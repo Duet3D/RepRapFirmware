@@ -19,7 +19,7 @@
 #include "Platform.h"
 #include "GCodes/GCodeBuffer.h"
 
-const char *Kinematics::HomeAllFileName = "homeall.g";
+const char * const Kinematics::HomeAllFileName = "homeall.g";
 const char * const Kinematics::StandardHomingFileNames[] = AXES_("homex.g", "homey.g", "homez.g", "homeu.g", "homev.g", "homew.g", "homea.g", "homeb.g", "homec.g");
 
 // Constructor. Pass segsPerSecond <= 0.0 to get non-segmented kinematics.

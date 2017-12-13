@@ -93,8 +93,8 @@
 
 //***************************************************************************************************
 
-const char* overflowResponse = "overflow";
-const char* badEscapeResponse = "bad escape";
+const char* const overflowResponse = "overflow";
+const char* const badEscapeResponse = "bad escape";
 
 //**************************** Generic Webserver implementation ******************************
 
@@ -548,55 +548,26 @@ bool Webserver::HttpInterpreter::DoingFastUpload() const
 	return false;
 }
 
+// Write some data on the SD card
 void Webserver::HttpInterpreter::DoFastUpload()
 {
-	NetworkTransaction *transaction = webserver->currentTransaction;
-
-	// Write some data on the SD card
+	NetworkTransaction * const transaction = webserver->currentTransaction;
 	const char *buffer;
 	size_t len;
 	if (transaction->ReadBuffer(buffer, len))
 	{
 		network->Unlock();
-		// Write data in sector-aligned chunks. This also means that the buffer in fatfs is only used to hold the FAT.
-		// Buffer size must be a multiple of the 512b sector size.
-#ifdef DUET_NG
-		static const size_t writeBufLength = 8192;
-#else
-		static const size_t writeBufLength = 2048;
-#endif
-		static uint32_t writeBufStorage[writeBufLength/4];		// aligned buffer for file writes
-		static size_t writeBufIndex;
-		char* const writeBuf = reinterpret_cast<char *>(writeBufStorage);
-
-		if (uploadedBytes == 0)
+		const bool success = fileBeingUploaded.Write(buffer, len);
+		if (!success)
 		{
-			writeBufIndex = 0;
-		}
+			platform->Message(GenericMessage, "Error: Could not write upload data!\n");
+			CancelUpload();
 
-		while (len != 0)
-		{
-			const size_t lengthToCopy = min<size_t>(writeBufLength - writeBufIndex, len);
-			memcpy(writeBuf + writeBufIndex, buffer, lengthToCopy);
-			writeBufIndex += lengthToCopy;
-			uploadedBytes += lengthToCopy;
-			buffer += lengthToCopy;
-			len -= lengthToCopy;
-			if (writeBufIndex == writeBufLength || uploadedBytes >= postFileLength)
-			{
-				const bool success = fileBeingUploaded.Write(writeBuf, writeBufIndex);
-				writeBufIndex = 0;
-				if (!success)
-				{
-					platform->Message(GenericMessage, "Error: Could not write upload data!\n");
-					CancelUpload();
-
-					while (!network->Lock()) { }
-					SendJsonResponse("upload");
-					return;
-				}
-			}
+			while (!network->Lock()) { }
+			SendJsonResponse("upload");
+			return;
 		}
+		uploadedBytes += len;
 		while (!network->Lock()) { }
 	}
 
@@ -604,7 +575,7 @@ void Webserver::HttpInterpreter::DoFastUpload()
 	if (uploadState == uploadOK && uploadedBytes >= postFileLength)
 	{
 		// Reset POST upload state for this client
-		uint32_t remoteIP = transaction->GetRemoteIP();
+		const uint32_t remoteIP = transaction->GetRemoteIP();
 		for(size_t i = 0; i < numSessions; i++)
 		{
 			if (sessions[i].ip == remoteIP && sessions[i].isPostUploading)

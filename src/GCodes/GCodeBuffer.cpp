@@ -436,7 +436,7 @@ float GCodeBuffer::GetFValue()
 }
 
 // Get a colon-separated list of floats after a key letter
-const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength, bool doPad)
+const void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{
@@ -451,7 +451,7 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength, bool do
 				returnedLength = 0;
 				return;
 			}
-			a[length] = (float)strtod(&gcodeBuffer[readPointer + 1], 0);
+			arr[length] = (float)strtod(&gcodeBuffer[readPointer + 1], 0);
 			length++;
 			do
 			{
@@ -469,7 +469,7 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength, bool do
 		{
 			for(size_t i = 1; i < returnedLength; i++)
 			{
-				a[i] = a[0];
+				arr[i] = arr[0];
 			}
 		}
 		else
@@ -486,8 +486,8 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength, bool do
 	}
 }
 
-// Get a :-separated list of longs after a key letter
-const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
+// Get a :-separated list of ints after a key letter
+const void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength)
 {
 	if (readPointer >= 0)
 	{
@@ -497,12 +497,49 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 		{
 			if (length >= returnedLength) // Array limit has been set in here
 			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
+				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode int array that is too long: %s\n", gcodeBuffer);
 				readPointer = -1;
 				returnedLength = 0;
 				return;
 			}
-			l[length] = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
+			arr[length] = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
+			length++;
+			do
+			{
+				readPointer++;
+			} while(gcodeBuffer[readPointer] != 0 && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR));
+			if (gcodeBuffer[readPointer] != LIST_SEPARATOR)
+			{
+				inList = false;
+			}
+		}
+		returnedLength = length;
+		readPointer = -1;
+	}
+	else
+	{
+		INTERNAL_ERROR;
+		returnedLength = 0;
+	}
+}
+
+// Get a :-separated list of unsigned ints after a key letter
+const void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& returnedLength)
+{
+	if (readPointer >= 0)
+	{
+		size_t length = 0;
+		bool inList = true;
+		while(inList)
+		{
+			if (length >= returnedLength) // Array limit has been set in here
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode unsigned array that is too long: %s\n", gcodeBuffer);
+				readPointer = -1;
+				returnedLength = 0;
+				return;
+			}
+			arr[length] = strtoul(&gcodeBuffer[readPointer + 1], 0, 0);
 			length++;
 			do
 			{

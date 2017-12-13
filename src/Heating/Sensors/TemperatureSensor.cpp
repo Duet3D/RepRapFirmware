@@ -35,7 +35,7 @@ void TemperatureSensor::SetHeaterName(const char *newName)
 	heaterName = nullptr;
 	delete oldName;
 
-	if (newName != nullptr)
+	if (newName != nullptr && strlen(newName) != 0)
 	{
 		char * const temp = new char[strlen(newName) + 1];
 		strcpy(temp, newName);

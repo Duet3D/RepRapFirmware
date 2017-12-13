@@ -12,7 +12,7 @@
 
 
 // Condition of a heater protection event
-enum class HeaterProtectionTrigger
+enum class HeaterProtectionTrigger : uint8_t
 {
 	TemperatureExceeded,
 	TemperatureTooLow
@@ -21,7 +21,7 @@ enum class HeaterProtectionTrigger
 const HeaterProtectionTrigger MaxHeaterProtectionTrigger = HeaterProtectionTrigger::TemperatureTooLow;
 
 // The action to trigger when the target condition is met
-enum class HeaterProtectionAction
+enum class HeaterProtectionAction : uint8_t
 {
 	GenerateFault = 0,
 	PermanentSwitchOff,
@@ -64,8 +64,8 @@ public:
 private:
 	HeaterProtection *next;
 
-	int8_t heater, supervisedHeater;
 	float limit;
+	int8_t heater, supervisedHeater;
 	HeaterProtectionAction action;
 	HeaterProtectionTrigger trigger;
 

@@ -396,15 +396,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (gb.Seen(extrudeLetter))
 			{
-				long int eDrive[MaxExtruders];
+				uint32_t eDrive[MaxExtruders];
 				size_t eCount = numExtruders;
-				gb.GetLongArray(eDrive, eCount);
+				gb.GetUnsignedArray(eDrive, eCount);
 				for (size_t i = 0; i < eCount; i++)
 				{
 					seen = true;
-					if (eDrive[i] < 0 || (size_t)eDrive[i] >= numExtruders)
+					if (eDrive[i] >= numExtruders)
 					{
-						reply.printf("Invalid extruder number specified: %ld", eDrive[i]);
+						reply.printf("Invalid extruder number specified: %" PRIu32, eDrive[i]);
 						result = GCodeResult::error;
 						break;
 					}
@@ -1279,9 +1279,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (!cancelWait && gb.Seen('H'))
 			{
 				// Wait for specified heaters to be ready
-				long heaters[Heaters];
+				int32_t heaters[Heaters];
 				size_t heaterCount = Heaters;
-				gb.GetLongArray(heaters, heaterCount);
+				gb.GetIntArray(heaters, heaterCount);
 
 				for (size_t i = 0; i < heaterCount; i++)
 				{
@@ -1298,9 +1298,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (!cancelWait && gb.Seen('C'))
 			{
 				// Wait for specified chamber(s) to be ready
-				long chamberIndices[NumChamberHeaters];
+				int32_t chamberIndices[NumChamberHeaters];
 				size_t chamberCount = NumChamberHeaters;
-				gb.GetLongArray(chamberIndices, chamberCount);
+				gb.GetIntArray(chamberIndices, chamberCount);
 
 				if (chamberCount == 0)
 				{
@@ -2034,7 +2034,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				reply.copy("Bad heater number in M303 command");
 			}
-			else if (reprap.GetHeat().CheckHeater(heater))
+			else if (!reprap.GetHeat().CheckHeater(heater))
 			{
 				reply.copy("Heater is not ready to perform PID auto-tuning");
 			}
@@ -2104,7 +2104,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				if (seen)
 				{
 					const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
-					if (!reprap.GetHeat().SetHeaterModel(heater, gain, tc, td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl, (uint16_t)min<uint32_t>(freq, 65536u)))
+					if (!reprap.GetHeat().SetHeaterModel(heater, gain, tc, td, maxPwm, voltage,
+															dontUsePid == 0, inverseTemperatureControl, (uint16_t)min<uint32_t>(freq, MaxHeaterPwmFrequency)))
 					{
 						reply.copy("Error: bad model parameters");
 					}
@@ -2152,7 +2153,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 350: // Set/report microstepping
 		{
 			// interp is currently an int not a bool, because we use special values of interp to set the chopper control register
-			int32_t mode = 0;						// this is usually the interpolation rwquested (0 = off, 1 = on)
+			int32_t mode = 0;						// this is usually the interpolation requested (0 = off, 1 = on)
 			bool dummy;
 			gb.TryGetIValue('I', mode, dummy);
 
@@ -2166,14 +2167,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 						return false;
 					}
 					seen = true;
-					const int microsteps = gb.GetIValue();
+					const unsigned int microsteps = gb.GetUIValue();
 					if (ChangeMicrostepping(axis, microsteps, mode))
 					{
 						SetAxisNotHomed(axis);
 					}
 					else
 					{
-						reply.printf("Drive %c does not support %dx microstepping%s", axisLetters[axis], microsteps, ((mode) ? " with interpolation" : ""));
+						reply.printf("Drive %c does not support %ux microstepping%s", axisLetters[axis], microsteps, ((mode) ? " with interpolation" : ""));
 						result = GCodeResult::error;
 					}
 				}
@@ -2186,14 +2187,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					return false;
 				}
 				seen = true;
-				long eVals[MaxExtruders];
+				uint32_t eVals[MaxExtruders];
 				size_t eCount = numExtruders;
-				gb.GetLongArray(eVals, eCount);
+				gb.GetUnsignedArray(eVals, eCount);
 				for (size_t e = 0; e < eCount; e++)
 				{
 					if (!ChangeMicrostepping(numTotalAxes + e, (int)eVals[e], mode))
 					{
-						reply.printf("Drive E%u does not support %dx microstepping%s", e, (int)eVals[e], ((mode) ? " with interpolation" : ""));
+						reply.printf("Drive E%u does not support %ux microstepping%s", e, (unsigned int)eVals[e], ((mode) ? " with interpolation" : ""));
 						result = GCodeResult::error;
 					}
 				}
@@ -2205,15 +2206,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
 					bool interp;
-					const int microsteps = platform.GetMicrostepping(axis, mode, interp);
-					reply.catf("%c:%d%s, ", axisLetters[axis], microsteps, (interp) ? "(on)" : "");
+					const unsigned int microsteps = platform.GetMicrostepping(axis, mode, interp);
+					reply.catf("%c:%u%s, ", axisLetters[axis], microsteps, (interp) ? "(on)" : "");
 				}
 				reply.cat("E");
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
 					bool interp;
-					const int microsteps = platform.GetMicrostepping(extruder + numTotalAxes, mode, interp);
-					reply.catf(":%d%s", microsteps, (interp) ? "(on)" : "");
+					const unsigned int microsteps = platform.GetMicrostepping(extruder + numTotalAxes, mode, interp);
+					reply.catf(":%u%s", microsteps, (interp) ? "(on)" : "");
 				}
 			}
 		}
@@ -2355,10 +2356,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		machineType = MachineType::cnc;
 		if (gb.Seen('P'))
 		{
-			int32_t pins[2] = { NoLogicalPin, NoLogicalPin };
+			uint32_t pins[2] = { NoLogicalPin, NoLogicalPin };
 			size_t numPins = 2;
-			gb.GetLongArray(pins, numPins);
-			if (pins[0] < 0 || pins[0] > 65535)
+			gb.GetUnsignedArray(pins, numPins);
+			if (pins[0] > 65535)
 			{
 				pins[0] = NoLogicalPin;
 			}
@@ -3003,14 +3004,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			const float advance = gb.GetFValue();
 			if (gb.Seen('D'))
 			{
-				long int eDrive[MaxExtruders];
+				uint32_t eDrive[MaxExtruders];
 				size_t eCount = MaxExtruders;
-				gb.GetLongArray(eDrive, eCount);
+				gb.GetUnsignedArray(eDrive, eCount);
 				for (size_t i = 0; i < eCount; i++)
 				{
-					if (eDrive[i] < 0 || (size_t)eDrive[i] >= numExtruders)
+					if (eDrive[i] >= numExtruders)
 					{
-						reply.printf("Invalid extruder number '%ld'", eDrive[i]);
+						reply.printf("Invalid extruder number '%" PRIu32 "'", eDrive[i]);
 						result = GCodeResult::error;
 						break;
 					}
@@ -3161,12 +3162,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 
 			// Extruder drives
-			size_t eDriveCount = MaxExtruders;
-			long eDrives[MaxExtruders];
 			if (gb.Seen(extrudeLetter))
 			{
-				gb.GetLongArray(eDrives, eDriveCount);
-				for(size_t extruder = 0; extruder < eDriveCount; extruder++)
+				size_t eDriveCount = MaxExtruders;
+				uint32_t eDrives[MaxExtruders];
+				gb.GetUnsignedArray(eDrives, eDriveCount);
+				for (size_t extruder = 0; extruder < eDriveCount; extruder++)
 				{
 					const size_t eDrive = eDrives[extruder];
 					if (eDrive >= MaxExtruders)

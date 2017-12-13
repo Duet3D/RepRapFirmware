@@ -5,8 +5,8 @@
  *      Author: David
  */
 
-#include <Network2/ESP8266/Network.h>
-#include <Network2/ESP8266/WifiFirmwareUploader.h>
+#include "Network.h"
+#include "WifiFirmwareUploader.h"
 #include "Platform.h"
 #include "RepRap.h"
 #include "Storage/FileStore.h"
@@ -43,7 +43,7 @@ const uint32_t ESP_FLASH_ADDR = 0x40200000;			// address of start of Flash
 const uint32_t ESP_FLASH_READ_STUB_BEGIN = IRAM_ADDR + 0x18;
 
 // Messages corresponding to result codes, should make sense when followed by " error"
-const char *resultMessages[] =
+const char * const resultMessages[] =
 {
 	"no",
 	"timeout",

@@ -19,7 +19,7 @@ ZProbeProgrammer::ZProbeProgrammer()
 }
 
 // Kick off sending some program bytes
-void ZProbeProgrammer::SendProgram(const long zProbeProgram[], size_t len)
+void ZProbeProgrammer::SendProgram(const uint32_t zProbeProgram[], size_t len)
 {
 	timer.CancelCallback();										// make quite certain that this timer isn't already pending
 

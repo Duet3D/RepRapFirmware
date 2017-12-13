@@ -35,8 +35,8 @@ public:
 	static Filament *GetFilamentByExtruder(const int extruder);	// Retrieve the Filament instance assigned to the given extruder drive
 
 private:
-	static const char *FilamentAssignmentFile;					// In which file the extruder <-> filament assignments are stored
-	static const char *FilamentAssignmentFileComment;			// The comment we write at the start of this file to ensure its integrity
+	static const char * const FilamentAssignmentFile;			// In which file the extruder <-> filament assignments are stored
+	static const char * const FilamentAssignmentFileComment;	// The comment we write at the start of this file to ensure its integrity
 
 	static Filament *filamentList;
 	Filament *next;

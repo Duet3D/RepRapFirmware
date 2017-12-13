@@ -77,16 +77,25 @@ constexpr float ThermostatHysteresis = 1.0;				// How much hysteresis we use to 
 constexpr float BAD_ERROR_TEMPERATURE = 2000.0;			// Must exceed any reasonable 5temperature limit including DEFAULT_TEMPERATURE_LIMIT
 constexpr uint32_t DefaultHeaterFaultTimeout = 10 * 60 * 1000;	// How long we wait (in milliseconds) for user intervention after a heater fault before shutting down
 
+constexpr PwmFrequency MaxHeaterPwmFrequency = 1000;	// maximum supported heater PWM frequency, to avoid overheating the mosfets
+
 // Heating model default parameters. For the chamber heater, we use the same values as for the bed heater.
 // These parameters are about right for an E3Dv6 hot end with 30W heater.
 constexpr float DefaultHotEndHeaterGain = 340.0;
 constexpr float DefaultHotEndHeaterTimeConstant = 140.0;
 constexpr float DefaultHotEndHeaterDeadTime = 5.5;
 
+#if SAM4E || SAME70
+constexpr size_t NumBedHeaters = 4;
+constexpr size_t NumChamberHeaters = 2;
+constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { 0, -1, -1, -1 };
+constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1, -1 };
+#else
 constexpr size_t NumBedHeaters = 1;
 constexpr size_t NumChamberHeaters = 2;
 constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { 0 };
 constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1, -1 };
+#endif
 
 constexpr int8_t DefaultE0Heater = 1;					// Index of the default first extruder heater
 
@@ -170,12 +179,17 @@ constexpr float TRIANGLE_ZERO = -0.001;					// Millimetres
 constexpr float SILLY_Z_VALUE = -9999.0;				// Millimetres
 
 // String lengths
-
 constexpr size_t FORMAT_STRING_LENGTH = 256;
 constexpr size_t MACHINE_NAME_LENGTH = 40;
 constexpr size_t PASSWORD_LENGTH = 20;
 
-constexpr size_t GCODE_LENGTH = 100;
+#if SAM4E || SAM4S || SAME70
+// Increased GCODE_LENGTH on the SAM4 because M587 and M589 commands on the Duet WiFi can get very long
+constexpr size_t GCODE_LENGTH = 161;					// maximum number of non-comment characters in a line of GCode including the null terminator
+#else
+constexpr size_t GCODE_LENGTH = 101;					// maximum number of non-comment characters in a line of GCode including the null terminator
+#endif
+
 constexpr size_t GCODE_REPLY_LENGTH = 2048;
 constexpr size_t MESSAGE_LENGTH = 256;
 

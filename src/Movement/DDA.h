@@ -128,6 +128,7 @@ public:
 	static uint32_t maxReps;
 
 private:
+	DriveMovement *FindDM(size_t drive) const;
 	void RecalculateMove() __attribute__ ((hot));
 	void CalcNewSpeeds() __attribute__ ((hot));
 	void ReduceHomingSpeed();										// called to reduce homing speed when a near-endstop is triggered
@@ -221,6 +222,12 @@ private:
 	DriveMovement *pddm[DRIVES];			// These describe the state of each drive movement
 };
 
+// Find the DriveMovement record for a given drive, or return nullptr if there isn't one
+inline DriveMovement *DDA::FindDM(size_t drive) const
+{
+	return pddm[drive];
+}
+
 // Force an end point
 inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 {
@@ -233,7 +240,7 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 // Get the current full step interval for this axis or extruder
 inline uint32_t DDA::GetStepInterval(size_t axis, uint32_t microstepShift) const
 {
-	const DriveMovement * const dm = pddm[axis];
+	const DriveMovement * const dm = FindDM(axis);
 	return (dm != nullptr) ? dm->GetStepInterval(microstepShift) : 0;
 }
 

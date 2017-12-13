@@ -39,7 +39,7 @@ float tuningVoltageAccumulator;				// sum of the voltage readings we take during
 
 // Member functions and constructors
 
-PID::PID(Platform& p, int8_t h) : platform(p), heater(h), mode(HeaterMode::off), invertPwmSignal(false)
+PID::PID(Platform& p, int8_t h) : platform(p), heaterProtection(nullptr), heater(h), mode(HeaterMode::off), invertPwmSignal(false)
 {
 }
 
@@ -726,7 +726,7 @@ void PID::DoTuningStep()
 	case HeaterMode::tuning1:
 		// Heating up
 		{
-			const bool isBedOrChamberHeater = (reprap.GetHeat().IsBedHeater(heater) || reprap.GetHeat().IsChamberHeater(heater));
+			const bool isBedOrChamberHeater = reprap.GetHeat().IsBedOrChamberHeater(heater);
 			const uint32_t heatingTime = millis() - tuningPhaseStartTime;
 			const float extraTimeAllowed = (isBedOrChamberHeater) ? 60.0 : 30.0;
 			if (heatingTime > (uint32_t)((model.GetDeadTime() + extraTimeAllowed) * SecondsToMillis) && (temperature - tuningStartTemp) < 3.0)

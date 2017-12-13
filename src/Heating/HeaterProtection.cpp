@@ -12,7 +12,7 @@
 #include "Heat.h"
 
 
-HeaterProtection::HeaterProtection(size_t index)
+HeaterProtection::HeaterProtection(size_t index) : next(nullptr)
 {
 	// By default each heater protection element is mapped to its corresponding heater.
 	// All other heater protection elements are unused and can be optionally assigned.
@@ -32,33 +32,33 @@ void HeaterProtection::Init(float tempLimit)
 // Check if any action needs to be taken. Returns true if everything is OK
 bool HeaterProtection::Check()
 {
-	TemperatureError err;
-	const float temperature = reprap.GetHeat().GetTemperature(supervisedHeater, err);
-
-	if (err != TemperatureError::success)
+	if (supervisedHeater >= 0)
 	{
-		badTemperatureCount++;
+		TemperatureError err;
+		const float temperature = reprap.GetHeat().GetTemperature(supervisedHeater, err);
 
-		if (badTemperatureCount > MAX_BAD_TEMPERATURE_COUNT)
+		if (err != TemperatureError::success)
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "Temperature reading error on heater %d\n", supervisedHeater);
-			return false;
+			badTemperatureCount++;
+			if (badTemperatureCount > MAX_BAD_TEMPERATURE_COUNT)
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "Temperature reading error on heater %d\n", supervisedHeater);
+				return false;
+			}
+		}
+		else
+		{
+			badTemperatureCount = 0;
+			switch (trigger)
+			{
+			case HeaterProtectionTrigger::TemperatureExceeded:
+				return (temperature <= limit);
+
+			case HeaterProtectionTrigger::TemperatureTooLow:
+				return (temperature >= limit);
+			}
 		}
 	}
-	else
-	{
-		badTemperatureCount = 0;
-
-		switch (trigger)
-		{
-		case HeaterProtectionTrigger::TemperatureExceeded:
-			return (temperature < limit);
-
-		case HeaterProtectionTrigger::TemperatureTooLow:
-			return (temperature > limit);
-		}
-	}
-
 	return true;
 }
 

@@ -15,7 +15,7 @@ class ZProbeProgrammer
 public:
 	ZProbeProgrammer();
 
-	void SendProgram(const long zProbeProgram[], size_t len);
+	void SendProgram(const uint32_t zProbeProgram[], size_t len);
 
 private:
 	static bool TimerInterrupt(void *param, uint32_t& when);

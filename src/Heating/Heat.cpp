@@ -53,7 +53,7 @@ void Heat::ResetHeaterModels()
 	{
 		if (pids[heater]->IsHeaterEnabled())
 		{
-			if (IsBedHeater(heater) || IsChamberHeater(heater))
+			if (IsBedOrChamberHeater(heater))
 			{
 				pids[heater]->SetModel(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, 1.0, 0.0, false, false, 0);
 			}
@@ -70,9 +70,9 @@ void Heat::Init()
 	// Initialise the heater protection items first
 	for (size_t index : ARRAY_INDICES(heaterProtections))
 	{
-		HeaterProtection *prot = heaterProtections[index];
+		HeaterProtection * const prot = heaterProtections[index];
 
-		const float tempLimit = (IsBedHeater(index) || IsChamberHeater(index)) ? DefaultBedTemperatureLimit : DefaultExtruderTemperatureLimit;
+		const float tempLimit = (IsBedOrChamberHeater(index)) ? DefaultBedTemperatureLimit : DefaultExtruderTemperatureLimit;
 		prot->Init(tempLimit);
 
 		if (index < Heaters)
@@ -85,7 +85,7 @@ void Heat::Init()
 	for (size_t heater : ARRAY_INDICES(pids))
 	{
 		heaterSensors[heater] = nullptr;			// no temperature sensor assigned yet
-		if (IsBedHeater(heater) || IsChamberHeater(heater))
+		if (IsBedOrChamberHeater(heater))
 		{
 			pids[heater]->Init(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, false, false);
 		}
@@ -612,7 +612,7 @@ void Heat::UpdateHeaterProtection()
 	}
 }
 
-// Check if the heater is able to operate
+// Check if the heater is able to operate returning true if everything is OK
 bool Heat::CheckHeater(size_t heater)
 {
 	return !pids[heater]->FaultOccurred() && pids[heater]->CheckProtection();
@@ -621,7 +621,7 @@ bool Heat::CheckHeater(size_t heater)
 // Get the temperature of a real or virtual heater
 float Heat::GetTemperature(size_t heater, TemperatureError& err)
 {
-	TemperatureSensor ** const spp = GetSensor(heater);
+	TemperatureSensor * const * const spp = GetSensor(heater);
 	if (spp == nullptr)
 	{
 		err = TemperatureError::unknownHeater;

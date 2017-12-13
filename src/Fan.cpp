@@ -95,9 +95,9 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, StringRef& 
 		if (gb.Seen('H'))		// Set thermostatically-controlled heaters
 		{
 			seen = true;
-			long heaters[Heaters + MaxVirtualHeaters];
+			int32_t heaters[Heaters + MaxVirtualHeaters];		// signed because we use H-1 to disable thermostatic mode
 			size_t numH = ARRAY_SIZE(heaters);
-			gb.GetLongArray(heaters, numH);
+			gb.GetIntArray(heaters, numH);
 
 			// Note that M106 H-1 disables thermostatic mode. The following code implements that automatically.
 			heatersMonitored = 0;

@@ -317,7 +317,7 @@ Platform::Platform() :
 		nextDriveToPoll(0),
 		onBoardDriversFanRunning(false), offBoardDriversFanRunning(false), onBoardDriversFanStartMillis(0), offBoardDriversFanStartMillis(0),
 #endif
-		lastFanCheckTime(0), auxGCodeReply(nullptr), tickState(0), debugCode(0), lastWarningMillis(0)
+		lastFanCheckTime(0), auxGCodeReply(nullptr), tickState(0), debugCode(0), lastWarningMillis(0), deliberateError(false)
 {
 	// Output
 	auxOutput = new OutputStack();
@@ -918,14 +918,14 @@ bool Platform::ProgramZProbe(GCodeBuffer& gb, StringRef& reply)
 {
 	if (gb.Seen('S'))
 	{
-		long zProbeProgram[MaxZProbeProgramBytes];
+		uint32_t zProbeProgram[MaxZProbeProgramBytes];
 		size_t len = MaxZProbeProgramBytes;
-		gb.GetLongArray(zProbeProgram, len);
+		gb.GetUnsignedArray(zProbeProgram, len);
 		if (len != 0)
 		{
 			for (size_t i = 0; i < len; ++i)
 			{
-				if (zProbeProgram[i] < 0 || zProbeProgram[i] > 255)
+				if (zProbeProgram[i] > 255)
 				{
 					reply.copy("Out of range value in program bytes");
 					return true;
@@ -1792,6 +1792,10 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		}
 		reason |= (uint8_t)reprap.GetSpinningModule();
 		reason |= (softwareResetDebugInfo & 0x07) << 5;
+		if (deliberateError)
+		{
+			reason |= (uint16_t)SoftwareResetReason::deliberate;
+		}
 
 		// Record the reason for the software reset
 		// First find a free slot (wear levelling)
@@ -1823,6 +1827,7 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		}
 		srdBuf[slot].magic = SoftwareResetData::magicValue;
 		srdBuf[slot].resetReason = reason;
+		srdBuf[slot].when = realTime;
 		GetStackUsage(nullptr, nullptr, &srdBuf[slot].neverUsedRam);
 		srdBuf[slot].hfsr = SCB->HFSR;
 		srdBuf[slot].cfsr = SCB->CFSR;
@@ -2147,14 +2152,14 @@ void Platform::Diagnostics(MessageType mtype)
 #endif
 		{
 			// Find the last slot written
-			slot = SoftwareResetData::numberOfSlots - 1;
-			while (slot >= 0 && srdBuf[slot].magic == 0xFFFF)
+			slot = SoftwareResetData::numberOfSlots;
+			do
 			{
 				--slot;
 			}
+			while (slot >= 0 && srdBuf[slot].magic == 0xFFFF);
 		}
 
-		Message(mtype, "Last software reset reason: ");
 		if (slot >= 0 && srdBuf[slot].magic == SoftwareResetData::magicValue)
 		{
 			const uint32_t reason = srdBuf[slot].resetReason & 0xF0;
@@ -2165,10 +2170,23 @@ void Platform::Diagnostics(MessageType mtype)
 														: (reason == (uint32_t)SoftwareResetReason::wdtFault) ? "Watchdog timeout"
 															: (reason == (uint32_t)SoftwareResetReason::otherFault) ? "Other fault"
 																: "Unknown";
-			MessageF(mtype, "%s, spinning module %s, available RAM %" PRIu32 " bytes (slot %d)\n",
-					reasonText, moduleName[srdBuf[slot].resetReason & 0x0F], srdBuf[slot].neverUsedRam, slot);
+			if (srdBuf[slot].when != 0)
+			{
+				const struct tm * const timeInfo = gmtime(&srdBuf[slot].when);
+				scratchString.printf("at %04u-%02u-%02u %02u:%02u",
+								timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday, timeInfo->tm_hour, timeInfo->tm_min);
+			}
+			else
+			{
+				scratchString.copy("time unknown");
+			}
+
+			MessageF(mtype, "Last software reset %s, reason: %s%s, spinning module %s, available RAM %" PRIu32 " bytes (slot %d)\n",
+								scratchString.Pointer(),
+								(srdBuf[slot].resetReason & (uint32_t)SoftwareResetReason::deliberate) ? "deliberate " : "",
+								reasonText, moduleName[srdBuf[slot].resetReason & 0x0F], srdBuf[slot].neverUsedRam, slot);
 			// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
-			MessageF(mtype, "Software reset code 0x%04x, HFSR 0x%08" PRIx32 ", CFSR 0x%08" PRIx32 ", ICSR 0x%08" PRIx32 ", BFAR 0x%08" PRIx32 ", SP 0x%08" PRIx32 "\n",
+			MessageF(mtype, "Software reset code 0x%04x HFSR 0x%08" PRIx32 ", CFSR 0x%08" PRIx32 ", ICSR 0x%08" PRIx32 ", BFAR 0x%08" PRIx32 ", SP 0x%08" PRIx32 "\n",
 				srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, srdBuf[slot].bfar, srdBuf[slot].sp);
 			if (srdBuf[slot].sp != 0xFFFFFFFF)
 			{
@@ -2183,7 +2201,7 @@ void Platform::Diagnostics(MessageType mtype)
 		}
 		else
 		{
-			Message(mtype, "not available\n");
+			Message(mtype, "Last software reset details not available\n");
 		}
 	}
 
@@ -2412,27 +2430,33 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, StringRef& reply, int d)
 		break;
 
 	case (int)DiagnosticTestType::TestWatchdog:
+		deliberateError = true;
 		SysTick->CTRL &= ~(SysTick_CTRL_TICKINT_Msk);	// disable the system tick interrupt so that we get a watchdog timeout reset
 		break;
 
 	case (int)DiagnosticTestType::TestSpinLockup:
+		deliberateError = true;
 		debugCode = d;									// tell the Spin function to loop
 		break;
 
 	case (int)DiagnosticTestType::TestSerialBlock:		// write an arbitrary message via debugPrintf()
+		deliberateError = true;
 		debugPrintf("Diagnostic Test\n");
 		break;
 
 	case (int)DiagnosticTestType::DivideByZero:			// do an integer divide by zero to test exception handling
+		deliberateError = true;
 		(void)RepRap::DoDivide(1, 0);					// call function in another module so it can't be optimised away
 		break;
 
 	case (int)DiagnosticTestType::UnalignedMemoryAccess:	// do an unaligned memory access to test exception handling
+		deliberateError = true;
 		SCB->CCR |= SCB_CCR_UNALIGN_TRP_Msk;			// by default, unaligned memory accesses are allowed, so change that
 		(void)RepRap::ReadDword(reinterpret_cast<const char*>(dummy) + 1);	// call function in another module so it can't be optimised away
 		break;
 
 	case (int)DiagnosticTestType::BusFault:
+		deliberateError = true;
 		// Read from the "Undefined (Abort)" area
 #if SAME70
 		// FIXME: The SAME70 provides an MPU, maybe we should configure it as well?
@@ -2605,83 +2629,80 @@ void Platform::UpdateConfiguredHeaters()
 
 EndStopHit Platform::Stopped(size_t drive) const
 {
-	if (drive < DRIVES)
+	if (drive < reprap.GetGCodes().GetTotalAxes())
 	{
-		if (drive >= reprap.GetGCodes().GetTotalAxes())
+		switch (endStopInputType[drive])
 		{
-			// Endstop not used for an axis, so no configuration data available.
-			// To allow us to see its status in DWC, pretend it is configured as a high-end active high endstop.
-			return (endStopPins[drive] != NoPin && IoPort::ReadPin(endStopPins[drive])) ? EndStopHit::highHit : EndStopHit::noStop;
-		}
-		else
-		{
-			switch (endStopInputType[drive])
+		case EndStopInputType::zProbe:
 			{
-			case EndStopInputType::zProbe:
-				{
-					const EndStopHit rslt = GetZProbeResult();
-					return (rslt == EndStopHit::lowHit && endStopPos[drive] == EndStopPosition::highEndStop)
-							? EndStopHit::highHit
-								: rslt;
-				}
+				const EndStopHit rslt = GetZProbeResult();
+				return (rslt == EndStopHit::lowHit && endStopPos[drive] == EndStopPosition::highEndStop)
+						? EndStopHit::highHit
+							: rslt;
+			}
 
 #if HAS_SMART_DRIVERS
-			case EndStopInputType::motorStall:
+		case EndStopInputType::motorStall:
+			{
+				bool motorIsStalled;
+				switch (reprap.GetMove().GetKinematics().GetKinematicsType())
 				{
-					bool motorIsStalled;
-					switch (reprap.GetMove().GetKinematics().GetKinematicsType())
-					{
-					case KinematicsType::coreXY:
-						// Both X and Y motors are involved in homing X or Y
-						motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
-											? AnyMotorStalled(X_AXIS) || AnyMotorStalled(Y_AXIS)
-												: AnyMotorStalled(drive);
-						break;
+				case KinematicsType::coreXY:
+					// Both X and Y motors are involved in homing X or Y
+					motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
+										? AnyMotorStalled(X_AXIS) || AnyMotorStalled(Y_AXIS)
+											: AnyMotorStalled(drive);
+					break;
 
-					case KinematicsType::coreXYU:
-						// Both X and Y motors are involved in homing X or Y, and both U and V motors are involved in homing U
-						motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
-											? AnyMotorStalled(X_AXIS) || AnyMotorStalled(Y_AXIS)
-												: (drive == U_AXIS)
-													? AnyMotorStalled(U_AXIS) || AnyMotorStalled(V_AXIS)
-														: AnyMotorStalled(drive);
-						break;
+				case KinematicsType::coreXYU:
+					// Both X and Y motors are involved in homing X or Y, and both U and V motors are involved in homing U
+					motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
+										? AnyMotorStalled(X_AXIS) || AnyMotorStalled(Y_AXIS)
+											: (drive == U_AXIS)
+												? AnyMotorStalled(U_AXIS) || AnyMotorStalled(V_AXIS)
+													: AnyMotorStalled(drive);
+					break;
 
-					case KinematicsType::coreXZ:
-						// Both X and Z motors are involved in homing X or Z
-						motorIsStalled = (drive == X_AXIS || drive == Z_AXIS)
-											? AnyMotorStalled(X_AXIS) || AnyMotorStalled(Z_AXIS)
-												: AnyMotorStalled(drive);
-						break;
+				case KinematicsType::coreXZ:
+					// Both X and Z motors are involved in homing X or Z
+					motorIsStalled = (drive == X_AXIS || drive == Z_AXIS)
+										? AnyMotorStalled(X_AXIS) || AnyMotorStalled(Z_AXIS)
+											: AnyMotorStalled(drive);
+					break;
 
-					default:
-						motorIsStalled = AnyMotorStalled(drive);
-						break;
-					}
-					return (!motorIsStalled) ? EndStopHit::noStop
-							: (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit
-								: EndStopHit::lowHit;
+				default:
+					motorIsStalled = AnyMotorStalled(drive);
+					break;
 				}
-				break;
+				return (!motorIsStalled) ? EndStopHit::noStop
+						: (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit
+							: EndStopHit::lowHit;
+			}
+			break;
 #endif
 
-			case EndStopInputType::activeLow:
-			case EndStopInputType::activeHigh:
-				if (endStopPins[drive] != NoPin)
+		case EndStopInputType::activeLow:
+		case EndStopInputType::activeHigh:
+			if (endStopPins[drive] != NoPin)
+			{
+				bool b = IoPort::ReadPin(endStopPins[drive]);
+				if (endStopInputType[drive] == EndStopInputType::activeHigh)
 				{
-					bool b = IoPort::ReadPin(endStopPins[drive]);
-					if (endStopInputType[drive] == EndStopInputType::activeHigh)
-					{
-						b = !b;
-					}
-					return (b) ? EndStopHit::noStop : (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
+					b = !b;
 				}
-				break;
-
-			default:
-				break;
+				return (b) ? EndStopHit::noStop : (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
 			}
+			break;
+
+		default:
+			break;
 		}
+	}
+	else if (drive < DRIVES)
+	{
+		// Endstop not used for an axis, so no configuration data available.
+		// To allow us to see its status in DWC, pretend it is configured as a high-end active high endstop.
+		return (endStopPins[drive] != NoPin && IoPort::ReadPin(endStopPins[drive])) ? EndStopHit::highHit : EndStopHit::noStop;
 	}
 	return EndStopHit::noStop;
 }
@@ -3053,7 +3074,7 @@ void Platform::SetIdleCurrentFactor(float f)
 }
 
 // Set the microstepping for a driver, returning true if successful
-bool Platform::SetDriverMicrostepping(size_t driver, int microsteps, int mode)
+bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode)
 {
 	if (driver < DRIVES)
 	{
@@ -4170,14 +4191,14 @@ bool Platform::ConfigureStallDetection(GCodeBuffer& gb, StringRef& reply)
 	DriversBitmap drivers = 0;
 	if (gb.Seen('P'))
 	{
-		long int drives[DRIVES];
+		uint32_t drives[DRIVES];
 		size_t dCount = DRIVES;
-		gb.GetLongArray(drives, dCount);
+		gb.GetUnsignedArray(drives, dCount);
 		for (size_t i = 0; i < dCount; i++)
 		{
-			if (drives[i] < 0 || (size_t)drives[i] >= numSmartDrivers)
+			if (drives[i] >= numSmartDrivers)
 			{
-				reply.printf("Invalid drive number '%ld'", drives[i]);
+				reply.printf("Invalid drive number '%" PRIu32 "'", drives[i]);
 				return true;
 			}
 			SetBit(drivers, drives[i]);

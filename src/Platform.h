@@ -155,7 +155,8 @@ enum class SoftwareResetReason : uint16_t
 	otherFault = 0x70,
 	inAuxOutput = 0x0800,			// this bit is or'ed in if we were in aux output at the time
 	inLwipSpin = 0x2000,			// we got stuck in a call to LWIP for too long
-	inUsbOutput = 0x4000			// this bit is or'ed in if we were in USB output at the time
+	inUsbOutput = 0x4000,			// this bit is or'ed in if we were in USB output at the time
+	deliberate = 0x8000				// this but it or'ed in if we deliberately caused a fault
 };
 
 // Enumeration to describe various tests we do in response to the M122 command
@@ -392,7 +393,7 @@ public:
 	void SetIdleCurrentFactor(float f);
 	float GetIdleCurrentFactor() const
 		{ return idleCurrentFactor; }
-	bool SetDriverMicrostepping(size_t driver, int microsteps, int mode);
+	bool SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode);
 	unsigned int GetDriverMicrostepping(size_t drive, int mode, bool& interpolation) const;
 	bool SetMicrostepping(size_t drive, int microsteps, int mode);
 	unsigned int GetMicrostepping(size_t drive, int mode, bool& interpolation) const;
@@ -606,12 +607,12 @@ private:
 	// directly from/to flash memory.
 	struct SoftwareResetData
 	{
-		static const uint16_t versionValue = 7;		// increment this whenever this struct changes
+		static const uint16_t versionValue = 8;		// increment this whenever this struct changes
 		static const uint16_t magicValue = 0x7D00 | versionValue;	// value we use to recognise that all the flash data has been written
 #if SAM3XA
 		static const uint32_t nvAddress = 0;		// must be 4-byte aligned
 #endif
-		static const size_t numberOfSlots = 5;		// number of storage slots used to implement wear levelling - must fit in 512 bytes
+		static const size_t numberOfSlots = 4;		// number of storage slots used to implement wear levelling - must fit in 512 bytes
 
 		uint16_t magic;								// the magic number, including the version
 		uint16_t resetReason;						// this records why we did a software reset, for diagnostic purposes
@@ -621,7 +622,8 @@ private:
 		uint32_t icsr;								// interrupt control and state register
 		uint32_t bfar;								// bus fault address register
 		uint32_t sp;								// stack pointer
-		uint32_t stack[18];							// stack when the exception occurred, with the program counter at the bottom
+		time_t when;								// value of the RTC when the software reset occurred
+		uint32_t stack[24];							// stack when the exception occurred, with the program counter at the bottom
 
 		bool isVacant() const						// return true if this struct can be written without erasing it first
 		{
@@ -734,7 +736,6 @@ private:
 #endif
 
 	// Z probe
-
 	Pin zProbePin;
 	Pin zProbeModulationPin;
 	ZProbeProgrammer zProbeProg;
@@ -756,7 +757,6 @@ private:
 	void UpdateNetworkAddress(byte dst[4], const byte src[4]);
 
 	// Axes and endstops
-
 	float axisMaxima[MaxAxes];
 	float axisMinima[MaxAxes];
 	AxesBitmap axisMinimaProbed, axisMaximaProbed;
@@ -766,7 +766,6 @@ private:
 	static bool WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam);
 
 	// Heaters - bed is assumed to be the first
-
 	Pin tempSensePins[Heaters];
 	Pin heatOnPins[Heaters];
 	Pin spiTempSenseCsPins[MaxSpiTempSensors];
@@ -774,7 +773,6 @@ private:
 	uint32_t heatSampleTicks;
 
 	// Fans
-
 	Fan fans[NUM_FANS];
 	Pin coolingFanRpmPin;											// we currently support only one fan RPM input
 	uint32_t lastFanCheckTime;
@@ -782,7 +780,6 @@ private:
 	bool FansHardwareInverted(size_t fanNumber) const;
 
   	// Serial/USB
-
 	uint32_t baudRates[NUM_SERIAL_CHANNELS];
 	uint8_t commsParams[NUM_SERIAL_CHANNELS];
 	OutputStack *auxOutput;
@@ -795,7 +792,6 @@ private:
 	uint32_t auxSeq;							// Sequence number for AUX devices
 
 	// Files
-
 	MassStorage* massStorage;
   
 	// Data used by the tick interrupt handler
@@ -875,6 +871,9 @@ private:
 
 	// Direct pin manipulation
 	int8_t logicalPinModes[HighestLogicalPin + 1];		// what mode each logical pin is set to - would ideally be class PinMode not int8_t
+
+	// Misc
+	bool deliberateError;								// true if we deliberately caused an exception for testing purposes
 };
 
 // Where the htm etc files are

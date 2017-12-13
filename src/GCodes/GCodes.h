@@ -283,7 +283,7 @@ private:
 	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);			// Retract or un-retract filaments
 	GCodeResult LoadFilament(GCodeBuffer& gb, StringRef& reply);		// Load the specified filament into a tool
 	GCodeResult UnloadFilament(GCodeBuffer& gb, StringRef& reply);		 // Unload the current filament from a tool
-	bool ChangeMicrostepping(size_t drive, int microsteps, int mode) const;	// Change microstepping on the specified drive
+	bool ChangeMicrostepping(size_t drive, unsigned int microsteps, int mode) const;	// Change microstepping on the specified drive
 	void ListTriggers(StringRef reply, TriggerInputsBitmap mask);		// Append a list of trigger inputs to a message
 	void CheckTriggers();												// Check for and execute triggers
 	void CheckFilament();												// Check for and respond to filament errors

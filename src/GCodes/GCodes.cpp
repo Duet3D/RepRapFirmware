@@ -232,7 +232,8 @@ float GCodes::FractionOfFilePrinted() const
 		return 0.0;
 	}
 
-	return (float)(fileBeingPrinted.GetPosition() - fileInput->BytesCached()) / (float)len;
+    const FilePosition bytesCached = fileGCode->IsDoingFileMacro() ? 0: fileInput->BytesCached();
+	return (float)(fileBeingPrinted.GetPosition() - bytesCached) / (float)len;
 }
 
 // Start running the config file
@@ -2886,10 +2887,9 @@ void GCodes::WriteGCodeToFile(GCodeBuffer& gb)
 		return;
 	}
 
-	// End of file?
-	if (gb.Seen('M'))
+	if (gb.GetCommandLetter() == 'M')
 	{
-		if (gb.GetIValue() == 29)
+		if (gb.GetCommandNumber() == 29)						// end of file?
 		{
 			fileBeingWritten->Close();
 			fileBeingWritten = nullptr;
@@ -2899,18 +2899,13 @@ void GCodes::WriteGCodeToFile(GCodeBuffer& gb)
 			return;
 		}
 	}
-
-	// Resend request?
-	if (gb.Seen('G'))
+	else if (gb.GetCommandLetter() == 'G' && gb.GetCommandNumber() == 998)						// resend request?
 	{
-		if (gb.GetIValue() == 998)
+		if (gb.Seen('P'))
 		{
-			if (gb.Seen('P'))
-			{
-				scratchString.printf("%" PRIi32 "\n", gb.GetIValue());
-				HandleReply(gb, false, scratchString.Pointer());
-				return;
-			}
+			scratchString.printf("%" PRIi32 "\n", gb.GetIValue());
+			HandleReply(gb, false, scratchString.Pointer());
+			return;
 		}
 	}
 
@@ -3147,11 +3142,11 @@ bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 	}
 
 	// Check drives
-	long drives[MaxExtruders];  		// There can never be more than we have...
-	size_t dCount = numExtruders;	// Sets the limit and returns the count
+	int32_t drives[MaxExtruders]; 	 		// There can never be more than we have...
+	size_t dCount = numExtruders;			// Sets the limit and returns the count
 	if (gb.Seen('D'))
 	{
-		gb.GetLongArray(drives, dCount);
+		gb.GetIntArray(drives, dCount);
 		seen = true;
 	}
 	else
@@ -3160,11 +3155,11 @@ bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 	}
 
 	// Check heaters
-	long heaters[Heaters];
+	int32_t heaters[Heaters];
 	size_t hCount = Heaters;
 	if (gb.Seen('H'))
 	{
-		gb.GetLongArray(heaters, hCount);
+		gb.GetIntArray(heaters, hCount);
 		seen = true;
 	}
 	else
@@ -3176,10 +3171,10 @@ bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 	AxesBitmap xMap;
 	if (gb.Seen('X'))
 	{
-		long xMapping[MaxAxes];
+		uint32_t xMapping[MaxAxes];
 		size_t xCount = numVisibleAxes;
-		gb.GetLongArray(xMapping, xCount);
-		xMap = LongArrayToBitMap<AxesBitmap>(xMapping, xCount) & LowestNBits<AxesBitmap>(numVisibleAxes);
+		gb.GetUnsignedArray(xMapping, xCount);
+		xMap = UnsignedArrayToBitMap<AxesBitmap>(xMapping, xCount) & LowestNBits<AxesBitmap>(numVisibleAxes);
 		seen = true;
 	}
 	else
@@ -3191,10 +3186,10 @@ bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 	AxesBitmap yMap;
 	if (gb.Seen('Y'))
 	{
-		long yMapping[MaxAxes];
+		uint32_t yMapping[MaxAxes];
 		size_t yCount = numVisibleAxes;
-		gb.GetLongArray(yMapping, yCount);
-		yMap = LongArrayToBitMap<AxesBitmap>(yMapping, yCount) & LowestNBits<AxesBitmap>(numVisibleAxes);
+		gb.GetUnsignedArray(yMapping, yCount);
+		yMap = UnsignedArrayToBitMap<AxesBitmap>(yMapping, yCount) & LowestNBits<AxesBitmap>(numVisibleAxes);
 		seen = true;
 	}
 	else
@@ -3212,10 +3207,10 @@ bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 	FansBitmap fanMap;
 	if (gb.Seen('F'))
 	{
-		long fanMapping[NUM_FANS];
+		uint32_t fanMapping[NUM_FANS];
 		size_t fanCount = NUM_FANS;
-		gb.GetLongArray(fanMapping, fanCount);
-		fanMap = LongArrayToBitMap<FansBitmap>(fanMapping, fanCount) & LowestNBits<FansBitmap>(NUM_FANS);
+		gb.GetUnsignedArray(fanMapping, fanCount);
+		fanMap = UnsignedArrayToBitMap<FansBitmap>(fanMapping, fanCount) & LowestNBits<FansBitmap>(NUM_FANS);
 		seen = true;
 	}
 	else
@@ -3260,7 +3255,7 @@ void GCodes::DisableDrives()
 	SetAllAxesNotHomed();
 }
 
-bool GCodes::ChangeMicrostepping(size_t drive, int microsteps, int mode) const
+bool GCodes::ChangeMicrostepping(size_t drive, unsigned int microsteps, int mode) const
 {
 	bool dummy;
 	const unsigned int oldSteps = platform.GetMicrostepping(drive, mode, dummy);
@@ -3335,11 +3330,11 @@ void GCodes::HandleReply(GCodeBuffer& gb, bool error, const char* reply)
 
 	case marlin:
 		// We don't need to handle M20 here because we always allocate an output buffer for that one
-		if (gb.Seen('M') && gb.GetIValue() == 28)
+		if (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 28)
 		{
 			platform.MessageF(type, "%s\n%s\n", response, reply);
 		}
-		else if ((gb.Seen('M') && gb.GetIValue() == 105) || (gb.Seen('M') && gb.GetIValue() == 998))
+		else if (gb.GetCommandLetter() == 'M' && (gb.GetCommandNumber() == 105 || gb.GetCommandNumber() == 998))
 		{
 			platform.MessageF(type, "%s %s\n", response, reply);
 		}
@@ -3393,7 +3388,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply)
 
 	const Compatibility c = (&gb == serialGCode || &gb == telnetGCode) ? platform.Emulating() : me;
 	const MessageType type = gb.GetResponseMessageType();
-	const char* const response = (gb.Seen('M') && gb.GetIValue() == 998) ? "rs " : "ok";
+	const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
 	const char* emulationType = nullptr;
 
 	switch (c)
@@ -3408,7 +3403,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply)
 		return;
 
 	case marlin:
-		if (gb.Seen('M') && gb.GetIValue() == 20)
+		if (gb.GetCommandLetter() =='M' && gb.GetCommandNumber() == 20)
 		{
 			platform.Message(type, "Begin file list\n");
 			platform.Message(type, reply);
@@ -3418,7 +3413,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply)
 			return;
 		}
 
-		if (gb.Seen('M') && gb.GetIValue() == 28)
+		if (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 28)
 		{
 			platform.Message(type, response);
 			platform.Message(type, "\n");
@@ -3426,7 +3421,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply)
 			return;
 		}
 
-		if ((gb.Seen('M') && gb.GetIValue() == 105) || (gb.Seen('M') && gb.GetIValue() == 998))
+		if (gb.GetCommandLetter() =='M' && (gb.GetCommandNumber() == 105 || gb.GetCommandNumber() == 998))
 		{
 			platform.Message(type, response);
 			platform.Message(type, " ");

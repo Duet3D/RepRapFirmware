@@ -73,13 +73,13 @@ bool PortControl::Configure(GCodeBuffer& gb, StringRef& reply)
 		seen = true;
 		UpdatePorts(0);
 		numConfiguredPorts = 0;
-		long portNumbers[MaxPorts];
+		uint32_t portNumbers[MaxPorts];
 		size_t numPorts = MaxPorts;
-		gb.GetLongArray(portNumbers, numPorts);
+		gb.GetUnsignedArray(portNumbers, numPorts);
 		for (size_t i = 0; i < numPorts; ++i)
 		{
-			const long pnum = portNumbers[i];
-			if (pnum < 0 || pnum > HighestLogicalPin)
+			const uint32_t pnum = portNumbers[i];
+			if (pnum > HighestLogicalPin)
 			{
 				reply.printf("Port number %ld out of range", pnum);
 				return true;

@@ -81,7 +81,7 @@ Tool * Tool::freelist = nullptr;
 	if (dCount == 1)
 	{
 		// Create only one Filament instance per extruder drive, and only if this tool is assigned to exactly one extruder
-		Filament *filament = Filament::GetFilamentByExtruder(d[0]);
+		Filament * const filament = Filament::GetFilamentByExtruder(d[0]);
 		t->filament = (filament == nullptr) ? new Filament(d[0]) : filament;
 	}
 	else
@@ -90,9 +90,19 @@ Tool * Tool::freelist = nullptr;
 		t->filament = nullptr;
 	}
 
-	t->myNumber = toolNumber;
-	SafeStrncpy(t->name, name, ToolNameLength);
+	const size_t nameLength = strlen(name);
+	if (nameLength != 0)
+	{
+		t->name = new char[nameLength + 1];
+		SafeStrncpy(t->name, name, nameLength + 1);
+	}
+	else
+	{
+		t->name = nullptr;
+	}
+
 	t->next = nullptr;
+	t->myNumber = toolNumber;
 	t->state = ToolState::off;
 	t->driveCount = dCount;
 	t->heaterCount = hCount;
@@ -111,7 +121,7 @@ Tool * Tool::freelist = nullptr;
 	for (size_t drive = 0; drive < t->driveCount; drive++)
 	{
 		t->drives[drive] = d[drive];
-		t->mix[drive] = (drive == 0) ? 1.0 : 0.0;		// initial mix ratio is 1:1:0
+		t->mix[drive] = (drive == 0) ? 1.0 : 0.0;		// initial mix ratio is 1:0:0
 	}
 
 	for (size_t heater = 0; heater < t->heaterCount; heater++)
@@ -133,6 +143,8 @@ Tool * Tool::freelist = nullptr;
 {
 	if (t != nullptr)
 	{
+		delete t->name;
+		t->name = nullptr;
 		t->filament = nullptr;
 		t->next = freelist;
 		freelist = t;
@@ -142,7 +154,7 @@ Tool * Tool::freelist = nullptr;
 void Tool::Print(StringRef& reply) const
 {
 	reply.printf("Tool %d - ", myNumber);
-	if (!StringEquals(name, ""))
+	if (name != nullptr)
 	{
 		reply.catf("name: %s; ", name);
 	}
@@ -392,7 +404,7 @@ void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHea
 
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		if (!reprap.GetHeat().IsBedHeater(heaters[heater]) && !reprap.GetHeat().IsChamberHeater(heaters[heater]) && heaters[heater] >= numHeaters)
+		if (!reprap.GetHeat().IsBedOrChamberHeater(heaters[heater]) && heaters[heater] >= numHeaters)
 		{
 			numHeaters = heaters[heater] + 1;
 		}

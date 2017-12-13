@@ -13,8 +13,8 @@
 #define KO_START "rr_"
 const size_t KoFirst = 3;
 
-const char* overflowResponse = "overflow";
-const char* badEscapeResponse = "bad escape";
+const char* const overflowResponse = "overflow";
+const char* const badEscapeResponse = "bad escape";
 
 const uint32_t HttpReceiveTimeout = 2000;
 

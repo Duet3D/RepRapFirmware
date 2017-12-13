@@ -169,7 +169,7 @@ Licence: GPL
 
 RepRap reprap;
 
-const char *moduleName[] =
+const char * const moduleName[] =
 {
 	"Platform",
 	"Network",
@@ -193,7 +193,7 @@ const char *moduleName[] =
 
 // Utilities and storage not part of any class
 
-static char scratchStringBuffer[170];		// this needs to be long enough to print delta parameters and 18 words of stack (162 bytes)
+static char scratchStringBuffer[220];		// this needs to be long enough to print delta parameters and 24 words of stack (217 bytes)
 StringRef scratchString(scratchStringBuffer, ARRAY_SIZE(scratchStringBuffer));
 
 // For debug use

@@ -404,77 +404,72 @@ void Network::Stop()
 
 void Network::Spin(bool full)
 {
-	// Main state machine.
-	switch (state)
+	if (full)
 	{
-	case NetworkState::starting1:
-		if (full)
+		// Main state machine.
+		switch (state)
 		{
-			// The ESP toggles CS before it has finished starting up, so don't look at the CS signal too soon
-			const uint32_t now = millis();
-			if (now - lastTickMillis >= WiFiStartupMillis)
+		case NetworkState::starting1:
 			{
-				lastTickMillis = now;
-				state = NetworkState::starting2;
-			}
-		}
-		break;
-
-	case NetworkState::starting2:
-		if (full)
-		{
-			// See if the ESP8266 has kept its pins at their stable values for long enough
-			const uint32_t now = millis();
-			if (digitalRead(SamCsPin) && digitalRead(EspTransferRequestPin) && !digitalRead(APIN_SPI_SCK))
-			{
-				if (now - lastTickMillis >= WiFiStableMillis)
+				// The ESP toggles CS before it has finished starting up, so don't look at the CS signal too soon
+				const uint32_t now = millis();
+				if (now - lastTickMillis >= WiFiStartupMillis)
 				{
-					// Setup the SPI controller in slave mode and assign the CS pin to it
-					platform.Message(NetworkInfoMessage, "WiFi module started\n");
-					SetupSpi();									// set up the SPI subsystem
-
-					// Read the status to get the WiFi server version
-					Receiver<NetworkStatusResponse> status;
-					const int32_t rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
-					if (rc > 0)
-					{
-						SafeStrncpy(wiFiServerVersion, status.Value().versionText, ARRAY_SIZE(wiFiServerVersion));
-
-						// Set the hostname before anything else is done
-						if (SendCommand(NetworkCommand::networkSetHostName, 0, 0, hostname, HostNameLength, nullptr, 0) != ResponseEmpty)
-						{
-							reprap.GetPlatform().Message(NetworkInfoMessage, "Error: Could not set WiFi hostname\n");
-						}
-
-						state = NetworkState::active;
-						espStatusChanged = true;				// make sure we fetch the current state and enable the ESP interrupt
-					}
-					else
-					{
-						// Something went wrong, maybe a bad firmware image was flashed
-						// Disable the WiFi chip again in this case
-						platform.MessageF(NetworkInfoMessage, "Error: Failed to initialise WiFi module, code %" PRIi32 "\n", rc);
-						Stop();
-					}
+					lastTickMillis = now;
+					state = NetworkState::starting2;
 				}
 			}
-			else
+			break;
+
+		case NetworkState::starting2:
 			{
-				lastTickMillis = now;
+				// See if the ESP8266 has kept its pins at their stable values for long enough
+				const uint32_t now = millis();
+				if (digitalRead(SamCsPin) && digitalRead(EspTransferRequestPin) && !digitalRead(APIN_SPI_SCK))
+				{
+					if (now - lastTickMillis >= WiFiStableMillis)
+					{
+						// Setup the SPI controller in slave mode and assign the CS pin to it
+						platform.Message(NetworkInfoMessage, "WiFi module started\n");
+						SetupSpi();									// set up the SPI subsystem
+
+						// Read the status to get the WiFi server version
+						Receiver<NetworkStatusResponse> status;
+						const int32_t rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
+						if (rc > 0)
+						{
+							SafeStrncpy(wiFiServerVersion, status.Value().versionText, ARRAY_SIZE(wiFiServerVersion));
+
+							// Set the hostname before anything else is done
+							if (SendCommand(NetworkCommand::networkSetHostName, 0, 0, hostname, HostNameLength, nullptr, 0) != ResponseEmpty)
+							{
+								reprap.GetPlatform().Message(NetworkInfoMessage, "Error: Could not set WiFi hostname\n");
+							}
+
+							state = NetworkState::active;
+							espStatusChanged = true;				// make sure we fetch the current state and enable the ESP interrupt
+						}
+						else
+						{
+							// Something went wrong, maybe a bad firmware image was flashed
+							// Disable the WiFi chip again in this case
+							platform.MessageF(NetworkInfoMessage, "Error: Failed to initialise WiFi module, code %" PRIi32 "\n", rc);
+							Stop();
+						}
+					}
+				}
+				else
+				{
+					lastTickMillis = now;
+				}
 			}
-		}
-		break;
+			break;
 
-	case NetworkState::disabled:
-		if (full)
-		{
+		case NetworkState::disabled:
 			uploader->Spin();
-		}
-		break;
+			break;
 
-	case NetworkState::active:
-		if (full)
-		{
+		case NetworkState::active:
 			if (espStatusChanged && digitalRead(EspTransferRequestPin))
 			{
 				if (reprap.Debug(moduleNetwork))
@@ -557,48 +552,48 @@ void Network::Spin(bool full)
 					nextResponderToPoll = nr;
 				}
 			}
-		}
-		break;
+			break;
 
-	case NetworkState::changingMode:
-		if (full && espStatusChanged && digitalRead(EspTransferRequestPin))
-		{
-			GetNewStatus();
-			if (currentMode != WiFiState::connecting)
+		case NetworkState::changingMode:
+			if (espStatusChanged && digitalRead(EspTransferRequestPin))
 			{
-				requestedMode = currentMode;				// don't keep repeating the request if it failed
-				state = NetworkState::active;
-				if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
+				GetNewStatus();
+				if (currentMode != WiFiState::connecting)
 				{
-					// Get our IP address, this needs to be correct for FTP to work
-					Receiver<NetworkStatusResponse> status;
-					if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
+					requestedMode = currentMode;				// don't keep repeating the request if it failed
+					state = NetworkState::active;
+					if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 					{
-						uint32_t ip = status.Value().ipAddress;
-						for (size_t i = 0; i < 4; ++i)
+						// Get our IP address, this needs to be correct for FTP to work
+						Receiver<NetworkStatusResponse> status;
+						if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
 						{
-							ipAddress[i] = (uint8_t)(ip & 255);
-							ip >>= 8;
+							uint32_t ip = status.Value().ipAddress;
+							for (size_t i = 0; i < 4; ++i)
+							{
+								ipAddress[i] = (uint8_t)(ip & 255);
+								ip >>= 8;
+							}
+							SafeStrncpy(actualSsid, status.Value().ssid, SsidLength);
 						}
-						SafeStrncpy(actualSsid, status.Value().ssid, SsidLength);
+						InitSockets();
+						reconnectCount = 0;
+						platform.MessageF(NetworkInfoMessage, "Wifi module is %s%s, IP address %s\n",
+							TranslateWiFiState(currentMode),
+							actualSsid,
+							IP4String(ipAddress).c_str());
 					}
-					InitSockets();
-					reconnectCount = 0;
-					platform.MessageF(NetworkInfoMessage, "Wifi module is %s%s, IP address %s\n",
-						TranslateWiFiState(currentMode),
-						actualSsid,
-						IP4String(ipAddress).c_str());
-				}
-				else
-				{
-					platform.MessageF(NetworkInfoMessage, "Wifi module is %s\n", TranslateWiFiState(currentMode));
+					else
+					{
+						platform.MessageF(NetworkInfoMessage, "Wifi module is %s\n", TranslateWiFiState(currentMode));
+					}
 				}
 			}
-		}
-		break;
+			break;
 
-	default:
-		break;
+		default:
+			break;
+		}
 	}
 
 	// Check for debug info received from the WiFi module

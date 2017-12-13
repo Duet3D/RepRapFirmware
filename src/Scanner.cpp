@@ -13,12 +13,12 @@
 #include "Platform.h"
 
 
-const char* ALIGN_ON_G = "align_on.g";
-const char* ALIGN_OFF_G = "align_off.g";
-const char* SCAN_PRE_G = "scan_pre.g";
-const char* SCAN_POST_G = "scan_post.g";
-const char* CALIBRATE_PRE_G = "calibrate_pre.g";
-const char* CALIBRATE_POST_G = "calibrate_post.g";
+const char* const ALIGN_ON_G = "align_on.g";
+const char* const ALIGN_OFF_G = "align_off.g";
+const char* const SCAN_PRE_G = "scan_pre.g";
+const char* const SCAN_POST_G = "scan_post.g";
+const char* const CALIBRATE_PRE_G = "calibrate_pre.g";
+const char* const CALIBRATE_POST_G = "calibrate_post.g";
 
 
 void Scanner::Init()

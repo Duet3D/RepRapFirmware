@@ -89,7 +89,10 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 		}
 
 		// Also try to allocate a write buffer so we can perform faster writes
-		writeBuffer = reprap.GetPlatform().GetMassStorage()->AllocateWriteBuffer();
+		// We only do this if the mode is write, not append, because we don't want to use up a large buffer to append messages to the log file,
+		// especially as we need to flush messages to SD card regularly.
+		// Currently, append mode is used only for the log file.
+		writeBuffer = (mode == OpenMode::write) ? reprap.GetPlatform().GetMassStorage()->AllocateWriteBuffer() : nullptr;
 	}
 
 	const FRESULT openReturn = f_open(&file, location,

@@ -28,9 +28,9 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
-const size_t ToolNameLength = 32;						// maximum allowed length for tool names
-const AxesBitmap DefaultXAxisMapping = 1u << X_AXIS;	// by default, X is mapped to X
-const AxesBitmap DefaultYAxisMapping = 1u << Y_AXIS;	// by default, Y is mapped to Y
+constexpr size_t ToolNameLength = 32;						// maximum allowed length for tool names
+constexpr AxesBitmap DefaultXAxisMapping = 1u << X_AXIS;	// by default, X is mapped to X
+constexpr AxesBitmap DefaultYAxisMapping = 1u << Y_AXIS;	// by default, Y is mapped to Y
 
 enum class ToolState : uint8_t
 {
@@ -40,6 +40,7 @@ enum class ToolState : uint8_t
 };
 
 class Filament;
+
 class Tool
 {
 public:
@@ -85,25 +86,27 @@ protected:
 private:
 	static Tool *freelist;
 
+	Tool() : next(nullptr), filament(nullptr), name(nullptr) { }
+
 	void SetTemperatureFault(int8_t dudHeater);
 	void ResetTemperatureFault(int8_t wasDudHeater);
 	bool AllHeatersAtHighTemperature(bool forExtrusion) const;
 
-	int myNumber;
-	char name[ToolNameLength];
-	int drives[MaxExtruders];
+	Tool* next;
+	Filament *filament;
+	char *name;
+	float offset[MaxAxes];
 	float mix[MaxExtruders];
-	size_t driveCount;
-	int heaters[Heaters];
 	float activeTemperatures[Heaters];
 	float standbyTemperatures[Heaters];
+	size_t driveCount;
 	size_t heaterCount;
-	float offset[MaxAxes];
-	AxesBitmap axisOffsetsProbed;
+	int myNumber;
 	AxesBitmap xMapping, yMapping;
+	AxesBitmap axisOffsetsProbed;
 	FansBitmap fanMapping;
-	Filament *filament;
-	Tool* next;
+	uint8_t drives[MaxExtruders];
+	int8_t heaters[Heaters];
 
 	ToolState state;
 	bool heaterFault;
@@ -127,7 +130,7 @@ inline int Tool::Heater(size_t heaterNumber) const
 
 inline const char *Tool::GetName() const
 {
-	return name;
+	return (name == nullptr) ? "" : name;
 }
 
 inline int Tool::Number() const

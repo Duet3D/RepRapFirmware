@@ -590,7 +590,7 @@ namespace SmartDrivers
 	}
 
 	// Set microstepping or chopper control register
-	bool SetMicrostepping(size_t drive, int microsteps, int mode)
+	bool SetMicrostepping(size_t drive, unsigned int microsteps, int mode)
 	{
 		if (drive < numTmc2660Drivers)
 		{

@@ -83,7 +83,7 @@ public:
 	void ExtrapolateMissing();										// Extrapolate missing points to ensure consistency
 
 private:
-	static const char *HeightMapComment;							// The start of the comment we write at the start of the height map file
+	static const char * const HeightMapComment;						// The start of the comment we write at the start of the height map file
 
 	GridDefinition def;
 	float gridHeights[MaxGridProbePoints];							// The Z coordinates of the points on the bed that were probed

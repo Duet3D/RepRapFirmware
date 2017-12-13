@@ -1034,6 +1034,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				}
 				response->cat("]]");
 
+				// Fan mapping
+				response->catf(",\"fans\":%lu", tool->GetFanMapping());
+
 				// Filament (if any)
 				if (tool->GetFilament() != nullptr)
 				{
@@ -1042,8 +1045,15 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 					response->EncodeString(filamentName, strlen(filamentName), false);
 				}
 
-				// Do we have any more tools?
-				response->cat((tool->Next() != nullptr) ? "}," : "}");
+				// Offsets
+				response->cat(",\"offsets\":[");
+				for (size_t i = 0; i < numAxes; i++)
+				{
+					response->catf((i == 0) ? "%.2f" : ",%.2f", (double)tool->GetOffset(i));
+				}
+
+  				// Do we have any more tools?
+				response->cat((tool->Next() != nullptr) ? "]}," : "]}");
 			}
 			response->cat("]");
 		}

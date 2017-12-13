@@ -13,8 +13,8 @@
 
 #include <ctime>
 
-const char *Filament::FilamentAssignmentFile = "filaments.csv";
-const char *Filament::FilamentAssignmentFileComment = "RepRapFirmware filament assignment file v1";
+const char * const Filament::FilamentAssignmentFile = "filaments.csv";
+const char * const Filament::FilamentAssignmentFileComment = "RepRapFirmware filament assignment file v1";
 
 Filament *Filament::filamentList = nullptr;
 

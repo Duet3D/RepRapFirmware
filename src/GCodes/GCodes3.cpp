@@ -341,12 +341,12 @@ GCodeResult GCodes::CheckOrConfigureTrigger(GCodeBuffer& gb, StringRef& reply, i
 					}
 					if (gb.Seen(extrudeLetter))
 					{
-						long eStops[MaxExtruders];
+						uint32_t eStops[MaxExtruders];
 						size_t numEntries = MaxExtruders;
-						gb.GetLongArray(eStops, numEntries);
+						gb.GetUnsignedArray(eStops, numEntries);
 						for (size_t i = 0; i < numEntries; ++i)
 						{
-							if (eStops[i] >= 0 && (unsigned long)eStops[i] < MaxExtruders)
+							if (eStops[i] < MaxExtruders)
 							{
 								SetBit(triggerMask, eStops[i] + E0_AXIS);
 							}
@@ -422,15 +422,15 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, StringRef& reply)
 			// Found an axis letter. Get the drivers to assign to this axis.
 			seen = true;
 			size_t numValues = MaxDriversPerAxis;
-			long drivers[MaxDriversPerAxis];
-			gb.GetLongArray(drivers, numValues);
+			uint32_t drivers[MaxDriversPerAxis];
+			gb.GetUnsignedArray(drivers, numValues);
 
 			// Check all the driver numbers are in range
 			AxisDriversConfig config;
 			config.numDrivers = numValues;
 			for (size_t i = 0; i < numValues; ++i)
 			{
-				if ((unsigned long)drivers[i] >= DRIVES)
+				if (drivers[i] >= DRIVES)
 				{
 					badDrive = true;
 				}
@@ -476,12 +476,12 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, StringRef& reply)
 	{
 		seen = true;
 		size_t numValues = DRIVES - numTotalAxes;
-		long drivers[MaxExtruders];
-		gb.GetLongArray(drivers, numValues);
+		uint32_t drivers[MaxExtruders];
+		gb.GetUnsignedArray(drivers, numValues);
 		numExtruders = numValues;
 		for (size_t i = 0; i < numValues; ++i)
 		{
-			if ((unsigned long)drivers[i] >= DRIVES)
+			if (drivers[i] >= DRIVES)
 			{
 				badDrive = true;
 			}
@@ -701,20 +701,20 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, StringRef &reply)
 		// Find out which modules we have been asked to update
 		if (gb.Seen('S'))
 		{
-			long modulesToUpdate[3];
+			uint32_t modulesToUpdate[3];
 			size_t numUpdateModules = ARRAY_SIZE(modulesToUpdate);
-			gb.GetLongArray(modulesToUpdate, numUpdateModules);
+			gb.GetUnsignedArray(modulesToUpdate, numUpdateModules);
 			for (size_t i = 0; i < numUpdateModules; ++i)
 			{
-				long t = modulesToUpdate[i];
-				if (t < 0 || (unsigned long)t >= NumFirmwareUpdateModules)
+				uint32_t t = modulesToUpdate[i];
+				if (t >= NumFirmwareUpdateModules)
 				{
-					reply.printf("Invalid module number '%ld'\n", t);
+					reply.printf("Invalid module number '%" PRIu32 "'\n", t);
 					firmwareUpdateModuleMap = 0;
 					return GCodeResult::error;
 					break;
 				}
-				firmwareUpdateModuleMap |= (1u << (unsigned int)t);
+				firmwareUpdateModuleMap |= (1u << t);
 			}
 		}
 		else

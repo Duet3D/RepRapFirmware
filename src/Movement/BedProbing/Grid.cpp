@@ -165,7 +165,7 @@ void GridDefinition::PrintError(float originalXrange, float originalYrange, Stri
 }
 
 // Increase the version number in the following string whenever we change the format of the height map file.
-const char *HeightMap::HeightMapComment = "RepRapFirmware height map file v2";
+const char * const HeightMap::HeightMapComment = "RepRapFirmware height map file v2";
 
 HeightMap::HeightMap() : useMap(false) { }
 

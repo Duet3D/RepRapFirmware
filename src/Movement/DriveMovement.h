@@ -156,20 +156,20 @@ private:
 
 	DMState state;										// whether this is active or not
 	uint8_t drive;										// the drive that this DM controls
-	uint8_t microstepShift : 4,							// log2 of the microstepping factor
+	uint8_t microstepShift : 4,							// log2 of the microstepping factor (for when we use dynamic microstepping adjustment)
 			direction : 1,								// true=forwards, false=backwards
 			fullCurrent : 1;							// true if the drivers are set to the full current, false if they are set to the standstill current
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
 	uint32_t totalSteps;								// total number of steps for this move
 
-	// These values change as the step is executed
+	// These values change as the step is executed, except for reverseStartStep
 	uint32_t nextStep;									// number of steps already done
 	uint32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
 	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
 
-	// The following only need to be stored per-drive if we are supporting pressure advance
+	// The following only needs to be stored per-drive if we are supporting pressure advance
 	uint64_t twoDistanceToStopTimesCsquaredDivA;
 
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.

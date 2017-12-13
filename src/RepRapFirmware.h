@@ -59,7 +59,7 @@ enum Module : uint8_t
 	noModule = 15
 };
 
-extern const char *moduleName[];
+extern const char * const moduleName[];
 
 // Warn of what's to come, so we can use pointers to classes without including the entire header files
 class Network;
@@ -182,15 +182,15 @@ template<typename BitmapType> inline void ClearBit(BitmapType &b, unsigned int n
 }
 
 // Convert an array of longs to a bit map with overflow checking
-template<typename BitmapType> BitmapType LongArrayToBitMap(const long *arr, size_t numEntries)
+template<typename BitmapType> BitmapType UnsignedArrayToBitMap(const uint32_t *arr, size_t numEntries)
 {
 	BitmapType res = 0;
 	for (size_t i = 0; i < numEntries; ++i)
 	{
-		const long f = arr[i];
-		if (f >= 0 && (unsigned long)f < sizeof(BitmapType) * CHAR_BIT)
+		const uint32_t f = arr[i];
+		if (f < sizeof(BitmapType) * CHAR_BIT)
 		{
-			SetBit(res, (unsigned int)f);
+			SetBit(res, f);
 		}
 	}
 	return res;
