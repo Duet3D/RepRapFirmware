@@ -1,6 +1,28 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.20RC2
+===============
+Upgrade notes:
+- Recommended DuetWiFiServer.bin version is 1.20beta10 (until 1.20beta11 is available). I recommend you install it twice because the first installation often leaves the WiFi not working. So after installing it the first time, send M997 S1 to install it again from the DuetWiFiServer.bin file that has been left on the SD card.
+- Recommended DuetWebControl version is 1.20RC1
+- See also the notes for earlier 1.20beta versions
+
+New features:
+- Heater PWM frequencies are limited to 1kHz to protect the heater mosfets
+- Tool offsets and fan mapping are now passed to DWC
+- More free memory is available, especially in the Duet 0.6/0.8.5 build
+- Maximum bed heaters increased to 4 for the Duet WiFi/Ethernet
+- The software reset data now records the date/time of the reset if known and a longer stack trace
+- The maximum length of GCode commands has been increased, in particular to allow long passwords in M587 commands
+
+Bug fixes:
+- Fixed M28/M29 file upload
+- Fixed some USB/Telnet response formats when in Marlin emulation mode
+- Fixed move timing when a long slow printing move follows a faster printing move
+- Heater tuning was not possible in 1.20RC1
+- If a file being printed executed a macro right at the start, DWC could assume that the print had already finished (thanks chrishamm)
+
 Version 1.20RC1
 ===============
 Upgrade notes:
