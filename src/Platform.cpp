@@ -42,6 +42,9 @@
 #ifdef DUET_NG
 # include "TMC2660.h"
 #endif
+#ifdef DUET_M
+# include "TMC22xx.h"
+#endif
 
 #if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
@@ -53,7 +56,8 @@
 extern char _end;
 extern "C" char *sbrk(int i);
 
-#if !defined(HAS_LWIP_NETWORKING) || !defined(HAS_CPU_TEMP_SENSOR) || !defined(HAS_HIGH_SPEED_SD)
+#if !defined(HAS_LWIP_NETWORKING) || !defined(HAS_WIFI_NETWORKING) || !defined(HAS_CPU_TEMP_SENSOR) || !defined(HAS_HIGH_SPEED_SD) \
+ || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_VREF_MONITOR) || !defined(ACTIVE_LOW_HEAT_ON)
 # error Missing feature definition
 #endif
 
@@ -558,11 +562,6 @@ void Platform::Init()
 	}
 	DuetExpansion::AdditionalOutputInit();
 
-	// Initialise TMC2660 driver module
-	driversPowered = false;
-	SmartDrivers::Init(ENABLE_PINS, numSmartDrivers);
-	logOnStallDrivers = pauseOnStallDrivers = rehomeOnStallDrivers = 0;
-
 	// Set up the VSSA sense pin. Older Duet WiFis don't have it connected, so we enable the pulldown resistor to keep it inactive.
 	{
 		pinMode(VssaSensePin, INPUT_PULLUP);
@@ -577,10 +576,23 @@ void Platform::Init()
 			pinMode(VssaSensePin, INPUT);
 		}
 	}
+#endif
 
-	temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadDrivers = stalledDrivers = 0;
-	stalledDriversToLog = stalledDriversToPause = stalledDriversToRehome = 0;
+#if HAS_SMART_DRIVERS
+	// Initialise TMC driver module
+	driversPowered = false;
+	SmartDrivers::Init(ENABLE_PINS, numSmartDrivers);
+	temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadDrivers = 0;
 	onBoardDriversFanRunning = offBoardDriversFanRunning = false;
+#endif
+
+#if HAS_STALL_DETECT
+	stalledDrivers = 0;
+	logOnStallDrivers = pauseOnStallDrivers = rehomeOnStallDrivers = 0;
+	stalledDriversToLog = stalledDriversToPause = stalledDriversToRehome = 0;
+#endif
+
+#if HAS_VOLTAGE_MONITOR
 	autoSaveEnabled = false;
 	autoSaveState = AutoSaveState::starting;
 #endif
@@ -627,16 +639,29 @@ void Platform::Init()
 #endif
 			);
 		}
-		AnalogChannelNumber chan = PinToAdcChannel(tempSensePins[heater]);	// translate the Arduino Due Analog pin number to the SAM ADC channel number
+		const AnalogChannelNumber chan = PinToAdcChannel(tempSensePins[heater]);	// translate the pin number to the SAM ADC channel number
 		pinMode(tempSensePins[heater], AIN);
-		thermistorAdcChannels[heater] = chan;
-		AnalogInEnableChannel(chan, true);
-		thermistorFilters[heater].Init(0);
+		filteredAdcChannels[heater] = chan;
 	}
 
-#if HAS_CPU_TEMP_SENSOR
-	cpuTemperatureFilter.Init(0);
+#if HAS_VREF_MONITOR
+	// Set up the VSSA and VREF measurement channels
+	pinMode(VssaSensePin, AIN);
+	filteredAdcChannels[VssaFilterIndex] = PinToAdcChannel(VssaSensePin);		// translate the pin number to the SAM ADC channel number
+	pinMode(VrefSensePin, AIN);
+	filteredAdcChannels[VrefFilterIndex] = PinToAdcChannel(VrefSensePin);		// translate the pin number to the SAM ADC channel number
 #endif
+
+#if HAS_CPU_TEMP_SENSOR
+	filteredAdcChannels[CpuTempFilterIndex] = GetTemperatureAdcChannel();
+#endif
+
+	// Initialise all the ADC filters and enable the corresponding ADC channels
+	for (size_t filter = 0; filter < NumAdcFilters; ++filter)
+	{
+		adcFilters[filter].Init(0);
+		AnalogInEnableChannel(filteredAdcChannels[filter], true);
+	}
 
 	// Fans
 	InitFans();
@@ -673,8 +698,6 @@ void Platform::Init()
 
 #if HAS_CPU_TEMP_SENSOR
 	// MCU temperature monitoring
-	temperatureAdcChannel = GetTemperatureAdcChannel();
-	AnalogInEnableChannel(temperatureAdcChannel, true);
 	highestMcuTemperature = 0;									// the highest output we have seen from the ADC filter
 	lowestMcuTemperature = 4095 * ThermistorAverageReadings;	// the lowest output we have seen from the ADC filter
 	mcuTemperatureAdjust = 0.0;
@@ -1373,9 +1396,9 @@ void Platform::Spin()
 
 	// Check the MCU max and min temperatures
 #if HAS_CPU_TEMP_SENSOR
-	if (cpuTemperatureFilter.IsValid())
+	if (adcFilters[CpuTempFilterIndex].IsValid())
 	{
-		const uint32_t currentMcuTemperature = cpuTemperatureFilter.GetSum();
+		const uint32_t currentMcuTemperature = adcFilters[CpuTempFilterIndex].GetSum();
 		if (currentMcuTemperature > highestMcuTemperature)
 		{
 			highestMcuTemperature= currentMcuTemperature;
@@ -1448,6 +1471,7 @@ void Platform::Spin()
 				{
 					openLoadDrivers &= ~mask;
 				}
+#if HAS_STALL_DETECT
 				if ((stat & TMC_RR_SG) != 0)
 				{
 					if ((stalledDrivers & mask) == 0)
@@ -1472,8 +1496,10 @@ void Platform::Spin()
 				{
 					stalledDrivers &= ~mask;
 				}
+#endif
 			}
 
+#if HAS_STALL_DETECT
 			// Action any pause or rehome actions due to motor stalls. This may have to be done more than once.
 			if (stalledDriversToRehome != 0)
 			{
@@ -1489,7 +1515,7 @@ void Platform::Spin()
 					stalledDriversToPause = 0;
 				}
 			}
-
+#endif
 			// Advance drive number ready for next time
 			++nextDriveToPoll;
 			if (nextDriveToPoll == numSmartDrivers)
@@ -1558,7 +1584,9 @@ void Platform::Spin()
 					ReportDrivers(temperatureWarningDrivers, "Warning: high temperature", reported);
 				}
 			}
+#endif
 
+#if HAS_STALL_DETECT
 			// Check for stalled drivers that need to be reported and logged
 			if (stalledDriversToLog != 0 && reprap.GetGCodes().IsReallyPrinting())
 			{
@@ -1587,8 +1615,15 @@ void Platform::Spin()
 			}
 #endif
 
-#ifdef DUET_NG
 			// Check for a VSSA fault
+#if HAS_VREF_MONITOR
+			constexpr uint32_t MaxVssaFilterSum = (15 * 4096 * ThermistorAverageReadings * 4)/2200;
+			if (adcFilters[VssaFilterIndex].GetSum() > MaxVssaFilterSum)
+			{
+				Message(ErrorMessage, "VSSA fault, check thermistor wiring\n");
+				reported = true;
+			}
+#elif defined(DUET_NG)
 			if (vssaSenseWorking && digitalRead(VssaSensePin))
 			{
 				Message(ErrorMessage, "VSSA fault, check thermistor wiring\n");
@@ -1671,6 +1706,10 @@ void Platform::ReportDrivers(DriversBitmap whichDrivers, const char* text, bool&
 		reported = true;
 	}
 }
+
+#endif
+
+#if HAS_STALL_DETECT
 
 // Return true if any motor driving this axis or extruder is stalled
 bool Platform::AnyMotorStalled(size_t drive) const
@@ -1897,7 +1936,7 @@ void Platform::InitialiseInterrupts()
 #endif
 
 #if HAS_SMART_DRIVERS
-	NVIC_SetPriority(USART_TMC_DRV_IRQn, NvicPriorityDriversUsart);
+	NVIC_SetPriority(SERIAL_TMC_DRV_IRQn, NvicPriorityDriversSerialTMC);
 #endif
 
 	// Timer interrupt for stepper motors
@@ -1974,7 +2013,7 @@ void Platform::InitialiseInterrupts()
 
 	// Tick interrupt for ADC conversions
 	tickState = 0;
-	currentHeater = 0;
+	currentFilterNumber = 0;
 
 	// Set up the timeout of the regulator watchdog, and set up the backup watchdog if there is one
 	// The clock frequency for both watchdogs is 32768/128 = 256Hz
@@ -2223,7 +2262,7 @@ void Platform::Diagnostics(MessageType mtype)
 
 #if HAS_CPU_TEMP_SENSOR
 	// Show the MCU temperatures
-	const uint32_t currentMcuTemperature = cpuTemperatureFilter.GetSum();
+	const uint32_t currentMcuTemperature = adcFilters[CpuTempFilterIndex].GetSum();
 	MessageF(mtype, "MCU temperature: min %.1f, current %.1f, max %.1f\n",
 		(double)AdcReadingToCpuTemperature(lowestMcuTemperature), (double)AdcReadingToCpuTemperature(currentMcuTemperature), (double)AdcReadingToCpuTemperature(highestMcuTemperature));
 	lowestMcuTemperature = highestMcuTemperature = currentMcuTemperature;
@@ -2340,7 +2379,7 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, StringRef& reply, int d)
 					return true;
 				}
 
-				const float currentMcuTemperature = AdcReadingToCpuTemperature(cpuTemperatureFilter.GetSum());
+				const float currentMcuTemperature = AdcReadingToCpuTemperature(adcFilters[CpuTempFilterIndex].GetSum());
 				if (currentMcuTemperature < tempMinMax[0])
 				{
 					MessageF(AddError(mtype), "MCU temperature %.1f is lower than expected\n", (double)currentMcuTemperature);
@@ -2641,7 +2680,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 							: rslt;
 			}
 
-#if HAS_SMART_DRIVERS
+#if HAS_STALL_DETECT
 		case EndStopInputType::motorStall:
 			{
 				bool motorIsStalled;
@@ -4150,7 +4189,7 @@ bool Platform::Inkjet(int bitPattern)
 void Platform::GetMcuTemperatures(float& minT, float& currT, float& maxT) const
 {
 	minT = AdcReadingToCpuTemperature(lowestMcuTemperature);
-	currT = AdcReadingToCpuTemperature(cpuTemperatureFilter.GetSum());
+	currT = AdcReadingToCpuTemperature(adcFilters[CpuTempFilterIndex].GetSum());
 	maxT = AdcReadingToCpuTemperature(highestMcuTemperature);
 }
 #endif
@@ -4182,6 +4221,10 @@ float Platform::GetTmcDriversTemperature(unsigned int board) const
 			: ((temperatureWarningDrivers & mask) != 0) ? 100.0
 				: 0.0;
 }
+
+#endif
+
+#if HAS_STALL_DETECT
 
 // Configure the motor stall detection, returning true if an error was encountered
 bool Platform::ConfigureStallDetection(GCodeBuffer& gb, StringRef& reply)
@@ -4496,24 +4539,24 @@ void Platform::Tick()
 	case 1:
 	case 3:
 		{
-			// We read a thermistor channel on alternate ticks
+			// We read a filtered ADC channel on alternate ticks
 			// Because we are in the tick ISR and no other ISR reads the averaging filter, we can cast away 'volatile' here.
 			// The following code assumes number of thermistor channels = number of heater channels
-			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
-			currentFilter.ProcessReading(AnalogInReadChannel(thermistorAdcChannels[currentHeater]));
+			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(adcFilters[currentFilterNumber]);
+			currentFilter.ProcessReading(AnalogInReadChannel(filteredAdcChannels[currentFilterNumber]));
 
 			// Guard against overly long delays between successive calls of PID::Spin().
 			// Do not call Time() here, it isn't safe. We use millis() instead.
-			if ((configuredHeaters & (1 << currentHeater)) != 0 && (millis() - reprap.GetHeat().GetLastSampleTime(currentHeater)) > maxPidSpinDelay)
+			if ((configuredHeaters & (1u << currentFilterNumber)) != 0 && (millis() - reprap.GetHeat().GetLastSampleTime(currentFilterNumber)) > maxPidSpinDelay)
 			{
-				SetHeater(currentHeater, 0.0);
+				SetHeater(currentFilterNumber, 0.0);
 				LogError(ErrorCode::BadTemp);
 			}
 
-			++currentHeater;
-			if (currentHeater == Heaters)
+			++currentFilterNumber;
+			if (currentFilterNumber == NumAdcFilters)
 			{
-				currentHeater = 0;
+				currentFilterNumber = 0;
 			}
 
 			// If we are not using a simple modulated IR sensor, process the Z probe reading on every tick for a faster response.
@@ -4534,10 +4577,6 @@ void Platform::Tick()
 			digitalWrite(zProbeModulationPin, LOW);				// turn off the IR emitter
 		}
 
-		// Read the MCU temperature as well (no need to do it in every state)
-#if HAS_CPU_TEMP_SENSOR
-		const_cast<ThermistorAveragingFilter&>(cpuTemperatureFilter).ProcessReading(AnalogInReadChannel(temperatureAdcChannel));
-#endif
 		++tickState;
 		break;
 

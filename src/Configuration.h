@@ -127,6 +127,7 @@ constexpr unsigned int FirstRtdChannel = 200;			// Temperature sensor channels 2
 constexpr unsigned int FirstLinearAdcChannel = 300;		// Temperature sensor channels 300... use an ADC that provides a linear output over a temperature range
 constexpr unsigned int DhtTemperatureChannel = 400;		// Temperature sensor channel 400 for DHTxx temperature
 constexpr unsigned int DhtHumidityChannel = 401;		// Temperature sensor channel 401 for DHTxx humidity
+constexpr unsigned int FirstPT1000Channel = 500;		// Temperature sensor channels 500... are PT1000 sensors connected to thermistor inputs
 constexpr unsigned int CpuTemperatureSenseChannel = 1000;  // Sensor 1000 is the MCJU's own temperature sensor
 constexpr unsigned int FirstTmcDriversSenseChannel = 1001; // Sensors 1001..1002 are the TMC2660 driver temperature sense
 constexpr unsigned int NumTmcDriversSenseChannels = 2;	// Sensors 1001..1002 are the TMC2660 driver temperature sense

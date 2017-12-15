@@ -9,7 +9,9 @@
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
 #define HAS_SMART_DRIVERS		0
+#define HAS_STALL_DETECT		0
 #define HAS_VOLTAGE_MONITOR		0
+#define HAS_VREF_MONITOR		0
 #define ACTIVE_LOW_HEAT_ON		1
 
 constexpr size_t NumFirmwareUpdateModules = 1;

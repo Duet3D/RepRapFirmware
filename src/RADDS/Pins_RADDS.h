@@ -9,7 +9,9 @@
 #define HAS_CPU_TEMP_SENSOR		0				// enabling the CPU temperature sensor disables Due pin 13 due to bug in SAM3X
 #define HAS_HIGH_SPEED_SD		0
 #define HAS_SMART_DRIVERS		0
+#define HAS_STALL_DETECT		0
 #define HAS_VOLTAGE_MONITOR		0
+#define HAS_VREF_MONITOR		0
 #define ACTIVE_LOW_HEAT_ON		0
 
 const size_t NumFirmwareUpdateModules = 1;

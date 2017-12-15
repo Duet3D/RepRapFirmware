@@ -31,7 +31,9 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
 #define HAS_SMART_DRIVERS		1
+#define HAS_STALL_DETECT		1
 #define HAS_VOLTAGE_MONITOR		1
+#define HAS_VREF_MONITOR		0
 #define ACTIVE_LOW_HEAT_ON		1
 
 #define IAP_UPDATE_FILE		"iap4e.bin"				// using the same IAP file for both Duet WiFi and Duet Ethernet

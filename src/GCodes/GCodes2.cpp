@@ -3884,7 +3884,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 #endif
 
-#if HAS_SMART_DRIVERS
+#if HAS_STALL_DETECT
 	case 915:
 		result = GetGCodeResultFromError(platform.ConfigureStallDetection(gb, reply));
 		break;

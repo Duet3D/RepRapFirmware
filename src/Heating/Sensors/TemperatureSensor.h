@@ -46,6 +46,8 @@ public:
 protected:
 	void CopyBasicHeaterDetails(unsigned int heater, StringRef& reply) const;
 
+	static TemperatureError GetPT100Temperature(float& t, uint16_t ohmsx100);		// shared function used by two derived classes
+
 private:
 	const unsigned int sensorChannel;
 	const char * const sensorType;

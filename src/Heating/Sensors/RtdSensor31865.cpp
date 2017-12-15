@@ -35,35 +35,6 @@ const uint8_t Cr0ReadMask = 0b11011101;		// bits 1 and 5 auto clear, so ignore t
 
 const uint16_t DefaultRef = 400;
 
-//	 pt100rtd list of resistances v temperature
-//
-//	DIN 43760 / IEC 751 resistance values (ohms) were multiplied by 100 and
-//	converted to 16 bit unsigned integers with no loss of accuracy.
-//
-//	Examples:
-//	1852 represents 18.52 ohms and corresponds to a temperature of -200C.
-//	10000 ==> 100.00 ohms @   0C
-//	13851 ==> 138.51 ohms @ 100C
-
-const float CelsiusMin = -100.0;					// starting temperature of the temp table below
-const float CelsiusInterval = 10.0;
-
-static const uint16_t tempTable[] =
-{
-	6026,  6430,  6833,  7233,  7633,  8031,  8427,  8822,  9216,  9609,
-	10000, 10390, 10779, 11167, 11554, 11940, 12324, 12708, 13090, 13471,
-	13851, 14229, 14607, 14983, 15358, 15733, 16105, 16477, 16848, 17217,
-	17586, 17953, 18319, 18684, 19047, 19410, 19771, 20131, 20490, 20848,
-	21205, 21561, 21915, 22268, 22621, 22972, 23321, 23670, 24018, 24364,
-	24709, 25053, 25396, 25738, 26078, 26418, 26756, 27093, 27429, 27764,
-	28098, 28430, 28762, 29092, 29421, 29749, 30075, 30401, 30725, 31048,
-	31371, 31692, 32012, 32330, 32648, 32964, 33279, 33593, 33906, 34218,
-	34528, 34838, 35146, 35453, 35759, 36064, 36367, 36670, 36971, 37271,
-	37570, 37868, 38165, 38460, 38755, 39048
-};
-
-const size_t NumTempTableEntries = sizeof(tempTable)/sizeof(tempTable[0]);
-
 RtdSensor31865::RtdSensor31865(unsigned int channel)
 	: SpiTemperatureSensor(channel, "PT100 (MAX31865)", channel - FirstRtdChannel, MAX31865_SpiMode, MAX31865_Frequency),
 	  rref(DefaultRef), cr0(DefaultCr0)
@@ -206,46 +177,8 @@ TemperatureError RtdSensor31865::GetTemperature(float& t)
 			else
 			{
 				const uint16_t ohmsx100 = (uint16_t)((((rawVal >> 1) & 0x7FFF) * rref * 100) >> 15);
-
-				// Formally-verified binary search routine, adapted from one of the eCv examples
-				size_t low = 0u, high = NumTempTableEntries;
-				while (high > low)
-				keep(low <= high; high <= NumTempTableEntries)
-				keep(low == 0u || tempTable[low - 1u] < ohmsx100)
-				keep(high == NumTempTableEntries || ohmsx100 <= tempTable[high])
-				decrease(high - low)
-				{
-					size_t mid = (high - low)/2u + low;			// get the mid point, avoiding arithmetic overflow
-					if (ohmsx100 <= tempTable[mid])
-					{
-						high = mid;
-					}
-					else
-					{
-						low = mid + 1u;
-					}
-				}
-				assert(low <= NumTempTableEntries);
-				assert(low == 0 || tempTable[low - 1] < ohmsx100);
-				assert(low == NumTempTableEntries || ohmsx100 <= tempTable[low]);
-
-				if (low == 0)									// if off the bottom of the table
-				{
-					lastResult = TemperatureError::shortCircuit;
-				}
-				else  if (low >= NumTempTableEntries)					// if off the top of the table
-				{
-					lastResult = TemperatureError::openCircuit;
-				}
-				else
-				{
-					const float temperatureFraction = (float)(ohmsx100 - tempTable[low - 1])/(float)(tempTable[low] - tempTable[low - 1]);
-
-					t = lastTemperature = CelsiusInterval * (low - 1 + temperatureFraction) + CelsiusMin;
-
-					//debugPrintf("raw %f low %u temp %f\n", ohmsx100, low, t);
-					lastResult = TemperatureError::success;
-				}
+				lastResult = GetPT100Temperature(lastTemperature, ohmsx100);
+				t = lastTemperature;
 			}
 		}
 	}

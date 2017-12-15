@@ -13,8 +13,10 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 #define HAS_WIFI_NETWORKING		1
 #define HAS_CPU_TEMP_SENSOR		0
 #define HAS_HIGH_SPEED_SD		1
-#define HAS_SMART_DRIVERS		0
+#define HAS_SMART_DRIVERS		0		// TBD
+#define HAS_STALL_DETECT		0		// TBD
 #define HAS_VOLTAGE_MONITOR		0		// TBD
+#define HAS_VREF_MONITOR		0		// TBD
 #define ACTIVE_LOW_HEAT_ON		1
 
 #define IAP_UPDATE_FILE		"iape70.bin"		// need special build for SAME70

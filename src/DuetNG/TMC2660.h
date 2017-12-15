@@ -15,7 +15,7 @@
 
 // The Platform class needs to know which USART we are using when assigning interrupt priorities
 #define USART_TMC_DRV			USART1
-#define USART_TMC_DRV_IRQn		USART1_IRQn
+#define SERIAL_TMC_DRV_IRQn		USART1_IRQn
 #define ID_USART_TMC_DRV		ID_USART1
 #define USART_TMC_DRV_Handler	USART1_Handler
 

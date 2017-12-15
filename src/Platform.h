@@ -53,6 +53,23 @@ Licence: GPL
 constexpr bool FORWARDS = true;
 constexpr bool BACKWARDS = !FORWARDS;
 
+// Define the number of ADC filters and the indices of the extra ones
+#if HAS_VREF_MONITOR
+constexpr size_t VrefFilterIndex = Heaters;
+constexpr size_t VssaFilterIndex = Heaters + 1;
+# if HAS_CPU_TEMP_SENSOR
+constexpr size_t NumAdcFilters = Heaters + 3;
+constexpr size_t CpuTempFilterIndex = Heaters + 2;
+# else
+constexpr size_t NumAdcFilters = Heaters + 2;
+# endif
+#elif HAS_CPU_TEMP_SENSOR
+constexpr size_t NumAdcFilters = Heaters + 1;
+constexpr size_t CpuTempFilterIndex = Heaters;
+#else
+constexpr size_t NumAdcFilters = Heaters;
+#endif
+
 /**************************************************************************************************/
 
 #if SUPPORT_INKJET
@@ -473,10 +490,10 @@ public:
 	// Heat and temperature
 	float GetZProbeTemperature();							// Get our best estimate of the Z probe temperature
 
-	volatile ThermistorAveragingFilter& GetThermistorFilter(size_t channel)
-	pre(channel < ARRAY_SIZE(thermistorFilters))
+	volatile ThermistorAveragingFilter& GetAdcFilter(size_t channel)
+	pre(channel < ARRAY_SIZE(adcFilters))
 	{
-		return thermistorFilters[channel];
+		return adcFilters[channel];
 	}
 
 	void SetHeater(size_t heater, float power, PwmFrequency freq = 0)	// power is a fraction in [0,1]
@@ -538,6 +555,9 @@ public:
 #if HAS_SMART_DRIVERS
 	float GetTmcDriversTemperature(unsigned int board) const;
 	void DriverCoolingFansOn(uint32_t driverChannelsMonitored);
+#endif
+
+#if HAS_STALL_DETECT
 	bool ConfigureStallDetection(GCodeBuffer& gb, StringRef& reply);
 #endif
 
@@ -588,6 +608,8 @@ private:
 
 #if HAS_SMART_DRIVERS
 	void ReportDrivers(DriversBitmap whichDrivers, const char* text, bool& reported);
+#endif
+#if HAS_STALL_DETECT
 	bool AnyMotorStalled(size_t drive) const pre(drive < DRIVES);
 #endif
 
@@ -641,7 +663,7 @@ private:
 	};
 
 #if SAM4E || SAM4S || SAME70
-	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= 512, "Can't fit software reset data in SAM4 user signature area");
+	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= 512, "Can't fit software reset data in user signature area");
 #else
 	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
 #endif
@@ -677,7 +699,6 @@ private:
 	void GetStackUsage(uint32_t* currentStack, uint32_t* maxStack, uint32_t* neverUsed) const;
 
 	// DRIVES
-
 	void SetDriverCurrent(size_t driver, float current, int code);
 	void UpdateMotorCurrent(size_t driver);
 	void SetDriverDirection(uint8_t driver, bool direction)
@@ -710,9 +731,7 @@ private:
 
 #if HAS_SMART_DRIVERS
 	size_t numSmartDrivers;						// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers
-	DriversBitmap logOnStallDrivers, pauseOnStallDrivers, rehomeOnStallDrivers;
-	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers, openLoadDrivers, stalledDrivers;
-	DriversBitmap stalledDriversToLog, stalledDriversToPause, stalledDriversToRehome;
+	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers, openLoadDrivers;
 	uint8_t nextDriveToPoll;
 	bool driversPowered;
 	bool onBoardDriversFanRunning;						// true if a fan is running to cool the on-board drivers
@@ -721,11 +740,16 @@ private:
 	uint32_t offBoardDriversFanStartMillis;				// how many times we have suppressed a temperature warning
 #endif
 
+#if HAS_STALL_DETECT
+	DriversBitmap logOnStallDrivers, pauseOnStallDrivers, rehomeOnStallDrivers;
+	DriversBitmap stalledDrivers, stalledDriversToLog, stalledDriversToPause, stalledDriversToRehome;
+#endif
+
 #if defined(DUET_06_085)
 	// Digipots
 	MCP4461 mcpDuet;
 	MCP4461 mcpExpansion;
-	Pin potWipes[8];								// we have only 8 digipots, on the Duet 0.8.5 we use the DAC for the 9th
+	Pin potWipes[8];												// we have only 8 digipots, on the Duet 0.8.5 we use the DAC for the 9th
 	float senseResistor;
 	float maxStepperDigipotVoltage;
 	float stepperDacVoltageRange, stepperDacVoltageOffset;
@@ -743,11 +767,9 @@ private:
 	volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off
 
 	// Thermistors and temperature monitoring
-	volatile ThermistorAveragingFilter thermistorFilters[Heaters];	// bed and extruder thermistor readings
+	volatile ThermistorAveragingFilter adcFilters[NumAdcFilters];	// ADC reading averaging filters
 
 #if HAS_CPU_TEMP_SENSOR
-	volatile ThermistorAveragingFilter cpuTemperatureFilter;		// MCU temperature readings
-	AnalogChannelNumber temperatureAdcChannel;
 	uint32_t highestMcuTemperature, lowestMcuTemperature;
 	float mcuTemperatureAdjust;
 #endif
@@ -827,10 +849,10 @@ private:
 	// of the M305 command (e.g., SetThermistorNumber() and array lookups assume range
 	// checking has already been performed.
 
-	AnalogChannelNumber thermistorAdcChannels[Heaters];
+	AnalogChannelNumber filteredAdcChannels[NumAdcFilters];
 	AnalogChannelNumber zProbeAdcChannel;
 	uint8_t tickState;
-	size_t currentHeater;
+	size_t currentFilterNumber;
 	int debugCode;
 
 	// Hotend configuration

@@ -230,7 +230,7 @@ const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the high
 #endif
 
 const uint32_t NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
-const uint32_t NvicPriorityDriversUsart = 2;	// USART used to control and monitor the TMC2660 drivers
+const uint32_t NvicPriorityDriversSerialTMC = 2;// USART or UART used to control and monitor the smart drivers
 const uint32_t NvicPrioritySystick = 3;			// systick kicks the watchdog and starts the ADC conversions, so must be quite high
 const uint32_t NvicPriorityPins = 4;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const uint32_t NvicPriorityStep = 5;			// step interrupt is next highest, it can preempt most other interrupts

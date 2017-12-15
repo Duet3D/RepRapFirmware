@@ -111,45 +111,75 @@ Done in 1.20beta10:
 - [done] Added CoreXYUV
 - [done] improved square root timing
 - [done] added Z probe types 7 and 8
-- [done] bug fix: semicolons inside quoted strings were still stipped out from some gcode sources
+- [done] bug fix: semicolons inside quoted strings were still stripped out from some gcode sources
 - [done] Bug fix: giving silly numbers of microsteps in M350 messed up the steps/mm
 - [done] Bug fix: High microstepping and high acceleration on deltas led to poor timing in deceleration phase and high MaxReps
 - [done] Bug fix: The commands in tool change macro files were sometimes not fully executed before the next action
 - [done] Bug fix to speed limits in CoreXYU
 - [done] Possible bug fix: avoid race condition in TMC SPI ISR
 
-Remaining:
-- [done, test] On filament error, doesn't print the right message in the box
-- On filament error, doesn't log the message
-- On filament error, and only pops up a message box once
-- Layer shift reports (new in beta 10)
-- Report of watchdog resets (from 1.20beta7)
-- [done, test] Add test report: test voltage readings, stepper driver status, SD card interface speed, and report processor ID
+Done in 1.20beta11:
+- [done, ok] On filament error, doesn't print the right message in the box
+- [done, ok] Layer shift reports (new in beta 10)
+- [done, ok] Report of watchdog resets (from 1.20beta7)
+- [done, ok] Add test report: test voltage readings, stepper driver status, SD card interface speed, and report processor ID
 - [done] M92, M201 etc. to work on all axes, not just visible axes
 
-- Implement G1 S4? (like S2 but always relative)
-- Need protection against deleting an open file especially a log file
-- add log entries for power down?
-- card detect?
+Done in 1.20RC1:
+- [ask him to test it again] Ian's report of strange M584 P behaviour, https://www.duet3d.com/forum/thread.php?pid=31469#p31469
+- [done] Ian's report of M109 Z movement issue, see https://www.duet3d.com/forum/thread.php?pid=31542#p31542
+- [done, test] M109/M104 tool selection and temperature setting
+- [done, ok] On filament error, doesn't log the message
+- [done, ok] On filament error, only pops up a message box once
+- [done] Chrishamm's responder bug fix
+- [done, ok] Z probe type 5 didn't work on Duet 085
+- [done, ok] WPA2 password check minimum 8 characters
+- [done, test] M500 doesn't save axis lengths found by G1 S3
+- [done, ok] display SG load register in M122
+- [done, ok] Variable heater PWM frequency
+- [done, ok] changed calculation of PID parameters for faster heatup
+- [done, ok] Added M81 S parameter
+- [done, ok so far] card detect
+- [done, ok] Protection against deleting an open file especially a log file
+
+Remaining after RC1:
+- Fix for pressure advance script https://www.duet3d.com/forum/thread.php?pid=32107#p32107
+- Allow longer M587 commands
+- Heater PWM frequency limit
+- Heater tuning doesn't start, says the header is not ready
+- M29 didn't work
+- Record time of last software reset, more stack, and whether it was deliberate
+- Free up memory esp. on Duet085 build
+
+Remaining:
+- [done] ADC low and high offsets are no longer divided by 2 compared to previously
+- PT1000 support
+- If no temp sensor configured, M305 Px should say so instead of allocating a thermistor
+- Document heater protection
+- Document multiple bed and chamber heaters
 
 Investigations:
 
-[NOT fixed by timing and ISR changes] https://www.duet3d.com/forum/thread.php?pid=30414#p30414 (watchdog reset)
+[done, waiting forvever for SD card] Investigate https://www.duet3d.com/forum/thread.php?pid=32237#p32237
+[done] https://www.duet3d.com/forum/thread.php?pid=30414#p30414 (watchdog reset)
 [can't reproduce] https://www.duet3d.com/forum/thread.php?pid=28210#p28210 (pressure advance causes over extrusion)
 [done] https://www.duet3d.com/forum/thread.php?pid=28255#p28255 (tool change problem)
 [done] https://www.duet3d.com/forum/thread.php?pid=30431#p30431 (bed probing inaccurate)
 [can't reproduce] https://www.duet3d.com/forum/thread.php?pid=30799#p30799 (step errors at high E steps/mm)
 [no fault] https://www.duet3d.com/forum/thread.php?pid=30851#p30851 (split axis motor goes the wrong way)
-[done] inconsistend oversize vs. len
-p->ref == 1 in EWiFi
+[done BUT still wrong in lwip 2] inconsistend oversize vs. len
+p->ref == 1 in WiFi
 
 Later versions:
 
+- Use M140H1:2:3 to set multiple bed heater numbers
+- Option to not broadcast SSID?
+- Support faster homing by using interrupts to check homing switch states
+- Implement G1 S4? (like S2 but always relative)
 - Add work coordinates? https://www.duet3d.com/forum/thread.php?pid=27128#p27128
-Don't do presure advance during accel/decel of sequences of short segments
-Axis limits on arc moves
-Arc move with same finish and start coordinates to do complete circle
-Add T parameter to M207
+- Don't do presure advance during accel/decel of sequences of short segments
+- Axis limits on arc moves
+- Arc move with same finish and start coordinates to do complete circle
+- Add T parameter to M207
 - look at supporting SIZE in FTP
 - Make mp.delta.hmz0sK, hmz0scK and dsk 64-bit in SAM4E versions, to increase movement limit - also increase K2?
-- hangprinter kinematics, see http://forums.reprap.org/read.php?1,792937,797500,page=1#msg-797500.
