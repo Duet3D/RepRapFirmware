@@ -5,6 +5,20 @@ Version 1.20RC2
 ===============
 Upgrade notes:
 - Recommended DuetWiFiServer.bin version is 1.20beta10 (until 1.20beta11 is available). I recommend you install it twice because the first installation often leaves the WiFi not working. So after installing it the first time, send M997 S1 to install it again from the DuetWiFiServer.bin file that has been left on the SD card.
+- Recommended DuetWebControl version is 1.20RC3
+- See also the notes for earlier 1.20beta versions
+
+New features:
+- PT1000 sensors connected to thermistor inputs are now supported
+
+Bug fixes:
+- M107 now turns off the mapped fan
+- ADC low and high offsets (M305 H and L parameters) were incorrectly divided by 2 in earlier 1.20 beta and RC versions
+
+Version 1.20RC2
+===============
+Upgrade notes:
+- Recommended DuetWiFiServer.bin version is 1.20beta10 (until 1.20beta11 is available). I recommend you install it twice because the first installation often leaves the WiFi not working. So after installing it the first time, send M997 S1 to install it again from the DuetWiFiServer.bin file that has been left on the SD card.
 - Recommended DuetWebControl version is 1.20RC1
 - See also the notes for earlier 1.20beta versions
 
