@@ -1528,7 +1528,7 @@ void Platform::Spin()
 	{
 		driversPowered = true;
 	}
-	SmartDrivers::SetDriversPowered(driversPowered);
+	SmartDrivers::Spin(driversPowered);
 #endif
 
 	const uint32_t now = millis();
@@ -3961,11 +3961,7 @@ bool Platform::GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firm
 {
 	firmwarePin = NoPin;										// assume failure
 	invert = false;												// this is the common case
-	if (logicalPin > HighestLogicalPin)
-	{
-		// Pin number out of range, so nothing to do here
-	}
-	else if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + (int)Heaters)		// pins 0-9 correspond to heater channels
+	if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + (int)Heaters)		// pins 0-9 correspond to heater channels
 	{
 		// For safety, we don't allow a heater channel to be used for servos until the heater has been disabled
 		if (!reprap.GetHeat().IsHeaterEnabled(logicalPin - Heater0LogicalPin))
@@ -4527,7 +4523,7 @@ void Platform::Tick()
 # if HAS_SMART_DRIVERS
 		if (driversPowered && currentVin > driverOverVoltageAdcReading)
 		{
-			SmartDrivers::SetDriversPowered(false);
+			SmartDrivers::TurnDriversOff();
 			// We deliberately do not clear driversPowered here or increase the over voltage event count - we let the spin loop handle that
 		}
 # endif

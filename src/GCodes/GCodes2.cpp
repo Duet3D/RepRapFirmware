@@ -1100,8 +1100,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
-	case 107: // Fan 0 off - deprecated
-		platform.SetFanValue(0, 0.0);
+	case 107: // Fan off - deprecated
+		lastDefaultFanSpeed = 0.0;
+		SetMappedFanSpeed();
 		break;
 
 	case 108: // Cancel waiting for temperature

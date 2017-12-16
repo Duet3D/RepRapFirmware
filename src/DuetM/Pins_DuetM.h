@@ -57,11 +57,12 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
-// DRIVES
+// Drivers
 constexpr Pin GlobalTmcEnablePin = 1;				// The pin that drives ENN of all drivers
 constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, 63, 61 };
 constexpr Pin STEP_PINS[DRIVES] = { 56, 38, 64, 40, 41, 67, 60 };
 constexpr Pin DIRECTION_PINS[DRIVES] = { 54, 8, 36, 33, 42, 18, 57 };
+constexpr Pin DriverMuxPins[3] = { 50, 52, 53 };	// Pins that control the UART multiplexer, LCB first
 
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
@@ -122,10 +123,10 @@ constexpr uint32_t ExpectedSdCardSpeed = 20000000;
 // This is the mapping from logical pins 60+ to firmware pin numbers
 constexpr Pin SpecialPinMap[] =
 {
-	21, 22, 3, 4															// PA21/RXD1/AD8, PA22/TXD1/AD9, PA3/TWD0, PA4/TWC
+	21, 22, 3, 4, Z_PROBE_MOD_PIN											// PA21/RXD1/AD8, PA22/TXD1/AD9, PA3/TWD0, PA4/TWC, Z_MOD
 };
 
-constexpr int HighestLogicalPin = 135;										// highest logical pin number on this electronics
+constexpr int HighestLogicalPin = 64;										// highest logical pin number on this electronics
 
 // SAM4S Flash locations (may be expanded in the future)
 constexpr uint32_t IAP_FLASH_START = 0x00470000;

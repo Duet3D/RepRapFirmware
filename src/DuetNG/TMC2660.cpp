@@ -188,9 +188,10 @@ private:
 		maxSgLoadRegister = 0;
 	}
 
-	static void SetupDMA(uint32_t outVal) __attribute__ ((hot));	// Set up the PDC to send a register and receive the status
+	static void SetupDMA(uint32_t outVal) __attribute__ ((hot));	// set up the PDC to send a register and receive the status
 
-	uint32_t registers[5];									// the values we want the TMC2660 writable registers to have
+	static constexpr unsigned int NumRegisters = 5;			// the number of registers that we write to
+	uint32_t registers[NumRegisters];						// the values we want the TMC2660 writable registers to have
 
 	// Register numbers are in priority order, most urgent first
 	static constexpr unsigned int DriveControl = 0;			// microstepping
@@ -208,7 +209,7 @@ private:
 	uint32_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
 	uint32_t maxSgLoadRegister;								// the maximum value of the StallGuard bits we read
 
-	static constexpr uint32_t UpdateAllRegisters = (1u << ARRAY_SIZE(registers)) - 1;	// bitmap in registersToUpdate for all registers
+	static constexpr uint32_t UpdateAllRegisters = (1u << NumRegisters) - 1;	// bitmap in registersToUpdate for all registers
 
 	volatile uint32_t lastReadStatus;						// the status word that we read most recently, updated by the ISR
 	volatile uint32_t accumulatedStatus;
@@ -383,24 +384,42 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const
 // Append the driver status to a string, and reset the min/max load values
 void TmcDriverState::AppendDriverStatus(const StringRef& reply)
 {
-	reply.catf("%s%s%s%s%s%s, SG min/max ",
-				(lastReadStatus & TMC_RR_SG) ? " stalled" : "",
-				(lastReadStatus & TMC_RR_OT) ? " temperature-shutdown!"
-					: (lastReadStatus & TMC_RR_OTPW) ? " temperature-warning" : "",
-				(lastReadStatus & TMC_RR_S2G) ? " short-to-ground" : "",
-				((lastReadStatus & TMC_RR_OLA) && !(lastReadStatus & TMC_RR_STST)) ? " open-load-A" : "",
-				((lastReadStatus & TMC_RR_OLB) && !(lastReadStatus & TMC_RR_STST)) ? " open-load-B" : "",
-				(lastReadStatus & TMC_RR_STST) ? " standstill"
-					: (lastReadStatus & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB))
-					  ? "" : " ok"
-			  );
+	if (lastReadStatus & TMC_RR_OT)
+	{
+		reply.cat(" temperature-shutdown!");
+	}
+	else if (lastReadStatus & TMC_RR_OTPW)
+	{
+		reply.cat(" temperature-warning");
+	}
+	if (lastReadStatus & TMC_RR_S2G)
+	{
+		reply.cat(" short-to-ground");
+	}
+	if ((lastReadStatus & TMC_RR_OLA) && !(lastReadStatus & TMC_RR_STST))
+	{
+		reply.cat(" open-load-A");
+	}
+	if ((lastReadStatus & TMC_RR_OLB) && !(lastReadStatus & TMC_RR_STST))
+	{
+		reply.cat(" open-load-B");
+	}
+	if (lastReadStatus & TMC_RR_STST)
+	{
+		reply.cat(" standstill");
+	}
+	else if ((lastReadStatus & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB)) == 0)
+	{
+		reply.cat(" ok");
+	}
+	
 	if (minSgLoadRegister <= maxSgLoadRegister)
 	{
-		reply.catf("%" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
+		reply.catf(", SG min/max %" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
 	}
 	else
 	{
-		reply.cat("not available");
+		reply.cat(", SG min/max not available");
 	}
 	ResetLoadRegisters();
 }
@@ -468,13 +487,13 @@ inline void TmcDriverState::StartTransfer()
 			}
 			++regNum;
 			mask <<= 1;
-		} while (regNum < 4);
+		} while (regNum < NumRegisters - 1);
 		registersToUpdate &= ~mask;
 		regVal = registers[regNum];
 	}
 
 	// Kick off a transfer for that register
-	irqflags_t flags = cpu_irq_save();					// avoid race condition
+	const irqflags_t flags = cpu_irq_save();			// avoid race condition
 	USART_TMC_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
 	fastDigitalWriteLow(pin);							// set CS low
 	SetupDMA(regVal);									// set up the PDC
@@ -626,10 +645,8 @@ namespace SmartDrivers
 	}
 
 	// Flag the the drivers have been powered up.
-	// Important notes:
-	// 1. Before the first call to this function with powered true, you must call Init().
-	// 2. This may be called by the tick ISR with powered false, possibly while another call (with powered either true or false) is being executed
-	void SetDriversPowered(bool powered)
+	// Before the first call to this function with powered true, you must call Init().
+	void Spin(bool powered)
 	{
 		const bool wasPowered = driversPowered;
 		driversPowered = powered;
@@ -657,6 +674,13 @@ namespace SmartDrivers
 		{
 			digitalWrite(GlobalTmcEnablePin, HIGH);			// disable the drivers
 		}
+	}
+
+	// This is called from the tick ISR, possibly while Spin (with powered either true or false) is being executed
+	void TurnDriversOff()
+	{
+		digitalWrite(GlobalTmcEnablePin, HIGH);				// disable the drivers
+		driversPowered = false;
 	}
 
 	void SetStallThreshold(size_t drive, int sgThreshold)
