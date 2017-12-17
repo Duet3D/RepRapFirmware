@@ -1,7 +1,7 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 1.20RC2
+Version 1.20RC3
 ===============
 Upgrade notes:
 - Recommended DuetWiFiServer.bin version is 1.20beta10 (until 1.20beta11 is available). I recommend you install it twice because the first installation often leaves the WiFi not working. So after installing it the first time, send M997 S1 to install it again from the DuetWiFiServer.bin file that has been left on the SD card.
