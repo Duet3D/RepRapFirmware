@@ -204,7 +204,7 @@ static inline constexpr uint8_t CRCAddBit(uint8_t crc, uint8_t currentByte, uint
 }
 
 // Add a byte to a CRC
-static inline uint8_t CRCAddByte(uint8_t crc, uint8_t currentByte)
+static inline constexpr uint8_t CRCAddByte(uint8_t crc, uint8_t currentByte)
 {
 	crc = CRCAddBit(crc, currentByte, 0);
 	crc = CRCAddBit(crc, currentByte, 1);
@@ -231,11 +231,27 @@ static uint8_t CalcCRC(const uint8_t *datagram, uint8_t length)
 }
 #endif
 
-// The following is volatile because we care about when it is written
-static volatile uint8_t sendData[8] = { 0xA0, 0x00 };					// message we send (only the first 4 bytes are used when requesting a register read), first 2 bytes are constant
-static volatile uint8_t receiveData[12];								// message we receive when reading data, the first 4 bytes are our own read request
+// CRC of the first 2 bytes we send in any request
+static constexpr uint8_t InitialSendCRC = CRCAddByte(CRCAddByte(0, 0xA0), 0x00);
 
-static const uint8_t InitialSendCRC = CRCAddByte(CRCAddByte(0, sendData[0]), sendData[1]);	// CRC of the first 2 bytes of the data we send
+// CRC of a request to read the IFCOUNT register
+static constexpr uint8_t ReadIfcountCRC = CRCAddByte(InitialSendCRC, REGNUM_IFCOUNT);
+
+// To write a register, we send one 8-byte packet to write it, then a 4-byte packet to ask for the IFCOUNT register, then we receive an 8-byte packet containing IFCOUNT.
+// This is the message we send - volatile because we care about when it is written
+static volatile uint8_t sendData[12] =
+{
+	0xA0, 0x00,							// sync byte and slave address
+	0x00,								// register address and write flag (filled in)
+	0x00, 0x00, 0x00, 0x00,				// value to write (if writing), or 1 byte of CRC is read request (filled in)
+	0x00,								// CRC of write request (filled in)
+	0xA0, 0x00,							// sync byte and slave address
+	REGNUM_IFCOUNT,						// register we want to read
+	ReadIfcountCRC						// CRC
+};
+
+// Buffer for the message we receive when reading data. The first 4 or 12 bytes bytes are our own transmitted data.
+static volatile uint8_t receiveData[20];
 
 //----------------------------------------------------------------------------------------------------------------------------------
 // Private types and methods
@@ -280,8 +296,8 @@ private:
 	static const uint8_t ReadRegNumbers[NumReadRegisters];	// the register numbers that we read from
 
 	// Read register numbers, in same order as ReadRegNumbers
-	static constexpr unsigned int ReadDrvStat = 0;
-	static constexpr unsigned int ReadGStat = 1;
+	static constexpr unsigned int ReadGStat = 0;
+	static constexpr unsigned int ReadDrvStat = 1;
 
 	static void SetupDMASend(uint8_t regnum, uint32_t outVal, uint8_t crc) __attribute__ ((hot));	// set up the PDC to send a register
 	static void SetupDMAReceive(uint8_t regnum, uint8_t crc) __attribute__ ((hot));					// set up the PDC to receive a register
@@ -292,13 +308,15 @@ private:
 
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state, without the microstepping bits
 	uint32_t registersToUpdate;								// bitmap of register indices whose values need to be sent to the driver chip
-	size_t registerToRead;									// the next register we need to read
+	uint32_t registerBeingUpdated;							// which register we are sending
 	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 
 	Pin enablePin;											// the enable pin of this driver, if it has its own
 	uint8_t driverNumber;									// the number of this driver as addressed by the UART multiplexer
 	uint8_t writeRegCRCs[NumWriteRegisters];				// CRCs of the messages needed to update the registers
+	uint8_t registerToRead;									// the next register we need to read
+	uint8_t lastIfCount;									// the value of the IFCNT register last time we read it
 	static const uint8_t ReadRegCRCs[NumReadRegisters];		// CRCs of the messages needed to read the registers
 	bool enabled;											// true if driver is enabled
 };
@@ -314,8 +332,8 @@ const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 
 const uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 {
-	REGNUM_DRV_STATUS,
-	REGNUM_GSTAT
+	REGNUM_GSTAT,
+	REGNUM_DRV_STATUS
 };
 
 const uint8_t TmcDriverState::ReadRegCRCs[NumReadRegisters] =
@@ -348,9 +366,12 @@ static uint32_t transferStartedTime;
 	sendData[7] = crc;
 
 	uartPdc->PERIPH_TPR = reinterpret_cast<uint32_t>(sendData);
-	uartPdc->PERIPH_TCR = 8;
+	uartPdc->PERIPH_TCR = 12;											// number of bytes to send
 
-	uartPdc->PERIPH_PTCR = PERIPH_PTCR_TXTEN;							// enable the PDC to transmit
+	uartPdc->PERIPH_RPR = reinterpret_cast<uint32_t>(receiveData);
+	uartPdc->PERIPH_RCR = 20;											// number of bytes to receive
+
+	uartPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTEN | PERIPH_PTCR_TXTEN);		// enable the PDC to transmit and receive
 }
 
 // Set up the PDC to send a register and receive the status
@@ -417,7 +438,9 @@ pre(!driversPowered)
 	{
 		accumulatedReadRegisters[i] = readRegisters[i] = 0;
 	}
+	registerBeingUpdated = 0;
 	registerToRead = 0;
+	lastIfCount = 0;
 }
 
 inline void TmcDriverState::SetAxisNumber(size_t p_axisNumber)
@@ -538,9 +561,19 @@ unsigned int TmcDriverState::GetMicrostepping(int mode, bool& interpolation) con
 // This is called by the ISR when the SPI transfer has completed
 inline void TmcDriverState::TransferDone()
 {
-	if (sendData[2] == ReadRegNumbers[registerToRead] && ReadRegNumbers[registerToRead] == receiveData[6] && receiveData[4] == 0xA0 && receiveData[6] == 0xFF)
+	if (sendData[2] & 0x80)
 	{
-		//TODO here we could check the CRC of the received message, but for now we assume that we won't get any corruption in the 32-bit data
+		const uint8_t currentIfCount = receiveData[18];
+		if (currentIfCount == (uint8_t)(lastIfCount + 1))
+		{
+			registersToUpdate &= ~registerBeingUpdated;
+		}
+		lastIfCount = currentIfCount;
+	}
+	else if (sendData[2] == ReadRegNumbers[registerToRead] && ReadRegNumbers[registerToRead] == receiveData[6] && receiveData[4] == 0xA0 && receiveData[6] == 0xFF)
+	{
+		// We asked to read the scheduled read register, and the sync byte, slave address and register number in the received message match
+		//TODO here we could check the CRC of the received message, but for now we assume that we won't get any corruption in the 32-bit received data
 		const uint32_t regVal = ((uint32_t)receiveData[7] << 24) | ((uint32_t)receiveData[8] << 16) | ((uint32_t)receiveData[9] << 8) | receiveData[11];
 		readRegisters[registerToRead] = regVal;
 		accumulatedReadRegisters[registerToRead] |= regVal;
@@ -622,7 +655,7 @@ inline void TmcDriverState::StartTransfer()
 			++regNum;
 			mask <<= 1;
 		} while (regNum < NumWriteRegisters - 1);
-		registersToUpdate &= ~mask;
+		registerBeingUpdated = mask;
 
 		// Kick off a transfer for that register
 		const irqflags_t flags = cpu_irq_save();			// avoid race condition

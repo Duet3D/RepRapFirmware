@@ -518,15 +518,13 @@ void Platform::Init()
 		driverState[drive] = DriverStatus::disabled;
 
 		// Enable pullup resistors on endstop inputs here if necessary.
-#if defined(DUET_NG)
+#if defined(DUET_NG) || defined(DUET_06_085)
 		// The Duets have hardware pullup resistors/LEDs except for the two on the CONN_LCD connector.
 		// They have RC filtering on the main endstop inputs, so best not to enable the pullup resistors on these.
-		if (drive >= 10)
-		{
-			setPullup(endStopPins[drive], true);				// enable pullup on CONN_LCD endstop input
-		}
-#endif
-#if defined(__RADDS__) || defined(__ALLIGATOR__)
+		// 2017-12-19: some users are having trouble with the endstops not being recognised in recent firmware versions.
+		// Probably the LED+resistor isn't pulling them up fast enough. So enable the pullup resistors again.
+		setPullup(endStopPins[drive], true);					// enable pullup on endstop input
+#elif defined(__RADDS__) || defined(__ALLIGATOR__)
 		// I don't know whether RADDS and Alligator have hardware pullup resistors or not. I'll assume they might not.
 		setPullup(endStopPins[drive], true);
 #endif

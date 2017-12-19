@@ -577,7 +577,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	response->printf("{\"status\":\"%c\",\"coords\":{", ch);
 
 	// Coordinates
-	const size_t numAxes = gCodes->GetVisibleAxes();
+	const size_t numVisibleAxes = gCodes->GetVisibleAxes();
 	{
 		float liveCoordinates[DRIVES];
 #if SUPPORT_ROLAND
@@ -593,7 +593,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		if (currentTool != nullptr)
 		{
-			for (size_t i = 0; i < numAxes; ++i)
+			for (size_t i = 0; i < numVisibleAxes; ++i)
 			{
 				liveCoordinates[i] += currentTool->GetOffset(i);
 			}
@@ -602,7 +602,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Homed axes
 		response->cat("\"axesHomed\":");
 		ch = '[';
-		for (size_t axis = 0; axis < numAxes; ++axis)
+		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
 			response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
 			ch = ',';
@@ -613,7 +613,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
-			response->catf("%c%.1f", ch, (double)liveCoordinates[numAxes + extruder]);
+			response->catf("%c%.1f", ch, (double)liveCoordinates[gCodes->GetTotalAxes() + extruder]);
 			ch = ',';
 		}
 		if (ch == '[')
@@ -625,7 +625,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// TODO ideally we would report "unknown" or similar for axis positions that are not known because we haven't homed them, but that requires changes to both DWC and PanelDue.
 		response->cat("],\"xyz\":");
 		ch = '[';
-		for (size_t axis = 0; axis < numAxes; axis++)
+		for (size_t axis = 0; axis < numVisibleAxes; axis++)
 		{
 			// Coordinates may be NaNs, for example when delta or SCARA homing fails. Replace any NaNs or infinities by 9999.9 to prevent JSON parsing errors.
 			const float coord = liveCoordinates[axis];
@@ -934,7 +934,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"endstops\":%" PRIu32, endstops);
 
 		// Firmware name, machine geometry and number of axes
-		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"axisNames\":\"%s\"", FIRMWARE_NAME, move->GetGeometryString(), numAxes, gCodes->GetAxisLetters());
+		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"axisNames\":\"%s\"", FIRMWARE_NAME, move->GetGeometryString(), numVisibleAxes, gCodes->GetAxisLetters());
 
 		// Total and mounted volumes
 		size_t mountedCards = 0;
@@ -1047,7 +1047,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 				// Offsets
 				response->cat(",\"offsets\":[");
-				for (size_t i = 0; i < numAxes; i++)
+				for (size_t i = 0; i < numVisibleAxes; i++)
 				{
 					response->catf((i == 0) ? "%.2f" : ",%.2f", (double)tool->GetOffset(i));
 				}
