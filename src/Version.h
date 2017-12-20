@@ -9,11 +9,11 @@
 #define SRC_VERSION_H_
 
 #ifndef VERSION
-# define VERSION "1.20RC3+2"
+# define VERSION "1.20RC4"
 #endif
 
 #ifndef DATE
-# define DATE "2017-12-19"
+# define DATE "2017-12-20"
 #endif
 
 #define AUTHORS "reprappro, dc42, chrishamm, t3p3, dnewman"

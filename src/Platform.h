@@ -482,7 +482,7 @@ public:
 	const ZProbeParameters& GetCurrentZProbeParameters() const { return GetZProbeParameters(zProbeType); }
 	void SetZProbeParameters(int32_t probeType, const struct ZProbeParameters& params);
 	bool HomingZWithProbe() const;
-	bool WritePlatformParameters(FileStore *f) const;
+	bool WritePlatformParameters(FileStore *f, bool includingG31) const;
 	void SetProbing(bool isProbing);
 	bool ProgramZProbe(GCodeBuffer& gb, StringRef& reply);
 	void SetZProbeModState(bool b) const;
@@ -717,20 +717,20 @@ private:
 	float driveStepsPerUnit[DRIVES];
 	float instantDvs[DRIVES];
 	float pressureAdvance[MaxExtruders];
-	float motorCurrents[DRIVES];					// the normal motor current for each stepper driver
-	float motorCurrentFraction[DRIVES];				// the percentages of normal motor current that each driver is set to
+	float motorCurrents[DRIVES];						// the normal motor current for each stepper driver
+	float motorCurrentFraction[DRIVES];					// the percentages of normal motor current that each driver is set to
 #if HAS_SMART_DRIVERS
 	float motorStandstillCurrentFraction[DRIVES];
 #endif
-	AxisDriversConfig axisDrivers[MaxAxes];			// the driver numbers assigned to each axis
-	uint8_t extruderDrivers[MaxExtruders];			// the driver number assigned to each extruder
-	uint32_t driveDriverBits[2 * DRIVES];			// the bitmap of driver port bits for each axis or extruder, followed by the raw versions
-	uint32_t slowDriverStepPulseClocks;				// minimum high and low step pulse widths, in processor clocks
-	uint32_t slowDrivers;							// bitmap of driver port bits that need extended step pulse timing
+	AxisDriversConfig axisDrivers[MaxAxes];				// the driver numbers assigned to each axis
+	uint8_t extruderDrivers[MaxExtruders];				// the driver number assigned to each extruder
+	uint32_t driveDriverBits[2 * DRIVES];				// the bitmap of driver port bits for each axis or extruder, followed by the raw versions
+	uint32_t slowDriverStepPulseClocks;					// minimum high and low step pulse widths, in processor clocks
+	uint32_t slowDrivers;								// bitmap of driver port bits that need extended step pulse timing
 	float idleCurrentFactor;
 
 #if HAS_SMART_DRIVERS
-	size_t numSmartDrivers;						// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers
+	size_t numSmartDrivers;								// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers
 	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers, openLoadDrivers;
 	uint8_t nextDriveToPoll;
 	bool driversPowered;

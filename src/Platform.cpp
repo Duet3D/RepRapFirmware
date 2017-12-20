@@ -539,7 +539,7 @@ void Platform::Init()
 		SetPressureAdvance(extr, 0.0);							// no pressure advance
 	}
 
-#ifdef DUET_NG
+#if defined(DUET_NG)
 	// Test for presence of a DueX2 or DueX5 expansion board and work out how many TMC2660 drivers we have
 	// The SX1509B has an independent power on reset, so give it some time
 	delay(200);
@@ -574,6 +574,8 @@ void Platform::Init()
 			pinMode(VssaSensePin, INPUT);
 		}
 	}
+#elif defined(DUET_M)
+	numSmartDrivers = 5;										// TODO for now we assume that additional drivers are dumb
 #endif
 
 #if HAS_SMART_DRIVERS
@@ -2770,7 +2772,7 @@ EndStopHit Platform::GetZProbeResult() const
 }
 
 // Write the platform parameters to file
-bool Platform::WritePlatformParameters(FileStore *f) const
+bool Platform::WritePlatformParameters(FileStore *f, bool includingG31) const
 {
 	bool ok;
 	if (axisMinimaProbed != 0 || axisMaximaProbed != 0)
@@ -2790,24 +2792,22 @@ bool Platform::WritePlatformParameters(FileStore *f) const
 		ok = true;
 	}
 
-#if 0	// From version 1.20 we no longer write the Z probe parameters, but keep the code for now in case too many users complain
-	if (ok)
+	if (ok && includingG31)
 	{
 		ok = f->Write("; Z probe parameters\n");
+		if (ok)
+		{
+			ok = irZProbeParameters.WriteParameters(f, 1);
+		}
+		if (ok)
+		{
+			ok = alternateZProbeParameters.WriteParameters(f, 3);
+		}
+		if (ok)
+		{
+			ok = switchZProbeParameters.WriteParameters(f, 4);
+		}
 	}
-	if (ok)
-	{
-		ok = irZProbeParameters.WriteParameters(f, 1);
-	}
-	if (ok)
-	{
-		ok = alternateZProbeParameters.WriteParameters(f, 3);
-	}
-	if (ok)
-	{
-		ok = switchZProbeParameters.WriteParameters(f, 4);
-	}
-#endif
 
 	return ok;
 }

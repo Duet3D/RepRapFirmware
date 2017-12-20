@@ -165,6 +165,8 @@ void GCodes::Reset()
 	ClearBabyStepping();
 	moveBuffer.xAxes = DefaultXAxisMapping;
 	moveBuffer.yAxes = DefaultYAxisMapping;
+	moveBuffer.virtualExtruderPosition = 0.0;
+
 #if SUPPORT_IOBITS
 	moveBuffer.ioBits = 0;
 #endif
@@ -4211,7 +4213,7 @@ void GCodes::SetAllAxesNotHomed()
 }
 
 // Write the config-override file returning true if an error occurred
-bool GCodes::WriteConfigOverrideFile(StringRef& reply, const char *fileName) const
+bool GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, StringRef& reply, const char *fileName) const
 {
 	FileStore * const f = platform.OpenFile(platform.GetSysDir(), fileName, OpenMode::write);
 	if (f == nullptr)
@@ -4232,7 +4234,7 @@ bool GCodes::WriteConfigOverrideFile(StringRef& reply, const char *fileName) con
 
 	if (ok)
 	{
-		ok = platform.WritePlatformParameters(f);
+		ok = platform.WritePlatformParameters(f, gb.Seen('P') && gb.GetIValue() == 31);
 	}
 
 	if (ok)

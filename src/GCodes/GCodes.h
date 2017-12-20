@@ -308,7 +308,7 @@ private:
 	GCodeResult CheckOrConfigureTrigger(GCodeBuffer& gb, StringRef& reply, int code);	// Handle M581 and M582
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, StringRef &reply);		// Handle M997
 
-	bool WriteConfigOverrideFile(StringRef& reply, const char *fileName) const; // Write the config-override file
+	bool WriteConfigOverrideFile(GCodeBuffer& gb, StringRef& reply, const char *fileName) const; // Write the config-override file
 	void CopyConfigFinalValues(GCodeBuffer& gb);						// Copy the feed rate etc. from the daemon to the input channels
 
 	void ClearBabyStepping() { currentBabyStepZOffset = 0.0; }
@@ -390,7 +390,6 @@ private:
 	float virtualExtruderPosition;				// Virtual extruder position of the last move fed into the Move class
 	float rawExtruderTotalByDrive[MaxExtruders]; // Extrusion amount in the last G1 command with an E parameter when in absolute extrusion mode
 	float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
-	float record[DRIVES];						// Temporary store for move positions
 	float distanceScale;						// MM or inches
 	float arcSegmentLength;						// Length of segments that we split arc moves into
 
@@ -504,7 +503,7 @@ private:
 #endif
 
 	static constexpr const float MinServoPulseWidth = 544.0, MaxServoPulseWidth = 2400.0;
-	static const uint16_t ServoRefreshFrequency = 50;
+	static constexpr uint16_t ServoRefreshFrequency = 50;
 };
 
 //*****************************************************************************************************

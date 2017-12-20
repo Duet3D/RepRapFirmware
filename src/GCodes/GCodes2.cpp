@@ -2389,7 +2389,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 500: // Store parameters in EEPROM
-		result = GetGCodeResultFromError(WriteConfigOverrideFile(reply, CONFIG_OVERRIDE_G));
+		result = GetGCodeResultFromError(WriteConfigOverrideFile(gb, reply, CONFIG_OVERRIDE_G));
 		break;
 
 	case 501: // Load parameters from EEPROM
