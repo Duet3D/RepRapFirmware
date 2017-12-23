@@ -1186,7 +1186,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	ch = '[';
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
-		response->catf("%c%.2f", ch, (double)(platform->GetMotorCurrent(drive, false)));
+		response->catf("%c%.2f", ch, (double)(platform->GetMotorCurrent(drive, 906)));
 		ch = ',';
 	}
 

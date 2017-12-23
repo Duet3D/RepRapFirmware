@@ -44,7 +44,7 @@ const uint32_t ESP_FLASH_ADDR = 0x40200000;			// address of start of Flash
 const uint32_t ESP_FLASH_READ_STUB_BEGIN = IRAM_ADDR + 0x18;
 
 // Messages corresponding to result codes, should make sense when followed by " error"
-const char *resultMessages[] =
+const char * const resultMessages[] =
 {
 	"no",
 	"timeout",
@@ -65,7 +65,7 @@ const char *resultMessages[] =
 // Probably our UART ISR cannot receive bytes fast enough, perhaps because of the latency of the system tick ISR.
 // 460800b doesn't always manage to connect, but if it does then uploading appears to be reliable.
 // 230400b always manages to connect.
-static const uint32_t uploadBaudRates[] = { 460800, 230400, 115200, 74880 };
+static const uint32_t uploadBaudRates[] = { 230400, 115200, 74880, 9600 };
 
 WifiFirmwareUploader::WifiFirmwareUploader(UARTClass& port, WiFiInterface& iface)
 	: uploadPort(port), interface(iface), uploadFile(nullptr), state(UploadState::idle)
@@ -471,8 +471,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeou
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t addr, uint32_t size)
 {
 	// determine the number of blocks represented by the size
-	uint32_t blkCnt;
-	blkCnt = (size + EspFlashBlockSize - 1) / EspFlashBlockSize;
+	const uint32_t blkCnt = (size + EspFlashBlockSize - 1) / EspFlashBlockSize;
 
 	// ensure that the address is on a block boundary
 	addr &= ~(EspFlashBlockSize - 1);
@@ -563,6 +562,26 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 	return stat;
 }
 
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::DoErase(uint32_t address, uint32_t size)
+{
+	const uint32_t sectorsPerBlock = 16;
+	const uint32_t sectorSize = 4096;
+	const uint32_t numSectors = (size + sectorSize - 1)/sectorSize;
+	const uint32_t startSector = address/sectorSize;
+	uint32_t headSectors = sectorsPerBlock - (startSector % sectorsPerBlock);
+
+	if (numSectors < headSectors)
+	{
+		headSectors = numSectors;
+	}
+    const uint32_t eraseSize = (numSectors < 2 * headSectors)
+    									? (numSectors + 1) / 2 * sectorSize
+    									: (numSectors - headSectors) * sectorSize;
+
+	MessageF("Erasing %u bytes...\n", eraseSize);
+	return flashBegin(uploadAddress, eraseSize);
+}
+
 void WifiFirmwareUploader::Spin()
 {
 	switch (state)
@@ -603,7 +622,7 @@ void WifiFirmwareUploader::Spin()
 				// Successful connection
 //				MessageF(" success on attempt %d\n", (connectAttemptNumber % retriesPerBaudRate) + 1);
 				MessageF(" success\n");
-				state = UploadState::erasing;
+				state = UploadState::erasing1;
 			}
 			else
 			{
@@ -621,25 +640,26 @@ void WifiFirmwareUploader::Spin()
 		}
 		break;
 
-	case UploadState::erasing:
+	case UploadState::erasing1:
 		if (millis() - lastAttemptTime >= blockWriteInterval)
 		{
-			const uint32_t sectorsPerBlock = 16;
-			const uint32_t sectorSize = 4096;
-			const uint32_t numSectors = (fileSize + sectorSize - 1)/sectorSize;
-			const uint32_t startSector = uploadAddress/sectorSize;
-			uint32_t headSectors = sectorsPerBlock - (startSector % sectorsPerBlock);
-
-			if (numSectors < headSectors)
+			uploadResult = DoErase(systemParametersAddress, systemParametersSize);
+			if (uploadResult == EspUploadResult::success)
 			{
-				headSectors = numSectors;
+				state = UploadState::erasing2;
 			}
-	        const uint32_t eraseSize = (numSectors < 2 * headSectors)
-	        									? (numSectors + 1) / 2 * sectorSize
-	        									: (numSectors - headSectors) * sectorSize;
+			else
+			{
+				MessageF("Erase failed\n");
+				state = UploadState::done;
+			}
+		}
+		break;
 
-			MessageF("Erasing %u bytes...\n", fileSize);
-			uploadResult = flashBegin(uploadAddress, eraseSize);
+	case UploadState::erasing2:
+		if (millis() - lastAttemptTime >= blockWriteInterval)
+		{
+			uploadResult = DoErase(uploadAddress, fileSize);
 			if (uploadResult == EspUploadResult::success)
 			{
 				MessageF("Uploading file...\n");

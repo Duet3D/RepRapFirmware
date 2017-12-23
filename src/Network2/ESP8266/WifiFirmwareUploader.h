@@ -22,16 +22,18 @@ public:
 	static const uint32_t WebFilesAddress = 0x00100000;
 
 private:
-	static const uint32_t defaultTimeout = 500;				// default timeout in milliseconds
+	static const uint32_t defaultTimeout = 500;					// default timeout in milliseconds
 	static const uint32_t syncTimeout = 1000;
 	static const unsigned int retriesPerBaudRate = 9;
 	static const unsigned int retriesPerReset = 3;
 	static const uint32_t connectAttemptInterval = 50;
 	static const uint32_t resetDelay = 500;
-	static const uint32_t blockWriteInterval = 15;			// 15ms is long enough, 10ms is mostly too short
+	static const uint32_t blockWriteInterval = 15;				// 15ms is long enough, 10ms is mostly too short
 	static const uint32_t blockWriteTimeout = 200;
-	static const uint32_t eraseTimeout = 15000;				// increased from 12 to 15 seconds because Roland's board was timing out
-	static const unsigned int percentToReportIncrement = 5;	// how often we report % complete
+	static const uint32_t eraseTimeout = 15000;					// increased from 12 to 15 seconds because Roland's board was timing out
+	static const unsigned int percentToReportIncrement = 5;		// how often we report % complete
+	static const uint32_t systemParametersAddress = 0x3FE000;	// the address of the system + user parameter area that needs to be cleared when changing SDK version
+	static const uint32_t systemParametersSize = 0x2000;		// the size of the system + user parameter area
 
 	// Return codes - this list must be kept in step with the corresponding messages
 	enum class EspUploadResult
@@ -53,7 +55,8 @@ private:
 		idle,
 		resetting,
 		connecting,
-		erasing,
+		erasing1,
+		erasing2,
 		uploading,
 		done
 	};
@@ -77,6 +80,7 @@ private:
 	EspUploadResult flashFinish(bool reboot);
 	static uint16_t checksum(const uint8_t *data, uint16_t dataLen, uint16_t cksum);
 	EspUploadResult flashWriteBlock(uint16_t flashParmVal, uint16_t flashParmMask);
+	EspUploadResult DoErase(uint32_t address, uint32_t size);
 
 	UARTClass& uploadPort;
 	FileStore *uploadFile;

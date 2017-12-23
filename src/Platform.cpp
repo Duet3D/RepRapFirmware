@@ -1231,7 +1231,8 @@ void Platform::SendAuxMessage(const char* msg)
 		buf->copy("{\"message\":");
 		buf->EncodeString(msg, strlen(msg), false, true);
 		buf->cat("}\n");
-		Message(LcdMessage, buf);
+		auxOutput->Push(buf);
+		FlushAuxMessages();
 	}
 }
 
@@ -1310,7 +1311,7 @@ void Platform::SetNetMask(byte nm[])
 }
 
 // Flush messages to USB and aux, returning true if there is more to send
-bool Platform::FlushMessages()
+bool Platform::FlushAuxMessages()
 {
 	// Write non-blocking data to the AUX line
 	OutputBuffer *auxOutputBuffer = auxOutput->GetFirstItem();
@@ -1328,6 +1329,13 @@ bool Platform::FlushMessages()
 			auxOutput->SetFirstItem(auxOutputBuffer);
 		}
 	}
+	return auxOutput->GetFirstItem() != nullptr;
+}
+
+// Flush messages to USB and aux, returning true if there is more to send
+bool Platform::FlushMessages()
+{
+	const bool auxHasMore = FlushAuxMessages();
 
 #ifdef SERIAL_AUX2_DEVICE
 	// Write non-blocking data to the second AUX line
@@ -1375,7 +1383,7 @@ bool Platform::FlushMessages()
 		}
 	}
 
-	return auxOutput->GetFirstItem() != nullptr
+	return auxHasMore
 #ifdef SERIAL_AUX2_DEVICE
 		|| aux2Output->GetFirstItem() != nullptr
 #endif
@@ -3459,7 +3467,7 @@ void Platform::RawMessage(MessageType type, const char *message)
 		logger->LogMessage(realTime, message);
 	}
 
-	// Send the nessage to the destinations
+	// Send the message to the destinations
 	if ((type & ImmediateLcdMessage) != 0)
 	{
 		SendAuxMessage(message);
