@@ -15,6 +15,7 @@ Upgrade notes:
 - On a Duet WiFi, if your M552 command in config.g includes a P parameter with an IP address (which was previously ignored), you will need to remove them
 - If you currently have G31 parameters for your active Z probe in config-override.g that are different from the ones in config.g, you should copy them to config.g, otherwise they will be lost next time you run M500.
 - The 'set output on extrude' function (M571) no longer defaults to FAN0 output. If you use this feature, you must define the output pin explicitly using the P parameter at least once.
+- If you are upgrading from a firmware version prior to 1.19, see also the upgrade notes for firmware 1.19.
 
 New features - kinematics and motion:
 - Added CoreXYUV kinematics, see M669 command
