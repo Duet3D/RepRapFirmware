@@ -28,7 +28,7 @@ New features - kinematics and motion:
 - SCARA prints are simulated without segmentation so that the simulation runs much faster. In tests, the difference in the simulation time with/without segmentation was negligible.
 - When using a segmented kinematics such as SCARA, or when long moves are segmented due to mesh bed compensation, segmented moves can be paused between segments
 - M584 can now be used to create additional axes using any of the letters UVWABC in any order
-- The start and end speeds of short segmented moves in accelerating or decalerating sequences are more closely matched where possible, which should give smoother motion
+- The start and end speeds of short segmented moves in accelerating or decelerating sequences are more closely matched where possible, which should give smoother motion
 - XY speed limiting is now done separately for each kinematics, in particular for CoreXY printers it is more accurate
 
 New features - heating and temperature measurement:
@@ -40,7 +40,7 @@ New features - heating and temperature measurement:
 - M109 and M104 commands now set both the active and the standby temperatures of the tool.
 - M109 now only selects a tool if no tool was selected
 - Duet WiFi and Duet Ethernet: Extruder heater PWM values are now compensated for supply voltage
-- When a heater fault occurs, the print is now paused and all heaters are turned off except bed amnd chamber heaters. After a timeout period, the print is cancelled, all remaining heaters are turned off, and the firmware attempts to turn the power off as if M81 had been received.
+- When a heater fault occurs, the print is now paused and all heaters are turned off except bed and chamber heaters. After a timeout period, the print is cancelled, all remaining heaters are turned off, and the firmware attempts to turn the power off as if M81 had been received.
 - Heater 0 values are sent to to PanelDue even if there is no heated bed
 - The value of the reference resistor on MAX31865 PT100 interface boards can now be configured (thanks bpaczkowski)
 - 3-wire PT100 sensors are now supported (thanks zlowred)
@@ -83,7 +83,7 @@ New features - networking:
 New features - other:
 - Loss of power is now handled much faster. The print is paused in the middle of a move if necessary. The M911 parameters are changed to facilitate this.
 - Following a power failure, M916 can now be used to resume the print instead of using M98 Presurrect.g
-- A resurrect.g file is now created any time the print is paused. This allows for planned power down ands resume.
+- A resurrect.g file is now created any time the print is paused. This allows for planned power down and resume.
 - Added event logging, controlled by the M929 command
 - More free memory is available, especially in the Duet 0.6/0.8.5 build
 - The software reset data now records the date/time of the reset if known and a longer stack trace
@@ -106,7 +106,6 @@ New features - other:
 
 Bug fixes:
 - M107 now turns off the mapped fan
-- ADC low and high offsets (M305 H and L parameters) were incorrectly divided by 2 in earlier 1.20 beta and RC versions
 - Fixed move timing when a long slow printing move follows a faster printing move
 - If a file being printed executed a macro right at the start, DWC could assume that the print had already finished (thanks chrishamm)
 - M109 commands could cause unwanted head movement when no tool change was required
@@ -133,8 +132,8 @@ Bug fixes:
 - An error in computing the time taken to execute moves that were not yet frozen caused the first movement on a SCARA printer following homing to be jerky
 - An extra space in the output from the M114 command confused Pronterface, causing it to print exception messages
 - An error in the motion planning system that could lead to a null pointer dereference has been fixed. It is not known what symptoms (if any) were associated with this bug.
-- If a Duet3D filament sensor was connected and congfigured but flashing an error code instead of sending filament data, the error recovery code running on the Duet caused short pauses in the print
-- On a delta printer if you created additonal axes, when you tried to home them it ran homedelta.g instead of e.g. homeu.g
+- If a Duet3D filament sensor was connected and configured but flashing an error code instead of sending filament data, the error recovery code running on the Duet caused short pauses in the print
+- On a delta printer if you created additional axes, when you tried to home them it ran homedelta.g instead of e.g. homeu.g
 - On a delta printer with additional axes, you can now do XYZ moves as soon as the towers have been homed
 - Fixed a possible race condition if the time and date were set at midnight
 - The 4-leadscrew auto/4-screw manual bed levelling code didn't work properly
@@ -150,7 +149,7 @@ Other changed behaviour:
 - When uploading firmware to the WiFi module, the highest and lowest baud rates have been reduced to 230400 and 9600 respectively
 - When uploading firmware to the WiFi module, the system parameter is cleared
 - M500 no longer saves G31 parameters to config-override.g by default, but you can use M500 P31 to include them
-- The default value for the P patameter in the G31 command has been changed from 400 to 500
+- The default value for the P parameter in the G31 command has been changed from 400 to 500
 - XYZ options have been removed from the M558 command. Use the new M574 S2 option instead.
 - G31 P parameter now defaults to 500 instead of 400 on the Duet 06/085 build just as it has done in the other builds
 - X homing no longer defaults to using the Z probe in the Duet 06/085 build
