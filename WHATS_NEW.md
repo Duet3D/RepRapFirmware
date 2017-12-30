@@ -17,6 +17,9 @@ Upgrade notes:
 - The 'set output on extrude' function (M571) no longer defaults to FAN0 output. If you use this feature, you must define the output pin explicitly using the P parameter at least once.
 - If you are upgrading from a firmware version prior to 1.19, see also the upgrade notes for firmware 1.19.
 
+Known issues:
+- If you have a Duet3D beta filament monitor configured and you run a print in simulation mode, the filament monitor keeps reporting insufficient extrusion and pausing the print. This issue is also present in earlier releases.
+
 New features - kinematics and motion:
 - Added CoreXYUV kinematics, see M669 command
 - Added Hangprinter kinematics (not tested yet), see M669 command
