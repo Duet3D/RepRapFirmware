@@ -464,11 +464,11 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 	inf.isMounted = true;
 	if (reportSuccess)
 	{
-		float capacity = sd_mmc_get_capacity(card)/1024;		// get capacity and convert to Mbytes
+		float capacity = ((float)sd_mmc_get_capacity(card) * 1024) / 1000000;		// get capacity and convert from Kib to Mbytes
 		const char* capUnits;
-		if (capacity >= 1024.0)
+		if (capacity >= 1000.0)
 		{
-			capacity /= 1024.0;
+			capacity /= 1000;
 			capUnits = "Gb";
 		}
 		else
@@ -650,6 +650,31 @@ void MassStorage::Spin()
 			fil.Close();
 		}
 	}
+}
+
+// Get information about the SD card and interface speed
+MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity, uint64_t& freeSpace, uint32_t& speed)
+{
+	if (slot >= NumSdCards)
+	{
+		return InfoResult::badSlot;
+	}
+
+	SdCardInfo& inf = info[slot];
+	if (!inf.isMounted)
+	{
+		return InfoResult::noCard;
+	}
+
+	capacity = (uint64_t)sd_mmc_get_capacity(slot) * 1024;
+	speed = sd_mmc_get_interface_speed(slot);
+	String<10> path;
+	path.GetRef().printf("%u:/", slot);
+	uint32_t freeClusters;
+	FATFS *fs;
+	const FRESULT fr = f_getfree(path.c_str(), &freeClusters, &fs);
+	freeSpace = (fr == FR_OK) ? (uint64_t)freeClusters * fs->csize * 512 : 0;
+	return InfoResult::ok;
 }
 
 // End

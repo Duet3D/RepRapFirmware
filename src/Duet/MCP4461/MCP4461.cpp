@@ -17,11 +17,7 @@ GPL v3
 #include <stdio.h>
 #include <Wire.h>
 
-#ifdef DUET_NG
-# define MCP_WIRE	Wire
-#else
-# define MCP_WIRE	Wire1
-#endif
+#define MCP_WIRE	Wire1
 
 //ensure you call begin() before any other functions but note
 //begin can only be called once for all MCP* objects as it initialises

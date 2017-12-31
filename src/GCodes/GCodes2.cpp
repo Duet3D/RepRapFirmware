@@ -886,6 +886,52 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
+	case 39:	// Return SD card info
+		{
+			uint32_t slot = 0;
+			bool dummy;
+			gb.TryGetUIValue('P', slot, dummy);
+			int32_t format = 0;
+			gb.TryGetIValue('S', format, dummy);
+			uint64_t capacity, freeSpace;
+			uint32_t speed;
+			const MassStorage::InfoResult res = platform.GetMassStorage()->GetCardInfo(slot, capacity, freeSpace, speed);
+			if (format == 2)
+			{
+				reply.printf("{\"SDinfo\":{\"slot\":%" PRIu32 ",\"present\":", slot);
+				if (res == MassStorage::InfoResult::ok)
+				{
+					reply.catf("1,\"capacity\":%" PRIu64 ",\"free\":%" PRIu64 ",\"speed\":%" PRIu32 "}}", capacity, freeSpace, speed);
+				}
+				else
+				{
+					reply.cat("0}}");
+				}
+			}
+			else
+			{
+				switch(res)
+				{
+				case MassStorage::InfoResult::badSlot:
+				default:
+					reply.printf("Bad SD slot number: %" PRIu32, slot);
+					result = GCodeResult::error;
+					break;
+
+				case MassStorage::InfoResult::noCard:
+					reply.printf("No SD card mounted in slot %" PRIu32, slot);
+					result = GCodeResult::error;
+					break;
+
+				case MassStorage::InfoResult::ok:
+					reply.printf("SD card in slot %" PRIu32 ": capacity %.2fGb, free space %.2fGb, speed %.2fMBytes/sec",
+									slot, (double)capacity/(1000*1000*1000), (double)freeSpace/(1000*1000*1000), (double)speed/(1000*1000));
+					break;
+				}
+			}
+		}
+		break;
+
 	case 42:	// Turn an output pin on or off
 		if (gb.Seen('P'))
 		{

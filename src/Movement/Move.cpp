@@ -43,7 +43,7 @@ void Move::Init()
 
 	currentDda = nullptr;
 	stepErrors = 0;
-	numLookaheadUnderruns = numPrepareUnderruns = 0;
+	numLookaheadUnderruns = numPrepareUnderruns = numLookaheadErrors = 0;
 
 	// Clear the transforms
 	SetIdentityTransform();
@@ -126,7 +126,7 @@ void Move::Spin()
 		{
 			if (reprap.Debug(moduleMove))
 			{
-				ddaRingCheckPointer->DebugPrint();
+				ddaRingCheckPointer->DebugPrintAll();
 			}
 			++stepErrors;
 			reprap.GetPlatform().LogError(ErrorCode::BadMove);
@@ -560,10 +560,10 @@ void Move::Diagnostics(MessageType mtype)
 {
 	Platform& p = reprap.GetPlatform();
 	p.Message(mtype, "=== Move ===\n");
-	p.MessageF(mtype, "MaxReps: %" PRIu32 ", StepErrors: %u, FreeDm: %d, MinFreeDm %d, MaxWait: %" PRIu32 "ms, Underruns: %u, %u\n",
-						DDA::maxReps, stepErrors, DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
+	p.MessageF(mtype, "MaxReps: %" PRIu32 ", StepErrors: %u, LaErrors: %u, FreeDm: %d, MinFreeDm %d, MaxWait: %" PRIu32 "ms, Underruns: %u, %u\n",
+						DDA::maxReps, stepErrors, numLookaheadErrors, DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
 	DDA::maxReps = 0;
-	numLookaheadUnderruns = numPrepareUnderruns = 0;
+	numLookaheadUnderruns = numPrepareUnderruns = numLookaheadErrors = 0;
 	longestGcodeWaitInterval = 0;
 	DriveMovement::ResetMinFree();
 
@@ -1204,7 +1204,7 @@ void Move::PrintCurrentDda() const
 {
 	if (currentDda != nullptr)
 	{
-		currentDda->DebugPrint();
+		currentDda->DebugPrintAll();
 	}
 }
 

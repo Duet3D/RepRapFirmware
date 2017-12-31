@@ -167,6 +167,7 @@ public:
 	bool IsResuming() const;
 	bool IsRunning() const;
 	bool IsReallyPrinting() const;										// Return true if we are printing from SD card and not pausing, paused or resuming
+	bool IsSimulating() const { return simulationMode != 0; }
 	bool IsDoingToolChange() const { return doingToolChange; }
 
 	bool AllAxesAreHomed() const;										// Return true if all axes are homed

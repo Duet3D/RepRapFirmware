@@ -70,6 +70,7 @@ public:
 	float PushBabyStepping(float amount);							// Try to push some babystepping through the lookahead queue
 
 	void Diagnostics(MessageType mtype);							// Report useful stuff
+	void RecordLookaheadError() { ++numLookaheadErrors; }			// Record a lookahead error
 
 	// Kinematics and related functions
 	Kinematics& GetKinematics() const { return *kinematics; }
@@ -159,6 +160,7 @@ private:
 
 	unsigned int numLookaheadUnderruns;					// How many times we have run out of moves to adjust during lookahead
 	unsigned int numPrepareUnderruns;					// How many times we wanted a new move but there were only un-prepared moves in the queue
+	unsigned int numLookaheadErrors;					// How many times our lookahead algorithm failed
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
 	float simulationTime;								// Print time since we started simulating

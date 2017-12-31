@@ -47,6 +47,15 @@ public:
 	unsigned int GetNumFreeFiles() const;
 	void Spin();
 
+	enum class InfoResult : uint8_t
+	{
+		badSlot = 0,
+		noCard = 1,
+		ok = 2
+	};
+
+	InfoResult GetCardInfo(size_t slot, uint64_t& capacity, uint64_t& freeSpace, uint32_t& speed);
+
 friend class Platform;
 friend class FileStore;
 
