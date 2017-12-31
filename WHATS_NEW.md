@@ -1,6 +1,19 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.20.1RC1
+=================
+Upgrade notes:
+- See 1.20
+
+New features:
+- Added M39 command to return SD card free space and other information
+
+Bug fixes:
+- Filament monitors are now disabled when simulating a print
+- Fixed step number calculation bug that caused benign step error reports with some values of pressure advance
+- Fixed a lookahead bug that caused occasional step errors. Print quality and speed may be affected.
+
 Version 1.20
 ===============
 Upgrade notes:
