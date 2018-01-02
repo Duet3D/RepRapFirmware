@@ -652,29 +652,26 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 
 	case GCodeState::stopping:		// MO after executing stop.g if present
 	case GCodeState::sleeping:		// M1 after executing sleep.g if present
-		if (simulationMode == 0)
+		// Deselect the active tool and turn off all heaters, unless parameter Hn was used with n > 0
+		if (!gb.Seen('H') || gb.GetIValue() <= 0)
 		{
-			// Deselect the active tool and turn off all heaters, unless parameter Hn was used with n > 0
-			if (!gb.Seen('H') || gb.GetIValue() <= 0)
+			Tool* tool = reprap.GetCurrentTool();
+			if (tool != nullptr)
 			{
-				Tool* tool = reprap.GetCurrentTool();
-				if (tool != nullptr)
-				{
-					reprap.StandbyTool(tool->Number(), simulationMode != 0);
-				}
-				reprap.GetHeat().SwitchOffAll(true);
+				reprap.StandbyTool(tool->Number(), simulationMode != 0);
 			}
+			reprap.GetHeat().SwitchOffAll(true);
+		}
 
-			// chrishamm 2014-18-10: Although RRP says M0 is supposed to turn off all drives and heaters,
-			// I think M1 is sufficient for this purpose. Leave M0 for a normal reset.
-			if (gb.GetState() == GCodeState::sleeping)
-			{
-				DisableDrives();
-			}
-			else
-			{
-				platform.SetDriversIdle();
-			}
+		// chrishamm 2014-18-10: Although RRP says M0 is supposed to turn off all drives and heaters,
+		// I think M1 is sufficient for this purpose. Leave M0 for a normal reset.
+		if (gb.GetState() == GCodeState::sleeping)
+		{
+			DisableDrives();
+		}
+		else
+		{
+			platform.SetDriversIdle();
 		}
 		gb.SetState(GCodeState::normal);
 		break;

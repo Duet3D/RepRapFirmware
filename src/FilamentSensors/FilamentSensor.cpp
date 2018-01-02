@@ -128,15 +128,15 @@ bool FilamentSensor::ConfigurePin(GCodeBuffer& gb, StringRef& reply, bool& seen)
 }
 
 // Return the filament sensor associated with a particular extruder
-/*static*/ FilamentSensor *FilamentSensor::GetFilamentSensor(int extruder)
+/*static*/ FilamentSensor *FilamentSensor::GetFilamentSensor(unsigned int extruder)
 {
-	return (extruder >= 0 && extruder < (int)MaxExtruders) ? filamentSensors[extruder] : nullptr;
+	return (extruder < MaxExtruders) ? filamentSensors[extruder] : nullptr;
 }
 
 // Set the filament sensor associated with a particular extruder
-/*static*/ bool FilamentSensor::SetFilamentSensorType(int extruder, int newSensorType)
+/*static*/ bool FilamentSensor::SetFilamentSensorType(unsigned int extruder, int newSensorType)
 {
-	if (extruder >= 0 && extruder < (int)MaxExtruders)
+	if (extruder < MaxExtruders)
 	{
 		FilamentSensor*& sensor = filamentSensors[extruder];
 		const int oldSensorType = (sensor == nullptr) ? 0 : sensor->GetType();

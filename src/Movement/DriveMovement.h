@@ -286,7 +286,7 @@ inline int32_t DriveMovement::GetNetStepsTaken() const
 	}
 	else
 	{
-		netStepsTaken = (int32_t)nextStep - (int32_t)(2 * reverseStartStep) + 2;	// allowing for direction having changed
+		netStepsTaken = (int32_t)nextStep - (int32_t)(2 * reverseStartStep) + 1;	// allowing for direction having changed
 	}
 	return (direction) ? netStepsTaken : -netStepsTaken;
 }

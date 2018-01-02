@@ -57,7 +57,8 @@ extern char _end;
 extern "C" char *sbrk(int i);
 
 #if !defined(HAS_LWIP_NETWORKING) || !defined(HAS_WIFI_NETWORKING) || !defined(HAS_CPU_TEMP_SENSOR) || !defined(HAS_HIGH_SPEED_SD) \
- || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_VREF_MONITOR) || !defined(ACTIVE_LOW_HEAT_ON)
+ || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_VREF_MONITOR) || !defined(ACTIVE_LOW_HEAT_ON) \
+ || !defined(NONLINEAR_EXTRUSION)
 # error Missing feature definition
 #endif
 
@@ -537,6 +538,10 @@ void Platform::Init()
 	{
 		extruderDrivers[extr] = (uint8_t)(extr + MinAxes);		// set up default extruder drive mapping
 		SetPressureAdvance(extr, 0.0);							// no pressure advance
+#if NONLINEAR_EXTRUSION
+		nonlinearExtrusionA[extr] = nonlinearExtrusionB[extr] = 0.0;
+		nonlinearExtrusionLimit[extr] = DefaultNonlinearExtrusionLimit;
+#endif
 	}
 
 #if defined(DUET_NG)
@@ -3793,6 +3798,32 @@ void Platform::SetPressureAdvance(size_t extruder, float factor)
 		pressureAdvance[extruder] = factor;
 	}
 }
+
+#if NONLINEAR_EXTRUSION
+
+bool Platform::GetExtrusionCoefficients(size_t extruder, float& a, float& b, float& limit) const
+{
+	if (extruder < MaxExtruders)
+	{
+		a = nonlinearExtrusionA[extruder];
+		b = nonlinearExtrusionB[extruder];
+		limit = nonlinearExtrusionLimit[extruder];
+		return true;
+	}
+	return false;
+}
+
+void Platform::SetNonlinearExtrusion(size_t extruder, float a, float b, float limit)
+{
+	if (extruder < MaxExtruders && nonlinearExtrusionLimit[extruder] > 0.0)
+	{
+		nonlinearExtrusionLimit[extruder] = limit;
+		nonlinearExtrusionA[extruder] = a;
+		nonlinearExtrusionB[extruder] = b;
+	}
+}
+
+#endif
 
 float Platform::ActualInstantDv(size_t drive) const
 {

@@ -38,4 +38,8 @@
 # define HAS_MULTIPLE_NETWORK_INTERFACES	0
 #endif
 
+#ifndef NONLINEAR_EXTRUSION
+#define NONLINEAR_EXTRUSION		1		// for now this is always enabled
+#endif
+
 #endif // PINS_H__

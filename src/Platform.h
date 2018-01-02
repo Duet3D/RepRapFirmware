@@ -467,6 +467,11 @@ public:
 	uint32_t GetSlowDrivers() const { return slowDrivers; }
 	uint32_t GetSlowDriverClocks() const { return slowDriverStepPulseClocks; }
 
+#if NONLINEAR_EXTRUSION
+	bool GetExtrusionCoefficients(size_t extruder, float& a, float& b, float& limit) const;
+	void SetNonlinearExtrusion(size_t extruder, float a, float b, float limit);
+#endif
+
 	// Z probe
 
 	void SetZProbeDefaults();
@@ -718,6 +723,9 @@ private:
 	float driveStepsPerUnit[DRIVES];
 	float instantDvs[DRIVES];
 	float pressureAdvance[MaxExtruders];
+#if NONLINEAR_EXTRUSION
+	float nonlinearExtrusionA[MaxExtruders], nonlinearExtrusionB[MaxExtruders], nonlinearExtrusionLimit[MaxExtruders];
+#endif
 	float motorCurrents[DRIVES];						// the normal motor current for each stepper driver
 	float motorCurrentFraction[DRIVES];					// the percentages of normal motor current that each driver is set to
 #if HAS_SMART_DRIVERS

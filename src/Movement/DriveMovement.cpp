@@ -172,11 +172,25 @@ void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bool doCompensation)
 {
 	const float dv = dda.directionVector[drive];
-	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive) * fabsf(dv);
+	float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive) * fabsf(dv);
+	const size_t extruder = drive - reprap.GetGCodes().GetTotalAxes();
+
+#if NONLINEAR_EXTRUSION
+	if (dda.isPrintingMove)
+	{
+		float a, b, limit;
+		if (reprap.GetPlatform().GetExtrusionCoefficients(extruder, a, b, limit))
+		{
+			const float averageExtrusionSpeed = (dda.totalDistance * dv * DDA::stepClockRate)/dda.clocksNeeded;
+			stepsPerMm *= 1.0 + min<float>((averageExtrusionSpeed * a) + (averageExtrusionSpeed * averageExtrusionSpeed * b), limit);
+		}
+	}
+#endif
+
 	mp.cart.twoCsquaredTimesMmPerStepDivA = roundU64((double)(DDA::stepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.acceleration));
 
 	// Calculate the pressure advance parameter
-	const float compensationTime = (doCompensation && dv > 0.0) ? reprap.GetPlatform().GetPressureAdvance(drive - reprap.GetGCodes().GetTotalAxes()) : 0.0;
+	const float compensationTime = (doCompensation && dv > 0.0) ? reprap.GetPlatform().GetPressureAdvance(extruder) : 0.0;
 	mp.cart.compensationClocks = roundU32(compensationTime * (float)DDA::stepClockRate);
 	mp.cart.accelCompensationClocks = roundU32(compensationTime * (float)DDA::stepClockRate * params.compFactor);
 

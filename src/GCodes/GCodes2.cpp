@@ -294,17 +294,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		{
 			const bool wasPaused = isPaused;			// isPaused gets cleared by CancelPrint
+			const bool wasSimulating = IsSimulating();	// simulationMode may get cleared by CancelPrint
 			StopPrint(&gb == fileGCode);				// if this is normal end-of-print commanded by the file, delete the resurrect.g file
 
-			// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
-			if (wasPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false))
+			if (!wasSimulating)							// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
 			{
-				break;
+				// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
+				if (wasPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false))
+				{
+					break;
+				}
+
+				gb.SetState((code == 0) ? GCodeState::stopping : GCodeState::sleeping);
+				DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false);
 			}
 		}
-
-		gb.SetState((code == 0) ? GCodeState::stopping : GCodeState::sleeping);
-		DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false);
 		break;
 
 	case 3: // Spin spindle clockwise
@@ -3384,8 +3388,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 591: // Configure filament sensor
 		if (gb.Seen('D'))
 		{
-			int extruder = gb.GetIValue();
-			if (extruder >= 0 && extruder < (int)numExtruders)
+			const unsigned int extruder = gb.GetUIValue();
+			if (extruder < numExtruders)
 			{
 				bool seen = false;
 				long sensorType;
@@ -3408,11 +3412,34 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else if (!seen)
 				{
-					reply.printf("Extruder drive %d has no filament sensor", extruder);
+					reply.printf("Extruder drive %u has no filament sensor", extruder);
 				}
 			}
 		}
 		break;
+
+#if NONLINEAR_EXTRUSION
+	case 592: // Configure nonlinear extrusion
+		if (gb.Seen('D'))
+		{
+			const unsigned int extruder = gb.GetUIValue();
+			bool seen = false;
+			float a = 0.0, b = 0.0, limit = DefaultNonlinearExtrusionLimit;
+			gb.TryGetFValue('A', a, seen);
+			gb.TryGetFValue('B', b, seen);
+			gb.TryGetFValue('L', limit, seen);
+			if (seen)
+			{
+				platform.SetNonlinearExtrusion(extruder, a, b, limit);
+			}
+			else
+			{
+				platform.GetExtrusionCoefficients(extruder, a, b, limit);
+				reply.printf("Drive %u nonlinear extrusion coefficients: A=%.3f, B=%.4f, limit=%.2f", extruder, (double)a, (double)b, (double)limit);
+			}
+		}
+		break;
+#endif
 
 	case 593: // Configure filament properties
 		// TODO: We may need this code later to restrict specific filaments to certain tools or to reset filament counters.
