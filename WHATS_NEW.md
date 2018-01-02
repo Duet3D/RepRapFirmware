@@ -1,6 +1,20 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.20.1RC2
+=================
+Upgrade notes:
+- The recommended version of DuetWiFiServer is 1.20+1. DuetWiFiServer 1.20 is also compatible with this release.
+- See upgrade notes for version 1.20
+
+New features:
+- Added support for nonlinear extruder drives (M592)
+- M591 D# response now includes the measured steps/mm and tolerance
+
+Bug fixes:
+- When a simulated print ends or is cancelled, stop.g, sleep.g and cancel.g are no longer run
+- Fixed a 1-step error in the commanded extrusion amount that the filament sensor compares with the measured extrusion
+
 Version 1.20.1RC1
 =================
 Upgrade notes:
