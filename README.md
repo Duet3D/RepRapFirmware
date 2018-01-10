@@ -6,8 +6,8 @@ RepRapFirmware has pioneered a number of advances in 3D printing including:
 * Precise timing of step pulses, even during acceleration (January 2015)
 * Accurate extruder pressure advance, including retraction before the end of a move when needed (January 2015)
 * Segmentation-free delta motion (January 2015)
+* Simulation mode, for establishing an accurate print time before committing to a print (January 2015)
 * Least-squares auto calibration of delta printers (April 2015)
-* Simulation mode, for establishing an accurate print time before committing to a print
 * Compensation for the variation in extruder steps/mm with speed that is a feature of common types of extruder (January 2018)
 
 General design principles of RepRapFirmware:
