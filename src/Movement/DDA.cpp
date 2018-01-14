@@ -1264,7 +1264,13 @@ void DDA::CheckEndstops(Platform& platform)
 #endif
 
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	for (size_t drive = 0; drive < numAxes; ++drive)
+	for (size_t drive = 0; drive <
+#if HAS_STALL_DETECT
+									DRIVES
+#else
+									numAxes
+#endif
+											; ++drive)
 	{
 		if (IsBitSet(endStopsToCheck, drive))
 		{
@@ -1273,7 +1279,7 @@ void DDA::CheckEndstops(Platform& platform)
 			{
 			case EndStopHit::lowHit:
 			case EndStopHit::highHit:
-				if ((endStopsToCheck & UseSpecialEndstop) != 0)		// use only one (probably non-default) endstop while probing a tool offset
+				if ((endStopsToCheck & UseSpecialEndstop) != 0)			// use only one (probably non-default) endstop while probing a tool offset
 				{
 					MoveAborted();
 				}
@@ -1281,7 +1287,12 @@ void DDA::CheckEndstops(Platform& platform)
 				{
 					ClearBit(endStopsToCheck, drive);					// clear this check so that we can check for more
 					const Kinematics& kin = reprap.GetMove().GetKinematics();
-					if (endStopsToCheck == 0 || kin.QueryTerminateHomingMove(drive))
+					if (   endStopsToCheck == 0							// if no endstops left to check
+#if HAS_STALL_DETECT
+						|| drive >= numAxes								// or we are stopping on an extruder motor stall
+#endif
+						|| kin.QueryTerminateHomingMove(drive)			// or this kinematics requires us to stop the move now
+					   )
 					{
 						MoveAborted();									// no more endstops to check, or this axis uses shared motors, so stop the entire move
 					}
@@ -1289,7 +1300,7 @@ void DDA::CheckEndstops(Platform& platform)
 					{
 						StopDrive(drive);								// we must stop the drive before we mess with its coordinates
 					}
-					if (drive < reprap.GetGCodes().GetTotalAxes() && IsHomingAxes())
+					if (drive < numAxes && IsHomingAxes())
 					{
 						kin.OnHomingSwitchTriggered(drive, esh == EndStopHit::highHit, reprap.GetPlatform().GetDriveStepsPerUnit(), *this);
 						reprap.GetGCodes().SetAxisIsHomed(drive);
@@ -1424,7 +1435,7 @@ bool DDA::Step()
 
 		// 2. Determine which drivers are due for stepping, overdue, or will be due very shortly
 		DriveMovement* dm = firstDM;
-		const uint32_t elapsedTime = (Platform::GetInterruptClocks() - moveStartTime) + minInterruptInterval;
+		const uint32_t elapsedTime = (Platform::GetInterruptClocks() - moveStartTime) + MinInterruptInterval;
 		uint32_t driversStepping = 0;
 		while (dm != nullptr && elapsedTime >= dm->nextStepTime)		// if the next step is due
 		{
@@ -1636,6 +1647,11 @@ int32_t DDA::GetStepsTaken(size_t drive) const
 {
 	const DriveMovement * const dmp = FindDM(drive);
 	return (dmp != nullptr) ? dmp->GetNetStepsTaken() : 0;
+}
+
+bool DDA::IsNonPrintingExtruderMove(size_t drive) const
+{
+	return !isPrintingMove && FindDM(drive) != nullptr;
 }
 
 void DDA::LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration)

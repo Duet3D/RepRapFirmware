@@ -74,6 +74,7 @@ public:
 	void LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration);	// Limit the speed an acceleration of this move
 
 	int32_t GetStepsTaken(size_t drive) const;
+	bool IsNonPrintingExtruderMove(size_t drive) const;
 
 	float GetProportionDone(bool moveWasAborted) const;						// Return the proportion of extrusion for the complete multi-segment move already done
 
@@ -105,17 +106,17 @@ public:
 	// Note: the above measurements were taken some time ago, before some firmware optimisations.
 #if SAME70
 	// The system clock of the SAME70 is running at 150MHz. Use the same defaults as for the SAM4E for now.
-	static constexpr int32_t MinCalcIntervalDelta = (40 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
-	static constexpr int32_t MinCalcIntervalCartesian = (40 * stepClockRate)/1000000;	// same as delta for now, but could be lower
-	static constexpr uint32_t minInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
+	static constexpr uint32_t MinCalcIntervalDelta = (40 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
+	static constexpr uint32_t MinCalcIntervalCartesian = (40 * stepClockRate)/1000000;	// same as delta for now, but could be lower
+	static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
 #elif SAM4E || SAM4S
-	static constexpr int32_t MinCalcIntervalDelta = (40 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
-	static constexpr int32_t MinCalcIntervalCartesian = (40 * stepClockRate)/1000000;	// same as delta for now, but could be lower
-	static constexpr uint32_t minInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
+	static constexpr uint32_t MinCalcIntervalDelta = (40 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
+	static constexpr uint32_t MinCalcIntervalCartesian = (40 * stepClockRate)/1000000;	// same as delta for now, but could be lower
+	static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
 #else
-	static constexpr int32_t MinCalcIntervalDelta = (60 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (60us) in step timer clocks
-	static constexpr int32_t MinCalcIntervalCartesian = (60 * stepClockRate)/1000000;	// same as delta for now, but could be lower
-	static constexpr uint32_t minInterruptInterval = 4;									// about 6us minimum interval between interrupts, in step clocks
+	static constexpr uint32_t MinCalcIntervalDelta = (60 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (60us) in step timer clocks
+	static constexpr uint32_t MinCalcIntervalCartesian = (60 * stepClockRate)/1000000;	// same as delta for now, but could be lower
+	static constexpr uint32_t MinInterruptInterval = 4;									// about 6us minimum interval between interrupts, in step clocks
 #endif
 
 	static void PrintMoves();										// print saved moves for debugging

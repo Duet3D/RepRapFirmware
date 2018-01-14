@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include <Network2/W5500/Wiznet/Ethernet/WizSpi.h>
+#include "WizSpi.h"
 #include "variant.h"
 #include "Pins.h"
 
@@ -24,9 +24,12 @@
 
 #include "matrix/matrix.h"
 
-// Functions called by the W5500 module to transfer data to/from the W5500 via SPI
-const uint32_t SpiClockFrequency = 40000000;			// tried 60MHz and we got some data corruption when uploading files, so try 40MHz instead
+// SPI data rate. I tried 60MHz and we got some data corruption when uploading files, so I reduced it to 40MHz.
+// 2018-01-11: We have now received one report of data corruption at 40MHz, so reduced this to 30MHz
+const uint32_t SpiClockFrequency = 30000000;
 const unsigned int SpiPeripheralChannelId = 0;			// we use NPCS0 as the slave select signal
+
+// Functions called by the W5500 module to transfer data to/from the W5500 via SPI
 
 #if USE_PDC
 static Pdc *spi_pdc;

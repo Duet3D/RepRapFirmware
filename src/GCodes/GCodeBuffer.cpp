@@ -463,8 +463,7 @@ const void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool 
 			}
 		}
 
-		// Special case if there is one entry and returnedLength requests several.
-		// Fill the array with the first entry.
+		// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
 		if (doPad && length == 1 && returnedLength > 1)
 		{
 			for(size_t i = 1; i < returnedLength; i++)
@@ -487,7 +486,7 @@ const void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool 
 }
 
 // Get a :-separated list of ints after a key letter
-const void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength)
+const void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{
@@ -513,7 +512,19 @@ const void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength)
 				inList = false;
 			}
 		}
-		returnedLength = length;
+
+		// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
+		if (doPad && length == 1 && returnedLength > 1)
+		{
+			for (size_t i = 1; i < returnedLength; i++)
+			{
+				arr[i] = arr[0];
+			}
+		}
+		else
+		{
+			returnedLength = length;
+		}
 		readPointer = -1;
 	}
 	else
@@ -524,7 +535,7 @@ const void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength)
 }
 
 // Get a :-separated list of unsigned ints after a key letter
-const void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& returnedLength)
+const void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{
@@ -550,7 +561,20 @@ const void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& returnedLength)
 				inList = false;
 			}
 		}
-		returnedLength = length;
+
+		// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
+		if (doPad && length == 1 && returnedLength > 1)
+		{
+			for (size_t i = 1; i < returnedLength; i++)
+			{
+				arr[i] = arr[0];
+			}
+		}
+		else
+		{
+			returnedLength = length;
+		}
+
 		readPointer = -1;
 	}
 	else

@@ -47,7 +47,7 @@ extern "C" void hsmciIdle()
 
 	if (reprap.GetSpinningModule() != moduleFilamentSensors)
 	{
-		FilamentSensor::Spin(false);
+		FilamentMonitor::Spin(false);
 	}
 }
 
@@ -223,7 +223,7 @@ void RepRap::Spin()
 
 	ticksInSpinState = 0;
 	spinningModule = moduleFilamentSensors;
-	FilamentSensor::Spin(true);
+	FilamentMonitor::Spin(true);
 
 	ticksInSpinState = 0;
 	spinningModule = noModule;
@@ -272,7 +272,7 @@ void RepRap::Diagnostics(MessageType mtype)
 	heat->Diagnostics(mtype);
 	gCodes->Diagnostics(mtype);
 	network->Diagnostics(mtype);
-	FilamentSensor::Diagnostics(mtype);
+	FilamentMonitor::Diagnostics(mtype);
 }
 
 // Turn off the heaters, disable the motors, and deactivate the Heat and Move classes. Leave everything else working.

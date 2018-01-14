@@ -343,7 +343,7 @@ GCodeResult GCodes::CheckOrConfigureTrigger(GCodeBuffer& gb, StringRef& reply, i
 					{
 						uint32_t eStops[MaxExtruders];
 						size_t numEntries = MaxExtruders;
-						gb.GetUnsignedArray(eStops, numEntries);
+						gb.GetUnsignedArray(eStops, numEntries, false);
 						for (size_t i = 0; i < numEntries; ++i)
 						{
 							if (eStops[i] < MaxExtruders)
@@ -423,7 +423,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, StringRef& reply)
 			seen = true;
 			size_t numValues = MaxDriversPerAxis;
 			uint32_t drivers[MaxDriversPerAxis];
-			gb.GetUnsignedArray(drivers, numValues);
+			gb.GetUnsignedArray(drivers, numValues, false);
 
 			// Check all the driver numbers are in range
 			AxisDriversConfig config;
@@ -477,7 +477,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, StringRef& reply)
 		seen = true;
 		size_t numValues = DRIVES - numTotalAxes;
 		uint32_t drivers[MaxExtruders];
-		gb.GetUnsignedArray(drivers, numValues);
+		gb.GetUnsignedArray(drivers, numValues, false);
 		numExtruders = numValues;
 		for (size_t i = 0; i < numValues; ++i)
 		{
@@ -703,7 +703,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, StringRef &reply)
 		{
 			uint32_t modulesToUpdate[3];
 			size_t numUpdateModules = ARRAY_SIZE(modulesToUpdate);
-			gb.GetUnsignedArray(modulesToUpdate, numUpdateModules);
+			gb.GetUnsignedArray(modulesToUpdate, numUpdateModules, false);
 			for (size_t i = 0; i < numUpdateModules; ++i)
 			{
 				uint32_t t = modulesToUpdate[i];

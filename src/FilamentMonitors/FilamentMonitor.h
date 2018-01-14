@@ -5,8 +5,8 @@
  *      Author: David
  */
 
-#ifndef SRC_FILAMENTSENSORS_FILAMENTSENSOR_H_
-#define SRC_FILAMENTSENSORS_FILAMENTSENSOR_H_
+#ifndef SRC_FILAMENTSENSORS_FILAMENTMONITOR_H_
+#define SRC_FILAMENTSENSORS_FILAMENTMONITOR_H_
 
 #include "RepRapFirmware.h"
 #include "MessageType.h"
@@ -20,7 +20,7 @@ enum class FilamentSensorStatus : uint8_t
 	sensorError
 };
 
-class FilamentSensor
+class FilamentMonitor
 {
 public:
 	// Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
@@ -28,7 +28,7 @@ public:
 
 	// Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 	// 'filamentConsumed' is the net amount of extrusion since the last call to this function.
-	virtual FilamentSensorStatus Check(bool full, float filamentConsumed) = 0;
+	virtual FilamentSensorStatus Check(bool full, bool hadNonPrintingMove, float filamentConsumed) = 0;
 
 	// Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
 	virtual FilamentSensorStatus Clear(bool full) = 0;
@@ -40,7 +40,7 @@ public:
 	virtual void Interrupt() = 0;
 
 	// Override the virtual destructor if your derived class allocates any dynamic memory
-	virtual ~FilamentSensor();
+	virtual ~FilamentMonitor();
 
 	// Return the type of this sensor
 	int GetType() const { return type; }
@@ -52,7 +52,7 @@ public:
 	static void Spin(bool full);
 
 	// Return the filament sensor associated with a particular extruder
-	static FilamentSensor *GetFilamentSensor(unsigned int extruder);
+	static FilamentMonitor *GetFilamentSensor(unsigned int extruder);
 
 	// Set the filament sensor associated with a particular extruder
 	static bool SetFilamentSensorType(unsigned int extruder, int newSensorType);
@@ -61,9 +61,9 @@ public:
 	static void Diagnostics(MessageType mtype);
 
 protected:
-	FilamentSensor(int t) : type(t), pin(NoPin) { }
+	FilamentMonitor(int t) : type(t), pin(NoPin) { }
 
-	bool ConfigurePin(GCodeBuffer& gb, StringRef& reply, bool& seen);
+	bool ConfigurePin(GCodeBuffer& gb, StringRef& reply, uint32_t interruptMode, bool& seen);
 
 	int GetEndstopNumber() const { return endstopNumber; }
 
@@ -71,15 +71,15 @@ protected:
 
 private:
 	// Create a filament sensor returning null if not a valid sensor type
-	static FilamentSensor *Create(int type);
+	static FilamentMonitor *Create(int type);
 
 	static void InterruptEntry(CallbackParameter param);
 
-	static FilamentSensor *filamentSensors[MaxExtruders];
+	static FilamentMonitor *filamentSensors[MaxExtruders];
 
 	int type;
 	int endstopNumber;
 	Pin pin;
 };
 
-#endif /* SRC_FILAMENTSENSORS_FILAMENTSENSOR_H_ */
+#endif /* SRC_FILAMENTSENSORS_FILAMENTMONITOR_H_ */

@@ -1439,7 +1439,7 @@ void GCodes::CheckFilament()
 	   )
 	{
 		String<100> filamentErrorString;
-		filamentErrorString.GetRef().printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentSensor::GetErrorMessage(lastFilamentError));
+		filamentErrorString.GetRef().printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentMonitor::GetErrorMessage(lastFilamentError));
 		DoPause(*autoPauseGCode, PauseReason::filament, filamentErrorString.Pointer());
 		lastFilamentError = FilamentSensorStatus::ok;
 		platform.Message(LogMessage, filamentErrorString.c_str());
@@ -2011,16 +2011,25 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 				{
 					const int drive = tool->Drive(eDrive);
 					float extrusionAmount = requestedExtrusionAmount * tool->GetMix()[eDrive];
-					if (gb.MachineState().volumetricExtrusion)
+					if (extrusionAmount != 0.0)
 					{
-						extrusionAmount *= volumetricExtrusionFactors[drive];
+						if (gb.MachineState().volumetricExtrusion)
+						{
+							extrusionAmount *= volumetricExtrusionFactors[drive];
+						}
+						rawExtruderTotalByDrive[drive] += extrusionAmount;
+						if (!doingToolChange)			// don't count extrusion done in tool change macros towards total filament consumed, it distorts the print progress
+						{
+							rawExtruderTotal += extrusionAmount;
+						}
+						moveBuffer.coords[drive + numTotalAxes] = extrusionAmount * extrusionFactors[drive];
+#if HAS_SMART_DRIVERS
+						if (moveBuffer.moveType == 1)
+						{
+							SetBit(moveBuffer.endStopsToCheck, drive + numTotalAxes);
+						}
+#endif
 					}
-					rawExtruderTotalByDrive[drive] += extrusionAmount;
-					if (!doingToolChange)			// don't count extrusion done in tool change macros towards total filament consumed, it distorts the print progress
-					{
-						rawExtruderTotal += extrusionAmount;
-					}
-					moveBuffer.coords[drive + numTotalAxes] = extrusionAmount * extrusionFactors[drive];
 				}
 			}
 			else
@@ -2032,16 +2041,25 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 					{
 						const int drive = tool->Drive(eDrive);
 						float extrusionAmount = eMovement[eDrive] * distanceScale;
-						if (gb.MachineState().volumetricExtrusion)
+						if (extrusionAmount != 0.0)
 						{
-							extrusionAmount *= volumetricExtrusionFactors[drive];
+							if (gb.MachineState().volumetricExtrusion)
+							{
+								extrusionAmount *= volumetricExtrusionFactors[drive];
+							}
+							rawExtruderTotalByDrive[drive] += extrusionAmount;
+							if (!doingToolChange)		// don't count extrusion done in tool change macros towards total filament consumed, it distorts the print progress
+							{
+								rawExtruderTotal += extrusionAmount;
+							}
+							moveBuffer.coords[drive + numTotalAxes] = extrusionAmount * extrusionFactors[drive] * volumetricExtrusionFactors[drive];
+#if HAS_SMART_DRIVERS
+							if (moveBuffer.moveType == 1)
+							{
+								SetBit(moveBuffer.endStopsToCheck, drive + numTotalAxes);
+							}
+#endif
 						}
-						rawExtruderTotalByDrive[drive] += extrusionAmount;
-						if (!doingToolChange)		// don't count extrusion done in tool change macros towards total filament consumed, it distorts the print progress
-						{
-							rawExtruderTotal += extrusionAmount;
-						}
-						moveBuffer.coords[drive + numTotalAxes] = extrusionAmount * extrusionFactors[drive] * volumetricExtrusionFactors[drive];
 					}
 				}
 				else
@@ -2068,6 +2086,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinate
 	axesToSenseLength = 0;
 
 	// Check to see if the move is a 'homing' move that endstops are checked on.
+	// We handle S1 parameters affecting extrusion elsewhere.
 	if (gb.Seen('S'))
 	{
 		const int ival = gb.GetIValue();
@@ -3145,7 +3164,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 	size_t dCount = numExtruders;			// Sets the limit and returns the count
 	if (gb.Seen('D'))
 	{
-		gb.GetIntArray(drives, dCount);
+		gb.GetIntArray(drives, dCount, false);
 		seen = true;
 	}
 	else
@@ -3158,7 +3177,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 	size_t hCount = Heaters;
 	if (gb.Seen('H'))
 	{
-		gb.GetIntArray(heaters, hCount);
+		gb.GetIntArray(heaters, hCount, false);
 		seen = true;
 	}
 	else
@@ -3172,7 +3191,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 	{
 		uint32_t xMapping[MaxAxes];
 		size_t xCount = numVisibleAxes;
-		gb.GetUnsignedArray(xMapping, xCount);
+		gb.GetUnsignedArray(xMapping, xCount, false);
 		xMap = UnsignedArrayToBitMap<AxesBitmap>(xMapping, xCount) & LowestNBits<AxesBitmap>(numVisibleAxes);
 		seen = true;
 	}
@@ -3187,7 +3206,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 	{
 		uint32_t yMapping[MaxAxes];
 		size_t yCount = numVisibleAxes;
-		gb.GetUnsignedArray(yMapping, yCount);
+		gb.GetUnsignedArray(yMapping, yCount, false);
 		yMap = UnsignedArrayToBitMap<AxesBitmap>(yMapping, yCount) & LowestNBits<AxesBitmap>(numVisibleAxes);
 		seen = true;
 	}
@@ -3208,7 +3227,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 	{
 		uint32_t fanMapping[NUM_FANS];
 		size_t fanCount = NUM_FANS;
-		gb.GetUnsignedArray(fanMapping, fanCount);
+		gb.GetUnsignedArray(fanMapping, fanCount, false);
 		fanMap = UnsignedArrayToBitMap<FansBitmap>(fanMapping, fanCount) & LowestNBits<FansBitmap>(NUM_FANS);
 		seen = true;
 	}
@@ -3650,13 +3669,13 @@ GCodeResult GCodes::SetHeaterParameters(GCodeBuffer& gb, StringRef& reply)
 			if (!seen && oldChannel < 0)
 			{
 				// For backwards compatibility, if no sensor has been configured on this channel then assume the thermistor normally associated with the heater
-				if (heater < (int)Heaters)
+				if (heater < (int)Heaters && (gb.Seen('R') || gb.Seen('T') || gb.Seen('B')))	// if it has a thermistor and we are trying to configure it
 				{
 					channel = heater;
 				}
 				else
 				{
-					reply.printf("Virtual heater %d is not configured", heater);
+					reply.printf("heater %d is not configured", heater);
 					return GCodeResult::error;
 				}
 			}

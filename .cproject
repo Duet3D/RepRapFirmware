@@ -110,7 +110,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/SAME70_TEST|src/Network2|src/Alligator|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/DuetNG|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Network2|src/Alligator|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/SAME70_TEST|src/DuetNG|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -228,7 +228,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/SAME70_TEST|src/Network2/W5500|src/Alligator|src/Duet|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Network2/W5500|src/Alligator|src/SAME70_TEST|src/Duet|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -338,7 +338,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/SAME70_TEST|src/Network2|src/Alligator|src/Duet|src/DuetNG|src/DuetM" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Network2|src/Alligator|src/SAME70_TEST|src/Duet|src/DuetNG|src/DuetM" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -461,7 +461,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/SAME70_TEST|src/Alligator|src/Duet|src/DuetM|src/Network2/ESP8266|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Alligator|src/SAME70_TEST|src/Duet|src/DuetM|src/Network2/ESP8266|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -582,7 +582,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/SAME70_TEST|src/Network2|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/DuetNG|src/DuetM|src/Alligator/Lwip/lwip/src/include/ipv6|src/Alligator/Lwip/lwip/test|src/Duet/MCP4461|src/Alligator/Lwip/lwip/src/core/ipv6|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Network2|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/SAME70_TEST|src/DuetNG|src/DuetM|src/Alligator/Lwip/lwip/src/include/ipv6|src/Alligator/Lwip/lwip/test|src/Duet/MCP4461|src/Alligator/Lwip/lwip/src/core/ipv6|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -703,7 +703,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/SAME70_TEST|src/DuetNG/DuetEthernet/Wiznet/Internet/TFTP|src/DuetNG/DuetEthernet/Ethernet3|src/DuetNG/DuetWiFi|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPServer|src/Duet|src/NetworkW5500/Wiznet/Internet/SNMP|src/DuetNG/DuetEthernet/Wiznet/Internet/SNTP|src/DuetNG/DuetEthernet/Ethernet3/examples|src/DuetNG|src/DuetNG/DuetEthernet/Wiznet/Internet/DNS|src/NetworkW5500/Wiznet/Internet/TFTP|src/DuetNG/DuetEthernet/Wiznet/Application|src/DuetNG/DuetEthernet/Wiznet/Internet/MQTT|src/Alligator|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPClient|src/DuetNG/DuetEthernet/Wiznet/Internet/httpServer|src/NetworkW5500/Wiznet/Internet/SNTP|src/NetworkW5500/Wiznet/Internet/DNS|src/DuetNG/DuetEthernet/Wiznet/Internet/SNMP|src/NetworkESP8266|src/Network2/ESP8266|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/DuetNG/DuetEthernet/Wiznet/Internet/TFTP|src/DuetNG/DuetEthernet/Ethernet3|src/DuetNG/DuetWiFi|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPServer|src/Duet|src/NetworkW5500/Wiznet/Internet/SNMP|src/DuetNG/DuetEthernet/Wiznet/Internet/SNTP|src/DuetNG/DuetEthernet/Ethernet3/examples|src/DuetNG|src/DuetNG/DuetEthernet/Wiznet/Internet/DNS|src/NetworkW5500/Wiznet/Internet/TFTP|src/DuetNG/DuetEthernet/Wiznet/Application|src/DuetNG/DuetEthernet/Wiznet/Internet/MQTT|src/Alligator|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPClient|src/SAME70_TEST|src/DuetNG/DuetEthernet/Wiznet/Internet/httpServer|src/NetworkW5500/Wiznet/Internet/SNTP|src/NetworkW5500/Wiznet/Internet/DNS|src/DuetNG/DuetEthernet/Wiznet/Internet/SNMP|src/NetworkESP8266|src/Network2/ESP8266|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -847,7 +847,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/DuetM|src/Network2/W5500|src/Network2|src/DuetNG/DuetWiFi|src/Duet|src/DuetNG/DuetEthernet/Wiznet/Internet/SNTP|src/DuetNG|src/DuetNG/DuetEthernet/Wiznet/Internet/DNS|src/DuetNG/DuetEthernet/Wiznet/Application|src/DuetNG/DuetEthernet/Wiznet/Internet/MQTT|src/Alligator|src/SAME70_TEST/Lwip/src/apps/mqtt|src/DuetNG/DuetEthernet/Wiznet/Internet/TFTP|src/DuetNG/DuetEthernet/Ethernet3|src/SAME70_TEST/Lwip/src/apps/snmp|src/SAME70_TEST/Lwip/src/apps/httpd|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPServer|src/SAME70_TEST/Lwip/src/apps/tftp|src/DuetNG/DuetEthernet/Ethernet3/examples|src/SAME70_TEST/Lwip/test|src/SAME70_TEST/Lwip/src/netif/ppp|src/SAME70_TEST/Lwip/src/apps/lwiperf|src/SAME70_TEST/Lwip/src/apps/sntp|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPClient|src/DuetNG/DuetEthernet/Wiznet/Internet/httpServer|src/DuetNG/DuetEthernet/Wiznet/Internet/SNMP|src/Network2/ESP8266|src/RADDS|src/SAME70_TEST/Lwip/doc" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Network2/W5500|src/Network2|src/SAME70_TEST/Lwip/src/netif/ppp|src/DuetNG/DuetWiFi|src/Duet|src/SAME70_TEST/Lwip/doc|src/DuetNG/DuetEthernet/Wiznet/Internet/SNTP|src/DuetNG|src/DuetNG/DuetEthernet/Wiznet/Internet/DNS|src/DuetNG/DuetEthernet/Wiznet/Application|src/DuetNG/DuetEthernet/Wiznet/Internet/MQTT|src/Alligator|src/SAME70_TEST/Lwip/test|src/SAME70_TEST/Lwip/src/apps/snmp|src/SAME70_TEST/Lwip/src/apps/httpd|src/SAME70_TEST/Lwip/src/apps/tftp|src/DuetNG/DuetEthernet/Wiznet/Internet/TFTP|src/DuetNG/DuetEthernet/Ethernet3|src/SAME70_TEST/Lwip/src/apps/lwiperf|src/SAME70_TEST/Lwip/src/apps/sntp|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPServer|src/DuetNG/DuetEthernet/Ethernet3/examples|src/SAME70_TEST/Lwip/src/apps/mqtt|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPClient|src/DuetNG/DuetEthernet/Wiznet/Internet/httpServer|src/DuetNG/DuetEthernet/Wiznet/Internet/SNMP|src/DuetM|src/Network2/ESP8266|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

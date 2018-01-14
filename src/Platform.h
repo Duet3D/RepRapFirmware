@@ -613,10 +613,11 @@ private:
 	float AdcReadingToCpuTemperature(uint32_t reading) const;
 
 #if HAS_SMART_DRIVERS
-	void ReportDrivers(DriversBitmap whichDrivers, const char* text, bool& reported);
+	void ReportDrivers(MessageType mt, DriversBitmap whichDrivers, const char* text, bool& reported);
 #endif
 #if HAS_STALL_DETECT
-	bool AnyMotorStalled(size_t drive) const pre(drive < DRIVES);
+	bool AnyAxisMotorStalled(size_t drive) const pre(drive < DRIVES);
+	bool ExtruderMotorStalled(size_t extruder) const pre(extruder < MaxExtruders);
 #endif
 
 #if SAM4E || SAM4S || SAME70

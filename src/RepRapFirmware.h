@@ -81,7 +81,7 @@ class OutputBuffer;
 class OutputStack;
 class GCodeBuffer;
 class GCodeQueue;
-class FilamentSensor;
+class FilamentMonitor;
 class RandomProbePointSet;
 class Logger;
 

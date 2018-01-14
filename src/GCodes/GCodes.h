@@ -29,7 +29,7 @@ Licence: GPL
 #include "Platform.h"		// for type EndStopHit
 #include "GCodeInput.h"
 #include "Tools/Filament.h"
-#include "FilamentSensors/FilamentSensor.h"
+#include "FilamentMonitors/FilamentMonitor.h"
 #include "RestorePoint.h"
 #include "Movement/BedProbing/Grid.h"
 

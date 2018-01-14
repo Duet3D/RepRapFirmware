@@ -404,8 +404,7 @@ void Network::Spin(bool full)
 
 void Network::Diagnostics(MessageType mtype)
 {
-	platform.Message(mtype, "=== Network ===\n");
-	platform.MessageF(mtype, "State: %d\n", (int)state);
+	platform.MessageF(mtype, "=== Network ===\nState: %d\n", (int)state);
 	HttpResponder::CommonDiagnostics(mtype);
 	platform.Message(mtype, "Responder states:");
 	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())

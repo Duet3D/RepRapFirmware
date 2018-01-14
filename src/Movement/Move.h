@@ -118,7 +118,7 @@ public:
 
 	void AdjustLeadscrews(const floatc_t corrections[]);							// Called by some Kinematics classes to adjust the leadscrews
 
-	int32_t GetAccumulatedExtrusion(size_t extruder);								// Return ands reset the accumulated extrusion amount
+	int32_t GetAccumulatedExtrusion(size_t extruder, bool& nonPrinting);			// Return and reset the accumulated extrusion amount
 
 	bool WriteResumeSettings(FileStore *f) const;									// Write settings for resuming the print
 
@@ -170,6 +170,7 @@ private:
 	volatile bool liveCoordinatesValid;					// True if the XYZ live coordinates are reliable (the extruder ones always are)
 	volatile int32_t liveEndPoints[DRIVES];				// The XYZ endpoints of the last completed move in motor coordinates
 	volatile int32_t extrusionAccumulators[MaxExtruders]; // Accumulated extruder motor steps
+	volatile bool extruderNonPrinting[MaxExtruders];	// Set whenever the extruder starts a non-printing move
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes
 	float& tanXY = tangents[0];

@@ -65,6 +65,7 @@ void Move::Init()
 	for (size_t i = 0; i < MaxExtruders; ++i)
 	{
 		extrusionAccumulators[i] = 0;
+		extruderNonPrinting[i] = false;
 		extrusionPending[i] = 0.0;
 	}
 
@@ -968,6 +969,10 @@ void Move::CurrentMoveCompleted()
 	for (size_t drive = numAxes; drive < DRIVES; ++drive)
 	{
 		extrusionAccumulators[drive - numAxes] += currentDda->GetStepsTaken(drive);
+		if (currentDda->IsNonPrintingExtruderMove(drive))
+		{
+			extruderNonPrinting[drive - numAxes] = true;
+		}
 	}
 	currentDda = nullptr;
 
@@ -1096,7 +1101,9 @@ void Move::ResetExtruderPositions()
 }
 
 // Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
-int32_t Move::GetAccumulatedExtrusion(size_t extruder)
+// Returns the number of motor steps moves since the last call, and nonPrinting is true if we are currently executing an extruding but non-printing move
+// or we completed one since the last call.
+int32_t Move::GetAccumulatedExtrusion(size_t extruder, bool& nonPrinting)
 {
 	const size_t drive = extruder + reprap.GetGCodes().GetTotalAxes();
 	if (drive < DRIVES)
@@ -1104,12 +1111,27 @@ int32_t Move::GetAccumulatedExtrusion(size_t extruder)
 		const irqflags_t flags = cpu_irq_save();
 		const int32_t ret = extrusionAccumulators[extruder];
 		const DDA * const cdda = currentDda;						// capture volatile variable
-		const int32_t adjustment = (cdda != nullptr) ? cdda->GetStepsTaken(drive) : 0;
+		const int32_t adjustment = (cdda == nullptr) ? 0 : cdda->GetStepsTaken(drive);
+		if (adjustment == 0)
+		{
+			// Either there is no current move, or we are at the very start of this move, or it doesn't involve this extruder e.g. a travel move
+			nonPrinting = extruderNonPrinting[extruder];
+		}
+		else if (cdda->IsPrintingMove())
+		{
+			nonPrinting = extruderNonPrinting[extruder];
+			extruderNonPrinting[extruder] = false;
+		}
+		else
+		{
+			nonPrinting = true;
+		}
 		extrusionAccumulators[extruder] = -adjustment;
 		cpu_irq_restore(flags);
 		return ret + adjustment;
 	}
 
+	nonPrinting = true;
 	return 0.0;
 }
 

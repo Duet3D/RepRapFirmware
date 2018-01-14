@@ -75,7 +75,7 @@ bool PortControl::Configure(GCodeBuffer& gb, StringRef& reply)
 		numConfiguredPorts = 0;
 		uint32_t portNumbers[MaxPorts];
 		size_t numPorts = MaxPorts;
-		gb.GetUnsignedArray(portNumbers, numPorts);
+		gb.GetUnsignedArray(portNumbers, numPorts, false);
 		for (size_t i = 0; i < numPorts; ++i)
 		{
 			const uint32_t pnum = portNumbers[i];

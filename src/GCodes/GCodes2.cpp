@@ -18,7 +18,7 @@
 #include "PrintMonitor.h"
 #include "RepRap.h"
 #include "Tools/Tool.h"
-#include "FilamentSensors/FilamentSensor.h"
+#include "FilamentMonitors/FilamentMonitor.h"
 #include "Libraries/General/IP4String.h"
 #include "Version.h"
 
@@ -402,7 +402,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				uint32_t eDrive[MaxExtruders];
 				size_t eCount = numExtruders;
-				gb.GetUnsignedArray(eDrive, eCount);
+				gb.GetUnsignedArray(eDrive, eCount, false);
 				for (size_t i = 0; i < eCount; i++)
 				{
 					seen = true;
@@ -1330,9 +1330,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (!cancelWait && gb.Seen('H'))
 			{
 				// Wait for specified heaters to be ready
-				int32_t heaters[Heaters];
+				uint32_t heaters[Heaters];
 				size_t heaterCount = Heaters;
-				gb.GetIntArray(heaters, heaterCount);
+				gb.GetUnsignedArray(heaters, heaterCount, false);
 
 				for (size_t i = 0; i < heaterCount; i++)
 				{
@@ -1349,9 +1349,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (!cancelWait && gb.Seen('C'))
 			{
 				// Wait for specified chamber(s) to be ready
-				int32_t chamberIndices[NumChamberHeaters];
+				uint32_t chamberIndices[NumChamberHeaters];
 				size_t chamberCount = NumChamberHeaters;
-				gb.GetIntArray(chamberIndices, chamberCount);
+				gb.GetUnsignedArray(chamberIndices, chamberCount, false);
 
 				if (chamberCount == 0)
 				{
@@ -1372,7 +1372,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					// Otherwise wait only for the specified chamber heaters
 					for (size_t i = 0; i < chamberCount; i++)
 					{
-						if (chamberIndices[i] >= 0 && chamberIndices[i] < (int)NumChamberHeaters)
+						if (chamberIndices[i] >= 0 && chamberIndices[i] < NumChamberHeaters)
 						{
 							const int8_t heater = reprap.GetHeat().GetChamberHeater(chamberIndices[i]);
 							if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true))
@@ -2240,7 +2240,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				seen = true;
 				uint32_t eVals[MaxExtruders];
 				size_t eCount = numExtruders;
-				gb.GetUnsignedArray(eVals, eCount);
+				gb.GetUnsignedArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
 					if (!ChangeMicrostepping(numTotalAxes + e, (int)eVals[e], mode))
@@ -2378,12 +2378,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		machineType = MachineType::laser;
 		if (gb.Seen('P'))
 		{
-			int lp = gb.GetIValue();
-			if (lp < 0 || lp > 65535)
+			uint32_t lp = gb.GetUIValue();
+			if (lp > 65535)
 			{
 				lp = NoLogicalPin;
 			}
-			if (reprap.GetPlatform().SetLaserPin(lp))
+			if (reprap.GetPlatform().SetLaserPin((LogicalPin)lp))
 			{
 				reply.copy("Laser mode selected");
 			}
@@ -2409,7 +2409,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			uint32_t pins[2] = { NoLogicalPin, NoLogicalPin };
 			size_t numPins = 2;
-			gb.GetUnsignedArray(pins, numPins);
+			gb.GetUnsignedArray(pins, numPins, false);
 			if (pins[0] > 65535)
 			{
 				pins[0] = NoLogicalPin;
@@ -3057,7 +3057,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				uint32_t eDrive[MaxExtruders];
 				size_t eCount = MaxExtruders;
-				gb.GetUnsignedArray(eDrive, eCount);
+				gb.GetUnsignedArray(eDrive, eCount, false);
 				for (size_t i = 0; i < eCount; i++)
 				{
 					if (eDrive[i] >= numExtruders)
@@ -3129,7 +3129,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					{
 						reply.catf(" %s,",
 									(inputType == EndStopInputType::activeHigh) ? "active high switch"
-										: (inputType == EndStopInputType::activeHigh) ? "active low switch"
+										: (inputType == EndStopInputType::activeLow) ? "active low switch"
 											: (inputType == EndStopInputType::zProbe) ? "Z probe"
 												: (inputType == EndStopInputType::motorStall) ? "motor stall"
 													: "unknown type"
@@ -3217,7 +3217,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				size_t eDriveCount = MaxExtruders;
 				uint32_t eDrives[MaxExtruders];
-				gb.GetUnsignedArray(eDrives, eDriveCount);
+				gb.GetUnsignedArray(eDrives, eDriveCount, false);
 				for (size_t extruder = 0; extruder < eDriveCount; extruder++)
 				{
 					const size_t eDrive = eDrives[extruder];
@@ -3396,10 +3396,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				gb.TryGetIValue('P', sensorType, seen);
 				if (seen)
 				{
-					FilamentSensor::SetFilamentSensorType(extruder, sensorType);
+					FilamentMonitor::SetFilamentSensorType(extruder, sensorType);
 				}
 
-				FilamentSensor *sensor = FilamentSensor::GetFilamentSensor(extruder);
+				FilamentMonitor *sensor = FilamentMonitor::GetFilamentSensor(extruder);
 				if (sensor != nullptr)
 				{
 					// Configure the sensor
@@ -3407,7 +3407,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					result = GetGCodeResultFromError(error);
 					if (error)
 					{
-						FilamentSensor::SetFilamentSensorType(extruder, 0);		// delete the sensor
+						FilamentMonitor::SetFilamentSensorType(extruder, 0);		// delete the sensor
 					}
 				}
 				else if (!seen)

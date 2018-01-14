@@ -182,7 +182,9 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bo
 		if (reprap.GetPlatform().GetExtrusionCoefficients(extruder, a, b, limit))
 		{
 			const float averageExtrusionSpeed = (dda.totalDistance * dv * DDA::stepClockRate)/dda.clocksNeeded;
-			stepsPerMm *= 1.0 + min<float>((averageExtrusionSpeed * a) + (averageExtrusionSpeed * averageExtrusionSpeed * b), limit);
+			const float factor = 1.0 + min<float>((averageExtrusionSpeed * a) + (averageExtrusionSpeed * averageExtrusionSpeed * b), limit);
+			stepsPerMm *= factor;
+			totalSteps = (uint32_t)(totalSteps * factor);		// round this down to avoid step errors
 		}
 	}
 #endif
@@ -293,10 +295,10 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	uint32_t shiftFactor = 0;		// assume single stepping
 	if (stepInterval < DDA::MinCalcIntervalCartesian)
 	{
-		uint32_t stepsToLimit = ((nextStep <= reverseStartStep && reverseStartStep <= totalSteps)
-									? reverseStartStep
-									: totalSteps
-								) - nextStep;
+		const uint32_t stepsToLimit = ((nextStep <= reverseStartStep && reverseStartStep <= totalSteps)
+										? reverseStartStep
+										: totalSteps
+									  ) - nextStep;
 		if (stepInterval < DDA::MinCalcIntervalCartesian/4 && stepsToLimit > 8)
 		{
 			shiftFactor = 3;		// octal stepping

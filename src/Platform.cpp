@@ -26,7 +26,7 @@
 #include "Movement/Move.h"
 #include "Network.h"
 #include "PrintMonitor.h"
-#include "FilamentSensors/FilamentSensor.h"
+#include "FilamentMonitors/FilamentMonitor.h"
 #include "RepRap.h"
 #include "Scanner.h"
 #include "Version.h"
@@ -948,7 +948,7 @@ bool Platform::ProgramZProbe(GCodeBuffer& gb, StringRef& reply)
 	{
 		uint32_t zProbeProgram[MaxZProbeProgramBytes];
 		size_t len = MaxZProbeProgramBytes;
-		gb.GetUnsignedArray(zProbeProgram, len);
+		gb.GetUnsignedArray(zProbeProgram, len, false);
 		if (len != 0)
 		{
 			for (size_t i = 0; i < len; ++i)
@@ -1579,8 +1579,8 @@ void Platform::Spin()
 		{
 			bool reported = false;
 #if HAS_SMART_DRIVERS
-			ReportDrivers(shortToGroundDrivers, "Error: Short-to-ground", reported);
-			ReportDrivers(temperatureShutdownDrivers, "Error: Over temperature shutdown", reported);
+			ReportDrivers(ErrorMessage, shortToGroundDrivers, "short-to-ground", reported);
+			ReportDrivers(ErrorMessage, temperatureShutdownDrivers, "over temperature shutdown", reported);
 			// Don't report open load because we get too many spurious open load reports
 			//ReportDrivers(openLoadDrivers, "Error: Open load", reported);
 
@@ -1594,7 +1594,7 @@ void Platform::Spin()
 					|| (offBoardOtw && (!offBoardDriversFanRunning || now - offBoardDriversFanStartMillis >= DriverCoolingTimeout))
 				   )
 				{
-					ReportDrivers(temperatureWarningDrivers, "Warning: high temperature", reported);
+					ReportDrivers(WarningMessage, temperatureWarningDrivers, "high temperature", reported);
 				}
 			}
 #endif
@@ -1702,7 +1702,7 @@ void Platform::Spin()
 
 // Report driver status conditions that require attention.
 // Sets 'reported' if we reported anything, else leaves 'reported' alone.
-void Platform::ReportDrivers(DriversBitmap whichDrivers, const char* text, bool& reported)
+void Platform::ReportDrivers(MessageType mt, DriversBitmap whichDrivers, const char* text, bool& reported)
 {
 	if (whichDrivers != 0)
 	{
@@ -1715,7 +1715,7 @@ void Platform::ReportDrivers(DriversBitmap whichDrivers, const char* text, bool&
 			}
 			whichDrivers >>= 1;
 		}
-		MessageF(WarningMessage, "%s\n", scratchString.Pointer());
+		MessageF(mt, "%s\n", scratchString.Pointer());
 		reported = true;
 	}
 }
@@ -1724,8 +1724,8 @@ void Platform::ReportDrivers(DriversBitmap whichDrivers, const char* text, bool&
 
 #if HAS_STALL_DETECT
 
-// Return true if any motor driving this axis or extruder is stalled
-bool Platform::AnyMotorStalled(size_t drive) const
+// Return true if any motor driving this axis is stalled
+bool Platform::AnyAxisMotorStalled(size_t drive) const
 {
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	if (drive < numAxes)
@@ -1741,6 +1741,12 @@ bool Platform::AnyMotorStalled(size_t drive) const
 	}
 
 	return (SmartDrivers::GetLiveStatus(extruderDrivers[drive - numAxes]) & TMC_RR_SG) != 0;
+}
+
+// Return true if the motor driving this extruder is stalled
+bool Platform::ExtruderMotorStalled(size_t extruder) const pre(drive < DRIVES)
+{
+	return (SmartDrivers::GetLiveStatus(extruderDrivers[extruder]) & TMC_RR_SG) != 0;
 }
 
 #endif
@@ -1925,7 +1931,7 @@ static void FanInterrupt(CallbackParameter)
 	++fanInterruptCount;
 	if (fanInterruptCount == fanMaxInterruptCount)
 	{
-		uint32_t now = micros();
+		const uint32_t now = micros();
 		fanInterval = now - fanLastResetTime;
 		fanLastResetTime = now;
 		fanInterruptCount = 0;
@@ -2681,7 +2687,8 @@ void Platform::UpdateConfiguredHeaters()
 
 EndStopHit Platform::Stopped(size_t drive) const
 {
-	if (drive < reprap.GetGCodes().GetTotalAxes())
+	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
+	if (drive < numAxes)
 	{
 		switch (endStopInputType[drive])
 		{
@@ -2702,28 +2709,28 @@ EndStopHit Platform::Stopped(size_t drive) const
 				case KinematicsType::coreXY:
 					// Both X and Y motors are involved in homing X or Y
 					motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
-										? AnyMotorStalled(X_AXIS) || AnyMotorStalled(Y_AXIS)
-											: AnyMotorStalled(drive);
+										? AnyAxisMotorStalled(X_AXIS) || AnyAxisMotorStalled(Y_AXIS)
+											: AnyAxisMotorStalled(drive);
 					break;
 
 				case KinematicsType::coreXYU:
 					// Both X and Y motors are involved in homing X or Y, and both U and V motors are involved in homing U
 					motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
-										? AnyMotorStalled(X_AXIS) || AnyMotorStalled(Y_AXIS)
+										? AnyAxisMotorStalled(X_AXIS) || AnyAxisMotorStalled(Y_AXIS)
 											: (drive == U_AXIS)
-												? AnyMotorStalled(U_AXIS) || AnyMotorStalled(V_AXIS)
-													: AnyMotorStalled(drive);
+												? AnyAxisMotorStalled(U_AXIS) || AnyAxisMotorStalled(V_AXIS)
+													: AnyAxisMotorStalled(drive);
 					break;
 
 				case KinematicsType::coreXZ:
 					// Both X and Z motors are involved in homing X or Z
 					motorIsStalled = (drive == X_AXIS || drive == Z_AXIS)
-										? AnyMotorStalled(X_AXIS) || AnyMotorStalled(Z_AXIS)
-											: AnyMotorStalled(drive);
+										? AnyAxisMotorStalled(X_AXIS) || AnyAxisMotorStalled(Z_AXIS)
+											: AnyAxisMotorStalled(drive);
 					break;
 
 				default:
-					motorIsStalled = AnyMotorStalled(drive);
+					motorIsStalled = AnyAxisMotorStalled(drive);
 					break;
 				}
 				return (!motorIsStalled) ? EndStopHit::noStop
@@ -2734,14 +2741,17 @@ EndStopHit Platform::Stopped(size_t drive) const
 #endif
 
 		case EndStopInputType::activeLow:
+			if (endStopPins[drive] != NoPin)
+			{
+				const bool b = IoPort::ReadPin(endStopPins[drive]);
+				return (b) ? EndStopHit::noStop : (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
+			}
+			break;
+
 		case EndStopInputType::activeHigh:
 			if (endStopPins[drive] != NoPin)
 			{
-				bool b = IoPort::ReadPin(endStopPins[drive]);
-				if (endStopInputType[drive] == EndStopInputType::activeHigh)
-				{
-					b = !b;
-				}
+				const bool b = !IoPort::ReadPin(endStopPins[drive]);
 				return (b) ? EndStopHit::noStop : (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
 			}
 			break;
@@ -2750,12 +2760,13 @@ EndStopHit Platform::Stopped(size_t drive) const
 			break;
 		}
 	}
+#if HAS_STALL_DETECT
 	else if (drive < DRIVES)
 	{
-		// Endstop not used for an axis, so no configuration data available.
-		// To allow us to see its status in DWC, pretend it is configured as a high-end active high endstop.
-		return (endStopPins[drive] != NoPin && IoPort::ReadPin(endStopPins[drive])) ? EndStopHit::highHit : EndStopHit::noStop;
+		// Endstop is for an extruder drive, so use stall detection
+		return (ExtruderMotorStalled(drive - numAxes)) ? EndStopHit::highHit : EndStopHit::noStop;
 	}
+#endif
 	return EndStopHit::noStop;
 }
 
@@ -4269,7 +4280,7 @@ bool Platform::ConfigureStallDetection(GCodeBuffer& gb, StringRef& reply)
 	{
 		uint32_t drives[DRIVES];
 		size_t dCount = DRIVES;
-		gb.GetUnsignedArray(drives, dCount);
+		gb.GetUnsignedArray(drives, dCount, false);
 		for (size_t i = 0; i < dCount; i++)
 		{
 			if (drives[i] >= numSmartDrivers)
@@ -4469,7 +4480,7 @@ void STEP_TC_HANDLER()
 {
 	const irqflags_t flags = cpu_irq_save();
 	const int32_t diff = (int32_t)(tim - GetInterruptClocks());		// see how long we have to go
-	if (diff < (int32_t)DDA::minInterruptInterval)					// if less than about 6us or already passed
+	if (diff < (int32_t)DDA::MinInterruptInterval)					// if less than about 6us or already passed
 	{
 		cpu_irq_restore(flags);
 		return true;												// tell the caller to simulate an interrupt instead
@@ -4502,7 +4513,7 @@ void STEP_TC_HANDLER()
 {
 	const irqflags_t flags = cpu_irq_save();
 	const int32_t diff = (int32_t)(tim - GetInterruptClocks());		// see how long we have to go
-	if (diff < (int32_t)DDA::minInterruptInterval)					// if less than about 6us or already passed
+	if (diff < (int32_t)DDA::MinInterruptInterval)					// if less than about 6us or already passed
 	{
 		cpu_irq_restore(flags);
 		return true;												// tell the caller to simulate an interrupt instead

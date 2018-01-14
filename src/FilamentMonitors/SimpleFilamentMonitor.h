@@ -5,18 +5,18 @@
  *      Author: David
  */
 
-#ifndef SRC_FILAMENTSENSORS_SIMPLEFILAMENTSENSOR_H_
-#define SRC_FILAMENTSENSORS_SIMPLEFILAMENTSENSOR_H_
+#ifndef SRC_FILAMENTSENSORS_SIMPLEFILAMENTMONITOR_H_
+#define SRC_FILAMENTSENSORS_SIMPLEFILAMENTMONITOR_H_
 
-#include "FilamentSensor.h"
+#include "FilamentMonitor.h"
 
-class SimpleFilamentSensor : public FilamentSensor
+class SimpleFilamentMonitor : public FilamentMonitor
 {
 public:
-	SimpleFilamentSensor(int type);
+	SimpleFilamentMonitor(int type);
 
 	bool Configure(GCodeBuffer& gb, StringRef& reply, bool& seen) override;
-	FilamentSensorStatus Check(bool full, float filamentConsumed) override;
+	FilamentSensorStatus Check(bool full, bool hadNonPrintingMove, float filamentConsumed) override;
 	FilamentSensorStatus Clear(bool full) override;
 	void Diagnostics(MessageType mtype, unsigned int extruder) override;
 	void Interrupt() override;
@@ -28,4 +28,4 @@ private:
 	bool filamentPresent;
 };
 
-#endif /* SRC_FILAMENTSENSORS_SIMPLEFILAMENTSENSOR_H_ */
+#endif /* SRC_FILAMENTSENSORS_SIMPLEFILAMENTMONITOR_H_ */

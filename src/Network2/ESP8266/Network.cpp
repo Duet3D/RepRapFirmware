@@ -669,7 +669,7 @@ const char* Network::TranslateNetworkState() const
 
 void Network::Diagnostics(MessageType mtype)
 {
-	platform.MessageF(mtype, "Network state is %s\n", TranslateNetworkState());
+	platform.MessageF(mtype, "=== Network ===\nNetwork state is %s\n", TranslateNetworkState());
 	platform.MessageF(mtype, "WiFi module is %s\n", TranslateWiFiState(currentMode));
 	platform.MessageF(mtype, "Failed messages: pending %u, notready %u, noresp %u\n", transferAlreadyPendingCount, readyTimeoutCount, responseTimeoutCount);
 
