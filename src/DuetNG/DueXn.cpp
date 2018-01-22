@@ -8,6 +8,7 @@
 #include "DueXn.h"
 #include "SX1509.h"
 #include "Platform.h"
+#include "RepRap.h"
 
 namespace DuetExpansion
 {
@@ -56,6 +57,8 @@ namespace DuetExpansion
 	// Identify which expansion board (if any) is attached and initialise it
 	ExpansionBoardType DueXnInit()
 	{
+		reprap.GetPlatform().InitI2c();					// initialise I2C
+
 		bool ret = dueXnExpander.begin(DueXnAddress);
 		if (!ret)
 		{
@@ -98,6 +101,7 @@ namespace DuetExpansion
 	// Look for an additional output pin expander
 	void AdditionalOutputInit()
 	{
+		reprap.GetPlatform().InitI2c();										// initialise I2C
 		bool ret = additionalIoExpander.begin(AdditionalIoExpanderAddress);
 		if (!ret)
 		{

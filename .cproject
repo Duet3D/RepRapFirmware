@@ -110,7 +110,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Network2|src/Alligator|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/SAME70_TEST|src/DuetNG|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Display|src/Network2|src/Alligator|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/SAME70_TEST|src/DuetNG|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -228,7 +228,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Network2/W5500|src/Alligator|src/SAME70_TEST|src/Duet|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Display|src/Network2/W5500|src/Alligator|src/SAME70_TEST|src/Duet|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -338,7 +338,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Network2|src/Alligator|src/SAME70_TEST|src/Duet|src/DuetNG|src/DuetM" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Display|src/Network2|src/Alligator|src/SAME70_TEST|src/Duet|src/DuetNG|src/DuetM" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -461,7 +461,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Alligator|src/SAME70_TEST|src/Duet|src/DuetM|src/Network2/ESP8266|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Display|src/Alligator|src/SAME70_TEST|src/Duet|src/DuetM|src/Network2/ESP8266|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -582,7 +582,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Network2|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/SAME70_TEST|src/DuetNG|src/DuetM|src/Alligator/Lwip/lwip/src/include/ipv6|src/Alligator/Lwip/lwip/test|src/Duet/MCP4461|src/Alligator/Lwip/lwip/src/core/ipv6|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Display|src/Network2|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/SAME70_TEST|src/DuetNG|src/DuetM|src/Alligator/Lwip/lwip/src/include/ipv6|src/Alligator/Lwip/lwip/test|src/Duet/MCP4461|src/Alligator/Lwip/lwip/src/core/ipv6|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -827,27 +827,8 @@
 							</tool>
 						</toolChain>
 					</folderInfo>
-					<folderInfo id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366.1645191116.src/DuetNG/DuetEthernet/Wiznet/Internet/FTPServer" name="/" resourcePath="src/DuetNG/DuetEthernet/Wiznet/Internet/FTPServer">
-						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.release.688825295" name="Cross GCC" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.release" unusedChildren="">
-							<option id="cdt.managedbuild.option.gnu.cross.path.1965306885.313001552.1040164617.403773467" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path.1965306885"/>
-							<option id="cdt.managedbuild.option.gnu.cross.prefix.444696517.1953934546.1227689785.1387839992" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix.444696517"/>
-							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.1288691475" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<tool id="cdt.managedbuild.tool.gnu.cross.c.compiler.91485731" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler.1860851793">
-								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.588698263" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
-							</tool>
-							<tool id="cdt.managedbuild.tool.gnu.cross.cpp.compiler.1740951937" name="Cross G++ Compiler" superClass="cdt.managedbuild.tool.gnu.cross.cpp.compiler.1203733011">
-								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.282461766" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
-							</tool>
-							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.393726279" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker.533117704"/>
-							<tool id="cdt.managedbuild.tool.gnu.cross.cpp.linker.49888442" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker.910947184"/>
-							<tool id="cdt.managedbuild.tool.gnu.cross.archiver.1605627031" name="Cross GCC Archiver" superClass="cdt.managedbuild.tool.gnu.cross.archiver.1081354337"/>
-							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.2133841845" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler.51365542">
-								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.283930674" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
-							</tool>
-						</toolChain>
-					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Network2/W5500|src/Network2|src/SAME70_TEST/Lwip/src/netif/ppp|src/DuetNG/DuetWiFi|src/Duet|src/SAME70_TEST/Lwip/doc|src/DuetNG/DuetEthernet/Wiznet/Internet/SNTP|src/DuetNG|src/DuetNG/DuetEthernet/Wiznet/Internet/DNS|src/DuetNG/DuetEthernet/Wiznet/Application|src/DuetNG/DuetEthernet/Wiznet/Internet/MQTT|src/Alligator|src/SAME70_TEST/Lwip/test|src/SAME70_TEST/Lwip/src/apps/snmp|src/SAME70_TEST/Lwip/src/apps/httpd|src/SAME70_TEST/Lwip/src/apps/tftp|src/DuetNG/DuetEthernet/Wiznet/Internet/TFTP|src/DuetNG/DuetEthernet/Ethernet3|src/SAME70_TEST/Lwip/src/apps/lwiperf|src/SAME70_TEST/Lwip/src/apps/sntp|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPServer|src/DuetNG/DuetEthernet/Ethernet3/examples|src/SAME70_TEST/Lwip/src/apps/mqtt|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPClient|src/DuetNG/DuetEthernet/Wiznet/Internet/httpServer|src/DuetNG/DuetEthernet/Wiznet/Internet/SNMP|src/DuetM|src/Network2/ESP8266|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Display|src/Network2/W5500|src/Network2|src/SAME70_TEST/Lwip/src/netif/ppp|src/DuetNG/DuetWiFi|src/Duet|src/SAME70_TEST/Lwip/doc|src/DuetNG/DuetEthernet/Wiznet/Internet/SNTP|src/DuetNG|src/DuetNG/DuetEthernet/Wiznet/Internet/DNS|src/DuetNG/DuetEthernet/Wiznet/Application|src/DuetNG/DuetEthernet/Wiznet/Internet/MQTT|src/Alligator|src/SAME70_TEST/Lwip/test|src/SAME70_TEST/Lwip/src/apps/snmp|src/SAME70_TEST/Lwip/src/apps/httpd|src/SAME70_TEST/Lwip/src/apps/tftp|src/DuetNG/DuetEthernet/Wiznet/Internet/TFTP|src/DuetNG/DuetEthernet/Ethernet3|src/SAME70_TEST/Lwip/src/apps/lwiperf|src/SAME70_TEST/Lwip/src/apps/sntp|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPServer|src/DuetNG/DuetEthernet/Ethernet3/examples|src/SAME70_TEST/Lwip/src/apps/mqtt|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPClient|src/DuetNG/DuetEthernet/Wiznet/Internet/httpServer|src/DuetNG/DuetEthernet/Wiznet/Internet/SNMP|src/DuetM|src/Network2/ESP8266|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

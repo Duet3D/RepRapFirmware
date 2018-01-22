@@ -232,6 +232,9 @@ private:
 	bool HandleGcode(GCodeBuffer& gb, StringRef& reply);				// Do a G code
 	bool HandleMcode(GCodeBuffer& gb, StringRef& reply);				// Do an M code
 	bool HandleTcode(GCodeBuffer& gb, StringRef& reply);				// Do a T code
+	bool HandleResult(GCodeBuffer& gb, GCodeResult rslt, StringRef& reply);
+	void HandleReply(GCodeBuffer& gb, bool error, const char *reply);	// Handle G-Code replies
+	void HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply);
 
 	bool DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinated) __attribute__((hot));	// Execute a straight move returning true if an error was written to 'reply'
 	bool DoArcMove(GCodeBuffer& gb, bool clockwise)						// Execute an arc move returning true if it was badly-formed
@@ -255,13 +258,17 @@ private:
 	bool Push(GCodeBuffer& gb);											// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb);											// Pop feedrate etc
 	void DisableDrives();												// Turn the motors off
-	void HandleReply(GCodeBuffer& gb, bool error, const char *reply);	// Handle G-Code replies
-	void HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply);
 	bool OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32);
 																		// Start saving GCodes in a file
 	void FinishWrite(GCodeBuffer& gb);									// Finish writing to the file and respond
 	bool SendConfigToLine();											// Deal with M503
-	GCodeResult OffsetAxes(GCodeBuffer& gb);							// Set offsets - deprecated, use G10
+
+	GCodeResult OffsetAxes(GCodeBuffer& gb);							// Set offsets
+
+#if SUPPORT_WORKPLACE_COORDINATES
+	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, StringRef& reply);	// Set workspace coordinates
+#endif
+
 	bool SetHeaterProtection(GCodeBuffer &gb, StringRef &reply);		// Configure heater protection (M143). Returns true if an error occurred
 	void SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply); // Set the P/I/D parameters for a heater
 	GCodeResult SetHeaterParameters(GCodeBuffer& gb, StringRef& reply);	// Set the thermistor and ADC parameters for a heater, returning true if an error occurs
@@ -308,6 +315,8 @@ private:
 	GCodeResult ProbeGrid(GCodeBuffer& gb, StringRef& reply);			// Start probing the grid, returning true if we didn't because of an error
 	GCodeResult CheckOrConfigureTrigger(GCodeBuffer& gb, StringRef& reply, int code);	// Handle M581 and M582
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, StringRef &reply);		// Handle M997
+	GCodeResult SendI2c(GCodeBuffer& gb, StringRef &reply);				// Handle M260
+	GCodeResult ReceiveI2c(GCodeBuffer& gb, StringRef &reply);			// Handle M261
 
 	bool WriteConfigOverrideFile(GCodeBuffer& gb, StringRef& reply, const char *fileName) const; // Write the config-override file
 	void CopyConfigFinalValues(GCodeBuffer& gb);						// Copy the feed rate etc. from the daemon to the input channels
@@ -386,13 +395,19 @@ private:
 	size_t numTotalAxes;						// How many axes we have
 	size_t numVisibleAxes;						// How many axes are visible
 	size_t numExtruders;						// How many extruders we have, or may have
-	float axisOffsets[MaxAxes];					// M206 axis offsets
-	float axisScaleFactors[MaxAxes];			// Scale XYZ coordinates by this factor (for Delta configurations)
+	float axisScaleFactors[MaxAxes];			// Scale XYZ coordinates by this factor
 	float virtualExtruderPosition;				// Virtual extruder position of the last move fed into the Move class
 	float rawExtruderTotalByDrive[MaxExtruders]; // Extrusion amount in the last G1 command with an E parameter when in absolute extrusion mode
 	float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
 	float distanceScale;						// MM or inches
 	float arcSegmentLength;						// Length of segments that we split arc moves into
+
+#if SUPPORT_WORKPLACE_COORDINATES
+	unsigned int currentCoordinateSystem;
+	float workplaceCoordinates[10][MaxAxes];	// Workplace coordinate offsets
+#else
+	float axisOffsets[MaxAxes];					// M206 axis offsets
+#endif
 
 	FileData fileToPrint;						// The next file to print
 	FilePosition fileOffsetToPrint;				// The offset to print from
@@ -424,11 +439,14 @@ private:
 	int g30SValue;								// S parameter in the G30 command, or -2 if there wasn't one
 	float g30zStoppedHeight;					// the height to report after running G30 S-1
 	float g30zHeightError;						// the height error last time we probed
+	float g30PrevHeightError;					// the height error the previous time we probed
 	uint32_t lastProbedTime;					// time in milliseconds that the probe was last triggered
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
 	size_t gridXindex, gridYindex;				// Which grid probe point is next
 	bool doingManualBedProbe;					// true if we are waiting for the user to jog the nozzle until it touches the bed
 	bool probeIsDeployed;						// true if M401 has been used to deploy the probe and M402 has not yet been used t0 retract it
+	bool hadProbingError;						// true if there was an error probing the last point
+	uint8_t tapsDone;							// how many times we tapped the current point
 
 	float simulationTime;						// Accumulated simulation time
 	uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging

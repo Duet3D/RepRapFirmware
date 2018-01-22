@@ -9,7 +9,7 @@ Separated out from Platform.h by dc42 and extended by chrishamm
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#include <Network2/W5500/Socket.h>
+#include "Socket.h"
 #include "NetworkDefs.h"
 #include "MessageType.h"
 
@@ -59,6 +59,7 @@ public:
 	const uint8_t *GetIPAddress() const { return ipAddress; }
 	void OpenDataPort(Port port);
 	void TerminateDataPort();
+	void DataPortClosing();
 
 	void HandleHttpGCodeReply(const char *msg);
 	void HandleTelnetGCodeReply(const char *msg);

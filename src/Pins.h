@@ -38,8 +38,16 @@
 # define HAS_MULTIPLE_NETWORK_INTERFACES	0
 #endif
 
-#ifndef NONLINEAR_EXTRUSION
-#define NONLINEAR_EXTRUSION		1		// for now this is always enabled
+#ifndef SUPPORT_NONLINEAR_EXTRUSION
+# define SUPPORT_NONLINEAR_EXTRUSION		1		// for now this is always enabled
+#endif
+
+#ifndef SUPPORT_WORKPLACE_COORDINATES
+# define SUPPORT_WORKPLACE_COORDINATES		0
+#endif
+
+#ifndef SUPPORT_12864_LCD
+# define SUPPORT_12864_LCD					0
 #endif
 
 #endif // PINS_H__

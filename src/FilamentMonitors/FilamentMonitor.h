@@ -28,7 +28,7 @@ public:
 
 	// Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 	// 'filamentConsumed' is the net amount of extrusion since the last call to this function.
-	virtual FilamentSensorStatus Check(bool full, bool hadNonPrintingMove, float filamentConsumed) = 0;
+	virtual FilamentSensorStatus Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed) = 0;
 
 	// Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
 	virtual FilamentSensorStatus Clear(bool full) = 0;
@@ -36,8 +36,8 @@ public:
 	// Print diagnostic info for this sensor
 	virtual void Diagnostics(MessageType mtype, unsigned int extruder) = 0;
 
-	// ISR for when the pin state changes
-	virtual void Interrupt() = 0;
+	// ISR for when the pin state changes. It should return true if the ISR wants the commanded extrusion to be fetched.
+	virtual bool Interrupt() = 0;
 
 	// Override the virtual destructor if your derived class allocates any dynamic memory
 	virtual ~FilamentMonitor();
@@ -61,7 +61,7 @@ public:
 	static void Diagnostics(MessageType mtype);
 
 protected:
-	FilamentMonitor(int t) : type(t), pin(NoPin) { }
+	FilamentMonitor(unsigned int extruder, int t) : extruderNumber(extruder), type(t), pin(NoPin) { }
 
 	bool ConfigurePin(GCodeBuffer& gb, StringRef& reply, uint32_t interruptMode, bool& seen);
 
@@ -71,15 +71,19 @@ protected:
 
 private:
 	// Create a filament sensor returning null if not a valid sensor type
-	static FilamentMonitor *Create(int type);
+	static FilamentMonitor *Create(unsigned int extruder, int type);
 
 	static void InterruptEntry(CallbackParameter param);
 
 	static FilamentMonitor *filamentSensors[MaxExtruders];
 
+	int32_t isrExtruderStepsCommanded;
+	unsigned int extruderNumber;
 	int type;
 	int endstopNumber;
 	Pin pin;
+	bool isrWasNonPrinting;
+	bool haveIsrStepsCommanded;
 };
 
 #endif /* SRC_FILAMENTSENSORS_FILAMENTMONITOR_H_ */

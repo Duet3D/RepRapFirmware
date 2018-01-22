@@ -970,4 +970,14 @@ bool GCodeBuffer::CanQueueCodes() const
 	return queueCodes || machineState->doingFileMacro;	// return true if we queue commands form this source or we are executing a macro
 }
 
+// Write the command to a string
+void GCodeBuffer::PrintCommand(StringRef& s) const
+{
+	s.printf("%c%d", commandLetter, commandNumber);
+	if (commandFraction >= 0)
+	{
+		s.catf(".%d", commandFraction);
+	}
+}
+
 // End

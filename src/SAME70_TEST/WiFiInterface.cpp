@@ -223,21 +223,22 @@ void WiFiInterface::ShutdownProtocol(Protocol protocol)
 	switch(protocol)
 	{
 	case HttpProtocol:
-		SendListenCommand(portNumbers[protocol], protocol, 0);
+		StopListening(portNumbers[protocol]);
 		TerminateSockets(portNumbers[protocol]);
 		break;
 
 	case FtpProtocol:
-		SendListenCommand(portNumbers[protocol], protocol, 0);
+		StopListening(portNumbers[protocol]);
 		TerminateSockets(portNumbers[protocol]);
 		if (ftpDataPort != 0)
 		{
+			StopListening(ftpDataPort);
 			TerminateSockets(ftpDataPort);
 		}
 		break;
 
 	case TelnetProtocol:
-		SendListenCommand(portNumbers[protocol], protocol, 0);
+		StopListening(portNumbers[protocol]);
 		TerminateSockets(portNumbers[protocol]);
 		break;
 
@@ -1136,14 +1137,14 @@ void WiFiInterface::TerminateDataPort()
 
 	if (ftpDataSocket == nullptr)
 	{
-		SendListenCommand(ftpDataPort, FtpDataProtocol, 0);
+		StopListening(ftpDataPort);
 		ftpDataPort = 0;
 		return;
 	}
 
 	if (closeDataPort || !ftpDataSocket->IsClosing())
 	{
-		SendListenCommand(ftpDataPort, FtpDataProtocol, 0);
+		StopListening(ftpDataPort);
 		ftpDataSocket->TerminateAndDisable();
 		ftpDataPort = 0;
 		closeDataPort = false;
@@ -1154,6 +1155,11 @@ void WiFiInterface::TerminateDataPort()
 		// Give it some more time
 		closeDataPort = true;
 	}
+}
+
+void WiFiInterface::DataPortClosing()
+{
+	StopListening(ftpDataPort);
 }
 
 #if USE_PDC
@@ -1611,6 +1617,12 @@ void WiFiInterface::SendListenCommand(Port port, Protocol protocol, unsigned int
 	lcb.remoteIp = AnyIp;
 	lcb.maxConnections = maxConnections;
 	SendCommand(NetworkCommand::networkListen, 0, 0, &lcb, sizeof(lcb), nullptr, 0);
+}
+
+// Stop listening on a port
+void WiFiInterface::StopListening(Port port)
+{
+	SendListenCommand(port, AnyProtocol, 0);
 }
 
 // This is called when ESP is signalling to us that an error occurred or there was a state change

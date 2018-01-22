@@ -39,7 +39,7 @@ void Socket::Close()
 
 	if (reprap.Debug(moduleNetwork))
 	{
-		debugPrintf("close failed, ir wrong state\n");
+		debugPrintf("close failed, in wrong state or bad reply\n");
 	}
 	Terminate();							// something is not right, so terminate the socket for safety
 }

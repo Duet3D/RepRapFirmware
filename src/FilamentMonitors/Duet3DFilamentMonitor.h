@@ -15,16 +15,22 @@
 class Duet3DFilamentMonitor : public FilamentMonitor
 {
 public:
-	Duet3DFilamentMonitor(int type);
+	Duet3DFilamentMonitor(unsigned int extruder, int type);
 
-	void Interrupt() override;
+	bool Interrupt() override;
 
 protected:
-	virtual void OnStartBitReceived() = 0;
-	virtual void ProcessReceivedWord(uint16_t val) = 0;
 	void InitReceiveBuffer();
-	void PollReceiveBuffer();
+
+	enum class PollResult : uint8_t
+	{
+		incomplete,
+		complete,
+		error
+	};
+	PollResult PollReceiveBuffer(uint16_t& measurement);
 	bool IsReceiving() const;
+	bool IsWaitingForStartBit() const;
 
 private:
 	static constexpr size_t EdgeCaptureBufferSize = 64;				// must be a power of 2

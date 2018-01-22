@@ -64,6 +64,7 @@ public:
 
 	void OpenDataPort(Port port) override;
 	void TerminateDataPort() override;
+	void DataPortClosing() override;
 
 	// The remaining functions are specific to the WiFi version
 	WifiFirmwareUploader& GetWifiUploader() { return *uploader; }
@@ -94,6 +95,7 @@ private:
 	void InitSockets();
 	void TerminateSockets();
 	void TerminateSockets(Port port);
+	void StopListening(Port port);
 
 	void StartProtocol(Protocol protocol)
 	pre(protocol < NumProtocols);

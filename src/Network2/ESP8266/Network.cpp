@@ -225,21 +225,22 @@ void Network::ShutdownProtocol(Protocol protocol)
 	switch(protocol)
 	{
 	case HttpProtocol:
-		SendListenCommand(portNumbers[protocol], protocol, 0);
+		StopListening(portNumbers[protocol]);
 		TerminateSockets(portNumbers[protocol]);
 		break;
 
 	case FtpProtocol:
-		SendListenCommand(portNumbers[protocol], protocol, 0);
+		StopListening(portNumbers[protocol]);
 		TerminateSockets(portNumbers[protocol]);
 		if (ftpDataPort != 0)
 		{
+			StopListening(ftpDataPort);
 			TerminateSockets(ftpDataPort);
 		}
 		break;
 
 	case TelnetProtocol:
-		SendListenCommand(portNumbers[protocol], protocol, 0);
+		StopListening(portNumbers[protocol]);
 		TerminateSockets(portNumbers[protocol]);
 		break;
 
@@ -1166,7 +1167,7 @@ void Network::TerminateDataPort()
 {
 	if (ftpDataPort != 0)
 	{
-		SendListenCommand(ftpDataPort, FtpDataProtocol, 0);
+		StopListening(ftpDataPort);
 		for (SocketNumber skt = 0; skt < NumTcpSockets; ++skt)
 		{
 			if (sockets[skt].GetLocalPort() == ftpDataPort)
@@ -1176,6 +1177,11 @@ void Network::TerminateDataPort()
 		}
 		ftpDataPort = 0;
 	}
+}
+
+void Network::DataPortClosing()
+{
+	StopListening(ftpDataPort);
 }
 
 void Network::HandleHttpGCodeReply(const char *msg)
@@ -1542,6 +1548,12 @@ void Network::SendListenCommand(Port port, Protocol protocol, unsigned int maxCo
 	lcb.remoteIp = AnyIp;
 	lcb.maxConnections = maxConnections;
 	SendCommand(NetworkCommand::networkListen, 0, 0, &lcb, sizeof(lcb), nullptr, 0);
+}
+
+// Stop listening on a port
+void Network::StopListening(Port port)
+{
+	SendListenCommand(port, AnyProtocol, 0);
 }
 
 // This is called when ESP is signalling to us that an error occurred or there was a state change

@@ -9,7 +9,8 @@
 #include "RepRap.h"
 #include "Platform.h"
 
-SimpleFilamentMonitor::SimpleFilamentMonitor(int type) : FilamentMonitor(type), highWhenNoFilament(type == 2), filamentPresent(false)
+SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int extruder, int type)
+	: FilamentMonitor(extruder, type), highWhenNoFilament(type == 2), filamentPresent(false)
 {
 }
 
@@ -23,7 +24,7 @@ bool SimpleFilamentMonitor::Configure(GCodeBuffer& gb, StringRef& reply, bool& s
 
 	if (seen)
 	{
-		Check(true, false, 0.0);
+		Check(true, false, false, 0.0);
 	}
 	else
 	{
@@ -34,10 +35,11 @@ bool SimpleFilamentMonitor::Configure(GCodeBuffer& gb, StringRef& reply, bool& s
 }
 
 // ISR for when the pin state changes
-void SimpleFilamentMonitor::Interrupt()
+bool SimpleFilamentMonitor::Interrupt()
 {
 	// Nothing needed here
 	detachInterrupt(GetPin());
+	return false;
 }
 
 // Call the following regularly to keep the status up to date
@@ -49,7 +51,7 @@ void SimpleFilamentMonitor::Poll()
 
 // Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 // 'filamentConsumed' is the net amount of extrusion since the last call to this function.
-FilamentSensorStatus SimpleFilamentMonitor::Check(bool full, bool hadNonPrintingMove, float filamentConsumed)
+FilamentSensorStatus SimpleFilamentMonitor::Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed)
 {
 	Poll();
 	return (filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;

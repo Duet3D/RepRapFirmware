@@ -63,7 +63,6 @@ public:
 	void DefineMix(const float m[]);
 	const float* GetMix() const;
 	float MaxFeedrate() const;
-	float InstantDv() const;
 	void Print(StringRef& reply) const;
 	AxesBitmap GetXAxisMap() const { return xMapping; }
 	AxesBitmap GetYAxisMap() const { return yMapping; }

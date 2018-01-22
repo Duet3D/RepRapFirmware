@@ -169,13 +169,13 @@ void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 }
 
 // Prepare this DM for an extruder move
-void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bool doCompensation)
+void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, float speedChange, bool doCompensation)
 {
 	const float dv = dda.directionVector[drive];
 	float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive) * fabsf(dv);
 	const size_t extruder = drive - reprap.GetGCodes().GetTotalAxes();
 
-#if NONLINEAR_EXTRUSION
+#if SUPPORT_NONLINEAR_EXTRUSION
 	if (dda.isPrintingMove)
 	{
 		float a, b, limit;
@@ -189,22 +189,42 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bo
 	}
 #endif
 
+	float compensationTime;
+	float accelCompensationDistance;
+	int32_t netSteps;
+
+	if (doCompensation && dv > 0.0)
+	{
+		// Calculate the pressure advance parameters
+		compensationTime = reprap.GetPlatform().GetPressureAdvance(extruder);
+		mp.cart.compensationClocks = roundU32(compensationTime * (float)DDA::stepClockRate);
+		mp.cart.accelCompensationClocks = roundU32(compensationTime * (float)DDA::stepClockRate * params.compFactor);
+
+		// If there is a speed change at the start of the move, theoretically we should instantly advance or retard the filament by the associated compensation amount.
+		// We can't do that, so increase or decrease the extrusion factor instead, so that at least the extrusion will be correct by the end of the move.
+		const float factor = 1.0 + (speedChange * compensationTime)/dda.totalDistance;
+		stepsPerMm *= factor;
+		totalSteps = (uint32_t)(totalSteps * factor);			// round this down to avoid step errors
+
+		// Calculate the net total step count to allow for compensation. It may be negative.
+		const float compensationDistance = (dda.endSpeed - dda.startSpeed) * compensationTime;
+		netSteps = (int32_t)(compensationDistance * stepsPerMm) + (int32_t)totalSteps;
+
+		// Calculate the acceleration phase parameters
+		accelCompensationDistance = compensationTime * (dda.topSpeed - dda.startSpeed);
+		mp.cart.accelStopStep = (uint32_t)((dda.accelDistance + accelCompensationDistance) * stepsPerMm) + 1;
+	}
+	else
+	{
+		accelCompensationDistance = compensationTime = 0.0;
+		mp.cart.compensationClocks = mp.cart.accelCompensationClocks = 0;
+		netSteps = (int32_t)totalSteps;
+
+		// Calculate the acceleration phase parameters
+		mp.cart.accelStopStep = (uint32_t)(dda.accelDistance * stepsPerMm) + 1;
+	}
+
 	mp.cart.twoCsquaredTimesMmPerStepDivA = roundU64((double)(DDA::stepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.acceleration));
-
-	// Calculate the pressure advance parameter
-	const float compensationTime = (doCompensation && dv > 0.0) ? reprap.GetPlatform().GetPressureAdvance(extruder) : 0.0;
-	mp.cart.compensationClocks = roundU32(compensationTime * (float)DDA::stepClockRate);
-	mp.cart.accelCompensationClocks = roundU32(compensationTime * (float)DDA::stepClockRate * params.compFactor);
-
-	// Calculate the net total step count to allow for compensation. It may be negative.
-	const float compensationDistance = (dda.endSpeed - dda.startSpeed) * compensationTime;
-	int32_t netSteps = (int32_t)(compensationDistance * stepsPerMm) + (int32_t)totalSteps;
-
-	// Calculate the acceleration phase parameters
-	const float accelCompensationDistance = compensationTime * (dda.topSpeed - dda.startSpeed);
-
-	// Acceleration phase parameters
-	mp.cart.accelStopStep = (uint32_t)((dda.accelDistance + accelCompensationDistance) * stepsPerMm) + 1;
 
 	// Constant speed phase parameters
 	mp.cart.mmPerStepTimesCKdivtopSpeed = (uint32_t)((float)((uint64_t)DDA::stepClockRate * K1)/(stepsPerMm * dda.topSpeed));

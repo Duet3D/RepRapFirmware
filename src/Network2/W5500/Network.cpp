@@ -5,9 +5,9 @@
  *      Author: David
  */
 
-#include <Network2/W5500/Network.h>
-#include <Network2/W5500/Wiznet/Ethernet/wizchip_conf.h>
-#include <Network2/W5500/Wiznet/Internet/DHCP/dhcp.h>
+#include "Network.h"
+#include "Wiznet/Ethernet/wizchip_conf.h"
+#include "Wiznet/Internet/DHCP/dhcp.h"
 #include "NetworkBuffer.h"
 #include "Platform.h"
 #include "RepRap.h"
@@ -497,6 +497,13 @@ void Network::InitSockets()
 		}
 	}
 	nextSocketToPoll = 0;
+}
+
+// The following is called by the FTP responder to stop listening on the FTP data port
+// For the W5500 listening stop automatically when the port is terminated, so we don't need anything here
+void Network::DataPortClosing()
+{
+	// nothing needed here
 }
 
 void Network::TerminateSockets()

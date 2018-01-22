@@ -150,10 +150,8 @@ static void low_level_init(struct netif *netif)
 
 	/* device capabilities */
 	/* don't set NETIF_FLAG_ETHARP if this device is not an ethernet one */
+	// The DHCP flag will be set by DHCP client if it is started
 	netif->flags |= NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP
-#if defined(DHCP_USED)
-			| NETIF_FLAG_DHCP
-#endif
 #if LWIP_IGMP
 			| NETIF_FLAG_IGMP
 #endif

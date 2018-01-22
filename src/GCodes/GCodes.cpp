@@ -152,9 +152,20 @@ void GCodes::Reset()
 
 	for (size_t i = 0; i < MaxAxes; ++i)
 	{
-		axisOffsets[i] = 0.0;
 		axisScaleFactors[i] = 1.0;
+#if SUPPORT_WORKPLACE_COORDINATES
+		for (size_t j = 0; j < 10; ++j)
+		{
+			workplaceCoordinates[j][i] = 0.0;
+		}
+#else
+		axisOffsets[i] = 0.0;
+#endif
 	}
+
+#if SUPPORT_WORKPLACE_COORDINATES
+	currentCoordinateSystem = 0;
+#endif
 
 	for (size_t i = 0; i < DRIVES; ++i)
 	{
@@ -720,6 +731,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			lastProbedTime = millis();
+			tapsDone = 0;
 			gb.AdvanceState();
 		}
 		break;
@@ -771,11 +783,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			doingManualBedProbe = false;
-			float heightError;
+			++tapsDone;
 			if (platform.GetZProbeType() == 0)
 			{
 				// No Z probe, so we are doing manual mesh levelling. Take the current Z height as the height error.
-				heightError = moveBuffer.coords[Z_AXIS];
+				g30zHeightError = moveBuffer.coords[Z_AXIS];
 			}
 			else
 			{
@@ -791,9 +803,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 					break;
 				}
 
-				heightError = moveBuffer.coords[Z_AXIS] - platform.ZProbeStopHeight();
+				g30zHeightError = moveBuffer.coords[Z_AXIS] - platform.ZProbeStopHeight();
 			}
-			reprap.GetMove().AccessHeightMap().SetGridHeight(gridXindex, gridYindex, heightError);
 
 			// Move back up to the dive height
 			moveBuffer.moveType = 0;
@@ -814,43 +825,66 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 	case GCodeState::gridProbing5:	// ready to compute the next probe point
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			const GridDefinition& grid = reprap.GetMove().AccessHeightMap().GetGrid();
-			if (gridYindex & 1)
+			// See whether we need to do any more taps
+			const ZProbeParameters& params = platform.GetCurrentZProbeParameters();
+			const bool acceptReading = (params.maxTaps < 2 || (tapsDone >= 2 && fabsf(g30zHeightError - g30PrevHeightError) <= params.tolerance));
+			if (acceptReading)
 			{
-				// Odd row, so decreasing X
-				if (gridXindex == 0)
+				HeightMap& hm = reprap.GetMove().AccessHeightMap();
+				hm.SetGridHeight(gridXindex, gridYindex, g30zHeightError);
+				if (gridYindex & 1)
 				{
-					++gridYindex;
+					// Odd row, so decreasing X
+					if (gridXindex == 0)
+					{
+						++gridYindex;
+					}
+					else
+					{
+						--gridXindex;
+					}
 				}
 				else
 				{
-					--gridXindex;
+					// Even row, so increasing X
+					if (gridXindex + 1 == hm.GetGrid().NumXpoints())
+					{
+						++gridYindex;
+					}
+					else
+					{
+						++gridXindex;
+					}
 				}
+				if (gridYindex == hm.GetGrid().NumYpoints())
+				{
+					// Done all the points
+					gb.AdvanceState();
+					if (platform.GetZProbeType() != 0 && !probeIsDeployed)
+					{
+						DoFileMacro(gb, RETRACTPROBE_G, false);
+					}
+				}
+				else
+				{
+					gb.SetState(GCodeState::gridProbing1);
+				}
+			}
+			else if (tapsDone < params.maxTaps)
+			{
+				// Tap again
+				lastProbedTime = millis();
+				g30PrevHeightError = g30zHeightError;
+				gb.SetState(GCodeState::gridProbing3);
 			}
 			else
 			{
-				// Even row, so increasing X
-				if (gridXindex + 1 == grid.NumXpoints())
-				{
-					++gridYindex;
-				}
-				else
-				{
-					++gridXindex;
-				}
-			}
-			if (gridYindex == grid.NumYpoints())
-			{
-				// Done all the points
-				gb.AdvanceState();
+				platform.Message(ErrorMessage, "Z probe readings not consistent\n");
+				gb.SetState(GCodeState::normal);
 				if (platform.GetZProbeType() != 0 && !probeIsDeployed)
 				{
 					DoFileMacro(gb, RETRACTPROBE_G, false);
 				}
-			}
-			else
-			{
-				gb.SetState(GCodeState::gridProbing1);
 			}
 		}
 		break;
@@ -923,6 +957,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		{
 			// Head has finished moving to the correct XY position
 			lastProbedTime = millis();			// start the probe recovery timer
+			tapsDone = 0;
 			gb.AdvanceState();
 		}
 		break;
@@ -983,7 +1018,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		{
 			// Probing move has stopped
 			doingManualBedProbe = false;
-			bool probingError = false;
+			hadProbingError = false;
+			++tapsDone;
 			if (platform.GetZProbeType() == 0)
 			{
 				// No Z probe, so we are doing manual mesh levelling. Take the current Z height as the height error.
@@ -996,7 +1032,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 				{
 					platform.Message(ErrorMessage, "Z probe was not triggered during probing move\n");
 					g30zHeightError = 0.0;
-					probingError = true;
+					hadProbingError = true;
 				}
 				else
 				{
@@ -1015,7 +1051,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 			{
 				// Simple G30 probing move
 				gb.SetState(GCodeState::normal);								// usually nothing more to do except perhaps retract the probe
-				if (!probingError)
+				if (!hadProbingError)
 				{
 					if (g30SValue == -1 || g30SValue == -2)
 					{
@@ -1039,18 +1075,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				// Probing with a probe point index number
-				if (!GetAxisIsHomed(Z_AXIS) && !probingError)
-				{
-					// The Z axis has not yet been homed, so treat this probe as a homing move.
-					moveBuffer.coords[Z_AXIS] -= g30zHeightError;			// reset the Z origin
-					reprap.GetMove().SetNewPosition(moveBuffer.coords, false);
-					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
-					SetAxisIsHomed(Z_AXIS);
-					g30zHeightError = 0.0;
-				}
-				reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, g30zHeightError, true, probingError);
-
 				// Move back up to the dive height before we change anything, in particular before we adjust leadscrews
 				moveBuffer.moveType = 0;
 				moveBuffer.isCoordinated = false;
@@ -1072,10 +1096,30 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		// Here when we were probing at a numbered point and we have moved the head back up to the dive height
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			gb.AdvanceState();
-			if (platform.GetZProbeType() != 0 && !probeIsDeployed)
+			// See whether we need to do any more taps
+			const ZProbeParameters& params = platform.GetCurrentZProbeParameters();
+			const bool acceptReading = (hadProbingError || params.maxTaps < 2 || (tapsDone >= 2 && fabsf(g30zHeightError - g30PrevHeightError) <= params.tolerance));
+			if (!acceptReading && tapsDone < params.maxTaps)
 			{
-				DoFileMacro(gb, RETRACTPROBE_G, false);
+				// Tap again
+				g30PrevHeightError = g30zHeightError;
+				lastProbedTime = millis();
+				gb.SetState(GCodeState::probingAtPoint3);
+			}
+			else
+			{
+				if (!acceptReading)
+				{
+					platform.Message(ErrorMessage, "Z probe readings not consistent\n");
+					hadProbingError = true;
+				}
+
+				reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, g30zHeightError, true, hadProbingError);
+				gb.AdvanceState();
+				if (platform.GetZProbeType() != 0 && !probeIsDeployed)
+				{
+					DoFileMacro(gb, RETRACTPROBE_G, false);
+				}
 			}
 		}
 		break;
@@ -4048,7 +4092,13 @@ void GCodes::ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[
 	{
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			coordsOut[axis] = (coordsIn[axis] * axisScaleFactors[axis]) - axisOffsets[axis];
+			const float totalOffset =
+#if SUPPORT_WORKPLACE_COORDINATES
+				workplaceCoordinates[currentCoordinateSystem][axis];
+#else
+				axisOffsets[axis];
+#endif
+			coordsOut[axis] = (coordsIn[axis] * axisScaleFactors[axis]) + totalOffset;
 		}
 	}
 	else
@@ -4061,12 +4111,18 @@ void GCodes::ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[
 				&& (axis != Y_AXIS || IsBitSet(yAxes, Y_AXIS))
 			   )
 			{
-				const float totalOffset = currentTool->GetOffset(axis) + axisOffsets[axis];
+				const float totalOffset =
+#if SUPPORT_WORKPLACE_COORDINATES
+					workplaceCoordinates[currentCoordinateSystem][axis]
+#else
+					axisOffsets[axis]
+#endif
+					- currentTool->GetOffset(axis);
 				const size_t inputAxis = (IsBitSet(explicitAxes, axis)) ? axis
 										: (IsBitSet(xAxes, axis)) ? X_AXIS
 											: (IsBitSet(yAxes, axis)) ? Y_AXIS
 												: axis;
-				coordsOut[axis] = (coordsIn[inputAxis] * axisScaleFactors[axis]) - totalOffset;
+				coordsOut[axis] = (coordsIn[inputAxis] * axisScaleFactors[axis]) + totalOffset;
 			}
 		}
 	}
@@ -4082,7 +4138,13 @@ void GCodes::ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coo
 	{
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			coordsOut[axis] = coordsIn[axis]/axisScaleFactors[axis];
+			const float totalOffset =
+#if SUPPORT_WORKPLACE_COORDINATES
+				workplaceCoordinates[currentCoordinateSystem][axis];
+#else
+				axisOffsets[axis];
+#endif
+			coordsOut[axis] = (coordsIn[axis] - totalOffset) / axisScaleFactors[axis];
 		}
 	}
 	else
@@ -4093,15 +4155,22 @@ void GCodes::ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coo
 		size_t numXAxes = 0, numYAxes = 0;
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
+			const float totalOffset =
+#if SUPPORT_WORKPLACE_COORDINATES
+				workplaceCoordinates[currentCoordinateSystem][axis]
+#else
+				axisOffsets[axis]
+#endif
+				- currentTool->GetOffset(axis);
 			coordsOut[axis] = coordsIn[axis] + currentTool->GetOffset(axis);
 			if (IsBitSet(xAxes, axis))
 			{
-				xCoord += coordsIn[axis]/axisScaleFactors[axis] + currentTool->GetOffset(axis);
+				xCoord += coordsIn[axis]/axisScaleFactors[axis] - totalOffset;
 				++numXAxes;
 			}
 			if (IsBitSet(yAxes, axis))
 			{
-				yCoord += coordsIn[axis]/axisScaleFactors[axis] + currentTool->GetOffset(axis);
+				yCoord += coordsIn[axis]/axisScaleFactors[axis] - totalOffset;
 				++numYAxes;
 			}
 		}

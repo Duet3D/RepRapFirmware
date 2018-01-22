@@ -13,13 +13,13 @@
 class PulsedFilamentMonitor : public FilamentMonitor
 {
 public:
-	PulsedFilamentMonitor(int type);
+	PulsedFilamentMonitor(unsigned int extruder, int type);
 
 	bool Configure(GCodeBuffer& gb, StringRef& reply, bool& seen) override;
-	FilamentSensorStatus Check(bool full, bool hadNonPrintingMove, float filamentConsumed) override;
+	FilamentSensorStatus Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed) override;
 	FilamentSensorStatus Clear(bool full) override;
 	void Diagnostics(MessageType mtype, unsigned int extruder) override;
-	void Interrupt() override;
+	bool Interrupt() override;
 
 private:
 	static constexpr float DefaultMmPerPulse = 28.8;

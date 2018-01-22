@@ -891,6 +891,7 @@ void FtpResponder::CloseDataPort()
 
 	if (dataSocket != nullptr)
 	{
+		dataSocket->GetInterface()->DataPortClosing();
 		dataSocket->Close();								// close it gracefully
 		dataSocket = nullptr;
 	}

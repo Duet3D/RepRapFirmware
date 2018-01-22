@@ -68,6 +68,7 @@ public:
 	const uint8_t *GetIPAddress() const { return ipAddress; }
 	void OpenDataPort(Port port);
 	void TerminateDataPort();
+	void DataPortClosing();
 
 	void HandleHttpGCodeReply(const char *msg);
 	void HandleTelnetGCodeReply(const char *msg);
@@ -104,6 +105,7 @@ private:
 	void InitSockets();
 	void TerminateSockets();
 	void TerminateSockets(Port port);
+	void StopListening(Port port);
 
 	void StartProtocol(Protocol protocol)
 	pre(protocol < NumProtocols);

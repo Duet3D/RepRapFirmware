@@ -49,6 +49,8 @@ constexpr size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels 
 #define SERIAL_AUX_DEVICE Serial
 #define SERIAL_AUX2_DEVICE Serial1
 
+#define I2C_IFACE	Wire1							// Which TWI channel we use
+
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // Drives

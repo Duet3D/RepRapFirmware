@@ -114,9 +114,11 @@ enum class BoardType : uint8_t
 #if defined(__SAME70Q21__)
 	SAME70_TEST = 1
 #elif defined(DUET_NG) && defined(DUET_WIFI)
-	DuetWiFi_10 = 1
+	DuetWiFi_10 = 1,
+	DuetWiFi_102 = 2
 #elif defined(DUET_NG) && defined(DUET_ETHERNET)
-	DuetEthernet_10 = 1
+	DuetEthernet_10 = 1,
+	DuetEthernet_102 = 2
 #elif defined(DUET_M)
 	DuetM_10 = 1,
 #elif defined(DUET_06_085)
@@ -203,14 +205,15 @@ struct ZProbeParameters
 {
 	int32_t adcValue;				// the target ADC value, after inversion if enabled
 	float xOffset, yOffset;			// the offset of the probe relative to the print head
-	float height;					// the nozzle height at which the target ADC value is returned
+	float triggerHeight;			// the nozzle height at which the target ADC value is returned
 	float calibTemperature;			// the temperature at which we did the calibration
 	float temperatureCoefficient;	// the variation of height with bed temperature
 	float diveHeight;				// the dive height we use when probing
 	float probeSpeed;				// the initial speed of probing
 	float travelSpeed;				// the speed at which we travel to the probe point
 	float recoveryTime;				// Z probe recovery time
-	float extraParam;				// extra parameters used by some types of probe e.g. Delta probe
+	float tolerance;				// maximum difference between probe heights when doing >1 taps
+	uint8_t maxTaps;				// maximum probes at each point
 	bool invertReading;				// true if we need to invert the reading
 
 	void Init(float h);
@@ -328,7 +331,6 @@ public:
 	const char* GetBoardString() const;
 
 	// Timing
-  
 	static uint32_t GetInterruptClocks() __attribute__ ((hot));					// Get the interrupt clock count
 	static bool ScheduleStepInterrupt(uint32_t tim) __attribute__ ((hot));		// Schedule an interrupt at the specified clock count, or return true if it has passed already
 	static void DisableStepInterrupt();						// Make sure we get no step interrupts
@@ -337,13 +339,11 @@ public:
 	void Tick() __attribute__((hot));						// Process a systick interrupt
 
 	// Real-time clock
-
 	bool IsDateTimeSet() const;						// Has the RTC been set yet?
 	time_t GetDateTime() const;						// Retrieves the current RTC datetime and returns true if it's valid
 	bool SetDateTime(time_t time);					// Sets the current RTC date and time or returns false on error
 
   	// Communications and data storage
-  
 	OutputBuffer *GetAuxGCodeReply();				// Returns cached G-Code reply for AUX devices and clears its reference
 	void AppendAuxReply(OutputBuffer *buf);
 	void AppendAuxReply(const char *msg);
@@ -382,7 +382,6 @@ public:
 	const char* GetDefaultFile() const;				// Where the default configuration is stored (in the system dir).
 
 	// Message output (see MessageType for further details)
-
 	void Message(MessageType type, const char *message);
 	void Message(MessageType type, OutputBuffer *buffer);
 	void MessageF(MessageType type, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
@@ -393,7 +392,6 @@ public:
 	void StopLogging();
 
 	// Movement
-
 	void EmergencyStop();
 	void SetDirection(size_t drive, bool direction);
 	void SetDirectionValue(size_t driver, bool dVal);
@@ -435,10 +433,10 @@ public:
 	float MaxFeedrate(size_t drive) const;
 	const float* MaxFeedrates() const;
 	void SetMaxFeedrate(size_t drive, float value);
-	float ConfiguredInstantDv(size_t drive) const;
-	float ActualInstantDv(size_t drive) const;
+	float GetInstantDv(size_t drive) const;
 	void SetInstantDv(size_t drive, float value);
 	EndStopHit Stopped(size_t drive) const;
+	bool EndStopInputState(size_t drive) const;
 	float AxisMaximum(size_t axis) const;
 	void SetAxisMaximum(size_t axis, float value, bool byProbing);
 	float AxisMinimum(size_t axis) const;
@@ -467,13 +465,12 @@ public:
 	uint32_t GetSlowDrivers() const { return slowDrivers; }
 	uint32_t GetSlowDriverClocks() const { return slowDriverStepPulseClocks; }
 
-#if NONLINEAR_EXTRUSION
+#if SUPPORT_NONLINEAR_EXTRUSION
 	bool GetExtrusionCoefficients(size_t extruder, float& a, float& b, float& limit) const;
 	void SetNonlinearExtrusion(size_t extruder, float a, float b, float limit);
 #endif
 
 	// Z probe
-
 	void SetZProbeDefaults();
 	float ZProbeStopHeight();
 	float GetZProbeDiveHeight() const;
@@ -600,6 +597,9 @@ public:
 	void SetLaserPwmFrequency(float freq);
 	float GetLaserPwmFrequency() const { return laserPort.GetFrequency(); }
 
+	// Misc
+	void InitI2c();
+
 	static uint8_t softwareResetDebugInfo;			// extra info for debugging
 
 //-------------------------------------------------------------------------------------------------------
@@ -694,7 +694,6 @@ private:
 
 #ifdef DUET_NG
 	ExpansionBoardType expansionBoard;
-	bool vssaSenseWorking;
 #endif
 
 	uint32_t longWait;
@@ -724,7 +723,7 @@ private:
 	float driveStepsPerUnit[DRIVES];
 	float instantDvs[DRIVES];
 	float pressureAdvance[MaxExtruders];
-#if NONLINEAR_EXTRUSION
+#if SUPPORT_NONLINEAR_EXTRUSION
 	float nonlinearExtrusionA[MaxExtruders], nonlinearExtrusionB[MaxExtruders], nonlinearExtrusionLimit[MaxExtruders];
 #endif
 	float motorCurrents[DRIVES];						// the normal motor current for each stepper driver
@@ -906,6 +905,7 @@ private:
 
 	// Misc
 	bool deliberateError;								// true if we deliberately caused an exception for testing purposes
+	bool i2cInitialised;								// true if the I2C subsystem has been initialised
 };
 
 // Where the htm etc files are
@@ -988,7 +988,7 @@ inline void Platform::SetMaxFeedrate(size_t drive, float value)
 	maxFeedrates[drive] = max<float>(value, 1.0);		// don't allow zero or negative
 }
 
-inline float Platform::ConfiguredInstantDv(size_t drive) const
+inline float Platform::GetInstantDv(size_t drive) const
 {
 	return instantDvs[drive];
 }

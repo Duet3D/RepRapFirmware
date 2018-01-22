@@ -55,8 +55,9 @@ enum Module : uint8_t
 	moduleDuetExpansion = 12,
 	moduleFilamentSensors = 13,
 	moduleWiFi = 14,
-	numModules = 15,				// make this one greater than the last module number
-	noModule = 15
+	moduleDisplay = 15,
+	numModules = 16,				// make this one greater than the last module number
+	noModule = 16
 };
 
 extern const char * const moduleName[];
@@ -87,6 +88,10 @@ class Logger;
 
 #if SUPPORT_IOBITS
 class PortControl;
+#endif
+
+#if SUPPORT_12864_LCD
+class Display;
 #endif
 
 // Define floating point type to use for calculations where we would like high precision in matrix calculations

@@ -319,7 +319,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 					if (compensationTime > 0.0)
 					{
 						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
-						accelerations[drive] = min<float>(accelerations[drive], reprap.GetPlatform().ConfiguredInstantDv(drive)/compensationTime);
+						accelerations[drive] = min<float>(accelerations[drive], reprap.GetPlatform().GetInstantDv(drive)/compensationTime);
 					}
 				}
 			}
@@ -710,7 +710,7 @@ float DDA::AdvanceBabyStepping(float amount)
 			if (ok)
 			{
 				// Limit the babystepping Z speed to the lower of 0.1 times the original XYZ speed and 0.5 times the Z jerk
-				const float maxBabySteppingAmount = cdda->totalDistance * min<float>(0.1, 0.5 * reprap.GetPlatform().ConfiguredInstantDv(Z_AXIS)/cdda->topSpeed);
+				const float maxBabySteppingAmount = cdda->totalDistance * min<float>(0.1, 0.5 * reprap.GetPlatform().GetInstantDv(Z_AXIS)/cdda->topSpeed);
 				babySteppingToDo = constrain<float>(amount, -maxBabySteppingAmount, maxBabySteppingAmount);
 				cdda->directionVector[Z_AXIS] += babySteppingToDo/cdda->totalDistance;
 				cdda->totalDistance *= cdda->NormaliseXYZ();
@@ -864,7 +864,7 @@ void DDA::RecalculateMove()
 		const Platform& p = reprap.GetPlatform();
 		for (size_t drive = 0; drive < DRIVES; ++drive)
 		{
-			if (pddm[drive] != nullptr && pddm[drive]->state == DMState::moving && endSpeed * fabsf(directionVector[drive]) > p.ActualInstantDv(drive))
+			if (pddm[drive] != nullptr && pddm[drive]->state == DMState::moving && endSpeed * fabsf(directionVector[drive]) > p.GetInstantDv(drive))
 			{
 				canPauseAfter = false;
 				break;
@@ -902,7 +902,7 @@ void DDA::MatchSpeeds()
 		{
 			const float totalFraction = fabsf(directionVector[drive] - next->directionVector[drive]);
 			const float jerk = totalFraction * targetNextSpeed;
-			const float allowedJerk = reprap.GetPlatform().ActualInstantDv(drive);
+			const float allowedJerk = reprap.GetPlatform().GetInstantDv(drive);
 			if (jerk > allowedJerk)
 			{
 				targetNextSpeed = allowedJerk/totalFraction;
@@ -1034,7 +1034,19 @@ void DDA::Prepare(uint8_t simMode)
 					reprap.GetPlatform().EnableDrive(drive);
 					if (drive >= numAxes)
 					{
-						pdm->PrepareExtruder(*this, params, usePressureAdvance);
+						// If there is any extruder jerk in this move, in theory that means we need to instantly extrude or retract some amount of filament.
+						// Pass the speed change to PrepareExtruder
+						float speedChange;
+						if (usePressureAdvance)
+						{
+							const float prevEndSpeed = (prev->usePressureAdvance) ? prev->endSpeed * prev->directionVector[drive] : 0.0;
+							speedChange = (endSpeed * directionVector[drive]) - prevEndSpeed;
+						}
+						else
+						{
+							speedChange = 0.0;
+						}
+						pdm->PrepareExtruder(*this, params, speedChange, usePressureAdvance);
 
 						// Check for sensible values, print them if they look dubious
 						if (reprap.Debug(moduleDda)

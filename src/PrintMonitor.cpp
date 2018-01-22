@@ -409,12 +409,17 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 					";Generated with "	// Cura (new)
 				};
 
-				size_t index;
-				const char* pos = nullptr;
-				for (index = 0; pos == nullptr && index < ARRAY_SIZE(GeneratedByStrings); ++index)
+				size_t index = 0;
+				const char* pos;
+				do
 				{
 					pos = strstr(buf, GeneratedByStrings[index]);
-				}
+					if (pos != nullptr)
+					{
+						break;
+					}
+					++index;
+				} while (index < ARRAY_SIZE(GeneratedByStrings));
 
 				if (pos != nullptr)
 				{

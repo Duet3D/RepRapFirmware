@@ -172,7 +172,7 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 		outIndex++;
 		if (outIndex >= ARRAY_SIZE(combinedName))
 		{
-			reprap.GetPlatform().Message(ErrorMessage, "CombineName() buffer overflow");
+			reprap.GetPlatform().Message(ErrorMessage, "file name too long");
 			outIndex = 0;
 		}
 	}

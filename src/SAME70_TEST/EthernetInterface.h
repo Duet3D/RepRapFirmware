@@ -64,6 +64,7 @@ public:
 
 	void OpenDataPort(Port port) override;
 	void TerminateDataPort() override;
+	void DataPortClosing() override;
 
 private:
 	enum class NetworkState

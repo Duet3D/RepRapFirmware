@@ -31,6 +31,8 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_SCANNER		0						// set zero to disable support for FreeLSS scanners
 #define SUPPORT_IOBITS		0						// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR	0						// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
+#define SUPPORT_12864_LCD	1						// set nonzero to support 12864 LCD and rotary encoder
 
 // The physical capabilities of the machine
 
@@ -54,6 +56,8 @@ constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper driv
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
+
+#define I2C_IFACE	Wire							// First and only I2C interface
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
@@ -115,8 +119,15 @@ constexpr Pin COOLING_FAN_RPM_PIN = 21;
 constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = { 44, NoPin };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[1] = {56};
+constexpr Pin SdSpiCSPins[1] = { 56 };
 constexpr uint32_t ExpectedSdCardSpeed = 20000000;
+
+// 12864 LCD
+constexpr Pin LcdCSPin = 45;
+constexpr Pin LcdBeepPin = 15;
+constexpr Pin EncoderPinA = 31;
+constexpr Pin EncoderPinB = 39;
+constexpr Pin EncoderPinSw = 7;
 
 // M42 and M208 commands now use logical pin numbers, not firmware pin numbers.
 // This next definition defines the highest one.

@@ -11,8 +11,8 @@
 #include "Movement/DDA.h"					// for stepClockRate
 
 // Constructors
-Duet3DFilamentMonitor::Duet3DFilamentMonitor(int type)
-	: FilamentMonitor(type)
+Duet3DFilamentMonitor::Duet3DFilamentMonitor(unsigned int extruder, int type)
+	: FilamentMonitor(extruder, type)
 {
 	InitReceiveBuffer();
 }
@@ -25,8 +25,9 @@ void Duet3DFilamentMonitor::InitReceiveBuffer()
 }
 
 // ISR for when the pin state changes
-void Duet3DFilamentMonitor::Interrupt()
+bool Duet3DFilamentMonitor::Interrupt()
 {
+	bool wantReading = false;
 	uint32_t now = Platform::GetInterruptClocks();
 	const size_t writePointer = edgeCaptureWritePointer;			// capture volatile variable
 	if ((writePointer + 1) % EdgeCaptureBufferSize != edgeCaptureReadPointer)
@@ -35,14 +36,18 @@ void Duet3DFilamentMonitor::Interrupt()
 		{
 			if ((writePointer & 1) == 0)							// low-to-high transitions should occur on odd indices
 			{
-				return;
+				return false;
+			}
+			if (state == RxdState::waitingForStartBit && writePointer == edgeCaptureReadPointer)
+			{
+				wantReading = true;									// if this is a possible start bit, ask for the extrusion commanded
 			}
 		}
 		else
 		{
 			if ((writePointer & 1) != 0)							// high-to-low transitions should occur on even indices
 			{
-				return;
+				return false;
 			}
 			now -= 40;												// partial correction for skew caused by debounce filter on Duet endstop inputs (measured skew = 74)
 		}
@@ -50,10 +55,11 @@ void Duet3DFilamentMonitor::Interrupt()
 
 	edgeCaptures[writePointer] = now;								// record the time at which this edge was detected
 	edgeCaptureWritePointer = (writePointer + 1) % EdgeCaptureBufferSize;
+	return wantReading;
 }
 
 // Call the following regularly to keep the status up to date
-void Duet3DFilamentMonitor::PollReceiveBuffer()
+Duet3DFilamentMonitor::PollResult Duet3DFilamentMonitor::PollReceiveBuffer(uint16_t& measurement)
 {
 	// For the Duet3D sensors we need to decode the received data from the transition times recorded in the edgeCaptures array
 	static constexpr uint32_t BitsPerSecond = 1000;									// the nominal bit rate that the data is transmitted at
@@ -90,7 +96,6 @@ void Duet3DFilamentMonitor::PollReceiveBuffer()
 					}
 					else
 					{
-						OnStartBitReceived();
 						state = RxdState::waitingForEndOfStartBit;
 						again = true;
 					}
@@ -178,8 +183,9 @@ void Duet3DFilamentMonitor::PollReceiveBuffer()
 					if (nibblesAssembled == 4)							// if we have a complete 16-bit word
 					{
 						edgeCaptureReadPointer = nextBitChangeIndex;	// ready for a new word
-						ProcessReceivedWord(valueBeingAssembled);
+						measurement = valueBeingAssembled;
 						state = RxdState::waitingForStartBit;
+						return PollResult::complete;
 					}
 					again = true;
 				}
@@ -192,16 +198,22 @@ void Duet3DFilamentMonitor::PollReceiveBuffer()
 				debugPrintf("Fil err %u\n", (unsigned int)state);
 			}
 			state = RxdState::waitingForStartBit;
-			again = true;
-			break;
+			return PollResult::error;
 		}
 	} while (again);
+	return PollResult::incomplete;
 }
 
 // Return true if we are on the process of receiving data form the filament monitor
 bool Duet3DFilamentMonitor::IsReceiving() const
 {
 	return state == RxdState::waitingForEndOfStartBit || state == RxdState::waitingForNibble;
+}
+
+// Return true if we are waiting for a start bit
+bool Duet3DFilamentMonitor::IsWaitingForStartBit() const
+{
+	return state == RxdState::waitingForStartBit;
 }
 
 // End

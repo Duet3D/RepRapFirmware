@@ -10,8 +10,8 @@
 #include "Platform.h"
 #include "RepRap.h"
 
-PulsedFilamentMonitor::PulsedFilamentMonitor(int type)
-	: FilamentMonitor(type),
+PulsedFilamentMonitor::PulsedFilamentMonitor(unsigned int extruder, int type)
+	: FilamentMonitor(extruder, type),
 	  mmPerPulse(DefaultMmPerPulse), tolerance(DefaultTolerance), minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength)
 {
 	Init();
@@ -90,7 +90,7 @@ bool PulsedFilamentMonitor::Configure(GCodeBuffer& gb, StringRef& reply, bool& s
 }
 
 // ISR for when the pin state changes
-void PulsedFilamentMonitor::Interrupt()
+bool PulsedFilamentMonitor::Interrupt()
 {
 	++sensorValue;
 	extrusionCommandedAtLastMeasurement = extrusionCommanded;
@@ -98,6 +98,7 @@ void PulsedFilamentMonitor::Interrupt()
 	{
 		++samplesReceived;
 	}
+	return true;
 }
 
 // Call the following regularly to keep the status up to date
@@ -120,7 +121,7 @@ float PulsedFilamentMonitor::GetCurrentPosition() const
 // Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 // 'filamentConsumed' is the net amount of extrusion since the last call to this function.
 // 'hadNonPrintingMove' is called if filamentConsumed includes extruder movement form non-printing moves.
-FilamentSensorStatus PulsedFilamentMonitor::Check(bool full, bool hadNonPrintingMove, float filamentConsumed)
+FilamentSensorStatus PulsedFilamentMonitor::Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed)
 {
 	Poll();														// this may update movementMeasured
 

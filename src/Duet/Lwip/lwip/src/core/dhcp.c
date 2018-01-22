@@ -1377,7 +1377,7 @@ again:
   offset_max = options_idx_max;
   options = (u8_t*)q->payload;
   /* at least 1 byte to read and no end marker, then at least 3 bytes to read? */
-  while((q != NULL) && (options[offset] != DHCP_OPTION_END) && (offset < offset_max)) {
+  while((q != NULL) && (offset < offset_max) && (options[offset] != DHCP_OPTION_END)) {
     u8_t op = options[offset];
     u8_t len;
     u8_t decode_len = 0;
@@ -1422,6 +1422,10 @@ again:
         break;
       case(DHCP_OPTION_OVERLOAD):
         LWIP_ERROR("len == 1", len == 1, return ERR_VAL;);
+#if 1 //dc42 from lwip 2
+        /* decode overload only in options, not in file/sname: invalid packet */
+        LWIP_ERROR("overload in file/sname", options_idx == DHCP_OPTIONS_OFS, return ERR_VAL;);
+#endif
         decode_idx = DHCP_OPTION_IDX_OVERLOAD;
         break;
       case(DHCP_OPTION_MESSAGE_TYPE):
@@ -1453,7 +1457,13 @@ decode_next:
       LWIP_ASSERT("check decode_idx", decode_idx >= 0 && decode_idx < DHCP_OPTION_IDX_MAX);
       if (!dhcp_option_given(dhcp, decode_idx)) {
         copy_len = LWIP_MIN(decode_len, 4);
+#if 1 //dc42
+        if (pbuf_copy_partial(q, &value, copy_len, val_offset) != copy_len) {
+          return ERR_BUF;
+        }
+#else
         pbuf_copy_partial(q, &value, copy_len, val_offset);
+#endif
         if (decode_len > 4) {
           /* decode more than one u32_t */
           LWIP_ERROR("decode_len % 4 == 0", decode_len % 4 == 0, return ERR_VAL;);
@@ -1478,7 +1488,11 @@ decode_next:
       offset_max -= q->len;
       if ((offset < offset_max) && offset_max) {
         q = q->next;
+#if 1	//dc42 from lwip 2
+        LWIP_ERROR("next pbuf was null", q != NULL, return ERR_VAL;);
+#else
         LWIP_ASSERT("next pbuf was null", q);
+#endif
         options = (u8_t*)q->payload;
       } else {
         // We've run out of bytes, probably no end marker. Don't proceed.
@@ -1562,7 +1576,11 @@ dhcp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, ip_addr_t *addr, u16_t
     goto free_pbuf_and_return;
   }
   /* iterate through hardware address and match against DHCP message */
+#if 1 //dc42 from lwip2
+  for (i = 0; i < netif->hwaddr_len && i < NETIF_MAX_HWADDR_LEN && i < DHCP_CHADDR_LEN; i++) {
+#else
   for (i = 0; i < netif->hwaddr_len; i++) {
+#endif
     if (netif->hwaddr[i] != reply_msg->chaddr[i]) {
       LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE | LWIP_DBG_LEVEL_WARNING,
         ("netif->hwaddr[%"U16_F"]==%02"X16_F" != reply_msg->chaddr[%"U16_F"]==%02"X16_F"\n",
@@ -1599,8 +1617,18 @@ dhcp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, ip_addr_t *addr, u16_t
     if (dhcp->state == DHCP_REQUESTING) {
       dhcp_handle_ack(netif);
 #if DHCP_DOES_ARP_CHECK
+# if 1 //dc42 from lwip2
+      if ((netif->flags & NETIF_FLAG_ETHARP) != 0) {
+        /* check if the acknowledged lease address is already in use */
+        dhcp_check(netif);
+      } else {
+        /* bind interface to the acknowledged lease address */
+        dhcp_bind(netif);
+      }
+# else
       /* check if the acknowledged lease address is already in use */
       dhcp_check(netif);
+# endif
 #else
       /* bind interface to the acknowledged lease address */
       dhcp_bind(netif);
@@ -1626,7 +1654,13 @@ dhcp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, ip_addr_t *addr, u16_t
     dhcp_handle_offer(netif);
   }
 free_pbuf_and_return:
+#if 1 //dc42 from lwpi2
+if (dhcp != NULL) {
   dhcp->msg_in = NULL;
+}
+#else
+  dhcp->msg_in = NULL;
+#endif
   pbuf_free(p);
 }
 
@@ -1706,11 +1740,7 @@ dhcp_create_msg(struct netif *netif, struct dhcp *dhcp, u8_t message_type)
   ip_addr_set_zero(&dhcp->msg_out->giaddr);
   for (i = 0; i < DHCP_CHADDR_LEN; i++) {
 	    /* copy netif hardware address, pad with zeroes */
-#if 1	// dc42 change to avoid gcc warning of array index out of bounds - looks like a gcc bug to me
-	dhcp->msg_out->chaddr[i] = (i < netif->hwaddr_len && i < NETIF_MAX_HWADDR_LEN) ? netif->hwaddr[i] : 0/* pad byte*/;
-#else
     dhcp->msg_out->chaddr[i] = (i < netif->hwaddr_len) ? netif->hwaddr[i] : 0/* pad byte*/;
-#endif
   }
   for (i = 0; i < DHCP_SNAME_LEN; i++) {
     dhcp->msg_out->sname[i] = 0;

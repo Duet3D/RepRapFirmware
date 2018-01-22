@@ -26,8 +26,9 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 #define SUPPORT_SCANNER		0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_IOBITS		1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR	0					// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_WORKPLACE_COORDINATES	1		// set nonzero to support G10 L2 and G53..59
 
-#define USE_CACHE			0					// Cache controller not available on the SAME70
+#define USE_CACHE			0					// Cache controller has some problems on the SAME70
 
 // The physical capabilities of the machine
 
@@ -51,6 +52,9 @@ constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper driv
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
+
+//TWI is disabled for now on the SAM7E until we rewrite the driver
+//#define I2C_IFACE	Wire							// Which TWI interface we use
 
 constexpr Pin DueXnExpansionStart = 200;			// Pin numbers 200-215 are on the I/O expander
 constexpr Pin AdditionalIoExpansionStart = 220;		// Pin numbers 220-235 are on the additional I/O expander

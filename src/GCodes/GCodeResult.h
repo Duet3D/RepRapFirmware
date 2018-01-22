@@ -16,7 +16,9 @@ enum class GCodeResult : uint8_t
 	notFinished,
 	ok,
 	error,
-	notSupportedInCurrentMode
+	notSupported,
+	notSupportedInCurrentMode,
+	badOrMissingParameter
 };
 
 // Convert a true/false error/no-error indication to a GCodeResult

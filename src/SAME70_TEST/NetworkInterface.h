@@ -40,6 +40,7 @@ public:
 
 	virtual void OpenDataPort(Port port) = 0;
 	virtual void TerminateDataPort() = 0;
+	virtual void DataPortClosing() = 0;
 
 protected:
 	Port portNumbers[NumProtocols];					// port number used for each protocol

@@ -43,8 +43,9 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_SCANNER		1						// set zero to disable support for FreeLSS scanners
 #define SUPPORT_IOBITS		1						// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR	1						// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 
-#define USE_CACHE			1						// set nonzero to enable the cache
+#define USE_CACHE			0						// set nonzero to enable the cache. Disabled this at 1.21RC1 because of doubts about its safety.
 
 // The physical capabilities of the machine
 
@@ -69,6 +70,8 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
 
+#define I2C_IFACE	Wire							// Which TWI interface we use
+
 constexpr Pin DueXnExpansionStart = 200;			// Pin numbers 200-215 are on the I/O expander
 constexpr Pin AdditionalIoExpansionStart = 220;		// Pin numbers 220-235 are on the additional I/O expander
 
@@ -86,7 +89,8 @@ constexpr Pin DueX_INT = 17;						// DueX interrupt pin = PA17 (was E6_STOP)
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-constexpr Pin END_STOP_PINS[DRIVES] = { 46, 02, 93, 74, 48, 200, 203, 202, 201, 213, 39, 8 };
+constexpr Pin END_STOP_PINS[DRIVES] = { 46, 02, 93, 74, 48, 4, 6, 7, 10, 25, 39, 8 };
+constexpr Pin DUEX_END_STOP_PINS[5] = { 200, 203, 202, 201, 213 };			// these replace endstops 5-9 if a DueX is present
 
 // HEATERS
 constexpr Pin TEMP_SENSE_PINS[Heaters] = { 45, 47, 44, 61, 62, 63, 59, 18 }; // Thermistor pin numbers

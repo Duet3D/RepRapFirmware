@@ -231,31 +231,8 @@ float Tool::MaxFeedrate() const
 	return result;
 }
 
-float Tool::InstantDv() const
-{
-	if (driveCount <= 0)
-	{
-		reprap.GetPlatform().Message(ErrorMessage, "Attempt to get InstantDv for a tool with no drives.\n");
-		return 1.0;
-	}
-	float result = FLT_MAX;
-	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	for (size_t d = 0; d < driveCount; d++)
-	{
-		const float idv = reprap.GetPlatform().ActualInstantDv(drives[d] + numAxes);
-		if (idv < result)
-		{
-			result = idv;
-		}
-	}
-	return result;
-}
-
-// There is a temperature fault on a heater.
-// Disable all tools using that heater.
-// This function must be called for the first
-// entry in the linked list.
-
+// There is a temperature fault on a heater, so disable all tools using that heater.
+// This function must be called for the first entry in the linked list.
 void Tool::FlagTemperatureFault(int8_t heater)
 {
 	Tool* n = this;

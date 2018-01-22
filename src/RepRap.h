@@ -86,6 +86,9 @@ public:
 #if SUPPORT_IOBITS
  	PortControl& GetPortControl() const;
 #endif
+#if SUPPORT_12864_LCD
+ 	Display& GetDisplay() const;
+#endif
 
 	void Tick();
 	bool SpinTimeoutImminent() const;
@@ -134,6 +137,10 @@ private:
  	PortControl *portControl;
 #endif
 
+#if SUPPORT_12864_LCD
+ 	Display *display;
+#endif
+
 	Tool* toolList;								// the tool list is sorted in order of increasing tool number
 	Tool* currentTool;
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
@@ -178,6 +185,10 @@ inline PrintMonitor& RepRap::GetPrintMonitor() const { return *printMonitor; }
 
 #if SUPPORT_IOBITS
 inline PortControl& RepRap::GetPortControl() const { return *portControl; }
+#endif
+
+#if SUPPORT_12864_LCD
+inline Display& RepRap::GetDisplay() const { return *display; }
 #endif
 
 inline bool RepRap::Debug(Module m) const { return debug & (1 << m); }
