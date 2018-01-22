@@ -1040,7 +1040,7 @@ void DDA::Prepare(uint8_t simMode)
 						if (usePressureAdvance)
 						{
 							const float prevEndSpeed = (prev->usePressureAdvance) ? prev->endSpeed * prev->directionVector[drive] : 0.0;
-							speedChange = (endSpeed * directionVector[drive]) - prevEndSpeed;
+							speedChange = (startSpeed * directionVector[drive]) - prevEndSpeed;
 						}
 						else
 						{
