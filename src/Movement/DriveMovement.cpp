@@ -184,7 +184,6 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 			const float averageExtrusionSpeed = (dda.totalDistance * dv * DDA::stepClockRate)/dda.clocksNeeded;
 			const float factor = 1.0 + min<float>((averageExtrusionSpeed * a) + (averageExtrusionSpeed * averageExtrusionSpeed * b), limit);
 			stepsPerMm *= factor;
-			totalSteps = (uint32_t)(totalSteps * factor);		// round this down to avoid step errors
 		}
 	}
 #endif
@@ -200,15 +199,15 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 		mp.cart.compensationClocks = roundU32(compensationTime * (float)DDA::stepClockRate);
 		mp.cart.accelCompensationClocks = roundU32(compensationTime * (float)DDA::stepClockRate * params.compFactor);
 
+#ifdef COMPENSATE_SPEED_CHANGES
 		// If there is a speed change at the start of the move, theoretically we should instantly advance or retard the filament by the associated compensation amount.
 		// We can't do that, so increase or decrease the extrusion factor instead, so that at least the extrusion will be correct by the end of the move.
 		const float factor = 1.0 + (speedChange * compensationTime)/dda.totalDistance;
 		stepsPerMm *= factor;
-		totalSteps = (uint32_t)(totalSteps * factor);			// round this down to avoid step errors
-
-		// Calculate the net total step count to allow for compensation. It may be negative.
+#endif
+		// Recalculate the net total step count to allow for compensation. It may be negative.
 		const float compensationDistance = (dda.endSpeed - dda.startSpeed) * compensationTime;
-		netSteps = (int32_t)(compensationDistance * stepsPerMm) + (int32_t)totalSteps;
+		netSteps = (int32_t)((dda.totalDistance + compensationDistance) * stepsPerMm);
 
 		// Calculate the acceleration phase parameters
 		accelCompensationDistance = compensationTime * (dda.topSpeed - dda.startSpeed);
@@ -218,7 +217,7 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	{
 		accelCompensationDistance = compensationTime = 0.0;
 		mp.cart.compensationClocks = mp.cart.accelCompensationClocks = 0;
-		netSteps = (int32_t)totalSteps;
+		netSteps = (int32_t)(dda.totalDistance * stepsPerMm);		// it may have changed from totalSteps if we are using nonlinear extrusion
 
 		// Calculate the acceleration phase parameters
 		mp.cart.accelStopStep = (uint32_t)(dda.accelDistance * stepsPerMm) + 1;
@@ -229,7 +228,7 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	// Constant speed phase parameters
 	mp.cart.mmPerStepTimesCKdivtopSpeed = (uint32_t)((float)((uint64_t)DDA::stepClockRate * K1)/(stepsPerMm * dda.topSpeed));
 
-	// Calculate the deceleration and reverse phase parameters
+	// Calculate the deceleration and reverse phase parameters and update totalSteps
 	// First check whether there is any deceleration at all, otherwise we may get strange results because of rounding errors
 	if (dda.decelDistance * stepsPerMm < 0.5)		// if less than 1 deceleration step
 	{

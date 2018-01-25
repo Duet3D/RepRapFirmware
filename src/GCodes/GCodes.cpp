@@ -4005,7 +4005,7 @@ void GCodes::StopPrint(bool normalCompletion)
 		if (platform.Emulating() == marlin)
 		{
 			// Pronterface expects a "Done printing" message
-			platform.Message(UsbMessage, "Done printing file");
+			platform.Message(UsbMessage, "Done printing file\n");
 		}
 		const uint32_t printMinutes = lrintf(reprap.GetPrintMonitor().GetPrintDuration()/60.0);
 		platform.MessageF(LoggedGenericMessage, "%s printing file %s, print time was %" PRIu32 "h %" PRIu32 "m\n",

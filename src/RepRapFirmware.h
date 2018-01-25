@@ -111,7 +111,8 @@ extern RepRap reprap;
 
 // Debugging support
 extern "C" void debugPrintf(const char* fmt, ...) __attribute__ ((format (printf, 1, 2)));
-#define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
+#define DEBUG_HERE do { } while (false)
+//#define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
 
 // Functions and globals not part of any class
 bool StringEndsWith(const char* string, const char* ending);

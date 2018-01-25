@@ -1199,11 +1199,13 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 }
 
 // *** These next three functions must use the same bit assignments in the drivers bitmap ***
-// The bitmaps are organised like this:
+// Each stepper driver must be assigned one bit in a 32-bit word, in such a way that multiple drivers can be stepped efficiently
+// and more or less simultaneously by doing parallel writes to several bits in one or more output ports.
+// The bitmaps for various controller electronics are organised like this:
 // Duet WiFi:
-//	All step pins are on port D, so the bitmap is just the map of bits in port D.
+//	All step pins are on port D, so the bitmap is just the map of step bits in port D.
 // Duet M:
-//	All step pins are on port C, so the bitmap is just the map of bits in port C.
+//	All step pins are on port C, so the bitmap is just the map of step bits in port C.
 // Duet 0.6 and 0.8.5:
 //	Step pins are PA0, PC7,9,11,14,25,29 and PD0,3.
 //	The PC and PD bit numbers don't overlap, so we use their actual positions.
@@ -1237,7 +1239,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 #endif
 }
 
-// Set the specified step pins high and all other step pins low
+// Set the specified step pins high
 // This needs to be as fast as possible, so we do a parallel write to the port(s).
 // We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
 /*static*/ inline void Platform::StepDriversHigh(uint32_t driverMap)
