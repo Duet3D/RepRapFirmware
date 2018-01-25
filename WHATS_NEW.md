@@ -1,32 +1,41 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 1.20.1RC2
+Version 1.21RC1
 =================
 Upgrade notes:
-- The recommended version of DuetWiFiServer is 1.20+1. DuetWiFiServer 1.20 is also compatible with this release.
+- The recommended version of DuetWiFiServer is 1.21RC1. DuetWiFiServer 1.20 is also compatible with this release.
+- DuetWebControl 1.20 is compatible with this release
 - See upgrade notes for version 1.20
 
 New features:
 - Added support for nonlinear extruder drives (M592)
+- Added support for Duet3D laser filament monitor
+- Added support for M260 and M261 (send/receive I2C)
+- Added support for workspace coordinates (G10 L2, G53 to G59.3)
+- Added absolute babystepping mode in M290 command
+- Added multi-touch Z probing (M558 A and S parameters)
+- Added M39 command to return SD card free space and other SD card information
 - M591 D# response now includes the measured steps/mm and tolerance
+- Support endstops 5-9 when no DueX board is present
+- Show Duet board revision as 1.02+ if we detect it
+- Recognise Ideamaker generated-by string
+- Cache is now disabled on the ATSAM4E
+- Ported DHCP changes from LWIP 2 to Duet 06/085 build
 
 Bug fixes:
 - When a simulated print ends or is cancelled, stop.g, sleep.g and cancel.g are no longer run
 - Fixed a 1-step error in the commanded extrusion amount that the filament sensor compares with the measured extrusion
-
-Version 1.20.1RC1
-=================
-Upgrade notes:
-- See 1.20
-
-New features:
-- Added M39 command to return SD card free space and other information
-
-Bug fixes:
 - Filament monitors are now disabled when simulating a print
 - Fixed step number calculation bug that caused benign step error reports with some values of pressure advance
-- Fixed a lookahead bug that caused occasional step errors. Print quality and speed may be affected.
+- Fixed a lookahead bug that caused occasional step errors. Print quality and speed may have been affected.
+- If no temperature sensor is configured for a heater. M305 Pn with no other parameters no longer allocates a thermistor
+- Fixed "listen failed" error after repeated use of FTP
+- Fixed M304
+- Fixed crash when an attempt was made to configure a filament monitor on a DueX endstop input
+- Fixed jerky curves when pressure advance is used and the slicer doesn't command a uniform extrusion rate
+- Fixed missing newline at end of "Done printing file" message (for Pronterface)
+- M350 Enn with only 1 extruder value specified is now applied to all extruder drives
 
 Version 1.20
 ===============
