@@ -6,7 +6,8 @@ DriverPackageDisplayName = "Duet3D USB driver"
 DUET = "Duet 3D printer control electronics with pre-1.18 firmware"
 DUET06 = "Duet 06 or 085 3D printer control electronics"
 ALLIGATOR = "Alligator 3D printer control electronics"
-DUETNG = "Duet WiFi or Duet Ethernet 3D printer control electronics"
+DUETNG = "Duet 2 WiFi or Duet 2 Ethernet 3D printer control electronics"
+DUETMAESTRO = "Duet 2 Maestro 3D printer control electronics"
 Serial.SvcDesc = "USB Serial emulation driver" 
 BOSSAPORT = "Bossa Program Port"
 
@@ -20,7 +21,7 @@ ClassGuid   = {4D36E978-E325-11CE-BFC1-08002BE10318}
 DriverPackageDisplayName = %DriverPackageDisplayName%
 Provider    = %Provider% 
 CatalogFile = duetinf.cat
-DriverVer   = 08/04/2017,1.19.0.0	; date in US format
+DriverVer   = 02/03/2018,1.21.0.0	; date in US format
 
 [Manufacturer] 
 %Provider% = DeviceList, NTAMD64, NT 
@@ -35,6 +36,7 @@ FakeModemCopyFileSection = 12
 %DUET06% = DriverInstall, USB\VID_1209&PID_D3D8
 %ALLIGATOR% = DriverInstall, USB\VID_1209&PID_AB3D
 %DUETNG% = DriverInstall, USB\VID_1D50&PID_60EC
+%DUETMAESTRO% = DriverInstall, USB\VID_1D50&PID_60ED
 
 [DeviceList.NTAMD64]
 %BOSSAPORT% = DriverInstall, USB\VID_03EB&PID_6124
@@ -42,6 +44,7 @@ FakeModemCopyFileSection = 12
 %DUET06% = DriverInstall.NTamd64, USB\VID_1209&PID_D3D8
 %ALLIGATOR% = DriverInstall.NTamd64, USB\VID_1209&PID_AB3D
 %DUETNG% = DriverInstall.NTamd64, USB\VID_1D50&PID_60EC
+%DUETMAESTRO% = DriverInstall.NTamd64, USB\VID_1D50&PID_60ED
 
 [DeviceList.NT]
 %BOSSAPORT% = DriverInstall, USB\VID_03EB&PID_6124
@@ -49,6 +52,7 @@ FakeModemCopyFileSection = 12
 %DUET06% = DriverInstall.NT, USB\VID_1209&PID_D3D8
 %ALLIGATOR% = DriverInstall.NT, USB\VID_1209&PID_AB3D
 %DUETNG% = DriverInstall.NT, USB\VID_1D50&PID_60EC
+%DUETMAESTRO% = DriverInstall.NT, USB\VID_1D50&PID_60ED
 
 ;------------------------------------------------------------
 ; Windows XP, Vista, Windows 7, Windows 8, Windows 10 - 32bit
