@@ -16,16 +16,16 @@ public:
 	Network(Platform& p) { }
 	void Init() const { }
 	void Activate() const { }
-	void Enable(int mode, StringRef& reply);
-	bool GetNetworkState(StringRef& reply);
+	void Enable(int mode, const StringRef& reply);
+	bool GetNetworkState(const StringRef& reply);
 	void Exit() const { }
 	void Spin(bool full) const { }
 	void Interrupt() const { }
 	void Diagnostics(MessageType mtype) const { }
 
-	void EnableProtocol(int protocol, int port, bool secure, StringRef& reply) { }
-	void DisableProtocol(int protocol, StringRef& reply) { }
-	void ReportProtocols(StringRef& reply) const;
+	void EnableProtocol(int protocol, int port, bool secure, const StringRef& reply) { }
+	void DisableProtocol(int protocol, const StringRef& reply) { }
+	void ReportProtocols(const StringRef& reply) const;
 
 	bool IsEnabled() const { return false; }
 	bool InLwip() const { return false; }

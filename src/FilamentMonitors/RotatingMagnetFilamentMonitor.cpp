@@ -37,7 +37,7 @@ void RotatingMagnetFilamentMonitor::Reset()
 }
 
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
-bool RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, StringRef& reply, bool& seen)
+bool RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen)
 {
 	if (ConfigurePin(gb, reply, CHANGE, seen))
 	{

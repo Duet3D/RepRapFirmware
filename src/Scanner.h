@@ -85,7 +85,7 @@ private:
 	char buffer[ScanBufferSize];
 	size_t bufferPointer;
 
-	char scanFilename[FILENAME_LENGTH];
+	char scanFilename[MaxFilenameLength];
 	int scanParam;
 
 	const char *uploadFilename;

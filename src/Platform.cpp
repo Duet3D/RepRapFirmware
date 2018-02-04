@@ -294,12 +294,12 @@ void ZProbeParameters::Init(float h)
 	triggerHeight = h;
 	calibTemperature = 20.0;
 	temperatureCoefficient = 0.0;	// no default temperature correction
-	diveHeight = DEFAULT_Z_DIVE;
-	probeSpeed = DEFAULT_PROBE_SPEED;
-	travelSpeed = DEFAULT_TRAVEL_SPEED;
+	diveHeight = DefaultZDive;
+	probeSpeed = DefaultProbingSpeed;
+	travelSpeed = DefaultZProbeTravelSpeed;
 	recoveryTime = 0.0;
-	tolerance = 0.01;
-	maxTaps = 1;
+	tolerance = DefaultZProbeTolerance;
+	maxTaps = DefaultZProbeTaps;
 	invertReading = false;
 }
 
@@ -644,9 +644,8 @@ void Platform::Init()
 #endif
 			);
 		}
-		const AnalogChannelNumber chan = PinToAdcChannel(tempSensePins[heater]);	// translate the pin number to the SAM ADC channel number
 		pinMode(tempSensePins[heater], AIN);
-		filteredAdcChannels[heater] = chan;
+		filteredAdcChannels[heater] = PinToAdcChannel(tempSensePins[heater]);	// translate the pin number to the SAM ADC channel number;
 	}
 
 #if HAS_VREF_MONITOR
@@ -942,7 +941,7 @@ void Platform::SetZProbeParameters(int32_t probeType, const ZProbeParameters& pa
 }
 
 // Program the Z probe, returning true if error
-bool Platform::ProgramZProbe(GCodeBuffer& gb, StringRef& reply)
+bool Platform::ProgramZProbe(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (gb.Seen('S'))
 	{
@@ -980,7 +979,7 @@ bool Platform::HomingZWithProbe() const
 }
 
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
-bool Platform::CheckFirmwareUpdatePrerequisites(StringRef& reply)
+bool Platform::CheckFirmwareUpdatePrerequisites(const StringRef& reply)
 {
 	FileStore * const firmwareFile = OpenFile(GetSysDir(), IAP_FIRMWARE_FILE, OpenMode::read);
 	if (firmwareFile == nullptr)
@@ -1322,7 +1321,7 @@ bool Platform::FlushAuxMessages()
 	OutputBuffer *auxOutputBuffer = auxOutput->GetFirstItem();
 	if (auxOutputBuffer != nullptr)
 	{
-		size_t bytesToWrite = min<size_t>(SERIAL_AUX_DEVICE.canWrite(), auxOutputBuffer->BytesLeft());
+		const size_t bytesToWrite = min<size_t>(SERIAL_AUX_DEVICE.canWrite(), auxOutputBuffer->BytesLeft());
 		if (bytesToWrite > 0)
 		{
 			SERIAL_AUX_DEVICE.write(auxOutputBuffer->Read(bytesToWrite), bytesToWrite);
@@ -1953,9 +1952,11 @@ void Platform::InitialiseInterrupts()
 	// Set the tick interrupt to the highest priority. We need to to monitor the heaters and kick the watchdog.
 	NVIC_SetPriority(SysTick_IRQn, NvicPrioritySystick);		// set priority for tick interrupts
 
-#if SAM4E || SAM4S || SAME70
+#if SAM4E || SAME70
 	NVIC_SetPriority(UART0_IRQn, NvicPriorityPanelDueUart);		// set priority for UART interrupt
 	NVIC_SetPriority(UART1_IRQn, NvicPriorityWiFiUart);			// set priority for WiFi UART interrupt
+#elif SAM4S
+	NVIC_SetPriority(UART1_IRQn, NvicPriorityPanelDueUart);		// set priority for UART interrupt
 #else
 	NVIC_SetPriority(UART_IRQn, NvicPriorityPanelDueUart);		// set priority for UART interrupt
 #endif
@@ -2359,7 +2360,7 @@ void Platform::Diagnostics(MessageType mtype)
 #endif
 }
 
-bool Platform::DiagnosticTest(GCodeBuffer& gb, StringRef& reply, int d)
+bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 {
 	static const uint32_t dummy[2] = { 0, 0 };
 
@@ -3302,7 +3303,7 @@ float Platform::GetDriverStepTiming(size_t driver) const
 // then search for parameters used to configure the fan. If any are found, perform appropriate actions and return true.
 // If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
 // If no relevant parameters are found, print the existing ones to 'reply' and return false.
-bool Platform::ConfigureFan(unsigned int mcode, int fanNum, GCodeBuffer& gb, StringRef& reply, bool& error)
+bool Platform::ConfigureFan(unsigned int mcode, int fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
 	if (fanNum < 0 || fanNum >= (int)NUM_FANS)
 	{
@@ -3737,7 +3738,7 @@ void Platform::SendAlert(MessageType mt, const char *message, const char *title,
 }
 
 // Configure logging according to the M929 command received, returning true if error
-bool Platform::ConfigureLogging(GCodeBuffer& gb, StringRef& reply)
+bool Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (gb.Seen('S'))
 	{
@@ -3754,7 +3755,7 @@ bool Platform::ConfigureLogging(GCodeBuffer& gb, StringRef& reply)
 				StopLogging();
 			}
 
-			char buf[FILENAME_LENGTH + 1];
+			char buf[MaxFilenameLength + 1];
 			StringRef filename(buf, ARRAY_SIZE(buf));
 			if (gb.Seen('P'))
 			{
@@ -4284,7 +4285,7 @@ float Platform::GetTmcDriversTemperature(unsigned int board) const
 #if HAS_STALL_DETECT
 
 // Configure the motor stall detection, returning true if an error was encountered
-bool Platform::ConfigureStallDetection(GCodeBuffer& gb, StringRef& reply)
+bool Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply)
 {
 	// Build a bitmap of all the drivers referenced
 	// First looks for explicit driver numbers
@@ -4610,8 +4611,7 @@ void Platform::Tick()
 		{
 			// We read a filtered ADC channel on alternate ticks
 			// Because we are in the tick ISR and no other ISR reads the averaging filter, we can cast away 'volatile' here.
-			// The following code assumes number of thermistor channels = number of heater channels
-			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(adcFilters[currentFilterNumber]);
+			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(adcFilters[currentFilterNumber]);		// cast away 'volatile'
 			currentFilter.ProcessReading(AnalogInReadChannel(filteredAdcChannels[currentFilterNumber]));
 
 			// Guard against overly long delays between successive calls of PID::Spin().

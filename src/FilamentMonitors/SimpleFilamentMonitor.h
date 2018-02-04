@@ -15,7 +15,7 @@ class SimpleFilamentMonitor : public FilamentMonitor
 public:
 	SimpleFilamentMonitor(unsigned int extruder, int type);
 
-	bool Configure(GCodeBuffer& gb, StringRef& reply, bool& seen) override;
+	bool Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) override;
 	FilamentSensorStatus Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed) override;
 	FilamentSensorStatus Clear(bool full) override;
 	void Diagnostics(MessageType mtype, unsigned int extruder) override;

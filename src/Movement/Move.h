@@ -55,7 +55,7 @@ public:
 	void SetXYBedProbePoint(size_t index, float x, float y);		// Record the X and Y coordinates of a probe point
 	void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError); // Record the Z coordinate of a probe point
 	float GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePosition) const; // Get pre-recorded probe coordinates
-	bool FinishedBedProbing(int sParam, StringRef& reply);			// Calibrate or set the bed equation after probing
+	bool FinishedBedProbing(int sParam, const StringRef& reply);	// Calibrate or set the bed equation after probing
 	void SetAxisCompensation(unsigned int axis, float tangent);		// Set an axis-pair compensation angle
 	float AxisCompensation(unsigned int axis) const;				// The tangent value
 	void SetIdentityTransform();									// Cancel the bed equation; does not reset axis angle compensation

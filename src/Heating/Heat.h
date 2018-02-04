@@ -86,13 +86,13 @@ public:
 	uint32_t GetLastSampleTime(size_t heater) const
 	pre(heater < Heaters);
 
-	void StartAutoTune(size_t heater, float temperature, float maxPwm, StringRef& reply) // Auto tune a PID
+	void StartAutoTune(size_t heater, float temperature, float maxPwm, const StringRef& reply) // Auto tune a PID
 	pre(heater < Heaters);
 
 	bool IsTuning(size_t heater) const							// Return true if the specified heater is auto tuning
 	pre(heater < Heaters);
 
-	void GetAutoTuneStatus(StringRef& reply) const;				// Get the status of the current or last auto tune
+	void GetAutoTuneStatus(const StringRef& reply) const;		// Get the status of the current or last auto tune
 
 	const FopDt& GetHeaterModel(size_t heater) const			// Get the process model for the specified heater
 	pre(heater < Heaters);
@@ -124,7 +124,7 @@ public:
 
 	int GetHeaterChannel(size_t heater) const;					// Return the channel used by a particular heater, or -1 if not configured
 	bool SetHeaterChannel(size_t heater, int channel);			// Set the channel used by a heater, returning true if bad heater or channel number
-	bool ConfigureHeaterSensor(size_t heater, unsigned int mcode, GCodeBuffer& gb, StringRef& reply, bool& error);	// Configure the temperature sensor for a channel
+	bool ConfigureHeaterSensor(size_t heater, unsigned int mcode, GCodeBuffer& gb, const StringRef& reply, bool& error);	// Configure the temperature sensor for a channel
 	const char *GetHeaterName(size_t heater) const;				// Get the name of a heater, or nullptr if it hasn't been named
 
 	HeaterProtection& AccessHeaterProtection(size_t index) const;	// Return the protection parameters of the given index

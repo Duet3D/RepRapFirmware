@@ -216,7 +216,7 @@ void LinearDeltaKinematics::GetAssumedInitialPosition(size_t numAxes, float posi
 }
 
 // Auto calibrate from a set of probe points returning true if it failed
-bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply)
+bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply)
 {
 	const size_t NumDeltaFactors = 9;		// maximum number of delta machine factors we can adjust
 	const size_t numPoints = probePoints.NumberOfProbePoints();
@@ -572,7 +572,7 @@ float LinearDeltaKinematics::GetTiltCorrection(size_t axis) const
 
 // Set the parameters from a M665, M666 or M669 command
 // Return true if we changed any parameters. Set 'error' true if there was an error, otherwise leave it alone.
-bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) /*override*/
+bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) /*override*/
 {
 	switch(mCode)
 	{

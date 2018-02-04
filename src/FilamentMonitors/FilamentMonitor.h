@@ -24,7 +24,7 @@ class FilamentMonitor
 {
 public:
 	// Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
-	virtual bool Configure(GCodeBuffer& gb, StringRef& reply, bool& seen) = 0;
+	virtual bool Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) = 0;
 
 	// Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 	// 'filamentConsumed' is the net amount of extrusion since the last call to this function.
@@ -63,7 +63,7 @@ public:
 protected:
 	FilamentMonitor(unsigned int extruder, int t) : extruderNumber(extruder), type(t), pin(NoPin) { }
 
-	bool ConfigurePin(GCodeBuffer& gb, StringRef& reply, uint32_t interruptMode, bool& seen);
+	bool ConfigurePin(GCodeBuffer& gb, const StringRef& reply, uint32_t interruptMode, bool& seen);
 
 	int GetEndstopNumber() const { return endstopNumber; }
 

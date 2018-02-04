@@ -149,7 +149,7 @@ void EthernetInterface::Init()
 	}
 }
 
-void EthernetInterface::EnableProtocol(int protocol, int port, int secure, StringRef& reply)
+void EthernetInterface::EnableProtocol(int protocol, int port, int secure, const StringRef& reply)
 {
 	if (secure != 0 && secure != -1)
 	{
@@ -183,7 +183,7 @@ void EthernetInterface::EnableProtocol(int protocol, int port, int secure, Strin
 	}
 }
 
-void EthernetInterface::DisableProtocol(int protocol, StringRef& reply)
+void EthernetInterface::DisableProtocol(int protocol, const StringRef& reply)
 {
 	if (protocol >= 0 && protocol < (int)NumProtocols)
 	{
@@ -271,7 +271,7 @@ void EthernetInterface::ShutdownProtocol(Protocol protocol)
 }
 
 // Report the protocols and ports in use
-void EthernetInterface::ReportProtocols(StringRef& reply) const
+void EthernetInterface::ReportProtocols(const StringRef& reply) const
 {
 	reply.Clear();
 	for (size_t i = 0; i < NumProtocols; ++i)
@@ -284,7 +284,7 @@ void EthernetInterface::ReportProtocols(StringRef& reply) const
 	}
 }
 
-void EthernetInterface::ReportOneProtocol(Protocol protocol, StringRef& reply) const
+void EthernetInterface::ReportOneProtocol(Protocol protocol, const StringRef& reply) const
 {
 	if (protocolEnabled[protocol])
 	{
@@ -320,7 +320,7 @@ void EthernetInterface::Exit()
 }
 
 // Get the network state into the reply buffer, returning true if there is some sort of error
-bool EthernetInterface::GetNetworkState(StringRef& reply)
+bool EthernetInterface::GetNetworkState(const StringRef& reply)
 {
 	const uint8_t * const config_ip = platform.GetIPAddress();
 	const int enableState = EnableState();
@@ -513,7 +513,7 @@ void EthernetInterface::Diagnostics(MessageType mtype)
 }
 
 // Enable or disable the network
-void EthernetInterface::Enable(int mode, StringRef& reply)
+void EthernetInterface::Enable(int mode, const StringRef& reply)
 {
 	if (!activated)
 	{

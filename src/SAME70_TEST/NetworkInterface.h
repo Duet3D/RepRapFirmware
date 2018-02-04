@@ -24,14 +24,14 @@ public:
 	virtual void Start() = 0;
 	virtual void Stop() = 0;
 
-	virtual void Enable(int mode, StringRef& reply) { };
-	virtual void Enable(int mode, const StringRef& ssid, StringRef& reply) { };
-	virtual bool GetNetworkState(StringRef& reply) = 0;
+	virtual void Enable(int mode, const StringRef& reply) { };
+	virtual void Enable(int mode, const StringRef& ssid, const StringRef& reply) { };
+	virtual bool GetNetworkState(const StringRef& reply) = 0;
 	virtual int EnableState() const = 0;
 
-	virtual void EnableProtocol(int protocol, int port, int secure, StringRef& reply) = 0;
-	virtual void DisableProtocol(int protocol, StringRef& reply) = 0;
-	virtual void ReportProtocols(StringRef& reply) const = 0;
+	virtual void EnableProtocol(int protocol, int port, int secure, const StringRef& reply) = 0;
+	virtual void DisableProtocol(int protocol, const StringRef& reply) = 0;
+	virtual void ReportProtocols(const StringRef& reply) const = 0;
 
 	virtual const uint8_t *GetIPAddress() const = 0;
 	virtual void SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[]) = 0;
@@ -45,9 +45,6 @@ public:
 protected:
 	Port portNumbers[NumProtocols];					// port number used for each protocol
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
-
 };
-
-
 
 #endif /* SRC_SAME70_NETWORKINTERFACE_H_ */

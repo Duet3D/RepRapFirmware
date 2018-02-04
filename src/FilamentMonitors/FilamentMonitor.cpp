@@ -30,7 +30,7 @@ FilamentMonitor::~FilamentMonitor()
 
 // Try to get the pin number from the GCode command in the buffer, setting Seen if a pin number was provided and returning true if error.
 // Also attaches the ISR.
-bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, StringRef& reply, uint32_t interruptMode, bool& seen)
+bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, uint32_t interruptMode, bool& seen)
 {
 	if (gb.Seen('C'))
 	{

@@ -34,7 +34,7 @@ void Fan::Init(Pin p_pin, bool hwInverted)
 // Exceptions:
 // 1. Only process the S parameter unless other values were processed.
 // 2. Don't process the R parameter, but if it is present don't print the existing configuration.
-bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, StringRef& reply, bool& error)
+bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
 	if (!IsEnabled())
 	{

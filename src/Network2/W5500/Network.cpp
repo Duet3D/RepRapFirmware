@@ -51,7 +51,7 @@ void Network::Init()
 	strcpy(hostname, HOSTNAME);
 }
 
-void Network::EnableProtocol(int protocol, int port, int secure, StringRef& reply)
+void Network::EnableProtocol(int protocol, int port, int secure, const StringRef& reply)
 {
 	if (secure != 0 && secure != -1)
 	{
@@ -89,7 +89,7 @@ void Network::EnableProtocol(int protocol, int port, int secure, StringRef& repl
 	}
 }
 
-void Network::DisableProtocol(int protocol, StringRef& reply)
+void Network::DisableProtocol(int protocol, const StringRef& reply)
 {
 	if (protocol >= 0 && protocol < (int)NumProtocols)
 	{
@@ -161,7 +161,7 @@ void Network::ShutdownProtocol(Protocol protocol)
 }
 
 // Report the protocols and ports in use
-void Network::ReportProtocols(StringRef& reply) const
+void Network::ReportProtocols(const StringRef& reply) const
 {
 	reply.Clear();
 	for (size_t i = 0; i < NumProtocols; ++i)
@@ -174,7 +174,7 @@ void Network::ReportProtocols(StringRef& reply) const
 	}
 }
 
-void Network::ReportOneProtocol(Protocol protocol, StringRef& reply) const
+void Network::ReportOneProtocol(Protocol protocol, const StringRef& reply) const
 {
 	if (protocolEnabled[protocol])
 	{
@@ -210,7 +210,7 @@ void Network::Exit()
 }
 
 // Get the network state into the reply buffer, returning true if there is some sort of error
-bool Network::GetNetworkState(StringRef& reply)
+bool Network::GetNetworkState(const StringRef& reply)
 {
 	const uint8_t * const config_ip = platform.GetIPAddress();
 	const int enableState = EnableState();
@@ -415,7 +415,7 @@ void Network::Diagnostics(MessageType mtype)
 }
 
 // Enable or disable the network
-void Network::Enable(int mode, StringRef& reply)
+void Network::Enable(int mode, const StringRef& reply)
 {
 	if (!activated)
 	{

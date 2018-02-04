@@ -895,7 +895,7 @@ void Move::SetAxisCompensation(unsigned int axis, float tangent)
 // Calibrate or set the bed equation after probing, returning true if an error occurred
 // sParam is the value of the S parameter in the G30 command that provoked this call.
 // Caller already owns the GCode movement lock.
-bool Move::FinishedBedProbing(int sParam, StringRef& reply)
+bool Move::FinishedBedProbing(int sParam, const StringRef& reply)
 {
 	bool error = false;
 	const size_t numPoints = probePoints.NumberOfProbePoints();

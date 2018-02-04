@@ -110,7 +110,7 @@ class ProtocolInterpreter
 
 		UploadState uploadState;
 		FileData fileBeingUploaded;
-		char filenameBeingUploaded[FILENAME_LENGTH];
+		char filenameBeingUploaded[MaxFilenameLength];
 
 		bool StartUpload(FileStore *file, const char *fileName);
 		bool IsUploading() const;
@@ -236,7 +236,7 @@ protected:
 
 		// Deferred requests (rr_fileinfo)
 		volatile Connection deferredRequestConnection;	// Which connection expects a response for a deferred request?
-		char filenameBeingProcessed[FILENAME_LENGTH];	// The filename being processed (for rr_fileinfo)
+		char filenameBeingProcessed[MaxFilenameLength];	// The filename being processed (for rr_fileinfo)
 
 		void ProcessDeferredRequest();
 	};
@@ -273,8 +273,8 @@ protected:
 		char clientMessage[ftpMessageLength];
 		size_t clientPointer;
 
-		char filename[FILENAME_LENGTH];
-		char currentDir[FILENAME_LENGTH];
+		char filename[MaxFilenameLength];
+		char currentDir[MaxFilenameLength];
 
 		uint32_t portOpenTime;
 

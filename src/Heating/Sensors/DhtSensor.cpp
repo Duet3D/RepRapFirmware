@@ -38,7 +38,7 @@ DhtSensor::~DhtSensor()
 	numInstances--;
 }
 
-bool DhtSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, StringRef& reply, bool& error)
+bool DhtSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
 	if (mCode == 305)
 	{

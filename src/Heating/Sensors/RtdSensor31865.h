@@ -14,7 +14,7 @@ class RtdSensor31865 : public SpiTemperatureSensor
 {
 public:
 	RtdSensor31865(unsigned int channel);
-	bool Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, StringRef& reply, bool& error) override;
+	bool Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error) override;
 	void Init() override;
 	TemperatureError GetTemperature(float& t) override;
 

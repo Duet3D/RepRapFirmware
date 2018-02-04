@@ -49,7 +49,7 @@ void CurrentLoopTemperatureSensor::Init()
 }
 
 // Configure this temperature sensor
-bool CurrentLoopTemperatureSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, StringRef& reply, bool& error)
+bool CurrentLoopTemperatureSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
 	if (mCode == 305)
 	{

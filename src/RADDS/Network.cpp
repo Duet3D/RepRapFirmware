@@ -10,17 +10,17 @@ const uint8_t *Network::GetIPAddress() const
 	return dummy_ipv4;
 }
 
-void Network::ReportProtocols(StringRef& reply) const
+void Network::ReportProtocols(const StringRef& reply) const
 {
 	reply.copy(notSupportedText);
 }
 
-void Network::Enable(int mode, StringRef& reply)
+void Network::Enable(int mode, const StringRef& reply)
 {
 	reply.copy(notSupportedText);
 }
 
-bool Network::GetNetworkState(StringRef& reply)
+bool Network::GetNetworkState(const StringRef& reply)
 {
 	reply.copy(notSupportedText);
 	return false;

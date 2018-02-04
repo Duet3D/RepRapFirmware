@@ -971,7 +971,7 @@ bool GCodeBuffer::CanQueueCodes() const
 }
 
 // Write the command to a string
-void GCodeBuffer::PrintCommand(StringRef& s) const
+void GCodeBuffer::PrintCommand(const StringRef& s) const
 {
 	s.printf("%c%d", commandLetter, commandNumber);
 	if (commandFraction >= 0)

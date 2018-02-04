@@ -147,7 +147,7 @@ void WiFiInterface::Init()
 	currentSocket = 0;
 }
 
-void WiFiInterface::EnableProtocol(int protocol, int port, int secure, StringRef& reply)
+void WiFiInterface::EnableProtocol(int protocol, int port, int secure, const StringRef& reply)
 {
 	if (secure != 0 && secure != -1)
 	{
@@ -180,7 +180,7 @@ void WiFiInterface::EnableProtocol(int protocol, int port, int secure, StringRef
 	}
 }
 
-void WiFiInterface::DisableProtocol(int protocol, StringRef& reply)
+void WiFiInterface::DisableProtocol(int protocol, const StringRef& reply)
 {
 	if (protocol >= 0 && protocol < (int)NumProtocols)
 	{
@@ -248,7 +248,7 @@ void WiFiInterface::ShutdownProtocol(Protocol protocol)
 }
 
 // Report the protocols and ports in use
-void WiFiInterface::ReportProtocols(StringRef& reply) const
+void WiFiInterface::ReportProtocols(const StringRef& reply) const
 {
 	reply.Clear();
 	for (size_t i = 0; i < NumProtocols; ++i)
@@ -261,7 +261,7 @@ void WiFiInterface::ReportProtocols(StringRef& reply) const
 	}
 }
 
-void WiFiInterface::ReportOneProtocol(Protocol protocol, StringRef& reply) const
+void WiFiInterface::ReportOneProtocol(Protocol protocol, const StringRef& reply) const
 {
 	if (protocolEnabled[protocol])
 	{
@@ -315,7 +315,7 @@ void WiFiInterface::Exit()
 }
 
 // Get the network state into the reply buffer, returning true if there is some sort of error
-bool WiFiInterface::GetNetworkState(StringRef& reply)
+bool WiFiInterface::GetNetworkState(const StringRef& reply)
 {
 	switch (state)
 	{
@@ -749,7 +749,7 @@ void WiFiInterface::Diagnostics(MessageType mtype)
 }
 
 // Enable or disable the network
-void WiFiInterface::Enable(int mode, const StringRef& ssid, StringRef& reply)
+void WiFiInterface::Enable(int mode, const StringRef& ssid, const StringRef& reply)
 {
 	// Translate enable mode to desired WiFi mode
 	const WiFiState modeRequested = (mode == 0) ? WiFiState::idle
@@ -840,7 +840,7 @@ void WiFiInterface::SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_ne
 	memcpy(gateway, p_gateway, sizeof(gateway));
 }
 
-GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, StringRef& reply, OutputBuffer*& longReply)
+GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply)
 {
 	switch (mcode)
 	{

@@ -108,11 +108,11 @@ static const uint8_t glcd16x16[] = {
 
 extern const LcdFont font16x16 =
 {
-  glcd16x16,   // font data
-  0x20,        // first character code
-  0x7F,        // last character code
-  16,          // row height in pixels
-  16           // character width in pixels
+	glcd16x16,	// font data
+	0x0020,		// first character code
+	0x007F,		// last character code
+	16,			// row height in pixels
+	16			// character width in pixels
 };
 
 // End

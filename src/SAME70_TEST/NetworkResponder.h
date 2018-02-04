@@ -96,7 +96,7 @@ protected:
 
 	// File uploads
 	FileData fileBeingUploaded;
-	char filenameBeingUploaded[FILENAME_LENGTH];
+	char filenameBeingUploaded[MaxFilenameLength];
 	uint32_t postFileLength, uploadedBytes;				// How many POST bytes do we expect and how many have already been written?
 	time_t fileLastModified;
 	bool uploadError;

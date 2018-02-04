@@ -11,6 +11,7 @@ SpiTemperatureSensor::SpiTemperatureSensor(unsigned int channel, const char *nam
 	: TemperatureSensor(channel, name)
 {
 	device.csPin = SpiTempSensorCsPins[relativeChannel];
+	device.csPolarity = false;						// active low chip select
 	device.spiMode = spiMode;
 	device.clockFrequency = clockFrequency;
 	lastTemperature = 0.0;

@@ -29,12 +29,12 @@ public:
 	bool IsValid() const { return isValid; }
 
 	bool Set(const float xRange[2], const float yRange[2], float pRadius, const float pSpacings[2]);
-	void PrintParameters(StringRef& r) const;
-	void WriteHeadingAndParameters(StringRef& r) const;
+	void PrintParameters(const StringRef& r) const;
+	void WriteHeadingAndParameters(const StringRef& r) const;
 	static int CheckHeading(const StringRef& s);
 	bool ReadParameters(const StringRef& s, int version);
 
-	void PrintError(float originalXrange, float originalYrange, StringRef& r) const
+	void PrintError(float originalXrange, float originalYrange, const StringRef& r) const
 	pre(!IsValid());
 
 private:
@@ -71,7 +71,7 @@ public:
 	bool SaveToFile(FileStore *f) const								// Save the grid to file returning true if an error occurred
 	pre(IsValid());
 
-	bool LoadFromFile(FileStore *f, StringRef& r);					// Load the grid from file returning true if an error occurred
+	bool LoadFromFile(FileStore *f, const StringRef& r);			// Load the grid from file returning true if an error occurred
 
 	unsigned int GetMinimumSegments(float deltaX, float deltaY) const;	// Return the minimum number of segments for a move by this X or Y amount
 

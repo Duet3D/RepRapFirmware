@@ -38,7 +38,7 @@ void LaserFilamentMonitor::Reset()
 }
 
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
-bool LaserFilamentMonitor::Configure(GCodeBuffer& gb, StringRef& reply, bool& seen)
+bool LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen)
 {
 	if (ConfigurePin(gb, reply, CHANGE, seen))
 	{

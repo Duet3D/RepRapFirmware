@@ -45,7 +45,7 @@ class Tool
 {
 public:
 
-	static Tool *Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, StringRef& reply);
+	static Tool *Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, const StringRef& reply);
 	static void Delete(Tool *t);
 
 	float GetOffset(size_t axis) const pre(axis < MaxAxes);
@@ -63,7 +63,7 @@ public:
 	void DefineMix(const float m[]);
 	const float* GetMix() const;
 	float MaxFeedrate() const;
-	void Print(StringRef& reply) const;
+	void Print(const StringRef& reply) const;
 	AxesBitmap GetXAxisMap() const { return xMapping; }
 	AxesBitmap GetYAxisMap() const { return yMapping; }
 	FansBitmap GetFanMapping() const { return fanMapping; }

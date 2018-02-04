@@ -21,6 +21,7 @@ void DAC084S085::Init(uint8_t cs)
 	{
 		pinMode(cs,OUTPUT_HIGH);
 		device.csPin = cs;								// chip select pin
+		device.csPolarity = false;						// active low chip select
 		device.spiMode = SPI_MODE_1; 					// CPHA Clock phase
 		device.clockFrequency = DAC084S085_MAX_FREQ;	// setup Clock Freq
 		sspi_master_init(&device, 8);

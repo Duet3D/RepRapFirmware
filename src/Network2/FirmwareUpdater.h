@@ -13,7 +13,7 @@
 
 namespace FirmwareUpdater
 {
-	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, StringRef& reply);
+	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, const StringRef& reply);
 	bool IsReady();
 	void UpdateModule(unsigned int module);
 }

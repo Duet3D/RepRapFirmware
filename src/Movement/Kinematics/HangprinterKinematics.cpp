@@ -87,7 +87,7 @@ const char *HangprinterKinematics::GetName(bool forStatusReport) const
 
 // Set the parameters from a M665, M666 or M669 command
 // Return true if we changed any parameters. Set 'error' true if there was an error, otherwise leave it alone.
-bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) /*override*/
+bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) /*override*/
 {
 	if (mCode == 669)
 	{
@@ -328,7 +328,7 @@ void HangprinterKinematics::InverseTransform(float La, float Lb, float Lc, float
 // 4, 5    X and Y coordinates of the C anchor
 // 6, 7, 8 Heights of the A, B, C anchors
 // We don't touch the XY coordinates of the A anchor or the X coordinate of the B anchor.
-bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply)
+bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply)
 {
 	const size_t NumHangprinterFactors = 9;		// maximum number of machine factors we can adjust
 	const size_t numPoints = probePoints.NumberOfProbePoints();

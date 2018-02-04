@@ -65,7 +65,7 @@ void PortControl::Spin(bool full)
 	}
 }
 
-bool PortControl::Configure(GCodeBuffer& gb, StringRef& reply)
+bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
 	bool seen = false;
 	if (gb.Seen('P'))

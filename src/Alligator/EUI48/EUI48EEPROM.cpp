@@ -21,6 +21,7 @@ void EUI48EEPROM::Init(uint8_t cs)
 	{
 		pinMode(cs,OUTPUT_HIGH);
 		device.csPin = cs;								// chip select pin
+		device.csPolarity = false;						// active low chip select
 		device.spiMode = SPI_MODE_1; 					// CPHA Clock phase
 		device.clockFrequency = EUI48EEPROM_MAX_FREQ;	// setup Clock Freq
 		sspi_master_init(&device, 8);

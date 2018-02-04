@@ -703,12 +703,12 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 		}
 
 		// Try to open a gzipped version of the file first
-		if (!StringEndsWith(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= FILENAME_LENGTH)
+		if (!StringEndsWith(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
 		{
-			char nameBuf[FILENAME_LENGTH + 1];
-			strcpy(nameBuf, nameOfFileToSend);
-			strcat(nameBuf, ".gz");
-			fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameBuf, OpenMode::read);
+			String<MaxFilenameLength> nameBuf;
+			nameBuf.copy(nameOfFileToSend);
+			nameBuf.cat(".gz");
+			fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameBuf.c_str(), OpenMode::read);
 			if (fileToSend != nullptr)
 			{
 				zip = true;
@@ -869,7 +869,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 		if (StringEquals(command, "configfile"))	// rr_configfile [DEPRECATED]
 		{
 			const char *configPath = GetPlatform().GetMassStorage()->CombineName(GetPlatform().GetSysDir(), GetPlatform().GetConfigFile());
-			char fileName[FILENAME_LENGTH];
+			char fileName[MaxFilenameLength];
 			SafeStrncpy(fileName, configPath, ARRAY_SIZE(fileName));
 			SendFile(fileName, false);
 			return;

@@ -52,13 +52,13 @@ public:
 	void Start();
 	void Stop();
 
-	void EnableProtocol(int protocol, int port, int secure, StringRef& reply);
-	void DisableProtocol(int protocol, StringRef& reply);
-	void ReportProtocols(StringRef& reply) const;
+	void EnableProtocol(int protocol, int port, int secure, const StringRef& reply);
+	void DisableProtocol(int protocol, const StringRef& reply);
+	void ReportProtocols(const StringRef& reply) const;
 
-	void Enable(int mode, const StringRef& ssid, StringRef& reply);			// enable or disable the network
-	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer& gb, StringRef& reply, OutputBuffer*& longReply);
-	bool GetNetworkState(StringRef& reply);
+	void Enable(int mode, const StringRef& ssid, const StringRef& reply);			// enable or disable the network
+	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& longReply);
+	bool GetNetworkState(const StringRef& reply);
 	int EnableState() const;
 
 	void SetHostname(const char *name);
@@ -113,7 +113,7 @@ private:
 	void ShutdownProtocol(Protocol protocol)
 	pre(protocol < NumProtocols);
 
-	void ReportOneProtocol(Protocol protocol, StringRef& reply) const
+	void ReportOneProtocol(Protocol protocol, const StringRef& reply) const
 	pre(protocol < NumProtocols);
 
 	void SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[]);

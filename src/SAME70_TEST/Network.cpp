@@ -56,7 +56,7 @@ void Network::Init()
 	}
 }
 
-void Network::EnableProtocol(int interface, int protocol, int port, int secure, StringRef& reply)
+void Network::EnableProtocol(int interface, int protocol, int port, int secure, const StringRef& reply)
 {
 	if (interface >= 0 && interface < (int)NumNetworkInterfaces)
 	{
@@ -68,7 +68,7 @@ void Network::EnableProtocol(int interface, int protocol, int port, int secure, 
 	}
 }
 
-void Network::DisableProtocol(int interface, int protocol, StringRef& reply)
+void Network::DisableProtocol(int interface, int protocol, const StringRef& reply)
 {
 	if (interface >= 0 && interface < (int)NumNetworkInterfaces)
 	{
@@ -81,7 +81,7 @@ void Network::DisableProtocol(int interface, int protocol, StringRef& reply)
 }
 
 // Report the protocols and ports in use
-void Network::ReportProtocols(int interface, StringRef& reply) const
+void Network::ReportProtocols(int interface, const StringRef& reply) const
 {
 	if (interface >= 0 && interface < (int)NumNetworkInterfaces)
 	{
@@ -93,13 +93,13 @@ void Network::ReportProtocols(int interface, StringRef& reply) const
 	}
 }
 
-void Network::EnableWiFi(int mode, const StringRef& ssid, StringRef& reply)
+void Network::EnableWiFi(int mode, const StringRef& ssid, const StringRef& reply)
 {
 	WiFiInterface *wifiInterface = static_cast<WiFiInterface *>(interfaces[WiFiInterfaceIndex]);
 	wifiInterface->Enable(mode, ssid, reply);
 }
 
-GCodeResult Network::HandleWiFiCode(int mcode, GCodeBuffer &gb, StringRef& reply, OutputBuffer*& longReply)
+GCodeResult Network::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply)
 {
 	WiFiInterface *wifiInterface = static_cast<WiFiInterface *>(interfaces[WiFiInterfaceIndex]);
 	return wifiInterface->HandleWiFiCode(mcode, gb, reply, longReply);
@@ -136,7 +136,7 @@ void Network::Exit()
 }
 
 // Get the network state into the reply buffer, returning true if there is some sort of error
-bool Network::GetNetworkState(int interface, StringRef& reply)
+bool Network::GetNetworkState(int interface, const StringRef& reply)
 {
 	if (interface >= 0 && interface < (int)NumNetworkInterfaces)
 	{
@@ -243,7 +243,7 @@ bool Network::InLwip() const
 	return EthernetInterface::InLwip();
 }
 
-void Network::EnableEthernet(int mode, StringRef& reply)
+void Network::EnableEthernet(int mode, const StringRef& reply)
 {
 	interfaces[EthernetInterfaceIndex]->Enable(mode, reply);
 }

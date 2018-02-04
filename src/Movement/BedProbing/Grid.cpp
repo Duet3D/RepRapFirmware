@@ -72,14 +72,14 @@ bool GridDefinition::IsInRadius(float x, float y) const
 }
 
 // Append the grid parameters to the end of a string
-void GridDefinition::PrintParameters(StringRef& s) const
+void GridDefinition::PrintParameters(const StringRef& s) const
 {
 	s.catf("X%.1f:%.1f, Y%.1f:%.1f, radius %.1f, X spacing %.1f, Y spacing %.1f, %" PRIu32 " points",
 		(double)xMin, (double)xMax, (double)yMin, (double)yMax, (double)radius, (double)xSpacing, (double)ySpacing, NumPoints());
 }
 
 // Write the parameter label line to a string
-void GridDefinition::WriteHeadingAndParameters(StringRef& s) const
+void GridDefinition::WriteHeadingAndParameters(const StringRef& s) const
 {
 	s.printf("%s\n%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%" PRIi32 ",%" PRIi32 "\n",
 				HeightMapLabelLines[ARRAY_UPB(HeightMapLabelLines)], (double)xMin, (double)xMax, (double)yMin, (double)yMax, (double)radius, (double)xSpacing, (double)ySpacing, numX, numY);
@@ -132,7 +132,7 @@ bool GridDefinition::ReadParameters(const StringRef& s, int version)
 }
 
 // Print what is wrong with the grid, appending it to the existing string
-void GridDefinition::PrintError(float originalXrange, float originalYrange, StringRef& r) const
+void GridDefinition::PrintError(float originalXrange, float originalYrange, const StringRef& r) const
 {
 	if (xSpacing < MinSpacing || ySpacing < MinSpacing)
 	{
@@ -211,8 +211,8 @@ unsigned int HeightMap::GetMinimumSegments(float deltaX, float deltaY) const
 // Save the grid to file returning true if an error occurred
 bool HeightMap::SaveToFile(FileStore *f) const
 {
-	char bufferSpace[500];
-	StringRef buf(bufferSpace, ARRAY_SIZE(bufferSpace));
+	String<500> bufferSpace;
+	const StringRef buf = bufferSpace.GetRef();
 
 	// Write the header comment
 	buf.copy(HeightMapComment);
@@ -270,7 +270,7 @@ bool HeightMap::SaveToFile(FileStore *f) const
 }
 
 // Load the grid from file, returning true if an error occurred with the error reason appended to the buffer
-bool HeightMap::LoadFromFile(FileStore *f, StringRef& r)
+bool HeightMap::LoadFromFile(FileStore *f, const StringRef& r)
 {
 	const size_t MaxLineLength = (MaxXGridPoints * 8) + 2;						// maximum length of a line in the height map file, need 8 characters per grid point
 	const char* const readFailureText = "failed to read line from file";

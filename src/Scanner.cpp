@@ -124,8 +124,8 @@ void Scanner::Spin()
 			if (!IsDoingFileMacro())
 			{
 				// Pre macro complete, build and send SCAN command
-				char scanCommand[FILENAME_LENGTH + 16];
-				snprintf(scanCommand, FILENAME_LENGTH + 16, "SCAN %d %s\n", scanParam, scanFilename);
+				char scanCommand[MaxFilenameLength + 16];
+				snprintf(scanCommand, MaxFilenameLength + 16, "SCAN %d %s\n", scanParam, scanFilename);
 
 				SERIAL_MAIN_DEVICE.write(scanCommand);
 				SERIAL_MAIN_DEVICE.flush();
@@ -522,7 +522,7 @@ void Scanner::DoFileMacro(const char *filename)
 {
 	if (platform.GetMassStorage()->FileExists(SYS_DIR, filename))
 	{
-		char gcode[FILENAME_LENGTH + 7];
+		char gcode[MaxFilenameLength + 7];
 		snprintf(gcode, ARRAY_SIZE(gcode), "M98 P%s\n", filename);
 		gcode[ARRAY_UPB(gcode)] = 0;
 

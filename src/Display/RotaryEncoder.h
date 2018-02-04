@@ -24,6 +24,7 @@ public:
 	void Init();
 	void Poll();
 	int GetChange();
+	bool GetButtonPress();
 };
 
 #endif

@@ -49,8 +49,8 @@ protected:
 	char clientMessage[ftpMessageLength];
 	size_t clientPointer;
 
-	char currentDirectory[FILENAME_LENGTH];
-	char fileToMove[FILENAME_LENGTH];
+	char currentDirectory[MaxFilenameLength];
+	char fileToMove[MaxFilenameLength];
 };
 
 #endif /* SRC_DUETNG_DUETETHERNET_FTPRESPONDER_H_ */

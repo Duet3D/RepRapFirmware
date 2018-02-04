@@ -61,6 +61,9 @@ GCodes::GCodes(Platform& p) :
 	serialGCode = new GCodeBuffer("serial", UsbMessage, true);
 	auxGCode = new GCodeBuffer("aux", LcdMessage, false);
 	daemonGCode = new GCodeBuffer("daemon", GenericMessage, false);
+#if SUPPORT_12864_LCD
+	lcdGCode = new GCodeBuffer("lcd", GenericMessage, false);
+#endif
 	queuedGCode = new GCodeBuffer("queue", GenericMessage, false);
 	autoPauseGCode = new GCodeBuffer("autopause", GenericMessage, false);
 	codeQueue = new GCodeQueue();
@@ -136,6 +139,9 @@ void GCodes::Reset()
 	auxGCode->Reset();
 	auxGCode->SetCommsProperties(1);					// by default, we require a checksum on the aux port
 	daemonGCode->Reset();
+#if SUPPORT_12864_LCD
+	lcdGCode->Reset();
+#endif
 	queuedGCode->Reset();
 	autoPauseGCode->Reset();
 
@@ -297,9 +303,7 @@ void GCodes::Spin()
 	GCodeBuffer& gb = *gbp;
 
 	// Set up a buffer for the reply
-	char replyBuffer[gcodeReplyLength];
-	StringRef reply(replyBuffer, ARRAY_SIZE(replyBuffer));
-	reply.Clear();
+	String<gcodeReplyLength> reply;
 
 	if (gb.GetState() == GCodeState::normal)
 	{
@@ -322,12 +326,12 @@ void GCodes::Spin()
 		}
 		else
 		{
-			StartNextGCode(gb, reply);
+			StartNextGCode(gb, reply.GetRef());
 		}
 	}
 	else
 	{
-		RunStateMachine(gb, reply);			// Execute the state machine
+		RunStateMachine(gb, reply.GetRef());			// Execute the state machine
 	}
 
 	// Check if we need to display a warning
@@ -351,7 +355,7 @@ void GCodes::Spin()
 }
 
 // Execute a step of the state machine
-void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
+void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 {
 	// Perform the next operation of the state machine for this gcode source
 	bool error = false;
@@ -717,12 +721,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 				else
 				{
 					platform.MessageF(WarningMessage, "Skipping grid point (%.1f, %.1f) because Z probe cannot reach it\n", (double)x, (double)y);
-					gb.SetState(GCodeState::gridProbing5);
+					gb.SetState(GCodeState::gridProbing6);
 				}
 			}
 			else
 			{
-				gb.SetState(GCodeState::gridProbing5);
+				gb.SetState(GCodeState::gridProbing6);
 			}
 		}
 		break;
@@ -732,6 +736,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		{
 			lastProbedTime = millis();
 			tapsDone = 0;
+			g30zHeightErrorSum = 0.0;
+			g30zHeightErrorLowestDiff = 1000.0;
 			gb.AdvanceState();
 		}
 		break;
@@ -804,6 +810,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 				}
 
 				g30zHeightError = moveBuffer.coords[Z_AXIS] - platform.ZProbeStopHeight();
+				g30zHeightErrorSum += g30zHeightError;
 			}
 
 			// Move back up to the dive height
@@ -818,57 +825,24 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 			moveBuffer.yAxes = DefaultYAxisMapping;
 			totalSegments = 1;
 			segmentsLeft = 1;
-			gb.SetState(GCodeState::gridProbing5);
+			gb.AdvanceState();
 		}
 		break;
 
-	case GCodeState::gridProbing5:	// ready to compute the next probe point
+	case GCodeState::gridProbing5:	// finished probing a point and moved back to the dive height
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			// See whether we need to do any more taps
 			const ZProbeParameters& params = platform.GetCurrentZProbeParameters();
-			const bool acceptReading = (params.maxTaps < 2 || (tapsDone >= 2 && fabsf(g30zHeightError - g30PrevHeightError) <= params.tolerance));
+			if (tapsDone >= 2)
+			{
+				g30zHeightErrorLowestDiff = min<float>(g30zHeightErrorLowestDiff, fabsf(g30zHeightError - g30PrevHeightError));
+			}
+			const bool acceptReading = (params.maxTaps < 2 || (tapsDone >= 2 && g30zHeightErrorLowestDiff <= params.tolerance));
 			if (acceptReading)
 			{
-				HeightMap& hm = reprap.GetMove().AccessHeightMap();
-				hm.SetGridHeight(gridXindex, gridYindex, g30zHeightError);
-				if (gridYindex & 1)
-				{
-					// Odd row, so decreasing X
-					if (gridXindex == 0)
-					{
-						++gridYindex;
-					}
-					else
-					{
-						--gridXindex;
-					}
-				}
-				else
-				{
-					// Even row, so increasing X
-					if (gridXindex + 1 == hm.GetGrid().NumXpoints())
-					{
-						++gridYindex;
-					}
-					else
-					{
-						++gridXindex;
-					}
-				}
-				if (gridYindex == hm.GetGrid().NumYpoints())
-				{
-					// Done all the points
-					gb.AdvanceState();
-					if (platform.GetZProbeType() != 0 && !probeIsDeployed)
-					{
-						DoFileMacro(gb, RETRACTPROBE_G, false);
-					}
-				}
-				else
-				{
-					gb.SetState(GCodeState::gridProbing1);
-				}
+				reprap.GetMove().AccessHeightMap().SetGridHeight(gridXindex, gridYindex, g30zHeightError);
+				gb.AdvanceState();
 			}
 			else if (tapsDone < params.maxTaps)
 			{
@@ -889,7 +863,50 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
-	case GCodeState::gridProbing6:
+	case GCodeState::gridProbing6:	// ready to compute the next probe point
+		{
+			const HeightMap& hm = reprap.GetMove().AccessHeightMap();
+			if (gridYindex & 1)
+			{
+				// Odd row, so decreasing X
+				if (gridXindex == 0)
+				{
+					++gridYindex;
+				}
+				else
+				{
+					--gridXindex;
+				}
+			}
+			else
+			{
+				// Even row, so increasing X
+				if (gridXindex + 1 == hm.GetGrid().NumXpoints())
+				{
+					++gridYindex;
+				}
+				else
+				{
+					++gridXindex;
+				}
+			}
+			if (gridYindex == hm.GetGrid().NumYpoints())
+			{
+				// Done all the points
+				gb.AdvanceState();
+				if (platform.GetZProbeType() != 0 && !probeIsDeployed)
+				{
+					DoFileMacro(gb, RETRACTPROBE_G, false);
+				}
+			}
+			else
+			{
+				gb.SetState(GCodeState::gridProbing1);
+			}
+		}
+		break;
+
+	case GCodeState::gridProbing7:
 		// Finished probing the grid, and retracted the probe if necessary
 		{
 			float mean, deviation;
@@ -958,6 +975,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 			// Head has finished moving to the correct XY position
 			lastProbedTime = millis();			// start the probe recovery timer
 			tapsDone = 0;
+			g30zHeightErrorSum = 0.0;
+			g30zHeightErrorLowestDiff = 1000.0;
 			gb.AdvanceState();
 		}
 		break;
@@ -1044,6 +1063,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 					reprap.GetMove().GetCurrentMachinePosition(m, false);		// get height without bed compensation
 					g30zStoppedHeight = m[Z_AXIS] - heightAdjust;				// save for later
 					g30zHeightError = g30zStoppedHeight - platform.ZProbeStopHeight();
+					g30zHeightErrorSum += g30zHeightError;
 				}
 			}
 
@@ -1098,7 +1118,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		{
 			// See whether we need to do any more taps
 			const ZProbeParameters& params = platform.GetCurrentZProbeParameters();
-			const bool acceptReading = (hadProbingError || params.maxTaps < 2 || (tapsDone >= 2 && fabsf(g30zHeightError - g30PrevHeightError) <= params.tolerance));
+			if (tapsDone >= 2)
+			{
+				g30zHeightErrorLowestDiff = min<float>(g30zHeightErrorLowestDiff, fabsf(g30zHeightError - g30PrevHeightError));
+			}
+			const bool acceptReading = (hadProbingError || params.maxTaps < 2 || (tapsDone >= 2 && g30zHeightErrorLowestDiff <= params.tolerance));
 			if (!acceptReading && tapsDone < params.maxTaps)
 			{
 				// Tap again
@@ -1108,10 +1132,18 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				if (!acceptReading)
+				if (acceptReading)
 				{
-					platform.Message(ErrorMessage, "Z probe readings not consistent\n");
-					hadProbingError = true;
+					if (tapsDone >= 2)
+					{
+						g30zHeightError = (g30zHeightError + g30PrevHeightError)/2;		// take the average of the two readings
+					}
+				}
+				else
+				{
+					// We no longer flag this as a probing error, instead we take the average and issue a warning
+					platform.Message(WarningMessage, "Z probe readings not consistent\n");
+					g30zHeightError = g30zHeightErrorSum/tapsDone;
 				}
 
 				reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, g30zHeightError, true, hadProbingError);
@@ -1289,7 +1321,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 }
 
 // Start a new gcode, or continue to execute one that has already been started:
-void GCodes::StartNextGCode(GCodeBuffer& gb, StringRef& reply)
+void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (IsPaused() && &gb == fileGCode)
 	{
@@ -1340,7 +1372,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, StringRef& reply)
 	}
 }
 
-void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
+void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 {
 	FileData& fd = gb.MachineState().fileState;
 
@@ -1465,9 +1497,8 @@ void GCodes::CheckTriggers()
 		else
 		{
 			ClearBit(triggersPending, lowestTriggerPending);		// clear the trigger
-			char buffer[25];
-			StringRef filename(buffer, ARRAY_SIZE(buffer));
-			filename.printf(SYS_DIR "trigger%u.g", lowestTriggerPending);
+			String<25> filename;
+			filename.GetRef().printf(SYS_DIR "trigger%u.g", lowestTriggerPending);
 			DoFileMacro(*daemonGCode, filename.Pointer(), true);
 		}
 	}
@@ -1830,8 +1861,8 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 		}
 		else
 		{
-			char bufferSpace[200];
-			StringRef buf(bufferSpace, ARRAY_SIZE(bufferSpace));
+			String<200> bufferSpace;
+			const StringRef buf = bufferSpace.GetRef();
 
 			// Write the header comment
 			buf.printf("; File \"%s\" resume print after %s", printingFilename, (wasPowerFailure) ? "power failure" : "print paused");
@@ -2118,7 +2149,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 
 // Execute a straight move returning true if an error was written to 'reply'
 // We have already acquired the movement lock and waited for the previous move to be taken.
-bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinated)
+bool GCodes::DoStraightMove(GCodeBuffer& gb, const StringRef& reply, bool isCoordinated)
 {
 	// Set up default move parameters
 	moveBuffer.isCoordinated = isCoordinated;
@@ -2597,7 +2628,7 @@ void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb)
 
 // Home one or more of the axes
 // 'reply' is only written if there is an error.
-GCodeResult GCodes::DoHome(GCodeBuffer& gb, StringRef& reply)
+GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (!LockMovementAndWaitForStandstill(gb))
 	{
@@ -2647,7 +2678,7 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, StringRef& reply)
 // If it is specified and is greater than SILLY_Z_VALUE (i.e. greater than -9999.0) then that value is used.
 // If it's less than SILLY_Z_VALUE the bed is probed and that value is used.
 // We already own the movement lock before this is called.
-GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, StringRef& reply)
+GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 {
 	g30SValue = (gb.Seen('S')) ? gb.GetIValue() : -3;		// S-3 is equivalent to having no S parameter
 	g30ProbePointIndex = -1;
@@ -2727,7 +2758,7 @@ void GCodes::DoManualProbe(GCodeBuffer& gb)
 
 // Start probing the grid, returning true if we didn't because of an error.
 // Prior to calling this the movement system must be locked.
-GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, StringRef& reply)
+GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (!defaultGrid.IsValid())
 	{
@@ -2755,16 +2786,16 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, StringRef& reply)
 	return GCodeResult::ok;
 }
 
-bool GCodes::LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const
+bool GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 {
 	reprap.GetMove().SetIdentityTransform();					// stop using old-style bed compensation and clear the height map
 
-	String<FILENAME_LENGTH> heightMapFileName;
+	String<MaxFilenameLength> heightMapFileName;
 	bool seen = false;
 	gb.TryGetQuotedString('P', heightMapFileName.GetRef(), seen);
 	if (!seen)
 	{
-		heightMapFileName.GetRef().copy(DefaultHeightMapFile);
+		heightMapFileName.copy(DefaultHeightMapFile);
 	}
 
 	FileStore * const f = platform.OpenFile(platform.GetSysDir(), heightMapFileName.c_str(), OpenMode::read);
@@ -2793,14 +2824,14 @@ bool GCodes::LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const
 
 // Save the height map and append the success or error message to 'reply', returning true if an error occurred
 // Called by G29 and M374. Both use the P parameter to provide the filename.
-bool GCodes::SaveHeightMap(GCodeBuffer& gb, StringRef& reply) const
+bool GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 {
-	String<FILENAME_LENGTH> heightMapFileName;
+	String<MaxFilenameLength> heightMapFileName;
 	bool seen = false;
 	gb.TryGetQuotedString('P', heightMapFileName.GetRef(), seen);
 	if (!seen)
 	{
-		heightMapFileName.GetRef().copy(DefaultHeightMapFile);
+		heightMapFileName.copy(DefaultHeightMapFile);
 	}
 
 	FileStore * const f = platform.OpenFile(platform.GetSysDir(), heightMapFileName.c_str(), OpenMode::write);
@@ -2829,7 +2860,7 @@ bool GCodes::SaveHeightMap(GCodeBuffer& gb, StringRef& reply) const
 
 // Return the current coordinates as a printable string.
 // Coordinates are updated at the end of each movement, so this won't tell you where you are mid-movement.
-void GCodes::GetCurrentCoordinates(StringRef& s) const
+void GCodes::GetCurrentCoordinates(const StringRef& s) const
 {
 	float liveCoordinates[DRIVES];
 	reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
@@ -2978,7 +3009,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer& gb)
 
 // Set up a file to print, but don't print it yet.
 // If successful return true, else write an error message to reply and return false
-bool GCodes::QueueFileToPrint(const char* fileName, StringRef& reply)
+bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply)
 {
 	FileStore * const f = platform.OpenFile(platform.GetGCodeDir(), fileName, OpenMode::read);
 	if (f != nullptr)
@@ -3084,7 +3115,7 @@ GCodeResult GCodes::DoDwellTime(GCodeBuffer& gb, uint32_t dwellMillis)
 }
 
 // Set offset, working and standby temperatures for a tool. I.e. handle a G10.
-GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, StringRef& reply)
+GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply)
 {
 	Tool *tool;
 	if (gb.Seen('P'))
@@ -3169,7 +3200,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, StringRef& reply)
 }
 
 // Create a new tool definition, returning true if an error was reported
-bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
+bool GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (!gb.Seen('P'))
 	{
@@ -3532,7 +3563,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply)
 }
 
 // Configure heater protection (M143). Returns true if an error occurred
-bool GCodes::SetHeaterProtection(GCodeBuffer& gb, StringRef& reply)
+bool GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 {
 	const int index = (gb.Seen('P'))
 						? gb.GetIValue()
@@ -3662,7 +3693,7 @@ bool GCodes::SetHeaterProtection(GCodeBuffer& gb, StringRef& reply)
 }
 
 // Set PID parameters (M301 or M304 command). 'heater' is the default heater number to use.
-void GCodes::SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply)
+void GCodes::SetPidParameters(GCodeBuffer& gb, int heater, const StringRef& reply)
 {
 	if (gb.Seen('H'))
 	{
@@ -3698,7 +3729,7 @@ void GCodes::SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply)
 }
 
 // Process M305
-GCodeResult GCodes::SetHeaterParameters(GCodeBuffer& gb, StringRef& reply)
+GCodeResult GCodes::SetHeaterParameters(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (gb.Seen('P'))
 	{
@@ -3850,7 +3881,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 }
 
 // Load the specified filament into a tool
-GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, StringRef& reply)
+GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 {
 	Tool * const tool = reprap.GetCurrentTool();
 	if (tool == nullptr)
@@ -3924,7 +3955,7 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, StringRef& reply)
 }
 
 // Unload the current filament from a tool
-GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, StringRef& reply)
+GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply)
 {
 	Tool *tool = reprap.GetCurrentTool();
 	if (tool == nullptr)
@@ -4206,7 +4237,7 @@ const char *GCodes::TranslateEndStopResult(EndStopHit es)
 }
 
 // Append a list of trigger endstops to a message
-void GCodes::ListTriggers(StringRef reply, TriggerInputsBitmap mask)
+void GCodes::ListTriggers(const StringRef& reply, TriggerInputsBitmap mask)
 {
 	if (mask == 0)
 	{
@@ -4252,7 +4283,7 @@ bool GCodes::StartHash(const char* filename)
 	return true;
 }
 
-GCodeResult GCodes::AdvanceHash(StringRef &reply)
+GCodeResult GCodes::AdvanceHash(const StringRef &reply)
 {
 	// Read and process some more data from the file
 	uint32_t buf32[(FILE_BUFFER_SIZE + 3) / 4];
@@ -4298,7 +4329,7 @@ void GCodes::SetAllAxesNotHomed()
 }
 
 // Write the config-override file returning true if an error occurred
-bool GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, StringRef& reply, const char *fileName) const
+bool GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply, const char *fileName) const
 {
 	FileStore * const f = platform.OpenFile(platform.GetSysDir(), fileName, OpenMode::write);
 	if (f == nullptr)
@@ -4340,7 +4371,7 @@ bool GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, StringRef& reply, const ch
 }
 
 // Store a standard-format temperature report in 'reply'. This doesn't put a newline character at the end.
-void GCodes::GenerateTemperatureReport(StringRef& reply) const
+void GCodes::GenerateTemperatureReport(const StringRef& reply) const
 {
 	Heat& heat = reprap.GetHeat();
 
@@ -4374,7 +4405,7 @@ void GCodes::GenerateTemperatureReport(StringRef& reply) const
 
 // Check whether we need to report temperatures or status.
 // 'reply' is a convenient buffer that is free for us to use.
-void GCodes::CheckReportDue(GCodeBuffer& gb, StringRef& reply) const
+void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 {
 	const uint32_t now = millis();
 	if (gb.timerRunning)
@@ -4526,7 +4557,7 @@ void GCodes::UnlockAll(const GCodeBuffer& gb)
 }
 
 // Append a list of axes to a string
-void GCodes::AppendAxes(StringRef& reply, AxesBitmap axes) const
+void GCodes::AppendAxes(const StringRef& reply, AxesBitmap axes) const
 {
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
@@ -4608,5 +4639,20 @@ void GCodes::CheckHeaterFault()
 		break;
 	}
 }
+
+#if SUPPORT_12864_LCD
+
+// Process a GCode command from the 12864 LCD returning true if the command was accepted
+bool GCodes::ProcessCommandFromLcd(const char *cmd)
+{
+	if (lcdGCode->IsCompletelyIdle())
+	{
+		lcdGCode->Put(cmd);
+		return true;
+	}
+	return false;
+}
+
+#endif
 
 // End

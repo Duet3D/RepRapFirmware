@@ -33,7 +33,7 @@ int StringRef::printf(const char *fmt, ...) const
 {
 	va_list vargs;
 	va_start(vargs, fmt);
-	int ret = vsnprintf(p, len, fmt, vargs);
+	const int ret = vsnprintf(p, len, fmt, vargs);
 	va_end(vargs);
 	return ret;
 }
@@ -45,12 +45,12 @@ int StringRef::vprintf(const char *fmt, va_list vargs) const
 
 int StringRef::catf(const char *fmt, ...) const
 {
-	size_t n = strlen();
+	const size_t n = strlen();
 	if (n + 1 < len)		// if room for at least 1 more character and a null
 	{
 		va_list vargs;
 		va_start(vargs, fmt);
-		int ret = vsnprintf(p + n, len - n, fmt, vargs);
+		const int ret = vsnprintf(p + n, len - n, fmt, vargs);
 		va_end(vargs);
 		return ret + n;
 	}
@@ -59,7 +59,7 @@ int StringRef::catf(const char *fmt, ...) const
 
 int StringRef::vcatf(const char *fmt, va_list vargs) const
 {
-	size_t n = strlen();
+	const size_t n = strlen();
 	if (n + 1 < len)		// if room for at least 1 more character and a null
 	{
 		return vsnprintf(p + n, len - n, fmt, vargs) + n;
@@ -70,7 +70,7 @@ int StringRef::vcatf(const char *fmt, va_list vargs) const
 // This is quicker than printf for printing constant strings
 size_t StringRef::copy(const char* src) const
 {
-	size_t length = strnlen(src, len - 1);
+	const size_t length = strnlen(src, len - 1);
 	memcpy(p, src, length);
 	p[length] = 0;
 	return length;
@@ -80,7 +80,7 @@ size_t StringRef::copy(const char* src) const
 size_t StringRef::cat(const char* src) const
 {
 	size_t length = strlen();
-	size_t toCopy = strnlen(src, len - length - 1);
+	const size_t toCopy = strnlen(src, len - length - 1);
 	memcpy(p + length, src, toCopy);
 	length += toCopy;
 	p[length] = 0;
@@ -113,7 +113,7 @@ size_t StringRef::StripTrailingSpaces() const
 
 size_t StringRef::Prepend(const char *src) const
 {
-	const size_t slen = ::strlen(src);
+	const size_t slen = min<size_t>(::strlen(src), len - 1);
 	const size_t dlen = strlen();
 	const size_t newLen = min<size_t>(dlen + slen, len - 1);
 	memmove(p + slen, p, newLen - slen + 1);

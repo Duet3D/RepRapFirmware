@@ -268,6 +268,21 @@ namespace DuetExpansion
 		}
 	}
 
+	// Print diagnostic data
+	void Diagnostics(MessageType mtype)
+	{
+		Platform& p = reprap.GetPlatform();
+		p.Message(mtype, "=== Expansion ===\n");
+		if (dueXnBoardType != ExpansionBoardType::none)
+		{
+			p.MessageF(mtype, "DueX I2C errors %" PRIu32 "\n", dueXnExpander.GetErrorCount());
+		}
+		if (additionalIoExpanderPresent)
+		{
+			p.MessageF(mtype, "Additional expander I2C errors %" PRIu32 "\n", additionalIoExpander.GetErrorCount());
+		}
+	}
+
 	// Diagnose the SX1509 by setting all pins as inputs and reading them
 	uint16_t DiagnosticRead()
 	{

@@ -18,13 +18,13 @@ public:
 	ZLeadscrewKinematics(KinematicsType k);
 	ZLeadscrewKinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0);
 
-	bool Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) override;
+	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) override;
 	bool SupportsAutoCalibration() const override;
-	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply) override;
+	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) override;
 	bool WriteResumeSettings(FileStore *f) const override;
 
 private:
-	void AppendCorrections(const floatc_t corrections[], StringRef& reply) const;
+	void AppendCorrections(const floatc_t corrections[], const StringRef& reply) const;
 
 	static const unsigned int MaxLeadscrews = 4;
 

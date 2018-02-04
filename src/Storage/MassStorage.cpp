@@ -81,7 +81,7 @@ void MassStorage::Init()
 	if (reply.strlen() != 0)
 	{
 		delay(3000);		// Wait a few seconds so users have a chance to see this
-		reprap.GetPlatform().Message(UsbMessage, reply.Pointer());
+		reprap.GetPlatform().MessageF(UsbMessage, "%s\n", reply.Pointer());
 	}
 }
 
@@ -184,7 +184,7 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 // Open a directory to read a file list. Returns true if it contains any files, false otherwise.
 bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 {
-	TCHAR loc[FILENAME_LENGTH + 1];
+	TCHAR loc[MaxFilenameLength + 1];
 
 	// Remove the trailing '/' from the directory name
 	SafeStrncpy(loc, directory, ARRAY_SIZE(loc));

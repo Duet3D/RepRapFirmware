@@ -137,8 +137,8 @@ void Logger::Flush(bool forced)
 // Caller must already have checked and set inLogger.
 bool Logger::WriteDateTime(time_t time)
 {
-	char bufferSpace[30];
-	StringRef buf(bufferSpace, ARRAY_SIZE(bufferSpace));
+	String<30> bufferSpace;
+	const StringRef buf = bufferSpace.GetRef();
 	if (time == 0)
 	{
 		const uint32_t timeSincePowerUp = (uint32_t)(millis64()/1000u);

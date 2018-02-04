@@ -811,7 +811,7 @@ const char *FtpResponder::GetParameter(const char *after) const
 
 void FtpResponder::ChangeDirectory(const char *newDirectory)
 {
-	char combinedPath[FILENAME_LENGTH];
+	char combinedPath[MaxFilenameLength];
 	if (newDirectory[0] != 0)
 	{
 		// Prepare the new directory path

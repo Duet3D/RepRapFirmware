@@ -63,9 +63,9 @@ public:
 	float GetAveragePWM() const;					// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
 	uint32_t GetLastSampleTime() const;				// Return when the temp sensor was last sampled
 	float GetAccumulator() const;					// Return the integral accumulator
-	void StartAutoTune(float targetTemp, float maxPwm, StringRef& reply);	// Start an auto tune cycle for this PID
+	void StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply);	// Start an auto tune cycle for this PID
 	bool IsTuning() const;
-	void GetAutoTuneStatus(StringRef& reply);		// Get the auto tune status or last result
+	void GetAutoTuneStatus(const StringRef& reply);	// Get the auto tune status or last result
 
 	const FopDt& GetModel() const					// Get the process model
 		{ return model; }

@@ -32,23 +32,23 @@ const uint8_t DefaultOscDivider = 5;		// a clock divider of 2 ^ (5 - 1) = 16 giv
 class SX1509
 {
 private:
-	uint8_t deviceAddress; // I2C Address of SX1509
+	uint8_t deviceAddress;					// I2C Address of SX1509
 
 	// Misc variables:
-	uint32_t _clkX;
+	uint32_t _clkX;							// clock speed
 	uint16_t pwmPins;						// bitmap of pins configured as PWM output pins
+	uint32_t errorCount;
 
 	// Read Functions:
 	uint8_t readByte(uint8_t registerAddress);
 	uint16_t readWord(uint8_t registerAddress);
 	uint32_t readDword(uint8_t registerAddress);
-	void readBytes(uint8_t firstRegisterAddress, uint8_t * destination, uint8_t length);
 
 	// Write functions:
 	void writeByte(uint8_t registerAddress, uint8_t writeValue);
 	void writeWord(uint8_t registerAddress, uint16_t writeValue);
 	void writeDword(uint8_t registerAddress, uint32_t writeValue);
-	void writeBytes(uint8_t firstRegisterAddress, uint8_t * writeArray, uint8_t length);
+
 	void setBitsInWord(uint8_t registerAddress, uint16_t bits);
 	void clearBitsInWord(uint8_t registerAddress, uint16_t bits);
 	void analogWriteMultiple(uint16_t pins, uint8_t pwm);
@@ -69,6 +69,8 @@ public:
 	//		SX1509, and sets up the private deviceAddress variable.
 	// -----------------------------------------------------------------------------
 	SX1509();
+
+	uint32_t GetErrorCount() const { return errorCount; }
 
 	// -----------------------------------------------------------------------------
 	// begin(uint8_t address): This function initializes the SX1509.

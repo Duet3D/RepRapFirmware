@@ -13,7 +13,7 @@
 struct FileInfo
 {
 	bool isDirectory;
-	char fileName[FILENAME_LENGTH];
+	char fileName[MaxFilenameLength];
 	uint32_t size;
 	time_t lastModified;
 };
@@ -92,7 +92,7 @@ private:
 	SdCardInfo info[NumSdCards];
 
 	DIR findDir;
-	char combinedName[FILENAME_LENGTH + 1];
+	char combinedName[MaxFilenameLength + 1];
 	FileWriteBuffer *freeWriteBuffers;
 
 	FileStore files[MAX_FILES];

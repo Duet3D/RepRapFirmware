@@ -58,14 +58,14 @@ constexpr bool BACKWARDS = !FORWARDS;
 constexpr size_t VrefFilterIndex = Heaters;
 constexpr size_t VssaFilterIndex = Heaters + 1;
 # if HAS_CPU_TEMP_SENSOR
-constexpr size_t NumAdcFilters = Heaters + 3;
 constexpr size_t CpuTempFilterIndex = Heaters + 2;
+constexpr size_t NumAdcFilters = Heaters + 3;
 # else
 constexpr size_t NumAdcFilters = Heaters + 2;
 # endif
 #elif HAS_CPU_TEMP_SENSOR
-constexpr size_t NumAdcFilters = Heaters + 1;
 constexpr size_t CpuTempFilterIndex = Heaters;
+constexpr size_t NumAdcFilters = Heaters + 1;
 #else
 constexpr size_t NumAdcFilters = Heaters;
 #endif
@@ -318,7 +318,7 @@ public:
 	Compatibility Emulating() const;
 	void SetEmulating(Compatibility c);
 	void Diagnostics(MessageType mtype);
-	bool DiagnosticTest(GCodeBuffer& gb, StringRef& reply, int d);
+	bool DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d);
 	void ClassReport(uint32_t &lastTime);  			// Called on Spin() return to check everything's live.
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
@@ -487,7 +487,7 @@ public:
 	bool HomingZWithProbe() const;
 	bool WritePlatformParameters(FileStore *f, bool includingG31) const;
 	void SetProbing(bool isProbing);
-	bool ProgramZProbe(GCodeBuffer& gb, StringRef& reply);
+	bool ProgramZProbe(GCodeBuffer& gb, const StringRef& reply);
 	void SetZProbeModState(bool b) const;
 
 	// Heat and temperature
@@ -508,7 +508,7 @@ public:
 	void UpdateConfiguredHeaters();
 
 	// Fans
-	bool ConfigureFan(unsigned int mcode, int fanNumber, GCodeBuffer& gb, StringRef& reply, bool& error);
+	bool ConfigureFan(unsigned int mcode, int fanNumber, GCodeBuffer& gb, const StringRef& reply, bool& error);
 
 	float GetFanValue(size_t fan) const;					// Result is returned in percent
 	void SetFanValue(size_t fan, float speed);				// Accepts values between 0..1 and 1..255
@@ -521,7 +521,7 @@ public:
 
 	// Flash operations
 	void UpdateFirmware();
-	bool CheckFirmwareUpdatePrerequisites(StringRef& reply);
+	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply);
 
 	// AUX device
 	void Beep(int freq, int ms);
@@ -561,7 +561,7 @@ public:
 #endif
 
 #if HAS_STALL_DETECT
-	bool ConfigureStallDetection(GCodeBuffer& gb, StringRef& reply);
+	bool ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply);
 #endif
 
 	// User I/O and servo support
@@ -571,7 +571,7 @@ public:
 	Pin GetEndstopPin(int endstop) const;			// Get the firmware pin number for an endstop
 
 	// Logging support
-	bool ConfigureLogging(GCodeBuffer& gb, StringRef& reply);
+	bool ConfigureLogging(GCodeBuffer& gb, const StringRef& reply);
 
 	// Ancilliary PWM
 	void SetExtrusionAncilliaryPwmValue(float v);

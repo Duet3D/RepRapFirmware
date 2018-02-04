@@ -131,9 +131,9 @@ public:
 	void Reset();														// Reset some parameter to defaults
 	bool ReadMove(RawMove& m);											// Called by the Move class to get a movement set by the last G Code
 	void ClearMove();
-	bool QueueFileToPrint(const char* fileName, StringRef& reply);		// Open a file of G Codes to run
+	bool QueueFileToPrint(const char* fileName, const StringRef& reply);	// Open a file of G Codes to run
 	void StartPrinting();												// Start printing the file already selected
-	void GetCurrentCoordinates(StringRef& s) const;						// Write where we are into a string
+	void GetCurrentCoordinates(const StringRef& s) const;				// Write where we are into a string
 	bool DoingFileMacro() const;										// Or still busy processing a macro file?
 	float FractionOfFilePrinted() const;								// Get fraction of file printed
 	void Diagnostics(MessageType mtype);								// Send helpful information out
@@ -195,6 +195,10 @@ public:
 
 	const char *GetAxisLetters() const { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
 
+#if SUPPORT_12864_LCD
+	bool ProcessCommandFromLcd(const char *cmd);						// Process a GCode command from the 12864 LCD returning true if the command was accepted
+#endif
+
 private:
 	GCodes(const GCodes&);												// private copy constructor to prevent copying
 
@@ -221,37 +225,37 @@ private:
 	void GrabMovement(const GCodeBuffer& gb);							// Grab the movement lock even if it is already owned
 	void UnlockAll(const GCodeBuffer& gb);								// Release all locks
 
-	void StartNextGCode(GCodeBuffer& gb, StringRef& reply);				// Fetch a new or old GCode and process it
-	void RunStateMachine(GCodeBuffer& gb, StringRef& reply);			// Execute a step of the state machine
-	void DoFilePrint(GCodeBuffer& gb, StringRef& reply);				// Get G Codes from a file and print them
+	void StartNextGCode(GCodeBuffer& gb, const StringRef& reply);		// Fetch a new or old GCode and process it
+	void RunStateMachine(GCodeBuffer& gb, const StringRef& reply);		// Execute a step of the state machine
+	void DoFilePrint(GCodeBuffer& gb, const StringRef& reply);			// Get G Codes from a file and print them
 	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning = 0);
 																		// Run a GCode macro file, optionally report error if not found
 	void FileMacroCyclesReturn(GCodeBuffer& gb);						// End a macro
 
-	bool ActOnCode(GCodeBuffer& gb, StringRef& reply);					// Do a G, M or T Code
-	bool HandleGcode(GCodeBuffer& gb, StringRef& reply);				// Do a G code
-	bool HandleMcode(GCodeBuffer& gb, StringRef& reply);				// Do an M code
-	bool HandleTcode(GCodeBuffer& gb, StringRef& reply);				// Do a T code
-	bool HandleResult(GCodeBuffer& gb, GCodeResult rslt, StringRef& reply);
+	bool ActOnCode(GCodeBuffer& gb, const StringRef& reply);			// Do a G, M or T Code
+	bool HandleGcode(GCodeBuffer& gb, const StringRef& reply);			// Do a G code
+	bool HandleMcode(GCodeBuffer& gb, const StringRef& reply);			// Do an M code
+	bool HandleTcode(GCodeBuffer& gb, const StringRef& reply);			// Do a T code
+	bool HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply);
 	void HandleReply(GCodeBuffer& gb, bool error, const char *reply);	// Handle G-Code replies
 	void HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply);
 
-	bool DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinated) __attribute__((hot));	// Execute a straight move returning true if an error was written to 'reply'
+	bool DoStraightMove(GCodeBuffer& gb, const StringRef& reply, bool isCoordinated) __attribute__((hot));	// Execute a straight move returning true if an error was written to 'reply'
 	bool DoArcMove(GCodeBuffer& gb, bool clockwise)						// Execute an arc move returning true if it was badly-formed
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
 	void FinaliseMove(const GCodeBuffer& gb);							// Adjust the move parameters to account for segmentation and/or part of the move having been done already
 
 	GCodeResult DoDwell(GCodeBuffer& gb);								// Wait for a bit
 	GCodeResult DoDwellTime(GCodeBuffer& gb, uint32_t dwellMillis);		// Really wait for a bit
-	GCodeResult DoHome(GCodeBuffer& gb, StringRef& reply);				// Home some axes
-	GCodeResult ExecuteG30(GCodeBuffer& gb, StringRef& reply);			// Probes at a given position - see the comment at the head of the function itself
-	void SetBedEquationWithProbe(int sParam, StringRef& reply);			// Probes a series of points and sets the bed equation
-	GCodeResult SetPrintZProbe(GCodeBuffer& gb, StringRef& reply);		// Either return the probe value, or set its threshold
-	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, StringRef& reply);	// Deal with a G10
-	GCodeResult SetPositions(GCodeBuffer& gb);							// Deal with a G92
-	GCodeResult DoDriveMapping(GCodeBuffer& gb, StringRef& reply);		// Deal with a M584
-	GCodeResult ProbeTool(GCodeBuffer& gb, StringRef& reply);			// Deal with a M585
-	GCodeResult SetDateTime(GCodeBuffer& gb, StringRef& reply);			// Deal with a M905
+	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply);		// Home some axes
+	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply);	// Probes at a given position - see the comment at the head of the function itself
+	void SetBedEquationWithProbe(int sParam, const StringRef& reply);	// Probes a series of points and sets the bed equation
+	GCodeResult SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply);		// Either return the probe value, or set its threshold
+	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply);	// Deal with a G10
+	GCodeResult SetPositions(GCodeBuffer& gb);								// Deal with a G92
+	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply);	// Deal with a M584
+	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply);			// Deal with a M585
+	GCodeResult SetDateTime(GCodeBuffer& gb,const  StringRef& reply);		// Deal with a M905
 
 	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType); // Set up the extrusion and feed rate of a move for the Move class
 
@@ -266,18 +270,18 @@ private:
 	GCodeResult OffsetAxes(GCodeBuffer& gb);							// Set offsets
 
 #if SUPPORT_WORKPLACE_COORDINATES
-	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, StringRef& reply);	// Set workspace coordinates
+	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply);	// Set workspace coordinates
 #endif
 
-	bool SetHeaterProtection(GCodeBuffer &gb, StringRef &reply);		// Configure heater protection (M143). Returns true if an error occurred
-	void SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply); // Set the P/I/D parameters for a heater
-	GCodeResult SetHeaterParameters(GCodeBuffer& gb, StringRef& reply);	// Set the thermistor and ADC parameters for a heater, returning true if an error occurs
-	bool ManageTool(GCodeBuffer& gb, StringRef& reply);					// Create a new tool definition, returning true if an error was reported
-	void SetToolHeaters(Tool *tool, float temperature, bool both);		// Set all a tool's heaters to the temperature, for M104/M109
+	bool SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply);			// Configure heater protection (M143). Returns true if an error occurred
+	void SetPidParameters(GCodeBuffer& gb, int heater, const StringRef& reply); // Set the P/I/D parameters for a heater
+	GCodeResult SetHeaterParameters(GCodeBuffer& gb, const StringRef& reply);	// Set the thermistor and ADC parameters for a heater, returning true if an error occurs
+	bool ManageTool(GCodeBuffer& gb, const StringRef& reply);					// Create a new tool definition, returning true if an error was reported
+	void SetToolHeaters(Tool *tool, float temperature, bool both);				// Set all a tool's heaters to the temperature, for M104/M109
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling) const; // Wait for the heaters associated with the specified tool to reach their set temperatures
-	void GenerateTemperatureReport(StringRef& reply) const;				// Store a standard-format temperature report in reply
+	void GenerateTemperatureReport(const StringRef& reply) const;				// Store a standard-format temperature report in reply
 	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const;	// Generate a M408 response
-	void CheckReportDue(GCodeBuffer& gb, StringRef& reply) const;		// Check whether we need to report temperatures or status
+	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const;		// Check whether we need to report temperatures or status
 
 	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const;	// Save position to a restore point
 	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb);		// Restore user position from a restore point
@@ -289,10 +293,10 @@ private:
 	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]);	// Convert head reference point coordinates to user coordinates
 	const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text
 	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);			// Retract or un-retract filaments
-	GCodeResult LoadFilament(GCodeBuffer& gb, StringRef& reply);		// Load the specified filament into a tool
-	GCodeResult UnloadFilament(GCodeBuffer& gb, StringRef& reply);		 // Unload the current filament from a tool
+	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply);		// Load the specified filament into a tool
+	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply);		 // Unload the current filament from a tool
 	bool ChangeMicrostepping(size_t drive, unsigned int microsteps, int mode) const;	// Change microstepping on the specified drive
-	void ListTriggers(StringRef reply, TriggerInputsBitmap mask);		// Append a list of trigger inputs to a message
+	void ListTriggers(const StringRef& reply, TriggerInputsBitmap mask);		// Append a list of trigger inputs to a message
 	void CheckTriggers();												// Check for and execute triggers
 	void CheckFilament();												// Check for and respond to filament errors
 	void CheckHeaterFault();											// Check for and respond to a heater fault, returning true if we should exit
@@ -308,17 +312,17 @@ private:
 	void SetMappedFanSpeed();											// Set the speeds of fans mapped for the current tool
 	void SaveFanSpeeds();												// Save the speeds of all fans
 
-	GCodeResult SetOrReportZProbe(GCodeBuffer& gb, StringRef &reply);	// Handle M558
-	GCodeResult DefineGrid(GCodeBuffer& gb, StringRef &reply);			// Define the probing grid, returning true if error
-	bool LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const;		// Load the height map from file
-	bool SaveHeightMap(GCodeBuffer& gb, StringRef& reply) const;		// Save the height map to file
-	GCodeResult ProbeGrid(GCodeBuffer& gb, StringRef& reply);			// Start probing the grid, returning true if we didn't because of an error
-	GCodeResult CheckOrConfigureTrigger(GCodeBuffer& gb, StringRef& reply, int code);	// Handle M581 and M582
-	GCodeResult UpdateFirmware(GCodeBuffer& gb, StringRef &reply);		// Handle M997
-	GCodeResult SendI2c(GCodeBuffer& gb, StringRef &reply);				// Handle M260
-	GCodeResult ReceiveI2c(GCodeBuffer& gb, StringRef &reply);			// Handle M261
+	GCodeResult SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply);	// Handle M558
+	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply);			// Define the probing grid, returning true if error
+	bool LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) const;		// Load the height map from file
+	bool SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;		// Save the height map to file
+	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply);			// Start probing the grid, returning true if we didn't because of an error
+	GCodeResult CheckOrConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, int code);	// Handle M581 and M582
+	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply);		// Handle M997
+	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply);				// Handle M260
+	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply);			// Handle M261
 
-	bool WriteConfigOverrideFile(GCodeBuffer& gb, StringRef& reply, const char *fileName) const; // Write the config-override file
+	bool WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply, const char *fileName) const; // Write the config-override file
 	void CopyConfigFinalValues(GCodeBuffer& gb);						// Copy the feed rate etc. from the daemon to the input channels
 
 	void ClearBabyStepping() { currentBabyStepZOffset = 0.0; }
@@ -326,7 +330,7 @@ private:
 	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;				// Decide which device to display a message box on
 	void DoManualProbe(GCodeBuffer& gb);								// Do a manual bed probe
 
-	void AppendAxes(StringRef& reply, AxesBitmap axes) const;			// Append a list of axes to a string
+	void AppendAxes(const StringRef& reply, AxesBitmap axes) const;			// Append a list of axes to a string
 
 	void EndSimulation(GCodeBuffer *gb);								// Restore positions etc. when exiting simulation mode
 	bool IsCodeQueueIdle() const;										// Return true if the code queue is idle
@@ -343,7 +347,11 @@ private:
 	StreamGCodeInput* serialInput;										// ...
 	StreamGCodeInput* auxInput;											// ...for the GCodeBuffers below
 
+#if SUPPORT_12864_LCD
+	GCodeBuffer* gcodeSources[9];										// The various sources of gcodes
+#else
 	GCodeBuffer* gcodeSources[8];										// The various sources of gcodes
+#endif
 
 	GCodeBuffer*& httpGCode = gcodeSources[0];
 	GCodeBuffer*& telnetGCode = gcodeSources[1];
@@ -352,7 +360,12 @@ private:
 	GCodeBuffer*& auxGCode = gcodeSources[4];							// This one is for the LCD display on the async serial interface
 	GCodeBuffer*& daemonGCode = gcodeSources[5];						// Used for executing config.g and trigger macro files
 	GCodeBuffer*& queuedGCode = gcodeSources[6];
+#if SUPPORT_12864_LCD
+	GCodeBuffer*& lcdGCode = gcodeSources[7];							// This one for the internally-supported LCD
+	GCodeBuffer*& autoPauseGCode = gcodeSources[8];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
+#else
 	GCodeBuffer*& autoPauseGCode = gcodeSources[7];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
+#endif
 
 	size_t nextGcodeSource;												// The one to check next
 
@@ -440,6 +453,8 @@ private:
 	float g30zStoppedHeight;					// the height to report after running G30 S-1
 	float g30zHeightError;						// the height error last time we probed
 	float g30PrevHeightError;					// the height error the previous time we probed
+	float g30zHeightErrorSum;					// the sum of the height errors for the current probe point
+	float g30zHeightErrorLowestDiff;			// the lowest difference we have seen between consecutive readings
 	uint32_t lastProbedTime;					// time in milliseconds that the probe was last triggered
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
 	size_t gridXindex, gridYindex;				// Which grid probe point is next
@@ -476,7 +491,7 @@ private:
 	FileStore *fileBeingHashed;
 	SHA1Context hash;
 	bool StartHash(const char* filename);
-	GCodeResult AdvanceHash(StringRef &reply);
+	GCodeResult AdvanceHash(const StringRef &reply);
 
 	// Filament monitoring
 	FilamentSensorStatus lastFilamentError;

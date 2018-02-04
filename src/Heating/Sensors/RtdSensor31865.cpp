@@ -42,7 +42,7 @@ RtdSensor31865::RtdSensor31865(unsigned int channel)
 }
 
 // Configure this temperature sensor
-bool RtdSensor31865::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, StringRef& reply, bool& error)
+bool RtdSensor31865::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
 	if (mCode == 305)
 	{

@@ -44,12 +44,12 @@ public:
 	void Start();
 	void Stop();
 
-	void EnableProtocol(int protocol, int port, int secure, StringRef& reply);
-	void DisableProtocol(int protocol, StringRef& reply);
-	void ReportProtocols(StringRef& reply) const;
+	void EnableProtocol(int protocol, int port, int secure, const StringRef& reply);
+	void DisableProtocol(int protocol, const StringRef& reply);
+	void ReportProtocols(const StringRef& reply) const;
 
-	void Enable(int mode, StringRef& reply);			// enable or disable the network
-	bool GetNetworkState(StringRef& reply);
+	void Enable(int mode, const StringRef& reply);			// enable or disable the network
+	bool GetNetworkState(const StringRef& reply);
 	int EnableState() const;
 
 	void SetHostname(const char *name);
@@ -87,7 +87,7 @@ private:
 	void ShutdownProtocol(Protocol protocol)
 	pre(protocol < NumProtocols);
 
-	void ReportOneProtocol(Protocol protocol, StringRef& reply) const
+	void ReportOneProtocol(Protocol protocol, const StringRef& reply) const
 	pre(protocol < NumProtocols);
 
 	void SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[]);

@@ -587,8 +587,8 @@ void Webserver::HttpInterpreter::DoFastUpload()
 		}
 
 		// Grab a copy of the filename and finish this upload
-		char filename[FILENAME_LENGTH];
-		SafeStrncpy(filename, filenameBeingUploaded, FILENAME_LENGTH);
+		char filename[MaxFilenameLength];
+		SafeStrncpy(filename, filenameBeingUploaded, MaxFilenameLength);
 		FinishUpload(postFileLength);
 
 		// Update the file timestamp if it was specified before
@@ -628,9 +628,9 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 		}
 
 		// Try to open a gzipped version of the file first
-		if (!StringEndsWith(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= FILENAME_LENGTH)
+		if (!StringEndsWith(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
 		{
-			char nameBuf[FILENAME_LENGTH + 1];
+			char nameBuf[MaxFilenameLength + 1];
 			strcpy(nameBuf, nameOfFileToSend);
 			strcat(nameBuf, ".gz");
 			fileToSend = platform->OpenFile(platform->GetWebDir(), nameBuf, OpenMode::read);
@@ -795,8 +795,8 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 		if (StringEquals(command, "configfile"))	// rr_configfile [DEPRECATED]
 		{
 			const char *configPath = platform->GetMassStorage()->CombineName(platform->GetSysDir(), platform->GetConfigFile());
-			char fileName[FILENAME_LENGTH];
-			SafeStrncpy(fileName, configPath, FILENAME_LENGTH);
+			char fileName[MaxFilenameLength];
+			SafeStrncpy(fileName, configPath, MaxFilenameLength);
 
 			SendFile(fileName, false);
 			return;
@@ -2097,8 +2097,8 @@ void Webserver::FtpInterpreter::ProcessLine()
 				if (filename[0] != '/')
 				{
 					const char *temp = platform->GetMassStorage()->CombineName(currentDir, filename);
-					SafeStrncpy(filename, temp, FILENAME_LENGTH);
-					filename[FILENAME_LENGTH - 1] = 0;
+					SafeStrncpy(filename, temp, MaxFilenameLength);
+					filename[MaxFilenameLength - 1] = 0;
 				}
 
 				if (platform->GetMassStorage()->FileExists(filename))
@@ -2113,9 +2113,9 @@ void Webserver::FtpInterpreter::ProcessLine()
 			else if (StringStartsWith(clientMessage, "RNTO"))
 			{
 				// Copy origin path to temp oldFilename and read new path
-				char oldFilename[FILENAME_LENGTH];
-				SafeStrncpy(oldFilename, filename, FILENAME_LENGTH);
-				oldFilename[FILENAME_LENGTH - 1] = 0;
+				char oldFilename[MaxFilenameLength];
+				SafeStrncpy(oldFilename, filename, MaxFilenameLength);
+				oldFilename[MaxFilenameLength - 1] = 0;
 				ReadFilename(4);
 
 				const char *newFilename = platform->GetMassStorage()->CombineName(currentDir, filename);
@@ -2326,7 +2326,7 @@ void Webserver::FtpInterpreter::ReadFilename(uint16_t start)
 {
 	int filenameLength = 0;
 	bool readingPath = false;
-	for(int i = start; i < (int)clientPointer && filenameLength < (int)(FILENAME_LENGTH - 1); i++)
+	for(int i = start; i < (int)clientPointer && filenameLength < (int)(MaxFilenameLength - 1); i++)
 	{
 		switch (clientMessage[i])
 		{
@@ -2356,15 +2356,15 @@ void Webserver::FtpInterpreter::ReadFilename(uint16_t start)
 
 void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 {
-	char combinedPath[FILENAME_LENGTH];
+	char combinedPath[MaxFilenameLength];
 
 	if (newDirectory[0] != 0)
 	{
 		/* Prepare the new directory path */
 		if (newDirectory[0] == '/') // absolute path
 		{
-			SafeStrncpy(combinedPath, newDirectory, FILENAME_LENGTH);
-			combinedPath[FILENAME_LENGTH - 1] = 0;
+			SafeStrncpy(combinedPath, newDirectory, MaxFilenameLength);
+			combinedPath[MaxFilenameLength - 1] = 0;
 		}
 		else if (StringEquals(newDirectory, "."))
 		{
@@ -2380,7 +2380,7 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 			}
 			else
 			{
-				SafeStrncpy(combinedPath, currentDir, FILENAME_LENGTH);
+				SafeStrncpy(combinedPath, currentDir, MaxFilenameLength);
 				for(int i=strlen(combinedPath) -2; i>=0; i--)
 				{
 					if (combinedPath[i] == '/')
@@ -2393,12 +2393,12 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 		}
 		else // go to child directory
 		{
-			SafeStrncpy(combinedPath, currentDir, FILENAME_LENGTH);
+			SafeStrncpy(combinedPath, currentDir, MaxFilenameLength);
 			if (strlen(currentDir) > 1)
 			{
-				SafeStrncat(combinedPath, "/", FILENAME_LENGTH);
+				SafeStrncat(combinedPath, "/", MaxFilenameLength);
 			}
-			SafeStrncat(combinedPath, newDirectory, FILENAME_LENGTH);
+			SafeStrncat(combinedPath, newDirectory, MaxFilenameLength);
 		}
 
 		/* Make sure the new path does not end with a '/', because FatFs won't see the directory otherwise */
@@ -2410,7 +2410,7 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 		/* Verify path and change it */
 		if (platform->GetMassStorage()->DirectoryExists(combinedPath))
 		{
-			SafeStrncpy(currentDir, combinedPath, FILENAME_LENGTH);
+			SafeStrncpy(currentDir, combinedPath, MaxFilenameLength);
 			SendReply(250, "Directory successfully changed.");
 		}
 		else

@@ -40,9 +40,9 @@ public:
 	void Start() override;
 	void Stop() override;
 
-	void EnableProtocol(int protocol, int port, int secure, StringRef& reply) override;
-	void DisableProtocol(int protocol, StringRef& reply) override;
-	void ReportProtocols(StringRef& reply) const override;
+	void EnableProtocol(int protocol, int port, int secure, const StringRef& reply) override;
+	void DisableProtocol(int protocol, const StringRef& reply) override;
+	void ReportProtocols(const StringRef& reply) const override;
 
 	// LwIP interfaces
 	void ResetCallback();
@@ -53,8 +53,8 @@ public:
 	bool ConnectionEstablished(tcp_pcb *pcb);
 
 	// Global settings
-	void Enable(int mode, StringRef& reply) override;
-	bool GetNetworkState(StringRef& reply) override;
+	void Enable(int mode, const StringRef& reply) override;
+	bool GetNetworkState(const StringRef& reply) override;
 	int EnableState() const override;
 
 	const uint8_t *GetIPAddress() const override;
@@ -88,7 +88,7 @@ private:
 	void ShutdownProtocol(Protocol protocol)
 	pre(protocol < NumProtocols);
 
-	void ReportOneProtocol(Protocol protocol, StringRef& reply) const
+	void ReportOneProtocol(Protocol protocol, const StringRef& reply) const
 	pre(protocol < NumProtocols);
 
 	Platform& platform;

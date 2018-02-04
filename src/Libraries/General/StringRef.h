@@ -22,7 +22,7 @@ class StringRef
 	size_t len;		// number of characters in the storage
 
 public:
-	StringRef(char *pp, size_t pl) : p(pp), len(pl) { p[0] = 0; }
+	StringRef(char *pp, size_t pl) : p(pp), len(pl) { }
 
 	size_t Length() const { return len; }
 	size_t strlen() const;
@@ -60,25 +60,36 @@ public:
 	const char *Pointer() const { return storage; }
 	char& operator[](size_t index) { return storage[index]; }
 	char operator[](size_t index) const { return storage[index]; }
-	size_t MaxLength() const { return Len; }
+	constexpr size_t MaxLength() const { return Len; }
 
 	void Clear() { storage[0] = 0; }
-	size_t cat(char c);
+	size_t copy(const char *src) { return GetRef().copy(src); }
+	size_t cat(const char *src) { return GetRef().cat(src); }
+	size_t cat(char c) { return GetRef().cat(c); }
+
+	void CopyAndPad(const char *src);
+	bool ConstantTimeEquals(String<Len> other) const;
 
 private:
 	char storage[Len + 1];
 };
 
-// Append a character if it will fit and return the new length
-template<size_t Len> size_t String<Len>::cat(char c)
+// Copy some text into this string and pad it with nulls so we can do a constant time compare
+template<size_t Len> void String<Len>::CopyAndPad(const char* src)
 {
-	size_t length = strlen();
-	if (length + 1 < Len)
+	memset(storage, 0, Len + 1);
+	copy(src);
+}
+
+// Do a constant time compare. Both this string and the other one much be padded with nulls.
+template<size_t Len> bool String<Len>::ConstantTimeEquals(String<Len> other) const
+{
+	char rslt = 0;
+	for (size_t i = 0; i < Len; ++i)
 	{
-		storage[length++] = c;
-		storage[length] = 0;
+		rslt |= (storage[i] ^ other.storage[i]);
 	}
-	return length;
+	return rslt == 0;
 }
 
 #endif /* STRINGREF_H_ */

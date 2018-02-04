@@ -10,6 +10,7 @@
 
 #include "ecv.h"
 #include "Core.h"
+#include "MessageType.h"
 
 enum class ExpansionBoardType : uint8_t
 {
@@ -31,6 +32,7 @@ namespace DuetExpansion
 	void AnalogOut(Pin pin, float pwm);							// Set the PWM value on this pin
 	uint16_t DiagnosticRead();									// Diagnose the SX1509 by setting all pins as inputs and reading them
 	void Spin(bool full);										// Task to keep the endstop inputs up to date
+	void Diagnostics(MessageType mtype);						// Print diagnostic data
 };
 
 #endif /* SRC_DUETNG_DUEXN_H_ */

@@ -47,15 +47,15 @@ public:
 	void Start() override;
 	void Stop() override;
 
-	void EnableProtocol(int protocol, int port, int secure, StringRef& reply) override;
-	void DisableProtocol(int protocol, StringRef& reply) override;
-	void ReportProtocols(StringRef& reply) const override;
+	void EnableProtocol(int protocol, int port, int secure, const StringRef& reply) override;
+	void DisableProtocol(int protocol, const StringRef& reply) override;
+	void ReportProtocols(const StringRef& reply) const override;
 
-	void Enable(int mode, const StringRef& ssid, StringRef& reply) override;			// enable or disable the network
-	bool GetNetworkState(StringRef& reply) override;
+	void Enable(int mode, const StringRef& ssid, const StringRef& reply) override;			// enable or disable the network
+	bool GetNetworkState(const StringRef& reply) override;
 	int EnableState() const override;
 
-	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer &gb, StringRef& reply, OutputBuffer*& longReply);
+	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply);
 
 	void SetHostname(const char *hostname);
 
@@ -103,7 +103,7 @@ private:
 	void ShutdownProtocol(Protocol protocol)
 	pre(protocol < NumProtocols);
 
-	void ReportOneProtocol(Protocol protocol, StringRef& reply) const
+	void ReportOneProtocol(Protocol protocol, const StringRef& reply) const
 	pre(protocol < NumProtocols);
 
 	Protocol GetProtocolByLocalPort(Port port) const;

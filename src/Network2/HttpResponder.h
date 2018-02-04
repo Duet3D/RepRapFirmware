@@ -102,7 +102,7 @@ private:
 	size_t numHeaderKeys;							// number of keys we have found, <= maxHeaders
 
 	// rr_fileinfo requests
-	char filenameBeingProcessed[FILENAME_LENGTH];	// The filename being processed (for rr_fileinfo)
+	char filenameBeingProcessed[MaxFilenameLength];	// The filename being processed (for rr_fileinfo)
 
 	// Keeping track of HTTP sessions
 	static HttpSession sessions[MaxHttpSessions];

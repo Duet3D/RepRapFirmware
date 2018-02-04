@@ -27,11 +27,11 @@ Distributed as-is; no warranty is given.
 #include "SX1509Registers.h"
 #include "Pins.h"
 
-SX1509::SX1509() : _clkX(0)
+SX1509::SX1509() : _clkX(0), errorCount(0)
 {
 }
 
-// Test for the presence of a SX1509B. The I2C subsystem muct be initialised before calling this.
+// Test for the presence of a SX1509B. The I2C subsystem must be initialised before calling this.
 bool SX1509::begin(uint8_t address)
 {
 	// Store the received parameters into member variables
@@ -646,7 +646,11 @@ uint8_t SX1509::readByte(uint8_t registerAddress)
 
 	I2C_IFACE.beginTransmission(deviceAddress);
 	I2C_IFACE.write(registerAddress);
-	I2C_IFACE.endTransmission();
+	if (I2C_IFACE.endTransmission() != 0)
+	{
+		++errorCount;
+		return 0;
+	}
 	I2C_IFACE.requestFrom(deviceAddress, (uint8_t) 1);
 
 	while ((I2C_IFACE.available() < 1) && (timeout != 0))
@@ -656,6 +660,7 @@ uint8_t SX1509::readByte(uint8_t registerAddress)
 		
 	if (timeout == 0)
 	{
+		++errorCount;
 		return 0;
 	}
 
@@ -673,7 +678,11 @@ uint16_t SX1509::readWord(uint8_t registerAddress)
 
 	I2C_IFACE.beginTransmission(deviceAddress);
 	I2C_IFACE.write(registerAddress);
-	I2C_IFACE.endTransmission();
+	if (I2C_IFACE.endTransmission() != 0)
+	{
+		++errorCount;
+		return 0;
+	}
 	I2C_IFACE.requestFrom(deviceAddress, (uint8_t) 2);
 
 	while (I2C_IFACE.available() < 2 && timeout != 0)
@@ -683,6 +692,7 @@ uint16_t SX1509::readWord(uint8_t registerAddress)
 		
 	if (timeout == 0)
 	{
+		++errorCount;
 		return 0;
 	}
 	
@@ -702,7 +712,11 @@ uint32_t SX1509::readDword(uint8_t registerAddress)
 
 	I2C_IFACE.beginTransmission(deviceAddress);
 	I2C_IFACE.write(registerAddress);
-	I2C_IFACE.endTransmission();
+	if (I2C_IFACE.endTransmission() != 0)
+	{
+		++errorCount;
+		return 0;
+	}
 	I2C_IFACE.requestFrom(deviceAddress, (uint8_t) 4);
 
 	while ((I2C_IFACE.available() < 4) && (timeout != 0))
@@ -712,6 +726,7 @@ uint32_t SX1509::readDword(uint8_t registerAddress)
 
 	if (timeout == 0)
 	{
+		++errorCount;
 		return 0;
 	}
 
@@ -725,27 +740,6 @@ uint32_t SX1509::readDword(uint8_t registerAddress)
 	return rslt;
 }
 
-// readBytes(uint8_t firstRegisterAddress, uint8_t * destination, uint8_t length)
-//	This function reads a series of bytes incrementing from a given address
-//	- firstRegsiterAddress is the first address to be read
-//	- destination is an array of bytes where the read values will be stored into
-//	- length is the number of bytes to be read
-//	- No return value.
-void SX1509::readBytes(uint8_t firstRegisterAddress, uint8_t * destination, uint8_t length)
-{
-	I2C_IFACE.beginTransmission(deviceAddress);
-	I2C_IFACE.write(firstRegisterAddress);
-	I2C_IFACE.endTransmission();
-	I2C_IFACE.requestFrom(deviceAddress, length);
-	
-	while (I2C_IFACE.available() < length) { }
-	
-	for (uint8_t i = 0; i < length; i++)
-	{
-		destination[i] = I2C_IFACE.read();
-	}
-}
-
 // writeByte(uint8_t registerAddress, uint8_t writeValue)
 //	This function writes a single uint8_t to a single register on the SX509.
 //	- writeValue is written to registerAddress
@@ -756,7 +750,10 @@ void SX1509::writeByte(uint8_t registerAddress, uint8_t writeValue)
 	I2C_IFACE.beginTransmission(deviceAddress);
 	I2C_IFACE.write(registerAddress);
 	I2C_IFACE.write(writeValue);
-	I2C_IFACE.endTransmission();
+	if (I2C_IFACE.endTransmission() != 0)
+	{
+		++errorCount;
+	}
 }
 
 // writeWord(uint8_t registerAddress, uint16_t writeValue)
@@ -770,7 +767,10 @@ void SX1509::writeWord(uint8_t registerAddress, uint16_t writeValue)
 	I2C_IFACE.write(registerAddress);
 	I2C_IFACE.write((uint8_t)(writeValue >> 8));
 	I2C_IFACE.write((uint8_t)writeValue);
-	I2C_IFACE.endTransmission();
+	if (I2C_IFACE.endTransmission() != 0)
+	{
+		++errorCount;
+	}
 }
 
 // writeDword(uint8_t registerAddress, uint32_t writeValue)
@@ -784,25 +784,10 @@ void SX1509::writeDword(uint8_t registerAddress, uint32_t writeValue)
 	I2C_IFACE.write((uint8_t)(writeValue >> 16));
 	I2C_IFACE.write((uint8_t)(writeValue >> 8));
 	I2C_IFACE.write((uint8_t)writeValue);
-	I2C_IFACE.endTransmission();
-}
-
-// writeBytes(uint8_t firstRegisterAddress, uint8_t * writeArray, uint8_t length)
-//	This function writes an array of bytes, beginning at a specific address
-//	- firstRegisterAddress is the initial register to be written.
-//		- All writes following will be at incremental register addresses.
-//	- writeArray should be an array of uint8_t values to be written.
-//	- length should be the number of bytes to be written.
-//	- no return value.
-void SX1509::writeBytes(uint8_t firstRegisterAddress, uint8_t * writeArray, uint8_t length)
-{
-	I2C_IFACE.beginTransmission(deviceAddress);
-	I2C_IFACE.write(firstRegisterAddress);
-	for (uint8_t i = 0; i < length; i++)
+	if (I2C_IFACE.endTransmission() != 0)
 	{
-		I2C_IFACE.write(writeArray[i]);
+		++errorCount;
 	}
-	I2C_IFACE.endTransmission();
 }
 
 // End

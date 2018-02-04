@@ -14,7 +14,7 @@ public:
 	// Configure the sensor from M305 parameters.
 	// If we find any parameters, process them and return true. If an error occurs while processing them, set 'error' to true and write an error message to 'reply.
 	// if we find no relevant parameters, report the current parameters to 'reply' and return 'false'.
-	virtual bool Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, StringRef& reply, bool& error);
+	virtual bool Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error);
 
 	// Initialise or re-initialise the temperature sensor
 	virtual void Init() = 0;
@@ -44,7 +44,7 @@ public:
 	static TemperatureSensor *Create(unsigned int channel);
 
 protected:
-	void CopyBasicHeaterDetails(unsigned int heater, StringRef& reply) const;
+	void CopyBasicHeaterDetails(unsigned int heater, const StringRef& reply) const;
 
 	static TemperatureError GetPT100Temperature(float& t, uint16_t ohmsx100);		// shared function used by two derived classes
 

@@ -162,19 +162,20 @@ constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
 
 const float DefaultGridSpacing = 20.0;					// Default bed probing grid spacing in mm
 
-static_assert(MaxProbePoints <= MaxGridProbePoints, "MaxProbePoints must be <= MaxGridProbePoints");
-static_assert(MaxCalibrationPoints <= MaxProbePoints, "MaxDeltaCalibrationPoints must be <= MaxProbePoints");
+static_assert(MaxCalibrationPoints <= MaxProbePoints, "MaxCalibrationPoints must be <= MaxProbePoints");
 
 // SD card
 constexpr uint32_t SdCardDetectDebounceMillis = 200;	// How long we give the SD card to settle in the socket
 
 // Z probing
-constexpr float DEFAULT_Z_DIVE = 5.0;					// Millimetres
-constexpr float DEFAULT_PROBE_SPEED = 2.0;				// Default Z probing speed mm/sec
-constexpr float DEFAULT_TRAVEL_SPEED = 100.0;			// Default speed for travel to probe points
+constexpr float DefaultZDive = 5.0;						// Millimetres
+constexpr float DefaultProbingSpeed = 2.0;				// Default Z probing speed mm/sec
+constexpr float DefaultZProbeTravelSpeed = 100.0;		// Default speed for travel to probe points
 constexpr float ZProbeMaxAcceleration = 250.0;			// Maximum Z acceleration to use at the start of a probing move
 constexpr size_t MaxZProbeProgramBytes = 8;				// Maximum number of bytes in a Z probe program
 constexpr uint32_t ProbingSpeedReductionFactor = 3;		// The factor by which we reduce the Z probing speed when we get a 'near' indication
+constexpr float DefaultZProbeTolerance = 0.03;			// How close the Z probe trigger height from consecutive taps must be
+constexpr uint8_t DefaultZProbeTaps = 1;				// The maximum number of times we probe each point
 
 constexpr float TRIANGLE_ZERO = -0.001;					// Millimetres
 constexpr float SILLY_Z_VALUE = -9999.0;				// Millimetres
@@ -191,13 +192,12 @@ constexpr size_t GCODE_LENGTH = 161;					// maximum number of non-comment charac
 constexpr size_t GCODE_LENGTH = 101;					// maximum number of non-comment characters in a line of GCode including the null terminator
 #endif
 
-constexpr size_t GCODE_REPLY_LENGTH = 2048;
-constexpr size_t MESSAGE_LENGTH = 256;
+constexpr size_t MaxMessageLength = 256;
 
 #if SAM4E || SAM4S || SAME70
-constexpr size_t FILENAME_LENGTH = 120;					// Maximum length of a filename including the path
+constexpr size_t MaxFilenameLength = 120;					// Maximum length of a filename including the path
 #else
-constexpr size_t FILENAME_LENGTH = 100;
+constexpr size_t MaxFilenameLength = 100;
 #endif
 
 constexpr size_t MaxHeaterNameLength = 20;				// Maximum number of characters in a heater name

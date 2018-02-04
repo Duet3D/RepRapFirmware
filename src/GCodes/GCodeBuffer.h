@@ -80,7 +80,7 @@ public:
 	uint32_t GetCRC32() const;
 	void SetCRC32(uint32_t newCRC32);
 
-	void PrintCommand(StringRef& s) const;
+	void PrintCommand(const StringRef& s) const;
 
 	uint32_t whenTimerStarted;							// when we started waiting
 	bool timerRunning;									// true if we are waiting

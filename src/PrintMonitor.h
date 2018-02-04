@@ -130,7 +130,7 @@ class PrintMonitor
 
 		// We parse G-Code files in multiple stages. These variables hold the required information
 		volatile FileParseState parseState;
-		char filenameBeingParsed[FILENAME_LENGTH];
+		char filenameBeingParsed[MaxFilenameLength];
 		FileStore *fileBeingParsed;
 		GCodeFileInfo parsedFileInfo;
 
@@ -139,7 +139,7 @@ class PrintMonitor
 
 		bool printingFileParsed;
 		GCodeFileInfo printingFileInfo;
-		char filenameBeingPrinted[FILENAME_LENGTH];
+		char filenameBeingPrinted[MaxFilenameLength];
 
 		// G-Code parser methods
 		bool FindHeight(const char* buf, size_t len, float& height) const;

@@ -39,7 +39,7 @@ void Thermistor::Init()
 }
 
 // Configure the temperature sensor
-bool Thermistor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, StringRef& reply, bool& error)
+bool Thermistor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
 	bool seen = false;
 	if (mCode == 305)
@@ -107,17 +107,19 @@ TemperatureError Thermistor::GetTemperature(float& t)
 	const volatile ThermistorAveragingFilter& vssaFilter = reprap.GetPlatform().GetAdcFilter(VssaFilterIndex);
 	if (tempFilter.IsValid() && vrefFilter.IsValid() && vssaFilter.IsValid())
 	{
-		const int32_t averagedVssaReading = vrefFilter.GetSum()/(ThermistorAverageReadings >> Thermistor::AdcOversampleBits);
+		const int32_t averagedVssaReading = vssaFilter.GetSum()/(ThermistorAverageReadings >> Thermistor::AdcOversampleBits);
 		const int32_t averagedVrefReading = vrefFilter.GetSum()/(ThermistorAverageReadings >> Thermistor::AdcOversampleBits);
 
-		// VREF is the measured voltage at VREF less the drop of a 15 ohm resistor. Assume that the maximum load is four 2K2 resistors to ground.
-		// VSSA is the voltage measured across the CSSA fuse. We assume the same maximum load and the same 15 ohms resistance for the fuse.
-		constexpr int32_t maxDrop = (15 * 4096 * (int32_t)(ThermistorAverageReadings >> Thermistor::AdcOversampleBits) * 4)/2200;
+		// VREF is the measured voltage at VREF less the drop of a 15 ohm resistor. Assume that the maximum load is four 2K2 resistors and one 4K7 resistor to ground = 492 ohms.
+		// VSSA is the voltage measured across the VSSA fuse. We assume the same maximum load and the same 15 ohms resistance for the fuse.
+		// Assume a maximum ADC reading offset of 100.
+		constexpr int32_t maxDrop = ((4096 << Thermistor::AdcOversampleBits) * 15)/492 + (100 << Thermistor::AdcOversampleBits);
 
-		if (   averagedVrefReading < (4096 * (int32_t)(ThermistorAverageReadings >> Thermistor::AdcOversampleBits)) - maxDrop
+		if (   averagedVrefReading < (4096 << Thermistor::AdcOversampleBits) - maxDrop
 			|| averagedVssaReading > maxDrop
 		   )
 		{
+//debugPrintf("vref=%" PRIi32 " vssa=%" PRIi32 " maxdrop=%" PRIi32 "\n", averagedVrefReading, averagedVssaReading, maxDrop);
 			t = BAD_ERROR_TEMPERATURE;
 			return TemperatureError::overOrUnderVoltage;
 		}

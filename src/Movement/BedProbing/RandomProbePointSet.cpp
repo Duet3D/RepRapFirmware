@@ -72,7 +72,7 @@ void RandomProbePointSet::ClearProbeHeights()
 	}
 }
 
-bool RandomProbePointSet::SetProbedBedEquation(size_t numPoints, StringRef& reply)
+bool RandomProbePointSet::SetProbedBedEquation(size_t numPoints, const StringRef& reply)
 {
 	if (!GoodProbePointOrdering(numPoints))
 	{
@@ -228,7 +228,7 @@ bool RandomProbePointSet::GoodProbePointOrdering(size_t numPoints) const
 }
 
 // Print out the probe heights and any errors
-void RandomProbePointSet::ReportProbeHeights(size_t numPoints, StringRef& reply) const
+void RandomProbePointSet::ReportProbeHeights(size_t numPoints, const StringRef& reply) const
 {
 	reply.copy("G32 bed probe heights:");
 	float sum = 0.0;

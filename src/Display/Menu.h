@@ -61,7 +61,7 @@ private:
 	static constexpr size_t DisplayedFilenameLength = 20;
 	static constexpr size_t MaxFiles = 6;
 	String<DisplayedFilenameLength> fileNames[MaxFiles];
-	String<FILENAME_LENGTH> previousFile;					// the last filename displayed on the previous page
+	String<MaxFilenameLength> previousFile;					// the last filename displayed on the previous page
 };
 
 #endif /* SRC_DISPLAY_MENU_H_ */

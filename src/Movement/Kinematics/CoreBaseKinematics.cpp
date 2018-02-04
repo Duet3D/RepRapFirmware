@@ -20,7 +20,7 @@ CoreBaseKinematics::CoreBaseKinematics(KinematicsType t) : ZLeadscrewKinematics(
 // Set the parameters from a M665, M666 or M669 command
 // Return true if we changed any parameters. Set 'error' true if there was an error, otherwise leave it alone.
 // This function is used for CoreXY and CoreXZ kinematics, but it overridden for CoreXYU kinematics
-bool CoreBaseKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) /*override*/
+bool CoreBaseKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) /*override*/
 {
 	if (mCode == 667)
 	{

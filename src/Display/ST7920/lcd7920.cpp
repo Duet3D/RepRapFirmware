@@ -33,24 +33,108 @@ const unsigned int numRows = 64;
 const unsigned int numCols = 128;
 
 Lcd7920::Lcd7920(uint8_t csPin)
-	: currentFont(nullptr), translateFrom(nullptr), translateTo(nullptr), textInverted(false)
+	: currentFont(nullptr), numContinuationBytesLeft(0), textInverted(false)
 {
 	device.csPin = csPin;
+	device.csPolarity = true;						// active high chip select
 	device.spiMode = 0;
 	device.clockFrequency = SpiClockFrequency;
 }
 
-size_t Lcd7920::write(uint8_t ch)
+void Lcd7920::Init()
 {
-	if (translateFrom != 0)
+	sspi_master_init(&device, 8);
+	numContinuationBytesLeft = 0;
+	startRow = startCol =  endRow = endCol = nextFlushRow = 0;
+
+	sendLcdCommand(LcdFunctionSetBasicAlpha);
+	delay(1);
+	sendLcdCommand(LcdFunctionSetBasicAlpha);
+	commandDelay();
+	sendLcdCommand(LcdEntryModeSet);
+	commandDelay();
+	extendedMode = false;
+
+	Clear();
+	FlushAll();
+	sendLcdCommand(LcdDisplayOn);
+	commandDelay();
+	currentFont = nullptr;
+}
+
+void Lcd7920::SetFont(const LcdFont *newFont)
+{
+  currentFont = newFont;
+}
+
+// Write a UTF8 byte.
+// If textYpos is off the end of the display, then don't write anything, just update textXpos and lastCharColData
+size_t Lcd7920::write(uint8_t c)
+{
+	if (numContinuationBytesLeft == 0)
 	{
-		const char* p = strchr(translateFrom, ch);
-		if (p != 0)
+		if (c < 0x80)
 		{
-			ch = translateTo[p - translateFrom];
+			return writeNative(c);
+		}
+		else if ((c & 0xE0) == 0xC0)
+		{
+			charVal = (uint32_t)(c & 0x1F);
+			numContinuationBytesLeft = 1;
+			return 1;
+		}
+		else if ((c & 0xF0) == 0xE0)
+		{
+			charVal = (uint32_t)(c & 0x0F);
+			numContinuationBytesLeft = 2;
+			return 1;
+		}
+		else if ((c & 0xF8) == 0xF0)
+		{
+			charVal = (uint32_t)(c & 0x07);
+			numContinuationBytesLeft = 3;
+			return 1;
+		}
+		else if ((c & 0xFC) == 0xF8)
+		{
+			charVal = (uint32_t)(c & 0x03);
+			numContinuationBytesLeft = 4;
+			return 1;
+		}
+		else if ((c & 0xFE) == 0xFC)
+		{
+			charVal = (uint32_t)(c & 0x01);
+			numContinuationBytesLeft = 5;
+			return 1;
+		}
+		else
+		{
+			return writeNative(0x7F);
 		}
 	}
+	else if ((c & 0xC0) == 0x80)
+	{
+		charVal = (charVal << 6) | (c & 0x3F);
+		--numContinuationBytesLeft;
+		if (numContinuationBytesLeft == 0)
+		{
+			return writeNative((charVal < 0x10000) ? (uint16_t)charVal : 0x007F);
+		}
+		else
+		{
+			return 1;
+		}
+	}
+	else
+	{
+		// Bad UTF8 state
+		numContinuationBytesLeft = 0;
+		return writeNative(0x7F);
+	}
+}
 
+size_t Lcd7920::writeNative(uint16_t ch)
+{
 	if (currentFont == 0)
 	{
 		return 0;
@@ -151,13 +235,13 @@ size_t Lcd7920::write(uint8_t ch)
 }
 
 // Set the right margin. In graphics mode, anything written will be truncated at the right margin. Defaults to the right hand edge of the display.
-void Lcd7920::setRightMargin(uint8_t r)
+void Lcd7920::SetRightMargin(uint8_t r)
 {
 	rightMargin = (r > numCols) ? numCols : r;
 }
 
 // Clear a rectangle from the current position to the right margin (graphics mode only). The height of the rectangle is the height of the current font.
-void Lcd7920::clearToMargin()
+void Lcd7920::ClearToMargin()
 {
 	if (currentFont != 0)
 	{
@@ -197,7 +281,7 @@ void Lcd7920::clearToMargin()
 }
 
 // Select normal or inverted text
-void Lcd7920::textInvert(bool b)
+void Lcd7920::TextInvert(bool b)
 {
 	if (b != textInverted)
 	{
@@ -206,48 +290,22 @@ void Lcd7920::textInvert(bool b)
 	}
 }
 
-// NB - if using SPI then the SS pin must be set to be an output before calling this!
-void Lcd7920::begin()
-{
-	sendLcdCommand(LcdFunctionSetBasicAlpha);
-	delay(1);
-	sendLcdCommand(LcdFunctionSetBasicAlpha);
-	commandDelay();
-	sendLcdCommand(LcdEntryModeSet);
-	commandDelay();
-	extendedMode = false;
-
-	clear();
-	setCursor(0, 0);
-	sendLcdCommand(LcdDisplayOn);
-	commandDelay();
-	currentFont = 0;
-	textInverted = false;
-	rightMargin = numCols;
-}
-
-void Lcd7920::setFont(const LcdFont *newFont)
-{
-  currentFont = newFont;
-}
-
-void Lcd7920::clear()
+void Lcd7920::Clear()
 {
 	memset(image, 0, sizeof(image));
 
-	// Flag whole image as dirty and update the display
+	// Flag whole image as dirty
 	startRow = 0;
 	endRow = numRows;
 	startCol = 0;
 	endCol = numCols;
-	flush();
-	setCursor(0, 0);
+	SetCursor(0, 0);
 	textInverted = false;
 	rightMargin = numCols;
 }
 
 // Draw a line using the Bresenham Algorithm (thanks Wikipedia)
-void Lcd7920::line(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, PixelMode mode)
+void Lcd7920::Line(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, PixelMode mode)
 {
 	int dx = (x1 >= x0) ? x1 - x0 : x0 - x1;
 	int dy = (y1 >= y0) ? y1 - y0 : y0 - y1;
@@ -257,7 +315,7 @@ void Lcd7920::line(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, PixelMode mod
 
 	for (;;)
 	{
-		setPixel(x0, y0, mode);
+		SetPixel(x0, y0, mode);
 		if (x0 == x1 && y0 == y1) break;
 		int e2 = err + err;
 		if (e2 > -dy)
@@ -274,7 +332,7 @@ void Lcd7920::line(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, PixelMode mod
 }
 
 // Draw a circle using the Bresenham Algorithm (thanks Wikipedia)
-void Lcd7920::circle(uint8_t x0, uint8_t y0, uint8_t radius, PixelMode mode)
+void Lcd7920::Circle(uint8_t x0, uint8_t y0, uint8_t radius, PixelMode mode)
 {
 	int f = 1 - (int)radius;
 	int ddF_x = 1;
@@ -282,10 +340,10 @@ void Lcd7920::circle(uint8_t x0, uint8_t y0, uint8_t radius, PixelMode mode)
 	int x = 0;
 	int y = radius;
 
-	setPixel(x0, y0 + radius, mode);
-	setPixel(x0, y0 - radius, mode);
-	setPixel(x0 + radius, y0, mode);
-	setPixel(x0 - radius, y0, mode);
+	SetPixel(x0, y0 + radius, mode);
+	SetPixel(x0, y0 - radius, mode);
+	SetPixel(x0 + radius, y0, mode);
+	SetPixel(x0 - radius, y0, mode);
 
 	while(x < y)
 	{
@@ -301,19 +359,19 @@ void Lcd7920::circle(uint8_t x0, uint8_t y0, uint8_t radius, PixelMode mode)
 		x++;
 		ddF_x += 2;
 		f += ddF_x;
-		setPixel(x0 + x, y0 + y, mode);
-		setPixel(x0 - x, y0 + y, mode);
-		setPixel(x0 + x, y0 - y, mode);
-		setPixel(x0 - x, y0 - y, mode);
-		setPixel(x0 + y, y0 + x, mode);
-		setPixel(x0 - y, y0 + x, mode);
-		setPixel(x0 + y, y0 - x, mode);
-		setPixel(x0 - y, y0 - x, mode);
+		SetPixel(x0 + x, y0 + y, mode);
+		SetPixel(x0 - x, y0 + y, mode);
+		SetPixel(x0 + x, y0 - y, mode);
+		SetPixel(x0 - x, y0 - y, mode);
+		SetPixel(x0 + y, y0 + x, mode);
+		SetPixel(x0 - y, y0 + x, mode);
+		SetPixel(x0 + y, y0 - x, mode);
+		SetPixel(x0 - y, y0 - x, mode);
 	}
 }
 
 // Draw a bitmap
-void Lcd7920::bitmap(uint8_t x0, uint8_t y0, uint8_t width, uint8_t height, const uint8_t data[])
+void Lcd7920::Bitmap(uint8_t x0, uint8_t y0, uint8_t width, uint8_t height, const uint8_t data[])
 {
 	for (uint8_t r = 0; r < height && r + y0 < numRows; ++r)
 	{
@@ -330,46 +388,61 @@ void Lcd7920::bitmap(uint8_t x0, uint8_t y0, uint8_t width, uint8_t height, cons
 	if (y0 + height > endRow) endRow = y0 + height;
 }
 
-// Flush the dirty part of the image to the lcd
-void Lcd7920::flush()
+// Flush all of the dirty part of the image to the lcd
+void Lcd7920::FlushAll()
 {
-	if (endCol > startCol && endRow > startRow)
-	{
-		const uint8_t startColNum = startCol/16;
-		const uint8_t endColNum = (endCol + 15)/16;
-		for (uint8_t r = startRow; r < endRow; ++r)
-		{
-			setGraphicsAddress(r, startColNum);
-			uint8_t *ptr = image + ((16 * r) + (2 * startColNum));
-			for (uint8_t i = startColNum; i < endColNum; ++i)
-			{
-				sendLcdData(*ptr++);
-				//commandDelay();    // don't seem to need a delay here
-				sendLcdData(*ptr++);
-				//commandDelay();    // don't seem to need as long a delay as this
-				delayMicroseconds(LcdDataDelayMicros);
-			}
-		}
-		startRow = numRows;
-		startCol = numCols;
-		endCol = endRow = 0;
-	}
+	while (FlushSome()) { }
 }
 
-void Lcd7920::Update()
+// Flush some of the dirty part of the image to the LCD, returning true if there is more to do
+bool Lcd7920::FlushSome()
 {
-	//TODO instead of using flush() above, send a limited number of data bytes each time this is called
+	// See if there is anything to flush
+	if (endCol > startCol && endRow > startRow)
+	{
+		// Decide which row to flush next
+		if (nextFlushRow < startRow || nextFlushRow >= endRow)
+		{
+			nextFlushRow = startRow;
+			++startRow;				// flag this row as flushed because it will be soon
+		}
+
+		// Flush that row
+		const uint8_t startColNum = startCol/16;
+		const uint8_t endColNum = (endCol + 15)/16;
+		setGraphicsAddress(nextFlushRow, startColNum);
+		uint8_t *ptr = image + ((16 * nextFlushRow) + (2 * startColNum));
+		for (uint8_t i = startColNum; i < endColNum; ++i)
+		{
+			sendLcdData(*ptr++);
+			//commandDelay();		// don't seem to need a delay here
+			sendLcdData(*ptr++);
+			//commandDelay();  	 	// don't seem to need as long a delay as this
+			delayMicroseconds(LcdDataDelayMicros);
+		}
+
+		if (startRow != endRow)
+		{
+			++nextFlushRow;
+			return true;
+		}
+
+		startRow = numRows;
+		startCol = numCols;
+		endCol = endRow = nextFlushRow = 0;
+	}
+	return false;
 }
 
 // Set the cursor position. We can only set alternate columns. The row addressing is rather odd.
-void Lcd7920::setCursor(uint8_t r, uint8_t c)
+void Lcd7920::SetCursor(uint8_t r, uint8_t c)
 {
 	row = r % numRows;
 	column = c % numCols;
 	lastCharColData = 0u;    // flag that we just set the cursor position, so no space before next character
 }
 
-void Lcd7920::setPixel(uint8_t x, uint8_t y, PixelMode mode)
+void Lcd7920::SetPixel(uint8_t x, uint8_t y, PixelMode mode)
 {
 	if (y < numRows && x < rightMargin)
 	{
@@ -396,7 +469,7 @@ void Lcd7920::setPixel(uint8_t x, uint8_t y, PixelMode mode)
 	}
 }
 
-bool Lcd7920::readPixel(uint8_t x, uint8_t y) const
+bool Lcd7920::ReadPixel(uint8_t x, uint8_t y) const
 {
 	if (y < numRows && x < numCols)
 	{
@@ -404,14 +477,6 @@ bool Lcd7920::readPixel(uint8_t x, uint8_t y) const
 		return (*p & (0x80u >> (x%8))) != 0;
 	}
 	return false;
-}
-
-// Set up translation for characters. Useful for translating fullstop into decimal point, or changing the width of spaces.
-// Either the first string passed must be NULL, or the two strings must have equal lengths as returned by strlen().
-void Lcd7920::setTranslation(const char *tFrom, const char *tTo)
-{
-	translateFrom = tFrom;
-	translateTo = tTo;
 }
 
 void Lcd7920::setGraphicsAddress(unsigned int r, unsigned int c)
@@ -444,11 +509,18 @@ void Lcd7920::sendLcdData(uint8_t data)
 void Lcd7920::sendLcd(uint8_t data1, uint8_t data2)
 {
 	sspi_acquire();			// TODO when using RTOS, wait for shared SPI to be available
+	sspi_master_setup_device(&device);
+	delayMicroseconds(1);
+	sspi_select_device(&device);
+	delayMicroseconds(1);
 	uint8_t data[3];
 	data[0] = data1;
 	data[1] = data2 & 0xF0;
 	data[2] = data2 << 4;
 	sspi_transceive_packet(data, nullptr, 3);
+	delayMicroseconds(1);
+	sspi_deselect_device(&device);
+	delayMicroseconds(1);
 	sspi_release();
 }
 

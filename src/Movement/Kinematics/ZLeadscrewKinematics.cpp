@@ -23,7 +23,7 @@ ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k, float segsPerSecond
 }
 
 // Configure this kinematics. We only deal with the leadscrew coordinates here
-bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error)
+bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
 	if (mCode == 671 && GetKinematicsType() != KinematicsType::coreXZ)
 	{
@@ -90,7 +90,7 @@ bool ZLeadscrewKinematics::SupportsAutoCalibration() const
 }
 
 // Perform auto calibration. Override this implementation in kinematics that support it. Caller already owns the GCode movement lock.
-bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply)
+bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply)
 {
 	if (!SupportsAutoCalibration())			// should be checked by caller, but check it here too
 	{
@@ -310,7 +310,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 }
 
 // Append the list of leadscrew corrections to 'reply'
-void ZLeadscrewKinematics::AppendCorrections(const floatc_t corrections[], StringRef& reply) const
+void ZLeadscrewKinematics::AppendCorrections(const floatc_t corrections[], const StringRef& reply) const
 {
 	for (size_t i = 0; i < numLeadscrews; ++i)
 	{

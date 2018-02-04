@@ -7,7 +7,6 @@
 //GLCD FontName : glcd10x10
 //GLCD FontSize : 10 x 10
 
-// Note that we replace the fullstop character by decimal point so that the Arduino print functions display a decimal point when printing numbers.
 static const uint8_t glcd10x10[] = {
         0x04, 0x06, 0x00, 0x09, 0x00, 0x09, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // Code for degree symbol
         0x09, 0x38, 0x00, 0x45, 0x00, 0x83, 0x00, 0x07, 0x00, 0x00, 0x00, 0xC0, 0x01, 0x82, 0x01, 0x44, 0x01, 0x38, 0x00, 0x00, 0x00,  // Code for rotating arrows 1
@@ -125,11 +124,11 @@ static const uint8_t glcd10x10[] = {
 
 extern const LcdFont font10x10 =
 {
-  glcd10x10,   // font data
-  0x10,        // first character code
-  0x7F,        // last character code
-  10,          // row height in pixels
-  10           // character width in pixels
+	glcd10x10,		// font data
+	0x0010,			// first character code
+	0x007F,			// last character code
+	10,				// row height in pixels
+	10				// character width in pixels
 };
 
 // End

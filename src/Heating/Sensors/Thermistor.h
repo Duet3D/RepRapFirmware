@@ -22,7 +22,7 @@ class Thermistor : public TemperatureSensor
 {
 public:
 	Thermistor(unsigned int channel, bool p_isPT1000);						// create an instance with default values
-	bool Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, StringRef& reply, bool& error) override; // configure the sensor from M305 parameters
+	bool Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error) override; // configure the sensor from M305 parameters
 	void Init() override;
 	TemperatureError GetTemperature(float& t) override;
 

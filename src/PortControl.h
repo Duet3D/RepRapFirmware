@@ -24,7 +24,7 @@ public:
 	void Init();
 	void Exit();
 	void Spin(bool full);
-	bool Configure(GCodeBuffer& gb, StringRef& reply);
+	bool Configure(GCodeBuffer& gb, const StringRef& reply);
 
 private:
 	void UpdatePorts(IoBits_t newPortState);

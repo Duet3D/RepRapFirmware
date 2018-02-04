@@ -24,7 +24,7 @@ namespace FirmwareUpdater
 
 	// Check that the prerequisites are satisfied.
 	// Return true if yes, else print a message and return false.
-	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, StringRef& reply)
+	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, const StringRef& reply)
 	{
 #if HAS_WIFI_NETWORKING
 		if ((moduleMap & (1 << WifiExternalFirmwareModule)) != 0 && (moduleMap & ((1 << WifiFirmwareModule) | (1 << WifiFilesModule))) != 0)

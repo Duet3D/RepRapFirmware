@@ -44,7 +44,7 @@ void TemperatureSensor::SetHeaterName(const char *newName)
 }
 
 // Default implementation of Configure, for sensors that have no configurable parameters
-bool TemperatureSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, StringRef& reply, bool& error)
+bool TemperatureSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
 	bool seen = false;
 	if (mCode == 305)
@@ -59,7 +59,7 @@ bool TemperatureSensor::Configure(unsigned int mCode, unsigned int heater, GCode
 	return seen;
 }
 
-void TemperatureSensor::CopyBasicHeaterDetails(unsigned int heater, StringRef& reply) const
+void TemperatureSensor::CopyBasicHeaterDetails(unsigned int heater, const StringRef& reply) const
 {
 	reply.printf("Heater %u", heater);
 	if (heaterName != nullptr)

@@ -562,7 +562,7 @@ float PID::GetExpectedHeatingRate() const
 }
 
 // Auto tune this PID
-void PID::StartAutoTune(float targetTemp, float maxPwm, StringRef& reply)
+void PID::StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply)
 {
 	// Starting an auto tune
 	if (!model.IsEnabled())
@@ -598,7 +598,7 @@ void PID::StartAutoTune(float targetTemp, float maxPwm, StringRef& reply)
 	}
 }
 
-void PID::GetAutoTuneStatus(StringRef& reply)	// Get the auto tune status or last result
+void PID::GetAutoTuneStatus(const StringRef& reply)	// Get the auto tune status or last result
 {
 	if (mode >= HeaterMode::tuning0)
 	{

@@ -48,19 +48,19 @@ public:
 	void Stop(int interface);
 	bool IsWiFiInterface(int interface) const;
 
-	void EnableProtocol(int interface, int protocol, int port, int secure, StringRef& reply);
-	void DisableProtocol(int interface, int protocol, StringRef& reply);
-	void ReportProtocols(int interface, StringRef& reply) const;
+	void EnableProtocol(int interface, int protocol, int port, int secure, const StringRef& reply);
+	void DisableProtocol(int interface, int protocol, const StringRef& reply);
+	void ReportProtocols(int interface, const StringRef& reply) const;
 
 	// WiFi interfaces
-	void EnableWiFi(int mode, const StringRef& ssid, StringRef& reply);
-	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer& gb, StringRef& reply, OutputBuffer*& longReply);
+	void EnableWiFi(int mode, const StringRef& ssid, const StringRef& reply);
+	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& longReply);
 	WifiFirmwareUploader& GetWifiUploader();
 	void ResetWiFiForUpload(bool external);
 
 	// Global settings
-	void EnableEthernet(int mode, StringRef& reply);
-	bool GetNetworkState(int interface, StringRef& reply);
+	void EnableEthernet(int mode, const StringRef& reply);
+	bool GetNetworkState(int interface, const StringRef& reply);
 	int EnableState(int interface) const;
 
 	const uint8_t *GetIPAddress(int interface) const;

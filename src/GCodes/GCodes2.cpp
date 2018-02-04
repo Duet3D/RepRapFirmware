@@ -34,7 +34,7 @@
 
 // If the code to act on is completed, this returns true, otherwise false.
 // It is called repeatedly for a given code until it returns true for that code.
-bool GCodes::ActOnCode(GCodeBuffer& gb, StringRef& reply)
+bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
 {
 	// Can we queue this code?
 	if (gb.CanQueueCodes() && codeQueue->QueueCode(gb, segmentsLeft))
@@ -73,7 +73,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, StringRef& reply)
 	return true;
 }
 
-bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
+bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 {
 	GCodeResult result = GCodeResult::ok;
 	const int code = gb.GetCommandNumber();
@@ -290,7 +290,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 	return HandleResult(gb, result, reply);
 }
 
-bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
+bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 {
 	GCodeResult result = GCodeResult::ok;
 
@@ -472,14 +472,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			OutputBuffer *fileResponse;
 			const int sparam = (gb.Seen('S')) ? gb.GetIValue() : 0;
-			String<FILENAME_LENGTH> dir;
+			String<MaxFilenameLength> dir;
 			if (gb.Seen('P'))
 			{
 				gb.GetPossiblyQuotedString(dir.GetRef());
 			}
 			else
 			{
-				dir.GetRef().copy(platform.GetGCodeDir());
+				dir.copy(platform.GetGCodeDir());
 			}
 
 			if (sparam == 2)
@@ -573,7 +573,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			return false;
 		}
 		{
-			String<FILENAME_LENGTH> filename;
+			String<MaxFilenameLength> filename;
 			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
 				if (QueueFileToPrint(filename.Pointer(), reply))
@@ -739,7 +739,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 28: // Write to file
 		{
-			String<FILENAME_LENGTH> filename;
+			String<MaxFilenameLength> filename;
 			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
 				const bool ok = OpenFileToWrite(gb, platform.GetGCodeDir(), filename.Pointer(), 0, false, 0);
@@ -767,7 +767,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 30:	// Delete file
 		{
-			String<FILENAME_LENGTH> filename;
+			String<MaxFilenameLength> filename;
 			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
 				platform.GetMassStorage()->Delete(platform.GetGCodeDir(), filename.Pointer(), false);
@@ -788,7 +788,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			return false;
 		}
 		{
-			String<FILENAME_LENGTH> filename;
+			String<MaxFilenameLength> filename;
 			const bool gotFilename = gb.GetUnprecedentedString(filename.GetRef());
 			OutputBuffer *fileInfoResponse;
 			const bool done = reprap.GetPrintMonitor().GetFileInfoResponse((gotFilename) ? filename.Pointer() : nullptr, fileInfoResponse);
@@ -806,7 +806,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			bool seen = false;
 			uint32_t newSimulationMode;
-			String<FILENAME_LENGTH> simFileName;
+			String<MaxFilenameLength> simFileName;
 
 			gb.TryGetPossiblyQuotedString('P', simFileName.GetRef(), seen);
 			if (seen)
@@ -888,7 +888,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		if (fileBeingHashed == nullptr)
 		{
 			// See if we can open the file and start hashing
-			String<FILENAME_LENGTH> filename;
+			String<MaxFilenameLength> filename;
 			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
 				if (StartHash(filename.Pointer()))
@@ -1102,7 +1102,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 98: // Call Macro/Subprogram
 		if (gb.Seen('P'))
 		{
-			String<FILENAME_LENGTH> filename;
+			String<MaxFilenameLength> filename;
 			gb.GetPossiblyQuotedString(filename.GetRef());
 			DoFileMacro(gb, filename.Pointer(), true);
 		}
@@ -1427,7 +1427,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 117:	// Display message
 		{
-			String<FILENAME_LENGTH> msg;
+			String<MaxFilenameLength> msg;
 			gb.GetUnprecedentedString(msg.GetRef());
 			reprap.SetMessage(msg.Pointer());
 		}
@@ -2025,11 +2025,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 291:	// Display message, optionally wait for acknowledgement
 		{
-			String<MESSAGE_LENGTH> title;
+			String<MaxMessageLength> title;
 			bool seen = false;
 			gb.TryGetQuotedString('R', title.GetRef(), seen);
 
-			String<MESSAGE_LENGTH> message;
+			String<MaxMessageLength> message;
 			gb.TryGetQuotedString('P', message.GetRef(), seen);
 			if (seen)
 			{
@@ -2642,16 +2642,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				const int enableValue = gb.GetIValue();
 				seen = true;
 
-				char ssidBuffer[SsidLength + 1];
-				StringRef ssid(ssidBuffer, ARRAY_SIZE(ssidBuffer));
-				if (gb.Seen('P') && !gb.GetQuotedString(ssid))
+				String<SsidLength> ssid;
+				if (gb.Seen('P') && !gb.GetQuotedString(ssid.GetRef()))
 				{
 					reply.copy("Bad or missing SSID");
 					result = GCodeResult::error;
 				}
 				else
 				{
-					reprap.GetNetwork().Enable(enableValue, ssid, reply);
+					reprap.GetNetwork().Enable(enableValue, ssid.GetRef(), reply);
 				}
 			}
 #else
@@ -2806,14 +2805,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			folder = platform.GetWebDir();
 			defaultFile = INDEX_PAGE_FILE;
 		}
-		String<FILENAME_LENGTH> filename;
+		String<MaxFilenameLength> filename;
 		if (gb.Seen('P'))
 		{
 			gb.GetPossiblyQuotedString(filename.GetRef());
 		}
 		else
 		{
-			filename.GetRef().copy(defaultFile);
+			filename.copy(defaultFile);
 		}
 		const FilePosition size = (gb.Seen('S') ? (FilePosition)gb.GetIValue() : 0);
 		const uint32_t crc32 = (gb.Seen('C') ? gb.GetUIValue() : 0);
@@ -3684,7 +3683,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 752: // Start 3D scan
 		if (gb.Seen('P'))
 		{
-			String<FILENAME_LENGTH> file;
+			String<MaxFilenameLength> file;
 			gb.GetPossiblyQuotedString(file.GetRef());
 			if (gb.Seen('S'))
 			{
@@ -4050,7 +4049,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	return HandleResult(gb, result, reply);
 }
 
-bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
+bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (gb.MachineState().runningM502)
 	{
@@ -4117,7 +4116,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 }
 
 // This is called to deal with the result of processing a G- or M-code
-bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, StringRef& reply)
+bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply)
 {
 	switch (rslt)
 	{

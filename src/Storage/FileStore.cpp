@@ -63,21 +63,19 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 	if (writing)
 	{
 		// Try to create the path of this file if we want to write to it
-		char filePathBuffer[FILENAME_LENGTH];
-		StringRef filePath(filePathBuffer, FILENAME_LENGTH);
+		String<MaxFilenameLength> filePath;
 		filePath.copy(location);
 
-		bool isVolume = isdigit(filePath[0]);
-		for (size_t i = 1; i < filePath.strlen(); i++)
+		size_t i = (isdigit(filePath[0]) && filePath[1] == ':') ? 2 : 0;
+		if (filePath[i] == '/')
+		{
+			++i;
+		}
+
+		while (i < filePath.strlen())
 		{
 			if (filePath[i] == '/')
 			{
-				if (isVolume)
-				{
-					isVolume = false;
-					continue;
-				}
-
 				filePath[i] = 0;
 				if (!reprap.GetPlatform().GetMassStorage()->DirectoryExists(filePath.Pointer()) && !reprap.GetPlatform().GetMassStorage()->MakeDirectory(filePath.Pointer()))
 				{
@@ -86,6 +84,7 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 				}
 				filePath[i] = '/';
 			}
+			++i;
 		}
 
 		// Also try to allocate a write buffer so we can perform faster writes
