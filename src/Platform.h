@@ -29,7 +29,7 @@ Licence: GPL
 // Platform-specific includes
 
 #include "RepRapFirmware.h"
-#include "IoPort.h"
+#include "IoPorts.h"
 #include "DueFlashStorage.h"
 #include "Fan.h"
 #include "Heating/TemperatureError.h"

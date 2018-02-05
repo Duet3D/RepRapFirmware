@@ -4,21 +4,25 @@
 #if SUPPORT_12864_LCD
 
 #include "RotaryEncoder.h"
+#include "IoPorts.h"
 
-RotaryEncoder::RotaryEncoder(Pin p0, Pin p1, Pin pb, int pulsesPerClick)
-	: pin0(p0), pin1(p1), pinButton(pb), ppc(pulsesPerClick), encoderChange(0), encoderState(0), newPress(false) {}
+RotaryEncoder::RotaryEncoder(Pin p0, Pin p1, Pin pb)
+	: pin0(p0), pin1(p1), pinButton(pb), ppc(1), encoderChange(0), encoderState(0), newPress(false), reverseDirection(false) {}
 
 inline unsigned int RotaryEncoder::ReadEncoderState() const
 {
 	return (digitalRead(pin0) ? 1u : 0u) | (digitalRead(pin1) ? 2u : 0u);
 }
 
-void RotaryEncoder::Init()
+void RotaryEncoder::Init(int pulsesPerClick)
 {
+	ppc = max<unsigned int>(abs(pulsesPerClick), 1);
+	reverseDirection = (pulsesPerClick < 0);
+
 	// Set up pins
-	pinMode(pin0, INPUT_PULLUP);
-	pinMode(pin1, INPUT_PULLUP);
-	pinMode(pinButton, INPUT_PULLUP);
+	IoPort::SetPinMode(pin0, INPUT_PULLUP);
+	IoPort::SetPinMode(pin1, INPUT_PULLUP);
+	IoPort::SetPinMode(pinButton, INPUT_PULLUP);
 	delay(2);                  // ensure we read the initial state correctly
 
 	// Initialise encoder variables
@@ -88,7 +92,7 @@ int RotaryEncoder::GetChange()
 		r = 0;
 	}
 	encoderChange -= (r * ppc);
-	return r;
+	return (reverseDirection) ? -r : r;
 }
 
 bool RotaryEncoder::GetButtonPress()

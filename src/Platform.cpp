@@ -40,15 +40,18 @@
 
 #include "sd_mmc.h"
 
-#ifdef DUET_NG
+#if defined(DUET_NG)
 # include "TMC2660.h"
-#endif
-#ifdef DUET_M
+#elif defined(DUET_M)
 # include "TMC22xx.h"
 #endif
 
 #if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
+#endif
+
+#if SUPPORT_12864_LCD
+# include "Display/Display.h"
 #endif
 
 #include <climits>
@@ -1022,6 +1025,10 @@ void Platform::UpdateFirmware()
 		MessageF(FirmwareUpdateMessage, "IAP not found\n");
 		return;
 	}
+
+#if SUPPORT_12864_LCD
+	reprap.GetDisplay().UpdatingFirmware();			// put the firmware update message on the display
+#endif
 
 	// The machine will be unresponsive for a few seconds, don't risk damaging the heaters...
 	reprap.EmergencyStop();

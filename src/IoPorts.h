@@ -5,8 +5,8 @@
  *      Author: David
  */
 
-#ifndef SRC_IOPORT_H_
-#define SRC_IOPORT_H_
+#ifndef SRC_IOPORTS_H_
+#define SRC_IOPORTS_H_
 
 #include "RepRapFirmware.h"
 

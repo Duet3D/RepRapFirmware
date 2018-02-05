@@ -668,8 +668,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 	// Output notifications
 	{
-		bool sendBeep = ((source == ResponseSource::AUX || !platform->HaveAux()) && beepDuration != 0 && beepFrequency != 0);
-		bool sendMessage = (message[0] != 0);
+		const bool sendBeep = ((source == ResponseSource::AUX || !platform->HaveAux()) && beepDuration != 0 && beepFrequency != 0);
+		const bool sendMessage = (message[0] != 0);
 
 		float timeLeft = 0.0;
 		if (displayMessageBox && boxTimer != 0)
@@ -685,7 +685,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			// Report beep values
 			if (sendBeep)
 			{
-				response->catf("\"beepDuration\":%d,\"beepFrequency\":%d", beepDuration, beepFrequency);
+				response->catf("\"beepDuration\":%u,\"beepFrequency\":%u", beepDuration, beepFrequency);
 				if (sendMessage)
 				{
 					response->cat(",");
@@ -1617,15 +1617,28 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
 }
 
 // Send a beep. We send it to both PanelDue and the web interface.
-void RepRap::Beep(int freq, int ms)
+void RepRap::Beep(unsigned int freq, unsigned int ms)
 {
-	beepFrequency = freq;
-	beepDuration = ms;
+	// Limit the frequency and duration to sensible values
+	freq = constrain<unsigned int>(freq, 50, 10000);
+	ms = constrain<unsigned int>(ms, 10, 60000);
 
+	// If there is an LCD device present, make it beep
+#if SUPPORT_12864_LCD
+	if (display->IsPresent())
+	{
+		display->Beep(freq, ms);
+	}
+	else
+#endif
 	if (platform->HaveAux())
 	{
-		// If there is an LCD device present, make it beep
 		platform->Beep(freq, ms);
+	}
+	else
+	{
+		beepFrequency = freq;
+		beepDuration = ms;
 	}
 }
 

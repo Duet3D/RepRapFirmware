@@ -7,11 +7,12 @@
 class RotaryEncoder
 {
 	const Pin pin0, pin1, pinButton;
-	const int ppc;
+	int ppc;
 	int encoderChange;
 	unsigned int encoderState;
 	bool buttonState;
 	bool newPress;
+	bool reverseDirection;
 	uint32_t whenSame;
 
 	unsigned int ReadEncoderState() const;
@@ -19,9 +20,9 @@ class RotaryEncoder
 	static constexpr uint32_t DebounceMillis = 5;
 
 public:
-	RotaryEncoder(Pin p0, Pin p1, Pin pb, int pulsesPerClick);
+	RotaryEncoder(Pin p0, Pin p1, Pin pb);
 
-	void Init();
+	void Init(int pulsesPerClick);
 	void Poll();
 	int GetChange();
 	bool GetButtonPress();

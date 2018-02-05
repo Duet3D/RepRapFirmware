@@ -153,7 +153,7 @@ size_t Lcd7920::writeNative(uint16_t ch)
 	const uint8_t bytesPerColumn = (fontHeight + 7)/8;
 	const uint8_t bytesPerChar = (bytesPerColumn * fontWidth) + 1;
 	const uint8_t *fontPtr = currentFont->ptr + (bytesPerChar * (ch - startChar));
-	uint16_t cmask = (1 << fontHeight) - 1;
+	const uint16_t cmask = (1u << fontHeight) - 1;
 
 	uint8_t nCols = *fontPtr++;
 
@@ -171,10 +171,10 @@ size_t Lcd7920::writeNative(uint16_t ch)
 	// We add a space column after a space character if we would have added one between the preceding and following characters.
 	if (column < rightMargin)
 	{
-		uint16_t thisCharColData = *fontPtr & cmask;
-		if (thisCharColData == 0)  // for characters with deliberate space row at the start, e.g. decimal point
+		uint16_t thisCharColData = *reinterpret_cast<const uint16_t*>(fontPtr) & cmask;
+		if (thisCharColData == 0)  // for characters with deliberate space column at the start, e.g. decimal point
 		{
-			thisCharColData = *(fontPtr + 2) & cmask;
+			thisCharColData = *reinterpret_cast<const uint16_t*>(fontPtr + 2) & cmask;
 		}
 		const bool wantSpace = ((thisCharColData | (thisCharColData << 1)) & (lastCharColData | (lastCharColData << 1))) != 0;
 		if (wantSpace)
@@ -200,7 +200,7 @@ size_t Lcd7920::writeNative(uint16_t ch)
 
 	while (nCols != 0 && column < rightMargin)
 	{
-		uint16_t colData = *fontPtr;
+		uint16_t colData = *reinterpret_cast<const uint16_t*>(fontPtr);
 		fontPtr += bytesPerColumn;
 		if (colData != 0)
 		{
@@ -212,7 +212,7 @@ size_t Lcd7920::writeNative(uint16_t ch)
 		const uint16_t setPixelVal = (textInverted) ? 0 : 1;
 		for (uint8_t i = 0; i < fontHeight && p < (image + sizeof(image)); ++i)
 		{
-			if ((colData & 1) == setPixelVal)
+			if ((colData & 1u) == setPixelVal)
 			{
 				*p |= mask1;      // set pixel
 			}
@@ -240,10 +240,10 @@ void Lcd7920::SetRightMargin(uint8_t r)
 	rightMargin = (r > numCols) ? numCols : r;
 }
 
-// Clear a rectangle from the current position to the right margin (graphics mode only). The height of the rectangle is the height of the current font.
+// Clear a rectangle from the current position to the right margin. The height of the rectangle is the height of the current font.
 void Lcd7920::ClearToMargin()
 {
-	if (currentFont != 0)
+	if (currentFont != nullptr)
 	{
 		if (column < rightMargin)
 		{
@@ -257,11 +257,20 @@ void Lcd7920::ClearToMargin()
 			  if (endRow < nextRow) { endRow = nextRow; }
 			  if (endCol < rightMargin) { endCol = rightMargin; }
 			}
+
 			while (column < rightMargin)
 			{
-				// Add space after character
-				uint8_t mask = 0x80 >> (column & 7);
 				uint8_t *p = image + ((row * (numCols/8)) + (column/8));
+				uint8_t mask = 0xFF >> (column & 7);
+				if ((column & (~7)) < (rightMargin & (~7)))
+				{
+					column = (column & (~7)) + 8;
+				}
+				else
+				{
+					mask ^= 0xFF >> (rightMargin & 7);
+					column = rightMargin;;
+				}
 				for (uint8_t i = 0; i < fontHeight && p < (image + sizeof(image)); ++i)
 				{
 					if (textInverted)
@@ -274,7 +283,6 @@ void Lcd7920::ClearToMargin()
 					}
 					p += (numCols/8);
 				}
-				++column;
 			}
 		}
 	}
@@ -370,7 +378,7 @@ void Lcd7920::Circle(uint8_t x0, uint8_t y0, uint8_t radius, PixelMode mode)
 	}
 }
 
-// Draw a bitmap
+// Draw a bitmap. x0 and numCols must be divisible by 8.
 void Lcd7920::Bitmap(uint8_t x0, uint8_t y0, uint8_t width, uint8_t height, const uint8_t data[])
 {
 	for (uint8_t r = 0; r < height && r + y0 < numRows; ++r)
@@ -434,7 +442,7 @@ bool Lcd7920::FlushSome()
 	return false;
 }
 
-// Set the cursor position. We can only set alternate columns. The row addressing is rather odd.
+// Set the cursor position
 void Lcd7920::SetCursor(uint8_t r, uint8_t c)
 {
 	row = r % numRows;
@@ -479,6 +487,7 @@ bool Lcd7920::ReadPixel(uint8_t x, uint8_t y) const
 	return false;
 }
 
+// Set the address to write to. The column address is in 16-bit words, so it ranges from 0 to 7.
 void Lcd7920::setGraphicsAddress(unsigned int r, unsigned int c)
 {
 	ensureExtendedMode();

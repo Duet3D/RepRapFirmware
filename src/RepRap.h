@@ -103,7 +103,7 @@ public:
 	OutputBuffer *GetFilesResponse(const char* dir, bool flagsDirs);
 	OutputBuffer *GetFilelistResponse(const char* dir);
 
-	void Beep(int freq, int ms);
+	void Beep(unsigned int freq, unsigned int ms);
 	void SetMessage(const char *msg);
 	void SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls);
 	void ClearAlert();
@@ -162,7 +162,7 @@ private:
 	String<PASSWORD_LENGTH> password;
 	String<MACHINE_NAME_LENGTH> myName;
 
-	int beepFrequency, beepDuration;
+	unsigned int beepFrequency, beepDuration;
 	char message[MaxMessageLength + 1];
 
 	// Message box data

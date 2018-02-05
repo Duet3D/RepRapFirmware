@@ -30,6 +30,10 @@
 # include "FirmwareUpdater.h"
 #endif
 
+#if SUPPORT_12864_LCD
+# include "Display/Display.h"
+#endif
+
 #include <utility>			// for std::swap
 
 // If the code to act on is completed, this returns true, otherwise false.
@@ -2094,8 +2098,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 300:	// Beep
 		{
-			const int ms = (gb.Seen('P')) ? gb.GetIValue() : 1000;			// time in milliseconds
-			const int freq = (gb.Seen('S')) ? gb.GetIValue() : 4600;		// 4600Hz produces the loudest sound on a PanelDue
+			const unsigned int ms = (gb.Seen('P')) ? gb.GetUIValue() : 1000;			// time in milliseconds
+			const unsigned int freq = (gb.Seen('S')) ? gb.GetUIValue() : 4600;			// 4600Hz produces the loudest sound on a PanelDue
 			reprap.Beep(freq, ms);
 		}
 		break;
@@ -3994,6 +3998,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			DoFileMacro(gb, RESUME_AFTER_POWER_FAIL_G, true);
 		}
+		break;
+#endif
+
+		// 917 set standstill current reduction not yet supported
+
+#if SUPPORT_12864_LCD
+	case 918: // Configure direct-connect display
+		result = reprap.GetDisplay().Configure(gb, reply);
 		break;
 #endif
 
