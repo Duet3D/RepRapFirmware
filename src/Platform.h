@@ -331,8 +331,9 @@ public:
 	const char* GetBoardString() const;
 
 	// Timing
-	static uint32_t GetInterruptClocks() __attribute__ ((hot));					// Get the interrupt clock count
-	static bool ScheduleStepInterrupt(uint32_t tim) __attribute__ ((hot));		// Schedule an interrupt at the specified clock count, or return true if it has passed already
+	static uint32_t GetInterruptClocks() __attribute__ ((hot));						// Get the interrupt clock count
+	static uint32_t GetInterruptClocksInterruptsDisabled() __attribute__ ((hot));	// Get the interrupt clock count, when we know already that interrupts are disabled
+	static bool ScheduleStepInterrupt(uint32_t tim) __attribute__ ((hot));			// Schedule an interrupt at the specified clock count, or return true if it has passed already
 	static void DisableStepInterrupt();						// Make sure we get no step interrupts
 	static bool ScheduleSoftTimerInterrupt(uint32_t tim);	// Schedule an interrupt at the specified clock count, or return true if it has passed already
 	static void DisableSoftTimerInterrupt();				// Make sure we get no software timer interrupts
@@ -600,9 +601,15 @@ public:
 	// Misc
 	void InitI2c();
 
-	static uint8_t softwareResetDebugInfo;			// extra info for debugging
+	static uint8_t softwareResetDebugInfo;				// extra info for debugging
 
-//-------------------------------------------------------------------------------------------------------
+#if SAM4S || SAME70
+	// Static data used by step ISR
+	static volatile uint32_t stepTimerPendingStatus;	// for holding status bits that we have read (and therefore cleared) but haven't serviced yet
+	static volatile uint32_t stepTimerHighWord;			// upper 16 bits of step timer
+#endif
+
+	//-------------------------------------------------------------------------------------------------------
   
 private:
 	Platform(const Platform&);						// private copy constructor to make sure we don't try to copy a Platform
@@ -909,21 +916,18 @@ private:
 };
 
 // Where the htm etc files are
-
 inline const char* Platform::GetWebDir() const
 {
 	return WEB_DIR;
 }
 
 // Where the gcodes are
-
 inline const char* Platform::GetGCodeDir() const
 {
 	return GCODE_DIR;
 }
 
 // Where the system files are
-
 inline const char* Platform::GetSysDir() const
 {
 	return SYS_DIR;
@@ -1123,11 +1127,34 @@ inline float Platform::GetPressureAdvance(size_t extruder) const
 	return (extruder < MaxExtruders) ? pressureAdvance[extruder] : 0.0;
 }
 
+#if SAM4S || SAME70		// if the TCs are 16-bit
+
+// Get the interrupt clock count
+/*static*/ inline uint32_t Platform::GetInterruptClocks()
+{
+	const irqflags_t flags = cpu_irq_save();						// ensure interrupts are disabled
+	const uint32_t rslt = GetInterruptClocksInterruptsDisabled();
+	cpu_irq_restore(flags);											// restore interrupt enable state
+	return rslt;
+}
+
+// Function GetInterruptClocks() is quite long for these processors, so it is moved to Platform.cpp and no longer inlined
+
+#else					// TCs are 32-bit
+
 // Get the interrupt clock count
 /*static*/ inline uint32_t Platform::GetInterruptClocks()
 {
 	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
 }
+
+// Get the interrupt clock count, when we know that interrupts are already disabled
+/*static*/ inline uint32_t Platform::GetInterruptClocksInterruptsDisabled()
+{
+	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
+}
+
+#endif
 
 // This is called by the tick ISR to get the raw Z probe reading to feed to the filter
 inline uint16_t Platform::GetRawZProbeReading() const

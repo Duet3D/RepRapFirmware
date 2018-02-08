@@ -186,10 +186,12 @@ const uint32_t IAP_FLASH_END = 0x000FFBFF;								// don't touch the last 1KB, i
 #define NETWORK_TC_CHAN		(1)
 #define NETWORK_TC_IRQN		TC4_IRQn
 #define NETWORK_TC_HANDLER	TC4_Handler
+#define NETWORK_TC_ID		ID_TC4
 
 #define STEP_TC				(TC1)
 #define STEP_TC_CHAN		(0)
 #define STEP_TC_IRQN		TC3_IRQn
 #define STEP_TC_HANDLER		TC3_Handler
+#define STEP_TC_ID			ID_TC3
 
 #endif

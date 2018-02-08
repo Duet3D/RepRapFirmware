@@ -177,68 +177,12 @@ const uint32_t IAP_FLASH_END = 0x000FFBFF;		// don't touch the last 1KB, it's us
 #define NETWORK_TC_CHAN		(1)
 #define NETWORK_TC_IRQN		TC4_IRQn
 #define NETWORK_TC_HANDLER	TC4_Handler
+#define NETWORK_TC_ID		ID_TC4
 
 #define STEP_TC				(TC1)
 #define STEP_TC_CHAN		(0)
 #define STEP_TC_IRQN		TC3_IRQn
 #define STEP_TC_HANDLER		TC3_Handler
-
-
-#ifdef LCD_UI
-
-// Hardware I2C support for LCD
-#define TWI_ID           ID_TWI1
-
-#define FEATURE_CONTROLLER              7
-#define UI_PAGES_DURATION            4000
-#define UI_ANIMATION                    0
-#define UI_SPEEDDEPENDENT_POSITIONING   0
-#define UI_DISABLE_AUTO_PAGESWITCH      1
-#define UI_AUTORETURN_TO_MENU_AFTER 30000
-#define UI_ENCODER_SPEED                1
-#define UI_KEY_BOUNCETIME              10
-#define UI_KEY_FIRST_REPEAT           500
-#define UI_KEY_REDUCE_REPEAT           50
-#define UI_KEY_MIN_REPEAT              50
-#define FEATURE_BEEPER                  1
-#define UI_START_SCREEN_DELAY        1000
-
-#define CASE_LIGHTS_PIN                -1
-#define SPI_PIN                        77
-#define SPI_CHAN                        0
-#define UI_HAS_KEYS                     1
-#define UI_HAS_BACK_KEY                 1
-#define UI_DISPLAY_TYPE                 1
-#define UI_DISPLAY_CHARSET              1
-#define BEEPER_TYPE                     1
-#define UI_COLS                        20
-#define UI_ROWS                         4
-#define BEEPER_PIN                     41
-#define UI_DISPLAY_RS_PIN              42
-#define UI_DISPLAY_RW_PIN              -1
-#define UI_DISPLAY_ENABLE_PIN          43
-#define UI_DISPLAY_D0_PIN              44
-#define UI_DISPLAY_D1_PIN              45
-#define UI_DISPLAY_D2_PIN              46
-#define UI_DISPLAY_D3_PIN              47
-#define UI_DISPLAY_D4_PIN              44
-#define UI_DISPLAY_D5_PIN              45
-#define UI_DISPLAY_D6_PIN              46
-#define UI_DISPLAY_D7_PIN              47
-#define UI_ENCODER_A                   52
-#define UI_ENCODER_B                   50
-#define UI_ENCODER_CLICK               48
-#define UI_RESET_PIN                   -1
-#define UI_DELAYPERCHAR                40
-#define UI_INVERT_MENU_DIRECTION        0
-#define UI_BUTTON_BACK                 71
-
-// Beeper sound definitions for short beeps during key actions and longer
-// beeps for important actions.  Parameters are the delay in microseconds
-// followed by the number of repetitions.  Values must be in range 1..255
-#define BEEPER_SHORT_SEQUENCE         2,2
-#define BEEPER_LONG_SEQUENCE          8,8
-
-#endif // LCD_UI
+#define STEP_TC_ID			ID_TC3
 
 #endif

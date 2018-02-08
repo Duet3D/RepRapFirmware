@@ -21,6 +21,7 @@ struct LcdFont
 	uint16_t endCharacter;		// Unicode code point of the last character in the font
 	uint8_t height;				// row height in pixels - only this number of pixels will be fetched and drawn - maximum 16 in this version of the software
 	uint8_t width;				// max character width in pixels (the font table contains this number of bytes or words per character, plus 1 for the active width)
+	uint8_t numSpaces;			// number of space columns between characters before kerning
 };
 
 // Class for driving 128x64 graphical LCD fitted with ST7920 controller

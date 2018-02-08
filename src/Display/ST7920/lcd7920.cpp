@@ -29,8 +29,8 @@ const unsigned int LcdCommandDelayMicros = 72 - 24; // 72us required, less 24us 
 const unsigned int LcdDataDelayMicros = 10;			// delay between sending data bytes
 const unsigned int LcdDisplayClearDelayMillis = 3;	// 1.6ms should be enough
 
-const unsigned int numRows = 64;
-const unsigned int numCols = 128;
+const unsigned int NumRows = 64;
+const unsigned int NumCols = 128;
 
 Lcd7920::Lcd7920(uint8_t csPin)
 	: currentFont(nullptr), numContinuationBytesLeft(0), textInverted(false)
@@ -145,15 +145,23 @@ size_t Lcd7920::writeNative(uint16_t ch)
 
 	if (ch < startChar || ch > endChar)
 	{
-		return 0;
+		ch = 0x007F;			// replace unsupported characters by square box
 	}
 
-	const uint8_t fontWidth = currentFont->width;
-	const uint8_t fontHeight = currentFont->height;
-	const uint8_t bytesPerColumn = (fontHeight + 7)/8;
-	const uint8_t bytesPerChar = (bytesPerColumn * fontWidth) + 1;
+	uint8_t ySize = currentFont->height;
+	const uint8_t bytesPerColumn = (ySize + 7)/8;
+	if (row >= NumRows)
+	{
+		ySize = 0;
+	}
+	else if (row + ySize > NumRows)
+	{
+		ySize = NumRows - row;
+	}
+
+	const uint8_t bytesPerChar = (bytesPerColumn * currentFont->width) + 1;
 	const uint8_t *fontPtr = currentFont->ptr + (bytesPerChar * (ch - startChar));
-	const uint16_t cmask = (1u << fontHeight) - 1;
+	const uint16_t cmask = (1u << currentFont->height) - 1;
 
 	uint8_t nCols = *fontPtr++;
 
@@ -161,38 +169,50 @@ size_t Lcd7920::writeNative(uint16_t ch)
 	{
 		if (startRow > row) { startRow = row; }
 		if (startCol > column) { startCol = column; }
-		uint8_t nextRow = row + fontHeight;
-		if (nextRow > numRows) { nextRow = numRows; }
+		uint8_t nextRow = row + ySize;
+		if (nextRow > NumRows) { nextRow = NumRows; }
 		if (endRow < nextRow) { endRow = nextRow; }
 	}
 
-	// Decide whether to add a space column first (auto-kerning)
-	// We don't add a space column before a space character.
-	// We add a space column after a space character if we would have added one between the preceding and following characters.
-	if (column < rightMargin)
+	if (lastCharColData != 0)	// if we have written anything other than spaces
 	{
+		uint8_t numSpaces = currentFont->numSpaces;
+
+		// Decide whether to add a space column first (auto-kerning)
+		// We don't add a space column before a space character.
+		// We add a space column after a space character if we would have added one between the preceding and following characters.
 		uint16_t thisCharColData = *reinterpret_cast<const uint16_t*>(fontPtr) & cmask;
 		if (thisCharColData == 0)  // for characters with deliberate space column at the start, e.g. decimal point
 		{
 			thisCharColData = *reinterpret_cast<const uint16_t*>(fontPtr + 2) & cmask;
 		}
-		const bool wantSpace = ((thisCharColData | (thisCharColData << 1)) & (lastCharColData | (lastCharColData << 1))) != 0;
-		if (wantSpace)
+
+		const bool kern = (numSpaces >= 2)
+						? ((thisCharColData & lastCharColData) == 0)
+						: (((thisCharColData | (thisCharColData << 1)) & (lastCharColData | (lastCharColData << 1))) == 0);
+		if (kern)
 		{
-			// Add space after character
-			uint8_t mask = 0x80 >> (column & 7);
-			uint8_t *p = image + ((row * (numCols/8)) + (column/8));
-			for (uint8_t i = 0; i < fontHeight && p < (image + sizeof(image)); ++i)
+			--numSpaces;	// kern the character pair
+		}
+		if (numSpaces != 0 && column < rightMargin)
+		{
+			// Add a single space column after the character
+			if (ySize != 0)
 			{
-				if (textInverted)
+				const uint8_t mask = 0x80 >> (column & 7);
+				uint8_t *p = image + ((row * (NumCols/8)) + (column/8));
+				for (uint8_t i = 0; i < ySize && p < (image + sizeof(image)); ++i)
 				{
-					*p |= mask;
+					if (textInverted)
+					{
+						*p |= mask;
+					}
+					else
+					{
+						*p &= ~mask;
+					}
+					p += (NumCols/8);
 				}
-				else
-				{
-					*p &= ~mask;
-				}
-				p += (numCols/8);
 			}
 			++column;
 		}
@@ -208,9 +228,9 @@ size_t Lcd7920::writeNative(uint16_t ch)
 		}
 		const uint8_t mask1 = 0x80 >> (column & 7);
 		const uint8_t mask2 = ~mask1;
-		uint8_t *p = image + ((row * (numCols/8)) + (column/8));
+		uint8_t *p = image + ((row * (NumCols/8)) + (column/8));
 		const uint16_t setPixelVal = (textInverted) ? 0 : 1;
-		for (uint8_t i = 0; i < fontHeight && p < (image + sizeof(image)); ++i)
+		for (uint8_t i = 0; i < ySize && p < (image + sizeof(image)); ++i)
 		{
 			if ((colData & 1u) == setPixelVal)
 			{
@@ -221,7 +241,7 @@ size_t Lcd7920::writeNative(uint16_t ch)
 				*p &= mask2;     // clear pixel
 			}
 			colData >>= 1;
-			p += (numCols/8);
+			p += (NumCols/8);
 		}
 		--nCols;
 		++column;
@@ -229,7 +249,7 @@ size_t Lcd7920::writeNative(uint16_t ch)
 	
 	if (column > endCol)
 	{
-		endCol = column;
+		endCol = min<uint8_t>(column, NumCols);
 	}
 	return 1;
 }
@@ -237,7 +257,7 @@ size_t Lcd7920::writeNative(uint16_t ch)
 // Set the right margin. In graphics mode, anything written will be truncated at the right margin. Defaults to the right hand edge of the display.
 void Lcd7920::SetRightMargin(uint8_t r)
 {
-	rightMargin = (r > numCols) ? numCols : r;
+	rightMargin = (r > NumCols) ? NumCols : r;
 }
 
 // Clear a rectangle from the current position to the right margin. The height of the rectangle is the height of the current font.
@@ -253,14 +273,14 @@ void Lcd7920::ClearToMargin()
 			  if (startRow > row) { startRow = row; }
 			  if (startCol > column) { startCol = column; }
 			  uint8_t nextRow = row + fontHeight;
-			  if (nextRow > numRows) { nextRow = numRows; }
+			  if (nextRow > NumRows) { nextRow = NumRows; }
 			  if (endRow < nextRow) { endRow = nextRow; }
 			  if (endCol < rightMargin) { endCol = rightMargin; }
 			}
 
 			while (column < rightMargin)
 			{
-				uint8_t *p = image + ((row * (numCols/8)) + (column/8));
+				uint8_t *p = image + ((row * (NumCols/8)) + (column/8));
 				uint8_t mask = 0xFF >> (column & 7);
 				if ((column & (~7)) < (rightMargin & (~7)))
 				{
@@ -281,7 +301,7 @@ void Lcd7920::ClearToMargin()
 					{
 						*p &= ~mask;
 					}
-					p += (numCols/8);
+					p += (NumCols/8);
 				}
 			}
 		}
@@ -304,12 +324,12 @@ void Lcd7920::Clear()
 
 	// Flag whole image as dirty
 	startRow = 0;
-	endRow = numRows;
+	endRow = NumRows;
 	startCol = 0;
-	endCol = numCols;
+	endCol = NumCols;
 	SetCursor(0, 0);
 	textInverted = false;
-	rightMargin = numCols;
+	rightMargin = NumCols;
 }
 
 // Draw a line using the Bresenham Algorithm (thanks Wikipedia)
@@ -381,11 +401,11 @@ void Lcd7920::Circle(uint8_t x0, uint8_t y0, uint8_t radius, PixelMode mode)
 // Draw a bitmap. x0 and numCols must be divisible by 8.
 void Lcd7920::Bitmap(uint8_t x0, uint8_t y0, uint8_t width, uint8_t height, const uint8_t data[])
 {
-	for (uint8_t r = 0; r < height && r + y0 < numRows; ++r)
+	for (uint8_t r = 0; r < height && r + y0 < NumRows; ++r)
 	{
-		uint8_t *p = image + (((r + y0) * (numCols/8)) + (x0/8));
+		uint8_t *p = image + (((r + y0) * (NumCols/8)) + (x0/8));
 		uint16_t bitMapOffset = r * (width/8);
-		for (uint8_t c = 0; c < (width/8) && c + (x0/8) < numCols/8; ++c)
+		for (uint8_t c = 0; c < (width/8) && c + (x0/8) < NumCols/8; ++c)
 		{
 			*p++ = data[bitMapOffset++];
 		}
@@ -435,8 +455,8 @@ bool Lcd7920::FlushSome()
 			return true;
 		}
 
-		startRow = numRows;
-		startCol = numCols;
+		startRow = NumRows;
+		startCol = NumCols;
 		endCol = endRow = nextFlushRow = 0;
 	}
 	return false;
@@ -445,16 +465,16 @@ bool Lcd7920::FlushSome()
 // Set the cursor position
 void Lcd7920::SetCursor(uint8_t r, uint8_t c)
 {
-	row = r % numRows;
-	column = c % numCols;
+	row = r;
+	column = c;
 	lastCharColData = 0u;    // flag that we just set the cursor position, so no space before next character
 }
 
 void Lcd7920::SetPixel(uint8_t x, uint8_t y, PixelMode mode)
 {
-	if (y < numRows && x < rightMargin)
+	if (y < NumRows && x < rightMargin)
 	{
-		uint8_t * const p = image + ((y * (numCols/8)) + (x/8));
+		uint8_t * const p = image + ((y * (NumCols/8)) + (x/8));
 		const uint8_t mask = 0x80u >> (x%8);
 		switch(mode)
 		{
@@ -479,9 +499,9 @@ void Lcd7920::SetPixel(uint8_t x, uint8_t y, PixelMode mode)
 
 bool Lcd7920::ReadPixel(uint8_t x, uint8_t y) const
 {
-	if (y < numRows && x < numCols)
+	if (y < NumRows && x < NumCols)
 	{
-		const uint8_t * const p = image + ((y * (numCols/8)) + (x/8));
+		const uint8_t * const p = image + ((y * (NumCols/8)) + (x/8));
 		return (*p & (0x80u >> (x%8))) != 0;
 	}
 	return false;

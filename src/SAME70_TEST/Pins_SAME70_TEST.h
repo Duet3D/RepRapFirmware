@@ -169,10 +169,12 @@ constexpr Pin SamCsPin = 20;					// SPI NPCS pin, input from WiFi module
 #define NETWORK_TC_CHAN		(0)
 #define NETWORK_TC_IRQN		TC0_IRQn
 #define NETWORK_TC_HANDLER	TC0_Handler
+#define NETWORK_TC_ID		ID_TC0
 
 #define STEP_TC				(TC0)
 #define STEP_TC_CHAN		(1)
 #define STEP_TC_IRQN		TC1_IRQn
 #define STEP_TC_HANDLER		TC1_Handler
+#define STEP_TC_ID			ID_TC1
 
 #endif

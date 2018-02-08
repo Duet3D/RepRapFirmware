@@ -75,8 +75,8 @@ public:
 	bool CanQueueCodes() const;
 	void MessageAcknowledged(bool cancelled);
 	FilePosition GetFilePosition(size_t bytesCached) const;	// Get the file position at the start of the current command
-	bool IsWritingBinary() const;		// returns true if writing binary
-	void SetBinaryWriting(bool state);	// set true if writing binary
+	bool IsWritingBinary() const;						// returns true if writing binary
+	void SetBinaryWriting(bool state);					// set true if writing binary
 	uint32_t GetCRC32() const;
 	void SetCRC32(uint32_t newCRC32);
 

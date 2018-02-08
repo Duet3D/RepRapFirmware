@@ -12,8 +12,8 @@
 
 constexpr int DefaultPulsesPerClick = -4;			// values that work with displays I have are 2 and -4
 
-extern const LcdFont font16x16;
-extern const LcdFont font10x10;
+extern const LcdFont font11x14;
+//extern const LcdFont font10x10;
 
 static int val = 0;
 
@@ -30,7 +30,7 @@ void Display::Init()
 
 	//TODO display top menu here
 	// For now we just print some text to test the display
-	lcd.SetFont(&font16x16);
+	lcd.SetFont(&font11x14);
 
 	lcd.SetCursor(5, 5);
 	lcd.SetRightMargin(128);
@@ -114,7 +114,7 @@ void Display::UpdatingFirmware()
 	IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
 	lcd.TextInvert(false);
 	lcd.Clear();
-	lcd.SetFont(&font10x10);
+	lcd.SetFont(&font11x14);
 	lcd.SetCursor(20, 0);
 	lcd.print("Updating firmware...");
 	lcd.FlushAll();

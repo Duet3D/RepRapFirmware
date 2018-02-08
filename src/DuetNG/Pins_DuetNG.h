@@ -213,5 +213,6 @@ constexpr Pin W5500SsPin = 11;				// SPI NPCS pin, input from W5500 module
 #define STEP_TC_CHAN		(2)
 #define STEP_TC_IRQN		TC2_IRQn
 #define STEP_TC_HANDLER		TC2_Handler
+#define STEP_TC_ID			ID_TC2
 
 #endif

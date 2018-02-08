@@ -150,16 +150,25 @@ uint32_t lastSoftTimerInterruptScheduledAt = 0;
 // Therefore, be very careful what you do here!
 void UrgentInit()
 {
-#if HAS_SMART_DRIVERS
+#if defined(DUET_NG)
 	// When the reset button is pressed on pre-production Duet WiFi boards, if the TMC2660 drivers were previously enabled then we get
 	// uncommanded motor movements if the STEP lines pick up any noise. Try to reduce that by initialising the pins that control the drivers early here.
-	// On the production boards the ENN line is pulled high and that prevents motor movements.
+	// On the production boards the ENN line is pulled high by an external pullup resistor and that prevents motor movements.
 	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
 		pinMode(STEP_PINS[drive], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
 		pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);
 	}
+#endif
+
+#if defined(DUET_M)
+	// The prototype boards don't have a pulldown on LCD_BEEP, which causes a hissing sound from the beeper on the 12864 display until the pin is initialised
+	pinMode(LcdBeepPin, OUTPUT_LOW);
+
+	// On the prototype boards the stepper driver expansion ports don't have external pullup resistors on their enable pins
+	pinMode(ENABLE_PINS[5], OUTPUT_HIGH);
+	pinMode(ENABLE_PINS[6], OUTPUT_HIGH);
 #endif
 }
 
@@ -1979,18 +1988,21 @@ void Platform::InitialiseInterrupts()
 	// 1.067us resolution on the Duet WiFi (120MHz clock)
 	// 0.853us resolution on the SAM E70 (150MHz clock)
 	pmc_set_writeprotect(false);
-	pmc_enable_periph_clk((uint32_t) STEP_TC_IRQN);
+	pmc_enable_periph_clk((uint32_t) STEP_TC_ID);
 	tc_init(STEP_TC, STEP_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK4 | TC_CMR_EEVT_XC0);	// must set TC_CMR_EEVT nonzero to get RB compare interrupts
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = ~(uint32_t)0; // interrupts disabled for now
+#if SAM4S || SAME70		// if 16-bit TCs
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_COVFS;	// enable the overflow interrupt so that we can use it to extend the count to 32-bits
+#endif
 	tc_start(STEP_TC, STEP_TC_CHAN);
 	tc_get_status(STEP_TC, STEP_TC_CHAN);					// clear any pending interrupt
-	NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);		// set high priority for this IRQ; it's time-critical
+	NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);		// set priority for this IRQ
 	NVIC_EnableIRQ(STEP_TC_IRQN);
 
 #if HAS_LWIP_NETWORKING
-	pmc_enable_periph_clk((uint32_t) NETWORK_TC_IRQN);
+	pmc_enable_periph_clk((uint32_t) NETWORK_TC_ID);
 # if SAME70
-	// Timer interrupt to keep the networking timers running (called at 18Hz)
+	// Timer interrupt to keep the networking timers running (called at 18Hz, which is almost as low as we can get because the timer is 16-bit)
 	tc_init(NETWORK_TC, NETWORK_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
 	const uint32_t rc = (VARIANT_MCK/128)/18;				// 128 because we selected TIMER_CLOCK4 above (16-bit counter)
 # else
@@ -4484,10 +4496,57 @@ void Platform::InitI2c()
 // Step pulse timer interrupt
 void STEP_TC_HANDLER() __attribute__ ((hot));
 
+#if SAM4S || SAME70
+// Static data used by step ISR
+volatile uint32_t Platform::stepTimerPendingStatus = 0;	// for holding status bits that we have read (and therefore cleared) but haven't serviced yet
+volatile uint32_t Platform::stepTimerHighWord = 0;		// upper 16 bits of step timer
+#endif
+
 void STEP_TC_HANDLER()
 {
-	uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR;		// read the status register, which clears the interrupt
-	tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;				// select only enabled interrupts
+#if SAM4S || SAME70
+	// On the SAM4 we need to check for overflow whenever we read the step clock counter, and that clears the status flags.
+	// So we store the un-serviced status flags.
+	for (;;)
+	{
+		uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR | Platform::stepTimerPendingStatus;	// read the status register, which clears the status bits, and or-in any pending status bits
+		tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;				// select only enabled interrupts
+		if (tcsr == 0)
+		{
+			break;
+		}
+
+		if ((tcsr & TC_SR_COVFS) != 0)
+		{
+			Platform::stepTimerHighWord += (1u << 16);
+			Platform::stepTimerPendingStatus &= ~TC_SR_COVFS;
+		}
+
+		if ((tcsr & TC_SR_CPAS) != 0)									// the step interrupt uses RA compare
+		{
+			STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;		// disable the interrupt
+			Platform::stepTimerPendingStatus &= ~TC_SR_CPAS;
+#ifdef MOVE_DEBUG
+			++numInterruptsExecuted;
+			lastInterruptTime = Platform::GetInterruptClocks();
+#endif
+			reprap.GetMove().Interrupt();								// execute the step interrupt
+		}
+
+		if ((tcsr & TC_SR_CPBS) != 0)
+		{
+			STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;		// disable the interrupt
+			Platform::stepTimerPendingStatus &= ~TC_SR_CPBS;
+#ifdef SOFT_TIMER_DEBUG
+			++numSoftTimerInterruptsExecuted;
+#endif
+			SoftTimer::Interrupt();
+		}
+	}
+#else
+	uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR;			// read the status register, which clears the status bits, and or-in any pending status bits
+	tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;					// select only enabled interrupts
+
 	if ((tcsr & TC_SR_CPAS) != 0)									// the step interrupt uses RA compare
 	{
 		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;		// disable the interrupt
@@ -4506,13 +4565,41 @@ void STEP_TC_HANDLER()
 #endif
 		SoftTimer::Interrupt();
 	}
+#endif
 }
+
+#if SAM4S || SAME70
+
+// Get the interrupt clock count, when we know that interrupts are already disabled
+// The TCs on the SAM4S and SAME70 are only 16 bits wide, so we maintain the upper 16 bits in software
+/*static*/ uint32_t Platform::GetInterruptClocksInterruptsDisabled()
+{
+	uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR;	// get the status to see whether there is an overflow
+	tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;			// clear any bits that don't generate interrupts
+	uint32_t lowWord = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;	// get the timer low word
+	uint32_t highWord = stepTimerHighWord;						// get the volatile high word
+	if ((tcsr & TC_SR_COVFS) != 0)								// if the timer has overflowed
+	{
+		highWord += (1u << 16);									// overflow is pending, so increment the high word
+		stepTimerHighWord = highWord;							// and save it
+		tcsr &= ~TC_SR_COVFS;									// we handled the overflow, don't do it again
+		lowWord = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;		// read the low word again in case the overflow occurred just after we read it the first time
+	}
+	if (tcsr != 0)												// if there were any other pending status bits that generate interrupts
+	{
+		stepTimerPendingStatus |= tcsr;							// save the other pending bits
+		NVIC_SetPendingIRQ(STEP_TC_IRQN);						// set step timer interrupt pending
+	}
+	return (lowWord & 0x0000FFFF) | highWord;
+}
+
+#endif
 
 // Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
 /*static*/ bool Platform::ScheduleStepInterrupt(uint32_t tim)
 {
 	const irqflags_t flags = cpu_irq_save();
-	const int32_t diff = (int32_t)(tim - GetInterruptClocks());		// see how long we have to go
+	const int32_t diff = (int32_t)(tim - GetInterruptClocksInterruptsDisabled());	// see how long we have to go
 	if (diff < (int32_t)DDA::MinInterruptInterval)					// if less than about 6us or already passed
 	{
 		cpu_irq_restore(flags);
@@ -4539,13 +4626,16 @@ void STEP_TC_HANDLER()
 /*static*/ void Platform::DisableStepInterrupt()
 {
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;
+#if SAM4S || SAME70
+	stepTimerPendingStatus &= ~TC_SR_CPAS;
+#endif
 }
 
 // Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
 /*static*/ bool Platform::ScheduleSoftTimerInterrupt(uint32_t tim)
 {
 	const irqflags_t flags = cpu_irq_save();
-	const int32_t diff = (int32_t)(tim - GetInterruptClocks());		// see how long we have to go
+	const int32_t diff = (int32_t)(tim - GetInterruptClocksInterruptsDisabled());	// see how long we have to go
 	if (diff < (int32_t)DDA::MinInterruptInterval)					// if less than about 6us or already passed
 	{
 		cpu_irq_restore(flags);
@@ -4570,6 +4660,9 @@ void STEP_TC_HANDLER()
 /*static*/ void Platform::DisableSoftTimerInterrupt()
 {
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;
+#if SAM4S || SAME70
+	stepTimerPendingStatus &= ~TC_SR_CPBS;
+#endif
 }
 
 // Process a 1ms tick interrupt
