@@ -241,13 +241,13 @@ constexpr float DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full P
 constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command for full power
 
 // File handling
-constexpr size_t MAX_FILES = 10;					// Must be large enough to handle the max number of simultaneous web requests + files being printed
+constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of simultaneous web requests + files being printed
 constexpr size_t FILE_BUFFER_SIZE = 256;
 
 // Webserver stuff
-#define DEFAULT_PASSWORD "reprap"					// Default machine password
-#define DEFAULT_NAME "My Duet"						// Default machine name
-#define HOSTNAME "duet"								// Default netbios name
+#define DEFAULT_PASSWORD		"reprap"				// Default machine password
+#define DEFAULT_MACHINE_NAME	"My Duet"				// Default machine name
+#define DEFAULT_HOSTNAME 		"duet"					// Default netbios name
 
 #define INDEX_PAGE_FILE "reprap.htm"
 #define FOUR04_PAGE_FILE "html404.htm"

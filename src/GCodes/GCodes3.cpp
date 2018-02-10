@@ -15,7 +15,7 @@
 #include "Tools/Tool.h"
 
 #if HAS_WIFI_NETWORKING
-#include "FirmwareUpdater.h"
+# include "FirmwareUpdater.h"
 #endif
 
 #include "Wire.h"

@@ -1,29 +1,36 @@
 #include "Network.h"
 #include "OutputMemory.h"
 
-static const uint8_t dummy_ipv4[4] = { 0, 0, 0, 0 };
+const char * const notSupportedText = "Networking is not supported on this hardware";
 
-const char *notSupportedText = "Networking is not supported on this hardware";
-
-const uint8_t *Network::GetIPAddress() const
-{
-	return dummy_ipv4;
-}
-
-void Network::ReportProtocols(const StringRef& reply) const
+GCodeResult Network::EnableProtocol(unsigned int interface, int protocol, int port, bool secure, const StringRef& reply)
 {
 	reply.copy(notSupportedText);
+	return GCodeResult::error;
 }
 
-void Network::Enable(int mode, const StringRef& reply)
+GCodeResult Network::DisableProtocol(unsigned int interface, int protocol, const StringRef& reply)
 {
 	reply.copy(notSupportedText);
+	return GCodeResult::error;
 }
 
-bool Network::GetNetworkState(const StringRef& reply)
+GCodeResult Network::ReportProtocols(unsigned int interface, const StringRef& reply) const
 {
 	reply.copy(notSupportedText);
-	return false;
+	return GCodeResult::error;
+}
+
+GCodeResult Network::EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply)
+{
+	reply.copy(notSupportedText);
+	return GCodeResult::error;
+}
+
+GCodeResult Network::GetNetworkState(unsigned int interface, const StringRef& reply)
+{
+	reply.copy(notSupportedText);
+	return GCodeResult::error;
 }
 
 void Network::HandleHttpGCodeReply(OutputBuffer *buf)

@@ -94,7 +94,7 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 	printMonitor = new PrintMonitor(*platform, *gCodes);
 
 	SetPassword(DEFAULT_PASSWORD);
-	SetName(DEFAULT_NAME);
+	SetName(DEFAULT_MACHINE_NAME);
 	message[0] = 0;
 }
 
@@ -1234,7 +1234,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 #endif
 	response->catf("\",\"firmwareName\":\"%s\"", FIRMWARE_NAME);
 	response->catf(",\"firmwareVersion\":\"%s\"", VERSION);
-#if defined(DUET_NG) && defined(DUET_WIFI)
+#if HAS_WIFI_NETWORKING
 	response->catf(",\"dwsVersion\":\"%s\"", network->GetWiFiServerVersion());
 #endif
 	response->catf(",\"firmwareDate\":\"%s\"", DATE);

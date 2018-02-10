@@ -278,7 +278,7 @@ void Network::Init()
 		freeConnections = cs;
 	}
 
-	strcpy(hostname, HOSTNAME);
+	strcpy(hostname, DEFAULT_HOSTNAME);
 
 	webserver = new Webserver(&platform, this);
 	webserver->Init();
@@ -290,11 +290,12 @@ void Network::Exit()
 	webserver->Exit();
 }
 
-void Network::EnableProtocol(int protocol, int port, int secure, const StringRef& reply)
+GCodeResult Network::EnableProtocol(unsigned int interface, int protocol, int port, int secure, const StringRef& reply)
 {
 	if (secure != 0 && secure != -1)
 	{
-		reply.copy("Error: this firmware does not support TLS");
+		reply.copy("this firmware does not support TLS");
+		return GCodeResult::error;
 	}
 	else if (protocol >= 0 && protocol < (int)NumProtocols)
 	{
@@ -320,21 +321,23 @@ void Network::EnableProtocol(int protocol, int port, int secure, const StringRef
 	else
 	{
 		reply.copy("Invalid protocol parameter");
+		return GCodeResult::error;
 	}
+	return GCodeResult::ok;
 }
 
-void Network::DisableProtocol(int protocol, const StringRef& reply)
+GCodeResult Network::DisableProtocol(unsigned int interface, int protocol, const StringRef& reply)
 {
 	if (protocol >= 0 && protocol < (int)NumProtocols)
 	{
 		ShutdownProtocol(protocol);
 		protocolEnabled[protocol] = false;
 		ReportOneProtocol(protocol, reply);
+		return GCodeResult::ok;
 	}
-	else
-	{
-		reply.copy("Invalid protocol parameter");
-	}
+
+	reply.copy("Invalid protocol parameter");
+	return GCodeResult::error;
 }
 
 void Network::StartProtocol(size_t protocol)
@@ -358,7 +361,7 @@ void Network::ShutdownProtocol(size_t protocol)
 }
 
 // Report the protocols and ports in use
-void Network::ReportProtocols(const StringRef& reply) const
+GCodeResult Network::ReportProtocols(unsigned int interface, const StringRef& reply) const
 {
 	reply.Clear();
 	for (size_t i = 0; i < NumProtocols; ++i)
@@ -369,6 +372,7 @@ void Network::ReportProtocols(const StringRef& reply) const
 		}
 		ReportOneProtocol(i, reply);
 	}
+	return GCodeResult::ok;
 }
 
 void Network::ReportOneProtocol(size_t protocol, const StringRef& reply) const
@@ -760,7 +764,7 @@ void Network::Unlock()
 	UnlockLWIP();
 }
 
-bool Network::InLwip() const
+bool Network::InNetworkStack() const
 {
 	return lwipLocked;
 }
@@ -770,7 +774,7 @@ const uint8_t *Network::GetIPAddress() const
 	return ethernet_get_ipaddress();
 }
 
-void Network::SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[])
+void Network::SetEthernetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[])
 {
 	if (state == NetworkObtainingIP || state == NetworkActive)
 	{
@@ -804,7 +808,7 @@ void Network::SetHostname(const char *name)
 	else
 	{
 		// Don't allow empty hostnames
-		strcpy(hostname, HOSTNAME);
+		strcpy(hostname, DEFAULT_HOSTNAME);
 	}
 
 	if (state == NetworkActive)
@@ -813,7 +817,7 @@ void Network::SetHostname(const char *name)
 	}
 }
 
-void Network::Enable(int mode, const StringRef& reply)
+GCodeResult Network::EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply)
 {
 	if (mode != 0)
 	{
@@ -831,15 +835,16 @@ void Network::Enable(int mode, const StringRef& reply)
 			Stop();
 		}
 	}
+	return GCodeResult::ok;
 }
 
 // Get the network state into the reply buffer, returning true if there is some sort of error
-bool Network::GetNetworkState(const StringRef& reply)
+GCodeResult Network::GetNetworkState(unsigned int interface, const StringRef& reply)
 {
 	reply.printf("Network is %s, configured IP address: %s, actual IP address: %s",
 					(isEnabled) ? "enabled" : "disabled",
 						IP4String(platform.GetIPAddress()).c_str(), IP4String(ethernet_get_ipaddress()).c_str());
-	return false;
+	return GCodeResult::ok;
 }
 
 void Network::Activate()

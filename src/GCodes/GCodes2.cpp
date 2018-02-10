@@ -2591,10 +2591,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 552: // Enable/Disable network and/or Set/Get IP address
 		{
 			bool seen = false;
+			const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 
-#if HAS_MULTIPLE_NETWORK_INTERFACES
-			const int interface = (gb.Seen('I') ? gb.GetIValue() : 0);
-
+			String<SsidBufferLength> ssid;
 			if (reprap.GetNetwork().IsWiFiInterface(interface))
 			{
 				if (gb.Seen('S')) // Has the user turned the network on or off?
@@ -2602,16 +2601,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					const int enableValue = gb.GetIValue();
 					seen = true;
 
-					char ssidBuffer[SsidLength + 1];
-					StringRef ssid(ssidBuffer, ARRAY_SIZE(ssidBuffer));
-					if (gb.Seen('P') && !gb.GetQuotedString(ssid))
+					if (gb.Seen('P') && !gb.GetQuotedString(ssid.GetRef()))
 					{
 						reply.copy("Bad or missing SSID");
 						result = GCodeResult::error;
 					}
 					else
 					{
-						reprap.GetNetwork().EnableWiFi(enableValue, ssid, reply);
+						result = reprap.GetNetwork().EnableInterface(interface, enableValue, ssid.GetRef(), reply);
 					}
 				}
 			}
@@ -2637,58 +2634,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (gb.Seen('S')) // Has the user turned the network on or off?
 				{
 					seen = true;
-					reprap.GetNetwork().EnableEthernet(gb.GetIValue(), reply);
+					result = reprap.GetNetwork().EnableInterface(interface, gb.GetIValue(), ssid.GetRef(), reply);
 				}
 			}
-#elif HAS_WIFI_NETWORKING
-			if (gb.Seen('S')) // Has the user turned the network on or off?
-			{
-				const int enableValue = gb.GetIValue();
-				seen = true;
-
-				String<SsidLength> ssid;
-				if (gb.Seen('P') && !gb.GetQuotedString(ssid.GetRef()))
-				{
-					reply.copy("Bad or missing SSID");
-					result = GCodeResult::error;
-				}
-				else
-				{
-					reprap.GetNetwork().Enable(enableValue, ssid.GetRef(), reply);
-				}
-			}
-#else
-			if (gb.Seen('P'))
-			{
-				seen = true;
-				uint8_t eth[4];
-				if (gb.GetIPAddress(eth))
-				{
-					platform.SetIPAddress(eth);
-				}
-				else
-				{
-					reply.copy("Bad IP address");
-					result = GCodeResult::error;
-					break;
-				}
-			}
-
-			// Process this one last in case the IP address is changed and the network enabled in the same command
-			if (gb.Seen('S')) // Has the user turned the network on or off?
-			{
-				seen = true;
-				reprap.GetNetwork().Enable(gb.GetIValue(), reply);
-			}
-#endif
 
 			if (!seen)
 			{
-#if HAS_MULTIPLE_NETWORK_INTERFACES
-				result = GetGCodeResultFromError(reprap.GetNetwork().GetNetworkState(interface, reply));
-#else
-				result = GetGCodeResultFromError(reprap.GetNetwork().GetNetworkState(reply));
-#endif
+				result = reprap.GetNetwork().GetNetworkState(interface, reply);
 			}
 		}
 		break;
@@ -3329,13 +3281,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 586: // Configure network protocols
-#if HAS_MULTIPLE_NETWORK_INTERFACES
 		{
-			const int interface = (gb.Seen('I') ? gb.GetIValue() : 0);
+			const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 
 			if (gb.Seen('P'))
 			{
-				const int protocol = gb.GetIValue();
+				const unsigned int protocol = gb.GetUIValue();
 				if (gb.Seen('S'))
 				{
 					const bool enable = (gb.GetIValue() == 1);
@@ -3343,43 +3294,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					{
 						const int port = (gb.Seen('R')) ? gb.GetIValue() : -1;
 						const int secure = (gb.Seen('T')) ? gb.GetIValue() : -1;
-						reprap.GetNetwork().EnableProtocol(interface, protocol, port, secure, reply);
+						result = reprap.GetNetwork().EnableProtocol(interface, protocol, port, secure, reply);
 					}
 					else
 					{
-						reprap.GetNetwork().DisableProtocol(interface, protocol, reply);
+						result = reprap.GetNetwork().DisableProtocol(interface, protocol, reply);
 					}
 				}
-				break;
 			}
-
-			// Default to reporting current protocols if P or S parameter missing
-			reprap.GetNetwork().ReportProtocols(interface, reply);
-		}
-#else
-		if (gb.Seen('P'))
-		{
-			const int protocol = gb.GetIValue();
-			if (gb.Seen('S'))
+			else
 			{
-				const bool enable = (gb.GetIValue() == 1);
-				if (enable)
-				{
-					const int port = (gb.Seen('R')) ? gb.GetIValue() : -1;
-					const int secure = (gb.Seen('T')) ? gb.GetIValue() : -1;
-					reprap.GetNetwork().EnableProtocol(protocol, port, secure, reply);
-				}
-				else
-				{
-					reprap.GetNetwork().DisableProtocol(protocol, reply);
-				}
-				break;
+				// Default to reporting current protocols if P or S parameter missing
+				result = reprap.GetNetwork().ReportProtocols(interface, reply);
 			}
 		}
-
-		// Default to reporting current protocols if P or S parameter missing
-		reprap.GetNetwork().ReportProtocols(reply);
-#endif
 		break;
 
 #if HAS_WIFI_NETWORKING

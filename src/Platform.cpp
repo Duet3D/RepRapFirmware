@@ -1306,13 +1306,7 @@ void Platform::UpdateNetworkAddress(byte dst[4], const byte src[4])
 	{
 		dst[i] = src[i];
 	}
-#if HAS_LWIP_NETWORKING
-# if HAS_MULTIPLE_NETWORK_INTERFACES
-	reprap.GetNetwork().SetIPAddress(EthernetInterfaceIndex, ipAddress, gateWay, netMask);
-# else
-	reprap.GetNetwork().SetIPAddress(ipAddress, gateWay, netMask);
-# endif
-#endif
+	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, gateWay, netMask);
 }
 
 void Platform::SetIPAddress(byte ip[])
@@ -1855,7 +1849,7 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 				reason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
 			}
 #if HAS_LWIP_NETWORKING
-			if (reprap.GetNetwork().InLwip())
+			if (reprap.GetNetwork().InNetworkStack())
 			{
 				reason |= (uint16_t)SoftwareResetReason::inLwipSpin;
 			}

@@ -9,6 +9,7 @@
 #define SRC_DUETNG_DUETETHERNET_NETWORKDEFS_H_
 
 #include <cstdint>
+#include <cstddef>
 
 class NetworkTransaction;
 class ConnectionState;
@@ -31,6 +32,8 @@ const uint8_t DefaultGateway[4] = { 0, 0, 0, 0 };
 const Port DefaultHttpPort = 80;
 const Port DefaultFtpPort = 21;
 const Port DefaultTelnetPort = 23;
+
+const size_t SsidBufferLength = 32;		// maximum size of a WiFi SSID
 
 // MSS is defined in lwip
 #include "Lwip/lwipopts.h"

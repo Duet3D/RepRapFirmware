@@ -56,7 +56,7 @@ public:
 	bool StartScan(const char *filename, int param);	// Start a new 3D scan. Returns true when the scan has been initiated
 	bool Cancel();										// Cancel current 3D scanner action. Returns true when done
 	bool Calibrate();									// Calibrate the 3D scanner. Returns true when done
-	bool SetAlignment(bool on);							// Send ALIGN ON/OFF to the 3D sanner. Returns true when done
+	bool SetAlignment(bool on);							// Send ALIGN ON/OFF to the 3D scanner. Returns true when done
 	bool Shutdown();									// Send SHUTDOWN to the scanner and unregisters it
 
 	bool DoingGCodes() const { return doingGCodes; }	// Has the scanner run any G-codes since the last state transition?
@@ -85,7 +85,7 @@ private:
 	char buffer[ScanBufferSize];
 	size_t bufferPointer;
 
-	char scanFilename[MaxFilenameLength];
+	String<MaxFilenameLength> scanFilename;
 	int scanParam;
 
 	const char *uploadFilename;

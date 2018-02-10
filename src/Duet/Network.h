@@ -12,6 +12,7 @@ Separated out from Platform.h by dc42 and extended by zpl
 #include "NetworkDefs.h"
 #include "RepRapFirmware.h"
 #include "MessageType.h"
+#include "GCodes/GCodeResult.h"
 
 #include "Lwip/lwip/src/include/lwip/err.h"		// for err_t
 
@@ -55,12 +56,11 @@ public:
 	void Interrupt();
 	void Diagnostics(MessageType mtype);
 
-	void EnableProtocol(int protocol, int port, int secure, const StringRef& reply);
-	void DisableProtocol(int protocol, const StringRef& reply);
-	void ReportProtocols(const StringRef& reply) const;
+	GCodeResult EnableProtocol(unsigned int interface, int protocol, int port, int secure, const StringRef& reply);
+	GCodeResult DisableProtocol(unsigned int interface, int protocol, const StringRef& reply);
+	GCodeResult ReportProtocols(unsigned int interface, const StringRef& reply) const;
 
 	// Deal with LwIP
-
 	void ResetCallback();
 	bool ReceiveInput(pbuf *pb, ConnectionState *cs);
 	ConnectionState *ConnectionAccepted(tcp_pcb *pcb);
@@ -69,15 +69,16 @@ public:
 
 	bool Lock();
 	void Unlock();
-	bool InLwip() const;
+	bool InNetworkStack() const;
 
 	// Global settings
 	const uint8_t *GetIPAddress() const;
-	void SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[]);
+	void SetEthernetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[]);
 	void SetHostname(const char *name);
+	bool IsWiFiInterface(unsigned int interface) const { return false; }
 
-	void Enable(int mode, const StringRef& reply);			// enable or disable the network
-	bool GetNetworkState(const StringRef& reply);
+	GCodeResult EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply);			// enable or disable the network
+	GCodeResult GetNetworkState(unsigned int interface, const StringRef& reply);
 	void Activate();
 
 	// Interfaces for the Webserver

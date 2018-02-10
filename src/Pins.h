@@ -32,12 +32,6 @@
 #endif
 #include P_INCLUDE_FILE
 
-#if (HAS_LWIP_NETWORKING + HAS_WIFI_NETWORKING) > 1
-# define HAS_MULTIPLE_NETWORK_INTERFACES	1
-#else
-# define HAS_MULTIPLE_NETWORK_INTERFACES	0
-#endif
-
 #ifndef SUPPORT_NONLINEAR_EXTRUSION
 # define SUPPORT_NONLINEAR_EXTRUSION		1		// for now this is always enabled
 #endif
