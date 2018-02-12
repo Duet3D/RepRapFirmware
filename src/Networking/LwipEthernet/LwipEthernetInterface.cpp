@@ -145,6 +145,8 @@ void LwipEthernetInterface::Init()
 	{
 		listeningPcbs[i] = nullptr;
 	}
+
+	memcpy(macAddress, platform.GetDefaultMacAddress(), sizeof(macAddress));
 }
 
 GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply)
@@ -344,7 +346,7 @@ void LwipEthernetInterface::Start()
 		const char *hostname = reprap.GetNetwork().GetHostname();
 
 		// Allow the MAC address to be set only before LwIP is started...
-		ethernet_configure_interface(platform.MACAddress(), hostname);
+		ethernet_configure_interface(platform.GetDefaultMacAddress(), hostname);
 		init_ethernet(DefaultIpAddress, DefaultNetMask, DefaultGateway);
 
 		// Initialise mDNS subsystem
@@ -542,16 +544,6 @@ int LwipEthernetInterface::EnableState() const
 	return (state == NetworkState::disabled) ? 0 : 1;
 }
 
-bool LwipEthernetInterface::Lock()
-{
-	return LockLWIP();
-}
-
-void LwipEthernetInterface::Unlock()
-{
-	UnlockLWIP();
-}
-
 bool LwipEthernetInterface::InNetworkStack() const
 {
 	return lwipLocked;
@@ -620,6 +612,11 @@ void LwipEthernetInterface::UpdateHostname(const char *hostname)
 		netbiosns_set_name(hostname);
 		RebuildMdnsServices();			// This updates the mDNS hostname too
 	}
+}
+
+void LwipEthernetInterface::SetMacAddress(const uint8_t mac[])
+{
+	memcpy(macAddress, mac, sizeof(macAddress));
 }
 
 void LwipEthernetInterface::OpenDataPort(Port port)

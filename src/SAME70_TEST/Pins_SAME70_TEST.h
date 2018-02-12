@@ -1,9 +1,9 @@
 #ifndef PINS_SAME70_H__
 #define PINS_SAME70_H__
 
-# define FIRMWARE_NAME "RepRapFirmware for SAME70"
-# define DEFAULT_BOARD_TYPE BoardType::SAME70_TEST
-const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module
+# define FIRMWARE_NAME		"RepRapFirmware for SAME70"
+# define DEFAULT_BOARD_TYPE BoardType::SamE70TestBoard
+const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
 # define IAP_FIRMWARE_FILE	"SAME70Firmware.bin"
 # define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
 # define WIFI_WEB_FILE		"DuetWebControl.bin"
@@ -160,7 +160,7 @@ constexpr uint32_t IAP_FLASH_END = 0x0047FFFF;		// we allow a full 64K on the SA
 // Duet pin numbers to control the WiFi interface
 constexpr Pin EspResetPin = 19;					// Low on this in holds the WiFi module in reset (ESP_RESET)
 constexpr Pin EspEnablePin = 48;				// High to enable the WiFi module, low to power it down (ESP_CH_PD)
-constexpr Pin EspTransferRequestPin = 12;		// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
+constexpr Pin EspDataReadyPin = 12;				// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
 constexpr Pin SamTfrReadyPin = 36;				// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
 constexpr Pin SamCsPin = 20;					// SPI NPCS pin, input from WiFi module
 

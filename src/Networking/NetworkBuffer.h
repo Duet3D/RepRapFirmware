@@ -86,12 +86,8 @@ private:
 	NetworkBuffer *next;
 	size_t dataLength;
 	size_t readPointer;
-#ifdef DUET_WIFI
-	// When doing unaligned transfers on the WiFi interface, up to 3 extra bytes may be returned
+	// When doing unaligned transfers on the WiFi interface, up to 3 extra bytes may be returned, hence the +1 in the following
 	uint32_t data32[bufferSize/sizeof(uint32_t) + 1];		// 32-bit aligned buffer so we can do direct DMA
-#else
-	uint32_t data32[bufferSize/sizeof(uint32_t)];			// 32-bit aligned buffer so we can do direct DMA
-#endif
 	static NetworkBuffer *freelist;
 };
 

@@ -111,14 +111,13 @@ constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in millisec
 enum class BoardType : uint8_t
 {
 	Auto = 0,
-#if defined(__SAME70Q21__)
-	SAME70_TEST = 1
-#elif defined(DUET_NG) && defined(DUET_WIFI)
+#if defined(SAME70_TEST_BOARD)
+	SamE70TestBoard = 1
+#elif defined(DUET_NG)
 	DuetWiFi_10 = 1,
-	DuetWiFi_102 = 2
-#elif defined(DUET_NG) && defined(DUET_ETHERNET)
-	DuetEthernet_10 = 1,
-	DuetEthernet_102 = 2
+	DuetWiFi_102 = 2,
+	DuetEthernet_10 = 3,
+	DuetEthernet_102 = 4
 #elif defined(DUET_M)
 	DuetM_10 = 1,
 #elif defined(DUET_06_085)
@@ -330,6 +329,12 @@ public:
 	const char* GetElectronicsString() const;
 	const char* GetBoardString() const;
 
+#ifdef DUET_NG
+	bool IsDuetWiFi() const;
+#endif
+
+	const uint8_t *GetDefaultMacAddress() const { return defaultMacAddress; }
+
 	// Timing
 	static uint32_t GetInterruptClocks() __attribute__ ((hot));						// Get the interrupt clock count
 	static uint32_t GetInterruptClocksInterruptsDisabled() __attribute__ ((hot));	// Get the interrupt clock count, when we know already that interrupts are disabled
@@ -358,8 +363,6 @@ public:
 	const uint8_t* NetMask() const;
 	void SetGateWay(uint8_t gw[]);
 	const uint8_t* GateWay() const;
-	void SetMACAddress(uint8_t mac[]);
-	const uint8_t* MACAddress() const;
 	void SetBaudRate(size_t chan, uint32_t br);
 	uint32_t GetBaudRate(size_t chan) const;
 	void SetCommsProperties(size_t chan, uint32_t cp);
@@ -694,7 +697,7 @@ private:
 	byte ipAddress[4];
 	byte netMask[4];
 	byte gateWay[4];
-	uint8_t macAddress[6];
+	uint8_t defaultMacAddress[6];
 	Compatibility compatibility;
 
 	BoardType board;
@@ -1115,11 +1118,6 @@ inline const uint8_t* Platform::NetMask() const
 inline const uint8_t* Platform::GateWay() const
 {
 	return gateWay;
-}
-
-inline const uint8_t* Platform::MACAddress() const
-{
-	return macAddress;
 }
 
 inline float Platform::GetPressureAdvance(size_t extruder) const

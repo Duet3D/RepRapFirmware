@@ -352,6 +352,7 @@ Platform::Platform() :
 
 //*******************************************************************************************************************
 
+// Initialise the Platform. Note: this is the first module to be initialised, so don't call other modules from here!
 void Platform::Init()
 {
 	// Deal with power first
@@ -385,14 +386,15 @@ void Platform::Init()
 #endif
 
 	compatibility = marlin;						// default to Marlin because the common host programs expect the "OK" response to commands
+
+	// File management
+	massStorage->Init();
+
 	ARRAY_INIT(ipAddress, DefaultIpAddress);
 	ARRAY_INIT(netMask, DefaultNetMask);
 	ARRAY_INIT(gateWay, DefaultGateway);
 
-#if defined(DUET_NG) && defined(DUET_WIFI)
-	// The WiFi module has a unique MAC address, so we don't need a default
-	memset(macAddress, 0xFF, sizeof(macAddress));
-#elif (defined(DUET_NG) && defined(DUET_ETHERNET)) || (defined(__SAME70Q21__))
+#if defined(DUET_NG)  || defined(SAME70_TEST_BOARD)
 	// On the Duet Ethernet and SAM E70, use the unique chip ID as most of the MAC address.
 	// The unique ID is 128 bits long whereas the whole MAC address is only 48 bits,
 	// so we can't guarantee that each Duet will get a unique MAC address this way.
@@ -401,33 +403,27 @@ void Platform::Init()
 		memset(idBuf, 0, sizeof(idBuf));
 		DisableCache();
 		cpu_irq_disable();
-		uint32_t rc = flash_read_unique_id(idBuf, 4);
+		const uint32_t rc = flash_read_unique_id(idBuf, 4);
 		cpu_irq_enable();
 		EnableCache();
 		if (rc == 0)
 		{
-			memset(macAddress, 0, sizeof(macAddress));
-			macAddress[0] = 0xBE;					// use a fixed first byte with the locally-administered bit set
+			memset(defaultMacAddress, 0, sizeof(defaultMacAddress));
+			defaultMacAddress[0] = 0xBE;					// use a fixed first byte with the locally-administered bit set
 			const uint8_t * const idBytes = reinterpret_cast<const uint8_t *>(idBuf);
 			for (size_t i = 0; i < 15; ++i)
 			{
-				macAddress[(i % 5) + 1] ^= idBytes[i];
+				defaultMacAddress[(i % 5) + 1] ^= idBytes[i];
 			}
 		}
 		else
 		{
-			ARRAY_INIT(macAddress, DefaultMacAddress);
+			ARRAY_INIT(defaultMacAddress, DefaultMacAddress);
 		}
 	}
-#else
-	// Set the default MAC address. The user must change it manually if using more than one Duet 06 or 085 on a network.
-	ARRAY_INIT(macAddress, DefaultMacAddress);
-#endif
+#elif defined(DUET_06_085)
+	ARRAY_INIT(defaultMacAddress, DefaultMacAddress);
 
-	// File management
-	massStorage->Init();
-
-#if defined(DUET_06_085)
 	// Motor current setting on Duet 0.6 and 0.8.5
 	InitI2c();
 	mcpExpansion.setMCP4461Address(0x2E);		// not required for mcpDuet, as this uses the default address
@@ -436,19 +432,20 @@ void Platform::Init()
 	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
 	stepperDacVoltageRange = STEPPER_DAC_VOLTAGE_RANGE;
 	stepperDacVoltageOffset = STEPPER_DAC_VOLTAGE_OFFSET;
-#endif
-
-#if defined(__ALLIGATOR__)
+#elif defined(__ALLIGATOR__)
 	pinMode(EthernetPhyResetPin, INPUT);													// Init Ethernet Phy Reset Pin
+
 	// Alligator Init DAC for motor current vref
 	ARRAY_INIT(spiDacCS, SPI_DAC_CS);
 	dacAlligator.Init(spiDacCS[0]);
 	dacPiggy.Init(spiDacCS[1]);
 	// Get macaddress from EUI48 eeprom
 	eui48MacAddress.Init(Eui48csPin);
-	if(! eui48MacAddress.getEUI48(macAddress)) {
-		ARRAY_INIT(macAddress, DefaultMacAddress);
+	if (!eui48MacAddress.getEUI48(defaultMacAddress))
+	{
+		ARRAY_INIT(defaultMacAddress, DefaultMacAddress);
 	}
+
 	Microstepping::Init();																	// Init Motor FAULT detect Pin
 	pinMode(ExpansionVoltageLevelPin, ExpansionVoltageLevel==3 ? OUTPUT_LOW : OUTPUT_HIGH); // Init Expansion Voltage Level Pin
 	pinMode(MotorFaultDetectPin,INPUT);														// Init Motor FAULT detect Pin
@@ -3423,14 +3420,6 @@ void Platform::InitFans()
 	}
 }
 
-void Platform::SetMACAddress(uint8_t mac[])
-{
-	for (size_t i = 0; i < 6; i++)
-	{
-		macAddress[i] = mac[i];
-	}
-}
-
 void Platform::SetEndStopConfiguration(size_t axis, EndStopPosition esPos, EndStopInputType inputType)
 {
 	endStopPos[axis] = esPos;
@@ -3920,9 +3909,13 @@ void Platform::SetBoardType(BoardType bt)
 {
 	if (bt == BoardType::Auto)
 	{
-#if defined(__SAME70Q21__)
-		board = BoardType::SAME70_TEST;
+#if defined(SAME70_TEST_BOARD)
+		board = BoardType::SamE70TestBoard;
 #elif defined(DUET_NG)
+		// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
+		pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500. We assume that this forces the ESP8266 UART output pin to high impedance.
+		pinMode(W5500ModuleSensePin, INPUT_PULLUP);				// set our UART receive pin to be an input pin and enable the pullup
+
 		// Set up the VSSA sense pin. Older Duet WiFis don't have it connected, so we enable the pulldown resistor to keep it inactive.
 		pinMode(VssaSensePin, INPUT_PULLUP);
 		delayMicroseconds(10);
@@ -3936,11 +3929,15 @@ void Platform::SetBoardType(BoardType bt)
 			pinMode(VssaSensePin, INPUT);
 		}
 
-# if defined(DUET_WIFI)
-		board = (vssaSenseWorking) ? BoardType::DuetWiFi_102 : BoardType::DuetWiFi_10;
-# elif defined(DUET_ETHERNET)
-		board = (vssaSenseWorking) ? BoardType::DuetEthernet_102 : BoardType::DuetEthernet_10;
-# endif
+		// Test whether the Ethernet module is present
+		if (digitalRead(W5500ModuleSensePin))					// the Ethernet module has this pin grounded
+		{
+			board = (vssaSenseWorking) ? BoardType::DuetWiFi_102 : BoardType::DuetWiFi_10;
+		}
+		else
+		{
+			board = (vssaSenseWorking) ? BoardType::DuetEthernet_102 : BoardType::DuetEthernet_10;
+		}
 #elif defined(DUET_M)
 		board = BoardType::DuetM_10;
 #elif defined(DUET_06_085)
@@ -3949,6 +3946,7 @@ void Platform::SetBoardType(BoardType bt)
 		// So we enable the pullup (value 100K-150K) on pin 67 and read it, expecting a LOW on a 0.8.5 board and a HIGH on a 0.6 board.
 		// This may fail if anyone connects a load to the DAC0 pin on a Duet 0.6, hence we implement board selection in M115 as well.
 		pinMode(Dac0DigitalPin, INPUT_PULLUP);
+		delayMicroseconds(10);
 		board = (digitalRead(Dac0DigitalPin)) ? BoardType::Duet_06 : BoardType::Duet_085;
 		pinMode(Dac0DigitalPin, INPUT);			// turn pullup off
 #elif defined(__RADDS__)
@@ -3976,12 +3974,11 @@ const char* Platform::GetElectronicsString() const
 {
 	switch (board)
 	{
-#if defined(__SAME70Q21__)
-	case BoardType::SAME70_TEST:			return "SAM E70 prototype 1";
-#elif defined(DUET_NG) && defined(DUET_WIFI)
+#if defined(SAME70_TEST_BOARD)
+	case BoardType::SamE70TestBoard:		return "SAM E70 prototype 1";
+#elif defined(DUET_NG)
 	case BoardType::DuetWiFi_10:			return "Duet WiFi 1.0 or 1.01";
 	case BoardType::DuetWiFi_102:			return "Duet WiFi 1.02 or later";
-#elif defined(DUET_NG) && defined(DUET_ETHERNET)
 	case BoardType::DuetEthernet_10:		return "Duet Ethernet 1.0 or 1.01";
 	case BoardType::DuetEthernet_102:		return "Duet Ethernet 1.02 or later";
 #elif defined(DUET_M)
@@ -4006,12 +4003,11 @@ const char* Platform::GetBoardString() const
 {
 	switch (board)
 	{
-#if defined(__SAME70Q21__)
-	case BoardType::SAME70_TEST:			return "same70prototype1";
-#elif defined(DUET_NG) && defined(DUET_WIFI)
+#if defined(SAME70_TEST_BOARD)
+	case BoardType::SamE70TestBoard:		return "same70prototype1";
+#elif defined(DUET_NG)
 	case BoardType::DuetWiFi_10:			return "duetwifi10";
 	case BoardType::DuetWiFi_102:			return "duetwifi102";
-#elif defined(DUET_NG) && defined(DUET_ETHERNET)
 	case BoardType::DuetEthernet_10:		return "duetethernet10";
 	case BoardType::DuetEthernet_102:		return "duetethernet102";
 #elif defined(DUET_M)
@@ -4030,6 +4026,14 @@ const char* Platform::GetBoardString() const
 	default:								return "unknown";
 	}
 }
+
+#ifdef DUET_NG
+// Return true if this is a Duet WiFi, false if it is a Duet Ethernet
+bool Platform::IsDuetWiFi() const
+{
+	return board == BoardType::DuetWiFi_10 || board == BoardType::DuetWiFi_102;
+}
+#endif
 
 // User I/O and servo support
 bool Platform::GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firmwarePin, bool& invert)

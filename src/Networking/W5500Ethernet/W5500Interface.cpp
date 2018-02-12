@@ -40,6 +40,7 @@ void W5500Interface::Init()
 	lastTickMillis = millis();
 
 	SetIPAddress(DefaultIpAddress, DefaultNetMask, DefaultGateway);
+	memcpy(macAddress, platform.GetDefaultMacAddress(), sizeof(macAddress));
 }
 
 GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply)
@@ -209,6 +210,15 @@ GCodeResult W5500Interface::GetNetworkState(const StringRef& reply)
 	return GCodeResult::ok;
 }
 
+// Update the MAC address
+void W5500Interface::SetMacAddress(const uint8_t mac[])
+{
+	for (size_t i = 0; i < 6; i++)
+	{
+		macAddress[i] = mac[i];
+	}
+}
+
 // Start up the network
 void W5500Interface::Start()
 {
@@ -226,7 +236,7 @@ void W5500Interface::Start()
 
 	wizchip_init(bufSizes, bufSizes);
 
-	setSHAR(platform.MACAddress());
+	setSHAR(macAddress);
 	setSIPR(ipAddress);
 	setGAR(gateway);
 	setSUBR(netmask);
@@ -346,7 +356,7 @@ void W5500Interface::Spin(bool full)
 
 			// Move on to the next TCP socket for next time
 			++nextSocketToPoll;
-			if (nextSocketToPoll == NumTcpSockets)
+			if (nextSocketToPoll == NumW5500TcpSockets)
 			{
 				nextSocketToPoll = 0;
 			}
@@ -439,7 +449,7 @@ void W5500Interface::DataPortClosing()
 
 void W5500Interface::TerminateSockets()
 {
-	for (SocketNumber skt = 0; skt < NumTcpSockets; ++skt)
+	for (SocketNumber skt = 0; skt < NumW5500TcpSockets; ++skt)
 	{
 		sockets[skt]->Terminate();
 	}

@@ -2540,23 +2540,26 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 540: // Set/report MAC address
-		if (gb.Seen('P'))
 		{
-			uint8_t mac[6];
-			if (gb.GetMacAddress(mac))
+			const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
+			if (gb.Seen('P'))
 			{
-				platform.SetMACAddress(mac);
+				uint8_t mac[6];
+				if (gb.GetMacAddress(mac))
+				{
+					reprap.GetNetwork().SetMacAddress(interface, mac);
+				}
+				else
+				{
+					reply.copy("Bad MAC address");
+					result = GCodeResult::error;
+				}
 			}
 			else
 			{
-				reply.copy("Bad MAC address");
-				result = GCodeResult::error;
+				const uint8_t * const mac = reprap.GetNetwork().GetMacAddress(interface);
+				reply.printf("MAC: %02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 			}
-		}
-		else
-		{
-			const uint8_t *mac = platform.MACAddress();
-			reply.printf("MAC: %02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 		}
 		break;
 

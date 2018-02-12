@@ -225,7 +225,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Networking/LwipEthernet|src/Networking/W5500Ethernet|src/Alligator|src/SAME70_TEST|src/Display|src/Duet|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Networking/LwipEthernet|src/Alligator|src/SAME70_TEST|src/Display|src/Duet|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

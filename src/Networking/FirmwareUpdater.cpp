@@ -19,7 +19,7 @@
 namespace FirmwareUpdater
 {
 	const unsigned int WifiFirmwareModule = 1;
-	const unsigned int WifiFilesModule = 2;
+	// Module 2 used to be the DWC binary file but is no longer used
 	const unsigned int WifiExternalFirmwareModule = 3;
 
 	// Check that the prerequisites are satisfied.
@@ -27,7 +27,7 @@ namespace FirmwareUpdater
 	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, const StringRef& reply)
 	{
 #if HAS_WIFI_NETWORKING
-		if ((moduleMap & (1 << WifiExternalFirmwareModule)) != 0 && (moduleMap & ((1 << WifiFirmwareModule) | (1 << WifiFilesModule))) != 0)
+		if ((moduleMap & (1 << WifiExternalFirmwareModule)) != 0 && (moduleMap & (1 << WifiFirmwareModule)) != 0)
 		{
 			reply.copy("Invalid combination of firmware update modules");
 			return false;
@@ -35,11 +35,6 @@ namespace FirmwareUpdater
 		if ((moduleMap & (1 << WifiFirmwareModule)) != 0 && !reprap.GetPlatform().GetMassStorage()->FileExists(SYS_DIR, WIFI_FIRMWARE_FILE))
 		{
 			reply.printf("File %s not found", WIFI_FIRMWARE_FILE);
-			return false;
-		}
-		if ((moduleMap & (1 << WifiFilesModule)) != 0 && !reprap.GetPlatform().GetMassStorage()->FileExists(SYS_DIR, WIFI_WEB_FILE))
-		{
-			reply.printf("File %s not found", WIFI_WEB_FILE);
 			return false;
 		}
 #endif
@@ -59,32 +54,29 @@ namespace FirmwareUpdater
 	void UpdateModule(unsigned int module)
 	{
 #if HAS_WIFI_NETWORKING
-		switch(module)
+# ifdef DUET_NG
+		if (reprap.GetPlatform().IsDuetWiFi())
 		{
-		case WifiExternalFirmwareModule:
-			reprap.GetNetwork().ResetWiFiForUpload(true);
-			break;
-
-		case WifiFirmwareModule:
+# endif
+			switch(module)
 			{
-				WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
-				if (uploader != nullptr)
-				{
-					uploader->SendUpdateFile(WIFI_FIRMWARE_FILE, SYS_DIR, WifiFirmwareUploader::FirmwareAddress);
-				}
-			}
-			break;
+			case WifiExternalFirmwareModule:
+				reprap.GetNetwork().ResetWiFiForUpload(true);
+				break;
 
-			case WifiFilesModule:
-			{
-				WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
-				if (uploader != nullptr)
+			case WifiFirmwareModule:
 				{
-					uploader->SendUpdateFile(WIFI_WEB_FILE, SYS_DIR, WifiFirmwareUploader::WebFilesAddress);
+					WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
+					if (uploader != nullptr)
+					{
+						uploader->SendUpdateFile(WIFI_FIRMWARE_FILE, SYS_DIR, WifiFirmwareUploader::FirmwareAddress);
+					}
 				}
+				break;
 			}
-			break;
+# ifdef DUET_NG
 		}
+# endif
 #endif
 	}
 }

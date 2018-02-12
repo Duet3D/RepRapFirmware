@@ -44,14 +44,6 @@ public:
 	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) override;
 	GCodeResult ReportProtocols(const StringRef& reply) const override;
 
-	// LwIP interfaces
-	void ResetCallback();
-	bool Lock();
-	void Unlock();
-
-	bool ConnectionEstablished(tcp_pcb *pcb);
-
-	// Global settings
 	GCodeResult GetNetworkState(const StringRef& reply) override;
 	int EnableState() const override;
 	bool InNetworkStack() const override;
@@ -60,6 +52,11 @@ public:
 	void UpdateHostname(const char *hostname) override;
 	const uint8_t *GetIPAddress() const override;
 	void SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[]) override;
+	void SetMacAddress(const uint8_t mac[]) override;
+	const uint8_t *GetMacAddress() const override { return macAddress; }
+
+	// LwIP interfaces
+	bool ConnectionEstablished(tcp_pcb *pcb);
 
 	void OpenDataPort(Port port) override;
 	void TerminateDataPort() override;
@@ -104,6 +101,8 @@ private:
 	bool activated;
 	bool initialised;
 	bool usingDhcp;
+
+	uint8_t macAddress[6];
 };
 
 #endif

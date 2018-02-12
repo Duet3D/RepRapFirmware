@@ -60,6 +60,8 @@ public:
 	void UpdateHostname(const char *hostname) override;
 	const uint8_t *GetIPAddress() const override { return ipAddress; }
 	void SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[]) override;
+	void SetMacAddress(const uint8_t mac[]) override;
+	const uint8_t *GetMacAddress() const override { return macAddress; }
 
 	void OpenDataPort(Port port) override;
 	void TerminateDataPort() override;
@@ -123,7 +125,7 @@ private:
 
 	WifiFirmwareUploader *uploader;
 
-	WiFiSocket *sockets[NumTcpSockets];
+	WiFiSocket *sockets[NumWiFiTcpSockets];
 	size_t currentSocket;
 
 	Port portNumbers[NumProtocols];					// port number used for each protocol
@@ -140,6 +142,7 @@ private:
 	uint8_t ipAddress[4];
 	uint8_t netmask[4];
 	uint8_t gateway[4];
+	uint8_t macAddress[6];
 	char requestedSsid[SsidLength + 1];
 	char actualSsid[SsidLength + 1];
 

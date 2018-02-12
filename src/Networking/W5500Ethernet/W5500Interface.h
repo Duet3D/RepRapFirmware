@@ -24,7 +24,7 @@ const size_t NumHttpSockets = 4;				// sockets 0-3 are for HTTP
 const SocketNumber FtpSocketNumber = 4;
 const SocketNumber FtpDataSocketNumber = 5;		// TODO can we allocate this dynamically when required, to allow more http sockets most of the time?
 const SocketNumber TelnetSocketNumber = 6;
-const size_t NumTcpSockets = 7;
+const size_t NumW5500TcpSockets = 7;
 const SocketNumber DhcpSocketNumber = 7;		// TODO can we allocate this dynamically when required, to allow more http sockets most of the time?
 
 class Platform;
@@ -51,11 +51,13 @@ public:
 	GCodeResult GetNetworkState(const StringRef& reply) override;
 	int EnableState() const override;
 	bool InNetworkStack() const override { return false; }
-	bool IsWiFiInterface() const override { return true; }
+	bool IsWiFiInterface() const override { return false; }
 
 	void UpdateHostname(const char *name) override { }
-
 	const uint8_t *GetIPAddress() const override { return ipAddress; }
+	void SetMacAddress(const uint8_t mac[]) override;
+	const uint8_t *GetMacAddress() const override { return macAddress; }
+
 	void OpenDataPort(Port port) override;
 	void TerminateDataPort() override;
 	void DataPortClosing() override;
@@ -84,11 +86,10 @@ private:
 	pre(protocol < NumProtocols);
 
 	void SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[]);
-
 	Platform& platform;
 	uint32_t lastTickMillis;
 
-	W5500Socket *sockets[NumTcpSockets];
+	W5500Socket *sockets[NumW5500TcpSockets];
 	size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
 
 	Port portNumbers[NumProtocols];					// port number used for each protocol
@@ -101,6 +102,7 @@ private:
 	uint8_t ipAddress[4];
 	uint8_t netmask[4];
 	uint8_t gateway[4];
+	uint8_t macAddress[6];
 };
 
 #endif

@@ -35,17 +35,23 @@
 
 Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderToPoll(nullptr)
 {
-	// Create the network modules
-
 #if defined(SAME70_TEST_BOARD)
 	interfaces[0] = new LwipEthernetInterface(p);
 	interfaces[1] = new WiFiInterface(p);
-#elif defined(DUET_WIFI)
-	interfaces[0] = new WiFiInterface(p);
-#elif defined(DUET_ETHERNET) || defined(DUET_M)
+#elif defined(DUET_NG)
+	interfaces[0] = nullptr;			// we set this up in Init()
+#elif defined(DUET_M)
 	interfaces[0] = new W5500Interface(p);
 #else
 # error Unknown board
+#endif
+}
+
+// Note that Platform::Init() must be called before this to that Platform::IsDuetWiFi() returns the correct value
+void Network::Init()
+{
+#if defined(DUET_NG)
+	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new W5500Interface(platform));
 #endif
 
 	// Create the responders
@@ -61,11 +67,7 @@ Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderT
 	{
 		responders = new HttpResponder(responders);
 	}
-}
 
-void Network::Init()
-{
-	longWait = millis();
 	strcpy(hostname, DEFAULT_HOSTNAME);
 
 	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
@@ -74,6 +76,8 @@ void Network::Init()
 	{
 		iface->Init();
 	}
+
+	longWait = millis();
 }
 
 GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, int secure, const StringRef& reply)
@@ -161,7 +165,7 @@ const char* Network::GetWiFiServerVersion() const
 	}
 #endif
 
-	return "(not defined)";
+	return "no WiFi interface";
 }
 
 WifiFirmwareUploader *Network::GetWifiUploader() const
@@ -372,6 +376,24 @@ void Network::SetHostname(const char *name)
 	{
 		iface->UpdateHostname(hostname);
 	}
+}
+
+// Net the MAC address. Pass -1 as the interface number to set the default MAC address for interfaces that don't have one.
+void Network::SetMacAddress(unsigned int interface, const uint8_t mac[])
+{
+	if (interface < NumNetworkInterfaces)
+	{
+		interfaces[interface]->SetMacAddress(mac);
+	}
+}
+
+const uint8_t *Network::GetMacAddress(unsigned int interface) const
+{
+	if (interface >= NumNetworkInterfaces)
+	{
+		interface = 0;
+	}
+	return interfaces[interface]->GetMacAddress();
 }
 
 // Find a responder to process a new connection

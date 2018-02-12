@@ -94,7 +94,6 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 	printMonitor = new PrintMonitor(*platform, *gCodes);
 
 	SetPassword(DEFAULT_PASSWORD);
-	SetName(DEFAULT_MACHINE_NAME);
 	message[0] = 0;
 }
 
@@ -102,8 +101,9 @@ void RepRap::Init()
 {
 	// All of the following init functions must execute reasonably quickly before the watchdog times us out
 	platform->Init();
-	gCodes->Init();
 	network->Init();
+	SetName(DEFAULT_MACHINE_NAME);		// network must be initialised before calling this because it calls SetHostName
+	gCodes->Init();
 	move->Init();
 	heat->Init();
 #if SUPPORT_ROLAND
@@ -119,7 +119,7 @@ void RepRap::Init()
 #if SUPPORT_12864_LCD
  	display->Init();
 #endif
-	active = true;					// must do this before we start the network, else the watchdog may time out
+	active = true;						// must do this before we start the network, else the watchdog may time out
 
 	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
@@ -1234,9 +1234,19 @@ OutputBuffer *RepRap::GetConfigResponse()
 #endif
 	response->catf("\",\"firmwareName\":\"%s\"", FIRMWARE_NAME);
 	response->catf(",\"firmwareVersion\":\"%s\"", VERSION);
+
 #if HAS_WIFI_NETWORKING
-	response->catf(",\"dwsVersion\":\"%s\"", network->GetWiFiServerVersion());
+	// If we have WiFi networking, send the WiFi module firmware version
+# ifdef DUET_NG
+	if (platform->IsDuetWiFi())
+	{
+# endif
+		response->catf(",\"dwsVersion\":\"%s\"", network->GetWiFiServerVersion());
+# ifdef DUET_NG
+	}
+# endif
 #endif
+
 	response->catf(",\"firmwareDate\":\"%s\"", DATE);
 
 	// Motor idle parameters

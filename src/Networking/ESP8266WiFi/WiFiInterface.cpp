@@ -21,7 +21,7 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 
 // Define exactly one of the following as 1, the other as zero
 
-#if defined(DUET_WIFI)
+#if defined(DUET_NG)
 
 // The PDC seems to be too slow to work reliably without getting transmit underruns, so we use the DMAC now.
 # define USE_PDC		0		// use peripheral DMA controller
@@ -121,12 +121,12 @@ static void EspTransferRequestIsr(CallbackParameter)
 
 static inline void EnableEspInterrupt()
 {
-	attachInterrupt(EspTransferRequestPin, EspTransferRequestIsr, RISING, nullptr);
+	attachInterrupt(EspDataReadyPin, EspTransferRequestIsr, RISING, nullptr);
 }
 
 static inline void DisableEspInterrupt()
 {
-	detachInterrupt(EspTransferRequestPin);
+	detachInterrupt(EspDataReadyPin);
 }
 
 /*-----------------------------------------------------------------------------------*/
@@ -162,7 +162,7 @@ void WiFiInterface::Init()
 
 	SetIPAddress(DefaultIpAddress, DefaultNetMask, DefaultGateway);
 
-	for (size_t i = 0; i < NumTcpSockets; ++i)
+	for (size_t i = 0; i < NumWiFiTcpSockets; ++i)
 	{
 		sockets[i]->Init(i);
 	}
@@ -389,7 +389,7 @@ void WiFiInterface::Start()
 	pinMode(SamTfrReadyPin, OUTPUT_LOW);
 
 	// Set up our data ready pin (ESP GPIO0) as an output and set it high ready to boot the ESP from flash
-	pinMode(EspTransferRequestPin, OUTPUT_HIGH);
+	pinMode(EspDataReadyPin, OUTPUT_HIGH);
 
 	// GPIO2 also needs to be high to boot. It's connected to MISO on the SAM, so set the pullup resistor on that pin
 	pinMode(APIN_SPI_MISO, INPUT_PULLUP);
@@ -414,7 +414,7 @@ void WiFiInterface::Start()
 	pinMode(SamCsPin, INPUT);
 
 	// Set the data request pin to be an input
-	pinMode(EspTransferRequestPin, INPUT_PULLUP);
+	pinMode(EspDataReadyPin, INPUT_PULLUP);
 
 	// The ESP takes about 300ms before it starts talking to us, so don't wait for it here, do that in Spin()
 	spiTxUnderruns = spiRxOverruns = 0;
@@ -472,7 +472,7 @@ void WiFiInterface::Spin(bool full)
 		{
 			// See if the ESP8266 has kept its pins at their stable values for long enough
 			const uint32_t now = millis();
-			if (digitalRead(SamCsPin) && digitalRead(EspTransferRequestPin) && !digitalRead(APIN_SPI_SCK))
+			if (digitalRead(SamCsPin) && digitalRead(EspDataReadyPin) && !digitalRead(APIN_SPI_SCK))
 			{
 				if (now - lastTickMillis >= WiFiStableMillis)
 				{
@@ -522,7 +522,7 @@ void WiFiInterface::Spin(bool full)
 	case NetworkState::active:
 		if (full)
 		{
-			if (espStatusChanged && digitalRead(EspTransferRequestPin))
+			if (espStatusChanged && digitalRead(EspDataReadyPin))
 			{
 				if (reprap.Debug(moduleNetwork))
 				{
@@ -573,7 +573,7 @@ void WiFiInterface::Spin(bool full)
 						break;
 					}
 					++currentSocket;
-					if (currentSocket == NumTcpSockets)
+					if (currentSocket == NumWiFiTcpSockets)
 					{
 						currentSocket = 0;
 					}
@@ -582,7 +582,7 @@ void WiFiInterface::Spin(bool full)
 				// Either the current socket needs polling, or no sockets do but we must still poll one of them to get notified of any new connections
 				sockets[currentSocket]->Poll(full);
 				++currentSocket;
-				if (currentSocket == NumTcpSockets)
+				if (currentSocket == NumWiFiTcpSockets)
 				{
 					currentSocket = 0;
 				}
@@ -607,7 +607,7 @@ void WiFiInterface::Spin(bool full)
 		break;
 
 	case NetworkState::changingMode:
-		if (full && espStatusChanged && digitalRead(EspTransferRequestPin))
+		if (full && espStatusChanged && digitalRead(EspDataReadyPin))
 		{
 			GetNewStatus();
 			if (currentMode != WiFiState::connecting)
@@ -771,7 +771,7 @@ void WiFiInterface::Diagnostics(MessageType mtype)
 		}
 	}
 	platform.Message(mtype, "Socket states:");
-	for (size_t i = 0; i < NumTcpSockets; i++)
+	for (size_t i = 0; i < NumWiFiTcpSockets; i++)
 	{
 		platform.MessageF(mtype, " %d", sockets[i]->State());
 	}
@@ -1093,6 +1093,15 @@ void WiFiInterface::UpdateHostname(const char *hostname)
 	}
 }
 
+void WiFiInterface::SetMacAddress(const uint8_t mac[])
+{
+	for (size_t i = 0; i < 6; i++)
+	{
+		macAddress[i] = mac[i];
+	}
+	// TODO actually update the mac address on the wifi module. For now we don't support this.
+}
+
 void WiFiInterface::InitSockets()
 {
 	for (size_t i = 0; i < NumProtocols; ++i)
@@ -1107,7 +1116,7 @@ void WiFiInterface::InitSockets()
 
 void WiFiInterface::TerminateSockets()
 {
-	for (SocketNumber skt = 0; skt < NumTcpSockets; ++skt)
+	for (SocketNumber skt = 0; skt < NumWiFiTcpSockets; ++skt)
 	{
 		sockets[skt]->Terminate();
 	}
@@ -1127,7 +1136,7 @@ void WiFiInterface::TerminateSockets(Port port)
 // This is called to tell the network which sockets are active
 void WiFiInterface::UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClosedSockets)
 {
-	for (size_t i = 0; i < NumTcpSockets; ++i)
+	for (size_t i = 0; i < NumWiFiTcpSockets; ++i)
 	{
 		if (((connectedSockets | otherEndClosedSockets) & (1u << i)) != 0)
 		{
@@ -1538,7 +1547,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	// Wait for the ESP to be ready, with timeout
 	{
 		const uint32_t now = millis();
-		while (!digitalRead(EspTransferRequestPin))
+		while (!digitalRead(EspDataReadyPin))
 		{
 			if (millis() - now > WiFiWaitReadyMillis)
 			{
@@ -1777,7 +1786,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external)
 	pinMode(SamTfrReadyPin, OUTPUT_LOW);
 
 	// Set up our data ready pin (ESP GPIO0) as an output and set it low ready to boot the ESP from UART
-	pinMode(EspTransferRequestPin, OUTPUT_LOW);
+	pinMode(EspDataReadyPin, OUTPUT_LOW);
 
 	// GPIO2 also needs to be high to boot up. It's connected to MISO on the SAM, so set the pullup resistor on that pin
 	pinMode(APIN_SPI_MISO, INPUT_PULLUP);

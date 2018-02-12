@@ -75,6 +75,8 @@ public:
 	const uint8_t *GetIPAddress() const;
 	void SetEthernetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[]);
 	void SetHostname(const char *name);
+	void SetMacAddress(unsigned int interface, const uint8_t mac[]);
+	const uint8_t *GetMacAddress(unsigned int interface) const { return macAddress; }
 	bool IsWiFiInterface(unsigned int interface) const { return false; }
 
 	GCodeResult EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply);			// enable or disable the network
@@ -146,6 +148,7 @@ private:
 	bool activated;
 	volatile bool resetCallback;
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
+	uint8_t macAddress[6];
 
 	ConnectionState * volatile dataCs;
 	ConnectionState * volatile ftpCs;

@@ -279,6 +279,7 @@ void Network::Init()
 	}
 
 	strcpy(hostname, DEFAULT_HOSTNAME);
+	memcpy(macAddress, platform.GetDefaultMacAddress(), sizeof(macAddress));
 
 	webserver = new Webserver(&platform, this);
 	webserver->Init();
@@ -817,6 +818,14 @@ void Network::SetHostname(const char *name)
 	}
 }
 
+void Network::SetMacAddress(unsigned int interface, const uint8_t mac[])
+{
+	for (size_t i = 0; i < 6; i++)
+	{
+		macAddress[i] = mac[i];
+	}
+}
+
 GCodeResult Network::EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply)
 {
 	if (mode != 0)
@@ -861,7 +870,7 @@ void Network::Start()
 	if (state == NotStarted)
 	{
 		// Allow the MAC address to be set only before LwIP is started...
-		ethernet_configure_interface(platform.MACAddress(), hostname);
+		ethernet_configure_interface(macAddress, hostname);
 		init_ethernet();
 		netbios_init();
 		state = NetworkInactive;

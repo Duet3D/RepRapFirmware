@@ -35,6 +35,8 @@ public:
 
 	virtual const uint8_t *GetIPAddress() const = 0;
 	virtual void SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[]) = 0;
+	virtual void SetMacAddress(const uint8_t mac[]) = 0;
+	virtual const uint8_t *GetMacAddress() const = 0;
 
 	virtual void UpdateHostname(const char *hostname) = 0;
 
