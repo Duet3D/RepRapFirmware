@@ -61,10 +61,10 @@ bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoor
 		if (armMode != switchedMode)
 		{
 			// The following equations choose arm mode 0 i.e. distal arm rotated anticlockwise relative to proximal arm
-			if (psi >= psiLimits[0] && psi <= psiLimits[1])
+			if (supportsContinuousRotation[1] || (psi >= psiLimits[0] && psi <= psiLimits[1]))
 			{
 				theta = atan2f(SCARA_K1 * y - SCARA_K2 * x, SCARA_K1 * x + SCARA_K2 * y);
-				if (theta >= thetaLimits[0] && theta <= thetaLimits[1])
+				if (supportsContinuousRotation[0] || (theta >= thetaLimits[0] && theta <= thetaLimits[1]))
 				{
 					break;
 				}
@@ -73,10 +73,10 @@ bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoor
 		else
 		{
 			// The following equations choose arm mode 1 i.e. distal arm rotated clockwise relative to proximal arm
-			if ((-psi) >= psiLimits[0] && (-psi) <= psiLimits[1])
+			if (supportsContinuousRotation[1] || ((-psi) >= psiLimits[0] && (-psi) <= psiLimits[1]))
 			{
 				theta = atan2f(SCARA_K1 * y + SCARA_K2 * x, SCARA_K1 * x - SCARA_K2 * y);
-				if (theta >= thetaLimits[0] && theta <= thetaLimits[1])
+				if (supportsContinuousRotation[0] || (theta >= thetaLimits[0] && theta <= thetaLimits[1]))
 				{
 					psi = -psi;
 					break;
@@ -430,17 +430,27 @@ void ScaraKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalise
 	}
 }
 
+// Return true if the specified axis is a continuous rotation axis
+bool ScaraKinematics::IsContinuousRotationAxis(size_t axis) const
+{
+	return axis < 2 && supportsContinuousRotation[axis];
+}
+
 // Recalculate the derived parameters
 void ScaraKinematics::Recalc()
 {
 	proximalArmLengthSquared = fsquare(proximalArmLength);
 	distalArmLengthSquared = fsquare(distalArmLength);
-	twoPd = proximalArmLength * distalArmLength * 2.0f;
+	twoPd = proximalArmLength * distalArmLength * 2;
 
 	minRadius = sqrtf(proximalArmLengthSquared + distalArmLengthSquared
 						- twoPd * max<float>(cosf(psiLimits[0] * DegreesToRadians), cosf(psiLimits[1] * DegreesToRadians))) * 1.005;
 
-	if (psiLimits[0] < 0.0 && psiLimits[1] > 0.0)
+	// If the total angle range is greater than 360 degrees, we assume that it supports continuous rotation
+	supportsContinuousRotation[0] = (thetaLimits[1] - thetaLimits[0] > 360.0);
+	supportsContinuousRotation[1] = (psiLimits[1] - psiLimits[0] > 360.0);
+
+	if (supportsContinuousRotation[1] || (psiLimits[0] <= 0.0 && psiLimits[1] >= 0.0))
 	{
 		// Zero distal arm angle is reachable
 		maxRadius = proximalArmLength + distalArmLength;

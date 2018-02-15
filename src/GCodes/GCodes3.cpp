@@ -24,14 +24,27 @@
 // Note that G31 P or G31 P0 prints the parameters of the currently-selected Z probe.
 GCodeResult GCodes::SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply)
 {
-	int32_t zProbeType = 0;
+	ZProbeType probeType;
 	bool seenT = false;
-	gb.TryGetIValue('T',zProbeType, seenT);
-	if (zProbeType == 0)
+	if (gb.Seen('T'))
 	{
-		zProbeType = platform.GetZProbeType();
+		unsigned int tp = gb.GetUIValue();
+		if (tp == 0 || tp >= (unsigned int)ZProbeType::numTypes)
+		{
+			reply.copy("Invalid Z probe type");
+			return GCodeResult::error;
+		}
+
+		probeType = (ZProbeType)tp;
+		seenT = true;
 	}
-	ZProbeParameters params = platform.GetZProbeParameters(zProbeType);
+	else
+	{
+		probeType = platform.GetZProbeType();
+		seenT = false;
+	}
+
+	ZProbe params = platform.GetZProbeParameters(probeType);
 	bool seen = false;
 	gb.TryGetFValue(axisLetters[X_AXIS], params.xOffset, seen);
 	gb.TryGetFValue(axisLetters[Y_AXIS], params.yOffset, seen);
@@ -59,7 +72,7 @@ GCodeResult GCodes::SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply)
 		{
 			return GCodeResult::notFinished;
 		}
-		platform.SetZProbeParameters(zProbeType, params);
+		platform.SetZProbeParameters(probeType, params);
 	}
 	else if (seenT)
 	{
@@ -305,7 +318,7 @@ GCodeResult GCodes::SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply)
 		seenType = true;
 	}
 
-	ZProbeParameters params = platform.GetCurrentZProbeParameters();
+	ZProbe params = platform.GetCurrentZProbeParameters();
 	gb.TryGetFValue('H', params.diveHeight, seenParam);		// dive height
 
 	if (gb.Seen('F'))		// feed rate i.e. probing speed
@@ -326,6 +339,12 @@ GCodeResult GCodes::SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply)
 		seenParam = true;
 	}
 
+	if (gb.Seen('B'))
+	{
+		params.turnHeatersOff = (gb.GetIValue() == 1);
+		seenParam = true;
+	}
+
 	gb.TryGetFValue('R', params.recoveryTime, seenParam);	// Z probe recovery time
 	gb.TryGetFValue('S', params.tolerance, seenParam);		// tolerance when multi-tapping
 
@@ -342,10 +361,12 @@ GCodeResult GCodes::SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply)
 
 	if (!(seenType || seenParam))
 	{
-		reply.printf("Z Probe type %d, invert %s, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min, recovery time %.2f sec, max taps %u, max diff %.2f",
-						platform.GetZProbeType(), (params.invertReading) ? "yes" : "no", (double)params.diveHeight,
+		reply.printf("Z Probe type %u, invert %s, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
+						(unsigned int)platform.GetZProbeType(), (params.invertReading) ? "yes" : "no", (double)params.diveHeight,
 						(int)(params.probeSpeed * MinutesToSeconds), (int)(params.travelSpeed * MinutesToSeconds),
-						(double)params.recoveryTime, params.maxTaps, (double)params.tolerance);
+						(double)params.recoveryTime,
+						(params.turnHeatersOff) ? "suspended" : "normal",
+						params.maxTaps, (double)params.tolerance);
 	}
 	return GCodeResult::ok;
 }
@@ -818,7 +839,7 @@ GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 			gb.GetIntArray(values, numValues, false);
 			if (numValues != 0)
 			{
-				reprap.GetPlatform().InitI2c();
+				platform.InitI2c();
 				I2C_IFACE.beginTransmission((int)address);
 				for (size_t i = 0; i < numValues; ++i)
 				{
@@ -853,7 +874,7 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 			uint32_t numBytes = gb.GetUIValue();
 			if (numBytes > 0 && numBytes <= MaxI2cBytes)
 			{
-				reprap.GetPlatform().InitI2c();
+				platform.InitI2c();
 				I2C_IFACE.requestFrom(address, numBytes);
 				reply.copy("Received");
 				const uint32_t now = millis();

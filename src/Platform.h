@@ -38,6 +38,7 @@ Licence: GPL
 #include "Storage/FileData.h"
 #include "Storage/MassStorage.h"	// must be after Pins.h because it needs NumSdCards defined
 #include "MessageType.h"
+#include "Zprobe.h"
 #include "ZProbeProgrammer.h"
 
 #if defined(DUET_NG)
@@ -96,7 +97,6 @@ const float AXIS_MAXIMA[MaxAxes] = AXES_(230.0, 210.0, 200.0, 0.0, 0.0, 0.0, 0.0
 
 constexpr float Z_PROBE_STOP_HEIGHT = 0.7;						// Millimetres
 constexpr unsigned int Z_PROBE_AVERAGE_READINGS = 8;			// We average this number of readings with IR on, and the same number with IR off
-constexpr int Z_PROBE_AD_VALUE = 500;							// Default for the Z probe - should be overwritten by experiment
 
 // HEATERS - The bed is assumed to be the at index 0
 
@@ -197,28 +197,6 @@ enum class DiagnosticTestType : int
 };
 
 /***************************************************************************************************************/
-
-// Struct for holding Z probe parameters
-
-struct ZProbeParameters
-{
-	int32_t adcValue;				// the target ADC value, after inversion if enabled
-	float xOffset, yOffset;			// the offset of the probe relative to the print head
-	float triggerHeight;			// the nozzle height at which the target ADC value is returned
-	float calibTemperature;			// the temperature at which we did the calibration
-	float temperatureCoefficient;	// the variation of height with bed temperature
-	float diveHeight;				// the dive height we use when probing
-	float probeSpeed;				// the initial speed of probing
-	float travelSpeed;				// the speed at which we travel to the probe point
-	float recoveryTime;				// Z probe recovery time
-	float tolerance;				// maximum difference between probe heights when doing >1 taps
-	uint8_t maxTaps;				// maximum probes at each point
-	bool invertReading;				// true if we need to invert the reading
-
-	void Init(float h);
-	float GetStopHeight(float temperature) const;
-	bool WriteParameters(FileStore *f, unsigned int probeType) const;
-};
 
 // Class to perform averaging of values read from the ADC
 // numAveraged should be a power of 2 for best efficiency
@@ -483,11 +461,11 @@ public:
 	int GetZProbeReading() const;
 	EndStopHit GetZProbeResult() const;
 	int GetZProbeSecondaryValues(int& v1, int& v2);
-	void SetZProbeType(int iZ);
-	int GetZProbeType() const { return zProbeType; }
-	const ZProbeParameters& GetZProbeParameters(int32_t probeType) const;
-	const ZProbeParameters& GetCurrentZProbeParameters() const { return GetZProbeParameters(zProbeType); }
-	void SetZProbeParameters(int32_t probeType, const struct ZProbeParameters& params);
+	void SetZProbeType(unsigned int iZ);
+	ZProbeType GetZProbeType() const { return zProbeType; }
+	const ZProbe& GetZProbeParameters(ZProbeType probeType) const;
+	const ZProbe& GetCurrentZProbeParameters() const { return GetZProbeParameters(zProbeType); }
+	void SetZProbeParameters(ZProbeType probeType, const struct ZProbe& params);
 	bool HomingZWithProbe() const;
 	bool WritePlatformParameters(FileStore *f, bool includingG31) const;
 	void SetProbing(bool isProbing);
@@ -689,10 +667,10 @@ private:
 	Logger *logger;
 
 	// Z probes
-	ZProbeParameters switchZProbeParameters;		// Z probe values for the switch Z-probe
-	ZProbeParameters irZProbeParameters;			// Z probe values for the IR sensor
-	ZProbeParameters alternateZProbeParameters;		// Z probe values for the alternate sensor
-	int zProbeType;									// the type of Z probe we are currently using
+	ZProbe switchZProbeParameters;			// Z probe values for the switch Z-probe
+	ZProbe irZProbeParameters;				// Z probe values for the IR sensor
+	ZProbe alternateZProbeParameters;		// Z probe values for the alternate sensor
+	ZProbeType zProbeType;					// the type of Z probe we are currently using
 
 	byte ipAddress[4];
 	byte netMask[4];
@@ -1159,28 +1137,29 @@ inline uint16_t Platform::GetRawZProbeReading() const
 {
 	switch (zProbeType)
 	{
-	case 1:
-	case 2:
-	case 3:
+	case ZProbeType::analog:
+	case ZProbeType::dumbModulated:
+	case ZProbeType::alternateAnalog:
 		return min<uint16_t>(AnalogInReadChannel(zProbeAdcChannel), 4000);
 
-	case 4:
+	case ZProbeType::e0Switch:
 		{
 			const bool b = IoPort::ReadPin(endStopPins[E0_AXIS]);
 			return (b) ? 4000 : 0;
 		}
 
-	case 5:
-	case 8:
+	case ZProbeType::digital:
+	case ZProbeType::unfilteredDigital:
+	case ZProbeType::blTouch:
 		return (IoPort::ReadPin(zProbePin)) ? 4000 : 0;
 
-	case 6:
+	case ZProbeType::e1Switch:
 		{
 			const bool b = IoPort::ReadPin(endStopPins[E0_AXIS + 1]);
 			return (b) ? 4000 : 0;
 		}
 
-	case 7:
+	case ZProbeType::zSwitch:
 		{
 			const bool b = IoPort::ReadPin(endStopPins[Z_AXIS]);
 			return (b) ? 4000 : 0;
@@ -1244,7 +1223,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // Calculate the step bit for a driver. This doesn't need to be fast.
 /*static*/ inline uint32_t Platform::CalcDriverBitmap(size_t driver)
 {
-#if defined(__SAME70Q21__)
+#if defined(SAME70_TEST_BOARD)
 	return 0;
 #else
 	const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
@@ -1269,7 +1248,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
 /*static*/ inline void Platform::StepDriversHigh(uint32_t driverMap)
 {
-#if defined(__SAME70Q21__)
+#if defined(SAME70_TEST_BOARD)
 	// TBD
 #elif defined(DUET_NG)
 	PIOD->PIO_ODSR = driverMap;				// on Duet WiFi all step pins are on port D
@@ -1298,7 +1277,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
 /*static*/ inline void Platform::StepDriversLow()
 {
-#if defined(__SAME70Q21__)
+#if defined(SAME70_TEST_BOARD)
 	// TODO
 #elif defined(DUET_NG)
 	PIOD->PIO_ODSR = 0;						// on Duet WiFi all step pins are on port D

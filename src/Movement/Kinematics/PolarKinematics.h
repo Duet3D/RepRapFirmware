@@ -30,6 +30,7 @@ public:
 	bool QueryTerminateHomingMove(size_t axis) const override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const override;
+	bool IsContinuousRotationAxis(size_t axis) const override;
 
 private:
 	static constexpr float DefaultSegmentsPerSecond = 100.0;

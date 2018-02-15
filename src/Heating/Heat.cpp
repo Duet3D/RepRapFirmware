@@ -643,9 +643,7 @@ float Heat::GetTemperature(size_t heater, TemperatureError& err)
 	return t;
 }
 
-#if HAS_VOLTAGE_MONITOR
-
-// Suspend the heaters to conserve power
+// Suspend the heaters to conserve power or while doing Z probing
 void Heat::SuspendHeaters(bool sus)
 {
 	for (PID *p : pids)
@@ -653,8 +651,6 @@ void Heat::SuspendHeaters(bool sus)
 		p->Suspend(sus);
 	}
 }
-
-#endif
 
 // Save some resume information returning true if successful.
 // We assume that the bed and chamber heaters are either on and active, or off (not on standby).

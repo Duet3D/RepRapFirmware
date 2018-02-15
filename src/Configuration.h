@@ -176,6 +176,7 @@ constexpr size_t MaxZProbeProgramBytes = 8;				// Maximum number of bytes in a Z
 constexpr uint32_t ProbingSpeedReductionFactor = 3;		// The factor by which we reduce the Z probing speed when we get a 'near' indication
 constexpr float DefaultZProbeTolerance = 0.03;			// How close the Z probe trigger height from consecutive taps must be
 constexpr uint8_t DefaultZProbeTaps = 1;				// The maximum number of times we probe each point
+constexpr int DefaultZProbeADValue = 500;				// Default trigger threshold
 
 constexpr float TRIANGLE_ZERO = -0.001;					// Millimetres
 constexpr float SILLY_Z_VALUE = -9999.0;				// Millimetres

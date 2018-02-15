@@ -60,6 +60,7 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 #define SERIAL_AUX_DEVICE Serial
 
 #define I2C_IFACE	Wire							// First and only I2C interface
+#define I2C_IRQn	WIRE_ISR_ID
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 

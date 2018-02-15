@@ -217,6 +217,7 @@ void Move::Spin()
 					{
 						AxisAndBedTransform(nextMove.coords, nextMove.xAxes, nextMove.yAxes, true);
 					}
+
 					if (ddaRingAddPointer->Init(nextMove, !IsRawMotorMove(nextMove.moveType)))
 					{
 						ddaRingAddPointer = ddaRingAddPointer->GetNext();
@@ -234,6 +235,7 @@ void Move::Spin()
 							lastStateChangeTime = now;
 						}
 					}
+
 #if 0	// see above
 					// Save the amount of extrusion not done
 					for (size_t drive = numAxes; drive < DRIVES; ++drive)
@@ -373,7 +375,7 @@ bool Move::IsRawMotorMove(uint8_t moveType) const
 // Return true if the specified point is accessible to the Z probe
 bool Move::IsAccessibleProbePoint(float x, float y) const
 {
-	const ZProbeParameters& params = reprap.GetPlatform().GetCurrentZProbeParameters();
+	const ZProbe& params = reprap.GetPlatform().GetCurrentZProbeParameters();
 	return kinematics->IsReachable(x - params.xOffset, y - params.yOffset, false);
 }
 
@@ -1168,7 +1170,7 @@ float Move::GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePo
 	y = probePoints.GetYCoord(count);
 	if (wantNozzlePosition)
 	{
-		const ZProbeParameters& rp = reprap.GetPlatform().GetCurrentZProbeParameters();
+		const ZProbe& rp = reprap.GetPlatform().GetCurrentZProbeParameters();
 		x -= rp.xOffset;
 		y -= rp.yOffset;
 	}

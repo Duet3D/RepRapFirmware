@@ -19,6 +19,18 @@ const char* const badEscapeResponse = "bad escape";
 
 const uint32_t HttpReceiveTimeout = 2000;
 
+// Text for a human-readable 404 page
+const char* const ErrorPagePart1 =
+	"<html>\n"
+	"<head>\n"
+	"</head>\n"
+	"<body>\n"
+	"<p style=\"font-size: 16pt; text-align: center; margin-top:50px\">Your Duet rejected the HTTP request: ";
+
+const char* const ErrorPagePart2 =
+	"</p>\n"
+	"</body>\n";
+
 HttpResponder::HttpResponder(NetworkResponder *n) : NetworkResponder(n)
 {
 }
@@ -731,7 +743,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 
 		if (fileToSend == nullptr)
 		{
-			RejectMessage("not found", 404);
+			RejectMessage("page not found", 404);
 			return;
 		}
 		fileBeingSent = fileToSend;
@@ -741,7 +753,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 		fileToSend = GetPlatform().OpenFile(FS_PREFIX, nameOfFileToSend, OpenMode::read);
 		if (fileToSend == nullptr)
 		{
-			RejectMessage("not found", 404);
+			RejectMessage("file not found", 404);
 			return;
 		}
 		fileBeingSent = fileToSend;
@@ -1089,6 +1101,7 @@ void HttpResponder::RejectMessage(const char* response, unsigned int code)
 		GetPlatform().MessageF(UsbMessage, "Webserver: rejecting message with: %u %s\n", code, response);
 	}
 	outBuf->printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
+	outBuf->catf("%s%s%s", ErrorPagePart1, response, ErrorPagePart2);
 	Commit();
 }
 

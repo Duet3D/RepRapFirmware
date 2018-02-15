@@ -282,7 +282,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 	{
 		// See if we can access the file
 		// Webserver may call rr_fileinfo for a directory, check this case here
-		if (reprap.GetPlatform().GetMassStorage()->DirectoryExists(directory, fileName))
+		if (platform.GetMassStorage()->DirectoryExists(directory, fileName))
 		{
 			info.isValid = false;
 			return true;
@@ -303,7 +303,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 		// Set up the info struct
 		parsedFileInfo.isValid = true;
 		parsedFileInfo.fileSize = fileBeingParsed->Length();
-		parsedFileInfo.lastModifiedTime = reprap.GetPlatform().GetMassStorage()->GetLastModifiedTime(directory, fileName);
+		parsedFileInfo.lastModifiedTime = platform.GetMassStorage()->GetLastModifiedTime(directory, fileName);
 		parsedFileInfo.firstLayerHeight = 0.0;
 		parsedFileInfo.objectHeight = 0.0;
 		parsedFileInfo.layerHeight = 0.0;

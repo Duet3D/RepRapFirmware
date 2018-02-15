@@ -95,6 +95,13 @@ bool GCodeBuffer::Put(char c)
 		return LineFinished();
 	}
 
+	if (c == 0x7F && bufferState != GCodeBufferState::discarding)
+	{
+		// The UART receiver stores 0x7F in the buffer if an overrun or framing errors occurs. So discard the command and resync on the next newline.
+		gcodeLineEnd = 0;
+		bufferState = GCodeBufferState::discarding;
+	}
+
 	// Process the incoming character in a state machine
 	bool again;
 	do

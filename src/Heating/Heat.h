@@ -143,9 +143,7 @@ public:
 
 	bool WriteBedAndChamberTempSettings(FileStore *f) const;	// Save some resume information
 
-#if HAS_VOLTAGE_MONITOR
 	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
-#endif
 
 private:
 	Heat(const Heat&);											// Private copy constructor to prevent copying

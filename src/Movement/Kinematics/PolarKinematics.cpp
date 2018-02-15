@@ -250,6 +250,12 @@ void PolarKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalise
 	}
 }
 
+// Return true if the specified axis is a continuous rotation axis
+bool PolarKinematics::IsContinuousRotationAxis(size_t axis) const
+{
+	return axis == 1;
+}
+
 // Update the derived parameters after the master parameters have been changed
 void PolarKinematics::Recalc()
 {

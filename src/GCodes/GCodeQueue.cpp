@@ -21,20 +21,9 @@ GCodeQueue::GCodeQueue() : freeItems(nullptr), queuedItems(nullptr)
 	}
 }
 
-// If moves are scheduled and the command in the passed GCodeBuffer can be queued, try to queue it.
-// If successful, return true to indicate it has been queued and the caller should not execute it.
-// If it is not a command that should be queued, return false.
-// If the queue is full, free up the oldest queued entry by copying its command to our own gcode buffer
-// so that we have room to queue the original command.
-bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
+// Return true if the move in the GCodeBuffer should be queued
+/*static*/ bool GCodeQueue::ShouldQueueCode(GCodeBuffer &gb)
 {
-	// Don't queue anything if no moves are being performed
-	const uint32_t scheduledMoves = reprap.GetMove().GetScheduledMoves() + segmentsLeft;
-	if (scheduledMoves == reprap.GetMove().GetCompletedMoves())
-	{
-		return false;
-	}
-
 #if SUPPORT_ROLAND
 	// Don't queue codes if the Roland module is active
 	if (reprap.GetRoland()->Active())
@@ -43,17 +32,13 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 	}
 #endif
 
-	// Check for G-Codes that can be queued
-	bool queueCode = false;
 	switch (gb.GetCommandLetter())
 	{
 	case 'G':
 		{
 			const int code = gb.GetCommandNumber();
-			queueCode = (code == 10 && gb.Seen('P'));	// Set active/standby temperatures
-
+			return code == 10 && gb.Seen('P');			// Set active/standby temperatures
 		}
-		break;
 
 	case 'M':
 		{
@@ -73,8 +58,7 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 			case 280:	// set servo
 			case 300:	// beep
 			case 420:	// set RGB colour
-				queueCode = true;
-				break;
+				return true;
 
 			default:
 				break;
@@ -86,7 +70,18 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 		break;
 	}
 
-	// Does it make sense to queue this code?
+	return false;
+}
+
+// If moves are scheduled and a command can be queued, try to queue the command in the passed GCodeBuffer.
+// If successful, return true to indicate it has been queued and the caller should not execute it.
+// If the queue is full, free up the oldest queued entry by copying its command to our own gcode buffer so that we have room to queue the original command.
+bool GCodeQueue::QueueCode(GCodeBuffer &gb)
+{
+	// Don't queue anything if no moves are being performed
+	const uint32_t scheduledMoves = reprap.GetMove().GetScheduledMoves();
+	bool queueCode = (scheduledMoves != reprap.GetMove().GetCompletedMoves());
+
 	if (queueCode)
 	{
 		char codeToRun[GCODE_LENGTH];

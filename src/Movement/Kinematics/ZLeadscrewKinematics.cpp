@@ -29,6 +29,7 @@ bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const 
 	{
 		// Configuring leadscrew positions.
 		// We no longer require the number of leadscrews to equal the number of motors. If there is a mismatch then auto calibration just prints the corrections.
+		// We now allow just 1 pair of coordinates to be specified, which in effect clears the M671 settings.
 		bool seenX = false, seenY = false;
 		size_t xSize = MaxLeadscrews, ySize = MaxLeadscrews;
 		if (gb.Seen('X'))
@@ -48,7 +49,7 @@ bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const 
 		bool seenP = false;
 		gb.TryGetFValue('P', screwPitch, seenP);
 
-		if (seenX && seenY && xSize == ySize && xSize > 1)
+		if (seenX && seenY && xSize == ySize)
 		{
 			numLeadscrews = xSize;
 			return false;							// successful configuration
@@ -56,7 +57,7 @@ bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const 
 
 		if (seenX || seenY)
 		{
-			reply.copy("Specify 2, 3 or 4 X and Y coordinates in M671");
+			reply.copy("Specify 1, 2, 3 or 4 X and Y coordinates in M671");
 			return true;
 		}
 

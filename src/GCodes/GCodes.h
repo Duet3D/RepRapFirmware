@@ -132,7 +132,7 @@ public:
 	bool ReadMove(RawMove& m);											// Called by the Move class to get a movement set by the last G Code
 	void ClearMove();
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply);	// Open a file of G Codes to run
-	void StartPrinting();												// Start printing the file already selected
+	void StartPrinting(bool fromStart);									// Start printing the file already selected
 	void GetCurrentCoordinates(const StringRef& s) const;				// Write where we are into a string
 	bool DoingFileMacro() const;										// Or still busy processing a macro file?
 	float FractionOfFilePrinted() const;								// Get fraction of file printed
@@ -522,6 +522,7 @@ private:
 	static constexpr const char* PAUSE_G = "pause.g";
 	static constexpr const char* RESUME_G = "resume.g";
 	static constexpr const char* CANCEL_G = "cancel.g";
+	static constexpr const char* START_G = "start.g";
 	static constexpr const char* STOP_G = "stop.g";
 	static constexpr const char* SLEEP_G = "sleep.g";
 	static constexpr const char* CONFIG_OVERRIDE_G = "config-override.g";

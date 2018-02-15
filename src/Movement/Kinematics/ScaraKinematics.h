@@ -41,6 +41,7 @@ public:
 	bool QueryTerminateHomingMove(size_t axis) const override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const override;
+	bool IsContinuousRotationAxis(size_t axis) const override;
 
 private:
 	static constexpr float DefaultSegmentsPerSecond = 100.0;
@@ -63,9 +64,10 @@ private:
 	float distalArmLength;
 	float thetaLimits[2];							// minimum proximal joint angle
 	float psiLimits[2];								// minimum distal joint angle
-	float crosstalk[3];								// if we rotate the distal arm motor, for each full rotation the Z height goes up by this amount
+	float crosstalk[3];								// proximal to distal, proximal to X and distal to Z crosstalk
 	float xOffset;									// where bed X=0 is relative to the proximal joint
 	float yOffset;									// where bed Y=0 is relative to the proximal joint
+	bool supportsContinuousRotation[2];				// true if the (proximal, distal) arms support continuous rotation
 
 	// Derived parameters
 	float minRadius, minRadiusSquared;

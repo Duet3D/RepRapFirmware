@@ -156,6 +156,9 @@ public:
 	// The speeds along individual Cartesian axes have already been limited before this is called.
 	virtual void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const = 0;
 
+	// Return true if the specified axis is a continuous rotation axis
+	virtual bool IsContinuousRotationAxis(size_t axis) const { return false; }
+
 	// Override this virtual destructor if your constructor allocates any dynamic memory
 	virtual ~Kinematics() { }
 

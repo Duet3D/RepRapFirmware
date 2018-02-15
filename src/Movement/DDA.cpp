@@ -271,6 +271,8 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	float accelerations[DRIVES];
 	const float * const normalAccelerations = reprap.GetPlatform().Accelerations();
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
+	const Kinematics& k = move.GetKinematics();
+
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
 		accelerations[drive] = normalAccelerations[drive];
@@ -280,7 +282,27 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 		}
 
 		endCoordinates[drive] = nextMove.coords[drive];
-		const int32_t delta = (drive < numAxes) ? endPoint[drive] - positionNow[drive] : endPoint[drive];
+		int32_t delta;
+		if (drive < numAxes)
+		{
+			delta = endPoint[drive] - positionNow[drive];
+			if (k.IsContinuousRotationAxis(drive))
+			{
+				const int32_t stepsPerRotation = lrintf(360.0 * reprap.GetPlatform().DriveStepsPerUnit(drive));
+				if (delta > stepsPerRotation/2)
+				{
+					delta -= stepsPerRotation;
+				}
+				else if (delta < -stepsPerRotation/2)
+				{
+					delta += stepsPerRotation;
+				}
+			}
+		}
+		else
+		{
+			delta = endPoint[drive];
+		}
 
 		if (drive < numAxes && doMotorMapping)
 		{
@@ -390,7 +412,6 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 		// There is some XY movement, so normalise the direction vector so that the total XYZ movement has unit length and 'totalDistance' is the XYZ distance moved.
 		// This means that the user gets the feed rate that he asked for. It also makes the delta calculations simpler.
 		// First do the bed tilt compensation for deltas.
-		const Kinematics& k = move.GetKinematics();
 		directionVector[Z_AXIS] += (directionVector[X_AXIS] * k.GetTiltCorrection(X_AXIS)) + (directionVector[Y_AXIS] * k.GetTiltCorrection(Y_AXIS));
 
 		totalDistance = NormaliseXYZ();
@@ -446,7 +467,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	// for diagonal moves. On a delta, this is not OK and any movement in the XY plane should be limited to the X/Y axis values, which we assume to be equal.
 	if (doMotorMapping)
 	{
-		reprap.GetMove().GetKinematics().LimitSpeedAndAcceleration(*this, normalisedDirectionVector);	// give the kinematics the chance to further restrict the speed and acceleration
+		k.LimitSpeedAndAcceleration(*this, normalisedDirectionVector);	// give the kinematics the chance to further restrict the speed and acceleration
 	}
 
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed

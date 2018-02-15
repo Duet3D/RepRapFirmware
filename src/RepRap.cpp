@@ -981,7 +981,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		/* Probe */
 		{
-			const ZProbeParameters probeParams = platform->GetCurrentZProbeParameters();
+			const ZProbe probeParams = platform->GetCurrentZProbeParameters();
 
 			// Trigger threshold
 			response->catf(",\"probe\":{\"threshold\":%" PRIi32, probeParams.adcValue);
@@ -990,7 +990,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			response->catf(",\"height\":%.2f", (double)probeParams.triggerHeight);
 
 			// Type
-			response->catf(",\"type\":%d}", platform->GetZProbeType());
+			response->catf(",\"type\":%u}", (unsigned int)platform->GetZProbeType());
 		}
 
 		/* Tool Mapping */

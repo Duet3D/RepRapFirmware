@@ -41,14 +41,22 @@
 bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
 {
 	// Can we queue this code?
-	if (gb.CanQueueCodes() && codeQueue->QueueCode(gb, segmentsLeft))
+	if (gb.CanQueueCodes() && codeQueue->ShouldQueueCode(gb))
 	{
-		HandleReply(gb, false, "");
-		return true;
+		// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
+		// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
+		if (segmentsLeft != 0)
+		{
+			return false;
+		}
+
+		if (codeQueue->QueueCode(gb))
+		{
+			HandleReply(gb, false, "");
+			return true;
+		}
 	}
 
-	// G29 string parameters may contain the letter M, and various M-code string parameters may contain the letter G.
-	// So we now look for the first G, M or T in the command.
 	switch (gb.GetCommandLetter())
 	{
 	case 'G':
@@ -315,13 +323,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	{
 	case 0: // Stop
 	case 1: // Sleep
-		if (   !LockMovementAndWaitForStandstill(gb)	// wait until everything has stopped
-			|| !IsCodeQueueIdle()						// must also wait until deferred command queue has caught up
-		   )
+		// Don't allow M0 or M1 to stop a print, unless the print is paused or the command comes from the file being printed itself.
+		if (reprap.GetPrintMonitor().IsPrinting() && &gb != fileGCode && !IsPaused())
 		{
-			return false;
+			reply.copy("Pause the print before attempting to cancel it");
+			result = GCodeResult::error;
 		}
+		else
 		{
+			if (   !LockMovementAndWaitForStandstill(gb)	// wait until everything has stopped
+				|| !IsCodeQueueIdle()						// must also wait until deferred command queue has caught up
+			   )
+			{
+				return false;
+			}
+
 			const bool wasPaused = isPaused;			// isPaused gets cleared by CancelPrint
 			const bool wasSimulating = IsSimulating();	// simulationMode may get cleared by CancelPrint
 			StopPrint(&gb == fileGCode);				// if this is normal end-of-print commanded by the file, delete the resurrect.g file
@@ -346,11 +362,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			switch (machineType)
 			{
 			case MachineType::cnc:
-				reprap.GetPlatform().SetSpindlePwm(gb.GetFValue()/spindleMaxRpm);
+				platform.SetSpindlePwm(gb.GetFValue()/spindleMaxRpm);
 				break;
 
 			case MachineType::laser:
-				reprap.GetPlatform().SetLaserPwm(gb.GetFValue()/laserMaxPower);
+				platform.SetLaserPwm(gb.GetFValue()/laserMaxPower);
 				break;
 
 			default:
@@ -374,7 +390,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			if (machineType == MachineType::cnc)
 			{
-				reprap.GetPlatform().SetSpindlePwm(-gb.GetFValue()/spindleMaxRpm);
+				platform.SetSpindlePwm(-gb.GetFValue()/spindleMaxRpm);
 			}
 			else
 			{
@@ -387,11 +403,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		switch (machineType)
 		{
 		case MachineType::cnc:
-			reprap.GetPlatform().SetSpindlePwm(0.0);
+			platform.SetSpindlePwm(0.0);
 			break;
 
 		case MachineType::laser:
-			reprap.GetPlatform().SetLaserPwm(0.0);
+			platform.SetLaserPwm(0.0);
 			break;
 
 		default:
@@ -595,7 +611,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 					if (code == 32)
 					{
-						StartPrinting();
+						StartPrinting(true);
 					}
 				}
 				else
@@ -657,7 +673,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				else
 #endif
 				{
-					if (fileOffsetToPrint != 0)
+					bool fromStart = (fileOffsetToPrint == 0);
+					if (!fromStart)
 					{
 						// We executed M23 to set the file offset, which normally means that we are executing resurrect.g.
 						// We need to copy the absolute/relative and volumetric extrusion flags over
@@ -667,7 +684,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						fileToPrint.Seek(fileOffsetToPrint);
 						moveFractionToSkip = moveFractionToStartAt;
 					}
-					StartPrinting();
+					StartPrinting(fromStart);
 				}
 			}
 		}
@@ -865,7 +882,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					{
 						exitSimulationWhenFileComplete = true;
 						reprap.GetPrintMonitor().StartingPrint(simFileName.c_str());
-						StartPrinting();
+						StartPrinting(true);
 						reply.printf("Simulating print of file %s", simFileName.c_str());
 					}
 					else
@@ -2343,7 +2360,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 401: // Deploy Z probe
-		if (platform.GetZProbeType() != 0)
+		if (platform.GetZProbeType() != ZProbeType::none)
 		{
 			probeIsDeployed = true;
 			DoFileMacro(gb, DEPLOYPROBE_G, false);
@@ -2351,7 +2368,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 402: // Retract Z probe
-		if (platform.GetZProbeType() != 0)
+		if (platform.GetZProbeType() != ZProbeType::none)
 		{
 			probeIsDeployed = false;
 			DoFileMacro(gb, RETRACTPROBE_G, false);
@@ -2417,7 +2434,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				lp = NoLogicalPin;
 			}
-			if (reprap.GetPlatform().SetLaserPin((LogicalPin)lp))
+			if (platform.SetLaserPin((LogicalPin)lp))
 			{
 				reply.copy("Laser mode selected");
 			}
@@ -2429,7 +2446,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		if (result == GCodeResult::ok && gb.Seen('F'))
 		{
-			reprap.GetPlatform().SetLaserPwmFrequency(gb.GetFValue());
+			platform.SetLaserPwmFrequency(gb.GetFValue());
 		}
 		if (result == GCodeResult::ok && gb.Seen('R'))
 		{
@@ -2452,7 +2469,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				pins[1] = NoLogicalPin;
 			}
-			if (reprap.GetPlatform().SetSpindlePins(pins[0], pins[1]))
+			if (platform.SetSpindlePins(pins[0], pins[1]))
 			{
 				reply.copy("CNC mode selected");
 			}
@@ -2464,7 +2481,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		if (result == GCodeResult::ok && gb.Seen('F'))
 		{
-			reprap.GetPlatform().SetSpindlePwmFrequency(gb.GetFValue());
+			platform.SetSpindlePwmFrequency(gb.GetFValue());
 		}
 		if (result == GCodeResult::ok && gb.Seen('R'))
 		{
