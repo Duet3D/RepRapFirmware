@@ -31,6 +31,13 @@ Bug fixes:
 - If neither of the /www/reprap.htm and /www/html404.htm files was present when the web server as asked to fetch a file, it returned a 404 error, however there was no associated plain text response so most browsers displayed a blank screen (fixed in Duet WiFi/Ethernet build only)
 - If a G0 or G1 command resulted in no movement (e.g. because it was a duplicate of a previous line) then correct synchronisation between subsequent movement and non-movement commands was lost
 
+Changes to DuetWiFServer:
+- Errors reported by LWIP for listening PCBs are handled, and reported if WiFi debugging is enabled
+
+Changes to iap and iap4e:
+- The binary file is no longer deleted after successful installation
+- On the Duet WiFi/Ethernet the DIAG LED blinks while the firmware is being installed
+
 Version 1.21RC1
 =================
 Upgrade notes:
