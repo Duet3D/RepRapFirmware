@@ -8,7 +8,7 @@ Upgrade notes:
 - DuetWebControl 1.20 is compatible with this release
 - To install this release for the first time on a Duet Ethernet, download DuetWiFiFirmware.bin, rename it to DuetEthernetFirmware.bin, then upload it via DWC.
 - If you have a start.g macro file in the /sys folder of your SD card, remove or rename it, unless you want it to be run every time you start a print from SD card
-- See upgrade notes for version 1.20
+- See also upgrade notes for version 1.20 if you are upgrading from an earlier version than that
 
 New features:
 - A common firmware image is used for both the Duet WiFi and the Duet Ethernet. For now the name of the binary file is DuetWiFiFirmware.bin.
@@ -29,6 +29,7 @@ Bug fixes:
 - When the M207 Z hop setting was changed during a print while a travel move is in progress, at the end of the travel move the head was lowered by the new value for Z hop instead of the original value
 - Endstop pins 5-9 (E2-E6) on the expansion connector are now working
 - If neither of the /www/reprap.htm and /www/html404.htm files was present when the web server as asked to fetch a file, it returned a 404 error, however there was no associated plain text response so most browsers displayed a blank screen (fixed in Duet WiFi/Ethernet build only)
+- If a G0 or G1 command resulted in no movement (e.g. because it was a duplicate of a previous line) then correct synchronisation between subsequent movement and non-movement commands was lost
 
 Version 1.21RC1
 =================
