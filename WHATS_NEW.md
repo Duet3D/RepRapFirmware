@@ -1,6 +1,40 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.21RC3
+===============
+Upgrade notes:
+- The compatible DuetWiFiServer version is 1.21RC3. You can install this before or after upgrading the main firmware, it doesn't matter.
+- After installing the new firmware binary and checking that the version number is correctly reported, upload DuetWebControl 1.21RC4
+- On Cartesian and CoreXY printers, normal G0 and G1 moves are no longer allowed before the corresponding axes have been homed. In particular, if your homex.g, homey.g and homeall.g files raise Z a little at the start and lower it at the end, you will need to add the S2 parameter to those G1 Z moves. Otherwise the G1 Z move will be refused unless Z has already been homed and the homing macro will be terminated.
+- The binary filename for the Duet WiFi and Duet Ethernet is now called Duet2CombinedFirmware.bin. When installing it on a Duet WiFi running a previous firmware revision or a Duet Ethernet running 1.21RC2, you will need to rename it to DuetWiFiFirmware.bin. Whenj installing it on a Duet Ethernet running mnfirmware 1.21RC1 or earlier, rename it to DuetEthernetFirmware.bin.
+
+New features:
+- On Cartesian and CoreXY printers, normal movement commands are no longer permitted until the corresponding axes have been homed
+- Illegal movement commands in a print file or macro file cause the file to be terminated and heaters/spindle motors/lasers to be turned off; except that when the printer is in FDM mode, G0 and G1 moves outside the movement limits are just truncated as before
+- The M39 command reports the SD card cluster size
+- If GCode attempts to set the temperature of a non-existent bed or chamber heater to zero (to turn it off), the error message that would normally be generated is suppressed
+- G60 command to set a restore point is implemented
+- M671 command now supports the F (fudge factor) parameter
+- The standstill current fraction can now be set on the Duet Maestro build
+- M118 support added (thanks chrishamm)
+- When using external stepper drivers the DIR signal is no longer changed before the step pulse has ended
+- The M452, M453 and M573 commands now support the I1 parameter to invert the laser, spindle or extrusion signal polarity
+
+Bug fixes
+- Duet Ethernet only: fixed bugs in the DHCP client code that could cause the printer to become very slow
+- G2 and G3 arc moves are terminated if the attempt to exceed the axis limits
+- When multi-touch Z probe mode is enabled, the recovery time is applied before all probing movements, not just the first one
+- Z probe mode 9 (for BLTouch) ow works in multi-touch mode
+- During simulation the status is set to "Simulating" instead of "Printing"
+- M556 with a zero S parameter no longer messes up the coordinate calculations
+- When large files were uploaded or copied to the SD card and the cluster size was small, HTTP requests could time out while DWC attempted to get the information for those files
+- The Duet3D rotating magnet filament monitor is supported again
+- FTP didn't work reliable in 1.21RC2 on the Duet WiFi and Duet Ethernet
+- Endstops 5 thru 9 on a DueX2/DueX5 board can now be used for simple filament sensors
+- When resuming a paused print the first move executed was sometimes incorrect
+- When the Duet WiFi was configured to run in access point mode, sometimes it wouldn't start in config.g or started with the wrong SSID and had to be started manually. This is believed fixed, but you may need to start it manually the first time.
+
 Version 1.21RC2
 =================
 Upgrade notes:
