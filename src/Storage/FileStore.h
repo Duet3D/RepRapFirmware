@@ -34,10 +34,12 @@ public:
 	bool ForceClose();
 	bool Seek(FilePosition pos);					// Jump to pos in the file
 	FilePosition Position() const;					// Return the current position in the file, assuming we are reading the file
+	uint32_t ClusterSize() const;					// Cluster size in bytes
+	FilePosition Length() const;					// File size in bytes
 #if 0	// not currently used
 	bool GoToEnd();									// Position the file at the end (so you can write on the end).
 #endif
-	FilePosition Length() const;					// File size in bytes
+
 	void Duplicate();								// Create a second reference to this file
 	bool Flush();									// Write remaining buffer data
 	bool Invalidate(const FATFS *fs, bool doClose);	// Invalidate the file if it uses the specified FATFS object

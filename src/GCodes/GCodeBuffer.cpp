@@ -950,6 +950,13 @@ bool GCodeBuffer::PopState()
 	return true;
 }
 
+// Abort execution of any files or macros being executed
+void GCodeBuffer::AbortFile()
+{
+	while (PopState()) { }							// abandon any macros
+	machineState->fileState.Close();				// if we are executing a file, abandon it
+}
+
 // Return true if this source is executing a file macro
 bool GCodeBuffer::IsDoingFileMacro() const
 {

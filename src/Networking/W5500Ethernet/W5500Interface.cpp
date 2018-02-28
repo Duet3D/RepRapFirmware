@@ -277,7 +277,7 @@ void W5500Interface::Spin(bool full)
 			{
 				// IP address is all zeros, so use DHCP
 //				debugPrintf("Link established, getting IP address\n");
-				DHCP_init(DhcpSocketNumber, reprap.GetNetwork().GetHostname());
+				DHCP_init(DhcpSocketNumber, platform.Random(), reprap.GetNetwork().GetHostname());
 				lastTickMillis = millis();
 				state = NetworkState::obtainingIP;
 			}
@@ -344,7 +344,7 @@ void W5500Interface::Spin(bool full)
 					DHCP_time_handler();
 				}
 				const DhcpRunResult ret = DHCP_run();
-				if (ret == DhcpRunResult::DHCP_IP_CHANGED)
+				if (ret == DhcpRunResult::DHCP_IP_CHANGED || ret == DhcpRunResult::DHCP_IP_ASSIGN)
 				{
 //					debugPrintf("IP address changed\n");
 					getSIPR(ipAddress);
@@ -438,13 +438,6 @@ void W5500Interface::InitSockets()
 		}
 	}
 	nextSocketToPoll = 0;
-}
-
-// The following is called by the FTP responder to stop listening on the FTP data port
-// For the W5500 listening stop automatically when the port is terminated, so we don't need anything here
-void W5500Interface::DataPortClosing()
-{
-	// nothing needed here
 }
 
 void W5500Interface::TerminateSockets()

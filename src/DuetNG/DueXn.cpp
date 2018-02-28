@@ -88,7 +88,7 @@ namespace DuetExpansion
 
 			// Set up the interrupt on any input change
 			dueXnInputMask = stopBits | AllGpioBits;
-			dueXnExpander.enableInterruptMultiple(dueXnInputMask, CHANGE);
+			dueXnExpander.enableInterruptMultiple(dueXnInputMask, INTERRUPT_MODE_CHANGE);
 
 			// Clear any initial interrupts
 			(void)dueXnExpander.interruptSource(true);

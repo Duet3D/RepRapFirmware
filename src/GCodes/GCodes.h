@@ -240,10 +240,12 @@ private:
 	void HandleReply(GCodeBuffer& gb, bool error, const char *reply);	// Handle G-Code replies
 	void HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply);
 
-	bool DoStraightMove(GCodeBuffer& gb, const StringRef& reply, bool isCoordinated) __attribute__((hot));	// Execute a straight move returning true if an error was written to 'reply'
-	bool DoArcMove(GCodeBuffer& gb, bool clockwise)						// Execute an arc move returning true if it was badly-formed
+	const char* DoStraightMove(GCodeBuffer& gb, bool isCoordinated) __attribute__((hot));	// Execute a straight move returning any error message
+	const char* DoArcMove(GCodeBuffer& gb, bool clockwise)				// Execute an arc move returning any error message
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
 	void FinaliseMove(const GCodeBuffer& gb);							// Adjust the move parameters to account for segmentation and/or part of the move having been done already
+	bool CheckEnoughAxesHomed(AxesBitmap axesMoved);					// Check that enough axes have been homed
+	void AbortPrint(GCodeBuffer& gb);									// Cancel any print in progress
 
 	GCodeResult DoDwell(GCodeBuffer& gb);								// Wait for a bit
 	GCodeResult DoDwellTime(GCodeBuffer& gb, uint32_t dwellMillis);		// Really wait for a bit
@@ -256,6 +258,7 @@ private:
 	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply);	// Deal with a M584
 	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply);			// Deal with a M585
 	GCodeResult SetDateTime(GCodeBuffer& gb,const  StringRef& reply);		// Deal with a M905
+	GCodeResult SavePosition(GCodeBuffer& gb,const  StringRef& reply);		// Deal with G60
 
 	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType); // Set up the extrusion and feed rate of a move for the Move class
 
@@ -401,10 +404,14 @@ private:
 	float arcCurrentAngle;
 	float arcAngleIncrement;
 	bool doingArcMove;
+	bool abortedArcMove;
 
 	RestorePoint simulationRestorePoint;		// The position and feed rate when we started a simulation
-	RestorePoint pauseRestorePoint;				// The position and feed rate when we paused the print
-	RestorePoint toolChangeRestorePoint;		// The position and feed rate when we freed a tool
+
+	RestorePoint numberedRestorePoints[NumRestorePoints];				// Restore points accessible using the R parameter in the G0/G1 command
+	RestorePoint& pauseRestorePoint = numberedRestorePoints[1];			// The position and feed rate when we paused the print
+	RestorePoint& toolChangeRestorePoint = numberedRestorePoints[2];	// The position and feed rate when we freed a tool
+
 	size_t numTotalAxes;						// How many axes we have
 	size_t numVisibleAxes;						// How many axes are visible
 	size_t numExtruders;						// How many extruders we have, or may have
@@ -514,7 +521,6 @@ private:
 	bool isWaiting;								// True if waiting to reach temperature
 	bool cancelWait;							// Set true to cancel waiting
 	bool displayNoToolWarning;					// True if we need to display a 'no tool selected' warning
-	bool displayDeltaNotHomedWarning;			// True if we need to display a 'attempt to move before homing on a delta printer' message
 	char filamentToLoad[FilamentNameLength];	// Name of the filament being loaded
 
 	// Standard macro filenames

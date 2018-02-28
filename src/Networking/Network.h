@@ -45,9 +45,6 @@ public:
 	void Interrupt();
 	void Diagnostics(MessageType mtype);
 	bool InNetworkStack() const;
-
-	void Start(unsigned int interface);
-	void Stop(unsigned int interface);
 	bool IsWiFiInterface(unsigned int interface) const;
 
 	GCodeResult EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply);

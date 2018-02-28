@@ -39,7 +39,7 @@ void RotatingMagnetFilamentMonitor::Reset()
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
 bool RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen)
 {
-	if (ConfigurePin(gb, reply, CHANGE, seen))
+	if (ConfigurePin(gb, reply, INTERRUPT_MODE_CHANGE, seen))
 	{
 		return true;
 	}
@@ -165,7 +165,7 @@ float RotatingMagnetFilamentMonitor::GetCurrentPosition() const
 }
 
 // Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
-// 'filamentConsumed' is the net amount of extrusion since the last call to this function.
+// 'filamentConsumed' is the net amount of extrusion commanded since the last call to this function.
 // 'hadNonPrintingMove' is called if filamentConsumed includes extruder movement form non-printing moves.
 FilamentSensorStatus RotatingMagnetFilamentMonitor::Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed)
 {
@@ -230,6 +230,8 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCo
 	}
 
 	FilamentSensorStatus ret = FilamentSensorStatus::ok;
+	const float extrusionMeasured = amountMeasured * mmPerRev;
+
 	if (!comparisonStarted)
 	{
 		// The first measurement after we start extruding is often a long way out, so discard it
@@ -241,7 +243,6 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCo
 		const float minExtrusionExpected = (amountCommanded >= 0.0)
 											 ? amountCommanded * minMovementAllowed
 												: amountCommanded * maxMovementAllowed;
-		const float extrusionMeasured = amountMeasured * mmPerRev;
 		if (extrusionMeasured < minExtrusionExpected)
 		{
 			ret = FilamentSensorStatus::tooLittleMovement;
@@ -259,7 +260,7 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCo
 	}
 
 	// Update the calibration accumulators, even if the user hasn't asked to do calibration
-	const float ratio = amountMeasured/amountCommanded;
+	const float ratio = extrusionMeasured/amountCommanded;
 	if (calibrationStarted)
 	{
 		if (ratio < minMovementRatio)

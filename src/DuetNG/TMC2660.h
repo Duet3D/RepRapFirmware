@@ -48,6 +48,8 @@ namespace SmartDrivers
 	void SetCoolStep(size_t drive, uint16_t coolStepConfig);
 	void AppendStallConfig(size_t drive, const StringRef& reply);
 	void AppendDriverStatus(size_t drive, const StringRef& reply);
+	float GetStandstillCurrentPercent(size_t drive);
+	void SetStandstillCurrentPercent(size_t drive, float percent);
 };
 
 #endif /* TMC2660_H_ */

@@ -13,12 +13,12 @@
 const float M3ScrewPitch = 0.5;
 
 ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k)
-	: Kinematics(k, -1.0, 0.0, true), numLeadscrews(0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
+	: Kinematics(k, -1.0, 0.0, true), numLeadscrews(0), correctionFactor(1.0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
 {
 }
 
 ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k, float segsPerSecond, float minSegLength, bool doUseRawG0)
-	: Kinematics(k, segsPerSecond, minSegLength, doUseRawG0), numLeadscrews(0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
+	: Kinematics(k, segsPerSecond, minSegLength, doUseRawG0), numLeadscrews(0), correctionFactor(1.0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
 {
 }
 
@@ -43,11 +43,10 @@ bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const 
 			seenY = true;
 		}
 
-		bool seenS = false;
-		gb.TryGetFValue('S', maxCorrection, seenS);
-
-		bool seenP = false;
-		gb.TryGetFValue('P', screwPitch, seenP);
+		bool seenPFS = false;
+		gb.TryGetFValue('S', maxCorrection, seenPFS);
+		gb.TryGetFValue('P', screwPitch, seenPFS);
+		gb.TryGetFValue('F', correctionFactor, seenPFS);
 
 		if (seenX && seenY && xSize == ySize)
 		{
@@ -62,7 +61,7 @@ bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const 
 		}
 
 		// If no parameters provided so just report the existing setup
-		if (seenS || seenP)
+		if (seenPFS)
 		{
 			return true;							// just changed the maximum correction or screw pitch
 		}
@@ -77,7 +76,7 @@ bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const 
 			{
 				reply.catf(" (%.1f,%.1f)", (double)leadscrewX[i], (double)leadscrewY[i]);
 			}
-			reply.catf(", maximum correction %.02fmm, manual adjusting screw pitch %.02fmm", (double)maxCorrection, (double)screwPitch);
+			reply.catf(", factor %.02f, maximum correction %.02fmm, manual adjusting screw pitch %.02fmm", (double)correctionFactor, (double)maxCorrection, (double)screwPitch);
 		}
 		return false;
 	}
@@ -262,9 +261,13 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 		{
 			haveNaN = true;
 		}
-		else if (fabsf(solution[i]) > maxCorrection)
+		else
 		{
-			haveLargeCorrection = true;
+			solution[i] *= (floatc_t)correctionFactor;
+			if (fabsf(solution[i]) > maxCorrection)
+			{
+				haveLargeCorrection = true;
+			}
 		}
 	}
 

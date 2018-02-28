@@ -653,7 +653,7 @@ void MassStorage::Spin()
 }
 
 // Get information about the SD card and interface speed
-MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity, uint64_t& freeSpace, uint32_t& speed)
+MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity, uint64_t& freeSpace, uint32_t& speed, uint32_t& clSize)
 {
 	if (slot >= NumSdCards)
 	{
@@ -673,7 +673,16 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity
 	uint32_t freeClusters;
 	FATFS *fs;
 	const FRESULT fr = f_getfree(path.c_str(), &freeClusters, &fs);
-	freeSpace = (fr == FR_OK) ? (uint64_t)freeClusters * fs->csize * 512 : 0;
+	if (fr == FR_OK)
+	{
+		clSize = fs->csize * 512;
+		freeSpace = (fr == FR_OK) ? (uint64_t)freeClusters * clSize : 0;
+	}
+	else
+	{
+		clSize = 0;
+		freeSpace = 0;
+	}
 	return InfoResult::ok;
 }
 

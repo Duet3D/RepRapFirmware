@@ -90,6 +90,11 @@ uint8_t sock_pack_info[_WIZCHIP_SOCK_NUM_] = {0,};
       if(len == 0) return SOCKERR_DATALEN;   \
    }while(0);              \
 
+bool IsSending(uint8_t sn)
+{
+	return (sock_is_sending & (1u << sn)) != 0;
+}
+
 void ExecCommand(uint8_t sn, uint8_t cmd)
 {
 	setSn_CR(sn, cmd);
@@ -248,144 +253,9 @@ int8_t connect(uint8_t sn, uint8_t * addr, uint16_t port)
 	return SOCK_OK;
 }
 
-int8_t disconnect(uint8_t sn)
-{
-	CHECK_SOCKMODE(Sn_MR_TCP);
-	ExecCommand(sn, Sn_CR_DISCON);
-
-	sock_is_sending &= ~(1<<sn);
-	if (sock_io_mode & (1<<sn))
-	{
-		return SOCK_BUSY;
-	}
-	while(getSn_SR(sn) != SOCK_CLOSED)
-	{
-		if (getSn_IR(sn) & Sn_IR_TIMEOUT)
-		{
-			close(sn);
-			return SOCKERR_TIMEOUT;
-		}
-	}
-	return SOCK_OK;
-}
-
 void disconnectNoWait(uint8_t sn)
 {
 	ExecCommand(sn, Sn_CR_DISCON);
-}
-
-int32_t send(uint8_t sn, uint8_t * buf, uint16_t len)
-{
-	CHECK_SOCKMODE(Sn_MR_TCP);
-	CHECK_SOCKDATA();
-	uint8_t tmp = getSn_SR(sn);
-	if (tmp != SOCK_ESTABLISHED && tmp != SOCK_CLOSE_WAIT)
-	{
-		return SOCKERR_SOCKSTATUS;
-	}
-	if ( sock_is_sending & (1<<sn) )
-	{
-		tmp = getSn_IR(sn);
-		if (tmp & Sn_IR_SENDOK)
-		{
-			setSn_IR(sn, Sn_IR_SENDOK);
-			sock_is_sending &= ~(1<<sn);
-		}
-		else if(tmp & Sn_IR_TIMEOUT)
-		{
-			close(sn);
-			return SOCKERR_TIMEOUT;
-		}
-		else
-		{
-			return SOCK_BUSY;
-		}
-	}
-	uint16_t freesize = getSn_TxMAX(sn);
-	if (len > freesize)
-	{
-		len = freesize; // check size not to exceed MAX size.
-	}
-	while(1)
-	{
-		freesize = getSn_TX_FSR(sn);
-		tmp = getSn_SR(sn);
-		if ((tmp != SOCK_ESTABLISHED) && (tmp != SOCK_CLOSE_WAIT))
-		{
-			close(sn);
-			return SOCKERR_SOCKSTATUS;
-		}
-		if ( (sock_io_mode & (1<<sn)) && (len > freesize) )
-		{
-			return SOCK_BUSY;
-		}
-		if (len <= freesize)
-		{
-			break;
-		}
-		DEBUG_PRINTF("Socket %u need %u free %u\n", sn, len, freesize);
-	}
-	wiz_send_data(sn, buf, len);
-
-	ExecCommand(sn, Sn_CR_SEND);
-	sock_is_sending |= (1 << sn);
-	return (int32_t)len;
-}
-
-
-int32_t recv(uint8_t sn, uint8_t * buf, uint16_t len)
-{
-	CHECK_SOCKMODE(Sn_MR_TCP);
-	CHECK_SOCKDATA();
-
-	uint16_t recvsize = getSn_RxMAX(sn);
-	if (recvsize < len)
-	{
-		len = recvsize;
-	}
-
-	while(1)
-	{
-		recvsize = getSn_RX_RSR(sn);
-		const uint8_t tmp = getSn_SR(sn);
-		if (tmp != SOCK_ESTABLISHED)
-		{
-			if (tmp == SOCK_CLOSE_WAIT)
-			{
-				if	(recvsize != 0)
-				{
-					break;
-				}
-				else if(getSn_TX_FSR(sn) == getSn_TxMAX(sn))
-				{
-					close(sn);
-					return SOCKERR_SOCKSTATUS;
-				}
-			}
-			else
-			{
-				close(sn);
-				return SOCKERR_SOCKSTATUS;
-			}
-		}
-		if ((sock_io_mode & (1<<sn)) && (recvsize == 0))
-		{
-			return SOCK_BUSY;
-		}
-		if (recvsize != 0)
-		{
-			break;
-		}
-	};
-
-	if (recvsize < len)
-	{
-		len = recvsize;
-	}
-	wiz_recv_data(sn, buf, len);
-	ExecCommand(sn, Sn_CR_RECV);
-
-	return (int32_t)len;
 }
 
 int32_t sendto(uint8_t sn, const uint8_t * buf, uint16_t len, const uint8_t * addr, uint16_t port)
@@ -426,48 +296,40 @@ int32_t sendto(uint8_t sn, const uint8_t * buf, uint16_t len, const uint8_t * ad
 		len = freesize; // check size not to exceed MAX size.
 	}
 
-	while(1)
+	freesize = getSn_TX_FSR(sn);
+	if (getSn_SR(sn) == SOCK_CLOSED)
 	{
-		freesize = getSn_TX_FSR(sn);
-		if (getSn_SR(sn) == SOCK_CLOSED)
-		{
-			return SOCKERR_SOCKCLOSED;
-		}
-		if ( (sock_io_mode & (1<<sn)) && (len > freesize) )
-		{
-			return SOCK_BUSY;
-		}
-		if (len <= freesize)
-		{
-			break;
-		}
-		DEBUG_PRINTF("Socket %u need %u free %u\n", sn, len, freesize);
-	};
+		return SOCKERR_SOCKCLOSED;
+	}
+	if (len > freesize)
+	{
+		return SOCK_BUSY;
+	}
 
 	wiz_send_data(sn, buf, len);
 	ExecCommand(sn, Sn_CR_SEND);
-
-	while(1)
-	{
-		const uint8_t tmp = getSn_IR(sn);
-		if (tmp & Sn_IR_SENDOK)
-		{
-			setSn_IR(sn, Sn_IR_SENDOK);
-			break;
-		}
-		else if(tmp & Sn_IR_TIMEOUT)
-		{
-			setSn_IR(sn, Sn_IR_TIMEOUT);
-			return SOCKERR_TIMEOUT;
-		}
-		DEBUG_PRINTF("Socket %u waiting for send to complete, IR=%02x\n", sn, tmp);
-#ifdef _SOCKET_DEBUG_
-		delay(10);		// to avoid too many messages
-#endif
-	}
+	sock_is_sending |= 1u << sn;
 	return (int32_t)len;
 }
 
+int32_t CheckSendComplete(uint8_t sn)
+{
+	const uint8_t tmp = getSn_IR(sn);
+	if (tmp & Sn_IR_SENDOK)
+	{
+		setSn_IR(sn, Sn_IR_SENDOK);
+		sock_is_sending &= ~(1u << sn);
+		return SOCK_OK;
+	}
+	else if(tmp & Sn_IR_TIMEOUT)
+	{
+		setSn_IR(sn, Sn_IR_TIMEOUT);
+		sock_is_sending &= ~(1u << sn);
+		return SOCKERR_TIMEOUT;
+	}
+	DEBUG_PRINTF("Socket %u waiting for send to complete, IR=%02x\n", sn, tmp);
+	return SOCK_BUSY;
+}
 
 int32_t recvfrom(uint8_t sn, uint8_t * buf, uint16_t len, uint8_t * addr, uint16_t *port)
 {

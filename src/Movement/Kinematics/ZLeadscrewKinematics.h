@@ -30,6 +30,7 @@ private:
 
 	unsigned int numLeadscrews;
 	float leadscrewX[MaxLeadscrews], leadscrewY[MaxLeadscrews];
+	float correctionFactor;
 	float maxCorrection;
 	float screwPitch;
 };

@@ -29,9 +29,10 @@ class IoPort
 public:
 	IoPort();
 	void Clear();
-	bool Set(LogicalPin lp, PinAccess access);
+	bool Set(LogicalPin lp, PinAccess access, bool pInvert);
 
 	LogicalPin GetLogicalPin() const { return logicalPort; }
+	LogicalPin GetLogicalPin(bool& pInvert) const { pInvert = invert; return logicalPort; }
 	void WriteDigital(bool high) const { if (pin != NoPin) { WriteDigital(pin, (invert) ? !high : high); } }
 
 	// Low level port access

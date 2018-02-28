@@ -65,13 +65,18 @@ extern "C" void debugPrintf(const char *fmt, ...);
 #endif   
 
 /* DHCP state machine. */
-#define STATE_DHCP_INIT          0        ///< Initialize
-#define STATE_DHCP_DISCOVER      1        ///< send DISCOVER and wait OFFER
-#define STATE_DHCP_REQUEST       2        ///< send REQEUST and wait ACK or NACK
-#define STATE_DHCP_LEASED        3        ///< ReceiveD ACK and IP leased
-#define STATE_DHCP_REREQUEST     4        ///< send REQUEST for maintaining leased IP
-#define STATE_DHCP_RELEASE       5        ///< No use
-#define STATE_DHCP_STOP          6        ///< Stop processing DHCP
+enum class DhcpState : uint8_t
+{
+	init = 0,				///< Initialize
+	discover,				///< send DISCOVER and wait OFFER
+	request,				///< send REQUEST and wait ACK or NACK
+	leased,					///< Received ACK and IP leased
+	rerequest,				///< send REQUEST for maintaining leased IP
+	release,				///< No use
+	stop,					///< Stop processing DHCP
+	checkingIpConflict,		///< Waiting for send to conflicting IP to complete
+	delaying
+};
 
 #define DHCP_FLAGSBROADCAST      0x8000   ///< The broadcast value of flags in @ref RIP_MSG 
 #define DHCP_FLAGSUNICAST        0x0000   ///< The unicast   value of flags in @ref RIP_MSG
@@ -81,6 +86,7 @@ extern "C" void debugPrintf(const char *fmt, ...);
 #define DHCP_BOOTREPLY           2        ///< Reply Message used i op of @ref RIP_MSG
 
 /* DHCP message type */
+#define DHCP_NOTYPE				 0		  // must be different from all of the following
 #define DHCP_DISCOVER            1        ///< DISCOVER message in OPT of @ref RIP_MSG
 #define DHCP_OFFER               2        ///< OFFER message in OPT of @ref RIP_MSG
 #define DHCP_REQUEST             3        ///< REQUEST message in OPT of @ref RIP_MSG
@@ -207,14 +213,16 @@ uint8_t DHCP_allocated_sn[4]  = {0, };    // Subnet mask from DHCP
 uint8_t DHCP_allocated_dns[4] = {0, };    // DNS address from DHCP
 
 
-int8_t   dhcp_state        = STATE_DHCP_INIT;   // DHCP state
-int8_t   dhcp_retry_count  = 0;                 
+DhcpState dhcp_state = DhcpState::init;   // DHCP state
+int8_t   dhcp_retry_count;
 
-uint32_t dhcp_lease_time   			= INFINITE_LEASETIME;
-volatile uint32_t dhcp_tick_1s      = 0;                 // unit 1 second
-uint32_t dhcp_tick_next    			= DHCP_WAIT_TIME ;
+uint32_t dhcp_lease_time;
+volatile uint32_t dhcp_tick_1s;                 // unit 1 second
+uint32_t dhcp_tick_next;
 
-uint32_t DHCP_XID;      // Any number
+uint32_t DHCP_XID;      							// Any number
+
+int32_t dhcpLastSendStatus;
 
 static RIP_MSG dhcpMessageBuffer;
 RIP_MSG* const pDHCPMSG = &dhcpMessageBuffer;		// Buffer pointer for DHCP processing
@@ -245,7 +253,7 @@ void     send_DHCP_REQUEST(void);
 void     send_DHCP_DECLINE(void);
 
 /* IP conflict check by sending ARP-request to leased IP and wait ARP-response. */
-bool   check_DHCP_leasedIP(void);
+void   check_DHCP_leasedIP(void);
 
 /* check the timeout in DHCP process */
 DhcpRunResult check_DHCP_timeout(void);
@@ -416,7 +424,7 @@ void send_DHCP_DISCOVER(void)
 
 	DEBUG_PRINTF("> Send DHCP_DISCOVER\n");
 
-	sendto(DHCP_SOCKET, (uint8_t *)pDHCPMSG, RIP_MSG_SIZE, ip, DHCP_SERVER_PORT);
+	(void)sendto(DHCP_SOCKET, (uint8_t *)pDHCPMSG, RIP_MSG_SIZE, ip, DHCP_SERVER_PORT);
 	DEBUG_PRINTF("Sent\n");
 }
 
@@ -427,7 +435,7 @@ void send_DHCP_REQUEST(void)
 	makeDHCPMSG();
 
 	uint8_t ip[4];
-	if (dhcp_state == STATE_DHCP_LEASED || dhcp_state == STATE_DHCP_REREQUEST)
+	if (dhcp_state == DhcpState::leased || dhcp_state == DhcpState::rerequest)
 	{
 		*((uint8_t*)(&pDHCPMSG->flags))   = ((DHCP_FLAGSUNICAST & 0xFF00)>> 8);
 		*((uint8_t*)(&pDHCPMSG->flags)+1) = (DHCP_FLAGSUNICAST & 0x00FF);
@@ -465,7 +473,7 @@ void send_DHCP_REQUEST(void)
 	pDHCPMSG->OPT[k++] = DHCP_CHADDR[4];
 	pDHCPMSG->OPT[k++] = DHCP_CHADDR[5];
 
-	if (ip[3] == 255)  // if(dchp_state == STATE_DHCP_LEASED || dchp_state == DHCP_REREQUEST_STATE)
+	if (dhcp_state != DhcpState::leased && dhcp_state != DhcpState::rerequest)
 	{
 		pDHCPMSG->OPT[k++] = dhcpRequestedIPaddr;
 		pDHCPMSG->OPT[k++] = 0x04;
@@ -510,7 +518,7 @@ void send_DHCP_REQUEST(void)
 
 	DEBUG_PRINTF("> Send DHCP_REQUEST\n");
 	
-	sendto(DHCP_SOCKET, (uint8_t *)pDHCPMSG, RIP_MSG_SIZE, ip, DHCP_SERVER_PORT);
+	(void)sendto(DHCP_SOCKET, (uint8_t *)pDHCPMSG, RIP_MSG_SIZE, ip, DHCP_SERVER_PORT);
 }
 
 /* SEND DHCP DHCPDECLINE */
@@ -568,13 +576,13 @@ void send_DHCP_DECLINE(void)
 
 	DEBUG_PRINTF("\n> Send DHCP_DECLINE\n");
 
-	sendto(DHCP_SOCKET, (uint8_t *)pDHCPMSG, RIP_MSG_SIZE, ip, DHCP_SERVER_PORT);
+	(void)sendto(DHCP_SOCKET, (uint8_t *)pDHCPMSG, RIP_MSG_SIZE, ip, DHCP_SERVER_PORT);
 }
 
 /* PARSE REPLY pDHCPMSG */
 int8_t parseDHCPMSG(void)
 {
-	uint8_t type = 0;
+	uint8_t type = DHCP_NOTYPE;
 	uint16_t len;
 	if ((len = getSn_RX_RSR(DHCP_SOCKET)) > 0)
 	{
@@ -587,9 +595,9 @@ int8_t parseDHCPMSG(void)
 		uint16_t svr_port;
 		len = recvfrom(DHCP_SOCKET, (uint8_t *)pDHCPMSG, len, svr_addr, &svr_port);
 
-		DEBUG_PRINTF("DHCP message : %d.%d.%d.%d(%d) %d received. \n", svr_addr[0], svr_addr[1], svr_addr[2], svr_addr[3],svr_port, len);
+		DEBUG_PRINTF("DHCP message : %d.%d.%d.%d(%d) %d received. \n", svr_addr[0], svr_addr[1], svr_addr[2], svr_addr[3], svr_port, len);
 
-		if (svr_port == DHCP_SERVER_PORT)
+		if (svr_port == DHCP_SERVER_PORT && len > 240)
 		{
 			// compare mac address
 			if (   (pDHCPMSG->chaddr[0] == DHCP_CHADDR[0]) && (pDHCPMSG->chaddr[1] == DHCP_CHADDR[1])
@@ -687,7 +695,7 @@ int8_t parseDHCPMSG(void)
 
 DhcpRunResult DHCP_run(void)
 {
-	if (dhcp_state == STATE_DHCP_STOP)
+	if (dhcp_state == DhcpState::stop)
 	{
 		return DhcpRunResult::DHCP_STOPPED;
 	}
@@ -698,20 +706,29 @@ DhcpRunResult DHCP_run(void)
 	}
 
 	DhcpRunResult ret = DhcpRunResult::DHCP_RUNNING;
+	if (IsSending(DHCP_SOCKET))
+	{
+		dhcpLastSendStatus = CheckSendComplete(DHCP_SOCKET);
+		if (dhcpLastSendStatus == SOCK_BUSY)
+		{
+			return ret;
+		}
+	}
+
 	const uint8_t type = parseDHCPMSG();
 
 	switch (dhcp_state)
 	{
-	case STATE_DHCP_INIT:
+	case DhcpState::init:
 		DHCP_allocated_ip[0] = 0;
 		DHCP_allocated_ip[1] = 0;
 		DHCP_allocated_ip[2] = 0;
 		DHCP_allocated_ip[3] = 0;
 		send_DHCP_DISCOVER();
-		dhcp_state = STATE_DHCP_DISCOVER;
+		dhcp_state = DhcpState::discover;
 		break;
 
-	case STATE_DHCP_DISCOVER:
+	case DhcpState::discover:
 		if (type == DHCP_OFFER)
 		{
 			DEBUG_PRINTF("> Receive DHCP_OFFER\n");
@@ -721,7 +738,7 @@ DhcpRunResult DHCP_run(void)
 			DHCP_allocated_ip[3] = pDHCPMSG->yiaddr[3];
 
 			send_DHCP_REQUEST();
-			dhcp_state = STATE_DHCP_REQUEST;
+			dhcp_state = DhcpState::request;
 		}
 		else
 		{
@@ -729,31 +746,32 @@ DhcpRunResult DHCP_run(void)
 		}
 		break;
 
-	case STATE_DHCP_REQUEST :
+	case DhcpState::request:
 		if (type == DHCP_ACK)
 		{
-			DEBUG_PRINTF("> Receive DHCP_ACK\n");
-			if (check_DHCP_leasedIP())
+			DEBUG_PRINTF("> Receive DHCP_ACK, lease time = %u\n", (unsigned int)dhcp_lease_time);
+			uint8_t currentIp[4];
+			getSIPR(currentIp);
+			if (memcmp(DHCP_allocated_ip, currentIp, 4) == 0)
 			{
-				// Network info assignment from DHCP
-				dhcp_ip_assign();
+				// We have been given the IP address we are already using.
+				// Don't check for an address conflict, because I have a suspicion that we end up replying to the ARP request ourselves.
+				dhcp_ip_assign();						// in case gateway or subnet mask have changed
 				reset_DHCP_timeout();
-				dhcp_state = STATE_DHCP_LEASED;
+				dhcp_state = DhcpState::leased;
 				ret = DhcpRunResult::DHCP_IP_ASSIGN;
 			}
 			else
 			{
-				// IP address conflict occurred
-				reset_DHCP_timeout();
-				dhcp_ip_conflict();
-				dhcp_state = STATE_DHCP_INIT;
+				check_DHCP_leasedIP();
+				dhcp_state = DhcpState::checkingIpConflict;
 			}
 		}
 		else if (type == DHCP_NAK)
 		{
 			DEBUG_PRINTF("> Receive DHCP_NACK\n");
 			reset_DHCP_timeout();
-			dhcp_state = STATE_DHCP_DISCOVER;
+			dhcp_state = DhcpState::discover;
 		}
 		else
 		{
@@ -761,11 +779,40 @@ DhcpRunResult DHCP_run(void)
 		}
 		break;
 
-	case STATE_DHCP_LEASED :
+	case DhcpState::checkingIpConflict:
+		if (dhcpLastSendStatus == SOCKERR_TIMEOUT)
+		{
+			// UDP send Timeout occurred, so allocated IP address is unique, DHCP Success
+			DEBUG_PRINTF("\n> Check leased IP - OK\n");
+			dhcp_ip_assign();
+			reset_DHCP_timeout();
+			dhcp_state = DhcpState::leased;
+			ret = DhcpRunResult::DHCP_IP_ASSIGN;
+		}
+		else
+		{
+			// Received ARP reply, so IP address conflict has occurred, DHCP Failed
+			send_DHCP_DECLINE();
+			dhcp_ip_conflict();
+			reset_DHCP_timeout();
+			dhcp_state = DhcpState::delaying;
+		}
+		break;
+
+	case DhcpState::delaying:
+		// Had IP address conflict. Delay before trying again.
+		if (dhcp_tick_1s > 3)
+		{
+			reset_DHCP_timeout();
+			dhcp_state = DhcpState::init;
+		}
+		break;
+
+	case DhcpState::leased :
 		ret = DhcpRunResult::DHCP_IP_LEASED;
 		if ((dhcp_lease_time != INFINITE_LEASETIME) && ((dhcp_lease_time/2) < dhcp_tick_1s))
 		{
-			DEBUG_PRINTF("> Maintains the IP address \n");
+			DEBUG_PRINTF("> Maintain the IP address \n");
 			OLD_allocated_ip[0] = DHCP_allocated_ip[0];
 			OLD_allocated_ip[1] = DHCP_allocated_ip[1];
 			OLD_allocated_ip[2] = DHCP_allocated_ip[2];
@@ -775,11 +822,11 @@ DhcpRunResult DHCP_run(void)
 
 			send_DHCP_REQUEST();
 			reset_DHCP_timeout();
-			dhcp_state = STATE_DHCP_REREQUEST;
+			dhcp_state = DhcpState::rerequest;
 		}
 		break;
 
-	case STATE_DHCP_REREQUEST :
+	case DhcpState::rerequest:
 		ret = DhcpRunResult::DHCP_IP_LEASED;
 		if (type == DHCP_ACK)
 		{
@@ -798,13 +845,13 @@ DhcpRunResult DHCP_run(void)
 				DEBUG_PRINTF(">IP is continued.\n");
 			}
 			reset_DHCP_timeout();
-			dhcp_state = STATE_DHCP_LEASED;
+			dhcp_state = DhcpState::leased;
 		}
 		else if (type == DHCP_NAK)
 		{
 			DEBUG_PRINTF("> Receive DHCP_NACK, Failed to maintain ip\n");
 			reset_DHCP_timeout();
-			dhcp_state = STATE_DHCP_DISCOVER;
+			dhcp_state = DhcpState::discover;
 		}
 		else
 		{
@@ -822,7 +869,7 @@ DhcpRunResult DHCP_run(void)
 void DHCP_stop(void)
 {
 	close(DHCP_SOCKET);
-	dhcp_state = STATE_DHCP_STOP;
+	dhcp_state = DhcpState::stop;
 }
 
 DhcpRunResult check_DHCP_timeout(void)
@@ -835,18 +882,18 @@ DhcpRunResult check_DHCP_timeout(void)
 		{
 			switch ( dhcp_state )
 			{
-			case STATE_DHCP_DISCOVER :
+			case DhcpState::discover :
 				DEBUG_PRINTF("<<timeout>> state : STATE_DHCP_DISCOVER\n");
 				send_DHCP_DISCOVER();
 				break;
 
-			case STATE_DHCP_REQUEST :
+			case DhcpState::request :
 				DEBUG_PRINTF("<<timeout>> state : STATE_DHCP_REQUEST\n");
 
 				send_DHCP_REQUEST();
 				break;
 
-			case STATE_DHCP_REREQUEST :
+			case DhcpState::rerequest :
 				DEBUG_PRINTF("<<timeout>> state : STATE_DHCP_REREQUEST\n");
 
 				send_DHCP_REQUEST();
@@ -865,14 +912,15 @@ DhcpRunResult check_DHCP_timeout(void)
 	{	// exceeded retry count
 		switch(dhcp_state)
 		{
-		case STATE_DHCP_DISCOVER:
-			dhcp_state = STATE_DHCP_INIT;
+		case DhcpState::discover:
+			dhcp_state = DhcpState::init;
 			ret = DhcpRunResult::DHCP_FAILED;
 			break;
-		case STATE_DHCP_REQUEST:
-		case STATE_DHCP_REREQUEST:
+		case DhcpState::request:
+		case DhcpState::rerequest:
+		case DhcpState::checkingIpConflict:
 			send_DHCP_DISCOVER();
-			dhcp_state = STATE_DHCP_DISCOVER;
+			dhcp_state = DhcpState::discover;
 			break;
 		default :
 			break;
@@ -882,43 +930,22 @@ DhcpRunResult check_DHCP_timeout(void)
 	return ret;
 }
 
-bool check_DHCP_leasedIP(void)
+void check_DHCP_leasedIP(void)
 {
-	uint8_t tmp;
-	int32_t ret;
-
 	//WIZchip RCR value changed for ARP Timeout count control
-	tmp = getRCR();
+	const uint8_t tmp = getRCR();
 	setRCR(0x03);
 
 	// IP conflict detection : ARP request - ARP reply
 	// Broadcasting ARP Request for check the IP conflict using UDP sendto() function
 	// TODO the following takes 620ms to time out - hanging for this long isn't very nice
-	ret = sendto(DHCP_SOCKET, (const uint8_t *)"CHECK_IP_CONFLICT", 17, DHCP_allocated_ip, 5000);
+	sendto(DHCP_SOCKET, (const uint8_t *)"CHECK_IP_CONFLICT", 17, DHCP_allocated_ip, 5000);
 
 	// RCR value restore
 	setRCR(tmp);
-
-	if (ret == SOCKERR_TIMEOUT)
-	{
-		// UDP send Timeout occurred : allocated IP address is unique, DHCP Success
-		DEBUG_PRINTF("\n> Check leased IP - OK\n");
-		return true;
-	}
-	else
-	{
-		// Received ARP reply or etc : IP address conflict occur, DHCP Failed
-		send_DHCP_DECLINE();
-
-		ret = dhcp_tick_1s;
-		//TODO can't tolerate a 1 to 2 second wait here
-		while((dhcp_tick_1s - ret) < 2) { }   // wait for 1s over; wait to complete to send DECLINE message;
-
-		return false;
-	}
 }	
 
-void DHCP_init(uint8_t s, const char *hname)
+void DHCP_init(uint8_t s, uint32_t seed, const char *hname)
 {
 	strncpy(HOST_NAME, hname, sizeof(HOST_NAME));
 	HOST_NAME[sizeof(HOST_NAME) - 1] = 0;
@@ -939,8 +966,11 @@ void DHCP_init(uint8_t s, const char *hname)
 		setSHAR(DHCP_CHADDR);
 	}
 
-	DHCP_SOCKET = s; // SOCK_DHCP
-	DHCP_XID = 0x12345678;
+	DHCP_SOCKET = s;
+	reset_DHCP_timeout();
+	dhcp_lease_time = INFINITE_LEASETIME;
+	DHCP_XID = seed;
+	dhcpLastSendStatus = SOCK_OK;
 
 	// WIZchip Netinfo Clear
 	setSIPR(zeroip);
@@ -948,7 +978,7 @@ void DHCP_init(uint8_t s, const char *hname)
 	setGAR(zeroip);
 
 	reset_DHCP_timeout();
-	dhcp_state = STATE_DHCP_INIT;
+	dhcp_state = DhcpState::init;
 }
 
 /* Rset the DHCP timeout count and retry count. */

@@ -161,11 +161,20 @@ void wiz_recv_data(uint8_t sn, uint8_t *wizdata, uint16_t len)
 		const uint32_t addrsel = ((uint32_t)ptr << 8) + (WIZCHIP_RXBUF_BLOCK(sn) << 3);
 		WIZCHIP_READ_BUF(addrsel, wizdata, len);
 		ptr += len;
-
-		setSn_RX_RD(sn,ptr);
+		setSn_RX_RD(sn, ptr);
 	}
 }
 
+// Function wiz_recv_data only works if we read the entire received data.
+// This function should get round that, but the caller will have to track the received buffer pointer.
+void wiz_recv_data_at(uint8_t sn, uint8_t *wizdata, uint16_t len, uint16_t ptr)
+{
+	if (len != 0)
+	{
+		const uint32_t addrsel = ((uint32_t)ptr << 8) + (WIZCHIP_RXBUF_BLOCK(sn) << 3);
+		WIZCHIP_READ_BUF(addrsel, wizdata, len);
+	}
+}
 
 void wiz_recv_ignore(uint8_t sn, uint16_t len)
 {

@@ -657,17 +657,6 @@ void LwipEthernetInterface::TerminateDataPort()
 	}
 }
 
-// Stop listening on a port
-void LwipEthernetInterface::DataPortClosing()
-{
-	// This is currently called only for the FTP data port
-	if (listeningPcbs[NumProtocols] != nullptr)
-	{
-		tcp_close(listeningPcbs[NumProtocols]);
-		listeningPcbs[NumProtocols] = nullptr;
-	}
-}
-
 void LwipEthernetInterface::InitSockets()
 {
 	for (size_t i = 0; i < NumProtocols; ++i)

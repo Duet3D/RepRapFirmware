@@ -1070,7 +1070,7 @@ DWORD clmt_clust (	/* <2:Error, >=2:Cluster number */
 	tbl = fp->cltbl + 1;	/* Top of CLMT */
 	cl = ofs / SS(fp->fs) / fp->fs->csize;	/* Cluster order from top of the file */
 	for (;;) {
-		ncl = *tbl++;			/* Number of cluters in the fragment */
+		ncl = *tbl++;			/* Number of clusters in the fragment */
 		if (!ncl) return 0;		/* End of table? (error) */
 		if (cl < ncl) break;	/* In this fragment? */
 		cl -= ncl; tbl++;		/* Next fragment */

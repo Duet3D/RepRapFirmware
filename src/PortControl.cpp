@@ -85,7 +85,7 @@ bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
 				return true;
 			}
 			IoPort& pm = portMap[i];
-			if (!pm.Set((LogicalPin)pnum, PinAccess::write))
+			if (!pm.Set((LogicalPin)pnum, PinAccess::write, false))
 			{
 				reply.printf("Port number %ld is not available", pnum);
 				return true;

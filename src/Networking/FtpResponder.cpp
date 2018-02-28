@@ -128,8 +128,6 @@ bool FtpResponder::Spin()
 					outBuf->copy("226 Transfer complete.\r\n");
 				}
 				Commit(ResponderState::reading);
-
-				// Close the data port again
 				CloseDataPort();
 			}
 			else
@@ -891,7 +889,6 @@ void FtpResponder::CloseDataPort()
 
 	if (dataSocket != nullptr)
 	{
-		dataSocket->GetInterface()->DataPortClosing();
 		dataSocket->Close();								// close it gracefully
 		dataSocket = nullptr;
 	}

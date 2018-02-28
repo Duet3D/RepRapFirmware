@@ -30,7 +30,7 @@ FilamentMonitor::~FilamentMonitor()
 
 // Try to get the pin number from the GCode command in the buffer, setting Seen if a pin number was provided and returning true if error.
 // Also attaches the ISR.
-bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, uint32_t interruptMode, bool& seen)
+bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen)
 {
 	if (gb.Seen('C'))
 	{
@@ -46,7 +46,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, uint
 		endstopNumber = endstop;
 		pin = p;
 		haveIsrStepsCommanded = false;
-		if (!attachInterrupt(pin, InterruptEntry, interruptMode, this))
+		if (interruptMode != INTERRUPT_MODE_NONE && !attachInterrupt(pin, InterruptEntry, interruptMode, this))
 		{
 			reply.copy("unsuitable endstop number");
 			return true;

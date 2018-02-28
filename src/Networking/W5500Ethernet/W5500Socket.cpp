@@ -17,7 +17,7 @@
 const unsigned int MaxBuffersPerSocket = 4;
 
 W5500Socket::W5500Socket(NetworkInterface *iface)
-	: Socket(iface), receivedData(nullptr), state(SocketState::disabled)
+	: Socket(iface), receivedData(nullptr)
 {
 }
 
@@ -171,12 +171,13 @@ void W5500Socket::Poll(bool full)
 					state = SocketState::connected;
 					sendOutstanding = false;
 				}
-				else
+				else if (millis() - whenConnected >= FindResponderTimeout)
 				{
-					if (millis() - whenConnected >= FindResponderTimeout)
+					if (reprap.Debug(moduleNetwork))
 					{
-						Terminate();
+						debugPrintf("Timed out waiting for resonder for port %u\n", localPort);
 					}
+					Terminate();
 				}
 			}
 
@@ -213,14 +214,16 @@ void W5500Socket::ReceiveData()
 	{
 //		debugPrintf("%u available\n", len);
 		NetworkBuffer * const lastBuffer = NetworkBuffer::FindLast(receivedData);
-		if (lastBuffer != nullptr && (lastBuffer->SpaceLeft() >= len || (lastBuffer->SpaceLeft() != 0 && NetworkBuffer::Count(receivedData) >= MaxBuffersPerSocket)))
+		// NOTE: reading only part of the received data doesn't work because the wizchip doesn't track the buffer pointer properly.
+		// We could probably make it work by tracking the buffer pointer ourselves, just as we do when sending data, and using wiz_recv_data_at.
+		if (lastBuffer != nullptr && lastBuffer->SpaceLeft() >= len)
 		{
-			const size_t lengthToRead = min<size_t>((size_t)len, lastBuffer->SpaceLeft());
-			wiz_recv_data(socketNum, lastBuffer->UnwrittenData(), (uint16_t)lengthToRead);
-			lastBuffer->dataLength += lengthToRead;
+			wiz_recv_data(socketNum, lastBuffer->UnwrittenData(), len);
+			ExecCommand(socketNum, Sn_CR_RECV);
+			lastBuffer->dataLength += len;
 			if (reprap.Debug(moduleNetwork))
 			{
-				debugPrintf("Received %u bytes\n", (unsigned int)lengthToRead);
+				debugPrintf("Appended %u bytes\n", (unsigned int)len);
 			}
 		}
 		else if (NetworkBuffer::Count(receivedData) < MaxBuffersPerSocket)

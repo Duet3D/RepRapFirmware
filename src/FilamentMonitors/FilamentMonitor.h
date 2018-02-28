@@ -63,7 +63,7 @@ public:
 protected:
 	FilamentMonitor(unsigned int extruder, int t) : extruderNumber(extruder), type(t), pin(NoPin) { }
 
-	bool ConfigurePin(GCodeBuffer& gb, const StringRef& reply, uint32_t interruptMode, bool& seen);
+	bool ConfigurePin(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen);
 
 	int GetEndstopNumber() const { return endstopNumber; }
 

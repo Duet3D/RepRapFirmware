@@ -20,8 +20,6 @@ public:
 	virtual void Spin(bool full) = 0;
 	virtual void Interrupt() { };
 	virtual void Diagnostics(MessageType mtype) = 0;
-	virtual void Start() = 0;
-	virtual void Stop() = 0;
 
 	virtual GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) = 0;
 	virtual GCodeResult GetNetworkState(const StringRef& reply) = 0;
@@ -42,7 +40,6 @@ public:
 
 	virtual void OpenDataPort(Port port) = 0;
 	virtual void TerminateDataPort() = 0;
-	virtual void DataPortClosing() = 0;
 
 protected:
 	Port portNumbers[NumProtocols];					// port number used for each protocol

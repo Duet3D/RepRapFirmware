@@ -121,7 +121,7 @@ static void EspTransferRequestIsr(CallbackParameter)
 
 static inline void EnableEspInterrupt()
 {
-	attachInterrupt(EspDataReadyPin, EspTransferRequestIsr, RISING, nullptr);
+	attachInterrupt(EspDataReadyPin, EspTransferRequestIsr, INTERRUPT_MODE_RISING, nullptr);
 }
 
 static inline void DisableEspInterrupt()
@@ -673,12 +673,10 @@ void WiFiInterface::Spin(bool full)
 		// Check for debug info received from the WiFi module
 		if (debugPrintPending)
 		{
-#if 0
 			if (reprap.Debug(moduleWiFi))
 			{
 				debugPrintf("WiFi: %s\n", debugMessageBuffer.Pointer());
 			}
-#endif
 			debugMessageBuffer.Clear();
 			debugPrintPending = false;
 		}
@@ -1195,11 +1193,6 @@ void WiFiInterface::TerminateDataPort()
 		// Give it some more time
 		closeDataPort = true;
 	}
-}
-
-void WiFiInterface::DataPortClosing()
-{
-	StopListening(ftpDataPort);
 }
 
 #if USE_PDC

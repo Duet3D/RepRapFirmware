@@ -154,6 +154,9 @@ private:
 	const T _end;
 };
 
+// Macro to create a SimpleRange from an array
+#define ARRAY_INDICES(_arr) (SimpleRange<size_t>(ARRAY_SIZE(_arr)))
+
 // Helper functions to work on bitmaps of various lengths.
 // The primary purpose of these is to allow us to switch between 16, 32 and 64-bit bitmaps.
 
@@ -202,9 +205,6 @@ template<typename BitmapType> BitmapType UnsignedArrayToBitMap(const uint32_t *a
 	return res;
 }
 
-// Macro to create a SimpleRange from an array
-#define ARRAY_INDICES(_arr) (SimpleRange<size_t>(ARRAY_SIZE(_arr)))
-
 // A string buffer used for temporary purposes
 extern StringRef scratchString;
 
@@ -221,8 +221,10 @@ constexpr float SecondsToMinutes = 1.0/MinutesToSeconds;
 constexpr float SecondsToMillis = 1000.0;
 constexpr float MillisToSeconds = 0.001;
 constexpr float InchToMm = 25.4;
-constexpr float DegreesToRadians = PI/180.0;
-constexpr float RadiansToDegrees = 180.0/PI;
+constexpr float Pi = 3.141592653589793;
+constexpr float TwoPi = 3.141592653589793 * 2;
+constexpr float DegreesToRadians = 3.141592653589793/180.0;
+constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 
 #define DEGREE_SYMBOL	"\xC2\xB0"									// degree-symbol encoding in UTF8
 

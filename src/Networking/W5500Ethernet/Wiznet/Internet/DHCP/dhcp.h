@@ -77,7 +77,7 @@ enum class DhcpRunResult : uint8_t
  * @param s   - socket number
  * @param hname - null-terminated host name string
  */
-void DHCP_init(uint8_t s, const char *hname);
+void DHCP_init(uint8_t s, uint32_t seed, const char *hname);
 
 /*
  * @brief DHCP 1s Tick Timer handler

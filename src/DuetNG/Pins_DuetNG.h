@@ -1,10 +1,10 @@
 #ifndef PINS_DUETNG_H__
 #define PINS_DUETNG_H__
 
-# define FIRMWARE_NAME	"RepRapFirmware for Duet WiFi and Duet Ethernet"
+# define FIRMWARE_NAME	"RepRapFirmware for Duet 2 WiFi/Ethernet"
 # define DEFAULT_BOARD_TYPE BoardType::DuetWiFi_10
 constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 is now unused)
-# define IAP_FIRMWARE_FILE	"DuetWiFiFirmware.bin"
+# define IAP_FIRMWARE_FILE	"Duet2CombinedFirmware.bin"
 # define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
 
 // Features definition

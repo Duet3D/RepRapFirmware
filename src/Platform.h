@@ -38,7 +38,7 @@ Licence: GPL
 #include "Storage/FileData.h"
 #include "Storage/MassStorage.h"	// must be after Pins.h because it needs NumSdCards defined
 #include "MessageType.h"
-#include "Zprobe.h"
+#include "ZProbe.h"
 #include "ZProbeProgrammer.h"
 
 #if defined(DUET_NG)
@@ -156,6 +156,17 @@ enum class EndStopInputType
 	activeHigh = 1,
 	zProbe = 2,
 	motorStall = 3
+};
+
+// Other firmware that we might switch to be compatible with.
+enum class Compatibility : uint8_t
+{
+	me = 0,
+	reprapFirmware = 1,
+	marlin = 2,
+	teacup = 3,
+	sprinter = 4,
+	repetier = 5
 };
 
 /***************************************************************************************************/
@@ -329,8 +340,8 @@ public:
 
   	// Communications and data storage
 	OutputBuffer *GetAuxGCodeReply();				// Returns cached G-Code reply for AUX devices and clears its reference
-	void AppendAuxReply(OutputBuffer *buf);
-	void AppendAuxReply(const char *msg);
+	void AppendAuxReply(OutputBuffer *buf, bool rawMessage);
+	void AppendAuxReply(const char *msg, bool rawMessage);
     uint32_t GetAuxSeq() { return auxSeq; }
     bool HaveAux() const { return auxDetected; }	// Any device on the AUX line?
     void SetAuxDetected() { auxDetected = true; }
@@ -434,7 +445,7 @@ public:
 	pre(axis < MaxAxes);
 
 	uint32_t GetAllEndstopStates() const;
-	void SetAxisDriversConfig(size_t drive, const AxisDriversConfig& config);
+	void SetAxisDriversConfig(size_t axis, const AxisDriversConfig& config);
 	const AxisDriversConfig& GetAxisDriversConfig(size_t drive) const
 		{ return axisDrivers[drive]; }
 	void SetExtruderDriver(size_t extruder, uint8_t driver);
@@ -555,13 +566,13 @@ public:
 	// Logging support
 	bool ConfigureLogging(GCodeBuffer& gb, const StringRef& reply);
 
-	// Ancilliary PWM
+	// Ancillary PWM
 	void SetExtrusionAncilliaryPwmValue(float v);
 	float GetExtrusionAncilliaryPwmValue() const;
 	void SetExtrusionAncilliaryPwmFrequency(float f);
 	float GetExtrusionAncilliaryPwmFrequency() const;
-	bool SetExtrusionAncilliaryPwmPin(LogicalPin logicalPin);
-	int GetExtrusionAncilliaryPwmPin() const { return extrusionAncilliaryPwmPort.GetLogicalPin(); }
+	bool SetExtrusionAncilliaryPwmPin(LogicalPin logicalPin, bool invert);
+	LogicalPin GetExtrusionAncilliaryPwmPin(bool& invert) const { return extrusionAncilliaryPwmPort.GetLogicalPin(invert); }
 	void ExtrudeOn();
 	void ExtrudeOff();
 
@@ -569,18 +580,22 @@ public:
 	void SetSpindlePwm(float pwm);
 	void SetLaserPwm(float pwm);
 
-	bool SetSpindlePins(LogicalPin lpf, LogicalPin lpr);
-	void GetSpindlePins(LogicalPin& lpf, LogicalPin& lpr) const;
+	bool SetSpindlePins(LogicalPin lpf, LogicalPin lpr, bool invert);
+	void GetSpindlePins(LogicalPin& lpf, LogicalPin& lpr, bool& invert) const;
 	void SetSpindlePwmFrequency(float freq);
 	float GetSpindlePwmFrequency() const { return spindleForwardPort.GetFrequency(); }
 
-	bool SetLaserPin(LogicalPin lp);
-	LogicalPin GetLaserPin() const { return laserPort.GetLogicalPin(); }
+	bool SetLaserPin(LogicalPin lp, bool invert);
+	LogicalPin GetLaserPin(bool& invert) const { return laserPort.GetLogicalPin(invert); }
 	void SetLaserPwmFrequency(float freq);
 	float GetLaserPwmFrequency() const { return laserPort.GetFrequency(); }
 
 	// Misc
 	void InitI2c();
+
+#if SAM4E || SAM4S || SAME70
+	uint32_t Random();
+#endif
 
 	static uint8_t softwareResetDebugInfo;				// extra info for debugging
 
@@ -639,7 +654,7 @@ private:
 		uint32_t icsr;								// interrupt control and state register
 		uint32_t bfar;								// bus fault address register
 		uint32_t sp;								// stack pointer
-		time_t when;								// value of the RTC when the software reset occurred
+		uint32_t when;								// value of the RTC when the software reset occurred
 		uint32_t stack[24];							// stack when the exception occurred, with the program counter at the bottom
 
 		bool isVacant() const						// return true if this struct can be written without erasing it first
@@ -672,12 +687,16 @@ private:
 	ZProbe alternateZProbeParameters;		// Z probe values for the alternate sensor
 	ZProbeType zProbeType;					// the type of Z probe we are currently using
 
-	byte ipAddress[4];
-	byte netMask[4];
-	byte gateWay[4];
+	// Network
+	uint8_t ipAddress[4];
+	uint8_t netMask[4];
+	uint8_t gateWay[4];
 	uint8_t defaultMacAddress[6];
-	Compatibility compatibility;
 
+	// Board and processor
+#if SAM4E || SAM4S || SAME70
+	uint32_t uniqueId[5];
+#endif
 	BoardType board;
 
 #ifdef DUET_NG
@@ -687,6 +706,7 @@ private:
 	uint32_t longWait;
 
 	bool active;
+	Compatibility compatibility;
 	uint32_t errorCodeBits;
 
 	void InitialiseInterrupts();
@@ -716,9 +736,6 @@ private:
 #endif
 	float motorCurrents[DRIVES];						// the normal motor current for each stepper driver
 	float motorCurrentFraction[DRIVES];					// the percentages of normal motor current that each driver is set to
-#if HAS_SMART_DRIVERS
-	float motorStandstillCurrentFraction[DRIVES];
-#endif
 	AxisDriversConfig axisDrivers[MaxAxes];				// the driver numbers assigned to each axis
 	uint8_t extruderDrivers[MaxExtruders];				// the driver number assigned to each extruder
 	uint32_t driveDriverBits[2 * DRIVES];				// the bitmap of driver port bits for each axis or extruder, followed by the raw versions
@@ -773,7 +790,7 @@ private:
 
 	void InitZProbe();
 	uint16_t GetRawZProbeReading() const;
-	void UpdateNetworkAddress(byte dst[4], const byte src[4]);
+	void UpdateNetworkAddress(uint8_t dst[4], const uint8_t src[4]);
 
 	// Axes and endstops
 	float axisMaxima[MaxAxes];

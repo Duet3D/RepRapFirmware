@@ -357,7 +357,7 @@ void Platform::Init()
 	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 #endif
 
-	compatibility = marlin;						// default to Marlin because the common host programs expect the "OK" response to commands
+	compatibility = Compatibility::marlin;		// default to Marlin because the common host programs expect the "OK" response to commands
 
 	// File management
 	massStorage->Init();
@@ -366,32 +366,36 @@ void Platform::Init()
 	ARRAY_INIT(netMask, DefaultNetMask);
 	ARRAY_INIT(gateWay, DefaultGateway);
 
-#if defined(DUET_NG)  || defined(SAME70_TEST_BOARD)
-	// On the Duet Ethernet and SAM E70, use the unique chip ID as most of the MAC address.
-	// The unique ID is 128 bits long whereas the whole MAC address is only 48 bits,
-	// so we can't guarantee that each Duet will get a unique MAC address this way.
+#if SAM4E || SAM4S || SAME70
+	// Read the unique ID of the MCU
+	memset(uniqueId, 0, sizeof(uniqueId));
+	DisableCache();
+	cpu_irq_disable();
+	const uint32_t rc = flash_read_unique_id(uniqueId, 4);
+	cpu_irq_enable();
+	EnableCache();
+
+	if (rc == 0)
 	{
-		uint32_t idBuf[4];
-		memset(idBuf, 0, sizeof(idBuf));
-		DisableCache();
-		cpu_irq_disable();
-		const uint32_t rc = flash_read_unique_id(idBuf, 4);
-		cpu_irq_enable();
-		EnableCache();
-		if (rc == 0)
+		// Put the checksum at the end
+		// We only print 30 5-bit characters = 128 data bits + 22 checksum bits. So compress the 32 checksum bits into 22.
+		uniqueId[4] = uniqueId[0] ^ uniqueId[1] ^ uniqueId[2] ^ uniqueId[3];
+		uniqueId[4] ^= (uniqueId[4] >> 10);
+
+		// On the Duet Ethernet and SAM E70, use the unique chip ID as most of the MAC address.
+		// The unique ID is 128 bits long whereas the whole MAC address is only 48 bits,
+		// so we can't guarantee that each Duet will get a unique MAC address this way.
+		memset(defaultMacAddress, 0, sizeof(defaultMacAddress));
+		defaultMacAddress[0] = 0xBE;					// use a fixed first byte with the locally-administered bit set
+		const uint8_t * const idBytes = reinterpret_cast<const uint8_t *>(uniqueId);
+		for (size_t i = 0; i < 15; ++i)
 		{
-			memset(defaultMacAddress, 0, sizeof(defaultMacAddress));
-			defaultMacAddress[0] = 0xBE;					// use a fixed first byte with the locally-administered bit set
-			const uint8_t * const idBytes = reinterpret_cast<const uint8_t *>(idBuf);
-			for (size_t i = 0; i < 15; ++i)
-			{
-				defaultMacAddress[(i % 5) + 1] ^= idBytes[i];
-			}
+			defaultMacAddress[(i % 5) + 1] ^= idBytes[i];
 		}
-		else
-		{
-			ARRAY_INIT(defaultMacAddress, DefaultMacAddress);
-		}
+	}
+	else
+	{
+		ARRAY_INIT(defaultMacAddress, DefaultMacAddress);
 	}
 #elif defined(DUET_06_085)
 	ARRAY_INIT(defaultMacAddress, DefaultMacAddress);
@@ -497,9 +501,6 @@ void Platform::Init()
 
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
-#if HAS_SMART_DRIVERS
-		motorStandstillCurrentFraction[drive] = 1.0;
-#endif
 		driverState[drive] = DriverStatus::disabled;
 
 		// Enable pullup resistors on endstop inputs here if necessary.
@@ -1254,26 +1255,26 @@ void Platform::Exit()
 
 Compatibility Platform::Emulating() const
 {
-	return (compatibility == reprapFirmware) ? me : compatibility;
+	return (compatibility == Compatibility::reprapFirmware) ? Compatibility::me : compatibility;
 }
 
 void Platform::SetEmulating(Compatibility c)
 {
-	if (c != me && c != reprapFirmware && c != marlin)
+	if (c != Compatibility::me && c != Compatibility::reprapFirmware && c != Compatibility::marlin)
 	{
 		Message(ErrorMessage, "Attempt to emulate unsupported firmware.\n");
 	}
 	else
 	{
-		if (c == reprapFirmware)
+		if (c == Compatibility::reprapFirmware)
 		{
-			c = me;
+			c = Compatibility::me;
 		}
 		compatibility = c;
 	}
 }
 
-void Platform::UpdateNetworkAddress(byte dst[4], const byte src[4])
+void Platform::UpdateNetworkAddress(uint8_t dst[4], const uint8_t src[4])
 {
 	for (uint8_t i = 0; i < 4; i++)
 	{
@@ -1282,22 +1283,22 @@ void Platform::UpdateNetworkAddress(byte dst[4], const byte src[4])
 	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, gateWay, netMask);
 }
 
-void Platform::SetIPAddress(byte ip[])
+void Platform::SetIPAddress(uint8_t ip[])
 {
 	UpdateNetworkAddress(ipAddress, ip);
 }
 
-void Platform::SetGateWay(byte gw[])
+void Platform::SetGateWay(uint8_t gw[])
 {
 	UpdateNetworkAddress(gateWay, gw);
 }
 
-void Platform::SetNetMask(byte nm[])
+void Platform::SetNetMask(uint8_t nm[])
 {
 	UpdateNetworkAddress(netMask, nm);
 }
 
-// Flush messages to USB and aux, returning true if there is more to send
+// Flush messages to aux, returning true if there is more to send
 bool Platform::FlushAuxMessages()
 {
 	// Write non-blocking data to the AUX line
@@ -1873,7 +1874,7 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		}
 		srdBuf[slot].magic = SoftwareResetData::magicValue;
 		srdBuf[slot].resetReason = reason;
-		srdBuf[slot].when = realTime;
+		srdBuf[slot].when = (uint32_t)realTime;			// some compilers/libraries use 64-bit time_t
 		GetStackUsage(nullptr, nullptr, &srdBuf[slot].neverUsedRam);
 		srdBuf[slot].hfsr = SCB->HFSR;
 		srdBuf[slot].cfsr = SCB->CFSR;
@@ -2020,7 +2021,7 @@ void Platform::InitialiseInterrupts()
 	// Interrupt for 4-pin PWM fan sense line
 	if (coolingFanRpmPin != NoPin)
 	{
-		attachInterrupt(coolingFanRpmPin, FanInterrupt, FALLING, nullptr);
+		attachInterrupt(coolingFanRpmPin, FanInterrupt, INTERRUPT_MODE_FALLING, nullptr);
 	}
 
 	// Tick interrupt for ADC conversions
@@ -2053,70 +2054,55 @@ void Platform::InitialiseInterrupts()
 // Print the unique processor ID
 void Platform::PrintUniqueId(MessageType mtype)
 {
-	uint32_t idBuf[5];
-	const irqflags_t flags = cpu_irq_save();
-	DisableCache();
-	const uint32_t rc = flash_read_unique_id(idBuf, 4);
-	EnableCache();
-	cpu_irq_restore(flags);
-	if (rc == 0)
+	// Print the unique ID and checksum as 30 base5 alphanumeric digits
+	char digits[30 + 5 + 1];			// 30 characters, 5 separators, 1 null terminator
+	char *digitPtr = digits;
+	for (size_t i = 0; i < 30; ++i)
 	{
-		// Put the checksum at the end
-		idBuf[4] = idBuf[0] ^ idBuf[1] ^ idBuf[2] ^ idBuf[3];
-
-		// We are only going to print 30 5-bit characters = 128 data bits + 22 checksum bits. So compress the 32 checksum bits into 22.
-		idBuf[4] ^= (idBuf[4] >> 10);
-
-		// Print the unique ID and checksum as 30 base5 alphanumeric digits
-		char digits[30 + 5 + 1];			// 30 characters, 5 separators, 1 null terminator
-		char *digitPtr = digits;
-		for (size_t i = 0; i < 30; ++i)
+		if ((i % 5) == 0 && i != 0)
 		{
-			if ((i % 5) == 0 && i != 0)
-			{
-				*digitPtr++ = '-';
-			}
-			const size_t index = (i * 5) / 32;
-			const size_t shift = (i * 5) % 32;
-			uint32_t val = idBuf[index] >> shift;
-			if (shift > 32 - 5)
-			{
-				// We need some bits from the next dword too
-				val |= idBuf[index + 1] << (32 - shift);
-			}
-			val &= 31;
-			char c;
-			if (val < 10)
-			{
-				c = val + '0';
-			}
-			else
-			{
-				c = val + ('A' - 10);
-				// We have 26 letters in the usual A-Z alphabet and we only need 22 of them plus 0-9.
-				// So avoid using letters C, E, I and O which are easily mistaken for G, F, 1 and 0.
-				if (c >= 'C')
-				{
-					++c;
-				}
-				if (c >= 'E')
-				{
-					++c;
-				}
-				if (c >= 'I')
-				{
-					++c;
-				}
-				if (c >= 'O')
-				{
-					++c;
-				}
-			}
-			*digitPtr++ = c;
+			*digitPtr++ = '-';
 		}
-		*digitPtr = 0;
-		MessageF(mtype, "Board ID: %s\n", digits);
+		const size_t index = (i * 5) / 32;
+		const size_t shift = (i * 5) % 32;
+		uint32_t val = uniqueId[index] >> shift;
+		if (shift > 32 - 5)
+		{
+			// We need some bits from the next dword too
+			val |= uniqueId[index + 1] << (32 - shift);
+		}
+		val &= 31;
+		char c;
+		if (val < 10)
+		{
+			c = val + '0';
+		}
+		else
+		{
+			c = val + ('A' - 10);
+			// We have 26 letters in the usual A-Z alphabet and we only need 22 of them plus 0-9.
+			// So avoid using letters C, E, I and O which are easily mistaken for G, F, 1 and 0.
+			if (c >= 'C')
+			{
+				++c;
+			}
+			if (c >= 'E')
+			{
+				++c;
+			}
+			if (c >= 'I')
+			{
+				++c;
+			}
+			if (c >= 'O')
+			{
+				++c;
+			}
+		}
+		*digitPtr++ = c;
 	}
+	*digitPtr = 0;
+	MessageF(mtype, "Board ID: %s\n", digits);
 }
 
 #endif
@@ -2157,7 +2143,7 @@ void Platform::Diagnostics(MessageType mtype)
 #elif SAM3XA
 			(char *) 0x20070000;
 #else
-# error
+# error Unsupported processor
 #endif
 	const struct mallinfo mi = mallinfo();
 	MessageF(mtype, "Static ram used: %d\n", &_end - ramstart);
@@ -2171,8 +2157,9 @@ void Platform::Diagnostics(MessageType mtype)
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
 	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software",
-#if SAM4E || SAM4S
-	// On the SAM4E a watchdog reset may be reported as a user reset because of the capacitor on the NRST pin
+#ifdef DUET_NG
+	// On the SAM4E a watchdog reset may be reported as a user reset because of the capacitor on the NRST pin.
+	// The SAM4S is the same but the Duet M has a diode in the reset circuit to avoid this problem.
 									"reset button or watchdog",
 #else
 									"reset button",
@@ -2223,7 +2210,8 @@ void Platform::Diagnostics(MessageType mtype)
 																: "Unknown";
 			if (srdBuf[slot].when != 0)
 			{
-				const struct tm * const timeInfo = gmtime(&srdBuf[slot].when);
+				const time_t when = (time_t)srdBuf[slot].when;
+				const struct tm * const timeInfo = gmtime(&when);
 				scratchString.printf("at %04u-%02u-%02u %02u:%02u",
 								timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday, timeInfo->tm_hour, timeInfo->tm_min);
 			}
@@ -2995,7 +2983,7 @@ void Platform::SetDriverCurrent(size_t driver, float currentOrPercent, int code)
 
 #if HAS_SMART_DRIVERS
 		case 917:
-			motorStandstillCurrentFraction[driver] = 0.01 * currentOrPercent;
+			SmartDrivers::SetStandstillCurrentPercent(driver, currentOrPercent);
 			break;
 #endif
 		default:
@@ -3110,7 +3098,7 @@ float Platform::GetMotorCurrent(size_t drive, int code) const
 
 #if HAS_SMART_DRIVERS
 			case 917:
-				return motorStandstillCurrentFraction[driver] * 100.0;
+				return (driver < numSmartDrivers) ? SmartDrivers::GetStandstillCurrentPercent(driver) : 100.0;
 #endif
 			default:
 				break;
@@ -3236,18 +3224,18 @@ void Platform::SetEnableValue(size_t driver, int8_t eVal)
 #endif
 }
 
-void Platform::SetAxisDriversConfig(size_t drive, const AxisDriversConfig& config)
+void Platform::SetAxisDriversConfig(size_t axis, const AxisDriversConfig& config)
 {
-	axisDrivers[drive] = config;
+	axisDrivers[axis] = config;
 	uint32_t bitmap = 0;
 	for (size_t i = 0; i < config.numDrivers; ++i)
 	{
 		bitmap |= CalcDriverBitmap(config.driverNumbers[i]);
 #if HAS_SMART_DRIVERS
-		SmartDrivers::SetAxisNumber(config.driverNumbers[i], drive);
+		SmartDrivers::SetAxisNumber(config.driverNumbers[i], axis);
 #endif
 	}
-	driveDriverBits[drive] = bitmap;
+	driveDriverBits[axis] = bitmap;
 }
 
 // Map an extruder to a driver
@@ -3410,14 +3398,14 @@ void Platform::GetEndStopConfiguration(size_t axis, EndStopPosition& esType, End
 
 //-----------------------------------------------------------------------------------------------------
 
-void Platform::AppendAuxReply(const char *msg)
+void Platform::AppendAuxReply(const char *msg, bool rawMessage)
 {
 	// Discard this response if either no aux device is attached or if the response is empty
 	if (msg[0] != 0 && HaveAux())
 	{
-		if (msg[0] == '{')
+		if (rawMessage)
 		{
-			// JSON responses are always sent directly to the AUX device
+			// Raw responses are sent directly to the AUX device
 			OutputBuffer *buf;
 			if (OutputBuffer::Allocate(buf))
 			{
@@ -3437,14 +3425,14 @@ void Platform::AppendAuxReply(const char *msg)
 	}
 }
 
-void Platform::AppendAuxReply(OutputBuffer *reply)
+void Platform::AppendAuxReply(OutputBuffer *reply, bool rawMessage)
 {
 	// Discard this response if either no aux device is attached or if the response is empty
 	if (reply == nullptr || reply->Length() == 0 || !HaveAux())
 	{
 		OutputBuffer::ReleaseAll(reply);
 	}
-	else if ((*reply)[0] == '{')
+	else if (rawMessage)
 	{
 		// JSON responses are always sent directly to the AUX device
 		// For big responses it makes sense to write big chunks of data in portions. Store this data here
@@ -3481,7 +3469,7 @@ void Platform::RawMessage(MessageType type, const char *message)
 	}
 	else if ((type & LcdMessage) != 0)
 	{
-		AppendAuxReply(message);
+		AppendAuxReply(message, (message[0] == '{')  || (type & RawMessageFlag) != 0);
 	}
 
 	if ((type & HttpMessage) != 0)
@@ -3597,7 +3585,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 
 		if ((type & (LcdMessage | ImmediateLcdMessage)) != 0)
 		{
-			AppendAuxReply(buffer);
+			AppendAuxReply(buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
 
 		if ((type & HttpMessage) != 0)
@@ -4106,9 +4094,9 @@ bool Platform::GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firm
 	return false;
 }
 
-bool Platform::SetExtrusionAncilliaryPwmPin(LogicalPin logicalPin)
+bool Platform::SetExtrusionAncilliaryPwmPin(LogicalPin logicalPin, bool invert)
 {
-	return extrusionAncilliaryPwmPort.Set(logicalPin, PinAccess::pwm);
+	return extrusionAncilliaryPwmPort.Set(logicalPin, PinAccess::pwm, invert);
 }
 
 // CNC and laser support
@@ -4131,21 +4119,21 @@ void Platform::SetLaserPwm(float pwm)
 	laserPort.WriteAnalog(pwm);
 }
 
-bool Platform::SetSpindlePins(LogicalPin lpf, LogicalPin lpr)
+bool Platform::SetSpindlePins(LogicalPin lpf, LogicalPin lpr, bool invert)
 {
-	const bool ok1 = spindleForwardPort.Set(lpf, PinAccess::pwm);
+	const bool ok1 = spindleForwardPort.Set(lpf, PinAccess::pwm, invert);
 	if (lpr == NoLogicalPin)
 	{
 		spindleReversePort.Clear();
 		return ok1;
 	}
-	const bool ok2 = spindleReversePort.Set(lpr, PinAccess::pwm);
+	const bool ok2 = spindleReversePort.Set(lpr, PinAccess::pwm, invert);
 	return ok1 && ok2;
 }
 
-void Platform::GetSpindlePins(LogicalPin& lpf, LogicalPin& lpr) const
+void Platform::GetSpindlePins(LogicalPin& lpf, LogicalPin& lpr, bool& invert) const
 {
-	lpf = spindleForwardPort.GetLogicalPin();
+	lpf = spindleForwardPort.GetLogicalPin(invert);
 	lpr = spindleReversePort.GetLogicalPin();
 }
 
@@ -4155,9 +4143,9 @@ void Platform::SetSpindlePwmFrequency(float freq)
 	spindleReversePort.SetFrequency(freq);
 }
 
-bool Platform::SetLaserPin(LogicalPin lp)
+bool Platform::SetLaserPin(LogicalPin lp, bool invert)
 {
-	return laserPort.Set(lp, PinAccess::pwm);
+	return laserPort.Set(lp, PinAccess::pwm, invert);
 }
 
 void Platform::SetLaserPwmFrequency(float freq)
@@ -4328,7 +4316,7 @@ bool Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('F'))
 	{
 		seen = true;
-		const int sgFilter = (gb.GetIValue() == 1);
+		const bool sgFilter = (gb.GetIValue() == 1);
 		for (size_t drive = 0; drive < numSmartDrivers; ++drive)
 		{
 			if (IsBitSet(drivers, drive))
@@ -4466,6 +4454,17 @@ void Platform::InitI2c()
 	}
 #endif
 }
+
+#if SAM4E || SAM4S || SAME70
+
+// Get a pseudo-random number
+uint32_t Platform::Random()
+{
+	const uint32_t clocks = GetInterruptClocks();
+	return clocks ^ uniqueId[0] ^ uniqueId[1] ^ uniqueId[2] ^ uniqueId[3];
+}
+
+#endif
 
 // Step pulse timer interrupt
 void STEP_TC_HANDLER() __attribute__ ((hot));

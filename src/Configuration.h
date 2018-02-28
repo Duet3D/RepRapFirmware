@@ -25,18 +25,6 @@ Licence: GPL
 
 #include <cstddef>			// for size_t
 
-// Other firmware that we might switch to be compatible with.
-
-enum Compatibility
-{
-	me = 0,
-	reprapFirmware = 1,
-	marlin = 2,
-	teacup = 3,
-	sprinter = 4,
-	repetier = 5
-};
-
 // Generic constants
 constexpr float ABS_ZERO = -273.15;						// Celsius
 constexpr float NEARLY_ABS_ZERO = -273.0;				// Celsius
@@ -220,6 +208,7 @@ constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buf
 constexpr float DefaultFeedrate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min
 constexpr float DefaultRetractSpeed = 1000.0;			// The default firmware retraction and un-retraction speed, in mm
 constexpr float DefaultRetractLength = 2.0;
+constexpr float MinimumMovementSpeed = 0.5;				// The minimum movement speed (extruding moves will go slower than this if the extrusion rate demands it)
 
 constexpr float DefaultArcSegmentLength = 0.2;			// G2 and G3 arc movement commands get split into segments this long
 
@@ -227,6 +216,7 @@ constexpr uint32_t DefaultIdleTimeout = 30000;			// Milliseconds
 constexpr float DefaultIdleCurrentFactor = 0.3;			// Proportion of normal motor current that we use for idle hold
 
 constexpr float DefaultNonlinearExtrusionLimit = 0.2;	// Maximum additional commanded extrusion to compensate for nonlinearity
+constexpr size_t NumRestorePoints = 3;					// Number of restore points, must be at least 3
 
 // Triggers
 constexpr unsigned int MaxTriggers = 10;				// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t

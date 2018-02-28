@@ -22,7 +22,7 @@ const bool DefaultInterpolation = true;						// interpolation enabled
 // So at 500kbaud it takes about 128us to write a register, and 192us+ to read a register.
 // In testing I found that 500kbaud was not reliable, so now using 200kbaud.
 const uint32_t DriversBaudRate = 200000;
-const uint32_t TransferTimeout = 10;						// any transfer should complete within 10 ticks
+const uint32_t TransferTimeout = 10;						// any transfer should complete within 10 ticks @ 1ms/tick
 
 static size_t numTmc22xxDrivers;
 
@@ -225,20 +225,6 @@ static inline constexpr uint8_t CRCAddByte(uint8_t crc, uint8_t currentByte)
 	return crc;
 }
 
-#if 0	// unused
-// Calculate the CRC of a message
-static uint8_t CalcCRC(const uint8_t *datagram, uint8_t length)
-{
-	uint8_t crc = 0;
-	do
-	{
-		crc = CRCAddByte(crc, *datagram++);
-	}
-	while (--length != 0);
-	return crc;
-}
-#endif
-
 // CRC of the first 2 bytes we send in any request
 static constexpr uint8_t InitialSendCRC = CRCAddByte(CRCAddByte(0, 0x05), 0x00);
 
@@ -278,6 +264,9 @@ public:
 	uint8_t GetDriverNumber() const { return driverNumber; }
 	bool UpdatePending() const { return registersToUpdate != 0; }
 
+	float GetStandstillCurrentPercent() const;
+	void SetStandstillCurrentPercent(float percent);
+
 	void TransferDone() __attribute__ ((hot));				// called by the ISR when the SPI transfer has completed
 	void StartTransfer() __attribute__ ((hot));				// called to start a transfer
 	void TransferTimedOut() { ++numTimeouts; }
@@ -289,7 +278,8 @@ public:
 
 private:
 	void UpdateRegister(size_t regIndex, uint32_t regVal);
-	void UpdateChopConfRegister();							// calculate the copper control register and flag it for sending
+	void UpdateChopConfRegister();							// calculate the chopper control register and flag it for sending
+	void UpdateCurrent();
 	void SetUartMux();
 
 	static constexpr unsigned int NumWriteRegisters = 5;	// the number of registers that we write to
@@ -312,16 +302,17 @@ private:
 	static void SetupDMASend(uint8_t regnum, uint32_t outVal, uint8_t crc) __attribute__ ((hot));	// set up the PDC to send a register
 	static void SetupDMAReceive(uint8_t regnum, uint8_t crc) __attribute__ ((hot));					// set up the PDC to receive a register
 
-	uint32_t writeRegisters[NumWriteRegisters];				// the values we want the TMC22xx writable registers to have
+	volatile uint32_t writeRegisters[NumWriteRegisters];	// the values we want the TMC22xx writable registers to have
 	volatile uint32_t readRegisters[NumReadRegisters];		// the last values read from the TMC22xx readable registers
 	volatile uint32_t accumulatedReadRegisters[NumReadRegisters];
 
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state, without the microstepping bits
-	uint32_t registersToUpdate;								// bitmap of register indices whose values need to be sent to the driver chip
-	uint32_t registerBeingUpdated;							// which register we are sending
+	volatile uint32_t registersToUpdate;					// bitmap of register indices whose values need to be sent to the driver chip
+	volatile uint32_t registerBeingUpdated;					// which register we are sending
 
 	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
+	uint32_t motorCurrent;									// the configured motor current
 
 	uint16_t readErrors;									// how many read errors we had
 	uint16_t writeErrors;									// how many write errors we had
@@ -330,9 +321,10 @@ private:
 
 	Pin enablePin;											// the enable pin of this driver, if it has its own
 	uint8_t driverNumber;									// the number of this driver as addressed by the UART multiplexer
-	uint8_t writeRegCRCs[NumWriteRegisters];				// CRCs of the messages needed to update the registers
+	uint8_t standstillCurrentFraction;						// divide this by 256 to get the motor current standstill fraction
 	uint8_t registerToRead;									// the next register we need to read
 	uint8_t lastIfCount;									// the value of the IFCNT register last time we read it
+	volatile uint8_t writeRegCRCs[NumWriteRegisters];		// CRCs of the messages needed to update the registers
 	static const uint8_t ReadRegCRCs[NumReadRegisters];		// CRCs of the messages needed to read the registers
 	bool enabled;											// true if driver is enabled
 };
@@ -436,18 +428,20 @@ void TmcDriverState::Init(uint32_t p_driverNumber, Pin p_pin)
 pre(!driversPowered)
 {
 	driverNumber = p_driverNumber;
-	axisNumber = p_driverNumber;				// assume straight-through axis mapping initially
-	enablePin = p_pin;							// this is NoPin for the built-in drivers
+	axisNumber = p_driverNumber;										// assume straight-through axis mapping initially
+	enablePin = p_pin;													// this is NoPin for the built-in drivers
 	if (p_pin != NoPin)
 	{
 		pinMode(p_pin, OUTPUT_HIGH);
 	}
 	enabled = false;
 	registersToUpdate = 0;
+	motorCurrent = 0;
+	standstillCurrentFraction = (256 * 3)/4;							// default to 75%
 	UpdateRegister(WriteGConf, DefaultGConfReg);
 	UpdateRegister(WriteSlaveConf, DefaultSlaveConfReg);
 	configuredChopConfReg = DefaultChopConfReg;
-	SetMicrostepping(DefaultMicrosteppingShift, DefaultInterpolation);		// this also updates the chopper control register
+	SetMicrostepping(DefaultMicrosteppingShift, DefaultInterpolation);	// this also updates the chopper control register
 	UpdateRegister(WriteIholdIrun, DefaultIholdIrunReg);
 	UpdateRegister(WritePwmConf, DefaultPwmConfReg);
 	for (size_t i = 0; i < NumReadRegisters; ++i)
@@ -469,6 +463,17 @@ inline void TmcDriverState::SetAxisNumber(size_t p_axisNumber)
 inline void TmcDriverState::WriteAll()
 {
 	registersToUpdate = (1u << NumWriteRegisters) - 1;
+}
+
+float TmcDriverState::GetStandstillCurrentPercent() const
+{
+	return (float)(standstillCurrentFraction * 100)/256;
+}
+
+void TmcDriverState::SetStandstillCurrentPercent(float percent)
+{
+	standstillCurrentFraction = (uint8_t)constrain<long>(lrintf((percent * 256)/100), 0, 255);
+	UpdateCurrent();
 }
 
 // Set the chopper control register to the settings provided by the user
@@ -493,12 +498,17 @@ void TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate)
 // Set the motor current
 void TmcDriverState::SetCurrent(float current)
 {
-	// The current sense resistor on the Duet M is 0.091 ohms, to which we must add 0.02 ohms internal resistance.
-	// Full scale peak motor current in the high sensitivity range is give by I = 0.18/(R+0.02) = 0.18/0.111 ~= 1.6A
+	motorCurrent = static_cast<uint32_t>(constrain<float>(current, 50.0, MaximumMotorCurrent));
+	UpdateCurrent();
+}
+
+void TmcDriverState::UpdateCurrent()
+{
+	// The current sense resistor on the Duet M is 0.075 ohms, to which we must add 0.03 ohms internal resistance.
+	// Full scale peak motor current in the high sensitivity range is give by I = 0.18/(R+0.03) = 0.18/0.105 ~= 1.6A
 	// This gives us a range of 50mA to 1.6A in 50mA steps in the high sensitivity range (VSENSE = 1)
-	const uint32_t iRunCurrent = static_cast<uint32_t>(constrain<float>(current, 50.0, MaximumMotorCurrent));
-	const uint32_t iRunCsBits = (32 * iRunCurrent - 800)/1615;		// formula checked by simulation on a spreadsheet
-	const uint32_t iHoldCurrent = (iRunCurrent * 3)/4;				// set standstill current to 3/4 of run current
+	const uint32_t iRunCsBits = (32 * motorCurrent - 800)/1615;		// formula checked by simulation on a spreadsheet
+	const uint32_t iHoldCurrent = (motorCurrent * standstillCurrentFraction)/256;	// set standstill current
 	const uint32_t iHoldCsBits = (32 * iHoldCurrent - 800)/1615;	// formula checked by simulation on a spreadsheet
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRunCsBits << IHOLDIRUN_IRUN_SHIFT) | (iHoldCsBits << IHOLDIRUN_IHOLD_SHIFT));
@@ -929,6 +939,20 @@ namespace SmartDrivers
 		{
 			driverStates[drive].AppendDriverStatus(reply);
 		}
+	}
+
+	float GetStandstillCurrentPercent(size_t drive)
+	{
+		return (drive < numTmc22xxDrivers) ? driverStates[drive].GetStandstillCurrentPercent() : 0.0;
+	}
+
+	void SetStandstillCurrentPercent(size_t drive, float percent)
+	{
+		if (drive < numTmc22xxDrivers)
+		{
+			driverStates[drive].SetStandstillCurrentPercent(percent);
+		}
+
 	}
 
 };	// end namespace

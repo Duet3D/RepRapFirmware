@@ -460,8 +460,8 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	}
 
 	// Don't use the constrain function in the following, because if we have a very small XY movement and a lot of extrusion, we may have to make the
-	// speed lower than the 0.5mm/sec minimum. We must apply the minimum speed first and then limit it if necessary after that.
-	requestedSpeed = min<float>(max<float>(reqSpeed, 0.5), VectorBoxIntersection(normalisedDirectionVector, reprap.GetPlatform().MaxFeedrates(), DRIVES));
+	// speed lower than MinimumMovementSpeed. We must apply the minimum speed first and then limit it if necessary after that.
+	requestedSpeed = min<float>(max<float>(reqSpeed, MinimumMovementSpeed), VectorBoxIntersection(normalisedDirectionVector, reprap.GetPlatform().MaxFeedrates(), DRIVES));
 
 	// On a Cartesian printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
 	// for diagonal moves. On a delta, this is not OK and any movement in the XY plane should be limited to the X/Y axis values, which we assume to be equal.
@@ -471,7 +471,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	}
 
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
-	endSpeed = 0.0;					// until the next move asks us to adjust it
+	endSpeed = 0.0;							// until the next move asks us to adjust it
 
 	if (prev->state != provisional || isPrintingMove != prev->isPrintingMove || xyMoving != prev->xyMoving)
 	{
@@ -1386,7 +1386,7 @@ pre(state == frozen)
 			{
 				const size_t drive = pdm->drive;
 				reprap.GetPlatform().SetDirection(drive, pdm->direction);
-				if (drive >= numAxes && drive < DRIVES)
+				if (drive >= numAxes)
 				{
 					if (pdm->direction == FORWARDS)
 					{
@@ -1481,24 +1481,30 @@ bool DDA::Step()
 //if (t3 < minCalcTime) minCalcTime = t3;
 		}
 
-		// 3. Step the drivers
-		if ((driversStepping & platform.GetSlowDrivers()) != 0)
+		if ((driversStepping & platform.GetSlowDrivers()) == 0)			// if not using any external drivers
 		{
-			while (Platform::GetInterruptClocks() - lastStepPulseTime < platform.GetSlowDriverClocks()) {}
+			// 3. Step the drivers
 			Platform::StepDriversHigh(driversStepping);					// generate the steps
-			lastStepPulseTime = Platform::GetInterruptClocks();
 		}
 		else
 		{
+			// 3. Step the drivers
+			while (Platform::GetInterruptClocks() - lastStepPulseTime < platform.GetSlowDriverClocks()) {}
 			Platform::StepDriversHigh(driversStepping);					// generate the steps
+			lastStepPulseTime = Platform::GetInterruptClocks();
+
+			// 3a. Reset all step pins low. Do this now because some external drivers don't like the direction pins being changed before the end of the step pulse.
+			while (Platform::GetInterruptClocks() - lastStepPulseTime < platform.GetSlowDriverClocks()) {}
+			Platform::StepDriversLow();									// set all step pins low
+			lastStepPulseTime = Platform::GetInterruptClocks();
 		}
 
 		// 4. Remove those drives from the list, calculate the next step times, update the direction pins where necessary,
-		//    and re-insert them so as to keep the list in step-time order. We assume that meeting the direction pin hold time
-		//    is not a problem for any driver type. This is not necessarily true.
-		DriveMovement *dmToInsert = firstDM;							// head of the chain we need to re-insert
-		firstDM = dm;													// remove the chain from the list
-		while (dmToInsert != dm)										// note that both of these may be nullptr
+		//    and re-insert them so as to keep the list in step-time order.
+		//    Note that the call to CalcNextStepTime may change the state of Direction pin.
+		DriveMovement *dmToInsert = firstDM;						// head of the chain we need to re-insert
+		firstDM = dm;												// remove the chain from the list
+		while (dmToInsert != dm)									// note that both of these may be nullptr
 		{
 			const bool hasMoreSteps = (isDeltaMovement && dmToInsert->drive < DELTA_AXES)
 					? dmToInsert->CalcNextStepTimeDelta(*this, true)
@@ -1511,17 +1517,8 @@ bool DDA::Step()
 			dmToInsert = nextToInsert;
 		}
 
-		// 5. Reset all step pins low
-		if ((driversStepping & platform.GetSlowDrivers()) != 0)
-		{
-			while (Platform::GetInterruptClocks() - lastStepPulseTime < platform.GetSlowDriverClocks()) {}
-			Platform::StepDriversLow();									// set all step pins low
-			lastStepPulseTime = Platform::GetInterruptClocks();
-		}
-		else
-		{
-			Platform::StepDriversLow();									// set all step pins low
-		}
+		// 5. Reset all step pins low. We already did this if we are using any external drivers, but doing it again does no harm.
+		Platform::StepDriversLow();									// set all step pins low
 
 		// 6. Check for move completed
 		if (firstDM == nullptr)

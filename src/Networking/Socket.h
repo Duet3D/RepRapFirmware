@@ -21,14 +21,15 @@ class NetworkInterface;
 class Socket
 {
 public:
-	Socket(NetworkInterface *iface) : interface(iface), localPort(0), remotePort(0), remoteIPAddress(0) { }
+	Socket(NetworkInterface *iface) : interface(iface), localPort(0), remotePort(0), remoteIPAddress(0), state(SocketState::disabled) { }
 	NetworkInterface *GetInterface() const { return interface; }
 
-	virtual void Poll(bool full) = 0;
 	Port GetLocalPort() const { return localPort; }
 	uint32_t GetRemoteIP() const { return remoteIPAddress; }
 	Port GetRemotePort() const { return remotePort; }
 	NetworkProtocol GetProtocol() const { return protocol; }
+
+	virtual void Poll(bool full) = 0;
 	virtual void Close() = 0;
 	virtual void Terminate() = 0;
 	virtual void TerminateAndDisable() = 0;
@@ -52,9 +53,9 @@ protected:
 		aborted
 	};
 
-	NetworkInterface *interface;
+	NetworkInterface * const interface;
 	Port localPort, remotePort;							// The local and remote ports
-	NetworkProtocol protocol;									// What protocol this socket is for
+	NetworkProtocol protocol;							// What protocol this socket is for
 	uint32_t remoteIPAddress;							// The remote IP address
 	SocketState state;
 };

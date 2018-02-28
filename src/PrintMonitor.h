@@ -68,6 +68,7 @@ enum FileParseState
 {
 	notParsing,
 	parsingHeader,
+	seeking,
 	parsingFooter
 };
 
@@ -129,9 +130,10 @@ class PrintMonitor
 		float layerEstimatedTimeLeft;
 
 		// We parse G-Code files in multiple stages. These variables hold the required information
-		volatile FileParseState parseState;
+		FileParseState parseState;
 		char filenameBeingParsed[MaxFilenameLength];
 		FileStore *fileBeingParsed;
+		FilePosition nextSeekPos;
 		GCodeFileInfo parsedFileInfo;
 
 		char fileOverlap[GCODE_OVERLAP_SIZE];
@@ -145,7 +147,7 @@ class PrintMonitor
 		bool FindHeight(const char* buf, size_t len, float& height) const;
 		bool FindFirstLayerHeight(const char* buf, size_t len, float& layerHeight) const;
 		bool FindLayerHeight(const char* buf, size_t len, float& layerHeight) const;
-		unsigned int FindFilamentUsed(const char* buf, size_t len, float *filamentUsed, unsigned int maxFilaments) const;
+		unsigned int FindFilamentUsed(const char* buf, size_t len, float *filamentUsed, size_t maxFilaments) const;
 
 		uint32_t accumulatedParseTime, accumulatedReadTime, accumulatedSeekTime;
 };

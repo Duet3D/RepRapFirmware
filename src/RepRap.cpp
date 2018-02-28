@@ -102,7 +102,7 @@ void RepRap::Init()
 	// All of the following init functions must execute reasonably quickly before the watchdog times us out
 	platform->Init();
 	network->Init();
-	SetName(DEFAULT_MACHINE_NAME);		// network must be initialised before calling this because it calls SetHostName
+	SetName(DEFAULT_MACHINE_NAME);		// network must be initialised before calling this because this calls SetHostName
 	gCodes->Init();
 	move->Init();
 	heat->Init();
@@ -1692,9 +1692,12 @@ char RepRap::GetStatusCharacter() const
 			: (gCodes->IsResuming()) 									? 'R'	// Resuming
 			: (gCodes->IsDoingToolChange())								? 'T'	// Changing tool
 			: (gCodes->IsPaused()) 										? 'S'	// Paused / Stopped
-			: (printMonitor->IsPrinting())								? 'P'	// Printing
+			: (printMonitor->IsPrinting())
+			  ? ((gCodes->IsSimulating())								? 'M'	// Simulating
+			  :															  'P'	// Printing
+				)
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement()) 	? 'B'	// Busy
-			: 'I';																// Idle
+			:															  'I';	// Idle
 }
 
 bool RepRap::NoPasswordSet() const

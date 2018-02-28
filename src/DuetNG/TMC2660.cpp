@@ -731,6 +731,16 @@ namespace SmartDrivers
 		}
 	}
 
+	float GetStandstillCurrentPercent(size_t drive)
+	{
+		return 100.0;			// not supported
+	}
+
+	void SetStandstillCurrentPercent(size_t drive, float percent)
+	{
+		// not supported so nothing to see here
+	}
+
 };	// end namespace
 
 // End

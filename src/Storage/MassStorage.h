@@ -54,7 +54,7 @@ public:
 		ok = 2
 	};
 
-	InfoResult GetCardInfo(size_t slot, uint64_t& capacity, uint64_t& freeSpace, uint32_t& speed);
+	InfoResult GetCardInfo(size_t slot, uint64_t& capacity, uint64_t& freeSpace, uint32_t& speed, uint32_t& clSize);
 
 friend class Platform;
 friend class FileStore;

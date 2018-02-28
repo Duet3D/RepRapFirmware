@@ -188,7 +188,7 @@ void DhtDataTransition(CallbackParameter)
 			// due to the fact that this messes with the stepping ISR
 			numPulses = 0;
 			lastPulseTime = 0;
-			attachInterrupt(DhtDataPin, DhtDataTransition, CHANGE, nullptr);
+			attachInterrupt(DhtDataPin, DhtDataTransition, INTERRUPT_MODE_CHANGE, nullptr);
 
 			// Wait for the next operation to complete
 			lastOperationTime = millis();

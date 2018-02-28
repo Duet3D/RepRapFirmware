@@ -99,6 +99,20 @@ GCodeResult GCodes::SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply)
 	return GCodeResult::ok;
 }
 
+// Deal with G60
+GCodeResult GCodes::SavePosition(GCodeBuffer& gb,const  StringRef& reply)
+{
+	const uint32_t sParam = (gb.Seen('S')) ? gb.GetUIValue() : 0;
+	if (sParam < ARRAY_SIZE(numberedRestorePoints))
+	{
+		SavePosition(numberedRestorePoints[sParam], gb);
+		return GCodeResult::ok;
+	}
+
+	reply.copy("Bad restore point number");
+	return GCodeResult::error;
+}
+
 // This handles G92. Return true if completed, false if it needs to be called again.
 GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 {

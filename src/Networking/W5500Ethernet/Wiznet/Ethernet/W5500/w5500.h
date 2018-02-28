@@ -2287,6 +2287,9 @@ void wiz_send_data_at(uint8_t sn, const uint8_t *wizdata, uint16_t len, uint16_t
  */
 void wiz_recv_data(uint8_t sn, uint8_t *wizdata, uint16_t len);
 
+// Alternative to wiz_recv_data to work around an apparent bug
+void wiz_recv_data_at(uint8_t sn, uint8_t *wizdata, uint16_t len, uint16_t ptr);
+
 /**
  * @ingroup Basic_IO_function
  * @brief It discard the received data in RX memory.

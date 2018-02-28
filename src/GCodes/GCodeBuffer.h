@@ -67,9 +67,12 @@ public:
 	GCodeMachineState& OriginalMachineState() const;
 	bool PushState();									// Push state returning true if successful (i.e. stack not overflowed)
 	bool PopState();									// Pop state returning true if successful (i.e. no stack underrun)
+	void AbortFile();									// Abort execution of any files or macros being executed
+
 	bool IsDoingFileMacro() const;						// Return true if this source is executing a file macro
 	GCodeState GetState() const;
 	void SetState(GCodeState newState);
+	void SetState(GCodeState newState, const char *err);
 	void AdvanceState();
 	const char *GetIdentity() const { return identity; }
 	bool CanQueueCodes() const;
@@ -202,6 +205,12 @@ inline GCodeState GCodeBuffer::GetState() const
 inline void GCodeBuffer::SetState(GCodeState newState)
 {
 	machineState->state = newState;
+}
+
+inline void GCodeBuffer::SetState(GCodeState newState, const char *err)
+{
+	machineState->state = newState;
+	machineState->err = err;
 }
 
 inline void GCodeBuffer::AdvanceState()

@@ -205,7 +205,12 @@ bool FileStore::Seek(FilePosition pos)
 
 FilePosition FileStore::Position() const
 {
-	return file.fptr;
+	return (inUse) ? file.fptr : 0;
+}
+
+uint32_t FileStore::ClusterSize() const
+{
+	return (inUse) ? file.fs->csize * 512u : 1;			// we divide by the cluster size so return 1 not 0 if there is an error
 }
 
 #if 0	// not currently used

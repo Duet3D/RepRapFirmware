@@ -49,15 +49,15 @@ private:
 	uint16_t switchOpenMask;								// mask to isolate the switch open bit(s) from the sensor value
 	uint32_t framingErrorCount;								// the number of framing errors we received
 
-	float extrusionCommandedAtStartBit;						// the amount of extrusion commanded since the previous comparison when we received the start bit
-	float extrusionCommandedSinceLastSync;
-	float movementMeasuredSinceLastSync;
+	float extrusionCommandedAtStartBit;						// the amount of extrusion commanded (mm) when we received the start bit since the last sync
+	float extrusionCommandedSinceLastSync;					// the amount of extrusion commanded (mm) since the last sync
+	float movementMeasuredSinceLastSync;					// the amount of movement in complete rotations of the wheel since the last sync
 	bool hadNonPrintingMoveAtStartBit;
 	bool hadNonPrintingMoveSinceLastSync;
 	bool haveStartBitData;
 
-	float extrusionCommandedThisSegment;					// the amount of extrusion commanded since we last did a comparison
-	float movementMeasuredThisSegment;						// the accumulated movement since the previous comparison
+	float extrusionCommandedThisSegment;					// the amount of extrusion commanded (mm) since we last did a comparison
+	float movementMeasuredThisSegment;						// the accumulated movement in complete rotations since the previous comparison
 
 	// Values measured for calibration
 	float minMovementRatio, maxMovementRatio;

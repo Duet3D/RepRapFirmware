@@ -531,13 +531,13 @@ void SX1509::enableInterruptMultiple(uint16_t pins, uint8_t riseFall)
 	uint8_t sensitivity;
 	switch (riseFall)
 	{
-	case CHANGE:
+	case INTERRUPT_MODE_CHANGE:
 		sensitivity = 0b11;
 		break;
-	case FALLING:
+	case INTERRUPT_MODE_FALLING:
 		sensitivity = 0b10;
 		break;
-	case RISING:
+	case INTERRUPT_MODE_RISING:
 		sensitivity = 0b01;
 		break;
 	default:

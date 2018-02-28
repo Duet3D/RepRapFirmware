@@ -228,31 +228,6 @@ GCodeResult Network::GetNetworkState(unsigned int interface, const StringRef& re
 	return GCodeResult::error;
 }
 
-// Start up the network
-void Network::Start(unsigned int interface)
-{
-	if (interface < NumNetworkInterfaces)
-	{
-		interfaces[interface]->Start();
-	}
-}
-
-// Stop the network
-void Network::Stop(unsigned int interface)
-{
-#if 0	// chrishamm: I wonder if this is actually needed - when sockets are disabled their state changes anyway
-	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
-	{
-		r->Terminate(AnyProtocol);
-	}
-#endif
-
-	if (interface < NumNetworkInterfaces && interfaces[interface] != nullptr)
-	{
-		interfaces[interface]->Stop();
-	}
-}
-
 bool Network::IsWiFiInterface(unsigned int interface) const
 {
 	return interface < NumNetworkInterfaces && interfaces[interface]->IsWiFiInterface();

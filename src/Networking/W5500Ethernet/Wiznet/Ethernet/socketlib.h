@@ -209,66 +209,7 @@ int8_t  listen(uint8_t sn);
  */
 int8_t  connect(uint8_t sn, uint8_t * addr, uint16_t port);
 
-/**
- * @ingroup WIZnet_socket_APIs
- * @brief Try to disconnect a connection socket.
- * @details It sends request message to disconnect the TCP socket 'sn' passed as parameter to the server or client.
- * @note It is valid only in TCP server or client mode. \n
- *       In block io mode, it does not return until disconnection is completed. \n
- *       In Non-block io mode, it return @ref SOCK_BUSY immediately. \n
-
- * @param sn Socket number. It should be <b>0 ~ @ref \_WIZCHIP_SOCK_NUM_</b>.
- * @return @b Success :   @ref SOCK_OK \n
- *         @b Fail    :\n @ref SOCKERR_SOCKNUM  - Invalid socket number \n
- *                        @ref SOCKERR_SOCKMODE - Invalid operation in the socket \n
- *                        @ref SOCKERR_TIMEOUT  - Timeout occurred \n
- *                        @ref SOCK_BUSY        - Socket is busy.
- */
-int8_t  disconnect(uint8_t sn);
-
 void disconnectNoWait(uint8_t sn);
-
-/**
- * @ingroup WIZnet_socket_APIs
- * @brief	Send data to the connected peer in TCP socket.
- * @details It is used to send outgoing data to the connected socket.
- * @note    It is valid only in TCP server or client mode. It can't send data greater than socket buffer size. \n
- *          In block io mode, It doesn't return until data send is completed - socket buffer size is greater than data. \n
- *          In non-block io mode, It return @ref SOCK_BUSY immediately when socket buffer is not enough. \n
- * @param sn Socket number. It should be <b>0 ~ @ref \_WIZCHIP_SOCK_NUM_</b>.
- * @param buf Pointer buffer containing data to be sent.
- * @param len The byte length of data in buf.
- * @return	@b Success : The sent data size \n
- *          @b Fail    : \n @ref SOCKERR_SOCKSTATUS - Invalid socket status for socket operation \n
- *                          @ref SOCKERR_TIMEOUT    - Timeout occurred \n
- *                          @ref SOCKERR_SOCKMODE 	- Invalid operation in the socket \n
- *                          @ref SOCKERR_SOCKNUM    - Invalid socket number \n
- *                          @ref SOCKERR_DATALEN    - zero data length \n
- *                          @ref SOCK_BUSY          - Socket is busy.
- */
-int32_t send(uint8_t sn, uint8_t * buf, uint16_t len);
-
-/**
- * @ingroup WIZnet_socket_APIs
- * @brief	Receive data from the connected peer.
- * @details It is used to read incoming data from the connected socket.\n
- *          It waits for data as much as the application wants to receive.
- * @note    It is valid only in TCP server or client mode. It can't receive data greater than socket buffer size. \n
- *          In block io mode, it doesn't return until data reception is completed - data is filled as <I>len</I> in socket buffer. \n
- *          In non-block io mode, it return @ref SOCK_BUSY immediately when <I>len</I> is greater than data size in socket buffer. \n
- *
- * @param sn  Socket number. It should be <b>0 ~ @ref \_WIZCHIP_SOCK_NUM_</b>.
- * @param buf Pointer buffer to read incoming data.
- * @param len The max data length of data in buf.
- * @return	@b Success : The real received data size \n
- *          @b Fail    :\n
- *                     @ref SOCKERR_SOCKSTATUS - Invalid socket status for socket operation \n
- *                     @ref SOCKERR_SOCKMODE   - Invalid operation in the socket \n
- *                     @ref SOCKERR_SOCKNUM    - Invalid socket number \n
- *                     @ref SOCKERR_DATALEN    - zero data length \n
- *                     @ref SOCK_BUSY          - Socket is busy.
- */
-int32_t recv(uint8_t sn, uint8_t * buf, uint16_t len);
 
 /**
  * @ingroup WIZnet_socket_APIs
@@ -276,8 +217,7 @@ int32_t recv(uint8_t sn, uint8_t * buf, uint16_t len);
  * @details It sends datagram of UDP or MACRAW to the peer with destination IP address and port number passed as parameter.\n
  *          Even if the connectionless socket has been previously connected to a specific address,
  *          the address and port number parameters override the destination address for that particular datagram only.
- * @note    In block io mode, It doesn't return until data send is completed - socket buffer size is greater than <I>len</I>.
- *          In non-block io mode, It return @ref SOCK_BUSY immediately when socket buffer is not enough.
+ * @note    In non-block io mode, It return @ref SOCK_BUSY immediately when socket buffer is not enough.
  *
  * @param sn    Socket number. It should be <b>0 ~ @ref \_WIZCHIP_SOCK_NUM_</b>.
  * @param buf   Pointer buffer to send outgoing data.
@@ -285,7 +225,7 @@ int32_t recv(uint8_t sn, uint8_t * buf, uint16_t len);
  * @param addr  Pointer variable of destination IP address. It should be allocated 4 bytes.
  * @param port  Destination port number.
  *
- * @return @b Success : The sent data size \n
+ * @return @b Success : The queued sent data size \n
  *         @b Fail    :\n @ref SOCKERR_SOCKNUM     - Invalid socket number \n
  *                        @ref SOCKERR_SOCKMODE    - Invalid operation in the socket \n
  *                        @ref SOCKERR_SOCKSTATUS  - Invalid socket status for socket operation \n
@@ -419,67 +359,11 @@ typedef enum
  */
 int8_t  ctlsocket(uint8_t sn, ctlsock_type cstype, void* arg);
 
-/** 
- * @ingroup WIZnet_socket_APIs
- *  @brief set socket options
- *  @details Set socket option like as TTL, MSS, TOS, and so on. Refer to @ref sockopt_type.
- *               
- *  @param sn socket number
- *  @param sotype socket option type. refer to @ref sockopt_type
- *  @param arg Data type and value is determined according to <I>sotype</I>. \n
- *             <table>
- *                  <tr> <td> @b sotype </td> <td> @b data type</td><td>@b value</td></tr> 
- *                  <tr> <td> @ref SO_TTL </td> <td> uint8_t </td><td> 0 ~ 255 </td> </tr>
- *                  <tr> <td> @ref SO_TOS </td> <td> uint8_t </td><td> 0 ~ 255 </td> </tr>
- *                  <tr> <td> @ref SO_MSS </td> <td> uint16_t </td><td> 0 ~ 65535 </td> </tr>
- *                  <tr> <td> @ref SO_DESTIP </td> <td> uint8_t[4] </td><td>  </td></tr> 
- *                  <tr> <td> @ref SO_DESTPORT </td> <td> uint16_t </td><td> 0 ~ 65535 </td></tr> 
- *                  <tr> <td> @ref SO_KEEPALIVESEND </td> <td> null </td><td> null </td></tr> 
- *                  <tr> <td> @ref SO_KEEPALIVEAUTO </td> <td> uint8_t </td><td> 0 ~ 255 </td></tr> 
- *             </table>
- * @return 
- * - @b Success : @ref SOCK_OK \n
- * - @b Fail 
- *  - @ref SOCKERR_SOCKNUM     - Invalid Socket number \n
- *  - @ref SOCKERR_SOCKMODE    - Invalid socket mode \n
- *  - @ref SOCKERR_SOCKOPT     - Invalid socket option or its value \n
- *  - @ref SOCKERR_TIMEOUT     - Timeout occurred when sending keep-alive packet \n
- */
-int8_t  setsockopt(uint8_t sn, sockopt_type sotype, void* arg);
+// Check whether we are sending on a socket
+bool IsSending(uint8_t sn);
 
-/** 
- * @ingroup WIZnet_socket_APIs
- *  @brief get socket options
- *  @details Get socket option like as FLAG, TTL, MSS, and so on. Refer to @ref sockopt_type
- *  @param sn socket number
- *  @param sotype socket option type. refer to @ref sockopt_type
- *  @param arg Data type and value is determined according to <I>sotype</I>. \n
- *             <table>
- *                  <tr> <td> @b sotype </td> <td>@b data type</td><td>@b value</td></tr>
- *                  <tr> <td> @ref SO_FLAG </td> <td> uint8_t </td><td> @ref SF_ETHER_OWN, etc... </td> </tr>
- *                  <tr> <td> @ref SO_TOS </td> <td> uint8_t </td><td> 0 ~ 255 </td> </tr>
- *                  <tr> <td> @ref SO_MSS </td> <td> uint16_t </td><td> 0 ~ 65535 </td> </tr>
- *                  <tr> <td> @ref SO_DESTIP </td> <td> uint8_t[4] </td><td>  </td></tr> 
- *                  <tr> <td> @ref SO_DESTPORT </td> <td> uint16_t </td><td>  </td></tr> 
- *                  <tr> <td> @ref SO_KEEPALIVEAUTO </td> <td> uint8_t </td><td> 0 ~ 255 </td></tr> 
- *                  <tr> <td> @ref SO_SENDBUF </td> <td> uint16_t </td><td> 0 ~ 65535 </td></tr>  
- *                  <tr> <td> @ref SO_RECVBUF </td> <td> uint16_t </td><td> 0 ~ 65535 </td></tr>  
- *                  <tr> <td> @ref SO_STATUS </td> <td> uint8_t </td><td> @ref SOCK_ESTABLISHED, etc.. </td></tr>  
- *                  <tr> <td> @ref SO_REMAINSIZE </td> <td> uint16_t </td><td> 0~ 65535 </td></tr>
- *                  <tr> <td> @ref SO_PACKINFO </td> <td> uint8_t </td><td> @ref PACK_FIRST, etc... </td></tr>
- *             </table>
- * @return 
- * - @b Success : @ref SOCK_OK \n
- * - @b Fail 
- *  - @ref SOCKERR_SOCKNUM     - Invalid Socket number \n
- *  - @ref SOCKERR_SOCKOPT     - Invalid socket option or its value \n
- *  - @ref SOCKERR_SOCKMODE    - Invalid socket mode \n
- * @note
- *   The option as PACK_REMAINED and SO_PACKINFO is valid only in NON-TCP mode and after call @ref recvfrom(). \n
- *   When SO_PACKINFO value is PACK_FIRST and the return value of recvfrom() is zero, 
- *   This means the zero byte UDP data(UDP Header only) received.
-  */
-int8_t  getsockopt(uint8_t sn, sockopt_type sotype, void* arg);
+// Check whether sending on a socket is complete
+int32_t CheckSendComplete(uint8_t sn);	// pre(IsSending())
 
 // Execute a command
 void ExecCommand(uint8_t sn, uint8_t cmd);
