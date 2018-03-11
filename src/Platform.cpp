@@ -4000,6 +4000,7 @@ bool Platform::IsDuetWiFi() const
 #endif
 
 // User I/O and servo support
+// Translate a logical pin to a firmware pin and also return whether the output of that pin is normally inverted
 bool Platform::GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firmwarePin, bool& invert)
 {
 	firmwarePin = NoPin;										// assume failure

@@ -6,7 +6,9 @@
  */
 
 #include "CoreBaseKinematics.h"
+
 #include "GCodes/GCodes.h"
+#include "GCodes/GCodeBuffer.h"
 #include "Movement/DDA.h"
 
 CoreBaseKinematics::CoreBaseKinematics(KinematicsType t) : ZLeadscrewKinematics(t)

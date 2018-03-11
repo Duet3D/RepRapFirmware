@@ -67,7 +67,7 @@ public:
 	GCodeMachineState& OriginalMachineState() const;
 	bool PushState();									// Push state returning true if successful (i.e. stack not overflowed)
 	bool PopState();									// Pop state returning true if successful (i.e. no stack underrun)
-	void AbortFile();									// Abort execution of any files or macros being executed
+	void AbortFile(FileGCodeInput* fileInput);			// Abort execution of any files or macros being executed
 
 	bool IsDoingFileMacro() const;						// Return true if this source is executing a file macro
 	GCodeState GetState() const;
@@ -210,7 +210,7 @@ inline void GCodeBuffer::SetState(GCodeState newState)
 inline void GCodeBuffer::SetState(GCodeState newState, const char *err)
 {
 	machineState->state = newState;
-	machineState->err = err;
+	machineState->errorMessage = err;
 }
 
 inline void GCodeBuffer::AdvanceState()

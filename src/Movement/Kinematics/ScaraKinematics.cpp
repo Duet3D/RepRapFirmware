@@ -322,6 +322,17 @@ AxesBitmap ScaraKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 	return g92Axes;
 }
 
+// Return the set of axes that must be homed prior to regular movement of the specified axes
+AxesBitmap ScaraKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
+{
+	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
+	if ((axesMoving & xyzAxes) != 0)
+	{
+		axesMoving |= xyzAxes;
+	}
+	return axesMoving;
+}
+
 size_t ScaraKinematics::NumHomingButtons(size_t numVisibleAxes) const
 {
 	const MassStorage *storage = reprap.GetPlatform().GetMassStorage();

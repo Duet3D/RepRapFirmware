@@ -100,7 +100,7 @@ void GCodes::Init()
 	active = true;
 	fileSize = 0;
 	longWait = millis();
-	limitAxes = true;
+	limitAxes = noMovesBeforeHoming = true;
 	SetAllAxesNotHomed();
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
@@ -280,6 +280,14 @@ void GCodes::CopyConfigFinalValues(GCodeBuffer& gb)
 	}
 }
 
+// Set up to do the first of a possibly multi-tap probe
+void GCodes::InitialiseTaps()
+{
+	tapsDone = 0;
+	g30zHeightErrorSum = 0.0;
+	g30zHeightErrorLowestDiff = 1000.0;
+}
+
 void GCodes::Spin()
 {
 	if (!active)
@@ -318,7 +326,7 @@ void GCodes::Spin()
 			{
 				if (gb.MachineState().previous == nullptr)
 				{
-					StopPrint(false);
+					StopPrint(StopPrintReason::userCancelled);
 				}
 				else
 				{
@@ -1004,15 +1012,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			totalSegments = 1;
 			segmentsLeft = 1;
 
-			tapsDone = 0;
-			g30zHeightErrorSum = 0.0;
-			g30zHeightErrorLowestDiff = 1000.0;
-
+			InitialiseTaps();
 			gb.AdvanceState();
 		}
 		break;
 
 	case GCodeState::probingAtPoint2a:								// note we return to this state when doing the second and subsequent taps
+		// Executing G30 with a P parameter. The move to put the head at the specified XY coordinates has been commanded.
+		// OR initial state when executing G30 with no P parameter (must call InitialiseTaps first)
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			gb.AdvanceState();
@@ -1024,8 +1031,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case GCodeState::probingAtPoint2b:
-		// Executing G30 with a P parameter. The move to put the head at the specified XY coordinates has been commanded.
-		// OR initial state when executing G30 with no P parameter
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			// Head has finished moving to the correct XY position
@@ -1126,58 +1131,54 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				}
 			}
 
-			if (g30ProbePointIndex < 0)
+			if (g30ProbePointIndex < 0)											// if no P parameter
 			{
 				// Simple G30 probing move
-				gb.SetState(GCodeState::normal);								// usually nothing more to do except perhaps retract the probe
-				if (!hadProbingError)
+				if (g30SValue == -1 || g30SValue == -2)
 				{
-					if (g30SValue == -1 || g30SValue == -2)
+					// G30 S-1 or S-2 command taps once and reports the height
+					gb.SetState(GCodeState::probingAtPoint7);					// special state for reporting the stopped height at the end
+					if (platform.GetZProbeType() != ZProbeType::none && !probeIsDeployed)
 					{
-						// G30 S-1 or S-2 command
-						gb.SetState(GCodeState::probingAtPoint7);				// special state for reporting the stopped height at the end
+						DoFileMacro(gb, RETRACTPROBE_G, false);					// retract the probe before moving to the new state
 					}
-					else
-					{
-						// Reset the Z axis origin according to the height error
-						moveBuffer.coords[Z_AXIS] -= g30zHeightError;
-						reprap.GetMove().SetNewPosition(moveBuffer.coords, false);
-						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
-						SetAxisIsHomed(Z_AXIS);									//TODO this is only correct if the Z axis is Cartesian-like!
-					}
+					break;
 				}
 
-				if (platform.GetZProbeType() != ZProbeType::none && !probeIsDeployed)
+				if (tapsDone == 1 && !hadProbingError)
 				{
-					DoFileMacro(gb, RETRACTPROBE_G, false);						// retract the probe before moving to the new state
+					// Reset the Z axis origin according to the height error so that we can move back up to the dive height
+					moveBuffer.coords[Z_AXIS] -= g30zHeightError;
+					g30zHeightError = 0;										// there is no zero height error form this probe
+					reprap.GetMove().SetNewPosition(moveBuffer.coords, false);
+					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+					SetAxisIsHomed(Z_AXIS);										// this is only correct if the Z axis is Cartesian-like, but other architectures must be homed before probing anyway
 				}
 			}
-			else
-			{
-				// Move back up to the dive height before we change anything, in particular before we adjust leadscrews
-				moveBuffer.moveType = 0;
-				moveBuffer.isCoordinated = false;
-				moveBuffer.endStopsToCheck = 0;
-				moveBuffer.usePressureAdvance = false;
-				moveBuffer.filePos = noFilePosition;
-				moveBuffer.coords[Z_AXIS] = platform.GetZProbeStartingHeight();
-				moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
-				moveBuffer.xAxes = DefaultXAxisMapping;
-				moveBuffer.yAxes = DefaultYAxisMapping;
-				totalSegments = 1;
-				segmentsLeft = 1;
-				gb.AdvanceState();
 
-				if (platform.GetZProbeType() == ZProbeType::blTouch)
-				{
-					DoFileMacro(gb, RETRACTPROBE_G, false);						// bltouch needs to be retracted when it triggers
-				}
+			// Move back up to the dive height before we change anything, in particular before we adjust leadscrews
+			moveBuffer.moveType = 0;
+			moveBuffer.isCoordinated = false;
+			moveBuffer.endStopsToCheck = 0;
+			moveBuffer.usePressureAdvance = false;
+			moveBuffer.filePos = noFilePosition;
+			moveBuffer.coords[Z_AXIS] = platform.GetZProbeStartingHeight();
+			moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
+			moveBuffer.xAxes = DefaultXAxisMapping;
+			moveBuffer.yAxes = DefaultYAxisMapping;
+			totalSegments = 1;
+			segmentsLeft = 1;
+			gb.AdvanceState();
+
+			if (platform.GetZProbeType() == ZProbeType::blTouch)
+			{
+				DoFileMacro(gb, RETRACTPROBE_G, false);						// bltouch needs to be retracted when it triggers
 			}
 		}
 		break;
 
 	case GCodeState::probingAtPoint5:
-		// Here when we were probing at a numbered point and we have moved the head back up to the dive height
+		// Here when we have moved the head back up to the dive height
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			// See whether we need to do any more taps
@@ -1210,7 +1211,17 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					g30zHeightError = g30zHeightErrorSum/tapsDone;
 				}
 
-				reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, g30zHeightError, true, hadProbingError);
+				if (g30ProbePointIndex >= 0)
+				{
+					reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, g30zHeightError, true, hadProbingError);
+				}
+				else
+				{
+					// Setting the Z height with G30
+					moveBuffer.coords[Z_AXIS] -= g30zHeightError;
+					reprap.GetMove().SetNewPosition(moveBuffer.coords, false);
+					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+				}
 				gb.AdvanceState();
 				if (platform.GetZProbeType() != ZProbeType::none && !probeIsDeployed)
 				{
@@ -1382,12 +1393,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		UnlockAll(gb);
 		if (error)
 		{
-			gb.MachineState().err = nullptr;								// we can't report more than one error here, so clear the original one
+			gb.MachineState().errorMessage = nullptr;								// we can't report more than one error here, so clear the original one
 		}
-		else if (gb.MachineState().err != nullptr)
+		else if (gb.MachineState().errorMessage != nullptr)
 		{
-			reply.copy(gb.MachineState().err);
-			gb.MachineState().err = nullptr;
+			reply.copy(gb.MachineState().errorMessage);
+			gb.MachineState().errorMessage = nullptr;
 			error = true;
 		}
 		HandleReply(gb, error, reply.Pointer());
@@ -1483,13 +1494,13 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 				&& IsCodeQueueIdle()									// must also wait until deferred command queue has caught up
 			   )
 			{
-				StopPrint(true);
+				StopPrint(StopPrintReason::normalCompletion);
 			}
 		}
 		else
 		{
 			// Finished a macro or finished processing config.g
-			fileInput->Reset();
+			fileInput->Reset(fd);
 			fd.Close();
 			if (runningConfigFile)
 			{
@@ -1666,8 +1677,8 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 		FileData& fdata = fileGCode->MachineState().fileState;
 		if (fdata.IsLive() && pauseRestorePoint.filePos != noFilePosition)
 		{
+			fileInput->Reset(fdata);													// clear the buffered data
 			fdata.Seek(pauseRestorePoint.filePos);										// replay the abandoned instructions when we resume
-			fileInput->Reset();															// clear the buffered data
 			fileGCode->Init();															// clear the next move
 			UnlockAll(*fileGCode);														// release any locks it had
 		}
@@ -2223,60 +2234,10 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 	return true;
 }
 
-// Check that enough axes have been homed
+// Check that enough axes have been homed, returning true if insufficient axes homed
 bool GCodes::CheckEnoughAxesHomed(AxesBitmap axesMoved)
 {
-	// Regular move. If it's a delta or SCARA printer, the XYZ axes must be homed first.
-	constexpr AxesBitmap xyAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS);
-	constexpr AxesBitmap xyzAxes = xyAxes | MakeBitmap<AxesBitmap>(Z_AXIS);
-	constexpr AxesBitmap xzAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
-	constexpr AxesBitmap uvAxes = MakeBitmap<AxesBitmap>(U_AXIS) | MakeBitmap<AxesBitmap>(V_AXIS);
-
-	switch (reprap.GetMove().GetKinematics().GetKinematicsType())
-	{
-	case KinematicsType::cartesian:
-		break;
-
-	case KinematicsType::coreXY:
-	case KinematicsType::coreXYU:
-		if ((axesMoved & xyAxes) != 0)
-		{
-			axesMoved |= xyAxes;
-		}
-		break;
-
-	case KinematicsType::coreXZ:
-		if ((axesMoved & xzAxes) != 0)
-		{
-			axesMoved |= xzAxes;
-		}
-		break;
-
-	case KinematicsType::coreXYUV:
-		if ((axesMoved & xyAxes) != 0)
-		{
-			axesMoved |= xyAxes;
-		}
-		if ((axesMoved & uvAxes) != 0)
-		{
-			axesMoved |= uvAxes;
-		}
-		break;
-
-	case KinematicsType::linearDelta:
-	case KinematicsType::polar:
-	case KinematicsType::scara:
-	case KinematicsType::hangprinter:
-	default:
-		// For these printers we require all of XYZ to be homed before any normal movements are made
-		if ((axesMoved & xyzAxes) != 0)
-		{
-			axesMoved |= xyzAxes;
-		}
-		break;
-	}
-
-	return (axesMoved & ~axesHomed) != 0;
+	return (reprap.GetMove().GetKinematics().MustBeHomedAxes(axesMoved, noMovesBeforeHoming) & ~axesHomed) != 0;
 }
 
 // Execute a straight move returning true if an error was written to 'reply'
@@ -2739,23 +2700,10 @@ void GCodes::ClearMove()
 // Cancel any macro or print in progress
 void GCodes::AbortPrint(GCodeBuffer& gb)
 {
-	gb.AbortFile();								// stop executing any files that this GCodeBuffer is running
+	gb.AbortFile(fileInput);					// stop executing any files or macros that this GCodeBuffer is running
 	if (&gb == fileGCode)						// if the current command came from a file being printed
 	{
-		reprap.GetHeat().SwitchOffAll(true);	// turn all heaters off
-		switch (machineType)
-		{
-		case MachineType::cnc:
-			platform.SetSpindlePwm(0);
-			break;
-
-		case MachineType::laser:
-			platform.SetLaserPwm(0);
-			break;
-
-		default:
-			break;
-		}
+		StopPrint(StopPrintReason::abort);
 	}
 }
 
@@ -2780,6 +2728,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 		return true;
 	}
 	gb.MachineState().fileState.Set(f);
+	fileInput->Reset(gb.MachineState().fileState);
 	gb.MachineState().doingFileMacro = true;
 	gb.MachineState().runningM501 = (codeRunning == 501);
 	gb.MachineState().runningM502 = (codeRunning == 502);
@@ -2898,6 +2847,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 	{
 		// G30 without P parameter. This probes the current location starting from the current position.
 		// If S=-1 it just reports the stopped height, else it resets the Z origin.
+		InitialiseTaps();
 		gb.SetState(GCodeState::probingAtPoint2a);
 		if (platform.GetZProbeType() != ZProbeType::none && !probeIsDeployed)
 		{
@@ -3215,7 +3165,7 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply)
 void GCodes::StartPrinting(bool fromStart)
 {
 	fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
-	fileInput->Reset();
+	fileInput->Reset(fileGCode->OriginalMachineState().fileState);
 	lastFilamentError = FilamentSensorStatus::ok;
 	reprap.GetPrintMonitor().StartedPrint();
 	platform.MessageF(LogMessage,
@@ -4175,7 +4125,7 @@ bool GCodes::IsCodeQueueIdle() const
 
 // Cancel the current SD card print.
 // This is called from Pid.cpp when there is a heater fault, and from elsewhere in this module.
-void GCodes::StopPrint(bool normalCompletion)
+void GCodes::StopPrint(StopPrintReason reason)
 {
 	segmentsLeft = 0;
 	isPaused = pausePending = false;
@@ -4208,11 +4158,37 @@ void GCodes::StopPrint(bool normalCompletion)
 		reprap.GetMove().Simulate(simulationMode);
 		EndSimulation(nullptr);
 		const uint32_t simMinutes = lrintf((reprap.GetMove().GetSimulationTime() + simulationTime)/60.0);
-		platform.MessageF(LoggedGenericMessage, "File %s will print in %" PRIu32 "h %" PRIu32 "m plus heating time\n",
-								printingFilename, simMinutes/60u, simMinutes % 60u);
+		if (reason == StopPrintReason::normalCompletion)
+		{
+			platform.MessageF(LoggedGenericMessage, "File %s will print in %" PRIu32 "h %" PRIu32 "m plus heating time\n",
+									printingFilename, simMinutes/60u, simMinutes % 60u);
+		}
+		else
+		{
+			platform.MessageF(LoggedGenericMessage, "Cancelled simulating file %s after %" PRIu32 "h %" PRIu32 "m simulated time\n",
+									printingFilename, simMinutes/60u, simMinutes % 60u);
+		}
 	}
 	else if (reprap.GetPrintMonitor().IsPrinting())
 	{
+		if (reason == StopPrintReason::abort)
+		{
+			reprap.GetHeat().SwitchOffAll(true);	// turn all heaters off
+			switch (machineType)
+			{
+			case MachineType::cnc:
+				platform.SetSpindlePwm(0);
+				break;
+
+			case MachineType::laser:
+				platform.SetLaserPwm(0);
+				break;
+
+			default:
+				break;
+			}
+		}
+
 		if (platform.Emulating() == Compatibility::marlin)
 		{
 			// Pronterface expects a "Done printing" message
@@ -4220,15 +4196,15 @@ void GCodes::StopPrint(bool normalCompletion)
 		}
 		const uint32_t printMinutes = lrintf(reprap.GetPrintMonitor().GetPrintDuration()/60.0);
 		platform.MessageF(LoggedGenericMessage, "%s printing file %s, print time was %" PRIu32 "h %" PRIu32 "m\n",
-			(normalCompletion) ? "Finished" : "Cancelled",
+			(reason == StopPrintReason::normalCompletion) ? "Finished" : "Cancelled",
 			printingFilename, printMinutes/60u, printMinutes % 60u);
+		if (reason == StopPrintReason::normalCompletion && simulationMode == 0)
+		{
+			platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G, true);
+		}
 	}
 
 	reprap.GetPrintMonitor().StoppedPrint();		// must do this after printing the simulation details because it clears the filename
-	if (normalCompletion && simulationMode == 0)
-	{
-		platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G, true);
-	}
 }
 
 // Return true if all the heaters for the specified tool are at their set temperatures
@@ -4803,7 +4779,7 @@ void GCodes::CheckHeaterFault()
 	case HeaterFaultState::timing:
 		if (millis() - heaterFaultTime >= heaterFaultTimeout)
 		{
-			StopPrint(false);
+			StopPrint(StopPrintReason::abort);
 			reprap.GetHeat().SwitchOffAll(true);
 			platform.MessageF(ErrorMessage, "Shutting down due to un-cleared heater fault after %lu seconds\n", heaterFaultTimeout/1000);
 			heaterFaultState = HeaterFaultState::stopping;

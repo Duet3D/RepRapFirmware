@@ -1065,7 +1065,6 @@ void Webserver::HttpInterpreter::ConnectionLost(Connection conn)
 	// Make sure deferred requests are cancelled
 	if (deferredRequestConnection == conn)
 	{
-		reprap.GetPrintMonitor().StopParsing(filenameBeingProcessed);
 		deferredRequestConnection = NoConnection;
 	}
 

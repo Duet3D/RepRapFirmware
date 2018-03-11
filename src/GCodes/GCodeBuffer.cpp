@@ -8,6 +8,8 @@
 //*************************************************************************************
 
 #include "GCodeBuffer.h"
+
+#include "GCodeInput.h"
 #include "Platform.h"
 #include "RepRap.h"
 
@@ -950,11 +952,17 @@ bool GCodeBuffer::PopState()
 	return true;
 }
 
-// Abort execution of any files or macros being executed
-void GCodeBuffer::AbortFile()
+// Abort execution of any files or macros being executed, returning true if any files were closed
+void GCodeBuffer::AbortFile(FileGCodeInput* fileInput)
 {
-	while (PopState()) { }							// abandon any macros
-	machineState->fileState.Close();				// if we are executing a file, abandon it
+	do
+	{
+		if (machineState->fileState.IsLive())
+		{
+			fileInput->Reset(machineState->fileState);
+			machineState->fileState.Close();
+		}
+	} while (PopState());							// abandon any macros
 }
 
 // Return true if this source is executing a file macro

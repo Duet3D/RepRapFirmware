@@ -22,9 +22,11 @@ class PID
 {
 	enum class HeaterMode : uint8_t
 	{
-		// The order of these is important because we test "mode > HeatingMode::off" to determine whether the heater is active
+		// The order of these is important because we test "mode > HeatingMode::suspended" to determine whether the heater is active
+		// and "mode >= HeatingMode::off" to determine whether the heater is eitehr active or suspended
 		fault,
 		off,
+		suspended,
 		heating,
 		cooling,
 		stable,
@@ -129,7 +131,6 @@ private:
 	bool invertPwmSignal;							// Invert the final PWM output signal (same behaviour as with HEAT_ON in earlier firmware versions)
 	bool active;									// Are we active or standby?
 	bool tuned;										// True if tuning was successful
-	bool suspended;									// True if suspended to save power
 	uint8_t badTemperatureCount;					// Count of sequential dud readings
 
 	static_assert(sizeof(previousTemperaturesGood) * 8 >= NumPreviousTemperatures, "too few bits in previousTemperaturesGood");

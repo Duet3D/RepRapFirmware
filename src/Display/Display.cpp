@@ -6,7 +6,9 @@
  */
 
 #include "Display.h"
+
 #include "GCodes/GCodes.h"
+#include "GCodes/GCodeBuffer.h"
 #include "IoPort.h"
 #include "Pins.h"
 

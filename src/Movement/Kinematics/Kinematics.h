@@ -149,6 +149,10 @@ public:
 	// This default is good for Cartesian and Core printers, but not deltas or SCARA
 	virtual AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const { return g92Axes; }
 
+	// Return the set of axes that must be homed prior to regular movement of the specified axes
+	// This default is good for Cartesian and Core printers, but not deltas or SCARA
+	virtual AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const { return (disallowMovesBeforeHoming) ? axesMoving : 0; }
+
 	// Write any calibration data that we need to resume a print after power fail, returning true if successful. Override where necessary.
 	virtual bool WriteResumeSettings(FileStore *f) const { return true; }
 

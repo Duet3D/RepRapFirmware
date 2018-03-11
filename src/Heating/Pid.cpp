@@ -79,7 +79,6 @@ void PID::Reset()
 	averagePWM = lastPwm = 0.0;
 	heatingFaultCount = 0;
 	temperature = BAD_ERROR_TEMPERATURE;
-	suspended = false;
 }
 
 // Set the process model
@@ -202,17 +201,11 @@ void PID::Spin()
 		// Read the temperature even if the heater is suspended
 		const TemperatureError err = ReadTemperature();
 
-		if (suspended)
-		{
-			SetHeater(0.0);
-			return;
-		}
-
 		// Handle any temperature reading error and calculate the temperature rate of change, if possible
 		if (err != TemperatureError::success)
 		{
 			previousTemperaturesGood <<= 1;				// this reading isn't a good one
-			if (mode > HeaterMode::off)					// don't worry about errors when reading heaters that are switched off or flagged as having faults
+			if (mode > HeaterMode::suspended)					// don't worry about errors when reading heaters that are switched off or flagged as having faults
 			{
 				// Error may be a temporary error and may correct itself after a few additional reads
 				badTemperatureCount++;
@@ -330,12 +323,12 @@ void PID::Spin()
 				}
 				break;
 
-			default:		// this covers off, fault, and the auto tuning states
+			default:		// this covers off, fault, suspended, and the auto tuning states
 				break;
 			}
 
 			// Calculate the PWM
-			if (mode <= HeaterMode::off)
+			if (mode <= HeaterMode::suspended)
 			{
 				lastPwm = 0.0;
 			}
@@ -367,14 +360,7 @@ void PID::Spin()
 					}
 					else
 					{
-#if 1	// try normal PWM instead, because it looks like the modified PWM may be causing undershoot on initial heating
 						const float errorToUse = error;
-#else
-						// In the following we use a modified PID when the temperature is a long way off target.
-						// During initial heating or cooling, the D term represents expected overshoot, which we don't want to add to the I accumulator.
-						// When we are in load mode, the I term is much larger and the D term doesn't represent overshoot, so use normal PID.
-						const float errorToUse = (inLoadMode || model.ArePidParametersOverridden()) ? error : errorMinusDterm;
-#endif
 						iAccumulator = constrain<float>
 										(iAccumulator + (errorToUse * params.kP * params.recipTi * platform.HeatSampleInterval() * MillisToSeconds),
 											0.0, model.GetMaxPwm());
@@ -468,7 +454,7 @@ void PID::SetActiveTemperature(float t)
 	else
 	{
 		activeTemperature = t;
-		if (mode > HeaterMode::off && active)
+		if (mode > HeaterMode::suspended && active)
 		{
 			SwitchOn();
 		}
@@ -488,7 +474,7 @@ void PID::SetStandbyTemperature(float t)
 	else
 	{
 		standbyTemperature = t;
-		if (mode > HeaterMode::off && !active)
+		if (mode > HeaterMode::suspended && !active)
 		{
 			SwitchOn();
 		}
@@ -964,10 +950,18 @@ void PID::DisplayBuffer(const char *intro)
 // Suspend the heater, or resume it
 void PID::Suspend(bool sus)
 {
-	suspended = sus;
-	if (sus && model.IsEnabled())
+	if (sus)
 	{
-		SetHeater(0.0);
+		if (mode == HeaterMode::stable || mode == HeaterMode::heating || mode == HeaterMode::cooling)
+		{
+			mode = HeaterMode::suspended;
+			SetHeater(0.0);
+			lastPwm = 0.0;
+		}
+	}
+	else if (mode == HeaterMode::suspended)
+	{
+		SwitchOn();
 	}
 }
 

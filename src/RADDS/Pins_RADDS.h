@@ -118,7 +118,7 @@ const Pin ATX_POWER_PIN = 40;
 // Z Probe pin
 // Must be an ADC capable pin.  Can be any of the ARM's A/D capable
 // pins even a non-Arduino pin.
-const Pin Z_PROBE_PIN = 5;  // RADDS "ADC" pin
+const Pin Z_PROBE_PIN = A5;  // RADDS "ADC" pin
 
 // Digital pin number to turn the IR LED on (high) or off (low)
 // D34 -- unused X-max on RADDS

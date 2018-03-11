@@ -190,6 +190,17 @@ AxesBitmap PolarKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 	return g92Axes;
 }
 
+// Return the set of axes that must be homed prior to regular movement of the specified axes
+AxesBitmap PolarKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
+{
+	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
+	if ((axesMoving & xyzAxes) != 0)
+	{
+		axesMoving |= xyzAxes;
+	}
+	return axesMoving;
+}
+
 // This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 // If we can proceed with homing some axes, return the name of the homing file to be called. Optionally, update 'alreadyHomed' to indicate
 // that some additional axes should be considered not homed.

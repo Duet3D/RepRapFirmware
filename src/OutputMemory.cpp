@@ -287,6 +287,11 @@ size_t OutputBuffer::EncodeString(const char *src, size_t srcLength, bool allowC
 	return bytesWritten;
 }
 
+size_t OutputBuffer::EncodeString(const StringRef& str, bool allowControlChars, bool encapsulateString)
+{
+	return EncodeString(str.Pointer(), str.Length(), encapsulateString);
+}
+
 size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 {
 	size_t bytesWritten = cat('"');

@@ -234,12 +234,15 @@ void W5500Interface::Start()
 	static const uint8_t bufSizes[8] = { 2, 2, 2, 2, 2, 2, 2, 2 };	// 2K buffers for everything
 #endif
 
-	wizchip_init(bufSizes, bufSizes);
+	setPHYCFGR(PHYCFGR_OPMD | PHYCFGR_OPMDC_ALLA);					// set auto negotiation and reset the PHY
 
+	wizchip_init(bufSizes, bufSizes);
 	setSHAR(macAddress);
 	setSIPR(ipAddress);
 	setGAR(gateway);
 	setSUBR(netmask);
+
+	setPHYCFGR(PHYCFGR_OPMD | PHYCFGR_OPMDC_ALLA | ~PHYCFGR_RST);	// remove the reset
 
 	state = NetworkState::establishingLink;
 }

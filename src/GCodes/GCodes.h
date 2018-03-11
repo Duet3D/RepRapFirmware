@@ -93,6 +93,13 @@ enum class PauseReason
 #endif
 };
 
+enum class StopPrintReason
+{
+	normalCompletion,
+	userCancelled,
+	abort
+};
+
 //****************************************************************************************************
 
 // The GCode interpreter
@@ -172,7 +179,7 @@ public:
 
 	bool AllAxesAreHomed() const;										// Return true if all axes are homed
 
-	void StopPrint(bool normalCompletion);								// Stop the current print
+	void StopPrint(StopPrintReason reason);								// Stop the current print
 
 	void MoveStoppedByZProbe() { zProbeTriggered = true; }				// Called from the step ISR when the Z probe is triggered, causing the move to be aborted
 
@@ -251,6 +258,7 @@ private:
 	GCodeResult DoDwellTime(GCodeBuffer& gb, uint32_t dwellMillis);		// Really wait for a bit
 	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply);		// Home some axes
 	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply);	// Probes at a given position - see the comment at the head of the function itself
+	void InitialiseTaps();												// Set up to do the first of a possibly multi-tap probe
 	void SetBedEquationWithProbe(int sParam, const StringRef& reply);	// Probes a series of points and sets the bed equation
 	GCodeResult SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply);		// Either return the probe value, or set its threshold
 	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply);	// Deal with a G10
@@ -273,7 +281,7 @@ private:
 	GCodeResult OffsetAxes(GCodeBuffer& gb);							// Set offsets
 
 #if SUPPORT_WORKPLACE_COORDINATES
-	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply);	// Set workspace coordinates
+	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute);	// Set workspace coordinates
 #endif
 
 	bool SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply);			// Configure heater protection (M143). Returns true if an error occurred
@@ -440,7 +448,8 @@ private:
 	uint8_t eofStringLength;					// ... EoF string as we read.
 
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
-	bool limitAxes;								// Don't think outside the box.
+	bool limitAxes;								// Don't think outside the box
+	bool noMovesBeforeHoming;					// Don't allow movement prior to homing the associates axes
 
 	AxesBitmap toBeHomed;						// Bitmap of axes still to be homed
 	AxesBitmap axesHomed;						// Bitmap of which axes have been homed

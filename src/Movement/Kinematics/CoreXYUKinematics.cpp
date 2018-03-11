@@ -6,7 +6,9 @@
  */
 
 #include "CoreXYUKinematics.h"
+
 #include "GCodes/GCodes.h"
+#include "GCodes/GCodeBuffer.h"
 #include "Movement/DDA.h"
 
 CoreXYUKinematics::CoreXYUKinematics() : CoreBaseKinematics(KinematicsType::coreXYU)

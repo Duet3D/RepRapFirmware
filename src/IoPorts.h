@@ -54,7 +54,7 @@ public:
 	PwmPort();
 	void SetFrequency(float freq);
 	float GetFrequency() const { return (float)frequency; }
-	void WriteAnalog(float pwm) const { if (pin != NoPin) { IoPort::WriteAnalog(pin, ((invert) ? 1.0 - pwm : pwm), frequency); } }
+	void WriteAnalog(float pwm) const;
 
 private:
 	uint16_t frequency;

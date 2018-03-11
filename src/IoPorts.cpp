@@ -29,15 +29,20 @@ void IoPort::Clear()
 
 bool IoPort::Set(LogicalPin lp, PinAccess access, bool pInvert)
 {
-	invert = pInvert;
 	const bool ret = reprap.GetPlatform().GetFirmwarePin(lp, access, pin, invert);
-	if (!ret)
+	if (ret)
+	{
+		if (pInvert)
+		{
+			invert = !invert;
+		}
+	}
+	else
 	{
 		Clear();
 	}
 	return ret;
 }
-
 
 /*static*/ void IoPort::SetPinMode(Pin pin, PinMode mode)
 {
@@ -112,6 +117,14 @@ PwmPort::PwmPort()
 void PwmPort::SetFrequency(float freq)
 {
 	frequency = (uint16_t)constrain<float>(freq, 1.0, 65535);
+}
+
+void PwmPort::WriteAnalog(float pwm) const
+{
+	if (pin != NoPin)
+	{
+		IoPort::WriteAnalog(pin, ((invert) ? 1.0 - pwm : pwm), frequency);
+	}
 }
 
 // End

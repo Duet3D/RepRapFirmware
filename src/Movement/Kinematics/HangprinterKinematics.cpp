@@ -259,6 +259,17 @@ uint32_t HangprinterKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 	return g92Axes;
 }
 
+// Return the set of axes that must be homed prior to regular movement of the specified axes
+AxesBitmap HangprinterKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
+{
+	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
+	if ((axesMoving & xyzAxes) != 0)
+	{
+		axesMoving |= xyzAxes;
+	}
+	return axesMoving;
+}
+
 // Limit the speed and acceleration of a move to values that the mechanics can handle.
 // The speeds in Cartesian space have already been limited.
 void HangprinterKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const

@@ -6,9 +6,12 @@
  */
 
 #include "ZLeadscrewKinematics.h"
+
 #include "RepRap.h"
 #include "Platform.h"
 #include "Movement/Move.h"
+#include "GCodes/GCodeBuffer.h"
+
 
 const float M3ScrewPitch = 0.5;
 

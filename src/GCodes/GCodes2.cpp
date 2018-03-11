@@ -114,11 +114,8 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 			const char* err = DoStraightMove(gb, code == 1);
 			if (err != nullptr)
 			{
+				AbortPrint(gb);
 				gb.SetState(GCodeState::waitingForSpecialMoveToComplete, err);	// force the user position to be restored
-				if (&gb == fileGCode)
-				{
-					AbortPrint(gb);
-				}
 			}
 		}
 		break;
@@ -138,11 +135,8 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 			const char* err = DoArcMove(gb, code == 2);
 			if (err != nullptr)
 			{
+				AbortPrint(gb);
 				gb.SetState(GCodeState::waitingForSpecialMoveToComplete, err);	// force the user position to be restored
-				if (&gb == fileGCode)
-				{
-					AbortPrint(gb);
-				}
 			}
 		}
 		break;
@@ -156,13 +150,24 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 #if SUPPORT_WORKPLACE_COORDINATES
 			if (gb.Seen('L'))
 			{
-				if (gb.GetUIValue() == 2)
+				const uint32_t ival = gb.GetUIValue();
+				switch (ival)
 				{
-					result = GetSetWorkplaceCoordinates(gb, reply);
-				}
-				else
-				{
+				case 1:
+					result = SetOrReportOffsets(gb, reply);			// same as G10 with offsets and no L parameter
+					break;
+
+				case 2:
+					result = GetSetWorkplaceCoordinates(gb, reply, false);
+					break;
+
+				case 20:
+					result = GetSetWorkplaceCoordinates(gb, reply, true);
+					break;
+
+				default:
 					result = GCodeResult::badOrMissingParameter;
+					break;
 				}
 			}
 			else
@@ -357,7 +362,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 			const bool wasPaused = isPaused;			// isPaused gets cleared by CancelPrint
 			const bool wasSimulating = IsSimulating();	// simulationMode may get cleared by CancelPrint
-			StopPrint(&gb == fileGCode);				// if this is normal end-of-print commanded by the file, delete the resurrect.g file
+			StopPrint((&gb == fileGCode) ? StopPrintReason::normalCompletion : StopPrintReason::userCancelled);
 
 			if (!wasSimulating)							// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
 			{
@@ -2915,13 +2920,22 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 564: // Think outside the box?
-		if (gb.Seen('S'))
 		{
-			limitAxes = (gb.GetIValue() != 0);
-		}
-		else
-		{
-			reply.printf("Movement outside the bed is %spermitted", (limitAxes) ? "not " : "");
+			bool seen = false;
+			if (gb.Seen('S'))
+			{
+				seen = true;
+				limitAxes = (gb.GetIValue() > 0);
+			}
+			if (gb.Seen('H'))
+			{
+				seen = true;
+				noMovesBeforeHoming = (gb.GetIValue() > 0);
+			}
+			if (!seen)
+			{
+				reply.printf("Movement outside the bed is %spermitted, movement before homing is %spermitted", (limitAxes) ? "not " : "", (noMovesBeforeHoming) ? "not " : "");
+			}
 		}
 		break;
 

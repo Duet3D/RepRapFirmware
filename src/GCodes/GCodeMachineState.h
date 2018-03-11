@@ -92,7 +92,7 @@ public:
 	float feedrate;
 	FileData fileState;
 	ResourceBitmap lockedResources;
-	const char *err;
+	const char *errorMessage;
 	GCodeState state;
 	uint8_t toolChangeParam;
 	int16_t newToolNumber;

@@ -9,10 +9,8 @@
 #define GCODEINPUT_H
 
 #include "RepRapFirmware.h"
-
-#include "GCodeBuffer.h"
-#include "Storage/FileStore.h"
-
+#include "Storage/FileData.h"
+#include "MessageType.h"
 
 const size_t GCodeInputBufferSize = 256;				// How many bytes can we cache per input source?
 const size_t GCodeInputFileReadThreshold = 128;			// How many free bytes must be available before data is read from the SD card?
@@ -96,7 +94,7 @@ public:
 	FileGCodeInput() : RegularGCodeInput(), lastFile(nullptr) { }
 
 	void Reset() override;								// This should be called when the associated file is being closed
-	void Reset(const FileData &file);					// Should be called when a specific G-code or macro file is closed outside the reading context
+	void Reset(const FileData &file);					// Should be called when a specific G-code or macro file is closed or re-opened outside the reading context
 
 	bool ReadFromFile(FileData &file);					// Read another chunk of G-codes from the file and return true if more data is available
 

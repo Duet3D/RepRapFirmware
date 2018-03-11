@@ -29,6 +29,7 @@ public:
 	bool IsEmpty() const { return p[0] == 0; }
 	char *Pointer() { return p; }
 	const char *Pointer() const { return p; }
+	const char *c_str() const { return p; }
 
 	char& operator[](size_t index) { return p[index]; }
 	char operator[](size_t index) const { return p[index]; }

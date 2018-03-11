@@ -461,31 +461,33 @@ void Network::Spin(bool full)
 						return;
 					}
 				}
-
-				NetworkTransaction *transaction = writingTransactions;
-				if (transaction != nullptr && sendingConnection == nullptr)
+				else if (state == NetworkActive)
 				{
-					if (transaction->next != nullptr)
+					NetworkTransaction *transaction = writingTransactions;
+					if (transaction != nullptr && sendingConnection == nullptr)
 					{
-						// Data is supposed to be sent and the last packet has been acknowledged.
-						// Rotate the transactions so every client is served even while multiple files are sent
-						NetworkTransaction *next = transaction->next;
-						writingTransactions = next;
-						AppendTransaction(&writingTransactions, transaction);
-						transaction = next;
-					}
-
-					if (transaction->Send())
-					{
-						// This transaction can be released, do this here
-						writingTransactions = transaction->next;
-						PrependTransaction(&freeTransactions, transaction);
-
-						// If there is more data to write on this connection, do it sometime soon
-						NetworkTransaction *nextWrite = transaction->nextWrite;
-						if (nextWrite != nullptr)
+						if (transaction->next != nullptr)
 						{
-							PrependTransaction(&writingTransactions, nextWrite);
+							// Data is supposed to be sent and the last packet has been acknowledged.
+							// Rotate the transactions so every client is served even while multiple files are sent
+							NetworkTransaction *next = transaction->next;
+							writingTransactions = next;
+							AppendTransaction(&writingTransactions, transaction);
+							transaction = next;
+						}
+
+						if (transaction->Send())
+						{
+							// This transaction can be released, do this here
+							writingTransactions = transaction->next;
+							PrependTransaction(&freeTransactions, transaction);
+
+							// If there is more data to write on this connection, do it sometime soon
+							NetworkTransaction *nextWrite = transaction->nextWrite;
+							if (nextWrite != nullptr)
+							{
+								PrependTransaction(&writingTransactions, nextWrite);
+							}
 						}
 					}
 				}
@@ -530,7 +532,7 @@ void Network::Diagnostics(MessageType mtype)
 	platform.Message(mtype, "=== Network ===\n");
 
 	size_t numFreeConnections = 0;
-	ConnectionState *freeConn = freeConnections;
+	const ConnectionState *freeConn = freeConnections;
 	while (freeConn != nullptr)
 	{
 		numFreeConnections++;
@@ -539,7 +541,7 @@ void Network::Diagnostics(MessageType mtype)
 	platform.MessageF(mtype, "Free connections: %d of %d\n", numFreeConnections, MEMP_NUM_TCP_PCB);
 
 	size_t numFreeTransactions = 0;
-	NetworkTransaction *freeTrans = freeTransactions;
+	const NetworkTransaction *freeTrans = freeTransactions;
 	while (freeTrans != nullptr)
 	{
 		numFreeTransactions++;
@@ -567,7 +569,7 @@ void Network::ResetCallback()
 // Called when data has been received. Return false if we cannot process it
 bool Network::ReceiveInput(pbuf *pb, ConnectionState* cs)
 {
-	NetworkTransaction* r = freeTransactions;
+	NetworkTransaction* const r = freeTransactions;
 	if (r == nullptr)
 	{
 		platform.Message(UsbMessage, "Network::ReceiveInput() - no free transactions!\n");
@@ -586,14 +588,14 @@ bool Network::ReceiveInput(pbuf *pb, ConnectionState* cs)
 // or NULL if no more items are available. This would reset the connection immediately
 ConnectionState *Network::ConnectionAccepted(tcp_pcb *pcb)
 {
-	ConnectionState *cs = freeConnections;
+	ConnectionState * const cs = freeConnections;
 	if (cs == nullptr)
 	{
 		platform.Message(UsbMessage, "Network::ConnectionAccepted() - no free ConnectionStates!\n");
 		return nullptr;
 	}
 
-	NetworkTransaction* transaction = freeTransactions;
+	NetworkTransaction* const transaction = freeTransactions;
 	if (transaction == nullptr)
 	{
 		platform.Message(UsbMessage, "Network::ConnectionAccepted() - no free transactions!\n");

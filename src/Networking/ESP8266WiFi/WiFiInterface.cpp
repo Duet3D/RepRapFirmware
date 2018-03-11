@@ -24,23 +24,25 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 #if defined(DUET_NG)
 
 // The PDC seems to be too slow to work reliably without getting transmit underruns, so we use the DMAC now.
-# define USE_PDC		0		// use peripheral DMA controller
-# define USE_DMAC		1		// use general DMA controller
-# define USE_XDMAC		0		// use XDMA controller
+# define USE_PDC			0		// use peripheral DMA controller
+# define USE_DMAC			1		// use general DMA controller
+# define USE_XDMAC			0		// use XDMA controller
 
-# define ESP_SPI		SPI
-# define ESP_SPI_ID		ID_SPI
-# define ESP_SPI_IRQn	SPI_IRQn
+# define ESP_SPI			SPI
+# define ESP_SPI_ID			ID_SPI
+# define ESP_SPI_IRQn		SPI_IRQn
+# define ESP_SPI_HANDLER	SPI_Handler
 
 #elif defined(SAME70_TEST_BOARD)
 
-# define USE_PDC		0		// use peripheral DMA controller
-# define USE_DMAC		0		// use general DMA controller
-# define USE_XDMAC		1		// use XDMA controller
+# define USE_PDC			0		// use peripheral DMA controller
+# define USE_DMAC			0		// use general DMA controller
+# define USE_XDMAC			1		// use XDMA controller
 
-# define ESP_SPI		SPI0
-# define ESP_SPI_ID		ID_SPI0
-# define ESP_SPI_IRQn	SPI0_IRQn
+# define ESP_SPI			SPI0
+# define ESP_SPI_ID			ID_SPI0
+# define ESP_SPI_IRQn		SPI0_IRQn
+# define ESP_SPI_HANDLER	SPI0_Handler
 
 #else
 # error Unknown board
@@ -630,14 +632,14 @@ void WiFiInterface::Spin(bool full)
 					}
 					InitSockets();
 					reconnectCount = 0;
-					platform.MessageF(NetworkInfoMessage, "Wifi module is %s%s, IP address %s\n",
+					platform.MessageF(NetworkInfoMessage, "WiFi module is %s%s, IP address %s\n",
 						TranslateWiFiState(currentMode),
 						actualSsid,
 						IP4String(ipAddress).c_str());
 				}
 				else
 				{
-					platform.MessageF(NetworkInfoMessage, "Wifi module is %s\n", TranslateWiFiState(currentMode));
+					platform.MessageF(NetworkInfoMessage, "WiFi module is %s\n", TranslateWiFiState(currentMode));
 				}
 			}
 		}
@@ -1019,6 +1021,12 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 					ok = gb.Seen('P') && gb.GetQuotedString(password.GetRef());
 					if (ok)
 					{
+						SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
+						if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
+						{
+							reply.copy("WiFi password must be at least 8 characters");
+							return GCodeResult::error;
+						}
 						SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
 						if (gb.Seen('I'))
 						{
@@ -1540,7 +1548,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	// Wait for the ESP to be ready, with timeout
 	{
 		const uint32_t now = millis();
-		while (!digitalRead(EspDataReadyPin))
+		while (!digitalRead(EspDataReadyPin) || !digitalRead(SamCsPin))
 		{
 			if (millis() - now > WiFiWaitReadyMillis)
 			{
@@ -1586,11 +1594,12 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	digitalWrite(SamTfrReadyPin, HIGH);
 
 	// Wait for the DMA complete interrupt, with timeout
+	// When we use RTOS we should allow other tasks to run here
 	{
 		const uint32_t now = millis();
 		while (transferPending || !spi_dma_check_rx_complete())
 		{
-			if (millis() - now > WifiResponseTimeoutMillis)
+			if (digitalRead(SamCsPin) && millis() - now > WifiResponseTimeoutMillis)	// if no transfer in progress and timed out
 			{
 				if (reprap.Debug(moduleNetwork))
 				{
@@ -1605,39 +1614,33 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	}
 
 	// Look at the response
-	int32_t response;
 	if (bufferIn.hdr.formatVersion != MyFormatVersion)
 	{
-		response = ResponseBadReplyFormatVersion;
+		if (reprap.Debug(moduleNetwork))
+		{
+			debugPrintf("bad format version %02x\n", bufferIn.hdr.formatVersion);
+		}
+		return ResponseBadReplyFormatVersion;
 	}
-	else
-	{
-		if (   (bufferIn.hdr.state == WiFiState::autoReconnecting || bufferIn.hdr.state == WiFiState::reconnecting)
+
+	if (   (bufferIn.hdr.state == WiFiState::autoReconnecting || bufferIn.hdr.state == WiFiState::reconnecting)
 			&& currentMode != WiFiState::autoReconnecting && currentMode != WiFiState::reconnecting
 		   )
-		{
-			++reconnectCount;
-		}
-		currentMode = bufferIn.hdr.state;
-		response = bufferIn.hdr.response;
-		if (response > 0 && dataIn != nullptr)
-		{
-			memcpy(dataIn, bufferIn.data, min<size_t>(dataInLength, (size_t)response));
-		}
+	{
+		++reconnectCount;
+	}
+
+	currentMode = bufferIn.hdr.state;
+	const int32_t response = bufferIn.hdr.response;
+	if (response > 0 && dataIn != nullptr)
+	{
+		memcpy(dataIn, bufferIn.data, min<size_t>(dataInLength, (size_t)response));
 	}
 
 	if (response < 0 && reprap.Debug(moduleNetwork))
 	{
-		debugPrintf("Network command %d socket %u returned error %" PRIi32 "\n", (int)cmd, socketNum, response);
+		debugPrintf("Network command %d socket %u returned error: %s\n", (int)cmd, socketNum, TranslateWiFiResponse(response));
 	}
-
-#if 0
-	//***TEMP debug
-	if (cmd != NetworkCommand::connGetStatus)
-	{
-		debugPrintBuffer("Recv", &bufferIn, (dataIn == nullptr) ? 0 : (size_t)max<int>(0, response));
-	}
-#endif
 
 	return response;
 }
@@ -1674,7 +1677,7 @@ void WiFiInterface::GetNewStatus()
 	rcvr.Value().messageBuffer[ARRAY_UPB(rcvr.Value().messageBuffer)] = 0;
 	if (rslt < 0)
 	{
-		platform.Message(NetworkInfoMessage, "Error retrieving WiFi status message\n");
+		platform.MessageF(NetworkInfoMessage, "Error retrieving WiFi status message: %s\n", TranslateWiFiResponse(rslt));
 	}
 	else if (rslt > 0 && rcvr.Value().messageBuffer[0] != 0)
 	{
@@ -1682,23 +1685,36 @@ void WiFiInterface::GetNewStatus()
 	}
 }
 
+/*static*/ const char* WiFiInterface::TranslateWiFiResponse(int32_t response)
+{
+	switch (response)
+	{
+	case ResponseUnknownCommand:			return "unknown command";
+	case ResponseBadRequestFormatVersion:	return "bad request format version";
+	case ResponseTooManySsids:				return "too many stored SSIDs";
+	case ResponseWrongState:				return "wrong WiFi module state";
+	case ResponseBadDataLength:				return "bad data length";
+	case ResponseNetworkDisabled:			return "WiFi module is disabled";
+	case ResponseTimeout:					return "SPI timeout";
+	case ResponseBusy:						return "another SPI transfer is pending";
+	case ResponseBufferTooSmall:			return "response buffer too small";
+	case ResponseBadReplyFormatVersion:		return "bad reply format version";
+	case ResponseBadParameter:				return "bad parameter in request";
+	case ResponseUnknownError:				return "unknown error";
+	default:								return "unknown response code";
+	}
+}
+
 // SPI interrupt handlers, called when NSS goes high
-#if SAME70
-void SPI0_Handler(void)
+void ESP_SPI_HANDLER(void)
 {
 	wifiInterface->SpiInterrupt();
 }
-#else
-void SPI_Handler(void)
-{
-	wifiInterface->SpiInterrupt();
-}
-#endif
 
 void WiFiInterface::SpiInterrupt()
 {
-	const uint32_t status = ESP_SPI->SPI_SR;					// read status and clear interrupt
-	ESP_SPI->SPI_IDR = SPI_IER_NSSR;							// disable the interrupt
+	const uint32_t status = ESP_SPI->SPI_SR;							// read status and clear interrupt
+	ESP_SPI->SPI_IDR = SPI_IER_NSSR;									// disable the interrupt
 	if ((status & SPI_SR_NSSR) != 0)
 	{
 #if USE_PDC
@@ -1707,7 +1723,7 @@ void WiFiInterface::SpiInterrupt()
 
 #if USE_DMAC
 		spi_tx_dma_disable();
-		dmac_channel_suspend(DMAC, CONF_SPI_DMAC_RX_CH);		// suspend the receive channel, don't disable it because the FIFO needs to empty first
+		dmac_channel_suspend(DMAC, CONF_SPI_DMAC_RX_CH);				// suspend the receive channel, don't disable it because the FIFO needs to empty first
 #endif
 
 #if USE_XDMAC

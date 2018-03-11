@@ -193,7 +193,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb)
 #if SUPPORT_WORKPLACE_COORDINATES
 
 // Set workspace coordinates
-GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute)
 {
 	if (gb.Seen('P'))
 	{
@@ -205,11 +205,26 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					workplaceCoordinates[cs][axis] = gb.GetFValue() * distanceScale;
-					seen = true;
+					const float coord = gb.GetFValue() * distanceScale;
+					if (!seen)
+					{
+						if (!LockMovementAndWaitForStandstill(gb))						// make sure the user coordinates are stable and up to date
+						{
+							return GCodeResult::notFinished;
+						}
+						seen = true;
+					}
+					workplaceCoordinates[cs][axis] = (compute)
+														? coord - currentUserPosition[axis] + workplaceCoordinates[currentCoordinateSystem][axis]
+															: coord;
 				}
 			}
-			if (!seen)
+
+			if (seen)
+			{
+				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates in case we are using the workspace we just changed
+			}
+			else
 			{
 				reply.printf("Coordinates of workplace %" PRIu32 ":", cs);
 				for (size_t axis = 0; axis < numVisibleAxes; axis++)

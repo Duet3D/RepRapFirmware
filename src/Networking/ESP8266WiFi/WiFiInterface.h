@@ -116,6 +116,7 @@ private:
 
 	void SendListenCommand(Port port, NetworkProtocol protocol, unsigned int maxConnections);
 	void GetNewStatus();
+	static const char* TranslateWiFiResponse(int32_t response);
 
 	static const char* TranslateEspResetReason(uint32_t reason);
 
@@ -157,7 +158,7 @@ private:
 	// For processing debug messages from the WiFi module
 	bool serialRunning;
 	bool debugPrintPending;
-	String<100> debugMessageBuffer;
+	String<150> debugMessageBuffer;
 };
 
 #endif

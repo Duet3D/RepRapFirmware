@@ -184,7 +184,7 @@ bool FileStore::ForceClose()
 		writeBuffer = nullptr;
 	}
 
-	FRESULT fr = f_close(&file);
+	const FRESULT fr = f_close(&file);
 	inUse = false;
 	writing = false;
 	closeRequested = false;

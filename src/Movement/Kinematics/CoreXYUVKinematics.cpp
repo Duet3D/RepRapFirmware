@@ -8,6 +8,7 @@
 #include "CoreXYUVKinematics.h"
 
 #include "GCodes/GCodes.h"
+#include "GCodes/GCodeBuffer.h"
 #include "Movement/DDA.h"
 
 CoreXYUVKinematics::CoreXYUVKinematics() : CoreBaseKinematics(KinematicsType::coreXYUV)

@@ -6,11 +6,12 @@
  */
 
 #include "LinearDeltaKinematics.h"
-#include "Pins.h"
-#include "Configuration.h"
+
 #include "Movement/Move.h"
 #include "RepRap.h"
 #include "Storage/FileStore.h"
+#include "GCodes/GCodeBuffer.h"
+
 
 LinearDeltaKinematics::LinearDeltaKinematics() : Kinematics(KinematicsType::linearDelta, -1.0, 0.0, true)
 {
@@ -679,15 +680,26 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 }
 
 // Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
-uint32_t LinearDeltaKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
+AxesBitmap LinearDeltaKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 {
 	// If all of X, Y and Z have been specified then we know the positions of all 3 tower motors, otherwise we don't
-	const uint32_t xyzAxes = (1u << X_AXIS) | (1u << Y_AXIS) | (1u << Z_AXIS);
+	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
 	if ((g92Axes & xyzAxes) != xyzAxes)
 	{
 		g92Axes &= ~xyzAxes;
 	}
 	return g92Axes;
+}
+
+// Return the set of axes that must be homed prior to regular movement of the specified axes
+AxesBitmap LinearDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
+{
+	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
+	if ((axesMoving & xyzAxes) != 0)
+	{
+		axesMoving |= xyzAxes;
+	}
+	return axesMoving;
 }
 
 // This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
