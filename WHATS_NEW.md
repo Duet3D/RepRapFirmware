@@ -12,6 +12,7 @@ New features and changed behaviour:
 - M589 now checks that the password is either empty or 8 characters minimum
 - G10 L2 is supported as an alternative way to set tool offsets
 - G10 L20 is supported as an alternative way to set workspace coordinates
+- G30 with no parameters now supports multi-tap, and the head is raised or the bed lowered to the dive height after probing
 - Heater fault detection is suppressed when heaters are suspended during bed probing
 - DuetWiFiServer.bin uses a new SDK version, which seems to resolve some issues
 - On boards with a W5500 Ethernet interface, the Ethernet PHY is now programmed to auto negotiate
