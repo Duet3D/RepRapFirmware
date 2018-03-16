@@ -607,6 +607,32 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 	// Coordinates
 	const size_t numVisibleAxes = gCodes->GetVisibleAxes();
+	// Homed axes
+	response->cat("\"axesHomed\":");
+	ch = '[';
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	{
+		response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
+		ch = ',';
+	}
+
+	// XYZ positions
+	// Coordinates may be NaNs or infinities, for example when delta or SCARA homing fails. We must replace any NaNs or infinities to avoid JSON parsing errors.
+	// Ideally we would report "unknown" or similar for axis positions that are not known because we haven't homed them, but that requires changes to both DWC and PanelDue.
+	// So we report 9999.9 instead.
+
+	// First the user coordinates
+	response->cat("],\"xyz\":");
+	const float * const userPos = gCodes->GetUserPosition();
+	ch = '[';
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
+	{
+		const float coord = userPos[axis];
+		response->catf("%c%.3f", ch, (double)((std::isnan(coord) || std::isinf(coord)) ? 9999.9 : coord));
+		ch = ',';
+	}
+
+	// Now the machine coordinates and the extruder coordinates
 	{
 		float liveCoordinates[DRIVES];
 #if SUPPORT_ROLAND
@@ -620,46 +646,26 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			move->LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
 		}
 
-		if (currentTool != nullptr)
-		{
-			for (size_t i = 0; i < numVisibleAxes; ++i)
-			{
-				liveCoordinates[i] += currentTool->GetOffset(i);
-			}
-		}
-
-		// Homed axes
-		response->cat("\"axesHomed\":");
+		// Machine coordinates
+		response->catf("],\"machine\":");		// announce the machine position
 		ch = '[';
-		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+		for (size_t drive = 0; drive < numVisibleAxes; drive++)
 		{
-			response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
+			response->catf("%c%.3f", ch, (double)liveCoordinates[drive]);
 			ch = ',';
 		}
 
 		// Actual and theoretical extruder positions since power up, last G92 or last M23
-		response->catf("],\"extr\":");		// announce actual extruder positions
+		response->catf("],\"extr\":");			// announce actual extruder positions
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
 			response->catf("%c%.1f", ch, (double)liveCoordinates[gCodes->GetTotalAxes() + extruder]);
 			ch = ',';
 		}
-		if (ch == '[')
+		if (ch == '[')							// we may have no extruders
 		{
 			response->cat(ch);
-		}
-
-		// XYZ positions
-		// TODO ideally we would report "unknown" or similar for axis positions that are not known because we haven't homed them, but that requires changes to both DWC and PanelDue.
-		response->cat("],\"xyz\":");
-		ch = '[';
-		for (size_t axis = 0; axis < numVisibleAxes; axis++)
-		{
-			// Coordinates may be NaNs, for example when delta or SCARA homing fails. Replace any NaNs or infinities by 9999.9 to prevent JSON parsing errors.
-			const float coord = liveCoordinates[axis];
-			response->catf("%c%.3f", ch, (double)((std::isnan(coord) || std::isinf(coord)) ? 9999.9 : coord));
-			ch = ',';
 		}
 	}
 
@@ -1341,19 +1347,26 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->cat("]");
 
 	// Send XYZ positions
-	const size_t numAxes = gCodes->GetVisibleAxes();
+	const size_t numVisibleAxes = gCodes->GetVisibleAxes();
+
+	// First the user coordinates
+	response->catf(",\"pos\":");			// announce the user position
+	const float * const userPos = gCodes->GetUserPosition();
+	ch = '[';
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
+	{
+		// Coordinates may be NaNs, for example when delta or SCARA homing fails. Replace any NaNs or infinities by 9999.9 to prevent JSON parsing errors.
+		const float coord = userPos[axis];
+		response->catf("%c%.3f", ch, (double)((std::isnan(coord) || std::isinf(coord)) ? 9999.9 : coord));
+		ch = ',';
+	}
+
+	// Now the machine coordinates
 	float liveCoordinates[DRIVES];
 	move->LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
-	if (currentTool != nullptr)
-	{
-		for (size_t i = 0; i < numAxes; ++i)
-		{
-			liveCoordinates[i] += currentTool->GetOffset(i);
-		}
-	}
-	response->catf(",\"pos\":");		// announce the XYZ position
+	response->catf("],\"machine\":");		// announce the machine position
 	ch = '[';
-	for (size_t drive = 0; drive < numAxes; drive++)
+	for (size_t drive = 0; drive < numVisibleAxes; drive++)
 	{
 		response->catf("%c%.3f", ch, (double)liveCoordinates[drive]);
 		ch = ',';
@@ -1406,7 +1419,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
 	response->cat(",\"homed\":");
 	ch = '[';
-	for (size_t axis = 0; axis < numAxes; ++axis)
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
 		ch = ',';
@@ -1459,7 +1472,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	{
 		// Add the static fields
 		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"axisNames\":\"%s\",\"volumes\":%u,\"numTools\":%u,\"myName\":",
-						move->GetGeometryString(), numAxes, gCodes->GetAxisLetters(), NumSdCards, GetNumberOfContiguousTools());
+						move->GetGeometryString(), numVisibleAxes, gCodes->GetAxisLetters(), NumSdCards, GetNumberOfContiguousTools());
 		response->EncodeString(myName.c_str(), myName.MaxLength(), false);
 		response->cat(",\"firmwareName\":");
 		response->EncodeString(FIRMWARE_NAME, strlen(FIRMWARE_NAME), false);
@@ -1860,12 +1873,6 @@ bool RepRap::WriteToolParameters(FileStore *f) const
 /*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b)
 {
 	return a/b;
-}
-
-// Helper function for diagnostic tests in Platform.cpp, to cause a deliberate unaligned memory read
-/*static*/ uint32_t RepRap::ReadDword(const char* p)
-{
-	return *reinterpret_cast<const uint32_t*>(p);
 }
 
 // Report an internal error

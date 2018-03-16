@@ -44,4 +44,8 @@
 # define SUPPORT_12864_LCD					0
 #endif
 
+#ifndef USE_CACHE
+# define USE_CACHE							0
+#endif
+
 #endif // PINS_H__

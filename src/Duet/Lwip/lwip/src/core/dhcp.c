@@ -1568,12 +1568,24 @@ dhcp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, ip_addr_t *addr, u16_t
 
   if (p->len < DHCP_MIN_REPLY_LEN) {
     LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE | LWIP_DBG_LEVEL_WARNING, ("DHCP reply message or pbuf too short\n"));
+#if 1	//dc42
+    dhcp->msg_in = NULL;
+    pbuf_free(p);
+    return;
+#else
     goto free_pbuf_and_return;
+#endif
   }
 
   if (reply_msg->op != DHCP_BOOTREPLY) {
     LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE | LWIP_DBG_LEVEL_WARNING, ("not a DHCP reply message, but type %"U16_F"\n", (u16_t)reply_msg->op));
+#if 1	//dc42
+    dhcp->msg_in = NULL;
+    pbuf_free(p);
+    return;
+#else
     goto free_pbuf_and_return;
+#endif
   }
   /* iterate through hardware address and match against DHCP message */
 #if 1 //dc42 from lwip2
@@ -1585,27 +1597,51 @@ dhcp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, ip_addr_t *addr, u16_t
       LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE | LWIP_DBG_LEVEL_WARNING,
         ("netif->hwaddr[%"U16_F"]==%02"X16_F" != reply_msg->chaddr[%"U16_F"]==%02"X16_F"\n",
         (u16_t)i, (u16_t)netif->hwaddr[i], (u16_t)i, (u16_t)reply_msg->chaddr[i]));
+#if 1	//dc42
+    dhcp->msg_in = NULL;
+    pbuf_free(p);
+    return;
+#else
       goto free_pbuf_and_return;
+#endif
     }
   }
   /* match transaction ID against what we expected */
   if (ntohl(reply_msg->xid) != dhcp->xid) {
     LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE | LWIP_DBG_LEVEL_WARNING,
       ("transaction id mismatch reply_msg->xid(%"X32_F")!=dhcp->xid(%"X32_F")\n",ntohl(reply_msg->xid),dhcp->xid));
+#if 1	//dc42
+    dhcp->msg_in = NULL;
+    pbuf_free(p);
+    return;
+#else
     goto free_pbuf_and_return;
+#endif
   }
   /* option fields could be unfold? */
   if (dhcp_parse_reply(dhcp, p) != ERR_OK) {
     LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE | LWIP_DBG_LEVEL_SERIOUS,
       ("problem unfolding DHCP message - too short on memory?\n"));
+#if 1	//dc42
+    dhcp->msg_in = NULL;
+    pbuf_free(p);
+    return;
+#else
     goto free_pbuf_and_return;
+#endif
   }
 
   LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE, ("searching DHCP_OPTION_MESSAGE_TYPE\n"));
   /* obtain pointer to DHCP message type */
   if (!dhcp_option_given(dhcp, DHCP_OPTION_IDX_MSG_TYPE)) {
     LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE | LWIP_DBG_LEVEL_WARNING, ("DHCP_OPTION_MESSAGE_TYPE option not found\n"));
+#if 1	//dc42
+    dhcp->msg_in = NULL;
+    pbuf_free(p);
+    return;
+#else
     goto free_pbuf_and_return;
+#endif
   }
 
   /* read DHCP message type */
@@ -1653,14 +1689,10 @@ dhcp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, ip_addr_t *addr, u16_t
     /* remember offered lease */
     dhcp_handle_offer(netif);
   }
+#if 0	//dc42
 free_pbuf_and_return:
-#if 1 //dc42 from lwpi2
-if (dhcp != NULL) {
-  dhcp->msg_in = NULL;
-}
-#else
-  dhcp->msg_in = NULL;
 #endif
+  dhcp->msg_in = NULL;
   pbuf_free(p);
 }
 

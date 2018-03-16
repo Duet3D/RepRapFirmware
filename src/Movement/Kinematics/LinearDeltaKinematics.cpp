@@ -593,6 +593,12 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			if (gb.Seen('B'))
 			{
 				printRadius = gb.GetFValue();
+				// Set the axis limits so that DWC reports them correctly (they are not otherwise used for deltas, except Z min)
+				Platform& p = reprap.GetPlatform();
+				p.SetAxisMinimum(X_AXIS, -printRadius, false);
+				p.SetAxisMinimum(Y_AXIS, -printRadius, false);
+				p.SetAxisMaximum(X_AXIS, printRadius, false);
+				p.SetAxisMaximum(Y_AXIS, printRadius, false);
 				seen = true;
 			}
 			if (gb.Seen('X'))
@@ -609,15 +615,16 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			}
 			if (gb.Seen('Z'))
 			{
-				// Y tower position correction
+				// Z tower position correction
 				angleCorrections[DELTA_C_AXIS] = gb.GetFValue();
 				seen = true;
 			}
 
-			// The homed height must be done last, because it gets recalculated when some of the other factors are changed
 			if (gb.Seen('H'))
 			{
 				homedHeight = gb.GetFValue();
+				// Set the Z axis maximum so that DWC reports it correctly (it is not otherwise used for deltas)
+				reprap.GetPlatform().SetAxisMaximum(Z_AXIS, homedHeight, false);
 				seen = true;
 			}
 

@@ -160,6 +160,7 @@ public:
 	float GetRawExtruderTotalByDrive(size_t extruder) const;			// Get the total extrusion since start of print, for one drive
 	float GetTotalRawExtrusion() const { return rawExtruderTotal; }		// Get the total extrusion since start of print, all drives
 	float GetBabyStepOffset() const { return currentBabyStepZOffset; }	// Get the current baby stepping Z offset
+	const float *GetUserPosition() const { return currentUserPosition; }	// Return the current user position
 
 	RegularGCodeInput *GetHTTPInput() const { return httpInput; }
 	RegularGCodeInput *GetTelnetInput() const { return telnetInput; }
@@ -292,42 +293,42 @@ private:
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling) const; // Wait for the heaters associated with the specified tool to reach their set temperatures
 	void GenerateTemperatureReport(const StringRef& reply) const;				// Store a standard-format temperature report in reply
 	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const;	// Generate a M408 response
-	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const;		// Check whether we need to report temperatures or status
+	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const;			// Check whether we need to report temperatures or status
 
-	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const;	// Save position to a restore point
-	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb);		// Restore user position from a restore point
+	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const;			// Save position to a restore point
+	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb);				// Restore user position from a restore point
 
-	void SetAllAxesNotHomed();											// Flag all axes as not homed
+	void SetAllAxesNotHomed();													// Flag all axes as not homed
 	void SetMachinePosition(const float positionNow[DRIVES], bool doBedCompensation = true); // Set the current position to be this
-	void GetCurrentUserPosition();										// Get the current position form the Move class
+	void UpdateCurrentUserPosition();											// Get the current position from the Move class
 	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = 0);	// Convert user coordinates to head reference point coordinates
 	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]);	// Convert head reference point coordinates to user coordinates
-	const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text
-	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);			// Retract or un-retract filaments
-	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply);		// Load the specified filament into a tool
-	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply);		 // Unload the current filament from a tool
+	const char *TranslateEndStopResult(EndStopHit es);							// Translate end stop result to text
+	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);					// Retract or un-retract filaments
+	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply);			// Load the specified filament into a tool
+	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply);		// Unload the current filament from a tool
 	bool ChangeMicrostepping(size_t drive, unsigned int microsteps, int mode) const;	// Change microstepping on the specified drive
 	void ListTriggers(const StringRef& reply, TriggerInputsBitmap mask);		// Append a list of trigger inputs to a message
-	void CheckTriggers();												// Check for and execute triggers
-	void CheckFilament();												// Check for and respond to filament errors
-	void CheckHeaterFault();											// Check for and respond to a heater fault, returning true if we should exit
-	void DoEmergencyStop();												// Execute an emergency stop
+	void CheckTriggers();														// Check for and execute triggers
+	void CheckFilament();														// Check for and respond to filament errors
+	void CheckHeaterFault();													// Check for and respond to a heater fault, returning true if we should exit
+	void DoEmergencyStop();														// Execute an emergency stop
 
-	void DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)	// Pause the print
+	void DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)			// Pause the print
 		pre(resourceOwners[movementResource] = &gb);
 
 #if HAS_VOLTAGE_MONITOR || HAS_SMART_DRIVERS
-	bool DoEmergencyPause();											// Do an emergency pause following loss of power or a motor stall
+	bool DoEmergencyPause();													// Do an emergency pause following loss of power or a motor stall
 #endif
 
-	void SetMappedFanSpeed();											// Set the speeds of fans mapped for the current tool
-	void SaveFanSpeeds();												// Save the speeds of all fans
+	void SetMappedFanSpeed();													// Set the speeds of fans mapped for the current tool
+	void SaveFanSpeeds();														// Save the speeds of all fans
 
-	GCodeResult SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply);	// Handle M558
+	GCodeResult SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply);		// Handle M558
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply);			// Define the probing grid, returning true if error
-	bool LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) const;		// Load the height map from file
-	bool SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;		// Save the height map to file
-	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply);			// Start probing the grid, returning true if we didn't because of an error
+	bool LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) const;			// Load the height map from file
+	bool SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;			// Save the height map to file
+	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply);				// Start probing the grid, returning true if we didn't because of an error
 	GCodeResult CheckOrConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, int code);	// Handle M581 and M582
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply);		// Handle M997
 	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply);				// Handle M260
@@ -431,8 +432,9 @@ private:
 	float arcSegmentLength;						// Length of segments that we split arc moves into
 
 #if SUPPORT_WORKPLACE_COORDINATES
+	static const size_t NumCoordinateSystems = 9;
 	unsigned int currentCoordinateSystem;
-	float workplaceCoordinates[10][MaxAxes];	// Workplace coordinate offsets
+	float workplaceCoordinates[NumCoordinateSystems][MaxAxes];	// Workplace coordinate offsets
 #else
 	float axisOffsets[MaxAxes];					// M206 axis offsets
 #endif

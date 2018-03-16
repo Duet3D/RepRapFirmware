@@ -60,6 +60,14 @@ GCodeQueue::GCodeQueue() : freeItems(nullptr), queuedItems(nullptr)
 			case 420:	// set RGB colour
 				return true;
 
+			case 291:
+				{
+					bool seen = false;
+					int32_t sParam = 1;
+					gb.TryGetIValue('S', sParam, seen);
+					return sParam < 2;					// queue non-blocking messages only
+				}
+
 			default:
 				break;
 			}

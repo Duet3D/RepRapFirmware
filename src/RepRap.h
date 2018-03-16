@@ -114,7 +114,6 @@ public:
 	void ReportInternalError(const char *file, const char *func, int line) const;	// Report an internal error
 
 	static uint32_t DoDivide(uint32_t a, uint32_t b);		// helper function for diagnostic tests
-	static uint32_t ReadDword(const char* p);				// helper function for diagnostic tests
 
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0);

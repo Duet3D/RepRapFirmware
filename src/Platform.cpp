@@ -66,7 +66,7 @@ extern "C" char *sbrk(int i);
 # error Missing feature definition
 #endif
 
-#if SAM4E && USE_CACHE
+#if USE_CACHE
 
 #include "sam/drivers/cmcc/cmcc.h"
 
@@ -114,7 +114,7 @@ const uint32_t fanMaxInterruptCount = 32;			// number of fan interrupts that we 
 static volatile uint32_t fanLastResetTime = 0;		// time (microseconds) at which we last reset the interrupt count, accessed inside and outside ISR
 static volatile uint32_t fanInterval = 0;			// written by ISR, read outside the ISR
 
-const float minStepPulseTiming = 0.2;				// we assume that we always generate step high and low times at least this wide without special action
+const float MinStepPulseTiming = 0.2;				// we assume that we always generate step high and low times at least this wide without special action
 
 const LogicalPin Heater0LogicalPin = 0;
 const LogicalPin Fan0LogicalPin = 20;
@@ -197,7 +197,7 @@ void setup()
 #endif
 	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD | RSTC_MR_URSTEN;	// ignore any signal on the NRST pin for now so that the reset reason will show as Software
 
-#if SAM4E && USE_CACHE
+#if USE_CACHE
 	// Enable the cache
 	struct cmcc_config g_cmcc_cfg;
 	cmcc_get_config_defaults(&g_cmcc_cfg);
@@ -518,8 +518,11 @@ void Platform::Init()
 #endif
 	}
 
-	slowDriverStepPulseClocks = 0;								// no extended driver timing configured yet
-	slowDrivers = 0;											// assume no drivers need extended step pulse timing
+	for (uint32_t& entry : slowDriverStepTimingClocks)
+	{
+		entry = 0;												// reset all to zero as we have no known slow drivers yet
+	}
+	slowDriversBitmap = 0;										// assume no drivers need extended step pulse timing
 
 	for (size_t extr = 0; extr < MaxExtruders; ++extr)
 	{
@@ -2110,7 +2113,7 @@ void Platform::PrintUniqueId(MessageType mtype)
 // Return diagnostic information
 void Platform::Diagnostics(MessageType mtype)
 {
-#if SAM4E && USE_CACHE
+#if USE_CACHE
 	// Get the cache statistics before we start messing around with the cache
 	const uint32_t cacheCount = cmcc_get_monitor_cnt(CMCC);
 #endif
@@ -2308,8 +2311,7 @@ void Platform::Diagnostics(MessageType mtype)
 		Message(mtype, "not set\n");
 	}
 
-#if SAM4E && USE_CACHE
-	// Get the cache statistics before we start messing around with the cache
+#if USE_CACHE
 	MessageF(mtype, "Cache data hit count %" PRIu32 "\n", cacheCount);
 #endif
 
@@ -2491,7 +2493,8 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 	case (int)DiagnosticTestType::UnalignedMemoryAccess:	// do an unaligned memory access to test exception handling
 		deliberateError = true;
 		SCB->CCR |= SCB_CCR_UNALIGN_TRP_Msk;			// by default, unaligned memory accesses are allowed, so change that
-		(void)RepRap::ReadDword(reinterpret_cast<const char*>(dummy) + 1);	// call function in another module so it can't be optimised away
+		__DMB();										// make sure that instruction completes, don't allow prefetch
+		(void)*(reinterpret_cast<const volatile char*>(dummy) + 1);
 		break;
 
 	case (int)DiagnosticTestType::BusFault:
@@ -2502,9 +2505,9 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 		// I guess this can wait until we have the RTOS working though.
 		Message(WarningMessage, "There is no abort area on the SAME70");
 #elif SAM4E || SAM4S
-		(void)RepRap::ReadDword(reinterpret_cast<const char*>(0x20800000));
+		(void)*(reinterpret_cast<const volatile char*>(0x20800000));
 #elif SAM3XA
-		(void)RepRap::ReadDword(reinterpret_cast<const char*>(0x20200000));
+		(void)*(reinterpret_cast<const volatile char*>(0x20200000));
 #else
 # error
 #endif
@@ -2846,6 +2849,11 @@ bool Platform::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float 
 // If drive >= DRIVES then we are setting an individual motor direction
 void Platform::SetDirection(size_t drive, bool direction)
 {
+	const bool isSlowDriver = (GetDriversBitmap(drive) & GetSlowDriversBitmap()) != 0;
+	if (isSlowDriver)
+	{
+		while (GetInterruptClocks() - DDA::lastStepLowTime < GetSlowDriverDirHoldClocks()) { }
+	}
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	if (drive < numAxes)
 	{
@@ -2861,6 +2869,10 @@ void Platform::SetDirection(size_t drive, bool direction)
 	else if (drive < 2 * DRIVES)
 	{
 		SetDriverDirection(drive - DRIVES, direction);
+	}
+	if (isSlowDriver)
+	{
+		DDA::lastDirChangeTime = GetInterruptClocks();
 	}
 }
 
@@ -3248,28 +3260,41 @@ void Platform::SetExtruderDriver(size_t extruder, uint8_t driver)
 	driveDriverBits[extruder + reprap.GetGCodes().GetTotalAxes()] = CalcDriverBitmap(driver);
 }
 
-void Platform::SetDriverStepTiming(size_t driver, float microseconds)
+void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4])
 {
-	if (microseconds < minStepPulseTiming)
+	const uint32_t bitmap = CalcDriverBitmap(driver);
+	slowDriversBitmap &= ~bitmap;								// start by assuming this drive does not need extended timing
+	if (slowDriversBitmap == 0)
 	{
-		slowDrivers &= ~CalcDriverBitmap(driver);						// this drive does not need extended timing
-	}
-	else
-	{
-		const uint32_t clocks = (uint32_t)(((float)DDA::stepClockRate * microseconds * 0.000001) + 0.99);	// convert microseconds to step clocks, rounding up
-		if (clocks > slowDriverStepPulseClocks)
+		for (uint32_t& entry : slowDriverStepTimingClocks)
 		{
-			slowDriverStepPulseClocks = clocks;
+			entry = 0;											// reset all to zero if we have no known slow drivers
 		}
-		slowDrivers |= CalcDriverBitmap(driver);						// this drive does need extended timing
+	}
+
+	for (size_t i = 0; i < ARRAY_SIZE(slowDriverStepTimingClocks); ++i)
+	{
+		if (microseconds[i] > MinStepPulseTiming)
+		{
+			slowDriversBitmap |= CalcDriverBitmap(driver);		// this drive does need extended timing
+			const uint32_t clocks = (uint32_t)(((float)DDA::stepClockRate * microseconds[i] * 0.000001) + 0.99);	// convert microseconds to step clocks, rounding up
+			if (clocks > slowDriverStepTimingClocks[i])
+			{
+				slowDriverStepTimingClocks[i] = clocks;
+			}
+		}
 	}
 }
 
-float Platform::GetDriverStepTiming(size_t driver) const
+void Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const
 {
-	return ((slowDrivers & CalcDriverBitmap(driver)) != 0)
-			? (float)slowDriverStepPulseClocks * 1000000.0/(float)DDA::stepClockRate
-			: 0.0;
+	const bool isSlowDriver = ((slowDriversBitmap & CalcDriverBitmap(driver)) != 0);
+	for (size_t i = 0; i < 4; ++i)
+	{
+		microseconds[i] = (isSlowDriver)
+							? (float)slowDriverStepTimingClocks[i] * 1000000.0/(float)DDA::stepClockRate
+								: 0.0;
+	}
 }
 
 // Set or report the parameters for the specified fan
@@ -3292,7 +3317,7 @@ bool Platform::ConfigureFan(unsigned int mcode, int fanNum, GCodeBuffer& gb, con
 // Get current cooling fan speed on a scale between 0 and 1
 float Platform::GetFanValue(size_t fan) const
 {
-	return (fan < NUM_FANS) ? fans[fan].GetValue() : -1;
+	return (fan < NUM_FANS) ? fans[fan].GetConfiguredPwm() : -1;
 }
 
 // This is a bit of a compromise - old RepRaps used fan speeds in the range
@@ -3304,7 +3329,7 @@ void Platform::SetFanValue(size_t fan, float speed)
 {
 	if (fan < NUM_FANS)
 	{
-		fans[fan].SetValue(speed);
+		fans[fan].SetPwm(speed);
 	}
 }
 
@@ -3354,7 +3379,7 @@ void Platform::InitFans()
 	{
 #if defined(DUET_06_085)
 		// Fan 1 on the Duet 0.8.5 shares its control pin with heater 6. Set it full on to make sure the heater (if present) is off.
-		fans[1].SetValue(1.0);												// set it full on
+		fans[1].SetPwm(1.0);												// set it full on
 #else
 		// Set fan 1 to be thermostatic by default, monitoring all heaters except the default bed and chamber heaters
 		Fan::HeatersMonitoredBitmap bedAndChamberHeaterMask = 0;
@@ -3373,7 +3398,7 @@ void Platform::InitFans()
 			}
 		}
 		fans[1].SetHeatersMonitored(LowestNBits<Fan::HeatersMonitoredBitmap>(Heaters) & ~bedAndChamberHeaterMask);
-		fans[1].SetValue(1.0);												// set it full on
+		fans[1].SetPwm(1.0);												// set it full on
 #endif
 	}
 

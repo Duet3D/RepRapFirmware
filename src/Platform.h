@@ -406,8 +406,8 @@ public:
 	unsigned int GetDriverMicrostepping(size_t drive, int mode, bool& interpolation) const;
 	bool SetMicrostepping(size_t drive, int microsteps, int mode);
 	unsigned int GetMicrostepping(size_t drive, int mode, bool& interpolation) const;
-	void SetDriverStepTiming(size_t driver, float microseconds);
-	float GetDriverStepTiming(size_t driver) const;
+	void SetDriverStepTiming(size_t driver, const float microseconds[4]);
+	void GetDriverStepTiming(size_t driver, float microseconds[4]) const;
 	float DriveStepsPerUnit(size_t drive) const;
 	const float *GetDriveStepsPerUnit() const
 		{ return driveStepsPerUnit; }
@@ -455,8 +455,11 @@ public:
 		{ return driveDriverBits[drive]; }
 	static void StepDriversLow();							// set all step pins low
 	static void StepDriversHigh(uint32_t driverMap);		// set the specified step pins high
-	uint32_t GetSlowDrivers() const { return slowDrivers; }
-	uint32_t GetSlowDriverClocks() const { return slowDriverStepPulseClocks; }
+	uint32_t GetSlowDriversBitmap() const { return slowDriversBitmap; }
+	uint32_t GetSlowDriverStepHighClocks() const { return slowDriverStepTimingClocks[0]; }
+	uint32_t GetSlowDriverStepLowClocks() const { return slowDriverStepTimingClocks[1]; }
+	uint32_t GetSlowDriverDirSetupClocks() const { return slowDriverStepTimingClocks[2]; }
+	uint32_t GetSlowDriverDirHoldClocks() const { return slowDriverStepTimingClocks[3]; }
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 	bool GetExtrusionCoefficients(size_t extruder, float& a, float& b, float& limit) const;
@@ -739,8 +742,8 @@ private:
 	AxisDriversConfig axisDrivers[MaxAxes];				// the driver numbers assigned to each axis
 	uint8_t extruderDrivers[MaxExtruders];				// the driver number assigned to each extruder
 	uint32_t driveDriverBits[2 * DRIVES];				// the bitmap of driver port bits for each axis or extruder, followed by the raw versions
-	uint32_t slowDriverStepPulseClocks;					// minimum high and low step pulse widths, in processor clocks
-	uint32_t slowDrivers;								// bitmap of driver port bits that need extended step pulse timing
+	uint32_t slowDriverStepTimingClocks[4];				// minimum step high, step low, dir setup and dir hold timing for slow drivers
+	uint32_t slowDriversBitmap;							// bitmap of driver port bits that need extended step pulse timing
 	float idleCurrentFactor;
 
 #if HAS_SMART_DRIVERS
@@ -1131,7 +1134,7 @@ inline float Platform::GetPressureAdvance(size_t extruder) const
 	return rslt;
 }
 
-// Function GetInterruptClocks() is quite long for these processors, so it is moved to Platform.cpp and no longer inlined
+// Function GetInterruptClocksInterruptsDisabled() is quite long for these processors, so it is moved to Platform.cpp and no longer inlined
 
 #else					// TCs are 32-bit
 

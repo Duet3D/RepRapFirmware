@@ -1440,7 +1440,9 @@ pre(state == frozen)
 	return true;	// schedule another interrupt immediately
 }
 
-uint32_t DDA::maxReps = 0;		// this holds he maximum ISR loop count
+uint32_t DDA::maxReps = 0;					// this holds he maximum ISR loop count
+uint32_t DDA::lastStepLowTime = 0;
+uint32_t DDA::lastDirChangeTime = 0;
 
 // This is called by the interrupt service routine to execute steps.
 // It returns true if it needs to be called again on the DDA of the new current move, otherwise false.
@@ -1449,7 +1451,7 @@ uint32_t DDA::maxReps = 0;		// this holds he maximum ISR loop count
 bool DDA::Step()
 {
 	Platform& platform = reprap.GetPlatform();
-	uint32_t lastStepPulseTime = platform.GetInterruptClocks();
+	uint32_t lastStepPulseTime = lastStepLowTime;
 	bool repeat;
 	uint32_t numReps = 0;
 	do
@@ -1481,7 +1483,7 @@ bool DDA::Step()
 //if (t3 < minCalcTime) minCalcTime = t3;
 		}
 
-		if ((driversStepping & platform.GetSlowDrivers()) == 0)			// if not using any external drivers
+		if ((driversStepping & platform.GetSlowDriversBitmap()) == 0)			// if not using any external drivers
 		{
 			// 3. Step the drivers
 			Platform::StepDriversHigh(driversStepping);					// generate the steps
@@ -1489,22 +1491,27 @@ bool DDA::Step()
 		else
 		{
 			// 3. Step the drivers
-			while (Platform::GetInterruptClocks() - lastStepPulseTime < platform.GetSlowDriverClocks()) {}
+			uint32_t now;
+			do
+			{
+				now = Platform::GetInterruptClocks();
+			}
+			while (now - lastStepPulseTime < platform.GetSlowDriverStepLowClocks() || now - lastDirChangeTime < platform.GetSlowDriverDirSetupClocks());
 			Platform::StepDriversHigh(driversStepping);					// generate the steps
 			lastStepPulseTime = Platform::GetInterruptClocks();
 
 			// 3a. Reset all step pins low. Do this now because some external drivers don't like the direction pins being changed before the end of the step pulse.
-			while (Platform::GetInterruptClocks() - lastStepPulseTime < platform.GetSlowDriverClocks()) {}
+			while (Platform::GetInterruptClocks() - lastStepPulseTime < platform.GetSlowDriverStepHighClocks()) {}
 			Platform::StepDriversLow();									// set all step pins low
-			lastStepPulseTime = Platform::GetInterruptClocks();
+			lastStepLowTime = lastStepPulseTime = Platform::GetInterruptClocks();
 		}
 
 		// 4. Remove those drives from the list, calculate the next step times, update the direction pins where necessary,
 		//    and re-insert them so as to keep the list in step-time order.
 		//    Note that the call to CalcNextStepTime may change the state of Direction pin.
-		DriveMovement *dmToInsert = firstDM;						// head of the chain we need to re-insert
-		firstDM = dm;												// remove the chain from the list
-		while (dmToInsert != dm)									// note that both of these may be nullptr
+		DriveMovement *dmToInsert = firstDM;							// head of the chain we need to re-insert
+		firstDM = dm;													// remove the chain from the list
+		while (dmToInsert != dm)										// note that both of these may be nullptr
 		{
 			const bool hasMoreSteps = (isDeltaMovement && dmToInsert->drive < DELTA_AXES)
 					? dmToInsert->CalcNextStepTimeDelta(*this, true)
@@ -1518,7 +1525,7 @@ bool DDA::Step()
 		}
 
 		// 5. Reset all step pins low. We already did this if we are using any external drivers, but doing it again does no harm.
-		Platform::StepDriversLow();									// set all step pins low
+		Platform::StepDriversLow();										// set all step pins low
 
 		// 6. Check for move completed
 		if (firstDM == nullptr)
@@ -1542,8 +1549,8 @@ bool DDA::Step()
 		// However, following a move that checks endstops or the Z probe, we always wait for the move to complete before we schedule another, so this doesn't matter.
 		const uint32_t finishTime = moveStartTime + clocksNeeded;	// calculate how long this move should take
 		Move& move = reprap.GetMove();
-		move.CurrentMoveCompleted();							// tell Move that the current move is complete
-		return move.TryStartNextMove(finishTime);				// schedule the next move
+		move.CurrentMoveCompleted();								// tell Move that the current move is complete
+		return move.TryStartNextMove(finishTime);					// schedule the next move
 	}
 	return false;
 }

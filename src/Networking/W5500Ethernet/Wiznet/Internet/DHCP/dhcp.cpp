@@ -938,7 +938,6 @@ void check_DHCP_leasedIP(void)
 
 	// IP conflict detection : ARP request - ARP reply
 	// Broadcasting ARP Request for check the IP conflict using UDP sendto() function
-	// TODO the following takes 620ms to time out - hanging for this long isn't very nice
 	sendto(DHCP_SOCKET, (const uint8_t *)"CHECK_IP_CONFLICT", 17, DHCP_allocated_ip, 5000);
 
 	// RCR value restore

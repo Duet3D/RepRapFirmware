@@ -127,7 +127,9 @@ public:
 	static int32_t loggedProbePositions[XYZ_AXES * MaxLoggedProbePositions];
 #endif
 
-	static uint32_t maxReps;
+	static uint32_t maxReps;										// maximum number of times that the ISR looped
+	static uint32_t lastStepLowTime;								// when we last completed a step pulse to a slow driver
+	static uint32_t lastDirChangeTime;								// when we last change the DIR signal to a slow driver
 
 private:
 	DriveMovement *FindDM(size_t drive) const;

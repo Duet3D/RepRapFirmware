@@ -116,7 +116,7 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 			}
 			if (heatersMonitored != 0)
 			{
-				SetValue(1.0);			// default the fan speed to full for safety
+				SetPwm(1.0);			// default the fan speed to full for safety
 			}
 		}
 
@@ -124,7 +124,7 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 		if (seen && gb.Seen('S'))		// Set new fan value - process this after processing 'H' or it may not be acted on
 		{
 			const float f = constrain<float>(gb.GetFValue(), 0.0, 255.0);
-			SetValue(f);
+			SetPwm(f);
 		}
 
 		if (seen)
@@ -158,7 +158,7 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 	return seen;
 }
 
-void Fan::SetValue(float speed)
+void Fan::SetPwm(float speed)
 {
 	if (speed > 1.0)
 	{

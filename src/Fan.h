@@ -25,10 +25,10 @@ public:
 	bool Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error);
 
 	bool IsEnabled() const { return pin != NoPin; }
-	float GetValue() const { return val; }
+	float GetConfiguredPwm() const { return val; }			// returns the configured PWM. Actual PWM may be different, e.g. due to blipping or for thermostatic fans.
 
 	void Init(Pin p_pin, bool hwInverted);
-	void SetValue(float speed);
+	void SetPwm(float speed);
 	void SetHeatersMonitored(HeatersMonitoredBitmap h);
 	bool Check();											// update the fan PWM returning true if it is a thermostatic fan that is on
 	void Disable();

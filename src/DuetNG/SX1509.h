@@ -27,7 +27,7 @@ Distributed as-is; no warranty is given.
 #include "Core.h"
 
 const int ReceiveTimeout = 1000;			// Timeout for I2C receive
-const uint8_t DefaultOscDivider = 5;		// a clock divider of 2 ^ (5 - 1) = 16 gives a PSWM frequency of 2MHz / (16 * 255) = 488Hz
+const uint8_t DefaultOscDivider = 5;		// a clock divider of 2 ^ (5 - 1) = 16 gives a PWM frequency of 2MHz / (16 * 255) = 488Hz
 
 class SX1509
 {

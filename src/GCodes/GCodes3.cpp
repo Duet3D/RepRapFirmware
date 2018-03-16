@@ -198,7 +198,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 	if (gb.Seen('P'))
 	{
 		const uint32_t cs = gb.GetIValue();
-		if (cs < ARRAY_SIZE(workplaceCoordinates))
+		if (cs > 0 && cs <= NumCoordinateSystems)
 		{
 			bool seen = false;
 			for (size_t axis = 0; axis < numVisibleAxes; axis++)
@@ -214,8 +214,8 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 						}
 						seen = true;
 					}
-					workplaceCoordinates[cs][axis] = (compute)
-														? coord - currentUserPosition[axis] + workplaceCoordinates[currentCoordinateSystem][axis]
+					workplaceCoordinates[cs - 1][axis] = (compute)
+														? currentUserPosition[axis] - coord + workplaceCoordinates[currentCoordinateSystem][axis]
 															: coord;
 				}
 			}
@@ -226,10 +226,10 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 			}
 			else
 			{
-				reply.printf("Coordinates of workplace %" PRIu32 ":", cs);
+				reply.printf("Origin of workplace %" PRIu32 ":", cs);
 				for (size_t axis = 0; axis < numVisibleAxes; axis++)
 				{
-					reply.catf(" %c%.2f", axisLetters[axis], (double)workplaceCoordinates[cs][axis]);
+					reply.catf(" %c%.2f", axisLetters[axis], (double)workplaceCoordinates[cs - 1][axis]);
 				}
 			}
 			return GCodeResult::ok;
@@ -345,6 +345,7 @@ GCodeResult GCodes::SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply)
 	{
 		platform.SetZProbeType(gb.GetIValue());
 		seenType = true;
+		DoDwellTime(gb, 100);				// delay a little to allow the averaging filters to accumulate data from the new source
 	}
 
 	ZProbe params = platform.GetCurrentZProbeParameters();

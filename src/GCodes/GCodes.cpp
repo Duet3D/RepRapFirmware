@@ -160,7 +160,7 @@ void GCodes::Reset()
 	{
 		axisScaleFactors[i] = 1.0;
 #if SUPPORT_WORKPLACE_COORDINATES
-		for (size_t j = 0; j < 10; ++j)
+		for (size_t j = 0; j < NumCoordinateSystems; ++j)
 		{
 			workplaceCoordinates[j][i] = 0.0;
 		}
@@ -320,7 +320,7 @@ void GCodes::Spin()
 		if (gb.MachineState().messageAcknowledged)
 		{
 			const bool wasCancelled = gb.MachineState().messageCancelled;
-			Pop(gb);
+			gb.PopState();											// this could fail if the current macro has already been aborted
 
 			if (wasCancelled)
 			{
@@ -527,7 +527,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tpre.g to finish executing
 		{
 			reprap.SelectTool(gb.MachineState().newToolNumber, simulationMode != 0);
-			GetCurrentUserPosition();					// get the actual position of the new tool
+			UpdateCurrentUserPosition();					// get the actual position of the new tool
 
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
@@ -2347,6 +2347,12 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 			{
 				currentUserPosition[axis] += moveArg;
 			}
+#if SUPPORT_WORKPLACE_COORDINATES
+			else if (gb.MachineState().useMachineCoordinates)
+			{
+				currentUserPosition[axis] = moveArg - workplaceCoordinates[currentCoordinateSystem][axis];
+			}
+#endif
 			else
 			{
 				currentUserPosition[axis] = moveArg;
@@ -2475,6 +2481,13 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		currentUserPosition[X_AXIS] += xParam;
 		currentUserPosition[Y_AXIS] += yParam;
 	}
+#if SUPPORT_WORKPLACE_COORDINATES
+	else if (gb.MachineState().useMachineCoordinates)
+	{
+		currentUserPosition[X_AXIS] = xParam - workplaceCoordinates[currentCoordinateSystem][X_AXIS];
+		currentUserPosition[Y_AXIS] = yParam - workplaceCoordinates[currentCoordinateSystem][Y_AXIS];
+	}
+#endif
 	else
 	{
 		currentUserPosition[X_AXIS] = xParam;
@@ -4231,7 +4244,7 @@ void GCodes::SetMachinePosition(const float positionNow[DRIVES], bool doBedCompe
 }
 
 // Get the current position from the Move class
-void GCodes::GetCurrentUserPosition()
+void GCodes::UpdateCurrentUserPosition()
 {
 	reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 	ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
@@ -4271,7 +4284,8 @@ void GCodes::RestorePosition(const RestorePoint& rp, GCodeBuffer *gb)
 }
 
 // Convert user coordinates to head reference point coordinates, optionally allowing for X axis mapping
-// If the X axis is mapped to some other axes not including X, then the X coordinate of coordsOut will be left unchanged. So make sure it is suitably initialised before calling this.
+// If the X axis is mapped to some other axes not including X, then the X coordinate of coordsOut will be left unchanged.
+// So make sure it is suitably initialised before calling this.
 void GCodes::ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes)
 {
 	const Tool * const currentTool = reprap.GetCurrentTool();
