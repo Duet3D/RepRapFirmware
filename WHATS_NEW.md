@@ -1,6 +1,29 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.21RC5
+===============
+Upgrade notes:
+- As for 1.21RC3.
+
+New features:
+- New M569 T parameter options to specify step pulse width, step pulse interval, direction setup and direction hold times
+- M665 now sets the M208 limits (except Z min) to match the machine limits, so that Duet Web Control reports the correct values
+
+Bug fixes:
+- M116 commands were sometimes executed out-of-order relative to previous G10 commands if movement commands were in progress
+- G10 L20 now computes the workplace coordinate origin correctly
+- G53 is only active until the end of the current line of GCode
+- The default coordinate system is the one selected by G54
+- G54..G59 update the user coordinates immediately
+- Fixed "Error: Pop(): stack underflow!" when a file or macro is terminated due to an illegal move command
+- A short delay is inserted when M558 is used to change the Z probe type, to allow the averaging filters to accumulate the new data
+- M291 messages which are non-blocking (i.e. mode < 2) are now synchronised to queued moves, like M117 messages
+
+Other changes:
+- Duet Web Control and PanelDue now report the coordinates relative to the origin of the current workplace
+- Rewrote dhcp_rec function on Duet06/085 to avoid goto statements (possible fix for startup problem when using DHCP)
+
 Version 1.21RC4
 ===============
 Upgrade notes:
