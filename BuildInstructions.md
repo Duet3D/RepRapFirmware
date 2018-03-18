@@ -30,16 +30,16 @@ Instructions for building dc42 fork of RepRapFirmware under macOS
 
 Using Homebrew-Cask makes it very easy to install new software on macOS: https://caskroom.github.io/
 
-1. Download and install the gcc-arm-embedded: brew cask install gcc-arm-embedded
+1. Download and install the gcc-arm-embedded 6-2017q2: brew cask install https://raw.githubusercontent.com/caskroom/homebrew-cask/4d16a06d09bc695c6a7252843106c5d7adce5877/Casks/gcc-arm-embedded.rb
 
-3. Download and install Eclipse for C++ : brew cask install eclipse-cpp
+2. Download and install Eclipse for C++ : brew cask install eclipse-cpp
 
-4. Download or clone the RepRapFirmware, CoreNG and DuetWiFiSocketServer projects into your workspace. Keep the folder names as is.
+3. Download or clone the RepRapFirmware, CoreNG and DuetWiFiSocketServer projects into your workspace. Keep the folder names as is.
 
-5. Open Eclipse and import RepRapFirmware and CoreNG projects.
+4. Open Eclipse and import RepRapFirmware and CoreNG projects.
 
-6. Right click "RepRapFirmware" project and select Properties. Go To "C/C++ Build -> Settings" and change the path: /usr/local/bin/ (or some other other path where arm-none-eabi-g++ and other binaries are located)
+5. Right click "RepRapFirmware" project and select Properties. Go To "C/C++ Build -> Settings" and change the path: /usr/local/bin/ (or some other other path where arm-none-eabi-g++ and other binaries are located)
 
-7. Do the same for CoreNG project.
+6. Do the same for CoreNG project.
 
-8. Build CoreNG first, then RepRapFirmware. The Duet WiFi and Duet Ethernet builds of RRF use the SAM4E build of CoreNG. The Duet085 build of RRF (which also runs on the Duet06) uses the SAM3X build of CoreNG. The RADDS build of RRF has its own build of CoreNG.
+7. Build CoreNG first, then RepRapFirmware. The Duet WiFi and Duet Ethernet builds of RRF use the SAM4E build of CoreNG. The Duet085 build of RRF (which also runs on the Duet06) uses the SAM3X build of CoreNG. The RADDS build of RRF has its own build of CoreNG.
