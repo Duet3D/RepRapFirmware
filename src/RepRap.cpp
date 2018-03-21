@@ -1028,9 +1028,27 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	}
 #endif
 
-	// Spindle
-	const double spindleRpm = gCodes->GetSpindleRpm();
-	response->catf(",\"spindle\":{\"current\":%1.f,\"active\":%1.f}", spindleRpm, spindleRpm);
+	// Spindles
+	response->cat(",\"spindles\":[");
+	for (size_t i = 0; i < MaxSpindles; i++)
+	{
+		if (i > 0)
+		{
+			response->cat(',');
+		}
+
+		const Spindle spindle = platform->AccessSpindle(i);
+		response->catf("{\"current\":%1.f,\"active\":%1.f", (double)spindle.GetCurrentRpm(), (double)spindle.GetRpm());
+		if (type == 2)
+		{
+			response->catf(",\"tool\":%d}", spindle.GetToolNumber());
+		}
+		else
+		{
+			response->cat('}');
+		}
+	}
+	response->cat(']');
 
 	/* Extended Status Response */
 	if (type == 2)

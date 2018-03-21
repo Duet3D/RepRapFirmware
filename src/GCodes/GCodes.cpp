@@ -115,8 +115,6 @@ void GCodes::Init()
 	isRetracted = false;
 	lastAuxStatusReportType = -1;						// no status reports requested yet
 
-	spindleRpm = 0.0;
-	spindleMaxRpm = DefaultMaxSpindleRpm;
 	laserMaxPower = DefaultMaxLaserPower;
 
 	heaterFaultState = HeaterFaultState::noFault;
@@ -4209,7 +4207,10 @@ void GCodes::StopPrint(StopPrintReason reason)
 			switch (machineType)
 			{
 			case MachineType::cnc:
-				platform.SetSpindlePwm(0);
+				for (size_t i = 0; i < MaxSpindles; i++)
+				{
+					platform.AccessSpindle(i).TurnOff();
+				}
 				break;
 
 			case MachineType::laser:

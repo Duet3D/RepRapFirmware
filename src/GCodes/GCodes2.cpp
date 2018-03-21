@@ -394,9 +394,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			switch (machineType)
 			{
 			case MachineType::cnc:
-				spindleRpm = gb.GetFValue();
-				platform.SetSpindlePwm(spindleRpm/spindleMaxRpm);
+			{
+				const float rpm = gb.GetFValue();
+				const uint32_t slot = gb.Seen('P') ? gb.GetUIValue() : 0;
+				if (slot >= MaxSpindles)
+				{
+					reply.copy("Invalid spindle index");
+					result = GCodeResult::error;
+				}
+				else
+				{
+					platform.AccessSpindle(slot).SetRpm(rpm);
+				}
 				break;
+			}
 
 			case MachineType::laser:
 				platform.SetLaserPwm(gb.GetFValue()/laserMaxPower);
@@ -423,7 +434,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			if (machineType == MachineType::cnc)
 			{
-				platform.SetSpindlePwm(-gb.GetFValue()/spindleMaxRpm);
+				const float rpm = gb.GetFValue();
+				const uint32_t slot = gb.Seen('P') ? gb.GetUIValue() : 0;
+				if (slot >= MaxSpindles)
+				{
+					reply.copy("Invalid spindle index");
+					result = GCodeResult::error;
+				}
+				else
+				{
+					platform.AccessSpindle(slot).SetRpm(-rpm);
+				}
 			}
 			else
 			{
@@ -436,7 +457,28 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		switch (machineType)
 		{
 		case MachineType::cnc:
-			platform.SetSpindlePwm(0.0);
+			if (gb.Seen('P'))
+			{
+				// Turn off specific spindle
+				const uint32_t slot = gb.GetUIValue();
+				if (slot >= MaxSpindles)
+				{
+					reply.copy("Invalid spindle index");
+					result = GCodeResult::error;
+				}
+				else
+				{
+					platform.AccessSpindle(slot).TurnOff();
+				}
+			}
+			else
+			{
+				// Turn off every spindle if no 'P' parameter is present
+				for (size_t i = 0; i < MaxSpindles; i++)
+				{
+					platform.AccessSpindle(i).TurnOff();
+				}
+			}
 			break;
 
 		case MachineType::laser:
@@ -2568,7 +2610,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 453: // Select CNC mode
-		machineType = MachineType::cnc;
+	{
+		uint32_t slot = gb.Seen('S') ? gb.GetUIValue() : 0;
+		if (slot >= MaxSpindles)
+		{
+			reply.copy("Invalid spindle index");
+			result = GCodeResult::error;
+			break;
+		}
+
+		Spindle spindle = platform.AccessSpindle(slot);
 		if (gb.Seen('P'))
 		{
 			uint32_t pins[2] = { NoLogicalPin, NoLogicalPin };
@@ -2583,25 +2634,33 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				pins[1] = NoLogicalPin;
 			}
 			const bool invert = (gb.Seen('I') && gb.GetIValue() > 0);
-			if (platform.SetSpindlePins(pins[0], pins[1], invert))
-			{
-				reply.copy("CNC mode selected");
-			}
-			else
+			if (!spindle.SetPins(pins[0], pins[1], invert))
 			{
 				reply.copy("Bad P parameter");
 				result = GCodeResult::error;
+				break;
 			}
 		}
-		if (result == GCodeResult::ok && gb.Seen('F'))
+		if (gb.Seen('F'))
 		{
-			platform.SetSpindlePwmFrequency(gb.GetFValue());
+			spindle.SetPwmFrequency(gb.GetFValue());
 		}
-		if (result == GCodeResult::ok && gb.Seen('R'))
+		if (gb.Seen('R'))
 		{
-			spindleMaxRpm = max<float>(1.0, gb.GetFValue());
+			spindle.SetMaxRpm(max<float>(1.0, gb.GetFValue()));
+		}
+		if (gb.Seen('T'))
+		{
+			spindle.SetToolNumber(gb.GetIValue());
+		}
+
+		if (machineType != MachineType::cnc)
+		{
+			machineType = MachineType::cnc;
+			reply.copy("CNC mode selected");
 		}
 		break;
+	}
 
 	case 500: // Store parameters in EEPROM
 		result = WriteConfigOverrideFile(gb, reply);

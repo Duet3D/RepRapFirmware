@@ -38,6 +38,7 @@ Licence: GPL
 #include "Storage/FileData.h"
 #include "Storage/MassStorage.h"	// must be after Pins.h because it needs NumSdCards defined
 #include "MessageType.h"
+#include "Spindle.h"
 #include "ZProbe.h"
 #include "ZProbeProgrammer.h"
 
@@ -585,14 +586,9 @@ public:
 	void ExtrudeOff();
 
 	// CNC and laser support
-	void SetSpindlePwm(float pwm);
+	Spindle &AccessSpindle(size_t slot) { return spindles[slot]; }
+
 	void SetLaserPwm(float pwm);
-
-	bool SetSpindlePins(LogicalPin lpf, LogicalPin lpr, bool invert);
-	void GetSpindlePins(LogicalPin& lpf, LogicalPin& lpr, bool& invert) const;
-	void SetSpindlePwmFrequency(float freq);
-	float GetSpindlePwmFrequency() const { return spindleForwardPort.GetFrequency(); }
-
 	bool SetLaserPin(LogicalPin lp, bool invert);
 	LogicalPin GetLaserPin(bool& invert) const { return laserPort.GetLogicalPin(invert); }
 	void SetLaserPwmFrequency(float freq);
@@ -906,9 +902,10 @@ private:
 	uint32_t timeLastUpdatedMillis;						// the milliseconds counter when we last incremented the time
 
 	// CNC and laser support
+	Spindle spindles[MaxSpindles];
 	float extrusionAncilliaryPwmValue;
 	PwmPort extrusionAncilliaryPwmPort;
-	PwmPort spindleForwardPort, spindleReversePort, laserPort;
+	PwmPort laserPort;
 
 	// Power on/off
 	bool deferredPowerDown;

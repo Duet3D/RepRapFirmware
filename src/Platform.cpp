@@ -3964,47 +3964,10 @@ bool Platform::SetExtrusionAncilliaryPwmPin(LogicalPin logicalPin, bool invert)
 }
 
 // CNC and laser support
-void Platform::SetSpindlePwm(float pwm)
-{
-	if (pwm >= 0)
-	{
-		spindleReversePort.WriteAnalog(0.0);
-		spindleForwardPort.WriteAnalog(pwm);
-	}
-	else
-	{
-		spindleForwardPort.WriteAnalog(0.0);
-		spindleReversePort.WriteAnalog(-pwm);
-	}
-}
 
 void Platform::SetLaserPwm(float pwm)
 {
 	laserPort.WriteAnalog(pwm);
-}
-
-bool Platform::SetSpindlePins(LogicalPin lpf, LogicalPin lpr, bool invert)
-{
-	const bool ok1 = spindleForwardPort.Set(lpf, PinAccess::pwm, invert);
-	if (lpr == NoLogicalPin)
-	{
-		spindleReversePort.Clear();
-		return ok1;
-	}
-	const bool ok2 = spindleReversePort.Set(lpr, PinAccess::pwm, invert);
-	return ok1 && ok2;
-}
-
-void Platform::GetSpindlePins(LogicalPin& lpf, LogicalPin& lpr, bool& invert) const
-{
-	lpf = spindleForwardPort.GetLogicalPin(invert);
-	lpr = spindleReversePort.GetLogicalPin();
-}
-
-void Platform::SetSpindlePwmFrequency(float freq)
-{
-	spindleForwardPort.SetFrequency(freq);
-	spindleReversePort.SetFrequency(freq);
 }
 
 bool Platform::SetLaserPin(LogicalPin lp, bool invert)
