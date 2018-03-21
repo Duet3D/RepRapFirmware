@@ -933,6 +933,7 @@ bool GCodeBuffer::PushState()
 	ms->runningM502 = machineState->runningM502;
 	ms->volumetricExtrusion = false;
 	ms->useMachineCoordinates = false;
+	ms->useMachineCoordinatesSticky = machineState->useMachineCoordinatesSticky || machineState->useMachineCoordinates;
 	ms->messageAcknowledged = false;
 	ms->waitingForAcknowledgement = false;
 	machineState = ms;

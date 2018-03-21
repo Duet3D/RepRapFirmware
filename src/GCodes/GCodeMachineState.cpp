@@ -14,7 +14,7 @@ unsigned int GCodeMachineState::numAllocated = 0;
 GCodeMachineState::GCodeMachineState()
 	: previous(nullptr), feedrate(DefaultFeedrate * SecondsToMinutes), fileState(), lockedResources(0), errorMessage(nullptr), state(GCodeState::normal),
 	  drivesRelative(false), axesRelative(false), doingFileMacro(false), runningM501(false), runningM502(false),
-	  volumetricExtrusion(false), useMachineCoordinates(false), waitingForAcknowledgement(false), messageAcknowledged(false)
+	  volumetricExtrusion(false), useMachineCoordinates(false), useMachineCoordinatesSticky(false), waitingForAcknowledgement(false), messageAcknowledged(false)
 {
 }
 

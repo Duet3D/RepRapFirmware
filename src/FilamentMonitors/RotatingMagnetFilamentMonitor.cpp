@@ -34,6 +34,8 @@ void RotatingMagnetFilamentMonitor::Reset()
 {
 	extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
 	comparisonStarted = false;
+	haveStartBitData = false;
+	hadNonPrintingMoveSinceLastSync = true;			// force a resync
 }
 
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
@@ -131,7 +133,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData()
 			movementMeasuredSinceLastSync += (float)movement/1024;
 			sensorValue = val;
 
-			if (haveStartBitData)					// if we have a synchronised  value for the amount of extrusion commanded
+			if (haveStartBitData)					// if we have a synchronised value for the amount of extrusion commanded
 			{
 				if (!hadNonPrintingMoveAtStartBit)
 				{
@@ -166,7 +168,8 @@ float RotatingMagnetFilamentMonitor::GetCurrentPosition() const
 
 // Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 // 'filamentConsumed' is the net amount of extrusion commanded since the last call to this function.
-// 'hadNonPrintingMove' is called if filamentConsumed includes extruder movement form non-printing moves.
+// 'hadNonPrintingMove' is true if filamentConsumed includes extruder movement from non-printing moves.
+// 'fromIsr' is true if this measurement was taken dat the end of the ISR because a potential start bit was seen
 FilamentSensorStatus RotatingMagnetFilamentMonitor::Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed)
 {
 	// 1. Update the extrusion commanded and whether we have had an extruding but non-printing move

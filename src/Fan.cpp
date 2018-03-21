@@ -151,6 +151,7 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 						reply.catf(" %u", (i < Heaters) ? i : FirstVirtualHeater + i - Heaters);
 					}
 				}
+				reply.catf(", current speed: %d%%:", (int)(lastVal * 100.0));
 			}
 		}
 	}

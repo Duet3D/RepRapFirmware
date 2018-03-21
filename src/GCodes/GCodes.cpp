@@ -115,6 +115,7 @@ void GCodes::Init()
 	isRetracted = false;
 	lastAuxStatusReportType = -1;						// no status reports requested yet
 
+	spindleRpm = 0.0;
 	spindleMaxRpm = DefaultMaxSpindleRpm;
 	laserMaxPower = DefaultMaxLaserPower;
 
@@ -2348,7 +2349,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 				currentUserPosition[axis] += moveArg;
 			}
 #if SUPPORT_WORKPLACE_COORDINATES
-			else if (gb.MachineState().useMachineCoordinates)
+			else if (gb.MachineState().useMachineCoordinates || gb.MachineState().useMachineCoordinatesSticky)
 			{
 				currentUserPosition[axis] = moveArg - workplaceCoordinates[currentCoordinateSystem][axis];
 			}
@@ -2482,7 +2483,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		currentUserPosition[Y_AXIS] += yParam;
 	}
 #if SUPPORT_WORKPLACE_COORDINATES
-	else if (gb.MachineState().useMachineCoordinates)
+	else if (gb.MachineState().useMachineCoordinates || gb.MachineState().useMachineCoordinatesSticky)
 	{
 		currentUserPosition[X_AXIS] = xParam - workplaceCoordinates[currentCoordinateSystem][X_AXIS];
 		currentUserPosition[Y_AXIS] = yParam - workplaceCoordinates[currentCoordinateSystem][Y_AXIS];
@@ -2722,6 +2723,11 @@ void GCodes::AbortPrint(GCodeBuffer& gb)
 
 // Run a file macro. Prior to calling this, 'state' must be set to the state we want to enter when the macro has been completed.
 // Return true if the file was found or it wasn't and we were asked to report that fact.
+// 'codeRunning' is the M command we are running, as follows;
+// 501 = running M501
+// 502 = running M502
+// 98 = running a macro explicitly via M98
+// 0 = running a system macro automatically
 bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning)
 {
 	FileStore * const f = platform.OpenFile(platform.GetSysDir(), fileName, OpenMode::read);
@@ -2745,6 +2751,10 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	gb.MachineState().doingFileMacro = true;
 	gb.MachineState().runningM501 = (codeRunning == 501);
 	gb.MachineState().runningM502 = (codeRunning == 502);
+	if (codeRunning != 98)
+	{
+		gb.MachineState().useMachineCoordinatesSticky = true;	// running a system macro e.g. homing or tool change, so don't use workplace coordinates
+	}
 	gb.SetState(GCodeState::normal);
 	gb.Init();
 	return true;

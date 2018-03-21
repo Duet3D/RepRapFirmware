@@ -203,6 +203,8 @@ public:
 
 	const char *GetAxisLetters() const { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
 
+	const float GetSpindleRpm() const { return spindleRpm; }
+
 #if SUPPORT_12864_LCD
 	bool ProcessCommandFromLcd(const char *cmd);						// Process a GCode command from the 12864 LCD returning true if the command was accepted
 #endif
@@ -516,6 +518,7 @@ private:
 	size_t lastFilamentErrorExtruder;
 
 	// CNC and laser
+	float spindleRpm;
 	float spindleMaxRpm;
 	float laserMaxPower;
 

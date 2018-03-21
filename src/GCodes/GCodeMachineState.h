@@ -104,7 +104,8 @@ public:
 		runningM501 : 1,
 		runningM502 : 1,
 		volumetricExtrusion : 1,
-		useMachineCoordinates : 1,		// true if seen G53 on this line of GCode
+		useMachineCoordinates : 1,			// true if seen G53 on this line of GCode
+		useMachineCoordinatesSticky : 1,	// true if using machine coordinates for the remainder of this macro
 		// Caution: these next 3 will be modified out-of-process when we use RTOS, so they will need to be individual bool variables
 		waitingForAcknowledgement : 1,
 		messageAcknowledged : 1,

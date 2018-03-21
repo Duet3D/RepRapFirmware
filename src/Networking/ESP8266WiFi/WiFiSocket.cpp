@@ -39,7 +39,7 @@ void WiFiSocket::Close()
 
 	if (reprap.Debug(moduleNetwork))
 	{
-		debugPrintf("close failed, ir wrong state\n");
+		debugPrintf("close failed, in wrong state\n");
 	}
 	Terminate();							// something is not right, so terminate the socket for safety
 }
@@ -203,6 +203,15 @@ void WiFiSocket::Poll(bool full)
 			txBufferSpace = resp.Value().writeBufferSpace;
 			ReceiveData(resp.Value().bytesAvailable);
 		}
+		break;
+
+	case ConnState::aborted:
+		if (reprap.Debug( moduleNetwork))
+		{
+			debugPrintf("Socket %u aborted\n", socketNum);
+		}
+		state = SocketState::broken;			// make sure that the Terminate call send a command to the WiFi module
+		Terminate();
 		break;
 
 	default:

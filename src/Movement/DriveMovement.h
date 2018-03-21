@@ -12,6 +12,7 @@
 
 class LinearDeltaKinematics;
 
+#define EVEN_STEPS			(1)			// 1 to generate steps at even intervals when doing double/quad/octal stepping
 #define ROUND_TO_NEAREST	(0)			// 1 for round to nearest (as used in 1.20beta10), 0 for round down (as used prior to 1.20beta10)
 
 // Rounding functions, to improve code clarity. Also allows a quick switch between round-to-nearest and round down in the movement code.
@@ -222,6 +223,9 @@ inline bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, bool live)
 		if (stepsTillRecalc != 0)
 		{
 			--stepsTillRecalc;			// we are doing double/quad/octal stepping
+#if EVEN_STEPS
+			nextStepTime += stepInterval;
+#endif
 			return true;
 		}
 		return CalcNextStepTimeCartesianFull(dda, live);
@@ -242,6 +246,9 @@ inline bool DriveMovement::CalcNextStepTimeDelta(const DDA &dda, bool live)
 		if (stepsTillRecalc != 0)
 		{
 			--stepsTillRecalc;			// we are doing double or quad stepping
+#if EVEN_STEPS
+			nextStepTime += stepInterval;
+#endif
 			return true;
 		}
 		else

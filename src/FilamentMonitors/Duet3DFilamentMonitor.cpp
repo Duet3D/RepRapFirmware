@@ -24,7 +24,7 @@ void Duet3DFilamentMonitor::InitReceiveBuffer()
 	state = RxdState::waitingForStartBit;
 }
 
-// ISR for when the pin state changes
+// ISR for when the pin state changes. It should return true if the ISR wants the commanded extrusion to be fetched.
 bool Duet3DFilamentMonitor::Interrupt()
 {
 	bool wantReading = false;

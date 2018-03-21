@@ -335,17 +335,17 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
 
 	const uint32_t nextCalcStep = nextStep + stepsTillRecalc;
-	const uint32_t lastStepTime = nextStepTime;					// pick up the time of the last step
+	uint32_t nextCalcStepTime;
 	if (nextCalcStep < mp.cart.accelStopStep)
 	{
 		// acceleration phase
 		const uint32_t adjustedStartSpeedTimesCdivA = dda.startSpeedTimesCdivA + mp.cart.compensationClocks;
-		nextStepTime = isqrt64(isquare64(adjustedStartSpeedTimesCdivA) + (mp.cart.twoCsquaredTimesMmPerStepDivA * nextCalcStep)) - adjustedStartSpeedTimesCdivA;
+		nextCalcStepTime = isqrt64(isquare64(adjustedStartSpeedTimesCdivA) + (mp.cart.twoCsquaredTimesMmPerStepDivA * nextCalcStep)) - adjustedStartSpeedTimesCdivA;
 	}
 	else if (nextCalcStep < mp.cart.decelStartStep)
 	{
 		// steady speed phase
-		nextStepTime = (uint32_t)(  (int32_t)(((uint64_t)mp.cart.mmPerStepTimesCKdivtopSpeed * nextCalcStep)/K1)
+		nextCalcStepTime = (uint32_t)(  (int32_t)(((uint64_t)mp.cart.mmPerStepTimesCKdivtopSpeed * nextCalcStep)/K1)
 								  + dda.extraAccelerationClocks
 								  - (int32_t)mp.cart.accelCompensationClocks
 								 );
@@ -356,7 +356,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		const uint64_t temp = mp.cart.twoCsquaredTimesMmPerStepDivA * nextCalcStep;
 		const uint32_t adjustedTopSpeedTimesCdivAPlusDecelStartClocks = dda.topSpeedTimesCdivAPlusDecelStartClocks - mp.cart.compensationClocks;
 		// Allow for possible rounding error when the end speed is zero or very small
-		nextStepTime = (temp < twoDistanceToStopTimesCsquaredDivA)
+		nextCalcStepTime = (temp < twoDistanceToStopTimesCsquaredDivA)
 						? adjustedTopSpeedTimesCdivAPlusDecelStartClocks - isqrt64(twoDistanceToStopTimesCsquaredDivA - temp)
 						: adjustedTopSpeedTimesCdivAPlusDecelStartClocks;
 	}
@@ -372,13 +372,19 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 			}
 		}
 		const uint32_t adjustedTopSpeedTimesCdivAPlusDecelStartClocks = dda.topSpeedTimesCdivAPlusDecelStartClocks - mp.cart.compensationClocks;
-		nextStepTime = adjustedTopSpeedTimesCdivAPlusDecelStartClocks
+		nextCalcStepTime = adjustedTopSpeedTimesCdivAPlusDecelStartClocks
 							+ isqrt64((int64_t)(mp.cart.twoCsquaredTimesMmPerStepDivA * nextCalcStep) - mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA);
 	}
 
-	stepInterval = (nextStepTime - lastStepTime) >> shiftFactor;	// calculate the time per step, ready for next time
+	stepInterval = (nextCalcStepTime - nextStepTime) >> shiftFactor;	// calculate the time per step, ready for next time
 
-	if (nextStepTime > dda.clocksNeeded)
+#if EVEN_STEPS
+	nextStepTime = nextCalcStepTime - (stepsTillRecalc * stepInterval);
+#else
+	nextStepTime = nextCalcStepTime;
+#endif
+
+	if (nextCalcStepTime > dda.clocksNeeded)
 	{
 		// The calculation makes this step late.
 		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
@@ -468,16 +474,16 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		return false;
 	}
 
-	const uint32_t lastStepTime = nextStepTime;		// pick up the time of the last step
+	uint32_t nextCalcStepTime;
 	if ((uint32_t)dsK < mp.delta.accelStopDsK)
 	{
 		// Acceleration phase
-		nextStepTime = isqrt64(isquare64(dda.startSpeedTimesCdivA) + (mp.delta.twoCsquaredTimesMmPerStepDivA * (uint32_t)dsK)/K2) - dda.startSpeedTimesCdivA;
+		nextCalcStepTime = isqrt64(isquare64(dda.startSpeedTimesCdivA) + (mp.delta.twoCsquaredTimesMmPerStepDivA * (uint32_t)dsK)/K2) - dda.startSpeedTimesCdivA;
 	}
 	else if ((uint32_t)dsK < mp.delta.decelStartDsK)
 	{
 		// Steady speed phase
-		nextStepTime = (uint32_t)(  (int32_t)(((uint64_t)mp.delta.mmPerStepTimesCKdivtopSpeed * (uint32_t)dsK)/(K1 * K2))
+		nextCalcStepTime = (uint32_t)(  (int32_t)(((uint64_t)mp.delta.mmPerStepTimesCKdivtopSpeed * (uint32_t)dsK)/(K1 * K2))
 								  + dda.extraAccelerationClocks
 								 );
 	}
@@ -485,14 +491,20 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	{
 		const uint64_t temp = (mp.delta.twoCsquaredTimesMmPerStepDivA * (uint32_t)dsK)/K2;
 		// Because of possible rounding error when the end speed is zero or very small, we need to check that the square root will work OK
-		nextStepTime = (temp < twoDistanceToStopTimesCsquaredDivA)
+		nextCalcStepTime = (temp < twoDistanceToStopTimesCsquaredDivA)
 						? dda.topSpeedTimesCdivAPlusDecelStartClocks - isqrt64(twoDistanceToStopTimesCsquaredDivA - temp)
 						: dda.topSpeedTimesCdivAPlusDecelStartClocks;
 	}
 
-	stepInterval = (nextStepTime - lastStepTime) >> shiftFactor;	// calculate the time per step, ready for next time
+	stepInterval = (nextCalcStepTime - nextStepTime) >> shiftFactor;	// calculate the time per step, ready for next time
 
-	if (nextStepTime > dda.clocksNeeded)
+#if EVEN_STEPS
+	nextStepTime = nextCalcStepTime - (stepsTillRecalc * stepInterval);
+#else
+	nextStepTime = nextCalcStepTime;
+#endif
+
+	if (nextCalcStepTime > dda.clocksNeeded)
 	{
 		// The calculation makes this step late.
 		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.

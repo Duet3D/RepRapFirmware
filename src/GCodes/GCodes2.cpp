@@ -300,6 +300,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				currentCoordinateSystem = cs;											// this is the zero-base coordinate system number
 				gb.MachineState().useMachineCoordinates = false;
+				gb.MachineState().useMachineCoordinatesSticky = false;
 				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates
 			}
 			else
@@ -393,7 +394,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			switch (machineType)
 			{
 			case MachineType::cnc:
-				platform.SetSpindlePwm(gb.GetFValue()/spindleMaxRpm);
+				spindleRpm = gb.GetFValue();
+				platform.SetSpindlePwm(spindleRpm/spindleMaxRpm);
 				break;
 
 			case MachineType::laser:
@@ -1165,7 +1167,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			String<MaxFilenameLength> filename;
 			gb.GetPossiblyQuotedString(filename.GetRef());
-			DoFileMacro(gb, filename.Pointer(), true);
+			DoFileMacro(gb, filename.Pointer(), true, 98);
 		}
 		break;
 
@@ -1179,7 +1181,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 102:
 		// S3D generates this command just before each explicit retraction command if both explicit retraction and "Include M101/101/103" are enabled.
-		// Old versions of S3D also generate it once at the start of each prnit file if "Include M101/101/103" is enabled.
+		// Old versions of S3D also generate it once at the start of each print file if "Include M101/101/103" is enabled.
 		// It's not documented, so we just ignore it rather than generate an error message.
 		break;
 

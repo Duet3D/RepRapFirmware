@@ -946,6 +946,10 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	}
 #endif
 
+	// Spindle
+	const double spindleRpm = gCodes->GetSpindleRpm();
+	response->catf(",\"spindle\":{\"current\":%1.f,\"active\":%1.f}", spindleRpm, spindleRpm);
+
 	/* Extended Status Response */
 	if (type == 2)
 	{
@@ -958,9 +962,19 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		// Endstops
 		uint32_t endstops = 0;
-		for(size_t drive = 0; drive < DRIVES; drive++)
+		const size_t totalAxes = gCodes->GetTotalAxes();
+		for (size_t drive = 0; drive < DRIVES; drive++)
 		{
-			if (platform->EndStopInputState(drive))
+			if (drive < totalAxes)
+			{
+				const EndStopHit es = platform->Stopped(drive);
+				if (es == EndStopHit::highHit || es == EndStopHit::lowHit)
+				{
+					endstops |= (1u << drive);
+
+				}
+			}
+			else if (platform->EndStopInputState(drive))
 			{
 				endstops |= (1u << drive);
 			}
@@ -972,7 +986,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		// Total and mounted volumes
 		size_t mountedCards = 0;
-		for(size_t i = 0; i < NumSdCards; i++)
+		for (size_t i = 0; i < NumSdCards; i++)
 		{
 			if (platform->GetMassStorage()->IsDriveMounted(i))
 			{
