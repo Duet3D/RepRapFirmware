@@ -143,7 +143,10 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 							(inverted) ? "yes" : "no");
 			if (heatersMonitored != 0)
 			{
-				reply.catf(", temperature: %.1f:%.1fC, heaters:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);
+				reply.catf(", actual-speed: %d%%, temperature: %.1f:%.1fC, heaters:",
+					(int)(lastVal * 100.0),
+					(double)triggerTemperatures[0],
+					(double)triggerTemperatures[1]);
 				for (unsigned int i = 0; i < Heaters + MaxVirtualHeaters; ++i)
 				{
 					if (IsBitSet(heatersMonitored, i))
