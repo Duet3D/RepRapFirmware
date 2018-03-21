@@ -2619,7 +2619,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			break;
 		}
 
-		Spindle spindle = platform.AccessSpindle(slot);
+		Spindle& spindle = platform.AccessSpindle(slot);
 		if (gb.Seen('P'))
 		{
 			uint32_t pins[2] = { NoLogicalPin, NoLogicalPin };

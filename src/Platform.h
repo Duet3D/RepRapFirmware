@@ -586,7 +586,7 @@ public:
 	void ExtrudeOff();
 
 	// CNC and laser support
-	Spindle &AccessSpindle(size_t slot) { return spindles[slot]; }
+	Spindle& AccessSpindle(size_t slot) { return spindles[slot]; }
 
 	void SetLaserPwm(float pwm);
 	bool SetLaserPin(LogicalPin lp, bool invert);

@@ -1037,7 +1037,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			response->cat(',');
 		}
 
-		const Spindle spindle = platform->AccessSpindle(i);
+		const Spindle& spindle = platform->AccessSpindle(i);
 		response->catf("{\"current\":%1.f,\"active\":%1.f", (double)spindle.GetCurrentRpm(), (double)spindle.GetRpm());
 		if (type == 2)
 		{
