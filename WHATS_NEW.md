@@ -1,6 +1,24 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.21
+============
+Upgrade notes:
+- The compatible DuetWiFiServer version is 1.21. If you are already running firmware 1.19 or later, you can install this before or after upgrading the main firmware, it doesn't matter.
+- The compatible Duet Web Control is 1.21RC4 or the forthcoming 1.21. Install it after upgrading the main firmware.
+- On Cartesian and CoreXY printers, normal G0 and G1 moves are no longer allowed before the corresponding axes have been homed. In particular, if your homex.g, homey.g and homeall.g files raise Z a little at the start and lower it at the end, you will need to add the S2 parameter to those G1 Z moves. Otherwise the G1 Z move will be refused unless Z has already been homed and the homing macro will be terminated.
+- The binary filename for the Duet WiFi and Duet Ethernet is now called Duet2CombinedFirmware.bin. However, your existing firmware version may expect it to be called DuetWiFiFirmware.bin or DuetEthernetFirmware.bin. For your convenience, this release includes copies of Duet2CombinedFirmware.bin with those names.
+
+New features and changed behaviour since 1.21RC5:
+- The rr_status and M408 reports now include the spindle speed
+- M106 now also reports the current fan PWM for thermostatically-controlled fans
+- Machine coordinates are always used when running system macros automatically.
+
+Bug fixes since 1.21RC5:
+- Pulse-type filament monitors are now working
+- WiFi sockets whose connections abort are now terminated to make them available for re-use
+- DWC Machine Properties page shows the correct state of active low endstops
+
 Version 1.21RC5
 ===============
 Upgrade notes:
@@ -54,7 +72,7 @@ Upgrade notes:
 - The compatible DuetWiFiServer version is 1.21RC3. You can install this before or after upgrading the main firmware, it doesn't matter.
 - After installing the new firmware binary and checking that the version number is correctly reported, upload DuetWebControl 1.21RC4
 - On Cartesian and CoreXY printers, normal G0 and G1 moves are no longer allowed before the corresponding axes have been homed. In particular, if your homex.g, homey.g and homeall.g files raise Z a little at the start and lower it at the end, you will need to add the S2 parameter to those G1 Z moves. Otherwise the G1 Z move will be refused unless Z has already been homed and the homing macro will be terminated.
-- The binary filename for the Duet WiFi and Duet Ethernet is now called Duet2CombinedFirmware.bin. When installing it on a Duet WiFi running a previous firmware revision or a Duet Ethernet running 1.21RC2, you will need to rename it to DuetWiFiFirmware.bin. Whenj installing it on a Duet Ethernet running mnfirmware 1.21RC1 or earlier, rename it to DuetEthernetFirmware.bin.
+- The binary filename for the Duet WiFi and Duet Ethernet is now called Duet2CombinedFirmware.bin. When installing it on a Duet WiFi running a previous firmware revision or a Duet Ethernet running 1.21RC2, you will need to rename it to DuetWiFiFirmware.bin. When installing it on a Duet Ethernet running firmware 1.21RC1 or earlier, rename it to DuetEthernetFirmware.bin.
 
 New features:
 - On Cartesian and CoreXY printers, normal movement commands are no longer permitted until the corresponding axes have been homed
