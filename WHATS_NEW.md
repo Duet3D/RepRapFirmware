@@ -9,6 +9,7 @@ Upgrade notes:
 - On Cartesian and CoreXY printers, normal G0 and G1 moves are no longer allowed before the corresponding axes have been homed. In particular, if your homex.g, homey.g and homeall.g files raise Z a little at the start and lower it at the end, you will need to add the S2 parameter to those G1 Z moves. Otherwise the G1 Z move will be refused unless Z has already been homed and the homing macro will be terminated.
 - The binary filename for the Duet WiFi and Duet Ethernet is now called Duet2CombinedFirmware.bin. However, your existing firmware version may expect it to be called DuetWiFiFirmware.bin or DuetEthernetFirmware.bin. For your convenience, this release includes copies of Duet2CombinedFirmware.bin with those names.
 - If you have a start.g macro file in the /sys folder of your SD card, remove or rename it, unless you want it to be run every time you start a print from SD card
+- See also the upgrade notes for version 1.20 if you are upgrading from a version earlier than that
 
 New features and changed behaviour:
 - The rr_status and M408 reports now include the spindle speed
