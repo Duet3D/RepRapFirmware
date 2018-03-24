@@ -218,7 +218,7 @@ FRESULT f_truncate (FIL*);							/* Truncate file */
 FRESULT f_sync (FIL*);								/* Flush cached data of a writing file */
 FRESULT f_unlink (const TCHAR*);					/* Delete an existing file or directory */
 FRESULT	f_mkdir (const TCHAR*);						/* Create a new directory */
-FRESULT f_chmod (const TCHAR*, BYTE, BYTE);			/* Change attriburte of the file/dir */
+FRESULT f_chmod (const TCHAR*, BYTE, BYTE);			/* Change attribute of the file/dir */
 FRESULT f_utime (const TCHAR*, const FILINFO*);		/* Change timestamp of the file/dir */
 FRESULT f_rename (const TCHAR*, const TCHAR*);		/* Rename/Move a file or directory */
 FRESULT f_chdrive (BYTE);							/* Change current drive */

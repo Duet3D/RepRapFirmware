@@ -26,7 +26,8 @@ Licence: GPL
 // See: http://www.rolanddg.com/product/3d/3d/mdx-20_15/mdx-20_15.html
 //      http://altlab.org/d/content/m/pangelo/ideas/rml_command_guide_en_v100.pdf
 
-#include "Arduino.h"
+#include "RepRapFirmware.h"
+#include "Core.h"
 #include "Platform.h"
 
 const float ROLAND_FACTOR = (1.016088061*100.0/2.54);	// Roland units are 0.001"
@@ -35,7 +36,7 @@ const size_t ROLAND_BUFFER_SIZE = 50;
 class Roland
 {
 	public:
-		Roland(Platform* p);
+		Roland(Platform& p);
 		void Init();
 		void Spin();
 		bool ProcessHome();
@@ -53,7 +54,7 @@ class Roland
 		void Zero(bool feed);
 		bool Busy();
 
-		Platform* platform;
+		Platform& platform;
 		float longWait;
 
 		float move[DRIVES+1];

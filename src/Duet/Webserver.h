@@ -49,7 +49,7 @@ const size_t minHttpResponseSize = 768;			// minimum number of bytes required fo
 
 const size_t maxCommandWords = 4;				// max number of space-separated words in the command
 const size_t maxQualKeys = 5;					// max number of key/value pairs in the qualifier
-const size_t maxHeaders = 16;					// max number of key/value pairs in the headers
+const size_t maxHeaders = 30;					// max number of key/value pairs in the headers
 
 const size_t  maxHttpSessions = 8;				// maximum number of simultaneous HTTP sessions
 const uint32_t httpSessionTimeout = 8000;		// HTTP session timeout in milliseconds
@@ -110,7 +110,7 @@ class ProtocolInterpreter
 
 		UploadState uploadState;
 		FileData fileBeingUploaded;
-		char filenameBeingUploaded[FILENAME_LENGTH];
+		char filenameBeingUploaded[MaxFilenameLength];
 
 		bool StartUpload(FileStore *file, const char *fileName);
 		bool IsUploading() const;
@@ -236,7 +236,7 @@ protected:
 
 		// Deferred requests (rr_fileinfo)
 		volatile Connection deferredRequestConnection;	// Which connection expects a response for a deferred request?
-		char filenameBeingProcessed[FILENAME_LENGTH];	// The filename being processed (for rr_fileinfo)
+		char filenameBeingProcessed[MaxFilenameLength];	// The filename being processed (for rr_fileinfo)
 
 		void ProcessDeferredRequest();
 	};
@@ -273,8 +273,8 @@ protected:
 		char clientMessage[ftpMessageLength];
 		size_t clientPointer;
 
-		char filename[FILENAME_LENGTH];
-		char currentDir[FILENAME_LENGTH];
+		char filename[MaxFilenameLength];
+		char currentDir[MaxFilenameLength];
 
 		uint32_t portOpenTime;
 
@@ -337,7 +337,7 @@ protected:
 	NetworkTransaction *currentTransaction;
 	volatile Connection readingConnection;
 
-    float longWait;
+    uint32_t longWait;
 };
 
 inline bool ProtocolInterpreter::CanParseData() { return true; }

@@ -6,11 +6,9 @@
 
 #include "RepRapFirmware.h"
 
-Roland::Roland(Platform* p)
+Roland::Roland(Platform& p) : platform(p)
 {
-	platform = p;
 }
-
 
 void Roland::Init()
 {
@@ -23,7 +21,7 @@ void Roland::Init()
 
 	bufferPointer = 0;
 	Zero(true);
-	longWait = platform->Time();
+	longWait = platform.Time();
 	active = false;
 }
 
@@ -31,7 +29,7 @@ void Roland::Spin()
 {
 	if (!Active())
 	{
-		platform->ClassReport(longWait);
+		platform.ClassReport(longWait);
 		return;
 	}
 
@@ -47,7 +45,7 @@ void Roland::Spin()
 	{
 		if (digitalRead(ROLAND_CTS_PIN))
 		{
-			platform->ClassReport(longWait);
+			platform.ClassReport(longWait);
 			return;
 		}
 
@@ -74,7 +72,7 @@ void Roland::Spin()
 		}
 	}
 
-	platform->ClassReport(longWait);
+	platform.ClassReport(longWait);
 }
 
 void Roland::Zero(bool feed)
@@ -90,7 +88,7 @@ void Roland::Zero(bool feed)
 
 	if (reprap.Debug(moduleGcodes))
 	{
-		platform->Message(HOST_MESSAGE, "Roland zero\n");
+		platform.Message(HOST_MESSAGE, "Roland zero\n");
 	}
 }
 
@@ -110,7 +108,7 @@ bool Roland::ProcessHome()
 	Zero(false);
 	if (reprap.Debug(moduleGcodes))
 	{
-		platform->MessageF(HOST_MESSAGE, "Roland home: %s", buffer);
+		platform.MessageF(HOST_MESSAGE, "Roland home: %s", buffer);
 	}
 	return true;
 }
@@ -127,7 +125,7 @@ bool Roland::ProcessDwell(long milliseconds)
 	sBuffer->cat("W0;\n");
 	if (reprap.Debug(moduleGcodes))
 	{
-		platform->MessageF(HOST_MESSAGE, "Roland dwell: %s", buffer);
+		platform.MessageF(HOST_MESSAGE, "Roland dwell: %s", buffer);
 	}
 	return true;
 }
@@ -145,7 +143,7 @@ bool Roland::ProcessG92(float v, size_t axis)
 	oldCoordinates[axis] = coordinates[axis];
 	if (reprap.Debug(moduleGcodes))
 	{
-		platform->Message(HOST_MESSAGE, "Roland G92\n");
+		platform.Message(HOST_MESSAGE, "Roland G92\n");
 	}
 	return true;
 }
@@ -168,7 +166,7 @@ bool Roland::ProcessSpindle(float rpm)
 
 	if (reprap.Debug(moduleGcodes))
 	{
-		platform->MessageF(HOST_MESSAGE, "Roland spindle: %s", buffer);
+		platform.MessageF(HOST_MESSAGE, "Roland spindle: %s", buffer);
 	}
 	return true;
 
@@ -212,7 +210,7 @@ void Roland::ProcessMove()
 
 	if (reprap.Debug(moduleGcodes))
 	{
-		platform->MessageF(HOST_MESSAGE, "Roland move: %s", buffer);
+		platform.MessageF(HOST_MESSAGE, "Roland move: %s", buffer);
 	}
 }
 
@@ -229,7 +227,7 @@ bool Roland::RawWrite(const char* s)
 
 	if (reprap.Debug(moduleGcodes))
 	{
-		platform->MessageF(HOST_MESSAGE, "Roland rawwrite: %s", buffer);
+		platform.MessageF(HOST_MESSAGE, "Roland rawwrite: %s", buffer);
 	}
 	return true;
 }
@@ -246,7 +244,7 @@ void Roland::Activate()
 
 	if (reprap.Debug(moduleGcodes))
 	{
-		platform->Message(HOST_MESSAGE, "Roland started\n");
+		platform.Message(HOST_MESSAGE, "Roland started\n");
 	}
 }
 
@@ -261,7 +259,7 @@ bool Roland::Deactivate()
 	active = false;
 	if (reprap.Debug(moduleGcodes))
 	{
-		platform->Message(HOST_MESSAGE, "Roland stopped\n");
+		platform.Message(HOST_MESSAGE, "Roland stopped\n");
 	}
 	return true;
 }

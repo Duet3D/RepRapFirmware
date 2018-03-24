@@ -1,0 +1,71 @@
+/* [wxMaxima batch file version 1] [ DO NOT EDIT BY HAND! ]*/
+/* [ Created with wxMaxima version 14.12.1 ] */
+
+/* [wxMaxima: input   start ] */
+eq1:h=H+a*x+b*y+c*x*y;
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq2:h0=H+a*x0+b*y0+c*x0*y0;
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq3:h1=H+a*x1+b*y1+c*x1*y1;
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq4:h2=H+a*x2+b*y2+c*x2*y2;
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq5:h3=H+a*x3+b*y3+c*x3*y3;
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq6:solve([eq2,eq3,eq4,eq5],[a,b,c,H]);
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq7:subst(eq6,eq1);
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq8:dhbydh0=factor(diff(rhs(eq7),h0));
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq9:dhbydh1=factor(diff(rhs(eq7),h1));
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq10:dhbydh2=factor(diff(rhs(eq7),h2));
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq11:dhbydh3=factor(diff(rhs(eq7),h3));
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq12:(x1*x3*y2*y3-x0*x3*y2*y3-x1*x2*y2*y3+x0*x2*y2*y3-x2*x3*y1*y3+x0*
+x3*y1*y3+x1*x2*y1*y3-x0*x1*y1*y3+x2*x3*y0*y3-x1*x3*y0*y3-x0*x2*y0*y3+x0*x1*y0*y3+x2*x3*y1*y2-x1*x3*y1*y2-x0*x2*y1*y2+x0*x1*y1*y2-x2*x3*y0*y2+x0*x3*y0*y2+x1*x2*y0*y2-x0*x1*y0*
+y2+x1*x3*y0*y1-x0*x3*y0*y1-x1*x2*y0*y1+x0*x2*y0*y1)=d;
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq13:subst(eq12,eq8);
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq14:subst(eq12,eq9);
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq15:subst(eq12,eq10);
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq16:subst(eq12,eq11);
+/* [wxMaxima: input   end   ] */
+
+/* Maxima can't load/batch files which end with a comment! */
+"Created with wxMaxima"$

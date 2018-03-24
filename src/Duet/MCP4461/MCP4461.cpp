@@ -14,14 +14,11 @@ Tony@think3dprint3d.com
 GPL v3
 */
 
-#include <stdio.h>
-#include <Wire.h>
+#include <cstdio>
+#include "Wire.h"
+#include "Pins.h"
 
-#ifdef DUET_NG
-# define MCP_WIRE	Wire
-#else
-# define MCP_WIRE	Wire1
-#endif
+#define MCP_WIRE	I2C_IFACE
 
 //ensure you call begin() before any other functions but note
 //begin can only be called once for all MCP* objects as it initialises
@@ -29,12 +26,7 @@ GPL v3
 //if the MCP4461 does not have a default address, call set address before
 //trying to communicate
 MCP4461::MCP4461() {
-  _mcp4461_address = DEFAULT_ADDRESS;
-}
-
-//initialise the I2C interface as master ie local address is 0
-void MCP4461::begin() {
-	MCP_WIRE.begin();
+	_mcp4461_address = DEFAULT_ADDRESS;
 }
 
 //set the MCP4461 address

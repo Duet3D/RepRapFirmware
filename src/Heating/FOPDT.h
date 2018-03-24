@@ -35,14 +35,17 @@ class FopDt
 public:
 	FopDt();
 
-	bool SetParameters(float pg, float ptc, float pdt, float pMaxPwm, bool pUsePid);
+	bool SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted, uint16_t pPwmFreq);
 
 	float GetGain() const { return gain; }
 	float GetTimeConstant() const { return timeConstant; }
 	float GetDeadTime() const { return deadTime; }
 	float GetMaxPwm() const { return maxPwm; }
+	float GetVoltage() const { return standardVoltage; }
 	bool UsePid() const { return usePid; }
+	bool IsInverted() const { return inverted; }
 	bool IsEnabled() const { return enabled; }
+	uint16_t GetPwmFrequency() const { return pwmFreq; }
 	bool ArePidParametersOverridden() const { return pidParametersOverridden; }
 	M301PidParameters GetM301PidParameters(bool forLoadChange) const;
 	void SetM301PidParameters(const M301PidParameters& params);
@@ -61,8 +64,11 @@ private:
 	float timeConstant;
 	float deadTime;
 	float maxPwm;
+	float standardVoltage;					// power voltage reading at which tuning was done, or 0 if unknown
+	PwmFrequency pwmFreq;
 	bool enabled;
 	bool usePid;
+	bool inverted;
 	bool pidParametersOverridden;
 
 	PidParameters setpointChangeParams;		// parameters for handling changes in the setpoint

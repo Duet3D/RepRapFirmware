@@ -19,7 +19,7 @@ class FileData
 public:
 	friend class FileGCodeInput;
 
-	FileData() : f(NULL) {}
+	FileData() : f(nullptr) {}
 
 	// Set this to refer to a newly-opened file
 	void Set(FileStore* pfile)
@@ -28,14 +28,14 @@ public:
 		f = pfile;
 	}
 
-	bool IsLive() const { return f != NULL; }
+	bool IsLive() const { return f != nullptr; }
 
 	bool Close()
 	{
-		if (f != NULL)
+		if (f != nullptr)
 		{
 			bool ok = f->Close();
-			f = NULL;
+			f = nullptr;
 			return ok;
 		}
 		return false;
@@ -46,7 +46,7 @@ public:
 		return f->Read(b);
 	}
 
-	int Read(char* buf, size_t nBytes)
+	int Read(char *buf, size_t nBytes)
 	{
 		return f->Read(buf, nBytes);
 	}
@@ -56,7 +56,17 @@ public:
 		return f->Write(b);
 	}
 
-	bool Write(const char *s, unsigned int len)
+	bool Write(const char *s)
+	{
+		return f->Write(s, strlen(s));
+	}
+
+	bool Write(const char *s, size_t len)
+	{
+		return f->Write(s, len);
+	}
+
+	bool Write(const uint8_t *s, size_t len)
 	{
 		return f->Write(s, len);
 	}
@@ -76,11 +86,6 @@ public:
 		return f->Seek(position);
 	}
 
-	float FractionRead() const
-	{
-		return (f == NULL ? -1.0 : f->FractionRead());
-	}
-
 	FilePosition Length() const
 	{
 		return f->Length();
@@ -91,7 +96,7 @@ public:
 	{
 		Close();
 		f = other.f;
-		if (f != NULL)
+		if (f != nullptr)
 		{
 			f->Duplicate();
 		}
@@ -110,7 +115,7 @@ private:
 
 	void Init()
 	{
-		f = NULL;
+		f = nullptr;
 	}
 
 	// Private assignment operator to prevent us assigning these objects

@@ -10,6 +10,7 @@
 
 #include "RepRapFirmware.h"
 #include "MessageType.h"
+#include "Storage/FileData.h"
 
 const size_t OUTPUT_STACK_DEPTH = 4;	// Number of OutputBuffer chains that can be pushed onto one stack instance
 
@@ -29,17 +30,19 @@ class OutputBuffer
 		void IncreaseReferences(size_t refs);
 
 		const char *Data() const { return data; }
+		const char *UnreadData() const { return data + bytesRead; }
 		size_t DataLength() const { return dataLength; }	// How many bytes have been written to this instance?
 		size_t Length() const;								// How many bytes have been written to the whole chain?
 
 		char& operator[](size_t index);
 		char operator[](size_t index) const;
 		const char *Read(size_t len);
+		void Taken(size_t len) { bytesRead += len; }
 		size_t BytesLeft() const { return dataLength - bytesRead; }	// How many bytes have not been sent yet?
 
-		size_t printf(const char *fmt, ...);
+		size_t printf(const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
 		size_t vprintf(const char *fmt, va_list vargs);
-		size_t catf(const char *fmt, ...);
+		size_t catf(const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
 
 		size_t copy(const char c);
 		size_t copy(const char *src);
@@ -51,9 +54,13 @@ class OutputBuffer
 		size_t cat(StringRef &str);
 
 		size_t EncodeString(const char *src, size_t srcLength, bool allowControlChars, bool encapsulateString = true);
+		size_t EncodeString(const StringRef& str, bool allowControlChars, bool encapsulateString = true);
 		size_t EncodeReply(OutputBuffer *src, bool allowControlChars);
 
 		uint32_t GetAge() const;
+
+		// Write the buffer to file returning true if successful
+		bool WriteToFile(FileData& f) const;
 
 		// Initialise the output buffers manager
 		static void Init();
@@ -145,5 +152,3 @@ class OutputStack
 };
 
 #endif /* OUTPUTMEMORY_H_ */
-
-// vim: ts=4:sw=4

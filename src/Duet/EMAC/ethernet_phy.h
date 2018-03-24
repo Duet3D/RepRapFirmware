@@ -47,7 +47,7 @@
 #define KSZ8051RNL_H_INCLUDED
 
 #include "Core.h"
-#include "emac.h"
+#include "emac/emac.h"
 #include "conf_eth.h"
 
 /// @cond 0

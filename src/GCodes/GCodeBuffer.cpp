@@ -8,13 +8,15 @@
 //*************************************************************************************
 
 #include "GCodeBuffer.h"
+
+#include "GCodeInput.h"
 #include "Platform.h"
 #include "RepRap.h"
 
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(const char* id, MessageType mt, bool usesCodeQueue)
 	: machineState(new GCodeMachineState()), identity(id), checksumRequired(false), writingFileDirectory(nullptr),
-	  toolNumberAdjust(0), responseMessageType(mt), queueCodes(usesCodeQueue)
+	  toolNumberAdjust(0), responseMessageType(mt), queueCodes(usesCodeQueue), binaryWriting(false)
 {
 	Init();
 }
@@ -27,17 +29,19 @@ void GCodeBuffer::Reset()
 
 void GCodeBuffer::Init()
 {
-	gcodePointer = 0;
+	gcodeLineEnd = 0;
+	commandLength = 0;
 	readPointer = -1;
-	inComment = timerRunning = false;
-	bufferState = GCodeBufferState::idle;
+	hadLineNumber = hadChecksum = timerRunning = false;
+	computedChecksum = 0;
+	bufferState = GCodeBufferState::parseNotStarted;
 }
 
 void GCodeBuffer::Diagnostics(MessageType mtype)
 {
 	switch (bufferState)
 	{
-	case GCodeBufferState::idle:
+	case GCodeBufferState::parseNotStarted:
 		scratchString.printf("%s is idle", identity);
 		break;
 
@@ -47,344 +51,681 @@ void GCodeBuffer::Diagnostics(MessageType mtype)
 
 	case GCodeBufferState::executing:
 		scratchString.printf("%s is doing \"%s\"", identity, Buffer());
+		break;
+
+	default:
+		scratchString.printf("%s is assembling a command", identity);
 	}
 
 	scratchString.cat(" in state(s)");
 	const GCodeMachineState *ms = machineState;
 	do
 	{
-		scratchString.catf(" %d", ms->state);
+		scratchString.catf(" %d", (int)ms->state);
 		ms = ms->previous;
 	}
 	while (ms != nullptr);
 	scratchString.cat('\n');
-	reprap.GetPlatform()->Message(mtype, scratchString.Pointer());
+	reprap.GetPlatform().Message(mtype, scratchString.Pointer());
 }
 
-int GCodeBuffer::CheckSum() const
+inline void GCodeBuffer::AddToChecksum(char c)
 {
-	uint8_t cs = 0;
-	for (size_t i = 0; gcodeBuffer[i] != '*' && gcodeBuffer[i] != 0; i++)
+	computedChecksum ^= (uint8_t)c;
+}
+
+inline void GCodeBuffer::StoreAndAddToChecksum(char c)
+{
+	computedChecksum ^= (uint8_t)c;
+	if (gcodeLineEnd < ARRAY_SIZE(gcodeBuffer))
 	{
-		cs = cs ^ (uint8_t)gcodeBuffer[i];
+		gcodeBuffer[gcodeLineEnd++] = c;
 	}
-	return (int)cs;
 }
 
 // Add a byte to the code being assembled.  If false is returned, the code is
 // not yet complete.  If true, it is complete and ready to be acted upon.
 bool GCodeBuffer::Put(char c)
 {
-	if (c == '\r')
+	if (c != 0)
 	{
-		// Ignore carriage return, it messes up filenames sometimes if it appears in macro files etc.
-		// Alternatively, we could handle it in the same way as linefeed, and add an optimisation to ignore blank lines.
+		++commandLength;
+	}
+
+	if (c == 0 || c == '\n' || c == '\r')
+	{
+		return LineFinished();
+	}
+
+	if (c == 0x7F && bufferState != GCodeBufferState::discarding)
+	{
+		// The UART receiver stores 0x7F in the buffer if an overrun or framing errors occurs. So discard the command and resync on the next newline.
+		gcodeLineEnd = 0;
+		bufferState = GCodeBufferState::discarding;
+	}
+
+	// Process the incoming character in a state machine
+	bool again;
+	do
+	{
+		again = false;
+		switch (bufferState)
+		{
+		case GCodeBufferState::parseNotStarted:				// we haven't started parsing yet
+			switch (c)
+			{
+			case 'N':
+			case 'n':
+				hadLineNumber = true;
+				AddToChecksum(c);
+				bufferState = GCodeBufferState::parsingLineNumber;
+				lineNumber = 0;
+				break;
+
+			case ' ':
+			case '\t':
+				AddToChecksum(c);
+				break;
+
+			default:
+				bufferState = GCodeBufferState::parsingGCode;
+				commandStart = 0;
+				again = true;
+				break;
+			}
+			break;
+
+		case GCodeBufferState::parsingLineNumber:			// we saw N at the start and we are parsing the line number
+			if (isDigit(c))
+			{
+				AddToChecksum(c);
+				lineNumber = (10 * lineNumber) + (c - '0');
+				break;
+			}
+			else
+			{
+				bufferState = GCodeBufferState::parsingWhitespace;
+				again = true;
+			}
+			break;
+
+		case GCodeBufferState::parsingWhitespace:
+			switch (c)
+			{
+			case ' ':
+			case '\t':
+				AddToChecksum(c);
+				break;
+
+			default:
+				bufferState = GCodeBufferState::parsingGCode;
+				commandStart = 0;
+				again = true;
+				break;
+			}
+			break;
+
+		case GCodeBufferState::parsingGCode:				// parsing GCode words
+			switch (c)
+			{
+			case '*':
+				declaredChecksum = 0;
+				hadChecksum = true;
+				bufferState = GCodeBufferState::parsingChecksum;
+				break;
+
+			case ';':
+				bufferState = GCodeBufferState::discarding;
+				break;
+
+			case '(':
+				AddToChecksum(c);
+				bufferState = GCodeBufferState::parsingBracketedComment;
+				break;
+
+			case '"':
+				StoreAndAddToChecksum(c);
+				bufferState = GCodeBufferState::parsingQuotedString;
+				break;
+
+			default:
+				StoreAndAddToChecksum(c);
+			}
+			break;
+
+		case GCodeBufferState::parsingBracketedComment:		// inside a (...) comment
+			AddToChecksum(c);
+			if (c == ')')
+			{
+				bufferState = GCodeBufferState::parsingGCode;
+			}
+			break;
+
+		case GCodeBufferState::parsingQuotedString:			// inside a double-quoted string
+			StoreAndAddToChecksum(c);
+			if (c == '"')
+			{
+				bufferState = GCodeBufferState::parsingGCode;
+			}
+			break;
+
+		case GCodeBufferState::parsingChecksum:				// parsing the checksum after '*'
+			if (isDigit(c))
+			{
+				declaredChecksum = (10 * declaredChecksum) + (c - '0');
+			}
+			else
+			{
+				bufferState = GCodeBufferState::discarding;
+				again = true;
+			}
+			break;
+
+		case GCodeBufferState::discarding:					// discarding characters after the checksum or an end-of-line comment
+		default:
+			// throw the character away
+			break;
+		}
+	} while (again);
+
+	return false;
+}
+
+// This is called when we are fed a null, CR or LF character.
+// Return true if there is a completed command ready to be executed.
+bool GCodeBuffer::LineFinished()
+{
+	if (gcodeLineEnd == 0)
+	{
+		// Empty line
+		Init();
 		return false;
 	}
 
-	if (c == ';')
+	if (gcodeLineEnd == ARRAY_SIZE(gcodeBuffer))
 	{
-		inComment = true;
+		reprap.GetPlatform().MessageF(ErrorMessage, "G-Code buffer '%s' length overflow\n", identity);
+		Init();
+		return false;
 	}
-	else if (c == '\n' || c == 0)
+
+	gcodeBuffer[gcodeLineEnd] = 0;
+	const bool badChecksum = (hadChecksum && computedChecksum != declaredChecksum);
+	const bool missingChecksum = (checksumRequired && !hadChecksum && machineState->previous == nullptr);
+	if (reprap.Debug(moduleGcodes) && !writingFileDirectory)
 	{
-		gcodeBuffer[gcodePointer] = 0;
-		if (reprap.Debug(moduleGcodes) && gcodeBuffer[0] != 0 && !writingFileDirectory) // Don't bother with blank/comment lines
+		reprap.GetPlatform().MessageF(DebugMessage, "%s%s: %s\n", identity, ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gcodeBuffer);
+	}
+
+	if (badChecksum)
+	{
+		if (hadLineNumber)
 		{
-			reprap.GetPlatform()->MessageF(DEBUG_MESSAGE, "%s: %s\n", identity, gcodeBuffer);
+			snprintf(gcodeBuffer, ARRAY_SIZE(gcodeBuffer), "M998 P%u", lineNumber);	// request resend
 		}
-
-		// Deal with line numbers and checksums
-		if (Seen('*'))
+		else
 		{
-			const int csSent = GetIValue();
-			const int csHere = CheckSum();
-			if (csSent != csHere)
-			{
-				if (Seen('N'))
-				{
-					snprintf(gcodeBuffer, GCODE_LENGTH, "M998 P%ld", GetIValue());
-				}
-				Init();
-				return true;
-			}
-
-			// Strip out the line number and checksum
-			gcodePointer = 0;
-			while (gcodeBuffer[gcodePointer] != ' ' && gcodeBuffer[gcodePointer] != 0)
-			{
-				gcodePointer++;
-			}
-
-			// Anything there?
-			if (gcodeBuffer[gcodePointer] == 0)
-			{
-				// No...
-				gcodeBuffer[0] = 0;
-				Init();
-				return false;
-			}
-
-			// Yes...
-			gcodePointer++;
-			int gp2 = 0;
-			while (gcodeBuffer[gcodePointer] != '*' && gcodeBuffer[gcodePointer] != 0)
-			{
-				gcodeBuffer[gp2] = gcodeBuffer[gcodePointer++];
-				gp2++;
-			}
-			gcodeBuffer[gp2] = 0;
-		}
-		else if ((checksumRequired && machineState->previous == nullptr) || IsEmpty())
-		{
-			// Checksum not found or buffer empty - cannot do anything
-			gcodeBuffer[0] = 0;
 			Init();
 			return false;
 		}
+	}
+	else if (missingChecksum)
+	{
+		// Checksum required but none was provided
 		Init();
-		bufferState = GCodeBufferState::ready;
-		return true;
+		return false;
 	}
-	else if (!inComment || writingFileDirectory)
+
+	commandStart = 0;
+	DecodeCommand();
+	return true;
+}
+
+// Decode this command command and find the start of the next one on the same line.
+// On entry, 'commandStart' has already been set to the address the start of where the command should be.
+// On return, the state must be set to 'ready' to indicate that a command is available and we should stop adding characters.
+void GCodeBuffer::DecodeCommand()
+{
+	// Check for a valid command letter at the start
+	commandLetter = toupper(gcodeBuffer[commandStart]);
+	hasCommandNumber = false;
+	commandNumber = -1;
+	commandFraction = -1;
+	if (commandLetter == 'G' || commandLetter == 'M' || commandLetter == 'T')
 	{
-		gcodeBuffer[gcodePointer++] = c;
-		if (gcodePointer >= (int)GCODE_LENGTH)
+		parameterStart = commandStart + 1;
+		const bool negative = (gcodeBuffer[parameterStart] == '-');
+		if (negative)
 		{
-			reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "Error: G-Code buffer '$s' length overflow\n", identity);
-			gcodePointer = 0;
-			gcodeBuffer[0] = 0;
+			++parameterStart;
+		}
+		if (isdigit(gcodeBuffer[parameterStart]))
+		{
+			hasCommandNumber = true;
+			// Read the number after the command letter
+			commandNumber = 0;
+			do
+			{
+				commandNumber = (10 * commandNumber) + (gcodeBuffer[parameterStart] - '0');
+				++parameterStart;
+			}
+			while (isdigit(gcodeBuffer[parameterStart]));
+			if (negative)
+			{
+				commandNumber = -commandNumber;
+			}
+
+			// Read the fractional digit, if any
+			if (gcodeBuffer[parameterStart] == '.')
+			{
+				++parameterStart;
+				if (isdigit(gcodeBuffer[parameterStart]))
+				{
+					commandFraction = gcodeBuffer[parameterStart] - '0';
+					++parameterStart;
+				}
+			}
+		}
+
+		// Find where the end of the command is. We assume that a G or M preceded by a space and not inside quotes is the start of a new command.
+		bool inQuotes = false;
+		bool primed = false;
+		for (commandEnd = parameterStart; commandEnd < gcodeLineEnd; ++commandEnd)
+		{
+			const char c = gcodeBuffer[commandEnd];
+			char c2;
+			if (c == '"')
+			{
+				inQuotes = !inQuotes;
+				primed = false;
+			}
+			else if (!inQuotes)
+			{
+				if (primed && ((c2 = toupper(c)) == 'G' || c2 == 'M'))
+				{
+					break;
+				}
+				primed = (c == ' ' || c == '\t');
+			}
+		}
+	}
+	else
+	{
+		parameterStart = commandStart;
+		commandEnd = gcodeLineEnd;
+	}
+	bufferState = GCodeBufferState::ready;
+}
+
+// Add an entire string, overwriting any existing content and adding '\n' at the end if necessary to make it a complete line
+void GCodeBuffer::Put(const char *str, size_t len)
+{
+	Init();
+	for (size_t i = 0; i < len; i++)
+	{
+		if (Put(str[i]))	// if the line is complete
+		{
+			return;
 		}
 	}
 
-	return false;
+	(void)Put('\n');		// because there wasn't one at the end of the string
 }
 
-bool GCodeBuffer::Put(const char *str, size_t len)
+// Add a null-terminated string, overwriting any existing content
+void GCodeBuffer::Put(const char *str)
 {
-	for(size_t i=0; i<=len; i++)
+	Put(str, strlen(str));
+}
+
+void GCodeBuffer::SetFinished(bool f)
+{
+	if (f)
 	{
-		if (Put(str[i]))
+		if (commandEnd < gcodeLineEnd)
 		{
-			return true;
+			// There is another command in the same line of gcode
+			commandStart = commandEnd;
+			DecodeCommand();
+		}
+		else
+		{
+			machineState->useMachineCoordinates = false;		// G53 does not persist beyond the current line
+			Init();
 		}
 	}
-
-	return false;
+	else
+	{
+		bufferState = GCodeBufferState::executing;
+	}
 }
 
-// Does this buffer contain any code?
-
-bool GCodeBuffer::IsEmpty() const
+// Get the file position at the start of the current command
+FilePosition GCodeBuffer::GetFilePosition(size_t bytesCached) const
 {
-	const char *buf = gcodeBuffer;
-	while (*buf != 0 && strchr(" \t\n\r", *buf) != nullptr)
+	if (machineState->fileState.IsLive())
 	{
-		buf++;
+		return machineState->fileState.GetPosition() - bytesCached - commandLength + commandStart;
 	}
-	return *buf == 0;
+	return noFilePosition;
 }
 
 // Is 'c' in the G Code string?
 // Leave the pointer there for a subsequent read.
 bool GCodeBuffer::Seen(char c)
 {
-	readPointer = 0;
-	for (;;)
+	bool inQuotes = false;
+	for (readPointer = parameterStart; (unsigned int)readPointer < commandEnd; ++readPointer)
 	{
 		const char b = gcodeBuffer[readPointer];
-		if (b == 0 || b == ';') break;
-		if (b == c) return true;
-		++readPointer;
+		if (b == '"')
+		{
+			inQuotes = !inQuotes;
+		}
+		else if (!inQuotes && toupper(b) == c)
+		{
+			return true;
+		}
 	}
 	readPointer = -1;
 	return false;
 }
 
-// Return the first G, M or T command letter. Needed so that we don't pick up a spurious command letter form inside a string parameter.
-char GCodeBuffer::GetCommandLetter()
-{
-	readPointer = 0;
-	for (;;)
-	{
-		const char b = gcodeBuffer[readPointer];
-		if (b == 0 || b == ';') break;
-		if (b == 'G' || b == 'M' || b == 'T')
-		{
-			return b;
-		}
-		++readPointer;
-	}
-	readPointer = -1;
-	return 0;
-}
-
 // Get a float after a G Code letter found by a call to Seen()
 float GCodeBuffer::GetFValue()
 {
-	if (readPointer < 0)
+	if (readPointer >= 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float before a search.\n");
+		const float result = (float) strtod(&gcodeBuffer[readPointer + 1], 0);
 		readPointer = -1;
-		return 0.0;
+		return result;
 	}
-	float result = (float) strtod(&gcodeBuffer[readPointer + 1], 0);
-	readPointer = -1;
-	return result;
+
+	INTERNAL_ERROR;
+	return 0.0;
 }
 
-// Get a :-separated list of floats after a key letter
-const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength, bool doPad)
+// Get a colon-separated list of floats after a key letter
+// If doPad is true then we allow just one element to be given, in which case we fill all elements with that value
+const void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
 {
-	if(readPointer < 0)
+	if (readPointer >= 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array before a search.\n");
+		size_t length = 0;
+		bool inList = true;
+		while (inList)
+		{
+			if (length >= returnedLength)		// array limit has been set in here
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
+				readPointer = -1;
+				returnedLength = 0;
+				return;
+			}
+			arr[length] = (float)strtod(&gcodeBuffer[readPointer + 1], 0);
+			length++;
+			do
+			{
+				readPointer++;
+			} while(gcodeBuffer[readPointer] && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR));
+			if (gcodeBuffer[readPointer] != LIST_SEPARATOR)
+			{
+				inList = false;
+			}
+		}
+
+		// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
+		if (doPad && length == 1 && returnedLength > 1)
+		{
+			for (size_t i = 1; i < returnedLength; i++)
+			{
+				arr[i] = arr[0];
+			}
+		}
+		else
+		{
+			returnedLength = length;
+		}
+
 		readPointer = -1;
-		returnedLength = 0;
-		return;
-	}
-
-	size_t length = 0;
-	bool inList = true;
-	while(inList)
-	{
-		if (length >= returnedLength)		// array limit has been set in here
-		{
-			reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
-			readPointer = -1;
-			returnedLength = 0;
-			return;
-		}
-		a[length] = (float)strtod(&gcodeBuffer[readPointer + 1], 0);
-		length++;
-		do
-		{
-			readPointer++;
-		} while(gcodeBuffer[readPointer] && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR));
-		if (gcodeBuffer[readPointer] != LIST_SEPARATOR)
-		{
-			inList = false;
-		}
-	}
-
-	// Special case if there is one entry and returnedLength requests several.
-	// Fill the array with the first entry.
-	if (doPad && length == 1 && returnedLength > 1)
-	{
-		for(size_t i = 1; i < returnedLength; i++)
-		{
-			a[i] = a[0];
-		}
 	}
 	else
 	{
-		returnedLength = length;
+		INTERNAL_ERROR;
+		returnedLength = 0;
 	}
-
-	readPointer = -1;
 }
 
-// Get a :-separated list of longs after a key letter
-const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
+// Get a :-separated list of ints after a key letter
+const void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad)
 {
-	if (readPointer < 0)
+	if (readPointer >= 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array before a search.\n");
-		readPointer = -1;
-		return;
-	}
+		size_t length = 0;
+		bool inList = true;
+		while(inList)
+		{
+			if (length >= returnedLength) // Array limit has been set in here
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode int array that is too long: %s\n", gcodeBuffer);
+				readPointer = -1;
+				returnedLength = 0;
+				return;
+			}
+			arr[length] = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
+			length++;
+			do
+			{
+				readPointer++;
+			} while(gcodeBuffer[readPointer] != 0 && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR));
+			if (gcodeBuffer[readPointer] != LIST_SEPARATOR)
+			{
+				inList = false;
+			}
+		}
 
-	size_t length = 0;
-	bool inList = true;
-	while(inList)
-	{
-		if (length >= returnedLength) // Array limit has been set in here
+		// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
+		if (doPad && length == 1 && returnedLength > 1)
 		{
-			reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
-			readPointer = -1;
-			returnedLength = 0;
-			return;
+			for (size_t i = 1; i < returnedLength; i++)
+			{
+				arr[i] = arr[0];
+			}
 		}
-		l[length] = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
-		length++;
-		do
+		else
 		{
-			readPointer++;
-		} while(gcodeBuffer[readPointer] != 0 && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR));
-		if (gcodeBuffer[readPointer] != LIST_SEPARATOR)
-		{
-			inList = false;
+			returnedLength = length;
 		}
+		readPointer = -1;
 	}
-	returnedLength = length;
-	readPointer = -1;
+	else
+	{
+		INTERNAL_ERROR;
+		returnedLength = 0;
+	}
 }
 
-// Get a string after a G Code letter found by a call to Seen().
-// It will be the whole of the rest of the GCode string, so strings should always be the last parameter.
-const char* GCodeBuffer::GetString()
+// Get a :-separated list of unsigned ints after a key letter
+const void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool doPad)
 {
-	if (readPointer < 0)
+	if (readPointer >= 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
+		size_t length = 0;
+		bool inList = true;
+		while(inList)
+		{
+			if (length >= returnedLength) // Array limit has been set in here
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode unsigned array that is too long: %s\n", gcodeBuffer);
+				readPointer = -1;
+				returnedLength = 0;
+				return;
+			}
+			arr[length] = strtoul(&gcodeBuffer[readPointer + 1], 0, 0);
+			length++;
+			do
+			{
+				readPointer++;
+			} while(gcodeBuffer[readPointer] != 0 && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR));
+			if (gcodeBuffer[readPointer] != LIST_SEPARATOR)
+			{
+				inList = false;
+			}
+		}
+
+		// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
+		if (doPad && length == 1 && returnedLength > 1)
+		{
+			for (size_t i = 1; i < returnedLength; i++)
+			{
+				arr[i] = arr[0];
+			}
+		}
+		else
+		{
+			returnedLength = length;
+		}
+
 		readPointer = -1;
-		return "";
 	}
-	const char* const result = &gcodeBuffer[readPointer + 1];
-	readPointer = -1;
-	return result;
+	else
+	{
+		INTERNAL_ERROR;
+		returnedLength = 0;
+	}
 }
 
-// This returns a pointer to the end of the buffer where a
-// string starts.  It assumes that an M or G search has
-// been done followed by a GetIValue(), so readPointer will
-// be -1.  It absorbs "M/Gnnn " (including the space) from the
-// start and returns a pointer to the next location.
+// Get and copy a quoted string returning true if successful
+bool GCodeBuffer::GetQuotedString(const StringRef& str)
+{
+	str.Clear();
+	if (readPointer >= 0)
+	{
+		++readPointer;				// skip the character that introduced the string
+		return gcodeBuffer[readPointer] == '"' && InternalGetQuotedString(str);
+	}
 
-// This is provided for legacy use, in particular in the M23
+	INTERNAL_ERROR;
+	return false;
+}
+
+// Given that the current character is double-quote, fetch the quoted string
+bool GCodeBuffer::InternalGetQuotedString(const StringRef& str)
+{
+	++readPointer;
+	for (;;)
+	{
+		char c = gcodeBuffer[readPointer++];
+		if (c < ' ')
+		{
+			return false;
+		}
+		if (c == '"')
+		{
+			if (gcodeBuffer[readPointer++] != '"')
+			{
+				return true;
+			}
+		}
+		else if (c == '\'')
+		{
+			if (isalpha(gcodeBuffer[readPointer]))
+			{
+				// Single quote before an alphabetic character forces that character to lower case
+				c = tolower(gcodeBuffer[readPointer++]);
+			}
+			else if (gcodeBuffer[readPointer] == c)
+			{
+				// Two single quotes are used to represent one
+				++readPointer;
+			}
+		}
+		str.cat(c);
+	}
+	return false;
+}
+
+// Get and copy a string which may or may not be quoted. If it is not quoted, it ends at the first space or control character.
+bool GCodeBuffer::GetPossiblyQuotedString(const StringRef& str)
+{
+	if (readPointer >= 0)
+	{
+		++readPointer;
+		return InternalGetPossiblyQuotedString(str);
+	}
+
+	INTERNAL_ERROR;
+	return false;
+}
+
+// Get and copy a string which may or may not be quoted, starting at readPointer
+bool GCodeBuffer::InternalGetPossiblyQuotedString(const StringRef& str)
+{
+	str.Clear();
+	if (gcodeBuffer[readPointer] == '"')
+	{
+		return InternalGetQuotedString(str);
+	}
+
+	commandEnd = gcodeLineEnd;				// the string is the remainder of the line of gcode
+	for (;;)
+	{
+		const char c = gcodeBuffer[readPointer++];
+		if (c < ' ')
+		{
+			break;
+		}
+		str.cat(c);
+	}
+	str.StripTrailingSpaces();
+	return !str.IsEmpty();
+}
+
+// This returns a string comprising the rest of the line, excluding any comment
+// It is provided for legacy use, in particular in the M23
 // command that sets the name of a file to be printed.  In
 // preference use GetString() which requires the string to have
 // been preceded by a tag letter.
-
-// If no string was provided, it produces an error message if the string was not optional, and returns nullptr.
-const char* GCodeBuffer::GetUnprecedentedString(bool optional)
+bool GCodeBuffer::GetUnprecedentedString(const StringRef& str)
 {
-	readPointer = 0;
-	while (gcodeBuffer[readPointer] != 0 && gcodeBuffer[readPointer] != ' ')
+	readPointer = parameterStart;
+	char c;
+	while ((unsigned int)readPointer < commandEnd && ((c = gcodeBuffer[readPointer]) == ' ' || c == '\t'))
 	{
-		readPointer++;
+		++readPointer;	// skip leading spaces
 	}
-
-	if (gcodeBuffer[readPointer] == 0)
-	{
-		readPointer = -1;
-		if (!optional)
-		{
-			reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: String expected but not seen.\n");
-		}
-		return nullptr;
-	}
-
-	const char* const result = &gcodeBuffer[readPointer + 1];
-	readPointer = -1;
-	return result;
+	return InternalGetPossiblyQuotedString(str);
 }
 
 // Get an int32 after a G Code letter
 int32_t GCodeBuffer::GetIValue()
 {
-	if (readPointer < 0)
+	if (readPointer >= 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode int before a search.\n");
+		const int32_t result = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
 		readPointer = -1;
-		return 0;
+		return result;
 	}
-	const int32_t result = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
-	readPointer = -1;
-	return result;
+
+	INTERNAL_ERROR;
+	return 0;
 }
 
-// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave value and seen alone.
+// Get an uint32 after a G Code letter
+uint32_t GCodeBuffer::GetUIValue()
+{
+	if (readPointer >= 0)
+	{
+		const uint32_t result = strtoul(&gcodeBuffer[readPointer + 1], 0, 0);
+		readPointer = -1;
+		return result;
+	}
+
+	INTERNAL_ERROR;
+	return 0;
+}
+
+// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
 void GCodeBuffer::TryGetFValue(char c, float& val, bool& seen)
 {
 	if (Seen(c))
@@ -394,7 +735,7 @@ void GCodeBuffer::TryGetFValue(char c, float& val, bool& seen)
 	}
 }
 
-// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave value and seen alone.
+// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
 void GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen)
 {
 	if (Seen(c))
@@ -402,6 +743,156 @@ void GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen)
 		val = GetIValue();
 		seen = true;
 	}
+}
+
+// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
+void GCodeBuffer::TryGetUIValue(char c, uint32_t& val, bool& seen)
+{
+	if (Seen(c))
+	{
+		val = GetUIValue();
+		seen = true;
+	}
+}
+
+// Try to get a float array exactly 'numVals' long after parameter letter 'c'.
+// If the wrong number of values is provided, generate an error message and return true.
+// Else set 'seen' if we saw the letter and value, and return false.
+bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad)
+{
+	if (Seen(c))
+	{
+		size_t count = numVals;
+		GetFloatArray(vals, count, doPad);
+		if (count == numVals)
+		{
+			seen = true;
+		}
+		else
+		{
+			reply.printf("Wrong number of values after '\''%c'\'', expected %d", c, numVals);
+			return true;
+		}
+	}
+	return false;
+}
+
+// Try to get a quoted string after parameter letter.
+// If we found it then set 'seen' true and return true, else leave 'seen' alone and return false
+bool GCodeBuffer::TryGetQuotedString(char c, const StringRef& str, bool& seen)
+{
+	if (Seen(c) && GetQuotedString(str))
+	{
+		seen = true;
+		return true;
+	}
+	return false;
+}
+
+// Try to get a string, which may be quoted, after parameter letter.
+// If we found it then set 'seen' true and return true, else leave 'seen' alone and return false
+bool GCodeBuffer::TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen)
+{
+	if (Seen(c) && GetPossiblyQuotedString(str))
+	{
+		seen = true;
+		return true;
+	}
+	return false;
+}
+
+// Get an IP address quad after a key letter
+bool GCodeBuffer::GetIPAddress(uint8_t ip[4])
+{
+	if (readPointer < 0)
+	{
+		INTERNAL_ERROR;
+		return false;
+	}
+
+	const char* p = &gcodeBuffer[readPointer + 1];
+	unsigned int n = 0;
+	for (;;)
+	{
+		char *pp;
+		const unsigned long v = strtoul(p, &pp, 10);
+		if (pp == p || v > 255)
+		{
+			readPointer = -1;
+			return false;
+		}
+		ip[n] = (uint8_t)v;
+		++n;
+		p = pp;
+		if (*p != '.')
+		{
+			break;
+		}
+		if (n == 4)
+		{
+			readPointer = -1;
+			return false;
+		}
+		++p;
+	}
+	readPointer = -1;
+	return n == 4;
+}
+
+// Get an IP address quad after a key letter
+bool GCodeBuffer::GetIPAddress(uint32_t& ip)
+{
+	if (readPointer < 0)
+	{
+		INTERNAL_ERROR;
+		return false;
+	}
+
+	uint8_t ipa[4];
+	const bool ok = GetIPAddress(ipa);
+	if (ok)
+	{
+		ip = (uint32_t)ipa[0] | ((uint32_t)ipa[1] << 8) | ((uint32_t)ipa[2] << 16) | ((uint32_t)ipa[3] << 24);
+	}
+	return ok;
+}
+
+// Get a MAX address sextet after a key letter
+bool GCodeBuffer::GetMacAddress(uint8_t mac[6])
+{
+	if (readPointer < 0)
+	{
+		INTERNAL_ERROR;
+		return false;
+	}
+
+	const char* p = &gcodeBuffer[readPointer + 1];
+	unsigned int n = 0;
+	for (;;)
+	{
+		char *pp;
+		const unsigned long v = strtoul(p, &pp, 16);
+		if (pp == p || v > 255)
+		{
+			readPointer = -1;
+			return false;
+		}
+		mac[n] = (uint8_t)v;
+		++n;
+		p = pp;
+		if (*p != ':')
+		{
+			break;
+		}
+		if (n == 6)
+		{
+			readPointer = -1;
+			return false;
+		}
+		++p;
+	}
+	readPointer = -1;
+	return n == 6;
 }
 
 // Get the original machine state before we pushed anything
@@ -432,11 +923,19 @@ bool GCodeBuffer::PushState()
 	GCodeMachineState * const ms = GCodeMachineState::Allocate();
 	ms->previous = machineState;
 	ms->feedrate = machineState->feedrate;
+	ms->fileState.CopyFrom(machineState->fileState);
+	ms->lockedResources = machineState->lockedResources;
 	ms->drivesRelative = machineState->drivesRelative;
 	ms->axesRelative = machineState->axesRelative;
 	ms->doingFileMacro = machineState->doingFileMacro;
-	ms->fileState.CopyFrom(machineState->fileState);
-	ms->lockedResources = machineState->lockedResources;
+	ms->waitWhileCooling = machineState->waitWhileCooling;
+	ms->runningM501 = machineState->runningM501;
+	ms->runningM502 = machineState->runningM502;
+	ms->volumetricExtrusion = false;
+	ms->useMachineCoordinates = false;
+	ms->useMachineCoordinatesSticky = machineState->useMachineCoordinatesSticky || machineState->useMachineCoordinates;
+	ms->messageAcknowledged = false;
+	ms->waitingForAcknowledgement = false;
 	machineState = ms;
 	return true;
 }
@@ -447,6 +946,8 @@ bool GCodeBuffer::PopState()
 	GCodeMachineState * const ms = machineState;
 	if (ms->previous == nullptr)
 	{
+		ms->messageAcknowledged = false;			// avoid getting stuck in a loop trying to pop
+		ms->waitingForAcknowledgement = false;
 		return false;
 	}
 
@@ -455,10 +956,54 @@ bool GCodeBuffer::PopState()
 	return true;
 }
 
+// Abort execution of any files or macros being executed, returning true if any files were closed
+void GCodeBuffer::AbortFile(FileGCodeInput* fileInput)
+{
+	do
+	{
+		if (machineState->fileState.IsLive())
+		{
+			fileInput->Reset(machineState->fileState);
+			machineState->fileState.Close();
+		}
+	} while (PopState());							// abandon any macros
+}
+
 // Return true if this source is executing a file macro
 bool GCodeBuffer::IsDoingFileMacro() const
 {
 	return machineState->doingFileMacro;
+}
+
+// Tell this input source that any message it sent and is waiting on has been acknowledged
+// Allow for the possibility that the source may have started running a macro since it started waiting
+void GCodeBuffer::MessageAcknowledged(bool cancelled)
+{
+	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->previous)
+	{
+		if (ms->waitingForAcknowledgement)
+		{
+			ms->waitingForAcknowledgement = false;
+			ms->messageAcknowledged = true;
+			ms->messageCancelled = cancelled;
+		}
+	}
+}
+
+// Return true if we can queue gcodes from this source
+bool GCodeBuffer::CanQueueCodes() const
+{
+	return queueCodes || machineState->doingFileMacro;		// return true if we queue commands from this source or we are executing a macro
+}
+
+// Write the command to a string
+void GCodeBuffer::PrintCommand(const StringRef& s) const
+{
+	s.printf("%c%d", commandLetter, commandNumber);
+	if (commandFraction >= 0)
+	{
+		s.catf(".%d", commandFraction);
+	}
 }
 
 // End

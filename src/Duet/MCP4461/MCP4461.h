@@ -1,7 +1,7 @@
 #ifndef MCP4461_H
 #define MCP4461_H
 
-#include <inttypes.h>
+#include <cstdint>
 
 #define DEFAULT_ADDRESS 0x2C  //With A0 and A1 grounded
 #define DEFAULT_WIPER_VALUE 0x80  //Default to the wipers in midrange
@@ -32,7 +32,6 @@
 class MCP4461{
 public:
   MCP4461();
-  void begin();
   void setMCP4461Address(uint8_t);
   void setVolatileWiper(uint8_t, uint16_t);
   void setNonVolatileWiper(uint8_t, uint16_t);

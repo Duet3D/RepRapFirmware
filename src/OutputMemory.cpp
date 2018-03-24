@@ -45,7 +45,7 @@ void OutputBuffer::IncreaseReferences(size_t refs)
 size_t OutputBuffer::Length() const
 {
 	size_t totalLength = 0;
-	for(const OutputBuffer *current = this; current != nullptr; current = current->Next())
+	for (const OutputBuffer *current = this; current != nullptr; current = current->Next())
 	{
 		totalLength += current->DataLength();
 	}
@@ -114,6 +114,7 @@ size_t OutputBuffer::catf(const char *fmt, ...)
 	vsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
 	va_end(vargs);
 
+	formatBuffer[ARRAY_UPB(formatBuffer)] = 0;
 	return cat(formatBuffer);
 }
 
@@ -148,54 +149,8 @@ size_t OutputBuffer::copy(const char *src, size_t len)
 		last = this;
 	}
 
-	// Does the whole string fit into this instance?
-	if (len > OUTPUT_BUFFER_SIZE)
-	{
-		// No - copy what we can't write into a new chain
-		OutputBuffer *currentBuffer;
-		size_t bytesCopied = OUTPUT_BUFFER_SIZE;
-		do {
-			if (!Allocate(currentBuffer))
-			{
-				// We cannot store the whole string, stop here
-				break;
-			}
-			currentBuffer->references = references;
-
-			// Fill up the next instance
-			const size_t copyLength = min<size_t>(OUTPUT_BUFFER_SIZE, len - bytesCopied);
-			memcpy(currentBuffer->data, src + bytesCopied, copyLength);
-			currentBuffer->dataLength = copyLength;
-			bytesCopied += copyLength;
-
-			// Link it to the chain
-			if (next == nullptr)
-			{
-				next = last = currentBuffer;
-			}
-			else
-			{
-				last->next = currentBuffer;
-				last = currentBuffer;
-			}
-		} while (bytesCopied < len);
-
-		// Update references to the last entry for all items
-		for(OutputBuffer *item = Next(); item != last; item = item->Next())
-		{
-			item->last = last;
-		}
-
-		// Then copy the rest into this instance
-		memcpy(data, src, OUTPUT_BUFFER_SIZE);
-		dataLength = OUTPUT_BUFFER_SIZE;
-		return bytesCopied;
-	}
-
-	// Yes, the whole string fits into this instance. No need to allocate a new item
-	memcpy(data, src, len);
-	dataLength = len;
-	return len;
+	dataLength = 0;
+	return cat(src, len);
 }
 
 size_t OutputBuffer::cat(const char c)
@@ -235,36 +190,32 @@ size_t OutputBuffer::cat(const char *src)
 
 size_t OutputBuffer::cat(const char *src, size_t len)
 {
-	// Copy what we can into the last buffer
-	size_t copyLength = min<size_t>(len, OUTPUT_BUFFER_SIZE - last->dataLength);
-	memcpy(last->data + last->dataLength, src, copyLength);
-	last->dataLength += copyLength;
-
-	// Is there any more data left?
-	if (len > copyLength)
+	size_t copied = 0;
+	while (copied < len)
 	{
-		// Yes - copy what we couldn't write into a new chain
-		OutputBuffer *nextBuffer;
-		if (!Allocate(nextBuffer))
+		if (last->dataLength == OUTPUT_BUFFER_SIZE)
 		{
-			// We cannot store any more data, stop here
-			return copyLength;
+			// The last buffer is full
+			OutputBuffer *nextBuffer;
+			if (!Allocate(nextBuffer))
+			{
+				// We cannot store any more data, stop here
+				break;
+			}
+			nextBuffer->references = references;
+			last->next = nextBuffer;
+			last = nextBuffer->last;
+			for (OutputBuffer *item = Next(); item != nextBuffer; item = item->Next())
+			{
+				item->last = last;
+			}
 		}
-		nextBuffer->references = references;
-		const size_t bytesCopied = copyLength + nextBuffer->copy(src + copyLength, len - copyLength);
-
-		// Done - now append the new entry to the chain
-		last->next = nextBuffer;
-		last = nextBuffer->last;
-		for(OutputBuffer *item = Next(); item != nextBuffer; item = item->Next())
-		{
-			item->last = last;
-		}
-		return bytesCopied;
+		const size_t copyLength = min<size_t>(len - copied, OUTPUT_BUFFER_SIZE - last->dataLength);
+		memcpy(last->data + last->dataLength, src + copied, copyLength);
+		last->dataLength += copyLength;
+		copied += copyLength;
 	}
-
-	// No more data had to be written, we could store everything
-	return len;
+	return copied;
 }
 
 size_t OutputBuffer::cat(StringRef &str)
@@ -281,13 +232,15 @@ size_t OutputBuffer::EncodeString(const char *src, size_t srcLength, bool allowC
 		bytesWritten += cat('"');
 	}
 
-	size_t srcPointer = 1;
-	char c = *src++;
-	while (srcPointer <= srcLength && c != 0 && (c >= ' ' || allowControlChars))
+	if (srcLength != 0)
 	{
-		char esc;
-		switch (c)
+		size_t srcPointer = 1;
+		char c = *src++;
+		while (srcPointer <= srcLength && c != 0 && (c >= ' ' || allowControlChars))
 		{
+			char esc;
+			switch (c)
+			{
 			case '\r':
 				esc = 'r';
 				break;
@@ -310,20 +263,21 @@ size_t OutputBuffer::EncodeString(const char *src, size_t srcLength, bool allowC
 			default:
 				esc = 0;
 				break;
-		}
+			}
 
-		if (esc != 0)
-		{
-			bytesWritten += cat('\\');
-			bytesWritten += cat(esc);
-		}
-		else
-		{
-			bytesWritten += cat(c);
-		}
+			if (esc != 0)
+			{
+				bytesWritten += cat('\\');
+				bytesWritten += cat(esc);
+			}
+			else
+			{
+				bytesWritten += cat(c);
+			}
 
-		c = *src++;
-		srcPointer++;
+			c = *src++;
+			srcPointer++;
+		}
 	}
 
 	if (encapsulateString)
@@ -331,6 +285,11 @@ size_t OutputBuffer::EncodeString(const char *src, size_t srcLength, bool allowC
 		bytesWritten += cat('"');
 	}
 	return bytesWritten;
+}
+
+size_t OutputBuffer::EncodeString(const StringRef& str, bool allowControlChars, bool encapsulateString)
+{
+	return EncodeString(str.Pointer(), str.Length(), encapsulateString);
 }
 
 size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
@@ -347,11 +306,37 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 	return bytesWritten;
 }
 
+// Write all the data to file, but don't release the buffers
+// Returns true if successful
+bool OutputBuffer::WriteToFile(FileData& f) const
+{
+	bool endedInNewline = false;
+	const OutputBuffer *current = this;
+	do
+	{
+		if (current->dataLength != 0)
+		{
+			if (!f.Write(current->data, current->dataLength))
+			{
+				return false;
+			}
+			endedInNewline = current->data[current->dataLength - 1] == '\n';
+		}
+		current = current->Next();
+	} while (current != nullptr);
+
+	if (!endedInNewline)
+	{
+		return f.Write('\n');
+	}
+	return true;
+}
+
 // Initialise the output buffers manager
 /*static*/ void OutputBuffer::Init()
 {
 	freeOutputBuffers = nullptr;
-	for(size_t i = 0; i < OUTPUT_BUFFER_COUNT; i++)
+	for (size_t i = 0; i < OUTPUT_BUFFER_COUNT; i++)
 	{
 		freeOutputBuffers = new OutputBuffer(freeOutputBuffers);
 	}
@@ -364,7 +349,7 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 
 	if (freeOutputBuffers == nullptr)
 	{
-		reprap.GetPlatform()->LogError(ErrorCode::OutputStarvation);
+		reprap.GetPlatform().LogError(ErrorCode::OutputStarvation);
 		cpu_irq_restore(flags);
 
 		buf = nullptr;
@@ -393,7 +378,7 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 // Get the number of bytes left for continuous writing
 /*static*/ size_t OutputBuffer::GetBytesLeft(const OutputBuffer *writingBuffer)
 {
-	size_t freeOutputBuffers = OUTPUT_BUFFER_COUNT - usedOutputBuffers;
+	const size_t freeOutputBuffers = OUTPUT_BUFFER_COUNT - usedOutputBuffers;
 	if (writingBuffer == nullptr)
 	{
 		// Only return the total number of bytes left
@@ -401,11 +386,11 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 	}
 
 	// We're doing a possibly long response like a filelist
-	size_t bytesLeft = OUTPUT_BUFFER_SIZE - writingBuffer->last->DataLength();
+	const size_t bytesLeft = OUTPUT_BUFFER_SIZE - writingBuffer->last->DataLength();
 
 	if (freeOutputBuffers < RESERVED_OUTPUT_BUFFERS)
 	{
-		// Keep some space left to encapsulate the respones (e.g. via an HTTP header)
+		// Keep some space left to encapsulate the responses (e.g. via an HTTP header)
 		return bytesLeft;
 	}
 
@@ -454,7 +439,7 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 /*static */ OutputBuffer *OutputBuffer::Release(OutputBuffer *buf)
 {
 	const irqflags_t flags = cpu_irq_save();
-	OutputBuffer *nextBuffer = buf->next;
+	OutputBuffer * const nextBuffer = buf->next;
 
 	// If this one is reused by another piece of code, don't free it up
 	if (buf->references > 1)
@@ -484,7 +469,7 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 
 /*static*/ void OutputBuffer::Diagnostics(MessageType mtype)
 {
-	reprap.GetPlatform()->MessageF(mtype, "Used output buffers: %d of %d (%d max)\n",
+	reprap.GetPlatform().MessageF(mtype, "Used output buffers: %d of %d (%d max)\n",
 			usedOutputBuffers, OUTPUT_BUFFER_COUNT, maxUsedOutputBuffers);
 }
 
@@ -497,7 +482,7 @@ void OutputStack::Push(OutputBuffer *buffer)
 	if (count == OUTPUT_STACK_DEPTH)
 	{
 		OutputBuffer::ReleaseAll(buffer);
-		reprap.GetPlatform()->LogError(ErrorCode::OutputStackOverflow);
+		reprap.GetPlatform().LogError(ErrorCode::OutputStackOverflow);
 		return;
 	}
 
@@ -599,7 +584,7 @@ void OutputStack::Append(OutputStack *stack)
 		}
 		else
 		{
-			reprap.GetPlatform()->LogError(ErrorCode::OutputStackOverflow);
+			reprap.GetPlatform().LogError(ErrorCode::OutputStackOverflow);
 			OutputBuffer::ReleaseAll(stack->items[i]);
 		}
 	}
@@ -626,4 +611,4 @@ void OutputStack::ReleaseAll()
 	count = 0;
 }
 
-// vim: ts=4:sw=4
+// End

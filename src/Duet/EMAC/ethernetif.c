@@ -55,8 +55,8 @@
 #include "lwip/src/include/netif/etharp.h"
 #include "lwip/src/include/netif/ppp_oe.h"
 
-#include "emac.h"
-#include "rstc.h"
+#include "emac/emac.h"
+#include "rstc/rstc.h"
 
 #include "ethernet_phy.h"
 #include "ethernetif.h"
@@ -150,10 +150,8 @@ static void low_level_init(struct netif *netif)
 
 	/* device capabilities */
 	/* don't set NETIF_FLAG_ETHARP if this device is not an ethernet one */
+	// The DHCP flag will be set by DHCP client if it is started
 	netif->flags |= NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP
-#if defined(DHCP_USED)
-			| NETIF_FLAG_DHCP
-#endif
 #if LWIP_IGMP
 			| NETIF_FLAG_IGMP
 #endif
@@ -204,8 +202,7 @@ void ethernetif_hardware_init(void)
 	/* Init EMAC driver structure */
 	emac_dev_init(EMAC, &gs_emac_dev, &emac_option);
 
-	/* Set IRQ priority */
-	NVIC_SetPriority(EMAC_IRQn, 4);
+	/* Set IRQ priority is now done in Platform.cpp because it has access to the priority definitions */
 
 	/* Enable Interrupt */
 	NVIC_EnableIRQ(EMAC_IRQn);

@@ -16,15 +16,17 @@
 #include "FOPDT.h"
 #include "TemperatureError.h"
 
-#define NEW_TUNING	(1)
+class HeaterProtection;
 
 class PID
 {
 	enum class HeaterMode : uint8_t
 	{
-		// The order of these is important because we test "mode > HeatingMode::off" to determine whether the heater is active
+		// The order of these is important because we test "mode > HeatingMode::suspended" to determine whether the heater is active
+		// and "mode >= HeatingMode::off" to determine whether the heater is eitehr active or suspended
 		fault,
 		off,
+		suspended,
 		heating,
 		cooling,
 		stable,
@@ -32,59 +34,64 @@ class PID
 		tuning0,
 		tuning1,
 		tuning2,
-#ifdef NEW_TUNING
 		tuning3,
 		lastTuningMode = tuning3
-#else
-		lastTuningMode = tuning2
-#endif
 	};
 
 	static const size_t NumPreviousTemperatures = 4; // How many samples we average the temperature derivative over
 
 public:
 
-	PID(Platform* p, int8_t h);
-	void Init(float pGain, float pTc, float pTd, float tempLimit, bool usePid);	// (Re)Set everything to start
+	PID(Platform& p, int8_t h);
+	void Init(float pGain, float pTc, float pTd, bool usePid, bool inverted);	// (Re)Set everything to start
 	void Reset();
 	void Spin();									// Called in a tight loop to keep things running
 	void SetActiveTemperature(float t);
 	float GetActiveTemperature() const;
 	void SetStandbyTemperature(float t);
 	float GetStandbyTemperature() const;
-	void SetTemperatureLimit(float t);
-	float GetTemperatureLimit() const;
+	void SetHeaterProtection(HeaterProtection *h);
+	float GetHighestTemperatureLimit() const;		// Get the highest temperature limit
+	float GetLowestTemperatureLimit() const;		// Get the lowest temperature limit
 	void Activate();								// Switch from idle to active
 	void Standby();									// Switch from active to idle
 	bool Active() const;							// Are we active?
 	void SwitchOff();								// Not even standby - all heater power off
 	bool SwitchedOff() const;						// Are we switched off?
+	bool CheckProtection() const;					// Check heater protection elements and return true if everything is good
 	bool FaultOccurred() const;						// Has a heater fault occurred?
 	void ResetFault();								// Reset a fault condition - only call this if you know what you are doing
 	float GetTemperature() const;					// Get the current temperature
 	float GetAveragePWM() const;					// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
 	uint32_t GetLastSampleTime() const;				// Return when the temp sensor was last sampled
 	float GetAccumulator() const;					// Return the integral accumulator
-	void StartAutoTune(float targetTemp, float maxPwm, StringRef& reply);	// Start an auto tune cycle for this PID
+	void StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply);	// Start an auto tune cycle for this PID
 	bool IsTuning() const;
-	void GetAutoTuneStatus(StringRef& reply);		// Get the auto tune status or last result
+	void GetAutoTuneStatus(const StringRef& reply);	// Get the auto tune status or last result
 
 	const FopDt& GetModel() const					// Get the process model
 		{ return model; }
 
-	bool SetModel(float gain, float tc, float td, float maxPwm, bool usePid);	// Set the process model
+	bool SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, PwmFrequency pwmFreq);	// Set the process model
+
+	bool IsHeaterSignalInverted() const				// Is the PWM output signal inverted?
+		{ return invertPwmSignal; }
+	void SetHeaterSignalInverted(bool inverted)		// Set PWM output signal inversion
+		{ invertPwmSignal = inverted; }
 
 	bool IsHeaterEnabled() const					// Is this heater enabled?
 		{ return model.IsEnabled(); }
 
-	void GetHeaterProtection(float& pMaxTempExcursion, float& pMaxFaultTime) const
+	void GetFaultDetectionParameters(float& pMaxTempExcursion, float& pMaxFaultTime) const
 		{ pMaxTempExcursion = maxTempExcursion; pMaxFaultTime = maxHeatingFaultTime; }
 
-	void SetHeaterProtection(float pMaxTempExcursion, float pMaxFaultTime)
+	void SetFaultDetectionParameters(float pMaxTempExcursion, float pMaxFaultTime)
 		{ maxTempExcursion = pMaxTempExcursion; maxHeatingFaultTime = pMaxFaultTime; }
 
 	void SetM301PidParameters(const M301PidParameters& params)
 		{ model.SetM301PidParameters(params); }
+
+	void Suspend(bool sus);							// Suspend the heater to conserve power or while doing Z probing
 
 private:
 
@@ -94,21 +101,16 @@ private:
 	void DoTuningStep();							// Called on each temperature sample when auto tuning
 	static bool ReadingsStable(size_t numReadings, float maxDiff)
 		pre(numReadings >= 2; numReadings <= MaxTuningTempReadings);
-#ifdef NEW_TUNING
 	static int GetPeakTempIndex();					// Auto tune helper function
 	static int IdentifyPeak(size_t numToAverage);	// Auto tune helper function
 	void CalculateModel();							// Calculate G, td and tc from the accumulated readings
-#else
-	static size_t GetMaxRateIndex();				// Auto tune helper function
-	void FitCurve();								// Calculate G, td and tc from the accumulated readings
-#endif
 	void DisplayBuffer(const char *intro);			// Debug helper
 	float GetExpectedHeatingRate() const;			// Get the minimum heating rate we expect
 
-	Platform* platform;								// The instance of the class that is the RepRap hardware
+	Platform& platform;								// The instance of the class that is the RepRap hardware
+	HeaterProtection *heaterProtection;				// The first element of assigned heater protection items
 	float activeTemperature;						// The required active temperature
 	float standbyTemperature;						// The required standby temperature
-	float temperatureLimit;							// The maximum allowed temperature for this heater
 	float maxTempExcursion;							// The maximum temperature excursion permitted while maintaining the setpoint
 	float maxHeatingFaultTime;						// How long a heater fault is permitted to persist before a heater fault is raised
 	float temperature;								// The current temperature
@@ -126,6 +128,7 @@ private:
 	int8_t heater;									// The index of our heater
 	uint8_t previousTemperaturesGood;				// Bitmap indicating which previous temperature were good readings
 	HeaterMode mode;								// Current state of the heater
+	bool invertPwmSignal;							// Invert the final PWM output signal (same behaviour as with HEAT_ON in earlier firmware versions)
 	bool active;									// Are we active or standby?
 	bool tuned;										// True if tuning was successful
 	uint8_t badTemperatureCount;					// Count of sequential dud readings
@@ -143,18 +146,11 @@ private:
 	static uint32_t tuningPhaseStartTime;			// when we started the current tuning phase
 	static uint32_t tuningReadingInterval;			// how often we are sampling, in milliseconds
 	static size_t tuningReadingsTaken;				// how many temperature samples we have taken
-
-#ifdef NEW_TUNING
 	static float tuningHeaterOffTemp;				// the temperature when we turned the heater off
 	static float tuningPeakTemperature;				// the peak temperature reached, averaged over 3 readings (so slightly less than the true peak)
 	static uint32_t tuningHeatingTime;				// how long we had the heating on for
 	static uint32_t tuningPeakDelay;				// how many milliseconds the temperature continues to rise after turning the heater off
-#else
-	static float tuningTimeOfFastestRate;			// how long after turn-on the fastest temperature rise occurred
-	static float tuningFastestRate;					// the fastest temperature rise
-#endif
 };
-
 
 
 inline bool PID::Active() const
@@ -170,16 +166,6 @@ inline float PID::GetActiveTemperature() const
 inline float PID::GetStandbyTemperature() const
 {
 	return standbyTemperature;
-}
-
-inline void PID::SetTemperatureLimit(float t)
-{
-	temperatureLimit = t;
-}
-
-inline float PID::GetTemperatureLimit() const
-{
-	return temperatureLimit;
 }
 
 inline float PID::GetTemperature() const

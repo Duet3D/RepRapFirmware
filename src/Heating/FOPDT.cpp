@@ -14,13 +14,13 @@ extern StringRef scratchString;
 // Heater 6 on the Duet 0.8.5 is disabled by default at startup so that we can use fan 2.
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
 FopDt::FopDt()
-	: gain(DefaultHotEndHeaterGain), timeConstant(DefaultHotEndHeaterTimeConstant), deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0),
-	  enabled(false), usePid(true), pidParametersOverridden(false)
+	: gain(DefaultHotEndHeaterGain), timeConstant(DefaultHotEndHeaterTimeConstant), deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0), standardVoltage(0.0), pwmFreq(0),
+	  enabled(false), usePid(true), inverted(false), pidParametersOverridden(false)
 {
 }
 
 // Check the model parameters are sensible, if they are then save them and return true.
-bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, bool pUsePid)
+bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted, PwmFrequency pPwmFreq)
 {
 	if (pg == -1.0 && ptc == -1.0 && pdt == -1.0)
 	{
@@ -29,14 +29,19 @@ bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, bool pU
 		return true;
 	}
 
-	if (pg > 10.0 && pg < 1500.0 && pdt > 0.1 && ptc > 2 * pdt && pMaxPwm > 0.2 && pMaxPwm <= 1.0)
+	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
+	const float maxGain = max<float>(1500.0, temperatureLimit + 500.0);
+	if (pg > 10.0 && pg <= maxGain && pdt > 0.099 && ptc >= 2 * pdt && pMaxPwm > 0.0099 && pMaxPwm <= 1.0)
 	{
 		gain = pg;
 		timeConstant = ptc;
 		deadTime = pdt;
 		maxPwm = pMaxPwm;
+		standardVoltage = pVoltage;
 		usePid = pUsePid;
+		inverted = pInverted;
 		enabled = true;
+		pwmFreq = pPwmFreq;
 		CalcPidConstants();
 		return true;
 	}
@@ -67,12 +72,13 @@ void FopDt::SetM301PidParameters(const M301PidParameters& pp)
 // Write the model parameters to file returning true if no error
 bool FopDt::WriteParameters(FileStore *f, size_t heater) const
 {
-	scratchString.printf("M307 H%u A%.1f C%.1f D%.1f S%.2f B%d\n", heater, gain, timeConstant, deadTime, maxPwm, (usePid) ? 0 : 1);
+	scratchString.printf("M307 H%u A%.1f C%.1f D%.1f S%.2f V%.1f B%d\n",
+							heater, (double)gain, (double)timeConstant, (double)deadTime, (double)maxPwm, (double)standardVoltage, (usePid) ? 0 : 1);
 	bool ok = f->Write(scratchString.Pointer());
 	if (ok && pidParametersOverridden)
 	{
 		const M301PidParameters pp = GetM301PidParameters(false);
-		scratchString.printf("M301 H%u P%.1f I%.3f D%.1f\n", heater, pp.kP, pp.kI, pp.kD);
+		scratchString.printf("M301 H%u P%.1f I%.3f D%.1f\n", heater, (double)pp.kP, (double)pp.kI, (double)pp.kD);
 		ok = f->Write(scratchString.Pointer());
 	}
 	return ok;
@@ -112,12 +118,11 @@ void FopDt::CalcPidConstants()
 {
 	const float timeFrac = deadTime/timeConstant;
 	loadChangeParams.kP = 0.7/(gain * timeFrac);
-//	loadChangeParams.recipTi = 1.0/(deadTime * 2.0);										// Ti = 2 * deadTime (this is what we used in version 1.15c)
-	loadChangeParams.recipTi = (1.0/1.14)/(pow(timeConstant, 0.25) * pow(deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
+	loadChangeParams.recipTi = (1.0/1.14)/(powf(timeConstant, 0.25) * powf(deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
 	loadChangeParams.tD = deadTime * 0.7;
 
 	setpointChangeParams.kP = 0.7/(gain * timeFrac);
-	setpointChangeParams.recipTi = 1.0/timeConstant;										// Ti = time constant
+	setpointChangeParams.recipTi = 1.0/(powf(timeConstant, 0.5) * powf(deadTime, 0.5));			// Ti = timeConstant^0.5 * deadTime^0.5
 	setpointChangeParams.tD = deadTime * 0.7;
 
 	pidParametersOverridden = false;

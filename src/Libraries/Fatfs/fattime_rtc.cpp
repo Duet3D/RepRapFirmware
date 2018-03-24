@@ -65,15 +65,15 @@
  */
 extern "C" uint32_t get_fattime()
 {
-	Platform *platform = reprap.GetPlatform();
-	if (!platform->IsDateTimeSet())
+	const Platform& platform = reprap.GetPlatform();
+	if (!platform.IsDateTimeSet())
 	{
 		// Date and time have not been set, return default timestamp instead
 		return 0x210001;
 	}
 
 	// Retrieve current date and time from RTC
-	time_t timeNow = platform->GetDateTime();
+	time_t timeNow = platform.GetDateTime();
 	struct tm timeInfo;
 	gmtime_r(&timeNow, &timeInfo);
 

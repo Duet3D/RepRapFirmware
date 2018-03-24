@@ -1,26 +1,65 @@
 #include "RepRap.h"
 
-#include "Network.h"
 #include "Movement/Move.h"
 #include "GCodes/GCodes.h"
 #include "Heating/Heat.h"
+#include "Network.h"
 #include "Platform.h"
+#include "Scanner.h"
 #include "PrintMonitor.h"
-#include "Tool.h"
-#include "Webserver.h"
+#include "Tools/Tool.h"
+#include "Tools/Filament.h"
 #include "Version.h"
 
-#ifndef __RADDS__
+#ifdef DUET_NG
+# include "DueXn.h"
+#endif
+
+#if SUPPORT_IOBITS
+# include "PortControl.h"
+#endif
+
+#if SUPPORT_12864_LCD
+# include "Display/Display.h"
+#endif
+
+#if HAS_HIGH_SPEED_SD
 # include "sam/drivers/hsmci/hsmci.h"
 #endif
 
 // Callback function from the hsmci driver, called while it is waiting for an SD card operation to complete
 extern "C" void hsmciIdle()
 {
-	if (reprap.GetSpinningModule() != moduleNetwork)	// I don't think this should ever be false because the Network module doesn't do file access, but just in case...
+	if (reprap.GetSpinningModule() != moduleNetwork)
 	{
-		reprap.GetNetwork()->Spin(false);
+		reprap.GetNetwork().Spin(false);
 	}
+
+#if SUPPORT_IOBITS
+	if (reprap.GetSpinningModule() != modulePortControl)
+	{
+		reprap.GetPortControl().Spin(false);
+	}
+#endif
+
+#ifdef DUET_NG
+	if (reprap.GetSpinningModule() != moduleDuetExpansion)
+	{
+		DuetExpansion::Spin(false);
+	}
+#endif
+
+	if (reprap.GetSpinningModule() != moduleFilamentSensors)
+	{
+		FilamentMonitor::Spin(false);
+	}
+
+#if SUPPORT_12864_LCD
+	if (reprap.GetSpinningModule() != moduleDisplay)
+	{
+		reprap.GetDisplay().Spin(false);
+	}
+#endif
 }
 
 // RepRap member functions.
@@ -29,24 +68,32 @@ extern "C" void hsmciIdle()
 
 RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
 	activeToolHeaters(0), ticksInSpinState(0), spinningModule(noModule), debug(0), stopped(false),
-	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0)
+	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0),
+	displayMessageBox(false), boxSeq(0)
 {
 	OutputBuffer::Init();
 	platform = new Platform();
-	network = new Network(platform);
-	webserver = new Webserver(platform, network);
-	gCodes = new GCodes(platform, webserver);
-	move = new Move(platform, gCodes);
-	heat = new Heat(platform);
+	network = new Network(*platform);
+	gCodes = new GCodes(*platform);
+	move = new Move();
+	heat = new Heat(*platform);
 
 #if SUPPORT_ROLAND
-	roland = new Roland(platform);
+	roland = new Roland(*platform);
+#endif
+#if SUPPORT_SCANNER
+	scanner = new Scanner(*platform);
+#endif
+#if SUPPORT_IOBITS
+	portControl = new PortControl();
+#endif
+#if SUPPORT_12864_LCD
+ 	display = new Display();
 #endif
 
-	printMonitor = new PrintMonitor(platform, gCodes);
+	printMonitor = new PrintMonitor(*platform, *gCodes);
 
 	SetPassword(DEFAULT_PASSWORD);
-	SetName(DEFAULT_NAME);
 	message[0] = 0;
 }
 
@@ -54,30 +101,38 @@ void RepRap::Init()
 {
 	// All of the following init functions must execute reasonably quickly before the watchdog times us out
 	platform->Init();
-	gCodes->Init();
 	network->Init();
-	webserver->Init();
+	SetName(DEFAULT_MACHINE_NAME);		// network must be initialised before calling this because this calls SetHostName
+	gCodes->Init();
 	move->Init();
 	heat->Init();
 #if SUPPORT_ROLAND
 	roland->Init();
 #endif
+#if SUPPORT_SCANNER
+	scanner->Init();
+#endif
+#if SUPPORT_IOBITS
+	portControl->Init();
+#endif
 	printMonitor->Init();
-	Platform::EnableWatchdog();		// do this after all init calls are made
-	active = true;					// must do this before we start the network, else the watchdog may time out
+#if SUPPORT_12864_LCD
+ 	display->Init();
+#endif
+	active = true;						// must do this before we start the network, else the watchdog may time out
 
-	platform->MessageF(HOST_MESSAGE, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
+	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
 	// Run the configuration file
 	const char *configFile = platform->GetConfigFile();
-	platform->Message(HOST_MESSAGE, "\nExecuting ");
+	platform->Message(UsbMessage, "\nExecuting ");
 	if (platform->GetMassStorage()->FileExists(platform->GetSysDir(), configFile))
 	{
-		platform->MessageF(HOST_MESSAGE, "%s...", platform->GetConfigFile());
+		platform->MessageF(UsbMessage, "%s...", platform->GetConfigFile());
 	}
 	else
 	{
-		platform->MessageF(HOST_MESSAGE, "%s (no configuration file found)...", platform->GetDefaultFile());
+		platform->MessageF(UsbMessage, "%s (no configuration file found)...", platform->GetDefaultFile());
 		configFile = platform->GetDefaultFile();
 	}
 
@@ -85,42 +140,48 @@ void RepRap::Init()
 	{
 		while (gCodes->IsDaemonBusy())
 		{
-			// GCodes::Spin will read the macro and ensure DoingFileMacro returns false when it's done
+			// GCodes::Spin will read the macro and ensure IsDaemonBusy returns false when it's done
 			Spin();
 		}
-		platform->Message(HOST_MESSAGE, "Done!\n");
+		platform->Message(UsbMessage, "Done!\n");
 	}
 	else
 	{
-		platform->Message(HOST_MESSAGE, "Error, not found\n");
+		platform->Message(UsbMessage, "Error, not found\n");
 	}
 	processingConfig = false;
 
 	// Enable network (unless it's disabled)
 	network->Activate();			// Need to do this here, as the configuration GCodes may set IP address etc.
-	if (!network->IsEnabled())
-	{
-		platform->Message(HOST_MESSAGE, "Network disabled.\n");
-	}
 
-#ifndef __RADDS__
+#if HAS_HIGH_SPEED_SD
 	hsmci_set_idle_func(hsmciIdle);
 #endif
-	platform->MessageF(HOST_MESSAGE, "%s is up and running.\n", FIRMWARE_NAME);
-	fastLoop = FLT_MAX;
-	slowLoop = 0.0;
-	lastTime = platform->Time();
+	platform->MessageF(UsbMessage, "%s is up and running.\n", FIRMWARE_NAME);
+	fastLoop = UINT32_MAX;
+	slowLoop = 0;
+	lastTime = micros();
 }
 
 void RepRap::Exit()
 {
+#if HAS_HIGH_SPEED_SD
+	hsmci_set_idle_func(nullptr);
+#endif
 	active = false;
 	heat->Exit();
 	move->Exit();
 	gCodes->Exit();
-	webserver->Exit();
+#if SUPPORT_SCANNER
+	scanner->Exit();
+#endif
+#if SUPPORT_IOBITS
+	portControl->Exit();
+#endif
+#if SUPPORT_12864_LCD
+ 	display->Exit();
+#endif
 	network->Exit();
-	platform->Message(GENERIC_MESSAGE, "RepRap class exited.\n");
 	platform->Exit();
 }
 
@@ -129,42 +190,69 @@ void RepRap::Spin()
 	if(!active)
 		return;
 
-	spinningModule = modulePlatform;
 	ticksInSpinState = 0;
+	spinningModule = modulePlatform;
 	platform->Spin();
 
-	spinningModule = moduleNetwork;
 	ticksInSpinState = 0;
+	spinningModule = moduleNetwork;
 	network->Spin(true);
 
+	ticksInSpinState = 0;
 	spinningModule = moduleWebserver;
-	ticksInSpinState = 0;
-	webserver->Spin();
 
-	spinningModule = moduleGcodes;
 	ticksInSpinState = 0;
+	spinningModule = moduleGcodes;
 	gCodes->Spin();
 
-	spinningModule = moduleMove;
 	ticksInSpinState = 0;
+	spinningModule = moduleMove;
 	move->Spin();
 
-	spinningModule = moduleHeat;
 	ticksInSpinState = 0;
+	spinningModule = moduleHeat;
 	heat->Spin();
 
 #if SUPPORT_ROLAND
-	spinningModule = moduleRoland;
 	ticksInSpinState = 0;
+	spinningModule = moduleRoland;
 	roland->Spin();
 #endif
 
-	spinningModule = modulePrintMonitor;
+#if SUPPORT_SCANNER
 	ticksInSpinState = 0;
+	spinningModule = moduleScanner;
+	scanner->Spin();
+#endif
+
+#if SUPPORT_IOBITS
+	ticksInSpinState = 0;
+	spinningModule = modulePortControl;
+	portControl->Spin(true);
+#endif
+
+	ticksInSpinState = 0;
+	spinningModule = modulePrintMonitor;
 	printMonitor->Spin();
 
-	spinningModule = noModule;
+#ifdef DUET_NG
 	ticksInSpinState = 0;
+	spinningModule = moduleDuetExpansion;
+	DuetExpansion::Spin(true);
+#endif
+
+	ticksInSpinState = 0;
+	spinningModule = moduleFilamentSensors;
+	FilamentMonitor::Spin(true);
+
+#if SUPPORT_12864_LCD
+	ticksInSpinState = 0;
+	spinningModule = moduleDisplay;
+	display->Spin(true);
+#endif
+
+	ticksInSpinState = 0;
+	spinningModule = noModule;
 
 	// Check if we need to display a cold extrusion warning
 	const uint32_t now = millis();
@@ -174,15 +262,15 @@ void RepRap::Spin()
 		{
 			if (t->DisplayColdExtrudeWarning())
 			{
-				platform->MessageF(GENERIC_MESSAGE, "Warning: Tool %d was not driven because its heater temperatures were not high enough or it has a heater fault\n", t->myNumber);
+				platform->MessageF(WarningMessage, "Tool %d was not driven because its heater temperatures were not high enough or it has a heater fault\n", t->myNumber);
 				lastWarningMillis = now;
 			}
 		}
 	}
 
 	// Keep track of the loop time
-	const float t = platform->Time();
-	const float dt = t - lastTime;
+	const uint32_t t = micros();
+	const uint32_t dt = t - lastTime;
 	if (dt < fastLoop)
 	{
 		fastLoop = dt;
@@ -196,9 +284,9 @@ void RepRap::Spin()
 
 void RepRap::Timing(MessageType mtype)
 {
-	platform->MessageF(mtype, "Slowest main loop (seconds): %f; fastest: %f\n", slowLoop, fastLoop);
-	fastLoop = FLT_MAX;
-	slowLoop = 0.0;
+	platform->MessageF(mtype, "Slowest main loop (seconds): %f; fastest: %f\n", (double)(slowLoop * 0.000001), (double)(fastLoop * 0.000001));
+	fastLoop = UINT32_MAX;
+	slowLoop = 0;
 }
 
 void RepRap::Diagnostics(MessageType mtype)
@@ -210,7 +298,10 @@ void RepRap::Diagnostics(MessageType mtype)
 	heat->Diagnostics(mtype);
 	gCodes->Diagnostics(mtype);
 	network->Diagnostics(mtype);
-	webserver->Diagnostics(mtype);
+	FilamentMonitor::Diagnostics(mtype);
+#ifdef DUET_NG
+	DuetExpansion::Diagnostics(mtype);
+#endif
 }
 
 // Turn off the heaters, disable the motors, and deactivate the Heat and Move classes. Leave everything else working.
@@ -229,32 +320,33 @@ void RepRap::EmergencyStop()
 	}
 
 	heat->Exit();
-	for(size_t heater = 0; heater < HEATERS; heater++)
+	for (size_t heater = 0; heater < Heaters; heater++)
 	{
 		platform->SetHeater(heater, 0.0);
 	}
 
 	// We do this twice, to avoid an interrupt switching a drive back on. move->Exit() should prevent interrupts doing this.
-	for(int i = 0; i < 2; i++)
+	for (int i = 0; i < 2; i++)
 	{
 		move->Exit();
-		for(size_t drive = 0; drive < DRIVES; drive++)
-		{
-			platform->SetMotorCurrent(drive, 0.0, false);
-			platform->DisableDrive(drive);
-		}
+		platform->DisableAllDrives();
 	}
+
+	platform->StopLogging();
 }
 
 void RepRap::SetDebug(Module m, bool enable)
 {
-	if (enable)
+	if (m < numModules)
 	{
-		debug |= (1 << m);
-	}
-	else
-	{
-		debug &= ~(1 << m);
+		if (enable)
+		{
+			debug |= (1u << m);
+		}
+		else
+		{
+			debug &= ~(1u << m);
+		}
 	}
 	PrintDebug();
 }
@@ -266,30 +358,24 @@ void RepRap::SetDebug(bool enable)
 
 void RepRap::PrintDebug()
 {
-	if (debug != 0)
+	platform->Message(GenericMessage, "Debugging enabled for modules:");
+	for (size_t i = 0; i < numModules; i++)
 	{
-		platform->Message(GENERIC_MESSAGE, "Debugging enabled for modules:");
-		for (size_t i = 0; i < numModules; i++)
+		if ((debug & (1u << i)) != 0)
 		{
-			if ((debug & (1 << i)) != 0)
-			{
-				platform->MessageF(GENERIC_MESSAGE, " %s(%u)", moduleName[i], i);
-			}
+			platform->MessageF(GenericMessage, " %s(%u)", moduleName[i], i);
 		}
-		platform->Message(GENERIC_MESSAGE, "\nDebugging disabled for modules:");
-		for (size_t i = 0; i < numModules; i++)
-		{
-			if ((debug & (1 << i)) == 0)
-			{
-				platform->MessageF(GENERIC_MESSAGE, " %s(%u)", moduleName[i], i);
-			}
-		}
-		platform->Message(GENERIC_MESSAGE, "\n");
 	}
-	else
+
+	platform->Message(GenericMessage, "\nDebugging disabled for modules:");
+	for (size_t i = 0; i < numModules; i++)
 	{
-		platform->Message(GENERIC_MESSAGE, "Debugging disabled\n");
+		if ((debug & (1u << i)) == 0)
+		{
+			platform->MessageF(GenericMessage, " %s(%u)", moduleName[i], i);
+		}
 	}
+	platform->Message(GenericMessage, "\n");
 }
 
 // Add a tool.
@@ -319,13 +405,13 @@ void RepRap::DeleteTool(Tool* tool)
 	// Deselect it if necessary
 	if (GetCurrentTool() == tool)
 	{
-		SelectTool(-1);
+		SelectTool(-1, false);
 	}
 
-	// Switch off any associated heater
+	// Switch off any associated heater and remove heater references
 	for (size_t i = 0; i < tool->HeaterCount(); i++)
 	{
-		reprap.GetHeat()->SwitchOff(tool->Heater(i));
+		heat->SwitchOff(tool->Heater(i));
 	}
 
 	// Purge any references to this tool
@@ -350,32 +436,27 @@ void RepRap::DeleteTool(Tool* tool)
 	platform->UpdateConfiguredHeaters();
 }
 
-void RepRap::SelectTool(int toolNumber)
+// Select the specified tool, putting the existing current tool into standby
+void RepRap::SelectTool(int toolNumber, bool simulating)
 {
-	Tool* tool = toolList;
-
-	while(tool != nullptr)
+	Tool* const newTool = GetTool(toolNumber);
+	if (!simulating)
 	{
-		if (tool->Number() == toolNumber)
+		if (currentTool != nullptr && currentTool != newTool)
 		{
-			tool->Activate(currentTool);
-			currentTool = tool;
-			return;
+			currentTool->Standby();
 		}
-		tool = tool->Next();
+		if (newTool != nullptr)
+		{
+			newTool->Activate();
+		}
 	}
-
-	// Selecting a non-existent tool is valid.  It sets them all to standby.
-	if (currentTool != nullptr)
-	{
-		StandbyTool(currentTool->Number());
-	}
-	currentTool = nullptr;
+	currentTool = newTool;
 }
 
-void RepRap::PrintTool(int toolNumber, StringRef& reply) const
+void RepRap::PrintTool(int toolNumber, const StringRef& reply) const
 {
-	Tool* tool = GetTool(toolNumber);
+	const Tool* const tool = GetTool(toolNumber);
 	if (tool != nullptr)
 	{
 		tool->Print(reply);
@@ -386,20 +467,23 @@ void RepRap::PrintTool(int toolNumber, StringRef& reply) const
 	}
 }
 
-void RepRap::StandbyTool(int toolNumber)
+void RepRap::StandbyTool(int toolNumber, bool simulating)
 {
-	Tool* tool = GetTool(toolNumber);
+	Tool* const tool = GetTool(toolNumber);
 	if (tool != nullptr)
 	{
-		tool->Standby();
-		if (currentTool == tool)
+		if (!simulating)
+		{
+			tool->Standby();
+		}
+  		if (currentTool == tool)
 		{
 			currentTool = nullptr;
 		}
 	}
 	else
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Error: Attempt to standby a non-existent tool: %d.\n", toolNumber);
+		platform->MessageF(ErrorMessage, "Attempt to standby a non-existent tool: %d.\n", toolNumber);
 	}
 }
 
@@ -415,6 +499,12 @@ Tool* RepRap::GetTool(int toolNumber) const
 		tool = tool->Next();
 	}
 	return nullptr; // Not an error
+}
+
+// Return the current tool number, or -1 if no tool selected
+int RepRap::GetCurrentToolNumber() const
+{
+	return (currentTool == nullptr) ? -1 : currentTool->Number();
 }
 
 // Get the current tool, or failing that the default tool. May return nullptr if we can't
@@ -434,15 +524,15 @@ void RepRap::SetToolVariables(int toolNumber, const float* standbyTemperatures, 
 	}
 	else
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Error: Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
+		platform->MessageF(ErrorMessage, "Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
 	}
 }
 
 bool RepRap::IsHeaterAssignedToTool(int8_t heater) const
 {
-	for(Tool *tool = toolList; tool != nullptr; tool = tool->Next())
+	for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 	{
-		for(size_t i = 0; i < tool->HeaterCount(); i++)
+		for (size_t i = 0; i < tool->HeaterCount(); i++)
 		{
 			if (tool->Heater(i) == heater)
 			{
@@ -471,22 +561,30 @@ void RepRap::Tick()
 	{
 		platform->Tick();
 		++ticksInSpinState;
-		if (ticksInSpinState >= 20000)	// if we stall for 20 seconds, save diagnostic data and reset
+		if (ticksInSpinState >= MaxTicksInSpinState)	// if we stall for 20 seconds, save diagnostic data and reset
 		{
 			resetting = true;
-			for(size_t i = 0; i < HEATERS; i++)
+			for (size_t i = 0; i < Heaters; i++)
 			{
 				platform->SetHeater(i, 0.0);
 			}
-			for(size_t i = 0; i < DRIVES; i++)
+			for (size_t i = 0; i < DRIVES; i++)
 			{
 				platform->DisableDrive(i);
 				// We can't set motor currents to 0 here because that requires interrupts to be working, and we are in an ISR
 			}
 
-			platform->SoftwareReset((uint16_t)SoftwareResetReason::stuckInSpin);
+			// We now save the stack when we get stuck in a spin loop
+			register const uint32_t * stackPtr asm ("sp");
+			platform->SoftwareReset((uint16_t)SoftwareResetReason::stuckInSpin, stackPtr + 5);
 		}
 	}
+}
+
+// Return true if we are close to timeout
+bool RepRap::SpinTimeoutImminent() const
+{
+	return ticksInSpinState >= HighTicksInSpinState;
 }
 
 // Get the JSON status response for the web server (or later for the M105 command).
@@ -508,9 +606,35 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	response->printf("{\"status\":\"%c\",\"coords\":{", ch);
 
 	// Coordinates
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	const size_t numVisibleAxes = gCodes->GetVisibleAxes();
+	// Homed axes
+	response->cat("\"axesHomed\":");
+	ch = '[';
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		float liveCoordinates[DRIVES + 1];
+		response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
+		ch = ',';
+	}
+
+	// XYZ positions
+	// Coordinates may be NaNs or infinities, for example when delta or SCARA homing fails. We must replace any NaNs or infinities to avoid JSON parsing errors.
+	// Ideally we would report "unknown" or similar for axis positions that are not known because we haven't homed them, but that requires changes to both DWC and PanelDue.
+	// So we report 9999.9 instead.
+
+	// First the user coordinates
+	response->cat("],\"xyz\":");
+	const float * const userPos = gCodes->GetUserPosition();
+	ch = '[';
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
+	{
+		const float coord = userPos[axis];
+		response->catf("%c%.3f", ch, (double)((std::isnan(coord) || std::isinf(coord)) ? 9999.9 : coord));
+		ch = ',';
+	}
+
+	// Now the machine coordinates and the extruder coordinates
+	{
+		float liveCoordinates[DRIVES];
 #if SUPPORT_ROLAND
 		if (roland->Active())
 		{
@@ -519,75 +643,55 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		else
 #endif
 		{
-			move->LiveCoordinates(liveCoordinates, GetCurrentXAxes());
+			move->LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
 		}
 
-		if (currentTool != nullptr)
-		{
-			const float *offset = currentTool->GetOffset();
-			for (size_t i = 0; i < numAxes; ++i)
-			{
-				liveCoordinates[i] += offset[i];
-			}
-		}
-
-		// Homed axes
-		response->cat("\"axesHomed\":");
+		// Machine coordinates
+		response->catf("],\"machine\":");		// announce the machine position
 		ch = '[';
-		for (size_t axis = 0; axis < numAxes; ++axis)
+		for (size_t drive = 0; drive < numVisibleAxes; drive++)
 		{
-			response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
+			response->catf("%c%.3f", ch, (double)liveCoordinates[drive]);
 			ch = ',';
 		}
 
 		// Actual and theoretical extruder positions since power up, last G92 or last M23
-		response->catf("],\"extr\":");		// announce actual extruder positions
+		response->catf("],\"extr\":");			// announce actual extruder positions
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
-			response->catf("%c%.1f", ch, liveCoordinates[numAxes + extruder]);
+			response->catf("%c%.1f", ch, (double)liveCoordinates[gCodes->GetTotalAxes() + extruder]);
 			ch = ',';
 		}
-		if (ch == '[')
+		if (ch == '[')							// we may have no extruders
 		{
 			response->cat(ch);
-		}
-
-		// XYZ positions
-		response->cat("],\"xyz\":");
-		if (!gCodes->AllAxesAreHomed() && move->IsDeltaMode())
-		{
-			// If in Delta mode, skip these coordinates if some axes are not homed
-			response->cat("[0.00,0.00,0.00");
-		}
-		else
-		{
-			// On Cartesian printers, the live coordinates are (usually) valid
-			ch = '[';
-			for (size_t axis = 0; axis < numAxes; axis++)
-			{
-				response->catf("%c%.3f", ch, liveCoordinates[axis]);
-				ch = ',';
-			}
 		}
 	}
 
 	// Current tool number
-	const int toolNumber = (currentTool == nullptr) ? -1 : currentTool->Number();
-	response->catf("]},\"currentTool\":%d", toolNumber);
+	response->catf("]},\"currentTool\":%d", GetCurrentToolNumber());
 
-	// Output - only reported once
+	// Output notifications
 	{
-		bool sendBeep = (beepDuration != 0 && beepFrequency != 0);
-		bool sendMessage = (message[0] != 0);
-		if (sendBeep || sendMessage)
+		const bool sendBeep = ((source == ResponseSource::AUX || !platform->HaveAux()) && beepDuration != 0 && beepFrequency != 0);
+		const bool sendMessage = (message[0] != 0);
+
+		float timeLeft = 0.0;
+		if (displayMessageBox && boxTimer != 0)
+		{
+			timeLeft = (float)(boxTimeout) / 1000.0 - (float)(millis() - boxTimer) / 1000.0;
+			displayMessageBox = (timeLeft > 0.0);
+		}
+
+		if (sendBeep || sendMessage || displayMessageBox)
 		{
 			response->cat(",\"output\":{");
 
 			// Report beep values
 			if (sendBeep)
 			{
-				response->catf("\"beepDuration\":%d,\"beepFrequency\":%d", beepDuration, beepFrequency);
+				response->catf("\"beepDuration\":%u,\"beepFrequency\":%u", beepDuration, beepFrequency);
 				if (sendMessage)
 				{
 					response->cat(",");
@@ -600,7 +704,21 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			{
 				response->cat("\"message\":");
 				response->EncodeString(message, ARRAY_SIZE(message), false);
+				if (displayMessageBox)
+				{
+					response->cat(",");
+				}
 				message[0] = 0;
+			}
+
+			// Report message box
+			if (displayMessageBox)
+			{
+				response->cat("\"msgBox\":{\"msg\":");
+				response->EncodeString(boxMessage.c_str(), boxMessage.MaxLength(), false);
+				response->cat(",\"title\":");
+				response->EncodeString(boxTitle.c_str(), boxTitle.MaxLength(), false);
+				response->catf(",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%" PRIu32 "}", boxMode, boxSeq, (double)timeLeft, boxControls);
 			}
 			response->cat("}");
 		}
@@ -616,29 +734,26 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for(size_t i = 0; i < NUM_FANS; i++)
 		{
-			response->catf("%c%.2f", ch, platform->GetFanValue(i) * 100.0);
+			response->catf("%c%.2f", ch, (double)(platform->GetFanValue(i) * 100.0));
 			ch = ',';
 		}
 
 		// Speed and Extrusion factors
-		response->catf("],\"speedFactor\":%.2f,\"extrFactors\":", gCodes->GetSpeedFactor() * 100.0);
+		response->catf("],\"speedFactor\":%.2f,\"extrFactors\":", (double)(gCodes->GetSpeedFactor() * 100.0));
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
-			response->catf("%c%.2f", ch, gCodes->GetExtrusionFactor(extruder) * 100.0);
+			response->catf("%c%.2f", ch, (double)(gCodes->GetExtrusionFactor(extruder) * 100.0));
 			ch = ',';
 		}
 		response->cat((ch == '[') ? "[]" : "]");
-		response->catf(",\"babystep\":%.03f}", gCodes->GetBabyStepOffset());
+		response->catf(",\"babystep\":%.03f}", (double)gCodes->GetBabyStepOffset());
 	}
 
-	// G-code reply sequence for webserver (seqence number for AUX is handled later)
+	// G-code reply sequence for webserver (sequence number for AUX is handled later)
 	if (source == ResponseSource::HTTP)
 	{
-		response->catf(",\"seq\":%d", webserver->GetReplySeq());
-
-		// There currently appears to be no need for this one, so skip it
-		//response->catf(",\"buff\":%u", webserver->GetGCodeBufferSpace(WebSource::HTTP));
+		response->catf(",\"seq\":%" PRIu32, network->GetHttpReplySeq());
 	}
 
 	/* Sensors */
@@ -670,100 +785,208 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->cat(",\"temps\":{");
 
 		/* Bed */
-		const int8_t bedHeater = heat->GetBedHeater();
+		const int8_t bedHeater = (NumBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
 		if (bedHeater != -1)
 		{
-			response->catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d},",
-					heat->GetTemperature(bedHeater), heat->GetActiveTemperature(bedHeater),
-					heat->GetStatus(bedHeater));
+			response->catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
+				(double)heat->GetTemperature(bedHeater), (double)heat->GetActiveTemperature(bedHeater),
+					heat->GetStatus(bedHeater), bedHeater);
 		}
 
 		/* Chamber */
-		const int8_t chamberHeater = heat->GetChamberHeater();
+		const int8_t chamberHeater = (NumChamberHeaters > 0) ? heat->GetChamberHeater(0) : -1;
 		if (chamberHeater != -1)
 		{
-			response->catf("\"chamber\":{\"current\":%.1f,", heat->GetTemperature(chamberHeater));
-			response->catf("\"active\":%.1f,", heat->GetActiveTemperature(chamberHeater));
-			response->catf("\"state\":%d},", static_cast<int>(heat->GetStatus(chamberHeater)));
+			response->catf("\"chamber\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
+				(double)heat->GetTemperature(chamberHeater), (double)heat->GetActiveTemperature(chamberHeater),
+					heat->GetStatus(chamberHeater), chamberHeater);
 		}
 
-		/* Heads */
+		/* Cabinet */
+		const int8_t cabinetHeater = (NumChamberHeaters > 1) ? heat->GetChamberHeater(1) : -1;
+		if (cabinetHeater != -1)
 		{
-			response->cat("\"heads\":{\"current\":");
-
-			// Current temperatures
-			ch = '[';
-			for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
-			{
-				response->catf("%c%.1f", ch, heat->GetTemperature(heater));
-				ch = ',';
-			}
-			response->cat((ch == '[') ? "[]" : "]");
-
-			// Active temperatures
-			response->catf(",\"active\":");
-			ch = '[';
-			for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
-			{
-				response->catf("%c%.1f", ch, heat->GetActiveTemperature(heater));
-				ch = ',';
-			}
-			response->cat((ch == '[') ? "[]" : "]");
-
-			// Standby temperatures
-			response->catf(",\"standby\":");
-			ch = '[';
-			for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
-			{
-				response->catf("%c%.1f", ch, heat->GetStandbyTemperature(heater));
-				ch = ',';
-			}
-			response->cat((ch == '[') ? "[]" : "]");
-
-			// Heater statuses (0=off, 1=standby, 2=active, 3=fault)
-			response->cat(",\"state\":");
-			ch = '[';
-			for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
-			{
-				response->catf("%c%d", ch, static_cast<int>(heat->GetStatus(heater)));
-				ch = ',';
-			}
-			response->cat((ch == '[') ? "[]" : "]");
+			response->catf("\"cabinet\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
+				(double)heat->GetTemperature(cabinetHeater), (double)heat->GetActiveTemperature(cabinetHeater),
+					heat->GetStatus(cabinetHeater), cabinetHeater);
 		}
-		response->cat("}}");
+
+		/* Heaters */
+
+		// Current temperatures
+		response->cat("\"current\":");
+		ch = '[';
+		for (size_t heater = 0; heater < Heaters; heater++)
+		{
+			response->catf("%c%.1f", ch, (double)heat->GetTemperature(heater));
+			ch = ',';
+		}
+		response->cat((ch == '[') ? "[]" : "]");
+
+		// Current states
+		response->cat(",\"state\":");
+		ch = '[';
+		for (size_t heater = 0; heater < Heaters; heater++)
+		{
+			response->catf("%c%d", ch, heat->GetStatus(heater));
+			ch = ',';
+		}
+		response->cat((ch == '[') ? "[]" : "]");
+
+		/* Heads - NOTE: This field is subject to deprecation and will be removed in v1.20 */
+		response->cat(",\"heads\":{\"current\":");
+
+		// Current temperatures
+		ch = '[';
+		for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
+		{
+			response->catf("%c%.1f", ch, (double)heat->GetTemperature(heater));
+			ch = ',';
+		}
+		response->cat((ch == '[') ? "[]" : "]");
+
+		// Active temperatures
+		response->catf(",\"active\":");
+		ch = '[';
+		for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
+		{
+			response->catf("%c%.1f", ch, (double)heat->GetActiveTemperature(heater));
+			ch = ',';
+		}
+		response->cat((ch == '[') ? "[]" : "]");
+
+		// Standby temperatures
+		response->catf(",\"standby\":");
+		ch = '[';
+		for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
+		{
+			response->catf("%c%.1f", ch, (double)heat->GetStandbyTemperature(heater));
+			ch = ',';
+		}
+		response->cat((ch == '[') ? "[]" : "]");
+
+		// Heater statuses (0=off, 1=standby, 2=active, 3=fault)
+		response->cat(",\"state\":");
+		ch = '[';
+		for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
+		{
+			response->catf("%c%d", ch, static_cast<int>(heat->GetStatus(heater)));
+			ch = ',';
+		}
+		response->cat((ch == '[') ? "[]" : "]");
+
+		/* Tool temperatures */
+		response->cat("},\"tools\":{\"active\":[");
+		for (const Tool *tool = toolList; tool != nullptr; tool = tool->Next())
+		{
+			ch = '[';
+			for (size_t heater = 0; heater < tool->heaterCount; heater++)
+			{
+				response->catf("%c%.1f", ch, (double)tool->activeTemperatures[heater]);
+				ch = ',';
+			}
+			response->cat((ch == '[') ? "[]" : "]");
+
+			if (tool->Next() != nullptr)
+			{
+				response->cat(",");
+			}
+		}
+
+		response->cat("],\"standby\":[");
+		for (const Tool *tool = toolList; tool != nullptr; tool = tool->Next())
+		{
+			ch = '[';
+			for (size_t heater = 0; heater < tool->heaterCount; heater++)
+			{
+				response->catf("%c%.1f", ch, (double)tool->standbyTemperatures[heater]);
+				ch = ',';
+			}
+			response->cat((ch == '[') ? "[]" : "]");
+
+			if (tool->Next() != nullptr)
+			{
+				response->cat(",");
+			}
+		}
+
+		// Named extra temperature sensors
+		response->cat("]},\"extra\":[");
+		bool first = true;
+		for (size_t heater = FirstVirtualHeater; heater < FirstVirtualHeater + MaxVirtualHeaters; ++heater)
+		{
+			const char * const nm = heat->GetHeaterName(heater);
+			if (nm != nullptr)
+			{
+				if (!first)
+				{
+					response->cat(',');
+				}
+				first = false;
+				response->cat("{\"name\":");
+				response->EncodeString(nm, strlen(nm), false, true);
+				TemperatureError err;
+				const float t = heat->GetTemperature(heater, err);
+				response->catf(",\"temp\":%.1f}", (double)t);
+			}
+		}
+
+		response->cat("]}");
 	}
 
 	// Time since last reset
-	response->catf(",\"time\":%.1f", platform->Time());
+	response->catf(",\"time\":%.1f", (double)(millis64()/1000u));
+
+#if SUPPORT_SCANNER
+	// Scanner
+	if (scanner->IsEnabled())
+	{
+		response->catf(",\"scanner\":{\"status\":\"%c\"", scanner->GetStatusCharacter());
+		response->catf(",\"progress\":%.1f}", (double)(scanner->GetProgress()));
+	}
+#endif
+
+	// Spindle
+	const double spindleRpm = gCodes->GetSpindleRpm();
+	response->catf(",\"spindle\":{\"current\":%1.f,\"active\":%1.f}", spindleRpm, spindleRpm);
 
 	/* Extended Status Response */
 	if (type == 2)
 	{
 		// Cold Extrude/Retract
-		response->catf(",\"coldExtrudeTemp\":%1.f", heat->ColdExtrude() ? 0 : HOT_ENOUGH_TO_EXTRUDE);
-		response->catf(",\"coldRetractTemp\":%1.f", heat->ColdExtrude() ? 0 : HOT_ENOUGH_TO_RETRACT);
+		response->catf(",\"coldExtrudeTemp\":%1.f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_EXTRUDE));
+		response->catf(",\"coldRetractTemp\":%1.f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_RETRACT));
 
 		// Maximum hotend temperature - DWC just wants the highest one
-		response->catf(",\"tempLimit\":%1.f", heat->GetHighestTemperatureLimit());
+		response->catf(",\"tempLimit\":%1.f", (double)(heat->GetHighestTemperatureLimit()));
 
 		// Endstops
-		uint16_t endstops = 0;
-		for(size_t drive = 0; drive < DRIVES; drive++)
+		uint32_t endstops = 0;
+		const size_t totalAxes = gCodes->GetTotalAxes();
+		for (size_t drive = 0; drive < DRIVES; drive++)
 		{
-			EndStopHit stopped = platform->Stopped(drive);
-			if (stopped == EndStopHit::highHit || stopped == EndStopHit::lowHit)
+			if (drive < totalAxes)
 			{
-				endstops |= (1 << drive);
+				const EndStopHit es = platform->Stopped(drive);
+				if (es == EndStopHit::highHit || es == EndStopHit::lowHit)
+				{
+					endstops |= (1u << drive);
+
+				}
+			}
+			else if (platform->EndStopInputState(drive))
+			{
+				endstops |= (1u << drive);
 			}
 		}
-		response->catf(",\"endstops\":%d", endstops);
+		response->catf(",\"endstops\":%" PRIu32, endstops);
 
 		// Firmware name, machine geometry and number of axes
-		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u", FIRMWARE_NAME, move->GetGeometryString(), numAxes);
+		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"axisNames\":\"%s\"", FIRMWARE_NAME, move->GetGeometryString(), numVisibleAxes, gCodes->GetAxisLetters());
 
 		// Total and mounted volumes
 		size_t mountedCards = 0;
-		for(size_t i = 0; i < NumSdCards; i++)
+		for (size_t i = 0; i < NumSdCards; i++)
 		{
 			if (platform->GetMassStorage()->IsDriveMounted(i))
 			{
@@ -774,30 +997,35 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		// Machine name
 		response->cat(",\"name\":");
-		response->EncodeString(myName, ARRAY_SIZE(myName), false);
+		response->EncodeString(myName.c_str(), myName.MaxLength(), false);
 
 		/* Probe */
 		{
-			const ZProbeParameters probeParams = platform->GetCurrentZProbeParameters();
+			const ZProbe probeParams = platform->GetCurrentZProbeParameters();
 
 			// Trigger threshold
-			response->catf(",\"probe\":{\"threshold\":%d", probeParams.adcValue);
+			response->catf(",\"probe\":{\"threshold\":%" PRIi32, probeParams.adcValue);
 
 			// Trigger height
-			response->catf(",\"height\":%.2f", probeParams.height);
+			response->catf(",\"height\":%.2f", (double)probeParams.triggerHeight);
 
 			// Type
-			response->catf(",\"type\":%d}", platform->GetZProbeType());
+			response->catf(",\"type\":%u}", (unsigned int)platform->GetZProbeType());
 		}
 
 		/* Tool Mapping */
 		{
 			response->cat(",\"tools\":[");
-			for(Tool *tool = toolList; tool != nullptr; tool = tool->Next())
+			for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 			{
+				// Number and Name
+				const char *toolName = tool->GetName();
+				response->catf("{\"number\":%d,\"name\":", tool->Number());
+				response->EncodeString(toolName, strlen(toolName), false);
+
 				// Heaters
-				response->catf("{\"number\":%d,\"heaters\":[", tool->Number());
-				for(size_t heater=0; heater<tool->HeaterCount(); heater++)
+				response->cat(",\"heaters\":[");
+				for (size_t heater = 0; heater < tool->HeaterCount(); heater++)
 				{
 					response->catf("%d", tool->Heater(heater));
 					if (heater + 1 < tool->HeaterCount())
@@ -808,7 +1036,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 				// Extruder drives
 				response->cat("],\"drives\":[");
-				for(size_t drive=0; drive<tool->DriveCount(); drive++)
+				for (size_t drive = 0; drive < tool->DriveCount(); drive++)
 				{
 					response->catf("%d", tool->Drive(drive));
 					if (drive + 1 < tool->DriveCount())
@@ -817,10 +1045,10 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 					}
 				}
 
-				// Axis mapping. Currently we only map the X axis, but we return an array of arrays to allow for mapping other axes in future.
+				// Axis mapping
 				response->cat("],\"axisMap\":[[");
 				bool first = true;
-				for (size_t xi = 0; xi < MAX_AXES; ++xi)
+				for (size_t xi = 0; xi < MaxAxes; ++xi)
 				{
 					if ((tool->GetXAxisMap() & (1u << xi)) != 0)
 					{
@@ -835,35 +1063,64 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 						response->catf("%u", xi);
 					}
 				}
+				response->cat("],[");
+				first = true;
+				for (size_t yi = 0; yi < MaxAxes; ++yi)
+				{
+					if ((tool->GetYAxisMap() & (1u << yi)) != 0)
+					{
+						if (first)
+						{
+							first = false;
+						}
+						else
+						{
+							response->cat(",");
+						}
+						response->catf("%u", yi);
+					}
+				}
+				response->cat("]]");
 
-				// Do we have any more tools?
-				if (tool->Next() != nullptr)
+				// Fan mapping
+				response->catf(",\"fans\":%lu", tool->GetFanMapping());
+
+				// Filament (if any)
+				if (tool->GetFilament() != nullptr)
 				{
-					response->cat("]]},");
+					const char *filamentName = tool->GetFilament()->GetName();
+					response->catf(",\"filament\":");
+					response->EncodeString(filamentName, strlen(filamentName), false);
 				}
-				else
+
+				// Offsets
+				response->cat(",\"offsets\":[");
+				for (size_t i = 0; i < numVisibleAxes; i++)
 				{
-					response->cat("]]}");
+					response->catf((i == 0) ? "%.2f" : ",%.2f", (double)tool->GetOffset(i));
 				}
+
+  				// Do we have any more tools?
+				response->cat((tool->Next() != nullptr) ? "]}," : "]}");
 			}
 			response->cat("]");
 		}
 
 		// MCU temperatures
-#ifndef __RADDS__
+#if HAS_CPU_TEMP_SENSOR
 		{
 			float minT, currT, maxT;
 			platform->GetMcuTemperatures(minT, currT, maxT);
-			response->catf(",\"mcutemp\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", minT, currT, maxT);
+			response->catf(",\"mcutemp\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)minT, (double)currT, (double)maxT);
 		}
 #endif
 
-#ifdef DUET_NG
+#if HAS_VOLTAGE_MONITOR
 		// Power in voltages
 		{
 			float minV, currV, maxV;
 			platform->GetPowerVoltages(minV, currV, maxV);
-			response->catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", minV, currV, maxV);
+			response->catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)minV, (double)currV, (double)maxV);
 		}
 #endif
 	}
@@ -873,14 +1130,14 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"currentLayer\":%d", printMonitor->GetCurrentLayer());
 
 		// Current Layer Time
-		response->catf(",\"currentLayerTime\":%.1f", printMonitor->GetCurrentLayerTime());
+		response->catf(",\"currentLayerTime\":%.1f", (double)(printMonitor->GetCurrentLayerTime()));
 
 		// Raw Extruder Positions
 		response->cat(",\"extrRaw\":");
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)		// loop through extruders
 		{
-			response->catf("%c%.1f", ch, gCodes->GetRawExtruderTotalByDrive(extruder));
+			response->catf("%c%.1f", ch, (double)(gCodes->GetRawExtruderTotalByDrive(extruder)));
 			ch = ',';
 		}
 		if (ch == '[')
@@ -889,31 +1146,31 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 
 		// Fraction of file printed
-		response->catf("],\"fractionPrinted\":%.1f", (printMonitor->IsPrinting()) ? (gCodes->FractionOfFilePrinted() * 100.0) : 0.0);
+		response->catf("],\"fractionPrinted\":%.1f", (double)((printMonitor->IsPrinting()) ? (gCodes->FractionOfFilePrinted() * 100.0) : 0.0));
 
 		// First Layer Duration
-		response->catf(",\"firstLayerDuration\":%.1f", printMonitor->GetFirstLayerDuration());
+		response->catf(",\"firstLayerDuration\":%.1f", (double)(printMonitor->GetFirstLayerDuration()));
 
 		// First Layer Height
 		// NB: This shouldn't be needed any more, but leave it here for the case that the file-based first-layer detection fails
-		response->catf(",\"firstLayerHeight\":%.2f", printMonitor->GetFirstLayerHeight());
+		response->catf(",\"firstLayerHeight\":%.2f", (double)(printMonitor->GetFirstLayerHeight()));
 
 		// Print Duration
-		response->catf(",\"printDuration\":%.1f", printMonitor->GetPrintDuration());
+		response->catf(",\"printDuration\":%.1f", (double)(printMonitor->GetPrintDuration()));
 
 		// Warm-Up Time
-		response->catf(",\"warmUpDuration\":%.1f", printMonitor->GetWarmUpDuration());
+		response->catf(",\"warmUpDuration\":%.1f", (double)(printMonitor->GetWarmUpDuration()));
 
 		/* Print Time Estimations */
 		{
 			// Based on file progress
-			response->catf(",\"timesLeft\":{\"file\":%.1f", printMonitor->EstimateTimeLeft(fileBased));
+			response->catf(",\"timesLeft\":{\"file\":%.1f", (double)(printMonitor->EstimateTimeLeft(fileBased)));
 
 			// Based on filament usage
-			response->catf(",\"filament\":%.1f", printMonitor->EstimateTimeLeft(filamentBased));
+			response->catf(",\"filament\":%.1f", (double)(printMonitor->EstimateTimeLeft(filamentBased)));
 
 			// Based on layers
-			response->catf(",\"layer\":%.1f}", printMonitor->EstimateTimeLeft(layerBased));
+			response->catf(",\"layer\":%.1f}", (double)(printMonitor->EstimateTimeLeft(layerBased)));
 		}
 	}
 
@@ -923,7 +1180,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		if (response != nullptr)
 		{
 			// Send the response to the last command. Do this last
-			response->catf(",\"seq\":%u,\"resp\":", platform->GetAuxSeq());			// send the response sequence number
+			response->catf(",\"seq\":%" PRIu32 ",\"resp\":", platform->GetAuxSeq());			// send the response sequence number
 
 			// Send the JSON response
 			response->EncodeReply(reply, true);										// also releases the OutputBuffer chain
@@ -943,14 +1200,14 @@ OutputBuffer *RepRap::GetConfigResponse()
 		return nullptr;
 	}
 
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	const size_t numAxes = gCodes->GetVisibleAxes();
 
 	// Axis minima
 	response->copy("{\"axisMins\":");
 	char ch = '[';
 	for (size_t axis = 0; axis < numAxes; axis++)
 	{
-		response->catf("%c%.2f", ch, platform->AxisMinimum(axis));
+		response->catf("%c%.2f", ch, (double)(platform->AxisMinimum(axis)));
 		ch = ',';
 	}
 
@@ -959,7 +1216,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	ch = '[';
 	for (size_t axis = 0; axis < numAxes; axis++)
 	{
-		response->catf("%c%.2f", ch, platform->AxisMaximum(axis));
+		response->catf("%c%.2f", ch, (double)(platform->AxisMaximum(axis)));
 		ch = ',';
 	}
 
@@ -968,7 +1225,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	ch = '[';
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
-		response->catf("%c%.2f", ch, platform->Acceleration(drive));
+		response->catf("%c%.2f", ch, (double)(platform->Acceleration(drive)));
 		ch = ',';
 	}
 
@@ -977,7 +1234,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	ch = '[';
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
-		response->catf("%c%.2f", ch, platform->GetMotorCurrent(drive, false));
+		response->catf("%c%.2f", ch, (double)(platform->GetMotorCurrent(drive, 906)));
 		ch = ',';
 	}
 
@@ -989,24 +1246,39 @@ OutputBuffer *RepRap::GetConfigResponse()
 	{
 		response->catf(" + %s", expansionName);
 	}
+	const char* additionalExpansionName = DuetExpansion::GetAdditionalExpansionBoardName();
+	if (additionalExpansionName != nullptr)
+	{
+		response->catf(" + %s", additionalExpansionName);
+	}
 #endif
 	response->catf("\",\"firmwareName\":\"%s\"", FIRMWARE_NAME);
 	response->catf(",\"firmwareVersion\":\"%s\"", VERSION);
-#if defined(DUET_NG) && defined(DUET_WIFI)
-	response->catf(",\"dwsVersion\":\"%s\"", network->GetWiFiServerVersion());
+
+#if HAS_WIFI_NETWORKING
+	// If we have WiFi networking, send the WiFi module firmware version
+# ifdef DUET_NG
+	if (platform->IsDuetWiFi())
+	{
+# endif
+		response->catf(",\"dwsVersion\":\"%s\"", network->GetWiFiServerVersion());
+# ifdef DUET_NG
+	}
+# endif
 #endif
+
 	response->catf(",\"firmwareDate\":\"%s\"", DATE);
 
 	// Motor idle parameters
-	response->catf(",\"idleCurrentFactor\":%.1f", platform->GetIdleCurrentFactor() * 100.0);
-	response->catf(",\"idleTimeout\":%.1f", move->IdleTimeout());
+	response->catf(",\"idleCurrentFactor\":%.1f", (double)(platform->GetIdleCurrentFactor() * 100.0));
+	response->catf(",\"idleTimeout\":%.1f", (double)(move->IdleTimeout()));
 
 	// Minimum feedrates
 	response->cat(",\"minFeedrates\":");
 	ch = '[';
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
-		response->catf("%c%.2f", ch, platform->ConfiguredInstantDv(drive));
+		response->catf("%c%.2f", ch, (double)(platform->GetInstantDv(drive)));
 		ch = ',';
 	}
 
@@ -1015,7 +1287,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	ch = '[';
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
-		response->catf("%c%.2f", ch, platform->MaxFeedrate(drive));
+		response->catf("%c%.2f", ch, (double)(platform->MaxFeedrate(drive)));
 		ch = ',';
 	}
 
@@ -1053,125 +1325,82 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	}
 	response->printf("{\"status\":\"%c\",\"heaters\":", ch);
 
-	// Send the heater actual temperatures
-	const int8_t bedHeater = heat->GetBedHeater();
-	if (bedHeater != -1)
-	{
-		ch = ',';
-		response->catf("[%.1f", heat->GetTemperature(bedHeater));
-	}
-	else
-	{
-		ch = '[';
-	}
+	// Send the heater actual temperatures. If there is no bed heater, send zero for PanelDue.
+	const int8_t bedHeater = (NumBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
+	ch = ',';
+	response->catf("[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetTemperature(bedHeater)));
 	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
-		response->catf("%c%.1f", ch, heat->GetTemperature(heater));
+		response->catf("%c%.1f", ch, (double)(heat->GetTemperature(heater)));
 		ch = ',';
 	}
 	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send the heater active temperatures
-	response->catf(",\"active\":");
-	if (heat->GetBedHeater() != -1)
-	{
-		ch = ',';
-		response->catf("[%.1f", heat->GetActiveTemperature(heat->GetBedHeater()));
-	}
-	else
-	{
-		ch = '[';
-	}
+	response->catf(",\"active\":[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetActiveTemperature(bedHeater)));
 	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
-		response->catf("%c%.1f", ch, heat->GetActiveTemperature(heater));
-		ch = ',';
+		response->catf(",%.1f", (double)(heat->GetActiveTemperature(heater)));
 	}
-	response->cat((ch == '[') ? "[]" : "]");
+	response->cat("]");
 
 	// Send the heater standby temperatures
-	response->catf(",\"standby\":");
-	if (bedHeater != -1)
-	{
-		ch = ',';
-		response->catf("[%.1f", heat->GetStandbyTemperature(bedHeater));
-	}
-	else
-	{
-		ch = '[';
-	}
+	response->catf(",\"standby\":[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetStandbyTemperature(bedHeater)));
 	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
-		response->catf("%c%.1f", ch, heat->GetStandbyTemperature(heater));
-		ch = ',';
+		response->catf(",%.1f", (double)(heat->GetStandbyTemperature(heater)));
 	}
-	response->cat((ch == '[') ? "[]" : "]");
+	response->cat("]");
 
 	// Send the heater statuses (0=off, 1=standby, 2=active, 3 = fault)
-	response->cat(",\"hstat\":");
-	if (bedHeater != -1)
-	{
-		ch = ',';
-		response->catf("[%d", static_cast<int>(heat->GetStatus(bedHeater)));
-	}
-	else
-	{
-		ch = '[';
-	}
+	response->catf(",\"hstat\":[%d", (bedHeater == -1) ? 0 : static_cast<int>(heat->GetStatus(bedHeater)));
 	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
-		response->catf("%c%d", ch, static_cast<int>(heat->GetStatus(heater)));
-		ch = ',';
+		response->catf(",%d", static_cast<int>(heat->GetStatus(heater)));
 	}
-	response->cat((ch == '[') ? "[]" : "]");
+	response->cat("]");
 
 	// Send XYZ positions
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
-	float liveCoordinates[DRIVES];
-	reprap.GetMove()->LiveCoordinates(liveCoordinates, GetCurrentXAxes());
-	const Tool* const currentTool = reprap.GetCurrentTool();
-	if (currentTool != nullptr)
-	{
-		const float *offset = currentTool->GetOffset();
-		for (size_t i = 0; i < numAxes; ++i)
-		{
-			liveCoordinates[i] += offset[i];
-		}
-	}
-	response->catf(",\"pos\":");		// announce the XYZ position
+	const size_t numVisibleAxes = gCodes->GetVisibleAxes();
+
+	// First the user coordinates
+	response->catf(",\"pos\":");			// announce the user position
+	const float * const userPos = gCodes->GetUserPosition();
 	ch = '[';
-	for (size_t drive = 0; drive < numAxes; drive++)
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
-		response->catf("%c%.3f", ch, liveCoordinates[drive]);
+		// Coordinates may be NaNs, for example when delta or SCARA homing fails. Replace any NaNs or infinities by 9999.9 to prevent JSON parsing errors.
+		const float coord = userPos[axis];
+		response->catf("%c%.3f", ch, (double)((std::isnan(coord) || std::isinf(coord)) ? 9999.9 : coord));
 		ch = ',';
 	}
 
-	// Send extruder total extrusion since power up, last G92 or last M23
-	response->cat("],\"extr\":");		// announce the extruder positions
+	// Now the machine coordinates
+	float liveCoordinates[DRIVES];
+	move->LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
+	response->catf("],\"machine\":");		// announce the machine position
 	ch = '[';
-	for (size_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
+	for (size_t drive = 0; drive < numVisibleAxes; drive++)
 	{
-		response->catf("%c%.1f", ch, gCodes->GetRawExtruderPosition(drive));
+		response->catf("%c%.3f", ch, (double)liveCoordinates[drive]);
 		ch = ',';
 	}
-	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send the speed and extruder override factors
-	response->catf(",\"sfactor\":%.2f,\"efactor\":", gCodes->GetSpeedFactor() * 100.0);
+	response->catf("],\"sfactor\":%.2f,\"efactor\":", (double)(gCodes->GetSpeedFactor() * 100.0));
 	ch = '[';
-	for (size_t i = 0; i < reprap.GetExtrudersInUse(); ++i)
+	for (size_t i = 0; i < GetExtrudersInUse(); ++i)
 	{
-		response->catf("%c%.2f", ch, gCodes->GetExtrusionFactor(i) * 100.0);
+		response->catf("%c%.2f", ch, (double)(gCodes->GetExtrusionFactor(i) * 100.0));
 		ch = ',';
 	}
 	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send the baby stepping offset
-	response->catf(",\"babystep\":%.03f", gCodes->GetBabyStepOffset());
+	response->catf(",\"babystep\":%.03f", (double)(gCodes->GetBabyStepOffset()));
 
 	// Send the current tool number
-	const int toolNumber = (currentTool == nullptr) ? 0 : currentTool->Number();
-	response->catf(",\"tool\":%d", toolNumber);
+	response->catf(",\"tool\":%d", GetCurrentToolNumber());
 
 	// Send the Z probe value
 	const int v0 = platform->GetZProbeReading();
@@ -1194,7 +1423,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	ch = '[';
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
-		response->catf("%c%.02f", ch, platform->GetFanValue(i) * 100.0);
+		response->catf("%c%.02f", ch, (double)(platform->GetFanValue(i) * 100.0));
 		ch = ',';
 	}
 
@@ -1204,7 +1433,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
 	response->cat(",\"homed\":");
 	ch = '[';
-	for (size_t axis = 0; axis < numAxes; ++axis)
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
 		ch = ',';
@@ -1214,11 +1443,33 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	if (printMonitor->IsPrinting())
 	{
 		// Send the fraction printed
-		response->catf(",\"fraction_printed\":%.4f", max<float>(0.0, gCodes->FractionOfFilePrinted()));
+		response->catf(",\"fraction_printed\":%.4f", (double)max<float>(0.0, gCodes->FractionOfFilePrinted()));
 	}
 
 	// Short messages are now pushed directly to PanelDue, so don't include them here as well
-	// We no longer send the amount of http buffer space here because the web interface doesn't use these formns of status response
+	// We no longer send the amount of http buffer space here because the web interface doesn't use these forms of status response
+
+	// Deal with the message box, if there is one
+	float timeLeft = 0.0;
+	if (displayMessageBox && boxTimer != 0)
+	{
+		timeLeft = (float)(boxTimeout) / 1000.0 - (float)(millis() - boxTimer) / 1000.0;
+		displayMessageBox = (timeLeft > 0.0);
+	}
+
+	if (displayMessageBox)
+	{
+		response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%" PRIu32 "",
+						boxMode, boxSeq, (double)timeLeft, boxControls);
+		response->cat(",\"msgBox.msg\":");
+		response->EncodeString(boxMessage.c_str(), boxMessage.MaxLength(), false);
+		response->cat(",\"msgBox.title\":");
+		response->EncodeString(boxTitle.c_str(), boxTitle.MaxLength(), false);
+	}
+	else
+	{
+		response->cat(",\"msgBox.mode\":-1");					// tell PanelDue that there is no active message box
+	}
 
 	if (type == 2)
 	{
@@ -1226,17 +1477,17 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		{
 			// Send estimated times left based on file progress, filament usage, and layers
 			response->catf(",\"timesLeft\":[%.1f,%.1f,%.1f]",
-					printMonitor->EstimateTimeLeft(fileBased),
-					printMonitor->EstimateTimeLeft(filamentBased),
-					printMonitor->EstimateTimeLeft(layerBased));
+					(double)(printMonitor->EstimateTimeLeft(fileBased)),
+					(double)(printMonitor->EstimateTimeLeft(filamentBased)),
+					(double)(printMonitor->EstimateTimeLeft(layerBased)));
 		}
 	}
 	else if (type == 3)
 	{
 		// Add the static fields
-		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"volumes\":%u,\"numTools\":%u,\"myName\":",
-						move->GetGeometryString(), numAxes, NumSdCards, GetNumberOfContiguousTools());
-		response->EncodeString(myName, ARRAY_SIZE(myName), false);
+		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"axisNames\":\"%s\",\"volumes\":%u,\"numTools\":%u,\"myName\":",
+						move->GetGeometryString(), numVisibleAxes, gCodes->GetAxisLetters(), NumSdCards, GetNumberOfContiguousTools());
+		response->EncodeString(myName.c_str(), myName.MaxLength(), false);
 		response->cat(",\"firmwareName\":");
 		response->EncodeString(FIRMWARE_NAME, strlen(FIRMWARE_NAME), false);
 	}
@@ -1254,22 +1505,6 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 	response->cat("}");
 	return response;
-}
-
-// Copy some parameter text, stopping at the first control character or when the destination buffer is full, and removing trailing spaces
-void RepRap::CopyParameterText(const char* src, char *dst, size_t length)
-{
-	size_t i;
-	for (i = 0; i + 1 < length && src[i] >= ' '; ++i)
-	{
-		dst[i] = src[i];
-	}
-	// Remove any trailing spaces
-	while (i > 0 && dst[i - 1] == ' ')
-	{
-		--i;
-	}
-	dst[i] = 0;
 }
 
 // Get the list of files in the specified directory in JSON format.
@@ -1300,7 +1535,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, bool flagsDirs)
 		bool gotFile = platform->GetMassStorage()->FindFirst(dir, fileInfo);	// TODO error handling here
 
 		size_t bytesLeft = OutputBuffer::GetBytesLeft(response);	// don't write more bytes than we can
-		char filename[FILENAME_LENGTH];
+		char filename[MaxFilenameLength];
 		filename[0] = '*';
 		const char *fname;
 
@@ -1311,8 +1546,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, bool flagsDirs)
 				// Get the long filename if possible
 				if (flagsDirs && fileInfo.isDirectory)
 				{
-					strncpy(filename + sizeof(char), fileInfo.fileName, FILENAME_LENGTH - 1);
-					filename[FILENAME_LENGTH - 1] = 0;
+					SafeStrncpy(filename + 1, fileInfo.fileName, ARRAY_SIZE(fileInfo.fileName) - 1);
 					fname = filename;
 				}
 				else
@@ -1332,7 +1566,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, bool flagsDirs)
 				{
 					bytesLeft -= response->cat(',');
 				}
-				bytesLeft -= response->EncodeString(fname, FILENAME_LENGTH, false);
+				bytesLeft -= response->EncodeString(fname, MaxFilenameLength, false);
 
 				firstFile = false;
 			}
@@ -1396,8 +1630,8 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
 
 			// Write another file entry
 			bytesLeft -= response->catf("{\"type\":\"%c\",\"name\":", fileInfo.isDirectory ? 'd' : 'f');
-			bytesLeft -= response->EncodeString(fileInfo.fileName, FILENAME_LENGTH, false);
-			bytesLeft -= response->catf(",\"size\":%u", fileInfo.size);
+			bytesLeft -= response->EncodeString(fileInfo.fileName, MaxFilenameLength, false);
+			bytesLeft -= response->catf(",\"size\":%" PRIu32, fileInfo.size);
 
 			const struct tm * const timeInfo = gmtime(&fileInfo.lastModified);
 			if (timeInfo->tm_year <= /*19*/80)
@@ -1420,28 +1654,59 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
 }
 
 // Send a beep. We send it to both PanelDue and the web interface.
-void RepRap::Beep(int freq, int ms)
+void RepRap::Beep(unsigned int freq, unsigned int ms)
 {
-	beepFrequency = freq;
-	beepDuration = ms;
+	// Limit the frequency and duration to sensible values
+	freq = constrain<unsigned int>(freq, 50, 10000);
+	ms = constrain<unsigned int>(ms, 10, 60000);
 
+	// If there is an LCD device present, make it beep
+#if SUPPORT_12864_LCD
+	if (display->IsPresent())
+	{
+		display->Beep(freq, ms);
+	}
+	else
+#endif
 	if (platform->HaveAux())
 	{
-		// If there is an LCD device present, make it beep
 		platform->Beep(freq, ms);
+	}
+	else
+	{
+		beepFrequency = freq;
+		beepDuration = ms;
 	}
 }
 
 // Send a short message. We send it to both PanelDue and the web interface.
 void RepRap::SetMessage(const char *msg)
 {
-	strncpy(message, msg, MESSAGE_LENGTH);
-	message[MESSAGE_LENGTH] = 0;
+	SafeStrncpy(message, msg, ARRAY_SIZE(message));
 
 	if (platform->HaveAux())
 	{
 		platform->SendAuxMessage(msg);
 	}
+}
+
+// Display a message box on the web interface
+void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls)
+{
+	boxMessage.copy(msg);
+	boxTitle.copy(title);
+	boxMode = mode;
+	boxTimer = (timeout <= 0.0) ? 0 : millis();
+	boxTimeout = round(max<float>(timeout, 0.0) * 1000.0);
+	boxControls = controls;
+	displayMessageBox = true;
+	++boxSeq;
+}
+
+// Clear pending message box
+void RepRap::ClearAlert()
+{
+	displayMessageBox = false;
 }
 
 // Get the status character for the new-style status response
@@ -1452,41 +1717,45 @@ char RepRap::GetStatusCharacter() const
 			: (IsStopped()) 											? 'H'	// Halted
 			: (gCodes->IsPausing()) 									? 'D'	// Pausing / Decelerating
 			: (gCodes->IsResuming()) 									? 'R'	// Resuming
-			: (gCodes->IsDoingToolChange())								? 'T'	// Running tool change macros
+			: (gCodes->IsDoingToolChange())								? 'T'	// Changing tool
 			: (gCodes->IsPaused()) 										? 'S'	// Paused / Stopped
-			: (printMonitor->IsPrinting())								? 'P'	// Printing
+			: (printMonitor->IsPrinting())
+			  ? ((gCodes->IsSimulating())								? 'M'	// Simulating
+			  :															  'P'	// Printing
+				)
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement()) 	? 'B'	// Busy
-			: 'I';																// Idle
+			:															  'I';	// Idle
 }
 
 bool RepRap::NoPasswordSet() const
 {
-	return (!password[0] || StringEquals(password, DEFAULT_PASSWORD));
+	return (password[0] == 0 || CheckPassword(DEFAULT_PASSWORD));
 }
 
 bool RepRap::CheckPassword(const char *pw) const
 {
-	return StringEquals(pw, password);
+	String<PASSWORD_LENGTH> copiedPassword;
+	copiedPassword.CopyAndPad(pw);
+	return password.ConstantTimeEquals(copiedPassword);
 }
 
 void RepRap::SetPassword(const char* pw)
 {
-	// Users sometimes put a tab character between the password and the comment, so allow for this
-	CopyParameterText(pw, password, ARRAY_SIZE(password));
+	password.CopyAndPad(pw);
 }
 
 const char *RepRap::GetName() const
 {
-	return myName;
+	return myName.c_str();
 }
 
 void RepRap::SetName(const char* nm)
 {
 	// Users sometimes put a tab character between the machine name and the comment, so allow for this
-	CopyParameterText(nm, myName, ARRAY_SIZE(myName));
+	myName.copy(nm);
 
 	// Set new DHCP hostname
-	network->SetHostname(myName);
+	network->SetHostname(myName.c_str());
 }
 
 // Given that we want to extrude/retract the specified extruder drives, check if they are allowed.
@@ -1494,12 +1763,12 @@ void RepRap::SetName(const char* nm)
 // This may be called by an ISR!
 unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions)
 {
-	if (GetHeat()->ColdExtrude())
+	if (GetHeat().ColdExtrude())
 	{
 		return 0;
 	}
 
-	Tool *tool = currentTool;
+	Tool * const tool = currentTool;
 	if (tool == nullptr)
 	{
 		// This should not happen, but if on tool is selected then don't allow any extruder movement
@@ -1540,7 +1809,7 @@ void RepRap::FlagTemperatureFault(int8_t dudHeater)
 
 void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
 {
-	reprap.GetHeat()->ResetFault(wasDudHeater);
+	heat->ResetFault(wasDudHeater);
 	if (toolList != nullptr)
 	{
 		toolList->ClearTemperatureFault(wasDudHeater);
@@ -1548,9 +1817,70 @@ void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
 }
 
 // Get the current axes used as X axes
-uint32_t RepRap::GetCurrentXAxes() const
+AxesBitmap RepRap::GetCurrentXAxes() const
 {
 	return (currentTool == nullptr) ? DefaultXAxisMapping : currentTool->GetXAxisMap();
+}
+
+// Get the current axes used as X axes
+AxesBitmap RepRap::GetCurrentYAxes() const
+{
+	return (currentTool == nullptr) ? DefaultYAxisMapping : currentTool->GetYAxisMap();
+}
+
+// Save some resume information, returning true if successful
+// We assume that the tool configuration doesn't change, only the temperatures and the mix
+bool RepRap::WriteToolSettings(FileStore *f) const
+{
+	// First write the settings of all tools except the current one and the command to select them if they are on standby
+	bool ok = true;
+	for (const Tool *t = toolList; t != nullptr && ok; t = t->Next())
+	{
+		if (t != currentTool)
+		{
+			ok = t->WriteSettings(f);
+		}
+	}
+
+	// Finally write the setting of the active tool and the commands to select it
+	if (ok && currentTool != nullptr)
+	{
+		ok = currentTool->WriteSettings(f);
+	}
+	return ok;
+}
+
+// Save some information in config-override.g
+bool RepRap::WriteToolParameters(FileStore *f) const
+{
+	bool ok = true, written = false;
+	for (const Tool *t = toolList; ok && t != nullptr; t = t->Next())
+	{
+		const AxesBitmap axesProbed = t->GetAxisOffsetsProbed();
+		if (axesProbed != 0)
+		{
+			if (written)
+			{
+				scratchString.Clear();
+			}
+			else
+			{
+				scratchString.copy("; Probed tool offsets\n");
+				written = true;
+			}
+			scratchString.catf("G10 P%d", t->Number());
+			for (size_t axis = 0; axis < MaxAxes; ++axis)
+			{
+				if (IsBitSet(axesProbed, axis))
+				{
+					scratchString.catf(" %c%.2f", gCodes->GetAxisLetters()[axis], (double)(t->GetOffset(axis)));
+				}
+			}
+			scratchString.cat('\n');
+			ok = f->Write(scratchString.Pointer());
+		}
+	}
+	return ok;
 }
 
 // Helper function for diagnostic tests in Platform.cpp, to cause a deliberate divide-by-zero
@@ -1559,10 +1889,10 @@ uint32_t RepRap::GetCurrentXAxes() const
 	return a/b;
 }
 
-// Helper function for diagnostic tests in Platform.cpp, to cause a deliberate unaligned memory read
-/*static*/ uint32_t RepRap::ReadDword(const char* p)
+// Report an internal error
+void RepRap::ReportInternalError(const char *file, const char *func, int line) const
 {
-	return *reinterpret_cast<const uint32_t*>(p);
+	platform->MessageF(ErrorMessage, "Internal Error in %s at %s(%d)\n", func, file, line);
 }
 
 // End

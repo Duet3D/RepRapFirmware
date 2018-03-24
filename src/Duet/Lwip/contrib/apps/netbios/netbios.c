@@ -61,11 +61,11 @@
 /** Since there's no standard function for case-insensitive string comparision,
  * we need another define here:
  * define this to stricmp() for windows or strcasecmp() for linux.
- * If not defined, comparision is case sensitive and NETBIOS_LWIP_NAME must be
+ * If not defined, comparison is case sensitive and NETBIOS_LWIP_NAME must be
  * uppercase
  */
 #ifndef NETBIOS_STRCMP
-#define NETBIOS_STRCMP(str1, str2) stricmp(str1, str2)
+#define NETBIOS_STRCMP(str1, str2) strcasecmp(str1, str2)
 #endif
 
 /** default port number for "NetBIOS Name service */
