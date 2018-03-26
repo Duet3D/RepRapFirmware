@@ -15,21 +15,15 @@
 
 GCodeQueue::GCodeQueue() : freeItems(nullptr), queuedItems(nullptr)
 {
-	for(size_t i = 0; i < maxQueuedCodes; i++)
+	for (size_t i = 0; i < maxQueuedCodes; i++)
 	{
 		freeItems = new QueuedCode(freeItems);
 	}
 }
 
-bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
+// Return true if the move in the GCodeBuffer should be queued
+/*static*/ bool GCodeQueue::ShouldQueueCode(GCodeBuffer &gb)
 {
-	// Don't queue anything if no moves are being performed
-	uint32_t scheduledMoves = reprap.GetMove()->GetScheduledMoves() + segmentsLeft;
-	if (scheduledMoves == reprap.GetMove()->GetCompletedMoves())
-	{
-		return false;
-	}
-
 #if SUPPORT_ROLAND
 	// Don't queue codes if the Roland module is active
 	if (reprap.GetRoland()->Active())
@@ -38,49 +32,64 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 	}
 #endif
 
-	// Check for G-Codes that can be queued
-	bool queueCode = false;
 	switch (gb.GetCommandLetter())
 	{
 	case 'G':
 		{
-			const int code = gb.GetIValue();
-
-			// Set active/standby temperatures
-			queueCode = (code == 10 && gb.Seen('P'));
+			const int code = gb.GetCommandNumber();
+			return code == 10 && gb.Seen('P');			// Set active/standby temperatures
 		}
-		break;
 
 	case 'M':
 		{
-			const int code = gb.GetIValue();
-			switch(code)
+			switch (gb.GetCommandNumber())
 			{
 			case 3:		// spindle control
-			case 4:
-			case 5:
+			case 4:		// spindle control
+			case 5:		// spindle control
 			case 42:	// set IO pin
 			case 106:	// fan control
-			case 107:
+			case 107:	// fan off
 			case 104:	// set temperatures and return immediately
-			case 140:
-			case 141:
-			case 144:
+			case 140:	// set bed temperature and return immediately
+			case 141:	// set chamber temperature and return immediately
+			case 144:	// bed standby
 			case 117:	// display message
 			case 280:	// set servo
 			case 300:	// beep
 			case 420:	// set RGB colour
-				queueCode = true;
-				break;
+				return true;
+
+			case 291:
+				{
+					bool seen = false;
+					int32_t sParam = 1;
+					gb.TryGetIValue('S', sParam, seen);
+					return sParam < 2;					// queue non-blocking messages only
+				}
 
 			default:
 				break;
 			}
 		}
 		break;
+
+	default:
+		break;
 	}
 
-	// Does it make sense to queue this code?
+	return false;
+}
+
+// If moves are scheduled and a command can be queued, try to queue the command in the passed GCodeBuffer.
+// If successful, return true to indicate it has been queued and the caller should not execute it.
+// If the queue is full, free up the oldest queued entry by copying its command to our own gcode buffer so that we have room to queue the original command.
+bool GCodeQueue::QueueCode(GCodeBuffer &gb)
+{
+	// Don't queue anything if no moves are being performed
+	const uint32_t scheduledMoves = reprap.GetMove().GetScheduledMoves();
+	bool queueCode = (scheduledMoves != reprap.GetMove().GetCompletedMoves());
+
 	if (queueCode)
 	{
 		char codeToRun[GCODE_LENGTH];
@@ -91,22 +100,22 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 		{
 			// No - we've run out of free items. Run the first outstanding code
 			queueCode = false;
-			codeToRunLength = strlen(queuedItems->code);
-			strncpy(codeToRun, queuedItems->code, codeToRunLength);
-			codeToRun[ARRAY_UPB(codeToRun)] = 0;
+			codeToRunLength = strlen(queuedItems->code) + 1;
+			SafeStrncpy(codeToRun, queuedItems->code, ARRAY_SIZE(codeToRun));
 
 			// Release the first queued item so that it can be reused later
-			QueuedCode *item = queuedItems;
+			QueuedCode * const item = queuedItems;
 			queuedItems = item->next;
 			item->next = nullptr;
 			freeItems = item;
 		}
 
 		// Unlink a free element and assign gb's code to it
-		QueuedCode *code = freeItems;
+		QueuedCode * const code = freeItems;
 		freeItems = code->next;
 		code->AssignFrom(gb);
 		code->executeAtMove = scheduledMoves;
+		code->next = nullptr;
 
 		// Append it to the list of queued codes
 		if (queuedItems == nullptr)
@@ -122,12 +131,15 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 			}
 			last->next = code;
 		}
-		code->next = nullptr;
 
 		// Overwrite the passed gb's content if we could not store its original code
-		if (!queueCode && !gb.Put(codeToRun, codeToRunLength))
+		if (!queueCode)
 		{
-			gb.Put('\n');
+			if (reprap.Debug(moduleGcodes))
+			{
+				reprap.GetPlatform().Message(DebugMessage, "(swap) ");
+			}
+			gb.Put(codeToRun, codeToRunLength);
 		}
 	}
 
@@ -137,7 +149,7 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 bool GCodeQueue::FillBuffer(GCodeBuffer *gb)
 {
 	// Can this buffer be filled?
-	if (queuedItems == nullptr || queuedItems->executeAtMove > reprap.GetMove()->GetCompletedMoves())
+	if (queuedItems == nullptr || queuedItems->executeAtMove > reprap.GetMove().GetCompletedMoves())
 	{
 		// No - stop here
 		return false;
@@ -154,6 +166,12 @@ bool GCodeQueue::FillBuffer(GCodeBuffer *gb)
 	return true;
 }
 
+// Return true if there is nothing to do
+bool GCodeQueue::IsIdle() const
+{
+	return queuedItems == nullptr || queuedItems->executeAtMove > reprap.GetMove().GetCompletedMoves();
+}
+
 // Because some moves may end before the print is actually paused, we need a method to
 // remove all the entries that will not be executed after the print has finally paused
 void GCodeQueue::PurgeEntries()
@@ -161,7 +179,7 @@ void GCodeQueue::PurgeEntries()
 	QueuedCode *item = queuedItems, *lastItem = nullptr;
 	while (item != nullptr)
 	{
-		if (item->executeAtMove > reprap.GetMove()->GetScheduledMoves())
+		if (item->executeAtMove > reprap.GetMove().GetScheduledMoves())
 		{
 			// Release this item
 			QueuedCode *nextItem = item->Next();
@@ -191,7 +209,7 @@ void GCodeQueue::Clear()
 {
 	while (queuedItems != nullptr)
 	{
-		QueuedCode *item = queuedItems;
+		QueuedCode * const item = queuedItems;
 		queuedItems = item->Next();
 		item->next = freeItems;
 		freeItems = item;
@@ -200,35 +218,33 @@ void GCodeQueue::Clear()
 
 void GCodeQueue::Diagnostics(MessageType mtype)
 {
-	reprap.GetPlatform()->MessageF(mtype, "Code queue is %s\n", (queuedItems == nullptr) ? "empty." : "not empty:");
+	reprap.GetPlatform().MessageF(mtype, "Code queue is %s\n", (queuedItems == nullptr) ? "empty." : "not empty:");
 	if (queuedItems != nullptr)
 	{
-		QueuedCode *item = queuedItems;
+		const QueuedCode *item = queuedItems;
 		size_t queueLength = 0;
 		do
 		{
 			queueLength++;
-			reprap.GetPlatform()->MessageF(mtype, "Queued '%s' for move %d\n", item->code, item->executeAtMove);
+			reprap.GetPlatform().MessageF(mtype, "Queued '%s' for move %" PRIu32 "\n", item->code, item->executeAtMove);
 		} while ((item = item->Next()) != nullptr);
-		reprap.GetPlatform()->MessageF(mtype, "%d of %d codes have been queued.\n", queueLength, maxQueuedCodes);
+		reprap.GetPlatform().MessageF(mtype, "%d of %d codes have been queued.\n", queueLength, maxQueuedCodes);
 	}
 }
-
 
 // QueuedCode class
 
 void QueuedCode::AssignFrom(GCodeBuffer &gb)
 {
 	toolNumberAdjust = gb.GetToolNumberAdjust();
-	strncpy(code, gb.Buffer(), GCODE_LENGTH);
-	code[ARRAY_UPB(code)] = 0;
+	SafeStrncpy(code, gb.Buffer(), ARRAY_SIZE(code));
 }
 
 void QueuedCode::AssignTo(GCodeBuffer *gb)
 {
 	gb->SetToolNumberAdjust(toolNumberAdjust);
-	if (!gb->Put(code, strlen(code)))
-	{
-		gb->Put('\n');
-	}
+	gb->Put(code);
 }
+
+// End
+
