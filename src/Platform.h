@@ -181,7 +181,12 @@ enum class SoftwareResetReason : uint16_t
 	hardFault = 0x30,				// most exceptions get escalated to a hard fault
 	stuckInSpin = 0x40,				// we got stuck in a Spin() function for too long
 	wdtFault = 0x50,				// secondary watchdog
+	usageFault = 0x60,
 	otherFault = 0x70,
+	stackOverflow = 0x80,
+	assertCalled = 0xA0,
+
+	// Bits that are or'ed in
 	inAuxOutput = 0x0800,			// this bit is or'ed in if we were in aux output at the time
 	inLwipSpin = 0x2000,			// we got stuck in a call to LWIP for too long
 	inUsbOutput = 0x4000,			// this bit is or'ed in if we were in USB output at the time
@@ -713,7 +718,6 @@ private:
 	uint32_t errorCodeBits;
 
 	void InitialiseInterrupts();
-	void GetStackUsage(uint32_t* currentStack, uint32_t* maxStack, uint32_t* neverUsed) const;
 
 	// DRIVES
 	void SetDriverCurrent(size_t driver, float current, int code);

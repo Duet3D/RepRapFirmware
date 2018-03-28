@@ -32,6 +32,7 @@
 #include "Version.h"
 #include "SoftTimer.h"
 #include "Logger.h"
+#include "Tasks.h"
 #include "Libraries/Math/Isqrt.h"
 #include "Wire.h"
 
@@ -107,8 +108,6 @@ constexpr uint16_t driverNormalVoltageAdcReading = PowerVoltageToAdcReading(27.5
 
 #endif
 
-const uint8_t memPattern = 0xA5;
-
 static uint32_t fanInterruptCount = 0;				// accessed only in ISR, so no need to declare it volatile
 const uint32_t fanMaxInterruptCount = 32;			// number of fan interrupts that we average over
 static volatile uint32_t fanLastResetTime = 0;		// time (microseconds) at which we last reset the interrupt count, accessed inside and outside ISR
@@ -148,7 +147,7 @@ uint32_t lastSoftTimerInterruptScheduledAt = 0;
 // Urgent initialisation function
 // This is called before general init has been done, and before constructors for C++ static data have been called.
 // Therefore, be very careful what you do here!
-void UrgentInit()
+extern "C" void UrgentInit()
 {
 #if defined(DUET_NG)
 	// When the reset button is pressed on pre-production Duet WiFi boards, if the TMC2660 drivers were previously enabled then we get
@@ -170,132 +169,6 @@ void UrgentInit()
 	pinMode(ENABLE_PINS[5], OUTPUT_HIGH);
 	pinMode(ENABLE_PINS[6], OUTPUT_HIGH);
 #endif
-}
-
-// Arduino initialise and loop functions
-// Put nothing in these other than calls to the RepRap equivalents
-void setup()
-{
-	// Fill the free memory with a pattern so that we can check for stack usage and memory corruption
-	char* heapend = sbrk(0);
-	register const char * stack_ptr asm ("sp");
-	while (heapend + 16 < stack_ptr)
-	{
-		*heapend++ = memPattern;
-	}
-
-	// Trap integer divide-by-zero.
-	// We could also trap unaligned memory access, if we change the gcc options to not generate code that uses unaligned memory access.
-	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
-
-	// When doing a software reset, we disable the NRST input (User reset) to prevent the negative-going pulse that gets generated on it
-	// being held in the capacitor and changing the reset reason from Software to User. So enable it again here. We hope that the reset signal
-	// will have gone away by now.
-#ifndef RSTC_MR_KEY_PASSWD
-// Definition of RSTC_MR_KEY_PASSWD is missing in the SAM3X ASF files
-# define RSTC_MR_KEY_PASSWD (0xA5u << 24)
-#endif
-	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD | RSTC_MR_URSTEN;	// ignore any signal on the NRST pin for now so that the reset reason will show as Software
-
-#if USE_CACHE
-	// Enable the cache
-	struct cmcc_config g_cmcc_cfg;
-	cmcc_get_config_defaults(&g_cmcc_cfg);
-	cmcc_init(CMCC, &g_cmcc_cfg);
-	EnableCache();
-#endif
-
-	// Go on and do the main initialisation
-	reprap.Init();
-}
-
-void loop()
-{
-	reprap.Spin();
-}
-
-extern "C"
-{
-	// This intercepts the 1ms system tick. It must return 'false', otherwise the Arduino core tick handler will be bypassed.
-	int sysTickHook()
-	{
-		reprap.Tick();
-		return 0;
-	}
-
-	// Exception handlers
-	// By default the Usage Fault, Bus Fault and Memory Management fault handlers are not enabled,
-	// so they escalate to a Hard Fault and we don't need to provide separate exception handlers for them.
-	void hardFaultDispatcher(const uint32_t *pulFaultStackAddress)
-	{
-	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pulFaultStackAddress + 5);
-	}
-
-	// The fault handler implementation calls a function called hardFaultDispatcher()
-	void HardFault_Handler() __attribute__((naked));
-	void HardFault_Handler()
-	{
-	    __asm volatile
-	    (
-	        " tst lr, #4                                                \n"		/* test bit 2 of the EXC_RETURN in LR to determine which stack was in use */
-	        " ite eq                                                    \n"		/* load the appropriate stack pointer into R0 */
-	        " mrseq r0, msp                                             \n"
-	        " mrsne r0, psp                                             \n"
-	        " ldr r2, handler_hf_address_const                          \n"
-	        " bx r2                                                     \n"
-	        " handler_hf_address_const: .word hardFaultDispatcher       \n"
-	    );
-	}
-
-	void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress)
-	{
-	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::wdtFault, pulFaultStackAddress + 5);
-	}
-
-	void WDT_Handler() __attribute__((naked));
-	void WDT_Handler()
-	{
-	    __asm volatile
-	    (
-	        " tst lr, #4                                                \n"		/* test bit 2 of the EXC_RETURN in LR to determine which stack was in use */
-	        " ite eq                                                    \n"		/* load the appropriate stack pointer into R0 */
-	        " mrseq r0, msp                                             \n"
-	        " mrsne r0, psp                                             \n"
-	        " ldr r2, handler_wdt_address_const                         \n"
-	        " bx r2                                                     \n"
-	        " handler_wdt_address_const: .word wdtFaultDispatcher       \n"
-	    );
-	}
-
-	void otherFaultDispatcher(const uint32_t *pulFaultStackAddress)
-	{
-	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::otherFault, pulFaultStackAddress + 5);
-	}
-
-	// The fault handler implementation calls a function called otherFaultDispatcher()
-	void OtherFault_Handler() __attribute__((naked));
-	void OtherFault_Handler()
-	{
-	    __asm volatile
-	    (
-	        " tst lr, #4                                                \n"		/* test bit 2 of the EXC_RETURN in LR to determine which stack was in use */
-	        " ite eq                                                    \n"		/* load the appropriate stack pointer into R0 */
-	        " mrseq r0, msp                                             \n"
-	        " mrsne r0, psp                                             \n"
-	        " ldr r2, handler_oflt_address_const                        \n"
-	        " bx r2                                                     \n"
-	        " handler_oflt_address_const: .word otherFaultDispatcher    \n"
-	    );
-	}
-
-	// We could set up the following fault handlers to retrieve the program counter in the same way as for a Hard Fault,
-	// however these exceptions are unlikely to occur, so for now we just report the exception type.
-	void NMI_Handler        () { reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::NMI); }
-
-	// 2017-05-25: A user is getting 'otherFault' reports, so now we do a stack dump for those too.
-	void SVC_Handler		() __attribute__ ((alias("OtherFault_Handler")));
-	void DebugMon_Handler   () __attribute__ ((alias("OtherFault_Handler")));
-	void PendSV_Handler		() __attribute__ ((alias("OtherFault_Handler")));
 }
 
 //*************************************************************************************************
@@ -327,6 +200,8 @@ Platform::Platform() :
 // Initialise the Platform. Note: this is the first module to be initialised, so don't call other modules from here!
 void Platform::Init()
 {
+	pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
+
 	// Deal with power first
 	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
 	deferredPowerDown = false;
@@ -369,6 +244,7 @@ void Platform::Init()
 #if SAM4E || SAM4S || SAME70
 	// Read the unique ID of the MCU
 	memset(uniqueId, 0, sizeof(uniqueId));
+
 	DisableCache();
 	cpu_irq_disable();
 	const uint32_t rc = flash_read_unique_id(uniqueId, 4);
@@ -1878,7 +1754,12 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		srdBuf[slot].magic = SoftwareResetData::magicValue;
 		srdBuf[slot].resetReason = reason;
 		srdBuf[slot].when = (uint32_t)realTime;			// some compilers/libraries use 64-bit time_t
-		GetStackUsage(nullptr, nullptr, &srdBuf[slot].neverUsedRam);
+#ifdef RTOS
+		// Should we store the stack data for any other task(s) here?
+		Tasks::GetHandlerStackUsage(nullptr, &srdBuf[slot].neverUsedRam);
+#else
+		Tasks::GetStackUsage(nullptr, nullptr, &srdBuf[slot].neverUsedRam);
+#endif
 		srdBuf[slot].hfsr = SCB->HFSR;
 		srdBuf[slot].cfsr = SCB->CFSR;
 		srdBuf[slot].icsr = SCB->ICSR;
@@ -1936,8 +1817,10 @@ void Platform::InitialiseInterrupts()
 	NVIC_SetPriority(WDT_IRQn, NvicPriorityWatchdog);			// set priority for watchdog interrupts
 #endif
 
+#ifndef RTOS
 	// Set the tick interrupt to the highest priority. We need to to monitor the heaters and kick the watchdog.
 	NVIC_SetPriority(SysTick_IRQn, NvicPrioritySystick);		// set priority for tick interrupts
+#endif
 
 #if SAM4E || SAME70
 	NVIC_SetPriority(UART0_IRQn, NvicPriorityPanelDueUart);		// set priority for UART interrupt
@@ -2138,7 +2021,8 @@ void Platform::Diagnostics(MessageType mtype)
 #endif
 
 	// Print memory stats and error codes to USB and copy them to the current webserver reply
-	const char *ramstart =
+	{
+		const char * const ramstart =
 #if SAME70
 			(char *) 0x20400000;
 #elif SAM4E || SAM4S
@@ -2148,14 +2032,23 @@ void Platform::Diagnostics(MessageType mtype)
 #else
 # error Unsupported processor
 #endif
-	const struct mallinfo mi = mallinfo();
-	MessageF(mtype, "Static ram used: %d\n", &_end - ramstart);
-	MessageF(mtype, "Dynamic ram used: %d\n", mi.uordblks);
-	MessageF(mtype, "Recycled dynamic ram: %d\n", mi.fordblks);
-	uint32_t currentStack, maxStack, neverUsed;
-	GetStackUsage(&currentStack, &maxStack, &neverUsed);
-	MessageF(mtype, "Stack ram used: %" PRIu32 " current, %" PRIu32 " maximum\n", currentStack, maxStack);
-	MessageF(mtype, "Never used ram: %" PRIu32 "\n", neverUsed);
+		MessageF(mtype, "Static ram used: %d\n", &_end - ramstart);
+
+		const struct mallinfo mi = mallinfo();
+		MessageF(mtype, "Dynamic ram used: %d\n", mi.uordblks);
+		MessageF(mtype, "Recycled dynamic ram: %d\n", mi.fordblks);
+
+		uint32_t maxStack, neverUsed;
+#ifdef RTOS
+		Tasks::GetHandlerStackUsage(&maxStack, &neverUsed);
+		MessageF(mtype, "Handler stack ram used: %" PRIu32 "\n", maxStack);
+#else
+		uint32_t currentStack;
+		Tasks::GetStackUsage(&currentStack, &maxStack, &neverUsed);
+		MessageF(mtype, "Stack ram used: %" PRIu32 " current, %" PRIu32 " maximum\n", currentStack, maxStack);
+#endif
+		MessageF(mtype, "Never used ram: %" PRIu32 "\n", neverUsed);
+	}
 
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
@@ -2333,6 +2226,10 @@ void Platform::Diagnostics(MessageType mtype)
 #ifdef SOFT_TIMER_DEBUG
 	MessageF(mtype, "Soft timer interrupts executed %u, next %u scheduled at %u, now %u\n",
 		numSoftTimerInterruptsExecuted, STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RB, lastSoftTimerInterruptScheduledAt, GetInterruptClocks());
+#endif
+
+#ifdef RTOS
+	Tasks::CurrentTaskDiagnostics(mtype);
 #endif
 }
 
@@ -2563,24 +2460,6 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 	}
 
 	return false;
-}
-
-extern "C" uint32_t _estack;		// this is defined in the linker script
-
-// Return the stack usage and amount of memory that has never been used, in bytes
-void Platform::GetStackUsage(uint32_t* currentStack, uint32_t* maxStack, uint32_t* neverUsed) const
-{
-	const char * const ramend = (const char *)&_estack;
-	register const char * stack_ptr asm ("sp");
-	const char * const heapend = sbrk(0);
-	const char * stack_lwm = heapend;
-	while (stack_lwm < stack_ptr && *stack_lwm == memPattern)
-	{
-		++stack_lwm;
-	}
-	if (currentStack != nullptr) { *currentStack = ramend - stack_ptr; }
-	if (maxStack != nullptr) { *maxStack = ramend - stack_lwm; }
-	if (neverUsed != nullptr) { *neverUsed = stack_lwm - heapend; }
 }
 
 void Platform::ClassReport(uint32_t &lastTime)

@@ -8,12 +8,18 @@
 #ifndef SRC_VERSION_H_
 #define SRC_VERSION_H_
 
+#ifdef RTOS
+# define RTOSVER "(RTOS)"
+#else
+# define RTOSVER
+#endif
+
 #ifndef VERSION
-# define VERSION "1.21"
+# define VERSION "2.0" RTOSVER "alpha1"
 #endif
 
 #ifndef DATE
-# define DATE "2018-03-21"
+# define DATE "2018-03-28"
 #endif
 
 #define AUTHORS "reprappro, dc42, chrishamm, t3p3, dnewman"

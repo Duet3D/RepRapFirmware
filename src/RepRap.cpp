@@ -119,7 +119,7 @@ void RepRap::Init()
 #if SUPPORT_12864_LCD
  	display->Init();
 #endif
-	active = true;						// must do this before we start the network, else the watchdog may time out
+	active = true;						// must do this before we start the network or call Spin(), else the watchdog may time out
 
 	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
