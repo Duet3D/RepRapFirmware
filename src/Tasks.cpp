@@ -9,11 +9,6 @@
 #include "RepRap.h"
 #include "Platform.h"
 
-#ifdef RTOS
-# include "FreeRTOS.h"
-# include "task.h"
-#endif
-
 const uint8_t memPattern = 0xA5;
 
 extern "C" char *sbrk(int i);
@@ -97,7 +92,7 @@ namespace Tasks
 		if (neverUsed != nullptr) { *neverUsed = stack_lwm - heapend; }
 	}
 
-	static void TaskDiagnostics(MessageType mtype, TaskHandle_t ct)
+	void TaskDiagnostics(MessageType mtype, TaskHandle_t ct)
 	{
 		TaskStatus_t taskDetails;
 		vTaskGetInfo(ct, &taskDetails, pdTRUE, eInvalid);

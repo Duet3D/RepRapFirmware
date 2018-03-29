@@ -721,7 +721,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			moveBuffer.feedRate = gb.MachineState().feedrate;
 
 			// Kick off new movement
-			segmentsLeft = 1;
+			NewMoveAvailable(1);
 			gb.SetState(GCodeState::probingToolOffset);
 		}
 	}

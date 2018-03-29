@@ -630,8 +630,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				// Just move to the saved position in one go
 				gb.SetState(GCodeState::resuming3);
 			}
-			totalSegments = 1;
-			segmentsLeft = 1;
+			NewMoveAvailable(1);
 		}
 		break;
 
@@ -740,8 +739,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
 					moveBuffer.xAxes = DefaultXAxisMapping;
 					moveBuffer.yAxes = DefaultYAxisMapping;
-					totalSegments = 1;
-					segmentsLeft = 1;
+					NewMoveAvailable(1);
 
 					tapsDone = 0;
 					g30zHeightErrorSum = 0.0;
@@ -822,8 +820,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				moveBuffer.feedRate = platform.GetCurrentZProbeParameters().probeSpeed;
 				moveBuffer.xAxes = DefaultXAxisMapping;
 				moveBuffer.yAxes = DefaultYAxisMapping;
-				totalSegments = 1;
-				segmentsLeft = 1;
+				NewMoveAvailable(1);
 				gb.AdvanceState();
 			}
 		}
@@ -868,8 +865,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
 			moveBuffer.xAxes = DefaultXAxisMapping;
 			moveBuffer.yAxes = DefaultYAxisMapping;
-			totalSegments = 1;
-			segmentsLeft = 1;
+			NewMoveAvailable(1);
 			gb.AdvanceState();
 
 			if (platform.GetZProbeType() == ZProbeType::blTouch)
@@ -989,8 +985,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
 		moveBuffer.xAxes = DefaultXAxisMapping;
 		moveBuffer.yAxes = DefaultYAxisMapping;
-		totalSegments = 1;
-		segmentsLeft = 1;
+		NewMoveAvailable(1);
 		gb.AdvanceState();
 		break;
 
@@ -1010,8 +1005,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
 			moveBuffer.xAxes = DefaultXAxisMapping;
 			moveBuffer.yAxes = DefaultYAxisMapping;
-			totalSegments = 1;
-			segmentsLeft = 1;
+			NewMoveAvailable(1);
 
 			InitialiseTaps();
 			gb.AdvanceState();
@@ -1088,8 +1082,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				moveBuffer.feedRate = platform.GetCurrentZProbeParameters().probeSpeed;
 				moveBuffer.xAxes = DefaultXAxisMapping;
 				moveBuffer.yAxes = DefaultYAxisMapping;
-				totalSegments = 1;
-				segmentsLeft = 1;
+				NewMoveAvailable(1);
 				gb.AdvanceState();
 			}
 		}
@@ -1167,8 +1160,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
 			moveBuffer.xAxes = DefaultXAxisMapping;
 			moveBuffer.yAxes = DefaultYAxisMapping;
-			totalSegments = 1;
-			segmentsLeft = 1;
+			NewMoveAvailable(1);
 			gb.AdvanceState();
 
 			if (platform.GetZProbeType() == ZProbeType::blTouch)
@@ -1300,8 +1292,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			moveBuffer.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
 			moveBuffer.xAxes = xAxes;
 			moveBuffer.yAxes = yAxes;
-			totalSegments = 1;
-			segmentsLeft = 1;
+			NewMoveAvailable(1);
 			gb.SetState(GCodeState::normal);
 		}
 		break;
@@ -1333,8 +1324,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				moveBuffer.canPauseAfter = true;
 				moveBuffer.xAxes = xAxes;
 				moveBuffer.yAxes = yAxes;
-				totalSegments = 1;
-				segmentsLeft = 1;
+				NewMoveAvailable(1);
 			}
 			gb.SetState(GCodeState::normal);
 		}
@@ -2601,7 +2591,7 @@ void GCodes::FinaliseMove(const GCodeBuffer& gb)
 			const float fseg = floor(totalSegments * moveFractionToSkip);		// round down to the start of a move
 			segmentsLeftToStartAt = totalSegments - (unsigned int)fseg;
 			firstSegmentFractionToSkip = (moveFractionToSkip * totalSegments) - fseg;
-			segmentsLeft = totalSegments;										// do this last, ready for RTOS
+			NewMoveAvailable();
 			return;
 		}
 	}
@@ -2609,7 +2599,7 @@ void GCodes::FinaliseMove(const GCodeBuffer& gb)
 	segmentsLeftToStartAt = totalSegments;
 	firstSegmentFractionToSkip = moveFractionToSkip;
 
-	segmentsLeft = totalSegments;												// do this last, ready for RTOS
+	NewMoveAvailable();
 }
 
 // The Move class calls this function to find what to do next.
@@ -2634,7 +2624,15 @@ bool GCodes::ReadMove(RawMove& m)
 			}
 		}
 		m.proportionLeft = 0.0;
-		ClearMove();
+
+		// Don't call ClearMove here because this is called from the Move task so the order of doing things matters, i.e. segmentsLeft is cleared last
+		doingArcMove = false;
+		moveBuffer.endStopsToCheck = 0;
+		moveBuffer.moveType = 0;
+		moveBuffer.isFirmwareRetraction = false;
+		moveFractionToSkip = 0.0;
+		__DMB();
+		segmentsLeft = 0;
 	}
 	else
 	{
@@ -2679,9 +2677,10 @@ bool GCodes::ReadMove(RawMove& m)
 		// This is expensive on a SCARA printer, so we really ought to store theta and phi in the move object for later use. But for now we don't.
 		if (doingArcMove && limitAxes && reprap.GetMove().GetKinematics().LimitPosition(m.coords, numVisibleAxes, axesHomed, true))
 		{
-			segmentsLeft = 0;
 			abortedArcMove = true;
 			doingArcMove = false;
+			__DMB();
+			segmentsLeft = 0;
 			return false;
 		}
 
@@ -3996,7 +3995,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 				}
 				moveBuffer.feedRate = retractSpeed;
 				moveBuffer.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
-				segmentsLeft = 1;
+				NewMoveAvailable(1);
 			}
 			if (retractHop > 0.0)
 			{
@@ -4010,7 +4009,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 			moveBuffer.coords[Z_AXIS] -= currentZHop;
 			currentZHop = 0.0;
 			moveBuffer.canPauseAfter = false;			// don't pause in the middle of a command
-			segmentsLeft = 1;
+			NewMoveAvailable(1);
 			gb.SetState(GCodeState::doingFirmwareUnRetraction);
 		}
 		else
@@ -4025,7 +4024,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 				}
 				moveBuffer.feedRate = unRetractSpeed;
 				moveBuffer.canPauseAfter = true;
-				segmentsLeft = 1;
+				NewMoveAvailable(1);
 			}
 		}
 		isRetracted = retract;

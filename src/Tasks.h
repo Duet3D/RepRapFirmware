@@ -11,6 +11,11 @@
 #include "RepRapFirmware.h"
 #include "MessageType.h"
 
+#ifdef RTOS
+# include "FreeRTOS.h"
+# include "task.h"
+#endif
+
 void setup();
 void loop();
 
@@ -18,6 +23,7 @@ namespace Tasks
 {
 #ifdef RTOS
 	void GetHandlerStackUsage(uint32_t* maxStack, uint32_t* neverUsed);
+	void TaskDiagnostics(MessageType mtype, TaskHandle_t ct);
 	void CurrentTaskDiagnostics(MessageType mtype);
 #else
 	void GetStackUsage(uint32_t* currentStack, uint32_t* maxStack, uint32_t* neverUsed);

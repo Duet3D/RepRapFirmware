@@ -353,6 +353,9 @@ private:
 
 	const char* GetMachineModeString() const;							// Get the name of the current machine mode
 
+	void NewMoveAvailable(unsigned int sl);								// Flag that a new move is available
+	void NewMoveAvailable();											// Flag that a new move is available
+
 	Platform& platform;													// The RepRap machine
 
 	RegularGCodeInput* httpInput;										// These cache incoming G-codes...
@@ -401,6 +404,7 @@ private:
 	float currentZHop;							// The amount of Z hop that is currently applied
 
 	// The following contain the details of moves that the Move module fetches
+	// CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
 	RawMove moveBuffer;							// Move details to pass to Move class
 	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
 	unsigned int totalSegments;					// The total number of segments left in the complete move
@@ -560,6 +564,25 @@ private:
 	static constexpr const float MinServoPulseWidth = 544.0, MaxServoPulseWidth = 2400.0;
 	static constexpr uint16_t ServoRefreshFrequency = 50;
 };
+
+// Flag that a new move is available for consumption by the Move subsystem
+// Code that sets up a new move should ensure that segmentsLeft is zero, then set up all the move parameters,
+// then call this function to update SegmentsLeft safely in a multi-threaded environment
+inline void GCodes::NewMoveAvailable(unsigned int sl)
+{
+	totalSegments = sl;
+	__DMB();					// make sure that all the move details have been written first
+	segmentsLeft = sl;			// set the number of segments to indicate that a move is available to be taken
+}
+
+// Flag that a new move is available for consumption by the Move subsystem
+// This version is for when totalSegments has already be set up.
+inline void GCodes::NewMoveAvailable()
+{
+	const unsigned int sl = totalSegments;
+	__DMB();					// make sure that the move details have been written first
+	segmentsLeft = sl;			// set the number of segments to indicate that a move is available to be taken
+}
 
 //*****************************************************************************************************
 

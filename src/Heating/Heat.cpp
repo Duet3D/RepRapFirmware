@@ -29,8 +29,32 @@ Licence: GPL
 # include "Sensors/DhtSensor.h"
 #endif
 
+#ifdef RTOS
+
+# include "Tasks.h"
+# include "FreeRTOS.h"
+# include "task.h"
+
+const uint32_t HeaterTaskStackSize = 128;			// task stack size in dwords
+const uint32_t HeaterTaskPriority = 1;
+
+static StackType_t heaterTaskStack[HeaterTaskStackSize];
+static StaticTask_t heaterTaskBuffer;
+static TaskHandle_t heaterTaskHandle;
+
+extern "C" void HeaterTask(void * pvParameters)
+{
+	reprap.GetHeat().Task();
+}
+
+#endif
+
 Heat::Heat(Platform& p)
-	: platform(p), active(false), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
+	: platform(p),
+#ifndef RTOS
+	  active(false),
+#endif
+	  coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
 	ARRAY_INIT(bedHeaters, DefaultBedHeaters);
 	ARRAY_INIT(chamberHeaters, DefaultChamberHeaters);
@@ -120,10 +144,15 @@ void Heat::Init()
 	virtualHeaterSensors[2] = TemperatureSensor::Create(FirstTmcDriversSenseChannel + 1);
 #endif
 
+	coldExtrude = false;
+
+#ifdef RTOS
+	heaterTaskHandle = xTaskCreateStatic(HeaterTask, "HEAT", ARRAY_SIZE(heaterTaskStack), nullptr, HeaterTaskPriority, heaterTaskStack, &heaterTaskBuffer);
+#else
 	lastTime = millis() - platform.HeatSampleInterval();		// flag the PIDS as due for spinning
 	longWait = millis();
-	coldExtrude = false;
 	active = true;
+#endif
 }
 
 void Heat::Exit()
@@ -132,8 +161,47 @@ void Heat::Exit()
 	{
 		pid->SwitchOff();
 	}
+
+#ifdef RTOS
+	vTaskSuspend(heaterTaskHandle);
+#else
 	active = false;
+#endif
 }
+
+#ifdef RTOS
+
+void Heat::Task()
+{
+	lastWakeTime = xTaskGetTickCount();
+	for (;;)
+	{
+		for (size_t heater = 0; heater < Heaters; heater++)
+		{
+			pids[heater]->Spin();
+		}
+
+		// See if we have finished tuning a PID
+		if (heaterBeingTuned != -1 && !pids[heaterBeingTuned]->IsTuning())
+		{
+			lastHeaterTuned = heaterBeingTuned;
+			heaterBeingTuned = -1;
+		}
+
+		// Delay until it is time again
+		vTaskDelayUntil(&lastWakeTime, platform.HeatSampleInterval());
+	}
+}
+
+// Unfortunately we still need the Spin function for the DHT sensor
+void Heat::Spin()
+{
+#if SUPPORT_DHT_SENSOR
+	DhtSensor::Spin();
+#endif
+}
+
+#else
 
 void Heat::Spin()
 {
@@ -165,6 +233,8 @@ void Heat::Spin()
 	platform.ClassReport(longWait);
 }
 
+#endif
+
 void Heat::Diagnostics(MessageType mtype)
 {
 	platform.Message(mtype, "=== Heat ===\nBed heaters =");
@@ -186,6 +256,9 @@ void Heat::Diagnostics(MessageType mtype)
 			platform.MessageF(mtype, "Heater %d is on, I-accum = %.1f\n", heater, (double)(pids[heater]->GetAccumulator()));
 		}
 	}
+#ifdef RTOS
+	Tasks::TaskDiagnostics(mtype, heaterTaskHandle);
+#endif
 }
 
 bool Heat::AllHeatersAtSetTemperatures(bool includingBed) const

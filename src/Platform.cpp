@@ -1083,7 +1083,16 @@ void Platform::UpdateFirmware()
 	cpu_irq_enable();
 
 	__asm volatile ("mov r3, %0" : : "r" (IAP_FLASH_START) : "r3");
+#ifdef RTOS
+	// We are using separate process and handler stacks. Put the process stack 1K bytes below the handler stack.
+	__asm volatile ("ldr r1, [r3]");
+	__asm volatile ("msr msp, r1");
+	__asm volatile ("sub r1, #1024");
+	__asm volatile ("mov sp, r1");
+#else
 	__asm volatile ("ldr sp, [r3]");
+#endif
+	__asm volatile ("isb");
 	__asm volatile ("ldr r1, [r3, #4]");
 	__asm volatile ("orr r1, r1, #1");
 	__asm volatile ("bx r1");

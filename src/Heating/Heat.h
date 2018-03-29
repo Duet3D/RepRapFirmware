@@ -40,6 +40,9 @@ public:
 	enum HeaterStatus { HS_off = 0, HS_standby = 1, HS_active = 2, HS_fault = 3, HS_tuning = 4 };
 
 	Heat(Platform& p);
+#ifdef RTOS
+	void Task();
+#endif
 	void Spin();												// Called in a tight loop to keep everything going
 	void Init();												// Set everything up
 	void Exit();												// Shut everything down
@@ -161,10 +164,14 @@ private:
 	TemperatureSensor *heaterSensors[Heaters];					// The sensor used by the real heaters
 	TemperatureSensor *virtualHeaterSensors[MaxVirtualHeaters];	// Sensors for virtual heaters
 
+#ifdef RTOS
+	uint32_t lastWakeTime;
+#else
 	uint32_t lastTime;											// The last time our Spin() was called
 	uint32_t longWait;											// Long time for things that happen occasionally
-
 	bool active;												// Are we active?
+#endif
+
 	bool coldExtrude;											// Is cold extrusion allowed?
 	int8_t bedHeaters[NumBedHeaters];							// Indices of the hot bed heaters to use or -1 if none is available
 	int8_t chamberHeaters[NumChamberHeaters];					// Indices of the chamber heaters to use or -1 if none is available
