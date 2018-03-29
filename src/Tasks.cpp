@@ -9,6 +9,11 @@
 #include "RepRap.h"
 #include "Platform.h"
 
+#ifdef RTOS
+# include "FreeRTOS.h"
+# include "task.h"
+#endif
+
 const uint8_t memPattern = 0xA5;
 
 extern "C" char *sbrk(int i);

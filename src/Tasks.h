@@ -12,8 +12,7 @@
 #include "MessageType.h"
 
 #ifdef RTOS
-# include "FreeRTOS.h"
-# include "task.h"
+typedef void *TaskHandle_t;			// copy of the FreeRTOS definition, to avoid having to include the FreeRTOS files here
 #endif
 
 void setup();

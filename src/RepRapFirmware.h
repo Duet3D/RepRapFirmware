@@ -115,6 +115,16 @@ extern "C" void debugPrintf(const char* fmt, ...) __attribute__ ((format (printf
 //#define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
 
 // Functions and globals not part of any class
+
+#ifdef RTOS
+void delay(uint32_t ms);
+#else
+inline void delay(uint32_t ms)
+{
+	coreDelay(ms);
+}
+#endif
+
 bool StringEndsWith(const char* string, const char* ending);
 bool StringStartsWith(const char* string, const char* starting);
 bool StringEquals(const char* s1, const char* s2);
@@ -244,6 +254,7 @@ const uint32_t NvicPriorityPins = 4;			// priority for GPIO pin interrupts - fil
 const uint32_t NvicPriorityStep = 5;			// step interrupt is next highest, it can preempt most other interrupts
 const uint32_t NvicPriorityWiFiUart = 6;		// UART used to receive debug data from the WiFi module
 const uint32_t NvicPriorityUSB = 6;				// USB interrupt
+const uint32_t NvicPriorityHSMCI = 6;			// HSMCI command complete interrupt
 
 #if HAS_LWIP_NETWORKING
 const uint32_t NvicPriorityNetworkTick = 7;		// priority for network tick interrupt

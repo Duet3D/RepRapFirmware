@@ -27,8 +27,42 @@
 # include "sam/drivers/hsmci/hsmci.h"
 #endif
 
+#ifdef RTOS
+# include "FreeRTOS.h"
+# include "task.h"
+
+static TaskHandle_t hsmciTask = nullptr;		// the task that is waiting for a HSMCI command to complete
+
 // Callback function from the hsmci driver, called while it is waiting for an SD card operation to complete
-extern "C" void hsmciIdle()
+// 'st' is the set of bits in the HSMCI status register that the caller is interested in.
+// The caller keeps calling this function until at least one of those bits is set.
+extern "C" void hsmciIdle(uint32_t st)
+{
+	if ((HSMCI->HSMCI_SR & st) == 0)
+	{
+		// Suspend this task until we get an interrupt indicating that a status bit has been set
+		hsmciTask = xTaskGetCurrentTaskHandle();
+		HSMCI->HSMCI_IER = st;
+		ulTaskNotifyTake(pdTRUE, 1000);
+	}
+}
+
+extern "C" void HSMCI_Handler()
+{
+	HSMCI->HSMCI_IDR = 0xFFFFFFFF;					// disable all HSMCI interrupts
+	if (hsmciTask != nullptr)
+	{
+		vTaskNotifyGiveFromISR(hsmciTask, nullptr);	// wake up the task
+		hsmciTask = nullptr;
+	}
+}
+
+#else
+
+// Callback function from the hsmci driver, called while it is waiting for an SD card operation to complete
+// 'st' is the set of bits in the HSMCI status register that the caller is interested in.
+// The caller keeps calling this function until at least one of those bits is set.
+extern "C" void hsmciIdle(uint32_t st)
 {
 	if (reprap.GetSpinningModule() != moduleNetwork)
 	{
@@ -61,6 +95,8 @@ extern "C" void hsmciIdle()
 	}
 #endif
 }
+
+#endif
 
 // RepRap member functions.
 
@@ -152,10 +188,14 @@ void RepRap::Init()
 	processingConfig = false;
 
 	// Enable network (unless it's disabled)
-	network->Activate();			// Need to do this here, as the configuration GCodes may set IP address etc.
+	network->Activate();			// need to do this here, as the configuration GCodes may set IP address etc.
 
 #if HAS_HIGH_SPEED_SD
 	hsmci_set_idle_func(hsmciIdle);
+# ifdef RTOS
+	HSMCI->HSMCI_IDR = 0xFFFFFFFF;	// disable all HSMCI interrupts
+	NVIC_EnableIRQ(HSMCI_IRQn);
+# endif
 #endif
 	platform->MessageF(UsbMessage, "%s is up and running.\n", FIRMWARE_NAME);
 	fastLoop = UINT32_MAX;

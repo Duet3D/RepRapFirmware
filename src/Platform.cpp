@@ -1826,7 +1826,9 @@ void Platform::InitialiseInterrupts()
 	NVIC_SetPriority(WDT_IRQn, NvicPriorityWatchdog);			// set priority for watchdog interrupts
 #endif
 
-#ifndef RTOS
+#ifdef RTOS
+	NVIC_SetPriority(HSMCI_IRQn, NvicPriorityHSMCI);			// set priority for SD interface interrupts
+#else
 	// Set the tick interrupt to the highest priority. We need to to monitor the heaters and kick the watchdog.
 	NVIC_SetPriority(SysTick_IRQn, NvicPrioritySystick);		// set priority for tick interrupts
 #endif

@@ -165,6 +165,11 @@ Licence: GPL
 #include "Platform.h"
 #include "RepRap.h"
 
+#ifdef RTOS
+# include "FreeRTOS.h"
+# include "task.h"
+#endif
+
 // We just need one instance of RepRap; everything else is contained within it and hidden
 
 RepRap reprap;
@@ -204,6 +209,15 @@ void debugPrintf(const char* fmt, ...)
 	reprap.GetPlatform().MessageF(DebugMessage, fmt, vargs);
 	va_end(vargs);
 }
+
+#ifdef RTOS
+
+void delay(uint32_t ms)
+{
+	vTaskDelay(ms);
+}
+
+#endif
 
 // String testing
 
