@@ -2,6 +2,15 @@
 #include "Platform.h"
 #include "RepRap.h"
 #include "sd_mmc.h"
+#include "RTOSIface.h"
+
+// A note on using mutexes:
+// Each SD card volume has its own mutex. There is also one for the file table, and one for the find first/find next buffer.
+// The FatFS subsystem locks and releases the appropriate volume mutex when it is called.
+// Any function that needs to acquire both the file table mutex and a volume mutex MUST take the file table mutex first, to avoid deadlocks.
+// Any function that needs to acquire both the find buffer mutex and a volume mutex MUST take the find buffer mutex first, to avoid deadlocks.
+// No function should need to take both the file table mutex and the find buffer mutex.
+// No function in here should be called when the caller already owns the shared SPI mutex.
 
 // Static helper functions - not declared as class members to avoid having to include sd_mmc.h everywhere
 static const char* TranslateCardType(card_type_t ct)
@@ -54,6 +63,10 @@ MassStorage::MassStorage(Platform* p) : freeWriteBuffers(nullptr)
 
 void MassStorage::Init()
 {
+	// Create the mutexes
+	fsMutexHandle = RTOSIface::CreateMutex(fsMutexStorage);
+	dirMutexHandle = RTOSIface::CreateMutex(dirMutexStorage);
+
 	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
 	{
 		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers);
@@ -66,6 +79,7 @@ void MassStorage::Init()
 		inf.mounting = inf.isMounted = false;
 		inf.cdPin = SdCardDetectPins[card];
 		inf.cardState = CardDetectState::present;
+		inf.volMutexHandle = RTOSIface::CreateMutex(inf.volMutexStorage);
 	}
 
 	sd_mmc_init(SdWriteProtectPins, SdSpiCSPins);		// initialize SD MMC stack
@@ -87,6 +101,7 @@ void MassStorage::Init()
 
 FileWriteBuffer *MassStorage::AllocateWriteBuffer()
 {
+	Locker lock(fsMutexHandle);
 	if (freeWriteBuffers == nullptr)
 	{
 		return nullptr;
@@ -100,24 +115,28 @@ FileWriteBuffer *MassStorage::AllocateWriteBuffer()
 
 void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer)
 {
+	Locker lock(fsMutexHandle);
 	buffer->SetNext(freeWriteBuffers);
 	freeWriteBuffers = buffer;
 }
 
 FileStore* MassStorage::OpenFile(const char* directory, const char* fileName, OpenMode mode)
 {
-	for (size_t i = 0; i < MAX_FILES; i++)
 	{
-		if (!files[i].inUse)
+		Locker lock(fsMutexHandle);
+		for (size_t i = 0; i < MAX_FILES; i++)
 		{
-			if (files[i].Open(directory, fileName, mode))
+			if (!files[i].inUse)
 			{
-				files[i].inUse = true;
-				return &files[i];
-			}
-			else
-			{
-				return nullptr;
+				if (files[i].Open(directory, fileName, mode))
+				{
+					files[i].inUse = true;
+					return &files[i];
+				}
+				else
+				{
+					return nullptr;
+				}
 			}
 		}
 	}
@@ -128,6 +147,7 @@ FileStore* MassStorage::OpenFile(const char* directory, const char* fileName, Op
 // Close all files
 void MassStorage::CloseAllFiles()
 {
+	Locker lock(fsMutexHandle);
 	for (FileStore& f : files)
 	{
 		while (f.inUse)
@@ -137,8 +157,9 @@ void MassStorage::CloseAllFiles()
 	}
 }
 
-const char* MassStorage::CombineName(const char* directory, const char* fileName)
+/*static*/ void MassStorage::CombineName(const StringRef& outbuf, const char* directory, const char* fileName)
 {
+	outbuf.Clear();
 	size_t outIndex = 0;
 	size_t inIndex = 0;
 
@@ -147,19 +168,20 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 	{
 		while (directory[inIndex] != 0 && directory[inIndex] != '\n')
 		{
-			combinedName[outIndex] = directory[inIndex];
+			outbuf.Pointer()[outIndex] = directory[inIndex];
 			inIndex++;
 			outIndex++;
-			if (outIndex >= ARRAY_SIZE(combinedName))
+			if (outIndex >= outbuf.Capacity())
 			{
 				reprap.GetPlatform().MessageF(ErrorMessage, "CombineName() buffer overflow");
-				outIndex = 0;
+				outbuf.copy("?????");
+				return;
 			}
 		}
 
-		if (inIndex > 0 && directory[inIndex - 1] != '/' && outIndex < ARRAY_UPB(combinedName))
+		if (inIndex > 0 && directory[inIndex - 1] != '/')
 		{
-			combinedName[outIndex] = '/';
+			outbuf.Pointer()[outIndex] = '/';
 			outIndex++;
 		}
 		inIndex = 0;
@@ -167,21 +189,22 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 
 	while (fileName[inIndex] != 0 && fileName[inIndex] != '\n')
 	{
-		combinedName[outIndex] = fileName[inIndex];
-		inIndex++;
-		outIndex++;
-		if (outIndex >= ARRAY_SIZE(combinedName))
+		if (outIndex >= outbuf.Capacity())
 		{
 			reprap.GetPlatform().Message(ErrorMessage, "file name too long");
-			outIndex = 0;
+			outbuf.copy("?????");
+			return;
 		}
+		outbuf.Pointer()[outIndex] = fileName[inIndex];
+		inIndex++;
+		outIndex++;
 	}
-	combinedName[outIndex] = 0;
-
-	return combinedName;
+	outbuf.Pointer()[outIndex] = 0;
 }
 
 // Open a directory to read a file list. Returns true if it contains any files, false otherwise.
+// If this returns true then the file system mutex is owned. The caller must subsequently release the mutex either
+// by calling FindNext until it returns false, or by calling AbandonFindNext.
 bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 {
 	TCHAR loc[MaxFilenameLength + 1];
@@ -192,6 +215,11 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 	if (len != 0 && loc[len - 1] == '/')
 	{
 		loc[len - 1] = 0;
+	}
+
+	if (!RTOSIface::TakeMutex(dirMutexHandle, 10000))
+	{
+		return false;
 	}
 
 	findDir.lfn = nullptr;
@@ -222,12 +250,19 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 		}
 	}
 
+	RTOSIface::ReleaseMutex(dirMutexHandle);
 	return false;
 }
 
 // Find the next file in a directory. Returns true if another file has been read.
+// If it returns false then it also releases the mutex.
 bool MassStorage::FindNext(FileInfo &file_info)
 {
+	if (RTOSIface::GetMutexHolder(dirMutexHandle) != RTOSIface::GetCurrentTask())
+	{
+		return false;		// error, we don't hold the mutex
+	}
+
 	FILINFO entry;
 	entry.lfname = file_info.fileName;
 	entry.lfsize = ARRAY_SIZE(file_info.fileName);
@@ -236,6 +271,7 @@ bool MassStorage::FindNext(FileInfo &file_info)
 	if (f_readdir(&findDir, &entry) != FR_OK || entry.fname[0] == 0)
 	{
 		//f_closedir(findDir);
+		RTOSIface::ReleaseMutex(dirMutexHandle);
 		return false;
 	}
 
@@ -251,6 +287,15 @@ bool MassStorage::FindNext(FileInfo &file_info)
 	return true;
 }
 
+// Quit searching for files. Needed to avoid hanging on to the mutex.
+void MassStorage::AbandonFindNext()
+{
+	if (RTOSIface::GetMutexHolder(dirMutexHandle) == RTOSIface::GetCurrentTask())
+	{
+		RTOSIface::ReleaseMutex(dirMutexHandle);
+	}
+}
+
 // Month names. The first entry is used for invalid month numbers.
 static const char *monthNames[13] = { "???", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
@@ -263,32 +308,40 @@ const char* MassStorage::GetMonthName(const uint8_t month)
 // Delete a file or directory
 bool MassStorage::Delete(const char* directory, const char* fileName, bool silent)
 {
-	const char* const location = (directory != nullptr)
-									? reprap.GetPlatform().GetMassStorage()->CombineName(directory, fileName)
-									: fileName;
+	String<MaxFilenameLength> location;
+	CombineName(location.GetRef(), directory, fileName);
 
-	// First check whether the file is open - don't allow it to be deleted if it is
-	FIL file;
-	const FRESULT openReturn = f_open(&file, location, FA_OPEN_EXISTING | FA_READ);
-	if (openReturn == FR_OK)
+	FRESULT unlinkReturn;
+
+	// Start new scope to lock the filesystem for the minimum time
 	{
-		for (const FileStore& fil : files)
+		Locker lock(fsMutexHandle);
+
+		// First check whether the file is open - don't allow it to be deleted if it is
+		FIL file;
+		const FRESULT openReturn = f_open(&file, location.c_str(), FA_OPEN_EXISTING | FA_READ);
+		if (openReturn == FR_OK)
 		{
-			if (fil.file.fs == file.fs && fil.file.dir_sect == file.dir_sect && fil.file.dir_ptr == file.dir_ptr )
+			for (const FileStore& fil : files)
 			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "Cannot delete file %s because it is open\n", location);
-				f_close(&file);
-				return false;
+				if (fil.file.fs == file.fs && fil.file.dir_sect == file.dir_sect && fil.file.dir_ptr == file.dir_ptr )
+				{
+					reprap.GetPlatform().MessageF(ErrorMessage, "Cannot delete file %s because it is open\n", location.c_str());
+					f_close(&file);
+					return false;
+				}
 			}
+			f_close(&file);
 		}
-		f_close(&file);
+
+		unlinkReturn = f_unlink(location.c_str());
 	}
 
-	if (f_unlink(location) != FR_OK)
+	if (unlinkReturn != FR_OK)
 	{
 		if (!silent)
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to delete file %s\n", location);
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to delete file %s\n", location.c_str());
 		}
 		return false;
 	}
@@ -298,10 +351,11 @@ bool MassStorage::Delete(const char* directory, const char* fileName, bool silen
 // Create a new directory
 bool MassStorage::MakeDirectory(const char *parentDir, const char *dirName)
 {
-	const char* const location = reprap.GetPlatform().GetMassStorage()->CombineName(parentDir, dirName);
-	if (f_mkdir(location) != FR_OK)
+	String<MaxFilenameLength> location;
+	CombineName(location.GetRef(), parentDir, dirName);
+	if (f_mkdir(location.c_str()) != FR_OK)
 	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create directory %s\n", location);
+		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create directory %s\n", location.c_str());
 		return false;
 	}
 	return true;
@@ -345,10 +399,9 @@ bool MassStorage::FileExists(const char *file) const
 
 bool MassStorage::FileExists(const char *directory, const char *fileName) const
 {
-	const char * const location = (directory != nullptr)
-									? reprap.GetPlatform().GetMassStorage()->CombineName(directory, fileName)
-									: fileName;
-	return FileExists(location);
+	String<MaxFilenameLength> location;
+	CombineName(location.GetRef(), directory, fileName);
+	return FileExists(location.c_str());
 }
 
 // Check if the specified directory exists
@@ -361,18 +414,19 @@ bool MassStorage::DirectoryExists(const char *path) const
 
 bool MassStorage::DirectoryExists(const char* directory, const char* subDirectory)
 {
-	return DirectoryExists(CombineName(directory, subDirectory));
+	String<MaxFilenameLength> location;
+	CombineName(location.GetRef(), directory, subDirectory);
+	return DirectoryExists(location.c_str());
 }
 
 // Return the last modified time of a file, or zero if failure
 time_t MassStorage::GetLastModifiedTime(const char* directory, const char *fileName) const
 {
-	const char * const location = (directory != nullptr)
-									? reprap.GetPlatform().GetMassStorage()->CombineName(directory, fileName)
-									: fileName;
+	String<MaxFilenameLength> location;
+	CombineName(location.GetRef(), directory, fileName);
 	FILINFO fil;
 	fil.lfname = nullptr;
-	if (f_stat(location, &fil) == FR_OK)
+	if (f_stat(location.c_str(), &fil) == FR_OK)
 	{
 		return ConvertTimeStamp(fil.fdate, fil.ftime);
 	}
@@ -381,17 +435,16 @@ time_t MassStorage::GetLastModifiedTime(const char* directory, const char *fileN
 
 bool MassStorage::SetLastModifiedTime(const char* directory, const char *fileName, time_t time)
 {
-	const char * const location = (directory != nullptr)
-									? reprap.GetPlatform().GetMassStorage()->CombineName(directory, fileName)
-									: fileName;
+	String<MaxFilenameLength> location;
+	CombineName(location.GetRef(), directory, fileName);
 	const struct tm * const timeInfo = gmtime(&time);
 	FILINFO fno;
     fno.fdate = (WORD)(((timeInfo->tm_year - 80) * 512U) | (timeInfo->tm_mon + 1) * 32U | timeInfo->tm_mday);
     fno.ftime = (WORD)(timeInfo->tm_hour * 2048U | timeInfo->tm_min * 32U | timeInfo->tm_sec / 2U);
-    const bool ok = (f_utime(location, &fno) == FR_OK);
+    const bool ok = (f_utime(location.c_str(), &fno) == FR_OK);
     if (!ok)
 	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to set last modified time for file '%s'\n", location);
+		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to set last modified time for file '%s'\n", location.c_str());
 	}
     return ok;
 }
@@ -408,6 +461,8 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 	}
 
 	SdCardInfo& inf = info[card];
+	Locker lock1(fsMutexHandle);
+	Locker lock2(inf.volMutexHandle);
 	if (!inf.mounting)
 	{
 		if (inf.isMounted)
@@ -513,6 +568,7 @@ bool MassStorage::CheckDriveMounted(const char* path)
 // Return true if any files are open on the file system
 bool MassStorage::AnyFileOpen(const FATFS *fs) const
 {
+	Locker lock(fsMutexHandle);
 	for (const FileStore & fil : files)
 	{
 		if (fil.IsOpenOn(fs))
@@ -527,6 +583,7 @@ bool MassStorage::AnyFileOpen(const FATFS *fs) const
 unsigned int MassStorage::InvalidateFiles(const FATFS *fs, bool doClose)
 {
 	unsigned int invalidated = 0;
+	Locker lock(fsMutexHandle);
 	for (FileStore & fil : files)
 	{
 		if (fil.Invalidate(fs, doClose))
@@ -561,6 +618,8 @@ bool MassStorage::IsCardDetected(size_t card) const
 bool MassStorage::InternalUnmount(size_t card, bool doClose)
 {
 	SdCardInfo& inf = info[card];
+	Locker lock1(fsMutexHandle);
+	Locker lock2(inf.volMutexHandle);
 	const bool invalidated = InvalidateFiles(&inf.fileSystem, doClose);
 	f_mount(card, nullptr);
 	memset(&inf.fileSystem, 0, sizeof(inf.fileSystem));
@@ -572,6 +631,7 @@ bool MassStorage::InternalUnmount(size_t card, bool doClose)
 unsigned int MassStorage::GetNumFreeFiles() const
 {
 	unsigned int numFreeFiles = 0;
+	Locker lock(fsMutexHandle);
 	for (const FileStore & fil : files)
 	{
 		if (!fil.inUse)
@@ -642,12 +702,15 @@ void MassStorage::Spin()
 	}
 
 	// Check if any files are supposed to be closed
-	for (FileStore & fil : files)
 	{
-		if (fil.closeRequested)
+		Locker lock(fsMutexHandle);
+		for (FileStore & fil : files)
 		{
-			// We cannot do this in ISRs, so do it here
-			fil.Close();
+			if (fil.closeRequested)
+			{
+				// We cannot do this in ISRs, so do it here
+				fil.Close();
+			}
 		}
 	}
 }
@@ -685,5 +748,39 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity
 	}
 	return InfoResult::ok;
 }
+
+#ifdef RTOS
+
+// Functions called by FatFS to acquire/release mutual exclusion
+extern "C"
+{
+	// Create a sync object. We already created it, we just need to copy the handle.
+	int ff_cre_syncobj (BYTE vol, _SYNC_t* psy)
+	{
+		*psy = reprap.GetPlatform().GetMassStorage()->GetVolumeMutexHandle(vol);
+		return 1;
+	}
+
+	// Lock sync object
+	int ff_req_grant (_SYNC_t sy)
+	{
+		xSemaphoreTakeRecursive(sy, portMAX_DELAY);
+		return 1;
+	}
+
+	// Unlock sync object
+	void ff_rel_grant (_SYNC_t sy)
+	{
+		xSemaphoreGiveRecursive(sy);
+	}
+
+	// Delete a sync object
+	int ff_del_syncobj (_SYNC_t sy)
+	{
+		return 1;		// nothing to do, we never delete the mutex
+	}
+}
+
+#endif
 
 // End

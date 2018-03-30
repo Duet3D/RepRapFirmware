@@ -50,7 +50,7 @@ protected:
 	size_t clientPointer;
 
 	char currentDirectory[MaxFilenameLength];
-	char fileToMove[MaxFilenameLength];
+	String<MaxFilenameLength> fileToMove;
 };
 
 #endif /* SRC_NETWORKING_FTPRESPONDER_H_ */

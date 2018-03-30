@@ -55,16 +55,15 @@ bool FileStore::IsOpenOn(const FATFS *fs) const
 // This is protected - only Platform can access it.
 bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 {
-	const char* const location = (directory != nullptr)
-									? reprap.GetPlatform().GetMassStorage()->CombineName(directory, fileName)
-										: fileName;
+	String<MaxFilenameLength> location;
+	MassStorage::CombineName(location.GetRef(), directory, fileName);
 	writing = (mode == OpenMode::write || mode == OpenMode::append);
 
 	if (writing)
 	{
 		// Try to create the path of this file if we want to write to it
 		String<MaxFilenameLength> filePath;
-		filePath.copy(location);
+		filePath.copy(location.c_str());
 
 		size_t i = (isdigit(filePath[0]) && filePath[1] == ':') ? 2 : 0;
 		if (filePath[i] == '/')
@@ -77,9 +76,9 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 			if (filePath[i] == '/')
 			{
 				filePath[i] = 0;
-				if (!reprap.GetPlatform().GetMassStorage()->DirectoryExists(filePath.Pointer()) && !reprap.GetPlatform().GetMassStorage()->MakeDirectory(filePath.Pointer()))
+				if (!reprap.GetPlatform().GetMassStorage()->DirectoryExists(filePath.c_str()) && !reprap.GetPlatform().GetMassStorage()->MakeDirectory(filePath.c_str()))
 				{
-					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create directory %s while trying to open file %s\n", filePath.Pointer(), location);
+					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create directory %s while trying to open file %s\n", filePath.c_str(), location.c_str());
 					return false;
 				}
 				filePath[i] = '/';
@@ -94,7 +93,7 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 		writeBuffer = (mode == OpenMode::write) ? reprap.GetPlatform().GetMassStorage()->AllocateWriteBuffer() : nullptr;
 	}
 
-	const FRESULT openReturn = f_open(&file, location,
+	const FRESULT openReturn = f_open(&file, location.c_str(),
 										(mode == OpenMode::write) ?  FA_CREATE_ALWAYS | FA_WRITE
 											: (mode == OpenMode::append) ? FA_WRITE | FA_OPEN_ALWAYS
 												: FA_OPEN_EXISTING | FA_READ);
@@ -104,7 +103,7 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 		// It is up to the caller to report an error if necessary.
 		if (reprap.Debug(modulePlatform))
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "Can't open %s to %s, error code %d\n", location, (writing) ? "write" : "read", openReturn);
+			reprap.GetPlatform().MessageF(ErrorMessage, "Can't open %s to %s, error code %d\n", location.c_str(), (writing) ? "write" : "read", openReturn);
 		}
 		return false;
 	}

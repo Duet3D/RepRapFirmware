@@ -40,23 +40,17 @@
  * \asf_license_stop
  *
  */
-/// @cond 0
-/**INDENT-OFF**/
-#ifdef __cplusplus
-extern "C" {
-#endif
-/**INDENT-ON**/
-/// @endcond
 
 #include "ctrl_access.h"
 #include "compiler.h"
 
 #include "diskio.h"
+#include "conf_sd_mmc.h"
 
+#include "RepRapFirmware.h"
+#include "Tasks.h"
 
-#include <string.h>
-#include <stdio.h>
-#include <assert.h>
+#include <cstring>
 
 //void debugPrintf(const char*, ...);
 
@@ -93,12 +87,6 @@ extern "C" {
  */
 DSTATUS disk_initialize(BYTE drv)
 {
-#if (SAM3S || SAM3U || SAM3N || SAM3XA_SERIES || SAM4S)
-	/* Default RTC configuration, 24-hour mode */
-	/**@TODO FIX THIS - need an RTC*/
-	//rtc_set_hour_mode(RTC, 0);
-#endif
-
 #if LUN_USB
 	/* USB disk with multiple LUNs */
 	if (drv > LUN_ID_USB + Lun_usb_get_lun()) {
@@ -110,6 +98,8 @@ DSTATUS disk_initialize(BYTE drv)
 		return STA_NOINIT;
 	}
 #endif
+
+	Locker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutextHandle() : nullptr);
 
 	Ctrl_status mem_status;
 
@@ -143,6 +133,8 @@ DSTATUS disk_initialize(BYTE drv)
  */
 DSTATUS disk_status(BYTE drv)
 {
+	Locker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutextHandle() : nullptr);
+
 	switch (mem_test_unit_ready(drv)) {
 	case CTRL_GOOD:
 		return 0;
@@ -167,6 +159,8 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
 {
 //	debugPrintf("R %u %u\n", sector, count);
 #if ACCESS_MEM_TO_RAM
+	Locker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutextHandle() : nullptr);
+
 	uint8_t uc_sector_size = mem_sector_size(drv);
 	uint32_t ul_last_sector_num;
 
@@ -212,6 +206,8 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count)
 {
 //	debugPrintf("W %u %u\n", sector, count);
 #if ACCESS_MEM_TO_RAM
+	Locker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutextHandle() : nullptr);
+
 	uint8_t uc_sector_size = mem_sector_size(drv);
 	uint32_t ul_last_sector_num;
 
@@ -278,6 +274,8 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
 	/* Get the number of sectors on the disk (DWORD) */
 	case GET_SECTOR_COUNT:
 	{
+		Locker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutextHandle() : nullptr);
+
 		uint32_t ul_last_sector_num;
 
 		/* Check valid address */
@@ -292,6 +290,8 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
 	/* Get sectors on the disk (WORD) */
 	case GET_SECTOR_SIZE:
 	{
+		Locker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutextHandle() : nullptr);
+
 		uint8_t uc_sector_size = mem_sector_size(drv);
 
 		if ((uc_sector_size != SECTOR_SIZE_512) &&
@@ -310,10 +310,14 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
 
 	/* Make sure that data has been written */
 	case CTRL_SYNC:
-		if (mem_test_unit_ready(drv) == CTRL_GOOD) {
-			res = RES_OK;
-		} else {
-			res = RES_NOTRDY;
+		{
+			Locker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutextHandle() : nullptr);
+
+			if (mem_test_unit_ready(drv) == CTRL_GOOD) {
+				res = RES_OK;
+			} else {
+				res = RES_NOTRDY;
+			}
 		}
 		break;
 
@@ -326,11 +330,3 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
 }
 
 //@}
-
-/// @cond 0
-/**INDENT-OFF**/
-#ifdef __cplusplus
-}
-#endif
-/**INDENT-ON**/
-/// @endcond

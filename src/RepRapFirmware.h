@@ -117,12 +117,16 @@ extern "C" void debugPrintf(const char* fmt, ...) __attribute__ ((format (printf
 // Functions and globals not part of any class
 
 #ifdef RTOS
+
 void delay(uint32_t ms);
+
 #else
+
 inline void delay(uint32_t ms)
 {
 	coreDelay(ms);
 }
+
 #endif
 
 bool StringEndsWith(const char* string, const char* ending);

@@ -881,10 +881,9 @@ void HttpResponder::SendJsonResponse(const char* command)
 
 		if (StringEquals(command, "configfile"))	// rr_configfile [DEPRECATED]
 		{
-			const char *configPath = GetPlatform().GetMassStorage()->CombineName(GetPlatform().GetSysDir(), GetPlatform().GetConfigFile());
-			char fileName[MaxFilenameLength];
-			SafeStrncpy(fileName, configPath, ARRAY_SIZE(fileName));
-			SendFile(fileName, false);
+			String<MaxFilenameLength> fileName;
+			MassStorage::CombineName(fileName.GetRef(), GetPlatform().GetSysDir(), GetPlatform().GetConfigFile());
+			SendFile(fileName.c_str(), false);
 			return;
 		}
 

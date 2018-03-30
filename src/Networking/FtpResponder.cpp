@@ -14,7 +14,7 @@
 FtpResponder::FtpResponder(NetworkResponder *n) : NetworkResponder(n), dataSocket(nullptr),
 	passivePort(0),	passivePortOpenTime(0), dataBuf(nullptr)
 {
-	strcpy(fileToMove, "");
+	fileToMove.Clear();
 }
 
 // Ask the responder to accept this connection, returns true if it did
@@ -595,13 +595,12 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "MKD"))
 		{
 			const char *filename = GetParameter("MKD");
-			const char *location = (filename[0] == '/')
-										? filename
-										: GetPlatform().GetMassStorage()->CombineName(currentDirectory, filename);
+			String<MaxFilenameLength> location;
+			MassStorage::CombineName(location.GetRef(), currentDirectory, filename);
 
-			if (GetPlatform().GetMassStorage()->MakeDirectory(location))
+			if (GetPlatform().GetMassStorage()->MakeDirectory(location.c_str()))
 			{
-				outBuf->printf("257 \"%s\" created\r\n", location);
+				outBuf->printf("257 \"%s\" created\r\n", location.c_str());
 			}
 			else
 			{
@@ -613,13 +612,9 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "RNFR"))
 		{
 			const char *filename = GetParameter("RNFR");
-			if (filename[0] != '/')
-			{
-				filename = GetPlatform().GetMassStorage()->CombineName(currentDirectory, filename);
-			}
-			SafeStrncpy(fileToMove, filename, ARRAY_SIZE(fileToMove));
+			MassStorage::CombineName(fileToMove.GetRef(), currentDirectory, filename);
 
-			if (GetPlatform().GetMassStorage()->FileExists(fileToMove))
+			if (GetPlatform().GetMassStorage()->FileExists(fileToMove.c_str()))
 			{
 				outBuf->copy("350 Ready to RNTO.\r\n");
 			}
@@ -632,12 +627,10 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "RNTO"))
 		{
 			const char *filename = GetParameter("RNTO");
-			if (filename[0] != '/')
-			{
-				filename = GetPlatform().GetMassStorage()->CombineName(currentDirectory, filename);
-			}
+			String<MaxFilenameLength> location;
+			MassStorage::CombineName(location.GetRef(), currentDirectory, filename);
 
-			if (GetPlatform().GetMassStorage()->Rename(fileToMove, filename))
+			if (GetPlatform().GetMassStorage()->Rename(fileToMove.c_str(), location.c_str()))
 			{
 				outBuf->copy("250 Rename successful.\r\n");
 			}

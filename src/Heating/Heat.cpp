@@ -32,15 +32,13 @@ Licence: GPL
 #ifdef RTOS
 
 # include "Tasks.h"
-# include "FreeRTOS.h"
-# include "task.h"
 
 const uint32_t HeaterTaskStackSize = 128;			// task stack size in dwords
 const uint32_t HeaterTaskPriority = 1;
 
-static StackType_t heaterTaskStack[HeaterTaskStackSize];
-static StaticTask_t heaterTaskBuffer;
-static TaskHandle_t heaterTaskHandle;
+static uint32_t heaterTaskStack[HeaterTaskStackSize];
+static TaskStorage heaterTaskBuffer;
+static TaskHandle heaterTaskHandle;
 
 extern "C" void HeaterTask(void * pvParameters)
 {
@@ -147,7 +145,7 @@ void Heat::Init()
 	coldExtrude = false;
 
 #ifdef RTOS
-	heaterTaskHandle = xTaskCreateStatic(HeaterTask, "HEAT", ARRAY_SIZE(heaterTaskStack), nullptr, HeaterTaskPriority, heaterTaskStack, &heaterTaskBuffer);
+	heaterTaskHandle = RTOSIface::CreateTask(HeaterTask, "HEAT", ARRAY_SIZE(heaterTaskStack), nullptr, HeaterTaskPriority, heaterTaskStack, heaterTaskBuffer);
 #else
 	lastTime = millis() - platform.HeatSampleInterval();		// flag the PIDS as due for spinning
 	longWait = millis();
@@ -163,7 +161,7 @@ void Heat::Exit()
 	}
 
 #ifdef RTOS
-	vTaskSuspend(heaterTaskHandle);
+	RTOSIface::SuspendTask(heaterTaskHandle);
 #else
 	active = false;
 #endif
@@ -747,7 +745,7 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const
 			buf.printf("M141 P%u S%.1f\n", index, (double)GetActiveTemperature(chamberHeater));
 		}
 	}
-	return (buf.Length() == 0) || f->Write(buf.Pointer());
+	return (buf.strlen() == 0) || f->Write(buf.Pointer());
 }
 
 // End

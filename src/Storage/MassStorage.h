@@ -9,6 +9,8 @@
 #include "FileStore.h"
 #include <ctime>
 
+#include "RTOSIface.h"
+
 // Info returned by FindFirst/FindNext calls
 struct FileInfo
 {
@@ -24,8 +26,9 @@ public:
 	FileStore* OpenFile(const char* directory, const char* fileName, OpenMode mode);
 	bool FindFirst(const char *directory, FileInfo &file_info);
 	bool FindNext(FileInfo &file_info);
+	void AbandonFindNext();
 	const char* GetMonthName(const uint8_t month);
-	const char* CombineName(const char* directory, const char* fileName);
+	static void CombineName(const StringRef& out, const char* directory, const char* fileName);
 	bool Delete(const char* directory, const char* fileName, bool silent = false);
 	bool MakeDirectory(const char *parentDir, const char *dirName);
 	bool MakeDirectory(const char *directory);
@@ -46,6 +49,7 @@ public:
 	void CloseAllFiles();
 	unsigned int GetNumFreeFiles() const;
 	void Spin();
+	MutexHandle GetVolumeMutexHandle(size_t vol) const { return info[vol].volMutexHandle; }
 
 	enum class InfoResult : uint8_t
 	{
@@ -80,6 +84,8 @@ private:
 		FATFS fileSystem;
 		uint32_t cdChangedTime;
 		uint32_t mountStartTime;
+		MutexHandle volMutexHandle;
+		MutexStorage volMutexStorage;
 		Pin cdPin;
 		bool mounting;
 		bool isMounted;
@@ -91,10 +97,13 @@ private:
 
 	SdCardInfo info[NumSdCards];
 
-	DIR findDir;
-	char combinedName[MaxFilenameLength + 1];
-	FileWriteBuffer *freeWriteBuffers;
+	MutexHandle fsMutexHandle;
+	MutexHandle dirMutexHandle;
+	MutexStorage fsMutexStorage;
+	MutexStorage dirMutexStorage;
 
+	DIR findDir;
+	FileWriteBuffer *freeWriteBuffers;
 	FileStore files[MAX_FILES];
 };
 

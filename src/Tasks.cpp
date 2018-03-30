@@ -26,6 +26,9 @@ static StackType_t mainTaskStack[MainTaskStackSize];
 static StaticTask_t mainTaskBuffer;
 static TaskHandle_t mainTaskHandle;
 
+static MutexHandle spiMutexHandle;
+static MutexStorage spiMutexStorage;
+
 extern "C" void MainTask(void * pvParameters);
 #endif
 
@@ -69,6 +72,7 @@ extern "C" void AppMain()
 
 extern "C" void MainTask(void *pvParameters)
 {
+	spiMutexHandle = RTOSIface::CreateMutex(spiMutexStorage);
 #endif
 	reprap.Init();
 	for (;;)
@@ -130,6 +134,15 @@ namespace Tasks
 	}
 
 #endif
+
+	MutexHandle GetSpiMutextHandle()
+	{
+#ifdef RTOS
+		return spiMutexHandle;
+#else
+		return nullptr;
+#endif
+	}
 }
 
 #ifdef RTOS

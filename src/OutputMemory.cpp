@@ -220,7 +220,7 @@ size_t OutputBuffer::cat(const char *src, size_t len)
 
 size_t OutputBuffer::cat(StringRef &str)
 {
-	return cat(str.Pointer(), str.Length());
+	return cat(str.c_str(), str.strlen());
 }
 
 // Encode a string in JSON format and append it to a string buffer and return the number of bytes written
@@ -289,7 +289,7 @@ size_t OutputBuffer::EncodeString(const char *src, size_t srcLength, bool allowC
 
 size_t OutputBuffer::EncodeString(const StringRef& str, bool allowControlChars, bool encapsulateString)
 {
-	return EncodeString(str.Pointer(), str.Length(), encapsulateString);
+	return EncodeString(str.c_str(), str.Capacity(), encapsulateString);
 }
 
 size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)

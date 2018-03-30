@@ -755,9 +755,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			if (displayMessageBox)
 			{
 				response->cat("\"msgBox\":{\"msg\":");
-				response->EncodeString(boxMessage.c_str(), boxMessage.MaxLength(), false);
+				response->EncodeString(boxMessage.c_str(), boxMessage.Capacity(), false);
 				response->cat(",\"title\":");
-				response->EncodeString(boxTitle.c_str(), boxTitle.MaxLength(), false);
+				response->EncodeString(boxTitle.c_str(), boxTitle.Capacity(), false);
 				response->catf(",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%" PRIu32 "}", boxMode, boxSeq, (double)timeLeft, boxControls);
 			}
 			response->cat("}");
@@ -1037,7 +1037,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		// Machine name
 		response->cat(",\"name\":");
-		response->EncodeString(myName.c_str(), myName.MaxLength(), false);
+		response->EncodeString(myName.c_str(), myName.Capacity(), false);
 
 		/* Probe */
 		{
@@ -1502,9 +1502,9 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%" PRIu32 "",
 						boxMode, boxSeq, (double)timeLeft, boxControls);
 		response->cat(",\"msgBox.msg\":");
-		response->EncodeString(boxMessage.c_str(), boxMessage.MaxLength(), false);
+		response->EncodeString(boxMessage.c_str(), boxMessage.Capacity(), false);
 		response->cat(",\"msgBox.title\":");
-		response->EncodeString(boxTitle.c_str(), boxTitle.MaxLength(), false);
+		response->EncodeString(boxTitle.c_str(), boxTitle.Capacity(), false);
 	}
 	else
 	{
@@ -1527,7 +1527,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		// Add the static fields
 		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"axisNames\":\"%s\",\"volumes\":%u,\"numTools\":%u,\"myName\":",
 						move->GetGeometryString(), numVisibleAxes, gCodes->GetAxisLetters(), NumSdCards, GetNumberOfContiguousTools());
-		response->EncodeString(myName.c_str(), myName.MaxLength(), false);
+		response->EncodeString(myName.c_str(), myName.Capacity(), false);
 		response->cat(",\"firmwareName\":");
 		response->EncodeString(FIRMWARE_NAME, strlen(FIRMWARE_NAME), false);
 	}
@@ -1598,6 +1598,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, bool flagsDirs)
 				if (bytesLeft < strlen(fname) * 2 + 4)
 				{
 					// No more space available - stop here
+					platform->GetMassStorage()->AbandonFindNext();
 					break;
 				}
 
@@ -1658,6 +1659,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
 			if (bytesLeft < strlen(fileInfo.fileName) + 70)
 			{
 				// No more space available - stop here
+				platform->GetMassStorage()->AbandonFindNext();
 				break;
 			}
 

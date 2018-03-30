@@ -616,7 +616,7 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 				}
 			}
 			response->cat("],\"generatedBy\":");
-			response->EncodeString(info.generatedBy.c_str(), info.generatedBy.MaxLength(), false);
+			response->EncodeString(info.generatedBy.c_str(), info.generatedBy.Capacity(), false);
 			response->cat("}");
 		}
 		else

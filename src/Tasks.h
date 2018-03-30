@@ -10,13 +10,7 @@
 
 #include "RepRapFirmware.h"
 #include "MessageType.h"
-
-#ifdef RTOS
-typedef void *TaskHandle_t;			// copy of the FreeRTOS definition, to avoid having to include the FreeRTOS files here
-#endif
-
-void setup();
-void loop();
+#include "RTOSIface.h"
 
 namespace Tasks
 {
@@ -27,6 +21,7 @@ namespace Tasks
 #else
 	void GetStackUsage(uint32_t* currentStack, uint32_t* maxStack, uint32_t* neverUsed);
 #endif
+	MutexHandle GetSpiMutextHandle();
 }
 
 #endif /* SRC_TASKS_H_ */

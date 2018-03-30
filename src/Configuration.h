@@ -184,7 +184,7 @@ constexpr size_t GCODE_LENGTH = 101;					// maximum number of non-comment charac
 constexpr size_t MaxMessageLength = 256;
 
 #if SAM4E || SAM4S || SAME70
-constexpr size_t MaxFilenameLength = 120;					// Maximum length of a filename including the path
+constexpr size_t MaxFilenameLength = 120;				// Maximum length of a filename including the path
 #else
 constexpr size_t MaxFilenameLength = 100;
 #endif
@@ -193,9 +193,9 @@ constexpr size_t MaxHeaterNameLength = 20;				// Maximum number of characters in
 
 // Output buffer lengths
 #if SAM4E || SAM4S || SAME70
-constexpr uint16_t OUTPUT_BUFFER_SIZE = 256;			// How many bytes does each OutputBuffer hold?
+constexpr uint16_t OUTPUT_BUFFER_SIZE = 128;			// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 32;				// How many OutputBuffer instances do we have?
-constexpr size_t RESERVED_OUTPUT_BUFFERS = 1;			// Number of reserved output buffers after long responses. Must be enough for an HTTP header
+constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buffers after long responses. Must be enough for an HTTP header
 #elif SAM3XA
 constexpr uint16_t OUTPUT_BUFFER_SIZE = 128;			// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 32;				// How many OutputBuffer instances do we have?

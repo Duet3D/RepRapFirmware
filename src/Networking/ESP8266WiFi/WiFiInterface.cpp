@@ -661,8 +661,8 @@ void WiFiInterface::Spin(bool full)
 			}
 			else if (c != '\r')
 			{
-				const size_t len = debugMessageBuffer.cat(c);
-				if (len == debugMessageBuffer.MaxLength())
+				debugMessageBuffer.cat(c);
+				if (debugMessageBuffer.strlen() == debugMessageBuffer.Capacity())
 				{
 					debugPrintPending = true;
 				}
