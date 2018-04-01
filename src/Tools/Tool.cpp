@@ -68,12 +68,16 @@ Tool * Tool::freelist = nullptr;
 	}
 
 	Tool *t;
-	if (freelist != nullptr)
 	{
+		CriticalSectionLocker lock;
 		t = freelist;
-		freelist = t->next;
+		if (t != nullptr)
+		{
+			freelist = t->next;
+		}
 	}
-	else
+
+	if (t == nullptr)
 	{
 		t = new Tool;
 	}
@@ -146,6 +150,8 @@ Tool * Tool::freelist = nullptr;
 		delete t->name;
 		t->name = nullptr;
 		t->filament = nullptr;
+
+		CriticalSectionLocker lock;
 		t->next = freelist;
 		freelist = t;
 	}

@@ -1,0 +1,36 @@
+Changes to RRF for RTOS
+
+[done] Include FreeRTOS library in the link library list and run RRF as a single FreeRTOS task
+[done] Run Heat as a separate task
+[done] Replace delay() by a version that calls FreeRTOS
+[done] Have hsmciIdleFunc suspend the calling task pending an interrupt
+[done] Use a mutex to protect fatfs from being reentered, preferably a separate mutex for each volume
+[done] Use a mutex to protect the shared SPI subsystem from reentrant calls, and use it the filesystem and the temperature sensor reading system
+[done] Use a mutex when allocating file handles
+[done] Use a mutex to protect the find first/next buffer
+[done] make getting file info thread safe
+[done] buffer allocation needs to be thread safe
+[done] tool list traversal to be thread safe
+[done] make USB and serial out channels thread safe
+[done] make message box output thread safe
+[done except for mutexes on network and telnet] Make Platform::Message thread safe
+Are there any aspects of Platform that are not thread-safe? e.g. GCodes setting stuff while network reports it?
+Get rid of shared scratchString
+Run Network as a separate task
+Run Move as a separate task. Probably needs a mutex to protect calls into it, e.g. babystepping and pause.
+Use DMA for SharedSPI transfers, suspend the calling task while waiting on a transfer
+Do a SAM4S version of FreeRTOS, then do a SAM4S_RTOS build of RRF
+Stop allocating file buffers on the stack?
+Find maximum stack sizes and optimise stacks
+Run all network responders as separate tasks? Would need mutex on network interface access
+
+Bugs
+
+[done] IAP fails to update firmware
+M122 output is too big for the available buffers, unless the Network task reads the output fast enough
+[done] Disconnects when getting file info forCandyBowlx8comments.gcode when running RTOS build
+File upload speed is a little lower when using RTOS - may be fixed when network is a separate task
+
+Deferred
+
+Use a mutex to protect HSMCI from reentrant calls (only needed if/when we support more than one HSMCI volume, which is unlikely but possoible on the SAME70)

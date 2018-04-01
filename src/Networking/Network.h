@@ -12,6 +12,7 @@
 #include "RepRapFirmware.h"
 #include "MessageType.h"
 #include "GCodes/GCodeResult.h"
+#include "RTOSIface.h"
 
 #if defined(SAME70_TEST_BOARD)
 const size_t NumNetworkInterfaces = 2;
@@ -85,6 +86,8 @@ private:
 	NetworkInterface *interfaces[NumNetworkInterfaces];
 	NetworkResponder *responders;
 	NetworkResponder *nextResponderToPoll;
+
+	Mutex httpMutex, telnetMutex;
 
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
 };

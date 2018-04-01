@@ -50,6 +50,9 @@ Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderT
 // Note that Platform::Init() must be called before this to that Platform::IsDuetWiFi() returns the correct value
 void Network::Init()
 {
+	httpMutex.Create();
+	telnetMutex.Create();
+
 #if defined(DUET_NG)
 	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new W5500Interface(platform));
 #endif
@@ -386,21 +389,25 @@ bool Network::FindResponder(Socket *skt, NetworkProtocol protocol)
 
 void Network::HandleHttpGCodeReply(const char *msg)
 {
+	MutexLocker lock(httpMutex);
 	HttpResponder::HandleGCodeReply(msg);
 }
 
 void Network::HandleTelnetGCodeReply(const char *msg)
 {
+	MutexLocker lock(telnetMutex);
 	TelnetResponder::HandleGCodeReply(msg);
 }
 
 void Network::HandleHttpGCodeReply(OutputBuffer *buf)
 {
+	MutexLocker lock(httpMutex);
 	HttpResponder::HandleGCodeReply(buf);
 }
 
 void Network::HandleTelnetGCodeReply(OutputBuffer *buf)
 {
+	MutexLocker lock(telnetMutex);
 	TelnetResponder::HandleGCodeReply(buf);
 }
 

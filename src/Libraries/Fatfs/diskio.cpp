@@ -99,7 +99,7 @@ DSTATUS disk_initialize(BYTE drv)
 	}
 #endif
 
-	Locker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutextHandle() : nullptr);
+	MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 
 	Ctrl_status mem_status;
 
@@ -133,7 +133,7 @@ DSTATUS disk_initialize(BYTE drv)
  */
 DSTATUS disk_status(BYTE drv)
 {
-	Locker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutextHandle() : nullptr);
+	MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 
 	switch (mem_test_unit_ready(drv)) {
 	case CTRL_GOOD:
@@ -159,7 +159,7 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
 {
 //	debugPrintf("R %u %u\n", sector, count);
 #if ACCESS_MEM_TO_RAM
-	Locker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutextHandle() : nullptr);
+	MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 
 	uint8_t uc_sector_size = mem_sector_size(drv);
 	uint32_t ul_last_sector_num;
@@ -206,7 +206,7 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count)
 {
 //	debugPrintf("W %u %u\n", sector, count);
 #if ACCESS_MEM_TO_RAM
-	Locker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutextHandle() : nullptr);
+	MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 
 	uint8_t uc_sector_size = mem_sector_size(drv);
 	uint32_t ul_last_sector_num;
@@ -274,7 +274,7 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
 	/* Get the number of sectors on the disk (DWORD) */
 	case GET_SECTOR_COUNT:
 	{
-		Locker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutextHandle() : nullptr);
+		MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 
 		uint32_t ul_last_sector_num;
 
@@ -290,7 +290,7 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
 	/* Get sectors on the disk (WORD) */
 	case GET_SECTOR_SIZE:
 	{
-		Locker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutextHandle() : nullptr);
+		MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 
 		uint8_t uc_sector_size = mem_sector_size(drv);
 
@@ -311,7 +311,7 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
 	/* Make sure that data has been written */
 	case CTRL_SYNC:
 		{
-			Locker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutextHandle() : nullptr);
+			MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 
 			if (mem_test_unit_ready(drv) == CTRL_GOOD) {
 				res = RES_OK;

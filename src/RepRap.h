@@ -23,6 +23,7 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 #include "MessageType.h"
+#include "RTOSIface.h"
 
 enum class ResponseSource
 {
@@ -141,6 +142,7 @@ private:
  	Display *display;
 #endif
 
+ 	Mutex toolListMutex, messageBoxMutex;
 	Tool* toolList;								// the tool list is sorted in order of increasing tool number
 	Tool* currentTool;
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often

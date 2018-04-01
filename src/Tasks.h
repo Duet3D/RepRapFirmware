@@ -16,12 +16,12 @@ namespace Tasks
 {
 #ifdef RTOS
 	void GetHandlerStackUsage(uint32_t* maxStack, uint32_t* neverUsed);
-	void TaskDiagnostics(MessageType mtype, TaskHandle_t ct);
+	void TaskDiagnostics(MessageType mtype, const Task& ct);
 	void CurrentTaskDiagnostics(MessageType mtype);
 #else
 	void GetStackUsage(uint32_t* currentStack, uint32_t* maxStack, uint32_t* neverUsed);
 #endif
-	MutexHandle GetSpiMutextHandle();
+	const Mutex *GetSpiMutex();
 }
 
 #endif /* SRC_TASKS_H_ */

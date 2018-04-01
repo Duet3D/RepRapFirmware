@@ -37,8 +37,7 @@ const uint32_t HeaterTaskStackSize = 128;			// task stack size in dwords
 const uint32_t HeaterTaskPriority = 1;
 
 static uint32_t heaterTaskStack[HeaterTaskStackSize];
-static TaskStorage heaterTaskBuffer;
-static TaskHandle heaterTaskHandle;
+static Task heaterTask;
 
 extern "C" void HeaterTask(void * pvParameters)
 {
@@ -145,7 +144,7 @@ void Heat::Init()
 	coldExtrude = false;
 
 #ifdef RTOS
-	heaterTaskHandle = RTOSIface::CreateTask(HeaterTask, "HEAT", ARRAY_SIZE(heaterTaskStack), nullptr, HeaterTaskPriority, heaterTaskStack, heaterTaskBuffer);
+	heaterTask.Create(HeaterTask, "HEAT", ARRAY_SIZE(heaterTaskStack), nullptr, HeaterTaskPriority, heaterTaskStack);
 #else
 	lastTime = millis() - platform.HeatSampleInterval();		// flag the PIDS as due for spinning
 	longWait = millis();
@@ -161,7 +160,7 @@ void Heat::Exit()
 	}
 
 #ifdef RTOS
-	RTOSIface::SuspendTask(heaterTaskHandle);
+	heaterTask.Suspend();
 #else
 	active = false;
 #endif
@@ -255,7 +254,7 @@ void Heat::Diagnostics(MessageType mtype)
 		}
 	}
 #ifdef RTOS
-	Tasks::TaskDiagnostics(mtype, heaterTaskHandle);
+	Tasks::TaskDiagnostics(mtype, heaterTask);
 #endif
 }
 

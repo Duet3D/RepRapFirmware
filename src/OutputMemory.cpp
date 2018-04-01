@@ -342,27 +342,29 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 	}
 }
 
-// Allocates an output buffer instance which can be used for (large) string outputs
+// Allocates an output buffer instance which can be used for (large) string outputs. This must be thread safe.
 /*static*/ bool OutputBuffer::Allocate(OutputBuffer *&buf)
 {
-	const irqflags_t flags = cpu_irq_save();
-
-	if (freeOutputBuffers == nullptr)
 	{
-		reprap.GetPlatform().LogError(ErrorCode::OutputStarvation);
-		cpu_irq_restore(flags);
+		CriticalSectionLocker lock;
 
-		buf = nullptr;
-		return false;
+		buf = freeOutputBuffers;
+		if (buf != nullptr)
+		{
+			freeOutputBuffers = buf->next;
+
+			usedOutputBuffers++;
+			if (usedOutputBuffers > maxUsedOutputBuffers)
+			{
+				maxUsedOutputBuffers = usedOutputBuffers;
+			}
+		}
 	}
 
-	buf = freeOutputBuffers;
-	freeOutputBuffers = buf->next;
-
-	usedOutputBuffers++;
-	if (usedOutputBuffers > maxUsedOutputBuffers)
+	if (buf == nullptr)
 	{
-		maxUsedOutputBuffers = usedOutputBuffers;
+		reprap.GetPlatform().LogError(ErrorCode::OutputStarvation);
+		return false;
 	}
 
 	buf->next = nullptr;
@@ -371,7 +373,6 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 	buf->references = 1; // Assume it's only used once by default
 	buf->isReferenced = false;
 
-	cpu_irq_restore(flags);
 	return true;
 }
 
@@ -438,7 +439,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 // Releases an output buffer instance and returns the next entry from the chain
 /*static */ OutputBuffer *OutputBuffer::Release(OutputBuffer *buf)
 {
-	const irqflags_t flags = cpu_irq_save();
+	CriticalSectionLocker lock;
 	OutputBuffer * const nextBuffer = buf->next;
 
 	// If this one is reused by another piece of code, don't free it up
@@ -446,16 +447,14 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 	{
 		buf->references--;
 		buf->bytesRead = 0;
-		cpu_irq_restore(flags);
-		return nextBuffer;
 	}
-
-	// Otherwise prepend it to the list of free output buffers again
-	buf->next = freeOutputBuffers;
-	freeOutputBuffers = buf;
-	usedOutputBuffers--;
-
-	cpu_irq_restore(flags);
+	else
+	{
+		// Otherwise prepend it to the list of free output buffers again
+		buf->next = freeOutputBuffers;
+		freeOutputBuffers = buf;
+		usedOutputBuffers--;
+	}
 	return nextBuffer;
 }
 
@@ -489,9 +488,8 @@ void OutputStack::Push(OutputBuffer *buffer)
 	if (buffer != nullptr)
 	{
 		buffer->whenQueued = millis();
-		const irqflags_t flags = cpu_irq_save();
+		CriticalSectionLocker lock;
 		items[count++] = buffer;
-		cpu_irq_restore(flags);
 	}
 }
 
@@ -503,14 +501,13 @@ OutputBuffer *OutputStack::Pop()
 		return nullptr;
 	}
 
-	const irqflags_t flags = cpu_irq_save();
+	CriticalSectionLocker lock;
 	OutputBuffer *item = items[0];
 	for(size_t i = 1; i < count; i++)
 	{
 		items[i - 1] = items[i];
 	}
 	count--;
-	cpu_irq_restore(flags);
 
 	return item;
 }
@@ -528,7 +525,7 @@ OutputBuffer *OutputStack::GetFirstItem() const
 // Set the first item of the stack. If it's NULL, then the first item will be removed
 void OutputStack::SetFirstItem(OutputBuffer *buffer)
 {
-	const irqflags_t flags = cpu_irq_save();
+	CriticalSectionLocker lock;
 	if (buffer == nullptr)
 	{
 		// If buffer is NULL, then the first item is removed from the stack
@@ -544,7 +541,6 @@ void OutputStack::SetFirstItem(OutputBuffer *buffer)
 		items[0] = buffer;
 		buffer->whenQueued = millis();
 	}
-	cpu_irq_restore(flags);
 }
 
 // Returns the last item from the stack or NULL if none is available
@@ -562,12 +558,11 @@ size_t OutputStack::DataLength() const
 {
 	size_t totalLength = 0;
 
-	const irqflags_t flags = cpu_irq_save();
+	CriticalSectionLocker lock;
 	for(size_t i = 0; i < count; i++)
 	{
 		totalLength += items[i]->Length();
 	}
-	cpu_irq_restore(flags);
 
 	return totalLength;
 }
@@ -593,12 +588,11 @@ void OutputStack::Append(OutputStack *stack)
 // Increase the number of references for each OutputBuffer on the stack
 void OutputStack::IncreaseReferences(size_t num)
 {
-	const irqflags_t flags = cpu_irq_save();
+	CriticalSectionLocker lock;
 	for(size_t i = 0; i < count; i++)
 	{
 		items[i]->IncreaseReferences(num);
 	}
-	cpu_irq_restore(flags);
 }
 
 // Release all buffers and clean up

@@ -51,7 +51,7 @@ public:
 	void CloseAllFiles();
 	unsigned int GetNumFreeFiles() const;
 	void Spin();
-	MutexHandle GetVolumeMutexHandle(size_t vol) const { return info[vol].volMutexHandle; }
+	const Mutex& GetVolumeMutex(size_t vol) const { return info[vol].volMutex; }
 	bool GetFileInfo(const char *directory, const char *fileName, GCodeFileInfo& info, bool quitEarly) { return infoParser.GetFileInfo(directory, fileName, info, quitEarly); }
 
 	enum class InfoResult : uint8_t
@@ -87,8 +87,7 @@ private:
 		FATFS fileSystem;
 		uint32_t cdChangedTime;
 		uint32_t mountStartTime;
-		MutexHandle volMutexHandle;
-		MutexStorage volMutexStorage;
+		Mutex volMutex;
 		Pin cdPin;
 		bool mounting;
 		bool isMounted;
@@ -100,10 +99,7 @@ private:
 
 	SdCardInfo info[NumSdCards];
 
-	MutexHandle fsMutexHandle;
-	MutexHandle dirMutexHandle;
-	MutexStorage fsMutexStorage;
-	MutexStorage dirMutexStorage;
+	Mutex fsMutex, dirMutex;
 
 	FileInfoParser infoParser;
 	DIR findDir;

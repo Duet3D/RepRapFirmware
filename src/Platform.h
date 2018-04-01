@@ -826,14 +826,20 @@ private:
   	// Serial/USB
 	uint32_t baudRates[NUM_SERIAL_CHANNELS];
 	uint8_t commsParams[NUM_SERIAL_CHANNELS];
+
 	OutputStack *auxOutput;
-#ifdef SERIAL_AUX2_DEVICE
-	OutputStack *aux2Output;
-#endif
-	OutputStack *usbOutput;
-    bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
+	Mutex auxMutex;
 	OutputBuffer *auxGCodeReply;				// G-Code reply for AUX devices (special one because it is actually encapsulated before sending)
 	uint32_t auxSeq;							// Sequence number for AUX devices
+    bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
+
+#ifdef SERIAL_AUX2_DEVICE
+	OutputStack *aux2Output;
+	Mutex aux2Mutex;
+#endif
+
+	OutputStack *usbOutput;
+	Mutex usbMutex;
 
 	// Files
 	MassStorage* massStorage;

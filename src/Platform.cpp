@@ -223,6 +223,8 @@ void Platform::Init()
 	commsParams[2] = 0;
 #endif
 
+	usbMutex.Create();
+	auxMutex.Create();
 	auxDetected = false;
 	auxSeq = 0;
 
@@ -230,6 +232,7 @@ void Platform::Init()
 	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
 #ifdef SERIAL_AUX2_DEVICE
 	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
+	aux2Mutex.Create();
 #endif
 
 	compatibility = Compatibility::marlin;		// default to Marlin because the common host programs expect the "OK" response to commands
@@ -1190,6 +1193,7 @@ void Platform::SetNetMask(uint8_t nm[])
 bool Platform::FlushAuxMessages()
 {
 	// Write non-blocking data to the AUX line
+	MutexLocker lock(auxMutex);
 	OutputBuffer *auxOutputBuffer = auxOutput->GetFirstItem();
 	if (auxOutputBuffer != nullptr)
 	{
@@ -1215,55 +1219,65 @@ bool Platform::FlushMessages()
 
 #ifdef SERIAL_AUX2_DEVICE
 	// Write non-blocking data to the second AUX line
-	OutputBuffer *aux2OutputBuffer = aux2Output->GetFirstItem();
-	if (aux2OutputBuffer != nullptr)
+	bool aux2hasMore;
 	{
-		size_t bytesToWrite = min<size_t>(SERIAL_AUX2_DEVICE.canWrite(), aux2OutputBuffer->BytesLeft());
-		if (bytesToWrite > 0)
+		MutexLocker lock(aux2MutexHandle);
+		OutputBuffer *aux2OutputBuffer = aux2Output->GetFirstItem();
+		if (aux2OutputBuffer != nullptr)
 		{
-			SERIAL_AUX2_DEVICE.write(aux2OutputBuffer->Read(bytesToWrite), bytesToWrite);
-		}
+			size_t bytesToWrite = min<size_t>(SERIAL_AUX2_DEVICE.canWrite(), aux2OutputBuffer->BytesLeft());
+			if (bytesToWrite > 0)
+			{
+				SERIAL_AUX2_DEVICE.write(aux2OutputBuffer->Read(bytesToWrite), bytesToWrite);
+			}
 
-		if (aux2OutputBuffer->BytesLeft() == 0)
-		{
-			aux2OutputBuffer = OutputBuffer::Release(aux2OutputBuffer);
-			aux2Output->SetFirstItem(aux2OutputBuffer);
+			if (aux2OutputBuffer->BytesLeft() == 0)
+			{
+				aux2OutputBuffer = OutputBuffer::Release(aux2OutputBuffer);
+				aux2Output->SetFirstItem(aux2OutputBuffer);
+			}
 		}
+		aux2hasMore = (aux2Output->GetFirstItem() != nullptr);
 	}
 #endif
 
 	// Write non-blocking data to the USB line
-	OutputBuffer *usbOutputBuffer = usbOutput->GetFirstItem();
-	if (usbOutputBuffer != nullptr)
+	bool usbHasMore;
 	{
-		if (!SERIAL_MAIN_DEVICE)
+		MutexLocker lock(usbMutex);
+		OutputBuffer *usbOutputBuffer = usbOutput->GetFirstItem();
+		if (usbOutputBuffer != nullptr)
 		{
-			// If the USB port is not opened, free the data left for writing
-			OutputBuffer::ReleaseAll(usbOutputBuffer);
-			usbOutput->SetFirstItem(nullptr);
-		}
-		else
-		{
-			// Write as much data as we can...
-			size_t bytesToWrite = min<size_t>(SERIAL_MAIN_DEVICE.canWrite(), usbOutputBuffer->BytesLeft());
-			if (bytesToWrite > 0)
+			if (!SERIAL_MAIN_DEVICE)
 			{
-				SERIAL_MAIN_DEVICE.write(usbOutputBuffer->Read(bytesToWrite), bytesToWrite);
+				// If the USB port is not opened, free the data left for writing
+				OutputBuffer::ReleaseAll(usbOutputBuffer);
+				usbOutput->SetFirstItem(nullptr);
 			}
+			else
+			{
+				// Write as much data as we can...
+				size_t bytesToWrite = min<size_t>(SERIAL_MAIN_DEVICE.canWrite(), usbOutputBuffer->BytesLeft());
+				if (bytesToWrite > 0)
+				{
+					SERIAL_MAIN_DEVICE.write(usbOutputBuffer->Read(bytesToWrite), bytesToWrite);
+				}
 
-			if (usbOutputBuffer->BytesLeft() == 0 || usbOutputBuffer->GetAge() > SERIAL_MAIN_TIMEOUT)
-			{
-				usbOutputBuffer = OutputBuffer::Release(usbOutputBuffer);
-				usbOutput->SetFirstItem(usbOutputBuffer);
+				if (usbOutputBuffer->BytesLeft() == 0 || usbOutputBuffer->GetAge() > SERIAL_MAIN_TIMEOUT)
+				{
+					usbOutputBuffer = OutputBuffer::Release(usbOutputBuffer);
+					usbOutput->SetFirstItem(usbOutputBuffer);
+				}
 			}
 		}
+		usbHasMore = (usbOutput->GetFirstItem() != nullptr);
 	}
 
 	return auxHasMore
 #ifdef SERIAL_AUX2_DEVICE
-		|| aux2Output->GetFirstItem() != nullptr
+		|| aux2HasMore
 #endif
-		|| usbOutput->GetFirstItem() != nullptr;
+		|| usbHasMore;
 }
 
 void Platform::Spin()
@@ -3323,6 +3337,7 @@ void Platform::AppendAuxReply(const char *msg, bool rawMessage)
 	// Discard this response if either no aux device is attached or if the response is empty
 	if (msg[0] != 0 && HaveAux())
 	{
+		MutexLocker lock(auxMutex);
 		if (rawMessage)
 		{
 			// Raw responses are sent directly to the AUX device
@@ -3352,23 +3367,27 @@ void Platform::AppendAuxReply(OutputBuffer *reply, bool rawMessage)
 	{
 		OutputBuffer::ReleaseAll(reply);
 	}
-	else if (rawMessage)
-	{
-		// JSON responses are always sent directly to the AUX device
-		// For big responses it makes sense to write big chunks of data in portions. Store this data here
-		auxOutput->Push(reply);
-	}
 	else
 	{
-		// Other responses are stored for M105/M408
-		auxSeq++;
-		if (auxGCodeReply == nullptr)
+		MutexLocker lock(auxMutex);
+		if (rawMessage)
 		{
-			auxGCodeReply = reply;
+			// JSON responses are always sent directly to the AUX device
+			// For big responses it makes sense to write big chunks of data in portions. Store this data here
+			auxOutput->Push(reply);
 		}
 		else
 		{
-			auxGCodeReply->Append(reply);
+			// Other responses are stored for M105/M408
+			auxSeq++;
+			if (auxGCodeReply == nullptr)
+			{
+				auxGCodeReply = reply;
+			}
+			else
+			{
+				auxGCodeReply->Append(reply);
+			}
 		}
 	}
 }
@@ -3405,6 +3424,7 @@ void Platform::RawMessage(MessageType type, const char *message)
 	if ((type & AuxMessage) != 0)
 	{
 #ifdef SERIAL_AUX2_DEVICE
+		MutexLocker lock(aux2Mutex);
 		// Message that is to be sent to the second auxiliary device (blocking)
 		if (!aux2Output->IsEmpty())
 		{
@@ -3423,6 +3443,7 @@ void Platform::RawMessage(MessageType type, const char *message)
 	if ((type & BlockingUsbMessage) != 0)
 	{
 		// Debug output sends messages in blocking mode. We now give up sending if we are close to software watchdog timeout.
+		MutexLocker lock(usbMutex);
 		const char *p = message;
 		size_t len = strlen(p);
 		while (SERIAL_MAIN_DEVICE && len != 0 && !reprap.SpinTimeoutImminent())
@@ -3436,6 +3457,7 @@ void Platform::RawMessage(MessageType type, const char *message)
 	else if ((type & UsbMessage) != 0)
 	{
 		// Message that is to be sent via the USB line (non-blocking)
+		MutexLocker lock(usbMutex);
 #if SUPPORT_SCANNER
 		if (!reprap.GetScanner().IsRegistered() || reprap.GetScanner().DoingGCodes())
 #endif
@@ -3522,12 +3544,14 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 		if ((type & AuxMessage) != 0)
 		{
 			// Send this message to the second UART device
+			MutexLocker lock(aux2Mutex);
 			aux2Output->Push(buffer);
 		}
 #endif
 
 		if ((type & (UsbMessage | BlockingUsbMessage)) != 0)
 		{
+			MutexLocker lock(usbMutex);
 			if (   !SERIAL_MAIN_DEVICE
 #if SUPPORT_SCANNER
 				|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
@@ -3548,24 +3572,23 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 
 void Platform::MessageF(MessageType type, const char *fmt, va_list vargs)
 {
-	char formatBuffer[FORMAT_STRING_LENGTH];
-	StringRef formatString(formatBuffer, ARRAY_SIZE(formatBuffer));
+	String<FORMAT_STRING_LENGTH> formatString;
 	if ((type & ErrorMessageFlag) != 0)
 	{
 		formatString.copy("Error: ");
-		formatString.vcatf(fmt, vargs);
+		formatString.GetRef().vcatf(fmt, vargs);
 	}
 	else if ((type & WarningMessageFlag) != 0)
 	{
 		formatString.copy("Warning: ");
-		formatString.vcatf(fmt, vargs);
+		formatString.GetRef().vcatf(fmt, vargs);
 	}
 	else
 	{
-		formatString.vprintf(fmt, vargs);
+		formatString.GetRef().vprintf(fmt, vargs);
 	}
 
-	RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatBuffer);
+	RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
 }
 
 void Platform::MessageF(MessageType type, const char *fmt, ...)
@@ -3584,11 +3607,10 @@ void Platform::Message(MessageType type, const char *message)
 	}
 	else
 	{
-		char formatBuffer[FORMAT_STRING_LENGTH];
-		StringRef formatString(formatBuffer, ARRAY_SIZE(formatBuffer));
+		String<FORMAT_STRING_LENGTH> formatString;
 		formatString.copy(((type & ErrorMessageFlag) != 0) ? "Error: " : "Warning: ");
 		formatString.cat(message);
-		RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatBuffer);
+		RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
 	}
 }
 

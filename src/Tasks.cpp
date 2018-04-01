@@ -23,11 +23,9 @@ const uint32_t MainTaskStackSize = 2048;			// task stack size in dwords
 const uint32_t MainTaskPriority = 1;
 
 static StackType_t mainTaskStack[MainTaskStackSize];
-static StaticTask_t mainTaskBuffer;
-static TaskHandle_t mainTaskHandle;
+static Task mainTask;
 
-static MutexHandle spiMutexHandle;
-static MutexStorage spiMutexStorage;
+static Mutex spiMutex;
 
 extern "C" void MainTask(void * pvParameters);
 #endif
@@ -66,13 +64,13 @@ extern "C" void AppMain()
 
 #ifdef RTOS
 	// Create the startup task
-	mainTaskHandle = xTaskCreateStatic(MainTask, "MAIN", ARRAY_SIZE(mainTaskStack), nullptr, MainTaskPriority, mainTaskStack, &mainTaskBuffer);
+	mainTask.Create(MainTask, "MAIN", ARRAY_SIZE(mainTaskStack), nullptr, MainTaskPriority, mainTaskStack);
 	vTaskStartScheduler();			// doesn't return
 }
 
 extern "C" void MainTask(void *pvParameters)
 {
-	spiMutexHandle = RTOSIface::CreateMutex(spiMutexStorage);
+	spiMutex.Create();
 #endif
 	reprap.Init();
 	for (;;)
@@ -101,18 +99,22 @@ namespace Tasks
 		if (neverUsed != nullptr) { *neverUsed = stack_lwm - heapend; }
 	}
 
-	void TaskDiagnostics(MessageType mtype, TaskHandle_t ct)
+	static void TaskDiagnosticsFromHandle(MessageType mtype, TaskHandle_t ct)
 	{
 		TaskStatus_t taskDetails;
 		vTaskGetInfo(ct, &taskDetails, pdTRUE, eInvalid);
 		reprap.GetPlatform().MessageF(mtype, "Task %s: state %d stack rem %u\n", taskDetails.pcTaskName, (int)taskDetails.eCurrentState, (unsigned int)taskDetails.usStackHighWaterMark);
 	}
 
+	void TaskDiagnostics(MessageType mtype, const Task& ct)
+	{
+		TaskDiagnosticsFromHandle(mtype, ct.GetHandle());
+	}
+
 	// Write data about the current task
 	void CurrentTaskDiagnostics(MessageType mtype)
 	{
-		const TaskHandle_t ct = xTaskGetCurrentTaskHandle();
-		TaskDiagnostics(mtype, ct);
+		TaskDiagnosticsFromHandle(mtype, xTaskGetCurrentTaskHandle());
 	}
 
 #else
@@ -135,10 +137,10 @@ namespace Tasks
 
 #endif
 
-	MutexHandle GetSpiMutextHandle()
+	const Mutex *GetSpiMutex()
 	{
 #ifdef RTOS
-		return spiMutexHandle;
+		return &spiMutex;
 #else
 		return nullptr;
 #endif

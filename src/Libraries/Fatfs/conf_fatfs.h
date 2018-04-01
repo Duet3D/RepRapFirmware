@@ -218,9 +218,10 @@
 
 #ifdef RTOS
 
-#define _FS_REENTRANT		1		/* 0:Disable or 1:Enable */
-#define _FS_TIMEOUT			1000	/* Timeout period in unit of time ticks */
-#define _SYNC_t				void*	/* O/S dependent type of sync object. e.g. HANDLE, OS_EVENT*, ID and etc.. */
+struct Mutex;
+#define _FS_REENTRANT		1					/* 0:Disable or 1:Enable */
+#define _FS_TIMEOUT			1000				/* Timeout period in unit of time ticks */
+#define _SYNC_t				const struct Mutex*	/* O/S dependent type of sync object. e.g. HANDLE, OS_EVENT*, ID and etc.. */
 
 #else
 

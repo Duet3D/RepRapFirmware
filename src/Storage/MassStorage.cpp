@@ -64,8 +64,8 @@ MassStorage::MassStorage(Platform* p) : freeWriteBuffers(nullptr)
 void MassStorage::Init()
 {
 	// Create the mutexes
-	fsMutexHandle = RTOSIface::CreateMutex(fsMutexStorage);
-	dirMutexHandle = RTOSIface::CreateMutex(dirMutexStorage);
+	fsMutex.Create();
+	dirMutex.Create();
 
 	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
 	{
@@ -79,7 +79,7 @@ void MassStorage::Init()
 		inf.mounting = inf.isMounted = false;
 		inf.cdPin = SdCardDetectPins[card];
 		inf.cardState = CardDetectState::present;
-		inf.volMutexHandle = RTOSIface::CreateMutex(inf.volMutexStorage);
+		inf.volMutex.Create();
 	}
 
 	sd_mmc_init(SdWriteProtectPins, SdSpiCSPins);		// initialize SD MMC stack
@@ -101,7 +101,7 @@ void MassStorage::Init()
 
 FileWriteBuffer *MassStorage::AllocateWriteBuffer()
 {
-	Locker lock(fsMutexHandle);
+	MutexLocker lock(fsMutex);
 	if (freeWriteBuffers == nullptr)
 	{
 		return nullptr;
@@ -115,7 +115,7 @@ FileWriteBuffer *MassStorage::AllocateWriteBuffer()
 
 void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer)
 {
-	Locker lock(fsMutexHandle);
+	MutexLocker lock(fsMutex);
 	buffer->SetNext(freeWriteBuffers);
 	freeWriteBuffers = buffer;
 }
@@ -123,7 +123,7 @@ void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer)
 FileStore* MassStorage::OpenFile(const char* directory, const char* fileName, OpenMode mode)
 {
 	{
-		Locker lock(fsMutexHandle);
+		MutexLocker lock(fsMutex);
 		for (size_t i = 0; i < MAX_FILES; i++)
 		{
 			if (!files[i].inUse)
@@ -147,7 +147,7 @@ FileStore* MassStorage::OpenFile(const char* directory, const char* fileName, Op
 // Close all files
 void MassStorage::CloseAllFiles()
 {
-	Locker lock(fsMutexHandle);
+	MutexLocker lock(fsMutex);
 	for (FileStore& f : files)
 	{
 		while (f.inUse)
@@ -217,7 +217,7 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 		loc[len - 1] = 0;
 	}
 
-	if (!RTOSIface::TakeMutex(dirMutexHandle, 10000))
+	if (!dirMutex.Take(10000))
 	{
 		return false;
 	}
@@ -250,7 +250,7 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 		}
 	}
 
-	RTOSIface::ReleaseMutex(dirMutexHandle);
+	dirMutex.Release();
 	return false;
 }
 
@@ -258,7 +258,7 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 // If it returns false then it also releases the mutex.
 bool MassStorage::FindNext(FileInfo &file_info)
 {
-	if (RTOSIface::GetMutexHolder(dirMutexHandle) != RTOSIface::GetCurrentTask())
+	if (dirMutex.GetHolder() != RTOSIface::GetCurrentTask())
 	{
 		return false;		// error, we don't hold the mutex
 	}
@@ -271,7 +271,7 @@ bool MassStorage::FindNext(FileInfo &file_info)
 	if (f_readdir(&findDir, &entry) != FR_OK || entry.fname[0] == 0)
 	{
 		//f_closedir(findDir);
-		RTOSIface::ReleaseMutex(dirMutexHandle);
+		dirMutex.Release();
 		return false;
 	}
 
@@ -290,9 +290,9 @@ bool MassStorage::FindNext(FileInfo &file_info)
 // Quit searching for files. Needed to avoid hanging on to the mutex.
 void MassStorage::AbandonFindNext()
 {
-	if (RTOSIface::GetMutexHolder(dirMutexHandle) == RTOSIface::GetCurrentTask())
+	if (dirMutex.GetHolder() == RTOSIface::GetCurrentTask())
 	{
-		RTOSIface::ReleaseMutex(dirMutexHandle);
+		dirMutex.Release();
 	}
 }
 
@@ -315,7 +315,7 @@ bool MassStorage::Delete(const char* directory, const char* fileName, bool silen
 
 	// Start new scope to lock the filesystem for the minimum time
 	{
-		Locker lock(fsMutexHandle);
+		MutexLocker lock(fsMutex);
 
 		// First check whether the file is open - don't allow it to be deleted if it is
 		FIL file;
@@ -461,8 +461,8 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 	}
 
 	SdCardInfo& inf = info[card];
-	Locker lock1(fsMutexHandle);
-	Locker lock2(inf.volMutexHandle);
+	MutexLocker lock1(fsMutex);
+	MutexLocker lock2(inf.volMutex);
 	if (!inf.mounting)
 	{
 		if (inf.isMounted)
@@ -568,7 +568,7 @@ bool MassStorage::CheckDriveMounted(const char* path)
 // Return true if any files are open on the file system
 bool MassStorage::AnyFileOpen(const FATFS *fs) const
 {
-	Locker lock(fsMutexHandle);
+	MutexLocker lock(fsMutex);
 	for (const FileStore & fil : files)
 	{
 		if (fil.IsOpenOn(fs))
@@ -583,7 +583,7 @@ bool MassStorage::AnyFileOpen(const FATFS *fs) const
 unsigned int MassStorage::InvalidateFiles(const FATFS *fs, bool doClose)
 {
 	unsigned int invalidated = 0;
-	Locker lock(fsMutexHandle);
+	MutexLocker lock(fsMutex);
 	for (FileStore & fil : files)
 	{
 		if (fil.Invalidate(fs, doClose))
@@ -618,8 +618,8 @@ bool MassStorage::IsCardDetected(size_t card) const
 bool MassStorage::InternalUnmount(size_t card, bool doClose)
 {
 	SdCardInfo& inf = info[card];
-	Locker lock1(fsMutexHandle);
-	Locker lock2(inf.volMutexHandle);
+	MutexLocker lock1(fsMutex);
+	MutexLocker lock2(inf.volMutex);
 	const bool invalidated = InvalidateFiles(&inf.fileSystem, doClose);
 	f_mount(card, nullptr);
 	memset(&inf.fileSystem, 0, sizeof(inf.fileSystem));
@@ -631,7 +631,7 @@ bool MassStorage::InternalUnmount(size_t card, bool doClose)
 unsigned int MassStorage::GetNumFreeFiles() const
 {
 	unsigned int numFreeFiles = 0;
-	Locker lock(fsMutexHandle);
+	MutexLocker lock(fsMutex);
 	for (const FileStore & fil : files)
 	{
 		if (!fil.inUse)
@@ -703,7 +703,7 @@ void MassStorage::Spin()
 
 	// Check if any files are supposed to be closed
 	{
-		Locker lock(fsMutexHandle);
+		MutexLocker lock(fsMutex);
 		for (FileStore & fil : files)
 		{
 			if (fil.closeRequested)
@@ -757,21 +757,21 @@ extern "C"
 	// Create a sync object. We already created it, we just need to copy the handle.
 	int ff_cre_syncobj (BYTE vol, _SYNC_t* psy)
 	{
-		*psy = reprap.GetPlatform().GetMassStorage()->GetVolumeMutexHandle(vol);
+		*psy = &reprap.GetPlatform().GetMassStorage()->GetVolumeMutex(vol);
 		return 1;
 	}
 
 	// Lock sync object
 	int ff_req_grant (_SYNC_t sy)
 	{
-		xSemaphoreTakeRecursive(sy, portMAX_DELAY);
+		sy->Take();
 		return 1;
 	}
 
 	// Unlock sync object
 	void ff_rel_grant (_SYNC_t sy)
 	{
-		xSemaphoreGiveRecursive(sy);
+		sy->Release();
 	}
 
 	// Delete a sync object

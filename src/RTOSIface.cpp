@@ -13,38 +13,99 @@
 # include "task.h"
 # include "semphr.h"
 
-static_assert(RTOSIface::TimeoutUnlimited == portMAX_DELAY, "Bad value for TimeoutUnlimited");
+static_assert(Mutex::TimeoutUnlimited == portMAX_DELAY, "Bad value for TimeoutUnlimited");
+
+void Mutex::Create()
+{
+	if (handle == nullptr)
+	{
+		handle = xSemaphoreCreateRecursiveMutexStatic(&storage);
+	}
+}
+
+bool Mutex::Take(uint32_t timeout) const
+{
+	return xSemaphoreTakeRecursive(handle, timeout) == pdTRUE;
+}
+
+bool Mutex::Release() const
+{
+	return xSemaphoreGiveRecursive(handle) == pdTRUE;
+}
+
+TaskHandle Mutex::GetHolder() const
+{
+	return static_cast<TaskHandle>(xSemaphoreGetMutexHolder(handle));
+}
+
+void Task::Create(TaskFunction_t pxTaskCode, const char * pcName, uint32_t ulStackDepth, void *pvParameters, unsigned int uxPriority, uint32_t * const puxStackBuffer)
+{
+	handle = xTaskCreateStatic(pxTaskCode, pcName, ulStackDepth, pvParameters, uxPriority, puxStackBuffer, &storage);
+}
+
+#else
+
+void Mutex::Create()
+{
+}
+
+bool Mutex::Take(uint32_t timeout) const
+{
+	return true;
+}
+
+bool Mutex::Release() const
+{
+	return true;
+}
+
+TaskHandle Mutex::GetHolder() const
+{
+	return nullptr;
+}
 
 #endif
 
-Locker::Locker(MutexHandle hnd)
+MutexLocker::MutexLocker(const Mutex *m, uint32_t timeout)
 {
-	handle = hnd;
+	handle = m;
 	acquired =
 #ifdef RTOS
-				hnd == nullptr || xSemaphoreTakeRecursive(hnd, portMAX_DELAY);
+				m == nullptr || m->Take(timeout);
 #else
 				true;
 #endif
 }
 
-Locker::Locker(MutexHandle hnd, uint32_t timeout)
+MutexLocker::MutexLocker(const Mutex& m, uint32_t timeout)
 {
-	handle = hnd;
+	handle = &m;
 	acquired =
 #ifdef RTOS
-				hnd == nullptr || xSemaphoreTakeRecursive(hnd, timeout);
+				m.Take(timeout);
 #else
 				true;
 #endif
 }
 
-Locker::~Locker()
+void MutexLocker::Release()
 {
 #ifdef RTOS
 	if (acquired && handle != nullptr)
 	{
-		xSemaphoreGiveRecursive(handle);
+		handle->Release();
+		acquired = false;
+	}
+#endif
+}
+
+MutexLocker::~MutexLocker()
+{
+	Release();
+#ifdef RTOS
+	if (acquired && handle != nullptr)
+	{
+		handle->Release();
 	}
 #endif
 }
@@ -54,63 +115,12 @@ namespace RTOSIface
 
 #ifdef RTOS
 
-	TaskHandle CreateTask(TaskFunction_t pxTaskCode, const char * pcName, uint32_t ulStackDepth, void *pvParameters, unsigned int uxPriority,
-							uint32_t * const puxStackBuffer, TaskStorage& taskBuffer)
-	{
-		return static_cast<TaskHandle>(xTaskCreateStatic(pxTaskCode, pcName, ulStackDepth, pvParameters, uxPriority, puxStackBuffer, &taskBuffer));
-	}
-
-	void SuspendTask(TaskHandle hnd)
-	{
-		vTaskSuspend(hnd);
-	}
-
-	MutexHandle CreateMutex(MutexStorage& st)
-	{
-		return static_cast<MutexHandle>(xSemaphoreCreateRecursiveMutexStatic(&st));
-	}
-
-	bool TakeMutex(MutexHandle hnd, uint32_t timeout)
-	{
-		return xSemaphoreTakeRecursive(hnd, timeout) == pdTRUE;
-	}
-
-	bool ReleaseMutex(MutexHandle hnd)
-	{
-		return xSemaphoreGiveRecursive(hnd) == pdTRUE;
-	}
-
-	TaskHandle GetMutexHolder(MutexHandle hnd)
-	{
-		return static_cast<TaskHandle>(xSemaphoreGetMutexHolder(hnd));
-	}
-
 	TaskHandle GetCurrentTask()
 	{
 		return static_cast<TaskHandle>(xTaskGetCurrentTaskHandle());
 	}
 
 #else
-
-	MutexHandle CreateMutex(MutexStorage& st)
-	{
-		return static_cast<MutexHandle>((void *)&st);
-	}
-
-	bool TakeMutex(MutexHandle hnd, uint32_t timeout)
-	{
-		return true;
-	}
-
-	bool ReleaseMutex(MutexHandle hnd)
-	{
-		return true;
-	}
-
-	TaskHandle GetMutexHolder(MutexHandle hnd)
-	{
-		return nullptr;
-	}
 
 	TaskHandle GetCurrentTask()
 	{

@@ -31,7 +31,7 @@ TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[],
 	uint8_t rawBytes[8];
 	spi_status_t sts;
 	{
-		Locker lock(Tasks::GetSpiMutextHandle(), 50);
+		MutexLocker lock(Tasks::GetSpiMutex(), 50);
 		if (!lock)
 		{
 			return TemperatureError::busBusy;

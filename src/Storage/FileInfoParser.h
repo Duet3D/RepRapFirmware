@@ -68,8 +68,7 @@ private:
 	unsigned int FindFilamentUsed(const char* buf, size_t len, float *filamentUsed, size_t maxFilaments) const;
 
 	// We parse G-Code files in multiple stages. These variables hold the required information
-	MutexHandle parserMutexHandle;
-	MutexStorage parserMutexStorage;
+	Mutex parserMutex;
 
 	FileParseState parseState;
 	String<MaxFilenameLength> filenameBeingParsed;

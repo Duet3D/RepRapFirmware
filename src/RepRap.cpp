@@ -135,6 +135,9 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 
 void RepRap::Init()
 {
+	toolListMutex.Create();
+	messageBoxMutex.Create();
+
 	// All of the following init functions must execute reasonably quickly before the watchdog times us out
 	platform->Init();
 	network->Init();
@@ -298,6 +301,7 @@ void RepRap::Spin()
 	const uint32_t now = millis();
 	if (now - lastWarningMillis >= MinimumWarningInterval)
 	{
+		MutexLocker lock(toolListMutex);
 		for (Tool *t = toolList; t != nullptr; t = t->Next())
 		{
 			if (t->DisplayColdExtrudeWarning())
@@ -352,18 +356,16 @@ void RepRap::EmergencyStop()
 	// Do not turn off ATX power here. If the nozzles are still hot, don't risk melting any surrounding parts...
 	//platform->SetAtxPower(false);
 
-	Tool* tool = toolList;
-	while (tool != nullptr)
+	// Deselect all tools (is this necessary?)
 	{
-		tool->Standby();
-		tool = tool->Next();
+		MutexLocker lock(toolListMutex);
+		for (Tool* tool = toolList; tool != nullptr; tool = tool->Next())
+		{
+			tool->Standby();
+		}
 	}
 
-	heat->Exit();
-	for (size_t heater = 0; heater < Heaters; heater++)
-	{
-		platform->SetHeater(heater, 0.0);
-	}
+	heat->Exit();		// this also turns off all heaters
 
 	// We do this twice, to avoid an interrupt switching a drive back on. move->Exit() should prevent interrupts doing this.
 	for (int i = 0; i < 2; i++)
@@ -423,6 +425,7 @@ void RepRap::PrintDebug()
 // The tool list is maintained in tool number order.
 void RepRap::AddTool(Tool* tool)
 {
+	MutexLocker lock(toolListMutex);
 	Tool** t = &toolList;
 	while(*t != nullptr && (*t)->Number() < tool->Number())
 	{
@@ -455,6 +458,7 @@ void RepRap::DeleteTool(Tool* tool)
 	}
 
 	// Purge any references to this tool
+	MutexLocker lock(toolListMutex);
 	for (Tool **t = &toolList; *t != nullptr; t = &((*t)->next))
 	{
 		if (*t == tool)
@@ -529,6 +533,7 @@ void RepRap::StandbyTool(int toolNumber, bool simulating)
 
 Tool* RepRap::GetTool(int toolNumber) const
 {
+	MutexLocker lock(toolListMutex);
 	Tool* tool = toolList;
 	while(tool != nullptr)
 	{
@@ -570,6 +575,7 @@ void RepRap::SetToolVariables(int toolNumber, const float* standbyTemperatures, 
 
 bool RepRap::IsHeaterAssignedToTool(int8_t heater) const
 {
+	MutexLocker lock(toolListMutex);
 	for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 	{
 		for (size_t i = 0; i < tool->HeaterCount(); i++)
@@ -718,6 +724,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		const bool sendMessage = (message[0] != 0);
 
 		float timeLeft = 0.0;
+		MutexLocker lock(messageBoxMutex);
 		if (displayMessageBox && boxTimer != 0)
 		{
 			timeLeft = (float)(boxTimeout) / 1000.0 - (float)(millis() - boxTimer) / 1000.0;
@@ -917,36 +924,39 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		/* Tool temperatures */
 		response->cat("},\"tools\":{\"active\":[");
-		for (const Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 		{
-			ch = '[';
-			for (size_t heater = 0; heater < tool->heaterCount; heater++)
+			MutexLocker lock(toolListMutex);
+			for (const Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 			{
-				response->catf("%c%.1f", ch, (double)tool->activeTemperatures[heater]);
-				ch = ',';
-			}
-			response->cat((ch == '[') ? "[]" : "]");
+				ch = '[';
+				for (size_t heater = 0; heater < tool->heaterCount; heater++)
+				{
+					response->catf("%c%.1f", ch, (double)tool->activeTemperatures[heater]);
+					ch = ',';
+				}
+				response->cat((ch == '[') ? "[]" : "]");
 
-			if (tool->Next() != nullptr)
-			{
-				response->cat(",");
+				if (tool->Next() != nullptr)
+				{
+					response->cat(",");
+				}
 			}
-		}
 
-		response->cat("],\"standby\":[");
-		for (const Tool *tool = toolList; tool != nullptr; tool = tool->Next())
-		{
-			ch = '[';
-			for (size_t heater = 0; heater < tool->heaterCount; heater++)
+			response->cat("],\"standby\":[");
+			for (const Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 			{
-				response->catf("%c%.1f", ch, (double)tool->standbyTemperatures[heater]);
-				ch = ',';
-			}
-			response->cat((ch == '[') ? "[]" : "]");
+				ch = '[';
+				for (size_t heater = 0; heater < tool->heaterCount; heater++)
+				{
+					response->catf("%c%.1f", ch, (double)tool->standbyTemperatures[heater]);
+					ch = ',';
+				}
+				response->cat((ch == '[') ? "[]" : "]");
 
-			if (tool->Next() != nullptr)
-			{
-				response->cat(",");
+				if (tool->Next() != nullptr)
+				{
+					response->cat(",");
+				}
 			}
 		}
 
@@ -1056,6 +1066,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		/* Tool Mapping */
 		{
 			response->cat(",\"tools\":[");
+			MutexLocker lock(toolListMutex);
 			for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 			{
 				// Number and Name
@@ -1490,25 +1501,29 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	// We no longer send the amount of http buffer space here because the web interface doesn't use these forms of status response
 
 	// Deal with the message box, if there is one
-	float timeLeft = 0.0;
-	if (displayMessageBox && boxTimer != 0)
 	{
-		timeLeft = (float)(boxTimeout) / 1000.0 - (float)(millis() - boxTimer) / 1000.0;
-		displayMessageBox = (timeLeft > 0.0);
-	}
+		float timeLeft = 0.0;
+		MutexLocker lock(messageBoxMutex);
 
-	if (displayMessageBox)
-	{
-		response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%" PRIu32 "",
-						boxMode, boxSeq, (double)timeLeft, boxControls);
-		response->cat(",\"msgBox.msg\":");
-		response->EncodeString(boxMessage.c_str(), boxMessage.Capacity(), false);
-		response->cat(",\"msgBox.title\":");
-		response->EncodeString(boxTitle.c_str(), boxTitle.Capacity(), false);
-	}
-	else
-	{
-		response->cat(",\"msgBox.mode\":-1");					// tell PanelDue that there is no active message box
+		if (displayMessageBox && boxTimer != 0)
+		{
+			timeLeft = (float)(boxTimeout) / 1000.0 - (float)(millis() - boxTimer) / 1000.0;
+			displayMessageBox = (timeLeft > 0.0);
+		}
+
+		if (displayMessageBox)
+		{
+			response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%" PRIu32 "",
+							boxMode, boxSeq, (double)timeLeft, boxControls);
+			response->cat(",\"msgBox.msg\":");
+			response->EncodeString(boxMessage.c_str(), boxMessage.Capacity(), false);
+			response->cat(",\"msgBox.title\":");
+			response->EncodeString(boxTitle.c_str(), boxTitle.Capacity(), false);
+		}
+		else
+		{
+			response->cat(",\"msgBox.mode\":-1");					// tell PanelDue that there is no active message box
+		}
 	}
 
 	if (type == 2)
@@ -1812,6 +1827,7 @@ void RepRap::SetMessage(const char *msg)
 // Display a message box on the web interface
 void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls)
 {
+	MutexLocker lock(messageBoxMutex);
 	boxMessage.copy(msg);
 	boxTitle.copy(title);
 	boxMode = mode;
@@ -1825,6 +1841,7 @@ void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeou
 // Clear pending message box
 void RepRap::ClearAlert()
 {
+	MutexLocker lock(messageBoxMutex);
 	displayMessageBox = false;
 }
 
@@ -1921,6 +1938,7 @@ unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, uns
 
 void RepRap::FlagTemperatureFault(int8_t dudHeater)
 {
+	MutexLocker lock(toolListMutex);
 	if (toolList != nullptr)
 	{
 		toolList->FlagTemperatureFault(dudHeater);
@@ -1930,6 +1948,7 @@ void RepRap::FlagTemperatureFault(int8_t dudHeater)
 void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
 {
 	heat->ResetFault(wasDudHeater);
+	MutexLocker lock(toolListMutex);
 	if (toolList != nullptr)
 	{
 		toolList->ClearTemperatureFault(wasDudHeater);
@@ -1954,6 +1973,7 @@ bool RepRap::WriteToolSettings(FileStore *f) const
 {
 	// First write the settings of all tools except the current one and the command to select them if they are on standby
 	bool ok = true;
+	MutexLocker lock(toolListMutex);
 	for (const Tool *t = toolList; t != nullptr && ok; t = t->Next())
 	{
 		if (t != currentTool)
@@ -1974,6 +1994,7 @@ bool RepRap::WriteToolSettings(FileStore *f) const
 bool RepRap::WriteToolParameters(FileStore *f) const
 {
 	bool ok = true, written = false;
+	MutexLocker lock(toolListMutex);
 	for (const Tool *t = toolList; ok && t != nullptr; t = t->Next())
 	{
 		const AxesBitmap axesProbed = t->GetAxisOffsetsProbed();

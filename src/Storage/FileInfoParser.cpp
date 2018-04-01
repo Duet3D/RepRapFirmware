@@ -31,12 +31,12 @@ FileInfoParser::FileInfoParser()
 	: parseState(notParsing), fileBeingParsed(nullptr), accumulatedParseTime(0), accumulatedReadTime(0), accumulatedSeekTime(0), fileOverlapLength(0)
 {
 	parsedFileInfo.Init();
-	parserMutexHandle = RTOSIface::CreateMutex(parserMutexStorage);
+	parserMutex.Create();
 }
 
 bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GCodeFileInfo& info, bool quitEarly)
 {
-	Locker lock(parserMutexHandle, MAX_FILEINFO_PROCESS_TIME);
+	MutexLocker lock(parserMutex, MAX_FILEINFO_PROCESS_TIME);
 	if (!lock)
 	{
 		return false;
