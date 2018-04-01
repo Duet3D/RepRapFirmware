@@ -1618,6 +1618,83 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, bool flagsDirs)
 	return response;
 }
 
+// Get information for the specified file, or the currently printing file, in JSON format
+bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly)
+{
+	// Poll file info for a specific file
+	if (filename != nullptr && filename[0] != 0)
+	{
+		GCodeFileInfo info;
+		if (!platform->GetMassStorage()->GetFileInfo(FS_PREFIX, filename, info, quitEarly))
+		{
+			// This may take a few runs...
+			return false;
+		}
+
+		if (info.isValid)
+		{
+			if (!OutputBuffer::Allocate(response))
+			{
+				// Should never happen
+				return false;
+			}
+
+			response->printf("{\"err\":0,\"size\":%lu,",info.fileSize);
+			const struct tm * const timeInfo = gmtime(&info.lastModifiedTime);
+			if (timeInfo->tm_year > /*19*/80)
+			{
+				response->catf("\"lastModified\":\"%04u-%02u-%02uT%02u:%02u:%02u\",",
+						timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
+						timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
+			}
+
+			response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,\"filament\":",
+				(double)info.objectHeight, (double)info.firstLayerHeight, (double)info.layerHeight);
+			char ch = '[';
+			if (info.numFilaments == 0)
+			{
+				response->cat(ch);
+			}
+			else
+			{
+				for (size_t i = 0; i < info.numFilaments; ++i)
+				{
+					response->catf("%c%.1f", ch, (double)info.filamentNeeded[i]);
+					ch = ',';
+				}
+			}
+			response->cat("],\"generatedBy\":");
+			response->EncodeString(info.generatedBy.c_str(), info.generatedBy.Capacity(), false);
+			response->cat("}");
+		}
+		else
+		{
+			if (!OutputBuffer::Allocate(response))
+			{
+				// Should never happen
+				return false;
+			}
+
+			response->copy("{\"err\":1}");
+		}
+	}
+	else if (GetPrintMonitor().IsPrinting())
+	{
+		return GetPrintMonitor().GetPrintingFileInfoResponse(response);
+	}
+	else
+	{
+		if (!OutputBuffer::Allocate(response))
+		{
+			// Should never happen
+			return false;
+		}
+
+		response->copy("{\"err\":1}");
+	}
+	return true;
+}
+
 // Get a JSON-style filelist including file types and sizes
 OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
 {
@@ -1757,6 +1834,7 @@ char RepRap::GetStatusCharacter() const
 	return    (processingConfig)										? 'C'	// Reading the configuration file
 			: (gCodes->IsFlashing())									? 'F'	// Flashing a new firmware binary
 			: (IsStopped()) 											? 'H'	// Halted
+			: (!platform->HasVinPower())								? 'O'	// Off i.e. powered down
 			: (gCodes->IsPausing()) 									? 'D'	// Pausing / Decelerating
 			: (gCodes->IsResuming()) 									? 'R'	// Resuming
 			: (gCodes->IsDoingToolChange())								? 'T'	// Changing tool

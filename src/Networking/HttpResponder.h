@@ -37,6 +37,7 @@ private:
 	static const size_t MaxQualKeys = 5;				// max number of key/value pairs in the qualifier
 	static const size_t MaxHeaders = 30;				// max number of key/value pairs in the headers
 	static const uint32_t HttpSessionTimeout = 8000;	// HTTP session timeout in milliseconds
+	static const uint32_t MaxFileInfoGetTime = 1800;	// maximum length of time we spend getting file info, to avoid the client timing out (actual time will be a little longer than this)
 
 	enum class HttpParseState
 	{
@@ -80,7 +81,7 @@ private:
 	bool GetJsonResponse(const char* request, OutputBuffer *&response, bool& keepOpen);
 	void ProcessMessage();
 	void RejectMessage(const char* s, unsigned int code = 500);
-	bool SendFileInfo();
+	bool SendFileInfo(bool quitEarly);
 
 	void DoUpload();
 
@@ -102,6 +103,7 @@ private:
 	size_t numHeaderKeys;							// number of keys we have found, <= maxHeaders
 
 	// rr_fileinfo requests
+	uint32_t startedGettingFileInfoAt;				// when we started trying to get file info
 	char filenameBeingProcessed[MaxFilenameLength];	// The filename being processed (for rr_fileinfo)
 
 	// Keeping track of HTTP sessions

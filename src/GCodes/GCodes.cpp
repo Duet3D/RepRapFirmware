@@ -2294,12 +2294,6 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 
 	if (moveBuffer.moveType != 0)
 	{
-		// Special move. If on a delta, movement must be relative.
-		if (!gb.MachineState().axesRelative && reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta)
-		{
-			return "G0/G1: attempt to move delta motors to absolute positions";
-		}
-
 		// This may be a raw motor move, in which case we need the current raw motor positions in moveBuffer.coords.
 		// If it isn't a raw motor move, it will still be applied without axis or bed transform applied,
 		// so make sure the initial coordinates don't have those either to avoid unwanted Z movement.
@@ -2317,6 +2311,12 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
+			// If it is a special move on a delta, movement must be relative.
+			if (moveBuffer.moveType != 0 && !gb.MachineState().axesRelative && reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta)
+			{
+				return "G0/G1: attempt to move individual motors of a delta machine to absolute positions";
+			}
+
 			SetBit(axesMentioned, axis);
 			const float moveArg = gb.GetFValue() * distanceScale;
 			if (moveBuffer.moveType != 0)

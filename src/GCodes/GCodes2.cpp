@@ -845,7 +845,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			String<MaxFilenameLength> filename;
 			const bool gotFilename = gb.GetUnprecedentedString(filename.GetRef());
 			OutputBuffer *fileInfoResponse;
-			const bool done = reprap.GetPrintMonitor().GetFileInfoResponse((gotFilename) ? filename.Pointer() : nullptr, fileInfoResponse);
+			const bool done = reprap.GetFileInfoResponse((gotFilename) ? filename.Pointer() : nullptr, fileInfoResponse, false);
 			if (done)
 			{
 				fileInfoResponse->cat('\n');
@@ -1892,9 +1892,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 204: // Set max travel and printing accelerations
 		{
 			bool seen = false;
-			if (gb.Seen('S') && platform.Emulating() == Compatibility::marlin)
+			if (gb.Seen('S'))
 			{
-				// For backwards compatibility e.g. with Cura, set both accelerations as Marlin does.
+				// For backwards compatibility with old versions of Marlin (e.g. for Cura and the Prusa fork of slic3r), set both accelerations
 				const float acc = gb.GetFValue();
 				platform.SetMaxPrintingAcceleration(acc);
 				platform.SetMaxTravelAcceleration(acc);

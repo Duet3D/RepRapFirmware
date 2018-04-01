@@ -7,6 +7,8 @@
 #include "Libraries/Fatfs/ff.h"
 #include "GCodes/GCodeResult.h"
 #include "FileStore.h"
+#include "FileInfoParser.h"
+
 #include <ctime>
 
 #include "RTOSIface.h"
@@ -50,6 +52,7 @@ public:
 	unsigned int GetNumFreeFiles() const;
 	void Spin();
 	MutexHandle GetVolumeMutexHandle(size_t vol) const { return info[vol].volMutexHandle; }
+	bool GetFileInfo(const char *directory, const char *fileName, GCodeFileInfo& info, bool quitEarly) { return infoParser.GetFileInfo(directory, fileName, info, quitEarly); }
 
 	enum class InfoResult : uint8_t
 	{
@@ -102,6 +105,7 @@ private:
 	MutexStorage fsMutexStorage;
 	MutexStorage dirMutexStorage;
 
+	FileInfoParser infoParser;
 	DIR findDir;
 	FileWriteBuffer *freeWriteBuffers;
 	FileStore files[MAX_FILES];

@@ -116,7 +116,7 @@ bool HttpResponder::Spin()
 		// no break
 
 	case ResponderState::gettingFileInfo:
-		if (SendFileInfo())
+		if (SendFileInfo(millis() - startedGettingFileInfoAt >= MaxFileInfoGetTime))
 		{
 			fileInfoLock.Release(this);					// release the lock
 		}
@@ -562,6 +562,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			// Simple rr_fileinfo call to get info about the file being printed
 			filenameBeingProcessed[0] = 0;
 		}
+		startedGettingFileInfoAt = millis();
 		responderState = ResponderState::gettingFileInfoLock;
 		return false;
 	}
@@ -618,10 +619,10 @@ const char* HttpResponder::GetKeyValue(const char *key) const
 
 // Called to process a FileInfo request, which may take several calls
 // When we have finished, set the state back to free.
-bool HttpResponder::SendFileInfo()
+bool HttpResponder::SendFileInfo(bool quitEarly)
 {
 	OutputBuffer *jsonResponse = nullptr;
-	const bool gotFileInfo = reprap.GetPrintMonitor().GetFileInfoResponse(filenameBeingProcessed, jsonResponse);
+	const bool gotFileInfo = reprap.GetFileInfoResponse(filenameBeingProcessed, jsonResponse, quitEarly);
 	if (gotFileInfo)
 	{
 		// Got it - send the response now

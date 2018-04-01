@@ -551,6 +551,7 @@ public:
 	void GetPowerVoltages(float& minV, float& currV, float& maxV) const;
 	float GetCurrentPowerVoltage() const;
 	bool IsPowerOk() const;
+	bool HasVinPower() const;
 	void DisableAutoSave();
 	void EnableAutoSave(float saveVoltage, float resumeVoltage);
 	bool GetAutoSaveSettings(float& saveVoltage, float&resumeVoltage);

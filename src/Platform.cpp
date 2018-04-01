@@ -1640,6 +1640,11 @@ bool Platform::IsPowerOk() const
 	return !autoSaveEnabled || currentVin > autoPauseReading;
 }
 
+bool Platform::HasVinPower() const
+{
+	return driversPowered;			// not quite right because drivers are disabled if we get over-voltage too, but OK for the status report
+}
+
 void Platform::EnableAutoSave(float saveVoltage, float resumeVoltage)
 {
 	autoPauseReading = PowerVoltageToAdcReading(saveVoltage);
