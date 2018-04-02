@@ -90,7 +90,7 @@ void GridDefinition::WriteHeadingAndParameters(const StringRef& s) const
 {
 	for (size_t i =0; i < ARRAY_SIZE(HeightMapLabelLines); ++i)
 	{
-		if (StringStartsWith(s.Pointer(), HeightMapLabelLines[i]))
+		if (StringStartsWith(s.c_str(), HeightMapLabelLines[i]))
 		{
 			return (int)i;
 		}
@@ -105,11 +105,11 @@ bool GridDefinition::ReadParameters(const StringRef& s, int version)
 	switch (version)
 	{
 	case 1:
-		ok = (sscanf(s.Pointer(), "%f,%f,%f,%f,%f,%f,%f,%lu,%lu", &xMin, &xMax, &yMin, &yMax, &radius, &xSpacing, &ySpacing, &numX, &numY) == 9);
+		ok = (sscanf(s.c_str(), "%f,%f,%f,%f,%f,%f,%f,%lu,%lu", &xMin, &xMax, &yMin, &yMax, &radius, &xSpacing, &ySpacing, &numX, &numY) == 9);
 		break;
 
 	case 0:
-		ok = (sscanf(s.Pointer(), "%f,%f,%f,%f,%f,%f,%lu,%lu", &xMin, &xMax, &yMin, &yMax, &radius, &xSpacing, &numX, &numY) == 8);
+		ok = (sscanf(s.c_str(), "%f,%f,%f,%f,%f,%f,%lu,%lu", &xMin, &xMax, &yMin, &yMax, &radius, &xSpacing, &numX, &numY) == 8);
 		if (ok)
 		{
 			ySpacing = xSpacing;
@@ -226,14 +226,14 @@ bool HeightMap::SaveToFile(FileStore *f) const
 	float mean, deviation;
 	(void)GetStatistics(mean, deviation);
 	buf.catf(", mean error %.3f, deviation %.3f\n", (double)mean, (double)deviation);
-	if (!f->Write(buf.Pointer()))
+	if (!f->Write(buf.c_str()))
 	{
 		return true;
 	}
 
 	// Write the grid parameters
 	def.WriteHeadingAndParameters(buf);
-	if (!f->Write(buf.Pointer()))
+	if (!f->Write(buf.c_str()))
 	{
 		return true;
 	}
@@ -260,7 +260,7 @@ bool HeightMap::SaveToFile(FileStore *f) const
 			++index;
 		}
 		buf.cat('\n');
-		if (!f->Write(buf.Pointer()))
+		if (!f->Write(buf.c_str()))
 		{
 			return true;
 		}

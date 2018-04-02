@@ -191,7 +191,7 @@ private:
 	static void SetupDMA(uint32_t outVal) __attribute__ ((hot));	// set up the PDC to send a register and receive the status
 
 	static constexpr unsigned int NumRegisters = 5;			// the number of registers that we write to
-	uint32_t registers[NumRegisters];						// the values we want the TMC2660 writable registers to have
+	volatile uint32_t registers[NumRegisters];				// the values we want the TMC2660 writable registers to have
 
 	// Register numbers are in priority order, most urgent first
 	static constexpr unsigned int DriveControl = 0;			// microstepping
@@ -202,7 +202,7 @@ private:
 
 	uint32_t pin;											// the pin number that drives the chip select pin of this driver
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state
-	uint32_t registersToUpdate;								// bitmap of register values that need to be sent to the driver chip
+	volatile uint32_t registersToUpdate;					// bitmap of register values that need to be sent to the driver chip
 	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection
@@ -290,16 +290,17 @@ void TmcDriverState::SetChopConf(uint32_t newVal)
 void TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate)
 {
 	microstepShiftFactor = shift;
-	registers[DriveControl] &= ~TMC_DRVCTRL_MRES_MASK;
-	registers[DriveControl] |= ((8u - shift) << TMC_DRVCTRL_MRES_SHIFT) & TMC_DRVCTRL_MRES_MASK;
+	uint32_t drvCtrlReg = registers[DriveControl] & ~TMC_DRVCTRL_MRES_MASK;
+	drvCtrlReg |= (((8u - shift) << TMC_DRVCTRL_MRES_SHIFT) & TMC_DRVCTRL_MRES_MASK);
 	if (interpolate)
 	{
-		registers[DriveControl] |= TMC_DRVCTRL_INTPOL;
+		drvCtrlReg |= TMC_DRVCTRL_INTPOL;
 	}
 	else
 	{
-		registers[DriveControl] &= ~TMC_DRVCTRL_INTPOL;
+		drvCtrlReg &= ~TMC_DRVCTRL_INTPOL;
 	}
+	registers[DriveControl] = drvCtrlReg;
 	registersToUpdate |= 1u << DriveControl;
 }
 
@@ -310,8 +311,7 @@ void TmcDriverState::SetCurrent(float current)
 	// This gives us a range of 101mA to 3.236A in 101mA steps in the high sensitivity range (VSENSE = 1)
 	const uint32_t iCurrent = static_cast<uint32_t>(constrain<float>(current, 100.0, MaximumMotorCurrent));
 	const uint32_t csBits = (32 * iCurrent - 1600)/3236;		// formula checked by simulation on a spreadsheet
-	registers[StallGuardConfig] &= ~TMC_SGCSCONF_CS_MASK;
-	registers[StallGuardConfig] |= TMC_SGCSCONF_CS(csBits);
+	registers[StallGuardConfig] = (registers[StallGuardConfig] & ~TMC_SGCSCONF_CS_MASK) | TMC_SGCSCONF_CS(csBits);
 	registersToUpdate |= 1u << StallGuardConfig;
 }
 

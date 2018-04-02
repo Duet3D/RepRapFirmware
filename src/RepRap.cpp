@@ -2000,11 +2000,8 @@ bool RepRap::WriteToolParameters(FileStore *f) const
 		const AxesBitmap axesProbed = t->GetAxisOffsetsProbed();
 		if (axesProbed != 0)
 		{
-			if (written)
-			{
-				scratchString.Clear();
-			}
-			else
+			String<ScratchStringLength> scratchString;
+			if (!written)
 			{
 				scratchString.copy("; Probed tool offsets\n");
 				written = true;
@@ -2018,7 +2015,7 @@ bool RepRap::WriteToolParameters(FileStore *f) const
 				}
 			}
 			scratchString.cat('\n');
-			ok = f->Write(scratchString.Pointer());
+			ok = f->Write(scratchString.c_str());
 		}
 	}
 	return ok;

@@ -81,7 +81,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	reply.printf("Bad command: %s", gb.Buffer());
-	HandleReply(gb, true, reply.Pointer());
+	HandleReply(gb, true, reply.c_str());
 	return true;
 }
 
@@ -537,7 +537,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 			if (sparam == 2)
 			{
-				fileResponse = reprap.GetFilesResponse(dir.Pointer(), true);		// Send the file list in JSON format
+				fileResponse = reprap.GetFilesResponse(dir.c_str(), true);		// Send the file list in JSON format
 				fileResponse->cat('\n');
 			}
 			else
@@ -558,7 +558,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 				bool encapsulateList = ((&gb != serialGCode && &gb != telnetGCode) || platform.Emulating() != Compatibility::marlin);
 				FileInfo fileInfo;
-				if (platform.GetMassStorage()->FindFirst(dir.Pointer(), fileInfo))
+				if (platform.GetMassStorage()->FindFirst(dir.c_str(), fileInfo))
 				{
 					// iterate through all entries and append each file name
 					do {
@@ -629,9 +629,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			String<MaxFilenameLength> filename;
 			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
-				if (QueueFileToPrint(filename.Pointer(), reply))
+				if (QueueFileToPrint(filename.c_str(), reply))
 				{
-					reprap.GetPrintMonitor().StartingPrint(filename.Pointer());
+					reprap.GetPrintMonitor().StartingPrint(filename.c_str());
 					if (platform.Emulating() == Compatibility::marlin && (&gb == serialGCode || &gb == telnetGCode))
 					{
 						reply.copy("File opened\nFile selected");
@@ -639,7 +639,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					else
 					{
 						// Command came from web interface or PanelDue, or not emulating Marlin, so send a nicer response
-						reply.printf("File %s selected for printing", filename.Pointer());
+						reply.printf("File %s selected for printing", filename.c_str());
 					}
 
 					if (code == 32)
@@ -796,14 +796,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			String<MaxFilenameLength> filename;
 			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
-				const bool ok = OpenFileToWrite(gb, platform.GetGCodeDir(), filename.Pointer(), 0, false, 0);
+				const bool ok = OpenFileToWrite(gb, platform.GetGCodeDir(), filename.c_str(), 0, false, 0);
 				if (ok)
 				{
-					reply.printf("Writing to file: %s", filename.Pointer());
+					reply.printf("Writing to file: %s", filename.c_str());
 				}
 				else
 				{
-					reply.printf("Can't open file %s for writing.", filename.Pointer());
+					reply.printf("Can't open file %s for writing.", filename.c_str());
 					result = GCodeResult::error;
 				}
 			}
@@ -824,7 +824,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			String<MaxFilenameLength> filename;
 			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
-				platform.GetMassStorage()->Delete(platform.GetGCodeDir(), filename.Pointer(), false);
+				platform.GetMassStorage()->Delete(platform.GetGCodeDir(), filename.c_str(), false);
 			}
 			else
 			{
@@ -845,7 +845,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			String<MaxFilenameLength> filename;
 			const bool gotFilename = gb.GetUnprecedentedString(filename.GetRef());
 			OutputBuffer *fileInfoResponse;
-			const bool done = reprap.GetFileInfoResponse((gotFilename) ? filename.Pointer() : nullptr, fileInfoResponse, false);
+			const bool done = reprap.GetFileInfoResponse((gotFilename) ? filename.c_str() : nullptr, fileInfoResponse, false);
 			if (done)
 			{
 				fileInfoResponse->cat('\n');
@@ -945,14 +945,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			String<MaxFilenameLength> filename;
 			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
-				if (StartHash(filename.Pointer()))
+				if (StartHash(filename.c_str()))
 				{
 					// Hashing is now in progress...
 					result = GCodeResult::notFinished;
 				}
 				else
 				{
-					reply.printf("Cannot open file: %s", filename.Pointer());
+					reply.printf("Cannot open file: %s", filename.c_str());
 					result = GCodeResult::error;
 				}
 			}
@@ -1167,7 +1167,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			String<MaxFilenameLength> filename;
 			gb.GetPossiblyQuotedString(filename.GetRef());
-			DoFileMacro(gb, filename.Pointer(), true, 98);
+			DoFileMacro(gb, filename.c_str(), true, 98);
 		}
 		break;
 
@@ -1507,7 +1507,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			String<MaxFilenameLength> msg;
 			gb.GetUnprecedentedString(msg.GetRef());
-			reprap.SetMessage(msg.Pointer());
+			reprap.SetMessage(msg.c_str());
 		}
 		break;
 
@@ -2909,14 +2909,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		const FilePosition size = (gb.Seen('S') ? (FilePosition)gb.GetIValue() : 0);
 		const uint32_t crc32 = (gb.Seen('C') ? gb.GetUIValue() : 0);
-		const bool ok = OpenFileToWrite(gb, folder, filename.Pointer(), size, true, crc32);
+		const bool ok = OpenFileToWrite(gb, folder, filename.c_str(), size, true, crc32);
 		if (ok)
 		{
-			reply.printf("Writing to file: %s", filename.Pointer());
+			reply.printf("Writing to file: %s", filename.c_str());
 		}
 		else
 		{
-			reply.printf("Can't open file %s for writing.", filename.Pointer());
+			reply.printf("Can't open file %s for writing.", filename.c_str());
 			result = GCodeResult::error;
 		}
 	}
@@ -3788,7 +3788,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					if (reprap.GetScanner().IsRegistered())
 					{
-						result = GetGCodeResultFromFinished(reprap.GetScanner().StartScan(file.Pointer(), sParam));
+						result = GetGCodeResultFromFinished(reprap.GetScanner().StartScan(file.c_str(), sParam));
 					}
 					else
 					{
@@ -4132,7 +4132,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				String<8> eraseString;
 				gb.GetPossiblyQuotedString(eraseString.GetRef());
-				doErase = StringStartsWith(eraseString.Pointer(), "ERASE");
+				doErase = StringStartsWith(eraseString.c_str(), "ERASE");
 			}
 			else
 			{
@@ -4215,7 +4215,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 
 	// If we get here, we have finished
 	UnlockAll(gb);
-	HandleReply(gb, false, reply.Pointer());
+	HandleReply(gb, false, reply.c_str());
 	return true;
 }
 
@@ -4243,9 +4243,12 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		break;
 
 	case GCodeResult::error:
-		gb.PrintCommand(scratchString);
-		scratchString.cat(": ");
-		reply.Prepend(scratchString.Pointer());
+		{
+			String<ScratchStringLength> scratchString;
+			gb.PrintCommand(scratchString.GetRef());
+			scratchString.cat(": ");
+			reply.Prepend(scratchString.c_str());
+		}
 		break;
 
 	default:
@@ -4256,7 +4259,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 	{
 		gb.timerRunning = false;
 		UnlockAll(gb);
-		HandleReply(gb, rslt != GCodeResult::ok, reply.Pointer());
+		HandleReply(gb, rslt != GCodeResult::ok, reply.c_str());
 	}
 	return true;
 }

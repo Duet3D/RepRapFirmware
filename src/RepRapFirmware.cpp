@@ -198,9 +198,6 @@ const char * const moduleName[] =
 
 // Utilities and storage not part of any class
 
-static char scratchStringBuffer[220];		// this needs to be long enough to print delta parameters and 24 words of stack (217 bytes)
-StringRef scratchString(scratchStringBuffer, ARRAY_SIZE(scratchStringBuffer));
-
 // For debug use
 void debugPrintf(const char* fmt, ...)
 {
@@ -310,7 +307,7 @@ void ListDrivers(const StringRef& str, DriversBitmap drivers)
 	{
 		if ((drivers & 1) != 0)
 		{
-			scratchString.catf(" %u", d);
+			str.catf(" %u", d);
 		}
 		drivers >>= 1;
 	}

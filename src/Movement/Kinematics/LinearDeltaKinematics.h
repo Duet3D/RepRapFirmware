@@ -64,7 +64,7 @@ private:
 
 	floatc_t ComputeDerivative(unsigned int deriv, float ha, float hb, float hc) const;	// Compute the derivative of height with respect to a parameter at a set of motor endpoints
 	void Adjust(size_t numFactors, const floatc_t v[]);								// Perform 3-, 4-, 6- or 7-factor adjustment
-	void PrintParameters(StringRef& reply) const;									// Print all the parameters for debugging
+	void PrintParameters(const StringRef& reply) const;								// Print all the parameters for debugging
 
 	// Delta parameter defaults
 	const float defaultDiagonal = 215.0;

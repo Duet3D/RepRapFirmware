@@ -219,10 +219,10 @@ template<typename BitmapType> BitmapType UnsignedArrayToBitMap(const uint32_t *a
 	return res;
 }
 
-// A string buffer used for temporary purposes
-extern StringRef scratchString;
-
 // Common definitions used by more than one module
+constexpr size_t ScratchStringLength = 220;							// standard length of a scratch string, enough to print delta parameters to
+constexpr size_t ShortScratchStringLength = 50;
+
 constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
 constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
 constexpr size_t CoreXYU_AXES = 5;									// The number of axes in a CoreXYU machine (there is a hidden V axis)

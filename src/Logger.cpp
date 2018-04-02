@@ -31,7 +31,7 @@ void Logger::Start(time_t time, const StringRef& filename)
 	if (!inLogger)
 	{
 		Lock loggerLock(inLogger);
-		FileStore * const f = reprap.GetPlatform().OpenFile(SYS_DIR, filename.Pointer(), OpenMode::append);
+		FileStore * const f = reprap.GetPlatform().OpenFile(SYS_DIR, filename.c_str(), OpenMode::append);
 		if (f != nullptr)
 		{
 			logFile.Set(f);
@@ -150,7 +150,7 @@ bool Logger::WriteDateTime(time_t time)
 		buf.printf("%04u-%02u-%02u %02u:%02u:%02u ",
 						timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday, timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
 	}
-	return logFile.Write(buf.Pointer());
+	return logFile.Write(buf.c_str());
 }
 
 // End

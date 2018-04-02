@@ -329,7 +329,7 @@ bool Fan::WriteSettings(FileStore *f, size_t fanNum) const
 		char bufSpace[50];
 		StringRef buf(bufSpace, ARRAY_SIZE(bufSpace));
 		buf.printf("M106 P%u S%.2f\n", fanNum, (double)val);
-		return f->Write(buf.Pointer());
+		return f->Write(buf.c_str());
 	}
 
 	return true;

@@ -291,12 +291,13 @@ bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const
 	bool ok = f->Write("; Hangprinter parameters\n");
 	if (ok)
 	{
+		String<100> scratchString;
 		scratchString.printf("M669 K6 A%.3f:%.3f:%.3f B%.3f:%.3f:%.3f C%.3f:%.3f:%.3f D%.3f P%.1f\n",
 							(double)anchorA[X_AXIS], (double)anchorA[Y_AXIS], (double)anchorA[Z_AXIS],
 							(double)anchorB[X_AXIS], (double)anchorB[Y_AXIS], (double)anchorB[Z_AXIS],
 							(double)anchorC[X_AXIS], (double)anchorC[Y_AXIS], (double)anchorC[Z_AXIS],
 							(double)anchorDz, (double)printRadius);
-		ok = f->Write(scratchString.Pointer());
+		ok = f->Write(scratchString.c_str());
 	}
 	return ok;
 }
@@ -352,8 +353,9 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 
 	if (reprap.Debug(moduleMove))
 	{
-		PrintParameters(scratchString);
-		debugPrintf("%s\n", scratchString.Pointer());
+		String<ScratchStringLength> scratchString;
+		PrintParameters(scratchString.GetRef());
+		debugPrintf("%s\n", scratchString.c_str());
 	}
 
 	// The following is for printing out the calculation time, see later
@@ -495,13 +497,14 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 	//debugPrintf("Time taken %dms\n", (reprap.GetPlatform()->GetInterruptClocks() - startTime) * 1000 / DDA::stepClockRate);
 	if (reprap.Debug(moduleMove))
 	{
-		PrintParameters(scratchString);
-		debugPrintf("%s\n", scratchString.Pointer());
+		String<ScratchStringLength> scratchString;
+		PrintParameters(scratchString.GetRef());
+		debugPrintf("%s\n", scratchString.c_str());
 	}
 
 	reply.printf("Calibrated %d factors using %d points, deviation before %.3f after %.3f",
 			numFactors, numPoints, (double)sqrtf(initialSumOfSquares/numPoints), (double)expectedRmsError);
-	reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.Pointer());
+	reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.c_str());
 
     doneAutoCalibration = true;
     return false;
@@ -614,7 +617,7 @@ void HangprinterKinematics::Adjust(size_t numFactors, const floatc_t v[])
 }
 
 // Print all the parameters for debugging
-void HangprinterKinematics::PrintParameters(StringRef& reply) const
+void HangprinterKinematics::PrintParameters(const StringRef& reply) const
 {
 	reply.printf("Anchor coordinates (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f)\n",
 					(double)anchorA[X_AXIS], (double)anchorA[Y_AXIS], (double)anchorA[Z_AXIS],

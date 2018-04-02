@@ -434,14 +434,14 @@ bool Tool::WriteSettings(FileStore *f) const
 			c = ':';
 		}
 		buf.cat('\n');
-		ok = f->Write(buf.Pointer());
+		ok = f->Write(buf.c_str());
 	}
 
 	if (ok && state != ToolState::off)
 	{
 		// Select tool
 		buf.printf("T%d P0\n", myNumber);
-		ok = f->Write(buf.Pointer());
+		ok = f->Write(buf.c_str());
 	}
 
 	return ok;

@@ -95,7 +95,7 @@ void MassStorage::Init()
 	if (reply.strlen() != 0)
 	{
 		delay(3000);		// Wait a few seconds so users have a chance to see this
-		reprap.GetPlatform().MessageF(UsbMessage, "%s\n", reply.Pointer());
+		reprap.GetPlatform().MessageF(UsbMessage, "%s\n", reply.c_str());
 	}
 }
 
@@ -731,8 +731,8 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity
 
 	capacity = (uint64_t)sd_mmc_get_capacity(slot) * 1024;
 	speed = sd_mmc_get_interface_speed(slot);
-	String<10> path;
-	path.GetRef().printf("%u:/", slot);
+	String<ShortScratchStringLength> path;
+	path.printf("%u:/", slot);
 	uint32_t freeClusters;
 	FATFS *fs;
 	const FRESULT fr = f_getfree(path.c_str(), &freeClusters, &fs);

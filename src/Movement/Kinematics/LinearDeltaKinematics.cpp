@@ -230,8 +230,9 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 
 	if (reprap.Debug(moduleMove))
 	{
-		PrintParameters(scratchString);
-		debugPrintf("%s\n", scratchString.Pointer());
+		String<ScratchStringLength> scratchString;
+		PrintParameters(scratchString.GetRef());
+		debugPrintf("%s\n", scratchString.c_str());
 	}
 
 	// The following is for printing out the calculation time, see later
@@ -383,13 +384,14 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 	//debugPrintf("Time taken %dms\n", (reprap.GetPlatform()->GetInterruptClocks() - startTime) * 1000 / DDA::stepClockRate);
 	if (reprap.Debug(moduleMove))
 	{
-		PrintParameters(scratchString);
-		debugPrintf("%s\n", scratchString.Pointer());
+		String<ScratchStringLength> scratchString;
+		PrintParameters(scratchString.GetRef());
+		debugPrintf("%s\n", scratchString.c_str());
 	}
 
 	reply.printf("Calibrated %d factors using %d points, deviation before %.3f after %.3f",
 			numFactors, numPoints, (double)sqrtf(initialSumOfSquares/numPoints), (double)expectedRmsError);
-	reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.Pointer());
+	reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.c_str());
 
     doneAutoCalibration = true;
     return false;
@@ -533,7 +535,7 @@ void LinearDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[])
 }
 
 // Print all the parameters for debugging
-void LinearDeltaKinematics::PrintParameters(StringRef& reply) const
+void LinearDeltaKinematics::PrintParameters(const StringRef& reply) const
 {
 	reply.printf("Stops X%.3f Y%.3f Z%.3f height %.3f diagonal %.3f radius %.3f xcorr %.2f ycorr %.2f zcorr %.2f xtilt %.3f%% ytilt %.3f%%\n",
 		(double)endstopAdjustments[DELTA_A_AXIS], (double)endstopAdjustments[DELTA_B_AXIS], (double)endstopAdjustments[DELTA_C_AXIS], (double)homedHeight, (double)diagonal, (double)radius,
@@ -546,15 +548,16 @@ bool LinearDeltaKinematics::WriteCalibrationParameters(FileStore *f) const
 	bool ok = f->Write("; Delta parameters\n");
 	if (ok)
 	{
+		String<ScratchStringLength> scratchString;
 		scratchString.printf("M665 L%.3f R%.3f H%.3f B%.1f X%.3f Y%.3f Z%.3f\n",
 			(double)diagonal, (double)radius, (double)homedHeight, (double)printRadius, (double)angleCorrections[DELTA_A_AXIS], (double)angleCorrections[DELTA_B_AXIS], (double)angleCorrections[DELTA_C_AXIS]);
-		ok = f->Write(scratchString.Pointer());
-	}
-	if (ok)
-	{
-		scratchString.printf("M666 X%.3f Y%.3f Z%.3f A%.2f B%.2f\n",
-			(double)endstopAdjustments[X_AXIS], (double)endstopAdjustments[Y_AXIS], (double)endstopAdjustments[Z_AXIS], (double)(xTilt * 100.0), (double)(yTilt * 100.0));
-		ok = f->Write(scratchString.Pointer());
+		ok = f->Write(scratchString.c_str());
+		if (ok)
+		{
+			scratchString.printf("M666 X%.3f Y%.3f Z%.3f A%.2f B%.2f\n",
+				(double)endstopAdjustments[X_AXIS], (double)endstopAdjustments[Y_AXIS], (double)endstopAdjustments[Z_AXIS], (double)(xTilt * 100.0), (double)(yTilt * 100.0));
+			ok = f->Write(scratchString.c_str());
+		}
 	}
 	return ok;
 }

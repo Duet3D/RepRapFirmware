@@ -744,7 +744,7 @@ GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply)
 		// Set date
 		String<12> dateString;
 		gb.GetPossiblyQuotedString(dateString.GetRef());
-		if (strptime(dateString.Pointer(), "%Y-%m-%d", &timeInfo) == nullptr)
+		if (strptime(dateString.c_str(), "%Y-%m-%d", &timeInfo) == nullptr)
 		{
 			reply.copy("Invalid date format");
 			return GCodeResult::error;
@@ -758,7 +758,7 @@ GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply)
 		// Set time
 		String<12> timeString;
 		gb.GetPossiblyQuotedString(timeString.GetRef());
-		if (strptime(timeString.Pointer(), "%H:%M:%S", &timeInfo) == nullptr)
+		if (strptime(timeString.c_str(), "%H:%M:%S", &timeInfo) == nullptr)
 		{
 			reply.copy("Invalid time format");
 			return GCodeResult::error;

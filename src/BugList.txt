@@ -104,6 +104,9 @@ Investigations:
 SCARA https://www.duet3d.com/forum/thread.php?pid=43636#p43636
 
 Remaining:
+- [done in 2.0] BUG: G1 E5 S1 on delta says "Error: G0/G1: attempt to move delta motors to absolute positions"
+- [done in 2.0] BUG: if we get a pause due to stalled drivers, the driver numbers won't be listed
+- BUG: G29 height map is way below bed. Happened on Ormerod.
 - Unexpected heaters off/tool selection behaviour, https://www.duet3d.com/forum/thread.php?pid=43059#p43059
 - warn when using : where ; was probably meant
 - check out G30 H parameter, https://www.duet3d.com/forum/thread.php?pid=42322#p42322
@@ -118,10 +121,14 @@ Remaining:
 - Return "Powered down" status when VIN power has never been seen or has gone down after sending M81
 - Auto mount main SD card when inserted
 - Workplace offsets are supposed to be persistant (check NIST), https://www.duet3d.com/forum/thread.php?pid=43755#p43755
-- Report workspace coordinates to 2dp not 1dp in G10 P# and to DWC (https://www.duet3d.com/forum/thread.php?pid=43789#p43789)
+- Report workspace coordinates to 2dp not 1dp to DWC (https://www.duet3d.com/forum/thread.php?pid=43789#p43789)
 - At the end of a simulation, restore the original workplace coordinate selection
 - G0 not to use G1 F parameter, move at machine limits instead (CNC, https://www.duet3d.com/forum/thread.php?pid=43825#p43825)
-- M204 S parameter to set both T and P, but overridden by T and/or P
+- [done in 2.0] M204 S parameter to set both T and P even if Marlin compatibility not enabled
+- apostrophe in quoted filename
+- looks like we get a Pop underflow message when you send DWC jog commands and axes are not homed
+- M582 not working from config.g? https://www.duet3d.com/forum/thread.php?pid=44259#p44259
+- Add warning message when print exceeds bounds
 
 - How should we lift X on a CoreXZ printer before homing?
 - if a homing command in an SD print file is aborted due to e.g. G1 Z5 in the homing file, error message should be written to both DWC and PanelDue
@@ -161,6 +168,8 @@ Remaining:
 
 Bug investigations:
 - [done] step errors, https://www.duet3d.com/forum/thread.php?pid=33741#p33741
+- SeeMeCNC scaling problem, see email of 2018-04-01
+- dual Z motors, https://www.duet3d.com/forum/thread.php?pid=44396#p44396
 
 Investigations:
 

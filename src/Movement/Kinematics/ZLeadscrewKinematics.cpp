@@ -298,7 +298,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 				AppendCorrections(solution, reply);
 				reply.catf(", points used %d, deviation before %.3f after %.3f",
 							numPoints, (double)sqrtf((float)initialSumOfSquares/numPoints), (double)sqrtf((float)sumOfSquares/numPoints));
-				reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.Pointer());
+				reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.c_str());
 			}
 		}
 		else

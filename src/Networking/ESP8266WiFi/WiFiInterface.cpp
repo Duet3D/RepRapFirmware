@@ -677,7 +677,7 @@ void WiFiInterface::Spin(bool full)
 		{
 			if (reprap.Debug(moduleWiFi))
 			{
-				debugPrintf("WiFi: %s\n", debugMessageBuffer.Pointer());
+				debugPrintf("WiFi: %s\n", debugMessageBuffer.c_str());
 			}
 			debugMessageBuffer.Clear();
 			debugPrintPending = false;
@@ -789,7 +789,7 @@ GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, cons
 	if (modeRequested == WiFiState::connected)
 	{
 		memset(requestedSsid, 0, sizeof(requestedSsid));
-		SafeStrncpy(requestedSsid, ssid.Pointer(), ARRAY_SIZE(requestedSsid));
+		SafeStrncpy(requestedSsid, ssid.c_str(), ARRAY_SIZE(requestedSsid));
 	}
 
 	if (activated)

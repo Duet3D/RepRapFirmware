@@ -499,8 +499,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			const Tool * const oldTool = reprap.GetCurrentTool();
 			if (oldTool != nullptr && AllAxesAreHomed())
 			{
+				String<ShortScratchStringLength> scratchString;
 				scratchString.printf("tfree%d.g", oldTool->Number());
-				DoFileMacro(gb, scratchString.Pointer(), false);
+				DoFileMacro(gb, scratchString.c_str(), false);
 			}
 		}
 		break;
@@ -517,8 +518,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			gb.AdvanceState();
 			if (reprap.GetTool(gb.MachineState().newToolNumber) != nullptr && AllAxesAreHomed() && (gb.MachineState().toolChangeParam & TPreBit) != 0)
 			{
+				String<ShortScratchStringLength> scratchString;
 				scratchString.printf("tpre%d.g", gb.MachineState().newToolNumber);
-				DoFileMacro(gb, scratchString.Pointer(), false);
+				DoFileMacro(gb, scratchString.c_str(), false);
 			}
 		}
 		break;
@@ -535,8 +537,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (reprap.GetTool(gb.MachineState().newToolNumber) != nullptr && (gb.MachineState().toolChangeParam & TPostBit) != 0)
 				{
+					String<ShortScratchStringLength> scratchString;
 					scratchString.printf("tpost%d.g", gb.MachineState().newToolNumber);
-					DoFileMacro(gb, scratchString.Pointer(), false);
+					DoFileMacro(gb, scratchString.c_str(), false);
 				}
 			}
 		}
@@ -1392,7 +1395,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			gb.MachineState().errorMessage = nullptr;
 			error = true;
 		}
-		HandleReply(gb, error, reply.Pointer());
+		HandleReply(gb, error, reply.c_str());
 	}
 }
 
@@ -1574,8 +1577,8 @@ void GCodes::CheckTriggers()
 		{
 			ClearBit(triggersPending, lowestTriggerPending);		// clear the trigger
 			String<25> filename;
-			filename.GetRef().printf(SYS_DIR "trigger%u.g", lowestTriggerPending);
-			DoFileMacro(*daemonGCode, filename.Pointer(), true);
+			filename.printf(SYS_DIR "trigger%u.g", lowestTriggerPending);
+			DoFileMacro(*daemonGCode, filename.c_str(), true);
 		}
 	}
 }
@@ -1590,8 +1593,8 @@ void GCodes::CheckFilament()
 	   )
 	{
 		String<100> filamentErrorString;
-		filamentErrorString.GetRef().printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentMonitor::GetErrorMessage(lastFilamentError));
-		DoPause(*autoPauseGCode, PauseReason::filament, filamentErrorString.Pointer());
+		filamentErrorString.printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentMonitor::GetErrorMessage(lastFilamentError));
+		DoPause(*autoPauseGCode, PauseReason::filament, filamentErrorString.c_str());
 		lastFilamentError = FilamentSensorStatus::ok;
 		platform.Message(LogMessage, filamentErrorString.c_str());
 	}
@@ -1901,9 +1904,9 @@ bool GCodes::PauseOnStall(DriversBitmap stalledDrivers)
 	}
 
 	String<100> stallErrorString;
-	stallErrorString.GetRef().printf("Stall detected on driver(s)");
+	stallErrorString.printf("Stall detected on driver(s)");
 	ListDrivers(stallErrorString.GetRef(), stalledDrivers);
-	DoPause(*autoPauseGCode, PauseReason::stall, stallErrorString.Pointer());
+	DoPause(*autoPauseGCode, PauseReason::stall, stallErrorString.c_str());
 	platform.Message(LogMessage, stallErrorString.c_str());
 	return true;
 }
@@ -1952,25 +1955,25 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 								timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday, timeInfo->tm_hour, timeInfo->tm_min);
 			}
 			buf.cat('\n');
-			bool ok = f->Write(buf.Pointer())
+			bool ok = f->Write(buf.c_str())
 					&& reprap.GetHeat().WriteBedAndChamberTempSettings(f)	// turn on bed and chamber heaters
 					&& reprap.WriteToolSettings(f)							// set tool temperatures, tool mix ratios etc.
 					&& reprap.GetMove().WriteResumeSettings(f);				// load grid, if we are using one
 			if (ok)
 			{
 				buf.printf("M98 P%s\n", RESUME_PROLOGUE_G);					// call the prologue - must contain at least M116
-				ok = f->Write(buf.Pointer())
+				ok = f->Write(buf.c_str())
 					&& platform.WriteFanSettings(f);						// set the speeds of non-thermostatic fans
 			}
 			if (ok)
 			{
 				buf.printf("M106 S%.2f\n", (double)lastDefaultFanSpeed);
-				ok = f->Write(buf.Pointer());
+				ok = f->Write(buf.c_str());
 			}
 			if (ok)
 			{
 				buf.printf("M116\nM290 S%.3f\n", (double)currentBabyStepZOffset);
-				ok = f->Write(buf.Pointer());								// write baby stepping offset
+				ok = f->Write(buf.c_str());								// write baby stepping offset
 			}
 			if (ok && fileGCode->OriginalMachineState().volumetricExtrusion)
 			{
@@ -1982,17 +1985,17 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 					c = ':';
 				}
 				buf.cat('\n');
-				ok = f->Write(buf.Pointer());								// write volumetric extrusion factors
+				ok = f->Write(buf.c_str());								// write volumetric extrusion factors
 			}
 			if (ok)
 			{
 				buf.printf("G92 E%.5f\n%s\n", (double)virtualExtruderPosition, (fileGCode->OriginalMachineState().drivesRelative) ? "M83" : "M82");
-				ok = f->Write(buf.Pointer());								// write virtual extruder position and absolute/relative extrusion flag
+				ok = f->Write(buf.c_str());								// write virtual extruder position and absolute/relative extrusion flag
 			}
 			if (ok)
 			{
 				buf.printf("M23 %s\nM26 S%" PRIu32 " P%.3f\n", printingFilename, pauseRestorePoint.filePos, (double)pauseRestorePoint.proportionDone);
-				ok = f->Write(buf.Pointer());								// write filename and file position
+				ok = f->Write(buf.c_str());								// write filename and file position
 			}
 			if (ok)
 			{
@@ -2019,7 +2022,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 				buf.catf(" P%u", (unsigned int)pauseRestorePoint.ioBits);
 #endif
 				buf.cat("\nM24\n");
-				ok = f->Write(buf.Pointer());								// restore feed rate and output bits
+				ok = f->Write(buf.c_str());								// restore feed rate and output bits
 			}
 			if (!f->Close())
 			{
@@ -3143,8 +3146,9 @@ void GCodes::WriteGCodeToFile(GCodeBuffer& gb)
 	{
 		if (gb.Seen('P'))
 		{
+			String<ShortScratchStringLength> scratchString;
 			scratchString.printf("%" PRIi32 "\n", gb.GetIValue());
-			HandleReply(gb, false, scratchString.Pointer());
+			HandleReply(gb, false, scratchString.c_str());
 			return;
 		}
 	}
@@ -4090,8 +4094,9 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 		SafeStrncpy(filamentToLoad, filamentName.c_str(), ARRAY_SIZE(filamentToLoad));
 		gb.SetState(GCodeState::loadingFilament);
 
+		String<ScratchStringLength> scratchString;
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName.c_str(), LOAD_FILAMENT_G);
-		DoFileMacro(gb, scratchString.Pointer(), true);
+		DoFileMacro(gb, scratchString.c_str(), true);
 		return GCodeResult::ok;
 	}
 	else if (tool->GetFilament()->IsLoaded())
@@ -4129,8 +4134,9 @@ GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	gb.SetState(GCodeState::unloadingFilament);
+	String<ScratchStringLength> scratchString;
 	scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, tool->GetFilament()->GetName(), UNLOAD_FILAMENT_G);
-	DoFileMacro(gb, scratchString.Pointer(), true);
+	DoFileMacro(gb, scratchString.c_str(), true);
 	return GCodeResult::ok;
 }
 
@@ -4596,7 +4602,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 				// In Marlin emulation mode we should return a standard temperature report every second
 				GenerateTemperatureReport(reply);
 				reply.cat('\n');
-				platform.Message(UsbMessage, reply.Pointer());
+				platform.Message(UsbMessage, reply.c_str());
 			}
 			if (lastAuxStatusReportType >= 0)
 			{

@@ -125,7 +125,7 @@ void Scanner::Spin()
 			{
 				// Pre macro complete, build and send SCAN command
 				String<MaxFilenameLength + 16> scanCommand;
-				scanCommand.GetRef().printf("SCAN %d %s\n", scanParam, scanFilename.c_str());
+				scanCommand.printf("SCAN %d %s\n", scanParam, scanFilename.c_str());
 
 				SERIAL_MAIN_DEVICE.write(scanCommand.c_str());
 				SERIAL_MAIN_DEVICE.flush();
@@ -523,7 +523,7 @@ void Scanner::DoFileMacro(const char *filename)
 	if (platform.GetMassStorage()->FileExists(SYS_DIR, filename))
 	{
 		String<MaxFilenameLength + 7> gcode;
-		gcode.GetRef().printf("M98 P%s\n", filename);
+		gcode.printf("M98 P%s\n", filename);
 		serialGCode->Put(gcode.c_str());
 	}
 }

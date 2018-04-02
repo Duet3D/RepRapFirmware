@@ -39,6 +39,7 @@ void GCodeBuffer::Init()
 
 void GCodeBuffer::Diagnostics(MessageType mtype)
 {
+	String<ScratchStringLength> scratchString;
 	switch (bufferState)
 	{
 	case GCodeBufferState::parseNotStarted:
@@ -66,7 +67,7 @@ void GCodeBuffer::Diagnostics(MessageType mtype)
 	}
 	while (ms != nullptr);
 	scratchString.cat('\n');
-	reprap.GetPlatform().Message(mtype, scratchString.Pointer());
+	reprap.GetPlatform().Message(mtype, scratchString.c_str());
 }
 
 inline void GCodeBuffer::AddToChecksum(char c)

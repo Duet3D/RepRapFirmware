@@ -50,7 +50,7 @@ private:
 
 	floatc_t ComputeDerivative(unsigned int deriv, float La, float Lb, float Lc) const;	// Compute the derivative of height with respect to a parameter at a set of motor endpoints
 	void Adjust(size_t numFactors, const floatc_t v[]);									// Perform 3-, 6- or 9-factor adjustment
-	void PrintParameters(StringRef& reply) const;										// Print all the parameters for debugging
+	void PrintParameters(const StringRef& reply) const;									// Print all the parameters for debugging
 
 	float anchorA[3], anchorB[3], anchorC[3];				// XYZ coordinates of the anchors
 	float anchorDz;
