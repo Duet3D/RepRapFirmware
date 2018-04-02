@@ -10,6 +10,6 @@ To add new kinematics:
 
 3. In your kinematics class, override virtual functions as needed. See the comments in file Kinematics.h for a description of those functions.
 
-4. Modify file Kinematics.h by adding a #include directive to include the .h file that declares your new kinematics. Also modify function Create by adding a new case to create an instance of your new kinematics class when the appropriate kinematics type number is passed.
+4. Modify file Kinematics.cpp by adding a #include directive to include the .h file that declares your new kinematics. Also modify function Create by adding a new case to create an instance of your new kinematics class when the appropriate kinematics type number is passed.
 
-DC updated 2018-03-20.
+DC updated 2018-04-02.
