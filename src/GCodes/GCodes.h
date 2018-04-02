@@ -162,8 +162,8 @@ public:
 	float GetBabyStepOffset() const { return currentBabyStepZOffset; }	// Get the current baby stepping Z offset
 	const float *GetUserPosition() const { return currentUserPosition; }	// Return the current user position
 
-	RegularGCodeInput *GetHTTPInput() const { return httpInput; }
-	RegularGCodeInput *GetTelnetInput() const { return telnetInput; }
+	NetworkGCodeInput *GetHTTPInput() const { return httpInput; }
+	NetworkGCodeInput *GetTelnetInput() const { return telnetInput; }
 
 	void WriteGCodeToFile(GCodeBuffer& gb);								// Write this GCode into a file
 	void WriteHTMLToFile(GCodeBuffer& gb, char b);						// Save an HTML file (usually to upload a new web interface)
@@ -358,8 +358,8 @@ private:
 
 	Platform& platform;													// The RepRap machine
 
-	RegularGCodeInput* httpInput;										// These cache incoming G-codes...
-	RegularGCodeInput* telnetInput;										// ...
+	NetworkGCodeInput* httpInput;										// These cache incoming G-codes...
+	NetworkGCodeInput* telnetInput;										// ...
 	FileGCodeInput* fileInput;											// ...
 	StreamGCodeInput* serialInput;										// ...
 	StreamGCodeInput* auxInput;											// ...for the GCodeBuffers below

@@ -276,7 +276,7 @@ void TelnetResponder::ProcessLine()
 	else if (reprap.GetGCodes().GetTelnetInput()->BufferSpaceLeft() >= clientPointer + 1)
 	{
 		// All other codes are stored for the GCodes class
-		RegularGCodeInput * const telnetInput = reprap.GetGCodes().GetTelnetInput();
+		NetworkGCodeInput * const telnetInput = reprap.GetGCodes().GetTelnetInput();
 		telnetInput->Put(TelnetMessage, clientMessage);
 		haveCompleteLine = false;
 		clientPointer = 0;

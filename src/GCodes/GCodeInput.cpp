@@ -64,7 +64,7 @@ size_t StreamGCodeInput::BytesCached() const
 // Dynamic G-code input class for caching codes from software-defined sources
 
 RegularGCodeInput::RegularGCodeInput()
-	: state(GCodeInputState::idle), buffer(reinterpret_cast<char * const>(buf32)), writingPointer(0), readingPointer(0)
+	: state(GCodeInputState::idle), writingPointer(0), readingPointer(0)
 {
 }
 
@@ -94,7 +94,12 @@ size_t RegularGCodeInput::BytesCached() const
 	return GCodeInputBufferSize - readingPointer + writingPointer;
 }
 
-void RegularGCodeInput::Put(MessageType mtype, const char c)
+size_t RegularGCodeInput::BufferSpaceLeft() const
+{
+	return (readingPointer - writingPointer - 1u) % GCodeInputBufferSize;
+}
+
+void NetworkGCodeInput::Put(MessageType mtype, char c)
 {
 	if (BufferSpaceLeft() == 0)
 	{
@@ -176,30 +181,36 @@ void RegularGCodeInput::Put(MessageType mtype, const char c)
 	}
 }
 
-void RegularGCodeInput::Put(MessageType mtype, const char *buf)
+void NetworkGCodeInput::Put(MessageType mtype, const char *buf)
 {
-	Put(mtype, buf, strlen(buf) + 1);
-}
-
-void RegularGCodeInput::Put(MessageType mtype, const char *buf, size_t len)
-{
-	if (len > BufferSpaceLeft())
+	const size_t len = strlen(buf) + 1;
+	MutexLocker lock(bufMutex, 200);
+	if (lock)
 	{
-		// Don't cache this if we don't have enough space left
-		return;
-	}
+		if (len > BufferSpaceLeft())
+		{
+			// Don't cache this if we don't have enough space left
+			return;
+		}
 
-	for (size_t i = 0; i < len; i++)
-	{
-		Put(mtype, buf[i]);
+		for (size_t i = 0; i < len; i++)
+		{
+			Put(mtype, buf[i]);
+		}
 	}
 }
 
-size_t RegularGCodeInput::BufferSpaceLeft() const
+NetworkGCodeInput::NetworkGCodeInput() : RegularGCodeInput()
 {
-	return (readingPointer - writingPointer - 1u) % GCodeInputBufferSize;
+	bufMutex.Create();
 }
 
+// Fill a GCodeBuffer with the last available G-code
+bool NetworkGCodeInput::FillBuffer(GCodeBuffer *gb) /*override*/
+{
+	MutexLocker lock(bufMutex, 10);
+	return lock && RegularGCodeInput::FillBuffer(gb);
+}
 
 // File-based G-code input source
 
@@ -247,25 +258,13 @@ bool FileGCodeInput::ReadFromFile(FileData &file)
 			readingPointer = writingPointer = 0;
 		}
 
-		// Read blocks with sizes multiple of 4 for HSMCI efficiency
-		uint32_t readBuffer32[(GCodeInputBufferSize + 3) / 4];
-		char * const readBuffer = reinterpret_cast<char * const>(readBuffer32);
-
-		int bytesRead = file.Read(readBuffer, BufferSpaceLeft() & (~3));
+		// The code here used to read into a local buffer in blocks that are multiples of 4 bytes.
+		// However, unless we can use a buffer of at least 512 bytes then that is redundant,
+		// because the data will be copied via the sector buffer in FatFS anyway. So we don't do that any more.
+		const int bytesRead = file.Read(buffer + writingPointer, min<size_t>(BufferSpaceLeft(), GCodeInputBufferSize - writingPointer));
 		if (bytesRead > 0)
 		{
-			int remaining = GCodeInputBufferSize - writingPointer;
-			if (bytesRead <= remaining)
-			{
-				memcpy(buffer + writingPointer, readBuffer, bytesRead);
-			}
-			else
-			{
-				memcpy(buffer + writingPointer, readBuffer, remaining);
-				memcpy(buffer, readBuffer + remaining, bytesRead - remaining);
-			}
-			writingPointer = (writingPointer + bytesRead) % GCodeInputBufferSize;
-
+			writingPointer = (writingPointer + (size_t)bytesRead) % GCodeInputBufferSize;
 			return true;
 		}
 	}

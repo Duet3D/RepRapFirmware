@@ -14,8 +14,10 @@ Changes to RRF for RTOS
 [done] make USB and serial out channels thread safe
 [done] make message box output thread safe
 [done except for mutexes on network and telnet] Make Platform::Message thread safe
+[done] Get rid of shared scratchString
+[done] Make interface between Network received data and GCodeBuffer thread safe, ready for running as separate tasks
+[done] FileGCodeInput: do away with unnecessary local buffer
 Are there any aspects of Platform that are not thread-safe? e.g. GCodes setting stuff while network reports it?
-Get rid of shared scratchString
 Run Network as a separate task
 Run Move as a separate task. Probably needs a mutex to protect calls into it, e.g. babystepping and pause.
 Use DMA for SharedSPI transfers, suspend the calling task while waiting on a transfer

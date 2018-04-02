@@ -49,8 +49,8 @@ GCodes::GCodes(Platform& p) :
 #endif
 	isFlashing(false), fileBeingHashed(nullptr), lastWarningMillis(0)
 {
-	httpInput = new RegularGCodeInput;
-	telnetInput = new RegularGCodeInput;
+	httpInput = new NetworkGCodeInput;
+	telnetInput = new NetworkGCodeInput;
 	fileInput = new FileGCodeInput();
 	serialInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
 	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);

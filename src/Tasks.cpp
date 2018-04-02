@@ -103,7 +103,8 @@ namespace Tasks
 	{
 		TaskStatus_t taskDetails;
 		vTaskGetInfo(ct, &taskDetails, pdTRUE, eInvalid);
-		reprap.GetPlatform().MessageF(mtype, "Task %s: state %d stack rem %u\n", taskDetails.pcTaskName, (int)taskDetails.eCurrentState, (unsigned int)taskDetails.usStackHighWaterMark);
+		reprap.GetPlatform().MessageF(mtype, "Task %s: state %d stack rem %u\n",
+			taskDetails.pcTaskName, (int)taskDetails.eCurrentState, (unsigned int)taskDetails.usStackHighWaterMark * sizeof(StackType_t));
 	}
 
 	void TaskDiagnostics(MessageType mtype, const Task& ct)
