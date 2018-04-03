@@ -41,6 +41,7 @@ public:
 	void Spin();
 	void Exit();
 	void Diagnostics(MessageType mtype);
+	void DeferredDiagnostics(MessageType mtype) { diagnosticsDestination = mtype; }
 	void Timing(MessageType mtype);
 
 	bool Debug(Module module) const;
@@ -174,6 +175,9 @@ private:
 	uint32_t boxSeq;
 	uint32_t boxTimer, boxTimeout;
 	AxesBitmap boxControls;
+
+	// Deferred diagnostics
+	MessageType diagnosticsDestination;
 };
 
 inline Platform& RepRap::GetPlatform() const { return *platform; }

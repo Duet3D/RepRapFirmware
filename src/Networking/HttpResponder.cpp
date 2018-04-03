@@ -107,19 +107,8 @@ bool HttpResponder::Spin()
 			return false;
 		}
 
-	case ResponderState::gettingFileInfoLock:
-		if (!fileInfoLock.Acquire(this))
-		{
-			return false;
-		}
-		responderState = ResponderState::gettingFileInfo;
-		// no break
-
 	case ResponderState::gettingFileInfo:
-		if (SendFileInfo(millis() - startedGettingFileInfoAt >= MaxFileInfoGetTime))
-		{
-			fileInfoLock.Release(this);					// release the lock
-		}
+		(void)SendFileInfo(millis() - startedGettingFileInfoAt >= MaxFileInfoGetTime);
 		return true;
 
 	case ResponderState::uploading:
@@ -563,7 +552,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			filenameBeingProcessed[0] = 0;
 		}
 		startedGettingFileInfoAt = millis();
-		responderState = ResponderState::gettingFileInfoLock;
+		responderState = ResponderState::gettingFileInfo;
 		return false;
 	}
 	else if (StringEquals(request, "move"))
@@ -820,47 +809,52 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 
 void HttpResponder::SendGCodeReply()
 {
-	// Do we need to keep the G-Code reply for other clients?
-	bool clearReply = false;
-	if (!gcodeReply->IsEmpty())
 	{
-		clientsServed++;
-		if (clientsServed < numSessions)
+		// Do we need to keep the G-Code reply for other clients?
+		bool clearReply = false;
+		MutexLocker Lock(gcodeReplyMutex);
+
+		if (!gcodeReply.IsEmpty())
 		{
-			// Yes - make sure the Network class doesn't discard its buffers yet
-			// NB: This must happen here, because NetworkTransaction::Write() might already release OutputBuffers
-			gcodeReply->IncreaseReferences(1);
-		}
-		else
-		{
-			// No - clean up again later
-			clearReply = true;
+			clientsServed++;
+			if (clientsServed < numSessions)
+			{
+				// Yes - make sure the Network class doesn't discard its buffers yet
+				// NB: This must happen here, because NetworkTransaction::Write() might already release OutputBuffers
+				gcodeReply.IncreaseReferences(1);
+			}
+			else
+			{
+				// No - clean up again later
+				clearReply = true;
+			}
+
+			if (reprap.Debug(moduleWebserver))
+			{
+				GetPlatform().MessageF(UsbMessage, "Sending G-Code reply to HTTP client %d of %d (length %u)\n", clientsServed, numSessions, gcodeReply.DataLength());
+			}
 		}
 
-		if (reprap.Debug(moduleWebserver))
+		// Send the whole G-Code reply as plain text to the client
+		outBuf->copy(	"HTTP/1.1 200 OK\n"
+						"Cache-Control: no-cache, no-store, must-revalidate\n"
+						"Pragma: no-cache\n"
+						"Expires: 0\n"
+						"Access-Control-Allow-Origin: *\n"
+						"Content-Type: text/plain\n"
+					);
+		outBuf->catf("Content-Length: %u\n", gcodeReply.DataLength());
+		outBuf->cat("Connection: close\n\n");
+		outStack.Append(gcodeReply);
+
+		// Possibly clean up the G-code reply once again
+		if (clearReply)
 		{
-			GetPlatform().MessageF(UsbMessage, "Sending G-Code reply to HTTP client %d of %d (length %u)\n", clientsServed, numSessions, gcodeReply->DataLength());
+			gcodeReply.Clear();
 		}
 	}
 
-	// Send the whole G-Code reply as plain text to the client
-	outBuf->copy(	"HTTP/1.1 200 OK\n"
-					"Cache-Control: no-cache, no-store, must-revalidate\n"
-					"Pragma: no-cache\n"
-					"Expires: 0\n"
-					"Access-Control-Allow-Origin: *\n"
-					"Content-Type: text/plain\n"
-				);
-	outBuf->catf("Content-Length: %u\n", gcodeReply->DataLength());
-	outBuf->cat("Connection: close\n\n");
-	outStack->Append(gcodeReply);
 	Commit();
-
-	// Possibly clean up the G-code reply once again
-	if (clearReply)
-	{
-		gcodeReply->Clear();
-	}
 }
 
 void HttpResponder::SendJsonResponse(const char* command)
@@ -1162,13 +1156,6 @@ void HttpResponder::Terminate(NetworkProtocol protocol)
 }
 
 // This overrides the version in class NetworkResponder
-void HttpResponder::ConnectionLost()
-{
-	fileInfoLock.Release(this);
-	NetworkResponder::ConnectionLost();
-}
-
-// This overrides the version in class NetworkResponder
 void HttpResponder::CancelUpload()
 {
 	if (skt != nullptr)
@@ -1201,11 +1188,19 @@ void HttpResponder::Diagnostics(MessageType mt) const
 	GetPlatform().MessageF(mt, " HTTP(%d)", (int)responderState);
 }
 
+/*static*/ void HttpResponder::InitStatic()
+{
+	gcodeReplyMutex.Create();
+}
+
+// This is called from the GCodes task to store a response, which is picked up by the Network task
 /*static*/ void HttpResponder::HandleGCodeReply(const char *reply)
 {
 	if (numSessions > 0)
 	{
-		OutputBuffer *buffer = gcodeReply->GetLastItem();
+		MutexLocker lock(gcodeReplyMutex);
+
+		OutputBuffer *buffer = gcodeReply.GetLastItem();
 		if (buffer == nullptr || buffer->IsReferenced())
 		{
 			if (!OutputBuffer::Allocate(buffer))
@@ -1213,7 +1208,7 @@ void HttpResponder::Diagnostics(MessageType mt) const
 				// No more space available, stop here
 				return;
 			}
-			gcodeReply->Push(buffer);
+			gcodeReply.Push(buffer);
 		}
 
 		buffer->cat(reply);
@@ -1230,7 +1225,9 @@ void HttpResponder::Diagnostics(MessageType mt) const
 		{
 			// FIXME: This might cause G-code responses to be sent twice to fast HTTP clients, but
 			// I (chrishamm) cannot think of a nicer way to deal with slow clients at the moment...
-			gcodeReply->Push(reply);
+			MutexLocker lock(gcodeReplyMutex);
+
+			gcodeReply.Push(reply);
 			clientsServed = 0;
 			seq++;
 		}
@@ -1245,6 +1242,7 @@ void HttpResponder::Diagnostics(MessageType mt) const
 
 /*static*/ void HttpResponder::CheckSessions()
 {
+	unsigned int clientsTimedOut = 0;
 	const uint32_t now = millis();
 	for (size_t i = numSessions; i != 0; )
 	{
@@ -1257,18 +1255,24 @@ void HttpResponder::Diagnostics(MessageType mt) const
 				memcpy(&sessions[k - 1], &sessions[k], sizeof(HttpSession));
 			}
 			numSessions--;
-			clientsServed++;	// assume the disconnected client hasn't fetched the G-Code reply yet
+			clientsTimedOut++;
 		}
 	}
 
 	// If we cannot send the G-Code reply to anyone, we may free up some run-time space by dumping it
-	if (numSessions == 0 || clientsServed >= numSessions)
+	if (clientsTimedOut != 0)
 	{
-		while (!gcodeReply->IsEmpty())
+		MutexLocker lock(gcodeReplyMutex);
+
+		clientsServed += clientsTimedOut;			// assume the disconnected clients haven't fetched the G-Code reply yet
+		if (numSessions == 0 || clientsServed >= numSessions)
 		{
-			OutputBuffer::ReleaseAll(gcodeReply->Pop());
+			while (!gcodeReply.IsEmpty())
+			{
+				OutputBuffer::ReleaseAll(gcodeReply.Pop());
+			}
+			clientsServed = 0;
 		}
-		clientsServed = 0;
 	}
 }
 
@@ -1284,8 +1288,7 @@ unsigned int HttpResponder::numSessions = 0;
 unsigned int HttpResponder::clientsServed = 0;
 
 uint32_t HttpResponder::seq = 0;
-OutputStack *HttpResponder::gcodeReply = new OutputStack();
-
-NetworkResponderLock HttpResponder::fileInfoLock;
+OutputStack HttpResponder::gcodeReply;
+Mutex HttpResponder::gcodeReplyMutex;
 
 // End

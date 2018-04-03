@@ -603,6 +603,7 @@ public:
 
 #if SAM4E || SAM4S || SAME70
 	uint32_t Random();
+	void PrintUniqueId(MessageType mtype);
 #endif
 
 	static uint8_t softwareResetDebugInfo;				// extra info for debugging
@@ -629,10 +630,6 @@ private:
 #if HAS_STALL_DETECT
 	bool AnyAxisMotorStalled(size_t drive) const pre(drive < DRIVES);
 	bool ExtruderMotorStalled(size_t extruder) const pre(extruder < MaxExtruders);
-#endif
-
-#if SAM4E || SAM4S || SAME70
-	void PrintUniqueId(MessageType mtype);
 #endif
 
 	// These are the structures used to hold our non-volatile data.
@@ -824,18 +821,18 @@ private:
 	uint32_t baudRates[NUM_SERIAL_CHANNELS];
 	uint8_t commsParams[NUM_SERIAL_CHANNELS];
 
-	OutputStack *auxOutput;
+	OutputStack auxOutput;
 	Mutex auxMutex;
 	OutputBuffer *auxGCodeReply;				// G-Code reply for AUX devices (special one because it is actually encapsulated before sending)
 	uint32_t auxSeq;							// Sequence number for AUX devices
     bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
 
 #ifdef SERIAL_AUX2_DEVICE
-	OutputStack *aux2Output;
+	OutputStack aux2Output;
 	Mutex aux2Mutex;
 #endif
 
-	OutputStack *usbOutput;
+	OutputStack usbOutput;
 	Mutex usbMutex;
 
 	// Files
@@ -1008,7 +1005,7 @@ inline float Platform::GetInstantDv(size_t drive) const
 
 inline void Platform::SetInstantDv(size_t drive, float value)
 {
-	instantDvs[drive] = max<float>(value, 1.0);			// don't allow zero or negative values, they causes Move to loop indefinitely
+	instantDvs[drive] = max<float>(value, 0.1);			// don't allow zero or negative values, they causes Move to loop indefinitely
 }
 
 inline void Platform::SetDirectionValue(size_t drive, bool dVal)

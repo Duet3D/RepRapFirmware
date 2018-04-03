@@ -29,9 +29,9 @@ Bugs
 
 [done] IAP fails to update firmware
 M122 output is too big for the available buffers, unless the Network task reads the output fast enough
-[probably related to above] Duet WiFi gets into a state in which it returns empty JSON messages after sending M122. Output buffer starvation?
+[probably related to above] Duet WiFi gets into a state in which it returns empty JSON messages after sending M122 from DWC. Output buffer starvation?
 [done] Disconnects when getting file info forCandyBowlx8comments.gcode when running RTOS build
-File upload speed is a little lower when using RTOS - may be fixed when network is a separate task
+[seems better now] File upload speed is a little lower when using RTOS - may be fixed when network is a separate task
 [seems ok now, was probably main stack overslow] Report that Pause works, but then hangs
  
 

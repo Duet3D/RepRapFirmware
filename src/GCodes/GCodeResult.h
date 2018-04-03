@@ -16,6 +16,7 @@ enum class GCodeResult : uint8_t
 	notFinished,
 	ok,
 	error,
+	warning,
 	notSupported,
 	notSupportedInCurrentMode,
 	badOrMissingParameter

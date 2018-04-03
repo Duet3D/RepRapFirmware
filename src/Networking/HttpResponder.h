@@ -19,6 +19,7 @@ public:
 	void Terminate(NetworkProtocol protocol) override;			// terminate the responder if it is serving the specified protocol
 	void Diagnostics(MessageType mtype) const override;
 
+	static void InitStatic();
 	static void HandleGCodeReply(const char *reply);
 	static void HandleGCodeReply(OutputBuffer *reply);
 	static uint32_t GetReplySeq() { return seq; }
@@ -26,7 +27,6 @@ public:
 	static void CommonDiagnostics(MessageType mtype);
 
 protected:
-	void ConnectionLost() override;
 	void CancelUpload() override;
 	void SendData() override;
 
@@ -113,9 +113,8 @@ private:
 
 	// Responses from GCodes class
 	static uint32_t seq;							// Sequence number for G-Code replies
-	static OutputStack *gcodeReply;
-
-	static NetworkResponderLock fileInfoLock;		// PrintMonitor::GetFileInfoResponse is single threaded at present, so use this to control access
+	static OutputStack gcodeReply;
+	static Mutex gcodeReplyMutex;
 };
 
 #endif /* SRC_NETWORKING_HTTPRESPONDER_H_ */

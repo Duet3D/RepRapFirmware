@@ -166,7 +166,7 @@ void FtpResponder::SendData()
 	{
 		if (outBuf == nullptr)
 		{
-			outBuf = outStack->Pop();
+			outBuf = outStack.Pop();
 			if (outBuf == nullptr)
 			{
 				break;

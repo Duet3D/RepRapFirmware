@@ -52,7 +52,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
 
 		if (codeQueue->QueueCode(gb))
 		{
-			HandleReply(gb, false, "");
+			HandleReply(gb, GCodeResult::ok, "");
 			return true;
 		}
 	}
@@ -81,7 +81,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	reply.printf("Bad command: %s", gb.Buffer());
-	HandleReply(gb, true, reply.c_str());
+	HandleReply(gb, GCodeResult::error, reply.c_str());
 	return true;
 }
 
@@ -2604,18 +2604,22 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 500: // Store parameters in EEPROM
-		result = GetGCodeResultFromError(WriteConfigOverrideFile(gb, reply, CONFIG_OVERRIDE_G));
+		result = WriteConfigOverrideFile(gb, reply);
 		break;
 
 	case 501: // Load parameters from EEPROM
-		DoFileMacro(gb, "config-override.g", true, code);
+		if (runningConfigFile)
+		{
+			m501SeenInConfigFile = true;
+		}
+		DoFileMacro(gb, CONFIG_OVERRIDE_G, true, code);
 		break;
 
 	case 502: // Revert to default "factory settings"
 		reprap.GetHeat().ResetHeaterModels();							// in case some heaters have no M307 commands in config.g
 		reprap.GetMove().GetKinematics().SetCalibrationDefaults();		// in case M665/M666/M667/M669 in config.g don't define all the parameters
 		platform.SetZProbeDefaults();
-		DoFileMacro(gb, "config.g", true, code);
+		DoFileMacro(gb, CONFIG_FILE, true, code);
 		break;
 
 	case 503: // List variable settings
@@ -4215,7 +4219,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 
 	// If we get here, we have finished
 	UnlockAll(gb);
-	HandleReply(gb, false, reply.c_str());
+	HandleReply(gb, GCodeResult::ok, reply.c_str());
 	return true;
 }
 
@@ -4230,16 +4234,19 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 	case GCodeResult::notSupported:
 		gb.PrintCommand(reply);
 		reply.cat(" command is not supported");
+		rslt = GCodeResult::warning;
 		break;
 
 	case GCodeResult::notSupportedInCurrentMode:
 		gb.PrintCommand(reply);
 		reply.catf(" command is not supported in machine mode %s", GetMachineModeString());
+		rslt = GCodeResult::warning;
 		break;
 
 	case GCodeResult::badOrMissingParameter:
 		gb.PrintCommand(reply);
 		reply.cat(": bad or missing parameter");
+		rslt = GCodeResult::error;
 		break;
 
 	case GCodeResult::error:
@@ -4259,7 +4266,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 	{
 		gb.timerRunning = false;
 		UnlockAll(gb);
-		HandleReply(gb, rslt != GCodeResult::ok, reply.c_str());
+		HandleReply(gb, rslt, reply.c_str());
 	}
 	return true;
 }

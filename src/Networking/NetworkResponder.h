@@ -13,24 +13,11 @@
 #include "NetworkDefs.h"
 #include "Storage/FileData.h"
 #include "NetworkBuffer.h"
+#include "Outputmemory.h"
 
 // Forward declarations
 class NetworkResponder;
 class Socket;
-
-// Class to implement a simple lock
-class NetworkResponderLock
-{
-public:
-	NetworkResponderLock() : owner(nullptr) { }
-
-	bool Acquire(const NetworkResponder *who);
-	void Release(const NetworkResponder *who);
-	bool IsOwnedBy(const NetworkResponder *who) const { return owner == who; }
-
-private:
-	const NetworkResponder *owner;
-};
 
 // Network responder base class
 class NetworkResponder
@@ -52,7 +39,6 @@ protected:
 		uploading,										// uploading a file to SD card
 
 		// HTTP responder additional states
-		gettingFileInfoLock,							// waiting to get the file info lock
 		gettingFileInfo,								// getting file info
 
 		// FTP responder additional states
@@ -90,7 +76,7 @@ protected:
 
 	// Buffers for sending responses
 	OutputBuffer *outBuf;
-	OutputStack *outStack;
+	OutputStack outStack;
 	FileStore *fileBeingSent;
 	NetworkBuffer *fileBuffer;
 

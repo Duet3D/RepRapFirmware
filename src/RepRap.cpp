@@ -106,7 +106,8 @@ extern "C" void hsmciIdle(uint32_t st)
 RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
 	activeToolHeaters(0), ticksInSpinState(0), spinningModule(noModule), debug(0), stopped(false),
 	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0),
-	displayMessageBox(false), boxSeq(0)
+	displayMessageBox(false), boxSeq(0),
+	diagnosticsDestination(MessageType::NoDestinationMessage)
 {
 	OutputBuffer::Init();
 	platform = new Platform();
@@ -300,6 +301,13 @@ void RepRap::Spin()
 	ticksInSpinState = 0;
 	spinningModule = noModule;
 
+	// Check if we need to send diagnostics
+	if (diagnosticsDestination != MessageType::NoDestinationMessage)
+	{
+		Diagnostics(diagnosticsDestination);
+		diagnosticsDestination = MessageType::NoDestinationMessage;
+	}
+
 	// Check if we need to display a cold extrusion warning
 	const uint32_t now = millis();
 	if (now - lastWarningMillis >= MinimumWarningInterval)
@@ -341,6 +349,25 @@ void RepRap::Timing(MessageType mtype)
 void RepRap::Diagnostics(MessageType mtype)
 {
 	platform->Message(mtype, "=== Diagnostics ===\n");
+
+	// Print the firmware version and board type
+
+#ifdef DUET_NG
+	platform->MessageF(mtype, "%s version %s running on %s", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
+	const char* const expansionName = DuetExpansion::GetExpansionBoardName();
+	platform->MessageF(mtype, (expansionName == nullptr) ? "\n" : " + %s\n", expansionName);
+#else
+	platform->MessageF(mtype, "%s version %s running on %s\n", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
+#endif
+
+#if SAM4E || SAM4S || SAME70
+	platform->PrintUniqueId(mtype);
+#endif
+
+	// Show the used and free buffer counts. Do this early in case we are running out of them and the diagnostics get truncated.
+	OutputBuffer::Diagnostics(mtype);
+
+	// Now print diagnostics for other modules
 	Tasks::Diagnostics(mtype);
 	platform->Diagnostics(mtype);				// this includes a call to our Timing() function
 	move->Diagnostics(mtype);

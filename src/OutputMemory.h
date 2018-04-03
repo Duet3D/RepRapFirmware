@@ -138,7 +138,7 @@ class OutputStack
 
 		// Append another OutputStack to this instance. If no more space is available,
 		// all OutputBuffers that can't be added are automatically released
-		void Append(OutputStack *stack);
+		void Append(OutputStack& stack);
 
 		// Increase the number of references for each OutputBuffer on the stack
 		void IncreaseReferences(size_t num);

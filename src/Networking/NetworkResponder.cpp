@@ -7,42 +7,13 @@
 
 #include "NetworkResponder.h"
 #include "Socket.h"
-
 #include "Platform.h"
-#include "OutputMemory.h"
-
-
-// NetworkResponderLock members
-
-// Acquire a lock
-bool NetworkResponderLock::Acquire(const NetworkResponder *who)
-{
-	if (owner == nullptr)
-	{
-		owner = who;
-		return true;
-	}
-	if (owner == who)
-	{
-		return true;
-	}
-	return false;
-}
-
-// Release a lock
-void NetworkResponderLock::Release(const NetworkResponder *who)
-{
-	if (owner == who)
-	{
-		owner = nullptr;
-	}
-}
 
 // NetworkResponder members
 
 NetworkResponder::NetworkResponder(NetworkResponder *n)
 	: next(n), responderState(ResponderState::free), skt(nullptr),
-	  outBuf(nullptr), outStack(new OutputStack), fileBeingSent(nullptr), fileBuffer(nullptr)
+	  outBuf(nullptr), fileBeingSent(nullptr), fileBuffer(nullptr)
 {
 }
 
@@ -66,7 +37,7 @@ void NetworkResponder::SendData()
 	{
 		if (outBuf == nullptr)
 		{
-			outBuf = outStack->Pop();
+			outBuf = outStack.Pop();
 			if (outBuf == nullptr)
 			{
 				break;
@@ -179,7 +150,7 @@ void NetworkResponder::ConnectionLost()
 	CancelUpload();
 	OutputBuffer::ReleaseAll(outBuf);
 	outBuf = nullptr;
-	outStack->ReleaseAll();
+	outStack.ReleaseAll();
 
 	if (fileBeingSent != nullptr)
 	{

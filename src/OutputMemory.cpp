@@ -569,18 +569,18 @@ size_t OutputStack::DataLength() const
 
 // Append another OutputStack to this instance. If no more space is available,
 // all OutputBuffers that can't be added are automatically released
-void OutputStack::Append(OutputStack *stack)
+void OutputStack::Append(OutputStack& stack)
 {
-	for(size_t i = 0; i < stack->count; i++)
+	for(size_t i = 0; i < stack.count; i++)
 	{
 		if (count < OUTPUT_STACK_DEPTH)
 		{
-			items[count++] = stack->items[i];
+			items[count++] = stack.items[i];
 		}
 		else
 		{
 			reprap.GetPlatform().LogError(ErrorCode::OutputStackOverflow);
-			OutputBuffer::ReleaseAll(stack->items[i]);
+			OutputBuffer::ReleaseAll(stack.items[i]);
 		}
 	}
 }

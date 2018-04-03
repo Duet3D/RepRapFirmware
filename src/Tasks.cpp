@@ -23,10 +23,31 @@ extern char _end;
 #ifdef RTOS
 
 constexpr unsigned int MainTaskStackWords = 1240;
+
 static Task<MainTaskStackWords> mainTask;
 static Mutex spiMutex;
+static Mutex mallocMutex;
+static bool rtosRunning = false;
 
 extern "C" void MainTask(void * pvParameters);
+
+// We need to make malloc/free thread safe, else sprintf and related I/O functions are liable to crash.
+// We must use a recursive mutex for it.
+extern "C" void __malloc_lock ( struct _reent *_r )
+{
+	if (rtosRunning)
+	{
+		mallocMutex.Take();
+	}
+}
+
+extern "C" void __malloc_unlock ( struct _reent *_r )
+{
+	if (rtosRunning)
+	{
+		mallocMutex.Release();
+	}
+}
 
 #endif
 
@@ -70,6 +91,9 @@ extern "C" void AppMain()
 
 extern "C" void MainTask(void *pvParameters)
 {
+	mallocMutex.Create();
+	rtosRunning = true;
+
 	spiMutex.Create();
 #endif
 	reprap.Init();
@@ -148,16 +172,15 @@ namespace Tasks
 #else
 # error Unsupported processor
 #endif
-			p.MessageF(mtype, "Static ram used: %d\n", &_end - ramstart);
+			p.MessageF(mtype, "Static ram: %d\n", &_end - ramstart);
 
 			const struct mallinfo mi = mallinfo();
-			p.MessageF(mtype, "Dynamic ram used: %d\n", mi.uordblks);
-			p.MessageF(mtype, "Recycled dynamic ram: %d\n", mi.fordblks);
+			p.MessageF(mtype, "Dynamic ram: %d of which %d recycled\n", mi.uordblks, mi.fordblks);
 
 			uint32_t maxStack, neverUsed;
 #ifdef RTOS
 			GetHandlerStackUsage(&maxStack, &neverUsed);
-			p.MessageF(mtype, "Handler stack ram used: %" PRIu32 "\n", maxStack);
+			p.MessageF(mtype, "Exception stack ram used: %" PRIu32 "\n", maxStack);
 #else
 			uint32_t currentStack;
 			Tasks::GetStackUsage(&currentStack, &maxStack, &neverUsed);
@@ -171,8 +194,13 @@ namespace Tasks
 		{
 			TaskStatus_t taskDetails;
 			vTaskGetInfo(t->GetHandle(), &taskDetails, pdTRUE, eInvalid);
-			p.MessageF(mtype, "Task %s: state %d stack rem %u\n",
-				taskDetails.pcTaskName, (int)taskDetails.eCurrentState, (unsigned int)taskDetails.usStackHighWaterMark * sizeof(StackType_t));
+			const char* const stateText = (taskDetails.eCurrentState == eRunning) ? "running"
+											: (taskDetails.eCurrentState == eReady) ? "ready"
+												: (taskDetails.eCurrentState == eBlocked) ? "blocked"
+													: (taskDetails.eCurrentState == eSuspended) ? "suspended"
+														: "invalid";
+			p.MessageF(mtype, "Task %s %s, free stack %u\n",
+				taskDetails.pcTaskName, stateText, (unsigned int)(taskDetails.usStackHighWaterMark * sizeof(StackType_t)));
 		}
 #endif
 	}

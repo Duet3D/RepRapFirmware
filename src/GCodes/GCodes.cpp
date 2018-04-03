@@ -96,6 +96,7 @@ void GCodes::Init()
 	eofStringCounter = 0;
 	eofStringLength = strlen(eofString);
 	runningConfigFile = false;
+	m501SeenInConfigFile = false;
 	doingToolChange = false;
 	active = true;
 	fileSize = 0;
@@ -1385,7 +1386,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		UnlockAll(gb);
 		if (error)
 		{
-			gb.MachineState().errorMessage = nullptr;								// we can't report more than one error here, so clear the original one
+			gb.MachineState().errorMessage = nullptr;						// we can't report more than one error here, so clear the original one
 		}
 		else if (gb.MachineState().errorMessage != nullptr)
 		{
@@ -1393,7 +1394,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			gb.MachineState().errorMessage = nullptr;
 			error = true;
 		}
-		HandleReply(gb, error, reply.c_str());
+		HandleReply(gb, (error) ? GCodeResult::error : GCodeResult::ok, reply.c_str());
 	}
 }
 
@@ -1504,7 +1505,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 			if (gb.GetState() == GCodeState::normal)
 			{
 				UnlockAll(gb);
-				HandleReply(gb, false, "");
+				HandleReply(gb, GCodeResult::ok, "");
 				if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
 				{
 					gb.Put("M226");
@@ -3025,7 +3026,7 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		// Don't put a space after the colon in the response, it confuses Pronterface
-		s.catf("%c:%.3f ", axisLetters[axis], (double)liveCoordinates[axis]);
+		s.catf("%c:%.3f ", axisLetters[axis], (double)currentUserPosition[axis]);
 	}
 	for (size_t i = numTotalAxes; i < DRIVES; i++)
 	{
@@ -3041,10 +3042,10 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 	}
 
 	// Add the user coordinates because they may be different from the machine coordinates under some conditions
-	s.cat(" User");
-	for (size_t i = 0; i < numVisibleAxes; ++i)
+	s.cat(" Machine");
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		s.catf(" %.1f", (double)currentUserPosition[i]);
+		s.catf(" %.3f", (double)liveCoordinates[axis]);
 	}
 }
 
@@ -3117,7 +3118,7 @@ void GCodes::FinishWrite(GCodeBuffer& gb)
 	gb.SetBinaryWriting(false);
 	gb.SetWritingFileDirectory(nullptr);
 
-	HandleReply(gb, false, r);
+	HandleReply(gb, GCodeResult::ok, r);
 }
 
 void GCodes::WriteGCodeToFile(GCodeBuffer& gb)
@@ -3136,7 +3137,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer& gb)
 			fileBeingWritten = nullptr;
 			gb.SetWritingFileDirectory(nullptr);
 			const char* r = (platform.Emulating() == Compatibility::marlin) ? "Done saving file." : "";
-			HandleReply(gb, false, r);
+			HandleReply(gb, GCodeResult::ok, r);
 			return;
 		}
 	}
@@ -3146,14 +3147,14 @@ void GCodes::WriteGCodeToFile(GCodeBuffer& gb)
 		{
 			String<ShortScratchStringLength> scratchString;
 			scratchString.printf("%" PRIi32 "\n", gb.GetIValue());
-			HandleReply(gb, false, scratchString.c_str());
+			HandleReply(gb, GCodeResult::ok, scratchString.c_str());
 			return;
 		}
 	}
 
 	fileBeingWritten->Write(gb.Buffer());
 	fileBeingWritten->Write('\n');
-	HandleReply(gb, false, "");
+	HandleReply(gb, GCodeResult::ok, "");
 }
 
 // Set up a file to print, but don't print it yet.
@@ -3547,7 +3548,7 @@ void GCodes::SaveFanSpeeds()
 
 // Handle sending a reply back to the appropriate interface(s).
 // Note that 'reply' may be empty. If it isn't, then we need to append newline when sending it.
-void GCodes::HandleReply(GCodeBuffer& gb, bool error, const char* reply)
+void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 {
 	// Don't report "ok" responses if a (macro) file is being processed
 	// Also check that this response was triggered by a gcode
@@ -3572,7 +3573,12 @@ void GCodes::HandleReply(GCodeBuffer& gb, bool error, const char* reply)
 	{
 	case Compatibility::me:
 	case Compatibility::reprapFirmware:
-		platform.MessageF((error) ? (MessageType)(type | ErrorMessageFlag) : type, "%s\n", reply);
+		{
+			const MessageType mt = (rslt == GCodeResult::error) ? (MessageType)(type | ErrorMessageFlag)
+									: (rslt == GCodeResult::warning) ? (MessageType)(type | WarningMessageFlag)
+										: type;
+			platform.MessageF(mt, "%s\n", reply);
+		}
 		break;
 
 	case Compatibility::marlin:
@@ -4512,13 +4518,14 @@ void GCodes::SetAllAxesNotHomed()
 }
 
 // Write the config-override file returning true if an error occurred
-bool GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply, const char *fileName) const
+GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const
 {
+	const char* const fileName = CONFIG_OVERRIDE_G;
 	FileStore * const f = platform.OpenFile(platform.GetSysDir(), fileName, OpenMode::write);
 	if (f == nullptr)
 	{
 		reply.printf("Failed to create file %s", fileName);
-		return true;
+		return GCodeResult::error;
 	}
 
 	bool ok = f->Write("; This is a system-generated file - do not edit\n");
@@ -4545,12 +4552,21 @@ bool GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply, co
 	{
 		ok = false;
 	}
+
 	if (!ok)
 	{
 		reply.printf("Failed to write file %s", fileName);
 		platform.GetMassStorage()->Delete(platform.GetSysDir(), fileName);
+		return GCodeResult::error;
 	}
-	return !ok;
+
+	if (!m501SeenInConfigFile)
+	{
+		reply.copy("No M501 command was executed in config.g");
+		return GCodeResult::warning;
+	}
+
+	return GCodeResult::ok;
 }
 
 // Store a standard-format temperature report in 'reply'. This doesn't put a newline character at the end.

@@ -88,7 +88,7 @@ bool TelnetResponder::SendGCodeReply()
 		}
 
 		// Send the whole G-Code reply as plain text to the client
-		outStack->Push(gcodeReply);
+		outStack.Push(gcodeReply);
 
 		// Possibly clean up the G-code reply once again
 		if (clearReply)

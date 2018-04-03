@@ -162,8 +162,10 @@ void NetworkGCodeInput::Put(MessageType mtype, char c)
 			if (c < ' ' || c == ';')
 			{
 				// Diagnostics requested - report them now
-				// Only send the report to the appropriate channel, because if we send it as a generic message instead then it gets truncated.
-				reprap.Diagnostics(mtype);
+				// Don't use the Network task itself to send them because this may result in deadlock if there is insufficient buffer space,
+				// because the Network task itself is used to send the output to the clients and free the buffers.
+				// Ask the main task to do it instead.
+				reprap.DeferredDiagnostics(mtype);
 
 				// But don't report them twice
 				Reset();

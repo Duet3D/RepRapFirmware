@@ -37,7 +37,7 @@
 # include "Tasks.h"
 # include "RTOSIface.h"
 
-constexpr size_t NetworkStackWords = 640;
+constexpr size_t NetworkStackWords = 650;
 static Task<NetworkStackWords> networkTask;
 
 #endif
@@ -67,6 +67,8 @@ void Network::Init()
 #endif
 
 	// Create the responders
+	HttpResponder::InitStatic();
+
 	for (size_t i = 0; i < NumTelnetResponders; ++i)
 	{
 		responders = new TelnetResponder(responders);
@@ -284,6 +286,8 @@ void Network::Spin(bool full)
 		} while (!doneSomething && nr != nextResponderToPoll);
 		nextResponderToPoll = nr;
 	}
+
+	HttpResponder::CheckSessions();		// time out any sessions that have gone away
 }
 
 // Process the network timer interrupt
