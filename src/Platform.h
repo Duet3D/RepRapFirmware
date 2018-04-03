@@ -184,7 +184,7 @@ enum class SoftwareResetReason : uint16_t
 	usageFault = 0x60,
 	otherFault = 0x70,
 	stackOverflow = 0x80,
-	assertCalled = 0xA0,
+	assertCalled = 0x90,
 
 	// Bits that are or'ed in
 	inAuxOutput = 0x0800,			// this bit is or'ed in if we were in aux output at the time
@@ -312,7 +312,6 @@ public:
 	void SetEmulating(Compatibility c);
 	void Diagnostics(MessageType mtype);
 	bool DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d);
-	void ClassReport(uint32_t &lastTime);  			// Called on Spin() return to check everything's live.
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
 	void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr);
@@ -711,8 +710,6 @@ private:
 #ifdef DUET_NG
 	ExpansionBoardType expansionBoard;
 #endif
-
-	uint32_t longWait;
 
 	bool active;
 	Compatibility compatibility;

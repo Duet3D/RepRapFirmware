@@ -72,7 +72,6 @@ void Move::Init()
 	usingMesh = false;
 	useTaper = false;
 
-	longWait = millis();
 	idleTimeout = DefaultIdleTimeout;
 	moveState = MoveState::idle;
 	idleCount = 0;
@@ -337,8 +336,6 @@ void Move::Spin()
 			CurrentMoveCompleted();
 		}
 	}
-
-	reprap.GetPlatform().ClassReport(longWait);
 }
 
 // Try to push some babystepping through the lookahead queue

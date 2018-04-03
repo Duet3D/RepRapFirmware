@@ -35,7 +35,7 @@ const Port DefaultTelnetPort = 23;
 const Port DefaultPortNumbers[NumProtocols] = { DefaultHttpPort, DefaultFtpPort, DefaultTelnetPort };
 const char * const ProtocolNames[NumProtocols] = { "HTTP", "FTP", "TELNET" };
 
-const size_t NetworkBufferCount = 8;			// number of 2K network buffers
+const size_t NetworkBufferCount = 6;			// number of 2K network buffers
 const size_t SsidBufferLength = 32;				// maximum characters in an SSID
 
 #endif /* SRC_NETWORKING_NETWORKDEFS_H_ */

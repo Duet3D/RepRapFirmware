@@ -51,21 +51,44 @@ private:
 
 #ifdef RTOS
 
-class Task
+class TaskBase
 {
 public:
-	Task() { handle = nullptr; }
+	TaskBase() { handle = nullptr; }
 
 	TaskHandle GetHandle() const { return static_cast<TaskHandle>(handle); }
-	void Create(TaskFunction_t pxTaskCode, const char * pcName, uint32_t ulStackDepth, void *pvParameters, unsigned int uxPriority, uint32_t * const puxStackBuffer);
-	void Suspend() { vTaskSuspend(handle); }
+	void Suspend() const { vTaskSuspend(handle); }
+	const TaskBase *GetNext() const { return next; }
 
-	Task(const Task&) = delete;
-	Task& operator=(const Task&) = delete;
+	TaskBase(const TaskBase&) = delete;
+	TaskBase& operator=(const TaskBase&) = delete;
+
+	static const TaskBase *GetTaskList() { return taskList; }
+
+	static constexpr int SpinPriority = 1;			// priority for tasks that rarely block
+	static constexpr int HeatPriority = 2;
+
+protected:
+	TaskHandle_t handle;
+	TaskBase *next;
+	StaticTask_t storage;
+
+	static TaskBase *taskList;
+};
+
+template<unsigned int StackWords> class Task : public TaskBase
+{
+public:
+	// The Create function assumes that only the main task creates other tasks, so we don't need a mutex to protect the task list
+	void Create(TaskFunction_t pxTaskCode, const char * pcName, void *pvParameters, unsigned int uxPriority)
+	{
+		next = taskList;
+		taskList = this;
+		handle = xTaskCreateStatic(pxTaskCode, pcName, StackWords, pvParameters, uxPriority, stack, &storage);
+	}
 
 private:
-	TaskHandle_t handle;
-	StaticTask_t storage;
+	uint32_t stack[StackWords];
 };
 
 #endif
@@ -118,6 +141,13 @@ namespace RTOSIface
 		{
 			cpu_irq_enable();
 		}
+#endif
+	}
+
+	inline void Yield()
+	{
+#ifdef RTOS
+		taskYIELD();
 #endif
 	}
 }

@@ -168,7 +168,6 @@ private:
 	uint32_t lastWakeTime;
 #else
 	uint32_t lastTime;											// The last time our Spin() was called
-	uint32_t longWait;											// Long time for things that happen occasionally
 	bool active;												// Are we active?
 #endif
 

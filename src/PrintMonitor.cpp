@@ -35,7 +35,7 @@ PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) : platform(p), gCodes(gc), i
 
 void PrintMonitor::Init()
 {
-	longWait = lastUpdateTime = millis();
+	lastUpdateTime = millis();
 }
 
 // Get information for the specified file, or the currently printing file, in JSON format
@@ -80,7 +80,6 @@ void PrintMonitor::Spin()
 		printingFileParsed = platform.GetMassStorage()->GetFileInfo(platform.GetGCodeDir(), filenameBeingPrinted.c_str(), printingFileInfo, false);
 		if (!printingFileParsed)
 		{
-			platform.ClassReport(longWait);
 			return;
 		}
 	}
@@ -92,7 +91,6 @@ void PrintMonitor::Spin()
 		{
 			pauseStartTime = millis64();
 		}
-		platform.ClassReport(longWait);
 		return;
 	}
 
@@ -183,7 +181,6 @@ void PrintMonitor::Spin()
 		}
 		lastUpdateTime = now;
 	}
-	platform.ClassReport(longWait);
 }
 
 float PrintMonitor::GetWarmUpDuration() const

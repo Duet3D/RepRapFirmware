@@ -99,7 +99,6 @@ void GCodes::Init()
 	doingToolChange = false;
 	active = true;
 	fileSize = 0;
-	longWait = millis();
 	limitAxes = noMovesBeforeHoming = true;
 	SetAllAxesNotHomed();
 	for (size_t i = 0; i < NUM_FANS; ++i)
@@ -356,7 +355,6 @@ void GCodes::Spin()
 			lastWarningMillis = now;
 		}
 	}
-	platform.ClassReport(longWait);
 }
 
 // Execute a step of the state machine

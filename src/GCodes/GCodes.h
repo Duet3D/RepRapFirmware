@@ -532,7 +532,6 @@ private:
 	uint32_t heaterFaultTimeout;				// how long we wait for the user to fix it before turning everything off
 
 	// Misc
-	uint32_t longWait;							// Timer for things that happen occasionally (seconds)
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
 	int8_t lastAuxStatusReportType;				// The type of the last status report requested by PanelDue

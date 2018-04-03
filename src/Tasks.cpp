@@ -8,6 +8,7 @@
 #include "Tasks.h"
 #include "RepRap.h"
 #include "Platform.h"
+#include <malloc.h>
 
 #ifdef RTOS
 # include "FreeRTOS.h"
@@ -17,17 +18,16 @@
 const uint8_t memPattern = 0xA5;
 
 extern "C" char *sbrk(int i);
+extern char _end;
 
 #ifdef RTOS
-const uint32_t MainTaskStackSize = 2048;			// task stack size in dwords
-const uint32_t MainTaskPriority = 1;
 
-static StackType_t mainTaskStack[MainTaskStackSize];
-static Task mainTask;
-
+constexpr unsigned int MainTaskStackWords = 1240;
+static Task<MainTaskStackWords> mainTask;
 static Mutex spiMutex;
 
 extern "C" void MainTask(void * pvParameters);
+
 #endif
 
 // Application entry point
@@ -64,7 +64,7 @@ extern "C" void AppMain()
 
 #ifdef RTOS
 	// Create the startup task
-	mainTask.Create(MainTask, "MAIN", ARRAY_SIZE(mainTaskStack), nullptr, MainTaskPriority, mainTaskStack);
+	mainTask.Create(MainTask, "MAIN", nullptr, TaskBase::SpinPriority);
 	vTaskStartScheduler();			// doesn't return
 }
 
@@ -85,8 +85,7 @@ namespace Tasks
 {
 
 #ifdef RTOS
-
-	void GetHandlerStackUsage(uint32_t* maxStack, uint32_t* neverUsed)
+	static void GetHandlerStackUsage(uint32_t* maxStack, uint32_t* neverUsed)
 	{
 		const char * const ramend = (const char *)&_estack;
 		const char * const heapend = sbrk(0);
@@ -98,30 +97,9 @@ namespace Tasks
 		if (maxStack != nullptr) { *maxStack = ramend - stack_lwm; }
 		if (neverUsed != nullptr) { *neverUsed = stack_lwm - heapend; }
 	}
-
-	static void TaskDiagnosticsFromHandle(MessageType mtype, TaskHandle_t ct)
-	{
-		TaskStatus_t taskDetails;
-		vTaskGetInfo(ct, &taskDetails, pdTRUE, eInvalid);
-		reprap.GetPlatform().MessageF(mtype, "Task %s: state %d stack rem %u\n",
-			taskDetails.pcTaskName, (int)taskDetails.eCurrentState, (unsigned int)taskDetails.usStackHighWaterMark * sizeof(StackType_t));
-	}
-
-	void TaskDiagnostics(MessageType mtype, const Task& ct)
-	{
-		TaskDiagnosticsFromHandle(mtype, ct.GetHandle());
-	}
-
-	// Write data about the current task
-	void CurrentTaskDiagnostics(MessageType mtype)
-	{
-		TaskDiagnosticsFromHandle(mtype, xTaskGetCurrentTaskHandle());
-	}
-
 #else
-
 	// Return the system stack usage and amount of memory that has never been used, in bytes
-	void GetStackUsage(uint32_t* currentStack, uint32_t* maxStack, uint32_t* neverUsed)
+	static void GetStackUsage(uint32_t* currentStack, uint32_t* maxStack, uint32_t* neverUsed)
 	{
 		const char * const ramend = (const char *)&_estack;
 		const char * const heapend = sbrk(0);
@@ -135,8 +113,69 @@ namespace Tasks
 		if (maxStack != nullptr) { *maxStack = ramend - stack_lwm; }
 		if (neverUsed != nullptr) { *neverUsed = stack_lwm - heapend; }
 	}
-
 #endif
+
+	uint32_t GetNeverUsedRam()
+	{
+		uint32_t neverUsedRam;
+
+#ifdef RTOS
+		GetHandlerStackUsage(nullptr, &neverUsedRam);
+#else
+		GetStackUsage(nullptr, nullptr, &neverUsedRam);
+#endif
+		return neverUsedRam;
+	}
+
+	// Write data about the current task (if RTOS) or the system
+	void Diagnostics(MessageType mtype)
+	{
+		Platform& p = reprap.GetPlatform();
+#ifdef RTOS
+		p.Message(mtype, "=== RTOS ===\n");
+#else
+		p.Message(mtype, "=== System ===\n");
+#endif
+		// Print memory stats
+		{
+			const char * const ramstart =
+#if SAME70
+				(char *) 0x20400000;
+#elif SAM4E || SAM4S
+				(char *) 0x20000000;
+#elif SAM3XA
+				(char *) 0x20070000;
+#else
+# error Unsupported processor
+#endif
+			p.MessageF(mtype, "Static ram used: %d\n", &_end - ramstart);
+
+			const struct mallinfo mi = mallinfo();
+			p.MessageF(mtype, "Dynamic ram used: %d\n", mi.uordblks);
+			p.MessageF(mtype, "Recycled dynamic ram: %d\n", mi.fordblks);
+
+			uint32_t maxStack, neverUsed;
+#ifdef RTOS
+			GetHandlerStackUsage(&maxStack, &neverUsed);
+			p.MessageF(mtype, "Handler stack ram used: %" PRIu32 "\n", maxStack);
+#else
+			uint32_t currentStack;
+			Tasks::GetStackUsage(&currentStack, &maxStack, &neverUsed);
+			p.MessageF(mtype, "Stack ram used: %" PRIu32 " current, %" PRIu32 " maximum\n", currentStack, maxStack);
+#endif
+			p.MessageF(mtype, "Never used ram: %" PRIu32 "\n", neverUsed);
+		}
+
+#ifdef RTOS
+		for (const TaskBase *t = TaskBase::GetTaskList(); t != nullptr; t = t->GetNext())
+		{
+			TaskStatus_t taskDetails;
+			vTaskGetInfo(t->GetHandle(), &taskDetails, pdTRUE, eInvalid);
+			p.MessageF(mtype, "Task %s: state %d stack rem %u\n",
+				taskDetails.pcTaskName, (int)taskDetails.eCurrentState, (unsigned int)taskDetails.usStackHighWaterMark * sizeof(StackType_t));
+		}
+#endif
+	}
 
 	const Mutex *GetSpiMutex()
 	{
@@ -271,20 +310,19 @@ extern "C"
 
 #ifdef RTOS
 	// FreeRTOS hooks that we need to provide
-	void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress)
+	void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName)
 	{
-	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::stackOverflow, pulFaultStackAddress + 5);
+	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::stackOverflow, pulFaultStackAddress);
 	}
 
 	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) __attribute((naked));
 	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName)
 	{
+		// r0 = pxTask, r1 = pxTaskName
 	    __asm volatile
 	    (
-	        " tst lr, #4                                                \n"		/* test bit 2 of the EXC_RETURN in LR to determine which stack was in use */
-	        " ite eq                                                    \n"		/* load the appropriate stack pointer into R0 */
-	        " mrseq r0, msp                                             \n"
-	        " mrsne r0, psp                                             \n"
+	    	" push {r0, r1, lr}											\n"		/* save parameters and call address on the stack */
+	    	" mov r0, sp												\n"
 	        " ldr r2, handler_sovf_address_const                        \n"
 	        " bx r2                                                     \n"
 	        " handler_sovf_address_const: .word stackOverflowDispatcher \n"
@@ -293,7 +331,7 @@ extern "C"
 
 	void assertCalledDispatcher(const uint32_t *pulFaultStackAddress)
 	{
-	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress + 5);
+	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress);
 	}
 
 	void vAssertCalled(uint32_t line, const char *file) __attribute((naked));
@@ -301,10 +339,8 @@ extern "C"
 	{
 	    __asm volatile
 	    (
-	        " tst lr, #4                                                \n"		/* test bit 2 of the EXC_RETURN in LR to determine which stack was in use */
-	        " ite eq                                                    \n"		/* load the appropriate stack pointer into R0 */
-	        " mrseq r0, msp                                             \n"
-	        " mrsne r0, psp                                             \n"
+	    	" push {r0, r1, lr}											\n"		/* save parameters and call address */
+	    	" mov r0, sp												\n"
 	        " ldr r2, handler_asrt_address_const                        \n"
 	        " bx r2                                                     \n"
 	        " handler_asrt_address_const: .word assertCalledDispatcher  \n"

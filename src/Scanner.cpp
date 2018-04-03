@@ -23,8 +23,6 @@ const char* const CALIBRATE_POST_G = "calibrate_post.g";
 
 void Scanner::Init()
 {
-	longWait = millis();
-
 	enabled = false;
 	SetState(ScannerState::Disconnected);
 	bufferPointer = 0;
@@ -67,7 +65,6 @@ void Scanner::Spin()
 	// Is the 3D scanner extension enabled at all and is a device registered?
 	if (!IsEnabled() || state == ScannerState::Disconnected)
 	{
-		platform.ClassReport(longWait);
 		return;
 	}
 
@@ -91,7 +88,6 @@ void Scanner::Spin()
 		SetState(ScannerState::Disconnected);
 
 		// Cannot do anything else...
-		platform.ClassReport(longWait);
 		return;
 	}
 
@@ -226,8 +222,6 @@ void Scanner::Spin()
 			}
 			break;
 	}
-
-	platform.ClassReport(longWait);
 }
 
 // Process incoming commands from the scanner board

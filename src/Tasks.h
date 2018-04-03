@@ -14,13 +14,8 @@
 
 namespace Tasks
 {
-#ifdef RTOS
-	void GetHandlerStackUsage(uint32_t* maxStack, uint32_t* neverUsed);
-	void TaskDiagnostics(MessageType mtype, const Task& ct);
-	void CurrentTaskDiagnostics(MessageType mtype);
-#else
-	void GetStackUsage(uint32_t* currentStack, uint32_t* maxStack, uint32_t* neverUsed);
-#endif
+	void Diagnostics(MessageType mtype);
+	uint32_t GetNeverUsedRam();
 	const Mutex *GetSpiMutex();
 }
 

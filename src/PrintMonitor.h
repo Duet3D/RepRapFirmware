@@ -68,7 +68,6 @@ class PrintMonitor
 	private:
 		Platform& platform;
 		GCodes& gCodes;
-		uint32_t longWait;
 		uint32_t lastUpdateTime;
 
 		// Information/Events concerning the file being printed

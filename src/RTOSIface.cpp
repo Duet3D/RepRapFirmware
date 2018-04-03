@@ -38,10 +38,7 @@ TaskHandle Mutex::GetHolder() const
 	return static_cast<TaskHandle>(xSemaphoreGetMutexHolder(handle));
 }
 
-void Task::Create(TaskFunction_t pxTaskCode, const char * pcName, uint32_t ulStackDepth, void *pvParameters, unsigned int uxPriority, uint32_t * const puxStackBuffer)
-{
-	handle = xTaskCreateStatic(pxTaskCode, pcName, ulStackDepth, pvParameters, uxPriority, puxStackBuffer, &storage);
-}
+TaskBase *TaskBase::taskList = nullptr;
 
 #else
 

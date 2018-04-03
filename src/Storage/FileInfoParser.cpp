@@ -106,7 +106,6 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 	const uint32_t loopStartTime = millis();
 	do
 	{
-		uint32_t buf32[(GCODE_READ_SIZE + GCODE_OVERLAP_SIZE + 3)/4 + 1];	// buffer should be 32-bit aligned for HSMCI (need the +1 so we can add a null terminator)
 		char* const buf = reinterpret_cast<char*>(buf32);
 		size_t sizeToRead, sizeToScan;										// number of bytes we want to read and scan in this go
 
@@ -120,7 +119,6 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 				sizeToRead = (size_t)min<FilePosition>(fileBeingParsed->Length() - fileBeingParsed->Position(), GCODE_READ_SIZE);
 				if (fileOverlapLength > 0)
 				{
-					memcpy(buf, fileOverlap, fileOverlapLength);
 					sizeToScan = sizeToRead + fileOverlapLength;
 				}
 				else
@@ -195,7 +193,7 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 				{
 					// No - copy the last chunk of the buffer for overlapping search
 					fileOverlapLength = min<size_t>(sizeToRead, GCODE_OVERLAP_SIZE);
-					memcpy(fileOverlap, &buf[sizeToRead - fileOverlapLength], fileOverlapLength);
+					memcpy(buf, &buf[sizeToRead - fileOverlapLength], fileOverlapLength);
 				}
 			}
 			break;
@@ -239,7 +237,7 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 				sizeToRead = (size_t)min<FilePosition>(fileBeingParsed->Length() - nextSeekPos, GCODE_READ_SIZE);
 				if (fileOverlapLength > 0)
 				{
-					memcpy(&buf[sizeToRead], fileOverlap, fileOverlapLength);
+					memcpy(&buf[sizeToRead], buf, fileOverlapLength);
 					sizeToScan = sizeToRead + fileOverlapLength;
 				}
 				else
@@ -316,7 +314,6 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 
 				// Else go back further
 				fileOverlapLength = (size_t)min<FilePosition>(sizeToScan, GCODE_OVERLAP_SIZE);
-				memcpy(fileOverlap, buf, fileOverlapLength);
 				nextSeekPos = (nextSeekPos <= GCODE_READ_SIZE) ? 0 : nextSeekPos - GCODE_READ_SIZE;
 				parseState = seeking;
 			}

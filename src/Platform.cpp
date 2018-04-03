@@ -56,10 +56,6 @@
 #endif
 
 #include <climits>
-#include <malloc.h>
-
-extern char _end;
-extern "C" char *sbrk(int i);
 
 #if !defined(HAS_LWIP_NETWORKING) || !defined(HAS_WIFI_NETWORKING) || !defined(HAS_CPU_TEMP_SENSOR) || !defined(HAS_HIGH_SPEED_SD) \
  || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_VREF_MONITOR) || !defined(ACTIVE_LOW_HEAT_ON) \
@@ -585,7 +581,6 @@ void Platform::Init()
 	memset(logicalPinModes, PIN_MODE_NOT_CONFIGURED, sizeof(logicalPinModes));		// set all pins to "not configured"
 
 	// Kick everything off
-	longWait = millis();
 	InitialiseInterrupts();		// also sets 'active' to true
 }
 
@@ -1585,8 +1580,6 @@ void Platform::Spin()
 	{
 		logger->Flush(false);
 	}
-
-	ClassReport(longWait);
 }
 
 #if HAS_SMART_DRIVERS
@@ -1783,12 +1776,7 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		srdBuf[slot].magic = SoftwareResetData::magicValue;
 		srdBuf[slot].resetReason = reason;
 		srdBuf[slot].when = (uint32_t)realTime;			// some compilers/libraries use 64-bit time_t
-#ifdef RTOS
-		// Should we store the stack data for any other task(s) here?
-		Tasks::GetHandlerStackUsage(nullptr, &srdBuf[slot].neverUsedRam);
-#else
-		Tasks::GetStackUsage(nullptr, nullptr, &srdBuf[slot].neverUsedRam);
-#endif
+		srdBuf[slot].neverUsedRam = Tasks::GetNeverUsedRam();
 		srdBuf[slot].hfsr = SCB->HFSR;
 		srdBuf[slot].cfsr = SCB->CFSR;
 		srdBuf[slot].icsr = SCB->ICSR;
@@ -2051,36 +2039,6 @@ void Platform::Diagnostics(MessageType mtype)
 	PrintUniqueId(mtype);
 #endif
 
-	// Print memory stats and error codes to USB and copy them to the current webserver reply
-	{
-		const char * const ramstart =
-#if SAME70
-			(char *) 0x20400000;
-#elif SAM4E || SAM4S
-			(char *) 0x20000000;
-#elif SAM3XA
-			(char *) 0x20070000;
-#else
-# error Unsupported processor
-#endif
-		MessageF(mtype, "Static ram used: %d\n", &_end - ramstart);
-
-		const struct mallinfo mi = mallinfo();
-		MessageF(mtype, "Dynamic ram used: %d\n", mi.uordblks);
-		MessageF(mtype, "Recycled dynamic ram: %d\n", mi.fordblks);
-
-		uint32_t maxStack, neverUsed;
-#ifdef RTOS
-		Tasks::GetHandlerStackUsage(&maxStack, &neverUsed);
-		MessageF(mtype, "Handler stack ram used: %" PRIu32 "\n", maxStack);
-#else
-		uint32_t currentStack;
-		Tasks::GetStackUsage(&currentStack, &maxStack, &neverUsed);
-		MessageF(mtype, "Stack ram used: %" PRIu32 " current, %" PRIu32 " maximum\n", currentStack, maxStack);
-#endif
-		MessageF(mtype, "Never used ram: %" PRIu32 "\n", neverUsed);
-	}
-
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
 	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software",
@@ -2134,7 +2092,9 @@ void Platform::Diagnostics(MessageType mtype)
 													: (reason == (uint32_t)SoftwareResetReason::stuckInSpin) ? "Stuck in spin loop"
 														: (reason == (uint32_t)SoftwareResetReason::wdtFault) ? "Watchdog timeout"
 															: (reason == (uint32_t)SoftwareResetReason::otherFault) ? "Other fault"
-																: "Unknown";
+																: (reason == (uint32_t)SoftwareResetReason::stackOverflow) ? "Stack overflow"
+																	: (reason == (uint32_t)SoftwareResetReason::assertCalled) ? "Assertion failed"
+																		: "Unknown";
 			String<ScratchStringLength> scratchString;
 			if (srdBuf[slot].when != 0)
 			{
@@ -2171,6 +2131,9 @@ void Platform::Diagnostics(MessageType mtype)
 			Message(mtype, "Last software reset details not available\n");
 		}
 	}
+
+	// Show the used and free buffer counts
+	OutputBuffer::Diagnostics(mtype);
 
 	// Show the current error codes
 	MessageF(mtype, "Error status: %" PRIu32 "\n", errorCodeBits);
@@ -2258,10 +2221,6 @@ void Platform::Diagnostics(MessageType mtype)
 #ifdef SOFT_TIMER_DEBUG
 	MessageF(mtype, "Soft timer interrupts executed %u, next %u scheduled at %u, now %u\n",
 		numSoftTimerInterruptsExecuted, STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RB, lastSoftTimerInterruptScheduledAt, GetInterruptClocks());
-#endif
-
-#ifdef RTOS
-	Tasks::CurrentTaskDiagnostics(mtype);
 #endif
 }
 
@@ -2492,20 +2451,6 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 	}
 
 	return false;
-}
-
-void Platform::ClassReport(uint32_t &lastTime)
-{
-	const Module spinningModule = reprap.GetSpinningModule();
-	if (reprap.Debug(spinningModule))
-	{
-		const uint32_t now = millis();
-		if (now - lastTime >= LongTime)
-		{
-			lastTime = now;
-			MessageF(UsbMessage, "Class %s spinning\n", moduleName[spinningModule]);
-		}
-	}
 }
 
 #if HAS_SMART_DRIVERS

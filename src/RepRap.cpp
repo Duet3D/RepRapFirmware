@@ -9,6 +9,7 @@
 #include "PrintMonitor.h"
 #include "Tools/Tool.h"
 #include "Tools/Filament.h"
+#include "Tasks.h"
 #include "Version.h"
 
 #ifdef DUET_NG
@@ -237,9 +238,11 @@ void RepRap::Spin()
 	spinningModule = modulePlatform;
 	platform->Spin();
 
+#ifndef RTOS
 	ticksInSpinState = 0;
 	spinningModule = moduleNetwork;
 	network->Spin(true);
+#endif
 
 	ticksInSpinState = 0;
 	spinningModule = moduleWebserver;
@@ -324,6 +327,8 @@ void RepRap::Spin()
 		slowLoop = dt;
 	}
 	lastTime = t;
+
+	RTOSIface::Yield();
 }
 
 void RepRap::Timing(MessageType mtype)
@@ -336,7 +341,7 @@ void RepRap::Timing(MessageType mtype)
 void RepRap::Diagnostics(MessageType mtype)
 {
 	platform->Message(mtype, "=== Diagnostics ===\n");
-	OutputBuffer::Diagnostics(mtype);
+	Tasks::Diagnostics(mtype);
 	platform->Diagnostics(mtype);				// this includes a call to our Timing() function
 	move->Diagnostics(mtype);
 	heat->Diagnostics(mtype);

@@ -32,6 +32,15 @@
 #include "Libraries/General/IP4String.h"
 #include "Version.h"
 
+#ifdef RTOS
+
+# include "Tasks.h"
+# include "RTOSIface.h"
+
+constexpr size_t NetworkStackWords = 640;
+static Task<NetworkStackWords> networkTask;
+
+#endif
 
 Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderToPoll(nullptr)
 {
@@ -79,8 +88,6 @@ void Network::Init()
 	{
 		iface->Init();
 	}
-
-	longWait = millis();
 }
 
 GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, int secure, const StringRef& reply)
@@ -195,6 +202,15 @@ void Network::ResetWiFiForUpload(bool external)
 #endif
 }
 
+extern "C" void NetworkLoop(void *)
+{
+	for (;;)
+	{
+		reprap.GetNetwork().Spin(true);
+		RTOSIface::Yield();
+	}
+}
+
 // This is called at the end of config.g processing.
 // Start the network if it was enabled
 void Network::Activate()
@@ -206,6 +222,11 @@ void Network::Activate()
 			iface->Activate();
 		}
 	}
+
+#ifdef RTOS
+	networkTask.Create(NetworkLoop, "NETWORK", nullptr, TaskBase::SpinPriority);
+#endif
+
 }
 
 void Network::Exit()
@@ -217,6 +238,8 @@ void Network::Exit()
 			iface->Exit();
 		}
 	}
+
+	// TODO: close down the network and suspend the network task. Not trivial because currently, the caller may be the network task.
 }
 
 // Get the network state into the reply buffer, returning true if there is some sort of error
@@ -260,8 +283,6 @@ void Network::Spin(bool full)
 			nr = nr->GetNext();
 		} while (!doneSomething && nr != nextResponderToPoll);
 		nextResponderToPoll = nr;
-
-		platform.ClassReport(longWait);
 	}
 }
 

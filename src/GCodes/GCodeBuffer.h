@@ -114,7 +114,6 @@ private:
 		pre (readPointer >= 0);
 
 	GCodeMachineState *machineState;					// Machine state for this gcode source
-	char gcodeBuffer[GCODE_LENGTH];						// The G Code
 	const char* const identity;							// Where we are from (web, file, serial line etc)
 	unsigned int commandStart;							// Index in the buffer of the command letter of this command
 	unsigned int parameterStart;
@@ -122,24 +121,27 @@ private:
 	unsigned int commandLength;							// Number of characters we read to build this command including the final \r or \n
 	unsigned int gcodeLineEnd;							// Number of characters in the entire line of gcode
 	int readPointer;									// Where in the buffer to read next
-	bool checksumRequired;								// True if we only accept commands with a valid checksum
 	GCodeBufferState bufferState;						// Idle, executing or paused
 	const char* writingFileDirectory;					// If the G Code is going into a file, where that is
 	int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
 	const MessageType responseMessageType;				// The message type we use for responses to commands coming from this channel
 	unsigned int lineNumber;
 	unsigned int declaredChecksum;
+	int commandNumber;
+	uint32_t crc32;										// crc32 of the binary file
+
 	uint8_t computedChecksum;
 	bool hadLineNumber;
 	bool hadChecksum;
 	bool hasCommandNumber;
 	char commandLetter;
-	int commandNumber;
+
+	char gcodeBuffer[GCODE_LENGTH];						// The G Code
+	bool checksumRequired;								// True if we only accept commands with a valid checksum
 	int8_t commandFraction;
 
 	bool queueCodes;									// Can we queue certain G-codes from this source?
 	bool binaryWriting;									// Executing gcode or writing binary file?
-	uint32_t crc32;										// crc32 of the binary file
 };
 
 inline uint32_t GCodeBuffer::GetCRC32() const

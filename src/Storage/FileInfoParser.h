@@ -20,7 +20,7 @@ const size_t GCODE_READ_SIZE = 2048;				// How many bytes to read in one go in G
 const size_t GCODE_READ_SIZE = 1024;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 512 for read efficiency)
 #endif
 
-const size_t GCODE_OVERLAP_SIZE = 100;				// Size of the overlapping buffer for searching (should be a multiple of 4)
+const size_t GCODE_OVERLAP_SIZE = 100;				// Size of the overlapping buffer for searching (must be a multiple of 4)
 
 const uint32_t MAX_FILEINFO_PROCESS_TIME = 200;		// Maximum time to spend polling for file info in each call
 const uint32_t MaxFileParseInterval = 4000;			// Maximum interval between repeat requests to parse a file
@@ -77,9 +77,12 @@ private:
 	GCodeFileInfo parsedFileInfo;
 	uint32_t lastFileParseTime;
 	uint32_t accumulatedParseTime, accumulatedReadTime, accumulatedSeekTime;
-
 	size_t fileOverlapLength;
-	char fileOverlap[GCODE_OVERLAP_SIZE];
+
+	// We used to allocate the following buffer on the stack; but now that this is called by more than one task
+	// it is more economical to allocate it permanently because that lets us use smaller stacks.
+	// Alternatively, we could allocate a FileBuffer temporarily.
+	uint32_t buf32[(GCODE_READ_SIZE + GCODE_OVERLAP_SIZE + 3)/4 + 1];	// buffer must be 32-bit aligned for HSMCI. We need the +1 so we can add a null terminator.
 };
 
 #endif /* SRC_STORAGE_FILEINFOPARSER_H_ */

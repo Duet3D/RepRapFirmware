@@ -187,7 +187,6 @@ private:
 
 	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
 	uint32_t lastStateChangeTime;						// The approximate time at which the state last changed, except we don't record timing->idle
-	uint32_t longWait;									// A long time for things that need to be done occasionally
 
 	Kinematics *kinematics;								// What kinematics we are using
 

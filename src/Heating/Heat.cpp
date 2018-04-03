@@ -33,11 +33,8 @@ Licence: GPL
 
 # include "Tasks.h"
 
-const uint32_t HeaterTaskStackSize = 128;			// task stack size in dwords
-const uint32_t HeaterTaskPriority = 1;
-
-static uint32_t heaterTaskStack[HeaterTaskStackSize];
-static Task heaterTask;
+constexpr uint32_t HeaterTaskStackWords = 128;			// task stack size in dwords
+static Task<HeaterTaskStackWords> heaterTask;
 
 extern "C" void HeaterTask(void * pvParameters)
 {
@@ -144,10 +141,9 @@ void Heat::Init()
 	coldExtrude = false;
 
 #ifdef RTOS
-	heaterTask.Create(HeaterTask, "HEAT", ARRAY_SIZE(heaterTaskStack), nullptr, HeaterTaskPriority, heaterTaskStack);
+	heaterTask.Create(HeaterTask, "HEAT", nullptr, TaskBase::HeatPriority);
 #else
 	lastTime = millis() - platform.HeatSampleInterval();		// flag the PIDS as due for spinning
-	longWait = millis();
 	active = true;
 #endif
 }
@@ -227,7 +223,6 @@ void Heat::Spin()
 		DhtSensor::Spin();
 #endif
 	}
-	platform.ClassReport(longWait);
 }
 
 #endif
@@ -253,9 +248,6 @@ void Heat::Diagnostics(MessageType mtype)
 			platform.MessageF(mtype, "Heater %d is on, I-accum = %.1f\n", heater, (double)(pids[heater]->GetAccumulator()));
 		}
 	}
-#ifdef RTOS
-	Tasks::TaskDiagnostics(mtype, heaterTask);
-#endif
 }
 
 bool Heat::AllHeatersAtSetTemperatures(bool includingBed) const

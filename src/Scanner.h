@@ -74,7 +74,6 @@ private:
 	void DoFileMacro(const char *filename);
 
 	Platform& platform;
-	uint32_t longWait;
 
 	bool enabled;
 

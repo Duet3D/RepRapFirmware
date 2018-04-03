@@ -81,7 +81,6 @@ private:
 	WiFiInterface *FindWiFiInterface() const;
 
 	Platform& platform;
-	uint32_t longWait;
 
 	NetworkInterface *interfaces[NumNetworkInterfaces];
 	NetworkResponder *responders;
