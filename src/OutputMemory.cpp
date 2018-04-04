@@ -128,7 +128,7 @@ size_t OutputBuffer::copy(const char c)
 		last = this;
 	}
 
-	// Set the date
+	// Set the data
 	data[0] = c;
 	dataLength = 1;
 	return 1;

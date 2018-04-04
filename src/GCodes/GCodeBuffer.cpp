@@ -437,7 +437,7 @@ float GCodeBuffer::GetFValue()
 {
 	if (readPointer >= 0)
 	{
-		const float result = (float) strtod(&gcodeBuffer[readPointer + 1], 0);
+		const float result = strtof(&gcodeBuffer[readPointer + 1], 0);
 		readPointer = -1;
 		return result;
 	}
@@ -463,7 +463,7 @@ const void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool 
 				returnedLength = 0;
 				return;
 			}
-			arr[length] = (float)strtod(&gcodeBuffer[readPointer + 1], 0);
+			arr[length] = strtof(&gcodeBuffer[readPointer + 1], 0);
 			length++;
 			do
 			{
