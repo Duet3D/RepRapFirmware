@@ -28,15 +28,19 @@ Run all network responders as separate tasks? Would need mutex on network interf
 Bugs
 
 [done] IAP fails to update firmware
-M122 output is too big for the available buffers, unless the Network task reads the output fast enough
+[done I think] M122 output is too big for the available buffers, unless the Network task reads the output fast enough
 [probably related to above] Duet WiFi gets into a state in which it returns empty JSON messages after sending M122 from DWC. Output buffer starvation?
 [done] Disconnects when getting file info forCandyBowlx8comments.gcode when running RTOS build
 [seems better now] File upload speed is a little lower when using RTOS - may be fixed when network is a separate task
 [seems ok now, was probably main stack overslow] Report that Pause works, but then hangs
+[done] Heater tuning crashes the firmware
+[believed fixed] DWC disconnects randomly with JSON parse errors
  
 
 Deferred work
 
+Use our own vsnprintf, and stop using sscanf. Should save a significant amount of stack space.
+Check whether we use any time conversion functoins that use _reent
 SAME70 uses a different memory model i.e. not strongly-ordered. Does this have any consequences for the code so far?
 Are there any aspects of Platform that are not thread-safe? e.g. GCodes setting multiple interdependent variables while network reports on them?
 Use a mutex to protect HSMCI from reentrant calls (only needed if/when we support more than one HSMCI volume, which is unlikely but possoible on the SAME70)

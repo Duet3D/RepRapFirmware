@@ -34,6 +34,8 @@ void OutputBuffer::IncreaseReferences(size_t refs)
 {
 	if (refs > 0)
 	{
+		TaskCriticalSectionLocker lock;
+
 		for(OutputBuffer *item = this; item != nullptr; item = item->Next())
 		{
 			item->references += refs;
@@ -92,7 +94,7 @@ size_t OutputBuffer::printf(const char *fmt, ...)
 	char formatBuffer[FORMAT_STRING_LENGTH];
 	va_list vargs;
 	va_start(vargs, fmt);
-	vsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
+	SafeVsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
 	va_end(vargs);
 
 	return copy(formatBuffer);
@@ -101,7 +103,7 @@ size_t OutputBuffer::printf(const char *fmt, ...)
 size_t OutputBuffer::vprintf(const char *fmt, va_list vargs)
 {
 	char formatBuffer[FORMAT_STRING_LENGTH];
-	vsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
+	SafeVsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
 
 	return cat(formatBuffer);
 }
@@ -111,7 +113,7 @@ size_t OutputBuffer::catf(const char *fmt, ...)
 	char formatBuffer[FORMAT_STRING_LENGTH];
 	va_list vargs;
 	va_start(vargs, fmt);
-	vsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
+	SafeVsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
 	va_end(vargs);
 
 	formatBuffer[ARRAY_UPB(formatBuffer)] = 0;
@@ -342,11 +344,11 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 	}
 }
 
-// Allocates an output buffer instance which can be used for (large) string outputs. This must be thread safe.
+// Allocates an output buffer instance which can be used for (large) string outputs. This must be thread safe. Not safe to call from interrupts!
 /*static*/ bool OutputBuffer::Allocate(OutputBuffer *&buf)
 {
 	{
-		CriticalSectionLocker lock;
+		TaskCriticalSectionLocker lock;
 
 		buf = freeOutputBuffers;
 		if (buf != nullptr)
@@ -439,7 +441,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 // Releases an output buffer instance and returns the next entry from the chain
 /*static */ OutputBuffer *OutputBuffer::Release(OutputBuffer *buf)
 {
-	CriticalSectionLocker lock;
+	TaskCriticalSectionLocker lock;
 	OutputBuffer * const nextBuffer = buf->next;
 
 	// If this one is reused by another piece of code, don't free it up
@@ -476,7 +478,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 // OutputStack class implementation
 
 // Push an OutputBuffer chain to the stack
-void OutputStack::Push(OutputBuffer *buffer)
+void OutputStack::Push(OutputBuffer *buffer) volatile
 {
 	if (count == OUTPUT_STACK_DEPTH)
 	{
@@ -488,20 +490,20 @@ void OutputStack::Push(OutputBuffer *buffer)
 	if (buffer != nullptr)
 	{
 		buffer->whenQueued = millis();
-		CriticalSectionLocker lock;
+		TaskCriticalSectionLocker lock;
 		items[count++] = buffer;
 	}
 }
 
-// Pop an OutputBuffer chain or return NULL if none is available
-OutputBuffer *OutputStack::Pop()
+// Pop an OutputBuffer chain or return nullptr if none is available
+OutputBuffer *OutputStack::Pop() volatile
 {
 	if (count == 0)
 	{
 		return nullptr;
 	}
 
-	CriticalSectionLocker lock;
+	TaskCriticalSectionLocker lock;
 	OutputBuffer *item = items[0];
 	for(size_t i = 1; i < count; i++)
 	{
@@ -513,7 +515,7 @@ OutputBuffer *OutputStack::Pop()
 }
 
 // Returns the first item from the stack or NULL if none is available
-OutputBuffer *OutputStack::GetFirstItem() const
+OutputBuffer *OutputStack::GetFirstItem() const volatile
 {
 	if (count == 0)
 	{
@@ -523,9 +525,9 @@ OutputBuffer *OutputStack::GetFirstItem() const
 }
 
 // Set the first item of the stack. If it's NULL, then the first item will be removed
-void OutputStack::SetFirstItem(OutputBuffer *buffer)
+void OutputStack::SetFirstItem(OutputBuffer *buffer) volatile
 {
-	CriticalSectionLocker lock;
+	TaskCriticalSectionLocker lock;
 	if (buffer == nullptr)
 	{
 		// If buffer is NULL, then the first item is removed from the stack
@@ -544,7 +546,7 @@ void OutputStack::SetFirstItem(OutputBuffer *buffer)
 }
 
 // Returns the last item from the stack or NULL if none is available
-OutputBuffer *OutputStack::GetLastItem() const
+OutputBuffer *OutputStack::GetLastItem() const volatile
 {
 	if (count == 0)
 	{
@@ -554,11 +556,11 @@ OutputBuffer *OutputStack::GetLastItem() const
 }
 
 // Get the total length of all queued buffers
-size_t OutputStack::DataLength() const
+size_t OutputStack::DataLength() const volatile
 {
 	size_t totalLength = 0;
 
-	CriticalSectionLocker lock;
+	TaskCriticalSectionLocker lock;
 	for(size_t i = 0; i < count; i++)
 	{
 		totalLength += items[i]->Length();
@@ -569,7 +571,7 @@ size_t OutputStack::DataLength() const
 
 // Append another OutputStack to this instance. If no more space is available,
 // all OutputBuffers that can't be added are automatically released
-void OutputStack::Append(OutputStack& stack)
+void OutputStack::Append(volatile OutputStack& stack) volatile
 {
 	for(size_t i = 0; i < stack.count; i++)
 	{
@@ -586,9 +588,9 @@ void OutputStack::Append(OutputStack& stack)
 }
 
 // Increase the number of references for each OutputBuffer on the stack
-void OutputStack::IncreaseReferences(size_t num)
+void OutputStack::IncreaseReferences(size_t num) volatile
 {
-	CriticalSectionLocker lock;
+	TaskCriticalSectionLocker lock;
 	for(size_t i = 0; i < count; i++)
 	{
 		items[i]->IncreaseReferences(num);
@@ -596,7 +598,7 @@ void OutputStack::IncreaseReferences(size_t num)
 }
 
 // Release all buffers and clean up
-void OutputStack::ReleaseAll()
+void OutputStack::ReleaseAll() volatile
 {
 	for(size_t i = 0; i < count; i++)
 	{

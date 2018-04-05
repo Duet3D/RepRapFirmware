@@ -33,7 +33,7 @@ Licence: GPL
 
 # include "Tasks.h"
 
-constexpr uint32_t HeaterTaskStackWords = 128;			// task stack size in dwords
+constexpr uint32_t HeaterTaskStackWords = 400;			// task stack size in dwords, must be large enough for auto tuning
 static Task<HeaterTaskStackWords> heaterTask;
 
 extern "C" void HeaterTask(void * pvParameters)

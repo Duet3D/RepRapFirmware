@@ -10,6 +10,10 @@
 #include <cstdio>
 #include "WMath.h"
 
+#ifdef RTOS
+# include "RTOSIface.h"
+#endif
+
 // Need to define strnlen here because it isn't ISO standard
 size_t strnlen(const char *s, size_t n)
 {
@@ -19,6 +23,36 @@ size_t strnlen(const char *s, size_t n)
 		++rslt;
 	}
 	return rslt;
+}
+
+// Thread safe version of vsnprintf. The standard one uses a buffer in the _reent structure.
+extern "C" int SafeVsnprintf(char* buffer, size_t buf_size, const char* format, va_list vlist)
+{
+#ifdef RTOS
+	TaskCriticalSectionLocker lock;
+#endif
+	return vsnprintf(buffer, buf_size, format, vlist);
+}
+
+extern "C" int SafeSnprintf(char* buffer, size_t buf_size, const char* format, ...)
+{
+	va_list vargs;
+	va_start(vargs, format);
+	const int ret = SafeVsnprintf(buffer, buf_size, format, vargs);
+	va_end(vargs);
+	return ret;
+}
+
+extern "C" int SafeSscanf(const char* s, const char* format, ...)
+{
+	va_list vargs;
+	va_start(vargs, format);
+#ifdef RTOS
+	TaskCriticalSectionLocker lock;
+#endif
+	const int ret = vsscanf(s, format, vargs);
+	va_end(vargs);
+	return ret;
 }
 
 //*************************************************************************************************
@@ -33,14 +67,14 @@ int StringRef::printf(const char *fmt, ...) const
 {
 	va_list vargs;
 	va_start(vargs, fmt);
-	const int ret = vsnprintf(p, len, fmt, vargs);
+	const int ret = SafeVsnprintf(p, len, fmt, vargs);
 	va_end(vargs);
 	return ret;
 }
 
 int StringRef::vprintf(const char *fmt, va_list vargs) const
 {
-	return vsnprintf(p, len, fmt, vargs);
+	return SafeVsnprintf(p, len, fmt, vargs);
 }
 
 int StringRef::catf(const char *fmt, ...) const
@@ -50,7 +84,7 @@ int StringRef::catf(const char *fmt, ...) const
 	{
 		va_list vargs;
 		va_start(vargs, fmt);
-		const int ret = vsnprintf(p + n, len - n, fmt, vargs);
+		const int ret = SafeVsnprintf(p + n, len - n, fmt, vargs);
 		va_end(vargs);
 		return ret + n;
 	}
@@ -62,7 +96,7 @@ int StringRef::vcatf(const char *fmt, va_list vargs) const
 	const size_t n = strlen();
 	if (n + 1 < len)		// if room for at least 1 more character and a null
 	{
-		return vsnprintf(p + n, len - n, fmt, vargs) + n;
+		return SafeVsnprintf(p + n, len - n, fmt, vargs) + n;
 	}
 	return 0;
 }
@@ -129,7 +163,3 @@ bool StringRef::Prepend(const char *src) const
 }
 
 // End
-
-
-
-

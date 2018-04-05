@@ -9,9 +9,8 @@
  * 2. It allocates and releases heap memory, which is not nice.
  *
  * Limitations of this version
- * 1. Rounding to nearest float may not always be correct.
- * 2. Doesn't handle more than 9 digits (excluding any leading zeros) before the decimal point. Numbers greater than 2^64-1 or less then -2^64-1
- *    will be incorrectly converted unless expressed in scientific notation.
+ * 1. Rounding to nearest double may not always be correct.
+ * 2. May not handle overflow for stupidly large numbers correctly.
  */
 
 #include <cstdlib>		// to pull in the standard declarations of strtod etc.

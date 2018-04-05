@@ -69,7 +69,7 @@ Tool * Tool::freelist = nullptr;
 
 	Tool *t;
 	{
-		CriticalSectionLocker lock;
+		TaskCriticalSectionLocker lock;
 		t = freelist;
 		if (t != nullptr)
 		{
@@ -151,7 +151,7 @@ Tool * Tool::freelist = nullptr;
 		t->name = nullptr;
 		t->filament = nullptr;
 
-		CriticalSectionLocker lock;
+		TaskCriticalSectionLocker lock;
 		t->next = freelist;
 		freelist = t;
 	}

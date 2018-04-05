@@ -262,7 +262,7 @@ bool GCodeBuffer::LineFinished()
 	{
 		if (hadLineNumber)
 		{
-			snprintf(gcodeBuffer, ARRAY_SIZE(gcodeBuffer), "M998 P%u", lineNumber);	// request resend
+			SafeSnprintf(gcodeBuffer, ARRAY_SIZE(gcodeBuffer), "M998 P%u", lineNumber);	// request resend
 		}
 		else
 		{

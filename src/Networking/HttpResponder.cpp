@@ -1287,8 +1287,8 @@ HttpResponder::HttpSession HttpResponder::sessions[MaxHttpSessions];
 unsigned int HttpResponder::numSessions = 0;
 unsigned int HttpResponder::clientsServed = 0;
 
-uint32_t HttpResponder::seq = 0;
-OutputStack HttpResponder::gcodeReply;
+volatile uint32_t HttpResponder::seq = 0;
+volatile OutputStack HttpResponder::gcodeReply;
 Mutex HttpResponder::gcodeReplyMutex;
 
 // End

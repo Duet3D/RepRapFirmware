@@ -15,6 +15,11 @@
 // Need to declare strnlen here because it isn't ISO standard
 size_t strnlen(const char *s, size_t n);
 
+// Thread safe versions of vsnprintf etc.
+extern "C" int SafeVsnprintf(char* buffer, size_t buf_size, const char* format, va_list vlist);
+extern "C" int SafeSnprintf(char* buffer, size_t buf_size, const char* format, ...) __attribute__ ((format (printf, 3, 4)));
+extern "C" int SafeSscanf(const char* s, const char* format, ...) __attribute__ ((format (scanf, 2, 3)));
+
 // Class to describe a string buffer, including its length. This saves passing buffer lengths around everywhere.
 class StringRef
 {
