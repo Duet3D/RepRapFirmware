@@ -5,12 +5,12 @@ Version 2.0beta1
 ================
 Upgrade notes:
 - Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21
-- There are no known breaking changes since verson 1.21
+- If you use G0 commands, see changed behaviour below.
 
 New features and changed behaviour:
+- G0 moves are now done using the maximum travel speed of the machine in accordance with the NIST standard. E and F parameters are no longer recognised on G0 commands.
 - M114 reports the user coordinates first and the machine coordinates at the end
 - Minimum jerk setting (M556) reduced from 1mm/sec to 0.1mm/sec
-- Better handling of Duet Web Control clients that go to sleep without disconnecting first
 - When M500 is used a warning is given if M501 was not run in config.g
 - G2 and G3 no longer require all of X, Y, I, J to be specified. X or Y and I or J is sufficient.
 - The user coordinates are updated if G10 is used to change the offsets of the current tool
@@ -20,6 +20,7 @@ New features and changed behaviour:
 Bug fixes:
 - G1 E5 S1 on a delta no longer reports "Error: G0/G1: attempt to move delta motors to absolute positions"
 - If the print was paused because of driver stall detection, the driver numbers were not listed in the message
+- Duet Web Control clients that go to sleep without disconnecting first are timed out after 8 seconds
 - If G30 was used to set an accurate Z height after mesh bed probing or loading a height map, if bed compensatoin was then cancelled then any Z offset from the height map remained. One consequence of this was that if bed probing was run again, the original height map Z offset was carried through to the new one.
 
 Internal changes:
