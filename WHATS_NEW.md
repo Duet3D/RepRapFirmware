@@ -21,6 +21,7 @@ Bug fixes:
 - G1 E5 S1 on a delta no longer reports "Error: G0/G1: attempt to move delta motors to absolute positions"
 - If the print was paused because of driver stall detection, the driver numbers were not listed in the message
 - Duet Web Control clients that go to sleep without disconnecting first are timed out after 8 seconds
+- VSSA fault detection was not working on the Duet Ethernet in firmware 1.21
 - If G30 was used to set an accurate Z height after mesh bed probing or loading a height map, if bed compensatoin was then cancelled then any Z offset from the height map remained. One consequence of this was that if bed probing was run again, the original height map Z offset was carried through to the new one.
 
 Internal changes:
