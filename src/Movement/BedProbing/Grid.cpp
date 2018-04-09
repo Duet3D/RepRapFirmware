@@ -105,11 +105,11 @@ bool GridDefinition::ReadParameters(const StringRef& s, int version)
 	switch (version)
 	{
 	case 1:
-		ok = (sscanf(s.c_str(), "%f,%f,%f,%f,%f,%f,%f,%lu,%lu", &xMin, &xMax, &yMin, &yMax, &radius, &xSpacing, &ySpacing, &numX, &numY) == 9);
+		ok = (SafeSscanf(s.c_str(), "%f,%f,%f,%f,%f,%f,%f,%lu,%lu", &xMin, &xMax, &yMin, &yMax, &radius, &xSpacing, &ySpacing, &numX, &numY) == 9);
 		break;
 
 	case 0:
-		ok = (sscanf(s.c_str(), "%f,%f,%f,%f,%f,%f,%lu,%lu", &xMin, &xMax, &yMin, &yMax, &radius, &xSpacing, &numX, &numY) == 8);
+		ok = (SafeSscanf(s.c_str(), "%f,%f,%f,%f,%f,%f,%lu,%lu", &xMin, &xMax, &yMin, &yMax, &radius, &xSpacing, &numX, &numY) == 8);
 		if (ok)
 		{
 			ySpacing = xSpacing;
@@ -330,7 +330,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const StringRef& r)
 				else
 				{
 					char* np = nullptr;
-					const float f = strtod(p, &np);
+					const float f = strtof(p, &np);
 					if (np == p)
 					{
 						r.catf("number expected at line %" PRIu32 " column %d", row + 3, (p - buffer) + 1);

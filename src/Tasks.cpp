@@ -22,12 +22,12 @@ extern char _end;
 
 #ifdef RTOS
 
-constexpr unsigned int MainTaskStackWords = 1240;
+// The main task currently runs GCodes, so it needs to be large enough to hold the matrices used for auto calibration.
+constexpr unsigned int MainTaskStackWords = 2100;
 
 static Task<MainTaskStackWords> mainTask;
 static Mutex spiMutex;
 static Mutex mallocMutex;
-static bool rtosRunning = false;
 
 extern "C" void MainTask(void * pvParameters);
 
@@ -35,7 +35,7 @@ extern "C" void MainTask(void * pvParameters);
 // We must use a recursive mutex for it.
 extern "C" void __malloc_lock ( struct _reent *_r )
 {
-	if (rtosRunning)
+	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)		// don't take mutex if scheduler not started or suspended
 	{
 		mallocMutex.Take();
 	}
@@ -43,7 +43,7 @@ extern "C" void __malloc_lock ( struct _reent *_r )
 
 extern "C" void __malloc_unlock ( struct _reent *_r )
 {
-	if (rtosRunning)
+	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)		// don't release mutex if scheduler not started or suspended
 	{
 		mallocMutex.Release();
 	}
@@ -92,8 +92,6 @@ extern "C" void AppMain()
 extern "C" void MainTask(void *pvParameters)
 {
 	mallocMutex.Create();
-	rtosRunning = true;
-
 	spiMutex.Create();
 #endif
 	reprap.Init();

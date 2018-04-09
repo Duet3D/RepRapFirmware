@@ -118,29 +118,52 @@ namespace RTOSIface
 	TaskHandle GetCurrentTask();
 
 #ifndef RTOS
-	static volatile unsigned int criticalSectionNesting = 0;
+	static volatile unsigned int interruptCriticalSectionNesting = 0;
 #endif
 
-	inline void EnterCriticalSection()
+	// Enter a critical section, where modificatio0n to variables by interrupts (and perhaps also other tasks) must be avoided
+	inline void EnterInterruptCriticalSection()
 	{
 #ifdef RTOS
 		taskENTER_CRITICAL();
 #else
 		cpu_irq_disable();
-		++criticalSectionNesting;
+		++interruptCriticalSectionNesting;
 #endif
 	}
 
-	inline void LeaveCriticalSection()
+	// Leave an interrupt-critical section
+	inline void LeaveInterruptCriticalSection()
 	{
 #ifdef RTOS
 		taskEXIT_CRITICAL();
 #else
-		--criticalSectionNesting;
-		if (criticalSectionNesting == 0)
+		--interruptCriticalSectionNesting;
+		if (interruptCriticalSectionNesting == 0)
 		{
 			cpu_irq_enable();
 		}
+#endif
+	}
+
+	// Enter a task-critical region. Used to protect concurrent access to variable form different tasks, where the variable are ont used/modified by interrupts.
+	inline void EnterTaskCriticalSection()
+	{
+#ifdef RTOS
+		vTaskSuspendAll();
+#else
+		// nothing to do here because there is on task preemption
+#endif
+	}
+
+	// Exit a task-critical region, returning true if a task switch occurred
+	inline bool LeaveTaskCriticalSection()
+	{
+#ifdef RTOS
+		return xTaskResumeAll() == pdTRUE;;
+#else
+		// nothing to do here because there is on task preemption
+		return false;
 #endif
 	}
 
@@ -152,11 +175,18 @@ namespace RTOSIface
 	}
 }
 
-class CriticalSectionLocker
+class InterruptCriticalSectionLocker
 {
 public:
-	CriticalSectionLocker() { RTOSIface::EnterCriticalSection(); }
-	~CriticalSectionLocker() { RTOSIface::LeaveCriticalSection(); }
+	InterruptCriticalSectionLocker() { RTOSIface::EnterInterruptCriticalSection(); }
+	~InterruptCriticalSectionLocker() { (void)RTOSIface::LeaveInterruptCriticalSection(); }
+};
+
+class TaskCriticalSectionLocker
+{
+public:
+	TaskCriticalSectionLocker() { RTOSIface::EnterTaskCriticalSection(); }
+	~TaskCriticalSectionLocker() { RTOSIface::LeaveTaskCriticalSection(); }
 };
 
 #endif /* SRC_RTOSIFACE_H_ */

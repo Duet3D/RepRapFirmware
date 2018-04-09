@@ -37,7 +37,7 @@
 # include "Tasks.h"
 # include "RTOSIface.h"
 
-constexpr size_t NetworkStackWords = 650;
+constexpr size_t NetworkStackWords = 550;
 static Task<NetworkStackWords> networkTask;
 
 #endif

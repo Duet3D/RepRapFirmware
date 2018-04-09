@@ -112,8 +112,8 @@ private:
 	static unsigned int clientsServed;
 
 	// Responses from GCodes class
-	static uint32_t seq;							// Sequence number for G-Code replies
-	static OutputStack gcodeReply;
+	static volatile uint32_t seq;					// Sequence number for G-Code replies
+	static volatile OutputStack gcodeReply;
 	static Mutex gcodeReplyMutex;
 };
 

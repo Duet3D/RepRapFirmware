@@ -111,6 +111,7 @@ Remaining:
 - [done in 2.0, test] Allow Z jerk down to 0.2mm/sec
 - [done in 2.0, ok] BUG: no call to HttpResponder::CheckSessions
 - BUG: G29 height map is way below bed. Happened on Ormerod. When probing the bed with simple G30 and compensation is applied, correct for the height map offset
+- Motor stall detection Z probe. Run deploy/retract macros before/after each probe, as for bltouch, or not?
 - Unexpected heaters off/tool selection behaviour, https://www.duet3d.com/forum/thread.php?pid=43059#p43059
 - warn when using : where ; was probably meant
 - check out G30 H parameter, https://www.duet3d.com/forum/thread.php?pid=42322#p42322
@@ -131,6 +132,8 @@ Remaining:
 - apostrophe in quoted filename
 - looks like we get a Pop underflow message when you send DWC jog commands and axes are not homed
 - Add warning message when print exceeds bounds
+- Does bltouch need a default recovery time?
+- Should bltouch use digital probe mode? Some users having problems with P25 in G31 command.
 
 - How should we lift X on a CoreXZ printer before homing?
 - if a homing command in an SD print file is aborted due to e.g. G1 Z5 in the homing file, error message should be written to both DWC and PanelDue
@@ -203,5 +206,3 @@ Later versions:
 - Add T parameter to M207
 - look at supporting SIZE in FTP
 - Make mp.delta.hmz0sK, hmz0scK and dsk 64-bit in SAM4E versions, to increase movement limit - also increase K2?
-
-- SAME7 boot loader - could base on SAM-BA, see http://hobbygenius.co.uk/blog/1633

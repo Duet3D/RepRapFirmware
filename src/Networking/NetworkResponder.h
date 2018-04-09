@@ -76,7 +76,7 @@ protected:
 
 	// Buffers for sending responses
 	OutputBuffer *outBuf;
-	OutputStack outStack;
+	OutputStack outStack;								// not volatile because only one task accesses it
 	FileStore *fileBeingSent;
 	NetworkBuffer *fileBuffer;
 
