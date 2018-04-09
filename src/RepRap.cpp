@@ -1057,6 +1057,17 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"coldExtrudeTemp\":%1.f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_EXTRUDE));
 		response->catf(",\"coldRetractTemp\":%1.f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_RETRACT));
 
+		// Controllable Fans
+		FansBitmap controllableFans = 0;
+		for (size_t fan = 0; fan < NUM_FANS; fan++)
+		{
+			if (platform->IsFanControllable(fan))
+			{
+				SetBit(controllableFans, fan);
+			}
+		}
+		response->catf(",\"controllableFans\":%lu", controllableFans);
+
 		// Maximum hotend temperature - DWC just wants the highest one
 		response->catf(",\"tempLimit\":%1.f", (double)(heat->GetHighestTemperatureLimit()));
 

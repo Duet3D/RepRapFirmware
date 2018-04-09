@@ -13,7 +13,7 @@
 #include "NetworkDefs.h"
 #include "Storage/FileData.h"
 #include "NetworkBuffer.h"
-#include "Outputmemory.h"
+#include "OutputMemory.h"
 
 // Forward declarations
 class NetworkResponder;
