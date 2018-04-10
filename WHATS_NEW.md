@@ -22,7 +22,7 @@ Bug fixes:
 - If the print was paused because of driver stall detection, the driver numbers were not listed in the message
 - Duet Web Control clients that go to sleep without disconnecting first are timed out after 8 seconds
 - VSSA fault detection was not working on the Duet Ethernet in firmware 1.21
-- If G30 was used to set an accurate Z height after mesh bed probing or loading a height map, if bed compensatoin was then cancelled then any Z offset from the height map remained. One consequence of this was that if bed probing was run again, the original height map Z offset was carried through to the new one.
+- If G30 was used to set an accurate Z height after mesh bed probing or loading a height map, if bed compensation was then cancelled then any Z offset from the height map remained. One consequence of this was that if bed probing was run again, the original height map Z offset was carried through to the new one, but the sign of the offset was reversed.
 
 Internal changes:
 - RepRapFirmware now uses a real time operating system kernel (FreeRTOS). Currently there are just three tasks: Main, Heat and Network.
