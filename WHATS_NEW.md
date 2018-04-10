@@ -25,7 +25,7 @@ Bug fixes:
 - If G30 was used to set an accurate Z height after mesh bed probing or loading a height map, if bed compensation was then cancelled then any Z offset from the height map remained. One consequence of this was that if bed probing was run again, the original height map Z offset was carried through to the new one, but the sign of the offset was reversed.
 
 Internal changes:
-- RepRapFirmware now uses a real time operating system kernel (FreeRTOS). Currently there are just three tasks: Main, Heat and Network.
+- RepRapFirmware now uses a real time operating system kernel (FreeRTOS). Currently there are just three tasks: Main, Heat and Network. The tasks and their free stack space are listed in the M122 diagnostics report.
 - Custom SafeStrtod, SafeVsnprintf and related functions are used instead of C library strtod, vsnprintf etc. The replacements are thread safe and use less stack than the originals.
 - Output buffers reduced from 32 x 256b to 40 x 128b
 
