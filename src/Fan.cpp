@@ -13,6 +13,7 @@
 
 void Fan::Init(Pin p_pin, bool hwInverted)
 {
+	isConfigured = false;
 	val = lastVal = 0.0;
 	minVal = 0.1;				// 10% minimum fan speed
 	blipTime = 100;				// 100ms fan blip
@@ -129,6 +130,7 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 
 		if (seen)
 		{
+			isConfigured = true;
 			Refresh();
 		}
 		else if (!gb.Seen('R') && !gb.Seen('S'))

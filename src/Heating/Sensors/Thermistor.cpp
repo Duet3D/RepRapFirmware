@@ -39,7 +39,7 @@ void Thermistor::Init()
 }
 
 // Configure the temperature sensor
-bool Thermistor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error)
+GCodeResult Thermistor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
 {
 	bool seen = false;
 	if (mCode == 305)
@@ -93,7 +93,7 @@ bool Thermistor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer&
 		}
 	}
 
-	return seen;
+	return GCodeResult::ok;
 }
 
 // Get the temperature

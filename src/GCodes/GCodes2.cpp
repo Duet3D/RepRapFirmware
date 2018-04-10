@@ -225,11 +225,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 				break;
 
 			case 1:		// load height map file
-				result = GetGCodeResultFromError(LoadHeightMap(gb, reply));
+				result = LoadHeightMap(gb, reply);
 				break;
 
 			default:	// clear height map
-				reprap.GetMove().SetIdentityTransform();
+				ClearBedMapping();
 				break;
 			}
 		}
@@ -394,8 +394,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			switch (machineType)
 			{
 			case MachineType::cnc:
-				spindleRpm = gb.GetFValue();
-				platform.SetSpindlePwm(spindleRpm/spindleMaxRpm);
+				{
+					const float rpm = gb.GetFValue();
+					const uint32_t slot = gb.Seen('P') ? gb.GetUIValue() : 0;
+					if (slot >= MaxSpindles)
+					{
+						reply.copy("Invalid spindle index");
+						result = GCodeResult::error;
+					}
+					else
+					{
+						platform.AccessSpindle(slot).SetRpm(rpm);
+					}
+				}
 				break;
 
 			case MachineType::laser:
@@ -423,7 +434,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			if (machineType == MachineType::cnc)
 			{
-				platform.SetSpindlePwm(-gb.GetFValue()/spindleMaxRpm);
+				const float rpm = gb.GetFValue();
+				const uint32_t slot = gb.Seen('P') ? gb.GetUIValue() : 0;
+				if (slot >= MaxSpindles)
+				{
+					reply.copy("Invalid spindle index");
+					result = GCodeResult::error;
+				}
+				else
+				{
+					platform.AccessSpindle(slot).SetRpm(-rpm);
+				}
 			}
 			else
 			{
@@ -436,7 +457,28 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		switch (machineType)
 		{
 		case MachineType::cnc:
-			platform.SetSpindlePwm(0.0);
+			if (gb.Seen('P'))
+			{
+				// Turn off specific spindle
+				const uint32_t slot = gb.GetUIValue();
+				if (slot >= MaxSpindles)
+				{
+					reply.copy("Invalid spindle index");
+					result = GCodeResult::error;
+				}
+				else
+				{
+					platform.AccessSpindle(slot).TurnOff();
+				}
+			}
+			else
+			{
+				// Turn off every spindle if no 'P' parameter is present
+				for (size_t i = 0; i < MaxSpindles; i++)
+				{
+					platform.AccessSpindle(i).TurnOff();
+				}
+			}
 			break;
 
 		case MachineType::laser:
@@ -859,77 +901,26 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 37:	// Simulation mode on/off, or simulate a whole file
 		{
 			bool seen = false;
-			uint32_t newSimulationMode;
 			String<MaxFilenameLength> simFileName;
 
 			gb.TryGetPossiblyQuotedString('P', simFileName.GetRef(), seen);
 			if (seen)
 			{
-				newSimulationMode = 1;			// default to simulation mode 1 when a filename is given
+				result = SimulateFile(gb, reply, simFileName.GetRef());
 			}
 			else
 			{
+				uint32_t newSimulationMode;
 				gb.TryGetUIValue('S', newSimulationMode, seen);
-			}
-
-			if (seen && newSimulationMode != simulationMode)
-			{
-				if (!LockMovementAndWaitForStandstill(gb))
+				if (seen)
 				{
-					return false;
-				}
-
-				const bool wasSimulating = (simulationMode != 0);
-				simulationMode = (uint8_t)newSimulationMode;
-				reprap.GetMove().Simulate(simulationMode);
-				if (simFileName.IsEmpty() || simulationMode == 0)
-				{
-					// It's a simulation mode change command
-					exitSimulationWhenFileComplete = false;
-					if (simulationMode != 0)
-					{
-						simulationTime = 0.0;
-						if (!wasSimulating)
-						{
-							// Starting a new simulation, so save the current position
-							reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-							simulationRestorePoint.feedRate = gb.MachineState().feedrate;
-						}
-					}
-					else if (wasSimulating)
-					{
-						EndSimulation(&gb);
-					}
+					result = ChangeSimulationMode(gb, reply, newSimulationMode);
 				}
 				else
 				{
-					// Simulate a whole file and then stop simulating
-					simulationTime = 0.0;
-					if (!wasSimulating)
-					{
-						// Starting a new simulation, so save the current position
-						reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-						simulationRestorePoint.feedRate = gb.MachineState().feedrate;
-					}
-					if (QueueFileToPrint(simFileName.c_str(), reply))
-					{
-						exitSimulationWhenFileComplete = true;
-						reprap.GetPrintMonitor().StartingPrint(simFileName.c_str());
-						StartPrinting(true);
-						reply.printf("Simulating print of file %s", simFileName.c_str());
-					}
-					else
-					{
-						simulationMode = 0;
-						reprap.GetMove().Simulate(0);
-						result = GCodeResult::error;
-					}
+					reply.printf("Simulation mode: %s, move time: %.1f sec, other time: %.1f sec",
+							(simulationMode != 0) ? "on" : "off", (double)reprap.GetMove().GetSimulationTime(), (double)simulationTime);
 				}
-			}
-			else
-			{
-				reply.printf("Simulation mode: %s, move time: %.1f sec, other time: %.1f sec",
-						(simulationMode != 0) ? "on" : "off", (double)reprap.GetMove().GetSimulationTime(), (double)simulationTime);
 			}
 		}
 		break;
@@ -2443,7 +2434,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			return false;
 		}
-		result = GetGCodeResultFromError(LoadHeightMap(gb, reply));
+		result = LoadHeightMap(gb, reply);
 		break;
 
 	case 376: // Set taper height
@@ -2568,38 +2559,55 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 453: // Select CNC mode
-		machineType = MachineType::cnc;
-		if (gb.Seen('P'))
 		{
-			uint32_t pins[2] = { NoLogicalPin, NoLogicalPin };
-			size_t numPins = 2;
-			gb.GetUnsignedArray(pins, numPins, false);
-			if (pins[0] > 65535)
+			uint32_t slot = gb.Seen('S') ? gb.GetUIValue() : 0;
+			if (slot >= MaxSpindles)
 			{
-				pins[0] = NoLogicalPin;
+				reply.copy("Invalid spindle index");
+				result = GCodeResult::error;
+				break;
 			}
-			if (numPins < 2 || pins[1] < 0 || pins[1] > 65535)
+
+			Spindle& spindle = platform.AccessSpindle(slot);
+			if (gb.Seen('P'))
 			{
-				pins[1] = NoLogicalPin;
+				uint32_t pins[2] = { NoLogicalPin, NoLogicalPin };
+				size_t numPins = 2;
+				gb.GetUnsignedArray(pins, numPins, false);
+				if (pins[0] > 65535)
+				{
+					pins[0] = NoLogicalPin;
+				}
+				if (numPins < 2 || pins[1] < 0 || pins[1] > 65535)
+				{
+					pins[1] = NoLogicalPin;
+				}
+				const bool invert = (gb.Seen('I') && gb.GetIValue() > 0);
+				if (!spindle.SetPins(pins[0], pins[1], invert))
+				{
+					reply.copy("Bad P parameter");
+					result = GCodeResult::error;
+					break;
+				}
 			}
-			const bool invert = (gb.Seen('I') && gb.GetIValue() > 0);
-			if (platform.SetSpindlePins(pins[0], pins[1], invert))
+			if (gb.Seen('F'))
 			{
+				spindle.SetPwmFrequency(gb.GetFValue());
+			}
+			if (gb.Seen('R'))
+			{
+				spindle.SetMaxRpm(max<float>(1.0, gb.GetFValue()));
+			}
+			if (gb.Seen('T'))
+			{
+				spindle.SetToolNumber(gb.GetIValue());
+			}
+
+			if (machineType != MachineType::cnc)
+			{
+				machineType = MachineType::cnc;
 				reply.copy("CNC mode selected");
 			}
-			else
-			{
-				reply.copy("Bad P parameter");
-				result = GCodeResult::error;
-			}
-		}
-		if (result == GCodeResult::ok && gb.Seen('F'))
-		{
-			platform.SetSpindlePwmFrequency(gb.GetFValue());
-		}
-		if (result == GCodeResult::ok && gb.Seen('R'))
-		{
-			spindleMaxRpm = max<float>(1.0, gb.GetFValue());
 		}
 		break;
 
@@ -2927,7 +2935,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	break;
 
 	case 561: // Set identity transform (also clears bed probe grid)
-		reprap.GetMove().SetIdentityTransform();
+		ClearBedMapping();
 		break;
 
 	case 562: // Reset temperature fault - use with great caution

@@ -115,8 +115,6 @@ void GCodes::Init()
 	isRetracted = false;
 	lastAuxStatusReportType = -1;						// no status reports requested yet
 
-	spindleRpm = 0.0;
-	spindleMaxRpm = DefaultMaxSpindleRpm;
 	laserMaxPower = DefaultMaxLaserPower;
 
 	heaterFaultState = HeaterFaultState::noFault;
@@ -872,7 +870,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 
 			if (platform.GetZProbeType() == ZProbeType::blTouch)
 			{
-				DoFileMacro(gb, RETRACTPROBE_G, false);			// bltouch needs to be retracted whehn it triggers
+				DoFileMacro(gb, RETRACTPROBE_G, false);			// bltouch needs to be retracted when it triggers
 			}
 		}
 		break;
@@ -1144,10 +1142,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				if (tapsDone == 1 && !hadProbingError)
 				{
 					// Reset the Z axis origin according to the height error so that we can move back up to the dive height
-					moveBuffer.coords[Z_AXIS] -= g30zHeightError;
-					g30zHeightError = 0;										// there is no zero height error form this probe
+					moveBuffer.coords[Z_AXIS] = platform.ZProbeStopHeight();
 					reprap.GetMove().SetNewPosition(moveBuffer.coords, false);
-					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+					reprap.GetMove().SetZeroHeightError(moveBuffer.coords);
+					g30zHeightError = 0;										// there is no longer any height error from this probe
 					SetAxisIsHomed(Z_AXIS);										// this is only correct if the Z axis is Cartesian-like, but other architectures must be homed before probing anyway
 				}
 			}
@@ -1215,6 +1213,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					// Setting the Z height with G30
 					moveBuffer.coords[Z_AXIS] -= g30zHeightError;
 					reprap.GetMove().SetNewPosition(moveBuffer.coords, false);
+					reprap.GetMove().SetZeroHeightError(moveBuffer.coords);
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 				}
 				gb.AdvanceState();
@@ -1523,6 +1522,7 @@ void GCodes::EndSimulation(GCodeBuffer *gb)
 	RestorePosition(simulationRestorePoint, gb);
 	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
 	reprap.GetMove().SetNewPosition(simulationRestorePoint.moveCoords, true);
+	axesHomed = axesHomedBeforeSimulation;
 }
 
 // Check for and execute triggers
@@ -2108,7 +2108,7 @@ void GCodes::Pop(GCodeBuffer& gb)
 // Set up the extrusion and feed rate of a move for the Move class
 // 'moveType' is the S parameter in the G0 or G1 command, or zero for a G2 or G3 command
 // Returns true if this gcode is valid so far, false if it should be discarded
-bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
+bool GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb)
 {
 	// Zero every extruder drive as some drives may not be moved
 	for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
@@ -2116,16 +2116,6 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 		moveBuffer.coords[drive] = 0.0;
 	}
 	moveBuffer.hasExtrusion = false;
-
-	// Deal with feed rate
-	if (moveType >= 0 && gb.Seen(feedrateLetter))
-	{
-		const float rate = gb.GetFValue() * distanceScale;
-		gb.MachineState().feedrate = (moveType == 0)
-										? rate * speedFactor
-										: rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
-	}
-	moveBuffer.feedRate = gb.MachineState().feedrate;
 
 	// If we are extruding, check that we have a tool to extrude with
 	if (gb.Seen(extrudeLetter))
@@ -2225,6 +2215,20 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 		}
 	}
 	return true;
+}
+
+// Set up the feed rate of a move
+// 'moveType' is the S parameter in the G1 command, or zero for a G2 or G3 command
+void GCodes::LoadFeedrateFromGCode(GCodeBuffer& gb)
+{
+	if (moveBuffer.moveType >= 0 && gb.Seen(feedrateLetter))
+	{
+		const float rate = gb.GetFValue() * distanceScale;
+		gb.MachineState().feedrate = (moveBuffer.moveType == 0)
+										? rate * speedFactor
+										: rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
+	}
+	moveBuffer.feedRate = gb.MachineState().feedrate;
 }
 
 // Check that enough axes have been homed, returning true if insufficient axes homed
@@ -2378,9 +2382,17 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	}
 
 	// Deal with extrusion and feed rate
-	LoadExtrusionAndFeedrateFromGCode(gb, moveBuffer.moveType);
+	if (isCoordinated)
+	{
+		LoadExtrusionFromGCode(gb);
+		LoadFeedrateFromGCode(gb);
+	}
+	else
+	{
+		moveBuffer.feedRate = platform.GetMaxTravelAcceleration();
+	}
 
-	// Set up the move. We must assign segmentsLeft last, so that when we move to RTOS, the move won't be picked up by the Move process before it is complete.
+	// Set up the move. We must assign segmentsLeft last, so that when Move runs as a separate task the move won't be picked up by the Move process before it is complete.
 	// Note that if this is an extruder-only move, we don't do axis movements to allow for tool offset changes, we defer those until an axis moves.
 	if (moveBuffer.moveType != 0)
 	{
@@ -2450,16 +2462,55 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 // Currently, we do not process new babystepping when executing an arc move
 const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 {
-	// Get the axis parameters. X Y I J are compulsory, Z is optional.
-	const char* const missingParameter = "G2/G3: missing parameter";
-	if (!gb.Seen('X')) return missingParameter;
-	const float xParam = gb.GetFValue() * distanceScale;
-	if (!gb.Seen('Y')) return missingParameter;
-	const float yParam = gb.GetFValue() * distanceScale;
-	if (!gb.Seen('I')) return missingParameter;
-	const float iParam = gb.GetFValue() * distanceScale;
-	if (!gb.Seen('J')) return missingParameter;
-	const float jParam = gb.GetFValue() * distanceScale;
+	// Get the axis parameters
+	float xParam, yParam;
+	bool seenXY = false;
+	if (gb.Seen('X'))
+	{
+		xParam = gb.GetFValue() * distanceScale;
+		seenXY = true;
+	}
+	else
+	{
+		xParam = currentUserPosition[X_AXIS];
+	}
+
+	if (gb.Seen('Y'))
+	{
+		yParam = gb.GetFValue() * distanceScale;
+		seenXY = true;
+	}
+	else
+	{
+		yParam = currentUserPosition[Y_AXIS];
+	}
+
+	float iParam, jParam;
+	bool seenIJ = false;
+	if (gb.Seen('I'))
+	{
+		iParam = gb.GetFValue() * distanceScale;
+		seenIJ = true;
+	}
+	else
+	{
+		iParam = 0.0;
+	}
+
+	if (gb.Seen('J'))
+	{
+		jParam = gb.GetFValue() * distanceScale;
+		seenIJ = true;
+	}
+	else
+	{
+		jParam = 0.0;
+	}
+
+	if (!seenXY && seenIJ)		// at least one of XY and IJ must be specified
+	{
+		return  "G2/G3: missing parameter";
+	}
 
 	memcpy(moveBuffer.initialCoords, moveBuffer.coords, numVisibleAxes * sizeof(moveBuffer.initialCoords[0]));
 
@@ -2543,7 +2594,9 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		}
 	}
 
-	LoadExtrusionAndFeedrateFromGCode(gb, moveBuffer.moveType);
+	LoadExtrusionFromGCode(gb);
+	LoadFeedrateFromGCode(gb);
+
 	moveBuffer.usePressureAdvance = moveBuffer.hasExtrusion;
 
 	arcRadius = sqrtf(iParam * iParam + jParam * jParam);
@@ -2921,10 +2974,8 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 		return GCodeResult::error;
 	}
 
-	Move& move = reprap.GetMove();
-	move.AccessHeightMap().SetGrid(defaultGrid);
-	move.AccessHeightMap().ClearGridHeights();
-	move.SetIdentityTransform();
+	reprap.GetMove().AccessHeightMap().SetGrid(defaultGrid);
+	ClearBedMapping();
 	gridXindex = gridYindex = 0;
 	gb.SetState(GCodeState::gridProbing1);
 
@@ -2935,9 +2986,9 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 	return GCodeResult::ok;
 }
 
-bool GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) const
+GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 {
-	reprap.GetMove().SetIdentityTransform();					// stop using old-style bed compensation and clear the height map
+	ClearBedMapping();
 
 	String<MaxFilenameLength> heightMapFileName;
 	bool seen = false;
@@ -2951,24 +3002,23 @@ bool GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 	if (f == nullptr)
 	{
 		reply.printf("Height map file %s not found", heightMapFileName.c_str());
-		return true;
+		return GCodeResult::error;
 	}
 
 	reply.printf("Failed to load height map from file %s: ", heightMapFileName.c_str());	// set up error message to append to
-	HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
-	const bool err = heightMap.LoadFromFile(f, reply);
+	const bool err = reprap.GetMove().LoadHeightMapFromFile(f, reply);
 	f->Close();
-	if (err)
+	reprap.GetMove().UseMesh(!err);
+
+	if (!err)
 	{
-		heightMap.ClearGridHeights();							// make sure we don't end up with a partial height map
-	}
-	else
-	{
-		reply.Clear();											// wipe the error message
+		reply.Clear();															// wipe the error message
+		// Update the current position to allow for any bed compensation at the current XY coordinates
+		reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
+		ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates to reflect any height map offset at the current position
 	}
 
-	reprap.GetMove().UseMesh(!err);
-	return err;
+	return (err) ? GCodeResult::error : GCodeResult::ok;
 }
 
 // Save the height map and append the success or error message to 'reply', returning true if an error occurred
@@ -2992,7 +3042,7 @@ bool GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 	}
 	else
 	{
-		err = reprap.GetMove().AccessHeightMap().SaveToFile(f);
+		err = reprap.GetMove().SaveHeightMapToFile(f);
 		f->Close();
 		if (err)
 		{
@@ -3005,6 +3055,13 @@ bool GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 		}
 	}
 	return err;
+}
+
+// Stop using bed compensation
+void GCodes::ClearBedMapping()
+{
+	reprap.GetMove().SetIdentityTransform();
+	ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates to remove any height map offset there was at the current position
 }
 
 // Return the current coordinates as a printable string.
@@ -3307,6 +3364,11 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply)
 			settingOffset = true;
 			tool->SetOffset(axis, gb.GetFValue(), gb.MachineState().runningM501);
 		}
+	}
+
+	if (settingOffset)
+	{
+		ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates to reflect the new tool offset, in case we have this tool selected
 	}
 
 	// Deal with setting temperatures
@@ -3924,9 +3986,7 @@ GCodeResult GCodes::SetHeaterParameters(GCodeBuffer& gb, const StringRef& reply)
 				}
 			}
 
-			bool hadError = false;
-			heat.ConfigureHeaterSensor(305, (unsigned int)heater, gb, reply, hadError);
-			return GetGCodeResultFromError(hadError);
+			return heat.ConfigureHeaterSensor(305, (unsigned int)heater, gb, reply);
 		}
 		else
 		{
@@ -4209,7 +4269,10 @@ void GCodes::StopPrint(StopPrintReason reason)
 			switch (machineType)
 			{
 			case MachineType::cnc:
-				platform.SetSpindlePwm(0);
+				for (size_t i = 0; i < MaxSpindles; i++)
+				{
+					platform.AccessSpindle(i).TurnOff();
+				}
 				break;
 
 			case MachineType::laser:

@@ -29,7 +29,7 @@ public:
 	DhtSensor(unsigned int channel);
 	~DhtSensor();
 
-	bool Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error) override;
+	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override;
 	void Init() override;
 	TemperatureError GetTemperature(float& t) override;
 

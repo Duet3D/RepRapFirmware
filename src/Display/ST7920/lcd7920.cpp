@@ -3,6 +3,7 @@
 
 #include "RepRapFirmware.h"
 #include "Pins.h"
+#include "Tasks.h"
 
 #if SUPPORT_12864_LCD
 
@@ -537,7 +538,7 @@ void Lcd7920::sendLcdData(uint8_t data)
 // Send a command to the lcd. Data1 is sent as-is, data2 is split into 2 bytes, high nibble first.
 void Lcd7920::sendLcd(uint8_t data1, uint8_t data2)
 {
-	sspi_acquire();			// TODO when using RTOS, wait for shared SPI to be available
+	MutexLocker lock(Tasks::GetSpiMutex());
 	sspi_master_setup_device(&device);
 	delayMicroseconds(1);
 	sspi_select_device(&device);
@@ -550,7 +551,6 @@ void Lcd7920::sendLcd(uint8_t data1, uint8_t data2)
 	delayMicroseconds(1);
 	sspi_deselect_device(&device);
 	delayMicroseconds(1);
-	sspi_release();
 }
 
 void Lcd7920::ensureBasicMode()

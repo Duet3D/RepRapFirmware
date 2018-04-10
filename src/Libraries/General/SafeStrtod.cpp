@@ -18,8 +18,14 @@
 #include <cmath>
 #include <climits>
 
-extern "C" double strtod(const char *s, char **p)
+double SafeStrtod(const char *s, const char **p)
 {
+	// 0. Skip white space
+	while (*s == ' ' || *s == '\t')
+	{
+		++s;
+	}
+
 	// 1. Check for a sign
 	const bool negative = (*s == '-');
 	if (negative || *s == '+')
@@ -121,15 +127,9 @@ extern "C" double strtod(const char *s, char **p)
 	return (negative) ? -retvalue : retvalue;
 }
 
-extern "C" float strtof(const char *s, char **p)
+float SafeStrtof(const char *s, const char **p)
 {
-	return (float)strtod(s, p);
-}
-
-// We need to define this one too because it is called internally, probably by sscanf
-extern "C" double _strtod_r(struct _reent *r, const char *s, char **p)
-{
-	return strtod(s, p);
+	return (float)SafeStrtod(s, p);
 }
 
 // End

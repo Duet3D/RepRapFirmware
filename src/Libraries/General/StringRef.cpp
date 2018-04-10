@@ -9,6 +9,7 @@
 #include <cstring>
 #include <cstdio>
 #include "WMath.h"
+#include "SafeVsnprintf.h"
 
 #ifdef RTOS
 # include "RTOSIface.h"
@@ -23,36 +24,6 @@ size_t strnlen(const char *s, size_t n)
 		++rslt;
 	}
 	return rslt;
-}
-
-// Thread safe version of vsnprintf. The standard one uses a buffer in the _reent structure.
-extern "C" int SafeVsnprintf(char* buffer, size_t buf_size, const char* format, va_list vlist)
-{
-#ifdef RTOS
-	TaskCriticalSectionLocker lock;
-#endif
-	return vsnprintf(buffer, buf_size, format, vlist);
-}
-
-extern "C" int SafeSnprintf(char* buffer, size_t buf_size, const char* format, ...)
-{
-	va_list vargs;
-	va_start(vargs, format);
-	const int ret = SafeVsnprintf(buffer, buf_size, format, vargs);
-	va_end(vargs);
-	return ret;
-}
-
-extern "C" int SafeSscanf(const char* s, const char* format, ...)
-{
-	va_list vargs;
-	va_start(vargs, format);
-#ifdef RTOS
-	TaskCriticalSectionLocker lock;
-#endif
-	const int ret = vsscanf(s, format, vargs);
-	va_end(vargs);
-	return ret;
 }
 
 //*************************************************************************************************

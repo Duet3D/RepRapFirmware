@@ -13,6 +13,7 @@
 #include "Movement/Move.h"
 #include "RepRap.h"
 #include "Tools/Tool.h"
+#include "PrintMonitor.h"
 
 #if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
@@ -333,6 +334,70 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 	reply.copy("bad grid definition: ");
 	defaultGrid.PrintError(xRange, yRange, reply);
 	return GCodeResult::error;
+}
+
+// Handle M37 to simulate a whole file
+GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file)
+{
+	if (reprap.GetPrintMonitor().IsPrinting())
+	{
+		reply.copy("cannot simulate while a file is being printed");
+		return GCodeResult::error;
+	}
+
+	if (QueueFileToPrint(file.c_str(), reply))
+	{
+		if (simulationMode == 0)
+		{
+			axesHomedBeforeSimulation = axesHomed;
+			axesHomed = LowestNBits<AxesBitmap>(numVisibleAxes);	// pretend all axes are homed
+			reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
+			simulationRestorePoint.feedRate = gb.MachineState().feedrate;
+		}
+		simulationTime = 0.0;
+		exitSimulationWhenFileComplete = true;
+		simulationMode = 1;
+		reprap.GetMove().Simulate(simulationMode);
+		reprap.GetPrintMonitor().StartingPrint(file.c_str());
+		StartPrinting(true);
+		reply.printf("Simulating print of file %s", file.c_str());
+		return GCodeResult::ok;
+	}
+
+	return GCodeResult::error;
+}
+
+// handle M37 to change the simulation mode
+GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode)
+{
+	if (newSimulationMode != simulationMode)
+	{
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+
+		if (newSimulationMode == 0)
+		{
+			EndSimulation(&gb);
+		}
+		else
+		{
+			if (simulationMode == 0)
+			{
+				// Starting a new simulation, so save the current position
+				axesHomedBeforeSimulation = axesHomed;
+				axesHomed = LowestNBits<AxesBitmap>(numVisibleAxes);	// pretend all axes are homed
+				reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
+				simulationRestorePoint.feedRate = gb.MachineState().feedrate;
+			}
+			simulationTime = 0.0;
+		}
+		exitSimulationWhenFileComplete = false;
+		simulationMode = (uint8_t)newSimulationMode;
+		reprap.GetMove().Simulate(simulationMode);
+	}
+	return GCodeResult::ok;
 }
 
 // Handle M558

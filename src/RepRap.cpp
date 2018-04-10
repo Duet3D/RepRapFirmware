@@ -1028,9 +1028,27 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	}
 #endif
 
-	// Spindle
-	const double spindleRpm = gCodes->GetSpindleRpm();
-	response->catf(",\"spindle\":{\"current\":%1.f,\"active\":%1.f}", spindleRpm, spindleRpm);
+	// Spindles
+	response->cat(",\"spindles\":[");
+	for (size_t i = 0; i < MaxSpindles; i++)
+	{
+		if (i > 0)
+		{
+			response->cat(',');
+		}
+
+		const Spindle& spindle = platform->AccessSpindle(i);
+		response->catf("{\"current\":%1.f,\"active\":%1.f", (double)spindle.GetCurrentRpm(), (double)spindle.GetRpm());
+		if (type == 2)
+		{
+			response->catf(",\"tool\":%d}", spindle.GetToolNumber());
+		}
+		else
+		{
+			response->cat('}');
+		}
+	}
+	response->cat(']');
 
 	/* Extended Status Response */
 	if (type == 2)
@@ -1038,6 +1056,17 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Cold Extrude/Retract
 		response->catf(",\"coldExtrudeTemp\":%1.f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_EXTRUDE));
 		response->catf(",\"coldRetractTemp\":%1.f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_RETRACT));
+
+		// Controllable Fans
+		FansBitmap controllableFans = 0;
+		for (size_t fan = 0; fan < NUM_FANS; fan++)
+		{
+			if (platform->IsFanControllable(fan))
+			{
+				SetBit(controllableFans, fan);
+			}
+		}
+		response->catf(",\"controllableFans\":%lu", controllableFans);
 
 		// Maximum hotend temperature - DWC just wants the highest one
 		response->catf(",\"tempLimit\":%1.f", (double)(heat->GetHighestTemperatureLimit()));

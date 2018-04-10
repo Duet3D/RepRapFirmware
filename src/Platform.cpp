@@ -620,6 +620,7 @@ void Platform::InitZProbe()
 	case ZProbeType::digital:
 	case ZProbeType::unfilteredDigital:
 	case ZProbeType::blTouch:
+	case ZProbeType::zMotorStall:
 	default:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(zProbePin, INPUT_PULLUP);
@@ -669,6 +670,19 @@ int Platform::GetZProbeReading() const
 
 		case ZProbeType::unfilteredDigital:		// Switch connected to Z probe input, no filtering
 			zProbeVal = GetRawZProbeReading()/4;
+			break;
+
+		case ZProbeType::zMotorStall:
+#if HAS_STALL_DETECT
+			{
+				const bool stalled = (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::coreXZ)
+										? AnyAxisMotorStalled(X_AXIS) || AnyAxisMotorStalled(Z_AXIS)
+										: AnyAxisMotorStalled(Z_AXIS);
+				zProbeVal = (stalled) ? 1000 : 0;
+			}
+#else
+			zProbeVal = 1000;
+#endif
 			break;
 
 		default:
@@ -760,6 +774,7 @@ const ZProbe& Platform::GetZProbeParameters(ZProbeType probeType) const
 	case ZProbeType::digital:
 	case ZProbeType::unfilteredDigital:
 	case ZProbeType::blTouch:
+	case ZProbeType::zMotorStall:
 		return irZProbeParameters;
 	case ZProbeType::alternateAnalog:
 		return alternateZProbeParameters;
@@ -780,6 +795,7 @@ void Platform::SetZProbeParameters(ZProbeType probeType, const ZProbe& params)
 	case ZProbeType::digital:
 	case ZProbeType::unfilteredDigital:
 	case ZProbeType::blTouch:
+	case ZProbeType::zMotorStall:
 		irZProbeParameters = params;
 		break;
 
@@ -1510,13 +1526,9 @@ void Platform::Spin()
 				reported = true;
 			}
 #elif defined(DUET_NG)
-			if (
-# if defined(DUET_WIFI)
-				board == BoardType::DuetWiFi_102
-# elif defined(DUET_ETHERNET)
-				board == BoardType::DuetEthernet_102
-# endif
-				&& digitalRead(VssaSensePin))
+			if (   (board == BoardType::DuetWiFi_102 || board == BoardType::DuetEthernet_102)
+				&& digitalRead(VssaSensePin)
+			   )
 			{
 				Message(ErrorMessage, "VSSA fault, check thermistor wiring\n");
 				reported = true;
@@ -3175,6 +3187,13 @@ void Platform::EnableSharedFan(bool enable)
 #endif
 
 
+// Check if the given fan can be controlled manually so that DWC can decide whether or not to show the corresponding fan
+// controls. This is the case if no thermostatic control is enabled and if the fan was configured at least once before.
+bool Platform::IsFanControllable(size_t fan) const
+{
+	return (fan < NUM_FANS) ? (!fans[fan].HasMonitoredHeaters() && fans[fan].IsConfigured()) : false;
+}
+
 // Get current fan RPM
 float Platform::GetFanRPM() const
 {
@@ -3963,48 +3982,9 @@ bool Platform::SetExtrusionAncilliaryPwmPin(LogicalPin logicalPin, bool invert)
 	return extrusionAncilliaryPwmPort.Set(logicalPin, PinAccess::pwm, invert);
 }
 
-// CNC and laser support
-void Platform::SetSpindlePwm(float pwm)
-{
-	if (pwm >= 0)
-	{
-		spindleReversePort.WriteAnalog(0.0);
-		spindleForwardPort.WriteAnalog(pwm);
-	}
-	else
-	{
-		spindleForwardPort.WriteAnalog(0.0);
-		spindleReversePort.WriteAnalog(-pwm);
-	}
-}
-
 void Platform::SetLaserPwm(float pwm)
 {
 	laserPort.WriteAnalog(pwm);
-}
-
-bool Platform::SetSpindlePins(LogicalPin lpf, LogicalPin lpr, bool invert)
-{
-	const bool ok1 = spindleForwardPort.Set(lpf, PinAccess::pwm, invert);
-	if (lpr == NoLogicalPin)
-	{
-		spindleReversePort.Clear();
-		return ok1;
-	}
-	const bool ok2 = spindleReversePort.Set(lpr, PinAccess::pwm, invert);
-	return ok1 && ok2;
-}
-
-void Platform::GetSpindlePins(LogicalPin& lpf, LogicalPin& lpr, bool& invert) const
-{
-	lpf = spindleForwardPort.GetLogicalPin(invert);
-	lpr = spindleReversePort.GetLogicalPin();
-}
-
-void Platform::SetSpindlePwmFrequency(float freq)
-{
-	spindleForwardPort.SetFrequency(freq);
-	spindleReversePort.SetFrequency(freq);
 }
 
 bool Platform::SetLaserPin(LogicalPin lp, bool invert)

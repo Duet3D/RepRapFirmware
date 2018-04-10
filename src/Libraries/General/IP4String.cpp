@@ -7,6 +7,7 @@
 
 #include "IP4String.h"
 #include "StringRef.h"
+#include "SafeVsnprintf.h"
 
 IP4String::IP4String(const uint8_t ip[4])
 {

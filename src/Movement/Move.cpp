@@ -3,10 +3,39 @@
  *
  *  Created on: 7 Dec 2014
  *      Author: David
+
+ A note on bed levelling:
+
+ As at version 1.21 we support two types of bed compensation:
+ 1. The old 3, 4 and 5-point compensation using a RandomProbePointSet. We will probably discontinue this soon.
+ 2. Mesh bed levelling
+
+ There is an interaction between using G30 to home Z or set a precise Z=0 height just before a print, and bed compensation.
+ Consider the following sequence:
+ 1. Home Z, using either G30 or an endstop.
+ 2. Run G29 to generate a height map. If the Z=0 point has drifted off, the height map may have a Z offset.
+ 3. Use G30 to get an accurate Z=0 point. We want to keep the shape of the height map, but get rid of the offset.
+ 4. Run G29 to generate a height map. This should generate a height map with on offset at the point we just probed.
+ 5. Cancel bed compensation. The height at the point we just probed should be zero.
+
+ So as well as maintaining a height map, we maintain a Z offset from it. The procedure is:
+ 1. Whenever bed compensation is not being used, the Z offset should be zero.
+ 2. Whenever we run G29 to probe the bed, we have a choice:
+ (a) accept that the map may have a height offset; and set the Z offset to zero. This is what we do currently.
+ (b) normalise the height map to zero, adjust the Z=0 origin, and set the Z offset to zero.
+ 3. When we run G30 to reset the Z=0 height, and we have a height map loaded, we adjust the Z offset to be the negative of the
+    height map indication of that point.
+ 4. If we now cancel the height map, we also clear the Z offset, and the height at the point we probed remains correct.
+ 5. If we now run G29 to probe again, the height map should have near zero offset at the point we probed, if there has been no drift.
+
+ Before we introduced the Z offset, at step 4 we would have a potentially large Z error as if the G30 hadn't been run,
+ and at step 5 the new height map would have an offset again.
+
  */
 
 #include "Move.h"
 #include "Platform.h"
+#include "Tools/Tool.h"
 
 static constexpr uint32_t UsualMinimumPreparedTime = DDA::stepClockRate/10;			// 100ms
 static constexpr uint32_t AbsoluteMinimumPreparedTime = DDA::stepClockRate/20;		// 50ms
@@ -71,6 +100,7 @@ void Move::Init()
 
 	usingMesh = false;
 	useTaper = false;
+	zShift = 0.0;
 
 	idleTimeout = DefaultIdleTimeout;
 	moveState = MoveState::idle;
@@ -731,6 +761,12 @@ void Move::AxisTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap y
 	}
 }
 
+// Get the height error at an XY position
+float Move::GetInterpolatedHeightError(float xCoord, float yCoord) const
+{
+	return (usingMesh) ? heightMap.GetInterpolatedHeightError(xCoord, yCoord) : probePoints.GetInterpolatedHeightError(xCoord, yCoord);
+}
+
 // Invert the Axis transform AFTER the bed transform
 void Move::InverseAxisTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const
 {
@@ -778,14 +814,7 @@ void Move::BedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yA
 					if (IsBitSet(yAxes, yAxis))
 					{
 						const float yCoord = xyzPoint[yAxis];
-						if (usingMesh)
-						{
-							zCorrection += heightMap.GetInterpolatedHeightError(xCoord, yCoord);
-						}
-						else
-						{
-							zCorrection += probePoints.GetInterpolatedHeightError(xCoord, yCoord);
-						}
+						zCorrection += GetInterpolatedHeightError(xCoord, yCoord);
 						++numCorrections;
 					}
 				}
@@ -797,6 +826,7 @@ void Move::BedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yA
 			zCorrection /= numCorrections;			// take an average
 		}
 
+		zCorrection += zShift;
 		xyzPoint[Z_AXIS] += (useTaper) ? (taperHeight - xyzPoint[Z_AXIS]) * recipTaperHeight * zCorrection : zCorrection;
 	}
 }
@@ -820,14 +850,7 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBi
 				if (IsBitSet(yAxes, yAxis))
 				{
 					const float yCoord = xyzPoint[yAxis];
-					if (usingMesh)
-					{
-						zCorrection += heightMap.GetInterpolatedHeightError(xCoord, yCoord);
-					}
-					else
-					{
-						zCorrection += probePoints.GetInterpolatedHeightError(xCoord, yCoord);
-					}
+					zCorrection += GetInterpolatedHeightError(xCoord, yCoord);
 					++numCorrections;
 				}
 			}
@@ -838,6 +861,8 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBi
 	{
 		zCorrection /= numCorrections;				// take an average
 	}
+
+	zCorrection += zShift;
 
 	if (!useTaper || zCorrection >= taperHeight)	// need check on zCorrection to avoid possible divide by zero
 	{
@@ -853,12 +878,43 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBi
 	}
 }
 
+// Normalise the bed transform to have zero height error at these coordinates
+void Move::SetZeroHeightError(const float coords[MaxAxes])
+{
+	float tempCoords[MaxAxes];
+	memcpy(tempCoords, coords, sizeof(tempCoords));
+	AxisTransform(tempCoords, DefaultXAxisMapping, DefaultYAxisMapping);
+	zShift = -GetInterpolatedHeightError(tempCoords[X_AXIS], tempCoords[Y_AXIS]);
+}
+
 void Move::SetIdentityTransform()
 {
 	probePoints.SetIdentity();
 	heightMap.ClearGridHeights();
 	heightMap.UseHeightMap(false);
 	usingMesh = false;
+	zShift = 0.0;
+}
+
+// Load the height map from file, returning true if an error occurred with the error reason appended to the buffer
+bool Move::LoadHeightMapFromFile(FileStore *f, const StringRef& r)
+{
+	const bool ret = heightMap.LoadFromFile(f, r);
+	if (ret)
+	{
+		heightMap.ClearGridHeights();							// make sure we don't end up with a partial height map
+	}
+	else
+	{
+		zShift = 0.0;
+	}
+	return ret;
+}
+
+// Save the height map to a file returning true if an error occurred
+bool Move::SaveHeightMapToFile(FileStore *f) const
+{
+	return heightMap.SaveToFile(f, zShift);
 }
 
 void Move::SetTaperHeight(float h)
