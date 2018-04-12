@@ -195,11 +195,13 @@ constexpr size_t MaxHeaterNameLength = 20;				// Maximum number of characters in
 #if SAM4E || SAM4S || SAME70
 constexpr uint16_t OUTPUT_BUFFER_SIZE = 128;			// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 40;				// How many OutputBuffer instances do we have?
-constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buffers after long responses. Must be enough for an HTTP header
+constexpr size_t RESERVED_OUTPUT_BUFFERS = 3;			// Number of reserved output buffers after long responses. Must be enough for an HTTP header.
+														// DC 2018-04-12 increased this from 2 to 3 because we were running out of buffers
+														// when a file upload completes and there are a lot of files
 #elif SAM3XA
 constexpr uint16_t OUTPUT_BUFFER_SIZE = 128;			// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 32;				// How many OutputBuffer instances do we have?
-constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buffers after long responses. Must be enough for an HTTP header
+constexpr size_t RESERVED_OUTPUT_BUFFERS = 3;			// Number of reserved output buffers after long responses. Must be enough for an HTTP header
 #else
 # error
 #endif

@@ -13,7 +13,6 @@
  * 2. May not handle overflow for stupidly large numbers correctly.
  */
 
-#include <cstdlib>		// to pull in the standard declarations of strtod etc.
 #include <cctype>
 #include <cmath>
 #include <climits>
@@ -120,7 +119,7 @@ double SafeStrtod(const char *s, const char **p)
 	// 7. Set end pointer
 	if (p != nullptr)
 	{
-		*p = const_cast<char *>(s);
+		*p = s;
 	}
 
 	// 8. Adjust sign if necessary
