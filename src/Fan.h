@@ -38,7 +38,6 @@ public:
 
 private:
 
-	bool isConfigured;
 	float val;
 	float lastVal;
 	float minVal;

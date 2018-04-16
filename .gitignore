@@ -5,3 +5,7 @@
 !Release/*/*/*.bin
 *~
 *orig
+/Duet2_RTOS/
+/Alligator/
+/SAME70/
+/SAME70_RTOS/

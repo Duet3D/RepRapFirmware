@@ -2559,17 +2559,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 453: // Select CNC mode
-	{
-		uint32_t slot = gb.Seen('S') ? gb.GetUIValue() : 0;
-		if (slot >= MaxSpindles)
-		{
-			reply.copy("Invalid spindle index");
-			result = GCodeResult::error;
-			break;
-		}
-
-		Spindle& spindle = platform.AccessSpindle(slot);
-		if (gb.Seen('P'))
 		{
 			uint32_t slot = gb.Seen('S') ? gb.GetUIValue() : 0;
 			if (slot >= MaxSpindles)
@@ -2601,34 +2590,26 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					break;
 				}
 			}
-			const bool invert = (gb.Seen('I') && gb.GetIValue() > 0);
-			if (!spindle.SetPins(pins[0], pins[1], invert))
+			if (gb.Seen('F'))
 			{
-				reply.copy("Bad P parameter");
-				result = GCodeResult::error;
-				break;
+				spindle.SetPwmFrequency(gb.GetFValue());
+			}
+			if (gb.Seen('R'))
+			{
+				spindle.SetMaxRpm(max<float>(1.0, gb.GetFValue()));
+			}
+			if (gb.Seen('T'))
+			{
+				spindle.SetToolNumber(gb.GetIValue());
+			}
+
+			if (machineType != MachineType::cnc)
+			{
+				machineType = MachineType::cnc;
+				reply.copy("CNC mode selected");
 			}
 		}
-		if (gb.Seen('F'))
-		{
-			spindle.SetPwmFrequency(gb.GetFValue());
-		}
-		if (gb.Seen('R'))
-		{
-			spindle.SetMaxRpm(max<float>(1.0, gb.GetFValue()));
-		}
-		if (gb.Seen('T'))
-		{
-			spindle.SetToolNumber(gb.GetIValue());
-		}
-
-		if (machineType != MachineType::cnc)
-		{
-			machineType = MachineType::cnc;
-			reply.copy("CNC mode selected");
-		}
 		break;
-	}
 
 	case 500: // Store parameters in EEPROM
 		result = WriteConfigOverrideFile(gb, reply);
