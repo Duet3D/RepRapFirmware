@@ -38,8 +38,9 @@ DhtSensor::~DhtSensor()
 	numInstances--;
 }
 
-bool DhtSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error)
+GCodeResult DhtSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
 {
+	GCodeResult rslt = GCodeResult::ok;
 	if (mCode == 305)
 	{
 		bool seen = false;
@@ -62,8 +63,8 @@ bool DhtSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& 
 					type = DhtSensorType::Dht22;
 					break;
 				default:
-					error = true;
 					reply.copy("Invalid DHT sensor type");
+					rslt = GCodeResult::error;
 					break;
 			}
 		}
@@ -91,7 +92,7 @@ bool DhtSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& 
 			reply.catf(", sensor type %s", sensorTypeString);
 		}
 	}
-	return false;
+	return rslt;
 }
 
 void DhtSensor::Init()

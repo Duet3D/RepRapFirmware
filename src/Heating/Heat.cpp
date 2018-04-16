@@ -577,17 +577,16 @@ bool Heat::SetHeaterChannel(size_t heater, int channel)
 }
 
 // Configure the temperature sensor for a channel
-bool Heat::ConfigureHeaterSensor(unsigned int mcode, size_t heater, GCodeBuffer& gb, const StringRef& reply, bool& error)
+GCodeResult Heat::ConfigureHeaterSensor(unsigned int mcode, size_t heater, GCodeBuffer& gb, const StringRef& reply)
 {
 	TemperatureSensor ** const spp = GetSensor(heater);
 	if (spp == nullptr || *spp == nullptr)
 	{
 		reply.printf("heater %d is not configured", heater);
-		error = true;
-		return false;
+		return GCodeResult::error;
 	}
 
-	return (*spp)->Configure(mcode, heater, gb, reply, error);
+	return (*spp)->Configure(mcode, heater, gb, reply);
 }
 
 // Get a pointer to the temperature sensor entry, or nullptr if the heater number is bad

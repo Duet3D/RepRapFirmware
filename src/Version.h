@@ -15,7 +15,7 @@
 #endif
 
 #ifndef VERSION
-# define VERSION "2.0" RTOSVER "alpha1"
+# define VERSION "2.0" RTOSVER "beta1+"
 #endif
 
 #ifndef DATE

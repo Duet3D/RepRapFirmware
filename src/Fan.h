@@ -49,6 +49,7 @@ private:
 	HeatersMonitoredBitmap heatersMonitored;
 	PwmFrequency freq;
 	Pin pin;
+	bool isConfigured;
 	bool inverted;
 	bool hardwareInverted;
 	bool blipping;

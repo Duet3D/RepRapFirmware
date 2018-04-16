@@ -258,7 +258,7 @@ void Scanner::ProcessCommand()
 	// Progress indicator: PROGRESS <PERCENT>
 	else if (StringStartsWith(buffer, "PROGRESS "))
 	{
-		float parsedProgress = atof(&buffer[9]);
+		const float parsedProgress = SafeStrtof(&buffer[9]);
 		progress = constrain<float>(parsedProgress, 0.0f, 100.0f);
 	}
 

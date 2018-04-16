@@ -49,7 +49,7 @@ void CurrentLoopTemperatureSensor::Init()
 }
 
 // Configure this temperature sensor
-bool CurrentLoopTemperatureSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error)
+GCodeResult CurrentLoopTemperatureSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
 {
 	if (mCode == 305)
 	{
@@ -68,7 +68,7 @@ bool CurrentLoopTemperatureSensor::Configure(unsigned int mCode, unsigned int he
 			reply.catf(", temperature range %.1f to %.1fC", (double)tempAt4mA, (double)tempAt20mA);
 		}
 	}
-	return false;
+	return GCodeResult::ok;
 }
 
 TemperatureError CurrentLoopTemperatureSensor::GetTemperature(float& t)

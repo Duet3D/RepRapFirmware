@@ -28,6 +28,7 @@ Licence: GPL
 #include "RepRapFirmware.h"
 #include "Pid.h"
 #include "MessageType.h"
+#include "GCodes/GCodeResult.h"
 
 class TemperatureSensor;
 class HeaterProtection;
@@ -127,7 +128,7 @@ public:
 
 	int GetHeaterChannel(size_t heater) const;					// Return the channel used by a particular heater, or -1 if not configured
 	bool SetHeaterChannel(size_t heater, int channel);			// Set the channel used by a heater, returning true if bad heater or channel number
-	bool ConfigureHeaterSensor(size_t heater, unsigned int mcode, GCodeBuffer& gb, const StringRef& reply, bool& error);	// Configure the temperature sensor for a channel
+	GCodeResult ConfigureHeaterSensor(size_t heater, unsigned int mcode, GCodeBuffer& gb, const StringRef& reply);	// Configure the temperature sensor for a channel
 	const char *GetHeaterName(size_t heater) const;				// Get the name of a heater, or nullptr if it hasn't been named
 
 	HeaterProtection& AccessHeaterProtection(size_t index) const;	// Return the protection parameters of the given index

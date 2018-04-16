@@ -112,6 +112,7 @@ constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 vo
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
 constexpr Pin Z_PROBE_MOD_PIN = 62;
+constexpr Pin DiagPin = Z_PROBE_MOD_PIN;
 
 // Cooling fans
 constexpr size_t NUM_FANS = 3;

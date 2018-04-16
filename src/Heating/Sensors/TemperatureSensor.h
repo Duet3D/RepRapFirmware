@@ -3,6 +3,7 @@
 
 #include "RepRapFirmware.h"
 #include "Heating/TemperatureError.h"		// for result codes
+#include "GCodes/GCodeResult.h"
 
 class GCodeBuffer;
 
@@ -14,7 +15,7 @@ public:
 	// Configure the sensor from M305 parameters.
 	// If we find any parameters, process them and return true. If an error occurs while processing them, set 'error' to true and write an error message to 'reply.
 	// if we find no relevant parameters, report the current parameters to 'reply' and return 'false'.
-	virtual bool Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error);
+	virtual GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply);
 
 	// Initialise or re-initialise the temperature sensor
 	virtual void Init() = 0;

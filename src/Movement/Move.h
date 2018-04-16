@@ -63,6 +63,7 @@ public:
 																	// Take a position and apply the bed and the axis-angle compensations
 	void InverseAxisAndBedTransform(float move[], AxesBitmap xAxes, AxesBitmap yAxes) const;
 																	// Go from a transformed point back to user coordinates
+	void SetZeroHeightError(const float coords[MaxAxes]);			// Set zero height error at these coordinates
 	float GetTaperHeight() const { return (useTaper) ? taperHeight : 0.0; }
 	void SetTaperHeight(float h);
 	bool UseMesh(bool b);											// Try to enable mesh bed compensation and report the final state
@@ -113,6 +114,8 @@ public:
 	void ResetMoveCounters() { scheduledMoves = completedMoves = 0; }
 
 	HeightMap& AccessHeightMap() { return heightMap; }								// Access the bed probing grid
+	bool LoadHeightMapFromFile(FileStore *f, const StringRef& r);					// Load the height map from a file returning true if an error occurred
+	bool SaveHeightMapToFile(FileStore *f) const;									// Save the height map to a file returning true if an error occurred
 
 	const DDA *GetCurrentDDA() const { return currentDda; }							// Return the DDA of the currently-executing move
 
@@ -144,6 +147,7 @@ private:
 	void AxisTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;			// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;	// Go from an axis transformed point back to user coordinates
 	void SetPositions(const float move[DRIVES]);												// Force the machine coordinates to be these
+	float GetInterpolatedHeightError(float xCoord, float yCoord) const;							// Get the height error at an XY position
 
 	bool DDARingAdd();									// Add a processed look-ahead entry to the DDA ring
 	DDA* DDARingGet();									// Get the next DDA ring entry to be run
@@ -177,13 +181,13 @@ private:
 	float& tanYZ = tangents[1];
 	float& tanXZ = tangents[2];
 
-	float recipTaperHeight;								// Reciprocal of the taper height
-	bool useTaper;										// True to taper off the compensation
-
 	HeightMap heightMap;    							// The grid definition in use and height map for G29 bed probing
 	RandomProbePointSet probePoints;					// G30 bed probe points
-	bool usingMesh;										// true if we are using the height map, false if we are using the random probe point set
 	float taperHeight;									// Height over which we taper
+	float recipTaperHeight;								// Reciprocal of the taper height
+	float zShift;										// Height to add to the bed transform
+	bool usingMesh;										// true if we are using the height map, false if we are using the random probe point set
+	bool useTaper;										// True to taper off the compensation
 
 	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
 	uint32_t lastStateChangeTime;						// The approximate time at which the state last changed, except we don't record timing->idle

@@ -391,35 +391,35 @@ public:
 
 	// Movement
 	void EmergencyStop();
-	void SetDirection(size_t drive, bool direction);
+	void SetDirection(size_t axisOrExtruder, bool direction);
 	void SetDirectionValue(size_t driver, bool dVal);
 	bool GetDirectionValue(size_t driver) const;
 	void SetEnableValue(size_t driver, int8_t eVal);
 	bool GetEnableValue(size_t driver) const;
 	void EnableDriver(size_t driver);
 	void DisableDriver(size_t driver);
-	void EnableDrive(size_t drive);
-	void DisableDrive(size_t drive);
+	void EnableDrive(size_t axisOrExtruder);
+	void DisableDrive(size_t axisOrExtruder);
 	void DisableAllDrives();
 	void SetDriversIdle();
-	void SetMotorCurrent(size_t drive, float current, int code);
-	float GetMotorCurrent(size_t drive, int code) const;
+	void SetMotorCurrent(size_t axisOrExtruder, float current, int code);
+	float GetMotorCurrent(size_t axisOrExtruder, int code) const;
 	void SetIdleCurrentFactor(float f);
 	float GetIdleCurrentFactor() const
 		{ return idleCurrentFactor; }
 	bool SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode);
 	unsigned int GetDriverMicrostepping(size_t drive, int mode, bool& interpolation) const;
-	bool SetMicrostepping(size_t drive, int microsteps, int mode);
-	unsigned int GetMicrostepping(size_t drive, int mode, bool& interpolation) const;
+	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, int mode);
+	unsigned int GetMicrostepping(size_t axisOrExtruder, int mode, bool& interpolation) const;
 	void SetDriverStepTiming(size_t driver, const float microseconds[4]);
 	void GetDriverStepTiming(size_t driver, float microseconds[4]) const;
-	float DriveStepsPerUnit(size_t drive) const;
+	float DriveStepsPerUnit(size_t axisOrExtruder) const;
 	const float *GetDriveStepsPerUnit() const
 		{ return driveStepsPerUnit; }
-	void SetDriveStepsPerUnit(size_t drive, float value);
-	float Acceleration(size_t drive) const;
+	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value);
+	float Acceleration(size_t axisOrExtruder) const;
 	const float* Accelerations() const;
-	void SetAcceleration(size_t drive, float value);
+	void SetAcceleration(size_t axisOrExtruder, float value);
 	float GetMaxPrintingAcceleration() const
 		{ return maxPrintingAcceleration; }
 	void SetMaxPrintingAcceleration(float acc)
@@ -428,19 +428,19 @@ public:
 		{ return maxTravelAcceleration; }
 	void SetMaxTravelAcceleration(float acc)
 		{ maxTravelAcceleration = acc; }
-	float MaxFeedrate(size_t drive) const;
+	float MaxFeedrate(size_t axisOrExtruder) const;
 	const float* MaxFeedrates() const;
-	void SetMaxFeedrate(size_t drive, float value);
-	float GetInstantDv(size_t drive) const;
-	void SetInstantDv(size_t drive, float value);
-	EndStopHit Stopped(size_t drive) const;
-	bool EndStopInputState(size_t drive) const;
+	void SetMaxFeedrate(size_t axisOrExtruder, float value);
+	float GetInstantDv(size_t axis) const;
+	void SetInstantDv(size_t axis, float value);
+	EndStopHit Stopped(size_t axisOrExtruder) const;
+	bool EndStopInputState(size_t axis) const;
 	float AxisMaximum(size_t axis) const;
 	void SetAxisMaximum(size_t axis, float value, bool byProbing);
 	float AxisMinimum(size_t axis) const;
 	void SetAxisMinimum(size_t axis, float value, bool byProbing);
 	float AxisTotalLength(size_t axis) const;
-	float GetPressureAdvance(size_t drive) const;
+	float GetPressureAdvance(size_t extruder) const;
 	void SetPressureAdvance(size_t extruder, float factor);
 
 	void SetEndStopConfiguration(size_t axis, EndStopPosition endstopPos, EndStopInputType inputType)
@@ -451,13 +451,13 @@ public:
 
 	uint32_t GetAllEndstopStates() const;
 	void SetAxisDriversConfig(size_t axis, const AxisDriversConfig& config);
-	const AxisDriversConfig& GetAxisDriversConfig(size_t drive) const
-		{ return axisDrivers[drive]; }
+	const AxisDriversConfig& GetAxisDriversConfig(size_t axis) const
+		{ return axisDrivers[axis]; }
 	void SetExtruderDriver(size_t extruder, uint8_t driver);
 	uint8_t GetExtruderDriver(size_t extruder) const
 		{ return extruderDrivers[extruder]; }
-	uint32_t GetDriversBitmap(size_t drive) const			// get the bitmap of driver step bits for this axis or extruder
-		{ return driveDriverBits[drive]; }
+	uint32_t GetDriversBitmap(size_t axisOrExtruder) const	// get the bitmap of driver step bits for this axis or extruder
+		{ return driveDriverBits[axisOrExtruder]; }
 	static void StepDriversLow();							// set all step pins low
 	static void StepDriversHigh(uint32_t driverMap);		// set the specified step pins high
 	uint32_t GetSlowDriversBitmap() const { return slowDriversBitmap; }
@@ -1190,6 +1190,7 @@ inline uint16_t Platform::GetRawZProbeReading() const
 			return (b) ? 4000 : 0;
 		}
 
+	case ZProbeType::zMotorStall:
 	default:
 		return 4000;
 	}
