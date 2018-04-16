@@ -105,6 +105,7 @@ constexpr Pin ATX_POWER_PIN = NoPin;
 
 // Analogue pin numbers
 constexpr Pin Z_PROBE_PIN = NoPin;											// TBD
+constexpr Pin DiagPin = NoPin;												// TBD
 constexpr Pin PowerMonitorVinDetectPin = NoPin;								// TBD
 constexpr Pin PowerMonitor5vDetectPin = NoPin;								// TBD
 

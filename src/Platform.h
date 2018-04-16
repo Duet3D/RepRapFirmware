@@ -556,6 +556,8 @@ public:
 	void DisableAutoSave();
 	void EnableAutoSave(float saveVoltage, float resumeVoltage);
 	bool GetAutoSaveSettings(float& saveVoltage, float&resumeVoltage);
+#else
+	bool HasVinPower() const { return true; }
 #endif
 
 #if HAS_SMART_DRIVERS
