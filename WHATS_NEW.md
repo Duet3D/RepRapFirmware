@@ -1,6 +1,15 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.0beta2
+================
+Upgrade notes: as for 2.0beta1
+
+Bug fixes:
+- DWC sometimes disconnected after uploading a GCode file
+- Reverted the behaviour of G0 commands when the machine mode is FFF
+- When high microstepping was used, certain sequences of movement commands could lock up the movement system
+
 Version 2.0beta1
 ================
 Upgrade notes:
