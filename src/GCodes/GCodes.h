@@ -129,6 +129,9 @@ public:
 		uint8_t canPauseAfter : 1;										// true if we can pause just after this move and successfully restart
 		uint8_t hasExtrusion : 1;										// true if the move includes extrusion - only valid if the move was set up by SetupMove
 		uint8_t isCoordinated : 1;										// true if this is a coordinates move
+		uint8_t usingStandardFeedrate : 1;								// true if this move uses the standard feed rate
+
+		void SetDefaults();												// set up default values
 	};
   
 	GCodes(Platform& p);
@@ -202,6 +205,7 @@ public:
 #endif
 
 	const char *GetAxisLetters() const { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
+	MachineType GetMachineType() const { return machineType; }
 
 #if SUPPORT_12864_LCD
 	bool ProcessCommandFromLcd(const char *cmd);						// Process a GCode command from the 12864 LCD returning true if the command was accepted
@@ -269,8 +273,7 @@ private:
 	GCodeResult SetDateTime(GCodeBuffer& gb,const  StringRef& reply);			// Deal with a M905
 	GCodeResult SavePosition(GCodeBuffer& gb,const  StringRef& reply);			// Deal with G60
 
-	bool LoadExtrusionFromGCode(GCodeBuffer& gb);								// Set up the extrusion of a move
-	void LoadFeedrateFromGCode(GCodeBuffer& gb);								// Set up the feed rate of a move
+	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb);					// Set up the extrusion of a move
 
 	bool Push(GCodeBuffer& gb);													// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb);													// Pop feedrate etc

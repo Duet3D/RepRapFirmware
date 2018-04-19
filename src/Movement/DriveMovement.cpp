@@ -376,8 +376,10 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 							+ isqrt64((int64_t)(mp.cart.twoCsquaredTimesMmPerStepDivA * nextCalcStep) - mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA);
 	}
 
-	stepInterval = (nextCalcStepTime - nextStepTime) >> shiftFactor;	// calculate the time per step, ready for next time
-
+	// When crossing between movement phases with high microstepping, due to rounding errors the next step may appear to be due before the last one
+	stepInterval = (nextCalcStepTime > nextStepTime)
+					? (nextCalcStepTime - nextStepTime) >> shiftFactor	// calculate the time per step, ready for next time
+					: 0;
 #if EVEN_STEPS
 	nextStepTime = nextCalcStepTime - (stepsTillRecalc * stepInterval);
 #else
@@ -496,8 +498,10 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 						: dda.topSpeedTimesCdivAPlusDecelStartClocks;
 	}
 
-	stepInterval = (nextCalcStepTime - nextStepTime) >> shiftFactor;	// calculate the time per step, ready for next time
-
+	// When crossing between movement phases with high microstepping, due to rounding errors the next step may appear to be due before the last one.
+	stepInterval = (nextCalcStepTime > nextStepTime)
+					? (nextCalcStepTime - nextStepTime) >> shiftFactor	// calculate the time per step, ready for next time
+					: 0;
 #if EVEN_STEPS
 	nextStepTime = nextCalcStepTime - (stepsTillRecalc * stepInterval);
 #else

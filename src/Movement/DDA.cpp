@@ -383,6 +383,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	endStopsToCheck = nextMove.endStopsToCheck;
 	canPauseBefore = nextMove.canPauseBefore;
 	canPauseAfter = nextMove.canPauseAfter;
+	usingStandardFeedrate = nextMove.usingStandardFeedrate;
 	filePos = nextMove.filePos;
 	isPrintingMove = xyMoving && extruding;
 	usePressureAdvance = nextMove.usePressureAdvance;
@@ -538,6 +539,7 @@ bool DDA::Init(const float_t adjustments[DRIVES])
 	endStopsToCheck = 0;
 	canPauseBefore = true;
 	canPauseAfter = true;
+	usingStandardFeedrate = false;
 	usePressureAdvance = false;
 	virtualExtruderPosition = prev->virtualExtruderPosition;
 	hadLookaheadUnderrun = false;

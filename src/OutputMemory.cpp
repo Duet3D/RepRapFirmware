@@ -23,7 +23,12 @@ void OutputBuffer::Append(OutputBuffer *other)
 	{
 		last->next = other;
 		last = other->last;
-		for(OutputBuffer *item = Next(); item != other; item = item->Next())
+		if (other->hadOverflow)
+		{
+			hadOverflow = true;
+		}
+
+		for (OutputBuffer *item = Next(); item != other; item = item->Next())
 		{
 			item->last = last;
 		}
@@ -164,7 +169,8 @@ size_t OutputBuffer::cat(const char c)
 		OutputBuffer *nextBuffer;
 		if (!Allocate(nextBuffer))
 		{
-			// We cannot store any more data. Should never happen
+			// We cannot store any more data
+			hadOverflow = true;
 			return 0;
 		}
 		nextBuffer->references = references;
@@ -172,7 +178,7 @@ size_t OutputBuffer::cat(const char c)
 
 		// Link the new item to this list
 		last->next = nextBuffer;
-		for(OutputBuffer *item = this; item != nextBuffer; item = item->Next())
+		for (OutputBuffer *item = this; item != nextBuffer; item = item->Next())
 		{
 			item->last = nextBuffer;
 		}
@@ -202,6 +208,7 @@ size_t OutputBuffer::cat(const char *src, size_t len)
 			if (!Allocate(nextBuffer))
 			{
 				// We cannot store any more data, stop here
+				hadOverflow = true;
 				break;
 			}
 			nextBuffer->references = references;
@@ -372,8 +379,9 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 	buf->next = nullptr;
 	buf->last = buf;
 	buf->dataLength = buf->bytesRead = 0;
-	buf->references = 1; // Assume it's only used once by default
+	buf->references = 1;					// assume it's only used once by default
 	buf->isReferenced = false;
+	buf->hadOverflow = false;
 
 	return true;
 }

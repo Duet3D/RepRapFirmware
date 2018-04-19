@@ -52,6 +52,7 @@ public:
 	bool CanPauseAfter() const { return canPauseAfter; }
 	bool CanPauseBefore() const { return canPauseBefore; }
 	bool IsPrintingMove() const { return isPrintingMove; }			// Return true if this involves both XY movement and extrusion
+	bool UsingStandardFeedrate() const { return usingStandardFeedrate; }
 
 	DDAState GetState() const { return state; }
 	DDA* GetNext() const { return next; }
@@ -172,6 +173,7 @@ private:
 			uint8_t xyMoving : 1;					// True if movement along an X axis or the Y axis was requested, even it if's too small to do
 			uint8_t goingSlow : 1;					// True if we have slowed the movement because the Z probe is approaching its threshold
 			uint8_t isLeadscrewAdjustmentMove : 1;	// True if this is a leadscrews adjustment move
+			uint8_t usingStandardFeedrate : 1;		// True if this move uses the standard feed rate
 		};
 		uint16_t flags;								// so that we can print all the flags at once for debugging
 	};
@@ -239,7 +241,7 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 	endCoordinatesValid = false;
 }
 
-#if HAS_SMART_DRIVERS
+#if HAS_STALL_DETECT
 
 // Get the current full step interval for this axis or extruder
 inline uint32_t DDA::GetStepInterval(size_t axis, uint32_t microstepShift) const

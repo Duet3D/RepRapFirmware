@@ -433,6 +433,7 @@ bool Move::PausePrint(RestorePoint& rp)
 	//
 	// In general, we can pause after a move if it is the last segment and its end speed is slow enough.
 	// We can pause before a move if it is the first segment in that move.
+	// The caller should set up rp.feedrate to the default feed rate for the file gcode source before calling this.
 
 	const DDA * const savedDdaRingAddPointer = ddaRingAddPointer;
 	bool pauseOkHere;
@@ -486,7 +487,10 @@ bool Move::PausePrint(RestorePoint& rp)
 	}
 
 	dda = ddaRingAddPointer;
-	rp.feedRate = dda->GetRequestedSpeed();
+	if (dda->UsingStandardFeedrate())
+	{
+		rp.feedRate = dda->GetRequestedSpeed();
+	}
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
 

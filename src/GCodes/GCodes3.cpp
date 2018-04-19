@@ -352,7 +352,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 			axesHomedBeforeSimulation = axesHomed;
 			axesHomed = LowestNBits<AxesBitmap>(numVisibleAxes);	// pretend all axes are homed
 			reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-			simulationRestorePoint.feedRate = gb.MachineState().feedrate;
+			simulationRestorePoint.feedRate = gb.MachineState().feedRate;
 		}
 		simulationTime = 0.0;
 		exitSimulationWhenFileComplete = true;
@@ -389,7 +389,7 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 				axesHomedBeforeSimulation = axesHomed;
 				axesHomed = LowestNBits<AxesBitmap>(numVisibleAxes);	// pretend all axes are homed
 				reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-				simulationRestorePoint.feedRate = gb.MachineState().feedrate;
+				simulationRestorePoint.feedRate = gb.MachineState().feedRate;
 			}
 			simulationTime = 0.0;
 		}
@@ -781,9 +781,9 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			if (gb.Seen(feedrateLetter))
 			{
 				const float rate = gb.GetFValue() * distanceScale;
-				gb.MachineState().feedrate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
+				gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
 			}
-			moveBuffer.feedRate = gb.MachineState().feedrate;
+			moveBuffer.feedRate = gb.MachineState().feedRate;
 
 			// Kick off new movement
 			NewMoveAvailable(1);

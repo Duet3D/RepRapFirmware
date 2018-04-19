@@ -12,8 +12,7 @@
 #include <cstdarg>	// for va_args
 #include <cstring>	// for strlen
 
-// Need to declare strnlen here because it isn't ISO standard
-size_t strnlen(const char *s, size_t n);
+#include "Strnlen.h"
 
 // Class to describe a string buffer, including its length. This saves passing buffer lengths around everywhere.
 class StringRef
@@ -54,7 +53,7 @@ public:
 
 	StringRef GetRef() { return StringRef(storage, Len + 1); }
 	const char *c_str() const { return storage; }
-	size_t strlen() const { return strnlen(storage, Len); }
+	size_t strlen() const { return Strnlen(storage, Len); }
 	bool IsEmpty() const { return storage[0] == 0; }
 //	char *Pointer() { return storage; }
 	char& operator[](size_t index) { return storage[index]; }

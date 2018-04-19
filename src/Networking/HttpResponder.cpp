@@ -107,8 +107,12 @@ bool HttpResponder::Spin()
 			return false;
 		}
 
+	case ResponderState::processingRequest:
+		ProcessRequest();
+		return true;
+
 	case ResponderState::gettingFileInfo:
-		(void)SendFileInfo(millis() - startedGettingFileInfoAt >= MaxFileInfoGetTime);
+		(void)SendFileInfo(millis() - startedProcessingRequestAt >= MaxFileInfoGetTime);
 		return true;
 
 	case ResponderState::uploading:
@@ -486,11 +490,11 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	}
 	else if (StringEquals(request, "status"))
 	{
-		int type = 0;
-		if (GetKeyValue("type") != nullptr)
+		const char *typeString = GetKeyValue("type");
+		if (typeString != nullptr)
 		{
 			// New-style JSON status responses
-			type = atoi(GetKeyValue("type"));
+			int type = SafeStrtol(typeString);
 			if (type < 1 || type > 3)
 			{
 				type = 1;
@@ -504,6 +508,13 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			// Deprecated
 			OutputBuffer::Release(response);
 			response = reprap.GetLegacyStatusResponse(1, 0);
+		}
+
+		if (response->HadOverflow())
+		{
+			// We ran out of buffers. Release the buffers we have and return false. The caller will retry later.
+			OutputBuffer::ReleaseAll(response);
+			return false;
 		}
 	}
 	else if (StringEquals(request, "gcode") && GetKeyValue("gcode") != nullptr)
@@ -551,7 +562,6 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			// Simple rr_fileinfo call to get info about the file being printed
 			filenameBeingProcessed[0] = 0;
 		}
-		startedGettingFileInfoAt = millis();
 		responderState = ResponderState::gettingFileInfo;
 		return false;
 	}
@@ -865,7 +875,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 		Authenticate();
 	}
 
-	// Update the authentication status and try handle "text/plain" requests here
+	// Update the authentication status and try to handle "text/plain" requests here
 	if (CheckAuthenticated())
 	{
 		if (StringEquals(command, "reply"))			// rr_reply
@@ -927,6 +937,11 @@ void HttpResponder::SendJsonResponse(const char* command)
 		}
 	}
 
+	// Note that when using RTOS the following response MUST be small enough to fit in a single buffer.
+	// This is because the current task may get suspended e.g. when reading from SD card to build a file list,
+	// so other tasks may allocate buffers meanwhile, and the previous mechanism for ensuring that there is sufficient
+	// buffer space remaining don't work.
+	// This response is currently about 230 bytes long in the worst case.
 	outBuf->copy(	"HTTP/1.1 200 OK\n"
 					"Cache-Control: no-cache, no-store, must-revalidate\n"
 					"Pragma: no-cache\n"
@@ -941,26 +956,33 @@ void HttpResponder::SendJsonResponse(const char* command)
 	Commit(keepOpen ? ResponderState::reading : ResponderState::free);
 }
 
-// Process the message received so far. We have reached the end of the headers.
-// Return true if the message is complete, false if we want to continue receiving data (i.e. postdata)
+// Process the message received. We have reached the end of the headers.
 void HttpResponder::ProcessMessage()
 {
 	if (reprap.Debug(moduleWebserver))
 	{
-		GetPlatform().MessageF(UsbMessage, "HTTP req, command words {");
+		Platform& p = GetPlatform();
+		p.MessageF(UsbMessage, "HTTP req, command words {");
 		for (size_t i = 0; i < numCommandWords; ++i)
 		{
-			GetPlatform().MessageF(UsbMessage, " %s", commandWords[i]);
+			p.MessageF(UsbMessage, " %s", commandWords[i]);
 		}
-		GetPlatform().Message(UsbMessage, " }, parameters {");
+		p.Message(UsbMessage, " }, parameters {");
 
 		for (size_t i = 0; i < numQualKeys; ++i)
 		{
-			GetPlatform().MessageF(UsbMessage, " %s=%s", qualifiers[i].key, qualifiers[i].value);
+			p.MessageF(UsbMessage, " %s=%s", qualifiers[i].key, qualifiers[i].value);
 		}
-		GetPlatform().Message(UsbMessage, " }\n");
+		p.Message(UsbMessage, " }\n");
 	}
 
+	responderState = ResponderState::processingRequest;
+	startedProcessingRequestAt = millis();
+}
+
+// Process the message received. We have reached the end of the headers.
+void HttpResponder::ProcessRequest()
+{
 	if (numCommandWords < 2)
 	{
 		RejectMessage("too few command words");

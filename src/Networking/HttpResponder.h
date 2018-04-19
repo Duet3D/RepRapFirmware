@@ -80,6 +80,7 @@ private:
 	void SendJsonResponse(const char* command);
 	bool GetJsonResponse(const char* request, OutputBuffer *&response, bool& keepOpen);
 	void ProcessMessage();
+	void ProcessRequest();
 	void RejectMessage(const char* s, unsigned int code = 500);
 	bool SendFileInfo(bool quitEarly);
 
@@ -103,7 +104,7 @@ private:
 	size_t numHeaderKeys;							// number of keys we have found, <= maxHeaders
 
 	// rr_fileinfo requests
-	uint32_t startedGettingFileInfoAt;				// when we started trying to get file info
+	uint32_t startedProcessingRequestAt;			// when we started processing the current HTTP request
 	char filenameBeingProcessed[MaxFilenameLength];	// The filename being processed (for rr_fileinfo)
 
 	// Keeping track of HTTP sessions

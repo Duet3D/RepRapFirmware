@@ -3191,7 +3191,7 @@ void Platform::EnableSharedFan(bool enable)
 // controls. This is the case if no thermostatic control is enabled and if the fan was configured at least once before.
 bool Platform::IsFanControllable(size_t fan) const
 {
-	return (fan < NUM_FANS) ? (!fans[fan].HasMonitoredHeaters() && fans[fan].IsConfigured()) : false;
+	return fan < NUM_FANS && !fans[fan].HasMonitoredHeaters() && fans[fan].IsConfigured();
 }
 
 // Get current fan RPM
@@ -3981,6 +3981,8 @@ bool Platform::SetExtrusionAncilliaryPwmPin(LogicalPin logicalPin, bool invert)
 {
 	return extrusionAncilliaryPwmPort.Set(logicalPin, PinAccess::pwm, invert);
 }
+
+// CNC and laser support
 
 void Platform::SetLaserPwm(float pwm)
 {

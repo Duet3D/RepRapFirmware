@@ -27,6 +27,7 @@ class OutputBuffer
 		void Append(OutputBuffer *other);
 		OutputBuffer *Next() const { return next; }
 		bool IsReferenced() const { return isReferenced; }
+		bool HadOverflow() const { return hadOverflow; }
 		void IncreaseReferences(size_t refs);
 
 		const char *Data() const { return data; }
@@ -94,6 +95,7 @@ class OutputBuffer
 		size_t dataLength, bytesRead;
 
 		bool isReferenced;
+		bool hadOverflow;
 		volatile size_t references;
 
 		static OutputBuffer * volatile freeOutputBuffers;		// Messages may be sent by multiple tasks

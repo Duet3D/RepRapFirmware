@@ -754,7 +754,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						// We executed M23 to set the file offset, which normally means that we are executing resurrect.g.
 						// We need to copy the absolute/relative and volumetric extrusion flags over
 						fileGCode->OriginalMachineState().drivesRelative = gb.MachineState().drivesRelative;
-						fileGCode->OriginalMachineState().feedrate = gb.MachineState().feedrate;
+						fileGCode->OriginalMachineState().feedRate = gb.MachineState().feedRate;
 						fileGCode->OriginalMachineState().volumetricExtrusion = gb.MachineState().volumetricExtrusion;
 						fileToPrint.Seek(fileOffsetToPrint);
 						moveFractionToSkip = moveFractionToStartAt;
@@ -1999,7 +1999,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					GCodeMachineState *ms = &gcodeSources[i]->MachineState();
 					while (ms != nullptr)
 					{
-						ms->feedrate *= speedFactorRatio;
+						ms->feedRate *= speedFactorRatio;
 						ms = ms->previous;
 					}
 				}
@@ -2517,6 +2517,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				HandleReply(gb, false, statusResponse);
 				return true;
 			}
+			result = GCodeResult::notFinished;			// we ran out of buffers, so try again later
 		}
 		break;
 
@@ -4261,7 +4262,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		{
 			String<ScratchStringLength> scratchString;
 			gb.PrintCommand(scratchString.GetRef());
-			scratchString.cat(": ");
+			reply.Prepend(": ");
 			reply.Prepend(scratchString.c_str());
 		}
 		break;

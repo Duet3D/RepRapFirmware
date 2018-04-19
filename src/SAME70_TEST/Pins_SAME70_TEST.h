@@ -114,6 +114,7 @@ constexpr Pin VssaSensePin = NoPin;
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
 constexpr Pin Z_PROBE_MOD_PIN = NoPin;
+constexpr Pin DiagPin = NoPin;												// TBD
 
 // Cooling fans
 constexpr size_t NUM_FANS = 1;

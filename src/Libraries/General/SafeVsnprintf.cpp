@@ -30,6 +30,8 @@
 #include <climits>
 #include <cmath>
 
+#include "Strnlen.h"
+
 // The following should be enough for 32-bit int/long and 64-bit long long
 constexpr size_t MaxLongDigits = 10;	// to print 4294967296
 constexpr size_t MaxUllDigits = 20;		// to print 18446744073709551616
@@ -103,12 +105,8 @@ static bool prints(SStringBuf& apBuf, const char *apString )
 	if (apBuf.flags.printLimit > 0 && apBuf.flags.isString)
 	{
 		// It's a string so printLimit is the max number of characters to print from the string.
-		// Don't call strlen on it because it might not be null terminated.
-		count = 0;
-		for (const char *s = apString; count < apBuf.flags.printLimit && *s != 0; ++s)
-		{
-			++count;
-		}
+		// Don't call strlen on it because it might not be null terminated, use Strnlen instead.
+		count = (int)Strnlen(apString, apBuf.flags.printLimit);
 	}
 	else
 	{

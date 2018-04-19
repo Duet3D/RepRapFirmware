@@ -917,7 +917,7 @@ bool GCodeBuffer::PushState()
 
 	GCodeMachineState * const ms = GCodeMachineState::Allocate();
 	ms->previous = machineState;
-	ms->feedrate = machineState->feedrate;
+	ms->feedRate = machineState->feedRate;
 	ms->fileState.CopyFrom(machineState->fileState);
 	ms->lockedResources = machineState->lockedResources;
 	ms->drivesRelative = machineState->drivesRelative;
