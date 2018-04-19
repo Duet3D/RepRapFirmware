@@ -7,7 +7,7 @@ Upgrade notes: as for 2.0beta1
 
 Bug fixes:
 - DWC sometimes disconnected after uploading a GCode file
-- Reverted the behaviour of G0 commands when the machine mode is FFF
+- Reverted the behaviour of G0 commands to the pre-2.0 behaviour when the machine mode is FFF (i.e. the F parameter is recognised and the feed rate is shared with the G1 feed rate)
 - If a G1 command with extrusion was followed by a G0 command, the extrusion was repeated in the G0 command
 - When high microstepping was used, certain sequences of movement commands could lock up the movement system
 
