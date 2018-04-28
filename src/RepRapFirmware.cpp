@@ -300,6 +300,12 @@ void SafeStrncat(char *dst, const char *src, size_t length)
 	dst[length - 1] = 0;
 }
 
+// Convert a float to double for passing to printf etc. If it is a NaN or infinity, convert it to 9999.9 to avoid getting JSON parse errors.
+double HideNan(float val)
+{
+	return (double)((std::isnan(val) || std::isinf(val)) ? 9999.9 : val);
+}
+
 // Append a list of driver numbers to a string, with a space before each one
 void ListDrivers(const StringRef& str, DriversBitmap drivers)
 {

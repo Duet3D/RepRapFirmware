@@ -750,6 +750,16 @@ void GCodeBuffer::TryGetUIValue(char c, uint32_t& val, bool& seen)
 	}
 }
 
+// If the specified parameter character is found, fetch 'value' as a Boolean and set 'seen'. Otherwise leave val and seen alone.
+void GCodeBuffer::TryGetBValue(char c, bool& val, bool& seen)
+{
+	if (Seen(c))
+	{
+		val = GetIValue() > 0;
+		seen = true;
+	}
+}
+
 // Try to get a float array exactly 'numVals' long after parameter letter 'c'.
 // If the wrong number of values is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.

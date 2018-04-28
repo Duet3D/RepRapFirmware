@@ -129,11 +129,32 @@ Remaining:
 - [fixed in 2.0b2, test] BUG: G0 command after G1 E command does extrusion
 - [believed fixed in 2.0b2] BUG movement system hangs sometimes if using very high microstepping, e.g. janke PSU model and config.g
 
-- BUG manual probing, see https://github.com/dc42/RepRapFirmware/issues/170#issuecomment-380790290
+Todo in 1.21.1 bugfix release:
+
+- [done in 2.0] BUG: G1 E5 S1 on delta says "Error: G0/G1: attempt to move delta motors to absolute positions"
+- [fixed in 2.0b2, test] BUG M667 S1 echoes the new kinematics
+- [done in 2.0] BUG: if we get a pause due to stalled drivers, the driver numbers won't be listed
+- [done in 2.0, ok] BUG: no call to HttpResponder::CheckSessions
+- [done in 2.0, test] Allow Z jerk down to 0.2mm/sec
+- [done in 2.0, test] BUG: G29 height map is way below bed. Happened on Ormerod. When probing the bed with simple G30 and compensation is applied, correct for the height map offset
+- [believed fixed in 2.0b2] BUG movement system hangs sometimes if using very high microstepping, e.g. janke PSU model and config.g
+- [consider, done in 2.0] Simulation to assume machine starts homed, restore homed status at end
+- [consider, done in 2.0] Update user coordinates after using G10 to change offsets, https://www.duet3d.com/forum/thread.php?pid=44900#p44900
+- [done, test] Support M916 on older Duets
+
+Remaining:
+
+- [done, test] M122 has some duplicate parts of network status on Maestro
+- [done, ok] prevent watchdog reset if MaxReps gets too high
+- [done] BUG manual probing, see https://github.com/dc42/RepRapFirmware/issues/170#issuecomment-380790290
+- [done, ok] BUG strange varying temperature readings if 100K resistor used on an input configured for a PT100
+- [done, ok] BUG if you set an input to be a PT1000 and then set it back to being a thermistor, it still reads like a PT1000
 - BUG SCARA continuous rotation doesn't work
 - BUG sounds like SCARA only checks that the end point is within limits, but for a G1 move intermediate positions may violate the minimum radius
+- [done, ok] When >1 hot end heater, add T0/T1 prefix to M105 response for compatibility with Marlin etc.
 
-- When >1 hot end heater, add T0/T1 prefix to M105 response for compatibiity with Marlin etc.
+- PanelDue won't connect if VIN velow minimum for stepper motors [PanelDue firmware needs to recognise status 'O']
+- Add parameter to M116 to specify acceptable temperature difference
 - Laser support, see https://forum.duet3d.com/topic/4702/laser-cnc-support-in-rrf-gcode-semantics/4
 - support M205 for setting jerk
 - support G12 clean tool?

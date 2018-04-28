@@ -380,8 +380,7 @@ void W5500Interface::Spin(bool full)
 
 void W5500Interface::Diagnostics(MessageType mtype)
 {
-	platform.MessageF(mtype, "=== Network ===\nState: %d\n", (int)state);
-	HttpResponder::CommonDiagnostics(mtype);
+	platform.MessageF(mtype, "Interface state: %d\n", (int)state);
 }
 
 // Enable or disable the network

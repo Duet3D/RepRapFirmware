@@ -33,6 +33,7 @@ private:
 	void CalcDerivedParameters();											// calculate shA and shB
 
 	// The following are configurable parameters
+	unsigned int thermistorInputChannel;
 	float r25, beta, shC, seriesR;											// parameters declared in the M305 command
 	bool isPT1000;															// true if it is a PT1000 sensor, not a thermistor
 

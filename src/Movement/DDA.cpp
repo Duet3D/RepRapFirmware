@@ -1442,7 +1442,7 @@ pre(state == frozen)
 	return true;	// schedule another interrupt immediately
 }
 
-uint32_t DDA::maxReps = 0;					// this holds he maximum ISR loop count
+uint32_t DDA::numHiccups = 0;
 uint32_t DDA::lastStepLowTime = 0;
 uint32_t DDA::lastDirChangeTime = 0;
 
@@ -1454,8 +1454,8 @@ bool DDA::Step()
 {
 	Platform& platform = reprap.GetPlatform();
 	uint32_t lastStepPulseTime = lastStepLowTime;
-	bool repeat;
-	uint32_t numReps = 0;
+	bool repeat = false;
+	uint32_t isrStartTime;
 	do
 	{
 		// Keep this loop as fast as possible, in the case that there are no endstops to check!
@@ -1471,12 +1471,16 @@ bool DDA::Step()
 		}
 
 		// 2. Determine which drivers are due for stepping, overdue, or will be due very shortly
+		const uint32_t iClocks = Platform::GetInterruptClocks();
+		if (!repeat)
+		{
+			isrStartTime = iClocks;		// first time through, so make a note of the ISR start time
+		}
+		const uint32_t elapsedTime = (iClocks - moveStartTime) + MinInterruptInterval;
 		DriveMovement* dm = firstDM;
-		const uint32_t elapsedTime = (Platform::GetInterruptClocks() - moveStartTime) + MinInterruptInterval;
 		uint32_t driversStepping = 0;
 		while (dm != nullptr && elapsedTime >= dm->nextStepTime)		// if the next step is due
 		{
-			++numReps;
 			driversStepping |= platform.GetDriversBitmap(dm->drive);
 			dm = dm->nextDM;
 
@@ -1485,7 +1489,7 @@ bool DDA::Step()
 //if (t3 < minCalcTime) minCalcTime = t3;
 		}
 
-		if ((driversStepping & platform.GetSlowDriversBitmap()) == 0)			// if not using any external drivers
+		if ((driversStepping & platform.GetSlowDriversBitmap()) == 0)	// if not using any external drivers
 		{
 			// 3. Step the drivers
 			Platform::StepDriversHigh(driversStepping);					// generate the steps
@@ -1537,13 +1541,9 @@ bool DDA::Step()
 		}
 
 		// 7. Schedule next interrupt, or if it would be too soon, generate more steps immediately
-		repeat = platform.ScheduleStepInterrupt(firstDM->nextStepTime + moveStartTime);
+		// If we have already spent too much time in the ISR, delay the interrupt
+		repeat = platform.ScheduleStepInterruptWithLimit(firstDM->nextStepTime + moveStartTime, isrStartTime);
 	} while (repeat);
-
-	if (numReps > maxReps)
-	{
-		maxReps = numReps;
-	}
 
 	if (state == completed)
 	{

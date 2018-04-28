@@ -584,19 +584,13 @@ bool Move::LowPowerPause(RestorePoint& rp)
 
 #endif
 
-#if 0
-// For debugging
-extern uint32_t sqSum1, sqSum2, sqCount, sqErrors, lastRes1, lastRes2;
-extern uint64_t lastNum;
-#endif
-
 void Move::Diagnostics(MessageType mtype)
 {
 	Platform& p = reprap.GetPlatform();
 	p.Message(mtype, "=== Move ===\n");
-	p.MessageF(mtype, "MaxReps: %" PRIu32 ", StepErrors: %u, LaErrors: %u, FreeDm: %d, MinFreeDm %d, MaxWait: %" PRIu32 "ms, Underruns: %u, %u\n",
-						DDA::maxReps, stepErrors, numLookaheadErrors, DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
-	DDA::maxReps = 0;
+	p.MessageF(mtype, "Hiccups: %" PRIu32 ", StepErrors: %u, LaErrors: %u, FreeDm: %d, MinFreeDm %d, MaxWait: %" PRIu32 "ms, Underruns: %u, %u\n",
+						DDA::numHiccups, stepErrors, numLookaheadErrors, DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
+	DDA::numHiccups = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = numLookaheadErrors = 0;
 	longestGcodeWaitInterval = 0;
 	DriveMovement::ResetMinFree();
@@ -643,16 +637,6 @@ void Move::Diagnostics(MessageType mtype)
 		ch = ',';
 	}
 	p.Message(mtype, "\n");
-#endif
-
-#if 0
-	// For debugging
-	if (sqCount != 0)
-	{
-		p.AppendMessage(GenericMessage, "Average sqrt times %.2f, %.2f, count %u,  errors %u, last %" PRIu64 " %u %u\n",
-				(float)sqSum1/sqCount, (float)sqSum2/sqCount, sqCount, sqErrors, lastNum, lastRes1, lastRes2);
-		sqSum1 = sqSum2 = sqCount = sqErrors = 0;
-	}
 #endif
 }
 

@@ -727,7 +727,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
 		const float coord = userPos[axis];
-		response->catf("%c%.3f", ch, (double)((std::isnan(coord) || std::isinf(coord)) ? 9999.9 : coord));
+		response->catf("%c%.3f", ch, HideNan(coord));
 		ch = ',';
 	}
 
@@ -750,7 +750,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for (size_t drive = 0; drive < numVisibleAxes; drive++)
 		{
-			response->catf("%c%.3f", ch, (double)liveCoordinates[drive]);
+			response->catf("%c%.3f", ch, HideNan(liveCoordinates[drive]));
 			ch = ',';
 		}
 
@@ -834,16 +834,16 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for(size_t i = 0; i < NUM_FANS; i++)
 		{
-			response->catf("%c%.2f", ch, (double)(platform->GetFanValue(i) * 100.0));
+			response->catf("%c%.1f", ch, (double)(platform->GetFanValue(i) * 100.0));
 			ch = ',';
 		}
 
 		// Speed and Extrusion factors
-		response->catf("],\"speedFactor\":%.2f,\"extrFactors\":", (double)(gCodes->GetSpeedFactor() * 100.0));
+		response->catf("],\"speedFactor\":%.1f,\"extrFactors\":", (double)(gCodes->GetSpeedFactor() * 100.0));
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
-			response->catf("%c%.2f", ch, (double)(gCodes->GetExtrusionFactor(extruder) * 100.0));
+			response->catf("%c%.1f", ch, (double)(gCodes->GetExtrusionFactor(extruder) * 100.0));
 			ch = ',';
 		}
 		response->cat((ch == '[') ? "[]" : "]");
@@ -1050,33 +1050,36 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 #endif
 
 	// Spindles
-	response->cat(",\"spindles\":[");
-	for (size_t i = 0; i < MaxSpindles; i++)
+	if (gCodes->GetMachineType() == MachineType::cnc)
 	{
-		if (i > 0)
+		response->cat(",\"spindles\":[");
+		for (size_t i = 0; i < MaxSpindles; i++)
 		{
-			response->cat(',');
-		}
+			if (i > 0)
+			{
+				response->cat(',');
+			}
 
-		const Spindle& spindle = platform->AccessSpindle(i);
-		response->catf("{\"current\":%1.f,\"active\":%1.f", (double)spindle.GetCurrentRpm(), (double)spindle.GetRpm());
-		if (type == 2)
-		{
-			response->catf(",\"tool\":%d}", spindle.GetToolNumber());
+			const Spindle& spindle = platform->AccessSpindle(i);
+			response->catf("{\"current\":%.1f,\"active\":%.1f", (double)spindle.GetCurrentRpm(), (double)spindle.GetRpm());
+			if (type == 2)
+			{
+				response->catf(",\"tool\":%d}", spindle.GetToolNumber());
+			}
+			else
+			{
+				response->cat('}');
+			}
 		}
-		else
-		{
-			response->cat('}');
-		}
+		response->cat(']');
 	}
-	response->cat(']');
 
 	/* Extended Status Response */
 	if (type == 2)
 	{
 		// Cold Extrude/Retract
-		response->catf(",\"coldExtrudeTemp\":%1.f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_EXTRUDE));
-		response->catf(",\"coldRetractTemp\":%1.f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_RETRACT));
+		response->catf(",\"coldExtrudeTemp\":%.1f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_EXTRUDE));
+		response->catf(",\"coldRetractTemp\":%.1f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_RETRACT));
 
 		// Controllable Fans
 		FansBitmap controllableFans = 0;
@@ -1090,7 +1093,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"controllableFans\":%lu", controllableFans);
 
 		// Maximum hotend temperature - DWC just wants the highest one
-		response->catf(",\"tempLimit\":%1.f", (double)(heat->GetHighestTemperatureLimit()));
+		response->catf(",\"tempLimit\":%.1f", (double)(heat->GetHighestTemperatureLimit()));
 
 		// Endstops
 		uint32_t endstops = 0;

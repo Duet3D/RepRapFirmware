@@ -9,6 +9,7 @@
 #define TMC2660_H_
 
 #include "RepRapFirmware.h"
+#include "GCodes/DriverMode.h"
 #include "Pins.h"
 #include "MessageType.h"
 #include "Libraries/General/StringRef.h"
@@ -41,8 +42,12 @@ namespace SmartDrivers
 	void EnableDrive(size_t drive, bool en);
 	uint32_t GetLiveStatus(size_t drive);
 	uint32_t GetAccumulatedStatus(size_t drive, uint32_t bitsToKeep);
-	bool SetMicrostepping(size_t drive, unsigned int microsteps, int mode);
-	unsigned int GetMicrostepping(size_t drive, int mode, bool& interpolation);
+	bool SetMicrostepping(size_t drive, unsigned int microsteps, bool interpolation);
+	unsigned int GetMicrostepping(size_t drive, bool& interpolation);
+	bool SetDriverMode(size_t driver, unsigned int mode);
+	DriverMode GetDriverMode(size_t driver);
+	bool SetChopperControlRegister(size_t driver, uint32_t ccr);
+	uint32_t GetChopperControlRegister(size_t driver);
 	void Spin(bool powered);
 	void TurnDriversOff();
 	void SetCoolStep(size_t drive, uint16_t coolStepConfig);

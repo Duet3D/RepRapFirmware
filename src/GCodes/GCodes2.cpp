@@ -30,6 +30,12 @@
 # include "FirmwareUpdater.h"
 #endif
 
+#if defined(DUET_NG)
+# include "TMC2660.h"
+#elif defined(DUET_M)
+# include "TMC22xx.h"
+#endif
+
 #if SUPPORT_12864_LCD
 # include "Display/Display.h"
 #endif
@@ -2112,23 +2118,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 290:	// Baby stepping
 		if (gb.Seen('S') || gb.Seen('Z'))
 		{
+			const float fval = gb.GetFValue();
 			if (!LockMovement(gb))
 			{
 				return false;
 			}
-			const float fval = constrain<float>(gb.GetFValue(), -1.0, 1.0);
 			const bool absolute = (gb.Seen('R') && gb.GetIValue() == 0);
-			float difference;
-			if (absolute)
-			{
-				difference = fval - currentBabyStepZOffset;
-				currentBabyStepZOffset = fval;
-			}
-			else
-			{
-				difference = fval;
-				currentBabyStepZOffset += fval;
-			}
+			float difference = (absolute) ? fval - currentBabyStepZOffset : fval;
+			difference = constrain<float>(difference, -1.0, 1.0);
+			currentBabyStepZOffset += difference;
 			const float amountPushed = reprap.GetMove().PushBabyStepping(difference);
 			moveBuffer.initialCoords[Z_AXIS] += amountPushed;
 
@@ -2357,11 +2355,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 350: // Set/report microstepping
 		{
-			// interp is currently an int not a bool, because we use special values of interp to set the chopper control register
-			int32_t mode = 0;						// this is usually the interpolation requested (0 = off, 1 = on)
-			bool dummy;
-			gb.TryGetIValue('I', mode, dummy);
-
+			bool interp = (gb.Seen('I') && gb.GetIValue() > 0);
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
@@ -2373,13 +2367,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					}
 					seen = true;
 					const unsigned int microsteps = gb.GetUIValue();
-					if (ChangeMicrostepping(axis, microsteps, mode))
+					if (ChangeMicrostepping(axis, microsteps, interp))
 					{
 						SetAxisNotHomed(axis);
 					}
 					else
 					{
-						reply.printf("Drive %c does not support %ux microstepping%s", axisLetters[axis], microsteps, ((mode) ? " with interpolation" : ""));
+						reply.printf("Drive %c does not support %ux microstepping%s", axisLetters[axis], microsteps, ((interp) ? " with interpolation" : ""));
 						result = GCodeResult::error;
 					}
 				}
@@ -2397,9 +2391,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				gb.GetUnsignedArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					if (!ChangeMicrostepping(numTotalAxes + e, (int)eVals[e], mode))
+					if (!ChangeMicrostepping(numTotalAxes + e, eVals[e], interp))
 					{
-						reply.printf("Drive E%u does not support %ux microstepping%s", e, (unsigned int)eVals[e], ((mode) ? " with interpolation" : ""));
+						reply.printf("Drive E%u does not support %ux microstepping%s", e, (unsigned int)eVals[e], ((interp) ? " with interpolation" : ""));
 						result = GCodeResult::error;
 					}
 				}
@@ -2410,16 +2404,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				reply.copy("Microstepping - ");
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					bool interp;
-					const unsigned int microsteps = platform.GetMicrostepping(axis, mode, interp);
-					reply.catf("%c:%u%s, ", axisLetters[axis], microsteps, (interp) ? "(on)" : "");
+					bool actualInterp;
+					const unsigned int microsteps = platform.GetMicrostepping(axis, actualInterp);
+					reply.catf("%c:%u%s, ", axisLetters[axis], microsteps, (actualInterp) ? "(on)" : "");
 				}
 				reply.cat("E");
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					bool interp;
-					const unsigned int microsteps = platform.GetMicrostepping(extruder + numTotalAxes, mode, interp);
-					reply.catf(":%u%s", microsteps, (interp) ? "(on)" : "");
+					bool actualInterp;
+					const unsigned int microsteps = platform.GetMicrostepping(extruder + numTotalAxes, actualInterp);
+					reply.catf(":%u%s", microsteps, (actualInterp) ? "(on)" : "");
 				}
 			}
 		}
@@ -3081,8 +3075,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					{
 						return false;
 					}
-					platform.SetDirectionValue(drive, gb.GetIValue() != 0);
 					seen = true;
+					platform.SetDirectionValue(drive, gb.GetIValue() != 0);
 				}
 				if (gb.Seen('R'))
 				{
@@ -3090,11 +3084,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					{
 						return false;
 					}
-					platform.SetEnableValue(drive, (int8_t)gb.GetIValue());
 					seen = true;
+					platform.SetEnableValue(drive, (int8_t)gb.GetIValue());
 				}
 				if (gb.Seen('T'))
 				{
+					seen = true;
 					float timings[4];
 					size_t numTimings = ARRAY_SIZE(timings);
 					gb.GetFloatArray(timings, numTimings, true);
@@ -3105,33 +3100,42 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						break;
 					}
 					platform.SetDriverStepTiming(drive, timings);
-					seen = true;
 				}
-				bool badParameter = false;
-				for (size_t axis = 0; axis < numTotalAxes; ++axis)
+
+#if HAS_SMART_DRIVERS
+				if (gb.Seen('D'))		// set driver mode
 				{
-					if (gb.Seen(axisLetters[axis]))
+					seen = true;
+					const unsigned int mode = gb.GetUIValue();
+					if (!SmartDrivers::SetDriverMode(drive, mode))
 					{
-						badParameter = true;
+						reply.printf("Driver %u does not support mode '%s'", drive, TranslateDriverMode(mode));
+						result = GCodeResult::error;
+						break;
 					}
 				}
-				if (gb.Seen(extrudeLetter))
+
+				if (gb.Seen('C'))		// set chopper control register
 				{
-					badParameter = true;
+					seen = true;
+					(void)SmartDrivers::SetChopperControlRegister(drive, gb.GetUIValue());		// currently this call never returns failure, so no error handling here
 				}
-				if (badParameter)
-				{
-					reply.copy("M569 no longer accepts XYZE parameters; use M584 instead");
-					result = GCodeResult::error;
-				}
-				else if (!seen)
+#endif
+				if (!seen)
 				{
 					float timings[4];
 					platform.GetDriverStepTiming(drive, timings);
-					reply.printf("Drive %u runs %s, active %s enable, step timing %.1f,%.1f,%.1f,%.1f microseconds",
+					reply.printf("Drive %u runs %s, active %s enable,"
+#if HAS_SMART_DRIVERS
+									" mode %s,"
+#endif
+									" step timing %.1f,%.1f,%.1f,%.1f microseconds",
 								drive,
 								(platform.GetDirectionValue(drive)) ? "forwards" : "in reverse",
 								(platform.GetEnableValue(drive)) ? "high" : "low",
+#if HAS_SMART_DRIVERS
+								TranslateDriverMode(SmartDrivers::GetDriverMode(drive)),
+#endif
 								(double)timings[0], (double)timings[1], (double)timings[2], (double)timings[3]);
 				}
 			}
@@ -3990,7 +3994,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 #if HAS_VOLTAGE_MONITOR
-	case 911: // Enable auto save
+	case 911: // Enable auto save on loss of power
 		if (gb.Seen('S'))
 		{
 			const float saveVoltage = gb.GetFValue();
@@ -4087,7 +4091,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 #endif
 
-#if HAS_VOLTAGE_MONITOR
 	case 916:
 		if (!platform.GetMassStorage()->FileExists(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G))
 		{
@@ -4104,7 +4107,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			DoFileMacro(gb, RESUME_AFTER_POWER_FAIL_G, true);
 		}
 		break;
-#endif
 
 		// For case 917, see 906
 

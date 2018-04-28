@@ -2330,7 +2330,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	// Check enough axes have been homed
 	if (moveBuffer.moveType == 0)
 	{
-		if (CheckEnoughAxesHomed(axesMentioned))
+		if (!doingManualBedProbe && CheckEnoughAxesHomed(axesMentioned))
 		{
 			return "G0/G1: insufficient axes homed";
 		}
@@ -3040,7 +3040,7 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		// Don't put a space after the colon in the response, it confuses Pronterface
-		s.catf("%c:%.3f ", axisLetters[axis], (double)currentUserPosition[axis]);
+		s.catf("%c:%.3f ", axisLetters[axis], HideNan(currentUserPosition[axis]));
 	}
 	for (size_t i = numTotalAxes; i < DRIVES; i++)
 	{
@@ -3055,11 +3055,11 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 		s.catf(" %" PRIi32, reprap.GetMove().GetEndPoint(i));
 	}
 
-	// Add the user coordinates because they may be different from the machine coordinates under some conditions
+	// Add the machine coordinates because they may be different from the user coordinates under some conditions
 	s.cat(" Machine");
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		s.catf(" %.3f", (double)liveCoordinates[axis]);
+		s.catf(" %.3f", HideNan(liveCoordinates[axis]));
 	}
 }
 
@@ -3522,12 +3522,12 @@ void GCodes::DisableDrives()
 	SetAllAxesNotHomed();
 }
 
-bool GCodes::ChangeMicrostepping(size_t drive, unsigned int microsteps, int mode) const
+bool GCodes::ChangeMicrostepping(size_t drive, unsigned int microsteps, bool interp) const
 {
 	bool dummy;
-	const unsigned int oldSteps = platform.GetMicrostepping(drive, mode, dummy);
-	const bool success = platform.SetMicrostepping(drive, microsteps, mode);
-	if (success && mode <= 1)							// modes higher than 1 are used for special functions
+	const unsigned int oldSteps = platform.GetMicrostepping(drive, dummy);
+	const bool success = platform.SetMicrostepping(drive, microsteps, interp);
+	if (success)
 	{
 		// We changed the microstepping, so adjust the steps/mm to compensate
 		platform.SetDriveStepsPerUnit(drive, platform.DriveStepsPerUnit(drive) * (float)microsteps / (float)oldSteps);
@@ -4587,18 +4587,26 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 	return GCodeResult::ok;
 }
 
-// Store a standard-format temperature report in 'reply'. This doesn't put a newline character at the end.
-void GCodes::GenerateTemperatureReport(const StringRef& reply) const
+// Report the temperatures of one tool in M105 format
+void GCodes::ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const
 {
-	Heat& heat = reprap.GetHeat();
-
-	// Pronterface, Repetier etc. expect the temperatures to be reported for T0, T1 etc.
-	// So scan the tool list and report the temperature of the heaters associated with each tool.
-	// If the user configures tools T0, T1 etc. with 1 heater each, that will return what these programs expect.
-	reply.copy("T");
-	char sep = ':';
-	for (const Tool *tool = reprap.GetFirstTool(); tool != nullptr; tool = tool->Next())
+	if (tool != nullptr && tool->HeaterCount() != 0)
 	{
+		if (reply.strlen() != 0)
+		{
+			reply.cat(' ');
+		}
+		if (includeNumber)
+		{
+			reply.catf("T%u", tool->Number());
+		}
+		else
+		{
+			reply.cat("T");
+		}
+
+		Heat& heat = reprap.GetHeat();
+		char sep = ':';
 		for (size_t i = 0; i < tool->HeaterCount(); ++i)
 		{
 			const int heater = tool->Heater(i);
@@ -4606,17 +4614,55 @@ void GCodes::GenerateTemperatureReport(const StringRef& reply) const
 			sep = ' ';
 		}
 	}
+}
 
-	const int bedHeater = (NumBedHeaters > 0) ? heat.GetBedHeater(0) : -1;				// default to first heated bed
-	if (bedHeater >= 0)
+// Store a standard-format temperature report in 'reply'. This doesn't put a newline character at the end.
+void GCodes::GenerateTemperatureReport(const StringRef& reply) const
+{
+	Heat& heat = reprap.GetHeat();
+
+	// The following is believed to be compatible with Marlin and Octoprint, based on thread https://github.com/foosel/OctoPrint/issues/2590#issuecomment-385023980
+	ReportToolTemperatures(reply, reprap.GetCurrentTool(), false);
+
+	for (const Tool *tool = reprap.GetFirstTool(); tool != nullptr; tool = tool->Next())
 	{
-		reply.catf(" B:%.1f /%.1f", (double)heat.GetTemperature(bedHeater), (double)heat.GetTargetTemperature(bedHeater));
+		ReportToolTemperatures(reply, tool, true);
 	}
 
-	const int chamberHeater = (NumChamberHeaters > 0) ? heat.GetChamberHeater(0) : -1;	// default to first chamber heater
-	if (chamberHeater >= 0)
+	for (size_t hn = 0; hn < NumBedHeaters && heat.GetBedHeater(hn) >= 0; ++hn)
 	{
-		reply.catf(" C:%.1f /%.1f", (double)heat.GetTemperature(chamberHeater), (double)heat.GetTargetTemperature(chamberHeater));
+		if (hn == 0)
+		{
+			if (reply.strlen() != 0)
+			{
+				reply.cat(' ');
+			}
+			reply.cat("B:");
+		}
+		else
+		{
+			reply.catf(" B%u:", hn);
+		}
+		const int8_t heater = heat.GetBedHeater(hn);
+		reply.catf("%.1f /%.1f", (double)heat.GetTemperature(heater), (double)heat.GetTargetTemperature(heater));
+	}
+
+	for (size_t hn = 0; hn < NumChamberHeaters && heat.GetChamberHeater(hn) >= 0; ++hn)
+	{
+		if (hn == 0)
+		{
+			if (reply.strlen() != 0)
+			{
+				reply.cat(' ');
+			}
+			reply.cat("C:");
+		}
+		else
+		{
+			reply.catf(" C%u:", hn);
+		}
+		const int8_t heater = heat.GetChamberHeater(hn);
+		reply.catf("%.1f /%.1f", (double)heat.GetTemperature(heater), (double)heat.GetTargetTemperature(heater));
 	}
 }
 

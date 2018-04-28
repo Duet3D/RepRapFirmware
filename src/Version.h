@@ -15,11 +15,11 @@
 #endif
 
 #ifndef VERSION
-# define VERSION "2.0" RTOSVER "beta2"
+# define VERSION "2.0" RTOSVER "beta3"
 #endif
 
 #ifndef DATE
-# define DATE "2018-04-19b1"
+# define DATE "2018-04-28b6"
 #endif
 
 #define AUTHORS "reprappro, dc42, chrishamm, t3p3, dnewman"

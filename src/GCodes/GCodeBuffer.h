@@ -46,6 +46,7 @@ public:
 	void TryGetFValue(char c, float& val, bool& seen);
 	void TryGetIValue(char c, int32_t& val, bool& seen);
 	void TryGetUIValue(char c, uint32_t& val, bool& seen);
+	void TryGetBValue(char c, bool& val, bool& seen);
 	bool TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad = false);
 	bool TryGetQuotedString(char c, const StringRef& str, bool& seen);
 	bool TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen);
