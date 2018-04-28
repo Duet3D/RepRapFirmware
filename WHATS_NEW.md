@@ -1,6 +1,26 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.0beta3
+================
+Upgrade notes: as for 2.0beta1
+
+New features:
+- Stepper driver mode for TMC2660 and TMC2224 drivers can now be set via the D parameter in M569
+- Stepper driver chopper control register can now be set via the C parameter in M569 - USE THIS	ONLY IF YOU KNOW WHAT YOU ARE DOING!
+- When Z probe type 0 is selected and DWC/PanelDue have prompted the user to jog Z, axis movement before homing is allowed
+
+Bug fixes:
+- If a network password was set, DWC disconnected with a "Not authorised" message after a large file was uploaded
+- If MaxReps got too high then a watchdog reset occurred. MaxReps has been replaced by a hiccup count.
+- M122 reported some parts of network status twice on Duet 2 Ethernet and Duet 2 Maestro
+- If a PT1000 sensor was configured using M305 but a thermistor was plugged in instead, the firmware reported semi-random high temperatures instead of an error
+- If a PT1000 sensor was configured using M305 and then M305 was used to change it back to a thermistor, it remained configured as a PT1000
+- If a delta printer failed to home then DWC might disconnect due to NaN values for the machine coordinates in the rr_status response 
+- The M105 response on a multi-tool system was not in the exact format that Octoprint required
+- Spindles are no longer reported in M408 responses or rr_status requests unless the machine mode is CNC
+- Excessive decimal places in some values in M408 responses and rr_status requests have been removed
+
 Version 2.0beta2
 ================
 Upgrade notes: as for 2.0beta1
