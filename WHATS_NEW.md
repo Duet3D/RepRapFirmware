@@ -3,7 +3,9 @@ Summary of important changes in recent versions
 
 Version 2.0beta3
 ================
-Upgrade notes: as for 2.0beta1
+Upgrade notes:
+- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21. Get these and any other files needed (e.g. iap file and Windows device driver) from the 1.21 release area at https://github.com/dc42/RepRapFirmware/releases/tag/1.21.
+- When the machine mode is set to CNC, G0 moves are now done using the maximum travel speed of the machine in accordance with the NIST standard, and E and F parameters are no longer recognised.
 
 New features and changed behaviour:
 - Default stepper driver mode for TMC2224 drivers is now stealthchop2
@@ -35,7 +37,7 @@ Bug fixes:
 Version 2.0beta1
 ================
 Upgrade notes:
-- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21
+- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21. Get these and any other files needed (e.g. iap file and Windows device driver) from the 1.21 release area at https://github.com/dc42/RepRapFirmware/releases/tag/1.21.
 - If you use G0 commands, see changed behaviour below.
 
 New features and changed behaviour:
