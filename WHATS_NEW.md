@@ -5,7 +5,8 @@ Version 2.0beta3
 ================
 Upgrade notes: as for 2.0beta1
 
-New features:
+New features and changed behaviour:
+- Default stepper driver mode for TMC2224 drivers is now stealthchop2
 - Stepper driver mode for TMC2660 and TMC2224 drivers can now be set via the D parameter in M569
 - Stepper driver chopper control register can now be set via the C parameter in M569 - USE THIS	ONLY IF YOU KNOW WHAT YOU ARE DOING!
 - When Z probe type 0 is selected and DWC/PanelDue have prompted the user to jog Z, axis movement before homing is allowed
