@@ -117,8 +117,9 @@ constexpr Pin ATX_POWER_PIN = 12;											// Arduino Due pin number that contr
 constexpr Pin Z_PROBE_PIN = 64;												// aka A10
 
 // Digital pin number to turn the IR LED on (high) or off (low)
-constexpr Pin Z_PROBE_MOD_PIN06 = 52;											// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)
+constexpr Pin Z_PROBE_MOD_PIN06 = 52;										// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)
 constexpr Pin Z_PROBE_MOD_PIN07 = X12;										// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.7 and v0.8.5 (PC10)
+constexpr Pin DiagPin = NoPin;
 
 // Pin number that the DAC that controls the second extruder motor current on the Duet 0.8.5 is connected to
 constexpr int Dac0DigitalPin = 66;											// Arduino Due pin number corresponding to DAC0 output pin

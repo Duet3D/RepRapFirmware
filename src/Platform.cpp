@@ -189,7 +189,10 @@ Platform::Platform() :
 // Initialise the Platform. Note: this is the first module to be initialised, so don't call other modules from here!
 void Platform::Init()
 {
-	pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
+	if (DiagPin != NoPin)
+	{
+		pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
+	}
 
 	// Deal with power first
 	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
@@ -1223,9 +1226,9 @@ bool Platform::FlushMessages()
 
 #ifdef SERIAL_AUX2_DEVICE
 	// Write non-blocking data to the second AUX line
-	bool aux2hasMore;
+	bool aux2HasMore;
 	{
-		MutexLocker lock(aux2MutexHandle);
+		MutexLocker lock(aux2Mutex);
 		OutputBuffer *aux2OutputBuffer = aux2Output.GetFirstItem();
 		if (aux2OutputBuffer != nullptr)
 		{
@@ -1241,7 +1244,7 @@ bool Platform::FlushMessages()
 				aux2Output.SetFirstItem(aux2OutputBuffer);
 			}
 		}
-		aux2hasMore = (aux2Output.GetFirstItem() != nullptr);
+		aux2HasMore = (aux2Output.GetFirstItem() != nullptr);
 	}
 #endif
 
@@ -1803,6 +1806,10 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 #endif
 	}
 
+#ifndef RSTC_MR_KEY_PASSWD
+// Definition of RSTC_MR_KEY_PASSWD is missing in the SAM3X ASF files
+# define RSTC_MR_KEY_PASSWD (0xA5u << 24)
+#endif
 	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD;			// ignore any signal on the NRST pin for now so that the reset reason will show as Software
 	Reset();
 	for(;;) {}

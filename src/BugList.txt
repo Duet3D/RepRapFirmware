@@ -140,10 +140,10 @@ Todo in 1.21.1 bugfix release:
 - [believed fixed in 2.0b2] BUG movement system hangs sometimes if using very high microstepping, e.g. janke PSU model and config.g
 - [consider, done in 2.0] Simulation to assume machine starts homed, restore homed status at end
 - [consider, done in 2.0] Update user coordinates after using G10 to change offsets, https://www.duet3d.com/forum/thread.php?pid=44900#p44900
-- [done, test] Support M916 on older Duets
 
 Remaining:
 
+- [done, test] Support M916 on older Duets
 - [done, test] M122 has some duplicate parts of network status on Maestro
 - [done, ok] prevent watchdog reset if MaxReps gets too high
 - [done] BUG manual probing, see https://github.com/dc42/RepRapFirmware/issues/170#issuecomment-380790290
