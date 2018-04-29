@@ -133,7 +133,7 @@ Upgrade notes:
 - Recommended DuetWebControl version is 1.20RC3. until version 1.20 is available
 - Windows device driver versoin 1.19 remains compatible with this release
 - If you have a SCARA printer with nonzero crosstalk parameters (C parameters in the M669 command), you may need to adjust the crosstalk values
-- If you are using a Duet to control a RepRapPro Ormerod, Huxley Duo or Mendel 3 printer or any other printer that uses the Z probe to do X homing, you need to add line M574 X1 S2 to config.g.
+- If you are using a Duet to control a RepRapPro Ormerod, Huxley Duo or Mendel 3 printer or any other printer that uses the Z probe to do X homing, you need to remove the X parameter from the existing M574 command in config,g and add line M574 X1 S2.
 - If you are using a Duet 06 or 085 and you don't already set the P parameter in your G31 command, add P400 to that command to get the same behaviour as before, because the default is now 500.
 - If you are using PT100 sensors, make sure you don't have any additional parameters in your M305 commands for those heaters left over from when you were using thermistors. In particular, the R parameter now configures the reference resistor value on the PT100 interface board, and must be omitted or set to 400 when using the Duet3D PT100 daughter board.
 - The parameters to the M911 command (which configures power fail handling) have changed since version 1.19.2. If you use this command in config.g you will have to change it accordingly.
