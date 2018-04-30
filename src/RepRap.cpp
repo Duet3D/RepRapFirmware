@@ -266,7 +266,7 @@ void RepRap::Spin()
 	roland->Spin();
 #endif
 
-#if SUPPORT_SCANNER
+#if !defined(RTOS) && SUPPORT_SCANNER
 	ticksInSpinState = 0;
 	spinningModule = moduleScanner;
 	scanner->Spin();
@@ -813,20 +813,20 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for(size_t i = 0; i < NUM_FANS; i++)
 		{
-			response->catf("%c%.2f", ch, (double)(platform->GetFanValue(i) * 100.0));
+			response->catf("%c%d", ch, (int)(platform->GetFanValue(i) * 100.0 + 0.5f));
 			ch = ',';
 		}
 
 		// Speed and Extrusion factors
-		response->catf("],\"speedFactor\":%.2f,\"extrFactors\":", (double)(gCodes->GetSpeedFactor() * 100.0));
+		response->catf("],\"speedFactor\":%.1f,\"extrFactors\":", (double)(gCodes->GetSpeedFactor() * 100.0));
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
-			response->catf("%c%.2f", ch, (double)(gCodes->GetExtrusionFactor(extruder) * 100.0));
+			response->catf("%c%.1f", ch, (double)(gCodes->GetExtrusionFactor(extruder) * 100.0));
 			ch = ',';
 		}
 		response->cat((ch == '[') ? "[]" : "]");
-		response->catf(",\"babystep\":%.03f}", (double)gCodes->GetBabyStepOffset());
+		response->catf(",\"babystep\":%.3f}", (double)gCodes->GetBabyStepOffset());
 	}
 
 	// G-code reply sequence for webserver (sequence number for AUX is handled later)
@@ -1029,33 +1029,45 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 #endif
 
 	// Spindles
-	response->cat(",\"spindles\":[");
-	for (size_t i = 0; i < MaxSpindles; i++)
+	int lastConfiguredSpindle = -1;
+	for (size_t spindle = 0; spindle < MaxSpindles; spindle++)
 	{
-		if (i > 0)
+		if (platform->AccessSpindle(spindle).GetToolNumber() != -1)
 		{
-			response->cat(',');
-		}
-
-		const Spindle& spindle = platform->AccessSpindle(i);
-		response->catf("{\"current\":%1.f,\"active\":%1.f", (double)spindle.GetCurrentRpm(), (double)spindle.GetRpm());
-		if (type == 2)
-		{
-			response->catf(",\"tool\":%d}", spindle.GetToolNumber());
-		}
-		else
-		{
-			response->cat('}');
+			lastConfiguredSpindle = spindle;
 		}
 	}
-	response->cat(']');
+
+	if (lastConfiguredSpindle != -1)
+	{
+		response->cat(",\"spindles\":[");
+		for (int i = 0; i <= lastConfiguredSpindle; i++)
+		{
+			if (i > 0)
+			{
+				response->cat(',');
+			}
+
+			const Spindle& spindle = platform->AccessSpindle(i);
+			response->catf("{\"current\":%.1f,\"active\":%.1f", (double)spindle.GetCurrentRpm(), (double)spindle.GetRpm());
+			if (type == 2)
+			{
+				response->catf(",\"tool\":%d}", spindle.GetToolNumber());
+			}
+			else
+			{
+				response->cat('}');
+			}
+		}
+		response->cat(']');
+	}
 
 	/* Extended Status Response */
 	if (type == 2)
 	{
 		// Cold Extrude/Retract
-		response->catf(",\"coldExtrudeTemp\":%1.f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_EXTRUDE));
-		response->catf(",\"coldRetractTemp\":%1.f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_RETRACT));
+		response->catf(",\"coldExtrudeTemp\":%.1f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_EXTRUDE));
+		response->catf(",\"coldRetractTemp\":%.1f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_RETRACT));
 
 		// Controllable Fans
 		FansBitmap controllableFans = 0;
@@ -1069,7 +1081,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"controllableFans\":%lu", controllableFans);
 
 		// Maximum hotend temperature - DWC just wants the highest one
-		response->catf(",\"tempLimit\":%1.f", (double)(heat->GetHighestTemperatureLimit()));
+		response->catf(",\"tempLimit\":%.1f", (double)(heat->GetHighestTemperatureLimit()));
 
 		// Endstops
 		uint32_t endstops = 0;
@@ -1130,10 +1142,16 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			MutexLocker lock(toolListMutex);
 			for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 			{
-				// Number and Name
+				// Number
+				response->catf("{\"number\":%d", tool->Number());
+
+				// Name
 				const char *toolName = tool->GetName();
-				response->catf("{\"number\":%d,\"name\":", tool->Number());
-				response->EncodeString(toolName, strlen(toolName), false);
+				if (toolName[0] != 0)
+				{
+					response->cat(",\"name\":");
+					response->EncodeString(toolName, strlen(toolName), false);
+				}
 
 				// Heaters
 				response->cat(",\"heaters\":[");
@@ -1201,8 +1219,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				if (tool->GetFilament() != nullptr)
 				{
 					const char *filamentName = tool->GetFilament()->GetName();
-					response->catf(",\"filament\":");
-					response->EncodeString(filamentName, strlen(filamentName), false);
+					if (filamentName[0] != 0)
+					{
+						response->catf(",\"filament\":");
+						response->EncodeString(filamentName, strlen(filamentName), false);
+					}
 				}
 
 				// Offsets
@@ -1535,7 +1556,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	ch = '[';
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
-		response->catf("%c%.02f", ch, (double)(platform->GetFanValue(i) * 100.0));
+		response->catf("%c%.1f", ch, (double)(platform->GetFanValue(i) * 100.0));
 		ch = ',';
 	}
 

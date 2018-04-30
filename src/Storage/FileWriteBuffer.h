@@ -35,7 +35,8 @@ public:
 	const size_t BytesLeft() const { return FileWriteBufLen - index; }
 
 	size_t Store(const char *data, size_t length);			// Stores some data and returns how much could be stored
-	void DataTaken() { index = 0; }							// Called to indicate that the buffer has been written
+	void DataTaken() { index = 0; }							// Called to indicate that the buffer has been written to the SD card
+	void DataStored(size_t numBytes) { index += numBytes; }	// Called when more data has been stored directly in the buffer
 
 private:
 	FileWriteBuffer *next;

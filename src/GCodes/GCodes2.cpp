@@ -3795,12 +3795,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			gb.GetPossiblyQuotedString(file.GetRef());
 			if (gb.Seen('S'))
 			{
-				const int sParam = gb.GetIValue();
+				const int range = gb.GetIValue();
 				if (reprap.GetScanner().IsEnabled())
 				{
 					if (reprap.GetScanner().IsRegistered())
 					{
-						result = GetGCodeResultFromFinished(reprap.GetScanner().StartScan(file.c_str(), sParam));
+						const int resolution = gb.Seen('R') ? gb.GetIValue() : 100;
+						const int mode = gb.Seen('N') ? gb.GetIValue() : 0;
+						result = GetGCodeResultFromFinished(reprap.GetScanner().StartScan(file.c_str(), range, resolution, mode));
 					}
 					else
 					{

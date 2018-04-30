@@ -13,7 +13,7 @@
 
 #if SUPPORT_SCANNER
 
-const size_t ScanBufferSize = 128;						// Buffer for incoming commands
+const size_t ScanBufferSize = 128;						// Size of the buffer for incoming commands
 
 enum class ScannerState
 {
@@ -53,7 +53,9 @@ public:
 	bool Register();									// Register a 3D scanner. Returns true when done
 	// External scanners are automatically unregistered when the main port (USB) is closed
 
-	bool StartScan(const char *filename, int param);	// Start a new 3D scan. Returns true when the scan has been initiated
+	// Start a new 3D scan. Returns true when the scan has been initiated
+	bool StartScan(const char *filename, int param, int resolution, int mode);
+
 	bool Cancel();										// Cancel current 3D scanner action. Returns true when done
 	bool Calibrate();									// Calibrate the 3D scanner. Returns true when done
 	bool SetAlignment(bool on);							// Send ALIGN ON/OFF to the 3D scanner. Returns true when done
@@ -65,6 +67,7 @@ public:
 
 private:
 	GCodeBuffer *serialGCode;
+
 	void SetGCodeBuffer(GCodeBuffer *gb);
 
 	void SetState(const ScannerState s);
@@ -85,7 +88,7 @@ private:
 	size_t bufferPointer;
 
 	String<MaxFilenameLength> scanFilename;
-	int scanParam;
+	int scanRange, scanResolution, scanMode;
 
 	const char *uploadFilename;
 	size_t uploadSize, uploadBytesLeft;
