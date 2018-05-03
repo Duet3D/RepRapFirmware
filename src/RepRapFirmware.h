@@ -138,6 +138,8 @@ int StringContains(const char* string, const char* match);
 void SafeStrncpy(char *dst, const char *src, size_t length) pre(length != 0);
 void SafeStrncat(char *dst, const char *src, size_t length) pre(length != 0);
 
+double HideNan(float val);
+
 void ListDrivers(const StringRef& str, DriversBitmap drivers);
 
 // Macro to assign an array from an initialiser list

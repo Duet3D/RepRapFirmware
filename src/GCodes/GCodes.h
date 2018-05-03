@@ -129,6 +129,9 @@ public:
 		uint8_t canPauseAfter : 1;										// true if we can pause just after this move and successfully restart
 		uint8_t hasExtrusion : 1;										// true if the move includes extrusion - only valid if the move was set up by SetupMove
 		uint8_t isCoordinated : 1;										// true if this is a coordinates move
+		uint8_t usingStandardFeedrate : 1;								// true if this move uses the standard feed rate
+
+		void SetDefaults();												// set up default values
 	};
   
 	GCodes(Platform& p);
@@ -202,6 +205,7 @@ public:
 #endif
 
 	const char *GetAxisLetters() const { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
+	MachineType GetMachineType() const { return machineType; }
 
 #if SUPPORT_12864_LCD
 	bool ProcessCommandFromLcd(const char *cmd);						// Process a GCode command from the 12864 LCD returning true if the command was accepted
@@ -269,8 +273,7 @@ private:
 	GCodeResult SetDateTime(GCodeBuffer& gb,const  StringRef& reply);			// Deal with a M905
 	GCodeResult SavePosition(GCodeBuffer& gb,const  StringRef& reply);			// Deal with G60
 
-	bool LoadExtrusionFromGCode(GCodeBuffer& gb);								// Set up the extrusion of a move
-	void LoadFeedrateFromGCode(GCodeBuffer& gb);								// Set up the feed rate of a move
+	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb);					// Set up the extrusion of a move
 
 	bool Push(GCodeBuffer& gb);													// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb);													// Pop feedrate etc
@@ -292,6 +295,7 @@ private:
 	bool ManageTool(GCodeBuffer& gb, const StringRef& reply);					// Create a new tool definition, returning true if an error was reported
 	void SetToolHeaters(Tool *tool, float temperature, bool both);				// Set all a tool's heaters to the temperature, for M104/M109
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling) const; // Wait for the heaters associated with the specified tool to reach their set temperatures
+	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const;
 	void GenerateTemperatureReport(const StringRef& reply) const;				// Store a standard-format temperature report in reply
 	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const;	// Generate a M408 response
 	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const;			// Check whether we need to report temperatures or status
@@ -308,7 +312,7 @@ private:
 	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);					// Retract or un-retract filaments
 	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply);			// Load the specified filament into a tool
 	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply);		// Unload the current filament from a tool
-	bool ChangeMicrostepping(size_t drive, unsigned int microsteps, int mode) const;	// Change microstepping on the specified drive
+	bool ChangeMicrostepping(size_t drive, unsigned int microsteps, bool interp) const; // Change microstepping on the specified drive
 	void ListTriggers(const StringRef& reply, TriggerInputsBitmap mask);		// Append a list of trigger inputs to a message
 	void CheckTriggers();														// Check for and execute triggers
 	void CheckFilament();														// Check for and respond to filament errors
@@ -339,12 +343,12 @@ private:
 	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode);	// handle M37 to change the simulation mode
 
 	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const; // Write the config-override file
-	void CopyConfigFinalValues(GCodeBuffer& gb);						// Copy the feed rate etc. from the daemon to the input channels
+	void CopyConfigFinalValues(GCodeBuffer& gb);							// Copy the feed rate etc. from the daemon to the input channels
 
 	void ClearBabyStepping() { currentBabyStepZOffset = 0.0; }
 
-	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;				// Decide which device to display a message box on
-	void DoManualProbe(GCodeBuffer& gb);								// Do a manual bed probe
+	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;					// Decide which device to display a message box on
+	void DoManualProbe(GCodeBuffer& gb);									// Do a manual bed probe
 
 	void AppendAxes(const StringRef& reply, AxesBitmap axes) const;			// Append a list of axes to a string
 

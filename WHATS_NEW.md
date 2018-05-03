@@ -1,10 +1,43 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.0beta3
+================
+Upgrade notes:
+- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21. Get these and any other files needed (e.g. iap file and Windows device driver) from the 1.21 release area at https://github.com/dc42/RepRapFirmware/releases/tag/1.21.
+- When the machine mode is set to CNC, G0 moves are now done using the maximum travel speed of the machine in accordance with the NIST standard, and E and F parameters are no longer recognised.
+
+New features and changed behaviour:
+- Default stepper driver mode for TMC2224 drivers is now stealthchop2
+- Stepper driver mode for TMC2660 and TMC2224 drivers can now be set via the D parameter in M569
+- Stepper driver chopper control register can now be set via the C parameter in M569 - USE THIS	ONLY IF YOU KNOW WHAT YOU ARE DOING!
+- When Z probe type 0 is selected and DWC/PanelDue have prompted the user to jog Z, axis movement before homing is allowed
+
+Bug fixes:
+- If a network password was set, DWC disconnected with a "Not authorised" message after a large file was uploaded
+- If MaxReps got too high then a watchdog reset occurred. MaxReps has been replaced by a hiccup count.
+- M122 reported some parts of network status twice on Duet 2 Ethernet and Duet 2 Maestro
+- If a PT1000 sensor was configured using M305 but a thermistor was plugged in instead, the firmware reported semi-random high temperatures instead of an error
+- If a PT1000 sensor was configured using M305 and then M305 was used to change it back to a thermistor, it remained configured as a PT1000
+- If a delta printer failed to home then DWC might disconnect due to NaN values for the machine coordinates in the rr_status response 
+- The M105 response on a multi-tool system was not in the exact format that Octoprint required
+- Spindles are no longer reported in M408 responses or rr_status requests unless the machine mode is CNC
+- Excessive decimal places in some values in M408 responses and rr_status requests have been removed
+
+Version 2.0beta2
+================
+Upgrade notes: as for 2.0beta1
+
+Bug fixes:
+- DWC sometimes disconnected after uploading a GCode file
+- Reverted the behaviour of G0 commands to the pre-2.0 behaviour when the machine mode is FFF (i.e. the F parameter is recognised and the feed rate is shared with the G1 feed rate)
+- If a G1 command with extrusion was followed by a G0 command, the extrusion was repeated in the G0 command
+- When high microstepping was used, certain sequences of movement commands could lock up the movement system
+
 Version 2.0beta1
 ================
 Upgrade notes:
-- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21
+- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21. Get these and any other files needed (e.g. iap file and Windows device driver) from the 1.21 release area at https://github.com/dc42/RepRapFirmware/releases/tag/1.21.
 - If you use G0 commands, see changed behaviour below.
 
 New features and changed behaviour:

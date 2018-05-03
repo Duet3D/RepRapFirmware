@@ -19,7 +19,7 @@ void RestorePoint::Init()
 		moveCoords[i] = 0.0;
 	}
 
-	feedRate = DefaultFeedrate * SecondsToMinutes;
+	feedRate = DefaultFeedRate * SecondsToMinutes;
 	virtualExtruderPosition = 0.0;
 	filePos = noFilePosition;
 	proportionDone = 0.0;

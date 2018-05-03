@@ -6,7 +6,7 @@
 #define DEFAULT_ADDRESS 0x2C  //With A0 and A1 grounded
 #define DEFAULT_WIPER_VALUE 0x80  //Default to the wipers in midrange
 
-// meory addresses (all shifted 4 bits left)
+// memory addresses (all shifted 4 bits left)
 //For all the Wipers 0x100 = Full scale, 0x80 = mid scale, 0x0 = Zero scale
 #define MCP4461_VW0 0x00
 #define MCP4461_VW1 0x10

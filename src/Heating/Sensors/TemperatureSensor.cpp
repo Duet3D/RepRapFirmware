@@ -92,7 +92,7 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int channel)
 	}
 	else if (FirstPT1000Channel <= channel && channel < FirstPT1000Channel + Heaters)
 	{
-		ts = new Thermistor(channel - FirstPT1000Channel, true);
+		ts = new Thermistor(channel, true);
 	}
 	else if (FirstMax31855ThermocoupleChannel <= channel && channel < FirstMax31855ThermocoupleChannel + MaxSpiTempSensors)
 	{

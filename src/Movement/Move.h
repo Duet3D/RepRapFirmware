@@ -125,7 +125,7 @@ public:
 
 	bool WriteResumeSettings(FileStore *f) const;									// Write settings for resuming the print
 
-#if HAS_SMART_DRIVERS
+#if HAS_STALL_DETECT
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const;			// Get the current step interval for this axis or extruder
 #endif
 
@@ -243,7 +243,7 @@ inline void Move::Interrupt()
 	}
 }
 
-#if HAS_SMART_DRIVERS
+#if HAS_STALL_DETECT
 
 // Get the current step interval for this axis or extruder, or 0 if it is not moving
 // This is called from the stepper drivers SPI interface ISR

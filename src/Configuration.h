@@ -191,23 +191,23 @@ constexpr size_t MaxFilenameLength = 100;
 
 constexpr size_t MaxHeaterNameLength = 20;				// Maximum number of characters in a heater name
 
-// Output buffer lengths
+// Output buffer length and number of buffers
+// When using RTOS, it must be possible to fit an HTTP response header in a single buffer. Our headers are currently about 230 bytes long.
 #if SAM4E || SAM4S || SAME70
-constexpr uint16_t OUTPUT_BUFFER_SIZE = 128;			// How many bytes does each OutputBuffer hold?
-constexpr size_t OUTPUT_BUFFER_COUNT = 40;				// How many OutputBuffer instances do we have?
-constexpr size_t RESERVED_OUTPUT_BUFFERS = 3;			// Number of reserved output buffers after long responses. Must be enough for an HTTP header.
-														// DC 2018-04-12 increased this from 2 to 3 because we were running out of buffers
-														// when a file upload completes and there are a lot of files
+constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
+constexpr size_t OUTPUT_BUFFER_COUNT = 20;				// How many OutputBuffer instances do we have?
+constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buffers after long responses
 #elif SAM3XA
-constexpr uint16_t OUTPUT_BUFFER_SIZE = 128;			// How many bytes does each OutputBuffer hold?
-constexpr size_t OUTPUT_BUFFER_COUNT = 32;				// How many OutputBuffer instances do we have?
-constexpr size_t RESERVED_OUTPUT_BUFFERS = 3;			// Number of reserved output buffers after long responses. Must be enough for an HTTP header
+constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
+constexpr size_t OUTPUT_BUFFER_COUNT = 16;				// How many OutputBuffer instances do we have?
+constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buffers after long responses
 #else
 # error
 #endif
 
 // Move system
-constexpr float DefaultFeedrate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min
+constexpr float DefaultFeedRate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min
+constexpr float DefaultG0FeedRate = 18000;				// The initial feed rate for G0 commands after resetting the printer, in mm/min
 constexpr float DefaultRetractSpeed = 1000.0;			// The default firmware retraction and un-retraction speed, in mm
 constexpr float DefaultRetractLength = 2.0;
 constexpr float MinimumMovementSpeed = 0.5;				// The minimum movement speed (extruding moves will go slower than this if the extrusion rate demands it)

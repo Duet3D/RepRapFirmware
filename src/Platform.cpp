@@ -189,7 +189,10 @@ Platform::Platform() :
 // Initialise the Platform. Note: this is the first module to be initialised, so don't call other modules from here!
 void Platform::Init()
 {
-	pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
+	if (DiagPin != NoPin)
+	{
+		pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
+	}
 
 	// Deal with power first
 	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
@@ -1223,9 +1226,9 @@ bool Platform::FlushMessages()
 
 #ifdef SERIAL_AUX2_DEVICE
 	// Write non-blocking data to the second AUX line
-	bool aux2hasMore;
+	bool aux2HasMore;
 	{
-		MutexLocker lock(aux2MutexHandle);
+		MutexLocker lock(aux2Mutex);
 		OutputBuffer *aux2OutputBuffer = aux2Output.GetFirstItem();
 		if (aux2OutputBuffer != nullptr)
 		{
@@ -1241,7 +1244,7 @@ bool Platform::FlushMessages()
 				aux2Output.SetFirstItem(aux2OutputBuffer);
 			}
 		}
-		aux2hasMore = (aux2Output.GetFirstItem() != nullptr);
+		aux2HasMore = (aux2Output.GetFirstItem() != nullptr);
 	}
 #endif
 
@@ -1803,6 +1806,10 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 #endif
 	}
 
+#ifndef RSTC_MR_KEY_PASSWD
+// Definition of RSTC_MR_KEY_PASSWD is missing in the SAM3X ASF files
+# define RSTC_MR_KEY_PASSWD (0xA5u << 24)
+#endif
 	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD;			// ignore any signal on the NRST pin for now so that the reset reason will show as Software
 	Reset();
 	for(;;) {}
@@ -3002,7 +3009,7 @@ bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, in
 }
 
 // Set the microstepping, returning true if successful. All drivers for the same axis must use the same microstepping.
-bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
+bool Platform::SetMicrostepping(size_t drive, int microsteps, bool interp)
 {
 	// Check that it is a valid microstepping number
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
@@ -3011,24 +3018,24 @@ bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 		bool ok = true;
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
 		{
-			ok = SetDriverMicrostepping(axisDrivers[drive].driverNumbers[i], microsteps, mode) && ok;
+			ok = SetDriverMicrostepping(axisDrivers[drive].driverNumbers[i], microsteps, interp) && ok;
 		}
 		return ok;
 	}
 	else if (drive < DRIVES)
 	{
-		return SetDriverMicrostepping(extruderDrivers[drive - numAxes], microsteps, mode);
+		return SetDriverMicrostepping(extruderDrivers[drive - numAxes], microsteps, interp);
 	}
 	return false;
 }
 
 // Get the microstepping for a driver
-unsigned int Platform::GetDriverMicrostepping(size_t driver, int mode, bool& interpolation) const
+unsigned int Platform::GetDriverMicrostepping(size_t driver, bool& interpolation) const
 {
 #if HAS_SMART_DRIVERS
 	if (driver < numSmartDrivers)
 	{
-		return SmartDrivers::GetMicrostepping(driver, mode, interpolation);
+		return SmartDrivers::GetMicrostepping(driver, interpolation);
 	}
 	// On-board drivers only support x16 microstepping without interpolation
 	interpolation = false;
@@ -3043,16 +3050,16 @@ unsigned int Platform::GetDriverMicrostepping(size_t driver, int mode, bool& int
 }
 
 // Get the microstepping for an axis or extruder
-unsigned int Platform::GetMicrostepping(size_t drive, int mode, bool& interpolation) const
+unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
 {
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	if (drive < numAxes)
 	{
-		return GetDriverMicrostepping(axisDrivers[drive].driverNumbers[0], mode, interpolation);
+		return GetDriverMicrostepping(axisDrivers[drive].driverNumbers[0], interpolation);
 	}
 	else if (drive < DRIVES)
 	{
-		return GetDriverMicrostepping(extruderDrivers[drive - numAxes], mode, interpolation);
+		return GetDriverMicrostepping(extruderDrivers[drive - numAxes], interpolation);
 	}
 	else
 	{
@@ -3190,7 +3197,7 @@ void Platform::EnableSharedFan(bool enable)
 // controls. This is the case if no thermostatic control is enabled and if the fan was configured at least once before.
 bool Platform::IsFanControllable(size_t fan) const
 {
-	return (fan < NUM_FANS) ? (!fans[fan].HasMonitoredHeaters() && fans[fan].IsConfigured()) : false;
+	return fan < NUM_FANS && !fans[fan].HasMonitoredHeaters() && fans[fan].IsConfigured();
 }
 
 // Get current fan RPM
@@ -3347,7 +3354,7 @@ void Platform::RawMessage(MessageType type, const char *message)
 	}
 	else if ((type & LcdMessage) != 0)
 	{
-		AppendAuxReply(message, (message[0] == '{')  || (type & RawMessageFlag) != 0);
+		AppendAuxReply(message, message[0] == '{' || (type & RawMessageFlag) != 0);
 	}
 
 	if ((type & HttpMessage) != 0)
@@ -4418,18 +4425,51 @@ void STEP_TC_HANDLER()
 {
 	const irqflags_t flags = cpu_irq_save();
 	const int32_t diff = (int32_t)(tim - GetInterruptClocksInterruptsDisabled());	// see how long we have to go
-	if (diff < (int32_t)DDA::MinInterruptInterval)					// if less than about 6us or already passed
+	if (diff < (int32_t)DDA::MinInterruptInterval)						// if less than about 6us or already passed
 	{
 		cpu_irq_restore(flags);
-		return true;												// tell the caller to simulate an interrupt instead
+		return true;													// tell the caller to simulate an interrupt instead
 	}
 
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RA = tim;					// set up the compare register
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RA = tim;						// set up the compare register
 
 	// We would like to clear any pending step interrupt. To do this, we must read the TC status register.
 	// Unfortunately, this would clear any other pending interrupts from the same TC.
 	// So we don't, and the step ISR must allow for getting called prematurely.
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPAS;			// enable the interrupt
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPAS;				// enable the interrupt
+	cpu_irq_restore(flags);
+
+#ifdef MOVE_DEBUG
+		++numInterruptsScheduled;
+		nextInterruptTime = tim;
+		nextInterruptScheduledAt = Platform::GetInterruptClocks();
+#endif
+	return false;
+}
+
+// Schedule an interrupt at the specified clock count, or return true if it has passed already
+// This version limits the time we can spend in the ISR
+/*static*/ bool Platform::ScheduleStepInterruptWithLimit(uint32_t tim, uint32_t isrStartTime)
+{
+	const irqflags_t flags = cpu_irq_save();
+	const uint32_t iClocks = GetInterruptClocksInterruptsDisabled();
+	if ((int32_t)(tim - iClocks) < (int32_t)DDA::MinInterruptInterval)	// if less than about 6us to go or already passed
+	{
+		if (iClocks - isrStartTime < DDA::MaxStepInterruptTime)			// if we haven't already spent too much time looping inside the ISR
+		{
+			cpu_irq_restore(flags);
+			return true;												// tell the caller to simulate an interrupt instead
+		}
+		tim = iClocks + DDA::MinInterruptInterval;						// delay the interrupt to avoid using all the CPU time
+		++DDA::numHiccups;
+	}
+
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RA = tim;						// set up the compare register
+
+	// We would like to clear any pending step interrupt. To do this, we must read the TC status register.
+	// Unfortunately, this would clear any other pending interrupts from the same TC.
+	// So we don't, and the step ISR must allow for getting called prematurely.
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPAS;				// enable the interrupt
 	cpu_irq_restore(flags);
 
 #ifdef MOVE_DEBUG

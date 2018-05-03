@@ -422,7 +422,6 @@ void Network::Spin(bool full)
 					UnlockLWIP();
 
 					platform.Message(UsbMessage, "Network down\n");
-					platform.ClassReport(longWait);
 					return;
 				}
 
@@ -457,7 +456,6 @@ void Network::Spin(bool full)
 
 						UnlockLWIP();
 						platform.MessageF(UsbMessage, "Network up, IP=%s\n", IP4String(ip).c_str());
-						platform.ClassReport(longWait);
 						return;
 					}
 				}
@@ -514,7 +512,6 @@ void Network::Spin(bool full)
 
 		UnlockLWIP();
 	}
-	platform.ClassReport(longWait);
 	webserver->Spin();
 }
 

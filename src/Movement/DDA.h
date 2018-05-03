@@ -52,6 +52,7 @@ public:
 	bool CanPauseAfter() const { return canPauseAfter; }
 	bool CanPauseBefore() const { return canPauseBefore; }
 	bool IsPrintingMove() const { return isPrintingMove; }			// Return true if this involves both XY movement and extrusion
+	bool UsingStandardFeedrate() const { return usingStandardFeedrate; }
 
 	DDAState GetState() const { return state; }
 	DDA* GetNext() const { return next; }
@@ -118,6 +119,7 @@ public:
 	static constexpr uint32_t MinCalcIntervalCartesian = (60 * stepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t MinInterruptInterval = 4;									// about 6us minimum interval between interrupts, in step clocks
 #endif
+	static constexpr uint32_t MaxStepInterruptTime = 10 * MinInterruptInterval;			// the maximum time we spend looping in the ISR , in step clocks
 
 	static void PrintMoves();										// print saved moves for debugging
 
@@ -127,7 +129,7 @@ public:
 	static int32_t loggedProbePositions[XYZ_AXES * MaxLoggedProbePositions];
 #endif
 
-	static uint32_t maxReps;										// maximum number of times that the ISR looped
+	static uint32_t numHiccups;										// how many times we delayed an interrupt to avoid using too much CPU time in interrupts
 	static uint32_t lastStepLowTime;								// when we last completed a step pulse to a slow driver
 	static uint32_t lastDirChangeTime;								// when we last change the DIR signal to a slow driver
 
@@ -172,6 +174,7 @@ private:
 			uint8_t xyMoving : 1;					// True if movement along an X axis or the Y axis was requested, even it if's too small to do
 			uint8_t goingSlow : 1;					// True if we have slowed the movement because the Z probe is approaching its threshold
 			uint8_t isLeadscrewAdjustmentMove : 1;	// True if this is a leadscrews adjustment move
+			uint8_t usingStandardFeedrate : 1;		// True if this move uses the standard feed rate
 		};
 		uint16_t flags;								// so that we can print all the flags at once for debugging
 	};
@@ -239,7 +242,7 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 	endCoordinatesValid = false;
 }
 
-#if HAS_SMART_DRIVERS
+#if HAS_STALL_DETECT
 
 // Get the current full step interval for this axis or extruder
 inline uint32_t DDA::GetStepInterval(size_t axis, uint32_t microstepShift) const

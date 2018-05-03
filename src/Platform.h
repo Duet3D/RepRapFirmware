@@ -333,6 +333,7 @@ public:
 	static uint32_t GetInterruptClocks() __attribute__ ((hot));						// Get the interrupt clock count
 	static uint32_t GetInterruptClocksInterruptsDisabled() __attribute__ ((hot));	// Get the interrupt clock count, when we know already that interrupts are disabled
 	static bool ScheduleStepInterrupt(uint32_t tim) __attribute__ ((hot));			// Schedule an interrupt at the specified clock count, or return true if it has passed already
+	static bool ScheduleStepInterruptWithLimit(uint32_t tim, uint32_t isrStartTime) __attribute__ ((hot));	// Schedule an interrupt at the specified clock count, or return true if it has passed already
 	static void DisableStepInterrupt();						// Make sure we get no step interrupts
 	static bool ScheduleSoftTimerInterrupt(uint32_t tim);	// Schedule an interrupt at the specified clock count, or return true if it has passed already
 	static void DisableSoftTimerInterrupt();				// Make sure we get no software timer interrupts
@@ -408,9 +409,9 @@ public:
 	float GetIdleCurrentFactor() const
 		{ return idleCurrentFactor; }
 	bool SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode);
-	unsigned int GetDriverMicrostepping(size_t drive, int mode, bool& interpolation) const;
-	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, int mode);
-	unsigned int GetMicrostepping(size_t axisOrExtruder, int mode, bool& interpolation) const;
+	unsigned int GetDriverMicrostepping(size_t drive, bool& interpolate) const;
+	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode);
+	unsigned int GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const;
 	void SetDriverStepTiming(size_t driver, const float microseconds[4]);
 	void GetDriverStepTiming(size_t driver, float microseconds[4]) const;
 	float DriveStepsPerUnit(size_t axisOrExtruder) const;

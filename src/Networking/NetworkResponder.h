@@ -39,6 +39,7 @@ protected:
 		uploading,										// uploading a file to SD card
 
 		// HTTP responder additional states
+		processingRequest,
 		gettingFileInfo,								// getting file info
 
 		// FTP responder additional states

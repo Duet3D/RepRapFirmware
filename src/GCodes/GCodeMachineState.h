@@ -89,7 +89,7 @@ public:
 	GCodeMachineState();
 
 	GCodeMachineState *previous;
-	float feedrate;
+	float feedRate;
 	FileData fileState;
 	ResourceBitmap lockedResources;
 	const char *errorMessage;
@@ -119,7 +119,7 @@ public:
 	{
 		drivesRelative = other.drivesRelative;
 		axesRelative = other.axesRelative;
-		feedrate = other.feedrate;
+		feedRate = other.feedRate;
 	}
 
 	static void Release(GCodeMachineState *ms);

@@ -163,21 +163,25 @@ public:
 	void Init(uint32_t p_axisNumber, uint32_t p_pin);
 	void SetAxisNumber(size_t p_axisNumber);
 	void WriteAll();
-	void SetChopConf(uint32_t newVal);
-	void SetMicrostepping(uint32_t shift, bool interpolate);
+
+	bool SetChopConf(uint32_t newVal);
+	uint32_t GetChopConf() const;
+	void SetCoolStep(uint16_t coolStepConfig);
+	bool SetMicrostepping(uint32_t shift, bool interpolate);
+	unsigned int GetMicrostepping(bool& interpolation) const;		// Get microstepping
+	bool SetDriverMode(unsigned int mode);
+	DriverMode GetDriverMode() const;
 	void SetCurrent(float current);
 	void Enable(bool en);
 	void SetStallDetectThreshold(int sgThreshold);
 	void SetStallDetectFilter(bool sgFilter);
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond);
-	void SetCoolStep(uint16_t coolStepConfig);
 	void AppendStallConfig(const StringRef& reply) const;
 	void AppendDriverStatus(const StringRef& reply);
 
-	void TransferDone() __attribute__ ((hot));				// called by the ISR when the SPI transfer has completed
-	void StartTransfer() __attribute__ ((hot));				// called to start a transfer
+	void TransferDone() __attribute__ ((hot));						// called by the ISR when the SPI transfer has completed
+	void StartTransfer() __attribute__ ((hot));						// called to start a transfer
 
-	unsigned int GetMicrostepping(int mode, bool& interpolation) const;		// Get microstepping or chopper control register
 	uint32_t ReadLiveStatus() const;
 	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep);
 
@@ -280,14 +284,48 @@ inline void TmcDriverState::WriteAll()
 }
 
 // Set the chopper control register
-void TmcDriverState::SetChopConf(uint32_t newVal)
+bool TmcDriverState::SetChopConf(uint32_t newVal)
 {
 	configuredChopConfReg = (newVal & 0x0001FFFF) | TMC_REG_CHOPCONF;		// save the new value
 	Enable((registers[ChopperControl] & TMC_CHOPCONF_TOFF_MASK) != 0);		// send the new value, keeping the current Enable status
+	return true;
+}
+
+// Set the driver mode
+bool TmcDriverState::SetDriverMode(unsigned int mode)
+{
+	switch (mode)
+	{
+	case (unsigned int)DriverMode::constantOffTime:
+		configuredChopConfReg = (configuredChopConfReg & ~TMC_CHOPCONF_RNDTF) | TMC_CHOPCONF_CHM;
+		Enable((registers[ChopperControl] & TMC_CHOPCONF_TOFF_MASK) != 0);		// send the new value, keeping the current Enable status
+		return true;
+
+	case (unsigned int)DriverMode::randomOffTime:
+		configuredChopConfReg |= (TMC_CHOPCONF_RNDTF | TMC_CHOPCONF_CHM);
+		Enable((registers[ChopperControl] & TMC_CHOPCONF_TOFF_MASK) != 0);		// send the new value, keeping the current Enable status
+		return true;
+
+	case (unsigned int)DriverMode::spreadCycle:
+		configuredChopConfReg &= ~(TMC_CHOPCONF_RNDTF | TMC_CHOPCONF_CHM);
+		Enable((registers[ChopperControl] & TMC_CHOPCONF_TOFF_MASK) != 0);		// send the new value, keeping the current Enable status
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+// Get the driver mode
+DriverMode TmcDriverState::GetDriverMode() const
+{
+	return ((configuredChopConfReg & TMC_CHOPCONF_CHM) == 0) ? DriverMode::spreadCycle
+			: ((configuredChopConfReg & TMC_CHOPCONF_RNDTF) == 0) ? DriverMode::constantOffTime
+				: DriverMode::randomOffTime;
 }
 
 // Set the microstepping and microstep interpolation. The desired microstepping is (1 << shift).
-void TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate)
+bool TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate)
 {
 	microstepShiftFactor = shift;
 	uint32_t drvCtrlReg = registers[DriveControl] & ~TMC_DRVCTRL_MRES_MASK;
@@ -302,6 +340,7 @@ void TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate)
 	}
 	registers[DriveControl] = drvCtrlReg;
 	registersToUpdate |= 1u << DriveControl;
+	return true;
 }
 
 // Set the motor current
@@ -424,18 +463,17 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply)
 	ResetLoadRegisters();
 }
 
-// Get microstepping or chopper control register
-unsigned int TmcDriverState::GetMicrostepping(int mode, bool& interpolation) const
+// Get microstepping
+unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const
 {
 	interpolation = (registers[DriveControl] & TMC_DRVCTRL_INTPOL) != 0;
-	if (mode == ChopperControlRegisterMode)
-	{
-		return configuredChopConfReg & TMC_DATA_MASK;
-	}
-	else
-	{
-		return 1u << microstepShiftFactor;
-	}
+	return 1u << microstepShiftFactor;
+}
+
+// Get chopper control register
+uint32_t TmcDriverState::GetChopConf() const
+{
+	return configuredChopConfReg & TMC_DATA_MASK;
 }
 
 // This is called by the ISR when the SPI transfer has completed
@@ -568,80 +606,97 @@ namespace SmartDrivers
 		//delay(10);
 
 		driversPowered = false;
-		for (size_t drive = 0; drive < numTmc2660Drivers; ++drive)
+		for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
 		{
-			driverStates[drive].Init(drive, driverSelectPins[drive]);		// axes are mapped straight through to drivers initially
+			driverStates[driver].Init(driver, driverSelectPins[driver]);		// axes are mapped straight through to drivers initially
 		}
 	}
 
-	void SetAxisNumber(size_t drive, uint32_t axisNumber)
+	void SetAxisNumber(size_t driver, uint32_t axisNumber)
 	{
-		if (drive < numTmc2660Drivers)
+		if (driver < numTmc2660Drivers)
 		{
-			driverStates[drive].SetAxisNumber(axisNumber);
+			driverStates[driver].SetAxisNumber(axisNumber);
 		}
 	}
 
-	void SetCurrent(size_t drive, float current)
+	void SetCurrent(size_t driver, float current)
 	{
-		if (drive < numTmc2660Drivers)
+		if (driver < numTmc2660Drivers)
 		{
-			driverStates[drive].SetCurrent(current);
+			driverStates[driver].SetCurrent(current);
 		}
 	}
 
-	void EnableDrive(size_t drive, bool en)
+	void EnableDrive(size_t driver, bool en)
 	{
-		if (drive < numTmc2660Drivers)
+		if (driver < numTmc2660Drivers)
 		{
-			driverStates[drive].Enable(en);
+			driverStates[driver].Enable(en);
 		}
 	}
 
-	uint32_t GetLiveStatus(size_t drive)
+	uint32_t GetLiveStatus(size_t driver)
 	{
-		return (drive < numTmc2660Drivers) ? driverStates[drive].ReadLiveStatus() : 0;
+		return (driver < numTmc2660Drivers) ? driverStates[driver].ReadLiveStatus() : 0;
 	}
 
-	uint32_t GetAccumulatedStatus(size_t drive, uint32_t bitsToKeep)
+	uint32_t GetAccumulatedStatus(size_t driver, uint32_t bitsToKeep)
 	{
-		return (drive < numTmc2660Drivers) ? driverStates[drive].ReadAccumulatedStatus(bitsToKeep) : 0;
+		return (driver < numTmc2660Drivers) ? driverStates[driver].ReadAccumulatedStatus(bitsToKeep) : 0;
 	}
 
-	// Set microstepping or chopper control register
-	bool SetMicrostepping(size_t drive, unsigned int microsteps, int mode)
+	// Set microstepping and microstep interpolation
+	bool SetMicrostepping(size_t driver, unsigned int microsteps, bool interpolate)
 	{
-		if (drive < numTmc2660Drivers)
+		if (driver < numTmc2660Drivers && microsteps > 0)
 		{
-			if (mode == ChopperControlRegisterMode && microsteps >= 0)
+			// Set the microstepping. We need to determine how many bits right to shift the desired microstepping to reach 1.
+			unsigned int shift = 0;
+			unsigned int uSteps = (unsigned int)microsteps;
+			while ((uSteps & 1) == 0)
 			{
-				driverStates[drive].SetChopConf((uint32_t)microsteps);	// set the chopper control register
-				return true;
+				uSteps >>= 1;
+				++shift;
 			}
-			else if (microsteps > 0 && (mode == 0 || mode == 1))
+			if (uSteps == 1 && shift <= 8)
 			{
-				// Set the microstepping. We need to determine how many bits right to shift the desired microstepping to reach 1.
-				unsigned int shift = 0;
-				unsigned int uSteps = (unsigned int)microsteps;
-				while ((uSteps & 1) == 0)
-				{
-					uSteps >>= 1;
-					++shift;
-				}
-				if (uSteps == 1 && shift <= 8)
-				{
-					driverStates[drive].SetMicrostepping(shift, mode != 0);
-					return true;
-				}
+				driverStates[driver].SetMicrostepping(shift, interpolate);
+				return true;
 			}
 		}
 		return false;
 	}
 
-	// Get microstepping or chopper control register
-	unsigned int GetMicrostepping(size_t drive, int mode, bool& interpolation)
+	// Get microstepping and interpolation
+	unsigned int GetMicrostepping(size_t driver, bool& interpolation)
 	{
-		return (drive < numTmc2660Drivers) ? driverStates[drive].GetMicrostepping(mode, interpolation) : 1;
+		if (driver < numTmc2660Drivers)
+		{
+			return driverStates[driver].GetMicrostepping(interpolation);
+		}
+		interpolation = false;
+		return 1;
+	}
+
+	bool SetDriverMode(size_t driver, unsigned int mode)
+	{
+		return driver < numTmc2660Drivers && driverStates[driver].SetDriverMode(mode);
+	}
+
+	DriverMode GetDriverMode(size_t driver)
+	{
+		return (driver < numTmc2660Drivers) ? driverStates[driver].GetDriverMode() : DriverMode::unknown;
+	}
+
+	bool SetChopperControlRegister(size_t driver, uint32_t ccr)
+	{
+		return driver < numTmc2660Drivers && driverStates[driver].SetChopConf(ccr);
+	}
+
+	uint32_t GetChopperControlRegister(size_t driver)
+	{
+		return (driver < numTmc2660Drivers) ? driverStates[driver].GetChopConf() : 0;
 	}
 
 	// Flag the the drivers have been powered up.
@@ -658,9 +713,9 @@ namespace SmartDrivers
 				digitalWrite(GlobalTmcEnablePin, LOW);
 				delayMicroseconds(10);
 
-				for (size_t drive = 0; drive < numTmc2660Drivers; ++drive)
+				for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
 				{
-					driverStates[drive].WriteAll();
+					driverStates[driver].WriteAll();
 				}
 			}
 			if (currentDriver == nullptr && numTmc2660Drivers != 0)
@@ -683,27 +738,27 @@ namespace SmartDrivers
 		driversPowered = false;
 	}
 
-	void SetStallThreshold(size_t drive, int sgThreshold)
+	void SetStallThreshold(size_t driver, int sgThreshold)
 	{
-		if (drive < numTmc2660Drivers)
+		if (driver < numTmc2660Drivers)
 		{
-			driverStates[drive].SetStallDetectThreshold(sgThreshold);
+			driverStates[driver].SetStallDetectThreshold(sgThreshold);
 		}
 	}
 
-	void SetStallFilter(size_t drive, bool sgFilter)
+	void SetStallFilter(size_t driver, bool sgFilter)
 	{
-		if (drive < numTmc2660Drivers)
+		if (driver < numTmc2660Drivers)
 		{
-			driverStates[drive].SetStallDetectFilter(sgFilter);
+			driverStates[driver].SetStallDetectFilter(sgFilter);
 		}
 	}
 
-	void SetStallMinimumStepsPerSecond(size_t drive, unsigned int stepsPerSecond)
+	void SetStallMinimumStepsPerSecond(size_t driver, unsigned int stepsPerSecond)
 	{
-		if (drive < numTmc2660Drivers)
+		if (driver < numTmc2660Drivers)
 		{
-			driverStates[drive].SetStallMinimumStepsPerSecond(stepsPerSecond);
+			driverStates[driver].SetStallMinimumStepsPerSecond(stepsPerSecond);
 		}
 	}
 
@@ -715,28 +770,28 @@ namespace SmartDrivers
 		}
 	}
 
-	void AppendStallConfig(size_t drive, const StringRef& reply)
+	void AppendStallConfig(size_t driver, const StringRef& reply)
 	{
-		if (drive < numTmc2660Drivers)
+		if (driver < numTmc2660Drivers)
 		{
-			driverStates[drive].AppendStallConfig(reply);
+			driverStates[driver].AppendStallConfig(reply);
 		}
 	}
 
-	void AppendDriverStatus(size_t drive, const StringRef& reply)
+	void AppendDriverStatus(size_t driver, const StringRef& reply)
 	{
-		if (drive < numTmc2660Drivers)
+		if (driver < numTmc2660Drivers)
 		{
-			driverStates[drive].AppendDriverStatus(reply);
+			driverStates[driver].AppendDriverStatus(reply);
 		}
 	}
 
-	float GetStandstillCurrentPercent(size_t drive)
+	float GetStandstillCurrentPercent(size_t driver)
 	{
 		return 100.0;			// not supported
 	}
 
-	void SetStandstillCurrentPercent(size_t drive, float percent)
+	void SetStandstillCurrentPercent(size_t driver, float percent)
 	{
 		// not supported so nothing to see here
 	}

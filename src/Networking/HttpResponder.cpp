@@ -40,31 +40,23 @@ bool HttpResponder::Accept(Socket *s, NetworkProtocol protocol)
 {
 	if (responderState == ResponderState::free && protocol == HttpProtocol)
 	{
-		// Make sure we can get an output buffer before we accept the connection, or we won't be able to reply
-		if (outBuf != nullptr || OutputBuffer::Allocate(outBuf))
-		{
-			responderState = ResponderState::reading;
-			skt = s;
-			timer = millis();
+		responderState = ResponderState::reading;
+		skt = s;
+		timer = millis();
 
-			// Reset the parse state variables
-			clientPointer = 0;
-			parseState = HttpParseState::doingCommandWord;
-			numCommandWords = 0;
-			numQualKeys = 0;
-			numHeaderKeys = 0;
-			commandWords[0] = clientMessage;
+		// Reset the parse state variables
+		clientPointer = 0;
+		parseState = HttpParseState::doingCommandWord;
+		numCommandWords = 0;
+		numQualKeys = 0;
+		numHeaderKeys = 0;
+		commandWords[0] = clientMessage;
 
-			if (reprap.Debug(moduleWebserver))
-			{
-				debugPrintf("HTTP connection accepted\n");
-			}
-			return true;
-		}
 		if (reprap.Debug(moduleWebserver))
 		{
-			debugPrintf("HTTP connection refused (no buffers)\n");
+			debugPrintf("HTTP connection accepted\n");
 		}
+		return true;
 	}
 	return false;
 }
@@ -107,8 +99,12 @@ bool HttpResponder::Spin()
 			return false;
 		}
 
+	case ResponderState::processingRequest:
+		ProcessRequest();
+		return true;
+
 	case ResponderState::gettingFileInfo:
-		(void)SendFileInfo(millis() - startedGettingFileInfoAt >= MaxFileInfoGetTime);
+		(void)SendFileInfo(millis() - startedProcessingRequestAt >= MaxFileInfoGetTime);
 		return true;
 
 	case ResponderState::uploading:
@@ -486,11 +482,11 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	}
 	else if (StringEquals(request, "status"))
 	{
-		int type = 0;
-		if (GetKeyValue("type") != nullptr)
+		const char *typeString = GetKeyValue("type");
+		if (typeString != nullptr)
 		{
 			// New-style JSON status responses
-			type = atoi(GetKeyValue("type"));
+			int type = SafeStrtol(typeString);
 			if (type < 1 || type > 3)
 			{
 				type = 1;
@@ -551,7 +547,6 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			// Simple rr_fileinfo call to get info about the file being printed
 			filenameBeingProcessed[0] = 0;
 		}
-		startedGettingFileInfoAt = millis();
 		responderState = ResponderState::gettingFileInfo;
 		return false;
 	}
@@ -589,6 +584,13 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	else
 	{
 		RejectMessage("Unknown request", 500);
+		return false;
+	}
+
+	if (response->HadOverflow())
+	{
+		// We ran out of buffers. Release the buffers we have and return false. The caller will retry later.
+		OutputBuffer::ReleaseAll(response);
 		return false;
 	}
 	return true;
@@ -865,7 +867,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 		Authenticate();
 	}
 
-	// Update the authentication status and try handle "text/plain" requests here
+	// Update the authentication status and try to handle "text/plain" requests here
 	if (CheckAuthenticated())
 	{
 		if (StringEquals(command, "reply"))			// rr_reply
@@ -895,195 +897,215 @@ void HttpResponder::SendJsonResponse(const char* command)
 
 	// Try to process a request for JSON responses
 	OutputBuffer *jsonResponse;
-	if (!OutputBuffer::Allocate(jsonResponse))
+	if (OutputBuffer::Allocate(jsonResponse))
 	{
-		// Reset the connection immediately if we cannot write any data. Should never happen.
-		skt->Terminate();
-		return;
-	}
-
-	bool mayKeepOpen;
-	const bool gotResponse = GetJsonResponse(command, jsonResponse, mayKeepOpen);
-	if (!gotResponse)
-	{
-		// Either this request was rejected, or it will take longer to process e.g. rr_fileinfo
-		OutputBuffer::Release(jsonResponse);
-		return;
-	}
-
-	// Send the JSON response
-	bool keepOpen = false;
-	if (mayKeepOpen)
-	{
-		// Check that the browser wants to persist the connection too
-		for (size_t i = 0; i < numHeaderKeys; ++i)
+		bool mayKeepOpen;
+		const bool gotResponse = GetJsonResponse(command, jsonResponse, mayKeepOpen);
+		if (!gotResponse)
 		{
-			if (StringEquals(headers[i].key, "Connection"))
+			// Either this request was rejected, or it will take longer to process e.g. rr_fileinfo
+			OutputBuffer::Release(jsonResponse);
+			return;
+		}
+
+		// Send the JSON response
+		bool keepOpen = false;
+		if (mayKeepOpen)
+		{
+			// Check that the browser wants to persist the connection too
+			for (size_t i = 0; i < numHeaderKeys; ++i)
 			{
-				// Comment out the following line to disable persistent connections
-				keepOpen = StringEquals(headers[i].value, "keep-alive");
-				break;
+				if (StringEquals(headers[i].key, "Connection"))
+				{
+					// Comment out the following line to disable persistent connections
+					keepOpen = StringEquals(headers[i].value, "keep-alive");
+					break;
+				}
 			}
 		}
+
+		// Note that when using RTOS the following response MUST be small enough to fit in a single buffer.
+		// This is because the current task may get suspended e.g. when reading from SD card to build a file list,
+		// so other tasks may allocate buffers meanwhile, and the previous mechanism for ensuring that there is sufficient
+		// buffer space remaining don't work.
+		// This response is currently about 230 bytes long in the worst case.
+		outBuf->copy(	"HTTP/1.1 200 OK\n"
+						"Cache-Control: no-cache, no-store, must-revalidate\n"
+						"Pragma: no-cache\n"
+						"Expires: 0\n"
+						"Access-Control-Allow-Origin: *\n"
+						"Content-Type: application/json\n"
+					);
+		outBuf->catf("Content-Length: %u\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
+		outBuf->catf("Connection: %s\n\n", keepOpen ? "keep-alive" : "close");
+		outBuf->Append(jsonResponse);
+
+		if (outBuf->HadOverflow())
+		{
+			// We ran out of buffers. Release the buffers we have and return false. The caller will retry later.
+			OutputBuffer::ReleaseAll(outBuf);
+		}
+		else
+		{
+			Commit(keepOpen ? ResponderState::reading : ResponderState::free);
+		}
 	}
-
-	outBuf->copy(	"HTTP/1.1 200 OK\n"
-					"Cache-Control: no-cache, no-store, must-revalidate\n"
-					"Pragma: no-cache\n"
-					"Expires: 0\n"
-					"Access-Control-Allow-Origin: *\n"
-					"Content-Type: application/json\n"
-				);
-	outBuf->catf("Content-Length: %u\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
-	outBuf->catf("Connection: %s\n\n", keepOpen ? "keep-alive" : "close");
-	outBuf->Append(jsonResponse);
-
-	Commit(keepOpen ? ResponderState::reading : ResponderState::free);
 }
 
-// Process the message received so far. We have reached the end of the headers.
-// Return true if the message is complete, false if we want to continue receiving data (i.e. postdata)
+// Process the message received. We have reached the end of the headers.
 void HttpResponder::ProcessMessage()
 {
 	if (reprap.Debug(moduleWebserver))
 	{
-		GetPlatform().MessageF(UsbMessage, "HTTP req, command words {");
+		Platform& p = GetPlatform();
+		p.MessageF(UsbMessage, "HTTP req, command words {");
 		for (size_t i = 0; i < numCommandWords; ++i)
 		{
-			GetPlatform().MessageF(UsbMessage, " %s", commandWords[i]);
+			p.MessageF(UsbMessage, " %s", commandWords[i]);
 		}
-		GetPlatform().Message(UsbMessage, " }, parameters {");
+		p.Message(UsbMessage, " }, parameters {");
 
 		for (size_t i = 0; i < numQualKeys; ++i)
 		{
-			GetPlatform().MessageF(UsbMessage, " %s=%s", qualifiers[i].key, qualifiers[i].value);
+			p.MessageF(UsbMessage, " %s=%s", qualifiers[i].key, qualifiers[i].value);
 		}
-		GetPlatform().Message(UsbMessage, " }\n");
+		p.Message(UsbMessage, " }\n");
 	}
 
+	responderState = ResponderState::processingRequest;
+	startedProcessingRequestAt = millis();
+}
+
+// Process the message received. We have reached the end of the headers.
+void HttpResponder::ProcessRequest()
+{
 	if (numCommandWords < 2)
 	{
 		RejectMessage("too few command words");
 		return;
 	}
 
-	if (StringEquals(commandWords[0], "GET"))
+	// Make sure we can get an output buffer before we process the request, or we won't be able to reply
+	if (outBuf != nullptr || OutputBuffer::Allocate(outBuf))
 	{
-		if (StringStartsWith(commandWords[1], KO_START))
+		if (StringEquals(commandWords[0], "GET"))
 		{
-			SendJsonResponse(commandWords[1] + KoFirst);
-		}
-		else if (commandWords[1][0] == '/' && StringStartsWith(commandWords[1] + 1, KO_START))
-		{
-			SendJsonResponse(commandWords[1] + 1 + KoFirst);
-		}
-		else
-		{
-			SendFile(commandWords[1], true);
-		}
-		return;
-	}
-
-	if (StringEquals(commandWords[0], "OPTIONS"))
-	{
-		outBuf->copy(	"HTTP/1.1 200 OK\n"
-						"Allow: OPTIONS, GET, POST\n"
-						"Cache-Control: no-cache, no-store, must-revalidate\n"
-						"Pragma: no-cache\n"
-						"Expires: 0\n"
-						"Access-Control-Allow-Origin: *\n"
-						"Access-Control-Allow-Headers: Content-Type\n"
-						"Content-Length: 0\n"
-						"\n"
-					);
-		Commit();
-		return;
-	}
-
-	if (CheckAuthenticated() && StringEquals(commandWords[0], "POST"))
-	{
-		const bool isUploadRequest = (StringEquals(commandWords[1], KO_START "upload"))
-								  || (commandWords[1][0] == '/' && StringEquals(commandWords[1] + 1, KO_START "upload"));
-		if (isUploadRequest)
-		{
-			const char* const filename = GetKeyValue("name");
-			if (filename != nullptr)
+			if (StringStartsWith(commandWords[1], KO_START))
 			{
-				// See how many bytes we expect to read
-				bool contentLengthFound = false;
-				for (size_t i = 0; i < numHeaderKeys; i++)
+				SendJsonResponse(commandWords[1] + KoFirst);
+			}
+			else if (commandWords[1][0] == '/' && StringStartsWith(commandWords[1] + 1, KO_START))
+			{
+				SendJsonResponse(commandWords[1] + 1 + KoFirst);
+			}
+			else
+			{
+				SendFile(commandWords[1], true);
+			}
+			return;
+		}
+
+		if (StringEquals(commandWords[0], "OPTIONS"))
+		{
+			outBuf->copy(	"HTTP/1.1 200 OK\n"
+							"Allow: OPTIONS, GET, POST\n"
+							"Cache-Control: no-cache, no-store, must-revalidate\n"
+							"Pragma: no-cache\n"
+							"Expires: 0\n"
+							"Access-Control-Allow-Origin: *\n"
+							"Access-Control-Allow-Headers: Content-Type\n"
+							"Content-Length: 0\n"
+							"\n"
+						);
+			Commit();
+			return;
+		}
+
+		if (CheckAuthenticated() && StringEquals(commandWords[0], "POST"))
+		{
+			const bool isUploadRequest = (StringEquals(commandWords[1], KO_START "upload"))
+									  || (commandWords[1][0] == '/' && StringEquals(commandWords[1] + 1, KO_START "upload"));
+			if (isUploadRequest)
+			{
+				const char* const filename = GetKeyValue("name");
+				if (filename != nullptr)
 				{
-					if (StringEquals(headers[i].key, "Content-Length"))
+					// See how many bytes we expect to read
+					bool contentLengthFound = false;
+					for (size_t i = 0; i < numHeaderKeys; i++)
 					{
-						postFileLength = atoi(headers[i].value);
-						contentLengthFound = true;
-						break;
+						if (StringEquals(headers[i].key, "Content-Length"))
+						{
+							postFileLength = atoi(headers[i].value);
+							contentLengthFound = true;
+							break;
+						}
 					}
-				}
 
-				// Start POST file upload
-				if (!contentLengthFound)
-				{
-					RejectMessage("invalid POST upload request");
-					return;
-				}
-
-				// Start a new file upload
-				FileStore *file = GetPlatform().OpenFile(FS_PREFIX, filename, OpenMode::write);
-				if (file == nullptr)
-				{
-					RejectMessage("could not create file");
-					return;
-
-				}
-				StartUpload(file, filename);
-
-				// Try to get the last modified file date and time
-				const char* const lastModifiedString = GetKeyValue("time");
-				if (lastModifiedString != nullptr)
-				{
-					struct tm timeInfo;
-					memset(&timeInfo, 0, sizeof(timeInfo));
-					if (strptime(lastModifiedString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
+					// Start POST file upload
+					if (!contentLengthFound)
 					{
-						fileLastModified  = mktime(&timeInfo);
+						RejectMessage("invalid POST upload request");
+						return;
+					}
+
+					// Start a new file upload
+					FileStore *file = GetPlatform().OpenFile(FS_PREFIX, filename, OpenMode::write);
+					if (file == nullptr)
+					{
+						RejectMessage("could not create file");
+						return;
+
+					}
+					StartUpload(file, filename);
+
+					// Try to get the last modified file date and time
+					const char* const lastModifiedString = GetKeyValue("time");
+					if (lastModifiedString != nullptr)
+					{
+						struct tm timeInfo;
+						memset(&timeInfo, 0, sizeof(timeInfo));
+						if (strptime(lastModifiedString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
+						{
+							fileLastModified  = mktime(&timeInfo);
+						}
+						else
+						{
+							fileLastModified = 0;
+						}
 					}
 					else
 					{
 						fileLastModified = 0;
 					}
-				}
-				else
-				{
-					fileLastModified = 0;
-				}
 
-				if (reprap.Debug(moduleWebserver))
-				{
-					GetPlatform().MessageF(UsbMessage, "Start uploading file %s length %lu\n", filename, postFileLength);
-				}
-				uploadedBytes = 0;
-
-				// Keep track of the connection that is now uploading
-				const uint32_t remoteIP = GetRemoteIP();
-				const uint16_t remotePort = skt->GetRemotePort();
-				for(size_t i = 0; i < numSessions; i++)
-				{
-					if (sessions[i].ip == remoteIP)
+					if (reprap.Debug(moduleWebserver))
 					{
-						sessions[i].postPort = remotePort;
-						sessions[i].isPostUploading = true;
-						break;
+						GetPlatform().MessageF(UsbMessage, "Start uploading file %s length %lu\n", filename, postFileLength);
 					}
+					uploadedBytes = 0;
+
+					// Keep track of the connection that is now uploading
+					const uint32_t remoteIP = GetRemoteIP();
+					const uint16_t remotePort = skt->GetRemotePort();
+					for(size_t i = 0; i < numSessions; i++)
+					{
+						if (sessions[i].ip == remoteIP)
+						{
+							sessions[i].postPort = remotePort;
+							sessions[i].isPostUploading = true;
+							break;
+						}
+					}
+					return;
 				}
-				return;
 			}
+			RejectMessage("only rr_upload is supported for POST requests");
 		}
-		RejectMessage("only rr_upload is supported for POST requests");
-	}
-	else
-	{
-		RejectMessage("Unknown message type or not authenticated");
+		else
+		{
+			RejectMessage("Unknown message type or not authenticated");
+		}
 	}
 }
 
@@ -1110,6 +1132,7 @@ void HttpResponder::DoUpload()
 		skt->Taken(len);
 		uploadedBytes += len;
 
+		(void)CheckAuthenticated();							// uploading may take a long time, so make sure the requester IP is not timed out
 		if (!fileBeingUploaded.Write(buffer, len))
 		{
 			uploadError = true;

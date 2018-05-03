@@ -15,23 +15,12 @@
 # include "RTOSIface.h"
 #endif
 
-// Need to define strnlen here because it isn't ISO standard
-size_t strnlen(const char *s, size_t n)
-{
-	size_t rslt = 0;
-	while (rslt < n && s[rslt] != 0)
-	{
-		++rslt;
-	}
-	return rslt;
-}
-
 //*************************************************************************************************
 // StringRef class member implementations
 
 size_t StringRef::strlen() const
 {
-	return strnlen(p, len - 1);
+	return Strnlen(p, len - 1);
 }
 
 int StringRef::printf(const char *fmt, ...) const

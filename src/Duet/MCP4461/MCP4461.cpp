@@ -1,4 +1,5 @@
 #include "MCP4461.h"
+#include "RepRapFirmware.h"
 
 /*
 Library to control the MCP4461 Digital Potentiometer over I2C.

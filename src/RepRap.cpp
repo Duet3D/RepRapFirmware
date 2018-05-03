@@ -26,6 +26,7 @@
 
 #if HAS_HIGH_SPEED_SD
 # include "sam/drivers/hsmci/hsmci.h"
+# include "conf_sd_mmc.h"
 #endif
 
 #ifdef RTOS
@@ -35,22 +36,32 @@
 static TaskHandle_t hsmciTask = nullptr;		// the task that is waiting for a HSMCI command to complete
 
 // Callback function from the hsmci driver, called while it is waiting for an SD card operation to complete
-// 'st' is the set of bits in the HSMCI status register that the caller is interested in.
+// 'stBits' is the set of bits in the HSMCI status register that the caller is interested in.
 // The caller keeps calling this function until at least one of those bits is set.
-extern "C" void hsmciIdle(uint32_t st)
+extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 {
-	if ((HSMCI->HSMCI_SR & st) == 0)
+	if (   (HSMCI->HSMCI_SR & stBits) == 0
+#if SAME70
+		&& (XDMAC->XDMAC_CHID[CONF_HSMCI_XDMAC_CHANNEL].XDMAC_CIS & dmaBits) == 0
+#endif
+	   )
 	{
-		// Suspend this task until we get an interrupt indicating that a status bit has been set
+		// Suspend this task until we get an interrupt indicating that a status bit that we are interested in has been set
 		hsmciTask = xTaskGetCurrentTaskHandle();
-		HSMCI->HSMCI_IER = st;
-		ulTaskNotifyTake(pdTRUE, 1000);
+		HSMCI->HSMCI_IER = stBits;
+#if SAME70
+		XDMAC->XDMAC_CHID[CONF_HSMCI_XDMAC_CHANNEL].XDMAC_CIE = dmaBits;
+#endif
+		ulTaskNotifyTake(pdTRUE, 200);
 	}
 }
 
 extern "C" void HSMCI_Handler()
 {
 	HSMCI->HSMCI_IDR = 0xFFFFFFFF;					// disable all HSMCI interrupts
+#if SAME70
+	XDMAC->XDMAC_CHID[CONF_HSMCI_XDMAC_CHANNEL].XDMAC_CID = 0xFFFFFFFF;
+#endif
 	if (hsmciTask != nullptr)
 	{
 		vTaskNotifyGiveFromISR(hsmciTask, nullptr);	// wake up the task
@@ -58,12 +69,18 @@ extern "C" void HSMCI_Handler()
 	}
 }
 
+#if SAME70
+extern "C" void XDMAC_handler() __attribute__ ((alias("HSMCI_Handler")));
+#endif
+
 #else
 
+// Non-RTOS code
+
 // Callback function from the hsmci driver, called while it is waiting for an SD card operation to complete
-// 'st' is the set of bits in the HSMCI status register that the caller is interested in.
+// 'stBits' is the set of bits in the HSMCI status register that the caller is interested in.
 // The caller keeps calling this function until at least one of those bits is set.
-extern "C" void hsmciIdle(uint32_t st)
+extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 {
 	if (reprap.GetSpinningModule() != moduleNetwork)
 	{
@@ -200,6 +217,10 @@ void RepRap::Init()
 # ifdef RTOS
 	HSMCI->HSMCI_IDR = 0xFFFFFFFF;	// disable all HSMCI interrupts
 	NVIC_EnableIRQ(HSMCI_IRQn);
+#  if SAME70
+	XDMAC->XDMAC_CHID[CONF_HSMCI_XDMAC_CHANNEL].XDMAC_CID = 0xFFFFFFFF;	// disable all XDMAC interrupts from the HSMCI channel
+	NVIC_EnableIRQ(XDMAC_IRQn);
+#  endif
 # endif
 #endif
 	platform->MessageF(UsbMessage, "%s is up and running.\n", FIRMWARE_NAME);
@@ -706,7 +727,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
 		const float coord = userPos[axis];
-		response->catf("%c%.3f", ch, (double)((std::isnan(coord) || std::isinf(coord)) ? 9999.9 : coord));
+		response->catf("%c%.3f", ch, HideNan(coord));
 		ch = ',';
 	}
 
@@ -729,7 +750,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for (size_t drive = 0; drive < numVisibleAxes; drive++)
 		{
-			response->catf("%c%.3f", ch, (double)liveCoordinates[drive]);
+			response->catf("%c%.3f", ch, HideNan(liveCoordinates[drive]));
 			ch = ',';
 		}
 
@@ -1933,7 +1954,9 @@ char RepRap::GetStatusCharacter() const
 	return    (processingConfig)										? 'C'	// Reading the configuration file
 			: (gCodes->IsFlashing())									? 'F'	// Flashing a new firmware binary
 			: (IsStopped()) 											? 'H'	// Halted
+#if HAS_VOLTAGE_MONITOR
 			: (!platform->HasVinPower())								? 'O'	// Off i.e. powered down
+#endif
 			: (gCodes->IsPausing()) 									? 'D'	// Pausing / Decelerating
 			: (gCodes->IsResuming()) 									? 'R'	// Resuming
 			: (gCodes->IsDoingToolChange())								? 'T'	// Changing tool
