@@ -9,7 +9,7 @@
 
 #include "GCodes/GCodes.h"
 #include "GCodes/GCodeBuffer.h"
-#include "IoPort.h"
+#include "IoPorts.h"
 #include "Pins.h"
 
 constexpr int DefaultPulsesPerClick = -4;			// values that work with displays I have are 2 and -4

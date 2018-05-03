@@ -123,6 +123,7 @@ const Pin Z_PROBE_PIN = A5;  // RADDS "ADC" pin
 // Digital pin number to turn the IR LED on (high) or off (low)
 // D34 -- unused X-max on RADDS
 const Pin Z_PROBE_MOD_PIN = 34;
+const Pin DiagPin = NoPin;
 
 // Use a PWM capable pin
 const size_t NUM_FANS = 2;
