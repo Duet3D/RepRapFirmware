@@ -157,7 +157,7 @@ void Scanner::Spin()
 			if (!IsDoingFileMacro())
 			{
 				// Pre macro complete, send CALIBRATE
-				platform.Message(MessageType::BlockingUsbMessage, "CALIBRATE\n");
+				platform.MessageF(MessageType::BlockingUsbMessage, "CALIBRATE %d\n", calibrationMode);
 				SetState(ScannerState::Calibrating);
 			}
 			break;
@@ -487,7 +487,7 @@ bool Scanner::Shutdown()
 }
 
 // Calibrate the 3D scanner
-bool Scanner::Calibrate()
+bool Scanner::Calibrate(int mode)
 {
 	if (state != ScannerState::Idle)
 	{
@@ -501,6 +501,7 @@ bool Scanner::Calibrate()
 	}
 
 	// In theory it would be good to verify if this succeeds, but the scanner client cannot give feedback (yet)
+	calibrationMode = mode;
 	DoFileMacro(CALIBRATE_PRE_G);
 	SetState(ScannerState::CalibratingPre);
 

@@ -57,7 +57,7 @@ public:
 	bool StartScan(const char *filename, int param, int resolution, int mode);
 
 	bool Cancel();										// Cancel current 3D scanner action. Returns true when done
-	bool Calibrate();									// Calibrate the 3D scanner. Returns true when done
+	bool Calibrate(int mode);							// Calibrate the 3D scanner. Returns true when done
 	bool SetAlignment(bool on);							// Send ALIGN ON/OFF to the 3D scanner. Returns true when done
 	bool Shutdown();									// Send SHUTDOWN to the scanner and unregisters it
 
@@ -86,6 +86,8 @@ private:
 
 	char buffer[ScanBufferSize];
 	size_t bufferPointer;
+
+	int calibrationMode;
 
 	String<MaxFilenameLength> scanFilename;
 	int scanRange, scanResolution, scanMode;

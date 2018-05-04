@@ -3859,7 +3859,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			if (reprap.GetScanner().IsRegistered())
 			{
-				result = GetGCodeResultFromFinished(reprap.GetScanner().Calibrate());
+				const int mode = gb.Seen('N') ? gb.GetIValue() : 0;
+				result = GetGCodeResultFromFinished(reprap.GetScanner().Calibrate(mode));
 			}
 			else
 			{
