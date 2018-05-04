@@ -1115,7 +1115,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				if (es == EndStopHit::highHit || es == EndStopHit::lowHit)
 				{
 					endstops |= (1u << drive);
-
 				}
 			}
 			else if (platform->EndStopInputState(drive))

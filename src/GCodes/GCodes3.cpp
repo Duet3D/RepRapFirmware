@@ -728,8 +728,8 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 		if (gb.Seen(axisLetters[axis]))
 		{
 			// Get parameters first and check them
-			const int endStopToUse = gb.Seen('E') ? gb.GetIValue() : 0;
-			if (endStopToUse < 0 || endStopToUse > (int)DRIVES)
+			const int endStopToUse = gb.Seen('E') ? gb.GetIValue() : -1;
+			if (endStopToUse > (int)DRIVES)
 			{
 				reply.copy("Invalid endstop number");
 				return GCodeResult::error;
@@ -741,7 +741,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 
 			// Prepare another move similar to G1 .. S3
 			moveBuffer.moveType = 3;
-			if (endStopToUse == 0)
+			if (endStopToUse < 0)
 			{
 				moveBuffer.endStopsToCheck = 0;
 				SetBit(moveBuffer.endStopsToCheck, axis);

@@ -1303,18 +1303,21 @@ void DDA::CheckEndstops(Platform& platform)
 #if HAS_STALL_DETECT
 									DRIVES
 #else
-									numAxes
+									((endStopsToCheck & UseSpecialEndstop) == 0 ? numAxes : DRIVES)
 #endif
 											; ++drive)
 	{
 		if (IsBitSet(endStopsToCheck, drive))
 		{
-			const EndStopHit esh = platform.Stopped(drive);
+			const EndStopHit esh = ((endStopsToCheck & UseSpecialEndstop) != 0 && drive >= numAxes)
+					? (platform.EndStopInputState(drive) ? EndStopHit::lowHit : EndStopHit::noStop)
+							: platform.Stopped(drive);
+
 			switch (esh)
 			{
 			case EndStopHit::lowHit:
 			case EndStopHit::highHit:
-				if ((endStopsToCheck & UseSpecialEndstop) != 0)			// use only one (probably non-default) endstop while probing a tool offset
+				if ((endStopsToCheck & UseSpecialEndstop) != 0)			// use non-default endstop while probing a tool offset
 				{
 					MoveAborted();
 				}
