@@ -1,23 +1,47 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 1.21.1
-==============
-Upgrade notes: see version 1.21
+Version 2.0 (Duet 2 series) and 1.21.1 (other hardware)
+=======================================================
+Upgrade notes:
+- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.1RC1. Use of older versions of DWC may result in "Not authorized" disconnections.
+- When the machine mode is set to CNC, G0 movement behaviour is changed to align more with the NIST standard (see below)
 
-New features: none
+New features and changed behaviour:
+- Default stepper driver mode for TMC2224 drivers is now stealthchop2
+- Stepper driver mode for TMC2660 and TMC2224 drivers can now be set via the D parameter in M569
+- Stepper driver chopper control register can now be set via the C parameter in M569 - USE THIS	ONLY IF YOU KNOW WHAT YOU ARE DOING!
+- When Z probe type 0 is selected and DWC/PanelDue have prompted the user to jog Z, axis movement before homing is allowed
+- When the machine mode is set to CNC, G0 moves are now done using the maximum travel speed of the machine in accordance with the NIST standard, and E and F parameters are no longer recognised.
+- M114 reports the user coordinates first and the machine coordinates at the end
+- Minimum allowed jerk setting (M556) is reduced from 1mm/sec to 0.1mm/sec
+- When M500 is used a warning is given if M501 was not run in config.g
+- G2 and G3 no longer require all of X, Y, I, J to be specified. X or Y and I or J is sufficient.
+- The user coordinates are updated if G10 is used to change the offsets of the current tool
+- Added experimental Z probe type 10 (Z motor stall)
+- Simulations can now be run when the printer is not homed
 
-Bug fixes
-- G1 E5 S1 on a delta no longer reports "Error: G0/G1: attempt to move delta motors to absolute positions"
-- If the print was paused because of driver stall detection, the driver numbers were not listed in the message
-- Duet Web Control clients that go to sleep without disconnecting first are timed out after 8 seconds
+Bug fixes:
+- When high microstepping was used so that MaxReps got very high, certain sequences of movement commands could lock up the movement system. MaxReps has been replaced by a hiccup count.
+- M122 reported some parts of network status twice on Duet 2 Ethernet and Duet 2 Maestro
+- If a PT1000 sensor was configured using M305 but a thermistor was plugged in instead, the firmware reported semi-random high temperatures instead of an error
+- If a PT1000 sensor was configured using M305 and then M305 was used to change it back to a thermistor, it remained configured as a PT1000
+- If a delta printer failed to home then DWC might disconnect due to NaN values for the machine coordinates in the rr_status response
+- The M105 response on a multi-tool system was not in the exact format that Octoprint required
+- Excessive decimal places in some values in M408 responses and rr_status requests have been removed
+- G1 E moves with the S1 parameter (i.e. filament loading woith extruder stall detection) on a delta reported "Error: G0/G1: attempt to move delta motors to absolute positions"
+- Duet Web Control clients that go to sleep without disconnecting first are timed out after 8 seconds (this was already happening on the Duet 06/085 but not on Duet 2)
 - VSSA fault detection was not working on the Duet Ethernet in firmware 1.21
 - If G30 was used to set an accurate Z height after mesh bed probing or loading a height map, if bed compensation was then cancelled then any Z offset from the height map remained. One consequence of this was that if bed probing was run again, the original height map Z offset was carried through to the new one, but the sign of the offset was reversed.
-- When M667 is used to select CoreXY kinematics, the kinematics type is no longer echoed
-- In firmware 1.21 when high native microstepping was used, some GCode movement sequencdes caused the motion system to lock up
+
+Internal changes:
+- RepRapFirmware 2.0 builds use a real time operating system kernel (FreeRTOS). Currently there are just three tasks: Main, Heat and Network. The tasks and their free stack space are listed in the M122 diagnostics report.
+- Custom SafeStrtod, SafeVsnprintf and related functions are used instead of C library strtod, vsnprintf etc. The replacements are thread safe and use less stack than the originals.
+- nano-newlib is used instead of newlib
 
 Known bugs:
-- Continuous rotation mode for SCARA printers doesn't work properly
+- Continuous rotation mode for SCARA printers doesn't work
+- When executing a linear (G1) move on a SCARA printer, the firmware checks that the endpoint is reachable but not that the interemdiate points are reachable
 
 Version 1.21
 ============
