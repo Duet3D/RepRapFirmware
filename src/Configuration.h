@@ -254,6 +254,7 @@ constexpr size_t FILE_BUFFER_SIZE = 256;
 #define MACRO_DIR "0:/macros/"						// Ditto - Macro files
 #define SCANS_DIRECTORY "0:/scans/"					// Directory for uploaded 3D scans
 #define FILAMENTS_DIRECTORY "0:/filaments/"			// Directory for filament configurations
+#define MENU_DIR "0:/menu/"							// Directory for menu files
 
 #define CONFIG_FILE "config.g"
 #define DEFAULT_FILE "default.g"

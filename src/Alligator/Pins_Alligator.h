@@ -113,7 +113,7 @@ const Pin Z_PROBE_PIN = 39;	 											// Z min pin ,Last signal of the end-sto
 
 // Digital pin number to turn the IR LED on (high) or off (low)
 const Pin Z_PROBE_MOD_PIN = NoPin;											// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)
-const Pin Z_PROBE_MOD_PIN07 = NoPin;										// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.7 and v0.8.5 (PC10)
+const Pin DiagPin = NoPin;
 
 // Pin number that the DAC that controls the second extruder motor current on the Duet 0.8.5 is connected to
 const int Dac0DigitalPin = NoPin;											// Arduino Due pin number corresponding to DAC0 output pin

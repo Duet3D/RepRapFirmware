@@ -8,60 +8,56 @@
 #ifndef SRC_DISPLAY_MENU_H_
 #define SRC_DISPLAY_MENU_H_
 
-#include "RepRapFirmware.h"
+#include "MenuItem.h"
 
-class Lcd7920;
-
-class MenuItem
-{
-public:
-	friend class EnumeratedMenu;
-
-protected:
-	MenuItem();
-
-private:
-	MenuItem *next;
-};
-
+// Class to represent either a full page menu or a popup menu.
+// For space reasons we store only a single instance of this class. Each nested menu is indented by a fixed margin from its parent.
 class Menu
 {
 public:
-	virtual void Show(Lcd7920& lcd) = 0;
-
-	void SetParent(Menu *p) { parent = p; }
-
-protected:
-	Menu(const char *nm) : name(nm) { parent = nullptr; }
-
-	Menu *parent;
-	const char *name;
-};
-
-class EnumeratedMenu : public Menu
-{
-public:
-	EnumeratedMenu(const char *nm);
-
-	void AddItem(MenuItem *newItem);
-	void Show(Lcd7920& lcd) override;
+	Menu(Lcd7920& refLcd);
+	void Load(const char* filename);							// load a menu file
+	void Pop();
+	void EncoderAction(int action);
+	void Refresh();
 
 private:
-	MenuItem *items;
-};
+	void Reload();
+	const char *ParseCommand(char *s);
+	void LoadError(const char *msg, unsigned int line);
+	void AddItem(MenuItem *item, bool isSelectable);
+	const char *AppendString(const char *s);
+	void LoadImage(const char *fname);
 
-class FilesMenu : public Menu
-{
-public:
-	FilesMenu(const char *nm);
+	static const char *SkipWhitespace(const char *s);
+	static char *SkipWhitespace(char *s);
 
-	void Show(Lcd7920& lcd) override;
+	static const size_t CommandBufferSize = 256;
+	static const size_t MaxMenuLineLength = 80;
+	static const size_t MaxMenuFilenameLength = 30;
+	static const size_t MaxMenuNesting = 3;						// maximum number of nested menus
+	static const PixelNumber InnerMargin = 2;					// how many pixels we keep clear inside the border
+	static const PixelNumber OuterMargin = 8 + InnerMargin;		// how many pixels of the previous menu we leave on each side
+	static const PixelNumber DefaultNumberWidth = 20;			// default numeric field width
+	static const unsigned int MaxFontNumber = 0;				// only one font supported for now
 
-private:
-	static constexpr size_t DisplayedFilenameLength = 20;
-	static constexpr size_t MaxFiles = 6;
-	String<DisplayedFilenameLength> fileNames[MaxFiles];
-	String<MaxFilenameLength> previousFile;					// the last filename displayed on the previous page
+	Lcd7920& lcd;
+	MenuItem *selectableItems;									// selectable items at the innermost level
+	MenuItem *unSelectableItems;								// unselectable items at the innermost level
+	String<MaxMenuFilenameLength> filenames[MaxMenuNesting];
+	size_t numNestedMenus;
+	int numSelectableItems;
+	int highlightedItem;
+	bool itemIsSelected;
+
+	// Variables used while parsing
+	size_t commandBufferIndex;
+	unsigned int fontNumber;
+	PixelNumber currentMargin;
+	PixelNumber row, column;
+
+	// Buffer for commands to be executed when the user presses a selected item
+	char commandBuffer[CommandBufferSize];
 };
 
 #endif /* SRC_DISPLAY_MENU_H_ */

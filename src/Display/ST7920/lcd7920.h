@@ -6,7 +6,7 @@
 #include "SharedSpi.h"
 
 // Enumeration for specifying drawing modes
-enum PixelMode
+enum class PixelMode : uint8_t
 {
 	PixelClear = 0,    // clear the pixel(s)
 	PixelSet = 1,      // set the pixel(s)
@@ -23,6 +23,9 @@ struct LcdFont
 	uint8_t width;				// max character width in pixels (the font table contains this number of bytes or words per character, plus 1 for the active width)
 	uint8_t numSpaces;			// number of space columns between characters before kerning
 };
+
+typedef uint8_t PixelNumber;
+const PixelNumber NumRows = 64, NumCols = 128;
 
 // Class for driving 128x64 graphical LCD fitted with ST7920 controller
 // This drives the GLCD in serial mode so that it needs just 2 pins.
@@ -47,24 +50,31 @@ public:
 	//  newFont = pointer to font descriptor in PROGMEM
 	void SetFont(const LcdFont *newFont);
 
+	// Get the current font height
+	PixelNumber GetFontHeight() const { return currentFont->height; }
+
 	// Select normal or inverted text (only works in graphics mode)
 	void TextInvert(bool b);
 
 	// Clear the display and select non-inverted text.
-	void Clear();
+	void Clear(PixelNumber top = 0, PixelNumber left = 0, PixelNumber bottom = NumRows, PixelNumber right = NumCols);
 
 	// Set the cursor position
-	//  r = row. In alphanumeric mode this is text row number.
-	//           In graphics mode it is the number of pixels from the top of the display to the top of the character.
-	//  c = column. In alphanumeric mode this must be even (ST7920 restriction because the characters are double width).
-	//              In graphics mode this is the number of pixels from the left hand edge of the display and the left hand edge of the character.
-	void SetCursor(uint8_t r, uint8_t c);        // 'c' in alpha mode, should be an even column number
+	//  r = row, the number of pixels from the top of the display to the top of the character.
+	//  c = column, is the number of pixels from the left hand edge of the display and the left hand edge of the character.
+	void SetCursor(PixelNumber r, uint8_t c);        // 'c' in alpha mode, should be an even column number
 
-	// Get the cursor column. Useful in graphics mode after we have written some text.
-	uint8_t GetColumn() const { return column; }
+	// Get the cursor row. Useful after we have written some text.
+	PixelNumber GetRow() const { return row; }
+
+	// Get the cursor column. Useful after we have written some text.
+	PixelNumber GetColumn() const { return column; }
+
+	// Set the left margin. This is where the cursor goes to when we print newline.
+	void SetLeftMargin(PixelNumber c);
 
 	// Set the right margin. In graphics mode, anything written will be truncated at the right margin. Defaults to the right hand edge of the display.
-	void SetRightMargin(uint8_t r);
+	void SetRightMargin(PixelNumber r);
 
 	// Clear a rectangle from the current position to the right margin (graphics mode only). The height of the rectangle is the height of the current font.
 	void ClearToMargin();
@@ -79,26 +89,26 @@ public:
 	//  x = x-coordinate of the pixel, measured from left hand edge of the display
 	//  y = y-coordinate of the pixel, measured down from the top of the display
 	//  mode = whether we want to set, clear or invert the pixel
-	void SetPixel(uint8_t x, uint8_t y, PixelMode mode);
+	void SetPixel(PixelNumber y, PixelNumber x, PixelMode mode);
 
 	// Read a pixel. Returns true if the pixel is set, false if it is clear.
 	//  x = x-coordinate of the pixel, measured from left hand edge of the display
 	//  y = y-coordinate of the pixel, measured down from the top of the display
-	bool ReadPixel(uint8_t x, uint8_t y) const;
+	bool ReadPixel(PixelNumber y, PixelNumber x) const;
 
 	// Draw a line.
 	//  x0 = x-coordinate of one end of the line, measured from left hand edge of the display
 	//  y0 = y-coordinate of one end of the line, measured down from the top of the display
 	//  x1, y1 = coordinates of the other end od the line
 	//  mode = whether we want to set, clear or invert each pixel
-	void Line(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, PixelMode mode);
+	void Line(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, PixelMode mode);
 
 	// Draw a circle
 	//  x0 = x-coordinate of the centre, measured from left hand edge of the display
 	//  y0 = y-coordinate of the centre, measured down from the top of the display
 	//  radius = radius of the circle in pixels
 	//  mode = whether we want to set, clear or invert each pixel
-	void Circle(uint8_t x0, uint8_t y0, uint8_t radius, PixelMode mode);
+	void Circle(PixelNumber row, PixelNumber col, PixelNumber radius, PixelMode mode);
 
 	// Draw a bitmap
 	//  x0 = x-coordinate of the top left, measured from left hand edge of the display. Currently, must be a multiple of 8.
@@ -106,30 +116,28 @@ public:
 	// width = width of bitmap in pixels. Currently, must be a multiple of 8.
 	// rows = height of bitmap in pixels
 	// data = bitmap image in PROGMEM, must be ((width/8) * rows) bytes long
-	void Bitmap(uint8_t x0, uint8_t y0, uint8_t width, uint8_t height, const uint8_t data[]);
+	void Bitmap(PixelNumber top, PixelNumber left, PixelNumber height, PixelNumber width, const uint8_t data[]);
 
 private:
 	uint32_t charVal;
-	const LcdFont *currentFont;					// pointer to descriptor for current font
+	const LcdFont *currentFont;						// pointer to descriptor for current font
 	sspi_device device;
-	uint16_t lastCharColData;					// data for the last non-space column, used for kerning
+	uint16_t lastCharColData;						// data for the last non-space column, used for kerning
 	uint8_t numContinuationBytesLeft;
-	uint8_t row, column;
-	uint8_t startRow, startCol, endRow, endCol;	// coordinates of the dirty rectangle
-	uint8_t nextFlushRow;						// which row we need to flush next
-	uint8_t rightMargin;
-	uint8_t image[(128 * 64)/8];				// image buffer, 1K in size
-	bool extendedMode;
+	PixelNumber row, column;
+	PixelNumber startRow, startCol, endRow, endCol;	// coordinates of the dirty rectangle
+	PixelNumber nextFlushRow;						// which row we need to flush next
+	PixelNumber leftMargin, rightMargin;
+	uint8_t image[(NumRows * NumCols)/8];			// image buffer, 1K in size
 	bool textInverted;
+	bool justSetCursor;
 
 	void sendLcdCommand(uint8_t command);
 	void sendLcdData(uint8_t data);
 	void sendLcd(uint8_t data1, uint8_t data2);
 	void commandDelay();
 	void setGraphicsAddress(unsigned int r, unsigned int c);
-	void ensureBasicMode();
-	void ensureExtendedMode();
-	size_t writeNative(uint16_t c);				// write a decoded character
+	size_t writeNative(uint16_t c);					// write a decoded character
 
 };
 

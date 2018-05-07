@@ -159,7 +159,7 @@ public:
 		{ ClearBit(axesHomed, axis); }
 
 	float GetSpeedFactor() const { return speedFactor * MinutesToSeconds; }	// Return the current speed factor
-	float GetExtrusionFactor(size_t extruder) { return extrusionFactors[extruder]; } // Return the current extrusion factors
+	float GetExtrusionFactor(size_t extruder) { return (extruder < numExtruders) ? extrusionFactors[extruder] : 0.0; } // Return the current extrusion factors
 	float GetRawExtruderTotalByDrive(size_t extruder) const;			// Get the total extrusion since start of print, for one drive
 	float GetTotalRawExtrusion() const { return rawExtruderTotal; }		// Get the total extrusion since start of print, all drives
 	float GetBabyStepOffset() const { return currentBabyStepZOffset; }	// Get the current baby stepping Z offset

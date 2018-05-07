@@ -30,9 +30,6 @@ const unsigned int LcdCommandDelayMicros = 72 - 24; // 72us required, less 24us 
 const unsigned int LcdDataDelayMicros = 10;			// delay between sending data bytes
 const unsigned int LcdDisplayClearDelayMillis = 3;	// 1.6ms should be enough
 
-const unsigned int NumRows = 64;
-const unsigned int NumCols = 128;
-
 Lcd7920::Lcd7920(uint8_t csPin)
 	: currentFont(nullptr), numContinuationBytesLeft(0), textInverted(false)
 {
@@ -54,7 +51,8 @@ void Lcd7920::Init()
 	commandDelay();
 	sendLcdCommand(LcdEntryModeSet);
 	commandDelay();
-	extendedMode = false;
+	sendLcdCommand(LcdFunctionSetExtendedGraphic);
+	commandDelay();
 
 	Clear();
 	FlushAll();
@@ -65,7 +63,7 @@ void Lcd7920::Init()
 
 void Lcd7920::SetFont(const LcdFont *newFont)
 {
-  currentFont = newFont;
+	currentFont = newFont;
 }
 
 // Write a UTF8 byte.
@@ -136,127 +134,141 @@ size_t Lcd7920::write(uint8_t c)
 
 size_t Lcd7920::writeNative(uint16_t ch)
 {
-	if (currentFont == 0)
+	if (currentFont == nullptr)
 	{
 		return 0;
 	}
 
-	const uint8_t startChar = currentFont->startCharacter;
-	const uint8_t endChar = currentFont->endCharacter;
-
-	if (ch < startChar || ch > endChar)
+	if (ch == '\n')
 	{
-		ch = 0x007F;			// replace unsupported characters by square box
+		SetCursor(row + currentFont->height + 1, leftMargin);
 	}
-
-	uint8_t ySize = currentFont->height;
-	const uint8_t bytesPerColumn = (ySize + 7)/8;
-	if (row >= NumRows)
+	else
 	{
-		ySize = 0;
-	}
-	else if (row + ySize > NumRows)
-	{
-		ySize = NumRows - row;
-	}
+		const uint8_t startChar = currentFont->startCharacter;
+		const uint8_t endChar = currentFont->endCharacter;
 
-	const uint8_t bytesPerChar = (bytesPerColumn * currentFont->width) + 1;
-	const uint8_t *fontPtr = currentFont->ptr + (bytesPerChar * (ch - startChar));
-	const uint16_t cmask = (1u << currentFont->height) - 1;
-
-	uint8_t nCols = *fontPtr++;
-
-	// Update dirty rectangle coordinates, except for endCol which we do at the end
-	{
-		if (startRow > row) { startRow = row; }
-		if (startCol > column) { startCol = column; }
-		uint8_t nextRow = row + ySize;
-		if (nextRow > NumRows) { nextRow = NumRows; }
-		if (endRow < nextRow) { endRow = nextRow; }
-	}
-
-	if (lastCharColData != 0)	// if we have written anything other than spaces
-	{
-		uint8_t numSpaces = currentFont->numSpaces;
-
-		// Decide whether to add a space column first (auto-kerning)
-		// We don't add a space column before a space character.
-		// We add a space column after a space character if we would have added one between the preceding and following characters.
-		uint16_t thisCharColData = *reinterpret_cast<const uint16_t*>(fontPtr) & cmask;
-		if (thisCharColData == 0)  // for characters with deliberate space column at the start, e.g. decimal point
+		if (ch < startChar || ch > endChar)
 		{
-			thisCharColData = *reinterpret_cast<const uint16_t*>(fontPtr + 2) & cmask;
+			ch = 0x007F;			// replace unsupported characters by square box
 		}
 
-		const bool kern = (numSpaces >= 2)
-						? ((thisCharColData & lastCharColData) == 0)
-						: (((thisCharColData | (thisCharColData << 1)) & (lastCharColData | (lastCharColData << 1))) == 0);
-		if (kern)
+		uint8_t ySize = currentFont->height;
+		const uint8_t bytesPerColumn = (ySize + 7)/8;
+		if (row >= NumRows)
 		{
-			--numSpaces;	// kern the character pair
+			ySize = 0;
 		}
-		if (numSpaces != 0 && column < rightMargin)
+		else if (row + ySize > NumRows)
 		{
-			// Add a single space column after the character
-			if (ySize != 0)
+			ySize = NumRows - row;
+		}
+
+		const uint8_t bytesPerChar = (bytesPerColumn * currentFont->width) + 1;
+		const uint8_t *fontPtr = currentFont->ptr + (bytesPerChar * (ch - startChar));
+		const uint16_t cmask = (1u << currentFont->height) - 1;
+
+		uint8_t nCols = *fontPtr++;
+
+		// Update dirty rectangle coordinates, except for endCol which we do at the end
+		{
+			if (startRow > row) { startRow = row; }
+			if (startCol > column) { startCol = column; }
+			uint8_t nextRow = row + ySize;
+			if (nextRow > NumRows) { nextRow = NumRows; }
+			if (endRow < nextRow) { endRow = nextRow; }
+		}
+
+		if (lastCharColData != 0)	// if we have written anything other than spaces
+		{
+			uint8_t numSpaces = currentFont->numSpaces;
+
+			// Decide whether to add a space column first (auto-kerning)
+			// We don't add a space column before a space character.
+			// We add a space column after a space character if we would have added one between the preceding and following characters.
+			uint16_t thisCharColData = *reinterpret_cast<const uint16_t*>(fontPtr) & cmask;
+			if (thisCharColData == 0)  // for characters with deliberate space column at the start, e.g. decimal point
 			{
-				const uint8_t mask = 0x80 >> (column & 7);
-				uint8_t *p = image + ((row * (NumCols/8)) + (column/8));
-				for (uint8_t i = 0; i < ySize && p < (image + sizeof(image)); ++i)
-				{
-					if (textInverted)
-					{
-						*p |= mask;
-					}
-					else
-					{
-						*p &= ~mask;
-					}
-					p += (NumCols/8);
-				}
+				thisCharColData = *reinterpret_cast<const uint16_t*>(fontPtr + 2) & cmask;
 			}
+
+			const bool kern = (numSpaces >= 2)
+							? ((thisCharColData & lastCharColData) == 0)
+							: (((thisCharColData | (thisCharColData << 1)) & (lastCharColData | (lastCharColData << 1))) == 0);
+			if (kern)
+			{
+				--numSpaces;	// kern the character pair
+			}
+			if (numSpaces != 0 && column < rightMargin)
+			{
+				// Add a single space column after the character
+				if (ySize != 0)
+				{
+					const uint8_t mask = 0x80 >> (column & 7);
+					uint8_t *p = image + ((row * (NumCols/8)) + (column/8));
+					for (uint8_t i = 0; i < ySize && p < (image + sizeof(image)); ++i)
+					{
+						if (textInverted)
+						{
+							*p |= mask;
+						}
+						else
+						{
+							*p &= ~mask;
+						}
+						p += (NumCols/8);
+					}
+				}
+				++column;
+			}
+		}
+
+		while (nCols != 0 && column < rightMargin)
+		{
+			uint16_t colData = *reinterpret_cast<const uint16_t*>(fontPtr);
+			fontPtr += bytesPerColumn;
+			if (colData != 0)
+			{
+				lastCharColData = colData & cmask;
+			}
+			const uint8_t mask1 = 0x80 >> (column & 7);
+			const uint8_t mask2 = ~mask1;
+			uint8_t *p = image + ((row * (NumCols/8)) + (column/8));
+			const uint16_t setPixelVal = (textInverted) ? 0 : 1;
+			for (uint8_t i = 0; i < ySize && p < (image + sizeof(image)); ++i)
+			{
+				if ((colData & 1u) == setPixelVal)
+				{
+					*p |= mask1;      // set pixel
+				}
+				else
+				{
+					*p &= mask2;     // clear pixel
+				}
+				colData >>= 1;
+				p += (NumCols/8);
+			}
+			--nCols;
 			++column;
 		}
-	}
 
-	while (nCols != 0 && column < rightMargin)
-	{
-		uint16_t colData = *reinterpret_cast<const uint16_t*>(fontPtr);
-		fontPtr += bytesPerColumn;
-		if (colData != 0)
+		if (column > endCol)
 		{
-			lastCharColData = colData & cmask;
+			endCol = min<uint8_t>(column, NumCols);
 		}
-		const uint8_t mask1 = 0x80 >> (column & 7);
-		const uint8_t mask2 = ~mask1;
-		uint8_t *p = image + ((row * (NumCols/8)) + (column/8));
-		const uint16_t setPixelVal = (textInverted) ? 0 : 1;
-		for (uint8_t i = 0; i < ySize && p < (image + sizeof(image)); ++i)
-		{
-			if ((colData & 1u) == setPixelVal)
-			{
-				*p |= mask1;      // set pixel
-			}
-			else
-			{
-				*p &= mask2;     // clear pixel
-			}
-			colData >>= 1;
-			p += (NumCols/8);
-		}
-		--nCols;
-		++column;
-	}
-	
-	if (column > endCol)
-	{
-		endCol = min<uint8_t>(column, NumCols);
+		justSetCursor = false;
 	}
 	return 1;
 }
 
+// Set the left margin. This is where the cursor goes to when we print newline.
+void Lcd7920::SetLeftMargin(PixelNumber c)
+{
+	leftMargin = (c > NumCols) ? NumCols : c;
+}
+
 // Set the right margin. In graphics mode, anything written will be truncated at the right margin. Defaults to the right hand edge of the display.
-void Lcd7920::SetRightMargin(uint8_t r)
+void Lcd7920::SetRightMargin(PixelNumber r)
 {
 	rightMargin = (r > NumCols) ? NumCols : r;
 }
@@ -315,26 +327,46 @@ void Lcd7920::TextInvert(bool b)
 	if (b != textInverted)
 	{
 		textInverted = b;
-		lastCharColData = 0xFFFF;    // always need space between inverted and non-inverted text
+		lastCharColData = (justSetCursor && !textInverted) ? 0u : 0xFFFF;
 	}
 }
 
-void Lcd7920::Clear()
+void Lcd7920::Clear(PixelNumber sRow, PixelNumber sCol, PixelNumber eRow, PixelNumber eCol)
 {
-	memset(image, 0, sizeof(image));
+	for (PixelNumber row = sRow; row < eRow; ++row)
+	{
+		PixelNumber col = sCol;
+		if ((col & 7) != 0)
+		{
+			uint8_t * const p = image + ((row * (NumCols/8)) + (col/8));
+			*p &= ~(0xFF >> (col & 7));
+			col = (col & ~7) + 1;
+		}
+		while (col < eCol)
+		{
+			image[(row * (NumCols/8)) + (col/8)] = 0;
+			col += 8;
+		}
+		if ((eCol & 7) != 0)
+		{
+			uint8_t * const p = image + ((row * (NumCols/8)) + (col/8));
+			*p &= (0xFF >> (col & 7));
+		}
+	}
 
-	// Flag whole image as dirty
-	startRow = 0;
-	endRow = NumRows;
-	startCol = 0;
-	endCol = NumCols;
-	SetCursor(0, 0);
+	// Flag cleared part as dirty
+	startRow = sRow;
+	endRow = eRow;
+	startCol = sCol;
+	endCol = eCol;
+	SetCursor(sRow, sCol);
 	textInverted = false;
-	rightMargin = NumCols;
+	leftMargin = sCol;
+	rightMargin = eCol;
 }
 
 // Draw a line using the Bresenham Algorithm (thanks Wikipedia)
-void Lcd7920::Line(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, PixelMode mode)
+void Lcd7920::Line(PixelNumber y0, PixelNumber x0, PixelNumber y1, PixelNumber x1, PixelMode mode)
 {
 	int dx = (x1 >= x0) ? x1 - x0 : x0 - x1;
 	int dy = (y1 >= y0) ? y1 - y0 : y0 - y1;
@@ -344,7 +376,7 @@ void Lcd7920::Line(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, PixelMode mod
 
 	for (;;)
 	{
-		SetPixel(x0, y0, mode);
+		SetPixel(y0, x0, mode);
 		if (x0 == x1 && y0 == y1) break;
 		int e2 = err + err;
 		if (e2 > -dy)
@@ -361,7 +393,7 @@ void Lcd7920::Line(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, PixelMode mod
 }
 
 // Draw a circle using the Bresenham Algorithm (thanks Wikipedia)
-void Lcd7920::Circle(uint8_t x0, uint8_t y0, uint8_t radius, PixelMode mode)
+void Lcd7920::Circle(PixelNumber x0, PixelNumber y0, PixelNumber radius, PixelMode mode)
 {
 	int f = 1 - (int)radius;
 	int ddF_x = 1;
@@ -369,10 +401,10 @@ void Lcd7920::Circle(uint8_t x0, uint8_t y0, uint8_t radius, PixelMode mode)
 	int x = 0;
 	int y = radius;
 
-	SetPixel(x0, y0 + radius, mode);
-	SetPixel(x0, y0 - radius, mode);
-	SetPixel(x0 + radius, y0, mode);
-	SetPixel(x0 - radius, y0, mode);
+	SetPixel(y0 + radius, x0, mode);
+	SetPixel(y0 - radius, x0, mode);
+	SetPixel(y0, x0 + radius, mode);
+	SetPixel(y0, x0 - radius, mode);
 
 	while(x < y)
 	{
@@ -388,25 +420,25 @@ void Lcd7920::Circle(uint8_t x0, uint8_t y0, uint8_t radius, PixelMode mode)
 		x++;
 		ddF_x += 2;
 		f += ddF_x;
-		SetPixel(x0 + x, y0 + y, mode);
-		SetPixel(x0 - x, y0 + y, mode);
-		SetPixel(x0 + x, y0 - y, mode);
-		SetPixel(x0 - x, y0 - y, mode);
-		SetPixel(x0 + y, y0 + x, mode);
-		SetPixel(x0 - y, y0 + x, mode);
-		SetPixel(x0 + y, y0 - x, mode);
-		SetPixel(x0 - y, y0 - x, mode);
+		SetPixel(y0 + y, x0 + x, mode);
+		SetPixel(y0 + y, x0 - x, mode);
+		SetPixel(y0 - y, x0 + x, mode);
+		SetPixel(y0 - y, x0 - x, mode);
+		SetPixel(y0 + x, x0 + y, mode);
+		SetPixel(y0 + x, x0 - y, mode);
+		SetPixel(y0 - x, x0 + y, mode);
+		SetPixel(y0 - x, x0 - y, mode);
 	}
 }
 
 // Draw a bitmap. x0 and numCols must be divisible by 8.
-void Lcd7920::Bitmap(uint8_t x0, uint8_t y0, uint8_t width, uint8_t height, const uint8_t data[])
+void Lcd7920::Bitmap(PixelNumber x0, PixelNumber y0, PixelNumber width, PixelNumber height, const uint8_t data[])
 {
-	for (uint8_t r = 0; r < height && r + y0 < NumRows; ++r)
+	for (PixelNumber r = 0; r < height && r + y0 < NumRows; ++r)
 	{
 		uint8_t *p = image + (((r + y0) * (NumCols/8)) + (x0/8));
 		uint16_t bitMapOffset = r * (width/8);
-		for (uint8_t c = 0; c < (width/8) && c + (x0/8) < NumCols/8; ++c)
+		for (PixelNumber c = 0; c < (width/8) && c + (x0/8) < NumCols/8; ++c)
 		{
 			*p++ = data[bitMapOffset++];
 		}
@@ -464,14 +496,15 @@ bool Lcd7920::FlushSome()
 }
 
 // Set the cursor position
-void Lcd7920::SetCursor(uint8_t r, uint8_t c)
+void Lcd7920::SetCursor(PixelNumber r, PixelNumber c)
 {
 	row = r;
 	column = c;
-	lastCharColData = 0u;    // flag that we just set the cursor position, so no space before next character
+	lastCharColData = (textInverted) ? 0xFFFF : 0u;    // flag that we just set the cursor position, so no space before next character
+	justSetCursor = true;
 }
 
-void Lcd7920::SetPixel(uint8_t x, uint8_t y, PixelMode mode)
+void Lcd7920::SetPixel(PixelNumber y, PixelNumber x, PixelMode mode)
 {
 	if (y < NumRows && x < rightMargin)
 	{
@@ -479,13 +512,13 @@ void Lcd7920::SetPixel(uint8_t x, uint8_t y, PixelMode mode)
 		const uint8_t mask = 0x80u >> (x%8);
 		switch(mode)
 		{
-		case PixelClear:
+		case PixelMode::PixelClear:
 			*p &= ~mask;
 			break;
-		case PixelSet:
+		case PixelMode::PixelSet:
 			*p |= mask;
 			break;
-		case PixelFlip:
+		case PixelMode::PixelFlip:
 			*p ^= mask;
 			break;
 		}
@@ -498,7 +531,7 @@ void Lcd7920::SetPixel(uint8_t x, uint8_t y, PixelMode mode)
 	}
 }
 
-bool Lcd7920::ReadPixel(uint8_t x, uint8_t y) const
+bool Lcd7920::ReadPixel(PixelNumber x, PixelNumber y) const
 {
 	if (y < NumRows && x < NumCols)
 	{
@@ -511,7 +544,6 @@ bool Lcd7920::ReadPixel(uint8_t x, uint8_t y) const
 // Set the address to write to. The column address is in 16-bit words, so it ranges from 0 to 7.
 void Lcd7920::setGraphicsAddress(unsigned int r, unsigned int c)
 {
-	ensureExtendedMode();
 	sendLcdCommand(LcdSetGdramAddress | (r & 31));
 	//commandDelay();  // don't seem to need this one
 	sendLcdCommand(LcdSetGdramAddress | c | ((r & 32) >> 2));
@@ -551,26 +583,6 @@ void Lcd7920::sendLcd(uint8_t data1, uint8_t data2)
 	delayMicroseconds(1);
 	sspi_deselect_device(&device);
 	delayMicroseconds(1);
-}
-
-void Lcd7920::ensureBasicMode()
-{
-	if (extendedMode)
-	{
-		sendLcdCommand(LcdFunctionSetBasicGraphic);
-		commandDelay();
-		extendedMode = false;
-	}
-}
-
-void Lcd7920::ensureExtendedMode()
-{
-	if (!extendedMode)
-	{
-		sendLcdCommand(LcdFunctionSetExtendedGraphic);
-		commandDelay();
-		extendedMode = true;
-	}
 }
 
 #endif

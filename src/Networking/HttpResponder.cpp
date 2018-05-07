@@ -472,7 +472,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	}
 	else if (!CheckAuthenticated())
 	{
-		RejectMessage("Not authorized", 500);
+		RejectMessage("Not authorized", 401);
 		return false;
 	}
 	else if (StringEquals(request, "disconnect"))
@@ -587,12 +587,6 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		return false;
 	}
 
-	if (response->HadOverflow())
-	{
-		// We ran out of buffers. Release the buffers we have and return false. The caller will retry later.
-		OutputBuffer::ReleaseAll(response);
-		return false;
-	}
 	return true;
 }
 
@@ -901,9 +895,9 @@ void HttpResponder::SendJsonResponse(const char* command)
 	{
 		bool mayKeepOpen;
 		const bool gotResponse = GetJsonResponse(command, jsonResponse, mayKeepOpen);
-		if (!gotResponse)
+		if (!gotResponse || jsonResponse->HadOverflow())
 		{
-			// Either this request was rejected, or it will take longer to process e.g. rr_fileinfo
+			// Either this request was rejected, or it will take longer to process e.g. rr_fileinfo, or we ran out of output buffers
 			OutputBuffer::Release(jsonResponse);
 			return;
 		}
@@ -985,7 +979,7 @@ void HttpResponder::ProcessRequest()
 		return;
 	}
 
-	// Make sure we can get an output buffer before we process the request, or we won't be able to reply
+	// Reserve an output buffer before we process the request, or we won't be able to reply
 	if (outBuf != nullptr || OutputBuffer::Allocate(outBuf))
 	{
 		if (StringEquals(commandWords[0], "GET"))
