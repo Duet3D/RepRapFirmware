@@ -45,10 +45,6 @@ void Scanner::Init()
 	bufferPointer = 0;
 	progress = 0.0f;
 	fileBeingUploaded = nullptr;
-
-#ifdef RTOS
-	scannerTask.Create(ScannerTask, "SCANNER", nullptr, TaskBase::SpinPriority);
-#endif
 }
 
 void Scanner::SetState(const ScannerState s)
@@ -382,6 +378,12 @@ void Scanner::ProcessCommand()
 bool Scanner::Enable()
 {
 	enabled = true;
+#ifdef RTOS
+	if (scannerTask.GetHandle() == nullptr)
+	{
+		scannerTask.Create(ScannerTask, "SCANNER", nullptr, TaskBase::SpinPriority);
+	}
+#endif
 	return true;
 }
 

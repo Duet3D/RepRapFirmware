@@ -47,6 +47,7 @@ private:
 	static DhtSensorType type;
 	static TemperatureError lastResult;
 	static float lastTemperature, lastHumidity;
+	static size_t badTemperatureCount;
 	static Mutex dhtMutex;
 
 #ifndef RTOS

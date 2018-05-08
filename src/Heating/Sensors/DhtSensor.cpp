@@ -39,6 +39,7 @@ DhtSensorType DhtSensor::type = DhtSensorType::Dht11;
 TemperatureError DhtSensor::lastResult = TemperatureError::notInitialised;
 float DhtSensor::lastTemperature = BAD_ERROR_TEMPERATURE;
 float DhtSensor::lastHumidity = BAD_ERROR_TEMPERATURE;
+size_t DhtSensor::badTemperatureCount = 0;
 
 Mutex DhtSensor::dhtMutex;
 
@@ -220,7 +221,17 @@ void DhtDataTransition(CallbackParameter)
 		if (numPulses == ARRAY_SIZE(pulses))
 		{
 			MutexLocker lock(dhtMutex);
+
 			ProcessReadings();
+			if (lastResult == TemperatureError::success || badTemperatureCount > MAX_BAD_TEMPERATURE_COUNT)
+			{
+				badTemperatureCount = 0;
+			}
+			else
+			{
+				badTemperatureCount++;
+				lastResult = TemperatureError::success;
+			}
 		}
 
 		// Wait a moment before starting a new measurement
