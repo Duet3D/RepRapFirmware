@@ -277,9 +277,11 @@ void RepRap::Spin()
 	spinningModule = moduleMove;
 	move->Spin();
 
+#ifndef RTOS
 	ticksInSpinState = 0;
 	spinningModule = moduleHeat;
 	heat->Spin();
+#endif
 
 #if SUPPORT_ROLAND
 	ticksInSpinState = 0;

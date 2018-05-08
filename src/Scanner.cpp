@@ -49,7 +49,6 @@ void Scanner::Init()
 #ifdef RTOS
 	scannerTask.Create(ScannerTask, "SCANNER", nullptr, TaskBase::SpinPriority);
 #endif
-
 }
 
 void Scanner::SetState(const ScannerState s)
