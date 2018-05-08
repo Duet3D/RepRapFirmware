@@ -13,10 +13,7 @@
 #if SUPPORT_DHT_SENSOR
 
 # include "TemperatureSensor.h"
-
-# ifdef RTOS
-#  include "RTOSIface.h"
-# endif
+# include "RTOSIface.h"
 
 enum class DhtSensorType
 {
