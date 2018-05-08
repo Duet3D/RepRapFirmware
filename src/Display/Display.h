@@ -29,11 +29,12 @@ public:
 private:
 	Lcd7920 lcd;
 	RotaryEncoder encoder;
-	Menu *mainMenu;
+	Menu menu;
 	uint32_t whenBeepStarted;
 	uint32_t beepLength;
 	bool present;
 	bool beepActive;
+	bool updatingFirmware;
 };
 
 #endif /* SRC_DISPLAY_DISPLAY_H_ */

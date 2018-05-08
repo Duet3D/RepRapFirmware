@@ -153,12 +153,14 @@ Remaining:
 - BUG sounds like SCARA only checks that the end point is within limits, but for a G1 move intermediate positions may violate the minimum radius
 - [done, ok] When >1 hot end heater, add T0/T1 prefix to M105 response for compatibility with Marlin etc.
 
+- Recognise Cura comment: ;TIME:38846
 - PanelDue won't connect if VIN velow minimum for stepper motors [PanelDue firmware needs to recognise status 'O']
 - Add parameter to M116 to specify acceptable temperature difference
 - Laser support, see https://forum.duet3d.com/topic/4702/laser-cnc-support-in-rrf-gcode-semantics/4
 - support M205 for setting jerk
 - support G12 clean tool?
 - support estimated print time comment from slic3r PE
+- M116 extra "close enough" parameter
 - Danny's modified SCARA kinematics (workpiece is on a plate, extruder is fixed)
 - Look at Bezier speed curves or other S-curve acceleration, https://github.com/MarlinFirmware/Marlin/pull/10373/files
 - after homing, warn if outside M208 movement limits on SCARA, polar etc.

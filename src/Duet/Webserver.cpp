@@ -904,7 +904,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 	}
 	else if (!IsAuthenticated())
 	{
-		RejectMessage("Not authorized", 500);
+		RejectMessage("Not authorized", 401);
 	}
 	else if (StringEquals(request, "disconnect"))
 	{

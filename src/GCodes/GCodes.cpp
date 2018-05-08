@@ -4726,10 +4726,10 @@ OutputBuffer *GCodes::GenerateJsonStatusResponse(int type, int seq, ResponseSour
 	if (statusResponse != nullptr)
 	{
 		statusResponse->cat('\n');
-	}
-	if (statusResponse->HadOverflow())
-	{
-		OutputBuffer::ReleaseAll(statusResponse);
+		if (statusResponse->HadOverflow())
+		{
+			OutputBuffer::ReleaseAll(statusResponse);
+		}
 	}
 	return statusResponse;
 }

@@ -21,6 +21,11 @@ inline unsigned long SafeStrtoul(const char *s, const char **endptr = nullptr, i
 	return strtoul(s, const_cast<char**>(endptr), base);
 }
 
+inline unsigned long SafeStrtoul(char *s, char **endptr = nullptr, int base = 10)
+{
+	return strtoul(s, endptr, base);
+}
+
 #define strtod(s, p) Do_not_use_strtod_use_SafeStrtod_instead
 #define strtof(s, p) Do_not_use_strtof_use_SafeStrtof_instead
 #define strtol(s, ...) Do_not_use_strtol_use_SafeStrtol_instead
