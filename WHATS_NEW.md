@@ -5,17 +5,17 @@ Version 2.0RC2 (Duet 2 series) and 1.21.1RC2 (other hardware)
 =============================================================
 Upgrade notes:
 - Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.1RC4. Use of older versions of DWC may result in "Not authorized" disconnections.
-- When the machine mode is set to CNC, G0 movement behaviour is changed to align more with the NIST standard (see below)
+- When the machine mode is set to CNC, G0 movement behaviour is changed to align more with the NIST standard (see 2.0RC1 release notes).
 
 New features and changed behaviour:
 - M144 S1 now sets the bed to Active mode. M144 with any other S parameter or no S parameter sets the bed to standby as before.
-- Added more functionality to 12864 displaty on Duet 2 Maestro
+- Added more functionality to 12864 displays on Duet 2 Maestro
 
 Bug fixes:
 - If the system ran out of output buffers when multiple tasks were generating output (e.g. DWC or Telnet combined with PanelDue or USB) then in rare cases the firmware would reboot
 
 Other changes:
-- Incorporated chrishamm's changes to scanner interfacre and DHT sensor support
+- Incorporated chrishamm's changes to scanner interface and DHT sensor support
 
 Version 2.0RC1 (Duet 2 series) and 1.21.1RC1 (other hardware)
 =============================================================
