@@ -153,6 +153,7 @@ Remaining:
 - BUG sounds like SCARA only checks that the end point is within limits, but for a G1 move intermediate positions may violate the minimum radius
 - [done, ok] When >1 hot end heater, add T0/T1 prefix to M105 response for compatibility with Marlin etc.
 
+- M144 option to exit standby mode
 - Recognise Cura comment: ;TIME:38846
 - PanelDue won't connect if VIN velow minimum for stepper motors [PanelDue firmware needs to recognise status 'O']
 - Add parameter to M116 to specify acceptable temperature difference

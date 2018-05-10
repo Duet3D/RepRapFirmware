@@ -43,8 +43,9 @@ public:
 	Heat(Platform& p);
 #ifdef RTOS
 	void Task();
-#endif
+#else
 	void Spin();												// Called in a tight loop to keep everything going
+#endif
 	void Init();												// Set everything up
 	void Exit();												// Shut everything down
 	void ResetHeaterModels();									// Reset all active heater models to defaults

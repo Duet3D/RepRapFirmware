@@ -105,13 +105,6 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 	{
 		FilamentMonitor::Spin(false);
 	}
-
-#if SUPPORT_12864_LCD
-	if (reprap.GetSpinningModule() != moduleDisplay)
-	{
-		reprap.GetDisplay().Spin(false);
-	}
-#endif
 }
 
 #endif
@@ -157,7 +150,6 @@ void RepRap::Init()
 	toolListMutex.Create();
 	messageBoxMutex.Create();
 
-	// All of the following init functions must execute reasonably quickly before the watchdog times us out
 	platform->Init();
 	network->Init();
 	SetName(DEFAULT_MACHINE_NAME);		// network must be initialised before calling this because this calls SetHostName
@@ -175,7 +167,7 @@ void RepRap::Init()
 #endif
 	printMonitor->Init();
 #if SUPPORT_12864_LCD
- 	display->Init();
+	display->Init();
 #endif
 	active = true;						// must do this before we start the network or call Spin(), else the watchdog may time out
 
@@ -224,6 +216,11 @@ void RepRap::Init()
 # endif
 #endif
 	platform->MessageF(UsbMessage, "%s is up and running.\n", FIRMWARE_NAME);
+
+#if SUPPORT_12864_LCD
+	display->Start();
+#endif
+
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
 	lastTime = micros();
@@ -277,9 +274,11 @@ void RepRap::Spin()
 	spinningModule = moduleMove;
 	move->Spin();
 
+#ifndef RTOS
 	ticksInSpinState = 0;
 	spinningModule = moduleHeat;
 	heat->Spin();
+#endif
 
 #if SUPPORT_ROLAND
 	ticksInSpinState = 0;
@@ -287,7 +286,7 @@ void RepRap::Spin()
 	roland->Spin();
 #endif
 
-#if SUPPORT_SCANNER
+#if SUPPORT_SCANNER && !SCANNER_AS_SEPARATE_TASK
 	ticksInSpinState = 0;
 	spinningModule = moduleScanner;
 	scanner->Spin();
@@ -613,19 +612,6 @@ Tool* RepRap::GetCurrentOrDefaultTool() const
 	return (currentTool != nullptr) ? currentTool : toolList;
 }
 
-void RepRap::SetToolVariables(int toolNumber, const float* standbyTemperatures, const float* activeTemperatures)
-{
-	Tool* tool = GetTool(toolNumber);
-	if (tool != nullptr)
-	{
-		tool->SetVariables(standbyTemperatures, activeTemperatures);
-	}
-	else
-	{
-		platform->MessageF(ErrorMessage, "Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
-	}
-}
-
 bool RepRap::IsHeaterAssignedToTool(int8_t heater) const
 {
 	MutexLocker lock(toolListMutex);
@@ -834,7 +820,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for(size_t i = 0; i < NUM_FANS; i++)
 		{
-			response->catf("%c%.1f", ch, (double)(platform->GetFanValue(i) * 100.0));
+			response->catf("%c%d", ch, (int)lrintf(platform->GetFanValue(i) * 100.0));
 			ch = ',';
 		}
 
@@ -847,7 +833,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			ch = ',';
 		}
 		response->cat((ch == '[') ? "[]" : "]");
-		response->catf(",\"babystep\":%.03f}", (double)gCodes->GetBabyStepOffset());
+		response->catf(",\"babystep\":%.3f}", (double)gCodes->GetBabyStepOffset());
 	}
 
 	// G-code reply sequence for webserver (sequence number for AUX is handled later)
@@ -1052,26 +1038,38 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	// Spindles
 	if (gCodes->GetMachineType() == MachineType::cnc)
 	{
-		response->cat(",\"spindles\":[");
-		for (size_t i = 0; i < MaxSpindles; i++)
+		int lastConfiguredSpindle = -1;
+		for (size_t spindle = 0; spindle < MaxSpindles; spindle++)
 		{
-			if (i > 0)
+			if (platform->AccessSpindle(spindle).GetToolNumber() != -1)
 			{
-				response->cat(',');
-			}
-
-			const Spindle& spindle = platform->AccessSpindle(i);
-			response->catf("{\"current\":%.1f,\"active\":%.1f", (double)spindle.GetCurrentRpm(), (double)spindle.GetRpm());
-			if (type == 2)
-			{
-				response->catf(",\"tool\":%d}", spindle.GetToolNumber());
-			}
-			else
-			{
-				response->cat('}');
+				lastConfiguredSpindle = spindle;
 			}
 		}
-		response->cat(']');
+
+		if (lastConfiguredSpindle != -1)
+		{
+			response->cat(",\"spindles\":[");
+			for (int i = 0; i <= lastConfiguredSpindle; i++)
+			{
+				if (i > 0)
+				{
+					response->cat(',');
+				}
+
+				const Spindle& spindle = platform->AccessSpindle(i);
+				response->catf("{\"current\":%.1f,\"active\":%.1f", (double)spindle.GetCurrentRpm(), (double)spindle.GetRpm());
+				if (type == 2)
+				{
+					response->catf(",\"tool\":%d}", spindle.GetToolNumber());
+				}
+				else
+				{
+					response->cat('}');
+				}
+			}
+			response->cat(']');
+		}
 	}
 
 	/* Extended Status Response */
@@ -1154,10 +1152,16 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			MutexLocker lock(toolListMutex);
 			for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 			{
-				// Number and Name
+				// Number
+				response->catf("{\"number\":%d", tool->Number());
+
+				// Name
 				const char *toolName = tool->GetName();
-				response->catf("{\"number\":%d,\"name\":", tool->Number());
-				response->EncodeString(toolName, strlen(toolName), false);
+				if (toolName[0] != 0)
+				{
+					response->cat(",\"name\":");
+					response->EncodeString(toolName, strlen(toolName), false);
+				}
 
 				// Heaters
 				response->cat(",\"heaters\":[");
@@ -1225,8 +1229,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				if (tool->GetFilament() != nullptr)
 				{
 					const char *filamentName = tool->GetFilament()->GetName();
-					response->catf(",\"filament\":");
-					response->EncodeString(filamentName, strlen(filamentName), false);
+					if (filamentName[0] != 0)
+					{
+						response->catf(",\"filament\":");
+						response->EncodeString(filamentName, strlen(filamentName), false);
+					}
 				}
 
 				// Offsets
@@ -1559,7 +1566,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	ch = '[';
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
-		response->catf("%c%.02f", ch, (double)(platform->GetFanValue(i) * 100.0));
+		response->catf("%c%.1f", ch, (double)(platform->GetFanValue(i) * 100.0));
 		ch = ',';
 	}
 

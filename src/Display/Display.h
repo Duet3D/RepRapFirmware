@@ -19,10 +19,13 @@ public:
 	Display();
 
 	void Init();
+	void Start();
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply);
 	void Spin(bool full);
 	void Exit();
 	void Beep(unsigned int frequency, unsigned int milliseconds);
+	void SuccessBeep();
+	void ErrorBeep();
 	bool IsPresent() const { return present; }
 	void UpdatingFirmware();
 

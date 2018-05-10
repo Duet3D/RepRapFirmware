@@ -8,12 +8,17 @@
  *  Each menu file holds a sequence of commands, one per line.
  *  The following commands are supported:
  *
- *  image [Rnn] [Cnn] [Fnn] L"filename"						; display the image from "filename" at position RC
- *  text [Rnn] [Cnn] [Fnn] T"text"							; display "text" at position RC
- *  button [Rnn] [Cnn] T"text" A"action" [L"filename"]		; display selectable text at RC, perform action when clicked
- *  value [Rnn] [Cnn] [Fnn] [Dnn] Wnnn Nvvv					; display the specified value at RC to the specified number of decimal places in the specified width
- *  alter [Rnn] [Cnn] [Fnn] [Dnn] Wnnn Nvvv					; display the specified value at RC to the specified number of decimal places in the specified width and allow it to be altered
- *  files [Rnn] [Fnn] Nnn F"initial-directory" A"action"	; display a list of files N lines high and allow them to be selected
+ *  image [Rnn] [Cnn] [Fnn] L"filename"							; display the image from "filename" at position RC
+ *  text [Rnn] [Cnn] [Fnn] T"text"								; display non-selectable "text" at position RC
+ *  button [Rnn] [Cnn] [Fnn] T"text" A"action" [L"filename"]	; display selectable "text" at RC, perform action when clicked
+ *  value [Rnn] [Cnn] [Fnn] [Dnn] Wnnn Nvvv						; display the specified value at RC to the specified number of decimal places in the specified width
+ *  alter [Rnn] [Cnn] [Fnn] [Dnn] Wnnn Nvvv						; display the specified value at RC to the specified number of decimal places in the specified width and allow it to be altered
+ *  files [Rnn] [Fnn] Nnn L"initial-directory" A"action"		; display a list of files N lines high and allow them to be selected. The list uses the full width of the display.
+ *
+ *  Rnn is the row number for the top of the element measured in pixels from the top of the display
+ *  Cnn is the column number for the left of the element measured in pixels from the left hand edge of the display
+ *  Fnn is the font to use, 0=small 1=large
+ *  Wnn is the width in pixels for the element
  *
  *  "action" can be any of:
  *  - a Gcode command string (must begin with G, M or T). In such a string, #0 represents the full name of the current file, in double quotes, set when a file is selected
@@ -22,13 +27,20 @@
  *  - "return" (returns to the parent menu)
  *  Multiple actions can be specified, separated by the vertical-bar character, e.g. "M32 #0|return|return|menu" but 'menu' may only be the last command
  *
- *  The N parameter in the "value" and "alter" commands specifies the value to change as follows:
- *  000+n	Heater n current temperature
- *  100+n	Heater n active temperature
- *  200+n	Heater n standby temperature
- *  300+n	Fan n percent full PWM
- *  400+n	Extruder n extrusion factor
- *  500		Speed factor
+ *  The N parameter in the "value" and "alter" commands specifies the value to display or change as follows:
+ *  000-079		Tool N first heater current temperature e.g. 0 = tool 0 current temperature (display only)
+ *  080-089		Bed heater (N-80) current temperature e.g. 80 = bed heater 0 current temperature (display only)
+ *  090-099		Chamber heater (N-90) current temperature e.g. 90 = chamber heater 0 current temperature (display only)
+ *  100-179		Tool (N-100) first heater active temperature e.g. 100 = tool 0 active temperature
+ *  180-189		Bed heater (N-180) active temperature e.g. 180 = bed heater 0 active temperature
+ *  190-199		Chamber heater (N-190) active temperature e.g. 190 = chamber heater 0 active temperature
+ *  200-279		Tool (N-200) first heater standby temperature e.g. 200 = tool 0 standby temperature
+ *  280-289		Bed heater (N-280) standby temperature e.g. 280 = bed heater 0 standby temperature
+ *  290-299		Chamber heater (N-290) standby temperature e.g. 290 = chamber heater 0 standby temperature
+ *  300-398		Fan (N-300) percent full PWM e.g. 302 = fan 2 percent
+ *  399			Current tool fan percent full PWM
+ *  400-499		Extruder (N-400) extrusion factor
+ *  500			Speed factor
  */
 
 #include "Menu.h"
@@ -36,9 +48,12 @@
 #include "RepRap.h"
 #include "Platform.h"
 #include "Storage/MassStorage.h"
+#include "GCodes/GCodes.h"
+#include "Display/Display.h"
 
-Menu::Menu(Lcd7920& refLcd)
-	: lcd(refLcd), selectableItems(nullptr), unSelectableItems(nullptr), numNestedMenus(0), numSelectableItems(0), highlightedItem(0), itemIsSelected(false)
+Menu::Menu(Lcd7920& refLcd, const LcdFont * const fnts[], size_t nFonts)
+	: lcd(refLcd), fonts(fnts), numFonts(nFonts),
+	  selectableItems(nullptr), unSelectableItems(nullptr), numNestedMenus(0), numSelectableItems(0), highlightedItem(0), itemIsSelected(false)
 {
 }
 
@@ -81,6 +96,7 @@ void Menu::Pop()
 void Menu::LoadError(const char *msg, unsigned int line)
 {
 	lcd.Clear(currentMargin, currentMargin, NumRows - currentMargin, NumCols - currentMargin);
+	lcd.SetFont(fonts[0]);
 	lcd.print("Error loading menu\nFile ");
 	lcd.print(filenames[numNestedMenus - 1].c_str());
 	if (line != 0)
@@ -93,7 +109,7 @@ void Menu::LoadError(const char *msg, unsigned int line)
 
 	if (numNestedMenus > 1)
 	{
-		// TODO add control to pop previous menu here
+		// TODO add control to pop previous menu here, or revert to main menu after some time
 	}
 }
 
@@ -152,7 +168,7 @@ const char *Menu::ParseCommand(char *commandWord)
 			break;
 
 		case 'F':
-			fontNumber = min<unsigned int>(SafeStrtoul(args, &args), MaxFontNumber);
+			fontNumber = min<unsigned int>(SafeStrtoul(args, &args), numFonts - 1);
 			break;
 
 		case 'D':
@@ -197,7 +213,10 @@ const char *Menu::ParseCommand(char *commandWord)
 	// Look up and execute the command
 	if (StringEquals(commandWord, "text"))
 	{
+		lcd.SetFont(fonts[fontNumber]);
 		lcd.print(text);
+		row = lcd.GetRow() - currentMargin;
+		column = lcd.GetColumn() - currentMargin;
 	}
 	else if (StringEquals(commandWord, "image") && fname != nullptr)
 	{
@@ -208,6 +227,11 @@ const char *Menu::ParseCommand(char *commandWord)
 		const char * const textString = AppendString(text);
 		const char * const actionString = AppendString(action);
 		AddItem(new ButtonMenuItem(row, column, fontNumber, textString, actionString), true);
+		// Print the button as well so that we can update the row and column
+		lcd.SetFont(fonts[fontNumber]);
+		lcd.print(text);
+		row = lcd.GetRow() - currentMargin;
+		column = lcd.GetColumn() - currentMargin;
 	}
 	else if (StringEquals(commandWord, "value"))
 	{
@@ -232,9 +256,6 @@ const char *Menu::ParseCommand(char *commandWord)
 		return "Unknown command";
 	}
 
-	row = lcd.GetRow() - currentMargin;
-	column = lcd.GetColumn() - currentMargin;
-
 	return nullptr;
 }
 
@@ -244,13 +265,13 @@ void Menu::Reload()
 	while (selectableItems != nullptr)
 	{
 		MenuItem *current = selectableItems;
-		selectableItems = selectableItems->next;
+		selectableItems = selectableItems->GetNext();
 		delete current;
 	}
 	while (unSelectableItems != nullptr)
 	{
 		MenuItem *current = unSelectableItems;
-		selectableItems = unSelectableItems->next;
+		unSelectableItems = unSelectableItems->GetNext();
 		delete current;
 	}
 	numSelectableItems = highlightedItem = 0;
@@ -303,13 +324,7 @@ void Menu::Reload()
 
 void Menu::AddItem(MenuItem *item, bool isSelectable)
 {
-	MenuItem **pItem = (isSelectable) ? &selectableItems : &unSelectableItems;
-	while (*pItem != nullptr)
-	{
-		pItem = &((*pItem)->next);
-	}
-	item->next = nullptr;
-	*pItem = item;
+	MenuItem::AppendToList((isSelectable) ? &selectableItems : &unSelectableItems, item);
 	if (isSelectable)
 	{
 		++numSelectableItems;
@@ -336,13 +351,18 @@ void Menu::EncoderAction(int action)
 	{
 		if (itemIsSelected)
 		{
-			if (action != 0)
+			MenuItem * const item = FindHighlightedItem();
+			if (item != nullptr)
 			{
-				//TODO alter the value of the selected item
+				const bool done = item->Adjust(action);
+				if (done)
+				{
+					itemIsSelected = false;
+				}
 			}
 			else
 			{
-				//TODO update the value
+				// Should not get here
 				itemIsSelected = false;
 			}
 		}
@@ -360,8 +380,34 @@ void Menu::EncoderAction(int action)
 		}
 		else
 		{
-			itemIsSelected = true;
-			// TODO change item highlighting so that the user can see we are in change-value mode
+			MenuItem * const item = FindHighlightedItem();
+			if (item != nullptr)
+			{
+				const char * const cmd = item->Select();
+				if (cmd != nullptr)
+				{
+					if (cmd[0] == 'G' || cmd[0] == 'M' || cmd[0] == 'T')
+					{
+						const bool success = reprap.GetGCodes().ProcessCommandFromLcd(cmd);
+						if (success)
+						{
+							reprap.GetDisplay().SuccessBeep();
+						}
+						else
+						{
+							reprap.GetDisplay().ErrorBeep();			// long low beep
+						}
+					}
+					else
+					{
+						//TODO run the command (popup, menu, return)
+					}
+				}
+				else
+				{
+					itemIsSelected = true;
+				}
+			}
 		}
 	}
 }
@@ -387,22 +433,35 @@ void Menu::EncoderAction(int action)
 void Menu::LoadImage(const char *fname)
 {
 	//TODO
+	lcd.print("<image>");
 }
 
 void Menu::Refresh()
 {
 	const PixelNumber rightMargin = NumCols - currentMargin;
 	int currentItem = 0;
-	for (MenuItem *item = selectableItems; item != nullptr; item = item->next)
+	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
 	{
+		lcd.SetFont(fonts[item->GetFontNumber()]);
 		item->Draw(lcd, rightMargin, currentItem == highlightedItem);
 		++currentItem;
 	}
-	for (MenuItem *item = unSelectableItems; item != nullptr; item = item->next)
+	for (MenuItem *item = unSelectableItems; item != nullptr; item = item->GetNext())
 	{
+		lcd.SetFont(fonts[item->GetFontNumber()]);
 		item->Draw(lcd, rightMargin, false);
 		++currentItem;
 	}
+}
+
+MenuItem *Menu::FindHighlightedItem() const
+{
+	MenuItem *p = selectableItems;
+	for (int n = highlightedItem; n > 0 && p != nullptr; --n)
+	{
+		p = p->GetNext();
+	}
+	return p;
 }
 
 // End

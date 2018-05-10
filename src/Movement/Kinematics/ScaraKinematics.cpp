@@ -192,9 +192,9 @@ bool ScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 		else if (!gb.Seen('K'))
 		{
 			reply.printf("Kinematics is Scara with proximal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL
-							", distal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL ", crosstalk %.1f:%.1f:%.1f, bed origin (%.1f, %.1f), segments/sec %d, min. segment length %.2f",
-							(double)proximalArmLength, (double)thetaLimits[0], (double)thetaLimits[1],
-							(double)distalArmLength, (double)psiLimits[0], (double)psiLimits[1],
+							"%s, distal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL "%s, crosstalk %.1f:%.1f:%.1f, bed origin (%.1f, %.1f), segments/sec %d, min. segment length %.2f",
+							(double)proximalArmLength, (double)thetaLimits[0], (double)thetaLimits[1], (supportsContinuousRotation[0]) ? " (continuous)" : "",
+							(double)distalArmLength, (double)psiLimits[0], (double)psiLimits[1], (supportsContinuousRotation[0]) ? " (continuous)" : "",
 							(double)crosstalk[0], (double)crosstalk[1], (double)crosstalk[2],
 							(double)xOffset, (double)yOffset,
 							(int)segmentsPerSecond, (double)minSegmentLength);

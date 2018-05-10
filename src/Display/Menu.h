@@ -15,7 +15,7 @@
 class Menu
 {
 public:
-	Menu(Lcd7920& refLcd);
+	Menu(Lcd7920& refLcd, const LcdFont * const fnts[], size_t nFonts);
 	void Load(const char* filename);							// load a menu file
 	void Pop();
 	void EncoderAction(int action);
@@ -28,6 +28,7 @@ private:
 	void AddItem(MenuItem *item, bool isSelectable);
 	const char *AppendString(const char *s);
 	void LoadImage(const char *fname);
+	MenuItem *FindHighlightedItem() const;
 
 	static const char *SkipWhitespace(const char *s);
 	static char *SkipWhitespace(char *s);
@@ -39,9 +40,11 @@ private:
 	static const PixelNumber InnerMargin = 2;					// how many pixels we keep clear inside the border
 	static const PixelNumber OuterMargin = 8 + InnerMargin;		// how many pixels of the previous menu we leave on each side
 	static const PixelNumber DefaultNumberWidth = 20;			// default numeric field width
-	static const unsigned int MaxFontNumber = 0;				// only one font supported for now
 
 	Lcd7920& lcd;
+	const LcdFont * const *fonts;
+	const size_t numFonts;
+
 	MenuItem *selectableItems;									// selectable items at the innermost level
 	MenuItem *unSelectableItems;								// unselectable items at the innermost level
 	String<MaxMenuFilenameLength> filenames[MaxMenuNesting];

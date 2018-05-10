@@ -12,7 +12,8 @@
 
 #if SUPPORT_DHT_SENSOR
 
-#include "TemperatureSensor.h"
+# include "TemperatureSensor.h"
+# include "RTOSIface.h"
 
 enum class DhtSensorType
 {
@@ -29,17 +30,25 @@ public:
 	DhtSensor(unsigned int channel);
 	~DhtSensor();
 
+#ifdef RTOS
+	static void SensorTask();
+#endif
+
 	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override;
 	void Init() override;
+	static void InitStatic();
 	TemperatureError GetTemperature(float& t) override;
 
 private:
 	static size_t numInstances;
 	static DhtSensorType type;
-	static uint32_t lastReadTime;
 	static TemperatureError lastResult;
 	static float lastTemperature, lastHumidity;
+	static size_t badTemperatureCount;
+	static Mutex dhtMutex;
 
+#ifndef RTOS
+	static uint32_t lastReadTime;
 	static enum SensorState
 	{
 		Initialising,
@@ -50,6 +59,9 @@ private:
 	static uint32_t lastOperationTime;
 
 	static void Spin();
+#endif
+
+	static void ProcessReadings();
 };
 
 #endif

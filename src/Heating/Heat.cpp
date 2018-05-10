@@ -138,6 +138,11 @@ void Heat::Init()
 	virtualHeaterSensors[2] = TemperatureSensor::Create(FirstTmcDriversSenseChannel + 1);
 #endif
 
+#if SUPPORT_DHT_SENSOR
+	// Initialise static fields of the DHT sensor
+	DhtSensor::InitStatic();
+#endif
+
 	coldExtrude = false;
 
 #ifdef RTOS
@@ -184,14 +189,6 @@ void Heat::Task()
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, platform.HeatSampleInterval());
 	}
-}
-
-// Unfortunately we still need the Spin function for the DHT sensor
-void Heat::Spin()
-{
-#if SUPPORT_DHT_SENSOR
-	DhtSensor::Spin();
-#endif
 }
 
 #else

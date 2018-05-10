@@ -26,6 +26,7 @@ public:
 	bool Read(char& b);								// Read 1 byte
 	int Read(char* buf, size_t nBytes);				// Read a block of nBytes length
 	int ReadLine(char* buf, size_t nBytes);			// As Read but stop after '\n' or '\r\n' and null-terminate
+	FileWriteBuffer *GetWriteBuffer() const;		// Return a pointer to the remaining space for writing
 	bool Write(char b);								// Write 1 byte
 	bool Write(const char *s, size_t len);			// Write a block of len bytes
 	bool Write(const uint8_t *s, size_t len);		// Write a block of len bytes
@@ -68,6 +69,8 @@ private:
 
 	static uint32_t longestWriteTime;
 };
+
+inline FileWriteBuffer *FileStore::GetWriteBuffer() const { return writeBuffer; }
 
 inline bool FileStore::Write(const uint8_t *s, size_t len) { return Write(reinterpret_cast<const char *>(s), len); }
 

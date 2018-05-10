@@ -1213,8 +1213,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					// We are processing an M106 S### command with no other recognised parameters and we have a tool selected.
 					// Apply the fan speed setting to the fans in the fan mapping for the current tool.
-					lastDefaultFanSpeed = f;
-					SetMappedFanSpeed();
+					SetMappedFanSpeed(f);
 				}
 			}
 
@@ -1696,12 +1695,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		result = GetGCodeResultFromError(SetHeaterProtection(gb, reply));
 		break;
 
-	case 144: // Set bed to standby
+	case 144: // Set bed to standby, or to active if S1 parameter given
 		{
-			int index = gb.Seen('P') ? gb.GetIValue() : 0;
-			if (index < 0 || index >= (int)NumBedHeaters)
+			const unsigned int index = gb.Seen('P') ? gb.GetUIValue() : 0;
+			if (index >= NumBedHeaters)
 			{
-				reply.printf("Invalid bed heater index '%d'", index);
+				reply.printf("Invalid bed heater index '%u'", index);
 				result = GCodeResult::error;
 				break;
 			}
@@ -1709,7 +1708,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			const int8_t bedHeater = reprap.GetHeat().GetBedHeater(index);
 			if (bedHeater >= 0)
 			{
-				reprap.GetHeat().Standby(bedHeater, nullptr);
+				if (gb.Seen('S') && gb.GetIValue() == 1)
+				{
+					reprap.GetHeat().Activate(bedHeater);
+				}
+				else
+				{
+					reprap.GetHeat().Standby(bedHeater, nullptr);
+				}
 			}
 		}
 		break;
@@ -3800,12 +3806,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			gb.GetPossiblyQuotedString(file.GetRef());
 			if (gb.Seen('S'))
 			{
-				const int sParam = gb.GetIValue();
+				const int range = gb.GetIValue();
 				if (reprap.GetScanner().IsEnabled())
 				{
 					if (reprap.GetScanner().IsRegistered())
 					{
-						result = GetGCodeResultFromFinished(reprap.GetScanner().StartScan(file.c_str(), sParam));
+						const int resolution = gb.Seen('R') ? gb.GetIValue() : 100;
+						const int mode = gb.Seen('N') ? gb.GetIValue() : 0;
+						result = GetGCodeResultFromFinished(reprap.GetScanner().StartScan(file.c_str(), range, resolution, mode));
 					}
 					else
 					{
@@ -3857,7 +3865,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			if (reprap.GetScanner().IsRegistered())
 			{
-				result = GetGCodeResultFromFinished(reprap.GetScanner().Calibrate());
+				const int mode = gb.Seen('N') ? gb.GetIValue() : 0;
+				result = GetGCodeResultFromFinished(reprap.GetScanner().Calibrate(mode));
 			}
 			else
 			{

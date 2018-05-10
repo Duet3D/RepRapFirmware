@@ -60,8 +60,15 @@ public:
 	void Suspend() const { vTaskSuspend(handle); }
 	const TaskBase *GetNext() const { return next; }
 
-	TaskBase(const TaskBase&) = delete;
-	TaskBase& operator=(const TaskBase&) = delete;
+	TaskBase(const TaskBase&) = delete;				// it's not save to copy these
+	TaskBase& operator=(const TaskBase&) = delete;	// it's not safe to assign these
+	// Ideally we would declare the destructor as deleted too, because it's unsafe to delete these because they are linked together via the 'next' field.
+	// But that prevents us from declaring static instances of tasks.
+	// Possible solutions:
+	// 1. Just be careful that after we allocate a task using 'new', we never delete it.
+	// 2. Write a destructor that removes the task from the linked list.
+	// 3. Don't allocate tasks statically, allocate them all using 'new'.
+	//~TaskBase() = delete;							// it's not safe to delete these because they are linked together via the 'next' field
 
 	static const TaskBase *GetTaskList() { return taskList; }
 
@@ -146,13 +153,13 @@ namespace RTOSIface
 #endif
 	}
 
-	// Enter a task-critical region. Used to protect concurrent access to variable form different tasks, where the variable are ont used/modified by interrupts.
+	// Enter a task-critical region. Used to protect concurrent access to variable from different tasks, where the variable are not used/modified by interrupts.
 	inline void EnterTaskCriticalSection()
 	{
 #ifdef RTOS
 		vTaskSuspendAll();
 #else
-		// nothing to do here because there is on task preemption
+		// nothing to do here because there is no task preemption
 #endif
 	}
 
@@ -160,9 +167,9 @@ namespace RTOSIface
 	inline bool LeaveTaskCriticalSection()
 	{
 #ifdef RTOS
-		return xTaskResumeAll() == pdTRUE;;
+		return xTaskResumeAll() == pdTRUE;
 #else
-		// nothing to do here because there is on task preemption
+		// nothing to do here because there is no task preemption
 		return false;
 #endif
 	}

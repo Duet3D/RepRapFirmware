@@ -15,11 +15,15 @@
 constexpr int DefaultPulsesPerClick = -4;			// values that work with displays I have are 2 and -4
 
 extern const LcdFont font11x14;
-const LcdFont& normalFont = font11x14;
-//extern const LcdFont font10x10;
+extern const LcdFont font7x11;
+
+const LcdFont& smallFont = font7x11;
+const LcdFont& largeFont = font11x14;
+
+const LcdFont * const fonts[] = { &font7x11, &font11x14 };
 
 Display::Display()
-	: lcd(LcdCSPin), encoder(EncoderPinA, EncoderPinB, EncoderPinSw), menu(lcd), present(false), beepActive(false), updatingFirmware(false)
+	: lcd(LcdCSPin), encoder(EncoderPinA, EncoderPinB, EncoderPinSw), menu(lcd, fonts, ARRAY_SIZE(fonts)), present(false), beepActive(false), updatingFirmware(false)
 {
 }
 
@@ -28,8 +32,11 @@ void Display::Init()
 	lcd.Init();
 	encoder.Init(DefaultPulsesPerClick);
 	IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
+}
 
-	lcd.SetFont(&font11x14);
+void Display::Start()
+{
+	lcd.SetFont(&smallFont);
 	menu.Load("main");
 }
 
@@ -70,7 +77,7 @@ void Display::Exit()
 	{
 		lcd.TextInvert(false);
 		lcd.Clear();
-		lcd.SetFont(&font11x14);
+		lcd.SetFont(&largeFont);
 		lcd.SetCursor(20, 0);
 		lcd.print("Shutting down...");
 	}
@@ -83,6 +90,16 @@ void Display::Beep(unsigned int frequency, unsigned int milliseconds)
 	beepLength = milliseconds;
 	beepActive = true;
 	IoPort::WriteAnalog(LcdBeepPin, 0.5, (uint16_t)frequency);
+}
+
+void Display::SuccessBeep()
+{
+	Beep(2000, 100);
+}
+
+void Display::ErrorBeep()
+{
+	Beep(500, 1000);
 }
 
 GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply)
@@ -106,7 +123,7 @@ void Display::UpdatingFirmware()
 	IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
 	lcd.TextInvert(false);
 	lcd.Clear();
-	lcd.SetFont(&font11x14);
+	lcd.SetFont(&largeFont);
 	lcd.SetCursor(20, 0);
 	lcd.print("Updating firmware...");
 	lcd.FlushAll();

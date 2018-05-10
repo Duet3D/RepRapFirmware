@@ -78,7 +78,7 @@ void MassStorage::Init()
 		memset(&inf.fileSystem, 0, sizeof(inf.fileSystem));
 		inf.mounting = inf.isMounted = false;
 		inf.cdPin = SdCardDetectPins[card];
-		inf.cardState = CardDetectState::present;
+		inf.cardState = (inf.cdPin == NoPin) ? CardDetectState::present : CardDetectState::notPresent;
 		inf.volMutex.Create();
 	}
 
