@@ -361,29 +361,26 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 		if (buf != nullptr)
 		{
 			freeOutputBuffers = buf->next;
-
 			usedOutputBuffers++;
 			if (usedOutputBuffers > maxUsedOutputBuffers)
 			{
 				maxUsedOutputBuffers = usedOutputBuffers;
 			}
+
+			// Initialise the buffer before we release the lock in case another task uses it immediately
+			buf->next = nullptr;
+			buf->last = buf;
+			buf->dataLength = buf->bytesRead = 0;
+			buf->references = 1;					// assume it's only used once by default
+			buf->isReferenced = false;
+			buf->hadOverflow = false;
+
+			return true;
 		}
 	}
 
-	if (buf == nullptr)
-	{
-		reprap.GetPlatform().LogError(ErrorCode::OutputStarvation);
-		return false;
-	}
-
-	buf->next = nullptr;
-	buf->last = buf;
-	buf->dataLength = buf->bytesRead = 0;
-	buf->references = 1;					// assume it's only used once by default
-	buf->isReferenced = false;
-	buf->hadOverflow = false;
-
-	return true;
+	reprap.GetPlatform().LogError(ErrorCode::OutputStarvation);
+	return false;
 }
 
 // Get the number of bytes left for continuous writing
