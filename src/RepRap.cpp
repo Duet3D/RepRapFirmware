@@ -1732,7 +1732,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 	if (filename != nullptr && filename[0] != 0)
 	{
 		GCodeFileInfo info;
-		if (!platform->GetMassStorage()->GetFileInfo(FS_PREFIX, filename, info, quitEarly))
+		if (!platform->GetMassStorage()->GetFileInfo(GCODE_DIR, filename, info, quitEarly))
 		{
 			// This may take a few runs...
 			return false;
@@ -1755,8 +1755,17 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 						timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
 			}
 
-			response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,\"filament\":",
+			response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,",
 				(double)info.objectHeight, (double)info.firstLayerHeight, (double)info.layerHeight);
+			if (info.printTime != 0)
+			{
+				response->catf("\"printTime\":%" PRIu32 ",", info.printTime);
+			}
+			if (info.simulatedTime != 0)
+			{
+				response->catf("\"simulatedTime\":%" PRIu32 ",", info.simulatedTime);
+			}
+			response->cat("\"filament\":");
 			char ch = '[';
 			if (info.numFilaments == 0)
 			{

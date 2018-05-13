@@ -350,8 +350,8 @@ private:
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply);		// Handle M997
 	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply);				// Handle M260
 	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply);			// Handle M261
-	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file);	// Handle M37 to simulate a whole file
-	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode);	// handle M37 to change the simulation mode
+	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile);	// Handle M37 to simulate a whole file
+	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode);		// Handle M37 to change the simulation mode
 
 	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const; // Write the config-override file
 	void CopyConfigFinalValues(GCodeBuffer& gb);							// Copy the feed rate etc. from the daemon to the input channels
@@ -519,6 +519,7 @@ private:
 	float simulationTime;						// Accumulated simulation time
 	uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging
 	bool exitSimulationWhenFileComplete;		// true if simulating a file
+	bool updateFileWhenSimulationComplete;		// true if simulated time should be appended to the file
 
 	// Firmware retraction settings
 	float retractLength, retractExtra;			// retraction length and extra length to un-retract

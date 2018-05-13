@@ -215,7 +215,7 @@ void GCodes::Reset()
 	triggersPending = 0;
 
 	simulationMode = 0;
-	exitSimulationWhenFileComplete = false;
+	exitSimulationWhenFileComplete = updateFileWhenSimulationComplete = false;
 	simulationTime = 0.0;
 	isPaused = false;
 #if HAS_VOLTAGE_MONITOR
@@ -4218,11 +4218,18 @@ void GCodes::StopPrint(StopPrintReason reason)
 
 	if (exitSimulationWhenFileComplete)
 	{
+		const float simSeconds = reprap.GetMove().GetSimulationTime() + simulationTime;
+		if (updateFileWhenSimulationComplete && reason == StopPrintReason::normalCompletion)
+		{
+			platform.GetMassStorage()->RecordSimulationTime(printingFilename, lrintf(simSeconds));
+		}
+
 		exitSimulationWhenFileComplete = false;
-		simulationMode = 0;
+		simulationMode = 0;							// do this after we append the simulation info to the file so that DWC doesn't try to reload the file info too soon
 		reprap.GetMove().Simulate(simulationMode);
 		EndSimulation(nullptr);
-		const uint32_t simMinutes = lrintf((reprap.GetMove().GetSimulationTime() + simulationTime)/60.0);
+
+		const uint32_t simMinutes = lrintf(simSeconds/60.0);
 		if (reason == StopPrintReason::normalCompletion)
 		{
 			platform.MessageF(LoggedGenericMessage, "File %s will print in %" PRIu32 "h %" PRIu32 "m plus heating time\n",
@@ -4272,6 +4279,7 @@ void GCodes::StopPrint(StopPrintReason reason)
 		}
 	}
 
+	updateFileWhenSimulationComplete = false;
 	reprap.GetPrintMonitor().StoppedPrint();		// must do this after printing the simulation details because it clears the filename
 }
 

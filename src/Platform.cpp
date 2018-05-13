@@ -1625,21 +1625,21 @@ bool Platform::AnyAxisMotorStalled(size_t drive) const
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
 		{
-			if ((SmartDrivers::GetLiveStatus(axisDrivers[drive].driverNumbers[i]) & TMC_RR_SG) != 0)
+			const uint8_t driver = axisDrivers[drive].driverNumbers[i];
+			if (driver < DRIVES && (SmartDrivers::GetLiveStatus(driver) & TMC_RR_SG) != 0)
 			{
 				return true;
 			}
 		}
-		return false;
 	}
-
-	return (SmartDrivers::GetLiveStatus(extruderDrivers[drive - numAxes]) & TMC_RR_SG) != 0;
+	return false;
 }
 
 // Return true if the motor driving this extruder is stalled
 bool Platform::ExtruderMotorStalled(size_t extruder) const pre(drive < DRIVES)
 {
-	return (SmartDrivers::GetLiveStatus(extruderDrivers[extruder]) & TMC_RR_SG) != 0;
+	const uint8_t driver = extruderDrivers[extruder];
+	return driver < DRIVES && (SmartDrivers::GetLiveStatus(driver) & TMC_RR_SG) != 0;
 }
 
 #endif

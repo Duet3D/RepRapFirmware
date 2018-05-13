@@ -715,6 +715,59 @@ void MassStorage::Spin()
 	}
 }
 
+// Append the simulated printing time to the end of the file
+void MassStorage::RecordSimulationTime(const char *printingFilename, uint32_t simSeconds)
+{
+	const char * const GCodeDir = reprap.GetPlatform().GetGCodeDir();
+	FileStore * const file = OpenFile(GCodeDir, printingFilename, OpenMode::append);
+	bool ok = (file != nullptr);
+	if (ok)
+	{
+		// Check whether there is already simulation info at the end of the file, in which case we should replace it
+		constexpr size_t BufferSize = 100;
+		String<BufferSize> buffer;
+		const FilePosition seekPos = file->Length() - BufferSize;
+		ok = file->Seek(seekPos);
+		time_t lastModtime = 0;
+		if (ok)
+		{
+			ok = (file->Read(buffer.GetRef().Pointer(), BufferSize) == BufferSize);
+			if (ok)
+			{
+				lastModtime = GetLastModifiedTime(GCodeDir, printingFilename);	// save the last modified time to that we can restore it later
+				buffer[BufferSize] = 0;											// this is OK because String<N> has N+1 bytes of storage
+				const char* const pos = strstr(buffer.c_str(), FileInfoParser::SimulatedTimeString);
+				if (pos != nullptr)
+				{
+					ok = file->Seek(seekPos + (pos - buffer.c_str()));			// overwrite previous simulation time
+				}
+				if (ok)
+				{
+					buffer.printf("%s: %" PRIu32 "\n", FileInfoParser::SimulatedTimeString, simSeconds);
+					ok = file->Write(buffer.c_str());
+					if (ok)
+					{
+						ok = file->Truncate();									// truncate file in case we overwrote a previous longer simulation time
+					}
+				}
+			}
+		}
+		if (!file->Close())
+		{
+			ok = false;
+		}
+		if (ok && lastModtime != 0)
+		{
+			ok = SetLastModifiedTime(GCodeDir, printingFilename, lastModtime);
+		}
+	}
+
+	if (!ok)
+	{
+		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to append simulated print time to file %s\n", printingFilename);
+	}
+}
+
 // Get information about the SD card and interface speed
 MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity, uint64_t& freeSpace, uint32_t& speed, uint32_t& clSize)
 {

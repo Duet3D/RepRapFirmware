@@ -43,6 +43,7 @@ public:
 
 	void Duplicate();								// Create a second reference to this file
 	bool Flush();									// Write remaining buffer data
+	bool Truncate();								// Truncate file at current file pointer
 	bool Invalidate(const FATFS *fs, bool doClose);	// Invalidate the file if it uses the specified FATFS object
 	bool IsOpenOn(const FATFS *fs) const;			// Return true if the file is open on the specified file system
 	uint32_t GetCRC32() const;

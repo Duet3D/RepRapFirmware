@@ -89,13 +89,13 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 		// Also try to allocate a write buffer so we can perform faster writes
 		// We only do this if the mode is write, not append, because we don't want to use up a large buffer to append messages to the log file,
 		// especially as we need to flush messages to SD card regularly.
-		// Currently, append mode is used only for the log file.
+		// Currently, append mode is used for the log file and for appending simulated print times to GCodes files (which required read access too).
 		writeBuffer = (mode == OpenMode::write) ? reprap.GetPlatform().GetMassStorage()->AllocateWriteBuffer() : nullptr;
 	}
 
 	const FRESULT openReturn = f_open(&file, location.c_str(),
 										(mode == OpenMode::write) ?  FA_CREATE_ALWAYS | FA_WRITE
-											: (mode == OpenMode::append) ? FA_WRITE | FA_OPEN_ALWAYS
+											: (mode == OpenMode::append) ? FA_READ | FA_WRITE | FA_OPEN_ALWAYS
 												: FA_OPEN_EXISTING | FA_READ);
 	if (openReturn != FR_OK)
 	{
@@ -117,7 +117,7 @@ void FileStore::Duplicate()
 {
 	if (!inUse)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Attempt to dup a non-open file.\n");
+		INTERNAL_ERROR;
 	}
 	else
 	{
@@ -152,7 +152,7 @@ bool FileStore::Close()
 
 	if (!inUse)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Attempt to close a non-open file.\n");
+		INTERNAL_ERROR;
 		return false;
 	}
 
@@ -195,7 +195,7 @@ bool FileStore::Seek(FilePosition pos)
 {
 	if (!inUse)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Attempt to seek on a non-open file.\n");
+		INTERNAL_ERROR;
 		return false;
 	}
 	FRESULT fr = f_lseek(&file, pos);
@@ -223,7 +223,7 @@ FilePosition FileStore::Length() const
 {
 	if (!inUse)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Attempt to size non-open file.\n");
+		INTERNAL_ERROR;
 		return 0;
 	}
 
@@ -241,7 +241,7 @@ int FileStore::Read(char* extBuf, size_t nBytes)
 {
 	if (!inUse)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Attempt to read from a non-open file.\n");
+		INTERNAL_ERROR;
 		return -1;
 	}
 
@@ -316,7 +316,7 @@ bool FileStore::Write(const char *s, size_t len)
 {
 	if (!inUse)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Attempt to write block to a non-open file.\n");
+		INTERNAL_ERROR;
 		return false;
 	}
 
@@ -361,7 +361,7 @@ bool FileStore::Flush()
 {
 	if (!inUse)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Attempt to flush a non-open file.\n");
+		INTERNAL_ERROR;
 		return false;
 	}
 
@@ -385,6 +385,23 @@ bool FileStore::Flush()
 	return f_sync(&file) == FR_OK;
 }
 
+// Truncate file at current file pointer
+bool FileStore::Truncate()
+{
+	if (!inUse)
+	{
+		INTERNAL_ERROR;
+		return false;
+	}
+
+	if (!Flush())
+	{
+		return false;
+	}
+
+	return f_truncate(&file) == FR_OK;
+}
+
 float FileStore::GetAndClearLongestWriteTime()
 {
 	float ret = (float)longestWriteTime/1000.0;
@@ -400,7 +417,7 @@ bool FileStore::SetClusterMap(uint32_t tbl[])
 {
 	if (!inUse)
 	{
-		platform->Message(ErrorMessage, "attempt to set cluster map for a non-open file.\n");
+		INTERNAL_ERROR;
 		return false;
 	}
 

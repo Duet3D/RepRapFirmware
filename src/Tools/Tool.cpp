@@ -425,15 +425,27 @@ void Tool::SetToolHeaterActiveTemperature(size_t heaterNumber, float temp)
 {
 	if (heaterNumber < heaterCount)
 	{
-		const float minTemperatureLimit = reprap.GetHeat().GetLowestTemperatureLimit(heaters[heaterNumber]);
-		const float maxTemperatureLimit = reprap.GetHeat().GetHighestTemperatureLimit(heaters[heaterNumber]);
-		if (temp > minTemperatureLimit && temp < maxTemperatureLimit)
+		const Tool * const currentTool = reprap.GetCurrentTool();
+		const bool setHeater = (currentTool == nullptr || currentTool == this);
+		if (temp < NEARLY_ABS_ZERO)								// temperatures close to ABS_ZERO turn off the heater
 		{
-			activeTemperatures[heaterNumber] = temp;
-			const Tool * const currentTool = reprap.GetCurrentTool();
-			if (currentTool == nullptr || currentTool == this)
+			activeTemperatures[heaterNumber] = 0;
+			if (setHeater)
 			{
-				reprap.GetHeat().SetActiveTemperature(heaters[heaterNumber], activeTemperatures[heaterNumber]);
+				reprap.GetHeat().SwitchOff(heaters[heaterNumber]);
+			}
+		}
+		else
+		{
+			const float minTemperatureLimit = reprap.GetHeat().GetLowestTemperatureLimit(heaters[heaterNumber]);
+			const float maxTemperatureLimit = reprap.GetHeat().GetHighestTemperatureLimit(heaters[heaterNumber]);
+			if (temp > minTemperatureLimit && temp < maxTemperatureLimit)
+			{
+				activeTemperatures[heaterNumber] = temp;
+				if (setHeater)
+				{
+					reprap.GetHeat().SetActiveTemperature(heaters[heaterNumber], activeTemperatures[heaterNumber]);
+				}
 			}
 		}
 	}
@@ -443,16 +455,28 @@ void Tool::SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp)
 {
 	if (heaterNumber < heaterCount)
 	{
-		const float minTemperatureLimit = reprap.GetHeat().GetLowestTemperatureLimit(heaters[heaterNumber]);
-		const float maxTemperatureLimit = reprap.GetHeat().GetHighestTemperatureLimit(heaters[heaterNumber]);
-		if (temp > minTemperatureLimit && temp < maxTemperatureLimit)
+		const Tool * const currentTool = reprap.GetCurrentTool();
+		const Tool * const lastStandbyTool = reprap.GetHeat().GetLastStandbyTool(heaters[heaterNumber]);
+		const bool setHeater = (currentTool == nullptr || currentTool == this || lastStandbyTool == nullptr || lastStandbyTool == this);
+		if (temp < NEARLY_ABS_ZERO)								// temperatures close to ABS_ZERO turn off the heater
 		{
-			standbyTemperatures[heaterNumber] = temp;
-			const Tool * const currentTool = reprap.GetCurrentTool();
-			const Tool * const lastStandbyTool = reprap.GetHeat().GetLastStandbyTool(heaters[heaterNumber]);
-			if (currentTool == nullptr || currentTool == this || lastStandbyTool == nullptr || lastStandbyTool  == this)
+			standbyTemperatures[heaterNumber] = 0;
+			if (setHeater)
 			{
-				reprap.GetHeat().SetStandbyTemperature(heaters[heaterNumber], standbyTemperatures[heaterNumber]);
+				reprap.GetHeat().SwitchOff(heaters[heaterNumber]);
+			}
+		}
+		else
+		{
+			const float minTemperatureLimit = reprap.GetHeat().GetLowestTemperatureLimit(heaters[heaterNumber]);
+			const float maxTemperatureLimit = reprap.GetHeat().GetHighestTemperatureLimit(heaters[heaterNumber]);
+			if (temp > minTemperatureLimit && temp < maxTemperatureLimit)
+			{
+				standbyTemperatures[heaterNumber] = temp;
+				if (setHeater)
+				{
+					reprap.GetHeat().SetStandbyTemperature(heaters[heaterNumber], standbyTemperatures[heaterNumber]);
+				}
 			}
 		}
 	}
