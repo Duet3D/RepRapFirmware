@@ -1,6 +1,22 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.0RC3 (Duet 2 series) and 1.21.1RC3 (other hardware)
+=============================================================
+Upgrade notes:
+- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.1RC4. Use of older versions of DWC may result in "Not authorized" disconnections.
+- When the machine mode is set to CNC, G0 movement behaviour is changed to align more with the NIST standard (see 2.0RC1 release notes).
+
+New features and changed behaviour:
+- M502 now resets all firmware parameters back to the values in config.g except network parameters
+- RRF attempts to pass the estimated print time and simulated print time from GCode files to DWC and PanelDue
+- When M37 is used to simulate a file, at the end of a successful simulation the simulated print time is appended to the file unless parameter F0 is included in the M37 command
+- The default folder for the M36 command is now 0:/gcodes instead of 0:/
+
+Bug fixes:
+- In RC2 it was no longer possible to turn a heater off by setting its temperatures to -273
+- Telnet didn't work reliably in all earlier 2.0 beta and RC versions
+
 Version 2.0RC2 (Duet 2 series) and 1.21.1RC2 (other hardware)
 =============================================================
 Upgrade notes:
