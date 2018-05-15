@@ -68,6 +68,7 @@ void Network::Init()
 
 	// Create the responders
 	HttpResponder::InitStatic();
+	TelnetResponder::InitStatic();
 
 	for (size_t i = 0; i < NumTelnetResponders; ++i)
 	{

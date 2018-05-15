@@ -337,7 +337,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 }
 
 // Handle M37 to simulate a whole file
-GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file)
+GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile)
 {
 	if (reprap.GetPrintMonitor().IsPrinting())
 	{
@@ -356,6 +356,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		}
 		simulationTime = 0.0;
 		exitSimulationWhenFileComplete = true;
+		updateFileWhenSimulationComplete = updateFile;
 		simulationMode = 1;
 		reprap.GetMove().Simulate(simulationMode);
 		reprap.GetPrintMonitor().StartingPrint(file.c_str());
@@ -393,7 +394,7 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 			}
 			simulationTime = 0.0;
 		}
-		exitSimulationWhenFileComplete = false;
+		exitSimulationWhenFileComplete = updateFileWhenSimulationComplete = false;
 		simulationMode = (uint8_t)newSimulationMode;
 		reprap.GetMove().Simulate(simulationMode);
 	}

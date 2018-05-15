@@ -46,13 +46,14 @@ public:
 	bool IsDriveMounted(size_t drive) const { return drive < NumSdCards && info[drive].isMounted; }
 	bool CheckDriveMounted(const char* path);
 	bool IsCardDetected(size_t card) const;
-	unsigned int InvalidateFiles(const FATFS *fs, bool doClose);	// Invalidate all open files on the specified file system, returning the number of files invalidated
-	bool AnyFileOpen(const FATFS *fs) const;						// Return true if any files are open on the file system
+	unsigned int InvalidateFiles(const FATFS *fs, bool doClose);					// Invalidate all open files on the specified file system, returning the number of files invalidated
+	bool AnyFileOpen(const FATFS *fs) const;										// Return true if any files are open on the file system
 	void CloseAllFiles();
 	unsigned int GetNumFreeFiles() const;
 	void Spin();
 	const Mutex& GetVolumeMutex(size_t vol) const { return info[vol].volMutex; }
 	bool GetFileInfo(const char *directory, const char *fileName, GCodeFileInfo& info, bool quitEarly) { return infoParser.GetFileInfo(directory, fileName, info, quitEarly); }
+	void RecordSimulationTime(const char *printingFilename, uint32_t simSeconds);	// Append the simulated printing time to the end of the file
 
 	enum class InfoResult : uint8_t
 	{

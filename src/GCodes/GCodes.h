@@ -158,8 +158,11 @@ public:
 	void SetAxisNotHomed(unsigned int axis)								// Tell us that the axis is not homed
 		{ ClearBit(axesHomed, axis); }
 
-	float GetSpeedFactor() const { return speedFactor * MinutesToSeconds; }	// Return the current speed factor
-	float GetExtrusionFactor(size_t extruder) { return (extruder < numExtruders) ? extrusionFactors[extruder] : 0.0; } // Return the current extrusion factors
+	float GetSpeedFactor() const;										// Return the current speed factor
+	void SetSpeedFactor(float factor);									// Set the speed factor
+	float GetExtrusionFactor(size_t extruder);							// Return the current extrusion factors
+	void SetExtrusionFactor(size_t extruder, float factor);				// Set an extrusion factor
+
 	float GetRawExtruderTotalByDrive(size_t extruder) const;			// Get the total extrusion since start of print, for one drive
 	float GetTotalRawExtrusion() const { return rawExtruderTotal; }		// Get the total extrusion since start of print, all drives
 	float GetBabyStepOffset() const { return currentBabyStepZOffset; }	// Get the current baby stepping Z offset
@@ -209,7 +212,15 @@ public:
 
 #if SUPPORT_12864_LCD
 	bool ProcessCommandFromLcd(const char *cmd);						// Process a GCode command from the 12864 LCD returning true if the command was accepted
+	float GetItemCurrentTemperature(unsigned int itemNumber) const;
+	float GetItemActiveTemperature(unsigned int itemNumber) const;
+	float GetItemStandbyTemperature(unsigned int itemNumber) const;
+	void SetItemActiveTemperature(unsigned int itemNumber, float temp);
+	void SetItemStandbyTemperature(unsigned int itemNumber, float temp);
+	float GetMappedFanSpeed() const { return lastDefaultFanSpeed; }		// Get the mapped fan speed
 #endif
+
+	void SetMappedFanSpeed(float f);									// Set the mapped fan speed
 
 private:
 	GCodes(const GCodes&);												// private copy constructor to prevent copying
@@ -255,7 +266,7 @@ private:
 	const char* DoStraightMove(GCodeBuffer& gb, bool isCoordinated) __attribute__((hot));	// Execute a straight move returning any error message
 	const char* DoArcMove(GCodeBuffer& gb, bool clockwise)						// Execute an arc move returning any error message
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
-	void FinaliseMove(const GCodeBuffer& gb);									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
+	void FinaliseMove(GCodeBuffer& gb);											// Adjust the move parameters to account for segmentation and/or part of the move having been done already
 	bool CheckEnoughAxesHomed(AxesBitmap axesMoved);							// Check that enough axes have been homed
 	void AbortPrint(GCodeBuffer& gb);											// Cancel any print in progress
 
@@ -339,8 +350,8 @@ private:
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply);		// Handle M997
 	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply);				// Handle M260
 	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply);			// Handle M261
-	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file);	// Handle M37 to simulate a whole file
-	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode);	// handle M37 to change the simulation mode
+	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile);	// Handle M37 to simulate a whole file
+	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode);		// Handle M37 to change the simulation mode
 
 	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const; // Write the config-override file
 	void CopyConfigFinalValues(GCodeBuffer& gb);							// Copy the feed rate etc. from the daemon to the input channels
@@ -361,6 +372,10 @@ private:
 
 	void NewMoveAvailable(unsigned int sl);								// Flag that a new move is available
 	void NewMoveAvailable();											// Flag that a new move is available
+
+#if SUPPORT_12864_LCD
+	int GetHeaterNumber(unsigned int itemNumber) const;
+#endif
 
 	Platform& platform;													// The RepRap machine
 
@@ -425,7 +440,14 @@ private:
 	float arcCurrentAngle;
 	float arcAngleIncrement;
 	bool doingArcMove;
-	bool abortedArcMove;
+
+	enum class SegmentedMoveState : uint8_t
+	{
+		inactive = 0,
+		active,
+		aborted
+	};
+	SegmentedMoveState segMoveState;
 
 	AxesBitmap axesHomedBeforeSimulation;		// axes that were homed when we started the simulation
 	RestorePoint simulationRestorePoint;		// The position and feed rate when we started a simulation
@@ -497,6 +519,7 @@ private:
 	float simulationTime;						// Accumulated simulation time
 	uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging
 	bool exitSimulationWhenFileComplete;		// true if simulating a file
+	bool updateFileWhenSimulationComplete;		// true if simulated time should be appended to the file
 
 	// Firmware retraction settings
 	float retractLength, retractExtra;			// retraction length and extra length to un-retract

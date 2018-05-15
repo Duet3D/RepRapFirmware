@@ -53,3 +53,5 @@ void Spindle::TurnOff()
 	spindleForwardPort.WriteAnalog(0.0);
 	currentRpm = 0.0;
 }
+
+// End

@@ -19,6 +19,7 @@ void GCodeFileInfo::Init()
 	firstLayerHeight = 0.0;
 	objectHeight = 0.0;
 	layerHeight = 0.0;
+	printTime = simulatedTime = 0;
 	numFilaments = 0;
 	generatedBy.Clear();
 	for (size_t extr = 0; extr < MaxExtruders; extr++)
@@ -146,26 +147,32 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 				// Search for filament usage (Cura puts it at the beginning of a G-code file)
 				if (parsedFileInfo.numFilaments == 0)
 				{
-					parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - reprap.GetGCodes().GetTotalAxes());
+					parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan);
 					headerInfoComplete &= (parsedFileInfo.numFilaments != 0);
 				}
 
 				// Look for first layer height
 				if (parsedFileInfo.firstLayerHeight == 0.0)
 				{
-					headerInfoComplete &= FindFirstLayerHeight(buf, sizeToScan, parsedFileInfo.firstLayerHeight);
+					headerInfoComplete &= FindFirstLayerHeight(buf, sizeToScan);
 				}
 
 				// Look for layer height
 				if (parsedFileInfo.layerHeight == 0.0)
 				{
-					headerInfoComplete &= FindLayerHeight(buf, sizeToScan, parsedFileInfo.layerHeight);
+					headerInfoComplete &= FindLayerHeight(buf, sizeToScan);
 				}
 
 				// Look for slicer program
 				if (parsedFileInfo.generatedBy.IsEmpty())
 				{
-					headerInfoComplete &= FindSlicerInfo(buf, sizeToScan, parsedFileInfo.generatedBy.GetRef());
+					headerInfoComplete &= FindSlicerInfo(buf, sizeToScan);
+				}
+
+				// Look for print time
+				if (parsedFileInfo.printTime == 0)
+				{
+					headerInfoComplete &= FindPrintTime(buf, sizeToScan);
 				}
 
 				// Keep track of the time stats
@@ -268,7 +275,7 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 				// Search for filament used
 				if (parsedFileInfo.numFilaments == 0)
 				{
-					parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - reprap.GetGCodes().GetTotalAxes());
+					parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan);
 					if (parsedFileInfo.numFilaments == 0)
 					{
 						footerInfoComplete = false;
@@ -278,7 +285,7 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 				// Search for layer height
 				if (parsedFileInfo.layerHeight == 0.0)
 				{
-					if (!FindLayerHeight(buf, sizeToScan, parsedFileInfo.layerHeight))
+					if (!FindLayerHeight(buf, sizeToScan))
 					{
 						footerInfoComplete = false;
 					}
@@ -287,7 +294,25 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 				// Search for object height
 				if (parsedFileInfo.objectHeight == 0.0)
 				{
-					if (!FindHeight(buf, sizeToScan, parsedFileInfo.objectHeight))
+					if (!FindHeight(buf, sizeToScan))
+					{
+						footerInfoComplete = false;
+					}
+				}
+
+				// Look for print time
+				if (parsedFileInfo.printTime == 0)
+				{
+					if (!FindPrintTime(buf, sizeToScan) && fileBeingParsed->Length() - nextSeekPos <= GcodeFooterPrintTimeSearchSize)
+					{
+						footerInfoComplete = false;
+					}
+				}
+
+				// Look for simulated print time. It will always be right at the end of the file, so don't look too far back
+				if (parsedFileInfo.simulatedTime == 0)
+				{
+					if (!FindSimulatedTime(buf, sizeToScan) && fileBeingParsed->Length() - nextSeekPos <= GcodeFooterPrintTimeSearchSize)
 					{
 						footerInfoComplete = false;
 					}
@@ -338,16 +363,15 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 }
 
 // Scan the buffer for a G1 Zxxx command. The buffer is null-terminated.
-bool FileInfoParser::FindFirstLayerHeight(const char* buf, size_t len, float& height) const
+bool FileInfoParser::FindFirstLayerHeight(const char* buf, size_t len)
 {
 	if (len < 4)
 	{
 		// Don't start if the buffer is not big enough
 		return false;
 	}
-	height = 0.0;
+	parsedFileInfo.firstLayerHeight = 0.0;
 
-//debugPrintf("Scanning %u bytes starting %.100s\n", len, buf);
 	bool inComment = false, inRelativeMode = false, foundHeight = false;
 	for(size_t i = 0; i < len - 4; i++)
 	{
@@ -383,9 +407,9 @@ bool FileInfoParser::FindFirstLayerHeight(const char* buf, size_t len, float& he
 					{
 						//debugPrintf("Found at offset %u text: %.100s\n", i, &buf[i + 1]);
 						const float flHeight = SafeStrtof(&buf[i + 1], nullptr);
-						if ((height == 0.0 || flHeight < height) && (flHeight <= reprap.GetPlatform().GetNozzleDiameter() * 3.0))
+						if ((parsedFileInfo.firstLayerHeight == 0.0 || flHeight < parsedFileInfo.firstLayerHeight) && (flHeight <= reprap.GetPlatform().GetNozzleDiameter() * 3.0))
 						{
-							height = flHeight;				// Only report first Z height if it's somewhat reasonable
+							parsedFileInfo.firstLayerHeight = flHeight;				// Only report first Z height if it's somewhat reasonable
 							foundHeight = true;
 							// NB: Don't stop here, because some slicers generate two Z moves at the beginning
 						}
@@ -407,7 +431,7 @@ bool FileInfoParser::FindFirstLayerHeight(const char* buf, size_t len, float& he
 // This parsing algorithm needs to be fast. The old one sometimes took 5 seconds or more to parse about 120K of data.
 // To speed up parsing, we now parse forwards from the start of the buffer. This means we can't stop when we have found a G1 Z command,
 // we have to look for a later G1 Z command in the buffer. But it is faster in the (common) case that we don't find a match in the buffer at all.
-bool FileInfoParser::FindHeight(const char* buf, size_t len, float& height) const
+bool FileInfoParser::FindHeight(const char* buf, size_t len)
 {
 	bool foundHeight = false;
 	bool inRelativeMode = false;
@@ -475,7 +499,7 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len, float& height) cons
 							}
 							else
 							{
-								height = SafeStrtof(zpos, nullptr);
+								parsedFileInfo.objectHeight = SafeStrtof(zpos, nullptr);
 								foundHeight = true;
 							}
 							break;		// carry on looking for a later G1 Z command
@@ -500,7 +524,7 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len, float& height) cons
 			static const char kisslicerHeightString[] = " END_LAYER_OBJECT z=";
 			if (len > 31 && StringStartsWith(buf, kisslicerHeightString))
 			{
-				height = SafeStrtof(buf + sizeof(kisslicerHeightString)/sizeof(char) - 1, nullptr);
+				parsedFileInfo.objectHeight = SafeStrtof(buf + sizeof(kisslicerHeightString)/sizeof(char) - 1, nullptr);
 				return true;
 			}
 		}
@@ -509,7 +533,7 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len, float& height) cons
 }
 
 // Scan the buffer for the layer height. The buffer is null-terminated.
-bool FileInfoParser::FindLayerHeight(const char *buf, size_t len, float& layerHeight) const
+bool FileInfoParser::FindLayerHeight(const char *buf, size_t len)
 {
 	static const char* const layerHeightStrings[] =
 	{
@@ -523,19 +547,19 @@ bool FileInfoParser::FindLayerHeight(const char *buf, size_t len, float& layerHe
 	if (*buf != 0)
 	{
 		++buf;														// make sure we can look back 1 character after we find a match
-		for (size_t i = 0; i < ARRAY_SIZE(layerHeightStrings); ++i)	// search for each string in turn
+		for (const char * lhStr : layerHeightStrings)				// search for each string in turn
 		{
 			const char *pos = buf;
 			for(;;)													// loop until success or strstr returns null
 			{
-				pos = strstr(pos, layerHeightStrings[i]);
+				pos = strstr(pos, lhStr);
 				if (pos == nullptr)
 				{
 					break;											// didn't find this string in the buffer, so try the next string
 				}
 
 				const char c = pos[-1];								// fetch the previous character
-				pos += strlen(layerHeightStrings[i]);				// skip the string we matched
+				pos += strlen(lhStr);				// skip the string we matched
 				if (c == ' ' || c == ';' || c == '\t')				// check we are not in the middle of a word
 				{
 					while (strchr(" \t=:,", *pos) != nullptr)		// skip the possible separators
@@ -546,7 +570,7 @@ bool FileInfoParser::FindLayerHeight(const char *buf, size_t len, float& layerHe
 					const float val = SafeStrtof(pos, &tailPtr);
 					if (tailPtr != pos)								// if we found and converted a number
 					{
-						layerHeight = val;
+						parsedFileInfo.layerHeight = val;
 						return true;
 					}
 				}
@@ -557,7 +581,7 @@ bool FileInfoParser::FindLayerHeight(const char *buf, size_t len, float& layerHe
 	return false;
 }
 
-bool FileInfoParser::FindSlicerInfo(const char* buf, size_t len, const StringRef& generatedBy) const
+bool FileInfoParser::FindSlicerInfo(const char* buf, size_t len)
 {
 	static const char * const GeneratedByStrings[] =
 	{
@@ -599,10 +623,10 @@ bool FileInfoParser::FindSlicerInfo(const char* buf, size_t len, const StringRef
 			break;
 		}
 
-		generatedBy.copy(introString);
+		parsedFileInfo.generatedBy.copy(introString);
 		while (*pos >= ' ')
 		{
-			generatedBy.cat(*pos++);
+			parsedFileInfo.generatedBy.cat(*pos++);
 		}
 		return true;
 	}
@@ -611,9 +635,10 @@ bool FileInfoParser::FindSlicerInfo(const char* buf, size_t len, const StringRef
 
 // Scan the buffer for the filament used. The buffer is null-terminated.
 // Returns the number of filaments found.
-unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len, float *filamentUsed, size_t maxFilaments) const
+unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len)
 {
 	unsigned int filamentsFound = 0;
+	const size_t maxFilaments = reprap.GetGCodes().GetNumExtruders();
 
 	// Look for filament usage as generated by Slic3r and Cura
 	const char* const filamentUsedStr1 = "ilament used";			// comment string used by slic3r and Cura, followed by filament used and "mm"
@@ -628,7 +653,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len, float
 		while (isDigit(*p))
 		{
 			const char* q;
-			filamentUsed[filamentsFound] = SafeStrtof(p, &q);
+			parsedFileInfo.filamentNeeded[filamentsFound] = SafeStrtof(p, &q);
 			p = q;
 			if (*p == 'm')
 			{
@@ -639,7 +664,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len, float
 				}
 				else
 				{
-					filamentUsed[filamentsFound] *= 1000.0;		// Cura outputs filament used in metres not mm
+					parsedFileInfo.filamentNeeded[filamentsFound] *= 1000.0;		// Cura outputs filament used in metres not mm
 				}
 			}
 			++filamentsFound;
@@ -667,7 +692,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len, float
 			}
 			if (isDigit(*p))
 			{
-				filamentUsed[filamentsFound] = SafeStrtof(p, nullptr);
+				parsedFileInfo.filamentNeeded[filamentsFound] = SafeStrtof(p, nullptr);
 				++filamentsFound;
 			}
 		}
@@ -687,7 +712,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len, float
 			}
 			if (isDigit(*p))
 			{
-				filamentUsed[filamentsFound] = SafeStrtof(p, nullptr); // S3D reports filament usage in mm, no conversion needed
+				parsedFileInfo.filamentNeeded[filamentsFound] = SafeStrtof(p, nullptr); // S3D reports filament usage in mm, no conversion needed
 				++filamentsFound;
 			}
 		}
@@ -712,7 +737,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len, float
 
 			if (isDigit(*p))
 			{
-				filamentUsed[filamentsFound] = SafeStrtof(p, nullptr);
+				parsedFileInfo.filamentNeeded[filamentsFound] = SafeStrtof(p, nullptr);
 				++filamentsFound;
 			}
 		}
@@ -726,11 +751,101 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* buf, size_t len, float
 		if (p != nullptr)
 		{
 			const float filamentCMM = SafeStrtof(p + strlen(filamentVolumeStr), nullptr) * 1000.0;
-			filamentUsed[filamentsFound++] = filamentCMM / (Pi * fsquare(reprap.GetPlatform().GetFilamentWidth() / 2.0));
+			parsedFileInfo.filamentNeeded[filamentsFound++] = filamentCMM / (Pi * fsquare(reprap.GetPlatform().GetFilamentWidth() / 2.0));
 		}
 	}
 
 	return filamentsFound;
+}
+
+// Scan the buffer for the estimated print time
+bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
+{
+	static const char* const PrintTimeStrings[] =
+	{
+		" estimated printing time",		// slic3r PE		"; estimated printing time = 1h 5m 24s"
+		";TIME",						// Cura				";TIME:38846"
+		" Build time"					// S3D				";   Build time: 0 hours 42 minutes"
+										// also KISSlicer	"; Estimated Build Time:   332.83 minutes"
+	};
+
+	for (const char * ptStr : PrintTimeStrings)
+	{
+		const char* pos = strstr(buf, ptStr);
+		if (pos != nullptr)
+		{
+			pos += strlen(ptStr);
+			while (strchr(" \t=:", *pos))
+			{
+				++pos;
+			}
+			const char * const q = pos;
+			float hours = 0.0, minutes = 0.0;
+			float secs = SafeStrtod(pos, &pos);
+			if (q != pos)
+			{
+				while (*pos == ' ')
+				{
+					++pos;
+				}
+				if (*pos == 'h')
+				{
+					hours = secs;
+					if (StringStartsWith(pos, "hours"))
+					{
+						pos += 5;
+					}
+					else
+					{
+						++pos;
+					}
+					secs = SafeStrtod(pos, &pos);
+					while (*pos == ' ')
+					{
+						++pos;
+					}
+				}
+				if (*pos == 'm')
+				{
+					minutes = secs;
+					if (StringStartsWith(pos, "minutes"))
+					{
+						pos += 7;
+					}
+					else
+					{
+						++pos;
+					}
+					secs = SafeStrtod(pos, &pos);
+				}
+			}
+			parsedFileInfo.printTime = lrintf((hours * 60.0 + minutes) * 60.0 + secs);
+			return true;
+		}
+	}
+	return false;
+}
+
+// Scan the buffer for the simulated print time
+bool FileInfoParser::FindSimulatedTime(const char* buf, size_t len)
+{
+	const char* pos = strstr(buf, SimulatedTimeString);
+	if (pos != nullptr)
+	{
+		pos += strlen(SimulatedTimeString);
+		while (strchr(" \t=:", *pos))
+		{
+			++pos;
+		}
+		const char * const q = pos;
+		const uint32_t secs = SafeStrtoul(pos, &pos);
+		if (q != pos)
+		{
+			parsedFileInfo.simulatedTime = secs;
+			return true;
+		}
+	}
+	return false;
 }
 
 // End

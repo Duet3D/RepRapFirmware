@@ -362,7 +362,7 @@ void TmcDriverState::Enable(bool en)
 }
 
 // Read the status
-uint32_t TmcDriverState::ReadLiveStatus() const
+inline uint32_t TmcDriverState::ReadLiveStatus() const
 {
 	return lastReadStatus & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
 }

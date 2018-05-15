@@ -58,8 +58,6 @@ public:
 	int Heater(size_t heaterNumber) const;
 	const char *GetName() const;
 	int Number() const;
-	void SetVariables(const float* standby, const float* active);
-	void GetVariables(float* standby, float* active) const;
 	void DefineMix(const float m[]);
 	const float* GetMix() const;
 	float MaxFeedrate() const;
@@ -71,6 +69,11 @@ public:
 	Tool *Next() const { return next; }
 	ToolState GetState() const { return state; }
 	bool WriteSettings(FileStore *f) const;			// write the tool's settings to file
+
+	float GetToolHeaterActiveTemperature(size_t heaterNumber) const;
+	float GetToolHeaterStandbyTemperature(size_t heaterNumber) const;
+	void SetToolHeaterActiveTemperature(size_t heaterNumber, float temp);
+	void SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp);
 
 	friend class RepRap;
 

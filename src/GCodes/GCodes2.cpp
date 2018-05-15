@@ -99,10 +99,6 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 	{
 		return true;					// we only simulate some gcodes
 	}
-	if (gb.MachineState().runningM502 && code != 31)
-	{
-		return true;					// when running M502 the only gcode we execute is G31
-	}
 
 	switch (code)
 	{
@@ -352,10 +348,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	{
 		return true;			// we don't simulate most M codes
 	}
-	if (gb.MachineState().runningM502 && code != 301 && code != 307 && code != 558 && code != 665 && code != 666)
-	{
-		return true;			// when running M502 the only mcodes we execute are 301, 307, 558, 665 and 666
-	}
 
 	switch (code)
 	{
@@ -400,20 +392,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			switch (machineType)
 			{
 			case MachineType::cnc:
-			{
-				const float rpm = gb.GetFValue();
-				const uint32_t slot = gb.Seen('P') ? gb.GetUIValue() : 0;
-				if (slot >= MaxSpindles)
 				{
-					reply.copy("Invalid spindle index");
-					result = GCodeResult::error;
-				}
-				else
-				{
-					platform.AccessSpindle(slot).SetRpm(rpm);
+					const float rpm = gb.GetFValue();
+					const uint32_t slot = gb.Seen('P') ? gb.GetUIValue() : 0;
+					if (slot >= MaxSpindles)
+					{
+						reply.copy("Invalid spindle index");
+						result = GCodeResult::error;
+					}
+					else
+					{
+						platform.AccessSpindle(slot).SetRpm(rpm);
+					}
 				}
 				break;
-			}
 
 			case MachineType::laser:
 				platform.SetLaserPwm(gb.GetFValue()/laserMaxPower);
@@ -912,7 +904,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			gb.TryGetPossiblyQuotedString('P', simFileName.GetRef(), seen);
 			if (seen)
 			{
-				result = SimulateFile(gb, reply, simFileName.GetRef());
+				const bool updateFile = !gb.Seen('F') || gb.GetUIValue() == 1;
+				result = SimulateFile(gb, reply, simFileName.GetRef(), updateFile);
 			}
 			else
 			{
@@ -1213,8 +1206,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					// We are processing an M106 S### command with no other recognised parameters and we have a tool selected.
 					// Apply the fan speed setting to the fans in the fan mapping for the current tool.
-					lastDefaultFanSpeed = f;
-					SetMappedFanSpeed();
+					SetMappedFanSpeed(f);
 				}
 			}
 
@@ -1696,12 +1688,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		result = GetGCodeResultFromError(SetHeaterProtection(gb, reply));
 		break;
 
-	case 144: // Set bed to standby
+	case 144: // Set bed to standby, or to active if S1 parameter given
 		{
-			int index = gb.Seen('P') ? gb.GetIValue() : 0;
-			if (index < 0 || index >= (int)NumBedHeaters)
+			const unsigned int index = gb.Seen('P') ? gb.GetUIValue() : 0;
+			if (index >= NumBedHeaters)
 			{
-				reply.printf("Invalid bed heater index '%d'", index);
+				reply.printf("Invalid bed heater index '%u'", index);
 				result = GCodeResult::error;
 				break;
 			}
@@ -1709,7 +1701,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			const int8_t bedHeater = reprap.GetHeat().GetBedHeater(index);
 			if (bedHeater >= 0)
 			{
-				reprap.GetHeat().Standby(bedHeater, nullptr);
+				if (gb.Seen('S') && gb.GetIValue() == 1)
+				{
+					reprap.GetHeat().Activate(bedHeater);
+				}
+				else
+				{
+					reprap.GetHeat().Standby(bedHeater, nullptr);
+				}
 			}
 		}
 		break;
@@ -2520,10 +2519,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 451: // Select FFF printer mode
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return false;
+		}
 		machineType = MachineType::fff;
 		break;
 
 	case 452: // Select laser mode
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return false;
+		}
 		machineType = MachineType::laser;
 		if (gb.Seen('P'))
 		{
@@ -2554,6 +2561,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 453: // Select CNC mode
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return false;
+		}
 		{
 			uint32_t slot = gb.Seen('S') ? gb.GetUIValue() : 0;
 			if (slot >= MaxSpindles)
@@ -2606,23 +2617,34 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
-	case 500: // Store parameters in EEPROM
+	case 500: // Store parameters in config-override.g
 		result = WriteConfigOverrideFile(gb, reply);
 		break;
 
-	case 501: // Load parameters from EEPROM
-		if (runningConfigFile)
+	case 501: // Load parameters from config-override.g
+		if (!gb.MachineState().runningM502 && !gb.MachineState().runningM501)		// when running M502 we ignore config-override.g
 		{
-			m501SeenInConfigFile = true;
+			if (runningConfigFile)
+			{
+				m501SeenInConfigFile = true;
+			}
+			DoFileMacro(gb, CONFIG_OVERRIDE_G, true, code);
 		}
-		DoFileMacro(gb, CONFIG_OVERRIDE_G, true, code);
 		break;
 
-	case 502: // Revert to default "factory settings"
-		reprap.GetHeat().ResetHeaterModels();							// in case some heaters have no M307 commands in config.g
-		reprap.GetMove().GetKinematics().SetCalibrationDefaults();		// in case M665/M666/M667/M669 in config.g don't define all the parameters
-		platform.SetZProbeDefaults();
-		DoFileMacro(gb, CONFIG_FILE, true, code);
+	case 502: // Revert to default "factory settings" ignoring values in config-override.g
+		if (!gb.MachineState().runningM502)									// avoid recursion
+		{
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
+			reprap.GetHeat().SwitchOffAll(true);							// turn heaters off before changing the models
+			reprap.GetHeat().ResetHeaterModels();							// in case some heaters have no M307 commands in config.g
+			reprap.GetMove().GetKinematics().SetCalibrationDefaults();		// in case M665/M666/M667/M669 in config.g don't define all the parameters
+			platform.SetZProbeDefaults();
+			DoFileMacro(gb, CONFIG_FILE, true, code);
+		}
 		break;
 
 	case 503: // List variable settings
@@ -2678,6 +2700,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 540: // Set/report MAC address
+		if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
 		{
 			const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 			if (gb.Seen('P'))
@@ -2730,6 +2753,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 552: // Enable/Disable network and/or Set/Get IP address
+		if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
 		{
 			bool seen = false;
 			const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
@@ -2787,44 +2811,50 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 553: // Set/Get netmask
-		if (gb.Seen('P'))
+		if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
 		{
-			uint8_t eth[4];
-			if (gb.GetIPAddress(eth))
+			if (gb.Seen('P'))
 			{
-				platform.SetNetMask(eth);
+				uint8_t eth[4];
+				if (gb.GetIPAddress(eth))
+				{
+					platform.SetNetMask(eth);
+				}
+				else
+				{
+					reply.copy("Bad IP address");
+					result = GCodeResult::error;
+				}
 			}
 			else
 			{
-				reply.copy("Bad IP address");
-				result = GCodeResult::error;
+				const uint8_t * const nm = platform.NetMask();
+				reply.printf("Net mask: %d.%d.%d.%d ", nm[0], nm[1], nm[2], nm[3]);
 			}
-		}
-		else
-		{
-			const uint8_t * const nm = platform.NetMask();
-			reply.printf("Net mask: %d.%d.%d.%d ", nm[0], nm[1], nm[2], nm[3]);
 		}
 		break;
 
 	case 554: // Set/Get gateway
-		if (gb.Seen('P'))
+		if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
 		{
-			uint8_t eth[4];
-			if (gb.GetIPAddress(eth))
+			if (gb.Seen('P'))
 			{
-				platform.SetGateWay(eth);
+				uint8_t eth[4];
+				if (gb.GetIPAddress(eth))
+				{
+					platform.SetGateWay(eth);
+				}
+				else
+				{
+					reply.copy("Bad IP address");
+					result = GCodeResult::error;
+				}
 			}
 			else
 			{
-				reply.copy("Bad IP address");
-				result = GCodeResult::error;
+				const uint8_t * const gw = platform.GateWay();
+				reply.printf("Gateway: %d.%d.%d.%d ", gw[0], gw[1], gw[2], gw[3]);
 			}
-		}
-		else
-		{
-			const uint8_t * const gw = platform.GateWay();
-			reply.printf("Gateway: %d.%d.%d.%d ", gw[0], gw[1], gw[2], gw[3]);
 		}
 		break;
 
@@ -3495,6 +3525,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 587:	// Add WiFi network or list remembered networks
 	case 588:	// Forget WiFi network
 	case 589:	// Configure access point
+		if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
 		{
 			OutputBuffer *longReply = nullptr;
 			result = reprap.GetNetwork().HandleWiFiCode(code, gb, reply, longReply);

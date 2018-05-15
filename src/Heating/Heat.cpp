@@ -138,8 +138,10 @@ void Heat::Init()
 	virtualHeaterSensors[2] = TemperatureSensor::Create(FirstTmcDriversSenseChannel + 1);
 #endif
 
+#if SUPPORT_DHT_SENSOR
 	// Initialise static fields of the DHT sensor
 	DhtSensor::InitStatic();
+#endif
 
 	coldExtrude = false;
 

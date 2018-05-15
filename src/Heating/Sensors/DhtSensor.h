@@ -31,7 +31,7 @@ public:
 	~DhtSensor();
 
 #ifdef RTOS
-	static void Task();
+	static void SensorTask();
 #endif
 
 	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override;

@@ -20,12 +20,12 @@ const char* const SCAN_POST_G = "scan_post.g";
 const char* const CALIBRATE_PRE_G = "calibrate_pre.g";
 const char* const CALIBRATE_POST_G = "calibrate_post.g";
 
-#ifdef RTOS
+#if SCANNER_AS_SEPARATE_TASK
 
 # include "Tasks.h"
 
 constexpr uint32_t ScannerTaskStackWords = 400;			// task stack size in dwords
-static Task<ScannerTaskStackWords> scannerTask;
+static Task<ScannerTaskStackWords> *scannerTask = nullptr;
 
 extern "C" void ScannerTask(void * pvParameters)
 {
@@ -378,10 +378,11 @@ void Scanner::ProcessCommand()
 bool Scanner::Enable()
 {
 	enabled = true;
-#ifdef RTOS
-	if (scannerTask.GetHandle() == nullptr)
+#if SCANNER_AS_SEPARATE_TASK
+	if (scannerTask == nullptr)
 	{
-		scannerTask.Create(ScannerTask, "SCANNER", nullptr, TaskBase::SpinPriority);
+		scannerTask = new Task<ScannerTaskStackWords>;
+		scannerTask->Create(ScannerTask, "SCANNER", nullptr, TaskBase::SpinPriority);
 	}
 #endif
 	return true;

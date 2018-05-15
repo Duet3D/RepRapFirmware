@@ -1021,8 +1021,11 @@ inline bool Platform::GetDirectionValue(size_t drive) const
 
 inline void Platform::SetDriverDirection(uint8_t driver, bool direction)
 {
-	const bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
-	digitalWrite(DIRECTION_PINS[driver], d);
+	if (driver < DRIVES)
+	{
+		const bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
+		digitalWrite(DIRECTION_PINS[driver], d);
+	}
 }
 
 inline bool Platform::GetEnableValue(size_t driver) const
@@ -1235,7 +1238,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // The bitmaps for various controller electronics are organised like this:
 // Duet WiFi:
 //	All step pins are on port D, so the bitmap is just the map of step bits in port D.
-// Duet M:
+// Duet Maestro:
 //	All step pins are on port C, so the bitmap is just the map of step bits in port C.
 // Duet 0.6 and 0.8.5:
 //	Step pins are PA0, PC7,9,11,14,25,29 and PD0,3.
@@ -1250,8 +1253,13 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // Calculate the step bit for a driver. This doesn't need to be fast.
 /*static*/ inline uint32_t Platform::CalcDriverBitmap(size_t driver)
 {
+	if (driver >= DRIVES)
+	{
+		return 0;
+	}
+
 #if defined(SAME70_TEST_BOARD)
-	return 0;
+	return 0;				// TODO assign step pins
 #else
 	const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
 #if defined(DUET_NG)
@@ -1276,11 +1284,11 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 /*static*/ inline void Platform::StepDriversHigh(uint32_t driverMap)
 {
 #if defined(SAME70_TEST_BOARD)
-	// TBD
+	// TODO
 #elif defined(DUET_NG)
 	PIOD->PIO_ODSR = driverMap;				// on Duet WiFi all step pins are on port D
 #elif defined(DUET_M)
-	PIOC->PIO_ODSR = driverMap;				// on Duet M all step pins are on port C
+	PIOC->PIO_ODSR = driverMap;				// on Duet Maestro all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = driverMap;
 	PIOC->PIO_ODSR = driverMap;
@@ -1309,7 +1317,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 #elif defined(DUET_NG)
 	PIOD->PIO_ODSR = 0;						// on Duet WiFi all step pins are on port D
 #elif defined(DUET_M)
-	PIOC->PIO_ODSR = 0;						// on Duet M all step pins are on port C
+	PIOC->PIO_ODSR = 0;						// on Duet Maestro all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = 0;
 	PIOC->PIO_ODSR = 0;

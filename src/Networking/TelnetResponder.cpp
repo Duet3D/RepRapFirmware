@@ -51,7 +51,12 @@ void TelnetResponder::ConnectionLost()
 {
 	if ((responderState == ResponderState::reading) || (responderState == ResponderState::sending))
 	{
-		numSessions--;
+		MutexLocker lock(gcodeReplyMutex);
+
+		if (numSessions != 0)
+		{
+			numSessions--;
+		}
 		if (gcodeReply != nullptr && clientsServed > numSessions)
 		{
 			// Make sure the G-code reply is freed after it is sent to all clients
@@ -66,9 +71,11 @@ void TelnetResponder::ConnectionLost()
 
 bool TelnetResponder::SendGCodeReply()
 {
-	bool clearReply = false;
+	MutexLocker lock(gcodeReplyMutex);
+
 	if (gcodeReply != nullptr)
 	{
+		bool clearReply = false;
 		clientsServed++;
 		if (clientsServed < numSessions)
 		{
@@ -283,10 +290,17 @@ void TelnetResponder::ProcessLine()
 	}
 }
 
+/*static*/ void TelnetResponder::InitStatic()
+{
+	gcodeReplyMutex.Create();
+}
+
 /*static*/ void TelnetResponder::HandleGCodeReply(const char *reply)
 {
 	if (reply != nullptr && numSessions > 0)
 	{
+		MutexLocker lock(gcodeReplyMutex);
+
 		// We need a valid OutputBuffer to start the conversion from NL to CRNL
 		if (gcodeReply == nullptr && !OutputBuffer::Allocate(gcodeReply))
 		{
@@ -319,6 +333,8 @@ void TelnetResponder::ProcessLine()
 {
 	if (reply != nullptr && numSessions > 0)
 	{
+		MutexLocker lock(gcodeReplyMutex);
+
 		// We need a valid OutputBuffer to start the conversion from NL to CRNL
 		if (gcodeReply == nullptr && !OutputBuffer::Allocate(gcodeReply))
 		{
@@ -364,5 +380,6 @@ void TelnetResponder::Diagnostics(MessageType mt) const
 unsigned int TelnetResponder::numSessions = 0;
 unsigned int TelnetResponder::clientsServed = 0;
 OutputBuffer *TelnetResponder::gcodeReply = nullptr;
+Mutex TelnetResponder::gcodeReplyMutex;
 
 // End

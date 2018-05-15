@@ -105,13 +105,6 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 	{
 		FilamentMonitor::Spin(false);
 	}
-
-#if SUPPORT_12864_LCD
-	if (reprap.GetSpinningModule() != moduleDisplay)
-	{
-		reprap.GetDisplay().Spin(false);
-	}
-#endif
 }
 
 #endif
@@ -157,7 +150,6 @@ void RepRap::Init()
 	toolListMutex.Create();
 	messageBoxMutex.Create();
 
-	// All of the following init functions must execute reasonably quickly before the watchdog times us out
 	platform->Init();
 	network->Init();
 	SetName(DEFAULT_MACHINE_NAME);		// network must be initialised before calling this because this calls SetHostName
@@ -175,7 +167,7 @@ void RepRap::Init()
 #endif
 	printMonitor->Init();
 #if SUPPORT_12864_LCD
- 	display->Init();
+	display->Init();
 #endif
 	active = true;						// must do this before we start the network or call Spin(), else the watchdog may time out
 
@@ -224,6 +216,11 @@ void RepRap::Init()
 # endif
 #endif
 	platform->MessageF(UsbMessage, "%s is up and running.\n", FIRMWARE_NAME);
+
+#if SUPPORT_12864_LCD
+	display->Start();
+#endif
+
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
 	lastTime = micros();
@@ -289,7 +286,7 @@ void RepRap::Spin()
 	roland->Spin();
 #endif
 
-#if !defined(RTOS) && SUPPORT_SCANNER
+#if SUPPORT_SCANNER && !SCANNER_AS_SEPARATE_TASK
 	ticksInSpinState = 0;
 	spinningModule = moduleScanner;
 	scanner->Spin();
@@ -615,19 +612,6 @@ Tool* RepRap::GetCurrentOrDefaultTool() const
 	return (currentTool != nullptr) ? currentTool : toolList;
 }
 
-void RepRap::SetToolVariables(int toolNumber, const float* standbyTemperatures, const float* activeTemperatures)
-{
-	Tool* tool = GetTool(toolNumber);
-	if (tool != nullptr)
-	{
-		tool->SetVariables(standbyTemperatures, activeTemperatures);
-	}
-	else
-	{
-		platform->MessageF(ErrorMessage, "Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
-	}
-}
-
 bool RepRap::IsHeaterAssignedToTool(int8_t heater) const
 {
 	MutexLocker lock(toolListMutex);
@@ -836,7 +820,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for(size_t i = 0; i < NUM_FANS; i++)
 		{
-			response->catf("%c%d", ch, (int)(platform->GetFanValue(i) * 100.0 + 0.5f));
+			response->catf("%c%d", ch, (int)lrintf(platform->GetFanValue(i) * 100.0));
 			ch = ',';
 		}
 
@@ -1052,37 +1036,40 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 #endif
 
 	// Spindles
-	int lastConfiguredSpindle = -1;
-	for (size_t spindle = 0; spindle < MaxSpindles; spindle++)
+	if (gCodes->GetMachineType() == MachineType::cnc)
 	{
-		if (platform->AccessSpindle(spindle).GetToolNumber() != -1)
+		int lastConfiguredSpindle = -1;
+		for (size_t spindle = 0; spindle < MaxSpindles; spindle++)
 		{
-			lastConfiguredSpindle = spindle;
-		}
-	}
-
-	if (lastConfiguredSpindle != -1)
-	{
-		response->cat(",\"spindles\":[");
-		for (int i = 0; i <= lastConfiguredSpindle; i++)
-		{
-			if (i > 0)
+			if (platform->AccessSpindle(spindle).GetToolNumber() != -1)
 			{
-				response->cat(',');
-			}
-
-			const Spindle& spindle = platform->AccessSpindle(i);
-			response->catf("{\"current\":%.1f,\"active\":%.1f", (double)spindle.GetCurrentRpm(), (double)spindle.GetRpm());
-			if (type == 2)
-			{
-				response->catf(",\"tool\":%d}", spindle.GetToolNumber());
-			}
-			else
-			{
-				response->cat('}');
+				lastConfiguredSpindle = spindle;
 			}
 		}
-		response->cat(']');
+
+		if (lastConfiguredSpindle != -1)
+		{
+			response->cat(",\"spindles\":[");
+			for (int i = 0; i <= lastConfiguredSpindle; i++)
+			{
+				if (i > 0)
+				{
+					response->cat(',');
+				}
+
+				const Spindle& spindle = platform->AccessSpindle(i);
+				response->catf("{\"current\":%.1f,\"active\":%.1f", (double)spindle.GetCurrentRpm(), (double)spindle.GetRpm());
+				if (type == 2)
+				{
+					response->catf(",\"tool\":%d}", spindle.GetToolNumber());
+				}
+				else
+				{
+					response->cat('}');
+				}
+			}
+			response->cat(']');
+		}
 	}
 
 	/* Extended Status Response */
@@ -1744,7 +1731,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 	if (filename != nullptr && filename[0] != 0)
 	{
 		GCodeFileInfo info;
-		if (!platform->GetMassStorage()->GetFileInfo(FS_PREFIX, filename, info, quitEarly))
+		if (!platform->GetMassStorage()->GetFileInfo(GCODE_DIR, filename, info, quitEarly))
 		{
 			// This may take a few runs...
 			return false;
@@ -1767,8 +1754,17 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 						timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
 			}
 
-			response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,\"filament\":",
+			response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,",
 				(double)info.objectHeight, (double)info.firstLayerHeight, (double)info.layerHeight);
+			if (info.printTime != 0)
+			{
+				response->catf("\"printTime\":%" PRIu32 ",", info.printTime);
+			}
+			if (info.simulatedTime != 0)
+			{
+				response->catf("\"simulatedTime\":%" PRIu32 ",", info.simulatedTime);
+			}
+			response->cat("\"filament\":");
 			char ch = '[';
 			if (info.numFilaments == 0)
 			{

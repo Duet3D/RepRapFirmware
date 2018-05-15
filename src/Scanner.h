@@ -13,6 +13,9 @@
 
 #if SUPPORT_SCANNER
 
+#define SCANNER_AS_SEPARATE_TASK	(0)					// set to 1 to use a separate task for the scanner (requires RTOS enabled too)
+//#define SCANNER_AS_SEPARATE_TASK	(defined(RTOS))		// set to 1 to use a separate task for the scanner (requires RTOS enabled too)
+
 const size_t ScanBufferSize = 128;						// Size of the buffer for incoming commands
 
 enum class ScannerState

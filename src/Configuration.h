@@ -236,7 +236,7 @@ constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command f
 
 // File handling
 constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of simultaneous web requests + files being printed
-constexpr size_t FILE_BUFFER_SIZE = 256;
+constexpr size_t FILE_BUFFER_SIZE = 128;
 
 // Webserver stuff
 #define DEFAULT_PASSWORD		"reprap"				// Default machine password

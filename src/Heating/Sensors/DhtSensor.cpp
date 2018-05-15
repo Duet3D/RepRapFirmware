@@ -21,17 +21,19 @@ const uint32_t MaximumReadTime = 50;			// ms
 #  include "Tasks.h"
 
 constexpr uint32_t DhtTaskStackWords = 80;		// task stack size in dwords
-static Task<DhtTaskStackWords> dhtTask;
+static Task<DhtTaskStackWords> *dhtTask;
 
 extern "C" void DhtTask(void * pvParameters)
 {
-	DhtSensor::Task();
+	DhtSensor::SensorTask();
 }
 
 # else
+
 uint32_t DhtSensor::lastReadTime = 0;
 DhtSensor::SensorState DhtSensor::state = Initialising;
 uint32_t DhtSensor::lastOperationTime = 0;
+
 # endif
 
 size_t DhtSensor::numInstances = 0;
@@ -115,9 +117,10 @@ GCodeResult DhtSensor::Configure(unsigned int mCode, unsigned int heater, GCodeB
 void DhtSensor::Init()
 {
 #ifdef RTOS
-	if (dhtTask.GetHandle() == nullptr)
+	if (dhtTask == nullptr)
 	{
-		dhtTask.Create(DhtTask, "DHTSENSOR", nullptr, TaskBase::HeatPriority);
+		dhtTask = new Task<DhtTaskStackWords>;
+		dhtTask->Create(DhtTask, "DHTSENSOR", nullptr, TaskBase::HeatPriority);
 	}
 #endif
 }
@@ -169,7 +172,7 @@ void DhtDataTransition(CallbackParameter)
 
 #ifdef RTOS
 
-/*static*/ void DhtSensor::Task()
+/*static*/ void DhtSensor::SensorTask()
 {
 	for (;;)
 	{

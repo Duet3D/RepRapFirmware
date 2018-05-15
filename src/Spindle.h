@@ -5,6 +5,10 @@
  *      Author: Christian
  */
 
+#ifndef SPINDLE_H
+#define SPINDLE_H
+
+#include "RepRapFirmware.h"
 #include "IoPorts.h"
 
 class Spindle
@@ -33,3 +37,5 @@ public:
 
 	void TurnOff();
 };
+
+#endif

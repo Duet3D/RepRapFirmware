@@ -17,7 +17,7 @@ enum class GCodeState : uint8_t
 	normal,												// not doing anything and ready to process a new GCode
 
 	waitingForSpecialMoveToComplete,					// doing a special move, so we must wait for it to finish before processing another GCode
-	waitingForArcMoveToComplete,						// doing an arc move, so we must check whether it completes normally
+	waitingForSegmentedMoveToComplete,						// doing an arc move, so we must check whether it completes normally
 
 	probingToolOffset,
 
