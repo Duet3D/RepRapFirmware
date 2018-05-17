@@ -141,10 +141,18 @@ Remaining:
 - [done in 2.0RC2, ok] M144 option to exit standby mode
 - [done in 2.0RC2A, ok] BUG if you run M122 over Telnet it sends the first ~460 chars of the reply then disconnects 
 - [done in 2.0RC2A, ok] BUG sending M503 over Telnet causes a restart, no output produced
-- BUG SCARA continuous rotation doesn't work
+- [done] Recognise Cura comment: ;TIME:38846
+- [done] support estimated print time comment from slic3r PE
 
-- Recognise Cura comment: ;TIME:38846
-- support estimated print time comment from slic3r PE
+RC3 fixes:
+- [done, test] BUG simulating a file < 100 byes long messes up file when appending simulation time
+- [done, test] Set status to Simulating if simulating a print with only 5V power applied
+- [done, ok] BUG SCARA continuous rotation doesn't work
+- [done, ok] SCARA arm angle limits were not being applied
+- [done, ok] SCARA intermediate positoin limit checking didn't work
+- [done, test] BUG extruder and additional axes don't work when doing G2/G3 moves
+- [done, ok] Configuring a chamber heater on H7 with no DueX5 present causes a crash
+
 - PanelDue won't connect if VIN velow minimum for stepper motors [PanelDue firmware needs to recognise status 'O']
 - Add parameter to M116 to specify acceptable temperature difference
 - Laser support, see https://forum.duet3d.com/topic/4702/laser-cnc-support-in-rrf-gcode-semantics/4

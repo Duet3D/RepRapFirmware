@@ -35,6 +35,7 @@ const char *ScaraKinematics::GetName(bool forStatusReport) const
 // Calculate theta, psi and the new arm mode from a target position.
 // If the position is not reachable because it is out of radius limits, set theta and psi to NaN and return false.
 // Otherwise set theta and psi to the required values and return true if they are in range.
+// Note: theta and psi are now returned in degrees.
 bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoordinated, float& theta, float& psi, bool& armMode) const
 {
 	const float x = machinePos[X_AXIS] + xOffset;
@@ -49,7 +50,7 @@ bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoor
 		return false;		// not reachable
 	}
 
-	psi = acosf(cosPsi);
+	psi = acosf(cosPsi) * RadiansToDegrees;
 	const float sinPsi = sqrtf(square);
 	const float SCARA_K1 = proximalArmLength + distalArmLength * cosPsi;
 	const float SCARA_K2 = distalArmLength * sinPsi;
@@ -63,7 +64,7 @@ bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoor
 			// The following equations choose arm mode 0 i.e. distal arm rotated anticlockwise relative to proximal arm
 			if (supportsContinuousRotation[1] || (psi >= psiLimits[0] && psi <= psiLimits[1]))
 			{
-				theta = atan2f(SCARA_K1 * y - SCARA_K2 * x, SCARA_K1 * x + SCARA_K2 * y);
+				theta = atan2f(SCARA_K1 * y - SCARA_K2 * x, SCARA_K1 * x + SCARA_K2 * y) * RadiansToDegrees;
 				if (supportsContinuousRotation[0] || (theta >= thetaLimits[0] && theta <= thetaLimits[1]))
 				{
 					break;
@@ -75,7 +76,7 @@ bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoor
 			// The following equations choose arm mode 1 i.e. distal arm rotated clockwise relative to proximal arm
 			if (supportsContinuousRotation[1] || ((-psi) >= psiLimits[0] && (-psi) <= psiLimits[1]))
 			{
-				theta = atan2f(SCARA_K1 * y + SCARA_K2 * x, SCARA_K1 * x - SCARA_K2 * y);
+				theta = atan2f(SCARA_K1 * y + SCARA_K2 * x, SCARA_K1 * x - SCARA_K2 * y) * RadiansToDegrees;
 				if (supportsContinuousRotation[0] || (theta >= thetaLimits[0] && theta <= thetaLimits[1]))
 				{
 					psi = -psi;
@@ -123,8 +124,8 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 
 //debugPrintf("psi = %.2f, theta = %.2f\n", psi * RadiansToDegrees, theta * RadiansToDegrees);
 
-	motorPos[X_AXIS] = lrintf(theta * RadiansToDegrees * stepsPerMm[X_AXIS]);
-	motorPos[Y_AXIS] = lrintf((psi - (crosstalk[0] * theta)) * RadiansToDegrees * stepsPerMm[Y_AXIS]);
+	motorPos[X_AXIS] = lrintf(theta * stepsPerMm[X_AXIS]);
+	motorPos[Y_AXIS] = lrintf((psi - (crosstalk[0] * theta)) * stepsPerMm[Y_AXIS]);
 	motorPos[Z_AXIS] = lrintf((machinePos[Z_AXIS] - (crosstalk[1] * theta) - (crosstalk[2] * psi)) * stepsPerMm[Z_AXIS]);
 
 	// Transform any additional axes linearly
@@ -139,11 +140,11 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 // For Scara, the X and Y components of stepsPerMm are actually steps per degree angle.
 void ScaraKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
 {
-	const float theta = ((float)motorPos[X_AXIS]/stepsPerMm[X_AXIS]) * DegreesToRadians;
-    const float psi = (((float)motorPos[Y_AXIS]/stepsPerMm[Y_AXIS]) * DegreesToRadians) + (crosstalk[0] * theta);
+	const float theta = ((float)motorPos[X_AXIS]/stepsPerMm[X_AXIS]);
+    const float psi = ((float)motorPos[Y_AXIS]/stepsPerMm[Y_AXIS]) + (crosstalk[0] * theta);
 
-    machinePos[X_AXIS] = (cosf(theta) * proximalArmLength + cosf(psi + theta) * distalArmLength) - xOffset;
-    machinePos[Y_AXIS] = (sinf(theta) * proximalArmLength + sinf(psi + theta) * distalArmLength) - yOffset;
+    machinePos[X_AXIS] = (cosf(theta * DegreesToRadians) * proximalArmLength + cosf((psi + theta) * DegreesToRadians) * distalArmLength) - xOffset;
+    machinePos[Y_AXIS] = (sinf(theta * DegreesToRadians) * proximalArmLength + sinf((psi + theta) * DegreesToRadians) * distalArmLength) - yOffset;
 
     // On some machines (e.g. Helios), the X and/or Y arm motors also affect the Z height
     machinePos[Z_AXIS] = ((float)motorPos[Z_AXIS]/stepsPerMm[Z_AXIS]) + (crosstalk[1] * theta) + (crosstalk[2] * psi);
@@ -291,8 +292,8 @@ bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesB
 		// Radius is in range but at least one arm angle isn't
 		cachedTheta = theta = constrain<float>(theta, thetaLimits[0], thetaLimits[1]);
 		cachedPsi = psi = constrain<float>(psi, psiLimits[0], psiLimits[1]);
-		cachedX = coords[X_AXIS] = (cosf(psi) * proximalArmLength + cosf(psi + theta) * distalArmLength) - xOffset;
-		cachedY = coords[Y_AXIS] = (sinf(psi) * proximalArmLength + sinf(psi + theta) * distalArmLength) - yOffset;
+		cachedX = coords[X_AXIS] = (cosf(psi * DegreesToRadians) * proximalArmLength + cosf((psi + theta) * DegreesToRadians) * distalArmLength) - xOffset;
+		cachedY = coords[Y_AXIS] = (sinf(psi * DegreesToRadians) * proximalArmLength + sinf((psi + theta) * DegreesToRadians) * distalArmLength) - yOffset;
 		cachedArmMode = currentArmMode;
 	}
 

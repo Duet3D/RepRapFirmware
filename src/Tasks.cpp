@@ -23,7 +23,7 @@ extern char _end;
 #ifdef RTOS
 
 // The main task currently runs GCodes, so it needs to be large enough to hold the matrices used for auto calibration.
-constexpr unsigned int MainTaskStackWords = 2100;
+constexpr unsigned int MainTaskStackWords = 2040;
 
 static Task<MainTaskStackWords> mainTask;
 static Mutex spiMutex;

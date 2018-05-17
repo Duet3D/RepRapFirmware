@@ -18,11 +18,11 @@
 # define RTOSVER
 #endif
 
-# define VERSION MAIN_VERSION RTOSVER "RC2b"
+# define VERSION MAIN_VERSION RTOSVER "RC4"
 #endif
 
 #ifndef DATE
-# define DATE "2018-05-13b3"
+# define DATE "2018-05-17b2"
 #endif
 
 #define AUTHORS "reprappro, dc42, chrishamm, t3p3, dnewman"

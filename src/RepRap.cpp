@@ -1953,7 +1953,7 @@ char RepRap::GetStatusCharacter() const
 			: (gCodes->IsFlashing())									? 'F'	// Flashing a new firmware binary
 			: (IsStopped()) 											? 'H'	// Halted
 #if HAS_VOLTAGE_MONITOR
-			: (!platform->HasVinPower())								? 'O'	// Off i.e. powered down
+			: (!platform->HasVinPower() && !gCodes->IsSimulating())		? 'O'	// Off i.e. powered down
 #endif
 			: (gCodes->IsPausing()) 									? 'D'	// Pausing / Decelerating
 			: (gCodes->IsResuming()) 									? 'R'	// Resuming

@@ -726,16 +726,17 @@ void MassStorage::RecordSimulationTime(const char *printingFilename, uint32_t si
 		// Check whether there is already simulation info at the end of the file, in which case we should replace it
 		constexpr size_t BufferSize = 100;
 		String<BufferSize> buffer;
-		const FilePosition seekPos = file->Length() - BufferSize;
+		const size_t bytesToRead = (size_t)min<FilePosition>(file->Length(), BufferSize);
+		const FilePosition seekPos = file->Length() - bytesToRead;
 		ok = file->Seek(seekPos);
 		time_t lastModtime = 0;
 		if (ok)
 		{
-			ok = (file->Read(buffer.GetRef().Pointer(), BufferSize) == BufferSize);
+			ok = (file->Read(buffer.GetRef().Pointer(), bytesToRead) == (int)bytesToRead);
 			if (ok)
 			{
 				lastModtime = GetLastModifiedTime(GCodeDir, printingFilename);	// save the last modified time to that we can restore it later
-				buffer[BufferSize] = 0;											// this is OK because String<N> has N+1 bytes of storage
+				buffer[bytesToRead] = 0;										// this is OK because String<N> has N+1 bytes of storage
 				const char* const pos = strstr(buffer.c_str(), FileInfoParser::SimulatedTimeString);
 				if (pos != nullptr)
 				{

@@ -20,7 +20,6 @@ Licence: GPL
 
 #include "Heat.h"
 #include "HeaterProtection.h"
-//#include "Pins.h"
 #include "Platform.h"
 #include "RepRap.h"
 #include "Sensors/TemperatureSensor.h"
@@ -291,7 +290,7 @@ Heat::HeaterStatus Heat::GetStatus(int8_t heater) const
 
 void Heat::SetBedHeater(size_t index, int8_t heater)
 {
-	const size_t bedHeater = bedHeaters[index];
+	const int bedHeater = bedHeaters[index];
 	if (bedHeater >= 0)
 	{
 		pids[bedHeater]->SwitchOff();
@@ -313,7 +312,7 @@ bool Heat::IsBedHeater(int8_t heater) const
 
 void Heat::SetChamberHeater(size_t index, int8_t heater)
 {
-	const size_t chamberHeater = chamberHeaters[heater];
+	const int chamberHeater = chamberHeaters[heater];
 	if (chamberHeater >= 0)
 	{
 		pids[chamberHeater]->SwitchOff();
@@ -718,7 +717,7 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const
 	const StringRef buf = bufSpace.GetRef();
 	for (size_t index : ARRAY_INDICES(bedHeaters))
 	{
-		const int8_t bedHeater = bedHeaters[index];
+		const int bedHeater = bedHeaters[index];
 		if (bedHeater >= 0 && pids[bedHeater]->Active() && !pids[bedHeater]->SwitchedOff())
 		{
 			buf.printf("M140 P%u S%.1f\n", index, (double)GetActiveTemperature(bedHeater));
@@ -726,7 +725,7 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const
 	}
 	for (size_t index : ARRAY_INDICES(chamberHeaters))
 	{
-		const int8_t chamberHeater = chamberHeaters[index];
+		const int chamberHeater = chamberHeaters[index];
 		if (chamberHeater >= 0 && pids[chamberHeater]->Active() && !pids[chamberHeater]->SwitchedOff())
 		{
 			buf.printf("M141 P%u S%.1f\n", index, (double)GetActiveTemperature(chamberHeater));
