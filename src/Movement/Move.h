@@ -250,7 +250,7 @@ inline void Move::Interrupt()
 inline uint32_t Move::GetStepInterval(size_t axis, uint32_t microstepShift) const
 {
 	const DDA * const cdda = currentDda;		// capture volatile variable
-	return (cdda != nullptr) ? cdda->GetStepInterval(axis, microstepShift) : 0;
+	return (cdda != nullptr && simulationMode == 0) ? cdda->GetStepInterval(axis, microstepShift) : 0;
 }
 
 #endif

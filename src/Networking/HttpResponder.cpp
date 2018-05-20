@@ -158,19 +158,21 @@ bool HttpResponder::CharFromClient(char c)
 		case ' ':
 		case '\t':
 			clientMessage[clientPointer++] = 0;
-			if (numCommandWords < MaxCommandWords)
 			{
 				++numCommandWords;
-				commandWords[numCommandWords] = clientMessage + clientPointer;
-				if (numCommandWords == 1)
+				if (numCommandWords < MaxCommandWords)
 				{
-					parseState = HttpParseState::doingFilename;
+					commandWords[numCommandWords] = clientMessage + clientPointer;
+					if (numCommandWords == 1)
+					{
+						parseState = HttpParseState::doingFilename;
+					}
 				}
-			}
-			else
-			{
-				RejectMessage("too many command words");
-				return true;
+				else
+				{
+					RejectMessage("too many command words");
+					return true;
+				}
 			}
 			break;
 		default:
@@ -205,16 +207,18 @@ bool HttpResponder::CharFromClient(char c)
 		case ' ':
 		case '\t':
 			clientMessage[clientPointer++] = 0;
-			if (numCommandWords < MaxCommandWords)
 			{
 				++numCommandWords;
-				commandWords[numCommandWords] = clientMessage + clientPointer;
-				parseState = HttpParseState::doingCommandWord;
-			}
-			else
-			{
-				RejectMessage("too many command words");
-				return true;
+				if (numCommandWords < MaxCommandWords)
+				{
+					commandWords[numCommandWords] = clientMessage + clientPointer;
+					parseState = HttpParseState::doingCommandWord;
+				}
+				else
+				{
+					RejectMessage("too many command words");
+					return true;
+				}
 			}
 			break;
 		default:
@@ -236,6 +240,14 @@ bool HttpResponder::CharFromClient(char c)
 		case ' ':
 		case '\t':
 		case '\r':
+			// IE11 sometimes puts a trailing '?' at the end of a GET request e.g. "GET /fonts/glyphicons.eot? HTTP/1.1"
+			if (numQualKeys == 0 && qualifiers[0].key == clientMessage + clientPointer)
+			{
+				commandWords[numCommandWords] = clientMessage + clientPointer;	// we have only 2 command words so far, so no need to check numCommandWords here
+				parseState = HttpParseState::doingCommandWord;
+				break;
+			}
+			// no break
 		case '%':	// none of our keys needs escaping, so treat an escape within a key as an error
 		case '&':	// key with no value
 			RejectMessage("bad qualifier key");
@@ -1101,6 +1113,11 @@ void HttpResponder::ProcessRequest()
 			RejectMessage("Unknown message type or not authenticated");
 		}
 	}
+	else
+	{
+		// No output buffers available. Ideally we would wait for one with timeout. For now we just quit.
+		responderState = ResponderState::free;
+	}
 }
 
 // Reject the current message
@@ -1110,9 +1127,18 @@ void HttpResponder::RejectMessage(const char* response, unsigned int code)
 	{
 		GetPlatform().MessageF(UsbMessage, "Webserver: rejecting message with: %u %s\n", code, response);
 	}
-	outBuf->printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
-	outBuf->catf("%s%s%s", ErrorPagePart1, response, ErrorPagePart2);
-	Commit();
+
+	if (outBuf != nullptr || OutputBuffer::Allocate(outBuf))
+	{
+		outBuf->printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
+		outBuf->catf("%s%s%s", ErrorPagePart1, response, ErrorPagePart2);
+		Commit();
+	}
+	else
+	{
+		// No output buffers available. Ideally we would wait for one with timeout. For now we just quit.
+		responderState = ResponderState::free;
+	}
 }
 
 // This function overrides the one in class NetworkResponder.
