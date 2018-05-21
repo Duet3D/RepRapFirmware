@@ -14,7 +14,7 @@ PulsedFilamentMonitor::PulsedFilamentMonitor(unsigned int extruder, int type)
 	: FilamentMonitor(extruder, type),
 	  mmPerPulse(DefaultMmPerPulse),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
-	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false)
+	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false), waitMsec(DefaultWaitMsec)
 {
 	Init();
 }
@@ -63,6 +63,12 @@ bool PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 		}
 	}
 
+        if (gb.Seen('W'))
+        {
+                seen = true;
+                waitMsec = gb.GetIValue();
+        }
+                             
 	if (gb.Seen('S'))
 	{
 		seen = true;
@@ -75,13 +81,14 @@ bool PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 	}
 	else
 	{
-		reply.printf("Pulse-type filament monitor on endstop input %u, %s, sensitivity %.2fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
+		reply.printf("Pulse-type filament monitor on endstop input %u, %s, sensitivity %.2fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, wait %lu msec, ",
 						GetEndstopNumber(),
 						(comparisonEnabled) ? "enabled" : "disabled",
 						(double)mmPerPulse,
 						lrintf(minMovementAllowed * 100.0),
 						lrintf(maxMovementAllowed * 100.0),
-						(double)minimumExtrusionCheckLength);
+                                                (double)minimumExtrusionCheckLength,
+                                                waitMsec);
 
 		if (samplesReceived < 2)
 		{
@@ -89,8 +96,8 @@ bool PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 		}
 		else
 		{
-			reply.catf("current position %.1f, ", (double)GetCurrentPosition());
-			if (calibrationStarted && fabsf(totalMovementMeasured) > 1.0 && totalExtrusionCommanded > 20.0)
+                  reply.catf("current position %.1f, ", (double) GetCurrentPosition());
+                  if (calibrationStarted && fabsf(totalMovementMeasured) > 1.0 && totalExtrusionCommanded > 1.0 /*20.0*/)
 			{
 				const float measuredMmPerPulse = totalExtrusionCommanded/totalMovementMeasured;
 				reply.catf("measured sensitivity %.3fmm/pulse, measured minimum %ld%%, maximum %ld%% over %.1fmm\n",
@@ -112,12 +119,17 @@ bool PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 // ISR for when the pin state changes. It should return true if the ISR wants the commanded extrusion to be fetched.
 bool PulsedFilamentMonitor::Interrupt()
 {
+        uint32_t localMillis = millis();
+        if (localMillis < (lastMeasurementTime + waitMsec)) {
+                return false;
+        }
+      
 	++sensorValue;
 	if (samplesReceived < 100)
 	{
 		++samplesReceived;
 	}
-	lastMeasurementTime = millis();
+	lastMeasurementTime = localMillis;
 	return true;
 }
 
@@ -277,7 +289,7 @@ void PulsedFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder
 {
 	Poll();
 	const char* const statusText = (samplesReceived < 2) ? "no data received" : "ok";
-	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: position %.2f, %s, ", extruder, (double)GetCurrentPosition(), statusText);
+	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: position %.2f, %s, ", extruder, (double) GetCurrentPosition(), statusText);
 	if (calibrationStarted && fabsf(totalMovementMeasured) > 1.0 && totalExtrusionCommanded > 20.0)
 	{
 		const float measuredMmPerRev = totalExtrusionCommanded/totalMovementMeasured;

@@ -26,7 +26,8 @@ private:
 	static constexpr float DefaultMinMovementAllowed = 0.6;
 	static constexpr float DefaultMaxMovementAllowed = 1.6;
 	static constexpr float DefaultMinimumExtrusionCheckLength = 5.0;
-
+        static constexpr uint32_t DefaultWaitMsec = 0;
+        
 	void Init();
 	void Reset();
 	void Poll();
@@ -38,6 +39,7 @@ private:
 	float minMovementAllowed, maxMovementAllowed;
 	float minimumExtrusionCheckLength;
 	bool comparisonEnabled;
+        uint32_t waitMsec;
 
 	// Other data
 	uint32_t sensorValue;									// how many pulses received
