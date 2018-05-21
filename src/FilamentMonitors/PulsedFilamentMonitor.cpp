@@ -97,7 +97,7 @@ bool PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 		else
 		{
                   reply.catf("current position %.1f, ", (double) GetCurrentPosition());
-                  if (calibrationStarted && fabsf(totalMovementMeasured) > 1.0 && totalExtrusionCommanded > 1.0 /*20.0*/)
+                  if (calibrationStarted && fabsf(totalMovementMeasured) > 1.0 && totalExtrusionCommanded > 20.0)
 			{
 				const float measuredMmPerPulse = totalExtrusionCommanded/totalMovementMeasured;
 				reply.catf("measured sensitivity %.3fmm/pulse, measured minimum %ld%%, maximum %ld%% over %.1fmm\n",
