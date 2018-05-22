@@ -1,6 +1,23 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.0RC5 (Duet 2 series) and 1.21.1RC5 (other hardware)
+=============================================================
+Upgrade notes:
+- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.1RC4. Use of older versions of DWC may result in "Not authorized" disconnections.
+- When the machine mode is set to CNC, G0 movement behaviour is changed to align more with the NIST standard (see 2.0RC1 release notes).
+
+New features:
+- Added S3 option to M20 to get file list including size, date/time etc.
+
+Bug fixes:
+- HTTP request parsing error recovery didn't work. One consequence was that connecting from Internet Explorer crashed the Duet.
+- Spurious stall warnings were sometimes generated when simulating a print
+- The print monitor didn't think the print had started until a nozzle had reached target temperature. This meant that layer counting didn't work on machines with no tool heaters, or when the tool temperatures were fluctuating.
+- The print monitor didn't count layers when simulating a print
+- Axes beyond Z were ignored in G2/G3 moves
+- DWC and the Duet could deadlock if the Duet ran out of output buffers
+
 Version 2.0RC3 (Duet 2 series) and 1.21.1RC3 (other hardware)
 =============================================================
 Upgrade notes:
