@@ -207,14 +207,13 @@ void MassStorage::CloseAllFiles()
 // by calling FindNext until it returns false, or by calling AbandonFindNext.
 bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 {
-	TCHAR loc[MaxFilenameLength + 1];
-
-	// Remove the trailing '/' from the directory name
-	SafeStrncpy(loc, directory, ARRAY_SIZE(loc));
-	const size_t len = strlen(loc);
-	if (len != 0 && loc[len - 1] == '/')
+	// Remove any trailing '/' from the directory name, it sometimes (but not always) confuses f_opendir
+	String<MaxFilenameLength> loc;
+	loc.copy(directory);
+	const size_t len = loc.strlen();
+	if (len != 0 && (loc[len - 1] == '/' || loc[len - 1] == '\\'))
 	{
-		loc[len - 1] = 0;
+		loc.Truncate(len - 1);
 	}
 
 	if (!dirMutex.Take(10000))
@@ -223,7 +222,7 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 	}
 
 	findDir.lfn = nullptr;
-	FRESULT res = f_opendir(&findDir, loc);
+	FRESULT res = f_opendir(&findDir, loc.c_str());
 	if (res == FR_OK)
 	{
 		FILINFO entry;
@@ -405,18 +404,35 @@ bool MassStorage::FileExists(const char *directory, const char *fileName) const
 }
 
 // Check if the specified directory exists
-bool MassStorage::DirectoryExists(const char *path) const
+// Warning: if 'path' has a trailing '/' or '\\' character, it will be removed!
+bool MassStorage::DirectoryExists(const StringRef& path) const
 {
+	// Remove any trailing '/' from the directory name, it sometimes (but not always) confuses f_opendir
+	const size_t len = path.strlen();
+	if (len != 0 && (path[len - 1] == '/' || path[len - 1] == '\\'))
+	{
+		path[len - 1] = 0;
+	}
+
 	DIR dir;
 	dir.lfn = nullptr;
-	return (f_opendir(&dir, path) == FR_OK);
+	return (f_opendir(&dir, path.c_str()) == FR_OK);
+}
+
+// Check if the specified directory exists
+bool MassStorage::DirectoryExists(const char *path) const
+{
+	// Remove any trailing '/' from the directory name, it sometimes (but not always) confuses f_opendir
+	String<MaxFilenameLength> loc;
+	loc.copy(path);
+	return DirectoryExists(loc.GetRef());
 }
 
 bool MassStorage::DirectoryExists(const char* directory, const char* subDirectory)
 {
 	String<MaxFilenameLength> location;
 	CombineName(location.GetRef(), directory, subDirectory);
-	return DirectoryExists(location.c_str());
+	return DirectoryExists(location.GetRef());
 }
 
 // Return the last modified time of a file, or zero if failure
@@ -559,8 +575,8 @@ GCodeResult MassStorage::Unmount(size_t card, const StringRef& reply)
 // Ideally we would try to mount it if it is not, however mounting a drive can take a long time, and the functions that call this are expected to execute quickly.
 bool MassStorage::CheckDriveMounted(const char* path)
 {
-	size_t card = (strlen(path) >= 2 && path[1] == ':' && isDigit(path[0]))
-					? path[0] - '0'
+	const size_t card = (strlen(path) >= 2 && path[1] == ':' && isDigit(path[0]))
+						? path[0] - '0'
 						: 0;
 	return card < NumSdCards && info[card].isMounted;
 }

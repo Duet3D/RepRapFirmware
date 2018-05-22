@@ -1715,6 +1715,15 @@ bool GCodes::IsReallyPrinting() const
 	return reprap.GetPrintMonitor().IsPrinting() && IsRunning();
 }
 
+// Return true if the SD card print is waiting for a heater to reach temperature
+bool GCodes::IsHeatingUp() const
+{
+	int num;
+	return fileGCode->IsExecuting()
+		&& fileGCode->GetCommandLetter() == 'M'
+		&& ((num = fileGCode->GetCommandNumber()) == 109 || num == 116 || num == 190 || num == 191);
+}
+
 #if HAS_VOLTAGE_MONITOR || HAS_SMART_DRIVERS
 
 // Do an emergency pause following loss of power or a motor stall returning true if successful, false if needs to be retried
@@ -2500,19 +2509,22 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 
 	AxesBitmap axesMentioned = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS);
 
-	// Get the optional Z parameter
-	if (gb.Seen('Z'))
+	// Get any additional axes
+	for (size_t axis = Z_AXIS; axis < numVisibleAxes; axis++)
 	{
-		const float zParam = gb.GetFValue() * distanceScale;
-		if (axesRelative)
+		if (gb.Seen(axisLetters[axis]))
 		{
-			currentUserPosition[Z_AXIS] += zParam;
+			const float axisParam = gb.GetFValue() * distanceScale;
+			if (axesRelative)
+			{
+				currentUserPosition[axis] += axisParam;
+			}
+			else
+			{
+				currentUserPosition[axis] = axisParam;
+			}
+			axesMentioned |= MakeBitmap<AxesBitmap>(axis);
 		}
-		else
-		{
-			currentUserPosition[Z_AXIS] = zParam;
-		}
-		axesMentioned |= MakeBitmap<AxesBitmap>(Z_AXIS);
 	}
 
 	// Check enough axes have been homed

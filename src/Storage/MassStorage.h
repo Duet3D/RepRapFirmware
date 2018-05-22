@@ -37,6 +37,7 @@ public:
 	bool Rename(const char *oldFilename, const char *newFilename);
 	bool FileExists(const char *file) const;
 	bool FileExists(const char* directory, const char *fileName) const;
+	bool DirectoryExists(const StringRef& path) const;								// Warning: if 'path' has a trailing '/' or '\\' character, it will be removed!
 	bool DirectoryExists(const char *path) const;
 	bool DirectoryExists(const char* directory, const char* subDirectory);
 	time_t GetLastModifiedTime(const char* directory, const char *fileName) const;

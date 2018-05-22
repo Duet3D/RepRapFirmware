@@ -563,7 +563,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			return false;
 		}
 		{
-			OutputBuffer *fileResponse;
 			const int sparam = (gb.Seen('S')) ? gb.GetIValue() : 0;
 			String<MaxFilenameLength> dir;
 			if (gb.Seen('P'))
@@ -575,16 +574,30 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				dir.copy(platform.GetGCodeDir());
 			}
 
+			OutputBuffer *fileResponse;
 			if (sparam == 2)
 			{
 				fileResponse = reprap.GetFilesResponse(dir.c_str(), true);		// Send the file list in JSON format
+				if (fileResponse == nullptr)
+				{
+					return false;
+				}
+				fileResponse->cat('\n');
+			}
+			else if (sparam == 3)
+			{
+				fileResponse = reprap.GetFilelistResponse(dir.c_str());
+				if (fileResponse == nullptr)
+				{
+					return false;
+				}
 				fileResponse->cat('\n');
 			}
 			else
 			{
 				if (!OutputBuffer::Allocate(fileResponse))
 				{
-					return false;													// Cannot allocate an output buffer, try again later
+					return false;												// Cannot allocate an output buffer, try again later
 				}
 
 				// To mimic the behaviour of the official RepRapPro firmware:

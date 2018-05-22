@@ -804,17 +804,17 @@ const char *FtpResponder::GetParameter(const char *after) const
 
 void FtpResponder::ChangeDirectory(const char *newDirectory)
 {
-	char combinedPath[MaxFilenameLength];
+	String<MaxFilenameLength> combinedPath;
 	if (newDirectory[0] != 0)
 	{
 		// Prepare the new directory path
 		if (newDirectory[0] == '/')		// Absolute path
 		{
-			SafeStrncpy(combinedPath, newDirectory, ARRAY_SIZE(combinedPath));
+			combinedPath.copy(newDirectory);
 		}
 		else if (StringEquals(newDirectory, "."))
 		{
-			SafeStrncpy(combinedPath, currentDirectory, ARRAY_SIZE(combinedPath));
+			combinedPath.copy(currentDirectory);
 		}
 		else if (StringEquals(newDirectory, ".."))	// Go up
 		{
@@ -827,8 +827,8 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 			}
 
 			// No - find the parent directory
-			SafeStrncpy(combinedPath, currentDirectory, ARRAY_SIZE(combinedPath));
-			for(int i = strlen(combinedPath) - 2; i >= 0; i--)
+			combinedPath.copy(currentDirectory);
+			for(int i = combinedPath.strlen() - 2; i >= 0; i--)
 			{
 				if (combinedPath[i] == '/')
 				{
@@ -839,24 +839,24 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 		}
 		else									// Go to child directory
 		{
-			SafeStrncpy(combinedPath, currentDirectory, ARRAY_SIZE(combinedPath));
-			if (!StringEndsWith(combinedPath, "/") && strlen(combinedPath) > 1)
+			combinedPath.copy(currentDirectory);
+			if (!combinedPath.EndsWith('/') && combinedPath.strlen() > 1)
 			{
-				SafeStrncat(combinedPath, "/", ARRAY_SIZE(combinedPath));
+				combinedPath.cat('/');
 			}
-			SafeStrncat(combinedPath, newDirectory, ARRAY_SIZE(combinedPath));
+			combinedPath.cat(newDirectory);
 		}
 
 		// Make sure the new path does not end with a slash, else FatFs won't be able to see the directory
-		if (StringEndsWith(combinedPath, "/") && strlen(combinedPath) > 1)
+		if (combinedPath.EndsWith('/') && combinedPath.strlen() > 1)
 		{
-			combinedPath[strlen(combinedPath) - 1] = 0;
+			combinedPath[combinedPath.strlen() - 1] = 0;
 		}
 
 		// Verify the final path and change it if possible
-		if (GetPlatform().GetMassStorage()->DirectoryExists(combinedPath))
+		if (GetPlatform().GetMassStorage()->DirectoryExists(combinedPath.GetRef()))
 		{
-			SafeStrncpy(currentDirectory, combinedPath, ARRAY_SIZE(currentDirectory));
+			SafeStrncpy(currentDirectory, combinedPath.c_str(), ARRAY_SIZE(currentDirectory));
 			outBuf->copy("250 Directory successfully changed.\r\n");
 			Commit(responderState);
 		}
@@ -891,7 +891,6 @@ void FtpResponder::CloseDataPort()
 	}
 
 	OutputBuffer::ReleaseAll(dataBuf);
-	dataBuf = nullptr;
 
 	if (fileBeingSent != nullptr)
 	{

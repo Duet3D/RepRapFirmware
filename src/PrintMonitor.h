@@ -71,15 +71,15 @@ class PrintMonitor
 		uint32_t lastUpdateTime;
 
 		// Information/Events concerning the file being printed
-		void WarmUpComplete();
 		void FirstLayerComplete();
 		void LayerComplete();
 
 		bool isPrinting;
+		bool heatingUp;
 		uint64_t printStartTime;
+		uint64_t heatingStartedTime;
 		uint64_t pauseStartTime, totalPauseTime;
 
-		bool heatingUp;
 		unsigned int currentLayer;
 		float warmUpDuration, firstLayerDuration;
 		float firstLayerFilament, firstLayerProgress;
@@ -99,7 +99,6 @@ class PrintMonitor
 inline bool PrintMonitor::IsPrinting() const { return isPrinting; }
 inline unsigned int PrintMonitor::GetCurrentLayer() const { return currentLayer; }
 inline float PrintMonitor::GetCurrentLayerTime() const { return (lastLayerChangeTime > 0.0) ? (GetPrintDuration() - lastLayerChangeTime) : 0.0; }
-inline float PrintMonitor::GetFirstLayerDuration() const { return (firstLayerDuration > 0.0) ? firstLayerDuration : ((currentLayer > 0) ? GetPrintDuration() - warmUpDuration : 0.0); }
 inline float PrintMonitor::GetFirstLayerHeight() const { return printingFileParsed ? printingFileInfo.firstLayerHeight : 0.0; }
 
 #endif /* PRINTMONITOR_H */

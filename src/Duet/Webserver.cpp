@@ -521,7 +521,8 @@ void Webserver::HttpInterpreter::Spin()
 	{
 		while (!gcodeReply->IsEmpty())
 		{
-			OutputBuffer::ReleaseAll(gcodeReply->Pop());
+			OutputBuffer *buf = gcodeReply->Pop();
+			OutputBuffer::ReleaseAll(buf);
 		}
 		clientsServed = 0;
 	}
@@ -1105,7 +1106,8 @@ bool Webserver::HttpInterpreter::CanParseData()
 		if (OutputBuffer::Truncate(gcodeReply->GetFirstItem(), minHttpResponseSize) == 0)
 		{
 			// Truncating didn't work out, but see if we can free up a few more bytes by releasing the first reply item
-			OutputBuffer::ReleaseAll(gcodeReply->Pop());
+			OutputBuffer *buf = gcodeReply->Pop();
+			OutputBuffer::ReleaseAll(buf);
 		}
 	}
 

@@ -156,12 +156,19 @@ Fixes in RC4:
 Fixes post RC4:
 - [done, ok] Connecting Internet Explorer crashes Duet due to trailing '?'
 - [done] spurious stall warnings when simulating
+- [done, test] Print monitor didn't think the print had started until a nozzle had reached target temperature
+- [done, ok] Print monitor didn't count layers when simulating a print
+- [done, ok but not always reliable due to buffer contention] Add S3 option to M20 to get file list including size, date/time etc.
+- [done] Extra axes were ignored in G2/G3 moves
+- [done] DWC and the Duet could deadlock if the Duet ran out of output buffers
 
 - PanelDue won't connect if VIN velow minimum for stepper motors [PanelDue firmware needs to recognise status 'O']
 - Add parameter to M116 to specify acceptable temperature difference
 - Laser support, see https://forum.duet3d.com/topic/4702/laser-cnc-support-in-rrf-gcode-semantics/4
+- Pushover notification support, https://forum.duet3d.com/topic/169/notification-via-pushover-or-other-service/45
 - support M205 for setting jerk
 - support G12 clean tool?
+- Add fan PWM limit, https://forum.duet3d.com/topic/5370/m106-feature-request-limit-max-pwm-parameter/4
 - M116 extra "close enough" parameter
 - Danny's modified SCARA kinematics (workpiece is on a plate, extruder is fixed)
 - Look at Bezier speed curves or other S-curve acceleration, https://github.com/MarlinFirmware/Marlin/pull/10373/files

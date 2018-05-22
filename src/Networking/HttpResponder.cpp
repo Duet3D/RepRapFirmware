@@ -442,7 +442,8 @@ bool HttpResponder::CharFromClient(char c)
 
 // Get the Json response for this command.
 // 'value' is null-terminated, but we also pass its length in case it contains embedded nulls, which matters when uploading files.
-// Return true if we generated a json response to send, false if we didn't and changed the state instead
+// Return true if we generated a json response to send, false if we didn't and changed the state instead.
+// This may also return true with response == nullptr if we tried to generate a response but ran out of buffers.
 bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response, bool& keepOpen)
 {
 	keepOpen = false;	// assume we don't want to persist the connection
@@ -505,7 +506,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			}
 
 			OutputBuffer::Release(response);
-			response = reprap.GetStatusResponse(type, ResponseSource::HTTP);
+			response = reprap.GetStatusResponse(type, ResponseSource::HTTP);		// this may return nullptr
 		}
 		else
 		{
@@ -532,7 +533,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	else if (StringEquals(request, "filelist") && GetKeyValue("dir") != nullptr)
 	{
 		OutputBuffer::Release(response);
-		response = reprap.GetFilelistResponse(GetKeyValue("dir"));
+		response = reprap.GetFilelistResponse(GetKeyValue("dir"));		// this may return nullptr
 	}
 	else if (StringEquals(request, "files"))
 	{
@@ -542,9 +543,9 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			dir = GetPlatform().GetGCodeDir();
 		}
 		const char* const flagDirsVal = GetKeyValue("flagDirs");
-		const bool flagDirs = flagDirsVal != nullptr && atoi(flagDirsVal) == 1;
+		const bool flagDirs = flagDirsVal != nullptr && SafeStrtol(flagDirsVal) == 1;
 		OutputBuffer::Release(response);
-		response = reprap.GetFilesResponse(dir, flagDirs);
+		response = reprap.GetFilesResponse(dir, flagDirs);				// this may return nullptr
 	}
 	else if (StringEquals(request, "fileinfo"))
 	{
@@ -615,11 +616,11 @@ const char* HttpResponder::GetKeyValue(const char *key) const
 }
 
 // Called to process a FileInfo request, which may take several calls
-// When we have finished, set the state back to free.
+// Return true if complete
 bool HttpResponder::SendFileInfo(bool quitEarly)
 {
 	OutputBuffer *jsonResponse = nullptr;
-	const bool gotFileInfo = reprap.GetFileInfoResponse(filenameBeingProcessed, jsonResponse, quitEarly);
+	bool gotFileInfo = reprap.GetFileInfoResponse(filenameBeingProcessed, jsonResponse, quitEarly);
 	if (gotFileInfo)
 	{
 		// Got it - send the response now
@@ -633,7 +634,16 @@ bool HttpResponder::SendFileInfo(bool quitEarly)
 		outBuf->catf("Content-Length: %u\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
 		outBuf->cat("Connection: close\n\n");
 		outBuf->Append(jsonResponse);
-		Commit();
+		if (outBuf->HadOverflow())
+		{
+			OutputBuffer::ReleaseAll(outBuf);
+			ReportOutputBufferExhaustion(__FILE__, __LINE__);
+			gotFileInfo = false;
+		}
+		else
+		{
+			Commit();
+		}
 	}
 	return gotFileInfo;
 }
@@ -903,57 +913,98 @@ void HttpResponder::SendJsonResponse(const char* command)
 
 	// Try to process a request for JSON responses
 	OutputBuffer *jsonResponse;
+	bool mayKeepOpen;
 	if (OutputBuffer::Allocate(jsonResponse))
 	{
-		bool mayKeepOpen;
 		const bool gotResponse = GetJsonResponse(command, jsonResponse, mayKeepOpen);
-		if (!gotResponse || jsonResponse->HadOverflow())
+		if (!gotResponse)
 		{
-			// Either this request was rejected, or it will take longer to process e.g. rr_fileinfo, or we ran out of output buffers
+			// GetJsonResponse() changed the state instead of returning a response
 			OutputBuffer::Release(jsonResponse);
 			return;
 		}
-
-		// Send the JSON response
-		bool keepOpen = false;
-		if (mayKeepOpen)
+		if (jsonResponse != nullptr && jsonResponse->HadOverflow())
 		{
-			// Check that the browser wants to persist the connection too
-			for (size_t i = 0; i < numHeaderKeys; ++i)
+			// The response is incomplete because we ran out of buffers
+			OutputBuffer::ReleaseAll(jsonResponse);
+		}
+	}
+
+	if (jsonResponse == nullptr)
+	{
+		// We ran out of buffers at some point.
+		// Unfortunately the protocol is prone to deadlocking, because if most output buffer are used up holding a GCode reply,
+		// there may be insufficient buffers left to compose the status response to tell DWC that it needs to fetch that GCode reply.
+		// Until we fix the protocol, the best we can do is time out and throw the GCode response away.
+		if (millis() - startedProcessingRequestAt >= MaxBufferWaitTime)
+		{
 			{
-				if (StringEquals(headers[i].key, "Connection"))
-				{
-					// Comment out the following line to disable persistent connections
-					keepOpen = StringEquals(headers[i].value, "keep-alive");
-					break;
-				}
+				MutexLocker lock(gcodeReplyMutex);
+				OutputBuffer *buf = gcodeReply.Pop();
+				OutputBuffer::ReleaseAll(buf);
+			}
+			ReportOutputBufferExhaustion(__FILE__, __LINE__);
+		}
+		return;
+	}
+
+	// Send the JSON response
+	bool keepOpen = false;
+	if (mayKeepOpen)
+	{
+		// Check that the browser wants to persist the connection too
+		for (size_t i = 0; i < numHeaderKeys; ++i)
+		{
+			if (StringEquals(headers[i].key, "Connection"))
+			{
+				// Comment out the following line to disable persistent connections
+				keepOpen = StringEquals(headers[i].value, "keep-alive");
+				break;
 			}
 		}
+	}
 
-		// Note that when using RTOS the following response MUST be small enough to fit in a single buffer.
-		// This is because the current task may get suspended e.g. when reading from SD card to build a file list,
-		// so other tasks may allocate buffers meanwhile, and the previous mechanism for ensuring that there is sufficient
-		// buffer space remaining don't work.
-		// This response is currently about 230 bytes long in the worst case.
-		outBuf->copy(	"HTTP/1.1 200 OK\n"
-						"Cache-Control: no-cache, no-store, must-revalidate\n"
-						"Pragma: no-cache\n"
-						"Expires: 0\n"
-						"Access-Control-Allow-Origin: *\n"
-						"Content-Type: application/json\n"
-					);
-		outBuf->catf("Content-Length: %u\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
-		outBuf->catf("Connection: %s\n\n", keepOpen ? "keep-alive" : "close");
-		outBuf->Append(jsonResponse);
+	// Note that when using RTOS the following response should preferably be small enough to fit in a single buffer.
+	// This is because the current task may get suspended e.g. when reading from SD card to build a file list,
+	// so other tasks may allocate buffers meanwhile, and the previous mechanism for ensuring that there is sufficient
+	// buffer space remaining don't work.
+	// This response is currently about 230 bytes long in the worst case.
+	outBuf->copy(	"HTTP/1.1 200 OK\n"
+					"Cache-Control: no-cache, no-store, must-revalidate\n"
+					"Pragma: no-cache\n"
+					"Expires: 0\n"
+					"Access-Control-Allow-Origin: *\n"
+					"Content-Type: application/json\n"
+				);
+	const unsigned int replyLength = (jsonResponse != nullptr) ? jsonResponse->Length() : 0;
+	outBuf->catf("Content-Length: %u\n", replyLength);
+	outBuf->catf("Connection: %s\n\n", keepOpen ? "keep-alive" : "close");
+	outBuf->Append(jsonResponse);
 
-		if (outBuf->HadOverflow())
+	if (outBuf->HadOverflow())
+	{
+		// We ran out of buffers. Release the buffers we have and return false. The caller will retry later.
+		OutputBuffer::ReleaseAll(outBuf);
+		// We ran out of buffers at some point.
+		// Unfortunately the protocol is prone to deadlocking, because if most output buffer are used up holding a GCode reply,
+		// there may be insufficient buffers left to compose the status response to tell DWC that it needs to fetch that GCode reply.
+		// Until we fix the protocol, the best we can do is time out and throw the GCode response away.
+		if (millis() - startedProcessingRequestAt >= MaxBufferWaitTime)
 		{
-			// We ran out of buffers. Release the buffers we have and return false. The caller will retry later.
-			OutputBuffer::ReleaseAll(outBuf);
+			{
+				MutexLocker lock(gcodeReplyMutex);
+				OutputBuffer *buf = gcodeReply.Pop();
+				OutputBuffer::ReleaseAll(buf);
+			}
+			ReportOutputBufferExhaustion(__FILE__, __LINE__);
 		}
-		else
+	}
+	else
+	{
+		Commit(keepOpen ? ResponderState::reading : ResponderState::free, false);
+		if (reprap.Debug(moduleWebserver))
 		{
-			Commit(keepOpen ? ResponderState::reading : ResponderState::free);
+			debugPrintf("Sending JSON reply, length %u\n", replyLength);
 		}
 	}
 }
@@ -1023,7 +1074,15 @@ void HttpResponder::ProcessRequest()
 							"Content-Length: 0\n"
 							"\n"
 						);
-			Commit();
+			if (outBuf->HadOverflow())
+			{
+				OutputBuffer::ReleaseAll(outBuf);
+				ReportOutputBufferExhaustion(__FILE__, __LINE__);
+			}
+			else
+			{
+				Commit();
+			}
 			return;
 		}
 
@@ -1312,9 +1371,14 @@ void HttpResponder::Diagnostics(MessageType mt) const
 		{
 			while (!gcodeReply.IsEmpty())
 			{
-				OutputBuffer::ReleaseAll(gcodeReply.Pop());
+				OutputBuffer *buf = gcodeReply.Pop();
+				OutputBuffer::ReleaseAll(buf);
 			}
 			clientsServed = 0;
+			if (reprap.Debug(moduleWebserver))
+			{
+				debugPrintf("Released gcodeReply, free buffers=%u\n", OutputBuffer::GetFreeBuffers());
+			}
 		}
 	}
 }

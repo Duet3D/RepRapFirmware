@@ -25,8 +25,8 @@ Licence: GPL
 #include "Platform.h"
 #include "RepRap.h"
 
-PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) : platform(p), gCodes(gc), isPrinting(false),
-	printStartTime(0), pauseStartTime(0), totalPauseTime(0), heatingUp(false), currentLayer(0), warmUpDuration(0.0),
+PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) : platform(p), gCodes(gc), isPrinting(false), heatingUp(false),
+	printStartTime(0), pauseStartTime(0), totalPauseTime(0), currentLayer(0), warmUpDuration(0.0),
 	firstLayerDuration(0.0), firstLayerFilament(0.0), firstLayerProgress(0.0), lastLayerChangeTime(0.0),
 	lastLayerFilament(0.0), lastLayerZ(0.0), numLayerSamples(0), layerEstimatedTimeLeft(0.0), printingFileParsed(false)
 {
@@ -95,7 +95,7 @@ void PrintMonitor::Spin()
 	}
 
 	// Otherwise collect some stats after a certain period of time
-	uint32_t now = millis();
+	const uint32_t now = millis();
 	if (IsPrinting()
 #if SUPPORT_ROLAND
 		&& !reprap.GetRoland()->Active()
@@ -109,87 +109,78 @@ void PrintMonitor::Spin()
 			pauseStartTime = 0;
 		}
 
-		// Have we just started a print? See if we're heating up
-		if (currentLayer == 0)
+		if (gCodes.IsHeatingUp())
 		{
-			// Check if there are any active heaters
-			bool nozzleAtHighTemperature = false;
-			for (int heater = 0; heater < (int)Heaters; heater++)
+			if (!heatingUp)
 			{
-				if (reprap.GetHeat().GetStatus(heater) == Heat::HS_active && reprap.GetHeat().GetActiveTemperature(heater) > TEMPERATURE_LOW_SO_DONT_CARE)
-				{
-					heatingUp = true;
-
-					// Check if this heater is assigned to a tool and if it has reached its set temperature yet
-					if (reprap.IsHeaterAssignedToTool(heater))
-					{
-						if (!reprap.GetHeat().HeaterAtSetTemperature(heater, false))
-						{
-							nozzleAtHighTemperature = false;
-							break;
-						}
-						nozzleAtHighTemperature = true;
-					}
-				}
-			}
-
-			// Yes - do we have live movement?
-			if (nozzleAtHighTemperature && !reprap.GetMove().NoLiveMovement())
-			{
-				// Yes - we're actually starting the print
-				WarmUpComplete();
-				currentLayer = 1;
+				heatingUp = true;
+				heatingStartedTime = millis64();
 			}
 		}
-		else if (!gCodes.DoingFileMacro() && reprap.GetMove().IsExtruding())
+		else
 		{
-			// Print is in progress and filament is being extruded
-			float liveCoordinates[DRIVES];
-			reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-
-			if (currentLayer == 1)
+			if (heatingUp)
 			{
-				// See if we need to determine the first layer height (usually smaller than the nozzle diameter)
-				if (printingFileInfo.firstLayerHeight == 0.0 && liveCoordinates[Z_AXIS] < platform.GetNozzleDiameter() * 1.5)
-				{
-					// This shouldn't be needed because we parse the first layer height anyway, but it won't harm
-					printingFileInfo.firstLayerHeight = liveCoordinates[Z_AXIS];
-				}
+				heatingUp = false;
+				warmUpDuration += (millis64() - heatingStartedTime) * MillisToSeconds;
+			}
 
-				// Check if we've finished the first layer
-				if (liveCoordinates[Z_AXIS] > printingFileInfo.firstLayerHeight + LAYER_HEIGHT_TOLERANCE)
+			if (!gCodes.DoingFileMacro() && reprap.GetMove().IsExtruding())
+			{
+				// Print is in progress and filament is being extruded
+				float liveCoordinates[DRIVES];
+				reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
+
+				if (currentLayer == 0)
 				{
-					FirstLayerComplete();
+					currentLayer = 1;
+
+					// See if we need to determine the first layer height (usually smaller than the nozzle diameter)
+					if (printingFileInfo.firstLayerHeight == 0.0 && liveCoordinates[Z_AXIS] < platform.GetNozzleDiameter() * 1.5)
+					{
+						printingFileInfo.firstLayerHeight = liveCoordinates[Z_AXIS];
+					}
+				}
+				else if (currentLayer == 1)
+				{
+					// Check if we've finished the first layer
+					if (liveCoordinates[Z_AXIS] > printingFileInfo.firstLayerHeight + LAYER_HEIGHT_TOLERANCE)
+					{
+						FirstLayerComplete();
+						currentLayer++;
+
+						lastLayerZ = liveCoordinates[Z_AXIS];
+						lastLayerChangeTime = GetPrintDuration();
+					}
+				}
+				// Else check for following layer changes
+				else if (liveCoordinates[Z_AXIS] > lastLayerZ + LAYER_HEIGHT_TOLERANCE)
+				{
+					LayerComplete();
 					currentLayer++;
 
-					lastLayerZ = liveCoordinates[Z_AXIS];
+					// If we know the layer height, compute what the current layer height should be. This is to handle slicers that use a different layer height for support.
+					lastLayerZ = (printingFileInfo.layerHeight > 0.0)
+									? printingFileInfo.firstLayerHeight + (currentLayer - 1) * printingFileInfo.layerHeight
+										: liveCoordinates[Z_AXIS];
 					lastLayerChangeTime = GetPrintDuration();
 				}
-			}
-			// Check for following layer changes
-			else if (liveCoordinates[Z_AXIS] > lastLayerZ + LAYER_HEIGHT_TOLERANCE)
-			{
-				LayerComplete();
-				currentLayer++;
-
-				// If we know the layer height, compute what the current layer height should be. This is to handle slicers that use a different layer height for support.
-				lastLayerZ = (printingFileInfo.layerHeight > 0.0)
-								? printingFileInfo.firstLayerHeight + (currentLayer - 1) * printingFileInfo.layerHeight
-									: liveCoordinates[Z_AXIS];
-				lastLayerChangeTime = GetPrintDuration();
 			}
 		}
 		lastUpdateTime = now;
 	}
 }
 
+// Return the first layer print time
+float PrintMonitor::GetFirstLayerDuration() const
+{
+	return (firstLayerDuration > 0.0) ? firstLayerDuration : ((currentLayer > 0) ? GetPrintDuration() - warmUpDuration : 0.0);
+}
+
+// Return the warm-up time
 float PrintMonitor::GetWarmUpDuration() const
 {
-	if (currentLayer > 0)
-	{
-		return warmUpDuration;
-	}
-	return heatingUp ? GetPrintDuration() : 0.0;
+	return (heatingUp) ? warmUpDuration + (millis64() - heatingStartedTime) * MillisToSeconds : warmUpDuration;
 }
 
 // Notifies this class that a file has been set for printing
@@ -203,14 +194,9 @@ void PrintMonitor::StartingPrint(const char* filename)
 void PrintMonitor::StartedPrint()
 {
 	isPrinting = true;
-	printStartTime = millis64();
-}
-
-// This is called as soon as the heaters are at temperature and the actual print has started
-void PrintMonitor::WarmUpComplete()
-{
 	heatingUp = false;
-	warmUpDuration = GetPrintDuration();
+	printStartTime = millis64();
+	warmUpDuration = 0.0;
 }
 
 // Called when the first layer has been finished

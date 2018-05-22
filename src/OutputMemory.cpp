@@ -131,7 +131,6 @@ size_t OutputBuffer::copy(const char c)
 	if (next != nullptr)
 	{
 		ReleaseAll(next);
-		next = nullptr;
 		last = this;
 	}
 
@@ -152,7 +151,6 @@ size_t OutputBuffer::copy(const char *src, size_t len)
 	if (next != nullptr)
 	{
 		ReleaseAll(next);
-		next = nullptr;
 		last = this;
 	}
 
@@ -387,13 +385,6 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 /*static*/ size_t OutputBuffer::GetBytesLeft(const OutputBuffer *writingBuffer)
 {
 	const size_t freeOutputBuffers = OUTPUT_BUFFER_COUNT - usedOutputBuffers;
-	if (writingBuffer == nullptr)
-	{
-		// Only return the total number of bytes left
-		return freeOutputBuffers * OUTPUT_BUFFER_SIZE;
-	}
-
-	// We're doing a possibly long response like a filelist
 	const size_t bytesLeft = OUTPUT_BUFFER_SIZE - writingBuffer->last->DataLength();
 
 	if (freeOutputBuffers < RESERVED_OUTPUT_BUFFERS)
@@ -404,7 +395,6 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 
 	return bytesLeft + (freeOutputBuffers - RESERVED_OUTPUT_BUFFERS) * OUTPUT_BUFFER_SIZE;
 }
-
 
 // Truncate an output buffer to free up more memory. Returns the number of released bytes.
 /*static */ size_t OutputBuffer::Truncate(OutputBuffer *buffer, size_t bytesNeeded)
@@ -465,7 +455,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 	return nextBuffer;
 }
 
-/*static */ void OutputBuffer::ReleaseAll(OutputBuffer *buf)
+/*static */ void OutputBuffer::ReleaseAll(OutputBuffer * volatile &buf)
 {
 	while (buf != nullptr)
 	{
@@ -485,32 +475,35 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 // Push an OutputBuffer chain to the stack
 void OutputStack::Push(OutputBuffer *buffer) volatile
 {
-	if (count == OUTPUT_STACK_DEPTH)
-	{
-		OutputBuffer::ReleaseAll(buffer);
-		reprap.GetPlatform().LogError(ErrorCode::OutputStackOverflow);
-		return;
-	}
-
 	if (buffer != nullptr)
 	{
-		buffer->whenQueued = millis();
-		TaskCriticalSectionLocker lock;
-		items[count++] = buffer;
+		{
+			TaskCriticalSectionLocker lock;
+
+			if (count < OUTPUT_STACK_DEPTH)
+			{
+				buffer->whenQueued = millis();
+				items[count++] = buffer;
+				return;
+			}
+		}
+		OutputBuffer::ReleaseAll(buffer);
+		reprap.GetPlatform().LogError(ErrorCode::OutputStackOverflow);
 	}
 }
 
 // Pop an OutputBuffer chain or return nullptr if none is available
 OutputBuffer *OutputStack::Pop() volatile
 {
+	TaskCriticalSectionLocker lock;
+
 	if (count == 0)
 	{
 		return nullptr;
 	}
 
-	TaskCriticalSectionLocker lock;
 	OutputBuffer *item = items[0];
-	for(size_t i = 1; i < count; i++)
+	for (size_t i = 1; i < count; i++)
 	{
 		items[i - 1] = items[i];
 	}
@@ -519,45 +512,30 @@ OutputBuffer *OutputStack::Pop() volatile
 	return item;
 }
 
-// Returns the first item from the stack or NULL if none is available
+// Returns the first item from the stack or nullptr if none is available
 OutputBuffer *OutputStack::GetFirstItem() const volatile
 {
-	if (count == 0)
-	{
-		return nullptr;
-	}
-	return items[0];
+	return (count == 0) ? nullptr : items[0];
 }
 
-// Set the first item of the stack. If it's NULL, then the first item will be removed
+// Update the first item of the stack
 void OutputStack::SetFirstItem(OutputBuffer *buffer) volatile
 {
-	TaskCriticalSectionLocker lock;
 	if (buffer == nullptr)
 	{
-		// If buffer is NULL, then the first item is removed from the stack
-		for(size_t i = 1; i < count; i++)
-		{
-			items[i - 1] = items[i];
-		}
-		count--;
+		(void)Pop();
 	}
 	else
 	{
-		// Else only the first item is updated
 		items[0] = buffer;
 		buffer->whenQueued = millis();
 	}
 }
 
-// Returns the last item from the stack or NULL if none is available
+// Returns the last item from the stack or nullptr if none is available
 OutputBuffer *OutputStack::GetLastItem() const volatile
 {
-	if (count == 0)
-	{
-		return nullptr;
-	}
-	return items[count - 1];
+	return (count == 0) ? nullptr : items[count - 1];
 }
 
 // Get the total length of all queued buffers
@@ -566,7 +544,7 @@ size_t OutputStack::DataLength() const volatile
 	size_t totalLength = 0;
 
 	TaskCriticalSectionLocker lock;
-	for(size_t i = 0; i < count; i++)
+	for (size_t i = 0; i < count; i++)
 	{
 		totalLength += items[i]->Length();
 	}

@@ -682,7 +682,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	OutputBuffer *response;
 	if (!OutputBuffer::Allocate(response))
 	{
-		// Should never happen
 		return nullptr;
 	}
 
@@ -1674,6 +1673,10 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, bool flagsDirs)
 	{
 		err = 1;
 	}
+	else if (!platform->GetMassStorage()->DirectoryExists(dir))
+	{
+		err = 2;
+	}
 	else
 	{
 		err = 0;
@@ -1821,69 +1824,77 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
 		return nullptr;
 	}
 
-	// If the requested volume is not mounted, report an error
-	if (!platform->GetMassStorage()->CheckDriveMounted(dir))
-	{
-		response->copy("{\"err\":1}");
-		return response;
-	}
-
-	// Check if the directory exists
-	if (!platform->GetMassStorage()->DirectoryExists(dir))
-	{
-		response->copy("{\"err\":2}");
-		return response;
-	}
-
 	response->copy("{\"dir\":");
 	response->EncodeString(dir, strlen(dir), false);
 	response->cat(",\"files\":[");
+	unsigned int err;
 
-	FileInfo fileInfo;
-	bool firstFile = true;
-	bool gotFile = platform->GetMassStorage()->FindFirst(dir, fileInfo);
-	size_t bytesLeft = OutputBuffer::GetBytesLeft(response);	// don't write more bytes than we can
-
-	while (gotFile)
+	if (!platform->GetMassStorage()->CheckDriveMounted(dir))
 	{
-		if (fileInfo.fileName[0] != '.')			// ignore Mac resource files and Linux hidden files
-		{
-			// Make sure we can end this response properly
-			if (bytesLeft < strlen(fileInfo.fileName) + 70)
-			{
-				// No more space available - stop here
-				platform->GetMassStorage()->AbandonFindNext();
-				break;
-			}
-
-			// Write delimiter
-			if (!firstFile)
-			{
-				bytesLeft -= response->cat(',');
-			}
-			firstFile = false;
-
-			// Write another file entry
-			bytesLeft -= response->catf("{\"type\":\"%c\",\"name\":", fileInfo.isDirectory ? 'd' : 'f');
-			bytesLeft -= response->EncodeString(fileInfo.fileName, MaxFilenameLength, false);
-			bytesLeft -= response->catf(",\"size\":%" PRIu32, fileInfo.size);
-
-			const struct tm * const timeInfo = gmtime(&fileInfo.lastModified);
-			if (timeInfo->tm_year <= /*19*/80)
-			{
-				// Don't send the last modified date if it is invalid
-				bytesLeft -= response->cat('}');
-			}
-			else
-			{
-				bytesLeft -= response->catf(",\"date\":\"%04u-%02u-%02uT%02u:%02u:%02u\"}",
-						timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
-						timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
-			}
-		}
-		gotFile = platform->GetMassStorage()->FindNext(fileInfo);
+		err = 1;
 	}
-	response->cat("]}");
+	else if (!platform->GetMassStorage()->DirectoryExists(dir))
+	{
+		err = 2;
+	}
+	else
+	{
+		err = 0;
+		FileInfo fileInfo;
+		bool firstFile = true;
+		bool gotFile = platform->GetMassStorage()->FindFirst(dir, fileInfo);
+		size_t bytesLeft = OutputBuffer::GetBytesLeft(response);	// don't write more bytes than we can
+
+		while (gotFile)
+		{
+			if (fileInfo.fileName[0] != '.')			// ignore Mac resource files and Linux hidden files
+			{
+				// Make sure we can end this response properly
+				if (bytesLeft < strlen(fileInfo.fileName) + 70)
+				{
+					// No more space available - stop here
+					platform->GetMassStorage()->AbandonFindNext();
+					break;
+				}
+
+				// Write delimiter
+				if (!firstFile)
+				{
+					bytesLeft -= response->cat(',');
+				}
+				firstFile = false;
+
+				// Write another file entry
+				bytesLeft -= response->catf("{\"type\":\"%c\",\"name\":", fileInfo.isDirectory ? 'd' : 'f');
+				bytesLeft -= response->EncodeString(fileInfo.fileName, MaxFilenameLength, false);
+				bytesLeft -= response->catf(",\"size\":%" PRIu32, fileInfo.size);
+
+				const struct tm * const timeInfo = gmtime(&fileInfo.lastModified);
+				if (timeInfo->tm_year <= /*19*/80)
+				{
+					// Don't send the last modified date if it is invalid
+					bytesLeft -= response->cat('}');
+				}
+				else
+				{
+					bytesLeft -= response->catf(",\"date\":\"%04u-%02u-%02uT%02u:%02u:%02u\"}",
+							timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
+							timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
+				}
+			}
+			gotFile = platform->GetMassStorage()->FindNext(fileInfo);
+		}
+	}
+
+	// If there is no error, don't append "err":0 because if we do then DWC thinks there has been an error - looks like it doesn't check the value
+	if (err != 0)
+	{
+		response->catf("],\"err\":%u}", err);
+	}
+	else
+	{
+		response->cat("]}");
+	}
 
 	return response;
 }
