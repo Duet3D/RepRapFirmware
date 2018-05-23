@@ -18,11 +18,11 @@ NetworkResponder::NetworkResponder(NetworkResponder *n)
 }
 
 // Send the contents of the output buffers
-void NetworkResponder::Commit(ResponderState nextState)
+void NetworkResponder::Commit(ResponderState nextState, bool report)
 {
 	stateAfterSending = nextState;
 	responderState = ResponderState::sending;
-	if (reprap.Debug(moduleWebserver))
+	if (report && reprap.Debug(moduleWebserver))
 	{
 		debugPrintf("Sending reply, file = %s\n", (fileBeingSent != nullptr) ? "yes" : "no");
 	}
@@ -149,7 +149,6 @@ void NetworkResponder::ConnectionLost()
 {
 	CancelUpload();
 	OutputBuffer::ReleaseAll(outBuf);
-	outBuf = nullptr;
 	outStack.ReleaseAll();
 
 	if (fileBeingSent != nullptr)
@@ -239,6 +238,14 @@ void NetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified
 uint32_t NetworkResponder::GetRemoteIP() const
 {
 	return (skt == nullptr) ? 0 : skt->GetRemoteIP();
+}
+
+void NetworkResponder::ReportOutputBufferExhaustion(const char *sourceFile, int line)
+{
+	if (reprap.Debug(moduleWebserver))
+	{
+		debugPrintf("Ran out of output buffers at %s(%d)\n", sourceFile, line);
+	}
 }
 
 // End

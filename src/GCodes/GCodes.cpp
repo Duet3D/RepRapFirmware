@@ -402,7 +402,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
-	case GCodeState::waitingForSegmentedMoveToComplete:
+	case GCodeState::waitingForSegmentedMoveToGo:
 		// Wait for all segments of the arc move to go into the movement queue and check whether an error occurred
 		switch (segMoveState)
 		{
@@ -417,8 +417,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			}
 			reply.copy("G1/G2/G3: intermediate position outside machine limits");
 			error = true;
-			AbortPrint(gb);
 			gb.SetState(GCodeState::normal);
+			if (machineType != MachineType::fff)
+			{
+				AbortPrint(gb);
+			}
 			break;
 
 		case SegmentedMoveState::active:					// move still ongoing
@@ -1346,16 +1349,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		// We completed a command, so unlock resources and tell the host about it
 		gb.timerRunning = false;
 		UnlockAll(gb);
-		if (error)
-		{
-			gb.MachineState().errorMessage = nullptr;						// we can't report more than one error here, so clear the original one
-		}
-		else if (gb.MachineState().errorMessage != nullptr)
+		if (!error && gb.MachineState().errorMessage != nullptr)
 		{
 			reply.copy(gb.MachineState().errorMessage);
-			gb.MachineState().errorMessage = nullptr;
 			error = true;
 		}
+		gb.MachineState().errorMessage = nullptr;
 		HandleReply(gb, (error) ? GCodeResult::error : GCodeResult::ok, reply.c_str());
 	}
 }
@@ -1714,6 +1713,15 @@ bool GCodes::IsRunning() const
 bool GCodes::IsReallyPrinting() const
 {
 	return reprap.GetPrintMonitor().IsPrinting() && IsRunning();
+}
+
+// Return true if the SD card print is waiting for a heater to reach temperature
+bool GCodes::IsHeatingUp() const
+{
+	int num;
+	return fileGCode->IsExecuting()
+		&& fileGCode->GetCommandLetter() == 'M'
+		&& ((num = fileGCode->GetCommandNumber()) == 109 || num == 116 || num == 190 || num == 191);
 }
 
 #if HAS_VOLTAGE_MONITOR || HAS_SMART_DRIVERS
@@ -2501,19 +2509,22 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 
 	AxesBitmap axesMentioned = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS);
 
-	// Get the optional Z parameter
-	if (gb.Seen('Z'))
+	// Get any additional axes
+	for (size_t axis = Z_AXIS; axis < numVisibleAxes; axis++)
 	{
-		const float zParam = gb.GetFValue() * distanceScale;
-		if (axesRelative)
+		if (gb.Seen(axisLetters[axis]))
 		{
-			currentUserPosition[Z_AXIS] += zParam;
+			const float axisParam = gb.GetFValue() * distanceScale;
+			if (axesRelative)
+			{
+				currentUserPosition[axis] += axisParam;
+			}
+			else
+			{
+				currentUserPosition[axis] = axisParam;
+			}
+			axesMentioned |= MakeBitmap<AxesBitmap>(axis);
 		}
-		else
-		{
-			currentUserPosition[Z_AXIS] = zParam;
-		}
-		axesMentioned |= MakeBitmap<AxesBitmap>(Z_AXIS);
 	}
 
 	// Check enough axes have been homed
@@ -2595,10 +2606,7 @@ void GCodes::FinaliseMove(GCodeBuffer& gb)
 	if (totalSegments > 1)
 	{
 		segMoveState = SegmentedMoveState::active;
-		if (machineType != MachineType::fff)
-		{
-			gb.SetState(GCodeState::waitingForSegmentedMoveToComplete);
-		}
+		gb.SetState(GCodeState::waitingForSegmentedMoveToGo);
 
 		for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
 		{
@@ -2660,18 +2668,15 @@ bool GCodes::ReadMove(RawMove& m)
 
 		for (size_t drive = 0; drive < numVisibleAxes; ++drive)
 		{
-			if (doingArcMove && drive != Z_AXIS)
+			if (doingArcMove && drive != Z_AXIS && IsBitSet(moveBuffer.yAxes, drive))
 			{
-				if (IsBitSet(moveBuffer.yAxes, drive))
-				{
-					// Y axis or a substitute Y axis
-					moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * sinf(arcCurrentAngle);
-				}
-				else if (IsBitSet(moveBuffer.xAxes, drive))
-				{
-					// X axis or a substitute X axis
-					moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * cosf(arcCurrentAngle);
-				}
+				// Y axis or a substitute Y axis
+				moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * sinf(arcCurrentAngle);
+			}
+			else if (doingArcMove && drive != Z_AXIS && IsBitSet(moveBuffer.xAxes, drive))
+			{
+				// X axis or a substitute X axis
+				moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * cosf(arcCurrentAngle);
 			}
 			else
 			{
@@ -2691,13 +2696,10 @@ bool GCodes::ReadMove(RawMove& m)
 		// Limit the end position at each segment. This is needed for arc moves on any printer, and for [segmented] straight moves on SCARA printers.
 		if (limitAxes && reprap.GetMove().GetKinematics().LimitPosition(m.coords, numVisibleAxes, axesHomed, true))
 		{
-			if (machineType != MachineType::fff)
-			{
-				segMoveState = SegmentedMoveState::aborted;
-				doingArcMove = false;
-				segmentsLeft = 0;
-				return false;
-			}
+			segMoveState = SegmentedMoveState::aborted;
+			doingArcMove = false;
+			segmentsLeft = 0;
+			return false;
 		}
 
 		if (segmentsLeftToStartAt == segmentsLeft && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it

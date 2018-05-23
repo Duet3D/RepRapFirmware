@@ -173,6 +173,7 @@ public:
 	DriverMode GetDriverMode() const;
 	void SetCurrent(float current);
 	void Enable(bool en);
+	void UpdateChopConfRegister();
 	void SetStallDetectThreshold(int sgThreshold);
 	void SetStallDetectFilter(bool sgFilter);
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond);
@@ -204,6 +205,8 @@ private:
 	static constexpr unsigned int DriveConfig = 3;			// read register select, sense voltage high/low sensitivity
 	static constexpr unsigned int SmartEnable = 4;			// coolstep configuration
 
+	static constexpr uint32_t UpdateAllRegisters = (1u << NumRegisters) - 1;	// bitmap in registersToUpdate for all registers
+
 	uint32_t pin;											// the pin number that drives the chip select pin of this driver
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state
 	volatile uint32_t registersToUpdate;					// bitmap of register values that need to be sent to the driver chip
@@ -213,10 +216,9 @@ private:
 	uint32_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
 	uint32_t maxSgLoadRegister;								// the maximum value of the StallGuard bits we read
 
-	static constexpr uint32_t UpdateAllRegisters = (1u << NumRegisters) - 1;	// bitmap in registersToUpdate for all registers
-
 	volatile uint32_t lastReadStatus;						// the status word that we read most recently, updated by the ISR
 	volatile uint32_t accumulatedStatus;
+	bool enabled;
 };
 
 // State structures for all drivers
@@ -257,6 +259,7 @@ pre(!driversPowered)
 	axisNumber = p_axisNumber;
 	pin = p_pin;
 	pinMode(pin, OUTPUT_HIGH);
+	enabled = false;
 	registers[DriveControl] = defaultDrvCtrlReg;
 	configuredChopConfReg = defaultChopConfReg;
 	registers[ChopperControl] = configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK;		// disable driver at startup
@@ -287,7 +290,7 @@ inline void TmcDriverState::WriteAll()
 bool TmcDriverState::SetChopConf(uint32_t newVal)
 {
 	configuredChopConfReg = (newVal & 0x0001FFFF) | TMC_REG_CHOPCONF;		// save the new value
-	Enable((registers[ChopperControl] & TMC_CHOPCONF_TOFF_MASK) != 0);		// send the new value, keeping the current Enable status
+	UpdateChopConfRegister();												// send the new value, keeping the current Enable status
 	return true;
 }
 
@@ -298,17 +301,17 @@ bool TmcDriverState::SetDriverMode(unsigned int mode)
 	{
 	case (unsigned int)DriverMode::constantOffTime:
 		configuredChopConfReg = (configuredChopConfReg & ~TMC_CHOPCONF_RNDTF) | TMC_CHOPCONF_CHM;
-		Enable((registers[ChopperControl] & TMC_CHOPCONF_TOFF_MASK) != 0);		// send the new value, keeping the current Enable status
+		UpdateChopConfRegister();											// send the new value, keeping the current Enable status
 		return true;
 
 	case (unsigned int)DriverMode::randomOffTime:
 		configuredChopConfReg |= (TMC_CHOPCONF_RNDTF | TMC_CHOPCONF_CHM);
-		Enable((registers[ChopperControl] & TMC_CHOPCONF_TOFF_MASK) != 0);		// send the new value, keeping the current Enable status
+		UpdateChopConfRegister();											// send the new value, keeping the current Enable status
 		return true;
 
 	case (unsigned int)DriverMode::spreadCycle:
 		configuredChopConfReg &= ~(TMC_CHOPCONF_RNDTF | TMC_CHOPCONF_CHM);
-		Enable((registers[ChopperControl] & TMC_CHOPCONF_TOFF_MASK) != 0);		// send the new value, keeping the current Enable status
+		UpdateChopConfRegister();											// send the new value, keeping the current Enable status
 		return true;
 
 	default:
@@ -357,24 +360,43 @@ void TmcDriverState::SetCurrent(float current)
 // Enable or disable the driver. Also called from SetChopConf after the chopper control configuration has been changed.
 void TmcDriverState::Enable(bool en)
 {
-	registers[ChopperControl] = (en) ? configuredChopConfReg : (configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK);
+	if (enabled != en)
+	{
+		if (en)
+		{
+			// Driver was disabled and we are enabling it, so clear the stall status
+			// Unfortunately this may not be sufficient, because the stall status probably won't be updated until the next full step position.
+			accumulatedStatus &= ~TMC_RR_SG;
+			lastReadStatus &= ~TMC_RR_SG;
+		}
+		enabled = en;
+		UpdateChopConfRegister();
+	}
+}
+
+void TmcDriverState::UpdateChopConfRegister()
+{
+	registers[ChopperControl] = (enabled) ? configuredChopConfReg : (configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK);
 	registersToUpdate |= 1u << ChopperControl;
 }
 
 // Read the status
 inline uint32_t TmcDriverState::ReadLiveStatus() const
 {
-	return lastReadStatus & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
+	const uint32_t ret = lastReadStatus & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
+	return (enabled) ? ret : ret & ~TMC_RR_SG;
 }
 
 // Read the status
 uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep)
 {
+	const uint32_t mask = (enabled) ? 0xFFFFFFFF : ~TMC_RR_SG;
+	bitsToKeep &= mask;
 	const irqflags_t flags = cpu_irq_save();
 	const uint32_t status = accumulatedStatus;
 	accumulatedStatus &= bitsToKeep;
 	cpu_irq_restore(flags);
-	return status & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
+	return status & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST) & mask;
 }
 
 void TmcDriverState::SetStallDetectThreshold(int sgThreshold)

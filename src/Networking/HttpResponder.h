@@ -37,7 +37,8 @@ private:
 	static const size_t MaxQualKeys = 5;				// max number of key/value pairs in the qualifier
 	static const size_t MaxHeaders = 30;				// max number of key/value pairs in the headers
 	static const uint32_t HttpSessionTimeout = 8000;	// HTTP session timeout in milliseconds
-	static const uint32_t MaxFileInfoGetTime = 1800;	// maximum length of time we spend getting file info, to avoid the client timing out (actual time will be a little longer than this)
+	static const uint32_t MaxFileInfoGetTime = 2000;	// maximum length of time we spend getting file info, to avoid the client timing out (actual time will be a little longer than this)
+	static const uint32_t MaxBufferWaitTime = 1000;		// maximum length of time we spend waiting for a buffer before we discard gcodeReply buffers
 
 	enum class HttpParseState
 	{

@@ -183,6 +183,7 @@ public:
 	bool IsReallyPrinting() const;										// Return true if we are printing from SD card and not pausing, paused or resuming
 	bool IsSimulating() const { return simulationMode != 0; }
 	bool IsDoingToolChange() const { return doingToolChange; }
+	bool IsHeatingUp() const;											// Return true if the SD card print is waiting for a heater to reach temperature
 
 	bool AllAxesAreHomed() const;										// Return true if all axes are homed
 

@@ -29,8 +29,7 @@ public:
 	const char *c_str() const { return p; }
 	char *Pointer() const { return p; }						// use Pointer() only in the very care case that we need direct write access to the storage!
 
-	char& operator[](size_t index) { return p[index]; }
-	char operator[](size_t index) const { return p[index]; }
+	char& operator[](size_t index) const { return p[index]; }
 
 	void Clear() const { p[0] = 0; }
 
@@ -59,6 +58,7 @@ public:
 	char& operator[](size_t index) { return storage[index]; }
 	char operator[](size_t index) const { return storage[index]; }
 	constexpr size_t Capacity() const { return Len; }
+	bool EndsWith(char c) const;
 
 	void Clear() { storage[0] = 0; }
 	int printf(const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
@@ -72,6 +72,8 @@ public:
 
 	void CopyAndPad(const char *src);
 	bool ConstantTimeEquals(String<Len> other) const;
+
+	void Truncate(size_t len);
 
 private:
 	char storage[Len + 1];
@@ -121,6 +123,20 @@ template<size_t Len> int String<Len>::catf(const char *fmt, ...)
 	const int ret = GetRef().vcatf(fmt, vargs);
 	va_end(vargs);
 	return ret;
+}
+
+template<size_t Len> void String<Len>::Truncate(size_t len)
+{
+	if (len < strlen())
+	{
+		storage[len] = 0;
+	}
+}
+
+template<size_t Len> bool String<Len>::EndsWith(char c) const
+{
+	const size_t len = strlen();
+	return len != 0 && storage[len - 1] == c;
 }
 
 #endif /* STRINGREF_H_ */

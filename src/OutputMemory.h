@@ -80,9 +80,11 @@ class OutputBuffer
 		static OutputBuffer *Release(OutputBuffer *buf);
 
 		// Release all OutputBuffer objects in a chain
-		static void ReleaseAll(OutputBuffer *buf);
+		static void ReleaseAll(OutputBuffer * volatile &buf);
 
 		static void Diagnostics(MessageType mtype);
+
+		static unsigned int GetFreeBuffers() { return OUTPUT_BUFFER_COUNT - usedOutputBuffers; }
 
 	private:
 

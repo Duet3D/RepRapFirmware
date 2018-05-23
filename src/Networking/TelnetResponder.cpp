@@ -61,7 +61,6 @@ void TelnetResponder::ConnectionLost()
 		{
 			// Make sure the G-code reply is freed after it is sent to all clients
 			OutputBuffer::ReleaseAll(gcodeReply);
-			gcodeReply = nullptr;
 			clientsServed = 0;
 		}
 	}

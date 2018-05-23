@@ -1259,7 +1259,7 @@ bool Platform::FlushMessages()
 			{
 				// If the USB port is not opened, free the data left for writing
 				OutputBuffer::ReleaseAll(usbOutputBuffer);
-				usbOutput.SetFirstItem(nullptr);
+				(void) usbOutput.Pop();
 			}
 			else
 			{
@@ -3431,7 +3431,7 @@ void Platform::RawMessage(MessageType type, const char *message)
 // and calls to send an immediate LCD message the same as ordinary LCD messages
 void Platform::Message(const MessageType type, OutputBuffer *buffer)
 {
-	// First deal with logging because it doesn't hand on to the buffer
+	// First deal with logging because it doesn't hang on to the buffer
 	if ((type & LogMessage) != 0 && logger != nullptr)
 	{
 		logger->LogMessage(realTime, buffer);

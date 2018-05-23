@@ -560,12 +560,15 @@ void TmcDriverState::UpdateCurrent()
 // Enable or disable the driver
 void TmcDriverState::Enable(bool en)
 {
-	enabled = en;
-	if (enablePin != NoPin)
+	if (enabled != en)
 	{
-		digitalWrite(enablePin, !en);				// we assume that smart drivers always have active low enables
+		enabled = en;
+		if (enablePin != NoPin)
+		{
+			digitalWrite(enablePin, !en);			// we assume that smart drivers always have active low enables
+		}
+		UpdateChopConfRegister();
 	}
-	UpdateChopConfRegister();
 }
 
 // Read the status

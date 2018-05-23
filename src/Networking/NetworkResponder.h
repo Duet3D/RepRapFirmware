@@ -55,7 +55,7 @@ protected:
 
 	NetworkResponder(NetworkResponder *n);
 
-	void Commit(ResponderState nextState = ResponderState::free);
+	void Commit(ResponderState nextState = ResponderState::free, bool report = true);
 	virtual void SendData();
 	virtual void ConnectionLost();
 
@@ -64,6 +64,7 @@ protected:
 	virtual void CancelUpload();
 
 	uint32_t GetRemoteIP() const;
+	void ReportOutputBufferExhaustion(const char *sourceFile, int line);
 
 	static Platform& GetPlatform() { return reprap.GetPlatform(); }
 	static Network& GetNetwork() { return reprap.GetNetwork(); }

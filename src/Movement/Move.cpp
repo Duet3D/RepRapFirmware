@@ -277,6 +277,18 @@ void Move::Spin()
 		}
 	}
 
+	// If we are simulating, simulate completion of the current move.
+	// Do this here rather than at the end, so that when simulating, currentDda is non-null for most of the time and IsExtruding() returns the correct value
+	{
+		DDA *cdda;													// currentDda is declared volatile, so copy it in the next line
+		if (simulationMode != 0 && (cdda = currentDda) != nullptr)
+		{
+			simulationTime += (float)cdda->GetClocksNeeded()/DDA::stepClockRate;
+			cdda->Complete();
+			CurrentMoveCompleted();
+		}
+	}
+
 	// See whether we need to kick off a move
 	if (currentDda == nullptr)
 	{
@@ -354,16 +366,6 @@ void Move::Spin()
 			++preparedCount;
 			cdda = cdda->GetNext();
 			st = cdda->GetState();
-		}
-
-		// If we are simulating, simulate completion of the current move
-		if (simulationMode != 0)
-		{
-//DEBUG
-//currentDda->DebugPrint();
-			simulationTime += (float)currentDda->GetClocksNeeded()/DDA::stepClockRate;
-			currentDda->Complete();
-			CurrentMoveCompleted();
 		}
 	}
 }
