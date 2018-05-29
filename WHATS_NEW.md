@@ -22,7 +22,7 @@ Bug fixes:
 - Corrected DHT start bit timing to avoid a bus conflict
 - Fixed unreliable DHT sensor reading in RTOS build, caused by call to micros()
 - Pausing between the segments of a segmented move didn't happen even if the jerk settings were high enough
-- Possibly fix for incorrect extrusion in the first move after resuming from a pause
+- Possible fix for incorrect extrusion in the first move after resuming from a pause
 - If filament monitors were deleted or the type changed, this could result in an exception
 - When step rate limiting occurred due to the speed and microstepping combination needing an excessive pulse rate, movement could become irregular
 - When the SD card is removed during a print it says 1 file was invalidated even if there were more
