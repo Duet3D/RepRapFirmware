@@ -1549,6 +1549,7 @@ bool DDA::Step()
 			const uint32_t delayClocks = (clocksTaken + DDA::MinInterruptInterval) - (nextStepDue - isrStartTime);
 			moveStartTime += delayClocks;
 			nextStepDue += delayClocks;
+			++numHiccups;
 		}
 
 		// 8. Schedule next interrupt, or if it would be too soon, generate more steps immediately
