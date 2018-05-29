@@ -25,7 +25,7 @@ Bug fixes:
 - When step rate limiting occurred due to the speed and microstepping combination needing an excessive pulse rate, movement could become irregular
 - When the SD card is removed during a print it says 1 file was invalidated even if there were more
 - When the SD card is removed during a print we get several internal error messages, no "print abandoned" or similar message, and the heaters remain on
-- Emergency stop now turns off all spindles
+- Emergency stop now turns off all spindles if the machine type is CNC, and the laser if the machine type is Laser
 
 Version 2.0RC5 (Duet 2 series) and 1.21.1RC5 (other hardware)
 =============================================================
