@@ -7,11 +7,13 @@ Upgrade notes:
 - Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.1. Use of older versions of DWC may result in "Not authorized" disconnections.
 - When the machine mode is set to CNC, G0 movement behaviour is changed to align more with the NIST standard (see 2.0RC1 release notes).
 - If you have a DHT temperature/humidity sensor connected to the CS6 pin on a Duet 2, the channel numbers (X parameter in the M305 commands) are changed to 405 (was 400) for the temperature sensor and 455 (was 401) for the humidity sensor.
+- If you have a simple switch-type filament monitor configured using M591, you need to add the S1 parameter to enable it
 
 New features:
 - The M569 response when only the P parameter is given now includes chopper configuration register if it is a smart driver
 - Multiple DHT sensors are supported, connected to any of the 8 SPI daughter board chip select pins
 - The Duet 2 Maestro build now supports DHT sensors
+- Simple switch-type filament sensors can now be enabled/disabled using S1/S0 in the M591 command
 - If the HSMCI idle function times out, an error code bit is now set
 
 Bug fixes:
