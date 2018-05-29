@@ -3168,18 +3168,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					float timings[4];
 					platform.GetDriverStepTiming(drive, timings);
-					reply.printf("Drive %u runs %s, active %s enable,"
-#if HAS_SMART_DRIVERS
-									" mode %s,"
-#endif
-									" step timing %.1f,%.1f,%.1f,%.1f microseconds",
+					reply.printf("Drive %u runs %s, active %s enable, step timing %.1f:%.1f:%.1f:%.1f us",
 								drive,
 								(platform.GetDirectionValue(drive)) ? "forwards" : "in reverse",
 								(platform.GetEnableValue(drive)) ? "high" : "low",
-#if HAS_SMART_DRIVERS
-								TranslateDriverMode(SmartDrivers::GetDriverMode(drive)),
-#endif
 								(double)timings[0], (double)timings[1], (double)timings[2], (double)timings[3]);
+#if HAS_SMART_DRIVERS
+					if (drive < platform.GetNumSmartDrivers())
+					{
+						reply.catf(", mode %s, ccr 0x%05" PRIx32, TranslateDriverMode(SmartDrivers::GetDriverMode(drive)), SmartDrivers::GetChopperControlRegister(drive));
+					}
+#endif
 				}
 			}
 		}
@@ -3562,29 +3561,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			const unsigned int extruder = gb.GetUIValue();
 			if (extruder < numExtruders)
 			{
-				bool seen = false;
-				long sensorType;
-				gb.TryGetIValue('P', sensorType, seen);
-				if (seen)
-				{
-					FilamentMonitor::SetFilamentSensorType(extruder, sensorType);
-				}
-
-				FilamentMonitor *sensor = FilamentMonitor::GetFilamentSensor(extruder);
-				if (sensor != nullptr)
-				{
-					// Configure the sensor
-					const bool error = sensor->Configure(gb, reply, seen);
-					result = GetGCodeResultFromError(error);
-					if (error)
-					{
-						FilamentMonitor::SetFilamentSensorType(extruder, 0);		// delete the sensor
-					}
-				}
-				else if (!seen)
-				{
-					reply.printf("Extruder drive %u has no filament sensor", extruder);
-				}
+				result = FilamentMonitor::Configure(gb, reply, extruder);
 			}
 		}
 		break;

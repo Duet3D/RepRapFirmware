@@ -26,6 +26,7 @@ private:
 
 	bool highWhenNoFilament;
 	bool filamentPresent;
+	bool enabled;
 };
 
 #endif /* SRC_FILAMENTSENSORS_SIMPLEFILAMENTMONITOR_H_ */

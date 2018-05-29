@@ -41,12 +41,13 @@ public:
 	// Get the name. Returns nullptr if no name has been assigned.
 	const char *GetHeaterName() const { return heaterName; }
 
+	// Copy the basic details to the reply buffer
+	void CopyBasicHeaterDetails(unsigned int heater, const StringRef& reply) const;
+
 	// Factory method
 	static TemperatureSensor *Create(unsigned int channel);
 
 protected:
-	void CopyBasicHeaterDetails(unsigned int heater, const StringRef& reply) const;
-
 	static TemperatureError GetPT100Temperature(float& t, uint16_t ohmsx100);		// shared function used by two derived classes
 
 private:

@@ -1416,16 +1416,21 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 	FileData& fd = gb.MachineState().fileState;
 
 	// Do we have more data to process?
-	if (fileInput->ReadFromFile(fd))
+	switch (fileInput->ReadFromFile(fd))
 	{
+	case GCodeInputReadResult::haveData:
 		// Yes - fill up the GCodeBuffer and run the next code
 		if (fileInput->FillBuffer(&gb))
 		{
 			gb.SetFinished(ActOnCode(gb, reply));
 		}
-	}
-	else
-	{
+		break;
+
+	case GCodeInputReadResult::error:
+		AbortPrint(gb);
+		break;
+
+	case GCodeInputReadResult::noData:
 		// We have reached the end of the file. Check for the last line of gcode not ending in newline.
 		if (!gb.StartingNewCode())				// if there is something in the buffer
 		{
@@ -1474,6 +1479,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 				}
 			}
 		}
+		break;
 	}
 }
 
@@ -1599,20 +1605,22 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 			ToolOffsetInverseTransform(pauseRestorePoint.moveCoords, currentUserPosition);	// transform the returned coordinates to user coordinates
 			ClearMove();
 		}
-		else if (segmentsLeft != 0 && moveBuffer.canPauseBefore)
+		else if (segmentsLeft != 0)
 		{
 			// We were not able to skip any moves, however we can skip the move that is waiting
 			pauseRestorePoint.virtualExtruderPosition = moveBuffer.virtualExtruderPosition;
 			pauseRestorePoint.filePos = moveBuffer.filePos;
 			pauseRestorePoint.feedRate = moveBuffer.feedRate;
+			pauseRestorePoint.proportionDone = (float)(totalSegments - segmentsLeft)/(float)totalSegments;
 			ToolOffsetInverseTransform(pauseRestorePoint.moveCoords, currentUserPosition);	// transform the returned coordinates to user coordinates
 			ClearMove();
 		}
 		else
 		{
-			// We were not able to skip any moves, and if there is a move waiting then we can't skip that one either
+			// We were not able to skip any moves, and there is no move waiting
 			pauseRestorePoint.feedRate = fileGCode->MachineState().feedRate;
 			pauseRestorePoint.virtualExtruderPosition = virtualExtruderPosition;
+			pauseRestorePoint.proportionDone = 0.0;
 
 			// TODO: when using RTOS there is a possible race condition in the following,
 			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
@@ -2423,6 +2431,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 
 	doingArcMove = false;
 	FinaliseMove(gb);
+	UnlockAll(gb);			// allow pause
 	return nullptr;
 }
 
@@ -2590,16 +2599,16 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 
 	doingArcMove = true;
 	FinaliseMove(gb);
+	UnlockAll(gb);			// allow pause
 //	debugPrintf("Radius %.2f, initial angle %.1f, increment %.1f, segments %u\n",
 //				arcRadius, arcCurrentAngle * RadiansToDegrees, arcAngleIncrement * RadiansToDegrees, segmentsLeft);
 	return nullptr;
 }
 
-// Adjust the move parameters to account for segmentation and/or  part of the move having been done already
+// Adjust the move parameters to account for segmentation and/or part of the move having been done already
 void GCodes::FinaliseMove(GCodeBuffer& gb)
 {
 	moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0);
-	moveBuffer.canPauseBefore = true;
 	moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;
 	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;
 
@@ -2734,7 +2743,7 @@ void GCodes::ClearMove()
 // Cancel any macro or print in progress
 void GCodes::AbortPrint(GCodeBuffer& gb)
 {
-	gb.AbortFile(fileInput);					// stop executing any files or macros that this GCodeBuffer is running
+	(void)gb.AbortFile(fileInput);				// stop executing any files or macros that this GCodeBuffer is running
 	if (&gb == fileGCode)						// if the current command came from a file being printed
 	{
 		StopPrint(StopPrintReason::abort);
@@ -4153,7 +4162,7 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 // Unload the current filament from a tool
 GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply)
 {
-	Tool *tool = reprap.GetCurrentTool();
+	Tool * const tool = reprap.GetCurrentTool();
 	if (tool == nullptr)
 	{
 		reply.copy("No tool selected");

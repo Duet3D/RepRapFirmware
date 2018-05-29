@@ -91,6 +91,9 @@ void Network::Init()
 	{
 		iface->Init();
 	}
+
+	fastLoop = UINT32_MAX;
+	slowLoop = 0;
 }
 
 GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, int secure, const StringRef& reply)
@@ -265,6 +268,8 @@ bool Network::IsWiFiInterface(unsigned int interface) const
 // Main spin loop. If 'full' is true then we are being called from the main spin loop. If false then we are being called during HSMCI idle time.
 void Network::Spin(bool full)
 {
+	const uint32_t lastTime = Platform::GetInterruptClocks();
+
 	// Keep the network modules running
 	for (NetworkInterface *iface : interfaces)
 	{
@@ -289,6 +294,17 @@ void Network::Spin(bool full)
 	}
 
 	HttpResponder::CheckSessions();		// time out any sessions that have gone away
+
+	// Keep track of the loop time
+	const uint32_t dt = Platform::GetInterruptClocks() - lastTime;
+	if (dt < fastLoop)
+	{
+		fastLoop = dt;
+	}
+	if (dt > slowLoop)
+	{
+		slowLoop = dt;
+	}
 }
 
 // Process the network timer interrupt
@@ -303,6 +319,11 @@ void Network::Interrupt()
 void Network::Diagnostics(MessageType mtype)
 {
 	platform.Message(mtype, "=== Network ===\n");
+
+	platform.MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+	fastLoop = UINT32_MAX;
+	slowLoop = 0;
+
 	platform.Message(mtype, "Responder states:");
 	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
 	{

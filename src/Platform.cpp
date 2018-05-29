@@ -1833,7 +1833,7 @@ static void FanInterrupt(CallbackParameter)
 	++fanInterruptCount;
 	if (fanInterruptCount == fanMaxInterruptCount)
 	{
-		const uint32_t now = micros();
+		const uint32_t now = Platform::GetInterruptClocks();
 		fanInterval = now - fanLastResetTime;
 		fanLastResetTime = now;
 		fanInterruptCount = 0;
@@ -2427,8 +2427,8 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 				}
 			}
 			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s\n",
-					(double)(tim1 * 10000)/DDA::stepClockRate, (ok1) ? "ok" : "ERROR",
-							(double)(tim2 * 10000)/DDA::stepClockRate, (ok2) ? "ok" : "ERROR");
+					(double)(tim1 * 10000)/StepClockRate, (ok1) ? "ok" : "ERROR",
+							(double)(tim2 * 10000)/StepClockRate, (ok2) ? "ok" : "ERROR");
 		}
 		break;
 
@@ -3126,7 +3126,7 @@ void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4])
 		if (microseconds[i] > MinStepPulseTiming)
 		{
 			slowDriversBitmap |= CalcDriverBitmap(driver);		// this drive does need extended timing
-			const uint32_t clocks = (uint32_t)(((float)DDA::stepClockRate * microseconds[i] * 0.000001) + 0.99);	// convert microseconds to step clocks, rounding up
+			const uint32_t clocks = (uint32_t)(((float)StepClockRate * microseconds[i] * 0.000001) + 0.99);	// convert microseconds to step clocks, rounding up
 			if (clocks > slowDriverStepTimingClocks[i])
 			{
 				slowDriverStepTimingClocks[i] = clocks;
@@ -3141,7 +3141,7 @@ void Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const
 	for (size_t i = 0; i < 4; ++i)
 	{
 		microseconds[i] = (isSlowDriver)
-							? (float)slowDriverStepTimingClocks[i] * 1000000.0/(float)DDA::stepClockRate
+							? (float)slowDriverStepTimingClocks[i] * 1000000.0/(float)StepClockRate
 								: 0.0;
 	}
 }
@@ -3208,9 +3208,9 @@ float Platform::GetFanRPM() const
 	// We get 2 tacho pulses per revolution, hence 2 interrupts per revolution.
 	// However, if the fan stops then we get no interrupts and fanInterval stops getting updated.
 	// We must recognise this and return zero.
-	return (fanInterval != 0 && micros() - fanLastResetTime < 3000000U)		// if we have a reading and it is less than 3 second old
-			? (float)((30000000U * fanMaxInterruptCount)/fanInterval)		// then calculate RPM assuming 2 interrupts per rev
-			: 0.0;															// else assume fan is off or tacho not connected
+	return (fanInterval != 0 && Platform::GetInterruptClocks() - fanLastResetTime < 3 * StepClockRate)	// if we have a reading and it is less than 3 second old
+			? (float)(3 * StepClockRate * fanMaxInterruptCount)/fanInterval		// then calculate RPM assuming 2 interrupts per rev
+			: 0.0;																// else assume fan is off or tacho not connected
 }
 
 bool Platform::FansHardwareInverted(size_t fanNumber) const
@@ -4430,39 +4430,6 @@ void STEP_TC_HANDLER()
 	{
 		cpu_irq_restore(flags);
 		return true;													// tell the caller to simulate an interrupt instead
-	}
-
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RA = tim;						// set up the compare register
-
-	// We would like to clear any pending step interrupt. To do this, we must read the TC status register.
-	// Unfortunately, this would clear any other pending interrupts from the same TC.
-	// So we don't, and the step ISR must allow for getting called prematurely.
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPAS;				// enable the interrupt
-	cpu_irq_restore(flags);
-
-#ifdef MOVE_DEBUG
-		++numInterruptsScheduled;
-		nextInterruptTime = tim;
-		nextInterruptScheduledAt = Platform::GetInterruptClocks();
-#endif
-	return false;
-}
-
-// Schedule an interrupt at the specified clock count, or return true if it has passed already
-// This version limits the time we can spend in the ISR
-/*static*/ bool Platform::ScheduleStepInterruptWithLimit(uint32_t tim, uint32_t isrStartTime)
-{
-	const irqflags_t flags = cpu_irq_save();
-	const uint32_t iClocks = GetInterruptClocksInterruptsDisabled();
-	if ((int32_t)(tim - iClocks) < (int32_t)DDA::MinInterruptInterval)	// if less than about 6us to go or already passed
-	{
-		if (iClocks - isrStartTime < DDA::MaxStepInterruptTime)			// if we haven't already spent too much time looping inside the ISR
-		{
-			cpu_irq_restore(flags);
-			return true;												// tell the caller to simulate an interrupt instead
-		}
-		tim = iClocks + DDA::MinInterruptInterval;						// delay the interrupt to avoid using all the CPU time
-		++DDA::numHiccups;
 	}
 
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RA = tim;						// set up the compare register

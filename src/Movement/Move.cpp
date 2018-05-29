@@ -37,8 +37,8 @@
 #include "Platform.h"
 #include "Tools/Tool.h"
 
-static constexpr uint32_t UsualMinimumPreparedTime = DDA::stepClockRate/10;			// 100ms
-static constexpr uint32_t AbsoluteMinimumPreparedTime = DDA::stepClockRate/20;		// 50ms
+constexpr uint32_t UsualMinimumPreparedTime = StepClockRate/10;			// 100ms
+constexpr uint32_t AbsoluteMinimumPreparedTime = StepClockRate/20;		// 50ms
 
 Move::Move() : currentDda(nullptr), active(false), scheduledMoves(0), completedMoves(0)
 {
@@ -197,7 +197,7 @@ void Move::Spin()
 			prevMoveTime = dda->GetClocksNeeded();
 		}
 
-		canAddMove = (unPreparedTime < DDA::stepClockRate/2 || unPreparedTime + prevMoveTime < 2 * DDA::stepClockRate);
+		canAddMove = (unPreparedTime < StepClockRate/2 || unPreparedTime + prevMoveTime < 2 * StepClockRate);
 	}
 
 	if (canAddMove)
@@ -283,7 +283,7 @@ void Move::Spin()
 		DDA *cdda;													// currentDda is declared volatile, so copy it in the next line
 		if (simulationMode != 0 && (cdda = currentDda) != nullptr)
 		{
-			simulationTime += (float)cdda->GetClocksNeeded()/DDA::stepClockRate;
+			simulationTime += (float)cdda->GetClocksNeeded()/StepClockRate;
 			cdda->Complete();
 			CurrentMoveCompleted();
 		}
@@ -455,7 +455,7 @@ bool Move::PausePrint(RestorePoint& rp)
 
 	while (dda != savedDdaRingAddPointer)
 	{
-		if (pauseOkHere && dda->CanPauseBefore())
+		if (pauseOkHere)
 		{
 			// We can pause before executing this move
 			ddaRingAddPointer = dda;
@@ -477,8 +477,6 @@ bool Move::PausePrint(RestorePoint& rp)
 
 	InverseAxisAndBedTransform(rp.moveCoords, prevDda->GetXAxes(), prevDda->GetYAxes());	// we assume that xAxes hasn't changed between the moves
 
-	rp.proportionDone = ddaRingAddPointer->GetProportionDone(false);	// get the proportion of the current multi-segment move that has been completed
-
 #if SUPPORT_IOBITS
 	rp.ioBits = dda->GetIoBits();
 #endif
@@ -489,6 +487,7 @@ bool Move::PausePrint(RestorePoint& rp)
 	}
 
 	dda = ddaRingAddPointer;
+	rp.proportionDone = dda->GetProportionDone(false);	// get the proportion of the current multi-segment move that has been completed
 	if (dda->UsingStandardFeedrate())
 	{
 		rp.feedRate = dda->GetRequestedSpeed();

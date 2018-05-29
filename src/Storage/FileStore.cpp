@@ -5,6 +5,7 @@
 #include "MassStorage.h"
 #include "Platform.h"
 #include "RepRap.h"
+#include "Movement/DDA.h"
 
 uint32_t FileStore::longestWriteTime = 0;
 
@@ -15,8 +16,7 @@ FileStore::FileStore() : writeBuffer(nullptr)
 
 void FileStore::Init()
 {
-	inUse = false;
-	writing = false;
+	usageMode = FileUseMode::free;
 	openCount = 0;
 	closeRequested = false;
 }
@@ -38,8 +38,8 @@ bool FileStore::Invalidate(const FATFS *fs, bool doClose)
 				reprap.GetPlatform().GetMassStorage()->ReleaseWriteBuffer(writeBuffer);
 				writeBuffer = nullptr;
 			}
-			Init();
 		}
+		usageMode = FileUseMode::invalidated;
 		return true;
 	}
 	return false;
@@ -57,7 +57,7 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 {
 	String<MaxFilenameLength> location;
 	MassStorage::CombineName(location.GetRef(), directory, fileName);
-	writing = (mode == OpenMode::write || mode == OpenMode::append);
+	const bool writing = (mode == OpenMode::write || mode == OpenMode::append);
 
 	if (writing)
 	{
@@ -108,71 +108,91 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 		return false;
 	}
 	crc.Reset();
-	inUse = true;
+	usageMode = (writing) ? FileUseMode::readWrite : FileUseMode::readOnly;
 	openCount = 1;
 	return true;
 }
 
 void FileStore::Duplicate()
 {
-	if (!inUse)
+	switch (usageMode)
 	{
+	case FileUseMode::free:
 		INTERNAL_ERROR;
-	}
-	else
-	{
-		irqflags_t flags = cpu_irq_save();
-		++openCount;
-		cpu_irq_restore(flags);
+		break;
+
+	case FileUseMode::readOnly:
+	case FileUseMode::readWrite:
+		{
+			const irqflags_t flags = cpu_irq_save();
+			++openCount;
+			cpu_irq_restore(flags);
+		}
+		break;
+
+	case FileUseMode::invalidated:
+	default:
+		break;
 	}
 }
 
 // This may be called from an ISR, in which case we need to defer the close
 bool FileStore::Close()
 {
-	if (inInterrupt())
+	switch (usageMode)
 	{
-		if (!inUse)
+	case FileUseMode::free:
+		if (!inInterrupt())
 		{
-			return false;
+			INTERNAL_ERROR;
 		}
-
-		const irqflags_t flags = cpu_irq_save();
-		if (openCount > 1)
-		{
-			--openCount;
-		}
-		else
-		{
-			closeRequested = true;
-		}
-		cpu_irq_restore(flags);
-		return true;
-	}
-
-	if (!inUse)
-	{
-		INTERNAL_ERROR;
 		return false;
+
+	case FileUseMode::readOnly:
+	case FileUseMode::readWrite:
+		{
+			const irqflags_t flags = cpu_irq_save();
+			if (openCount > 1)
+			{
+				--openCount;
+				cpu_irq_restore(flags);
+				return true;
+			}
+			else if (inInterrupt())
+			{
+				closeRequested = true;
+				cpu_irq_restore(flags);
+				return true;
+			}
+			else
+			{
+				cpu_irq_restore(flags);
+				return ForceClose();
+			}
+		}
+
+	case FileUseMode::invalidated:
+	default:
+		{
+			const irqflags_t flags = cpu_irq_save();
+			if (openCount > 1)
+			{
+				--openCount;
+			}
+			else
+			{
+				usageMode = FileUseMode::free;
+			}
+			cpu_irq_restore(flags);
+			return true;
+		}
 	}
-
-	const irqflags_t flags = cpu_irq_save();
-	--openCount;
-	bool leaveOpen = (openCount != 0);
-	cpu_irq_restore(flags);
-
-	if (leaveOpen)
-	{
-		return true;
-	}
-
-	return ForceClose();
 }
 
 bool FileStore::ForceClose()
 {
 	bool ok = true;
-	if (writing)
+	if (usageMode == FileUseMode::readWrite)
 	{
 		ok = Flush();
 	}
@@ -184,8 +204,7 @@ bool FileStore::ForceClose()
 	}
 
 	const FRESULT fr = f_close(&file);
-	inUse = false;
-	writing = false;
+	usageMode = FileUseMode::free;
 	closeRequested = false;
 	openCount = 0;
 	return ok && fr == FR_OK;
@@ -193,23 +212,30 @@ bool FileStore::ForceClose()
 
 bool FileStore::Seek(FilePosition pos)
 {
-	if (!inUse)
+	switch (usageMode)
 	{
+	case FileUseMode::free:
 		INTERNAL_ERROR;
 		return false;
+
+	case FileUseMode::readOnly:
+	case FileUseMode::readWrite:
+		return f_lseek(&file, pos) == FR_OK;
+
+	case FileUseMode::invalidated:
+	default:
+		return false;
 	}
-	FRESULT fr = f_lseek(&file, pos);
-	return fr == FR_OK;
 }
 
 FilePosition FileStore::Position() const
 {
-	return (inUse) ? file.fptr : 0;
+	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.fptr : 0;
 }
 
 uint32_t FileStore::ClusterSize() const
 {
-	return (inUse) ? file.fs->csize * 512u : 1;			// we divide by the cluster size so return 1 not 0 if there is an error
+	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.fs->csize * 512u : 1;	// we divide by the cluster size so return 1 not 0 if there is an error
 }
 
 #if 0	// not currently used
@@ -221,13 +247,22 @@ bool FileStore::GoToEnd()
 
 FilePosition FileStore::Length() const
 {
-	if (!inUse)
+	switch (usageMode)
 	{
+	case FileUseMode::free:
 		INTERNAL_ERROR;
 		return 0;
-	}
 
-	return (writeBuffer != nullptr) ? file.fsize + writeBuffer->BytesStored() : file.fsize;
+	case FileUseMode::readOnly:
+		return file.fsize;
+
+	case FileUseMode::readWrite:
+		return (writeBuffer != nullptr) ? file.fsize + writeBuffer->BytesStored() : file.fsize;
+
+	case FileUseMode::invalidated:
+	default:
+		return 0;
+	}
 }
 
 // Single character read
@@ -239,20 +274,29 @@ bool FileStore::Read(char& b)
 // Returns the number of bytes read or -1 if the read process failed
 int FileStore::Read(char* extBuf, size_t nBytes)
 {
-	if (!inUse)
+	switch (usageMode)
 	{
+	case FileUseMode::free:
 		INTERNAL_ERROR;
 		return -1;
-	}
 
-	UINT bytes_read;
-	FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
-	if (readStatus != FR_OK)
-	{
-		reprap.GetPlatform().Message(ErrorMessage, "Cannot read file.\n");
+	case FileUseMode::readOnly:
+	case FileUseMode::readWrite:
+		{
+			UINT bytes_read;
+			FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
+			if (readStatus != FR_OK)
+			{
+				reprap.GetPlatform().Message(ErrorMessage, "Cannot read file.\n");
+				return -1;
+			}
+			return (int)bytes_read;
+		}
+
+	case FileUseMode::invalidated:
+	default:
 		return -1;
 	}
-	return (int)bytes_read;
 }
 
 // As Read but stop after '\n' or '\r\n' and null-terminate the string.
@@ -291,10 +335,10 @@ int FileStore::ReadLine(char* buf, size_t nBytes)
 
 FRESULT FileStore::Store(const char *s, size_t len, size_t *bytesWritten)
 {
-	uint32_t time = micros();
+	uint32_t time = Platform::GetInterruptClocks();
 	crc.Update(s, len);
-	FRESULT writeStatus = f_write(&file, s, len, bytesWritten);
-	time = micros() - time;
+	const FRESULT writeStatus = f_write(&file, s, len, bytesWritten);
+	time = Platform::GetInterruptClocks() - time;
 	if (time > longestWriteTime)
 	{
 		longestWriteTime = time;
@@ -314,97 +358,121 @@ bool FileStore::Write(const char* b)
 
 bool FileStore::Write(const char *s, size_t len)
 {
-	if (!inUse)
+	switch (usageMode)
 	{
+	case FileUseMode::free:
 		INTERNAL_ERROR;
 		return false;
-	}
 
-	size_t totalBytesWritten = 0;
-	FRESULT writeStatus = FR_OK;
-	if (writeBuffer == nullptr)
-	{
-		writeStatus = Store(s, len, &totalBytesWritten);
-	}
-	else
-	{
-		do
+	case FileUseMode::readOnly:
+	case FileUseMode::readWrite:
 		{
-			size_t bytesStored = writeBuffer->Store(s + totalBytesWritten, len - totalBytesWritten);
-			if (writeBuffer->BytesLeft() == 0)
+			size_t totalBytesWritten = 0;
+			FRESULT writeStatus = FR_OK;
+			if (writeBuffer == nullptr)
 			{
-				const size_t bytesToWrite = writeBuffer->BytesStored();
-				size_t bytesWritten;
-				writeStatus = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
-				writeBuffer->DataTaken();
-
-				if (bytesToWrite != bytesWritten)
-				{
-					// Something went wrong
-					break;
-				}
+				writeStatus = Store(s, len, &totalBytesWritten);
 			}
-			totalBytesWritten += bytesStored;
-		}
-		while (writeStatus == FR_OK && totalBytesWritten != len);
-	}
+			else
+			{
+				do
+				{
+					size_t bytesStored = writeBuffer->Store(s + totalBytesWritten, len - totalBytesWritten);
+					if (writeBuffer->BytesLeft() == 0)
+					{
+						const size_t bytesToWrite = writeBuffer->BytesStored();
+						size_t bytesWritten;
+						writeStatus = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
+						writeBuffer->DataTaken();
 
-	if ((writeStatus != FR_OK) || (totalBytesWritten != len))
-	{
-		reprap.GetPlatform().Message(ErrorMessage, "Failed to write to file. Drive may be full.\n");
-		return false;
-	}
-	return true;
-}
+						if (bytesToWrite != bytesWritten)
+						{
+							// Something went wrong
+							break;
+						}
+					}
+					totalBytesWritten += bytesStored;
+				}
+				while (writeStatus == FR_OK && totalBytesWritten != len);
+			}
 
-bool FileStore::Flush()
-{
-	if (!inUse)
-	{
-		INTERNAL_ERROR;
-		return false;
-	}
-
-	if (writeBuffer != nullptr)
-	{
-		const size_t bytesToWrite = writeBuffer->BytesStored();
-		if (bytesToWrite != 0)
-		{
-			size_t bytesWritten;
-			const FRESULT writeStatus = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
-			writeBuffer->DataTaken();
-
-			if ((writeStatus != FR_OK) || (bytesToWrite != bytesWritten))
+			if ((writeStatus != FR_OK) || (totalBytesWritten != len))
 			{
 				reprap.GetPlatform().Message(ErrorMessage, "Failed to write to file. Drive may be full.\n");
 				return false;
 			}
+			return true;
 		}
-	}
 
-	return f_sync(&file) == FR_OK;
+	case FileUseMode::invalidated:
+	default:
+		return 0;
+	}
+}
+
+bool FileStore::Flush()
+{
+	switch (usageMode)
+	{
+	case FileUseMode::free:
+		INTERNAL_ERROR;
+		return false;
+
+	case FileUseMode::readOnly:
+		return true;
+
+	case FileUseMode::readWrite:
+		if (writeBuffer != nullptr)
+		{
+			const size_t bytesToWrite = writeBuffer->BytesStored();
+			if (bytesToWrite != 0)
+			{
+				size_t bytesWritten;
+				const FRESULT writeStatus = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
+				writeBuffer->DataTaken();
+
+				if ((writeStatus != FR_OK) || (bytesToWrite != bytesWritten))
+				{
+					reprap.GetPlatform().Message(ErrorMessage, "Failed to write to file. Drive may be full.\n");
+					return false;
+				}
+			}
+		}
+		return f_sync(&file) == FR_OK;
+
+	case FileUseMode::invalidated:
+	default:
+		return false;
+	}
 }
 
 // Truncate file at current file pointer
 bool FileStore::Truncate()
 {
-	if (!inUse)
+	switch (usageMode)
 	{
+	case FileUseMode::free:
+	case FileUseMode::readOnly:
 		INTERNAL_ERROR;
 		return false;
-	}
 
-	if (!Flush())
-	{
+	case FileUseMode::readWrite:
+		if (!Flush())
+		{
+			return false;
+		}
+		return f_truncate(&file) == FR_OK;
+
+	case FileUseMode::invalidated:
+	default:
 		return false;
 	}
-
-	return f_truncate(&file) == FR_OK;
 }
 
+// Return the file write time in milliseconds, and clear it
 float FileStore::GetAndClearLongestWriteTime()
 {
-	float ret = (float)longestWriteTime/1000.0;
+	const float ret = (float)longestWriteTime * StepClocksToMillis;
 	longestWriteTime = 0;
 	return ret;
 }
@@ -415,16 +483,25 @@ float FileStore::GetAndClearLongestWriteTime()
 // The first element of the table must be set to the total number of 32-bit entries in the table before calling this.
 bool FileStore::SetClusterMap(uint32_t tbl[])
 {
-	if (!inUse)
+	switch (usageMode)
 	{
+	case FileUseMode::free:
 		INTERNAL_ERROR;
 		return false;
-	}
 
-	file.cltbl = tbl;
-	FRESULT ret = f_lseek(&file, CREATE_LINKMAP);
-//	debugPrintf("ret %d need %u\n", (int)ret, tbl[0]);
-	return ret == FR_OK;
+	case FileUseMode::readOnly:
+	case FileUseMode::readWrite:
+		{
+			file.cltbl = tbl;
+			const FRESULT ret = f_lseek(&file, CREATE_LINKMAP);
+//			debugPrintf("ret %d need %u\n", (int)ret, tbl[0]);
+			return ret == FR_OK;
+		}
+
+	case FileUseMode::invalidated:
+	default:
+		return false;
+	}
 }
 
 #endif

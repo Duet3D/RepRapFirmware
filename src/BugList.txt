@@ -153,7 +153,7 @@ Fixes in RC4:
 - [done, test] BUG extruder and additional axes don't work when doing G2/G3 moves
 - [done, ok] Configuring a chamber heater on H7 with no DueX5 present causes a crash
 
-Fixes post RC4:
+Fixes in RC5:
 - [done, ok] Connecting Internet Explorer crashes Duet due to trailing '?'
 - [done] spurious stall warnings when simulating
 - [done, test] Print monitor didn't think the print had started until a nozzle had reached target temperature
@@ -162,6 +162,26 @@ Fixes post RC4:
 - [done] Extra axes were ignored in G2/G3 moves
 - [done] DWC and the Duet could deadlock if the Duet ran out of output buffers
 
+Fixes post RC5:
+- [done] M569 report includes chopper configuration register for smart drivers
+- [done] If getting file info timed out it didn't close the file
+- [done] DHT sensor task was running out of stack space
+- [done] Correct bus conflict in DHT sensor code
+- [done] Fixed unreliable DHT sensor reading in RTOS build, caused by call to micros()
+- [done] Multiple DHT sensor support
+- [done] Support DHT sensor on Duet Maestro
+- [done] Pausing between the segments of a segmented move didn't happen even if the jerk settings were high enough
+- [done - need to test filament monitors!!!] If filament monitors were deleted or the type changed, this could result in an exception
+- [seems ok] Test Upload & print function, see https://forum.duet3d.com/topic/5394/new-firmware-2-0rc5-available/52
+- [done, test] When step rate limiting happens, various problems, see https://forum.duet3d.com/topic/5445/unable-to-run-128-or-256-microstepping (adjust move start time)
+- [can't reproduce] Kulitorum report that first move after a pause doesn't extrude, https://forum.duet3d.com/topic/5408/does-not-extrude-first-g1-after-a-pause/7
+- [done, test] when the SD card is removed it says 1 file was invalidated even if it was more
+- [done, ok] When SD card is removed during a print we get lots of internal error messages, and no "print abandoned" or similar message, also the heaters stay on
+- [done] Emergency stop should turn off all spindles
+- [looks like was caused by using M502] Report that filaments no longer work 
+
+- M3 R parameter so it can restore the spinder/laser after a pause (https://forum.duet3d.com/topic/5418/cnc-laser-m3-unpause-r-parameter)
+- CNC: look at G17/18/19, see https://forum.duet3d.com/topic/4669/ooznest-workbee-screw-driven
 - PanelDue won't connect if VIN velow minimum for stepper motors [PanelDue firmware needs to recognise status 'O']
 - Add parameter to M116 to specify acceptable temperature difference
 - Laser support, see https://forum.duet3d.com/topic/4702/laser-cnc-support-in-rrf-gcode-semantics/4

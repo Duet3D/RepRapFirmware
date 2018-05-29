@@ -421,7 +421,7 @@ void TmcDriverState::SetStallDetectFilter(bool sgFilter)
 
 void TmcDriverState::SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond)
 {
-	maxStallStepInterval = DDA::stepClockRate/max<unsigned int>(stepsPerSecond, 1);
+	maxStallStepInterval = StepClockRate/max<unsigned int>(stepsPerSecond, 1);
 }
 
 void TmcDriverState::SetCoolStep(uint16_t coolStepConfig)
@@ -439,7 +439,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const
 		threshold -= 128;
 	}
 	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 ", coolstep %" PRIx32,
-				threshold, ((filtered) ? "on" : "off"), DDA::stepClockRate/maxStallStepInterval, registers[SmartEnable] & 0xFFFF);
+				threshold, ((filtered) ? "on" : "off"), StepClockRate/maxStallStepInterval, registers[SmartEnable] & 0xFFFF);
 }
 
 // Append the driver status to a string, and reset the min/max load values

@@ -101,7 +101,7 @@ bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
 	{
 		seen = true;
 		advanceMillis = (unsigned int)constrain<int>(gb.GetIValue(), 0, 1000);
-		advanceClocks = (advanceMillis * (uint64_t)DDA::stepClockRate)/1000;
+		advanceClocks = (advanceMillis * (uint64_t)StepClockRate)/1000;
 	}
 	if (!seen)
 	{

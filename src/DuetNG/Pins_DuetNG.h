@@ -112,9 +112,6 @@ constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { 28, 50, 51, 52, 24, 97,
 
 #endif
 
-// DHTxx data pin
-constexpr Pin DhtDataPin = 97;												// Pin CS6
-
 // Pin that controls the ATX power on/off
 constexpr Pin ATX_POWER_PIN = 79;
 

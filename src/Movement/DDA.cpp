@@ -381,7 +381,6 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	xAxes = nextMove.xAxes;
 	yAxes = nextMove.yAxes;
 	endStopsToCheck = nextMove.endStopsToCheck;
-	canPauseBefore = nextMove.canPauseBefore;
 	canPauseAfter = nextMove.canPauseAfter;
 	usingStandardFeedrate = nextMove.usingStandardFeedrate;
 	filePos = nextMove.filePos;
@@ -537,7 +536,6 @@ bool DDA::Init(const float_t adjustments[DRIVES])
 	isPrintingMove = false;
 	xyMoving = false;
 	endStopsToCheck = 0;
-	canPauseBefore = true;
 	canPauseAfter = true;
 	usingStandardFeedrate = false;
 	usePressureAdvance = false;
@@ -897,7 +895,7 @@ void DDA::RecalculateMove()
 
 	// We need to set the number of clocks needed here because we use it before the move has been frozen
 	const float totalTime = (2 * topSpeed - startSpeed - endSpeed)/acceleration + (totalDistance - accelDistance - decelDistance)/topSpeed;
-	clocksNeeded = (uint32_t)(totalTime * stepClockRate);
+	clocksNeeded = (uint32_t)(totalTime * StepClockRate);
 }
 
 // Decide what speed we would really like this move to end at.
@@ -1027,10 +1025,10 @@ void DDA::Prepare(uint8_t simMode)
 		const float accelStopTime = (topSpeed - startSpeed)/acceleration;
 		const float decelStartTime = accelStopTime + (params.decelStartDistance - accelDistance)/topSpeed;
 
-		startSpeedTimesCdivA = (uint32_t)roundU32((startSpeed * stepClockRate)/acceleration);
-		params.topSpeedTimesCdivA = (uint32_t)roundU32((topSpeed * stepClockRate)/acceleration);
-		topSpeedTimesCdivAPlusDecelStartClocks = params.topSpeedTimesCdivA + (uint32_t)roundU32(decelStartTime * stepClockRate);
-		extraAccelerationClocks = roundS32((accelStopTime - (accelDistance/topSpeed)) * stepClockRate);
+		startSpeedTimesCdivA = (uint32_t)roundU32((startSpeed * StepClockRate)/acceleration);
+		params.topSpeedTimesCdivA = (uint32_t)roundU32((topSpeed * StepClockRate)/acceleration);
+		topSpeedTimesCdivAPlusDecelStartClocks = params.topSpeedTimesCdivA + (uint32_t)roundU32(decelStartTime * StepClockRate);
+		extraAccelerationClocks = roundS32((accelStopTime - (accelDistance/topSpeed)) * StepClockRate);
 		params.compFactor = (topSpeed - startSpeed)/topSpeed;
 
 		firstDM = nullptr;
@@ -1542,9 +1540,20 @@ bool DDA::Step()
 			break;
 		}
 
-		// 7. Schedule next interrupt, or if it would be too soon, generate more steps immediately
+		// 7. Check whether we have been in this ISR for too long already and need to take a break
+		uint32_t nextStepDue = firstDM->nextStepTime + moveStartTime;
+		const uint32_t clocksTaken = (Platform::GetInterruptClocks16() - isrStartTime) & 0x0000FFFF;
+		if (clocksTaken >= DDA::MaxStepInterruptTime && (nextStepDue - isrStartTime) < (clocksTaken + DDA::MinInterruptInterval))
+		{
+			// Force a break by updating the move start time
+			const uint32_t delayClocks = (clocksTaken + DDA::MinInterruptInterval) - (nextStepDue - isrStartTime);
+			moveStartTime += delayClocks;
+			nextStepDue += delayClocks;
+		}
+
+		// 8. Schedule next interrupt, or if it would be too soon, generate more steps immediately
 		// If we have already spent too much time in the ISR, delay the interrupt
-		repeat = platform.ScheduleStepInterruptWithLimit(firstDM->nextStepTime + moveStartTime, isrStartTime);
+		repeat = platform.ScheduleStepInterrupt(nextStepDue);
 	} while (repeat);
 
 	if (state == completed)

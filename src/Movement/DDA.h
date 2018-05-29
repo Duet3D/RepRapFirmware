@@ -50,7 +50,6 @@ public:
 	void Prepare(uint8_t simMode) __attribute__ ((hot));			// Calculate all the values and freeze this DDA
 	bool HasStepError() const;
 	bool CanPauseAfter() const { return canPauseAfter; }
-	bool CanPauseBefore() const { return canPauseBefore; }
 	bool IsPrintingMove() const { return isPrintingMove; }			// Return true if this involves both XY movement and extrusion
 	bool UsingStandardFeedrate() const { return usingStandardFeedrate; }
 
@@ -96,9 +95,6 @@ public:
 	void DebugPrint() const;												// print the DDA only
 	void DebugPrintAll() const;												// print the DDA and active DMs
 
-	static constexpr uint32_t stepClockRate = VARIANT_MCK/128;				// the frequency of the clock used for stepper pulse timing (see Platform::InitialiseInterrupts)
-	static constexpr uint64_t stepClockRateSquared = (uint64_t)stepClockRate * stepClockRate;
-
 	// Note on the following constant:
 	// If we calculate the step interval on every clock, we reach a point where the calculation time exceeds the step interval.
 	// The worst case is pure Z movement on a delta. On a Mini Kossel with 80 steps/mm with this firmware running on a Duet (84MHx SAM3X8 processor),
@@ -107,16 +103,16 @@ public:
 	// Note: the above measurements were taken some time ago, before some firmware optimisations.
 #if SAME70
 	// The system clock of the SAME70 is running at 150MHz. Use the same defaults as for the SAM4E for now.
-	static constexpr uint32_t MinCalcIntervalDelta = (40 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
-	static constexpr uint32_t MinCalcIntervalCartesian = (40 * stepClockRate)/1000000;	// same as delta for now, but could be lower
+	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
+	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
 #elif SAM4E || SAM4S
-	static constexpr uint32_t MinCalcIntervalDelta = (40 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
-	static constexpr uint32_t MinCalcIntervalCartesian = (40 * stepClockRate)/1000000;	// same as delta for now, but could be lower
+	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
+	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
 #else
-	static constexpr uint32_t MinCalcIntervalDelta = (60 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (60us) in step timer clocks
-	static constexpr uint32_t MinCalcIntervalCartesian = (60 * stepClockRate)/1000000;	// same as delta for now, but could be lower
+	static constexpr uint32_t MinCalcIntervalDelta = (60 * StepClockRate)/1000000; 		// the smallest sensible interval between calculations (60us) in step timer clocks
+	static constexpr uint32_t MinCalcIntervalCartesian = (60 * StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t MinInterruptInterval = 4;									// about 6us minimum interval between interrupts, in step clocks
 #endif
 	static constexpr uint32_t MaxStepInterruptTime = 10 * MinInterruptInterval;			// the maximum time we spend looping in the ISR , in step clocks
@@ -167,7 +163,6 @@ private:
 			uint8_t endCoordinatesValid : 1;		// True if endCoordinates can be relied on
 			uint8_t isDeltaMovement : 1;			// True if this is a delta printer movement
 			uint8_t canPauseAfter : 1;				// True if we can pause at the end of this move
-			uint8_t canPauseBefore : 1;				// True if we can pause just before this move
 			uint8_t isPrintingMove : 1;				// True if this move includes XY movement and extrusion
 			uint8_t usePressureAdvance : 1;			// True if pressure advance should be applied to any forward extrusion
 			uint8_t hadLookaheadUnderrun : 1;		// True if the lookahead queue was not long enough to optimise this move

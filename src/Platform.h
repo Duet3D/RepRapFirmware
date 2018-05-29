@@ -279,10 +279,11 @@ typedef AveragingFilter<Z_PROBE_AVERAGE_READINGS> ZProbeAveragingFilter;
 // Enumeration of error condition bits
 enum class ErrorCode : uint32_t
 {
-	BadTemp = 1 << 0,
-	BadMove = 1 << 1,
-	OutputStarvation = 1 << 2,
-	OutputStackOverflow = 1 << 3
+	BadTemp = 1u << 0,
+	BadMove = 1u << 1,
+	OutputStarvation = 1u << 2,
+	OutputStackOverflow = 1u << 3,
+	HsmciTimeout = 1u << 4
 };
 
 struct AxisDriversConfig
@@ -332,8 +333,8 @@ public:
 	// Timing
 	static uint32_t GetInterruptClocks() __attribute__ ((hot));						// Get the interrupt clock count
 	static uint32_t GetInterruptClocksInterruptsDisabled() __attribute__ ((hot));	// Get the interrupt clock count, when we know already that interrupts are disabled
+	static uint16_t GetInterruptClocks16();											// Get the interrupt clock count when we only care about the lowest 16 bits
 	static bool ScheduleStepInterrupt(uint32_t tim) __attribute__ ((hot));			// Schedule an interrupt at the specified clock count, or return true if it has passed already
-	static bool ScheduleStepInterruptWithLimit(uint32_t tim, uint32_t isrStartTime) __attribute__ ((hot));	// Schedule an interrupt at the specified clock count, or return true if it has passed already
 	static void DisableStepInterrupt();						// Make sure we get no step interrupts
 	static bool ScheduleSoftTimerInterrupt(uint32_t tim);	// Schedule an interrupt at the specified clock count, or return true if it has passed already
 	static void DisableSoftTimerInterrupt();				// Make sure we get no software timer interrupts
@@ -562,6 +563,7 @@ public:
 #if HAS_SMART_DRIVERS
 	float GetTmcDriversTemperature(unsigned int board) const;
 	void DriverCoolingFansOn(uint32_t driverChannelsMonitored);
+	unsigned int GetNumSmartDrivers() const { return numSmartDrivers; }
 #endif
 
 #if HAS_STALL_DETECT
@@ -1158,6 +1160,12 @@ inline float Platform::GetPressureAdvance(size_t extruder) const
 }
 
 #endif
+
+// Get the interrupt clock count when we only care about the lowest 16 bits. More efficient than calling GetInterruptClocks on platforms with 16-bit timers.
+/*static*/ inline uint16_t Platform::GetInterruptClocks16()
+{
+	return (uint16_t)STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
+}
 
 // This is called by the tick ISR to get the raw Z probe reading to feed to the filter
 inline uint16_t Platform::GetRawZProbeReading() const

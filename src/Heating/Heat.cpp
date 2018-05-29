@@ -139,7 +139,7 @@ void Heat::Init()
 
 #if SUPPORT_DHT_SENSOR
 	// Initialise static fields of the DHT sensor
-	DhtSensor::InitStatic();
+	DhtSensorHardwareInterface::InitStatic();
 #endif
 
 	coldExtrude = false;

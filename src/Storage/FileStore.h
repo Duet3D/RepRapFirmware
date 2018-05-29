@@ -17,6 +17,14 @@ enum class OpenMode : uint8_t
 	append			// append to an existing file, or create a new file if it is not found
 };
 
+enum class FileUseMode : uint8_t
+{
+	free,			// file object is free
+	readOnly,		// file object is in use for reading only
+	readWrite,		// file object is in use for reading and writing
+	invalidated		// file object is in use but file system has been invalidated
+};
+
 class FileStore
 {
 public:
@@ -63,9 +71,8 @@ private:
 	FileWriteBuffer *writeBuffer;
 	volatile unsigned int openCount;
 	volatile bool closeRequested;
+	FileUseMode usageMode;
 
-	bool inUse;
-	bool writing;
 	CRC32 crc;
 
 	static uint32_t longestWriteTime;
