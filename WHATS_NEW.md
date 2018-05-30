@@ -8,6 +8,7 @@ Upgrade notes:
 - When the machine mode is set to CNC, G0 movement behaviour is changed to align more with the NIST standard (see 2.0RC1 release notes).
 - If you have a DHT temperature/humidity sensor connected to the CS6 pin on a Duet 2, the channel numbers (X parameter in the M305 commands) are changed to 405 (was 400) for the temperature sensor and 455 (was 401) for the humidity sensor.
 - If you have a simple switch-type filament monitor configured using M591, you need to add the S1 parameter to enable it
+- The number of GCode files in a single folder that can be displayed by DWC is lower than before. This was required to fix other issues. If you can't see all of your GCode files, or files that you have just uploaded, the workaround is to move some files into subfolders. If you can't see any subfolders in DWC, you may have to move the SD card to a PC to do this. Alternatively, use the backup facility in DWC to backup the files that you can see, then delete them; then you should be able to see the other files.
 
 New features:
 - The M569 response when only the P parameter is given now includes chopper configuration register if it is a smart driver
