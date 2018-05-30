@@ -346,6 +346,7 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 
 		default:	// should not get here
 			parsedFileInfo.incomplete = false;
+			fileBeingParsed->Close();
 			info = parsedFileInfo;
 			parseState = notParsing;
 			return true;
@@ -356,6 +357,7 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 	if (quitEarly)
 	{
 		info = parsedFileInfo;				// note that the 'incomplete' flag is still set
+		fileBeingParsed->Close();
 		parseState = notParsing;
 		return true;
 	}

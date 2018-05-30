@@ -88,6 +88,8 @@ private:
 
 	Mutex httpMutex, telnetMutex;
 
+	uint32_t fastLoop, slowLoop;
+
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
 };
 

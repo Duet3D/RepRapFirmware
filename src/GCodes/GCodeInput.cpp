@@ -60,7 +60,6 @@ size_t StreamGCodeInput::BytesCached() const
 	return device.available();
 }
 
-
 // Dynamic G-code input class for caching codes from software-defined sources
 
 RegularGCodeInput::RegularGCodeInput()
@@ -189,15 +188,13 @@ void NetworkGCodeInput::Put(MessageType mtype, const char *buf)
 	MutexLocker lock(bufMutex, 200);
 	if (lock)
 	{
-		if (len > BufferSpaceLeft())
+		// Only cache this if we have enough space left
+		if (len <= BufferSpaceLeft())
 		{
-			// Don't cache this if we don't have enough space left
-			return;
-		}
-
-		for (size_t i = 0; i < len; i++)
-		{
-			Put(mtype, buf[i]);
+			for (size_t i = 0; i < len; i++)
+			{
+				Put(mtype, buf[i]);
+			}
 		}
 	}
 }
@@ -233,7 +230,7 @@ void FileGCodeInput::Reset(const FileData &file)
 }
 
 // Read another chunk of G-codes from the file and return true if more data is available
-bool FileGCodeInput::ReadFromFile(FileData &file)
+GCodeInputReadResult FileGCodeInput::ReadFromFile(FileData &file)
 {
 	const size_t bytesCached = BytesCached();
 
@@ -264,14 +261,18 @@ bool FileGCodeInput::ReadFromFile(FileData &file)
 		// However, unless we can use a buffer of at least 512 bytes then that is redundant,
 		// because the data will be copied via the sector buffer in FatFS anyway. So we don't do that any more.
 		const int bytesRead = file.Read(buffer + writingPointer, min<size_t>(BufferSpaceLeft(), GCodeInputBufferSize - writingPointer));
+		if (bytesRead < 0)
+		{
+			return GCodeInputReadResult::error;
+		}
 		if (bytesRead > 0)
 		{
 			writingPointer = (writingPointer + (size_t)bytesRead) % GCodeInputBufferSize;
-			return true;
+			return GCodeInputReadResult::haveData;
 		}
 	}
 
-	return bytesCached > 0;
+	return (bytesCached > 0) ? GCodeInputReadResult::haveData : GCodeInputReadResult::noData;
 }
 
 // End

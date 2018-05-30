@@ -126,17 +126,9 @@ FileStore* MassStorage::OpenFile(const char* directory, const char* fileName, Op
 		MutexLocker lock(fsMutex);
 		for (size_t i = 0; i < MAX_FILES; i++)
 		{
-			if (!files[i].inUse)
+			if (files[i].usageMode == FileUseMode::free)
 			{
-				if (files[i].Open(directory, fileName, mode))
-				{
-					files[i].inUse = true;
-					return &files[i];
-				}
-				else
-				{
-					return nullptr;
-				}
+				return (files[i].Open(directory, fileName, mode)) ? &files[i]: nullptr;
 			}
 		}
 	}
@@ -150,7 +142,7 @@ void MassStorage::CloseAllFiles()
 	MutexLocker lock(fsMutex);
 	for (FileStore& f : files)
 	{
-		while (f.inUse)
+		while (f.usageMode != FileUseMode::free)
 		{
 			f.Close();
 		}
@@ -595,7 +587,7 @@ bool MassStorage::AnyFileOpen(const FATFS *fs) const
 	return false;
 }
 
-// Invalidate all open files on the specified file system, returning true if any files were invalidated
+// Invalidate all open files on the specified file system, returning the number of files that were invalidated
 unsigned int MassStorage::InvalidateFiles(const FATFS *fs, bool doClose)
 {
 	unsigned int invalidated = 0;
@@ -630,13 +622,13 @@ bool MassStorage::IsCardDetected(size_t card) const
 	return info[card].cardState == CardDetectState::present;
 }
 
-// Unmount a file system returning true if any pen files were invalidated
-bool MassStorage::InternalUnmount(size_t card, bool doClose)
+// Unmount a file system returning true if any open files were invalidated
+unsigned int MassStorage::InternalUnmount(size_t card, bool doClose)
 {
 	SdCardInfo& inf = info[card];
 	MutexLocker lock1(fsMutex);
 	MutexLocker lock2(inf.volMutex);
-	const bool invalidated = InvalidateFiles(&inf.fileSystem, doClose);
+	const unsigned int invalidated = InvalidateFiles(&inf.fileSystem, doClose);
 	f_mount(card, nullptr);
 	memset(&inf.fileSystem, 0, sizeof(inf.fileSystem));
 	sd_mmc_unmount(card);
@@ -650,7 +642,7 @@ unsigned int MassStorage::GetNumFreeFiles() const
 	MutexLocker lock(fsMutex);
 	for (const FileStore & fil : files)
 	{
-		if (!fil.inUse)
+		if (fil.usageMode == FileUseMode::free)
 		{
 			++numFreeFiles;
 		}

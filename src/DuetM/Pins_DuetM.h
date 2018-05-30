@@ -32,7 +32,7 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_ROLAND		0						// set nonzero to support Roland mill
 #define SUPPORT_SCANNER		0						// set zero to disable support for FreeLSS scanners
 #define SUPPORT_IOBITS		0						// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR	0						// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_DHT_SENSOR	1						// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD	1						// set nonzero to support 12864 LCD and rotary encoder
 

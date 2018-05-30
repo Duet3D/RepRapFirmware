@@ -153,7 +153,6 @@ private:
 	uint16_t ticksInSpinState;
 	Module spinningModule;
 	uint32_t fastLoop, slowLoop;
-	uint32_t lastTime;
 
 	uint32_t debug;
 	bool stopped;

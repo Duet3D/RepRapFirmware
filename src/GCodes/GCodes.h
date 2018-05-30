@@ -125,7 +125,6 @@ public:
 
 		uint8_t isFirmwareRetraction : 1;								// true if this is a firmware retraction/un-retraction move
 		uint8_t usePressureAdvance : 1;									// true if we want to us extruder pressure advance, if there is any extrusion
-		uint8_t canPauseBefore : 1;										// true if we can pause before this move
 		uint8_t canPauseAfter : 1;										// true if we can pause just after this move and successfully restart
 		uint8_t hasExtrusion : 1;										// true if the move includes extrusion - only valid if the move was set up by SetupMove
 		uint8_t isCoordinated : 1;										// true if this is a coordinates move

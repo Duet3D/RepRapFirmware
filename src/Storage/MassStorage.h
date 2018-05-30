@@ -96,7 +96,7 @@ private:
 		CardDetectState cardState;
 	};
 
-	bool InternalUnmount(size_t card, bool doClose);
+	unsigned int InternalUnmount(size_t card, bool doClose);
 	static time_t ConvertTimeStamp(uint16_t fdate, uint16_t ftime);
 
 	SdCardInfo info[NumSdCards];

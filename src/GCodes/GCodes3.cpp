@@ -757,7 +757,6 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			moveBuffer.usePressureAdvance = false;
 			moveBuffer.filePos = noFilePosition;
 			moveBuffer.canPauseAfter = false;
-			moveBuffer.canPauseBefore = true;
 
 			// Decide which way and how far to go
 			if (gb.Seen('R'))

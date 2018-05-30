@@ -33,6 +33,9 @@
 # include "FreeRTOS.h"
 # include "task.h"
 
+// We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
+static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI, "configMAX_SYSCALL_INTERRUPT_PRIORITY is set too high");
+
 static TaskHandle_t hsmciTask = nullptr;		// the task that is waiting for a HSMCI command to complete
 
 // Callback function from the hsmci driver, called while it is waiting for an SD card operation to complete
@@ -52,7 +55,11 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 #if SAME70
 		XDMAC->XDMAC_CHID[CONF_HSMCI_XDMAC_CHANNEL].XDMAC_CIE = dmaBits;
 #endif
-		ulTaskNotifyTake(pdTRUE, 200);
+		if (ulTaskNotifyTake(pdTRUE, 200) == 0)
+		{
+			// We timed out waiting for the HSMCI operation to complete
+			reprap.GetPlatform().LogError(ErrorCode::HsmciTimeout);
+		}
 	}
 }
 
@@ -152,7 +159,7 @@ void RepRap::Init()
 
 	platform->Init();
 	network->Init();
-	SetName(DEFAULT_MACHINE_NAME);		// network must be initialised before calling this because this calls SetHostName
+	SetName(DEFAULT_MACHINE_NAME);		// Network must be initialised before calling this because this calls SetHostName
 	gCodes->Init();
 	move->Init();
 	heat->Init();
@@ -166,6 +173,7 @@ void RepRap::Init()
 	portControl->Init();
 #endif
 	printMonitor->Init();
+	FilamentMonitor::InitStatic();
 #if SUPPORT_12864_LCD
 	display->Init();
 #endif
@@ -223,7 +231,6 @@ void RepRap::Init()
 
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
-	lastTime = micros();
 }
 
 void RepRap::Exit()
@@ -250,8 +257,12 @@ void RepRap::Exit()
 
 void RepRap::Spin()
 {
-	if(!active)
+	if (!active)
+	{
 		return;
+	}
+
+	const uint32_t lastTime = Platform::GetInterruptClocks();
 
 	ticksInSpinState = 0;
 	spinningModule = modulePlatform;
@@ -344,8 +355,7 @@ void RepRap::Spin()
 	}
 
 	// Keep track of the loop time
-	const uint32_t t = micros();
-	const uint32_t dt = t - lastTime;
+	const uint32_t dt = Platform::GetInterruptClocks() - lastTime;
 	if (dt < fastLoop)
 	{
 		fastLoop = dt;
@@ -354,14 +364,13 @@ void RepRap::Spin()
 	{
 		slowLoop = dt;
 	}
-	lastTime = t;
 
 	RTOSIface::Yield();
 }
 
 void RepRap::Timing(MessageType mtype)
 {
-	platform->MessageF(mtype, "Slowest main loop (seconds): %f; fastest: %f\n", (double)(slowLoop * 0.000001), (double)(fastLoop * 0.000001));
+	platform->MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
 }
@@ -405,8 +414,25 @@ void RepRap::EmergencyStop()
 {
 	stopped = true;
 
-	// Do not turn off ATX power here. If the nozzles are still hot, don't risk melting any surrounding parts...
+	// Do not turn off ATX power here. If the nozzles are still hot, don't risk melting any surrounding parts by turning fans off.
 	//platform->SetAtxPower(false);
+
+	switch (gCodes->GetMachineType())
+	{
+	case MachineType::cnc:
+		for (size_t i = 0; i < MaxSpindles; i++)
+		{
+			platform->AccessSpindle(i).TurnOff();
+		}
+		break;
+
+	case MachineType::laser:
+		platform->SetLaserPwm(0.0);
+		break;
+
+	default:
+		break;
+	}
 
 	// Deselect all tools (is this necessary?)
 	{

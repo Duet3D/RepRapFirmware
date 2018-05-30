@@ -111,9 +111,13 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int channel)
 		ts = new CurrentLoopTemperatureSensor(channel);
 	}
 #if SUPPORT_DHT_SENSOR
-	else if (channel == DhtTemperatureChannel || channel == DhtHumidityChannel)
+	else if (FirstDhtTemperatureChannel <= channel && channel < FirstDhtTemperatureChannel + MaxSpiTempSensors)
 	{
-		ts = new DhtSensor(channel);
+		ts = new DhtTemperatureSensor(channel);
+	}
+	else if (FirstDhtHumidityChannel <= channel && channel < FirstDhtHumidityChannel + MaxSpiTempSensors)
+	{
+		ts = new DhtHumiditySensor(channel);
 	}
 #endif
 #if HAS_CPU_TEMP_SENSOR
@@ -123,7 +127,7 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int channel)
 	}
 #endif
 #if HAS_SMART_DRIVERS
-	else if (channel >= FirstTmcDriversSenseChannel && channel < FirstTmcDriversSenseChannel + 2)
+	else if (channel >= FirstTmcDriversSenseChannel && channel < FirstTmcDriversSenseChannel + NumTmcDriversSenseChannels)
 	{
 		ts = new TmcDriverTemperatureSensor(channel);
 	}

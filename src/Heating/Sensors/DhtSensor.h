@@ -12,56 +12,80 @@
 
 #if SUPPORT_DHT_SENSOR
 
+#ifndef RTOS
+# error DHT sensors are only supported in RTOS builds
+#endif
+
 # include "TemperatureSensor.h"
 # include "RTOSIface.h"
 
 enum class DhtSensorType
 {
+	none,
 	Dht11,
 	Dht21,
 	Dht22
 };
 
-class DhtSensor : public TemperatureSensor
+// This class represents a DHT sensor attached to a particular SPI CS pin
+class DhtSensorHardwareInterface
 {
 public:
-	friend class Heat;
 
-	DhtSensor(unsigned int channel);
-	~DhtSensor();
+	static GCodeResult Configure(TemperatureSensor *ts, unsigned int relativeChannel, unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply);
+	void Interrupt();
 
-#ifdef RTOS
-	static void SensorTask();
-#endif
-
-	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override;
-	void Init() override;
+	static DhtSensorHardwareInterface *Create(unsigned int relativeChannel);
+	static TemperatureError GetTemperatureOrHumidity(unsigned int relativeChannel, float& t, bool wantHumidity);
 	static void InitStatic();
-	TemperatureError GetTemperature(float& t) override;
+	static void SensorTask();
 
 private:
-	static size_t numInstances;
-	static DhtSensorType type;
-	static TemperatureError lastResult;
-	static float lastTemperature, lastHumidity;
-	static size_t badTemperatureCount;
+	DhtSensorHardwareInterface(Pin p_pin);
+
+	GCodeResult Configure(TemperatureSensor *ts, unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply);
+	TemperatureError GetTemperatureOrHumidity(float& t, bool wantHumidity) const;
+	void TakeReading();
+	TemperatureError ProcessReadings();
+
+	static constexpr uint32_t DhtTaskStackWords = 100;		// task stack size in dwords. 80 was not enough. Use 300 if debugging is enabled.
 	static Mutex dhtMutex;
+	static Task<DhtTaskStackWords> *dhtTask;
+	static DhtSensorHardwareInterface *activeSensors[MaxSpiTempSensors];
 
-#ifndef RTOS
-	static uint32_t lastReadTime;
-	static enum SensorState
-	{
-		Initialising,
-		Starting,
-		Starting2,
-		Reading
-	} state;
-	static uint32_t lastOperationTime;
+	Pin sensorPin;
+	DhtSensorType type;
+	TemperatureError lastResult;
+	float lastTemperature, lastHumidity;
+	size_t badTemperatureCount;
 
-	static void Spin();
-#endif
+	volatile uint16_t lastPulseTime;
+	volatile size_t numPulses;
+	uint16_t pulses[41];			// 1 start bit + 40 data bits
+};
 
-	static void ProcessReadings();
+// This class represents a DHT temperature sensor
+class DhtTemperatureSensor : public TemperatureSensor
+{
+public:
+	DhtTemperatureSensor(unsigned int channel);
+	~DhtTemperatureSensor();
+
+	TemperatureError GetTemperature(float& t) override;
+	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override;
+	void Init() override;
+};
+
+// This class represents a DHT humidity sensor
+class DhtHumiditySensor : public TemperatureSensor
+{
+public:
+	DhtHumiditySensor(unsigned int channel);
+	~DhtHumiditySensor();
+
+	TemperatureError GetTemperature(float& t) override;
+	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override;
+	void Init() override;
 };
 
 #endif

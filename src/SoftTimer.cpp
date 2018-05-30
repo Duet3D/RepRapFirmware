@@ -7,7 +7,6 @@
 
 #include "SoftTimer.h"
 #include "Platform.h"
-#include "Movement/DDA.h"
 
 SoftTimer * volatile SoftTimer::pendingList = nullptr;
 
@@ -74,7 +73,7 @@ void SoftTimer::CancelCallback()
 // Get the tick rate
 /*static*/ SoftTimer::Ticks SoftTimer::GetTickRate()
 {
-	return DDA::stepClockRate;			// the software timer uses the same counter as the step timer
+	return StepClockRate;			// the software timer uses the same counter as the step timer
 }
 
 // ISR called from Platform. May sometimes get called prematurely.
