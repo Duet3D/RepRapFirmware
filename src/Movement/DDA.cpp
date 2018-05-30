@@ -1307,8 +1307,9 @@ void DDA::CheckEndstops(Platform& platform)
 	{
 		if (IsBitSet(endStopsToCheck, drive))
 		{
+			const bool esc = (endStopsToCheck & ActiveLowEndstop) == 0;
 			const EndStopHit esh = ((endStopsToCheck & UseSpecialEndstop) != 0 && drive >= numAxes)
-					? (platform.EndStopInputState(drive) ? EndStopHit::lowHit : EndStopHit::noStop)
+					? ((platform.EndStopInputState(drive) == esc) ? EndStopHit::lowHit : EndStopHit::noStop)
 							: platform.Stopped(drive);
 			switch (esh)
 			{
