@@ -56,7 +56,7 @@ void HangprinterKinematics::Recalc()
 	Yab = anchorA[1] - anchorB[1];
 	Ybc = anchorB[1] - anchorC[1];
 	Yca = anchorC[1] - anchorA[1];
-	Zab = anchorB[2] - anchorC[2];
+	Zab = anchorA[2] - anchorB[2];
 	Zbc = anchorB[2] - anchorC[2];
 	Zca = anchorC[2] - anchorA[2];
 	P = (  anchorB[0] * Yca
