@@ -196,11 +196,11 @@ void RepRap::Init()
 
 	if (gCodes->RunConfigFile(configFile))
 	{
-		while (gCodes->IsDaemonBusy())
+		do
 		{
 			// GCodes::Spin will read the macro and ensure IsDaemonBusy returns false when it's done
 			Spin();
-		}
+		} while (gCodes->IsDaemonBusy());
 		platform->Message(UsbMessage, "Done!\n");
 	}
 	else
