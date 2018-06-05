@@ -231,12 +231,16 @@ size_t OutputBuffer::cat(StringRef &str)
 }
 
 // Encode a string in JSON format and append it to a string buffer and return the number of bytes written
-size_t OutputBuffer::EncodeString(const char *src, size_t srcLength, bool allowControlChars, bool encapsulateString)
+size_t OutputBuffer::EncodeString(const char *src, size_t srcLength, bool allowControlChars, bool encapsulateString, bool prependAsterisk)
 {
 	size_t bytesWritten = 0;
 	if (encapsulateString)
 	{
 		bytesWritten += cat('"');
+	}
+	if (prependAsterisk)
+	{
+		bytesWritten += cat('*');
 	}
 
 	if (srcLength != 0)

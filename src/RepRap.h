@@ -101,8 +101,8 @@ public:
 	OutputBuffer *GetStatusResponse(uint8_t type, ResponseSource source);
 	OutputBuffer *GetConfigResponse();
 	OutputBuffer *GetLegacyStatusResponse(uint8_t type, int seq);
-	OutputBuffer *GetFilesResponse(const char* dir, bool flagsDirs);
-	OutputBuffer *GetFilelistResponse(const char* dir);
+	OutputBuffer *GetFilesResponse(const char* dir, unsigned int startAt, bool flagsDirs);
+	OutputBuffer *GetFilelistResponse(const char* dir, unsigned int startAt);
 	bool GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly);
 
 	void Beep(unsigned int freq, unsigned int ms);

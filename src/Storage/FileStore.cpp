@@ -77,7 +77,7 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 				filePath[i] = 0;
 				if (!reprap.GetPlatform().GetMassStorage()->DirectoryExists(filePath.GetRef()) && !reprap.GetPlatform().GetMassStorage()->MakeDirectory(filePath.c_str()))
 				{
-					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create directory %s while trying to open file %s\n", filePath.c_str(), location.c_str());
+					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create folder %s while trying to open file %s\n", filePath.c_str(), location.c_str());
 					return false;
 				}
 				filePath[i] = '/';
@@ -102,7 +102,7 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 		// It is up to the caller to report an error if necessary.
 		if (reprap.Debug(modulePlatform))
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "Can't open %s to %s, error code %d\n", location.c_str(), (writing) ? "write" : "read", openReturn);
+			reprap.GetPlatform().MessageF(ErrorMessage, "Can't open %s to %s, error code %d\n", location.c_str(), (writing) ? "write" : "read", (int)openReturn);
 		}
 		return false;
 	}
@@ -286,7 +286,7 @@ int FileStore::Read(char* extBuf, size_t nBytes)
 			FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
 			if (readStatus != FR_OK)
 			{
-				reprap.GetPlatform().Message(ErrorMessage, "Cannot read file.\n");
+				reprap.GetPlatform().MessageF(ErrorMessage, "Cannot read file, error code %d.\n", (int)readStatus);
 				return -1;
 			}
 			return (int)bytes_read;
@@ -397,7 +397,7 @@ bool FileStore::Write(const char *s, size_t len)
 
 			if ((writeStatus != FR_OK) || (totalBytesWritten != len))
 			{
-				reprap.GetPlatform().Message(ErrorMessage, "Failed to write to file. Drive may be full.\n");
+				reprap.GetPlatform().MessageF(ErrorMessage, "Failed to write to file, error code %d. Card may be full.\n", (int)writeStatus);
 				return false;
 			}
 			return true;
@@ -432,7 +432,7 @@ bool FileStore::Flush()
 
 				if ((writeStatus != FR_OK) || (bytesToWrite != bytesWritten))
 				{
-					reprap.GetPlatform().Message(ErrorMessage, "Failed to write to file. Drive may be full.\n");
+					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to flush data to file, error code %d. Card may be full.\n", (int)writeStatus);
 					return false;
 				}
 			}

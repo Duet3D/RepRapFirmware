@@ -162,7 +162,7 @@ Fixes in RC5:
 - [done] Extra axes were ignored in G2/G3 moves
 - [done] DWC and the Duet could deadlock if the Duet ran out of output buffers
 
-Fixes post RC5:
+Fixes in RC6:
 - [done] M569 report includes chopper configuration register for smart drivers
 - [done] If getting file info timed out it didn't close the file
 - [done] DHT sensor task was running out of stack space
@@ -171,50 +171,69 @@ Fixes post RC5:
 - [done] Multiple DHT sensor support
 - [done] Support DHT sensor on Duet Maestro
 - [done] Pausing between the segments of a segmented move didn't happen even if the jerk settings were high enough
-- [done - need to test filament monitors!!!] If filament monitors were deleted or the type changed, this could result in an exception
-- [seems ok] Test Upload & print function, see https://forum.duet3d.com/topic/5394/new-firmware-2-0rc5-available/52
+- [done, ok] If filament monitors were deleted or the type changed, this could result in an exception
+- [done] Support S0/S1 for simple filament monitors
 - [done, test] When step rate limiting happens, various problems, see https://forum.duet3d.com/topic/5445/unable-to-run-128-or-256-microstepping (adjust move start time)
-- [can't reproduce] Kulitorum report that first move after a pause doesn't extrude, https://forum.duet3d.com/topic/5408/does-not-extrude-first-g1-after-a-pause/7
 - [done, test] when the SD card is removed it says 1 file was invalidated even if it was more
 - [done, ok] When SD card is removed during a print we get lots of internal error messages, and no "print abandoned" or similar message, also the heaters stay on
 - [done] Emergency stop should turn off all spindles
-- [looks like was caused by using M502] Report that filaments no longer work 
 
+- [seems ok] Test Upload & print function, see https://forum.duet3d.com/topic/5394/new-firmware-2-0rc5-available/52
+
+Fixes in release 2.0:
+- [done, test] Kulitorum report that first move after a pause doesn't extrude, https://forum.duet3d.com/topic/5408/does-not-extrude-first-g1-after-a-pause/7
+- [done] Add error codes to SD card error messages
+- [tested, documentation error] chrishamm says DHT sensors on CS pins 1-4 don't work
+- [done] add facility to return rr_filelist in chunks?
+- [done] load config.g.bak if config.g not present, not default.g
+- [done] can't load filaments because DWC doesn't give the option unless a filament is already loaded
+- look at wifi disconnect issue, https://forum.duet3d.com/topic/4341/wifi-module-keeps-disconnecting/64
+
+Planned for 2.01:
+- Bezier speed curves or other S-curve acceleration, e.g. look at https://github.com/MarlinFirmware/Marlin/pull/10373/files
+- Option to send M280 servo commands just a few times instead of continuously, for E3D and BLTouch
+- Recovery from SD card errors during a print (Dan)
+- Danny's modified SCARA kinematics (workpiece is on a plate, extruder is fixed)
+- Laser support via G1 S parameter, see https://forum.duet3d.com/topic/4702/laser-cnc-support-in-rrf-gcode-semantics/4
+- Look at pushover notification support, https://forum.duet3d.com/topic/169/notification-via-pushover-or-other-service/45
 - M3 R parameter so it can restore the spinder/laser after a pause (https://forum.duet3d.com/topic/5418/cnc-laser-m3-unpause-r-parameter)
+- M81: don't give low voltage warnings when main power has just been turned off
+- Does bltouch need a default recovery time?
+- Should bltouch use digital probe mode? Some users having problems with P25 in G31 command.
+- M584 when assigning a drive, unmap any existing assignment. Also allow an axis to be mapped to driver -1.
+- Add S4 option to G1 command, like S1 but no endstop checks (needed for CoreXY, CoreXZ)
 - CNC: look at G17/18/19, see https://forum.duet3d.com/topic/4669/ooznest-workbee-screw-driven
-- PanelDue won't connect if VIN velow minimum for stepper motors [PanelDue firmware needs to recognise status 'O']
+- M569 command to allow selection of smart/dumb driver, also allow all 12 drivers to be smart
+- M569 TOFF parameter, https://forum.duet3d.com/topic/5392/does-m906-set-rms-or-peak-current/28
+- Apostrophe in quoted filename: can we make apostrophe special in SSIDs/passwords but not filenames?
+- If wifi module gets stuck in starting or changing mode state, reset it again
+- If wifi disconnects when in client mode, keep retrying the connection
+
+Other (some of these may be in 2.01):
+- Update PanelDue firmware via Duet
+- Use Heat task to read DHT sensors?
+- Add option R4 to M915 command, to do an emergency stop (useful for Z motor)
+- GCodes corresponding to rr_move and rr_mkdir, https://forum.duet3d.com/topic/5470/firmware-2-0rc6-and-1-21-1rc6-released/13
 - Add parameter to M116 to specify acceptable temperature difference
-- Laser support, see https://forum.duet3d.com/topic/4702/laser-cnc-support-in-rrf-gcode-semantics/4
-- Pushover notification support, https://forum.duet3d.com/topic/169/notification-via-pushover-or-other-service/45
 - support M205 for setting jerk
 - support G12 clean tool?
 - Add fan PWM limit, https://forum.duet3d.com/topic/5370/m106-feature-request-limit-max-pwm-parameter/4
 - M116 extra "close enough" parameter
-- Danny's modified SCARA kinematics (workpiece is on a plate, extruder is fixed)
-- Look at Bezier speed curves or other S-curve acceleration, https://github.com/MarlinFirmware/Marlin/pull/10373/files
 - after homing, warn if outside M208 movement limits on SCARA, polar etc.
 - Unexpected heaters off/tool selection behaviour, https://www.duet3d.com/forum/thread.php?pid=43059#p43059
 - warn when using : where ; was probably meant
 - Error message if you attempt movement with VIN < minimum
 - min/max RSSI display?
-- save theta, phi in move and then in DDA?
 - report RSSI in M552?
 - When VIN power too low and stepper drivers turned off, flag axes as not homed?
-- M81: don't give low voltage warnings when main power has just been turned off
-- Return "Powered down" status when VIN power has never been seen or has gone down after sending M81
 - Auto mount main SD card when inserted
 - Workplace offsets are supposed to be persistant (check NIST), https://www.duet3d.com/forum/thread.php?pid=43755#p43755
 - At the end of a simulation, restore the original workplace coordinate selection
-- apostrophe in quoted filename
 - looks like we get a Pop underflow message when you send DWC jog commands and axes are not homed
 - Add warning message when print exceeds bounds
-- Does bltouch need a default recovery time?
-- Should bltouch use digital probe mode? Some users having problems with P25 in G31 command.
-- M584 when assigning a drive, unmap any existing assignment. Also allow an axis to be mapped to driver -1.
-- Add S4 option to G1 command, like S1 but no endstop checks (needed for CoreXY, CoreXZ)
 - When uploading while a file is being printed, don't allow the currently-printing file to be replaced
 
-- if a homing command in an SD print file is aborted due to e.g. G1 Z5 in the homing file, error message should be written to both DWC and PanelDue
+- [check] if a homing command in an SD print file is aborted due to e.g. G1 Z5 in the homing file, error message should be written to both DWC and PanelDue
 - [no fault] stall detect on Z axis
 - Files generated by Cura doesn't detect layer changes, see https://www.duet3d.com/forum/thread.php?pid=40865#p40865
 - [re-test using new DuetWiFiServer] "Failed to change mode" messages after M552 S2/S0/S1 cycle
@@ -231,7 +250,6 @@ Fixes post RC5:
 - check that we never enable the drivers before we set vsense
 
 - [don't do] Don't report the motor current for a non-existent extruder
-- SD card read error handling?
 - dual extrusion layer counting, see https://www.duet3d.com/forum/thread.php?pid=34816#p34816
 - M140/M190 with no P parameter sets all bed heater temperatures (same for M141/M191)
 - M291 to lock movement and wait for it to finish?
@@ -245,9 +263,6 @@ Fixes post RC5:
 - Send reduce power command to PanelDue when main power turned off?
 - Document multiple bed and chamber heaters
 - [mostly done] Check all classes for correct initialisation
-- sd_mmc_spi doesn't acquire/release the SPI bus. Need to change this for RTOS.
-- If wifi module gets stuck in starting state, reset it again
-- If wifi disconnects when in client mode, keep retrying the connection
 
 Bug investigations:
 - [done] step errors, https://www.duet3d.com/forum/thread.php?pid=33741#p33741

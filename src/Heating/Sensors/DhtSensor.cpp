@@ -39,6 +39,7 @@ DhtSensorHardwareInterface::DhtSensorHardwareInterface(Pin p_pin)
 	: sensorPin(p_pin), type(DhtSensorType::none), lastResult(TemperatureError::notInitialised),
 	  lastTemperature(BAD_ERROR_TEMPERATURE), lastHumidity(BAD_ERROR_TEMPERATURE), badTemperatureCount(0)
 {
+	IoPort::SetPinMode(sensorPin, INPUT_PULLUP);
 }
 
 TemperatureError DhtSensorHardwareInterface::GetTemperatureOrHumidity(float& t, bool wantHumidity) const
@@ -117,7 +118,7 @@ GCodeResult DhtSensorHardwareInterface::Configure(TemperatureSensor *ts, unsigne
 	return rslt;
 }
 
-// Create a hardware interface object re the specified channel if there isn't already
+// Create a hardware interface object for the specified channel if there isn't already
 DhtSensorHardwareInterface *DhtSensorHardwareInterface::Create(unsigned int relativeChannel)
 {
 	if (relativeChannel >= MaxSpiTempSensors)
@@ -170,19 +171,13 @@ void DhtSensorHardwareInterface::Interrupt()
 	if (numPulses < ARRAY_SIZE(pulses))
 	{
 		const uint16_t now = Platform::GetInterruptClocks16();
-		if (digitalRead(sensorPin))
+		if (IoPort::ReadPin(sensorPin))
 		{
 			lastPulseTime = now;
 		}
 		else if (lastPulseTime != 0)
 		{
 			pulses[numPulses++] = now - lastPulseTime;
-#if 0
-			if (numPulses == ARRAY_SIZE(pulses))
-			{
-				vTaskNotifyGiveFromISR(dhtTask->GetHandle(), nullptr);	// wake up the task
-			}
-#endif
 		}
 	}
 }
@@ -191,12 +186,8 @@ void DhtSensorHardwareInterface::TakeReading()
 {
 	if (type != DhtSensorType::none)			// if sensor has been configured
 	{
-		// Send start signal. See DHT datasheet for full signal diagram:
-		// http://www.adafruit.com/datasheets/Digital%20humidity%20and%20temperature%20sensor%20AM2302.pdf
-		pinMode(sensorPin, OUTPUT_HIGH);
-		delay(250);
-
-		digitalWrite(sensorPin, LOW);
+		// Send the start bit. This must be at least 18ms for the DHT11, 0.8ms for the DHT21, and 1ms long for the DHT22.
+		IoPort::SetPinMode(sensorPin, OUTPUT_LOW);
 		delay(20);
 
 		{
@@ -204,11 +195,11 @@ void DhtSensorHardwareInterface::TakeReading()
 
 			// End the start signal by setting data line high. the sensor will respond with the start bit in 20 to 40us.
 			// We need only force the data line high long enough to charge the line capacitance, after that the pullup resistor keeps it high.
-			digitalWrite(sensorPin, HIGH);		// this will generate an interrupt, but we will ignore it
+			IoPort::WriteDigital(sensorPin, HIGH);		// this will generate an interrupt, but we will ignore it
 			delayMicroseconds(3);
 
 			// Now start reading the data line to get the value from the DHT sensor
-			pinMode(sensorPin, INPUT_PULLUP);
+			IoPort::SetPinMode(sensorPin, INPUT_PULLUP);
 
 			// It appears that switching the pin to an output disables the interrupt, so we need to call attachInterrupt here
 			// We are likely to get an immediate interrupt at this point corresponding to the low-to-high transition. We must ignore this.

@@ -952,7 +952,7 @@ inline const char* Platform::GetConfigFile() const
 
 inline const char* Platform::GetDefaultFile() const
 {
-	return DEFAULT_FILE;
+	return CONFIG_BACKUP_FILE;
 }
 
 //*****************************************************************************************************************

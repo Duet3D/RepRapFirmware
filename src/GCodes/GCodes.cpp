@@ -2115,11 +2115,11 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 		moveBuffer.coords[drive] = 0.0;
 	}
 	moveBuffer.hasExtrusion = false;
+	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;	// save this before we update it
 
 	// Check if we are extruding
 	if (moveBuffer.isCoordinated && gb.Seen(extrudeLetter))
 	{
-
 		// Check that we have a tool to extrude with
 		Tool* const tool = reprap.GetCurrentTool();
 		if (tool == nullptr)
@@ -2610,7 +2610,6 @@ void GCodes::FinaliseMove(GCodeBuffer& gb)
 {
 	moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0);
 	moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;
-	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;
 
 	if (totalSegments > 1)
 	{
