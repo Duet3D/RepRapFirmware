@@ -1,7 +1,7 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 2.0RC6 (Duet 2 series) and 1.21.1RC6 (other hardware)
+Version 2.0 (Duet 2 series) and 1.21.1 (other hardware)
 =============================================================
 Upgrade notes:
 - Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.1. Use of older versions of DWC may result in "Not authorized" disconnections.
@@ -10,82 +10,22 @@ Upgrade notes:
 - If you have a simple switch-type filament monitor configured using M591, you need to add the S1 parameter to enable it
 - The number of GCode files in a single folder that can be displayed by DWC is lower than before. This was required to fix other issues. If you can't see all of your GCode files, or files that you have just uploaded, the workaround is to move some files into subfolders. If you can't see any subfolders in DWC, you may have to move the SD card to a PC to do this. Alternatively, use the backup facility in DWC to backup the files that you can see, then delete them; then you should be able to see the other files.
 
-New features:
+New features and changed behaviour:
 - The M569 response when only the P parameter is given now includes chopper configuration register if it is a smart driver
 - Multiple DHT sensors are supported, connected to any of the 8 SPI daughter board chip select pins
 - The Duet 2 Maestro build now supports DHT sensors
 - Simple switch-type filament sensors can now be enabled/disabled using S1/S0 in the M591 command
 - If the HSMCI idle function times out, an error code bit is now set
-
-Bug fixes:
-- If getting file info for DWC or PanelDue timed out, it didn't close the file. This could lead to running out of open file entries.
-- The DHT sensor task ran out of stack space under some conditions
-- Corrected DHT start bit timing to avoid a bus conflict
-- Fixed unreliable DHT sensor reading in RTOS build, caused by call to micros()
-- Pausing between the segments of a segmented move didn't happen even if the jerk settings were high enough
-- Possible fix for incorrect extrusion in the first move after resuming from a pause
-- If filament monitors were deleted or the type changed, this could result in an exception
-- When step rate limiting occurred due to the speed and microstepping combination needing an excessive pulse rate, movement could become irregular
-- When the SD card is removed during a print it says 1 file was invalidated even if there were more
-- When the SD card is removed during a print we get several internal error messages, no "print abandoned" or similar message, and the heaters remain on
-- Emergency stop now turns off all spindles if the machine type is CNC, and the laser if the machine type is Laser
-
-Version 2.0RC5 (Duet 2 series) and 1.21.1RC5 (other hardware)
-=============================================================
-Upgrade notes:
-- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.1RC4. Use of older versions of DWC may result in "Not authorized" disconnections.
-- When the machine mode is set to CNC, G0 movement behaviour is changed to align more with the NIST standard (see 2.0RC1 release notes).
-
-New features:
+- If config.g is not found then config.g.bak is run instead of default.g
+- If an error occurs when accessing the SD card, the error message now includes an error code
 - Added S3 option to M20 to get file list including size, date/time etc.
-
-Bug fixes:
-- HTTP request parsing error recovery didn't work. One consequence was that connecting from Internet Explorer crashed the Duet.
-- Spurious stall warnings were sometimes generated when simulating a print
-- The print monitor didn't think the print had started until a nozzle had reached target temperature. This meant that layer counting didn't work on machines with no tool heaters, or when the tool temperatures were fluctuating.
-- The print monitor didn't count layers when simulating a print
-- Axes beyond Z were ignored in G2/G3 moves
-- DWC and the Duet could deadlock if the Duet ran out of output buffers
-
-Version 2.0RC3 (Duet 2 series) and 1.21.1RC3 (other hardware)
-=============================================================
-Upgrade notes:
-- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.1RC4. Use of older versions of DWC may result in "Not authorized" disconnections.
-- When the machine mode is set to CNC, G0 movement behaviour is changed to align more with the NIST standard (see 2.0RC1 release notes).
-
-New features and changed behaviour:
+- rr_files, rr_filelist, M20 S2 and M20 S3 now provide for retrieving the list if files in chunks, using a "first" parameter in rr_files/rr_filelist or "R" parameter in M20 S2/S2, and a "next" field in the response
 - M502 now resets all firmware parameters back to the values in config.g except network parameters
 - RRF attempts to pass the estimated print time and simulated print time from GCode files to DWC and PanelDue
 - When M37 is used to simulate a file, at the end of a successful simulation the simulated print time is appended to the file unless parameter F0 is included in the M37 command
 - The default folder for the M36 command is now 0:/gcodes instead of 0:/
-
-Bug fixes:
-- In RC2 it was no longer possible to turn a heater off by setting its temperatures to -273
-- Telnet didn't work reliably in all earlier 2.0 beta and RC versions
-
-Version 2.0RC2 (Duet 2 series) and 1.21.1RC2 (other hardware)
-=============================================================
-Upgrade notes:
-- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.1RC4. Use of older versions of DWC may result in "Not authorized" disconnections.
-- When the machine mode is set to CNC, G0 movement behaviour is changed to align more with the NIST standard (see 2.0RC1 release notes).
-
-New features and changed behaviour:
 - M144 S1 now sets the bed to Active mode. M144 with any other S parameter or no S parameter sets the bed to standby as before.
 - Added more functionality to 12864 displays on Duet 2 Maestro
-
-Bug fixes:
-- If the system ran out of output buffers when multiple tasks were generating output (e.g. DWC or Telnet combined with PanelDue or USB) then in rare cases the firmware would reboot
-
-Other changes:
-- Incorporated chrishamm's changes to scanner interface and DHT sensor support
-
-Version 2.0RC1 (Duet 2 series) and 1.21.1RC1 (other hardware)
-=============================================================
-Upgrade notes:
-- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.1RC1. Use of older versions of DWC may result in "Not authorized" disconnections.
-- When the machine mode is set to CNC, G0 movement behaviour is changed to align more with the NIST standard (see below)
-
-New features and changed behaviour:
 - Default stepper driver mode for TMC2224 drivers is now stealthchop2
 - Stepper driver mode for TMC2660 and TMC2224 drivers can now be set via the D parameter in M569
 - Stepper driver chopper control register can now be set via the C parameter in M569 - USE THIS	ONLY IF YOU KNOW WHAT YOU ARE DOING!
@@ -96,10 +36,29 @@ New features and changed behaviour:
 - When M500 is used a warning is given if M501 was not run in config.g
 - G2 and G3 no longer require all of X, Y, I, J to be specified. X or Y and I or J is sufficient.
 - The user coordinates are updated if G10 is used to change the offsets of the current tool
-- Added experimental Z probe type 10 (Z motor stall)
+- Added Z probe type 10 (Z motor stall)
 - Simulations can now be run when the printer is not homed
+- Multiple splindles are supported in CNC mode (thanks chrishamm)
 
 Bug fixes:
+- If getting file info for DWC or PanelDue timed out, it didn't close the file. This could lead to running out of open file entries.
+- The DHT sensor task ran out of stack space under some conditions
+- Corrected DHT start bit timing to avoid a bus conflict
+- Fixed unreliable DHT sensor reading in RTOS build, caused by call to micros()
+- Pausing between the segments of a segmented move didn't happen even if the jerk settings were high enough
+- Possible fix for incorrect extrusion in the first move after resuming from a pause
+- If filament monitors were deleted or the type changed, this could result in an exception
+- When step rate limiting occurred due to the speed and microstepping combination needing an excessive pulse rate, movement could become irregular
+- When the SD card was removed during a print it said 1 file was invalidated even if there were more
+- When the SD card was removed during a print, several "internal error" messages wree generated, but no "print abandoned" or similar message, and the heaters remain on
+- Emergency stop now turns off all spindles if the machine type is CNC, and the laser if the machine type is Laser
+- HTTP request parsing error recovery didn't work on the Duet 2 boards. One consequence was that connecting from Internet Explorer crashed the Duet.
+- Spurious stall warnings were sometimes generated when simulating a print
+- The print monitor didn't think the print had started until a nozzle had reached target temperature. This meant that layer counting didn't work on machines with no tool heaters, or when the tool temperatures were fluctuating.
+- The print monitor didn't count layers when simulating a print
+- Axes beyond Z were ignored in G2/G3 moves
+- DWC and the Duet could deadlock if the Duet ran out of output buffers
+- If the system ran out of output buffers when multiple tasks were generating output (e.g. DWC or Telnet combined with PanelDue or USB) then in rare cases the firmware would reboot
 - When high microstepping was used so that MaxReps got very high, certain sequences of movement commands could lock up the movement system. MaxReps has been replaced by a hiccup count.
 - M122 reported some parts of network status twice on Duet 2 Ethernet and Duet 2 Maestro
 - If a PT1000 sensor was configured using M305 but a thermistor was plugged in instead, the firmware reported semi-random high temperatures instead of an error
@@ -107,19 +66,16 @@ Bug fixes:
 - If a delta printer failed to home then DWC might disconnect due to NaN values for the machine coordinates in the rr_status response
 - The M105 response on a multi-tool system was not in the exact format that Octoprint required
 - Excessive decimal places in some values in M408 responses and rr_status requests have been removed
-- G1 E moves with the S1 parameter (i.e. filament loading woith extruder stall detection) on a delta reported "Error: G0/G1: attempt to move delta motors to absolute positions"
-- Duet Web Control clients that go to sleep without disconnecting first are timed out after 8 seconds (this was already happening on the Duet 06/085 but not on Duet 2)
+- G1 E moves with the S1 parameter (i.e. filament loading with extruder stall detection) on a delta reported "Error: G0/G1: attempt to move delta motors to absolute positions"
+- Duet Web Control clients that go to sleep without disconnecting first are timed out after 8 seconds (this was already happening on the Duet 06/085 but not on Duet 2 series)
 - VSSA fault detection was not working on the Duet Ethernet in firmware 1.21
 - If G30 was used to set an accurate Z height after mesh bed probing or loading a height map, if bed compensation was then cancelled then any Z offset from the height map remained. One consequence of this was that if bed probing was run again, the original height map Z offset was carried through to the new one, but the sign of the offset was reversed.
 
-Internal changes:
-- RepRapFirmware 2.0 builds use a real time operating system kernel (FreeRTOS). Currently there are just three tasks: Main, Heat and Network. The tasks and their free stack space are listed in the M122 diagnostics report.
+Other changes:
+- RepRapFirmware 2.0 uses a real time operating system kernel (FreeRTOS). Currently there are just four tasks: Main, Heat, Network and DHT (if DHT sensors are configured). The tasks and their free stack space are listed in the M122 diagnostics report.
 - Custom SafeStrtod, SafeVsnprintf and related functions are used instead of C library strtod, vsnprintf etc. The replacements are thread safe and use less stack than the originals.
 - nano-newlib is used instead of newlib
-
-Known bugs:
-- Continuous rotation mode for SCARA printers doesn't work
-- When executing a linear (G1) move on a SCARA printer, the firmware checks that the endpoint is reachable but not that the interemdiate points are reachable
+- Incorporated chrishamm's changes to scanner support
 
 Version 1.21
 ============
