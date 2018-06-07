@@ -533,19 +533,23 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	else if (StringEquals(request, "filelist") && GetKeyValue("dir") != nullptr)
 	{
 		OutputBuffer::Release(response);
-		response = reprap.GetFilelistResponse(GetKeyValue("dir"));		// this may return nullptr
+		const char* const firstVal = GetKeyValue("first");
+		const unsigned int startAt = (firstVal == nullptr) ? 0 : (unsigned int)SafeStrtol(firstVal);
+		response = reprap.GetFilelistResponse(GetKeyValue("dir"), startAt);		// this may return nullptr
 	}
 	else if (StringEquals(request, "files"))
 	{
+		OutputBuffer::Release(response);
 		const char* dir = GetKeyValue("dir");
 		if (dir == nullptr)
 		{
 			dir = GetPlatform().GetGCodeDir();
 		}
+		const char* const firstVal = GetKeyValue("first");
+		const unsigned int startAt = (firstVal == nullptr) ? 0 : SafeStrtol(firstVal);
 		const char* const flagDirsVal = GetKeyValue("flagDirs");
 		const bool flagDirs = flagDirsVal != nullptr && SafeStrtol(flagDirsVal) == 1;
-		OutputBuffer::Release(response);
-		response = reprap.GetFilesResponse(dir, flagDirs);				// this may return nullptr
+		response = reprap.GetFilesResponse(dir, startAt, flagDirs);				// this may return nullptr
 	}
 	else if (StringEquals(request, "fileinfo"))
 	{

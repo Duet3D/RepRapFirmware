@@ -734,7 +734,6 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			{
 				reply.copy("Invalid endstop number");
 				return GCodeResult::error;
-				break;
 			}
 
 			// Save the current axis coordinates
@@ -751,10 +750,11 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			{
 				moveBuffer.endStopsToCheck = UseSpecialEndstop;
 				SetBit(moveBuffer.endStopsToCheck, endStopToUse);
+
 				if (gb.Seen('L') && gb.GetIValue() == 0)
 				{
 					// By default custom endstops are active-high when triggered, so allow this to be inverted
-					SetBit(moveBuffer.endStopsToCheck, ActiveLowEndstop);
+					moveBuffer.endStopsToCheck |= ActiveLowEndstop;
 				}
 			}
 			moveBuffer.xAxes = DefaultXAxisMapping;

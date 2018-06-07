@@ -515,7 +515,7 @@ void WiFiInterface::Spin(bool full)
 		break;
 
 	case NetworkState::disabled:
-		if (full)
+		if (full && uploader != nullptr)
 		{
 			uploader->Spin();
 		}

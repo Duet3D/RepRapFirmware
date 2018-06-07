@@ -622,7 +622,7 @@ bool MassStorage::IsCardDetected(size_t card) const
 	return info[card].cardState == CardDetectState::present;
 }
 
-// Unmount a file system returning true if any open files were invalidated
+// Unmount a file system returning the number of open files were invalidated
 unsigned int MassStorage::InternalUnmount(size_t card, bool doClose)
 {
 	SdCardInfo& inf = info[card];

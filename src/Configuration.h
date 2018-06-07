@@ -259,7 +259,7 @@ constexpr size_t FILE_BUFFER_SIZE = 128;
 #define MENU_DIR "0:/menu/"							// Directory for menu files
 
 #define CONFIG_FILE "config.g"
-#define DEFAULT_FILE "default.g"
+#define CONFIG_BACKUP_FILE "config.g.bak"
 #define DEFAULT_LOG_FILE "eventlog.txt"
 
 #define EOF_STRING "<!-- **EoF** -->"

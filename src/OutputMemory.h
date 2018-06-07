@@ -54,7 +54,7 @@ class OutputBuffer
 		size_t cat(const char *src, size_t len);
 		size_t cat(StringRef &str);
 
-		size_t EncodeString(const char *src, size_t srcLength, bool allowControlChars, bool encapsulateString = true);
+		size_t EncodeString(const char *src, size_t srcLength, bool allowControlChars, bool encapsulateString = true, bool prependAsterisk = false);
 		size_t EncodeString(const StringRef& str, bool allowControlChars, bool encapsulateString = true);
 		size_t EncodeReply(OutputBuffer *src, bool allowControlChars);
 

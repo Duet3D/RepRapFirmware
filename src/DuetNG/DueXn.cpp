@@ -25,7 +25,7 @@ namespace DuetExpansion
 	static bool additionalIoExpanderPresent = false;
 	static uint16_t additionalIoInputBits = 0;
 
-	// The original DueX2 and DueX5 boards had 2 board ID pins, bits 14 an 15.
+	// The original DueX2 and DueX5 boards had 2 board ID pins, bits 14 and 15.
 	// The new ones use bit 15 for fan 8, so not we just have bit 14.
 	// If we want any more variants, they will have to use a different I2C address.
 	const uint16_t BoardTypePins = (1u << 14);
