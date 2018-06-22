@@ -1546,10 +1546,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (result != GCodeResult::error)
 			{
 				String<GCODE_LENGTH> message;
-				if (gb.Seen(('S')))
+				if (gb.Seen('S') && gb.GetQuotedString(message.GetRef()))
 				{
-					gb.GetQuotedString(message.GetRef());
 					platform.Message(type, message.c_str());
+					if (type != HttpMessage && type != TelnetMessage)
+					{
+						platform.Message(type, "\n");
+					}
 				}
 			}
 		}
@@ -3800,7 +3803,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			if (reprap.GetScanner().IsEnabled())
 			{
-				result = GetGCodeResultFromFinished(reprap.GetScanner().Register());
+				reprap.GetScanner().Register();
+
+				// The Scanner module will attempt to run a macro via this G-code source so we're not done yet
+				result = GCodeResult::notFinished;
 			}
 			else
 			{
@@ -4163,7 +4169,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 999:
-		result = DoDwellTime(gb, 500);		// wait half a second to allow the response to be sent back to the web server, otherwise it may retry
+		result = DoDwellTime(gb, 1000);		// wait a second to allow the response to be sent back to the web server, otherwise it may retry
 		if (result != GCodeResult::notFinished)
 		{
 			reprap.EmergencyStop();			// this disables heaters and drives - Duet WiFi pre-production boards need drives disabled here

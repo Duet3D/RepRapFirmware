@@ -269,6 +269,18 @@ float GCodes::FractionOfFilePrinted() const
 	return (float)(fileBeingPrinted.GetPosition() - bytesCached) / (float)len;
 }
 
+FilePosition GCodes::GetFilePosition() const
+{
+	const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
+	if (!fileBeingPrinted.IsLive())
+	{
+		return 0;
+	}
+
+    const FilePosition bytesCached = fileGCode->IsDoingFileMacro() ? 0: fileInput->BytesCached();
+    return fileBeingPrinted.GetPosition() - bytesCached;
+}
+
 // Start running the config file
 // We use triggerCGode as the source to prevent any triggers being executed until we have finished
 bool GCodes::RunConfigFile(const char* fileName)

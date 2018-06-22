@@ -162,7 +162,8 @@ constexpr Pin ROLAND_RTS_PIN = xx;											// Expansion pin 12, PA13_RXD1
 // This is the mapping from logical pins 60+ to firmware pin numbers
 constexpr Pin SpecialPinMap[] =
 {
-	24, 97, 98, 99															// We allow CS5-CS8 to be used because few users need >4 thermocouples or RTDs
+	24, 97, 98, 99,															// We allow CS5-CS8 to be used because few users need >4 thermocouples or RTDs
+	7																		// SW_ENC on CONN_SD
 };
 constexpr Pin DueX5GpioPinMap[] = { 211, 210, 209, 208 };					// Pins 100-103 map to GPIO 1-4 on DueX5
 // We also allow pins 120-135 to be used if there is an additional SX1509B expander
