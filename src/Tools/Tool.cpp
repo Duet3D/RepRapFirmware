@@ -34,7 +34,7 @@
 Tool * Tool::freelist = nullptr;
 
 // Create a new tool and return a pointer to it. If an error occurs, put an error message in 'reply' and return nullptr.
-/*static*/ Tool *Tool::Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, const StringRef& reply)
+/*static*/ Tool *Tool::Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, bool forceFilament, const StringRef& reply)
 {
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
@@ -82,9 +82,10 @@ Tool * Tool::freelist = nullptr;
 		t = new Tool;
 	}
 
-	if (dCount == 1)
+	if (dCount == 1 || forceFilament)
 	{
-		// Create only one Filament instance per extruder drive, and only if this tool is assigned to exactly one extruder
+		// Create only one Filament instance per extruder drive, and only if this tool is assigned to exactly one extruder\
+		// This option can be overridden manually though
 		Filament * const filament = Filament::GetFilamentByExtruder(d[0]);
 		t->filament = (filament == nullptr) ? new Filament(d[0]) : filament;
 	}

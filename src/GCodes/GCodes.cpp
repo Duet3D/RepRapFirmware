@@ -3522,6 +3522,9 @@ bool GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		fanMap = 1;					// by default map fan 0 to fan 0
 	}
 
+	// Check if filament support is being enforced
+	const bool forceFilament = (gb.Seen('L') && gb.GetIValue() > 0);
+
 	if (seen)
 	{
 		// Add or delete tool, so start by deleting the old one with this number, if any
@@ -3534,7 +3537,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
-			Tool* const tool = Tool::Create(toolNumber, name.c_str(), drives, dCount, heaters, hCount, xMap, yMap, fanMap, reply);
+			Tool* const tool = Tool::Create(toolNumber, name.c_str(), drives, dCount, heaters, hCount, xMap, yMap, fanMap, forceFilament, reply);
 			if (tool == nullptr)
 			{
 				return true;
