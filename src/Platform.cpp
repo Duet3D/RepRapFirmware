@@ -57,6 +57,8 @@
 
 #include <climits>
 
+extern uint32_t _estack;			// defined in the linker script
+
 #if !defined(HAS_LWIP_NETWORKING) || !defined(HAS_WIFI_NETWORKING) || !defined(HAS_CPU_TEMP_SENSOR) || !defined(HAS_HIGH_SPEED_SD) \
  || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_VREF_MONITOR) || !defined(ACTIVE_LOW_HEAT_ON) \
  || !defined(SUPPORT_NONLINEAR_EXTRUSION)
@@ -215,8 +217,8 @@ void Platform::Init()
 	commsParams[2] = 0;
 #endif
 
-	usbMutex.Create();
-	auxMutex.Create();
+	usbMutex.Create("USB");
+	auxMutex.Create("Aux");
 	auxDetected = false;
 	auxSeq = 0;
 
@@ -224,7 +226,7 @@ void Platform::Init()
 	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
 #ifdef SERIAL_AUX2_DEVICE
 	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
-	aux2Mutex.Create();
+	aux2Mutex.Create("Aux2");
 #endif
 
 	compatibility = Compatibility::marlin;		// default to Marlin because the common host programs expect the "OK" response to commands
@@ -1074,7 +1076,7 @@ void Platform::UpdateFirmware()
 	}
 
 #if defined(DUET_NG) || defined(DUET_M)
-	IoPort::WriteDigital(Z_PROBE_MOD_PIN, false);	// turn the DIAG LED off
+	IoPort::WriteDigital(DiagPin, false);			// turn the DIAG LED off
 #endif
 
 	wdt_restart(WDT);								// kick the watchdog one last time
@@ -1381,7 +1383,7 @@ void Platform::Spin()
 				{
 					if ((stalledDrivers & mask) == 0)
 					{
-						// This stall is new and we are printing, so check whether we need to perform some action in response to the stall
+						// This stall is new so check whether we need to perform some action in response to the stall
 						if ((rehomeOnStallDrivers & mask) != 0)
 						{
 							stalledDriversToRehome |= mask;
@@ -1551,7 +1553,8 @@ void Platform::Spin()
 		switch (autoSaveState)
 		{
 		case AutoSaveState::starting:
-			if (currentVin >= autoResumeReading)
+			// Some users set the auto resume threshold high to disable auto resume, so prime auto save at the auto save threshold plus half a volt
+			if (currentVin >= autoResumeReading || currentVin > autoPauseReading + PowerVoltageToAdcReading(0.5))
 			{
 				autoSaveState = AutoSaveState::normal;
 			}
@@ -1794,7 +1797,8 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 			srdBuf[slot].sp = reinterpret_cast<uint32_t>(stk);
 			for (size_t i = 0; i < ARRAY_SIZE(srdBuf[slot].stack); ++i)
 			{
-				srdBuf[slot].stack[i] = stk[i];
+				srdBuf[slot].stack[i] = (stk < &_estack) ? *stk : 0xFFFFFFFF;
+				++stk;
 			}
 		}
 

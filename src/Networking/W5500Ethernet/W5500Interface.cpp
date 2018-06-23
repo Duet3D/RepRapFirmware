@@ -35,6 +35,8 @@ W5500Interface::W5500Interface(Platform& p)
 
 void W5500Interface::Init()
 {
+	interfaceMutex.Create("W5500");
+
 	// Ensure that the W5500 chip is in the reset state
 	pinMode(W5500ResetPin, OUTPUT_LOW);
 	lastTickMillis = millis();
@@ -53,6 +55,8 @@ GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, i
 
 	if (protocol < NumProtocols)
 	{
+		MutexLocker lock(interfaceMutex);
+
 		const Port portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
 		if (portToUse != portNumbers[protocol] && state == NetworkState::active)
 		{
@@ -87,6 +91,8 @@ GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const Stri
 {
 	if (protocol < NumProtocols)
 	{
+		MutexLocker lock(interfaceMutex);
+
 		if (state == NetworkState::active)
 		{
 			ShutdownProtocol(protocol);
@@ -102,6 +108,8 @@ GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const Stri
 
 void W5500Interface::StartProtocol(NetworkProtocol protocol)
 {
+	MutexLocker lock(interfaceMutex);
+
 	switch(protocol)
 	{
 	case HttpProtocol:
@@ -126,6 +134,8 @@ void W5500Interface::StartProtocol(NetworkProtocol protocol)
 
 void W5500Interface::ShutdownProtocol(NetworkProtocol protocol)
 {
+	MutexLocker lock(interfaceMutex);
+
 	switch(protocol)
 	{
 	case HttpProtocol:
@@ -222,6 +232,8 @@ void W5500Interface::SetMacAddress(const uint8_t mac[])
 // Start up the network
 void W5500Interface::Start()
 {
+	MutexLocker lock(interfaceMutex);
+
 	SetIPAddress(platform.GetIPAddress(), platform.NetMask(), platform.GateWay());
 	pinMode(W5500ResetPin, OUTPUT_LOW);
 	delayMicroseconds(550);						// W550 reset pulse must be at least 500us long
@@ -252,6 +264,8 @@ void W5500Interface::Stop()
 {
 	if (state != NetworkState::disabled)
 	{
+		MutexLocker lock(interfaceMutex);
+
 		if (usingDhcp)
 		{
 			DHCP_stop();
@@ -273,21 +287,25 @@ void W5500Interface::Spin(bool full)
 		break;
 
 	case NetworkState::establishingLink:
-		if (full && wizphy_getphylink() == PHY_LINK_ON)
 		{
-			usingDhcp = (ipAddress[0] == 0 && ipAddress[1] == 0 && ipAddress[2] == 0 && ipAddress[3] == 0);
-			if (usingDhcp)
+			MutexLocker lock(interfaceMutex);
+
+			if (full && wizphy_getphylink() == PHY_LINK_ON)
 			{
-				// IP address is all zeros, so use DHCP
-//				debugPrintf("Link established, getting IP address\n");
-				DHCP_init(DhcpSocketNumber, platform.Random(), reprap.GetNetwork().GetHostname());
-				lastTickMillis = millis();
-				state = NetworkState::obtainingIP;
-			}
-			else
-			{
-//				debugPrintf("Link established, network running\n");
-				state = NetworkState::connected;
+				usingDhcp = (ipAddress[0] == 0 && ipAddress[1] == 0 && ipAddress[2] == 0 && ipAddress[3] == 0);
+				if (usingDhcp)
+				{
+					// IP address is all zeros, so use DHCP
+//					debugPrintf("Link established, getting IP address\n");
+					DHCP_init(DhcpSocketNumber, platform.Random(), reprap.GetNetwork().GetHostname());
+					lastTickMillis = millis();
+					state = NetworkState::obtainingIP;
+				}
+				else
+				{
+//					debugPrintf("Link established, network running\n");
+					state = NetworkState::connected;
+				}
 			}
 		}
 		break;
@@ -295,6 +313,8 @@ void W5500Interface::Spin(bool full)
 	case NetworkState::obtainingIP:
 		if (full)
 		{
+			MutexLocker lock(interfaceMutex);
+
 			if (wizphy_getphylink() == PHY_LINK_ON)
 			{
 				const uint32_t now = millis();
@@ -334,45 +354,49 @@ void W5500Interface::Spin(bool full)
 		break;
 
 	case NetworkState::active:
-		// Check that the link is still up
-		if (wizphy_getphylink() == PHY_LINK_ON)
 		{
-			// Maintain DHCP
-			if (full && usingDhcp)
-			{
-				const uint32_t now = millis();
-				if (now - lastTickMillis >= 1000)
-				{
-					lastTickMillis += 1000;
-					DHCP_time_handler();
-				}
-				const DhcpRunResult ret = DHCP_run();
-				if (ret == DhcpRunResult::DHCP_IP_CHANGED || ret == DhcpRunResult::DHCP_IP_ASSIGN)
-				{
-//					debugPrintf("IP address changed\n");
-					getSIPR(ipAddress);
-				}
-			}
+			MutexLocker lock(interfaceMutex);
 
-			// Poll the next TCP socket
-			sockets[nextSocketToPoll]->Poll(full);
+			// Check that the link is still up
+			if (wizphy_getphylink() == PHY_LINK_ON)
+			{
+				// Maintain DHCP
+				if (full && usingDhcp)
+				{
+					const uint32_t now = millis();
+					if (now - lastTickMillis >= 1000)
+					{
+						lastTickMillis += 1000;
+						DHCP_time_handler();
+					}
+					const DhcpRunResult ret = DHCP_run();
+					if (ret == DhcpRunResult::DHCP_IP_CHANGED || ret == DhcpRunResult::DHCP_IP_ASSIGN)
+					{
+//						debugPrintf("IP address changed\n");
+						getSIPR(ipAddress);
+					}
+				}
 
-			// Move on to the next TCP socket for next time
-			++nextSocketToPoll;
-			if (nextSocketToPoll == NumW5500TcpSockets)
-			{
-				nextSocketToPoll = 0;
+				// Poll the next TCP socket
+				sockets[nextSocketToPoll]->Poll(full);
+
+				// Move on to the next TCP socket for next time
+				++nextSocketToPoll;
+				if (nextSocketToPoll == NumW5500TcpSockets)
+				{
+					nextSocketToPoll = 0;
+				}
 			}
-		}
-		else if (full)
-		{
-//			debugPrintf("Lost phy link\n");
-			if (usingDhcp)
+			else if (full)
 			{
-				DHCP_stop();
+//				debugPrintf("Lost phy link\n");
+				if (usingDhcp)
+				{
+					DHCP_stop();
+				}
+				TerminateSockets();
+				state = NetworkState::establishingLink;
 			}
-			TerminateSockets();
-			state = NetworkState::establishingLink;
 		}
 		break;
 	}

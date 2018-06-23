@@ -145,6 +145,7 @@ public:
 	void GetCurrentCoordinates(const StringRef& s) const;				// Write where we are into a string
 	bool DoingFileMacro() const;										// Or still busy processing a macro file?
 	float FractionOfFilePrinted() const;								// Get fraction of file printed
+	FilePosition GetFilePosition() const;								// Return the current position of the file being printed in bytes
 	void Diagnostics(MessageType mtype);								// Send helpful information out
 
 	bool RunConfigFile(const char* fileName);							// Start running the config file
@@ -294,7 +295,7 @@ private:
 	void FinishWrite(GCodeBuffer& gb);											// Finish writing to the file and respond
 	bool SendConfigToLine();													// Deal with M503
 
-	GCodeResult OffsetAxes(GCodeBuffer& gb);									// Set offsets
+	GCodeResult OffsetAxes(GCodeBuffer& gb, const StringRef& reply);			// Set/report offsets
 
 #if SUPPORT_WORKPLACE_COORDINATES
 	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute);	// Set workspace coordinates

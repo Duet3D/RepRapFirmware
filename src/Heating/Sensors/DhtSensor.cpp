@@ -144,7 +144,7 @@ DhtSensorHardwareInterface *DhtSensorHardwareInterface::Create(unsigned int rela
 
 /*static*/ void DhtSensorHardwareInterface::InitStatic()
 {
-	dhtMutex.Create();
+	dhtMutex.Create("DHT");
 }
 
 /*static*/ TemperatureError DhtSensorHardwareInterface::GetTemperatureOrHumidity(unsigned int relativeChannel, float& t, bool wantHumidity)

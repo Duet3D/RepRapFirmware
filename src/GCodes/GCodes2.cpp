@@ -1928,7 +1928,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 206: // Offset axes
-		result = OffsetAxes(gb);
+		result = OffsetAxes(gb, reply);
 		break;
 
 	case 207: // Set firmware retraction details
@@ -2511,7 +2511,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			const int type = gb.Seen('S') ? gb.GetIValue() : 0;
 			const int seq = gb.Seen('R') ? gb.GetIValue() : -1;
-			if (&gb == auxGCode)
+			if (&gb == auxGCode && (type == 0 || type == 2))
 			{
 				lastAuxStatusReportType = type;
 			}
@@ -3800,7 +3800,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			if (reprap.GetScanner().IsEnabled())
 			{
-				result = GetGCodeResultFromFinished(reprap.GetScanner().Register());
+				reprap.GetScanner().Register();
+
+				// The Scanner module will attempt to run a macro via this G-code source so we're not done yet
+				result = GCodeResult::notFinished;
 			}
 			else
 			{
@@ -4163,7 +4166,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 999:
-		result = DoDwellTime(gb, 500);		// wait half a second to allow the response to be sent back to the web server, otherwise it may retry
+		result = DoDwellTime(gb, 1000);		// wait a second to allow the response to be sent back to the web server, otherwise it may retry
 		if (result != GCodeResult::notFinished)
 		{
 			reprap.EmergencyStop();			// this disables heaters and drives - Duet WiFi pre-production boards need drives disabled here

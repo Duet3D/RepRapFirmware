@@ -189,17 +189,58 @@ Fixes in release 2.0:
 - [done] can't load filaments because DWC doesn't give the option unless a filament is already loaded
 - look at wifi disconnect issue, https://forum.duet3d.com/topic/4341/wifi-module-keeps-disconnecting/64
 
-Planned for 2.01:
+Planned for 2.01/1.21.2:
+
+WiFi:
+- [resolve library incompatibility] New ESP8266 SDK
+- [done] check what's new in Arduino ESP 2.4.1
+
+Bug fixes/investigations:
+- [done, test] sqrt(2) error factor in extrusion-only moves, see Michael's email
+- [done] Homing wrong if axes not labeled sequentially, see Christian's email of 18/6/18
+- [done, test] Fix "2dtstc2diva=u" in debug printout, https://forum.duet3d.com/topic/3139/high-level-of-steperrors-what-can-cause-them/5
+- [done, test] when stuck in spin loop, in RTOS build discard LR and 16 stack dwords, they are within FreeRTOS
+- [done, test] Rotating magnet monitor reports "allowed movement 2147483647% to 160%" in M591 response, see Tony's email (caused by R-1 in M591 command)
+- [done, test] Duet Maestro 7th stepper step/dir pin numbers swapped
+- [done, test] Pausing during an arc move, on resume the arc centre is at the wrong place. Temporarily don't allow pause during an arc move?
+- [done] WiFi needs a mutex on SendCommand because WiFiInterface::Diagnostics and SetHostName can be called from outside the Network task. Similarly for W5500 Ethernet interface.
+- [done, test] bltouch retracts, deploys, retracts between probes. Is the M280 retract command being queued until the end of the movement command?
+- [checked, ok] Check that in M569, T3 is equivalent to T3:3:3:3, see https://forum.duet3d.com/topic/5579/expansion-stepper-breakout-tb6600
+- [done, test] M206 with no parameters to report axis offsets
+- [done] During heating, returns M408 S0 responses to PanelDue port even if the last request was M408 S2, see https://forum.duet3d.com/topic/5761/printer-is-sending-m408-s0-when-heating.
+- [done in CoreNG] Fix VBUS detection in CoreNG, see chrishamm's branch
+- [done] Add SW_ENC pin on CONN_SD to available GPIO ports
+- [done] Increased M999 delay to 1 second
+- [done] If M911 resume threshold is set too high, save-on-power-off never primes itself
+
+- Test gcode file that pauses between parts, https://forum.duet3d.com/topic/5702/printer-keeps-pausing-during-print/15
+- Doesn't find DueX5 after M999 reset? https://forum.duet3d.com/topic/5713/duet2-with-2-0-rtos-looses-duex5-on-reset
+- stuck in spin loop, https://forum.duet3d.com/topic/5674/damned-crash-stuck-in-spin-loop
+- step errors, see https://forum.duet3d.com/topic/3139/high-level-of-steperrors-what-can-cause-them/5
+- Investigate failed .BMP conversion, https://forum.duet3d.com/topic/5623/boot-logo-corruption-in-1-21/2
+- Duet Maestro default to TMC2224 drivers on expansion? How to detect them?
+- M28 and M29 in a macro, https://forum.duet3d.com/topic/5642/filament-load-macro-writing-to-file-in-sys. Move fileBeingWritten to GCodeBuffer, get rid of writingFileDirectory.
+- Is there a kink during auto tuning? https://forum.duet3d.com/topic/5582/hot-end-auto-tuning-failed-due. Could explain oddly low dead times from auto tuning.
+- Does bltouch need a default recovery time to allow it to deploy? (probably not)
+- Should bltouch use digital probe mode? Some users having problems with P25 in G31 command.
+- Test Duet 06/085 DHCP problem again, see https://forum.duet3d.com/topic/5572/it-s-out-reprapfirmware-2-0-and-1-21-1-released/16 for config.g files
+- Retry after SD card error?
+
+Other:
+- @wilriker PR for M106 PWM limit
+- [done, test] display mutex owners in task diagnostics
+
+Planned for 2.02:
+- WiFi continuous auto reconnect, or extra M552 parameter? See https://forum.duet3d.com/topic/5765/wifi-module-auto-reconnect
+- Better dead time measurement during auto tuning. Measure both turn-on and turn-off?
 - Bezier speed curves or other S-curve acceleration, e.g. look at https://github.com/MarlinFirmware/Marlin/pull/10373/files
-- Option to send M280 servo commands just a few times instead of continuously, for E3D and BLTouch
+- Option to send M280 servo commands just a few times instead of continuously, for E3D
 - Recovery from SD card errors during a print (Dan)
 - Danny's modified SCARA kinematics (workpiece is on a plate, extruder is fixed)
 - Laser support via G1 S parameter, see https://forum.duet3d.com/topic/4702/laser-cnc-support-in-rrf-gcode-semantics/4
 - Look at pushover notification support, https://forum.duet3d.com/topic/169/notification-via-pushover-or-other-service/45
 - M3 R parameter so it can restore the spinder/laser after a pause (https://forum.duet3d.com/topic/5418/cnc-laser-m3-unpause-r-parameter)
 - M81: don't give low voltage warnings when main power has just been turned off
-- Does bltouch need a default recovery time?
-- Should bltouch use digital probe mode? Some users having problems with P25 in G31 command.
 - M584 when assigning a drive, unmap any existing assignment. Also allow an axis to be mapped to driver -1.
 - Add S4 option to G1 command, like S1 but no endstop checks (needed for CoreXY, CoreXZ)
 - CNC: look at G17/18/19, see https://forum.duet3d.com/topic/4669/ooznest-workbee-screw-driven
@@ -208,8 +249,9 @@ Planned for 2.01:
 - Apostrophe in quoted filename: can we make apostrophe special in SSIDs/passwords but not filenames?
 - If wifi module gets stuck in starting or changing mode state, reset it again
 - If wifi disconnects when in client mode, keep retrying the connection
+- M140 command to set default bed heaters for M140 S commands (e.g. M140 P0:1:2)
 
-Other (some of these may be in 2.01):
+Other (some of these may be in 2.02):
 - Update PanelDue firmware via Duet
 - Use Heat task to read DHT sensors?
 - Add option R4 to M915 command, to do an emergency stop (useful for Z motor)
@@ -282,16 +324,11 @@ p->ref == 1 in WiFi
 
 Later versions:
 
-- Multiple bed heaters, https://www.duet3d.com/forum/thread.php?pid=33903#p33903
-- Use M140H1:2:3 to set multiple bed heater numbers
 - Check https://www.duet3d.com/forum/thread.php?pid=33951#p33951
 
 - Option to not broadcast SSID?
-- On file read error during SD card print, treat like a temperature fault
 - Support faster homing by using interrupts to check homing switch states
 - Allow manual bed probing to be aborted
-- Implement G1 S4? (like S2 but always relative)
-- Add work coordinates? https://www.duet3d.com/forum/thread.php?pid=27128#p27128
 - Don't do pressure advance during accel/decel of sequences of short segments
 - Arc move with same finish and start coordinates to do complete circle
 - Add T parameter to M207

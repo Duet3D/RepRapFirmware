@@ -54,7 +54,7 @@ public:
 	const char *c_str() const { return storage; }
 	size_t strlen() const { return Strnlen(storage, Len); }
 	bool IsEmpty() const { return storage[0] == 0; }
-//	char *Pointer() { return storage; }
+	bool IsFull() const { return strlen() == Len; }
 	char& operator[](size_t index) { return storage[index]; }
 	char operator[](size_t index) const { return storage[index]; }
 	constexpr size_t Capacity() const { return Len; }
@@ -74,6 +74,7 @@ public:
 	bool ConstantTimeEquals(String<Len> other) const;
 
 	void Truncate(size_t len);
+	void Erase(size_t pos, size_t count = 1);
 
 private:
 	char storage[Len + 1];
@@ -130,6 +131,20 @@ template<size_t Len> void String<Len>::Truncate(size_t len)
 	if (len < strlen())
 	{
 		storage[len] = 0;
+	}
+}
+
+template<size_t Len> void String<Len>::Erase(size_t pos, size_t count)
+{
+	const size_t len = strlen();
+	if (pos < len)
+	{
+		while (pos + count < len)
+		{
+			storage[pos] = storage[pos + count];
+			++pos;
+		}
+		storage[pos] = 0;
 	}
 }
 

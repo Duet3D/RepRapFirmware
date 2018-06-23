@@ -201,7 +201,7 @@ void NetworkGCodeInput::Put(MessageType mtype, const char *buf)
 
 NetworkGCodeInput::NetworkGCodeInput() : RegularGCodeInput()
 {
-	bufMutex.Create();
+	bufMutex.Create("NetworkGCodeInput");
 }
 
 // Fill a GCodeBuffer with the last available G-code

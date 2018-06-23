@@ -67,8 +67,8 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 // Drivers
 constexpr Pin GlobalTmcEnablePin = 1;				// The pin that drives ENN of all drivers
 constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, 63, 61 };
-constexpr Pin STEP_PINS[DRIVES] = { 56, 38, 64, 40, 41, 67, 60 };
-constexpr Pin DIRECTION_PINS[DRIVES] = { 54, 8, 30, 33, 42, 18, 57 };
+constexpr Pin STEP_PINS[DRIVES] = { 56, 38, 64, 40, 41, 67, 57 };
+constexpr Pin DIRECTION_PINS[DRIVES] = { 54, 8, 30, 33, 42, 18, 60 };
 constexpr Pin DriverMuxPins[3] = { 50, 52, 53 };	// Pins that control the UART multiplexer, LSB first
 
 // Endstops

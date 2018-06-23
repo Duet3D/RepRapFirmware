@@ -269,6 +269,19 @@ float GCodes::FractionOfFilePrinted() const
 	return (float)(fileBeingPrinted.GetPosition() - bytesCached) / (float)len;
 }
 
+// Return the current position of the file being printed in bytes
+FilePosition GCodes::GetFilePosition() const
+{
+	const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
+	if (!fileBeingPrinted.IsLive())
+	{
+		return 0;
+	}
+
+    const FilePosition bytesCached = fileGCode->IsDoingFileMacro() ? 0: fileInput->BytesCached();
+    return fileBeingPrinted.GetPosition() - bytesCached;
+}
+
 // Start running the config file
 // We use triggerCGode as the source to prevent any triggers being executed until we have finished
 bool GCodes::RunConfigFile(const char* fileName)
@@ -859,18 +872,21 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				g30zHeightErrorSum += g30zHeightError;
 			}
 
-			// Move back up to the dive height
-			moveBuffer.SetDefaults();
-			moveBuffer.coords[Z_AXIS] = platform.GetZProbeStartingHeight();
-			moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
-			NewMoveAvailable(1);
 			gb.AdvanceState();
-
 			if (platform.GetZProbeType() == ZProbeType::blTouch)
 			{
 				DoFileMacro(gb, RETRACTPROBE_G, false);			// bltouch needs to be retracted when it triggers
 			}
 		}
+		break;
+
+	case GCodeState::gridProbing4a:	// ready to lift the probe after probing the current grid probe point
+		// Move back up to the dive height
+		moveBuffer.SetDefaults();
+		moveBuffer.coords[Z_AXIS] = platform.GetZProbeStartingHeight();
+		moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
+		NewMoveAvailable(1);
+		gb.AdvanceState();
 		break;
 
 	case GCodeState::gridProbing5:	// finished probing a point and moved back to the dive height
@@ -1131,18 +1147,21 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				}
 			}
 
-			// Move back up to the dive height before we change anything, in particular before we adjust leadscrews
-			moveBuffer.SetDefaults();
-			moveBuffer.coords[Z_AXIS] = platform.GetZProbeStartingHeight();
-			moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
-			NewMoveAvailable(1);
 			gb.AdvanceState();
-
 			if (platform.GetZProbeType() == ZProbeType::blTouch)
 			{
-				DoFileMacro(gb, RETRACTPROBE_G, false);						// bltouch needs to be retracted when it triggers
+				DoFileMacro(gb, RETRACTPROBE_G, false);							// bltouch needs to be retracted when it triggers
 			}
 		}
+		break;
+
+	case GCodeState::probingAtPoint4a:
+		// Move back up to the dive height before we change anything, in particular before we adjust leadscrews
+		moveBuffer.SetDefaults();
+		moveBuffer.coords[Z_AXIS] = platform.GetZProbeStartingHeight();
+		moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
+		NewMoveAvailable(1);
+		gb.AdvanceState();
 		break;
 
 	case GCodeState::probingAtPoint5:
@@ -2608,7 +2627,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 // Adjust the move parameters to account for segmentation and/or part of the move having been done already
 void GCodes::FinaliseMove(GCodeBuffer& gb)
 {
-	moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0);
+	moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0) && !doingArcMove;		// pausing during an arc move isn't save because the arc centre get recomputed incorrectly when we resume
 	moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;
 
 	if (totalSegments > 1)
@@ -2663,6 +2682,10 @@ bool GCodes::ReadMove(RawMove& m)
 			}
 		}
 		m.proportionLeft = 0.0;
+		if (doingArcMove)
+		{
+			m.canPauseAfter = true;			// we can pause after the final segment of an arc move
+		}
 		ClearMove();
 	}
 	else
@@ -4721,7 +4744,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 			if (lastAuxStatusReportType >= 0)
 			{
 				// Send a standard status response for PanelDue
-				OutputBuffer * const statusBuf = GenerateJsonStatusResponse(0, -1, ResponseSource::AUX);
+				OutputBuffer * const statusBuf = GenerateJsonStatusResponse(lastAuxStatusReportType, -1, ResponseSource::AUX);
 				if (statusBuf != nullptr)
 				{
 					platform.AppendAuxReply(statusBuf, true);
