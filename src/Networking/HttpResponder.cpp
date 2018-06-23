@@ -1296,7 +1296,7 @@ void HttpResponder::Diagnostics(MessageType mt) const
 
 /*static*/ void HttpResponder::InitStatic()
 {
-	gcodeReplyMutex.Create();
+	gcodeReplyMutex.Create("HttpGCodeReply");
 }
 
 // This is called from the GCodes task to store a response, which is picked up by the Network task

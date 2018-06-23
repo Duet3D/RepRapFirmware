@@ -50,23 +50,25 @@ enum class GCodeState : uint8_t
 	stopping,
 	sleeping,
 
-	// These next 7 must be contiguous
+	// These next 9 must be contiguous
 	gridProbing1,
 	gridProbing2a,
 	gridProbing2b,
 	gridProbing3,
 	gridProbing4,
+	gridProbing4a,
 	gridProbing5,
 	gridProbing6,
 	gridProbing7,
 
-	// These next 9 must be contiguous
+	// These next 10 must be contiguous
 	probingAtPoint0,
 	probingAtPoint1,
 	probingAtPoint2a,
 	probingAtPoint2b,
 	probingAtPoint3,
 	probingAtPoint4,
+	probingAtPoint4a,
 	probingAtPoint5,
 	probingAtPoint6,
 	probingAtPoint7,

@@ -28,21 +28,34 @@ class Mutex
 public:
 	Mutex() { handle = nullptr; }
 
-	void Create();
+	void Create(const char *pName);
 	bool Take(uint32_t timeout = TimeoutUnlimited) const;
 	bool Release() const;
 	TaskHandle GetHolder() const;
 
-	static constexpr uint32_t TimeoutUnlimited = 0xFFFFFFFF;
+#ifdef RTOS
+	const Mutex *GetNext() const { return next; }
+	const char *GetName() const { return name; }
+#endif
 
 	Mutex(const Mutex&) = delete;
 	Mutex& operator=(const Mutex&) = delete;
+
+	static constexpr uint32_t TimeoutUnlimited = 0xFFFFFFFF;
+
+#ifdef RTOS
+	static const Mutex *GetMutexList() { return mutexList; }
+#endif
 
 private:
 
 #ifdef RTOS
 	SemaphoreHandle_t handle;
+	Mutex *next;
+	const char *name;
 	StaticSemaphore_t storage;
+
+	static Mutex *mutexList;
 #else
 	void *handle;
 #endif
@@ -60,7 +73,7 @@ public:
 	void Suspend() const { vTaskSuspend(handle); }
 	const TaskBase *GetNext() const { return next; }
 
-	TaskBase(const TaskBase&) = delete;				// it's not save to copy these
+	TaskBase(const TaskBase&) = delete;				// it's not safe to copy these
 	TaskBase& operator=(const TaskBase&) = delete;	// it's not safe to assign these
 	// Ideally we would declare the destructor as deleted too, because it's unsafe to delete these because they are linked together via the 'next' field.
 	// But that prevents us from declaring static instances of tasks.

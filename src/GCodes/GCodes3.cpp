@@ -173,8 +173,9 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 // Offset the axes by the X, Y, and Z amounts in the M226 code in gb. The actual movement occurs on the next move command.
 // It's not clear from the description in the reprap.org wiki whether offsets are cumulative or not. We now assume they are not.
 // Note that M206 offsets are actually negative offsets.
-GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb)
+GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 {
+	bool seen = false;
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
 		if (gb.Seen(axisLetters[axis]))
@@ -185,6 +186,22 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb)
 			axisOffsets[axis]
 #endif
 						 = -(gb.GetFValue() * distanceScale);
+			seen = true;
+		}
+	}
+
+	if (!seen)
+	{
+		reply.printf("Axis offsets:");
+		for (size_t axis = 0; axis < numVisibleAxes; axis++)
+		{
+			reply.catf(" %c%.2f", axisLetters[axis],
+#if SUPPORT_WORKPLACE_COORDINATES
+				-(double)(workplaceCoordinates[0][axis]/distanceScale)
+#else
+				-(double)(axisOffsets[axis]/distanceScale)
+#endif
+													 );
 		}
 	}
 
@@ -230,7 +247,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 				reply.printf("Origin of workplace %" PRIu32 ":", cs);
 				for (size_t axis = 0; axis < numVisibleAxes; axis++)
 				{
-					reply.catf(" %c%.2f", axisLetters[axis], (double)workplaceCoordinates[cs - 1][axis]);
+					reply.catf(" %c%.2f", axisLetters[axis], (double)(workplaceCoordinates[cs - 1][axis]/distanceScale));
 				}
 			}
 			return GCodeResult::ok;

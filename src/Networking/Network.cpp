@@ -59,8 +59,8 @@ Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderT
 // Note that Platform::Init() must be called before this to that Platform::IsDuetWiFi() returns the correct value
 void Network::Init()
 {
-	httpMutex.Create();
-	telnetMutex.Create();
+	httpMutex.Create("HTTP");
+	telnetMutex.Create("Telnet");
 
 #if defined(DUET_NG)
 	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new W5500Interface(platform));

@@ -91,8 +91,8 @@ extern "C" void AppMain()
 
 extern "C" void MainTask(void *pvParameters)
 {
-	mallocMutex.Create();
-	spiMutex.Create();
+	mallocMutex.Create("Malloc");
+	spiMutex.Create("SPI");
 #endif
 	reprap.Init();
 	for (;;)
@@ -188,6 +188,7 @@ namespace Tasks
 		}
 
 #ifdef RTOS
+		p.Message(mtype, "Tasks:");
 		for (const TaskBase *t = TaskBase::GetTaskList(); t != nullptr; t = t->GetNext())
 		{
 			TaskStatus_t taskDetails;
@@ -197,9 +198,28 @@ namespace Tasks
 												: (taskDetails.eCurrentState == eBlocked) ? "blocked"
 													: (taskDetails.eCurrentState == eSuspended) ? "suspended"
 														: "invalid";
-			p.MessageF(mtype, "Task %s %s, free stack %u\n",
+			p.MessageF(mtype, " %s(%s,%u)",
 				taskDetails.pcTaskName, stateText, (unsigned int)(taskDetails.usStackHighWaterMark * sizeof(StackType_t)));
 		}
+		p.Message(mtype, "\nMutexes:");
+
+		for (const Mutex *m = Mutex::GetMutexList(); m != nullptr; m = m->GetNext())
+		{
+			const TaskHandle holder = m->GetHolder();
+			TaskStatus_t taskDetails;
+			const char *holderText;
+			if (holder == nullptr)
+			{
+				holderText = "null";
+			}
+			else
+			{
+				vTaskGetInfo(holder, &taskDetails, pdTRUE, eInvalid);
+				holderText = taskDetails.pcTaskName;
+			}
+			p.MessageF(mtype, " %s(%s)", m->GetName(), holderText);
+		}
+		p.MessageF(mtype, "\n");
 #endif
 	}
 
@@ -216,7 +236,7 @@ namespace Tasks
 #ifdef RTOS
 
 static StaticTask_t xIdleTaskTCB;
-static StackType_t uxIdleTaskStack[ configMINIMAL_STACK_SIZE ];
+static StackType_t uxIdleTaskStack[configMINIMAL_STACK_SIZE];
 
 extern "C" void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer,
                                     StackType_t **ppxIdleTaskStackBuffer,
@@ -233,7 +253,7 @@ extern "C" void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuff
 }
 
 static StaticTask_t xTimerTaskTCB;
-static StackType_t uxTimerTaskStack[ configTIMER_TASK_STACK_DEPTH ];
+static StackType_t uxTimerTaskStack[configTIMER_TASK_STACK_DEPTH];
 
 extern "C" void vApplicationGetTimerTaskMemory( StaticTask_t **ppxTimerTaskTCBBuffer,
                                      StackType_t **ppxTimerTaskStackBuffer,

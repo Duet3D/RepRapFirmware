@@ -4,18 +4,22 @@
  *  Created on: 4 Apr 2018
  *      Author: David
  *
- * This is a replacement for strtof() in the C standard library. That version has two problems:
+ * This is a replacement for strtod() and strtof() in the C standard library. Those versions have two problems:
  * 1. It is not reentrant. We can make it so by defining configUSE_NEWLIB_REENTRANT in FreeRTOS, but that makes the tasks much bigger.
  * 2. It allocates and releases heap memory, which is not nice.
  *
  * Limitations of this version
  * 1. Rounding to nearest double may not always be correct.
- * 2. May not handle overflow for stupidly large numbers correctly.
+ * 2. Does not handle overflow for stupidly large numbers correctly.
  */
 
 #include <cctype>
 #include <cmath>
 #include <climits>
+#include <cstdlib>
+
+#include "SafeStrtod.h"
+#undef strtoul		// Undo the macro definition of strtoul in SafeStrtod.h so that we can call it in this file
 
 double SafeStrtod(const char *s, const char **p)
 {
@@ -129,6 +133,42 @@ double SafeStrtod(const char *s, const char **p)
 float SafeStrtof(const char *s, const char **p)
 {
 	return (float)SafeStrtod(s, p);
+}
+
+unsigned long SafeStrtoul(const char *s, const char **endptr, int base)
+{
+	// strtoul() accepts a leading minus-sign, which we don't want to allow
+	while (*s == ' ' || *s == '\t')
+	{
+		++s;
+	}
+	if (*s == '-')
+	{
+		if (endptr != nullptr)
+		{
+			*endptr = s;
+		}
+		return 0;
+	}
+	return strtoul(s, const_cast<char**>(endptr), base);
+}
+
+unsigned long SafeStrtoul(char *s, char **endptr, int base)
+{
+	// strtoul() accepts a leading minus-sign, which we don't want to allow
+	while (*s == ' ' || *s == '\t')
+	{
+		++s;
+	}
+	if (*s == '-')
+	{
+		if (endptr != nullptr)
+		{
+			*endptr = s;
+		}
+		return 0;
+	}
+	return strtoul(s, endptr, base);
 }
 
 // End

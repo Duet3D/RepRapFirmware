@@ -266,6 +266,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	}
 
 	xyMoving = false;
+	bool axesMoving = false;
 	bool extruding = false;												// we set this true if extrusion was commanded, even if it is too small to do
 	bool realMove = false;
 	float accelerations[DRIVES];
@@ -345,6 +346,10 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 					}
 				}
 			}
+			else
+			{
+				axesMoving = true;
+			}
 		}
 	}
 
@@ -413,18 +418,25 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 		// This means that the user gets the feed rate that he asked for. It also makes the delta calculations simpler.
 		// First do the bed tilt compensation for deltas.
 		directionVector[Z_AXIS] += (directionVector[X_AXIS] * k.GetTiltCorrection(X_AXIS)) + (directionVector[Y_AXIS] * k.GetTiltCorrection(Y_AXIS));
-
 		totalDistance = NormaliseXYZ();
+	}
+	else if (axesMoving)
+	{
+		// Some axes are moving, but not axes that X or Y are mapped to. Normalise the movement to the vector sum of the axes that are moving.
+		totalDistance = Normalise(directionVector, DRIVES, numAxes);
 	}
 	else
 	{
-		// Extruder-only movement, or movement of additional axes, or a combination.
-		// Currently we normalise vector sum of all drive movement to unit length.
-		// Alternatives would be:
-		// 1. Normalise the largest one to unit length. This means that when retracting multiple filaments, they all get the requested retract speed.
-		// 2. Normalise the sum to unit length. This means that when we use mixing, we get the requested extrusion rate at the nozzle.
-		// 3. Normalise the sum to the sum of the mixing coefficients (which we would have to include in the move details).
-		totalDistance = Normalise(directionVector, DRIVES, DRIVES);
+		// Extruder-only movement. Normalise so that the magnitude is the total absolute movement. This gives the correct feed rate for mixing extruders.
+		totalDistance = 0.0;
+		for (size_t d = 0; d < DRIVES; d++)
+		{
+			totalDistance += fabs(directionVector[d]);
+		}
+		if (totalDistance > 0.0)		// should always be true
+		{
+			Scale(directionVector, 1.0/totalDistance, DRIVES);
+		}
 	}
 
 	// 5. Compute the maximum acceleration available

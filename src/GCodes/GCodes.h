@@ -296,7 +296,7 @@ private:
 	void FinishWrite(GCodeBuffer& gb);											// Finish writing to the file and respond
 	bool SendConfigToLine();													// Deal with M503
 
-	GCodeResult OffsetAxes(GCodeBuffer& gb);									// Set offsets
+	GCodeResult OffsetAxes(GCodeBuffer& gb, const StringRef& reply);			// Set/report offsets
 
 #if SUPPORT_WORKPLACE_COORDINATES
 	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute);	// Set workspace coordinates

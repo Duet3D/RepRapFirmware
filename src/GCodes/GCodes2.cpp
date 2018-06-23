@@ -1931,7 +1931,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 206: // Offset axes
-		result = OffsetAxes(gb);
+		result = OffsetAxes(gb, reply);
 		break;
 
 	case 207: // Set firmware retraction details
@@ -2514,7 +2514,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			const int type = gb.Seen('S') ? gb.GetIValue() : 0;
 			const int seq = gb.Seen('R') ? gb.GetIValue() : -1;
-			if (&gb == auxGCode)
+			if (&gb == auxGCode && (type == 0 || type == 2))
 			{
 				lastAuxStatusReportType = type;
 			}

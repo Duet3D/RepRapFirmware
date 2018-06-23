@@ -82,9 +82,9 @@ Tool * Tool::freelist = nullptr;
 		t = new Tool;
 	}
 
-	if (dCount == 1 || forceFilament)
+	if (dCount == 1 || (dCount > 0 && forceFilament))
 	{
-		// Create only one Filament instance per extruder drive, and only if this tool is assigned to exactly one extruder\
+		// Create only one Filament instance per extruder drive, and only if this tool is assigned to exactly one extruder
 		// This option can be overridden manually though
 		Filament * const filament = Filament::GetFilamentByExtruder(d[0]);
 		t->filament = (filament == nullptr) ? new Filament(d[0]) : filament;

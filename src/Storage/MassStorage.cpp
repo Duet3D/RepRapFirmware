@@ -63,9 +63,12 @@ MassStorage::MassStorage(Platform* p) : freeWriteBuffers(nullptr)
 
 void MassStorage::Init()
 {
+	static const char * const VolMutexNames[] = { "SD0", "SD1" };
+	static_assert(ARRAY_SIZE(VolMutexNames) >= NumSdCards, "Incorrect VolMutexNames array");
+
 	// Create the mutexes
-	fsMutex.Create();
-	dirMutex.Create();
+	fsMutex.Create("FileSystem");
+	dirMutex.Create("DirSearch");
 
 	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
 	{
@@ -79,7 +82,7 @@ void MassStorage::Init()
 		inf.mounting = inf.isMounted = false;
 		inf.cdPin = SdCardDetectPins[card];
 		inf.cardState = (inf.cdPin == NoPin) ? CardDetectState::present : CardDetectState::notPresent;
-		inf.volMutex.Create();
+		inf.volMutex.Create(VolMutexNames[card]);
 	}
 
 	sd_mmc_init(SdWriteProtectPins, SdSpiCSPins);		// initialize SD MMC stack

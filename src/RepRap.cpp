@@ -154,8 +154,8 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 
 void RepRap::Init()
 {
-	toolListMutex.Create();
-	messageBoxMutex.Create();
+	toolListMutex.Create("ToolList");
+	messageBoxMutex.Create("MessageBox");
 
 	platform->Init();
 	network->Init();
@@ -687,7 +687,14 @@ void RepRap::Tick()
 
 			// We now save the stack when we get stuck in a spin loop
 			register const uint32_t * stackPtr asm ("sp");
-			platform->SoftwareReset((uint16_t)SoftwareResetReason::stuckInSpin, stackPtr + 5);
+
+			platform->SoftwareReset((uint16_t)SoftwareResetReason::stuckInSpin,
+#ifdef RTOS
+				stackPtr + 5 + 15			// discard the stack used by the FreeRTOS stack handler and our tick handler
+#else
+				stackPtr + 5				// discard the stack used by our tick handler
+#endif
+				);
 		}
 	}
 }

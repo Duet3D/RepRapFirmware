@@ -291,7 +291,7 @@ void TelnetResponder::ProcessLine()
 
 /*static*/ void TelnetResponder::InitStatic()
 {
-	gcodeReplyMutex.Create();
+	gcodeReplyMutex.Create("TelnetGCodeReply");
 }
 
 /*static*/ void TelnetResponder::HandleGCodeReply(const char *reply)

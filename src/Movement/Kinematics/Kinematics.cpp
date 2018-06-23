@@ -19,6 +19,7 @@
 #include "Platform.h"
 #include "GCodes/GCodes.h"
 #include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodes.h"
 
 const char * const Kinematics::HomeAllFileName = "homeall.g";
 const char * const Kinematics::StandardHomingFileNames[] = AXES_("homex.g", "homey.g", "homez.g", "homeu.g", "homev.g", "homew.g", "homea.g", "homeb.g", "homec.g");
@@ -116,19 +117,20 @@ const char* Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alrea
 	const AxesBitmap homeFirst = AxesToHomeBeforeProbing();
 
 	// Return the homing file for the lowest axis that we have been asked to home
-	const char *configuredAxes = reprap.GetGCodes().GetAxisLetters();
-	const char *lettersToTry = "XYZUVWABC";
+	const char * const axisNames = reprap.GetGCodes().GetAxisLetters();
+	const char lettersToTry[] = "XYZUVWABC";
+	static_assert(ARRAY_SIZE(lettersToTry) >= MaxAxes, "lettersToTry too short");
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		if (IsBitSet(toBeHomed, axis) && (axis != Z_AXIS || !homeZLast || (alreadyHomed & homeFirst) == homeFirst))
 		{
-			for (size_t actualAxis = 0; actualAxis < strlen(lettersToTry); actualAxis++)
-			{
-				if (configuredAxes[axis] == lettersToTry[actualAxis])
-				{
-					return StandardHomingFileNames[actualAxis];
-				}
-			}
+            for (size_t actualAxis = 0; actualAxis < MaxAxes; actualAxis++)
+            {
+                if (axisNames[axis] == lettersToTry[actualAxis])
+                {
+                    return StandardHomingFileNames[actualAxis];
+                }
+            }
 		}
 	}
 

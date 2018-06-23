@@ -71,7 +71,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 // Static initialisation
 /*static*/ void FilamentMonitor::InitStatic()
 {
-	filamentSensorsMutex.Create();
+	filamentSensorsMutex.Create("FilamentSensors");
 }
 
 // Handle M591

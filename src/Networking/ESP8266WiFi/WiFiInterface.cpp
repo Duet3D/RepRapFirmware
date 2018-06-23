@@ -158,6 +158,8 @@ WiFiInterface::WiFiInterface(Platform& p) : platform(p), uploader(nullptr), ftpD
 
 void WiFiInterface::Init()
 {
+	interfaceMutex.Create("WiFi");
+
 	// Make sure the ESP8266 is held in the reset state
 	ResetWiFi();
 	lastTickMillis = millis();
@@ -182,6 +184,8 @@ GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, in
 	else if (protocol < NumProtocols)
 	{
 		const Port portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
+		MutexLocker lock(interfaceMutex);
+
 		if (portToUse != portNumbers[protocol] && state == NetworkState::active)
 		{
 			// We need to shut down and restart the protocol if it is active because the port number has changed
@@ -210,6 +214,8 @@ GCodeResult WiFiInterface::DisableProtocol(NetworkProtocol protocol, const Strin
 {
 	if (protocol < NumProtocols)
 	{
+		MutexLocker lock(interfaceMutex);
+
 		if (state == NetworkState::active)
 		{
 			ShutdownProtocol(protocol);
@@ -225,6 +231,8 @@ GCodeResult WiFiInterface::DisableProtocol(NetworkProtocol protocol, const Strin
 
 void WiFiInterface::StartProtocol(NetworkProtocol protocol)
 {
+	MutexLocker lock(interfaceMutex);
+
 	switch(protocol)
 	{
 	case HttpProtocol:
@@ -246,6 +254,8 @@ void WiFiInterface::StartProtocol(NetworkProtocol protocol)
 
 void WiFiInterface::ShutdownProtocol(NetworkProtocol protocol)
 {
+	MutexLocker lock(interfaceMutex);
+
 	switch(protocol)
 	{
 	case HttpProtocol:
@@ -432,6 +442,8 @@ void WiFiInterface::Stop()
 {
 	if (state != NetworkState::disabled)
 	{
+		MutexLocker lock(interfaceMutex);
+
 		digitalWrite(SamTfrReadyPin, LOW);			// tell the ESP we can't receive
 		digitalWrite(EspResetPin, LOW);				// put the ESP back into reset
 		DisableEspInterrupt();						// ignore IRQs from the transfer request pin
@@ -1534,6 +1546,8 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		}
 		return ResponseNetworkDisabled;
 	}
+
+	MutexLocker lock(interfaceMutex);
 
 	if (transferPending)
 	{
