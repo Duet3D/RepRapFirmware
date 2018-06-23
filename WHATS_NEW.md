@@ -16,7 +16,7 @@ Bug fixes:
 - M206 with no parameters didn't report the current axis offsets
 - During heating, the firmware returned M408 S0 responses to the PanelDue port even if the last request was M408 S2
 - Fixed VBUS detection (thanks chrishamm)
-- If the resume threshold in the M911 command was set higher than the supply voltage then the save-on-power-off mechanism never got primed. It will now prime at thwe auto-save threshold plus 0.5V or the resume threshold, whichever is lower.
+- If the resume threshold in the M911 command was set higher than the supply voltage then the save-on-power-off mechanism never got primed. It will now prime at the auto-save threshold plus 0.5V or the resume threshold, whichever is lower.
 - Fixed "2dtstc2diva=u" in debug printout
 - Where a G- or M-code command parameter was supposed to accept unsigned values only, if a negative value was supplied then it was accepted and converted to a large unsigned value
 
