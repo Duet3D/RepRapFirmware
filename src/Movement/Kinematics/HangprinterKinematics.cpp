@@ -241,6 +241,8 @@ inline float HangprinterKinematics::LineLengthSquared(const float machinePos[3],
 // Convert Cartesian coordinates to motor coordinates, returning true if successful
 bool HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const
 {
+    // Geometry of hangprinter makes fsquare(anchorABC[Z_AXIS] - machinePos[Z_AXIS]) the smallest term in the sum.
+    // Starting sum with smallest number gives smallest roundoff error.
 	const float aSquared = LineLengthSquared(machinePos, anchorA);
 	const float bSquared = LineLengthSquared(machinePos, anchorB);
 	const float cSquared = LineLengthSquared(machinePos, anchorC);
