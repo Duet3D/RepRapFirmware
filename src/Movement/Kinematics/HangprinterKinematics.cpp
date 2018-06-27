@@ -251,10 +251,10 @@ bool HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], cons
 							+ fsquare(anchorDz - machinePos[Z_AXIS]);
 	if (aSquared > 0.0 && bSquared > 0.0 && cSquared > 0.0 && dSquared > 0.0)
 	{
-		motorPos[A_AXIS] = lrintf(sqrtf(aSquared) * stepsPerMm[A_AXIS]);
-		motorPos[B_AXIS] = lrintf(sqrtf(bSquared) * stepsPerMm[B_AXIS]);
-		motorPos[C_AXIS] = lrintf(sqrtf(cSquared) * stepsPerMm[C_AXIS]);
-		motorPos[D_AXIS] = lrintf(sqrtf(dSquared) * stepsPerMm[D_AXIS]);
+		motorPos[A_AXIS] = lrintf(k0[A_AXIS] * (sqrtf(k1[A_AXIS] + sqrtf(aSquared) * k2[A_AXIS]) - sqrtk1[A_AXIS]));
+		motorPos[B_AXIS] = lrintf(k0[B_AXIS] * (sqrtf(k1[B_AXIS] + sqrtf(bSquared) * k2[B_AXIS]) - sqrtk1[B_AXIS]));
+		motorPos[C_AXIS] = lrintf(k0[C_AXIS] * (sqrtf(k1[C_AXIS] + sqrtf(cSquared) * k2[C_AXIS]) - sqrtk1[C_AXIS]));
+		motorPos[D_AXIS] = lrintf(k0[D_AXIS] * (sqrtf(k1[D_AXIS] + sqrtf(dSquared) * k2[D_AXIS]) - sqrtk1[D_AXIS]));
 		return true;
 	}
 	return false;
@@ -263,7 +263,11 @@ bool HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], cons
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
 void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
 {
-	InverseTransform(motorPos[A_AXIS]/stepsPerMm[A_AXIS], motorPos[B_AXIS]/stepsPerMm[B_AXIS], motorPos[C_AXIS]/stepsPerMm[C_AXIS], machinePos);
+	InverseTransform(
+		(fsquare(motorPos[A_AXIS]/k0[A_AXIS] + sqrtk1[A_AXIS]) - k1[A_AXIS])/k2[A_AXIS],
+		(fsquare(motorPos[B_AXIS]/k0[B_AXIS] + sqrtk1[B_AXIS]) - k1[B_AXIS])/k2[B_AXIS],
+		(fsquare(motorPos[C_AXIS]/k0[C_AXIS] + sqrtk1[C_AXIS]) - k1[C_AXIS])/k2[C_AXIS],
+		machinePos);
 }
 
 // Return true if the specified XY position is reachable by the print head reference point.
