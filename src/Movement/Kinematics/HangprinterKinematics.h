@@ -62,6 +62,11 @@ private:
 	float anchorA[3], anchorB[3], anchorC[3];				// XYZ coordinates of the anchors
 	float anchorDz;
 	float printRadius;
+	// Line buildup compensation
+	float spoolBuildupFactor;
+	float mountedLine[HANGPRINTER_AXES], spoolRadii[HANGPRINTER_AXES];
+	uint32_t mechanicalAdvantage[HANGPRINTER_AXES], actionPoints[HANGPRINTER_AXES];
+	uint32_t motorGearTeeth[HANGPRINTER_AXES], spoolGearTeeth[HANGPRINTER_AXES], fullStepsPerRevolution[HANGPRINTER_AXES];
 
 	// Derived parameters
 	float printRadiusSquared;
@@ -70,6 +75,7 @@ private:
 	float Yab, Ybc, Yca;
 	float Zab, Zbc, Zca;
 	float P, Q, R, P2, U, A;
+	float k0[HANGPRINTER_AXES], k1[HANGPRINTER_AXES], k2[HANGPRINTER_AXES], sqrtk1[HANGPRINTER_AXES], lineLengthsOrigin[HANGPRINTER_AXES]; // For line buildup compensation
 
 	bool doneAutoCalibration;							// True if we have done auto calibration
 };

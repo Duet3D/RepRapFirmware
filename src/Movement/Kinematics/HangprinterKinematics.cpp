@@ -29,11 +29,39 @@ HangprinterKinematics::HangprinterKinematics()
 
 void HangprinterKinematics::Init()
 {
-	anchorDz = DefaultAnchorDz;
-	printRadius = DefaultPrintRadius;
+	/* Naive buildup factor calculation (assumes cylindrical, straight line)
+	 * line diameter: 0.5 mm
+	 * spool height: 8.0 mm
+	 * (line_cross_section_area)/(height*pi): ((0.5/2)*(0.5/2)*pi)/(8.0*pi) = 0.0078 mm
+	 * Default buildup factor for 0.50 mm FireLine: 0.0078
+	 * Default buildup factor for 0.39 mm FireLine: 0.00475
+	 * In practice you might want to compensate a bit more or a bit less */
+	constexpr float DefaultSpoolBuildupFactor = 0.7;
+	/* Total length of lines on each spool
+	 * Default assumes all six abc-lines are cut to length 7500 mm,
+	 * and the three D lines to be cut to 4000 mm*/
+	constexpr float DefaultMountedLine[4] = { 7500.0, 7500.0, 7500.0, 4000.0};
+	/* Measure and set spool radii with M669 to achieve better accuracy */
+	constexpr float DefaultSpoolRadii[4] = { 55.0, 55.0, 55.0, 55.0};
+	/* If axis runs lines back through pulley system, set mechanical advantage accordingly with M669 */
+	constexpr uint32_t DefaultMechanicalAdvantage[4] = { 1, 1, 1, 1};
+	constexpr uint32_t DefaultActionPoints[4] = { 2, 2, 2, 3};
+	constexpr uint32_t DefaultMotorGearTeeth[4] = {  10,  10,  10,  10};
+	constexpr uint32_t DefaultSpoolGearTeeth[4] = { 100, 100, 100, 100};
+	constexpr uint32_t DefaultFullStepsPerRevolution[4] = { 200, 200, 200, 200};
 	ARRAY_INIT(anchorA, DefaultAnchorA);
 	ARRAY_INIT(anchorB, DefaultAnchorB);
 	ARRAY_INIT(anchorC, DefaultAnchorC);
+	anchorDz = DefaultAnchorDz;
+	printRadius = DefaultPrintRadius;
+	spoolBuildupFactor = DefaultSpoolBuildupFactor;
+	ARRAY_INIT(mountedLine, DefaultMountedLine);
+	ARRAY_INIT(spoolRadii, DefaultSpoolRadii);
+	ARRAY_INIT(mechanicalAdvantage, DefaultmechanicalAdvantage);
+	ARRAY_INIT(actionPoints, DefaultActionPoints);
+	ARRAY_INIT(motorGearTeeth, DefaultMotorGearTeeth);
+	ARRAY_INIT(spoolGearTeeth, DefaultSpoolGearTeeth);
+	ARRAY_INIT(fullStepsPerRevolution, DefaultFullStepsPerRevolution);
 	doneAutoCalibration = false;
 	Recalc();
 }
@@ -72,6 +100,48 @@ void HangprinterKinematics::Recalc()
 		  ) * 2;
 	U = (anchorA[2] * P2) + (anchorA[0] * Q * P) + (anchorA[1] * R * P);
 	A = (P2 + fsquare(Q) + fsquare(R)) * 2;
+
+	#define HYP3D(x,y,z) sqrtf(fsquare(x)+fsquare(y)+fsquare(z))
+	lineLengthsOrigin[A_AXIS] = HYP3D(anchorA[0], anchorA[1], anchorA[2]);
+	lineLengthsOrigin[B_AXIS] = HYP3D(anchorB[0], anchorB[1], anchorB[2]);
+	lineLengthsOrigin[C_AXIS] = HYP3D(anchorC[0], anchorC[1], anchorC[2]);
+	lineLengthsOrigin[D_AXIS] = anchorDz;
+
+	// Line buildup compensation
+	float stepsPerUnitTimesRTmp[HANGPRINTER_AXES], nrLinesDirTmp[HANGPRINTER_AXES], spoolRadiiSqTmp[HANGPRINTER_AXES], lineOnSpoolOriginTmp[HANGPRINTER_AXES];
+	uint32_t stepsPerMotorRevolution[HANGPRINTER_AXES];
+	bool dummy;
+	for (size_t i = 0; i < HANGPRINTER_AXES; i++)
+	{
+		stepsPerMotorRevolution[i] = fullStepsPerRevolution[i] * platform.GetMicrostepping(i, dummy);
+		stepsPerUnitTimesRTmp[i] = ((float)(mechanicalAdvantage[i]) * stepsPerMotorRevolution[i] * spoolGearTeeth[i]) / (2.0 * Pi * motorGearTeeth[i]);
+		nrLinesDirTmp[i] = mechanicalAdvantage[i]*actionPoints[i];
+		spoolRadiiSqTmp[i] = spoolRadii[i] * spoolRadii[i];
+		k2[i] = -(float)nrLinesDirTmp[i] * spoolBuildupFactor;
+		k0[i] = 2.0 * stepsPerUnitTimesRTmp[i] / k2[i];
+	}
+
+	/* Assumes spools are mounted near D-anchor in ceiling
+	 * And that extra lines from pulley system (mechanical advantage)
+	 * only doubles the lines between mover and anchor */
+	lineOnSpoolOriginTmp[A_AXIS] = actionPoints[A_AXIS] * mountedLine[A_AXIS]          /* All the line */
+		- actionPointsTmp[A_AXIS] * HYP3D(anchorA[0], anchorA[1], anchorDz - anchorA[2]) /* Minus line between A anchor and ceiling unit */
+		- nrLinesDirTmp[A_AXIS] * lineLengthsOrigin[A_AXIS];                             /* ... and minus line between mover at origin and A anchor */
+	lineOnSpoolOriginTmp[B_AXIS] = actionPoints[B_AXIS] * mountedLine[B_AXIS]
+		- actionPoints[B_AXIS] * HYP3D(anchorB[0], anchorB[1], anchorDz - anchorB[2])
+		- nrLinesDirTmp[B_AXIS] * lineLengthsOrigin[B_AXIS];
+	lineOnSpoolOriginTmp[C_AXIS] = actionPoints[C_AXIS] * mountedLine[C_AXIS]
+		- actionPoints[C_AXIS] * HYP3D(anchorC[0], anchorC[1], anchorDz - anchorC[2])
+		- nrLinesDirTmp[C_AXIS] * lineLengthsOrigin[C_AXIS];
+	lineOnSpoolOriginTmp[D_AXIS] = actionPoints[D_AXIS] * mountedLine[D_AXIS]
+		- nrLinesDirTmp[D_AXIS] * lineLengthsOrigin[D_AXIS];
+
+	for (size_t i = 0; i < HANGPRINTER_AXES; i++)
+	{
+		platform.SetDriveStepsPerUnit(i, stepsPerUnitTimesRTmp[i] / sqrtf(spoolBuildupFactor * lineOnSpoolOriginTmp[i] + spoolRadiiSqTmp[i]));
+		k1[i] = spoolBuildupFactor * (lineOnSpoolOriginTmp[i] + nrLinesDirTmp[i] * lineLengthsOrigin[i]) + spoolRadiiSqTmp[i];
+		sqrtk1[i] = sqrtf(k1[i]);
+	}
 }
 
 // Return the name of the current kinematics
@@ -90,22 +160,34 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		bool seenNonGeometry = false;
 		gb.TryGetFValue('S', segmentsPerSecond, seenNonGeometry);
 		gb.TryGetFValue('T', minSegmentLength, seenNonGeometry);
-		if (gb.TryGetFloatArray('A', 3, anchorA, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetFloatArray('B', 3, anchorB, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetFloatArray('C', 3, anchorC, reply, seen))
-		{
-			error = true;
-			return true;
-		}
+
+		#define GET_FLOAT_ARRAY(CHAR_, LEN_, ARR_) do {           \
+		  if(gb.TryGetFloatArray(CHAR_, LEN_, ARR_, reply, seen)) \
+		  {                                                       \
+		    error = true;                                         \
+		    return true;                                          \
+		  } while(0)
+
+		GET_FLOAT_ARRAY('A', 3, anchorA);
+		GET_FLOAT_ARRAY('B', 3, anchorB);
+		GET_FLOAT_ARRAY('C', 3, anchorC);
 		gb.TryGetFValue('D', anchorDz, seen);
+		gb.TryGetFValue('Q', spoolBuildupFactor, seen);
+		GET_FLOAT_ARRAY('W', HANGPRINTER_AXES, mountedLine);
+		GET_FLOAT_ARRAY('R', HANGPRINTER_AXES, spoolRadii);
+
+		#define GET_UI_ARRAY_HPAX(CHAR_, ARR_) do {                        \
+		  if(gb.TryGetUIArray(CHAR_, HANGPRINTER_AXES, ARR_, reply, seen)) \
+		  {                                                                \
+		    error = true;                                                  \
+		    return true;                                                   \
+		  } while(0)
+
+		GET_UI_ARRAY_HPAX('U', mechanicalAdvantage);
+		GET_UI_ARRAY_HPAX('O', actionPoints);
+		GET_UI_ARRAY_HPAX('G', motorGearTeeth);
+		GET_UI_ARRAY_HPAX('H', spoolGearTeeth)
+		GET_UI_ARRAY_HPAX('J', fullStepsPerRevolution)
 
 		if (seen || seenNonGeometry)
 		{
@@ -118,13 +200,29 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		}
 		else if (!gb.Seen('K'))
 		{
-			reply.printf("Kinematics is Hangprinter with ABC anchor coordinates (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f),"
-							"D anchor Z coordinate %.2f, print radius %.1f, segments/sec %d, min. segment length %.2f",
-							(double)anchorA[X_AXIS], (double)anchorA[Y_AXIS], (double)anchorA[Z_AXIS],
-							(double)anchorB[X_AXIS], (double)anchorB[Y_AXIS], (double)anchorB[Z_AXIS],
-							(double)anchorC[X_AXIS], (double)anchorC[Y_AXIS], (double)anchorC[Z_AXIS],
-							(double)anchorDz, (double)printRadius,
-							(int)segmentsPerSecond, (double)minSegmentLength);
+			reply.printf("Kinematics is Hangprinter with ABC anchor coordinates (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f), "
+				"D anchor Z coordinate %.2f, print radius %.1f, segments/sec %d, min. segment length %.2f, "
+				"spool buildup factor %.4f, "
+				"mounted line (%.1f, %.1f, %.1f, %.1f), "
+				"spool radii (%.2f, %.2f, %.2f, %.2f), "
+				"mechanical advantage (%d, %d, %d, %d), "
+				"action points (%d, %d, %d, %d), "
+				"motor gear teeth (%d, %d, %d, %d), "
+				"spool gear teeth (%d, %d, %d, %d), "
+				"full steps per revolution (%d, %d, %d, %d)",
+				(double)anchorA[X_AXIS], (double)anchorA[Y_AXIS], (double)anchorA[Z_AXIS],
+				(double)anchorB[X_AXIS], (double)anchorB[Y_AXIS], (double)anchorB[Z_AXIS],
+				(double)anchorC[X_AXIS], (double)anchorC[Y_AXIS], (double)anchorC[Z_AXIS],
+				(double)anchorDz, (double)printRadius,
+				(int)segmentsPerSecond, (double)minSegmentLength),
+				(double)spoolBuildupFactor,
+				(double)mountedLine[A_AXIS], (double)mountedLine[B_AXIS], (double)mountedLine[C_AXIS], (double)mountedLine[D_AXIS],
+				(double)spoolRadii[A_AXIS], (double)spoolRadii[B_AXIS], (double)spoolRadii[C_AXIS], (double)spoolRadii[D_AXIS],
+				(int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS], (int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS],
+				(int)actionPoints[A_AXIS], (int)actionPoints[B_AXIS], (int)actionPoints[C_AXIS], (int)actionPoints[D_AXIS],
+				(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS], (int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS],
+				(int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS], (int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS],
+				(int)fullStepsPerRevolution[A_AXIS], (int)fullStepsPerRevolution[B_AXIS], (int)fullStepsPerRevolution[C_AXIS], (int)fullStepsPerRevolution[D_AXIS];
 		}
 		return seen;
 	}
