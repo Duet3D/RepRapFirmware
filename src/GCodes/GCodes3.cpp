@@ -709,8 +709,8 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 		return GCodeResult::notFinished;
 	}
 
-	bool seen = false;
-	const char *lettersToTry = "XYZUVWABC";
+	bool seen = false, badDrive = false;
+	const char *lettersToTry = "XYZUVWABCD";
 	char c;
 	while ((c = *lettersToTry) != 0)
 	{
