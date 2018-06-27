@@ -483,6 +483,55 @@ float GCodeBuffer::GetFValue()
 	return 0.0;
 }
 
+// Get a colon-separated list of uints after a key letter
+// If doPad is true then we allow just one element to be given, in which case we fill all elements with that value
+const void GCodeBuffer::GetUIArray(uint32_t arr[], size_t& returnedLength, bool doPad)
+{
+	if (readPointer >= 0)
+	{
+		size_t length = 0;
+		const char *p = gcodeBuffer + readPointer + 1;
+		for (;;)
+		{
+			if (length >= returnedLength)		// array limit has been set in here
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode uint32_t array that is too long: %s\n", gcodeBuffer);
+				readPointer = -1;
+				returnedLength = 0;
+				return;
+			}
+			const char *q;
+			arr[length] = (uint32_t)SafeStrtoul(p, &q);
+			length++;
+			if (*q != LIST_SEPARATOR)
+			{
+				break;
+			}
+			p = q + 1;
+		}
+
+		// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
+		if (doPad && length == 1 && returnedLength > 1)
+		{
+			for (size_t i = 1; i < returnedLength; i++)
+			{
+				arr[i] = arr[0];
+			}
+		}
+		else
+		{
+			returnedLength = length;
+		}
+
+		readPointer = -1;
+	}
+	else
+	{
+		INTERNAL_ERROR;
+		returnedLength = 0;
+	}
+}
+
 // Get a colon-separated list of floats after a key letter
 // If doPad is true then we allow just one element to be given, in which case we fill all elements with that value
 const void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
@@ -886,6 +935,28 @@ bool GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], const S
 	{
 		size_t count = numVals;
 		GetUnsignedArray(vals, count, doPad);
+		if (count == numVals)
+		{
+			seen = true;
+		}
+		else
+		{
+			reply.printf("Wrong number of values after '\''%c'\'', expected %d", c, numVals);
+			return true;
+		}
+	}
+	return false;
+}
+
+// Try to get an int array exactly 'numVals' long after parameter letter 'c'.
+// If the wrong number of values is provided, generate an error message and return true.
+// Else set 'seen' if we saw the letter and value, and return false.
+bool GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad)
+{
+	if (Seen(c))
+	{
+		size_t count = numVals;
+		GetUIArray(vals, count, doPad);
 		if (count == numVals)
 		{
 			seen = true;
