@@ -190,6 +190,7 @@ constexpr size_t MaxFilenameLength = 100;
 #endif
 
 constexpr size_t MaxHeaterNameLength = 20;				// Maximum number of characters in a heater name
+constexpr size_t MaxFanNameLength = 20;					// Maximum number of characters in a fan name
 
 // Output buffer length and number of buffers
 // When using RTOS, it is best if it is possible to fit an HTTP response header in a single buffer. Our headers are currently about 230 bytes long.
