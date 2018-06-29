@@ -27,7 +27,11 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define SUPPORT_ROLAND		0						// set nonzero to support Roland mill
 #define SUPPORT_SCANNER		1						// set zero to disable support for FreeLSS scanners
 #define SUPPORT_IOBITS		1						// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR	1						// set nonzero to support DHT temperature/humidity sensors
+#ifdef RTOS
+# define SUPPORT_DHT_SENSOR	1						// set nonzero to support DHT temperature/humidity sensors
+#else
+# define SUPPORT_DHT_SENSOR	0						// DHT sensors are only supported in RTOS builds
+#endif
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 
 #define USE_CACHE			0						// set nonzero to enable the cache. Disabled this at 1.21RC1 because of doubts about its safety.
