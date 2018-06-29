@@ -116,7 +116,7 @@ void HangprinterKinematics::Recalc()
 	{
 		stepsPerMotorRevolution[i] = fullStepsPerRevolution[i] * platform.GetMicrostepping(i, dummy);
 		stepsPerUnitTimesRTmp[i] = ((float)(mechanicalAdvantage[i]) * stepsPerMotorRevolution[i] * spoolGearTeeth[i]) / (2.0 * Pi * motorGearTeeth[i]);
-		nrLinesDirTmp[i] = mechanicalAdvantage[i]*actionPoints[i];
+		nrLinesDirTmp[i] = mechanicalAdvantage[i] * actionPoints[i];
 		spoolRadiiSqTmp[i] = spoolRadii[i] * spoolRadii[i];
 		k2[i] = -(float)nrLinesDirTmp[i] * spoolBuildupFactor;
 		k0[i] = 2.0 * stepsPerUnitTimesRTmp[i] / k2[i];
