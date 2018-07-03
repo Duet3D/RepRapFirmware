@@ -130,6 +130,10 @@ public:
 	// Override this if the homing buttons are not named after the axes (e.g. SCARA printer)
 	virtual const char* HomingButtonNames() const { return "XYZUVWABC"; }
 
+	// Some gcodes want to refer to each individual movement motor.
+	// Override this to enable parameter names that matches the motor names of your kinematics
+	virtual const char* MachineAxisNames() const { return "XYZ"; }
+
 	// This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 	// If we can't proceed because other axes need to be homed first, return those axes.
 	// If we can proceed with homing some axes, set 'filename' to the name of the homing file to be called and return 0. Optionally, update 'alreadyHomed' to indicate

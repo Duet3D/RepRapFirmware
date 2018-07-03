@@ -30,6 +30,7 @@ public:
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
 	size_t NumHomingButtons(size_t numVisibleAxes) const override { return 0; }
 	const char* HomingButtonNames() const override { return "ABCD"; }
+	const char* MachineAxisNames() const override { return "ABCD"; }
 	HomingMode GetHomingMode() const override { return homeIndividualMotors; }
 	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const override;
 	AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const override;
