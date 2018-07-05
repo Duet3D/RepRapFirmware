@@ -210,7 +210,9 @@ public:
 	bool ReHomeOnStall(DriversBitmap stalledDrivers);
 #endif
 
-	const char *GetAxisLetters() const { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
+	const char *GetAxisLetters() const { return axisLetters; }					// Return a null-terminated string of axis letters indexed by drive
+	const char *GetMachineAxisLetters() const { return machineAxisLetters; }	// Return a null-terminated string of axis letters indexed by drive
+	void SetMachineAxisLetters(const char *letters, uint8_t n);					// Set names of the n machine axes
 	MachineType GetMachineType() const { return machineType; }
 
 #if SUPPORT_12864_LCD
@@ -508,6 +510,7 @@ private:
 	FilePosition fileOffsetToPrint;				// The offset to print from
 
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
+	char machineAxisLetters[MaxAxes + 1];		// Names of the machine's axes, with a null terminator.
 	bool limitAxes;								// Don't think outside the box
 	bool noMovesBeforeHoming;					// Don't allow movement prior to homing the associates axes
 

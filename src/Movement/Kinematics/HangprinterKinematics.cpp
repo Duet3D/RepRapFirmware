@@ -63,6 +63,7 @@ void HangprinterKinematics::Init()
 	ARRAY_INIT(spoolGearTeeth, DefaultSpoolGearTeeth);
 	ARRAY_INIT(fullStepsPerRevolution, DefaultFullStepsPerRevolution);
 	doneAutoCalibration = false;
+	reprap.GetGCodes().SetMachineAxisLetters(MachineAxisNames(), 4);
 	Recalc();
 }
 
@@ -94,10 +95,10 @@ void HangprinterKinematics::Recalc()
 		 - anchorB[2] * Yca
 		) * 2;
 	R = - (  anchorB[0] * Zca
-		   + anchorA[0] * anchorC[2]
-		   + anchorA[2] * anchorC[0]
-		   - anchorB[2] * Xca
-		  ) * 2;
+		 + anchorA[0] * anchorC[2]
+		 + anchorA[2] * anchorC[0]
+		 - anchorB[2] * Xca
+		) * 2;
 	U = (anchorA[2] * P2) + (anchorA[0] * Q * P) + (anchorA[1] * R * P);
 	A = (P2 + fsquare(Q) + fsquare(R)) * 2;
 
@@ -139,6 +140,7 @@ void HangprinterKinematics::Recalc()
 
 	for (size_t i = 0; i < HANGPRINTER_AXES; i++)
 	{
+		// Calculate the steps per unit that is correct at the origin
 		platform.SetDriveStepsPerUnit(i, stepsPerUnitTimesRTmp[i] / sqrtf(spoolBuildupFactor * lineOnSpoolOriginTmp[i] + spoolRadiiSqTmp[i]));
 		k1[i] = spoolBuildupFactor * (lineOnSpoolOriginTmp[i] + nrLinesDirTmp[i] * lineLengthsOrigin[i]) + spoolRadiiSqTmp[i];
 		sqrtk1[i] = sqrtf(k1[i]);
@@ -168,7 +170,7 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		    error = true;                                         \
 		    return true;                                          \
 		  }                                                       \
-    } while(0)
+		} while(0)
 
 		GET_FLOAT_ARRAY('A', 3, anchorA);
 		GET_FLOAT_ARRAY('B', 3, anchorB);
@@ -184,7 +186,7 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		    error = true;                                                  \
 		    return true;                                                   \
 		  }                                                                \
-    } while(0)
+		} while(0)
 
 		GET_UI_ARRAY_HPAX('U', mechanicalAdvantage);
 		GET_UI_ARRAY_HPAX('O', actionPoints);
@@ -203,16 +205,16 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		}
 		else if (!gb.Seen('K'))
 		{
-			reply.printf("Kinematics is Hangprinter with ABC anchor coordinates (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f), "
-				"D anchor Z coordinate %.2f, print radius %.1f, segments/sec %d, min. segment length %.2f, "
-				"spool buildup factor %.4f, "
-				"mounted line (%.1f, %.1f, %.1f, %.1f), "
-				"spool radii (%.2f, %.2f, %.2f, %.2f), "
-				"mechanical advantage (%d, %d, %d, %d), "
-				"action points (%d, %d, %d, %d), "
-				"motor gear teeth (%d, %d, %d, %d), "
-				"spool gear teeth (%d, %d, %d, %d), "
-				"full steps per revolution (%d, %d, %d, %d)",
+			reply.printf("Kinematics is Hangprinter\nAnchor positions:\n%.2f, %.2f, %.2f\n%.2f, %.2f, %.2f\n%.2f, %.2f, %.2f\n"
+				"%.2f\nPrint radius:\n%.1f\nSegments/s:\n%d\nMin segment length:\n%.2f\n"
+				"Spool buildup factor:\n%.4f\n"
+				"Mounted line lengths:\n%.1f, %.1f, %.1f, %.1f\n"
+				"Spool radii:\n%.2f, %.2f, %.2f, %.2f\n"
+				"Mechanical Advantage:\n%d, %d, %d, %d\n"
+				"Action points:\n%d, %d, %d, %d\n"
+				"Motor gear teeth\n%d, %d, %d, %d\n"
+				"Spool gear teeth\n%d, %d, %d, %d\n"
+				"Full steps per revolution\n%d, %d, %d, %d",
 				(double)anchorA[X_AXIS], (double)anchorA[Y_AXIS], (double)anchorA[Z_AXIS],
 				(double)anchorB[X_AXIS], (double)anchorB[Y_AXIS], (double)anchorB[Z_AXIS],
 				(double)anchorC[X_AXIS], (double)anchorC[Y_AXIS], (double)anchorC[Z_AXIS],
@@ -238,14 +240,15 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 // Calculate the square of the line length from a spool from a Cartesian coordinate
 inline float HangprinterKinematics::LineLengthSquared(const float machinePos[3], const float anchor[3]) const
 {
-	return fsquare(anchor[Z_AXIS] - machinePos[Z_AXIS]) + fsquare(anchor[Y_AXIS] - machinePos[Y_AXIS]) + fsquare(anchor[X_AXIS] - machinePos[X_AXIS]);
+    // Geometry of hangprinter makes fsquare(anchorABC[Z_AXIS] - machinePos[Z_AXIS]) the smallest term in the sum.
+    // Geometry also makes machinePos[XY_AXIS] smaller than anchor[XY_AXIS] 5 out of 6 times (exception being anchorA[X_AXIS] = 0.0 by convention).
+    // Starting sum with smallest number gives smallest roundoff error.
+	return fsquare(anchor[Z_AXIS] - machinePos[Z_AXIS]) + fsquare(machinePos[Y_AXIS] - anchor[Y_AXIS]) + fsquare(machinePos[X_AXIS] - anchor[X_AXIS]);
 }
 
 // Convert Cartesian coordinates to motor coordinates, returning true if successful
 bool HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const
 {
-    // Geometry of hangprinter makes fsquare(anchorABC[Z_AXIS] - machinePos[Z_AXIS]) the smallest term in the sum.
-    // Starting sum with smallest number gives smallest roundoff error.
 	const float aSquared = LineLengthSquared(machinePos, anchorA);
 	const float bSquared = LineLengthSquared(machinePos, anchorB);
 	const float cSquared = LineLengthSquared(machinePos, anchorC);

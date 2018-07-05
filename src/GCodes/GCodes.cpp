@@ -121,6 +121,10 @@ void GCodes::Init()
 	axisLetters[0] = 'X';
 	axisLetters[1] = 'Y';
 	axisLetters[2] = 'Z';
+	memset(machineAxisLetters, 0, sizeof(machineAxisLetters));
+	machineAxisLetters[0] = 'X';
+	machineAxisLetters[1] = 'Y';
+	machineAxisLetters[2] = 'Z';
 
 #if HAS_SMART_DRIVERS
 	numExtruders = min<size_t>(MaxExtruders, platform.GetNumSmartDrivers() - XYZ_AXES);	// don't default dumb drivers to extruders because they don't support the same microstepping options
@@ -2073,6 +2077,19 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers)
 }
 
 #endif
+
+void GCodes::SetMachineAxisLetters(const char *letters, uint8_t n)
+{
+	memset(machineAxisLetters, 0, sizeof(machineAxisLetters));
+	if (n >= sizeof(machineAxisLetters)) // Force null termination
+	{
+		n = sizeof(machineAxisLetters) - 1;
+	}
+	for (size_t i = 0; i < n; i++)
+	{
+		machineAxisLetters[i] = letters[i];
+	}
+}
 
 void GCodes::SaveResumeInfo(bool wasPowerFailure)
 {

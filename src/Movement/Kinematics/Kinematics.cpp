@@ -27,6 +27,7 @@ const char * const Kinematics::HomeAllFileName = "homeall.g";
 Kinematics::Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0)
 	: segmentsPerSecond(segsPerSecond), minSegmentLength(minSegLength), useSegmentation(segsPerSecond > 0.0), useRawG0(doUseRawG0), type(t)
 {
+	reprap.GetGCodes().SetMachineAxisLetters(MachineAxisNames(), 3);
 }
 
 // Set or report the parameters from a M665, M666 or M669 command

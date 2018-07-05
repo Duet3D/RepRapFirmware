@@ -40,6 +40,7 @@ void LinearDeltaKinematics::Init()
 		towerX[axis] = towerY[axis] = 0.0;
 	}
 
+	reprap.GetGCodes().SetMachineAxisLetters(MachineAxisNames(), 3);
 	Recalc();
 }
 

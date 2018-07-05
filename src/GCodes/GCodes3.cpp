@@ -731,13 +731,13 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 
 			// Find the drive number allocated to this axis, or allocate a new one if necessary
 			size_t drive = 0;
-			while (drive < numTotalAxes && axisLetters[drive] != c)
+			while (drive < numTotalAxes && machineAxisLetters[drive] != c)
 			{
 				++drive;
 			}
 			if (drive == numTotalAxes && drive < MaxAxes)
 			{
-				axisLetters[drive] = c;								// assign the drive to this drive letter
+				machineAxisLetters[drive] = c;								// assign the drive to this drive letter
 				++numTotalAxes;
 				numVisibleAxes = numTotalAxes;						// assume any new axes are visible unless there is a P parameter
 				float initialCoords[MaxAxes];
@@ -796,7 +796,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 		{
 			reply.cat(' ');
 			const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(drive);
-			char c = axisLetters[drive];
+			char c = machineAxisLetters[drive];
 			for (size_t i = 0; i < axisConfig.numDrivers; ++i)
 			{
 				reply.catf("%c%u", c, axisConfig.driverNumbers[i]);

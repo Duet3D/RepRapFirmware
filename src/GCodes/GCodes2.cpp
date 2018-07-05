@@ -1126,7 +1126,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
-				if (gb.Seen(axisLetters[axis]))
+				if (gb.Seen(machineAxisLetters[axis]))
 				{
 					if (!LockMovementAndWaitForStandstill(gb))
 					{
@@ -1165,7 +1165,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				reply.copy("Steps/mm: ");
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					reply.catf("%c: %.3f, ", axisLetters[axis], (double)platform.DriveStepsPerUnit(axis));
+					reply.catf("%c: %.3f, ", machineAxisLetters[axis], (double)platform.DriveStepsPerUnit(axis));
 				}
 				reply.catf("E:");
 				char sep = ' ';
@@ -1851,7 +1851,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
-				if (gb.Seen(axisLetters[axis]))
+				if (gb.Seen(machineAxisLetters[axis]))
 				{
 					platform.SetAcceleration(axis, gb.GetFValue() * distanceScale);
 					seen = true;
@@ -1875,7 +1875,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				reply.printf("Accelerations: ");
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.Acceleration(axis) / distanceScale));
+					reply.catf("%c: %.1f, ", machineAxisLetters[axis], (double)(platform.Acceleration(axis) / distanceScale));
 				}
 				reply.cat("E:");
 				char sep = ' ';
@@ -1893,7 +1893,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; ++axis)
 			{
-				if (gb.Seen(axisLetters[axis]))
+				if (gb.Seen(machineAxisLetters[axis]))
 				{
 					platform.SetMaxFeedrate(axis, gb.GetFValue() * distanceScale * SecondsToMinutes); // G Code feedrates are in mm/minute; we need mm/sec
 					seen = true;
@@ -1917,7 +1917,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				reply.copy("Maximum feedrates: ");
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.MaxFeedrate(axis) / (distanceScale * SecondsToMinutes)));
+					reply.catf("%c: %.1f, ", machineAxisLetters[axis], (double)(platform.MaxFeedrate(axis) / (distanceScale * SecondsToMinutes)));
 				}
 				reply.cat("E:");
 				char sep = ' ';
@@ -1982,7 +1982,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
-				if (gb.Seen(axisLetters[axis]))
+				if (gb.Seen(machineAxisLetters[axis]))
 				{
 					float values[2];
 					size_t numValues = 2;
@@ -2010,7 +2010,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				char sep = 's';
 				for (size_t axis = 0; axis < numTotalAxes; axis++)
 				{
-					reply.catf("%c %c%.1f:%.1f", sep, axisLetters[axis], (double)platform.AxisMinimum(axis), (double)platform.AxisMaximum(axis));
+					reply.catf("%c %c%.1f:%.1f", sep, machineAxisLetters[axis], (double)platform.AxisMinimum(axis), (double)platform.AxisMaximum(axis));
 					sep = ',';
 				}
 			}
@@ -2367,7 +2367,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
-				if (gb.Seen(axisLetters[axis]))
+				if (gb.Seen(machineAxisLetters[axis]))
 				{
 					if (!LockMovementAndWaitForStandstill(gb))
 					{
@@ -2381,7 +2381,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					}
 					else
 					{
-						reply.printf("Drive %c does not support %ux microstepping%s", axisLetters[axis], microsteps, ((interp) ? " with interpolation" : ""));
+						reply.printf("Drive %c does not support %ux microstepping%s", machineAxisLetters[axis], microsteps, ((interp) ? " with interpolation" : ""));
 						result = GCodeResult::error;
 					}
 				}
@@ -2414,7 +2414,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					bool actualInterp;
 					const unsigned int microsteps = platform.GetMicrostepping(axis, actualInterp);
-					reply.catf("%c:%u%s, ", axisLetters[axis], microsteps, (actualInterp) ? "(on)" : "");
+					reply.catf("%c:%u%s, ", machineAxisLetters[axis], microsteps, (actualInterp) ? "(on)" : "");
 				}
 				reply.cat("E");
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
@@ -3056,7 +3056,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
-				if (gb.Seen(axisLetters[axis]))
+				if (gb.Seen(machineAxisLetters[axis]))
 				{
 					platform.SetInstantDv(axis, gb.GetFValue() * multiplier);
 					seen = true;
@@ -3079,7 +3079,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				reply.copy("Maximum jerk rates: ");
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.GetInstantDv(axis) / multiplier));
+					reply.catf("%c: %.1f, ", machineAxisLetters[axis], (double)(platform.GetInstantDv(axis) / multiplier));
 				}
 				reply.cat("E:");
 				char sep = ' ';
@@ -3955,7 +3955,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
-				if (gb.Seen(axisLetters[axis]))
+				if (gb.Seen(machineAxisLetters[axis]))
 				{
 					platform.SetMotorCurrent(axis, gb.GetFValue(), code);
 					seen = true;
@@ -3990,7 +3990,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						);
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					reply.catf("%c:%d, ", axisLetters[axis], (int)platform.GetMotorCurrent(axis, code));
+					reply.catf("%c:%d, ", machineAxisLetters[axis], (int)platform.GetMotorCurrent(axis, code));
 				}
 				reply.cat("E");
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
