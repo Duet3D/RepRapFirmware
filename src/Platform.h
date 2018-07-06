@@ -298,9 +298,9 @@ class Platform
 public:
 	// Enumeration to describe the status of a drive
 	enum class DriverStatus : uint8_t { disabled, idle, enabled };
-  
+
 	Platform();
-  
+
 //-------------------------------------------------------------------------------------------------------------
 
 	// These are the functions that form the interface between Platform and the rest of the firmware.
@@ -396,6 +396,8 @@ public:
 	bool GetDirectionValue(size_t driver) const;
 	void SetEnableValue(size_t driver, int8_t eVal);
 	bool GetEnableValue(size_t driver) const;
+	void SetExternalI2C(size_t driver, uint8_t addr);
+	uint8_t GetExternalI2C(size_t driver) const;
 	void EnableDriver(size_t driver);
 	void DisableDriver(size_t driver);
 	void EnableDrive(size_t axisOrExtruder);
@@ -604,7 +606,7 @@ public:
 	static uint8_t softwareResetDebugInfo;				// extra info for debugging
 
 	//-------------------------------------------------------------------------------------------------------
-  
+
 private:
 	Platform(const Platform&);						// private copy constructor to make sure we don't try to copy a Platform
 
@@ -719,6 +721,11 @@ private:
 	volatile DriverStatus driverState[MaxTotalDrivers];
 	bool directions[MaxTotalDrivers];
 	int8_t enableValues[MaxTotalDrivers];
+	/* Non-zero i2c-value in interpreted as an i2c address.
+	 * Some gcodes will be forwarded to the i2c address.
+	 * Value 0 means: "There's no i2c connected to this drive, don't forward via i2c".
+	 * This works since i2c address 0 is reserved for the i2c bus master (this firmware will act as master). */
+	uint8_t i2cValues[MaxTotalDrivers];
 	Pin endStopPins[NumEndstops];
 	float maxFeedrates[MaxTotalDrivers];
 	float accelerations[MaxTotalDrivers];
@@ -833,7 +840,7 @@ private:
 
 	// Files
 	MassStorage* massStorage;
-  
+
 	// Data used by the tick interrupt handler
 
 	// Heater #n, 0 <= n < HEATERS, uses "temperature channel" tc given by
@@ -1028,6 +1035,11 @@ inline void Platform::SetDriverDirection(uint8_t driver, bool direction)
 inline bool Platform::GetEnableValue(size_t driver) const
 {
 	return enableValues[driver];
+}
+
+inline uint8_t Platform::GetExternalI2C(size_t driver) const
+{
+	return i2cValues[driver];
 }
 
 inline float Platform::AxisMaximum(size_t axis) const

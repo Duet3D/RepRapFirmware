@@ -376,6 +376,7 @@ void Platform::Init()
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
 		driverState[drive] = DriverStatus::disabled;
+		i2cValues[drive] = 0;						// drives don't get forwarded gcodes via i2c by default
 
 		// Map axes and extruders straight through
 		driveDriverBits[drive] = driveDriverBits[drive + MaxTotalDrivers] = CalcDriverBitmap(drive);	// this returns 0 for remote drivers
@@ -3308,6 +3309,11 @@ void Platform::SetEnableValue(size_t driver, int8_t eVal)
 		openLoadBDrivers &= mask;
 	}
 #endif
+}
+
+void Platform::SetExternalI2C(size_t driver, uint8_t addr)
+{
+	i2cValues[driver] = addr;
 }
 
 void Platform::SetAxisDriversConfig(size_t axis, const AxisDriversConfig& config)

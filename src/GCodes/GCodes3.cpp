@@ -1184,6 +1184,11 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 				}
 				platform.SetDriverStepTiming(drive, timings);
 			}
+			if (gb.Seen('I'))
+			{
+				seen = true;
+				platform.SetExternalI2C(drive, (uint8_t)gb.GetUIValueMaybeHex());
+			}
 
 #if HAS_SMART_DRIVERS
 			{
@@ -1279,10 +1284,11 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 #endif
 			if (!seen)
 			{
-				reply.printf("Drive %u runs %s, active %s enable, step timing ",
+				reply.printf("Drive %u runs %s, active %s enable, i2c value 0x%02x, step timing ",
 							drive,
 							(platform.GetDirectionValue(drive)) ? "forwards" : "in reverse",
-							(platform.GetEnableValue(drive)) ? "high" : "low");
+							(platform.GetEnableValue(drive)) ? "high" : "low",
+                            platform.GetExternalI2C(drive));
 							float timings[4];
 							const bool isSlowDriver = platform.GetDriverStepTiming(drive, timings);
 							if (isSlowDriver)
