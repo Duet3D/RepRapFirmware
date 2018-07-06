@@ -535,6 +535,10 @@ public:
 	// So you can test for inkjet presence with if(platform->Inkjet(0))
 	bool Inkjet(int bitPattern);
 
+	// Register the used i2c addresses to avoid double use...
+	size_t RegisterI2cAddrUsage(uint8_t addr);
+	size_t UnregisterI2cAddrUsage(uint8_t addr);
+
 	// MCU temperature
 #if HAS_CPU_TEMP_SENSOR
 	void GetMcuTemperatures(float& minT, float& currT, float& maxT) const;
@@ -726,6 +730,9 @@ private:
 	 * Value 0 means: "There's no i2c connected to this drive, don't forward via i2c".
 	 * This works since i2c address 0 is reserved for the i2c bus master (this firmware will act as master). */
 	uint8_t i2cValues[MaxTotalDrivers];
+	// Keep track of used i2c addresses, so we can warn if one is unintentionally used twice
+	static const size_t MAX_TRACK_I2C_ADDRS = 50;
+	uint8_t registeredAddrs[MAX_TRACK_I2C_ADDRS] = { 0 };
 	Pin endStopPins[NumEndstops];
 	float maxFeedrates[MaxTotalDrivers];
 	float accelerations[MaxTotalDrivers];

@@ -64,6 +64,13 @@ struct Trigger
 	}
 };
 
+// Facilitates sending of floats over i2c
+// Contains the assumtion that floats are 4 bytes long
+typedef union {
+  float fval;
+  uint8_t bval[4];
+} i2cFloat;
+
 // Bits for T-code P-parameter to specify which macros are supposed to be run
 constexpr uint8_t TFreeBit = 1 << 0;
 constexpr uint8_t TPreBit = 1 << 1;
@@ -293,6 +300,8 @@ private:
 	GCodeResult SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply);		// Either return the probe value, or set its threshold
 	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply);	// Deal with a G10
 	GCodeResult SetPositions(GCodeBuffer& gb);									// Deal with a G92
+	GCodeResult I2cForward(GCodeBuffer& gb, uint8_t addr, uint8_t *data, size_t data_size, const StringRef& reply);	// Forward gcodes. Used for drivers with a i2c address set in i2cValues.
+	GCodeResult SetTorqueMode(GCodeBuffer& gb, const StringRef& reply);			// Deal with a G95
 	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply);		// Deal with a M584
 	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply);				// Deal with a M585
 	GCodeResult SetDateTime(GCodeBuffer& gb,const  StringRef& reply);			// Deal with a M905

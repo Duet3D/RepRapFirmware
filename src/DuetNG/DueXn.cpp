@@ -79,6 +79,7 @@ namespace DuetExpansion
 
 		if (ret)
 		{
+            reprap.GetPlatform().RegisterI2cAddrUsage(DueXnAddress);
 			dueXnExpander.pinModeMultiple(BoardTypePins, INPUT_PULLUP);
 			const uint16_t data = dueXnExpander.digitalReadAll();
 			dueXnBoardType = boardTypes[(data & BoardTypePins) >> BoardTypeShift];
@@ -127,6 +128,7 @@ namespace DuetExpansion
 
 		if (ret)
 		{
+            reprap.GetPlatform().RegisterI2cAddrUsage(AdditionalIoExpanderAddress);
 			additionalIoExpander.pinModeMultiple((1u << 16) - 1, INPUT_PULLDOWN);
 			additionalIoInputBits = additionalIoExpander.digitalReadAll();
 			additionalIoExpanderPresent = true;

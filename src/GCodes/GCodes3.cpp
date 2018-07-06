@@ -190,6 +190,71 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 	return GCodeResult::ok;
 }
 
+// Sends the gcode and the value to the i2c addr
+GCodeResult GCodes::I2cForward(GCodeBuffer& gb, uint8_t addr, uint8_t *data, size_t data_size, const StringRef& reply)
+{
+	const char *buffer = gb.Buffer();
+	size_t glen = 0;
+	// How many letters before first space in gcode command? Lets us different length commands
+	if (buffer[1] == ' ') glen = 1;
+	if (buffer[2] == ' ') glen = 2;
+	if (buffer[3] == ' ') glen = 3;
+	if (buffer[4] == ' ') glen = 4;
+
+	// Send the gcode and the date separated by a space character
+	platform.InitI2c();
+	I2C_IFACE.beginTransmission((int)addr);
+	for (size_t i = 0; i < glen; i++)
+	{
+		I2C_IFACE.write(buffer[i]);
+	}
+	I2C_IFACE.write(' ');
+	for (size_t i = 0; i < data_size; i++)
+	{
+		I2C_IFACE.write(data[i]);
+	}
+	if (I2C_IFACE.endTransmission() != 0)
+	{
+		reply.copy("I2C transmission error");
+		return GCodeResult::error;
+	}
+	reply.printf("Sent %d bytes to i2c addr 0x%02x", glen + 1 + data_size, addr);
+	return GCodeResult::ok;
+}
+
+// This handles G95
+GCodeResult GCodes::SetTorqueMode(GCodeBuffer& gb, const StringRef& reply)
+{
+	GCodeResult res = GCodeResult::ok;
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	{
+		if (gb.Seen(machineAxisLetters[axis]))
+		{
+			const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(axis);
+			uint8_t driver = axisConfig.driverNumbers[0]; // Only supports single driver
+			uint8_t i2cValue = platform.GetExternalI2C(driver);
+			if (i2cValue)
+			{
+				i2cFloat torque;
+				torque.fval = gb.GetFValue();
+				if (fabs(torque.fval < 255.0)) // 255 is the motor's maximum torque
+				{
+					torque.fval = -fabs(torque.fval); // We want G95 to always drive axis backwards, never forwards
+					if (platform.GetDirectionValue(driver)) torque.fval = -torque.fval;
+					if ((res = I2cForward(gb, i2cValue, torque.bval, 4, reply)) != GCodeResult::ok) return res;
+				}
+			}
+			else
+			{
+				// Enable torque mode in some non-i2c way
+			}
+		}
+	}
+
+	// TODO: support for gb.Seen(extrudeLetter)
+	return GCodeResult::ok;
+}
+
 // Offset the axes by the X, Y, and Z amounts in the M226 code in gb. The actual movement occurs on the next move command.
 // It's not clear from the description in the reprap.org wiki whether offsets are cumulative or not. We now assume they are not.
 // Note that M206 offsets are actually negative offsets.
@@ -1187,7 +1252,19 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 			if (gb.Seen('I'))
 			{
 				seen = true;
-				platform.SetExternalI2C(drive, (uint8_t)gb.GetUIValueMaybeHex());
+#if defined(I2C_IFACE)
+				// This drive's previous i2c addr will no longer be used
+				platform.UnregisterI2cAddrUsage(platform.GetExternalI2C(drive));
+				uint8_t addr = (uint8_t)gb.GetUIValueMaybeHex();
+				size_t n = platform.RegisterI2cAddrUsage(addr); // Broadcast that there's a new listener on addr
+				if (n > 1)
+				{
+					reply.printf("Warning, there are now %d registered recipiens on the i2c address 0x%02x", n, addr);
+				}
+				platform.SetExternalI2C(drive, addr);
+#else
+				reply.copy("Skipping I, I2C not available");
+#endif
 			}
 
 #if HAS_SMART_DRIVERS

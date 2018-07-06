@@ -884,6 +884,57 @@ bool Platform::HomingZWithProbe() const
 	return zProbeType != ZProbeType::none && (endStopInputType[Z_AXIS] == EndStopInputType::zProbe || endStopPos[Z_AXIS] == EndStopPosition::noEndStop);
 }
 
+size_t Platform::RegisterI2cAddrUsage(uint8_t addr)
+{
+	// Fill the addr into the first available spot
+	bool registered = false;
+	for (size_t i = 0; i < MAX_TRACK_I2C_ADDRS; i++)
+	{
+		if (registeredAddrs[i] == 0)
+		{
+			registeredAddrs[i] = addr;
+			registered = true;
+			break;
+		}
+	}
+	if (!registered) // Array full, could not register
+	{
+		return MAX_TRACK_I2C_ADDRS;
+	}
+
+	// Count how many times addr is registered (including this time)
+	uint8_t addrUsers = 0;
+	for (size_t i = 0; i < MAX_TRACK_I2C_ADDRS; i++)
+	{
+		if (addr != 0 && addr == registeredAddrs[i]) {
+			addrUsers++;
+		}
+	}
+	return addrUsers;
+}
+
+size_t Platform::UnregisterI2cAddrUsage(uint8_t addr)
+{
+	// Wipe out zero or one occurence of addr
+	for (size_t i = 0; i < MAX_TRACK_I2C_ADDRS; i++)
+	{
+		if (addr != 0 && addr == registeredAddrs[i]) {
+			registeredAddrs[i] = 0;
+			break;
+		}
+	}
+
+	// Count how many registered uses of addr is left
+	uint8_t addrUsers = 0;
+	for (size_t i = 0; i < MAX_TRACK_I2C_ADDRS; i++)
+	{
+		if (addr != 0 && addr == registeredAddrs[i]) {
+			addrUsers++;
+		}
+	}
+	return addrUsers;
+}
+
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
 bool Platform::CheckFirmwareUpdatePrerequisites(const StringRef& reply)
 {

@@ -334,6 +334,10 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		result = SetPositions(gb);
 		break;
 
+	case 95: // Set torque mode
+		result = SetTorqueMode(gb, reply);
+		break;
+
 	default:
 		result = GCodeResult::notSupported;
 	}
