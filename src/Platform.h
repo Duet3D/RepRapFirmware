@@ -397,7 +397,7 @@ public:
 	void SetEnableValue(size_t driver, int8_t eVal);
 	bool GetEnableValue(size_t driver) const;
 	void SetExternalI2C(size_t driver, uint8_t addr);
-	uint8_t GetExternalI2C(size_t driver) const;
+	uint8_t GetExternalI2c(size_t driver) const;
 	void EnableDriver(size_t driver);
 	void DisableDriver(size_t driver);
 	void EnableDrive(size_t axisOrExtruder);
@@ -1044,7 +1044,7 @@ inline bool Platform::GetEnableValue(size_t driver) const
 	return enableValues[driver];
 }
 
-inline uint8_t Platform::GetExternalI2C(size_t driver) const
+inline uint8_t Platform::GetExternalI2c(size_t driver) const
 {
 	return i2cValues[driver];
 }

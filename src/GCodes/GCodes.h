@@ -301,7 +301,9 @@ private:
 	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply);	// Deal with a G10
 	GCodeResult SetPositions(GCodeBuffer& gb);									// Deal with a G92
 	GCodeResult I2cForward(GCodeBuffer& gb, uint8_t addr, uint8_t *data, size_t data_size, const StringRef& reply);	// Forward gcodes. Used for drivers with a i2c address set in i2cValues.
+	GCodeResult I2cForward(GCodeBuffer& gb, uint8_t addr, const StringRef& reply); // Send only the name of the gcode
 	GCodeResult SetTorqueMode(GCodeBuffer& gb, const StringRef& reply);			// Deal with a G95
+	GCodeResult MarkEncoderRef(GCodeBuffer& gb, const StringRef& reply);								// Deal with a G96
 	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply);		// Deal with a M584
 	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply);				// Deal with a M585
 	GCodeResult SetDateTime(GCodeBuffer& gb,const  StringRef& reply);			// Deal with a M905

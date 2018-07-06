@@ -334,8 +334,12 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		result = SetPositions(gb);
 		break;
 
-	case 95: // Set torque mode
+	case 95: // Set/toggle torque mode
 		result = SetTorqueMode(gb, reply);
+		break;
+
+	case 96: // Mark encoder reference point
+		result = MarkEncoderRef(gb, reply);
 		break;
 
 	default:

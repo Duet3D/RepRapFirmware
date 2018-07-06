@@ -196,19 +196,20 @@ GCodeResult GCodes::I2cForward(GCodeBuffer& gb, uint8_t addr, uint8_t *data, siz
 	const char *buffer = gb.Buffer();
 	size_t glen = 0;
 	// How many letters before first space in gcode command? Lets us different length commands
-	if (buffer[1] == ' ') glen = 1;
-	if (buffer[2] == ' ') glen = 2;
-	if (buffer[3] == ' ') glen = 3;
-	if (buffer[4] == ' ') glen = 4;
+	// We do rely on string termination being done right in gcodeBuffer...
+	if (buffer[1] == ' ' || buffer[1] == '\0') glen = 1;
+	else if (buffer[2] == ' ' || buffer[2] == '\0') glen = 2;
+	else if (buffer[3] == ' ' || buffer[3] == '\0') glen = 3;
+	else if (buffer[4] == ' ' || buffer[4] == '\0') glen = 4;
 
-	// Send the gcode and the date separated by a space character
+	// Send the gcode and the data separated by a space character
 	platform.InitI2c();
 	I2C_IFACE.beginTransmission((int)addr);
 	for (size_t i = 0; i < glen; i++)
 	{
 		I2C_IFACE.write(buffer[i]);
 	}
-	I2C_IFACE.write(' ');
+	I2C_IFACE.write(' '); // Send a blank space after gcode regardless if there's any data
 	for (size_t i = 0; i < data_size; i++)
 	{
 		I2C_IFACE.write(data[i]);
@@ -222,17 +223,24 @@ GCodeResult GCodes::I2cForward(GCodeBuffer& gb, uint8_t addr, uint8_t *data, siz
 	return GCodeResult::ok;
 }
 
+GCodeResult GCodes::I2cForward(GCodeBuffer& gb, uint8_t addr, const StringRef& reply)
+{
+	static uint8_t *dummydata;
+	return I2cForward(gb, addr, dummydata, 0, reply);
+}
+
 // This handles G95
 GCodeResult GCodes::SetTorqueMode(GCodeBuffer& gb, const StringRef& reply)
 {
 	GCodeResult res = GCodeResult::ok;
+
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		if (gb.Seen(machineAxisLetters[axis]))
 		{
 			const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(axis);
 			uint8_t driver = axisConfig.driverNumbers[0]; // Only supports single driver
-			uint8_t i2cValue = platform.GetExternalI2C(driver);
+			uint8_t i2cValue = platform.GetExternalI2c(driver);
 			if (i2cValue)
 			{
 				i2cFloat torque;
@@ -247,6 +255,43 @@ GCodeResult GCodes::SetTorqueMode(GCodeBuffer& gb, const StringRef& reply)
 			else
 			{
 				// Enable torque mode in some non-i2c way
+			}
+		}
+	}
+
+	// TODO: support for gb.Seen(extrudeLetter)
+	return GCodeResult::ok;
+}
+
+// This handles G96
+GCodeResult GCodes::MarkEncoderRef(GCodeBuffer& gb, const StringRef& reply)
+{
+	GCodeResult res = GCodeResult::ok;
+	// Make "G96" a shorthand for "G96 A B C D" or "G96 X Y Z"
+	bool noneSeen = true;
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	{
+		if (gb.Seen(machineAxisLetters[axis]))
+		{
+			noneSeen = false;
+			break;
+		}
+	}
+
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	{
+		if (gb.Seen(machineAxisLetters[axis]) || noneSeen)
+		{
+			const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(axis);
+			uint8_t driver = axisConfig.driverNumbers[0]; // Only supports single driver
+			uint8_t i2cValue = platform.GetExternalI2c(driver);
+			if (i2cValue)
+			{
+				if ((res = I2cForward(gb, i2cValue, reply)) != GCodeResult::ok) return res;
+			}
+			else
+			{
+				// Mark encoder reference point in some non-i2c way
 			}
 		}
 	}
@@ -1254,7 +1299,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 				seen = true;
 #if defined(I2C_IFACE)
 				// This drive's previous i2c addr will no longer be used
-				platform.UnregisterI2cAddrUsage(platform.GetExternalI2C(drive));
+				platform.UnregisterI2cAddrUsage(platform.GetExternalI2c(drive));
 				uint8_t addr = (uint8_t)gb.GetUIValueMaybeHex();
 				size_t n = platform.RegisterI2cAddrUsage(addr); // Broadcast that there's a new listener on addr
 				if (n > 1)
@@ -1365,7 +1410,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 							drive,
 							(platform.GetDirectionValue(drive)) ? "forwards" : "in reverse",
 							(platform.GetEnableValue(drive)) ? "high" : "low",
-                            platform.GetExternalI2C(drive));
+                            platform.GetExternalI2c(drive));
 							float timings[4];
 							const bool isSlowDriver = platform.GetDriverStepTiming(drive, timings);
 							if (isSlowDriver)
