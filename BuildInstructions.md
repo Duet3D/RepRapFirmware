@@ -17,6 +17,8 @@ Instructions for building dc42 fork of RepRapFirmware under Windows
 
 5a. If you want to build version 1.19 or later of the Duet WiFi build of RepRapFirmware then you also need to download and add project DuetWiFiSocketServer. Alternatively, just download file src/include/MessageFormats.h from that project and put it somewhere on the include path for RepRapFirmware.
 
+5b. If you want to build a RTOS-enabled configuration of the v2-dev branch, also download and project FreeRTOS from my github repo and add that project to the workspace.
+
 6. Load Eclipse and tell it to import the CoreNG and ReprapFirmware projects (and DuetWiFiSocketServer if you have included it).
 
 7. If your compiler and tools are in a folder other than C:\Program Files (x86)\GNU Tools ARM Embedded\6 2017-q2-update\bin (if building 1.20alpha3 or later) or C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\bin (if building earlier versions), configure the path to the tools in both projects. You will find this in the project settings under C/C++ Build -> Settings -> Cross Settings.
