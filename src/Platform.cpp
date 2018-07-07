@@ -749,9 +749,15 @@ float Platform::GetZProbeTravelSpeed() const
 
 void Platform::SetZProbeType(unsigned int pt)
 {
-	if(pt == (unsigned int)ZProbeType::e1Switch)
-		pt = (unsigned int)ZProbeType::eSwitch;
-	zProbeType = (pt < (unsigned int)ZProbeType::numTypes) ? (ZProbeType)pt : ZProbeType::none;
+	if(pt == (unsigned int)ZProbeType::e1Switch) //Backward compatibility for Mode 6
+	{
+		zProbeType = ZProbeType::eSwitch;
+		ZProbe params = GetCurrentZProbeParameters();
+		params.eEndstop = 1;
+		SetZProbeParameters(zProbeType, params);
+	}
+	else
+		zProbeType = (pt < (unsigned int)ZProbeType::numTypes) ? (ZProbeType)pt : ZProbeType::none;
 }
 
 void Platform::SetProbing(bool isProbing)
