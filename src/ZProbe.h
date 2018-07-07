@@ -16,9 +16,9 @@ enum class ZProbeType : uint8_t
 	analog = 1,
 	dumbModulated = 2,
 	alternateAnalog = 3,
-	e0Switch = 4,
+	eSwitch = 4,
 	digital = 5,
-	e1Switch = 6,
+	e1Switch = 6, //Deprecated
 	zSwitch = 7,
 	unfilteredDigital = 8,
 	blTouch = 9,

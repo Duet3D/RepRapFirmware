@@ -24,7 +24,7 @@ void ZProbe::Init(float h)
 	tolerance = DefaultZProbeTolerance;
 	maxTaps = DefaultZProbeTaps;
 	invertReading = turnHeatersOff = false;
-	eEndstop = 0;
+	eEndstop = 1; // Default e1 for Mode 6 backward compatibility
 }
 
 float ZProbe::GetStopHeight(float temperature) const

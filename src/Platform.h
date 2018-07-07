@@ -1177,7 +1177,7 @@ inline uint16_t Platform::GetRawZProbeReading() const
 	case ZProbeType::alternateAnalog:
 		return min<uint16_t>(AnalogInReadChannel(zProbeAdcChannel), 4000);
 
-	case ZProbeType::e0Switch:
+	case ZProbeType::eSwitch:
 		{
 			uint8_t eEndstop = GetCurrentZProbeParameters().eEndstop;
 			const bool b = IoPort::ReadPin(endStopPins[E0_AXIS + eEndstop]);
@@ -1188,12 +1188,6 @@ inline uint16_t Platform::GetRawZProbeReading() const
 	case ZProbeType::unfilteredDigital:
 	case ZProbeType::blTouch:
 		return (IoPort::ReadPin(zProbePin)) ? 4000 : 0;
-
-	case ZProbeType::e1Switch:
-		{
-			const bool b = IoPort::ReadPin(endStopPins[E0_AXIS + 1]);
-			return (b) ? 4000 : 0;
-		}
 
 	case ZProbeType::zSwitch:
 		{

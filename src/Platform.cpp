@@ -615,7 +615,7 @@ void Platform::InitZProbe()
 		pinMode(zProbeModulationPin, OUTPUT_LOW);		// enable the alternate sensor
 		break;
 
-	case ZProbeType::e0Switch:
+	case ZProbeType::eSwitch:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(zProbePin, INPUT_PULLUP);
 		pinMode(endStopPins[E0_AXIS + GetCurrentZProbeParameters().eEndstop], INPUT);
@@ -629,13 +629,6 @@ void Platform::InitZProbe()
 	default:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(zProbePin, INPUT_PULLUP);
-		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
-		break;
-
-	case ZProbeType::e1Switch:
-		AnalogInEnableChannel(zProbeAdcChannel, false);
-		pinMode(zProbePin, INPUT_PULLUP);
-		pinMode(endStopPins[E0_AXIS + 1], INPUT);
 		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
 		break;
 
@@ -659,9 +652,8 @@ int Platform::GetZProbeReading() const
 		{
 		case ZProbeType::analog:				// Simple or intelligent IR sensor
 		case ZProbeType::alternateAnalog:		// Alternate sensor
-		case ZProbeType::e0Switch:				// Switch connected to E0 endstop input
+		case ZProbeType::eSwitch:				// Switch connected to E[n] endstop input
 		case ZProbeType::digital:				// Switch connected to Z probe input
-		case ZProbeType::e1Switch:				// Switch connected to E1 endstop input
 		case ZProbeType::zSwitch:				// Switch connected to Z endstop input
 		case ZProbeType::blTouch:
 			zProbeVal = (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));
@@ -757,6 +749,8 @@ float Platform::GetZProbeTravelSpeed() const
 
 void Platform::SetZProbeType(unsigned int pt)
 {
+	if(pt == (unsigned int)ZProbeType::e1Switch)
+		pt = (unsigned int)ZProbeType::eSwitch;
 	zProbeType = (pt < (unsigned int)ZProbeType::numTypes) ? (ZProbeType)pt : ZProbeType::none;
 }
 
@@ -782,8 +776,7 @@ const ZProbe& Platform::GetZProbeParameters(ZProbeType probeType) const
 		return irZProbeParameters;
 	case ZProbeType::alternateAnalog:
 		return alternateZProbeParameters;
-	case ZProbeType::e0Switch:
-	case ZProbeType::e1Switch:
+	case ZProbeType::eSwitch:
 	case ZProbeType::zSwitch:
 	default:
 		return switchZProbeParameters;
@@ -807,8 +800,7 @@ void Platform::SetZProbeParameters(ZProbeType probeType, const ZProbe& params)
 		alternateZProbeParameters = params;
 		break;
 
-	case ZProbeType::e0Switch:
-	case ZProbeType::e1Switch:
+	case ZProbeType::eSwitch:
 	case ZProbeType::zSwitch:
 	default:
 		switchZProbeParameters = params;
