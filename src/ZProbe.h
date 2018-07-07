@@ -42,6 +42,7 @@ public:
 	uint8_t maxTaps;				// maximum probes at each point
 	bool invertReading;				// true if we need to invert the reading
 	bool turnHeatersOff;			// true to turn heaters off while probing
+	uint8_t eEndstop;                  // E endstop to use with P4;
 
 	void Init(float h);
 	float GetStopHeight(float temperature) const;

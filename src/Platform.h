@@ -492,6 +492,7 @@ public:
 	void SetProbing(bool isProbing);
 	bool ProgramZProbe(GCodeBuffer& gb, const StringRef& reply);
 	void SetZProbeModState(bool b) const;
+	void InitZProbe();
 
 	// Heat and temperature
 	float GetZProbeTemperature();							// Get our best estimate of the Z probe temperature
@@ -790,7 +791,6 @@ private:
 	float mcuTemperatureAdjust;
 #endif
 
-	void InitZProbe();
 	uint16_t GetRawZProbeReading() const;
 	void UpdateNetworkAddress(uint8_t dst[4], const uint8_t src[4]);
 
@@ -1179,7 +1179,8 @@ inline uint16_t Platform::GetRawZProbeReading() const
 
 	case ZProbeType::e0Switch:
 		{
-			const bool b = IoPort::ReadPin(endStopPins[E0_AXIS]);
+			uint8_t eEndstop = GetCurrentZProbeParameters().eEndstop;
+			const bool b = IoPort::ReadPin(endStopPins[E0_AXIS + eEndstop]);
 			return (b) ? 4000 : 0;
 		}
 

@@ -428,7 +428,6 @@ GCodeResult GCodes::SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply)
 	{
 		platform.SetZProbeType(gb.GetIValue());
 		seenType = true;
-		DoDwellTime(gb, 100);				// delay a little to allow the averaging filters to accumulate data from the new source
 	}
 
 	ZProbe params = platform.GetCurrentZProbeParameters();
@@ -467,9 +466,21 @@ GCodeResult GCodes::SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply)
 		seenParam = true;
 	}
 
+	if (gb.Seen('E'))
+	{
+		params.eEndstop = gb.GetUIValue();
+		seenParam = true;
+	}
+
 	if (seenParam)
 	{
 		platform.SetZProbeParameters(platform.GetZProbeType(), params);
+	}
+
+	if (seenParam || seenType)
+	{
+		platform.InitZProbe();
+		DoDwellTime(gb, 100);				// delay a little to allow the averaging filters to accumulate data from the new source
 	}
 
 	if (!(seenType || seenParam))

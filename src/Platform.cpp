@@ -618,7 +618,7 @@ void Platform::InitZProbe()
 	case ZProbeType::e0Switch:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(zProbePin, INPUT_PULLUP);
-		pinMode(endStopPins[E0_AXIS], INPUT);
+		pinMode(endStopPins[E0_AXIS + GetCurrentZProbeParameters().eEndstop], INPUT);
 		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
 		break;
 
@@ -758,7 +758,6 @@ float Platform::GetZProbeTravelSpeed() const
 void Platform::SetZProbeType(unsigned int pt)
 {
 	zProbeType = (pt < (unsigned int)ZProbeType::numTypes) ? (ZProbeType)pt : ZProbeType::none;
-	InitZProbe();
 }
 
 void Platform::SetProbing(bool isProbing)
