@@ -167,7 +167,7 @@ public:
 	virtual void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const = 0;
 
 	// Given a motor angle relative to that in the origin, what is our position along that axis?
-	virtual float MotorAngToAxisPosition(float ang, uint32_t stepsPerRevolution, const float stepsPerMm[], size_t axis);
+	virtual float MotorAngToAxisPosition(float ang, uint32_t fullStepsPerRevolution, const float stepsPerMm[], size_t axis);
 
 	// Return true if the specified axis is a continuous rotation axis
 	virtual bool IsContinuousRotationAxis(size_t axis) const { return false; }

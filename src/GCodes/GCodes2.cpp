@@ -1413,9 +1413,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 114:
-		if(gb.Seen('S'))
+		if (gb.Seen('S'))
 		{
-			GetAxisPositionsFromEncoders(reply);
+			if (gb.GetIValue() == 1)
+			{
+				GetAxisPositionsFromEncoders(reply);
+			}
 		}
 		else
 		{

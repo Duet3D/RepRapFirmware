@@ -39,7 +39,7 @@ public:
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 	bool WriteResumeSettings(FileStore *f) const override;
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const override;
-	float MotorAngToAxisPosition(float ang, uint32_t stepsPerRevolution, const float stepsPerMm[], size_t axis) override;
+	float MotorAngToAxisPosition(float ang, uint32_t fullStepsPerRevolution, const float stepsPerMm[], size_t axis) override;
 
 private:
 	static constexpr float DefaultSegmentsPerSecond = 100.0;
