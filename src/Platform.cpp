@@ -377,6 +377,7 @@ void Platform::Init()
 		motorCurrentFraction[drive] = 1.0;
 		driverState[drive] = DriverStatus::disabled;
 		i2cValues[drive] = 0;						// drives don't get forwarded gcodes via i2c by default
+		invertReportedAngle[drive] = false;			// don't invert reported angle by default
 
 		// Map axes and extruders straight through
 		driveDriverBits[drive] = driveDriverBits[drive + MaxTotalDrivers] = CalcDriverBitmap(drive);	// this returns 0 for remote drivers

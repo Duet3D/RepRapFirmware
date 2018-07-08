@@ -48,7 +48,6 @@ void HangprinterKinematics::Init()
 	constexpr uint32_t DefaultActionPoints[4] = { 2, 2, 2, 3};
 	constexpr uint32_t DefaultMotorGearTeeth[4] = {  10,  10,  10,  10};
 	constexpr uint32_t DefaultSpoolGearTeeth[4] = { 100, 100, 100, 100};
-	constexpr uint32_t DefaultFullStepsPerRevolution[4] = { 200, 200, 200, 200};
 	ARRAY_INIT(anchorA, DefaultAnchorA);
 	ARRAY_INIT(anchorB, DefaultAnchorB);
 	ARRAY_INIT(anchorC, DefaultAnchorC);
@@ -61,7 +60,6 @@ void HangprinterKinematics::Init()
 	ARRAY_INIT(actionPoints, DefaultActionPoints);
 	ARRAY_INIT(motorGearTeeth, DefaultMotorGearTeeth);
 	ARRAY_INIT(spoolGearTeeth, DefaultSpoolGearTeeth);
-	ARRAY_INIT(fullStepsPerRevolution, DefaultFullStepsPerRevolution);
 	doneAutoCalibration = false;
 	reprap.GetGCodes().SetMachineAxisLetters(MachineAxisNames(), 4);
 	Recalc();
@@ -115,7 +113,9 @@ void HangprinterKinematics::Recalc()
 	Platform& platform = reprap.GetPlatform(); // No const because we want to set drive steper per unit
 	for (size_t i = 0; i < HANGPRINTER_AXES; i++)
 	{
-		stepsPerMotorRevolution[i] = fullStepsPerRevolution[i] * platform.GetMicrostepping(i, dummy);
+		const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(i);
+		uint8_t driver = axisConfig.driverNumbers[0]; // Only supports single driver
+		stepsPerMotorRevolution[i] = fullStepsPerMotorRev[i] * platform.GetMicrostepping(driver, dummy);
 		stepsPerUnitTimesRTmp[i] = ((float)(mechanicalAdvantage[i]) * stepsPerMotorRevolution[i] * spoolGearTeeth[i]) / (2.0 * Pi * motorGearTeeth[i]);
 		nrLinesDirTmp[i] = mechanicalAdvantage[i] * actionPoints[i];
 		spoolRadiiSqTmp[i] = spoolRadii[i] * spoolRadii[i];
@@ -192,7 +192,7 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		GET_UI_ARRAY_HPAX('O', actionPoints);
 		GET_UI_ARRAY_HPAX('G', motorGearTeeth);
 		GET_UI_ARRAY_HPAX('H', spoolGearTeeth);
-		GET_UI_ARRAY_HPAX('J', fullStepsPerRevolution);
+		GET_UI_ARRAY_HPAX('J', fullStepsPerMotorRev);
 
 		if (seen || seenNonGeometry)
 		{
@@ -228,7 +228,7 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 				(int)actionPoints[A_AXIS], (int)actionPoints[B_AXIS], (int)actionPoints[C_AXIS], (int)actionPoints[D_AXIS],
 				(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS], (int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS],
 				(int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS], (int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS],
-				(int)fullStepsPerRevolution[A_AXIS], (int)fullStepsPerRevolution[B_AXIS], (int)fullStepsPerRevolution[C_AXIS], (int)fullStepsPerRevolution[D_AXIS]);
+				(int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS], (int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS]);
 		}
 		return seen;
 	}
@@ -275,6 +275,13 @@ void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], cons
 		(fsquare(motorPos[B_AXIS]/k0[B_AXIS] + sqrtk1[B_AXIS]) - k1[B_AXIS])/k2[B_AXIS],
 		(fsquare(motorPos[C_AXIS]/k0[C_AXIS] + sqrtk1[C_AXIS]) - k1[C_AXIS])/k2[C_AXIS],
 		machinePos);
+}
+
+float HangprinterKinematics::MotorAngToAxisPosition(float ang, uint32_t stepsPerRevolution, const float stepsPerMm[], size_t axis)
+{
+	float absStepInOrigin = k0[axis] * (sqrt(k1[axis] + k2[axis] * lineLengthsOrigin[axis]) - sqrtk1[axis]);
+	float c = absStepInOrigin + ang * float(fullStepsPerMotorRev[axis]) / 360.0; // current step count
+	return ((c / k0[axis] + sqrtk1[axis]) * (c / k0[axis] + sqrtk1[axis]) - k1[axis]) / k2[axis] - lineLengthsOrigin[axis];
 }
 
 // Return true if the specified XY position is reachable by the print head reference point.

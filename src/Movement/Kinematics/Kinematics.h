@@ -166,6 +166,9 @@ public:
 	// The speeds along individual Cartesian axes have already been limited before this is called.
 	virtual void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const = 0;
 
+	// Given a motor angle relative to that in the origin, what is our position along that axis?
+	virtual float MotorAngToAxisPosition(float ang, uint32_t stepsPerRevolution, const float stepsPerMm[], size_t axis);
+
 	// Return true if the specified axis is a continuous rotation axis
 	virtual bool IsContinuousRotationAxis(size_t axis) const { return false; }
 
@@ -183,6 +186,7 @@ public:
 	bool UseRawG0() const { return useRawG0; }
 	float GetSegmentsPerSecond() const pre(UseSegmentation()) { return segmentsPerSecond; }
 	float GetMinSegmentLength() const pre(UseSegmentation()) { return minSegmentLength; }
+	uint32_t GetFullStepsPerMotorRev(size_t axis) const { return fullStepsPerMotorRev[axis]; }
 
 protected:
 	// Constructor. Pass segsPerSecond <= 0.0 to get non-segmented motion.
@@ -198,6 +202,7 @@ protected:
 
 	float segmentsPerSecond;				// if we are using segmentation, the target number of segments/second
 	float minSegmentLength;					// if we are using segmentation, the minimum segment size
+	uint32_t fullStepsPerMotorRev[DRIVES] = { 200 }; // Default full steps per revolution is 200
 
 	static const char * const HomeAllFileName;
 

@@ -394,6 +394,8 @@ public:
 	void SetDirection(size_t axisOrExtruder, bool direction);
 	void SetDirectionValue(size_t driver, bool dVal);
 	bool GetDirectionValue(size_t driver) const;
+	void SetInvertReportedAngle(size_t drive, bool dVal);
+	bool GetInvertReportedAngle(size_t drive) const;
 	void SetEnableValue(size_t driver, int8_t eVal);
 	bool GetEnableValue(size_t driver) const;
 	void SetExternalI2C(size_t driver, uint8_t addr);
@@ -724,6 +726,7 @@ private:
 
 	volatile DriverStatus driverState[MaxTotalDrivers];
 	bool directions[MaxTotalDrivers];
+	bool invertReportedAngle[MaxTotalDrivers];
 	int8_t enableValues[MaxTotalDrivers];
 	/* Non-zero i2c-value in interpreted as an i2c address.
 	 * Some gcodes will be forwarded to the i2c address.
@@ -1028,6 +1031,18 @@ inline void Platform::SetDirectionValue(size_t drive, bool dVal)
 inline bool Platform::GetDirectionValue(size_t drive) const
 {
 	return directions[drive];
+}
+
+// When we ask for the angle of this drive (eg communicating with encoder via i2c),
+// shold we invert the angle it gives us before using it?
+inline void Platform::SetInvertReportedAngle(size_t drive, bool dVal)
+{
+	invertReportedAngle[drive] = dVal;
+}
+
+inline bool Platform::GetInvertReportedAngle(size_t drive) const
+{
+	return invertReportedAngle[drive];
 }
 
 inline void Platform::SetDriverDirection(uint8_t driver, bool direction)

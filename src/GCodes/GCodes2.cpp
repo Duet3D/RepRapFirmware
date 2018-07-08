@@ -1413,7 +1413,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 114:
-		GetCurrentCoordinates(reply);
+		if(gb.Seen('S'))
+		{
+			GetAxisPositionsFromEncoders(reply);
+		}
+		else
+		{
+			GetCurrentCoordinates(reply);
+		}
 		break;
 
 	case 115: // Print firmware version or set hardware type

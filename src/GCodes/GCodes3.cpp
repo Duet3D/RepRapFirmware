@@ -229,6 +229,53 @@ GCodeResult GCodes::I2cForward(GCodeBuffer& gb, uint8_t addr, const StringRef& r
 	return I2cForward(gb, addr, dummydata, 0, reply);
 }
 
+float GCodes::I2cRequestFloat(uint8_t addr)
+{
+	i2cFloat r;
+	uint8_t numBytes = 4;
+	platform.InitI2c();
+	I2C_IFACE.requestFrom(addr, numBytes);
+	const uint32_t now = millis();
+	do
+	{
+		if (I2C_IFACE.available() != 0)
+		{
+			r.bval[4 - numBytes] = I2C_IFACE.read() & 0x00FF;
+			--numBytes;
+		}
+	} while (numBytes != 0 && now - millis() < 3);
+
+	return r.fval;
+}
+
+// This handles M114 S1
+void GCodes::GetAxisPositionsFromEncoders(const StringRef& reply)
+{
+	reply.copy("[");
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	{
+		const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(axis);
+		uint8_t driver = axisConfig.driverNumbers[0]; // Only supports single driver
+		uint8_t i2cValue = platform.GetExternalI2c(driver);
+		if (i2cValue)
+		{
+			float ang = I2cRequestFloat(i2cValue);
+			if(platform.GetInvertReportedAngle(driver) == platform.GetDirectionValue(driver))
+			{
+				ang = -ang;
+			}
+			uint32_t stPrRev = reprap.GetMove().GetKinematics().GetFullStepsPerMotorRev(axis);
+			float pos = reprap.GetMove().GetKinematics().MotorAngToAxisPosition(ang, stPrRev, reprap.GetPlatform().GetDriveStepsPerUnit(), axis);
+			reply.catf("%.2f", (double)pos);
+		}
+		if (axis < numVisibleAxes - 1)
+		{
+			reply.cat(", ");
+		}
+	}
+	reply.cat(" ],\n");
+}
+
 // This handles G95
 GCodeResult GCodes::SetTorqueMode(GCodeBuffer& gb, const StringRef& reply)
 {
@@ -1280,6 +1327,11 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 				}
 				seen = true;
 				platform.SetEnableValue(drive, (int8_t)gb.GetIValue());
+			}
+			if (gb.Seen('M'))
+			{
+				seen = true;
+				platform.SetInvertReportedAngle(drive, (int8_t)gb.GetIValue());
 			}
 			if (gb.Seen('T'))
 			{

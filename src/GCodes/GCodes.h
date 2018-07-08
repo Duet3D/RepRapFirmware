@@ -149,6 +149,8 @@ public:
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply);	// Open a file of G Codes to run
 	void StartPrinting(bool fromStart);									// Start printing the file already selected
 	void GetCurrentCoordinates(const StringRef& s) const;				// Write where we are into a string
+	void GetAxisPositionsFromEncoders(const StringRef& reply);			// Get encoder position since G96, calculate moved mm, and write to string
+	float I2cRequestFloat(uint8_t addr);						 		// Send only the name of the gcode, ask for a float back
 	bool DoingFileMacro() const;										// Or still busy processing a macro file?
 	float FractionOfFilePrinted() const;								// Get fraction of file printed
 	FilePosition GetFilePosition() const;								// Return the current position of the file being printed in bytes
@@ -303,7 +305,7 @@ private:
 	GCodeResult I2cForward(GCodeBuffer& gb, uint8_t addr, uint8_t *data, size_t data_size, const StringRef& reply);	// Forward gcodes. Used for drivers with a i2c address set in i2cValues.
 	GCodeResult I2cForward(GCodeBuffer& gb, uint8_t addr, const StringRef& reply); // Send only the name of the gcode
 	GCodeResult SetTorqueMode(GCodeBuffer& gb, const StringRef& reply);			// Deal with a G95
-	GCodeResult MarkEncoderRef(GCodeBuffer& gb, const StringRef& reply);								// Deal with a G96
+	GCodeResult MarkEncoderRef(GCodeBuffer& gb, const StringRef& reply);		// Deal with a G96
 	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply);		// Deal with a M584
 	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply);				// Deal with a M585
 	GCodeResult SetDateTime(GCodeBuffer& gb,const  StringRef& reply);			// Deal with a M905
