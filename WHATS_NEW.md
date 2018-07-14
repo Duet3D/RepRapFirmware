@@ -4,8 +4,6 @@ Summary of important changes in recent versions
 Version 2.01beta2 (Duet 2 series) and 1.22beta1 (Duet 06/085)
 =============================================================
 
-[This release is in preparation]
-
 Upgrade notes:
 - Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.2beta2. Use of DWC 1.21 or earlier may result in "Not authorized" disconnections if you have a password set. However, if your machine is a CoreXY then you may need to use DWC 1.21 for the axis jog buttons to work correctly.
 
@@ -17,6 +15,8 @@ Bug fixes:
 - Duet 06/085 only: fixed a buffer overflow in the Netbios responder code
 - Duet 2 series: when an under-voltage event occurred, spurious driver status warnings/errors were sometimes reported
 - Duet 2 series: when an under- or over-voltage event occurred, the VIN voltage reported was the current voltage, not the voltage when the event was recorded
+- When an axis was made visible and later hidden, subsequent move commands sometimes sent step commands incorrectly to the driver(s) associated with that axis. This could cause unwanted movement if the axis was still mapped to a real driver. If it was mapped to a dummy driver, it could still cause step errors to be recorded and/or some movements to be slowed down.
+- The longest loop time reported by M122 was distorted by the fact that M122 itself takes a long time to execute, due to the volume of output it produces and the need to synchronise with the Network task
 
 New features/changed behaviour:
 - On the Duet 2 Maestro, the 2 optional add-on drivers are now assumed to be TMC2224 with UART interface
@@ -25,7 +25,7 @@ New features/changed behaviour:
 - On the Duet WiFi/Ethernet, at startup the firmware does additional retries when checking for the presence of a DueX2 or DueX5 and/or additional I/O expansion board
 - When a resurrect.g file is generated, it now includes G92 commands just before it invokes resurrect-prologue.g, to set the assumed head position to the point at which power was lost or the print was paused. This is to better handle printers for which homing Z is not possible when a print is already on the bed. Caution: this doesn't allow for any Z lift or other movement in the power fail script.
 - RTOS builds only: added a separate software watchdog to monitor the Heat task
-- RTOS builds only: the software reset data now includes which task was active
+- RTOS builds only: in the M122 report, the software reset data now includes which task was active, and only owned mutexes are listed
 - Upgraded compiler to 2018-q2-update
 
 Version 2.01beta1 (Duet 2 series) and 1.21.2beta1 (Duet 06/085)
