@@ -214,7 +214,7 @@ Done in 2.01beta1:
 - [done] If M911 resume threshold is set too high, save-on-power-off never primes itself
 - [done] display mutex owners in task diagnostics
 
-Bug fixes/investigations for 2.02beta2:
+Done in 2.02beta2:
 - [done, test] GCode queue overflow, see https://forum.duet3d.com/topic/5821/major-performance-problem. Suspend processing until queue space is available.
 - [done, test M28/M29 and M559/M560 file uploads] M28 and M29 in a macro, https://forum.duet3d.com/topic/5642/filament-load-macro-writing-to-file-in-sys. Move fileBeingWritten to GCodeBuffer, get rid of writingFileDirectory.
 - [done, test] we get a Pop underflow message when you send DWC jog commands and axes are not homed
@@ -231,7 +231,9 @@ Bug fixes/investigations for 2.02beta2:
 - [done, test] Software reset data now includes which task was active
 - [done, test] Step errors on a drive corresponding to an invisible axis, https://forum.duet3d.com/topic/3139/high-level-of-steperrors-what-can-cause-them/5
 
-- [awaiting reply] Step errors when usimng Numbe and pressure advance, https://forum.duet3d.com/topic/3139/high-level-of-steperrors-what-can-cause-them/5
+Bug fixes/investigations for 2.02beta3:
+- [done, ok] Chrishamm's changes to allow fans to be named
+- [awaiting reply] Step errors when using Nimble and pressure advance, https://forum.duet3d.com/topic/3139/high-level-of-steperrors-what-can-cause-them/5
 - [awaiting reply] GCode file that pauses between parts, https://forum.duet3d.com/topic/5702/printer-keeps-pausing-during-print/15
 - [looks like it was a temperature sensing error] Is there a kink during auto tuning? https://forum.duet3d.com/topic/5582/hot-end-auto-tuning-failed-due. Could explain oddly low dead times from auto tuning.
 - Pressure advance, see https://www.duet3d.com/forum/thread.php?pid=38036#p38036 and https://forum.duet3d.com/topic/1935/more-strange-pressure-advance-behaviour/95

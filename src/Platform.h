@@ -520,6 +520,7 @@ public:
 	void EnableSharedFan(bool enable);						// enable/disable the fan that shares its PWM pin with the last heater
 #endif
 	bool IsFanControllable(size_t fan) const;
+	const char *GetFanName(size_t fan) const;
 
 	bool WriteFanSettings(FileStore *f) const;		// Save some resume information
 	float GetFanRPM() const;

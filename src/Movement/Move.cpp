@@ -371,6 +371,12 @@ void Move::Spin()
 	}
 }
 
+// Return the number of currently used probe points
+unsigned int Move::GetNumProbePoints() const
+{
+	return probePoints.GetNumBedCompensationPoints();
+}
+
 // Try to push some babystepping through the lookahead queue
 float Move::PushBabyStepping(float amount)
 {
@@ -905,6 +911,18 @@ bool Move::LoadHeightMapFromFile(FileStore *f, const StringRef& r)
 bool Move::SaveHeightMapToFile(FileStore *f) const
 {
 	return heightMap.SaveToFile(f, zShift);
+}
+
+float Move::GetTopSpeed() const
+{
+	const DDA * const currDda = currentDda;
+	return (currDda == nullptr) ? 0.0 : currDda->GetTopSpeed();
+}
+
+float Move::GetRequestedSpeed() const
+{
+	const DDA * const currDda = currentDda;
+	return (currDda == nullptr) ? 0.0 : currDda->GetRequestedSpeed();
 }
 
 void Move::SetTaperHeight(float h)

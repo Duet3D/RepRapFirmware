@@ -1216,6 +1216,8 @@ void HttpResponder::DoUpload()
 		uploadedBytes += len;
 
 		(void)CheckAuthenticated();							// uploading may take a long time, so make sure the requester IP is not timed out
+		timer = millis();									// reset the timer
+
 		if (!fileBeingUploaded.Write(buffer, len))
 		{
 			uploadError = true;
@@ -1224,6 +1226,12 @@ void HttpResponder::DoUpload()
 			SendJsonResponse("upload");
 			return;
 		}
+	}
+	else if (!skt->CanRead() || millis() - timer >= HttpSessionTimeout)
+	{
+		// Sometimes uploads can get stuck; make sure they are cancelled when that happens
+		ConnectionLost();
+		return;
 	}
 
 	// See if the upload has finished
@@ -1243,12 +1251,6 @@ void HttpResponder::DoUpload()
 
 		FinishUpload(postFileLength, fileLastModified);
 		SendJsonResponse("upload");
-		return;
-	}
-	else if (!skt->CanRead())
-	{
-		// We cannot read any more, discard the transaction
-		ConnectionLost();
 	}
 }
 

@@ -3222,6 +3222,12 @@ bool Platform::IsFanControllable(size_t fan) const
 	return fan < NUM_FANS && !fans[fan].HasMonitoredHeaters() && fans[fan].IsConfigured();
 }
 
+// Return the fan's name
+const char *Platform::GetFanName(size_t fan) const
+{
+	return fan < NUM_FANS ? fans[fan].GetName() : "";
+}
+
 // Get current fan RPM
 float Platform::GetFanRPM() const
 {
