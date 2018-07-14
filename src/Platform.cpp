@@ -438,7 +438,7 @@ void Platform::Init()
 	DuetExpansion::AdditionalOutputInit();
 
 #elif defined(DUET_M)
-	numSmartDrivers = 5;										// TODO for now we assume that additional drivers are dumb
+	numSmartDrivers = 7;										// TODO for now we assume that additional drivers are smart
 #endif
 
 #if HAS_SMART_DRIVERS
@@ -653,7 +653,7 @@ void Platform::InitZProbe()
 int Platform::GetZProbeReading() const
 {
 	int zProbeVal = 0;			// initialised to avoid spurious compiler warning
-	if (zProbeType == ZProbeType::unfilteredDigital || (zProbeOnFilter.IsValid() && zProbeOffFilter.IsValid()))
+	if (zProbeType == ZProbeType::unfilteredDigital || zProbeType == ZProbeType::blTouch || (zProbeOnFilter.IsValid() && zProbeOffFilter.IsValid()))
 	{
 		switch (zProbeType)
 		{
@@ -663,7 +663,6 @@ int Platform::GetZProbeReading() const
 		case ZProbeType::digital:				// Switch connected to Z probe input
 		case ZProbeType::e1Switch:				// Switch connected to E1 endstop input
 		case ZProbeType::zSwitch:				// Switch connected to Z endstop input
-		case ZProbeType::blTouch:
 			zProbeVal = (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));
 			break;
 
@@ -674,6 +673,7 @@ int Platform::GetZProbeReading() const
 			break;
 
 		case ZProbeType::unfilteredDigital:		// Switch connected to Z probe input, no filtering
+		case ZProbeType::blTouch:				// blTouch is now unfiltered too
 			zProbeVal = GetRawZProbeReading()/4;
 			break;
 
@@ -1330,13 +1330,15 @@ void Platform::Spin()
 	{
 		if (currentVin < driverPowerOffAdcReading)
 		{
-			++numUnderVoltageEvents;
 			driversPowered = false;
+			++numUnderVoltageEvents;
+			lastUnderVoltageValue = currentVin;					// save this because the voltage may have changed by the time we report it
 		}
 		else if (currentVin > driverOverVoltageAdcReading)
 		{
 			driversPowered = false;
 			++numOverVoltageEvents;
+			lastOverVoltageValue = currentVin;					// save this because the voltage may have changed by the time we report it
 		}
 		else
 		{
@@ -1510,13 +1512,13 @@ void Platform::Spin()
 #if HAS_VOLTAGE_MONITOR
 			if (numOverVoltageEvents != previousOverVoltageEvents)
 			{
-				MessageF(WarningMessage, "VIN over-voltage event (%.1fV)", (double)GetCurrentPowerVoltage());
+				MessageF(WarningMessage, "VIN over-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastOverVoltageValue));
 				previousOverVoltageEvents = numOverVoltageEvents;
 				reported = true;
 			}
 			if (numUnderVoltageEvents != previousUnderVoltageEvents)
 			{
-				MessageF(WarningMessage, "VIN under-voltage event (%.1fV)", (double)GetCurrentPowerVoltage());
+				MessageF(WarningMessage, "VIN under-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastUnderVoltageValue));
 				previousUnderVoltageEvents = numUnderVoltageEvents;
 				reported = true;
 			}
@@ -1792,6 +1794,10 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		srdBuf[slot].cfsr = SCB->CFSR;
 		srdBuf[slot].icsr = SCB->ICSR;
 		srdBuf[slot].bfar = SCB->BFAR;
+#ifdef RTOS
+		srdBuf[slot].taskName = *reinterpret_cast<const uint32_t*>(pcTaskGetName(nullptr));
+#endif
+
 		if (stk != nullptr)
 		{
 			srdBuf[slot].sp = reinterpret_cast<uint32_t>(stk);
@@ -2093,7 +2099,8 @@ void Platform::Diagnostics(MessageType mtype)
 															: (reason == (uint32_t)SoftwareResetReason::otherFault) ? "Other fault"
 																: (reason == (uint32_t)SoftwareResetReason::stackOverflow) ? "Stack overflow"
 																	: (reason == (uint32_t)SoftwareResetReason::assertCalled) ? "Assertion failed"
-																		: "Unknown";
+																		: (reason == (uint32_t)SoftwareResetReason::heaterWatchdog) ? "Heat task stuck"
+																			: "Unknown";
 			String<ScratchStringLength> scratchString;
 			if (srdBuf[slot].when != 0)
 			{
@@ -2112,8 +2119,15 @@ void Platform::Diagnostics(MessageType mtype)
 								(srdBuf[slot].resetReason & (uint32_t)SoftwareResetReason::deliberate) ? "deliberate " : "",
 								reasonText, moduleName[srdBuf[slot].resetReason & 0x0F], srdBuf[slot].neverUsedRam, slot);
 			// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
-			MessageF(mtype, "Software reset code 0x%04x HFSR 0x%08" PRIx32 ", CFSR 0x%08" PRIx32 ", ICSR 0x%08" PRIx32 ", BFAR 0x%08" PRIx32 ", SP 0x%08" PRIx32 "\n",
-				srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, srdBuf[slot].bfar, srdBuf[slot].sp);
+			MessageF(mtype,
+#ifdef RTOS
+					"Software reset code 0x%04x HFSR 0x%08" PRIx32 " CFSR 0x%08" PRIx32 " ICSR 0x%08" PRIx32 " BFAR 0x%08" PRIx32 " SP 0x%08" PRIx32 " Task 0x%08" PRIx32 "\n",
+					srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, srdBuf[slot].bfar, srdBuf[slot].sp, srdBuf[slot].taskName
+#else
+					"Software reset code 0x%04x HFSR 0x%08" PRIx32 " CFSR 0x%08" PRIx32 " ICSR 0x%08" PRIx32 " BFAR 0x%08" PRIx32 " SP 0x%08" PRIx32 "\n",
+					srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, srdBuf[slot].bfar, srdBuf[slot].sp
+#endif
+				);
 			if (srdBuf[slot].sp != 0xFFFFFFFF)
 			{
 				// We saved a stack dump, so print it
@@ -2145,7 +2159,7 @@ void Platform::Diagnostics(MessageType mtype)
 #endif
 
 	// Show the longest SD card write time
-	MessageF(mtype, "SD card longest block write time: %.1fms\n", (double)FileStore::GetAndClearLongestWriteTime());
+	MessageF(mtype, "SD card longest block write time: %.1fms, max retries %u\n", (double)FileStore::GetAndClearLongestWriteTime(), FileStore::GetAndClearMaxRetryCount());
 
 #if HAS_CPU_TEMP_SENSOR
 	// Show the MCU temperatures
@@ -2807,12 +2821,15 @@ void Platform::DisableDrive(size_t drive)
 	}
 }
 
-// Disable all drives
+// Disable all drives. Called from emergency stop and the tick ISR.
 void Platform::DisableAllDrives()
 {
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
-		SetDriverCurrent(drive, 0.0, false);
+		if (!inInterrupt())		// on the Duet 06/085 we need interrupts running to send the I2C commands to set motor currents
+		{
+			SetDriverCurrent(drive, 0.0, false);
+		}
 		DisableDriver(drive);
 	}
 }
@@ -3663,12 +3680,11 @@ void Platform::AtxPowerOff(bool defer)
 	deferredPowerDown = defer;
 	if (!defer)
 	{
-		deferredPowerDown = false;
 		if (logger != nullptr)
 		{
 			logger->LogMessage(realTime, "Power off commanded");
 			logger->Flush(true);
-			// We don't call logger->Stop() here because we don't now whether turning off the power will work
+			// We don't call logger->Stop() here because we don't know whether turning off the power will work
 		}
 		IoPort::WriteDigital(ATX_POWER_PIN, false);
 	}

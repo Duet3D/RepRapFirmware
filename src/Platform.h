@@ -180,12 +180,13 @@ enum class SoftwareResetReason : uint16_t
 	erase = 0x10,					// special M999 command to erase firmware and reset
 	NMI = 0x20,
 	hardFault = 0x30,				// most exceptions get escalated to a hard fault
-	stuckInSpin = 0x40,				// we got stuck in a Spin() function for too long
+	stuckInSpin = 0x40,				// we got stuck in a Spin() function in the Main task for too long
 	wdtFault = 0x50,				// secondary watchdog
 	usageFault = 0x60,
 	otherFault = 0x70,
-	stackOverflow = 0x80,
-	assertCalled = 0x90,
+	stackOverflow = 0x80,			// FreeRTOS detected stack overflow
+	assertCalled = 0x90,			// FreeRTOS assertion failure
+	heaterWatchdog = 0xA0,			// the Heat task didn't kick the watchdog often enough
 
 	// Bits that are or'ed in
 	inAuxOutput = 0x0800,			// this bit is or'ed in if we were in aux output at the time
@@ -294,7 +295,7 @@ struct AxisDriversConfig
 
 // The main class that defines the RepRap machine for the benefit of the other classes
 class Platform
-{   
+{
 public:
 	// Enumeration to describe the status of a drive
 	enum class DriverStatus : uint8_t { disabled, idle, enabled };
@@ -660,7 +661,12 @@ private:
 		uint32_t bfar;								// bus fault address register
 		uint32_t sp;								// stack pointer
 		uint32_t when;								// value of the RTC when the software reset occurred
+#ifdef RTOS
+		uint32_t taskName;							// first 4 bytes of the task name
+		uint32_t stack[23];							// stack when the exception occurred, with the program counter at the bottom
+#else
 		uint32_t stack[24];							// stack when the exception occurred, with the program counter at the bottom
+#endif
 
 		bool isVacant() const						// return true if this struct can be written without erasing it first
 		{
@@ -885,6 +891,7 @@ private:
 #if HAS_VOLTAGE_MONITOR
 	AnalogChannelNumber vInMonitorAdcChannel;
 	volatile uint16_t currentVin, highestVin, lowestVin;
+	uint16_t lastUnderVoltageValue, lastOverVoltageValue;
 	uint16_t autoPauseReading, autoResumeReading;
 	uint32_t numUnderVoltageEvents, previousUnderVoltageEvents;
 	volatile uint32_t numOverVoltageEvents, previousOverVoltageEvents;

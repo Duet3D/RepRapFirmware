@@ -60,7 +60,7 @@ public:
 	bool SetClusterMap(uint32_t[]);					// Provide a cluster map for fast seeking
 #endif
 	static float GetAndClearLongestWriteTime();		// Return the longest time it took to write a block to a file, in milliseconds
-
+	static unsigned int GetAndClearMaxRetryCount();	// Return the highest SD card retry count that resulted in a successful transfer
 	friend class MassStorage;
 
 private:

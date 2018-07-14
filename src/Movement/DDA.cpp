@@ -248,8 +248,17 @@ void DDA::Init()
 // Either way, return the amount of extrusion we didn't do in the extruder coordinates of nextMove
 bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 {
-	// 1. Compute the new endpoints and the movement vector
+	// 0. If there are more total axes than visible axes, then we must ignore any movement data in nextMove for the invisible axes.
+	// The call to CartesianToMotorSteps may adjust the invisible axis endpoints for architectures such as CoreXYU, so set them up here.
+	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
+	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
 	const int32_t * const positionNow = prev->DriveCoordinates();
+	for (size_t axis = numVisibleAxes; axis < numTotalAxes; ++axis)
+	{
+		endPoint[axis] = positionNow[axis];
+	}
+
+	// 1. Compute the new endpoints and the movement vector
 	const Move& move = reprap.GetMove();
 	if (doMotorMapping)
 	{
@@ -271,20 +280,19 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	bool realMove = false;
 	float accelerations[DRIVES];
 	const float * const normalAccelerations = reprap.GetPlatform().Accelerations();
-	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	const Kinematics& k = move.GetKinematics();
 
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
 		accelerations[drive] = normalAccelerations[drive];
-		if (drive >= numAxes || !doMotorMapping)
+		if (drive >= numTotalAxes || (!doMotorMapping && drive < numVisibleAxes))
 		{
 			endPoint[drive] = Move::MotorEndPointToMachine(drive, nextMove.coords[drive]);
 		}
 
 		endCoordinates[drive] = nextMove.coords[drive];
 		int32_t delta;
-		if (drive < numAxes)
+		if (drive < numTotalAxes)
 		{
 			delta = endPoint[drive] - positionNow[drive];
 			if (k.IsContinuousRotationAxis(drive) && nextMove.moveType != 1 && nextMove.moveType != 2)
@@ -305,7 +313,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 			delta = endPoint[drive];
 		}
 
-		if (drive < numAxes && doMotorMapping)
+		if (drive < numTotalAxes && doMotorMapping)
 		{
 			const float positionDelta = nextMove.coords[drive] - prev->GetEndCoordinate(drive, false);
 			directionVector[drive] = positionDelta;
@@ -317,7 +325,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 		else
 		{
 			directionVector[drive] = (float)delta/reprap.GetPlatform().DriveStepsPerUnit(drive);
-			if (drive >= numAxes && nextMove.coords[drive] > 0.0)
+			if (drive >= numTotalAxes && nextMove.coords[drive] > 0.0)
 			{
 				extruding = true;
 			}
@@ -331,14 +339,14 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 			pdm->totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 			pdm->direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 
-			if (drive >= numAxes)
+			if (drive >= numTotalAxes)
 			{
 				// It's an extruder movement
 				nextMove.coords[drive] -= directionVector[drive];
 														// subtract the amount of extrusion we actually did to leave the residue outstanding
 				if (xyMoving && nextMove.usePressureAdvance)
 				{
-					const float compensationTime = reprap.GetPlatform().GetPressureAdvance(drive - numAxes);
+					const float compensationTime = reprap.GetPlatform().GetPressureAdvance(drive - numTotalAxes);
 					if (compensationTime > 0.0)
 					{
 						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
@@ -359,7 +367,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 		// Update the end position in the previous move, so that on the next move we don't think there is XY movement when the user didn't ask for any
 		if (doMotorMapping)
 		{
-			for (size_t drive = 0; drive < numAxes; ++drive)
+			for (size_t drive = 0; drive < numTotalAxes; ++drive)
 			{
 				prev->endCoordinates[drive] = nextMove.coords[drive];
 			}
@@ -423,7 +431,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	else if (axesMoving)
 	{
 		// Some axes are moving, but not axes that X or Y are mapped to. Normalise the movement to the vector sum of the axes that are moving.
-		totalDistance = Normalise(directionVector, DRIVES, numAxes);
+		totalDistance = Normalise(directionVector, DRIVES, numTotalAxes);
 	}
 	else
 	{

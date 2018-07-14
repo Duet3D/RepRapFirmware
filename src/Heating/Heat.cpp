@@ -185,6 +185,8 @@ void Heat::Task()
 			heaterBeingTuned = -1;
 		}
 
+		reprap.KickHeatTaskWatchdog();
+
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, platform.HeatSampleInterval());
 	}

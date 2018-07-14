@@ -195,7 +195,7 @@ WiFi:
 - [resolve library incompatibility] New ESP8266 SDK
 - [done] check what's new in Arduino ESP 2.4.1
 
-Bug fixes/investigations:
+Done in 2.01beta1:
 - [done, test] sqrt(2) error factor in extrusion-only moves, see Michael's email
 - [done] Homing wrong if axes not labeled sequentially, see Christian's email of 18/6/18
 - [done, test] Fix "2dtstc2diva=u" in debug printout, https://forum.duet3d.com/topic/3139/high-level-of-steperrors-what-can-cause-them/5
@@ -212,30 +212,42 @@ Bug fixes/investigations:
 - [done] Add SW_ENC pin on CONN_SD to available GPIO ports
 - [done] Increased M999 delay to 1 second
 - [done] If M911 resume threshold is set too high, save-on-power-off never primes itself
+- [done] display mutex owners in task diagnostics
 
-- Test gcode file that pauses between parts, https://forum.duet3d.com/topic/5702/printer-keeps-pausing-during-print/15
-- Doesn't find DueX5 after M999 reset? https://forum.duet3d.com/topic/5713/duet2-with-2-0-rtos-looses-duex5-on-reset
-- stuck in spin loop, https://forum.duet3d.com/topic/5674/damned-crash-stuck-in-spin-loop
-- step errors, see https://forum.duet3d.com/topic/3139/high-level-of-steperrors-what-can-cause-them/5
+Bug fixes/investigations for 2.02beta2:
+- [done, test] GCode queue overflow, see https://forum.duet3d.com/topic/5821/major-performance-problem. Suspend processing until queue space is available.
+- [done, test M28/M29 and M559/M560 file uploads] M28 and M29 in a macro, https://forum.duet3d.com/topic/5642/filament-load-macro-writing-to-file-in-sys. Move fileBeingWritten to GCodeBuffer, get rid of writingFileDirectory.
+- [done, test] we get a Pop underflow message when you send DWC jog commands and axes are not homed
+- [done, test] clear bed compensation not working properly, https://forum.duet3d.com/topic/5978/dwc-ui-position-updates-are-behind-causing-leveling-problems/6
+- [done] Duet Maestro default to TMC2224 drivers on expansion
+- [done] bltouch now uses unfiltered digital probe mode
+- [done] Reset/retry after SD card error - we have confirmation that fatfs is reporting a low-level error (error 1)
+- [increased retries, test detection] Doesn't find DueX5 after M999 reset? https://forum.duet3d.com/topic/5713/duet2-with-2-0-rtos-looses-duex5-on-reset
+- [made some changes] Test Duet 06/085 DHCP problem again, see https://forum.duet3d.com/topic/5572/it-s-out-reprapfirmware-2-0-and-1-21-1-released/16 for config.g files
+- [done, test] resurrect.g to include G92 commands to set head position to the power fail position
+- [done] Software watchdog to watch Heat task
+- [done, test] When an under-voltage event occurs, spurious driver status warnings/error were sometimes reported
+- [done, test] When an under- or over-voltage event occurred, the VIN voltage reported was the current voltage, not the voltage when the event was recorded
+- [done, test] Software reset data now includes which task was active
+- [done, test] Step errors on a drive corresponding to an invisible axis, https://forum.duet3d.com/topic/3139/high-level-of-steperrors-what-can-cause-them/5
+
+- [awaiting reply] Step errors when usimng Numbe and pressure advance, https://forum.duet3d.com/topic/3139/high-level-of-steperrors-what-can-cause-them/5
+- [awaiting reply] GCode file that pauses between parts, https://forum.duet3d.com/topic/5702/printer-keeps-pausing-during-print/15
+- [looks like it was a temperature sensing error] Is there a kink during auto tuning? https://forum.duet3d.com/topic/5582/hot-end-auto-tuning-failed-due. Could explain oddly low dead times from auto tuning.
+- Pressure advance, see https://www.duet3d.com/forum/thread.php?pid=38036#p38036 and https://forum.duet3d.com/topic/1935/more-strange-pressure-advance-behaviour/95
+- Stuck in spin loop, https://forum.duet3d.com/topic/5674/damned-crash-stuck-in-spin-loop
+- Report that if you use FileZilla to upload several short files, some of them are written blank, https://forum.duet3d.com/topic/5992/files-uploaded-over-ftp-occasionally-blank
+
 - Investigate failed .BMP conversion, https://forum.duet3d.com/topic/5623/boot-logo-corruption-in-1-21/2
-- Duet Maestro default to TMC2224 drivers on expansion? How to detect them?
-- M28 and M29 in a macro, https://forum.duet3d.com/topic/5642/filament-load-macro-writing-to-file-in-sys. Move fileBeingWritten to GCodeBuffer, get rid of writingFileDirectory.
-- Is there a kink during auto tuning? https://forum.duet3d.com/topic/5582/hot-end-auto-tuning-failed-due. Could explain oddly low dead times from auto tuning.
-- Does bltouch need a default recovery time to allow it to deploy? (probably not)
-- Should bltouch use digital probe mode? Some users having problems with P25 in G31 command.
-- Test Duet 06/085 DHCP problem again, see https://forum.duet3d.com/topic/5572/it-s-out-reprapfirmware-2-0-and-1-21-1-released/16 for config.g files
-- Retry after SD card error?
 
 Other:
-- @wilriker PR for M106 PWM limit
-- [done, test] display mutex owners in task diagnostics
 
 Planned for 2.02:
-- WiFi continuous auto reconnect, or extra M552 parameter? See https://forum.duet3d.com/topic/5765/wifi-module-auto-reconnect
+- @wilriker PR for M106 PWM limit
+- WiFi continuous auto reconnect in client mode, or extra M552 parameter? See https://forum.duet3d.com/topic/5765/wifi-module-auto-reconnect
 - Better dead time measurement during auto tuning. Measure both turn-on and turn-off?
 - Bezier speed curves or other S-curve acceleration, e.g. look at https://github.com/MarlinFirmware/Marlin/pull/10373/files
 - Option to send M280 servo commands just a few times instead of continuously, for E3D
-- Recovery from SD card errors during a print (Dan)
 - Danny's modified SCARA kinematics (workpiece is on a plate, extruder is fixed)
 - Laser support via G1 S parameter, see https://forum.duet3d.com/topic/4702/laser-cnc-support-in-rrf-gcode-semantics/4
 - Look at pushover notification support, https://forum.duet3d.com/topic/169/notification-via-pushover-or-other-service/45
@@ -244,11 +256,10 @@ Planned for 2.02:
 - M584 when assigning a drive, unmap any existing assignment. Also allow an axis to be mapped to driver -1.
 - Add S4 option to G1 command, like S1 but no endstop checks (needed for CoreXY, CoreXZ)
 - CNC: look at G17/18/19, see https://forum.duet3d.com/topic/4669/ooznest-workbee-screw-driven
-- M569 command to allow selection of smart/dumb driver, also allow all 12 drivers to be smart
+- M569 command to allow selection of smart/dumb driver (including on Duet M), also allow all 12 drivers to be smart
 - M569 TOFF parameter, https://forum.duet3d.com/topic/5392/does-m906-set-rms-or-peak-current/28
 - Apostrophe in quoted filename: can we make apostrophe special in SSIDs/passwords but not filenames?
 - If wifi module gets stuck in starting or changing mode state, reset it again
-- If wifi disconnects when in client mode, keep retrying the connection
 - M140 command to set default bed heaters for M140 S commands (e.g. M140 P0:1:2)
 
 Other (some of these may be in 2.02):
@@ -260,7 +271,6 @@ Other (some of these may be in 2.02):
 - support M205 for setting jerk
 - support G12 clean tool?
 - Add fan PWM limit, https://forum.duet3d.com/topic/5370/m106-feature-request-limit-max-pwm-parameter/4
-- M116 extra "close enough" parameter
 - after homing, warn if outside M208 movement limits on SCARA, polar etc.
 - Unexpected heaters off/tool selection behaviour, https://www.duet3d.com/forum/thread.php?pid=43059#p43059
 - warn when using : where ; was probably meant
@@ -271,7 +281,6 @@ Other (some of these may be in 2.02):
 - Auto mount main SD card when inserted
 - Workplace offsets are supposed to be persistant (check NIST), https://www.duet3d.com/forum/thread.php?pid=43755#p43755
 - At the end of a simulation, restore the original workplace coordinate selection
-- looks like we get a Pop underflow message when you send DWC jog commands and axes are not homed
 - Add warning message when print exceeds bounds
 - When uploading while a file is being printed, don't allow the currently-printing file to be replaced
 
@@ -288,7 +297,6 @@ Other (some of these may be in 2.02):
 - laser control, https://www.duet3d.com/forum/thread.php?pid=37891#p37891
 - slow DWC but fast FTP, https://www.duet3d.com/forum/thread.php?pid=38345#p38345
 - no stall detect on Z axis, https://www.duet3d.com/forum/thread.php?pid=38504#p38504, https://www.duet3d.com/forum/thread.php?pid=39484#p39484
-- Pressure advance, see https://www.duet3d.com/forum/thread.php?pid=38036#p38036
 - check that we never enable the drivers before we set vsense
 
 - [don't do] Don't report the motor current for a non-existent extruder

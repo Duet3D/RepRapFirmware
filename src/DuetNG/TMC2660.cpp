@@ -501,27 +501,30 @@ uint32_t TmcDriverState::GetChopConf() const
 // This is called by the ISR when the SPI transfer has completed
 inline void TmcDriverState::TransferDone()
 {
-	fastDigitalWriteHigh(pin);								// set the CS pin high for the driver we just polled
-	uint32_t status = be32_to_cpu(spiDataIn) >> 12;			// get the status
-	const uint32_t interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
-	if (interval == 0 || interval > maxStallStepInterval)	// if the motor speed is too low to get reliable stall indication
+	fastDigitalWriteHigh(pin);									// set the CS pin high for the driver we just polled
+	if (driversPowered)											// if the power is still good, update the status
 	{
-		status &= ~TMC_RR_SG;								// remove the stall status bit
-	}
-	else
-	{
-		const uint32_t sgLoad = (status >> TMC_RR_SG_LOAD_SHIFT) & 1023;	// get the StallGuard load register
-		if (sgLoad < minSgLoadRegister)
+		uint32_t status = be32_to_cpu(spiDataIn) >> 12;			// get the status
+		const uint32_t interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
+		if (interval == 0 || interval > maxStallStepInterval)	// if the motor speed is too low to get reliable stall indication
 		{
-			minSgLoadRegister = sgLoad;
+			status &= ~TMC_RR_SG;								// remove the stall status bit
 		}
-		if (sgLoad > maxSgLoadRegister)
+		else
 		{
-			maxSgLoadRegister = sgLoad;
+			const uint32_t sgLoad = (status >> TMC_RR_SG_LOAD_SHIFT) & 1023;	// get the StallGuard load register
+			if (sgLoad < minSgLoadRegister)
+			{
+				minSgLoadRegister = sgLoad;
+			}
+			if (sgLoad > maxSgLoadRegister)
+			{
+				maxSgLoadRegister = sgLoad;
+			}
 		}
+		lastReadStatus = status;
+		accumulatedStatus |= status;
 	}
-	lastReadStatus = status;
-	accumulatedStatus |= status;
 }
 
 // This is called from the ISR or elsewhere to start a new SPI transfer. Inlined for ISR speed.

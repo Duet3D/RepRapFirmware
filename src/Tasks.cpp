@@ -201,23 +201,15 @@ namespace Tasks
 			p.MessageF(mtype, " %s(%s,%u)",
 				taskDetails.pcTaskName, stateText, (unsigned int)(taskDetails.usStackHighWaterMark * sizeof(StackType_t)));
 		}
-		p.Message(mtype, "\nMutexes:");
+		p.Message(mtype, "\nOwned mutexes:");
 
 		for (const Mutex *m = Mutex::GetMutexList(); m != nullptr; m = m->GetNext())
 		{
 			const TaskHandle holder = m->GetHolder();
-			TaskStatus_t taskDetails;
-			const char *holderText;
-			if (holder == nullptr)
+			if (holder != nullptr)
 			{
-				holderText = "null";
+				p.MessageF(mtype, " %s(%s)", m->GetName(), pcTaskGetName(holder));
 			}
-			else
-			{
-				vTaskGetInfo(holder, &taskDetails, pdTRUE, eInvalid);
-				holderText = taskDetails.pcTaskName;
-			}
-			p.MessageF(mtype, " %s(%s)", m->GetName(), holderText);
 		}
 		p.MessageF(mtype, "\n");
 #endif

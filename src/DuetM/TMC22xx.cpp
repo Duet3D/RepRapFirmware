@@ -268,6 +268,7 @@ public:
 	void AppendDriverStatus(const StringRef& reply);
 	uint8_t GetDriverNumber() const { return driverNumber; }
 	bool UpdatePending() const { return registersToUpdate != 0; }
+	bool UsesGlobalEnable() const { return enablePin == NoPin; }
 
 	float GetStandstillCurrentPercent() const;
 	void SetStandstillCurrentPercent(float percent);
@@ -640,24 +641,27 @@ inline void TmcDriverState::TransferDone()
 		}
 		lastIfCount = currentIfCount;
 	}
-	else if (sendData[2] == ReadRegNumbers[registerToRead] && ReadRegNumbers[registerToRead] == receiveData[6] && receiveData[4] == 0x05 && receiveData[5] == 0xFF)
+	else if (driversState != DriversState::noPower)		// we don't check the CRC, so only accept the result if power is still good
 	{
-		// We asked to read the scheduled read register, and the sync byte, slave address and register number in the received message match
-		//TODO here we could check the CRC of the received message, but for now we assume that we won't get any corruption in the 32-bit received data
-		const uint32_t regVal = ((uint32_t)receiveData[7] << 24) | ((uint32_t)receiveData[8] << 16) | ((uint32_t)receiveData[9] << 8) | receiveData[10];
-		readRegisters[registerToRead] = regVal;
-		accumulatedReadRegisters[registerToRead] |= regVal;
-
-		++registerToRead;
-		if (registerToRead == NumReadRegisters)
+		if (sendData[2] == ReadRegNumbers[registerToRead] && ReadRegNumbers[registerToRead] == receiveData[6] && receiveData[4] == 0x05 && receiveData[5] == 0xFF)
 		{
-			registerToRead = 0;
+			// We asked to read the scheduled read register, and the sync byte, slave address and register number in the received message match
+			//TODO here we could check the CRC of the received message, but for now we assume that we won't get any corruption in the 32-bit received data
+			const uint32_t regVal = ((uint32_t)receiveData[7] << 24) | ((uint32_t)receiveData[8] << 16) | ((uint32_t)receiveData[9] << 8) | receiveData[10];
+			readRegisters[registerToRead] = regVal;
+			accumulatedReadRegisters[registerToRead] |= regVal;
+
+			++registerToRead;
+			if (registerToRead == NumReadRegisters)
+			{
+				registerToRead = 0;
+			}
+			++numReads;
 		}
-		++numReads;
-	}
-	else
-	{
-		++readErrors;
+		else
+		{
+			++readErrors;
+		}
 	}
 }
 
@@ -903,7 +907,6 @@ namespace SmartDrivers
 			if (powered)
 			{
 				// Power to the drivers has been provided or restored, so we need to enable and re-initialise them
-
 				for (size_t drive = 0; drive < numTmc22xxDrivers; ++drive)
 				{
 					driverStates[drive].WriteAll();
@@ -938,11 +941,11 @@ namespace SmartDrivers
 
 			if (driversState == DriversState::initialising)
 			{
-				// If all drivers have been initialised, set the global enable
+				// If all drivers that share the global enable have been initialised, set the global enable
 				bool allInitialised = true;
 				for (size_t i = 0; i < numTmc22xxDrivers; ++i)
 				{
-					if (driverStates[i].UpdatePending())
+					if (driverStates[i].UsesGlobalEnable() && driverStates[i].UpdatePending())
 					{
 						allInitialised = false;
 						break;

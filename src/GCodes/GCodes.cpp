@@ -105,16 +105,14 @@ void GCodes::Init()
 	{
 		rawExtruderTotalByDrive[extruder] = 0.0;
 	}
-	eofString = EOF_STRING;
-	eofStringCounter = 0;
-	eofStringLength = strlen(eofString);
+
 	runningConfigFile = false;
 	m501SeenInConfigFile = false;
 	doingToolChange = false;
 	active = true;
-	fileSize = 0;
 	limitAxes = noMovesBeforeHoming = true;
 	SetAllAxesNotHomed();
+
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
 		pausedFanSpeeds[i] = 0.0;
@@ -160,7 +158,6 @@ void GCodes::Reset()
 	nextGcodeSource = 0;
 
 	fileToPrint.Close();
-	fileBeingWritten = nullptr;
 	speedFactor = SecondsToMinutes;						// default is just to convert from mm/minute to mm/second
 
 	for (size_t i = 0; i < MaxExtruders; ++i)
@@ -1441,7 +1438,11 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 		// Yes - fill up the GCodeBuffer and run the next code
 		if (fileInput->FillBuffer(&gb))
 		{
-			gb.SetFinished(ActOnCode(gb, reply));
+			// We read some data, but we don't necessarily have a command available because we may be executing M28 within a file
+			if (gb.IsReady())
+			{
+				gb.SetFinished(ActOnCode(gb, reply));
+			}
 		}
 		break;
 
@@ -1959,6 +1960,17 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 					&& reprap.GetMove().WriteResumeSettings(f);				// load grid, if we are using one
 			if (ok)
 			{
+				// Write a G92 command to say where the head is. This is useful if we can't Z-home the printer with a print on the bed and the Z steps/mm is high.
+				buf.copy("G92");
+				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+				{
+					buf.catf(" %c%.3f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
+				}
+				buf.cat('\n');
+				ok = f->Write(buf.c_str());
+			}
+			if (ok)
+			{
 				buf.printf("M98 P%s\n", RESUME_PROLOGUE_G);					// call the prologue - must contain at least M116
 				ok = f->Write(buf.c_str())
 					&& platform.WriteFanSettings(f);						// set the speeds of non-thermostatic fans
@@ -2007,7 +2019,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 				{
 					if (axis != Z_AXIS)
 					{
-						buf.catf(" %c%.2f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
+						buf.catf(" %c%.3f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
 					}
 				}
 
@@ -3058,6 +3070,7 @@ bool GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 void GCodes::ClearBedMapping()
 {
 	reprap.GetMove().SetIdentityTransform();
+	reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 	ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates to remove any height map offset there was at the current position
 }
 
@@ -3101,114 +3114,6 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 	{
 		s.catf(" %.3f", HideNan(liveCoordinates[axis]));
 	}
-}
-
-bool GCodes::OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
-{
-	fileBeingWritten = platform.OpenFile(directory, fileName, OpenMode::write);
-	eofStringCounter = 0;
-	fileSize = size;
-	if (fileBeingWritten == nullptr)
-	{
-		platform.MessageF(ErrorMessage, "Failed to open GCode file \"%s\" for writing.\n", fileName);
-		return false;
-	}
-	else
-	{
-		gb.SetCRC32(fileCRC32);
-		gb.SetBinaryWriting(binaryWrite);
-		gb.SetWritingFileDirectory(directory);
-		return true;
-	}
-}
-
-void GCodes::WriteHTMLToFile(GCodeBuffer& gb, char b)
-{
-	if (fileBeingWritten == nullptr)
-	{
-		platform.Message(ErrorMessage, "Attempt to write to a null file.\n");
-		return;
-	}
-
-	if ((b == eofString[eofStringCounter]) && (fileSize == 0))
-	{
-		eofStringCounter++;
-		if (eofStringCounter >= eofStringLength)
-		{
-			FinishWrite(gb);
-		}
-	}
-	else
-	{
-		if (eofStringCounter != 0)
-		{
-			for (uint8_t i = 0; i < eofStringCounter; i++)
-			{
-				fileBeingWritten->Write(eofString[i]);
-			}
-			eofStringCounter = 0;
-		}
-		fileBeingWritten->Write(b);		// writing one character at a time isn't very efficient, but uploading HTML files via USB is rarely done these days
-		if (fileSize > 0 && fileBeingWritten->Length() >= fileSize)
-		{
-			FinishWrite(gb);
-		}
-	}
-}
-
-void GCodes::FinishWrite(GCodeBuffer& gb)
-{
-	const char* r;
-	fileBeingWritten->Close();
-	if ((gb.GetCRC32() != fileBeingWritten->GetCRC32()) && (gb.GetCRC32() != 0))
-	{
-		r = "Error: CRC32 checksum doesn't match";
-	}
-	else
-	{
-		r = (platform.Emulating() == Compatibility::marlin) ? "Done saving file." : "";
-	}
-	fileBeingWritten = nullptr;
-	gb.SetBinaryWriting(false);
-	gb.SetWritingFileDirectory(nullptr);
-
-	HandleReply(gb, GCodeResult::ok, r);
-}
-
-void GCodes::WriteGCodeToFile(GCodeBuffer& gb)
-{
-	if (fileBeingWritten == nullptr)
-	{
-		platform.Message(ErrorMessage, "Attempt to write to a null file.\n");
-		return;
-	}
-
-	if (gb.GetCommandLetter() == 'M')
-	{
-		if (gb.GetCommandNumber() == 29)						// end of file?
-		{
-			fileBeingWritten->Close();
-			fileBeingWritten = nullptr;
-			gb.SetWritingFileDirectory(nullptr);
-			const char* r = (platform.Emulating() == Compatibility::marlin) ? "Done saving file." : "";
-			HandleReply(gb, GCodeResult::ok, r);
-			return;
-		}
-	}
-	else if (gb.GetCommandLetter() == 'G' && gb.GetCommandNumber() == 998)						// resend request?
-	{
-		if (gb.Seen('P'))
-		{
-			String<ShortScratchStringLength> scratchString;
-			scratchString.printf("%" PRIi32 "\n", gb.GetIValue());
-			HandleReply(gb, GCodeResult::ok, scratchString.c_str());
-			return;
-		}
-	}
-
-	fileBeingWritten->Write(gb.Buffer());
-	fileBeingWritten->Write('\n');
-	HandleReply(gb, GCodeResult::ok, "");
 }
 
 // Set up a file to print, but don't print it yet.
@@ -4911,7 +4816,7 @@ const char* GCodes::GetMachineModeString() const
 }
 
 // Respond to a heater fault. The heater has already been turned off and its status set to 'fault' when this is called from the Heat module.
-// The Heat module will generate an appropriate error message, so on need to do that here.
+// The Heat module will generate an appropriate error message, so no need to do that here.
 void GCodes::HandleHeaterFault(int heater)
 {
 	if (heaterFaultState == HeaterFaultState::noFault && fileGCode->OriginalMachineState().fileState.IsLive())
@@ -4953,11 +4858,12 @@ void GCodes::CheckHeaterFault()
 			reprap.GetHeat().SwitchOffAll(true);
 			platform.MessageF(ErrorMessage, "Shutting down due to un-cleared heater fault after %lu seconds\n", heaterFaultTimeout/1000);
 			heaterFaultState = HeaterFaultState::stopping;
+			heaterFaultTime = millis();
 		}
 		break;
 
 	case HeaterFaultState::stopping:
-		if (millis() - heaterFaultTime >= 2000)			// wait 2 seconds for the message to be picked up by DWC and PanelDue
+		if (millis() - heaterFaultTime >= 1000)			// wait 1 second for the message to be picked up by DWC and PanelDue
 		{
 			platform.AtxPowerOff(false);
 			heaterFaultState = HeaterFaultState::stopped;

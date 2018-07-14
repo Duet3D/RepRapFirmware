@@ -61,6 +61,8 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
 			HandleReply(gb, GCodeResult::ok, "");
 			return true;
 		}
+
+		return false;		// we should queue this code but we can't, so wait until we can either execute it or queue it
 	}
 
 	switch (gb.GetCommandLetter())
@@ -230,8 +232,12 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 				result = LoadHeightMap(gb, reply);
 				break;
 
-			default:	// clear height map
+			case 2:		// clear height map
 				ClearBedMapping();
+				break;
+
+			default:
+				result = GCodeResult::badOrMissingParameter;
 				break;
 			}
 		}
@@ -850,7 +856,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			String<MaxFilenameLength> filename;
 			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
-				const bool ok = OpenFileToWrite(gb, platform.GetGCodeDir(), filename.c_str(), 0, false, 0);
+				const bool ok = gb.OpenFileToWrite(platform.GetGCodeDir(), filename.c_str(), 0, false, 0);
 				if (ok)
 				{
 					reply.printf("Writing to file: %s", filename.c_str());
@@ -2960,7 +2966,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		const FilePosition size = (gb.Seen('S') ? (FilePosition)gb.GetIValue() : 0);
 		const uint32_t crc32 = (gb.Seen('C') ? gb.GetUIValue() : 0);
-		const bool ok = OpenFileToWrite(gb, folder, filename.c_str(), size, true, crc32);
+		const bool ok = gb.OpenFileToWrite(folder, filename.c_str(), size, true, crc32);
 		if (ok)
 		{
 			reply.printf("Writing to file: %s", filename.c_str());
@@ -2973,7 +2979,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	}
 	break;
 
-	case 561: // Set identity transform (also clears bed probe grid)
+	case 561: // Set identity transform and disable height map
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return false;
+		}
 		ClearBedMapping();
 		break;
 

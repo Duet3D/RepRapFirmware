@@ -171,9 +171,6 @@ public:
 	NetworkGCodeInput *GetHTTPInput() const { return httpInput; }
 	NetworkGCodeInput *GetTelnetInput() const { return telnetInput; }
 
-	void WriteGCodeToFile(GCodeBuffer& gb);								// Write this GCode into a file
-	void WriteHTMLToFile(GCodeBuffer& gb, char b);						// Save an HTML file (usually to upload a new web interface)
-
 	bool IsFlashing() const { return isFlashing; }						// Is a new firmware binary going to be flashed?
 
 	bool IsPaused() const;
@@ -222,6 +219,7 @@ public:
 #endif
 
 	void SetMappedFanSpeed(float f);									// Set the mapped fan speed
+	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);	// Handle G-Code replies
 
 private:
 	GCodes(const GCodes&);												// private copy constructor to prevent copying
@@ -261,7 +259,6 @@ private:
 	bool HandleMcode(GCodeBuffer& gb, const StringRef& reply);			// Do an M code
 	bool HandleTcode(GCodeBuffer& gb, const StringRef& reply);			// Do a T code
 	bool HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply);
-	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);		// Handle G-Code replies
 	void HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply);
 
 	const char* DoStraightMove(GCodeBuffer& gb, bool isCoordinated) __attribute__((hot));	// Execute a straight move returning any error message
@@ -290,9 +287,7 @@ private:
 	bool Push(GCodeBuffer& gb);													// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb);													// Pop feedrate etc
 	void DisableDrives();														// Turn the motors off
-	bool OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32);
 																				// Start saving GCodes in a file
-	void FinishWrite(GCodeBuffer& gb);											// Finish writing to the file and respond
 	bool SendConfigToLine();													// Deal with M503
 
 	GCodeResult OffsetAxes(GCodeBuffer& gb, const StringRef& reply);			// Set/report offsets
@@ -477,13 +472,6 @@ private:
 
 	FileData fileToPrint;						// The next file to print
 	FilePosition fileOffsetToPrint;				// The offset to print from
-
-	FileStore* fileBeingWritten;				// A file to write G Codes (or sometimes HTML) to
-	FilePosition fileSize;						// Size of the file being written
-
-	const char* eofString;						// What's at the end of an HTML file?
-	uint8_t eofStringCounter;					// Check the...
-	uint8_t eofStringLength;					// ... EoF string as we read.
 
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
 	bool limitAxes;								// Don't think outside the box

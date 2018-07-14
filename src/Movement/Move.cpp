@@ -104,6 +104,7 @@ void Move::Init()
 
 	idleTimeout = DefaultIdleTimeout;
 	moveState = MoveState::idle;
+	lastStateChangeTime = millis();
 	idleCount = 0;
 
 	simulationMode = 0;
@@ -589,7 +590,7 @@ void Move::Diagnostics(MessageType mtype)
 {
 	Platform& p = reprap.GetPlatform();
 	p.Message(mtype, "=== Move ===\n");
-	p.MessageF(mtype, "Hiccups: %" PRIu32 ", StepErrors: %u, LaErrors: %u, FreeDm: %d, MinFreeDm %d, MaxWait: %" PRIu32 "ms, Underruns: %u, %u\n",
+	p.MessageF(mtype, "Hiccups: %" PRIu32 ", StepErrors: %u, LaErrors: %u, FreeDm: %d, MinFreeDm: %d, MaxWait: %" PRIu32 "ms, Underruns: %u, %u\n",
 						DDA::numHiccups, stepErrors, numLookaheadErrors, DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
 	DDA::numHiccups = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = numLookaheadErrors = 0;

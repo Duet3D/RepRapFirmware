@@ -5,6 +5,7 @@
 #include "MassStorage.h"
 #include "Platform.h"
 #include "RepRap.h"
+#include "Libraries/Fatfs/diskio.h"
 
 uint32_t FileStore::longestWriteTime = 0;
 
@@ -474,6 +475,12 @@ float FileStore::GetAndClearLongestWriteTime()
 	const float ret = (float)longestWriteTime * StepClocksToMillis;
 	longestWriteTime = 0;
 	return ret;
+}
+
+// Return the highest SD card retry count that resulted in a successful transfer
+unsigned int FileStore::GetAndClearMaxRetryCount()
+{
+	return DiskioGetAndClearMaxRetryCount();
 }
 
 #if 0	// not currently used
