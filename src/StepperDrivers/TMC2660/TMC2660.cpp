@@ -5,6 +5,10 @@
  *      Author: David
  */
 
+#include "ReprapFirmware.h"
+
+#if SUPPORT_TMC2660
+
 #include "TMC2660.h"
 #include "RepRap.h"
 #include "Movement/Move.h"
@@ -822,6 +826,8 @@ namespace SmartDrivers
 	}
 
 };	// end namespace
+
+#endif
 
 // End
 

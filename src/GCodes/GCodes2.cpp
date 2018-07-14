@@ -30,10 +30,12 @@
 # include "FirmwareUpdater.h"
 #endif
 
-#if defined(DUET_NG)
-# include "TMC2660.h"
-#elif defined(DUET_M)
-# include "TMC22xx.h"
+#if SUPPORT_TMC2660
+# include "StepperDrivers/TMC2660/TMC2660.h"
+#endif
+
+#if SUPPORT_TMC22xx
+# include "StepperDrivers/TMC22xx/TMC22xx.h"
 #endif
 
 #if SUPPORT_12864_LCD

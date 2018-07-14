@@ -41,10 +41,11 @@
 
 #include "sd_mmc.h"
 
-#if defined(DUET_NG)
-# include "TMC2660.h"
-#elif defined(DUET_M)
-# include "TMC22xx.h"
+#if SUPPORT_TMC2660
+# include "StepperDrivers/TMC2660/TMC2660.h"
+#endif
+#if SUPPORT_TMC22xx
+# include "StepperDrivers/TMC22xx/TMC22xx.h"
 #endif
 
 #if HAS_WIFI_NETWORKING
@@ -3832,6 +3833,8 @@ void Platform::SetBoardType(BoardType bt)
 		board = BoardType::RADDS_15;
 #elif defined(__ALLIGATOR__)
 		board = BoardType::Alligator_2;
+#elif defined(PCCB)
+		board = BoardType::PCCB_10;
 #else
 # error Undefined board type
 #endif
@@ -3870,6 +3873,8 @@ const char* Platform::GetElectronicsString() const
 	case BoardType::RADDS_15:				return "RADDS 1.5";
 #elif defined(__ALLIGATOR__)
 	case BoardType::Alligator_2:			return "Alligator r2";
+#elif defined(PCCB)
+	case BoardType::PCCB_10:				return "PCCB 1.0";
 #else
 # error Undefined board type
 #endif
@@ -3899,6 +3904,8 @@ const char* Platform::GetBoardString() const
 	case BoardType::RADDS_15:				return "radds15";
 #elif defined(__ALLIGATOR__)
 	case BoardType::Alligator_2:			return "alligator2";
+#elif defined(PCCB)
+	case BoardType::PCCB_10:				return "pccb10";
 #else
 # error Undefined board type
 #endif

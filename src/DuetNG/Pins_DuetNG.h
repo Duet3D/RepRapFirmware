@@ -5,6 +5,7 @@
 # define DEFAULT_BOARD_TYPE BoardType::DuetWiFi_10
 constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 is now unused)
 # define IAP_FIRMWARE_FILE	"Duet2CombinedFirmware.bin"
+#define IAP_UPDATE_FILE		"iap4e.bin"				// using the same IAP file for both Duet WiFi and Duet Ethernet
 # define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
 
 // Features definition
@@ -15,13 +16,10 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
-#define HAS_SMART_DRIVERS		1
-#define HAS_STALL_DETECT		1
+#define SUPPORT_TMC2660			1
 #define HAS_VOLTAGE_MONITOR		1
 #define HAS_VREF_MONITOR		0
 #define ACTIVE_LOW_HEAT_ON		1
-
-#define IAP_UPDATE_FILE		"iap4e.bin"				// using the same IAP file for both Duet WiFi and Duet Ethernet
 
 #define SUPPORT_INKJET		0						// set nonzero to support inkjet control
 #define SUPPORT_ROLAND		0						// set nonzero to support Roland mill

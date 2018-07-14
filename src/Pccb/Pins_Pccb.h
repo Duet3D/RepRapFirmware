@@ -8,16 +8,16 @@
 #ifndef SRC_DUETM_PINS_DUETM_H_
 #define SRC_DUETM_PINS_DUETM_H_
 
-# define FIRMWARE_NAME "RepRapFirmware for Duet 2 Maestro"
-# define DEFAULT_BOARD_TYPE BoardType::DuetM_10
+# define FIRMWARE_NAME "RepRapFirmware for PCCB"
+# define DEFAULT_BOARD_TYPE BoardType::PCCB_10
 constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
-# define IAP_FIRMWARE_FILE	"DuetMaestroFirmware.bin"
+# define IAP_FIRMWARE_FILE	"PccbFirmware.bin"
 #define IAP_UPDATE_FILE		"iap4s.bin"
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0
 #define HAS_WIFI_NETWORKING		0
-#define HAS_W5500_NETWORKING	1
+#define HAS_W5500_NETWORKING	0
 
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
@@ -32,7 +32,7 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_IOBITS		0						// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR	1						// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
-#define SUPPORT_12864_LCD	1						// set nonzero to support 12864 LCD and rotary encoder
+#define SUPPORT_12864_LCD	0						// set nonzero to support 12864 LCD and rotary encoder
 
 // The physical capabilities of the machine
 

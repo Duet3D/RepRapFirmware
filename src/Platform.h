@@ -129,6 +129,8 @@ enum class BoardType : uint8_t
 	RADDS_15 = 1
 #elif defined(__ALLIGATOR__)
 	Alligator_2 = 1
+#elif defined(PCCB)
+	PCCB_10 = 1
 #else
 # error Unknown board
 #endif
@@ -1252,7 +1254,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // The bitmaps for various controller electronics are organised like this:
 // Duet WiFi:
 //	All step pins are on port D, so the bitmap is just the map of step bits in port D.
-// Duet Maestro:
+// Duet Maestro and PCCB:
 //	All step pins are on port C, so the bitmap is just the map of step bits in port C.
 // Duet 0.6 and 0.8.5:
 //	Step pins are PA0, PC7,9,11,14,25,29 and PD0,3.
@@ -1276,9 +1278,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	return 0;				// TODO assign step pins
 #else
 	const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
-#if defined(DUET_NG)
-	return pinDesc.ulPin;
-#elif defined(DUET_M)
+#if defined(DUET_NG) || defined(DUET_M) || defined(PCCB)
 	return pinDesc.ulPin;
 #elif defined(DUET_06_085)
 	return (pinDesc.pPort == PIOA) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
@@ -1301,7 +1301,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	// TODO
 #elif defined(DUET_NG)
 	PIOD->PIO_ODSR = driverMap;				// on Duet WiFi all step pins are on port D
-#elif defined(DUET_M)
+#elif defined(DUET_M) || defined(PCCB)
 	PIOC->PIO_ODSR = driverMap;				// on Duet Maestro all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = driverMap;
@@ -1330,7 +1330,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	// TODO
 #elif defined(DUET_NG)
 	PIOD->PIO_ODSR = 0;						// on Duet WiFi all step pins are on port D
-#elif defined(DUET_M)
+#elif defined(DUET_M) || defined(PCCB)
 	PIOC->PIO_ODSR = 0;						// on Duet Maestro all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = 0;

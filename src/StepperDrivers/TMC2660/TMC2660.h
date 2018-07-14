@@ -8,6 +8,8 @@
 #ifndef TMC2660_H_
 #define TMC2660_H_
 
+#if SUPPORT_TMC2660
+
 #include "RepRapFirmware.h"
 #include "GCodes/DriverMode.h"
 #include "Pins.h"
@@ -57,5 +59,7 @@ namespace SmartDrivers
 	float GetStandstillCurrentPercent(size_t driver);
 	void SetStandstillCurrentPercent(size_t driver, float percent);
 };
+
+#endif
 
 #endif /* TMC2660_H_ */

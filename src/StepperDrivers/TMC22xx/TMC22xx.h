@@ -5,8 +5,10 @@
  *      Author: David
  */
 
-#ifndef TMC2660_H_
-#define TMC2660_H_
+#ifndef TMC22xx_H_
+#define TMC22xx_H_
+
+#if SUPPORT_TMC22xx
 
 #include "RepRapFirmware.h"
 #include "GCodes/DriverMode.h"
@@ -56,4 +58,6 @@ namespace SmartDrivers
 	void SetStandstillCurrentPercent(size_t drive, float percent);
 };
 
-#endif /* TMC2660_H_ */
+#endif
+
+#endif /* TMC22xx_H_ */

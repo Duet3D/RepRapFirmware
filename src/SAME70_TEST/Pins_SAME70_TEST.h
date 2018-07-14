@@ -1,25 +1,22 @@
 #ifndef PINS_SAME70_H__
 #define PINS_SAME70_H__
 
-# define FIRMWARE_NAME		"RepRapFirmware for SAME70"
-# define DEFAULT_BOARD_TYPE BoardType::SamE70TestBoard
+#define FIRMWARE_NAME		"RepRapFirmware for SAME70"
+#define DEFAULT_BOARD_TYPE BoardType::SamE70TestBoard
 const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
-# define IAP_FIRMWARE_FILE	"SAME70Firmware.bin"
-# define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
-# define WIFI_WEB_FILE		"DuetWebControl.bin"
+#define IAP_FIRMWARE_FILE	"SAME70Firmware.bin"
+#define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
+#define WIFI_WEB_FILE		"DuetWebControl.bin"
+#define IAP_UPDATE_FILE		"iape70.bin"		// need special build for SAME70
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		1
 #define HAS_CPU_TEMP_SENSOR		0
 #define HAS_HIGH_SPEED_SD		1
-#define HAS_SMART_DRIVERS		0		// TBD
-#define HAS_STALL_DETECT		0		// TBD
 #define HAS_VOLTAGE_MONITOR		0		// TBD
 #define HAS_VREF_MONITOR		0		// TBD
 #define ACTIVE_LOW_HEAT_ON		1
-
-#define IAP_UPDATE_FILE		"iape70.bin"		// need special build for SAME70
 
 #define SUPPORT_INKJET		0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND		0					// set nonzero to support Roland mill
