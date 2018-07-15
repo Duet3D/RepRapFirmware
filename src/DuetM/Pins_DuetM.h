@@ -22,6 +22,7 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
 #define SUPPORT_TMC22xx			1
+#define TMC22xx_HAS_MUX			1
 #define HAS_VOLTAGE_MONITOR		1
 #define HAS_VREF_MONITOR		1
 #define ACTIVE_LOW_HEAT_ON		1
@@ -67,6 +68,15 @@ constexpr Pin GlobalTmcEnablePin = 1;				// The pin that drives ENN of all drive
 constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, 63, 61 };
 constexpr Pin STEP_PINS[DRIVES] = { 56, 38, 64, 40, 41, 67, 57 };
 constexpr Pin DIRECTION_PINS[DRIVES] = { 54, 8, 30, 33, 42, 18, 60 };
+
+// UART interface to stepper drivers
+#define UART_TMC_DRV			UART0
+#define SERIAL_TMC_DRV_IRQn		UART0_IRQn
+#define ID_UART_TMC_DRV			ID_UART0
+#define UART_TMC_DRV_Handler	UART0_Handler
+
+static const uint8_t UART_TMC_DRV_PINS = APINS_UART0;
+
 constexpr Pin DriverMuxPins[3] = { 50, 52, 53 };	// Pins that control the UART multiplexer, LSB first
 
 // Endstops
