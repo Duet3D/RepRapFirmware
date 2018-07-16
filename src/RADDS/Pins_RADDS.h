@@ -37,24 +37,20 @@ const size_t DRIVES = 9;
 
 // The number of heaters in the machine
 // 0 is the heated bed even if there isn't one.
-const size_t Heaters = 4;
+constexpr size_t Heaters = 4;
+constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
+constexpr size_t NumThermistorInputs = 4;
 
-const size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
-
-// Initialization macro used in statements needing to initialize values in arrays of size HEATERS.  E.g.,
-// defaultPidKis[HEATERS] = {HEATERS_(5.0, 0.1, 0.1, 0.1, 0.1, 0.1)};
-#define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d }
-
-const size_t MinAxes = 3;						// The minimum and default number of axes
-const size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
+constexpr size_t MinAxes = 3;						// The minimum and default number of axes
+constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
 // Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
 #define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f }
 
-const size_t MIN_AXES = 3;						// The minimum and default number of axes
-const size_t MaxExtruders = DRIVES - MIN_AXES;	// The maximum number of extruders
-const size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
+constexpr size_t MIN_AXES = 3;						// The minimum and default number of axes
+constexpr size_t MaxExtruders = DRIVES - MIN_AXES;	// The maximum number of extruders
+constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
-const size_t NUM_SERIAL_CHANNELS = 2;
+constexpr size_t NUM_SERIAL_CHANNELS = 2;
 // Use TX0/RX0 for the auxiliary serial line
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial1
@@ -85,14 +81,14 @@ const Pin END_STOP_PINS[DRIVES] = { 28, 30, 32, 39, NoPin, NoPin, NoPin, NoPin }
 // HEATERS - The bed is assumed to be the at index 0
 
 // Analogue pin numbers
-const Pin TEMP_SENSE_PINS[Heaters] = HEATERS_(4, 0, 1, 2, e, f, g, h);
+const Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 4, 0, 1, 2 };
 
 // Heater outputs
 // Bed PMW: D7 has hardware PWM so bed has PWM
 // h0, h1 PMW: D13 & D12 are on TIOB0 & B8 which are both TC B channels, so they get PWM
 // h2 bang-bang: D11 is on TIOA8 which is a TC A channel shared with h1, it gets bang-bang control
 
-const Pin HEAT_ON_PINS[Heaters] = HEATERS_(7, 13, 12, 11, e, f, g, h); // bed, h0, h1, h2
+const Pin HEAT_ON_PINS[Heaters] = { 7, 13, 12, 11 };	// bed, h0, h1, h2
 
 // Default thermistor betas
 const float BED_R25 = 10000.0;
@@ -131,7 +127,8 @@ const Pin COOLING_FAN_PINS[NUM_FANS] = { 9, 8 }; // Fan 0, Fan 1
 // see FanInterrupt() in Platform.cpp
 //
 // D25 -- Unused GPIO on AUX1
-const Pin COOLING_FAN_RPM_PIN = 25;
+constexpr size_t NumTachos = 1;
+constexpr Pin TachoPins[NumTachos] = { 25 };
 
 // SD cards
 const size_t NumSdCards = 2;

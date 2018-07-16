@@ -750,7 +750,7 @@ namespace SmartDrivers
 			if (currentDriver == nullptr && numTmc2660Drivers != 0)
 			{
 				// Kick off the first transfer
-				NVIC_EnableIRQ(SERIAL_TMC_DRV_IRQn);
+				NVIC_EnableIRQ(UART_TMC_DRV_IRQn);
 				driverStates[0].StartTransfer();
 			}
 		}

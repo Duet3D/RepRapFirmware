@@ -280,10 +280,21 @@ public:
 	void TransferDone() __attribute__ ((hot));				// called by the ISR when the SPI transfer has completed
 	void StartTransfer() __attribute__ ((hot));				// called to start a transfer
 	void TransferTimedOut() { ++numTimeouts; }
-	static void AbortTransfer();
+	void AbortTransfer();
 
 	uint32_t ReadLiveStatus() const;
 	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep);
+
+	// Variables used by the ISR
+#if TMC22xx_HAS_MUX
+	static TmcDriverState * volatile currentDriver;			// volatile because the ISR changes it
+	static uint32_t transferStartedTime;
+#else
+	uint32_t transferStartedTime;
+
+	void CheckTransfer();									// start a transfer or check for timeout
+	void UartTmcHandler();									// core of the ISR for this driver
+#endif
 
 private:
 	void UpdateRegister(size_t regIndex, uint32_t regVal);
@@ -326,6 +337,12 @@ private:
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	uint32_t motorCurrent;									// the configured motor current
 
+#if TMC22xx_HAS_MUX
+	static Uart * const uart;
+#else
+	Uart *uart;												// the UART that controls this driver
+#endif
+
 	uint16_t readErrors;									// how many read errors we had
 	uint16_t writeErrors;									// how many write errors we had
 	uint16_t numReads;										// how many successful reads we had
@@ -340,6 +357,10 @@ private:
 	static const uint8_t ReadRegCRCs[NumReadRegisters];		// CRCs of the messages needed to read the registers
 	bool enabled;											// true if driver is enabled
 };
+
+#if TMC22xx_HAS_MUX
+Uart * const TmcDriverState::uart = UART_TMC_DRV;
+#endif
 
 const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 {
@@ -364,15 +385,6 @@ const uint8_t TmcDriverState::ReadRegCRCs[NumReadRegisters] =
 
 // State structures for all drivers
 static TmcDriverState driverStates[MaxSmartDrivers];
-
-#if TMC22xx_HAS_MUX
-// PDC address for the single UART that communicates with all drivers
-static Pdc * const uartPdc = uart_get_pdc_base(UART_TMC_DRV);
-#endif
-
-// Variables used by the ISR
-static TmcDriverState * volatile currentDriver = nullptr;	// volatile because the ISR changes it
-static uint32_t transferStartedTime;
 
 // Set up the PDC to send a register
 /*static*/ inline void TmcDriverState::SetupDMASend(Pdc *pdc, uint8_t regNum, uint32_t regVal, uint8_t crc)
@@ -444,10 +456,16 @@ pre(!driversPowered)
 	driverNumber = p_driverNumber;
 	axisNumber = p_driverNumber;										// assume straight-through axis mapping initially
 	enablePin = p_pin;													// this is NoPin for the built-in drivers
+
+#if !TMC22xx_HAS_MUX
+	uart = DriverUarts[p_driverNumber];
+#endif
+
 	if (p_pin != NoPin)
 	{
 		pinMode(p_pin, OUTPUT_HIGH);
 	}
+
 	enabled = false;
 	registersToUpdate = 0;
 	motorCurrent = 0;
@@ -677,13 +695,15 @@ inline void TmcDriverState::TransferDone()
 // This is called to abandon the current transfer, if any
 void TmcDriverState::AbortTransfer()
 {
-	UART_TMC_DRV->UART_IDR = UART_IDR_ENDRX;				// disable end-of-receive interrupt
-	uartPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);	// disable the PDC
-	UART_TMC_DRV->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS | UART_CR_RSTSTA;
-	currentDriver = nullptr;
+	uart->UART_IDR = UART_IDR_ENDRX;				// disable end-of-receive interrupt
+	uart_get_pdc_base(uart)->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);	// disable the PDC
+	uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS | UART_CR_RSTSTA;
 }
 
 #if TMC22xx_HAS_MUX
+
+TmcDriverState * volatile TmcDriverState::currentDriver = nullptr;	// volatile because the ISR changes it
+uint32_t TmcDriverState::transferStartedTime;
 
 // Set up the UART multiplexer to address the selected driver
 inline void TmcDriverState::SetUartMux()
@@ -714,14 +734,31 @@ inline void TmcDriverState::SetUartMux()
 	}
 }
 
+#else
+
+// If no transfer is in progress, start one
+// If a transfer is in progress, check for timeout
+void TmcDriverState::CheckTransfer()
+{
+	if ((uart->UART_IMR & UART_IMR_ENDRX) == 0)			// if no transfer is in progress
+	{
+		StartTransfer();
+	}
+	else if (millis() - TmcDriverState::transferStartedTime > TransferTimeout)
+	{
+		// A UART transfer was started but has timed out
+		TransferTimedOut();
+		AbortTransfer();
+	}
+}
+
 #endif
 
 // This is called from the ISR or elsewhere to start a new SPI transfer. Inlined for ISR speed.
 inline void TmcDriverState::StartTransfer()
 {
-	currentDriver = this;
-
 #if TMC22xx_HAS_MUX
+	currentDriver = this;
 	SetUartMux();
 #endif
 
@@ -732,10 +769,10 @@ inline void TmcDriverState::StartTransfer()
 
 		// Read a register
 		const irqflags_t flags = cpu_irq_save();				// avoid race condition
-		UART_TMC_DRV->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX;	// reset transmitter and receiver
-		SetupDMAReceive(uartPdc, ReadRegNumbers[registerToRead], ReadRegCRCs[registerToRead]);	// set up the PDC
-		UART_TMC_DRV->UART_IER = UART_IER_ENDRX;				// enable end-of-receive interrupt
-		UART_TMC_DRV->UART_CR = UART_CR_RXEN | UART_CR_TXEN;	// enable transmitter and receiver
+		uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX;	// reset transmitter and receiver
+		SetupDMAReceive(uart_get_pdc_base(uart), ReadRegNumbers[registerToRead], ReadRegCRCs[registerToRead]);	// set up the PDC
+		uart->UART_IER = UART_IER_ENDRX;				// enable end-of-receive interrupt
+		uart->UART_CR = UART_CR_RXEN | UART_CR_TXEN;	// enable transmitter and receiver
 		transferStartedTime = millis();
 		cpu_irq_restore(flags);
 	}
@@ -757,21 +794,25 @@ inline void TmcDriverState::StartTransfer()
 		// Kick off a transfer for that register
 		const irqflags_t flags = cpu_irq_save();				// avoid race condition
 		registerBeingUpdated = mask;
-		UART_TMC_DRV->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX;	// reset transmitter and receiver
-		SetupDMASend(uartPdc, WriteRegNumbers[regNum], writeRegisters[regNum], writeRegCRCs[regNum]);	// set up the PDC
-		UART_TMC_DRV->UART_IER = UART_IER_ENDRX;				// enable end-of-transfer interrupt
-		UART_TMC_DRV->UART_CR = UART_CR_RXEN | UART_CR_TXEN;	// enable transmitter and receiver
+		uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX;	// reset transmitter and receiver
+		SetupDMASend(uart_get_pdc_base(uart), WriteRegNumbers[regNum], writeRegisters[regNum], writeRegCRCs[regNum]);	// set up the PDC
+		uart->UART_IER = UART_IER_ENDRX;				// enable end-of-transfer interrupt
+		uart->UART_CR = UART_CR_RXEN | UART_CR_TXEN;	// enable transmitter and receiver
 		transferStartedTime = millis();
 		cpu_irq_restore(flags);
 	}
 }
 
-// ISR for the UART
-extern "C" void UART_TMC_DRV_Handler(void) __attribute__ ((hot));
+// ISR(s) for the UART(s)
 
-void UART_TMC_DRV_Handler(void)
+#if TMC22xx_HAS_MUX
+
+// ISR for the single UART
+extern "C" void UART_TMC_DRV_Handler() __attribute__ ((hot));
+
+void UART_TMC_DRV_Handler()
 {
-	TmcDriverState *driver = currentDriver;				// capture volatile variable
+	TmcDriverState *driver = TmcDriverState::currentDriver;	// capture volatile variable
 	if (driver != nullptr)
 	{
 		driver->TransferDone();							// tidy up after the transfer we just completed
@@ -790,8 +831,39 @@ void UART_TMC_DRV_Handler(void)
 
 	// Driver power is down or there is no current driver, so stop polling
 	UART_TMC_DRV->UART_IDR = UART_IDR_ENDRX;
-	currentDriver = nullptr;							// signal that we are not waiting for an interrupt
+	TmcDriverState::currentDriver = nullptr;			// signal that we are not waiting for an interrupt
 }
+
+#else
+
+inline void TmcDriverState::UartTmcHandler()
+{
+	TransferDone();										// tidy up after the transfer we just completed
+	if (driversState != DriversState::noPower)
+	{
+		// Power is still good, so send/receive again
+		StartTransfer();
+	}
+	else
+	{
+		// Driver power is down so disable interrupt to stop polling
+		uart->UART_IDR = UART_IDR_ENDRX;
+	}
+}
+
+extern "C" void UART_TMC_DRV0_Handler() __attribute__ ((hot));
+void UART_TMC_DRV0_Handler()
+{
+	driverStates[0].UartTmcHandler();
+}
+
+extern "C" void UART_TMC_DRV1_Handler() __attribute__ ((hot));
+void UART_TMC_DRV1_Handler()
+{
+	driverStates[1].UartTmcHandler();
+}
+
+#endif
 
 //--------------------------- Public interface ---------------------------------
 
@@ -807,8 +879,8 @@ namespace SmartDrivers
 		pinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
 
 #if TMC22xx_HAS_MUX
-		// The pins are already set up for UART use in the pins table
-		ConfigurePin(GetPinDescription(UART_TMC_DRV_PINS));
+		// Set up- the single UART that communicates with all TMC22xx drivers
+		ConfigurePin(GetPinDescription(UART_TMC_DRV_PINS));					// the pins are already set up for UART use in the pins table
 
 		// Enable the clock to the UART
 		pmc_enable_periph_clk(ID_UART_TMC_DRV);
@@ -819,6 +891,7 @@ namespace SmartDrivers
 		UART_TMC_DRV->UART_MR = UART_MR_CHMODE_NORMAL | UART_MR_PAR_NO;
 		UART_TMC_DRV->UART_BRGR = VARIANT_MCK/(16 * DriversBaudRate);		// set baud rate
 		UART_TMC_DRV->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS | UART_CR_RSTSTA;
+		NVIC_EnableIRQ(UART_TMC_DRV_IRQn);
 
 		// Set up the multiplexer control pins as outputs
 		pinMode(DriverMuxPins[0], OUTPUT_LOW);
@@ -829,6 +902,23 @@ namespace SmartDrivers
 		driversState = DriversState::noPower;
 		for (size_t drive = 0; drive < numTmc22xxDrivers; ++drive)
 		{
+#if !TMC22xx_HAS_MUX
+			// Initialise the UART that controls this driver
+			// The pins are already set up for UART use in the pins table
+			ConfigurePin(GetPinDescription(DriverUartPins[drive]));
+
+			// Enable the clock to the UART
+			pmc_enable_periph_clk(DriverUartIds[drive]);
+
+			// Set the UART baud rate, 8 bits, 2 stop bits, no parity
+			Uart * const uart = DriverUarts[drive];
+			uart->UART_IDR = ~0u;
+			uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS;
+			uart->UART_MR = UART_MR_CHMODE_NORMAL | UART_MR_PAR_NO;
+			uart->UART_BRGR = VARIANT_MCK/(16 * DriversBaudRate);		// set baud rate
+			uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS | UART_CR_RSTSTA;
+			NVIC_EnableIRQ(DriverUartIRQns[drive]);
+#endif
 			driverStates[drive].Init(drive, driverSelectPins[drive]);		// axes are mapped straight through to drivers initially
 		}
 	}
@@ -933,28 +1023,37 @@ namespace SmartDrivers
 		}
 		else if (powered)
 		{
-			if (currentDriver == nullptr)
+			// If no transfer is in progress, kick one off.
+			// If a transfer has timed out, abort it.
+#if TMC22xx_HAS_MUX
+			if (TmcDriverState::currentDriver == nullptr)
 			{
 				// No transfer in progress, so start one
 				if (numTmc22xxDrivers != 0)
 				{
 					// Kick off the first transfer
-					NVIC_EnableIRQ(SERIAL_TMC_DRV_IRQn);
 					driverStates[0].StartTransfer();
 				}
 			}
-			else if (millis() - transferStartedTime > TransferTimeout)
+			else if (millis() - TmcDriverState::transferStartedTime > TransferTimeout)
 			{
 				// A UART transfer was started but has timed out
-				currentDriver->TransferTimedOut();
-				uint8_t driverNum = currentDriver->GetDriverNumber();
-				TmcDriverState::AbortTransfer();		// this clears currentDriver
+				TmcDriverState::currentDriver->TransferTimedOut();
+				TmcDriverState::currentDriver->AbortTransfer();
+				TmcDriverState::currentDriver = nullptr;
+				uint8_t driverNum = TmcDriverState::currentDriver->GetDriverNumber();
 				++driverNum;
 				if (driverNum >= numTmc22xxDrivers)
 				{
 					driverNum = 0;
 				}
 			}
+#else
+			for (size_t drive = 0; drive < numTmc22xxDrivers; ++drive)
+			{
+				driverStates[drive].CheckTransfer();
+			}
+#endif
 
 			if (driversState == DriversState::initialising)
 			{
@@ -980,7 +1079,18 @@ namespace SmartDrivers
 		{
 			// We had power but we lost it
 			digitalWrite(GlobalTmcEnablePin, HIGH);			// disable the drivers
-			TmcDriverState::AbortTransfer();
+#if TMC22xx_HAS_MUX
+			if (TmcDriverState::currentDriver == nullptr)
+			{
+				TmcDriverState::currentDriver->AbortTransfer();
+				TmcDriverState::currentDriver = nullptr;
+			}
+#else
+			for (size_t drive = 0; drive < numTmc22xxDrivers; ++drive)
+			{
+				driverStates[drive].AbortTransfer();
+			}
+#endif
 			driversState = DriversState::noPower;
 		}
 	}

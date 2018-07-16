@@ -2021,13 +2021,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				// Update the feed rate for ALL input sources, and all feed rates on the stack
 				const float speedFactorRatio = newSpeedFactor / speedFactor;
-				for (size_t i = 0; i < ARRAY_SIZE(gcodeSources); ++i)
+				for (GCodeBuffer *gb : gcodeSources)
 				{
-					GCodeMachineState *ms = &gcodeSources[i]->MachineState();
-					while (ms != nullptr)
+					if (gb != nullptr)
 					{
-						ms->feedRate *= speedFactorRatio;
-						ms = ms->previous;
+						GCodeMachineState *ms = &gb->MachineState();
+						while (ms != nullptr)
+						{
+							ms->feedRate *= speedFactorRatio;
+							ms = ms->previous;
+						}
 					}
 				}
 				// If the last move hasn't gone yet, update its feed rate too if it is not a firmware retraction
@@ -2262,13 +2265,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 303: // Run PID tuning
 		if (gb.Seen('H'))
 		{
-			const int heater = gb.GetIValue();
+			const unsigned int heater = gb.GetUIValue();
 			const float temperature = (gb.Seen('S')) ? gb.GetFValue()
 										: reprap.GetHeat().IsBedHeater(heater) ? 75.0
 										: reprap.GetHeat().IsChamberHeater(heater) ? 50.0
 										: 200.0;
 			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : reprap.GetHeat().GetHeaterModel(heater).GetMaxPwm();
-			if (heater < 0 || heater >= (int)Heaters)
+			if (heater >= Heaters)
 			{
 				reply.copy("Bad heater number in M303 command");
 			}
@@ -2302,8 +2305,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 307: // Set heater process model parameters
 		if (gb.Seen('H'))
 		{
-			const int heater = gb.GetIValue();
-			if (heater >= 0 && heater < (int)Heaters)
+			const unsigned int heater = gb.GetUIValue();
+			if (heater < Heaters)
 			{
 				const FopDt& model = reprap.GetHeat().GetHeaterModel(heater);
 				bool seen = false;
@@ -2992,8 +2995,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 562: // Reset temperature fault - use with great caution
 		if (gb.Seen('P'))
 		{
-			const int heater = gb.GetIValue();
-			if (heater >= 0 && heater < (int)Heaters)
+			const unsigned int heater = gb.GetUIValue();
+			if (heater < Heaters)
 			{
 				reprap.ClearTemperatureFault(heater);
 			}
@@ -3006,7 +3009,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		else
 		{
 			// Clear all heater faults
-			for (int heater = 0; heater < (int)Heaters; ++heater)
+			for (unsigned int heater = 0; heater < Heaters; ++heater)
 			{
 				reprap.ClearTemperatureFault(heater);
 			}
@@ -3207,8 +3210,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			if (gb.Seen('H'))
 			{
-				const int heater = gb.GetIValue();
-				if (heater >= 0 && heater < (int)Heaters)
+				const unsigned heater = gb.GetUIValue();
+				if (heater < Heaters)
 				{
 					bool seenValue = false;
 					float maxTempExcursion, maxFaultTime;
@@ -3305,10 +3308,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 573: // Report heater average PWM
 		if (gb.Seen('P'))
 		{
-			const int heater = gb.GetIValue();
-			if (heater >= 0 && heater < (int)Heaters)
+			const unsigned int heater = gb.GetUIValue();
+			if (heater < Heaters)
 			{
-				reply.printf("Average heater %d PWM: %.3f", heater, (double)reprap.GetHeat().GetAveragePWM(heater));
+				reply.printf("Average heater %u PWM: %.3f", heater, (double)reprap.GetHeat().GetAveragePWM(heater));
 			}
 		}
 		break;

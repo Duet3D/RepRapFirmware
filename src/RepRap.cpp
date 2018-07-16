@@ -931,8 +931,27 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				break;
 		}
 
-		// Fan RPM
-		response->catf(",\"fanRPM\":%d}", static_cast<unsigned int>(platform->GetFanRPM()));
+		// Send fan RPM value(s)
+		if (NumTachos != 0)
+		{
+			response->cat(",\"fanRPM\":");
+			// For compatibility with older versions of DWC, if there is only one tacho value then we send it as a simple variable
+			if (NumTachos > 1)
+			{
+				char ch = '[';
+				for (size_t i = 0; i < NumTachos; ++i)
+				{
+					response->catf("%c%" PRIu32, ch, platform->GetFanRPM(i));
+					ch = ',';
+				}
+				response->cat(']');
+			}
+			else
+			{
+				response->catf("%" PRIu32, platform->GetFanRPM(0));
+			}
+		}
+		response->cat('}');		// end sensors
 	}
 
 	/* Temperatures */
@@ -1628,8 +1647,27 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		ch = ',';
 	}
 
-	// Send fan RPM value (we only support one)
-	response->catf("],\"fanRPM\":%u", static_cast<unsigned int>(platform->GetFanRPM()));
+	// Send fan RPM value(s)
+	response->cat(']');
+	if (NumTachos != 0)
+	{
+		response->cat(",\"fanRPM\":");
+		// For compatibility with older versions of DWC, if there is only one tacho value then we send it as a simple variable
+		if (NumTachos > 1)
+		{
+			char ch = '[';
+			for (size_t i = 0; i < NumTachos; ++i)
+			{
+				response->catf("%c%" PRIu32, ch, platform->GetFanRPM(i));
+				ch = ',';
+			}
+			response->cat(']');
+		}
+		else
+		{
+			response->catf("%" PRIu32, platform->GetFanRPM(0));
+		}
+	}
 
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
 	response->cat(",\"homed\":");

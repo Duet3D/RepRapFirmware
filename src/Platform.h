@@ -31,7 +31,8 @@ Licence: GPL
 #include "RepRapFirmware.h"
 #include "IoPorts.h"
 #include "DueFlashStorage.h"
-#include "Fan.h"
+#include "Fans/Fan.h"
+#include "Fans/Tacho.h"
 #include "Heating/TemperatureError.h"
 #include "OutputMemory.h"
 #include "Storage/FileStore.h"
@@ -57,19 +58,19 @@ constexpr bool BACKWARDS = !FORWARDS;
 
 // Define the number of ADC filters and the indices of the extra ones
 #if HAS_VREF_MONITOR
-constexpr size_t VrefFilterIndex = Heaters;
-constexpr size_t VssaFilterIndex = Heaters + 1;
+constexpr size_t VrefFilterIndex = NumThermistorInputs;
+constexpr size_t VssaFilterIndex = NumThermistorInputs + 1;
 # if HAS_CPU_TEMP_SENSOR
-constexpr size_t CpuTempFilterIndex = Heaters + 2;
-constexpr size_t NumAdcFilters = Heaters + 3;
+constexpr size_t CpuTempFilterIndex = NumThermistorInputs + 2;
+constexpr size_t NumAdcFilters = NumThermistorInputs + 3;
 # else
-constexpr size_t NumAdcFilters = Heaters + 2;
+constexpr size_t NumAdcFilters = NumThermistorInputs + 2;
 # endif
 #elif HAS_CPU_TEMP_SENSOR
-constexpr size_t CpuTempFilterIndex = Heaters;
-constexpr size_t NumAdcFilters = Heaters + 1;
+constexpr size_t CpuTempFilterIndex = NumThermistorInputs;
+constexpr size_t NumAdcFilters = NumThermistorInputs + 1;
 #else
-constexpr size_t NumAdcFilters = Heaters;
+constexpr size_t NumAdcFilters = NumThermistorInputs;
 #endif
 
 /**************************************************************************************************/
@@ -525,7 +526,7 @@ public:
 	const char *GetFanName(size_t fan) const;
 
 	bool WriteFanSettings(FileStore *f) const;		// Save some resume information
-	float GetFanRPM() const;
+	uint32_t GetFanRPM(size_t tachoIndex) const;
 
 	// Flash operations
 	void UpdateFirmware();
@@ -813,7 +814,7 @@ private:
 	static bool WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam);
 
 	// Heaters - bed is assumed to be the first
-	Pin tempSensePins[Heaters];
+	Pin tempSensePins[NumThermistorInputs];
 	Pin heatOnPins[Heaters];
 	Pin spiTempSenseCsPins[MaxSpiTempSensors];
 	uint32_t configuredHeaters;										// bitmask of all real heaters in use
@@ -821,20 +822,25 @@ private:
 
 	// Fans
 	Fan fans[NUM_FANS];
-	Pin coolingFanRpmPin;											// we currently support only one fan RPM input
 	uint32_t lastFanCheckTime;
 	void InitFans();
 	bool FansHardwareInverted(size_t fanNumber) const;
+
+	// Fan tachos
+	Tacho tachos[NumTachos];
 
   	// Serial/USB
 	uint32_t baudRates[NUM_SERIAL_CHANNELS];
 	uint8_t commsParams[NUM_SERIAL_CHANNELS];
 
+#ifdef SERIAL_AUX_DEVICE
 	volatile OutputStack auxOutput;
 	Mutex auxMutex;
+#endif
+
 	OutputBuffer *auxGCodeReply;				// G-Code reply for AUX devices (special one because it is actually encapsulated before sending)
 	uint32_t auxSeq;							// Sequence number for AUX devices
-    bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
+	bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
 
 #ifdef SERIAL_AUX2_DEVICE
     volatile OutputStack aux2Output;

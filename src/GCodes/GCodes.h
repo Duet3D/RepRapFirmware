@@ -379,27 +379,21 @@ private:
 	NetworkGCodeInput* telnetInput;										// ...
 	FileGCodeInput* fileInput;											// ...
 	StreamGCodeInput* serialInput;										// ...
+#ifdef SERIAL_AUX_DEVICE
 	StreamGCodeInput* auxInput;											// ...for the GCodeBuffers below
-
-#if SUPPORT_12864_LCD
-	GCodeBuffer* gcodeSources[9];										// The various sources of gcodes
-#else
-	GCodeBuffer* gcodeSources[8];										// The various sources of gcodes
 #endif
+
+	GCodeBuffer* gcodeSources[9];										// The various sources of gcodes
 
 	GCodeBuffer*& httpGCode = gcodeSources[0];
 	GCodeBuffer*& telnetGCode = gcodeSources[1];
 	GCodeBuffer*& fileGCode = gcodeSources[2];
 	GCodeBuffer*& serialGCode = gcodeSources[3];
-	GCodeBuffer*& auxGCode = gcodeSources[4];							// This one is for the LCD display on the async serial interface
+	GCodeBuffer*& auxGCode = gcodeSources[4];							// This one is for the PanelDue on the async serial interface
 	GCodeBuffer*& daemonGCode = gcodeSources[5];						// Used for executing config.g and trigger macro files
 	GCodeBuffer*& queuedGCode = gcodeSources[6];
-#if SUPPORT_12864_LCD
-	GCodeBuffer*& lcdGCode = gcodeSources[7];							// This one for the internally-supported LCD
+	GCodeBuffer*& lcdGCode = gcodeSources[7];							// This one for the 12864 LCD
 	GCodeBuffer*& autoPauseGCode = gcodeSources[8];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
-#else
-	GCodeBuffer*& autoPauseGCode = gcodeSources[7];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
-#endif
 
 	size_t nextGcodeSource;												// The one to check next
 

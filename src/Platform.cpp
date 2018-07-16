@@ -107,11 +107,6 @@ constexpr uint16_t driverNormalVoltageAdcReading = PowerVoltageToAdcReading(27.5
 
 #endif
 
-static uint32_t fanInterruptCount = 0;				// accessed only in ISR, so no need to declare it volatile
-const uint32_t fanMaxInterruptCount = 32;			// number of fan interrupts that we average over
-static volatile uint32_t fanLastResetTime = 0;		// time (microseconds) at which we last reset the interrupt count, accessed inside and outside ISR
-static volatile uint32_t fanInterval = 0;			// written by ISR, read outside the ISR
-
 const float MinStepPulseTiming = 0.2;				// we assume that we always generate step high and low times at least this wide without special action
 
 const LogicalPin Heater0LogicalPin = 0;
@@ -208,23 +203,31 @@ void Platform::Init()
 
 	// Comms
 	baudRates[0] = MAIN_BAUD_RATE;
+#ifdef SERIAL_AUX_DEVICE
 	baudRates[1] = AUX_BAUD_RATE;
+#endif
 #ifdef SERIAL_AUX2_DEVICE
 	baudRates[2] = AUX2_BAUD_RATE;
 #endif
 	commsParams[0] = 0;
+#ifdef SERIAL_AUX_DEVICE
 	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
+#endif
 #ifdef SERIAL_AUX2_DEVICE
 	commsParams[2] = 0;
 #endif
 
 	usbMutex.Create("USB");
+#ifdef SERIAL_AUX_DEVICE
 	auxMutex.Create("Aux");
 	auxDetected = false;
 	auxSeq = 0;
+#endif
 
 	SERIAL_MAIN_DEVICE.begin(baudRates[0]);
+#ifdef SERIAL_AUX_DEVICE
 	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
+#endif
 #ifdef SERIAL_AUX2_DEVICE
 	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 	aux2Mutex.Create("Aux2");
@@ -493,18 +496,20 @@ void Platform::Init()
 
 	for (size_t heater = 0; heater < Heaters; heater++)
 	{
-		if (heatOnPins[heater] != NoPin)
-		{
-			pinMode(heatOnPins[heater],
+		// pinMode is safe to call when the pin is NoPin, so we don't need to check it here
+		pinMode(heatOnPins[heater],
 #if ACTIVE_LOW_HEAT_ON
 				OUTPUT_LOW
 #else
 				OUTPUT_HIGH
 #endif
 			);
-		}
-		pinMode(tempSensePins[heater], AIN);
-		filteredAdcChannels[heater] = PinToAdcChannel(tempSensePins[heater]);	// translate the pin number to the SAM ADC channel number;
+	}
+
+	for (size_t thermistor = 0; thermistor < NumThermistorInputs; thermistor++)
+	{
+		pinMode(tempSensePins[thermistor], AIN);
+		filteredAdcChannels[thermistor] = PinToAdcChannel(tempSensePins[thermistor]);	// translate the pin number to the SAM ADC channel number;
 	}
 
 #if HAS_VREF_MONITOR
@@ -528,6 +533,10 @@ void Platform::Init()
 
 	// Fans
 	InitFans();
+	for (size_t i = 0; i < NumTachos; ++i)
+	{
+		tachos[i].Init(TachoPins[i]);
+	}
 
 	// Hotend configuration
 	nozzleDiameter = NOZZLE_DIAMETER;
@@ -1120,6 +1129,7 @@ void Platform::Beep(int freq, int ms)
 // Send a short message to the aux channel. There is no flow control on this port, so it can't block for long.
 void Platform::SendAuxMessage(const char* msg)
 {
+#ifdef SERIAL_AUX_DEVICE
 	OutputBuffer *buf;
 	if (OutputBuffer::Allocate(buf))
 	{
@@ -1129,6 +1139,7 @@ void Platform::SendAuxMessage(const char* msg)
 		auxOutput.Push(buf);
 		FlushAuxMessages();
 	}
+#endif
 }
 
 void Platform::Exit()
@@ -1147,7 +1158,9 @@ void Platform::Exit()
 
 	// Close down USB and serial ports
 	SERIAL_MAIN_DEVICE.end();
+#ifdef SERIAL_AUX_DEVICE
 	SERIAL_AUX_DEVICE.end();
+#endif
 #ifdef SERIAL_AUX2_DEVICE
 	SERIAL_AUX2_DEVICE.end();
 #endif
@@ -1202,6 +1215,7 @@ void Platform::SetNetMask(uint8_t nm[])
 // Flush messages to aux, returning true if there is more to send
 bool Platform::FlushAuxMessages()
 {
+#ifdef SERIAL_AUX_DEVICE
 	// Write non-blocking data to the AUX line
 	MutexLocker lock(auxMutex);
 	OutputBuffer *auxOutputBuffer = auxOutput.GetFirstItem();
@@ -1220,6 +1234,9 @@ bool Platform::FlushAuxMessages()
 		}
 	}
 	return auxOutput.GetFirstItem() != nullptr;
+#else
+	return false;
+#endif
 }
 
 // Flush messages to USB and aux, returning true if there is more to send
@@ -1743,14 +1760,17 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 				reason |= (uint16_t)SoftwareResetReason::inLwipSpin;
 			}
 #endif
+
+#ifdef SERIAL_AUX_DEVICE
 			if (SERIAL_AUX_DEVICE.canWrite() == 0
-#ifdef SERIAL_AUX2_DEVICE
+# ifdef SERIAL_AUX2_DEVICE
 				|| SERIAL_AUX2_DEVICE.canWrite() == 0
-#endif
+# endif
 			   )
 			{
 				reason |= (uint16_t)SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
 			}
+#endif
 		}
 		reason |= (uint8_t)reprap.GetSpinningModule();
 		reason |= (softwareResetDebugInfo & 0x07) << 5;
@@ -1839,18 +1859,6 @@ void NETWORK_TC_HANDLER()
 
 #endif
 
-static void FanInterrupt(CallbackParameter)
-{
-	++fanInterruptCount;
-	if (fanInterruptCount == fanMaxInterruptCount)
-	{
-		const uint32_t now = Platform::GetInterruptClocks();
-		fanInterval = now - fanLastResetTime;
-		fanLastResetTime = now;
-		fanInterruptCount = 0;
-	}
-}
-
 void Platform::InitialiseInterrupts()
 {
 #if SAM4E || SAM7E
@@ -1864,17 +1872,23 @@ void Platform::InitialiseInterrupts()
 	NVIC_SetPriority(SysTick_IRQn, NvicPrioritySystick);		// set priority for tick interrupts
 #endif
 
-#if SAM4E || SAME70
+	// Set UART interrupt priorities
+#ifdef PCCB
+	NVIC_SetPriority(DriverUartIRQns[0], NvicPriorityDriversSerialTMC);
+	NVIC_SetPriority(DriverUartIRQns[1], NvicPriorityDriversSerialTMC);
+#else
+# if SAM4E || SAME70
 	NVIC_SetPriority(UART0_IRQn, NvicPriorityPanelDueUart);		// set priority for UART interrupt
 	NVIC_SetPriority(UART1_IRQn, NvicPriorityWiFiUart);			// set priority for WiFi UART interrupt
-#elif SAM4S
+# elif SAM4S
 	NVIC_SetPriority(UART1_IRQn, NvicPriorityPanelDueUart);		// set priority for UART interrupt
-#else
+# else
 	NVIC_SetPriority(UART_IRQn, NvicPriorityPanelDueUart);		// set priority for UART interrupt
-#endif
+# endif
 
-#if HAS_SMART_DRIVERS
-	NVIC_SetPriority(SERIAL_TMC_DRV_IRQn, NvicPriorityDriversSerialTMC);
+# if HAS_SMART_DRIVERS
+	NVIC_SetPriority(UART_TMC_DRV_IRQn, NvicPriorityDriversSerialTMC);
+# endif
 #endif
 
 	// Timer interrupt for stepper motors
@@ -1945,12 +1959,6 @@ void Platform::InitialiseInterrupts()
 #if defined(DUET_NG) || defined(DUET_M) || defined(DUET_06_085)
 	NVIC_SetPriority(I2C_IRQn, NvicPriorityTwi);
 #endif
-
-	// Interrupt for 4-pin PWM fan sense line
-	if (coolingFanRpmPin != NoPin)
-	{
-		attachInterrupt(coolingFanRpmPin, FanInterrupt, INTERRUPT_MODE_FALLING, nullptr);
-	}
 
 	// Tick interrupt for ADC conversions
 	tickState = 0;
@@ -3230,15 +3238,9 @@ const char *Platform::GetFanName(size_t fan) const
 }
 
 // Get current fan RPM
-float Platform::GetFanRPM() const
+uint32_t Platform::GetFanRPM(size_t tachoIndex) const
 {
-	// The ISR sets fanInterval to the number of microseconds it took to get fanMaxInterruptCount interrupts.
-	// We get 2 tacho pulses per revolution, hence 2 interrupts per revolution.
-	// However, if the fan stops then we get no interrupts and fanInterval stops getting updated.
-	// We must recognise this and return zero.
-	return (fanInterval != 0 && Platform::GetInterruptClocks() - fanLastResetTime < 3 * StepClockRate)	// if we have a reading and it is less than 3 second old
-			? (float)(3 * StepClockRate * fanMaxInterruptCount)/fanInterval		// then calculate RPM assuming 2 interrupts per rev
-			: 0.0;																// else assume fan is off or tacho not connected
+	return (tachoIndex < NumTachos) ? tachos[tachoIndex].GetRPM() : 0;
 }
 
 bool Platform::FansHardwareInverted(size_t fanNumber) const
@@ -3285,12 +3287,6 @@ void Platform::InitFans()
 		fans[1].SetPwm(1.0);												// set it full on
 #endif
 	}
-
-	coolingFanRpmPin = COOLING_FAN_RPM_PIN;
-	if (coolingFanRpmPin != NoPin)
-	{
-		pinModeDuet(coolingFanRpmPin, INPUT_PULLUP, 1500);	// enable pullup and 1500Hz debounce filter (500Hz only worked up to 7000RPM)
-	}
 }
 
 void Platform::SetEndStopConfiguration(size_t axis, EndStopPosition esPos, EndStopInputType inputType)
@@ -3309,6 +3305,7 @@ void Platform::GetEndStopConfiguration(size_t axis, EndStopPosition& esType, End
 
 void Platform::AppendAuxReply(const char *msg, bool rawMessage)
 {
+#ifdef SERIAL_AUX_DEVICE
 	// Discard this response if either no aux device is attached or if the response is empty
 	if (msg[0] != 0 && HaveAux())
 	{
@@ -3333,10 +3330,12 @@ void Platform::AppendAuxReply(const char *msg, bool rawMessage)
 			}
 		}
 	}
+#endif
 }
 
 void Platform::AppendAuxReply(OutputBuffer *reply, bool rawMessage)
 {
+#ifdef SERIAL_AUX_DEVICE
 	// Discard this response if either no aux device is attached or if the response is empty
 	if (reply == nullptr || reply->Length() == 0 || !HaveAux())
 	{
@@ -3365,6 +3364,9 @@ void Platform::AppendAuxReply(OutputBuffer *reply, bool rawMessage)
 			}
 		}
 	}
+#else
+	OutputBuffer::ReleaseAll(reply);
+#endif
 }
 
 // Send the specified message to the specified destinations. The Error and Warning flags have already been handled.
@@ -3770,16 +3772,21 @@ void Platform::ResetChannel(size_t chan)
 		SERIAL_MAIN_DEVICE.end();
 		SERIAL_MAIN_DEVICE.begin(baudRates[0]);
 		break;
+
+#ifdef SERIAL_AUX_DEVICE
 	case 1:
 		SERIAL_AUX_DEVICE.end();
 		SERIAL_AUX_DEVICE.begin(baudRates[1]);
 		break;
+#endif
+
 #ifdef SERIAL_AUX2_DEVICE
 	case 2:
 		SERIAL_AUX2_DEVICE.end();
 		SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 		break;
 #endif
+
 	default:
 		break;
 	}

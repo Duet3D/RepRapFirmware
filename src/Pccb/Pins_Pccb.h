@@ -41,10 +41,9 @@ constexpr size_t DRIVES = 8;						// The maximum number of drives supported by t
 constexpr size_t MaxSmartDrivers = 2;				// The maximum number of smart drivers
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h }
 
-constexpr size_t Heaters = 2;						// The number of heaters/thermistors in the machine. PCCB has no heaters but 2 thermistors.
-#define HEATERS_(a,b,c,d,e,f,g,h) { a,b }
-
+constexpr size_t Heaters = 1;						// The number of heaters in the machine. PCCB has no heaters, but the code doesn't like that so we say 1
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
+constexpr size_t NumThermistorInputs = 2;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
@@ -70,9 +69,13 @@ constexpr Pin DIRECTION_PINS[DRIVES] = { 8, 11, 17, 57, 54, 34, 1, 53 };
 
 #define TMC22xx_NO_MUX	1		// each driver has its own UART
 
-const Uart *DriverUarts[MaxSmartDrivers] = { UART0, UART1 };
+Uart * const DriverUarts[MaxSmartDrivers] = { UART0, UART1 };
 constexpr uint32_t DriverUartIds[MaxSmartDrivers] = { ID_UART0, ID_UART1 };
 constexpr IRQn DriverUartIRQns[MaxSmartDrivers] = { UART0_IRQn, UART1_IRQn };
+constexpr Pin DriverUartPins[MaxSmartDrivers] = { APINS_UART0, APINS_UART1 };
+
+#define UART_TMC_DRV0_Handler	UART0_Handler
+#define UART_TMC_DRV1_Handler	UART1_Handler
 
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
@@ -80,8 +83,8 @@ constexpr IRQn DriverUartIRQns[MaxSmartDrivers] = { UART0_IRQn, UART1_IRQn };
 constexpr Pin END_STOP_PINS[DRIVES] = { 24, 25, 67, 63, NoPin, NoPin, NoPin, NoPin };
 
 // Heaters and thermistors
-constexpr Pin HEAT_ON_PINS[Heaters] = { NoPin, NoPin };	// Heater pin numbers
-constexpr Pin TEMP_SENSE_PINS[Heaters] = { 20, 49 }; 	// Thermistor pin numbers
+constexpr Pin HEAT_ON_PINS[Heaters] = { NoPin };	// Heater pin numbers
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 20, 49 }; 	// Thermistor pin numbers
 constexpr Pin VssaSensePin = 19;
 constexpr Pin VrefSensePin = 27;
 
@@ -116,16 +119,16 @@ constexpr Pin DiagPin = NoPin;
 
 // Cooling fans
 constexpr size_t NUM_FANS = 4;
-constexpr size_t NUM_TACHOS = 2;
+constexpr size_t NumTachos = 2;
 constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { 16, 39, 15, 37 };				// PWML2, PWML3, TIOA1, PWML1
-constexpr Pin TACHO_PINS[NUM_TACHOS] = { 26, 66 };
+constexpr Pin TachoPins[NumTachos] = { 26, 66 };
 
 // Main LED control
 constexpr size_t NUM_LEDS = 2;												// number of main LEDs
 constexpr Pin LedOnPins[NUM_LEDS] = { 36, 59 };								// LED control pins
 
 // DotStar LED control
-const Usart *DotStarUsart = USART1;
+Usart * const DotStarUsart = USART1;
 constexpr uint32_t DotStarUsartId = ID_USART1;
 constexpr IRQn DotStarUsartIRQn = USART1_IRQn;
 

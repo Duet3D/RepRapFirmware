@@ -41,10 +41,9 @@ constexpr size_t DRIVES = 7;						// The maximum number of drives supported by t
 constexpr size_t MaxSmartDrivers = 7;				// The maximum number of smart drivers
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g }
 
-constexpr size_t Heaters = 4;						// The number of heaters/thermistors in the machine. Duet M has 3 heaters but 4 thermistors.
-#define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c }
-
+constexpr size_t Heaters = 3;						// The number of heaters/thermistors in the machine. Duet M has 3 heaters but 4 thermistors.
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
+constexpr size_t NumThermistorInputs = 4;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
@@ -70,12 +69,12 @@ constexpr Pin STEP_PINS[DRIVES] = { 56, 38, 64, 40, 41, 67, 57 };
 constexpr Pin DIRECTION_PINS[DRIVES] = { 54, 8, 30, 33, 42, 18, 60 };
 
 // UART interface to stepper drivers
-#define UART_TMC_DRV			UART0
-#define SERIAL_TMC_DRV_IRQn		UART0_IRQn
-#define ID_UART_TMC_DRV			ID_UART0
-#define UART_TMC_DRV_Handler	UART0_Handler
+Uart * const UART_TMC_DRV = UART0;
+const IRQn UART_TMC_DRV_IRQn = UART0_IRQn;
+const uint32_t ID_UART_TMC_DRV = ID_UART0;
+const uint8_t UART_TMC_DRV_PINS = APINS_UART0;
 
-static const uint8_t UART_TMC_DRV_PINS = APINS_UART0;
+#define UART_TMC_DRV_Handler	UART0_Handler
 
 constexpr Pin DriverMuxPins[3] = { 50, 52, 53 };	// Pins that control the UART multiplexer, LSB first
 
@@ -85,8 +84,8 @@ constexpr Pin DriverMuxPins[3] = { 50, 52, 53 };	// Pins that control the UART m
 constexpr Pin END_STOP_PINS[DRIVES] = { 24, 32, 46, 25, 43, NoPin, NoPin };
 
 // Heaters and thermistors
-constexpr Pin HEAT_ON_PINS[Heaters] = { 36, 37, 16, NoPin };	// Heater pin numbers
-constexpr Pin TEMP_SENSE_PINS[Heaters] = { 20, 26, 66, 27 }; 	// Thermistor pin numbers
+constexpr Pin HEAT_ON_PINS[Heaters] = { 36, 37, 16 };						// Heater pin numbers
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 20, 26, 66, 27 }; 	// Thermistor pin numbers
 constexpr Pin VssaSensePin = 19;
 constexpr Pin VrefSensePin = 17;
 
@@ -125,7 +124,8 @@ constexpr Pin DiagPin = Z_PROBE_MOD_PIN;
 // Cooling fans
 constexpr size_t NUM_FANS = 3;
 constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { 59, 58, 65 };
-constexpr Pin COOLING_FAN_RPM_PIN = 21;
+constexpr size_t NumTachos = 1;
+constexpr Pin TachoPins[NumTachos] = { 21 };
 
 // SD cards
 constexpr size_t NumSdCards = 2;

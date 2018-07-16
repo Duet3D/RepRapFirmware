@@ -66,16 +66,23 @@ GCodes::GCodes(Platform& p) :
 	telnetInput = new NetworkGCodeInput;
 	fileInput = new FileGCodeInput();
 	serialInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
+#ifdef SERIAL_AUX_DEVICE
 	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
-
+#endif
 	httpGCode = new GCodeBuffer("http", HttpMessage, false);
 	telnetGCode = new GCodeBuffer("telnet", TelnetMessage, true);
 	fileGCode = new GCodeBuffer("file", GenericMessage, true);
 	serialGCode = new GCodeBuffer("serial", UsbMessage, true);
+#ifdef SERIAL_AUX_DEVICE
 	auxGCode = new GCodeBuffer("aux", LcdMessage, false);
+#else
+	auxGCode = nullptr;
+#endif
 	daemonGCode = new GCodeBuffer("daemon", GenericMessage, false);
 #if SUPPORT_12864_LCD
 	lcdGCode = new GCodeBuffer("lcd", GenericMessage, false);
+#else
+	lcdGCode = nullptr;
 #endif
 	queuedGCode = new GCodeBuffer("queue", GenericMessage, false);
 	autoPauseGCode = new GCodeBuffer("autopause", GenericMessage, false);
@@ -240,7 +247,7 @@ bool GCodes::DoingFileMacro() const
 {
 	for (const GCodeBuffer *gb : gcodeSources)
 	{
-		if (gb->IsDoingFileMacro())
+		if (gb != nullptr && gb->IsDoingFileMacro())
 		{
 			return true;
 		}
@@ -296,9 +303,12 @@ bool GCodes::IsDaemonBusy() const
 // Copy the feed rate etc. from the daemon to the input channels
 void GCodes::CopyConfigFinalValues(GCodeBuffer& gb)
 {
-	for (size_t i = 0; i < ARRAY_SIZE(gcodeSources); ++i)
+	for (GCodeBuffer *gb2 : gcodeSources)
 	{
-		gcodeSources[i]->MachineState().CopyStateFrom(gb.MachineState());
+		if (gb2 != nullptr)
+		{
+			gb2->MachineState().CopyStateFrom(gb.MachineState());
+		}
 	}
 }
 
@@ -325,12 +335,15 @@ void GCodes::Spin()
 	GCodeBuffer *gbp = autoPauseGCode;
 	if (gbp->IsCompletelyIdle() && !(gbp->MachineState().fileState.IsLive()))
 	{
-		gbp = gcodeSources[nextGcodeSource];
-		++nextGcodeSource;											// move on to the next gcode source ready for next time
-		if (nextGcodeSource == ARRAY_SIZE(gcodeSources) - 1)		// the last one is autoPauseGCode, so don't do it again
+		do
 		{
-			nextGcodeSource = 0;
-		}
+			gbp = gcodeSources[nextGcodeSource];
+			++nextGcodeSource;										// move on to the next gcode source ready for next time
+			if (nextGcodeSource == ARRAY_SIZE(gcodeSources) - 1)	// the last one is autoPauseGCode, so don't do it again
+			{
+				nextGcodeSource = 0;
+			}
+		} while (gbp == nullptr);									// we must have at least one GCode source, so this can't loop indefinitely
 	}
 	GCodeBuffer& gb = *gbp;
 
@@ -1416,6 +1429,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 		// USB interface. This line may be shared with a 3D scanner
 		serialInput->FillBuffer(serialGCode);
 	}
+#ifdef SERIAL_AUX_DEVICE
 	else if (&gb == auxGCode)
 	{
 		// Aux serial port (typically PanelDue)
@@ -1425,6 +1439,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 			platform.SetAuxDetected();
 		}
 	}
+#endif
 }
 
 void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
@@ -2061,7 +2076,10 @@ void GCodes::Diagnostics(MessageType mtype)
 
 	for (size_t i = 0; i < ARRAY_SIZE(gcodeSources); ++i)
 	{
-		gcodeSources[i]->Diagnostics(mtype);
+		if (gcodeSources[i] != nullptr)
+		{
+			gcodeSources[i]->Diagnostics(mtype);
+		}
 	}
 
 	codeQueue->Diagnostics(mtype);

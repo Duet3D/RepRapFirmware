@@ -37,9 +37,8 @@ constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h,i,j,k,l }
 
 constexpr size_t Heaters = 8;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
-#define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d,e,f,g,h }
-
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
+constexpr size_t NumThermistorInputs = 8;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
@@ -77,7 +76,7 @@ constexpr Pin END_STOP_PINS[DRIVES] = { 46, 02, 93, 74, 48, 96, 97, 98, 99, 17, 
 constexpr Pin DUEX_END_STOP_PINS[5] = { 200, 203, 202, 201, 213 };			// these replace endstops 5-9 if a DueX is present
 
 // HEATERS
-constexpr Pin TEMP_SENSE_PINS[Heaters] = { 45, 47, 44, 61, 62, 63, 59, 18 }; // Thermistor pin numbers
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 45, 47, 44, 61, 62, 63, 59, 18 }; // Thermistor pin numbers
 constexpr Pin HEAT_ON_PINS[Heaters] = { 19, 20, 16, 35, 37, 40, 43, 15 };	// Heater pin numbers (heater 7 pin TBC)
 
 // Default thermistor parameters
@@ -129,7 +128,8 @@ constexpr Pin DiagPin = Z_PROBE_MOD_PIN;
 // Cooling fans
 constexpr size_t NUM_FANS = 9;
 constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { 55, 58, 00, 212, 207, 206, 205, 204, 215 };
-constexpr Pin COOLING_FAN_RPM_PIN = 102;									// PB6 on expansion connector
+constexpr size_t NumTachos = 1;
+constexpr Pin TachoPins[NumTachos] = { 102 };								// PB6 on expansion connector
 
 // SD cards
 constexpr size_t NumSdCards = 2;
