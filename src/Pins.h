@@ -63,7 +63,25 @@
 #define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx)
 #define HAS_STALL_DETECT		SUPPORT_TMC2660
 
-#define HAS_UNIFIED_NETWORKING	(HAS_LWIP_NETWORKING || HAS_WIFI_NETWORKING || HAS_W5500_NETWORKING)
+// HAS_LWIP_NETWORKING refers to Lwip 2 support in the Networking folder, not legacy SAM3XA networking using Lwip 1
+#ifndef HAS_LWIP_NETWORKING
+# define HAS_LWIP_NETWORKING	0
+#endif
+
+#ifndef HAS_WIFI_NETWORKING
+# define HAS_WIFI_NETWORKING	0
+#endif
+
+#ifndef HAS_W5500_NETWORKING
+# define HAS_W5500_NETWORKING	0
+#endif
+
+// Boards that support legacy SAM3X networking must define HAS_LEGACY_NETWORKING in their specific Pins_xxx.h file
+#ifndef HAS_LEGACY_NETWORKING
+# define HAS_LEGACY_NETWORKING	0
+#endif
+
+#define HAS_NETWORKING			(HAS_LWIP_NETWORKING || HAS_WIFI_NETWORKING || HAS_W5500_NETWORKING || HAS_LEGACY_NETWORKING)
 
 #if SUPPORT_DHT_SENSOR && !defined(RTOS)
 # error DHT sensor support requires RTOS

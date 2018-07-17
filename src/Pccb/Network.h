@@ -21,8 +21,9 @@ public:
 	void Init() const { }
 	void Activate() const { }
 	void Exit() const { }
+#ifndef RTOS
 	void Spin(bool full) const { }
-	void Interrupt() const { }
+#endif
 	void Diagnostics(MessageType mtype) const { }
 
 	GCodeResult EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply);

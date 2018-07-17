@@ -168,8 +168,10 @@ public:
 	float GetBabyStepOffset() const { return currentBabyStepZOffset; }	// Get the current baby stepping Z offset
 	const float *GetUserPosition() const { return currentUserPosition; }	// Return the current user position
 
+#if HAS_NETWORKING
 	NetworkGCodeInput *GetHTTPInput() const { return httpInput; }
 	NetworkGCodeInput *GetTelnetInput() const { return telnetInput; }
+#endif
 
 	bool IsFlashing() const { return isFlashing; }						// Is a new firmware binary going to be flashed?
 
@@ -375,10 +377,13 @@ private:
 
 	Platform& platform;													// The RepRap machine
 
-	NetworkGCodeInput* httpInput;										// These cache incoming G-codes...
-	NetworkGCodeInput* telnetInput;										// ...
 	FileGCodeInput* fileInput;											// ...
 	StreamGCodeInput* serialInput;										// ...
+
+#if HAS_NETWORKING
+	NetworkGCodeInput* httpInput;										// These cache incoming G-codes...
+	NetworkGCodeInput* telnetInput;										// ...
+#endif
 #ifdef SERIAL_AUX_DEVICE
 	StreamGCodeInput* auxInput;											// ...for the GCodeBuffers below
 #endif

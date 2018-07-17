@@ -442,7 +442,9 @@ void Platform::Init()
 	DuetExpansion::AdditionalOutputInit();
 
 #elif defined(DUET_M)
-	numSmartDrivers = 7;										// TODO for now we assume that additional drivers are smart
+	numSmartDrivers = MaxSmartDrivers;							// for now we assume that expansion drivers are smart too
+#elif defined(PCCB)
+	numSmartDrivers = MaxSmartDrivers;
 #endif
 
 #if HAS_SMART_DRIVERS

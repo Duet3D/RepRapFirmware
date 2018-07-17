@@ -8,10 +8,10 @@
 #ifndef SRC_DUETM_PINS_DUETM_H_
 #define SRC_DUETM_PINS_DUETM_H_
 
-# define FIRMWARE_NAME "RepRapFirmware for PCCB"
-# define DEFAULT_BOARD_TYPE BoardType::PCCB_10
+#define FIRMWARE_NAME "RepRapFirmware for PCCB"
+#define DEFAULT_BOARD_TYPE BoardType::PCCB_10
 constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
-# define IAP_FIRMWARE_FILE	"PccbFirmware.bin"
+#define IAP_FIRMWARE_FILE	"PccbFirmware.bin"
 #define IAP_UPDATE_FILE		"iap4s.bin"
 
 // Features definition
@@ -31,7 +31,7 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_ROLAND		0						// set nonzero to support Roland mill
 #define SUPPORT_SCANNER		0						// set zero to disable support for FreeLSS scanners
 #define SUPPORT_IOBITS		0						// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR	1						// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
+#define SUPPORT_DHT_SENSOR	0						// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD	0						// set nonzero to support 12864 LCD and rotary encoder
 
@@ -46,7 +46,7 @@ constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater p
 constexpr size_t NumThermistorInputs = 2;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
-constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
+constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, <= DRIVES
 // Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
 #define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f }
 
@@ -67,8 +67,6 @@ constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, 61, 35, 41, 55, 0, 64 };
 constexpr Pin STEP_PINS[DRIVES] = { 40, 43, 60, 38, 58, 56, 46, 50 };
 constexpr Pin DIRECTION_PINS[DRIVES] = { 8, 11, 17, 57, 54, 34, 1, 53 };
 
-#define TMC22xx_NO_MUX	1		// each driver has its own UART
-
 Uart * const DriverUarts[MaxSmartDrivers] = { UART0, UART1 };
 constexpr uint32_t DriverUartIds[MaxSmartDrivers] = { ID_UART0, ID_UART1 };
 constexpr IRQn DriverUartIRQns[MaxSmartDrivers] = { UART0_IRQn, UART1_IRQn };
@@ -83,14 +81,14 @@ constexpr Pin DriverUartPins[MaxSmartDrivers] = { APINS_UART0, APINS_UART1 };
 constexpr Pin END_STOP_PINS[DRIVES] = { 24, 25, 67, 63, NoPin, NoPin, NoPin, NoPin };
 
 // Heaters and thermistors
-constexpr Pin HEAT_ON_PINS[Heaters] = { NoPin };	// Heater pin numbers
+constexpr Pin HEAT_ON_PINS[Heaters] = { NoPin };
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 20, 49 }; 	// Thermistor pin numbers
 constexpr Pin VssaSensePin = 19;
 constexpr Pin VrefSensePin = 27;
 
-// Default thermistor parameters
+// Default thermistor parameters - on PCCB we default both thermistors to the same parameters
 constexpr float BED_R25 = 100000.0;
-constexpr float BED_BETA = 3988.0;
+constexpr float BED_BETA = 4388.0;
 constexpr float BED_SHC = 0.0;
 constexpr float EXT_R25 = 100000.0;
 constexpr float EXT_BETA = 4388.0;
@@ -100,7 +98,7 @@ constexpr float EXT_SHC = 0.0;
 constexpr float THERMISTOR_SERIES_RS = 2200.0;
 
 // Number of SPI temperature sensors to support
-constexpr size_t MaxSpiTempSensors = 1;
+constexpr size_t MaxSpiTempSensors = 1;		//TODO which SPI channels does PCCB route to the DueX?
 
 // Digital pins the 31855s have their select lines tied to
 constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { 63 };				// SPI0_CS6 if a DueX5 is connected

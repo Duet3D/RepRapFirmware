@@ -4,8 +4,7 @@
 #define FIRMWARE_NAME "RepRapFirmware for Alligator"
 
 // Features definition
-#define HAS_LWIP_NETWORKING		1
-#define HAS_WIFI_NETWORKING		0
+#define HAS_LEGACY_NETWORKING	1
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		0
 #define HAS_VOLTAGE_MONITOR		0

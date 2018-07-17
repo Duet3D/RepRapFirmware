@@ -73,19 +73,34 @@ constexpr float DefaultHotEndHeaterGain = 340.0;
 constexpr float DefaultHotEndHeaterTimeConstant = 140.0;
 constexpr float DefaultHotEndHeaterDeadTime = 5.5;
 
-#if SAM4E || SAME70
+#ifdef PCCB
+
+constexpr size_t NumBedHeaters = 1;
+constexpr size_t NumChamberHeaters = 1;
+constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { -1 };
+constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1 };
+
+constexpr int8_t DefaultE0Heater = 0;					// Index of the default first extruder heater, used only for the legacy status response
+
+#elif SAM4E || SAME70
+
 constexpr size_t NumBedHeaters = 4;
 constexpr size_t NumChamberHeaters = 2;
 constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { 0, -1, -1, -1 };
 constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1, -1 };
+
+constexpr int8_t DefaultE0Heater = 1;					// Index of the default first extruder heater, used only for the legacy status response
+
 #else
+
 constexpr size_t NumBedHeaters = 1;
 constexpr size_t NumChamberHeaters = 2;
 constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { 0 };
 constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1, -1 };
-#endif
 
-constexpr int8_t DefaultE0Heater = 1;					// Index of the default first extruder heater
+constexpr int8_t DefaultE0Heater = 1;					// Index of the default first extruder heater, used only for the legacy status response
+
+#endif
 
 constexpr unsigned int FirstVirtualHeater = 100;		// the heater number at which virtual heaters start
 constexpr unsigned int MaxVirtualHeaters = 10;			// the number of virtual heaters supported

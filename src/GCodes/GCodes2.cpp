@@ -2021,11 +2021,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				// Update the feed rate for ALL input sources, and all feed rates on the stack
 				const float speedFactorRatio = newSpeedFactor / speedFactor;
-				for (GCodeBuffer *gb : gcodeSources)
+				for (GCodeBuffer *gb2 : gcodeSources)
 				{
-					if (gb != nullptr)
+					if (gb2 != nullptr)
 					{
-						GCodeMachineState *ms = &gb->MachineState();
+						GCodeMachineState *ms = &gb2->MachineState();
 						while (ms != nullptr)
 						{
 							ms->feedRate *= speedFactorRatio;
@@ -3385,8 +3385,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						serialGCode->SetCommsProperties(val);
 						break;
 					case 1:
-						auxGCode->SetCommsProperties(val);
-						platform.SetAuxDetected();
+						if (auxGCode != nullptr)
+						{
+							auxGCode->SetCommsProperties(val);
+							platform.SetAuxDetected();
+						}
 						break;
 					default:
 						break;

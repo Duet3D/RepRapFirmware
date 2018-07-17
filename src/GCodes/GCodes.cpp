@@ -62,15 +62,19 @@ GCodes::GCodes(Platform& p) :
 #endif
 	isFlashing(false), fileBeingHashed(nullptr), lastWarningMillis(0)
 {
-	httpInput = new NetworkGCodeInput;
-	telnetInput = new NetworkGCodeInput;
 	fileInput = new FileGCodeInput();
 	serialInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
 #ifdef SERIAL_AUX_DEVICE
 	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
 #endif
+#if HAS_NETWORKING
+	httpInput = new NetworkGCodeInput;
+	telnetInput = new NetworkGCodeInput;
 	httpGCode = new GCodeBuffer("http", HttpMessage, false);
 	telnetGCode = new GCodeBuffer("telnet", TelnetMessage, true);
+#else
+	httpGCode = telnetGCode = nullptr;
+#endif
 	fileGCode = new GCodeBuffer("file", GenericMessage, true);
 	serialGCode = new GCodeBuffer("serial", UsbMessage, true);
 #ifdef SERIAL_AUX_DEVICE
@@ -128,7 +132,7 @@ void GCodes::Init()
 
 	retractLength = DefaultRetractLength;
 	retractExtra = 0.0;
-	currentZHop = retractHop = 0.0;
+	retractHop = 0.0;
 	retractSpeed = unRetractSpeed = DefaultRetractSpeed * SecondsToMinutes;
 	isRetracted = false;
 	lastAuxStatusReportType = -1;						// no status reports requested yet
@@ -149,18 +153,18 @@ void GCodes::Reset()
 {
 	// Here we could reset the input sources as well, but this would mess up M122\nM999
 	// because both codes are sent at once from the web interface. Hence we don't do this here.
-	httpGCode->Reset();
-	telnetGCode->Reset();
-	fileGCode->Reset();
-	serialGCode->Reset();
-	auxGCode->Reset();
-	auxGCode->SetCommsProperties(1);					// by default, we require a checksum on the aux port
-	daemonGCode->Reset();
-#if SUPPORT_12864_LCD
-	lcdGCode->Reset();
-#endif
-	queuedGCode->Reset();
-	autoPauseGCode->Reset();
+	for (GCodeBuffer *gb : gcodeSources)
+	{
+		if (gb != nullptr)
+		{
+			gb->Reset();
+		}
+	}
+
+	if (auxGCode != nullptr)
+	{
+		auxGCode->SetCommsProperties(1);				// by default, we require a checksum on the aux port
+	}
 
 	nextGcodeSource = 0;
 
@@ -195,7 +199,8 @@ void GCodes::Reset()
 	}
 
 	ClearMove();
-	ClearBabyStepping();
+	ClearBabyStepping();								// clear this before calling ToolOffsetInverseTransform
+	currentZHop = 0.0;									// clear this before calling ToolOffsetInverseTransform
 	moveBuffer.xAxes = DefaultXAxisMapping;
 	moveBuffer.yAxes = DefaultYAxisMapping;
 	moveBuffer.virtualExtruderPosition = 0.0;
@@ -1410,6 +1415,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 		// Code queue
 		codeQueue->FillBuffer(queuedGCode);
 	}
+#if HAS_NETWORKING
 	else if (&gb == httpGCode)
 	{
 		// Webserver
@@ -1420,6 +1426,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 		// Telnet
 		telnetInput->FillBuffer(telnetGCode);
 	}
+#endif
 	else if (   &gb == serialGCode
 #if SUPPORT_SCANNER
 			 && !reprap.GetScanner().IsRegistered()
@@ -2074,11 +2081,11 @@ void GCodes::Diagnostics(MessageType mtype)
 	const GCodeBuffer * const movementOwner = resourceOwners[MoveResource];
 	platform.MessageF(mtype, "Movement lock held by %s\n", (movementOwner == nullptr) ? "null" : movementOwner->GetIdentity());
 
-	for (size_t i = 0; i < ARRAY_SIZE(gcodeSources); ++i)
+	for (GCodeBuffer *gb : gcodeSources)
 	{
-		if (gcodeSources[i] != nullptr)
+		if (gb != nullptr)
 		{
-			gcodeSources[i]->Diagnostics(mtype);
+			gb->Diagnostics(mtype);
 		}
 	}
 
