@@ -234,6 +234,7 @@ Done in 2.02beta2:
 Bug fixes/investigations for 2.02beta3:
 - [done, ok] Chrishamm's changes to allow fans to be named
 - [done] Initial assumed Z position could be strange because babystepping wasn't cleared early enough at startup
+- M28/M29 in macro still doesn't work if the M29 is right at the end of the file
 - Pressure advance with high K and low microstepping, see https://forum.duet3d.com/topic/1935/more-strange-pressure-advance-behaviour/95
 - Do we need to defer stall detection when a motor is starting from rest?
 - [awaiting reply] Step errors when using Nimble and pressure advance, https://forum.duet3d.com/topic/3139/high-level-of-steperrors-what-can-cause-them/5

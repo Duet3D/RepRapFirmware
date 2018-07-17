@@ -72,6 +72,16 @@ constexpr uint32_t DriverUartIds[MaxSmartDrivers] = { ID_UART0, ID_UART1 };
 constexpr IRQn DriverUartIRQns[MaxSmartDrivers] = { UART0_IRQn, UART1_IRQn };
 constexpr Pin DriverUartPins[MaxSmartDrivers] = { APINS_UART0, APINS_UART1 };
 
+// Define the baud rate used to send/receive data to/from the drivers.
+// If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
+// We send data via a 1K series resistor. Even if we assume a 200pF load on the shared UART line, this gives a 200ns time constant, which is much less than the 2us bit time @ 500kbaud.
+// To write a register we need to send 8 bytes. To read a register we send 4 bytes and receive 8 bytes after a programmable delay.
+// So at 500kbaud it takes about 128us to write a register, and 192us+ to read a register.
+// On the PCCB we have only 2 drivers, so we use a lower baud rate to reduce the CPU load
+
+const uint32_t DriversBaudRate = 100000;
+const uint32_t TransferTimeout = 10;						// any transfer should complete within 10 ticks @ 1ms/tick
+
 #define UART_TMC_DRV0_Handler	UART0_Handler
 #define UART_TMC_DRV1_Handler	UART1_Handler
 

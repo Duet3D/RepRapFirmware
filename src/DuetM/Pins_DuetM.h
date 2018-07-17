@@ -76,6 +76,15 @@ const uint8_t UART_TMC_DRV_PINS = APINS_UART0;
 
 #define UART_TMC_DRV_Handler	UART0_Handler
 
+// Define the baud rate used to send/receive data to/from the drivers.
+// If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
+// We send data via a 1K series resistor. Even if we assume a 200pF load on the shared UART line, this gives a 200ns time constant, which is much less than the 2us bit time @ 500kbaud.
+// To write a register we need to send 8 bytes. To read a register we send 4 bytes and receive 8 bytes after a programmable delay.
+// So at 500kbaud it takes about 128us to write a register, and 192us+ to read a register.
+// In testing I found that 500kbaud was not reliable, so now using 200kbaud.
+const uint32_t DriversBaudRate = 200000;
+const uint32_t TransferTimeout = 10;				// any transfer should complete within 10 ticks @ 1ms/tick
+
 constexpr Pin DriverMuxPins[3] = { 50, 52, 53 };	// Pins that control the UART multiplexer, LSB first
 
 // Endstops
