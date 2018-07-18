@@ -48,6 +48,10 @@
 # define SUPPORT_12864_LCD		0
 #endif
 
+#ifndef SUPPORT_DOTSTAR_LED
+# define SUPPORT_DOTSTAR_LED	0
+#endif
+
 #ifndef USE_CACHE
 # define USE_CACHE				0
 #endif

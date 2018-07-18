@@ -27,13 +27,14 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define HAS_VREF_MONITOR		1
 #define ACTIVE_LOW_HEAT_ON		1					// irrelevant because there are no heaters
 
-#define SUPPORT_INKJET		0						// set nonzero to support inkjet control
-#define SUPPORT_ROLAND		0						// set nonzero to support Roland mill
-#define SUPPORT_SCANNER		0						// set zero to disable support for FreeLSS scanners
-#define SUPPORT_IOBITS		0						// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR	0						// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
+#define SUPPORT_INKJET			0					// set nonzero to support inkjet control
+#define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
+#define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
+#define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
+#define SUPPORT_DHT_SENSOR		0					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
-#define SUPPORT_12864_LCD	0						// set nonzero to support 12864 LCD and rotary encoder
+#define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
+#define SUPPORT_DOTSTAR_LED		1					// set nonzero to support DotStar LED strips
 
 // The physical capabilities of the machine
 
@@ -41,7 +42,7 @@ constexpr size_t DRIVES = 8;						// The maximum number of drives supported by t
 constexpr size_t MaxSmartDrivers = 2;				// The maximum number of smart drivers
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h }
 
-constexpr size_t Heaters = 1;						// The number of heaters in the machine. PCCB has no heaters, but the code doesn't like that so we say 1
+constexpr size_t Heaters = 2;						// The number of heaters in the machine. PCCB has no heaters, but we pretend that the LED pins are heaters.
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 2;
 
@@ -91,7 +92,7 @@ const uint32_t TransferTimeout = 10;						// any transfer should complete within
 constexpr Pin END_STOP_PINS[DRIVES] = { 24, 25, 67, 63, NoPin, NoPin, NoPin, NoPin };
 
 // Heaters and thermistors
-constexpr Pin HEAT_ON_PINS[Heaters] = { NoPin };
+constexpr Pin HEAT_ON_PINS[Heaters] = { 36, 59 };					// these are actually the LED control pins
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 20, 49 }; 	// Thermistor pin numbers
 constexpr Pin VssaSensePin = 19;
 constexpr Pin VrefSensePin = 27;
@@ -131,14 +132,19 @@ constexpr size_t NumTachos = 2;
 constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { 16, 39, 15, 37 };				// PWML2, PWML3, TIOA1, PWML1
 constexpr Pin TachoPins[NumTachos] = { 26, 66 };
 
+#if 0	// currently unused
 // Main LED control
 constexpr size_t NUM_LEDS = 2;												// number of main LEDs
 constexpr Pin LedOnPins[NUM_LEDS] = { 36, 59 };								// LED control pins
+#endif
 
-// DotStar LED control
+// DotStar LED control (USART0 is SharedSPI,
 Usart * const DotStarUsart = USART1;
 constexpr uint32_t DotStarUsartId = ID_USART1;
+constexpr Pin DotStarMosiPin = 22;
+constexpr Pin DotStarSclkPin = 23;
 constexpr IRQn DotStarUsartIRQn = USART1_IRQn;
+const uint32_t DotStarSpiClockFrequency = 100000;		// try sending at 100kHz
 
 // SD cards
 constexpr size_t NumSdCards = 1;

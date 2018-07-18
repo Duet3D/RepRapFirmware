@@ -103,7 +103,7 @@ void Heat::Init()
 	{
 		heaterSensors[heater] = nullptr;			// no temperature sensor assigned yet
 #ifdef PCCB
-		// PCCB has no heaters by default
+		// PCCB has no heaters by default, but we pretend that the LED outputs are heaters. So disable the PID controllers.
 		pids[heater]->Init(-1.0, -1.0, -1.0, true, false);
 #else
 		if (IsBedOrChamberHeater(heater))

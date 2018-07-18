@@ -40,6 +40,10 @@
 # include "FirmwareUpdater.h"
 #endif
 
+#if SUPPORT_DOTSTAR_LED
+# include "Fans/DotStarLed.h"
+#endif
+
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
 // Set up some default values for special moves, e.g. for Z probing and firmware retraction
@@ -146,6 +150,11 @@ void GCodes::Init()
 #if SUPPORT_SCANNER
 	reprap.GetScanner().SetGCodeBuffer(serialGCode);
 #endif
+
+#if SUPPORT_DOTSTAR_LED
+	DotStarLed::Init();
+#endif
+
 }
 
 // This is called from Init and when doing an emergency stop
@@ -1476,7 +1485,8 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 		// We have reached the end of the file. Check for the last line of gcode not ending in newline.
 		if (!gb.StartingNewCode())				// if there is something in the buffer
 		{
-			if (gb.Put('\n')) 					// in case there wasn't a newline ending the file
+			gb.FileEnded();						// append a newline and deal with any pending file write
+			if (gb.IsReady())
 			{
 				gb.SetFinished(ActOnCode(gb, reply));
 				return;

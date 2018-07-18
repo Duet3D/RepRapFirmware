@@ -46,7 +46,7 @@ constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the
 #define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f,g,h,i }
 
 constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
-constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
+constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
@@ -156,12 +156,12 @@ constexpr Pin ROLAND_RTS_PIN = xx;											// Expansion pin 12, PA13_RXD1
 #endif
 
 // M42 and M208 commands now use logical pin numbers, not firmware pin numbers.
-// This next definition defines the highest one.
 // This is the mapping from logical pins 60+ to firmware pin numbers
 constexpr Pin SpecialPinMap[] =
 {
 	24, 97, 98, 99,															// We allow CS5-CS8 to be used because few users need >4 thermocouples or RTDs
-	7																		// SW_ENC on CONN_SD
+	7,																		// SW_ENC on CONN_SD
+	Z_PROBE_MOD_PIN
 };
 constexpr Pin DueX5GpioPinMap[] = { 211, 210, 209, 208 };					// Pins 100-103 map to GPIO 1-4 on DueX5
 // We also allow pins 120-135 to be used if there is an additional SX1509B expander

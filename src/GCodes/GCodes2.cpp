@@ -42,6 +42,10 @@
 # include "Display/Display.h"
 #endif
 
+#if SUPPORT_DOTSTAR_LED
+# include "Fans/DotStarLed.h"
+#endif
+
 #include <utility>			// for std::swap
 
 // If the code to act on is completed, this returns true, otherwise false.
@@ -1734,6 +1738,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 		break;
+
+#if SUPPORT_DOTSTAR_LED
+	case 150:
+		result = DotStarLed::SetColours(gb, reply);
+		break;
+#endif
 
 	case 190: // Set bed temperature and wait
 	case 191: // Set chamber temperature and wait

@@ -23,6 +23,7 @@ public:
 	bool Put(char c) __attribute__((hot));				// Add a character to the end
 	void Put(const char *str, size_t len);				// Add an entire string, overwriting any existing content
 	void Put(const char *str);							// Add a null-terminated string, overwriting any existing content
+	void FileEnded();									// Called when we reach the end of the file we are reading from
 	bool Seen(char c) __attribute__((hot));				// Is a character present?
 
 	char GetCommandLetter() const { return commandLetter; }
@@ -85,6 +86,7 @@ public:
 
 	bool IsWritingBinary() const { return IsWritingFile() && binaryWriting; }	// returns true if writing binary
 	void WriteBinaryToFile(char b);											// write a byte to the file
+	void FinishWritingBinary();
 
 	size_t CommandLength() const { return commandEnd - commandStart; }		// get the length of the current command
 	const char* CommandStart() const { return gcodeBuffer + commandStart; }	// get the start of the current command

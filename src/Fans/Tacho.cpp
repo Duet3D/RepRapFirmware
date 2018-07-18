@@ -34,7 +34,7 @@ uint32_t Tacho::GetRPM() const
 	// However, if the fan stops then we get no interrupts and fanInterval stops getting updated.
 	// We must recognise this and return zero.
 	return (fanInterval != 0 && Platform::GetInterruptClocks() - fanLastResetTime < 3 * StepClockRate)	// if we have a reading and it is less than 3 second old
-			? (StepClockRate * fanMaxInterruptCount)/(2 * fanInterval)			// then calculate RPM assuming 2 interrupts per rev
+			? (StepClockRate * fanMaxInterruptCount * (60/2))/fanInterval		// then calculate RPM assuming 2 interrupts per rev
 			: 0;																// else assume fan is off or tacho not connected
 }
 

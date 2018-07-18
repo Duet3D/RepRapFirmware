@@ -30,7 +30,7 @@ bool GCodeInput::FillBuffer(GCodeBuffer *gb)
 				gb->WriteToFile();
 			}
 
-			// Code is complete, stop here
+			// Code is complete or has been written to file, so stop here
 			return true;
 		}
 	}

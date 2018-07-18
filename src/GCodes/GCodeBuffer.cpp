@@ -1064,9 +1064,9 @@ void GCodeBuffer::WriteToFile()
 		{
 			fileBeingWritten->Close();
 			fileBeingWritten = nullptr;
+			SetFinished(true);
 			const char* const r = (reprap.GetPlatform().Emulating() == Compatibility::marlin) ? "Done saving file." : "";
 			reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, r);
-			SetFinished(true);
 			return;
 		}
 	}
@@ -1074,10 +1074,10 @@ void GCodeBuffer::WriteToFile()
 	{
 		if (Seen('P'))
 		{
+			SetFinished(true);
 			String<ShortScratchStringLength> scratchString;
 			scratchString.printf("%" PRIi32 "\n", GetIValue());
 			reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, scratchString.c_str());
-			SetFinished(true);
 			return;
 		}
 	}
@@ -1094,7 +1094,7 @@ void GCodeBuffer::WriteBinaryToFile(char b)
 		eofStringCounter++;
 		if (eofStringCounter < ARRAY_SIZE(eofString) - 1)
 		{
-			return;			// not reached end of input yet
+			return;					// not reached end of input yet
 		}
 	}
 	else
@@ -1110,10 +1110,15 @@ void GCodeBuffer::WriteBinaryToFile(char b)
 		fileBeingWritten->Write(b);		// writing one character at a time isn't very efficient, but uploading HTML files via USB is rarely done these days
 		if (writingFileSize == 0 || fileBeingWritten->Length() < writingFileSize)
 		{
-			return;			// not reached end of input yet
+			return;					// not reached end of input yet
 		}
 	}
 
+	FinishWritingBinary();
+}
+
+void GCodeBuffer::FinishWritingBinary()
+{
 	// If we get here then we have come to the end of the data
 	fileBeingWritten->Close();
 	const bool crcOk = (crc32 == fileBeingWritten->GetCRC32() || crc32 == 0);
@@ -1127,6 +1132,40 @@ void GCodeBuffer::WriteBinaryToFile(char b)
 	else
 	{
 		reprap.GetGCodes().HandleReply(*this, GCodeResult::error, "CRC32 checksum doesn't match");
+	}
+}
+
+// This is called when we reach the end of the file we are reading from
+void GCodeBuffer::FileEnded()
+{
+	if (IsWritingBinary())
+	{
+		// We are in the middle of writing a binary file but the input stream has ended
+		FinishWritingBinary();
+	}
+	else
+	{
+		Put('\n');					// append a newline in case the file didn't end with one
+		if (IsWritingFile())
+		{
+			bool gotM29 = false;
+			if (IsReady())			// if we have a complete command
+			{
+				gotM29 = (GetCommandLetter() == 'M' && GetCommandNumber() == 29);
+				if (!gotM29)		// if it wasn't M29, write it to file
+				{
+					fileBeingWritten->Write(Buffer());
+					fileBeingWritten->Write('\n');
+				}
+			}
+
+			// Close the file whether or not we saw M29
+			fileBeingWritten->Close();
+			fileBeingWritten = nullptr;
+			SetFinished(true);
+			const char* const r = (reprap.GetPlatform().Emulating() == Compatibility::marlin) ? "Done saving file." : "";
+			reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, r);
+		}
 	}
 }
 

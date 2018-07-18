@@ -3260,7 +3260,13 @@ void Platform::InitFans()
 {
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
-		fans[i].Init(COOLING_FAN_PINS[i], FansHardwareInverted(i));
+		fans[i].Init(COOLING_FAN_PINS[i], FansHardwareInverted(i),
+#ifdef PCCB
+						(i == 3) ? 25000 : DefaultFanPwmFreq				// PCCB fan 3 has 4-wire fan connectors for Intel-spec PWM fans
+#else
+						DefaultFanPwmFreq
+#endif
+			);
 	}
 
 	if (NUM_FANS > 1)
@@ -3268,8 +3274,8 @@ void Platform::InitFans()
 #if defined(DUET_06_085)
 		// Fan 1 on the Duet 0.8.5 shares its control pin with heater 6. Set it full on to make sure the heater (if present) is off.
 		fans[1].SetPwm(1.0);												// set it full on
-#else
-		// Set fan 1 to be thermostatic by default, monitoring all heaters except the default bed and chamber heaters
+#elif defined(DUET_NG)
+		// On Duet WiFi/Ethernet we set fan 1 to be thermostatic by default, monitoring all heaters except the default bed and chamber heaters
 		Fan::HeatersMonitoredBitmap bedAndChamberHeaterMask = 0;
 		for (uint8_t bedHeater : DefaultBedHeaters)
 		{
@@ -3287,6 +3293,9 @@ void Platform::InitFans()
 		}
 		fans[1].SetHeatersMonitored(LowestNBits<Fan::HeatersMonitoredBitmap>(Heaters) & ~bedAndChamberHeaterMask);
 		fans[1].SetPwm(1.0);												// set it full on
+#elif defined(PCCB)
+		// Fan 3 needs to be set explicitly to zero PWM, otherwise it turns on because the MCU output pin isn't set low
+		fans[3].SetPwm(0.0);
 #endif
 	}
 }
