@@ -13,6 +13,8 @@
 #include "Platform.h"
 
 
+const char* const SCANNER_ON_G = "scanner_on.g";
+const char* const SCANNER_OFF_G = "scanner_off.g";
 const char* const ALIGN_ON_G = "align_on.g";
 const char* const ALIGN_OFF_G = "align_off.g";
 const char* const SCAN_PRE_G = "scan_pre.g";
@@ -104,7 +106,8 @@ void Scanner::Spin()
 		}
 		SetState(ScannerState::Disconnected);
 
-		// Cannot do anything else...
+		// Run a macro to perform custom actions when the scanner is removed
+		DoFileMacro(SCANNER_OFF_G);
 		return;
 	}
 
@@ -389,18 +392,15 @@ bool Scanner::Enable()
 }
 
 // Register a scanner device
-bool Scanner::Register()
+void Scanner::Register()
 {
-	if (IsRegistered())
+	if (!IsRegistered())
 	{
-		// Don't do anything if a device is already registered
-		return true;
+		platform.Message(MessageType::BlockingUsbMessage, "OK\n");
+		SetState(ScannerState::Idle);
+
+		DoFileMacro(SCANNER_ON_G);
 	}
-
-	platform.Message(MessageType::BlockingUsbMessage, "OK\n");
-	SetState(ScannerState::Idle);
-
-	return true;
 }
 
 // Initiate a new scan

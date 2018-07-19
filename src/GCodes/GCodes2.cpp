@@ -30,14 +30,20 @@
 # include "FirmwareUpdater.h"
 #endif
 
-#if defined(DUET_NG)
-# include "TMC2660.h"
-#elif defined(DUET_M)
-# include "TMC22xx.h"
+#if SUPPORT_TMC2660
+# include "StepperDrivers/TMC2660/TMC2660.h"
+#endif
+
+#if SUPPORT_TMC22xx
+# include "StepperDrivers/TMC22xx/TMC22xx.h"
 #endif
 
 #if SUPPORT_12864_LCD
 # include "Display/Display.h"
+#endif
+
+#if SUPPORT_DOTSTAR_LED
+# include "Fans/DotStarLed.h"
 #endif
 
 #include <utility>			// for std::swap
@@ -61,6 +67,8 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
 			HandleReply(gb, GCodeResult::ok, "");
 			return true;
 		}
+
+		return false;		// we should queue this code but we can't, so wait until we can either execute it or queue it
 	}
 
 	switch (gb.GetCommandLetter())
@@ -230,8 +238,12 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 				result = LoadHeightMap(gb, reply);
 				break;
 
-			default:	// clear height map
+			case 2:		// clear height map
 				ClearBedMapping();
+				break;
+
+			default:
+				result = GCodeResult::badOrMissingParameter;
 				break;
 			}
 		}
@@ -850,7 +862,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			String<MaxFilenameLength> filename;
 			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
-				const bool ok = OpenFileToWrite(gb, platform.GetGCodeDir(), filename.c_str(), 0, false, 0);
+				const bool ok = gb.OpenFileToWrite(platform.GetGCodeDir(), filename.c_str(), 0, false, 0);
 				if (ok)
 				{
 					reply.printf("Writing to file: %s", filename.c_str());
@@ -1727,6 +1739,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+#if SUPPORT_DOTSTAR_LED
+	case 150:
+		result = DotStarLed::SetColours(gb, reply);
+		break;
+#endif
+
 	case 190: // Set bed temperature and wait
 	case 191: // Set chamber temperature and wait
 		if (   !LockMovementAndWaitForStandstill(gb)		// wait until movement has finished
@@ -1928,7 +1946,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 206: // Offset axes
-		result = OffsetAxes(gb);
+		result = OffsetAxes(gb, reply);
 		break;
 
 	case 207: // Set firmware retraction details
@@ -2013,13 +2031,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				// Update the feed rate for ALL input sources, and all feed rates on the stack
 				const float speedFactorRatio = newSpeedFactor / speedFactor;
-				for (size_t i = 0; i < ARRAY_SIZE(gcodeSources); ++i)
+				for (GCodeBuffer *gb2 : gcodeSources)
 				{
-					GCodeMachineState *ms = &gcodeSources[i]->MachineState();
-					while (ms != nullptr)
+					if (gb2 != nullptr)
 					{
-						ms->feedRate *= speedFactorRatio;
-						ms = ms->previous;
+						GCodeMachineState *ms = &gb2->MachineState();
+						while (ms != nullptr)
+						{
+							ms->feedRate *= speedFactorRatio;
+							ms = ms->previous;
+						}
 					}
 				}
 				// If the last move hasn't gone yet, update its feed rate too if it is not a firmware retraction
@@ -2254,13 +2275,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 303: // Run PID tuning
 		if (gb.Seen('H'))
 		{
-			const int heater = gb.GetIValue();
+			const unsigned int heater = gb.GetUIValue();
 			const float temperature = (gb.Seen('S')) ? gb.GetFValue()
 										: reprap.GetHeat().IsBedHeater(heater) ? 75.0
 										: reprap.GetHeat().IsChamberHeater(heater) ? 50.0
 										: 200.0;
 			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : reprap.GetHeat().GetHeaterModel(heater).GetMaxPwm();
-			if (heater < 0 || heater >= (int)Heaters)
+			if (heater >= Heaters)
 			{
 				reply.copy("Bad heater number in M303 command");
 			}
@@ -2294,8 +2315,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 307: // Set heater process model parameters
 		if (gb.Seen('H'))
 		{
-			const int heater = gb.GetIValue();
-			if (heater >= 0 && heater < (int)Heaters)
+			const unsigned int heater = gb.GetUIValue();
+			if (heater < Heaters)
 			{
 				const FopDt& model = reprap.GetHeat().GetHeaterModel(heater);
 				bool seen = false;
@@ -2511,7 +2532,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			const int type = gb.Seen('S') ? gb.GetIValue() : 0;
 			const int seq = gb.Seen('R') ? gb.GetIValue() : -1;
-			if (&gb == auxGCode)
+			if (&gb == auxGCode && (type == 0 || type == 2))
 			{
 				lastAuxStatusReportType = type;
 			}
@@ -2960,7 +2981,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		const FilePosition size = (gb.Seen('S') ? (FilePosition)gb.GetIValue() : 0);
 		const uint32_t crc32 = (gb.Seen('C') ? gb.GetUIValue() : 0);
-		const bool ok = OpenFileToWrite(gb, folder, filename.c_str(), size, true, crc32);
+		const bool ok = gb.OpenFileToWrite(folder, filename.c_str(), size, true, crc32);
 		if (ok)
 		{
 			reply.printf("Writing to file: %s", filename.c_str());
@@ -2973,15 +2994,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	}
 	break;
 
-	case 561: // Set identity transform (also clears bed probe grid)
+	case 561: // Set identity transform and disable height map
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return false;
+		}
 		ClearBedMapping();
 		break;
 
 	case 562: // Reset temperature fault - use with great caution
 		if (gb.Seen('P'))
 		{
-			const int heater = gb.GetIValue();
-			if (heater >= 0 && heater < (int)Heaters)
+			const unsigned int heater = gb.GetUIValue();
+			if (heater < Heaters)
 			{
 				reprap.ClearTemperatureFault(heater);
 			}
@@ -2994,7 +3019,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		else
 		{
 			// Clear all heater faults
-			for (int heater = 0; heater < (int)Heaters; ++heater)
+			for (unsigned int heater = 0; heater < Heaters; ++heater)
 			{
 				reprap.ClearTemperatureFault(heater);
 			}
@@ -3195,8 +3220,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			if (gb.Seen('H'))
 			{
-				const int heater = gb.GetIValue();
-				if (heater >= 0 && heater < (int)Heaters)
+				const unsigned heater = gb.GetUIValue();
+				if (heater < Heaters)
 				{
 					bool seenValue = false;
 					float maxTempExcursion, maxFaultTime;
@@ -3293,10 +3318,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 573: // Report heater average PWM
 		if (gb.Seen('P'))
 		{
-			const int heater = gb.GetIValue();
-			if (heater >= 0 && heater < (int)Heaters)
+			const unsigned int heater = gb.GetUIValue();
+			if (heater < Heaters)
 			{
-				reply.printf("Average heater %d PWM: %.3f", heater, (double)reprap.GetHeat().GetAveragePWM(heater));
+				reply.printf("Average heater %u PWM: %.3f", heater, (double)reprap.GetHeat().GetAveragePWM(heater));
 			}
 		}
 		break;
@@ -3370,8 +3395,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						serialGCode->SetCommsProperties(val);
 						break;
 					case 1:
-						auxGCode->SetCommsProperties(val);
-						platform.SetAuxDetected();
+						if (auxGCode != nullptr)
+						{
+							auxGCode->SetCommsProperties(val);
+							platform.SetAuxDetected();
+						}
 						break;
 					default:
 						break;
@@ -3800,7 +3828,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			if (reprap.GetScanner().IsEnabled())
 			{
-				result = GetGCodeResultFromFinished(reprap.GetScanner().Register());
+				reprap.GetScanner().Register();
+
+				// The Scanner module will attempt to run a macro via this G-code source so we're not done yet
+				result = GCodeResult::notFinished;
 			}
 			else
 			{
@@ -4163,7 +4194,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 999:
-		result = DoDwellTime(gb, 500);		// wait half a second to allow the response to be sent back to the web server, otherwise it may retry
+		result = DoDwellTime(gb, 1000);		// wait a second to allow the response to be sent back to the web server, otherwise it may retry
 		if (result != GCodeResult::notFinished)
 		{
 			reprap.EmergencyStop();			// this disables heaters and drives - Duet WiFi pre-production boards need drives disabled here

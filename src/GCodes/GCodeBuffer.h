@@ -23,6 +23,7 @@ public:
 	bool Put(char c) __attribute__((hot));				// Add a character to the end
 	void Put(const char *str, size_t len);				// Add an entire string, overwriting any existing content
 	void Put(const char *str);							// Add a null-terminated string, overwriting any existing content
+	void FileEnded();									// Called when we reach the end of the file we are reading from
 	bool Seen(char c) __attribute__((hot));				// Is a character present?
 
 	char GetCommandLetter() const { return commandLetter; }
@@ -48,7 +49,8 @@ public:
 	void TryGetUIValue(char c, uint32_t& val, bool& seen);
 	void TryGetBValue(char c, bool& val, bool& seen);
 	bool TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad = false);
-	bool TryGetQuotedString(char c, const StringRef& str, bool& seen);
+	bool TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad = false);
+ 	bool TryGetQuotedString(char c, const StringRef& str, bool& seen);
 	bool TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen);
 
 	const char* Buffer() const;
@@ -57,8 +59,6 @@ public:
 	bool IsReady() const;								// Return true if a gcode is ready but hasn't been started yet
 	bool IsExecuting() const;							// Return true if a gcode has been started and is not paused
 	void SetFinished(bool f);							// Set the G Code executed (or not)
-	const char* WritingFileDirectory() const;			// If we are writing the G Code to a file, where that file is
-	void SetWritingFileDirectory(const char* wfd);		// Set the directory for the file to write the GCode in
 	int GetToolNumberAdjust() const { return toolNumberAdjust; }
 	void SetToolNumberAdjust(int arg) { toolNumberAdjust = arg; }
 	void SetCommsProperties(uint32_t arg) { checksumRequired = (arg & 1); }
@@ -79,10 +79,17 @@ public:
 	bool CanQueueCodes() const;
 	void MessageAcknowledged(bool cancelled);
 	FilePosition GetFilePosition(size_t bytesCached) const;	// Get the file position at the start of the current command
-	bool IsWritingBinary() const;						// returns true if writing binary
-	void SetBinaryWriting(bool state);					// set true if writing binary
-	uint32_t GetCRC32() const;
-	void SetCRC32(uint32_t newCRC32);
+
+	bool OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32);	// open a file to write to
+	bool IsWritingFile() const { return fileBeingWritten != nullptr; }		// returns true if writing a file
+	void WriteToFile();														// write the current GCode to file
+
+	bool IsWritingBinary() const { return IsWritingFile() && binaryWriting; }	// returns true if writing binary
+	void WriteBinaryToFile(char b);											// write a byte to the file
+	void FinishWritingBinary();
+
+	size_t CommandLength() const { return commandEnd - commandStart; }		// get the length of the current command
+	const char* CommandStart() const { return gcodeBuffer + commandStart; }	// get the start of the current command
 
 	void PrintCommand(const StringRef& s) const;
 
@@ -123,7 +130,11 @@ private:
 	unsigned int gcodeLineEnd;							// Number of characters in the entire line of gcode
 	int readPointer;									// Where in the buffer to read next
 	GCodeBufferState bufferState;						// Idle, executing or paused
-	const char* writingFileDirectory;					// If the G Code is going into a file, where that is
+
+	FileStore *fileBeingWritten;						// If we are copying GCodes to a file, which file it is
+	FilePosition writingFileSize;						// Size of the file being written, or zero if not known
+	uint8_t eofStringCounter;							// Check the...
+
 	int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
 	const MessageType responseMessageType;				// The message type we use for responses to commands coming from this channel
 	unsigned int lineNumber;
@@ -144,26 +155,6 @@ private:
 	bool queueCodes;									// Can we queue certain G-codes from this source?
 	bool binaryWriting;									// Executing gcode or writing binary file?
 };
-
-inline uint32_t GCodeBuffer::GetCRC32() const
-{
-	return crc32;
-}
-
-inline void GCodeBuffer::SetCRC32(uint32_t newCRC32)
-{
-	crc32 = newCRC32;
-}
-
-inline bool GCodeBuffer::IsWritingBinary() const
-{
-	return binaryWriting;
-}
-
-inline void GCodeBuffer::SetBinaryWriting(bool state)
-{
-	binaryWriting = state;
-}
 
 inline const char* GCodeBuffer::Buffer() const
 {
@@ -188,16 +179,6 @@ inline bool GCodeBuffer::IsReady() const
 inline bool GCodeBuffer::IsExecuting() const
 {
 	return bufferState == GCodeBufferState::executing;
-}
-
-inline const char* GCodeBuffer::WritingFileDirectory() const
-{
-	return writingFileDirectory;
-}
-
-inline void GCodeBuffer::SetWritingFileDirectory(const char* wfd)
-{
-	writingFileDirectory = wfd;
 }
 
 inline GCodeState GCodeBuffer::GetState() const

@@ -145,6 +145,7 @@ public:
 	void GetCurrentCoordinates(const StringRef& s) const;				// Write where we are into a string
 	bool DoingFileMacro() const;										// Or still busy processing a macro file?
 	float FractionOfFilePrinted() const;								// Get fraction of file printed
+	FilePosition GetFilePosition() const;								// Return the current position of the file being printed in bytes
 	void Diagnostics(MessageType mtype);								// Send helpful information out
 
 	bool RunConfigFile(const char* fileName);							// Start running the config file
@@ -167,11 +168,10 @@ public:
 	float GetBabyStepOffset() const { return currentBabyStepZOffset; }	// Get the current baby stepping Z offset
 	const float *GetUserPosition() const { return currentUserPosition; }	// Return the current user position
 
+#if HAS_NETWORKING
 	NetworkGCodeInput *GetHTTPInput() const { return httpInput; }
 	NetworkGCodeInput *GetTelnetInput() const { return telnetInput; }
-
-	void WriteGCodeToFile(GCodeBuffer& gb);								// Write this GCode into a file
-	void WriteHTMLToFile(GCodeBuffer& gb, char b);						// Save an HTML file (usually to upload a new web interface)
+#endif
 
 	bool IsFlashing() const { return isFlashing; }						// Is a new firmware binary going to be flashed?
 
@@ -221,6 +221,7 @@ public:
 #endif
 
 	void SetMappedFanSpeed(float f);									// Set the mapped fan speed
+	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);	// Handle G-Code replies
 
 private:
 	GCodes(const GCodes&);												// private copy constructor to prevent copying
@@ -260,7 +261,6 @@ private:
 	bool HandleMcode(GCodeBuffer& gb, const StringRef& reply);			// Do an M code
 	bool HandleTcode(GCodeBuffer& gb, const StringRef& reply);			// Do a T code
 	bool HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply);
-	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);		// Handle G-Code replies
 	void HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply);
 
 	const char* DoStraightMove(GCodeBuffer& gb, bool isCoordinated) __attribute__((hot));	// Execute a straight move returning any error message
@@ -289,12 +289,10 @@ private:
 	bool Push(GCodeBuffer& gb);													// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb);													// Pop feedrate etc
 	void DisableDrives();														// Turn the motors off
-	bool OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32);
 																				// Start saving GCodes in a file
-	void FinishWrite(GCodeBuffer& gb);											// Finish writing to the file and respond
 	bool SendConfigToLine();													// Deal with M503
 
-	GCodeResult OffsetAxes(GCodeBuffer& gb);									// Set offsets
+	GCodeResult OffsetAxes(GCodeBuffer& gb, const StringRef& reply);			// Set/report offsets
 
 #if SUPPORT_WORKPLACE_COORDINATES
 	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute);	// Set workspace coordinates
@@ -379,31 +377,28 @@ private:
 
 	Platform& platform;													// The RepRap machine
 
-	NetworkGCodeInput* httpInput;										// These cache incoming G-codes...
-	NetworkGCodeInput* telnetInput;										// ...
 	FileGCodeInput* fileInput;											// ...
 	StreamGCodeInput* serialInput;										// ...
-	StreamGCodeInput* auxInput;											// ...for the GCodeBuffers below
 
-#if SUPPORT_12864_LCD
-	GCodeBuffer* gcodeSources[9];										// The various sources of gcodes
-#else
-	GCodeBuffer* gcodeSources[8];										// The various sources of gcodes
+#if HAS_NETWORKING
+	NetworkGCodeInput* httpInput;										// These cache incoming G-codes...
+	NetworkGCodeInput* telnetInput;										// ...
 #endif
+#ifdef SERIAL_AUX_DEVICE
+	StreamGCodeInput* auxInput;											// ...for the GCodeBuffers below
+#endif
+
+	GCodeBuffer* gcodeSources[9];										// The various sources of gcodes
 
 	GCodeBuffer*& httpGCode = gcodeSources[0];
 	GCodeBuffer*& telnetGCode = gcodeSources[1];
 	GCodeBuffer*& fileGCode = gcodeSources[2];
 	GCodeBuffer*& serialGCode = gcodeSources[3];
-	GCodeBuffer*& auxGCode = gcodeSources[4];							// This one is for the LCD display on the async serial interface
+	GCodeBuffer*& auxGCode = gcodeSources[4];							// This one is for the PanelDue on the async serial interface
 	GCodeBuffer*& daemonGCode = gcodeSources[5];						// Used for executing config.g and trigger macro files
 	GCodeBuffer*& queuedGCode = gcodeSources[6];
-#if SUPPORT_12864_LCD
-	GCodeBuffer*& lcdGCode = gcodeSources[7];							// This one for the internally-supported LCD
+	GCodeBuffer*& lcdGCode = gcodeSources[7];							// This one for the 12864 LCD
 	GCodeBuffer*& autoPauseGCode = gcodeSources[8];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
-#else
-	GCodeBuffer*& autoPauseGCode = gcodeSources[7];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
-#endif
 
 	size_t nextGcodeSource;												// The one to check next
 
@@ -476,13 +471,6 @@ private:
 
 	FileData fileToPrint;						// The next file to print
 	FilePosition fileOffsetToPrint;				// The offset to print from
-
-	FileStore* fileBeingWritten;				// A file to write G Codes (or sometimes HTML) to
-	FilePosition fileSize;						// Size of the file being written
-
-	const char* eofString;						// What's at the end of an HTML file?
-	uint8_t eofStringCounter;					// Check the...
-	uint8_t eofStringLength;					// ... EoF string as we read.
 
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
 	bool limitAxes;								// Don't think outside the box

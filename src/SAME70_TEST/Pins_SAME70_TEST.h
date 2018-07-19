@@ -1,25 +1,22 @@
 #ifndef PINS_SAME70_H__
 #define PINS_SAME70_H__
 
-# define FIRMWARE_NAME		"RepRapFirmware for SAME70"
-# define DEFAULT_BOARD_TYPE BoardType::SamE70TestBoard
+#define FIRMWARE_NAME		"RepRapFirmware for SAME70"
+#define DEFAULT_BOARD_TYPE BoardType::SamE70TestBoard
 const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
-# define IAP_FIRMWARE_FILE	"SAME70Firmware.bin"
-# define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
-# define WIFI_WEB_FILE		"DuetWebControl.bin"
+#define IAP_FIRMWARE_FILE	"SAME70Firmware.bin"
+#define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
+#define WIFI_WEB_FILE		"DuetWebControl.bin"
+#define IAP_UPDATE_FILE		"iape70.bin"		// need special build for SAME70
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		1
 #define HAS_CPU_TEMP_SENSOR		0
 #define HAS_HIGH_SPEED_SD		1
-#define HAS_SMART_DRIVERS		0		// TBD
-#define HAS_STALL_DETECT		0		// TBD
 #define HAS_VOLTAGE_MONITOR		0		// TBD
 #define HAS_VREF_MONITOR		0		// TBD
 #define ACTIVE_LOW_HEAT_ON		1
-
-#define IAP_UPDATE_FILE		"iape70.bin"		// need special build for SAME70
 
 #define SUPPORT_INKJET		0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND		0					// set nonzero to support Roland mill
@@ -37,9 +34,8 @@ const size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h,i,j,k,l }
 
 constexpr size_t Heaters = 8;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
-#define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d,e,f,g,h }
-
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
+constexpr size_t NumThermistorInputs = 8;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
@@ -62,12 +58,12 @@ constexpr Pin AdditionalIoExpansionStart = 220;		// Pin numbers 220-235 are on t
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // DRIVES
-constexpr Pin GlobalTmcEnablePin = NoPin;				// The pin that drives ENN of all TMC2660 drivers on production boards (on pre-production boards they are grounded)
+constexpr Pin GlobalTmcEnablePin = NoPin;			// The pin that drives ENN of all TMC2660 drivers on production boards (on pre-production boards they are grounded)
 constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
 constexpr Pin STEP_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
 constexpr Pin DIRECTION_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
 
-constexpr Pin DueX_SG = NoPin;							// DueX stallguard detect pin (TBD)
+constexpr Pin DueX_SG = NoPin;						// DueX stallguard detect pin (TBD)
 constexpr Pin DueX_INT = NoPin;						// DueX interrupt pin (TBD)
 
 // Endstops
@@ -75,8 +71,8 @@ constexpr Pin DueX_INT = NoPin;						// DueX interrupt pin (TBD)
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
 constexpr Pin END_STOP_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
 
-// HEATERS
-constexpr Pin TEMP_SENSE_PINS[Heaters] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin }; // Thermistor pin numbers
+// Heater and thermistors
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin }; // Thermistor pin numbers
 constexpr Pin HEAT_ON_PINS[Heaters] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };	// Heater pin numbers (TBD)
 
 // Default thermistor parameters
@@ -119,7 +115,8 @@ constexpr Pin DiagPin = NoPin;												// TBD
 // Cooling fans
 constexpr size_t NUM_FANS = 1;
 constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { NoPin };
-constexpr Pin COOLING_FAN_RPM_PIN = NoPin;									// TBD
+constexpr size_t NumTachos = 1;
+constexpr Pin TachoPins[NumTachos] = { NoPin };								// TBD
 
 // SD cards
 constexpr size_t NumSdCards = 2;

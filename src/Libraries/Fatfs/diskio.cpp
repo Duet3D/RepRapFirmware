@@ -52,6 +52,15 @@
 
 #include <cstring>
 
+static unsigned int highestSdRetriesDone = 0;
+
+unsigned int DiskioGetAndClearMaxRetryCount()
+{
+	const unsigned int ret = highestSdRetriesDone;
+	highestSdRetriesDone = 0;
+	return ret;
+}
+
 //void debugPrintf(const char*, ...);
 
 //#if (SAM3S || SAM3U || SAM3N || SAM3XA_SERIES || SAM4S)
@@ -161,22 +170,35 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
 #if ACCESS_MEM_TO_RAM
 	MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 
-	uint8_t uc_sector_size = mem_sector_size(drv);
-	uint32_t ul_last_sector_num;
-
-	if (uc_sector_size == 0) {
+	const uint8_t uc_sector_size = mem_sector_size(drv);
+	if (uc_sector_size == 0)
+	{
 		return RES_ERROR;
 	}
 
 	/* Check valid address */
+	uint32_t ul_last_sector_num;
 	mem_read_capacity(drv, &ul_last_sector_num);
-	if ((sector + count * uc_sector_size) > (ul_last_sector_num + 1) * uc_sector_size) {
+	if ((sector + count * uc_sector_size) > (ul_last_sector_num + 1) * uc_sector_size)
+	{
 		return RES_PARERR;
 	}
 
 	/* Read the data */
-	if (memory_2_ram(drv, sector, buff, count) != CTRL_GOOD) {
-		return RES_ERROR;
+	unsigned int retryNumber = 0;
+	while (memory_2_ram(drv, sector, buff, count) != CTRL_GOOD)
+	{
+		++retryNumber;
+		if (retryNumber == MaxSdCardTries)
+		{
+			return RES_ERROR;
+		}
+		delay(SdCardRetryDelay);
+	}
+
+	if (retryNumber > highestSdRetriesDone)
+	{
+		highestSdRetriesDone = retryNumber;
 	}
 
 	return RES_OK;
@@ -208,23 +230,36 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count)
 #if ACCESS_MEM_TO_RAM
 	MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 
-	uint8_t uc_sector_size = mem_sector_size(drv);
-	uint32_t ul_last_sector_num;
+	const uint8_t uc_sector_size = mem_sector_size(drv);
 
-	if (uc_sector_size == 0) {
+	if (uc_sector_size == 0)
+	{
 		return RES_ERROR;
 	}
 
 	/* Check valid address */
+	uint32_t ul_last_sector_num;
 	mem_read_capacity(drv, &ul_last_sector_num);
-	if ((sector + count * uc_sector_size) >
-			(ul_last_sector_num + 1) * uc_sector_size) {
+	if ((sector + count * uc_sector_size) > (ul_last_sector_num + 1) * uc_sector_size)
+	{
 		return RES_PARERR;
 	}
 
 	/* Write the data */
-	if (ram_2_memory(drv, sector, buff, count) != CTRL_GOOD) {
-		return RES_ERROR;
+	unsigned int retryNumber = 0;
+	while (ram_2_memory(drv, sector, buff, count) != CTRL_GOOD)
+	{
+		++retryNumber;
+		if (retryNumber == MaxSdCardTries)
+		{
+			return RES_ERROR;
+		}
+		delay(SdCardRetryDelay);
+	}
+
+	if (retryNumber > highestSdRetriesDone)
+	{
+		highestSdRetriesDone = retryNumber;
 	}
 
 	return RES_OK;

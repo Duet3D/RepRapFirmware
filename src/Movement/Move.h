@@ -68,6 +68,7 @@ public:
 	void SetTaperHeight(float h);
 	bool UseMesh(bool b);											// Try to enable mesh bed compensation and report the final state
 	bool IsUsingMesh() const { return usingMesh; }					// Return true if we are using mesh compensation
+	unsigned int GetNumProbePoints() const;							// Return the number of currently used probe points
 	float PushBabyStepping(float amount);							// Try to push some babystepping through the lookahead queue
 
 	void Diagnostics(MessageType mtype);							// Report useful stuff
@@ -118,6 +119,9 @@ public:
 	bool SaveHeightMapToFile(FileStore *f) const;									// Save the height map to a file returning true if an error occurred
 
 	const DDA *GetCurrentDDA() const { return currentDda; }							// Return the DDA of the currently-executing move
+
+	float GetTopSpeed() const;
+	float GetRequestedSpeed() const;
 
 	void AdjustLeadscrews(const floatc_t corrections[]);							// Called by some Kinematics classes to adjust the leadscrews
 

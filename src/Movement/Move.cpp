@@ -104,6 +104,7 @@ void Move::Init()
 
 	idleTimeout = DefaultIdleTimeout;
 	moveState = MoveState::idle;
+	lastStateChangeTime = millis();
 	idleCount = 0;
 
 	simulationMode = 0;
@@ -370,6 +371,12 @@ void Move::Spin()
 	}
 }
 
+// Return the number of currently used probe points
+unsigned int Move::GetNumProbePoints() const
+{
+	return probePoints.GetNumBedCompensationPoints();
+}
+
 // Try to push some babystepping through the lookahead queue
 float Move::PushBabyStepping(float amount)
 {
@@ -589,7 +596,7 @@ void Move::Diagnostics(MessageType mtype)
 {
 	Platform& p = reprap.GetPlatform();
 	p.Message(mtype, "=== Move ===\n");
-	p.MessageF(mtype, "Hiccups: %" PRIu32 ", StepErrors: %u, LaErrors: %u, FreeDm: %d, MinFreeDm %d, MaxWait: %" PRIu32 "ms, Underruns: %u, %u\n",
+	p.MessageF(mtype, "Hiccups: %" PRIu32 ", StepErrors: %u, LaErrors: %u, FreeDm: %d, MinFreeDm: %d, MaxWait: %" PRIu32 "ms, Underruns: %u, %u\n",
 						DDA::numHiccups, stepErrors, numLookaheadErrors, DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
 	DDA::numHiccups = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = numLookaheadErrors = 0;
@@ -904,6 +911,18 @@ bool Move::LoadHeightMapFromFile(FileStore *f, const StringRef& r)
 bool Move::SaveHeightMapToFile(FileStore *f) const
 {
 	return heightMap.SaveToFile(f, zShift);
+}
+
+float Move::GetTopSpeed() const
+{
+	const DDA * const currDda = currentDda;
+	return (currDda == nullptr) ? 0.0 : currDda->GetTopSpeed();
+}
+
+float Move::GetRequestedSpeed() const
+{
+	const DDA * const currDda = currentDda;
+	return (currDda == nullptr) ? 0.0 : currDda->GetRequestedSpeed();
 }
 
 void Move::SetTaperHeight(float h)

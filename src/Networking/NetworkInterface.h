@@ -41,6 +41,8 @@ public:
 	virtual void OpenDataPort(Port port) = 0;
 	virtual void TerminateDataPort() = 0;
 
+	Mutex interfaceMutex;							// mutex to protect against multiple tasks using the same interface concurrently. Public so that sockets can lock it.
+
 protected:
 	Port portNumbers[NumProtocols];					// port number used for each protocol
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled

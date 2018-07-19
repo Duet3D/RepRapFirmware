@@ -32,7 +32,7 @@ FileInfoParser::FileInfoParser()
 	: parseState(notParsing), fileBeingParsed(nullptr), accumulatedParseTime(0), accumulatedReadTime(0), accumulatedSeekTime(0), fileOverlapLength(0)
 {
 	parsedFileInfo.Init();
-	parserMutex.Create();
+	parserMutex.Create("FileInfoParser");
 }
 
 bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GCodeFileInfo& info, bool quitEarly)

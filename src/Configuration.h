@@ -73,19 +73,34 @@ constexpr float DefaultHotEndHeaterGain = 340.0;
 constexpr float DefaultHotEndHeaterTimeConstant = 140.0;
 constexpr float DefaultHotEndHeaterDeadTime = 5.5;
 
-#if SAM4E || SAME70
+#ifdef PCCB
+
+constexpr size_t NumBedHeaters = 1;
+constexpr size_t NumChamberHeaters = 1;
+constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { -1 };
+constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1 };
+
+constexpr int8_t DefaultE0Heater = 0;					// Index of the default first extruder heater, used only for the legacy status response
+
+#elif SAM4E || SAME70
+
 constexpr size_t NumBedHeaters = 4;
 constexpr size_t NumChamberHeaters = 2;
 constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { 0, -1, -1, -1 };
 constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1, -1 };
+
+constexpr int8_t DefaultE0Heater = 1;					// Index of the default first extruder heater, used only for the legacy status response
+
 #else
+
 constexpr size_t NumBedHeaters = 1;
 constexpr size_t NumChamberHeaters = 2;
 constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { 0 };
 constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1, -1 };
-#endif
 
-constexpr int8_t DefaultE0Heater = 1;					// Index of the default first extruder heater
+constexpr int8_t DefaultE0Heater = 1;					// Index of the default first extruder heater, used only for the legacy status response
+
+#endif
 
 constexpr unsigned int FirstVirtualHeater = 100;		// the heater number at which virtual heaters start
 constexpr unsigned int MaxVirtualHeaters = 10;			// the number of virtual heaters supported
@@ -154,6 +169,8 @@ static_assert(MaxCalibrationPoints <= MaxProbePoints, "MaxCalibrationPoints must
 
 // SD card
 constexpr uint32_t SdCardDetectDebounceMillis = 200;	// How long we give the SD card to settle in the socket
+constexpr unsigned int MaxSdCardTries = 3;				// Number of read or write attempts before giving up
+constexpr uint32_t SdCardRetryDelay = 10;				// Number of milliseconds delay between SD transfer retries
 
 // Z probing
 constexpr float DefaultZDive = 5.0;						// Millimetres
@@ -177,8 +194,10 @@ constexpr size_t PASSWORD_LENGTH = 20;
 #if SAM4E || SAM4S || SAME70
 // Increased GCODE_LENGTH on the SAM4 because M587 and M589 commands on the Duet WiFi can get very long
 constexpr size_t GCODE_LENGTH = 161;					// maximum number of non-comment characters in a line of GCode including the null terminator
+constexpr size_t SHORT_GCODE_LENGTH = 61;				// maximum length of a GCode that we can queue to synchronise it to a move
 #else
 constexpr size_t GCODE_LENGTH = 101;					// maximum number of non-comment characters in a line of GCode including the null terminator
+constexpr size_t SHORT_GCODE_LENGTH = 61;				// maximum length of a GCode that we can queue to synchronise it to a move
 #endif
 
 constexpr size_t MaxMessageLength = 256;
@@ -190,6 +209,7 @@ constexpr size_t MaxFilenameLength = 100;
 #endif
 
 constexpr size_t MaxHeaterNameLength = 20;				// Maximum number of characters in a heater name
+constexpr size_t MaxFanNameLength = 20;					// Maximum number of characters in a fan name
 
 // Output buffer length and number of buffers
 // When using RTOS, it is best if it is possible to fit an HTTP response header in a single buffer. Our headers are currently about 230 bytes long.
@@ -206,6 +226,8 @@ constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buf
 #else
 # error
 #endif
+
+const size_t maxQueuedCodes = 16;						// How many codes can be queued?
 
 // Move system
 constexpr float DefaultFeedRate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min

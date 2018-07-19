@@ -17,7 +17,7 @@ inline floatc_t fcsquare(floatc_t a)
 }
 
 // Different types of kinematics we support. Each of these has a class to represent it.
-// These must have the same numeric assignments as the K parameter of the M669 command, as documented in ???
+// These must have the same numeric assignments as the K parameter of the M669 command, as documented in the GCodes wiki page
 enum class KinematicsType : uint8_t
 {
 	cartesian = 0,
@@ -29,6 +29,7 @@ enum class KinematicsType : uint8_t
 	hangprinter,
 	polar,
 	coreXYUV,
+//	linearDeltaPlusZ,	// reserved for @sga, see https://forum.duet3d.com/topic/5775/aditional-carterian-z-axis-on-delta-printer
 
 	unknown				// this one must be last!
 };

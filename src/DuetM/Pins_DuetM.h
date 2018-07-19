@@ -12,6 +12,7 @@
 # define DEFAULT_BOARD_TYPE BoardType::DuetM_10
 constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 # define IAP_FIRMWARE_FILE	"DuetMaestroFirmware.bin"
+#define IAP_UPDATE_FILE		"iap4s.bin"
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0
@@ -20,13 +21,11 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
-#define HAS_SMART_DRIVERS		1
-#define HAS_STALL_DETECT		0
+#define SUPPORT_TMC22xx			1
+#define TMC22xx_HAS_MUX			1
 #define HAS_VOLTAGE_MONITOR		1
 #define HAS_VREF_MONITOR		1
 #define ACTIVE_LOW_HEAT_ON		1
-
-#define IAP_UPDATE_FILE		"iap4s.bin"
 
 #define SUPPORT_INKJET		0						// set nonzero to support inkjet control
 #define SUPPORT_ROLAND		0						// set nonzero to support Roland mill
@@ -42,10 +41,9 @@ constexpr size_t DRIVES = 7;						// The maximum number of drives supported by t
 constexpr size_t MaxSmartDrivers = 7;				// The maximum number of smart drivers
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g }
 
-constexpr size_t Heaters = 4;						// The number of heaters/thermistors in the machine. Duet M has 3 heaters but 4 thermistors.
-#define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c }
-
+constexpr size_t Heaters = 3;						// The number of heaters/thermistors in the machine. Duet M has 3 heaters but 4 thermistors.
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
+constexpr size_t NumThermistorInputs = 4;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
@@ -67,8 +65,26 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 // Drivers
 constexpr Pin GlobalTmcEnablePin = 1;				// The pin that drives ENN of all drivers
 constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, 63, 61 };
-constexpr Pin STEP_PINS[DRIVES] = { 56, 38, 64, 40, 41, 67, 60 };
-constexpr Pin DIRECTION_PINS[DRIVES] = { 54, 8, 30, 33, 42, 18, 57 };
+constexpr Pin STEP_PINS[DRIVES] = { 56, 38, 64, 40, 41, 67, 57 };
+constexpr Pin DIRECTION_PINS[DRIVES] = { 54, 8, 30, 33, 42, 18, 60 };
+
+// UART interface to stepper drivers
+Uart * const UART_TMC_DRV = UART0;
+const IRQn UART_TMC_DRV_IRQn = UART0_IRQn;
+const uint32_t ID_UART_TMC_DRV = ID_UART0;
+const uint8_t UART_TMC_DRV_PINS = APINS_UART0;
+
+#define UART_TMC_DRV_Handler	UART0_Handler
+
+// Define the baud rate used to send/receive data to/from the drivers.
+// If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
+// We send data via a 1K series resistor. Even if we assume a 200pF load on the shared UART line, this gives a 200ns time constant, which is much less than the 2us bit time @ 500kbaud.
+// To write a register we need to send 8 bytes. To read a register we send 4 bytes and receive 8 bytes after a programmable delay.
+// So at 500kbaud it takes about 128us to write a register, and 192us+ to read a register.
+// In testing I found that 500kbaud was not reliable, so now using 200kbaud.
+const uint32_t DriversBaudRate = 200000;
+const uint32_t TransferTimeout = 10;				// any transfer should complete within 10 ticks @ 1ms/tick
+
 constexpr Pin DriverMuxPins[3] = { 50, 52, 53 };	// Pins that control the UART multiplexer, LSB first
 
 // Endstops
@@ -77,8 +93,8 @@ constexpr Pin DriverMuxPins[3] = { 50, 52, 53 };	// Pins that control the UART m
 constexpr Pin END_STOP_PINS[DRIVES] = { 24, 32, 46, 25, 43, NoPin, NoPin };
 
 // Heaters and thermistors
-constexpr Pin HEAT_ON_PINS[Heaters] = { 36, 37, 16, NoPin };	// Heater pin numbers
-constexpr Pin TEMP_SENSE_PINS[Heaters] = { 20, 26, 66, 27 }; 	// Thermistor pin numbers
+constexpr Pin HEAT_ON_PINS[Heaters] = { 36, 37, 16 };						// Heater pin numbers
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 20, 26, 66, 27 }; 	// Thermistor pin numbers
 constexpr Pin VssaSensePin = 19;
 constexpr Pin VrefSensePin = 17;
 
@@ -117,7 +133,8 @@ constexpr Pin DiagPin = Z_PROBE_MOD_PIN;
 // Cooling fans
 constexpr size_t NUM_FANS = 3;
 constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { 59, 58, 65 };
-constexpr Pin COOLING_FAN_RPM_PIN = 21;
+constexpr size_t NumTachos = 1;
+constexpr Pin TachoPins[NumTachos] = { 21 };
 
 // SD cards
 constexpr size_t NumSdCards = 2;

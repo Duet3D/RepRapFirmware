@@ -15,11 +15,14 @@
 
 static_assert(Mutex::TimeoutUnlimited == portMAX_DELAY, "Bad value for TimeoutUnlimited");
 
-void Mutex::Create()
+void Mutex::Create(const char *pName)
 {
 	if (handle == nullptr)
 	{
 		handle = xSemaphoreCreateRecursiveMutexStatic(&storage);
+		name = pName;
+		next = mutexList;
+		mutexList = this;
 	}
 }
 
@@ -39,10 +42,11 @@ TaskHandle Mutex::GetHolder() const
 }
 
 TaskBase *TaskBase::taskList = nullptr;
+Mutex *Mutex::mutexList = nullptr;
 
 #else
 
-void Mutex::Create()
+void Mutex::Create(const char *pName)
 {
 }
 
