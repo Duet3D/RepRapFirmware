@@ -18,8 +18,9 @@ namespace DotStarLed
 	const unsigned int MaxChunkSize = 30;					// maximum number of LEDs we DMA to in one go (most strips have 30 LEDs/metre)
 
 	static unsigned int numRemaining = 0;					// how much of the current request remains after the current transfer
+	static bool needStartFrame = true;						// true if we need to send a start frame with the next command
 	static bool busy = false;
-	static uint8_t chunkBuffer[3 * MaxChunkSize];			// BGR values for each LED in the chunk
+	static uint32_t chunkBuffer[MaxChunkSize + 2];			// start frame, one LED frame containing BGR values for each LED in the chunk, end frame
 
 	void Init()
 	{
@@ -60,30 +61,43 @@ namespace DotStarLed
 		}
 
 		bool seen = false;
-		uint32_t red = 0, green = 0, blue = 0, numLeds = MaxChunkSize;
+		uint32_t red = 0, green = 0, blue = 0, brightness = 16, numLeds = MaxChunkSize, following = 0;
 		gb.TryGetUIValue('R', red, seen);
 		gb.TryGetUIValue('U', green, seen);
 		gb.TryGetUIValue('B', blue, seen);
+		gb.TryGetUIValue('Y', brightness, seen);
 		gb.TryGetUIValue('S', numLeds, seen);
-		if (!seen || numLeds == 0)
+		gb.TryGetUIValue('F', following, seen);
+		if (!seen || (numLeds == 0 && !needStartFrame && !following))
 		{
 			return GCodeResult::ok;
 		}
 
 		if (numRemaining != 0)
 		{
-			numLeds = numRemaining;							// we have come back to do another chunk
+			numLeds = numRemaining;												// we have come back to do another chunk
 		}
 
 		// Set up the data in the DMA buffer
-		unsigned int thisChunk = min<unsigned int>(numLeds, MaxChunkSize);
-		uint8_t *p = chunkBuffer;
+		const unsigned int thisChunk = min<unsigned int>(numLeds, MaxChunkSize);
+		numRemaining = numLeds - thisChunk;
+
+		uint32_t *p = chunkBuffer;
+		if (needStartFrame)
+		{
+			*p++ = 0;															// start frame
+		}
 		for (unsigned int i = 0; i < thisChunk; ++i)
 		{
 			// According to the Adafruit web site, current production uses the order BGR
-			*p++ = (uint8_t)blue;
-			*p++ = (uint8_t)green;
-			*p++ = (uint8_t)red;
+			*p++ = (brightness & 31) | 0xE0 | ((blue & 255) << 8) | ((green & 255) << 16) | ((red & 255) << 24);	// LED frame
+		}
+		needStartFrame = (numRemaining == 0 && following == 0);
+
+		if (needStartFrame)														// if this is the end of all the data
+		{
+			// I'm not sure that end frames are needed at all, but they may help to ensure that start frames are correctly recognised
+			*p++ = 0xFFFFFFFF;													// end frame
 		}
 
 		// DMA the data
@@ -91,12 +105,11 @@ namespace DotStarLed
 		Pdc * const usartPdc = usart_get_pdc_base(DotStarUsart);
 		usartPdc->PERIPH_PTCR = PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS;		// disable the PDC
 		usartPdc->PERIPH_TPR = reinterpret_cast<uint32_t>(&chunkBuffer);
-		usartPdc->PERIPH_TCR = 3 * thisChunk;
+		usartPdc->PERIPH_TCR = 4 * (p - chunkBuffer);							// number of bytes to transfer
 		usartPdc->PERIPH_PTCR = PERIPH_PTCR_TXTEN;								// enable the PDC to send data
 
 		DotStarUsart->US_CR = US_CR_TXEN;										// enable transmitter
 
-		numRemaining = numLeds - thisChunk;
 		busy = true;
 		return (numRemaining == 0) ? GCodeResult::ok : GCodeResult::notFinished;
 	}

@@ -25,7 +25,7 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define TMC22xx_HAS_MUX			0
 #define HAS_VOLTAGE_MONITOR		1
 #define HAS_VREF_MONITOR		1
-#define ACTIVE_LOW_HEAT_ON		1					// irrelevant because there are no heaters
+#define ACTIVE_LOW_HEAT_ON		1					// although we have no heaters, this matters because we treat the LEDs as heaters
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
@@ -132,11 +132,9 @@ constexpr size_t NumTachos = 2;
 constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { 16, 39, 15, 37 };				// PWML2, PWML3, TIOA1, PWML1
 constexpr Pin TachoPins[NumTachos] = { 26, 66 };
 
-#if 0	// currently unused
 // Main LED control
-constexpr size_t NUM_LEDS = 2;												// number of main LEDs
-constexpr Pin LedOnPins[NUM_LEDS] = { 36, 59 };								// LED control pins
-#endif
+constexpr size_t NumLeds = 2;												// number of main LEDs
+constexpr Pin LedOnPins[NumLeds] = { 36, 59 };								// LED control pins
 
 // DotStar LED control (USART0 is SharedSPI,
 Usart * const DotStarUsart = USART1;

@@ -192,11 +192,21 @@ void Platform::Init()
 		pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
 	}
 
-	// Deal with power first
+	// Deal with power first (we assume this doesn't depend on identifying the board type)
 	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
 	deferredPowerDown = false;
 
 	SetBoardType(BoardType::Auto);
+
+#ifdef PCCB
+	// Ensure that the main LEDs are turned off.
+	// The main LED output is active, just like a heater on the Duet 2 series.
+	// The secondary LED control dims the LED via the external controller when the output is high. So both outputs must be initialised high.
+	for (size_t i = 0; i < NumLeds; ++i)
+	{
+		pinMode(LedOnPins[i], OUTPUT_HIGH);
+	}
+#endif
 
 	// Real-time clock
 	realTime = 0;
@@ -468,10 +478,6 @@ void Platform::Init()
 
 	extrusionAncilliaryPwmValue = 0.0;
 
-	ARRAY_INIT(tempSensePins, TEMP_SENSE_PINS);
-	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
-	ARRAY_INIT(spiTempSenseCsPins, SpiTempSensorCsPins);
-
 	configuredHeaters = 0;
 	for (int8_t bedHeater : DefaultBedHeaters)
 	{
@@ -499,7 +505,7 @@ void Platform::Init()
 	for (size_t heater = 0; heater < Heaters; heater++)
 	{
 		// pinMode is safe to call when the pin is NoPin, so we don't need to check it here
-		pinMode(heatOnPins[heater],
+		pinMode(HEAT_ON_PINS[heater],
 #if ACTIVE_LOW_HEAT_ON
 				OUTPUT_LOW
 #else
@@ -510,8 +516,8 @@ void Platform::Init()
 
 	for (size_t thermistor = 0; thermistor < NumThermistorInputs; thermistor++)
 	{
-		pinMode(tempSensePins[thermistor], AIN);
-		filteredAdcChannels[thermistor] = PinToAdcChannel(tempSensePins[thermistor]);	// translate the pin number to the SAM ADC channel number;
+		pinMode(TEMP_SENSE_PINS[thermistor], AIN);
+		filteredAdcChannels[thermistor] = PinToAdcChannel(TEMP_SENSE_PINS[thermistor]);	// translate the pin number to the SAM ADC channel number;
 	}
 
 #if HAS_VREF_MONITOR
@@ -2496,7 +2502,7 @@ void Platform::DriverCoolingFansOn(uint32_t driverChannelsMonitored)
 // Power is a fraction in [0,1]
 void Platform::SetHeater(size_t heater, float power, PwmFrequency freq)
 {
-	if (heatOnPins[heater] != NoPin)
+	if (HEAT_ON_PINS[heater] != NoPin)
 	{
 		if (freq == 0)
 		{
@@ -2508,7 +2514,7 @@ void Platform::SetHeater(size_t heater, float power, PwmFrequency freq)
 #else
 			power;
 #endif
-		IoPort::WriteAnalog(heatOnPins[heater], pwm, freq);
+		IoPort::WriteAnalog(HEAT_ON_PINS[heater], pwm, freq);
 	}
 }
 
@@ -3950,7 +3956,7 @@ bool Platform::GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firm
 		// For safety, we don't allow a heater channel to be used for servos until the heater has been disabled
 		if (!reprap.GetHeat().IsHeaterEnabled(logicalPin - Heater0LogicalPin))
 		{
-			firmwarePin = heatOnPins[logicalPin - Heater0LogicalPin];
+			firmwarePin = HEAT_ON_PINS[logicalPin - Heater0LogicalPin];
 #if ACTIVE_LOW_HEAT_ON
 			invert = true;
 #else

@@ -185,31 +185,51 @@ void RepRap::Init()
 
 	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
-	// Run the configuration file
-	const char *configFile = platform->GetConfigFile();
-	platform->Message(UsbMessage, "\nExecuting ");
-	if (platform->GetMassStorage()->FileExists(platform->GetSysDir(), configFile))
+	// Try to mount the first SD card
 	{
-		platform->MessageF(UsbMessage, "%s...", platform->GetConfigFile());
-	}
-	else
-	{
-		platform->MessageF(UsbMessage, "%s (no configuration file found)...", platform->GetDefaultFile());
-		configFile = platform->GetDefaultFile();
-	}
-
-	if (gCodes->RunConfigFile(configFile))
-	{
+		GCodeResult rslt;
+		String<100> reply;
 		do
 		{
-			// GCodes::Spin will read the macro and ensure IsDaemonBusy returns false when it's done
-			Spin();
-		} while (gCodes->IsDaemonBusy());
-		platform->Message(UsbMessage, "Done!\n");
-	}
-	else
-	{
-		platform->Message(UsbMessage, "Error, not found\n");
+			platform->GetMassStorage()->Spin();			// Spin() doesn't get called regularly until after this function completes, and we need it to update the card detect status
+			rslt = platform->GetMassStorage()->Mount(0, reply.GetRef(), false);
+		}
+		while (rslt == GCodeResult::notFinished);
+
+		if (rslt == GCodeResult::ok)
+		{
+			// Run the configuration file
+			const char *configFile = platform->GetConfigFile();
+			platform->Message(UsbMessage, "\nExecuting ");
+			if (platform->GetMassStorage()->FileExists(platform->GetSysDir(), configFile))
+			{
+				platform->MessageF(UsbMessage, "%s...", platform->GetConfigFile());
+			}
+			else
+			{
+				platform->MessageF(UsbMessage, "%s (no configuration file found)...", platform->GetDefaultFile());
+				configFile = platform->GetDefaultFile();
+			}
+
+			if (gCodes->RunConfigFile(configFile))
+			{
+				do
+				{
+					// GCodes::Spin will read the macro and ensure IsDaemonBusy returns false when it's done
+					Spin();
+				} while (gCodes->IsDaemonBusy());
+				platform->Message(UsbMessage, "Done!\n");
+			}
+			else
+			{
+				platform->Message(UsbMessage, "Error, not found\n");
+			}
+		}
+		else
+		{
+			delay(3000);		// Wait a few seconds so users have a chance to see this
+			platform->MessageF(UsbMessage, "%s\n", reply.c_str());
+		}
 	}
 	processingConfig = false;
 
