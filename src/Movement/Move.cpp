@@ -376,6 +376,12 @@ unsigned int Move::GetNumProbePoints() const
 	return probePoints.GetNumBedCompensationPoints();
 }
 
+// Return the number of actually probed probe points
+unsigned int Move::GetNumProbedProbePoints() const
+{
+	return probePoints.NumberOfProbePoints();
+}
+
 // Try to push some babystepping through the lookahead queue
 float Move::PushBabyStepping(float amount)
 {

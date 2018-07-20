@@ -8,7 +8,6 @@
 //*************************************************************************************
 
 #include "GCodeBuffer.h"
-
 #include "GCodeInput.h"
 #include "Platform.h"
 #include "RepRap.h"

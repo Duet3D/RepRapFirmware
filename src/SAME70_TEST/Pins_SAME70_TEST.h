@@ -3,14 +3,12 @@
 
 # define FIRMWARE_NAME		"RepRapFirmware for SAME70"
 # define DEFAULT_BOARD_TYPE BoardType::SamE70TestBoard
-const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
 # define IAP_FIRMWARE_FILE	"SAME70Firmware.bin"
-# define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
-# define WIFI_WEB_FILE		"DuetWebControl.bin"
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
-#define HAS_WIFI_NETWORKING		1
+#define HAS_WIFI_NETWORKING		0
+#define HAS_LINUX_INTERFACE		1
 #define HAS_CPU_TEMP_SENSOR		0
 #define HAS_HIGH_SPEED_SD		1
 #define HAS_SMART_DRIVERS		0		// TBD
@@ -20,6 +18,14 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 #define ACTIVE_LOW_HEAT_ON		1
 
 #define IAP_UPDATE_FILE		"iape70.bin"		// need special build for SAME70
+
+#if HAS_WIFI_NETWORKING
+const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
+# define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
+# define WIFI_WEB_FILE		"DuetWebControl.bin"
+#else
+const size_t NumFirmwareUpdateModules = 1;
+#endif
 
 #define SUPPORT_INKJET		0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND		0					// set nonzero to support Roland mill
@@ -158,12 +164,14 @@ constexpr int HighestLogicalPin = 50;										// highest logical pin number on 
 constexpr uint32_t IAP_FLASH_START = 0x00470000;
 constexpr uint32_t IAP_FLASH_END = 0x0047FFFF;		// we allow a full 64K on the SAM4
 
+#if HAS_WIFI_NETWORKING
 // Duet pin numbers to control the WiFi interface
 constexpr Pin EspResetPin = 19;					// Low on this in holds the WiFi module in reset (ESP_RESET)
 constexpr Pin EspEnablePin = 48;				// High to enable the WiFi module, low to power it down (ESP_CH_PD)
 constexpr Pin EspDataReadyPin = 12;				// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
 constexpr Pin SamTfrReadyPin = 36;				// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
 constexpr Pin SamCsPin = 20;					// SPI NPCS pin, input from WiFi module
+#endif
 
 // Timer allocation
 #define NETWORK_TC			(TC0)

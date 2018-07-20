@@ -15,7 +15,11 @@
 #include "RTOSIface.h"
 
 #if defined(SAME70_TEST_BOARD)
+# if HAS_WIFI_NETWORKING
 const size_t NumNetworkInterfaces = 2;
+# else
+const size_t NumNetworkInterfaces = 1;
+# endif
 #elif defined(DUET_NG) || defined(DUET_M)
 const size_t NumNetworkInterfaces = 1;
 #else

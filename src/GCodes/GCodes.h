@@ -385,9 +385,12 @@ private:
 	NetworkGCodeInput* telnetInput;										// ...
 	FileGCodeInput* fileInput;											// ...
 	StreamGCodeInput* serialInput;										// ...
-	StreamGCodeInput* auxInput;											// ...for the GCodeBuffers below
+	StreamGCodeInput* auxInput;											// ...
+#if HAS_LINUX_INTERFACE
+	NetworkGCodeInput* spiInput;										// ...for the GCodeBuffers below
+#endif
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_12864_LCD || HAS_LINUX_INTERFACE
 	GCodeBuffer* gcodeSources[9];										// The various sources of gcodes
 #else
 	GCodeBuffer* gcodeSources[8];										// The various sources of gcodes
@@ -402,6 +405,9 @@ private:
 	GCodeBuffer*& queuedGCode = gcodeSources[6];
 #if SUPPORT_12864_LCD
 	GCodeBuffer*& lcdGCode = gcodeSources[7];							// This one for the internally-supported LCD
+	GCodeBuffer*& autoPauseGCode = gcodeSources[8];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
+#elif HAS_LINUX_INTERFACE
+	GCodeBuffer*& spiGCode = gcodeSources[7];
 	GCodeBuffer*& autoPauseGCode = gcodeSources[8];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
 #else
 	GCodeBuffer*& autoPauseGCode = gcodeSources[7];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out

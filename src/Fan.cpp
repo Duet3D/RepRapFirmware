@@ -148,7 +148,7 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 							(int)(minVal * 100.0),
 							(double)(blipTime * MillisToSeconds),
 							(inverted) ? "yes" : "no",
-							name);
+							name.c_str());
 			if (heatersMonitored != 0)
 			{
 				reply.catf(", temperature: %.1f:%.1fC, heaters:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);

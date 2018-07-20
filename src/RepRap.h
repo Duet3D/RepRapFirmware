@@ -90,6 +90,9 @@ public:
 #if SUPPORT_12864_LCD
  	Display& GetDisplay() const;
 #endif
+#if HAS_LINUX_INTERFACE
+	LinuxComm& GetLinuxComm() const;
+#endif
 
 	void Tick();
 	bool SpinTimeoutImminent() const;
@@ -140,6 +143,9 @@ private:
 
 #if SUPPORT_12864_LCD
  	Display *display;
+#endif
+#if HAS_LINUX_INTERFACE
+	LinuxComm *linuxComm;
 #endif
 
  	Mutex toolListMutex, messageBoxMutex;
@@ -193,6 +199,9 @@ inline PortControl& RepRap::GetPortControl() const { return *portControl; }
 
 #if SUPPORT_12864_LCD
 inline Display& RepRap::GetDisplay() const { return *display; }
+#endif
+#if HAS_LINUX_INTERFACE
+inline LinuxComm& RepRap::GetLinuxComm() const { return *linuxComm; }
 #endif
 
 inline bool RepRap::Debug(Module m) const { return debug & (1 << m); }

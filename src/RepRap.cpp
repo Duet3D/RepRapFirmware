@@ -24,6 +24,10 @@
 # include "Display/Display.h"
 #endif
 
+#if HAS_LINUX_INTERFACE
+# include "SAME70_TEST/LinuxComm.h"
+#endif
+
 #if HAS_HIGH_SPEED_SD
 # include "sam/drivers/hsmci/hsmci.h"
 # include "conf_sd_mmc.h"
@@ -145,6 +149,9 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 #if SUPPORT_12864_LCD
  	display = new Display();
 #endif
+#if HAS_LINUX_INTERFACE
+	linuxComm = new LinuxComm();
+#endif
 
 	printMonitor = new PrintMonitor(*platform, *gCodes);
 
@@ -176,6 +183,9 @@ void RepRap::Init()
 	FilamentMonitor::InitStatic();
 #if SUPPORT_12864_LCD
 	display->Init();
+#endif
+#if HAS_LINUX_INTERFACE
+	linuxComm->Init();
 #endif
 	active = true;						// must do this before we start the network or call Spin(), else the watchdog may time out
 
@@ -327,6 +337,12 @@ void RepRap::Spin()
 	ticksInSpinState = 0;
 	spinningModule = moduleDisplay;
 	display->Spin(true);
+#endif
+
+#if HAS_LINUX_INTERFACE
+	ticksInSpinState = 0;
+	spinningModule = moduleLinuxComm;
+	linuxComm->Spin();
 #endif
 
 	ticksInSpinState = 0;

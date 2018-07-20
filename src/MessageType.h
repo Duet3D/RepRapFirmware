@@ -21,12 +21,13 @@ enum MessageType : uint16_t
 	HttpMessage = 0x10,					// A message that is to be sent to the web (HTTP)
 	TelnetMessage = 0x20,				// A message that is to be sent to a Telnet client
 	AuxMessage = 0x40,					// A message that is to be sent to the second auxiliary device
-	LogMessage = 0x80,					// A message to be written to the log file
+	SpiMessage = 0x80,					// A message that is to be sent to the SPI master
+	LogMessage = 0x100,					// A message to be written to the log file
 
 	// Special indicators. The first two are not processed when calling the version of Platform::Message that takes an OutputBuffer.
-	ErrorMessageFlag = 0x100,			// This is an error message
-	WarningMessageFlag = 0x200,			// This is a warning message
-	RawMessageFlag = 0x400,				// Do not encapsulate this message
+	ErrorMessageFlag = 0x200,			// This is an error message
+	WarningMessageFlag = 0x400,			// This is a warning message
+	RawMessageFlag = 0x800,				// Do not encapsulate this message
 
 	// Common combinations
 	NoDestinationMessage = 0,												// A message that is going nowhere

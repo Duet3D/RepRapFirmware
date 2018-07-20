@@ -58,8 +58,9 @@ enum Module : uint8_t
 	moduleFilamentSensors = 13,
 	moduleWiFi = 14,
 	moduleDisplay = 15,
-	numModules = 16,				// make this one greater than the last module number
-	noModule = 16
+	moduleLinuxComm = 16,
+	numModules = 17,				// make this one greater than the last module number
+	noModule = 17
 };
 
 extern const char * const moduleName[];
@@ -94,6 +95,9 @@ class PortControl;
 
 #if SUPPORT_12864_LCD
 class Display;
+#endif
+#if HAS_LINUX_INTERFACE
+class LinuxComm;
 #endif
 
 // Define floating point type to use for calculations where we would like high precision in matrix calculations

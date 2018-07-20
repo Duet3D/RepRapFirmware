@@ -55,6 +55,10 @@
 # include "Display/Display.h"
 #endif
 
+#if HAS_LINUX_INTERFACE
+# include "SAME70_TEST/LinuxComm.h"
+#endif
+
 #include <climits>
 
 extern uint32_t _estack;			// defined in the linker script
@@ -3434,6 +3438,11 @@ void Platform::RawMessage(MessageType type, const char *message)
 			usbOutputBuffer->cat(message);
 		}
 	}
+
+	if ((type & SpiMessage) != 0)
+	{
+		reprap.GetLinuxComm().HandleGCodeReply(message);
+	}
 }
 
 // Note: this overload of Platform::Message does not process the special action flags in the MessageType.
@@ -3462,6 +3471,10 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 		++numDestinations;
 	}
 	if ((type & TelnetMessage) != 0)
+	{
+		++numDestinations;
+	}
+	if ((type & SpiMessage) != 0)
 	{
 		++numDestinations;
 	}
@@ -3522,6 +3535,11 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 				// Else append incoming data to the stack
 				usbOutput.Push(buffer);
 			}
+		}
+
+		if ((type & SpiMessage) != 0)
+		{
+			reprap.GetLinuxComm().HandleGCodeReply(buffer);
 		}
 	}
 }

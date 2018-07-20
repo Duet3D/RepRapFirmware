@@ -3785,6 +3785,138 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		result = GetGCodeResultFromError(platform.ProgramZProbe(gb, reply));
 		break;
 
+	case 673: // Align plane on rotary axis
+		if (numTotalAxes < U_AXIS)
+		{
+			reply.copy("Insufficient axes configured");
+			result = GCodeResult::error;
+		}
+		else if (LockMovementAndWaitForStandstill(gb))
+		{
+			if (reprap.GetMove().GetNumProbedProbePoints() < 2)
+			{
+				reply.copy("Insufficient probe points");
+				result = GCodeResult::error;
+			}
+			else if (!AllAxesAreHomed())
+			{
+				reply.copy("Home the axes first");
+				result = GCodeResult::error;
+			}
+			else
+			{
+				// See which rotary axis needs to be compensated (if any)
+				size_t axisToUse = 0;
+				for (size_t axis = U_AXIS; axis < numVisibleAxes; axis++)
+				{
+					if (gb.Seen(axisLetters[axis]))
+					{
+						axisToUse = axis;
+						break;
+					}
+				}
+
+				// Get the coordinates of the first two G30 points and calculate how far off the axis is
+				float x1, y1, x2, y2;
+				const float z1 = reprap.GetMove().GetProbeCoordinates(0, x1, y1, true);
+				const float z2 = reprap.GetMove().GetProbeCoordinates(1, x2, y2, true);
+				const float a1 = (x1 == x2) ? y1 : x1;
+				const float a2 = (x1 == x2) ? y2 : x2;
+
+				// See what kind of compensation we need to perform
+				moveBuffer.SetDefaults();
+				if (axisToUse != 0)
+				{
+					// An axis letter is given, so try to level the given axis
+					const float correctionAngle = atanf((z2 - z1) / (a2 - a1)) * 180.0 / M_PI;
+					const float correctionFactor = gb.Seen('S') ? gb.GetFValue() : 1.0;
+					moveBuffer.coords[axisToUse] += correctionAngle * correctionFactor;
+
+					reply.printf("%c axis is off by %.2f deg", axisLetters[axisToUse], (double)correctionAngle);
+					HandleReply(gb, GCodeResult::ok, reply.c_str());
+				}
+				else if (reprap.GetMove().GetNumProbedProbePoints() >= 4)
+				{
+					// At least four G30 points are given. This lets us figure out how far off the centre of the axis is
+					const float z3 = reprap.GetMove().GetProbeCoordinates(2, x1, y1, true);
+					const float z4 = reprap.GetMove().GetProbeCoordinates(3, x2, y2, true);
+					const float a3 = (x1 == x2) ? y1 : x1;
+					const float a4 = (x1 == x2) ? y2 : x2;
+
+					// Calculate intersection points in [XY] and Z directions
+					const float aS = ((a4 - a3) * (a2 * z1 - a1 * z2) - (a2 - a1) * (a4 * z3 - a3 * z4)) /
+							((z4 - z3) * (a2 - a1) - (z2 - z1) * (a4 - a3));
+					const float zS = ((z1 - z2) * (a4 * z3 - a3 * z4) - (z3 - z4) * (a2 * z1 - a1 * z2)) /
+							((z4 - z3) * (a2 - a1) - (z2 - z1) * (a4 - a3));
+					moveBuffer.coords[(x1 == x2) ? Y_AXIS : X_AXIS] += aS;
+					moveBuffer.coords[Z_AXIS] += zS;
+
+					reply.printf("%c is offset by %.2fmm, Z is offset by %.2fmm", (x2 == x1) ? 'Y' : 'X', (double)aS, (double)zS);
+					HandleReply(gb, GCodeResult::ok, reply.c_str());
+				}
+				else
+				{
+					reply.copy("No rotary axis letter and/or not enough probe points for rotary axis alignment");
+					result = GCodeResult::error;
+					break;
+				}
+
+				// Get the feedrate (if any) and kick off a new move
+				if (gb.Seen(feedrateLetter))
+				{
+					const float rate = gb.GetFValue() * distanceScale;
+					gb.MachineState().feedRate = rate * SecondsToMinutes;		// don't apply the speed factor
+				}
+				moveBuffer.feedRate = gb.MachineState().feedRate;
+				moveBuffer.usingStandardFeedrate = true;
+				NewMoveAvailable(1);
+
+				gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
+			}
+		}
+		else
+		{
+			result = GCodeResult::notFinished;
+		}
+		break;
+
+#if false
+	// This code is not finished yet
+	case 674: // Set Z to center point
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			if (reprap.GetMove().GetNumProbedProbePoints() < 2)
+			{
+				reply.copy("Insufficient probe points");
+				result = GCodeResult::error;
+			}
+			else if (!AllAxesAreHomed())
+			{
+				reply.copy("Home the axes first");
+				result = GCodeResult::error;
+			}
+			else
+			{
+				float x, y;
+				const float z1 = reprap.GetMove().GetProbeCoordinates(0, x, y, true);
+				const float z2 = reprap.GetMove().GetProbeCoordinates(1, x, y, true);
+				const float offset = gb.Seen('P') ? gb.GetFValue() : 0.0;
+				currentUserPosition[Z_AXIS] -= (z1 + z2) / 2.0 + offset;
+
+				ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, LowestNBits<AxesBitmap>(numVisibleAxes), false))	// pretend that all axes are homed
+				{
+					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// make sure the limits are reflected in the user position
+				}
+				reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
+				axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(MakeBitmap<AxesBitmap>(Z_AXIS));
+
+				reply.printf("Probe points at %.2f %.2f, setting new Z to %.2f", (double)z1, (double)z2, (double)currentUserPosition[Z_AXIS]);
+			}
+		}
+		break;
+#endif
+
 	case 701: // Load filament
 		result = LoadFilament(gb, reply);
 		break;

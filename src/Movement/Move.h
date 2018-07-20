@@ -69,6 +69,7 @@ public:
 	bool UseMesh(bool b);											// Try to enable mesh bed compensation and report the final state
 	bool IsUsingMesh() const { return usingMesh; }					// Return true if we are using mesh compensation
 	unsigned int GetNumProbePoints() const;							// Return the number of currently used probe points
+	unsigned int GetNumProbedProbePoints() const;					// Return the number of actually probed probe points
 	float PushBabyStepping(float amount);							// Try to push some babystepping through the lookahead queue
 
 	void Diagnostics(MessageType mtype);							// Report useful stuff

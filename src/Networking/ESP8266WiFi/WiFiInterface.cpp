@@ -82,7 +82,7 @@ struct MessageBufferOut
 struct MessageBufferIn
 {
 	MessageHeaderEspToSam hdr;
-	uint8_t data[MaxDataLength];	// data to send
+	uint8_t data[MaxDataLength];	// data to receive
 };
 
 static MessageBufferOut bufferOut;
@@ -1237,7 +1237,7 @@ const uint32_t DMA_HW_ID_SPI_RX = 2;
 const uint32_t CONF_SPI_DMAC_TX_CH = 1;
 const uint32_t CONF_SPI_DMAC_RX_CH = 2;
 
-// XDMAC hardware
+// XDMAC hardware, see datasheet
 const uint32_t SPI0_XDMAC_TX_CH_NUM = 1;
 const uint32_t SPI0_XDMAC_RX_CH_NUM = 2;
 

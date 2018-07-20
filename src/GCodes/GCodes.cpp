@@ -39,6 +39,9 @@
 #if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
 #endif
+#if HAS_LINUX_INTERFACE
+# include "SAME70_TEST/LinuxComm.h"
+#endif
 
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
@@ -62,11 +65,14 @@ GCodes::GCodes(Platform& p) :
 #endif
 	isFlashing(false), fileBeingHashed(nullptr), lastWarningMillis(0)
 {
-	httpInput = new NetworkGCodeInput;
-	telnetInput = new NetworkGCodeInput;
+	httpInput = new NetworkGCodeInput();
+	telnetInput = new NetworkGCodeInput();
 	fileInput = new FileGCodeInput();
 	serialInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
 	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
+#if HAS_LINUX_INTERFACE
+	spiInput = new NetworkGCodeInput();
+#endif
 
 	httpGCode = new GCodeBuffer("http", HttpMessage, false);
 	telnetGCode = new GCodeBuffer("telnet", TelnetMessage, true);
@@ -76,6 +82,9 @@ GCodes::GCodes(Platform& p) :
 	daemonGCode = new GCodeBuffer("daemon", GenericMessage, false);
 #if SUPPORT_12864_LCD
 	lcdGCode = new GCodeBuffer("lcd", GenericMessage, false);
+#endif
+#if HAS_LINUX_INTERFACE
+	spiGCode = new GCodeBuffer("spi", SpiMessage, false);
 #endif
 	queuedGCode = new GCodeBuffer("queue", GenericMessage, false);
 	autoPauseGCode = new GCodeBuffer("autopause", GenericMessage, false);
@@ -137,6 +146,9 @@ void GCodes::Init()
 #if SUPPORT_SCANNER
 	reprap.GetScanner().SetGCodeBuffer(serialGCode);
 #endif
+#if HAS_LINUX_INTERFACE
+	reprap.GetLinuxComm().SetGCodeInput(spiInput);
+#endif
 }
 
 // This is called from Init and when doing an emergency stop
@@ -153,6 +165,9 @@ void GCodes::Reset()
 	daemonGCode->Reset();
 #if SUPPORT_12864_LCD
 	lcdGCode->Reset();
+#endif
+#if HAS_LINUX_INTERFACE
+	spiGCode->Reset();
 #endif
 	queuedGCode->Reset();
 	autoPauseGCode->Reset();
@@ -1075,9 +1090,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				platform.SetProbing(true);
 				moveBuffer.SetDefaults();
 				moveBuffer.endStopsToCheck = ZProbeActive;
-				moveBuffer.coords[Z_AXIS] = (GetAxisIsHomed(Z_AXIS))
+				moveBuffer.coords[Z_AXIS] = (GetAxisIsHomed(Z_AXIS) && limitAxes)
 											? -platform.GetZProbeDiveHeight()			// Z axis has been homed, so no point in going very far
-											: -1.1 * platform.AxisTotalLength(Z_AXIS);	// Z axis not homed yet, so treat this as a homing move
+											: -1.1 * platform.AxisTotalLength(Z_AXIS);	// Z axis not homed yet or moving outside limits, so treat this as a homing move
 				moveBuffer.feedRate = platform.GetCurrentZProbeParameters().probeSpeed;
 				NewMoveAvailable(1);
 				gb.AdvanceState();
@@ -1428,6 +1443,13 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 			platform.SetAuxDetected();
 		}
 	}
+#if HAS_LINUX_INTERFACE
+	else if (&gb == spiGCode)
+	{
+		// SPI communication to an external Linux board
+		spiInput->FillBuffer(spiGCode);
+	}
+#endif
 }
 
 void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
