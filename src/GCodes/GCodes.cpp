@@ -40,6 +40,10 @@
 # include "FirmwareUpdater.h"
 #endif
 
+#if SUPPORT_DOTSTAR_LED
+# include "Fans/DotStarLed.h"
+#endif
+
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
 // Set up some default values for special moves, e.g. for Z probing and firmware retraction
@@ -62,20 +66,31 @@ GCodes::GCodes(Platform& p) :
 #endif
 	isFlashing(false), fileBeingHashed(nullptr), lastWarningMillis(0)
 {
-	httpInput = new NetworkGCodeInput;
-	telnetInput = new NetworkGCodeInput;
 	fileInput = new FileGCodeInput();
 	serialInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
+#ifdef SERIAL_AUX_DEVICE
 	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
-
+#endif
+#if HAS_NETWORKING
+	httpInput = new NetworkGCodeInput;
+	telnetInput = new NetworkGCodeInput;
 	httpGCode = new GCodeBuffer("http", HttpMessage, false);
 	telnetGCode = new GCodeBuffer("telnet", TelnetMessage, true);
+#else
+	httpGCode = telnetGCode = nullptr;
+#endif
 	fileGCode = new GCodeBuffer("file", GenericMessage, true);
 	serialGCode = new GCodeBuffer("serial", UsbMessage, true);
+#ifdef SERIAL_AUX_DEVICE
 	auxGCode = new GCodeBuffer("aux", LcdMessage, false);
+#else
+	auxGCode = nullptr;
+#endif
 	daemonGCode = new GCodeBuffer("daemon", GenericMessage, false);
 #if SUPPORT_12864_LCD
 	lcdGCode = new GCodeBuffer("lcd", GenericMessage, false);
+#else
+	lcdGCode = nullptr;
 #endif
 	queuedGCode = new GCodeBuffer("queue", GenericMessage, false);
 	autoPauseGCode = new GCodeBuffer("autopause", GenericMessage, false);
@@ -105,16 +120,14 @@ void GCodes::Init()
 	{
 		rawExtruderTotalByDrive[extruder] = 0.0;
 	}
-	eofString = EOF_STRING;
-	eofStringCounter = 0;
-	eofStringLength = strlen(eofString);
+
 	runningConfigFile = false;
 	m501SeenInConfigFile = false;
 	doingToolChange = false;
 	active = true;
-	fileSize = 0;
 	limitAxes = noMovesBeforeHoming = true;
 	SetAllAxesNotHomed();
+
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
 		pausedFanSpeeds[i] = 0.0;
@@ -123,7 +136,7 @@ void GCodes::Init()
 
 	retractLength = DefaultRetractLength;
 	retractExtra = 0.0;
-	currentZHop = retractHop = 0.0;
+	retractHop = 0.0;
 	retractSpeed = unRetractSpeed = DefaultRetractSpeed * SecondsToMinutes;
 	isRetracted = false;
 	lastAuxStatusReportType = -1;						// no status reports requested yet
@@ -137,6 +150,11 @@ void GCodes::Init()
 #if SUPPORT_SCANNER
 	reprap.GetScanner().SetGCodeBuffer(serialGCode);
 #endif
+
+#if SUPPORT_DOTSTAR_LED
+	DotStarLed::Init();
+#endif
+
 }
 
 // This is called from Init and when doing an emergency stop
@@ -144,23 +162,22 @@ void GCodes::Reset()
 {
 	// Here we could reset the input sources as well, but this would mess up M122\nM999
 	// because both codes are sent at once from the web interface. Hence we don't do this here.
-	httpGCode->Reset();
-	telnetGCode->Reset();
-	fileGCode->Reset();
-	serialGCode->Reset();
-	auxGCode->Reset();
-	auxGCode->SetCommsProperties(1);					// by default, we require a checksum on the aux port
-	daemonGCode->Reset();
-#if SUPPORT_12864_LCD
-	lcdGCode->Reset();
-#endif
-	queuedGCode->Reset();
-	autoPauseGCode->Reset();
+	for (GCodeBuffer *gb : gcodeSources)
+	{
+		if (gb != nullptr)
+		{
+			gb->Reset();
+		}
+	}
+
+	if (auxGCode != nullptr)
+	{
+		auxGCode->SetCommsProperties(1);				// by default, we require a checksum on the aux port
+	}
 
 	nextGcodeSource = 0;
 
 	fileToPrint.Close();
-	fileBeingWritten = nullptr;
 	speedFactor = SecondsToMinutes;						// default is just to convert from mm/minute to mm/second
 
 	for (size_t i = 0; i < MaxExtruders; ++i)
@@ -191,7 +208,8 @@ void GCodes::Reset()
 	}
 
 	ClearMove();
-	ClearBabyStepping();
+	ClearBabyStepping();								// clear this before calling ToolOffsetInverseTransform
+	currentZHop = 0.0;									// clear this before calling ToolOffsetInverseTransform
 	moveBuffer.xAxes = DefaultXAxisMapping;
 	moveBuffer.yAxes = DefaultYAxisMapping;
 	moveBuffer.virtualExtruderPosition = 0.0;
@@ -243,7 +261,7 @@ bool GCodes::DoingFileMacro() const
 {
 	for (const GCodeBuffer *gb : gcodeSources)
 	{
-		if (gb->IsDoingFileMacro())
+		if (gb != nullptr && gb->IsDoingFileMacro())
 		{
 			return true;
 		}
@@ -269,6 +287,19 @@ float GCodes::FractionOfFilePrinted() const
 	return (float)(fileBeingPrinted.GetPosition() - bytesCached) / (float)len;
 }
 
+// Return the current position of the file being printed in bytes
+FilePosition GCodes::GetFilePosition() const
+{
+	const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
+	if (!fileBeingPrinted.IsLive())
+	{
+		return 0;
+	}
+
+    const FilePosition bytesCached = fileGCode->IsDoingFileMacro() ? 0: fileInput->BytesCached();
+    return fileBeingPrinted.GetPosition() - bytesCached;
+}
+
 // Start running the config file
 // We use triggerCGode as the source to prevent any triggers being executed until we have finished
 bool GCodes::RunConfigFile(const char* fileName)
@@ -286,9 +317,12 @@ bool GCodes::IsDaemonBusy() const
 // Copy the feed rate etc. from the daemon to the input channels
 void GCodes::CopyConfigFinalValues(GCodeBuffer& gb)
 {
-	for (size_t i = 0; i < ARRAY_SIZE(gcodeSources); ++i)
+	for (GCodeBuffer *gb2 : gcodeSources)
 	{
-		gcodeSources[i]->MachineState().CopyStateFrom(gb.MachineState());
+		if (gb2 != nullptr)
+		{
+			gb2->MachineState().CopyStateFrom(gb.MachineState());
+		}
 	}
 }
 
@@ -315,12 +349,15 @@ void GCodes::Spin()
 	GCodeBuffer *gbp = autoPauseGCode;
 	if (gbp->IsCompletelyIdle() && !(gbp->MachineState().fileState.IsLive()))
 	{
-		gbp = gcodeSources[nextGcodeSource];
-		++nextGcodeSource;											// move on to the next gcode source ready for next time
-		if (nextGcodeSource == ARRAY_SIZE(gcodeSources) - 1)		// the last one is autoPauseGCode, so don't do it again
+		do
 		{
-			nextGcodeSource = 0;
-		}
+			gbp = gcodeSources[nextGcodeSource];
+			++nextGcodeSource;										// move on to the next gcode source ready for next time
+			if (nextGcodeSource == ARRAY_SIZE(gcodeSources) - 1)	// the last one is autoPauseGCode, so don't do it again
+			{
+				nextGcodeSource = 0;
+			}
+		} while (gbp == nullptr);									// we must have at least one GCode source, so this can't loop indefinitely
 	}
 	GCodeBuffer& gb = *gbp;
 
@@ -859,18 +896,21 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				g30zHeightErrorSum += g30zHeightError;
 			}
 
-			// Move back up to the dive height
-			moveBuffer.SetDefaults();
-			moveBuffer.coords[Z_AXIS] = platform.GetZProbeStartingHeight();
-			moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
-			NewMoveAvailable(1);
 			gb.AdvanceState();
-
 			if (platform.GetZProbeType() == ZProbeType::blTouch)
 			{
 				DoFileMacro(gb, RETRACTPROBE_G, false);			// bltouch needs to be retracted when it triggers
 			}
 		}
+		break;
+
+	case GCodeState::gridProbing4a:	// ready to lift the probe after probing the current grid probe point
+		// Move back up to the dive height
+		moveBuffer.SetDefaults();
+		moveBuffer.coords[Z_AXIS] = platform.GetZProbeStartingHeight();
+		moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
+		NewMoveAvailable(1);
+		gb.AdvanceState();
 		break;
 
 	case GCodeState::gridProbing5:	// finished probing a point and moved back to the dive height
@@ -1131,18 +1171,21 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				}
 			}
 
-			// Move back up to the dive height before we change anything, in particular before we adjust leadscrews
-			moveBuffer.SetDefaults();
-			moveBuffer.coords[Z_AXIS] = platform.GetZProbeStartingHeight();
-			moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
-			NewMoveAvailable(1);
 			gb.AdvanceState();
-
 			if (platform.GetZProbeType() == ZProbeType::blTouch)
 			{
-				DoFileMacro(gb, RETRACTPROBE_G, false);						// bltouch needs to be retracted when it triggers
+				DoFileMacro(gb, RETRACTPROBE_G, false);							// bltouch needs to be retracted when it triggers
 			}
 		}
+		break;
+
+	case GCodeState::probingAtPoint4a:
+		// Move back up to the dive height before we change anything, in particular before we adjust leadscrews
+		moveBuffer.SetDefaults();
+		moveBuffer.coords[Z_AXIS] = platform.GetZProbeStartingHeight();
+		moveBuffer.feedRate = platform.GetZProbeTravelSpeed();
+		NewMoveAvailable(1);
+		gb.AdvanceState();
 		break;
 
 	case GCodeState::probingAtPoint5:
@@ -1381,6 +1424,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 		// Code queue
 		codeQueue->FillBuffer(queuedGCode);
 	}
+#if HAS_NETWORKING
 	else if (&gb == httpGCode)
 	{
 		// Webserver
@@ -1391,6 +1435,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 		// Telnet
 		telnetInput->FillBuffer(telnetGCode);
 	}
+#endif
 	else if (   &gb == serialGCode
 #if SUPPORT_SCANNER
 			 && !reprap.GetScanner().IsRegistered()
@@ -1400,6 +1445,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 		// USB interface. This line may be shared with a 3D scanner
 		serialInput->FillBuffer(serialGCode);
 	}
+#ifdef SERIAL_AUX_DEVICE
 	else if (&gb == auxGCode)
 	{
 		// Aux serial port (typically PanelDue)
@@ -1409,6 +1455,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 			platform.SetAuxDetected();
 		}
 	}
+#endif
 }
 
 void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
@@ -1422,7 +1469,11 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 		// Yes - fill up the GCodeBuffer and run the next code
 		if (fileInput->FillBuffer(&gb))
 		{
-			gb.SetFinished(ActOnCode(gb, reply));
+			// We read some data, but we don't necessarily have a command available because we may be executing M28 within a file
+			if (gb.IsReady())
+			{
+				gb.SetFinished(ActOnCode(gb, reply));
+			}
 		}
 		break;
 
@@ -1434,7 +1485,8 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 		// We have reached the end of the file. Check for the last line of gcode not ending in newline.
 		if (!gb.StartingNewCode())				// if there is something in the buffer
 		{
-			if (gb.Put('\n')) 					// in case there wasn't a newline ending the file
+			gb.FileEnded();						// append a newline and deal with any pending file write
+			if (gb.IsReady())
 			{
 				gb.SetFinished(ActOnCode(gb, reply));
 				return;
@@ -1940,6 +1992,17 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 					&& reprap.GetMove().WriteResumeSettings(f);				// load grid, if we are using one
 			if (ok)
 			{
+				// Write a G92 command to say where the head is. This is useful if we can't Z-home the printer with a print on the bed and the Z steps/mm is high.
+				buf.copy("G92");
+				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+				{
+					buf.catf(" %c%.3f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
+				}
+				buf.cat('\n');
+				ok = f->Write(buf.c_str());
+			}
+			if (ok)
+			{
 				buf.printf("M98 P%s\n", RESUME_PROLOGUE_G);					// call the prologue - must contain at least M116
 				ok = f->Write(buf.c_str())
 					&& platform.WriteFanSettings(f);						// set the speeds of non-thermostatic fans
@@ -1988,7 +2051,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 				{
 					if (axis != Z_AXIS)
 					{
-						buf.catf(" %c%.2f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
+						buf.catf(" %c%.3f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
 					}
 				}
 
@@ -2028,9 +2091,12 @@ void GCodes::Diagnostics(MessageType mtype)
 	const GCodeBuffer * const movementOwner = resourceOwners[MoveResource];
 	platform.MessageF(mtype, "Movement lock held by %s\n", (movementOwner == nullptr) ? "null" : movementOwner->GetIdentity());
 
-	for (size_t i = 0; i < ARRAY_SIZE(gcodeSources); ++i)
+	for (GCodeBuffer *gb : gcodeSources)
 	{
-		gcodeSources[i]->Diagnostics(mtype);
+		if (gb != nullptr)
+		{
+			gb->Diagnostics(mtype);
+		}
 	}
 
 	codeQueue->Diagnostics(mtype);
@@ -2608,7 +2674,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 // Adjust the move parameters to account for segmentation and/or part of the move having been done already
 void GCodes::FinaliseMove(GCodeBuffer& gb)
 {
-	moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0);
+	moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0) && !doingArcMove;		// pausing during an arc move isn't save because the arc centre get recomputed incorrectly when we resume
 	moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;
 
 	if (totalSegments > 1)
@@ -2663,6 +2729,10 @@ bool GCodes::ReadMove(RawMove& m)
 			}
 		}
 		m.proportionLeft = 0.0;
+		if (doingArcMove)
+		{
+			m.canPauseAfter = true;			// we can pause after the final segment of an arc move
+		}
 		ClearMove();
 	}
 	else
@@ -3035,6 +3105,7 @@ bool GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 void GCodes::ClearBedMapping()
 {
 	reprap.GetMove().SetIdentityTransform();
+	reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 	ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates to remove any height map offset there was at the current position
 }
 
@@ -3078,114 +3149,6 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 	{
 		s.catf(" %.3f", HideNan(liveCoordinates[axis]));
 	}
-}
-
-bool GCodes::OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
-{
-	fileBeingWritten = platform.OpenFile(directory, fileName, OpenMode::write);
-	eofStringCounter = 0;
-	fileSize = size;
-	if (fileBeingWritten == nullptr)
-	{
-		platform.MessageF(ErrorMessage, "Failed to open GCode file \"%s\" for writing.\n", fileName);
-		return false;
-	}
-	else
-	{
-		gb.SetCRC32(fileCRC32);
-		gb.SetBinaryWriting(binaryWrite);
-		gb.SetWritingFileDirectory(directory);
-		return true;
-	}
-}
-
-void GCodes::WriteHTMLToFile(GCodeBuffer& gb, char b)
-{
-	if (fileBeingWritten == nullptr)
-	{
-		platform.Message(ErrorMessage, "Attempt to write to a null file.\n");
-		return;
-	}
-
-	if ((b == eofString[eofStringCounter]) && (fileSize == 0))
-	{
-		eofStringCounter++;
-		if (eofStringCounter >= eofStringLength)
-		{
-			FinishWrite(gb);
-		}
-	}
-	else
-	{
-		if (eofStringCounter != 0)
-		{
-			for (uint8_t i = 0; i < eofStringCounter; i++)
-			{
-				fileBeingWritten->Write(eofString[i]);
-			}
-			eofStringCounter = 0;
-		}
-		fileBeingWritten->Write(b);		// writing one character at a time isn't very efficient, but uploading HTML files via USB is rarely done these days
-		if (fileSize > 0 && fileBeingWritten->Length() >= fileSize)
-		{
-			FinishWrite(gb);
-		}
-	}
-}
-
-void GCodes::FinishWrite(GCodeBuffer& gb)
-{
-	const char* r;
-	fileBeingWritten->Close();
-	if ((gb.GetCRC32() != fileBeingWritten->GetCRC32()) && (gb.GetCRC32() != 0))
-	{
-		r = "Error: CRC32 checksum doesn't match";
-	}
-	else
-	{
-		r = (platform.Emulating() == Compatibility::marlin) ? "Done saving file." : "";
-	}
-	fileBeingWritten = nullptr;
-	gb.SetBinaryWriting(false);
-	gb.SetWritingFileDirectory(nullptr);
-
-	HandleReply(gb, GCodeResult::ok, r);
-}
-
-void GCodes::WriteGCodeToFile(GCodeBuffer& gb)
-{
-	if (fileBeingWritten == nullptr)
-	{
-		platform.Message(ErrorMessage, "Attempt to write to a null file.\n");
-		return;
-	}
-
-	if (gb.GetCommandLetter() == 'M')
-	{
-		if (gb.GetCommandNumber() == 29)						// end of file?
-		{
-			fileBeingWritten->Close();
-			fileBeingWritten = nullptr;
-			gb.SetWritingFileDirectory(nullptr);
-			const char* r = (platform.Emulating() == Compatibility::marlin) ? "Done saving file." : "";
-			HandleReply(gb, GCodeResult::ok, r);
-			return;
-		}
-	}
-	else if (gb.GetCommandLetter() == 'G' && gb.GetCommandNumber() == 998)						// resend request?
-	{
-		if (gb.Seen('P'))
-		{
-			String<ShortScratchStringLength> scratchString;
-			scratchString.printf("%" PRIi32 "\n", gb.GetIValue());
-			HandleReply(gb, GCodeResult::ok, scratchString.c_str());
-			return;
-		}
-	}
-
-	fileBeingWritten->Write(gb.Buffer());
-	fileBeingWritten->Write('\n');
-	HandleReply(gb, GCodeResult::ok, "");
 }
 
 // Set up a file to print, but don't print it yet.
@@ -4721,7 +4684,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 			if (lastAuxStatusReportType >= 0)
 			{
 				// Send a standard status response for PanelDue
-				OutputBuffer * const statusBuf = GenerateJsonStatusResponse(0, -1, ResponseSource::AUX);
+				OutputBuffer * const statusBuf = GenerateJsonStatusResponse(lastAuxStatusReportType, -1, ResponseSource::AUX);
 				if (statusBuf != nullptr)
 				{
 					platform.AppendAuxReply(statusBuf, true);
@@ -4888,7 +4851,7 @@ const char* GCodes::GetMachineModeString() const
 }
 
 // Respond to a heater fault. The heater has already been turned off and its status set to 'fault' when this is called from the Heat module.
-// The Heat module will generate an appropriate error message, so on need to do that here.
+// The Heat module will generate an appropriate error message, so no need to do that here.
 void GCodes::HandleHeaterFault(int heater)
 {
 	if (heaterFaultState == HeaterFaultState::noFault && fileGCode->OriginalMachineState().fileState.IsLive())
@@ -4930,11 +4893,12 @@ void GCodes::CheckHeaterFault()
 			reprap.GetHeat().SwitchOffAll(true);
 			platform.MessageF(ErrorMessage, "Shutting down due to un-cleared heater fault after %lu seconds\n", heaterFaultTimeout/1000);
 			heaterFaultState = HeaterFaultState::stopping;
+			heaterFaultTime = millis();
 		}
 		break;
 
 	case HeaterFaultState::stopping:
-		if (millis() - heaterFaultTime >= 2000)			// wait 2 seconds for the message to be picked up by DWC and PanelDue
+		if (millis() - heaterFaultTime >= 1000)			// wait 1 second for the message to be picked up by DWC and PanelDue
 		{
 			platform.AtxPowerOff(false);
 			heaterFaultState = HeaterFaultState::stopped;

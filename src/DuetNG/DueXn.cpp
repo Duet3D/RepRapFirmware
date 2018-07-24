@@ -59,12 +59,15 @@ namespace DuetExpansion
 	{
 		reprap.GetPlatform().InitI2c();					// initialise I2C
 
-		bool ret = dueXnExpander.begin(DueXnAddress);
-		if (!ret)
+		// DC 2018-07-12: occasionally the SX1509B isn't found after doing a software reset, so try a few more attempts
+		bool ret;
+		unsigned int attempts = 0;
+		do
 		{
-			delay(100);									// wait a little while
-			ret = dueXnExpander.begin(DueXnAddress);	// do 1 retry
-		}
+			++attempts;
+			delay(50);
+			ret = dueXnExpander.begin(DueXnAddress);
+		} while (!ret && attempts < 5);
 
 		if (ret)
 		{
@@ -102,12 +105,15 @@ namespace DuetExpansion
 	void AdditionalOutputInit()
 	{
 		reprap.GetPlatform().InitI2c();										// initialise I2C
-		bool ret = additionalIoExpander.begin(AdditionalIoExpanderAddress);
-		if (!ret)
+
+		bool ret;
+		unsigned int attempts = 0;
+		do
 		{
-			delay(100);														// wait a little while
-			ret = additionalIoExpander.begin(AdditionalIoExpanderAddress);	// do 1 retry
-		}
+			++attempts;
+			delay(50);
+			ret = additionalIoExpander.begin(AdditionalIoExpanderAddress);
+		} while (!ret && attempts < 5);
 
 		if (ret)
 		{

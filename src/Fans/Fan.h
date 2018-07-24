@@ -9,6 +9,7 @@
 #define SRC_FAN_H_
 
 #include "RepRapFirmware.h"
+#include "Libraries/General/StringRef.h"
 
 class GCodeBuffer;
 
@@ -28,10 +29,12 @@ public:
 	bool IsEnabled() const { return pin != NoPin; }
 	float GetConfiguredPwm() const { return val; }			// returns the configured PWM. Actual PWM may be different, e.g. due to blipping or for thermostatic fans.
 
-	void Init(Pin p_pin, bool hwInverted);
+	void Init(Pin p_pin, bool hwInverted, PwmFrequency p_freq);
 	void SetPwm(float speed);
 	bool HasMonitoredHeaters() const { return heatersMonitored != 0; }
 	void SetHeatersMonitored(HeatersMonitoredBitmap h);
+	const char *GetName() const { return name.c_str(); }
+
 	bool Check();											// update the fan PWM returning true if it is a thermostatic fan that is on
 	void Disable();
 	bool WriteSettings(FileStore *f, size_t fanNum) const;	// save the settings of this fan if it isn't thermostatic
@@ -48,6 +51,7 @@ private:
 	HeatersMonitoredBitmap heatersMonitored;
 	PwmFrequency freq;
 	Pin pin;
+	String<MaxFanNameLength> name;
 	bool isConfigured;
 	bool inverted;
 	bool hardwareInverted;

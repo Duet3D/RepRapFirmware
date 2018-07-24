@@ -63,9 +63,12 @@ MassStorage::MassStorage(Platform* p) : freeWriteBuffers(nullptr)
 
 void MassStorage::Init()
 {
+	static const char * const VolMutexNames[] = { "SD0", "SD1" };
+	static_assert(ARRAY_SIZE(VolMutexNames) >= NumSdCards, "Incorrect VolMutexNames array");
+
 	// Create the mutexes
-	fsMutex.Create();
-	dirMutex.Create();
+	fsMutex.Create("FileSystem");
+	dirMutex.Create("DirSearch");
 
 	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
 	{
@@ -79,24 +82,12 @@ void MassStorage::Init()
 		inf.mounting = inf.isMounted = false;
 		inf.cdPin = SdCardDetectPins[card];
 		inf.cardState = (inf.cdPin == NoPin) ? CardDetectState::present : CardDetectState::notPresent;
-		inf.volMutex.Create();
+		inf.volMutex.Create(VolMutexNames[card]);
 	}
 
 	sd_mmc_init(SdWriteProtectPins, SdSpiCSPins);		// initialize SD MMC stack
 
-	// Try to mount the first SD card only
-	String<100> reply;
-	do
-	{
-		Spin();											// Spin() doesn't get called regularly until after this function completes, and we need it to update the card detect status
-	}
-	while (Mount(0, reply.GetRef(), false) == GCodeResult::notFinished);
-
-	if (reply.strlen() != 0)
-	{
-		delay(3000);		// Wait a few seconds so users have a chance to see this
-		reprap.GetPlatform().MessageF(UsbMessage, "%s\n", reply.c_str());
-	}
+	// We no longer mount the SD card here because it may take a long time if it fails
 }
 
 FileWriteBuffer *MassStorage::AllocateWriteBuffer()

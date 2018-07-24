@@ -5,6 +5,7 @@
 # define DEFAULT_BOARD_TYPE BoardType::DuetWiFi_10
 constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 is now unused)
 # define IAP_FIRMWARE_FILE	"Duet2CombinedFirmware.bin"
+#define IAP_UPDATE_FILE		"iap4e.bin"				// using the same IAP file for both Duet WiFi and Duet Ethernet
 # define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
 
 // Features definition
@@ -15,13 +16,10 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
-#define HAS_SMART_DRIVERS		1
-#define HAS_STALL_DETECT		1
+#define SUPPORT_TMC2660			1
 #define HAS_VOLTAGE_MONITOR		1
 #define HAS_VREF_MONITOR		0
 #define ACTIVE_LOW_HEAT_ON		1
-
-#define IAP_UPDATE_FILE		"iap4e.bin"				// using the same IAP file for both Duet WiFi and Duet Ethernet
 
 #define SUPPORT_INKJET		0						// set nonzero to support inkjet control
 #define SUPPORT_ROLAND		0						// set nonzero to support Roland mill
@@ -39,9 +37,8 @@ constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h,i,j,k,l }
 
 constexpr size_t Heaters = 8;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
-#define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d,e,f,g,h }
-
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
+constexpr size_t NumThermistorInputs = 8;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
@@ -49,7 +46,7 @@ constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the
 #define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f,g,h,i }
 
 constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
-constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
+constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
@@ -79,7 +76,7 @@ constexpr Pin END_STOP_PINS[DRIVES] = { 46, 02, 93, 74, 48, 96, 97, 98, 99, 17, 
 constexpr Pin DUEX_END_STOP_PINS[5] = { 200, 203, 202, 201, 213 };			// these replace endstops 5-9 if a DueX is present
 
 // HEATERS
-constexpr Pin TEMP_SENSE_PINS[Heaters] = { 45, 47, 44, 61, 62, 63, 59, 18 }; // Thermistor pin numbers
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 45, 47, 44, 61, 62, 63, 59, 18 }; // Thermistor pin numbers
 constexpr Pin HEAT_ON_PINS[Heaters] = { 19, 20, 16, 35, 37, 40, 43, 15 };	// Heater pin numbers (heater 7 pin TBC)
 
 // Default thermistor parameters
@@ -131,7 +128,8 @@ constexpr Pin DiagPin = Z_PROBE_MOD_PIN;
 // Cooling fans
 constexpr size_t NUM_FANS = 9;
 constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { 55, 58, 00, 212, 207, 206, 205, 204, 215 };
-constexpr Pin COOLING_FAN_RPM_PIN = 102;									// PB6 on expansion connector
+constexpr size_t NumTachos = 1;
+constexpr Pin TachoPins[NumTachos] = { 102 };								// PB6 on expansion connector
 
 // SD cards
 constexpr size_t NumSdCards = 2;
@@ -158,11 +156,12 @@ constexpr Pin ROLAND_RTS_PIN = xx;											// Expansion pin 12, PA13_RXD1
 #endif
 
 // M42 and M208 commands now use logical pin numbers, not firmware pin numbers.
-// This next definition defines the highest one.
 // This is the mapping from logical pins 60+ to firmware pin numbers
 constexpr Pin SpecialPinMap[] =
 {
-	24, 97, 98, 99															// We allow CS5-CS8 to be used because few users need >4 thermocouples or RTDs
+	24, 97, 98, 99,															// We allow CS5-CS8 to be used because few users need >4 thermocouples or RTDs
+	7,																		// SW_ENC on CONN_SD
+	Z_PROBE_MOD_PIN
 };
 constexpr Pin DueX5GpioPinMap[] = { 211, 210, 209, 208 };					// Pins 100-103 map to GPIO 1-4 on DueX5
 // We also allow pins 120-135 to be used if there is an additional SX1509B expander

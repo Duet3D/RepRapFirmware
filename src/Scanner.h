@@ -53,7 +53,7 @@ public:
 	bool Enable();										// Enable 3D scanner extension. Returns true when done
 
 	bool IsRegistered() const;							// Is the 3D scanner registered and ready to use?
-	bool Register();									// Register a 3D scanner. Returns true when done
+	void Register();									// Register a 3D scanner instance
 	// External scanners are automatically unregistered when the main port (USB) is closed
 
 	// Start a new 3D scan. Returns true when the scan has been initiated

@@ -65,6 +65,7 @@ public:
     void SetPositions(const float move[], size_t numDrives);		// Force the endpoints to be these
     FilePosition GetFilePosition() const { return filePos; }
     float GetRequestedSpeed() const { return requestedSpeed; }
+    float GetTopSpeed() const { return topSpeed; }
     float GetVirtualExtruderPosition() const { return virtualExtruderPosition; }
 	float AdvanceBabyStepping(float amount);						// Try to push babystepping earlier in the move queue
 	bool IsHomingAxes() const { return (endStopsToCheck & HomeAxes) != 0; }

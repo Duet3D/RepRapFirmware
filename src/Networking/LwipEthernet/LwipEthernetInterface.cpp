@@ -140,6 +140,9 @@ LwipEthernetInterface::LwipEthernetInterface(Platform& p) : platform(p), closeDa
 
 void LwipEthernetInterface::Init()
 {
+	interfaceMutex.Create("Lwip");
+	//TODO we don't yet use this mutex anywhere!
+
 	// Clear the PCBs
 	for (size_t i = 0; i < NumTcpPorts; ++i)
 	{

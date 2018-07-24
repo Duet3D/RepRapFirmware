@@ -121,10 +121,14 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
 RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
-	activeToolHeaters(0), ticksInSpinState(0), spinningModule(noModule), debug(0), stopped(false),
+	activeToolHeaters(0), ticksInSpinState(0),
+#ifdef RTOS
+	heatTaskIdleTicks(0),
+#endif
+	spinningModule(noModule), debug(0), stopped(false),
 	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0),
 	displayMessageBox(false), boxSeq(0),
-	diagnosticsDestination(MessageType::NoDestinationMessage)
+	diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false)
 {
 	OutputBuffer::Init();
 	platform = new Platform();
@@ -154,8 +158,8 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 
 void RepRap::Init()
 {
-	toolListMutex.Create();
-	messageBoxMutex.Create();
+	toolListMutex.Create("ToolList");
+	messageBoxMutex.Create("MessageBox");
 
 	platform->Init();
 	network->Init();
@@ -181,31 +185,51 @@ void RepRap::Init()
 
 	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
-	// Run the configuration file
-	const char *configFile = platform->GetConfigFile();
-	platform->Message(UsbMessage, "\nExecuting ");
-	if (platform->GetMassStorage()->FileExists(platform->GetSysDir(), configFile))
+	// Try to mount the first SD card
 	{
-		platform->MessageF(UsbMessage, "%s...", platform->GetConfigFile());
-	}
-	else
-	{
-		platform->MessageF(UsbMessage, "%s (no configuration file found)...", platform->GetDefaultFile());
-		configFile = platform->GetDefaultFile();
-	}
-
-	if (gCodes->RunConfigFile(configFile))
-	{
+		GCodeResult rslt;
+		String<100> reply;
 		do
 		{
-			// GCodes::Spin will read the macro and ensure IsDaemonBusy returns false when it's done
-			Spin();
-		} while (gCodes->IsDaemonBusy());
-		platform->Message(UsbMessage, "Done!\n");
-	}
-	else
-	{
-		platform->Message(UsbMessage, "Error, not found\n");
+			platform->GetMassStorage()->Spin();			// Spin() doesn't get called regularly until after this function completes, and we need it to update the card detect status
+			rslt = platform->GetMassStorage()->Mount(0, reply.GetRef(), false);
+		}
+		while (rslt == GCodeResult::notFinished);
+
+		if (rslt == GCodeResult::ok)
+		{
+			// Run the configuration file
+			const char *configFile = platform->GetConfigFile();
+			platform->Message(UsbMessage, "\nExecuting ");
+			if (platform->GetMassStorage()->FileExists(platform->GetSysDir(), configFile))
+			{
+				platform->MessageF(UsbMessage, "%s...", platform->GetConfigFile());
+			}
+			else
+			{
+				platform->MessageF(UsbMessage, "%s (no configuration file found)...", platform->GetDefaultFile());
+				configFile = platform->GetDefaultFile();
+			}
+
+			if (gCodes->RunConfigFile(configFile))
+			{
+				do
+				{
+					// GCodes::Spin will read the macro and ensure IsDaemonBusy returns false when it's done
+					Spin();
+				} while (gCodes->IsDaemonBusy());
+				platform->Message(UsbMessage, "Done!\n");
+			}
+			else
+			{
+				platform->Message(UsbMessage, "Error, not found\n");
+			}
+		}
+		else
+		{
+			delay(3000);		// Wait a few seconds so users have a chance to see this
+			platform->MessageF(UsbMessage, "%s\n", reply.c_str());
+		}
 	}
 	processingConfig = false;
 
@@ -355,14 +379,22 @@ void RepRap::Spin()
 	}
 
 	// Keep track of the loop time
-	const uint32_t dt = Platform::GetInterruptClocks() - lastTime;
-	if (dt < fastLoop)
+	if (justSentDiagnostics)
 	{
-		fastLoop = dt;
+		// Sending diagnostics increases the loop time, so don't count it
+		justSentDiagnostics = false;
 	}
-	if (dt > slowLoop)
+	else
 	{
-		slowLoop = dt;
+		const uint32_t dt = Platform::GetInterruptClocks() - lastTime;
+		if (dt < fastLoop)
+		{
+			fastLoop = dt;
+		}
+		if (dt > slowLoop)
+		{
+			slowLoop = dt;
+		}
 	}
 
 	RTOSIface::Yield();
@@ -407,6 +439,7 @@ void RepRap::Diagnostics(MessageType mtype)
 #ifdef DUET_NG
 	DuetExpansion::Diagnostics(mtype);
 #endif
+	justSentDiagnostics = true;
 }
 
 // Turn off the heaters, disable the motors, and deactivate the Heat and Move classes. Leave everything else working.
@@ -672,22 +705,32 @@ void RepRap::Tick()
 	{
 		platform->Tick();
 		++ticksInSpinState;
-		if (ticksInSpinState >= MaxTicksInSpinState)	// if we stall for 20 seconds, save diagnostic data and reset
+#ifdef RTOS
+		++heatTaskIdleTicks;
+		const bool heatTaskStuck = (heatTaskIdleTicks >= MaxTicksInSpinState);
+		if (heatTaskStuck || ticksInSpinState >= MaxTicksInSpinState)		// if we stall for 20 seconds, save diagnostic data and reset
+#else
+		if (ticksInSpinState >= MaxTicksInSpinState)						// if we stall for 20 seconds, save diagnostic data and reset
+#endif
 		{
 			resetting = true;
 			for (size_t i = 0; i < Heaters; i++)
 			{
 				platform->SetHeater(i, 0.0);
 			}
-			for (size_t i = 0; i < DRIVES; i++)
-			{
-				platform->DisableDrive(i);
-				// We can't set motor currents to 0 here because that requires interrupts to be working, and we are in an ISR
-			}
+			platform->DisableAllDrives();
 
 			// We now save the stack when we get stuck in a spin loop
 			register const uint32_t * stackPtr asm ("sp");
-			platform->SoftwareReset((uint16_t)SoftwareResetReason::stuckInSpin, stackPtr + 5);
+			platform->SoftwareReset(
+#ifdef RTOS
+				(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
+				stackPtr + 5 + 15			// discard the stack used by the FreeRTOS stack handler and our tick handler
+#else
+				(uint16_t)SoftwareResetReason::stuckInSpin,
+				stackPtr + 5				// discard the stack used by our tick handler
+#endif
+				);
 		}
 	}
 }
@@ -779,8 +822,12 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 	}
 
-	// Current tool number
-	response->catf("]},\"currentTool\":%d", GetCurrentToolNumber());
+	// Current speeds
+	response->catf("]},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}",
+			(double)move->GetRequestedSpeed(), (double)move->GetTopSpeed());
+
+ 	// Current tool number
+	response->catf(",\"currentTool\":%d", GetCurrentToolNumber());
 
 	// Output notifications
 	{
@@ -843,14 +890,31 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Cooling fan value
 		response->cat(",\"fanPercent\":");
 		ch = '[';
-		for(size_t i = 0; i < NUM_FANS; i++)
+		for (size_t i = 0; i < NUM_FANS; i++)
 		{
 			response->catf("%c%d", ch, (int)lrintf(platform->GetFanValue(i) * 100.0));
 			ch = ',';
 		}
+		response->cat((ch == '[') ? "[]" : "]");
+
+		// Cooling fan names
+		if (type == 2)
+		{
+			response->cat(",\"fanNames\":");
+			ch = '[';
+			for (size_t fan = 0; fan < NUM_FANS; fan++)
+			{
+				response->cat(ch);
+				ch = ',';
+
+				const char *fanName = GetPlatform().GetFanName(fan);
+				response->EncodeString(fanName, strlen(fanName), true);
+			}
+			response->cat((ch == '[') ? "[]" : "]");
+		}
 
 		// Speed and Extrusion factors
-		response->catf("],\"speedFactor\":%.1f,\"extrFactors\":", (double)(gCodes->GetSpeedFactor() * 100.0));
+		response->catf(",\"speedFactor\":%.1f,\"extrFactors\":", (double)(gCodes->GetSpeedFactor() * 100.0));
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
@@ -887,8 +951,27 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				break;
 		}
 
-		// Fan RPM
-		response->catf(",\"fanRPM\":%d}", static_cast<unsigned int>(platform->GetFanRPM()));
+		// Send fan RPM value(s)
+		if (NumTachos != 0)
+		{
+			response->cat(",\"fanRPM\":");
+			// For compatibility with older versions of DWC, if there is only one tacho value then we send it as a simple variable
+			if (NumTachos > 1)
+			{
+				char ch = '[';
+				for (size_t i = 0; i < NumTachos; ++i)
+				{
+					response->catf("%c%" PRIu32, ch, platform->GetFanRPM(i));
+					ch = ',';
+				}
+				response->cat(']');
+			}
+			else
+			{
+				response->catf("%" PRIu32, platform->GetFanRPM(0));
+			}
+		}
+		response->cat('}');		// end sensors
 	}
 
 	/* Temperatures */
@@ -944,50 +1027,24 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 		response->cat((ch == '[') ? "[]" : "]");
 
-		/* Heads - NOTE: This field is subject to deprecation and will be removed in v1.20 */
-		response->cat(",\"heads\":{\"current\":");
-
-		// Current temperatures
-		ch = '[';
-		for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
+		// Names
+		if (type == 2)
 		{
-			response->catf("%c%.1f", ch, (double)heat->GetTemperature(heater));
-			ch = ',';
-		}
-		response->cat((ch == '[') ? "[]" : "]");
+			response->cat(",\"names\":");
+			ch = '[';
+			for (size_t heater = 0; heater < Heaters; heater++)
+			{
+				response->cat(ch);
+				ch = ',';
 
-		// Active temperatures
-		response->catf(",\"active\":");
-		ch = '[';
-		for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
-		{
-			response->catf("%c%.1f", ch, (double)heat->GetActiveTemperature(heater));
-			ch = ',';
+				const char *heaterName = GetHeat().GetHeaterName(heater);
+				response->EncodeString(heaterName, (heaterName == nullptr) ? 0 : strlen(heaterName), true);
+			}
+			response->cat((ch == '[') ? "[]" : "]");
 		}
-		response->cat((ch == '[') ? "[]" : "]");
-
-		// Standby temperatures
-		response->catf(",\"standby\":");
-		ch = '[';
-		for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
-		{
-			response->catf("%c%.1f", ch, (double)heat->GetStandbyTemperature(heater));
-			ch = ',';
-		}
-		response->cat((ch == '[') ? "[]" : "]");
-
-		// Heater statuses (0=off, 1=standby, 2=active, 3=fault)
-		response->cat(",\"state\":");
-		ch = '[';
-		for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
-		{
-			response->catf("%c%d", ch, static_cast<int>(heat->GetStatus(heater)));
-			ch = ',';
-		}
-		response->cat((ch == '[') ? "[]" : "]");
 
 		/* Tool temperatures */
-		response->cat("},\"tools\":{\"active\":[");
+		response->cat(",\"tools\":{\"active\":[");
 		{
 			MutexLocker lock(toolListMutex);
 			for (const Tool *tool = toolList; tool != nullptr; tool = tool->Next())
@@ -1103,6 +1160,21 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Cold Extrude/Retract
 		response->catf(",\"coldExtrudeTemp\":%.1f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_EXTRUDE));
 		response->catf(",\"coldRetractTemp\":%.1f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_RETRACT));
+
+		// Compensation type
+		response->cat(",\"compensation\":");
+		if (move->IsUsingMesh())
+		{
+			response->cat("\"Mesh\"");
+		}
+		else if (move->GetNumProbePoints() > 0)
+		{
+			response->catf("\"%u Point\"", move->GetNumProbePoints());
+		}
+		else
+		{
+			response->cat("\"None\"");
+		}
 
 		// Controllable Fans
 		FansBitmap controllableFans = 0;
@@ -1254,15 +1326,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				if (tool->GetFilament() != nullptr)
 				{
 					const char *filamentName = tool->GetFilament()->GetName();
-#if 0	// DC this change broke filament loading/unloading in DWC
-					if (filamentName[0] != 0)
-					{
-#endif
-						response->catf(",\"filament\":");
-						response->EncodeString(filamentName, strlen(filamentName), false);
-#if 0	// DC see above
-					}
-#endif
+					response->catf(",\"filament\":");
+					response->EncodeString(filamentName, strlen(filamentName), false);
 				}
 
 				// Offsets
@@ -1319,6 +1384,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		// Fraction of file printed
 		response->catf("],\"fractionPrinted\":%.1f", (double)((printMonitor->IsPrinting()) ? (gCodes->FractionOfFilePrinted() * 100.0) : 0.0));
+
+		// Byte position of the file being printed
+		response->catf(",\"filePosition\":%lu", gCodes->GetFilePosition());
 
 		// First Layer Duration
 		response->catf(",\"firstLayerDuration\":%.1f", (double)(printMonitor->GetFirstLayerDuration()));
@@ -1599,8 +1667,27 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		ch = ',';
 	}
 
-	// Send fan RPM value (we only support one)
-	response->catf("],\"fanRPM\":%u", static_cast<unsigned int>(platform->GetFanRPM()));
+	// Send fan RPM value(s)
+	response->cat(']');
+	if (NumTachos != 0)
+	{
+		response->cat(",\"fanRPM\":");
+		// For compatibility with older versions of DWC, if there is only one tacho value then we send it as a simple variable
+		if (NumTachos > 1)
+		{
+			char ch = '[';
+			for (size_t i = 0; i < NumTachos; ++i)
+			{
+				response->catf("%c%" PRIu32, ch, platform->GetFanRPM(i));
+				ch = ',';
+			}
+			response->cat(']');
+		}
+		else
+		{
+			response->catf("%" PRIu32, platform->GetFanRPM(0));
+		}
+	}
 
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
 	response->cat(",\"homed\":");

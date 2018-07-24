@@ -31,7 +31,8 @@ Licence: GPL
 #include "RepRapFirmware.h"
 #include "IoPorts.h"
 #include "DueFlashStorage.h"
-#include "Fan.h"
+#include "Fans/Fan.h"
+#include "Fans/Tacho.h"
 #include "Heating/TemperatureError.h"
 #include "OutputMemory.h"
 #include "Storage/FileStore.h"
@@ -57,19 +58,19 @@ constexpr bool BACKWARDS = !FORWARDS;
 
 // Define the number of ADC filters and the indices of the extra ones
 #if HAS_VREF_MONITOR
-constexpr size_t VrefFilterIndex = Heaters;
-constexpr size_t VssaFilterIndex = Heaters + 1;
+constexpr size_t VrefFilterIndex = NumThermistorInputs;
+constexpr size_t VssaFilterIndex = NumThermistorInputs + 1;
 # if HAS_CPU_TEMP_SENSOR
-constexpr size_t CpuTempFilterIndex = Heaters + 2;
-constexpr size_t NumAdcFilters = Heaters + 3;
+constexpr size_t CpuTempFilterIndex = NumThermistorInputs + 2;
+constexpr size_t NumAdcFilters = NumThermistorInputs + 3;
 # else
-constexpr size_t NumAdcFilters = Heaters + 2;
+constexpr size_t NumAdcFilters = NumThermistorInputs + 2;
 # endif
 #elif HAS_CPU_TEMP_SENSOR
-constexpr size_t CpuTempFilterIndex = Heaters;
-constexpr size_t NumAdcFilters = Heaters + 1;
+constexpr size_t CpuTempFilterIndex = NumThermistorInputs;
+constexpr size_t NumAdcFilters = NumThermistorInputs + 1;
 #else
-constexpr size_t NumAdcFilters = Heaters;
+constexpr size_t NumAdcFilters = NumThermistorInputs;
 #endif
 
 /**************************************************************************************************/
@@ -129,6 +130,8 @@ enum class BoardType : uint8_t
 	RADDS_15 = 1
 #elif defined(__ALLIGATOR__)
 	Alligator_2 = 1
+#elif defined(PCCB)
+	PCCB_10 = 1
 #else
 # error Unknown board
 #endif
@@ -180,12 +183,13 @@ enum class SoftwareResetReason : uint16_t
 	erase = 0x10,					// special M999 command to erase firmware and reset
 	NMI = 0x20,
 	hardFault = 0x30,				// most exceptions get escalated to a hard fault
-	stuckInSpin = 0x40,				// we got stuck in a Spin() function for too long
+	stuckInSpin = 0x40,				// we got stuck in a Spin() function in the Main task for too long
 	wdtFault = 0x50,				// secondary watchdog
 	usageFault = 0x60,
 	otherFault = 0x70,
-	stackOverflow = 0x80,
-	assertCalled = 0x90,
+	stackOverflow = 0x80,			// FreeRTOS detected stack overflow
+	assertCalled = 0x90,			// FreeRTOS assertion failure
+	heaterWatchdog = 0xA0,			// the Heat task didn't kick the watchdog often enough
 
 	// Bits that are or'ed in
 	inAuxOutput = 0x0800,			// this bit is or'ed in if we were in aux output at the time
@@ -294,7 +298,7 @@ struct AxisDriversConfig
 
 // The main class that defines the RepRap machine for the benefit of the other classes
 class Platform
-{   
+{
 public:
 	// Enumeration to describe the status of a drive
 	enum class DriverStatus : uint8_t { disabled, idle, enabled };
@@ -519,9 +523,10 @@ public:
 	void EnableSharedFan(bool enable);						// enable/disable the fan that shares its PWM pin with the last heater
 #endif
 	bool IsFanControllable(size_t fan) const;
+	const char *GetFanName(size_t fan) const;
 
 	bool WriteFanSettings(FileStore *f) const;		// Save some resume information
-	float GetFanRPM() const;
+	uint32_t GetFanRPM(size_t tachoIndex) const;
 
 	// Flash operations
 	void UpdateFirmware();
@@ -660,7 +665,12 @@ private:
 		uint32_t bfar;								// bus fault address register
 		uint32_t sp;								// stack pointer
 		uint32_t when;								// value of the RTC when the software reset occurred
+#ifdef RTOS
+		uint32_t taskName;							// first 4 bytes of the task name
+		uint32_t stack[23];							// stack when the exception occurred, with the program counter at the bottom
+#else
 		uint32_t stack[24];							// stack when the exception occurred, with the program counter at the bottom
+#endif
 
 		bool isVacant() const						// return true if this struct can be written without erasing it first
 		{
@@ -803,29 +813,31 @@ private:
 
 	static bool WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam);
 
-	// Heaters - bed is assumed to be the first
-	Pin tempSensePins[Heaters];
-	Pin heatOnPins[Heaters];
-	Pin spiTempSenseCsPins[MaxSpiTempSensors];
+	// Heaters
 	uint32_t configuredHeaters;										// bitmask of all real heaters in use
 	uint32_t heatSampleTicks;
 
 	// Fans
 	Fan fans[NUM_FANS];
-	Pin coolingFanRpmPin;											// we currently support only one fan RPM input
 	uint32_t lastFanCheckTime;
 	void InitFans();
 	bool FansHardwareInverted(size_t fanNumber) const;
+
+	// Fan tachos
+	Tacho tachos[NumTachos];
 
   	// Serial/USB
 	uint32_t baudRates[NUM_SERIAL_CHANNELS];
 	uint8_t commsParams[NUM_SERIAL_CHANNELS];
 
+#ifdef SERIAL_AUX_DEVICE
 	volatile OutputStack auxOutput;
 	Mutex auxMutex;
+#endif
+
 	OutputBuffer *auxGCodeReply;				// G-Code reply for AUX devices (special one because it is actually encapsulated before sending)
 	uint32_t auxSeq;							// Sequence number for AUX devices
-    bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
+	bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
 
 #ifdef SERIAL_AUX2_DEVICE
     volatile OutputStack aux2Output;
@@ -885,6 +897,7 @@ private:
 #if HAS_VOLTAGE_MONITOR
 	AnalogChannelNumber vInMonitorAdcChannel;
 	volatile uint16_t currentVin, highestVin, lowestVin;
+	uint16_t lastUnderVoltageValue, lastOverVoltageValue;
 	uint16_t autoPauseReading, autoResumeReading;
 	uint32_t numUnderVoltageEvents, previousUnderVoltageEvents;
 	volatile uint32_t numOverVoltageEvents, previousOverVoltageEvents;
@@ -1244,7 +1257,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // The bitmaps for various controller electronics are organised like this:
 // Duet WiFi:
 //	All step pins are on port D, so the bitmap is just the map of step bits in port D.
-// Duet Maestro:
+// Duet Maestro and PCCB:
 //	All step pins are on port C, so the bitmap is just the map of step bits in port C.
 // Duet 0.6 and 0.8.5:
 //	Step pins are PA0, PC7,9,11,14,25,29 and PD0,3.
@@ -1268,9 +1281,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	return 0;				// TODO assign step pins
 #else
 	const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
-#if defined(DUET_NG)
-	return pinDesc.ulPin;
-#elif defined(DUET_M)
+#if defined(DUET_NG) || defined(DUET_M) || defined(PCCB)
 	return pinDesc.ulPin;
 #elif defined(DUET_06_085)
 	return (pinDesc.pPort == PIOA) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
@@ -1293,7 +1304,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	// TODO
 #elif defined(DUET_NG)
 	PIOD->PIO_ODSR = driverMap;				// on Duet WiFi all step pins are on port D
-#elif defined(DUET_M)
+#elif defined(DUET_M) || defined(PCCB)
 	PIOC->PIO_ODSR = driverMap;				// on Duet Maestro all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = driverMap;
@@ -1322,7 +1333,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	// TODO
 #elif defined(DUET_NG)
 	PIOD->PIO_ODSR = 0;						// on Duet WiFi all step pins are on port D
-#elif defined(DUET_M)
+#elif defined(DUET_M) || defined(PCCB)
 	PIOC->PIO_ODSR = 0;						// on Duet Maestro all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = 0;

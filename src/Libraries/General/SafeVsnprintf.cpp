@@ -15,7 +15,7 @@
 	Changes for the FreeRTOS ports:
 
 	- The dot in "%-8.8s"
-	- The specifiers 'l' (long) and 'L' (long long)
+	- The specifiers 'l' (long) and 'll' (long long)
 	- The specifier 'u' for unsigned
 	- Dot notation for IP addresses:
 	  sprintf("IP = %xip\n", 0xC0A80164);
@@ -546,14 +546,15 @@ static void tiny_print(SStringBuf& apBuf, const char *format, va_list args)
 		if (ch == 'l')
 		{
 			ch = *format++;
-			apBuf.flags.long32 = 1;
-			// Makes no difference as u32 == long
-		}
-		if (ch == 'L')
-		{
-			ch = *format++;
-			apBuf.flags.long64 = 1;
-			// Does make a difference
+			if (ch == 'l')
+			{
+				ch = *format++;
+				apBuf.flags.long64 = 1;
+			}
+			else
+			{
+				apBuf.flags.long32 = 1;
+			}
 		}
 
 		if (ch == 'f' || ch == 'e' || ch == 'F' || ch == 'E')

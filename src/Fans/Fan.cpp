@@ -11,13 +11,13 @@
 #include "GCodes/GCodeBuffer.h"
 #include "Heating/Heat.h"
 
-void Fan::Init(Pin p_pin, bool hwInverted)
+void Fan::Init(Pin p_pin, bool hwInverted, PwmFrequency p_freq)
 {
 	isConfigured = false;
 	val = lastVal = 0.0;
 	minVal = 0.1;				// 10% minimum fan speed
 	blipTime = 100;				// 100ms fan blip
-	freq = DefaultFanPwmFreq;
+	freq = p_freq;
 	pin = p_pin;
 	hardwareInverted = hwInverted;
 	inverted = blipping = false;
@@ -121,6 +121,11 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 			}
 		}
 
+		if (gb.Seen('C') && gb.GetQuotedString(name.GetRef()))
+		{
+			seen = true;
+		}
+
 		// We only act on the 'S' parameter here if we have processed other parameters
 		if (seen && gb.Seen('S'))		// Set new fan value - process this after processing 'H' or it may not be acted on
 		{
@@ -136,13 +141,14 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 		else if (!gb.Seen('R') && !gb.Seen('S'))
 		{
 			// Report the configuration of the specified fan
-			reply.printf("Fan%i frequency: %uHz, speed: %d%%, min: %d%%, blip: %.2f, inverted: %s",
+			reply.printf("Fan%i frequency: %uHz, speed: %d%%, min: %d%%, blip: %.2f, inverted: %s, name: %s",
 							fanNum,
 							(unsigned int)freq,
 							(int)(val * 100.0),
 							(int)(minVal * 100.0),
 							(double)(blipTime * MillisToSeconds),
-							(inverted) ? "yes" : "no");
+							(inverted) ? "yes" : "no",
+							name.c_str());
 			if (heatersMonitored != 0)
 			{
 				reply.catf(", temperature: %.1f:%.1fC, heaters:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);

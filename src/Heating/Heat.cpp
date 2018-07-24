@@ -102,6 +102,10 @@ void Heat::Init()
 	for (size_t heater : ARRAY_INDICES(pids))
 	{
 		heaterSensors[heater] = nullptr;			// no temperature sensor assigned yet
+#ifdef PCCB
+		// PCCB has no heaters by default, but we pretend that the LED outputs are heaters. So disable the PID controllers.
+		pids[heater]->Init(-1.0, -1.0, -1.0, true, false);
+#else
 		if (IsBedOrChamberHeater(heater))
 		{
 			pids[heater]->Init(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, false, false);
@@ -117,6 +121,7 @@ void Heat::Init()
 		{
 			pids[heater]->Init(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, true, false);
 		}
+#endif
 		lastStandbyTools[heater] = nullptr;
 	}
 
@@ -134,7 +139,9 @@ void Heat::Init()
 #endif
 #if HAS_SMART_DRIVERS
 	virtualHeaterSensors[1] = TemperatureSensor::Create(FirstTmcDriversSenseChannel);
+#ifndef PCCB
 	virtualHeaterSensors[2] = TemperatureSensor::Create(FirstTmcDriversSenseChannel + 1);
+#endif
 #endif
 
 #if SUPPORT_DHT_SENSOR
@@ -184,6 +191,8 @@ void Heat::Task()
 			lastHeaterTuned = heaterBeingTuned;
 			heaterBeingTuned = -1;
 		}
+
+		reprap.KickHeatTaskWatchdog();
 
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, platform.HeatSampleInterval());
@@ -629,8 +638,6 @@ HeaterProtection& Heat::AccessHeaterProtection(size_t index) const
 	}
 	return *heaterProtections[index];
 }
-
-
 
 // Updates the PIDs and HeaterProtection items after a heater change
 void Heat::UpdateHeaterProtection()

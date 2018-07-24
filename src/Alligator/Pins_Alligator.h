@@ -4,12 +4,9 @@
 #define FIRMWARE_NAME "RepRapFirmware for Alligator"
 
 // Features definition
-#define HAS_LWIP_NETWORKING		1
-#define HAS_WIFI_NETWORKING		0
+#define HAS_LEGACY_NETWORKING	1
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		0
-#define HAS_SMART_DRIVERS		0
-#define HAS_STALL_DETECT		0
 #define HAS_VOLTAGE_MONITOR		0
 #define HAS_VREF_MONITOR		0
 #define ACTIVE_LOW_HEAT_ON		0
@@ -37,16 +34,16 @@ const size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers 
 #define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f }
 
 // Alligator + Piggy module max 5 heaters
-const int8_t Heaters = 5;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
-#define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d,e }
+constexpr size_t Heaters = 5;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 
-const size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
+constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
+constexpr size_t NumThermistorInputs = 5;
 
-const size_t MaxAxes = 7;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
-const size_t MinAxes = 3;						// The minimum and default number of axes
-const size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
+constexpr size_t MaxAxes = 7;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
+constexpr size_t MinAxes = 3;						// The minimum and default number of axes
+constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
 
-const size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels (USB and two auxiliary UARTs)
+constexpr size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels (USB and two auxiliary UARTs)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
 #define SERIAL_AUX2_DEVICE Serial1
@@ -69,19 +66,18 @@ const Pin MotorFaultDetectPin = 22;
 // Alligator End-stop pinout mapping for RepRapFirmware:
 // 5V SIGN SIGN GND , 5V SIGN SIGN GND, 5V SIGN   SIGN    GND
 //     X    E0            Y    E1           Z   E2-Zprobe
-const Pin END_STOP_PINS[DRIVES] = { 33, 35, 38, 34, 37, 39 ,NoPin };
+const Pin END_STOP_PINS[DRIVES] = { 33, 35, 38, 34, 37, 39, NoPin };
 
 // SPI DAC Motor for Current Vref
 const size_t MaxSpiDac = 2;
 const Pin SPI_DAC_CS[MaxSpiDac] = { 53, 6 };
 
 // HEATERS
-const Pin TEMP_SENSE_PINS[Heaters] = HEATERS_(1, 0, 2, 3, 4, f, g, h);	// Analogue pin numbers
+const Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 1, 0, 2, 3, 4 };	// Analogue pin numbers
 
 // h1,h2,h3,h4: X2,8,9,X8 is hardware PWM
 // b: X3 is not hardware PWM
-const Pin HEAT_ON_PINS[Heaters] = HEATERS_(X3, X2, 8, 9, X8, f, g, h);	// b,h1,h2,h3,h4
-
+const Pin HEAT_ON_PINS[Heaters] = { X3, X2, 8, 9, X8 };
 
 // Default thermistor parameters
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
@@ -112,11 +108,11 @@ const Pin ATX_POWER_PIN = NoPin;										// Arduino Due pin number that control
 const Pin Z_PROBE_PIN = 39;	 											// Z min pin ,Last signal of the end-stop connectors
 
 // Digital pin number to turn the IR LED on (high) or off (low)
-const Pin Z_PROBE_MOD_PIN = NoPin;											// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)
+const Pin Z_PROBE_MOD_PIN = NoPin;										// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)
 const Pin DiagPin = NoPin;
 
 // Pin number that the DAC that controls the second extruder motor current on the Duet 0.8.5 is connected to
-const int Dac0DigitalPin = NoPin;											// Arduino Due pin number corresponding to DAC0 output pin
+const int Dac0DigitalPin = NoPin;										// Arduino Due pin number corresponding to DAC0 output pin
 
 // COOLING FANS
 const size_t NUM_FANS = 4;
@@ -124,7 +120,8 @@ const size_t NUM_FANS = 4;
 // Fan2: 31 is not hardware PWM
 // J5 pin1  black connector ha hardware PWM, attached to FANS
 const Pin COOLING_FAN_PINS[NUM_FANS] = { X0, 31, X17};
-const Pin COOLING_FAN_RPM_PIN = NoPin;										// Pin PA15
+constexpr size_t NumTachos = 0;
+constexpr Pin TachoPins[NumTachos] = { };
 
 // SD cards
 const size_t NumSdCards = 1;
