@@ -16,6 +16,7 @@ void Fan::Init(Pin p_pin, bool hwInverted, PwmFrequency p_freq)
 	isConfigured = false;
 	val = lastVal = 0.0;
 	minVal = 0.1;				// 10% minimum fan speed
+	maxVal = 1.0;				// 100% maximum fan speed
 	blipTime = 100;				// 100ms fan blip
 	freq = p_freq;
 	pin = p_pin;
@@ -90,7 +91,18 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 			{
 				speed /= 255.0;
 			}
-			minVal = constrain<float>(speed, 0.0, 1.0);
+			minVal = constrain<float>(speed, 0.0, maxVal);
+		}
+
+		if (gb.Seen('X'))		// Set maximum speed
+		{
+			seen = true;
+			float speed = gb.GetFValue();
+			if (speed > 1.0)
+			{
+				speed /= 255.0;
+			}
+			maxVal = constrain<float>(speed, minVal, 1.0);
 		}
 
 		if (gb.Seen('H'))		// Set thermostatically-controlled heaters
@@ -141,11 +153,12 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 		else if (!gb.Seen('R') && !gb.Seen('S'))
 		{
 			// Report the configuration of the specified fan
-			reply.printf("Fan%i frequency: %uHz, speed: %d%%, min: %d%%, blip: %.2f, inverted: %s, name: %s",
+			reply.printf("Fan%i frequency: %uHz, speed: %d%%, min: %d%%, max: %d%%, blip: %.2f, inverted: %s, name: %s",
 							fanNum,
 							(unsigned int)freq,
 							(int)(val * 100.0),
 							(int)(minVal * 100.0),
+							(int)(maxVal * 100.0),
 							(double)(blipTime * MillisToSeconds),
 							(inverted) ? "yes" : "no",
 							name.c_str());
@@ -254,7 +267,7 @@ void Fan::Refresh()
 					else if (lastVal != 0.0 && ht + ThermostatHysteresis > triggerTemperatures[0])
 					{
 						// If the fan is on, add a hysteresis before turning it off
-						reqVal = max<float>(reqVal, (bangBangMode) ? max<float>(0.5, val) : minVal);
+						reqVal = min<float>(max<float>(reqVal, (bangBangMode) ? max<float>(0.5, val) : minVal), maxVal);
 					}
 #if HAS_SMART_DRIVERS
 					const unsigned int channel = reprap.GetHeat().GetHeaterChannel(heaterHumber);
@@ -273,6 +286,11 @@ void Fan::Refresh()
 		if (reqVal < minVal)
 		{
 			reqVal = minVal;
+		}
+
+		if (reqVal > maxVal)
+		{
+			reqVal = maxVal;
 		}
 
 		if (lastVal == 0.0)
