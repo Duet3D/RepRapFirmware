@@ -191,6 +191,7 @@ const char * const moduleName[] =
 	"DuetExpansion",
 	"FilamentSensors",
 	"WiFi",
+	"LinuxComms",
 	"none"
 };
 

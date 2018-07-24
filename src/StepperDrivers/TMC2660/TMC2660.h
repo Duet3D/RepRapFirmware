@@ -8,6 +8,8 @@
 #ifndef TMC2660_H_
 #define TMC2660_H_
 
+#if SUPPORT_TMC2660
+
 #include "RepRapFirmware.h"
 #include "GCodes/DriverMode.h"
 #include "Pins.h"
@@ -16,7 +18,7 @@
 
 // The Platform class needs to know which USART we are using when assigning interrupt priorities
 #define USART_TMC_DRV			USART1
-#define SERIAL_TMC_DRV_IRQn		USART1_IRQn
+#define UART_TMC_DRV_IRQn		USART1_IRQn
 #define ID_USART_TMC_DRV		ID_USART1
 #define USART_TMC_DRV_Handler	USART1_Handler
 
@@ -57,5 +59,7 @@ namespace SmartDrivers
 	float GetStandstillCurrentPercent(size_t driver);
 	void SetStandstillCurrentPercent(size_t driver, float percent);
 };
+
+#endif
 
 #endif /* TMC2660_H_ */

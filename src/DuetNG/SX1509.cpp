@@ -21,11 +21,10 @@ local, and you've found our code helpful, please buy us a round!
 Distributed as-is; no warranty is given.
 ******************************************************************************/
 
-#include "Core.h"
+#include "RepRapFirmware.h"
 #include "Wire.h"
 #include "SX1509.h"
 #include "SX1509Registers.h"
-#include "Pins.h"
 
 SX1509::SX1509() : _clkX(0), errorCount(0)
 {
@@ -38,6 +37,7 @@ bool SX1509::begin(uint8_t address)
 	deviceAddress =  address;
 	
 	reset();
+	delay(2);														// not sure this is needed, but it may help
 
 	pwmPins = 0;
 

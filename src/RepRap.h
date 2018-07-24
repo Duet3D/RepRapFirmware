@@ -120,6 +120,10 @@ public:
 
 	static uint32_t DoDivide(uint32_t a, uint32_t b);		// helper function for diagnostic tests
 
+#ifdef RTOS
+	void KickHeatTaskWatchdog() { heatTaskIdleTicks = 0; }
+#endif
+
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0);
 
@@ -157,6 +161,9 @@ private:
 	uint16_t activeToolHeaters;
 
 	uint16_t ticksInSpinState;
+#ifdef RTOS
+	uint16_t heatTaskIdleTicks;
+#endif
 	Module spinningModule;
 	uint32_t fastLoop, slowLoop;
 
@@ -182,6 +189,7 @@ private:
 
 	// Deferred diagnostics
 	MessageType diagnosticsDestination;
+	bool justSentDiagnostics;
 };
 
 inline Platform& RepRap::GetPlatform() const { return *platform; }

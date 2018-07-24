@@ -43,9 +43,16 @@ private:
 	static constexpr float DefaultSegmentsPerSecond = 100.0;
 	static constexpr float DefaultMinSegmentSize = 0.2;
 
+	// Basic facts about movement system
+	static constexpr size_t HANGPRINTER_AXES = 4;
+	static constexpr size_t A_AXIS = 0;
+	static constexpr size_t B_AXIS = 1;
+	static constexpr size_t C_AXIS = 2;
+	static constexpr size_t D_AXIS = 3;
+
 	void Init();
 	void Recalc();
-    float LineLengthASquared(const float machinePos[3], const float anchor[3]) const;	// Calculate the square of the line length from a spool from a Cartesian coordinate
+	float LineLengthSquared(const float machinePos[3], const float anchor[3]) const;	// Calculate the square of the line length from a spool from a Cartesian coordinate
 	void InverseTransform(float La, float Lb, float Lc, float machinePos[3]) const;
 
 	floatc_t ComputeDerivative(unsigned int deriv, float La, float Lb, float Lc) const;	// Compute the derivative of height with respect to a parameter at a set of motor endpoints

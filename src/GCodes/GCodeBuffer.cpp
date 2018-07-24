@@ -8,13 +8,16 @@
 //*************************************************************************************
 
 #include "GCodeBuffer.h"
+#include "GCodes.h"
 #include "GCodeInput.h"
 #include "Platform.h"
 #include "RepRap.h"
 
+static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML file?
+
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(const char* id, MessageType mt, bool usesCodeQueue)
-	: machineState(new GCodeMachineState()), identity(id), writingFileDirectory(nullptr),
+	: machineState(new GCodeMachineState()), identity(id), fileBeingWritten(nullptr), writingFileSize(0), eofStringCounter(0),
 	  toolNumberAdjust(0), responseMessageType(mt), checksumRequired(false), queueCodes(usesCodeQueue), binaryWriting(false)
 {
 	Init();
@@ -252,7 +255,7 @@ bool GCodeBuffer::LineFinished()
 	gcodeBuffer[gcodeLineEnd] = 0;
 	const bool badChecksum = (hadChecksum && computedChecksum != declaredChecksum);
 	const bool missingChecksum = (checksumRequired && !hadChecksum && machineState->previous == nullptr);
-	if (reprap.Debug(moduleGcodes) && !writingFileDirectory)
+	if (reprap.Debug(moduleGcodes) && fileBeingWritten == nullptr)
 	{
 		reprap.GetPlatform().MessageF(DebugMessage, "%s%s: %s\n", identity, ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gcodeBuffer);
 	}
@@ -759,6 +762,28 @@ void GCodeBuffer::TryGetBValue(char c, bool& val, bool& seen)
 	}
 }
 
+// Try to get an int array exactly 'numVals' long after parameter letter 'c'.
+// If the wrong number of values is provided, generate an error message and return true.
+// Else set 'seen' if we saw the letter and value, and return false.
+bool GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad)
+{
+	if (Seen(c))
+	{
+		size_t count = numVals;
+		GetUnsignedArray(vals, count, doPad);
+		if (count == numVals)
+		{
+			seen = true;
+		}
+		else
+		{
+			reply.printf("Wrong number of values after '\''%c'\'', expected %d", c, numVals);
+			return true;
+		}
+	}
+	return false;
+}
+
 // Try to get a float array exactly 'numVals' long after parameter letter 'c'.
 // If the wrong number of values is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.
@@ -961,16 +986,20 @@ bool GCodeBuffer::PopState()
 }
 
 // Abort execution of any files or macros being executed, returning true if any files were closed
+// We now avoid popping the state if we were not executing from a file, so that if DWC or PanelDue is used to jog the axes before they are homed, we don't report stack underflow.
 void GCodeBuffer::AbortFile(FileGCodeInput* fileInput)
 {
-	do
+	if (machineState->fileState.IsLive())
 	{
-		if (machineState->fileState.IsLive())
+		do
 		{
-			fileInput->Reset(machineState->fileState);
-			machineState->fileState.Close();
-		}
-	} while (PopState());							// abandon any macros
+			if (machineState->fileState.IsLive())
+			{
+				fileInput->Reset(machineState->fileState);
+				machineState->fileState.Close();
+			}
+		} while (PopState());							// abandon any macros
+	}
 }
 
 // Return true if this source is executing a file macro
@@ -1007,6 +1036,136 @@ void GCodeBuffer::PrintCommand(const StringRef& s) const
 	if (commandFraction >= 0)
 	{
 		s.catf(".%d", commandFraction);
+	}
+}
+
+// Open a file to write to
+bool GCodeBuffer::OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
+{
+	fileBeingWritten = reprap.GetPlatform().OpenFile(directory, fileName, OpenMode::write);
+	eofStringCounter = 0;
+	writingFileSize = size;
+	if (fileBeingWritten == nullptr)
+	{
+		return false;
+	}
+
+	crc32 = fileCRC32;
+	binaryWriting = binaryWrite;
+	return true;
+}
+
+// Write the current GCode to file
+void GCodeBuffer::WriteToFile()
+{
+	if (GetCommandLetter() == 'M')
+	{
+		if (GetCommandNumber() == 29)						// end of file?
+		{
+			fileBeingWritten->Close();
+			fileBeingWritten = nullptr;
+			SetFinished(true);
+			const char* const r = (reprap.GetPlatform().Emulating() == Compatibility::marlin) ? "Done saving file." : "";
+			reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, r);
+			return;
+		}
+	}
+	else if (GetCommandLetter() == 'G' && GetCommandNumber() == 998)						// resend request?
+	{
+		if (Seen('P'))
+		{
+			SetFinished(true);
+			String<ShortScratchStringLength> scratchString;
+			scratchString.printf("%" PRIi32 "\n", GetIValue());
+			reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, scratchString.c_str());
+			return;
+		}
+	}
+
+	fileBeingWritten->Write(Buffer());
+	fileBeingWritten->Write('\n');
+	SetFinished(true);
+}
+
+void GCodeBuffer::WriteBinaryToFile(char b)
+{
+	if (b == eofString[eofStringCounter] && writingFileSize == 0)
+	{
+		eofStringCounter++;
+		if (eofStringCounter < ARRAY_SIZE(eofString) - 1)
+		{
+			return;					// not reached end of input yet
+		}
+	}
+	else
+	{
+		if (eofStringCounter != 0)
+		{
+			for (uint8_t i = 0; i < eofStringCounter; i++)
+			{
+				fileBeingWritten->Write(eofString[i]);
+			}
+			eofStringCounter = 0;
+		}
+		fileBeingWritten->Write(b);		// writing one character at a time isn't very efficient, but uploading HTML files via USB is rarely done these days
+		if (writingFileSize == 0 || fileBeingWritten->Length() < writingFileSize)
+		{
+			return;					// not reached end of input yet
+		}
+	}
+
+	FinishWritingBinary();
+}
+
+void GCodeBuffer::FinishWritingBinary()
+{
+	// If we get here then we have come to the end of the data
+	fileBeingWritten->Close();
+	const bool crcOk = (crc32 == fileBeingWritten->GetCRC32() || crc32 == 0);
+	fileBeingWritten = nullptr;
+	binaryWriting = false;
+	if (crcOk)
+	{
+		const char* const r = (reprap.GetPlatform().Emulating() == Compatibility::marlin) ? "Done saving file." : "";
+		reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, r);
+	}
+	else
+	{
+		reprap.GetGCodes().HandleReply(*this, GCodeResult::error, "CRC32 checksum doesn't match");
+	}
+}
+
+// This is called when we reach the end of the file we are reading from
+void GCodeBuffer::FileEnded()
+{
+	if (IsWritingBinary())
+	{
+		// We are in the middle of writing a binary file but the input stream has ended
+		FinishWritingBinary();
+	}
+	else
+	{
+		Put('\n');					// append a newline in case the file didn't end with one
+		if (IsWritingFile())
+		{
+			bool gotM29 = false;
+			if (IsReady())			// if we have a complete command
+			{
+				gotM29 = (GetCommandLetter() == 'M' && GetCommandNumber() == 29);
+				if (!gotM29)		// if it wasn't M29, write it to file
+				{
+					fileBeingWritten->Write(Buffer());
+					fileBeingWritten->Write('\n');
+				}
+			}
+
+			// Close the file whether or not we saw M29
+			fileBeingWritten->Close();
+			fileBeingWritten = nullptr;
+			SetFinished(true);
+			const char* const r = (reprap.GetPlatform().Emulating() == Compatibility::marlin) ? "Done saving file." : "";
+			reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, r);
+		}
 	}
 }
 

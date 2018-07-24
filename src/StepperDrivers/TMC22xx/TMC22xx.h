@@ -5,20 +5,22 @@
  *      Author: David
  */
 
-#ifndef TMC2660_H_
-#define TMC2660_H_
+// NB - must #include some file that includes Pins.h before including this one, so that SUPPORT_TMC22xx is defined
+
+#ifndef TMC22xx_H_
+#define TMC22xx_H_
+
+#if SUPPORT_TMC22xx
+
+#ifndef TMC22xx_HAS_MUX
+# error TMC22xx_HAS_MUX not defined
+#endif
 
 #include "RepRapFirmware.h"
 #include "GCodes/DriverMode.h"
 #include "Pins.h"
 #include "MessageType.h"
 #include "Libraries/General/StringRef.h"
-
-// The Platform class needs to know which USART we are using when assigning interrupt priorities (SERIAL_TMC_DRV_IRQn), so we define the UART we are using here
-#define UART_TMC_DRV			UART0
-#define SERIAL_TMC_DRV_IRQn		UART0_IRQn
-#define ID_UART_TMC_DRV			ID_UART0
-#define UART_TMC_DRV_Handler	UART0_Handler
 
 // TMC22xx DRV_STATUS register bit assignments
 const uint32_t TMC_RR_OT = 1 << 1;			// over temperature shutdown
@@ -56,4 +58,6 @@ namespace SmartDrivers
 	void SetStandstillCurrentPercent(size_t drive, float percent);
 };
 
-#endif /* TMC2660_H_ */
+#endif
+
+#endif /* TMC22xx_H_ */

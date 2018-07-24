@@ -5,6 +5,7 @@
 #ifndef _DISKIO
 
 #ifdef __cplusplus
+unsigned int DiskioGetAndClearMaxRetryCount();
 extern "C" {
 #endif
 

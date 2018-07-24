@@ -86,11 +86,11 @@ void TemperatureSensor::TryConfigureHeaterName(GCodeBuffer& gb, bool& seen)
 TemperatureSensor *TemperatureSensor::Create(unsigned int channel)
 {
 	TemperatureSensor *ts = nullptr;
-	if (channel < Heaters)
+	if (channel < NumThermistorInputs)
 	{
 		ts = new Thermistor(channel, false);
 	}
-	else if (FirstPT1000Channel <= channel && channel < FirstPT1000Channel + Heaters)
+	else if (FirstPT1000Channel <= channel && channel < FirstPT1000Channel + NumThermistorInputs)
 	{
 		ts = new Thermistor(channel, true);
 	}

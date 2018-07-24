@@ -21,18 +21,16 @@ bool GCodeInput::FillBuffer(GCodeBuffer *gb)
 		if (gb->IsWritingBinary())
 		{
 			// HTML uploads are handled by the GCodes class
-			reprap.GetGCodes().WriteHTMLToFile(*gb, c);
+			gb->WriteBinaryToFile(c);
 		}
 		else if (gb->Put(c))
 		{
-			// Check if we can finish a file upload
-			if (gb->WritingFileDirectory() != nullptr)
+			if (gb->IsWritingFile())
 			{
-				reprap.GetGCodes().WriteGCodeToFile(*gb);
-				gb->SetFinished(true);
+				gb->WriteToFile();
 			}
 
-			// Code is complete, stop here
+			// Code is complete or has been written to file, so stop here
 			return true;
 		}
 	}
@@ -116,7 +114,7 @@ void NetworkGCodeInput::Put(MessageType mtype, char c)
 				return;
 			}
 
-			state = (c == 'M') ? GCodeInputState::doingMCode : GCodeInputState::doingCode;
+			state = (c == 'M' || c == 'm') ? GCodeInputState::doingMCode : GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingCode:

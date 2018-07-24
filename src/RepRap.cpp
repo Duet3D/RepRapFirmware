@@ -125,10 +125,14 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
 RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
-	activeToolHeaters(0), ticksInSpinState(0), spinningModule(noModule), debug(0), stopped(false),
+	activeToolHeaters(0), ticksInSpinState(0),
+#ifdef RTOS
+	heatTaskIdleTicks(0),
+#endif
+	spinningModule(noModule), debug(0), stopped(false),
 	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0),
 	displayMessageBox(false), boxSeq(0),
-	diagnosticsDestination(MessageType::NoDestinationMessage)
+	diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false)
 {
 	OutputBuffer::Init();
 	platform = new Platform();
@@ -371,14 +375,22 @@ void RepRap::Spin()
 	}
 
 	// Keep track of the loop time
-	const uint32_t dt = Platform::GetInterruptClocks() - lastTime;
-	if (dt < fastLoop)
+	if (justSentDiagnostics)
 	{
-		fastLoop = dt;
+		// Sending diagnostics increases the loop time, so don't count it
+		justSentDiagnostics = false;
 	}
-	if (dt > slowLoop)
+	else
 	{
-		slowLoop = dt;
+		const uint32_t dt = Platform::GetInterruptClocks() - lastTime;
+		if (dt < fastLoop)
+		{
+			fastLoop = dt;
+		}
+		if (dt > slowLoop)
+		{
+			slowLoop = dt;
+		}
 	}
 
 	RTOSIface::Yield();
@@ -423,6 +435,7 @@ void RepRap::Diagnostics(MessageType mtype)
 #ifdef DUET_NG
 	DuetExpansion::Diagnostics(mtype);
 #endif
+	justSentDiagnostics = true;
 }
 
 // Turn off the heaters, disable the motors, and deactivate the Heat and Move classes. Leave everything else working.
@@ -688,26 +701,29 @@ void RepRap::Tick()
 	{
 		platform->Tick();
 		++ticksInSpinState;
-		if (ticksInSpinState >= MaxTicksInSpinState)	// if we stall for 20 seconds, save diagnostic data and reset
+#ifdef RTOS
+		++heatTaskIdleTicks;
+		const bool heatTaskStuck = (heatTaskIdleTicks >= MaxTicksInSpinState);
+		if (heatTaskStuck || ticksInSpinState >= MaxTicksInSpinState)		// if we stall for 20 seconds, save diagnostic data and reset
+#else
+		if (ticksInSpinState >= MaxTicksInSpinState)						// if we stall for 20 seconds, save diagnostic data and reset
+#endif
 		{
 			resetting = true;
 			for (size_t i = 0; i < Heaters; i++)
 			{
 				platform->SetHeater(i, 0.0);
 			}
-			for (size_t i = 0; i < DRIVES; i++)
-			{
-				platform->DisableDrive(i);
-				// We can't set motor currents to 0 here because that requires interrupts to be working, and we are in an ISR
-			}
+			platform->DisableAllDrives();
 
 			// We now save the stack when we get stuck in a spin loop
 			register const uint32_t * stackPtr asm ("sp");
-
-			platform->SoftwareReset((uint16_t)SoftwareResetReason::stuckInSpin,
+			platform->SoftwareReset(
 #ifdef RTOS
+				(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
 				stackPtr + 5 + 15			// discard the stack used by the FreeRTOS stack handler and our tick handler
 #else
+				(uint16_t)SoftwareResetReason::stuckInSpin,
 				stackPtr + 5				// discard the stack used by our tick handler
 #endif
 				);
@@ -806,7 +822,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	response->catf("]},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}",
 			(double)move->GetRequestedSpeed(), (double)move->GetTopSpeed());
 
-	// Current tool number
+ 	// Current tool number
 	response->catf(",\"currentTool\":%d", GetCurrentToolNumber());
 
 	// Output notifications
@@ -870,7 +886,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Cooling fan value
 		response->cat(",\"fanPercent\":");
 		ch = '[';
-		for(size_t i = 0; i < NUM_FANS; i++)
+		for (size_t i = 0; i < NUM_FANS; i++)
 		{
 			response->catf("%c%d", ch, (int)lrintf(platform->GetFanValue(i) * 100.0));
 			ch = ',';
@@ -931,8 +947,27 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				break;
 		}
 
-		// Fan RPM
-		response->catf(",\"fanRPM\":%d}", static_cast<unsigned int>(platform->GetFanRPM()));
+		// Send fan RPM value(s)
+		if (NumTachos != 0)
+		{
+			response->cat(",\"fanRPM\":");
+			// For compatibility with older versions of DWC, if there is only one tacho value then we send it as a simple variable
+			if (NumTachos > 1)
+			{
+				char ch = '[';
+				for (size_t i = 0; i < NumTachos; ++i)
+				{
+					response->catf("%c%" PRIu32, ch, platform->GetFanRPM(i));
+					ch = ',';
+				}
+				response->cat(']');
+			}
+			else
+			{
+				response->catf("%" PRIu32, platform->GetFanRPM(0));
+			}
+		}
+		response->cat('}');		// end sensors
 	}
 
 	/* Temperatures */
@@ -1120,7 +1155,22 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	{
 		// Cold Extrude/Retract
 		response->catf(",\"coldExtrudeTemp\":%.1f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_EXTRUDE));
-		response->catf(",\"coldRetractTemp\":%.1f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_RETRACT));\
+		response->catf(",\"coldRetractTemp\":%.1f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_RETRACT));
+
+		// Compensation type
+		response->cat(",\"compensation\":");
+		if (move->IsUsingMesh())
+		{
+			response->cat("\"Mesh\"");
+		}
+		else if (move->GetNumProbePoints() > 0)
+		{
+			response->catf("\"%u Point\"", move->GetNumProbePoints());
+		}
+		else
+		{
+			response->cat("\"None\"");
+		}
 
 		// Compensation type
 		response->cat(",\"compensation\":");
@@ -1627,8 +1677,27 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		ch = ',';
 	}
 
-	// Send fan RPM value (we only support one)
-	response->catf("],\"fanRPM\":%u", static_cast<unsigned int>(platform->GetFanRPM()));
+	// Send fan RPM value(s)
+	response->cat(']');
+	if (NumTachos != 0)
+	{
+		response->cat(",\"fanRPM\":");
+		// For compatibility with older versions of DWC, if there is only one tacho value then we send it as a simple variable
+		if (NumTachos > 1)
+		{
+			char ch = '[';
+			for (size_t i = 0; i < NumTachos; ++i)
+			{
+				response->catf("%c%" PRIu32, ch, platform->GetFanRPM(i));
+				ch = ',';
+			}
+			response->cat(']');
+		}
+		else
+		{
+			response->catf("%" PRIu32, platform->GetFanRPM(0));
+		}
+	}
 
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
 	response->cat(",\"homed\":");

@@ -10,7 +10,7 @@
 
 #include "Libraries/General/FreelistManager.h"
 #include "RepRapFirmware.h"
-#include "ST7920/Lcd7920.h"
+#include "ST7920/lcd7920.h"
 
 // Menu item class hierarchy
 class MenuItem

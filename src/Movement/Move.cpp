@@ -104,6 +104,7 @@ void Move::Init()
 
 	idleTimeout = DefaultIdleTimeout;
 	moveState = MoveState::idle;
+	lastStateChangeTime = millis();
 	idleCount = 0;
 
 	simulationMode = 0;
@@ -601,7 +602,7 @@ void Move::Diagnostics(MessageType mtype)
 {
 	Platform& p = reprap.GetPlatform();
 	p.Message(mtype, "=== Move ===\n");
-	p.MessageF(mtype, "Hiccups: %" PRIu32 ", StepErrors: %u, LaErrors: %u, FreeDm: %d, MinFreeDm %d, MaxWait: %" PRIu32 "ms, Underruns: %u, %u\n",
+	p.MessageF(mtype, "Hiccups: %" PRIu32 ", StepErrors: %u, LaErrors: %u, FreeDm: %d, MinFreeDm: %d, MaxWait: %" PRIu32 "ms, Underruns: %u, %u\n",
 						DDA::numHiccups, stepErrors, numLookaheadErrors, DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
 	DDA::numHiccups = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = numLookaheadErrors = 0;
@@ -920,14 +921,14 @@ bool Move::SaveHeightMapToFile(FileStore *f) const
 
 float Move::GetTopSpeed() const
 {
-	const DDA *currDda = currentDda;
-	return (currDda == nullptr) ? 0.0f : currDda->GetTopSpeed();
+	const DDA * const currDda = currentDda;
+	return (currDda == nullptr) ? 0.0 : currDda->GetTopSpeed();
 }
 
 float Move::GetRequestedSpeed() const
 {
-	const DDA *currDda = currentDda;
-	return (currDda == nullptr) ? 0.0f : currDda->GetRequestedSpeed();
+	const DDA * const currDda = currentDda;
+	return (currDda == nullptr) ? 0.0 : currDda->GetRequestedSpeed();
 }
 
 void Move::SetTaperHeight(float h)

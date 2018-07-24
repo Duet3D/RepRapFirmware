@@ -160,8 +160,11 @@ static void ethernet_rx_callback(uint32_t ul_status)
 
 static void conn_err(void *arg, err_t err)
 {
-	// Report the error to the monitor
-	reprap.GetPlatform().MessageF(UsbMessage, "Network: Connection error, code %d\n", err);
+	if (reprap.Debug(moduleNetwork) && !inInterrupt())
+	{
+		// Report the error to the monitor
+		reprap.GetPlatform().MessageF(UsbMessage, "Network: Connection error, code %d\n", err);
+	}
 
 	// Tell the higher levels about the error
 	ConnectionState *cs = (ConnectionState*)arg;
@@ -179,7 +182,10 @@ static err_t conn_recv(void *arg, tcp_pcb *pcb, pbuf *p, err_t err)
 	{
 		if (cs->pcb != pcb)
 		{
-			reprap.GetPlatform().Message(UsbMessage, "Network: Mismatched pcb in conn_recv!\n");
+			if (reprap.Debug(moduleNetwork) && !inInterrupt())
+			{
+				reprap.GetPlatform().Message(UsbMessage, "Network: Mismatched pcb in conn_recv!\n");
+			}
 			tcp_abort(pcb);
 			return ERR_ABRT;
 		}

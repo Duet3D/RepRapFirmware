@@ -11,13 +11,13 @@
 #include "GCodes/GCodeBuffer.h"
 #include "Heating/Heat.h"
 
-void Fan::Init(Pin p_pin, bool hwInverted)
+void Fan::Init(Pin p_pin, bool hwInverted, PwmFrequency p_freq)
 {
 	isConfigured = false;
 	val = lastVal = 0.0;
 	minVal = 0.1;				// 10% minimum fan speed
 	blipTime = 100;				// 100ms fan blip
-	freq = DefaultFanPwmFreq;
+	freq = p_freq;
 	pin = p_pin;
 	hardwareInverted = hwInverted;
 	inverted = blipping = false;
