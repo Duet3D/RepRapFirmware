@@ -747,9 +747,18 @@ bool LinearDeltaKinematics::QueryTerminateHomingMove(size_t axis) const
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
 void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
 {
-	if (highEnd)
+	if (axis < DELTA_AXES)
 	{
-		const float hitPoint = GetHomedCarriageHeight(axis);
+		if (highEnd)
+		{
+			const float hitPoint = GetHomedCarriageHeight(axis);
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+		}
+	}
+	else
+	{
+		// Assume that any additional axes are linear
+		const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
 		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 	}
 }
