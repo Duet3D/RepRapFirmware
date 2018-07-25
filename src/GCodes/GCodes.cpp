@@ -110,7 +110,12 @@ void GCodes::Init()
 	axisLetters[1] = 'Y';
 	axisLetters[2] = 'Z';
 
+#if defined(DUET_NG) || defined(DUET_M)
+	numExtruders = min<size_t>(MaxExtruders, platform.GetNumSmartDrivers() - XYZ_AXES);	// don't default dumb drivers to extruders because they don't support the same microstepping options
+#else
 	numExtruders = MaxExtruders;
+#endif
+
 	Reset();
 
 	distanceScale = 1.0;
@@ -1259,9 +1264,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				error = reprap.GetMove().FinishedBedProbing(g30SValue, reply);
 			}
+			gb.SetState(GCodeState::normal);
 		}
-
-		gb.SetState(GCodeState::normal);
 		break;
 
 	case GCodeState::probingAtPoint7:

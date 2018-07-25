@@ -721,12 +721,15 @@ void RepRap::Tick()
 			platform->DisableAllDrives();
 
 			// We now save the stack when we get stuck in a spin loop
+#ifdef RTOS
+		    __asm volatile("mrs r2, psp");
+			register const uint32_t * stackPtr asm ("r2");					// we want the PSP not the MSP
+			platform->SoftwareReset(
+				(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
+				stackPtr
+#else
 			register const uint32_t * stackPtr asm ("sp");
 			platform->SoftwareReset(
-#ifdef RTOS
-				(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
-				stackPtr + 5 + 15			// discard the stack used by the FreeRTOS stack handler and our tick handler
-#else
 				(uint16_t)SoftwareResetReason::stuckInSpin,
 				stackPtr + 5				// discard the stack used by our tick handler
 #endif
