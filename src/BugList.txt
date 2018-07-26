@@ -236,21 +236,22 @@ Bug fixes/investigations for 2.02beta3:
 - [done] Initial assumed Z position could be strange because babystepping wasn't cleared early enough at startup
 - [done] allow Z probe mod pin to be accessed as a GP output pin (but some Z probe modes will still change it)
 - [done] allow up to 5 drivers/axis on Duet 2 WiFi/Ethernet instead of 4
-- [done, test] M28/M29 in macro still doesn't work if the M29 is right at the end of the file. Also test the case of no M29.
+- [done, test] M28/M29 in macro still doesn't work if the M29 is right at the end of the file
+- Also doesn't work if no M29 in macro file
 - [done, ok] Fix tacho RPM readings
 - [done] Fix homing additional axes on a delta printer
 - [already fixed in 2.01beta2 according to deckingman] Pressure advance with high K and low microstepping, see https://forum.duet3d.com/topic/1935/more-strange-pressure-advance-behaviour/95
 - [done, ok] If retractprobe.g contains any movement commands, G32 works but produces no output at the end of bed probing
 - [done, ok] Don't treat dumb drivers as extruders by default on Duet WiFi/Ethernet
-- implement DRC
-- Do we need to defer stall detection when a motor is starting from rest?
-- [done, test] Stack trace doesn't provide useful data when "stuck in spin loop" - need to locate and print user stack in this case? https://forum.duet3d.com/topic/6070/new-firmware-2-01-beta-2-available/23
-- Should we limit bed probing like other moves? https://forum.duet3d.com/topic/6070/new-firmware-2-01-beta-2-available/19
+- [defer] implement DRC
+- [checked, looks ok] Do we need to defer stall detection when a motor is starting from rest?
+- [done, ok] Stack trace doesn't provide useful data when "stuck in spin loop" - need to locate and print user stack in this case? https://forum.duet3d.com/topic/6070/new-firmware-2-01-beta-2-available/23
+- [defer] Should we limit bed probing like other moves? https://forum.duet3d.com/topic/6070/new-firmware-2-01-beta-2-available/19
 - [awaiting reply] Step errors when using Nimble and pressure advance, https://forum.duet3d.com/topic/3139/high-level-of-steperrors-what-can-cause-them/5
 - [awaiting reply] GCode file that pauses between parts, https://forum.duet3d.com/topic/5702/printer-keeps-pausing-during-print/15
 - [looks like it was a temperature sensing error] Is there a kink during auto tuning? https://forum.duet3d.com/topic/5582/hot-end-auto-tuning-failed-due. Could explain oddly low dead times from auto tuning.
 - Stuck in spin loop, https://forum.duet3d.com/topic/5674/damned-crash-stuck-in-spin-loop
-- Report that if you use FileZilla to upload several short files, some of them are written blank, https://forum.duet3d.com/topic/5992/files-uploaded-over-ftp-occasionally-blank
+- [defer] Report that if you use FileZilla to upload several short files, some of them are written blank, https://forum.duet3d.com/topic/5992/files-uploaded-over-ftp-occasionally-blank
 
 - Investigate failed .BMP conversion, https://forum.duet3d.com/topic/5623/boot-logo-corruption-in-1-21/2
 

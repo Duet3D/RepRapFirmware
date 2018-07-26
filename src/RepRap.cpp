@@ -726,12 +726,12 @@ void RepRap::Tick()
 			register const uint32_t * stackPtr asm ("r2");					// we want the PSP not the MSP
 			platform->SoftwareReset(
 				(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
-				stackPtr
+				stackPtr + 5												// discard uninteresting registers, keep LR PC PSR
 #else
 			register const uint32_t * stackPtr asm ("sp");
 			platform->SoftwareReset(
 				(uint16_t)SoftwareResetReason::stuckInSpin,
-				stackPtr + 5				// discard the stack used by our tick handler
+				stackPtr + 5												// discard uninteresting registers, keep LR PC PSR
 #endif
 				);
 		}

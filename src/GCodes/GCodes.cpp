@@ -1487,14 +1487,11 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 
 	case GCodeInputReadResult::noData:
 		// We have reached the end of the file. Check for the last line of gcode not ending in newline.
-		if (!gb.StartingNewCode())				// if there is something in the buffer
+		gb.FileEnded();							// append a newline if necessary and deal with any pending file write
+		if (gb.IsReady())
 		{
-			gb.FileEnded();						// append a newline and deal with any pending file write
-			if (gb.IsReady())
-			{
-				gb.SetFinished(ActOnCode(gb, reply));
-				return;
-			}
+			gb.SetFinished(ActOnCode(gb, reply));
+			return;
 		}
 
 		gb.Init();								// mark buffer as empty
