@@ -327,7 +327,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 			directionVector[drive] = (float)delta/reprap.GetPlatform().DriveStepsPerUnit(drive);
 			if (drive >= numTotalAxes && nextMove.coords[drive] > 0.0)
 			{
-				extruding = true;
+				extruding = true;						// flag this move as extruding even if the number of extruder microsteps is zero
 			}
 		}
 

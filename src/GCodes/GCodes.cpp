@@ -119,7 +119,12 @@ void GCodes::Init()
 	axisLetters[1] = 'Y';
 	axisLetters[2] = 'Z';
 
+#if defined(DUET_NG) || defined(DUET_M)
+	numExtruders = min<size_t>(MaxExtruders, platform.GetNumSmartDrivers() - XYZ_AXES);	// don't default dumb drivers to extruders because they don't support the same microstepping options
+#else
 	numExtruders = MaxExtruders;
+#endif
+
 	Reset();
 
 	distanceScale = 1.0;
@@ -1271,9 +1276,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				error = reprap.GetMove().FinishedBedProbing(g30SValue, reply);
 			}
+			gb.SetState(GCodeState::normal);
 		}
-
-		gb.SetState(GCodeState::normal);
 		break;
 
 	case GCodeState::probingAtPoint7:
@@ -1502,14 +1506,11 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 
 	case GCodeInputReadResult::noData:
 		// We have reached the end of the file. Check for the last line of gcode not ending in newline.
-		if (!gb.StartingNewCode())				// if there is something in the buffer
+		gb.FileEnded();							// append a newline if necessary and deal with any pending file write
+		if (gb.IsReady())
 		{
-			gb.FileEnded();						// append a newline and deal with any pending file write
-			if (gb.IsReady())
-			{
-				gb.SetFinished(ActOnCode(gb, reply));
-				return;
-			}
+			gb.SetFinished(ActOnCode(gb, reply));
+			return;
 		}
 
 		gb.Init();								// mark buffer as empty

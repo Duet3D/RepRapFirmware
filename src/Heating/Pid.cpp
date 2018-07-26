@@ -55,10 +55,7 @@ void PID::Init(float pGain, float pTc, float pTd, bool usePid, bool inverted)
 	model.SetParameters(pGain, pTc, pTd, 1.0, GetHighestTemperatureLimit(), 0.0, usePid, inverted, 0);
 	Reset();
 
-	if (model.IsEnabled())
-	{
-		SetHeater(0.0);
-	}
+	SetHeater(0.0);							// set up the pin even if the heater is not enabled (for PCCB)
 
 	// Time the sensor was last sampled.  During startup, we use the current
 	// time as the initial value so as to not trigger an immediate warning from the Tick ISR.

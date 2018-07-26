@@ -62,7 +62,6 @@ public:
 	int GetToolNumberAdjust() const { return toolNumberAdjust; }
 	void SetToolNumberAdjust(int arg) { toolNumberAdjust = arg; }
 	void SetCommsProperties(uint32_t arg) { checksumRequired = (arg & 1); }
-	bool StartingNewCode() const { return gcodeLineEnd == 0; }
 	MessageType GetResponseMessageType() const { return responseMessageType; }
 	GCodeMachineState& MachineState() const { return *machineState; }
 	GCodeMachineState& OriginalMachineState() const;

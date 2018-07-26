@@ -171,7 +171,7 @@ static_assert(MaxCalibrationPoints <= MaxProbePoints, "MaxCalibrationPoints must
 // SD card
 constexpr uint32_t SdCardDetectDebounceMillis = 200;	// How long we give the SD card to settle in the socket
 constexpr unsigned int MaxSdCardTries = 3;				// Number of read or write attempts before giving up
-constexpr uint32_t SdCardRetryDelay = 10;				// Number of milliseconds delay between SD transfer retries
+constexpr uint32_t SdCardRetryDelay = 30;				// Number of milliseconds delay between SD transfer retries. Looks like 10ms may be too low.
 
 // Z probing
 constexpr float DefaultZDive = 5.0;						// Millimetres

@@ -815,10 +815,7 @@ private:
 
 	static bool WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam);
 
-	// Heaters - bed is assumed to be the first
-	Pin tempSensePins[NumThermistorInputs];
-	Pin heatOnPins[Heaters];
-	Pin spiTempSenseCsPins[MaxSpiTempSensors];
+	// Heaters
 	uint32_t configuredHeaters;										// bitmask of all real heaters in use
 	uint32_t heatSampleTicks;
 
