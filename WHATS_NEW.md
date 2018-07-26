@@ -1,15 +1,19 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 2.01beta2 (Duet 2 series) and 1.22beta1 (Duet 06/085)
-=============================================================
+Version 2.01 (Duet 2 series) and 1.22 (Duet 06/085)
+===================================================
 
 Upgrade notes:
-- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.2beta2. Use of DWC 1.21 or earlier may result in "Not authorized" disconnections if you have a password set. However, if your machine is a CoreXY then you may need to use DWC 1.21 for the axis jog buttons to work correctly.
+- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.2-dc42. Use of DWC 1.21 or earlier may result in "Not authorized" disconnections if you have a password set.
 
 Bug fixes:
+- The assumed Z position at power up had an undefined value
 - Non-movement commands were not correctly synchronised with movement commands when there were more than 8 non-movement commands interspersed with more than 2 seconds of movement
-- If M28/M29 was used in a macro file to then the commands between M28 and M29 were executed as well as being written to the target file
+- If M28/M29 was used in a macro file to then the commands between M28 and M29 were executed as well as being written to the target file. Also the M29 command to close the file was not recognised if it occurred right and the end of the macro file with no following newline character.
+- Fan RPM readings were incorrect
+- If additional axes were created on a delta printer, after they were homed the axis coordinate was incorrect
+- If retractprobe.g contained any movement commands, G32 worked but produced no output at the end of bed probing
 - If you used the jog buttons in DWC before homing the axes, and you didn't use M564 H0 in config.g, then as well as the "insufficient axes homed" error message, a stack underflow error message was produced
 - Neither M561 nor G29 S2 adjusted the user Z coordinate if bed compensation was previously active (G29 S2 did if you ran it twice)
 - Duet 06/085 only: fixed a buffer overflow in the Netbios responder code
@@ -17,23 +21,6 @@ Bug fixes:
 - Duet 2 series: when an under- or over-voltage event occurred, the VIN voltage reported was the current voltage, not the voltage when the event was recorded
 - When an axis was made visible and later hidden, subsequent move commands sometimes sent step commands incorrectly to the driver(s) associated with that axis. This could cause unwanted movement if the axis was still mapped to a real driver. If it was mapped to a dummy driver, it could still cause step errors to be recorded and/or some movements to be slowed down.
 - The longest loop time reported by M122 was distorted by the fact that M122 itself takes a long time to execute, due to the volume of output it produces and the need to synchronise with the Network task
-
-New features/changed behaviour:
-- On the Duet 2 Maestro, the 2 optional add-on drivers are now assumed to be TMC2224 with UART interface
-- When the Z probe type is set to 9 for BLTouch, the probe output is no longer filtered, for faster response
-- If an error occurs while reading or writing the SD card, the operation is retried. The M122 report includes the maximum number of retries that were done before a successful outcome.
-- On the Duet WiFi/Ethernet, at startup the firmware does additional retries when checking for the presence of a DueX2 or DueX5 and/or additional I/O expansion board
-- When a resurrect.g file is generated, it now includes G92 commands just before it invokes resurrect-prologue.g, to set the assumed head position to the point at which power was lost or the print was paused. This is to better handle printers for which homing Z is not possible when a print is already on the bed. Caution: this doesn't allow for any Z lift or other movement in the power fail script.
-- RTOS builds only: added a separate software watchdog to monitor the Heat task
-- RTOS builds only: in the M122 report, the software reset data now includes which task was active, and only owned mutexes are listed
-- Upgraded compiler to 2018-q2-update
-
-Version 2.01beta1 (Duet 2 series) and 1.21.2beta1 (Duet 06/085)
-===============================================================
-Upgrade notes:
-- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.2beta2. Use of DWC 1.21 or earlier may result in "Not authorized" disconnections if you have a password set.
-
-Bug fixes:
 - When using a mixing extruder, the feed rate for extruder-only moves was incorrect
 - If additional axes were not created in the order UVWABC then incorrect homing files might be run (thanks chrishamm)
 - On the Duet Maestro, the 7th stepper step/dir pin numbers were swapped
@@ -47,8 +34,20 @@ Bug fixes:
 - Fixed "2dtstc2diva=u" in debug printout
 - Where a G- or M-code command parameter was supposed to accept unsigned values only, if a negative value was supplied then it was accepted and converted to a large unsigned value
 
-New features and changed behaviour:
-- If the firmware gets stuck in a spin loop, the RTOS builds now discard LR and 16 stack dwords in order to get more useful information from the stack trace
+New features/changed behaviour:
+- Fans can now be named (thanks chrishamm)
+- The Z probe MOD pin can now be accessed as a GPIO pin
+- The maximum number of drivers per axis on the Duet WiFi/Ethernet has been increased form 4 to 5
+- Dumb drivers no longer default to being extruders by default on the Duet WiFi/Ethernet/Maestro
+- On the Duet 2 Maestro, the 2 optional add-on drivers are now assumed to be TMC2224 with UART interface
+- When the Z probe type is set to 9 for BLTouch, the probe output is no longer filtered, for faster response
+- If an error occurs while reading or writing the SD card, the operation is retried. The M122 report includes the maximum number of retries that were done before a successful outcome.
+- On the Duet WiFi/Ethernet, at startup the firmware does additional retries when checking for the presence of a DueX2 or DueX5 and/or additional I/O expansion board
+- When a resurrect.g file is generated, it now includes G92 commands just before it invokes resurrect-prologue.g, to set the assumed head position to the point at which power was lost or the print was paused. This is to better handle printers for which homing Z is not possible when a print is already on the bed. Caution: this doesn't allow for any Z lift or other movement in the power fail script.
+- RTOS builds only: added a separate software watchdog to monitor the Heat task
+- RTOS builds only: in the M122 report, the software reset data now includes which task was active, and only owned mutexes are listed
+- Upgraded compiler to 2018-q2-update
+- If the firmware gets stuck in a spin loop, the RTOS builds now saves data from the process stack instead oif the system stack, to provide more useful information
 - Increased M999 delay to 1 second
 - The report generated by M122 now includes a list of mutexes and their owners
 - Added SW_ENC pin on CONN_SD to available GPIO ports (thanks chrishamm)
