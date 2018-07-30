@@ -3512,11 +3512,12 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 	{
 		++numDestinations;
 	}
+#if HAS_LINUX_COMMS
 	if ((type & SpiMessage) != 0)
 	{
 		++numDestinations;
 	}
-
+#endif
 #ifdef SERIAL_AUX2_DEVICE
 	if ((type & AuxMessage) != 0)
 	{

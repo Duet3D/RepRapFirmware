@@ -845,7 +845,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	response->catf("]},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}",
 			(double)move->GetRequestedSpeed(), (double)move->GetTopSpeed());
 
- 	// Current tool number
+	// Current tool number
 	response->catf(",\"currentTool\":%d", GetCurrentToolNumber());
 
 	// Output notifications
@@ -1137,7 +1137,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 #endif
 
 	// Spindles
-	if (gCodes->GetMachineType() == MachineType::cnc)
+	if (gCodes->GetMachineType() == MachineType::cnc || type == 2)
 	{
 		int lastConfiguredSpindle = -1;
 		for (size_t spindle = 0; spindle < MaxSpindles; spindle++)
@@ -1257,6 +1257,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			}
 		}
 		response->catf(",\"volumes\":%u,\"mountedVolumes\":%u", NumSdCards, mountedCards);
+
+		// Machine mode
+		const char *machineMode = gCodes->GetMachineModeString();
+		response->cat(",\"mode\":");
+		response->EncodeString(machineMode, strlen(machineMode), false);
 
 		// Machine name
 		response->cat(",\"name\":");

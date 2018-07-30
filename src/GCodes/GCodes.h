@@ -195,6 +195,8 @@ public:
 	size_t GetVisibleAxes() const { return numVisibleAxes; }
 	size_t GetNumExtruders() const { return numExtruders; }
 
+	const char* GetMachineModeString() const;							// Get the name of the current machine mode
+
 	void FilamentError(size_t extruder, FilamentSensorStatus fstat);
 	void HandleHeaterFault(int heater);									// Respond to a heater fault
 
@@ -366,8 +368,6 @@ private:
 	bool IsCodeQueueIdle() const;										// Return true if the code queue is idle
 
 	void SaveResumeInfo(bool wasPowerFailure);
-
-	const char* GetMachineModeString() const;							// Get the name of the current machine mode
 
 	void NewMoveAvailable(unsigned int sl);								// Flag that a new move is available
 	void NewMoveAvailable();											// Flag that a new move is available
