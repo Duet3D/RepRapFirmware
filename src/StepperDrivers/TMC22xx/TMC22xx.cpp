@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include "ReprapFirmware.h"
+#include "RepRapFirmware.h"
 
 #if SUPPORT_TMC22xx
 
