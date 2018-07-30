@@ -1,73 +1,139 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 2.0beta3
-================
+Version 2.01 (Duet 2 series) and 1.22 (Duet 06/085)
+===================================================
+
 Upgrade notes:
-- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21. Get these and any other files needed (e.g. iap file and Windows device driver) from the 1.21 release area at https://github.com/dc42/RepRapFirmware/releases/tag/1.21.
-- When the machine mode is set to CNC, G0 moves are now done using the maximum travel speed of the machine in accordance with the NIST standard, and E and F parameters are no longer recognised.
+- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.2-dc42. Use of DWC 1.21 or earlier may result in "Not authorized" disconnections if you have a password set.
+
+Bug fixes:
+- The assumed Z position at power up had an undefined value
+- Non-movement commands were not correctly synchronised with movement commands when there were more than 8 non-movement commands interspersed with more than 2 seconds of movement
+- If M28/M29 was used in a macro file to then the commands between M28 and M29 were executed as well as being written to the target file. Also the M29 command to close the file was not recognised if it occurred right and the end of the macro file with no following newline character.
+- Fan RPM readings were incorrect
+- If additional axes were created on a delta printer, after they were homed the axis coordinate was incorrect
+- If retractprobe.g contained any movement commands, G32 worked but produced no output at the end of bed probing
+- If you used the jog buttons in DWC before homing the axes, and you didn't use M564 H0 in config.g, then as well as the "insufficient axes homed" error message, a stack underflow error message was produced
+- Neither M561 nor G29 S2 adjusted the user Z coordinate if bed compensation was previously active (G29 S2 did if you ran it twice)
+- Duet 06/085 only: fixed a buffer overflow in the Netbios responder code
+- Duet 2 series: when an under-voltage event occurred, spurious driver status warnings/errors were sometimes reported
+- Duet 2 series: when an under- or over-voltage event occurred, the VIN voltage reported was the current voltage, not the voltage when the event was recorded
+- When an axis was made visible and later hidden, subsequent move commands sometimes sent step commands incorrectly to the driver(s) associated with that axis. This could cause unwanted movement if the axis was still mapped to a real driver. If it was mapped to a dummy driver, it could still cause step errors to be recorded and/or some movements to be slowed down.
+- The longest loop time reported by M122 was distorted by the fact that M122 itself takes a long time to execute, due to the volume of output it produces and the need to synchronise with the Network task
+- When using a mixing extruder, the feed rate for extruder-only moves was incorrect
+- If additional axes were not created in the order UVWABC then incorrect homing files might be run (thanks chrishamm)
+- On the Duet Maestro, the 7th stepper step/dir pin numbers were swapped
+- If you paused a print during a G2/G3 arc move, on resuming it the arc centre was at the wrong place. This release defers the pause until the arc move is completed.
+- If a command that interrogated the network (e.g. M122 on the Duet WiFi) was sent from USB, PanelDue or another non-network channel, the network subsystem could be accessed by multiple tasks concurrently, causing network disconnections or other errors
+- When using a bltouch, between probe points the pin retracted, deployed and retracted again
+- M206 with no parameters didn't report the current axis offsets
+- During heating, the firmware returned M408 S0 responses to the PanelDue port even if the last request was M408 S2
+- Fixed VBUS detection (thanks chrishamm)
+- If the resume threshold in the M911 command was set higher than the supply voltage then the save-on-power-off mechanism never got primed. It will now prime at the auto-save threshold plus 0.5V or the resume threshold, whichever is lower.
+- Fixed "2dtstc2diva=u" in debug printout
+- Where a G- or M-code command parameter was supposed to accept unsigned values only, if a negative value was supplied then it was accepted and converted to a large unsigned value
+
+New features/changed behaviour:
+- Fans can now be named (thanks chrishamm)
+- The Z probe MOD pin can now be accessed as a GPIO pin
+- The maximum number of drivers per axis on the Duet WiFi/Ethernet has been increased form 4 to 5
+- Dumb drivers no longer default to being extruders by default on the Duet WiFi/Ethernet/Maestro
+- On the Duet 2 Maestro, the 2 optional add-on drivers are now assumed to be TMC2224 with UART interface
+- When the Z probe type is set to 9 for BLTouch, the probe output is no longer filtered, for faster response
+- If an error occurs while reading or writing the SD card, the operation is retried. The M122 report includes the maximum number of retries that were done before a successful outcome.
+- On the Duet WiFi/Ethernet, at startup the firmware does additional retries when checking for the presence of a DueX2 or DueX5 and/or additional I/O expansion board
+- When a resurrect.g file is generated, it now includes G92 commands just before it invokes resurrect-prologue.g, to set the assumed head position to the point at which power was lost or the print was paused. This is to better handle printers for which homing Z is not possible when a print is already on the bed. Caution: this doesn't allow for any Z lift or other movement in the power fail script.
+- RTOS builds only: added a separate software watchdog to monitor the Heat task
+- RTOS builds only: in the M122 report, the software reset data now includes which task was active, and only owned mutexes are listed
+- Upgraded compiler to 2018-q2-update
+- If the firmware gets stuck in a spin loop, the RTOS builds now saves data from the process stack instead oif the system stack, to provide more useful information
+- Increased M999 delay to 1 second
+- The report generated by M122 now includes a list of mutexes and their owners
+- Added SW_ENC pin on CONN_SD to available GPIO ports (thanks chrishamm)
+
+Version 2.0 (Duet 2 series) and 1.21.1 (other hardware)
+=============================================================
+Upgrade notes:
+- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.1. Use of older versions of DWC may result in "Not authorized" disconnections.
+- When the machine mode is set to CNC, G0 movement behaviour is changed to align more with the NIST standard (see 2.0RC1 release notes).
+- If you have a DHT temperature/humidity sensor connected to the CS6 pin on a Duet 2, the channel numbers (X parameter in the M305 commands) are changed to 405 (was 400) for the temperature sensor and 455 (was 401) for the humidity sensor.
+- If you have a simple switch-type filament monitor configured using M591, you need to add the S1 parameter to enable it
+- The number of GCode files in a single folder that can be displayed by DWC is lower than before. This was required to fix other issues. If you can't see all of your GCode files, or files that you have just uploaded, the workaround is to move some files into subfolders. If you can't see any subfolders in DWC, you may have to move the SD card to a PC to do this. Alternatively, use the backup facility in DWC to backup the files that you can see, then delete them; then you should be able to see the other files.
 
 New features and changed behaviour:
+- The M569 response when only the P parameter is given now includes chopper configuration register if it is a smart driver
+- Multiple DHT sensors are supported, connected to any of the 8 SPI daughter board chip select pins
+- The Duet 2 Maestro build now supports DHT sensors
+- Simple switch-type filament sensors can now be enabled/disabled using S1/S0 in the M591 command
+- If the HSMCI idle function times out, an error code bit is now set
+- If config.g is not found then config.g.bak is run instead of default.g
+- If an error occurs when accessing the SD card, the error message now includes an error code
+- Added S3 option to M20 to get file list including size, date/time etc.
+- rr_files, rr_filelist, M20 S2 and M20 S3 now provide for retrieving the list if files in chunks, using a "first" parameter in rr_files/rr_filelist or "R" parameter in M20 S2/S2, and a "next" field in the response
+- M502 now resets all firmware parameters back to the values in config.g except network parameters
+- RRF attempts to pass the estimated print time and simulated print time from GCode files to DWC and PanelDue
+- When M37 is used to simulate a file, at the end of a successful simulation the simulated print time is appended to the file unless parameter F0 is included in the M37 command
+- The default folder for the M36 command is now 0:/gcodes instead of 0:/
+- M144 S1 now sets the bed to Active mode. M144 with any other S parameter or no S parameter sets the bed to standby as before.
+- Added more functionality to 12864 displays on Duet 2 Maestro
 - Default stepper driver mode for TMC2224 drivers is now stealthchop2
 - Stepper driver mode for TMC2660 and TMC2224 drivers can now be set via the D parameter in M569
 - Stepper driver chopper control register can now be set via the C parameter in M569 - USE THIS	ONLY IF YOU KNOW WHAT YOU ARE DOING!
 - When Z probe type 0 is selected and DWC/PanelDue have prompted the user to jog Z, axis movement before homing is allowed
-
-Bug fixes:
-- If a network password was set, DWC disconnected with a "Not authorised" message after a large file was uploaded
-- If MaxReps got too high then a watchdog reset occurred. MaxReps has been replaced by a hiccup count.
-- M122 reported some parts of network status twice on Duet 2 Ethernet and Duet 2 Maestro
-- If a PT1000 sensor was configured using M305 but a thermistor was plugged in instead, the firmware reported semi-random high temperatures instead of an error
-- If a PT1000 sensor was configured using M305 and then M305 was used to change it back to a thermistor, it remained configured as a PT1000
-- If a delta printer failed to home then DWC might disconnect due to NaN values for the machine coordinates in the rr_status response 
-- The M105 response on a multi-tool system was not in the exact format that Octoprint required
-- Spindles are no longer reported in M408 responses or rr_status requests unless the machine mode is CNC
-- Excessive decimal places in some values in M408 responses and rr_status requests have been removed
-
-Version 2.0beta2
-================
-Upgrade notes: as for 2.0beta1
-
-Bug fixes:
-- DWC sometimes disconnected after uploading a GCode file
-- Reverted the behaviour of G0 commands to the pre-2.0 behaviour when the machine mode is FFF (i.e. the F parameter is recognised and the feed rate is shared with the G1 feed rate)
-- If a G1 command with extrusion was followed by a G0 command, the extrusion was repeated in the G0 command
-- When high microstepping was used, certain sequences of movement commands could lock up the movement system
-
-Version 2.0beta1
-================
-Upgrade notes:
-- Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21. Get these and any other files needed (e.g. iap file and Windows device driver) from the 1.21 release area at https://github.com/dc42/RepRapFirmware/releases/tag/1.21.
-- If you use G0 commands, see changed behaviour below.
-
-New features and changed behaviour:
-- G0 moves are now done using the maximum travel speed of the machine in accordance with the NIST standard. E and F parameters are no longer recognised on G0 commands.
+- When the machine mode is set to CNC, G0 moves are now done using the maximum travel speed of the machine in accordance with the NIST standard, and E and F parameters are no longer recognised.
 - M114 reports the user coordinates first and the machine coordinates at the end
-- Minimum jerk setting (M556) reduced from 1mm/sec to 0.1mm/sec
+- Minimum allowed jerk setting (M556) is reduced from 1mm/sec to 0.1mm/sec
 - When M500 is used a warning is given if M501 was not run in config.g
 - G2 and G3 no longer require all of X, Y, I, J to be specified. X or Y and I or J is sufficient.
 - The user coordinates are updated if G10 is used to change the offsets of the current tool
-- Added experimental Z probe type 10 (Z motor stall)
+- Added Z probe type 10 (Z motor stall)
 - Simulations can now be run when the printer is not homed
+- Multiple splindles are supported in CNC mode (thanks chrishamm)
 
 Bug fixes:
-- G1 E5 S1 on a delta no longer reports "Error: G0/G1: attempt to move delta motors to absolute positions"
-- If the print was paused because of driver stall detection, the driver numbers were not listed in the message
-- Duet Web Control clients that go to sleep without disconnecting first are timed out after 8 seconds
+- If getting file info for DWC or PanelDue timed out, it didn't close the file. This could lead to running out of open file entries.
+- The DHT sensor task ran out of stack space under some conditions
+- Corrected DHT start bit timing to avoid a bus conflict
+- Fixed unreliable DHT sensor reading in RTOS build, caused by call to micros()
+- Pausing between the segments of a segmented move didn't happen even if the jerk settings were high enough
+- Possible fix for incorrect extrusion in the first move after resuming from a pause
+- If filament monitors were deleted or the type changed, this could result in an exception
+- When step rate limiting occurred due to the speed and microstepping combination needing an excessive pulse rate, movement could become irregular
+- When the SD card was removed during a print it said 1 file was invalidated even if there were more
+- When the SD card was removed during a print, several "internal error" messages wree generated, but no "print abandoned" or similar message, and the heaters remain on
+- Emergency stop now turns off all spindles if the machine type is CNC, and the laser if the machine type is Laser
+- HTTP request parsing error recovery didn't work on the Duet 2 boards. One consequence was that connecting from Internet Explorer crashed the Duet.
+- Spurious stall warnings were sometimes generated when simulating a print
+- The print monitor didn't think the print had started until a nozzle had reached target temperature. This meant that layer counting didn't work on machines with no tool heaters, or when the tool temperatures were fluctuating.
+- The print monitor didn't count layers when simulating a print
+- Axes beyond Z were ignored in G2/G3 moves
+- DWC and the Duet could deadlock if the Duet ran out of output buffers
+- If the system ran out of output buffers when multiple tasks were generating output (e.g. DWC or Telnet combined with PanelDue or USB) then in rare cases the firmware would reboot
+- When high microstepping was used so that MaxReps got very high, certain sequences of movement commands could lock up the movement system. MaxReps has been replaced by a hiccup count.
+- M122 reported some parts of network status twice on Duet 2 Ethernet and Duet 2 Maestro
+- If a PT1000 sensor was configured using M305 but a thermistor was plugged in instead, the firmware reported semi-random high temperatures instead of an error
+- If a PT1000 sensor was configured using M305 and then M305 was used to change it back to a thermistor, it remained configured as a PT1000
+- If a delta printer failed to home then DWC might disconnect due to NaN values for the machine coordinates in the rr_status response
+- The M105 response on a multi-tool system was not in the exact format that Octoprint required
+- Excessive decimal places in some values in M408 responses and rr_status requests have been removed
+- G1 E moves with the S1 parameter (i.e. filament loading with extruder stall detection) on a delta reported "Error: G0/G1: attempt to move delta motors to absolute positions"
+- Duet Web Control clients that go to sleep without disconnecting first are timed out after 8 seconds (this was already happening on the Duet 06/085 but not on Duet 2 series)
 - VSSA fault detection was not working on the Duet Ethernet in firmware 1.21
 - If G30 was used to set an accurate Z height after mesh bed probing or loading a height map, if bed compensation was then cancelled then any Z offset from the height map remained. One consequence of this was that if bed probing was run again, the original height map Z offset was carried through to the new one, but the sign of the offset was reversed.
 
-Internal changes:
-- RepRapFirmware now uses a real time operating system kernel (FreeRTOS). Currently there are just three tasks: Main, Heat and Network. The tasks and their free stack space are listed in the M122 diagnostics report.
+Other changes:
+- RepRapFirmware 2.0 uses a real time operating system kernel (FreeRTOS). Currently there are just four tasks: Main, Heat, Network and DHT (if DHT sensors are configured). The tasks and their free stack space are listed in the M122 diagnostics report.
 - Custom SafeStrtod, SafeVsnprintf and related functions are used instead of C library strtod, vsnprintf etc. The replacements are thread safe and use less stack than the originals.
-- Output buffers reduced from 32 x 256b to 40 x 128b
+- nano-newlib is used instead of newlib
+- Incorporated chrishamm's changes to scanner support
 
 Version 1.21
 ============
 Upgrade notes:
 - The compatible DuetWiFiServer version is 1.21. If you are already running firmware 1.19 or later, you can install this before or after upgrading the main firmware, it doesn't matter.
 - The compatible Duet Web Control is 1.21. Install it after upgrading the main firmware.
-- On Cartesian and CoreXY printers, normal G0 and G1 moves are no longer allowed before the corresponding axes have been homed. In particular, if your homex.g, homey.g and homeall.g files raise Z a little at the start and lower it at the end, you will need to add the S2 parameter to those G1 Z moves. Otherwise the G1 Z move will be refused unless Z has already been homed and the homing macro will be terminated.
+- On Cartesian and CoreXY printers, normal G0 and G1 moves are no longer allowed before the corresponding axes have been homed. In particular, if your homex.g, homey.g and homeall.g files raise Z a little at the start and lower it at the end, you will need to add the S2 parameter to those G1 Z moves. Otherwise the G1 Z move will be refused unless Z has already been homed and the homing macro will be terminated. If you want to allow axis movement prior to homing, put M564 H0 in config.g.
 - The binary filename for the Duet WiFi and Duet Ethernet is now called Duet2CombinedFirmware.bin. However, your existing firmware version may expect it to be called DuetWiFiFirmware.bin or DuetEthernetFirmware.bin. For your convenience, this release includes copies of Duet2CombinedFirmware.bin with those names.
 - If you have a start.g macro file in the /sys folder of your SD card, remove or rename it, unless you want it to be run every time you start a print from SD card
 - See also the upgrade notes for version 1.20 if you are upgrading from a version earlier than that
@@ -176,7 +242,7 @@ Upgrade notes:
 - Recommended DuetWebControl version is 1.20RC3. until version 1.20 is available
 - Windows device driver versoin 1.19 remains compatible with this release
 - If you have a SCARA printer with nonzero crosstalk parameters (C parameters in the M669 command), you may need to adjust the crosstalk values
-- If you are using a Duet to control a RepRapPro Ormerod, Huxley Duo or Mendel 3 printer or any other printer that uses the Z probe to do X homing, you need to add line M574 X1 S2 to config.g.
+- If you are using a Duet to control a RepRapPro Ormerod, Huxley Duo or Mendel 3 printer or any other printer that uses the Z probe to do X homing, you need to remove the X parameter from the existing M574 command in config,g and add line M574 X1 S2.
 - If you are using a Duet 06 or 085 and you don't already set the P parameter in your G31 command, add P400 to that command to get the same behaviour as before, because the default is now 500.
 - If you are using PT100 sensors, make sure you don't have any additional parameters in your M305 commands for those heaters left over from when you were using thermistors. In particular, the R parameter now configures the reference resistor value on the PT100 interface board, and must be omitted or set to 400 when using the Duet3D PT100 daughter board.
 - The parameters to the M911 command (which configures power fail handling) have changed since version 1.19.2. If you use this command in config.g you will have to change it accordingly.
