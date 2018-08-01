@@ -3226,7 +3226,7 @@ void Platform::SetFanValue(size_t fan, float speed)
 void Platform::EnableSharedFan(bool enable)
 {
 	const size_t sharedFanNumber = NUM_FANS - 1;
-	fans[sharedFanNumber].Init((enable) ? COOLING_FAN_PINS[sharedFanNumber] : NoPin, FansHardwareInverted(sharedFanNumber));
+	fans[sharedFanNumber].Init((enable) ? COOLING_FAN_PINS[sharedFanNumber] : NoPin, FansHardwareInverted(sharedFanNumber), DefaultFanPwmFreq);
 }
 
 #endif

@@ -18,9 +18,10 @@ namespace DotStarLed
 	const unsigned int MaxChunkSize = 30;					// maximum number of LEDs we DMA to in one go (most strips have 30 LEDs/metre)
 
 	static unsigned int numRemaining = 0;					// how much of the current request remains after the current transfer
+	static unsigned int totalSent = 0;						// total amount of data sent since the start frame
 	static bool needStartFrame = true;						// true if we need to send a start frame with the next command
 	static bool busy = false;
-	static uint32_t chunkBuffer[MaxChunkSize + 2];			// start frame, one LED frame containing BGR values for each LED in the chunk, end frame
+	static uint32_t chunkBuffer[MaxChunkSize];
 
 	void Init()
 	{
@@ -45,7 +46,8 @@ namespace DotStarLed
 		DotStarUsart->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
 
 		// Initialise variables
-		numRemaining = 0;
+		numRemaining = totalSent = 0;
+		needStartFrame = true;
 		busy = false;
 	}
 
@@ -78,26 +80,48 @@ namespace DotStarLed
 			numLeds = numRemaining;												// we have come back to do another chunk
 		}
 
-		// Set up the data in the DMA buffer
-		const unsigned int thisChunk = min<unsigned int>(numLeds, MaxChunkSize);
-		numRemaining = numLeds - thisChunk;
-
+		// Set up the data in the DMA buffer.
+		// Sending at least 32 zero bits (start frame) tells the LEDs that this is new data starting with the first LED in the strip.
+		// The first 1 bit indicates the start of the data frame for the first LED.
+		// There is a half-bit delay in each LED before the data is shifted out to the next LED. This means that we need to send at least an extra N/2 bits of data,
+		// where N is the number of LEDs in the strip. The datasheet says to send 32 bits of 1 but this is only sufficient for up to 64 LEDs. Sending 1s can lead to a spurious
+		// white LED at the end if we don't provide data for all the LEDs. So instead we send 32 or more bits of zeros.
+		// See https://cpldcpu.wordpress.com/2014/11/30/understanding-the-apa102-superled/ for more.
+		unsigned int spaceLeft = MaxChunkSize;
 		uint32_t *p = chunkBuffer;
 		if (needStartFrame)
 		{
 			*p++ = 0;															// start frame
+			--spaceLeft;														// one less slot available for data
+			totalSent = 0;
 		}
+
+		// Can we fit the remaining data and stop bits in the buffer?
+		unsigned int numStopWordsNeeded = (following) ? 0 : min<unsigned int>((numLeds + totalSent + 63)/64, MaxChunkSize - 1);
+		unsigned int thisChunk;
+		if (numLeds + numStopWordsNeeded <= spaceLeft)
+		{
+			thisChunk = numLeds;
+		}
+		else
+		{
+			thisChunk = min<unsigned int>(spaceLeft, numLeds - 1);
+			numStopWordsNeeded = 0;
+		}
+
+		numRemaining = numLeds - thisChunk;
+		totalSent += thisChunk;
+		needStartFrame = (numRemaining == 0 && following == 0);
+
 		for (unsigned int i = 0; i < thisChunk; ++i)
 		{
 			// According to the Adafruit web site, current production uses the order BGR
 			*p++ = (brightness & 31) | 0xE0 | ((blue & 255) << 8) | ((green & 255) << 16) | ((red & 255) << 24);	// LED frame
 		}
-		needStartFrame = (numRemaining == 0 && following == 0);
 
-		if (needStartFrame)														// if this is the end of all the data
+		for (unsigned int i = 0; i < numStopWordsNeeded; ++i)
 		{
-			// I'm not sure that end frames are needed at all, but they may help to ensure that start frames are correctly recognised
-			*p++ = 0xFFFFFFFF;													// end frame
+			*p++ = 0;															// append some stop bits
 		}
 
 		// DMA the data

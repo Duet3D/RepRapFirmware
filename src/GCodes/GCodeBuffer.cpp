@@ -1145,14 +1145,17 @@ void GCodeBuffer::FileEnded()
 	}
 	else
 	{
-		Put('\n');					// append a newline in case the file didn't end with one
+		if (gcodeLineEnd != 0)				// if there is something in the buffer
+		{
+			Put('\n');						// append a newline in case the file didn't end with one
+		}
 		if (IsWritingFile())
 		{
 			bool gotM29 = false;
-			if (IsReady())			// if we have a complete command
+			if (IsReady())					// if we have a complete command
 			{
 				gotM29 = (GetCommandLetter() == 'M' && GetCommandNumber() == 29);
-				if (!gotM29)		// if it wasn't M29, write it to file
+				if (!gotM29)				// if it wasn't M29, write it to file
 				{
 					fileBeingWritten->Write(Buffer());
 					fileBeingWritten->Write('\n');
