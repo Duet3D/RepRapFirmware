@@ -426,14 +426,6 @@ public:
 	float Acceleration(size_t axisOrExtruder) const;
 	const float* Accelerations() const;
 	void SetAcceleration(size_t axisOrExtruder, float value);
-	float GetMaxPrintingAcceleration() const
-		{ return maxPrintingAcceleration; }
-	void SetMaxPrintingAcceleration(float acc)
-		{ maxPrintingAcceleration = acc; }
-	float GetMaxTravelAcceleration() const
-		{ return maxTravelAcceleration; }
-	void SetMaxTravelAcceleration(float acc)
-		{ maxTravelAcceleration = acc; }
 	float MaxFeedrate(size_t axisOrExtruder) const;
 	const float* MaxFeedrates() const;
 	void SetMaxFeedrate(size_t axisOrExtruder, float value);
@@ -738,8 +730,6 @@ private:
 	Pin endStopPins[DRIVES];
 	float maxFeedrates[DRIVES];
 	float accelerations[DRIVES];
-	float maxPrintingAcceleration;
-	float maxTravelAcceleration;
 	float driveStepsPerUnit[DRIVES];
 	float instantDvs[DRIVES];
 	float pressureAdvance[MaxExtruders];

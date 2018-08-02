@@ -199,6 +199,9 @@ void Platform::Init()
 	SetBoardType(BoardType::Auto);
 
 #ifdef PCCB
+	// Make sure the on-board TMC22xx drivers are disabled
+	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+
 	// Ensure that the main LEDs are turned off.
 	// The main LED output is active, just like a heater on the Duet 2 series.
 	// The secondary LED control dims the LED via the external controller when the output is high. So both outputs must be initialised high.
@@ -324,7 +327,6 @@ void Platform::Init()
 	ARRAY_INIT(accelerations, ACCELERATIONS);
 	ARRAY_INIT(driveStepsPerUnit, DRIVE_STEPS_PER_UNIT);
 	ARRAY_INIT(instantDvs, INSTANT_DVS);
-	maxPrintingAcceleration = maxTravelAcceleration = 10000.0;
 
 	// Z PROBE
 	zProbeType = ZProbeType::none;				// default is to use no Z probe
@@ -1880,23 +1882,29 @@ void Platform::InitialiseInterrupts()
 	NVIC_SetPriority(SysTick_IRQn, NvicPrioritySystick);		// set priority for tick interrupts
 #endif
 
-	// Set UART interrupt priorities
-#ifdef PCCB
-	NVIC_SetPriority(DriverUartIRQns[0], NvicPriorityDriversSerialTMC);
-	NVIC_SetPriority(DriverUartIRQns[1], NvicPriorityDriversSerialTMC);
-#else
-# if SAM4E || SAME70
-	NVIC_SetPriority(UART0_IRQn, NvicPriorityPanelDueUart);		// set priority for UART interrupt
-	NVIC_SetPriority(UART1_IRQn, NvicPriorityWiFiUart);			// set priority for WiFi UART interrupt
-# elif SAM4S
-	NVIC_SetPriority(UART1_IRQn, NvicPriorityPanelDueUart);		// set priority for UART interrupt
-# else
-	NVIC_SetPriority(UART_IRQn, NvicPriorityPanelDueUart);		// set priority for UART interrupt
-# endif
+	// Set PanelDue UART interrupt priority
+#ifdef SERIAL_AUX_DEVICE
+	SERIAL_AUX_DEVICE.setInterruptPriority(NvicPriorityPanelDueUart);
+#endif
+#ifdef SERIAL_AUX2_DEVICE
+	SERIAL_AUX2_DEVICE.setInterruptPriority(NvicPriorityPanelDueUart);
+#endif
 
-# if HAS_SMART_DRIVERS
-	NVIC_SetPriority(UART_TMC_DRV_IRQn, NvicPriorityDriversSerialTMC);
+#if HAS_WIFI_NETWORKING
+	NVIC_SetPriority(UART1_IRQn, NvicPriorityWiFiUart);			// set priority for WiFi UART interrupt
+#endif
+
+#if SUPPORT_TMC22xx
+# if TMC22xx_HAS_MUX
+	NVIC_SetPriority(TMC22xx_UART_IRQn, NvicPriorityDriversSerialTMC);	// set priority for TMC2660 SPI interrupt
+# else
+	NVIC_SetPriority(TMC22xxUartIRQns[0], NvicPriorityDriversSerialTMC);
+	NVIC_SetPriority(TMC22xxUartIRQns[1], NvicPriorityDriversSerialTMC);
 # endif
+#endif
+
+#if SUPPORT_TMC2660
+	NVIC_SetPriority(TMC2660_SPI_IRQn, NvicPriorityDriversSerialTMC);	// set priority for TMC2660 SPI interrupt
 #endif
 
 	// Timer interrupt for stepper motors

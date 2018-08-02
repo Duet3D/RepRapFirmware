@@ -140,9 +140,11 @@ private:
 	void RemoveDM(size_t drive);
 	void ReleaseDMs();
 	bool IsDecelerationMove() const;								// return true if this move is or have been might have been intended to be a deceleration-only move
+	bool IsAccelerationMove() const;								// return true if this move is or have been might have been intended to be an acceleration-only move
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const;
 	void CheckEndstops(Platform& platform);
 	float NormaliseXYZ();											// Make the direction vector unit-normal in XYZ
+	void AdjustAcceleration();										// Adjust the acceleration and deceleration to reduce ringing
 
 	static void DoLookahead(DDA *laDDA) __attribute__ ((hot));		// Try to smooth out moves in the queue
     static float Normalise(float v[], size_t dim1, size_t dim2);  	// Normalise a vector of dim1 dimensions to unit length in the first dim1 dimensions
@@ -175,6 +177,10 @@ private:
 		uint16_t flags;								// so that we can print all the flags at once for debugging
 	};
 
+#if SUPPORT_IOBITS
+	IoBits_t ioBits;						// port state required during this move (here because it is currently 16 bits)
+#endif
+
     EndstopChecks endStopsToCheck;			// Which endstops we are checking on this move
     AxesBitmap xAxes;						// Which axes are behaving as X axes
     AxesBitmap yAxes;						// Which axes are behaving as Y axes
@@ -186,11 +192,9 @@ private:
 	float directionVector[DRIVES];			// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;					// How long is the move in hypercuboid space
 	float acceleration;						// The acceleration to use
+	float deceleration;						// The deceleration to use
     float requestedSpeed;					// The speed that the user asked for
     float virtualExtruderPosition;			// the virtual extruder position at the end of this move, used for pause/resume
-
-    // These are used only in delta calculations
-    int32_t cKc;							// The Z movement fraction multiplied by Kc and converted to integer
 
     // These vary depending on how we connect the move with its predecessor and successor, but remain constant while the move is being executed
 	float startSpeed;
@@ -199,21 +203,31 @@ private:
 	float accelDistance;
 	float decelDistance;
 
-	// This is a temporary, used to keep track of the lookahead to avoid making recursive calls
-	float targetNextSpeed;					// The speed that the next move would like to start at
-
-	// These are calculated from the above and used in the ISR, so they are set up by Prepare()
-	uint32_t clocksNeeded;					// in clocks
-	uint32_t moveStartTime;					// clock count at which the move was started
-	uint32_t startSpeedTimesCdivA;			// the number of clocks it would have taken to reach the start speed from rest
-	uint32_t topSpeedTimesCdivAPlusDecelStartClocks;
-	int32_t extraAccelerationClocks;		// the additional number of clocks needed because we started the move at less than topSpeed. Negative after ReduceHomingSpeed has been called.
-
 	float proportionLeft;					// what proportion of the extrusion in the G1 or G0 move of which this is a part remains to be done after this segment is complete
+	uint32_t clocksNeeded;
 
-#if SUPPORT_IOBITS
-	IoBits_t ioBits;						// port state required during this move
-#endif
+	union
+	{
+		// Values that are needed only before Prepare is called
+		struct
+		{
+			float targetNextSpeed;				// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
+			float maxAcceleration;				// the maximum allowed acceleration for this move according to the limits set by M201
+		};
+
+		// Values that are not set or accessed before Prepare is called
+		struct
+		{
+			// These are calculated from the above and used in the ISR, so they are set up by Prepare()
+			uint32_t moveStartTime;				// clock count at which the move was started
+			uint32_t startSpeedTimesCdivA;		// the number of clocks it would have taken to reach the start speed from rest
+			uint32_t topSpeedTimesCdivDPlusDecelStartClocks;
+			int32_t extraAccelerationClocks;	// the additional number of clocks needed because we started the move at less than topSpeed. Negative after ReduceHomingSpeed has been called.
+
+			// These are used only in delta calculations
+		    int32_t cKc;						// The Z movement fraction multiplied by Kc and converted to integer
+		};
+	};
 
 #if DDA_LOG_PROBE_CHANGES
 	static bool probeTriggered;

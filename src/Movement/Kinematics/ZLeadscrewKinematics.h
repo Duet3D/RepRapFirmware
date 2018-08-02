@@ -26,7 +26,7 @@ public:
 private:
 	void AppendCorrections(const floatc_t corrections[], const StringRef& reply) const;
 
-	static const unsigned int MaxLeadscrews = 4;
+	static const unsigned int MaxLeadscrews = 8;			// some Folgertech FT5 printers have 8 bed adjusting screws
 
 	unsigned int numLeadscrews;
 	float leadscrewX[MaxLeadscrews], leadscrewY[MaxLeadscrews];

@@ -73,6 +73,8 @@ void Move::Init()
 	currentDda = nullptr;
 	stepErrors = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = numLookaheadErrors = 0;
+	maxPrintingAcceleration = maxTravelAcceleration = 10000.0;
+	drcEnabled = false;											// disable dynamic ringing cancellation
 
 	// Clear the transforms
 	SetIdentityTransform();
@@ -1282,6 +1284,20 @@ void Move::SetIdleTimeout(float timeout)
 bool Move::WriteResumeSettings(FileStore *f) const
 {
 	return kinematics->WriteResumeSettings(f) && (!usingMesh || f->Write("G29 S1\n"));
+}
+
+// Set the DRC frequency or disable DRC
+void Move::SetDRCfreq(float f)
+{
+	if (f >= 4.0 && f <= 10000.0)
+	{
+		drcPeriod = 1.0/f;
+		drcEnabled = true;
+	}
+	else
+	{
+		drcEnabled = false;
+	}
 }
 
 // For debugging

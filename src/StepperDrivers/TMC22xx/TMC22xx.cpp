@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include "ReprapFirmware.h"
+#include "RepRapFirmware.h"
 
 #if SUPPORT_TMC22xx
 
@@ -346,7 +346,7 @@ private:
 // Static data members of class TmcDriverState
 
 #if TMC22xx_HAS_MUX
-Uart * const TmcDriverState::uart = UART_TMC_DRV;
+Uart * const TmcDriverState::uart = UART_TMC22xx;
 #endif
 
 TmcDriverState * volatile TmcDriverState::currentDriver = nullptr;	// volatile because the ISR changes it
@@ -471,7 +471,7 @@ pre(!driversPowered)
 	}
 
 #if !TMC22xx_HAS_MUX
-	uart = DriverUarts[p_driverNumber];
+	uart = TMC22xxUarts[p_driverNumber];
 #endif
 
 	enabled = false;
@@ -715,27 +715,27 @@ inline void TmcDriverState::SetUartMux()
 {
 	if ((driverNumber & 0x01) != 0)
 	{
-		fastDigitalWriteHigh(DriverMuxPins[0]);
+		fastDigitalWriteHigh(TMC22xxMuxPins[0]);
 	}
 	else
 	{
-		fastDigitalWriteLow(DriverMuxPins[0]);
+		fastDigitalWriteLow(TMC22xxMuxPins[0]);
 	}
 	if ((driverNumber & 0x02) != 0)
 	{
-		fastDigitalWriteHigh(DriverMuxPins[1]);
+		fastDigitalWriteHigh(TMC22xxMuxPins[1]);
 	}
 	else
 	{
-		fastDigitalWriteLow(DriverMuxPins[1]);
+		fastDigitalWriteLow(TMC22xxMuxPins[1]);
 	}
 	if ((driverNumber & 0x04) != 0)
 	{
-		fastDigitalWriteHigh(DriverMuxPins[2]);
+		fastDigitalWriteHigh(TMC22xxMuxPins[2]);
 	}
 	else
 	{
-		fastDigitalWriteLow(DriverMuxPins[2]);
+		fastDigitalWriteLow(TMC22xxMuxPins[2]);
 	}
 }
 
@@ -816,11 +816,16 @@ inline void TmcDriverState::UartTmcHandler()
 
 #if TMC22xx_HAS_MUX
 
+#ifndef TMC22xx_UART_Handler
+# error TMC handler name not defined
+#endif
+
 // ISR for the single UART
-extern "C" void UART_TMC_DRV_Handler() __attribute__ ((hot));
-void UART_TMC_DRV_Handler()
+extern "C" void TMC22xx_UART_Handler() __attribute__ ((hot));
+
+void TMC22xx_UART_Handler()
 {
-	UART_TMC_DRV->UART_IDR = UART_IDR_ENDRX;			// disable the interrupt
+	UART_TMC22xx->UART_IDR = UART_IDR_ENDRX;			// disable the interrupt
 	TmcDriverState *driver = TmcDriverState::currentDriver;	// capture volatile variable
 	if (driver != nullptr)
 	{
@@ -856,27 +861,27 @@ namespace SmartDrivers
 		numTmc22xxDrivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
 
 		// Make sure the ENN pins are high
-		pinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
+		pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 
 #if TMC22xx_HAS_MUX
 		// Set up- the single UART that communicates with all TMC22xx drivers
-		ConfigurePin(GetPinDescription(UART_TMC_DRV_PINS));					// the pins are already set up for UART use in the pins table
+		ConfigurePin(GetPinDescription(TMC22xx_UART_PINS));					// the pins are already set up for UART use in the pins table
 
 		// Enable the clock to the UART
-		pmc_enable_periph_clk(ID_UART_TMC_DRV);
+		pmc_enable_periph_clk(ID_TMC22xx_UART);
 
 		// Set the UART baud rate, 8 bits, 2 stop bits, no parity
-		UART_TMC_DRV->UART_IDR = ~0u;
-		UART_TMC_DRV->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS;
-		UART_TMC_DRV->UART_MR = UART_MR_CHMODE_NORMAL | UART_MR_PAR_NO;
-		UART_TMC_DRV->UART_BRGR = VARIANT_MCK/(16 * DriversBaudRate);		// set baud rate
-		UART_TMC_DRV->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS | UART_CR_RSTSTA;
-		NVIC_EnableIRQ(UART_TMC_DRV_IRQn);
+		UART_TMC22xx->UART_IDR = ~0u;
+		UART_TMC22xx->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS;
+		UART_TMC22xx->UART_MR = UART_MR_CHMODE_NORMAL | UART_MR_PAR_NO;
+		UART_TMC22xx->UART_BRGR = VARIANT_MCK/(16 * DriversBaudRate);		// set baud rate
+		UART_TMC22xx->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS | UART_CR_RSTSTA;
+		NVIC_EnableIRQ(TMC22xx_UART_IRQn);
 
 		// Set up the multiplexer control pins as outputs
-		pinMode(DriverMuxPins[0], OUTPUT_LOW);
-		pinMode(DriverMuxPins[1], OUTPUT_LOW);
-		pinMode(DriverMuxPins[2], OUTPUT_LOW);
+		pinMode(TMC22xxMuxPins[0], OUTPUT_LOW);
+		pinMode(TMC22xxMuxPins[1], OUTPUT_LOW);
+		pinMode(TMC22xxMuxPins[2], OUTPUT_LOW);
 #endif
 
 		driversState = DriversState::noPower;
@@ -885,19 +890,19 @@ namespace SmartDrivers
 #if !TMC22xx_HAS_MUX
 			// Initialise the UART that controls this driver
 			// The pins are already set up for UART use in the pins table
-			ConfigurePin(GetPinDescription(DriverUartPins[drive]));
+			ConfigurePin(GetPinDescription(TMC22xxUartPins[drive]));
 
 			// Enable the clock to the UART
-			pmc_enable_periph_clk(DriverUartIds[drive]);
+			pmc_enable_periph_clk(TMC22xxUartIds[drive]);
 
 			// Set the UART baud rate, 8 bits, 2 stop bits, no parity
-			Uart * const uart = DriverUarts[drive];
+			Uart * const uart = TMC22xxUarts[drive];
 			uart->UART_IDR = ~0u;
 			uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS;
 			uart->UART_MR = UART_MR_CHMODE_NORMAL | UART_MR_PAR_NO;
 			uart->UART_BRGR = VARIANT_MCK/(16 * DriversBaudRate);		// set baud rate
 			uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS | UART_CR_RSTSTA;
-			NVIC_EnableIRQ(DriverUartIRQns[drive]);
+			NVIC_EnableIRQ(TMC22xxUartIRQns[drive]);
 #endif
 			driverStates[drive].Init(drive, driverSelectPins[drive]);	// axes are mapped straight through to drivers initially
 		}
@@ -1045,7 +1050,7 @@ namespace SmartDrivers
 
 				if (allInitialised)
 				{
-					digitalWrite(GlobalTmcEnablePin, LOW);
+					digitalWrite(GlobalTmc22xxEnablePin, LOW);
 					driversState = DriversState::ready;
 				}
 			}
@@ -1053,7 +1058,7 @@ namespace SmartDrivers
 		else
 		{
 			// We had power but we lost it
-			digitalWrite(GlobalTmcEnablePin, HIGH);			// disable the drivers
+			digitalWrite(GlobalTmc22xxEnablePin, HIGH);			// disable the drivers
 			if (TmcDriverState::currentDriver == nullptr)
 			{
 				TmcDriverState::currentDriver->AbortTransfer();

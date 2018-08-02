@@ -29,8 +29,8 @@ enum class KinematicsType : uint8_t
 	hangprinter,
 	polar,
 	coreXYUV,
-//	linearDeltaPlusZ,	// reserved for @sga, see https://forum.duet3d.com/topic/5775/aditional-carterian-z-axis-on-delta-printer
-//	rotaryDelta,		// not yet implemented
+	linearDeltaPlusZ,	// reserved for @sga, see https://forum.duet3d.com/topic/5775/aditional-carterian-z-axis-on-delta-printer
+	rotaryDelta,		// not yet implemented
 
 	unknown				// this one must be last!
 };
