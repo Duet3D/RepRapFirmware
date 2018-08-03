@@ -6,6 +6,7 @@ Version 2.01 (Duet 2 series) and 1.22 (Duet 06/085)
 
 Upgrade notes:
 - Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.2-dc42. Use of DWC 1.21 or earlier may result in "Not authorized" disconnections if you have a password set.
+- On the Duet WiFi and Duet Ethernet, in previous versions drivers 3 to 11 inclusive defaulted to being extruder drives. In this version, only drivers 2 to 9 inclusive default to extruder drives. This is to avoid issues when users try to change microstepping on all extruder drives. If you want to use drivers 10 and 11 as extruder drive,s you will have to assign them explicitly using M584. Also if have not used M584 to assign drives and you are listing all the extruder drives in a command (e.g. M906 E1000:1000:1000:1000:1000:1000:1000:1000:1000) then you will need to reduce the number of E values listed from 9 to 7.
 
 Bug fixes:
 - The assumed Z position at power up had an undefined value
