@@ -44,6 +44,7 @@ private:
 	float val;
 	float lastVal;
 	float minVal;
+	float maxVal;
 	float triggerTemperatures[2];
 	float lastPwm;
 	uint32_t blipTime;						// in milliseconds
