@@ -52,6 +52,10 @@ public:
 
 	bool ColdExtrude() const;									// Is cold extrusion allowed?
 	void AllowColdExtrude(bool b);								// Allow or deny cold extrusion
+	float GetExtrusionMinTemp() const;							// Get minimum extrusion temperature
+	float GetRetractionMinTemp() const;							// Get minimum retraction temperature
+	void SetExtrusionMinTemp(float t);							// Set minimum extrusion temperature
+	void SetRetractionMinTemp(float t);							// Set minimum retraction temperature
 
 	int8_t GetBedHeater(size_t index) const						// Get a hot bed heater number
 	pre(index < NumBedHeaters);
@@ -173,6 +177,8 @@ private:
 	bool active;												// Are we active?
 #endif
 
+	float extrusionMinTemp;										// Minimum temperature to allow regular extrusion
+	float retractionMinTemp;									// Minimum temperature to allow regular retraction
 	bool coldExtrude;											// Is cold extrusion allowed?
 	int8_t bedHeaters[NumBedHeaters];							// Indices of the hot bed heaters to use or -1 if none is available
 	int8_t chamberHeaters[NumChamberHeaters];					// Indices of the chamber heaters to use or -1 if none is available
@@ -190,6 +196,26 @@ inline bool Heat::ColdExtrude() const
 inline void Heat::AllowColdExtrude(bool b)
 {
 	coldExtrude = b;
+}
+
+inline float Heat::GetExtrusionMinTemp() const
+{
+	return extrusionMinTemp;
+}
+
+inline float Heat::GetRetractionMinTemp() const
+{
+	return retractionMinTemp;
+}
+
+inline void Heat::SetExtrusionMinTemp(float t)
+{
+	extrusionMinTemp = t;
+}
+
+inline void Heat::SetRetractionMinTemp(float t)
+{
+	retractionMinTemp = t;
 }
 
 inline int8_t Heat::GetBedHeater(size_t index) const

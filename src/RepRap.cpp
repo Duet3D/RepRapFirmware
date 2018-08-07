@@ -2146,7 +2146,7 @@ unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, uns
 	Tool * const tool = currentTool;
 	if (tool == nullptr)
 	{
-		// This should not happen, but if on tool is selected then don't allow any extruder movement
+		// This should not happen, but if no tool is selected then don't allow any extruder movement
 		return extrusions | retractions;
 	}
 
