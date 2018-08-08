@@ -1533,7 +1533,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 			// Finished a macro or finished processing config.g
 			fileInput->Reset(fd);
 			fd.Close();
-			if (runningConfigFile)
+			if (runningConfigFile && gb.MachineState().previous->previous == nullptr)
 			{
 				CopyConfigFinalValues(gb);
 				runningConfigFile = false;

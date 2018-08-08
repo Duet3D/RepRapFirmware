@@ -1930,7 +1930,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 					}
 
 					// Write delimiter
-					if (filesFound != 0)
+					if (filesFound > startAt)
 					{
 						bytesLeft -= response->cat(',');
 					}

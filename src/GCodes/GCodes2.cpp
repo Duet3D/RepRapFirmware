@@ -3967,6 +3967,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		result = UnloadFilament(gb, reply);
 		break;
 
+	case 703: // Configure Filament
+		if (reprap.GetCurrentTool() != nullptr)
+		{
+			if (reprap.GetCurrentTool()->GetFilament() != nullptr)
+			{
+				String<ScratchStringLength> scratchString;
+				scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, reprap.GetCurrentTool()->GetFilament()->GetName(), CONFIG_FILAMENT_G);
+				DoFileMacro(gb, scratchString.c_str(), false);
+			}
+		}
+		else
+		{
+			result = GCodeResult::error;
+			reply.copy("No tool selected");
+		}
+		break;
+
 #if SUPPORT_SCANNER
 	case 750: // Enable 3D scanner extension
 		reprap.GetScanner().Enable();

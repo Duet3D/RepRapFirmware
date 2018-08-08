@@ -575,6 +575,7 @@ private:
 	static constexpr const char* RETRACTPROBE_G = "retractprobe.g";
 	static constexpr const char* DefaultHeightMapFile = "heightmap.csv";
 	static constexpr const char* LOAD_FILAMENT_G = "load.g";
+	static constexpr const char* CONFIG_FILAMENT_G = "config.g";
 	static constexpr const char* UNLOAD_FILAMENT_G = "unload.g";
 	static constexpr const char* RESUME_AFTER_POWER_FAIL_G = "resurrect.g";
 	static constexpr const char* RESUME_PROLOGUE_G = "resurrect-prologue.g";
