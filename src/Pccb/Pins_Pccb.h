@@ -8,7 +8,12 @@
 #ifndef SRC_DUETM_PINS_DUETM_H_
 #define SRC_DUETM_PINS_DUETM_H_
 
-#define FIRMWARE_NAME "RepRapFirmware for PCCB"
+#ifdef PCCB_X5
+# define FIRMWARE_NAME "RepRapFirmware for PCCB+DueX5"
+#else
+# define FIRMWARE_NAME "RepRapFirmware for PCCB"
+#endif
+
 #define DEFAULT_BOARD_TYPE BoardType::PCCB_10
 constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define IAP_FIRMWARE_FILE	"PccbFirmware.bin"
@@ -21,8 +26,15 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1					// SD card socket is optional
-#define SUPPORT_TMC22xx			1
-#define TMC22xx_HAS_MUX			0
+
+#ifdef PCCB_X5
+# define SUPPORT_TMC2660		1
+# define TMC2660_USES_USART		0
+#else
+# define SUPPORT_TMC22xx		1
+# define TMC22xx_HAS_MUX		0
+#endif
+
 #define HAS_VOLTAGE_MONITOR		1
 #define HAS_VREF_MONITOR		1
 #define ACTIVE_LOW_HEAT_ON		1					// although we have no heaters, this matters because we treat the LEDs as heaters
@@ -38,9 +50,19 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 
 // The physical capabilities of the machine
 
+#ifdef PCCB_X5
+
+constexpr size_t DRIVES = 6;						// The maximum number of drives supported by the electronics
+constexpr size_t MaxSmartDrivers = 5;				// The maximum number of smart drivers
+# define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f }
+
+#else
+
 constexpr size_t DRIVES = 8;						// The maximum number of drives supported by the electronics
 constexpr size_t MaxSmartDrivers = 2;				// The maximum number of smart drivers
-#define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h }
+# define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h }
+
+#endif
 
 constexpr size_t Heaters = 2;						// The number of heaters in the machine. PCCB has no heaters, but we pretend that the LED pins are heaters.
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
@@ -63,15 +85,37 @@ constexpr size_t NUM_SERIAL_CHANNELS = 1;			// The number of serial IO channels 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // Drivers
-constexpr Pin GlobalTmcEnablePin = 1;				// The pin that drives ENN of all drivers
+constexpr Pin GlobalTmc22xxEnablePin = 1;			// The pin that drives ENN of all internal drivers
+
+#ifdef PCCB_X5
+
+constexpr Pin GlobalTmc2660EnablePin = 52;			// The pin that drives ENN of all drivers on the DueX5
+constexpr Pin ENABLE_PINS[DRIVES] = { 61, 35, 41, 55, 0, 64 };
+constexpr Pin STEP_PINS[DRIVES] = { 60, 38, 58, 56, 46, 50 };
+constexpr Pin DIRECTION_PINS[DRIVES] = { 17, 57, 54, 34, 1, 53 };
+
+Spi * const SPI_TMC2660 = SPI;
+constexpr uint32_t ID_TMC2660_SPI = ID_SPI;
+constexpr IRQn TMC2660_SPI_IRQn = SPI_IRQn;
+# define TMC2660_SPI_Handler	SPI_Handler
+
+// Pin assignments, using USART1 in SPI mode
+constexpr Pin TMC2660MosiPin = 13;					// PA13
+constexpr Pin TMC2660MisoPin = 12;					// PA12
+constexpr Pin TMC2660SclkPin = 14;					// PA14
+
+#else
+
 constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, 61, 35, 41, 55, 0, 64 };
 constexpr Pin STEP_PINS[DRIVES] = { 40, 43, 60, 38, 58, 56, 46, 50 };
 constexpr Pin DIRECTION_PINS[DRIVES] = { 8, 11, 17, 57, 54, 34, 1, 53 };
 
-Uart * const DriverUarts[MaxSmartDrivers] = { UART0, UART1 };
-constexpr uint32_t DriverUartIds[MaxSmartDrivers] = { ID_UART0, ID_UART1 };
-constexpr IRQn DriverUartIRQns[MaxSmartDrivers] = { UART0_IRQn, UART1_IRQn };
-constexpr Pin DriverUartPins[MaxSmartDrivers] = { APINS_UART0, APINS_UART1 };
+Uart * const TMC22xxUarts[MaxSmartDrivers] = { UART0, UART1 };
+constexpr uint32_t TMC22xxUartIds[MaxSmartDrivers] = { ID_UART0, ID_UART1 };
+constexpr IRQn TMC22xxUartIRQns[MaxSmartDrivers] = { UART0_IRQn, UART1_IRQn };
+constexpr Pin TMC22xxUartPins[MaxSmartDrivers] = { APINS_UART0, APINS_UART1 };
+
+#endif
 
 // Define the baud rate used to send/receive data to/from the drivers.
 // If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
@@ -89,7 +133,11 @@ const uint32_t TransferTimeout = 10;						// any transfer should complete within
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
+#ifdef PCCB_X5
+constexpr Pin END_STOP_PINS[DRIVES] = { 24, 25, 67, 63, NoPin, NoPin };
+#else
 constexpr Pin END_STOP_PINS[DRIVES] = { 24, 25, 67, 63, NoPin, NoPin, NoPin, NoPin };
+#endif
 
 // Heaters and thermistors
 constexpr Pin HEAT_ON_PINS[Heaters] = { 36, 59 };					// these are actually the LED control pins

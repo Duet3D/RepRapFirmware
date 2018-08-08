@@ -31,11 +31,11 @@
 #endif
 
 #if SUPPORT_TMC2660
-# include "StepperDrivers/TMC2660/TMC2660.h"
+# include "Movement/StepperDrivers/TMC2660.h"
 #endif
 
 #if SUPPORT_TMC22xx
-# include "StepperDrivers/TMC22xx/TMC22xx.h"
+# include "Movement/StepperDrivers/TMC22xx.h"
 #endif
 
 #if SUPPORT_12864_LCD
@@ -1922,28 +1922,31 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 204: // Set max travel and printing accelerations
 		{
+			Move& move = reprap.GetMove();
 			bool seen = false;
 			if (gb.Seen('S'))
 			{
 				// For backwards compatibility with old versions of Marlin (e.g. for Cura and the Prusa fork of slic3r), set both accelerations
 				const float acc = gb.GetFValue();
-				platform.SetMaxPrintingAcceleration(acc);
-				platform.SetMaxTravelAcceleration(acc);
+				move.SetMaxPrintingAcceleration(acc);
+				move.SetMaxTravelAcceleration(acc);
 				seen = true;
 			}
 			if (gb.Seen('P'))
 			{
-				platform.SetMaxPrintingAcceleration(gb.GetFValue());
+				move.SetMaxPrintingAcceleration(gb.GetFValue());
 				seen = true;
 			}
 			if (gb.Seen('T'))
 			{
-				platform.SetMaxTravelAcceleration(gb.GetFValue());
+				move.SetMaxTravelAcceleration(gb.GetFValue());
 				seen = true;
 			}
 			if (!seen)
 			{
-				reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f", (double)platform.GetMaxPrintingAcceleration(), (double)platform.GetMaxTravelAcceleration());
+				reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f%s",
+					(double)move.GetMaxPrintingAcceleration(), (double)move.GetMaxTravelAcceleration(),
+					(move.IsDRCenabled()) ? " (both currently ignored because DRC is enabled)" : "");
 			}
 		}
 		break;
@@ -3621,8 +3624,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 #endif
 
-	case 593: // Configure filament properties
-		// TODO: We may need this code later to restrict specific filaments to certain tools or to reset filament counters.
+	case 593: // Configure dynamic ringing cancellation
+		if (gb.Seen('F'))
+		{
+			reprap.GetMove().SetDRCfreq(gb.GetFValue());
+		}
+		else if (reprap.GetMove().IsDRCenabled())
+		{
+			reply.printf("Dynamic ringing cancellation at %.1fHz", (double)reprap.GetMove().GetDRCfreq());
+		}
+		else
+		{
+			reply.copy("Dynamic ringing cancellation is disabled");
+		}
 		break;
 
 	case 665: // Set delta configuration

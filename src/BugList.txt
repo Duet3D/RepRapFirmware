@@ -258,6 +258,7 @@ Bug fixes/investigations for 2.02beta3:
 Other:
 
 Planned for 2.02:
+- Still doesn't always find the DueX5, see https://forum.duet3d.com/topic/6239/unstable-after-firmware-upgrade/3. Is the Heat task affecting the timing? Need new I2C driver?
 - @wilriker PR for M106 PWM limit
 - WiFi continuous auto reconnect in client mode, or extra M552 parameter? See https://forum.duet3d.com/topic/5765/wifi-module-auto-reconnect
 - Better dead time measurement during auto tuning. Measure both turn-on and turn-off?

@@ -15,6 +15,7 @@
 #include "HangprinterKinematics.h"
 #include "PolarKinematics.h"
 #include "CoreXYUVKinematics.h"
+#include "RotaryDeltaKinematics.h"
 #include "RepRap.h"
 #include "Platform.h"
 #include "GCodes/GCodes.h"
@@ -143,8 +144,10 @@ const char* Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alrea
 {
 	switch (k)
 	{
+	case KinematicsType::linearDeltaPlusZ:	// not implemented yet
 	default:
 		return nullptr;
+
 	case KinematicsType::cartesian:
 		return new CartesianKinematics();
 	case KinematicsType::linearDelta:
@@ -163,6 +166,8 @@ const char* Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alrea
 		return new PolarKinematics();
 	case KinematicsType::coreXYUV:
 		return new CoreXYUVKinematics();
+	case KinematicsType::rotaryDelta:
+		return new RotaryDeltaKinematics();
 	}
 }
 

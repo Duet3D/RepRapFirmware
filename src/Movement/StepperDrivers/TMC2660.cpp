@@ -26,12 +26,6 @@ static size_t numTmc2660Drivers;
 
 static bool driversPowered = false;
 
-// Pin assignments, using USART1 in SPI mode
-const Pin DriversClockPin = 15;								// PB15/TIOA1
-const Pin DriversMosiPin = 22;								// PA13
-const Pin DriversMisoPin = 21;								// PA22
-const Pin DriversSclkPin = 23;								// PA23
-
 const int ChopperControlRegisterMode = 999;					// mode passed to get/set microstepping to indicate we want the chopper control register
 
 // The SPI clock speed is a compromise:
@@ -228,8 +222,13 @@ private:
 // State structures for all drivers
 static TmcDriverState driverStates[MaxSmartDrivers];
 
-// PDC address for the USART
-static Pdc * const usartPdc = usart_get_pdc_base(USART_TMC_DRV);
+// PDC address
+static Pdc * const spiPdc =
+#if TMC2660_USES_USART
+			usart_get_pdc_base(USART_TMC2660);
+#else
+			spi_get_pdc_base(SPI_TMC2660);
+#endif
 
 // Words to send and receive driver SPI data from/to
 volatile static uint32_t spiDataOut = 0;					// volatile because we care about when it is written
@@ -242,18 +241,18 @@ static TmcDriverState * volatile currentDriver = nullptr;	// volatile because th
 /*static*/ inline void TmcDriverState::SetupDMA(uint32_t outVal)
 {
 	// Faster code, not using the ASF
-	usartPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);			// disable the PDC
+	spiPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);		// disable the PDC
 
 	// SPI sends data MSB first, but the firmware uses little-endian mode, so we need to reverse the byte order
 	spiDataOut = cpu_to_be32(outVal << 8);
 
-	usartPdc->PERIPH_TPR = reinterpret_cast<uint32_t>(&spiDataOut);
-	usartPdc->PERIPH_TCR = 3;
+	spiPdc->PERIPH_TPR = reinterpret_cast<uint32_t>(&spiDataOut);
+	spiPdc->PERIPH_TCR = 3;
 
-	usartPdc->PERIPH_RPR = reinterpret_cast<uint32_t>(&spiDataIn);
-	usartPdc->PERIPH_RCR = 3;
+	spiPdc->PERIPH_RPR = reinterpret_cast<uint32_t>(&spiDataIn);
+	spiPdc->PERIPH_RCR = 3;
 
-	usartPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTEN | PERIPH_PTCR_TXTEN);			// enable the PDC
+	spiPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTEN | PERIPH_PTCR_TXTEN);			// enable the PDC
 }
 
 // Initialise the state of the driver and its CS pin
@@ -561,18 +560,37 @@ inline void TmcDriverState::StartTransfer()
 
 	// Kick off a transfer for that register
 	const irqflags_t flags = cpu_irq_save();			// avoid race condition
-	USART_TMC_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
+
+#if TMC2660_USES_USART
+	USART_TMC2660->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
+#else
+	SPI_TMC2660->SPI_CR = SPI_CR_SPIDIS;				// disable the SPI
+	(void)SPI_TMC2660->SPI_RDR;							// clear the receive buffer
+#endif
+
 	fastDigitalWriteLow(pin);							// set CS low
 	SetupDMA(regVal);									// set up the PDC
-	USART_TMC_DRV->US_IER = US_IER_ENDRX;				// enable end-of-transfer interrupt
-	USART_TMC_DRV->US_CR = US_CR_RXEN | US_CR_TXEN;		// enable transmitter and receiver
+
+#if TMC2660_USES_USART
+	USART_TMC2660->US_IER = US_IER_ENDRX;				// enable end-of-transfer interrupt
+	USART_TMC2660->US_CR = US_CR_RXEN | US_CR_TXEN;		// enable transmitter and receiver
+#else
+	SPI_TMC2660->SPI_IER = SPI_IER_ENDRX;				// enable end-of-transfer interrupt
+	SPI_TMC2660->SPI_CR = SPI_CR_SPIEN;					// enable SPI
+#endif
+
 	cpu_irq_restore(flags);
 }
 
 // ISR for the USART
-extern "C" void USART_TMC_DRV_Handler(void) __attribute__ ((hot));
 
-void USART_TMC_DRV_Handler(void)
+#ifndef TMC2660_SPI_Handler
+# error TMC handler name not defined
+#endif
+
+extern "C" void TMC2660_SPI_Handler(void) __attribute__ ((hot));
+
+void TMC2660_SPI_Handler(void)
 {
 	TmcDriverState *driver = currentDriver;				// capture volatile variable
 	if (driver != nullptr)
@@ -592,7 +610,13 @@ void USART_TMC_DRV_Handler(void)
 	}
 
 	// Driver power is down or there is no current driver, so stop polling
-	USART_TMC_DRV->US_IDR = US_IDR_ENDRX;
+
+#if TMC2660_USES_USART
+	USART_TMC2660->US_IDR = US_IDR_ENDRX;
+#else
+	SPI_TMC2660->SPI_IDR = SPI_IDR_ENDRX;
+#endif
+
 	currentDriver = nullptr;							// signal that we are not waiting for an interrupt
 }
 
@@ -607,32 +631,49 @@ namespace SmartDrivers
 		numTmc2660Drivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
 
 		// Make sure the ENN pins are high
-		pinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
+		pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
 
 		// The pins are already set up for SPI in the pins table
-		ConfigurePin(GetPinDescription(DriversMosiPin));
-		ConfigurePin(GetPinDescription(DriversMisoPin));
-		ConfigurePin(GetPinDescription(DriversSclkPin));
+		ConfigurePin(GetPinDescription(TMC2660MosiPin));
+		ConfigurePin(GetPinDescription(TMC2660MisoPin));
+		ConfigurePin(GetPinDescription(TMC2660SclkPin));
 
-		// Enable the clock to the USART
-		pmc_enable_periph_clk(ID_USART_TMC_DRV);
+		// Enable the clock to the USART or SPI
+		pmc_enable_periph_clk(ID_TMC2660_SPI);
 
+#if TMC2660_USES_USART
 		// Set USART_EXT_DRV in SPI mode, with data changing on the falling edge of the clock and captured on the rising edge
-		USART_TMC_DRV->US_IDR = ~0u;
-		USART_TMC_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;
-		USART_TMC_DRV->US_MR = US_MR_USART_MODE_SPI_MASTER
+		USART_TMC2660->US_IDR = ~0u;
+		USART_TMC2660->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;
+		USART_TMC2660->US_MR = US_MR_USART_MODE_SPI_MASTER
 						| US_MR_USCLKS_MCK
 						| US_MR_CHRL_8_BIT
 						| US_MR_CHMODE_NORMAL
 						| US_MR_CPOL
 						| US_MR_CLKO;
-		USART_TMC_DRV->US_BRGR = VARIANT_MCK/DriversSpiClockFrequency;		// set SPI clock frequency
-		USART_TMC_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
+		USART_TMC2660->US_BRGR = VARIANT_MCK/DriversSpiClockFrequency;		// set SPI clock frequency
+		USART_TMC2660->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
 
 		// We need a few microseconds of delay here for the USART to sort itself out before we send any data,
 		// otherwise the processor generates two short reset pulses on its own NRST pin, and resets itself.
 		// 2016-07-07: removed this delay, because we no longer send commands to the TMC2660 drivers immediately.
 		//delay(10);
+#else
+		// Set up the SPI interface with data changing on the falling edge of the clock and captured on the rising edge
+		spi_reset(SPI_TMC2660);										// this clears the transmit and receive registers and puts the SPI into slave mode
+		SPI_TMC2660->SPI_MR = SPI_MR_MSTR							// master mode
+						| SPI_MR_MODFDIS							// disable fault detection
+						| SPI_MR_PCS(0);							// fixed peripheral select
+
+		// Set SPI mode, clock frequency, CS active after transfer, delay between transfers
+		const uint16_t baud_div = (uint16_t)spi_calc_baudrate_div(DriversSpiClockFrequency, SystemCoreClock);
+		const uint32_t csr = SPI_CSR_SCBR(baud_div)					// Baud rate
+						| SPI_CSR_BITS_8_BIT						// Transfer bit width
+						| SPI_CSR_DLYBCT(0)      					// Transfer delay
+						| SPI_CSR_CSAAT								// Keep CS low after transfer in case we are slow in writing the next byte
+						| SPI_CSR_CPOL;								// clock high between transfers
+		SPI_TMC2660->SPI_CSR[0] = csr;
+#endif
 
 		driversPowered = false;
 		for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
@@ -739,7 +780,7 @@ namespace SmartDrivers
 			if (!wasPowered)
 			{
 				// Power to the drivers has been provided or restored, so we need to enable and re-initialise them
-				digitalWrite(GlobalTmcEnablePin, LOW);
+				digitalWrite(GlobalTmc2660EnablePin, LOW);
 				delayMicroseconds(10);
 
 				for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
@@ -750,20 +791,20 @@ namespace SmartDrivers
 			if (currentDriver == nullptr && numTmc2660Drivers != 0)
 			{
 				// Kick off the first transfer
-				NVIC_EnableIRQ(UART_TMC_DRV_IRQn);
+				NVIC_EnableIRQ(TMC2660_SPI_IRQn);
 				driverStates[0].StartTransfer();
 			}
 		}
 		else if (wasPowered)
 		{
-			digitalWrite(GlobalTmcEnablePin, HIGH);			// disable the drivers
+			digitalWrite(GlobalTmc2660EnablePin, HIGH);			// disable the drivers
 		}
 	}
 
 	// This is called from the tick ISR, possibly while Spin (with powered either true or false) is being executed
 	void TurnDriversOff()
 	{
-		digitalWrite(GlobalTmcEnablePin, HIGH);				// disable the drivers
+		digitalWrite(GlobalTmc2660EnablePin, HIGH);				// disable the drivers
 		driversPowered = false;
 	}
 
