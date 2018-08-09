@@ -2266,15 +2266,29 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		SetPidParameters(gb, 1, reply);
 		break;
 
-	case 302: // Allow, deny or report cold extrudes
-		if (gb.Seen('P'))
+	case 302: // Allow, deny or report cold extrudes and configure minimum extrusion/retraction temps
 		{
-			reprap.GetHeat().AllowColdExtrude(gb.GetIValue() > 0);
-		}
-		else
-		{
-			reply.printf("Cold extrusion is %s, use M302 P[1/0] to allow/deny it",
-					reprap.GetHeat().ColdExtrude() ? "allowed" : "denied");
+			bool seen = false;
+			if (gb.Seen('P'))
+			{
+				seen = true;
+				reprap.GetHeat().AllowColdExtrude(gb.GetIValue() > 0);
+			}
+			if (gb.Seen('S'))
+			{
+				seen = true;
+				reprap.GetHeat().SetExtrusionMinTemp(gb.GetFValue());
+			}
+			if (gb.Seen('R'))
+			{
+				seen = true;
+				reprap.GetHeat().SetRetractionMinTemp(gb.GetFValue());
+			}
+			if (!seen)
+			{
+				reply.printf("Cold extrusion is %s (use M302 P[1/0] to allow/deny it), min. extrusion temp is %.1f, min. retraction temp is %.1f",
+						reprap.GetHeat().ColdExtrude() ? "allowed" : "denied", (double)reprap.GetHeat().GetExtrusionMinTemp(), (double)reprap.GetHeat().GetRetractionMinTemp());
+			}
 		}
 		break;
 

@@ -288,7 +288,7 @@ bool Tool::AllHeatersAtHighTemperature(bool forExtrusion) const
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
 		const float temperature = reprap.GetHeat().GetTemperature(heaters[heater]);
-		if (temperature < HOT_ENOUGH_TO_RETRACT || (temperature < HOT_ENOUGH_TO_EXTRUDE && forExtrusion))
+		if (temperature < reprap.GetHeat().GetRetractionMinTemp() || (forExtrusion && temperature < reprap.GetHeat().GetExtrusionMinTemp()))
 		{
 			return false;
 		}

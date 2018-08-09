@@ -149,6 +149,8 @@ void Heat::Init()
 	DhtSensorHardwareInterface::InitStatic();
 #endif
 
+	extrusionMinTemp = HOT_ENOUGH_TO_EXTRUDE;
+	retractionMinTemp = HOT_ENOUGH_TO_RETRACT;
 	coldExtrude = false;
 
 #ifdef RTOS
