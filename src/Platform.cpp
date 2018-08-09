@@ -3001,6 +3001,23 @@ void Platform::DisableAllDrives()
 	}
 }
 
+#if HAS_SMART_DRIVERS
+// Check if at least one driver is NOT in state disabled
+bool Platform::IsAnyDriverActive(unsigned int board) const
+{
+	const size_t firstDriver = board * 5;
+	const size_t lastDriver = min<size_t>(firstDriver + 5, MaxSmartDrivers);
+	for (size_t driver = firstDriver; driver < lastDriver; ++driver)
+	{
+		if (driverState[driver] != DriverStatus::disabled)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+#endif
+
 // Set drives to idle hold if they are enabled. If a drive is disabled, leave it alone.
 // Must not be called from an ISR, or with interrupts disabled.
 void Platform::SetDriversIdle()
@@ -4426,7 +4443,8 @@ float Platform::GetTmcDriversTemperature(unsigned int board) const
 	const uint16_t mask = ((1u << 5) - 1) << (5 * board);			// there are 5 drivers on each board
 	return ((temperatureShutdownDrivers & mask) != 0) ? 150.0
 			: ((temperatureWarningDrivers & mask) != 0) ? 100.0
-				: 0.0;
+				: IsAnyDriverActive(board) ? 40.0
+					: 0.0;
 }
 
 #endif
