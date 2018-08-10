@@ -1,6 +1,29 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.02beta1
+=================
+
+Upgrade notes:
+- **Very important!** If you use M452 to put your machine into Laser mode, you must change all S parameters in G1 commands in homing files etc. by H parameters. This is because S is now used to control laser power.
+- Duet Web Control version 1.22.1 is recommended. For the Duet WiFi, DuetWiFiServer.bin version 1.21 remains compatible.
+
+New features and changed behaviour:
+- Dynamic acceleration control/dynamic ringing cancellation is supported. Use M593 to configure it.
+- When switched into Laser mode (M452), the S parameter on G0 and G1 commands sets the laser power
+- The primary parameter letter used to control the type of a G0 or G1 move has been changed from S to H. This is because S is the standard parameter to control laser power on a laser cutter or engraver. However, unless you use M452 to put the firmware into Laser mode, you can continue to use S to set the move type.
+- If you set the motor idle current percentage to 0 in the M906 command, all drives will be disabled when all motors have been idle for the idle timeout and all axes will be flagged as not homed.
+- The M569 accepts a new F parameter for the off-time. Valid values are 1 to 15. If you choose 1 then the blanking time may be adjusted too in order to run the drivers within their specifications.
+- The M106 command supports a new X parameter to set the maximum allowed fan PWM (thanks @wikriker)
+- The M302 command now allows the minimum extrusion and retraction temperatures to be configured (thanks @wikriker)
+- The total number of axes is now passed to DWC and PanelDue as well as the number of visible axes
+
+Bug fixes:
+- I2C errors sometimes occurred due to task switching in the middle of ans I2C transaction
+- The E parameter was ignored in G0 commands
+- Fixed bad JSON response when 'first' parameter of rr_filelist HTML command is non-zero
+- M106 Snn commands with no P parameter failed if fan 0 had been disabled but the print cooling fan was mapped to another fan in the current tool definition
+
 Version 2.01 (Duet 2 series) and 1.22 (Duet 06/085)
 ===================================================
 
