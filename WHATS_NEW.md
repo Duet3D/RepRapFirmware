@@ -18,6 +18,7 @@ New features and changed behaviour:
 - The M106 command supports a new X parameter to set the maximum allowed fan PWM (thanks @wikriker)
 - The M302 command now allows the minimum extrusion and retraction temperatures to be configured (thanks @wikriker)
 - The total number of axes is now passed to DWC and PanelDue as well as the number of visible axes
+- Attempts to use M569 to set disallowed combinations of TOFF and TBL in the chopper control register of TMC2660 or TMC22xx drivers are rejected
 - Added M703 support (thanks chrishamm)
 
 Bug fixes:
