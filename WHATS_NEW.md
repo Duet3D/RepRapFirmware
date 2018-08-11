@@ -14,11 +14,13 @@ New features and changed behaviour:
 - When switched into Laser mode (M452), the S parameter on G0 and G1 commands sets the laser power
 - The primary parameter letter used to control the type of a G0 or G1 move has been changed from S to H. This is because S is the standard parameter to control laser power on a laser cutter or engraver. However, unless you use M452 to put the firmware into Laser mode, you can continue to use S to set the move type.
 - If you set the motor idle current percentage to 0 in the M906 command, all drives will now be disabled when all motors have been idle for the idle timeout and all axes will be flagged as not homed.
-- The M569 accepts a new F parameter for the off-time. Valid values are 1 to 15. If you choose 1 then the blanking time may be adjusted too in order to run the drivers within their specifications.
-- The M106 command supports a new X parameter to set the maximum allowed fan PWM (thanks @wikriker)
-- The M302 command now allows the minimum extrusion and retraction temperatures to be configured (thanks @wikriker)
-- The total number of axes is now passed to DWC and PanelDue as well as the number of visible axes
+- The M569 accepts a new F parameter for the off-time. Valid values are 1 to 15. 
 - Attempts to use M569 to set disallowed combinations of TOFF and TBL in the chopper control register of TMC2660 or TMC22xx drivers are rejected
+- The M106 command supports a new X parameter to set the maximum allowed fan PWM (thanks @wikriker)
+- The M106 command supports a new A parameter to map the fan to a different fan output or a heater output, or to re-enable a disabled fan
+- The M302 command now allows the minimum extrusion and retraction temperatures to be configured (thanks @wikriker)
+- On Duet Ethernet and Duet Maestro the physical link speed and half/full duplex status is included in the Network section of the M122 report
+- The total number of axes is now passed to DWC and PanelDue as well as the number of visible axes
 - Added M703 support (thanks chrishamm)
 
 Bug fixes:
@@ -28,6 +30,7 @@ Bug fixes:
 - Fixed bad JSON response when the 'first' parameter of a rr_filelist HTML command was non-zero
 - M106 Snn commands with no P parameter failed if fan 0 had been disabled but the print cooling fan was mapped to another fan in the current tool definition
 - If config.g invoked a macro then final values were copied to GCode sources too early and a subsequent M501 command wasn't acted on (thanks chrishamm)
+- If an emergency stop occurred during execution of a macro, an internal seek error message was sometimes generated. Emergency stop now closes any active print files and macro files.
 
 Version 2.01 (Duet 2 series) and 1.22 (Duet 06/085)
 ===================================================
