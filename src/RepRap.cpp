@@ -460,7 +460,7 @@ void RepRap::EmergencyStop()
 		break;
 
 	case MachineType::laser:
-		platform->SetLaserPwm(0.0);
+		platform->SetLaserPwm(0);
 		break;
 
 	default:
@@ -485,6 +485,7 @@ void RepRap::EmergencyStop()
 		platform->DisableAllDrives();
 	}
 
+	gCodes->EmergencyStop();
 	platform->StopLogging();
 }
 
@@ -1195,10 +1196,10 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		// Endstops
 		uint32_t endstops = 0;
-		const size_t totalAxes = gCodes->GetTotalAxes();
+		const size_t numTotalAxes = gCodes->GetTotalAxes();
 		for (size_t drive = 0; drive < DRIVES; drive++)
 		{
-			if (drive < totalAxes)
+			if (drive < numTotalAxes)
 			{
 				const EndStopHit es = platform->Stopped(drive);
 				if (es == EndStopHit::highHit || es == EndStopHit::lowHit)
@@ -1215,7 +1216,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"endstops\":%" PRIu32, endstops);
 
 		// Firmware name, machine geometry and number of axes
-		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"axisNames\":\"%s\"", FIRMWARE_NAME, move->GetGeometryString(), numVisibleAxes, gCodes->GetAxisLetters());
+		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\"",
+			FIRMWARE_NAME, move->GetGeometryString(), numVisibleAxes, numTotalAxes, gCodes->GetAxisLetters());
 
 		// Total and mounted volumes
 		size_t mountedCards = 0;
@@ -1751,8 +1753,8 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	else if (type == 3)
 	{
 		// Add the static fields
-		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"axisNames\":\"%s\",\"volumes\":%u,\"numTools\":%u,\"myName\":",
-						move->GetGeometryString(), numVisibleAxes, gCodes->GetAxisLetters(), NumSdCards, GetNumberOfContiguousTools());
+		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\",\"volumes\":%u,\"numTools\":%u,\"myName\":",
+						move->GetGeometryString(), numVisibleAxes, gCodes->GetTotalAxes(), gCodes->GetAxisLetters(), NumSdCards, GetNumberOfContiguousTools());
 		response->EncodeString(myName.c_str(), myName.Capacity(), false);
 		response->cat(",\"firmwareName\":");
 		response->EncodeString(FIRMWARE_NAME, strlen(FIRMWARE_NAME), false);
@@ -1823,7 +1825,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 					}
 
 					// Write separator and filename
-					if (filesFound > startAt)
+					if (filesFound != startAt)
 					{
 						bytesLeft -= response->cat(',');
 					}
@@ -1895,7 +1897,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 					}
 
 					// Write delimiter
-					if (filesFound != 0)
+					if (filesFound != startAt)
 					{
 						bytesLeft -= response->cat(',');
 					}

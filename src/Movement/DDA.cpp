@@ -239,8 +239,8 @@ void DDA::Init()
 	virtualExtruderPosition = 0;
 	filePos = noFilePosition;
 
-#if SUPPORT_IOBITS
-	ioBits = 0;
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	laserPwmOrIoBits.Clear();
 #endif
 }
 
@@ -407,7 +407,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	goingSlow = false;
 
 #if SUPPORT_IOBITS
-	ioBits = nextMove.ioBits;
+	laserPwmOrIoBits = nextMove.laserPwmOrIoBits;
 #endif
 
 	// If it's a Z probing move, limit the Z acceleration to better handle nozzle-contact probes
@@ -568,8 +568,19 @@ bool DDA::Init(const float_t adjustments[DRIVES])
 	endCoordinatesValid = prev->endCoordinatesValid;
 	goingSlow = false;
 
-#if SUPPORT_IOBITS
-	ioBits = prev->ioBits;
+#if SUPPORT_LASER && SUPPORT_IOBITS
+	if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
+	{
+		laserPwmOrIoBits.Clear();
+	}
+	else
+	{
+		laserPwmOrIoBits = prev->laserPwmOrIoBits;
+	}
+#elif SUPPORT_LASER
+	laserPwmOrIoBits.Clear();
+#elif SUPPORT_IOBITS
+	laserPwmOrIoBits = prev->laserPwmOrIoBits;
 #endif
 
 	// 4. Normalise the direction vector and compute the amount of motion.
@@ -1118,6 +1129,14 @@ void DDA::Prepare(uint8_t simMode)
 		AdjustAcceleration();
 	}
 
+#if SUPPORT_LASER
+	if (topSpeed < requestedSpeed && reprap.GetGCodes().GetMachineType() == MachineType::laser)
+	{
+		// Scale back the laser power according to the actual speed
+		laserPwmOrIoBits.laserPwm = (laserPwmOrIoBits.laserPwm * topSpeed)/requestedSpeed;
+	}
+#endif
+
 	PrepParams params;
 	params.decelStartDistance = totalDistance - decelDistance;
 
@@ -1495,6 +1514,16 @@ pre(state == frozen)
 
 	if (firstDM != nullptr)
 	{
+
+#if SUPPORT_LASER
+		// Deal with laser power
+		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
+		{
+			// Ideally we should ramp up the laser power as the machine accelerates, but for now we don't.
+			reprap.GetPlatform().SetLaserPwm(laserPwmOrIoBits.laserPwm);
+		}
+#endif
+
 		unsigned int extrusions = 0, retractions = 0;		// bitmaps of extruding and retracting drives
 		const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 		for (size_t i = 0; i < DRIVES; ++i)

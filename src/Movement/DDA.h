@@ -84,9 +84,13 @@ public:
 	uint32_t GetClocksNeeded() const { return clocksNeeded; }
 	bool IsGoodToPrepare() const;
 
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	LaserPwmOrIoBits GetLaserPwmOrIoBits() const { return laserPwmOrIoBits; }
+#endif
+
 #if SUPPORT_IOBITS
 	uint32_t GetMoveStartTime() const { return moveStartTime; }
-	IoBits_t GetIoBits() const { return ioBits; }
+	IoBits_t GetIoBits() const { return laserPwmOrIoBits.ioBits; }
 #endif
 
 #if HAS_SMART_DRIVERS
@@ -177,8 +181,8 @@ private:
 		uint16_t flags;								// so that we can print all the flags at once for debugging
 	};
 
-#if SUPPORT_IOBITS
-	IoBits_t ioBits;						// port state required during this move (here because it is currently 16 bits)
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	LaserPwmOrIoBits laserPwmOrIoBits;		// laser PWM required or port state required during this move (here because it is currently 16 bits)
 #endif
 
     EndstopChecks endStopsToCheck;			// Which endstops we are checking on this move

@@ -44,6 +44,8 @@ namespace SmartDrivers
 	DriverMode GetDriverMode(size_t driver);
 	bool SetChopperControlRegister(size_t driver, uint32_t ccr);
 	uint32_t GetChopperControlRegister(size_t driver);
+	bool SetOffTime(size_t driver, uint32_t ccr);
+	uint32_t GetOffTime(size_t driver);
 	void SetStallThreshold(size_t driver, int sgThreshold);
 	void SetStallFilter(size_t driver, bool sgFilter);
 	void SetStallMinimumStepsPerSecond(size_t driver, unsigned int stepsPerSecond);

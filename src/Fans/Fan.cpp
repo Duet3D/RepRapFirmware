@@ -11,7 +11,7 @@
 #include "GCodes/GCodeBuffer.h"
 #include "Heating/Heat.h"
 
-void Fan::Init(Pin p_pin, bool hwInverted, PwmFrequency p_freq)
+void Fan::Init(Pin p_pin, LogicalPin lp, bool hwInverted, PwmFrequency p_freq)
 {
 	isConfigured = false;
 	val = lastVal = 0.0;
@@ -20,6 +20,7 @@ void Fan::Init(Pin p_pin, bool hwInverted, PwmFrequency p_freq)
 	blipTime = 100;				// 100ms fan blip
 	freq = p_freq;
 	pin = p_pin;
+	logicalPin = lp;
 	hardwareInverted = hwInverted;
 	inverted = blipping = false;
 	heatersMonitored = 0;
@@ -38,16 +39,36 @@ void Fan::Init(Pin p_pin, bool hwInverted, PwmFrequency p_freq)
 // 2. Don't process the R parameter, but if it is present don't print the existing configuration.
 bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
-	if (!IsEnabled())
-	{
-		reply.printf("Fan %d is disabled", fanNum);
-		error = true;
-		return true;											// say we have processed it
-	}
-
 	bool seen = false;
 	if (mcode == 106)
 	{
+		// We allow a disabled fan to be re-enabled using the A parameter to specify the logical pin number
+		if (gb.Seen('A'))
+		{
+			seen = true;
+			const LogicalPin lp = gb.GetUIValue();
+			if (reprap.GetPlatform().TranslateFanPin(lp, pin, hardwareInverted))
+			{
+				logicalPin = lp;
+			}
+			else
+			{
+				reply.copy("Logical pin ");
+				reprap.GetPlatform().AppendPinName(lp, reply);
+				reply.catf(" is not available to use for fan %d", fanNum);
+				error = true;
+				return true;
+			}
+		}
+
+		// The remaining parameters are not available if the fan has been disabled
+		if (!IsEnabled())
+		{
+			reply.printf("Fan %d is disabled", fanNum);
+			error = true;
+			return true;											// say we have processed it
+		}
+
 		if (gb.Seen('I'))		// Invert cooling
 		{
 			seen = true;
@@ -153,15 +174,20 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 		else if (!gb.Seen('R') && !gb.Seen('S'))
 		{
 			// Report the configuration of the specified fan
-			reply.printf("Fan%i frequency: %uHz, speed: %d%%, min: %d%%, max: %d%%, blip: %.2f, inverted: %s, name: %s",
-							fanNum,
-							(unsigned int)freq,
-							(int)(val * 100.0),
-							(int)(minVal * 100.0),
-							(int)(maxVal * 100.0),
-							(double)(blipTime * MillisToSeconds),
-							(inverted) ? "yes" : "no",
-							name.c_str());
+			reply.printf("Fan %i", fanNum);
+			if (name.strlen() != 0)
+			{
+				reply.catf(" (%s)", name.c_str());
+			}
+			reply.cat(" pin: ");
+			reprap.GetPlatform().AppendPinName(logicalPin, reply);
+			reply.catf(", frequency: %uHz, speed: %d%%, min: %d%%, max: %d%%, blip: %.2f, inverted: %s",
+						(unsigned int)freq,
+						(int)(val * 100.0),
+						(int)(minVal * 100.0),
+						(int)(maxVal * 100.0),
+						(double)(blipTime * MillisToSeconds),
+						(inverted) ? "yes" : "no");
 			if (heatersMonitored != 0)
 			{
 				reply.catf(", temperature: %.1f:%.1fC, heaters:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);
@@ -264,10 +290,10 @@ void Fan::Refresh()
 						// We already know that ht < triggerTemperatures[1], therefore unless we have NaNs it is safe to divide by (triggerTemperatures[1] - triggerTemperatures[0])
 						reqVal = max<float>(reqVal, (ht - triggerTemperatures[0])/(triggerTemperatures[1] - triggerTemperatures[0]));
 					}
-					else if (lastVal != 0.0 && ht + ThermostatHysteresis > triggerTemperatures[0])
+					else if (lastVal != 0.0 && ht + ThermostatHysteresis > triggerTemperatures[0])		// if the fan is on, add a hysteresis before turning it off
 					{
-						// If the fan is on, add a hysteresis before turning it off
-						reqVal = min<float>(max<float>(reqVal, (bangBangMode) ? max<float>(0.5, val) : minVal), maxVal);
+						const float minFanSpeed = (bangBangMode) ? max<float>(0.5, val) : minVal;
+						reqVal = constrain<float>(reqVal, minFanSpeed, maxVal);
 					}
 #if HAS_SMART_DRIVERS
 					const unsigned int channel = reprap.GetHeat().GetHeaterChannel(heaterHumber);
@@ -283,16 +309,7 @@ void Fan::Refresh()
 
 	if (reqVal > 0.0)
 	{
-		if (reqVal < minVal)
-		{
-			reqVal = minVal;
-		}
-
-		if (reqVal > maxVal)
-		{
-			reqVal = maxVal;
-		}
-
+		reqVal = constrain<float>(reqVal, minVal, maxVal);
 		if (lastVal == 0.0)
 		{
 			// We are turning this fan on
@@ -345,6 +362,7 @@ void Fan::Disable()
 		SetHardwarePwm(0.0);
 	}
 	pin = NoPin;
+	logicalPin = NoLogicalPin;
 }
 
 // Save the settings of this fan if it isn't thermostatic

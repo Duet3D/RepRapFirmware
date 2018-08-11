@@ -219,8 +219,8 @@ void GCodes::Reset()
 	moveBuffer.yAxes = DefaultYAxisMapping;
 	moveBuffer.virtualExtruderPosition = 0.0;
 
-#if SUPPORT_IOBITS
-	moveBuffer.ioBits = 0;
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	moveBuffer.laserPwmOrIoBits.Clear();
 #endif
 
 	reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
@@ -1514,7 +1514,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 			// Finished a macro or finished processing config.g
 			fileInput->Reset(fd);
 			fd.Close();
-			if (runningConfigFile)
+			if (runningConfigFile && gb.MachineState().previous->previous == nullptr)
 			{
 				CopyConfigFinalValues(gb);
 				runningConfigFile = false;
@@ -1678,8 +1678,8 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 			// TODO: when using RTOS there is a possible race condition in the following,
 			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
 			pauseRestorePoint.filePos = fileGCode->GetFilePosition(fileInput->BytesCached());
-#if SUPPORT_IOBITS
-			pauseRestorePoint.ioBits = moveBuffer.ioBits;
+#if SUPPORT_LASER || SUPPORT_IOBITS
+			pauseRestorePoint.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
 #endif
 		}
 
@@ -1813,8 +1813,8 @@ bool GCodes::DoEmergencyPause()
 		pauseRestorePoint.virtualExtruderPosition = moveBuffer.virtualExtruderPosition;
 		pauseRestorePoint.filePos = moveBuffer.filePos;
 		pauseRestorePoint.proportionDone = (float)(totalSegments - segmentsLeft)/(float)totalSegments;
-#if SUPPORT_IOBITS
-		pauseRestorePoint.ioBits = moveBuffer.ioBits;
+#if SUPPORT_LASER || SUPPORT_IOBITS
+		pauseRestorePoint.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
 #endif
 		ClearMove();
 	}
@@ -1828,8 +1828,8 @@ bool GCodes::DoEmergencyPause()
 		// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
 		pauseRestorePoint.filePos = fileGCode->GetFilePosition(fileInput->BytesCached());
 		pauseRestorePoint.proportionDone = 0.0;
-#if SUPPORT_IOBITS
-		pauseRestorePoint.ioBits = moveBuffer.ioBits;
+#if SUPPORT_LASER || SUPPORT_IOBITS
+		pauseRestorePoint.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
 #endif
 	}
 
@@ -2061,8 +2061,19 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 
 				// Set the feed rate
 				buf.catf("G1 F%.1f", (double)(pauseRestorePoint.feedRate * MinutesToSeconds));
+#if SUPPORT_LASER
+				if (machineType == MachineType::laser)
+				{
+					buf.catf(" S%u", (unsigned int)pauseRestorePoint.laserPwmOrIoBits.laserPwm);
+				}
+				else
+				{
+#endif
 #if SUPPORT_IOBITS
-				buf.catf(" P%u", (unsigned int)pauseRestorePoint.ioBits);
+					buf.catf(" P%u", (unsigned int)pauseRestorePoint.laserPwmOrIoBits.ioBits);
+#endif
+#if SUPPORT_LASER
+				}
 #endif
 				buf.cat("\nM24\n");
 				ok = f->Write(buf.c_str());								// restore feed rate and output bits
@@ -2185,7 +2196,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;	// save this before we update it
 
 	// Check if we are extruding
-	if (moveBuffer.isCoordinated && gb.Seen(extrudeLetter))
+	if (gb.Seen(extrudeLetter))							// DC 2018-08-07: at E3D's request, extrusion is now recognised even on uncoordinated moves
 	{
 		// Check that we have a tool to extrude with
 		Tool* const tool = reprap.GetCurrentTool();
@@ -2305,7 +2316,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 
 	// Check to see if the move is a 'homing' move that endstops are checked on.
 	// We handle S1 parameters affecting extrusion elsewhere.
-	if (gb.Seen('S'))
+	if (gb.Seen('H') || (machineType != MachineType::laser && gb.Seen('S')))
 	{
 		const int ival = gb.GetIValue();
 		if (ival == 1 || ival == 2 || ival == 3)
@@ -2335,20 +2346,34 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		}
 	}
 
-#if SUPPORT_IOBITS
-	// Update the iobits parameter
+	// Check for laser power setting or IOBITS
+#if SUPPORT_LASER || SUPPORT_IOBITS
 	if (rp != nullptr)
 	{
-		moveBuffer.ioBits = rp->ioBits;
+		moveBuffer.laserPwmOrIoBits = rp->laserPwmOrIoBits;
 	}
-	else if (gb.Seen('P'))
+#if SUPPORT_LASER
+	else if (machineType == MachineType::laser)
 	{
-		moveBuffer.ioBits = (IoBits_t)gb.GetIValue();
+		moveBuffer.laserPwmOrIoBits.laserPwm = (moveBuffer.moveType == 0 && isCoordinated && gb.Seen('S'))
+												? ConvertLaserPwm(gb.GetFValue())
+												: 0;
 	}
+#endif
+#if SUPPORT_IOBITS
 	else
 	{
-		// Leave moveBuffer.ioBits alone so that we keep the previous value
+		// Update the iobits parameter
+		if (gb.Seen('P'))
+		{
+			moveBuffer.laserPwmOrIoBits.ioBits = (IoBits_t)gb.GetIValue();
+		}
+		else
+		{
+			// Leave moveBuffer.ioBits alone so that we keep the previous value
+		}
 	}
+#endif
 #endif
 
 	if (moveBuffer.moveType != 0)
@@ -2817,6 +2842,18 @@ void GCodes::AbortPrint(GCodeBuffer& gb)
 	if (&gb == fileGCode)						// if the current command came from a file being printed
 	{
 		StopPrint(StopPrintReason::abort);
+	}
+}
+
+// Cancel everything
+void GCodes::EmergencyStop()
+{
+	for (GCodeBuffer *gbp : gcodeSources)
+	{
+		if (gbp != nullptr)
+		{
+			AbortPrint(*gbp);
+		}
 	}
 }
 
@@ -4298,8 +4335,8 @@ void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const
 	rp.feedRate = gb.MachineState().feedRate;
 	rp.virtualExtruderPosition = virtualExtruderPosition;
 
-#if SUPPORT_IOBITS
-	rp.ioBits = moveBuffer.ioBits;
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	rp.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
 #endif
 }
 
@@ -4310,13 +4347,14 @@ void GCodes::RestorePosition(const RestorePoint& rp, GCodeBuffer *gb)
 	{
 		currentUserPosition[axis] = rp.moveCoords[axis];
 	}
+
 	if (gb != nullptr)
 	{
 		gb->MachineState().feedRate = rp.feedRate;
 	}
 
-#if SUPPORT_IOBITS
-	moveBuffer.ioBits = rp.ioBits;
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	moveBuffer.laserPwmOrIoBits = rp.laserPwmOrIoBits;
 #endif
 }
 
@@ -4528,11 +4566,6 @@ bool GCodes::AllAxesAreHomed() const
 {
 	const AxesBitmap allAxes = LowestNBits<AxesBitmap>(numVisibleAxes);
 	return (axesHomed & allAxes) == allAxes;
-}
-
-void GCodes::SetAllAxesNotHomed()
-{
-	axesHomed = 0;
 }
 
 // Write the config-override file returning true if an error occurred
@@ -4933,6 +4966,11 @@ void GCodes::SetExtrusionFactor(size_t extruder, float factor)
 	{
 		extrusionFactors[extruder] = constrain<float>(factor, 0.0, 2.0);
 	}
+}
+
+Pwm_t GCodes::ConvertLaserPwm(float reqVal) const
+{
+	return (uint16_t)constrain<long>(lrintf((reqVal * 65535)/laserMaxPower), 0, 65535);
 }
 
 #if SUPPORT_12864_LCD

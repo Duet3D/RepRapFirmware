@@ -420,7 +420,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				break;
 
 			case MachineType::laser:
-				platform.SetLaserPwm(gb.GetFValue()/laserMaxPower);
+				platform.SetLaserPwm(ConvertLaserPwm(gb.GetFValue()));
 				break;
 
 			default:
@@ -492,7 +492,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			break;
 
 		case MachineType::laser:
-			platform.SetLaserPwm(0.0);
+			platform.SetLaserPwm(0);
 			break;
 
 		default:
@@ -1214,11 +1214,22 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 106: // Set/report fan values
 		{
 			bool seenFanNum = false;
-			int32_t fanNum = 0;			// Default to the first fan
+			int32_t fanNum;
 			gb.TryGetIValue('P', fanNum, seenFanNum);
-			bool error = false;
-			const bool processed = platform.ConfigureFan(code, fanNum, gb, reply, error);
-			result = GetGCodeResultFromError(error);
+			bool processed;
+
+			// 2018-08-09: only configure the fan if a fan number was given.
+			// This avoids M106 Snn failing if we have disabled Fan 0 and mapped the print cooling fan to a different fan.
+			if (seenFanNum)
+			{
+				bool error = false;
+				processed = platform.ConfigureFan(code, fanNum, gb, reply, error);
+				result = GetGCodeResultFromError(error);
+			}
+			else
+			{
+				processed = false;
+			}
 
 			// ConfigureFan only processes S parameters if there were other parameters to process
 			if (!processed && gb.Seen('S'))
@@ -2264,30 +2275,37 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 302: // Allow, deny or report cold extrudes and configure minimum extrusion/retraction temps
+	{
+		bool seen = false;
+		if (gb.Seen('P'))
 		{
-			bool seen = false;
-			if (gb.Seen('P'))
+			seen = true;
+			reprap.GetHeat().AllowColdExtrude(gb.GetIValue() > 0);
+		}
+		if (gb.Seen('S'))
+		{
+			seen = true;
+			reprap.GetHeat().SetExtrusionMinTemp(gb.GetFValue());
+		}
+		if (gb.Seen('R'))
+		{
+			seen = true;
+			reprap.GetHeat().SetRetractionMinTemp(gb.GetFValue());
+		}
+		if (!seen)
+		{
+			if (reprap.GetHeat().ColdExtrude())
 			{
-				seen = true;
-				reprap.GetHeat().AllowColdExtrude(gb.GetIValue() > 0);
+				reply.copy("Cold extrusion is allowed (use M302 P0 to forbid it)");
 			}
-			if (gb.Seen('S'))
+			else
 			{
-				seen = true;
-				reprap.GetHeat().SetExtrusionMinTemp(gb.GetFValue());
-			}
-			if (gb.Seen('R'))
-			{
-				seen = true;
-				reprap.GetHeat().SetRetractionMinTemp(gb.GetFValue());
-			}
-			if (!seen)
-			{
-				reply.printf("Cold extrusion is %s (use M302 P[1/0] to allow/deny it), min. extrusion temp is %.1f, min. retraction temp is %.1f",
-						reprap.GetHeat().ColdExtrude() ? "allowed" : "denied", (double)reprap.GetHeat().GetExtrusionMinTemp(), (double)reprap.GetHeat().GetRetractionMinTemp());
+			reply.printf("Cold extrusion is forbidden (use M302 P1 to allow it), min. extrusion temperature %.1fC, min. retraction temperature %.1fC",
+					(double)reprap.GetHeat().GetExtrusionMinTemp(), (double)reprap.GetHeat().GetRetractionMinTemp());
 			}
 		}
-		break;
+	}
+	break;
 
 	case 303: // Run PID tuning
 		if (gb.Seen('H'))
@@ -3204,7 +3222,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (gb.Seen('C'))		// set chopper control register
 				{
 					seen = true;
-					(void)SmartDrivers::SetChopperControlRegister(drive, gb.GetUIValue());		// currently this call never returns failure, so no error handling here
+					if (!SmartDrivers::SetChopperControlRegister(drive, gb.GetUIValue()))
+					{
+						reply.printf("Bad ccr for driver %u", drive);
+						result = GCodeResult::error;
+						break;
+					}
+				}
+
+				if (gb.Seen('F'))
+				{
+					seen = true;
+					if (!SmartDrivers::SetOffTime(drive, gb.GetUIValue()))
+					{
+						reply.printf("Bad off time for driver %u", drive);
+						result = GCodeResult::error;
+						break;
+					}
 				}
 #endif
 				if (!seen)
@@ -3219,7 +3253,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 #if HAS_SMART_DRIVERS
 					if (drive < platform.GetNumSmartDrivers())
 					{
-						reply.catf(", mode %s, ccr 0x%05" PRIx32, TranslateDriverMode(SmartDrivers::GetDriverMode(drive)), SmartDrivers::GetChopperControlRegister(drive));
+						reply.catf(", mode %s, ccr 0x%05" PRIx32 ", off time %" PRIu32,
+							TranslateDriverMode(SmartDrivers::GetDriverMode(drive)), SmartDrivers::GetChopperControlRegister(drive), SmartDrivers::GetOffTime(drive));
 					}
 #endif
 				}
@@ -3846,6 +3881,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		result = UnloadFilament(gb, reply);
 		break;
 
+	case 703: // Configure Filament
+		if (reprap.GetCurrentTool() != nullptr)
+		{
+			if (reprap.GetCurrentTool()->GetFilament() != nullptr)
+			{
+				String<ScratchStringLength> scratchString;
+				scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, reprap.GetCurrentTool()->GetFilament()->GetName(), CONFIG_FILAMENT_G);
+				DoFileMacro(gb, scratchString.c_str(), false);
+			}
+		}
+		else
+		{
+			result = GCodeResult::error;
+			reply.copy("No tool selected");
+		}
+		break;
+
 #if SUPPORT_SCANNER
 	case 750: // Enable 3D scanner extension
 		reprap.GetScanner().Enable();
@@ -4045,11 +4097,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (code == 906 && gb.Seen('I'))
 			{
 				seen = true;
-				const float idleFactor = gb.GetFValue();
-				if (idleFactor >= 0 && idleFactor <= 100.0)
-				{
-					platform.SetIdleCurrentFactor(idleFactor/100.0);
-				}
+				platform.SetIdleCurrentFactor(gb.GetFValue()/100.0);
 			}
 
 			if (!seen)

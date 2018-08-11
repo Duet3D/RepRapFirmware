@@ -28,8 +28,9 @@ public:
 
 	bool IsEnabled() const { return pin != NoPin; }
 	float GetConfiguredPwm() const { return val; }			// returns the configured PWM. Actual PWM may be different, e.g. due to blipping or for thermostatic fans.
+	LogicalPin GetLogicalPin() const { return logicalPin; }
 
-	void Init(Pin p_pin, bool hwInverted, PwmFrequency p_freq);
+	void Init(Pin p_pin, LogicalPin lp, bool hwInverted, PwmFrequency p_freq);
 	void SetPwm(float speed);
 	bool HasMonitoredHeaters() const { return heatersMonitored != 0; }
 	void SetHeatersMonitored(HeatersMonitoredBitmap h);
@@ -51,6 +52,7 @@ private:
 	uint32_t blipStartTime;
 	HeatersMonitoredBitmap heatersMonitored;
 	PwmFrequency freq;
+	LogicalPin logicalPin;
 	Pin pin;
 	String<MaxFanNameLength> name;
 	bool isConfigured;

@@ -107,6 +107,36 @@ typedef float floatc_t;						// type of matrix element used for calibration
 typedef uint32_t AxesBitmap;				// Type of a bitmap representing a set of axes
 typedef uint32_t DriversBitmap;				// Type of a bitmap representing a set of driver numbers
 typedef uint32_t FansBitmap;				// Type of a bitmap representing a set of fan numbers
+typedef uint16_t Pwm_t;						// Type of a PWM value when we don't want to use floats
+
+// Logical pins used for general output, servos, CCN and laser control
+typedef uint16_t LogicalPin;				// Type used to represent logical pin numbers
+constexpr LogicalPin NoLogicalPin = 0xFFFFu;
+
+#if SUPPORT_IOBITS
+typedef uint16_t IoBits_t;					// Type of the port control bitmap (G1 P parameter)
+#endif
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+union LaserPwmOrIoBits
+{
+#if SUPPORT_LASER
+	Pwm_t laserPwm;							// the laser PWM to use for this move
+#endif
+#if SUPPORT_IOBITS
+	IoBits_t ioBits;						// I/O bits to set/clear at the start of this move
+#endif
+
+	void Clear()							// set to zero, whichever one it is
+	{
+#if SUPPORT_LASER
+		laserPwm = 0;
+#else
+		ioBits = 0;
+#endif
+	}
+};
+#endif
 
 // A single instance of the RepRap class contains all the others
 extern RepRap reprap;

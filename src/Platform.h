@@ -570,6 +570,10 @@ public:
 	// User I/O and servo support
 	bool GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firmwarePin, bool& invert);
 
+	// For fan pin mapping
+	bool TranslateFanPin(LogicalPin logicalPin, Pin& firmwarePin, bool& invert) const;
+	void AppendPinName(LogicalPin lp, const StringRef& str) const;
+
 	// For filament sensor support
 	Pin GetEndstopPin(int endstop) const;			// Get the firmware pin number for an endstop
 
@@ -589,7 +593,7 @@ public:
 	// CNC and laser support
 	Spindle& AccessSpindle(size_t slot) { return spindles[slot]; }
 
-	void SetLaserPwm(float pwm);
+	void SetLaserPwm(Pwm_t pwm);
 	bool SetLaserPin(LogicalPin lp, bool invert);
 	LogicalPin GetLaserPin(bool& invert) const { return laserPort.GetLogicalPin(invert); }
 	void SetLaserPwmFrequency(float freq);

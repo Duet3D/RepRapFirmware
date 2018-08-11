@@ -134,9 +134,9 @@ const uint32_t TransferTimeout = 10;						// any transfer should complete within
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
 #ifdef PCCB_X5
-constexpr Pin END_STOP_PINS[DRIVES] = { 24, 25, 67, 63, NoPin, NoPin };
+constexpr Pin END_STOP_PINS[DRIVES] = { 25, 67, 24, 63, NoPin, NoPin };
 #else
-constexpr Pin END_STOP_PINS[DRIVES] = { 24, 25, 67, 63, NoPin, NoPin, NoPin, NoPin };
+constexpr Pin END_STOP_PINS[DRIVES] = { 25, 67, 24, 63, NoPin, NoPin, NoPin, NoPin };
 #endif
 
 // Heaters and thermistors

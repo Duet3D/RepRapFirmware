@@ -10,10 +10,6 @@
 
 #include "RepRapFirmware.h"
 
-// Logical pins used fore general output, servos, CCN and laser control
-typedef uint16_t LogicalPin;								// Type used to represent logical pin numbers
-constexpr LogicalPin NoLogicalPin = 0xFFFFu;
-
 // Enumeration to describe what we want to do with a logical pin
 enum class PinAccess : int
 {

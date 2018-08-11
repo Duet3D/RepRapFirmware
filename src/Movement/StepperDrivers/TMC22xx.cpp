@@ -242,7 +242,9 @@ public:
 	void SetAxisNumber(size_t p_axisNumber);
 	void WriteAll();
 	bool SetChopConf(uint32_t newVal);
+	bool SetOffTime(uint32_t newVal);
 	uint32_t GetChopConf() const;
+	uint32_t GetOffTime() const;
 	void SetCoolStep(uint16_t coolStepConfig);
 	bool SetMicrostepping(uint32_t shift, bool interpolate);
 	unsigned int GetMicrostepping(bool& interpolation) const;		// Get microstepping
@@ -536,18 +538,40 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const
 	return 1u << microstepShiftFactor;
 }
 
-// Set the chopper control register to the settings provided by the user
+// Set the chopper control register to the settings provided by the user. We allow only the lowest 17 bits to be set.
 bool TmcDriverState::SetChopConf(uint32_t newVal)
 {
-	configuredChopConfReg = (newVal & (CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK)) | CHOPCONF_VSENSE_HIGH;
+	const uint32_t offTime = (newVal & CHOPCONF_TOFF_MASK) >> CHOPCONF_TOFF_SHIFT;
+	if (offTime == 0 || (offTime == 1 && (configuredChopConfReg & CHOPCONF_TBL_MASK) < (2 << CHOPCONF_TBL_SHIFT)))
+	{
+		return false;
+	}
+	const uint32_t userMask = CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK;	// mask of bits the user is allowed to change
+	configuredChopConfReg = (configuredChopConfReg & ~userMask) | (newVal & userMask);
 	UpdateChopConfRegister();
 	return true;
+}
+
+// Set the off time in the chopper control register
+bool TmcDriverState::SetOffTime(uint32_t newVal)
+{
+	if (newVal > 15)
+	{
+		return false;
+	}
+	return SetChopConf((configuredChopConfReg & ~CHOPCONF_TOFF_MASK) | ((newVal << CHOPCONF_TOFF_SHIFT) & CHOPCONF_TOFF_MASK));
 }
 
 // Get microstepping or chopper control register
 uint32_t TmcDriverState::GetChopConf() const
 {
-	return configuredChopConfReg;
+	return configuredChopConfReg & 0x01FFFF;
+}
+
+// Get the off time from the chopper control register
+uint32_t TmcDriverState::GetOffTime() const
+{
+	return (configuredChopConfReg & CHOPCONF_TOFF_MASK) >> CHOPCONF_TOFF_SHIFT;
 }
 
 // Set the driver mode
@@ -988,6 +1012,16 @@ namespace SmartDrivers
 	uint32_t GetChopperControlRegister(size_t driver)
 	{
 		return (driver < numTmc22xxDrivers) ? driverStates[driver].GetChopConf() : 0;
+	}
+
+	bool SetOffTime(size_t driver, uint32_t offTime)
+	{
+		return driver < numTmc22xxDrivers && driverStates[driver].SetOffTime(offTime);
+	}
+
+	uint32_t GetOffTime(size_t driver)
+	{
+		return (driver < numTmc22xxDrivers) ? driverStates[driver].GetOffTime() : 0;
 	}
 
 	// Flag that the the drivers have been powered up or down and handle any timeouts

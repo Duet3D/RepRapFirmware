@@ -2863,12 +2863,20 @@ void Platform::DisableAllDrives()
 // Must not be called from an ISR, or with interrupts disabled.
 void Platform::SetDriversIdle()
 {
-	for (size_t driver = 0; driver < DRIVES; ++driver)
+	if (idleCurrentFactor == 0)
 	{
-		if (driverState[driver] == DriverStatus::enabled)
+		DisableAllDrives();
+		reprap.GetGCodes().SetAllAxesNotHomed();
+	}
+	else
+	{
+		for (size_t driver = 0; driver < DRIVES; ++driver)
 		{
-			driverState[driver] = DriverStatus::idle;
-			UpdateMotorCurrent(driver);
+			if (driverState[driver] == DriverStatus::enabled)
+			{
+				driverState[driver] = DriverStatus::idle;
+				UpdateMotorCurrent(driver);
+			}
 		}
 	}
 }
@@ -2985,13 +2993,13 @@ void Platform::UpdateMotorCurrent(size_t driver)
 	}
 }
 
-// Get the configured motor current for a drive.
+// Get the configured motor current for an axis or extruder
 // Currently we don't allow multiple motors on a single axis to have different currents, so we can just return the current for the first one.
 float Platform::GetMotorCurrent(size_t drive, int code) const
 {
-	if (drive < DRIVES)
+	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
+	if (drive < DRIVES && drive < numAxes + reprap.GetGCodes().GetNumExtruders())
 	{
-		const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 		const uint8_t driver = (drive < numAxes) ? axisDrivers[drive].driverNumbers[0] : extruderDrivers[drive - numAxes];
 		if (driver < DRIVES)
 		{
@@ -3018,7 +3026,7 @@ float Platform::GetMotorCurrent(size_t drive, int code) const
 // Set the motor idle current factor
 void Platform::SetIdleCurrentFactor(float f)
 {
-	idleCurrentFactor = f;
+	idleCurrentFactor = constrain<float>(f, 0.0, 1.0);
 	for (size_t driver = 0; driver < DRIVES; ++driver)
 	{
 		if (driverState[driver] == DriverStatus::idle)
@@ -3274,7 +3282,7 @@ void Platform::InitFans()
 {
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
-		fans[i].Init(COOLING_FAN_PINS[i], FansHardwareInverted(i),
+		fans[i].Init(COOLING_FAN_PINS[i], Fan0LogicalPin + i, FansHardwareInverted(i),
 #ifdef PCCB
 						(i == 3) ? 25000 : DefaultFanPwmFreq				// PCCB fan 3 has 4-wire fan connectors for Intel-spec PWM fans
 #else
@@ -3954,7 +3962,8 @@ bool Platform::IsDuetWiFi() const
 #endif
 
 // User I/O and servo support
-// Translate a logical pin to a firmware pin and also return whether the output of that pin is normally inverted
+// Translate a logical pin to a firmware pin and whether the output of that pin is normally inverted
+// Returns true if the pin is available
 bool Platform::GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firmwarePin, bool& invert)
 {
 	firmwarePin = NoPin;										// assume failure
@@ -3974,8 +3983,8 @@ bool Platform::GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firm
 	}
 	else if (logicalPin >= Fan0LogicalPin && logicalPin < Fan0LogicalPin + (int)NUM_FANS)		// pins 20- correspond to fan channels
 	{
-		// Don't allow a fan channel to be used unless the fan has been disabled
-		if (!fans[logicalPin - Fan0LogicalPin].IsEnabled()
+		// Don't allow a fan channel to be used unless the fan normally using it has been disabled or remapped
+		if (fans[logicalPin - Fan0LogicalPin].GetLogicalPin() != logicalPin
 #ifdef DUET_NG
 			// Fan pins on the DueX2/DueX5 cannot be used to control servos because the frequency is not well-defined.
 			&& (logicalPin <= Fan0LogicalPin + 2 || access != PinAccess::servo)
@@ -4049,6 +4058,58 @@ bool Platform::GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firm
 	return false;
 }
 
+// For fan pin mapping
+bool Platform::TranslateFanPin(LogicalPin logicalPin, Pin& firmwarePin, bool& invert) const
+{
+	if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + (int)Heaters)		// pins 0-9 correspond to heater channels
+	{
+		// For safety, we don't allow a heater channel to be used for fans until the heater has been disabled
+		if (!reprap.GetHeat().IsHeaterEnabled(logicalPin - Heater0LogicalPin))
+		{
+			firmwarePin = HEAT_ON_PINS[logicalPin - Heater0LogicalPin];
+#if ACTIVE_LOW_HEAT_ON
+			invert = true;
+#else
+			invert = false;
+#endif
+			return true;
+		}
+	}
+	else if (logicalPin >= Fan0LogicalPin && logicalPin < Fan0LogicalPin + (int)NUM_FANS)		// pins 20- correspond to fan channels
+	{
+		const unsigned int fanPinNum = logicalPin - Fan0LogicalPin;
+		firmwarePin = COOLING_FAN_PINS[fanPinNum];
+		invert = FansHardwareInverted(fanPinNum);
+		return true;
+	}
+	return false;
+}
+
+// Append the name of a logical pin to a string
+void Platform::AppendPinName(LogicalPin logicalPin, const StringRef& str) const
+{
+	if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + (int)Heaters)		// pins 0-9 correspond to heater channels
+	{
+		str.catf("H%u", logicalPin - Heater0LogicalPin);
+	}
+	else if (logicalPin >= Fan0LogicalPin && logicalPin < Fan0LogicalPin + (int)NUM_FANS)		// pins 20- correspond to fan channels
+	{
+		str.catf("F%u", logicalPin - Fan0LogicalPin);
+	}
+	else if (logicalPin >= EndstopXLogicalPin && logicalPin < EndstopXLogicalPin + (int)ARRAY_SIZE(endStopPins))	// pins 40-49 correspond to endstop pins
+	{
+		str.catf("E%u", logicalPin - EndstopXLogicalPin);
+	}
+	else if (logicalPin >= Special0LogicalPin && logicalPin < Special0LogicalPin + (int)ARRAY_SIZE(SpecialPinMap))
+	{
+		str.catf("S%u", logicalPin - Special0LogicalPin);
+	}
+	else
+	{
+		str.cat("unknown");
+	}
+}
+
 bool Platform::SetExtrusionAncilliaryPwmPin(LogicalPin logicalPin, bool invert)
 {
 	return extrusionAncilliaryPwmPort.Set(logicalPin, PinAccess::pwm, invert);
@@ -4056,9 +4117,9 @@ bool Platform::SetExtrusionAncilliaryPwmPin(LogicalPin logicalPin, bool invert)
 
 // CNC and laser support
 
-void Platform::SetLaserPwm(float pwm)
+void Platform::SetLaserPwm(Pwm_t pwm)
 {
-	laserPort.WriteAnalog(pwm);
+	laserPort.WriteAnalog((float)pwm/65535);			// we don't currently have an function that accepts an integer PWM fraction
 }
 
 bool Platform::SetLaserPin(LogicalPin lp, bool invert)
@@ -4173,7 +4234,7 @@ float Platform::GetCurrentPowerVoltage() const
 // TMC driver temperatures
 float Platform::GetTmcDriversTemperature(unsigned int board) const
 {
-	const uint16_t mask = ((1u << 5) - 1) << (5 * board);			// there are 5 driver son each board
+	const uint16_t mask = ((1u << 5) - 1) << (5 * board);			// there are 5 drivers on each board
 	return ((temperatureShutdownDrivers & mask) != 0) ? 150.0
 			: ((temperatureWarningDrivers & mask) != 0) ? 100.0
 				: 0.0;

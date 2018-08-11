@@ -72,12 +72,15 @@ const uint32_t TMC_DRVCONF_TST = 1 << 16;
 
 // Chopper control register bits
 const uint32_t TMC_CHOPCONF_TOFF_MASK = 15;
+const uint32_t TMC_CHOPCONF_TOFF_SHIFT = 0;
 #define TMC_CHOPCONF_TOFF(n)	((((uint32_t)n) & 15) << 0)
 #define TMC_CHOPCONF_HSTRT(n)	((((uint32_t)n) & 7) << 4)
 #define TMC_CHOPCONF_HEND(n)	((((uint32_t)n) & 15) << 7)
 #define TMC_CHOPCONF_HDEC(n)	((((uint32_t)n) & 3) << 11)
 const uint32_t TMC_CHOPCONF_RNDTF = 1 << 13;
 const uint32_t TMC_CHOPCONF_CHM = 1 << 14;
+const uint32_t TMC_CHOPCONF_TBL_MASK = (3 << 15);
+const uint32_t TMC_CHOPCONF_TBL_SHIFT = 15;
 #define TMC_CHOPCONF_TBL(n)	(((uint32_t)n & 3) << 15)
 
 // Driver control register bits, when SDOFF=0
@@ -163,7 +166,9 @@ public:
 	void WriteAll();
 
 	bool SetChopConf(uint32_t newVal);
+	bool SetOffTime(uint32_t newVal);
 	uint32_t GetChopConf() const;
+	uint32_t GetOffTime() const;
 	void SetCoolStep(uint16_t coolStepConfig);
 	bool SetMicrostepping(uint32_t shift, bool interpolate);
 	unsigned int GetMicrostepping(bool& interpolation) const;		// Get microstepping
@@ -289,12 +294,29 @@ inline void TmcDriverState::WriteAll()
 	registersToUpdate = UpdateAllRegisters;
 }
 
-// Set the chopper control register
+// Check the new chopper control register, update it and return true if it is legal
 bool TmcDriverState::SetChopConf(uint32_t newVal)
 {
+	// TOFF = 0 turns the driver off so it is not allowed.
+	// TOFF = 1 is not allowed if TBL = 0.
+	const uint32_t toff = (newVal & TMC_CHOPCONF_TOFF_MASK) >> TMC_CHOPCONF_TOFF_SHIFT;
+	if (toff == 0 || (toff == 1 && ((newVal & TMC_CHOPCONF_TBL_MASK) == 0)))
+	{
+		return false;
+	}
 	configuredChopConfReg = (newVal & 0x0001FFFF) | TMC_REG_CHOPCONF;		// save the new value
 	UpdateChopConfRegister();												// send the new value, keeping the current Enable status
 	return true;
+}
+
+// Set the off time in the chopper control register
+bool TmcDriverState::SetOffTime(uint32_t newVal)
+{
+	if (newVal > 15)
+	{
+		return false;
+	}
+	return SetChopConf((configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK) | ((newVal << TMC_CHOPCONF_TOFF_SHIFT) & TMC_CHOPCONF_TOFF_MASK));
 }
 
 // Set the driver mode
@@ -303,19 +325,13 @@ bool TmcDriverState::SetDriverMode(unsigned int mode)
 	switch (mode)
 	{
 	case (unsigned int)DriverMode::constantOffTime:
-		configuredChopConfReg = (configuredChopConfReg & ~TMC_CHOPCONF_RNDTF) | TMC_CHOPCONF_CHM;
-		UpdateChopConfRegister();											// send the new value, keeping the current Enable status
-		return true;
+		return SetChopConf((configuredChopConfReg & ~TMC_CHOPCONF_RNDTF) | TMC_CHOPCONF_CHM);
 
 	case (unsigned int)DriverMode::randomOffTime:
-		configuredChopConfReg |= (TMC_CHOPCONF_RNDTF | TMC_CHOPCONF_CHM);
-		UpdateChopConfRegister();											// send the new value, keeping the current Enable status
-		return true;
+		return SetChopConf(configuredChopConfReg | TMC_CHOPCONF_RNDTF | TMC_CHOPCONF_CHM);
 
 	case (unsigned int)DriverMode::spreadCycle:
-		configuredChopConfReg &= ~(TMC_CHOPCONF_RNDTF | TMC_CHOPCONF_CHM);
-		UpdateChopConfRegister();											// send the new value, keeping the current Enable status
-		return true;
+		return SetChopConf(configuredChopConfReg & ~(TMC_CHOPCONF_RNDTF | TMC_CHOPCONF_CHM));
 
 	default:
 		return false;
@@ -499,6 +515,12 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const
 uint32_t TmcDriverState::GetChopConf() const
 {
 	return configuredChopConfReg & TMC_DATA_MASK;
+}
+
+// Get the off time from the chopper control register
+uint32_t TmcDriverState::GetOffTime() const
+{
+	return (configuredChopConfReg & TMC_CHOPCONF_TOFF_MASK) >> TMC_CHOPCONF_TOFF_SHIFT;
 }
 
 // This is called by the ISR when the SPI transfer has completed
@@ -767,6 +789,16 @@ namespace SmartDrivers
 	uint32_t GetChopperControlRegister(size_t driver)
 	{
 		return (driver < numTmc2660Drivers) ? driverStates[driver].GetChopConf() : 0;
+	}
+
+	bool SetOffTime(size_t driver, uint32_t offTime)
+	{
+		return driver < numTmc2660Drivers && driverStates[driver].SetOffTime(offTime);
+	}
+
+	uint32_t GetOffTime(size_t driver)
+	{
+		return (driver < numTmc2660Drivers) ? driverStates[driver].GetOffTime() : 0;
 	}
 
 	// Flag the the drivers have been powered up.

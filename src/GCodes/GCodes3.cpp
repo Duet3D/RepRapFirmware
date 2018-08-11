@@ -943,7 +943,7 @@ GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 #if defined(I2C_IFACE)
 	if (gb.Seen('A'))
 	{
-		uint32_t address = gb.GetUIValue();
+		const uint32_t address = gb.GetUIValue();
 		if (gb.Seen('B'))
 		{
 			int32_t values[MaxI2cBytes];
@@ -951,6 +951,8 @@ GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 			gb.GetIntArray(values, numValues, false);
 			if (numValues != 0)
 			{
+				TaskCriticalSectionLocker Lock;
+
 				platform.InitI2c();
 				I2C_IFACE.beginTransmission((int)address);
 				for (size_t i = 0; i < numValues; ++i)
@@ -980,12 +982,14 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 #if defined(I2C_IFACE)
 	if (gb.Seen('A'))
 	{
-		uint32_t address = gb.GetUIValue();
+		const uint32_t address = gb.GetUIValue();
 		if (gb.Seen('B'))
 		{
 			uint32_t numBytes = gb.GetUIValue();
 			if (numBytes > 0 && numBytes <= MaxI2cBytes)
 			{
+				TaskCriticalSectionLocker Lock;
+
 				platform.InitI2c();
 				I2C_IFACE.requestFrom(address, numBytes);
 				reply.copy("Received");

@@ -486,8 +486,8 @@ bool Move::PausePrint(RestorePoint& rp)
 
 	InverseAxisAndBedTransform(rp.moveCoords, prevDda->GetXAxes(), prevDda->GetYAxes());	// we assume that xAxes hasn't changed between the moves
 
-#if SUPPORT_IOBITS
-	rp.ioBits = dda->GetIoBits();
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	rp.laserPwmOrIoBits = dda->GetLaserPwmOrIoBits();
 #endif
 
 	if (ddaRingAddPointer == savedDdaRingAddPointer)
@@ -566,8 +566,8 @@ bool Move::LowPowerPause(RestorePoint& rp)
 	rp.filePos = dda->GetFilePosition();
 	rp.proportionDone = dda->GetProportionDone(abortedMove);	// store how much of the complete multi-segment move's extrusion has been done
 
-#if SUPPORT_IOBITS
-	rp.ioBits = dda->GetIoBits();
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	rp.laserPwmOrIoBits = dda->GetLaserPwmOrIoBits();
 #endif
 
 	ddaRingAddPointer = (abortedMove) ? dda->GetNext() : dda;
@@ -1060,7 +1060,13 @@ bool Move::TryStartNextMove(uint32_t startTime)
 			// There are more moves available, but they are not prepared yet. Signal an underrun.
 			++numPrepareUnderruns;
 		}
-		reprap.GetPlatform().ExtrudeOff();	// turn off ancilliary PWM
+		reprap.GetPlatform().ExtrudeOff();			// turn off ancillary PWM
+#if SUPPORT_LASER
+		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
+		{
+			reprap.GetPlatform().SetLaserPwm(0);	// turn off the laser
+		}
+#endif
 		return false;
 	}
 }
