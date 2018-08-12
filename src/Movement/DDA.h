@@ -130,7 +130,7 @@ public:
 	static int32_t loggedProbePositions[XYZ_AXES * MaxLoggedProbePositions];
 #endif
 
-	static uint32_t numHiccups;										// how many times we delayed an interrupt to avoid using too much CPU time in interrupts
+	static unsigned int numHiccups;									// how many times we delayed an interrupt to avoid using too much CPU time in interrupts
 	static uint32_t lastStepLowTime;								// when we last completed a step pulse to a slow driver
 	static uint32_t lastDirChangeTime;								// when we last change the DIR signal to a slow driver
 
@@ -177,6 +177,7 @@ private:
 			uint8_t goingSlow : 1;					// True if we have slowed the movement because the Z probe is approaching its threshold
 			uint8_t isLeadscrewAdjustmentMove : 1;	// True if this is a leadscrews adjustment move
 			uint8_t usingStandardFeedrate : 1;		// True if this move uses the standard feed rate
+			uint8_t hadHiccup : 1;					// True if we had a hiccup while executing this move
 		};
 		uint16_t flags;								// so that we can print all the flags at once for debugging
 	};

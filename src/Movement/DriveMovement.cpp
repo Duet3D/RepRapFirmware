@@ -78,8 +78,7 @@ void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	else
 	{
 		mp.cart.decelStartStep = (uint32_t)(params.decelStartDistance * stepsPerMm) + 1;
-		const uint64_t initialDecelSpeedTimesCdivDSquared = isquare64(params.topSpeedTimesCdivD);
-		twoDistanceToStopTimesCsquaredDivD = initialDecelSpeedTimesCdivDSquared + roundU64((params.decelStartDistance * (StepClockRateSquared * 2))/dda.deceleration);
+		twoDistanceToStopTimesCsquaredDivD = isquare64(params.topSpeedTimesCdivD) + roundU64((params.decelStartDistance * (StepClockRateSquared * 2))/dda.deceleration);
 	}
 
 	// No reverse phase

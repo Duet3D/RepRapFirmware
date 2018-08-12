@@ -1929,34 +1929,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 204: // Set max travel and printing accelerations
-		{
-			Move& move = reprap.GetMove();
-			bool seen = false;
-			if (gb.Seen('S'))
-			{
-				// For backwards compatibility with old versions of Marlin (e.g. for Cura and the Prusa fork of slic3r), set both accelerations
-				const float acc = gb.GetFValue();
-				move.SetMaxPrintingAcceleration(acc);
-				move.SetMaxTravelAcceleration(acc);
-				seen = true;
-			}
-			if (gb.Seen('P'))
-			{
-				move.SetMaxPrintingAcceleration(gb.GetFValue());
-				seen = true;
-			}
-			if (gb.Seen('T'))
-			{
-				move.SetMaxTravelAcceleration(gb.GetFValue());
-				seen = true;
-			}
-			if (!seen)
-			{
-				reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f%s",
-					(double)move.GetMaxPrintingAcceleration(), (double)move.GetMaxTravelAcceleration(),
-					(move.IsDRCenabled()) ? " (both currently ignored because DRC is enabled)" : "");
-			}
-		}
+		result = reprap.GetMove().ConfigureAccelerations(gb, reply);
 		break;
 
 	case 206: // Offset axes
@@ -3671,18 +3644,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 #endif
 
 	case 593: // Configure dynamic ringing cancellation
-		if (gb.Seen('F'))
-		{
-			reprap.GetMove().SetDRCfreq(gb.GetFValue());
-		}
-		else if (reprap.GetMove().IsDRCenabled())
-		{
-			reply.printf("Dynamic ringing cancellation at %.1fHz", (double)reprap.GetMove().GetDRCfreq());
-		}
-		else
-		{
-			reply.copy("Dynamic ringing cancellation is disabled");
-		}
+		result = reprap.GetMove().ConfigureDynamicAcceleration(gb, reply);
 		break;
 
 	case 665: // Set delta configuration

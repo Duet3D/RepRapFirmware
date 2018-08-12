@@ -77,14 +77,14 @@ bool RotaryDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		{
 			bool seen = false;
 			size_t numValues = 3;
-			if (gb.TryGetFloatArray('L', numValues, armLengths, reply, seen, true))
+			if (gb.TryGetFloatArray('U', numValues, armLengths, reply, seen, true))
 			{
 				error = true;
 				return true;
 			}
 
 			numValues = 3;
-			if (gb.TryGetFloatArray('R', numValues, rodLengths, reply, seen, true))
+			if (gb.TryGetFloatArray('L', numValues, rodLengths, reply, seen, true))
 			{
 				error = true;
 				return true;
@@ -127,7 +127,7 @@ bool RotaryDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			}
 			else
 			{
-				reply.printf("Arms (%.3f,%.2f,%.3f)mm, rods (%.3f,%.3f,%.3f)mm, bearingHeights (%.3f,%.2f,%.3f)mm"
+				reply.printf("Kinematics is rotary delta, arms (%.3f,%.2f,%.3f)mm, rods (%.3f,%.3f,%.3f)mm, bearingHeights (%.3f,%.2f,%.3f)mm"
 							 ", arm movement %.1f to %.1f" DEGREE_SYMBOL
 							 ", delta radius %.3f, bed radius %.1f"
 							 ", angle corrections (%.3f,%.3f,%.3f)" DEGREE_SYMBOL ,
@@ -186,9 +186,10 @@ bool RotaryDeltaKinematics::CartesianToMotorSteps(const float machinePos[], cons
 	// TEMP DEBUG
 	if (reprap.Debug(moduleMove))
 	{
-		debugPrintf("Transformed %.2f,%.2f,%.2f mm to %" PRIi32 ",%" PRIi32 ",%" PRIi32 "steps\n",
+		debugPrintf("Transformed %.2f,%.2f,%.2f mm to %" PRIi32 ",%" PRIi32 ",%" PRIi32 " steps %s\n",
 			(double)machinePos[0], (double)machinePos[1], (double)machinePos[2],
-			motorPos[0], motorPos[1], motorPos[2]);
+			motorPos[0], motorPos[1], motorPos[2],
+			(ok) ? "ok" : "fail");
 	}
 
 	// Transform any additional axes linearly
@@ -424,69 +425,43 @@ float RotaryDeltaKinematics::Transform(const float machinePos[], size_t axis) co
 void RotaryDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float machinePos[DELTA_AXES]) const
 {
 	// Calculate the Cartesian coordinates of the joints at the moving ends of the arms
-	const float angleA = Ha  * DegreesToRadians;
+	const float angleA = Ha * DegreesToRadians;
 	const float posAX = (radius + (armLengths[DELTA_A_AXIS] * cosf(angleA))) * armAngleCosines[DELTA_A_AXIS];
 	const float posAY = (radius + (armLengths[DELTA_A_AXIS] * cosf(angleA))) * armAngleSines[DELTA_A_AXIS];
-	const float posAZ = bearingHeights[DELTA_A_AXIS] + sinf(angleA);
+	const float posAZ = bearingHeights[DELTA_A_AXIS] + (armLengths[DELTA_A_AXIS] * sinf(angleA));
 
 	const float angleB = Hb * DegreesToRadians;
 	const float posBX = (radius + (armLengths[DELTA_B_AXIS] * cosf(angleB))) * armAngleCosines[DELTA_B_AXIS];
 	const float posBY = (radius + (armLengths[DELTA_B_AXIS] * cosf(angleB))) * armAngleSines[DELTA_B_AXIS];
-	const float posBZ = bearingHeights[DELTA_B_AXIS] + sinf(angleB);
+	const float posBZ = bearingHeights[DELTA_B_AXIS] + (armLengths[DELTA_A_AXIS] * sinf(angleB));
 
 	const float angleC = Hc * DegreesToRadians;
 	const float posCX = (radius + (armLengths[DELTA_C_AXIS] * cosf(angleC))) * armAngleCosines[DELTA_C_AXIS];
 	const float posCY = (radius + (armLengths[DELTA_C_AXIS] * cosf(angleC))) * armAngleSines[DELTA_C_AXIS];
-	const float posCZ = bearingHeights[DELTA_C_AXIS] + sinf(angleC);
+	const float posCZ = bearingHeights[DELTA_C_AXIS] + (armLengths[DELTA_A_AXIS] * sinf(angleC));
 
 	// Calculate some intermediate values that we will use more than once
 	const float Da2 = fsquare(posAX) + fsquare(posAY) + fsquare(posAZ);
 	const float Db2 = fsquare(posBX) + fsquare(posBY) + fsquare(posBZ);
 	const float Dc2 = fsquare(posCX) + fsquare(posCY) + fsquare(posCZ);
 
-	const float Xab = posAX - posBX;
-	const float Xbc = posBX - posCX;
-	const float Xca = posCX - posAX;
-
-	const float Yab = posAY - posBY;
-	const float Ybc = posBY - posCY;
-	const float Yca = posCY - posAY;
-
-	const float Zca = posCZ - posAZ;
-
 	// Calculate PQRST such that x = (Qz + S)/P, y = (Rz + T)/P.
-	const float P = (  posBX * Yca
-					 - posAX * posCY
-					 + posAY * posCX
-					 - posBY * Xca
-					) * 2;
+	const float P = (posBX * posCY - posAX * posCY - posCX * posBY + posAX * posBY + posCX * posAY - posBX * posAY) * 2;
+	const float Q = ((posBY - posAY) * posCZ + (posAY - posCY) * posBZ + (posCY - posBY) * posAZ) * 2;
+	const float R = ((posBX - posAX) * posCZ + (posAX - posCX) * posBZ + (posCX - posBX) * posAZ) * 2;
 
-	const float Q = (  posBY * Zca
-					 - posAY * posCZ
-					 + posAZ * posCY
-					 - posBZ * Yca
-					) * 2;
-
-	const float R = - (  posBX * Zca
-					   + posAX * posCZ
-					   + posAZ * posCX
-					   - posBZ * Xca
-					  ) * 2;
-
-	const float P2 = fsquare(P);
-	const float U = (posAZ * P2) + (posAX * Q * P) + (posAY * R * P);
-	const float A = (P2 + fsquare(Q) + fsquare(R)) * 2;
-
-	const float S = - Yab * (rodSquared[DELTA_C_AXIS] - Dc2)
-	                - Yca * (rodSquared[DELTA_B_AXIS] - Db2)
-	                - Ybc * (rodSquared[DELTA_A_AXIS] - Da2);
-	const float T = - Xab * (rodSquared[DELTA_C_AXIS] - Dc2)
-	                + Xca * (rodSquared[DELTA_B_AXIS] - Db2)
-	                + Xbc * (rodSquared[DELTA_A_AXIS] - Da2);
+	const float S =   (rodSquared[DELTA_A_AXIS] - rodSquared[DELTA_B_AXIS] + Db2 - Da2) * posCY
+					+ (rodSquared[DELTA_C_AXIS] - rodSquared[DELTA_A_AXIS] + Da2 - Dc2) * posBY
+					+ (rodSquared[DELTA_B_AXIS] - rodSquared[DELTA_C_AXIS] + Dc2 - Db2) * posAY;
+	const float T =   (rodSquared[DELTA_A_AXIS] - rodSquared[DELTA_B_AXIS] + Db2 - Da2) * posCX
+					+ (rodSquared[DELTA_C_AXIS] - rodSquared[DELTA_A_AXIS] + Da2 - Dc2) * posBX
+					+ (rodSquared[DELTA_B_AXIS] - rodSquared[DELTA_C_AXIS] + Dc2 - Db2) * posAX;
 
 	// Calculate quadratic equation coefficients
-	const float halfB = (S * Q) - (R * T) - U;
-	const float C = fsquare(S) + fsquare(T) + (posAY * T - posAX * S) * P * 2 + (Da2 - rodSquared[DELTA_A_AXIS]) * P2;
+	const float P2 = fsquare(P);
+	const float A = P2 + fsquare(Q) + fsquare(R);
+	const float halfB = (P * R * posAY) - (P2 * posAZ) - (P * Q * posAX) + (R * T) + (Q * S);
+	const float C = fsquare(S) + fsquare(T) + (T * posAY - S * posAX) * P * 2 + (Da2 - rodSquared[DELTA_A_AXIS]) * P2;
 
 	// Solve the quadratic equation for z
 	const float z = (- halfB - sqrtf(fsquare(halfB) - A * C))/A;

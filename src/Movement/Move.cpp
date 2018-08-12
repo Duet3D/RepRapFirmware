@@ -35,6 +35,7 @@
 
 #include "Move.h"
 #include "Platform.h"
+#include "GCodes/GCodeBuffer.h"
 #include "Tools/Tool.h"
 
 constexpr uint32_t UsualMinimumPreparedTime = StepClockRate/10;			// 100ms
@@ -75,6 +76,7 @@ void Move::Init()
 	numLookaheadUnderruns = numPrepareUnderruns = numLookaheadErrors = 0;
 	maxPrintingAcceleration = maxTravelAcceleration = 10000.0;
 	drcEnabled = false;											// disable dynamic ringing cancellation
+	drcMinimumAcceleration = 10.0;
 
 	// Clear the transforms
 	SetIdentityTransform();
@@ -598,9 +600,10 @@ void Move::Diagnostics(MessageType mtype)
 {
 	Platform& p = reprap.GetPlatform();
 	p.Message(mtype, "=== Move ===\n");
-	p.MessageF(mtype, "Hiccups: %" PRIu32 ", StepErrors: %u, LaErrors: %u, FreeDm: %d, MinFreeDm: %d, MaxWait: %" PRIu32 "ms, Underruns: %u, %u\n",
+	p.MessageF(mtype, "Hiccups: %u, StepErrors: %u, LaErrors: %u, FreeDm: %d, MinFreeDm: %d, MaxWait: %" PRIu32 "ms, Underruns: %u, %u\n",
 						DDA::numHiccups, stepErrors, numLookaheadErrors, DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
 	DDA::numHiccups = 0;
+	stepErrors = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = numLookaheadErrors = 0;
 	longestGcodeWaitInterval = 0;
 	DriveMovement::ResetMinFree();
@@ -1292,18 +1295,69 @@ bool Move::WriteResumeSettings(FileStore *f) const
 	return kinematics->WriteResumeSettings(f) && (!usingMesh || f->Write("G29 S1\n"));
 }
 
-// Set the DRC frequency or disable DRC
-void Move::SetDRCfreq(float f)
+// Process M204
+GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)
 {
-	if (f >= 4.0 && f <= 10000.0)
+	bool seen = false;
+	if (gb.Seen('S'))
 	{
-		drcPeriod = 1.0/f;
-		drcEnabled = true;
+		// For backwards compatibility with old versions of Marlin (e.g. for Cura and the Prusa fork of slic3r), set both accelerations
+		seen = true;
+		maxTravelAcceleration = maxPrintingAcceleration = gb.GetFValue();
 	}
-	else
+	if (gb.Seen('P'))
 	{
-		drcEnabled = false;
+		seen = true;
+		maxPrintingAcceleration = gb.GetFValue();
 	}
+	if (gb.Seen('T'))
+	{
+		seen = true;
+		maxTravelAcceleration = gb.GetFValue();
+	}
+	if (!seen)
+	{
+		reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f", (double)maxPrintingAcceleration, (double)maxTravelAcceleration);
+	}
+	return GCodeResult::ok;
+}
+
+// Process M593
+GCodeResult Move::ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef& reply)
+{
+	bool seen = false;
+	if (gb.Seen('F'))
+	{
+		seen = true;
+		const float f = gb.GetFValue();
+		if (f >= 4.0 && f <= 10000.0)
+		{
+			drcPeriod = 1.0/f;
+			drcEnabled = true;
+		}
+		else
+		{
+			drcEnabled = false;
+		}
+	}
+	if (gb.Seen('L'))
+	{
+		seen = true;
+		drcMinimumAcceleration = max<float>(gb.GetFValue(), 1.0);		// very low accelerations cause problems with the maths
+	}
+
+	if (!seen)
+	{
+		if (reprap.GetMove().IsDRCenabled())
+		{
+			reply.printf("Dynamic ringing cancellation at %.1fHz, min. acceleration %.1f", (double)(1.0/drcPeriod), (double)drcMinimumAcceleration);
+		}
+		else
+		{
+			reply.copy("Dynamic ringing cancellation is disabled");
+		}
+	}
+	return GCodeResult::ok;
 }
 
 // For debugging
