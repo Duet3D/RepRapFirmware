@@ -466,9 +466,9 @@ GCodeResult GCodes::SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply)
 		seenParam = true;
 	}
 
-	if (gb.Seen('E'))
+	if (gb.Seen('C'))
 	{
-		params.eEndstop = gb.GetUIValue();
+		params.endstop = gb.GetUIValue();
 		seenParam = true;
 	}
 

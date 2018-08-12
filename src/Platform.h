@@ -1179,8 +1179,8 @@ inline uint16_t Platform::GetRawZProbeReading() const
 
 	case ZProbeType::eSwitch:
 		{
-			uint8_t eEndstop = GetCurrentZProbeParameters().eEndstop;
-			const bool b = IoPort::ReadPin(endStopPins[E0_AXIS + eEndstop]);
+			uint8_t endstop = GetCurrentZProbeParameters().endstop;
+			const bool b = IoPort::ReadPin(endStopPins[endstop]);
 			return (b) ? 4000 : 0;
 		}
 

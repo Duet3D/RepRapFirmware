@@ -24,7 +24,7 @@ void ZProbe::Init(float h)
 	tolerance = DefaultZProbeTolerance;
 	maxTaps = DefaultZProbeTaps;
 	invertReading = turnHeatersOff = false;
-	eEndstop = 0; // Default e0 for Mode 4 backward compatibility
+	endstop = 3; // Default e0 for Mode 4 backward compatibility
 }
 
 float ZProbe::GetStopHeight(float temperature) const
@@ -37,10 +37,10 @@ bool ZProbe::WriteParameters(FileStore *f, unsigned int probeType) const
 	String<ScratchStringLength> scratchString;
 	if(probeType != (unsigned int)ZProbeType::eSwitch)
 		scratchString.printf("G31 T%u P%" PRIu32 " X%.1f Y%.1f Z%.2f", probeType, adcValue, (double)xOffset, (double)yOffset, (double)triggerHeight);
-	else if(eEndstop == 1)
+	else if(endstop == 4)
 		scratchString.printf("G31 T%u P%" PRIu32 " X%.1f Y%.1f Z%.2f", (unsigned int)ZProbeType::e1Switch, adcValue, (double)xOffset, (double)yOffset, (double)triggerHeight);
 	else
-		scratchString.printf("G31 T%u P%" PRIu32 " X%.1f Y%.1f Z%.2f E%u\n", probeType, adcValue, (double)xOffset, (double)yOffset, (double)triggerHeight, eEndstop);
+		scratchString.printf("G31 T%u P%" PRIu32 " X%.1f Y%.1f Z%.2f C%u\n", probeType, adcValue, (double)xOffset, (double)yOffset, (double)triggerHeight, endstop);
 
 	return f->Write(scratchString.c_str());
 }
