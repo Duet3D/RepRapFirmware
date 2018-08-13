@@ -58,7 +58,9 @@ public:
 	int Heater(size_t heaterNumber) const;
 	const char *GetName() const;
 	int Number() const;
-	void DefineMix(const float m[]);
+	bool DefineMix(const float m[]);
+	void SetCanExceedMixSumOf1(const bool m) { canExceedMixSumOf1 = m; }
+	bool GetCanExceedMixSumOf1() const { return canExceedMixSumOf1; }
 	const float* GetMix() const;
 	float MaxFeedrate() const;
 	void Print(const StringRef& reply) const;
@@ -94,11 +96,14 @@ private:
 	void ResetTemperatureFault(int8_t wasDudHeater);
 	bool AllHeatersAtHighTemperature(bool forExtrusion) const;
 
+	bool CheckExceedsMixSumOf1(const float m[]) const;
+
 	Tool* next;
 	Filament *filament;
 	char *name;
 	float offset[MaxAxes];
 	float mix[MaxExtruders];
+	bool canExceedMixSumOf1;
 	float activeTemperatures[Heaters];
 	float standbyTemperatures[Heaters];
 	size_t driveCount;
