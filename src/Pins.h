@@ -44,6 +44,14 @@
 # define SUPPORT_WORKPLACE_COORDINATES		0
 #endif
 
+#ifndef SUPPORT_LASER
+# define SUPPORT_LASER			0
+#endif
+
+#ifndef SUPPORT_IOBITS
+# define SUPPORT_IOBITS			0
+#endif
+
 #ifndef SUPPORT_12864_LCD
 # define SUPPORT_12864_LCD		0
 #endif

@@ -17,6 +17,7 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
 #define SUPPORT_TMC2660			1
+#define TMC2660_USES_USART		1
 #define HAS_VOLTAGE_MONITOR		1
 #define HAS_VREF_MONITOR		0
 #define ACTIVE_LOW_HEAT_ON		1
@@ -24,6 +25,7 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define SUPPORT_INKJET		0						// set nonzero to support inkjet control
 #define SUPPORT_ROLAND		0						// set nonzero to support Roland mill
 #define SUPPORT_SCANNER		1						// set zero to disable support for FreeLSS scanners
+#define SUPPORT_LASER		1						// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS		1						// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR	1						// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
@@ -61,10 +63,20 @@ constexpr Pin AdditionalIoExpansionStart = 220;		// Pin numbers 220-235 are on t
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // DRIVES
-constexpr Pin GlobalTmcEnablePin = 38;				// The pin that drives ENN of all TMC2660 drivers on production boards (on pre-production boards they are grounded)
+constexpr Pin GlobalTmc2660EnablePin = 38;			// The pin that drives ENN of all TMC2660 drivers on production boards (on pre-production boards they are grounded)
 constexpr Pin ENABLE_PINS[DRIVES] = { 78, 41, 42, 49, 57, 87, 88, 89, 90, 31, 82, 60 };
 constexpr Pin STEP_PINS[DRIVES] = { 70, 71, 72, 69, 68, 66, 65, 64, 67, 91, 84, 85 };
 constexpr Pin DIRECTION_PINS[DRIVES] = { 75, 76, 77, 01, 73, 92, 86, 80, 81, 32, 83, 25 };
+
+// Pin assignments etc. using USART1 in SPI mode
+Usart * const USART_TMC2660 = USART1;
+constexpr uint32_t  ID_TMC2660_SPI = ID_USART1;
+constexpr IRQn TMC2660_SPI_IRQn = USART1_IRQn;
+# define TMC2660_SPI_Handler	USART1_Handler
+
+constexpr Pin TMC2660MosiPin = 22;					// PA13
+constexpr Pin TMC2660MisoPin = 21;					// PA22
+constexpr Pin TMC2660SclkPin = 23;					// PA23
 
 constexpr Pin DueX_SG = 96;							// DueX stallguard detect pin = PE0 (was E2_STOP)
 constexpr Pin DueX_INT = 17;						// DueX interrupt pin = PA17 (was E6_STOP)

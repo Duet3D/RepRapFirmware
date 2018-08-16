@@ -71,6 +71,16 @@ public:
 	unsigned int GetNumProbePoints() const;							// Return the number of currently used probe points
 	float PushBabyStepping(float amount);							// Try to push some babystepping through the lookahead queue
 
+	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply);			// process M204
+	GCodeResult ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef& reply);	// process M593
+
+	float GetMaxPrintingAcceleration() const { return maxPrintingAcceleration; }
+	float GetMaxTravelAcceleration() const { return maxTravelAcceleration; }
+	float GetDRCfreq() const { return 1.0/drcPeriod; }
+	float GetDRCperiod() const { return drcPeriod; }
+	float GetDRCminimumAcceleration() const { return drcMinimumAcceleration; }
+	float IsDRCenabled() const { return drcEnabled; }
+
 	void Diagnostics(MessageType mtype);							// Report useful stuff
 	void RecordLookaheadError() { ++numLookaheadErrors; }			// Record a lookahead error
 
@@ -165,6 +175,12 @@ private:
 	bool active;										// Are we live and running?
 	uint8_t simulationMode;								// Are we simulating, or really printing?
 	MoveState moveState;								// whether the idle timer is active
+	bool drcEnabled;
+
+	float maxPrintingAcceleration;
+	float maxTravelAcceleration;
+	float drcPeriod;									// the period of ringing that we don't want to excite
+	float drcMinimumAcceleration;						// the minimum value that we reduce acceleration to
 
 	unsigned int numLookaheadUnderruns;					// How many times we have run out of moves to adjust during lookahead
 	unsigned int numPrepareUnderruns;					// How many times we wanted a new move but there were only un-prepared moves in the queue

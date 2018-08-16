@@ -32,7 +32,7 @@ void PortControl::Exit()
 
 void PortControl::Spin(bool full)
 {
-	if (numConfiguredPorts != 0)
+	if (numConfiguredPorts != 0 && reprap.GetGCodes().GetMachineType() != MachineType::laser)
 	{
 		cpu_irq_disable();
 		const DDA * cdda = reprap.GetMove().GetCurrentDDA();

@@ -50,6 +50,8 @@ namespace SmartDrivers
 	DriverMode GetDriverMode(size_t driver);
 	bool SetChopperControlRegister(size_t driver, uint32_t ccr);
 	uint32_t GetChopperControlRegister(size_t driver);
+	bool SetOffTime(size_t driver, uint32_t ccr);
+	uint32_t GetOffTime(size_t driver);
 	void Spin(bool powered);
 	void TurnDriversOff();
 	void SetCoolStep(size_t drive, uint16_t coolStepConfig);

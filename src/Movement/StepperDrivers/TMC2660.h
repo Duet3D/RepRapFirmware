@@ -16,12 +16,6 @@
 #include "MessageType.h"
 #include "Libraries/General/StringRef.h"
 
-// The Platform class needs to know which USART we are using when assigning interrupt priorities
-#define USART_TMC_DRV			USART1
-#define UART_TMC_DRV_IRQn		USART1_IRQn
-#define ID_USART_TMC_DRV		ID_USART1
-#define USART_TMC_DRV_Handler	USART1_Handler
-
 // TMC2660 Read response. The microstep counter can also be read, but we don't include that here.
 const uint32_t TMC_RR_SG = 1 << 0;			// stall detected
 const uint32_t TMC_RR_OT = 1 << 1;			// over temperature shutdown
@@ -50,6 +44,8 @@ namespace SmartDrivers
 	DriverMode GetDriverMode(size_t driver);
 	bool SetChopperControlRegister(size_t driver, uint32_t ccr);
 	uint32_t GetChopperControlRegister(size_t driver);
+	bool SetOffTime(size_t driver, uint32_t ccr);
+	uint32_t GetOffTime(size_t driver);
 	void SetStallThreshold(size_t driver, int sgThreshold);
 	void SetStallFilter(size_t driver, bool sgFilter);
 	void SetStallMinimumStepsPerSecond(size_t driver, unsigned int stepsPerSecond);

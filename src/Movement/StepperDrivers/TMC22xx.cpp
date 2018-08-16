@@ -242,7 +242,9 @@ public:
 	void SetAxisNumber(size_t p_axisNumber);
 	void WriteAll();
 	bool SetChopConf(uint32_t newVal);
+	bool SetOffTime(uint32_t newVal);
 	uint32_t GetChopConf() const;
+	uint32_t GetOffTime() const;
 	void SetCoolStep(uint16_t coolStepConfig);
 	bool SetMicrostepping(uint32_t shift, bool interpolate);
 	unsigned int GetMicrostepping(bool& interpolation) const;		// Get microstepping
@@ -346,7 +348,7 @@ private:
 // Static data members of class TmcDriverState
 
 #if TMC22xx_HAS_MUX
-Uart * const TmcDriverState::uart = UART_TMC_DRV;
+Uart * const TmcDriverState::uart = UART_TMC22xx;
 #endif
 
 TmcDriverState * volatile TmcDriverState::currentDriver = nullptr;	// volatile because the ISR changes it
@@ -471,7 +473,7 @@ pre(!driversPowered)
 	}
 
 #if !TMC22xx_HAS_MUX
-	uart = DriverUarts[p_driverNumber];
+	uart = TMC22xxUarts[p_driverNumber];
 #endif
 
 	enabled = false;
@@ -536,18 +538,40 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const
 	return 1u << microstepShiftFactor;
 }
 
-// Set the chopper control register to the settings provided by the user
+// Set the chopper control register to the settings provided by the user. We allow only the lowest 17 bits to be set.
 bool TmcDriverState::SetChopConf(uint32_t newVal)
 {
-	configuredChopConfReg = (newVal & (CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK)) | CHOPCONF_VSENSE_HIGH;
+	const uint32_t offTime = (newVal & CHOPCONF_TOFF_MASK) >> CHOPCONF_TOFF_SHIFT;
+	if (offTime == 0 || (offTime == 1 && (configuredChopConfReg & CHOPCONF_TBL_MASK) < (2 << CHOPCONF_TBL_SHIFT)))
+	{
+		return false;
+	}
+	const uint32_t userMask = CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK;	// mask of bits the user is allowed to change
+	configuredChopConfReg = (configuredChopConfReg & ~userMask) | (newVal & userMask);
 	UpdateChopConfRegister();
 	return true;
+}
+
+// Set the off time in the chopper control register
+bool TmcDriverState::SetOffTime(uint32_t newVal)
+{
+	if (newVal > 15)
+	{
+		return false;
+	}
+	return SetChopConf((configuredChopConfReg & ~CHOPCONF_TOFF_MASK) | ((newVal << CHOPCONF_TOFF_SHIFT) & CHOPCONF_TOFF_MASK));
 }
 
 // Get microstepping or chopper control register
 uint32_t TmcDriverState::GetChopConf() const
 {
-	return configuredChopConfReg;
+	return configuredChopConfReg & 0x01FFFF;
+}
+
+// Get the off time from the chopper control register
+uint32_t TmcDriverState::GetOffTime() const
+{
+	return (configuredChopConfReg & CHOPCONF_TOFF_MASK) >> CHOPCONF_TOFF_SHIFT;
 }
 
 // Set the driver mode
@@ -715,27 +739,27 @@ inline void TmcDriverState::SetUartMux()
 {
 	if ((driverNumber & 0x01) != 0)
 	{
-		fastDigitalWriteHigh(DriverMuxPins[0]);
+		fastDigitalWriteHigh(TMC22xxMuxPins[0]);
 	}
 	else
 	{
-		fastDigitalWriteLow(DriverMuxPins[0]);
+		fastDigitalWriteLow(TMC22xxMuxPins[0]);
 	}
 	if ((driverNumber & 0x02) != 0)
 	{
-		fastDigitalWriteHigh(DriverMuxPins[1]);
+		fastDigitalWriteHigh(TMC22xxMuxPins[1]);
 	}
 	else
 	{
-		fastDigitalWriteLow(DriverMuxPins[1]);
+		fastDigitalWriteLow(TMC22xxMuxPins[1]);
 	}
 	if ((driverNumber & 0x04) != 0)
 	{
-		fastDigitalWriteHigh(DriverMuxPins[2]);
+		fastDigitalWriteHigh(TMC22xxMuxPins[2]);
 	}
 	else
 	{
-		fastDigitalWriteLow(DriverMuxPins[2]);
+		fastDigitalWriteLow(TMC22xxMuxPins[2]);
 	}
 }
 
@@ -816,11 +840,16 @@ inline void TmcDriverState::UartTmcHandler()
 
 #if TMC22xx_HAS_MUX
 
+#ifndef TMC22xx_UART_Handler
+# error TMC handler name not defined
+#endif
+
 // ISR for the single UART
-extern "C" void UART_TMC_DRV_Handler() __attribute__ ((hot));
-void UART_TMC_DRV_Handler()
+extern "C" void TMC22xx_UART_Handler() __attribute__ ((hot));
+
+void TMC22xx_UART_Handler()
 {
-	UART_TMC_DRV->UART_IDR = UART_IDR_ENDRX;			// disable the interrupt
+	UART_TMC22xx->UART_IDR = UART_IDR_ENDRX;			// disable the interrupt
 	TmcDriverState *driver = TmcDriverState::currentDriver;	// capture volatile variable
 	if (driver != nullptr)
 	{
@@ -856,27 +885,27 @@ namespace SmartDrivers
 		numTmc22xxDrivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
 
 		// Make sure the ENN pins are high
-		pinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
+		pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 
 #if TMC22xx_HAS_MUX
 		// Set up- the single UART that communicates with all TMC22xx drivers
-		ConfigurePin(GetPinDescription(UART_TMC_DRV_PINS));					// the pins are already set up for UART use in the pins table
+		ConfigurePin(GetPinDescription(TMC22xx_UART_PINS));					// the pins are already set up for UART use in the pins table
 
 		// Enable the clock to the UART
-		pmc_enable_periph_clk(ID_UART_TMC_DRV);
+		pmc_enable_periph_clk(ID_TMC22xx_UART);
 
 		// Set the UART baud rate, 8 bits, 2 stop bits, no parity
-		UART_TMC_DRV->UART_IDR = ~0u;
-		UART_TMC_DRV->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS;
-		UART_TMC_DRV->UART_MR = UART_MR_CHMODE_NORMAL | UART_MR_PAR_NO;
-		UART_TMC_DRV->UART_BRGR = VARIANT_MCK/(16 * DriversBaudRate);		// set baud rate
-		UART_TMC_DRV->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS | UART_CR_RSTSTA;
-		NVIC_EnableIRQ(UART_TMC_DRV_IRQn);
+		UART_TMC22xx->UART_IDR = ~0u;
+		UART_TMC22xx->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS;
+		UART_TMC22xx->UART_MR = UART_MR_CHMODE_NORMAL | UART_MR_PAR_NO;
+		UART_TMC22xx->UART_BRGR = VARIANT_MCK/(16 * DriversBaudRate);		// set baud rate
+		UART_TMC22xx->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS | UART_CR_RSTSTA;
+		NVIC_EnableIRQ(TMC22xx_UART_IRQn);
 
 		// Set up the multiplexer control pins as outputs
-		pinMode(DriverMuxPins[0], OUTPUT_LOW);
-		pinMode(DriverMuxPins[1], OUTPUT_LOW);
-		pinMode(DriverMuxPins[2], OUTPUT_LOW);
+		pinMode(TMC22xxMuxPins[0], OUTPUT_LOW);
+		pinMode(TMC22xxMuxPins[1], OUTPUT_LOW);
+		pinMode(TMC22xxMuxPins[2], OUTPUT_LOW);
 #endif
 
 		driversState = DriversState::noPower;
@@ -885,19 +914,19 @@ namespace SmartDrivers
 #if !TMC22xx_HAS_MUX
 			// Initialise the UART that controls this driver
 			// The pins are already set up for UART use in the pins table
-			ConfigurePin(GetPinDescription(DriverUartPins[drive]));
+			ConfigurePin(GetPinDescription(TMC22xxUartPins[drive]));
 
 			// Enable the clock to the UART
-			pmc_enable_periph_clk(DriverUartIds[drive]);
+			pmc_enable_periph_clk(TMC22xxUartIds[drive]);
 
 			// Set the UART baud rate, 8 bits, 2 stop bits, no parity
-			Uart * const uart = DriverUarts[drive];
+			Uart * const uart = TMC22xxUarts[drive];
 			uart->UART_IDR = ~0u;
 			uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS;
 			uart->UART_MR = UART_MR_CHMODE_NORMAL | UART_MR_PAR_NO;
 			uart->UART_BRGR = VARIANT_MCK/(16 * DriversBaudRate);		// set baud rate
 			uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS | UART_CR_RSTSTA;
-			NVIC_EnableIRQ(DriverUartIRQns[drive]);
+			NVIC_EnableIRQ(TMC22xxUartIRQns[drive]);
 #endif
 			driverStates[drive].Init(drive, driverSelectPins[drive]);	// axes are mapped straight through to drivers initially
 		}
@@ -985,6 +1014,16 @@ namespace SmartDrivers
 		return (driver < numTmc22xxDrivers) ? driverStates[driver].GetChopConf() : 0;
 	}
 
+	bool SetOffTime(size_t driver, uint32_t offTime)
+	{
+		return driver < numTmc22xxDrivers && driverStates[driver].SetOffTime(offTime);
+	}
+
+	uint32_t GetOffTime(size_t driver)
+	{
+		return (driver < numTmc22xxDrivers) ? driverStates[driver].GetOffTime() : 0;
+	}
+
 	// Flag that the the drivers have been powered up or down and handle any timeouts
 	// Before the first call to this function with 'powered' true, you must call Init()
 	void Spin(bool powered)
@@ -1045,7 +1084,7 @@ namespace SmartDrivers
 
 				if (allInitialised)
 				{
-					digitalWrite(GlobalTmcEnablePin, LOW);
+					digitalWrite(GlobalTmc22xxEnablePin, LOW);
 					driversState = DriversState::ready;
 				}
 			}
@@ -1053,7 +1092,7 @@ namespace SmartDrivers
 		else
 		{
 			// We had power but we lost it
-			digitalWrite(GlobalTmcEnablePin, HIGH);			// disable the drivers
+			digitalWrite(GlobalTmc22xxEnablePin, HIGH);			// disable the drivers
 			if (TmcDriverState::currentDriver == nullptr)
 			{
 				TmcDriverState::currentDriver->AbortTransfer();

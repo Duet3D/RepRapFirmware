@@ -141,7 +141,7 @@ namespace RTOSIface
 	static volatile unsigned int interruptCriticalSectionNesting = 0;
 #endif
 
-	// Enter a critical section, where modificatio0n to variables by interrupts (and perhaps also other tasks) must be avoided
+	// Enter a critical section, where modification to variables by interrupts (and perhaps also other tasks) must be avoided
 	inline void EnterInterruptCriticalSection()
 	{
 #ifdef RTOS
@@ -167,6 +167,7 @@ namespace RTOSIface
 	}
 
 	// Enter a task-critical region. Used to protect concurrent access to variable from different tasks, where the variable are not used/modified by interrupts.
+	// This can be called even if the caller is already in a TaskCriticalSection, because FreeRTOS keeps track of the nesting count.
 	inline void EnterTaskCriticalSection()
 	{
 #ifdef RTOS

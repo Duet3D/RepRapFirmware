@@ -469,7 +469,7 @@ void ScaraKinematics::Recalc()
 	}
 	else
 	{
-		const float minAngle = min<float>(fabs(psiLimits[0]), fabs(psiLimits[1])) * DegreesToRadians;
+		const float minAngle = min<float>(fabsf(psiLimits[0]), fabsf(psiLimits[1])) * DegreesToRadians;
 		maxRadius = sqrtf(proximalArmLengthSquared + distalArmLengthSquared + (twoPd * cosf(minAngle)));
 	}
 	maxRadius *= 0.995;

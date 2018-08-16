@@ -247,10 +247,10 @@ void HeightMap::SetGridHeight(size_t xIndex, size_t yIndex, float height)
 // Note that deltaX and deltaY may be negative
 unsigned int HeightMap::GetMinimumSegments(float deltaX, float deltaY) const
 {
-	const float xDistance = fabs(deltaX);
+	const float xDistance = fabsf(deltaX);
 	unsigned int xSegments = (xDistance > 0.0) ? (unsigned int)(xDistance * def.recipXspacing + 0.4) : 1;
 
-	const float yDistance = fabs(deltaY);
+	const float yDistance = fabsf(deltaY);
 	unsigned int ySegments = (yDistance > 0.0) ? (unsigned int)(yDistance * def.recipYspacing + 0.4) : 1;
 
 	return max<unsigned int>(xSegments, ySegments);
