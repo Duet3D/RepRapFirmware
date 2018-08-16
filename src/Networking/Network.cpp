@@ -371,6 +371,15 @@ void Network::SetEthernetIPAddress(const uint8_t ipAddress[], const uint8_t netm
 	}
 }
 
+const uint8_t *Network::GetIPAddress(unsigned int interface) const
+{
+	if (interface < NumNetworkInterfaces)
+	{
+		return interfaces[interface]->GetIPAddress();
+	}
+	return nullptr;
+}
+
 void Network::SetHostname(const char *name)
 {
 	size_t i = 0;

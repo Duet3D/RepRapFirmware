@@ -51,7 +51,7 @@ public:
 	void SetFont(const LcdFont *newFont);
 
 	// Get the current font height
-	PixelNumber GetFontHeight() const { return currentFont->height; }
+	PixelNumber GetFontHeight() const { return m_oCurrentFont->height; }
 
 	// Select normal or inverted text (only works in graphics mode)
 	void TextInvert(bool b);
@@ -65,10 +65,10 @@ public:
 	void SetCursor(PixelNumber r, uint8_t c);        // 'c' in alpha mode, should be an even column number
 
 	// Get the cursor row. Useful after we have written some text.
-	PixelNumber GetRow() const { return row; }
+	PixelNumber GetRow() const { return m_pixnumRow; }
 
 	// Get the cursor column. Useful after we have written some text.
-	PixelNumber GetColumn() const { return column; }
+	PixelNumber GetColumn() const { return m_pixnumColumn; }
 
 	// Set the left margin. This is where the cursor goes to when we print newline.
 	void SetLeftMargin(PixelNumber c);
@@ -119,18 +119,16 @@ public:
 	void Bitmap(PixelNumber top, PixelNumber left, PixelNumber height, PixelNumber width, const uint8_t data[]);
 
 private:
-	uint32_t charVal;
-	const LcdFont *currentFont;						// pointer to descriptor for current font
-	sspi_device device;
-	uint16_t lastCharColData;						// data for the last non-space column, used for kerning
-	uint8_t numContinuationBytesLeft;
-	PixelNumber row, column;
-	PixelNumber startRow, startCol, endRow, endCol;	// coordinates of the dirty rectangle
-	PixelNumber nextFlushRow;						// which row we need to flush next
-	PixelNumber leftMargin, rightMargin;
-	uint8_t image[(NumRows * NumCols)/8];			// image buffer, 1K in size
-	bool textInverted;
-	bool justSetCursor;
+	const LcdFont *m_oCurrentFont;						// pointer to descriptor for current font
+	sspi_device m_oDevice;
+	uint16_t m_u16LastCharColData;						// data for the last non-space column, used for kerning
+	uint8_t m_u8NumContinuationBytesLeft;
+	PixelNumber m_pixnumRow, m_pixnumColumn;
+	PixelNumber m_pixnumStartRow, m_pixnumStartCol, m_pixnumEndRow, m_pixnumEndCol;	// coordinates of the dirty rectangle
+	PixelNumber m_pixnumLeftMargin, m_pixnumRightMargin;
+	uint8_t m_au8Image[(NumRows * NumCols)/8];			// image buffer, 1K in size
+	bool m_bTextInverted;
+	bool m_bJustSetCursor;
 
 	void sendLcdCommand(uint8_t command);
 	void sendLcdData(uint8_t data);
@@ -142,3 +140,4 @@ private:
 };
 
 #endif
+
