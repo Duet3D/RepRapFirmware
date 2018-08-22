@@ -559,7 +559,7 @@ public:
 
 #if HAS_SMART_DRIVERS
 	float GetTmcDriversTemperature(unsigned int board) const;
-	void DriverCoolingFansOn(uint32_t driverChannelsMonitored);
+	void DriverCoolingFansOnOff(uint32_t driverChannelsMonitored, bool on);
 	unsigned int GetNumSmartDrivers() const { return numSmartDrivers; }
 #endif
 
@@ -626,7 +626,7 @@ private:
 	float AdcReadingToCpuTemperature(uint32_t reading) const;
 
 #if HAS_SMART_DRIVERS
-	void ReportDrivers(MessageType mt, DriversBitmap whichDrivers, const char* text, bool& reported);
+	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char* text, bool& reported);
 #endif
 #if HAS_STALL_DETECT
 	bool AnyAxisMotorStalled(size_t drive) const pre(drive < DRIVES);
@@ -751,13 +751,11 @@ private:
 
 #if HAS_SMART_DRIVERS
 	size_t numSmartDrivers;								// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers
-	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers, openLoadDrivers;
+	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers, openLoadADrivers, openLoadBDrivers;
+	MillisTimer openLoadATimer, openLoadBTimer;
+	MillisTimer driversFanTimers[NumTmcDriversSenseChannels];		// driver cooling fan timers
 	uint8_t nextDriveToPoll;
 	bool driversPowered;
-	bool onBoardDriversFanRunning;						// true if a fan is running to cool the on-board drivers
-	bool offBoardDriversFanRunning;						// true if a fan is running to cool the drivers on the DueX
-	uint32_t onBoardDriversFanStartMillis;				// how many times we have suppressed a temperature warning
-	uint32_t offBoardDriversFanStartMillis;				// how many times we have suppressed a temperature warning
 #endif
 
 #if HAS_STALL_DETECT

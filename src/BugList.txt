@@ -29,11 +29,17 @@ Implemented in 2.02beta1:
 - added check for timeout when sending to the W5500 but not receiving
 
 Remaining:
-- Retest Duet Maestro behaviour when TMC2224 drivers overheat, https://forum.duet3d.com/topic/6309/little-monster-s-hort-to-ground/13
+- [done, ok on DuetM, test on Duet2] No warning messages when TMC2224 drivers overheat, https://forum.duet3d.com/topic/6309/little-monster-s-hort-to-ground/13
+- Command to copy output from the following commands to the log file?
 - Track which devices use which pins
 - Matt's display changes/other display fixes
 - Hangprinter PRs
 - PR to have any enabled driver report 50C
+- M116 parameter to set allowed temperature difference
+- M208 xaa:bb etc.
+- M557 option to set number of X and Y points instead of limits and spacing
+- Alternative G10 command to set offsets from known current tool position, see https://forum.duet3d.com/topic/6465/g92-g10-m585-for-setting-head-position-not-machine-position/4
+- Keep sending M408 responses to PanelDue while waiting for movement to complete, or M400 or homing move or similar
 - CNC shutdown when movement outside limits attempted not working well, https://forum.duet3d.com/topic/6186/stable-firmware-2-01-duet-2-and-1-22-duet-06-085-released/55
 - Junction deviation instead of jerk?
 - Still doesn't always find the DueX5, see https://forum.duet3d.com/topic/6239/unstable-after-firmware-upgrade/3. Is the Heat task affecting the timing? Need new I2C driver?

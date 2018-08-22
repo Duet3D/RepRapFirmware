@@ -316,7 +316,7 @@ void Fan::Refresh()
 #if HAS_SMART_DRIVERS
 			if (driverChannelsMonitored != 0)
 			{
-				reprap.GetPlatform().DriverCoolingFansOn(driverChannelsMonitored);		// tell Platform that we have started a fan that cools drivers
+				reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, true);		// tell Platform that we have started a fan that cools drivers
 			}
 #endif
 			if (reqVal < 1.0 && blipTime != 0)
@@ -339,6 +339,12 @@ void Fan::Refresh()
 			}
 		}
 	}
+#if HAS_SMART_DRIVERS
+	else if (driverChannelsMonitored != 0 && lastVal != 0.0)
+	{
+		reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, false);			// tell Platform that we have stopped a fan that cools drivers
+	}
+#endif
 
 	SetHardwarePwm(reqVal);
 	lastVal = reqVal;

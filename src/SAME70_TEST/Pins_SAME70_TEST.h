@@ -6,36 +6,35 @@
 const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
 #define IAP_FIRMWARE_FILE	"SAME70Firmware.bin"
 #define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
-#define WIFI_WEB_FILE		"DuetWebControl.bin"
 #define IAP_UPDATE_FILE		"iape70.bin"		// need special build for SAME70
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		1
-#define HAS_CPU_TEMP_SENSOR		0
+#define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
 #define HAS_VOLTAGE_MONITOR		0		// TBD
 #define HAS_VREF_MONITOR		0		// TBD
-#define ACTIVE_LOW_HEAT_ON		1
+#define ACTIVE_LOW_HEAT_ON		0		// TBD
 
 #define SUPPORT_INKJET		0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND		0					// set nonzero to support Roland mill
 #define SUPPORT_SCANNER		0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_IOBITS		1					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR	0					// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_DHT_SENSOR	1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1		// set nonzero to support G10 L2 and G53..59
 
 #define USE_CACHE			0					// Cache controller has some problems on the SAME70
 
 // The physical capabilities of the machine
 
-const size_t DRIVES = 12;						// The maximum number of drives supported by the electronics
-const size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
-#define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h,i,j,k,l }
+const size_t DRIVES = 6;						// The maximum number of drives supported by the electronics
+const size_t MaxSmartDrivers = 6;				// The maximum number of smart drivers
+#define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f }
 
-constexpr size_t Heaters = 8;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
+constexpr size_t Heaters = 4;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
-constexpr size_t NumThermistorInputs = 8;
+constexpr size_t NumThermistorInputs = 4;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
@@ -43,25 +42,23 @@ constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the
 #define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f,g,h,i }
 
 constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
-constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
+constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
-constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
+constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
+#define SERIAL_WIFI_DEVICE Serial1
 
 //TWI is disabled for now on the SAM7E until we rewrite the driver
 //#define I2C_IFACE	Wire							// Which TWI interface we use
-
-constexpr Pin DueXnExpansionStart = 200;			// Pin numbers 200-215 are on the I/O expander
-constexpr Pin AdditionalIoExpansionStart = 220;		// Pin numbers 220-235 are on the additional I/O expander
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // DRIVES
 constexpr Pin GlobalTmcEnablePin = NoPin;			// The pin that drives ENN of all TMC2660 drivers on production boards (on pre-production boards they are grounded)
-constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
-constexpr Pin STEP_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
-constexpr Pin DIRECTION_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
+constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
+constexpr Pin STEP_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
+constexpr Pin DIRECTION_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
 
 constexpr Pin DueX_SG = NoPin;						// DueX stallguard detect pin (TBD)
 constexpr Pin DueX_INT = NoPin;						// DueX interrupt pin (TBD)
@@ -69,11 +66,11 @@ constexpr Pin DueX_INT = NoPin;						// DueX interrupt pin (TBD)
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-constexpr Pin END_STOP_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
+constexpr Pin END_STOP_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
 
 // Heater and thermistors
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin }; // Thermistor pin numbers
-constexpr Pin HEAT_ON_PINS[Heaters] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };	// Heater pin numbers (TBD)
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 66, 86, 48, 65 }; // Thermistor pin numbers (labelled AD1-2 and AD4-5 on test board, but AD5 has a 0R resistor missing)
+constexpr Pin HEAT_ON_PINS[Heaters] = { NoPin, NoPin, NoPin, NoPin };	// Heater pin numbers (TBD)
 
 // Default thermistor parameters
 constexpr float BED_R25 = 100000.0;
@@ -84,17 +81,14 @@ constexpr float EXT_BETA = 4388.0;
 constexpr float EXT_SHC = 0.0;
 
 // Thermistor series resistor value in Ohms
-constexpr float THERMISTOR_SERIES_RS = 4700.0;
+constexpr float THERMISTOR_SERIES_RS = 2200.0;
 
 // Number of SPI temperature sensors to support
 
-constexpr size_t MaxSpiTempSensors = 0;
+constexpr size_t MaxSpiTempSensors = 4;
 
 // Digital pins the 31855s have their select lines tied to
-constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { };
-
-// DHTxx data pin
-constexpr Pin DhtDataPin = NoPin;											// TBD
+constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { NoPin, NoPin, NoPin, NoPin };
 
 // Pin that controls the ATX power on/off
 constexpr Pin ATX_POWER_PIN = NoPin;
@@ -102,11 +96,11 @@ constexpr Pin ATX_POWER_PIN = NoPin;
 // Analogue pin numbers
 constexpr Pin Z_PROBE_PIN = NoPin;											// TBD
 constexpr Pin PowerMonitorVinDetectPin = NoPin;								// TBD
-constexpr Pin PowerMonitor5vDetectPin = NoPin;								// TBD
 
-//constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 voltage divider (TBD)
+constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 voltage divider (TBD)
 
 constexpr Pin VssaSensePin = NoPin;
+constexpr Pin VrefSensePin = NoPin;
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
 constexpr Pin Z_PROBE_MOD_PIN = NoPin;
@@ -120,7 +114,7 @@ constexpr Pin TachoPins[NumTachos] = { NoPin };								// TBD
 
 // SD cards
 constexpr size_t NumSdCards = 2;
-constexpr Pin SdCardDetectPins[NumSdCards] = { 32, NoPin };
+constexpr Pin SdCardDetectPins[NumSdCards] = { 51, NoPin };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[1] = { NoPin };
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
@@ -148,19 +142,20 @@ constexpr Pin ROLAND_RTS_PIN = xx;											// Expansion pin 12, PA13_RXD1
 constexpr Pin SpecialPinMap[] =
 {
 };
-constexpr Pin DueX5GpioPinMap[] = {};					// TBD
+constexpr Pin DueX5GpioPinMap[] = {};				// TBD
 constexpr int HighestLogicalPin = 50;										// highest logical pin number on this electronics
 
-// SAME70 Flash locations (may be expanded in the future) [TBD]
-constexpr uint32_t IAP_FLASH_START = 0x00470000;
-constexpr uint32_t IAP_FLASH_END = 0x0047FFFF;		// we allow a full 64K on the SAM4
+// SAME70 Flash locations
+// These are designed to work with 1Mbyte flash processors as well as 2Mbyte
+// We can only erase complete 128kb sectors on the SAME70, so we allow 128Kb for IAP
+constexpr uint32_t IAP_FLASH_START = 0x004E0000;
+constexpr uint32_t IAP_FLASH_END = 0x004FFFFF;
 
 // Duet pin numbers to control the WiFi interface
-constexpr Pin EspResetPin = 19;					// Low on this in holds the WiFi module in reset (ESP_RESET)
-constexpr Pin EspEnablePin = 48;				// High to enable the WiFi module, low to power it down (ESP_CH_PD)
-constexpr Pin EspDataReadyPin = 12;				// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
-constexpr Pin SamTfrReadyPin = 36;				// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
-constexpr Pin SamCsPin = 20;					// SPI NPCS pin, input from WiFi module
+constexpr Pin EspResetPin = 27;					// Low on this in holds the WiFi module in reset (ESP_RESET)
+constexpr Pin EspDataReadyPin = 19;				// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
+constexpr Pin SamTfrReadyPin = 66;				// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
+constexpr Pin SamCsPin = 28;					// SPI NPCS pin, input from WiFi module
 
 // Timer allocation
 #define NETWORK_TC			(TC0)

@@ -205,6 +205,22 @@ private:
 // Macro to create a SimpleRange from an array
 #define ARRAY_INDICES(_arr) (SimpleRange<size_t>(ARRAY_SIZE(_arr)))
 
+// A simple milliseconds timer class
+class MillisTimer
+{
+public:
+	MillisTimer() { running = false; }
+	void Start();
+	void Stop() { running = false; }
+	bool Check(uint32_t timeoutMillis) const;
+	bool CheckAndStop(uint32_t timeoutMillis);
+	bool IsRunning() const { return running; }
+
+private:
+	uint32_t whenStarted;
+	bool running;
+};
+
 // Helper functions to work on bitmaps of various lengths.
 // The primary purpose of these is to allow us to switch between 16, 32 and 64-bit bitmaps.
 

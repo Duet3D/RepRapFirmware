@@ -171,7 +171,7 @@ void WiFiInterface::Init()
 		sockets[i]->Init(i);
 	}
 
-	uploader = new WifiFirmwareUploader(Serial1, *this);
+	uploader = new WifiFirmwareUploader(SERIAL_WIFI_DEVICE, *this);
 	currentSocket = 0;
 }
 
@@ -394,8 +394,10 @@ void WiFiInterface::Start()
 	// Make sure the ESP8266 is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
 
+#ifdef DUET_NG
 	// Take the ESP8266 out of power down
 	pinMode(EspEnablePin, OUTPUT_HIGH);
+#endif
 
 	// Set up our transfer request pin (GPIO4) as an output and set it low
 	pinMode(SamTfrReadyPin, OUTPUT_LOW);
@@ -1802,8 +1804,10 @@ void WiFiInterface::ResetWiFiForUpload(bool external)
 	// Make sure the ESP8266 is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
 
+#ifdef DUET_NG
 	// Take the ESP8266 out of power down
 	pinMode(EspEnablePin, OUTPUT_HIGH);
+#endif
 
 	// Set up our transfer request pin (GPIO4) as an output and set it low
 	pinMode(SamTfrReadyPin, OUTPUT_LOW);

@@ -174,7 +174,6 @@ Platform::Platform() :
 		logger(nullptr), board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
 #if HAS_SMART_DRIVERS
 		nextDriveToPoll(0),
-		onBoardDriversFanRunning(false), offBoardDriversFanRunning(false), onBoardDriversFanStartMillis(0), offBoardDriversFanStartMillis(0),
 #endif
 		lastFanCheckTime(0), auxGCodeReply(nullptr), tickState(0), debugCode(0), lastWarningMillis(0), deliberateError(false), i2cInitialised(false)
 {
@@ -463,8 +462,7 @@ void Platform::Init()
 	// Initialise TMC driver module
 	driversPowered = false;
 	SmartDrivers::Init(ENABLE_PINS, numSmartDrivers);
-	temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadDrivers = 0;
-	onBoardDriversFanRunning = offBoardDriversFanRunning = false;
+	temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadADrivers = openLoadBDrivers = 0;
 #endif
 
 #if HAS_STALL_DETECT
@@ -942,8 +940,8 @@ void Platform::UpdateFirmware()
 	char* const data = reinterpret_cast<char *>(data32);
 
 #if SAM4E || SAM4S || SAME70
-	// The EWP command is not supported for non-8KByte sectors in the SAM4 series.
-	// So we have to unlock and erase the complete 64Kb sector first.
+	// The EWP command is not supported for non-8KByte sectors in the SAM4 and SAME70 series.
+	// So we have to unlock and erase the complete 64Kb or 128kb sector first. One sector is always enough to contain the IAP.
 	flash_unlock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
 	flash_erase_sector(IAP_FLASH_START);
 
@@ -1370,7 +1368,7 @@ void Platform::Spin()
 		}
 		else
 		{
-			// Check one TMC2660 for temperature warning or temperature shutdown
+			// Check one TMC2660 or TMC2224 for temperature warning or temperature shutdown
 			if (enableValues[nextDriveToPoll] >= 0)				// don't poll driver if it is flagged "no poll"
 			{
 				const uint32_t stat = SmartDrivers::GetAccumulatedStatus(nextDriveToPoll, 0);
@@ -1378,19 +1376,10 @@ void Platform::Spin()
 				if (stat & TMC_RR_OT)
 				{
 					temperatureShutdownDrivers |= mask;
-					temperatureWarningDrivers &= ~mask;			// no point in setting warning as well as error
 				}
-				else
+				else if (stat & TMC_RR_OTPW)
 				{
-					temperatureShutdownDrivers &= ~mask;
-					if (stat & TMC_RR_OTPW)
-					{
-						temperatureWarningDrivers |= mask;
-					}
-					else
-					{
-						temperatureWarningDrivers &= ~mask;
-					}
+					temperatureWarningDrivers |= mask;
 				}
 				if (stat & TMC_RR_S2G)
 				{
@@ -1400,14 +1389,35 @@ void Platform::Spin()
 				{
 					shortToGroundDrivers &= ~mask;
 				}
-				if ((stat & (TMC_RR_OLA | TMC_RR_OLB)) != 0 && (stat & TMC_RR_STST) == 0)
+
+				// The driver often produces a transient open-load error, especially in stealthchop mode, so we require the condition to persist before we report it.
+				// Also,false open load indications persist when in standstill, if the phase has zero current in that position
+				if ((stat & TMC_RR_OLA) != 0 && (stat & TMC_RR_STST) == 0)
 				{
-					openLoadDrivers |= mask;
+					if (openLoadADrivers == 0)
+					{
+						openLoadATimer.Start();
+					}
+					openLoadADrivers |= mask;
 				}
 				else
 				{
-					openLoadDrivers &= ~mask;
+					openLoadADrivers &= ~mask;
 				}
+
+				if ((stat & TMC_RR_OLB) != 0 && (stat & TMC_RR_STST) == 0)
+				{
+					if (openLoadBDrivers == 0)
+					{
+						openLoadBTimer.Start();
+					}
+					openLoadBDrivers |= mask;
+				}
+				else
+				{
+					openLoadBDrivers &= ~mask;
+				}
+
 #if HAS_STALL_DETECT
 				if ((stat & TMC_RR_SG) != 0)
 				{
@@ -1505,21 +1515,36 @@ void Platform::Spin()
 #if HAS_SMART_DRIVERS
 			ReportDrivers(ErrorMessage, shortToGroundDrivers, "short-to-ground", reported);
 			ReportDrivers(ErrorMessage, temperatureShutdownDrivers, "over temperature shutdown", reported);
-			// Don't report open load because we get too many spurious open load reports
-			//ReportDrivers(openLoadDrivers, "Error: Open load", reported);
+			if (openLoadATimer.CheckAndStop(OpenLoadTimeout))
+			{
+				ReportDrivers(ErrorMessage, openLoadADrivers, "motor phase A disconnected", reported);
+			}
+			if (openLoadBTimer.CheckAndStop(OpenLoadTimeout))
+			{
+				ReportDrivers(ErrorMessage, openLoadBDrivers, "motor phase B disconnected", reported);
+			}
 
 			// Don't warn about a hot driver if we recently turned on a fan to cool it
 			if (temperatureWarningDrivers != 0)
 			{
-				// Don't warn about over-temperature drivers if we have recently turned on a fan to cool them
-				const bool onBoardOtw = (temperatureWarningDrivers & ((1u << 5) - 1)) != 0;
-				const bool offBoardOtw = (temperatureWarningDrivers & ~((1u << 5) - 1)) != 0;
-				if (   (onBoardOtw && (!onBoardDriversFanRunning || now - onBoardDriversFanStartMillis >= DriverCoolingTimeout))
-					|| (offBoardOtw && (!offBoardDriversFanRunning || now - offBoardDriversFanStartMillis >= DriverCoolingTimeout))
-				   )
+				const DriversBitmap driversMonitored[NumTmcDriversSenseChannels] =
+# ifdef DUET_NG
+					{ LowestNBits<DriversBitmap>(5), LowestNBits<DriversBitmap>(5) << 5 };			// first channel is Duet, second is DueX5
+# else
+					{ LowestNBits<DriversBitmap>(DRIVES), LowestNBits<DriversBitmap>(DRIVES) };		// both channels monitor all drivers
+# endif
+				for (unsigned int i = 0; i < NumTmcDriversSenseChannels; ++i)
 				{
-					ReportDrivers(WarningMessage, temperatureWarningDrivers, "high temperature", reported);
+					if (driversFanTimers[i].IsRunning())
+					{
+						const bool timedOut = driversFanTimers[i].CheckAndStop(DriverCoolingTimeout);
+						if (!timedOut)
+						{
+							temperatureWarningDrivers &= ~driversMonitored[i];
+						}
+					}
 				}
+				ReportDrivers(WarningMessage, temperatureWarningDrivers, "high temperature", reported);
 			}
 #endif
 
@@ -1627,22 +1652,24 @@ void Platform::Spin()
 
 // Report driver status conditions that require attention.
 // Sets 'reported' if we reported anything, else leaves 'reported' alone.
-void Platform::ReportDrivers(MessageType mt, DriversBitmap whichDrivers, const char* text, bool& reported)
+void Platform::ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char* text, bool& reported)
 {
 	if (whichDrivers != 0)
 	{
 		String<ScratchStringLength> scratchString;
 		scratchString.printf("%s on drivers", text);
-		for (unsigned int drive = 0; whichDrivers != 0; ++drive)
+		DriversBitmap wd = whichDrivers;
+		for (unsigned int drive = 0; wd != 0; ++drive)
 		{
-			if ((whichDrivers & 1) != 0)
+			if ((wd & 1) != 0)
 			{
 				scratchString.catf(" %u", drive);
 			}
-			whichDrivers >>= 1;
+			wd >>= 1;
 		}
 		MessageF(mt, "%s\n", scratchString.c_str());
 		reported = true;
+		whichDrivers = 0;
 	}
 }
 
@@ -1733,6 +1760,8 @@ float Platform::AdcReadingToCpuTemperature(uint32_t adcVal) const
 	return (voltage - 1.44) * (1000.0/4.7) + 27.0 + mcuTemperatureAdjust;			// accuracy at 27C is +/-13C
 #elif SAM3XA
 	return (voltage - 0.8) * (1000.0/2.65) + 27.0 + mcuTemperatureAdjust;			// accuracy at 27C is +/-45C
+#elif SAME70
+	return (voltage - 0.72) * (1000.0/2.33) + 25.0 + mcuTemperatureAdjust;			// accuracy at 25C is +/-34C
 #else
 # error undefined CPU temp conversion
 #endif
@@ -2469,7 +2498,7 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 					ok2 = false;
 				}
 			}
-			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s\n",
+			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s",
 					(double)(tim1 * 10000)/StepClockRate, (ok1) ? "ok" : "ERROR",
 							(double)(tim2 * 10000)/StepClockRate, (ok2) ? "ok" : "ERROR");
 		}
@@ -2491,17 +2520,21 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 #if HAS_SMART_DRIVERS
 
 // This is called when a fan that monitors driver temperatures is turned on when it was off
-void Platform::DriverCoolingFansOn(uint32_t driverChannelsMonitored)
+void Platform::DriverCoolingFansOnOff(uint32_t driverChannelsMonitored, bool on)
 {
-	if (driverChannelsMonitored & 1)
+	for (unsigned int i = 0; i < NumTmcDriversSenseChannels; ++i)
 	{
-		onBoardDriversFanStartMillis = millis();
-		onBoardDriversFanRunning = true;
-	}
-	if (driverChannelsMonitored & 2)
-	{
-		offBoardDriversFanStartMillis = millis();
-		offBoardDriversFanRunning = true;
+		if ((driverChannelsMonitored & (1 << i)) != 0)
+		{
+			if (on)
+			{
+				driversFanTimers[i].Start();
+			}
+			else
+			{
+				driversFanTimers[i].Stop();
+			}
+		}
 	}
 }
 
@@ -2514,7 +2547,7 @@ void Platform::SetHeater(size_t heater, float power, PwmFrequency freq)
 	{
 		if (freq == 0)
 		{
-			freq = (reprap.GetHeat().IsBedOrChamberHeater(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;	// use sefault PWM frequency
+			freq = (reprap.GetHeat().IsBedOrChamberHeater(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;	// use default PWM frequency
 		}
 		const float pwm =
 #if ACTIVE_LOW_HEAT_ON
@@ -2551,7 +2584,7 @@ void Platform::UpdateConfiguredHeaters()
 	}
 
 	// Check tool heaters
-	for(size_t heater = 0; heater < Heaters; heater++)
+	for (size_t heater = 0; heater < Heaters; heater++)
 	{
 		if (reprap.IsHeaterAssignedToTool(heater))
 		{
@@ -3134,7 +3167,8 @@ void Platform::SetEnableValue(size_t driver, int8_t eVal)
 		temperatureShutdownDrivers &= mask;
 		temperatureWarningDrivers &= mask;
 		shortToGroundDrivers &= mask;
-		openLoadDrivers &= mask;
+		openLoadADrivers &= mask;
+		openLoadBDrivers &= mask;
 	}
 #endif
 }
@@ -4632,9 +4666,9 @@ void Platform::Tick()
 	rswdt_restart(RSWDT);							// kick the secondary watchdog (the primary one is kicked in CoreNG)
 #endif
 
+#if HAS_VOLTAGE_MONITOR
 	if (tickState != 0)
 	{
-#if HAS_VOLTAGE_MONITOR
 		// Read the power input voltage
 		currentVin = AnalogInReadChannel(vInMonitorAdcChannel);
 		if (currentVin > highestVin)
@@ -4653,8 +4687,8 @@ void Platform::Tick()
 			// We deliberately do not clear driversPowered here or increase the over voltage event count - we let the spin loop handle that
 		}
 # endif
-#endif
 	}
+#endif
 
 	switch (tickState)
 	{

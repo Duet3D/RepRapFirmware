@@ -413,7 +413,7 @@ uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep)
 	bitsToKeep &= mask;
 	const irqflags_t flags = cpu_irq_save();
 	const uint32_t status = accumulatedStatus;
-	accumulatedStatus &= bitsToKeep;
+	accumulatedStatus = (status & bitsToKeep) | lastReadStatus;		// so that the next call to ReadAccumulatedStatus isn't missing some bits
 	cpu_irq_restore(flags);
 	return status & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST) & mask;
 }
