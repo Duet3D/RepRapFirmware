@@ -64,7 +64,8 @@ constexpr size_t MaxSmartDrivers = 2;				// The maximum number of smart drivers
 
 #endif
 
-constexpr size_t Heaters = 2;						// The number of heaters in the machine. PCCB has no heaters, but we pretend that the LED pins are heaters.
+constexpr size_t NumEndstops = 4;					// The number of inputs we have for endstops, filament sensors etc.
+constexpr size_t NumHeaters = 2;					// The number of heaters in the machine. PCCB has no heaters, but we pretend that the LED pins are heaters.
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 2;
 
@@ -133,14 +134,10 @@ const uint32_t TransferTimeout = 10;						// any transfer should complete within
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-#ifdef PCCB_X5
-constexpr Pin END_STOP_PINS[DRIVES] = { 25, 67, 24, 63, NoPin, NoPin };
-#else
-constexpr Pin END_STOP_PINS[DRIVES] = { 25, 67, 24, 63, NoPin, NoPin, NoPin, NoPin };
-#endif
+constexpr Pin END_STOP_PINS[NumEndstops] = { 25, 67, 24, 63 };
 
 // Heaters and thermistors
-constexpr Pin HEAT_ON_PINS[Heaters] = { 36, 59 };					// these are actually the LED control pins
+constexpr Pin HEAT_ON_PINS[NumHeaters] = { 36, 59 };					// these are actually the LED control pins
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 20, 49 }; 	// Thermistor pin numbers
 constexpr Pin VssaSensePin = 19;
 constexpr Pin VrefSensePin = 27;

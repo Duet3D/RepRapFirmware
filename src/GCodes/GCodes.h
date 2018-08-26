@@ -237,7 +237,7 @@ private:
 	static const Resource MoveResource = 0;								// Movement system, including canned cycle variables
 	static const Resource FileSystemResource = 1;						// Non-sharable parts of the file system
 	static const Resource HeaterResourceBase = 2;
-	static const Resource FanResourceBase = HeaterResourceBase + Heaters;
+	static const Resource FanResourceBase = HeaterResourceBase + NumHeaters;
 	static const size_t NumResources = FanResourceBase + NUM_FANS;
 
 	static_assert(NumResources <= 32, "Too many resources to keep a bitmap of them in class GCodeMachineState");

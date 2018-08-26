@@ -14,7 +14,7 @@
 #include "GCodes/GCodeResult.h"
 #include "RTOSIface.h"
 
-#if defined(SAME70_TEST_BOARD)
+#if defined(DUET3)
 const size_t NumNetworkInterfaces = 2;
 #elif defined(DUET_NG) || defined(DUET_M)
 const size_t NumNetworkInterfaces = 1;

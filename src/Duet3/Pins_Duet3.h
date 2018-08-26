@@ -1,10 +1,10 @@
 #ifndef PINS_SAME70_H__
 #define PINS_SAME70_H__
 
-#define FIRMWARE_NAME		"RepRapFirmware for SAME70"
-#define DEFAULT_BOARD_TYPE BoardType::SamE70TestBoard
+#define FIRMWARE_NAME		"RepRapFirmware for Duet 3"
+#define DEFAULT_BOARD_TYPE BoardType::Duet3_10
 const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
-#define IAP_FIRMWARE_FILE	"SAME70Firmware.bin"
+#define IAP_FIRMWARE_FILE	"Duet3Firmware.bin"
 #define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
 #define IAP_UPDATE_FILE		"iape70.bin"		// need special build for SAME70
 
@@ -13,26 +13,44 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 #define HAS_WIFI_NETWORKING		1
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
+
+//#define VARIANT_TMC5130		1
+
+#ifdef VARIANT_TMC5130
+# define SUPPORT_TMC51xx		1
+# define TMC51xx_USES_USART		1
+#else
+# define SUPPORT_TMC2660		1
+# define TMC2660_USES_USART		1
+#endif
+
 #define HAS_VOLTAGE_MONITOR		0		// TBD
 #define HAS_VREF_MONITOR		0		// TBD
-#define ACTIVE_LOW_HEAT_ON		0		// TBD
+#define ACTIVE_LOW_HEAT_ON		0
 
-#define SUPPORT_INKJET		0					// set nonzero to support inkjet control
-#define SUPPORT_ROLAND		0					// set nonzero to support Roland mill
-#define SUPPORT_SCANNER		0					// set zero to disable support for FreeLSS scanners
-#define SUPPORT_IOBITS		1					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR	1					// set nonzero to support DHT temperature/humidity sensors
-#define SUPPORT_WORKPLACE_COORDINATES	1		// set nonzero to support G10 L2 and G53..59
+#define SUPPORT_INKJET			0					// set nonzero to support inkjet control
+#define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
+#define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
+#define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
+#define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 
-#define USE_CACHE			0					// Cache controller has some problems on the SAME70
+#define USE_CACHE				0					// Cache controller disabled for now
 
 // The physical capabilities of the machine
 
-const size_t DRIVES = 6;						// The maximum number of drives supported by the electronics
-const size_t MaxSmartDrivers = 6;				// The maximum number of smart drivers
-#define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f }
+#ifdef VARIANT_TMC5130
+constexpr size_t DRIVES = 6;						// The maximum number of drives supported by the electronics
+constexpr size_t MaxSmartDrivers = 6;				// The maximum number of smart drivers
+# define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f }
+#else
+constexpr size_t DRIVES = 5;						// The maximum number of drives supported by the electronics
+constexpr size_t MaxSmartDrivers = 5;				// The maximum number of smart drivers
+# define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e }
+#endif
 
-constexpr size_t Heaters = 4;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
+constexpr size_t NumEndstops = 6;					// The number of inputs we have for endstops, filament sensors etc.
+constexpr size_t NumHeaters = 4;					// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 4;
 
@@ -55,22 +73,51 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // DRIVES
-constexpr Pin GlobalTmcEnablePin = NoPin;			// The pin that drives ENN of all TMC2660 drivers on production boards (on pre-production boards they are grounded)
+
+#ifdef VARIANT_TMC5130
+
 constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
 constexpr Pin STEP_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
 constexpr Pin DIRECTION_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
 
-constexpr Pin DueX_SG = NoPin;						// DueX stallguard detect pin (TBD)
-constexpr Pin DueX_INT = NoPin;						// DueX interrupt pin (TBD)
+// Pin assignments etc. using USART1 in SPI mode
+constexpr Pin GlobalTmc51xxEnablePin = NoPin;		// The pin that drives ENN of all TMC drivers
+Usart * const USART_TMC51xx = USART1;
+constexpr uint32_t  ID_TMC51xx_SPI = ID_USART1;
+constexpr IRQn TMC51xx_SPI_IRQn = USART1_IRQn;
+# define TMC51xx_SPI_Handler	USART1_Handler
+
+constexpr Pin TMC51xxMosiPin = NoPin;
+constexpr Pin TMC51xxMisoPin = NoPin;
+constexpr Pin TMC51xxSclkPin = NoPin;
+
+#else
+
+constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin };
+constexpr Pin STEP_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin };
+constexpr Pin DIRECTION_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin };
+
+// Pin assignments etc. using USART1 in SPI mode
+constexpr Pin GlobalTmc2660EnablePin = NoPin;		// The pin that drives ENN of all TMC drivers
+Usart * const USART_TMC2660 = USART1;
+constexpr uint32_t  ID_TMC2660_SPI = ID_USART1;
+constexpr IRQn TMC2660_SPI_IRQn = USART1_IRQn;
+# define TMC2660_SPI_Handler	USART1_Handler
+
+constexpr Pin TMC2660MosiPin = NoPin;
+constexpr Pin TMC2660MisoPin = NoPin;
+constexpr Pin TMC2660SclkPin = NoPin;
+
+#endif
 
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-constexpr Pin END_STOP_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
+constexpr Pin END_STOP_PINS[NumEndstops] = { NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
 
 // Heater and thermistors
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 66, 86, 48, 65 }; // Thermistor pin numbers (labelled AD1-2 and AD4-5 on test board, but AD5 has a 0R resistor missing)
-constexpr Pin HEAT_ON_PINS[Heaters] = { NoPin, NoPin, NoPin, NoPin };	// Heater pin numbers (TBD)
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 66, 86, 48, 65 };	// Thermistor pin numbers (labelled AD1-2 and AD4-5 on eval board, but AD5 has a 0R resistor missing)
+constexpr Pin HEAT_ON_PINS[NumHeaters] = { NoPin, NoPin, NoPin, NoPin };	// Heater pin numbers (TBD)
 
 // Default thermistor parameters
 constexpr float BED_R25 = 100000.0;

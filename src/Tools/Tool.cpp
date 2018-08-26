@@ -60,7 +60,7 @@ Tool * Tool::freelist = nullptr;
 	}
 	for (size_t i = 0; i < hCount; ++i)
 	{
-		if (h[i] < 0 || h[i] >= (int)Heaters)
+		if (h[i] < 0 || h[i] >= (int)NumHeaters)
 		{
 			reply.copy("Tool creation: bad heater number");
 			return nullptr;

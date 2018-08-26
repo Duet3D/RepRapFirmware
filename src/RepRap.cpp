@@ -27,6 +27,9 @@
 #if HAS_HIGH_SPEED_SD
 # include "sam/drivers/hsmci/hsmci.h"
 # include "conf_sd_mmc.h"
+# if SAME70
+static_assert(CONF_HSMCI_XDMAC_CHANNEL == XDMAC_CHAN_HSMCI, "mismatched DMA channel assignment");
+# endif
 #endif
 
 #ifdef RTOS
@@ -715,7 +718,7 @@ void RepRap::Tick()
 #endif
 		{
 			resetting = true;
-			for (size_t i = 0; i < Heaters; i++)
+			for (size_t i = 0; i < NumHeaters; i++)
 			{
 				platform->SetHeater(i, 0.0);
 			}
@@ -1014,7 +1017,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Current temperatures
 		response->cat("\"current\":");
 		ch = '[';
-		for (size_t heater = 0; heater < Heaters; heater++)
+		for (size_t heater = 0; heater < NumHeaters; heater++)
 		{
 			response->catf("%c%.1f", ch, (double)heat->GetTemperature(heater));
 			ch = ',';
@@ -1024,7 +1027,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Current states
 		response->cat(",\"state\":");
 		ch = '[';
-		for (size_t heater = 0; heater < Heaters; heater++)
+		for (size_t heater = 0; heater < NumHeaters; heater++)
 		{
 			response->catf("%c%d", ch, heat->GetStatus(heater));
 			ch = ',';
@@ -1036,7 +1039,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		{
 			response->cat(",\"names\":");
 			ch = '[';
-			for (size_t heater = 0; heater < Heaters; heater++)
+			for (size_t heater = 0; heater < NumHeaters; heater++)
 			{
 				response->cat(ch);
 				ch = ',';
@@ -1197,7 +1200,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Endstops
 		uint32_t endstops = 0;
 		const size_t numTotalAxes = gCodes->GetTotalAxes();
-		for (size_t drive = 0; drive < DRIVES; drive++)
+		for (size_t drive = 0; drive < NumEndstops; drive++)
 		{
 			if (drive < numTotalAxes)
 			{

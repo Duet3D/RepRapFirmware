@@ -99,8 +99,8 @@ private:
 	char *name;
 	float offset[MaxAxes];
 	float mix[MaxExtruders];
-	float activeTemperatures[Heaters];
-	float standbyTemperatures[Heaters];
+	float activeTemperatures[NumHeaters];
+	float standbyTemperatures[NumHeaters];
 	size_t driveCount;
 	size_t heaterCount;
 	int myNumber;
@@ -108,7 +108,7 @@ private:
 	AxesBitmap axisOffsetsProbed;
 	FansBitmap fanMapping;
 	uint8_t drives[MaxExtruders];
-	int8_t heaters[Heaters];
+	int8_t heaters[NumHeaters];
 
 	ToolState state;
 	bool heaterFault;

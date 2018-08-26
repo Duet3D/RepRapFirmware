@@ -518,10 +518,10 @@ bool Move::PausePrint(RestorePoint& rp)
 	return true;
 }
 
-#if HAS_VOLTAGE_MONITOR
+#if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 
 // Pause the print immediately, returning true if we were able to skip or abort any moves and setting up to the move we aborted
-bool Move::LowPowerPause(RestorePoint& rp)
+bool Move::LowPowerOrStallPause(RestorePoint& rp)
 {
 	const DDA * const savedDdaRingAddPointer = ddaRingAddPointer;
 	bool abortedMove = false;

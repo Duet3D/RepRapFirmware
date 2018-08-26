@@ -33,8 +33,9 @@ const size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers 
 // Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
 #define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f }
 
+constexpr size_t NumEndstops = 6;					// The number of inputs we have for endstops, filament sensors etc.
 // Alligator + Piggy module max 5 heaters
-constexpr size_t Heaters = 5;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
+constexpr size_t NumHeaters = 5;					// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 5;
@@ -66,7 +67,7 @@ const Pin MotorFaultDetectPin = 22;
 // Alligator End-stop pinout mapping for RepRapFirmware:
 // 5V SIGN SIGN GND , 5V SIGN SIGN GND, 5V SIGN   SIGN    GND
 //     X    E0            Y    E1           Z   E2-Zprobe
-const Pin END_STOP_PINS[DRIVES] = { 33, 35, 38, 34, 37, 39, NoPin };
+const Pin END_STOP_PINS[NumEndstops] = { 33, 35, 38, 34, 37, 39 };
 
 // SPI DAC Motor for Current Vref
 const size_t MaxSpiDac = 2;
@@ -77,7 +78,7 @@ const Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 1, 0, 2, 3, 4 };	// Analogue 
 
 // h1,h2,h3,h4: X2,8,9,X8 is hardware PWM
 // b: X3 is not hardware PWM
-const Pin HEAT_ON_PINS[Heaters] = { X3, X2, 8, 9, X8 };
+const Pin HEAT_ON_PINS[NumHeaters] = { X3, X2, 8, 9, X8 };
 
 // Default thermistor parameters
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930

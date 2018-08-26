@@ -12,7 +12,13 @@
 #include "TMC2660.h"
 #include "RepRap.h"
 #include "Movement/Move.h"
-#include "sam/drivers/pdc/pdc.h"
+
+# if SAME70
+#  include "sam/drivers/xdmac/xdmac.h"
+# else
+#  include "sam/drivers/pdc/pdc.h"
+# endif
+
 #include "sam/drivers/usart/usart.h"
 
 const float MaximumMotorCurrent = 2400.0;
@@ -25,8 +31,6 @@ const unsigned int DefaultMinimumStepsPerSecond = 200;		// for stall detection: 
 static size_t numTmc2660Drivers;
 
 static bool driversPowered = false;
-
-const int ChopperControlRegisterMode = 999;					// mode passed to get/set microstepping to indicate we want the chopper control register
 
 // The SPI clock speed is a compromise:
 // - too high and polling the driver chips take too much of the CPU time
@@ -227,12 +231,14 @@ private:
 // State structures for all drivers
 static TmcDriverState driverStates[MaxSmartDrivers];
 
+#if !SAME70
 // PDC address
 static Pdc * const spiPdc =
-#if TMC2660_USES_USART
+# if TMC2660_USES_USART
 			usart_get_pdc_base(USART_TMC2660);
-#else
+# else
 			spi_get_pdc_base(SPI_TMC2660);
+# endif
 #endif
 
 // Words to send and receive driver SPI data from/to
@@ -245,6 +251,97 @@ static TmcDriverState * volatile currentDriver = nullptr;	// volatile because th
 // Set up the PDC to send a register and receive the status
 /*static*/ inline void TmcDriverState::SetupDMA(uint32_t outVal)
 {
+#if SAME70
+	/* From the data sheet:
+	 * Single Block Transfer With Single Microblock
+		1. Read the XDMAC Global Channel Status Register (XDMAC_GS) to select a free channel. [we use fixed channel numbers instead.]
+		2. Clear the pending Interrupt Status bit(s) by reading the selected XDMAC Channel x Interrupt Status
+		Register (XDMAC_CISx).
+		3. Write the XDMAC Channel x Source Address Register (XDMAC_CSAx) for channel x.
+		4. Write the XDMAC Channel x Destination Address Register (XDMAC_CDAx) for channel x.
+		5. Program field UBLEN in the XDMAC Channel x Microblock Control Register (XDMAC_CUBCx) with
+		the number of data.
+		6. Program the XDMAC Channel x Configuration Register (XDMAC_CCx):
+		6.1. Clear XDMAC_CCx.TYPE for a memory-to-memory transfer, otherwise set this bit.
+		6.2. Configure XDMAC_CCx.MBSIZE to the memory burst size used.
+		6.3. Configure XDMAC_CCx.SAM and DAM to Memory Addressing mode.
+		6.4. Configure XDMAC_CCx.DSYNC to select the peripheral transfer direction.
+		6.5. Configure XDMAC_CCx.CSIZE to configure the channel chunk size (only relevant for
+		peripheral synchronized transfer).
+		6.6. Configure XDMAC_CCx.DWIDTH to configure the transfer data width.
+		6.7. Configure XDMAC_CCx.SIF, XDMAC_CCx.DIF to configure the master interface used to
+		read data and write data, respectively.
+		6.8. Configure XDMAC_CCx.PERID to select the active hardware request line (only relevant for
+		a peripheral synchronized transfer).
+		6.9. Set XDMAC_CCx.SWREQ to use a software request (only relevant for a peripheral
+		synchronized transfer).
+		7. Clear the following five registers:
+		– XDMAC Channel x Next Descriptor Control Register (XDMAC_CNDCx)
+		– XDMAC Channel x Block Control Register (XDMAC_CBCx)
+		– XDMAC Channel x Data Stride Memory Set Pattern Register (XDMAC_CDS_MSPx)
+		– XDMAC Channel x Source Microblock Stride Register (XDMAC_CSUSx)
+		– XDMAC Channel x Destination Microblock Stride Register (XDMAC_CDUSx)
+		This indicates that the linked list is disabled, there is only one block and striding is disabled.
+		8. Enable the Microblock interrupt by writing a ‘1’ to bit BIE in the XDMAC Channel x Interrupt Enable
+		Register (XDMAC_CIEx). Enable the Channel x Interrupt Enable bit by writing a ‘1’ to bit IEx in the
+		XDMAC Global Interrupt Enable Register (XDMAC_GIE).
+		9. Enable channel x by writing a ‘1’ to bit ENx in the XDMAC Global Channel Enable Register
+		(XDMAC_GE). XDMAC_GS.STx (XDMAC Channel x Status bit) is set by hardware.
+		10. Once completed, the DMA channel sets XDMAC_CISx.BIS (End of Block Interrupt Status bit) and
+		generates an interrupt. XDMAC_GS.STx is cleared by hardware. The software can either wait for
+		an interrupt or poll the channel status bit.
+
+		The following code is adapted form the code in the HSMCI driver.
+	*/
+
+	// Receive
+	{
+		xdmac_channel_disable(XDMAC, XDMAC_CHAN_TMC_RX);
+		xdmac_channel_config_t p_cfg = {0, 0, 0, 0, 0, 0, 0, 0};
+		p_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN
+						| XDMAC_CC_MBSIZE_SINGLE
+						| XDMAC_CC_DSYNC_PER2MEM
+						| XDMAC_CC_CSIZE_CHK_1
+						| XDMAC_CC_DWIDTH_BYTE
+						| XDMAC_CC_SIF_AHB_IF1
+						| XDMAC_CC_DIF_AHB_IF0
+						| XDMAC_CC_SAM_FIXED_AM
+						| XDMAC_CC_DAM_INCREMENTED_AM
+						| XDMAC_CC_PERID(XDMAC_CHAN_TMC_RX);
+		p_cfg.mbr_ubc = 3;
+		HSMCI->HSMCI_MR |= HSMCI_MR_FBYTE;
+		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(USART_TMC2660->US_RHR));
+		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&spiDataIn);
+		xdmac_configure_transfer(XDMAC, XDMAC_CHAN_TMC_RX, &p_cfg);
+	}
+
+	// Transmit
+	{
+		xdmac_channel_disable(XDMAC, XDMAC_CHAN_TMC_TX);
+		xdmac_channel_config_t p_cfg = {0, 0, 0, 0, 0, 0, 0, 0};
+		p_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN
+						| XDMAC_CC_MBSIZE_SINGLE
+						| XDMAC_CC_DSYNC_MEM2PER
+						| XDMAC_CC_CSIZE_CHK_1
+						| XDMAC_CC_DWIDTH_BYTE
+						| XDMAC_CC_SIF_AHB_IF0
+						| XDMAC_CC_DIF_AHB_IF1
+						| XDMAC_CC_SAM_INCREMENTED_AM
+						| XDMAC_CC_DAM_FIXED_AM
+						| XDMAC_CC_PERID(XDMAC_CHAN_TMC_TX);
+		p_cfg.mbr_ubc = 3;
+		HSMCI->HSMCI_MR |= HSMCI_MR_FBYTE;
+		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(&spiDataOut);
+		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&(USART_TMC2660->US_THR));
+		xdmac_configure_transfer(XDMAC, XDMAC_CHAN_TMC_TX, &p_cfg);
+	}
+
+	// SPI sends data MSB first, but the firmware uses little-endian mode, so we need to reverse the byte order
+	spiDataOut = cpu_to_be32(outVal << 8);
+
+	xdmac_channel_enable(XDMAC, XDMAC_CHAN_TMC_RX);
+	xdmac_channel_enable(XDMAC, XDMAC_CHAN_TMC_TX);
+#else
 	// Faster code, not using the ASF
 	spiPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);		// disable the PDC
 
@@ -258,6 +355,7 @@ static TmcDriverState * volatile currentDriver = nullptr;	// volatile because th
 	spiPdc->PERIPH_RCR = 3;
 
 	spiPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTEN | PERIPH_PTCR_TXTEN);			// enable the PDC
+#endif
 }
 
 // Initialise the state of the driver and its CS pin
@@ -591,13 +689,21 @@ inline void TmcDriverState::StartTransfer()
 #endif
 
 	fastDigitalWriteLow(pin);							// set CS low
-	SetupDMA(regVal);									// set up the PDC
+	SetupDMA(regVal);									// set up the PDC or DMAC
 
-#if TMC2660_USES_USART
+	// Enable the interrupt
+#if SAME70
+	xdmac_channel_enable_interrupt(XDMAC, XDMAC_CHAN_TMC_RX, XDMAC_CIE_BIE);
+#elif TMC2660_USES_USART
 	USART_TMC2660->US_IER = US_IER_ENDRX;				// enable end-of-transfer interrupt
-	USART_TMC2660->US_CR = US_CR_RXEN | US_CR_TXEN;		// enable transmitter and receiver
 #else
 	SPI_TMC2660->SPI_IER = SPI_IER_ENDRX;				// enable end-of-transfer interrupt
+#endif
+
+	// Enable the transfer
+#if TMC2660_USES_USART
+	USART_TMC2660->US_CR = US_CR_RXEN | US_CR_TXEN;		// enable transmitter and receiver
+#else
 	SPI_TMC2660->SPI_CR = SPI_CR_SPIEN;					// enable SPI
 #endif
 
@@ -633,7 +739,9 @@ void TMC2660_SPI_Handler(void)
 
 	// Driver power is down or there is no current driver, so stop polling
 
-#if TMC2660_USES_USART
+#if SAME70
+	xdmac_channel_disable_interrupt(XDMAC, XDMAC_CHAN_TMC_RX, XDMAC_CIE_BIE);
+#elif TMC2660_USES_USART
 	USART_TMC2660->US_IDR = US_IDR_ENDRX;
 #else
 	SPI_TMC2660->SPI_IDR = SPI_IDR_ENDRX;
@@ -702,6 +810,13 @@ namespace SmartDrivers
 		{
 			driverStates[driver].Init(driver, driverSelectPins[driver]);		// axes are mapped straight through to drivers initially
 		}
+
+#if SAME70
+		pmc_enable_periph_clk(ID_XDMAC);
+		xdmac_channel_disable_interrupt(XDMAC, XDMAC_CHAN_TMC_TX, 0xFFFFFFFF);
+		xdmac_channel_disable_interrupt(XDMAC, XDMAC_CHAN_TMC_RX, 0xFFFFFFFF);
+		xdmac_enable_interrupt(XDMAC, XDMAC_CHAN_TMC_RX);
+#endif
 	}
 
 	void SetAxisNumber(size_t driver, uint32_t axisNumber)

@@ -28,7 +28,8 @@ constexpr size_t NumFirmwareUpdateModules = 1;
 constexpr size_t DRIVES = 9;						// The number of drives in the machine, including X, Y, and Z plus extruder drives
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h,i }
 
-constexpr size_t Heaters = 7;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
+constexpr size_t NumEndstops = 9;					// The number of inputs we have for endstops, filament sensors etc.
+constexpr size_t NumHeaters = 7;					// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 7;
 
@@ -59,7 +60,7 @@ constexpr Pin DIRECTION_PINS[DRIVES] = { 15, 26, 4, X3, 35, 53, 51, 48, X11 };
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-constexpr Pin END_STOP_PINS[DRIVES] = { 11, 28, 60, 31, 24, 46, 45, 44, X9 };
+constexpr Pin END_STOP_PINS[NumEndstops] = { 11, 28, 60, 31, 24, 46, 45, 44, X9 };
 
 // Indices for motor current digipots (if any): first 4 are for digipot 1 (on duet), second 4 for digipot 2 (on expansion board)
 constexpr uint8_t POT_WIPES[8] = { 1, 3, 2, 0, 1, 3, 2, 0 };
@@ -70,7 +71,7 @@ constexpr float STEPPER_DAC_VOLTAGE_OFFSET = -0.025;						// Stepper motor curre
 
 // HEATERS
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 5, 4, 0, 7, 8, 9, 11 };	// Analogue pin numbers
-constexpr Pin HEAT_ON_PINS[Heaters] = { 6, X5, X7, 7, 8, 9, X17 };			// Heater Channel 7 (pin X17) is shared with Fan1
+constexpr Pin HEAT_ON_PINS[NumHeaters] = { 6, X5, X7, 7, 8, 9, X17 };			// Heater Channel 7 (pin X17) is shared with Fan1
 
 // Default thermistor parameters
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930

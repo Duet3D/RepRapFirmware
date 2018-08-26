@@ -30,11 +30,13 @@ Implemented in 2.02beta1:
 
 Remaining:
 - [done, ok on DuetM, test on Duet2] No warning messages when TMC2224 drivers overheat, https://forum.duet3d.com/topic/6309/little-monster-s-hort-to-ground/13
+- G30 S-1 when no Z probe, https://forum.duet3d.com/topic/6510/a-couple-of-dwc-odd-things/2
 - Command to copy output from the following commands to the log file?
 - Track which devices use which pins
 - Matt's display changes/other display fixes
 - Hangprinter PRs
 - PR to have any enabled driver report 50C
+- PR to allow endstop input number to be specified in M558
 - M116 parameter to set allowed temperature difference
 - M208 xaa:bb etc.
 - M557 option to set number of X and Y points instead of limits and spacing

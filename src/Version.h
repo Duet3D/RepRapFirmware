@@ -22,7 +22,7 @@
 #endif
 
 #ifndef DATE
-# define DATE "2018-08-22b2"
+# define DATE "2018-08-26b3"
 #endif
 
 #define AUTHORS "reprappro, dc42, chrishamm, t3p3, dnewman"

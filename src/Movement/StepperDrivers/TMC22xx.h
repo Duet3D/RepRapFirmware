@@ -1,5 +1,5 @@
 /*
- * ExternalDrivers.h
+ * TMC22xx.h
  *
  *  Created on: 23 Jan 2016
  *      Author: David

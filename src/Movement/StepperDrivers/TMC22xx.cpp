@@ -1,5 +1,5 @@
 /*
- * TMC2660.cpp
+ * TMC22xx.cpp
  *
  *  Created on: 23 Jan 2016
  *      Author: David
@@ -35,8 +35,6 @@ enum class DriversState : uint8_t
 };
 
 static DriversState driversState = DriversState::noPower;
-
-const int ChopperControlRegisterMode = 999;					// mode passed to get/set microstepping to indicate we want the chopper control register
 
 // GCONF register (0x00, RW)
 constexpr uint8_t REGNUM_GCONF = 0x00;

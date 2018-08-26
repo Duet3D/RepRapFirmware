@@ -38,7 +38,8 @@ constexpr size_t DRIVES = 12;						// The maximum number of drives supported by 
 constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h,i,j,k,l }
 
-constexpr size_t Heaters = 8;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
+constexpr size_t NumEndstops = 12;					// The number of inputs we have for endstops, filament sensors etc.
+constexpr size_t NumHeaters = 8;					// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 8;
 
@@ -85,12 +86,12 @@ constexpr Pin DueX_INT = 17;						// DueX interrupt pin = PA17 (was E6_STOP)
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-constexpr Pin END_STOP_PINS[DRIVES] = { 46, 02, 93, 74, 48, 96, 97, 98, 99, 17, 39, 8 };
-constexpr Pin DUEX_END_STOP_PINS[5] = { 200, 203, 202, 201, 213 };			// these replace endstops 5-9 if a DueX is present
+constexpr Pin END_STOP_PINS[NumEndstops] = { 46, 02, 93, 74, 48, 96, 97, 98, 99, 17, 39, 8 };
+constexpr Pin DUEX_END_STOP_PINS[5] = { 200, 203, 202, 201, 213 };				// these replace endstops 5-9 if a DueX is present
 
 // HEATERS
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 45, 47, 44, 61, 62, 63, 59, 18 }; // Thermistor pin numbers
-constexpr Pin HEAT_ON_PINS[Heaters] = { 19, 20, 16, 35, 37, 40, 43, 15 };	// Heater pin numbers (heater 7 pin TBC)
+constexpr Pin HEAT_ON_PINS[NumHeaters] = { 19, 20, 16, 35, 37, 40, 43, 15 };	// Heater pin numbers (heater 7 pin TBC)
 
 // Default thermistor parameters
 constexpr float BED_R25 = 100000.0;

@@ -86,7 +86,7 @@ bool PID::SetModel(float gain, float tc, float td, float maxPwm, float voltage, 
 	if (rslt)
 	{
 #if defined(DUET_06_085)
-		if (heater == Heaters - 1)
+		if (heater == NumHeaters - 1)
 		{
 			// The last heater on the Duet 0.8.5 + DueX4 shares its pin with Fan1
 			platform.EnableSharedFan(!model.IsEnabled());

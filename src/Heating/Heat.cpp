@@ -92,7 +92,7 @@ void Heat::Init()
 		const float tempLimit = (IsBedOrChamberHeater(index)) ? DefaultBedTemperatureLimit : DefaultExtruderTemperatureLimit;
 		prot->Init(tempLimit);
 
-		if (index < Heaters)
+		if (index < NumHeaters)
 		{
 			pids[index]->SetHeaterProtection(prot);
 		}
@@ -111,7 +111,7 @@ void Heat::Init()
 			pids[heater]->Init(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, false, false);
 		}
 #if defined(DUET_06_085)
-		else if (heater == Heaters - 1)
+		else if (heater == NumHeaters - 1)
 		{
 			// On the Duet 085, the heater 6 pin is also the fan 1 pin. By default we support fan 1, so disable heater 6.
 			pids[heater]->Init(-1.0, -1.0, -1.0, true, false);
@@ -182,7 +182,7 @@ void Heat::Task()
 	lastWakeTime = xTaskGetTickCount();
 	for (;;)
 	{
-		for (size_t heater = 0; heater < Heaters; heater++)
+		for (size_t heater = 0; heater < NumHeaters; heater++)
 		{
 			pids[heater]->Spin();
 		}
@@ -212,7 +212,7 @@ void Heat::Spin()
 		if (now - lastTime >= platform.HeatSampleInterval())
 		{
 			lastTime = now;
-			for (size_t heater = 0; heater < Heaters; heater++)
+			for (size_t heater = 0; heater < NumHeaters; heater++)
 			{
 				pids[heater]->Spin();
 			}
@@ -273,7 +273,7 @@ bool Heat::AllHeatersAtSetTemperatures(bool includingBed) const
 bool Heat::HeaterAtSetTemperature(int8_t heater, bool waitWhenCooling) const
 {
 	// If it hasn't anything to do, it must be right wherever it is...
-	if (heater < 0 || heater >= (int)Heaters || pids[heater]->SwitchedOff() || pids[heater]->FaultOccurred())
+	if (heater < 0 || heater >= (int)NumHeaters || pids[heater]->SwitchedOff() || pids[heater]->FaultOccurred())
 	{
 		return true;
 	}
@@ -287,7 +287,7 @@ bool Heat::HeaterAtSetTemperature(int8_t heater, bool waitWhenCooling) const
 
 Heat::HeaterStatus Heat::GetStatus(int8_t heater) const
 {
-	if (heater < 0 || heater >= (int)Heaters)
+	if (heater < 0 || heater >= (int)NumHeaters)
 	{
 		return HS_off;
 	}
@@ -345,7 +345,7 @@ bool Heat::IsChamberHeater(int8_t heater) const
 
 void Heat::SetActiveTemperature(int8_t heater, float t)
 {
-	if (heater >= 0 && heater < (int)Heaters)
+	if (heater >= 0 && heater < (int)NumHeaters)
 	{
 		pids[heater]->SetActiveTemperature(t);
 	}
@@ -353,12 +353,12 @@ void Heat::SetActiveTemperature(int8_t heater, float t)
 
 float Heat::GetActiveTemperature(int8_t heater) const
 {
-	return (heater >= 0 && heater < (int)Heaters) ? pids[heater]->GetActiveTemperature() : ABS_ZERO;
+	return (heater >= 0 && heater < (int)NumHeaters) ? pids[heater]->GetActiveTemperature() : ABS_ZERO;
 }
 
 void Heat::SetStandbyTemperature(int8_t heater, float t)
 {
-	if (heater >= 0 && heater < (int)Heaters)
+	if (heater >= 0 && heater < (int)NumHeaters)
 	{
 		pids[heater]->SetStandbyTemperature(t);
 	}
@@ -366,13 +366,13 @@ void Heat::SetStandbyTemperature(int8_t heater, float t)
 
 float Heat::GetStandbyTemperature(int8_t heater) const
 {
-	return (heater >= 0 && heater < (int)Heaters) ? pids[heater]->GetStandbyTemperature() : ABS_ZERO;
+	return (heater >= 0 && heater < (int)NumHeaters) ? pids[heater]->GetStandbyTemperature() : ABS_ZERO;
 }
 
 float Heat::GetHighestTemperatureLimit(int8_t heater) const
 {
 	float limit = BAD_ERROR_TEMPERATURE;
-	if (heater >= 0 && heater < (int)Heaters)
+	if (heater >= 0 && heater < (int)NumHeaters)
 	{
 		for (const HeaterProtection *prot : heaterProtections)
 		{
@@ -392,7 +392,7 @@ float Heat::GetHighestTemperatureLimit(int8_t heater) const
 float Heat::GetLowestTemperatureLimit(int8_t heater) const
 {
 	float limit = ABS_ZERO;
-	if (heater >= 0 && heater < (int)Heaters)
+	if (heater >= 0 && heater < (int)NumHeaters)
 	{
 		for (const HeaterProtection *prot : heaterProtections)
 		{
@@ -412,7 +412,7 @@ float Heat::GetLowestTemperatureLimit(int8_t heater) const
 // Get the current temperature of a heater
 float Heat::GetTemperature(int8_t heater) const
 {
-	return (heater >= 0 && heater < (int)Heaters) ? pids[heater]->GetTemperature() : ABS_ZERO;
+	return (heater >= 0 && heater < (int)NumHeaters) ? pids[heater]->GetTemperature() : ABS_ZERO;
 }
 
 // Get the target temperature of a heater
@@ -426,7 +426,7 @@ float Heat::GetTargetTemperature(int8_t heater) const
 
 void Heat::Activate(int8_t heater)
 {
-	if (heater >= 0 && heater < (int)Heaters)
+	if (heater >= 0 && heater < (int)NumHeaters)
 	{
 		pids[heater]->Activate();
 	}
@@ -434,7 +434,7 @@ void Heat::Activate(int8_t heater)
 
 void Heat::SwitchOff(int8_t heater)
 {
-	if (heater >= 0 && heater < (int)Heaters)
+	if (heater >= 0 && heater < (int)NumHeaters)
 	{
 		pids[heater]->SwitchOff();
 		lastStandbyTools[heater] = nullptr;
@@ -443,7 +443,7 @@ void Heat::SwitchOff(int8_t heater)
 
 void Heat::SwitchOffAll(bool includingChamberAndBed)
 {
-	for (int heater = 0; heater < (int)Heaters; ++heater)
+	for (int heater = 0; heater < (int)NumHeaters; ++heater)
 	{
 		if (includingChamberAndBed || !IsBedOrChamberHeater(heater))
 		{
@@ -454,7 +454,7 @@ void Heat::SwitchOffAll(bool includingChamberAndBed)
 
 void Heat::Standby(int8_t heater, const Tool *tool)
 {
-	if (heater >= 0 && heater < (int)Heaters)
+	if (heater >= 0 && heater < (int)NumHeaters)
 	{
 		pids[heater]->Standby();
 		lastStandbyTools[heater] = tool;
@@ -463,7 +463,7 @@ void Heat::Standby(int8_t heater, const Tool *tool)
 
 void Heat::ResetFault(int8_t heater)
 {
-	if (heater >= 0 && heater < (int)Heaters)
+	if (heater >= 0 && heater < (int)NumHeaters)
 	{
 		pids[heater]->ResetFault();
 	}
@@ -599,7 +599,7 @@ GCodeResult Heat::ConfigureHeaterSensor(unsigned int mcode, size_t heater, GCode
 // Get a pointer to the temperature sensor entry, or nullptr if the heater number is bad
 TemperatureSensor **Heat::GetSensor(size_t heater)
 {
-	if (heater < Heaters)
+	if (heater < NumHeaters)
 	{
 		return &heaterSensors[heater];
 	}
@@ -613,7 +613,7 @@ TemperatureSensor **Heat::GetSensor(size_t heater)
 // Get a pointer to the temperature sensor entry, or nullptr if the heater number is bad (const version of above)
 TemperatureSensor * const *Heat::GetSensor(size_t heater) const
 {
-	if (heater < Heaters)
+	if (heater < NumHeaters)
 	{
 		return &heaterSensors[heater];
 	}
@@ -636,7 +636,7 @@ HeaterProtection& Heat::AccessHeaterProtection(size_t index) const
 {
 	if (index >= FirstExtraHeaterProtection && index < FirstExtraHeaterProtection + NumExtraHeaterProtections)
 	{
-		return *heaterProtections[index + Heaters - FirstExtraHeaterProtection];
+		return *heaterProtections[index + NumHeaters - FirstExtraHeaterProtection];
 	}
 	return *heaterProtections[index];
 }

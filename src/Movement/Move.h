@@ -112,8 +112,8 @@ public:
 	void PrintCurrentDda() const;													// For debugging
 
 	bool PausePrint(RestorePoint& rp);												// Pause the print as soon as we can, returning true if we were able to
-#if HAS_VOLTAGE_MONITOR
-	bool LowPowerPause(RestorePoint& rp);											// Pause the print immediately, returning true if we were able to
+#if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
+	bool LowPowerOrStallPause(RestorePoint& rp);									// Pause the print immediately, returning true if we were able to
 #endif
 
 	bool NoLiveMovement() const;													// Is a move running, or are there any queued?
