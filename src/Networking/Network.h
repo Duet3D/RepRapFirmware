@@ -64,6 +64,7 @@ public:
 	int EnableState(unsigned int interface) const;
 
 	void SetEthernetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[]);
+	const uint8_t *GetIPAddress(unsigned int interface) const;
 	const char *GetHostname() const { return hostname; }
 	void SetHostname(const char *name);
 	void SetMacAddress(unsigned int interface, const uint8_t mac[]);

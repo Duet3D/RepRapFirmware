@@ -75,6 +75,8 @@ public:
 	void SetToolHeaterActiveTemperature(size_t heaterNumber, float temp);
 	void SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp);
 
+	bool HasTemperatureFault() const { return heaterFault; }
+
 	friend class RepRap;
 
 protected:
