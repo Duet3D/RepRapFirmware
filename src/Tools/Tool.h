@@ -72,6 +72,7 @@ public:
 
 	float GetToolHeaterActiveTemperature(size_t heaterNumber) const;
 	float GetToolHeaterStandbyTemperature(size_t heaterNumber) const;
+	bool HasTemperatureFault() const { return heaterFault; }
 	void SetToolHeaterActiveTemperature(size_t heaterNumber, float temp);
 	void SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp);
 

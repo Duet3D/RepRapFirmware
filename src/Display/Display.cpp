@@ -9,7 +9,7 @@
 
 #include "GCodes/GCodes.h"
 #include "GCodes/GCodeBuffer.h"
-#include "IoPort.h"
+#include "IoPorts.h"
 #include "Pins.h"
 
 constexpr int DefaultPulsesPerClick = -4;			// values that work with displays I have are 2 and -4
@@ -40,16 +40,15 @@ void Display::Start()
 	menu.Load("main");
 }
 
-void Display::Spin(bool full)
+void Display::Spin(const bool bIncludeLCDUpdate)
 {
 	encoder.Poll();
 
-	if (full)
+	if (bIncludeLCDUpdate)
 	{
 		if (!updatingFirmware)
 		{
 			// Check encoder and update display here
-			// For now we just test the encoder functionality
 			const int ch = encoder.GetChange();
 			if (ch != 0)
 			{
@@ -67,6 +66,7 @@ void Display::Spin(bool full)
 	if (beepActive && millis() - whenBeepStarted > beepLength)
 	{
 		IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);
+		beepActive = false;
 	}
 }
 
@@ -84,6 +84,9 @@ void Display::Exit()
 	lcd.FlushAll();
 }
 
+// NOTE: nothing enforces that this beep concludes before another is begun;
+//   that is, in rapid succession of commands, only the last beep issued
+//   will be heard by the user
 void Display::Beep(unsigned int frequency, unsigned int milliseconds)
 {
 	whenBeepStarted = millis();

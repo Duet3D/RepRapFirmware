@@ -5,3 +5,5 @@
 !Release/*/*/*.bin
 *~
 *orig
+/DuetM/
+/DuetM_RTOS/
