@@ -48,6 +48,7 @@ void HangprinterKinematics::Init()
 	constexpr uint32_t DefaultActionPoints[4] = { 2, 2, 2, 3};
 	constexpr uint32_t DefaultMotorGearTeeth[4] = {  10,  10,  10,  10};
 	constexpr uint32_t DefaultSpoolGearTeeth[4] = { 100, 100, 100, 100};
+	constexpr uint32_t DefaultFullStepsPerMotorRev[4] = { 200, 200, 200, 200};
 	ARRAY_INIT(anchorA, DefaultAnchorA);
 	ARRAY_INIT(anchorB, DefaultAnchorB);
 	ARRAY_INIT(anchorC, DefaultAnchorC);
@@ -60,6 +61,7 @@ void HangprinterKinematics::Init()
 	ARRAY_INIT(actionPoints, DefaultActionPoints);
 	ARRAY_INIT(motorGearTeeth, DefaultMotorGearTeeth);
 	ARRAY_INIT(spoolGearTeeth, DefaultSpoolGearTeeth);
+	ARRAY_INIT(fullStepsPerMotorRev, DefaultFullStepsPerMotorRev);
 	doneAutoCalibration = false;
 	reprap.GetGCodes().SetMachineAxisLetters(MachineAxisNames(), 4);
 	Recalc();
