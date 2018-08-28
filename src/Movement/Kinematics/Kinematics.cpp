@@ -57,13 +57,19 @@ bool Kinematics::IsReachable(float x, float y, bool isCoordinated) const
 	return x >= platform.AxisMinimum(X_AXIS) && y >= platform.AxisMinimum(Y_AXIS) && x <= platform.AxisMaximum(X_AXIS) && y <= platform.AxisMaximum(Y_AXIS);
 }
 
-float Kinematics::MotorAngToAxisPosition(float ang, uint32_t fullStepsPerRevolution, const float stepsPerMm[], size_t axis){
+float Kinematics::MotorAngToAxisPosition(float ang, uint32_t fullStepsPerRevolution, const float stepsPerMm[], size_t axis)
+{
 	bool dummy;
 	const Platform& platform = reprap.GetPlatform();
 	const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(axis);
 	uint8_t driver = axisConfig.driverNumbers[0]; // Only supports single driver
 	float stepsPerRevolution = fullStepsPerRevolution * platform.GetMicrostepping(driver, dummy);
 	return (stepsPerRevolution / stepsPerMm[axis]) * ang / 360.0;
+}
+
+uint32_t Kinematics::GetFullStepsPerMotorRev(size_t axis)
+{
+	return 200;
 }
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed

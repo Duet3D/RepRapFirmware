@@ -40,6 +40,7 @@ public:
 	bool WriteResumeSettings(FileStore *f) const override;
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const override;
 	float MotorAngToAxisPosition(float ang, uint32_t fullStepsPerRevolution, const float stepsPerMm[], size_t axis) override;
+	uint32_t GetFullStepsPerMotorRev(size_t axis) override;
 
 private:
 	static constexpr float DefaultSegmentsPerSecond = 100.0;
@@ -68,7 +69,7 @@ private:
 	float spoolBuildupFactor;
 	float mountedLine[HANGPRINTER_AXES], spoolRadii[HANGPRINTER_AXES];
 	uint32_t mechanicalAdvantage[HANGPRINTER_AXES], actionPoints[HANGPRINTER_AXES];
-	uint32_t motorGearTeeth[HANGPRINTER_AXES], spoolGearTeeth[HANGPRINTER_AXES], fullStepsPerRevolution[HANGPRINTER_AXES];
+	uint32_t motorGearTeeth[HANGPRINTER_AXES], spoolGearTeeth[HANGPRINTER_AXES], fullStepsPerMotorRev[HANGPRINTER_AXES];
 
 	// Derived parameters
 	float printRadiusSquared;

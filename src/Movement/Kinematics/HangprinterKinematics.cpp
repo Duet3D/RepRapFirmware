@@ -286,6 +286,11 @@ float HangprinterKinematics::MotorAngToAxisPosition(float ang, uint32_t stepsPer
 	return ((c / k0[axis] + sqrtk1[axis]) * (c / k0[axis] + sqrtk1[axis]) - k1[axis]) / k2[axis] - lineLengthsOrigin[axis];
 }
 
+uint32_t HangprinterKinematics::GetFullStepsPerMotorRev(size_t axis)
+{
+	return fullStepsPerMotorRev[axis];
+}
+
 // Return true if the specified XY position is reachable by the print head reference point.
 bool HangprinterKinematics::IsReachable(float x, float y, bool isCoordinated) const
 {
