@@ -119,6 +119,33 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 
 #endif
 
+#ifdef SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 then if lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) [] (ObjectModel* arg) { RepRap * const self = static_cast<RepRap*>(arg); return (void *)(_ret); }
+
+const ObjectModelTableEntry RepRap::objectModelTable[] =
+{
+	{ "gcodes", OBJECT_MODEL_FUNC(&(self->GetGCodes())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none }
+};
+
+const char *RepRap::GetModuleName() const
+{
+	return nullptr;				// this module has no name and doesn't need one
+}
+
+const ObjectModelTableEntry *RepRap::GetObjectModelTable(size_t& numEntries) const
+{
+	numEntries = ARRAY_SIZE(objectModelTable);
+	return objectModelTable;
+}
+
+#endif
+
 // RepRap member functions.
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()

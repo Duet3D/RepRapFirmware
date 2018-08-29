@@ -59,6 +59,33 @@ void GCodes::RawMove::SetDefaults()
 	yAxes = DefaultYAxisMapping;
 }
 
+#ifdef SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 then if lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) [] (ObjectModel* arg) { GCodes * const self = static_cast<GCodes*>(arg); return (void *)(_ret); }
+
+const ObjectModelTableEntry GCodes::objectModelTable[] =
+{
+	{ "speedFactor", OBJECT_MODEL_FUNC(&(self->speedFactor)), TYPE_OF(float), ObjectModelTableEntry::none }
+};
+
+const char *GCodes::GetModuleName() const
+{
+	return nullptr;				// this module has no name and doesn't need one
+}
+
+const ObjectModelTableEntry *GCodes::GetObjectModelTable(size_t& numEntries) const
+{
+	numEntries = ARRAY_SIZE(objectModelTable);
+	return objectModelTable;
+}
+
+#endif
+
 GCodes::GCodes(Platform& p) :
 	platform(p), machineType(MachineType::fff), active(false),
 #if HAS_VOLTAGE_MONITOR

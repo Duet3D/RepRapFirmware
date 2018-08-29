@@ -4466,7 +4466,7 @@ bool Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply)
 		{
 			if (IsBitSet(drivers, drive))
 			{
-				SmartDrivers::SetCoolStep(drive, coolStepConfig);
+				SmartDrivers::SetRegister(drive, SmartDriverRegister::coolStep, coolStepConfig);
 			}
 		}
 	}

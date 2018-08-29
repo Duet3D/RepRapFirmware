@@ -20,6 +20,7 @@
 #include "Tools/Tool.h"
 #include "FilamentMonitors/FilamentMonitor.h"
 #include "Libraries/General/IP4String.h"
+#include "Movement/StepperDrivers/DriverMode.h"
 #include "Version.h"
 
 #if SUPPORT_IOBITS
@@ -3197,7 +3198,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (gb.Seen('C'))		// set chopper control register
 				{
 					seen = true;
-					if (!SmartDrivers::SetChopperControlRegister(drive, gb.GetUIValue()))
+					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::chopperControl, gb.GetUIValue()))
 					{
 						reply.printf("Bad ccr for driver %u", drive);
 						result = GCodeResult::error;
@@ -3208,7 +3209,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (gb.Seen('F'))
 				{
 					seen = true;
-					if (!SmartDrivers::SetOffTime(drive, gb.GetUIValue()))
+					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::toff, gb.GetUIValue()))
 					{
 						reply.printf("Bad off time for driver %u", drive);
 						result = GCodeResult::error;
@@ -3229,7 +3230,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					if (drive < platform.GetNumSmartDrivers())
 					{
 						reply.catf(", mode %s, ccr 0x%05" PRIx32 ", off time %" PRIu32,
-							TranslateDriverMode(SmartDrivers::GetDriverMode(drive)), SmartDrivers::GetChopperControlRegister(drive), SmartDrivers::GetOffTime(drive));
+							TranslateDriverMode(SmartDrivers::GetDriverMode(drive)),
+							SmartDrivers::GetRegister(drive, SmartDriverRegister::chopperControl), SmartDrivers::GetRegister(drive, SmartDriverRegister::toff));
 					}
 #endif
 				}

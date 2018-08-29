@@ -77,14 +77,20 @@ const uint32_t TMC_DRVCONF_TST = 1 << 16;
 // Chopper control register bits
 const uint32_t TMC_CHOPCONF_TOFF_MASK = 15;
 const uint32_t TMC_CHOPCONF_TOFF_SHIFT = 0;
-#define TMC_CHOPCONF_TOFF(n)	((((uint32_t)n) & 15) << 0)
-#define TMC_CHOPCONF_HSTRT(n)	((((uint32_t)n) & 7) << 4)
-#define TMC_CHOPCONF_HEND(n)	((((uint32_t)n) & 15) << 7)
-#define TMC_CHOPCONF_HDEC(n)	((((uint32_t)n) & 3) << 11)
+const uint32_t TMC_CHOPCONF_HSTRT_MASK = (7 << 4);
+const uint32_t TMC_CHOPCONF_HSTRT_SHIFT = 4;
+const uint32_t TMC_CHOPCONF_HEND_MASK = (15 << 7);
+const uint32_t TMC_CHOPCONF_HEND_SHIFT = 7;
+const uint32_t TMC_CHOPCONF_HDEC_MASK = (3 << 11);
+const uint32_t TMC_CHOPCONF_HDEC_SHIFT = 11;
 const uint32_t TMC_CHOPCONF_RNDTF = 1 << 13;
 const uint32_t TMC_CHOPCONF_CHM = 1 << 14;
 const uint32_t TMC_CHOPCONF_TBL_MASK = (3 << 15);
 const uint32_t TMC_CHOPCONF_TBL_SHIFT = 15;
+#define TMC_CHOPCONF_TOFF(n)	((((uint32_t)n) & 15) << 0)
+#define TMC_CHOPCONF_HSTRT(n)	((((uint32_t)n) & 7) << 4)
+#define TMC_CHOPCONF_HEND(n)	((((uint32_t)n) & 15) << 7)
+#define TMC_CHOPCONF_HDEC(n)	((((uint32_t)n) & 3) << 11)
 #define TMC_CHOPCONF_TBL(n)	(((uint32_t)n & 3) << 15)
 
 // Driver control register bits, when SDOFF=0
@@ -169,11 +175,6 @@ public:
 	void SetAxisNumber(size_t p_axisNumber);
 	void WriteAll();
 
-	bool SetChopConf(uint32_t newVal);
-	bool SetOffTime(uint32_t newVal);
-	uint32_t GetChopConf() const;
-	uint32_t GetOffTime() const;
-	void SetCoolStep(uint16_t coolStepConfig);
 	bool SetMicrostepping(uint32_t shift, bool interpolate);
 	unsigned int GetMicrostepping(bool& interpolation) const;		// Get microstepping
 	bool SetDriverMode(unsigned int mode);
@@ -187,6 +188,9 @@ public:
 	void AppendStallConfig(const StringRef& reply) const;
 	void AppendDriverStatus(const StringRef& reply);
 
+	bool SetRegister(SmartDriverRegister reg, uint32_t regVal);
+	uint32_t GetRegister(SmartDriverRegister reg) const;
+
 	void TransferDone() __attribute__ ((hot));						// called by the ISR when the SPI transfer has completed
 	void StartTransfer() __attribute__ ((hot));						// called to start a transfer
 
@@ -194,6 +198,8 @@ public:
 	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep);
 
 private:
+	bool SetChopConf(uint32_t newVal);
+
 	void ResetLoadRegisters()
 	{
 		minSgLoadRegister = 1023;
@@ -392,6 +398,70 @@ inline void TmcDriverState::WriteAll()
 	registersToUpdate = UpdateAllRegisters;
 }
 
+bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal)
+{
+	switch(reg)
+	{
+	case SmartDriverRegister::chopperControl:
+		return SetChopConf(regVal);
+
+	case SmartDriverRegister::coolStep:
+		registers[SmartEnable] = TMC_REG_SMARTEN | (regVal & 0xFFFF);
+		registersToUpdate |= 1u << SmartEnable;
+		return true;
+
+	case SmartDriverRegister::toff:
+		return SetChopConf((configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK) | ((regVal << TMC_CHOPCONF_TOFF_SHIFT) & TMC_CHOPCONF_TOFF_MASK));
+
+	case SmartDriverRegister::tblank:
+		return SetChopConf((configuredChopConfReg & ~TMC_CHOPCONF_TBL_MASK) | ((regVal << TMC_CHOPCONF_TBL_SHIFT) & TMC_CHOPCONF_TBL_MASK));
+
+	case SmartDriverRegister::hstart:
+		return SetChopConf((configuredChopConfReg & ~TMC_CHOPCONF_HSTRT_MASK) | ((regVal << TMC_CHOPCONF_HSTRT_SHIFT) & TMC_CHOPCONF_HSTRT_MASK));
+
+	case SmartDriverRegister::hend:
+		return SetChopConf((configuredChopConfReg & ~TMC_CHOPCONF_HEND_MASK) | ((regVal << TMC_CHOPCONF_HEND_SHIFT) & TMC_CHOPCONF_HEND_MASK));
+
+	case SmartDriverRegister::hdec:
+		return SetChopConf((configuredChopConfReg & ~TMC_CHOPCONF_HDEC_MASK) | ((regVal << TMC_CHOPCONF_HDEC_SHIFT) & TMC_CHOPCONF_HDEC_MASK));
+
+	case SmartDriverRegister::tpwmthrs:
+	default:
+		return false;
+	}
+}
+
+uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const
+{
+	switch(reg)
+	{
+	case SmartDriverRegister::chopperControl:
+		return configuredChopConfReg & TMC_DATA_MASK;
+
+	case SmartDriverRegister::coolStep:
+		return registers[SmartEnable] & TMC_DATA_MASK;
+
+	case SmartDriverRegister::toff:
+		return (configuredChopConfReg & TMC_CHOPCONF_TOFF_MASK) >> TMC_CHOPCONF_TOFF_SHIFT;
+
+	case SmartDriverRegister::tblank:
+		return (configuredChopConfReg & TMC_CHOPCONF_TBL_MASK) >> TMC_CHOPCONF_TBL_SHIFT;
+
+	case SmartDriverRegister::hstart:
+		return (configuredChopConfReg & TMC_CHOPCONF_HSTRT_MASK) >> TMC_CHOPCONF_HSTRT_SHIFT;
+
+	case SmartDriverRegister::hend:
+		return (configuredChopConfReg & TMC_CHOPCONF_HEND_MASK) >> TMC_CHOPCONF_HEND_SHIFT;
+
+	case SmartDriverRegister::hdec:
+		return (configuredChopConfReg & TMC_CHOPCONF_HDEC_MASK) >> TMC_CHOPCONF_HDEC_SHIFT;
+
+	case SmartDriverRegister::tpwmthrs:
+	default:
+		return 0;
+	}
+}
+
 // Check the new chopper control register, update it and return true if it is legal
 bool TmcDriverState::SetChopConf(uint32_t newVal)
 {
@@ -402,19 +472,18 @@ bool TmcDriverState::SetChopConf(uint32_t newVal)
 	{
 		return false;
 	}
+	if ((newVal & TMC_CHOPCONF_CHM) == 0)
+	{
+		const uint32_t hstrt = (newVal & TMC_CHOPCONF_HSTRT_MASK) >> TMC_CHOPCONF_HSTRT_SHIFT;
+		const uint32_t hend = (newVal & TMC_CHOPCONF_HEND_MASK) >> TMC_CHOPCONF_HEND_SHIFT;
+		if (hstrt + hend > 15)
+		{
+			return false;
+		}
+	}
 	configuredChopConfReg = (newVal & 0x0001FFFF) | TMC_REG_CHOPCONF;		// save the new value
 	UpdateChopConfRegister();												// send the new value, keeping the current Enable status
 	return true;
-}
-
-// Set the off time in the chopper control register
-bool TmcDriverState::SetOffTime(uint32_t newVal)
-{
-	if (newVal > 15)
-	{
-		return false;
-	}
-	return SetChopConf((configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK) | ((newVal << TMC_CHOPCONF_TOFF_SHIFT) & TMC_CHOPCONF_TOFF_MASK));
 }
 
 // Set the driver mode
@@ -541,12 +610,6 @@ void TmcDriverState::SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond)
 	maxStallStepInterval = StepClockRate/max<unsigned int>(stepsPerSecond, 1);
 }
 
-void TmcDriverState::SetCoolStep(uint16_t coolStepConfig)
-{
-	registers[SmartEnable] = TMC_REG_SMARTEN | coolStepConfig;
-	registersToUpdate |= 1u << SmartEnable;
-}
-
 void TmcDriverState::AppendStallConfig(const StringRef& reply) const
 {
 	const bool filtered = ((registers[StallGuardConfig] & TMC_SGCSCONF_SGT_SFILT) != 0);
@@ -607,18 +670,6 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const
 {
 	interpolation = (registers[DriveControl] & TMC_DRVCTRL_INTPOL) != 0;
 	return 1u << microstepShiftFactor;
-}
-
-// Get chopper control register
-uint32_t TmcDriverState::GetChopConf() const
-{
-	return configuredChopConfReg & TMC_DATA_MASK;
-}
-
-// Get the off time from the chopper control register
-uint32_t TmcDriverState::GetOffTime() const
-{
-	return (configuredChopConfReg & TMC_CHOPCONF_TOFF_MASK) >> TMC_CHOPCONF_TOFF_SHIFT;
 }
 
 // This is called by the ISR when the SPI transfer has completed
@@ -896,26 +947,6 @@ namespace SmartDrivers
 		return (driver < numTmc2660Drivers) ? driverStates[driver].GetDriverMode() : DriverMode::unknown;
 	}
 
-	bool SetChopperControlRegister(size_t driver, uint32_t ccr)
-	{
-		return driver < numTmc2660Drivers && driverStates[driver].SetChopConf(ccr);
-	}
-
-	uint32_t GetChopperControlRegister(size_t driver)
-	{
-		return (driver < numTmc2660Drivers) ? driverStates[driver].GetChopConf() : 0;
-	}
-
-	bool SetOffTime(size_t driver, uint32_t offTime)
-	{
-		return driver < numTmc2660Drivers && driverStates[driver].SetOffTime(offTime);
-	}
-
-	uint32_t GetOffTime(size_t driver)
-	{
-		return (driver < numTmc2660Drivers) ? driverStates[driver].GetOffTime() : 0;
-	}
-
 	// Flag the the drivers have been powered up.
 	// Before the first call to this function with powered true, you must call Init().
 	void Spin(bool powered)
@@ -979,14 +1010,6 @@ namespace SmartDrivers
 		}
 	}
 
-	void SetCoolStep(size_t drive, uint16_t coolStepConfig)
-	{
-		if (drive < numTmc2660Drivers)
-		{
-			driverStates[drive].SetCoolStep(coolStepConfig);
-		}
-	}
-
 	void AppendStallConfig(size_t driver, const StringRef& reply)
 	{
 		if (driver < numTmc2660Drivers)
@@ -1011,6 +1034,16 @@ namespace SmartDrivers
 	void SetStandstillCurrentPercent(size_t driver, float percent)
 	{
 		// not supported so nothing to see here
+	}
+
+	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal)
+	{
+		return (driver < numTmc2660Drivers) && driverStates[driver].SetRegister(reg, regVal);
+	}
+
+	uint32_t GetRegister(size_t driver, SmartDriverRegister reg)
+	{
+		return (driver < numTmc2660Drivers) ? driverStates[driver].GetRegister(reg) : 0;
 	}
 
 };	// end namespace

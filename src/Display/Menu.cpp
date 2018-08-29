@@ -21,7 +21,7 @@
  *  Wnn is the width in pixels for the element
  *  Dnn specifies the number of decimal places for numeric display
  *
- *  Vnn specifies the item's visibility with value:
+ *  Vnn specifies the item's visibility (currently implemented for buttons only) with value:
  *   0  always visible (default if not specified)
  *   2  visible when the printer is actively printing (actively printing defined as not paused, pausing or resuming)
  *   3  visible when the printer is NOT actively printing
@@ -31,6 +31,8 @@
  *   7  visible when the printer is printing and NOT in paused state (actively printing or resuming)
  *   10 visible when SD card 0 is mounted
  *   11 visible when SD card 0 is NOT mounted
+ *   20 visible when the current or default tool has a temperature fault
+ *   28 visible when the bed heater has a temperature fault
  *
  *  "action" can be any of:
  *  - a Gcode command string (must begin with G, M or T). In such a string, #0 represents the full name of the current file, in double quotes, set when a file is selected
@@ -74,11 +76,14 @@
 #include "Storage/MassStorage.h"
 #include "Tools/Tool.h"
 
+const uint32_t InactivityTimeout = 20000;		// inactivity timeout
+const uint32_t ErrorTimeout = 6000;				// how long wre display an error message for
+
 Menu::Menu(Lcd7920& refLcd, const LcdFont * const fnts[], size_t nFonts)
 	: lcd(refLcd), fonts(fnts), numFonts(nFonts),
-	  timeoutEnabled(false), lastActionTime(millis()),
-	  selectableItems(nullptr), unSelectableItems(nullptr), numNestedMenus(0), numSelectableItems(0), highlightedItem(0), itemIsSelected(false),
-	  rowOffset(0)
+	  timeoutValue(0), lastActionTime(0),
+	  selectableItems(nullptr), unSelectableItems(nullptr), numNestedMenus(0), numSelectableItems(0), highlightedItem(0), itemIsSelected(false), displayingFixedMenu(false),
+	  errorColumn(0), rowOffset(0)
 {
 }
 
@@ -111,56 +116,46 @@ void Menu::Load(const char* filename)
 		}
 
 		++numNestedMenus;
+		displayingFixedMenu = false;
 		Reload();
 	}
 }
 
 void Menu::LoadFixedMenu()
 {
-	if (numNestedMenus < MaxMenuNesting)
+	displayingFixedMenu = true;
+	numNestedMenus = 0;
+	rowOffset = 0;
+	currentMargin = 0;
+	lcd.Clear();
+
+	// Instead of Reload():
+	lcd.SetRightMargin(NumCols - currentMargin);
+
+	ResetCache();
+
+	char acLine1[] = "text R3 C5 F0 T\"No SD Card Found\"";
+	char acLine2[] = "button R15 C5 F0 T\"Mount SD\" A\"M21\"";
+
+	const char *errMsg = ParseMenuLine(acLine1);
+	if (nullptr != errMsg)
 	{
-		filenames[numNestedMenus].copy(m_pcFixedMenu);
-
-		rowOffset = 0;
-
-		currentMargin = 0;
-		lcd.Clear();
-
-		++numNestedMenus;
-
-		// Instead of Reload():
-		lcd.SetRightMargin(NumCols - currentMargin);
-
-		ResetCache();
-
-		char acLine1[] = "text R3 C5 F0 T\"No SD Card Found\"";
-		char acLine2[] = "button R15 C5 F0 T\"Mount SD\" A\"M21\"";
-
-		const char *errMsg = ParseMenuLine(acLine1);
-		if (nullptr != errMsg)
-		{
-			LoadError(errMsg, 1);
-		}
-		if (commandBufferIndex == sizeof(commandBuffer))
-		{
-			LoadError("|Menu buffer full", 1);
-		}
-
-		errMsg = ParseMenuLine(acLine2);
-		if (nullptr != errMsg)
-		{
-			LoadError(errMsg, 2);
-		}
-		if (commandBufferIndex == sizeof(commandBuffer))
-		{
-			LoadError("|Menu buffer full", 2);
-		}
+		LoadError(errMsg, 1);
 	}
-}
+	if (commandBufferIndex == sizeof(commandBuffer))
+	{
+		LoadError("|Menu buffer full", 1);
+	}
 
-bool Menu::bInFixedMenu() const
-{
-	return ((0 != numNestedMenus) && (0 == strcmp(filenames[numNestedMenus - 1].c_str(), m_pcFixedMenu)));
+	errMsg = ParseMenuLine(acLine2);
+	if (nullptr != errMsg)
+	{
+		LoadError(errMsg, 2);
+	}
+	if (commandBufferIndex == sizeof(commandBuffer))
+	{
+		LoadError("|Menu buffer full", 2);
+	}
 }
 
 void Menu::Pop()
@@ -179,26 +174,31 @@ void Menu::LoadError(const char *msg, unsigned int line)
 
 	lcd.Clear(currentMargin, currentMargin, NumRows - currentMargin, NumCols - currentMargin);
 	lcd.SetFont(fonts[0]);
-	lcd.print("Error loading menu\nFile ");
-	lcd.print(filenames[numNestedMenus - 1].c_str());
+	lcd.print("Error loading menu\nFile: ");
+	lcd.print((numNestedMenus > 0) ? filenames[numNestedMenus - 1].c_str() : "(none)");
 	if (line != 0)
 	{
 		lcd.print("\nLine ");
 		lcd.print(line);
+		if (errorColumn != 0)
+		{
+			lcd.print(" column ");
+			lcd.print(errorColumn);
+		}
 	}
 	lcd.write('\n');
 	lcd.print(msg);
 
-	if (numNestedMenus > 1)
-	{
-		// TODO add control to pop previous menu here, or revert to main menu after some time
-	}
+	lastActionTime = millis();
+	timeoutValue = ErrorTimeout;
 }
 
 // Parse a line in a menu layout file returning any error message, or nullptr if there was no error.
 // Leading whitespace has already been skipped.
-const char *Menu::ParseMenuLine(char *commandWord)
+const char *Menu::ParseMenuLine(char * const commandWord)
 {
+	errorColumn = 0;
+
 	// Check for blank or comment line
 	if (*commandWord == ';' || *commandWord == 0)
 	{
@@ -213,12 +213,13 @@ const char *Menu::ParseMenuLine(char *commandWord)
 	}
 	if (args == commandWord || (*args != ' ' && *args != '\t' && *args != 0))
 	{
+		errorColumn = (args - commandWord) + 1;
 		return "Bad command";
 	}
 
 	if (*args != 0)
 	{
-		*args = 0;		// null terminate command word
+		*args = 0;		// null terminate the command word
 		++args;
 	}
 
@@ -275,6 +276,7 @@ const char *Menu::ParseMenuLine(char *commandWord)
 		case 'I':
 			if (*args != '"')
 			{
+				errorColumn = (args - commandWord) + 1;
 				return "Missing string arg";
 			}
 			++args;
@@ -291,6 +293,7 @@ const char *Menu::ParseMenuLine(char *commandWord)
 			break;
 
 		default:
+			errorColumn = (args - commandWord);
 			return "Bad arg letter";
 		}
 	}
@@ -349,12 +352,13 @@ const char *Menu::ParseMenuLine(char *commandWord)
 		const char * const actionString = AppendString(action);
 		const char *const dir = AppendString(dirpath);
 		const char *const acFileString = AppendString(fname);
-		AddItem(new FilesMenuItem(row, column, fontNumber, actionString, dir, acFileString, nparam, fonts[fontNumber]->height), true);
-		//TODO update row by a sensible value e.g. nparam * text row height
+		AddItem(new FilesMenuItem(row, 0, fontNumber, actionString, dir, acFileString, nparam, fonts[fontNumber]->height), true);
+		row += nparam * fonts[fontNumber]->height;
 		column = 0;
 	}
 	else
 	{
+		errorColumn = 1;
 		return "Unknown command";
 	}
 
@@ -366,13 +370,13 @@ void Menu::ResetCache()
 	// Delete the existing items
 	while (selectableItems != nullptr)
 	{
-		MenuItem *current = selectableItems;
+		MenuItem * const current = selectableItems;
 		selectableItems = selectableItems->GetNext();
 		delete current;
 	}
 	while (unSelectableItems != nullptr)
 	{
-		MenuItem *current = unSelectableItems;
+		MenuItem * const current = unSelectableItems;
 		unSelectableItems = unSelectableItems->GetNext();
 		delete current;
 	}
@@ -587,8 +591,8 @@ void Menu::EncoderAction(int action)
 			EncoderAction_EnterItemHelper();
 	}
 
-	timeoutEnabled = true;
 	lastActionTime = millis();
+	timeoutValue = InactivityTimeout;
 }
 /*static*/ const char *Menu::SkipWhitespace(const char *s)
 {
@@ -611,7 +615,7 @@ void Menu::EncoderAction(int action)
 void Menu::LoadImage(const char *fname)
 {
 	//TODO
-	lcd.print("<image>");
+	lcd.print("[img]");
 }
 
 // Refresh is called every Spin() of the Display under most circumstances; an appropriate place to check if timeout action needs to be taken
@@ -619,23 +623,20 @@ void Menu::Refresh()
 {
 	if (!reprap.GetPlatform().GetMassStorage()->IsDriveMounted(0))
 	{
-		if (!bInFixedMenu())
+		if (!displayingFixedMenu)
 		{
 			// When the SD card is not mounted, we show a fixed menu for graceful recovery
-			numNestedMenus = 0;
 			LoadFixedMenu();
 		}
 	}
-	else if (bInFixedMenu() || (timeoutEnabled && (millis() - lastActionTime > 20000)))
+	else if (displayingFixedMenu || (timeoutValue != 0 && (millis() - lastActionTime > timeoutValue)))
 	{
-		// Showing fixed menu but SD card is now mounted, or 20 seconds following latest user action
-
+		// Showing fixed menu but SD card is now mounted, or 10 seconds following latest user action
 		// Go to the top menu (just discard information)
 		numNestedMenus = 0;
 		Load("main");
 
-		timeoutEnabled = false;
-		// m_uLastActionTime = millis();
+		timeoutValue = 0;
 	}
 
 	const PixelNumber rightMargin = NumCols - currentMargin;

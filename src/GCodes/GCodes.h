@@ -105,6 +105,9 @@ enum class StopPrintReason
 // The GCode interpreter
 
 class GCodes
+#ifdef SUPPORT_OBJECT_MODEL
+	: public ObjectModel
+#endif
 {   
 public:
 	struct RawMove
@@ -225,6 +228,14 @@ public:
 	void SetMappedFanSpeed(float f);									// Set the mapped fan speed
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);	// Handle G-Code replies
 	void EmergencyStop();												// Cancel everything
+
+#ifdef SUPPORT_OBJECT_MODEL
+protected:
+	const char *GetModuleName() const override;
+	const ObjectModelTableEntry *GetObjectModelTable(size_t& numEntries) const override;
+
+	static const ObjectModelTableEntry objectModelTable[];
+#endif
 
 private:
 	GCodes(const GCodes&);												// private copy constructor to prevent copying

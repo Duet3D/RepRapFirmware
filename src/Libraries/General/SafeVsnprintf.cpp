@@ -527,7 +527,7 @@ static void tiny_print(SStringBuf& apBuf, const char *format, va_list args)
 		{
 			const char *s = va_arg(args, const char *);
 			apBuf.flags.isString = true;
-			if (!prints(apBuf, (s != nullptr) ? s : "(null)"))
+			if (!prints(apBuf, (s != nullptr) ? s : "<null>"))
 			{
 				break;
 			}

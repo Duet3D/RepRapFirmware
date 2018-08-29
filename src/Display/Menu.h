@@ -23,10 +23,9 @@ public:
 
 private:
 	void LoadFixedMenu();
-	bool bInFixedMenu() const;
 	void ResetCache();
 	void Reload();
-	const char *ParseMenuLine(char *s);
+	const char *ParseMenuLine(char * s);
 	void LoadError(const char *msg, unsigned int line);
 	void AddItem(MenuItem *item, bool isSelectable);
 	const char *AppendString(const char *s);
@@ -54,7 +53,7 @@ private:
 	const LcdFont * const *fonts;
 	const size_t numFonts;
 
-	bool timeoutEnabled;
+	uint32_t timeoutValue;										// how long to time out after 0 = no timeout
 	uint32_t lastActionTime;
 
 	MenuItem *selectableItems;									// selectable items at the innermost level
@@ -64,11 +63,11 @@ private:
 	int numSelectableItems;
 	int highlightedItem;
 	bool itemIsSelected;
-
-	static constexpr const char *const m_pcFixedMenu = "zzFixed";
+	bool displayingFixedMenu;
 
 	// Variables used while parsing
 	size_t commandBufferIndex;
+	unsigned int errorColumn;									// column in the current line at which ParseMenuLine hit an error
 	MenuItem::FontNumber fontNumber;
 	PixelNumber currentMargin;
 	PixelNumber row, column;

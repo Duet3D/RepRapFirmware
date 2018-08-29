@@ -196,11 +196,6 @@ public:
 	void Init(uint32_t p_driverNumber, Pin p_pin);
 	void SetAxisNumber(size_t p_axisNumber);
 	void WriteAll();
-	bool SetChopConf(uint32_t newVal);
-	bool SetOffTime(uint32_t newVal);
-	uint32_t GetChopConf() const;
-	uint32_t GetOffTime() const;
-	void SetCoolStep(uint16_t coolStepConfig);
 	bool SetMicrostepping(uint32_t shift, bool interpolate);
 	unsigned int GetMicrostepping(bool& interpolation) const;		// Get microstepping
 	bool SetDriverMode(unsigned int mode);
@@ -214,6 +209,9 @@ public:
 	void SetStallDetectFilter(bool sgFilter);
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond);
 	void AppendStallConfig(const StringRef& reply) const;
+
+	bool SetRegister(SmartDriverRegister reg, uint32_t regVal);
+	uint32_t GetRegister(SmartDriverRegister reg) const;
 
 	float GetStandstillCurrentPercent() const;
 	void SetStandstillCurrentPercent(float percent);
@@ -246,7 +244,7 @@ private:
 	void SetupDMAReceive(uint8_t regnum, uint8_t crc) __attribute__ ((hot));						// set up the PDC to receive a register
 #endif
 
-	static constexpr unsigned int NumWriteRegisters = 5;	// the number of registers that we write to
+	static constexpr unsigned int NumWriteRegisters = 6;	// the number of registers that we write to
 	static const uint8_t WriteRegNumbers[NumWriteRegisters];	// the register numbers that we write to
 
 	// Write register numbers are in priority order, most urgent first, in same order as WriteRegNumbers
@@ -255,6 +253,7 @@ private:
 	static constexpr unsigned int WriteChopConf = 2;		// enable/disable and microstep setting
 	static constexpr unsigned int WriteIholdIrun = 3;		// current setting
 	static constexpr unsigned int WritePwmConf = 4;			// read register select, sense voltage high/low sensitivity
+	static constexpr unsigned int WriteTpwmthrs = 5;		// upper step rate limit for stealthchop
 
 	static constexpr unsigned int NumReadRegisters = 2;		// the number of registers that we read from
 	static const uint8_t ReadRegNumbers[NumReadRegisters];	// the register numbers that we read from
@@ -447,26 +446,6 @@ namespace SmartDrivers
 		return (driver < numTmc51xxDrivers) ? driverStates[driver].GetDriverMode() : DriverMode::unknown;
 	}
 
-	bool SetChopperControlRegister(size_t driver, uint32_t ccr)
-	{
-		return driver < numTmc51xxDrivers && driverStates[driver].SetChopConf(ccr);
-	}
-
-	uint32_t GetChopperControlRegister(size_t driver)
-	{
-		return (driver < numTmc51xxDrivers) ? driverStates[driver].GetChopConf() : 0;
-	}
-
-	bool SetOffTime(size_t driver, uint32_t offTime)
-	{
-		return driver < numTmc51xxDrivers && driverStates[driver].SetOffTime(offTime);
-	}
-
-	uint32_t GetOffTime(size_t driver)
-	{
-		return (driver < numTmc51xxDrivers) ? driverStates[driver].GetOffTime() : 0;
-	}
-
 	// Flag that the the drivers have been powered up or down and handle any timeouts
 	// Before the first call to this function with 'powered' true, you must call Init()
 	void Spin(bool powered)
@@ -577,14 +556,6 @@ namespace SmartDrivers
 		}
 	}
 
-	void SetCoolStep(size_t drive, uint16_t coolStepConfig)
-	{
-		if (drive < numTmc51xxDrivers)
-		{
-			driverStates[drive].SetCoolStep(coolStepConfig);
-		}
-	}
-
 	void AppendStallConfig(size_t driver, const StringRef& reply)
 	{
 		if (driver < numTmc51xxDrivers)
@@ -611,7 +582,18 @@ namespace SmartDrivers
 		// not supported so nothing to see here
 	}
 
+	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal)
+	{
+		return (driver < numTmc22xxDrivers) && driverStates[driver].SetRegister(reg, regVal);
+	}
+
+	uint32_t GetRegister(size_t driver, SmartDriverRegister reg)
+	{
+		return (driver < numTmc22xxDrivers) ? driverStates[driver].GetRegister(reg) : 0;
+	}
+
 };	// end namespace
+
 #endif
 
 // End

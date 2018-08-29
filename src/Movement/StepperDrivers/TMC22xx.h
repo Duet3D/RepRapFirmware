@@ -17,7 +17,7 @@
 #endif
 
 #include "RepRapFirmware.h"
-#include "GCodes/DriverMode.h"
+#include "DriverMode.h"
 #include "Pins.h"
 #include "MessageType.h"
 #include "Libraries/General/StringRef.h"
@@ -48,16 +48,13 @@ namespace SmartDrivers
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation);
 	bool SetDriverMode(size_t driver, unsigned int mode);
 	DriverMode GetDriverMode(size_t driver);
-	bool SetChopperControlRegister(size_t driver, uint32_t ccr);
-	uint32_t GetChopperControlRegister(size_t driver);
-	bool SetOffTime(size_t driver, uint32_t ccr);
-	uint32_t GetOffTime(size_t driver);
 	void Spin(bool powered);
 	void TurnDriversOff();
-	void SetCoolStep(size_t drive, uint16_t coolStepConfig);
 	void AppendDriverStatus(size_t drive, const StringRef& reply);
 	float GetStandstillCurrentPercent(size_t drive);
 	void SetStandstillCurrentPercent(size_t drive, float percent);
+	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal);
+	uint32_t GetRegister(size_t driver, SmartDriverRegister reg);
 };
 
 #endif
