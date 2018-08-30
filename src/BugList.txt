@@ -29,6 +29,9 @@ Implemented in 2.02beta1:
 - added check for timeout when sending to the W5500 but not receiving
 
 Investigations:
+- [done, test] Fix additional axes on delta not coordinated
+- [done] DWC disconnects when a message box and a beep are pending at the same time
+- [tested, pause/resume works as intended] Check M106 R1 parameter, see https://forum.duet3d.com/topic/6538/resuming-print-fan-after-pause
 - Weird height map, https://forum.duet3d.com/topic/6472/mesh-grid-compensation/28
 - Full stepping problem, https://forum.duet3d.com/topic/6433/how-to-reduce-the-speed-of-extrusion/14
 - Print time estimation problem, see https://forum.duet3d.com/topic/5572/it-s-out-reprapfirmware-2-0-and-1-21-1-released/64
@@ -37,8 +40,7 @@ Investigations:
 Remaining:
 - [done, ok on DuetM, test on Duet2] No warning messages when TMC2224 drivers overheat, https://forum.duet3d.com/topic/6309/little-monster-s-hort-to-ground/13
 - [done] Different numbers of endstop inputs and motor drivers
-- Check M106 R1 parameter, see https://forum.duet3d.com/topic/6538/resuming-print-fan-after-pause
-- Support mixed stealthchop/spread cycle mode on Maestro via TPWMTHRS register, https://forum.duet3d.com/topic/6512/duet-2-maestro-stealthchop-default/7
+- [done, ok] Support mixed stealthchop/spread cycle mode on Maestro via TPWMTHRS register, https://forum.duet3d.com/topic/6512/duet-2-maestro-stealthchop-default/7
 - Add check digit to serial number
 - check DAA working as intended, results are inconsistent
 - chrishamm's watchdog issue, see his email oif 2018-08-01

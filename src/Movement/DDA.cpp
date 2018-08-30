@@ -1297,7 +1297,7 @@ void DDA::Prepare(uint8_t simMode)
 				pdm->nextStepTime = 0;
 				pdm->stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
 				pdm->stepsTillRecalc = 0;							// so that we don't skip the calculation
-				const bool stepsToDo = (isDeltaMovement && drive < numAxes)
+				const bool stepsToDo = (isDeltaMovement && drive < DELTA_AXES)
 										? pdm->CalcNextStepTimeDelta(*this, false)
 										: pdm->CalcNextStepTimeCartesian(*this, false);
 				if (stepsToDo)

@@ -13,6 +13,8 @@
 
 #include "TMC51xx.h"
 
+constexpr uint32_t DefaultTpwmthrsReg = 2000;							// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle
+
 // The SPI clock speed is a compromise:
 // - too high and polling the driver chips take too much of the CPU time
 // - too low and we won't detect stalls quickly enough
@@ -195,6 +197,7 @@ class TmcDriverState
 public:
 	void Init(uint32_t p_driverNumber, Pin p_pin);
 	void SetAxisNumber(size_t p_axisNumber);
+	uint32_t GetAxisNumber() const { return axisNumber; }
 	void WriteAll();
 	bool SetMicrostepping(uint32_t shift, bool interpolate);
 	unsigned int GetMicrostepping(bool& interpolation) const;		// Get microstepping
@@ -375,6 +378,11 @@ namespace SmartDrivers
 		{
 			driverStates[driver].SetAxisNumber(axisNumber);
 		}
+	}
+
+	uint32_t GetAxisNumber(size_t drive)
+	{
+		return (drive < numTmc51xxDrivers) ? driverStates[drive].GetAxisNumber() : 0;
 	}
 
 	void SetCurrent(size_t driver, float current)
@@ -584,12 +592,12 @@ namespace SmartDrivers
 
 	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal)
 	{
-		return (driver < numTmc22xxDrivers) && driverStates[driver].SetRegister(reg, regVal);
+		return (driver < numTmc51xxDrivers) && driverStates[driver].SetRegister(reg, regVal);
 	}
 
 	uint32_t GetRegister(size_t driver, SmartDriverRegister reg)
 	{
-		return (driver < numTmc22xxDrivers) ? driverStates[driver].GetRegister(reg) : 0;
+		return (driver < numTmc51xxDrivers) ? driverStates[driver].GetRegister(reg) : 0;
 	}
 
 };	// end namespace

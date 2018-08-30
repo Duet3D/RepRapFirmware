@@ -21,9 +21,10 @@
 // Therefore this driver will only work if there are at least two TMC22xx drivers being driven,
 // so that each one gets an interval while the other one is being polled.
 
-const float MaximumMotorCurrent = 1600.0;
-const uint32_t DefaultMicrosteppingShift = 4;				// x16 microstepping
-const bool DefaultInterpolation = true;						// interpolation enabled
+constexpr float MaximumMotorCurrent = 1600.0;
+constexpr uint32_t DefaultMicrosteppingShift = 4;						// x16 microstepping
+constexpr bool DefaultInterpolation = true;								// interpolation enabled
+constexpr uint32_t DefaultTpwmthrsReg = 2000;							// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle
 
 static size_t numTmc22xxDrivers;
 
@@ -142,8 +143,6 @@ constexpr uint8_t REGNUM_TPOWER_DOWN = 0x11;
 constexpr uint8_t REGNUM_TSTEP = 0x12;
 
 constexpr uint8_t REGNUM_TPWMTHRS = 0x13;
-constexpr uint32_t DefaultTpwmthrsReg = 1000;			//TODO find a sensible default
-
 constexpr uint8_t REGNUM_VACTUAL = 0x22;
 
 // Sequencer registers (read only)
@@ -241,6 +240,7 @@ class TmcDriverState
 public:
 	void Init(uint32_t p_driverNumber, Pin p_pin);
 	void SetAxisNumber(size_t p_axisNumber);
+	uint32_t GetAxisNumber() const { return axisNumber; }
 	void WriteAll();
 	bool SetMicrostepping(uint32_t shift, bool interpolate);
 	unsigned int GetMicrostepping(bool& interpolation) const;		// Get microstepping
@@ -984,6 +984,11 @@ namespace SmartDrivers
 		{
 			driverStates[drive].SetAxisNumber(axisNumber);
 		}
+	}
+
+	uint32_t GetAxisNumber(size_t drive)
+	{
+		return (drive < numTmc22xxDrivers) ? driverStates[drive].GetAxisNumber() : 0;
 	}
 
 	void SetCurrent(size_t drive, float current)

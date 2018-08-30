@@ -418,7 +418,7 @@ public:
 	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode);
 	unsigned int GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const;
 	void SetDriverStepTiming(size_t driver, const float microseconds[4]);
-	void GetDriverStepTiming(size_t driver, float microseconds[4]) const;
+	bool GetDriverStepTiming(size_t driver, float microseconds[4]) const;
 	float DriveStepsPerUnit(size_t axisOrExtruder) const;
 	const float *GetDriveStepsPerUnit() const
 		{ return driveStepsPerUnit; }

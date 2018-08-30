@@ -11,7 +11,7 @@
 #if SUPPORT_TMC51xx
 
 #include "RepRapFirmware.h"
-#include "GCodes/DriverMode.h"
+#include "DriverMode.h"
 #include "Pins.h"
 #include "MessageType.h"
 #include "Libraries/General/StringRef.h"
@@ -33,6 +33,7 @@ namespace SmartDrivers
 	void TurnDriversOff();
 
 	void SetAxisNumber(size_t driver, uint32_t axisNumber);
+	uint32_t GetAxisNumber(size_t drive);
 	void SetCurrent(size_t driver, float current);
 	void EnableDrive(size_t driver, bool en);
 	uint32_t GetLiveStatus(size_t driver);

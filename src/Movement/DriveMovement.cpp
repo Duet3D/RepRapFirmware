@@ -534,7 +534,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 // Reduce the speed of this movement. Called to reduce the homing speed when we detect we are near the endstop for a drive.
 void DriveMovement::ReduceSpeed(const DDA& dda, uint32_t inverseSpeedFactor)
 {
-	if (dda.isDeltaMovement)
+	if (dda.isDeltaMovement && drive < DELTA_AXES)
 	{
 		// Force the linear motion phase
 		mp.delta.accelStopDsK = 0;

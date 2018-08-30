@@ -3321,7 +3321,8 @@ void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4])
 	}
 }
 
-void Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const
+// Get the driver step timing, returning true if we are using slower timing than standard
+bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const
 {
 	const bool isSlowDriver = ((slowDriversBitmap & CalcDriverBitmap(driver)) != 0);
 	for (size_t i = 0; i < 4; ++i)
@@ -3330,6 +3331,7 @@ void Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const
 							? (float)slowDriverStepTimingClocks[i] * 1000000.0/(float)StepClockRate
 								: 0.0;
 	}
+	return isSlowDriver;
 }
 
 // Set or report the parameters for the specified fan

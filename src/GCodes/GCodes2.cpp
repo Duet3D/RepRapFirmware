@@ -31,16 +31,6 @@
 # include "FirmwareUpdater.h"
 #endif
 
-#if SUPPORT_TMC2660
-# include "Movement/StepperDrivers/TMC2660.h"
-#endif
-#if SUPPORT_TMC22xx
-# include "Movement/StepperDrivers/TMC22xx.h"
-#endif
-#if SUPPORT_TMC51xx
-# include "Movement/StepperDrivers/TMC51xx.h"
-#endif
-
 #if SUPPORT_12864_LCD
 # include "Display/Display.h"
 #endif
@@ -3143,100 +3133,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 569: // Set/report axis direction
-		if (gb.Seen('P'))
-		{
-			const size_t drive = gb.GetIValue();
-			if (drive < DRIVES)
-			{
-				bool seen = false;
-				if (gb.Seen('S'))
-				{
-					if (!LockMovementAndWaitForStandstill(gb))
-					{
-						return false;
-					}
-					seen = true;
-					platform.SetDirectionValue(drive, gb.GetIValue() != 0);
-				}
-				if (gb.Seen('R'))
-				{
-					if (!LockMovementAndWaitForStandstill(gb))
-					{
-						return false;
-					}
-					seen = true;
-					platform.SetEnableValue(drive, (int8_t)gb.GetIValue());
-				}
-				if (gb.Seen('T'))
-				{
-					seen = true;
-					float timings[4];
-					size_t numTimings = ARRAY_SIZE(timings);
-					gb.GetFloatArray(timings, numTimings, true);
-					if (numTimings != ARRAY_SIZE(timings))
-					{
-						reply.copy("bad timing parameter");
-						result = GCodeResult::error;
-						break;
-					}
-					platform.SetDriverStepTiming(drive, timings);
-				}
-
-#if HAS_SMART_DRIVERS
-				if (gb.Seen('D'))		// set driver mode
-				{
-					seen = true;
-					const unsigned int mode = gb.GetUIValue();
-					if (!SmartDrivers::SetDriverMode(drive, mode))
-					{
-						reply.printf("Driver %u does not support mode '%s'", drive, TranslateDriverMode(mode));
-						result = GCodeResult::error;
-						break;
-					}
-				}
-
-				if (gb.Seen('C'))		// set chopper control register
-				{
-					seen = true;
-					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::chopperControl, gb.GetUIValue()))
-					{
-						reply.printf("Bad ccr for driver %u", drive);
-						result = GCodeResult::error;
-						break;
-					}
-				}
-
-				if (gb.Seen('F'))
-				{
-					seen = true;
-					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::toff, gb.GetUIValue()))
-					{
-						reply.printf("Bad off time for driver %u", drive);
-						result = GCodeResult::error;
-						break;
-					}
-				}
-#endif
-				if (!seen)
-				{
-					float timings[4];
-					platform.GetDriverStepTiming(drive, timings);
-					reply.printf("Drive %u runs %s, active %s enable, step timing %.1f:%.1f:%.1f:%.1f us",
-								drive,
-								(platform.GetDirectionValue(drive)) ? "forwards" : "in reverse",
-								(platform.GetEnableValue(drive)) ? "high" : "low",
-								(double)timings[0], (double)timings[1], (double)timings[2], (double)timings[3]);
-#if HAS_SMART_DRIVERS
-					if (drive < platform.GetNumSmartDrivers())
-					{
-						reply.catf(", mode %s, ccr 0x%05" PRIx32 ", off time %" PRIu32,
-							TranslateDriverMode(SmartDrivers::GetDriverMode(drive)),
-							SmartDrivers::GetRegister(drive, SmartDriverRegister::chopperControl), SmartDrivers::GetRegister(drive, SmartDriverRegister::toff));
-					}
-#endif
-				}
-			}
-		}
+		result = ConfigureDriver(gb, reply);
 		break;
 
 	case 570: // Set/report heater monitoring

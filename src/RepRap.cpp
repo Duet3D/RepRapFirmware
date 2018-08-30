@@ -884,7 +884,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			if (sendBeep)
 			{
 				response->catf("\"beepDuration\":%u,\"beepFrequency\":%u", beepDuration, beepFrequency);
-				if (sendMessage)
+				if (sendMessage || displayMessageBox)
 				{
 					response->cat(",");
 				}

@@ -40,6 +40,7 @@ namespace SmartDrivers
 	void Init(const Pin[DRIVES], size_t numTmcDrivers)
 		pre(numTmcDrivers <= DRIVES);
 	void SetAxisNumber(size_t drive, uint32_t axisNumber);
+	uint32_t GetAxisNumber(size_t drive);
 	void SetCurrent(size_t drive, float current);
 	void EnableDrive(size_t drive, bool en);
 	uint32_t GetLiveStatus(size_t drive);
