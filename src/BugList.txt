@@ -41,6 +41,8 @@ Remaining:
 - [done, ok on DuetM, test on Duet2] No warning messages when TMC2224 drivers overheat, https://forum.duet3d.com/topic/6309/little-monster-s-hort-to-ground/13
 - [done] Different numbers of endstop inputs and motor drivers
 - [done, ok] Support mixed stealthchop/spread cycle mode on Maestro via TPWMTHRS register, https://forum.duet3d.com/topic/6512/duet-2-maestro-stealthchop-default/7
+- [done, test] Add paused coordinates to 'printing paused' message? https://reprap.org/forum/read.php?416,832303,832440#msg-832440
+- [done] If a bad curve fit occurs during tuning, display the values as A, C and D instead of G, tc and td to better relate to M307
 - Add check digit to serial number
 - check DAA working as intended, results are inconsistent
 - chrishamm's watchdog issue, see his email oif 2018-08-01

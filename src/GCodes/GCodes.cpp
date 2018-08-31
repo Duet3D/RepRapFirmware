@@ -679,8 +679,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 	case GCodeState::pausing2:
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			reply.copy("Printing paused");
-			platform.Message(LogMessage, "Printing paused\n");
+			reply.printf("Printing paused at");
+			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+			{
+				reply.catf(" %c%.1f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
+			}
+			platform.MessageF(LogMessage, "%s\n", reply.c_str());
 			gb.SetState(GCodeState::normal);
 		}
 		break;
@@ -1735,6 +1739,13 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 		}
 	}
 
+#if SUPPORT_LASER
+	if (machineType == MachineType::laser)
+	{
+		moveBuffer.laserPwmOrIoBits.laserPwm = 0;		// turn off the laser when we start moving
+	}
+#endif
+
 	SaveFanSpeeds();
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
 
@@ -2382,9 +2393,18 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 #if SUPPORT_LASER
 	else if (machineType == MachineType::laser)
 	{
-		moveBuffer.laserPwmOrIoBits.laserPwm = (moveBuffer.moveType == 0 && isCoordinated && gb.Seen('S'))
-												? ConvertLaserPwm(gb.GetFValue())
-												: 0;
+		if (!isCoordinated || moveBuffer.moveType != 0)
+		{
+			moveBuffer.laserPwmOrIoBits.laserPwm = 0;
+		}
+		else if (gb.Seen('S'))
+		{
+			moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
+		}
+		else
+		{
+			// leave the laser PWM alone because this is what LaserWeb expects
+		}
 	}
 #endif
 #if SUPPORT_IOBITS
@@ -2695,6 +2715,37 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	}
 
 	LoadExtrusionAndFeedrateFromGCode(gb);
+
+#if SUPPORT_LASER
+	if (machineType == MachineType::laser)
+	{
+		if (gb.Seen('S'))
+		{
+			moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
+		}
+		else
+		{
+			// leave the laser PWM alone because this is what LaserWeb expects
+		}
+	}
+# if SUPPORT_IOBITS
+	else
+# endif
+#endif
+#if SUPPORT_IOBITS
+	{
+		// Update the iobits parameter
+		if (gb.Seen('P'))
+		{
+			moveBuffer.laserPwmOrIoBits.ioBits = (IoBits_t)gb.GetIValue();
+		}
+		else
+		{
+			// Leave moveBuffer.ioBits alone so that we keep the previous value
+		}
+	}
+#endif
+
 
 	moveBuffer.usePressureAdvance = moveBuffer.hasExtrusion;
 

@@ -749,7 +749,7 @@ void PID::DoTuningStep()
 			const int peakIndex = GetPeakTempIndex();
 			if (peakIndex < 0)
 			{
-				if (millis() - tuningPhaseStartTime < 60 * 1000)			// allow 1 minute for the bed temperature reach peal temperature
+				if (millis() - tuningPhaseStartTime < 60 * 1000)			// allow 1 minute for the bed temperature reach peak temperature
 				{
 					return;			// still waiting for peak temperature
 				}
@@ -898,7 +898,8 @@ void PID::CalculateModel()
 	{
 		DisplayBuffer("At completion");
 	}
-	const float tc = (float)((tuningReadingsTaken - 1) * tuningReadingInterval)/(1000.0 * logf((tuningTempReadings[0] - tuningStartTemp)/(tuningTempReadings[tuningReadingsTaken - 1] - tuningStartTemp)));
+	const float tc = (float)((tuningReadingsTaken - 1) * tuningReadingInterval)
+						/(1000.0 * logf((tuningTempReadings[0] - tuningStartTemp)/(tuningTempReadings[tuningReadingsTaken - 1] - tuningStartTemp)));
 	const float heatingTime = (tuningHeatingTime - tuningPeakDelay) * 0.001;
 	const float gain = (tuningHeaterOffTemp - tuningStartTemp)/(1.0 - expf(-heatingTime/tc));
 
@@ -925,7 +926,7 @@ void PID::CalculateModel()
 	}
 	else
 	{
-		platform.MessageF(WarningMessage, "Auto tune of heater %u failed due to bad curve fit (G=%.1f, tc=%.1f, td=%.1f)\n", heater, (double)gain, (double)tc, (double)td);
+		platform.MessageF(WarningMessage, "Auto tune of heater %u failed due to bad curve fit (A=%.1f, C=%.1f, D=%.1f)\n", heater, (double)gain, (double)tc, (double)td);
 	}
 }
 

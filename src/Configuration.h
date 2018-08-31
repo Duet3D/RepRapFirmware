@@ -32,7 +32,7 @@ constexpr float ROOM_TEMPERATURE = 21.0;				// Celsius
 
 // Timeouts
 constexpr uint32_t FanCheckInterval = 500;				// Milliseconds
-constexpr uint32_t OpenLoadTimeout = 500;				// Milliseconds
+constexpr uint32_t OpenLoadTimeout = 5000;				// Milliseconds. A value of 500 resulted in lots of spurious detections in the SCARA extruder. Even 2000 resulted in a couple.
 constexpr uint32_t MinimumWarningInterval = 4000;		// Milliseconds, must be at least as long as FanCheckInterval
 constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
 constexpr uint32_t DriverCoolingTimeout = 4000;			// Milliseconds
