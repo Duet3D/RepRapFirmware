@@ -1,6 +1,29 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.02RC1
+===============
+
+Upgrade notes:
+- **Very important!** If you use M452 to put your machine into Laser mode, you must replace all S parameters in G1 commands in homing files etc. by H parameters. This is because S is now used to control laser power.
+- Duet Web Control version 1.22.3 is recommended with this firmware. On the Duet WiFi, DuetWiFiServer.bin version 1.21 remains compatible.
+- Previously, you could omit the P0 parameter when configuring fan 0. The P0 parameter is now compulsory when configuring fan 0. The only parameters now recognised in M106 commands with no P parameter are S and R.
+
+New features and changed behaviour (since 2.02beta1):
+- When TMC22xx drivers on the Duet Maestro are configured in stealthChop mode, the driver is programmed to switch over to spreadCycle automatically at high speeds
+- Added M569 parameters B, H and V to configure blanking time value, hysteresis values (2 or 3 of them) and stealthchop/spreadCycle switchover register value. Also added these values to the M569 report when only a P parameter is given.
+- More complete 12864 display support on the Duet Maestro (thanks printm3d)
+- Hardware configurations with more or fewer endstop inputs than motor drivers are better supported
+- When a print is paused, the coordinates of the pause point are included in the "Printing paused" message
+- If heater tuning fails due to a bad curve fit, the parameters measured are reported as A, C and D (to match the M307 parameter letters) instead of G, tc and td
+
+Bug fixes (since 2.02beta1):
+- The code to report overheating TMC22xx or TMC2660 drivers to Duet Web Control, Panel Due console and USB hosts wasn't working
+- In laser mode a G1 command with no S parameter keeps the previous laser power instead of turning the laser off. A G0 move always turns the laser off.
+- In laser mode, G2 and G3 arc moves may now use the laser
+- On a delta printer, if you created additional axes then the movement of these axes was not coordinated with the effector movement
+- If your GCode generated a beep (M300) and a dialog box (M291) in quick succession, a bad JSON response was constructed, causing Duet Web Control to disconnect
+
 Version 2.02beta1
 =================
 
