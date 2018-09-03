@@ -84,9 +84,13 @@ public:
 	uint32_t GetClocksNeeded() const { return clocksNeeded; }
 	bool IsGoodToPrepare() const;
 
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	LaserPwmOrIoBits GetLaserPwmOrIoBits() const { return laserPwmOrIoBits; }
+#endif
+
 #if SUPPORT_IOBITS
 	uint32_t GetMoveStartTime() const { return moveStartTime; }
-	IoBits_t GetIoBits() const { return ioBits; }
+	IoBits_t GetIoBits() const { return laserPwmOrIoBits.ioBits; }
 #endif
 
 #if HAS_SMART_DRIVERS
@@ -126,7 +130,7 @@ public:
 	static int32_t loggedProbePositions[XYZ_AXES * MaxLoggedProbePositions];
 #endif
 
-	static uint32_t numHiccups;										// how many times we delayed an interrupt to avoid using too much CPU time in interrupts
+	static unsigned int numHiccups;									// how many times we delayed an interrupt to avoid using too much CPU time in interrupts
 	static uint32_t lastStepLowTime;								// when we last completed a step pulse to a slow driver
 	static uint32_t lastDirChangeTime;								// when we last change the DIR signal to a slow driver
 
@@ -173,12 +177,13 @@ private:
 			uint8_t goingSlow : 1;					// True if we have slowed the movement because the Z probe is approaching its threshold
 			uint8_t isLeadscrewAdjustmentMove : 1;	// True if this is a leadscrews adjustment move
 			uint8_t usingStandardFeedrate : 1;		// True if this move uses the standard feed rate
+			uint8_t hadHiccup : 1;					// True if we had a hiccup while executing this move
 		};
 		uint16_t flags;								// so that we can print all the flags at once for debugging
 	};
 
-#if SUPPORT_IOBITS
-	IoBits_t ioBits;						// port state required during this move (here because it is currently 16 bits)
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	LaserPwmOrIoBits laserPwmOrIoBits;		// laser PWM required or port state required during this move (here because it is currently 16 bits)
 #endif
 
     EndstopChecks endStopsToCheck;			// Which endstops we are checking on this move

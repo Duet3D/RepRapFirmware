@@ -44,11 +44,9 @@ static Task<NetworkStackWords> networkTask;
 
 Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderToPoll(nullptr)
 {
-#if defined(SAME70_TEST_BOARD)
+#if defined(DUET3)
 	interfaces[0] = new LwipEthernetInterface(p);
-# if HAS_WIFI_NETWORKING
 	interfaces[1] = new WiFiInterface(p);
-# endif
 #elif defined(DUET_NG)
 	interfaces[0] = nullptr;			// we set this up in Init()
 #elif defined(DUET_M)
@@ -371,6 +369,13 @@ void Network::SetEthernetIPAddress(const uint8_t ipAddress[], const uint8_t netm
 			iface->SetIPAddress(ipAddress, netmask, gateway);
 		}
 	}
+}
+
+const uint8_t *Network::GetIPAddress(unsigned int interface) const
+{
+	static const uint8_t nullIpAddress[4] = { 0, 0, 0, 0 };
+
+	return (interface < NumNetworkInterfaces) ? interfaces[interface]->GetIPAddress() : nullIpAddress;
 }
 
 void Network::SetHostname(const char *name)

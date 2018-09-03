@@ -41,7 +41,8 @@ constexpr size_t DRIVES = 7;						// The maximum number of drives supported by t
 constexpr size_t MaxSmartDrivers = 7;				// The maximum number of smart drivers
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g }
 
-constexpr size_t Heaters = 3;						// The number of heaters/thermistors in the machine. Duet M has 3 heaters but 4 thermistors.
+constexpr size_t NumEndstops = 5;					// The number of inputs we have for endstops, filament sensors etc.
+constexpr size_t NumHeaters = 3;					// The number of heaters/thermistors in the machine. Duet M has 3 heaters but 4 thermistors.
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 4;
 
@@ -89,10 +90,10 @@ constexpr Pin TMC22xxMuxPins[3] = { 50, 52, 53 };	// Pins that control the UART 
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-constexpr Pin END_STOP_PINS[DRIVES] = { 24, 32, 46, 25, 43, NoPin, NoPin };
+constexpr Pin END_STOP_PINS[NumEndstops] = { 24, 32, 46, 25, 43 };
 
 // Heaters and thermistors
-constexpr Pin HEAT_ON_PINS[Heaters] = { 36, 37, 16 };						// Heater pin numbers
+constexpr Pin HEAT_ON_PINS[NumHeaters] = { 36, 37, 16 };					// Heater pin numbers
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 20, 26, 66, 27 }; 	// Thermistor pin numbers
 constexpr Pin VssaSensePin = 19;
 constexpr Pin VrefSensePin = 17;

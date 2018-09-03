@@ -113,8 +113,8 @@ constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in millisec
 enum class BoardType : uint8_t
 {
 	Auto = 0,
-#if defined(SAME70_TEST_BOARD)
-	SamE70TestBoard = 1
+#if defined(DUET3)
+	Duet3_10 = 1
 #elif defined(DUET_NG)
 	DuetWiFi_10 = 1,
 	DuetWiFi_102 = 2,
@@ -418,7 +418,7 @@ public:
 	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode);
 	unsigned int GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const;
 	void SetDriverStepTiming(size_t driver, const float microseconds[4]);
-	void GetDriverStepTiming(size_t driver, float microseconds[4]) const;
+	bool GetDriverStepTiming(size_t driver, float microseconds[4]) const;
 	float DriveStepsPerUnit(size_t axisOrExtruder) const;
 	const float *GetDriveStepsPerUnit() const
 		{ return driveStepsPerUnit; }
@@ -561,7 +561,7 @@ public:
 
 #if HAS_SMART_DRIVERS
 	float GetTmcDriversTemperature(unsigned int board) const;
-	void DriverCoolingFansOn(uint32_t driverChannelsMonitored);
+	void DriverCoolingFansOnOff(uint32_t driverChannelsMonitored, bool on);
 	unsigned int GetNumSmartDrivers() const { return numSmartDrivers; }
 #endif
 
@@ -571,6 +571,10 @@ public:
 
 	// User I/O and servo support
 	bool GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firmwarePin, bool& invert);
+
+	// For fan pin mapping
+	bool TranslateFanPin(LogicalPin logicalPin, Pin& firmwarePin, bool& invert) const;
+	void AppendPinName(LogicalPin lp, const StringRef& str) const;
 
 	// For filament sensor support
 	Pin GetEndstopPin(int endstop) const;			// Get the firmware pin number for an endstop
@@ -591,7 +595,7 @@ public:
 	// CNC and laser support
 	Spindle& AccessSpindle(size_t slot) { return spindles[slot]; }
 
-	void SetLaserPwm(float pwm);
+	void SetLaserPwm(Pwm_t pwm);
 	bool SetLaserPin(LogicalPin lp, bool invert);
 	LogicalPin GetLaserPin(bool& invert) const { return laserPort.GetLogicalPin(invert); }
 	void SetLaserPwmFrequency(float freq);
@@ -624,7 +628,7 @@ private:
 	float AdcReadingToCpuTemperature(uint32_t reading) const;
 
 #if HAS_SMART_DRIVERS
-	void ReportDrivers(MessageType mt, DriversBitmap whichDrivers, const char* text, bool& reported);
+	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char* text, bool& reported);
 #endif
 #if HAS_STALL_DETECT
 	bool AnyAxisMotorStalled(size_t drive) const pre(drive < DRIVES);
@@ -729,7 +733,7 @@ private:
 	volatile DriverStatus driverState[DRIVES];
 	bool directions[DRIVES];
 	int8_t enableValues[DRIVES];
-	Pin endStopPins[DRIVES];
+	Pin endStopPins[NumEndstops];
 	float maxFeedrates[DRIVES];
 	float accelerations[DRIVES];
 	float driveStepsPerUnit[DRIVES];
@@ -749,13 +753,11 @@ private:
 
 #if HAS_SMART_DRIVERS
 	size_t numSmartDrivers;								// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers
-	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers, openLoadDrivers;
+	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers, openLoadADrivers, openLoadBDrivers;
+	MillisTimer openLoadATimer, openLoadBTimer;
+	MillisTimer driversFanTimers[NumTmcDriversSenseChannels];		// driver cooling fan timers
 	uint8_t nextDriveToPoll;
 	bool driversPowered;
-	bool onBoardDriversFanRunning;						// true if a fan is running to cool the on-board drivers
-	bool offBoardDriversFanRunning;						// true if a fan is running to cool the drivers on the DueX
-	uint32_t onBoardDriversFanStartMillis;				// how many times we have suppressed a temperature warning
-	uint32_t offBoardDriversFanStartMillis;				// how many times we have suppressed a temperature warning
 #endif
 
 #if HAS_STALL_DETECT
@@ -1184,7 +1186,7 @@ inline uint16_t Platform::GetRawZProbeReading() const
 
 	case ZProbeType::e0Switch:
 		{
-			const bool b = IoPort::ReadPin(endStopPins[E0_AXIS]);
+			const bool b = IoPort::ReadPin(GetEndstopPin(E0_AXIS));
 			return (b) ? 4000 : 0;
 		}
 
@@ -1195,7 +1197,7 @@ inline uint16_t Platform::GetRawZProbeReading() const
 
 	case ZProbeType::e1Switch:
 		{
-			const bool b = IoPort::ReadPin(endStopPins[E0_AXIS + 1]);
+			const bool b = IoPort::ReadPin(GetEndstopPin(E0_AXIS + 1));
 			return (b) ? 4000 : 0;
 		}
 
@@ -1249,7 +1251,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // The bitmaps for various controller electronics are organised like this:
 // Duet WiFi:
 //	All step pins are on port D, so the bitmap is just the map of step bits in port D.
-// Duet Maestro and PCCB:
+// Duet Maestro, PCCB and Duet 3:
 //	All step pins are on port C, so the bitmap is just the map of step bits in port C.
 // Duet 0.6 and 0.8.5:
 //	Step pins are PA0, PC7,9,11,14,25,29 and PD0,3.
@@ -1269,11 +1271,11 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 		return 0;
 	}
 
-#if defined(SAME70_TEST_BOARD)
-	return 0;				// TODO assign step pins
-#else
+#ifndef __LPC17xx__		//LPC doesn't need pinDesc
 	const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
-#if defined(DUET_NG) || defined(DUET_M) || defined(PCCB)
+#endif
+
+#if defined(DUET_NG) || defined(DUET_M) || defined(PCCB) || defined(DUET3)
 	return pinDesc.ulPin;
 #elif defined(DUET_06_085)
 	return (pinDesc.pPort == PIOA) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
@@ -1281,9 +1283,10 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	return (pinDesc.pPort == PIOC) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
 #elif defined(__ALLIGATOR__)
 	return pinDesc.ulPin;
+# elif defined(__LPC17xx__)
+	return 1u << STEP_PIN_PORT2_POS[driver];
 #else
 # error Unknown board
-#endif
 #endif
 }
 
@@ -1292,11 +1295,9 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
 /*static*/ inline void Platform::StepDriversHigh(uint32_t driverMap)
 {
-#if defined(SAME70_TEST_BOARD)
-	// TODO
-#elif defined(DUET_NG)
+#if defined(DUET_NG)
 	PIOD->PIO_ODSR = driverMap;				// on Duet WiFi all step pins are on port D
-#elif defined(DUET_M) || defined(PCCB)
+#elif defined(DUET_M) || defined(PCCB) || defined(DUET3)
 	PIOC->PIO_ODSR = driverMap;				// on Duet Maestro all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = driverMap;
@@ -1311,6 +1312,11 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	PIOB->PIO_ODSR = driverMap;
 	PIOD->PIO_ODSR = driverMap;
 	PIOC->PIO_ODSR = driverMap;
+#elif defined(__LPC17xx__)
+	//On Azteeg X5 Mini all step pins are on Port 2
+	//On Smoothieboard all step pins are on Port 2
+	//On ReArm all step pins are on Port 2
+	LPC_GPIO2->FIOSET = driverMap;
 #else
 # error Unknown board
 #endif
@@ -1321,11 +1327,9 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
 /*static*/ inline void Platform::StepDriversLow()
 {
-#if defined(SAME70_TEST_BOARD)
-	// TODO
-#elif defined(DUET_NG)
+#if defined(DUET_NG)
 	PIOD->PIO_ODSR = 0;						// on Duet WiFi all step pins are on port D
-#elif defined(DUET_M) || defined(PCCB)
+#elif defined(DUET_M) || defined(PCCB) || defined(DUET3)
 	PIOC->PIO_ODSR = 0;						// on Duet Maestro all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = 0;
@@ -1340,6 +1344,8 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	PIOD->PIO_ODSR = 0;
 	PIOC->PIO_ODSR = 0;
 	PIOB->PIO_ODSR = 0;
+#elif defined(__LPC17xx__)
+	LPC_GPIO2->FIOCLR = STEP_DRIVER_MASK;
 #else
 # error Unknown board
 #endif

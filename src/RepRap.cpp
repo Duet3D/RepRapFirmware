@@ -31,6 +31,9 @@
 #if HAS_HIGH_SPEED_SD
 # include "sam/drivers/hsmci/hsmci.h"
 # include "conf_sd_mmc.h"
+# if SAME70
+static_assert(CONF_HSMCI_XDMAC_CHANNEL == XDMAC_CHAN_HSMCI, "mismatched DMA channel assignment");
+# endif
 #endif
 
 #ifdef RTOS
@@ -116,6 +119,33 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 	{
 		FilamentMonitor::Spin(false);
 	}
+}
+
+#endif
+
+#ifdef SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 then if lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) [] (ObjectModel* arg) { RepRap * const self = static_cast<RepRap*>(arg); return (void *)(_ret); }
+
+const ObjectModelTableEntry RepRap::objectModelTable[] =
+{
+	{ "gcodes", OBJECT_MODEL_FUNC(&(self->GetGCodes())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none }
+};
+
+const char *RepRap::GetModuleName() const
+{
+	return nullptr;				// this module has no name and doesn't need one
+}
+
+const ObjectModelTableEntry *RepRap::GetObjectModelTable(size_t& numEntries) const
+{
+	numEntries = ARRAY_SIZE(objectModelTable);
+	return objectModelTable;
 }
 
 #endif
@@ -476,7 +506,7 @@ void RepRap::EmergencyStop()
 		break;
 
 	case MachineType::laser:
-		platform->SetLaserPwm(0.0);
+		platform->SetLaserPwm(0);
 		break;
 
 	default:
@@ -501,6 +531,7 @@ void RepRap::EmergencyStop()
 		platform->DisableAllDrives();
 	}
 
+	gCodes->EmergencyStop();
 	platform->StopLogging();
 }
 
@@ -730,7 +761,7 @@ void RepRap::Tick()
 #endif
 		{
 			resetting = true;
-			for (size_t i = 0; i < Heaters; i++)
+			for (size_t i = 0; i < NumHeaters; i++)
 			{
 				platform->SetHeater(i, 0.0);
 			}
@@ -869,7 +900,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			if (sendBeep)
 			{
 				response->catf("\"beepDuration\":%u,\"beepFrequency\":%u", beepDuration, beepFrequency);
-				if (sendMessage)
+				if (sendMessage || displayMessageBox)
 				{
 					response->cat(",");
 				}
@@ -1029,7 +1060,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Current temperatures
 		response->cat("\"current\":");
 		ch = '[';
-		for (size_t heater = 0; heater < Heaters; heater++)
+		for (size_t heater = 0; heater < NumHeaters; heater++)
 		{
 			response->catf("%c%.1f", ch, (double)heat->GetTemperature(heater));
 			ch = ',';
@@ -1039,7 +1070,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Current states
 		response->cat(",\"state\":");
 		ch = '[';
-		for (size_t heater = 0; heater < Heaters; heater++)
+		for (size_t heater = 0; heater < NumHeaters; heater++)
 		{
 			response->catf("%c%d", ch, heat->GetStatus(heater));
 			ch = ',';
@@ -1051,7 +1082,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		{
 			response->cat(",\"names\":");
 			ch = '[';
-			for (size_t heater = 0; heater < Heaters; heater++)
+			for (size_t heater = 0; heater < NumHeaters; heater++)
 			{
 				response->cat(ch);
 				ch = ',';
@@ -1226,10 +1257,10 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		// Endstops
 		uint32_t endstops = 0;
-		const size_t totalAxes = gCodes->GetTotalAxes();
-		for (size_t drive = 0; drive < DRIVES; drive++)
+		const size_t numTotalAxes = gCodes->GetTotalAxes();
+		for (size_t drive = 0; drive < NumEndstops; drive++)
 		{
-			if (drive < totalAxes)
+			if (drive < numTotalAxes)
 			{
 				const EndStopHit es = platform->Stopped(drive);
 				if (es == EndStopHit::highHit || es == EndStopHit::lowHit)
@@ -1245,7 +1276,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"endstops\":%" PRIu32, endstops);
 
 		// Firmware name, machine geometry and number of axes
-		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"axisNames\":\"%s\"", FIRMWARE_NAME, move->GetGeometryString(), numVisibleAxes, gCodes->GetAxisLetters());
+		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\"",
+			FIRMWARE_NAME, move->GetGeometryString(), numVisibleAxes, numTotalAxes, gCodes->GetAxisLetters());
 
 		// Total and mounted volumes
 		size_t mountedCards = 0;
@@ -1786,8 +1818,8 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	else if (type == 3)
 	{
 		// Add the static fields
-		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"axisNames\":\"%s\",\"volumes\":%u,\"numTools\":%u,\"myName\":",
-						move->GetGeometryString(), numVisibleAxes, gCodes->GetAxisLetters(), NumSdCards, GetNumberOfContiguousTools());
+		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\",\"volumes\":%u,\"numTools\":%u,\"myName\":",
+						move->GetGeometryString(), numVisibleAxes, gCodes->GetTotalAxes(), gCodes->GetAxisLetters(), NumSdCards, GetNumberOfContiguousTools());
 		response->EncodeString(myName.c_str(), myName.Capacity(), false);
 		response->cat(",\"firmwareName\":");
 		response->EncodeString(FIRMWARE_NAME, strlen(FIRMWARE_NAME), false);
@@ -1858,7 +1890,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 					}
 
 					// Write separator and filename
-					if (filesFound > startAt)
+					if (filesFound != startAt)
 					{
 						bytesLeft -= response->cat(',');
 					}
@@ -1930,7 +1962,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 					}
 
 					// Write delimiter
-					if (filesFound > startAt)
+					if (filesFound != startAt)
 					{
 						bytesLeft -= response->cat(',');
 					}

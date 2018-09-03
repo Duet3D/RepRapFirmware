@@ -78,8 +78,7 @@ void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	else
 	{
 		mp.cart.decelStartStep = (uint32_t)(params.decelStartDistance * stepsPerMm) + 1;
-		const uint64_t initialDecelSpeedTimesCdivDSquared = isquare64(params.topSpeedTimesCdivD);
-		twoDistanceToStopTimesCsquaredDivD = initialDecelSpeedTimesCdivDSquared + roundU64((params.decelStartDistance * (StepClockRateSquared * 2))/dda.deceleration);
+		twoDistanceToStopTimesCsquaredDivD = isquare64(params.topSpeedTimesCdivD) + roundU64((params.decelStartDistance * (StepClockRateSquared * 2))/dda.deceleration);
 	}
 
 	// No reverse phase
@@ -535,7 +534,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 // Reduce the speed of this movement. Called to reduce the homing speed when we detect we are near the endstop for a drive.
 void DriveMovement::ReduceSpeed(const DDA& dda, uint32_t inverseSpeedFactor)
 {
-	if (dda.isDeltaMovement)
+	if (dda.isDeltaMovement && drive < DELTA_AXES)
 	{
 		// Force the linear motion phase
 		mp.delta.accelStopDsK = 0;

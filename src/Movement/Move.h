@@ -72,14 +72,15 @@ public:
 	unsigned int GetNumProbedProbePoints() const;					// Return the number of actually probed probe points
 	float PushBabyStepping(float amount);							// Try to push some babystepping through the lookahead queue
 
+	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply);			// process M204
+	GCodeResult ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef& reply);	// process M593
+
 	float GetMaxPrintingAcceleration() const { return maxPrintingAcceleration; }
-	void SetMaxPrintingAcceleration(float acc) { maxPrintingAcceleration = acc; }
 	float GetMaxTravelAcceleration() const { return maxTravelAcceleration; }
-	void SetMaxTravelAcceleration(float acc) { maxTravelAcceleration = acc; }
 	float GetDRCfreq() const { return 1.0/drcPeriod; }
 	float GetDRCperiod() const { return drcPeriod; }
+	float GetDRCminimumAcceleration() const { return drcMinimumAcceleration; }
 	float IsDRCenabled() const { return drcEnabled; }
-	void SetDRCfreq(float f);
 
 	void Diagnostics(MessageType mtype);							// Report useful stuff
 	void RecordLookaheadError() { ++numLookaheadErrors; }			// Record a lookahead error
@@ -112,8 +113,8 @@ public:
 	void PrintCurrentDda() const;													// For debugging
 
 	bool PausePrint(RestorePoint& rp);												// Pause the print as soon as we can, returning true if we were able to
-#if HAS_VOLTAGE_MONITOR
-	bool LowPowerPause(RestorePoint& rp);											// Pause the print immediately, returning true if we were able to
+#if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
+	bool LowPowerOrStallPause(RestorePoint& rp);									// Pause the print immediately, returning true if we were able to
 #endif
 
 	bool NoLiveMovement() const;													// Is a move running, or are there any queued?
@@ -180,6 +181,7 @@ private:
 	float maxPrintingAcceleration;
 	float maxTravelAcceleration;
 	float drcPeriod;									// the period of ringing that we don't want to excite
+	float drcMinimumAcceleration;						// the minimum value that we reduce acceleration to
 
 	unsigned int numLookaheadUnderruns;					// How many times we have run out of moves to adjust during lookahead
 	unsigned int numPrepareUnderruns;					// How many times we wanted a new move but there were only un-prepared moves in the queue

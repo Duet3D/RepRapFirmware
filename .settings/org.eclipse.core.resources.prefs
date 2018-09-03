@@ -1,0 +1,4 @@
+eclipse.preferences.version=1
+encoding//src/Display/ST7920/glcd11x14.cpp=UTF-8
+encoding//src/Display/ST7920/glcd7x11.cpp=UTF-8
+encoding//src/Movement/StepperDrivers/TMC51xx.cpp=UTF-8

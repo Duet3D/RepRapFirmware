@@ -14,12 +14,8 @@
 #include "GCodes/GCodeResult.h"
 #include "RTOSIface.h"
 
-#if defined(SAME70_TEST_BOARD)
-# if HAS_WIFI_NETWORKING
+#if defined(DUET3)
 const size_t NumNetworkInterfaces = 2;
-# else
-const size_t NumNetworkInterfaces = 1;
-# endif
 #elif defined(DUET_NG) || defined(DUET_M)
 const size_t NumNetworkInterfaces = 1;
 #else
@@ -68,6 +64,7 @@ public:
 	int EnableState(unsigned int interface) const;
 
 	void SetEthernetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[]);
+	const uint8_t *GetIPAddress(unsigned int interface) const;
 	const char *GetHostname() const { return hostname; }
 	void SetHostname(const char *name);
 	void SetMacAddress(unsigned int interface, const uint8_t mac[]);

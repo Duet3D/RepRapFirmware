@@ -404,7 +404,14 @@ void W5500Interface::Spin(bool full)
 
 void W5500Interface::Diagnostics(MessageType mtype)
 {
-	platform.MessageF(mtype, "Interface state: %d\n", (int)state);
+	uint8_t phycfgr;
+	{
+		MutexLocker lock(interfaceMutex);
+		phycfgr = getPHYCFGR();
+	}
+	const char * const linkSpeed = ((phycfgr & 1) == 0) ? "down" : ((phycfgr & 2) != 0) ? "100Mbps" : "10Mbps";
+	const char * const linkDuplex = ((phycfgr & 1) == 0) ? "" : ((phycfgr & 4) != 0) ? " full duplex" : " half duplex";
+	platform.MessageF(mtype, "Interface state %d, link %s%s\n", (int)state, linkSpeed, linkDuplex);
 }
 
 // Enable or disable the network

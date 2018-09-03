@@ -723,43 +723,51 @@ uint32_t GCodeBuffer::GetUIValue()
 }
 
 // If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
-void GCodeBuffer::TryGetFValue(char c, float& val, bool& seen)
+bool GCodeBuffer::TryGetFValue(char c, float& val, bool& seen)
 {
-	if (Seen(c))
+	const bool ret = Seen(c);
+	if (ret)
 	{
 		val = GetFValue();
 		seen = true;
 	}
+	return ret;
 }
 
 // If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
-void GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen)
+bool GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen)
 {
-	if (Seen(c))
+	const bool ret = Seen(c);
+	if (ret)
 	{
 		val = GetIValue();
 		seen = true;
 	}
+	return ret;
 }
 
 // If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
-void GCodeBuffer::TryGetUIValue(char c, uint32_t& val, bool& seen)
+bool GCodeBuffer::TryGetUIValue(char c, uint32_t& val, bool& seen)
 {
-	if (Seen(c))
+	const bool ret = Seen(c);
+	if (ret)
 	{
 		val = GetUIValue();
 		seen = true;
 	}
+	return ret;
 }
 
 // If the specified parameter character is found, fetch 'value' as a Boolean and set 'seen'. Otherwise leave val and seen alone.
-void GCodeBuffer::TryGetBValue(char c, bool& val, bool& seen)
+bool GCodeBuffer::TryGetBValue(char c, bool& val, bool& seen)
 {
-	if (Seen(c))
+	const bool ret = Seen(c);
+	if (ret)
 	{
 		val = GetIValue() > 0;
 		seen = true;
 	}
+	return ret;
 }
 
 // Try to get an int array exactly 'numVals' long after parameter letter 'c'.

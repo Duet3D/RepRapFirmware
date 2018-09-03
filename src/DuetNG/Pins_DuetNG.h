@@ -25,12 +25,9 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define SUPPORT_INKJET		0						// set nonzero to support inkjet control
 #define SUPPORT_ROLAND		0						// set nonzero to support Roland mill
 #define SUPPORT_SCANNER		1						// set zero to disable support for FreeLSS scanners
+#define SUPPORT_LASER		1						// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS		1						// set to support P parameter in G0/G1 commands
-#ifdef RTOS
-# define SUPPORT_DHT_SENSOR	1						// set nonzero to support DHT temperature/humidity sensors
-#else
-# define SUPPORT_DHT_SENSOR	0						// DHT sensors are only supported in RTOS builds
-#endif
+#define SUPPORT_DHT_SENSOR	1						// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 
 #define USE_CACHE			0						// set nonzero to enable the cache. Disabled this at 1.21RC1 because of doubts about its safety.
@@ -41,7 +38,8 @@ constexpr size_t DRIVES = 12;						// The maximum number of drives supported by 
 constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h,i,j,k,l }
 
-constexpr size_t Heaters = 8;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
+constexpr size_t NumEndstops = 12;					// The number of inputs we have for endstops, filament sensors etc.
+constexpr size_t NumHeaters = 8;					// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 8;
 
@@ -53,9 +51,10 @@ constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the
 constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
-constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
+constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
+#define SERIAL_WIFI_DEVICE Serial1
 
 #define I2C_IFACE	Wire							// Which TWI interface we use
 #define I2C_IRQn	WIRE_ISR_ID						// The interrupt number it uses
@@ -87,12 +86,12 @@ constexpr Pin DueX_INT = 17;						// DueX interrupt pin = PA17 (was E6_STOP)
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-constexpr Pin END_STOP_PINS[DRIVES] = { 46, 02, 93, 74, 48, 96, 97, 98, 99, 17, 39, 8 };
-constexpr Pin DUEX_END_STOP_PINS[5] = { 200, 203, 202, 201, 213 };			// these replace endstops 5-9 if a DueX is present
+constexpr Pin END_STOP_PINS[NumEndstops] = { 46, 02, 93, 74, 48, 96, 97, 98, 99, 17, 39, 8 };
+constexpr Pin DUEX_END_STOP_PINS[5] = { 200, 203, 202, 201, 213 };				// these replace endstops 5-9 if a DueX is present
 
 // HEATERS
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 45, 47, 44, 61, 62, 63, 59, 18 }; // Thermistor pin numbers
-constexpr Pin HEAT_ON_PINS[Heaters] = { 19, 20, 16, 35, 37, 40, 43, 15 };	// Heater pin numbers (heater 7 pin TBC)
+constexpr Pin HEAT_ON_PINS[NumHeaters] = { 19, 20, 16, 35, 37, 40, 43, 15 };	// Heater pin numbers (heater 7 pin TBC)
 
 // Default thermistor parameters
 constexpr float BED_R25 = 100000.0;

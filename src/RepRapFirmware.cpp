@@ -195,6 +195,32 @@ const char * const moduleName[] =
 	"none"
 };
 
+// class MillisTimer members
+
+// Start or restart the timer
+void MillisTimer::Start()
+{
+	whenStarted = millis();
+	running = true;
+}
+
+// Check whether the timer is running and a timeout has expired, but don't stop it
+bool MillisTimer::Check(uint32_t timeoutMillis) const
+{
+	return running && millis() - whenStarted >= timeoutMillis;
+}
+
+// Check whether a timeout has expired and stop the timer if it has, else leave it running if it was running
+bool MillisTimer::CheckAndStop(uint32_t timeoutMillis)
+{
+	const bool ret = Check(timeoutMillis);
+	if (ret)
+	{
+		running = false;
+	}
+	return ret;
+}
+
 //*************************************************************************************************
 
 // Utilities and storage not part of any class

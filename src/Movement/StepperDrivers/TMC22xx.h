@@ -1,5 +1,5 @@
 /*
- * ExternalDrivers.h
+ * TMC22xx.h
  *
  *  Created on: 23 Jan 2016
  *      Author: David
@@ -17,7 +17,7 @@
 #endif
 
 #include "RepRapFirmware.h"
-#include "GCodes/DriverMode.h"
+#include "DriverMode.h"
 #include "Pins.h"
 #include "MessageType.h"
 #include "Libraries/General/StringRef.h"
@@ -40,6 +40,7 @@ namespace SmartDrivers
 	void Init(const Pin[DRIVES], size_t numTmcDrivers)
 		pre(numTmcDrivers <= DRIVES);
 	void SetAxisNumber(size_t drive, uint32_t axisNumber);
+	uint32_t GetAxisNumber(size_t drive);
 	void SetCurrent(size_t drive, float current);
 	void EnableDrive(size_t drive, bool en);
 	uint32_t GetLiveStatus(size_t drive);
@@ -48,14 +49,13 @@ namespace SmartDrivers
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation);
 	bool SetDriverMode(size_t driver, unsigned int mode);
 	DriverMode GetDriverMode(size_t driver);
-	bool SetChopperControlRegister(size_t driver, uint32_t ccr);
-	uint32_t GetChopperControlRegister(size_t driver);
 	void Spin(bool powered);
 	void TurnDriversOff();
-	void SetCoolStep(size_t drive, uint16_t coolStepConfig);
 	void AppendDriverStatus(size_t drive, const StringRef& reply);
 	float GetStandstillCurrentPercent(size_t drive);
 	void SetStandstillCurrentPercent(size_t drive, float percent);
+	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal);
+	uint32_t GetRegister(size_t driver, SmartDriverRegister reg);
 };
 
 #endif

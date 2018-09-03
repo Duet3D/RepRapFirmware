@@ -111,6 +111,36 @@ typedef float floatc_t;						// type of matrix element used for calibration
 typedef uint32_t AxesBitmap;				// Type of a bitmap representing a set of axes
 typedef uint32_t DriversBitmap;				// Type of a bitmap representing a set of driver numbers
 typedef uint32_t FansBitmap;				// Type of a bitmap representing a set of fan numbers
+typedef uint16_t Pwm_t;						// Type of a PWM value when we don't want to use floats
+
+// Logical pins used for general output, servos, CCN and laser control
+typedef uint16_t LogicalPin;				// Type used to represent logical pin numbers
+constexpr LogicalPin NoLogicalPin = 0xFFFFu;
+
+#if SUPPORT_IOBITS
+typedef uint16_t IoBits_t;					// Type of the port control bitmap (G1 P parameter)
+#endif
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+union LaserPwmOrIoBits
+{
+#if SUPPORT_LASER
+	Pwm_t laserPwm;							// the laser PWM to use for this move
+#endif
+#if SUPPORT_IOBITS
+	IoBits_t ioBits;						// I/O bits to set/clear at the start of this move
+#endif
+
+	void Clear()							// set to zero, whichever one it is
+	{
+#if SUPPORT_LASER
+		laserPwm = 0;
+#else
+		ioBits = 0;
+#endif
+	}
+};
+#endif
 
 // A single instance of the RepRap class contains all the others
 extern RepRap reprap;
@@ -178,6 +208,22 @@ private:
 
 // Macro to create a SimpleRange from an array
 #define ARRAY_INDICES(_arr) (SimpleRange<size_t>(ARRAY_SIZE(_arr)))
+
+// A simple milliseconds timer class
+class MillisTimer
+{
+public:
+	MillisTimer() { running = false; }
+	void Start();
+	void Stop() { running = false; }
+	bool Check(uint32_t timeoutMillis) const;
+	bool CheckAndStop(uint32_t timeoutMillis);
+	bool IsRunning() const { return running; }
+
+private:
+	uint32_t whenStarted;
+	bool running;
+};
 
 // Helper functions to work on bitmaps of various lengths.
 // The primary purpose of these is to allow us to switch between 16, 32 and 64-bit bitmaps.
@@ -258,7 +304,12 @@ constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;
 
+//-------------------------------------------------------------------------------------------------
 // Interrupt priorities - must be chosen with care! 0 is the highest priority, 15 is the lowest.
+// This interacts with FreeRTOS config constant configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY which is currently defined as 5.
+// ISRs with better (numerically lower) priorities than this value cannot make FreeRTOS calls, but those interrupts wont be disabled even in FreeRTOS critical sections.
+// So use priority 4 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
+
 #if SAM4E || SAME70
 const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 #endif
@@ -270,22 +321,25 @@ const uint32_t NvicPriorityDriversSerialTMC = 2; // USART or UART used to contro
 const uint32_t NvicPrioritySystick = 3;			// systick kicks the watchdog and starts the ADC conversions, so must be quite high
 #endif
 
-const uint32_t NvicPriorityPins = 4;			// priority for GPIO pin interrupts - filament sensors must be higher than step
-
-// Currently we set configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY in FreeRTOS to 5.
-// This means that only interrupts with priority numerically at least 5 can make ISR-safe calls to FreeRTOS in an ISR.
-
+const uint32_t NvicPriorityPins = 5;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const uint32_t NvicPriorityStep = 6;			// step interrupt is next highest, it can preempt most other interrupts
 const uint32_t NvicPriorityWiFiUart = 7;		// UART used to receive debug data from the WiFi module
 const uint32_t NvicPriorityUSB = 7;				// USB interrupt
 const uint32_t NvicPriorityHSMCI = 7;			// HSMCI command complete interrupt
 
 #if HAS_LWIP_NETWORKING
-const uint32_t NvicPriorityNetworkTick = 8;		// priority for network tick interrupt
+const uint32_t NvicPriorityNetworkTick = 8;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
 const uint32_t NvicPriorityEthernet = 8;		// priority for Ethernet interface
 #endif
 
 const uint32_t NvicPrioritySpi = 8;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
 const uint32_t NvicPriorityTwi = 9;				// TWI is used to read endstop and other inputs on the DueXn
+
+#if SAME70
+// DMA channel allocations
+const uint32_t XDMAC_CHAN_HSMCI = 0;			// DMA channel used for HSMCI interface, see CONF_HSMCI_XDMAC_CHANNEL in file conf_sd_mmc.h in project CoreNG
+const uint32_t XDMAC_CHAN_TMC_TX = 1;			// DMA channel for sending to SPI-controlled TMC drivers
+const uint32_t XDMAC_CHAN_TMC_RX = 2;			// DMA channel for receiving from SPI-controlled TMC drivers
+#endif
 
 #endif

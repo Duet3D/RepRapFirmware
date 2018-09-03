@@ -1,14 +1,14 @@
 /*
- * TMC2660.h
+ * TMC51xx.h
  *
- *  Created on: 23 Jan 2016
+ *  Created on: 26 Aug 2018
  *      Author: David
  */
 
-#ifndef TMC2660_H_
-#define TMC2660_H_
+#ifndef SRC_MOVEMENT_STEPPERDRIVERS_TMC51XX_H_
+#define SRC_MOVEMENT_STEPPERDRIVERS_TMC51XX_H_
 
-#if SUPPORT_TMC2660
+#if SUPPORT_TMC51xx
 
 #include "RepRapFirmware.h"
 #include "DriverMode.h"
@@ -16,15 +16,14 @@
 #include "MessageType.h"
 #include "Libraries/General/StringRef.h"
 
-// TMC2660 Read response. The microstep counter can also be read, but we don't include that here.
-const uint32_t TMC_RR_SG = 1 << 0;			// stall detected
-const uint32_t TMC_RR_OT = 1 << 1;			// over temperature shutdown
-const uint32_t TMC_RR_OTPW = 1 << 2;		// over temperature warning
-const uint32_t TMC_RR_S2G = 3 << 3;			// short to ground counter (2 bits)
-const uint32_t TMC_RR_OLA = 1 << 5;			// open load A
-const uint32_t TMC_RR_OLB = 1 << 6;			// open load B
-const uint32_t TMC_RR_STST = 1 << 7;		// standstill detected
-const uint32_t TMC_RR_SG_LOAD_SHIFT = 10;	// shift to get stallguard load register
+// TMC22xx DRV_STATUS register bit assignments
+const uint32_t TMC_RR_SG = 1 << 24;					// stall detected
+const uint32_t TMC_RR_OT = 1 << 25;					// over temperature shutdown
+const uint32_t TMC_RR_OTPW = 1 << 26;				// over temperature warning
+const uint32_t TMC_RR_S2G = (3 << 27) | (3 << 12);	// short to ground indicator (1 bit for each phase) + short to VS indicator
+const uint32_t TMC_RR_OLA = 1 << 29;				// open load A
+const uint32_t TMC_RR_OLB = 1 << 30;				// open load B
+const uint32_t TMC_RR_STST = 1 << 31;				// standstill detected
 
 namespace SmartDrivers
 {
@@ -34,6 +33,7 @@ namespace SmartDrivers
 	void TurnDriversOff();
 
 	void SetAxisNumber(size_t driver, uint32_t axisNumber);
+	uint32_t GetAxisNumber(size_t drive);
 	void SetCurrent(size_t driver, float current);
 	void EnableDrive(size_t driver, bool en);
 	uint32_t GetLiveStatus(size_t driver);
@@ -55,4 +55,4 @@ namespace SmartDrivers
 
 #endif
 
-#endif /* TMC2660_H_ */
+#endif /* SRC_MOVEMENT_STEPPERDRIVERS_TMC51XX_H_ */
