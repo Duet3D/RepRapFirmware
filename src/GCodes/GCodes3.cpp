@@ -810,6 +810,57 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			// Kick off new movement
 			NewMoveAvailable(1);
 			gb.SetState(GCodeState::probingToolOffset);
+			break;
+		}
+	}
+
+	return GCodeResult::ok;
+}
+
+// Deal with M675
+GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply)
+{
+	if (!LockMovementAndWaitForStandstill(gb))
+	{
+		return GCodeResult::notFinished;
+	}
+
+	for (size_t axis = 0; axis < numTotalAxes; axis++)
+	{
+		if (gb.Seen(axisLetters[axis]))
+		{
+			// Prepare another move similar to G1 .. S3
+			moveBuffer.moveType = 3;
+			moveBuffer.endStopsToCheck = 0;
+			SetBit(moveBuffer.endStopsToCheck, axis);
+			moveBuffer.xAxes = DefaultXAxisMapping;
+			moveBuffer.yAxes = DefaultYAxisMapping;
+			moveBuffer.usePressureAdvance = false;
+			moveBuffer.filePos = noFilePosition;
+			moveBuffer.canPauseAfter = false;
+
+			// Move to axis minimum first
+			moveBuffer.coords[axis] = platform.AxisMinimum(axis);
+
+			// Zero every extruder drive
+			for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
+			{
+				moveBuffer.coords[drive] = 0.0;
+			}
+			moveBuffer.hasExtrusion = false;
+
+			// Deal with feed rate
+			if (gb.Seen(feedrateLetter))
+			{
+				const float rate = gb.GetFValue() * distanceScale;
+				gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
+			}
+			moveBuffer.feedRate = gb.MachineState().feedRate;
+
+			// Kick off new movement
+			NewMoveAvailable(1);
+			gb.SetState(GCodeState::probingCavity1);
+			break;
 		}
 	}
 

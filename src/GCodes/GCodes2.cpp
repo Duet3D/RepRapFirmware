@@ -3973,6 +3973,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 #endif
 
+	case 675: // Find center of cavity
+		result = FindCenterOfCavity(gb, reply);
+		break;
+
 	case 701: // Load filament
 		result = LoadFilament(gb, reply);
 		break;
@@ -4009,9 +4013,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (reprap.GetScanner().IsEnabled())
 			{
 				reprap.GetScanner().Register();
-
-				// The Scanner module will attempt to run a macro via this G-code source so we're not done yet
-				result = GCodeResult::notFinished;
 			}
 			else
 			{

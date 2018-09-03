@@ -506,6 +506,139 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+	case GCodeState::probingCavity1:
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			// We're trying to find the center of the cavity and we've moved all the way back until the corresponding
+			// endstop has been triggered. This means we can save the minimum position
+			memcpy(toolChangeRestorePoint.moveCoords, currentUserPosition, MaxAxes * sizeof(currentUserPosition[0]));
+
+			// Move away from the endstop
+			for (size_t axis = 0; axis < numTotalAxes; axis++)
+			{
+				if (gb.Seen(axisLetters[axis]))
+				{
+					moveBuffer.moveType = 0;
+					moveBuffer.endStopsToCheck = 0;
+					moveBuffer.xAxes = DefaultXAxisMapping;
+					moveBuffer.yAxes = DefaultYAxisMapping;
+					moveBuffer.usePressureAdvance = false;
+					moveBuffer.filePos = noFilePosition;
+					moveBuffer.canPauseAfter = false;
+
+					// Move to axis maximum next
+					moveBuffer.coords[axis] += gb.Seen('R') ? gb.GetFValue() : 5.0;
+
+					// Zero every extruder drive
+					for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
+					{
+						moveBuffer.coords[drive] = 0.0;
+					}
+					moveBuffer.hasExtrusion = false;
+
+					// Deal with feed rate
+					if (gb.Seen(feedrateLetter))
+					{
+						const float rate = gb.GetFValue() * distanceScale;
+						gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
+					}
+					moveBuffer.feedRate = gb.MachineState().feedRate;
+
+					// Kick off new movement
+					NewMoveAvailable(1);
+					gb.SetState(GCodeState::probingCavity2);
+					break;
+				}
+			}
+		}
+		break;
+
+	case GCodeState::probingCavity2:
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			// Kick off another probing move to the axis maximum
+			for (size_t axis = 0; axis < numTotalAxes; axis++)
+			{
+				if (gb.Seen(axisLetters[axis]))
+				{
+					moveBuffer.moveType = 3;
+					moveBuffer.endStopsToCheck = 0;
+					SetBit(moveBuffer.endStopsToCheck, axis);
+					moveBuffer.xAxes = DefaultXAxisMapping;
+					moveBuffer.yAxes = DefaultYAxisMapping;
+					moveBuffer.usePressureAdvance = false;
+					moveBuffer.filePos = noFilePosition;
+					moveBuffer.canPauseAfter = false;
+
+					// Move to axis maximum next
+					moveBuffer.coords[axis] = platform.AxisMaximum(axis);
+
+					// Zero every extruder drive
+					for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
+					{
+						moveBuffer.coords[drive] = 0.0;
+					}
+					moveBuffer.hasExtrusion = false;
+
+					// Deal with feed rate
+					if (gb.Seen(feedrateLetter))
+					{
+						const float rate = gb.GetFValue() * distanceScale;
+						gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
+					}
+					moveBuffer.feedRate = gb.MachineState().feedRate;
+
+					// Kick off new movement
+					NewMoveAvailable(1);
+					gb.SetState(GCodeState::probingCavity3);
+					break;
+				}
+			}
+		}
+		break;
+
+	case GCodeState::probingCavity3:
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			// We get here when both the minimum and maximum values have been probed
+			for (size_t axis = 0; axis < numTotalAxes; axis++)
+			{
+				if (gb.Seen(axisLetters[axis]))
+				{
+					moveBuffer.moveType = 0;
+					moveBuffer.xAxes = DefaultXAxisMapping;
+					moveBuffer.yAxes = DefaultYAxisMapping;
+					moveBuffer.usePressureAdvance = false;
+					moveBuffer.filePos = noFilePosition;
+					moveBuffer.canPauseAfter = false;
+
+					// Move to probed center point
+					moveBuffer.coords[axis] = (currentUserPosition[axis] + toolChangeRestorePoint.moveCoords[axis]) / 2.0;
+
+					// Zero every extruder drive
+					for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
+					{
+						moveBuffer.coords[drive] = 0.0;
+					}
+					moveBuffer.hasExtrusion = false;
+
+					// Deal with feed rate
+					if (gb.Seen(feedrateLetter))
+					{
+						const float rate = gb.GetFValue() * distanceScale;
+						gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
+					}
+					moveBuffer.feedRate = gb.MachineState().feedRate;
+
+					// Kick off new movement
+					NewMoveAvailable(1);
+					gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
+					break;
+				}
+			}
+		}
+		break;
+
 	case GCodeState::homing1:
 		if (toBeHomed == 0)
 		{

@@ -21,6 +21,10 @@ enum class GCodeState : uint8_t
 
 	probingToolOffset,
 
+	probingCavity1,
+	probingCavity2,
+	probingCavity3,
+
 	homing1,
 	homing2,
 
