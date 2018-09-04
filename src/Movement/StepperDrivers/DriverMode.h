@@ -36,7 +36,8 @@ enum class SmartDriverRegister : unsigned int
 	hdec,
 	chopperControl,
 	coolStep,
-	tpwmthrs
+	tpwmthrs,
+	thigh
 };
 
 #endif /* SRC_MOVEMENT_STEPPERDRIVERS_DRIVERMODE_H_ */

@@ -13,7 +13,29 @@
 
 #include "TMC51xx.h"
 
-constexpr uint32_t DefaultTpwmthrsReg = 2000;							// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle
+#define TMC_TYPE	5160
+//#define TMC_TYPE	5130
+
+constexpr float MinimumMotorCurrent = 50.0;
+constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
+constexpr bool DefaultInterpolation = true;					// interpolation enabled
+constexpr uint32_t DefaultTpwmthrsReg = 2000;				// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle
+const int DefaultStallDetectThreshold = 1;
+const bool DefaultStallDetectFiltered = false;
+const unsigned int DefaultMinimumStepsPerSecond = 200;		// for stall detection: 1 rev per second assuming 1.8deg/step, as per the TMC2660 datasheet
+const uint32_t DefaultTcoolthrs = 2000;						// max interval between 1/256 microsteps for stall detection to be enabled
+const uint32_t DefaultThigh = 200;
+
+#if TMC_TYPE == 2130
+constexpr float MaximumMotorCurrent = 1600.0;
+constexpr float SenseResistor = 0.11;						// 0.082R external + 0.03 internal
+#elif TMC_TYPE == 5160
+constexpr float MaximumMotorCurrent = 3200.0;				// depends on sense resistor power rating
+constexpr float SenseResistor = 0.051;
+constexpr float FullScaleCurrent = 0.325/SenseResistor;
+#else
+# error Unknown device
+#endif
 
 // The SPI clock speed is a compromise:
 // - too high and polling the driver chips take too much of the CPU time
@@ -38,7 +60,7 @@ constexpr uint32_t GCONF_5160_RECAL = 1 << 0;				// Zero crossing recalibration 
 constexpr uint32_t GCONF_5160_FASTSTANDSTILL = 1 << 1;		// Timeout for step execution until standstill detection: 1: Short time: 2^18 clocks, 0: Normal time: 2^20 clocks
 constexpr uint32_t GCONF_5160_MULTISTEP_FILT = 1 << 3;		// Enable step input filtering for stealthChop optimization with external step source (default=1)
 
-constexpr uint32_t GCONF_SPREAD_CYCLE = 1 << 2;				// use spread cycle mode (else stealthchop mode)
+constexpr uint32_t GCONF_STEALTHCHOP = 1 << 2;				// use stealthchop mode (else spread cycle mode)
 constexpr uint32_t GCONF_REV_DIR = 1 << 4;					// reverse motor direction
 constexpr uint32_t GCONF_DIAG0_ERROR = 1 << 5;				// Enable DIAG0 active on driver errors: Over temperature (ot), short to GND (s2g), undervoltage chargepump (uv_cp)
 															// DIAG0 always shows the reset-status, i.e. is active low during reset condition.
@@ -93,6 +115,7 @@ constexpr uint32_t SHORTCONF_FILTER_MASK = (3 << 16);		// Spike filtering bandwi
 															// Hint: A good PCB layout will allow using setting 0. Increase value, if erroneous short detection occurs. Reset Default = 1
 constexpr uint32_t SHORTCONF_DELAY = (1 << 18);				// Short detection delay 0=750ns: normal, 1=1500ns: high The short detection delay shall cover the bridge switching time.
 															// 0 will work for most applications. (Reset Default = 0)
+constexpr uint32_t DefaultShortConfReg = (10 << SHORTCONF_S2VS_LEVEL_SHIFT) | (6 << SHORTCONF_S2G_LEVEL_SHIFT) | (0 << SHORTCONF_FILTER_SHIFT);
 
 // DRV_CONF register
 constexpr uint8_t REGNUM_5160_DRVCONF = 0x0A;
@@ -113,11 +136,13 @@ constexpr uint32_t DRVCONF_FILT_ISENSE_SHIFT = 20;
 constexpr uint32_t DRVCONF_FILT_ISENSE_MASK = (3 << 20);	// Filter time constant of sense amplifier to suppress ringing and coupling from second coil operation
 															// 00: low – 100ns 01: – 200ns 10: – 300ns 11: high – 400ns
 															// Hint: Increase setting if motor chopper noise occurs due to cross-coupling of both coils. Reset Default = 0.
+constexpr uint32_t DefaultDrvConfReg = 2 << DRVCONF_BBMCLKS_SHIFT;
 
 constexpr uint8_t REGNUM_5160_GLOBAL_SCALER = 0x0B;			// Global scaling of Motor current. This value is multiplied to the current scaling in order to adapt a drive to a
 															// certain motor type. This value should be chosen before tuning other settings, because it also influences chopper hysteresis.
 															// 0: Full Scale (or write 256) 1 … 31: Not allowed for operation 32 … 255: 32/256 … 255/256 of maximum current.
 															// Hint: Values >128 recommended for best results. Reset Default 0.
+constexpr uint32_t DefaultGlobalScalerReg = 0;				// until we use it as part of the current setting
 
 constexpr uint8_t REGNUM_5160_OFFSET_READ = 0x0B;			// Bits 8..15: Offset calibration result phase A (signed). Bits 0..7: Offset calibration result phase B (signed).
 
@@ -138,6 +163,13 @@ constexpr uint32_t DefaultIholdIrunReg = (0 << IHOLDIRUN_IHOLD_SHIFT) | (0 << IH
 constexpr uint8_t REGNUM_TPOWER_DOWN = 0x11;
 constexpr uint8_t REGNUM_TSTEP = 0x12;
 constexpr uint8_t REGNUM_TPWMTHRS = 0x13;
+
+constexpr uint8_t REGNUM_TCOOLTHRS = 0x14;
+const uint32_t DefaultTcoolthrsReg = DefaultTcoolthrs;
+
+constexpr uint8_t REGNUM_THIGH = 0x15;
+const uint32_t DefaultThighReg = DefaultThigh;
+
 constexpr uint8_t REGNUM_VACTUAL = 0x22;
 
 // Sequencer registers (read only)
@@ -154,9 +186,11 @@ constexpr uint32_t CHOPCONF_HSTRT_SHIFT = 4;				// hysteresis start
 constexpr uint32_t CHOPCONF_HSTRT_MASK = 0x07 << CHOPCONF_HSTRT_SHIFT;
 constexpr uint32_t CHOPCONF_HEND_SHIFT = 7;					// hysteresis end
 constexpr uint32_t CHOPCONF_HEND_MASK = 0x0F << CHOPCONF_HEND_SHIFT;
+constexpr uint32_t CHOPCONF_5130_RNDTOFF = 1 << 13;			// random off time
+constexpr uint32_t CHOPCONF_CHM = 1 << 14;					// fixed off time
 constexpr uint32_t CHOPCONF_TBL_SHIFT = 15;					// blanking time
 constexpr uint32_t CHOPCONF_TBL_MASK = 0x03 << CHOPCONF_TBL_SHIFT;
-constexpr uint32_t CHOPCONF_VSENSE_HIGH = 1 << 17;			// use high sensitivity current scaling
+constexpr uint32_t CHOPCONF_5130_VSENSE_HIGH = 1 << 17;		// use high sensitivity current scaling
 constexpr uint32_t CHOPCONF_MRES_SHIFT = 24;				// microstep resolution
 constexpr uint32_t CHOPCONF_MRES_MASK = 0x0F << CHOPCONF_MRES_SHIFT;
 constexpr uint32_t CHOPCONF_INTPOL = 1 << 28;				// use interpolation
@@ -164,7 +198,15 @@ constexpr uint32_t CHOPCONF_DEDGE = 1 << 29;				// step on both edges
 constexpr uint32_t CHOPCONF_DISS2G = 1 << 30;				// disable short to ground protection
 constexpr uint32_t CHOPCONF_DISS2VS = 1 << 31;				// disable low side short protection
 
-constexpr uint32_t DefaultChopConfReg = 0x10000053 | CHOPCONF_VSENSE_HIGH;	// this is the reset default + CHOPCONF_VSENSE_HIGH - try it until we find something better
+constexpr uint32_t DefaultChopConfReg_5130 = (1 << CHOPCONF_TBL_SHIFT) | (3 << CHOPCONF_TOFF_SHIFT) | (5 << CHOPCONF_HSTRT_SHIFT) | CHOPCONF_5130_VSENSE_HIGH;
+constexpr uint32_t DefaultChopConfReg_5160 = (1 << CHOPCONF_TBL_SHIFT) | (3 << CHOPCONF_TOFF_SHIFT) | (5 << CHOPCONF_HSTRT_SHIFT);
+
+constexpr uint8_t REGNUM_COOLCONF = 0x6D;
+constexpr uint32_t COOLCONF_SGFILT = 1 << 24;				// set to update stallGuard status every 4 full steps instead of every full step
+constexpr uint32_t COOLCONF_SGT_SHIFT = 16;
+constexpr uint32_t COOLCONF_SGT_MASK = 128 << COOLCONF_SGT_SHIFT;	// stallguard threshold (signed)
+
+constexpr uint32_t DefaultCoolConfReg = 0;
 
 // DRV_STATUS register. See the .h file for the bit definitions.
 constexpr uint8_t REGNUM_DRV_STATUS = 0x6F;
@@ -195,7 +237,7 @@ static DriversState driversState = DriversState::noPower;
 class TmcDriverState
 {
 public:
-	void Init(uint32_t p_driverNumber, Pin p_pin);
+	void Init(uint32_t p_driverNumber);
 	void SetAxisNumber(size_t p_axisNumber);
 	uint32_t GetAxisNumber() const { return axisNumber; }
 	void WriteAll();
@@ -234,29 +276,32 @@ public:
 	void UartTmcHandler();									// core of the ISR for this driver
 
 private:
+	bool SetChopConf(uint32_t newVal);
 	void UpdateRegister(size_t regIndex, uint32_t regVal);
 	void UpdateChopConfRegister();							// calculate the chopper control register and flag it for sending
 	void UpdateCurrent();
 
-#if TMC22xx_HAS_MUX
-	void SetUartMux();
-	static void SetupDMASend(uint8_t regnum, uint32_t outVal, uint8_t crc) __attribute__ ((hot));	// set up the PDC to send a register
-	static void SetupDMAReceive(uint8_t regnum, uint8_t crc) __attribute__ ((hot));					// set up the PDC to receive a register
-#else
-	void SetupDMASend(uint8_t regnum, uint32_t outVal, uint8_t crc) __attribute__ ((hot));			// set up the PDC to send a register
-	void SetupDMAReceive(uint8_t regnum, uint8_t crc) __attribute__ ((hot));						// set up the PDC to receive a register
-#endif
+	void ResetLoadRegisters()
+	{
+		minSgLoadRegister = 1023;
+		maxSgLoadRegister = 0;
+	}
 
-	static constexpr unsigned int NumWriteRegisters = 6;	// the number of registers that we write to
+	static constexpr unsigned int NumWriteRegisters = 11;	// the number of registers that we write to
 	static const uint8_t WriteRegNumbers[NumWriteRegisters];	// the register numbers that we write to
 
 	// Write register numbers are in priority order, most urgent first, in same order as WriteRegNumbers
 	static constexpr unsigned int WriteGConf = 0;			// microstepping
-	static constexpr unsigned int WriteSlaveConf = 1;		// read response timing
-	static constexpr unsigned int WriteChopConf = 2;		// enable/disable and microstep setting
-	static constexpr unsigned int WriteIholdIrun = 3;		// current setting
-	static constexpr unsigned int WritePwmConf = 4;			// read register select, sense voltage high/low sensitivity
+	static constexpr unsigned int Write5160ShortConf = 1;	// short circuit detection configuration
+	static constexpr unsigned int Write5160DrvConf = 2;		// driver timing
+	static constexpr unsigned int Write5160GlobalScaler = 3; // motor current scaling
+	static constexpr unsigned int WriteIholdIrun = 4;		// current setting
 	static constexpr unsigned int WriteTpwmthrs = 5;		// upper step rate limit for stealthchop
+	static constexpr unsigned int WriteTcoolthrs = 6;		// lower velocity for coolStep and stallGuard
+	static constexpr unsigned int WriteThigh = 7;			// upper velocity for coolStep and stealthChop
+	static constexpr unsigned int WriteChopConf = 8;		// chopper control
+	static constexpr unsigned int WriteCoolConf = 9;		// coolstep control
+	static constexpr unsigned int WritePwmConf = 10;		// stealthchop and frewheel control
 
 	static constexpr unsigned int NumReadRegisters = 2;		// the number of registers that we read from
 	static const uint8_t ReadRegNumbers[NumReadRegisters];	// the register numbers that we read from
@@ -270,6 +315,10 @@ private:
 	volatile uint32_t accumulatedReadRegisters[NumReadRegisters];
 
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state, without the microstepping bits
+	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection
+	uint32_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
+	uint32_t maxSgLoadRegister;								// the maximum value of the StallGuard bits we read
+
 	volatile uint32_t registersToUpdate;					// bitmap of register indices whose values need to be sent to the driver chip
 	volatile uint32_t registerBeingUpdated;					// which register we are sending
 
@@ -277,33 +326,433 @@ private:
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	uint32_t motorCurrent;									// the configured motor current
 
-#if TMC22xx_HAS_MUX
-	static Uart * const uart;								// the UART that controls all drivers
-#else
-	Uart *uart;												// the UART that controls this driver
-#endif
-
-	// To write a register, we send one 8-byte packet to write it, then a 4-byte packet to ask for the IFCOUNT register, then we receive an 8-byte packet containing IFCOUNT.
-	// This is the message we send - volatile because we care about when it is written
-	static volatile uint8_t sendData[12];
-
-	// Buffer for the message we receive when reading data. The first 4 or 12 bytes bytes are our own transmitted data.
-	static volatile uint8_t receiveData[20];
-
-	uint16_t readErrors;									// how many read errors we had
-	uint16_t writeErrors;									// how many write errors we had
 	uint16_t numReads;										// how many successful reads we had
 	uint16_t numTimeouts;									// how many times a transfer timed out
 
-	Pin enablePin;											// the enable pin of this driver, if it has its own
 	uint8_t driverNumber;									// the number of this driver as addressed by the UART multiplexer
 	uint8_t standstillCurrentFraction;						// divide this by 256 to get the motor current standstill fraction
 	uint8_t registerToRead;									// the next register we need to read
-	uint8_t lastIfCount;									// the value of the IFCNT register last time we read it
-	volatile uint8_t writeRegCRCs[NumWriteRegisters];		// CRCs of the messages needed to update the registers
-	static const uint8_t ReadRegCRCs[NumReadRegisters];		// CRCs of the messages needed to read the registers
 	bool enabled;											// true if driver is enabled
 };
+
+const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
+{
+	REGNUM_GCONF,
+	REGNUM_5160_SHORTCONF,
+	REGNUM_5160_DRVCONF,
+	REGNUM_5160_GLOBAL_SCALER,
+	REGNUM_IHOLDIRUN,
+	REGNUM_TPWMTHRS,
+	REGNUM_TCOOLTHRS,
+	REGNUM_THIGH,
+	REGNUM_CHOPCONF,
+	REGNUM_COOLCONF,
+	REGNUM_PWMCONF
+};
+
+const uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
+{
+	REGNUM_GSTAT,
+	REGNUM_DRV_STATUS
+};
+
+// Initialise the state of the driver and its CS pin
+void TmcDriverState::Init(uint32_t p_axisNumber)
+pre(!driversPowered)
+{
+	axisNumber = p_axisNumber;
+	enabled = false;
+	registersToUpdate = 0;
+	motorCurrent = 0;
+	standstillCurrentFraction = (256 * 3)/4;							// default to 75%
+
+	// Set default values for all registers and flag them to be updated
+#if TMC_TYPE == 5130
+	UpdateRegister(WriteGConf, DefaultGConfReg_5130);
+#elif TMC_TYPE == 5160
+	UpdateRegister(WriteGConf, DefaultGConfReg_5160);
+	UpdateRegister(Write5160ShortConf, DefaultShortConfReg);
+	UpdateRegister(Write5160DrvConf, DefaultDrvConfReg);
+	UpdateRegister(Write5160GlobalScaler, DefaultGlobalScalerReg);
+#else
+# error unknown device
+#endif
+	UpdateRegister(WriteIholdIrun, DefaultIholdIrunReg);
+	UpdateRegister(WriteTpwmthrs, DefaultTpwmthrsReg);
+	UpdateRegister(WriteTcoolthrs, DefaultTcoolthrsReg);
+	UpdateRegister(WriteThigh, DefaultThighReg);
+	configuredChopConfReg =
+#if TMC_TYPE == 5130
+		DefaultChopConfReg_5130
+#elif TMC_TYPE == 5160
+		DefaultChopConfReg_5160
+#else
+# error unknown device
+#endif
+		;
+	SetMicrostepping(DefaultMicrosteppingShift, DefaultInterpolation);	// this also updates the chopper control register
+	writeRegisters[WriteCoolConf] = DefaultCoolConfReg;
+	SetStallDetectThreshold(DefaultStallDetectThreshold);				// this also updates the CoolConf register
+	SetStallMinimumStepsPerSecond(DefaultMinimumStepsPerSecond);
+	UpdateRegister(WritePwmConf, DefaultPwmConfReg);
+
+	for (size_t i = 0; i < NumReadRegisters; ++i)
+	{
+		accumulatedReadRegisters[i] = readRegisters[i] = 0;
+	}
+
+	registerBeingUpdated = 0;
+	registerToRead = 0;
+	numReads = numTimeouts = 0;
+}
+
+// Set a register value and flag it for updating
+void TmcDriverState::UpdateRegister(size_t regIndex, uint32_t regVal)
+{
+	registersToUpdate &= ~(1u << regIndex);								// make sure it is not updated while we are changing it
+	const irqflags_t flags = cpu_irq_save();
+	writeRegisters[regIndex] = regVal;
+	registersToUpdate |= (1u << regIndex);								// flag it for sending
+	cpu_irq_restore(flags);
+}
+
+// Calculate the chopper control register and flag it for sending
+void TmcDriverState::UpdateChopConfRegister()
+{
+	UpdateRegister(WriteChopConf, (enabled) ? configuredChopConfReg : configuredChopConfReg & ~CHOPCONF_TOFF_MASK);
+}
+
+void TmcDriverState::SetStallDetectThreshold(int sgThreshold)
+{
+	const uint32_t sgVal = ((uint32_t)constrain<int>(sgThreshold, -64, 63)) & 127;
+	writeRegisters[WriteCoolConf] = (writeRegisters[WriteCoolConf] & ~COOLCONF_SGT_MASK) | (sgVal << COOLCONF_SGT_SHIFT);
+	registersToUpdate |= 1u << WriteCoolConf;
+}
+
+inline void TmcDriverState::SetAxisNumber(size_t p_axisNumber)
+{
+	axisNumber = p_axisNumber;
+}
+
+// Write all registers. This is called when the drivers are known to be powered up.
+inline void TmcDriverState::WriteAll()
+{
+	registersToUpdate = (1u << NumWriteRegisters) - 1;
+}
+
+float TmcDriverState::GetStandstillCurrentPercent() const
+{
+	return (float)(standstillCurrentFraction * 100)/256;
+}
+
+void TmcDriverState::SetStandstillCurrentPercent(float percent)
+{
+	standstillCurrentFraction = (uint8_t)constrain<long>(lrintf((percent * 256)/100), 0, 255);
+	UpdateCurrent();
+}
+
+// Set the microstepping and microstep interpolation. The desired microstepping is (1 << shift).
+bool TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate)
+{
+	microstepShiftFactor = shift;
+	configuredChopConfReg = (configuredChopConfReg & ~(CHOPCONF_MRES_MASK | CHOPCONF_INTPOL)) | ((8 - shift) << CHOPCONF_MRES_SHIFT);
+	if (interpolate)
+	{
+		configuredChopConfReg |= CHOPCONF_INTPOL;
+	}
+	UpdateChopConfRegister();
+	return true;
+}
+
+// Get microstepping or chopper control register
+unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const
+{
+	interpolation = (writeRegisters[WriteChopConf] & CHOPCONF_INTPOL) != 0;
+	return 1u << microstepShiftFactor;
+}
+
+bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal)
+{
+	switch(reg)
+	{
+	case SmartDriverRegister::chopperControl:
+		return SetChopConf(regVal);
+
+	case SmartDriverRegister::toff:
+		return SetChopConf((configuredChopConfReg & ~CHOPCONF_TOFF_MASK) | ((regVal << CHOPCONF_TOFF_SHIFT) & CHOPCONF_TOFF_MASK));
+
+	case SmartDriverRegister::tblank:
+		return SetChopConf((configuredChopConfReg & ~CHOPCONF_TBL_MASK) | ((regVal << CHOPCONF_TBL_SHIFT) & CHOPCONF_TBL_MASK));
+
+	case SmartDriverRegister::hstart:
+		return SetChopConf((configuredChopConfReg & ~CHOPCONF_HSTRT_MASK) | ((regVal << CHOPCONF_HSTRT_SHIFT) & CHOPCONF_HSTRT_MASK));
+
+	case SmartDriverRegister::hend:
+		return SetChopConf((configuredChopConfReg & ~CHOPCONF_HEND_MASK) | ((regVal << CHOPCONF_HEND_SHIFT) & CHOPCONF_HEND_MASK));
+
+	case SmartDriverRegister::tpwmthrs:
+		UpdateRegister(WriteTpwmthrs, regVal & ((1u << 20) - 1));
+		return true;
+
+	case SmartDriverRegister::thigh:
+		UpdateRegister (WriteThigh, regVal & ((1u << 20) - 1));
+		return true;
+
+	case SmartDriverRegister::coolStep:
+		UpdateRegister (WriteTcoolthrs, regVal & ((1u << 20) - 1));
+		return true;
+
+	case SmartDriverRegister::hdec:
+	default:
+		return false;
+	}
+}
+
+uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const
+{
+	switch(reg)
+	{
+	case SmartDriverRegister::chopperControl:
+		return configuredChopConfReg & 0x01FFFF;
+
+	case SmartDriverRegister::toff:
+		return (configuredChopConfReg & CHOPCONF_TOFF_MASK) >> CHOPCONF_TOFF_SHIFT;
+
+	case SmartDriverRegister::tblank:
+		return (configuredChopConfReg & CHOPCONF_TBL_MASK) >> CHOPCONF_TBL_SHIFT;
+
+	case SmartDriverRegister::hstart:
+		return (configuredChopConfReg & CHOPCONF_HSTRT_MASK) >> CHOPCONF_HSTRT_SHIFT;
+
+	case SmartDriverRegister::hend:
+		return (configuredChopConfReg & CHOPCONF_HEND_MASK) >> CHOPCONF_HEND_SHIFT;
+
+	case SmartDriverRegister::tpwmthrs:
+		return writeRegisters[WriteTpwmthrs];
+
+	case SmartDriverRegister::thigh:
+		return writeRegisters[WriteThigh];
+
+	case SmartDriverRegister::coolStep:
+		return writeRegisters[WriteTcoolthrs];
+
+	case SmartDriverRegister::hdec:
+	default:
+		return 0;
+	}
+}
+
+// Set the chopper control register to the settings provided by the user. We allow only the lowest 17 bits to be set.
+bool TmcDriverState::SetChopConf(uint32_t newVal)
+{
+	const uint32_t offTime = (newVal & CHOPCONF_TOFF_MASK) >> CHOPCONF_TOFF_SHIFT;
+	if (offTime == 0 || (offTime == 1 && (newVal & CHOPCONF_TBL_MASK) < (2 << CHOPCONF_TBL_SHIFT)))
+	{
+		return false;
+	}
+	const uint32_t hstrt = (newVal & CHOPCONF_HSTRT_MASK) >> CHOPCONF_HSTRT_SHIFT;
+	const uint32_t hend = (newVal & CHOPCONF_HEND_MASK) >> CHOPCONF_HEND_SHIFT;
+	if (hstrt + hend > 16)
+	{
+		return false;
+	}
+	const uint32_t userMask = CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK;	// mask of bits the user is allowed to change
+	configuredChopConfReg = (configuredChopConfReg & ~userMask) | (newVal & userMask);
+	UpdateChopConfRegister();
+	return true;
+}
+
+// Set the driver mode
+bool TmcDriverState::SetDriverMode(unsigned int mode)
+{
+	switch (mode)
+	{
+	case (unsigned int)DriverMode::spreadCycle:
+		UpdateRegister(WriteGConf, writeRegisters[WriteGConf] & ~GCONF_STEALTHCHOP);
+		return true;
+
+	case (unsigned int)DriverMode::stealthChop:
+		UpdateRegister(WriteGConf, writeRegisters[WriteGConf] | GCONF_STEALTHCHOP);
+		return true;
+
+	case (unsigned int)DriverMode::constantOffTime:
+		UpdateRegister(WriteGConf, writeRegisters[WriteGConf] & ~GCONF_STEALTHCHOP);
+		UpdateRegister(WriteChopConf,
+#if TMC_TYPE == 5130
+			(writeRegisters[WriteChopConf] | CHOPCONF_CHM) & ~CHOPCONF_5130_RNDTOFF
+#else
+			writeRegisters[WriteChopConf] | CHOPCONF_CHM
+#endif
+			);
+		return true;
+
+#if TMC_TYPE == 5130
+	case (unsigned int)DriverMode::randomOffTime:
+		UpdateRegister(WriteGConf, writeRegisters[WriteGConf] & ~GCONF_STEALTHCHOP);
+		UpdateRegister(WriteChopConf, writeRegisters[WriteChopConf] | CHOPCONF_CHM | CHOPCONF_5130_RNDTOFF);
+		return true;
+#endif
+
+	default:
+		return false;
+	}
+}
+
+// Get the driver mode
+DriverMode TmcDriverState::GetDriverMode() const
+{
+	return ((writeRegisters[WriteGConf] & GCONF_STEALTHCHOP) != 0) ? DriverMode::stealthChop
+		: ((writeRegisters[WriteChopConf] & CHOPCONF_CHM) == 0) ? DriverMode::spreadCycle
+#if TMC_TYPE == 5130
+			: ((writeRegisters[WriteChopConf] & CHOPCONF_5130_RNDTOFF) != 0) ? DriverMode::randomOffTime
+#endif
+				: DriverMode::constantOffTime;
+}
+
+// Set the motor current
+void TmcDriverState::SetCurrent(float current)
+{
+	motorCurrent = static_cast<uint32_t>(constrain<float>(current, MinimumMotorCurrent, MaximumMotorCurrent));
+	UpdateCurrent();
+}
+
+void TmcDriverState::UpdateCurrent()
+{
+#if TMC_TYPE == 5130
+	// Assume a current sense resistor of 0.082 ohms, to which we must add 0.025 ohms internal resistance.
+	// Full scale peak motor current in the high sensitivity range is give by I = 0.18/(R+0.03) = 0.18/0.105 ~= 1.6A
+	// This gives us a range of 50mA to 1.6A in 50mA steps in the high sensitivity range (VSENSE = 1)
+	const uint32_t iRunCsBits = (32 * motorCurrent - 800)/1615;		// formula checked by simulation on a spreadsheet
+	const uint32_t iHoldCurrent = (motorCurrent * standstillCurrentFraction)/256;	// set standstill current
+	const uint32_t iHoldCsBits = (32 * iHoldCurrent - 800)/1615;	// formula checked by simulation on a spreadsheet
+	UpdateRegister(WriteIholdIrun,
+					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRunCsBits << IHOLDIRUN_IRUN_SHIFT) | (iHoldCsBits << IHOLDIRUN_IHOLD_SHIFT));
+#elif TMC_TYPE == 5160
+	// See if we can set IRUN to 31 and do he current adjustment in the global scaler
+	uint32_t gs = lrintf((motorCurrent * 256)/FullScaleCurrent);
+	uint32_t iRun = 31;
+	if (gs >= 256)
+	{
+		gs = 0;
+	}
+	else if (gs < 32)
+	{
+		// We can't regulate the current just through the global scaler because it has a minimum value of 32
+		iRun = gs - 1;
+		gs = 32;
+	}
+	const uint32_t iHold = (iRun * standstillCurrentFraction)/256;
+	UpdateRegister(WriteIholdIrun,
+					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHold << IHOLDIRUN_IHOLD_SHIFT));
+	UpdateRegister(Write5160GlobalScaler, gs);
+#else
+# error unknown device
+#endif
+}
+
+// Enable or disable the driver
+void TmcDriverState::Enable(bool en)
+{
+	if (enabled != en)
+	{
+		enabled = en;
+		UpdateChopConfRegister();
+	}
+}
+
+// Read the status
+uint32_t TmcDriverState::ReadLiveStatus() const
+{
+	return readRegisters[ReadDrvStat] & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
+}
+
+// Read the status
+uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep)
+{
+	const irqflags_t flags = cpu_irq_save();
+	const uint32_t status = accumulatedReadRegisters[ReadDrvStat];
+	accumulatedReadRegisters[ReadDrvStat] = (status & bitsToKeep) | readRegisters[ReadDrvStat];		// so that the next call to ReadAccumulatedStatus isn't missing some bits
+	cpu_irq_restore(flags);
+	return status & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
+}
+
+// Append the driver status to a string, and reset the min/max load values
+void TmcDriverState::AppendDriverStatus(const StringRef& reply)
+{
+	const uint32_t lastReadStatus = readRegisters[ReadDrvStat];
+	if (lastReadStatus & TMC_RR_OT)
+	{
+		reply.cat(" temperature-shutdown!");
+	}
+	else if (lastReadStatus & TMC_RR_OTPW)
+	{
+		reply.cat(" temperature-warning");
+	}
+	if (lastReadStatus & TMC_RR_S2G)
+	{
+		reply.cat(" short-to-ground");
+	}
+	if ((lastReadStatus & TMC_RR_OLA) && !(lastReadStatus & TMC_RR_STST))
+	{
+		reply.cat(" open-load-A");
+	}
+	if ((lastReadStatus & TMC_RR_OLB) && !(lastReadStatus & TMC_RR_STST))
+	{
+		reply.cat(" open-load-B");
+	}
+	if (lastReadStatus & TMC_RR_STST)
+	{
+		reply.cat(" standstill");
+	}
+	else if ((lastReadStatus & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB)) == 0)
+	{
+		reply.cat(" ok");
+	}
+
+	reply.catf(", reads %u, timeouts %u", numReads, numTimeouts);
+	numReads = numTimeouts = 0;
+
+	if (minSgLoadRegister <= maxSgLoadRegister)
+	{
+		reply.catf(", SG min/max %" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
+	}
+	else
+	{
+		reply.cat(", SG min/max not available");
+	}
+	ResetLoadRegisters();
+}
+
+void TmcDriverState::SetStallDetectFilter(bool sgFilter)
+{
+	if (sgFilter)
+	{
+		writeRegisters[WriteCoolConf] |= COOLCONF_SGFILT;
+	}
+	else
+	{
+		writeRegisters[WriteCoolConf] &= ~COOLCONF_SGFILT;
+	}
+	registersToUpdate |= 1u << WriteCoolConf;
+}
+
+void TmcDriverState::SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond)
+{
+	//TODO use hardware facility instead
+	maxStallStepInterval = StepClockRate/max<unsigned int>(stepsPerSecond, 1);
+}
+
+void TmcDriverState::AppendStallConfig(const StringRef& reply) const
+{
+	const bool filtered = ((writeRegisters[WriteCoolConf] & COOLCONF_SGFILT) != 0);
+	int threshold = (int)((writeRegisters[WriteCoolConf] & COOLCONF_SGT_MASK) >> COOLCONF_SGT_SHIFT);
+	if (threshold >= 64)
+	{
+		threshold -= 128;
+	}
+	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 ", coolstep %" PRIx32,
+				threshold, ((filtered) ? "on" : "off"), StepClockRate/maxStallStepInterval, writeRegisters[WriteCoolConf] & 0xFFFF);
+}
 
 // State structures for all drivers
 static TmcDriverState driverStates[MaxSmartDrivers];
@@ -364,7 +813,7 @@ namespace SmartDrivers
 		driversState = DriversState::noPower;
 		for (size_t driver = 0; driver < numTmc51xxDrivers; ++driver)
 		{
-			driverStates[driver].Init(driver, driverSelectPins[driver]);		// axes are mapped straight through to drivers initially
+			driverStates[driver].Init(driver);		// axes are mapped straight through to drivers initially
 		}
 
 #if SAME70
