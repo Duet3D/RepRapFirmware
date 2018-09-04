@@ -9,7 +9,7 @@
 #include "Socket.h"
 #include "GCodes/GCodes.h"
 #include "PrintMonitor.h"
-#include "Libraries/General/IP4String.h"
+#include "General/IP4String.h"
 
 #define KO_START "rr_"
 const size_t KoFirst = 3;

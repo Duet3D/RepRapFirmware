@@ -7,7 +7,6 @@
 
 #include "FOPDT.h"
 #include "Storage/FileStore.h"
-#include "Libraries/General/StringRef.h"
 
 // Heater 6 on the Duet 0.8.5 is disabled by default at startup so that we can use fan 2.
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.

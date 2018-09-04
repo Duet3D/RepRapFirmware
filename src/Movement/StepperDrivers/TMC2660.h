@@ -14,7 +14,6 @@
 #include "DriverMode.h"
 #include "Pins.h"
 #include "MessageType.h"
-#include "Libraries/General/StringRef.h"
 
 // TMC2660 Read response. The microstep counter can also be read, but we don't include that here.
 const uint32_t TMC_RR_SG = 1 << 0;			// stall detected

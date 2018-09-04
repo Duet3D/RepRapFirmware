@@ -14,7 +14,7 @@
 #include "FtpResponder.h"
 #include "TelnetResponder.h"
 #include "WifiFirmwareUploader.h"
-#include "Libraries/General/IP4String.h"
+#include "General/IP4String.h"
 #include "WiFiSocket.h"
 
 static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and MessageFormats.h don't match");

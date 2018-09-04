@@ -12,7 +12,7 @@
 #include "RepRapFirmware.h"
 #include "MessageType.h"
 #include "GCodes/GCodeResult.h"
-#include "RTOSIface.h"
+#include "RTOSIface/RTOSIface.h"
 
 #if defined(DUET3)
 const size_t NumNetworkInterfaces = 2;

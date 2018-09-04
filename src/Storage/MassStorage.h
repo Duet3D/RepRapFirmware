@@ -8,10 +8,9 @@
 #include "GCodes/GCodeResult.h"
 #include "FileStore.h"
 #include "FileInfoParser.h"
+#include "RTOSIface/RTOSIface.h"
 
 #include <ctime>
-
-#include "RTOSIface.h"
 
 // Info returned by FindFirst/FindNext calls
 struct FileInfo

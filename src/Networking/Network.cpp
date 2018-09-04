@@ -29,13 +29,10 @@
 #include "HttpResponder.h"
 #include "FtpResponder.h"
 #include "TelnetResponder.h"
-#include "Libraries/General/IP4String.h"
+#include "General/IP4String.h"
 #include "Version.h"
 
 #ifdef RTOS
-
-# include "Tasks.h"
-# include "RTOSIface.h"
 
 constexpr size_t NetworkStackWords = 550;
 static Task<NetworkStackWords> networkTask;

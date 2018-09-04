@@ -10,7 +10,7 @@
 
 #include "RepRapFirmware.h"
 #include "MessageType.h"
-#include "RTOSIface.h"
+#include "RTOSIface/RTOSIface.h"
 
 namespace Tasks
 {

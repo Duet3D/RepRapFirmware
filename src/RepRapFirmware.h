@@ -35,9 +35,9 @@ typedef uint16_t PwmFrequency;		// type used to represent a PWM frequency. 0 som
 #include "Configuration.h"
 #include "Pins.h"
 
-#include "Libraries/General/SafeStrtod.h"
-#include "Libraries/General/SafeVsnprintf.h"
-#include "Libraries/General/StringRef.h"
+#include "General/SafeStrtod.h"
+#include "General/SafeVsnprintf.h"
+#include "General/StringRef.h"
 
 // Module numbers and names, used for diagnostics and debug
 enum Module : uint8_t

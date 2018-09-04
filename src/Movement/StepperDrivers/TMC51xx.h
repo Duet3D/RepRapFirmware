@@ -14,7 +14,6 @@
 #include "DriverMode.h"
 #include "Pins.h"
 #include "MessageType.h"
-#include "Libraries/General/StringRef.h"
 
 // TMC22xx DRV_STATUS register bit assignments
 const uint32_t TMC_RR_SG = 1 << 24;					// stall detected

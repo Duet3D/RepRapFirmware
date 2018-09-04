@@ -9,7 +9,7 @@
 #include "DDA.h"
 #include "Move.h"
 #include "RepRap.h"
-#include "Libraries/Math/Isqrt.h"
+#include "Math/Isqrt.h"
 #include "Kinematics/LinearDeltaKinematics.h"
 
 // Static members

@@ -8,7 +8,7 @@
 #ifndef SRC_DISPLAY_MENUITEM_H_
 #define SRC_DISPLAY_MENUITEM_H_
 
-#include "Libraries/General/FreelistManager.h"
+#include "General/FreelistManager.h"
 #include "RepRapFirmware.h"
 #include "ST7920/lcd7920.h"
 #include "Storage/MassStorage.h"

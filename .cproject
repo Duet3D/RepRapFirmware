@@ -409,10 +409,12 @@
 								<option id="gnu.cpp.link.option.paths.605414111" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" useByScannerDiscovery="false" valueType="libPaths">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/SAM4E8E_RTOS/}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/SAM4E}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/SAM4E_RTOS}&quot;"/>
 								</option>
 								<option id="gnu.cpp.link.option.libs.847860449" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
 									<listOptionValue builtIn="false" value="${CoreName}"/>
 									<listOptionValue builtIn="false" value="FreeRTOS"/>
+									<listOptionValue builtIn="false" value="RRFLibraries"/>
 								</option>
 								<option id="gnu.cpp.link.option.flags.161856294" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -T${workspace_loc:/${CoreName}/variants/duetNG/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1270956612" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
@@ -449,6 +451,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/DuetWiFiSocketServer/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM4F}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.1443248224" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM4E8E__"/>
@@ -529,10 +532,12 @@
 								<option id="gnu.cpp.link.option.paths.2085138159" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" useByScannerDiscovery="false" valueType="libPaths">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/SAM4S_RTOS/}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/SAM4S}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/SAM4S_RTOS}&quot;"/>
 								</option>
 								<option id="gnu.cpp.link.option.libs.214117190" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
 									<listOptionValue builtIn="false" value="${CoreName}"/>
 									<listOptionValue builtIn="false" value="FreeRTOS"/>
+									<listOptionValue builtIn="false" value="RRFLibraries"/>
 								</option>
 								<option id="gnu.cpp.link.option.flags.1077151865" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -T${workspace_loc:/${CoreName}/variants/sam4s/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.480654714" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
@@ -569,6 +574,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/DuetWiFiSocketServer/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM3}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.1832014133" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM4S8C__"/>
@@ -659,10 +665,12 @@
 								<option id="gnu.cpp.link.option.paths.579521002" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" useByScannerDiscovery="false" valueType="libPaths">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/SAME70_RTOS/}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/SAME70}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/SAME70_RTOS}&quot;"/>
 								</option>
 								<option id="gnu.cpp.link.option.libs.1783235457" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
 									<listOptionValue builtIn="false" value="${CoreName}"/>
 									<listOptionValue builtIn="false" value="FreeRTOS"/>
+									<listOptionValue builtIn="false" value="RRFLibraries"/>
 								</option>
 								<option id="gnu.cpp.link.option.flags.2100826215" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -T${workspace_loc:/${CoreName}/variants/same70/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1623645672" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
@@ -702,6 +710,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/DuetWiFiSocketServer/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM7/r0p1}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.315745995" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAME70Q21__"/>
@@ -783,10 +792,12 @@
 								<option id="gnu.cpp.link.option.paths.2028936348" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" useByScannerDiscovery="false" valueType="libPaths">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/SAM4S_RTOS_PCCB/}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/SAM4S}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/SAM4S_RTOS}&quot;"/>
 								</option>
 								<option id="gnu.cpp.link.option.libs.1421214818" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
 									<listOptionValue builtIn="false" value="${CoreName}"/>
 									<listOptionValue builtIn="false" value="FreeRTOS"/>
+									<listOptionValue builtIn="false" value="RRFLibraries"/>
 								</option>
 								<option id="gnu.cpp.link.option.flags.633609481" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -T${workspace_loc:/${CoreName}/variants/sam4s/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.96746585" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
@@ -822,6 +833,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/DuetWiFiSocketServer/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM3}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.249074867" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM4S8C__"/>
@@ -903,10 +915,12 @@
 								<option id="gnu.cpp.link.option.paths.144825348" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" useByScannerDiscovery="false" valueType="libPaths">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/SAM4S_RTOS_PCCB/}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/SAM4S}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/SAM4S_RTOS}&quot;"/>
 								</option>
 								<option id="gnu.cpp.link.option.libs.1538113275" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
 									<listOptionValue builtIn="false" value="${CoreName}"/>
 									<listOptionValue builtIn="false" value="FreeRTOS"/>
+									<listOptionValue builtIn="false" value="RRFLibraries"/>
 								</option>
 								<option id="gnu.cpp.link.option.flags.1106600671" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -T${workspace_loc:/${CoreName}/variants/sam4s/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.180173717" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
@@ -942,6 +956,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/DuetWiFiSocketServer/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM3}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.900153856" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM4S8C__"/>

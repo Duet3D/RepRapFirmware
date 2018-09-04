@@ -33,7 +33,7 @@
 #include "SoftTimer.h"
 #include "Logger.h"
 #include "Tasks.h"
-#include "Libraries/Math/Isqrt.h"
+#include "Math/Isqrt.h"
 #include "Wire.h"
 
 #ifndef __LPC17xx__
@@ -1409,7 +1409,7 @@ void Platform::Spin()
 				}
 
 				// The driver often produces a transient open-load error, especially in stealthchop mode, so we require the condition to persist before we report it.
-				// Also,false open load indications persist when in standstill, if the phase has zero current in that position
+				// Also, false open load indications persist when in standstill, if the phase has zero current in that position
 				if ((stat & TMC_RR_OLA) != 0 && (stat & TMC_RR_STST) == 0)
 				{
 					if (openLoadADrivers == 0)
