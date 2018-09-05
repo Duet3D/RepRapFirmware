@@ -1114,9 +1114,20 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 						return GCodeResult::error;
 					}
 				}
+
+#if SUPPORT_TMC51xx
+				if (gb.TryGetUIValue('H', val, seen))		// set microstep interval for changing from stealthChop to spreadCycle
+				{
+					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::thigh, val))
+					{
+						reply.printf("Bad high speed microstep interval for driver %u", drive);
+						return GCodeResult::error;
+					}
+				}
+#endif
 			}
 
-			if (gb.Seen('H'))								// set spread cycle hysteresis
+			if (gb.Seen('Y'))								// set spread cycle hysteresis
 			{
 				seen = true;
 				uint32_t hvalues[3];
@@ -1178,11 +1189,23 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 						);
 
 #if SUPPORT_TMC22xx || SUPPORT_TMC51xx
-					const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
-					const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
-					bool bdummy;
-					const float mmPerSec = (12000000.0 * platform.GetDriverMicrostepping(drive, bdummy))/(256 * tpwmthrs * platform.DriveStepsPerUnit(axis));
-					reply.catf(", tpwmthrs %" PRIu32 " (%.1f mm/sec)", tpwmthrs, (double)mmPerSec);
+					{
+						const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
+						const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
+						bool bdummy;
+						const float mmPerSec = (12000000.0 * platform.GetDriverMicrostepping(drive, bdummy))/(256 * tpwmthrs * platform.DriveStepsPerUnit(axis));
+						reply.catf(", tpwmthrs %" PRIu32 " (%.1f mm/sec)", tpwmthrs, (double)mmPerSec);
+					}
+#endif
+
+#if SUPPORT_TMC51xx
+					{
+						const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
+						const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
+						bool bdummy;
+						const float mmPerSec = (12000000.0 * platform.GetDriverMicrostepping(drive, bdummy))/(256 * thigh * platform.DriveStepsPerUnit(axis));
+						reply.catf(", thigh %" PRIu32 " (%.1f mm/sec)", thigh, (double)mmPerSec);
+					}
 #endif
 				}
 #endif
