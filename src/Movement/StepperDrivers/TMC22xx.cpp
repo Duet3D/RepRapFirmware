@@ -709,11 +709,11 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply)
 	{
 		reply.cat(" short-to-ground");
 	}
-	if ((lastReadStatus & TMC_RR_OLA) && !(lastReadStatus & TMC_RR_STST))
+	if (lastReadStatus & TMC_RR_OLA)
 	{
 		reply.cat(" open-load-A");
 	}
-	if ((lastReadStatus & TMC_RR_OLB) && !(lastReadStatus & TMC_RR_STST))
+	if (lastReadStatus & TMC_RR_OLB)
 	{
 		reply.cat(" open-load-B");
 	}
@@ -752,7 +752,18 @@ inline void TmcDriverState::TransferDone()
 		{
 			// We asked to read the scheduled read register, and the sync byte, slave address and register number in the received message match
 			//TODO here we could check the CRC of the received message, but for now we assume that we won't get any corruption in the 32-bit received data
-			const uint32_t regVal = ((uint32_t)receiveData[7] << 24) | ((uint32_t)receiveData[8] << 16) | ((uint32_t)receiveData[9] << 8) | receiveData[10];
+			uint32_t regVal = ((uint32_t)receiveData[7] << 24) | ((uint32_t)receiveData[8] << 16) | ((uint32_t)receiveData[9] << 8) | receiveData[10];
+			if (registerToRead == ReadDrvStat)
+			{
+				uint32_t interval;
+				if ((regVal & TMC_RR_STST) != 0
+					|| (interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor)) == 0		// get the full step interval
+					|| interval > StepClockRate/MinimumOpenLoadFullStepsPerSec
+				   )
+				{
+					regVal &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds
+				}
+			}
 			readRegisters[registerToRead] = regVal;
 			accumulatedReadRegisters[registerToRead] |= regVal;
 

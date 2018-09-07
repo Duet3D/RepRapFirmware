@@ -41,7 +41,7 @@ static Task<NetworkStackWords> networkTask;
 
 Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderToPoll(nullptr)
 {
-#if defined(DUET3)
+#if defined(DUET3) || defined(SAME70XPLD)
 	interfaces[0] = new LwipEthernetInterface(p);
 	interfaces[1] = new WiFiInterface(p);
 #elif defined(DUET_NG)

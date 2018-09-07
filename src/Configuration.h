@@ -32,11 +32,13 @@ constexpr float ROOM_TEMPERATURE = 21.0;				// Celsius
 
 // Timeouts
 constexpr uint32_t FanCheckInterval = 500;				// Milliseconds
-constexpr uint32_t OpenLoadTimeout = 5000;				// Milliseconds. A value of 500 resulted in lots of spurious detections in the SCARA extruder. Even 2000 resulted in a couple.
+constexpr uint32_t OpenLoadTimeout = 500;				// Milliseconds
 constexpr uint32_t MinimumWarningInterval = 4000;		// Milliseconds, must be at least as long as FanCheckInterval
 constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
 constexpr uint32_t DriverCoolingTimeout = 4000;			// Milliseconds
 constexpr float DefaultMessageTimeout = 10.0;			// How long a message is displayed by default, in seconds
+
+constexpr uint32_t MinimumOpenLoadFullStepsPerSec = 4;
 
 // FanCheckInterval must be lower than MinimumWarningInterval to avoid giving driver over temperature warnings too soon when thermostatic control of electronics cooling fans is used
 static_assert(FanCheckInterval < MinimumWarningInterval, "FanCheckInterval too large");

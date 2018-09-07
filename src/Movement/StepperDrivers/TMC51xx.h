@@ -27,8 +27,7 @@ const uint32_t TMC_RR_SGRESULT = 0x3FF;				// 10-bit stallGuard2 result
 
 namespace SmartDrivers
 {
-	void Init(const Pin[DRIVES], size_t numTmcDrivers)
-		pre(numTmcDrivers <= DRIVES);
+	void Init();
 	void Spin(bool powered);
 	void TurnDriversOff();
 

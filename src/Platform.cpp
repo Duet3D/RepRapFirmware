@@ -477,7 +477,11 @@ void Platform::Init()
 #if HAS_SMART_DRIVERS
 	// Initialise TMC driver module
 	driversPowered = false;
+# if SUPPORT_TMC51xx
+	SmartDrivers::Init();
+# else
 	SmartDrivers::Init(ENABLE_PINS, numSmartDrivers);
+# endif
 	temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadADrivers = openLoadBDrivers = 0;
 #endif
 
@@ -1410,7 +1414,7 @@ void Platform::Spin()
 
 				// The driver often produces a transient open-load error, especially in stealthchop mode, so we require the condition to persist before we report it.
 				// Also, false open load indications persist when in standstill, if the phase has zero current in that position
-				if ((stat & TMC_RR_OLA) != 0 && (stat & TMC_RR_STST) == 0)
+				if ((stat & TMC_RR_OLA) != 0)
 				{
 					if (openLoadADrivers == 0)
 					{
@@ -1423,7 +1427,7 @@ void Platform::Spin()
 					openLoadADrivers &= ~mask;
 				}
 
-				if ((stat & TMC_RR_OLB) != 0 && (stat & TMC_RR_STST) == 0)
+				if ((stat & TMC_RR_OLB) != 0)
 				{
 					if (openLoadBDrivers == 0)
 					{
@@ -3969,6 +3973,8 @@ void Platform::SetBoardType(BoardType bt)
 	{
 #if defined(DUET3)
 		board = BoardType::Duet3_10;
+#elif defined(SAME70XPLD)
+		board = BoardType::SAME70XPLD_0;
 #elif defined(DUET_NG)
 		// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
 		pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500. We assume that this forces the ESP8266 UART output pin to high impedance.
@@ -4038,6 +4044,8 @@ const char* Platform::GetElectronicsString() const
 	{
 #if defined(DUET3)
 	case BoardType::Duet3_10:				return "Duet 3 prototype 1";
+#elif defined(SAME70XPLD)
+	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
 #elif defined(DUET_NG)
 	case BoardType::DuetWiFi_10:			return "Duet WiFi 1.0 or 1.01";
 	case BoardType::DuetWiFi_102:			return "Duet WiFi 1.02 or later";
@@ -4071,6 +4079,8 @@ const char* Platform::GetBoardString() const
 	{
 #if defined(DUET3)
 	case BoardType::Duet3_10:				return "duet3proto";
+#elif defined(SAME70XPLD)
+	case BoardType::SAME70XPLD_0:			return "same70xpld";
 #elif defined(DUET_NG)
 	case BoardType::DuetWiFi_10:			return "duetwifi10";
 	case BoardType::DuetWiFi_102:			return "duetwifi102";

@@ -115,6 +115,8 @@ enum class BoardType : uint8_t
 	Auto = 0,
 #if defined(DUET3)
 	Duet3_10 = 1
+#elif defined(SAME70XPLD)
+	SAME70XPLD_0 = 1
 #elif defined(DUET_NG)
 	DuetWiFi_10 = 1,
 	DuetWiFi_102 = 2,
@@ -1273,7 +1275,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
 #endif
 
-#if defined(DUET_NG) || defined(DUET_M) || defined(PCCB) || defined(DUET3)
+#if defined(DUET_NG) || defined(DUET_M) || defined(PCCB) || defined(DUET3) || defined(SAME70XPLD)
 	return pinDesc.ulPin;
 #elif defined(DUET_06_085)
 	return (pinDesc.pPort == PIOA) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
@@ -1295,7 +1297,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 {
 #if defined(DUET_NG)
 	PIOD->PIO_ODSR = driverMap;				// on Duet WiFi all step pins are on port D
-#elif defined(DUET_M) || defined(PCCB) || defined(DUET3)
+#elif defined(DUET_M) || defined(PCCB) || defined(DUET3) || defined(SAME70XPLD)
 	PIOC->PIO_ODSR = driverMap;				// on Duet Maestro all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = driverMap;
@@ -1327,7 +1329,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 {
 #if defined(DUET_NG)
 	PIOD->PIO_ODSR = 0;						// on Duet WiFi all step pins are on port D
-#elif defined(DUET_M) || defined(PCCB) || defined(DUET3)
+#elif defined(DUET_M) || defined(PCCB) || defined(DUET3) || defined(SAME70XPLD)
 	PIOC->PIO_ODSR = 0;						// on Duet Maestro all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = 0;

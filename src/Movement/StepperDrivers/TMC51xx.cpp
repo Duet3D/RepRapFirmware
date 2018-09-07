@@ -229,7 +229,7 @@ constexpr uint8_t REGNUM_PWM_SCALE = 0x71;
 constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
 
 // Common data
-static size_t numTmc51xxDrivers;
+static const size_t numTmc51xxDrivers = MaxSmartDrivers;
 
 enum class DriversState : uint8_t
 {
@@ -1089,13 +1089,13 @@ namespace SmartDrivers
 {
 	// Initialise the driver interface and the drivers, leaving each drive disabled.
 	// It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
-	void Init(const Pin driverSelectPins[DRIVES], size_t numTmcDrivers)
+	void Init()
 	{
-		numTmc51xxDrivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
-
 		// Make sure the ENN pins are high
 		pinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
+		pinMode(GlobalTmc51xxCSPin, OUTPUT_HIGH);
 
+#ifndef SAME51
 		// The pins are already set up for SPI in the pins table
 		ConfigurePin(GetPinDescription(TMC51xxMosiPin));
 		ConfigurePin(GetPinDescription(TMC51xxMisoPin));
@@ -1103,8 +1103,52 @@ namespace SmartDrivers
 
 		// Enable the clock to the USART or SPI
 		pmc_enable_periph_clk(ID_TMC51xx_SPI);
+#endif
 
-#if TMC51xx_USES_USART
+#if TMC51xx_USES_SERCOM
+		// Temporary fixed pin assignment
+		gpio_set_pin_function(PB24, PINMUX_PB24C_SERCOM0_PAD0);		// MOSI
+		gpio_set_pin_function(PB25, PINMUX_PB25C_SERCOM0_PAD1);		// SCLK
+		gpio_set_pin_function(PB24, PINMUX_PC25C_SERCOM0_PAD3);		// MISO
+
+		// Enable the clock
+		hri_gclk_write_PCHCTRL_reg(GCLK, SERCOM0_GCLK_ID_CORE, CONF_GCLK_SERCOM3_CORE_SRC | (1 << GCLK_PCHCTRL_CHEN_Pos));
+		hri_gclk_write_PCHCTRL_reg(GCLK, SERCOM0_GCLK_ID_SLOW, CONF_GCLK_SERCOM3_SLOW_SRC | (1 << GCLK_PCHCTRL_CHEN_Pos));
+		hri_mclk_set_APBBMASK_SERCOM0_bit(MCLK);
+
+		// Set up the SERCOM
+		//TODO the following needs rewriting, it sets up the usart in async mode
+//		uint8_t i = _get_sercom_index(SERCOM_TMC51xx);
+
+		if (!hri_sercomusart_is_syncing(SERCOM_TMC51xx, SERCOM_USART_SYNCBUSY_SWRST))
+		{
+			uint32_t mode = _usarts[i].ctrl_a & SERCOM_USART_CTRLA_MODE_Msk;
+			if (hri_sercomusart_get_CTRLA_reg(SERCOM_TMC51xx))
+			{
+				hri_sercomusart_clear_CTRLA_ENABLE_bit(SERCOM_TMC51xx);
+				hri_sercomusart_wait_for_sync(SERCOM_TMC51xx, SERCOM_USART_SYNCBUSY_ENABLE);
+			}
+			hri_sercomusart_write_CTRLA_reg(SERCOM_TMC51xx, SERCOM_USART_CTRLA_SWRST | mode);
+		}
+		hri_sercomusart_wait_for_sync(SERCOM_TMC51xx, SERCOM_USART_SYNCBUSY_SWRST);
+
+		hri_sercomusart_write_CTRLA_reg(SERCOM_TMC51xx, _usarts[i].ctrl_a);
+		hri_sercomusart_write_CTRLB_reg(SERCOM_TMC51xx, _usarts[i].ctrl_b);
+		hri_sercomusart_write_CTRLC_reg(SERCOM_TMC51xx, _usarts[i].ctrl_c);
+		if ((_usarts[i].ctrl_a & SERCOM_USART_CTRLA_SAMPR(0x1)) || (_usarts[i].ctrl_a & SERCOM_USART_CTRLA_SAMPR(0x3)))
+		{
+			SERCOM_TMC51xx->USART.BAUD.FRAC.BAUD = _usarts[i].baud;
+			SERCOM_TMC51xx->USART.BAUD.FRAC.FP   = _usarts[i].fractional;
+		}
+		else
+		{
+			hri_sercomusart_write_BAUD_reg(SERCOM_TMC51xx, _usarts[i].baud);
+		}
+
+		hri_sercomusart_write_RXPL_reg(SERCOM_TMC51xx, _usarts[i].rxpl);
+		hri_sercomusart_write_DBGCTRL_reg(hw, _usarts[i].debug_ctrl);
+
+#elif TMC51xx_USES_USART
 		// Set USART_EXT_DRV in SPI mode, with data changing on the falling edge of the clock and captured on the rising edge
 		USART_TMC51xx->US_IDR = ~0u;
 		USART_TMC51xx->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;

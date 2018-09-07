@@ -637,11 +637,11 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply)
 	{
 		reply.cat(" short-to-ground");
 	}
-	if ((lastReadStatus & TMC_RR_OLA) && !(lastReadStatus & TMC_RR_STST))
+	if (lastReadStatus & TMC_RR_OLA)
 	{
 		reply.cat(" open-load-A");
 	}
-	if ((lastReadStatus & TMC_RR_OLB) && !(lastReadStatus & TMC_RR_STST))
+	if (lastReadStatus & TMC_RR_OLB)
 	{
 		reply.cat(" open-load-B");
 	}
@@ -695,6 +695,10 @@ inline void TmcDriverState::TransferDone()
 			{
 				maxSgLoadRegister = sgLoad;
 			}
+		}
+		if ((status & TMC_RR_STST) != 0 || interval == 0 || interval > StepClockRate/MinimumOpenLoadFullStepsPerSec)
+		{
+			status &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds
 		}
 		lastReadStatus = status;
 		accumulatedStatus |= status;
