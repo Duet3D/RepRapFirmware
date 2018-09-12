@@ -8,6 +8,7 @@
 #include "DriveMovement.h"
 #include "DDA.h"
 #include "Move.h"
+#include "StepTimer.h"
 #include "RepRap.h"
 #include "Math/Isqrt.h"
 #include "Kinematics/LinearDeltaKinematics.h"
@@ -58,15 +59,15 @@ DriveMovement::DriveMovement(DriveMovement *next) : nextDM(next)
 void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params)
 {
 	const float stepsPerMm = (float)totalSteps/dda.totalDistance;
-	mp.cart.twoCsquaredTimesMmPerStepDivA = roundU64((double)(StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.acceleration));
-	mp.cart.twoCsquaredTimesMmPerStepDivD = roundU64((double)(StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.deceleration));
+	mp.cart.twoCsquaredTimesMmPerStepDivA = roundU64((double)(StepTimer::StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.acceleration));
+	mp.cart.twoCsquaredTimesMmPerStepDivD = roundU64((double)(StepTimer::StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.deceleration));
 
 	// Acceleration phase parameters
 	mp.cart.accelStopStep = (uint32_t)(dda.accelDistance * stepsPerMm) + 1;
 	mp.cart.compensationClocks = mp.cart.accelCompensationClocks = 0;
 
 	// Constant speed phase parameters
-	mp.cart.mmPerStepTimesCKdivtopSpeed = roundU32(((float)((uint64_t)StepClockRate * K1))/(stepsPerMm * dda.topSpeed));
+	mp.cart.mmPerStepTimesCKdivtopSpeed = roundU32(((float)((uint64_t)StepTimer::StepClockRate * K1))/(stepsPerMm * dda.topSpeed));
 
 	// Deceleration phase parameters
 	// First check whether there is any deceleration at all, otherwise we may get strange results because of rounding errors
@@ -78,7 +79,7 @@ void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	else
 	{
 		mp.cart.decelStartStep = (uint32_t)(params.decelStartDistance * stepsPerMm) + 1;
-		twoDistanceToStopTimesCsquaredDivD = isquare64(params.topSpeedTimesCdivD) + roundU64((params.decelStartDistance * (StepClockRateSquared * 2))/dda.deceleration);
+		twoDistanceToStopTimesCsquaredDivD = isquare64(params.topSpeedTimesCdivD) + roundU64((params.decelStartDistance * (StepTimer::StepClockRateSquared * 2))/dda.deceleration);
 	}
 
 	// No reverse phase
@@ -98,8 +99,8 @@ void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 	mp.delta.hmz0sK = roundS32(h0MinusZ0 * stepsPerMm * DriveMovement::K2);
 	mp.delta.minusAaPlusBbTimesKs = -roundS32(aAplusbB * stepsPerMm * DriveMovement::K2);
 	mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared = roundS64(dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm * DriveMovement::K2));
-	mp.delta.twoCsquaredTimesMmPerStepDivA = roundU64((double)(2 * StepClockRateSquared)/((double)stepsPerMm * (double)dda.acceleration));
-	mp.delta.twoCsquaredTimesMmPerStepDivD = roundU64((double)(2 * StepClockRateSquared)/((double)stepsPerMm * (double)dda.deceleration));
+	mp.delta.twoCsquaredTimesMmPerStepDivA = roundU64((double)(2 * StepTimer::StepClockRateSquared)/((double)stepsPerMm * (double)dda.acceleration));
+	mp.delta.twoCsquaredTimesMmPerStepDivD = roundU64((double)(2 * StepTimer::StepClockRateSquared)/((double)stepsPerMm * (double)dda.deceleration));
 
 	// Calculate the distance at which we need to reverse direction.
 	if (params.a2plusb2 <= 0.0)
@@ -153,7 +154,7 @@ void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 	mp.delta.accelStopDsK = roundU32(dda.accelDistance * stepsPerMm * K2);
 
 	// Constant speed phase parameters
-	mp.delta.mmPerStepTimesCKdivtopSpeed = roundU32(((float)StepClockRate * K1)/(stepsPerMm * dda.topSpeed));
+	mp.delta.mmPerStepTimesCKdivtopSpeed = roundU32(((float)StepTimer::StepClockRate * K1)/(stepsPerMm * dda.topSpeed));
 
 	// Deceleration phase parameters
 	// First check whether there is any deceleration at all, otherwise we may get strange results because of rounding errors
@@ -165,7 +166,7 @@ void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 	else
 	{
 		mp.delta.decelStartDsK = roundU32(params.decelStartDistance * stepsPerMm * K2);
-		twoDistanceToStopTimesCsquaredDivD = isquare64(params.topSpeedTimesCdivD) + roundU64((params.decelStartDistance * (StepClockRateSquared * 2))/dda.deceleration);
+		twoDistanceToStopTimesCsquaredDivD = isquare64(params.topSpeedTimesCdivD) + roundU64((params.decelStartDistance * (StepTimer::StepClockRateSquared * 2))/dda.deceleration);
 	}
 }
 
@@ -182,7 +183,7 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 		float a, b, limit;
 		if (reprap.GetPlatform().GetExtrusionCoefficients(extruder, a, b, limit))
 		{
-			const float averageExtrusionSpeed = (dda.totalDistance * dv * StepClockRate)/dda.clocksNeeded;
+			const float averageExtrusionSpeed = (dda.totalDistance * dv * StepTimer::StepClockRate)/dda.clocksNeeded;
 			const float factor = 1.0 + min<float>((averageExtrusionSpeed * a) + (averageExtrusionSpeed * averageExtrusionSpeed * b), limit);
 			stepsPerMm *= factor;
 		}
@@ -197,8 +198,8 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	{
 		// Calculate the pressure advance parameters
 		compensationTime = reprap.GetPlatform().GetPressureAdvance(extruder);
-		mp.cart.compensationClocks = roundU32(compensationTime * (float)StepClockRate);
-		mp.cart.accelCompensationClocks = roundU32(compensationTime * (float)StepClockRate * params.compFactor);
+		mp.cart.compensationClocks = roundU32(compensationTime * (float)StepTimer::StepClockRate);
+		mp.cart.accelCompensationClocks = roundU32(compensationTime * (float)StepTimer::StepClockRate * params.compFactor);
 
 #ifdef COMPENSATE_SPEED_CHANGES
 		// If there is a speed change at the start of the move, theoretically we should instantly advance or retard the filament by the associated compensation amount.
@@ -224,11 +225,11 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 		mp.cart.accelStopStep = (uint32_t)(dda.accelDistance * stepsPerMm) + 1;
 	}
 
-	mp.cart.twoCsquaredTimesMmPerStepDivA = roundU64((double)(StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.acceleration));
-	mp.cart.twoCsquaredTimesMmPerStepDivD = roundU64((double)(StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.deceleration));
+	mp.cart.twoCsquaredTimesMmPerStepDivA = roundU64((double)(StepTimer::StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.acceleration));
+	mp.cart.twoCsquaredTimesMmPerStepDivD = roundU64((double)(StepTimer::StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.deceleration));
 
 	// Constant speed phase parameters
-	mp.cart.mmPerStepTimesCKdivtopSpeed = (uint32_t)((float)((uint64_t)StepClockRate * K1)/(stepsPerMm * dda.topSpeed));
+	mp.cart.mmPerStepTimesCKdivtopSpeed = (uint32_t)((float)((uint64_t)StepTimer::StepClockRate * K1)/(stepsPerMm * dda.topSpeed));
 
 	// Calculate the deceleration and reverse phase parameters and update totalSteps
 	// First check whether there is any deceleration at all, otherwise we may get strange results because of rounding errors
@@ -245,7 +246,7 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 		const int32_t initialDecelSpeedTimesCdivD = (int32_t)params.topSpeedTimesCdivD - (int32_t)mp.cart.compensationClocks;	// signed because it may be negative and we square it
 		const uint64_t initialDecelSpeedTimesCdivDSquared = isquare64(initialDecelSpeedTimesCdivD);
 		twoDistanceToStopTimesCsquaredDivD =
-			initialDecelSpeedTimesCdivDSquared + roundU64(((params.decelStartDistance + accelCompensationDistance) * (float)(StepClockRateSquared * 2))/dda.deceleration);
+			initialDecelSpeedTimesCdivDSquared + roundU64(((params.decelStartDistance + accelCompensationDistance) * (float)(StepTimer::StepClockRateSquared * 2))/dda.deceleration);
 
 		// See whether there is a reverse phase
 		const float compensationSpeedChange = dda.deceleration * compensationTime;

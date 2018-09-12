@@ -270,8 +270,6 @@ template<typename BitmapType> BitmapType UnsignedArrayToBitMap(const uint32_t *a
 }
 
 // Common definitions used by more than one module
-constexpr uint32_t StepClockRate = VARIANT_MCK/128;					// the frequency of the clock used for stepper pulse timing (see Platform::InitialiseInterrupts)
-constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
 
 constexpr size_t ScratchStringLength = 220;							// standard length of a scratch string, enough to print delta parameters to
 constexpr size_t ShortScratchStringLength = 50;
@@ -287,7 +285,6 @@ constexpr float MinutesToSeconds = 60.0;
 constexpr float SecondsToMinutes = 1.0/MinutesToSeconds;
 constexpr float SecondsToMillis = 1000.0;
 constexpr float MillisToSeconds = 0.001;
-constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
 constexpr float InchToMm = 25.4;
 constexpr float Pi = 3.141592653589793;
 constexpr float TwoPi = 3.141592653589793 * 2;
@@ -330,12 +327,5 @@ const uint32_t NvicPriorityEthernet = 8;		// priority for Ethernet interface
 
 const uint32_t NvicPrioritySpi = 8;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
 const uint32_t NvicPriorityTwi = 9;				// TWI is used to read endstop and other inputs on the DueXn
-
-#if SAME70
-// DMA channel allocations
-const uint32_t XDMAC_CHAN_HSMCI = 0;			// DMA channel used for HSMCI interface, see CONF_HSMCI_XDMAC_CHANNEL in file conf_sd_mmc.h in project CoreNG
-const uint32_t XDMAC_CHAN_TMC_TX = 1;			// DMA channel for sending to SPI-controlled TMC drivers
-const uint32_t XDMAC_CHAN_TMC_RX = 2;			// DMA channel for receiving from SPI-controlled TMC drivers
-#endif
 
 #endif

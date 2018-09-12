@@ -14,7 +14,7 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
 
-//#define VARIANT_TMC5130		1
+#define VARIANT_TMC5130		1
 
 #ifdef VARIANT_TMC5130
 # define SUPPORT_TMC51xx		1
@@ -24,8 +24,8 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 # define TMC2660_USES_USART		1
 #endif
 
-#define HAS_VOLTAGE_MONITOR		0		// TBD
-#define HAS_VREF_MONITOR		0		// TBD
+#define HAS_VOLTAGE_MONITOR		1
+#define HAS_VREF_MONITOR		1
 #define ACTIVE_LOW_HEAT_ON		0
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
@@ -217,5 +217,12 @@ constexpr Pin SamCsPin = 28;					// SPI NPCS pin, input from WiFi module
 #define STEP_TC_IRQN		TC1_IRQn
 #define STEP_TC_HANDLER		TC1_Handler
 #define STEP_TC_ID			ID_TC1
+
+// DMA channel allocation
+constexpr uint8_t DmacChanHsmci = 0;			// this is hard coded in the ASF HSMCI driver
+constexpr uint8_t DmacChanWiFiTx = 1;
+constexpr uint8_t DmacChanWiFiRx = 2;
+constexpr uint8_t DmacChanTmcTx = 3;
+constexpr uint8_t DmacChanTmcRx = 4;
 
 #endif

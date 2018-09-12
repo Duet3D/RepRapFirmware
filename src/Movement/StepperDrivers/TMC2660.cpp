@@ -12,6 +12,7 @@
 #include "TMC2660.h"
 #include "RepRap.h"
 #include "Movement/Move.h"
+#include "Movement/StepTimer.h"
 
 # if SAME70
 #  include "sam/drivers/xdmac/xdmac.h"
@@ -302,7 +303,7 @@ static TmcDriverState * volatile currentDriver = nullptr;	// volatile because th
 
 	// Receive
 	{
-		xdmac_channel_disable(XDMAC, XDMAC_CHAN_TMC_RX);
+		xdmac_channel_disable(XDMAC, DmacChanTmcRx);
 		xdmac_channel_config_t p_cfg = {0, 0, 0, 0, 0, 0, 0, 0};
 		p_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN
 						| XDMAC_CC_MBSIZE_SINGLE
@@ -313,17 +314,17 @@ static TmcDriverState * volatile currentDriver = nullptr;	// volatile because th
 						| XDMAC_CC_DIF_AHB_IF0
 						| XDMAC_CC_SAM_FIXED_AM
 						| XDMAC_CC_DAM_INCREMENTED_AM
-						| XDMAC_CC_PERID(XDMAC_CHAN_TMC_RX);
+						| XDMAC_CC_PERID(DmacChanTmcRx);
 		p_cfg.mbr_ubc = 3;
 		HSMCI->HSMCI_MR |= HSMCI_MR_FBYTE;
 		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(USART_TMC2660->US_RHR));
 		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&spiDataIn);
-		xdmac_configure_transfer(XDMAC, XDMAC_CHAN_TMC_RX, &p_cfg);
+		xdmac_configure_transfer(XDMAC, DmacChanTmcRx, &p_cfg);
 	}
 
 	// Transmit
 	{
-		xdmac_channel_disable(XDMAC, XDMAC_CHAN_TMC_TX);
+		xdmac_channel_disable(XDMAC, DmacChanTmcTx);
 		xdmac_channel_config_t p_cfg = {0, 0, 0, 0, 0, 0, 0, 0};
 		p_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN
 						| XDMAC_CC_MBSIZE_SINGLE
@@ -334,19 +335,19 @@ static TmcDriverState * volatile currentDriver = nullptr;	// volatile because th
 						| XDMAC_CC_DIF_AHB_IF1
 						| XDMAC_CC_SAM_INCREMENTED_AM
 						| XDMAC_CC_DAM_FIXED_AM
-						| XDMAC_CC_PERID(XDMAC_CHAN_TMC_TX);
+						| XDMAC_CC_PERID(DmacChanTmcTx);
 		p_cfg.mbr_ubc = 3;
 		HSMCI->HSMCI_MR |= HSMCI_MR_FBYTE;
 		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(&spiDataOut);
 		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&(USART_TMC2660->US_THR));
-		xdmac_configure_transfer(XDMAC, XDMAC_CHAN_TMC_TX, &p_cfg);
+		xdmac_configure_transfer(XDMAC, DmacChanTmcTx, &p_cfg);
 	}
 
 	// SPI sends data MSB first, but the firmware uses little-endian mode, so we need to reverse the byte order
 	spiDataOut = cpu_to_be32(outVal << 8);
 
-	xdmac_channel_enable(XDMAC, XDMAC_CHAN_TMC_RX);
-	xdmac_channel_enable(XDMAC, XDMAC_CHAN_TMC_TX);
+	xdmac_channel_enable(XDMAC, DmacChanTmcRx);
+	xdmac_channel_enable(XDMAC, DmacChanTmcTx);
 #else
 	// Faster code, not using the ASF
 	spiPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);		// disable the PDC
@@ -607,7 +608,7 @@ void TmcDriverState::SetStallDetectFilter(bool sgFilter)
 
 void TmcDriverState::SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond)
 {
-	maxStallStepInterval = StepClockRate/max<unsigned int>(stepsPerSecond, 1);
+	maxStallStepInterval = StepTimer::StepClockRate/max<unsigned int>(stepsPerSecond, 1);
 }
 
 void TmcDriverState::AppendStallConfig(const StringRef& reply) const
@@ -619,7 +620,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const
 		threshold -= 128;
 	}
 	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 ", coolstep %" PRIx32,
-				threshold, ((filtered) ? "on" : "off"), StepClockRate/maxStallStepInterval, registers[SmartEnable] & 0xFFFF);
+				threshold, ((filtered) ? "on" : "off"), StepTimer::StepClockRate/maxStallStepInterval, registers[SmartEnable] & 0xFFFF);
 }
 
 // Append the driver status to a string, and reset the min/max load values
@@ -696,7 +697,7 @@ inline void TmcDriverState::TransferDone()
 				maxSgLoadRegister = sgLoad;
 			}
 		}
-		if ((status & TMC_RR_STST) != 0 || interval == 0 || interval > StepClockRate/MinimumOpenLoadFullStepsPerSec)
+		if ((status & TMC_RR_STST) != 0 || interval == 0 || interval > StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec)
 		{
 			status &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds
 		}
@@ -748,7 +749,7 @@ inline void TmcDriverState::StartTransfer()
 
 	// Enable the interrupt
 #if SAME70
-	xdmac_channel_enable_interrupt(XDMAC, XDMAC_CHAN_TMC_RX, XDMAC_CIE_BIE);
+	xdmac_channel_enable_interrupt(XDMAC, DmacChanTmcRx, XDMAC_CIE_BIE);
 #elif TMC2660_USES_USART
 	USART_TMC2660->US_IER = US_IER_ENDRX;				// enable end-of-transfer interrupt
 #else
@@ -795,7 +796,7 @@ void TMC2660_SPI_Handler(void)
 	// Driver power is down or there is no current driver, so stop polling
 
 #if SAME70
-	xdmac_channel_disable_interrupt(XDMAC, XDMAC_CHAN_TMC_RX, XDMAC_CIE_BIE);
+	xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcRx, XDMAC_CIE_BIE);
 #elif TMC2660_USES_USART
 	USART_TMC2660->US_IDR = US_IDR_ENDRX;
 #else
@@ -868,9 +869,9 @@ namespace SmartDrivers
 
 #if SAME70
 		pmc_enable_periph_clk(ID_XDMAC);
-		xdmac_channel_disable_interrupt(XDMAC, XDMAC_CHAN_TMC_TX, 0xFFFFFFFF);
-		xdmac_channel_disable_interrupt(XDMAC, XDMAC_CHAN_TMC_RX, 0xFFFFFFFF);
-		xdmac_enable_interrupt(XDMAC, XDMAC_CHAN_TMC_RX);
+		xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcTx, 0xFFFFFFFF);
+		xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcRx, 0xFFFFFFFF);
+		xdmac_enable_interrupt(XDMAC, DmacChanTmcRx);
 #endif
 	}
 

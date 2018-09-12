@@ -12,6 +12,7 @@
 #include "TMC22xx.h"
 #include "RepRap.h"
 #include "Movement/Move.h"
+#include "Movement/StepTimer.h"
 #include "sam/drivers/pdc/pdc.h"
 #include "sam/drivers/uart/uart.h"
 
@@ -758,7 +759,7 @@ inline void TmcDriverState::TransferDone()
 				uint32_t interval;
 				if ((regVal & TMC_RR_STST) != 0
 					|| (interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor)) == 0		// get the full step interval
-					|| interval > StepClockRate/MinimumOpenLoadFullStepsPerSec
+					|| interval > StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec
 				   )
 				{
 					regVal &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds

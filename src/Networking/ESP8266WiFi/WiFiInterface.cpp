@@ -1235,10 +1235,6 @@ const uint32_t DMA_HW_ID_SPI_RX = 2;
 
 #if USE_XDMAC
 
-// Our choice of XDMA channels to use
-const uint32_t CONF_SPI_DMAC_TX_CH = 1;
-const uint32_t CONF_SPI_DMAC_RX_CH = 2;
-
 // XDMAC hardware
 const uint32_t SPI0_XDMAC_TX_CH_NUM = 1;
 const uint32_t SPI0_XDMAC_RX_CH_NUM = 2;
@@ -1258,7 +1254,7 @@ static inline void spi_rx_dma_enable()
 #endif
 
 #if USE_XDMAC
-	xdmac_channel_enable(XDMAC, CONF_SPI_DMAC_RX_CH);
+	xdmac_channel_enable(XDMAC, DmacChanWiFiRx);
 #endif
 }
 
@@ -1273,7 +1269,7 @@ static inline void spi_tx_dma_enable()
 #endif
 
 #if USE_XDMAC
-	xdmac_channel_enable(XDMAC, CONF_SPI_DMAC_TX_CH);
+	xdmac_channel_enable(XDMAC, DmacChanWiFiTx);
 #endif
 }
 
@@ -1288,7 +1284,7 @@ static inline void spi_rx_dma_disable()
 #endif
 
 #if USE_XDMAC
-	xdmac_channel_disable(XDMAC, CONF_SPI_DMAC_RX_CH);
+	xdmac_channel_disable(XDMAC, DmacChanWiFiRx);
 #endif
 }
 
@@ -1303,7 +1299,7 @@ static inline void spi_tx_dma_disable()
 #endif
 
 #if USE_XDMAC
-	xdmac_channel_disable(XDMAC, CONF_SPI_DMAC_TX_CH);
+	xdmac_channel_disable(XDMAC, DmacChanWiFiTx);
 #endif
 }
 
@@ -1334,15 +1330,15 @@ static bool spi_dma_check_rx_complete()
 
 #if USE_XDMAC
 	const uint32_t status = xdmac_channel_get_status(XDMAC);
-	const uint32_t channelStatus = XDMAC->XDMAC_CHID[CONF_SPI_DMAC_RX_CH].XDMAC_CC;
-	if (	((status & (1 << CONF_SPI_DMAC_RX_CH)) == 0)					// channel is not enabled
+	const uint32_t channelStatus = XDMAC->XDMAC_CHID[DmacChanWiFiRx].XDMAC_CC;
+	if (	((status & (1 << DmacChanWiFiRx)) == 0)					// channel is not enabled
 		|| (((channelStatus & XDMAC_CC_RDIP) == XDMAC_CC_RDIP_DONE) && ((channelStatus & XDMAC_CC_WRIP) == XDMAC_CC_WRIP_DONE))	// controller is neither reading nor writing via this channel
 	)
 	{
 		// Disable the channel.
 		// We also need to set the resume bit, otherwise it remains suspended when we re-enable it.
-		xdmac_channel_disable(XDMAC, CONF_SPI_DMAC_RX_CH);
-		xdmac_channel_readwrite_resume(XDMAC, CONF_SPI_DMAC_RX_CH);
+		xdmac_channel_disable(XDMAC, DmacChanWiFiRx);
+		xdmac_channel_readwrite_resume(XDMAC, DmacChanWiFiRx);
 		return true;
 	}
 #endif
@@ -1394,12 +1390,12 @@ static void spi_tx_dma_setup(const void *buf, uint32_t transferLength)
 	xdmac_tx_cfg.mbr_ds = 0;
 	xdmac_tx_cfg.mbr_sus = 0;
 	xdmac_tx_cfg.mbr_dus = 0;
-	xdmac_configure_transfer(XDMAC, CONF_SPI_DMAC_TX_CH, &xdmac_tx_cfg);
+	xdmac_configure_transfer(XDMAC, DmacChanWiFiTx, &xdmac_tx_cfg);
 
-	xdmac_channel_set_descriptor_control(XDMAC, CONF_SPI_DMAC_TX_CH, 0);
-	xdmac_channel_disable_interrupt(XDMAC, CONF_SPI_DMAC_TX_CH, xdmaint);
-	xdmac_channel_enable(XDMAC, CONF_SPI_DMAC_TX_CH);
-	xdmac_disable_interrupt(XDMAC, CONF_SPI_DMAC_TX_CH);
+	xdmac_channel_set_descriptor_control(XDMAC, DmacChanWiFiTx, 0);
+	xdmac_channel_disable_interrupt(XDMAC, DmacChanWiFiTx, xdmaint);
+	xdmac_channel_enable(XDMAC, DmacChanWiFiTx);
+	xdmac_disable_interrupt(XDMAC, DmacChanWiFiTx);
 #endif
 }
 
@@ -1448,12 +1444,12 @@ static void spi_rx_dma_setup(const void *buf, uint32_t transferLength)
 	xdmac_tx_cfg.mbr_ds = 0;
 	xdmac_rx_cfg.mbr_sus = 0;
 	xdmac_rx_cfg.mbr_dus = 0;
-	xdmac_configure_transfer(XDMAC, CONF_SPI_DMAC_RX_CH, &xdmac_rx_cfg);
+	xdmac_configure_transfer(XDMAC, DmacChanWiFiRx, &xdmac_rx_cfg);
 
-	xdmac_channel_set_descriptor_control(XDMAC, CONF_SPI_DMAC_RX_CH, 0);
-	xdmac_channel_disable_interrupt(XDMAC, CONF_SPI_DMAC_RX_CH, xdmaint);
-	xdmac_channel_enable(XDMAC, CONF_SPI_DMAC_RX_CH);
-	xdmac_disable_interrupt(XDMAC, CONF_SPI_DMAC_RX_CH);
+	xdmac_channel_set_descriptor_control(XDMAC, DmacChanWiFiRx, 0);
+	xdmac_channel_disable_interrupt(XDMAC, DmacChanWiFiRx, xdmaint);
+	xdmac_channel_enable(XDMAC, DmacChanWiFiRx);
+	xdmac_disable_interrupt(XDMAC, DmacChanWiFiRx);
 #endif
 }
 
@@ -1744,7 +1740,7 @@ void WiFiInterface::SpiInterrupt()
 
 #if USE_XDMAC
 		spi_tx_dma_disable();
-		xdmac_channel_readwrite_suspend(XDMAC, CONF_SPI_DMAC_RX_CH);	// suspend the receive channel
+		xdmac_channel_readwrite_suspend(XDMAC, DmacChanWiFiRx);			// suspend the receive channel
 #endif
 
 		spi_disable(ESP_SPI);

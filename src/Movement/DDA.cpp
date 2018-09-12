@@ -9,6 +9,7 @@
 #include "RepRap.h"
 #include "Platform.h"
 #include "Move.h"
+#include "StepTimer.h"
 #include "Kinematics/LinearDeltaKinematics.h"		// for DELTA_AXES
 
 #ifdef DUET_NG
@@ -134,7 +135,7 @@ int32_t DDA::GetTimeLeft() const
 pre(state == executing || state == frozen || state == completed)
 {
 	return (state == completed) ? 0
-			: (state == executing) ? (int32_t)(moveStartTime + clocksNeeded - Platform::GetInterruptClocks())
+			: (state == executing) ? (int32_t)(moveStartTime + clocksNeeded - StepTimer::GetInterruptClocks())
 			: (int32_t)clocksNeeded;
 }
 
@@ -949,7 +950,7 @@ void DDA::RecalculateMove()
 
 	// We need to set the number of clocks needed here because we use it before the move has been frozen
 	const float totalTime = (topSpeed - startSpeed)/acceleration + (topSpeed - endSpeed)/deceleration + (totalDistance - accelDistance - decelDistance)/topSpeed;
-	clocksNeeded = (uint32_t)(totalTime * StepClockRate);
+	clocksNeeded = (uint32_t)(totalTime * StepTimer::StepClockRate);
 }
 
 // Decide what speed we would really like this move to end at.
@@ -1161,7 +1162,7 @@ inline void DDA::AdjustAcceleration()
 		const float totalTime =   (topSpeed - startSpeed)/acceleration
 								+ (topSpeed - endSpeed)/deceleration
 								+ (totalDistance - accelDistance - decelDistance)/topSpeed;
-		clocksNeeded = (uint32_t)(totalTime * StepClockRate);
+		clocksNeeded = (uint32_t)(totalTime * StepTimer::StepClockRate);
 		if (reprap.Debug(moduleMove))
 		{
 			debugPrintf("New a=%.1f d=%.1f\n", (double)acceleration, (double)deceleration);
@@ -1213,10 +1214,10 @@ void DDA::Prepare(uint8_t simMode)
 		const float accelStopTime = (topSpeed - startSpeed)/acceleration;
 		const float decelStartTime = accelStopTime + (params.decelStartDistance - accelDistance)/topSpeed;
 
-		startSpeedTimesCdivA = (uint32_t)roundU32((startSpeed * StepClockRate)/acceleration);
-		params.topSpeedTimesCdivD = (uint32_t)roundU32((topSpeed * StepClockRate)/deceleration);
-		topSpeedTimesCdivDPlusDecelStartClocks = params.topSpeedTimesCdivD + (uint32_t)roundU32(decelStartTime * StepClockRate);
-		extraAccelerationClocks = roundS32((accelStopTime - (accelDistance/topSpeed)) * StepClockRate);
+		startSpeedTimesCdivA = (uint32_t)roundU32((startSpeed * StepTimer::StepClockRate)/acceleration);
+		params.topSpeedTimesCdivD = (uint32_t)roundU32((topSpeed * StepTimer::StepClockRate)/deceleration);
+		topSpeedTimesCdivDPlusDecelStartClocks = params.topSpeedTimesCdivD + (uint32_t)roundU32(decelStartTime * StepTimer::StepClockRate);
+		extraAccelerationClocks = roundS32((accelStopTime - (accelDistance/topSpeed)) * StepTimer::StepClockRate);
 		params.compFactor = (topSpeed - startSpeed)/topSpeed;
 
 		firstDM = nullptr;
@@ -1633,7 +1634,7 @@ pre(state == frozen)
 
 		if (firstDM != nullptr)
 		{
-			return platform.ScheduleStepInterrupt(firstDM->nextStepTime + moveStartTime);
+			return StepTimer::ScheduleStepInterrupt(firstDM->nextStepTime + moveStartTime);
 		}
 	}
 
@@ -1670,7 +1671,7 @@ bool DDA::Step()
 		}
 
 		// 2. Determine which drivers are due for stepping, overdue, or will be due very shortly
-		const uint32_t iClocks = Platform::GetInterruptClocks();
+		const uint32_t iClocks = StepTimer::GetInterruptClocks();
 		if (!repeat)
 		{
 			isrStartTime = iClocks;		// first time through, so make a note of the ISR start time
@@ -1699,16 +1700,16 @@ bool DDA::Step()
 			uint32_t now;
 			do
 			{
-				now = Platform::GetInterruptClocks();
+				now = StepTimer::GetInterruptClocks();
 			}
 			while (now - lastStepPulseTime < platform.GetSlowDriverStepLowClocks() || now - lastDirChangeTime < platform.GetSlowDriverDirSetupClocks());
 			Platform::StepDriversHigh(driversStepping);					// generate the steps
-			lastStepPulseTime = Platform::GetInterruptClocks();
+			lastStepPulseTime = StepTimer::GetInterruptClocks();
 
 			// 3a. Reset all step pins low. Do this now because some external drivers don't like the direction pins being changed before the end of the step pulse.
-			while (Platform::GetInterruptClocks() - lastStepPulseTime < platform.GetSlowDriverStepHighClocks()) {}
+			while (StepTimer::GetInterruptClocks() - lastStepPulseTime < platform.GetSlowDriverStepHighClocks()) {}
 			Platform::StepDriversLow();									// set all step pins low
-			lastStepLowTime = lastStepPulseTime = Platform::GetInterruptClocks();
+			lastStepLowTime = lastStepPulseTime = StepTimer::GetInterruptClocks();
 		}
 
 		// 4. Remove those drives from the list, calculate the next step times, update the direction pins where necessary,
@@ -1741,7 +1742,7 @@ bool DDA::Step()
 
 		// 7. Check whether we have been in this ISR for too long already and need to take a break
 		uint32_t nextStepDue = firstDM->nextStepTime + moveStartTime;
-		const uint32_t clocksTaken = (Platform::GetInterruptClocks16() - isrStartTime) & 0x0000FFFF;
+		const uint32_t clocksTaken = (StepTimer::GetInterruptClocks16() - isrStartTime) & 0x0000FFFF;
 		if (clocksTaken >= DDA::MaxStepInterruptTime && (nextStepDue - isrStartTime) < (clocksTaken + DDA::MinInterruptInterval))
 		{
 			// Force a break by updating the move start time
@@ -1754,7 +1755,7 @@ bool DDA::Step()
 
 		// 8. Schedule next interrupt, or if it would be too soon, generate more steps immediately
 		// If we have already spent too much time in the ISR, delay the interrupt
-		repeat = platform.ScheduleStepInterrupt(nextStepDue);
+		repeat = StepTimer::ScheduleStepInterrupt(nextStepDue);
 	} while (repeat);
 
 	if (state == completed)
@@ -1851,7 +1852,7 @@ void DDA::ReduceHomingSpeed()
 		topSpeed *= (1.0/ProbingSpeedReductionFactor);
 
 		// Adjust extraAccelerationClocks so that step timing will be correct in the steady speed phase at the new speed
-		const uint32_t clocksSoFar = Platform::GetInterruptClocks() - moveStartTime;
+		const uint32_t clocksSoFar = StepTimer::GetInterruptClocks() - moveStartTime;
 		extraAccelerationClocks = (extraAccelerationClocks * (int32_t)ProbingSpeedReductionFactor) - ((int32_t)clocksSoFar * (int32_t)(ProbingSpeedReductionFactor - 1));
 
 		// We also need to adjust the total clocks needed, to prevent step errors being recorded

@@ -1,6 +1,8 @@
 #include "RepRap.h"
 
 #include "Movement/Move.h"
+#include "Movement/StepTimer.h"
+#include "FilamentMonitors/FilamentMonitor.h"
 #include "GCodes/GCodes.h"
 #include "Heating/Heat.h"
 #include "Network.h"
@@ -28,7 +30,7 @@
 # include "sam/drivers/hsmci/hsmci.h"
 # include "conf_sd_mmc.h"
 # if SAME70
-static_assert(CONF_HSMCI_XDMAC_CHANNEL == XDMAC_CHAN_HSMCI, "mismatched DMA channel assignment");
+static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel assignment");
 # endif
 #endif
 
@@ -36,10 +38,48 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == XDMAC_CHAN_HSMCI, "mismatched DMA chan
 # include "FreeRTOS.h"
 # include "task.h"
 
+# if SAME70
+#  include "DmacManager.h"
+# endif
+
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
 static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI, "configMAX_SYSCALL_INTERRUPT_PRIORITY is set too high");
 
 static TaskHandle_t hsmciTask = nullptr;		// the task that is waiting for a HSMCI command to complete
+
+// HSMCI interrupt handler
+extern "C" void HSMCI_Handler()
+{
+	HSMCI->HSMCI_IDR = 0xFFFFFFFF;										// disable all HSMCI interrupts
+#if SAME70
+	XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CID = 0xFFFFFFFF;			// disable all DMA interrupts for this channel
+#endif
+	if (hsmciTask != nullptr)
+	{
+		BaseType_t higherPriorityTaskWoken = pdFALSE;
+		vTaskNotifyGiveFromISR(hsmciTask, &higherPriorityTaskWoken);	// wake up the task
+		hsmciTask = nullptr;
+		portYIELD_FROM_ISR(higherPriorityTaskWoken);
+	}
+}
+
+#if SAME70
+
+// HSMCI DMA complete callback
+void HsmciDmaCallback(CallbackParameter cp)
+{
+	HSMCI->HSMCI_IDR = 0xFFFFFFFF;										// disable all HSMCI interrupts
+	XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CID = 0xFFFFFFFF;			// disable all DMA interrupts for this channel
+	if (hsmciTask != nullptr)
+	{
+		BaseType_t higherPriorityTaskWoken = pdFALSE;
+		vTaskNotifyGiveFromISR(hsmciTask, &higherPriorityTaskWoken);	// wake up the task
+		hsmciTask = nullptr;
+		portYIELD_FROM_ISR(higherPriorityTaskWoken);
+	}
+}
+
+#endif
 
 // Callback function from the hsmci driver, called while it is waiting for an SD card operation to complete
 // 'stBits' is the set of bits in the HSMCI status register that the caller is interested in.
@@ -48,7 +88,7 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 {
 	if (   (HSMCI->HSMCI_SR & stBits) == 0
 #if SAME70
-		&& (XDMAC->XDMAC_CHID[CONF_HSMCI_XDMAC_CHANNEL].XDMAC_CIS & dmaBits) == 0
+		&& (XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CIS & dmaBits) == 0
 #endif
 	   )
 	{
@@ -56,7 +96,8 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 		hsmciTask = xTaskGetCurrentTaskHandle();
 		HSMCI->HSMCI_IER = stBits;
 #if SAME70
-		XDMAC->XDMAC_CHID[CONF_HSMCI_XDMAC_CHANNEL].XDMAC_CIE = dmaBits;
+		DmacManager::SetInterruptCallback(DmacChanHsmci, HsmciDmaCallback, CallbackParameter());
+		XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CIE = dmaBits;
 #endif
 		if (ulTaskNotifyTake(pdTRUE, 200) == 0)
 		{
@@ -65,23 +106,6 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 		}
 	}
 }
-
-extern "C" void HSMCI_Handler()
-{
-	HSMCI->HSMCI_IDR = 0xFFFFFFFF;					// disable all HSMCI interrupts
-#if SAME70
-	XDMAC->XDMAC_CHID[CONF_HSMCI_XDMAC_CHANNEL].XDMAC_CID = 0xFFFFFFFF;
-#endif
-	if (hsmciTask != nullptr)
-	{
-		vTaskNotifyGiveFromISR(hsmciTask, nullptr);	// wake up the task
-		hsmciTask = nullptr;
-	}
-}
-
-#if SAME70
-extern "C" void XDMAC_handler() __attribute__ ((alias("HSMCI_Handler")));
-#endif
 
 #else
 
@@ -316,7 +340,7 @@ void RepRap::Spin()
 		return;
 	}
 
-	const uint32_t lastTime = Platform::GetInterruptClocks();
+	const uint32_t lastTime = StepTimer::GetInterruptClocks();
 
 	ticksInSpinState = 0;
 	spinningModule = modulePlatform;
@@ -416,7 +440,7 @@ void RepRap::Spin()
 	}
 	else
 	{
-		const uint32_t dt = Platform::GetInterruptClocks() - lastTime;
+		const uint32_t dt = StepTimer::GetInterruptClocks() - lastTime;
 		if (dt < fastLoop)
 		{
 			fastLoop = dt;

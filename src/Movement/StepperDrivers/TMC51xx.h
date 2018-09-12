@@ -8,12 +8,11 @@
 #ifndef SRC_MOVEMENT_STEPPERDRIVERS_TMC51XX_H_
 #define SRC_MOVEMENT_STEPPERDRIVERS_TMC51XX_H_
 
+#include "RepRapFirmware.h"
+
 #if SUPPORT_TMC51xx
 
-#include "RepRapFirmware.h"
 #include "DriverMode.h"
-#include "Pins.h"
-#include "MessageType.h"
 
 // TMC51xx DRV_STATUS register bit assignments
 const uint32_t TMC_RR_SG = 1 << 24;					// stall detected
