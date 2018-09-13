@@ -1761,7 +1761,7 @@ void WiFiInterface::SpiInterrupt()
 void WiFiInterface::StartWiFi()
 {
 	digitalWrite(EspResetPin, HIGH);
-	ConfigurePin(g_APinDescription[APINS_UART1]);				// connect the pins to UART1
+	ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to UART1
 	Serial1.begin(WiFiBaudRate);								// initialise the UART, to receive debug info
 	debugMessageBuffer.Clear();
 	serialRunning = true;
@@ -1772,8 +1772,8 @@ void WiFiInterface::StartWiFi()
 void WiFiInterface::ResetWiFi()
 {
 	pinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
-	pinMode(APIN_UART1_TXD, INPUT_PULLUP);						// just enable pullups on TxD and RxD pins for now to avoid floating pins
-	pinMode(APIN_UART1_RXD, INPUT_PULLUP);
+	pinMode(APIN_Serial1_TXD, INPUT_PULLUP);						// just enable pullups on TxD and RxD pins for now to avoid floating pins
+	pinMode(APIN_Serial1_RXD, INPUT_PULLUP);
 	currentMode = WiFiState::disabled;
 
 	if (serialRunning)
@@ -1822,12 +1822,12 @@ void WiFiInterface::ResetWiFiForUpload(bool external)
 
 	if (external)
 	{
-		pinMode(APIN_UART1_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
-		pinMode(APIN_UART1_RXD, INPUT_PULLUP);
+		pinMode(APIN_Serial1_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
+		pinMode(APIN_Serial1_RXD, INPUT_PULLUP);
 	}
 	else
 	{
-		ConfigurePin(g_APinDescription[APINS_UART1]);			// connect the pins to UART1
+		ConfigurePin(g_APinDescription[APINS_Serial1]);			// connect the pins to UART1
 	}
 
 	// Release the reset on the ESP8266

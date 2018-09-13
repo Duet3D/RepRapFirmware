@@ -16,6 +16,7 @@
 
 # if SAME70
 #  include "sam/drivers/xdmac/xdmac.h"
+#  include "DmacManager.h"
 # else
 #  include "sam/drivers/pdc/pdc.h"
 # endif
@@ -314,7 +315,7 @@ static TmcDriverState * volatile currentDriver = nullptr;	// volatile because th
 						| XDMAC_CC_DIF_AHB_IF0
 						| XDMAC_CC_SAM_FIXED_AM
 						| XDMAC_CC_DAM_INCREMENTED_AM
-						| XDMAC_CC_PERID(DmacChanTmcRx);
+						| XDMAC_CC_PERID(TMC2660_DmaRxPerid);
 		p_cfg.mbr_ubc = 3;
 		HSMCI->HSMCI_MR |= HSMCI_MR_FBYTE;
 		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(USART_TMC2660->US_RHR));
@@ -335,7 +336,7 @@ static TmcDriverState * volatile currentDriver = nullptr;	// volatile because th
 						| XDMAC_CC_DIF_AHB_IF1
 						| XDMAC_CC_SAM_INCREMENTED_AM
 						| XDMAC_CC_DAM_FIXED_AM
-						| XDMAC_CC_PERID(DmacChanTmcTx);
+						| XDMAC_CC_PERID(TMC2660_DmaTxPerid);
 		p_cfg.mbr_ubc = 3;
 		HSMCI->HSMCI_MR |= HSMCI_MR_FBYTE;
 		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(&spiDataOut);

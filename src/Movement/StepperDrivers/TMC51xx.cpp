@@ -20,6 +20,8 @@
 # include "HAL/DmacManager.h"
 # include "peripheral_clk_config.h"
 # include "HAL/SAME5x.h"
+#elif SAME70
+# include "DmacManager.h"
 #endif
 
 //#define TMC_TYPE	5130
@@ -930,9 +932,8 @@ static void SetupDMA()
 						| XDMAC_CC_DIF_AHB_IF0
 						| XDMAC_CC_SAM_FIXED_AM
 						| XDMAC_CC_DAM_INCREMENTED_AM
-						| XDMAC_CC_PERID(qq /*XDMAC_CHAN_TMC_RX*/);
+						| XDMAC_CC_PERID(TMC51xx_DmaRxPerid);
 		p_cfg.mbr_ubc = ARRAY_SIZE(rcvData);
-		HSMCI->HSMCI_MR |= HSMCI_MR_FBYTE;
 		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(USART_TMC51xx->US_RHR));
 		p_cfg.mbr_da = reinterpret_cast<uint32_t>(rcvData);
 		xdmac_configure_transfer(XDMAC, DmacChanTmcRx, &p_cfg);
@@ -951,9 +952,8 @@ static void SetupDMA()
 						| XDMAC_CC_DIF_AHB_IF1
 						| XDMAC_CC_SAM_FIXED_AM
 						| XDMAC_CC_DAM_INCREMENTED_AM
-						| XDMAC_CC_PERID(qq /*XDMAC_CHAN_TMC_TX*/);
+						| XDMAC_CC_PERID(TMC51xx_DmaTxPerid);
 		p_cfg.mbr_ubc = ARRAY_SIZE(sendData);
-		HSMCI->HSMCI_MR |= HSMCI_MR_FBYTE;
 		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(sendData);
 		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&(USART_TMC51xx->US_THR));
 		xdmac_configure_transfer(XDMAC, DmacChanTmcTx, &p_cfg);
@@ -1050,7 +1050,7 @@ static inline void EnableEndOfTransferInterrupt()
 }
 
 // DMA complete callback
-void RxDmaCompleteIsr(CallbackParameter param)
+void RxDmaCompleteCallback(CallbackParameter param)
 {
 	fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
 	tmcTask.GiveFromISR();
@@ -1221,7 +1221,7 @@ namespace SmartDrivers
 		DmacSetDestinationAddress(TmcTxDmaChannel, &(SERCOM_TMC51xx->SPI.DATA.reg));
 		DmacSetDataLength(TmcTxDmaChannel, ARRAY_SIZE(sendData));
 
-		DmacSetInterruptCallbacks(TmcRxDmaChannel, RxDmaCompleteIsr, nullptr, 0U);
+		DmacSetInterruptCallbacks(TmcRxDmaChannel, RxDmaCompleteCallback, nullptr, 0U);
 
 		SERCOM_TMC51xx->SPI.CTRLA.bit.ENABLE = 1;		// keep the SPI enabled all the time so that the SPCLK line is driven
 
@@ -1262,13 +1262,12 @@ namespace SmartDrivers
 		driversState = DriversState::noPower;
 		for (size_t driver = 0; driver < numTmc51xxDrivers; ++driver)
 		{
-			driverStates[driver].Init(driver);		// axes are mapped straight through to drivers initially
+			driverStates[driver].Init(driver);						// axes are mapped straight through to drivers initially
 		}
 
 #if SAME70
 		pmc_enable_periph_clk(ID_XDMAC);
-		// Set up DMA complete callback
-		qq;
+		DmacManager::SetInterruptCallback(DmacChanTmcRx, RxDmaCompleteCallback, CallbackParameter());				// set up DMA receive complete callback
 #endif
 
 		tmcTask.Create(TmcLoop, "TMC", nullptr, TaskBase::TmcPriority);

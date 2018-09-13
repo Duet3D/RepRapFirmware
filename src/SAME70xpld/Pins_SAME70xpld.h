@@ -4,18 +4,15 @@
 #define FIRMWARE_NAME		"RepRapFirmware for SAME70-XPLD"
 #define DEFAULT_BOARD_TYPE BoardType::SAME70XPLD_0
 const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
-#define IAP_FIRMWARE_FILE	"Duet3Firmware.bin"
+#define IAP_FIRMWARE_FILE	"SAME70XPLDFirmware.bin"
 #define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
-#define IAP_UPDATE_FILE		"iape70.bin"		// need special build for SAME70
+#define IAP_UPDATE_FILE		"iapsame70xpld.bin"
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		1
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
-
-#define SUPPORT_TMC2660			1
-#define TMC2660_USES_USART		1
 
 #define HAS_VOLTAGE_MONITOR		0
 #define HAS_VREF_MONITOR		0
@@ -62,19 +59,8 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 // DRIVES
 
 constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin };
-constexpr Pin STEP_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin };
+constexpr Pin STEP_PINS[DRIVES] = { PORTC_PIN(19), PORTC_PIN(19), PORTC_PIN(19), PORTC_PIN(19), PORTC_PIN(19) };	// Do not use NoPin in this list! Code assumes all on port C
 constexpr Pin DIRECTION_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin };
-
-// Pin assignments etc. using USART1 in SPI mode
-constexpr Pin GlobalTmc2660EnablePin = NoPin;		// The pin that drives ENN of all TMC drivers
-Usart * const USART_TMC2660 = USART1;
-constexpr uint32_t  ID_TMC2660_SPI = ID_USART1;
-constexpr IRQn TMC2660_SPI_IRQn = USART1_IRQn;
-# define TMC2660_SPI_Handler	USART1_Handler
-
-constexpr Pin TMC2660MosiPin = NoPin;
-constexpr Pin TMC2660MisoPin = NoPin;
-constexpr Pin TMC2660SclkPin = NoPin;
 
 // Endstops
 // RepRapFirmware only has a single endstop per axis.

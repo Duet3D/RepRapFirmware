@@ -402,7 +402,9 @@ void Platform::Init()
 		// Set up the control pins and endstops
 		pinMode(STEP_PINS[drive], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
+#if !defined(DUET3)
 		pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
+#endif
 
 #ifndef __LPC17xx__
 		const PinDescription& pinDesc = g_APinDescription[STEP_PINS[drive]];
@@ -2862,17 +2864,19 @@ void Platform::EnableDriver(size_t driver)
 		driverState[driver] = DriverStatus::enabled;
 		UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
 
-#if HAS_SMART_DRIVERS
+#if defined(DUET3) && HAS_SMART_DRIVERS
+		SmartDrivers::EnableDrive(driver, true);		// all drivers driven directly by the main board are smart
+#elif HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
 		{
 			SmartDrivers::EnableDrive(driver, true);
 		}
 		else
 		{
-#endif
 			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
-#if HAS_SMART_DRIVERS
 		}
+#else
+		digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
 #endif
 	}
 }
@@ -2882,17 +2886,19 @@ void Platform::DisableDriver(size_t driver)
 {
 	if (driver < DRIVES)
 	{
-#if HAS_SMART_DRIVERS
+#if defined(DUET3) && HAS_SMART_DRIVERS
+		SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
+#elif HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
 		{
 			SmartDrivers::EnableDrive(driver, false);
 		}
 		else
 		{
-#endif
 			digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
-#if HAS_SMART_DRIVERS
 		}
+#else
+		digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
 #endif
 		driverState[driver] = DriverStatus::disabled;
 	}

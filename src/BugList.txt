@@ -1,3 +1,10 @@
+Duet 3 work list
+- Configure ESP SPI pins and channel from Pins.h
+- Enable dotstar support
+- SWdebug stuff
+- fan/heater output flexible configuration
+- endstop/Z probe flexible configuration
+
 RRF 1.20 work list
 
 WiFi:
