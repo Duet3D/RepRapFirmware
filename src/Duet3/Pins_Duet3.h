@@ -166,7 +166,7 @@ constexpr float THERMISTOR_SERIES_RS = 2200.0;
 constexpr size_t MaxSpiTempSensors = 4;
 
 // Digital pins the 31855s have their select lines tied to
-constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { PORTD_PIN(15), PORTD_PIN(27), PORTC_PIN(22), PORTD_PIN(24) };
+constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { PORTD_PIN(16), PORTD_PIN(15), PORTD_PIN(27), PORTC_PIN(22) };
 
 // Pin that controls the ATX power on/off
 constexpr Pin ATX_POWER_PIN = PORTA_PIN(10);
@@ -186,7 +186,7 @@ constexpr Pin DiagPin = PORTC_PIN(20);
 constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = { PORTA_PIN(6), NoPin };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[1] = { PORTD_PIN(16) };
+constexpr Pin SdSpiCSPins[1] = { PORTD_PIN(24) };
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 
 // Ethernet
