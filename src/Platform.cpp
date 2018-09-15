@@ -415,20 +415,22 @@ void Platform::Init()
 		driverState[drive] = DriverStatus::disabled;
 	}
 
-#if defined(DUET_NG) || defined(DUET_06_085) || defined(__RADDS__) || defined(__ALLIGATOR__)
-	// Enable pullup resistors on endstop inputs here if necessary.
-	// The Duets have hardware pullup resistors/LEDs except for the two on the CONN_LCD connector.
-	// They have RC filtering on the main endstop inputs, so best not to enable the pullup resistors on these.
-	// 2017-12-19: some users are having trouble with the endstops not being recognised in recent firmware versions.
-	// Probably the LED+resistor isn't pulling them up fast enough. So enable the pullup resistors again.
-	// Note: if we don't have a DueX board connected, the pullups on endstop inputs 5-9 must always be enabled.
-	// Also the pullups on endstop inputs 10-11 must always be enabled.
-	// I don't know whether RADDS and Alligator have hardware pullup resistors or not. I'll assume they might not.
 	for (size_t endstop = 0; endstop <  NumEndstops; ++endstop)
 	{
-		setPullup(endStopPins[endstop], true);					// enable pullup on endstop input
-	}
+#if defined(DUET_NG) || defined(DUET_06_085) || defined(__RADDS__) || defined(__ALLIGATOR__)
+		// Enable pullup resistors on endstop inputs here if necessary.
+		// The Duets have hardware pullup resistors/LEDs except for the two on the CONN_LCD connector.
+		// They have RC filtering on the main endstop inputs, so best not to enable the pullup resistors on these.
+		// 2017-12-19: some users are having trouble with the endstops not being recognised in recent firmware versions.
+		// Probably the LED+resistor isn't pulling them up fast enough. So enable the pullup resistors again.
+		// Note: if we don't have a DueX board connected, the pullups on endstop inputs 5-9 must always be enabled.
+		// Also the pullups on endstop inputs 10-11 must always be enabled.
+		// I don't know whether RADDS and Alligator have hardware pullup resistors or not. I'll assume they might not.
+		pinMode(endStopPins[endstop], INPUT_PULLUP);			// enable pullup on endstop input
+#else
+		pinMode(endStopPins[endstop], INPUT);					// don't enable pullup on endstop input
 #endif
+	}
 
 	for (uint32_t& entry : slowDriverStepTimingClocks)
 	{
@@ -1996,6 +1998,7 @@ void Platform::InitialiseInterrupts()
 	// Set up the Ethernet interface priority here to because we have access to the priority definitions
 # if SAME70
 	NVIC_SetPriority(GMAC_IRQn, NvicPriorityEthernet);
+	NVIC_SetPriority(XDMAC_IRQn, NvicPriorityDMA);
 # else
 	NVIC_SetPriority(EMAC_IRQn, NvicPriorityEthernet);
 # endif

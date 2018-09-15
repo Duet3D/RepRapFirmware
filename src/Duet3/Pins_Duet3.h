@@ -122,6 +122,8 @@ constexpr size_t NumInputOutputs = 9;				// number of connectors we have for end
 #else
 
 // The following are temporary until we implement flexible pin usage
+// Assign 4 outputs to heaters and 6 to fans
+// Assign 8 I/O connectors as endstop inputs and the last one as the Z probe
 constexpr size_t NumHeaters = 4;
 constexpr size_t NumFans = 6;
 constexpr size_t NumEndstops = 8;

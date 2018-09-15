@@ -98,6 +98,7 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 #if SAME70
 		DmacManager::SetInterruptCallback(DmacChanHsmci, HsmciDmaCallback, CallbackParameter());
 		XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CIE = dmaBits;
+		XDMAC->XDMAC_GIE = 1u << DmacChanHsmci;
 #endif
 		if (ulTaskNotifyTake(pdTRUE, 200) == 0)
 		{

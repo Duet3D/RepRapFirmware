@@ -16,7 +16,7 @@ namespace DmacManager
 
 	void Init()
 	{
-		// I don't think we need anything here because the DMAC gets initialised by the HSMCI subsystem
+		pmc_enable_periph_clk(ID_XDMAC);
 	}
 
 	void SetInterruptCallback(const uint8_t channel, StandardCallbackFunction fn, CallbackParameter param)
@@ -30,7 +30,7 @@ namespace DmacManager
 }
 
 // DMAC interrupt service routine
-extern "C" void XDMAC_handler()
+extern "C" void XDMAC_Handler()
 {
 	uint32_t pendingChannels = XDMAC->XDMAC_GIS;
 	for (size_t i = 0; i < NumDmaChannelsUsed; ++i)

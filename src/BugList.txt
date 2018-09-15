@@ -1,5 +1,6 @@
 Duet 3 work list
 - Configure ESP SPI pins and channel from Pins.h
+- Driver on/off voltages to be defined in Pins.h, they depend on the board
 - Enable dotstar support
 - SWdebug stuff
 - fan/heater output flexible configuration
@@ -39,6 +40,7 @@ Investigations:
 - [done, test] Fix additional axes on delta not coordinated
 - [done] DWC disconnects when a message box and a beep are pending at the same time
 - [tested, pause/resume works as intended] Check M106 R1 parameter, see https://forum.duet3d.com/topic/6538/resuming-print-fan-after-pause
+- spurious drive disconected messages in RC2, https://forum.duet3d.com/topic/6765/firmware-2-02rc2-released/14
 - Weird height map, https://forum.duet3d.com/topic/6472/mesh-grid-compensation/28
 - Full stepping problem, https://forum.duet3d.com/topic/6433/how-to-reduce-the-speed-of-extrusion/14
 - Print time estimation problem, see https://forum.duet3d.com/topic/5572/it-s-out-reprapfirmware-2-0-and-1-21-1-released/64 and https://forum.duet3d.com/topic/5572/it-s-out-reprapfirmware-2-0-and-1-21-1-released/73
