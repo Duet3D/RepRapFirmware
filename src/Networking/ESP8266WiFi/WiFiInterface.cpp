@@ -1772,7 +1772,7 @@ void WiFiInterface::StartWiFi()
 void WiFiInterface::ResetWiFi()
 {
 	pinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
-	pinMode(APIN_Serial1_TXD, INPUT_PULLUP);						// just enable pullups on TxD and RxD pins for now to avoid floating pins
+	pinMode(APIN_Serial1_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins for now to avoid floating pins
 	pinMode(APIN_Serial1_RXD, INPUT_PULLUP);
 	currentMode = WiFiState::disabled;
 
