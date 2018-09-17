@@ -19,7 +19,7 @@
 #include "RepRap.h"
 #include "Tools/Tool.h"
 #include "FilamentMonitors/FilamentMonitor.h"
-#include "Libraries/General/IP4String.h"
+#include "General/IP4String.h"
 #include "Movement/StepperDrivers/DriverMode.h"
 #include "Version.h"
 

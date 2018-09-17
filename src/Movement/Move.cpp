@@ -34,12 +34,13 @@
  */
 
 #include "Move.h"
+#include "StepTimer.h"
 #include "Platform.h"
 #include "GCodes/GCodeBuffer.h"
 #include "Tools/Tool.h"
 
-constexpr uint32_t UsualMinimumPreparedTime = StepClockRate/10;			// 100ms
-constexpr uint32_t AbsoluteMinimumPreparedTime = StepClockRate/20;		// 50ms
+constexpr uint32_t UsualMinimumPreparedTime = StepTimer::StepClockRate/10;			// 100ms
+constexpr uint32_t AbsoluteMinimumPreparedTime = StepTimer::StepClockRate/20;		// 50ms
 
 Move::Move() : currentDda(nullptr), active(false), scheduledMoves(0), completedMoves(0)
 {
@@ -121,7 +122,7 @@ void Move::Init()
 
 void Move::Exit()
 {
-	Platform::DisableStepInterrupt();
+	StepTimer::DisableStepInterrupt();
 
 	// Clear the DDA ring so that we don't report any moves as pending
 	currentDda = nullptr;
@@ -202,7 +203,7 @@ void Move::Spin()
 			prevMoveTime = dda->GetClocksNeeded();
 		}
 
-		canAddMove = (unPreparedTime < StepClockRate/2 || unPreparedTime + prevMoveTime < 2 * StepClockRate);
+		canAddMove = (unPreparedTime < StepTimer::StepClockRate/2 || unPreparedTime + prevMoveTime < 2 * StepTimer::StepClockRate);
 	}
 
 	if (canAddMove)
@@ -288,7 +289,7 @@ void Move::Spin()
 		DDA *cdda;													// currentDda is declared volatile, so copy it in the next line
 		if (simulationMode != 0 && (cdda = currentDda) != nullptr)
 		{
-			simulationTime += (float)cdda->GetClocksNeeded()/StepClockRate;
+			simulationTime += (float)cdda->GetClocksNeeded()/StepTimer::StepClockRate;
 			cdda->Complete();
 			CurrentMoveCompleted();
 		}
@@ -301,7 +302,7 @@ void Move::Spin()
 		if (!canAddMove || idleCount > 10)							// better to have a few moves in the queue so that we can do lookahead
 		{
 			// Prepare one move and execute it. We assume that we will enter the next if-block before it completes, giving us time to prepare more moves.
-			Platform::DisableStepInterrupt();						// should be disabled already because we weren't executing a move, but make sure
+			StepTimer::DisableStepInterrupt();						// should be disabled already because we weren't executing a move, but make sure
 			DDA * const dda = ddaRingGetPointer;					// capture volatile variable
 			if (dda->GetState() == DDA::provisional)
 			{
@@ -315,7 +316,7 @@ void Move::Spin()
 				}
 				else
 				{
-					if (StartNextMove(Platform::GetInterruptClocks()))	// start the next move
+					if (StartNextMove(StepTimer::GetInterruptClocks()))	// start the next move
 					{
 						Interrupt();
 					}
@@ -537,7 +538,7 @@ bool Move::LowPowerOrStallPause(RestorePoint& rp)
 	if (dda != nullptr && dda->GetFilePosition() != noFilePosition)
 	{
 		// We are executing a move that has a file address, so we can interrupt it
-		Platform::DisableStepInterrupt();
+		StepTimer::DisableStepInterrupt();
 		dda->MoveAborted();
 		CurrentMoveCompleted();							// updates live endpoints, extrusion, ddaRingGetPointer, currentDda etc.
 		--completedMoves;								// this move wasn't really completed
@@ -1172,8 +1173,9 @@ void Move::SetLiveCoordinates(const float coords[DRIVES])
 
 void Move::ResetExtruderPositions()
 {
+	const size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
 	cpu_irq_disable();
-	for (size_t eDrive = reprap.GetGCodes().GetTotalAxes(); eDrive < DRIVES; eDrive++)
+	for (size_t eDrive = totalAxes; eDrive < DRIVES; eDrive++)
 	{
 		liveCoordinates[eDrive] = 0.0;
 	}

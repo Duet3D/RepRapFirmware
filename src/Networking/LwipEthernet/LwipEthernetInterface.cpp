@@ -17,7 +17,7 @@
 #include "Networking/HttpResponder.h"
 #include "Networking/FtpResponder.h"
 #include "Networking/TelnetResponder.h"
-#include "Libraries/General/IP4String.h"
+#include "General/IP4String.h"
 #include "Version.h"
 
 extern "C"

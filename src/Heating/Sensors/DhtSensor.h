@@ -17,7 +17,7 @@
 #endif
 
 # include "TemperatureSensor.h"
-# include "RTOSIface.h"
+# include "RTOSIface/RTOSIface.h"
 
 enum class DhtSensorType
 {

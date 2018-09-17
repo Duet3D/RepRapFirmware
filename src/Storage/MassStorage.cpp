@@ -2,7 +2,6 @@
 #include "Platform.h"
 #include "RepRap.h"
 #include "sd_mmc.h"
-#include "RTOSIface.h"
 
 // A note on using mutexes:
 // Each SD card volume has its own mutex. There is also one for the file table, and one for the find first/find next buffer.

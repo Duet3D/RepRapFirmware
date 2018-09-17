@@ -115,6 +115,8 @@ enum class BoardType : uint8_t
 	Auto = 0,
 #if defined(DUET3)
 	Duet3_10 = 1
+#elif defined(SAME70XPLD)
+	SAME70XPLD_0 = 1
 #elif defined(DUET_NG)
 	DuetWiFi_10 = 1,
 	DuetWiFi_102 = 2,
@@ -231,7 +233,7 @@ public:
 
 	void Init(uint16_t val) volatile
 	{
-		irqflags_t flags = cpu_irq_save();
+		const irqflags_t flags = cpu_irq_save();
 		sum = (uint32_t)val * (uint32_t)numAveraged;
 		index = 0;
 		isValid = false;
@@ -335,13 +337,6 @@ public:
 	const uint8_t *GetDefaultMacAddress() const { return defaultMacAddress; }
 
 	// Timing
-	static uint32_t GetInterruptClocks() __attribute__ ((hot));						// Get the interrupt clock count
-	static uint32_t GetInterruptClocksInterruptsDisabled() __attribute__ ((hot));	// Get the interrupt clock count, when we know already that interrupts are disabled
-	static uint16_t GetInterruptClocks16();											// Get the interrupt clock count when we only care about the lowest 16 bits
-	static bool ScheduleStepInterrupt(uint32_t tim) __attribute__ ((hot));			// Schedule an interrupt at the specified clock count, or return true if it has passed already
-	static void DisableStepInterrupt();						// Make sure we get no step interrupts
-	static bool ScheduleSoftTimerInterrupt(uint32_t tim);	// Schedule an interrupt at the specified clock count, or return true if it has passed already
-	static void DisableSoftTimerInterrupt();				// Make sure we get no software timer interrupts
 	void Tick() __attribute__((hot));						// Process a systick interrupt
 
 	// Real-time clock
@@ -610,12 +605,6 @@ public:
 #endif
 
 	static uint8_t softwareResetDebugInfo;				// extra info for debugging
-
-#if SAM4S || SAME70
-	// Static data used by step ISR
-	static volatile uint32_t stepTimerPendingStatus;	// for holding status bits that we have read (and therefore cleared) but haven't serviced yet
-	static volatile uint32_t stepTimerHighWord;			// upper 16 bits of step timer
-#endif
 
 	//-------------------------------------------------------------------------------------------------------
   
@@ -1139,41 +1128,6 @@ inline float Platform::GetPressureAdvance(size_t extruder) const
 	return (extruder < MaxExtruders) ? pressureAdvance[extruder] : 0.0;
 }
 
-#if SAM4S || SAME70		// if the TCs are 16-bit
-
-// Get the interrupt clock count
-/*static*/ inline uint32_t Platform::GetInterruptClocks()
-{
-	const irqflags_t flags = cpu_irq_save();						// ensure interrupts are disabled
-	const uint32_t rslt = GetInterruptClocksInterruptsDisabled();
-	cpu_irq_restore(flags);											// restore interrupt enable state
-	return rslt;
-}
-
-// Function GetInterruptClocksInterruptsDisabled() is quite long for these processors, so it is moved to Platform.cpp and no longer inlined
-
-#else					// TCs are 32-bit
-
-// Get the interrupt clock count
-/*static*/ inline uint32_t Platform::GetInterruptClocks()
-{
-	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
-}
-
-// Get the interrupt clock count, when we know that interrupts are already disabled
-/*static*/ inline uint32_t Platform::GetInterruptClocksInterruptsDisabled()
-{
-	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
-}
-
-#endif
-
-// Get the interrupt clock count when we only care about the lowest 16 bits. More efficient than calling GetInterruptClocks on platforms with 16-bit timers.
-/*static*/ inline uint16_t Platform::GetInterruptClocks16()
-{
-	return (uint16_t)STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
-}
-
 // This is called by the tick ISR to get the raw Z probe reading to feed to the filter
 inline uint16_t Platform::GetRawZProbeReading() const
 {
@@ -1275,7 +1229,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
 #endif
 
-#if defined(DUET_NG) || defined(DUET_M) || defined(PCCB) || defined(DUET3)
+#if defined(DUET_NG) || defined(DUET_M) || defined(PCCB) || defined(DUET3) || defined(SAME70XPLD)
 	return pinDesc.ulPin;
 #elif defined(DUET_06_085)
 	return (pinDesc.pPort == PIOA) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
@@ -1297,7 +1251,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 {
 #if defined(DUET_NG)
 	PIOD->PIO_ODSR = driverMap;				// on Duet WiFi all step pins are on port D
-#elif defined(DUET_M) || defined(PCCB) || defined(DUET3)
+#elif defined(DUET_M) || defined(PCCB) || defined(DUET3) || defined(SAME70XPLD)
 	PIOC->PIO_ODSR = driverMap;				// on Duet Maestro all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = driverMap;
@@ -1329,7 +1283,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 {
 #if defined(DUET_NG)
 	PIOD->PIO_ODSR = 0;						// on Duet WiFi all step pins are on port D
-#elif defined(DUET_M) || defined(PCCB) || defined(DUET3)
+#elif defined(DUET_M) || defined(PCCB) || defined(DUET3) || defined(SAME70XPLD)
 	PIOC->PIO_ODSR = 0;						// on Duet Maestro all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = 0;

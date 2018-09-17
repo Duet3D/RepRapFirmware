@@ -24,6 +24,7 @@
 #include "Heating/Heat.h"
 #include "Movement/DDA.h"
 #include "Movement/Move.h"
+#include "Movement/StepTimer.h"
 #include "Network.h"
 #include "PrintMonitor.h"
 #include "FilamentMonitors/FilamentMonitor.h"
@@ -33,7 +34,8 @@
 #include "SoftTimer.h"
 #include "Logger.h"
 #include "Tasks.h"
-#include "Libraries/Math/Isqrt.h"
+#include "DmacManager.h"
+#include "Math/Isqrt.h"
 #include "Wire.h"
 
 #ifndef __LPC17xx__
@@ -219,6 +221,10 @@ void Platform::Init()
 	}
 #endif
 
+#if SAME70
+	DmacManager::Init();
+#endif
+
 	// Real-time clock
 	realTime = 0;
 
@@ -400,7 +406,9 @@ void Platform::Init()
 		// Set up the control pins and endstops
 		pinMode(STEP_PINS[drive], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
+#if !defined(DUET3)
 		pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
+#endif
 
 #ifndef __LPC17xx__
 		const PinDescription& pinDesc = g_APinDescription[STEP_PINS[drive]];
@@ -411,20 +419,22 @@ void Platform::Init()
 		driverState[drive] = DriverStatus::disabled;
 	}
 
-#if defined(DUET_NG) || defined(DUET_06_085) || defined(__RADDS__) || defined(__ALLIGATOR__)
-	// Enable pullup resistors on endstop inputs here if necessary.
-	// The Duets have hardware pullup resistors/LEDs except for the two on the CONN_LCD connector.
-	// They have RC filtering on the main endstop inputs, so best not to enable the pullup resistors on these.
-	// 2017-12-19: some users are having trouble with the endstops not being recognised in recent firmware versions.
-	// Probably the LED+resistor isn't pulling them up fast enough. So enable the pullup resistors again.
-	// Note: if we don't have a DueX board connected, the pullups on endstop inputs 5-9 must always be enabled.
-	// Also the pullups on endstop inputs 10-11 must always be enabled.
-	// I don't know whether RADDS and Alligator have hardware pullup resistors or not. I'll assume they might not.
 	for (size_t endstop = 0; endstop <  NumEndstops; ++endstop)
 	{
-		setPullup(endStopPins[endstop], true);					// enable pullup on endstop input
-	}
+#if defined(DUET_NG) || defined(DUET_06_085) || defined(__RADDS__) || defined(__ALLIGATOR__)
+		// Enable pullup resistors on endstop inputs here if necessary.
+		// The Duets have hardware pullup resistors/LEDs except for the two on the CONN_LCD connector.
+		// They have RC filtering on the main endstop inputs, so best not to enable the pullup resistors on these.
+		// 2017-12-19: some users are having trouble with the endstops not being recognised in recent firmware versions.
+		// Probably the LED+resistor isn't pulling them up fast enough. So enable the pullup resistors again.
+		// Note: if we don't have a DueX board connected, the pullups on endstop inputs 5-9 must always be enabled.
+		// Also the pullups on endstop inputs 10-11 must always be enabled.
+		// I don't know whether RADDS and Alligator have hardware pullup resistors or not. I'll assume they might not.
+		pinMode(endStopPins[endstop], INPUT_PULLUP);			// enable pullup on endstop input
+#else
+		pinMode(endStopPins[endstop], INPUT);					// don't enable pullup on endstop input
 #endif
+	}
 
 	for (uint32_t& entry : slowDriverStepTimingClocks)
 	{
@@ -476,12 +486,18 @@ void Platform::Init()
 	numSmartDrivers = MaxSmartDrivers;							// for now we assume that expansion drivers are smart too
 #elif defined(PCCB)
 	numSmartDrivers = MaxSmartDrivers;
+#elif defined(DUET3)
+	numSmartDrivers = MaxSmartDrivers;
 #endif
 
 #if HAS_SMART_DRIVERS
 	// Initialise TMC driver module
 	driversPowered = false;
+# if SUPPORT_TMC51xx
+	SmartDrivers::Init();
+# else
 	SmartDrivers::Init(ENABLE_PINS, numSmartDrivers);
+# endif
 	temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadADrivers = openLoadBDrivers = 0;
 #endif
 
@@ -1413,8 +1429,8 @@ void Platform::Spin()
 				}
 
 				// The driver often produces a transient open-load error, especially in stealthchop mode, so we require the condition to persist before we report it.
-				// Also,false open load indications persist when in standstill, if the phase has zero current in that position
-				if ((stat & TMC_RR_OLA) != 0 && (stat & TMC_RR_STST) == 0)
+				// Also, false open load indications persist when in standstill, if the phase has zero current in that position
+				if ((stat & TMC_RR_OLA) != 0)
 				{
 					if (openLoadADrivers == 0)
 					{
@@ -1427,7 +1443,7 @@ void Platform::Spin()
 					openLoadADrivers &= ~mask;
 				}
 
-				if ((stat & TMC_RR_OLB) != 0 && (stat & TMC_RR_STST) == 0)
+				if ((stat & TMC_RR_OLB) != 0)
 				{
 					if (openLoadBDrivers == 0)
 					{
@@ -1962,40 +1978,7 @@ void Platform::InitialiseInterrupts()
 	NVIC_SetPriority(TMC2660_SPI_IRQn, NvicPriorityDriversSerialTMC);	// set priority for TMC2660 SPI interrupt
 #endif
 
-	// Timer interrupt for stepper motors
-	// The clock rate we use is a compromise. Too fast and the 64-bit square roots take a long time to execute. Too slow and we lose resolution.
-	// We choose a clock divisor of 128 which gives
-	// 1.524us resolution on the Duet 085 (84MHz clock)
-	// 1.067us resolution on the Duet WiFi (120MHz clock)
-	// 0.853us resolution on the SAM E70 (150MHz clock)
-
-#if __LPC17xx__
-	//LPC has 32bit timers
-	//Using the same 128 divisor (as also specified in DDA)
-	//LPC Timers default to /4 -->  (SystemCoreClock/4)
-	const uint32_t res = (VARIANT_MCK/128);					// 1.28us for 100MHz (LPC1768) and 1.067us for 120MHz (LPC1769)
-
-	//Start a free running Timer using Match Registers 0 and 1 to generate interrupts
-	LPC_SC->PCONP |= ((uint32_t) 1<<SBIT_PCTIM0);			// Ensure the Power bit is set for the Timer
-	STEP_TC->MCR = 0;										//disable all MRx interrupts
-	STEP_TC->PR   =  (getPclk(PCLK_TIMER0) / res) - 1;		// Set the LPC Prescaler (i.e. TC increment every 32 TimerClock Ticks)
-	STEP_TC->TC  = 0x00;  									// Restart the Timer Count
-	NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);		// set high priority for this IRQ; it's time-critical
-	NVIC_EnableIRQ(STEP_TC_IRQN);
-	STEP_TC->TCR  = (1 <<SBIT_CNTEN);						// Start Timer
-#else
-	pmc_set_writeprotect(false);
-	pmc_enable_periph_clk(STEP_TC_ID);
-	tc_init(STEP_TC, STEP_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK4 | TC_CMR_EEVT_XC0);	// must set TC_CMR_EEVT nonzero to get RB compare interrupts
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = ~(uint32_t)0; // interrupts disabled for now
-#if SAM4S || SAME70		// if 16-bit TCs
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_COVFS; // enable the overflow interrupt so that we can use it to extend the count to 32-bits
-#endif
-	tc_start(STEP_TC, STEP_TC_CHAN);
-	tc_get_status(STEP_TC, STEP_TC_CHAN);					// clear any pending interrupt
-	NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);		// set priority for this IRQ
-	NVIC_EnableIRQ(STEP_TC_IRQN);
-#endif
+	StepTimer::Init();										// initialise the step pulse timer
 
 #if HAS_LWIP_NETWORKING
 	pmc_enable_periph_clk(NETWORK_TC_ID);
@@ -2011,14 +1994,15 @@ void Platform::InitialiseInterrupts()
 	tc_write_ra(NETWORK_TC, NETWORK_TC_CHAN, rc/2);			// 50% high, 50% low
 	tc_write_rc(NETWORK_TC, NETWORK_TC_CHAN, rc);
 	tc_start(NETWORK_TC, NETWORK_TC_CHAN);
-	NETWORK_TC ->TC_CHANNEL[NETWORK_TC_CHAN].TC_IER = TC_IER_CPCS;
-	NETWORK_TC ->TC_CHANNEL[NETWORK_TC_CHAN].TC_IDR = ~TC_IER_CPCS;
+	NETWORK_TC->TC_CHANNEL[NETWORK_TC_CHAN].TC_IER = TC_IER_CPCS;
+	NETWORK_TC->TC_CHANNEL[NETWORK_TC_CHAN].TC_IDR = ~TC_IER_CPCS;
 	NVIC_SetPriority(NETWORK_TC_IRQN, NvicPriorityNetworkTick);
 	NVIC_EnableIRQ(NETWORK_TC_IRQN);
 
 	// Set up the Ethernet interface priority here to because we have access to the priority definitions
 # if SAME70
 	NVIC_SetPriority(GMAC_IRQn, NvicPriorityEthernet);
+	NVIC_SetPriority(XDMAC_IRQn, NvicPriorityDMA);
 # else
 	NVIC_SetPriority(EMAC_IRQn, NvicPriorityEthernet);
 # endif
@@ -2556,9 +2540,9 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 			for (uint32_t i = 0; i < 100; ++i)
 			{
 				const uint32_t num1 = 0x7265ac3d + i;
-				const uint32_t now1 = Platform::GetInterruptClocks();
+				const uint32_t now1 = StepTimer::GetInterruptClocks();
 				const uint32_t num1a = isqrt64((uint64_t)num1 * num1);
-				tim1 += Platform::GetInterruptClocks() - now1;
+				tim1 += StepTimer::GetInterruptClocks() - now1;
 				if (num1a != num1)
 				{
 					ok1 = false;
@@ -2570,17 +2554,17 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 			for (uint32_t i = 0; i < 100; ++i)
 			{
 				const uint32_t num2 = 0x0000a4c5 + i;
-				const uint32_t now2 = Platform::GetInterruptClocks();
+				const uint32_t now2 = StepTimer::GetInterruptClocks();
 				const uint32_t num2a = isqrt64((uint64_t)num2 * num2);
-				tim2 += Platform::GetInterruptClocks() - now2;
+				tim2 += StepTimer::GetInterruptClocks() - now2;
 				if (num2a != num2)
 				{
 					ok2 = false;
 				}
 			}
 			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s",
-					(double)(tim1 * 10000)/StepClockRate, (ok1) ? "ok" : "ERROR",
-							(double)(tim2 * 10000)/StepClockRate, (ok2) ? "ok" : "ERROR");
+					(double)(tim1 * 10000)/StepTimer::StepClockRate, (ok1) ? "ok" : "ERROR",
+							(double)(tim2 * 10000)/StepTimer::StepClockRate, (ok2) ? "ok" : "ERROR");
 		}
 		break;
 
@@ -2857,7 +2841,7 @@ void Platform::SetDirection(size_t drive, bool direction)
 	const bool isSlowDriver = (GetDriversBitmap(drive) & GetSlowDriversBitmap()) != 0;
 	if (isSlowDriver)
 	{
-		while (GetInterruptClocks() - DDA::lastStepLowTime < GetSlowDriverDirHoldClocks()) { }
+		while (StepTimer::GetInterruptClocks() - DDA::lastStepLowTime < GetSlowDriverDirHoldClocks()) { }
 	}
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	if (drive < numAxes)
@@ -2877,7 +2861,7 @@ void Platform::SetDirection(size_t drive, bool direction)
 	}
 	if (isSlowDriver)
 	{
-		DDA::lastDirChangeTime = GetInterruptClocks();
+		DDA::lastDirChangeTime = StepTimer::GetInterruptClocks();
 	}
 }
 
@@ -2889,17 +2873,19 @@ void Platform::EnableDriver(size_t driver)
 		driverState[driver] = DriverStatus::enabled;
 		UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
 
-#if HAS_SMART_DRIVERS
+#if defined(DUET3) && HAS_SMART_DRIVERS
+		SmartDrivers::EnableDrive(driver, true);		// all drivers driven directly by the main board are smart
+#elif HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
 		{
 			SmartDrivers::EnableDrive(driver, true);
 		}
 		else
 		{
-#endif
 			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
-#if HAS_SMART_DRIVERS
 		}
+#else
+		digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
 #endif
 	}
 }
@@ -2909,17 +2895,19 @@ void Platform::DisableDriver(size_t driver)
 {
 	if (driver < DRIVES)
 	{
-#if HAS_SMART_DRIVERS
+#if defined(DUET3) && HAS_SMART_DRIVERS
+		SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
+#elif HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
 		{
 			SmartDrivers::EnableDrive(driver, false);
 		}
 		else
 		{
-#endif
 			digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
-#if HAS_SMART_DRIVERS
 		}
+#else
+		digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
 #endif
 		driverState[driver] = DriverStatus::disabled;
 	}
@@ -3316,7 +3304,7 @@ void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4])
 		if (microseconds[i] > MinStepPulseTiming)
 		{
 			slowDriversBitmap |= CalcDriverBitmap(driver);		// this drive does need extended timing
-			const uint32_t clocks = (uint32_t)(((float)StepClockRate * microseconds[i] * 0.000001) + 0.99);	// convert microseconds to step clocks, rounding up
+			const uint32_t clocks = (uint32_t)(((float)StepTimer::StepClockRate * microseconds[i] * 0.000001) + 0.99);	// convert microseconds to step clocks, rounding up
 			if (clocks > slowDriverStepTimingClocks[i])
 			{
 				slowDriverStepTimingClocks[i] = clocks;
@@ -3332,7 +3320,7 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const
 	for (size_t i = 0; i < 4; ++i)
 	{
 		microseconds[i] = (isSlowDriver)
-							? (float)slowDriverStepTimingClocks[i] * 1000000.0/(float)StepClockRate
+							? (float)slowDriverStepTimingClocks[i] * 1000000.0/(float)StepTimer::StepClockRate
 								: 0.0;
 	}
 	return isSlowDriver;
@@ -3990,6 +3978,8 @@ void Platform::SetBoardType(BoardType bt)
 	{
 #if defined(DUET3)
 		board = BoardType::Duet3_10;
+#elif defined(SAME70XPLD)
+		board = BoardType::SAME70XPLD_0;
 #elif defined(DUET_NG)
 		// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
 		pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500. We assume that this forces the ESP8266 UART output pin to high impedance.
@@ -4059,6 +4049,8 @@ const char* Platform::GetElectronicsString() const
 	{
 #if defined(DUET3)
 	case BoardType::Duet3_10:				return "Duet 3 prototype 1";
+#elif defined(SAME70XPLD)
+	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
 #elif defined(DUET_NG)
 	case BoardType::DuetWiFi_10:			return "Duet WiFi 1.0 or 1.01";
 	case BoardType::DuetWiFi_102:			return "Duet WiFi 1.02 or later";
@@ -4092,6 +4084,8 @@ const char* Platform::GetBoardString() const
 	{
 #if defined(DUET3)
 	case BoardType::Duet3_10:				return "duet3proto";
+#elif defined(SAME70XPLD)
+	case BoardType::SAME70XPLD_0:			return "same70xpld";
 #elif defined(DUET_NG)
 	case BoardType::DuetWiFi_10:			return "duetwifi10";
 	case BoardType::DuetWiFi_102:			return "duetwifi102";
@@ -4604,230 +4598,11 @@ void Platform::InitI2c()
 // Get a pseudo-random number
 uint32_t Platform::Random()
 {
-	const uint32_t clocks = GetInterruptClocks();
+	const uint32_t clocks = StepTimer::GetInterruptClocks();
 	return clocks ^ uniqueId[0] ^ uniqueId[1] ^ uniqueId[2] ^ uniqueId[3];
 }
 
 #endif
-
-// Step pulse timer interrupt
-#if __LPC17xx__
-extern "C"
-#endif
-void STEP_TC_HANDLER() __attribute__ ((hot));
-
-#if SAM4S || SAME70
-// Static data used by step ISR
-volatile uint32_t Platform::stepTimerPendingStatus = 0;	// for holding status bits that we have read (and therefore cleared) but haven't serviced yet
-volatile uint32_t Platform::stepTimerHighWord = 0;		// upper 16 bits of step timer
-#endif
-
-void STEP_TC_HANDLER()
-{
-#if SAM4S || SAME70
-	// On the SAM4 we need to check for overflow whenever we read the step clock counter, and that clears the status flags.
-	// So we store the un-serviced status flags.
-	for (;;)
-	{
-		uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR | Platform::stepTimerPendingStatus;	// read the status register, which clears the status bits, and or-in any pending status bits
-		tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;			// select only enabled interrupts
-		if (tcsr == 0)
-		{
-			break;
-		}
-
-		if ((tcsr & TC_SR_COVFS) != 0)
-		{
-			Platform::stepTimerHighWord += (1u << 16);
-			Platform::stepTimerPendingStatus &= ~TC_SR_COVFS;
-		}
-
-		if ((tcsr & TC_SR_CPAS) != 0)								// the step interrupt uses RA compare
-		{
-			STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;	// disable the interrupt
-			Platform::stepTimerPendingStatus &= ~TC_SR_CPAS;
-#ifdef MOVE_DEBUG
-			++numInterruptsExecuted;
-			lastInterruptTime = Platform::GetInterruptClocks();
-#endif
-			reprap.GetMove().Interrupt();							// execute the step interrupt
-		}
-
-		if ((tcsr & TC_SR_CPBS) != 0)
-		{
-			STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;	// disable the interrupt
-			Platform::stepTimerPendingStatus &= ~TC_SR_CPBS;
-#ifdef SOFT_TIMER_DEBUG
-			++numSoftTimerInterruptsExecuted;
-#endif
-			SoftTimer::Interrupt();
-		}
-	}
-#elif __LPC17xx__
-	uint32_t regval = STEP_TC->IR;
-	//find which Match Register triggered the interrupt
-	if (regval & (1 << SBIT_MRI0_IFM)) //Interrupt flag for match channel 0.
-	{
-		STEP_TC->IR |= (1<<SBIT_MRI0_IFM); //clear interrupt on MR0 (setting bit will clear int)
-		STEP_TC->MCR  &= ~(1<<SBIT_MR0I); //Disable Int on MR0
-
-# ifdef MOVE_DEBUG
-        ++numInterruptsExecuted;
-        lastInterruptTime = Platform::GetInterruptClocks();
-# endif
-		reprap.GetMove().Interrupt();                                // execute the step interrupt
-	}
-
-	if (regval & (1 << SBIT_MRI1_IFM)) //Interrupt flag for match channel 1.
-	{
-		STEP_TC->IR |= (1<<SBIT_MRI1_IFM); //clear interrupt
-		STEP_TC->MCR  &= ~(1<<SBIT_MR1I); //Disable Int on MR1
-# ifdef SOFT_TIMER_DEBUG
-        ++numSoftTimerInterruptsExecuted;
-# endif
-		SoftTimer::Interrupt();
-	}
-//end __LPC17xx__
-
-#else
-	uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR;		// read the status register, which clears the status bits, and or-in any pending status bits
-	tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;				// select only enabled interrupts
-
-	if ((tcsr & TC_SR_CPAS) != 0)									// the step interrupt uses RA compare
-	{
-		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;		// disable the interrupt
-#ifdef MOVE_DEBUG
-		++numInterruptsExecuted;
-		lastInterruptTime = Platform::GetInterruptClocks();
-#endif
-		reprap.GetMove().Interrupt();								// execute the step interrupt
-	}
-
-	if ((tcsr & TC_SR_CPBS) != 0)
-	{
-		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;		// disable the interrupt
-#ifdef SOFT_TIMER_DEBUG
-		++numSoftTimerInterruptsExecuted;
-#endif
-		SoftTimer::Interrupt();
-	}
-#endif
-}
-
-#if SAM4S || SAME70
-
-// Get the interrupt clock count, when we know that interrupts are already disabled
-// The TCs on the SAM4S and SAME70 are only 16 bits wide, so we maintain the upper 16 bits in software
-/*static*/ uint32_t Platform::GetInterruptClocksInterruptsDisabled()
-{
-	uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR;	// get the status to see whether there is an overflow
-	tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;			// clear any bits that don't generate interrupts
-	uint32_t lowWord = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;	// get the timer low word
-	uint32_t highWord = stepTimerHighWord;						// get the volatile high word
-	if ((tcsr & TC_SR_COVFS) != 0)								// if the timer has overflowed
-	{
-		highWord += (1u << 16);									// overflow is pending, so increment the high word
-		stepTimerHighWord = highWord;							// and save it
-		tcsr &= ~TC_SR_COVFS;									// we handled the overflow, don't do it again
-		lowWord = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;		// read the low word again in case the overflow occurred just after we read it the first time
-	}
-	if (tcsr != 0)												// if there were any other pending status bits that generate interrupts
-	{
-		stepTimerPendingStatus |= tcsr;							// save the other pending bits
-		NVIC_SetPendingIRQ(STEP_TC_IRQN);						// set step timer interrupt pending
-	}
-	return (lowWord & 0x0000FFFF) | highWord;
-}
-
-#endif
-
-// Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
-/*static*/ bool Platform::ScheduleStepInterrupt(uint32_t tim)
-{
-	const irqflags_t flags = cpu_irq_save();
-	const int32_t diff = (int32_t)(tim - GetInterruptClocksInterruptsDisabled());	// see how long we have to go
-	if (diff < (int32_t)DDA::MinInterruptInterval)						// if less than about 6us or already passed
-	{
-		cpu_irq_restore(flags);
-		return true;													// tell the caller to simulate an interrupt instead
-	}
-
-#ifdef __LPC17xx__
-	STEP_TC->MR0 = tim;
-	STEP_TC->MCR  |= (1 << SBIT_MR0I);     // Enable Int on MR0 match
-#else
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RA = tim;						// set up the compare register
-
-	// We would like to clear any pending step interrupt. To do this, we must read the TC status register.
-	// Unfortunately, this would clear any other pending interrupts from the same TC.
-	// So we don't, and the step ISR must allow for getting called prematurely.
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPAS;				// enable the interrupt
-	cpu_irq_restore(flags);
-#endif
-
-#ifdef MOVE_DEBUG
-		++numInterruptsScheduled;
-		nextInterruptTime = tim;
-		nextInterruptScheduledAt = Platform::GetInterruptClocks();
-#endif
-	return false;
-}
-
-// Make sure we get no step interrupts
-/*static*/ void Platform::DisableStepInterrupt()
-{
-#ifdef __LPC17xx__
-    STEP_TC->MCR  &= ~(1<<SBIT_MR0I); //Disable Int on MR0
-#else
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;
-# if SAM4S || SAME70
-	stepTimerPendingStatus &= ~TC_SR_CPAS;
-# endif
-#endif
-}
-
-// Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
-/*static*/ bool Platform::ScheduleSoftTimerInterrupt(uint32_t tim)
-{
-	const irqflags_t flags = cpu_irq_save();
-	const int32_t diff = (int32_t)(tim - GetInterruptClocksInterruptsDisabled());	// see how long we have to go
-	if (diff < (int32_t)DDA::MinInterruptInterval)					// if less than about 6us or already passed
-	{
-		cpu_irq_restore(flags);
-		return true;												// tell the caller to simulate an interrupt instead
-	}
-
-#ifdef __LPC17xx__
-	STEP_TC->MR1 = tim; //set MR1 compare register
-	STEP_TC->MCR  |= (1<<SBIT_MR1I);     // Int on MR1 match
-#else
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RB = tim;					// set up the compare register
-
-	// We would like to clear any pending step interrupt. To do this, we must read the TC status register.
-	// Unfortunately, this would clear any other pending interrupts from the same TC.
-	// So we don't, and the timer ISR must allow for getting called prematurely.
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPBS;			// enable the interrupt
-#endif
-	cpu_irq_restore(flags);
-
-#ifdef SOFT_TIMER_DEBUG
-	lastSoftTimerInterruptScheduledAt = GetInterruptClocks();
-#endif
-	return false;
-}
-
-// Make sure we get no step interrupts
-/*static*/ void Platform::DisableSoftTimerInterrupt()
-{
-#ifdef __LPC17xx__
-    STEP_TC->MCR  &= ~(1<<SBIT_MR1I); //Disable Int on MR1
-#else
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;
-# if SAM4S || SAME70
-	stepTimerPendingStatus &= ~TC_SR_CPBS;
-# endif
-#endif
-}
 
 // Process a 1ms tick interrupt
 // This function must be kept fast so as not to disturb the stepper timing, so don't do any floating point maths in here.

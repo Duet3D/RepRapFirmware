@@ -15,7 +15,7 @@
 #include "HttpResponder.h"
 #include "FtpResponder.h"
 #include "TelnetResponder.h"
-#include "Libraries/General/IP4String.h"
+#include "General/IP4String.h"
 
 W5500Interface::W5500Interface(Platform& p)
 	: platform(p), lastTickMillis(0), state(NetworkState::disabled), activated(false)

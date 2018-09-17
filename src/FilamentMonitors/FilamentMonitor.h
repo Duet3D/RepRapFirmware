@@ -11,7 +11,7 @@
 #include "RepRapFirmware.h"
 #include "MessageType.h"
 #include "GCodes/GCodeResult.h"
-#include "RTOSIface.h"
+#include "RTOSIface/RTOSIface.h"
 
 enum class FilamentSensorStatus : uint8_t
 {

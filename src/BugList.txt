@@ -1,3 +1,11 @@
+Duet 3 work list
+- Configure ESP SPI pins and channel from Pins.h
+- Driver on/off voltages to be defined in Pins.h, they depend on the board
+- Enable dotstar support
+- SWdebug stuff
+- fan/heater output flexible configuration
+- endstop/Z probe flexible configuration
+
 RRF 1.20 work list
 
 WiFi:
@@ -32,10 +40,12 @@ Investigations:
 - [done, test] Fix additional axes on delta not coordinated
 - [done] DWC disconnects when a message box and a beep are pending at the same time
 - [tested, pause/resume works as intended] Check M106 R1 parameter, see https://forum.duet3d.com/topic/6538/resuming-print-fan-after-pause
+- spurious drive disconected messages in RC2, https://forum.duet3d.com/topic/6765/firmware-2-02rc2-released/14
 - Weird height map, https://forum.duet3d.com/topic/6472/mesh-grid-compensation/28
 - Full stepping problem, https://forum.duet3d.com/topic/6433/how-to-reduce-the-speed-of-extrusion/14
-- Print time estimation problem, see https://forum.duet3d.com/topic/5572/it-s-out-reprapfirmware-2-0-and-1-21-1-released/64
+- Print time estimation problem, see https://forum.duet3d.com/topic/5572/it-s-out-reprapfirmware-2-0-and-1-21-1-released/64 and https://forum.duet3d.com/topic/5572/it-s-out-reprapfirmware-2-0-and-1-21-1-released/73
 - Disconnections, https://forum.duet3d.com/topic/6487/running-bed-mesh-compensation/19
+- M122, https://forum.duet3d.com/topic/6725/m122-does-not-work-from-dwc-console
 
 Remaining:
 - [done, ok on DuetM, test on Duet2] No warning messages when TMC2224 drivers overheat, https://forum.duet3d.com/topic/6309/little-monster-s-hort-to-ground/13
@@ -43,13 +53,15 @@ Remaining:
 - [done, ok] Support mixed stealthchop/spread cycle mode on Maestro via TPWMTHRS register, https://forum.duet3d.com/topic/6512/duet-2-maestro-stealthchop-default/7
 - [done, test] Add paused coordinates to 'printing paused' message? https://reprap.org/forum/read.php?416,832303,832440#msg-832440
 - [done] If a bad curve fit occurs during tuning, display the values as A, C and D instead of G, tc and td to better relate to M307
+- [done, M3D testing] Merge in Matt's display changes
+- Limit amount of CPU time used to refesh the display, https://forum.duet3d.com/topic/6676/firmware-2-02-release-candidate-1-now-available
+- Option to generate stall warning messages if stalls occur when not printing from SD card, https://forum.duet3d.com/topic/6720/stall-protection-on-pyserial-print/6
 - Add check digit to serial number
 - check DAA working as intended, results are inconsistent
 - chrishamm's watchdog issue, see his email oif 2018-08-01
 - G30 S-1 when no Z probe, https://forum.duet3d.com/topic/6510/a-couple-of-dwc-odd-things/2
 - Command to copy output from the following commands to the log file?
 - Track which devices use which pins
-- [done, M3D testing] Merge in Matt's display changes
 - Hangprinter PRs
 - PR to have any enabled driver report 50C
 - PR to allow endstop input number to be specified in M558

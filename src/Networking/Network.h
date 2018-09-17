@@ -12,9 +12,9 @@
 #include "RepRapFirmware.h"
 #include "MessageType.h"
 #include "GCodes/GCodeResult.h"
-#include "RTOSIface.h"
+#include "RTOSIface/RTOSIface.h"
 
-#if defined(DUET3)
+#if defined(DUET3) || defined(SAME70XPLD)
 const size_t NumNetworkInterfaces = 2;
 #elif defined(DUET_NG) || defined(DUET_M)
 const size_t NumNetworkInterfaces = 1;

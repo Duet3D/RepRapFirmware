@@ -24,7 +24,7 @@ Licence: GPL
 #include "RepRapFirmware.h"
 #include "ObjectModel/ObjectModel.h"
 #include "MessageType.h"
-#include "RTOSIface.h"
+#include "RTOSIface/RTOSIface.h"
 
 enum class ResponseSource
 {

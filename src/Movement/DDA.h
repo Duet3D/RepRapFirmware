@@ -10,6 +10,7 @@
 
 #include "RepRapFirmware.h"
 #include "DriveMovement.h"
+#include "StepTimer.h"
 #include "GCodes/GCodes.h"			// for class RawMove
 
 #ifdef DUET_NG
@@ -108,16 +109,16 @@ public:
 	// Note: the above measurements were taken some time ago, before some firmware optimisations.
 #if SAME70
 	// The system clock of the SAME70 is running at 150MHz. Use the same defaults as for the SAM4E for now.
-	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
-	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepClockRate)/1000000;	// same as delta for now, but could be lower
+	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
+	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
 #elif SAM4E || SAM4S
-	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
-	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepClockRate)/1000000;	// same as delta for now, but could be lower
+	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
+	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
 #else
-	static constexpr uint32_t MinCalcIntervalDelta = (60 * StepClockRate)/1000000; 		// the smallest sensible interval between calculations (60us) in step timer clocks
-	static constexpr uint32_t MinCalcIntervalCartesian = (60 * StepClockRate)/1000000;	// same as delta for now, but could be lower
+	static constexpr uint32_t MinCalcIntervalDelta = (60 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (60us) in step timer clocks
+	static constexpr uint32_t MinCalcIntervalCartesian = (60 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t MinInterruptInterval = 4;									// about 6us minimum interval between interrupts, in step clocks
 #endif
 	static constexpr uint32_t MaxStepInterruptTime = 10 * MinInterruptInterval;			// the maximum time we spend looping in the ISR , in step clocks
@@ -257,7 +258,7 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 	endCoordinatesValid = false;
 }
 
-#if HAS_STALL_DETECT
+#if HAS_SMART_DRIVERS
 
 // Get the current full step interval for this axis or extruder
 inline uint32_t DDA::GetStepInterval(size_t axis, uint32_t microstepShift) const

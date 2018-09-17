@@ -35,9 +35,9 @@ typedef uint16_t PwmFrequency;		// type used to represent a PWM frequency. 0 som
 #include "Configuration.h"
 #include "Pins.h"
 
-#include "Libraries/General/SafeStrtod.h"
-#include "Libraries/General/SafeVsnprintf.h"
-#include "Libraries/General/StringRef.h"
+#include "General/SafeStrtod.h"
+#include "General/SafeVsnprintf.h"
+#include "General/StringRef.h"
 
 // Module numbers and names, used for diagnostics and debug
 enum Module : uint8_t
@@ -274,8 +274,6 @@ template<typename BitmapType> BitmapType UnsignedArrayToBitMap(const uint32_t *a
 }
 
 // Common definitions used by more than one module
-constexpr uint32_t StepClockRate = VARIANT_MCK/128;					// the frequency of the clock used for stepper pulse timing (see Platform::InitialiseInterrupts)
-constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
 
 constexpr size_t ScratchStringLength = 220;							// standard length of a scratch string, enough to print delta parameters to
 constexpr size_t ShortScratchStringLength = 50;
@@ -291,7 +289,6 @@ constexpr float MinutesToSeconds = 60.0;
 constexpr float SecondsToMinutes = 1.0/MinutesToSeconds;
 constexpr float SecondsToMillis = 1000.0;
 constexpr float MillisToSeconds = 0.001;
-constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
 constexpr float InchToMm = 25.4;
 constexpr float Pi = 3.141592653589793;
 constexpr float TwoPi = 3.141592653589793 * 2;
@@ -306,20 +303,48 @@ const FilePosition noFilePosition = 0xFFFFFFFF;
 
 //-------------------------------------------------------------------------------------------------
 // Interrupt priorities - must be chosen with care! 0 is the highest priority, 15 is the lowest.
-// This interacts with FreeRTOS config constant configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY which is currently defined as 5.
+// This interacts with FreeRTOS config constant configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY which is currently defined as 3 for the SAME70 and 5 for the SAM4x.
 // ISRs with better (numerically lower) priorities than this value cannot make FreeRTOS calls, but those interrupts wont be disabled even in FreeRTOS critical sections.
-// So use priority 4 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 
-#if SAM4E || SAME70
+#if SAME70
+// We have only 8 interrupt priority levels
+// Use priority 2 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
+
 const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
-#endif
+const uint32_t NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
+const uint32_t NvicPriorityWiFiUart = 2;		// UART used to receive debug data from the WiFi module
+
+# ifndef RTOS
+const uint32_t NvicPrioritySystick = 3;			// systick kicks the watchdog and starts the ADC conversions, so must be quite high
+# endif
+
+const uint32_t NvicPriorityPins = 3;			// priority for GPIO pin interrupts - filament sensors must be higher than step
+const uint32_t NvicPriorityStep = 4;			// step interrupt is next highest, it can preempt most other interrupts
+const uint32_t NvicPriorityUSB = 5;				// USB interrupt
+const uint32_t NvicPriorityHSMCI = 5;			// HSMCI command complete interrupt
+
+# if HAS_LWIP_NETWORKING
+const uint32_t NvicPriorityNetworkTick = 6;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
+const uint32_t NvicPriorityEthernet = 6;		// priority for Ethernet interface
+# endif
+
+const uint32_t NvicPriorityDMA = 6;				// end-of-DMA interrupt used by TMC drivers and HSMCI
+const uint32_t NvicPrioritySpi = 6;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
+
+#else
+// We have 16 priority levels
+// Use priority 4 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
+
+# if SAM4E
+const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
+# endif
 
 const uint32_t NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 const uint32_t NvicPriorityDriversSerialTMC = 2; // USART or UART used to control and monitor the smart drivers
 
-#ifndef RTOS
+# ifndef RTOS
 const uint32_t NvicPrioritySystick = 3;			// systick kicks the watchdog and starts the ADC conversions, so must be quite high
-#endif
+# endif
 
 const uint32_t NvicPriorityPins = 5;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const uint32_t NvicPriorityStep = 6;			// step interrupt is next highest, it can preempt most other interrupts
@@ -327,19 +352,14 @@ const uint32_t NvicPriorityWiFiUart = 7;		// UART used to receive debug data fro
 const uint32_t NvicPriorityUSB = 7;				// USB interrupt
 const uint32_t NvicPriorityHSMCI = 7;			// HSMCI command complete interrupt
 
-#if HAS_LWIP_NETWORKING
+# if HAS_LWIP_NETWORKING
 const uint32_t NvicPriorityNetworkTick = 8;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
 const uint32_t NvicPriorityEthernet = 8;		// priority for Ethernet interface
-#endif
+# endif
 
 const uint32_t NvicPrioritySpi = 8;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
 const uint32_t NvicPriorityTwi = 9;				// TWI is used to read endstop and other inputs on the DueXn
 
-#if SAME70
-// DMA channel allocations
-const uint32_t XDMAC_CHAN_HSMCI = 0;			// DMA channel used for HSMCI interface, see CONF_HSMCI_XDMAC_CHANNEL in file conf_sd_mmc.h in project CoreNG
-const uint32_t XDMAC_CHAN_TMC_TX = 1;			// DMA channel for sending to SPI-controlled TMC drivers
-const uint32_t XDMAC_CHAN_TMC_RX = 2;			// DMA channel for receiving from SPI-controlled TMC drivers
 #endif
 
 #endif

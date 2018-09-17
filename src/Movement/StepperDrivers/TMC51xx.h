@@ -8,15 +8,13 @@
 #ifndef SRC_MOVEMENT_STEPPERDRIVERS_TMC51XX_H_
 #define SRC_MOVEMENT_STEPPERDRIVERS_TMC51XX_H_
 
+#include "RepRapFirmware.h"
+
 #if SUPPORT_TMC51xx
 
-#include "RepRapFirmware.h"
 #include "DriverMode.h"
-#include "Pins.h"
-#include "MessageType.h"
-#include "Libraries/General/StringRef.h"
 
-// TMC22xx DRV_STATUS register bit assignments
+// TMC51xx DRV_STATUS register bit assignments
 const uint32_t TMC_RR_SG = 1 << 24;					// stall detected
 const uint32_t TMC_RR_OT = 1 << 25;					// over temperature shutdown
 const uint32_t TMC_RR_OTPW = 1 << 26;				// over temperature warning
@@ -24,11 +22,11 @@ const uint32_t TMC_RR_S2G = (3 << 27) | (3 << 12);	// short to ground indicator 
 const uint32_t TMC_RR_OLA = 1 << 29;				// open load A
 const uint32_t TMC_RR_OLB = 1 << 30;				// open load B
 const uint32_t TMC_RR_STST = 1 << 31;				// standstill detected
+const uint32_t TMC_RR_SGRESULT = 0x3FF;				// 10-bit stallGuard2 result
 
 namespace SmartDrivers
 {
-	void Init(const Pin[DRIVES], size_t numTmcDrivers)
-		pre(numTmcDrivers <= DRIVES);
+	void Init();
 	void Spin(bool powered);
 	void TurnDriversOff();
 

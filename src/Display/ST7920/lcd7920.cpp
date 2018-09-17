@@ -9,7 +9,7 @@
 
 #include "lcd7920.h"
 
-const uint32_t SpiClockFrequency = 1000000;			// try 1MHz for now
+const uint32_t SpiClockFrequency = 1600000;			// 1.6MHz (minimum clock cycle time for ST7920 is 600ns @ Vdd=2.7V)
 
 // LCD basic instructions. These all take 72us to execute except LcdDisplayClear, which takes 1.6ms
 const uint8_t LcdDisplayClear = 0x01;
@@ -26,8 +26,8 @@ const uint8_t LcdSetDdramAddress = 0x80;			// add the address we want to set
 // LCD extended instructions
 const uint8_t LcdSetGdramAddress = 0x80;
 
-const unsigned int LcdCommandDelayMicros = 72 - 24; // 72us required, less 24us time to send the command @ 1MHz
-const unsigned int LcdDataDelayMicros = 10;			// delay between sending data bytes
+const unsigned int LcdCommandDelayMicros = 72 - 15; // 72us required, less 15us time to send the command @ 1MHz
+const unsigned int LcdDataDelayMicros = 4;			// delay between sending data bytes
 const unsigned int LcdDisplayClearDelayMillis = 3;	// 1.6ms should be enough
 
 Lcd7920::Lcd7920(uint8_t csPin)
@@ -45,19 +45,38 @@ void Lcd7920::Init()
 	numContinuationBytesLeft = 0;
 	startRow = startCol =  endRow = endCol = nextFlushRow = 0;
 
-	sendLcdCommand(LcdFunctionSetBasicAlpha);
-	delay(1);
-	sendLcdCommand(LcdFunctionSetBasicAlpha);
-	commandDelay();
-	sendLcdCommand(LcdEntryModeSet);
-	commandDelay();
-	sendLcdCommand(LcdFunctionSetExtendedGraphic);
-	commandDelay();
+	{
+		MutexLocker lock(Tasks::GetSpiMutex());
+		sspi_master_setup_device(&device);
+		delayMicroseconds(1);
+		sspi_select_device(&device);
+		delayMicroseconds(1);
+
+		sendLcdCommand(LcdFunctionSetBasicAlpha);
+		delay(1);
+		sendLcdCommand(LcdFunctionSetBasicAlpha);
+		commandDelay();
+		sendLcdCommand(LcdEntryModeSet);
+		commandDelay();
+		sendLcdCommand(LcdFunctionSetExtendedGraphic);
+		commandDelay();
+
+		sspi_deselect_device(&device);
+	}
 
 	Clear();
 	FlushAll();
-	sendLcdCommand(LcdDisplayOn);
-	commandDelay();
+
+	{
+		MutexLocker lock(Tasks::GetSpiMutex());
+		sspi_master_setup_device(&device);
+		delayMicroseconds(1);
+		sspi_select_device(&device);
+		delayMicroseconds(1);
+		sendLcdCommand(LcdDisplayOn);
+		commandDelay();
+		sspi_deselect_device(&device);
+	}
 	currentFont = nullptr;
 }
 
@@ -469,17 +488,28 @@ bool Lcd7920::FlushSome()
 		}
 
 		// Flush that row
-		const uint8_t startColNum = startCol/16;
-		const uint8_t endColNum = (endCol + 15)/16;
-		setGraphicsAddress(nextFlushRow, startColNum);
-		uint8_t *ptr = image + ((16 * nextFlushRow) + (2 * startColNum));
-		for (uint8_t i = startColNum; i < endColNum; ++i)
 		{
-			sendLcdData(*ptr++);
-			//commandDelay();		// don't seem to need a delay here
-			sendLcdData(*ptr++);
-			//commandDelay();  	 	// don't seem to need as long a delay as this
-			delayMicroseconds(LcdDataDelayMicros);
+			const uint8_t startColNum = startCol/16;
+			const uint8_t endColNum = (endCol + 15)/16;
+
+			MutexLocker lock(Tasks::GetSpiMutex());
+			sspi_master_setup_device(&device);
+			delayMicroseconds(1);
+			sspi_select_device(&device);
+			delayMicroseconds(1);
+
+			setGraphicsAddress(nextFlushRow, startColNum);
+			uint8_t *ptr = image + ((16 * nextFlushRow) + (2 * startColNum));
+			for (uint8_t i = startColNum; i < endColNum; ++i)
+			{
+				sendLcdData(*ptr++);
+				//commandDelay();		// don't seem to need a delay here
+				sendLcdData(*ptr++);
+				//commandDelay();  	 	// don't seem to need as long a delay as this
+				delayMicroseconds(LcdDataDelayMicros);
+			}
+
+			sspi_deselect_device(&device);
 		}
 
 		if (startRow != endRow)
@@ -570,19 +600,11 @@ void Lcd7920::sendLcdData(uint8_t data)
 // Send a command to the lcd. Data1 is sent as-is, data2 is split into 2 bytes, high nibble first.
 void Lcd7920::sendLcd(uint8_t data1, uint8_t data2)
 {
-	MutexLocker lock(Tasks::GetSpiMutex());
-	sspi_master_setup_device(&device);
-	delayMicroseconds(1);
-	sspi_select_device(&device);
-	delayMicroseconds(1);
 	uint8_t data[3];
 	data[0] = data1;
 	data[1] = data2 & 0xF0;
 	data[2] = data2 << 4;
 	sspi_transceive_packet(data, nullptr, 3);
-	delayMicroseconds(1);
-	sspi_deselect_device(&device);
-	delayMicroseconds(1);
 }
 
 #endif

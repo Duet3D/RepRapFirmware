@@ -25,7 +25,7 @@ Distributed as-is; no warranty is given.
 #include "Wire.h"
 #include "SX1509.h"
 #include "SX1509Registers.h"
-#include "RTOSIface.h"
+#include "RTOSIface/RTOSIface.h"
 
 SX1509::SX1509() : _clkX(0), errorCount(0)
 {

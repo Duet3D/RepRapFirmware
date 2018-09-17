@@ -12,6 +12,7 @@
 #include "TMC22xx.h"
 #include "RepRap.h"
 #include "Movement/Move.h"
+#include "Movement/StepTimer.h"
 #include "sam/drivers/pdc/pdc.h"
 #include "sam/drivers/uart/uart.h"
 
@@ -653,7 +654,7 @@ void TmcDriverState::SetCurrent(float current)
 
 void TmcDriverState::UpdateCurrent()
 {
-	// The current sense resistor on the Duet M is 0.075 ohms, to which we must add 0.03 ohms internal resistance.
+	// The current sense resistor on the Duet M is 0.082 ohms, to which we must add 0.03 ohms internal resistance.
 	// Full scale peak motor current in the high sensitivity range is give by I = 0.18/(R+0.03) = 0.18/0.105 ~= 1.6A
 	// This gives us a range of 50mA to 1.6A in 50mA steps in the high sensitivity range (VSENSE = 1)
 	const uint32_t iRunCsBits = (32 * motorCurrent - 800)/1615;		// formula checked by simulation on a spreadsheet
@@ -709,11 +710,11 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply)
 	{
 		reply.cat(" short-to-ground");
 	}
-	if ((lastReadStatus & TMC_RR_OLA) && !(lastReadStatus & TMC_RR_STST))
+	if (lastReadStatus & TMC_RR_OLA)
 	{
 		reply.cat(" open-load-A");
 	}
-	if ((lastReadStatus & TMC_RR_OLB) && !(lastReadStatus & TMC_RR_STST))
+	if (lastReadStatus & TMC_RR_OLB)
 	{
 		reply.cat(" open-load-B");
 	}
@@ -752,7 +753,18 @@ inline void TmcDriverState::TransferDone()
 		{
 			// We asked to read the scheduled read register, and the sync byte, slave address and register number in the received message match
 			//TODO here we could check the CRC of the received message, but for now we assume that we won't get any corruption in the 32-bit received data
-			const uint32_t regVal = ((uint32_t)receiveData[7] << 24) | ((uint32_t)receiveData[8] << 16) | ((uint32_t)receiveData[9] << 8) | receiveData[10];
+			uint32_t regVal = ((uint32_t)receiveData[7] << 24) | ((uint32_t)receiveData[8] << 16) | ((uint32_t)receiveData[9] << 8) | receiveData[10];
+			if (registerToRead == ReadDrvStat)
+			{
+				uint32_t interval;
+				if ((regVal & TMC_RR_STST) != 0
+					|| (interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor)) == 0		// get the full step interval
+					|| interval > StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec
+				   )
+				{
+					regVal &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds
+				}
+			}
 			readRegisters[registerToRead] = regVal;
 			accumulatedReadRegisters[registerToRead] |= regVal;
 

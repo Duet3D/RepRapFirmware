@@ -132,7 +132,7 @@ public:
 	int32_t GetNetStepsLeft() const;
 	int32_t GetNetStepsTaken() const;
 
-#if HAS_STALL_DETECT
+#if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const;	// Get the current full step interval for this axis or extruder
 #endif
 
@@ -308,7 +308,7 @@ inline void DriveMovement::Release(DriveMovement *item)
 	++numFree;
 }
 
-#if HAS_STALL_DETECT
+#if HAS_SMART_DRIVERS
 
 // Get the current full step interval for this axis or extruder
 inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const

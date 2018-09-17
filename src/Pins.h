@@ -15,7 +15,13 @@
 # elif defined(__SAM4E8E__)
 #  define PLATFORM DuetNG
 # elif defined(__SAME70Q21__)
-#  define PLATFORM Duet3
+#  if defined(DUET3)
+#   define PLATFORM Duet3
+#  elif defined(SAME70XPLD)
+#   define PLATFORM SAME70xpld
+#  else
+#   error Unknown platform
+#  endif
 # elif defined(DUET_M)
 #  define PLATFORM DuetM
 # elif defined(PCCB)

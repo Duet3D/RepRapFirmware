@@ -9,7 +9,7 @@
 #define SRC_MOVEMENT_KINEMATICS_H_
 
 #include "RepRapFirmware.h"
-#include "Libraries/Math/Matrix.h"
+#include "Math/Matrix.h"
 
 inline floatc_t fcsquare(floatc_t a)
 {
