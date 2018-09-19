@@ -154,7 +154,7 @@ extern "C" void UrgentInit()
 	// When the reset button is pressed on pre-production Duet WiFi boards, if the TMC2660 drivers were previously enabled then we get
 	// uncommanded motor movements if the STEP lines pick up any noise. Try to reduce that by initialising the pins that control the drivers early here.
 	// On the production boards the ENN line is pulled high by an external pullup resistor and that prevents motor movements.
-	for (size_t drive = 0; drive < DRIVES; ++drive)
+	for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
 	{
 		pinMode(STEP_PINS[drive], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
@@ -338,12 +338,26 @@ void Platform::Init()
 	Microstepping::Init(); // basic class to remember the Microstepping.
 #endif
 
-	// DRIVES
 	ARRAY_INIT(endStopPins, END_STOP_PINS);
-	ARRAY_INIT(maxFeedrates, MAX_FEEDRATES);
-	ARRAY_INIT(accelerations, ACCELERATIONS);
-	ARRAY_INIT(driveStepsPerUnit, DRIVE_STEPS_PER_UNIT);
-	ARRAY_INIT(instantDvs, INSTANT_DVS);
+
+	// Drives
+	maxFeedrates[X_AXIS] = maxFeedrates[Y_AXIS] = DefaultXYMaxFeedrate;
+	accelerations[X_AXIS] = accelerations[Y_AXIS] = DefaultXYAcceleration;
+	driveStepsPerUnit[X_AXIS] = driveStepsPerUnit[Y_AXIS] = DefaultXYDriveStepsPerUnit;
+	instantDvs[X_AXIS] = instantDvs[Y_AXIS] = DefaultXYInstantDv;
+
+	maxFeedrates[Z_AXIS] = DefaultZMaxFeedrate;
+	accelerations[Z_AXIS] = DefaultZAcceleration;
+	driveStepsPerUnit[Z_AXIS] = DefaultZDriveStepsPerUnit;
+	instantDvs[Z_AXIS] = DefaultZInstantDv;
+
+	for (size_t drive = E0_AXIS; drive < MaxTotalDrivers; ++drive)
+	{
+		maxFeedrates[drive] = DefaultEMaxFeedrate;
+		accelerations[drive] = DefaultEAcceleration;
+		driveStepsPerUnit[drive] = DefaultEDriveStepsPerUnit;
+		instantDvs[drive] = DefaultEInstantDv;
+	}
 
 	// Z PROBE
 	zProbeType = ZProbeType::none;				// default is to use no Z probe
@@ -383,10 +397,13 @@ void Platform::Init()
 # endif
 #endif
 
-	for (size_t drive = 0; drive < DRIVES; drive++)
+	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
 	{
 		enableValues[drive] = 0;					// assume active low enable signal
 		directions[drive] = true;					// drive moves forwards by default
+		motorCurrents[drive] = 0.0;
+		motorCurrentFraction[drive] = 1.0;
+		driverState[drive] = DriverStatus::disabled;
 
 		// Map axes and extruders straight through
 		if (drive < MaxAxes)
@@ -397,22 +414,22 @@ void Platform::Init()
 			endStopInputType[drive] = EndStopInputType::activeHigh;	// assume all endstops use active high logic e.g. normally-closed switch to ground
 		}
 
-		driveDriverBits[drive] = driveDriverBits[drive + DRIVES] = CalcDriverBitmap(drive);
+		if (drive < NumDirectDrivers)
+		{
+			driveDriverBits[drive] = driveDriverBits[drive + NumDirectDrivers] = CalcDriverBitmap(drive);
 
-		// Set up the control pins and endstops
-		pinMode(STEP_PINS[drive], OUTPUT_LOW);
-		pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
+			// Set up the control pins and endstops
+			pinMode(STEP_PINS[drive], OUTPUT_LOW);
+			pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
 #if !defined(DUET3)
-		pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
+			pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
 #endif
 
 #ifndef __LPC17xx__
-		const PinDescription& pinDesc = g_APinDescription[STEP_PINS[drive]];
-		pinDesc.pPort->PIO_OWER = pinDesc.ulPin;				// enable parallel writes to the step pins
+			const PinDescription& pinDesc = g_APinDescription[STEP_PINS[drive]];
+			pinDesc.pPort->PIO_OWER = pinDesc.ulPin;				// enable parallel writes to the step pins
 #endif
-		motorCurrents[drive] = 0.0;
-		motorCurrentFraction[drive] = 1.0;
-		driverState[drive] = DriverStatus::disabled;
+		}
 	}
 
 	for (size_t endstop = 0; endstop <  NumEndstops; ++endstop)
@@ -1567,7 +1584,7 @@ void Platform::Spin()
 # ifdef DUET_NG
 					{ LowestNBits<DriversBitmap>(5), LowestNBits<DriversBitmap>(5) << 5 };			// first channel is Duet, second is DueX5
 # else
-					{ LowestNBits<DriversBitmap>(DRIVES), LowestNBits<DriversBitmap>(DRIVES) };		// both channels monitor all drivers
+					{ LowestNBits<DriversBitmap>(NumDirectDrivers), LowestNBits<DriversBitmap>(NumDirectDrivers) };		// both channels monitor all drivers
 # endif
 				for (unsigned int i = 0; i < NumTmcDriversSenseChannels; ++i)
 				{
@@ -1591,7 +1608,7 @@ void Platform::Spin()
 				String<ScratchStringLength> scratchString;
 				ListDrivers(scratchString.GetRef(), stalledDriversToLog);
 				stalledDriversToLog = 0;
-				float liveCoordinates[DRIVES];
+				float liveCoordinates[MaxTotalDrivers];
 				reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 				MessageF(WarningMessage, "Driver(s)%s stalled at Z height %.2f", scratchString.c_str(), (double)liveCoordinates[Z_AXIS]);
 				reported = true;
@@ -1722,7 +1739,7 @@ bool Platform::AnyAxisMotorStalled(size_t drive) const
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
 		{
 			const uint8_t driver = axisDrivers[drive].driverNumbers[i];
-			if (driver < DRIVES && (SmartDrivers::GetLiveStatus(driver) & TMC_RR_SG) != 0)
+			if (driver < NumDirectDrivers && (SmartDrivers::GetLiveStatus(driver) & TMC_RR_SG) != 0)
 			{
 				return true;
 			}
@@ -1735,7 +1752,7 @@ bool Platform::AnyAxisMotorStalled(size_t drive) const
 bool Platform::ExtruderMotorStalled(size_t extruder) const pre(drive < DRIVES)
 {
 	const uint8_t driver = extruderDrivers[extruder];
-	return driver < DRIVES && (SmartDrivers::GetLiveStatus(driver) & TMC_RR_SG) != 0;
+	return driver < NumDirectDrivers && (SmartDrivers::GetLiveStatus(driver) & TMC_RR_SG) != 0;
 }
 
 #endif
@@ -2729,7 +2746,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 		}
 	}
 #if HAS_STALL_DETECT
-	else if (drive < DRIVES)
+	else if (drive < NumDirectDrivers)
 	{
 		// Endstop is for an extruder drive, so use stall detection
 		return (ExtruderMotorStalled(drive - numAxes)) ? EndStopHit::highHit : EndStopHit::noStop;
@@ -2847,13 +2864,13 @@ void Platform::SetDirection(size_t drive, bool direction)
 			SetDriverDirection(axisDrivers[drive].driverNumbers[i], direction);
 		}
 	}
-	else if (drive < DRIVES)
+	else if (drive < NumDirectDrivers)
 	{
 		SetDriverDirection(extruderDrivers[drive - numAxes], direction);
 	}
-	else if (drive < 2 * DRIVES)
+	else if (drive >= MaxTotalDrivers && drive < MaxTotalDrivers + NumDirectDrivers)
 	{
-		SetDriverDirection(drive - DRIVES, direction);
+		SetDriverDirection(drive - MaxTotalDrivers, direction);
 	}
 	if (isSlowDriver)
 	{
@@ -2864,7 +2881,7 @@ void Platform::SetDirection(size_t drive, bool direction)
 // Enable a driver. Must not be called from an ISR, or with interrupts disabled.
 void Platform::EnableDriver(size_t driver)
 {
-	if (driver < DRIVES && driverState[driver] != DriverStatus::enabled)
+	if (driver < NumDirectDrivers && driverState[driver] != DriverStatus::enabled)
 	{
 		driverState[driver] = DriverStatus::enabled;
 		UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
@@ -2889,7 +2906,7 @@ void Platform::EnableDriver(size_t driver)
 // Disable a driver
 void Platform::DisableDriver(size_t driver)
 {
-	if (driver < DRIVES)
+	if (driver < NumDirectDrivers)
 	{
 #if defined(DUET3) && HAS_SMART_DRIVERS
 		SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
@@ -2920,7 +2937,7 @@ void Platform::EnableDrive(size_t drive)
 			EnableDriver(axisDrivers[drive].driverNumbers[i]);
 		}
 	}
-	else if (drive < DRIVES)
+	else if (drive < NumDirectDrivers)
 	{
 		EnableDriver(extruderDrivers[drive - numAxes]);
 	}
@@ -2937,7 +2954,7 @@ void Platform::DisableDrive(size_t drive)
 			DisableDriver(axisDrivers[drive].driverNumbers[i]);
 		}
 	}
-	else if (drive < DRIVES)
+	else if (drive < NumDirectDrivers)
 	{
 		DisableDriver(extruderDrivers[drive - numAxes]);
 	}
@@ -2946,7 +2963,7 @@ void Platform::DisableDrive(size_t drive)
 // Disable all drives. Called from emergency stop and the tick ISR.
 void Platform::DisableAllDrives()
 {
-	for (size_t drive = 0; drive < DRIVES; drive++)
+	for (size_t drive = 0; drive < NumDirectDrivers; drive++)
 	{
 		if (!inInterrupt())		// on the Duet 06/085 we need interrupts running to send the I2C commands to set motor currents
 		{
@@ -2967,7 +2984,7 @@ void Platform::SetDriversIdle()
 	}
 	else
 	{
-		for (size_t driver = 0; driver < DRIVES; ++driver)
+		for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 		{
 			if (driverState[driver] == DriverStatus::enabled)
 			{
@@ -2981,7 +2998,7 @@ void Platform::SetDriversIdle()
 // Set the current for a drive. Current is in mA.
 void Platform::SetDriverCurrent(size_t driver, float currentOrPercent, int code)
 {
-	if (driver < DRIVES)
+	if (driver < NumDirectDrivers)
 	{
 		switch (code)
 		{
@@ -3018,7 +3035,7 @@ void Platform::SetMotorCurrent(size_t drive, float currentOrPercent, int code)
 		}
 
 	}
-	else if (drive < DRIVES)
+	else if (drive < NumDirectDrivers)
 	{
 		SetDriverCurrent(extruderDrivers[drive - numAxes], currentOrPercent, code);
 	}
@@ -3027,7 +3044,7 @@ void Platform::SetMotorCurrent(size_t drive, float currentOrPercent, int code)
 // This must not be called from an ISR, or with interrupts disabled.
 void Platform::UpdateMotorCurrent(size_t driver)
 {
-	if (driver < DRIVES)
+	if (driver < NumDirectDrivers)
 	{
 		float current = motorCurrents[driver];
 		if (driverState[driver] == DriverStatus::idle)
@@ -3112,10 +3129,10 @@ void Platform::UpdateMotorCurrent(size_t driver)
 float Platform::GetMotorCurrent(size_t drive, int code) const
 {
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	if (drive < DRIVES && drive < numAxes + reprap.GetGCodes().GetNumExtruders())
+	if (drive < NumDirectDrivers && drive < numAxes + reprap.GetGCodes().GetNumExtruders())
 	{
 		const uint8_t driver = (drive < numAxes) ? axisDrivers[drive].driverNumbers[0] : extruderDrivers[drive - numAxes];
-		if (driver < DRIVES)
+		if (driver < NumDirectDrivers)
 		{
 			switch (code)
 			{
@@ -3141,7 +3158,7 @@ float Platform::GetMotorCurrent(size_t drive, int code) const
 void Platform::SetIdleCurrentFactor(float f)
 {
 	idleCurrentFactor = constrain<float>(f, 0.0, 1.0);
-	for (size_t driver = 0; driver < DRIVES; ++driver)
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
 		if (driverState[driver] == DriverStatus::idle)
 		{
@@ -3153,7 +3170,7 @@ void Platform::SetIdleCurrentFactor(float f)
 // Set the microstepping for a driver, returning true if successful
 bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode)
 {
-	if (driver < DRIVES)
+	if (driver < NumDirectDrivers)
 	{
 #if HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
@@ -3192,7 +3209,7 @@ bool Platform::SetMicrostepping(size_t drive, int microsteps, bool interp)
 		}
 		return ok;
 	}
-	else if (drive < DRIVES)
+	else if (drive < NumDirectDrivers)
 	{
 		return SetDriverMicrostepping(extruderDrivers[drive - numAxes], microsteps, interp);
 	}
@@ -3230,7 +3247,7 @@ unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
 	{
 		return GetDriverMicrostepping(axisDrivers[drive].driverNumbers[0], interpolation);
 	}
-	else if (drive < DRIVES)
+	else if (drive < NumDirectDrivers)
 	{
 		return GetDriverMicrostepping(extruderDrivers[drive - numAxes], interpolation);
 	}
@@ -4390,8 +4407,8 @@ bool Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply)
 	DriversBitmap drivers = 0;
 	if (gb.Seen('P'))
 	{
-		uint32_t drives[DRIVES];
-		size_t dCount = DRIVES;
+		uint32_t drives[NumDirectDrivers];
+		size_t dCount = NumDirectDrivers;
 		gb.GetUnsignedArray(drives, dCount, false);
 		for (size_t i = 0; i < dCount; i++)
 		{

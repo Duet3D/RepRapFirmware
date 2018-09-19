@@ -128,7 +128,7 @@ void PrintMonitor::Spin()
 			if (!gCodes.DoingFileMacro() && reprap.GetMove().IsExtruding())
 			{
 				// Print is in progress and filament is being extruded
-				float liveCoordinates[DRIVES];
+				float liveCoordinates[MaxTotalDrivers];
 				reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 
 				if (currentLayer == 0)
@@ -365,7 +365,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 			// Sum up the filament usage and the filament needed
 			float totalFilamentNeeded = 0.0;
 			const float extrRawTotal = gCodes.GetTotalRawExtrusion();
-			for (size_t extruder = 0; extruder < DRIVES - reprap.GetGCodes().GetTotalAxes(); extruder++)
+			for (size_t extruder = 0; extruder < MaxTotalDrivers - reprap.GetGCodes().GetTotalAxes(); extruder++)
 			{
 				totalFilamentNeeded += printingFileInfo.filamentNeeded[extruder];
 			}

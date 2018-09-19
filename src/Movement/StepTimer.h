@@ -61,6 +61,4 @@ namespace StepTimer
 	void DisableSoftTimerInterrupt();									// Make sure we get no software timer interrupts
 }
 
-constexpr float StepClocksToMillis = 1000.0/(float)StepTimer::StepClockRate;
-
 #endif /* SRC_MOVEMENT_STEPTIMER_H_ */

@@ -813,7 +813,7 @@ namespace SmartDrivers
 {
 	// Initialise the driver interface and the drivers, leaving each drive disabled.
 	// It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
-	void Init(const Pin driverSelectPins[DRIVES], size_t numTmcDrivers)
+	void Init(const Pin driverSelectPins[NumDirectDrivers], size_t numTmcDrivers)
 	{
 		numTmc2660Drivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
 

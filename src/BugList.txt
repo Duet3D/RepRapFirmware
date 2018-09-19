@@ -5,6 +5,7 @@ Duet 3 work list
 - SWdebug stuff
 - fan/heater output flexible configuration
 - endstop/Z probe flexible configuration
+- leadscrew adjustment move drive numbering is probably wrong
 
 RRF 1.20 work list
 
@@ -40,6 +41,7 @@ Investigations:
 - [done, test] Fix additional axes on delta not coordinated
 - [done] DWC disconnects when a message box and a beep are pending at the same time
 - [tested, pause/resume works as intended] Check M106 R1 parameter, see https://forum.duet3d.com/topic/6538/resuming-print-fan-after-pause
+- M226 not working? https://forum.duet3d.com/topic/6860/filament-change-no-reaction/3
 - spurious drive disconected messages in RC2, https://forum.duet3d.com/topic/6765/firmware-2-02rc2-released/14
 - Weird height map, https://forum.duet3d.com/topic/6472/mesh-grid-compensation/28
 - Full stepping problem, https://forum.duet3d.com/topic/6433/how-to-reduce-the-speed-of-extrusion/14

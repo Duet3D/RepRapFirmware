@@ -40,7 +40,7 @@ public:
 	DDA(DDA* n);
 
 	bool Init(GCodes::RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
-	bool Init(const float_t steps[DRIVES]);							// Set up a raw (unmapped) motor move
+	bool Init(const float_t steps[MaxTotalDrivers]);				// Set up a raw (unmapped) motor move
 	void Init();													// Set up initial positions for machine startup
 	bool Start(uint32_t tim) __attribute__ ((hot));					// Start executing the DDA, i.e. move the move.
 	bool Step() __attribute__ ((hot));								// Take one step of the DDA, called by timed interrupt.
@@ -62,7 +62,7 @@ public:
 	void SetDriveCoordinate(int32_t a, size_t drive);				// Force an end point
 	void SetFeedRate(float rate) { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping);
-	bool FetchEndPosition(volatile int32_t ep[DRIVES], volatile float endCoords[DRIVES]);
+	bool FetchEndPosition(volatile int32_t ep[MaxTotalDrivers], volatile float endCoords[MaxTotalDrivers]);
     void SetPositions(const float move[], size_t numDrives);		// Force the endpoints to be these
     FilePosition GetFilePosition() const { return filePos; }
     float GetRequestedSpeed() const { return requestedSpeed; }
@@ -193,9 +193,9 @@ private:
 
     FilePosition filePos;					// The position in the SD card file after this move was read, or zero if not read from SD card
 
-	int32_t endPoint[DRIVES];  				// Machine coordinates of the endpoint
-	float endCoordinates[DRIVES];			// The Cartesian coordinates at the end of the move plus extrusion amounts
-	float directionVector[DRIVES];			// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
+	int32_t endPoint[MaxTotalDrivers];  	// Machine coordinates of the endpoint
+	float endCoordinates[MaxTotalDrivers];	// The Cartesian coordinates at the end of the move plus extrusion amounts
+	float directionVector[MaxTotalDrivers];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;					// How long is the move in hypercuboid space
 	float acceleration;						// The acceleration to use
 	float deceleration;						// The deceleration to use
@@ -241,8 +241,8 @@ private:
 	void LogProbePosition();
 #endif
 
-    DriveMovement* firstDM;					// list of contained DMs that need steps, in step time order
-	DriveMovement *pddm[DRIVES];			// These describe the state of each drive movement
+    DriveMovement* firstDM;						// list of contained DMs that need steps, in step time order
+	DriveMovement *pddm[MaxTotalDrivers];		// These describe the state of each drive movement
 };
 
 // Find the DriveMovement record for a given drive, or return nullptr if there isn't one

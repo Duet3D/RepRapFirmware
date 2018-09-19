@@ -30,6 +30,23 @@ constexpr float ABS_ZERO = -273.15;						// Celsius
 constexpr float NEARLY_ABS_ZERO = -273.0;				// Celsius
 constexpr float ROOM_TEMPERATURE = 21.0;				// Celsius
 
+// Axes
+constexpr float DefaultXYMaxFeedrate = 100;				// mm/sec
+constexpr float DefaultZMaxFeedrate = 5.0;
+constexpr float DefaultEMaxFeedrate = 20.0;
+
+constexpr float DefaultXYAcceleration = 500.0;			// mm/sec^2
+constexpr float DefaultZAcceleration = 20.0;
+constexpr float DefaultEAcceleration = 250.0;
+
+constexpr float DefaultXYDriveStepsPerUnit = 80.0;		// steps/mm
+constexpr float DefaultZDriveStepsPerUnit = 4000.0;
+constexpr float DefaultEDriveStepsPerUnit = 420.0;
+
+constexpr float DefaultXYInstantDv = 15.0;				// mm/sec
+constexpr float DefaultZInstantDv = 0.2;
+constexpr float DefaultEInstantDv = 2.0;
+
 // Timeouts
 constexpr uint32_t FanCheckInterval = 500;				// Milliseconds
 constexpr uint32_t OpenLoadTimeout = 500;				// Milliseconds

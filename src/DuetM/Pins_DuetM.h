@@ -37,9 +37,9 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 
 // The physical capabilities of the machine
 
-constexpr size_t DRIVES = 7;						// The maximum number of drives supported by the electronics
+constexpr size_t NumDirectDrivers = 7;				// The maximum number of drives supported by the electronics
+constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 constexpr size_t MaxSmartDrivers = 7;				// The maximum number of smart drivers
-#define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g }
 
 constexpr size_t NumEndstops = 5;					// The number of inputs we have for endstops, filament sensors etc.
 constexpr size_t NumHeaters = 3;					// The number of heaters/thermistors in the machine. Duet M has 3 heaters but 4 thermistors.
@@ -51,7 +51,7 @@ constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the
 // Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
 #define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f }
 
-constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
+constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
@@ -65,9 +65,9 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 
 // Drivers
 constexpr Pin GlobalTmc22xxEnablePin = 1;			// The pin that drives ENN of all drivers
-constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, 63, 61 };
-constexpr Pin STEP_PINS[DRIVES] = { 56, 38, 64, 40, 41, 67, 57 };
-constexpr Pin DIRECTION_PINS[DRIVES] = { 54, 8, 30, 33, 42, 18, 60 };
+constexpr Pin ENABLE_PINS[NumDirectDrivers] = { NoPin, NoPin, NoPin, NoPin, NoPin, 63, 61 };
+constexpr Pin STEP_PINS[NumDirectDrivers] = { 56, 38, 64, 40, 41, 67, 57 };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { 54, 8, 30, 33, 42, 18, 60 };
 
 // UART interface to stepper drivers
 Uart * const UART_TMC22xx = UART0;

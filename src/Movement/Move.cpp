@@ -86,8 +86,8 @@ void Move::Init()
 	// Put the origin on the lookahead ring with default velocity in the previous position to the first one that will be used.
 	// Do this by calling SetLiveCoordinates and SetPositions, so that the motor coordinates will be correct too even on a delta.
 	{
-		float move[DRIVES];
-		for (size_t i = 0; i < DRIVES; i++)
+		float move[MaxTotalDrivers];
+		for (size_t i = 0; i < MaxTotalDrivers; i++)
 		{
 			move[i] = 0.0;
 			liveEndPoints[i] = 0;								// not actually right for a delta, but better than printing random values in response to M114
@@ -183,7 +183,7 @@ void Move::Spin()
 #endif
 						  ddaRingAddPointer->GetState() == DDA::empty
 					   && ddaRingAddPointer->GetNext()->GetState() != DDA::provisional		// function Prepare needs to access the endpoints in the previous move, so don't change them
-					   && DriveMovement::NumFree() >= (int)DRIVES							// check that we won't run out of DMs
+					   && DriveMovement::NumFree() >= (int)MaxTotalDrivers					// check that we won't run out of DMs
 					  );
 	if (canAddMove)
 	{
@@ -655,9 +655,9 @@ void Move::Diagnostics(MessageType mtype)
 }
 
 // Set the current position to be this
-void Move::SetNewPosition(const float positionNow[DRIVES], bool doBedCompensation)
+void Move::SetNewPosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation)
 {
-	float newPos[DRIVES];
+	float newPos[MaxTotalDrivers];
 	memcpy(newPos, positionNow, sizeof(newPos));			// copy to local storage because Transform modifies it
 	AxisAndBedTransform(newPos, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes(), doBedCompensation);
 	SetLiveCoordinates(newPos);
@@ -665,11 +665,11 @@ void Move::SetNewPosition(const float positionNow[DRIVES], bool doBedCompensatio
 }
 
 // These are the actual numbers we want in the positions, so don't transform them.
-void Move::SetPositions(const float move[DRIVES])
+void Move::SetPositions(const float move[MaxTotalDrivers])
 {
 	if (DDARingEmpty())
 	{
-		ddaRingAddPointer->GetPrevious()->SetPositions(move, DRIVES);
+		ddaRingAddPointer->GetPrevious()->SetPositions(move, MaxTotalDrivers);
 	}
 	else
 	{
@@ -1035,7 +1035,7 @@ void Move::CurrentMoveCompleted()
 	// Save the current motor coordinates, and the machine Cartesian coordinates if known
 	liveCoordinatesValid = currentDda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	for (size_t drive = numAxes; drive < DRIVES; ++drive)
+	for (size_t drive = numAxes; drive < MaxTotalDrivers; ++drive)
 	{
 		extrusionAccumulators[drive - numAxes] += currentDda->GetStepsTaken(drive);
 		if (currentDda->IsNonPrintingExtruderMove(drive))
@@ -1119,7 +1119,7 @@ void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, AxesBitmap
 
 // Return the current live XYZ and extruder coordinates
 // Interrupts are assumed enabled on entry
-void Move::LiveCoordinates(float m[DRIVES], AxesBitmap xAxes, AxesBitmap yAxes)
+void Move::LiveCoordinates(float m[MaxTotalDrivers], AxesBitmap xAxes, AxesBitmap yAxes)
 {
 	// The live coordinates and live endpoints are modified by the ISR, so be careful to get a self-consistent set of them
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();		// do this before we disable interrupts
@@ -1128,13 +1128,13 @@ void Move::LiveCoordinates(float m[DRIVES], AxesBitmap xAxes, AxesBitmap yAxes)
 	if (liveCoordinatesValid)
 	{
 		// All coordinates are valid, so copy them across
-		memcpy(m, const_cast<const float *>(liveCoordinates), sizeof(m[0]) * DRIVES);
+		memcpy(m, const_cast<const float *>(liveCoordinates), sizeof(m[0]) * MaxTotalDrivers);
 		cpu_irq_enable();
 	}
 	else
 	{
 		// Only the extruder coordinates are valid, so we need to convert the motor endpoints to coordinates
-		memcpy(m + numTotalAxes, const_cast<const float *>(liveCoordinates + numTotalAxes), sizeof(m[0]) * (DRIVES - numTotalAxes));
+		memcpy(m + numTotalAxes, const_cast<const float *>(liveCoordinates + numTotalAxes), sizeof(m[0]) * (MaxTotalDrivers - numTotalAxes));
 		int32_t tempEndPoints[MaxAxes];
 		memcpy(tempEndPoints, const_cast<const int32_t*>(liveEndPoints), sizeof(tempEndPoints));
 		cpu_irq_enable();
@@ -1155,9 +1155,9 @@ void Move::LiveCoordinates(float m[DRIVES], AxesBitmap xAxes, AxesBitmap yAxes)
 
 // These are the actual numbers that we want to be the coordinates, so don't transform them.
 // The caller must make sure that no moves are in progress or pending when calling this
-void Move::SetLiveCoordinates(const float coords[DRIVES])
+void Move::SetLiveCoordinates(const float coords[MaxTotalDrivers])
 {
-	for (size_t drive = 0; drive < DRIVES; drive++)
+	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
 	{
 		liveCoordinates[drive] = coords[drive];
 	}
@@ -1169,7 +1169,7 @@ void Move::ResetExtruderPositions()
 {
 	const size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
 	cpu_irq_disable();
-	for (size_t eDrive = totalAxes; eDrive < DRIVES; eDrive++)
+	for (size_t eDrive = totalAxes; eDrive < MaxTotalDrivers; eDrive++)
 	{
 		liveCoordinates[eDrive] = 0.0;
 	}
@@ -1182,7 +1182,7 @@ void Move::ResetExtruderPositions()
 int32_t Move::GetAccumulatedExtrusion(size_t extruder, bool& nonPrinting)
 {
 	const size_t drive = extruder + reprap.GetGCodes().GetTotalAxes();
-	if (drive < DRIVES)
+	if (drive < MaxTotalDrivers)
 	{
 		const irqflags_t flags = cpu_irq_save();
 		const int32_t ret = extrusionAccumulators[extruder];
