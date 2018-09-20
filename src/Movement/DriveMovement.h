@@ -98,9 +98,18 @@ struct PrepParams
 	// Parameters used only for extruders
 	float compFactor;
 
+#if SUPPORT_CAN_EXPANSION
+	// Parameters used by CAN expansion
+	float accelTime, steadyTime, decelTime;
+	float initialSpeedFraction, finalSpeedFraction;
+#endif
+
 	// Parameters used only for delta moves
-	float initialX;
-	float initialY;
+	float initialX, initialY;
+#if SUPPORT_CAN_EXPANSION
+	float finalX, finalY;
+	float zMovement;
+#endif
 	const LinearDeltaKinematics *dparams;
 	float diagonalSquared;
 	float a2plusb2;								// sum of the squares of the X and Y movement fractions
@@ -134,6 +143,10 @@ public:
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const;	// Get the current full step interval for this axis or extruder
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+	int32_t GetSteps() const { return (direction) ? totalSteps : -totalSteps; }
 #endif
 
 	static void InitialAllocate(unsigned int num);

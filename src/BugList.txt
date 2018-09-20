@@ -2,10 +2,11 @@ Duet 3 work list
 - Configure ESP SPI pins and channel from Pins.h
 - Driver on/off voltages to be defined in Pins.h, they depend on the board
 - Enable dotstar support
-- SWdebug stuff
+- SWdebug stuff for main board
 - fan/heater output flexible configuration
 - endstop/Z probe flexible configuration
-- leadscrew adjustment move drive numbering is probably wrong
+- leadscrew adjustment moves not implemented on remote drivers
+- hiccup delay times will need sending to CAN drivers
 
 RRF 1.20 work list
 
@@ -56,6 +57,7 @@ Remaining:
 - [done, test] Add paused coordinates to 'printing paused' message? https://reprap.org/forum/read.php?416,832303,832440#msg-832440
 - [done] If a bad curve fit occurs during tuning, display the values as A, C and D instead of G, tc and td to better relate to M307
 - [done, M3D testing] Merge in Matt's display changes
+- M918 should echo current settings
 - Limit amount of CPU time used to refesh the display, https://forum.duet3d.com/topic/6676/firmware-2-02-release-candidate-1-now-available
 - Option to generate stall warning messages if stalls occur when not printing from SD card, https://forum.duet3d.com/topic/6720/stall-protection-on-pyserial-print/6
 - Add check digit to serial number

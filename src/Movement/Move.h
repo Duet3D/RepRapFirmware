@@ -30,9 +30,10 @@ const unsigned int DdaRingLength = 20;
 const unsigned int NumDms = DdaRingLength * 5;						// suitable for e.g. a delta + 2-input hot end
 #endif
 
-/**
- * This is the master movement class.  It controls all movement in the machine.
- */
+constexpr uint32_t MovementStartDelayClocks = StepTimer::StepClockRate/100;		// 10ms delay between preparing the first move and starting it
+
+// This is the master movement class.  It controls all movement in the machine.
+
 class Move
 {
 public:

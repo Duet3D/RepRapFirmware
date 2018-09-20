@@ -406,6 +406,7 @@ void Platform::Init()
 		driverState[drive] = DriverStatus::disabled;
 
 		// Map axes and extruders straight through
+		driveDriverBits[drive] = driveDriverBits[drive + MaxTotalDrivers] = CalcDriverBitmap(drive);	// this returns 0 for remote drivers
 		if (drive < MaxAxes)
 		{
 			axisDrivers[drive].numDrivers = 1;
@@ -416,8 +417,6 @@ void Platform::Init()
 
 		if (drive < NumDirectDrivers)
 		{
-			driveDriverBits[drive] = driveDriverBits[drive + NumDirectDrivers] = CalcDriverBitmap(drive);
-
 			// Set up the control pins and endstops
 			pinMode(STEP_PINS[drive], OUTPUT_LOW);
 			pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);

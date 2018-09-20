@@ -39,6 +39,10 @@
 #include "GCodes/GCodeBuffer.h"
 #include "Tools/Tool.h"
 
+#if SUPPORT_CAN_EXPANSION
+# include "CAN/CanInterface.h"
+#endif
+
 constexpr uint32_t UsualMinimumPreparedTime = StepTimer::StepClockRate/10;			// 100ms
 constexpr uint32_t AbsoluteMinimumPreparedTime = StepTimer::StepClockRate/20;		// 50ms
 
@@ -304,7 +308,11 @@ void Move::Spin()
 			// Prepare one move and execute it. We assume that we will enter the next if-block before it completes, giving us time to prepare more moves.
 			StepTimer::DisableStepInterrupt();						// should be disabled already because we weren't executing a move, but make sure
 			DDA * const dda = ddaRingGetPointer;					// capture volatile variable
-			if (dda->GetState() == DDA::provisional)
+			if (   dda->GetState() == DDA::provisional
+#if SUPPORT_CAN_EXPANSION
+				&& CanInterface::CanPrepareMove()
+#endif
+			   )
 			{
 				dda->Prepare(simulationMode);
 			}
@@ -358,13 +366,17 @@ void Move::Spin()
 		}
 
 		// If the number of prepared moves will execute in less than the minimum time, prepare another move.
-		// Try to avoid preparing deceleration-only moves
+		// Try to avoid preparing deceleration-only moves too early
 		while (st == DDA::provisional
 				&& preparedTime < (int32_t)UsualMinimumPreparedTime		// prepare moves one eighth of a second ahead of when they will be needed
 				&& preparedCount < DdaRingLength/2 - 1					// but don't prepare as much as half the ring
 			  )
 		{
-			if (cdda->IsGoodToPrepare() || preparedTime < (int32_t)AbsoluteMinimumPreparedTime)
+			if (   (cdda->IsGoodToPrepare() || preparedTime < (int32_t)AbsoluteMinimumPreparedTime)
+#if SUPPORT_CAN_EXPANSION
+				&& CanInterface::CanPrepareMove()
+#endif
+			   )
 			{
 				cdda->Prepare(simulationMode);
 			}

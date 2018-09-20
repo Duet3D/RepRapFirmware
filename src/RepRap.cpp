@@ -34,6 +34,10 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 # endif
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+# include "CAN/CanInterface.h"
+#endif
+
 #ifdef RTOS
 # include "FreeRTOS.h"
 # include "task.h"
@@ -220,6 +224,9 @@ void RepRap::Init()
 	network->Init();
 	SetName(DEFAULT_MACHINE_NAME);		// Network must be initialised before calling this because this calls SetHostName
 	gCodes->Init();
+#if SUPPORT_CAN_EXPANSION
+	CanInterface::Init();
+#endif
 	move->Init();
 	heat->Init();
 #if SUPPORT_ROLAND

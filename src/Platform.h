@@ -728,7 +728,7 @@ private:
 	float motorCurrentFraction[MaxTotalDrivers];		// the percentages of normal motor current that each driver is set to
 	AxisDriversConfig axisDrivers[MaxAxes];				// the driver numbers assigned to each axis
 	uint8_t extruderDrivers[MaxExtruders];				// the driver number assigned to each extruder
-	uint32_t driveDriverBits[2 * NumDirectDrivers];		// the bitmap of driver port bits for each axis or extruder, followed by the raw versions
+	uint32_t driveDriverBits[2 * MaxTotalDrivers];		// the bitmap of driver port bits for each axis or extruder, followed by the raw versions
 	uint32_t slowDriverStepTimingClocks[4];				// minimum step high, step low, dir setup and dir hold timing for slow drivers
 	uint32_t slowDriversBitmap;							// bitmap of driver port bits that need extended step pulse timing
 	float idleCurrentFactor;
@@ -1210,7 +1210,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // Alligator:
 //  Pins on ports B,C,D are used but the bit numbers are all different, so we use their actual positions
 
-// Calculate the step bit for a driver. This doesn't need to be fast.
+// Calculate the step bit for a driver. This doesn't need to be fast. It must return 0 if the driver is remote.
 /*static*/ inline uint32_t Platform::CalcDriverBitmap(size_t driver)
 {
 	if (driver >= NumDirectDrivers)
