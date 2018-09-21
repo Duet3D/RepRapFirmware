@@ -14,7 +14,7 @@
 #  endif
 # elif defined(__SAM4E8E__)
 #  define PLATFORM DuetNG
-# elif defined(__SAME70Q21__)
+# elif defined(__SAME70Q21__) || defined(__SAME70Q20B__) || defined(__SAME70Q21B__)
 #  if defined(DUET3)
 #   define PLATFORM Duet3
 #  elif defined(SAME70XPLD)

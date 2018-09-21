@@ -152,7 +152,7 @@ constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater p
 
 // Thermistor/PT1000 inputs
 constexpr size_t NumThermistorInputs = 4;
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PORTB_PIN(3), PORTC_PIN(15), PORTC_PIN(12), PORTC_PIN(30) };	// Thermistor/PT1000 pins
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PORTB_PIN(3), PORTC_PIN(15), PORTC_PIN(0), PORTC_PIN(30) };	// Thermistor/PT1000 pins
 
 // Default thermistor parameters
 constexpr float BED_R25 = 100000.0;

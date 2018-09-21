@@ -26,6 +26,7 @@ public:
 	static unsigned int FreeBuffers() { return numFree; }
 
 	CanMessageBuffer *next;
+	unsigned int expansionBoardId;
 	CanMovementMessage msg;
 
 private:

@@ -21,7 +21,10 @@
 // Each DDA needs one DM per drive that it moves.
 // However, DM's are large, so we provide fewer than DRIVES * DdaRingLength of them. The planner checks that enough DMs are available before filling in a new DDA.
 
-#if SAM4E || SAM4S || SAME70
+#if SAME70
+const unsigned int DdaRingLength = 30;
+const unsigned int NumDms = DdaRingLength * 12;						// allow enough for plenty of CAN expansion
+#elif SAM4E || SAM4S
 const unsigned int DdaRingLength = 30;
 const unsigned int NumDms = DdaRingLength * 8;						// suitable for e.g. a delta + 5 input hot end
 #else

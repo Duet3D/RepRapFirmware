@@ -1249,7 +1249,7 @@ namespace SmartDrivers
 						| US_MR_CHMODE_NORMAL
 						| US_MR_CPOL
 						| US_MR_CLKO;
-		USART_TMC51xx->US_BRGR = VARIANT_MCK/DriversSpiClockFrequency;		// set SPI clock frequency
+		USART_TMC51xx->US_BRGR = SystemPeripheralClock()/DriversSpiClockFrequency;		// set SPI clock frequency
 		USART_TMC51xx->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
 
 		// We need a few microseconds of delay here for the USART to sort itself out before we send any data,

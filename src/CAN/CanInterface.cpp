@@ -64,8 +64,10 @@ void CanInterface::AddMovement(const DDA& dda, const PrepParams& params, size_t 
 			buf = CanMessageBuffer::Allocate();
 			if (buf == nullptr)
 			{
-				return;
+				return;		//TODO error handling
 			}
+
+			buf->expansionBoardId = expansionBoardNumber + 1;
 
 			// Common parameters
 			buf->msg.accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
