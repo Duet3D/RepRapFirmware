@@ -557,7 +557,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					moveBuffer.coords[axis] += gb.Seen('R') ? gb.GetFValue() : 5.0;
 
 					// Zero every extruder drive
-					for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
+					for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; drive++)
 					{
 						moveBuffer.coords[drive] = 0.0;
 					}
@@ -601,7 +601,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					moveBuffer.coords[axis] = platform.AxisMaximum(axis);
 
 					// Zero every extruder drive
-					for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
+					for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; drive++)
 					{
 						moveBuffer.coords[drive] = 0.0;
 					}
@@ -643,7 +643,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					moveBuffer.coords[axis] = (currentUserPosition[axis] + toolChangeRestorePoint.moveCoords[axis]) / 2.0;
 
 					// Zero every extruder drive
-					for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
+					for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; drive++)
 					{
 						moveBuffer.coords[drive] = 0.0;
 					}

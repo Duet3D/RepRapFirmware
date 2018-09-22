@@ -853,7 +853,7 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply)
 			moveBuffer.coords[axis] = platform.AxisMinimum(axis);
 
 			// Zero every extruder drive
-			for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
+			for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; drive++)
 			{
 				moveBuffer.coords[drive] = 0.0;
 			}
