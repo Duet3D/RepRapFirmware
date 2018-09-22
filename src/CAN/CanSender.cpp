@@ -46,12 +46,14 @@ enum class CanStatusBits : uint32_t
 	busOff = 0x40000
 };
 
+#if 0
 static uint32_t GetAndClearStatusBits()
 {
 	const uint32_t st = canStatus;
 	canStatus = 0;
 	return st;
 }
+#endif
 
 // -------------------- The following code was adapted from the Atmel quick start example ---------------------------
 
@@ -96,6 +98,8 @@ static void configure_mcan()
 	NVIC_EnableIRQ(MCanIRQn);
 	mcan_enable_interrupt(&mcan_instance, (mcan_interrupt_source)(MCAN_FORMAT_ERROR | MCAN_ACKNOWLEDGE_ERROR | MCAN_BUS_OFF));
 }
+
+#if 0
 
 // Set receive standard MCAN ID, dedicated buffer
 static void mcan_set_standard_filter_0()
@@ -179,6 +183,8 @@ static status_code mcan_send_standard_message(uint32_t id_value, const uint8_t *
 	return rc;
 }
 
+#endif
+
 // Send standard CAN message in fd mode,
 static status_code mcan_fd_send_standard_message(uint32_t id_value, const uint8_t *data)
 {
@@ -186,7 +192,7 @@ static status_code mcan_fd_send_standard_message(uint32_t id_value, const uint8_
 
 	mcan_get_tx_buffer_element_defaults(&tx_element);
 	tx_element.T0.reg |= MCAN_TX_ELEMENT_T0_STANDARD_ID(id_value);
-	tx_element.T1.reg = (MCAN_TX_ELEMENT_T1_DLC(MCAN_TX_ELEMENT_T1_DLC_DATA64_Val) | MCAN_TX_ELEMENT_T1_FDF | MCAN_TX_ELEMENT_T1_BRS);
+	tx_element.T1.reg = (MCAN_TX_ELEMENT_T1_DLC(MCAN_TX_ELEMENT_T1_DLC_DATA64_Val) | MCAN_TX_ELEMENT_T1_FDF /*| MCAN_TX_ELEMENT_T1_BRS*/);
 	for (uint32_t i = 0; i < CONF_MCAN_ELEMENT_DATA_SIZE; i++)
 	{
 		tx_element.data[i] = *data;
@@ -209,6 +215,7 @@ static status_code mcan_fd_send_standard_message(uint32_t id_value, const uint8_
 	return rc;
 }
 
+#if 0
 // Send extended MCAN message,
 static status_code mcan_fd_send_extended_message(uint32_t id_value, const uint8_t *data)
 {
@@ -237,6 +244,7 @@ static status_code mcan_fd_send_extended_message(uint32_t id_value, const uint8_
 	}
 	return rc;
 }
+#endif
 
 // Interrupt handler for MCAN, including RX,TX,ERROR and so on processes
 void MCAN1_INT0_Handler(void)
@@ -341,8 +349,8 @@ extern "C" void CanSenderLoop(void *)
 
 			// Send the message
 			buf->msg.timeNow = StepTimer::GetInterruptClocks();
-			mcan_fd_send_extended_message(buf->expansionBoardId | 0x5A5A5A0, reinterpret_cast<uint8_t*>(&(buf->msg)));
-
+			mcan_fd_send_standard_message(buf->expansionBoardId | 0x0300, reinterpret_cast<uint8_t*>(&(buf->msg)));
+#if 0
 			// Display a debug message too
 			debugPrintf("CCCR %08" PRIx32 ", PSR %08" PRIx32 ", ECR %08" PRIx32 ", TXBRP %08" PRIx32 ", TXBTO %08" PRIx32 ", st %08" PRIx32 "\n",
 						MCAN1->MCAN_CCCR, MCAN1->MCAN_PSR, MCAN1->MCAN_ECR, MCAN1->MCAN_TXBRP, MCAN1->MCAN_TXBTO, GetAndClearStatusBits());
@@ -350,7 +358,7 @@ extern "C" void CanSenderLoop(void *)
 			delay(50);
 			debugPrintf("CCCR %08" PRIx32 ", PSR %08" PRIx32 ", ECR %08" PRIx32 ", TXBRP %08" PRIx32 ", TXBTO %08" PRIx32 ", st %08" PRIx32 "\n",
 						MCAN1->MCAN_CCCR, MCAN1->MCAN_PSR, MCAN1->MCAN_ECR, MCAN1->MCAN_TXBRP, MCAN1->MCAN_TXBTO, GetAndClearStatusBits());
-
+#endif
 			// Free the message buffer.
 			CanMessageBuffer::Free(buf);
 		}

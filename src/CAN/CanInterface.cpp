@@ -20,7 +20,7 @@ const size_t NumCanBoards = (MaxCanDrivers + DriversPerCanBoard - 1)/DriversPerC
 
 static CanMessageBuffer *movementBuffers[NumCanBoards];
 
-// CanMovementMessage is declare in project Duet3Expansion, so we need to implement its members here
+// CanMovementMessage is declared in project Duet3Expansion, so we need to implement its members here
 void CanMovementMessage::DebugPrint()
 {
 	debugPrintf("Can: %08" PRIx32 " %08" PRIx32 " %" PRIu32 " %" PRIu32 " %" PRIu32 " %.2f %.2f:",
