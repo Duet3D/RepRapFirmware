@@ -24,6 +24,7 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 # define TMC2660_USES_USART		1
 #endif
 
+#define SUPPORT_CAN_EXPANSION	1
 #define HAS_VOLTAGE_MONITOR		1
 #define HAS_VREF_MONITOR		1
 #define ACTIVE_LOW_HEAT_ON		0
@@ -40,21 +41,22 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 // The physical capabilities of the machine
 
 #ifdef VARIANT_TMC5130
-constexpr size_t DRIVES = 6;						// The maximum number of drives supported by the electronics inc. direct expansion
+constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
 constexpr size_t MaxSmartDrivers = 6;				// The maximum number of smart drivers
-# define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f }
 #else
-constexpr size_t DRIVES = 5;						// The maximum number of drives supported by the electronics inc. direct expansion
+constexpr size_t NumDirectDrivers = 5;						// The maximum number of drives supported by the electronics inc. direct expansion
 constexpr size_t MaxSmartDrivers = 5;				// The maximum number of smart drivers
-# define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e }
 #endif
+
+constexpr size_t MaxCanDrivers = 12;				// we need to set a limit until the DDA/DMs are restructured
+constexpr size_t MaxTotalDrivers = NumDirectDrivers + MaxCanDrivers;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
 // Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
 #define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f,g,h,i }
 
-constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
+constexpr size_t MaxExtruders = MaxTotalDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
@@ -68,9 +70,9 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 
 #ifdef VARIANT_TMC5130
 
-constexpr Pin STEP_PINS[DRIVES] =		{ PORTC_PIN(18), PORTC_PIN(16), PORTC_PIN(28), PORTC_PIN(01), PORTC_PIN(04), PORTC_PIN(9) };
-constexpr Pin DIRECTION_PINS[DRIVES] =	{ PORTB_PIN(05), PORTD_PIN(10), PORTA_PIN(04), PORTA_PIN(22), PORTC_PIN(03), PORTD_PIN(14) };
-constexpr Pin DIAG_PINS[DRIVES] =		{ PORTD_PIN(19), PORTC_PIN(17), PORTD_PIN(13), PORTC_PIN(02), PORTD_PIN(31), PORTC_PIN(10) };
+constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PORTC_PIN(18), PORTC_PIN(16), PORTC_PIN(28), PORTC_PIN(01), PORTC_PIN(04), PORTC_PIN(9) };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PORTB_PIN(05), PORTD_PIN(10), PORTA_PIN(04), PORTA_PIN(22), PORTC_PIN(03), PORTD_PIN(14) };
+constexpr Pin DIAG_PINS[NumDirectDrivers] =			{ PORTD_PIN(19), PORTC_PIN(17), PORTD_PIN(13), PORTC_PIN(02), PORTD_PIN(31), PORTC_PIN(10) };
 
 // Pin assignments etc. using USART1 in SPI mode
 constexpr Pin GlobalTmc51xxEnablePin = PORTA_PIN(9);		// The pin that drives ENN of all TMC drivers
@@ -150,7 +152,7 @@ constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater p
 
 // Thermistor/PT1000 inputs
 constexpr size_t NumThermistorInputs = 4;
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PORTB_PIN(3), PORTC_PIN(15), PORTC_PIN(12), PORTC_PIN(30) };	// Thermistor/PT1000 pins
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PORTB_PIN(3), PORTC_PIN(15), PORTC_PIN(0), PORTC_PIN(30) };	// Thermistor/PT1000 pins
 
 // Default thermistor parameters
 constexpr float BED_R25 = 100000.0;

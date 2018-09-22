@@ -246,7 +246,7 @@ void GCodes::Reset()
 	currentCoordinateSystem = 0;
 #endif
 
-	for (size_t i = 0; i < DRIVES; ++i)
+	for (size_t i = 0; i < MaxTotalDrivers; ++i)
 	{
 		moveBuffer.coords[i] = 0.0;						// clear out all axis and extruder coordinates
 	}
@@ -846,7 +846,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				currentUserPosition[drive] =  pauseRestorePoint.moveCoords[drive];
 			}
 			ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-			for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
+			for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; ++drive)
 			{
 				moveBuffer.coords[drive] = 0.0;
 			}
@@ -1477,7 +1477,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			const AxesBitmap yAxes = reprap.GetCurrentYAxes();
 			reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, xAxes, yAxes);
 			moveBuffer.coords[Z_AXIS] += retractHop;
-			for (size_t i = numTotalAxes; i < DRIVES; ++i)
+			for (size_t i = numTotalAxes; i < MaxTotalDrivers; ++i)
 			{
 				moveBuffer.coords[i] = 0.0;
 			}
@@ -1501,7 +1501,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				const uint32_t xAxes = reprap.GetCurrentXAxes();
 				const uint32_t yAxes = reprap.GetCurrentYAxes();
 				reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, xAxes, yAxes);
-				for (size_t i = numTotalAxes; i < DRIVES; ++i)
+				for (size_t i = numTotalAxes; i < MaxTotalDrivers; ++i)
 				{
 					moveBuffer.coords[i] = 0.0;
 				}
@@ -2378,7 +2378,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 	}
 
 	// Zero every extruder drive as some drives may not be moved
-	for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
+	for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; drive++)
 	{
 		moveBuffer.coords[drive] = 0.0;
 	}
@@ -2938,7 +2938,7 @@ void GCodes::FinaliseMove(GCodeBuffer& gb)
 		segMoveState = SegmentedMoveState::active;
 		gb.SetState(GCodeState::waitingForSegmentedMoveToGo);
 
-		for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
+		for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; ++drive)
 		{
 			moveBuffer.coords[drive] /= totalSegments;							// change the extrusion to extrusion per segment
 		}
@@ -2979,7 +2979,7 @@ bool GCodes::ReadMove(RawMove& m)
 		if (segmentsLeftToStartAt == 1 && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
 		{
 			// Reduce the extrusion by the amount to be skipped
-			for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
+			for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; ++drive)
 			{
 				m.coords[drive] *= (1.0 - firstSegmentFractionToSkip);
 			}
@@ -3039,7 +3039,7 @@ bool GCodes::ReadMove(RawMove& m)
 		if (segmentsLeftToStartAt == segmentsLeft && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
 		{
 			// Reduce the extrusion by the amount to be skipped
-			for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
+			for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; ++drive)
 			{
 				m.coords[drive] *= (1.0 - firstSegmentFractionToSkip);
 			}
@@ -3381,7 +3381,7 @@ void GCodes::ClearBedMapping()
 // Coordinates are updated at the end of each movement, so this won't tell you where you are mid-movement.
 void GCodes::GetCurrentCoordinates(const StringRef& s) const
 {
-	float liveCoordinates[DRIVES];
+	float liveCoordinates[MaxTotalDrivers];
 	reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 	const Tool * const currentTool = reprap.GetCurrentTool();
 	if (currentTool != nullptr)
@@ -3398,7 +3398,7 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 		// Don't put a space after the colon in the response, it confuses Pronterface
 		s.catf("%c:%.3f ", axisLetters[axis], HideNan(currentUserPosition[axis]));
 	}
-	for (size_t i = numTotalAxes; i < DRIVES; i++)
+	for (size_t i = numTotalAxes; i < MaxTotalDrivers; i++)
 	{
 		s.catf("E%u:%.1f ", i - numTotalAxes, (double)liveCoordinates[i]);
 	}
@@ -3774,7 +3774,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 // Does what it says.
 void GCodes::DisableDrives()
 {
-	for (size_t drive = 0; drive < DRIVES; drive++)
+	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
 	{
 		platform.DisableDrive(drive);
 	}
@@ -4258,7 +4258,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 		const uint32_t xAxes = reprap.GetCurrentXAxes();
 		const uint32_t yAxes = reprap.GetCurrentYAxes();
 		reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, xAxes, yAxes);
-		for (size_t i = numTotalAxes; i < DRIVES; ++i)
+		for (size_t i = numTotalAxes; i < MaxTotalDrivers; ++i)
 		{
 			moveBuffer.coords[i] = 0.0;
 		}
@@ -4544,7 +4544,7 @@ bool GCodes::ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling
 }
 
 // Set the current position, optionally applying bed and axis compensation
-void GCodes::SetMachinePosition(const float positionNow[DRIVES], bool doBedCompensation)
+void GCodes::SetMachinePosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation)
 {
 	memcpy(moveBuffer.coords, positionNow, sizeof(moveBuffer.coords[0] * numTotalAxes));
 	reprap.GetMove().SetNewPosition(positionNow, doBedCompensation);
@@ -4724,7 +4724,7 @@ void GCodes::ListTriggers(const StringRef& reply, TriggerInputsBitmap mask)
 	else
 	{
 		bool printed = false;
-		for (unsigned int i = 0; i < DRIVES; ++i)
+		for (unsigned int i = 0; i < NumEndstops; ++i)
 		{
 			if (IsBitSet(mask, i))
 			{

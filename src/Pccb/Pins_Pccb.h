@@ -52,17 +52,17 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 
 #ifdef PCCB_X5
 
-constexpr size_t DRIVES = 6;						// The maximum number of drives supported by the electronics
+constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics
 constexpr size_t MaxSmartDrivers = 5;				// The maximum number of smart drivers
-# define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f }
 
 #else
 
-constexpr size_t DRIVES = 8;						// The maximum number of drives supported by the electronics
+constexpr size_t NumDirectDrivers = 8;				// The maximum number of drives supported by the electronics
 constexpr size_t MaxSmartDrivers = 2;				// The maximum number of smart drivers
-# define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h }
 
 #endif
+
+constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 
 constexpr size_t NumEndstops = 4;					// The number of inputs we have for endstops, filament sensors etc.
 constexpr size_t NumHeaters = 2;					// The number of heaters in the machine. PCCB has no heaters, but we pretend that the LED pins are heaters.
@@ -74,7 +74,7 @@ constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the
 // Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
 #define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f }
 
-constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
+constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t NUM_SERIAL_CHANNELS = 1;			// The number of serial IO channels (USB only)
@@ -91,9 +91,9 @@ constexpr Pin GlobalTmc22xxEnablePin = 1;			// The pin that drives ENN of all in
 #ifdef PCCB_X5
 
 constexpr Pin GlobalTmc2660EnablePin = 52;			// The pin that drives ENN of all drivers on the DueX5
-constexpr Pin ENABLE_PINS[DRIVES] = { 61, 35, 41, 55, 0, 64 };
-constexpr Pin STEP_PINS[DRIVES] = { 60, 38, 58, 56, 46, 50 };
-constexpr Pin DIRECTION_PINS[DRIVES] = { 17, 57, 54, 34, 1, 53 };
+constexpr Pin ENABLE_PINS[NumDirectDrivers] = { 61, 35, 41, 55, 0, 64 };
+constexpr Pin STEP_PINS[NumDirectDrivers] = { 60, 38, 58, 56, 46, 50 };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { 17, 57, 54, 34, 1, 53 };
 
 Spi * const SPI_TMC2660 = SPI;
 constexpr uint32_t ID_TMC2660_SPI = ID_SPI;
@@ -107,9 +107,9 @@ constexpr Pin TMC2660SclkPin = 14;					// PA14
 
 #else
 
-constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, 61, 35, 41, 55, 0, 64 };
-constexpr Pin STEP_PINS[DRIVES] = { 40, 43, 60, 38, 58, 56, 46, 50 };
-constexpr Pin DIRECTION_PINS[DRIVES] = { 8, 11, 17, 57, 54, 34, 1, 53 };
+constexpr Pin ENABLE_PINS[NumDirectDrivers] = { NoPin, NoPin, 61, 35, 41, 55, 0, 64 };
+constexpr Pin STEP_PINS[NumDirectDrivers] = { 40, 43, 60, 38, 58, 56, 46, 50 };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { 8, 11, 17, 57, 54, 34, 1, 53 };
 
 Uart * const TMC22xxUarts[MaxSmartDrivers] = { UART0, UART1 };
 constexpr uint32_t TMC22xxUartIds[MaxSmartDrivers] = { ID_UART0, ID_UART1 };

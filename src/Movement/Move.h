@@ -21,7 +21,10 @@
 // Each DDA needs one DM per drive that it moves.
 // However, DM's are large, so we provide fewer than DRIVES * DdaRingLength of them. The planner checks that enough DMs are available before filling in a new DDA.
 
-#if SAM4E || SAM4S || SAME70
+#if SAME70
+const unsigned int DdaRingLength = 30;
+const unsigned int NumDms = DdaRingLength * 12;						// allow enough for plenty of CAN expansion
+#elif SAM4E || SAM4S
 const unsigned int DdaRingLength = 30;
 const unsigned int NumDms = DdaRingLength * 8;						// suitable for e.g. a delta + 5 input hot end
 #else
@@ -30,9 +33,10 @@ const unsigned int DdaRingLength = 20;
 const unsigned int NumDms = DdaRingLength * 5;						// suitable for e.g. a delta + 2-input hot end
 #endif
 
-/**
- * This is the master movement class.  It controls all movement in the machine.
- */
+constexpr uint32_t MovementStartDelayClocks = StepTimer::StepClockRate/100;		// 10ms delay between preparing the first move and starting it
+
+// This is the master movement class.  It controls all movement in the machine.
+
 class Move
 {
 public:
@@ -45,12 +49,12 @@ public:
 	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, AxesBitmap xAxes, AxesBitmap yAxes) const;
 																	// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetEndPoint(size_t drive) const { return liveEndPoints[drive]; } 	// Get the current position of a motor
-	void LiveCoordinates(float m[DRIVES], AxesBitmap xAxes, AxesBitmap yAxes);	// Gives the last point at the end of the last complete DDA transformed to user coords
+	void LiveCoordinates(float m[MaxTotalDrivers], AxesBitmap xAxes, AxesBitmap yAxes);	// Gives the last point at the end of the last complete DDA transformed to user coords
 	void Interrupt() __attribute__ ((hot));							// The hardware's (i.e. platform's)  interrupt should call this.
 	bool AllMovesAreFinished();										// Is the look-ahead ring empty?  Stops more moves being added as well.
 	void DoLookAhead() __attribute__ ((hot));						// Run the look-ahead procedure
-	void SetNewPosition(const float positionNow[DRIVES], bool doBedCompensation); // Set the current position to be this
-	void SetLiveCoordinates(const float coords[DRIVES]);			// Force the live coordinates (see above) to be these
+	void SetNewPosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation); // Set the current position to be this
+	void SetLiveCoordinates(const float coords[MaxTotalDrivers]);			// Force the live coordinates (see above) to be these
 	void ResetExtruderPositions();									// Resets the extrusion amounts of the live coordinates
 	void SetXYBedProbePoint(size_t index, float x, float y);		// Record the X and Y coordinates of a probe point
 	void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError); // Record the Z coordinate of a probe point
@@ -161,7 +165,7 @@ private:
 	void InverseBedTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;	// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;			// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;	// Go from an axis transformed point back to user coordinates
-	void SetPositions(const float move[DRIVES]);												// Force the machine coordinates to be these
+	void SetPositions(const float move[MaxTotalDrivers]);										// Force the machine coordinates to be these
 	float GetInterpolatedHeightError(float xCoord, float yCoord) const;							// Get the height error at an XY position
 
 	bool DDARingAdd();									// Add a processed look-ahead entry to the DDA ring
@@ -191,9 +195,9 @@ private:
 	float simulationTime;								// Print time since we started simulating
 
 	float extrusionPending[MaxExtruders];				// Extrusion not done due to rounding to nearest step
-	volatile float liveCoordinates[DRIVES];				// The endpoint that the machine moved to in the last completed move
+	volatile float liveCoordinates[MaxTotalDrivers];	// The endpoint that the machine moved to in the last completed move
 	volatile bool liveCoordinatesValid;					// True if the XYZ live coordinates are reliable (the extruder ones always are)
-	volatile int32_t liveEndPoints[DRIVES];				// The XYZ endpoints of the last completed move in motor coordinates
+	volatile int32_t liveEndPoints[MaxTotalDrivers];	// The XYZ endpoints of the last completed move in motor coordinates
 	volatile int32_t extrusionAccumulators[MaxExtruders]; // Accumulated extruder motor steps
 	volatile bool extruderNonPrinting[MaxExtruders];	// Set whenever the extruder starts a non-printing move
 
@@ -219,7 +223,7 @@ private:
 	uint32_t scheduledMoves;							// Move counters for the code queue
 	volatile uint32_t completedMoves;					// This one is modified by an ISR, hence volatile
 
-	float specialMoveCoords[DRIVES];					// Amounts by which to move individual motors (leadscrew adjustment move)
+	float specialMoveCoords[MaxTotalDrivers];			// Amounts by which to move individual motors (leadscrew adjustment move)
 	bool specialMoveAvailable;							// True if a leadscrew adjustment move is pending
 };
 

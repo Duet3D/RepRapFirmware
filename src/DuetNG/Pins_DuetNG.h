@@ -34,9 +34,9 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 
 // The physical capabilities of the machine
 
-constexpr size_t DRIVES = 12;						// The maximum number of drives supported by the electronics
+constexpr size_t NumDirectDrivers = 12;				// The maximum number of drives supported directly by the electronics
+constexpr size_t MaxTotalDrivers = NumDirectDrivers; // The maximum number of drives including CAN expansion
 constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
-#define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h,i,j,k,l }
 
 constexpr size_t NumEndstops = 12;					// The number of inputs we have for endstops, filament sensors etc.
 constexpr size_t NumHeaters = 8;					// The number of heaters in the machine; 0 is the heated bed even if there isn't one
@@ -48,7 +48,7 @@ constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the
 // Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
 #define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f,g,h,i }
 
-constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
+constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
@@ -66,9 +66,9 @@ constexpr Pin AdditionalIoExpansionStart = 220;		// Pin numbers 220-235 are on t
 
 // DRIVES
 constexpr Pin GlobalTmc2660EnablePin = 38;			// The pin that drives ENN of all TMC2660 drivers on production boards (on pre-production boards they are grounded)
-constexpr Pin ENABLE_PINS[DRIVES] = { 78, 41, 42, 49, 57, 87, 88, 89, 90, 31, 82, 60 };
-constexpr Pin STEP_PINS[DRIVES] = { 70, 71, 72, 69, 68, 66, 65, 64, 67, 91, 84, 85 };
-constexpr Pin DIRECTION_PINS[DRIVES] = { 75, 76, 77, 01, 73, 92, 86, 80, 81, 32, 83, 25 };
+constexpr Pin ENABLE_PINS[NumDirectDrivers] = { 78, 41, 42, 49, 57, 87, 88, 89, 90, 31, 82, 60 };
+constexpr Pin STEP_PINS[NumDirectDrivers] = { 70, 71, 72, 69, 68, 66, 65, 64, 67, 91, 84, 85 };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { 75, 76, 77, 01, 73, 92, 86, 80, 81, 32, 83, 25 };
 
 // Pin assignments etc. using USART1 in SPI mode
 Usart * const USART_TMC2660 = USART1;

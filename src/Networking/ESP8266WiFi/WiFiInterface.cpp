@@ -1309,6 +1309,18 @@ static void spi_dma_disable()
 	spi_rx_dma_disable();
 }
 
+static inline void spi_dma_enable()
+{
+#if USE_PDC
+	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN | PERIPH_PTCR_RXTEN);
+#endif
+
+#if USE_DMAC || USE_XDMAC
+	spi_rx_dma_enable();
+	spi_tx_dma_enable();
+#endif
+}
+
 static bool spi_dma_check_rx_complete()
 {
 #if USE_PDC
@@ -1366,6 +1378,7 @@ static void spi_tx_dma_setup(const void *buf, uint32_t transferLength)
 #endif
 
 #if USE_XDMAC
+	xdmac_disable_interrupt(XDMAC, DmacChanWiFiTx);
 	const uint32_t xdmaint = (XDMAC_CIE_BIE |
 			XDMAC_CIE_DIE   |
 			XDMAC_CIE_FIE   |
@@ -1394,8 +1407,6 @@ static void spi_tx_dma_setup(const void *buf, uint32_t transferLength)
 
 	xdmac_channel_set_descriptor_control(XDMAC, DmacChanWiFiTx, 0);
 	xdmac_channel_disable_interrupt(XDMAC, DmacChanWiFiTx, xdmaint);
-	xdmac_channel_enable(XDMAC, DmacChanWiFiTx);
-	xdmac_disable_interrupt(XDMAC, DmacChanWiFiTx);
 #endif
 }
 
@@ -1420,6 +1431,7 @@ static void spi_rx_dma_setup(const void *buf, uint32_t transferLength)
 #endif
 
 #if USE_XDMAC
+	xdmac_disable_interrupt(XDMAC, DmacChanWiFiRx);
 	const uint32_t xdmaint = (XDMAC_CIE_BIE |
 			XDMAC_CIE_DIE   |
 			XDMAC_CIE_FIE   |
@@ -1448,8 +1460,6 @@ static void spi_rx_dma_setup(const void *buf, uint32_t transferLength)
 
 	xdmac_channel_set_descriptor_control(XDMAC, DmacChanWiFiRx, 0);
 	xdmac_channel_disable_interrupt(XDMAC, DmacChanWiFiRx, xdmaint);
-	xdmac_channel_enable(XDMAC, DmacChanWiFiRx);
-	xdmac_disable_interrupt(XDMAC, DmacChanWiFiRx);
 #endif
 }
 
@@ -1462,17 +1472,15 @@ static void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize)
 	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS | PERIPH_PTCR_RXTDIS);
 	spi_rx_dma_setup(&bufferIn, dataInSize + sizeof(MessageHeaderEspToSam));
 	spi_tx_dma_setup(&bufferOut, dataOutSize + sizeof(MessageHeaderSamToEsp));
-	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN | PERIPH_PTCR_RXTEN);
 #endif
 
 #if USE_DMAC || USE_XDMAC
 	spi_dma_disable();
-
 	spi_rx_dma_setup(&bufferIn, dataInSize + sizeof(MessageHeaderEspToSam));
-	spi_rx_dma_enable();
 	spi_tx_dma_setup(&bufferOut, dataOutSize + sizeof(MessageHeaderSamToEsp));
-	spi_tx_dma_enable();
 #endif
+
+	spi_dma_enable();
 }
 
 // Set up the SPI system

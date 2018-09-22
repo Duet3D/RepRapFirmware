@@ -14,7 +14,7 @@
 #  endif
 # elif defined(__SAM4E8E__)
 #  define PLATFORM DuetNG
-# elif defined(__SAME70Q21__)
+# elif defined(__SAME70Q21__) || defined(__SAME70Q20B__) || defined(__SAME70Q21B__)
 #  if defined(DUET3)
 #   define PLATFORM Duet3
 #  elif defined(SAME70XPLD)
@@ -80,6 +80,10 @@
 
 #ifndef SUPPORT_TMC51xx
 # define SUPPORT_TMC51xx		0
+#endif
+
+#ifndef SUPPORT_CAN_EXPANSION
+# define SUPPORT_CAN_EXPANSION	0
 #endif
 
 #define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx || SUPPORT_TMC51xx)

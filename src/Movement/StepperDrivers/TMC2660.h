@@ -27,8 +27,8 @@ const uint32_t TMC_RR_SG_LOAD_SHIFT = 10;	// shift to get stallguard load regist
 
 namespace SmartDrivers
 {
-	void Init(const Pin[DRIVES], size_t numTmcDrivers)
-		pre(numTmcDrivers <= DRIVES);
+	void Init(const Pin[NumDirectDrivers], size_t numTmcDrivers)
+		pre(numTmcDrivers <= NumDirectDrivers);
 	void Spin(bool powered);
 	void TurnDriversOff();
 

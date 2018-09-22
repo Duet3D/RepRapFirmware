@@ -625,7 +625,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 			config.numDrivers = numValues;
 			for (size_t i = 0; i < numValues; ++i)
 			{
-				if (drivers[i] >= DRIVES)
+				if (drivers[i] >= MaxTotalDrivers)
 				{
 					badDrive = true;
 				}
@@ -658,9 +658,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 				}
 				reprap.GetMove().SetNewPosition(moveBuffer.coords, true);	// tell the Move system where any new axes are
 				platform.SetAxisDriversConfig(drive, config);
-				if (numTotalAxes + numExtruders > DRIVES)
+				if (numTotalAxes + numExtruders > MaxTotalDrivers)
 				{
-					numExtruders = DRIVES - numTotalAxes;		// if we added axes, we may have fewer extruders now
+					numExtruders = MaxTotalDrivers - numTotalAxes;		// if we added axes, we may have fewer extruders now
 				}
 			}
 		}
@@ -670,13 +670,13 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen(extrudeLetter))
 	{
 		seen = true;
-		size_t numValues = DRIVES - numTotalAxes;
+		size_t numValues = MaxTotalDrivers - numTotalAxes;
 		uint32_t drivers[MaxExtruders];
 		gb.GetUnsignedArray(drivers, numValues, false);
 		numExtruders = numValues;
 		for (size_t i = 0; i < numValues; ++i)
 		{
-			if (drivers[i] >= DRIVES)
+			if (drivers[i] >= MaxTotalDrivers)
 			{
 				badDrive = true;
 			}
@@ -757,7 +757,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 		{
 			// Get parameters first and check them
 			const int endStopToUse = gb.Seen('E') ? gb.GetIValue() : -1;
-			if (endStopToUse > (int)DRIVES)
+			if (endStopToUse > (int)NumEndstops)
 			{
 				reply.copy("Invalid endstop number");
 				return GCodeResult::error;
@@ -803,7 +803,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			}
 
 			// Zero every extruder drive
-			for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
+			for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; drive++)
 			{
 				moveBuffer.coords[drive] = 0.0;
 			}
@@ -1088,7 +1088,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 	if (gb.Seen('P'))
 	{
 		const size_t drive = gb.GetIValue();
-		if (drive < DRIVES)
+		if (drive < MaxTotalDrivers)
 		{
 			bool seen = false;
 			if (gb.Seen('S'))

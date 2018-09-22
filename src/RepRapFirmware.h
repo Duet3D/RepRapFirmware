@@ -147,8 +147,8 @@ extern RepRap reprap;
 
 // Debugging support
 extern "C" void debugPrintf(const char* fmt, ...) __attribute__ ((format (printf, 1, 2)));
-#define DEBUG_HERE do { } while (false)
-//#define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
+//#define DEBUG_HERE do { } while (false)
+#define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
 
 // Functions and globals not part of any class
 
@@ -313,6 +313,7 @@ const FilePosition noFilePosition = 0xFFFFFFFF;
 const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 const uint32_t NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 const uint32_t NvicPriorityWiFiUart = 2;		// UART used to receive debug data from the WiFi module
+const uint32_t NvicPriorityMCan = 2;			// CAN interface
 
 # ifndef RTOS
 const uint32_t NvicPrioritySystick = 3;			// systick kicks the watchdog and starts the ADC conversions, so must be quite high

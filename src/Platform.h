@@ -85,11 +85,6 @@ const int INKJET_DELAY_MICROSECONDS = 800;				// How long to wait before the nex
 
 #endif
 
-const float MAX_FEEDRATES[DRIVES] = DRIVES_(100.0, 100.0, 3.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0);							// mm/sec
-const float ACCELERATIONS[DRIVES] = DRIVES_(500.0, 500.0, 20.0, 250.0, 250.0, 250.0, 250.0, 250.0, 250.0, 250.0, 250.0, 250.0);					// mm/sec^2
-const float DRIVE_STEPS_PER_UNIT[DRIVES] = DRIVES_(87.4890, 87.4890, 4000.0, 420.0, 420.0, 420.0, 420.0, 420.0, 420.0, 420.0, 420.0, 420.0);	// steps/mm
-const float INSTANT_DVS[DRIVES] = DRIVES_(15.0, 15.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0);										// mm/sec
-
 // AXES
 
 const float AXIS_MINIMA[MaxAxes] = AXES_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);				// mm
@@ -719,23 +714,23 @@ private:
 
 	static uint32_t CalcDriverBitmap(size_t driver);	// calculate the step bit(s) for this driver
 
-	volatile DriverStatus driverState[DRIVES];
-	bool directions[DRIVES];
-	int8_t enableValues[DRIVES];
+	volatile DriverStatus driverState[MaxTotalDrivers];
+	bool directions[MaxTotalDrivers];
+	int8_t enableValues[MaxTotalDrivers];
 	Pin endStopPins[NumEndstops];
-	float maxFeedrates[DRIVES];
-	float accelerations[DRIVES];
-	float driveStepsPerUnit[DRIVES];
-	float instantDvs[DRIVES];
+	float maxFeedrates[MaxTotalDrivers];
+	float accelerations[MaxTotalDrivers];
+	float driveStepsPerUnit[MaxTotalDrivers];
+	float instantDvs[MaxTotalDrivers];
 	float pressureAdvance[MaxExtruders];
 #if SUPPORT_NONLINEAR_EXTRUSION
 	float nonlinearExtrusionA[MaxExtruders], nonlinearExtrusionB[MaxExtruders], nonlinearExtrusionLimit[MaxExtruders];
 #endif
-	float motorCurrents[DRIVES];						// the normal motor current for each stepper driver
-	float motorCurrentFraction[DRIVES];					// the percentages of normal motor current that each driver is set to
+	float motorCurrents[MaxTotalDrivers];				// the normal motor current for each stepper driver
+	float motorCurrentFraction[MaxTotalDrivers];		// the percentages of normal motor current that each driver is set to
 	AxisDriversConfig axisDrivers[MaxAxes];				// the driver numbers assigned to each axis
 	uint8_t extruderDrivers[MaxExtruders];				// the driver number assigned to each extruder
-	uint32_t driveDriverBits[2 * DRIVES];				// the bitmap of driver port bits for each axis or extruder, followed by the raw versions
+	uint32_t driveDriverBits[2 * MaxTotalDrivers];		// the bitmap of driver port bits for each axis or extruder, followed by the raw versions
 	uint32_t slowDriverStepTimingClocks[4];				// minimum step high, step low, dir setup and dir hold timing for slow drivers
 	uint32_t slowDriversBitmap;							// bitmap of driver port bits that need extended step pulse timing
 	float idleCurrentFactor;
@@ -1017,7 +1012,7 @@ inline bool Platform::GetDirectionValue(size_t drive) const
 
 inline void Platform::SetDriverDirection(uint8_t driver, bool direction)
 {
-	if (driver < DRIVES)
+	if (driver < NumDirectDrivers)
 	{
 		const bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
 		digitalWrite(DIRECTION_PINS[driver], d);
@@ -1217,10 +1212,10 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // Alligator:
 //  Pins on ports B,C,D are used but the bit numbers are all different, so we use their actual positions
 
-// Calculate the step bit for a driver. This doesn't need to be fast.
+// Calculate the step bit for a driver. This doesn't need to be fast. It must return 0 if the driver is remote.
 /*static*/ inline uint32_t Platform::CalcDriverBitmap(size_t driver)
 {
-	if (driver >= DRIVES)
+	if (driver >= NumDirectDrivers)
 	{
 		return 0;
 	}

@@ -36,8 +36,8 @@ const uint32_t TMC_RR_TEMPBITS = 15 << 8;	// all temperature threshold bits
 
 namespace SmartDrivers
 {
-	void Init(const Pin[DRIVES], size_t numTmcDrivers)
-		pre(numTmcDrivers <= DRIVES);
+	void Init(const Pin[NumDirectDrivers], size_t numTmcDrivers)
+		pre(numTmcDrivers <= NumDirectDrivers);
 	void SetAxisNumber(size_t drive, uint32_t axisNumber);
 	uint32_t GetAxisNumber(size_t drive);
 	void SetCurrent(size_t drive, float current);
