@@ -1621,7 +1621,10 @@ void DDA::CheckEndstops(Platform& platform)
 bool DDA::Start(uint32_t tim)
 pre(state == frozen)
 {
-	moveStartTime = tim;
+	if ((int32_t)(tim - moveStartTime ) > 25)
+	{
+		moveStartTime = tim;			// this move is late starting, so record the actual start time
+	}
 	state = executing;
 
 #if DDA_LOG_PROBE_CHANGES
@@ -1703,8 +1706,8 @@ pre(state == frozen)
 		}
 	}
 
-	// No steps are pending. This should not happen, except perhaps for an extrude-only move when extrusion is prohibited
-	return true;	// schedule another interrupt immediately
+	// No steps are pending. This can happen if no local drives are involved in the move.
+	return StepTimer::ScheduleStepInterrupt(moveStartTime + clocksNeeded - WakeupTime);		// schedule an interrupt shortly before the end of the move
 }
 
 unsigned int DDA::numHiccups = 0;
@@ -1721,6 +1724,7 @@ bool DDA::Step()
 	uint32_t lastStepPulseTime = lastStepLowTime;
 	bool repeat = false;
 	uint32_t isrStartTime;
+
 	do
 	{
 		// Keep this loop as fast as possible, in the case that there are no endstops to check!
@@ -1801,7 +1805,6 @@ bool DDA::Step()
 		// 6. Check for move completed
 		if (firstDM == nullptr)
 		{
-			state = completed;
 			break;
 		}
 
@@ -1823,11 +1826,22 @@ bool DDA::Step()
 		repeat = StepTimer::ScheduleStepInterrupt(nextStepDue);
 	} while (repeat);
 
+	if (state == executing && firstDM == nullptr)
+	{
+		// There are no steps left for this move, but don't say that the move has completed unless the allocated time for it has nearly elapsed,
+		// otherwise we tend to skip moves that use no drivers on this board
+		const uint32_t finishTime = moveStartTime + clocksNeeded;	// calculate when this move should finish
+		if (StepTimer::ScheduleStepInterrupt(finishTime - WakeupTime))
+		{
+			state = completed;
+		}
+	}
+
 	if (state == completed)
 	{
 		// The following finish time is wrong if we aborted the move because of endstop or Z probe checks.
 		// However, following a move that checks endstops or the Z probe, we always wait for the move to complete before we schedule another, so this doesn't matter.
-		const uint32_t finishTime = moveStartTime + clocksNeeded;	// calculate how long this move should take
+		const uint32_t finishTime = moveStartTime + clocksNeeded;	// calculate when this move should finish
 		Move& move = reprap.GetMove();
 		move.CurrentMoveCompleted();								// tell Move that the current move is complete
 		return move.TryStartNextMove(finishTime);					// schedule the next move
