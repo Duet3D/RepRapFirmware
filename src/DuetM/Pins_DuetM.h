@@ -37,11 +37,12 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 
 // The physical capabilities of the machine
 
-constexpr size_t DRIVES = 7;						// The maximum number of drives supported by the electronics
+constexpr size_t NumDirectDrivers = 7;				// The maximum number of drives supported by the electronics
+constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 constexpr size_t MaxSmartDrivers = 7;				// The maximum number of smart drivers
-#define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g }
 
-constexpr size_t Heaters = 3;						// The number of heaters/thermistors in the machine. Duet M has 3 heaters but 4 thermistors.
+constexpr size_t NumEndstops = 5;					// The number of inputs we have for endstops, filament sensors etc.
+constexpr size_t NumHeaters = 3;					// The number of heaters/thermistors in the machine. Duet M has 3 heaters but 4 thermistors.
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 4;
 
@@ -50,7 +51,7 @@ constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the
 // Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
 #define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f }
 
-constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
+constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
@@ -63,18 +64,17 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // Drivers
-constexpr Pin GlobalTmcEnablePin = 1;				// The pin that drives ENN of all drivers
-constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin, 63, 61 };
-constexpr Pin STEP_PINS[DRIVES] = { 56, 38, 64, 40, 41, 67, 57 };
-constexpr Pin DIRECTION_PINS[DRIVES] = { 54, 8, 30, 33, 42, 18, 60 };
+constexpr Pin GlobalTmc22xxEnablePin = 1;			// The pin that drives ENN of all drivers
+constexpr Pin ENABLE_PINS[NumDirectDrivers] = { NoPin, NoPin, NoPin, NoPin, NoPin, 63, 61 };
+constexpr Pin STEP_PINS[NumDirectDrivers] = { 56, 38, 64, 40, 41, 67, 57 };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { 54, 8, 30, 33, 42, 18, 60 };
 
 // UART interface to stepper drivers
-Uart * const UART_TMC_DRV = UART0;
-const IRQn UART_TMC_DRV_IRQn = UART0_IRQn;
-const uint32_t ID_UART_TMC_DRV = ID_UART0;
-const uint8_t UART_TMC_DRV_PINS = APINS_UART0;
-
-#define UART_TMC_DRV_Handler	UART0_Handler
+Uart * const UART_TMC22xx = UART0;
+const IRQn TMC22xx_UART_IRQn = UART0_IRQn;
+const uint32_t ID_TMC22xx_UART = ID_UART0;
+const uint8_t TMC22xx_UART_PINS = APINS_UART0;
+#define TMC22xx_UART_Handler	UART0_Handler
 
 // Define the baud rate used to send/receive data to/from the drivers.
 // If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
@@ -85,15 +85,15 @@ const uint8_t UART_TMC_DRV_PINS = APINS_UART0;
 const uint32_t DriversBaudRate = 200000;
 const uint32_t TransferTimeout = 10;				// any transfer should complete within 10 ticks @ 1ms/tick
 
-constexpr Pin DriverMuxPins[3] = { 50, 52, 53 };	// Pins that control the UART multiplexer, LSB first
+constexpr Pin TMC22xxMuxPins[3] = { 50, 52, 53 };	// Pins that control the UART multiplexer, LSB first
 
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-constexpr Pin END_STOP_PINS[DRIVES] = { 24, 32, 46, 25, 43, NoPin, NoPin };
+constexpr Pin END_STOP_PINS[NumEndstops] = { 24, 32, 46, 25, 43 };
 
 // Heaters and thermistors
-constexpr Pin HEAT_ON_PINS[Heaters] = { 36, 37, 16 };						// Heater pin numbers
+constexpr Pin HEAT_ON_PINS[NumHeaters] = { 36, 37, 16 };					// Heater pin numbers
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 20, 26, 66, 27 }; 	// Thermistor pin numbers
 constexpr Pin VssaSensePin = 19;
 constexpr Pin VrefSensePin = 17;

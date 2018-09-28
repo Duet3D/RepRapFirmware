@@ -30,13 +30,32 @@ constexpr float ABS_ZERO = -273.15;						// Celsius
 constexpr float NEARLY_ABS_ZERO = -273.0;				// Celsius
 constexpr float ROOM_TEMPERATURE = 21.0;				// Celsius
 
+// Axes
+constexpr float DefaultXYMaxFeedrate = 100;				// mm/sec
+constexpr float DefaultZMaxFeedrate = 5.0;
+constexpr float DefaultEMaxFeedrate = 20.0;
+
+constexpr float DefaultXYAcceleration = 500.0;			// mm/sec^2
+constexpr float DefaultZAcceleration = 20.0;
+constexpr float DefaultEAcceleration = 250.0;
+
+constexpr float DefaultXYDriveStepsPerUnit = 80.0;		// steps/mm
+constexpr float DefaultZDriveStepsPerUnit = 4000.0;
+constexpr float DefaultEDriveStepsPerUnit = 420.0;
+
+constexpr float DefaultXYInstantDv = 15.0;				// mm/sec
+constexpr float DefaultZInstantDv = 0.2;
+constexpr float DefaultEInstantDv = 2.0;
+
 // Timeouts
-constexpr uint32_t LongTime = 300000;					// Milliseconds (5 minutes)
 constexpr uint32_t FanCheckInterval = 500;				// Milliseconds
+constexpr uint32_t OpenLoadTimeout = 500;				// Milliseconds
 constexpr uint32_t MinimumWarningInterval = 4000;		// Milliseconds, must be at least as long as FanCheckInterval
 constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
 constexpr uint32_t DriverCoolingTimeout = 4000;			// Milliseconds
 constexpr float DefaultMessageTimeout = 10.0;			// How long a message is displayed by default, in seconds
+
+constexpr uint32_t MinimumOpenLoadFullStepsPerSec = 4;
 
 // FanCheckInterval must be lower than MinimumWarningInterval to avoid giving driver over temperature warnings too soon when thermostatic control of electronics cooling fans is used
 static_assert(FanCheckInterval < MinimumWarningInterval, "FanCheckInterval too large");
@@ -170,7 +189,7 @@ static_assert(MaxCalibrationPoints <= MaxProbePoints, "MaxCalibrationPoints must
 // SD card
 constexpr uint32_t SdCardDetectDebounceMillis = 200;	// How long we give the SD card to settle in the socket
 constexpr unsigned int MaxSdCardTries = 3;				// Number of read or write attempts before giving up
-constexpr uint32_t SdCardRetryDelay = 10;				// Number of milliseconds delay between SD transfer retries
+constexpr uint32_t SdCardRetryDelay = 30;				// Number of milliseconds delay between SD transfer retries. Looks like 10ms may be too low.
 
 // Z probing
 constexpr float DefaultZDive = 5.0;						// Millimetres
@@ -215,7 +234,11 @@ constexpr size_t MaxFanNameLength = 20;					// Maximum number of characters in a
 // When using RTOS, it is best if it is possible to fit an HTTP response header in a single buffer. Our headers are currently about 230 bytes long.
 // A note on reserved buffers: the worst case is when a GCode with a long response is processed. After string the response, there must be enough buffer space
 // for the HTTP responder to return a status response. Otherwise DWC never gets to know that it needs to make a rr_reply call and the system deadlocks.
-#if SAM4E || SAM4S || SAME70
+#if SAME70
+constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
+constexpr size_t OUTPUT_BUFFER_COUNT = 32;				// How many OutputBuffer instances do we have?
+constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response
+#elif SAM4E || SAM4S
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 20;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response

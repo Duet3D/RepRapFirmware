@@ -44,10 +44,10 @@ public:
 	const void GetIntArray(int32_t arr[], size_t& length, bool doPad);			// Get a :-separated list of ints after a key letter
 	const void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
 
-	void TryGetFValue(char c, float& val, bool& seen);
-	void TryGetIValue(char c, int32_t& val, bool& seen);
-	void TryGetUIValue(char c, uint32_t& val, bool& seen);
-	void TryGetBValue(char c, bool& val, bool& seen);
+	bool TryGetFValue(char c, float& val, bool& seen);
+	bool TryGetIValue(char c, int32_t& val, bool& seen);
+	bool TryGetUIValue(char c, uint32_t& val, bool& seen);
+	bool TryGetBValue(char c, bool& val, bool& seen);
 	bool TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad = false);
 	bool TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad = false);
  	bool TryGetQuotedString(char c, const StringRef& str, bool& seen);
@@ -62,7 +62,6 @@ public:
 	int GetToolNumberAdjust() const { return toolNumberAdjust; }
 	void SetToolNumberAdjust(int arg) { toolNumberAdjust = arg; }
 	void SetCommsProperties(uint32_t arg) { checksumRequired = (arg & 1); }
-	bool StartingNewCode() const { return gcodeLineEnd == 0; }
 	MessageType GetResponseMessageType() const { return responseMessageType; }
 	GCodeMachineState& MachineState() const { return *machineState; }
 	GCodeMachineState& OriginalMachineState() const;

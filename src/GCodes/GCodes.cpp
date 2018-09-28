@@ -59,6 +59,33 @@ void GCodes::RawMove::SetDefaults()
 	yAxes = DefaultYAxisMapping;
 }
 
+#ifdef SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 then if lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) [] (ObjectModel* arg) { GCodes * const self = static_cast<GCodes*>(arg); return (void *)(_ret); }
+
+const ObjectModelTableEntry GCodes::objectModelTable[] =
+{
+	{ "speedFactor", OBJECT_MODEL_FUNC(&(self->speedFactor)), TYPE_OF(float), ObjectModelTableEntry::none }
+};
+
+const char *GCodes::GetModuleName() const
+{
+	return nullptr;				// this module has no name and doesn't need one
+}
+
+const ObjectModelTableEntry *GCodes::GetObjectModelTable(size_t& numEntries) const
+{
+	numEntries = ARRAY_SIZE(objectModelTable);
+	return objectModelTable;
+}
+
+#endif
+
 GCodes::GCodes(Platform& p) :
 	platform(p), machineType(MachineType::fff), active(false),
 #if HAS_VOLTAGE_MONITOR
@@ -110,7 +137,12 @@ void GCodes::Init()
 	axisLetters[1] = 'Y';
 	axisLetters[2] = 'Z';
 
+#if defined(DUET_NG) || defined(DUET_M)
+	numExtruders = min<size_t>(MaxExtruders, platform.GetNumSmartDrivers() - XYZ_AXES);	// don't default dumb drivers to extruders because they don't support the same microstepping options
+#else
 	numExtruders = MaxExtruders;
+#endif
+
 	Reset();
 
 	distanceScale = 1.0;
@@ -202,7 +234,7 @@ void GCodes::Reset()
 	currentCoordinateSystem = 0;
 #endif
 
-	for (size_t i = 0; i < DRIVES; ++i)
+	for (size_t i = 0; i < MaxTotalDrivers; ++i)
 	{
 		moveBuffer.coords[i] = 0.0;						// clear out all axis and extruder coordinates
 	}
@@ -214,8 +246,8 @@ void GCodes::Reset()
 	moveBuffer.yAxes = DefaultYAxisMapping;
 	moveBuffer.virtualExtruderPosition = 0.0;
 
-#if SUPPORT_IOBITS
-	moveBuffer.ioBits = 0;
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	moveBuffer.laserPwmOrIoBits.Clear();
 #endif
 
 	reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
@@ -647,8 +679,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 	case GCodeState::pausing2:
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			reply.copy("Printing paused");
-			platform.Message(LogMessage, "Printing paused\n");
+			reply.printf("Printing paused at");
+			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+			{
+				reply.catf(" %c%.1f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
+			}
+			platform.MessageF(LogMessage, "%s\n", reply.c_str());
 			gb.SetState(GCodeState::normal);
 		}
 		break;
@@ -665,7 +701,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				currentUserPosition[drive] =  pauseRestorePoint.moveCoords[drive];
 			}
 			ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-			for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
+			for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; ++drive)
 			{
 				moveBuffer.coords[drive] = 0.0;
 			}
@@ -1259,9 +1295,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				error = reprap.GetMove().FinishedBedProbing(g30SValue, reply);
 			}
+			gb.SetState(GCodeState::normal);
 		}
-
-		gb.SetState(GCodeState::normal);
 		break;
 
 	case GCodeState::probingAtPoint7:
@@ -1297,7 +1332,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			const AxesBitmap yAxes = reprap.GetCurrentYAxes();
 			reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, xAxes, yAxes);
 			moveBuffer.coords[Z_AXIS] += retractHop;
-			for (size_t i = numTotalAxes; i < DRIVES; ++i)
+			for (size_t i = numTotalAxes; i < MaxTotalDrivers; ++i)
 			{
 				moveBuffer.coords[i] = 0.0;
 			}
@@ -1321,7 +1356,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				const uint32_t xAxes = reprap.GetCurrentXAxes();
 				const uint32_t yAxes = reprap.GetCurrentYAxes();
 				reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, xAxes, yAxes);
-				for (size_t i = numTotalAxes; i < DRIVES; ++i)
+				for (size_t i = numTotalAxes; i < MaxTotalDrivers; ++i)
 				{
 					moveBuffer.coords[i] = 0.0;
 				}
@@ -1483,14 +1518,11 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 
 	case GCodeInputReadResult::noData:
 		// We have reached the end of the file. Check for the last line of gcode not ending in newline.
-		if (!gb.StartingNewCode())				// if there is something in the buffer
+		gb.FileEnded();							// append a newline if necessary and deal with any pending file write
+		if (gb.IsReady())
 		{
-			gb.FileEnded();						// append a newline and deal with any pending file write
-			if (gb.IsReady())
-			{
-				gb.SetFinished(ActOnCode(gb, reply));
-				return;
-			}
+			gb.SetFinished(ActOnCode(gb, reply));
+			return;
 		}
 
 		gb.Init();								// mark buffer as empty
@@ -1513,7 +1545,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 			// Finished a macro or finished processing config.g
 			fileInput->Reset(fd);
 			fd.Close();
-			if (runningConfigFile)
+			if (runningConfigFile && gb.MachineState().previous->previous == nullptr)
 			{
 				CopyConfigFinalValues(gb);
 				runningConfigFile = false;
@@ -1677,8 +1709,8 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 			// TODO: when using RTOS there is a possible race condition in the following,
 			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
 			pauseRestorePoint.filePos = fileGCode->GetFilePosition(fileInput->BytesCached());
-#if SUPPORT_IOBITS
-			pauseRestorePoint.ioBits = moveBuffer.ioBits;
+#if SUPPORT_LASER || SUPPORT_IOBITS
+			pauseRestorePoint.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
 #endif
 		}
 
@@ -1706,6 +1738,13 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 			platform.MessageF(GenericMessage, "Paused print, file offset=%" PRIu32 "\n", pauseRestorePoint.filePos);
 		}
 	}
+
+#if SUPPORT_LASER
+	if (machineType == MachineType::laser)
+	{
+		moveBuffer.laserPwmOrIoBits.laserPwm = 0;		// turn off the laser when we start moving
+	}
+#endif
 
 	SaveFanSpeeds();
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
@@ -1784,7 +1823,7 @@ bool GCodes::IsHeatingUp() const
 		&& ((num = fileGCode->GetCommandNumber()) == 109 || num == 116 || num == 190 || num == 191);
 }
 
-#if HAS_VOLTAGE_MONITOR || HAS_SMART_DRIVERS
+#if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 
 // Do an emergency pause following loss of power or a motor stall returning true if successful, false if needs to be retried
 bool GCodes::DoEmergencyPause()
@@ -1797,7 +1836,7 @@ bool GCodes::DoEmergencyPause()
 	// Save the resume info, stop movement immediately and run the low voltage pause script to lift the nozzle etc.
 	GrabMovement(*autoPauseGCode);
 
-	const bool movesSkipped = reprap.GetMove().LowPowerPause(pauseRestorePoint);
+	const bool movesSkipped = reprap.GetMove().LowPowerOrStallPause(pauseRestorePoint);
 	if (movesSkipped)
 	{
 		// The PausePrint call has filled in the restore point with machine coordinates
@@ -1812,8 +1851,8 @@ bool GCodes::DoEmergencyPause()
 		pauseRestorePoint.virtualExtruderPosition = moveBuffer.virtualExtruderPosition;
 		pauseRestorePoint.filePos = moveBuffer.filePos;
 		pauseRestorePoint.proportionDone = (float)(totalSegments - segmentsLeft)/(float)totalSegments;
-#if SUPPORT_IOBITS
-		pauseRestorePoint.ioBits = moveBuffer.ioBits;
+#if SUPPORT_LASER || SUPPORT_IOBITS
+		pauseRestorePoint.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
 #endif
 		ClearMove();
 	}
@@ -1827,8 +1866,8 @@ bool GCodes::DoEmergencyPause()
 		// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
 		pauseRestorePoint.filePos = fileGCode->GetFilePosition(fileInput->BytesCached());
 		pauseRestorePoint.proportionDone = 0.0;
-#if SUPPORT_IOBITS
-		pauseRestorePoint.ioBits = moveBuffer.ioBits;
+#if SUPPORT_LASER || SUPPORT_IOBITS
+		pauseRestorePoint.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
 #endif
 	}
 
@@ -2060,8 +2099,19 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 
 				// Set the feed rate
 				buf.catf("G1 F%.1f", (double)(pauseRestorePoint.feedRate * MinutesToSeconds));
+#if SUPPORT_LASER
+				if (machineType == MachineType::laser)
+				{
+					buf.catf(" S%u", (unsigned int)pauseRestorePoint.laserPwmOrIoBits.laserPwm);
+				}
+				else
+				{
+#endif
 #if SUPPORT_IOBITS
-				buf.catf(" P%u", (unsigned int)pauseRestorePoint.ioBits);
+					buf.catf(" P%u", (unsigned int)pauseRestorePoint.laserPwmOrIoBits.ioBits);
+#endif
+#if SUPPORT_LASER
+				}
 #endif
 				buf.cat("\nM24\n");
 				ok = f->Write(buf.c_str());								// restore feed rate and output bits
@@ -2176,7 +2226,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 	}
 
 	// Zero every extruder drive as some drives may not be moved
-	for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
+	for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; drive++)
 	{
 		moveBuffer.coords[drive] = 0.0;
 	}
@@ -2184,7 +2234,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;	// save this before we update it
 
 	// Check if we are extruding
-	if (moveBuffer.isCoordinated && gb.Seen(extrudeLetter))
+	if (gb.Seen(extrudeLetter))							// DC 2018-08-07: at E3D's request, extrusion is now recognised even on uncoordinated moves
 	{
 		// Check that we have a tool to extrude with
 		Tool* const tool = reprap.GetCurrentTool();
@@ -2304,7 +2354,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 
 	// Check to see if the move is a 'homing' move that endstops are checked on.
 	// We handle S1 parameters affecting extrusion elsewhere.
-	if (gb.Seen('S'))
+	if (gb.Seen('H') || (machineType != MachineType::laser && gb.Seen('S')))
 	{
 		const int ival = gb.GetIValue();
 		if (ival == 1 || ival == 2 || ival == 3)
@@ -2334,20 +2384,43 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		}
 	}
 
-#if SUPPORT_IOBITS
-	// Update the iobits parameter
+	// Check for laser power setting or IOBITS
+#if SUPPORT_LASER || SUPPORT_IOBITS
 	if (rp != nullptr)
 	{
-		moveBuffer.ioBits = rp->ioBits;
+		moveBuffer.laserPwmOrIoBits = rp->laserPwmOrIoBits;
 	}
-	else if (gb.Seen('P'))
+#if SUPPORT_LASER
+	else if (machineType == MachineType::laser)
 	{
-		moveBuffer.ioBits = (IoBits_t)gb.GetIValue();
+		if (!isCoordinated || moveBuffer.moveType != 0)
+		{
+			moveBuffer.laserPwmOrIoBits.laserPwm = 0;
+		}
+		else if (gb.Seen('S'))
+		{
+			moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
+		}
+		else
+		{
+			// leave the laser PWM alone because this is what LaserWeb expects
+		}
 	}
+#endif
+#if SUPPORT_IOBITS
 	else
 	{
-		// Leave moveBuffer.ioBits alone so that we keep the previous value
+		// Update the iobits parameter
+		if (gb.Seen('P'))
+		{
+			moveBuffer.laserPwmOrIoBits.ioBits = (IoBits_t)gb.GetIValue();
+		}
+		else
+		{
+			// Leave moveBuffer.ioBits alone so that we keep the previous value
+		}
 	}
+#endif
 #endif
 
 	if (moveBuffer.moveType != 0)
@@ -2643,6 +2716,37 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 
 	LoadExtrusionAndFeedrateFromGCode(gb);
 
+#if SUPPORT_LASER
+	if (machineType == MachineType::laser)
+	{
+		if (gb.Seen('S'))
+		{
+			moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
+		}
+		else
+		{
+			// leave the laser PWM alone because this is what LaserWeb expects
+		}
+	}
+# if SUPPORT_IOBITS
+	else
+# endif
+#endif
+#if SUPPORT_IOBITS
+	{
+		// Update the iobits parameter
+		if (gb.Seen('P'))
+		{
+			moveBuffer.laserPwmOrIoBits.ioBits = (IoBits_t)gb.GetIValue();
+		}
+		else
+		{
+			// Leave moveBuffer.ioBits alone so that we keep the previous value
+		}
+	}
+#endif
+
+
 	moveBuffer.usePressureAdvance = moveBuffer.hasExtrusion;
 
 	arcRadius = sqrtf(iParam * iParam + jParam * jParam);
@@ -2682,7 +2786,7 @@ void GCodes::FinaliseMove(GCodeBuffer& gb)
 		segMoveState = SegmentedMoveState::active;
 		gb.SetState(GCodeState::waitingForSegmentedMoveToGo);
 
-		for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
+		for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; ++drive)
 		{
 			moveBuffer.coords[drive] /= totalSegments;							// change the extrusion to extrusion per segment
 		}
@@ -2723,7 +2827,7 @@ bool GCodes::ReadMove(RawMove& m)
 		if (segmentsLeftToStartAt == 1 && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
 		{
 			// Reduce the extrusion by the amount to be skipped
-			for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
+			for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; ++drive)
 			{
 				m.coords[drive] *= (1.0 - firstSegmentFractionToSkip);
 			}
@@ -2783,7 +2887,7 @@ bool GCodes::ReadMove(RawMove& m)
 		if (segmentsLeftToStartAt == segmentsLeft && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
 		{
 			// Reduce the extrusion by the amount to be skipped
-			for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
+			for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; ++drive)
 			{
 				m.coords[drive] *= (1.0 - firstSegmentFractionToSkip);
 			}
@@ -2816,6 +2920,18 @@ void GCodes::AbortPrint(GCodeBuffer& gb)
 	if (&gb == fileGCode)						// if the current command came from a file being printed
 	{
 		StopPrint(StopPrintReason::abort);
+	}
+}
+
+// Cancel everything
+void GCodes::EmergencyStop()
+{
+	for (GCodeBuffer *gbp : gcodeSources)
+	{
+		if (gbp != nullptr)
+		{
+			AbortPrint(*gbp);
+		}
 	}
 }
 
@@ -3113,7 +3229,7 @@ void GCodes::ClearBedMapping()
 // Coordinates are updated at the end of each movement, so this won't tell you where you are mid-movement.
 void GCodes::GetCurrentCoordinates(const StringRef& s) const
 {
-	float liveCoordinates[DRIVES];
+	float liveCoordinates[MaxTotalDrivers];
 	reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 	const Tool * const currentTool = reprap.GetCurrentTool();
 	if (currentTool != nullptr)
@@ -3130,7 +3246,7 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 		// Don't put a space after the colon in the response, it confuses Pronterface
 		s.catf("%c:%.3f ", axisLetters[axis], HideNan(currentUserPosition[axis]));
 	}
-	for (size_t i = numTotalAxes; i < DRIVES; i++)
+	for (size_t i = numTotalAxes; i < MaxTotalDrivers; i++)
 	{
 		s.catf("E%u:%.1f ", i - numTotalAxes, (double)liveCoordinates[i]);
 	}
@@ -3318,7 +3434,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply)
 			settingTemps = true;
 			if (simulationMode == 0)
 			{
-				float standby[Heaters];
+				float standby[NumHeaters];
 				gb.GetFloatArray(standby, hCount, true);
 				for (size_t h = 0; h < hCount; ++h)
 				{
@@ -3331,7 +3447,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply)
 			settingTemps = true;
 			if (simulationMode == 0)
 			{
-				float active[Heaters];
+				float active[NumHeaters];
 				gb.GetFloatArray(active, hCount, true);
 				for (size_t h = 0; h < hCount; ++h)
 				{
@@ -3410,8 +3526,8 @@ bool GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	// Check heaters
-	int32_t heaters[Heaters];
-	size_t hCount = Heaters;
+	int32_t heaters[NumHeaters];
+	size_t hCount = NumHeaters;
 	if (gb.Seen('H'))
 	{
 		gb.GetIntArray(heaters, hCount, false);
@@ -3503,7 +3619,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 // Does what it says.
 void GCodes::DisableDrives()
 {
-	for (size_t drive = 0; drive < DRIVES; drive++)
+	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
 	{
 		platform.DisableDrive(drive);
 	}
@@ -3742,7 +3858,7 @@ bool GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 	const int index = (gb.Seen('P'))
 						? gb.GetIValue()
 						: (gb.Seen('H')) ? gb.GetIValue() : 1;		// default to extruder 1 if no heater number provided
-	if ((index < 0 || index >= (int)Heaters) && (index < (int)FirstExtraHeaterProtection || index >= (int)(FirstExtraHeaterProtection + NumExtraHeaterProtections)))
+	if ((index < 0 || index >= (int)NumHeaters) && (index < (int)FirstExtraHeaterProtection || index >= (int)(FirstExtraHeaterProtection + NumExtraHeaterProtections)))
 	{
 		reply.printf("Invalid heater protection item '%d'", index);
 		return true;
@@ -3755,7 +3871,7 @@ bool GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('P') && gb.Seen('H'))
 	{
 		const int heater = gb.GetIValue();
-		if (heater > (int)Heaters)									// allow negative values to disable heater protection
+		if (heater > (int)NumHeaters)									// allow negative values to disable heater protection
 		{
 			reply.printf("Invalid heater number '%d'", heater);
 			return true;
@@ -3769,7 +3885,7 @@ bool GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('X'))
 	{
 		const int heater = gb.GetIValue();
-		if ((heater < 0 || heater > (int)Heaters) && (heater < (int)FirstVirtualHeater || heater >= (int)(FirstVirtualHeater + MaxVirtualHeaters)))
+		if ((heater < 0 || heater > (int)NumHeaters) && (heater < (int)FirstVirtualHeater || heater >= (int)(FirstVirtualHeater + MaxVirtualHeaters)))
 		{
 			reply.printf("Invalid heater number '%d'", heater);
 			return true;
@@ -3874,7 +3990,7 @@ void GCodes::SetPidParameters(GCodeBuffer& gb, int heater, const StringRef& repl
 		heater = gb.GetIValue();
 	}
 
-	if (heater >= 0 && heater < (int)Heaters)
+	if (heater >= 0 && heater < (int)NumHeaters)
 	{
 		const FopDt& model = reprap.GetHeat().GetHeaterModel(heater);
 		M301PidParameters pp = model.GetM301PidParameters(false);
@@ -3908,7 +4024,7 @@ GCodeResult GCodes::SetHeaterParameters(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('P'))
 	{
 		const int heater = gb.GetIValue();
-		if ((heater >= 0 && heater < (int)Heaters) || (heater >= (int)FirstVirtualHeater && heater < (int)(FirstVirtualHeater + MaxVirtualHeaters)))
+		if ((heater >= 0 && heater < (int)NumHeaters) || (heater >= (int)FirstVirtualHeater && heater < (int)(FirstVirtualHeater + MaxVirtualHeaters)))
 		{
 			Heat& heat = reprap.GetHeat();
 			const int oldChannel = heat.GetHeaterChannel(heater);
@@ -3918,7 +4034,7 @@ GCodeResult GCodes::SetHeaterParameters(GCodeBuffer& gb, const StringRef& reply)
 			if (!seen && oldChannel < 0)
 			{
 				// For backwards compatibility, if no sensor has been configured on this channel then assume the thermistor normally associated with the heater
-				if (heater < (int)Heaters && (gb.Seen('R') || gb.Seen('T') || gb.Seen('B')))	// if it has a thermistor and we are trying to configure it
+				if (heater < (int)NumHeaters && (gb.Seen('R') || gb.Seen('T') || gb.Seen('B')))	// if it has a thermistor and we are trying to configure it
 				{
 					channel = heater;
 				}
@@ -3987,7 +4103,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 		const uint32_t xAxes = reprap.GetCurrentXAxes();
 		const uint32_t yAxes = reprap.GetCurrentYAxes();
 		reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, xAxes, yAxes);
-		for (size_t i = numTotalAxes; i < DRIVES; ++i)
+		for (size_t i = numTotalAxes; i < MaxTotalDrivers; ++i)
 		{
 			moveBuffer.coords[i] = 0.0;
 		}
@@ -4273,7 +4389,7 @@ bool GCodes::ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling
 }
 
 // Set the current position, optionally applying bed and axis compensation
-void GCodes::SetMachinePosition(const float positionNow[DRIVES], bool doBedCompensation)
+void GCodes::SetMachinePosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation)
 {
 	memcpy(moveBuffer.coords, positionNow, sizeof(moveBuffer.coords[0] * numTotalAxes));
 	reprap.GetMove().SetNewPosition(positionNow, doBedCompensation);
@@ -4297,8 +4413,8 @@ void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const
 	rp.feedRate = gb.MachineState().feedRate;
 	rp.virtualExtruderPosition = virtualExtruderPosition;
 
-#if SUPPORT_IOBITS
-	rp.ioBits = moveBuffer.ioBits;
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	rp.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
 #endif
 }
 
@@ -4309,13 +4425,14 @@ void GCodes::RestorePosition(const RestorePoint& rp, GCodeBuffer *gb)
 	{
 		currentUserPosition[axis] = rp.moveCoords[axis];
 	}
+
 	if (gb != nullptr)
 	{
 		gb->MachineState().feedRate = rp.feedRate;
 	}
 
-#if SUPPORT_IOBITS
-	moveBuffer.ioBits = rp.ioBits;
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	moveBuffer.laserPwmOrIoBits = rp.laserPwmOrIoBits;
 #endif
 }
 
@@ -4452,7 +4569,7 @@ void GCodes::ListTriggers(const StringRef& reply, TriggerInputsBitmap mask)
 	else
 	{
 		bool printed = false;
-		for (unsigned int i = 0; i < DRIVES; ++i)
+		for (unsigned int i = 0; i < NumEndstops; ++i)
 		{
 			if (IsBitSet(mask, i))
 			{
@@ -4527,11 +4644,6 @@ bool GCodes::AllAxesAreHomed() const
 {
 	const AxesBitmap allAxes = LowestNBits<AxesBitmap>(numVisibleAxes);
 	return (axesHomed & allAxes) == allAxes;
-}
-
-void GCodes::SetAllAxesNotHomed()
-{
-	axesHomed = 0;
 }
 
 // Write the config-override file returning true if an error occurred
@@ -4774,7 +4886,7 @@ void GCodes::GrabResource(const GCodeBuffer& gb, Resource r)
 
 bool GCodes::LockHeater(const GCodeBuffer& gb, int heater)
 {
-	if (heater >= 0 && heater < (int)Heaters)
+	if (heater >= 0 && heater < (int)NumHeaters)
 	{
 		return LockResource(gb, HeaterResourceBase + heater);
 	}
@@ -4932,6 +5044,11 @@ void GCodes::SetExtrusionFactor(size_t extruder, float factor)
 	{
 		extrusionFactors[extruder] = constrain<float>(factor, 0.0, 2.0);
 	}
+}
+
+Pwm_t GCodes::ConvertLaserPwm(float reqVal) const
+{
+	return (uint16_t)constrain<long>(lrintf((reqVal * 65535)/laserMaxPower), 0, 65535);
 }
 
 #if SUPPORT_12864_LCD

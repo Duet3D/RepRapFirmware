@@ -1,17 +1,18 @@
 /*
- * TMC2660.cpp
+ * TMC22xx.cpp
  *
  *  Created on: 23 Jan 2016
  *      Author: David
  */
 
-#include "ReprapFirmware.h"
+#include "RepRapFirmware.h"
 
 #if SUPPORT_TMC22xx
 
 #include "TMC22xx.h"
 #include "RepRap.h"
 #include "Movement/Move.h"
+#include "Movement/StepTimer.h"
 #include "sam/drivers/pdc/pdc.h"
 #include "sam/drivers/uart/uart.h"
 
@@ -21,9 +22,10 @@
 // Therefore this driver will only work if there are at least two TMC22xx drivers being driven,
 // so that each one gets an interval while the other one is being polled.
 
-const float MaximumMotorCurrent = 1600.0;
-const uint32_t DefaultMicrosteppingShift = 4;				// x16 microstepping
-const bool DefaultInterpolation = true;						// interpolation enabled
+constexpr float MaximumMotorCurrent = 1600.0;
+constexpr uint32_t DefaultMicrosteppingShift = 4;						// x16 microstepping
+constexpr bool DefaultInterpolation = true;								// interpolation enabled
+constexpr uint32_t DefaultTpwmthrsReg = 2000;							// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle
 
 static size_t numTmc22xxDrivers;
 
@@ -35,8 +37,6 @@ enum class DriversState : uint8_t
 };
 
 static DriversState driversState = DriversState::noPower;
-
-const int ChopperControlRegisterMode = 999;					// mode passed to get/set microstepping to indicate we want the chopper control register
 
 // GCONF register (0x00, RW)
 constexpr uint8_t REGNUM_GCONF = 0x00;
@@ -142,6 +142,7 @@ constexpr uint32_t DefaultIholdIrunReg = (0 << IHOLDIRUN_IHOLD_SHIFT) | (0 << IH
 
 constexpr uint8_t REGNUM_TPOWER_DOWN = 0x11;
 constexpr uint8_t REGNUM_TSTEP = 0x12;
+
 constexpr uint8_t REGNUM_TPWMTHRS = 0x13;
 constexpr uint8_t REGNUM_VACTUAL = 0x22;
 
@@ -240,10 +241,8 @@ class TmcDriverState
 public:
 	void Init(uint32_t p_driverNumber, Pin p_pin);
 	void SetAxisNumber(size_t p_axisNumber);
+	uint32_t GetAxisNumber() const { return axisNumber; }
 	void WriteAll();
-	bool SetChopConf(uint32_t newVal);
-	uint32_t GetChopConf() const;
-	void SetCoolStep(uint16_t coolStepConfig);
 	bool SetMicrostepping(uint32_t shift, bool interpolate);
 	unsigned int GetMicrostepping(bool& interpolation) const;		// Get microstepping
 	bool SetDriverMode(unsigned int mode);
@@ -254,6 +253,9 @@ public:
 	uint8_t GetDriverNumber() const { return driverNumber; }
 	bool UpdatePending() const { return registersToUpdate != 0; }
 	bool UsesGlobalEnable() const { return enablePin == NoPin; }
+
+	bool SetRegister(SmartDriverRegister reg, uint32_t regVal);
+	uint32_t GetRegister(SmartDriverRegister reg) const;
 
 	float GetStandstillCurrentPercent() const;
 	void SetStandstillCurrentPercent(float percent);
@@ -273,6 +275,7 @@ public:
 	void UartTmcHandler();									// core of the ISR for this driver
 
 private:
+	bool SetChopConf(uint32_t newVal);
 	void UpdateRegister(size_t regIndex, uint32_t regVal);
 	void UpdateChopConfRegister();							// calculate the chopper control register and flag it for sending
 	void UpdateCurrent();
@@ -286,7 +289,7 @@ private:
 	void SetupDMAReceive(uint8_t regnum, uint8_t crc) __attribute__ ((hot));						// set up the PDC to receive a register
 #endif
 
-	static constexpr unsigned int NumWriteRegisters = 5;	// the number of registers that we write to
+	static constexpr unsigned int NumWriteRegisters = 6;	// the number of registers that we write to
 	static const uint8_t WriteRegNumbers[NumWriteRegisters];	// the register numbers that we write to
 
 	// Write register numbers are in priority order, most urgent first, in same order as WriteRegNumbers
@@ -295,6 +298,7 @@ private:
 	static constexpr unsigned int WriteChopConf = 2;		// enable/disable and microstep setting
 	static constexpr unsigned int WriteIholdIrun = 3;		// current setting
 	static constexpr unsigned int WritePwmConf = 4;			// read register select, sense voltage high/low sensitivity
+	static constexpr unsigned int WriteTpwmthrs = 5;		// upper step rate limit for stealthchop
 
 	static constexpr unsigned int NumReadRegisters = 2;		// the number of registers that we read from
 	static const uint8_t ReadRegNumbers[NumReadRegisters];	// the register numbers that we read from
@@ -346,7 +350,7 @@ private:
 // Static data members of class TmcDriverState
 
 #if TMC22xx_HAS_MUX
-Uart * const TmcDriverState::uart = UART_TMC_DRV;
+Uart * const TmcDriverState::uart = UART_TMC22xx;
 #endif
 
 TmcDriverState * volatile TmcDriverState::currentDriver = nullptr;	// volatile because the ISR changes it
@@ -374,7 +378,8 @@ const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 	REGNUM_SLAVECONF,
 	REGNUM_CHOPCONF,
 	REGNUM_IHOLDIRUN,
-	REGNUM_PWMCONF
+	REGNUM_PWMCONF,
+	REGNUM_TPWMTHRS
 };
 
 const uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
@@ -471,7 +476,7 @@ pre(!driversPowered)
 	}
 
 #if !TMC22xx_HAS_MUX
-	uart = DriverUarts[p_driverNumber];
+	uart = TMC22xxUarts[p_driverNumber];
 #endif
 
 	enabled = false;
@@ -484,6 +489,7 @@ pre(!driversPowered)
 	SetMicrostepping(DefaultMicrosteppingShift, DefaultInterpolation);	// this also updates the chopper control register
 	UpdateRegister(WriteIholdIrun, DefaultIholdIrunReg);
 	UpdateRegister(WritePwmConf, DefaultPwmConfReg);
+	UpdateRegister(WriteTpwmthrs, DefaultTpwmthrsReg);
 	for (size_t i = 0; i < NumReadRegisters; ++i)
 	{
 		accumulatedReadRegisters[i] = readRegisters[i] = 0;
@@ -536,18 +542,83 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const
 	return 1u << microstepShiftFactor;
 }
 
-// Set the chopper control register to the settings provided by the user
-bool TmcDriverState::SetChopConf(uint32_t newVal)
+bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal)
 {
-	configuredChopConfReg = (newVal & (CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK)) | CHOPCONF_VSENSE_HIGH;
-	UpdateChopConfRegister();
-	return true;
+	switch(reg)
+	{
+	case SmartDriverRegister::chopperControl:
+		return SetChopConf(regVal);
+
+	case SmartDriverRegister::toff:
+		return SetChopConf((configuredChopConfReg & ~CHOPCONF_TOFF_MASK) | ((regVal << CHOPCONF_TOFF_SHIFT) & CHOPCONF_TOFF_MASK));
+
+	case SmartDriverRegister::tblank:
+		return SetChopConf((configuredChopConfReg & ~CHOPCONF_TBL_MASK) | ((regVal << CHOPCONF_TBL_SHIFT) & CHOPCONF_TBL_MASK));
+
+	case SmartDriverRegister::hstart:
+		return SetChopConf((configuredChopConfReg & ~CHOPCONF_HSTRT_MASK) | ((regVal << CHOPCONF_HSTRT_SHIFT) & CHOPCONF_HSTRT_MASK));
+
+	case SmartDriverRegister::hend:
+		return SetChopConf((configuredChopConfReg & ~CHOPCONF_HEND_MASK) | ((regVal << CHOPCONF_HEND_SHIFT) & CHOPCONF_HEND_MASK));
+
+	case SmartDriverRegister::tpwmthrs:
+		UpdateRegister(WriteTpwmthrs, regVal & ((1u << 20) - 1));
+		return true;
+
+	case SmartDriverRegister::hdec:
+	case SmartDriverRegister::coolStep:
+	default:
+		return false;
+	}
 }
 
-// Get microstepping or chopper control register
-uint32_t TmcDriverState::GetChopConf() const
+uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const
 {
-	return configuredChopConfReg;
+	switch(reg)
+	{
+	case SmartDriverRegister::chopperControl:
+		return configuredChopConfReg & 0x01FFFF;
+
+	case SmartDriverRegister::toff:
+		return (configuredChopConfReg & CHOPCONF_TOFF_MASK) >> CHOPCONF_TOFF_SHIFT;
+
+	case SmartDriverRegister::tblank:
+		return (configuredChopConfReg & CHOPCONF_TBL_MASK) >> CHOPCONF_TBL_SHIFT;
+
+	case SmartDriverRegister::hstart:
+		return (configuredChopConfReg & CHOPCONF_HSTRT_MASK) >> CHOPCONF_HSTRT_SHIFT;
+
+	case SmartDriverRegister::hend:
+		return (configuredChopConfReg & CHOPCONF_HEND_MASK) >> CHOPCONF_HEND_SHIFT;
+
+	case SmartDriverRegister::tpwmthrs:
+		return writeRegisters[WriteTpwmthrs];
+
+	case SmartDriverRegister::hdec:
+	case SmartDriverRegister::coolStep:
+	default:
+		return 0;
+	}
+}
+
+// Set the chopper control register to the settings provided by the user. We allow only the lowest 17 bits to be set.
+bool TmcDriverState::SetChopConf(uint32_t newVal)
+{
+	const uint32_t offTime = (newVal & CHOPCONF_TOFF_MASK) >> CHOPCONF_TOFF_SHIFT;
+	if (offTime == 0 || (offTime == 1 && (newVal & CHOPCONF_TBL_MASK) < (2 << CHOPCONF_TBL_SHIFT)))
+	{
+		return false;
+	}
+	const uint32_t hstrt = (newVal & CHOPCONF_HSTRT_MASK) >> CHOPCONF_HSTRT_SHIFT;
+	const uint32_t hend = (newVal & CHOPCONF_HEND_MASK) >> CHOPCONF_HEND_SHIFT;
+	if (hstrt + hend > 16)
+	{
+		return false;
+	}
+	const uint32_t userMask = CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK;	// mask of bits the user is allowed to change
+	configuredChopConfReg = (configuredChopConfReg & ~userMask) | (newVal & userMask);
+	UpdateChopConfRegister();
+	return true;
 }
 
 // Set the driver mode
@@ -583,7 +654,7 @@ void TmcDriverState::SetCurrent(float current)
 
 void TmcDriverState::UpdateCurrent()
 {
-	// The current sense resistor on the Duet M is 0.075 ohms, to which we must add 0.03 ohms internal resistance.
+	// The current sense resistor on the Duet M is 0.082 ohms, to which we must add 0.03 ohms internal resistance.
 	// Full scale peak motor current in the high sensitivity range is give by I = 0.18/(R+0.03) = 0.18/0.105 ~= 1.6A
 	// This gives us a range of 50mA to 1.6A in 50mA steps in the high sensitivity range (VSENSE = 1)
 	const uint32_t iRunCsBits = (32 * motorCurrent - 800)/1615;		// formula checked by simulation on a spreadsheet
@@ -618,7 +689,7 @@ uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep)
 {
 	const irqflags_t flags = cpu_irq_save();
 	const uint32_t status = accumulatedReadRegisters[ReadDrvStat];
-	accumulatedReadRegisters[ReadDrvStat] &= bitsToKeep;
+	accumulatedReadRegisters[ReadDrvStat] = (status & bitsToKeep) | readRegisters[ReadDrvStat];		// so that the next call to ReadAccumulatedStatus isn't missing some bits
 	cpu_irq_restore(flags);
 	return status & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST | TMC_RR_TEMPBITS);
 }
@@ -639,11 +710,11 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply)
 	{
 		reply.cat(" short-to-ground");
 	}
-	if ((lastReadStatus & TMC_RR_OLA) && !(lastReadStatus & TMC_RR_STST))
+	if (lastReadStatus & TMC_RR_OLA)
 	{
 		reply.cat(" open-load-A");
 	}
-	if ((lastReadStatus & TMC_RR_OLB) && !(lastReadStatus & TMC_RR_STST))
+	if (lastReadStatus & TMC_RR_OLB)
 	{
 		reply.cat(" open-load-B");
 	}
@@ -682,7 +753,18 @@ inline void TmcDriverState::TransferDone()
 		{
 			// We asked to read the scheduled read register, and the sync byte, slave address and register number in the received message match
 			//TODO here we could check the CRC of the received message, but for now we assume that we won't get any corruption in the 32-bit received data
-			const uint32_t regVal = ((uint32_t)receiveData[7] << 24) | ((uint32_t)receiveData[8] << 16) | ((uint32_t)receiveData[9] << 8) | receiveData[10];
+			uint32_t regVal = ((uint32_t)receiveData[7] << 24) | ((uint32_t)receiveData[8] << 16) | ((uint32_t)receiveData[9] << 8) | receiveData[10];
+			if (registerToRead == ReadDrvStat)
+			{
+				uint32_t interval;
+				if ((regVal & TMC_RR_STST) != 0
+					|| (interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor)) == 0		// get the full step interval
+					|| interval > StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec
+				   )
+				{
+					regVal &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds
+				}
+			}
 			readRegisters[registerToRead] = regVal;
 			accumulatedReadRegisters[registerToRead] |= regVal;
 
@@ -715,27 +797,27 @@ inline void TmcDriverState::SetUartMux()
 {
 	if ((driverNumber & 0x01) != 0)
 	{
-		fastDigitalWriteHigh(DriverMuxPins[0]);
+		fastDigitalWriteHigh(TMC22xxMuxPins[0]);
 	}
 	else
 	{
-		fastDigitalWriteLow(DriverMuxPins[0]);
+		fastDigitalWriteLow(TMC22xxMuxPins[0]);
 	}
 	if ((driverNumber & 0x02) != 0)
 	{
-		fastDigitalWriteHigh(DriverMuxPins[1]);
+		fastDigitalWriteHigh(TMC22xxMuxPins[1]);
 	}
 	else
 	{
-		fastDigitalWriteLow(DriverMuxPins[1]);
+		fastDigitalWriteLow(TMC22xxMuxPins[1]);
 	}
 	if ((driverNumber & 0x04) != 0)
 	{
-		fastDigitalWriteHigh(DriverMuxPins[2]);
+		fastDigitalWriteHigh(TMC22xxMuxPins[2]);
 	}
 	else
 	{
-		fastDigitalWriteLow(DriverMuxPins[2]);
+		fastDigitalWriteLow(TMC22xxMuxPins[2]);
 	}
 }
 
@@ -816,11 +898,16 @@ inline void TmcDriverState::UartTmcHandler()
 
 #if TMC22xx_HAS_MUX
 
+#ifndef TMC22xx_UART_Handler
+# error TMC handler name not defined
+#endif
+
 // ISR for the single UART
-extern "C" void UART_TMC_DRV_Handler() __attribute__ ((hot));
-void UART_TMC_DRV_Handler()
+extern "C" void TMC22xx_UART_Handler() __attribute__ ((hot));
+
+void TMC22xx_UART_Handler()
 {
-	UART_TMC_DRV->UART_IDR = UART_IDR_ENDRX;			// disable the interrupt
+	UART_TMC22xx->UART_IDR = UART_IDR_ENDRX;			// disable the interrupt
 	TmcDriverState *driver = TmcDriverState::currentDriver;	// capture volatile variable
 	if (driver != nullptr)
 	{
@@ -851,32 +938,32 @@ namespace SmartDrivers
 {
 	// Initialise the driver interface and the drivers, leaving each drive disabled.
 	// It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
-	void Init(const Pin driverSelectPins[DRIVES], size_t numTmcDrivers)
+	void Init(const Pin driverSelectPins[NumDirectDrivers], size_t numTmcDrivers)
 	{
 		numTmc22xxDrivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
 
 		// Make sure the ENN pins are high
-		pinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
+		pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 
 #if TMC22xx_HAS_MUX
 		// Set up- the single UART that communicates with all TMC22xx drivers
-		ConfigurePin(GetPinDescription(UART_TMC_DRV_PINS));					// the pins are already set up for UART use in the pins table
+		ConfigurePin(GetPinDescription(TMC22xx_UART_PINS));					// the pins are already set up for UART use in the pins table
 
 		// Enable the clock to the UART
-		pmc_enable_periph_clk(ID_UART_TMC_DRV);
+		pmc_enable_periph_clk(ID_TMC22xx_UART);
 
 		// Set the UART baud rate, 8 bits, 2 stop bits, no parity
-		UART_TMC_DRV->UART_IDR = ~0u;
-		UART_TMC_DRV->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS;
-		UART_TMC_DRV->UART_MR = UART_MR_CHMODE_NORMAL | UART_MR_PAR_NO;
-		UART_TMC_DRV->UART_BRGR = VARIANT_MCK/(16 * DriversBaudRate);		// set baud rate
-		UART_TMC_DRV->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS | UART_CR_RSTSTA;
-		NVIC_EnableIRQ(UART_TMC_DRV_IRQn);
+		UART_TMC22xx->UART_IDR = ~0u;
+		UART_TMC22xx->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS;
+		UART_TMC22xx->UART_MR = UART_MR_CHMODE_NORMAL | UART_MR_PAR_NO;
+		UART_TMC22xx->UART_BRGR = VARIANT_MCK/(16 * DriversBaudRate);		// set baud rate
+		UART_TMC22xx->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS | UART_CR_RSTSTA;
+		NVIC_EnableIRQ(TMC22xx_UART_IRQn);
 
 		// Set up the multiplexer control pins as outputs
-		pinMode(DriverMuxPins[0], OUTPUT_LOW);
-		pinMode(DriverMuxPins[1], OUTPUT_LOW);
-		pinMode(DriverMuxPins[2], OUTPUT_LOW);
+		pinMode(TMC22xxMuxPins[0], OUTPUT_LOW);
+		pinMode(TMC22xxMuxPins[1], OUTPUT_LOW);
+		pinMode(TMC22xxMuxPins[2], OUTPUT_LOW);
 #endif
 
 		driversState = DriversState::noPower;
@@ -885,19 +972,19 @@ namespace SmartDrivers
 #if !TMC22xx_HAS_MUX
 			// Initialise the UART that controls this driver
 			// The pins are already set up for UART use in the pins table
-			ConfigurePin(GetPinDescription(DriverUartPins[drive]));
+			ConfigurePin(GetPinDescription(TMC22xxUartPins[drive]));
 
 			// Enable the clock to the UART
-			pmc_enable_periph_clk(DriverUartIds[drive]);
+			pmc_enable_periph_clk(TMC22xxUartIds[drive]);
 
 			// Set the UART baud rate, 8 bits, 2 stop bits, no parity
-			Uart * const uart = DriverUarts[drive];
+			Uart * const uart = TMC22xxUarts[drive];
 			uart->UART_IDR = ~0u;
 			uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS;
 			uart->UART_MR = UART_MR_CHMODE_NORMAL | UART_MR_PAR_NO;
 			uart->UART_BRGR = VARIANT_MCK/(16 * DriversBaudRate);		// set baud rate
 			uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS | UART_CR_TXDIS | UART_CR_RSTSTA;
-			NVIC_EnableIRQ(DriverUartIRQns[drive]);
+			NVIC_EnableIRQ(TMC22xxUartIRQns[drive]);
 #endif
 			driverStates[drive].Init(drive, driverSelectPins[drive]);	// axes are mapped straight through to drivers initially
 		}
@@ -909,6 +996,11 @@ namespace SmartDrivers
 		{
 			driverStates[drive].SetAxisNumber(axisNumber);
 		}
+	}
+
+	uint32_t GetAxisNumber(size_t drive)
+	{
+		return (drive < numTmc22xxDrivers) ? driverStates[drive].GetAxisNumber() : 0;
 	}
 
 	void SetCurrent(size_t drive, float current)
@@ -975,16 +1067,6 @@ namespace SmartDrivers
 		return (driver < numTmc22xxDrivers) ? driverStates[driver].GetDriverMode() : DriverMode::unknown;
 	}
 
-	bool SetChopperControlRegister(size_t driver, uint32_t ccr)
-	{
-		return driver < numTmc22xxDrivers && driverStates[driver].SetChopConf(ccr);
-	}
-
-	uint32_t GetChopperControlRegister(size_t driver)
-	{
-		return (driver < numTmc22xxDrivers) ? driverStates[driver].GetChopConf() : 0;
-	}
-
 	// Flag that the the drivers have been powered up or down and handle any timeouts
 	// Before the first call to this function with 'powered' true, you must call Init()
 	void Spin(bool powered)
@@ -1045,7 +1127,7 @@ namespace SmartDrivers
 
 				if (allInitialised)
 				{
-					digitalWrite(GlobalTmcEnablePin, LOW);
+					digitalWrite(GlobalTmc22xxEnablePin, LOW);
 					driversState = DriversState::ready;
 				}
 			}
@@ -1053,7 +1135,7 @@ namespace SmartDrivers
 		else
 		{
 			// We had power but we lost it
-			digitalWrite(GlobalTmcEnablePin, HIGH);			// disable the drivers
+			digitalWrite(GlobalTmc22xxEnablePin, HIGH);			// disable the drivers
 			if (TmcDriverState::currentDriver == nullptr)
 			{
 				TmcDriverState::currentDriver->AbortTransfer();
@@ -1068,11 +1150,6 @@ namespace SmartDrivers
 	{
 		// When using TMC2660 drivers, this is called when an over-voltage event occurs, so that we can try to protect the drivers by disabling them.
 		// We don't use it with TMC22xx drivers.
-	}
-
-	void SetCoolStep(size_t drive, uint16_t coolStepConfig)
-	{
-		// Not supported on the TMC22xx
 	}
 
 	void AppendDriverStatus(size_t drive, const StringRef& reply)
@@ -1094,7 +1171,16 @@ namespace SmartDrivers
 		{
 			driverStates[drive].SetStandstillCurrentPercent(percent);
 		}
+	}
 
+	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal)
+	{
+		return (driver < numTmc22xxDrivers) && driverStates[driver].SetRegister(reg, regVal);
+	}
+
+	uint32_t GetRegister(size_t driver, SmartDriverRegister reg)
+	{
+		return (driver < numTmc22xxDrivers) ? driverStates[driver].GetRegister(reg) : 0;
 	}
 
 };	// end namespace

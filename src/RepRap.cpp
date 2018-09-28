@@ -1,6 +1,8 @@
 #include "RepRap.h"
 
 #include "Movement/Move.h"
+#include "Movement/StepTimer.h"
+#include "FilamentMonitors/FilamentMonitor.h"
 #include "GCodes/GCodes.h"
 #include "Heating/Heat.h"
 #include "Network.h"
@@ -27,16 +29,61 @@
 #if HAS_HIGH_SPEED_SD
 # include "sam/drivers/hsmci/hsmci.h"
 # include "conf_sd_mmc.h"
+# if SAME70
+static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel assignment");
+# endif
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+# include "CAN/CanInterface.h"
 #endif
 
 #ifdef RTOS
 # include "FreeRTOS.h"
 # include "task.h"
 
+# if SAME70
+#  include "DmacManager.h"
+# endif
+
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
 static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI, "configMAX_SYSCALL_INTERRUPT_PRIORITY is set too high");
 
 static TaskHandle_t hsmciTask = nullptr;		// the task that is waiting for a HSMCI command to complete
+
+// HSMCI interrupt handler
+extern "C" void HSMCI_Handler()
+{
+	HSMCI->HSMCI_IDR = 0xFFFFFFFF;										// disable all HSMCI interrupts
+#if SAME70
+	XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CID = 0xFFFFFFFF;			// disable all DMA interrupts for this channel
+#endif
+	if (hsmciTask != nullptr)
+	{
+		BaseType_t higherPriorityTaskWoken = pdFALSE;
+		vTaskNotifyGiveFromISR(hsmciTask, &higherPriorityTaskWoken);	// wake up the task
+		hsmciTask = nullptr;
+		portYIELD_FROM_ISR(higherPriorityTaskWoken);
+	}
+}
+
+#if SAME70
+
+// HSMCI DMA complete callback
+void HsmciDmaCallback(CallbackParameter cp)
+{
+	HSMCI->HSMCI_IDR = 0xFFFFFFFF;										// disable all HSMCI interrupts
+	XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CID = 0xFFFFFFFF;			// disable all DMA interrupts for this channel
+	if (hsmciTask != nullptr)
+	{
+		BaseType_t higherPriorityTaskWoken = pdFALSE;
+		vTaskNotifyGiveFromISR(hsmciTask, &higherPriorityTaskWoken);	// wake up the task
+		hsmciTask = nullptr;
+		portYIELD_FROM_ISR(higherPriorityTaskWoken);
+	}
+}
+
+#endif
 
 // Callback function from the hsmci driver, called while it is waiting for an SD card operation to complete
 // 'stBits' is the set of bits in the HSMCI status register that the caller is interested in.
@@ -45,7 +92,7 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 {
 	if (   (HSMCI->HSMCI_SR & stBits) == 0
 #if SAME70
-		&& (XDMAC->XDMAC_CHID[CONF_HSMCI_XDMAC_CHANNEL].XDMAC_CIS & dmaBits) == 0
+		&& (XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CIS & dmaBits) == 0
 #endif
 	   )
 	{
@@ -53,7 +100,9 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 		hsmciTask = xTaskGetCurrentTaskHandle();
 		HSMCI->HSMCI_IER = stBits;
 #if SAME70
-		XDMAC->XDMAC_CHID[CONF_HSMCI_XDMAC_CHANNEL].XDMAC_CIE = dmaBits;
+		DmacManager::SetInterruptCallback(DmacChanHsmci, HsmciDmaCallback, CallbackParameter());
+		XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CIE = dmaBits;
+		XDMAC->XDMAC_GIE = 1u << DmacChanHsmci;
 #endif
 		if (ulTaskNotifyTake(pdTRUE, 200) == 0)
 		{
@@ -62,23 +111,6 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 		}
 	}
 }
-
-extern "C" void HSMCI_Handler()
-{
-	HSMCI->HSMCI_IDR = 0xFFFFFFFF;					// disable all HSMCI interrupts
-#if SAME70
-	XDMAC->XDMAC_CHID[CONF_HSMCI_XDMAC_CHANNEL].XDMAC_CID = 0xFFFFFFFF;
-#endif
-	if (hsmciTask != nullptr)
-	{
-		vTaskNotifyGiveFromISR(hsmciTask, nullptr);	// wake up the task
-		hsmciTask = nullptr;
-	}
-}
-
-#if SAME70
-extern "C" void XDMAC_handler() __attribute__ ((alias("HSMCI_Handler")));
-#endif
 
 #else
 
@@ -112,6 +144,33 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 	{
 		FilamentMonitor::Spin(false);
 	}
+}
+
+#endif
+
+#ifdef SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 then if lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) [] (ObjectModel* arg) { RepRap * const self = static_cast<RepRap*>(arg); return (void *)(_ret); }
+
+const ObjectModelTableEntry RepRap::objectModelTable[] =
+{
+	{ "gcodes", OBJECT_MODEL_FUNC(&(self->GetGCodes())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none }
+};
+
+const char *RepRap::GetModuleName() const
+{
+	return nullptr;				// this module has no name and doesn't need one
+}
+
+const ObjectModelTableEntry *RepRap::GetObjectModelTable(size_t& numEntries) const
+{
+	numEntries = ARRAY_SIZE(objectModelTable);
+	return objectModelTable;
 }
 
 #endif
@@ -165,6 +224,9 @@ void RepRap::Init()
 	network->Init();
 	SetName(DEFAULT_MACHINE_NAME);		// Network must be initialised before calling this because this calls SetHostName
 	gCodes->Init();
+#if SUPPORT_CAN_EXPANSION
+	CanInterface::Init();
+#endif
 	move->Init();
 	heat->Init();
 #if SUPPORT_ROLAND
@@ -185,31 +247,51 @@ void RepRap::Init()
 
 	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
-	// Run the configuration file
-	const char *configFile = platform->GetConfigFile();
-	platform->Message(UsbMessage, "\nExecuting ");
-	if (platform->GetMassStorage()->FileExists(platform->GetSysDir(), configFile))
+	// Try to mount the first SD card
 	{
-		platform->MessageF(UsbMessage, "%s...", platform->GetConfigFile());
-	}
-	else
-	{
-		platform->MessageF(UsbMessage, "%s (no configuration file found)...", platform->GetDefaultFile());
-		configFile = platform->GetDefaultFile();
-	}
-
-	if (gCodes->RunConfigFile(configFile))
-	{
+		GCodeResult rslt;
+		String<100> reply;
 		do
 		{
-			// GCodes::Spin will read the macro and ensure IsDaemonBusy returns false when it's done
-			Spin();
-		} while (gCodes->IsDaemonBusy());
-		platform->Message(UsbMessage, "Done!\n");
-	}
-	else
-	{
-		platform->Message(UsbMessage, "Error, not found\n");
+			platform->GetMassStorage()->Spin();			// Spin() doesn't get called regularly until after this function completes, and we need it to update the card detect status
+			rslt = platform->GetMassStorage()->Mount(0, reply.GetRef(), false);
+		}
+		while (rslt == GCodeResult::notFinished);
+
+		if (rslt == GCodeResult::ok)
+		{
+			// Run the configuration file
+			const char *configFile = platform->GetConfigFile();
+			platform->Message(UsbMessage, "\nExecuting ");
+			if (platform->GetMassStorage()->FileExists(platform->GetSysDir(), configFile))
+			{
+				platform->MessageF(UsbMessage, "%s...", platform->GetConfigFile());
+			}
+			else
+			{
+				platform->MessageF(UsbMessage, "%s (no configuration file found)...", platform->GetDefaultFile());
+				configFile = platform->GetDefaultFile();
+			}
+
+			if (gCodes->RunConfigFile(configFile))
+			{
+				do
+				{
+					// GCodes::Spin will read the macro and ensure IsDaemonBusy returns false when it's done
+					Spin();
+				} while (gCodes->IsDaemonBusy());
+				platform->Message(UsbMessage, "Done!\n");
+			}
+			else
+			{
+				platform->Message(UsbMessage, "Error, not found\n");
+			}
+		}
+		else
+		{
+			delay(3000);		// Wait a few seconds so users have a chance to see this
+			platform->MessageF(UsbMessage, "%s\n", reply.c_str());
+		}
 	}
 	processingConfig = false;
 
@@ -266,7 +348,7 @@ void RepRap::Spin()
 		return;
 	}
 
-	const uint32_t lastTime = Platform::GetInterruptClocks();
+	const uint32_t lastTime = StepTimer::GetInterruptClocks();
 
 	ticksInSpinState = 0;
 	spinningModule = modulePlatform;
@@ -366,7 +448,7 @@ void RepRap::Spin()
 	}
 	else
 	{
-		const uint32_t dt = Platform::GetInterruptClocks() - lastTime;
+		const uint32_t dt = StepTimer::GetInterruptClocks() - lastTime;
 		if (dt < fastLoop)
 		{
 			fastLoop = dt;
@@ -382,7 +464,7 @@ void RepRap::Spin()
 
 void RepRap::Timing(MessageType mtype)
 {
-	platform->MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+	platform->MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepTimer::StepClocksToMillis), (double)(fastLoop * StepTimer::StepClocksToMillis));
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
 }
@@ -440,7 +522,7 @@ void RepRap::EmergencyStop()
 		break;
 
 	case MachineType::laser:
-		platform->SetLaserPwm(0.0);
+		platform->SetLaserPwm(0);
 		break;
 
 	default:
@@ -465,6 +547,7 @@ void RepRap::EmergencyStop()
 		platform->DisableAllDrives();
 	}
 
+	gCodes->EmergencyStop();
 	platform->StopLogging();
 }
 
@@ -694,21 +777,24 @@ void RepRap::Tick()
 #endif
 		{
 			resetting = true;
-			for (size_t i = 0; i < Heaters; i++)
+			for (size_t i = 0; i < NumHeaters; i++)
 			{
 				platform->SetHeater(i, 0.0);
 			}
 			platform->DisableAllDrives();
 
 			// We now save the stack when we get stuck in a spin loop
+#ifdef RTOS
+		    __asm volatile("mrs r2, psp");
+			register const uint32_t * stackPtr asm ("r2");					// we want the PSP not the MSP
+			platform->SoftwareReset(
+				(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
+				stackPtr + 5												// discard uninteresting registers, keep LR PC PSR
+#else
 			register const uint32_t * stackPtr asm ("sp");
 			platform->SoftwareReset(
-#ifdef RTOS
-				(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
-				stackPtr + 5 + 15			// discard the stack used by the FreeRTOS stack handler and our tick handler
-#else
 				(uint16_t)SoftwareResetReason::stuckInSpin,
-				stackPtr + 5				// discard the stack used by our tick handler
+				stackPtr + 5												// discard uninteresting registers, keep LR PC PSR
 #endif
 				);
 		}
@@ -767,7 +853,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 	// Now the machine coordinates and the extruder coordinates
 	{
-		float liveCoordinates[DRIVES];
+		float liveCoordinates[MaxTotalDrivers];
 #if SUPPORT_ROLAND
 		if (roland->Active())
 		{
@@ -830,7 +916,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			if (sendBeep)
 			{
 				response->catf("\"beepDuration\":%u,\"beepFrequency\":%u", beepDuration, beepFrequency);
-				if (sendMessage)
+				if (sendMessage || displayMessageBox)
 				{
 					response->cat(",");
 				}
@@ -990,7 +1076,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Current temperatures
 		response->cat("\"current\":");
 		ch = '[';
-		for (size_t heater = 0; heater < Heaters; heater++)
+		for (size_t heater = 0; heater < NumHeaters; heater++)
 		{
 			response->catf("%c%.1f", ch, (double)heat->GetTemperature(heater));
 			ch = ',';
@@ -1000,7 +1086,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Current states
 		response->cat(",\"state\":");
 		ch = '[';
-		for (size_t heater = 0; heater < Heaters; heater++)
+		for (size_t heater = 0; heater < NumHeaters; heater++)
 		{
 			response->catf("%c%d", ch, heat->GetStatus(heater));
 			ch = ',';
@@ -1012,7 +1098,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		{
 			response->cat(",\"names\":");
 			ch = '[';
-			for (size_t heater = 0; heater < Heaters; heater++)
+			for (size_t heater = 0; heater < NumHeaters; heater++)
 			{
 				response->cat(ch);
 				ch = ',';
@@ -1172,10 +1258,10 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		// Endstops
 		uint32_t endstops = 0;
-		const size_t totalAxes = gCodes->GetTotalAxes();
-		for (size_t drive = 0; drive < DRIVES; drive++)
+		const size_t numTotalAxes = gCodes->GetTotalAxes();
+		for (size_t drive = 0; drive < NumEndstops; drive++)
 		{
-			if (drive < totalAxes)
+			if (drive < numTotalAxes)
 			{
 				const EndStopHit es = platform->Stopped(drive);
 				if (es == EndStopHit::highHit || es == EndStopHit::lowHit)
@@ -1192,7 +1278,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"endstops\":%" PRIu32, endstops);
 
 		// Firmware name, machine geometry and number of axes
-		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"axisNames\":\"%s\"", FIRMWARE_NAME, move->GetGeometryString(), numVisibleAxes, gCodes->GetAxisLetters());
+		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\"",
+			FIRMWARE_NAME, move->GetGeometryString(), numVisibleAxes, numTotalAxes, gCodes->GetAxisLetters());
 
 		// Total and mounted volumes
 		size_t mountedCards = 0;
@@ -1443,7 +1530,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	// Accelerations
 	response->cat("],\"accelerations\":");
 	ch = '[';
-	for (size_t drive = 0; drive < DRIVES; drive++)
+	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
 	{
 		response->catf("%c%.2f", ch, (double)(platform->Acceleration(drive)));
 		ch = ',';
@@ -1452,7 +1539,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	// Motor currents
 	response->cat("],\"currents\":");
 	ch = '[';
-	for (size_t drive = 0; drive < DRIVES; drive++)
+	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
 	{
 		response->catf("%c%.2f", ch, (double)(platform->GetMotorCurrent(drive, 906)));
 		ch = ',';
@@ -1496,7 +1583,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	// Minimum feedrates
 	response->cat(",\"minFeedrates\":");
 	ch = '[';
-	for (size_t drive = 0; drive < DRIVES; drive++)
+	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
 	{
 		response->catf("%c%.2f", ch, (double)(platform->GetInstantDv(drive)));
 		ch = ',';
@@ -1505,7 +1592,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	// Maximum feedrates
 	response->cat("],\"maxFeedrates\":");
 	ch = '[';
-	for (size_t drive = 0; drive < DRIVES; drive++)
+	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
 	{
 		response->catf("%c%.2f", ch, (double)(platform->MaxFeedrate(drive)));
 		ch = ',';
@@ -1596,7 +1683,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	}
 
 	// Now the machine coordinates
-	float liveCoordinates[DRIVES];
+	float liveCoordinates[MaxTotalDrivers];
 	move->LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
 	response->catf("],\"machine\":");		// announce the machine position
 	ch = '[';
@@ -1728,8 +1815,8 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	else if (type == 3)
 	{
 		// Add the static fields
-		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"axisNames\":\"%s\",\"volumes\":%u,\"numTools\":%u,\"myName\":",
-						move->GetGeometryString(), numVisibleAxes, gCodes->GetAxisLetters(), NumSdCards, GetNumberOfContiguousTools());
+		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\",\"volumes\":%u,\"numTools\":%u,\"myName\":",
+						move->GetGeometryString(), numVisibleAxes, gCodes->GetTotalAxes(), gCodes->GetAxisLetters(), NumSdCards, GetNumberOfContiguousTools());
 		response->EncodeString(myName.c_str(), myName.Capacity(), false);
 		response->cat(",\"firmwareName\":");
 		response->EncodeString(FIRMWARE_NAME, strlen(FIRMWARE_NAME), false);
@@ -1800,7 +1887,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 					}
 
 					// Write separator and filename
-					if (filesFound > startAt)
+					if (filesFound != startAt)
 					{
 						bytesLeft -= response->cat(',');
 					}
@@ -1872,7 +1959,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 					}
 
 					// Write delimiter
-					if (filesFound != 0)
+					if (filesFound != startAt)
 					{
 						bytesLeft -= response->cat(',');
 					}
@@ -2123,7 +2210,7 @@ unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, uns
 	Tool * const tool = currentTool;
 	if (tool == nullptr)
 	{
-		// This should not happen, but if on tool is selected then don't allow any extruder movement
+		// This should not happen, but if no tool is selected then don't allow any extruder movement
 		return extrusions | retractions;
 	}
 

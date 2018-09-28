@@ -8,7 +8,7 @@
 #ifndef SRC_FANS_DOTSTARLED_H_
 #define SRC_FANS_DOTSTARLED_H_
 
-#include "ReprapFirmware.h"
+#include "RepRapFirmware.h"
 #include "GCodes/GCodeResult.h"
 
 class GCodeBuffer;

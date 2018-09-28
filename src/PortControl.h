@@ -15,8 +15,6 @@ class GCodeBuffer;
 
 #if SUPPORT_IOBITS
 
-typedef uint16_t IoBits_t;
-
 class PortControl
 {
 public:

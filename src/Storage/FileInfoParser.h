@@ -9,7 +9,7 @@
 #define SRC_STORAGE_FILEINFOPARSER_H_
 
 #include "RepRapFirmware.h"
-#include "RTOSIface.h"
+#include "RTOSIface/RTOSIface.h"
 
 const FilePosition GCODE_HEADER_SIZE = 20000uL;		// How many bytes to read from the header - I (DC) have a Kisslicer file with a layer height comment 14Kb from the start
 const FilePosition GCODE_FOOTER_SIZE = 400000uL;	// How many bytes to read from the footer

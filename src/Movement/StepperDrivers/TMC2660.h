@@ -1,5 +1,5 @@
 /*
- * ExternalDrivers.h
+ * TMC2660.h
  *
  *  Created on: 23 Jan 2016
  *      Author: David
@@ -11,16 +11,9 @@
 #if SUPPORT_TMC2660
 
 #include "RepRapFirmware.h"
-#include "GCodes/DriverMode.h"
+#include "DriverMode.h"
 #include "Pins.h"
 #include "MessageType.h"
-#include "Libraries/General/StringRef.h"
-
-// The Platform class needs to know which USART we are using when assigning interrupt priorities
-#define USART_TMC_DRV			USART1
-#define UART_TMC_DRV_IRQn		USART1_IRQn
-#define ID_USART_TMC_DRV		ID_USART1
-#define USART_TMC_DRV_Handler	USART1_Handler
 
 // TMC2660 Read response. The microstep counter can also be read, but we don't include that here.
 const uint32_t TMC_RR_SG = 1 << 0;			// stall detected
@@ -34,8 +27,8 @@ const uint32_t TMC_RR_SG_LOAD_SHIFT = 10;	// shift to get stallguard load regist
 
 namespace SmartDrivers
 {
-	void Init(const Pin[DRIVES], size_t numTmcDrivers)
-		pre(numTmcDrivers <= DRIVES);
+	void Init(const Pin[NumDirectDrivers], size_t numTmcDrivers)
+		pre(numTmcDrivers <= NumDirectDrivers);
 	void Spin(bool powered);
 	void TurnDriversOff();
 
@@ -48,16 +41,15 @@ namespace SmartDrivers
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation);
 	bool SetDriverMode(size_t driver, unsigned int mode);
 	DriverMode GetDriverMode(size_t driver);
-	bool SetChopperControlRegister(size_t driver, uint32_t ccr);
-	uint32_t GetChopperControlRegister(size_t driver);
 	void SetStallThreshold(size_t driver, int sgThreshold);
 	void SetStallFilter(size_t driver, bool sgFilter);
 	void SetStallMinimumStepsPerSecond(size_t driver, unsigned int stepsPerSecond);
-	void SetCoolStep(size_t driver, uint16_t coolStepConfig);
 	void AppendStallConfig(size_t driver, const StringRef& reply);
 	void AppendDriverStatus(size_t driver, const StringRef& reply);
 	float GetStandstillCurrentPercent(size_t driver);
 	void SetStandstillCurrentPercent(size_t driver, float percent);
+	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal);
+	uint32_t GetRegister(size_t driver, SmartDriverRegister reg);
 };
 
 #endif

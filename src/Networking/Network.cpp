@@ -29,13 +29,11 @@
 #include "HttpResponder.h"
 #include "FtpResponder.h"
 #include "TelnetResponder.h"
-#include "Libraries/General/IP4String.h"
+#include "General/IP4String.h"
 #include "Version.h"
+#include "Movement/StepTimer.h"
 
 #ifdef RTOS
-
-# include "Tasks.h"
-# include "RTOSIface.h"
 
 constexpr size_t NetworkStackWords = 550;
 static Task<NetworkStackWords> networkTask;
@@ -44,7 +42,7 @@ static Task<NetworkStackWords> networkTask;
 
 Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderToPoll(nullptr)
 {
-#if defined(SAME70_TEST_BOARD)
+#if defined(DUET3) || defined(SAME70XPLD)
 	interfaces[0] = new LwipEthernetInterface(p);
 	interfaces[1] = new WiFiInterface(p);
 #elif defined(DUET_NG)
@@ -268,7 +266,7 @@ bool Network::IsWiFiInterface(unsigned int interface) const
 // Main spin loop. If 'full' is true then we are being called from the main spin loop. If false then we are being called during HSMCI idle time.
 void Network::Spin(bool full)
 {
-	const uint32_t lastTime = Platform::GetInterruptClocks();
+	const uint32_t lastTime = StepTimer::GetInterruptClocks();
 
 	// Keep the network modules running
 	for (NetworkInterface *iface : interfaces)
@@ -296,7 +294,7 @@ void Network::Spin(bool full)
 	HttpResponder::CheckSessions();		// time out any sessions that have gone away
 
 	// Keep track of the loop time
-	const uint32_t dt = Platform::GetInterruptClocks() - lastTime;
+	const uint32_t dt = StepTimer::GetInterruptClocks() - lastTime;
 	if (dt < fastLoop)
 	{
 		fastLoop = dt;
@@ -320,7 +318,7 @@ void Network::Diagnostics(MessageType mtype)
 {
 	platform.Message(mtype, "=== Network ===\n");
 
-	platform.MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+	platform.MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepTimer::StepClocksToMillis), (double)(fastLoop * StepTimer::StepClocksToMillis));
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
 
@@ -369,6 +367,13 @@ void Network::SetEthernetIPAddress(const uint8_t ipAddress[], const uint8_t netm
 			iface->SetIPAddress(ipAddress, netmask, gateway);
 		}
 	}
+}
+
+const uint8_t *Network::GetIPAddress(unsigned int interface) const
+{
+	static const uint8_t nullIpAddress[4] = { 0, 0, 0, 0 };
+
+	return (interface < NumNetworkInterfaces) ? interfaces[interface]->GetIPAddress() : nullIpAddress;
 }
 
 void Network::SetHostname(const char *name)

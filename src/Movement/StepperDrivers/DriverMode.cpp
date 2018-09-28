@@ -5,8 +5,8 @@
  *      Author: David
  */
 
+#include <RepRapFirmware.h>
 #include "DriverMode.h"
-#include "RepRapFirmware.h"
 
 // This table must be in the same order as enum DriverMode
 static const char * const DriverModeStrings[] =

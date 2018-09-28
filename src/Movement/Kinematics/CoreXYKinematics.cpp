@@ -62,7 +62,7 @@ void CoreXYKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalis
 {
 	const float vecX = normalisedDirectionVector[0];
 	const float vecY = normalisedDirectionVector[1];
-	const float vecMax = max<float>(fabs(vecX + vecY), fabs(vecX - vecY));		// pick the case for the motor that is working hardest
+	const float vecMax = max<float>(fabsf(vecX + vecY), fabsf(vecX - vecY));		// pick the case for the motor that is working hardest
 	if (vecMax > 0.01)															// avoid division by zero or near-zero
 	{
 		const Platform& platform = reprap.GetPlatform();
@@ -70,8 +70,8 @@ void CoreXYKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalis
 		const float aY = platform.Acceleration(1);
 		const float vX = platform.MaxFeedrate(0);
 		const float vY = platform.MaxFeedrate(1);
-		const float aMax = (fabs(vecX) + fabs(vecY)) * aX * aY/(vecMax * (fabs(vecX) * aY + fabs(vecY) * aX));
-		const float vMax = (fabs(vecX) + fabs(vecY)) * vX * vY/(vecMax * (fabs(vecX) * vY + fabs(vecY) * vX));
+		const float aMax = (fabsf(vecX) + fabsf(vecY)) * aX * aY/(vecMax * (fabsf(vecX) * aY + fabsf(vecY) * aX));
+		const float vMax = (fabsf(vecX) + fabsf(vecY)) * vX * vY/(vecMax * (fabsf(vecX) * vY + fabsf(vecY) * vX));
 		dda.LimitSpeedAndAcceleration(vMax, aMax);
 	}
 }

@@ -105,11 +105,14 @@ enum class StopPrintReason
 // The GCode interpreter
 
 class GCodes
+#ifdef SUPPORT_OBJECT_MODEL
+	: public ObjectModel
+#endif
 {   
 public:
 	struct RawMove
 	{
-		float coords[DRIVES];											// new positions for the axes, amount of movement for the extruders
+		float coords[MaxTotalDrivers];									// new positions for the axes, amount of movement for the extruders
 		float initialCoords[MaxAxes];									// the initial positions of the axes
 		float feedRate;													// feed rate of this move
 		float virtualExtruderPosition;									// the virtual extruder position at the start of this move
@@ -118,8 +121,8 @@ public:
 		AxesBitmap xAxes;												// axes that X is mapped to
 		AxesBitmap yAxes;												// axes that Y is mapped to
 		EndstopChecks endStopsToCheck;									// endstops to check
-#if SUPPORT_IOBITS
-		IoBits_t ioBits;												// I/O bits to set/clear at the start of this move
+#if SUPPORT_LASER || SUPPORT_IOBITS
+		LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
 #endif
 		uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
 
@@ -157,6 +160,8 @@ public:
 		{ SetBit(axesHomed, axis); }
 	void SetAxisNotHomed(unsigned int axis)								// Tell us that the axis is not homed
 		{ ClearBit(axesHomed, axis); }
+	void SetAllAxesNotHomed()											// Flag all axes as not homed
+		{ axesHomed = 0; }
 
 	float GetSpeedFactor() const;										// Return the current speed factor
 	void SetSpeedFactor(float factor);									// Set the speed factor
@@ -222,6 +227,15 @@ public:
 
 	void SetMappedFanSpeed(float f);									// Set the mapped fan speed
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);	// Handle G-Code replies
+	void EmergencyStop();												// Cancel everything
+
+#ifdef SUPPORT_OBJECT_MODEL
+protected:
+	const char *GetModuleName() const override;
+	const ObjectModelTableEntry *GetObjectModelTable(size_t& numEntries) const override;
+
+	static const ObjectModelTableEntry objectModelTable[];
+#endif
 
 private:
 	GCodes(const GCodes&);												// private copy constructor to prevent copying
@@ -234,7 +248,7 @@ private:
 	static const Resource MoveResource = 0;								// Movement system, including canned cycle variables
 	static const Resource FileSystemResource = 1;						// Non-sharable parts of the file system
 	static const Resource HeaterResourceBase = 2;
-	static const Resource FanResourceBase = HeaterResourceBase + Heaters;
+	static const Resource FanResourceBase = HeaterResourceBase + NumHeaters;
 	static const size_t NumResources = FanResourceBase + NUM_FANS;
 
 	static_assert(NumResources <= 32, "Too many resources to keep a bitmap of them in class GCodeMachineState");
@@ -283,6 +297,7 @@ private:
 	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply);				// Deal with a M585
 	GCodeResult SetDateTime(GCodeBuffer& gb,const  StringRef& reply);			// Deal with a M905
 	GCodeResult SavePosition(GCodeBuffer& gb,const  StringRef& reply);			// Deal with G60
+	GCodeResult ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply);		// Deal with M569
 
 	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb);					// Set up the extrusion of a move
 
@@ -312,8 +327,7 @@ private:
 	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const;			// Save position to a restore point
 	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb);				// Restore user position from a restore point
 
-	void SetAllAxesNotHomed();													// Flag all axes as not homed
-	void SetMachinePosition(const float positionNow[DRIVES], bool doBedCompensation = true); // Set the current position to be this
+	void SetMachinePosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation = true); // Set the current position to be this
 	void UpdateCurrentUserPosition();											// Get the current position from the Move class
 	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = 0);	// Convert user coordinates to head reference point coordinates
 	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]);	// Convert head reference point coordinates to user coordinates
@@ -374,6 +388,7 @@ private:
 #if SUPPORT_12864_LCD
 	int GetHeaterNumber(unsigned int itemNumber) const;
 #endif
+	Pwm_t ConvertLaserPwm(float reqVal) const;
 
 	Platform& platform;													// The RepRap machine
 
@@ -570,6 +585,7 @@ private:
 	static constexpr const char* RETRACTPROBE_G = "retractprobe.g";
 	static constexpr const char* DefaultHeightMapFile = "heightmap.csv";
 	static constexpr const char* LOAD_FILAMENT_G = "load.g";
+	static constexpr const char* CONFIG_FILAMENT_G = "config.g";
 	static constexpr const char* UNLOAD_FILAMENT_G = "unload.g";
 	static constexpr const char* RESUME_AFTER_POWER_FAIL_G = "resurrect.g";
 	static constexpr const char* RESUME_PROLOGUE_G = "resurrect-prologue.g";

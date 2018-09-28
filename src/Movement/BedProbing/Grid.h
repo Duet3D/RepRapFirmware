@@ -9,7 +9,6 @@
 #define SRC_MOVEMENT_GRID_H_
 
 #include "RepRapFirmware.h"
-#include "Libraries/General/StringRef.h"
 
 // This class defines the bed probing grid
 class GridDefinition

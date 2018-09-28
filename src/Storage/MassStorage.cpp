@@ -2,7 +2,6 @@
 #include "Platform.h"
 #include "RepRap.h"
 #include "sd_mmc.h"
-#include "RTOSIface.h"
 
 // A note on using mutexes:
 // Each SD card volume has its own mutex. There is also one for the file table, and one for the find first/find next buffer.
@@ -87,19 +86,7 @@ void MassStorage::Init()
 
 	sd_mmc_init(SdWriteProtectPins, SdSpiCSPins);		// initialize SD MMC stack
 
-	// Try to mount the first SD card only
-	String<100> reply;
-	do
-	{
-		Spin();											// Spin() doesn't get called regularly until after this function completes, and we need it to update the card detect status
-	}
-	while (Mount(0, reply.GetRef(), false) == GCodeResult::notFinished);
-
-	if (reply.strlen() != 0)
-	{
-		delay(3000);		// Wait a few seconds so users have a chance to see this
-		reprap.GetPlatform().MessageF(UsbMessage, "%s\n", reply.c_str());
-	}
+	// We no longer mount the SD card here because it may take a long time if it fails
 }
 
 FileWriteBuffer *MassStorage::AllocateWriteBuffer()

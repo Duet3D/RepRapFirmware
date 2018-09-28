@@ -19,7 +19,8 @@
 #include "RepRap.h"
 #include "Tools/Tool.h"
 #include "FilamentMonitors/FilamentMonitor.h"
-#include "Libraries/General/IP4String.h"
+#include "General/IP4String.h"
+#include "Movement/StepperDrivers/DriverMode.h"
 #include "Version.h"
 
 #if SUPPORT_IOBITS
@@ -28,14 +29,6 @@
 
 #if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
-#endif
-
-#if SUPPORT_TMC2660
-# include "StepperDrivers/TMC2660/TMC2660.h"
-#endif
-
-#if SUPPORT_TMC22xx
-# include "StepperDrivers/TMC22xx/TMC22xx.h"
 #endif
 
 #if SUPPORT_12864_LCD
@@ -420,7 +413,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				break;
 
 			case MachineType::laser:
-				platform.SetLaserPwm(gb.GetFValue()/laserMaxPower);
+				platform.SetLaserPwm(ConvertLaserPwm(gb.GetFValue()));
 				break;
 
 			default:
@@ -492,7 +485,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			break;
 
 		case MachineType::laser:
-			platform.SetLaserPwm(0.0);
+			platform.SetLaserPwm(0);
 			break;
 
 		default:
@@ -1214,11 +1207,22 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 106: // Set/report fan values
 		{
 			bool seenFanNum = false;
-			int32_t fanNum = 0;			// Default to the first fan
+			int32_t fanNum;
 			gb.TryGetIValue('P', fanNum, seenFanNum);
-			bool error = false;
-			const bool processed = platform.ConfigureFan(code, fanNum, gb, reply, error);
-			result = GetGCodeResultFromError(error);
+			bool processed;
+
+			// 2018-08-09: only configure the fan if a fan number was given.
+			// This avoids M106 Snn failing if we have disabled Fan 0 and mapped the print cooling fan to a different fan.
+			if (seenFanNum)
+			{
+				bool error = false;
+				processed = platform.ConfigureFan(code, fanNum, gb, reply, error);
+				result = GetGCodeResultFromError(error);
+			}
+			else
+			{
+				processed = false;
+			}
 
 			// ConfigureFan only processes S parameters if there were other parameters to process
 			if (!processed && gb.Seen('S'))
@@ -1448,8 +1452,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (gb.Seen('H'))
 			{
 				// Wait for specified heaters to be ready
-				uint32_t heaters[Heaters];
-				size_t heaterCount = Heaters;
+				uint32_t heaters[NumHeaters];
+				size_t heaterCount = NumHeaters;
 				gb.GetUnsignedArray(heaters, heaterCount, false);
 
 				for (size_t i = 0; i < heaterCount; i++)
@@ -1633,7 +1637,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					heater = -1;
 				}
-				else if (heater >= (int)Heaters)
+				else if (heater >= (int)NumHeaters)
 				{
 					reply.printf("Invalid heater number '%d'", heater);
 					result = GCodeResult::error;
@@ -1918,31 +1922,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 204: // Set max travel and printing accelerations
-		{
-			bool seen = false;
-			if (gb.Seen('S'))
-			{
-				// For backwards compatibility with old versions of Marlin (e.g. for Cura and the Prusa fork of slic3r), set both accelerations
-				const float acc = gb.GetFValue();
-				platform.SetMaxPrintingAcceleration(acc);
-				platform.SetMaxTravelAcceleration(acc);
-				seen = true;
-			}
-			if (gb.Seen('P'))
-			{
-				platform.SetMaxPrintingAcceleration(gb.GetFValue());
-				seen = true;
-			}
-			if (gb.Seen('T'))
-			{
-				platform.SetMaxTravelAcceleration(gb.GetFValue());
-				seen = true;
-			}
-			if (!seen)
-			{
-				reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f", (double)platform.GetMaxPrintingAcceleration(), (double)platform.GetMaxTravelAcceleration());
-			}
-		}
+		result = reprap.GetMove().ConfigureAccelerations(gb, reply);
 		break;
 
 	case 206: // Offset axes
@@ -2260,17 +2240,38 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		SetPidParameters(gb, 1, reply);
 		break;
 
-	case 302: // Allow, deny or report cold extrudes
+	case 302: // Allow, deny or report cold extrudes and configure minimum extrusion/retraction temps
+	{
+		bool seen = false;
 		if (gb.Seen('P'))
 		{
+			seen = true;
 			reprap.GetHeat().AllowColdExtrude(gb.GetIValue() > 0);
 		}
-		else
+		if (gb.Seen('S'))
 		{
-			reply.printf("Cold extrusion is %s, use M302 P[1/0] to allow/deny it",
-					reprap.GetHeat().ColdExtrude() ? "allowed" : "denied");
+			seen = true;
+			reprap.GetHeat().SetExtrusionMinTemp(gb.GetFValue());
 		}
-		break;
+		if (gb.Seen('R'))
+		{
+			seen = true;
+			reprap.GetHeat().SetRetractionMinTemp(gb.GetFValue());
+		}
+		if (!seen)
+		{
+			if (reprap.GetHeat().ColdExtrude())
+			{
+				reply.copy("Cold extrusion is allowed (use M302 P0 to forbid it)");
+			}
+			else
+			{
+			reply.printf("Cold extrusion is forbidden (use M302 P1 to allow it), min. extrusion temperature %.1fC, min. retraction temperature %.1fC",
+					(double)reprap.GetHeat().GetExtrusionMinTemp(), (double)reprap.GetHeat().GetRetractionMinTemp());
+			}
+		}
+	}
+	break;
 
 	case 303: // Run PID tuning
 		if (gb.Seen('H'))
@@ -2281,7 +2282,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 										: reprap.GetHeat().IsChamberHeater(heater) ? 50.0
 										: 200.0;
 			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : reprap.GetHeat().GetHeaterModel(heater).GetMaxPwm();
-			if (heater >= Heaters)
+			if (heater >= NumHeaters)
 			{
 				reply.copy("Bad heater number in M303 command");
 			}
@@ -2316,7 +2317,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (gb.Seen('H'))
 		{
 			const unsigned int heater = gb.GetUIValue();
-			if (heater < Heaters)
+			if (heater < NumHeaters)
 			{
 				const FopDt& model = reprap.GetHeat().GetHeaterModel(heater);
 				bool seen = false;
@@ -3006,7 +3007,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (gb.Seen('P'))
 		{
 			const unsigned int heater = gb.GetUIValue();
-			if (heater < Heaters)
+			if (heater < NumHeaters)
 			{
 				reprap.ClearTemperatureFault(heater);
 			}
@@ -3019,7 +3020,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		else
 		{
 			// Clear all heater faults
-			for (unsigned int heater = 0; heater < Heaters; ++heater)
+			for (unsigned int heater = 0; heater < NumHeaters; ++heater)
 			{
 				reprap.ClearTemperatureFault(heater);
 			}
@@ -3132,82 +3133,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 569: // Set/report axis direction
-		if (gb.Seen('P'))
-		{
-			const size_t drive = gb.GetIValue();
-			if (drive < DRIVES)
-			{
-				bool seen = false;
-				if (gb.Seen('S'))
-				{
-					if (!LockMovementAndWaitForStandstill(gb))
-					{
-						return false;
-					}
-					seen = true;
-					platform.SetDirectionValue(drive, gb.GetIValue() != 0);
-				}
-				if (gb.Seen('R'))
-				{
-					if (!LockMovementAndWaitForStandstill(gb))
-					{
-						return false;
-					}
-					seen = true;
-					platform.SetEnableValue(drive, (int8_t)gb.GetIValue());
-				}
-				if (gb.Seen('T'))
-				{
-					seen = true;
-					float timings[4];
-					size_t numTimings = ARRAY_SIZE(timings);
-					gb.GetFloatArray(timings, numTimings, true);
-					if (numTimings != ARRAY_SIZE(timings))
-					{
-						reply.copy("bad timing parameter");
-						result = GCodeResult::error;
-						break;
-					}
-					platform.SetDriverStepTiming(drive, timings);
-				}
-
-#if HAS_SMART_DRIVERS
-				if (gb.Seen('D'))		// set driver mode
-				{
-					seen = true;
-					const unsigned int mode = gb.GetUIValue();
-					if (!SmartDrivers::SetDriverMode(drive, mode))
-					{
-						reply.printf("Driver %u does not support mode '%s'", drive, TranslateDriverMode(mode));
-						result = GCodeResult::error;
-						break;
-					}
-				}
-
-				if (gb.Seen('C'))		// set chopper control register
-				{
-					seen = true;
-					(void)SmartDrivers::SetChopperControlRegister(drive, gb.GetUIValue());		// currently this call never returns failure, so no error handling here
-				}
-#endif
-				if (!seen)
-				{
-					float timings[4];
-					platform.GetDriverStepTiming(drive, timings);
-					reply.printf("Drive %u runs %s, active %s enable, step timing %.1f:%.1f:%.1f:%.1f us",
-								drive,
-								(platform.GetDirectionValue(drive)) ? "forwards" : "in reverse",
-								(platform.GetEnableValue(drive)) ? "high" : "low",
-								(double)timings[0], (double)timings[1], (double)timings[2], (double)timings[3]);
-#if HAS_SMART_DRIVERS
-					if (drive < platform.GetNumSmartDrivers())
-					{
-						reply.catf(", mode %s, ccr 0x%05" PRIx32, TranslateDriverMode(SmartDrivers::GetDriverMode(drive)), SmartDrivers::GetChopperControlRegister(drive));
-					}
-#endif
-				}
-			}
-		}
+		result = ConfigureDriver(gb, reply);
 		break;
 
 	case 570: // Set/report heater monitoring
@@ -3221,7 +3147,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (gb.Seen('H'))
 			{
 				const unsigned heater = gb.GetUIValue();
-				if (heater < Heaters)
+				if (heater < NumHeaters)
 				{
 					bool seenValue = false;
 					float maxTempExcursion, maxFaultTime;
@@ -3319,7 +3245,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (gb.Seen('P'))
 		{
 			const unsigned int heater = gb.GetUIValue();
-			if (heater < Heaters)
+			if (heater < NumHeaters)
 			{
 				reply.printf("Average heater %u PWM: %.3f", heater, (double)reprap.GetHeat().GetAveragePWM(heater));
 			}
@@ -3618,8 +3544,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 #endif
 
-	case 593: // Configure filament properties
-		// TODO: We may need this code later to restrict specific filaments to certain tools or to reset filament counters.
+	case 593: // Configure dynamic ringing cancellation
+		result = reprap.GetMove().ConfigureDynamicAcceleration(gb, reply);
 		break;
 
 	case 665: // Set delta configuration
@@ -3816,6 +3742,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 702: // Unload filament
 		result = UnloadFilament(gb, reply);
+		break;
+
+	case 703: // Configure Filament
+		if (reprap.GetCurrentTool() != nullptr)
+		{
+			if (reprap.GetCurrentTool()->GetFilament() != nullptr)
+			{
+				String<ScratchStringLength> scratchString;
+				scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, reprap.GetCurrentTool()->GetFilament()->GetName(), CONFIG_FILAMENT_G);
+				DoFileMacro(gb, scratchString.c_str(), false);
+			}
+		}
+		else
+		{
+			result = GCodeResult::error;
+			reply.copy("No tool selected");
+		}
 		break;
 
 #if SUPPORT_SCANNER
@@ -4017,11 +3960,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (code == 906 && gb.Seen('I'))
 			{
 				seen = true;
-				const float idleFactor = gb.GetFValue();
-				if (idleFactor >= 0 && idleFactor <= 100.0)
-				{
-					platform.SetIdleCurrentFactor(idleFactor/100.0);
-				}
+				platform.SetIdleCurrentFactor(gb.GetFValue()/100.0);
 			}
 
 			if (!seen)

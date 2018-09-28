@@ -37,7 +37,8 @@ const size_t DRIVES = 9;
 
 // The number of heaters in the machine
 // 0 is the heated bed even if there isn't one.
-constexpr size_t Heaters = 4;
+constexpr size_t NumEndstops = 4;					// The number of inputs we have for endstops, filament sensors etc.
+constexpr size_t NumHeaters = 4;
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 4;
 
@@ -76,7 +77,7 @@ const Pin DIRECTION_PINS[DRIVES] = { 23, 16,  3, 60, 63, 53, 33, 27, 66 };
 //
 // This leaves 34, 36, and 38 as spare pins (X, Y, Z max)
 
-const Pin END_STOP_PINS[DRIVES] = { 28, 30, 32, 39, NoPin, NoPin, NoPin, NoPin };
+const Pin END_STOP_PINS[NumEndstops] = { 28, 30, 32, 39 };
 
 // HEATERS - The bed is assumed to be the at index 0
 
@@ -88,7 +89,7 @@ const Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 4, 0, 1, 2 };
 // h0, h1 PMW: D13 & D12 are on TIOB0 & B8 which are both TC B channels, so they get PWM
 // h2 bang-bang: D11 is on TIOA8 which is a TC A channel shared with h1, it gets bang-bang control
 
-const Pin HEAT_ON_PINS[Heaters] = { 7, 13, 12, 11 };	// bed, h0, h1, h2
+const Pin HEAT_ON_PINS[NumHeaters] = { 7, 13, 12, 11 };	// bed, h0, h1, h2
 
 // Default thermistor betas
 const float BED_R25 = 10000.0;

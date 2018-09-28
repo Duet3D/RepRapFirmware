@@ -21,7 +21,10 @@
 // Each DDA needs one DM per drive that it moves.
 // However, DM's are large, so we provide fewer than DRIVES * DdaRingLength of them. The planner checks that enough DMs are available before filling in a new DDA.
 
-#if SAM4E || SAM4S || SAME70
+#if SAME70
+const unsigned int DdaRingLength = 30;
+const unsigned int NumDms = DdaRingLength * 12;						// allow enough for plenty of CAN expansion
+#elif SAM4E || SAM4S
 const unsigned int DdaRingLength = 30;
 const unsigned int NumDms = DdaRingLength * 8;						// suitable for e.g. a delta + 5 input hot end
 #else
@@ -30,9 +33,10 @@ const unsigned int DdaRingLength = 20;
 const unsigned int NumDms = DdaRingLength * 5;						// suitable for e.g. a delta + 2-input hot end
 #endif
 
-/**
- * This is the master movement class.  It controls all movement in the machine.
- */
+constexpr uint32_t MovementStartDelayClocks = StepTimer::StepClockRate/100;		// 10ms delay between preparing the first move and starting it
+
+// This is the master movement class.  It controls all movement in the machine.
+
 class Move
 {
 public:
@@ -45,12 +49,12 @@ public:
 	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, AxesBitmap xAxes, AxesBitmap yAxes) const;
 																	// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetEndPoint(size_t drive) const { return liveEndPoints[drive]; } 	// Get the current position of a motor
-	void LiveCoordinates(float m[DRIVES], AxesBitmap xAxes, AxesBitmap yAxes);	// Gives the last point at the end of the last complete DDA transformed to user coords
+	void LiveCoordinates(float m[MaxTotalDrivers], AxesBitmap xAxes, AxesBitmap yAxes);	// Gives the last point at the end of the last complete DDA transformed to user coords
 	void Interrupt() __attribute__ ((hot));							// The hardware's (i.e. platform's)  interrupt should call this.
 	bool AllMovesAreFinished();										// Is the look-ahead ring empty?  Stops more moves being added as well.
 	void DoLookAhead() __attribute__ ((hot));						// Run the look-ahead procedure
-	void SetNewPosition(const float positionNow[DRIVES], bool doBedCompensation); // Set the current position to be this
-	void SetLiveCoordinates(const float coords[DRIVES]);			// Force the live coordinates (see above) to be these
+	void SetNewPosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation); // Set the current position to be this
+	void SetLiveCoordinates(const float coords[MaxTotalDrivers]);			// Force the live coordinates (see above) to be these
 	void ResetExtruderPositions();									// Resets the extrusion amounts of the live coordinates
 	void SetXYBedProbePoint(size_t index, float x, float y);		// Record the X and Y coordinates of a probe point
 	void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError); // Record the Z coordinate of a probe point
@@ -70,6 +74,16 @@ public:
 	bool IsUsingMesh() const { return usingMesh; }					// Return true if we are using mesh compensation
 	unsigned int GetNumProbePoints() const;							// Return the number of currently used probe points
 	float PushBabyStepping(float amount);							// Try to push some babystepping through the lookahead queue
+
+	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply);			// process M204
+	GCodeResult ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef& reply);	// process M593
+
+	float GetMaxPrintingAcceleration() const { return maxPrintingAcceleration; }
+	float GetMaxTravelAcceleration() const { return maxTravelAcceleration; }
+	float GetDRCfreq() const { return 1.0/drcPeriod; }
+	float GetDRCperiod() const { return drcPeriod; }
+	float GetDRCminimumAcceleration() const { return drcMinimumAcceleration; }
+	float IsDRCenabled() const { return drcEnabled; }
 
 	void Diagnostics(MessageType mtype);							// Report useful stuff
 	void RecordLookaheadError() { ++numLookaheadErrors; }			// Record a lookahead error
@@ -102,8 +116,8 @@ public:
 	void PrintCurrentDda() const;													// For debugging
 
 	bool PausePrint(RestorePoint& rp);												// Pause the print as soon as we can, returning true if we were able to
-#if HAS_VOLTAGE_MONITOR
-	bool LowPowerPause(RestorePoint& rp);											// Pause the print immediately, returning true if we were able to
+#if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
+	bool LowPowerOrStallPause(RestorePoint& rp);									// Pause the print immediately, returning true if we were able to
 #endif
 
 	bool NoLiveMovement() const;													// Is a move running, or are there any queued?
@@ -129,7 +143,7 @@ public:
 
 	bool WriteResumeSettings(FileStore *f) const;									// Write settings for resuming the print
 
-#if HAS_STALL_DETECT
+#if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const;			// Get the current step interval for this axis or extruder
 #endif
 
@@ -150,7 +164,7 @@ private:
 	void InverseBedTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;	// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;			// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;	// Go from an axis transformed point back to user coordinates
-	void SetPositions(const float move[DRIVES]);												// Force the machine coordinates to be these
+	void SetPositions(const float move[MaxTotalDrivers]);										// Force the machine coordinates to be these
 	float GetInterpolatedHeightError(float xCoord, float yCoord) const;							// Get the height error at an XY position
 
 	bool DDARingAdd();									// Add a processed look-ahead entry to the DDA ring
@@ -165,6 +179,12 @@ private:
 	bool active;										// Are we live and running?
 	uint8_t simulationMode;								// Are we simulating, or really printing?
 	MoveState moveState;								// whether the idle timer is active
+	bool drcEnabled;
+
+	float maxPrintingAcceleration;
+	float maxTravelAcceleration;
+	float drcPeriod;									// the period of ringing that we don't want to excite
+	float drcMinimumAcceleration;						// the minimum value that we reduce acceleration to
 
 	unsigned int numLookaheadUnderruns;					// How many times we have run out of moves to adjust during lookahead
 	unsigned int numPrepareUnderruns;					// How many times we wanted a new move but there were only un-prepared moves in the queue
@@ -174,9 +194,9 @@ private:
 	float simulationTime;								// Print time since we started simulating
 
 	float extrusionPending[MaxExtruders];				// Extrusion not done due to rounding to nearest step
-	volatile float liveCoordinates[DRIVES];				// The endpoint that the machine moved to in the last completed move
+	volatile float liveCoordinates[MaxTotalDrivers];	// The endpoint that the machine moved to in the last completed move
 	volatile bool liveCoordinatesValid;					// True if the XYZ live coordinates are reliable (the extruder ones always are)
-	volatile int32_t liveEndPoints[DRIVES];				// The XYZ endpoints of the last completed move in motor coordinates
+	volatile int32_t liveEndPoints[MaxTotalDrivers];	// The XYZ endpoints of the last completed move in motor coordinates
 	volatile int32_t extrusionAccumulators[MaxExtruders]; // Accumulated extruder motor steps
 	volatile bool extruderNonPrinting[MaxExtruders];	// Set whenever the extruder starts a non-printing move
 
@@ -202,7 +222,7 @@ private:
 	uint32_t scheduledMoves;							// Move counters for the code queue
 	volatile uint32_t completedMoves;					// This one is modified by an ISR, hence volatile
 
-	float specialMoveCoords[DRIVES];					// Amounts by which to move individual motors (leadscrew adjustment move)
+	float specialMoveCoords[MaxTotalDrivers];			// Amounts by which to move individual motors (leadscrew adjustment move)
 	bool specialMoveAvailable;							// True if a leadscrew adjustment move is pending
 };
 
@@ -247,7 +267,7 @@ inline void Move::Interrupt()
 	}
 }
 
-#if HAS_STALL_DETECT
+#if HAS_SMART_DRIVERS
 
 // Get the current step interval for this axis or extruder, or 0 if it is not moving
 // This is called from the stepper drivers SPI interface ISR

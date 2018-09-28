@@ -11,14 +11,16 @@
 #include "GCodes/GCodeBuffer.h"
 #include "Heating/Heat.h"
 
-void Fan::Init(Pin p_pin, bool hwInverted, PwmFrequency p_freq)
+void Fan::Init(Pin p_pin, LogicalPin lp, bool hwInverted, PwmFrequency p_freq)
 {
 	isConfigured = false;
 	val = lastVal = 0.0;
 	minVal = 0.1;				// 10% minimum fan speed
+	maxVal = 1.0;				// 100% maximum fan speed
 	blipTime = 100;				// 100ms fan blip
 	freq = p_freq;
 	pin = p_pin;
+	logicalPin = lp;
 	hardwareInverted = hwInverted;
 	inverted = blipping = false;
 	heatersMonitored = 0;
@@ -37,16 +39,36 @@ void Fan::Init(Pin p_pin, bool hwInverted, PwmFrequency p_freq)
 // 2. Don't process the R parameter, but if it is present don't print the existing configuration.
 bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
-	if (!IsEnabled())
-	{
-		reply.printf("Fan %d is disabled", fanNum);
-		error = true;
-		return true;											// say we have processed it
-	}
-
 	bool seen = false;
 	if (mcode == 106)
 	{
+		// We allow a disabled fan to be re-enabled using the A parameter to specify the logical pin number
+		if (gb.Seen('A'))
+		{
+			seen = true;
+			const LogicalPin lp = gb.GetUIValue();
+			if (reprap.GetPlatform().TranslateFanPin(lp, pin, hardwareInverted))
+			{
+				logicalPin = lp;
+			}
+			else
+			{
+				reply.copy("Logical pin ");
+				reprap.GetPlatform().AppendPinName(lp, reply);
+				reply.catf(" is not available to use for fan %d", fanNum);
+				error = true;
+				return true;
+			}
+		}
+
+		// The remaining parameters are not available if the fan has been disabled
+		if (!IsEnabled())
+		{
+			reply.printf("Fan %d is disabled", fanNum);
+			error = true;
+			return true;											// say we have processed it
+		}
+
 		if (gb.Seen('I'))		// Invert cooling
 		{
 			seen = true;
@@ -90,13 +112,24 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 			{
 				speed /= 255.0;
 			}
-			minVal = constrain<float>(speed, 0.0, 1.0);
+			minVal = constrain<float>(speed, 0.0, maxVal);
+		}
+
+		if (gb.Seen('X'))		// Set maximum speed
+		{
+			seen = true;
+			float speed = gb.GetFValue();
+			if (speed > 1.0)
+			{
+				speed /= 255.0;
+			}
+			maxVal = constrain<float>(speed, minVal, 1.0);
 		}
 
 		if (gb.Seen('H'))		// Set thermostatically-controlled heaters
 		{
 			seen = true;
-			int32_t heaters[Heaters + MaxVirtualHeaters];		// signed because we use H-1 to disable thermostatic mode
+			int32_t heaters[NumHeaters + MaxVirtualHeaters];		// signed because we use H-1 to disable thermostatic mode
 			size_t numH = ARRAY_SIZE(heaters);
 			gb.GetIntArray(heaters, numH, false);
 
@@ -105,14 +138,14 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 			for (size_t h = 0; h < numH; ++h)
 			{
 				const int hnum = heaters[h];
-				if (hnum >= 0 && hnum < (int)Heaters)
+				if (hnum >= 0 && hnum < (int)NumHeaters)
 				{
 					SetBit(heatersMonitored, (unsigned int)hnum);
 				}
 				else if (hnum >= (int)FirstVirtualHeater && hnum < (int)(FirstVirtualHeater + MaxVirtualHeaters))
 				{
 					// Heaters 100, 101... are virtual heaters i.e. CPU and driver temperatures
-					SetBit(heatersMonitored, Heaters + (unsigned int)hnum - FirstVirtualHeater);
+					SetBit(heatersMonitored, NumHeaters + (unsigned int)hnum - FirstVirtualHeater);
 				}
 			}
 			if (heatersMonitored != 0)
@@ -141,22 +174,28 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 		else if (!gb.Seen('R') && !gb.Seen('S'))
 		{
 			// Report the configuration of the specified fan
-			reply.printf("Fan%i frequency: %uHz, speed: %d%%, min: %d%%, blip: %.2f, inverted: %s, name: %s",
-							fanNum,
-							(unsigned int)freq,
-							(int)(val * 100.0),
-							(int)(minVal * 100.0),
-							(double)(blipTime * MillisToSeconds),
-							(inverted) ? "yes" : "no",
-							name.c_str());
+			reply.printf("Fan %i", fanNum);
+			if (name.strlen() != 0)
+			{
+				reply.catf(" (%s)", name.c_str());
+			}
+			reply.cat(" pin: ");
+			reprap.GetPlatform().AppendPinName(logicalPin, reply);
+			reply.catf(", frequency: %uHz, speed: %d%%, min: %d%%, max: %d%%, blip: %.2f, inverted: %s",
+						(unsigned int)freq,
+						(int)(val * 100.0),
+						(int)(minVal * 100.0),
+						(int)(maxVal * 100.0),
+						(double)(blipTime * MillisToSeconds),
+						(inverted) ? "yes" : "no");
 			if (heatersMonitored != 0)
 			{
 				reply.catf(", temperature: %.1f:%.1fC, heaters:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);
-				for (unsigned int i = 0; i < Heaters + MaxVirtualHeaters; ++i)
+				for (unsigned int i = 0; i < NumHeaters + MaxVirtualHeaters; ++i)
 				{
 					if (IsBitSet(heatersMonitored, i))
 					{
-						reply.catf(" %u", (i < Heaters) ? i : FirstVirtualHeater + i - Heaters);
+						reply.catf(" %u", (i < NumHeaters) ? i : FirstVirtualHeater + i - NumHeaters);
 					}
 				}
 				reply.catf(", current speed: %d%%:", (int)(lastVal * 100.0));
@@ -225,21 +264,21 @@ void Fan::Refresh()
 	{
 		reqVal = 0.0;
 		const bool bangBangMode = (triggerTemperatures[1] <= triggerTemperatures[0]);
-		for (size_t h = 0; h < Heaters + MaxVirtualHeaters; ++h)
+		for (size_t h = 0; h < NumHeaters + MaxVirtualHeaters; ++h)
 		{
 			// Check if this heater is both monitored by this fan and in use
 			if (   IsBitSet(heatersMonitored, h)
-				&& (h < reprap.GetToolHeatersInUse() || (h >= Heaters && h < Heaters + MaxVirtualHeaters) || reprap.GetHeat().IsBedOrChamberHeater(h))
+				&& (h < reprap.GetToolHeatersInUse() || (h >= NumHeaters && h < NumHeaters + MaxVirtualHeaters) || reprap.GetHeat().IsBedOrChamberHeater(h))
 			   )
 			{
 				// This heater is both monitored and potentially active
-				if (h < Heaters && reprap.GetHeat().IsTuning(h))
+				if (h < NumHeaters && reprap.GetHeat().IsTuning(h))
 				{
 					reqVal = 1.0;			// when turning the PID for a monitored heater, turn the fan on
 				}
 				else
 				{
-					const size_t heaterHumber = (h >= Heaters) ? (h - Heaters) + FirstVirtualHeater : h;
+					const size_t heaterHumber = (h >= NumHeaters) ? (h - NumHeaters) + FirstVirtualHeater : h;
 					TemperatureError err;
 					const float ht = reprap.GetHeat().GetTemperature(heaterHumber, err);
 					if (err != TemperatureError::success || ht < BAD_LOW_TEMPERATURE || ht >= triggerTemperatures[1])
@@ -251,10 +290,10 @@ void Fan::Refresh()
 						// We already know that ht < triggerTemperatures[1], therefore unless we have NaNs it is safe to divide by (triggerTemperatures[1] - triggerTemperatures[0])
 						reqVal = max<float>(reqVal, (ht - triggerTemperatures[0])/(triggerTemperatures[1] - triggerTemperatures[0]));
 					}
-					else if (lastVal != 0.0 && ht + ThermostatHysteresis > triggerTemperatures[0])
+					else if (lastVal != 0.0 && ht + ThermostatHysteresis > triggerTemperatures[0])		// if the fan is on, add a hysteresis before turning it off
 					{
-						// If the fan is on, add a hysteresis before turning it off
-						reqVal = max<float>(reqVal, (bangBangMode) ? max<float>(0.5, val) : minVal);
+						const float minFanSpeed = (bangBangMode) ? max<float>(0.5, val) : minVal;
+						reqVal = constrain<float>(reqVal, minFanSpeed, maxVal);
 					}
 #if HAS_SMART_DRIVERS
 					const unsigned int channel = reprap.GetHeat().GetHeaterChannel(heaterHumber);
@@ -270,18 +309,14 @@ void Fan::Refresh()
 
 	if (reqVal > 0.0)
 	{
-		if (reqVal < minVal)
-		{
-			reqVal = minVal;
-		}
-
+		reqVal = constrain<float>(reqVal, minVal, maxVal);
 		if (lastVal == 0.0)
 		{
 			// We are turning this fan on
 #if HAS_SMART_DRIVERS
 			if (driverChannelsMonitored != 0)
 			{
-				reprap.GetPlatform().DriverCoolingFansOn(driverChannelsMonitored);		// tell Platform that we have started a fan that cools drivers
+				reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, true);		// tell Platform that we have started a fan that cools drivers
 			}
 #endif
 			if (reqVal < 1.0 && blipTime != 0)
@@ -304,6 +339,12 @@ void Fan::Refresh()
 			}
 		}
 	}
+#if HAS_SMART_DRIVERS
+	else if (driverChannelsMonitored != 0 && lastVal != 0.0)
+	{
+		reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, false);			// tell Platform that we have stopped a fan that cools drivers
+	}
+#endif
 
 	SetHardwarePwm(reqVal);
 	lastVal = reqVal;
@@ -327,6 +368,7 @@ void Fan::Disable()
 		SetHardwarePwm(0.0);
 	}
 	pin = NoPin;
+	logicalPin = NoLogicalPin;
 }
 
 // Save the settings of this fan if it isn't thermostatic
