@@ -6,7 +6,7 @@ For documentation on supported gcodes and configuration, see https://duet3d.com/
 
 Support, issues and suggestions
 ===============================
-If you wish to obtain support, report suspected firmware issues or make suggestions for improvements, please use the forum at https://forum.duet3d.com/ so that other users of RepRapFirmware can help you or comment on your suggestions.
+If you wish to obtain support, report suspected firmware issues or make suggestions for improvements, please use the forum at https://forum.duet3d.com/ so that other users of RepRapFirmware can help you or comment on your suggestions. **I am not accepting any new Issues via github** due to repeated inappropriate use of this facility.
 
 Pull requests
 =============
