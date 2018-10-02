@@ -19,6 +19,8 @@ extern "C"
 	#include "pmc/pmc.h"
 }
 
+//#define CAN_DEBUG
+
 Mcan* const MCAN_MODULE = MCAN1;
 const IRQn MCanIRQn = MCAN1_INT0_IRQn;
 
@@ -46,7 +48,7 @@ enum class CanStatusBits : uint32_t
 	busOff = 0x40000
 };
 
-#if 0
+#ifdef CAN_DEBUG
 static uint32_t GetAndClearStatusBits()
 {
 	const uint32_t st = canStatus;
@@ -350,7 +352,7 @@ extern "C" void CanSenderLoop(void *)
 			// Send the message
 			buf->msg.timeNow = StepTimer::GetInterruptClocks();
 			mcan_fd_send_standard_message(buf->expansionBoardId | 0x0300, reinterpret_cast<uint8_t*>(&(buf->msg)));
-#if 0
+#ifdef CAN_DEBUG
 			// Display a debug message too
 			debugPrintf("CCCR %08" PRIx32 ", PSR %08" PRIx32 ", ECR %08" PRIx32 ", TXBRP %08" PRIx32 ", TXBTO %08" PRIx32 ", st %08" PRIx32 "\n",
 						MCAN1->MCAN_CCCR, MCAN1->MCAN_PSR, MCAN1->MCAN_ECR, MCAN1->MCAN_TXBRP, MCAN1->MCAN_TXBTO, GetAndClearStatusBits());
@@ -358,6 +360,8 @@ extern "C" void CanSenderLoop(void *)
 			delay(50);
 			debugPrintf("CCCR %08" PRIx32 ", PSR %08" PRIx32 ", ECR %08" PRIx32 ", TXBRP %08" PRIx32 ", TXBTO %08" PRIx32 ", st %08" PRIx32 "\n",
 						MCAN1->MCAN_CCCR, MCAN1->MCAN_PSR, MCAN1->MCAN_ECR, MCAN1->MCAN_TXBRP, MCAN1->MCAN_TXBTO, GetAndClearStatusBits());
+#else
+			delay(2);		// until we have the transmit fifo working, we need to delay to allow the message to be sent
 #endif
 			// Free the message buffer.
 			CanMessageBuffer::Free(buf);
@@ -369,18 +373,10 @@ void CanSender::Init()
 {
 	pendingBuffers = nullptr;
 
-#if 0
-	//TEMP test pin
-	pinMode(PORTD_PIN(12), OUTPUT_LOW);
-	delay(2);
-#endif
-
 	ConfigurePin(g_APinDescription[APIN_CAN1_TX]);
 	ConfigurePin(g_APinDescription[APIN_CAN1_RX]);
 	pmc_enable_upll_clock();			// configure_mcan sets up PCLK5 to be the UPLL divided by something, so make sure the UPLL is running
 	configure_mcan();
-
-//	mcan_set_extended_filter_1();		//TEMP!!!
 
 	// Create the task that sends CAN messages
 	canSenderTask.Create(CanSenderLoop, "CanSender", nullptr, TaskBase::CanSenderPriority);

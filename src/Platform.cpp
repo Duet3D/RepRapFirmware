@@ -1374,6 +1374,20 @@ void Platform::Spin()
 		return;
 	}
 
+#ifdef DUET3
+	{
+		static uint32_t lastTime = 0;
+		static bool diagState = true;
+		const uint32_t now = millis();
+		if (now - lastTime >= 500)
+		{
+			lastTime = now;
+			diagState = !diagState;
+			digitalWrite(DiagPin, diagState);
+		}
+	}
+#endif
+
 	massStorage->Spin();
 
 	// Try to flush messages to serial ports
