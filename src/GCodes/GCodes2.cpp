@@ -4314,10 +4314,14 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 		toolNum = gb.GetCommandNumber();
 		toolNum += gb.GetToolNumberAdjust();
 	}
-	else if (gb.Seen('R') && gb.GetIValue() == 1)
+	else if (gb.Seen('R'))
 	{
-		seen = true;
-		toolNum = pauseRestorePoint.toolNumber;
+		const int restorePointIndex = gb.GetIValue();
+		if (restorePointIndex >= 0 && restorePointIndex < (int)NumRestorePoints)
+		{
+			seen = true;
+			toolNum = numberedRestorePoints[restorePointIndex].toolNumber;
+		}
 	}
 
 	if (seen)

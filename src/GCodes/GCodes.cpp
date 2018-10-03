@@ -4567,6 +4567,7 @@ void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const
 
 	rp.feedRate = gb.MachineState().feedRate;
 	rp.virtualExtruderPosition = virtualExtruderPosition;
+	rp.toolNumber = reprap.GetCurrentToolNumber();
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	rp.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
