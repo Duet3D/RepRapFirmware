@@ -24,12 +24,15 @@ private:
 
 	// Configurable parameters
 	float tempAt4mA, tempAt20mA;
+	unsigned int chipChannel, singleDifferential;
 
 	// Derived parameters
 	float minLinearAdcTemp, linearAdcDegCPerCount;
 
 	static constexpr float DefaultTempAt4mA = 385.0;
 	static constexpr float DefaultTempAt20mA = 1600.0;
+	static constexpr int DefaultChipChannel = 0;
+	static constexpr int DefaultSingleDifferential = 0;
 };
 
 #endif /* SRC_HEATING_LINEARADCTEMPERATURESENSOR_H_ */
