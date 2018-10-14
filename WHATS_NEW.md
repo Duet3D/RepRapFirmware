@@ -1,6 +1,24 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.02RC2
+===============
+
+Upgrade notes: as for 2.02RC1
+
+New features and changed behaviour since 2.02RC1:
+- Support different numbers of endstop inputs and motor drivers
+- Support mixed stealthchop/spread cycle mode on Maestro via TPWMTHRS register
+- Added paused coordinates to 'printing paused' message
+- If a bad curve fit occurs during tuning, display the values as A, C and D instead of G, tc and td to better relate to M307
+- Support for 12864 displays on Duet Maestro greatly improved (thanks to M3D for most of this)
+- Display a message when the stepper drivers report open-circuit motors
+
+Bug fixes since 2.02RC1:
+- Additional axes on delta printers were not coordinated with XYZ movement
+- DWC disconnected when a message box and a beep were pending at the same time
+- There were no warning messages generated when TMC2224 drivers overheated
+
 Version 2.02RC1
 ===============
 
