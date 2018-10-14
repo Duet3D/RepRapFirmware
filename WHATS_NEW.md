@@ -5,7 +5,7 @@ Version 2.02RC3
 ===============
 
 Upgrade notes:
-- ** Please test your Z probe after installing this release, before you rely on it for Z homing or bed probing! **
+- **Please test your Z probe after installing this release, before you rely on it for Z homing or bed probing!**
 - Duet Web Control version 1.22.4b1 is recommended with this firmware. On the Duet WiFi, DuetWiFiServer.bin version 1.21 remains compatible.
 - If you were not already running 2.02RC1 or RC2 then see also the important upgrade notes for 2.02RC1
 
