@@ -10,6 +10,7 @@ Upgrade notes:
 - If you were not already running 2.02RC1 or RC2 then see also the important upgrade notes for 2.02RC1
 
 New G/M code features since 2.02RC2:
+- G10 L2 and G10 L20 can now be used with no P parameter, meaning use the current coordinate system
 - G60 now saves the current tool as well as the current user coordinates
 - M116 now accepts an optional S parameter to specify the acceptable temperature difference
 - M205 is supported to set the jerk limits (in mm/sec) as an alternative to M566
@@ -43,6 +44,7 @@ Bug fixes since 2.02RC2:
 - M915 output was truncated if no drives were specified
 - On the Duet 2 Maestro, if a BLTouch Z probe was used then the pin didn't always stay retracted after the probe was triggered
 - If G30 S-1 was sent with the Z probe type set to zero then reported trigger height was an undefined value
+- Fixed potential buffer overflow issues in 12864 menu code
 
 Version 2.02RC2
 ===============
