@@ -43,6 +43,7 @@ Bug fixes since 2.02RC2:
 - M915 now recognises the E parameter
 - M915 output was truncated if no drives were specified
 - On the Duet 2 Maestro, if a BLTouch Z probe was used then the pin didn't always stay retracted after the probe was triggered
+- On the Duet 2 Maestro, if the SD card menu on the 12864 display was used then the network kept disconnecting
 - If G30 S-1 was sent with the Z probe type set to zero then reported trigger height was an undefined value
 - Fixed potential buffer overflow issues in 12864 menu code
 
