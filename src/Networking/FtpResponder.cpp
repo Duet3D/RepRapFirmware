@@ -551,9 +551,9 @@ void FtpResponder::ProcessLine()
 			}
 
 			// send FTP response
-			const uint8_t * const ipAddress = skt->GetInterface()->GetIPAddress();
+			const IPAddress ipAddress = skt->GetInterface()->GetIPAddress();
 			outBuf->printf("227 Entering Passive Mode (%d,%d,%d,%d,%d,%d)\r\n",
-					ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3],
+					ipAddress.GetQuad(0), ipAddress.GetQuad(1), ipAddress.GetQuad(2), ipAddress.GetQuad(3),
 					passivePort / 256, passivePort % 256);
 			Commit(ResponderState::waitingForPasvPort);
 		}

@@ -37,7 +37,7 @@ constexpr uint32_t MovementStartDelayClocks = StepTimer::StepClockRate/100;		// 
 
 // This is the master movement class.  It controls all movement in the machine.
 
-class Move
+class Move INHERIT_OBJECT_MODEL
 {
 public:
 	Move();
@@ -129,8 +129,11 @@ public:
 	void ResetMoveCounters() { scheduledMoves = completedMoves = 0; }
 
 	HeightMap& AccessHeightMap() { return heightMap; }								// Access the bed probing grid
+	const GridDefinition& GetGrid() const { return heightMap.GetGrid(); }			// Get the grid definition
 	bool LoadHeightMapFromFile(FileStore *f, const StringRef& r);					// Load the height map from a file returning true if an error occurred
 	bool SaveHeightMapToFile(FileStore *f) const;									// Save the height map to a file returning true if an error occurred
+
+	const RandomProbePointSet& GetProbePoints() const { return probePoints; }		// Return the probe point set constructed from G30 commands
 
 	const DDA *GetCurrentDDA() const { return currentDda; }							// Return the DDA of the currently-executing move
 
@@ -149,6 +152,9 @@ public:
 
 	static int32_t MotorEndPointToMachine(size_t drive, float coord);				// Convert a single motor position to number of steps
 	static float MotorEndpointToPosition(int32_t endpoint, size_t drive);			// Convert number of motor steps to motor position
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	enum class MoveState : uint8_t

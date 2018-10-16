@@ -15,6 +15,10 @@
 # include "task.h"
 #endif
 
+#if USE_CACHE
+# include "cmcc/cmcc.h"
+#endif
+
 const uint8_t memPattern = 0xA5;
 
 extern "C" char *sbrk(int i);
@@ -77,7 +81,7 @@ extern "C" void AppMain()
 
 #if USE_CACHE
 	// Enable the cache
-	struct cmcc_config g_cmcc_cfg;
+	cmcc_config g_cmcc_cfg;
 	cmcc_get_config_defaults(&g_cmcc_cfg);
 	cmcc_init(CMCC, &g_cmcc_cfg);
 	EnableCache();

@@ -418,6 +418,7 @@ FilePosition GCodeBuffer::GetFilePosition(size_t bytesCached) const
 bool GCodeBuffer::Seen(char c)
 {
 	bool inQuotes = false;
+	unsigned int inBrackets = 0;
 	for (readPointer = parameterStart; (unsigned int)readPointer < commandEnd; ++readPointer)
 	{
 		const char b = gcodeBuffer[readPointer];
@@ -425,9 +426,20 @@ bool GCodeBuffer::Seen(char c)
 		{
 			inQuotes = !inQuotes;
 		}
-		else if (!inQuotes && toupper(b) == c)
+		else if (!inQuotes)
 		{
-			return true;
+			if (inBrackets == 0 && toupper(b) == c)
+			{
+				return true;
+			}
+			if (b == '[')
+			{
+				++inBrackets;
+			}
+			else if (b == ']' && inBrackets != 0)
+			{
+				--inBrackets;
+			}
 		}
 	}
 	readPointer = -1;
@@ -439,7 +451,7 @@ float GCodeBuffer::GetFValue()
 {
 	if (readPointer >= 0)
 	{
-		const float result = SafeStrtof(&gcodeBuffer[readPointer + 1], 0);
+		const float result = ReadFloatValue(&gcodeBuffer[readPointer + 1], nullptr);
 		readPointer = -1;
 		return result;
 	}
@@ -466,7 +478,7 @@ const void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool 
 				return;
 			}
 			const char *q;
-			arr[length] = SafeStrtof(p, &q);
+			arr[length] = ReadFloatValue(p, &q);
 			length++;
 			if (*q != LIST_SEPARATOR)
 			{
@@ -514,7 +526,7 @@ const void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength, bool 
 				return;
 			}
 			const char *q;
-			arr[length] = SafeStrtol(p, &q);
+			arr[length] = ReadIValue(p, &q);
 			length++;
 			if (*q != LIST_SEPARATOR)
 			{
@@ -561,7 +573,7 @@ const void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& returnedLength,
 				return;
 			}
 			const char *q;
-			arr[length] = SafeStrtoul(p, &q);
+			arr[length] = ReadUIValue(p, &q);
 			length++;
 			if (*q != LIST_SEPARATOR)
 			{
@@ -663,6 +675,10 @@ bool GCodeBuffer::InternalGetPossiblyQuotedString(const StringRef& str)
 	{
 		return InternalGetQuotedString(str);
 	}
+	if (gcodeBuffer[readPointer] == '[')
+	{
+		return GetStringExpression(str);
+	}
 
 	commandEnd = gcodeLineEnd;				// the string is the remainder of the line of gcode
 	for (;;)
@@ -699,7 +715,7 @@ int32_t GCodeBuffer::GetIValue()
 {
 	if (readPointer >= 0)
 	{
-		const int32_t result = SafeStrtol(&gcodeBuffer[readPointer + 1]);
+		const int32_t result = ReadIValue(&gcodeBuffer[readPointer + 1], nullptr);
 		readPointer = -1;
 		return result;
 	}
@@ -839,7 +855,7 @@ bool GCodeBuffer::TryGetPossiblyQuotedString(char c, const StringRef& str, bool&
 }
 
 // Get an IP address quad after a key letter
-bool GCodeBuffer::GetIPAddress(uint8_t ip[4])
+bool GCodeBuffer::GetIPAddress(IPAddress& returnedIp)
 {
 	if (readPointer < 0)
 	{
@@ -848,6 +864,7 @@ bool GCodeBuffer::GetIPAddress(uint8_t ip[4])
 	}
 
 	const char* p = &gcodeBuffer[readPointer + 1];
+	uint8_t ip[4];
 	unsigned int n = 0;
 	for (;;)
 	{
@@ -873,25 +890,13 @@ bool GCodeBuffer::GetIPAddress(uint8_t ip[4])
 		++p;
 	}
 	readPointer = -1;
-	return n == 4;
-}
-
-// Get an IP address quad after a key letter
-bool GCodeBuffer::GetIPAddress(uint32_t& ip)
-{
-	if (readPointer < 0)
+	if (n == 4)
 	{
-		INTERNAL_ERROR;
-		return false;
+		returnedIp.SetV4(ip);
+		return true;
 	}
-
-	uint8_t ipa[4];
-	const bool ok = GetIPAddress(ipa);
-	if (ok)
-	{
-		ip = (uint32_t)ipa[0] | ((uint32_t)ipa[1] << 8) | ((uint32_t)ipa[2] << 16) | ((uint32_t)ipa[3] << 24);
-	}
-	return ok;
+	returnedIp.SetNull();
+	return false;
 }
 
 // Get a MAX address sextet after a key letter
@@ -1179,5 +1184,145 @@ void GCodeBuffer::FileEnded()
 		}
 	}
 }
+
+// Functions to read values from lines of GCode, allowing for expressions and variable substitution
+float GCodeBuffer::ReadFloatValue(const char *p, const char **endptr)
+{
+#if SUPPORT_OBJECT_MODEL
+	if (*p == '[')
+	{
+		ExpressionValue val;
+		switch (EvaluateExpression(p, endptr, val))
+		{
+		case TYPE_OF(float):
+			return val.fVal;
+
+		case TYPE_OF(int32_t):
+			return (float)val.iVal;
+
+		case TYPE_OF(uint32_t):
+			return (float)val.uVal;
+
+		default:
+			//TODO report error
+			return 1.0;
+		}
+	}
+#endif
+
+	return SafeStrtof(p, endptr);
+}
+
+uint32_t GCodeBuffer::ReadUIValue(const char *p, const char **endptr)
+{
+#if SUPPORT_OBJECT_MODEL
+	if (*p == '[')
+	{
+		ExpressionValue val;
+		switch (EvaluateExpression(p, endptr, val))
+		{
+		case TYPE_OF(uint32_t):
+			return val.uVal;
+
+		case TYPE_OF(int32_t):
+			if (val.iVal >= 0)
+			{
+				return (uint32_t)val.iVal;
+			}
+			//TODO report error
+			return 0;
+
+		default:
+			//TODO report error
+			return 0;
+		}
+	}
+#endif
+
+	return SafeStrtoul(p, endptr);
+}
+
+int32_t GCodeBuffer::ReadIValue(const char *p, const char **endptr)
+{
+#if SUPPORT_OBJECT_MODEL
+	if (*p == '[')
+	{
+		ExpressionValue val;
+		switch (EvaluateExpression(p, endptr, val))
+		{
+		case TYPE_OF(int32_t):
+			return val.iVal;
+
+		case TYPE_OF(uint32_t):
+			return (int32_t)val.uVal;
+
+		default:
+			//TODO report error
+			return 0;
+		}
+	}
+#endif
+
+	return SafeStrtol(p, endptr);
+}
+
+// Get a string expression. The current character is '['.
+bool GCodeBuffer::GetStringExpression(const StringRef& str)
+{
+	++readPointer;
+	for (;;)
+	{
+		const char c = gcodeBuffer[readPointer];
+		if (c == 0)
+		{
+			return false;
+		}
+		++readPointer;
+		// For now we don't process the characters between { } and just return a standard string
+		if (c == ']')
+		{
+			str.copy("string_variables_not_implemented");
+			break;
+		}
+	}
+	return true;
+}
+
+#if SUPPORT_OBJECT_MODEL
+
+// Evaluate an expression. the current character is '['.
+TypeCode GCodeBuffer::EvaluateExpression(const char *p, const char **endptr, ExpressionValue& rslt)
+{
+	++p;						// skip the '['
+	// For now the only form of expression we handle is [variable-name]
+	if (isalpha(*p))			// if it's a variable name
+	{
+		const char * const start = p;
+		while (isalpha(*p) || isdigit(*p) || *p == '_')
+		{
+			++p;
+		}
+		String<MaxVariableNameLength> varName;
+		if (varName.copy(start, p - start))
+		{
+			// variable name is too long
+			//TODO error handling
+			return NoType;
+		}
+		//TODO consider supporting standard CNC functions here
+		const TypeCode tc = reprap.GetObjectValue(rslt, varName.c_str());
+		if (tc != NoType && (tc & IsArray) == 0 && *p == ']')
+		{
+			if (endptr != nullptr)
+			{
+				*endptr = p + 1;
+			}
+			return tc;
+		}
+	}
+	return NoType;
+}
+
+#endif
 
 // End

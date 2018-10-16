@@ -572,13 +572,13 @@ void TmcDriverState::UpdateChopConfRegister()
 inline uint32_t TmcDriverState::ReadLiveStatus() const
 {
 	const uint32_t ret = lastReadStatus & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
-	return (enabled) ? ret : ret & ~TMC_RR_SG;
+	return (enabled) ? ret : ret & ~(TMC_RR_SG | TMC_RR_OLA | TMC_RR_OLB);
 }
 
 // Read the status
 uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep)
 {
-	const uint32_t mask = (enabled) ? 0xFFFFFFFF : ~TMC_RR_SG;
+	const uint32_t mask = (enabled) ? 0xFFFFFFFF : ~(TMC_RR_SG | TMC_RR_OLA | TMC_RR_OLB);
 	bitsToKeep &= mask;
 	const irqflags_t flags = cpu_irq_save();
 	const uint32_t status = accumulatedStatus;

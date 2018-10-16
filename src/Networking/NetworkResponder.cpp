@@ -235,9 +235,9 @@ void NetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified
 	filenameBeingUploaded[0] = 0;
 }
 
-uint32_t NetworkResponder::GetRemoteIP() const
+IPAddress NetworkResponder::GetRemoteIP() const
 {
-	return (skt == nullptr) ? 0 : skt->GetRemoteIP();
+	return (skt == nullptr) ? IPAddress() : skt->GetRemoteIP();
 }
 
 void NetworkResponder::ReportOutputBufferExhaustion(const char *sourceFile, int line)

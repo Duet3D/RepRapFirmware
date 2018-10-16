@@ -11,6 +11,7 @@
 #include "RepRapFirmware.h"
 #include "GCodeMachineState.h"
 #include "MessageType.h"
+#include "ObjectModel/ObjectModel.h"
 
 // Class to hold an individual GCode and provide functions to allow it to be parsed
 class GCodeBuffer
@@ -34,8 +35,7 @@ public:
 	float GetFValue() __attribute__((hot));				// Get a float after a key letter
 	int32_t GetIValue() __attribute__((hot));			// Get an integer after a key letter
 	uint32_t GetUIValue();								// Get an unsigned integer value
-	bool GetIPAddress(uint8_t ip[4]);					// Get an IP address quad after a key letter
-	bool GetIPAddress(uint32_t& ip);					// Get an IP address quad after a key letter
+	bool GetIPAddress(IPAddress& returnedIp);			// Get an IP address quad after a key letter
 	bool GetMacAddress(uint8_t mac[6]);					// Get a MAX address sextet after a key letter
 	bool GetUnprecedentedString(const StringRef& str);	// Get a string with no preceding key letter
 	bool GetQuotedString(const StringRef& str);			// Get and copy a quoted string
@@ -116,9 +116,18 @@ private:
 	bool LineFinished();								// Deal with receiving end-of-line and return true if we have a command
 	void DecodeCommand();
 	bool InternalGetQuotedString(const StringRef& str)
-		pre (gcodeBuffer[readPointer] == '"'; str.IsEmpty());
+		pre (readPointer >= 0; gcodeBuffer[readPointer] == '"'; str.IsEmpty());
 	bool InternalGetPossiblyQuotedString(const StringRef& str)
 		pre (readPointer >= 0);
+	float ReadFloatValue(const char *p, const char **endptr);
+	uint32_t ReadUIValue(const char *p, const char **endptr);
+	int32_t ReadIValue(const char *p, const char **endptr);
+	bool GetStringExpression(const StringRef& str)
+		pre (readPointer >= 0; gcodeBuffer[readPointer] == '{'; str.IsEmpty());
+
+#if SUPPORT_OBJECT_MODEL
+	TypeCode EvaluateExpression(const char *p, const char **endptr, ExpressionValue& rslt);
+#endif
 
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 	const char* const identity;							// Where we are from (web, file, serial line etc)

@@ -12,6 +12,29 @@
 #include "MessageType.h"
 #include "RTOSIface/RTOSIface.h"
 
+#if USE_CACHE
+
+#include "sam/drivers/cmcc/cmcc.h"
+
+inline void EnableCache()
+{
+	cmcc_invalidate_all(CMCC);
+	cmcc_enable(CMCC);
+}
+
+inline void DisableCache()
+{
+	cmcc_disable(CMCC);
+}
+
+#else
+
+inline void EnableCache() {}
+inline void DisableCache() {}
+
+#endif
+
+
 namespace Tasks
 {
 	void Diagnostics(MessageType mtype);

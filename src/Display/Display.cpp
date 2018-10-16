@@ -21,9 +21,11 @@ const LcdFont& smallFont = font7x11;
 const LcdFont& largeFont = font11x14;
 
 const LcdFont * const fonts[] = { &font7x11, &font11x14 };
+const size_t SmallFontNumber = 0;
+const size_t LargeFontNumber = 1;
 
 Display::Display()
-	: lcd(LcdCSPin), encoder(EncoderPinA, EncoderPinB, EncoderPinSw), menu(lcd, fonts, ARRAY_SIZE(fonts)), present(false), beepActive(false), updatingFirmware(false)
+	: lcd(LcdCSPin, fonts, ARRAY_SIZE(fonts)), encoder(EncoderPinA, EncoderPinB, EncoderPinSw), menu(lcd), present(false), beepActive(false), updatingFirmware(false)
 {
 }
 
@@ -36,7 +38,7 @@ void Display::Init()
 
 void Display::Start()
 {
-	lcd.SetFont(&smallFont);
+	lcd.SetFont(SmallFontNumber);
 	menu.Load("main");
 }
 
@@ -48,7 +50,7 @@ void Display::Spin(bool full)
 	{
 		if (!updatingFirmware)
 		{
-			// Check encoder and update display here
+			// Check encoder and update display
 			const int ch = encoder.GetChange();
 			if (ch != 0)
 			{
@@ -77,7 +79,7 @@ void Display::Exit()
 	{
 		lcd.TextInvert(false);
 		lcd.Clear();
-		lcd.SetFont(&largeFont);
+		lcd.SetFont(LargeFontNumber);
 		lcd.SetCursor(20, 0);
 		lcd.print("Shutting down...");
 	}
@@ -115,6 +117,14 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply)
 			encoder.Init(gb.GetIValue());			// configure encoder pulses per click and direction
 		}
 	}
+	else if (!present)
+	{
+		reply.copy("12864 display is not present or not configured");
+	}
+	else
+	{
+		reply.printf("12864 display is configured, pulses-per-click is %d", encoder.GetPulsesPerClick());
+	}
 	return GCodeResult::ok;
 }
 
@@ -125,7 +135,7 @@ void Display::UpdatingFirmware()
 	IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
 	lcd.TextInvert(false);
 	lcd.Clear();
-	lcd.SetFont(&largeFont);
+	lcd.SetFont(LargeFontNumber);
 	lcd.SetCursor(20, 0);
 	lcd.print("Updating firmware...");
 	lcd.FlushAll();

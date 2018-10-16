@@ -7,7 +7,7 @@
 
 #include "ObjectModel.h"
 
-#ifdef SUPPORT_OBJECT_MODEL
+#if SUPPORT_OBJECT_MODEL
 
 #include "OutputMemory.h"
 #include <cstring>
@@ -20,31 +20,23 @@ ObjectModel::ObjectModel()
 // Report this object
 bool ObjectModel::ReportAsJson(OutputBuffer* buf, const char* filter, ReportFlags flags)
 {
-	size_t numEntries;
-	const ObjectModelTableEntry *tbl = GetObjectModelTable(numEntries);
-	const char *moduleName = GetModuleName();
-	if (moduleName != nullptr)							// if we are not the root object
-	{
-		buf->cat(moduleName);
-		buf->cat(':');
-		filter = GetNextElement(filter);				// skip the bit that matches the name of this module
-	}
-
 	buf->cat('{');
+	size_t numEntries;
+	const ObjectModelTableEntry *omte = GetObjectModelTable(numEntries);
 	bool added = false;
 	while (numEntries != 0)
 	{
-		if (added)
+		if (omte->Matches(filter, flags))
 		{
-			buf->cat(',');
-		}
-		if (filter[0] == 0 || tbl->Matches(filter, flags))
-		{
-			tbl->ReportAsJson(buf, this, filter, flags);
+			if (added)
+			{
+				buf->cat(',');
+			}
+			omte->ReportAsJson(buf, this, filter, flags);
 			added = true;
 		}
 		--numEntries;
-		++tbl;
+		++omte;
 	}
 	buf->cat('}');
 	return true;
@@ -197,89 +189,115 @@ const ObjectModelTableEntry *ObjectModelTableEntry::FindLeafEntry(ObjectModel *s
 	return ((ObjectModel*)param(self))->FindObjectModelLeafEntry(ObjectModel::GetNextElement(idString));
 }
 
+// Private function to report a value of primitive type
+void ObjectModelTableEntry::ReportItemAsJson(OutputBuffer *buf, const char *filter, ObjectModel::ReportFlags flags, void *nParam, TypeCode type)
+{
+	switch (type)
+	{
+	case TYPE_OF(ObjectModel):
+		((ObjectModel*)nParam)->ReportAsJson(buf, filter, flags);
+		break;
+
+	case TYPE_OF(float):
+		buf->catf("%.1f", (double)*(const float *)nParam);		//TODO different parameters need different number of decimal places
+		break;
+
+	case TYPE_OF(uint32_t):
+		buf->catf("%" PRIu32, *(const uint32_t *)nParam);
+		break;
+
+	case TYPE_OF(int32_t):
+		buf->catf("%" PRIi32, *(const int32_t *)nParam);
+		break;
+
+	case TYPE_OF(Bitmap32):
+		if (flags & ObjectModel::flagShortForm)
+		{
+			buf->catf("%" PRIu32, *(const uint32_t *)nParam);
+		}
+		else
+		{
+			buf->cat('[');
+			// TODO list the bits that are set
+			buf->cat(']');
+		}
+		break;
+
+	case TYPE_OF(Enum32):
+		if (flags & ObjectModel::flagShortForm)
+		{
+			buf->catf("%" PRIu32, *(const uint32_t *)nParam);
+		}
+		else
+		{
+			buf->cat("\"unimplemented\"");
+			// TODO append the real name
+		}
+		break;
+
+	case TYPE_OF(bool):
+		{
+			const bool bVal = *(const bool *)nParam;
+			if (flags & ObjectModel::flagShortForm)
+			{
+				buf->cat((bVal) ? '1' : '0');
+			}
+			else
+			{
+				buf->cat((bVal) ? "yes" : "no");
+			}
+		}
+		break;
+
+	case TYPE_OF(IPAddress):
+		{
+			const IPAddress ipVal = *(const IPAddress *)nParam;
+			char sep = '"';
+			for (unsigned int q = 0; q < 4; ++q)
+			{
+				buf->catf("%c%u", sep, ipVal.GetQuad(q));
+				sep = '.';
+			}
+			buf->cat('"');
+		}
+		break;
+	}
+}
+
 // Add the value of this element to the buffer, returning true if it matched and we did
 bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectModel *self, const char* filter, ObjectModel::ReportFlags flags) const
 {
-	//TODO handle arrays
 	buf->cat(name);
 	buf->cat(':');
 
-	if ((type & isArray) != 0)
+	if ((type & IsArray) != 0)
 	{
-		//TODO
-		buf->cat("[]");
+		// TODO match array indices
+		buf->cat('[');
+		const ObjectModelArrayDescriptor *arr = (const ObjectModelArrayDescriptor*)param(self);
+		for (size_t i = 0; i < arr->GetNumElements(self); ++i)
+		{
+			if (i != 0)
+			{
+				buf->cat(',');
+			}
+			ReportItemAsJson(buf, filter, flags, arr->GetElement(self, i), type & ~IsArray);
+		}
+		buf->cat(']');
 	}
 	else
 	{
-		void *nParam = param(self);
-		switch (type & 15)
-		{
-		case TYPE_OF(ObjectModel):
-			((ObjectModel*)nParam)->ReportAsJson(buf, filter, flags);
-			break;
-
-		case TYPE_OF(float):
-			buf->cat("%.1f", (double)*(const float *)nParam);		//TODO different parameters need different number of decimal places
-			break;
-
-		case TYPE_OF(uint32_t):
-			buf->cat("%" PRIu32, *(const uint32_t *)nParam);
-			break;
-
-		case TYPE_OF(int32_t):
-			buf->cat("%" PRIi32, *(const int32_t *)nParam);
-			break;
-
-		case TYPE_OF(Bitmap32):
-			if (flags & ObjectModel::shortForm)
-			{
-				buf->cat("%" PRIu32, *(const uint32_t *)nParam);
-			}
-			else
-			{
-				buf->cat('[');
-				// TODO list the bits that are set
-				buf->cat(']');
-			}
-			break;
-
-		case TYPE_OF(Enum32):
-			if (flags & ObjectModel::shortForm)
-			{
-				buf->cat("%" PRIu32, *(const uint32_t *)nParam);
-			}
-			else
-			{
-				buf->cat("\"unimplemented\"");
-				// TODO append the real name
-			}
-			break;
-
-		case TYPE_OF(bool):
-			{
-				const bool bVal = *(const bool *)nParam;
-				if (flags & ObjectModel::shortForm)
-				{
-					buf->cat((bVal) ? '1' : '0');
-				}
-				else
-				{
-					buf->cat((bVal) ? "yes" : "no");
-				}
-			}
-			break;
-		}
+		ReportItemAsJson(buf, filter, flags, param(self), type);
 	}
-
 	return true;
 }
 
-// Compare and ID with the name of this object
+// Compare an ID with the name of this object
 int ObjectModelTableEntry::IdCompare(const char *id) const
 {
-	if (id[0] == '*')
+	if (id[0] == 0 || id[0] == '*')
 	{
-		return true;
+		return 0;
 	}
 
 	const char *n = name;
@@ -301,6 +319,99 @@ void* ObjectModelTableEntry::GetValuePointer(ObjectModel *self, TypeCode t) cons
 		return nullptr;
 	}
 	return param(self);
+}
+
+// Return the type of an object
+TypeCode ObjectModel::GetObjectType(const char *idString)
+{
+	const ObjectModelTableEntry * const e = FindObjectModelLeafEntry(idString);
+	return (e == nullptr) ? NoType : e->type;
+}
+
+// Get the value of an object when we don't know what its type is
+TypeCode ObjectModel::GetObjectValue(ExpressionValue& val, const char *idString)
+{
+	const ObjectModelTableEntry * const e = FindObjectModelLeafEntry(idString);
+	if (e == nullptr)
+	{
+		return NoType;
+	}
+	switch (e->type)
+	{
+	case TYPE_OF(float):
+		val.fVal = *((const float*)e->param(this));
+		break;
+
+	case TYPE_OF(uint32_t):
+	case TYPE_OF(Bitmap32):
+	case TYPE_OF(Enum32):
+		val.uVal = *((const uint32_t*)e->param(this));
+		break;
+
+	case TYPE_OF(int32_t):
+		val.iVal = *((const int32_t*)e->param(this));
+		break;
+
+	case TYPE_OF(const char*):
+		val.sVal = *((const char* const *)e->param(this));
+		break;
+
+	default:
+		break;
+	}
+	return e->type;
+}
+
+// Template specialisations
+template<> bool ObjectModel::GetObjectValue(float& val, const char *idString)
+{
+	const ObjectModelTableEntry * const e = FindObjectModelLeafEntry(idString);
+	if (e == nullptr)
+	{
+		return false;
+	}
+
+	switch (e->type)
+	{
+	case TYPE_OF(float):
+		val = *((const float*)e->param(this));
+		return true;
+
+	case TYPE_OF(uint32_t):
+		val = (float)*((const uint32_t*)e->param(this));
+		return true;
+
+	case TYPE_OF(int32_t):
+		val = (float)*((const int32_t*)e->param(this));
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+// Specialisation of above for int, allowing conversion from unsigned to signed
+template<> bool ObjectModel::GetObjectValue(int32_t& val, const char *idString)
+{
+	const ObjectModelTableEntry * const e = FindObjectModelLeafEntry(idString);
+	if (e == nullptr)
+	{
+		return false;
+	}
+
+	switch (e->type)
+	{
+	case TYPE_OF(int32_t):
+		val = *((const int32_t*)e->param(this));
+		return true;
+
+	case TYPE_OF(uint32_t):
+		val = (int32_t)*((const uint32_t*)e->param(this));
+		return true;
+
+	default:
+		return false;
+	}
 }
 
 #endif

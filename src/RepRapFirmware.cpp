@@ -191,6 +191,7 @@ const char * const moduleName[] =
 	"DuetExpansion",
 	"FilamentSensors",
 	"WiFi",
+	"Display",
 	"none"
 };
 
@@ -291,14 +292,14 @@ int StringContains(const char* string, const char* match)
 	int i = 0;
 	int count = 0;
 
-	while(string[i])
+	while (string[i] != 0)
 	{
 		if (string[i++] == match[count])
 		{
 			count++;
-			if (!match[count])
+			if (match[count] == 0)
 			{
-				return i;
+				return i - count;
 			}
 		}
 		else

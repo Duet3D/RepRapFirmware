@@ -131,10 +131,10 @@ public:
 	virtual const char* HomingButtonNames() const { return "XYZUVWABC"; }
 
 	// This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
-	// If we can proceed with homing some axes, return the name of the homing file to be called. Optionally, update 'alreadyHomed' to indicate
+	// If we can't proceed because other axes need to be homed first, return those axes.
+	// If we can proceed with homing some axes, set 'filename' to the name of the homing file to be called and return 0. Optionally, update 'alreadyHomed' to indicate
 	// that some additional axes should be considered not homed.
-	// If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
-	virtual const char* GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const;
+	virtual AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const;
 
 	// This function is called from the step ISR when an endstop switch is triggered during homing.
 	// Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
@@ -196,7 +196,6 @@ protected:
 	float minSegmentLength;					// if we are using segmentation, the minimum segment size
 
 	static const char * const HomeAllFileName;
-	static const char * const StandardHomingFileNames[];
 
 private:
 	bool useSegmentation;					// true if we have to approximate linear movement using segmentation

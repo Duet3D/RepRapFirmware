@@ -16,10 +16,10 @@ enum class ZProbeType : uint8_t
 	analog = 1,
 	dumbModulated = 2,
 	alternateAnalog = 3,
-	e0Switch = 4,
+	endstopSwitch = 4,
 	digital = 5,
-	e1Switch = 6,
-	zSwitch = 7,
+	e1Switch_obsolete = 6,
+	zSwitch_obsolete = 7,
 	unfilteredDigital = 8,
 	blTouch = 9,
 	zMotorStall = 10,
@@ -40,6 +40,7 @@ public:
 	float recoveryTime;				// Z probe recovery time
 	float tolerance;				// maximum difference between probe heights when doing >1 taps
 	uint8_t maxTaps;				// maximum probes at each point
+	uint8_t inputChannel;			// input channel, use when the selected Z probe type is a switch
 	bool invertReading;				// true if we need to invert the reading
 	bool turnHeatersOff;			// true to turn heaters off while probing
 

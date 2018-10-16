@@ -1361,18 +1361,23 @@ void DDA::Prepare(uint8_t simMode)
 							}
 						}
 					}
-					else if (drive >= NumDirectDrivers)
+					else
 					{
-						CanInterface::AddMovement(*this, params, drive - NumDirectDrivers, *pdm);
+						const uint8_t driver = platform.GetExtruderDriver(drive - numAxes);
+						if (driver >= NumDirectDrivers)
+						{
+							CanInterface::AddMovement(*this, params, driver - NumDirectDrivers, *pdm);
+						}
 					}
 				}
 #endif
 			}
 		}
 
-		moveStartTime = (reprap.GetMove().GetCurrentDDA() == nullptr)				// if no move currently executing then this one will be the first...
-				? StepTimer::GetInterruptClocks() + MovementStartDelayClocks		// ...so start this move after a short delay
-					: prev->moveStartTime + prev->clocksNeeded;						// else calculate the start time, assuming no more hiccups
+		const DDAState st = prev->state;
+		moveStartTime = (st == DDAState::executing || st == DDAState::frozen)
+						? prev->moveStartTime + prev->clocksNeeded							// this move will follow the previous one, so calculate the start time assuming no more hiccups
+							: StepTimer::GetInterruptClocks() + MovementStartDelayClocks;	// else this move is the first so start it after a short delay
 
 #if SUPPORT_CAN_EXPANSION
 		CanInterface::FinishMovement(moveStartTime);
@@ -1635,18 +1640,17 @@ pre(state == frozen)
 	}
 #endif
 
-	if (firstDM != nullptr)
-	{
-
 #if SUPPORT_LASER
-		// Deal with laser power
-		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
-		{
-			// Ideally we should ramp up the laser power as the machine accelerates, but for now we don't.
-			reprap.GetPlatform().SetLaserPwm(laserPwmOrIoBits.laserPwm);
-		}
+	// Deal with laser power
+	if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
+	{
+		// Ideally we should ramp up the laser power as the machine accelerates, but for now we don't.
+		reprap.GetPlatform().SetLaserPwm(laserPwmOrIoBits.laserPwm);
+	}
 #endif
 
+	if (firstDM != nullptr)
+	{
 		unsigned int extrusions = 0, retractions = 0;		// bitmaps of extruding and retracting drives
 		const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 		for (size_t i = 0; i < NumDirectDrivers; ++i)
@@ -1817,8 +1821,13 @@ bool DDA::Step()
 			const uint32_t delayClocks = (clocksTaken + DDA::MinInterruptInterval) - (nextStepDue - isrStartTime);
 			moveStartTime += delayClocks;
 			nextStepDue += delayClocks;
+			for (DDA *nextDda = next; nextDda->state == DDAState::frozen; nextDda = nextDda->next)
+			{
+				nextDda->moveStartTime += delayClocks;
+			}
 			++numHiccups;
 			hadHiccup = true;
+			// TODO tell CAN drivers about the hiccup
 		}
 
 		// 8. Schedule next interrupt, or if it would be too soon, generate more steps immediately

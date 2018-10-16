@@ -208,7 +208,7 @@ constexpr float SILLY_Z_VALUE = -9999.0;				// Millimetres
 // String lengths
 constexpr size_t FORMAT_STRING_LENGTH = 256;
 constexpr size_t MACHINE_NAME_LENGTH = 40;
-constexpr size_t PASSWORD_LENGTH = 20;
+constexpr size_t PASSWORD_LENGTH = 20;					// must also be long enough to hold any homing file name
 
 #if SAM4E || SAM4S || SAME70
 // Increased GCODE_LENGTH on the SAM4 because M587 and M589 commands on the Duet WiFi can get very long
@@ -223,8 +223,10 @@ constexpr size_t MaxMessageLength = 256;
 
 #if SAM4E || SAM4S || SAME70
 constexpr size_t MaxFilenameLength = 120;				// Maximum length of a filename including the path
+constexpr size_t MaxVariableNameLength = 120;
 #else
 constexpr size_t MaxFilenameLength = 100;
+constexpr size_t MaxVariableNameLength = 100;
 #endif
 
 constexpr size_t MaxHeaterNameLength = 20;				// Maximum number of characters in a heater name
@@ -265,7 +267,7 @@ constexpr uint32_t DefaultIdleTimeout = 30000;			// Milliseconds
 constexpr float DefaultIdleCurrentFactor = 0.3;			// Proportion of normal motor current that we use for idle hold
 
 constexpr float DefaultNonlinearExtrusionLimit = 0.2;	// Maximum additional commanded extrusion to compensate for nonlinearity
-constexpr size_t NumRestorePoints = 3;					// Number of restore points, must be at least 3
+constexpr size_t NumRestorePoints = 6;					// Number of restore points, must be at least 3
 
 // Triggers
 constexpr unsigned int MaxTriggers = 10;				// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t

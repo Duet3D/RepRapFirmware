@@ -20,7 +20,7 @@ const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in
 
 CurrentLoopTemperatureSensor::CurrentLoopTemperatureSensor(unsigned int channel)
 	: SpiTemperatureSensor(channel, "Current Loop", channel - FirstLinearAdcChannel, MCP3204_SpiMode, MCP3204_Frequency),
-	  tempAt4mA(DefaultTempAt4mA), tempAt20mA(DefaultTempAt20mA), chipChannel(DefaultChipChannel), singleDifferential(DefaultSingleDifferential)
+	  tempAt4mA(DefaultTempAt4mA), tempAt20mA(DefaultTempAt20mA), chipChannel(DefaultChipChannel), isDifferential(false)
 {
 	CalcDerivedParameters();
 }
@@ -56,8 +56,8 @@ GCodeResult CurrentLoopTemperatureSensor::Configure(unsigned int mCode, unsigned
 		bool seen = false;
 		gb.TryGetFValue('L', tempAt4mA, seen);
 		gb.TryGetFValue('H', tempAt20mA, seen);
-		gb.TryGetFValue('C', chipChannel, seen);
-		gb.TryGetFValue('W', singleDifferential, seen);
+		gb.TryGetUIValue('C', chipChannel, seen);
+		gb.TryGetUIValue('D', isDifferential, seen);
 		TryConfigureHeaterName(gb, seen);
 
 		if (seen)
@@ -117,9 +117,7 @@ void CurrentLoopTemperatureSensor::TryGetLinearAdcTemperature()
 	 * These values represent clocks 1 to 5.
 	 */
 
-	unsigned int channelByte = 0xC0 + chipChannel * 0x08;
-	if ( singleDifferential == 1 )
-		channelByte -= 0x40;
+	const uint8_t channelByte = ((isDifferential) ? 0x80 : 0xC0) | (chipChannel * 0x08);
 	static const uint8_t adcData[] = { channelByte, 0x00, 0x00 };
 	uint32_t rawVal;
 	lastResult = DoSpiTransaction(adcData, 3, rawVal);

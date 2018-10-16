@@ -15,7 +15,7 @@
 class Menu
 {
 public:
-	Menu(Lcd7920& refLcd, const LcdFont * const fnts[], size_t nFonts);
+	Menu(Lcd7920& refLcd);
 	void Load(const char* filename);							// load a menu file
 	void Pop();
 	void EncoderAction(int action);
@@ -29,7 +29,6 @@ private:
 	void LoadError(const char *msg, unsigned int line);
 	void AddItem(MenuItem *item, bool isSelectable);
 	const char *AppendString(const char *s);
-	void LoadImage(const char *fname);
 	MenuItem *FindHighlightedItem() const;
 
 	void EncoderAction_EnterItemHelper();
@@ -50,8 +49,6 @@ private:
 	static const PixelNumber DefaultNumberWidth = 20;			// default numeric field width
 
 	Lcd7920& lcd;
-	const LcdFont * const *fonts;
-	const size_t numFonts;
 
 	uint32_t timeoutValue;										// how long to time out after 0 = no timeout
 	uint32_t lastActionTime;

@@ -674,7 +674,7 @@ bool HttpResponder::Authenticate()
 // Check and update the authentication
 bool HttpResponder::CheckAuthenticated()
 {
-	const uint32_t remoteIP = GetRemoteIP();
+	const IPAddress remoteIP = GetRemoteIP();
 	for (size_t i = 0; i < numSessions; i++)
 	{
 		if (sessions[i].ip == remoteIP)
@@ -688,7 +688,7 @@ bool HttpResponder::CheckAuthenticated()
 
 bool HttpResponder::RemoveAuthentication()
 {
-	const uint32_t remoteIP = skt->GetRemoteIP();
+	const IPAddress remoteIP = skt->GetRemoteIP();
 	for (size_t i = numSessions; i != 0; )
 	{
 		--i;
@@ -1155,7 +1155,7 @@ void HttpResponder::ProcessRequest()
 					uploadedBytes = 0;
 
 					// Keep track of the connection that is now uploading
-					const uint32_t remoteIP = GetRemoteIP();
+					const IPAddress remoteIP = GetRemoteIP();
 					const uint16_t remotePort = skt->GetRemotePort();
 					for(size_t i = 0; i < numSessions; i++)
 					{
@@ -1238,7 +1238,7 @@ void HttpResponder::DoUpload()
 	if (uploadedBytes >= postFileLength)
 	{
 		// Reset POST upload state for this client
-		const uint32_t remoteIP = GetRemoteIP();
+		const IPAddress remoteIP = GetRemoteIP();
 		for (size_t i = 0; i < numSessions; i++)
 		{
 			if (sessions[i].ip == remoteIP && sessions[i].isPostUploading)

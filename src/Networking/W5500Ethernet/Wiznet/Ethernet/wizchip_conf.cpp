@@ -59,8 +59,6 @@
  * @\ref WIZCHIP instance data
  */
 
-static uint8_t    _DNS_[4];      // DNS server ip address
-static dhcp_mode  _DHCP_;        // DHCP mode
 static const char WizchipId[6] = "w5500";
 
 int8_t ctlwizchip(ctlwizchip_type cwtype, void* arg)
@@ -140,37 +138,9 @@ int8_t ctlwizchip(ctlwizchip_type cwtype, void* arg)
 	return 0;
 }
 
-
-int8_t ctlnetwork(ctlnetwork_type cntype, void* arg)
-{
-	switch(cntype)
-	{
-	case CN_SET_NETINFO:
-		wizchip_setnetinfo((wiz_NetInfo*)arg);
-		break;
-	case CN_GET_NETINFO:
-		wizchip_getnetinfo((wiz_NetInfo*)arg);
-		break;
-	case CN_SET_NETMODE:
-		return wizchip_setnetmode(*(netmode_type*)arg);
-	case CN_GET_NETMODE:
-		*(netmode_type*)arg = wizchip_getnetmode();
-		break;
-	case CN_SET_TIMEOUT:
-		wizchip_settimeout((wiz_NetTimeout*)arg);
-		break;
-	case CN_GET_TIMEOUT:
-		wizchip_gettimeout((wiz_NetTimeout*)arg);
-		break;
-	default:
-		return -1;
-	}
-	return 0;
-}
-
 void wizchip_sw_reset(void)
 {
-	uint8_t gw[4], sn[4], sip[4];
+	IPAddress gw, sn, sip;
 	uint8_t mac[6];
 	getSHAR(mac);
 	getGAR(gw);  getSUBR(sn);  getSIPR(sip);
@@ -396,33 +366,6 @@ int8_t wizphy_setphypmode(uint8_t pmode)
 		}
 	}
 	return -1;
-}
-
-
-void wizchip_setnetinfo(wiz_NetInfo* pnetinfo)
-{
-	setSHAR(pnetinfo->mac);
-	setGAR(pnetinfo->gw);
-	setSUBR(pnetinfo->sn);
-	setSIPR(pnetinfo->ip);
-	_DNS_[0] = pnetinfo->dns[0];
-	_DNS_[1] = pnetinfo->dns[1];
-	_DNS_[2] = pnetinfo->dns[2];
-	_DNS_[3] = pnetinfo->dns[3];
-	_DHCP_   = pnetinfo->dhcp;
-}
-
-void wizchip_getnetinfo(wiz_NetInfo* pnetinfo)
-{
-	getSHAR(pnetinfo->mac);
-	getGAR(pnetinfo->gw);
-	getSUBR(pnetinfo->sn);
-	getSIPR(pnetinfo->ip);
-	pnetinfo->dns[0]= _DNS_[0];
-	pnetinfo->dns[1]= _DNS_[1];
-	pnetinfo->dns[2]= _DNS_[2];
-	pnetinfo->dns[3]= _DNS_[3];
-	pnetinfo->dhcp  = _DHCP_;
 }
 
 int8_t wizchip_setnetmode(netmode_type netmode)
