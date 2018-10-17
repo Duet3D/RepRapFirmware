@@ -346,4 +346,14 @@ void ListDrivers(const StringRef& str, DriversBitmap drivers)
 	}
 }
 
+// Convert a PWM that is possibly in the old style 0..255 to be in the range 0.0..1.0
+float ConvertOldStylePwm(float v)
+{
+	if (v > 1.0)
+	{
+		v = v/255.0;
+	}
+	return constrain<float>(v, 0.0, 1.0);
+}
+
 // End

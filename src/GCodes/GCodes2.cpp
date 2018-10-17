@@ -1034,12 +1034,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			const LogicalPin logicalPin = gb.GetIValue();
 			if (gb.Seen('S'))
 			{
-				float val = gb.GetFValue();
-				if (val > 1.0)
-				{
-					val /= 255.0;
-				}
-				val = constrain<float>(val, 0.0, 1.0);
+				float val = ConvertOldStylePwm(gb.GetFValue());
 
 				// The SX1509B I/O expander chip doesn't seem to work if you set PWM mode and then set digital output mode.
 				// This cases a problem if M42 is used to write to some pins and then M670 is used to set up the G1 P parameter port mapping.
@@ -1222,7 +1217,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			// ConfigureFan only processes S parameters if there were other parameters to process
 			if (!processed && gb.Seen('S'))
 			{
-				const float f = constrain<float>(gb.GetFValue(), 0.0, 255.0);
+				// Convert the parameter to an interval in 0.0..1.0 here so that we save the correct value in lastDefaultFanSpeed
+				const float f = ConvertOldStylePwm(gb.GetFValue());
 				if (seenFanNum)
 				{
 					platform.SetFanValue(fanNum, f);

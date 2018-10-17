@@ -366,6 +366,7 @@ unsigned int ValueMenuItem::GetReferencedToolNumber() const
 
 bool ValueMenuItem::Adjust_AlterHelper(int clicks)
 {
+	itemChanged = true;			// we will probably change the value, so it will need to be re-displayed
 	const unsigned int itemNumber = GetReferencedToolNumber();
 
 	switch (valIndex/100)

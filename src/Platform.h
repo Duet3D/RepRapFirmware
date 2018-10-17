@@ -495,8 +495,8 @@ public:
 	// Fans
 	bool ConfigureFan(unsigned int mcode, int fanNumber, GCodeBuffer& gb, const StringRef& reply, bool& error);
 
-	float GetFanValue(size_t fan) const;					// Result is returned in percent
-	void SetFanValue(size_t fan, float speed);				// Accepts values between 0..1 and 1..255
+	float GetFanValue(size_t fan) const;					// Result is returned in range 0..1
+	void SetFanValue(size_t fan, float speed);				// Accepts values between 0..1
 #if defined(DUET_06_085)
 	void EnableSharedFan(bool enable);						// enable/disable the fan that shares its PWM pin with the last heater
 #endif

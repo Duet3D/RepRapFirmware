@@ -269,6 +269,9 @@ template<typename BitmapType> BitmapType UnsignedArrayToBitMap(const uint32_t *a
 	return res;
 }
 
+// Convert a PWM that is possibly in the old style 0..255 to be in the range 0.0..1.0
+float ConvertOldStylePwm(float v);
+
 // Common definitions used by more than one module
 
 constexpr size_t ScratchStringLength = 220;							// standard length of a scratch string, enough to print delta parameters to

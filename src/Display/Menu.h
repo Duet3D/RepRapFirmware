@@ -41,7 +41,7 @@ private:
 	static bool CheckVisibility(MenuItem::Visibility vis);
 
 	static const size_t CommandBufferSize = 512;
-	static const size_t MaxMenuLineLength = 80;		// adjusts behaviour in Reload()
+	static const size_t MaxMenuLineLength = 100;				// adjusts behaviour in Reload()
 	static const size_t MaxMenuFilenameLength = 18;
 	static const size_t MaxMenuNesting = 8;						// maximum number of nested menus
 	static const PixelNumber InnerMargin = 2;					// how many pixels we keep clear inside the border

@@ -3350,11 +3350,6 @@ float Platform::GetFanValue(size_t fan) const
 	return (fan < NUM_FANS) ? fans[fan].GetConfiguredPwm() : -1;
 }
 
-// This is a bit of a compromise - old RepRaps used fan speeds in the range
-// [0, 255], which is very hardware dependent.  It makes much more sense
-// to specify speeds in [0.0, 1.0].  This looks at the value supplied (which
-// the G Code reader will get right for a float or an int) and attempts to
-// do the right thing whichever the user has done.
 void Platform::SetFanValue(size_t fan, float speed)
 {
 	if (fan < NUM_FANS)
@@ -3377,7 +3372,6 @@ void Platform::EnableSharedFan(bool enable)
 }
 
 #endif
-
 
 // Check if the given fan can be controlled manually so that DWC can decide whether or not to show the corresponding fan
 // controls. This is the case if no thermostatic control is enabled and if the fan was configured at least once before.
