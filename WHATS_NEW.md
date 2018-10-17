@@ -39,7 +39,7 @@ Bug fixes since 2.02RC2:
 - Further limited the amount of CPU time used to refresh the 12864 display
 - Fixed incorrect check for G2/G3 missing parameter
 - Fix CoreXYUV stall detection
-- Absolute babystepping was be restricted to 1mm change
+- Absolute babystepping was restricted to 1mm change
 - After using G10 L2 or G10 L20 to change workplace coordinate offsets, the user positions of axes other than X and Y were not updated
 - M915 now recognises the E parameter
 - M915 output was truncated if no drives were specified
