@@ -613,7 +613,7 @@ int8_t parseDHCPMSG(void)
 					case subnetMask :
 						p++;
 						p++;
-						DHCP_allocated_sn.SetV4(*p);
+						DHCP_allocated_sn.SetV4(p);
 						p += 4;
 						break;
 					case routersOnSubnet :

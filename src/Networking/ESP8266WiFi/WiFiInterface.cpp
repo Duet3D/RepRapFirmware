@@ -658,7 +658,7 @@ void WiFiInterface::Spin(bool full)
 					Receiver<NetworkStatusResponse> status;
 					if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
 					{
-						ipAddress.SetV4(status.Value().ipAddress);
+						ipAddress.SetV4LittleEndian(status.Value().ipAddress);
 						SafeStrncpy(actualSsid, status.Value().ssid, SsidLength);
 					}
 					InitSockets();
@@ -938,19 +938,19 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 			{
 				IPAddress temp;
 				gb.GetIPAddress(temp);
-				config.ip = temp.GetV4();
+				config.ip = temp.GetV4LittleEndian();
 			}
 			if (ok && gb.Seen('J'))
 			{
 				IPAddress temp;
 				ok = gb.GetIPAddress(temp);
-				config.gateway = temp.GetV4();
+				config.gateway = temp.GetV4LittleEndian();
 			}
 			if (ok && gb.Seen('K'))
 			{
 				IPAddress temp;
 				ok = gb.GetIPAddress(temp);
-				config.netmask = temp.GetV4();
+				config.netmask = temp.GetV4LittleEndian();
 			}
 			if (ok)
 			{
@@ -1075,7 +1075,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						{
 							IPAddress temp;
 							ok = gb.GetIPAddress(temp);
-							config.ip = temp.GetV4();
+							config.ip = temp.GetV4LittleEndian();
 							config.channel = (gb.Seen('C')) ? gb.GetIValue() : 0;
 						}
 						else

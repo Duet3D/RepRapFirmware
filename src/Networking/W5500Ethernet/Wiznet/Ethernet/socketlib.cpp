@@ -109,7 +109,7 @@ int8_t socket(uint8_t sn, uint8_t protocol, uint16_t port, uint8_t flag)
 		{
 			IPAddress taddr;
 			getSIPR(taddr);
-			if (taddr.GetV4() == 0)
+			if (taddr.IsNull())
 			{
 				return SOCKERR_SOCKINIT;
 			}
@@ -264,7 +264,7 @@ int32_t sendto(uint8_t sn, const uint8_t * buf, uint16_t len, IPAddress destIp, 
 	}
 
 	CHECK_SOCKDATA();
-	if (destIp.GetV4() == 0)
+	if (destIp.IsNull())
 	{
 		return SOCKERR_IPINVALID;
 	}

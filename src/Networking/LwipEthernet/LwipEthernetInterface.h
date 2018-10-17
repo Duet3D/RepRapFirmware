@@ -104,6 +104,9 @@ private:
 	bool initialised;
 	bool usingDhcp;
 
+	IPAddress ipAddress;
+	IPAddress netmask;
+	IPAddress gateway;
 	uint8_t macAddress[6];
 };
 

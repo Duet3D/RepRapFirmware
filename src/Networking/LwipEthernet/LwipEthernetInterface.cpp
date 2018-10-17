@@ -19,10 +19,10 @@
 #include "Networking/TelnetResponder.h"
 #include "General/IP4String.h"
 #include "Version.h"
+#include "GMAC/ethernet_sam.h"
 
 extern "C"
 {
-#include "GMAC/ethernet_sam.h"
 
 #ifdef LWIP_STATS
 #include "lwip/stats.h"
@@ -348,10 +348,11 @@ void LwipEthernetInterface::Exit()
 // Get the network state into the reply buffer, returning true if there is some sort of error
 GCodeResult LwipEthernetInterface::GetNetworkState(const StringRef& reply)
 {
+	ethernet_get_ipaddress(ipAddress, netmask, gateway);
 	const int enableState = EnableState();
 	reply.printf("Ethernet is %s, configured IP address: %s, actual IP address: %s",
 					(enableState == 0) ? "disabled" : "enabled",
-					IP4String(platform.GetIPAddress()).c_str(), IP4String(ethernet_get_ipaddress()).c_str());
+					IP4String(platform.GetIPAddress()).c_str(), IP4String(ipAddress).c_str());
 	return GCodeResult::ok;
 }
 
@@ -369,11 +370,7 @@ void LwipEthernetInterface::Start()
 
 		// Allow the MAC address to be set only before LwIP is started...
 		ethernet_configure_interface(platform.GetDefaultMacAddress(), hostname);
-		uint8_t ipAddress[4], netmask[4], gateway[4];
-		DefaultIpAddress.UnpackV4(ipAddress);
-		DefaultNetMask.UnpackV4(netmask);
-		DefaultGateway.UnpackV4(gateway);
-		init_ethernet(ipAddress, netmask, gateway);
+		init_ethernet(DefaultIpAddress, DefaultNetMask, DefaultGateway);
 
 		// Initialise mDNS subsystem
 		mdns_resp_init();
@@ -424,7 +421,7 @@ void LwipEthernetInterface::Spin(bool full)
 					// IP address is all zeros, so use DHCP
 					state = NetworkState::obtainingIP;
 //					debugPrintf("Link established, getting IP address\n");
-					uint8_t nullAddress[4] = { 0, 0, 0, 0 };
+					IPAddress nullAddress;
 					ethernet_set_configuration(nullAddress, nullAddress, nullAddress);
 					dhcp_start(&gs_net_if);
 				}
@@ -433,11 +430,7 @@ void LwipEthernetInterface::Spin(bool full)
 					// Using static IP address
 					state = NetworkState::connected;
 //					debugPrintf("Link established, network running\n");
-					uint8_t ipAddress[4], netmask[4], gateway[4];
-					platform.GetIPAddress().UnpackV4(ipAddress);
-					platform.NetMask().UnpackV4(netmask);
-					platform.GateWay().UnpackV4(gateway);
-					ethernet_set_configuration(ipAddress, netmask, gateway);
+					ethernet_set_configuration(platform.GetIPAddress(), platform.NetMask(), platform.GateWay());
 				}
 			}
 			break;
@@ -451,8 +444,8 @@ void LwipEthernetInterface::Spin(bool full)
 					DoEthernetTask();
 
 					// Have we obtained an IP address yet?
-					const uint8_t * const ip = ethernet_get_ipaddress();
-					if (ip[0] != 0 || ip[1] != 0 || ip[2] != 0 || ip[3] != 0)
+					ethernet_get_ipaddress(ipAddress, netmask, gateway);
+					if (!ipAddress.IsNull())
 					{
 						// Notify the mDNS responder about this
 						state = NetworkState::connected;
@@ -478,7 +471,8 @@ void LwipEthernetInterface::Spin(bool full)
 			{
 				InitSockets();
 				RebuildMdnsServices();
-				platform.MessageF(NetworkInfoMessage, "Ethernet running, IP address = %s\n", IP4String(ethernet_get_ipaddress()).c_str());
+				ethernet_get_ipaddress(ipAddress, netmask, gateway);
+				platform.MessageF(NetworkInfoMessage, "Ethernet running, IP address = %s\n", IP4String(ipAddress).c_str());
 				state = NetworkState::active;
 			}
 			break;
@@ -595,7 +589,7 @@ bool LwipEthernetInterface::ConnectionEstablished(tcp_pcb *pcb)
 
 IPAddress LwipEthernetInterface::GetIPAddress() const
 {
-	return IPAddress(ethernet_get_ipaddress());
+	return ipAddress;
 }
 
 void LwipEthernetInterface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway)
@@ -609,7 +603,7 @@ void LwipEthernetInterface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netm
 			if (!usingDhcp)
 			{
 				state = NetworkState::obtainingIP;
-				uint8_t nullAddress[4] = { 0, 0, 0, 0 };
+				IPAddress nullAddress;
 				ethernet_set_configuration(nullAddress, nullAddress, nullAddress);
 				dhcp_start(&gs_net_if);
 				usingDhcp = true;
@@ -628,11 +622,7 @@ void LwipEthernetInterface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netm
 				usingDhcp = false;
 			}
 
-			uint8_t ipAddress[4], netmask[4], gateway[4];
-			p_ipAddress.UnpackV4(ipAddress);
-			p_netmask.UnpackV4(netmask);
-			p_gateway.UnpackV4(gateway);
-			ethernet_set_configuration(ipAddress, netmask, gateway);
+			ethernet_set_configuration(p_ipAddress, p_netmask, p_gateway);
 			mdns_resp_netif_settings_changed(&gs_net_if);
 		}
 	}

@@ -29,9 +29,8 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 
 // The physical capabilities of the machine
 
-constexpr size_t DRIVES = 5;						// The maximum number of drives supported by the electronics
-constexpr size_t MaxSmartDrivers = 5;				// The maximum number of smart drivers
-# define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e }
+constexpr size_t NumDirectDrivers = 5;				// The maximum number of drives supported by the electronics
+constexpr size_t MaxTotalDrivers = 5;				// The maximum number of smart drivers
 
 constexpr size_t NumEndstops = 5;					// The number of inputs we have for endstops, filament sensors etc.
 constexpr size_t NumHeaters = 4;					// The number of heaters in the machine; 0 is the heated bed even if there isn't one
@@ -43,7 +42,7 @@ constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the
 // Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
 #define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f,g,h,i }
 
-constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
+constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
@@ -58,9 +57,9 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 
 // DRIVES
 
-constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin };
-constexpr Pin STEP_PINS[DRIVES] = { PORTC_PIN(19), PORTC_PIN(19), PORTC_PIN(19), PORTC_PIN(19), PORTC_PIN(19) };	// Do not use NoPin in this list! Code assumes all on port C
-constexpr Pin DIRECTION_PINS[DRIVES] = { NoPin, NoPin, NoPin, NoPin, NoPin };
+constexpr Pin ENABLE_PINS[NumDirectDrivers] = { NoPin, NoPin, NoPin, NoPin, NoPin };
+constexpr Pin STEP_PINS[NumDirectDrivers] = { PORTC_PIN(19), PORTC_PIN(19), PORTC_PIN(19), PORTC_PIN(19), PORTC_PIN(19) };	// Do not use NoPin in this list! Code assumes all on port C
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { NoPin, NoPin, NoPin, NoPin, NoPin };
 
 // Endstops
 // RepRapFirmware only has a single endstop per axis.

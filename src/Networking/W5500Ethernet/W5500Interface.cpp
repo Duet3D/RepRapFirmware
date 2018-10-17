@@ -312,7 +312,7 @@ void W5500Interface::Spin(bool full)
 
 			if (full && wizphy_getphylink() == PHY_LINK_ON)
 			{
-				usingDhcp = (ipAddress.GetV4() == 0);
+				usingDhcp = ipAddress.IsNull();
 				if (usingDhcp)
 				{
 					// IP address is all zeros, so use DHCP

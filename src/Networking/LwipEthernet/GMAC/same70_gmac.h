@@ -45,6 +45,10 @@
 #ifndef ETHERNETIF_H_INCLUDED
 #define ETHERNETIF_H_INCLUDED
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "lwip/err.h"
 #include "lwip/ip_addr.h"
 #include "lwip/netif.h"
@@ -68,6 +72,10 @@ void ethernetif_set_rx_callback(gmac_dev_tx_cb_t callback);
 
 void ethernetif_set_mac_address(const uint8_t macAddress[]);
 
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif /* ETHERNETIF_H_INCLUDED */
