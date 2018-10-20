@@ -33,10 +33,7 @@ enum class ResponseSource
 	Generic
 };
 
-class RepRap
-#ifdef SUPPORT_OBJECT_MODEL
-	: public ObjectModel
-#endif
+class RepRap INHERIT_OBJECT_MODEL
 {
 public:
 	RepRap();
@@ -128,13 +125,8 @@ public:
 	void KickHeatTaskWatchdog() { heatTaskIdleTicks = 0; }
 #endif
 
-#ifdef SUPPORT_OBJECT_MODEL
 protected:
-	const char *GetModuleName() const override;
-	const ObjectModelTableEntry *GetObjectModelTable(size_t& numEntries) const override;
-
-	static const ObjectModelTableEntry objectModelTable[];
-#endif
+	DECLARE_OBJECT_MODEL
 
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0);

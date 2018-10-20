@@ -152,30 +152,27 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 
 #endif
 
-#ifdef SUPPORT_OBJECT_MODEL
+#if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
-// Note: if using GCC version 7.3.1 20180622 then if lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) [] (ObjectModel* arg) { RepRap * const self = static_cast<RepRap*>(arg); return (void *)(_ret); }
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(RepRap, _ret)
 
 const ObjectModelTableEntry RepRap::objectModelTable[] =
 {
-	{ "gcodes", OBJECT_MODEL_FUNC(&(self->GetGCodes())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none }
+	// These entries are temporary pending design of the object model
+	//TODO design the object model
+	{ "gcodes", OBJECT_MODEL_FUNC(&(self->GetGCodes())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },
+	{ "move", OBJECT_MODEL_FUNC(&(self->GetMove())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },
+	{ "network", OBJECT_MODEL_FUNC(&(self->GetNetwork())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },
+	{ "meshProbe", OBJECT_MODEL_FUNC(&(self->GetMove().GetGrid())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },
+	{ "randomProbe", OBJECT_MODEL_FUNC(&(self->GetMove().GetProbePoints())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },
 };
 
-const char *RepRap::GetModuleName() const
-{
-	return nullptr;				// this module has no name and doesn't need one
-}
-
-const ObjectModelTableEntry *RepRap::GetObjectModelTable(size_t& numEntries) const
-{
-	numEntries = ARRAY_SIZE(objectModelTable);
-	return objectModelTable;
-}
+DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
 #endif
 
@@ -2098,7 +2095,6 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 		{
 			if (!OutputBuffer::Allocate(response))
 			{
-				// Should never happen
 				return false;
 			}
 
@@ -2113,7 +2109,6 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 	{
 		if (!OutputBuffer::Allocate(response))
 		{
-			// Should never happen
 			return false;
 		}
 

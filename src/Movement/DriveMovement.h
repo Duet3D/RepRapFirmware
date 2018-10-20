@@ -326,8 +326,8 @@ inline void DriveMovement::Release(DriveMovement *item)
 // Get the current full step interval for this axis or extruder
 inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const
 {
-	return ((nextStep >> microstepShift) != 0)		// if at least 1 full step done
-		? stepInterval << microstepShift			// return the interval between steps converted to full steps
+	return (nextStep < totalSteps && nextStep > (1u << microstepShift))		// if at least 1 full step done
+		? stepInterval << microstepShift									// return the interval between steps converted to full steps
 			: 0;
 }
 

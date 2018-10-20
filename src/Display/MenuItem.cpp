@@ -16,7 +16,7 @@
 #include "Networking/Network.h"
 
 MenuItem::MenuItem(PixelNumber r, PixelNumber c, FontNumber fn)
-	: row(r), column(c), fontNumber(fn), next(nullptr)
+	: row(r), column(c), fontNumber(fn), itemChanged(true), highlighted(false), next(nullptr)
 {
 }
 
@@ -30,8 +30,6 @@ MenuItem::MenuItem(PixelNumber r, PixelNumber c, FontNumber fn)
 	*root = item;
 }
 
-TextMenuItem *TextMenuItem::freelist = nullptr;
-
 TextMenuItem::TextMenuItem(PixelNumber r, PixelNumber c, FontNumber fn, Visibility xVis, CheckFunction bF, const char* t)
 	: MenuItem(r, c, fn), text(t), m_xVisCase(xVis), m_bF(bF)
 {
@@ -44,31 +42,17 @@ bool TextMenuItem::Visible() const
 
 void TextMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
 {
-	if (Visible())
+	// We ignore the 'highlight' parameter because text items are not selectable
+	if (Visible() && itemChanged)
 	{
+		lcd.SetFont(fontNumber);
 		lcd.SetCursor(row - tOffset, column);
-		// lcd.SetRightMargin(rightMargin);
-
+		lcd.SetRightMargin(rightMargin);
 		lcd.TextInvert(false);
 		lcd.print(text);
-
-		// lcd.SetCursor(row + currentMargin, column + currentMargin);
-		// lcd.SetFont(fonts[fontNumber]);
-		// lcd.print(text);
-		// row = lcd.GetRow() - currentMargin;
-		// column = lcd.GetColumn() - currentMargin;
-
-		// lcd.ClearToMargin();
+		itemChanged = false;
 	}
 }
-
-// TODO need to clean up this design since it isn't meaningful to select a text item
-const char* TextMenuItem::Select()
-{
-	return text;
-}
-
-ButtonMenuItem *ButtonMenuItem::freelist = nullptr;
 
 ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, FontNumber fn, Visibility xVis, CheckFunction bF, const char* t, const char* cmd, char const* acFile)
 	: MenuItem(r, c, fn), text(t), command(cmd), m_acFile(acFile), m_xVisCase(xVis), m_bF(bF)
@@ -83,8 +67,9 @@ bool ButtonMenuItem::Visible() const
 
 void ButtonMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
 {
-	if (Visible() && column < NumCols)
+	if (Visible() && (itemChanged || highlight != highlighted) && column < NumCols)
 	{
+		lcd.SetFont(fontNumber);
 		lcd.SetCursor(row - tOffset, column);
 		lcd.SetRightMargin(rightMargin);
 
@@ -93,6 +78,8 @@ void ButtonMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight,
 
 		lcd.TextInvert(false);
 		lcd.ClearToMargin();
+		itemChanged = false;
+		highlighted = highlight;
 	}
 }
 
@@ -101,31 +88,27 @@ void ButtonMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight,
 // NOTE: menu names must not begin with 'G', 'M' or 'T'
 const char* ButtonMenuItem::Select()
 {
-	m_acCommand[0] = '\0';
-
-	SafeStrncpy(m_acCommand, command, strlen(command) + 1);
-	// WS1 assumed safe
-
-	int nReplacementIndex = StringContains(m_acCommand, "menu");
+	const int nReplacementIndex = StringContains(command, "menu");
 	if (-1 != nReplacementIndex)
 	{
-		nReplacementIndex -= strlen("menu");
-
-		// TODO WS1
-		SafeStrncpy(m_acCommand + nReplacementIndex, m_acFile, min(strlen(m_acFile) + 1, sizeof(m_acCommand) - nReplacementIndex));
+		m_acCommand.copy(command, nReplacementIndex);
+		m_acCommand.cat(m_acFile);
+	}
+	else
+	{
+		m_acCommand.copy(command);
 	}
 
-	return m_acCommand;
+	return m_acCommand.c_str();
 }
 
-PixelNumber ButtonMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, const LcdFont *oFont) const
+PixelNumber ButtonMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const
 {
 	PixelNumber tOffsetRequest = tCurrentOffset;
 
 	// Are we off the bottom of the visible window?
-	if (64 + tCurrentOffset <= row + oFont->height + 1)
+	if (64 + tCurrentOffset <= row + fontHeight + 1)
 	{
-		// tOffsetRequest = tCurrentOffset + row - 3;
 		tOffsetRequest = row - 3;
 	}
 
@@ -145,14 +128,13 @@ ValueMenuItem::ValueMenuItem(PixelNumber r, PixelNumber c, FontNumber fn, PixelN
 
 void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
 {
-	lcd.SetCursor(row - tOffset, column);
-	lcd.SetRightMargin(min<PixelNumber>(column + width, rightMargin));
-	lcd.TextInvert(highlight);
-
+	lcd.SetFont(fontNumber);
 	bool error = false;
 	if (!adjusting)
 	{
 		const unsigned int itemNumber = valIndex % 100;
+		const float oldValue = currentValue;
+
 		switch (valIndex/100)
 		{
 		case 0:		// heater current temperature
@@ -236,19 +218,19 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 
 			// Platform's IP address is the "planned", Network's IP address is the "actual"
 			case 30:
-				currentValue = reprap.GetNetwork().GetIPAddress(0)[0];
+				currentValue = reprap.GetNetwork().GetIPAddress(0).GetQuad(0);
 				break;
 
 			case 31:
-				currentValue = reprap.GetNetwork().GetIPAddress(0)[1];
+				currentValue = reprap.GetNetwork().GetIPAddress(0).GetQuad(1);
 				break;
 
 			case 32:
-				currentValue = reprap.GetNetwork().GetIPAddress(0)[2];
+				currentValue = reprap.GetNetwork().GetIPAddress(0).GetQuad(2);
 				break;
 
 			case 33:
-				currentValue = reprap.GetNetwork().GetIPAddress(0)[3];
+				currentValue = reprap.GetNetwork().GetIPAddress(0).GetQuad(3);
 				break;
 
 			default:
@@ -260,17 +242,31 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 			error = true;
 			break;
 		}
+
+		if (error || currentValue != oldValue)
+		{
+			itemChanged = true;
+		}
 	}
 
-	if (error)
+	if (itemChanged || (highlight != highlighted))
 	{
-		lcd.print("***");
+		lcd.SetCursor(row - tOffset, column);
+		lcd.SetRightMargin(min<PixelNumber>(column + width, rightMargin));
+		lcd.TextInvert(highlight);
+
+		if (error)
+		{
+			lcd.print("***");
+		}
+		else
+		{
+			lcd.print(currentValue, decimals);
+		}
+		lcd.ClearToMargin();
+		itemChanged = false;
+		highlighted = highlight;
 	}
-	else
-	{
-		lcd.print(currentValue, decimals);
-	}
-	lcd.ClearToMargin();
 }
 
 const char* ValueMenuItem::Select()
@@ -279,7 +275,7 @@ const char* ValueMenuItem::Select()
 	return nullptr;
 }
 
-PixelNumber ValueMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, const LcdFont *oFont) const
+PixelNumber ValueMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const
 {
 	// TODO
 	return 0;
@@ -293,19 +289,17 @@ bool ValueMenuItem::Adjust_SelectHelper()
 	switch (valIndex/100)
 	{
 	case 1: // heater active temperature
+		if (1 > currentValue) // 0 is off
 		{
-			if (1 > currentValue) // 0 is off
+			reprap.GetGCodes().SetItemActiveTemperature(itemNumber, -273.15f);
+		}
+		else // otherwise ensure the tool is made active at the same time (really only matters for 79)
+		{
+			if (80 > itemNumber)
 			{
-				reprap.GetGCodes().SetItemActiveTemperature(itemNumber, -273.15f);
+				reprap.SelectTool(itemNumber, false);
 			}
-			else // otherwise ensure the tool is made active at the same time (really only matters for 79)
-			{
-				if (80 > itemNumber)
-				{
-					reprap.SelectTool(itemNumber, false);
-				}
-				reprap.GetGCodes().SetItemActiveTemperature(itemNumber, currentValue);
-			}
+			reprap.GetGCodes().SetItemActiveTemperature(itemNumber, currentValue);
 		}
 		break;
 
@@ -372,6 +366,7 @@ unsigned int ValueMenuItem::GetReferencedToolNumber() const
 
 bool ValueMenuItem::Adjust_AlterHelper(int clicks)
 {
+	itemChanged = true;			// we will probably change the value, so it will need to be re-displayed
 	const unsigned int itemNumber = GetReferencedToolNumber();
 
 	switch (valIndex/100)
@@ -385,9 +380,10 @@ bool ValueMenuItem::Adjust_AlterHelper(int clicks)
 			if (0 > clicks) // decrementing
 			{
 				currentValue += clicks;
-
 				if (95 > (int)currentValue)
+				{
 					currentValue = 0;
+				}
 			}
 			else // incrementing
 			{
@@ -396,7 +392,6 @@ bool ValueMenuItem::Adjust_AlterHelper(int clicks)
 					currentValue = (95 - 1);
 					// --clicks;
 				}
-
 				currentValue = min<int>(currentValue + clicks, reprap.GetHeat().GetHighestTemperatureLimit(reprap.GetTool(itemNumber)->Heater(0)));
 			}
 		}
@@ -473,20 +468,17 @@ bool ValueMenuItem::Adjust(int clicks)
 	return Adjust_AlterHelper(clicks);
 }
 
-FilesMenuItem *FilesMenuItem::freelist = nullptr;
-
-FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, FontNumber fn, const char *cmd, const char *dir, const char *acFile, unsigned int nf, unsigned int uFontHeight)
-	: MenuItem(r, c, fn), command(cmd), initialDirectory(dir), m_acFile(acFile), m_uDisplayLines(nf), m_uFontHeight(uFontHeight),
+FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, FontNumber fn, const char *cmd, const char *dir, const char *acFile, unsigned int nf)
+	: MenuItem(r, c, fn), numDisplayLines(nf), command(cmd), initialDirectory(dir), m_acFile(acFile),
         m_uListingFirstVisibleIndex(0), m_uListingSelectedIndex(0), m_oMS(reprap.GetPlatform().GetMassStorage())
 {
-	m_acCommand[0] = '\0';
-
 	// There's no guarantee that initialDirectory has a trailing '/'
-	SafeStrncpy(m_acCurrentDirectory, initialDirectory, strlen(initialDirectory) + 1);
-	// WS1 assumed safe
-	if ('/' != m_acCurrentDirectory[strlen(m_acCurrentDirectory) - 1])
-		SafeStrncpy(m_acCurrentDirectory + strlen(m_acCurrentDirectory), "/", 2);
-		// WS1 assumed safe
+	m_acCurrentDirectory.copy(initialDirectory);
+	const size_t len = m_acCurrentDirectory.strlen();
+	if (len == 0 || '/' != m_acCurrentDirectory[len - 1])
+	{
+		m_acCurrentDirectory.cat('/');
+	}
 
 	// We don't bother with m_uHardItemsInDirectory in init. list because --
 	EnterDirectory();
@@ -501,11 +493,10 @@ void FilesMenuItem::vResetViewState()
 void FilesMenuItem::EnterDirectory()
 {
 	vResetViewState();
-
 	m_uHardItemsInDirectory = 0;
 
 	FileInfo oFileInfo;
-	if (m_oMS->FindFirst(m_acCurrentDirectory, oFileInfo))
+	if (m_oMS->FindFirst(m_acCurrentDirectory.c_str(), oFileInfo))
 	{
 		do
 		{
@@ -517,14 +508,15 @@ void FilesMenuItem::EnterDirectory()
 
 bool FilesMenuItem::bInSubdirectory() const
 {
-	const char *pcPathElement = m_acCurrentDirectory;
+	const char *pcPathElement = m_acCurrentDirectory.c_str();
 	unsigned int uNumSlashes = 0;
 
 	while ('\0' != *pcPathElement)
 	{
 		if (('/' == *pcPathElement) && ('\0' != *(pcPathElement + 1))) // don't count a trailing slash
+		{
 			++uNumSlashes;
-
+		}
 		++pcPathElement;
 	}
 
@@ -538,181 +530,149 @@ unsigned int FilesMenuItem::uListingEntries() const
 
 void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
 {
-	lcd.SetCursor(row, column); // TODO: consider tOffset
-	lcd.SetRightMargin(rightMargin);
-
-	if (bInSubdirectory()) // manually add the ".." entry
+	// The 'highlight' parameter is not used to highlight this item, but it is still used to tell whether this item is selected or not
+	if (itemChanged || highlighted != highlight)
 	{
-		// We are writing text to line numbers (0), 1, 2 ... m_uDisplayLines - 1 (0 = "..")
-		// If m_uListingFirstVisibleIndex is 0, then we can see "..":
-		//   The remaining fs entries are m_uListingFirstVisibleIndex, m_uListingFirstVisibleIndex + 1 ... m_uListingFirstVisibleIndex + m_uDisplayLines - 2
-		// Otherwise (m_uListingFirstVisibleIndex is not 0, so we can't see "..")
-		//   The fs entries are m_uListingFirstVisibleIndex, m_uListingFirstVisibleIndex + 1 ... m_uListingFirstVisibleIndex + m_uDisplayLines - 1
-		// (We iterate the file system exactly the same, we just use 'i' to make sure we stop at the appropriate time.)
+		lcd.SetFont(fontNumber);
+		lcd.SetRightMargin(rightMargin);
+		uint8_t line = 0;
 
-		uint8_t i = 0;
-
-		// e.g. m_uListingFirstVisible = 0, we'll see "..", "a.gcode", "b.gcode", ...
-		//      m_uListingFirstVisible = 1, we'll see "a.gcode", "b.gcode", ...
-		if (0 == m_uListingFirstVisibleIndex)
+		// If we are in a subdirectory then we prepend ".." to the list of files
+		unsigned int dirEntriesToSkip;
+		if (bInSubdirectory())
 		{
-			lcd.SetCursor(row, column);
-
-			if (highlight && (m_uListingSelectedIndex == m_uListingFirstVisibleIndex))
+			if (m_uListingFirstVisibleIndex == 0)
 			{
-				lcd.print("> ");
+				lcd.SetCursor(row, column);
+				lcd.print("  ..");
+				lcd.ClearToMargin();
+				if (highlight && m_uListingSelectedIndex == 0)
+				{
+					// Overwriting the initial spaces with '>' avoids shifting the following text when we change the selection
+					lcd.SetCursor(row, column);
+					lcd.print(">");
+				}
+				line = 1;
+				dirEntriesToSkip = 0;
 			}
 			else
 			{
+				dirEntriesToSkip = m_uListingFirstVisibleIndex - 1;
+			}
+		}
+		else
+		{
+			dirEntriesToSkip = m_uListingFirstVisibleIndex;
+		}
+
+		// Seek to the first file that is in view
+		FileInfo oFileInfo;
+		bool gotFileInfo = m_oMS->FindFirst(m_acCurrentDirectory.c_str(), oFileInfo);
+		while (gotFileInfo && dirEntriesToSkip != 0)
+		{
+			--dirEntriesToSkip;
+			gotFileInfo =  m_oMS->FindNext(oFileInfo);
+		}
+
+		// We always iterate the entire viewport so that old listing lines that may not be overwritten are cleared
+		while (line < numDisplayLines)
+		{
+			lcd.SetCursor(row + (lcd.GetFontHeight() * line), column);
+
+			// If there's actually a file to describe (not just ensuring viewport line clear)
+			if (gotFileInfo)
+			{
 				lcd.print("  ");
-			}
-			lcd.print("..");
-
-			lcd.ClearToMargin();
-
-			i = 1;
-		}
-
-		// Seek to the first file that is in view
-		int nDirReferencedLocation = -1;
-		FileInfo oFileInfo;
-		if (m_oMS->FindFirst(m_acCurrentDirectory, oFileInfo))
-		{
-			do
-			{
-				++nDirReferencedLocation;
-			}
-			while ((nDirReferencedLocation < static_cast<int>(m_uListingFirstVisibleIndex - 1)) && m_oMS->FindNext(oFileInfo));
-			// -- relying on short-circuit, do not change order!
-		}
-
-		bool bAnotherFile = (-1 != nDirReferencedLocation);
-
-
-		// i iterates over the visible lines on the screen (0, 1, 2...)
-
-		// We always iterate the entire viewport so that old listing lines that may not be overwritten are cleared
-		for (/* uint8_t i = (0 == m_uListingFirstVisible ? 1 : 0) */ ; i < m_uDisplayLines; ++i, bAnotherFile = m_oMS->FindNext(oFileInfo))
-		{
-			lcd.SetCursor(row + (m_uFontHeight * i), column);
-
-			// If there's actually a file to describe (not just ensuring viewport line clear)
-			if (bAnotherFile)
-			{
-				if (highlight && (m_uListingSelectedIndex == (i + m_uListingFirstVisibleIndex)))
-					lcd.print("> ");
-				else
-					lcd.print("  ");
-
 				if (oFileInfo.isDirectory)
+				{
 					lcd.print("./");
-
+				}
 				lcd.print(oFileInfo.fileName);
+				lcd.ClearToMargin();
+				if (highlight && m_uListingSelectedIndex == line + m_uListingFirstVisibleIndex)
+				{
+					lcd.SetCursor(row + (lcd.GetFontHeight() * line), column);
+					lcd.print(">");
+				}
 			}
-
-			lcd.ClearToMargin();
-		}
-	}
-	else // logical root, no ".." entry
-	{
-		// We are writing text to line numbers 0, 1 ... m_uDisplayLines - 1
-		// These are fs entries m_uListingFirstVisibleIndex, m_uListingFirstVisibleIndex + 1 ... m_uListingFirstVisibleIndex + m_uDisplayLines - 1
-
-		// Seek to the first file that is in view
-		int nDirListingLocation = -1;
-		FileInfo oFileInfo;
-		if (m_oMS->FindFirst(m_acCurrentDirectory, oFileInfo))
-		{
-			do
+			else
 			{
-				++nDirListingLocation;
+				lcd.ClearToMargin();
 			}
-			while ((nDirListingLocation < static_cast<int>(m_uListingFirstVisibleIndex)) && m_oMS->FindNext(oFileInfo));
-			// -- relying on short-circuit, do not change order!
-		}
 
-		bool bAnotherFile = (-1 != nDirListingLocation);
-
-		// We always iterate the entire viewport so that old listing lines that may not be overwritten are cleared
-		for (uint8_t i = 0; i < m_uDisplayLines; ++i, bAnotherFile = m_oMS->FindNext(oFileInfo))
-		{
-			lcd.SetCursor(row + (m_uFontHeight * i), column);
-
-			// If there's actually a file to describe (not just ensuring viewport line clear)
-			if (bAnotherFile)
+			++line;
+			if (line == numDisplayLines)
 			{
-				if (highlight && (m_uListingSelectedIndex == (i + m_uListingFirstVisibleIndex)))
-					lcd.print("> ");
-				else
-					lcd.print("  ");
-
-				if (oFileInfo.isDirectory)
-					lcd.print("./");
-
-				lcd.print(oFileInfo.fileName);
+				break;		// skip getting more file info for efficiency
 			}
-
-			lcd.ClearToMargin();
+			gotFileInfo = m_oMS->FindNext(oFileInfo);
 		}
-	}
 
-	// TODO: cache these filenames to avoid the SD overhead each time...
+		m_oMS->AbandonFindNext();				// release the mutex, there may be more files that we don't have room to display
+
+		itemChanged = false;
+		highlighted = highlight;
+	}
 }
 
 void FilesMenuItem::Enter(bool bForwardDirection)
 {
-	if (bForwardDirection || 0 == uListingEntries())
+	if (bForwardDirection || uListingEntries() == 0)
 	{
 		m_uListingSelectedIndex = 0;
-		m_uListingFirstVisibleIndex = 0;
+		m_uListingFirstVisibleIndex = 0;					// select the first item and start the list form the first item
 	}
 	else
 	{
-		m_uListingSelectedIndex = uListingEntries() - 1;
-		m_uListingFirstVisibleIndex = ((uListingEntries() > m_uDisplayLines) ? (uListingEntries() - m_uDisplayLines) : 0);
+		m_uListingSelectedIndex = uListingEntries() - 1;	// select the last item
+		m_uListingFirstVisibleIndex = ((uListingEntries() > numDisplayLines) ? (uListingEntries() - numDisplayLines) : 0);
 	}
+	itemChanged = true;
 }
 
 int FilesMenuItem::Advance(int nCounts)
 {
 	// In case of empty directory, there's nothing the control itself can do
-	if (0 == uListingEntries())
-	{
-		// Force the menu system to the next item in the list
-		// ++nCounts;
-	}
-	else
+	if (uListingEntries() != 0)
 	{
 		while (nCounts > 0)
 		{
 			// Advancing one more would take us past the end of the list
-			// Instead, return the remaining count so that the other
-			// selectable menu items can be scrolled.
-			if (uListingEntries() == m_uListingSelectedIndex + 1)
+			// Instead, return the remaining count so that the other selectable menu items can be scrolled.
+			if (m_uListingSelectedIndex + 1 == uListingEntries())
+			{
 				break;
+			}
 
 			++m_uListingSelectedIndex;
 			--nCounts;
 
 			// Move the visible portion of the list down, if required
-			if (m_uListingSelectedIndex == m_uListingFirstVisibleIndex + m_uDisplayLines)
+			if (m_uListingSelectedIndex == m_uListingFirstVisibleIndex + numDisplayLines)
+			{
 				++m_uListingFirstVisibleIndex;
+			}
 		}
 
 		while (nCounts < 0)
 		{
-			// We're already at the first item in the visible list;
-			// return the remaining action to the menu system.
+			// We're already at the first item in the visible list; return the remaining action to the menu system.
 			if (0 == m_uListingSelectedIndex)
+			{
 				break;
+			}
 
 			--m_uListingSelectedIndex;
 			++nCounts;
 
 			// Move the visible portion of the list up, if required
 			if (m_uListingSelectedIndex < m_uListingFirstVisibleIndex)
+			{
 				--m_uListingFirstVisibleIndex;
+			}
 		}
+
+		itemChanged = true;
 	}
 
 	return nCounts;
@@ -720,7 +680,7 @@ int FilesMenuItem::Advance(int nCounts)
 
 const char* FilesMenuItem::Select()
 {
-	char* acReVal = nullptr;
+	const char* acReVal = nullptr;
 
 	// Several cases:
 	// TEST 1. ".." entry - call EnterDirectory(), using saved state information
@@ -729,18 +689,17 @@ const char* FilesMenuItem::Select()
 
 	// Get information on the item selected
 
-	if (bInSubdirectory() && (0 == m_uListingSelectedIndex)) // meaning ".."
+	if (bInSubdirectory() && 0 == m_uListingSelectedIndex) // meaning ".."
 	{
 		// TODO: go up one level rather than to logical root
 		// There's no guarantee that initialDirectory has a trailing '/'
-		SafeStrncpy(m_acCurrentDirectory, initialDirectory, strlen(initialDirectory) + 1);
-		// WS1 assumed safe
-		if ('/' != m_acCurrentDirectory[strlen(m_acCurrentDirectory) - 1])
-			SafeStrncpy(m_acCurrentDirectory + strlen(m_acCurrentDirectory), "/", 2);
-		    // WS1 assumed safe
-
+		m_acCurrentDirectory.copy(initialDirectory);
+		const size_t len = m_acCurrentDirectory.strlen();
+		if (len == 0 || '/' != m_acCurrentDirectory[len - 1])
+		{
+			m_acCurrentDirectory.cat('/');
+		}
 		EnterDirectory();
-		// return nullptr;
 	}
 	else
 	{
@@ -749,73 +708,54 @@ const char* FilesMenuItem::Select()
 		// If ".." is not visible, the selected file is visible index m_uListingSelectedIndex, fs index m_uListingSelectedIndex - 1
 		// If logical root:
 		// ".." is never visible, so the selected file is visible index m_uListingSelectedIndex, fs index m_uListingSelectedIndex
-
-		unsigned int uFindFileIndex = bInSubdirectory() ? m_uListingSelectedIndex - 1 : m_uListingSelectedIndex;
+		unsigned int dirEntriesToSkip = bInSubdirectory() ? m_uListingSelectedIndex - 1 : m_uListingSelectedIndex;
 
 		// Seek to the selected file
-		int nDirectoryLocation = -1;
 		FileInfo oFileInfo;
-		if (m_oMS->FindFirst(m_acCurrentDirectory, oFileInfo))
+		bool gotFileInfo = m_oMS->FindFirst(m_acCurrentDirectory.c_str(), oFileInfo);
+		while (gotFileInfo && dirEntriesToSkip != 0)
 		{
-			do
-			{
-				++nDirectoryLocation;
-			}
-			while ((nDirectoryLocation != static_cast<int>(uFindFileIndex)) && m_oMS->FindNext(oFileInfo)); // relying on short-circuit -- don't change order!
+			--dirEntriesToSkip;
+			gotFileInfo = m_oMS->FindNext(oFileInfo);
 		}
+		m_oMS->AbandonFindNext();
 
-		if (nDirectoryLocation == static_cast<int>(uFindFileIndex)) // handles empty directory (no action)
+		if (gotFileInfo) // handles empty directory (no action)
 		{
 			if (oFileInfo.isDirectory)
 			{
 				// Build the new directory, and ensure it's terminated with a forward slash
-				// TODO WS1
-				SafeStrncpy(m_acCurrentDirectory + strlen(m_acCurrentDirectory), oFileInfo.fileName, min(strlen(oFileInfo.fileName) + 1, sizeof(m_acCurrentDirectory) - strlen(m_acCurrentDirectory)));
-				SafeStrncpy(m_acCurrentDirectory + strlen(m_acCurrentDirectory), "/", min(2u, sizeof(m_acCurrentDirectory) - strlen(m_acCurrentDirectory)));
-
+				m_acCurrentDirectory.cat(oFileInfo.fileName);
+				m_acCurrentDirectory.cat('/');
 				EnterDirectory();
-				// return nullptr;
 			}
 			else
 			{
-				m_acCommand[0] = '\0';
-
-				SafeStrncpy(m_acCommand, command, strlen(command) + 1);
-				// WS1 assumed safe
-
-				int nReplacementIndex = StringContains(m_acCommand, "#0");
-				if (-1 != nReplacementIndex)
+				int nReplacementIndex = StringContains(command, "#0");
+				if (nReplacementIndex != -1)
 				{
-					nReplacementIndex -= strlen("#0");
-
-					SafeStrncpy(m_acCommand + nReplacementIndex, "\"", min(2u, sizeof(m_acCommand) - nReplacementIndex));
-					++nReplacementIndex;
-
-					SafeStrncpy(m_acCommand + nReplacementIndex, m_acCurrentDirectory, min(strlen(m_acCurrentDirectory) + 1, sizeof(m_acCommand) - nReplacementIndex));
-					nReplacementIndex += strlen(m_acCurrentDirectory);
-
-					SafeStrncpy(m_acCommand + nReplacementIndex, oFileInfo.fileName, min(strlen(oFileInfo.fileName) + 1, sizeof(m_acCommand) - nReplacementIndex));
-					nReplacementIndex += strlen(oFileInfo.fileName);
-
-					SafeStrncpy(m_acCommand + nReplacementIndex, "\"", min(2u, sizeof(m_acCommand) - nReplacementIndex));
-					++nReplacementIndex;
-
-					SafeStrncpy(m_acCommand + nReplacementIndex, command + StringContains(command, "#0"), min(strlen(command + StringContains(command, "#0")) + 1, sizeof(m_acCommand) - nReplacementIndex));
-					// nReplacementIndex = ... // unused
+					m_acCommand.copy(command, nReplacementIndex);
+					m_acCommand.cat('"');
+					m_acCommand.cat(m_acCurrentDirectory.c_str());
+					m_acCommand.cat(oFileInfo.fileName);
+					m_acCommand.cat('"');
+					m_acCommand.cat(command + nReplacementIndex + strlen("#0"));
+				}
+				else
+				{
+					m_acCommand.copy(command);
 				}
 
 				// TODO: do this on the way in and it might be less work...
 				//   On the other hand, this only occurs when an item is selected so it's O(1) vs. O(n)
-				nReplacementIndex = StringContains(m_acCommand, "menu");
-				if (-1 != nReplacementIndex)
+				nReplacementIndex = StringContains(m_acCommand.c_str(), "menu");
+				if (nReplacementIndex != -1)
 				{
-					nReplacementIndex -= strlen("menu");
-
-					SafeStrncpy(m_acCommand + nReplacementIndex, m_acFile, min(strlen(m_acFile) + 1, sizeof(m_acCommand) - nReplacementIndex));
+					m_acCommand.Truncate(nReplacementIndex);
+					m_acCommand.cat(m_acFile);
 				}
 
-				acReVal = m_acCommand;
-				// return m_acCommand; // would otherwise break encapsulation, but the return is const
+				acReVal = m_acCommand.c_str();
 			}
 		}
 	}
@@ -823,10 +763,70 @@ const char* FilesMenuItem::Select()
 	return acReVal;
 }
 
-PixelNumber FilesMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, const LcdFont *oFont) const
+PixelNumber FilesMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const
 {
 	// TODO
 	return 0;
+}
+
+// Image menu item members
+// The image file format is:
+// Byte 0 = number of columns
+// Byte 1 = number of rows
+// Remaining bytes = data, 1 row at a time. If the number of columns is not a multiple of 8 then the data for each row is padded to a multiple of 8 bits.
+ImageMenuItem::ImageMenuItem(PixelNumber r, PixelNumber c, const char *pFileName)
+	: MenuItem(r, c, 0)
+{
+	fileName.copy(pFileName);
+}
+
+void ImageMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
+{
+	// Highlighting is ignored for this item type because it can't be selected
+	if (itemChanged || highlight != highlighted)
+	{
+		FileStore * const fs = reprap.GetPlatform().OpenFile(MENU_DIR, fileName.c_str(), OpenMode::read);
+		if (fs != nullptr)
+		{
+			uint8_t widthAndHeight[2];
+			if (fs->Read(widthAndHeight, 2) == 2)
+			{
+				const PixelNumber cols = widthAndHeight[0];
+				const PixelNumber rows = widthAndHeight[1];
+				if (cols != 0 && cols <= NumCols && rows != 0)
+				{
+					lcd.SetRightMargin(rightMargin);
+					const size_t bytesPerRow = (cols + 7)/8;
+					for (PixelNumber irow = 0; irow < rows; ++irow)
+					{
+						uint8_t buffer[NumCols/8];
+						if (fs->Read(buffer, bytesPerRow) != (int)bytesPerRow)
+						{
+							break;
+						}
+						lcd.BitmapRow(row - tOffset + irow, column,  cols, buffer, highlight);
+						++irow;
+					}
+				}
+			}
+			fs->Close();
+		}
+		itemChanged = false;
+		highlighted = highlight;
+	}
+}
+
+PixelNumber ImageMenuItem::GetWidth() const
+{
+	FileStore * const fs = reprap.GetPlatform().OpenFile(MENU_DIR, fileName.c_str(), OpenMode::read);
+	if (fs == nullptr)
+	{
+		return 0;
+	}
+	uint8_t width;
+	fs->Read(width);			// read the number of columns
+	fs->Close();
+	return width;
 }
 
 // End

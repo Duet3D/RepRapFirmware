@@ -104,7 +104,7 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 		// It is up to the caller to report an error if necessary.
 		if (reprap.Debug(modulePlatform))
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "Can't open %s to %s, error code %d\n", location.c_str(), (writing) ? "write" : "read", (int)openReturn);
+			reprap.GetPlatform().MessageF(WarningMessage, "Failed to open %s to %s, error code %d\n", location.c_str(), (writing) ? "write" : "read", (int)openReturn);
 		}
 		return false;
 	}

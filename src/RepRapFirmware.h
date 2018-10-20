@@ -60,7 +60,7 @@ enum Module : uint8_t
 	moduleDisplay = 15,
 	moduleLinuxComm = 16,
 	numModules = 17,				// make this one greater than the last module number
-	noModule = 17
+	noModule = 18
 };
 
 extern const char * const moduleName[];
@@ -272,6 +272,9 @@ template<typename BitmapType> BitmapType UnsignedArrayToBitMap(const uint32_t *a
 	}
 	return res;
 }
+
+// Convert a PWM that is possibly in the old style 0..255 to be in the range 0.0..1.0
+float ConvertOldStylePwm(float v);
 
 // Common definitions used by more than one module
 

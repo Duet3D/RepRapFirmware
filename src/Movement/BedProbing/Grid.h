@@ -9,9 +9,10 @@
 #define SRC_MOVEMENT_GRID_H_
 
 #include "RepRapFirmware.h"
+#include "ObjectModel/ObjectModel.h"
 
 // This class defines the bed probing grid
-class GridDefinition
+class GridDefinition INHERIT_OBJECT_MODEL
 {
 public:
 	friend class HeightMap;
@@ -34,6 +35,9 @@ public:
 
 	void PrintError(float originalXrange, float originalYrange, const StringRef& r) const
 	pre(!IsValid());
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	void CheckValidity();

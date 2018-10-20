@@ -41,9 +41,12 @@
  *
  */
 
-#include "ethernet_phy.h"
 #include "ethernet_sam.h"
-#include <string.h>
+#include <cstring>
+
+extern "C" {
+
+#include "ethernet_phy.h"
 
 /* lwIP includes */
 #include "lwip/api.h"
@@ -59,7 +62,6 @@
 #include "lwip/tcp.h"
 #include "lwip/tcpip.h"
 #include "netif/etharp.h"
-
 
 /* Global variable containing MAC Config (hw addr, IP, GW, ...) */
 struct netif gs_net_if;
@@ -89,7 +91,9 @@ static timers_info_t gs_timers_table[] = {
 #endif
 };
 
-extern uint32_t millis( void ) ;
+extern uint32_t millis();
+
+}		// end extern "C"
 
 /**
  * \brief Process timing functions.
@@ -125,12 +129,12 @@ void ethernet_timers_update(void)
 //************************************************************************************************************
 
 // This sets the static IP configuration on-the-fly
-void ethernet_set_configuration(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[])
+void ethernet_set_configuration(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay)
 {
 	ip4_addr_t x_ip_addr, x_net_mask, x_gateway;
-	IP4_ADDR(&x_ip_addr, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
-	IP4_ADDR(&x_net_mask, netMask[0], netMask[1], netMask[2], netMask[3]);
-	IP4_ADDR(&x_gateway, gateWay[0], gateWay[1], gateWay[2], gateWay[3]);
+	x_ip_addr.addr = ipAddress.GetV4LittleEndian();
+	x_net_mask.addr = netMask.GetV4LittleEndian();
+	x_gateway.addr = gateWay.GetV4LittleEndian();
 
 	// use static IP address
 	netif_set_ipaddr(&gs_net_if, &x_ip_addr);
@@ -141,12 +145,12 @@ void ethernet_set_configuration(const uint8_t ipAddress[], const uint8_t netMask
 /** \brief Initialize the Ethernet subsystem.
  *
  */
-void init_ethernet(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[])
+void init_ethernet(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay)
 {
 	ip4_addr_t x_ip_addr, x_net_mask, x_gateway;
-	IP4_ADDR(&x_ip_addr, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
-	IP4_ADDR(&x_net_mask, netMask[0], netMask[1], netMask[2], netMask[3]);
-	IP4_ADDR(&x_gateway, gateWay[0], gateWay[1], gateWay[2], gateWay[3]);
+	x_ip_addr.addr = ipAddress.GetV4LittleEndian();
+	x_net_mask.addr = netMask.GetV4LittleEndian();
+	x_gateway.addr = gateWay.GetV4LittleEndian();
 
 	/* Initialize lwIP. */
 	lwip_init();
@@ -232,7 +236,9 @@ void ethernet_set_rx_callback(gmac_dev_tx_cb_t callback)
 /*
  * \brief Returns the current IP address
  */
-const uint8_t *ethernet_get_ipaddress()
+void ethernet_get_ipaddress(IPAddress& ipAddress, IPAddress& netMask, IPAddress& gateWay)
 {
-	return (uint8_t*)&gs_net_if.ip_addr.addr;
+	ipAddress.SetV4LittleEndian(gs_net_if.ip_addr.addr);
+	netMask.SetV4LittleEndian(gs_net_if.netmask.addr);
+	gateWay.SetV4LittleEndian(gs_net_if.gw.addr);
 }

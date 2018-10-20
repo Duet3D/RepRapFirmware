@@ -31,7 +31,7 @@ namespace StepTimer
 		// 1.067us resolution on the Duet WiFi (120MHz clock)
 		// 0.853us resolution on the SAM E70 (150MHz clock)
 
-	#if __LPC17xx__
+#if __LPC17xx__
 		//LPC has 32bit timers
 		//Using the same 128 divisor (as also specified in DDA)
 		//LPC Timers default to /4 -->  (SystemCoreClock/4)
@@ -39,26 +39,25 @@ namespace StepTimer
 
 		//Start a free running Timer using Match Registers 0 and 1 to generate interrupts
 		LPC_SC->PCONP |= ((uint32_t) 1<<SBIT_PCTIM0);			// Ensure the Power bit is set for the Timer
-		STEP_TC->MCR = 0;										//disable all MRx interrupts
+		STEP_TC->MCR = 0;										// disable all MRx interrupts
 		STEP_TC->PR   =  (getPclk(PCLK_TIMER0) / res) - 1;		// Set the LPC Prescaler (i.e. TC increment every 32 TimerClock Ticks)
 		STEP_TC->TC  = 0x00;  									// Restart the Timer Count
 		NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);		// set high priority for this IRQ; it's time-critical
 		NVIC_EnableIRQ(STEP_TC_IRQN);
 		STEP_TC->TCR  = (1 <<SBIT_CNTEN);						// Start Timer
-	#else
+#else
 		pmc_set_writeprotect(false);
 		pmc_enable_periph_clk(STEP_TC_ID);
 		tc_init(STEP_TC, STEP_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK4 | TC_CMR_EEVT_XC0);	// must set TC_CMR_EEVT nonzero to get RB compare interrupts
 		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = ~(uint32_t)0; // interrupts disabled for now
-	#if SAM4S || SAME70		// if 16-bit TCs
+#if SAM4S || SAME70												// if 16-bit TCs
 		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_COVFS; // enable the overflow interrupt so that we can use it to extend the count to 32-bits
-	#endif
+#endif
 		tc_start(STEP_TC, STEP_TC_CHAN);
 		tc_get_status(STEP_TC, STEP_TC_CHAN);					// clear any pending interrupt
 		NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);		// set priority for this IRQ
 		NVIC_EnableIRQ(STEP_TC_IRQN);
-	#endif
-
+#endif
 	}
 
 #if SAM4S || SAME70
@@ -93,22 +92,22 @@ namespace StepTimer
 	{
 		const irqflags_t flags = cpu_irq_save();
 		const int32_t diff = (int32_t)(tim - GetInterruptClocksInterruptsDisabled());	// see how long we have to go
-		if (diff < (int32_t)DDA::MinInterruptInterval)						// if less than about 6us or already passed
+		if (diff < (int32_t)DDA::MinInterruptInterval)				// if less than about 6us or already passed
 		{
 			cpu_irq_restore(flags);
-			return true;													// tell the caller to simulate an interrupt instead
+			return true;											// tell the caller to simulate an interrupt instead
 		}
 
 #ifdef __LPC17xx__
 		STEP_TC->MR0 = tim;
-		STEP_TC->MCR  |= (1 << SBIT_MR0I);     // Enable Int on MR0 match
+		STEP_TC->MCR  |= (1 << SBIT_MR0I);     						// enable Int on MR0 match
 #else
-		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RA = tim;						// set up the compare register
+		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RA = tim;				// set up the compare register
 
 		// We would like to clear any pending step interrupt. To do this, we must read the TC status register.
 		// Unfortunately, this would clear any other pending interrupts from the same TC.
 		// So we don't, and the step ISR must allow for getting called prematurely.
-		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPAS;				// enable the interrupt
+		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPAS;		// enable the interrupt
 		cpu_irq_restore(flags);
 #endif
 
@@ -124,7 +123,7 @@ namespace StepTimer
 	void DisableStepInterrupt()
 	{
 #ifdef __LPC17xx__
-	    STEP_TC->MCR  &= ~(1<<SBIT_MR0I); //Disable Int on MR0
+	    STEP_TC->MCR  &= ~(1<<SBIT_MR0I);								// disable Int on MR0
 #else
 		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;
 # if SAM4S || SAME70
@@ -167,7 +166,7 @@ namespace StepTimer
 	void DisableSoftTimerInterrupt()
 	{
 #ifdef __LPC17xx__
-	    STEP_TC->MCR  &= ~(1<<SBIT_MR1I); //Disable Int on MR1
+	    STEP_TC->MCR  &= ~(1<<SBIT_MR1I);								 // disable Int on MR1
 #else
 		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;
 # if SAM4S || SAME70

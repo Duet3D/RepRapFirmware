@@ -42,6 +42,7 @@ Licence: GPL
 #include "Spindle.h"
 #include "ZProbe.h"
 #include "ZProbeProgrammer.h"
+#include <General/IPAddress.h>
 
 #if defined(DUET_NG)
 # include "DueXn.h"
@@ -84,11 +85,6 @@ const int INKJET_FIRE_MICROSECONDS = 5;					// How long to fire a nozzle
 const int INKJET_DELAY_MICROSECONDS = 800;				// How long to wait before the next bit
 
 #endif
-
-// AXES
-
-const float AXIS_MINIMA[MaxAxes] = AXES_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);				// mm
-const float AXIS_MAXIMA[MaxAxes] = AXES_(230.0, 210.0, 200.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);		// mm
 
 // Z PROBE
 
@@ -347,12 +343,12 @@ public:
     bool HaveAux() const { return auxDetected; }	// Any device on the AUX line?
     void SetAuxDetected() { auxDetected = true; }
 
-	void SetIPAddress(uint8_t ip[]);
-	const uint8_t* GetIPAddress() const;
-	void SetNetMask(uint8_t nm[]);
-	const uint8_t* NetMask() const;
-	void SetGateWay(uint8_t gw[]);
-	const uint8_t* GateWay() const;
+	void SetIPAddress(IPAddress ip);
+	IPAddress GetIPAddress() const;
+	void SetNetMask(IPAddress nm);
+	IPAddress NetMask() const;
+	void SetGateWay(IPAddress gw);
+	IPAddress GateWay() const;
 	void SetBaudRate(size_t chan, uint32_t br);
 	uint32_t GetBaudRate(size_t chan) const;
 	void SetCommsProperties(size_t chan, uint32_t cp);
@@ -499,8 +495,8 @@ public:
 	// Fans
 	bool ConfigureFan(unsigned int mcode, int fanNumber, GCodeBuffer& gb, const StringRef& reply, bool& error);
 
-	float GetFanValue(size_t fan) const;					// Result is returned in percent
-	void SetFanValue(size_t fan, float speed);				// Accepts values between 0..1 and 1..255
+	float GetFanValue(size_t fan) const;					// Result is returned in range 0..1
+	void SetFanValue(size_t fan, float speed);				// Accepts values between 0..1
 #if defined(DUET_06_085)
 	void EnableSharedFan(bool enable);						// enable/disable the fan that shares its PWM pin with the last heater
 #endif
@@ -556,7 +552,7 @@ public:
 #endif
 
 #if HAS_STALL_DETECT
-	bool ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf);
 #endif
 
 	// User I/O and servo support
@@ -685,9 +681,9 @@ private:
 	ZProbeType zProbeType;					// the type of Z probe we are currently using
 
 	// Network
-	uint8_t ipAddress[4];
-	uint8_t netMask[4];
-	uint8_t gateWay[4];
+	IPAddress ipAddress;
+	IPAddress netMask;
+	IPAddress gateWay;
 	uint8_t defaultMacAddress[6];
 
 	// Board and processor
@@ -737,7 +733,8 @@ private:
 
 #if HAS_SMART_DRIVERS
 	size_t numSmartDrivers;								// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers
-	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers, openLoadADrivers, openLoadBDrivers;
+	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers;
+	DriversBitmap openLoadADrivers, openLoadBDrivers, notOpenLoadADrivers, notOpenLoadBDrivers;
 	MillisTimer openLoadATimer, openLoadBTimer;
 	MillisTimer driversFanTimers[NumTmcDriversSenseChannels];		// driver cooling fan timers
 	uint8_t nextDriveToPoll;
@@ -780,7 +777,6 @@ private:
 
 	void InitZProbe();
 	uint16_t GetRawZProbeReading() const;
-	void UpdateNetworkAddress(uint8_t dst[4], const uint8_t src[4]);
 
 	// Axes and endstops
 	float axisMaxima[MaxAxes];
@@ -1103,17 +1099,17 @@ inline void Platform::SetHeatSampleTime(float st)
 	}
 }
 
-inline const uint8_t* Platform::GetIPAddress() const
+inline IPAddress Platform::GetIPAddress() const
 {
 	return ipAddress;
 }
 
-inline const uint8_t* Platform::NetMask() const
+inline IPAddress Platform::NetMask() const
 {
 	return netMask;
 }
 
-inline const uint8_t* Platform::GateWay() const
+inline IPAddress Platform::GateWay() const
 {
 	return gateWay;
 }
@@ -1133,9 +1129,9 @@ inline uint16_t Platform::GetRawZProbeReading() const
 	case ZProbeType::alternateAnalog:
 		return min<uint16_t>(AnalogInReadChannel(zProbeAdcChannel), 4000);
 
-	case ZProbeType::e0Switch:
+	case ZProbeType::endstopSwitch:
 		{
-			const bool b = IoPort::ReadPin(GetEndstopPin(E0_AXIS));
+			const bool b = IoPort::ReadPin(GetEndstopPin(GetCurrentZProbeParameters().inputChannel));
 			return (b) ? 4000 : 0;
 		}
 
@@ -1143,18 +1139,6 @@ inline uint16_t Platform::GetRawZProbeReading() const
 	case ZProbeType::unfilteredDigital:
 	case ZProbeType::blTouch:
 		return (IoPort::ReadPin(zProbePin)) ? 4000 : 0;
-
-	case ZProbeType::e1Switch:
-		{
-			const bool b = IoPort::ReadPin(GetEndstopPin(E0_AXIS + 1));
-			return (b) ? 4000 : 0;
-		}
-
-	case ZProbeType::zSwitch:
-		{
-			const bool b = IoPort::ReadPin(endStopPins[Z_AXIS]);
-			return (b) ? 4000 : 0;
-		}
 
 	case ZProbeType::zMotorStall:
 	default:

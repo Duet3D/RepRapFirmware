@@ -83,6 +83,7 @@ enum class PauseReason
 {
 	user,			// M25 command received
 	gcode,			// M25 or M226 command encountered in the file being printed
+	filamentChange,	// M600 command
 	trigger,		// external switch
 	heaterFault,	// heater fault detected
 	filament,		// filament monitor
@@ -105,10 +106,7 @@ enum class StopPrintReason
 
 // The GCode interpreter
 
-class GCodes
-#ifdef SUPPORT_OBJECT_MODEL
-	: public ObjectModel
-#endif
+class GCodes INHERIT_OBJECT_MODEL
 {   
 public:
 	struct RawMove
@@ -232,13 +230,8 @@ public:
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);	// Handle G-Code replies
 	void EmergencyStop();												// Cancel everything
 
-#ifdef SUPPORT_OBJECT_MODEL
 protected:
-	const char *GetModuleName() const override;
-	const ObjectModelTableEntry *GetObjectModelTable(size_t& numEntries) const override;
-
-	static const ObjectModelTableEntry objectModelTable[];
-#endif
+	DECLARE_OBJECT_MODEL
 
 private:
 	GCodes(const GCodes&);												// private copy constructor to prevent copying
@@ -277,8 +270,10 @@ private:
 	bool HandleGcode(GCodeBuffer& gb, const StringRef& reply);			// Do a G code
 	bool HandleMcode(GCodeBuffer& gb, const StringRef& reply);			// Do an M code
 	bool HandleTcode(GCodeBuffer& gb, const StringRef& reply);			// Do a T code
-	bool HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply);
-	void HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply);
+	bool HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply, OutputBuffer *outBuf)
+		pre(outBuf == nullptr || rslt == GCodeResult::ok);
+
+	void HandleReply(GCodeBuffer& gb, OutputBuffer *reply);
 
 	const char* DoStraightMove(GCodeBuffer& gb, bool isCoordinated) __attribute__((hot));	// Execute a straight move returning any error message
 	const char* DoArcMove(GCodeBuffer& gb, bool clockwise)						// Execute an arc move returning any error message
@@ -322,7 +317,8 @@ private:
 	GCodeResult SetHeaterParameters(GCodeBuffer& gb, const StringRef& reply);	// Set the thermistor and ADC parameters for a heater, returning true if an error occurs
 	bool ManageTool(GCodeBuffer& gb, const StringRef& reply);					// Create a new tool definition, returning true if an error was reported
 	void SetToolHeaters(Tool *tool, float temperature, bool both);				// Set all a tool's heaters to the temperature, for M104/M109
-	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling) const; // Wait for the heaters associated with the specified tool to reach their set temperatures
+	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance) const;
+																				// Wait for the heaters associated with the specified tool to reach their set temperatures
 	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const;
 	void GenerateTemperatureReport(const StringRef& reply) const;				// Store a standard-format temperature report in reply
 	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const;	// Generate a M408 response
@@ -595,6 +591,7 @@ private:
 	static constexpr const char* UNLOAD_FILAMENT_G = "unload.g";
 	static constexpr const char* RESUME_AFTER_POWER_FAIL_G = "resurrect.g";
 	static constexpr const char* RESUME_PROLOGUE_G = "resurrect-prologue.g";
+	static constexpr const char* FILAMENT_CHANGE_G = "filament-change.g";
 #if HAS_SMART_DRIVERS
 	static constexpr const char* REHOME_G = "rehome.g";
 #endif

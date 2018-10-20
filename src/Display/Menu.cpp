@@ -79,8 +79,8 @@
 const uint32_t InactivityTimeout = 20000;		// inactivity timeout
 const uint32_t ErrorTimeout = 6000;				// how long wre display an error message for
 
-Menu::Menu(Lcd7920& refLcd, const LcdFont * const fnts[], size_t nFonts)
-	: lcd(refLcd), fonts(fnts), numFonts(nFonts),
+Menu::Menu(Lcd7920& refLcd)
+	: lcd(refLcd),
 	  timeoutValue(0), lastActionTime(0),
 	  selectableItems(nullptr), unSelectableItems(nullptr), numNestedMenus(0), numSelectableItems(0), highlightedItem(0), itemIsSelected(false), displayingFixedMenu(false),
 	  errorColumn(0), rowOffset(0)
@@ -173,7 +173,7 @@ void Menu::LoadError(const char *msg, unsigned int line)
 	ResetCache();
 
 	lcd.Clear(currentMargin, currentMargin, NumRows - currentMargin, NumCols - currentMargin);
-	lcd.SetFont(fonts[0]);
+	lcd.SetFont(0);
 	lcd.print("Error loading menu\nFile: ");
 	lcd.print((numNestedMenus > 0) ? filenames[numNestedMenus - 1].c_str() : "(none)");
 	if (line != 0)
@@ -251,7 +251,7 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 			break;
 
 		case 'F':
-			fontNumber = min<unsigned int>(SafeStrtoul(args, &args), numFonts - 1);
+			fontNumber = min<unsigned int>(SafeStrtoul(args, &args), lcd.GetNumFonts() - 1);
 			break;
 
 		case 'V':
@@ -309,7 +309,7 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 
 		if (pNewItem->Visible())
 		{
-			lcd.SetFont(fonts[fontNumber]);
+			lcd.SetFont(fontNumber);
 			lcd.print(text);
 			row = lcd.GetRow() - currentMargin;
 			column = lcd.GetColumn() - currentMargin;
@@ -317,23 +317,24 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 	}
 	else if (StringEquals(commandWord, "image") && fname != nullptr)
 	{
-		LoadImage(fname);
+		ImageMenuItem *pNewItem = new ImageMenuItem(row, column, fname);
+		AddItem(pNewItem, false);
+		column += pNewItem->GetWidth();
 	}
 	else if (StringEquals(commandWord, "button"))
 	{
 		const char * const textString = AppendString(text);
 		const char * const actionString = AppendString(action);
-		const char *const c_acFileString = AppendString(fname);
+		const char * const c_acFileString = AppendString(fname);
 		MenuItem::CheckFunction bF = &(Menu::CheckVisibility);
 		ButtonMenuItem *pNewItem = new ButtonMenuItem(row, column, fontNumber, xVis, bF, textString, actionString, c_acFileString);
 		AddItem(pNewItem, true);
 
-		// Print the button as well so that we can update the row and column
+		// Print the button as well so that we can update the column
 		if (pNewItem->Visible())
 		{
-			lcd.SetFont(fonts[fontNumber]);
+			lcd.SetFont(fontNumber);
 			lcd.print(text);
-			row = lcd.GetRow() - currentMargin;
 			column = lcd.GetColumn() - currentMargin;
 		}
 	}
@@ -352,8 +353,8 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 		const char * const actionString = AppendString(action);
 		const char *const dir = AppendString(dirpath);
 		const char *const acFileString = AppendString(fname);
-		AddItem(new FilesMenuItem(row, 0, fontNumber, actionString, dir, acFileString, nparam, fonts[fontNumber]->height), true);
-		row += nparam * fonts[fontNumber]->height;
+		AddItem(new FilesMenuItem(row, 0, fontNumber, actionString, dir, acFileString, nparam), true);
+		row += nparam * lcd.GetFontHeight(fontNumber);
 		column = 0;
 	}
 	else
@@ -454,7 +455,7 @@ const char *Menu::AppendString(const char *s)
 	const size_t oldIndex = commandBufferIndex;
 	if (commandBufferIndex < sizeof(commandBuffer))
 	{
-		SafeStrncpy(commandBuffer + commandBufferIndex, s, sizeof(commandBuffer) - commandBufferIndex);
+		SafeStrncpy(commandBuffer + commandBufferIndex, s, ARRAY_SIZE(commandBuffer) - commandBufferIndex);
 		commandBufferIndex += strlen(commandBuffer + commandBufferIndex) + 1;
 	}
 	return commandBuffer + oldIndex;
@@ -502,12 +503,9 @@ void Menu::EncoderAction_EnterItemHelper()
 			int nNextCommandIndex = StringContains(pcCurrentCommand, "|");
 			while (-1 != nNextCommandIndex)
 			{
-				*(pcCurrentCommand + nNextCommandIndex - 1) = '\0';
-
+				*(pcCurrentCommand + nNextCommandIndex) = '\0';
 				EncoderAction_ExecuteHelper(pcCurrentCommand);
-
-				pcCurrentCommand += nNextCommandIndex;
-
+				pcCurrentCommand += nNextCommandIndex + 1;
 				nNextCommandIndex = StringContains(pcCurrentCommand, "|");
 			}
 			EncoderAction_ExecuteHelper(pcCurrentCommand);
@@ -531,7 +529,7 @@ void Menu::EncoderAction_AdjustItemHelper(int action)
 	// Let the current menu item attempt to handle scroll wheel first
 	action = oStartItem->Advance(action);
 
-	if (0 != action)
+	if (action != 0)
 	{
 		// Otherwise we move through the remaining selectable menu items
 		highlightedItem += action;
@@ -545,15 +543,24 @@ void Menu::EncoderAction_AdjustItemHelper(int action)
 		}
 
 		// Let the newly selected MenuItem handle any selection setup
-		MenuItem *const oNewItem = FindHighlightedItem();
+		MenuItem * const oNewItem = FindHighlightedItem();
 		oNewItem->Enter(action > 0);
 
 		PixelNumber tLastOffset = rowOffset;
-		rowOffset = oNewItem->GetVisibilityRowOffset(tLastOffset, fonts[oNewItem->GetFontNumber()]);
+		rowOffset = oNewItem->GetVisibilityRowOffset(tLastOffset, lcd.GetFontHeight(oNewItem->GetFontNumber()));
 
 		if (rowOffset != tLastOffset)
 		{
+			// We have scrolled the whole menu, so redraw it
 			lcd.Clear();
+			for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
+			{
+				item->SetChanged();
+			}
+			for (MenuItem *item = unSelectableItems; item != nullptr; item = item->GetNext())
+			{
+				item->SetChanged();
+			}
 		}
 	}
 }
@@ -584,16 +591,23 @@ void Menu::EncoderAction(int action)
 	if (numSelectableItems != 0)
 	{
 		if (itemIsSelected) // send the wheel action (scroll or click) to the item itself
+		{
 			EncoderAction_ExitItemHelper(action);
+		}
 		else if (action != 0) // scroll without an item under selection
+		{
 			EncoderAction_AdjustItemHelper(action);
+		}
 		else // click without an item under selection
+		{
 			EncoderAction_EnterItemHelper();
+		}
 	}
 
 	lastActionTime = millis();
 	timeoutValue = InactivityTimeout;
 }
+
 /*static*/ const char *Menu::SkipWhitespace(const char *s)
 {
 	while (*s == ' ' || *s == '\t')
@@ -612,12 +626,6 @@ void Menu::EncoderAction(int action)
 	return s;
 }
 
-void Menu::LoadImage(const char *fname)
-{
-	//TODO
-	lcd.print("[img]");
-}
-
 // Refresh is called every Spin() of the Display under most circumstances; an appropriate place to check if timeout action needs to be taken
 void Menu::Refresh()
 {
@@ -625,8 +633,7 @@ void Menu::Refresh()
 	{
 		if (!displayingFixedMenu)
 		{
-			// When the SD card is not mounted, we show a fixed menu for graceful recovery
-			LoadFixedMenu();
+			LoadFixedMenu();						// when the SD card is not mounted, we show a fixed menu for graceful recovery
 		}
 	}
 	else if (displayingFixedMenu || (timeoutValue != 0 && (millis() - lastActionTime > timeoutValue)))
@@ -635,7 +642,6 @@ void Menu::Refresh()
 		// Go to the top menu (just discard information)
 		numNestedMenus = 0;
 		Load("main");
-
 		timeoutValue = 0;
 	}
 
@@ -644,18 +650,13 @@ void Menu::Refresh()
 
 	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
 	{
-		// TODO: move this into the item Draw() routine
-		lcd.SetFont(fonts[item->GetFontNumber()]);
 		item->Draw(lcd, rightMargin, (nItemBeingDrawnIndex == highlightedItem), rowOffset);
 		++nItemBeingDrawnIndex;
 	}
 
 	for (MenuItem *item = unSelectableItems; item != nullptr; item = item->GetNext())
 	{
-		// TODO: move this into the item Draw() routine
-		lcd.SetFont(fonts[item->GetFontNumber()]);
 		item->Draw(lcd, rightMargin, false, rowOffset);
-		// ++nItemBeingDrawnIndex; // unused
 	}
 }
 

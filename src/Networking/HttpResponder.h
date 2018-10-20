@@ -65,7 +65,7 @@ private:
 	// HTTP sessions
 	struct HttpSession
 	{
-		uint32_t ip;
+		IPAddress ip;
 		uint32_t lastQueryTime;
 		bool isPostUploading;
 		uint16_t postPort;

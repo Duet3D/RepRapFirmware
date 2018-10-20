@@ -30,22 +30,19 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 // The physical capabilities of the machine
 
 constexpr size_t NumDirectDrivers = 5;				// The maximum number of drives supported by the electronics
-constexpr size_t MaxSmartDrivers = 5;				// The maximum number of smart drivers
-
-constexpr size_t MaxCanDrivers = 12;				// we need to set a limit until the DDA/DMs are restructured
-constexpr size_t MaxTotalDrivers = NumDirectDrivers + MaxCanDrivers;
-
-constexpr size_t MinAxes = 3;						// The minimum and default number of axes
-constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
-// Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
-#define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f,g,h,i }
+constexpr size_t MaxTotalDrivers = 5;				// The maximum number of smart drivers
 
 constexpr size_t NumEndstops = 5;					// The number of inputs we have for endstops, filament sensors etc.
 constexpr size_t NumHeaters = 4;					// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 4;
 
-constexpr size_t MaxExtruders = MaxTotalDrivers - MinAxes;	// The maximum number of extruders
+constexpr size_t MinAxes = 3;						// The minimum and default number of axes
+constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
+// Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
+#define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f,g,h,i }
+
+constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
@@ -134,9 +131,9 @@ constexpr uint32_t IAP_FLASH_START = 0x004E0000;
 constexpr uint32_t IAP_FLASH_END = 0x004FFFFF;
 
 // Duet pin numbers to control the WiFi interface
-constexpr Pin EspResetPin = PORTC_PIN(17);					// Low on this in holds the WiFi module in reset (ESP_RESET)
-constexpr Pin EspDataReadyPin = PORTD_PIN(28);				// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
-constexpr Pin SamTfrReadyPin = PORTA_PIN(0);				// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
+constexpr Pin EspResetPin = PORTB_PIN(1);					// Low on this in holds the WiFi module in reset (ESP_RESET)
+constexpr Pin EspDataReadyPin = PORTA_PIN(19);				// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
+constexpr Pin SamTfrReadyPin = PORTC_PIN(31);				// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
 constexpr Pin SamCsPin = PORTB_PIN(2);						// SPI NPCS pin, input from WiFi module
 
 // Timer allocation

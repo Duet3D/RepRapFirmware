@@ -83,8 +83,9 @@ public:
 	void SwitchOff(int8_t heater);								// Turn off a specific heater
 	void SwitchOffAll(bool includingChamberAndBed);				// Turn all heaters off
 	void ResetFault(int8_t heater);								// Reset a heater fault - only call this if you know what you are doing
-	bool AllHeatersAtSetTemperatures(bool includingBed) const;	// Is everything at temperature within tolerance?
-	bool HeaterAtSetTemperature(int8_t heater, bool waitWhenCooling) const;	// Is a specific heater at temperature within tolerance?
+	bool AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const;	// Is everything at temperature within tolerance?
+	bool HeaterAtSetTemperature(int8_t heater, bool waitWhenCooling, float tolerance) const;
+																// Is a specific heater at temperature within tolerance?
 	void Diagnostics(MessageType mtype);						// Output useful information
 
 	float GetAveragePWM(size_t heater) const					// Return the running average PWM to the heater as a fraction in [0, 1].

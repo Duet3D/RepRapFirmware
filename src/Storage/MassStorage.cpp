@@ -268,7 +268,7 @@ bool MassStorage::FindNext(FileInfo &file_info)
 	return true;
 }
 
-// Quit searching for files. Needed to avoid hanging on to the mutex.
+// Quit searching for files. Needed to avoid hanging on to the mutex. Safe to call even if the caller doesn't hold the mutex.
 void MassStorage::AbandonFindNext()
 {
 	if (dirMutex.GetHolder() == RTOSIface::GetCurrentTask())

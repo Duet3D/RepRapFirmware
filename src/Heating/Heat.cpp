@@ -257,11 +257,11 @@ void Heat::Diagnostics(MessageType mtype)
 	}
 }
 
-bool Heat::AllHeatersAtSetTemperatures(bool includingBed) const
+bool Heat::AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const
 {
 	for (size_t heater : ARRAY_INDICES(pids))
 	{
-		if (!HeaterAtSetTemperature(heater, true) && (includingBed || !IsBedHeater(heater)))
+		if (!HeaterAtSetTemperature(heater, true, tolerance) && (includingBed || !IsBedHeater(heater)))
 		{
 			return false;
 		}
@@ -270,7 +270,7 @@ bool Heat::AllHeatersAtSetTemperatures(bool includingBed) const
 }
 
 //query an individual heater
-bool Heat::HeaterAtSetTemperature(int8_t heater, bool waitWhenCooling) const
+bool Heat::HeaterAtSetTemperature(int8_t heater, bool waitWhenCooling, float tolerance) const
 {
 	// If it hasn't anything to do, it must be right wherever it is...
 	if (heater < 0 || heater >= (int)NumHeaters || pids[heater]->SwitchedOff() || pids[heater]->FaultOccurred())
@@ -281,7 +281,7 @@ bool Heat::HeaterAtSetTemperature(int8_t heater, bool waitWhenCooling) const
 	const float dt = GetTemperature(heater);
 	const float target = (pids[heater]->Active()) ? GetActiveTemperature(heater) : GetStandbyTemperature(heater);
 	return (target < TEMPERATURE_LOW_SO_DONT_CARE)
-		|| (fabsf(dt - target) <= TEMPERATURE_CLOSE_ENOUGH)
+		|| (fabsf(dt - target) <= tolerance)
 		|| (target < dt && !waitWhenCooling);
 }
 

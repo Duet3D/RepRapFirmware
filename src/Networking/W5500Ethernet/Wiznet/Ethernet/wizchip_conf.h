@@ -284,18 +284,6 @@ struct wiz_NetTimeout
  */          
 int8_t ctlwizchip(ctlwizchip_type cwtype, void* arg);
 
-/**
- * @ingroup extra_functions
- * @brief Controls to network.
- * @details Controls to network environment, mode, timeout and so on.
- * @param cntype : Input. Decides to the control type
- * @param arg : Inout. arg type is dependent on cntype.
- * @return -1 : Fail because of invalid \ref ctlnetwork_type or unsupported \ref ctlnetwork_type in WIZCHIP \n
- *          0 : Success      
- */          
-int8_t ctlnetwork(ctlnetwork_type cntype, void* arg);
-
-
 /* 
  * The following functions are implemented for internal use. 
  * but You can call these functions for code size reduction instead of ctlwizchip() and ctlnetwork().
@@ -374,20 +362,6 @@ void   wizphy_getphystat(wiz_PhyConf* phyconf);
  * @param pmode Settig value of power down mode.
  */   
 int8_t wizphy_setphypmode(uint8_t pmode);
-
-/**
-* @ingroup extra_functions
- * @brief Set the network information for WIZCHIP
- * @param pnetinfo : @ref wizNetInfo
- */
-void wizchip_setnetinfo(wiz_NetInfo* pnetinfo);
-
-/**
- * @ingroup extra_functions
- * @brief Get the network information for WIZCHIP
- * @param pnetinfo : @ref wizNetInfo
- */
-void wizchip_getnetinfo(wiz_NetInfo* pnetinfo);
 
 /**
  * @ingroup extra_functions
