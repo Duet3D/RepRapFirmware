@@ -1869,7 +1869,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
-				if (gb.Seen(machineAxisLetters[axis]))
+				if (gb.Seen(axisLetters[axis]))
 				{
 					platform.SetAcceleration(axis, gb.GetFValue() * distanceScale);
 					seen = true;
@@ -1893,7 +1893,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				reply.printf("Accelerations: ");
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					reply.catf("%c: %.1f, ", machineAxisLetters[axis], (double)(platform.Acceleration(axis) / distanceScale));
+					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.Acceleration(axis) / distanceScale));
 				}
 				reply.cat("E:");
 				char sep = ' ';
@@ -1911,7 +1911,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; ++axis)
 			{
-				if (gb.Seen(machineAxisLetters[axis]))
+				if (gb.Seen(axisLetters[axis]))
 				{
 					platform.SetMaxFeedrate(axis, gb.GetFValue() * distanceScale * SecondsToMinutes); // G Code feedrates are in mm/minute; we need mm/sec
 					seen = true;
@@ -1935,7 +1935,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				reply.copy("Maximum feedrates: ");
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					reply.catf("%c: %.1f, ", machineAxisLetters[axis], (double)(platform.MaxFeedrate(axis) / (distanceScale * SecondsToMinutes)));
+					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.MaxFeedrate(axis) / (distanceScale * SecondsToMinutes)));
 				}
 				reply.cat("E:");
 				char sep = ' ';
