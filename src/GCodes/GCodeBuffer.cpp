@@ -921,28 +921,6 @@ bool GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], const S
 	return false;
 }
 
-// Try to get an int array exactly 'numVals' long after parameter letter 'c'.
-// If the wrong number of values is provided, generate an error message and return true.
-// Else set 'seen' if we saw the letter and value, and return false.
-bool GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad)
-{
-	if (Seen(c))
-	{
-		size_t count = numVals;
-		GetUnsignedArray(vals, count, doPad);
-		if (count == numVals)
-		{
-			seen = true;
-		}
-		else
-		{
-			reply.printf("Wrong number of values after '\''%c'\'', expected %d", c, numVals);
-			return true;
-		}
-	}
-	return false;
-}
-
 // Try to get a float array exactly 'numVals' long after parameter letter 'c'.
 // If the wrong number of values is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.
