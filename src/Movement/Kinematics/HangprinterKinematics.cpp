@@ -44,10 +44,10 @@ void HangprinterKinematics::Init()
 	/* Measure and set spool radii with M669 to achieve better accuracy */
 	constexpr float DefaultSpoolRadii[4] = { 55.0, 55.0, 55.0, 55.0};
 	/* If axis runs lines back through pulley system, set mechanical advantage accordingly with M669 */
-	constexpr uint32_t DefaultMechanicalAdvantage[4] = { 1, 1, 1, 1};
-	constexpr uint32_t DefaultActionPoints[4] = { 2, 2, 2, 3};
-	constexpr uint32_t DefaultMotorGearTeeth[4] = {  10,  10,  10,  10};
-	constexpr uint32_t DefaultSpoolGearTeeth[4] = { 100, 100, 100, 100};
+	constexpr uint32_t DefaultMechanicalAdvantage[4] = { 1, 1, 1, 1}; // HP3 default
+	constexpr uint32_t DefaultLinesPerSpool[4] = { 2, 2, 2, 3}; // HP3 default
+	constexpr uint32_t DefaultMotorGearTeeth[4] = {  10,  10,  10,  10}; // HP3 default
+	constexpr uint32_t DefaultSpoolGearTeeth[4] = { 100, 100, 100, 100}; // HP3 default
 	constexpr uint32_t DefaultFullStepsPerMotorRev[4] = { 200, 200, 200, 200};
 	ARRAY_INIT(anchorA, DefaultAnchorA);
 	ARRAY_INIT(anchorB, DefaultAnchorB);
@@ -58,7 +58,7 @@ void HangprinterKinematics::Init()
 	ARRAY_INIT(mountedLine, DefaultMountedLine);
 	ARRAY_INIT(spoolRadii, DefaultSpoolRadii);
 	ARRAY_INIT(mechanicalAdvantage, DefaultMechanicalAdvantage);
-	ARRAY_INIT(actionPoints, DefaultActionPoints);
+	ARRAY_INIT(linesPerSpool, DefaultLinesPerSpool);
 	ARRAY_INIT(motorGearTeeth, DefaultMotorGearTeeth);
 	ARRAY_INIT(spoolGearTeeth, DefaultSpoolGearTeeth);
 	ARRAY_INIT(fullStepsPerMotorRev, DefaultFullStepsPerMotorRev);
@@ -119,7 +119,7 @@ void HangprinterKinematics::Recalc()
 		uint8_t driver = axisConfig.driverNumbers[0]; // Only supports single driver
 		stepsPerMotorRevolution[i] = fullStepsPerMotorRev[i] * platform.GetMicrostepping(driver, dummy);
 		stepsPerUnitTimesRTmp[i] = ((float)(mechanicalAdvantage[i]) * stepsPerMotorRevolution[i] * spoolGearTeeth[i]) / (2.0 * Pi * motorGearTeeth[i]);
-		nrLinesDirTmp[i] = mechanicalAdvantage[i] * actionPoints[i];
+		nrLinesDirTmp[i] = mechanicalAdvantage[i] * linesPerSpool[i];
 		spoolRadiiSqTmp[i] = spoolRadii[i] * spoolRadii[i];
 		k2[i] = -(float)nrLinesDirTmp[i] * spoolBuildupFactor;
 		k0[i] = 2.0 * stepsPerUnitTimesRTmp[i] / k2[i];
@@ -128,16 +128,16 @@ void HangprinterKinematics::Recalc()
 	/* Assumes spools are mounted near D-anchor in ceiling
 	 * And that extra lines from pulley system (mechanical advantage)
 	 * only doubles the lines between mover and anchor */
-	lineOnSpoolOriginTmp[A_AXIS] = actionPoints[A_AXIS] * mountedLine[A_AXIS]          /* All the line */
-		- actionPoints[A_AXIS] * HYP3D(anchorA[0], anchorA[1], anchorDz - anchorA[2]) /* Minus line between A anchor and ceiling unit */
+	lineOnSpoolOriginTmp[A_AXIS] = linesPerSpool[A_AXIS] * mountedLine[A_AXIS]          /* All the line */
+		- linesPerSpool[A_AXIS] * HYP3D(anchorA[0], anchorA[1], anchorDz - anchorA[2]) /* Minus line between A anchor and ceiling unit */
 		- nrLinesDirTmp[A_AXIS] * lineLengthsOrigin[A_AXIS];                             /* ... and minus line between mover at origin and A anchor */
-	lineOnSpoolOriginTmp[B_AXIS] = actionPoints[B_AXIS] * mountedLine[B_AXIS]
-		- actionPoints[B_AXIS] * HYP3D(anchorB[0], anchorB[1], anchorDz - anchorB[2])
+	lineOnSpoolOriginTmp[B_AXIS] = linesPerSpool[B_AXIS] * mountedLine[B_AXIS]
+		- linesPerSpool[B_AXIS] * HYP3D(anchorB[0], anchorB[1], anchorDz - anchorB[2])
 		- nrLinesDirTmp[B_AXIS] * lineLengthsOrigin[B_AXIS];
-	lineOnSpoolOriginTmp[C_AXIS] = actionPoints[C_AXIS] * mountedLine[C_AXIS]
-		- actionPoints[C_AXIS] * HYP3D(anchorC[0], anchorC[1], anchorDz - anchorC[2])
+	lineOnSpoolOriginTmp[C_AXIS] = linesPerSpool[C_AXIS] * mountedLine[C_AXIS]
+		- linesPerSpool[C_AXIS] * HYP3D(anchorC[0], anchorC[1], anchorDz - anchorC[2])
 		- nrLinesDirTmp[C_AXIS] * lineLengthsOrigin[C_AXIS];
-	lineOnSpoolOriginTmp[D_AXIS] = actionPoints[D_AXIS] * mountedLine[D_AXIS]
+	lineOnSpoolOriginTmp[D_AXIS] = linesPerSpool[D_AXIS] * mountedLine[D_AXIS]
 		- nrLinesDirTmp[D_AXIS] * lineLengthsOrigin[D_AXIS];
 
 	for (size_t i = 0; i < HANGPRINTER_AXES; i++)
@@ -191,8 +191,8 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		} while(0)
 
 		GET_UI_ARRAY_HPAX('U', mechanicalAdvantage);
-		GET_UI_ARRAY_HPAX('O', actionPoints);
-		GET_UI_ARRAY_HPAX('G', motorGearTeeth);
+		GET_UI_ARRAY_HPAX('O', linesPerSpool);
+		GET_UI_ARRAY_HPAX('L', motorGearTeeth);
 		GET_UI_ARRAY_HPAX('H', spoolGearTeeth);
 		GET_UI_ARRAY_HPAX('J', fullStepsPerMotorRev);
 
@@ -214,7 +214,7 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 				"Mounted line lengths:\n%.1f, %.1f, %.1f, %.1f\n"
 				"Spool radii:\n%.2f, %.2f, %.2f, %.2f\n"
 				"Mechanical Advantage:\n%d, %d, %d, %d\n"
-				"Action points:\n%d, %d, %d, %d\n"
+				"Lines per spool:\n%d, %d, %d, %d\n"
 				"Motor gear teeth\n%d, %d, %d, %d\n"
 				"Spool gear teeth\n%d, %d, %d, %d\n"
 				"Full steps per revolution\n%d, %d, %d, %d",
@@ -227,7 +227,7 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 				(double)mountedLine[A_AXIS], (double)mountedLine[B_AXIS], (double)mountedLine[C_AXIS], (double)mountedLine[D_AXIS],
 				(double)spoolRadii[A_AXIS], (double)spoolRadii[B_AXIS], (double)spoolRadii[C_AXIS], (double)spoolRadii[D_AXIS],
 				(int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS], (int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS],
-				(int)actionPoints[A_AXIS], (int)actionPoints[B_AXIS], (int)actionPoints[C_AXIS], (int)actionPoints[D_AXIS],
+				(int)linesPerSpool[A_AXIS], (int)linesPerSpool[B_AXIS], (int)linesPerSpool[C_AXIS], (int)linesPerSpool[D_AXIS],
 				(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS], (int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS],
 				(int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS], (int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS],
 				(int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS], (int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS]);

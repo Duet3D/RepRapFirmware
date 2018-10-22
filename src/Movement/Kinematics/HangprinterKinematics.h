@@ -68,7 +68,7 @@ private:
 	// Line buildup compensation
 	float spoolBuildupFactor;
 	float mountedLine[HANGPRINTER_AXES], spoolRadii[HANGPRINTER_AXES];
-	uint32_t mechanicalAdvantage[HANGPRINTER_AXES], actionPoints[HANGPRINTER_AXES];
+	uint32_t mechanicalAdvantage[HANGPRINTER_AXES], linesPerSpool[HANGPRINTER_AXES];
 	uint32_t motorGearTeeth[HANGPRINTER_AXES], spoolGearTeeth[HANGPRINTER_AXES], fullStepsPerMotorRev[HANGPRINTER_AXES];
 
 	// Derived parameters
