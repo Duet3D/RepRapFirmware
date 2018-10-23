@@ -2540,28 +2540,11 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	AxesBitmap axesMentioned = 0;
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
-		if (gb.Seen(axisLetters[axis]))
+		if (moveBuffer.moveType == 0 && gb.Seen(axisLetters[axis]))
 		{
-			// If it is a special move on a delta, movement must be relative.
-			if (moveBuffer.moveType != 0 && !gb.MachineState().axesRelative && reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta)
-			{
-				return "G0/G1: attempt to move individual motors of a delta machine to absolute positions";
-			}
-
 			SetBit(axesMentioned, axis);
 			const float moveArg = gb.GetFValue() * distanceScale;
-			if (moveBuffer.moveType != 0 || (rp == nullptr && gb.MachineState().UsingMachineCoordinates()))
-			{
-				if (gb.MachineState().axesRelative)
-				{
-					moveBuffer.coords[axis] += moveArg;
-				}
-				else
-				{
-					moveBuffer.coords[axis] = moveArg;
-				}
-			}
-			else if (rp != nullptr)
+			if (rp != nullptr)
 			{
 				currentUserPosition[axis] = moveArg + rp->moveCoords[axis];
 			}
@@ -2572,6 +2555,36 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 			else
 			{
 				currentUserPosition[axis] = moveArg;
+			}
+		}
+		else if (moveBuffer.moveType != 0 && gb.Seen(machineAxisLetters[axis]))
+		{
+			// If it is a special move on a delta, movement must be relative.
+			if (!gb.MachineState().axesRelative && reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta)
+			{
+				return "G0/G1: attempt to move individual motors of a delta machine to absolute positions";
+			}
+			SetBit(axesMentioned, axis);
+			const float moveArg = gb.GetFValue() * distanceScale;
+			if (gb.MachineState().axesRelative // All Hangprinter special moves are relative
+                    || reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter)
+			{
+				moveBuffer.coords[axis] += moveArg;
+			}
+			else
+			{
+				moveBuffer.coords[axis] = moveArg;
+			}
+    }
+    else if (moveBuffer.moveType != 0 || (rp == nullptr && gb.MachineState().UsingMachineCoordinates()))
+		{
+			if (gb.MachineState().axesRelative)
+			{
+				moveBuffer.coords[axis] += moveArg;
+			}
+			else
+			{
+				moveBuffer.coords[axis] = moveArg;
 			}
 		}
 		// If a restore point is being used (G1 R parameter) then we used to set any coordinates that were not mentioned to the restore point values.
