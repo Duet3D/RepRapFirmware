@@ -22,7 +22,7 @@ constexpr float DefaultPrintRadius = 1500.0;
 
 // Constructor
 HangprinterKinematics::HangprinterKinematics()
-	: Kinematics(KinematicsType::scara, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true)
+	: Kinematics(KinematicsType::hangprinter, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true)
 {
 	Init();
 }
@@ -74,7 +74,7 @@ void HangprinterKinematics::Recalc()
 	Da2 = fsquare(anchorA[0]) + fsquare(anchorA[1]) + fsquare(anchorA[2]);
 	Db2 = fsquare(anchorB[0]) + fsquare(anchorB[1]) + fsquare(anchorB[2]);
 	Dc2 = fsquare(anchorC[0]) + fsquare(anchorC[1]) + fsquare(anchorC[2]);
-	Xab = anchorA[0] - anchorB[0];
+	Xab = anchorA[0] - anchorB[0]; // maybe zero
 	Xbc = anchorB[0] - anchorC[0];
 	Xca = anchorC[0] - anchorA[0];
 	Yab = anchorA[1] - anchorB[1];
@@ -147,6 +147,8 @@ void HangprinterKinematics::Recalc()
 		k1[i] = spoolBuildupFactor * (lineOnSpoolOriginTmp[i] + nrLinesDirTmp[i] * lineLengthsOrigin[i]) + spoolRadiiSqTmp[i];
 		sqrtk1[i] = sqrtf(k1[i]);
 	}
+
+	debugPrintf("Recalced params\nDa2: %.2f, Db2: %.2f, Dc2: %.2f, Xab: %.2f, Xbc: %.2f, Xca: %.2f, Yab: %.2f, Ybc: %.2f, Yca: %.2f, Zab: %.2f, Zbc: %.2f, Zca: %.2f, P: %.2f, P2: %.2f, Q: %.2f, R: %.2f, U: %.2f, A: %.2f\n", Da2, Db2, Dc2, Xab, Xbc, Xca, Yab, Ybc, Yca, Zab, Zbc, Zca, P, P2, Q, R, U, A);
 }
 
 // Return the name of the current kinematics
@@ -270,6 +272,7 @@ bool HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], cons
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
+// TODO: This should not be called after individual motor moves
 void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
 {
 	InverseTransform(
@@ -441,9 +444,10 @@ void HangprinterKinematics::InverseTransform(float La, float Lb, float Lc, float
 	// Calculate quadratic equation coefficients
 	const float halfB = (S * Q) - (R * T) - U;
 	const float C = fsquare(S) + fsquare(T) + (anchorA[1] * T - anchorA[0] * S) * P * 2 + (Da2 - fsquare(La)) * P2;
+	debugPrintf("S: %.2f, T: %.2f, halfB: %.2f, C: %.2f\n", S, T, halfB, C);
 
 	// Solve the quadratic equation for z
-	machinePos[2] = (- halfB - sqrtf(fsquare(halfB) - A * C))/A;
+	machinePos[2] = (- halfB - sqrtf(fabs(fsquare(halfB) - A * C)))/A;
 
 	// Substitute back for X and Y
 	machinePos[0] = (Q * machinePos[2] + S)/P;
