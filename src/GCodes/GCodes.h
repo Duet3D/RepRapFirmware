@@ -69,7 +69,7 @@ struct Trigger
 typedef union {
   float fval;
   uint8_t bval[4];
-} i2cFloat;
+} I2cFloat;
 
 // Bits for T-code P-parameter to specify which macros are supposed to be run
 constexpr uint8_t TFreeBit = 1 << 0;
@@ -137,6 +137,7 @@ public:
 		uint8_t hasExtrusion : 1;										// true if the move includes extrusion - only valid if the move was set up by SetupMove
 		uint8_t isCoordinated : 1;										// true if this is a coordinates move
 		uint8_t usingStandardFeedrate : 1;								// true if this move uses the standard feed rate
+		uint8_t alterPositionState : 1;									// true if this move should alter the variables describing position state
 	};
 
 	GCodes(Platform& p);

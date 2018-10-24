@@ -194,32 +194,34 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 GCodeResult GCodes::I2cForward(GCodeBuffer& gb, uint8_t addr, uint8_t *data, size_t data_size, const StringRef& reply)
 {
 	const char *buffer = gb.Buffer();
-	size_t glen = 0;
+
 	// How many letters before first space in gcode command? Lets us different length commands
 	// We do rely on string termination being done right in gcodeBuffer...
+	size_t glen = 0;
 	if (buffer[1] == ' ' || buffer[1] == '\0') glen = 1;
 	else if (buffer[2] == ' ' || buffer[2] == '\0') glen = 2;
 	else if (buffer[3] == ' ' || buffer[3] == '\0') glen = 3;
 	else if (buffer[4] == ' ' || buffer[4] == '\0') glen = 4;
 
-	// Send the gcode and the data separated by a space character
+	uint8_t send[5+data_size] = { '\0' };
+  for(size_t i = 0; i < glen; i++)
+  {
+    send[i] = (uint8_t)buffer[i];
+  }
+  send[glen] = ' '; // space to separate gcode and data
+  for(size_t i = 0; i < data_size; i++)
+  {
+    send[i + glen + 1] = data[i];
+  }
+
 	platform.InitI2c();
-	I2C_IFACE.beginTransmission((int)addr);
-	for (size_t i = 0; i < glen; i++)
-	{
-		I2C_IFACE.write(buffer[i]);
-	}
-	I2C_IFACE.write(' '); // Send a blank space after gcode regardless if there's any data
-	for (size_t i = 0; i < data_size; i++)
-	{
-		I2C_IFACE.write(data[i]);
-	}
-	if (I2C_IFACE.endTransmission() != 0)
-	{
-		reply.copy("I2C transmission error");
-		return GCodeResult::error;
-	}
-	reply.printf("Sent %d bytes to i2c addr 0x%02x", glen + 1 + data_size, addr);
+  size_t bytesTransferred = 0;
+  {
+    MutexLocker lock(Tasks::GetI2CMutex());
+    bytesTransferred = I2C_IFACE.Transfer((int)addr, send, glen + 1 + data_size, 0);
+  }
+
+	reply.printf("Sent %d bytes to i2c addr 0x%02x", bytesTransferred, addr);
 	return GCodeResult::ok;
 }
 
@@ -231,19 +233,12 @@ GCodeResult GCodes::I2cForward(GCodeBuffer& gb, uint8_t addr, const StringRef& r
 
 float GCodes::I2cRequestFloat(uint8_t addr)
 {
-	i2cFloat r;
-	uint8_t numBytes = 4;
+	I2cFloat r;
 	platform.InitI2c();
-	I2C_IFACE.requestFrom(addr, numBytes);
-	const uint32_t now = millis();
-	do
 	{
-		if (I2C_IFACE.available() != 0)
-		{
-			r.bval[4 - numBytes] = I2C_IFACE.read() & 0x00FF;
-			--numBytes;
-		}
-	} while (numBytes != 0 && now - millis() < 3);
+		MutexLocker lock(Tasks::GetI2CMutex());
+		I2C_IFACE.Transfer(addr, r.bval, 0, 4);
+	}
 
 	return r.fval;
 }
@@ -290,7 +285,7 @@ GCodeResult GCodes::SetTorqueMode(GCodeBuffer& gb, const StringRef& reply)
 			uint8_t i2cValue = platform.GetExternalI2c(driver);
 			if (i2cValue)
 			{
-				i2cFloat torque;
+				I2cFloat torque;
 				torque.fval = gb.GetFValue();
 				if (fabs(torque.fval < 255.0)) // 255 is the motor's maximum torque
 				{
@@ -866,7 +861,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 		return GCodeResult::notFinished;
 	}
 
-	bool seen = false, badDrive = false;
+	bool seen = false;
 	const char *lettersToTry = "XYZUVWABCD";
 	char c;
 	while ((c = *lettersToTry) != 0)

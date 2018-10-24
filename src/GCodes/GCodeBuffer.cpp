@@ -765,28 +765,6 @@ int32_t GCodeBuffer::GetIValue()
 }
 
 // Get an uint32 after a G Code letter
-// Interpret numbers starting with 0x or 0X as hex
-uint32_t GCodeBuffer::GetUIValueMaybeHex()
-{
-	if (readPointer >= 0)
-	{
-		int base = 10;
-		int skip = 0;
-		if (gcodeBuffer[readPointer + 1] == '"' && gcodeBuffer[readPointer + 2] == '0' && (gcodeBuffer[readPointer + 3] == 'x' || gcodeBuffer[readPointer + 3] == 'X'))
-		{
-			base = 16;
-			skip = 3;
-		}
-		const uint32_t result = SafeStrtoul(&gcodeBuffer[readPointer + 1 + skip], nullptr, base);
-		readPointer = -1;
-		return result;
-	}
-
-	INTERNAL_ERROR;
-	return 0;
-}
-
-// Get an uint32 after a G Code letter
 uint32_t GCodeBuffer::GetUIValue()
 {
 	if (readPointer >= 0)

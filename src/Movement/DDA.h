@@ -64,6 +64,7 @@ public:
 	void SetFeedRate(float rate) { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping);
 	bool FetchEndPosition(volatile int32_t ep[MaxTotalDrivers], volatile float endCoords[MaxTotalDrivers]);
+	bool GetAlterPositionState() const { return alterPositionState; }
     void SetPositions(const float move[], size_t numDrives);		// Force the endpoints to be these
     FilePosition GetFilePosition() const { return filePos; }
     float GetRequestedSpeed() const { return requestedSpeed; }
@@ -181,6 +182,7 @@ private:
 			uint8_t isLeadscrewAdjustmentMove : 1;	// True if this is a leadscrews adjustment move
 			uint8_t usingStandardFeedrate : 1;		// True if this move uses the standard feed rate
 			uint8_t hadHiccup : 1;					// True if we had a hiccup while executing this move
+			uint8_t alterPositionState : 1;			// True if this move should alter the position state variables of the machine
 		};
 		uint16_t flags;								// so that we can print all the flags at once for debugging
 	};

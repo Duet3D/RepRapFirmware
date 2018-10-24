@@ -148,7 +148,7 @@ void HangprinterKinematics::Recalc()
 		sqrtk1[i] = sqrtf(k1[i]);
 	}
 
-	debugPrintf("Recalced params\nDa2: %.2f, Db2: %.2f, Dc2: %.2f, Xab: %.2f, Xbc: %.2f, Xca: %.2f, Yab: %.2f, Ybc: %.2f, Yca: %.2f, Zab: %.2f, Zbc: %.2f, Zca: %.2f, P: %.2f, P2: %.2f, Q: %.2f, R: %.2f, U: %.2f, A: %.2f\n", Da2, Db2, Dc2, Xab, Xbc, Xca, Yab, Ybc, Yca, Zab, Zbc, Zca, P, P2, Q, R, U, A);
+	debugPrintf("Recalced params\nDa2: %.2f, Db2: %.2f, Dc2: %.2f, Xab: %.2f, Xbc: %.2f, Xca: %.2f, Yab: %.2f, Ybc: %.2f, Yca: %.2f, Zab: %.2f, Zbc: %.2f, Zca: %.2f, P: %.2f, P2: %.2f, Q: %.2f, R: %.2f, U: %.2f, A: %.2f\n", (double)Da2, (double)Db2, (double)Dc2, (double)Xab, (double)Xbc, (double)Xca, (double)Yab, (double)Ybc, (double)Yca, (double)Zab, (double)Zbc, (double)Zca, (double)P, (double)P2, (double)Q, (double)R, (double)U, (double)A);
 }
 
 // Return the name of the current kinematics
@@ -271,8 +271,7 @@ bool HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], cons
 	return false;
 }
 
-// Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
-// TODO: This should not be called after individual motor moves
+// Convert motor coordinates to machine coordinates. Used after homing.
 void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
 {
 	InverseTransform(
@@ -444,7 +443,7 @@ void HangprinterKinematics::InverseTransform(float La, float Lb, float Lc, float
 	// Calculate quadratic equation coefficients
 	const float halfB = (S * Q) - (R * T) - U;
 	const float C = fsquare(S) + fsquare(T) + (anchorA[1] * T - anchorA[0] * S) * P * 2 + (Da2 - fsquare(La)) * P2;
-	debugPrintf("S: %.2f, T: %.2f, halfB: %.2f, C: %.2f\n", S, T, halfB, C);
+	debugPrintf("S: %.2f, T: %.2f, halfB: %.2f, C: %.2f\n", (double)S, (double)T, (double)halfB, (double)C);
 
 	// Solve the quadratic equation for z
 	machinePos[2] = (- halfB - sqrtf(fabs(fsquare(halfB) - A * C)))/A;

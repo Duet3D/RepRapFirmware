@@ -1062,15 +1062,18 @@ void Move::AdjustMotorPositions(const float_t adjustment[], size_t numMotors)
 // This is called from the step ISR when the current move has been completed
 void Move::CurrentMoveCompleted()
 {
-	// Save the current motor coordinates, and the machine Cartesian coordinates if known
-	liveCoordinatesValid = currentDda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
-	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	for (size_t drive = numAxes; drive < MaxTotalDrivers; ++drive)
+	if (currentDda->GetAlterPositionState())
 	{
-		extrusionAccumulators[drive - numAxes] += currentDda->GetStepsTaken(drive);
-		if (currentDda->IsNonPrintingExtruderMove(drive))
+		// Save the current motor coordinates, and the machine Cartesian coordinates if known
+		liveCoordinatesValid = currentDda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
+		const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
+		for (size_t drive = numAxes; drive < MaxTotalDrivers; ++drive)
 		{
-			extruderNonPrinting[drive - numAxes] = true;
+			extrusionAccumulators[drive - numAxes] += currentDda->GetStepsTaken(drive);
+			if (currentDda->IsNonPrintingExtruderMove(drive))
+			{
+				extruderNonPrinting[drive - numAxes] = true;
+			}
 		}
 	}
 	currentDda = nullptr;

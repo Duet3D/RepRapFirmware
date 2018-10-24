@@ -416,6 +416,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	hadHiccup = false;
 	isLeadscrewAdjustmentMove = false;
 	goingSlow = false;
+	alterPositionState = nextMove.alterPositionState;
 
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a raw motor move
 	endCoordinatesValid = (endStopsToCheck == 0) && doMotorMapping;
@@ -573,6 +574,7 @@ bool DDA::Init(const float_t adjustments[MaxTotalDrivers])
 	hadLookaheadUnderrun = false;
 	hadHiccup = false;
 	goingSlow = false;
+	alterPositionState = true;
 	endStopsToCheck = 0;
 	virtualExtruderPosition = prev->virtualExtruderPosition;
 	xAxes = prev->xAxes;

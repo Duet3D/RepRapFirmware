@@ -2265,8 +2265,11 @@ bool GCodes::LockMovementAndWaitForStandstill(const GCodeBuffer& gb)
 		return false;
 	}
 
-	// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
-	UpdateCurrentUserPosition();
+	if (moveBuffer.alterPositionState)
+	{
+		// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
+		UpdateCurrentUserPosition();
+	}
 	return true;
 }
 
@@ -2446,6 +2449,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	moveBuffer.xAxes = reprap.GetCurrentXAxes();
 	moveBuffer.yAxes = reprap.GetCurrentYAxes();
 	moveBuffer.usePressureAdvance = false;
+	moveBuffer.alterPositionState = true;
 	axesToSenseLength = 0;
 
 	// Check to see if the move is a 'homing' move that endstops are checked on.
@@ -2538,12 +2542,12 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	const float initialX = currentUserPosition[X_AXIS];
 	const float initialY = currentUserPosition[Y_AXIS];
 	AxesBitmap axesMentioned = 0;
+  const float moveArg = gb.GetFValue() * distanceScale;
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
 		if (moveBuffer.moveType == 0 && gb.Seen(axisLetters[axis]))
 		{
 			SetBit(axesMentioned, axis);
-			const float moveArg = gb.GetFValue() * distanceScale;
 			if (rp != nullptr)
 			{
 				currentUserPosition[axis] = moveArg + rp->moveCoords[axis];
@@ -2565,11 +2569,15 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 				return "G0/G1: attempt to move individual motors of a delta machine to absolute positions";
 			}
 			SetBit(axesMentioned, axis);
-			const float moveArg = gb.GetFValue() * distanceScale;
-			if (gb.MachineState().axesRelative // All Hangprinter special moves are relative
-                    || reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter)
+      const bool hangprinter = reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter;
+			if (gb.MachineState().axesRelative || hangprinter)
 			{
 				moveBuffer.coords[axis] += moveArg;
+        if (hangprinter)
+        {
+				  // Special moves should not be remembered by Hangprinters
+          moveBuffer.alterPositionState = false;
+        }
 			}
 			else
 			{
