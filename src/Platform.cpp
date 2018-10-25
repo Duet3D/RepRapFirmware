@@ -55,6 +55,9 @@
 # include "Movement/StepperDrivers/TMC51xx.h"
 #endif
 
+//#include "Movement/StepperDrivers/ODriveUART.h"
+//#include "ODriveUART.h"
+
 #if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
 #endif
@@ -64,6 +67,105 @@
 #endif
 
 #include <climits>
+
+
+// Print with stream operator
+template<class T> inline Print& operator <<(Print &obj,     T arg) { obj.print(arg);    return obj; }
+template<>        inline Print& operator <<(Print &obj, float arg) { obj.print(arg, 4); return obj; }
+
+ODriveUART::ODriveUART(Stream& serial)
+	: serial_(serial), encoderPosReference{0.0f, 0.0f}, serialAttached(true){}
+
+ODriveUART::ODriveUART()
+	: serial_(SERIAL_AUX_DEVICE), encoderPosReference{0.0f, 0.0f}, serialAttached(false){}
+
+void ODriveUART::SetSerial(Stream& serial)
+{
+	serial_ = serial;
+	serialAttached = true;
+}
+
+void ODriveUART::SetPosition(int motor_number, float position) {
+	SetPosition(motor_number, position, 0.0f, 0.0f);
+}
+
+void ODriveUART::SetPosition(int motor_number, float position, float velocity_feedforward) {
+	SetPosition(motor_number, position, velocity_feedforward, 0.0f);
+}
+
+void ODriveUART::SetPosition(int motor_number, float position, float velocity_feedforward, float current_feedforward) {
+	serial_ << "p " << motor_number  << " " << position << " " << velocity_feedforward << " " << current_feedforward << "\n";
+}
+
+void ODriveUART::SetVelocity(int motor_number, float velocity) {
+	SetVelocity(motor_number, velocity, 0.0f);
+}
+
+void ODriveUART::SetVelocity(int motor_number, float velocity, float current_feedforward) {
+	serial_ << "v " << motor_number  << " " << velocity << " " << current_feedforward << "\n";
+}
+
+float ODriveUART::readFloat() {
+    char str[50];
+    readString(str, 50);
+	return SafeStrtof(str);
+}
+
+int32_t ODriveUART::readInt() {
+    char str[50];
+    readString(str, 50);
+	return (int32_t)SafeStrtol(str);
+}
+
+int32_t ODriveUART::GetEncoderConfigCpr(int axis)
+{
+	serial_ << "r axis" << axis << ".encoder.config.cpr\n";
+	return readInt();
+}
+
+
+float ODriveUART::GetEncoderPosEstimate(int axis)
+{
+	serial_ << "r axis" << axis << ".encoder.pos_estimate\n";
+	return readFloat();
+}
+
+bool ODriveUART::run_state(int axis, int requested_state, bool wait) {
+	int timeout_ctr = 100;
+	serial_ << "w axis" << axis << ".requested_state " << requested_state << '\n';
+	if (wait) {
+		do {
+			delay(100);
+			serial_ << "r axis" << axis << ".current_state\n";
+		} while (!readInt() && --timeout_ctr > 0);
+	}
+
+	return timeout_ctr > 0;
+}
+
+void ODriveUART::readString(char* str, size_t size) {
+	size_t found_chars = 0;
+	static const unsigned long timeout = 1000;
+	unsigned long timeout_start = millis();
+	while (found_chars < size-1) {
+		while (!serial_.available()) {
+			if (millis() - timeout_start >= timeout) {
+                str[found_chars+1] = '\0';
+				return;
+			}
+		}
+		char c = serial_.read();
+		if (c == '\n')
+        {
+            str[found_chars+1] = '\0';
+			break;
+        }
+		str[found_chars] = c;
+		found_chars++;
+	}
+	str[found_chars] = '\0';
+}
+
 
 extern uint32_t _estack;			// defined in the linker script
 
@@ -489,6 +591,8 @@ void Platform::Init()
 # endif
 	temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadADrivers = openLoadBDrivers = notOpenLoadADrivers = notOpenLoadBDrivers = 0;
 #endif
+
+    //ODriveUART odrive0(SERIAL_AUX_DEVICE); // ODrive should be created together with platform object. Connect serial later with M569 Q0:1:115200
 
 #if HAS_STALL_DETECT
 	stalledDrivers = 0;

@@ -92,12 +92,14 @@ GCodes::GCodes(Platform& p) :
 #else
 	httpGCode = telnetGCode = nullptr;
 #endif
-#ifdef SERIAL_AUX_DEVICE
-	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
-	auxGCode = new GCodeBuffer("aux", LcdMessage, false);
-#else
+    // TODO: ODrive wants SERIAL_AUX_DEVICE for itself.
+    //  Make Panel Due and ODrive live side by side later
+//#ifdef SERIAL_AUX_DEVICE
+//	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
+//	auxGCode = new GCodeBuffer("aux", LcdMessage, false);
+//#else
 	auxGCode = nullptr;
-#endif
+//#endif
 	daemonGCode = new GCodeBuffer("daemon", GenericMessage, false);
 #if SUPPORT_12864_LCD
 	lcdGCode = new GCodeBuffer("lcd", GenericMessage, false);

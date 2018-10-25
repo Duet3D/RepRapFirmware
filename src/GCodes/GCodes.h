@@ -32,6 +32,8 @@ Licence: GPL
 #include "FilamentMonitors/FilamentMonitor.h"
 #include "RestorePoint.h"
 #include "Movement/BedProbing/Grid.h"
+//#include "Movement/StepperDrivers/ODriveUART.h"
+//#include "ODriveUART.h"
 
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
@@ -150,7 +152,9 @@ public:
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply);	// Open a file of G Codes to run
 	void StartPrinting(bool fromStart);									// Start printing the file already selected
 	void GetCurrentCoordinates(const StringRef& s) const;				// Write where we are into a string
-	void GetAxisPositionsFromEncoders(const StringRef& reply);			// Get encoder position since G96, calculate moved mm, and write to string
+	void GetAxisPositionsFromEncodersI2C(const StringRef& reply);		// Get encoder position since G96, calculate moved mm, and write to string
+	void GetEncoderPositionsUART(const StringRef& reply);				// Get encoder position since G96, convert units to degrees, and write to string
+	int ConnectODriveUARTToSerialChannel(size_t whichODrive, size_t whichChannel, uint32_t atWhatBaud, const StringRef& reply);
 	float I2cRequestFloat(uint8_t addr);						 		// Send only the name of the gcode, ask for a float back
 	bool DoingFileMacro() const;										// Or still busy processing a macro file?
 	float FractionOfFilePrinted() const;								// Get fraction of file printed

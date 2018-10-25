@@ -30,6 +30,10 @@
 # include "Movement/StepperDrivers/TMC51xx.h"
 #endif
 
+//#include "Movement/StepperDrivers/ODriveUART.h"
+//#include "ODriveUART.h"
+//ODriveUART odrive0;
+
 #include "Wire.h"
 
 // Set or print the Z probe. Called by G31.
@@ -243,8 +247,63 @@ float GCodes::I2cRequestFloat(uint8_t addr)
 	return r.fval;
 }
 
+// This handles M569 Q
+int GCodes::ConnectODriveUARTToSerialChannel(size_t whichODrive, size_t whichChannel, uint32_t atWhatBaud, const StringRef& reply)
+{
+    if (whichODrive == 0) // Only one odrive is created in Platform::Init() for now
+    {
+        if (whichChannel == 1)
+        {
+#if defined(SERIAL_AUX_DEVICE) && NUM_SERIAL_CHANNELS >= 2
+            commsParams[whichODrive] = 0; // Don't require checksum from ODrive
+            if (atWhatBaud > 0)
+            {
+                if (baudRates[whichChannel] != atWhatBaud)
+                {
+                    baudRates[whichChannel] = atWhatBaud;
+                    reprap.GetPlatform().ResetChannel(whichChannel);
+                    reply.printf("Warning: reset serial channel %u in to %u baud.", whichChannel, atWhatBaud);
+                }
+            }
+            reprap.GetPlatform().GetODrive0().SetSerial(SERIAL_AUX_DEVICE);
+            //odrive0.SetSerial(SERIAL_AUX_DEVICE);
+            // TODO: Should we setAuxDetected() here, or would that spam us with stuff meant for Panel Due?
+            return 0;
+#else
+            reply.copy("Cannot connect ODrive. Channel %u not available.", whichChannel);
+            return 1;
+#endif
+        }
+    }
+    else
+    {
+        reply.copy("ODrive %u does not exist.", whichODrive);
+    }
+    return 1;
+}
+
+
+// This handles M114 S2
+void GCodes::GetEncoderPositionsUART(const StringRef& reply)
+{
+    //ODriveUART odrive0 = reprap.GetPlatform().GetODrive0();
+    // The odrive0 should be an object, initialized and attached to a Serial stream before we get here
+	reply.copy("[");
+    int32_t cpr = reprap.GetPlatform().GetODrive0().GetEncoderConfigCpr(0);
+    reply.catf("%d", cpr);
+
+
+    //float cpr_pos0 = reprap.GetPlatform().GetODrive0().GetEncoderPosEstimate(0) - reprap.GetPlatform().GetODrive0().GetEncoderPosReference(0);
+    //float ang0 = 360.0*cpr_pos0/(float)reprap.GetPlatform().GetODrive0().GetEncoderConfigCpr(0);
+    //reply.catf("%.2f", (double)ang0);
+
+	reply.cat(", ");
+	reply.cat(" ],\n");
+}
+
+
 // This handles M114 S1
-void GCodes::GetAxisPositionsFromEncoders(const StringRef& reply)
+void GCodes::GetAxisPositionsFromEncodersI2C(const StringRef& reply)
 {
 	reply.copy("[");
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
@@ -1299,6 +1358,20 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 // Deal with M569
 GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 {
+
+    uint32_t qvals[3];
+    bool seenQ = false;
+    gb.TryGetUIArray('Q', 3, qvals, reply, seenQ);
+    if (seenQ)
+    {
+        reply.printf("Yup, got %lu, %lu, %lu.", qvals[0], qvals[1], qvals[2]);
+        if (ConnectODriveUARTToSerialChannel((size_t)qvals[0], (size_t)qvals[1], qvals[2], reply) == 0)
+        {
+            //reply.printf("Connected ODrive %lu to serial %lu at %lu baud.", qvals[0], qvals[1], qvals[2]);
+            // TODO: Also associate ODrive qvals[0] with drive from P-parmeter
+        }
+    }
+
 	if (gb.Seen('P'))
 	{
 		const size_t drive = gb.GetIValue();

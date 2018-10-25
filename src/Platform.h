@@ -43,6 +43,8 @@ Licence: GPL
 #include "ZProbe.h"
 #include "ZProbeProgrammer.h"
 #include <General/IPAddress.h>
+//#include "Movement/StepperDrivers/ODriveUART.h"
+//#include "ODriveUART.h"
 
 #if defined(DUET_NG)
 # include "DueXn.h"
@@ -53,6 +55,66 @@ Licence: GPL
 # include "EUI48/EUI48EEPROM.h"    // SPI EUI48 mac address EEPROM
 # include "Microstepping.h"
 #endif
+
+
+
+/* The policy is: we don't save run state information about the ODrive unless you have to.
+ * We only save information about how to ask for the things we need,
+ * and never-changing info about how to interpret them.
+ */
+class ODriveUART {
+public:
+	enum AxisState_t {
+		AXIS_STATE_UNDEFINED = 0,           //<! will fall through to idle
+		AXIS_STATE_IDLE = 1,                //<! disable PWM and do nothing
+		AXIS_STATE_STARTUP_SEQUENCE = 2, //<! the actual sequence is defined by the config.startup_... flags
+		AXIS_STATE_FULL_CALIBRATION_SEQUENCE = 3,   //<! run all calibration procedures, then idle
+		AXIS_STATE_MOTOR_CALIBRATION = 4,   //<! run motor calibration
+		AXIS_STATE_SENSORLESS_CONTROL = 5,  //<! run sensorless control
+		AXIS_STATE_ENCODER_INDEX_SEARCH = 6, //<! run encoder index search
+		AXIS_STATE_ENCODER_OFFSET_CALIBRATION = 7, //<! run encoder offset calibration
+		AXIS_STATE_CLOSED_LOOP_CONTROL = 8  //<! run closed loop control
+	};
+
+	ODriveUART();
+	ODriveUART(Stream& serial);
+
+	// Commands
+	void SetSerial(Stream& serial);
+	void SetPosition(int motor_number, float position);
+	void SetPosition(int motor_number, float position, float velocity_feedforward);
+	void SetPosition(int motor_number, float position, float velocity_feedforward, float current_feedforward);
+	void SetVelocity(int motor_number, float velocity);
+	void SetVelocity(int motor_number, float velocity, float current_feedforward);
+
+	// Hangprinter needs
+	void EnableTorqueMode(int motor_number); // set <axis>.controller.config.control_mode = CTRL_MODE_CURRENT_CONTROL
+	void EnablePositionMode(int motor_number); // set <axis>.controller.config.control_mode = CTRL_MODE_POSITION_CONTROL
+	void SetCurrent(int motor_number, float current); // set <axis>.controller.current_setpoint = <current_in_A>
+	float GetEncoderPosEstimate(int axis); // read <axis>.encoder.pos_estimate
+	int32_t GetEncoderConfigCpr(int axis); // read <axis>.encoder.config.cpr
+
+	// ODrive Firmware can't currently store reference points so this is stored locally in the RRF ODrive object
+	int GetEncoderPosReference(int axis) { return encoderPosReference[axis]; }
+	void SetEncoderPosReference(int axis, float posReference) { encoderPosReference[axis] = posReference; }
+
+	// General params
+	float readFloat();
+	int32_t readInt();
+
+	// State helper
+	bool run_state(int axis, int requested_state, bool wait);
+private:
+	float encoderPosReference[2]; // One ODrive board can control two axes
+	void readString(char*, size_t);
+	// TODO: To be cool, we should use the included StringRef library here
+
+	Stream& serial_;
+	bool serialAttached;
+};
+
+
+
 
 constexpr bool FORWARDS = true;
 constexpr bool BACKWARDS = !FORWARDS;
@@ -565,6 +627,8 @@ public:
 	unsigned int GetNumSmartDrivers() const { return numSmartDrivers; }
 #endif
 
+    ODriveUART GetODrive0() { return odrive0; }
+
 #if HAS_STALL_DETECT
 	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf);
 #endif
@@ -763,6 +827,7 @@ private:
 	uint8_t nextDriveToPoll;
 	bool driversPowered;
 #endif
+    ODriveUART odrive0;
 
 #if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
 	bool warnDriversNotPowered;

@@ -1415,9 +1415,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 114:
 		if (gb.Seen('S'))
 		{
-			if (gb.GetIValue() == 1)
+			int ival = gb.GetIValue();
+			if (ival == 1)
 			{
-				GetAxisPositionsFromEncoders(reply);
+				GetAxisPositionsFromEncodersI2C(reply);
+			}
+			else if (ival == 2)
+			{
+				GetEncoderPositionsUART(reply);
 			}
 		}
 		else
