@@ -106,6 +106,7 @@ void ODriveUART::SetVelocity(int motor_number, float velocity, float current_fee
 }
 
 float ODriveUART::readFloat() {
+	// TODO: To be cool, we should use the included StringRef library here
     char str[50];
     readString(str, 50);
 	return SafeStrtof(str);

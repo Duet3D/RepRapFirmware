@@ -254,25 +254,24 @@ int GCodes::ConnectODriveUARTToSerialChannel(size_t whichODrive, size_t whichCha
     {
         if (whichChannel == 1)
         {
-#if defined(SERIAL_AUX_DEVICE) && NUM_SERIAL_CHANNELS >= 2
-            commsParams[whichODrive] = 0; // Don't require checksum from ODrive
+//#if defined(SERIAL_AUX_DEVICE) && NUM_SERIAL_CHANNELS >= 2
+            //commsParams[whichODrive] = 0; // Don't require checksum from ODrive
             if (atWhatBaud > 0)
             {
-                if (baudRates[whichChannel] != atWhatBaud)
+                if (reprap.GetPlatform().GetBaudRate(whichChannel) != atWhatBaud)
                 {
-                    baudRates[whichChannel] = atWhatBaud;
-                    reprap.GetPlatform().ResetChannel(whichChannel);
-                    reply.printf("Warning: reset serial channel %u in to %u baud.", whichChannel, atWhatBaud);
+                    reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
+                    reply.printf("Warning: reset serial channel %u to %u baud.", whichChannel, atWhatBaud);
                 }
             }
             reprap.GetPlatform().GetODrive0().SetSerial(SERIAL_AUX_DEVICE);
             //odrive0.SetSerial(SERIAL_AUX_DEVICE);
             // TODO: Should we setAuxDetected() here, or would that spam us with stuff meant for Panel Due?
             return 0;
-#else
-            reply.copy("Cannot connect ODrive. Channel %u not available.", whichChannel);
-            return 1;
-#endif
+//#else
+//            reply.copy("Cannot connect ODrive. Channel %u not available.", whichChannel);
+//            return 1;
+//#endif
         }
     }
     else
@@ -286,16 +285,17 @@ int GCodes::ConnectODriveUARTToSerialChannel(size_t whichODrive, size_t whichCha
 // This handles M114 S2
 void GCodes::GetEncoderPositionsUART(const StringRef& reply)
 {
-    //ODriveUART odrive0 = reprap.GetPlatform().GetODrive0();
-    // The odrive0 should be an object, initialized and attached to a Serial stream before we get here
 	reply.copy("[");
     int32_t cpr = reprap.GetPlatform().GetODrive0().GetEncoderConfigCpr(0);
     reply.catf("%d", cpr);
 
+    //reply.catf("pos_estimate: %.3f, ", reprap.GetPlatform().GetODrive0().GetEncoderPosEstimate(0));
+    //reply.catf("encoder pos reference: %.3f, ", reprap.GetPlatform().GetODrive0().GetEncoderPosReference(0));
+    //reply.catf("cpr: %d, ", reprap.GetPlatform().GetODrive0().GetEncoderConfigCpr(0));
 
     //float cpr_pos0 = reprap.GetPlatform().GetODrive0().GetEncoderPosEstimate(0) - reprap.GetPlatform().GetODrive0().GetEncoderPosReference(0);
     //float ang0 = 360.0*cpr_pos0/(float)reprap.GetPlatform().GetODrive0().GetEncoderConfigCpr(0);
-    //reply.catf("%.2f", (double)ang0);
+    //reply.catf("angle: %.2f", (double)ang0);
 
 	reply.cat(", ");
 	reply.cat(" ],\n");

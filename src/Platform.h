@@ -95,7 +95,7 @@ public:
 	int32_t GetEncoderConfigCpr(int axis); // read <axis>.encoder.config.cpr
 
 	// ODrive Firmware can't currently store reference points so this is stored locally in the RRF ODrive object
-	int GetEncoderPosReference(int axis) { return encoderPosReference[axis]; }
+	float GetEncoderPosReference(int axis) { return encoderPosReference[axis]; }
 	void SetEncoderPosReference(int axis, float posReference) { encoderPosReference[axis] = posReference; }
 
 	// General params
@@ -107,7 +107,6 @@ public:
 private:
 	float encoderPosReference[2]; // One ODrive board can control two axes
 	void readString(char*, size_t);
-	// TODO: To be cool, we should use the included StringRef library here
 
 	Stream& serial_;
 	bool serialAttached;
