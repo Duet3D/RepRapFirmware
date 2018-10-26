@@ -30,9 +30,11 @@
 # include "Movement/StepperDrivers/TMC51xx.h"
 #endif
 
-//#include "Movement/StepperDrivers/ODriveUART.h"
 //#include "ODriveUART.h"
-//ODriveUART odrive0;
+// Each ODrive needs two pos references, and I can't make getter/setters of the ODriveUART
+// object work. The getter always returns 0.0, regardless how I try to change the variable
+float pos_reference[4] = { 0.0, 0.0, 0.0, 0.0 };
+int32_t cpr[4] = { 0 };
 
 #include "Wire.h"
 
@@ -252,27 +254,50 @@ int GCodes::ConnectODriveUARTToSerialChannel(size_t whichODrive, size_t whichCha
 {
     if (whichODrive == 0) // Only one odrive is created in Platform::Init() for now
     {
-        if (whichChannel == 1)
+		//commsParams[whichODrive] = 0; // Don't require checksum from ODrive
+		if (atWhatBaud > 0)
+		{
+		    if (reprap.GetPlatform().GetBaudRate(whichChannel) != atWhatBaud)
+		    {
+		        reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
+		        reply.printf("Warning: reset serial channel %u to %lu baud.", whichChannel, atWhatBaud);
+				// See for example Networking/ESP8266WiFi/WifiFirmwareUploader.cpp line 614
+				// for a much more serious attempt at establishing a UART connection
+		    }
+		}
+		if (whichChannel == 0)
+		{
+#if defined(SERIAL_MAIN_DEVICE)
+			reprap.GetPlatform().GetODrive0().SetSerial(SERIAL_MAIN_DEVICE);
+			return 0;
+#else
+#error "SERIAL_MAIN_DEVICE not defined"
+#endif
+		}
+		else if (whichChannel == 1)
         {
-//#if defined(SERIAL_AUX_DEVICE) && NUM_SERIAL_CHANNELS >= 2
-            //commsParams[whichODrive] = 0; // Don't require checksum from ODrive
-            if (atWhatBaud > 0)
-            {
-                if (reprap.GetPlatform().GetBaudRate(whichChannel) != atWhatBaud)
-                {
-                    reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
-                    reply.printf("Warning: reset serial channel %u to %u baud.", whichChannel, atWhatBaud);
-                }
-            }
+#if defined(SERIAL_AUX_DEVICE)
             reprap.GetPlatform().GetODrive0().SetSerial(SERIAL_AUX_DEVICE);
-            //odrive0.SetSerial(SERIAL_AUX_DEVICE);
+			reprap.GetPlatform().GetODrive0().flush(); // TODO: Don't know if this is enough
             // TODO: Should we setAuxDetected() here, or would that spam us with stuff meant for Panel Due?
             return 0;
-//#else
-//            reply.copy("Cannot connect ODrive. Channel %u not available.", whichChannel);
-//            return 1;
-//#endif
+#else
+#error "SERIAL_AUX_DEVICE not defined"
+#endif
         }
+		else if (whichChannel == 2)
+		{
+//TODO: SERIAL_AUX2_DEVICE is not available on DuetWifi 1.0
+// We want to use SERIAL_WIFI_DEVICE, but that one meant for use like controlling ODrives
+// so it's baud rate is not even included in the baudRates array
+//#if defined(SERIAL_AUX2_DEVICE)
+//            //commsParams[whichODrive] = 0; // Don't require checksum from ODrive
+//            reprap.GetPlatform().GetODrive0().SetSerial(SERIAL_AUX2_DEVICE);
+//            return 0;
+//#else
+//#error "SERIAL_AUX2_DEVICE not defined"
+//#endif
+		}
     }
     else
     {
@@ -285,19 +310,17 @@ int GCodes::ConnectODriveUARTToSerialChannel(size_t whichODrive, size_t whichCha
 // This handles M114 S2
 void GCodes::GetEncoderPositionsUART(const StringRef& reply)
 {
+
+	float pos[4] = { 0.0, 0.0, 0.0, 0.0 };
+	float ang[4] = { 0.0, 0.0, 0.0, 0.0 };
+
 	reply.copy("[");
-    int32_t cpr = reprap.GetPlatform().GetODrive0().GetEncoderConfigCpr(0);
-    reply.catf("%d", cpr);
-
-    //reply.catf("pos_estimate: %.3f, ", reprap.GetPlatform().GetODrive0().GetEncoderPosEstimate(0));
-    //reply.catf("encoder pos reference: %.3f, ", reprap.GetPlatform().GetODrive0().GetEncoderPosReference(0));
-    //reply.catf("cpr: %d, ", reprap.GetPlatform().GetODrive0().GetEncoderConfigCpr(0));
-
-    //float cpr_pos0 = reprap.GetPlatform().GetODrive0().GetEncoderPosEstimate(0) - reprap.GetPlatform().GetODrive0().GetEncoderPosReference(0);
-    //float ang0 = 360.0*cpr_pos0/(float)reprap.GetPlatform().GetODrive0().GetEncoderConfigCpr(0);
-    //reply.catf("angle: %.2f", (double)ang0);
-
-	reply.cat(", ");
+	for (size_t i = 0; i < 2; i++)
+	{
+		pos[i] = reprap.GetPlatform().GetODrive0().AskForEncoderPosEstimate(i) - pos_reference[i];
+		ang[i] = 360.0*pos[i]/(float)cpr[i];
+		reply.catf("%.2f, ", (double)ang[i]);
+	}
 	reply.cat(" ],\n");
 }
 
@@ -348,7 +371,7 @@ GCodeResult GCodes::SetTorqueMode(GCodeBuffer& gb, const StringRef& reply)
 				torque.fval = gb.GetFValue();
 				if (fabs(torque.fval < 255.0)) // 255 is the motor's maximum torque
 				{
-					torque.fval = -fabs(torque.fval); // We want G95 to always drive axis backwards, never forwards
+					torque.fval = fabs(torque.fval); // We want G95 to always drive axis backwards, never forwards
 					if (platform.GetDirectionValue(driver)) torque.fval = -torque.fval;
 					if ((res = I2cForward(gb, i2cValue, torque.bval, 4, reply)) != GCodeResult::ok) return res;
 				}
@@ -356,6 +379,38 @@ GCodeResult GCodes::SetTorqueMode(GCodeBuffer& gb, const StringRef& reply)
 			else
 			{
 				// Enable torque mode in some non-i2c way
+				if (axis == 0 || axis == 1)
+				{
+					float torque = gb.GetFValue();
+					if (fabs(torque) < 0.1)
+					{ // Set axis in position mode
+						// Set the current to zero
+						reprap.GetPlatform().GetODrive0().SetCurrent(axis, 0.0);
+
+						// Tell ODrive that current position is the desired one
+						float desiredPos = reprap.GetPlatform().GetODrive0().AskForEncoderPosEstimate(axis);
+						reprap.GetPlatform().GetODrive0().SetPosSetpoint(axis, desiredPos);
+
+						// Tell ODrive to enter position mode
+						reprap.GetPlatform().GetODrive0().EnablePositionControlMode(axis);
+
+						// This should have done both, but it didn't...
+						//reprap.GetPlatform().GetODrive0().SetPosition(axis, desiredPos);
+
+						reply.catf("Set axis %d to position mode.", axis);
+					}
+					else if (fabs(torque) < 127.0)
+					{
+						// Calculate the right current, including its sign
+						torque = -1.0*fabs(torque);
+						if (platform.GetDirectionValue(driver)) torque = -torque;
+						// Limit max current to 30 A. Use units that max out at 127 to match Mechaduino and Smart Stepper behaviour.
+						float current = torque*30.0/127.0;
+						// Enable current control mode on the ODrive at desider current
+						reprap.GetPlatform().GetODrive0().SetCurrent(axis, current);
+						reply.catf("Set torque of axis %d to %.3f out of 127.0. (current: %.3f A).", axis, (double)torque, (double)current);
+					}
+				}
 			}
 		}
 	}
@@ -393,6 +448,17 @@ GCodeResult GCodes::MarkEncoderRef(GCodeBuffer& gb, const StringRef& reply)
 			else
 			{
 				// Mark encoder reference point in some non-i2c way
+				if (axis == 0 || axis == 1)
+				{
+					pos_reference[axis] = reprap.GetPlatform().GetODrive0().AskForEncoderPosEstimate(axis);
+					cpr[axis] = reprap.GetPlatform().GetODrive0().AskForEncoderConfigCpr(axis);
+					reply.catf("Set pos_reference[%d] to %.3f and cpr[%d] to %lu.", axis, (double)pos_reference[axis], axis, cpr[axis]);
+				}
+				else if (axis == 2 || axis == 3)
+				{
+					// Todo odrive1 doesn't exist in this firmware yet
+					//reprap.GetPlatform().GetODrive(1).SetEncoderPosReference(axis);
+				}
 			}
 		}
 	}

@@ -43,7 +43,6 @@ Licence: GPL
 #include "ZProbe.h"
 #include "ZProbeProgrammer.h"
 #include <General/IPAddress.h>
-//#include "Movement/StepperDrivers/ODriveUART.h"
 //#include "ODriveUART.h"
 
 #if defined(DUET_NG)
@@ -57,6 +56,8 @@ Licence: GPL
 #endif
 
 
+
+/* Start of tucked in file ODriveUART.h */
 
 /* The policy is: we don't save run state information about the ODrive unless you have to.
  * We only save information about how to ask for the things we need,
@@ -76,6 +77,14 @@ public:
 		AXIS_STATE_CLOSED_LOOP_CONTROL = 8  //<! run closed loop control
 	};
 
+	enum ControlState_t {
+		CTRL_MODE_VOLTAGE_CONTROL = 0,
+		CTRL_MODE_CURRENT_CONTROL = 1,
+		CTRL_MODE_VELOCITY_CONTROL = 2,
+		CTRL_MODE_POSITION_CONTROL = 3,
+		CTRL_MODE_TRAJECTORY_CONTROL = 4
+	};
+
 	ODriveUART();
 	ODriveUART(Stream& serial);
 
@@ -88,15 +97,20 @@ public:
 	void SetVelocity(int motor_number, float velocity, float current_feedforward);
 
 	// Hangprinter needs
-	void EnableTorqueMode(int motor_number); // set <axis>.controller.config.control_mode = CTRL_MODE_CURRENT_CONTROL
-	void EnablePositionMode(int motor_number); // set <axis>.controller.config.control_mode = CTRL_MODE_POSITION_CONTROL
+	void SetCtrlMode(int axis, int ctrlMode);
+	void EnableCurrentControlMode(int motor_number); // set <axis>.controller.config.control_mode = CTRL_MODE_CURRENT_CONTROL
+	void EnablePositionControlMode(int motor_number); // set <axis>.controller.config.control_mode = CTRL_MODE_POSITION_CONTROL
 	void SetCurrent(int motor_number, float current); // set <axis>.controller.current_setpoint = <current_in_A>
-	float GetEncoderPosEstimate(int axis); // read <axis>.encoder.pos_estimate
-	int32_t GetEncoderConfigCpr(int axis); // read <axis>.encoder.config.cpr
+	void SetPosSetpoint(int axis, float position);
+	void flush();
+	float AskForEncoderPosEstimate(int axis); // read <axis>.encoder.pos_estimate
+	int32_t AskForEncoderConfigCpr(int axis); // read <axis>.encoder.config.cpr
 
 	// ODrive Firmware can't currently store reference points so this is stored locally in the RRF ODrive object
-	float GetEncoderPosReference(int axis) { return encoderPosReference[axis]; }
-	void SetEncoderPosReference(int axis, float posReference) { encoderPosReference[axis] = posReference; }
+	/*
+	float GetEncoderPosReference() const { return encoderPosReference; }
+	float SetEncoderPosReference(int axis);
+	*/
 
 	// General params
 	float readFloat();
@@ -105,14 +119,16 @@ public:
 	// State helper
 	bool run_state(int axis, int requested_state, bool wait);
 private:
-	float encoderPosReference[2]; // One ODrive board can control two axes
-	void readString(char*, size_t);
+	/*
+	float encoderPosReference; // One ODrive board can control two axes
+	*/
+	size_t readString(char*, size_t);
 
 	Stream& serial_;
 	bool serialAttached;
 };
 
-
+/* End of tucked in file ODriveUART.h */
 
 
 constexpr bool FORWARDS = true;
