@@ -739,6 +739,10 @@ private:
 	bool driversPowered;
 #endif
 
+#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
+	bool warnDriversNotPowered;
+#endif
+
 #if HAS_STALL_DETECT
 	DriversBitmap logOnStallDrivers, pauseOnStallDrivers, rehomeOnStallDrivers;
 	DriversBitmap stalledDrivers, stalledDriversToLog, stalledDriversToPause, stalledDriversToRehome;

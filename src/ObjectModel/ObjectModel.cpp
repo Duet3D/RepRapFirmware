@@ -32,7 +32,7 @@ bool ObjectModel::ReportAsJson(OutputBuffer* buf, const char* filter, ReportFlag
 			{
 				buf->cat(',');
 			}
-			omte->ReportAsJson(buf, this, filter, flags);
+			omte->ReportAsJson(buf, this, GetNextElement(filter), flags);
 			added = true;
 		}
 		--numEntries;
@@ -68,99 +68,6 @@ const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(const char* 
 	return (low < numElems && tbl[low].IdCompare(idString) == 0) ? &tbl[low] : nullptr;
 }
 
-// Get the object model table entry for the leaf object in the query
-const ObjectModelTableEntry *ObjectModel::FindObjectModelLeafEntry(const char *idString)
-{
-	const ObjectModelTableEntry *e = FindObjectModelTableEntry(idString);
-	return (e == nullptr) ? e : e->FindLeafEntry(this, idString);
-}
-
-#if 0	// not implemented yet
-bool ObjectModel::GetStringObjectValue(const StringRef& str, const char* idString) const
-{
-}
-
-bool ObjectModel::GetLongEnumObjectValue(const StringRef& str, const char* idString) const
-{
-}
-
-bool ObjectModel::GetShortEnumObjectValue(uint32_t& val, const char* idString) const
-{
-}
-
-bool ObjectModel::GetBitmapObjectValue(uint32_t& val, const char* idString) const
-{
-}
-#endif
-
-#if 0
-bool ObjectModel::SetFloatObjectValue(float val, const char* idString)
-{
-}
-
-bool ObjectModel::SetUnsignedObjectValue(uint32_t val, const char* idString)
-{
-}
-
-bool ObjectModel::SetSignedObjectValue(int32_t val, const char* idString)
-{
-}
-
-bool ObjectModel::SetStringObjectValue(const StringRef& str, const char* idString)
-{
-}
-
-bool ObjectModel::SetLongEnumObjectValue(const StringRef& str, const char* idString)
-{
-}
-
-bool ObjectModel::SetShortEnumObjectValue(uint32_t val, const char* idString)
-{
-}
-
-bool ObjectModel::SetBitmapObjectValue(uint32_t val, const char* idString)
-{
-}
-
-bool ObjectModel::SetBoolObjectValue(bool val, const char* idString)
-{
-}
-
-bool ObjectModel::AdjustFloatObjectValue(float val, const char* idString)
-{
-}
-
-bool ObjectModel::AdjustUnsignedObjectValue(int32_t val, const char* idString)
-{
-}
-
-bool ObjectModel::AdjustSignedObjectValue(int32_t val, const char* idString)
-{
-}
-
-bool ObjectModel::ToggleBoolObjectValue(const char* idString)
-{
-}
-#endif
-
-const char** ObjectModel::GetStringObjectPointer(const char* idString)
-{
-	//TODO
-	return nullptr;
-}
-
-uint32_t* ObjectModel::GetShortEnumObjectPointer(const char* idString)
-{
-	const ObjectModelTableEntry *e = FindObjectModelLeafEntry(idString);
-	return (e == nullptr) ? nullptr : (uint32_t*)(e->GetValuePointer(this, TYPE_OF(Enum32)));
-}
-
-uint32_t* ObjectModel::GetBitmapObjectPointer(const char* idString)
-{
-	const ObjectModelTableEntry *e = FindObjectModelLeafEntry(idString);
-	return (e == nullptr) ? nullptr : (uint32_t*)(e->GetValuePointer(this, TYPE_OF(Bitmap32)));
-}
-
 /*static*/ const char* ObjectModel::GetNextElement(const char *id)
 {
 	while (*id != 0 && *id != '.' && *id != '[')
@@ -177,16 +84,6 @@ uint32_t* ObjectModel::GetBitmapObjectPointer(const char* idString)
 bool ObjectModelTableEntry::Matches(const char* filterString, ObjectModelFilterFlags filterFlags) const
 {
 	return IdCompare(filterString) == 0 && (flags & filterFlags) == filterFlags;
-}
-
-const ObjectModelTableEntry *ObjectModelTableEntry::FindLeafEntry(ObjectModel *self, const char *idString) const
-{
-	if (!IsObject())
-	{
-		return this;
-	}
-
-	return ((ObjectModel*)param(self))->FindObjectModelLeafEntry(ObjectModel::GetNextElement(idString));
 }
 
 // Private function to report a value of primitive type
@@ -208,6 +105,10 @@ void ObjectModelTableEntry::ReportItemAsJson(OutputBuffer *buf, const char *filt
 
 	case TYPE_OF(int32_t):
 		buf->catf("%" PRIi32, *(const int32_t *)nParam);
+		break;
+
+	case TYPE_OF(const char*):
+		buf->EncodeString((const char*)nParam, strlen((const char*)nParam), true, true, false);
 		break;
 
 	case TYPE_OF(Bitmap32):
@@ -321,23 +222,26 @@ void* ObjectModelTableEntry::GetValuePointer(ObjectModel *self, TypeCode t) cons
 	return param(self);
 }
 
-// Return the type of an object
-TypeCode ObjectModel::GetObjectType(const char *idString)
-{
-	const ObjectModelTableEntry * const e = FindObjectModelLeafEntry(idString);
-	return (e == nullptr) ? NoType : e->type;
-}
-
 // Get the value of an object when we don't know what its type is
 TypeCode ObjectModel::GetObjectValue(ExpressionValue& val, const char *idString)
 {
-	const ObjectModelTableEntry * const e = FindObjectModelLeafEntry(idString);
+	const ObjectModelTableEntry *e = FindObjectModelTableEntry(idString);
 	if (e == nullptr)
 	{
 		return NoType;
 	}
+
+	if ((e->type & IsArray) != 0)
+	{
+		//TODO handle arrays
+		return NoType;
+	}
+
 	switch (e->type)
 	{
+	case TYPE_OF(ObjectModel):
+		return ((ObjectModel*)e->param(this))->GetObjectValue(val, GetNextElement(idString));
+
 	case TYPE_OF(float):
 		val.fVal = *((const float*)e->param(this));
 		break;
@@ -363,16 +267,25 @@ TypeCode ObjectModel::GetObjectValue(ExpressionValue& val, const char *idString)
 }
 
 // Template specialisations
-template<> bool ObjectModel::GetObjectValue(float& val, const char *idString)
+bool ObjectModel::GetObjectValue(float& val, const char *idString)
 {
-	const ObjectModelTableEntry * const e = FindObjectModelLeafEntry(idString);
+	const ObjectModelTableEntry *e = FindObjectModelTableEntry(idString);
 	if (e == nullptr)
 	{
-		return false;
+		return NoType;
+	}
+
+	if ((e->type & IsArray) != 0)
+	{
+		//TODO handle arrays
+		return NoType;
 	}
 
 	switch (e->type)
 	{
+	case TYPE_OF(ObjectModel):
+		return ((ObjectModel*)e->param(this))->GetObjectValue(val, GetNextElement(idString));
+
 	case TYPE_OF(float):
 		val = *((const float*)e->param(this));
 		return true;
@@ -391,16 +304,25 @@ template<> bool ObjectModel::GetObjectValue(float& val, const char *idString)
 }
 
 // Specialisation of above for int, allowing conversion from unsigned to signed
-template<> bool ObjectModel::GetObjectValue(int32_t& val, const char *idString)
+bool ObjectModel::GetObjectValue(int32_t& val, const char *idString)
 {
-	const ObjectModelTableEntry * const e = FindObjectModelLeafEntry(idString);
+	const ObjectModelTableEntry *e = FindObjectModelTableEntry(idString);
 	if (e == nullptr)
 	{
-		return false;
+		return NoType;
+	}
+
+	if ((e->type & IsArray) != 0)
+	{
+		//TODO handle arrays
+		return NoType;
 	}
 
 	switch (e->type)
 	{
+	case TYPE_OF(ObjectModel):
+		return ((ObjectModel*)e->param(this))->GetObjectValue(val, GetNextElement(idString));
+
 	case TYPE_OF(int32_t):
 		val = *((const int32_t*)e->param(this));
 		return true;

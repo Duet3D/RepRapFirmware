@@ -1298,7 +1298,7 @@ TypeCode GCodeBuffer::EvaluateExpression(const char *p, const char **endptr, Exp
 	if (isalpha(*p))			// if it's a variable name
 	{
 		const char * const start = p;
-		while (isalpha(*p) || isdigit(*p) || *p == '_')
+		while (isalpha(*p) || isdigit(*p) || *p == '_' || *p == '.')
 		{
 			++p;
 		}

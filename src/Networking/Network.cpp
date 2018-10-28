@@ -70,7 +70,7 @@ static const ObjectModelArrayDescriptor interfaceArrayDescriptor =
 
 const ObjectModelTableEntry Network::objectModelTable[] =
 {
-	{ "interface", OBJECT_MODEL_FUNC_NOSELF(&interfaceArrayDescriptor), TYPE_OF(ObjectModel) | IsArray, ObjectModelTableEntry::none }
+	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfaceArrayDescriptor), TYPE_OF(ObjectModel) | IsArray, ObjectModelTableEntry::none }
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Network)

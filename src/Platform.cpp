@@ -505,6 +505,10 @@ void Platform::Init()
 	autoSaveState = AutoSaveState::starting;
 #endif
 
+#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
+	warnDriversNotPowered = false;
+#endif
+
 	extrusionAncilliaryPwmValue = 0.0;
 
 	configuredHeaters = 0;
@@ -1327,6 +1331,7 @@ void Platform::Spin()
 	}
 
 #ifdef DUET3
+	// Blink the LED
 	{
 		static uint32_t lastTime = 0;
 		static bool diagState = true;
@@ -1611,7 +1616,7 @@ void Platform::Spin()
 
 			// Check for a VSSA fault
 #if HAS_VREF_MONITOR
-			constexpr uint32_t MaxVssaFilterSum = (15 * 4096 * ThermistorAverageReadings * 4)/2200;
+			constexpr uint32_t MaxVssaFilterSum = (15 * 4096 * ThermistorAverageReadings * 4)/2200;		// VSSA fuse should have <= 15 ohms resistance
 			if (adcFilters[VssaFilterIndex].GetSum() > MaxVssaFilterSum)
 			{
 				Message(ErrorMessage, "VSSA fault, check thermistor wiring\n");
@@ -1623,6 +1628,16 @@ void Platform::Spin()
 			   )
 			{
 				Message(ErrorMessage, "VSSA fault, check thermistor wiring\n");
+				reported = true;
+			}
+#endif
+
+#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
+			// Check for attempts to move motors when not powered
+			if (warnDriversNotPowered)
+			{
+				Message(ErrorMessage, "Attempt to move motors when VIN is not in range");
+				warnDriversNotPowered = false;
 				reported = true;
 			}
 #endif
@@ -2869,26 +2884,37 @@ void Platform::SetDirection(size_t drive, bool direction)
 // Enable a driver. Must not be called from an ISR, or with interrupts disabled.
 void Platform::EnableDriver(size_t driver)
 {
-	if (driver < NumDirectDrivers && driverState[driver] != DriverStatus::enabled)
+#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
+	if (driver < numSmartDrivers && !driversPowered)
 	{
-		driverState[driver] = DriverStatus::enabled;
-		UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
+		warnDriversNotPowered = true;
+	}
+	else
+	{
+#endif
+		if (driver < NumDirectDrivers && driverState[driver] != DriverStatus::enabled)
+		{
+			driverState[driver] = DriverStatus::enabled;
+			UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
 
 #if defined(DUET3) && HAS_SMART_DRIVERS
-		SmartDrivers::EnableDrive(driver, true);		// all drivers driven directly by the main board are smart
+			SmartDrivers::EnableDrive(driver, true);		// all drivers driven directly by the main board are smart
 #elif HAS_SMART_DRIVERS
-		if (driver < numSmartDrivers)
-		{
-			SmartDrivers::EnableDrive(driver, true);
-		}
-		else
-		{
-			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
-		}
+			if (driver < numSmartDrivers)
+			{
+				SmartDrivers::EnableDrive(driver, true);
+			}
+			else
+			{
+				digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
+			}
 #else
-		digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
+			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
 #endif
+		}
+#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
 	}
+#endif
 }
 
 // Disable a driver

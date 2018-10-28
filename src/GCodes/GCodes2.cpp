@@ -2007,8 +2007,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 220:	// Set/report speed factor override percentage
 		if (gb.Seen('S'))
 		{
-			float newSpeedFactor = (gb.GetFValue() * 0.01) * SecondsToMinutes;	// include the conversion from mm/minute to mm/second
-			if (newSpeedFactor > 0.0)
+			float newSpeedFactor = gb.GetFValue();
+			if (newSpeedFactor > 10.0)
 			{
 				// Update the feed rate for ALL input sources, and all feed rates on the stack
 				const float speedFactorRatio = newSpeedFactor / speedFactor;
@@ -2039,7 +2039,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
-			reply.printf("Speed factor override: %.1f%%", (double)(speedFactor * MinutesToSeconds * 100.0));
+			reply.printf("Speed factor override: %.1f%%", (double)speedFactor);
 		}
 		break;
 
@@ -2158,6 +2158,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
 			// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
 			moveBuffer.coords[Z_AXIS] += difference;
+
+			if (amountPushed != difference && segmentsLeft == 0 && reprap.GetMove().AllMovesAreFinished())
+			{
+				// The pipeline is empty, so execute the babystepping move immediately
+				moveBuffer.SetDefaults();
+				moveBuffer.feedRate = platform.MaxFeedrate(Z_AXIS);
+				NewMoveAvailable(1);
+			}
 		}
 		else
 		{

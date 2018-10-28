@@ -162,7 +162,9 @@ public:
 		{ axesHomed = 0; }
 
 	float GetSpeedFactor() const;										// Return the current speed factor
+#if SUPPORT_12864_LCD
 	void SetSpeedFactor(float factor);									// Set the speed factor
+#endif
 	float GetExtrusionFactor(size_t extruder);							// Return the current extrusion factors
 	void SetExtrusionFactor(size_t extruder, float factor);				// Set an extrusion factor
 
@@ -220,9 +222,9 @@ public:
 	float GetItemStandbyTemperature(unsigned int itemNumber) const;
 	void SetItemActiveTemperature(unsigned int itemNumber, float temp);
 	void SetItemStandbyTemperature(unsigned int itemNumber, float temp);
-	float GetMappedFanSpeed() const { return lastDefaultFanSpeed; }		// Get the mapped fan speed
 #endif
 
+	float GetMappedFanSpeed() const { return lastDefaultFanSpeed; }		// Get the mapped fan speed
 	void SetMappedFanSpeed(float f);									// Set the mapped fan speed
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);	// Handle G-Code replies
 	void EmergencyStop();												// Cancel everything
@@ -386,6 +388,11 @@ private:
 #endif
 	Pwm_t ConvertLaserPwm(float reqVal) const;
 
+#ifdef SERIAL_AUX_DEVICE
+	static bool emergencyStopCommanded;
+	static void CommandEmergencyStop(UARTClass *p);
+#endif
+
 	Platform& platform;													// The RepRap machine
 
 	FileGCodeInput* fileInput;											// ...
@@ -502,6 +509,7 @@ private:
 	GridDefinition defaultGrid;					// The grid defined by the M557 command in config.g
 	int32_t g30ProbePointIndex;					// the index of the point we are probing (G30 P parameter), or -1 if none
 	int g30SValue;								// S parameter in the G30 command, or -2 if there wasn't one
+	float g30HValue;							// H parameter in the G30 command, or 0.0 if there wasn't on
 	float g30zStoppedHeight;					// the height to report after running G30 S-1
 	float g30zHeightError;						// the height error last time we probed
 	float g30PrevHeightError;					// the height error the previous time we probed

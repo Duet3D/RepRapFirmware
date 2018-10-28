@@ -326,7 +326,7 @@ bool ValueMenuItem::Adjust_SelectHelper()
 		switch (itemNumber)
 		{
 		case 0:
-			reprap.GetGCodes().SetSpeedFactor(currentValue * 0.01);
+			reprap.GetGCodes().SetSpeedFactor(currentValue);
 			break;
 
 		case 20:

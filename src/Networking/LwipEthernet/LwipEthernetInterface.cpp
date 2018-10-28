@@ -149,6 +149,7 @@ LwipEthernetInterface::LwipEthernetInterface(Platform& p) : platform(p), closeDa
 
 const ObjectModelTableEntry LwipEthernetInterface::objectModelTable[] =
 {
+	{ "name", OBJECT_MODEL_FUNC_NOSELF("ethernet"), TYPE_OF(const char *), ObjectModelTableEntry::none },
 	{ "ip", OBJECT_MODEL_FUNC(&(self->ipAddress)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
 	{ "netmask", OBJECT_MODEL_FUNC(&(self->netmask)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
 	{ "gateway", OBJECT_MODEL_FUNC(&(self->gateway)), TYPE_OF(IPAddress), ObjectModelTableEntry::none }

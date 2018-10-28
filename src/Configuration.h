@@ -55,7 +55,7 @@ constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
 constexpr uint32_t DriverCoolingTimeout = 4000;			// Milliseconds
 constexpr float DefaultMessageTimeout = 10.0;			// How long a message is displayed by default, in seconds
 
-constexpr uint32_t MinimumOpenLoadFullStepsPerSec = 4;
+constexpr uint32_t MinimumOpenLoadFullStepsPerSec = 20;	// this is 4mm/sec @ 80steps/mm
 
 // FanCheckInterval must be lower than MinimumWarningInterval to avoid giving driver over temperature warnings too soon when thermostatic control of electronics cooling fans is used
 static_assert(FanCheckInterval < MinimumWarningInterval, "FanCheckInterval too large");

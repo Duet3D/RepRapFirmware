@@ -77,6 +77,16 @@ DEFINE_GET_OBJECT_MODEL_TABLE(GCodes)
 
 #endif
 
+#ifdef SERIAL_AUX_DEVICE
+// Support for emergency stpo form PanelDue
+bool GCodes::emergencyStopCommanded = false;
+
+void GCodes::CommandEmergencyStop(UARTClass *p)
+{
+	emergencyStopCommanded = true;
+}
+#endif
+
 GCodes::GCodes(Platform& p) :
 	platform(p), machineType(MachineType::fff), active(false),
 #if HAS_VOLTAGE_MONITOR
@@ -176,6 +186,9 @@ void GCodes::Init()
 	DotStarLed::Init();
 #endif
 
+#ifdef SERIAL_AUX_DEVICE
+	SERIAL_AUX_DEVICE.SetInterruptCallback(GCodes::CommandEmergencyStop);
+#endif
 }
 
 // This is called from Init and when doing an emergency stop
@@ -199,7 +212,7 @@ void GCodes::Reset()
 	nextGcodeSource = 0;
 
 	fileToPrint.Close();
-	speedFactor = SecondsToMinutes;						// default is just to convert from mm/minute to mm/second
+	speedFactor = 100.0;
 
 	for (size_t i = 0; i < MaxExtruders; ++i)
 	{
@@ -361,6 +374,16 @@ void GCodes::Spin()
 	{
 		return;
 	}
+
+#ifdef SERIAL_AUX_DEVICE
+	if (emergencyStopCommanded)
+	{
+		DoEmergencyStop();
+		while (SERIAL_AUX_DEVICE.read() >= 0) { }
+		emergencyStopCommanded = false;
+		return;
+	}
+#endif
 
 	CheckTriggers();
 	CheckHeaterFault();
@@ -1197,12 +1220,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				else
 				{
 					// Successful probing
-					float heightAdjust = 0.0;
-					bool dummy;
-					gb.TryGetFValue('H', heightAdjust, dummy);
 					float m[MaxAxes];
 					reprap.GetMove().GetCurrentMachinePosition(m, false);		// get height without bed compensation
-					g30zStoppedHeight = m[Z_AXIS] - heightAdjust;				// save for later
+					g30zStoppedHeight = m[Z_AXIS] - g30HValue;					// save for later
 					g30zHeightError = g30zStoppedHeight - platform.ZProbeStopHeight();
 					g30zHeightErrorSum += g30zHeightError;
 				}
@@ -2244,7 +2264,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 		{
 			const float rate = gb.GetFValue() * distanceScale;
 			gb.MachineState().feedRate = (moveBuffer.moveType == 0)
-						? rate * speedFactor
+						? rate * speedFactor * (0.01 * SecondsToMinutes)
 						: rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
 		}
 		moveBuffer.feedRate = gb.MachineState().feedRate;
@@ -3073,6 +3093,7 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply)
 GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 {
 	g30SValue = (gb.Seen('S')) ? gb.GetIValue() : -3;		// S-3 is equivalent to having no S parameter
+	g30HValue = (gb.Seen('H')) ? gb.GetFValue() : 0.0;
 	g30ProbePointIndex = -1;
 	bool seenP = false;
 	gb.TryGetIValue('P', g30ProbePointIndex, seenP);
@@ -3715,13 +3736,6 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 	// Also check that this response was triggered by a gcode
 	if ((gb.MachineState().doingFileMacro || &gb == fileGCode) && reply[0] == 0)
 	{
-		return;
-	}
-
-	// Second UART device, e.g. PanelDue. Do NOT use emulation for this one!
-	if (&gb == auxGCode)
-	{
-		platform.AppendAuxReply(reply, reply[0] == '{');
 		return;
 	}
 
@@ -5050,13 +5064,7 @@ void GCodes::CheckHeaterFault()
 // Return the current speed factor
 float GCodes::GetSpeedFactor() const
 {
-	return speedFactor * MinutesToSeconds;
-}
-
-// Set the speed factor
-void GCodes::SetSpeedFactor(float factor)
-{
-	speedFactor = constrain<float>(factor, 0.1, 5.0) / MinutesToSeconds;
+	return speedFactor;
 }
 
 // Return a current extrusion factor
@@ -5080,6 +5088,12 @@ Pwm_t GCodes::ConvertLaserPwm(float reqVal) const
 }
 
 #if SUPPORT_12864_LCD
+
+// Set the speed factor. Value passed is in percent.
+void GCodes::SetSpeedFactor(float factor)
+{
+	speedFactor = constrain<float>(factor, 10.0, 500.0);
+}
 
 // Process a GCode command from the 12864 LCD returning true if the command was accepted
 bool GCodes::ProcessCommandFromLcd(const char *cmd)

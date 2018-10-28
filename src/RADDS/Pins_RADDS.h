@@ -29,11 +29,8 @@ const size_t NumFirmwareUpdateModules = 1;
 // The physical capabilities of the machine
 
 // The number of drives in the machine, including X, Y, and Z plus extruder drives
-const size_t DRIVES = 9;
-
-// Initialization macro used in statements needing to initialize values in arrays of size DRIVES.  E.g.,
-// max_feed_rates[DRIVES] = {DRIVES_(1, 1, 1, 1, 1, 1, 1, 1, 1, 1)}
-#define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h,i }
+const size_t NumDirectDrivers = 9;
+constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 
 // The number of heaters in the machine
 // 0 is the heated bed even if there isn't one.
@@ -44,11 +41,8 @@ constexpr size_t NumThermistorInputs = 4;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
-// Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
-#define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f }
 
-constexpr size_t MIN_AXES = 3;						// The minimum and default number of axes
-constexpr size_t MaxExtruders = DRIVES - MIN_AXES;	// The maximum number of extruders
+constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;
@@ -58,11 +52,11 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 // DRIVES
-//                                    X   Y   Z  E1  E2  E3  E4  E5  E6
-const Pin ENABLE_PINS[DRIVES] =    { 26, 22, 15, 62, 65, 49, 37, 31, 68 };
-//                                   A15 A12 A09 A02 B19 C12 C03 D06 B16
-const Pin STEP_PINS[DRIVES] =      { 24, 17,  2, 61, 64, 51, 35, 29, 67 };
-const Pin DIRECTION_PINS[DRIVES] = { 23, 16,  3, 60, 63, 53, 33, 27, 66 };
+//			                                    X   Y   Z  E1  E2  E3  E4  E5  E6
+const Pin ENABLE_PINS[NumDirectDrivers] =    { 26, 22, 15, 62, 65, 49, 37, 31, 68 };
+//			                                   A15 A12 A09 A02 B19 C12 C03 D06 B16
+const Pin STEP_PINS[NumDirectDrivers] =      { 24, 17,  2, 61, 64, 51, 35, 29, 67 };
+const Pin DIRECTION_PINS[NumDirectDrivers] = { 23, 16,  3, 60, 63, 53, 33, 27, 66 };
 
 // Endstops
 // E Stops not currently used
@@ -111,8 +105,7 @@ const Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { 38, 36 };
 const Pin ATX_POWER_PIN = 40;
 
 // Z Probe pin
-// Must be an ADC capable pin.  Can be any of the ARM's A/D capable
-// pins even a non-Arduino pin.
+// Must be an ADC capable pin. Can be any of the ARM's A/D capable pins even a non-Arduino pin.
 const Pin Z_PROBE_PIN = A5;  // RADDS "ADC" pin
 
 // Digital pin number to turn the IR LED on (high) or off (low)
