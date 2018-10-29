@@ -28,6 +28,7 @@ const char * const GridDefinition::HeightMapLabelLines[] =
 
 const ObjectModelTableEntry GridDefinition::objectModelTable[] =
 {
+	// These entries must be in alphabetical order
 	{ "radius", OBJECT_MODEL_FUNC(&(self->radius)), TYPE_OF(float), ObjectModelTableEntry::none }
 };
 

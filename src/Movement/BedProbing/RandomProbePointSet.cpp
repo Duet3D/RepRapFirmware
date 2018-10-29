@@ -20,7 +20,8 @@
 
 const ObjectModelTableEntry RandomProbePointSet::objectModelTable[] =
 {
-	{ "numBedCompensationPoints", OBJECT_MODEL_FUNC(&(self->numBedCompensationPoints)), TYPE_OF(uint32_t), ObjectModelTableEntry::none }
+	// These entries must be in alphabetical order
+	{ "numPointsProbed", OBJECT_MODEL_FUNC(&(self->numBedCompensationPoints)), TYPE_OF(uint32_t), ObjectModelTableEntry::none }
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RandomProbePointSet)

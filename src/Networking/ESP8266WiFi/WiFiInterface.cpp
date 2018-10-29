@@ -167,10 +167,11 @@ WiFiInterface::WiFiInterface(Platform& p) : platform(p), uploader(nullptr), ftpD
 
 const ObjectModelTableEntry WiFiInterface::objectModelTable[] =
 {
-	{ "name", OBJECT_MODEL_FUNC_NOSELF("wifi"), TYPE_OF(const char *), ObjectModelTableEntry::none },
+	// These entries must be in alphabetical order
+	{ "gateway", OBJECT_MODEL_FUNC(&(self->gateway)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
 	{ "ip", OBJECT_MODEL_FUNC(&(self->ipAddress)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+	{ "name", OBJECT_MODEL_FUNC_NOSELF("wifi"), TYPE_OF(const char *), ObjectModelTableEntry::none },
 	{ "netmask", OBJECT_MODEL_FUNC(&(self->netmask)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
-	{ "gateway", OBJECT_MODEL_FUNC(&(self->gateway)), TYPE_OF(IPAddress), ObjectModelTableEntry::none }
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(WiFiInterface)

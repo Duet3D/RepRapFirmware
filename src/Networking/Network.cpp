@@ -70,6 +70,7 @@ static const ObjectModelArrayDescriptor interfaceArrayDescriptor =
 
 const ObjectModelTableEntry Network::objectModelTable[] =
 {
+	// These entries must be in alphabetical order
 	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfaceArrayDescriptor), TYPE_OF(ObjectModel) | IsArray, ObjectModelTableEntry::none }
 };
 

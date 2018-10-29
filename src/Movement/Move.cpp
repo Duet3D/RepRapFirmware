@@ -57,11 +57,12 @@ constexpr uint32_t AbsoluteMinimumPreparedTime = StepTimer::StepClockRate/20;		/
 
 const ObjectModelTableEntry Move::objectModelTable[] =
 {
+	// These entries must be in alphabetical order
+	{ "drcEnabled", OBJECT_MODEL_FUNC(&(self->drcEnabled)), TYPE_OF(bool), ObjectModelTableEntry::none },
+	{ "drcMinimumAcceleration", OBJECT_MODEL_FUNC(&(self->drcMinimumAcceleration)), TYPE_OF(float), ObjectModelTableEntry::none },
+	{ "drcPeriod", OBJECT_MODEL_FUNC(&(self->drcPeriod)), TYPE_OF(float), ObjectModelTableEntry::none },
 	{ "maxPrintingAcceleration", OBJECT_MODEL_FUNC(&(self->maxPrintingAcceleration)), TYPE_OF(float), ObjectModelTableEntry::none },
 	{ "maxTravelAcceleration", OBJECT_MODEL_FUNC(&(self->maxTravelAcceleration)), TYPE_OF(float), ObjectModelTableEntry::none },
-	{ "drcPeriod", OBJECT_MODEL_FUNC(&(self->drcPeriod)), TYPE_OF(float), ObjectModelTableEntry::none },
-	{ "drcMinimumAcceleration", OBJECT_MODEL_FUNC(&(self->drcMinimumAcceleration)), TYPE_OF(float), ObjectModelTableEntry::none },
-	{ "drcEnabled", OBJECT_MODEL_FUNC(&(self->drcEnabled)), TYPE_OF(bool), ObjectModelTableEntry::none },
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
@@ -1307,7 +1308,10 @@ void Move::AdjustLeadscrews(const floatc_t corrections[])
 	const AxisDriversConfig& config = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS);
 	for (size_t i = 0; i < config.numDrivers; ++i)
 	{
-		specialMoveCoords[config.driverNumbers[i]] = corrections[i];
+		if (config.driverNumbers[i] < MaxTotalDrivers)
+		{
+			specialMoveCoords[config.driverNumbers[i]] = corrections[i];
+		}
 	}
 	specialMoveAvailable = true;
 }

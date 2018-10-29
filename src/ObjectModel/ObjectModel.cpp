@@ -11,6 +11,7 @@
 
 #include "OutputMemory.h"
 #include <cstring>
+#include <General/SafeStrtod.h>
 
 // Constructor
 ObjectModel::ObjectModel()
@@ -96,7 +97,15 @@ void ObjectModelTableEntry::ReportItemAsJson(OutputBuffer *buf, const char *filt
 		break;
 
 	case TYPE_OF(float):
-		buf->catf("%.1f", (double)*(const float *)nParam);		//TODO different parameters need different number of decimal places
+		buf->catf("%.1f", (double)*(const float *)nParam);
+		break;
+
+	case TYPE_OF(Float2):
+		buf->catf("%.2f", (double)*(const float *)nParam);
+		break;
+
+	case TYPE_OF(Float3):
+		buf->catf("%.3f", (double)*(const float *)nParam);
 		break;
 
 	case TYPE_OF(uint32_t):
@@ -118,8 +127,15 @@ void ObjectModelTableEntry::ReportItemAsJson(OutputBuffer *buf, const char *filt
 		}
 		else
 		{
+			uint32_t v = *(const uint32_t *)nParam;
 			buf->cat('[');
-			// TODO list the bits that are set
+			buf->cat((v & 1) ? '1' : '0');
+			for (unsigned int i = 1; i < 32; ++i)
+			{
+				v >>= 1;
+				buf->cat(',');
+				buf->cat((v & 1) ? '1' : '0');
+			}
 			buf->cat(']');
 		}
 		break;
@@ -145,7 +161,7 @@ void ObjectModelTableEntry::ReportItemAsJson(OutputBuffer *buf, const char *filt
 			}
 			else
 			{
-				buf->cat((bVal) ? "yes" : "no");
+				buf->cat((bVal) ? "\"yes\"" : "\"no\"");
 			}
 		}
 		break;
@@ -212,16 +228,6 @@ int ObjectModelTableEntry::IdCompare(const char *id) const
 			: -1;
 }
 
-// Check the type is correct, call the function if necessary and return the pointer
-void* ObjectModelTableEntry::GetValuePointer(ObjectModel *self, TypeCode t) const
-{
-	if (t != type)
-	{
-		return nullptr;
-	}
-	return param(self);
-}
-
 // Get the value of an object when we don't know what its type is
 TypeCode ObjectModel::GetObjectValue(ExpressionValue& val, const char *idString)
 {
@@ -231,39 +237,73 @@ TypeCode ObjectModel::GetObjectValue(ExpressionValue& val, const char *idString)
 		return NoType;
 	}
 
-	if ((e->type & IsArray) != 0)
+	idString = GetNextElement(idString);
+	void * param = e->param(this);
+	TypeCode tc = e->type;
+	if ((tc & IsArray) != 0)
 	{
-		//TODO handle arrays
-		return NoType;
+		if (*idString != '[')
+		{
+			return NoType;						// no array index is provided, and we don't currently allow an entire array to be returned
+		}
+		const char *endptr;
+		const unsigned long val = SafeStrtoul(idString + 1, &endptr);
+		if (endptr == idString + 1 || *endptr != ']')
+		{
+			return NoType;						// invalid syntax
+		}
+		const ObjectModelArrayDescriptor *arr = (const ObjectModelArrayDescriptor*)param;
+		if (val >= arr->GetNumElements(this))
+		{
+			return NoType;						// array index out of range
+		}
+
+		idString = endptr + 1;					// skip past the ']'
+		if (*idString == '.')
+		{
+			++idString;							// skip any '.' after it because it could be an array of objects
+		}
+		tc &= ~IsArray;							// clear the array flag
+		param = arr->GetElement(this, val);		// fetch the pointer to the array element
 	}
 
-	switch (e->type)
+	switch (tc)
 	{
 	case TYPE_OF(ObjectModel):
-		return ((ObjectModel*)e->param(this))->GetObjectValue(val, GetNextElement(idString));
+		return ((ObjectModel*)param)->GetObjectValue(val, idString);
 
 	case TYPE_OF(float):
-		val.fVal = *((const float*)e->param(this));
+	case TYPE_OF(Float2):
+	case TYPE_OF(Float3):
+		val.fVal = *((const float*)param);
 		break;
 
 	case TYPE_OF(uint32_t):
 	case TYPE_OF(Bitmap32):
 	case TYPE_OF(Enum32):
-		val.uVal = *((const uint32_t*)e->param(this));
+		val.uVal = *((const uint32_t*)param);
 		break;
 
 	case TYPE_OF(int32_t):
-		val.iVal = *((const int32_t*)e->param(this));
+		val.iVal = *((const int32_t*)param);
 		break;
 
 	case TYPE_OF(const char*):
-		val.sVal = *((const char* const *)e->param(this));
+		val.sVal = (const char*)param;
+		break;
+
+	case TYPE_OF(bool):
+		val.bVal = *((const bool*)param);
+		break;
+
+	case TYPE_OF(IPAddress):
+		val.uVal = ((const IPAddress *)param)->GetV4LittleEndian();
 		break;
 
 	default:
-		break;
+		return NoType;
 	}
-	return e->type;
+	return tc;
 }
 
 // Template specialisations

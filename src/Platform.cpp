@@ -2294,9 +2294,10 @@ void Platform::Diagnostics(MessageType mtype)
 
 #if HAS_VOLTAGE_MONITOR
 	// Show the supply voltage
-	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 ", over voltage events: %" PRIu32 "\n",
+	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 ", over voltage events: %" PRIu32 ", power good: %s\n",
 		(double)AdcReadingToPowerVoltage(lowestVin), (double)AdcReadingToPowerVoltage(currentVin), (double)AdcReadingToPowerVoltage(highestVin),
-				numUnderVoltageEvents, numOverVoltageEvents);
+				numUnderVoltageEvents, numOverVoltageEvents,
+				(driversPowered) ? "yes" : "no");
 	lowestVin = highestVin = currentVin;
 #endif
 
@@ -4436,7 +4437,11 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 		{
 			for (size_t j = 0; j < axisDrivers[i].numDrivers; ++j)
 			{
-				SetBit(drivers, axisDrivers[i].driverNumbers[j]);
+				const uint8_t driver = axisDrivers[i].driverNumbers[j];
+				if (driver < numSmartDrivers)
+				{
+					SetBit(drivers, driver);
+				}
 			}
 		}
 	}
@@ -4451,7 +4456,11 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 		{
 			if (extruderNumbers[i] < MaxExtruders)
 			{
-				SetBit(drivers, GetExtruderDriver(extruderNumbers[i]));
+				const uint8_t driver = GetExtruderDriver(extruderNumbers[i]);
+				if (driver < numSmartDrivers)
+				{
+					SetBit(drivers, driver);
+				}
 			}
 		}
 	}

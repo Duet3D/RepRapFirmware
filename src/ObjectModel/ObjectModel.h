@@ -24,6 +24,7 @@ class ObjectModel;
 
 union ExpressionValue
 {
+	bool bVal;
 	float fVal;
 	int32_t iVal;
 	uint32_t uVal;
@@ -32,8 +33,10 @@ union ExpressionValue
 };
 
 // Dummy types, used to define type codes
-class Bitmap32 { };
-class Enum32 { };
+class Bitmap32;
+class Enum32;
+class Float2;			// float printed to 2 decimal places instead of 1
+class Float3;			// float printed to 3 decimal places instead of 1
 
 class ObjectModel
 {
@@ -87,11 +90,13 @@ template<> constexpr TypeCode TypeOf<bool> () { return 1; }
 template<> constexpr TypeCode TypeOf<uint32_t> () { return 2; }
 template<> constexpr TypeCode TypeOf<int32_t>() { return 3; }
 template<> constexpr TypeCode TypeOf<float>() { return 4; }
-template<> constexpr TypeCode TypeOf<Bitmap32>() { return 5; }
-template<> constexpr TypeCode TypeOf<Enum32>() { return 6; }
-template<> constexpr TypeCode TypeOf<ObjectModel>() { return 7; }
-template<> constexpr TypeCode TypeOf<const char *>() { return 8; }
-template<> constexpr TypeCode TypeOf<IPAddress>() { return 9; }
+template<> constexpr TypeCode TypeOf<Float2>() { return 5; }
+template<> constexpr TypeCode TypeOf<Float3>() { return 6; }
+template<> constexpr TypeCode TypeOf<Bitmap32>() { return 7; }
+template<> constexpr TypeCode TypeOf<Enum32>() { return 8; }
+template<> constexpr TypeCode TypeOf<ObjectModel>() { return 9; }
+template<> constexpr TypeCode TypeOf<const char *>() { return 10; }
+template<> constexpr TypeCode TypeOf<IPAddress>() { return 11; }
 
 #define TYPE_OF(_t) (TypeOf<_t>())
 
@@ -140,15 +145,6 @@ public:
 
 	// Compare the name of this field with the filter string that we are trying to match
 	int IdCompare(const char *id) const;
-
-	// Return true if this field is an object, not a primitive type
-	bool IsObject() const { return type == TYPE_OF(ObjectModel); }
-
-	// Follow the path specified by the ifString until we reach the end of it
-	const ObjectModelTableEntry *FindLeafEntry(ObjectModel *self, const char *idString) const;
-
-	// Check the type is correct, call the function and return the pointer
-	void* GetValuePointer(ObjectModel *self, TypeCode t) const;
 
 	// Private function to report a value of primitive type
 	static void ReportItemAsJson(OutputBuffer *buf, const char *filter, ObjectModel::ReportFlags flags, void *nParam, TypeCode type);

@@ -679,7 +679,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 		return GCodeResult::notFinished;
 	}
 
-	bool seen = false, badDrive = false;
+	bool seen = false;
 	const char *lettersToTry = "XYZUVWABC";
 	char c;
 	while ((c = *lettersToTry) != 0)
@@ -697,19 +697,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 			config.numDrivers = numValues;
 			for (size_t i = 0; i < numValues; ++i)
 			{
-				if (drivers[i] >= MaxTotalDrivers)
-				{
-					badDrive = true;
-				}
-				else
-				{
-					config.driverNumbers[i] = (uint8_t)drivers[i];
-				}
-			}
-
-			if (badDrive)
-			{
-				break;
+				config.driverNumbers[i] = (uint8_t)min<uint32_t>(drivers[i], 255);
 			}
 
 			// Find the drive number allocated to this axis, or allocate a new one if necessary
@@ -748,62 +736,47 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 		numExtruders = numValues;
 		for (size_t i = 0; i < numValues; ++i)
 		{
-			if (drivers[i] >= MaxTotalDrivers)
-			{
-				badDrive = true;
-			}
-			else
-			{
-				platform.SetExtruderDriver(i, (uint8_t)drivers[i]);
-			}
+			platform.SetExtruderDriver(i, (uint8_t)min<uint32_t>(drivers[i], 255));
 		}
 	}
 
-	if (badDrive)
+	if (gb.Seen('P'))
 	{
-		reply.copy("Invalid driver number");
-		return GCodeResult::error;
-	}
-	else
-	{
-		if (gb.Seen('P'))
+		seen = true;
+		const int nva = gb.GetIValue();
+		if (nva >= (int)MinAxes && (unsigned int)nva <= numTotalAxes)
 		{
-			seen = true;
-			const int nva = gb.GetIValue();
-			if (nva >= (int)MinAxes && (unsigned int)nva <= numTotalAxes)
-			{
-				numVisibleAxes = (size_t)nva;
-			}
-			else
-			{
-				reply.copy("Invalid number of visible axes");
-				return GCodeResult::error;
-			}
+			numVisibleAxes = (size_t)nva;
 		}
-
-		if (!seen)
+		else
 		{
-			reply.copy("Driver assignments:");
-			for (size_t drive = 0; drive < numTotalAxes; ++ drive)
-			{
-				reply.cat(' ');
-				const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(drive);
-				char c = axisLetters[drive];
-				for (size_t i = 0; i < axisConfig.numDrivers; ++i)
-				{
-					reply.catf("%c%u", c, axisConfig.driverNumbers[i]);
-					c = ':';
-				}
-			}
+			reply.copy("Invalid number of visible axes");
+			return GCodeResult::error;
+		}
+	}
+
+	if (!seen)
+	{
+		reply.copy("Driver assignments:");
+		for (size_t drive = 0; drive < numTotalAxes; ++ drive)
+		{
 			reply.cat(' ');
-			char c = extrudeLetter;
-			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+			const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(drive);
+			char c = axisLetters[drive];
+			for (size_t i = 0; i < axisConfig.numDrivers; ++i)
 			{
-				reply.catf("%c%u", c, platform.GetExtruderDriver(extruder));
+				reply.catf("%c%u", c, axisConfig.driverNumbers[i]);
 				c = ':';
 			}
-			reply.catf(", %u axes visible", numVisibleAxes);
 		}
+		reply.cat(' ');
+		char c = extrudeLetter;
+		for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+		{
+			reply.catf("%c%u", c, platform.GetExtruderDriver(extruder));
+			c = ':';
+		}
+		reply.catf(", %u axes visible", numVisibleAxes);
 	}
 
 	return GCodeResult::ok;
@@ -1025,7 +998,7 @@ GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 #if defined(I2C_IFACE)
 	if (gb.Seen('A'))
 	{
-		const uint32_t address = gb.GetUIValue();
+		const uint32_t address = gb.GetUIValueMaybeHex();
 		if (gb.Seen('B'))
 		{
 			int32_t values[MaxI2cBytes];
@@ -1064,7 +1037,7 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 #if defined(I2C_IFACE)
 	if (gb.Seen('A'))
 	{
-		const uint32_t address = gb.GetUIValue();
+		const uint32_t address = gb.GetUIValueMaybeHex();
 		if (gb.Seen('B'))
 		{
 			uint32_t numBytes = gb.GetUIValue();

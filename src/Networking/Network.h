@@ -80,7 +80,7 @@ public:
 	uint32_t GetHttpReplySeq();
 
 #if SUPPORT_OBJECT_MODEL
-	void *GetInterface(size_t n) { return interfaces[n]; }
+	NetworkInterface *GetInterface(size_t n) const { return interfaces[n]; }
 #endif
 
 protected:

@@ -70,6 +70,7 @@ void GCodes::RawMove::SetDefaults()
 
 const ObjectModelTableEntry GCodes::objectModelTable[] =
 {
+	// These entries must be in alphabetical order
 	{ "speedFactor", OBJECT_MODEL_FUNC(&(self->speedFactor)), TYPE_OF(float), ObjectModelTableEntry::none }
 };
 

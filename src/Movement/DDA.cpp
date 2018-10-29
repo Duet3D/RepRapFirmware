@@ -678,7 +678,12 @@ pre(state == provisional)
 					)
 			{
 				// This is a deceleration-only move, so we may have to adjust the previous move as well to get optimum behaviour
-				if (laDDA->prev->state == provisional && laDDA->prev->isPrintingMove == laDDA->isPrintingMove && laDDA->prev->xyMoving == laDDA->xyMoving)
+				if (   laDDA->prev->state == provisional
+					&& laDDA->prev->xyMoving == laDDA->xyMoving
+					&& (   laDDA->prev->isPrintingMove == laDDA->isPrintingMove
+						|| (laDDA->prev->isPrintingMove && laDDA->prev->requestedSpeed == laDDA->requestedSpeed)	// special case to support coast-to-end
+					   )
+				   )
 				{
 					laDDA->MatchSpeeds();
 					const float maxStartSpeed = sqrtf(fsquare(laDDA->targetNextSpeed) + (2 * laDDA->deceleration * laDDA->totalDistance));
