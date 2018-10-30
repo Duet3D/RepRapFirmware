@@ -2930,6 +2930,8 @@ void Platform::EnableDrive(size_t drive)
 		{
 			EnableDriver(axisDrivers[drive].driverNumbers[i]);
 		}
+		// If axis has brake pin assigned, then release the brake
+		axisBrakes[drive].WriteDigital(true);
 	}
 	else if (drive < DRIVES)
 	{
@@ -2947,6 +2949,8 @@ void Platform::DisableDrive(size_t drive)
 		{
 			DisableDriver(axisDrivers[drive].driverNumbers[i]);
 		}
+		// If axis has brake pin assigned, then enable the brake
+		axisBrakes[drive].WriteDigital(false);
 	}
 	else if (drive < DRIVES)
 	{
@@ -3812,6 +3816,42 @@ void Platform::SetPressureAdvance(size_t extruder, float factor)
 	{
 		pressureAdvance[extruder] = factor;
 	}
+}
+
+bool Platform::ConfigureAxisBrakes(GCodeBuffer& gb, const StringRef& reply) 
+{
+
+	bool success = true;
+	bool seen = false;
+	bool invert = gb.Seen('I') && gb.GetIValue() > 0;
+	bool printed = false;
+
+	// look for axes
+	for (size_t i = 0; i < reprap.GetGCodes().GetTotalAxes(); ++i)
+	{
+		char axis = reprap.GetGCodes().GetAxisLetters()[i];
+		if (gb.Seen(axis))
+		{
+			seen = true;
+			LogicalPin logicalPin = gb.GetIValue();
+			if (printed)
+			{
+				reply.cat('\n');
+			}
+			if (axisBrakes[i].Set(logicalPin, PinAccess::write, invert)) 
+			{
+				reply.catf("Assigned brake for Axis %c on Logical pin %d", axis, logicalPin);
+			} 
+			else 
+			{
+				reply.catf("Logical pin %d is not available for writing", logicalPin);
+				success = false;
+			}
+			printed = true;
+		}
+	}
+
+	return seen && success;
 }
 
 #if SUPPORT_NONLINEAR_EXTRUSION

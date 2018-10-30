@@ -3555,6 +3555,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		// TODO: We may need this code later to restrict specific filaments to certain tools or to reset filament counters.
 		break;
 
+	case 594: // Configure stepper brakes per axis
+		if (!platform.ConfigureAxisBrakes(gb, reply))
+		{
+			result = GCodeResult::error;
+		}
+		break;
+
 	case 665: // Set delta configuration
 		if (!LockMovementAndWaitForStandstill(gb))
 		{
