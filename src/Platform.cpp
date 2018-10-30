@@ -3931,20 +3931,23 @@ bool Platform::ConfigureAxisBrakes(GCodeBuffer& gb, const StringRef& reply)
 		{
 			seen = true;
 			LogicalPin logicalPin = gb.GetIValue();
-			if (printed)
-			{
-				reply.cat('\n');
+			// Negative pin values indicate to ignore 
+			if (logicalPin >= 0) {
+				if (printed)
+				{
+					reply.cat('\n');
+				}
+				if (axisBrakes[i].Set(logicalPin, PinAccess::write, invert)) 
+				{
+					reply.catf("Assigned brake for Axis %c on Logical pin %d", axis, logicalPin);
+				} 
+				else 
+				{
+					reply.catf("Logical pin %d is not available for writing", logicalPin);
+					success = false;
+				}
+				printed = true;
 			}
-			if (axisBrakes[i].Set(logicalPin, PinAccess::write, invert)) 
-			{
-				reply.catf("Assigned brake for Axis %c on Logical pin %d", axis, logicalPin);
-			} 
-			else 
-			{
-				reply.catf("Logical pin %d is not available for writing", logicalPin);
-				success = false;
-			}
-			printed = true;
 		}
 	}
 

@@ -795,7 +795,7 @@ private:
 	AxesBitmap axisMinimaProbed, axisMaximaProbed;
 	EndStopPosition endStopPos[MaxAxes];
 	EndStopInputType endStopInputType[MaxAxes];
-    IoPort axisBrakes[MaxAxes];
+	IoPort axisBrakes[MaxAxes];
 
 	static bool WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam);
 
