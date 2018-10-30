@@ -32,6 +32,7 @@ bool IoPort::Set(LogicalPin lp, PinAccess access, bool pInvert)
 	const bool ret = reprap.GetPlatform().GetFirmwarePin(lp, access, pin, invert);
 	if (ret)
 	{
+		logicalPort = lp;
 		if (pInvert)
 		{
 			invert = !invert;

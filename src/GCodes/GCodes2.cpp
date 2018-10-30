@@ -3549,6 +3549,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		DoFileMacro(gb, PEEL_MOVE_G, true);
 		break;
 
+	case 594: // Configure stepper brakes per axis
+		if (!platform.ConfigureAxisBrakes(gb, reply))
+		{
+			result = GCodeResult::error;
+		}
+		break;
+
 	case 665: // Set delta configuration
 		if (!LockMovementAndWaitForStandstill(gb))
 		{
