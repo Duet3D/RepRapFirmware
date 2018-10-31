@@ -1,5 +1,17 @@
-Instructions for building dc42 fork of RepRapFirmware under Windows
-===================================================================
+Instructions for building dc42 fork of RepRapFirmware
+=====================================================
+
+**Important!**
+
+RepRapFirmware is built from several Github projects. You need to use compatible branches of these projects. As at October 2018, development uses these branches:
+
+- ReprapFirmware: v2-dev
+- CoreNG: main
+- FreeRTOS: main
+- RRFLibraries: main
+- DuetWiFiSocketServer: dev
+
+**Instructions for building under Windows**
 
 1. Download and install the gcc cross-compiler:
 
@@ -35,8 +47,7 @@ Instructions for building dc42 fork of RepRapFirmware under Windows
 
 14. Build CoreNG first, also build FreeRTOS and RRFLibraries if needed. Then clean and build RepRapFirmware (the clean step is needed to make Eclipse notice that the output library files in the other projects have been built). The Duet WiFi and Duet Ethernet builds of RRF use the SAM4E_RTOS builds of CoreNG and RRFLibraries and the SAM4E build of FreeRTOS. The Duet Maestro uses the SAM4S_RTOS build of CoreNG and RRFLibraries, and the SAM4S build of FreeRTOS. The Duet085 build of RRF (which also runs on the Duet06) uses the SAM3X build of CoreNG. The RADDS and Alligator builds of RRF have their own builds of CoreNG.
 
-Instructions for building dc42 fork of RepRapFirmware under macOS
-=================================================================
+**Instructions for building under macOS**
 
 Using Homebrew-Cask makes it very easy to install new software on macOS: https://caskroom.github.io/
 
