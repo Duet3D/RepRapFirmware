@@ -67,7 +67,7 @@
 								<option id="gnu.cpp.link.option.libs.1995000942" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
 									<listOptionValue builtIn="false" value="${CoreName}"/>
 								</option>
-								<option id="gnu.cpp.link.option.flags.1670739910" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m3 -T${workspace_loc:/${CoreName}/variants/duet/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
+								<option id="gnu.cpp.link.option.flags.1670739910" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m3 -T&quot;${workspace_loc:/${CoreName}/variants/duet/linker_scripts/gcc/flash.ld}&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1491196930" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -117,7 +117,7 @@
 			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
 		</cconfiguration>
 		<cconfiguration id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289">
-			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289" moduleId="org.eclipse.cdt.core.settings" name="RADDS">
+			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289" moduleId="org.eclipse.cdt.core.settings" name="RADDS_RTOS">
 				<macros>
 					<stringMacro name="LinkFlags2" type="VALUE_TEXT" value="-Wl,--end-group -lm"/>
 					<stringMacro name="LinkFlags1" type="VALUE_TEXT" value="-mthumb -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry=Reset_Handler -Wl,--unresolved-symbols=report-all -Wl,--warn-common -Wl,--warn-section-align -Wl,--warn-unresolved-symbols -Wl,--start-group"/>
@@ -135,7 +135,7 @@
 				</extensions>
 			</storageModule>
 			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
-				<configuration artifactExtension="elf" artifactName="${ProjName}-RADDS" buildArtefactType="org.eclipse.cdt.build.core.buildArtefactType.exe" buildProperties="org.eclipse.cdt.build.core.buildArtefactType=org.eclipse.cdt.build.core.buildArtefactType.exe,org.eclipse.cdt.build.core.buildType=org.eclipse.cdt.build.core.buildType.release" cleanCommand="rm -rf" description="" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289" name="RADDS" parent="cdt.managedbuild.config.gnu.cross.exe.release" postannouncebuildStep="Generating binary file" postbuildStep="arm-none-eabi-objcopy -O binary ${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.elf ${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.bin">
+				<configuration artifactExtension="elf" artifactName="${ProjName}-RADDS" buildArtefactType="org.eclipse.cdt.build.core.buildArtefactType.exe" buildProperties="org.eclipse.cdt.build.core.buildArtefactType=org.eclipse.cdt.build.core.buildArtefactType.exe,org.eclipse.cdt.build.core.buildType=org.eclipse.cdt.build.core.buildType.release" cleanCommand="rm -rf" description="" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289" name="RADDS_RTOS" parent="cdt.managedbuild.config.gnu.cross.exe.release" postannouncebuildStep="Generating binary file" postbuildStep="arm-none-eabi-objcopy -O binary ${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.elf ${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.bin">
 					<folderInfo id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289." name="/" resourcePath="">
 						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.release.1973208555" name="Cross GCC" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.release">
 							<option id="cdt.managedbuild.option.gnu.cross.path.2092504710" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${GccPath}" valueType="string"/>
@@ -166,6 +166,7 @@
 								<option id="gnu.c.compiler.option.preprocessor.def.symbols.2017188375" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
 									<listOptionValue builtIn="false" value="__RADDS__"/>
+									<listOptionValue builtIn="false" value="RTOS"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.110609707" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
@@ -174,12 +175,16 @@
 							<tool command="gcc" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT} ${LinkFlags1} &quot;${workspace_loc}/${CoreName}/RADDS/cores/arduino/syscalls.o&quot; ${INPUTS} ${LinkFlags2}" id="cdt.managedbuild.tool.gnu.cross.cpp.linker.1176271302" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker">
 								<option id="gnu.cpp.link.option.nostdlibs.706270025" name="No startup or default libs (-nostdlib)" superClass="gnu.cpp.link.option.nostdlibs" useByScannerDiscovery="false" value="false" valueType="boolean"/>
 								<option id="gnu.cpp.link.option.paths.1160723414" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" useByScannerDiscovery="false" valueType="libPaths">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/RADDS/}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/RADDS_RTOS/}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/SAM3X}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/SAM3X_RTOS}&quot;"/>
 								</option>
 								<option id="gnu.cpp.link.option.libs.1006761104" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
 									<listOptionValue builtIn="false" value="${CoreName}"/>
+									<listOptionValue builtIn="false" value="FreeRTOS"/>
+									<listOptionValue builtIn="false" value="RRFLibraries"/>
 								</option>
-								<option id="gnu.cpp.link.option.flags.827167716" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m3 -T${workspace_loc:/${CoreName}/variants/RADDS/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
+								<option id="gnu.cpp.link.option.flags.827167716" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m3 -T&quot;${workspace_loc:/${CoreName}/variants/RADDS/linker_scripts/gcc/flash.ld}&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.99895855" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -209,10 +214,14 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/variants/RADDS}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/RADDS}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM3}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.1179781669" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
 									<listOptionValue builtIn="false" value="__RADDS__"/>
+									<listOptionValue builtIn="false" value="RTOS"/>
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1578939493" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
@@ -294,7 +303,7 @@
 								<option id="gnu.cpp.link.option.libs.1260510068" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
 									<listOptionValue builtIn="false" value="${CoreName}"/>
 								</option>
-								<option id="gnu.cpp.link.option.flags.1376831701" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m3 -T${workspace_loc:/${CoreName}/variants/alligator/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
+								<option id="gnu.cpp.link.option.flags.1376831701" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m3 -T&quot;${workspace_loc:/${CoreName}/variants/alligator/linker_scripts/gcc/flash.ld&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1951368129" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -358,21 +367,21 @@
 				<externalSettings/>
 				<extensions>
 					<extension id="org.eclipse.cdt.core.ELF" point="org.eclipse.cdt.core.BinaryParser"/>
-					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
 					<extension id="org.eclipse.cdt.core.GCCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
 					<extension id="org.eclipse.cdt.core.GASErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
 					<extension id="org.eclipse.cdt.core.GLDErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
 				</extensions>
 			</storageModule>
 			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
 				<configuration artifactExtension="elf" artifactName="Duet2CombinedFirmware" buildArtefactType="org.eclipse.cdt.build.core.buildArtefactType.exe" buildProperties="org.eclipse.cdt.build.core.buildArtefactType=org.eclipse.cdt.build.core.buildArtefactType.exe,org.eclipse.cdt.build.core.buildType=org.eclipse.cdt.build.core.buildType.release" cleanCommand="rm -rf" description="" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.170574622" name="Duet2_RTOS" parent="cdt.managedbuild.config.gnu.cross.exe.release" postannouncebuildStep="Generating binary file" postbuildStep="arm-none-eabi-objcopy -O binary ${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.elf ${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.bin">
 					<folderInfo id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.170574622." name="/" resourcePath="">
-						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.release.435431950" name="Cross GCC" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.release">
+						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.release.435431950" name="Cross GCC" nonInternalBuilderId="cdt.managedbuild.builder.gnu.cross" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.release">
 							<option id="cdt.managedbuild.option.gnu.cross.path.1881231799" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${GccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.172065168" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.1838379384" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.591414239" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Duet2_RTOS" id="cdt.managedbuild.builder.gnu.cross.1206198077" keepEnvironmentInBuildfile="false" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1539163958" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.1036697395" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
@@ -416,7 +425,7 @@
 									<listOptionValue builtIn="false" value="FreeRTOS"/>
 									<listOptionValue builtIn="false" value="RRFLibraries"/>
 								</option>
-								<option id="gnu.cpp.link.option.flags.161856294" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -T${workspace_loc:/${CoreName}/variants/duetNG/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
+								<option id="gnu.cpp.link.option.flags.161856294" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -T&quot;${workspace_loc:/${CoreName}/variants/duetNG/linker_scripts/gcc/flash.ld}&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1270956612" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -539,7 +548,7 @@
 									<listOptionValue builtIn="false" value="FreeRTOS"/>
 									<listOptionValue builtIn="false" value="RRFLibraries"/>
 								</option>
-								<option id="gnu.cpp.link.option.flags.1077151865" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -T${workspace_loc:/${CoreName}/variants/sam4s/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
+								<option id="gnu.cpp.link.option.flags.1077151865" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -T&quot;${workspace_loc:/${CoreName}/variants/sam4s/linker_scripts/gcc/flash.ld}&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.480654714" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -672,7 +681,7 @@
 									<listOptionValue builtIn="false" value="FreeRTOS"/>
 									<listOptionValue builtIn="false" value="RRFLibraries"/>
 								</option>
-								<option id="gnu.cpp.link.option.flags.2100826215" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -T${workspace_loc:/${CoreName}/variants/same70/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
+								<option id="gnu.cpp.link.option.flags.2100826215" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -T&quot;${workspace_loc:/${CoreName}/variants/same70/linker_scripts/gcc/flash.ld}&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1623645672" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -693,6 +702,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/utils}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/clock}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/ioport}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/components/ethernet_phy/ksz8081rna}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/gmac}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/services/flash_efc}&quot;"/>
@@ -800,7 +810,7 @@
 									<listOptionValue builtIn="false" value="FreeRTOS"/>
 									<listOptionValue builtIn="false" value="RRFLibraries"/>
 								</option>
-								<option id="gnu.cpp.link.option.flags.633609481" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -T${workspace_loc:/${CoreName}/variants/sam4s/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
+								<option id="gnu.cpp.link.option.flags.633609481" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -T&quot;${workspace_loc:/${CoreName}/variants/sam4s/linker_scripts/gcc/flash.ld}&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.96746585" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -923,7 +933,7 @@
 									<listOptionValue builtIn="false" value="FreeRTOS"/>
 									<listOptionValue builtIn="false" value="RRFLibraries"/>
 								</option>
-								<option id="gnu.cpp.link.option.flags.1106600671" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -T${workspace_loc:/${CoreName}/variants/sam4s/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
+								<option id="gnu.cpp.link.option.flags.1106600671" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -T&quot;${workspace_loc:/${CoreName}/variants/sam4s/linker_scripts/gcc/flash.ld}&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.180173717" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -1056,7 +1066,7 @@
 									<listOptionValue builtIn="false" value="FreeRTOS"/>
 									<listOptionValue builtIn="false" value="RRFLibraries"/>
 								</option>
-								<option id="gnu.cpp.link.option.flags.1694312842" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -T${workspace_loc:/${CoreName}/variants/same70/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
+								<option id="gnu.cpp.link.option.flags.1694312842" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -T&quot;${workspace_loc:/${CoreName}/variants/same70/linker_scripts/gcc/flash.ld}&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.806549806" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -1077,6 +1087,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/utils}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/clock}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/ioport}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/components/ethernet_phy/ksz8081rna}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/gmac}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/services/flash_efc}&quot;"/>
@@ -1123,11 +1134,15 @@
 		<configuration configurationName="DuetM_RTOS"/>
 		<configuration configurationName="Alligator"/>
 		<configuration configurationName="SAME70"/>
-		<configuration configurationName="Duet2"/>
 		<configuration configurationName="RADDS"/>
 		<configuration configurationName="Duet2_RTOS"/>
+		<configuration configurationName="Duet2"/>
+		<configuration configurationName="Duet3"/>
+		<configuration configurationName="PCCB"/>
 		<configuration configurationName="DuetM"/>
+		<configuration configurationName="PCCB_X5"/>
 		<configuration configurationName="Duet085"/>
+		<configuration configurationName="SAME70XPLD"/>
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
 	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>

@@ -345,7 +345,7 @@ size_t ScaraKinematics::NumHomingButtons(size_t numVisibleAxes) const
 	{
 		return 1;
 	}
-	if (!storage->FileExists(SYS_DIR, StandardHomingFileNames[Z_AXIS]))
+	if (!storage->FileExists(SYS_DIR, "homez.g"))
 	{
 		return 2;
 	}
@@ -355,25 +355,29 @@ size_t ScaraKinematics::NumHomingButtons(size_t numVisibleAxes) const
 // This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 // If we can proceed with homing some axes, return the name of the homing file to be called.
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
-const char* ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const
+AxesBitmap ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
 {
 	// Ask the base class which homing file we should call first
-	const char* ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, mustHomeFirst);
-	// Change the returned name if it is X or Y
-	if (ret == StandardHomingFileNames[X_AXIS])
-	{
-		ret = HomeProximalFileName;
-	}
-	else if (ret == StandardHomingFileNames[Y_AXIS])
-	{
-		ret = HomeDistalFileName;
-	}
+	AxesBitmap ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
 
-	// Some SCARA printers cannot have individual axes homed safely. So it the user doesn't provide the homing file for an axis, default to homeall.
-	const MassStorage *storage = reprap.GetPlatform().GetMassStorage();
-	if (!storage->FileExists(SYS_DIR, ret))
+	if (ret == 0)
 	{
-		ret = HomeAllFileName;
+	// Change the returned name if it is X or Y
+		if (StringEquals(filename.c_str(), "homex.g"))
+		{
+			filename.copy(HomeProximalFileName);
+		}
+		else if (StringEquals(filename.c_str(), "homey.g"))
+		{
+			filename.copy(HomeDistalFileName);
+		}
+
+		// Some SCARA printers cannot have individual axes homed safely. So it the user doesn't provide the homing file for an axis, default to homeall.
+		const MassStorage *storage = reprap.GetPlatform().GetMassStorage();
+		if (!storage->FileExists(SYS_DIR, filename.c_str()))
+		{
+			filename.copy(HomeAllFileName);
+		}
 	}
 	return ret;
 }

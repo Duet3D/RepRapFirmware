@@ -9,25 +9,42 @@
 #define SRC_OBJECTMODEL_OBJECTMODEL_H_
 
 #include "RepRapFirmware.h"
+#include <General/IPAddress.h>
 
-#ifdef SUPPORT_OBJECT_MODEL
+#if SUPPORT_OBJECT_MODEL
 
 typedef uint32_t ObjectModelFilterFlags;
 typedef uint8_t TypeCode;
-
-// Dummy types, used to define type codes
-class Bitmap32 { };
-class Enum32 { };
+constexpr TypeCode IsArray = 128;						// this is or'ed in to a type code to indicate an array
+constexpr TypeCode NoType = 0;							// code for an invalid or unknown type
 
 // Forward declarations
 class ObjectModelTableEntry;
+class ObjectModel;
+
+union ExpressionValue
+{
+	bool bVal;
+	float fVal;
+	int32_t iVal;
+	uint32_t uVal;
+	const char *sVal;
+	const ObjectModel *omVal;
+};
+
+// Dummy types, used to define type codes
+class Bitmap32;
+class Enum32;
+class Float2;			// float printed to 2 decimal places instead of 1
+class Float3;			// float printed to 3 decimal places instead of 1
 
 class ObjectModel
 {
 public:
 	enum ReportFlags : uint16_t
 	{
-		shortForm = 1
+		flagsNone,
+		flagShortForm = 1
 	};
 
 	ObjectModel();
@@ -35,40 +52,25 @@ public:
 	// Construct a JSON representation of those parts of the object model requested by the user
 	bool ReportAsJson(OutputBuffer *buf, const char *filter, ReportFlags rflags);
 
-	// Get values of various types from the object model, returning true if successful
-	template<class T> bool GetObjectValue(T& val, const char *idString);
+	// Return the type of an object
+	TypeCode GetObjectType(const char *idString);
 
-	bool GetStringObjectValue(const StringRef& str, const char* idString) const;
-	bool GetLongEnumObjectValue(const StringRef& str, const char *idString) const;
-	bool GetShortEnumObjectValue(uint32_t &val, const char *idString) const;
-	bool GetBitmapObjectValue(uint32_t &val, const char *idString) const;
+	// Get the value of an object when we don't know what its type is
+	TypeCode GetObjectValue(ExpressionValue& val, const char *idString);
 
-	// Try to set values of various types from the object model, returning true if successful
-	bool SetFloatObjectValue(float val, const char *idString);
-	bool SetUnsignedObjectValue(uint32_t val, const char *idString);
-	bool SetSignedObjectValue(int32_t val, const char *idString);
-	bool SetStringObjectValue(const StringRef& str, const char *idString);
-	bool SetLongEnumObjectValue(const StringRef& str, const char *idString);
-	bool SetShortEnumObjectValue(uint32_t val, const char *idString);
-	bool SetBitmapObjectValue(uint32_t val, const char *idString);
-	bool SetBoolObjectValue(bool val, const char *idString);
+	// Specialisation of above for float, allowing conversion from integer to float
+	bool GetObjectValue(float& val, const char *idString);
 
-	// Try to adjust values of various types from the object model, returning true if successful
-	bool AdjustFloatObjectValue(float val, const char *idString);
-	bool AdjustUnsignedObjectValue(int32_t val, const char *idString);
-	bool AdjustSignedObjectValue(int32_t val, const char *idString);
-	bool ToggleBoolObjectValue(const char *idString);
+	// Specialisation of above for int, allowing conversion from unsigned to signed
+	bool GetObjectValue(int32_t& val, const char *idString);
 
 	// Get the object model table entry for the current level object in the query
 	const ObjectModelTableEntry *FindObjectModelTableEntry(const char *idString);
 
-	// Get the object model table entry for the leaf object in the query
-	const ObjectModelTableEntry *FindObjectModelLeafEntry(const char *idString);
 	// Skip the current element in the ID or filter string
 	static const char* GetNextElement(const char *id);
 
 protected:
-	virtual const char *GetModuleName() const = 0;
 	virtual const ObjectModelTableEntry *GetObjectModelTable(size_t& numEntries) const = 0;
 
 private:
@@ -81,79 +83,96 @@ private:
 };
 
 // Function template used to get constexpr type IDs
+// Each type must return a unique type code in the range 1 to 127
 template<class T> constexpr TypeCode TypeOf();
 
 template<> constexpr TypeCode TypeOf<bool> () { return 1; }
 template<> constexpr TypeCode TypeOf<uint32_t> () { return 2; }
 template<> constexpr TypeCode TypeOf<int32_t>() { return 3; }
 template<> constexpr TypeCode TypeOf<float>() { return 4; }
-template<> constexpr TypeCode TypeOf<Bitmap32>() { return 5; }
-template<> constexpr TypeCode TypeOf<Enum32>() { return 6; }
-template<> constexpr TypeCode TypeOf<ObjectModel>() { return 7; }
+template<> constexpr TypeCode TypeOf<Float2>() { return 5; }
+template<> constexpr TypeCode TypeOf<Float3>() { return 6; }
+template<> constexpr TypeCode TypeOf<Bitmap32>() { return 7; }
+template<> constexpr TypeCode TypeOf<Enum32>() { return 8; }
+template<> constexpr TypeCode TypeOf<ObjectModel>() { return 9; }
+template<> constexpr TypeCode TypeOf<const char *>() { return 10; }
+template<> constexpr TypeCode TypeOf<IPAddress>() { return 11; }
 
 #define TYPE_OF(_t) (TypeOf<_t>())
+
+// Entry to describe an array
+class ObjectModelArrayDescriptor
+{
+public:
+	size_t (*GetNumElements)(ObjectModel*);
+	void * (*GetElement)(ObjectModel*, size_t);
+};
 
 // Object model table entry
 // It must be possible to construct these in the form of initialised data in flash memory, to avoid using large amounts of RAM.
 // Therefore we can't use a class hierarchy to represent different types of entry. Instead we use a type code and a void* parameter.
-// Only const member functions are allowed in this class
 class ObjectModelTableEntry
 {
 public:
+	// Type declarations
+	// Flags field of a table entry
 	enum ObjectModelEntryFlags : uint16_t
 	{
-		none = 0,
+		none = 0,				// nothing special
 		live = 1,				// fast changing data, included in common status response
 		canAlter = 2,			// we can alter this value
-		isArray = 4			// value is an array of the basic type
 	};
 
+	// Type of the function pointer in the table entry, that returns a pointer to the data
 	typedef void *(*ParamFuncPtr_t)(ObjectModel*);
+
+	// Member data. This must be public so that we can brace-initialise table entries.
+	const char * name;				// name of this field
+	ParamFuncPtr_t param;			// function that yields a pointer to this value
+	TypeCode type;					// code for the type of this value
+	ObjectModelEntryFlags flags;	// information about this value
+
+	// Member functions. These must all be 'const'.
 
 	// Return true if this object table entry matches a filter or query
 	bool Matches(const char *filter, ObjectModelFilterFlags flags) const;
 
-	// Add the value of this element to the buffer, returning true if it matched and we did
+	// See whether we should add the value of this element to the buffer, returning true if it matched the filter and we did add it
 	bool ReportAsJson(OutputBuffer* buf, ObjectModel *self, const char* filter, ObjectModel::ReportFlags flags) const;
 
+	// Return the name of this field
 	const char* GetName() const { return name; }
 
+	// Compare the name of this field with the filter string that we are trying to match
 	int IdCompare(const char *id) const;
 
-	bool IsObject() const { return type == TYPE_OF(ObjectModel); }
-	const ObjectModelTableEntry *FindLeafEntry(ObjectModel *self, const char *idString) const;
-
-	// Check the type is correct, call the function if necessary and return the pointer
-	void* GetValuePointer(ObjectModel *self, TypeCode t) const;
-
-	// Note: all data members must be public so that we can brace-initialise these. This doesn't matter because they are always 'const'.
-	const char * name;
-	ParamFuncPtr_t param;
-	TypeCode type;
-	ObjectModelEntryFlags flags;
+	// Private function to report a value of primitive type
+	static void ReportItemAsJson(OutputBuffer *buf, const char *filter, ObjectModel::ReportFlags flags, void *nParam, TypeCode type);
 };
 
-template<class T> bool ObjectModel::GetObjectValue(T& val, const char *idString)
-{
-	const ObjectModelTableEntry *e = FindObjectModelLeafEntry(idString);
-	if (e == nullptr)
-	{
-		return false;
-	}
-	const T *p = (float*)(e->GetValuePointer(this, TYPE_OF(T)));
-	if (p == nullptr)
-	{
-		return false;
-	}
-	val = *p;
-	return true;
-}
+// Use this macro to inherit form ObjectModel
+#define INHERIT_OBJECT_MODEL	: public ObjectModel
 
-template<class T> T* ObjectModel::GetObjectPointer(const char* idString)
-{
-	const ObjectModelTableEntry *e = FindObjectModelLeafEntry(idString);
-	return (e == nullptr) ? nullptr : (T*)(e->GetValuePointer(this, TYPE_OF(T)));
-}
+// Use this macro in the 'protected' section of every class declaration that derived from ObjectModel
+#define DECLARE_OBJECT_MODEL \
+	const ObjectModelTableEntry *GetObjectModelTable(size_t& numEntries) const override; \
+	static const ObjectModelTableEntry objectModelTable[];
+
+#define DEFINE_GET_OBJECT_MODEL_TABLE(_class) \
+	const ObjectModelTableEntry *_class::GetObjectModelTable(size_t& numEntries) const \
+	{ \
+		numEntries = ARRAY_SIZE(objectModelTable); \
+		return objectModelTable; \
+	}
+
+#define OBJECT_MODEL_FUNC_BODY(_class,_ret) [] (ObjectModel* arg) { _class * const self = static_cast<_class*>(arg); return (void *)(_ret); }
+#define OBJECT_MODEL_FUNC_NOSELF(_ret) [] (ObjectModel* arg) { return (void *)(_ret); }
+
+#else
+
+#define INHERIT_OBJECT_MODEL			// nothing
+#define DECLARE_OBJECT_MODEL			// nothing
+#define DEFINE_GET_OBJECT_MODEL_TABLE	// nothing
 
 #endif
 

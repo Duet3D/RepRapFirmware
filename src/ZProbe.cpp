@@ -23,6 +23,7 @@ void ZProbe::Init(float h)
 	recoveryTime = 0.0;
 	tolerance = DefaultZProbeTolerance;
 	maxTaps = DefaultZProbeTaps;
+	inputChannel = 0;
 	invertReading = turnHeatersOff = false;
 }
 

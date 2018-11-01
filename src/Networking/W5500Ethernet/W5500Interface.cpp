@@ -33,6 +33,28 @@ W5500Interface::W5500Interface(Platform& p)
 	}
 }
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(W5500Interface, _ret)
+
+const ObjectModelTableEntry W5500Interface::objectModelTable[] =
+{
+	// These entries must be in alphabetical order
+	{ "gateway", OBJECT_MODEL_FUNC(&(self->gateway)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+	{ "ip", OBJECT_MODEL_FUNC(&(self->ipAddress)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+	{ "name", OBJECT_MODEL_FUNC_NOSELF("ethernet"), TYPE_OF(const char *), ObjectModelTableEntry::none },
+	{ "netmask", OBJECT_MODEL_FUNC(&(self->netmask)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+};
+
+DEFINE_GET_OBJECT_MODEL_TABLE(W5500Interface)
+
+#endif
+
 void W5500Interface::Init()
 {
 	interfaceMutex.Create("W5500");
@@ -212,7 +234,7 @@ void W5500Interface::Exit()
 // Get the network state into the reply buffer, returning true if there is some sort of error
 GCodeResult W5500Interface::GetNetworkState(const StringRef& reply)
 {
-	const uint8_t * const config_ip = platform.GetIPAddress();
+	const IPAddress config_ip = platform.GetIPAddress();
 	const int enableState = EnableState();
 	reply.printf("Network is %s, configured IP address: %s, actual IP address: %s",
 			(enableState == 0) ? "disabled" : "enabled",
@@ -292,7 +314,7 @@ void W5500Interface::Spin(bool full)
 
 			if (full && wizphy_getphylink() == PHY_LINK_ON)
 			{
-				usingDhcp = (ipAddress[0] == 0 && ipAddress[1] == 0 && ipAddress[2] == 0 && ipAddress[3] == 0);
+				usingDhcp = ipAddress.IsNull();
 				if (usingDhcp)
 				{
 					// IP address is all zeros, so use DHCP
@@ -443,11 +465,11 @@ int W5500Interface::EnableState() const
 	return (state == NetworkState::disabled) ? 0 : 1;
 }
 
-void W5500Interface::SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[])
+void W5500Interface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway)
 {
-	memcpy(ipAddress, p_ipAddress, sizeof(ipAddress));
-	memcpy(netmask, p_netmask, sizeof(netmask));
-	memcpy(gateway, p_gateway, sizeof(gateway));
+	ipAddress = p_ipAddress;
+	netmask = p_netmask;
+	gateway = p_gateway;
 }
 
 void W5500Interface::OpenDataPort(Port port)

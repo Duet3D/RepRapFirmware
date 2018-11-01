@@ -22,15 +22,16 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define HAS_VREF_MONITOR		0
 #define ACTIVE_LOW_HEAT_ON		1
 
-#define SUPPORT_INKJET		0						// set nonzero to support inkjet control
-#define SUPPORT_ROLAND		0						// set nonzero to support Roland mill
-#define SUPPORT_SCANNER		1						// set zero to disable support for FreeLSS scanners
-#define SUPPORT_LASER		1						// support laser cutters and engravers using G1 S parameter
-#define SUPPORT_IOBITS		1						// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR	1						// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_INKJET			0					// set nonzero to support inkjet control
+#define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
+#define SUPPORT_SCANNER			1					// set zero to disable support for FreeLSS scanners
+#define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
+#define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
+#define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
+#define SUPPORT_OBJECT_MODEL	1
 
-#define USE_CACHE			0						// set nonzero to enable the cache. Disabled this at 1.21RC1 because of doubts about its safety.
+#define USE_CACHE				1					// set nonzero to enable the cache
 
 // The physical capabilities of the machine
 
@@ -45,8 +46,6 @@ constexpr size_t NumThermistorInputs = 8;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
-// Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
-#define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f,g,h,i }
 
 constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis

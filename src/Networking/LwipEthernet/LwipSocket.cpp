@@ -87,7 +87,7 @@ bool LwipSocket::AcceptConnection(tcp_pcb *pcb)
 		whenConnected = millis();
 
 		connectionPcb = pcb;
-		remoteIPAddress = pcb->remote_ip.addr;
+		remoteIPAddress.SetV4LittleEndian(pcb->remote_ip.addr);
 		remotePort = pcb->remote_port;
 
 		tcp_arg(pcb, this);

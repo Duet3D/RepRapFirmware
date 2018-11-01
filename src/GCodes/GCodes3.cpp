@@ -117,6 +117,7 @@ GCodeResult GCodes::SavePosition(GCodeBuffer& gb,const  StringRef& reply)
 	if (sParam < ARRAY_SIZE(numberedRestorePoints))
 	{
 		SavePosition(numberedRestorePoints[sParam], gb);
+		numberedRestorePoints[sParam].toolNumber = reprap.GetCurrentToolNumber();
 		return GCodeResult::ok;
 	}
 
@@ -223,45 +224,42 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 // Set workspace coordinates
 GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute)
 {
-	if (gb.Seen('P'))
+	const uint32_t cs = (gb.Seen('P')) ? gb.GetIValue() : currentCoordinateSystem + 1;
+	if (cs > 0 && cs <= NumCoordinateSystems)
 	{
-		const uint32_t cs = gb.GetIValue();
-		if (cs > 0 && cs <= NumCoordinateSystems)
+		bool seen = false;
+		for (size_t axis = 0; axis < numVisibleAxes; axis++)
 		{
-			bool seen = false;
+			if (gb.Seen(axisLetters[axis]))
+			{
+				const float coord = gb.GetFValue() * distanceScale;
+				if (!seen)
+				{
+					if (!LockMovementAndWaitForStandstill(gb))						// make sure the user coordinates are stable and up to date
+					{
+						return GCodeResult::notFinished;
+					}
+					seen = true;
+				}
+				workplaceCoordinates[cs - 1][axis] = (compute)
+													? currentUserPosition[axis] - coord + workplaceCoordinates[currentCoordinateSystem][axis]
+														: coord;
+			}
+		}
+
+		if (seen)
+		{
+			ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates in case we are using the workspace we just changed
+		}
+		else
+		{
+			reply.printf("Origin of workplace %" PRIu32 ":", cs);
 			for (size_t axis = 0; axis < numVisibleAxes; axis++)
 			{
-				if (gb.Seen(axisLetters[axis]))
-				{
-					const float coord = gb.GetFValue() * distanceScale;
-					if (!seen)
-					{
-						if (!LockMovementAndWaitForStandstill(gb))						// make sure the user coordinates are stable and up to date
-						{
-							return GCodeResult::notFinished;
-						}
-						seen = true;
-					}
-					workplaceCoordinates[cs - 1][axis] = (compute)
-														? currentUserPosition[axis] - coord + workplaceCoordinates[currentCoordinateSystem][axis]
-															: coord;
-				}
+				reply.catf(" %c%.2f", axisLetters[axis], (double)(workplaceCoordinates[cs - 1][axis]/distanceScale));
 			}
-
-			if (seen)
-			{
-				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates in case we are using the workspace we just changed
-			}
-			else
-			{
-				reply.printf("Origin of workplace %" PRIu32 ":", cs);
-				for (size_t axis = 0; axis < numVisibleAxes; axis++)
-				{
-					reply.catf(" %c%.2f", axisLetters[axis], (double)(workplaceCoordinates[cs - 1][axis]/distanceScale));
-				}
-			}
-			return GCodeResult::ok;
 		}
+		return GCodeResult::ok;
 	}
 
 	return GCodeResult::badOrMissingParameter;
@@ -283,7 +281,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 		return GCodeResult::notFinished;
 	}
 
-	bool seenX = false, seenY = false, seenR = false, seenS = false;
+	bool seenX = false, seenY = false, seenR = false, seenP = false, seenS = false;
 	float xValues[2];
 	float yValues[2];
 	float spacings[2] = { DefaultGridSpacing, DefaultGridSpacing };
@@ -296,9 +294,18 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 	{
 		return GCodeResult::error;
 	}
-	if (gb.TryGetFloatArray('S', 2, spacings, reply, seenS, true))
+
+	uint32_t numPoints[2];
+	if (gb.TryGetUIArray('P', 2, numPoints, reply, seenP, true))
 	{
 		return GCodeResult::error;
+	}
+	if (!seenP)
+	{
+		if (gb.TryGetFloatArray('S', 2, spacings, reply, seenS, true))
+		{
+			return GCodeResult::error;
+		}
 	}
 
 	float radius = -1.0;
@@ -327,20 +334,54 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 
 	if (!seenX && !seenR)
 	{
-		// Must have given just the S parameter
+		// Must have given just the S or P parameter
 		reply.copy("specify at least radius or X,Y ranges in M577");
 		return GCodeResult::error;
 	}
 
-	if (!seenX)
+	if (seenX)
 	{
-		if (radius > 0)
+		// Seen both X and Y
+		if (seenP)
 		{
-			const float effectiveXRadius = floorf((radius - 0.1)/spacings[0]) * spacings[0];
+			if (spacings[0] >= 2 && xValues[1] > xValues[0])
+			{
+				spacings[0] = (xValues[1] - xValues[0])/(numPoints[0] - 1);
+			}
+			if (spacings[1] >= 2 && yValues[1] > yValues[0])
+			{
+				spacings[1] = (yValues[1] - yValues[0])/(numPoints[1] - 1);
+			}
+		}
+	}
+	else
+	{
+		// Seen R
+		if (radius > 0.0)
+		{
+			float effectiveXRadius;
+			if (seenP && numPoints[0] >= 2)
+			{
+				effectiveXRadius = radius - 0.1;
+				spacings[0] = (2 * effectiveXRadius)/(numPoints[0] - 1);
+			}
+			else
+			{
+				effectiveXRadius = floorf((radius - 0.1)/spacings[0]) * spacings[0];
+			}
 			xValues[0] = -effectiveXRadius;
 			xValues[1] =  effectiveXRadius + 0.1;
 
-			const float effectiveYRadius = floorf((radius - 0.1)/spacings[1]) * spacings[1];
+			float effectiveYRadius;
+			if (seenP && numPoints[1] >= 2)
+			{
+				effectiveYRadius = radius - 0.1;
+				spacings[1] = (2 * effectiveYRadius)/(numPoints[1] - 1);
+			}
+			else
+			{
+				effectiveYRadius = floorf((radius - 0.1)/spacings[1]) * spacings[1];
+			}
 			yValues[0] = -effectiveYRadius;
 			yValues[1] =  effectiveYRadius + 0.1;
 		}
@@ -431,61 +472,92 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 // Handle M558
 GCodeResult GCodes::SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply)
 {
-	bool seenType = false, seenParam = false;
+	bool seen = false;
 
 	// We must get and set the Z probe type first before setting the dive height etc., because different probe types may have different parameters
+	uint32_t requestedChannel = 0;
 	if (gb.Seen('P'))		// probe type
 	{
-		platform.SetZProbeType(gb.GetIValue());
-		seenType = true;
-		DoDwellTime(gb, 100);				// delay a little to allow the averaging filters to accumulate data from the new source
+		seen = true;
+		uint32_t requestedType = gb.GetUIValue();
+		switch (requestedType)
+		{
+		case (uint32_t)ZProbeType::endstopSwitch:
+			requestedChannel = E0_AXIS;						// default channel if no C parameter present
+			break;
+
+		case (uint32_t)ZProbeType::e1Switch_obsolete:
+			requestedChannel = E0_AXIS + 1;
+			requestedType = (uint32_t)ZProbeType::endstopSwitch;
+			break;
+
+		case (uint32_t)ZProbeType::zSwitch_obsolete:
+			requestedChannel = Z_AXIS;
+			requestedType = (uint32_t)ZProbeType::endstopSwitch;
+			break;
+
+		default:
+			break;
+		}
+		platform.SetZProbeType(requestedType);
+		DoDwellTime(gb, 100);								// delay a little to allow the averaging filters to accumulate data from the new source
+	}
+
+	// Do the input channel next so that 'seen' will be true only if the type and/or the channel has been specified
+	if (gb.Seen('C'))										// input channel
+	{
+		requestedChannel = gb.GetUIValue();
+		seen = true;
 	}
 
 	ZProbe params = platform.GetCurrentZProbeParameters();
-	gb.TryGetFValue('H', params.diveHeight, seenParam);		// dive height
+	if (seen)												// if seen P and/or C
+	{
+		params.inputChannel = requestedChannel;				// set the input to the default one for this type or the requested one
+	}
 
-	if (gb.Seen('F'))		// feed rate i.e. probing speed
+	gb.TryGetFValue('H', params.diveHeight, seen);			// dive height
+	if (gb.Seen('F'))										// feed rate i.e. probing speed
 	{
 		params.probeSpeed = gb.GetFValue() * SecondsToMinutes;
-		seenParam = true;
+		seen = true;
 	}
 
 	if (gb.Seen('T'))		// travel speed to probe point
 	{
 		params.travelSpeed = gb.GetFValue() * SecondsToMinutes;
-		seenParam = true;
+		seen = true;
 	}
 
 	if (gb.Seen('I'))
 	{
 		params.invertReading = (gb.GetIValue() != 0);
-		seenParam = true;
+		seen = true;
 	}
 
 	if (gb.Seen('B'))
 	{
 		params.turnHeatersOff = (gb.GetIValue() == 1);
-		seenParam = true;
+		seen = true;
 	}
 
-	gb.TryGetFValue('R', params.recoveryTime, seenParam);	// Z probe recovery time
-	gb.TryGetFValue('S', params.tolerance, seenParam);		// tolerance when multi-tapping
+	gb.TryGetFValue('R', params.recoveryTime, seen);		// Z probe recovery time
+	gb.TryGetFValue('S', params.tolerance, seen);			// tolerance when multi-tapping
 
 	if (gb.Seen('A'))
 	{
 		params.maxTaps = gb.GetUIValue();
-		seenParam = true;
+		seen = true;
 	}
 
-	if (seenParam)
+	if (seen)
 	{
 		platform.SetZProbeParameters(platform.GetZProbeType(), params);
 	}
-
-	if (!(seenType || seenParam))
+	else
 	{
-		reply.printf("Z Probe type %u, invert %s, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
-						(unsigned int)platform.GetZProbeType(), (params.invertReading) ? "yes" : "no", (double)params.diveHeight,
+		reply.printf("Z Probe type %u, input %u, invert %s, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
+						(unsigned int)platform.GetZProbeType(), params.inputChannel, (params.invertReading) ? "yes" : "no", (double)params.diveHeight,
 						(int)(params.probeSpeed * MinutesToSeconds), (int)(params.travelSpeed * MinutesToSeconds),
 						(double)params.recoveryTime,
 						(params.turnHeatersOff) ? "suspended" : "normal",
@@ -607,7 +679,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 		return GCodeResult::notFinished;
 	}
 
-	bool seen = false, badDrive = false;
+	bool seen = false;
 	const char *lettersToTry = "XYZUVWABC";
 	char c;
 	while ((c = *lettersToTry) != 0)
@@ -625,19 +697,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 			config.numDrivers = numValues;
 			for (size_t i = 0; i < numValues; ++i)
 			{
-				if (drivers[i] >= MaxTotalDrivers)
-				{
-					badDrive = true;
-				}
-				else
-				{
-					config.driverNumbers[i] = (uint8_t)drivers[i];
-				}
-			}
-
-			if (badDrive)
-			{
-				break;
+				config.driverNumbers[i] = (uint8_t)min<uint32_t>(drivers[i], 255);
 			}
 
 			// Find the drive number allocated to this axis, or allocate a new one if necessary
@@ -676,62 +736,47 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 		numExtruders = numValues;
 		for (size_t i = 0; i < numValues; ++i)
 		{
-			if (drivers[i] >= MaxTotalDrivers)
-			{
-				badDrive = true;
-			}
-			else
-			{
-				platform.SetExtruderDriver(i, (uint8_t)drivers[i]);
-			}
+			platform.SetExtruderDriver(i, (uint8_t)min<uint32_t>(drivers[i], 255));
 		}
 	}
 
-	if (badDrive)
+	if (gb.Seen('P'))
 	{
-		reply.copy("Invalid driver number");
-		return GCodeResult::error;
-	}
-	else
-	{
-		if (gb.Seen('P'))
+		seen = true;
+		const int nva = gb.GetIValue();
+		if (nva >= (int)MinAxes && (unsigned int)nva <= numTotalAxes)
 		{
-			seen = true;
-			const int nva = gb.GetIValue();
-			if (nva >= (int)MinAxes && (unsigned int)nva <= numTotalAxes)
-			{
-				numVisibleAxes = (size_t)nva;
-			}
-			else
-			{
-				reply.copy("Invalid number of visible axes");
-				return GCodeResult::error;
-			}
+			numVisibleAxes = (size_t)nva;
 		}
-
-		if (!seen)
+		else
 		{
-			reply.copy("Driver assignments:");
-			for (size_t drive = 0; drive < numTotalAxes; ++ drive)
-			{
-				reply.cat(' ');
-				const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(drive);
-				char c = axisLetters[drive];
-				for (size_t i = 0; i < axisConfig.numDrivers; ++i)
-				{
-					reply.catf("%c%u", c, axisConfig.driverNumbers[i]);
-					c = ':';
-				}
-			}
+			reply.copy("Invalid number of visible axes");
+			return GCodeResult::error;
+		}
+	}
+
+	if (!seen)
+	{
+		reply.copy("Driver assignments:");
+		for (size_t drive = 0; drive < numTotalAxes; ++ drive)
+		{
 			reply.cat(' ');
-			char c = extrudeLetter;
-			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+			const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(drive);
+			char c = axisLetters[drive];
+			for (size_t i = 0; i < axisConfig.numDrivers; ++i)
 			{
-				reply.catf("%c%u", c, platform.GetExtruderDriver(extruder));
+				reply.catf("%c%u", c, axisConfig.driverNumbers[i]);
 				c = ':';
 			}
-			reply.catf(", %u axes visible", numVisibleAxes);
 		}
+		reply.cat(' ');
+		char c = extrudeLetter;
+		for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+		{
+			reply.catf("%c%u", c, platform.GetExtruderDriver(extruder));
+			c = ':';
+		}
+		reply.catf(", %u axes visible", numVisibleAxes);
 	}
 
 	return GCodeResult::ok;
@@ -953,7 +998,7 @@ GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 #if defined(I2C_IFACE)
 	if (gb.Seen('A'))
 	{
-		const uint32_t address = gb.GetUIValue();
+		const uint32_t address = gb.GetUIValueMaybeHex();
 		if (gb.Seen('B'))
 		{
 			int32_t values[MaxI2cBytes];
@@ -992,7 +1037,7 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 #if defined(I2C_IFACE)
 	if (gb.Seen('A'))
 	{
-		const uint32_t address = gb.GetUIValue();
+		const uint32_t address = gb.GetUIValueMaybeHex();
 		if (gb.Seen('B'))
 		{
 			uint32_t numBytes = gb.GetUIValue();

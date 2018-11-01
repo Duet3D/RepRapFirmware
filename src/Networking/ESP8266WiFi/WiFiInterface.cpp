@@ -156,6 +156,28 @@ WiFiInterface::WiFiInterface(Platform& p) : platform(p), uploader(nullptr), ftpD
 	strcpy(wiFiServerVersion, "(unknown)");
 }
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(WiFiInterface, _ret)
+
+const ObjectModelTableEntry WiFiInterface::objectModelTable[] =
+{
+	// These entries must be in alphabetical order
+	{ "gateway", OBJECT_MODEL_FUNC(&(self->gateway)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+	{ "ip", OBJECT_MODEL_FUNC(&(self->ipAddress)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+	{ "name", OBJECT_MODEL_FUNC_NOSELF("wifi"), TYPE_OF(const char *), ObjectModelTableEntry::none },
+	{ "netmask", OBJECT_MODEL_FUNC(&(self->netmask)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+};
+
+DEFINE_GET_OBJECT_MODEL_TABLE(WiFiInterface)
+
+#endif
+
 void WiFiInterface::Init()
 {
 	interfaceMutex.Create("WiFi");
@@ -450,13 +472,9 @@ void WiFiInterface::Stop()
 		digitalWrite(EspResetPin, LOW);				// put the ESP back into reset
 		DisableEspInterrupt();						// ignore IRQs from the transfer request pin
 
-#if SAME70
-		NVIC_DisableIRQ(SPI0_IRQn);
-		spi_disable(SPI0);
-#else
-		NVIC_DisableIRQ(SPI_IRQn);
-		spi_disable(SPI);
-#endif
+		NVIC_DisableIRQ(ESP_SPI_IRQn);
+		spi_disable(ESP_SPI);
+
 		spi_dma_check_rx_complete();
 		spi_dma_disable();
 
@@ -623,25 +641,26 @@ void WiFiInterface::Spin(bool full)
 		break;
 
 	case NetworkState::changingMode:
+		// Here when we have asked the ESP to change mode. Don't leave this state until we have a new status report from the ESP.
 		if (full && espStatusChanged && digitalRead(EspDataReadyPin))
 		{
 			GetNewStatus();
-			if (currentMode != WiFiState::connecting)
+			switch (currentMode)
 			{
-				requestedMode = currentMode;				// don't keep repeating the request if it failed
+			case WiFiState::connecting:
+			case WiFiState::reconnecting:
+			case WiFiState::autoReconnecting:
+				break;											// let the connect attempt continue
+
+			case WiFiState::connected:
+			case WiFiState::runningAsAccessPoint:
 				state = NetworkState::active;
-				if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 				{
 					// Get our IP address, this needs to be correct for FTP to work
 					Receiver<NetworkStatusResponse> status;
 					if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
 					{
-						uint32_t ip = status.Value().ipAddress;
-						for (size_t i = 0; i < 4; ++i)
-						{
-							ipAddress[i] = (uint8_t)(ip & 255);
-							ip >>= 8;
-						}
+						ipAddress.SetV4LittleEndian(status.Value().ipAddress);
 						SafeStrncpy(actualSsid, status.Value().ssid, SsidLength);
 					}
 					InitSockets();
@@ -651,10 +670,16 @@ void WiFiInterface::Spin(bool full)
 						actualSsid,
 						IP4String(ipAddress).c_str());
 				}
-				else
+				break;
+
+			default:
+				if (requestedMode != WiFiState::connected)
 				{
-					platform.MessageF(NetworkInfoMessage, "WiFi module is %s\n", TranslateWiFiState(currentMode));
+					requestedMode = currentMode;				// don't keep repeating the request if it failed and it wasn't a connect request
 				}
+				state = NetworkState::active;
+				platform.MessageF(NetworkInfoMessage, "WiFi module is %s\n", TranslateWiFiState(currentMode));
+				break;
 			}
 		}
 		break;
@@ -878,11 +903,11 @@ void WiFiInterface::EspRequestsTransfer()
 	DisableEspInterrupt();				// don't allow more interrupts until we have acknowledged this one
 }
 
-void WiFiInterface::SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[])
+void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress p_gateway)
 {
-	memcpy(ipAddress, p_ipAddress, sizeof(ipAddress));
-	memcpy(netmask, p_netmask, sizeof(netmask));
-	memcpy(gateway, p_gateway, sizeof(gateway));
+	ipAddress = p_ip;
+	netmask = p_netmask;
+	gateway = p_gateway;
 }
 
 GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply)
@@ -913,15 +938,21 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 			}
 			if (ok && gb.Seen('I'))
 			{
-				gb.GetIPAddress(config.ip);
+				IPAddress temp;
+				gb.GetIPAddress(temp);
+				config.ip = temp.GetV4LittleEndian();
 			}
 			if (ok && gb.Seen('J'))
 			{
-				ok = gb.GetIPAddress(config.gateway);
+				IPAddress temp;
+				ok = gb.GetIPAddress(temp);
+				config.gateway = temp.GetV4LittleEndian();
 			}
 			if (ok && gb.Seen('K'))
 			{
-				ok = gb.GetIPAddress(config.netmask);
+				IPAddress temp;
+				ok = gb.GetIPAddress(temp);
+				config.netmask = temp.GetV4LittleEndian();
 			}
 			if (ok)
 			{
@@ -1044,7 +1075,9 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
 						if (gb.Seen('I'))
 						{
-							ok = gb.GetIPAddress(config.ip);
+							IPAddress temp;
+							ok = gb.GetIPAddress(temp);
+							config.ip = temp.GetV4LittleEndian();
 							config.channel = (gb.Seen('C')) ? gb.GetIValue() : 0;
 						}
 						else

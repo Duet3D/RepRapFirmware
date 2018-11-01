@@ -40,6 +40,9 @@ enum class GCodeState : uint8_t
 	pausing1,
 	pausing2,
 
+	filamentChangePause1,
+	filamentChangePause2,
+
 	resuming1,
 	resuming2,
 	resuming3,

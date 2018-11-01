@@ -58,8 +58,8 @@ public:
 	bool IsWiFiInterface() const override { return true; }
 
 	void UpdateHostname(const char *hostname) override;
-	const uint8_t *GetIPAddress() const override { return ipAddress; }
-	void SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[]) override;
+	IPAddress GetIPAddress() const override { return ipAddress; }
+	void SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress p_gateway) override;
 	void SetMacAddress(const uint8_t mac[]) override;
 	const uint8_t *GetMacAddress() const override { return macAddress; }
 
@@ -78,6 +78,9 @@ public:
 	void SpiInterrupt();
 	void EspRequestsTransfer();
 	void UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClosedSockets);
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	enum class NetworkState
@@ -139,9 +142,9 @@ private:
 	bool activated;
 	volatile bool espStatusChanged;
 
-	uint8_t ipAddress[4];
-	uint8_t netmask[4];
-	uint8_t gateway[4];
+	IPAddress ipAddress;
+	IPAddress netmask;
+	IPAddress gateway;
 	uint8_t macAddress[6];
 	char requestedSsid[SsidLength + 1];
 	char actualSsid[SsidLength + 1];

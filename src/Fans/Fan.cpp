@@ -206,13 +206,10 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 	return seen;
 }
 
+// Set the PWM. 'speed' is in the interval 0.0..1.0.
 void Fan::SetPwm(float speed)
 {
-	if (speed > 1.0)
-	{
-		speed /= 255.0;
-	}
-	val = constrain<float>(speed, 0.0, 1.0);
+	val = speed;
 	Refresh();
 }
 

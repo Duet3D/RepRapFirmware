@@ -171,7 +171,7 @@ void W5500Socket::Poll(bool full)
 			if (getSn_IR(socketNum) & Sn_IR_CON)
 			{
 				// New connection, so retrieve the sending IP address and port, and clear the interrupt
-				getSn_DIPR(socketNum, reinterpret_cast<uint8_t*>(&remoteIPAddress));
+				getSn_DIPR(socketNum, remoteIPAddress);
 				remotePort = getSn_DPORT(socketNum);
 				setSn_IR(socketNum, Sn_IR_CON);
 				whenConnected = millis();

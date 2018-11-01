@@ -138,7 +138,7 @@ constexpr uint32_t IHOLDIRUN_IHOLDDELAY_SHIFT = 16;
 constexpr uint32_t IHOLDIRUN_IHOLDDELAY_MASK = 0x0F << IHOLDIRUN_IHOLDDELAY_SHIFT;
 
 constexpr uint32_t DefaultIholdIrunReg = (0 << IHOLDIRUN_IHOLD_SHIFT) | (0 << IHOLDIRUN_IRUN_SHIFT) | (2 << IHOLDIRUN_IHOLDDELAY_SHIFT);
-															// approx. 0.5 sec motor current reduction to half power
+															// approx. 0.5 sec motor current reduction to low power
 
 constexpr uint8_t REGNUM_TPOWER_DOWN = 0x11;
 constexpr uint8_t REGNUM_TSTEP = 0x12;
@@ -681,17 +681,20 @@ void TmcDriverState::Enable(bool en)
 // Read the status
 uint32_t TmcDriverState::ReadLiveStatus() const
 {
-	return readRegisters[ReadDrvStat] & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST | TMC_RR_TEMPBITS);
+	const uint32_t ret = readRegisters[ReadDrvStat] & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST | TMC_RR_TEMPBITS);
+	return (enabled) ? ret : ret & ~(TMC_RR_OLA | TMC_RR_OLB);
 }
 
 // Read the status
 uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep)
 {
+	const uint32_t mask = (enabled) ? 0xFFFFFFFF : ~(TMC_RR_OLA | TMC_RR_OLB);
+	bitsToKeep &= mask;
 	const irqflags_t flags = cpu_irq_save();
 	const uint32_t status = accumulatedReadRegisters[ReadDrvStat];
 	accumulatedReadRegisters[ReadDrvStat] = (status & bitsToKeep) | readRegisters[ReadDrvStat];		// so that the next call to ReadAccumulatedStatus isn't missing some bits
 	cpu_irq_restore(flags);
-	return status & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST | TMC_RR_TEMPBITS);
+	return status & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST | TMC_RR_TEMPBITS) & mask;
 }
 
 // Append the driver status to a string, and reset the min/max load values

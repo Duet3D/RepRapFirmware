@@ -8,7 +8,7 @@
 #ifndef SRC_CAN_CANMESSAGEBUFFER_H_
 #define SRC_CAN_CANMESSAGEBUFFER_H_
 
-#include "ReprapFirmware.h"
+#include "RepRapFirmware.h"
 
 #if SUPPORT_CAN_EXPANSION
 

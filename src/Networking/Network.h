@@ -13,6 +13,7 @@
 #include "MessageType.h"
 #include "GCodes/GCodeResult.h"
 #include "RTOSIface/RTOSIface.h"
+#include "ObjectModel/ObjectModel.h"
 
 #if defined(DUET3) || defined(SAME70XPLD)
 const size_t NumNetworkInterfaces = 2;
@@ -34,7 +35,7 @@ class WiFiInterface;
 class WifiFirmwareUploader;
 
 // The main network class that drives the network.
-class Network
+class Network INHERIT_OBJECT_MODEL
 {
 public:
 	Network(Platform& p);
@@ -63,8 +64,8 @@ public:
 	GCodeResult GetNetworkState(unsigned int interface, const StringRef& reply);
 	int EnableState(unsigned int interface) const;
 
-	void SetEthernetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[]);
-	const uint8_t *GetIPAddress(unsigned int interface) const;
+	void SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway);
+	IPAddress GetIPAddress(unsigned int interface) const;
 	const char *GetHostname() const { return hostname; }
 	void SetHostname(const char *name);
 	void SetMacAddress(unsigned int interface, const uint8_t mac[]);
@@ -77,6 +78,13 @@ public:
 	void HandleHttpGCodeReply(OutputBuffer *buf);
 	void HandleTelnetGCodeReply(OutputBuffer *buf);
 	uint32_t GetHttpReplySeq();
+
+#if SUPPORT_OBJECT_MODEL
+	NetworkInterface *GetInterface(size_t n) const { return interfaces[n]; }
+#endif
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	WiFiInterface *FindWiFiInterface() const;

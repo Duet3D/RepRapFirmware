@@ -26,6 +26,7 @@ public:
 	void Poll();
 	int GetChange();
 	bool GetButtonPress();
+	int GetPulsesPerClick() const { return ppc; }
 };
 
 #endif

@@ -46,6 +46,29 @@
 constexpr uint32_t UsualMinimumPreparedTime = StepTimer::StepClockRate/10;			// 100ms
 constexpr uint32_t AbsoluteMinimumPreparedTime = StepTimer::StepClockRate/20;		// 50ms
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(Move, _ret)
+
+const ObjectModelTableEntry Move::objectModelTable[] =
+{
+	// These entries must be in alphabetical order
+	{ "drcEnabled", OBJECT_MODEL_FUNC(&(self->drcEnabled)), TYPE_OF(bool), ObjectModelTableEntry::none },
+	{ "drcMinimumAcceleration", OBJECT_MODEL_FUNC(&(self->drcMinimumAcceleration)), TYPE_OF(float), ObjectModelTableEntry::none },
+	{ "drcPeriod", OBJECT_MODEL_FUNC(&(self->drcPeriod)), TYPE_OF(float), ObjectModelTableEntry::none },
+	{ "maxPrintingAcceleration", OBJECT_MODEL_FUNC(&(self->maxPrintingAcceleration)), TYPE_OF(float), ObjectModelTableEntry::none },
+	{ "maxTravelAcceleration", OBJECT_MODEL_FUNC(&(self->maxTravelAcceleration)), TYPE_OF(float), ObjectModelTableEntry::none },
+};
+
+DEFINE_GET_OBJECT_MODEL_TABLE(Move)
+
+#endif
+
 Move::Move() : currentDda(nullptr), active(false), scheduledMoves(0), completedMoves(0)
 {
 	kinematics = Kinematics::Create(KinematicsType::cartesian);			// default to Cartesian
@@ -82,6 +105,7 @@ void Move::Init()
 	maxPrintingAcceleration = maxTravelAcceleration = 10000.0;
 	drcEnabled = false;											// disable dynamic ringing cancellation
 	drcMinimumAcceleration = 10.0;
+	drcPeriod = 50.0;
 
 	// Clear the transforms
 	SetIdentityTransform();
@@ -1284,7 +1308,10 @@ void Move::AdjustLeadscrews(const floatc_t corrections[])
 	const AxisDriversConfig& config = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS);
 	for (size_t i = 0; i < config.numDrivers; ++i)
 	{
-		specialMoveCoords[config.driverNumbers[i]] = corrections[i];
+		if (config.driverNumbers[i] < MaxTotalDrivers)
+		{
+			specialMoveCoords[config.driverNumbers[i]] = corrections[i];
+		}
 	}
 	specialMoveAvailable = true;
 }

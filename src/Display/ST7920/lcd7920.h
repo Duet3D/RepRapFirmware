@@ -35,10 +35,9 @@ class Lcd7920 : public Print
 {
 public:
 	// Construct a GLCD driver.
-	Lcd7920(Pin csPin);			// constructor
+	Lcd7920(Pin csPin, const LcdFont * const fnts[], size_t nFonts);
 
 	// Write a single character in the current font. Called by the 'print' functions.
-	// A call to setFont must have been made before calling this.
 	//  c = character to write
 	// Returns the number of characters written (1 if we wrote it, 0 otherwise)
 	virtual size_t write(uint8_t c);		// write a character
@@ -46,12 +45,17 @@ public:
 	// Initialize the display. Call this in setup(). Also call setFont to select initial text font.
 	void Init();
 
-	// Select the font to use for subsequent calls to write() in graphics mode. Must be called before calling write().
-	//  newFont = pointer to font descriptor in PROGMEM
-	void SetFont(const LcdFont *newFont);
+	// Return the number of fonts
+	size_t GetNumFonts() const { return numFonts; }
+
+	// Select the font to use for subsequent calls to write() in graphics mode
+	void SetFont(size_t newFont);
 
 	// Get the current font height
-	PixelNumber GetFontHeight() const { return currentFont->height; }
+	PixelNumber GetFontHeight() const;
+
+	// Get the height of a specified font
+	PixelNumber GetFontHeight(size_t fontNumber) const;
 
 	// Select normal or inverted text (only works in graphics mode)
 	void TextInvert(bool b);
@@ -62,7 +66,7 @@ public:
 	// Set the cursor position
 	//  r = row, the number of pixels from the top of the display to the top of the character.
 	//  c = column, is the number of pixels from the left hand edge of the display and the left hand edge of the character.
-	void SetCursor(PixelNumber r, uint8_t c);        // 'c' in alpha mode, should be an even column number
+	void SetCursor(PixelNumber r, PixelNumber c);
 
 	// Get the cursor row. Useful after we have written some text.
 	PixelNumber GetRow() const { return row; }
@@ -113,14 +117,23 @@ public:
 	// Draw a bitmap
 	//  x0 = x-coordinate of the top left, measured from left hand edge of the display. Currently, must be a multiple of 8.
 	//  y0 = y-coordinate of the top left, measured down from the top of the display
-	// width = width of bitmap in pixels. Currently, must be a multiple of 8.
-	// rows = height of bitmap in pixels
-	// data = bitmap image in PROGMEM, must be ((width/8) * rows) bytes long
+	//  width = width of bitmap in pixels. Currently, must be a multiple of 8.
+	//  rows = height of bitmap in pixels
+	//  data = bitmap image, must be ((width/8) * rows) bytes long
 	void Bitmap(PixelNumber top, PixelNumber left, PixelNumber height, PixelNumber width, const uint8_t data[]);
 
+	// Draw a bitmap row
+	//  x0 = x-coordinate of the top left, measured from left hand edge of the display
+	//  y0 = y-coordinate of the top left, measured down from the top of the display
+	//  width = width of bitmap in pixels
+	//  data = bitmap image, must be ((width + 7)/8) bytes long
+	void BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert);
+
 private:
+	const LcdFont * const *fonts;
+	const size_t numFonts;
+	size_t currentFontNumber;						// index of the current font
 	uint32_t charVal;
-	const LcdFont *currentFont;						// pointer to descriptor for current font
 	sspi_device device;
 	uint16_t lastCharColData;						// data for the last non-space column, used for kerning
 	uint8_t numContinuationBytesLeft;
@@ -135,10 +148,11 @@ private:
 	void sendLcdCommand(uint8_t command);
 	void sendLcdData(uint8_t data);
 	void sendLcd(uint8_t data1, uint8_t data2);
-	void commandDelay();
+	void CommandDelay();
+	void DataDelay();
 	void setGraphicsAddress(unsigned int r, unsigned int c);
 	size_t writeNative(uint16_t c);					// write a decoded character
-
+	void SetDirty(PixelNumber r, PixelNumber c);
 };
 
 #endif

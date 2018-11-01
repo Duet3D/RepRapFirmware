@@ -9,6 +9,25 @@
 #include "RepRap.h"
 #include "Platform.h"
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(RandomProbePointSet, _ret)
+
+const ObjectModelTableEntry RandomProbePointSet::objectModelTable[] =
+{
+	// These entries must be in alphabetical order
+	{ "numPointsProbed", OBJECT_MODEL_FUNC(&(self->numBedCompensationPoints)), TYPE_OF(uint32_t), ObjectModelTableEntry::none }
+};
+
+DEFINE_GET_OBJECT_MODEL_TABLE(RandomProbePointSet)
+
+#endif
+
 RandomProbePointSet::RandomProbePointSet() : numBedCompensationPoints(0)
 {
 	for (size_t point = 0; point < MaxProbePoints; point++)

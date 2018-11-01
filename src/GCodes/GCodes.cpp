@@ -59,31 +59,33 @@ void GCodes::RawMove::SetDefaults()
 	yAxes = DefaultYAxisMapping;
 }
 
-#ifdef SUPPORT_OBJECT_MODEL
+#if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
-// Note: if using GCC version 7.3.1 20180622 then if lambda functions are used in this table, you must compile this file with option -std=gnu++17.
-// Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) [] (ObjectModel* arg) { GCodes * const self = static_cast<GCodes*>(arg); return (void *)(_ret); }
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(GCodes, _ret)
 
 const ObjectModelTableEntry GCodes::objectModelTable[] =
 {
+	// These entries must be in alphabetical order
 	{ "speedFactor", OBJECT_MODEL_FUNC(&(self->speedFactor)), TYPE_OF(float), ObjectModelTableEntry::none }
 };
 
-const char *GCodes::GetModuleName() const
-{
-	return nullptr;				// this module has no name and doesn't need one
-}
+DEFINE_GET_OBJECT_MODEL_TABLE(GCodes)
 
-const ObjectModelTableEntry *GCodes::GetObjectModelTable(size_t& numEntries) const
-{
-	numEntries = ARRAY_SIZE(objectModelTable);
-	return objectModelTable;
-}
+#endif
 
+#ifdef SERIAL_AUX_DEVICE
+// Support for emergency stpo form PanelDue
+bool GCodes::emergencyStopCommanded = false;
+
+void GCodes::CommandEmergencyStop(UARTClass *p)
+{
+	emergencyStopCommanded = true;
+}
 #endif
 
 GCodes::GCodes(Platform& p) :
@@ -94,21 +96,19 @@ GCodes::GCodes(Platform& p) :
 	isFlashing(false), fileBeingHashed(nullptr), lastWarningMillis(0)
 {
 	fileInput = new FileGCodeInput();
+	fileGCode = new GCodeBuffer("file", GenericMessage, true);
 	serialInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
-#ifdef SERIAL_AUX_DEVICE
-	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
-#endif
+	serialGCode = new GCodeBuffer("serial", UsbMessage, true);
 #if HAS_NETWORKING
 	httpInput = new NetworkGCodeInput;
-	telnetInput = new NetworkGCodeInput;
 	httpGCode = new GCodeBuffer("http", HttpMessage, false);
+	telnetInput = new NetworkGCodeInput;
 	telnetGCode = new GCodeBuffer("telnet", TelnetMessage, true);
 #else
 	httpGCode = telnetGCode = nullptr;
 #endif
-	fileGCode = new GCodeBuffer("file", GenericMessage, true);
-	serialGCode = new GCodeBuffer("serial", UsbMessage, true);
 #ifdef SERIAL_AUX_DEVICE
+	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
 	auxGCode = new GCodeBuffer("aux", LcdMessage, false);
 #else
 	auxGCode = nullptr;
@@ -187,6 +187,9 @@ void GCodes::Init()
 	DotStarLed::Init();
 #endif
 
+#ifdef SERIAL_AUX_DEVICE
+	SERIAL_AUX_DEVICE.SetInterruptCallback(GCodes::CommandEmergencyStop);
+#endif
 }
 
 // This is called from Init and when doing an emergency stop
@@ -210,7 +213,7 @@ void GCodes::Reset()
 	nextGcodeSource = 0;
 
 	fileToPrint.Close();
-	speedFactor = SecondsToMinutes;						// default is just to convert from mm/minute to mm/second
+	speedFactor = 100.0;
 
 	for (size_t i = 0; i < MaxExtruders; ++i)
 	{
@@ -373,6 +376,16 @@ void GCodes::Spin()
 		return;
 	}
 
+#ifdef SERIAL_AUX_DEVICE
+	if (emergencyStopCommanded)
+	{
+		DoEmergencyStop();
+		while (SERIAL_AUX_DEVICE.read() >= 0) { }
+		emergencyStopCommanded = false;
+		return;
+	}
+#endif
+
 	CheckTriggers();
 	CheckHeaterFault();
 	CheckFilament();
@@ -528,9 +541,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
-			AxesBitmap mustHomeFirst;
-			const char *nextHomingFile = reprap.GetMove().GetKinematics().GetHomingFileName(toBeHomed, axesHomed, numVisibleAxes, mustHomeFirst);
-			if (nextHomingFile == nullptr)
+			String<PASSWORD_LENGTH> nextHomingFileName;
+			AxesBitmap mustHomeFirst = reprap.GetMove().GetKinematics().GetHomingFileName(toBeHomed, axesHomed, numVisibleAxes, nextHomingFileName.GetRef());
+			if (mustHomeFirst != 0)
 			{
 				// Error, can't home this axes
 				reply.copy("Must home these axes:");
@@ -544,9 +557,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			else
 			{
 				gb.SetState(GCodeState::homing2);
-				if (!DoFileMacro(gb, nextHomingFile, false))
+				if (!DoFileMacro(gb, nextHomingFileName.c_str(), false))
 				{
-					reply.printf("Homing file %s not found", nextHomingFile);
+					reply.printf("Homing file %s not found", nextHomingFileName.c_str());
 					error = true;
 					gb.SetState(GCodeState::normal);
 				}
@@ -653,7 +666,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case GCodeState::m109WaitForTemperature:
-		if (cancelWait || simulationMode != 0 || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.MachineState().waitWhileCooling))
+		if (cancelWait || simulationMode != 0 || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.MachineState().waitWhileCooling, TEMPERATURE_CLOSE_ENOUGH))
 		{
 			cancelWait = isWaiting = false;
 			gb.SetState(GCodeState::normal);
@@ -668,7 +681,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 	case GCodeState::pausing1:
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			gb.SetState(GCodeState::pausing2);
+			gb.AdvanceState();
 			if (AllAxesAreHomed())
 			{
 				DoFileMacro(gb, PAUSE_G, true);
@@ -676,10 +689,25 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
-	case GCodeState::pausing2:
+	case GCodeState::filamentChangePause1:
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			reply.printf("Printing paused at");
+			gb.AdvanceState();
+			if (AllAxesAreHomed())
+			{
+				if (!DoFileMacro(gb, FILAMENT_CHANGE_G, false))
+				{
+					DoFileMacro(gb, PAUSE_G, true);
+				}
+			}
+		}
+		break;
+
+	case GCodeState::pausing2:
+	case GCodeState::filamentChangePause2:
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			reply.printf((gb.GetState() == GCodeState::filamentChangePause2) ? "Printing paused for filament change at" : "Printing paused at");
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
 				reply.catf(" %c%.1f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
@@ -954,11 +982,29 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		{
 			// See whether we need to do any more taps
 			const ZProbe& params = platform.GetCurrentZProbeParameters();
-			if (tapsDone >= 2)
+			bool acceptReading = false;
+			if (params.maxTaps < 2)
+			{
+				acceptReading = true;
+			}
+			else if (tapsDone >= 2)
 			{
 				g30zHeightErrorLowestDiff = min<float>(g30zHeightErrorLowestDiff, fabsf(g30zHeightError - g30PrevHeightError));
+				if (params.tolerance > 0.0)
+				{
+					if (g30zHeightErrorLowestDiff <= params.tolerance)
+					{
+						g30zHeightError = (g30zHeightError + g30PrevHeightError)/2;
+						acceptReading = true;
+					}
+				}
+				else if (tapsDone == params.maxTaps)
+				{
+					g30zHeightError = g30zHeightErrorSum/tapsDone;
+					acceptReading = true;
+				}
 			}
-			const bool acceptReading = (params.maxTaps < 2 || (tapsDone >= 2 && g30zHeightErrorLowestDiff <= params.tolerance));
+
 			if (acceptReading)
 			{
 				reprap.GetMove().AccessHeightMap().SetGridHeight(gridXindex, gridYindex, g30zHeightError);
@@ -1043,6 +1089,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				reply.copy("Too few points probed");
 				error = true;
 			}
+		}
+		if (!error)
+		{
+			reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.c_str());
 		}
 		gb.SetState(GCodeState::normal);
 		break;
@@ -1157,7 +1207,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			if (platform.GetZProbeType() == ZProbeType::none)
 			{
 				// No Z probe, so we are doing manual mesh levelling. Take the current Z height as the height error.
-				g30zHeightError = moveBuffer.coords[Z_AXIS];
+				g30zStoppedHeight = g30zHeightError = moveBuffer.coords[Z_AXIS];
 			}
 			else
 			{
@@ -1171,12 +1221,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				else
 				{
 					// Successful probing
-					float heightAdjust = 0.0;
-					bool dummy;
-					gb.TryGetFValue('H', heightAdjust, dummy);
 					float m[MaxAxes];
 					reprap.GetMove().GetCurrentMachinePosition(m, false);		// get height without bed compensation
-					g30zStoppedHeight = m[Z_AXIS] - heightAdjust;				// save for later
+					g30zStoppedHeight = m[Z_AXIS] - g30HValue;					// save for later
 					g30zHeightError = g30zStoppedHeight - platform.ZProbeStopHeight();
 					g30zHeightErrorSum += g30zHeightError;
 				}
@@ -1230,51 +1277,56 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		{
 			// See whether we need to do any more taps
 			const ZProbe& params = platform.GetCurrentZProbeParameters();
-			if (tapsDone >= 2)
+			bool acceptReading = false;
+			if (params.maxTaps < 2)
+			{
+				acceptReading = true;
+			}
+			else if (tapsDone >= 2)
 			{
 				g30zHeightErrorLowestDiff = min<float>(g30zHeightErrorLowestDiff, fabsf(g30zHeightError - g30PrevHeightError));
+				if (params.tolerance > 0.0 && g30zHeightErrorLowestDiff <= params.tolerance)
+				{
+					g30zHeightError = (g30zHeightError + g30PrevHeightError)/2;
+					acceptReading = true;
+				}
 			}
-			const bool acceptReading = (hadProbingError || params.maxTaps < 2 || (tapsDone >= 2 && g30zHeightErrorLowestDiff <= params.tolerance));
-			if (!acceptReading && tapsDone < params.maxTaps)
+
+			if (!acceptReading)
 			{
-				// Tap again
-				g30PrevHeightError = g30zHeightError;
-				lastProbedTime = millis();
-				gb.SetState(GCodeState::probingAtPoint2a);
+				if (tapsDone < params.maxTaps)
+				{
+					// Tap again
+					g30PrevHeightError = g30zHeightError;
+					lastProbedTime = millis();
+					gb.SetState(GCodeState::probingAtPoint2a);
+					break;
+				}
+
+				// We no longer flag this as a probing error, instead we take the average and issue a warning
+				g30zHeightError = g30zHeightErrorSum/tapsDone;
+				if (params.tolerance > 0.0)			// zero or negative tolerance means always average all readings
+				{
+					platform.Message(WarningMessage, "Z probe readings not consistent\n");
+				}
+			}
+
+			if (g30ProbePointIndex >= 0)
+			{
+				reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, g30zHeightError, true, hadProbingError);
 			}
 			else
 			{
-				if (acceptReading)
-				{
-					if (tapsDone >= 2)
-					{
-						g30zHeightError = (g30zHeightError + g30PrevHeightError)/2;		// take the average of the two readings
-					}
-				}
-				else
-				{
-					// We no longer flag this as a probing error, instead we take the average and issue a warning
-					platform.Message(WarningMessage, "Z probe readings not consistent\n");
-					g30zHeightError = g30zHeightErrorSum/tapsDone;
-				}
-
-				if (g30ProbePointIndex >= 0)
-				{
-					reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, g30zHeightError, true, hadProbingError);
-				}
-				else
-				{
-					// Setting the Z height with G30
-					moveBuffer.coords[Z_AXIS] -= g30zHeightError;
-					reprap.GetMove().SetNewPosition(moveBuffer.coords, false);
-					reprap.GetMove().SetZeroHeightError(moveBuffer.coords);
-					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
-				}
-				gb.AdvanceState();
-				if (platform.GetZProbeType() != ZProbeType::none && !probeIsDeployed)
-				{
-					DoFileMacro(gb, RETRACTPROBE_G, false);
-				}
+				// Setting the Z height with G30
+				moveBuffer.coords[Z_AXIS] -= g30zHeightError;
+				reprap.GetMove().SetNewPosition(moveBuffer.coords, false);
+				reprap.GetMove().SetZeroHeightError(moveBuffer.coords);
+				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+			}
+			gb.AdvanceState();
+			if (platform.GetZProbeType() != ZProbeType::none && !probeIsDeployed)
+			{
+				DoFileMacro(gb, RETRACTPROBE_G, false);
 			}
 		}
 		break;
@@ -1754,7 +1806,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 		SaveResumeInfo(false);															// create the resume file so that we can resume after power down
 	}
 
-	gb.SetState(GCodeState::pausing1);
+	gb.SetState((reason == PauseReason::filamentChange) ? GCodeState::filamentChangePause1 : GCodeState::pausing1);
 	isPaused = true;
 
 	if (msg != nullptr)
@@ -2213,7 +2265,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 		{
 			const float rate = gb.GetFValue() * distanceScale;
 			gb.MachineState().feedRate = (moveBuffer.moveType == 0)
-						? rate * speedFactor
+						? rate * speedFactor * (0.01 * SecondsToMinutes)
 						: rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
 		}
 		moveBuffer.feedRate = gb.MachineState().feedRate;
@@ -2624,9 +2676,9 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		jParam = 0.0;
 	}
 
-	if (!seenXY && seenIJ)		// at least one of XY and IJ must be specified
+	if (!(seenXY && seenIJ))		// at least one of XY and IJ must be specified
 	{
-		return  "G2/G3: missing parameter";
+		return "G2/G3: missing parameter";
 	}
 
 	memcpy(moveBuffer.initialCoords, moveBuffer.coords, numVisibleAxes * sizeof(moveBuffer.initialCoords[0]));
@@ -3042,6 +3094,7 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply)
 GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 {
 	g30SValue = (gb.Seen('S')) ? gb.GetIValue() : -3;		// S-3 is equivalent to having no S parameter
+	g30HValue = (gb.Seen('H')) ? gb.GetFValue() : 0.0;
 	g30ProbePointIndex = -1;
 	bool seenP = false;
 	gb.TryGetIValue('P', g30ProbePointIndex, seenP);
@@ -3687,13 +3740,6 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 		return;
 	}
 
-	// Second UART device, e.g. PanelDue. Do NOT use emulation for this one!
-	if (&gb == auxGCode)
-	{
-		platform.AppendAuxReply(reply, reply[0] == '{');
-		return;
-	}
-
 	const Compatibility c = (&gb == serialGCode || &gb == telnetGCode) ? platform.Emulating() : Compatibility::me;
 	const MessageType type = gb.GetResponseMessageType();
 	const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
@@ -3704,8 +3750,8 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 	case Compatibility::me:
 	case Compatibility::reprapFirmware:
 		{
-			const MessageType mt = (rslt == GCodeResult::error) ? (MessageType)(type | ErrorMessageFlag)
-									: (rslt == GCodeResult::warning) ? (MessageType)(type | WarningMessageFlag)
+			const MessageType mt = (rslt == GCodeResult::error) ? (MessageType)(type | ErrorMessageFlag | LogMessage)
+									: (rslt == GCodeResult::warning) ? (MessageType)(type | WarningMessageFlag | LogMessage)
 										: type;
 			platform.MessageF(mt, "%s\n", reply);
 		}
@@ -3754,7 +3800,8 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 	}
 }
 
-void GCodes::HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply)
+// Handle a successful response when the response is in an OutputBuffer
+void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply)
 {
 	// Although unlikely, it's possible that we get a nullptr reply. Don't proceed if this is the case
 	if (reply == nullptr)
@@ -3778,10 +3825,6 @@ void GCodes::HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply)
 	{
 	case Compatibility::me:
 	case Compatibility::reprapFirmware:
-		if (error)
-		{
-			platform.Message(type, "Error: ");
-		}
 		platform.Message(type, reply);
 		return;
 
@@ -4373,13 +4416,13 @@ void GCodes::StopPrint(StopPrintReason reason)
 }
 
 // Return true if all the heaters for the specified tool are at their set temperatures
-bool GCodes::ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling) const
+bool GCodes::ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance) const
 {
 	if (tool != nullptr)
 	{
 		for (size_t i = 0; i < tool->HeaterCount(); ++i)
 		{
-			if (!reprap.GetHeat().HeaterAtSetTemperature(tool->Heater(i), waitWhenCooling))
+			if (!reprap.GetHeat().HeaterAtSetTemperature(tool->Heater(i), waitWhenCooling, tolerance))
 			{
 				return false;
 			}
@@ -4516,7 +4559,7 @@ void GCodes::ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coo
 				axisOffsets[axis]
 #endif
 				- currentTool->GetOffset(axis);
-			coordsOut[axis] = coordsIn[axis] + currentTool->GetOffset(axis);
+			coordsOut[axis] = coordsIn[axis]/axisScaleFactors[axis] - totalOffset;
 			if (IsBitSet(xAxes, axis))
 			{
 				xCoord += coordsIn[axis]/axisScaleFactors[axis] - totalOffset;
@@ -5022,13 +5065,7 @@ void GCodes::CheckHeaterFault()
 // Return the current speed factor
 float GCodes::GetSpeedFactor() const
 {
-	return speedFactor * MinutesToSeconds;
-}
-
-// Set the speed factor
-void GCodes::SetSpeedFactor(float factor)
-{
-	speedFactor = constrain<float>(factor, 0.1, 5.0) / MinutesToSeconds;
+	return speedFactor;
 }
 
 // Return a current extrusion factor
@@ -5052,6 +5089,12 @@ Pwm_t GCodes::ConvertLaserPwm(float reqVal) const
 }
 
 #if SUPPORT_12864_LCD
+
+// Set the speed factor. Value passed is in percent.
+void GCodes::SetSpeedFactor(float factor)
+{
+	speedFactor = constrain<float>(factor, 10.0, 500.0);
+}
 
 // Process a GCode command from the 12864 LCD returning true if the command was accepted
 bool GCodes::ProcessCommandFromLcd(const char *cmd)

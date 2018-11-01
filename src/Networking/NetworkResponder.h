@@ -63,7 +63,7 @@ protected:
 	void FinishUpload(uint32_t fileLength, time_t fileLastModified);
 	virtual void CancelUpload();
 
-	uint32_t GetRemoteIP() const;
+	IPAddress GetRemoteIP() const;
 	void ReportOutputBufferExhaustion(const char *sourceFile, int line);
 
 	static Platform& GetPlatform() { return reprap.GetPlatform(); }

@@ -148,30 +148,27 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 
 #endif
 
-#ifdef SUPPORT_OBJECT_MODEL
+#if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
-// Note: if using GCC version 7.3.1 20180622 then if lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) [] (ObjectModel* arg) { RepRap * const self = static_cast<RepRap*>(arg); return (void *)(_ret); }
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(RepRap, _ret)
 
 const ObjectModelTableEntry RepRap::objectModelTable[] =
 {
-	{ "gcodes", OBJECT_MODEL_FUNC(&(self->GetGCodes())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none }
+	// These entries are temporary pending design of the object model
+	//TODO design the object model
+	{ "gcodes", OBJECT_MODEL_FUNC(&(self->GetGCodes())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },
+	{ "meshProbe", OBJECT_MODEL_FUNC(&(self->GetMove().GetGrid())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },
+	{ "move", OBJECT_MODEL_FUNC(&(self->GetMove())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },
+	{ "network", OBJECT_MODEL_FUNC(&(self->GetNetwork())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },
+	{ "randomProbe", OBJECT_MODEL_FUNC(&(self->GetMove().GetProbePoints())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },
 };
 
-const char *RepRap::GetModuleName() const
-{
-	return nullptr;				// this module has no name and doesn't need one
-}
-
-const ObjectModelTableEntry *RepRap::GetObjectModelTable(size_t& numEntries) const
-{
-	numEntries = ARRAY_SIZE(objectModelTable);
-	return objectModelTable;
-}
+DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
 #endif
 
@@ -979,8 +976,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			response->cat((ch == '[') ? "[]" : "]");
 		}
 
-		// Speed and Extrusion factors
-		response->catf(",\"speedFactor\":%.1f,\"extrFactors\":", (double)(gCodes->GetSpeedFactor() * 100.0));
+		// Speed and Extrusion factors in %
+		response->catf(",\"speedFactor\":%.1f,\"extrFactors\":", (double)(gCodes->GetSpeedFactor()));
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
@@ -1694,7 +1691,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	}
 
 	// Send the speed and extruder override factors
-	response->catf("],\"sfactor\":%.2f,\"efactor\":", (double)(gCodes->GetSpeedFactor() * 100.0));
+	response->catf("],\"sfactor\":%.2f,\"efactor\":", (double)(gCodes->GetSpeedFactor()));
 	ch = '[';
 	for (size_t i = 0; i < GetExtrudersInUse(); ++i)
 	{
@@ -1726,20 +1723,19 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	}
 
 	// Send the fan settings, for PanelDue firmware 1.13 and later
-	response->catf(",\"fanPercent\":");
-	ch = '[';
+	// Currently, PanelDue assumes that the first value is the print cooling fan speed and only uses that one, so send the mapped fan speed first
+	response->catf(",\"fanPercent\":[%.1f", (double)(gCodes->GetMappedFanSpeed() * 100.0));
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
-		response->catf("%c%.1f", ch, (double)(platform->GetFanValue(i) * 100.0));
-		ch = ',';
+		response->catf(",%.1f", (double)(platform->GetFanValue(i) * 100.0));
 	}
+	response->cat(']');
 
 	// Send fan RPM value(s)
-	response->cat(']');
 	if (NumTachos != 0)
 	{
 		response->cat(",\"fanRPM\":");
-		// For compatibility with older versions of DWC, if there is only one tacho value then we send it as a simple variable
+		// For compatibility with older versions of DWC and PanelDue, if there is only one tacho value then we send it as a simple variable
 		if (NumTachos > 1)
 		{
 			char ch = '[';
@@ -2063,7 +2059,6 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 		{
 			if (!OutputBuffer::Allocate(response))
 			{
-				// Should never happen
 				return false;
 			}
 
@@ -2078,7 +2073,6 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 	{
 		if (!OutputBuffer::Allocate(response))
 		{
-			// Should never happen
 			return false;
 		}
 

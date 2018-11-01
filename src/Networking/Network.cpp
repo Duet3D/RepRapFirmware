@@ -54,6 +54,30 @@ Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderT
 #endif
 }
 
+#if SUPPORT_OBJECT_MODEL
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+static const ObjectModelArrayDescriptor interfaceArrayDescriptor =
+{
+	[] (ObjectModel *self) -> size_t { return NumNetworkInterfaces; },
+	[] (ObjectModel *self, size_t n) -> void* { return (void *)(((Network*)self)->GetInterface(n)); }
+};
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(Network, _ret)
+
+const ObjectModelTableEntry Network::objectModelTable[] =
+{
+	// These entries must be in alphabetical order
+	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfaceArrayDescriptor), TYPE_OF(ObjectModel) | IsArray, ObjectModelTableEntry::none }
+};
+
+DEFINE_GET_OBJECT_MODEL_TABLE(Network)
+
+#endif
+
 // Note that Platform::Init() must be called before this to that Platform::IsDuetWiFi() returns the correct value
 void Network::Init()
 {
@@ -358,22 +382,20 @@ int Network::EnableState(unsigned int interface) const
 	return -1;
 }
 
-void Network::SetEthernetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[])
+void Network::SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway)
 {
 	for (NetworkInterface *iface : interfaces)
 	{
 		if (!iface->IsWiFiInterface())
 		{
-			iface->SetIPAddress(ipAddress, netmask, gateway);
+			iface->SetIPAddress(p_ipAddress, p_netmask, p_gateway);
 		}
 	}
 }
 
-const uint8_t *Network::GetIPAddress(unsigned int interface) const
+IPAddress Network::GetIPAddress(unsigned int interface) const
 {
-	static const uint8_t nullIpAddress[4] = { 0, 0, 0, 0 };
-
-	return (interface < NumNetworkInterfaces) ? interfaces[interface]->GetIPAddress() : nullIpAddress;
+	return (interface < NumNetworkInterfaces) ? interfaces[interface]->GetIPAddress() : IPAddress();
 }
 
 void Network::SetHostname(const char *name)
