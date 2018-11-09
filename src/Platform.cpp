@@ -450,6 +450,8 @@ void Platform::Init()
 	// The SX1509B has an independent power on reset, so give it some time
 	delay(200);
 	expansionBoard = DuetExpansion::DueXnInit();
+
+#if HAS_SMART_DRIVERS
 	switch (expansionBoard)
 	{
 	case ExpansionBoardType::DueX2:
@@ -464,6 +466,7 @@ void Platform::Init()
 		numSmartDrivers = 5;									// assume that any additional drivers are dumb enable/step/dir ones
 		break;
 	}
+#endif
 
 	if (expansionBoard != ExpansionBoardType::none)
 	{
@@ -1765,7 +1768,11 @@ bool Platform::IsPowerOk() const
 
 bool Platform::HasVinPower() const
 {
+#if HAS_SMART_DRIVERS
 	return driversPowered;			// not quite right because drivers are disabled if we get over-voltage too, but OK for the status report
+#else
+	return true;
+#endif
 }
 
 void Platform::EnableAutoSave(float saveVoltage, float resumeVoltage)
@@ -2297,7 +2304,7 @@ void Platform::Diagnostics(MessageType mtype)
 	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 ", over voltage events: %" PRIu32 ", power good: %s\n",
 		(double)AdcReadingToPowerVoltage(lowestVin), (double)AdcReadingToPowerVoltage(currentVin), (double)AdcReadingToPowerVoltage(highestVin),
 				numUnderVoltageEvents, numOverVoltageEvents,
-				(driversPowered) ? "yes" : "no");
+				(HasVinPower()) ? "yes" : "no");
 	lowestVin = highestVin = currentVin;
 #endif
 

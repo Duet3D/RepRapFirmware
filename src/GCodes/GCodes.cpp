@@ -137,7 +137,7 @@ void GCodes::Init()
 	axisLetters[1] = 'Y';
 	axisLetters[2] = 'Z';
 
-#if defined(DUET_NG) || defined(DUET_M)
+#if HAS_SMART_DRIVERS
 	numExtruders = min<size_t>(MaxExtruders, platform.GetNumSmartDrivers() - XYZ_AXES);	// don't default dumb drivers to extruders because they don't support the same microstepping options
 #else
 	numExtruders = MaxExtruders;
