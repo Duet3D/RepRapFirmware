@@ -3,6 +3,8 @@
  *
  *  Created on: 11 Nov 2018
  *      Author: Joerg
+ *
+ *	documentation: https://duet3d.dozuki.com/Guide/Five+Bar+Parallel+SCARA/24?lang=en
  */
 
 #ifndef SRC_MOVEMENT_KINEMATICS_FIVEBARSCARAKINEMATICS_H_
@@ -11,7 +13,6 @@
 #include "ZLeadscrewKinematics.h"
 
 // Standard setup for 5 Bar SCARA (parallel SCARA) machines assumed by this firmware
-// Parameters are documented in https://duet3d.dozuki.com/Guide/Five+Bar+Parallel+SCARA/24?lang=en
 
 class FiveBarScaraKinematics : public ZLeadscrewKinematics
 {
