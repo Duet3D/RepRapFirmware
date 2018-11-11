@@ -46,27 +46,27 @@ private:
 	
 	void Recalc();
 	//bool CalculateThetaAndPsi(const float machinePos[], bool isCoordinated, float& theta, float& psi, bool& armMode) const;
-  int getQuadrant(int x, int y) const;
-  float getAbsoluteAngle(float xOrig, float yOrig, float xDest, float yDest) const;
-  float * getIntersec(float firstRadius, float secondRadius, float firstX, float firstY, float secondX, float secondY) const;
-  float * getTheta(float proximal, float distal, float proxX, float proxY, float destX, float destY) const;
-  float * getXYFromAngle(float angle, float length, float origX, float origY) const;
-  float *getForward(float thetaL, float thetaR, int workmode) const;
-  float *getInverse(float x0, float y0) const;
-  float getAngle(float x1, float y1, float xAngle, float yAngle, float x2, float y2) const;
-  bool constraintOk(float angleMin, float angleMax, float angle) const;
+	int getQuadrant(int x, int y) const;
+	float getAbsoluteAngle(float xOrig, float yOrig, float xDest, float yDest) const;
+	float * getIntersec(float firstRadius, float secondRadius, float firstX, float firstY, float secondX, float secondY) const;
+	float * getTheta(float proximal, float distal, float proxX, float proxY, float destX, float destY) const;
+	float * getXYFromAngle(float angle, float length, float origX, float origY) const;
+	float *getForward(float thetaL, float thetaR, int workmode) const;
+	float *getInverse(float x0, float y0) const;
+	float getAngle(float x1, float y1, float xAngle, float yAngle, float x2, float y2) const;
+	bool constraintOk(float angleMin, float angleMax, float angle) const;
 
 	// Primary parameters
-  float xOffsetL;
-  float yOffsetL;
-  float xOffsetR;
-  float yOffsetR;
-  float proximalL;
-  float proximalR;
-  float distalL;
-  float distalR;
-  float cantL;
-  float cantR;
+	float xOffsetL;
+	float yOffsetL;
+	float xOffsetR;
+	float yOffsetR;
+	float proximalL;
+	float proximalR;
+	float distalL;
+	float distalR;
+	float cantL;
+	float cantR;
   
 	//float proximalArmLength;
 	//float distalArmLength;
