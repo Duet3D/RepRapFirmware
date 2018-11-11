@@ -47,6 +47,7 @@ private:
 	
 	void Recalc();
 	int getQuadrant(int x, int y) const;
+	bool isCantilevered(int mode) const;
 	float getAbsoluteAngle(float xOrig, float yOrig, float xDest, float yDest) const;
 	float * getIntersec(float firstRadius, float secondRadius, float firstX, float firstY, float secondX, float secondY) const;
 	float * getTheta(float proximal, float distal, float proxX, float proxY, float destX, float destY) const;
@@ -57,10 +58,10 @@ private:
 	bool constraintOk(float angleMin, float angleMax, float angle) const;
 
 	// Primary parameters
-	float xActuatorL;
-	float yActuatorL;
-	float xActuatorR;
-	float yActuatorR;
+	float xOrigL;
+	float yOrigL;
+	float xOrigR;
+	float yOrigR;
 	float proximalL;
 	float proximalR;
 	float distalL;
