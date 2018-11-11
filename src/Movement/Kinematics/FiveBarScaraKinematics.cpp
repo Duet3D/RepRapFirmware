@@ -3,6 +3,8 @@
  *
  *  Created on: 11 Nov 2018
  *      Author: Joerg
+ *
+ *	documentation: https://duet3d.dozuki.com/Guide/Five+Bar+Parallel+SCARA/24?lang=en
  */
 
 #include "FiveBarScaraKinematics.h"
