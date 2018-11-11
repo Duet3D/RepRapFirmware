@@ -68,25 +68,11 @@ private:
 	float cantL;
 	float cantR;
   
-	//float proximalArmLength;
-	//float distalArmLength;
-	//float thetaLimits[2];							// minimum proximal joint angle
-	//float psiLimits[2];								// minimum distal joint angle
-	//float crosstalk[3];								// proximal to distal, proximal to X and distal to Z crosstalk
-	//float xOffset;									// where bed X=0 is relative to the left proximal joint
-	//float yOffset;									// where bed Y=0 is relative to the left proximal joint
-	//bool supportsContinuousRotation[2];				// true if the (proximal, distal) arms support continuous rotation
-
 	// Derived parameters
-	//float minRadius, minRadiusSquared;
-	//float maxRadius, maxRadiusSquared;
-	//float proximalArmLengthSquared;
-	//float distalArmLengthSquared;
-	//float twoPd;
 
 	// State variables
-	//mutable float cachedX, cachedY, cachedTheta, cachedPsi;
-	//mutable bool currentArmMode, cachedArmMode;
+	mutable float cachedX0, cachedY0, cachedThetaL, cachedThetaR;
+	mutable int workmode;
 };
 
-#endif /* SRC_MOVEMENT_KINEMATICS_SCARAKINEMATICS_H_ */
+#endif /* SRC_MOVEMENT_KINEMATICS_FIVEBARSCARAKINEMATICS_H_ */
