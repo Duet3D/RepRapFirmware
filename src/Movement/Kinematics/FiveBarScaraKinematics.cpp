@@ -32,6 +32,163 @@ const char *FiveBarScaraKinematics::GetName(bool forStatusReport) const
 //////////////////////// private functions /////////////////////////
 
 
+float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
+{
+	static float result[8];	// xL, yL, thetaL, xR, yR, thetaR, x1, y1 (joint of distals)
+
+	float thetaL = -1.0;
+	float thetaR = -1.0;
+	float xL, xR, yL, yR, x1, y1;
+
+	if(isCantilevered(1)) {
+		// calculate cantilevered side first:
+		float *theta = getTheta(proximalL, distalL + cantL, xOrigL, yOrigL, x_0, y_0);
+		xL = theta[0];
+		yL = theta[1];
+		thetaL = theta[2];
+
+		if(workmode == 1) {
+			if(theta[0] < theta[3]) {
+				xL = theta[3];
+				yL = theta[4];
+				thetaL = theta[5];
+			}
+		}
+		else if(workmode == 2 || workmode == 4) {
+			if(theta[0] > theta[3]) {
+				xL = theta[3];
+				yL = theta[4];
+				thetaL = theta[5];
+			}
+		}
+		else {
+			// unsupported workmode => TODO error log or exception
+		}
+
+		// calculate x1,y1, i.e. where the distal arms meet
+		float fraction = distalL / (distalL + cantL);
+		x1 = (x_0 - xL) * fraction + xL;
+		y1 = (y_0 - yL) * fraction + yL;
+
+		// calculate right, non cantilevered side:
+		theta = getTheta(proximalR, distalR, xOrigR, yOrigR, x1, y1);
+		xR = theta[0];
+		yR = theta[1];
+		thetaR = theta[2];
+
+		if(workmode == 1 || workmode == 2) {
+			if(theta[0] < theta[3]) {
+				xR = theta[3];
+				yR = theta[4];
+				thetaR = theta[5];
+			}
+		}
+		else if(workmode == 4) {
+			if(theta[0] > theta[3]) {
+				xR = theta[3];
+				yR = theta[4];
+				thetaR = theta[5];
+			}
+		}
+		else {
+			// unsupported workmode => TODO error log or exception
+		}
+	}
+	else if(isCantilevered(2)) {
+		// calculate cantilevered side first:
+		float *theta = getTheta(proximalR, distalR + cantR, xOrigR, yOrigR, x_0, y_0);
+		xR = theta[0];
+		yR = theta[1];
+		thetaR = theta[2];
+
+		if(workmode == 1 || workmode == 2) {
+			if(theta[0] < theta[3]) {
+				xR = theta[3];
+				yR = theta[4];
+				thetaR = theta[5];
+			}
+		}
+		else if(workmode == 4) {
+			if(theta[0] > theta[3]) {
+				xR = theta[3];
+				yR = theta[4];
+				thetaR = theta[5];
+			}
+		}
+		else {
+			// unsupported workmode => TODO error log or exception
+		}
+
+		// calculate x1,y1, i.e. where the distal arms meet
+		float fraction = distalR / (distalR + cantR);
+		x1 = (x_0 - xR) * fraction + xR;
+		y1 = (y_0 - yR) * fraction + yR;
+
+		// calculate left, non cantilevered side:
+		theta = getTheta(proximalL, distalL, xOrigL, yOrigL, x1, y1);
+		xL = theta[0];
+		yL = theta[1];
+		thetaL = theta[2];
+
+		if(workmode == 1) {
+			if(theta[0] < theta[3]) {
+				xL = theta[3];
+				yL = theta[4];
+				thetaL = theta[5];
+			}
+		}
+		else if(workmode == 2 || workmode == 4) {
+			if(theta[0] > theta[3]) {
+				xL = theta[3];
+				yL = theta[4];
+				thetaL = theta[5];
+			}
+		}
+		else {
+			// unsupported workmode => TODO error log or exception
+		}
+	}
+	else {	// not cantilevered, hotend is at top joint
+		float *theta = getTheta(proximalL, distalL, xOrigL, yOrigL, x_0, y_0);
+		x1 = x_0;
+		y1 = y_0;
+		float thetaL1 = theta[2];
+		float thetaL2 = theta[5];
+		if(workmode == 1) {
+			if(thetaL1 <= thetaL2) {
+				thetaL = thetaL1;
+			}
+			else {
+				thetaL = thetaL2;
+			}
+		}
+
+		theta = getTheta(proximalR, distalR, xOrigR, yOrigR, x_0, y_0);
+		float thetaR1 = theta[2];
+		float thetaR2 = theta[5];
+		if(workmode == 1) {
+			if(thetaR1 <= thetaR2) {
+				thetaR = thetaR1;
+			}
+			else {
+				thetaR = thetaR2;
+			}
+		}
+	}
+
+	// xL, yL, thetaL, xR, yR, thetaR, x1, y1 (joint of distals)
+	result[0] = xL;
+	result[1] = yL;
+	result[2] = thetaL;
+	result[3] = xR;
+	result[4] = yR;
+	result[5] = thetaR;
+	result[6] = x1;
+	result[7] = y1;
+
+	return result;
+}
+
 int FiveBarScaraKinematics::getNumParameters(char c, GCodeBuffer gb) const {
 	String<MaxFilenameLength> str;
 	bool seen = false;
@@ -218,18 +375,78 @@ float FiveBarScaraKinematics::getAngle(float x1, float y1, float xAngle, float y
 	return angle;
 }
 
-// test angle to be between min and max value and return true or false
-bool FiveBarScaraKinematics::constraintOk(float angleMin, float angleMax, float angle) const
+bool FiveBarScaraKinematics::isPointInsideDefinedPrintableArea(float x0, float y0) const
 {
-	if(angle >= angleMin && angle <= angleMax) {
-		return true;
+	if(printAreaElementsDefined == 4) { // rectangle
+		float x1 = printArea[0];
+		float y1 = printArea[1];
+		float x2 = printArea[2];
+		float y2 = printArea[3];
+
+		if(x1 < x2 && y1 > y2) {
+			if(x0 >= x1 && x0 <= x2 && y2 <= y0 && y1 >= y0) {
+				return true;
+			}
+			else {
+				return false;
+			}
+		}
+		else if(x1 > x2 && y1 < y2) {
+			if(x0 >= x2 && x0 <= x1 && y2 >= y0 && y1 <= y0) {
+				return true;
+			}
+			else {
+				return false;
+			}
+		}
+		else {
+			// TODO error log
+		}
 	}
-	else {
-		return false;
+	else { // polygone
+		// TODO implement
 	}
+	return false;
 }
 
+bool FiveBarScaraKinematics::constraintsOk(float x_0, float y_0) const
+{
+	float *inv = getInverse(x_0, y_0);	// xL, yL, thetaL, xR, yR, thetaR, x1, y1 (joint of distals)
+	float xL = inv[0];
+	float yL = inv[1];
+	float thetaL = inv[2];
+	float xR = inv[3];
+	float yR = inv[4];
+	float thetaR = inv[5];
+	float x1 = inv[6];
+	float y1 = inv[7];
 
+	// check theta angles
+	if(actuatorAngleLMin > thetaL || actuatorAngleLMax < thetaL) {
+		return false;
+	}
+	if(actuatorAngleRMin > thetaR || actuatorAngleRMax < thetaR) {
+		return false;
+	}
+
+	// check constr
+	float constr = getAngle(xL, yL, x1, y1, xR, yR);
+	if(constrMin > constr || constrMax < constr) {
+		return false;
+	}
+
+	// check proxDistral angle L and R
+	float angleProxDistL = getAngle(xOrigL, yOrigL, xL, yL, x1, y1);
+	if(proxDistLAngleMin > angleProxDistL || proxDistLAngleMax < angleProxDistL) {
+		return false;
+	}
+	float angleProxDistR = getAngle(xOrigR, yOrigR, xR, yR, x1, y1);
+	if(proxDistRAngleMin > angleProxDistR || proxDistRAngleMax < angleProxDistR) {
+		return false;
+	}
+
+	return true;
+}
 
 ///////////////////////////// public functions /////////////////////////
 
@@ -314,14 +531,34 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 			gb.TryGetFloatArray('A', 4, angles, reply, seen);
 			constrMin = angles[0];
 			constrMax = angles[1];
-			proxDistAngleMin = angles[2];
-			proxDistAngleMax = angles[3];
+			proxDistLAngleMin = angles[2];
+			proxDistLAngleMax = angles[3];
+			proxDistRAngleMin = angles[4];
+			proxDistRAngleMax = angles[5];
 		}
 		else  {
 			constrMin = 15.0;
 			constrMax = 165.0;
-			proxDistAngleMin = 0.0;
-			proxDistAngleMax = 360.0;
+			proxDistLAngleMin = 0.0;
+			proxDistLAngleMax = 360.0;
+			proxDistRAngleMin = 0.0;
+			proxDistRAngleMax = 360.0;
+		}
+
+
+		if(gb.Seen('C')) {
+			float angles[4];
+			gb.TryGetFloatArray('C', 4, angles, reply, seen);
+			actuatorAngleLMin = angles[0];
+			actuatorAngleLMax = angles[1];
+			actuatorAngleRMin = angles[2];
+			actuatorAngleRMax = angles[3];
+		}
+		else {
+			actuatorAngleLMin = 10.0;
+			actuatorAngleLMax = 170.0;
+			actuatorAngleRMin = 10.0;
+			actuatorAngleRMax = 170.0;
 		}
 
 
@@ -340,9 +577,11 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 				}
 			}
 			printAreaElementsDefined = numParameters;
+			printAreaDefined = true;
 		}
 		else {
 			printAreaElementsDefined = 0;
+			printAreaDefined = false;
 		}
 
 
@@ -366,6 +605,14 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 	}
 }
 
+// Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
+bool FiveBarScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated) const
+{
+	// First limit all axes according to M208
+	const bool m208Limited = Kinematics::LimitPosition(coords, numVisibleAxes, axesHomed, isCoordinated);
+	return m208Limited;
+}
+
 
 // Convert Cartesian coordinates to motor coordinates, returning true if successful
 // In the following, theta is the proximal arm angle relative to the X axis, psi is the distal arm angle relative to the proximal arm
@@ -373,146 +620,10 @@ bool FiveBarScaraKinematics::CartesianToMotorSteps(const float machinePos[], con
 {
 	float x_0 = machinePos[0];
 	float y_0 = machinePos[1];
+	float *inv = getInverse(x_0, y_0);	// xL, yL, thetaL, xR, yR, thetaR, x1, y1 (joint of distals)
 
-	float thetaL = -1.0;
-	float thetaR = -1.0;
-
-	if(isCantilevered(1)) {
-		// calculate cantilevered side first:
-		float *theta = getTheta(proximalL, distalL + cantL, xOrigL, yOrigL, x_0, y_0);
-		float xL = theta[0];
-		float yL = theta[1];
-		thetaL = theta[2];
-
-		if(workmode == 1) {
-			if(theta[0] < theta[3]) {
-				xL = theta[3];
-				yL = theta[4];
-				thetaL = theta[5];
-			}
-		}
-		else if(workmode == 2 || workmode == 4) {
-			if(theta[0] > theta[3]) {
-				xL = theta[3];
-				yL = theta[4];
-				thetaL = theta[5];
-			}
-		}
-		else {
-			// unsupported workmode => TODO error log or exception
-		}
-
-		// calculate x1,y1, i.e. where the distal arms meet
-		float fraction = distalL / (distalL + cantL);
-		float x1 = (x_0 - xL) * fraction + xL;
-		float y1 = (y_0 - yL) * fraction + yL;
-
-		// calculate right, non cantilevered side:
-		theta = getTheta(proximalR, distalR, xOrigR, yOrigR, x1, y1);
-		float xR = theta[0];
-		float yR = theta[1];
-		thetaR = theta[2];
-
-		if(workmode == 1 || workmode == 2) {
-			if(theta[0] < theta[3]) {
-				xR = theta[3];
-				yR = theta[4];
-				thetaR = theta[5];
-			}
-		}
-		else if(workmode == 4) {
-			if(theta[0] > theta[3]) {
-				xR = theta[3];
-				yR = theta[4];
-				thetaR = theta[5];
-			}
-		}
-		else {
-			// unsupported workmode => TODO error log or exception
-		}
-	}
-	else if(isCantilevered(2)) {
-		// calculate cantilevered side first:
-		float *theta = getTheta(proximalR, distalR + cantR, xOrigR, yOrigR, x_0, y_0);
-		float xR = theta[0];
-		float yR = theta[1];
-		thetaR = theta[2];
-
-		if(workmode == 1 || workmode == 2) {
-			if(theta[0] < theta[3]) {
-				xR = theta[3];
-				yR = theta[4];
-				thetaR = theta[5];
-			}
-		}
-		else if(workmode == 4) {
-			if(theta[0] > theta[3]) {
-				xR = theta[3];
-				yR = theta[4];
-				thetaR = theta[5];
-			}
-		}
-		else {
-			// unsupported workmode => TODO error log or exception
-		}
-
-		// calculate x1,y1, i.e. where the distal arms meet
-		float fraction = distalR / (distalR + cantR);
-		float x1 = (x_0 - xR) * fraction + xR;
-		float y1 = (y_0 - yR) * fraction + yR;
-
-		// calculate left, non cantilevered side:
-		theta = getTheta(proximalL, distalL, xOrigL, yOrigL, x1, y1);
-		float xL = theta[0];
-		float yL = theta[1];
-		thetaL = theta[2];
-
-		if(workmode == 1) {
-			if(theta[0] < theta[3]) {
-				xL = theta[3];
-				yL = theta[4];
-				thetaL = theta[5];
-			}
-		}
-		else if(workmode == 2 || workmode == 4) {
-			if(theta[0] > theta[3]) {
-				xL = theta[3];
-				yL = theta[4];
-				thetaL = theta[5];
-			}
-		}
-		else {
-			// unsupported workmode => TODO error log or exception
-		}
-	}
-	else {	// not cantilevered, hotend is at top joint
-		float *theta = getTheta(proximalL, distalL, xOrigL, yOrigL, x_0, y_0);
-		float thetaL1 = theta[2];
-		float thetaL2 = theta[5];
-		if(workmode == 1) {
-			if(thetaL1 <= thetaL2) {
-				thetaL = thetaL1;
-			}
-			else {
-				thetaL = thetaL2;
-			}
-		}
-
-		theta = getTheta(proximalR, distalR, xOrigR, yOrigR, x_0, y_0);
-		float thetaR1 = theta[2];
-		float thetaR2 = theta[5];
-		if(workmode == 1) {
-			if(thetaR1 <= thetaR2) {
-				thetaR = thetaR1;
-			}
-			else {
-				thetaR = thetaR2;
-			}
-		}
-	}
-
-	motorPos[X_AXIS] = lrintf(thetaL * stepsPerMm[X_AXIS]);
-	motorPos[Y_AXIS] = lrintf(thetaR * stepsPerMm[Y_AXIS]);
+	motorPos[X_AXIS] = lrintf(inv[2] * stepsPerMm[X_AXIS]);
+	motorPos[Y_AXIS] = lrintf(inv[5] * stepsPerMm[Y_AXIS]);
 	motorPos[Z_AXIS] = lrintf(machinePos[Z_AXIS] * stepsPerMm[Z_AXIS]);
 
 	// Transform any additional axes linearly
@@ -578,7 +689,25 @@ void FiveBarScaraKinematics::MotorStepsToCartesian(const int32_t motorPos[], con
 // Return true if the specified XY position is reachable by the print head reference point.
 bool FiveBarScaraKinematics::IsReachable(float x, float y, bool isCoordinated) const
 {
-	return true;
+	// Check the M208 limits first
+	float coords[2] = {x, y};
+	if (Kinematics::LimitPosition(coords, 2, LowestNBits<AxesBitmap>(2), isCoordinated))
+	{
+		return false;
+	}
+
+	if(printAreaDefined) {
+		if(isPointInsideDefinedPrintableArea(x, y)) {
+			return true;
+		}
+	}
+	else {
+		if(constraintsOk(x, y)) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics
@@ -616,14 +745,6 @@ size_t FiveBarScaraKinematics::NumHomingButtons(size_t numVisibleAxes) const
 	{
 		return 0;
 	}
-	if (!storage->FileExists(SYS_DIR, Home5BarScaraFileName))
-	{
-		return 1;
-	}
-	if (!storage->FileExists(SYS_DIR, "homez.g"))
-	{
-		return 2;
-	}
 	return numVisibleAxes;
 }
 
@@ -634,26 +755,8 @@ AxesBitmap FiveBarScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesB
 {
 	// Ask the base class which homing file we should call first
 	AxesBitmap ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
+	filename.copy(Home5BarScaraFileName);
 
-	if (ret == 0)
-	{
-	// Change the returned name if it is X or Y
-		if (StringEquals(filename.c_str(), "homex.g"))
-		{
-			filename.copy(Home5BarScaraFileName);
-		}
-		else if (StringEquals(filename.c_str(), "homey.g"))
-		{
-			filename.copy(Home5BarScaraFileName);
-		}
-
-		// Some SCARA printers cannot have individual axes homed safely. So it the user doesn't provide the homing file for an axis, default to homeall.
-		const MassStorage *storage = reprap.GetPlatform().GetMassStorage();
-		if (!storage->FileExists(SYS_DIR, filename.c_str()))
-		{
-			filename.copy(HomeAllFileName);
-		}
-	}
 	return ret;
 }
 
@@ -661,49 +764,37 @@ AxesBitmap FiveBarScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesB
 // Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
 bool FiveBarScaraKinematics::QueryTerminateHomingMove(size_t axis) const
 {
-	// If crosstalk causes the axis motor concerned to affect other axes then must terminate the entire move
-//	return (axis == X_AXIS && (crosstalk[0] != 0.0 || crosstalk[1] != 0.0))
-//		|| (axis == Y_AXIS && crosstalk[2] != 0.0);
-	return false;
+	return (axis == X_AXIS  || axis == Y_AXIS);
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
 void FiveBarScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
 {
-//	switch (axis)
-//	{
-//	case X_AXIS:	// proximal joint homing switch
-//		{
-//			const float hitPoint = (highEnd) ? thetaLimits[1] : thetaLimits[0];
-//			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
-//		}
-//		break;
-//
-//	case Y_AXIS:	// distal joint homing switch
-//		{
-//			const float hitPoint = ((highEnd) ? psiLimits[1] : psiLimits[0])
-//									- ((dda.DriveCoordinates()[X_AXIS] * crosstalk[0])/stepsPerMm[X_AXIS]);
-//			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
-//		}
-//		break;
-//
-//	case Z_AXIS:	// Z axis homing switch
-//		{
-//			const float hitPoint = ((highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis))
-//									- ((dda.DriveCoordinates()[X_AXIS] * crosstalk[1])/stepsPerMm[X_AXIS])
-//									- ((dda.DriveCoordinates()[Y_AXIS] * crosstalk[2])/stepsPerMm[Y_AXIS]);
-//			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
-//		}
-//		break;
-//
-//	default:		// Additional axis
-//		{
-//			const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
-//			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
-//		}
-//		break;
-//	}
+	switch (axis)
+	{
+	case X_AXIS:	// proximal joint homing switch
+		dda.SetDriveCoordinate(lrintf(homingAngleL * stepsPerMm[axis]), axis);
+		break;
+
+	case Y_AXIS:	// distal joint homing switch
+		dda.SetDriveCoordinate(lrintf(homingAngleR * stepsPerMm[axis]), axis);
+		break;
+
+	case Z_AXIS:	// Z axis homing switch
+		{
+			const float hitPoint = ((highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis));
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+		}
+		break;
+
+	default:		// Additional axis
+		{
+			const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+		}
+		break;
+	}
 }
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.
