@@ -56,7 +56,8 @@ private:
 	float * getForward(float thetaL, float thetaR, int workmode) const;
 	float * getInverse(float x0, float y0) const;
 	float getAngle(float x1, float y1, float xAngle, float yAngle, float x2, float y2) const;
-	bool constraintOk(float angleMin, float angleMax, float angle) const;
+	bool isPointInsideDefinedPrintableArea(float x0, float y0) const;
+	bool constraintsOk(float x0, float y0) const;
 
 	// Primary parameters
 	float xOrigL;
@@ -72,12 +73,21 @@ private:
 	int workmode;
 	float homingAngleL;
 	float homingAngleR;
+
+	bool printAreaDefined;
 	float printArea[40];	// maximum 20 x/ycoordinates, concave
-	bool printAreaElementsDefined;
+	int printAreaElementsDefined;
+
 	float constrMin;
 	float constrMax;
-	float proxDistAngleMin;
-	float proxDistAngleMax;
+	float proxDistLAngleMin;
+	float proxDistLAngleMax;
+	float proxDistRAngleMin;
+	float proxDistRAngleMax;
+	float actuatorAngleLMin;
+	float actuatorAngleLMax;
+	float actuatorAngleRMin;
+	float actuatorAngleRMax;
   
 	// Derived parameters
 
