@@ -75,8 +75,7 @@ private:
 	float homingAngleR;
 
 	bool printAreaDefined;
-	float printArea[40];	// maximum 20 x/ycoordinates, concave
-	int printAreaElementsDefined;
+	float printArea[4];	// x1, y1, x2, y2
 
 	float constrMin;
 	float constrMax;
