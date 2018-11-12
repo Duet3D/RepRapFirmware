@@ -20,7 +20,7 @@
 FiveBarScaraKinematics::FiveBarScaraKinematics()
 	: ZLeadscrewKinematics(KinematicsType::scara, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true)
 {
-	Recalc();	// TODO implement
+	Recalc();
 }
 
 // Return the name of the current kinematics
