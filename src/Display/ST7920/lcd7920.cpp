@@ -228,8 +228,7 @@ size_t Lcd7920::writeNative(uint16_t ch)
 		const uint16_t cmask = (1u << currentFont->height) - 1;
 
 		uint8_t nCols = *fontPtr++;
-
-		if (lastCharColData != 0)	// if we have written anything other than spaces
+		if (lastCharColData != 0)		// if we have written anything other than spaces
 		{
 			uint8_t numSpaces = currentFont->numSpaces;
 
@@ -308,6 +307,46 @@ size_t Lcd7920::writeNative(uint16_t ch)
 	return 1;
 }
 
+// Write a space
+void Lcd7920::WriteSpaces(PixelNumber numPixels)
+{
+	const LcdFont * const currentFont = fonts[currentFontNumber];
+	uint8_t ySize = currentFont->height;
+	if (row >= NumRows)
+	{
+		ySize = 0;				// we still execute the code, so that the caller can tell how many columns the text will occupy by writing it off-screen
+	}
+	else if (row + ySize > NumRows)
+	{
+		ySize = NumRows - row;
+	}
+
+	while (numPixels != 0 && column < NumCols)
+	{
+		if (ySize != 0)
+		{
+			const uint8_t mask = 0x80 >> (column & 7);
+			uint8_t *p = image + ((row * (NumCols/8)) + (column/8));
+			for (uint8_t i = 0; i < ySize && p < (image + sizeof(image)); ++i)
+			{
+				const uint8_t oldVal = *p;
+				const uint8_t newVal = (textInverted) ? oldVal | mask : oldVal & ~mask;
+				if (newVal != oldVal)
+				{
+					*p = newVal;
+					SetDirty(row + i, column);
+				}
+				p += (NumCols/8);
+			}
+		}
+		--numPixels;
+		++column;
+	}
+
+	lastCharColData = 0;
+	justSetCursor = false;
+}
+
 // Set the left margin. This is where the cursor goes to when we print newline.
 void Lcd7920::SetLeftMargin(PixelNumber c)
 {
@@ -360,7 +399,10 @@ void Lcd7920::TextInvert(bool b)
 	if (b != textInverted)
 	{
 		textInverted = b;
-		lastCharColData = (justSetCursor && !textInverted) ? 0u : 0xFFFF;
+		if (!justSetCursor)
+		{
+			lastCharColData = 0xFFFF;				// force a space when switching between normal and inverted text
+		}
 	}
 }
 
@@ -522,7 +564,7 @@ void Lcd7920::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, co
 		const unsigned int lastDataShift = 7 - ((left + width - 1) % 8);	// number of trailing bits in the last byte that we leave alone
 		const uint8_t lastMask = (1u << lastDataShift) - 1;					// mask for bits we want to keep;
 		accumulator |= *p & lastMask;
-		const uint8_t newVal = accumulator | (((*data ^ inv) << (8 - firstDataShift)) & ~lastMask);
+		const uint8_t newVal = accumulator | (((*data ^ inv) << firstDataShift) & ~lastMask);
 		if (newVal != *p)
 		{
 			*p = newVal;
@@ -598,7 +640,7 @@ void Lcd7920::SetCursor(PixelNumber r, PixelNumber c)
 {
 	row = r;
 	column = c;
-	lastCharColData = (textInverted) ? 0xFFFF : 0u;    // flag that we just set the cursor position, so no space before next character
+	lastCharColData = 0u;    // flag that we just set the cursor position, so no space before next character
 	justSetCursor = true;
 }
 

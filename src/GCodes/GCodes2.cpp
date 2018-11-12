@@ -780,7 +780,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 226: // Gcode Initiated Pause
-	case 600: // Filament change pause
 		if (&gb == fileGCode)						// ignore M226 if it did't come from within a file being printed
 		{
 			if (gb.IsDoingFileMacro())
@@ -793,7 +792,25 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					return false;
 				}
-				DoPause(gb, (code == 600) ? PauseReason::filamentChange : PauseReason::gcode, nullptr);
+				DoPause(gb, PauseReason::gcode, nullptr);
+			}
+		}
+		break;
+
+	case 600: // Filament change pause
+		if (&gb == fileGCode)						// ignore M600 if it did't come from within a file being printed
+		{
+			if (gb.IsDoingFileMacro())
+			{
+				filamentChangePausePending = true;
+			}
+			else
+			{
+				if (!LockMovement(gb))				// lock movement before calling DoPause
+				{
+					return false;
+				}
+				DoPause(gb, PauseReason::filamentChange, nullptr);
 			}
 		}
 		break;
@@ -1589,7 +1606,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else
 			{
-				result = GetGCodeResultFromError(platform.DiagnosticTest(gb, reply, val));
+				result = platform.DiagnosticTest(gb, reply, val);
 			}
 		}
 		break;
@@ -1707,7 +1724,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 143: // Configure heater protection
-		result = GetGCodeResultFromError(SetHeaterProtection(gb, reply));
+		result = SetHeaterProtection(gb, reply);
 		break;
 
 	case 144: // Set bed to standby, or to active if S1 parameter given
@@ -2033,7 +2050,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else
 			{
-				reply.printf("Invalid speed factor");
+				reply.copy("Invalid speed factor");
 				result = GCodeResult::error;
 			}
 		}
@@ -2125,7 +2142,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else
 			{
-				platform.MessageF(ErrorMessage, "Invalid servo index %d in M280 command\n", servoIndex);
+				reply.printf("Invalid servo index %d in M280 command\n", servoIndex);
+				result = GCodeResult::error;
 			}
 		}
 		break;
@@ -2333,78 +2351,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 307: // Set heater process model parameters
-		if (gb.Seen('H'))
-		{
-			const unsigned int heater = gb.GetUIValue();
-			if (heater < NumHeaters)
-			{
-				const FopDt& model = reprap.GetHeat().GetHeaterModel(heater);
-				bool seen = false;
-				float gain = model.GetGain(),
-					tc = model.GetTimeConstant(),
-					td = model.GetDeadTime(),
-					maxPwm = model.GetMaxPwm(),
-					voltage = model.GetVoltage();
-				uint32_t freq = model.GetPwmFrequency();
-				int32_t dontUsePid = model.UsePid() ? 0 : 1;
-				int32_t inversionParameter = 0;
-
-				gb.TryGetFValue('A', gain, seen);
-				gb.TryGetFValue('C', tc, seen);
-				gb.TryGetFValue('D', td, seen);
-				gb.TryGetIValue('B', dontUsePid, seen);
-				gb.TryGetFValue('S', maxPwm, seen);
-				gb.TryGetFValue('V', voltage, seen);
-				gb.TryGetIValue('I', inversionParameter, seen);
-				gb.TryGetUIValue('F', freq, seen);
-
-				if (seen)
-				{
-					const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
-					if (!reprap.GetHeat().SetHeaterModel(heater, gain, tc, td, maxPwm, voltage,
-															dontUsePid == 0, inverseTemperatureControl, (uint16_t)min<uint32_t>(freq, MaxHeaterPwmFrequency)))
-					{
-						reply.copy("Error: bad model parameters");
-					}
-
-					const bool invertedPwmSignal = (inversionParameter == 2 || inversionParameter == 3);
-					reprap.GetHeat().SetHeaterSignalInverted(heater, invertedPwmSignal);
-				}
-				else if (!model.IsEnabled())
-				{
-					reply.printf("Heater %u is disabled", heater);
-				}
-				else
-				{
-					const char* mode = (!model.UsePid()) ? "bang-bang"
-										: (model.ArePidParametersOverridden()) ? "custom PID"
-											: "PID";
-					const bool pwmSignalInverted = reprap.GetHeat().IsHeaterSignalInverted(heater);
-					const char* inverted = model.IsInverted()
-											? (pwmSignalInverted ? "PWM signal and temperature control" : "temperature control")
-											: (pwmSignalInverted ? "PWM signal" : "no");
-
-					reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, calibration voltage %.1f, mode %s, inverted %s, frequency ",
-							heater, (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode, inverted);
-					if (model.GetPwmFrequency() == 0)
-					{
-						reply.cat("default");
-					}
-					else
-					{
-						reply.catf("%uHz", model.GetPwmFrequency());
-					}
-					if (model.UsePid())
-					{
-						// When reporting the PID parameters, we scale them by 255 for compatibility with older firmware and other firmware
-						M301PidParameters params = model.GetM301PidParameters(false);
-						reply.catf("\nComputed PID parameters for setpoint change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
-						params = model.GetM301PidParameters(true);
-						reply.catf("\nComputed PID parameters for load change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
-					}
-				}
-			}
-		}
+		result = SetHeaterModel(gb, reply);
 		break;
 
 	case 350: // Set/report microstepping
@@ -3068,7 +3015,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 563: // Define tool
-		result = GetGCodeResultFromError(ManageTool(gb, reply));
+		result = ManageTool(gb, reply);
 		break;
 
 	case 564: // Think outside the box?
@@ -3765,7 +3712,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 672: // Program Z probe
-		result = GetGCodeResultFromError(platform.ProgramZProbe(gb, reply));
+		result = platform.ProgramZProbe(gb, reply);
 		break;
 
 	case 701: // Load filament
@@ -4144,7 +4091,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 #endif
 
 	case 929: // Start/stop event logging
-		result = GetGCodeResultFromError(platform.ConfigureLogging(gb, reply));
+		result = platform.ConfigureLogging(gb, reply);
 		break;
 
 	case 997: // Perform firmware update

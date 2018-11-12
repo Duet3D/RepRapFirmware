@@ -40,6 +40,7 @@ typedef uint16_t PwmFrequency;		// type used to represent a PWM frequency. 0 som
 #include "General/StringRef.h"
 
 // Module numbers and names, used for diagnostics and debug
+// All of these including noModule must be <= 15 because we 'or' the module number into the software reset code
 enum Module : uint8_t
 {
 	modulePlatform = 0,

@@ -225,7 +225,7 @@ void Platform::Init()
 	auxSeq = 0;
 #endif
 
-	SERIAL_MAIN_DEVICE.begin(baudRates[0]);
+	SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
 #ifdef SERIAL_AUX_DEVICE
 	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
 #endif
@@ -236,7 +236,16 @@ void Platform::Init()
 
 	compatibility = Compatibility::marlin;		// default to Marlin because the common host programs expect the "OK" response to commands
 
-	// File management
+	// File management and SD card interfaces
+	for (size_t i = 0; i < NumSdCards; ++i)
+	{
+		const Pin p = SdCardDetectPins[i];
+		if (p != NoPin)
+		{
+			setPullup(p, true);
+		}
+	}
+
 	massStorage->Init();
 
 	ipAddress = DefaultIpAddress;
@@ -354,16 +363,6 @@ void Platform::Init()
 
 	idleCurrentFactor = DefaultIdleCurrentFactor;
 
-	// SD card interfaces
-	for (size_t i = 0; i < NumSdCards; ++i)
-	{
-		const Pin p = SdCardDetectPins[i];
-		if (p != NoPin)
-		{
-			setPullup(p, true);
-		}
-	}
-
 	// Motors
 #ifndef __LPC17xx__
 	// Disable parallel writes to all pins. We re-enable them for the step pins.
@@ -450,6 +449,8 @@ void Platform::Init()
 	// The SX1509B has an independent power on reset, so give it some time
 	delay(200);
 	expansionBoard = DuetExpansion::DueXnInit();
+
+#if HAS_SMART_DRIVERS
 	switch (expansionBoard)
 	{
 	case ExpansionBoardType::DueX2:
@@ -464,6 +465,7 @@ void Platform::Init()
 		numSmartDrivers = 5;									// assume that any additional drivers are dumb enable/step/dir ones
 		break;
 	}
+#endif
 
 	if (expansionBoard != ExpansionBoardType::none)
 	{
@@ -630,7 +632,9 @@ void Platform::Init()
 	memset(logicalPinModes, PIN_MODE_NOT_CONFIGURED, sizeof(logicalPinModes));		// set all pins to "not configured"
 
 	// Kick everything off
-	InitialiseInterrupts();		// also sets 'active' to true
+	InitialiseInterrupts();
+
+	active = true;
 }
 
 void Platform::SetZProbeDefaults()
@@ -849,8 +853,8 @@ void Platform::SetZProbeParameters(ZProbeType probeType, const ZProbe& params)
 	}
 }
 
-// Program the Z probe, returning true if error
-bool Platform::ProgramZProbe(GCodeBuffer& gb, const StringRef& reply)
+// Program the Z probe
+GCodeResult Platform::ProgramZProbe(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (gb.Seen('S'))
 	{
@@ -864,15 +868,15 @@ bool Platform::ProgramZProbe(GCodeBuffer& gb, const StringRef& reply)
 				if (zProbeProgram[i] > 255)
 				{
 					reply.copy("Out of range value in program bytes");
-					return true;
+					return GCodeResult::error;
 				}
 			}
 			zProbeProg.SendProgram(zProbeProgram, len);
-			return false;
+			return GCodeResult::ok;
 		}
 	}
 	reply.copy("No program bytes provided");
-	return true;
+	return GCodeResult::error;
 }
 
 // Set the state of the Z probe modulation pin
@@ -2052,24 +2056,6 @@ void Platform::InitialiseInterrupts()
 	// Tick interrupt for ADC conversions
 	tickState = 0;
 	currentFilterNumber = 0;
-
-	// Set up the timeout of the regulator watchdog, and set up the backup watchdog if there is one
-#if __LPC17xx__
-	wdt_init(1); // set wdt to 1 second. reset the processor on a watchdog fault
-#else
-	// The clock frequency for both watchdogs is 32768/128 = 256Hz
-	const uint16_t timeout = 32768/128;												// set watchdog timeout to 1 second (max allowed value is 4095 = 16 seconds)
-	wdt_init(WDT, WDT_MR_WDRSTEN, timeout, timeout);								// reset the processor on a watchdog fault
-#endif
-
-#if SAM4E || SAME70
-	// The RSWDT must be initialised *after* the main WDT
-	const uint16_t rsTimeout = 16384/128;											// set secondary watchdog timeout to 0.5 second (max allowed value is 4095 = 16 seconds)
-	rswdt_init(RSWDT, RSWDT_MR_WDFIEN, rsTimeout, rsTimeout);						// generate an interrupt on a watchdog fault
-	NVIC_EnableIRQ(WDT_IRQn);														// enable the watchdog interrupt
-#endif
-
-	active = true;							// this enables the tick interrupt, which keeps the watchdog happy
 }
 
 //*************************************************************************************************
@@ -2311,14 +2297,6 @@ void Platform::Diagnostics(MessageType mtype)
 	}
 #endif
 
-#ifdef DUET_NG
-	if (expansionBoard == ExpansionBoardType::DueX2 || expansionBoard == ExpansionBoardType::DueX5)
-	{
-		const bool stalled = digitalRead(DueX_SG);
-		MessageF(mtype, "Expansion motor(s) stall indication: %s\n", (stalled) ? "yes" : "no");
-	}
-#endif
-
 	// Show current RTC time
 	Message(mtype, "Date/time: ");
 	struct tm timeInfo;
@@ -2356,9 +2334,15 @@ void Platform::Diagnostics(MessageType mtype)
 	MessageF(mtype, "Soft timer interrupts executed %u, next %u scheduled at %u, now %u\n",
 		numSoftTimerInterruptsExecuted, STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RB, lastSoftTimerInterruptScheduledAt, GetInterruptClocks());
 #endif
+
+#ifdef I2C_IFACE
+	const TwoWireErrors errs = I2C_IFACE.GetErrorCounts(true);
+	MessageF(mtype, "I2C nak errors %" PRIu32 ", send timeouts %" PRIu32 ", receive timeouts %" PRIu32 ", finishTimeouts %" PRIu32 "\n",
+		errs.naks, errs.sendTimeouts, errs.recvTimeouts, errs.finishTimeouts);
+#endif
 }
 
-bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
+GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 {
 	static const uint32_t dummy[2] = { 0, 0 };
 
@@ -2395,12 +2379,12 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 				bool seen = false;
 				if (gb.TryGetFloatArray('T', numTemps, tempMinMax, reply, seen, false))
 				{
-					return true;
+					return GCodeResult::error;
 				}
 				if (!seen)
 				{
 					reply.copy("Missing T parameter");
-					return true;
+					return GCodeResult::error;
 				}
 
 				const float currentMcuTemperature = AdcReadingToCpuTemperature(adcFilters[CpuTempFilterIndex].GetSum());
@@ -2429,12 +2413,12 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 				bool seen = false;
 				if (gb.TryGetFloatArray('V', numVoltages, voltageMinMax, reply, seen, false))
 				{
-					return true;
+					return GCodeResult::error;
 				}
 				if (!seen)
 				{
 					reply.copy("Missing V parameter");
-					return true;
+					return GCodeResult::error;
 				}
 
 				const float voltage = AdcReadingToPowerVoltage(currentVin);
@@ -2586,7 +2570,7 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 		break;
 	}
 
-	return false;
+	return GCodeResult::ok;
 }
 
 #if HAS_SMART_DRIVERS
@@ -3808,7 +3792,7 @@ void Platform::SendAlert(MessageType mt, const char *message, const char *title,
 }
 
 // Configure logging according to the M929 command received, returning true if error
-bool Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (gb.Seen('S'))
 	{
@@ -3832,7 +3816,7 @@ bool Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply)
 				if (!gb.GetQuotedString(filename))
 				{
 					reply.copy("Missing filename in M929 command");
-					return true;
+					return GCodeResult::error;
 				}
 			}
 			else
@@ -3846,7 +3830,7 @@ bool Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply)
 	{
 		reply.printf("Event logging is %s", (logger != nullptr && logger->IsActive()) ? "enabled" : "disabled");
 	}
-	return false;
+	return GCodeResult::ok;
 }
 
 // This is called from EmergencyStop. It closes the log file and stops logging.
@@ -3947,15 +3931,13 @@ uint32_t Platform::GetCommsProperties(size_t chan) const
 }
 
 // Re-initialise a serial channel.
-// Ideally, this would be part of the Line class. However, the Arduino core inexplicably fails to make the serial I/O begin() and end() members
-// virtual functions of a base class, which makes that difficult to do.
 void Platform::ResetChannel(size_t chan)
 {
 	switch(chan)
 	{
 	case 0:
 		SERIAL_MAIN_DEVICE.end();
-		SERIAL_MAIN_DEVICE.begin(baudRates[0]);
+		SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
 		break;
 
 #ifdef SERIAL_AUX_DEVICE
@@ -4620,14 +4602,18 @@ bool Platform::SetDateTime(time_t time)
 	return ok;
 }
 
-// Misc
+// Initialise the I2C interface, if not already done
 void Platform::InitI2c()
 {
 #if defined(I2C_IFACE)
 	if (!i2cInitialised)
 	{
-		I2C_IFACE.begin();
-		i2cInitialised = true;
+		MutexLocker lock(Tasks::GetI2CMutex());
+		if (!i2cInitialised)			// test it again, now that we own the mutex
+		{
+			I2C_IFACE.BeginMaster(I2cClockFreq);
+			i2cInitialised = true;
+		}
 	}
 #endif
 }

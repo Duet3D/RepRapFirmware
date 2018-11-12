@@ -31,69 +31,70 @@ Display::Display()
 
 void Display::Init()
 {
-	lcd.Init();
 	encoder.Init(DefaultPulsesPerClick);
-	IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
-}
-
-void Display::Start()
-{
-	lcd.SetFont(SmallFontNumber);
-	menu.Load("main");
 }
 
 void Display::Spin(bool full)
 {
-	encoder.Poll();
-
-	if (full)
+	if (present)
 	{
-		if (!updatingFirmware)
+		encoder.Poll();
+
+		if (full)
 		{
-			// Check encoder and update display
-			const int ch = encoder.GetChange();
-			if (ch != 0)
+			if (!updatingFirmware)
 			{
-				menu.EncoderAction(ch);
+				// Check encoder and update display
+				const int ch = encoder.GetChange();
+				if (ch != 0)
+				{
+					menu.EncoderAction(ch);
+				}
+				else if (encoder.GetButtonPress())
+				{
+					menu.EncoderAction(0);
+				}
+				menu.Refresh();
 			}
-			else if (encoder.GetButtonPress())
-			{
-				menu.EncoderAction(0);
-			}
-			menu.Refresh();
+			lcd.FlushSome();
 		}
-		lcd.FlushSome();
-	}
 
-	if (beepActive && millis() - whenBeepStarted > beepLength)
-	{
-		IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);
-		beepActive = false;
+		if (beepActive && millis() - whenBeepStarted > beepLength)
+		{
+			IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);
+			beepActive = false;
+		}
 	}
 }
 
 void Display::Exit()
 {
-	IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
-	if (!updatingFirmware)
+	if (present)
 	{
-		lcd.TextInvert(false);
-		lcd.Clear();
-		lcd.SetFont(LargeFontNumber);
-		lcd.SetCursor(20, 0);
-		lcd.print("Shutting down...");
+		IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
+		if (!updatingFirmware)
+		{
+			lcd.TextInvert(false);
+			lcd.Clear();
+			lcd.SetFont(LargeFontNumber);
+			lcd.SetCursor(20, 0);
+			lcd.print("Shutting down...");
+		}
+		lcd.FlushAll();
 	}
-	lcd.FlushAll();
 }
 
 // NOTE: nothing enforces that this beep concludes before another is begun;
 //   that is, in rapid succession of commands, only the last beep issued will be heard by the user
 void Display::Beep(unsigned int frequency, unsigned int milliseconds)
 {
-	whenBeepStarted = millis();
-	beepLength = milliseconds;
-	beepActive = true;
-	IoPort::WriteAnalog(LcdBeepPin, 0.5, (uint16_t)frequency);
+	if (present)
+	{
+		whenBeepStarted = millis();
+		beepLength = milliseconds;
+		beepActive = true;
+		IoPort::WriteAnalog(LcdBeepPin, 0.5, (uint16_t)frequency);
+	}
 }
 
 void Display::SuccessBeep()
@@ -108,22 +109,43 @@ void Display::ErrorBeep()
 
 GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
-	if (gb.Seen('P') && gb.GetUIValue() == 1)
+	bool seen = false;
+
+	if (gb.Seen('P'))
 	{
-		// 12864 display configuration
-		present = true;
-		if (gb.Seen('E'))
+		seen = true;
+		switch (gb.GetUIValue())
 		{
-			encoder.Init(gb.GetIValue());			// configure encoder pulses per click and direction
+		case 1:		// 12864 display
+			present = true;
+			lcd.Init();
+			IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
+			lcd.SetFont(SmallFontNumber);
+			menu.Load("main");
+			break;
+
+		default:
+			reply.copy("Unknown display type");
+			return GCodeResult::error;
 		}
 	}
-	else if (!present)
+
+	if (gb.Seen('E'))
 	{
-		reply.copy("12864 display is not present or not configured");
+		seen = true;
+		encoder.Init(gb.GetIValue());			// configure encoder pulses per click and direction
 	}
-	else
+
+	if (!seen)
 	{
-		reply.printf("12864 display is configured, pulses-per-click is %d", encoder.GetPulsesPerClick());
+		if (present)
+		{
+			reply.printf("12864 display is configured, pulses-per-click is %d", encoder.GetPulsesPerClick());
+		}
+		else
+		{
+			reply.copy("12864 display is not present or not configured");
+		}
 	}
 	return GCodeResult::ok;
 }
@@ -132,13 +154,16 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply)
 void Display::UpdatingFirmware()
 {
 	updatingFirmware = true;
-	IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
-	lcd.TextInvert(false);
-	lcd.Clear();
-	lcd.SetFont(LargeFontNumber);
-	lcd.SetCursor(20, 0);
-	lcd.print("Updating firmware...");
-	lcd.FlushAll();
+	if (present)
+	{
+		IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
+		lcd.TextInvert(false);
+		lcd.Clear();
+		lcd.SetFont(LargeFontNumber);
+		lcd.SetCursor(20, 0);
+		lcd.print("Updating firmware...");
+		lcd.FlushAll();
+	}
 }
 
 // End

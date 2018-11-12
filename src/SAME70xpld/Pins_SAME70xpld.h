@@ -48,6 +48,8 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 #define SERIAL_AUX_DEVICE Serial
 #define SERIAL_WIFI_DEVICE Serial1
 
+constexpr Pin UsbVBusPin = NoPin;					// Pin used to monitor VBUS on USB port
+
 //TWI is disabled for now on the SAM7E until we rewrite the driver
 //#define I2C_IFACE	Wire							// Which TWI interface we use
 

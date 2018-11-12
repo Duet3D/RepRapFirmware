@@ -150,7 +150,7 @@ constexpr unsigned int FirstLinearAdcChannel = 300;		// Temperature sensor chann
 constexpr unsigned int FirstDhtTemperatureChannel = 400;	// Temperature sensor channel 400 for DHTxx temperature
 constexpr unsigned int FirstDhtHumidityChannel = 450;		// Temperature sensor channel 401 for DHTxx humidity
 constexpr unsigned int FirstPT1000Channel = 500;		// Temperature sensor channels 500... are PT1000 sensors connected to thermistor inputs
-constexpr unsigned int CpuTemperatureSenseChannel = 1000;  // Sensor 1000 is the MCJU's own temperature sensor
+constexpr unsigned int CpuTemperatureSenseChannel = 1000;  // Sensor 1000 is the MCU's own temperature sensor
 constexpr unsigned int FirstTmcDriversSenseChannel = 1001; // Sensors 1001..1002 are the TMC2660 driver temperature sense
 constexpr unsigned int NumTmcDriversSenseChannels = 2;	// Sensors 1001..1002 are the TMC2660 driver temperature sense
 
@@ -283,6 +283,12 @@ constexpr size_t MaxSpindles = 4;						// Maximum number of configurable spindle
 constexpr float DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full PWM
 constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command for full power
 
+// I2C
+constexpr uint32_t I2cClockFreq = 100000;				// clock frequency in Hz
+constexpr uint32_t I2cSendTimeoutMicroseconds = 10000;	// max time to wait for i2C send complete
+constexpr uint32_t I2cRecvTimeoutMicroseconds = 10000;	// max time to wait for i2C receive complete
+constexpr size_t MaxI2cBytes = 32;						// max bytes in M260 or M261 command
+
 // File handling
 constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of simultaneous web requests + files being printed
 constexpr size_t FILE_BUFFER_SIZE = 128;
@@ -315,8 +321,5 @@ constexpr size_t FILE_BUFFER_SIZE = 128;
 constexpr char LIST_SEPARATOR = ':';
 constexpr char FILE_LIST_SEPARATOR = ',';
 constexpr char FILE_LIST_BRACKET = '"';
-
-// Misc
-constexpr size_t MaxI2cBytes = 32;
 
 #endif

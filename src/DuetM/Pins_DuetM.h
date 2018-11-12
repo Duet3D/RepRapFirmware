@@ -57,6 +57,9 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
 
+// SerialUSB
+constexpr Pin UsbVBusPin = 47;						// Pin used to monitor VBUS on USB port
+
 #define I2C_IFACE	Wire							// First and only I2C interface
 #define I2C_IRQn	WIRE_ISR_ID
 

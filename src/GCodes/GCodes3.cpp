@@ -14,6 +14,7 @@
 #include "RepRap.h"
 #include "Tools/Tool.h"
 #include "PrintMonitor.h"
+#include "Tasks.h"
 
 #if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
@@ -270,12 +271,6 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 // Define the probing grid, called when we see an M557 command
 GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 {
-	if (gb.Seen('P'))
-	{
-		reply.copy("Error: M557 P parameter is no longer supported. Use a bed.g file instead.\n");
-		return GCodeResult::error;
-	}
-
 	if (!LockMovement(gb))							// to ensure that probing is not already in progress
 	{
 		return GCodeResult::notFinished;
@@ -755,7 +750,11 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 		}
 	}
 
-	if (!seen)
+	if (seen)
+	{
+		UpdateCurrentUserPosition();			// make sure that any new visible axes are up to date
+	}
+	else
 	{
 		reply.copy("Driver assignments:");
 		for (size_t drive = 0; drive < numTotalAxes; ++ drive)
@@ -992,35 +991,68 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 	return GCodeResult::ok;
 }
 
-// Handle M260
+// Handle M260 - send and possibly receive via I2C
 GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 {
 #if defined(I2C_IFACE)
 	if (gb.Seen('A'))
 	{
 		const uint32_t address = gb.GetUIValueMaybeHex();
+		uint32_t numToReceive = 0;
+		bool seenR;
+		gb.TryGetUIValue('R', numToReceive, seenR);
+		int32_t values[MaxI2cBytes];
+		size_t numToSend;
 		if (gb.Seen('B'))
 		{
-			int32_t values[MaxI2cBytes];
-			size_t numValues = MaxI2cBytes;
-			gb.GetIntArray(values, numValues, false);
-			if (numValues != 0)
-			{
-				TaskCriticalSectionLocker Lock;
+			numToSend = MaxI2cBytes;
+			gb.GetIntArray(values, numToSend, false);		//TODO allow hex values
+		}
+		else
+		{
+			numToSend = 0;
+		}
 
-				platform.InitI2c();
-				I2C_IFACE.beginTransmission((int)address);
-				for (size_t i = 0; i < numValues; ++i)
-				{
-					I2C_IFACE.write((uint8_t)values[i]);
-				}
-				if (I2C_IFACE.endTransmission() == 0)
-				{
-					return GCodeResult::ok;
-				}
+		if (numToSend + numToReceive != 0)
+		{
+			if (numToSend + numToReceive > MaxI2cBytes)
+			{
+				numToReceive = MaxI2cBytes - numToSend;
+			}
+			uint8_t bValues[MaxI2cBytes];
+			for (size_t i = 0; i < numToSend; ++i)
+			{
+				bValues[i] = (uint8_t)values[i];
+			}
+
+			platform.InitI2c();
+			size_t bytesTransferred;
+			{
+				MutexLocker lock(Tasks::GetI2CMutex());
+				bytesTransferred = I2C_IFACE.Transfer(address, bValues, numToSend, numToReceive, I2cSendTimeoutMicroseconds);
+			}
+
+			if (bytesTransferred < numToSend)
+			{
 				reply.copy("I2C transmission error");
 				return GCodeResult::error;
 			}
+			else if (numToReceive != 0)
+			{
+				reply.copy("Received");
+				if (bytesTransferred == numToSend)
+				{
+					reply.cat(" nothing");
+				}
+				else
+				{
+					for (size_t i = numToSend; i < bytesTransferred; ++i)
+					{
+						reply.catf(" %02x", bValues[i]);
+					}
+				}
+			}
+			return (bytesTransferred == numToSend + numToReceive) ? GCodeResult::ok : GCodeResult::error;
 		}
 	}
 
@@ -1040,26 +1072,32 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 		const uint32_t address = gb.GetUIValueMaybeHex();
 		if (gb.Seen('B'))
 		{
-			uint32_t numBytes = gb.GetUIValue();
+			const uint32_t numBytes = gb.GetUIValue();
 			if (numBytes > 0 && numBytes <= MaxI2cBytes)
 			{
-				TaskCriticalSectionLocker Lock;
-
 				platform.InitI2c();
-				I2C_IFACE.requestFrom(address, numBytes);
-				reply.copy("Received");
-				const uint32_t now = millis();
-				do
-				{
-					if (I2C_IFACE.available() != 0)
-					{
-						const unsigned int b = I2C_IFACE.read() & 0x00FF;
-						reply.catf(" %02x", b);
-						--numBytes;
-					}
-				} while (numBytes != 0 && now - millis() < 3);
 
-				return GCodeResult::ok;
+				uint8_t bValues[MaxI2cBytes];
+				size_t bytesRead;
+				{
+					MutexLocker lock(Tasks::GetI2CMutex());
+					bytesRead = I2C_IFACE.Transfer(address, bValues, 0, numBytes, I2cRecvTimeoutMicroseconds);
+				}
+
+				reply.copy("Received");
+				if (bytesRead == 0)
+				{
+					reply.cat(" nothing");
+				}
+				else
+				{
+					for (size_t i = 0; i < bytesRead; ++i)
+					{
+						reply.catf(" %02x", bValues[i]);
+					}
+				}
+
+				return (bytesRead == numBytes) ? GCodeResult::ok : GCodeResult::error;
 			}
 		}
 	}
@@ -1124,7 +1162,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 					}
 				}
 
-				if (gb.TryGetUIValue('C', val, seen))		// set chopper control register
+				if (gb.TryGetUIValueMaybeHex('C', val, seen))		// set chopper control register
 				{
 					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::chopperControl, val))
 					{
@@ -1233,6 +1271,20 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 							SmartDrivers::GetRegister(drive, SmartDriverRegister::hdec)
 						);
 
+#if SUPPORT_TMC2660
+					{
+						const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
+						if (mstepPos < 1024)
+						{
+							reply.catf(", pos %" PRIu32, mstepPos);
+						}
+						else
+						{
+							reply.cat(", pos unknown");
+						}
+					}
+#endif
+
 #if SUPPORT_TMC22xx || SUPPORT_TMC51xx
 					{
 						const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
@@ -1254,6 +1306,85 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 #endif
 				}
 #endif
+			}
+		}
+	}
+	return GCodeResult::ok;
+}
+
+// Set the heater model (M307)
+GCodeResult GCodes::SetHeaterModel(GCodeBuffer& gb, const StringRef& reply)
+{
+	if (gb.Seen('H'))
+	{
+		const unsigned int heater = gb.GetUIValue();
+		if (heater < NumHeaters)
+		{
+			const FopDt& model = reprap.GetHeat().GetHeaterModel(heater);
+			bool seen = false;
+			float gain = model.GetGain(),
+				tc = model.GetTimeConstant(),
+				td = model.GetDeadTime(),
+				maxPwm = model.GetMaxPwm(),
+				voltage = model.GetVoltage();
+			uint32_t freq = model.GetPwmFrequency();
+			int32_t dontUsePid = model.UsePid() ? 0 : 1;
+			int32_t inversionParameter = 0;
+
+			gb.TryGetFValue('A', gain, seen);
+			gb.TryGetFValue('C', tc, seen);
+			gb.TryGetFValue('D', td, seen);
+			gb.TryGetIValue('B', dontUsePid, seen);
+			gb.TryGetFValue('S', maxPwm, seen);
+			gb.TryGetFValue('V', voltage, seen);
+			gb.TryGetIValue('I', inversionParameter, seen);
+			gb.TryGetUIValue('F', freq, seen);
+
+			if (seen)
+			{
+				const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
+				if (!reprap.GetHeat().SetHeaterModel(heater, gain, tc, td, maxPwm, voltage,
+														dontUsePid == 0, inverseTemperatureControl, (uint16_t)min<uint32_t>(freq, MaxHeaterPwmFrequency)))
+				{
+					reply.copy("bad model parameters");
+					return GCodeResult::error;
+				}
+
+				const bool invertedPwmSignal = (inversionParameter == 2 || inversionParameter == 3);
+				reprap.GetHeat().SetHeaterSignalInverted(heater, invertedPwmSignal);
+			}
+			else if (!model.IsEnabled())
+			{
+				reply.printf("Heater %u is disabled", heater);
+			}
+			else
+			{
+				const char* mode = (!model.UsePid()) ? "bang-bang"
+									: (model.ArePidParametersOverridden()) ? "custom PID"
+										: "PID";
+				const bool pwmSignalInverted = reprap.GetHeat().IsHeaterSignalInverted(heater);
+				const char* const inverted = model.IsInverted()
+										? (pwmSignalInverted ? "PWM signal and temperature control" : "temperature control")
+										: (pwmSignalInverted ? "PWM signal" : "no");
+
+				reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, calibration voltage %.1f, mode %s, inverted %s, frequency ",
+						heater, (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode, inverted);
+				if (model.GetPwmFrequency() == 0)
+				{
+					reply.cat("default");
+				}
+				else
+				{
+					reply.catf("%uHz", model.GetPwmFrequency());
+				}
+				if (model.UsePid())
+				{
+					// When reporting the PID parameters, we scale them by 255 for compatibility with older firmware and other firmware
+					M301PidParameters params = model.GetM301PidParameters(false);
+					reply.catf("\nComputed PID parameters for setpoint change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
+					params = model.GetM301PidParameters(true);
+					reply.catf("\nComputed PID parameters for load change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
+				}
 			}
 		}
 	}

@@ -137,7 +137,7 @@ void GCodes::Init()
 	axisLetters[1] = 'Y';
 	axisLetters[2] = 'Z';
 
-#if defined(DUET_NG) || defined(DUET_M)
+#if HAS_SMART_DRIVERS
 	numExtruders = min<size_t>(MaxExtruders, platform.GetNumSmartDrivers() - XYZ_AXES);	// don't default dumb drivers to extruders because they don't support the same microstepping options
 #else
 	numExtruders = MaxExtruders;
@@ -245,6 +245,7 @@ void GCodes::Reset()
 	ClearMove();
 	ClearBabyStepping();								// clear this before calling ToolOffsetInverseTransform
 	currentZHop = 0.0;									// clear this before calling ToolOffsetInverseTransform
+	lastPrintingMoveHeight = -1.0;
 	moveBuffer.xAxes = DefaultXAxisMapping;
 	moveBuffer.yAxes = DefaultYAxisMapping;
 	moveBuffer.virtualExtruderPosition = 0.0;
@@ -276,7 +277,7 @@ void GCodes::Reset()
 #endif
 	doingToolChange = false;
 	doingManualBedProbe = false;
-	pausePending = false;
+	pausePending = filamentChangePausePending = false;
 	probeIsDeployed = false;
 	moveBuffer.filePos = noFilePosition;
 	lastEndstopStates = platform.GetAllEndstopStates();
@@ -770,6 +771,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 
 	case GCodeState::flashing1:
 #if HAS_WIFI_NETWORKING
+		CheckReportDue(gb, reply);						// this is so that the ATE gets status reports and can tell when flashing is complete
+
 		// Update additional modules before the main firmware
 		if (FirmwareUpdater::IsReady())
 		{
@@ -1234,7 +1237,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				// Simple G30 probing move
 				if (g30SValue == -1 || g30SValue == -2)
 				{
-					// G30 S-1 or S-2 command taps once and reports the height
+					// G30 S-1 command taps once and reports the height, S-2 sets the tool offset to the negative of the current height
 					gb.SetState(GCodeState::probingAtPoint7);					// special state for reporting the stopped height at the end
 					if (platform.GetZProbeType() != ZProbeType::none && !probeIsDeployed)
 					{
@@ -1356,15 +1359,16 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		if (g30SValue == -2)
 		{
 			// Adjust the Z offset of the current tool to account for the height error
-			Tool *const tool = reprap.GetCurrentTool();
+			Tool * const tool = reprap.GetCurrentTool();
 			if (tool == nullptr)
 			{
-				platform.Message(ErrorMessage, "G30 S-2 commanded with no tool selected");
+				platform.Message(ErrorMessage, "Tool was deselected during G30 S-2 command");
 				error = true;
 			}
 			else
 			{
-				tool->SetOffset(Z_AXIS, tool->GetOffset(Z_AXIS) + g30zHeightError, true);
+				tool->SetOffset(Z_AXIS, tool->GetOffset(Z_AXIS) - g30zHeightError, true);
+				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates to reflect the new tool offset
 			}
 		}
 		else
@@ -1608,7 +1612,12 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 			{
 				UnlockAll(gb);
 				HandleReply(gb, GCodeResult::ok, "");
-				if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
+				if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
+				{
+					gb.Put("M600");
+					filamentChangePausePending = false;
+				}
+				else if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
 				{
 					gb.Put("M226");
 					pausePending = false;
@@ -1823,20 +1832,24 @@ bool GCodes::IsPaused() const
 bool GCodes::IsPausing() const
 {
 	GCodeState topState = fileGCode->OriginalMachineState().state;
-	if (topState == GCodeState::pausing1 || topState == GCodeState::pausing2)
+	if (   topState == GCodeState::pausing1 || topState == GCodeState::pausing2
+		|| topState == GCodeState::filamentChangePause1 || topState == GCodeState::filamentChangePause2
+	   )
 	{
 		return true;
 	}
 
 	topState = daemonGCode->OriginalMachineState().state;
-	if (topState == GCodeState::pausing1 || topState == GCodeState::pausing2)
+	if (   topState == GCodeState::pausing1 || topState == GCodeState::pausing2
+		|| topState == GCodeState::filamentChangePause1 || topState == GCodeState::filamentChangePause2
+	   )
 	{
 		return true;
 	}
 
 	topState = autoPauseGCode->OriginalMachineState().state;
-	if (   topState == GCodeState::pausing1
-		|| topState == GCodeState::pausing2
+	if (   topState == GCodeState::pausing1 || topState == GCodeState::pausing2
+		|| topState == GCodeState::filamentChangePause1 || topState == GCodeState::filamentChangePause2
 #if HAS_VOLTAGE_MONITOR
 		|| topState == GCodeState::powerFailPausing1
 #endif
@@ -2227,9 +2240,7 @@ bool GCodes::LockMovementAndWaitForStandstill(const GCodeBuffer& gb)
 	}
 
 	// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
-	reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-	memcpy(moveBuffer.initialCoords, moveBuffer.coords, numVisibleAxes * sizeof(moveBuffer.initialCoords[0]));
-	ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+	UpdateCurrentUserPosition();
 	return true;
 }
 
@@ -2574,6 +2585,11 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	}
 	else
 	{
+		if (&gb == fileGCode && !gb.IsDoingFileMacro() && moveBuffer.hasExtrusion && (axesMentioned & ((1 << X_AXIS) | (1 << Y_AXIS))) != 0)
+		{
+			lastPrintingMoveHeight = currentUserPosition[Z_AXIS];
+		}
+
 		ToolOffsetTransform(currentUserPosition, moveBuffer.coords, axesMentioned);	// apply tool offset, axis mapping, baby stepping, Z hop and axis scaling
 		AxesBitmap effectiveAxesHomed = axesHomed;
 		if (doingManualBedProbe)
@@ -3094,6 +3110,12 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply)
 GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 {
 	g30SValue = (gb.Seen('S')) ? gb.GetIValue() : -3;		// S-3 is equivalent to having no S parameter
+	if (g30SValue == -2 && reprap.GetCurrentTool() == nullptr)
+	{
+		reply.copy("G30 S-2 commanded with no tool selected");
+		return GCodeResult::error;
+	}
+
 	g30HValue = (gb.Seen('H')) ? gb.GetFValue() : 0.0;
 	g30ProbePointIndex = -1;
 	bool seenP = false;
@@ -3355,6 +3377,7 @@ void GCodes::StartPrinting(bool fromStart)
 	fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
 	fileInput->Reset(fileGCode->OriginalMachineState().fileState);
 	lastFilamentError = FilamentSensorStatus::ok;
+	lastPrintingMoveHeight = -1.0;
 	reprap.GetPrintMonitor().StartedPrint();
 	platform.MessageF(LogMessage,
 						(simulationMode == 0) ? "Started printing file %s\n" : "Started simulating printing file %s\n",
@@ -3530,8 +3553,8 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply)
 	return GCodeResult::ok;
 }
 
-// Create a new tool definition, returning true if an error was reported
-bool GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
+// Create a new tool definition
+GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (!gb.Seen('P'))
 	{
@@ -3541,7 +3564,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 			int adjust = gb.GetIValue();
 			gb.SetToolNumberAdjust(adjust);
 		}
-		return false;
+		return GCodeResult::ok;
 	}
 
 	// Check tool number
@@ -3550,7 +3573,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	if (toolNumber < 0)
 	{
 		reply.copy("Tool number must be positive");
-		return true;
+		return GCodeResult::error;
 	}
 
 	// Check tool name
@@ -3560,7 +3583,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		if (!gb.GetQuotedString(name.GetRef()))
 		{
 			reply.copy("Invalid tool name");
-			return true;
+			return GCodeResult::error;
 		}
 		seen = true;
 	}
@@ -3624,7 +3647,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	if ((xMap & yMap) != 0)
 	{
 		reply.copy("Cannot map both X and Y to the same axis");
-		return true;
+		return GCodeResult::error;
 	}
 
 	// Check for fan mapping
@@ -3657,7 +3680,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 			Tool* const tool = Tool::Create(toolNumber, name.c_str(), drives, dCount, heaters, hCount, xMap, yMap, fanMap, reply);
 			if (tool == nullptr)
 			{
-				return true;
+				return GCodeResult::error;
 			}
 			reprap.AddTool(tool);
 		}
@@ -3666,7 +3689,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	{
 		reprap.PrintTool(toolNumber, reply);
 	}
-	return false;
+	return GCodeResult::ok;
 }
 
 // Does what it says.
@@ -3896,7 +3919,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply)
 }
 
 // Configure heater protection (M143). Returns true if an error occurred
-bool GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 {
 	const int index = (gb.Seen('P'))
 						? gb.GetIValue()
@@ -3904,7 +3927,7 @@ bool GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 	if ((index < 0 || index >= (int)NumHeaters) && (index < (int)FirstExtraHeaterProtection || index >= (int)(FirstExtraHeaterProtection + NumExtraHeaterProtections)))
 	{
 		reply.printf("Invalid heater protection item '%d'", index);
-		return true;
+		return GCodeResult::error;
 	}
 
 	HeaterProtection &item = reprap.GetHeat().AccessHeaterProtection(index);
@@ -3917,7 +3940,7 @@ bool GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 		if (heater > (int)NumHeaters)									// allow negative values to disable heater protection
 		{
 			reply.printf("Invalid heater number '%d'", heater);
-			return true;
+			return GCodeResult::error;
 		}
 
 		seen = true;
@@ -3931,7 +3954,7 @@ bool GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 		if ((heater < 0 || heater > (int)NumHeaters) && (heater < (int)FirstVirtualHeater || heater >= (int)(FirstVirtualHeater + MaxVirtualHeaters)))
 		{
 			reply.printf("Invalid heater number '%d'", heater);
-			return true;
+			return GCodeResult::error;
 		}
 
 		seen = true;
@@ -3971,7 +3994,7 @@ bool GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 		if (limit <= BAD_LOW_TEMPERATURE || limit >= BAD_ERROR_TEMPERATURE)
 		{
 			reply.copy("Invalid temperature limit");
-			return true;
+			return GCodeResult::error;
 		}
 
 		seen = true;
@@ -4022,7 +4045,7 @@ bool GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 		}
 	}
 
-	return false;
+	return GCodeResult::ok;
 }
 
 // Set PID parameters (M301 or M304 command). 'heater' is the default heater number to use.
@@ -4325,7 +4348,7 @@ bool GCodes::IsCodeQueueIdle() const
 void GCodes::StopPrint(StopPrintReason reason)
 {
 	segmentsLeft = 0;
-	isPaused = pausePending = false;
+	isPaused = pausePending = filamentChangePausePending = false;
 
 	FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
 
@@ -5086,6 +5109,17 @@ void GCodes::SetExtrusionFactor(size_t extruder, float factor)
 Pwm_t GCodes::ConvertLaserPwm(float reqVal) const
 {
 	return (uint16_t)constrain<long>(lrintf((reqVal * 65535)/laserMaxPower), 0, 65535);
+}
+
+// Get the height in user coordinates of the last printing move
+bool GCodes::GetLastPrintingHeight(float& height) const
+{
+	if (IsReallyPrinting() && lastPrintingMoveHeight > 0.0)
+	{
+		height = lastPrintingMoveHeight;
+		return true;
+	}
+	return false;
 }
 
 #if SUPPORT_12864_LCD

@@ -42,6 +42,9 @@ public:
 	// Returns the number of characters written (1 if we wrote it, 0 otherwise)
 	virtual size_t write(uint8_t c);		// write a character
 
+	// Write a space
+	void WriteSpaces(PixelNumber numPixels);
+
 	// Initialize the display. Call this in setup(). Also call setFont to select initial text font.
 	void Init();
 

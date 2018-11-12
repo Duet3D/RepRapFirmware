@@ -310,7 +310,7 @@ public:
 	Compatibility Emulating() const;
 	void SetEmulating(Compatibility c);
 	void Diagnostics(MessageType mtype);
-	bool DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d);
+	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d);
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
 	void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr);
@@ -472,7 +472,7 @@ public:
 	bool HomingZWithProbe() const;
 	bool WritePlatformParameters(FileStore *f, bool includingG31) const;
 	void SetProbing(bool isProbing);
-	bool ProgramZProbe(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply);
 	void SetZProbeModState(bool b) const;
 
 	// Heat and temperature
@@ -564,7 +564,7 @@ public:
 	Pin GetEndstopPin(int endstop) const;			// Get the firmware pin number for an endstop
 
 	// Logging support
-	bool ConfigureLogging(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureLogging(GCodeBuffer& gb, const StringRef& reply);
 
 	// Ancillary PWM
 	void SetExtrusionAncilliaryPwmValue(float v);
