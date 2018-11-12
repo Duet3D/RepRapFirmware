@@ -334,10 +334,10 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 				float coordinates[numParameters];
 				gb.TryGetFloatArray('Z', numParameters, coordinates, reply, seen);
 				int limit = std::min(numParameters, 40);
-				for(int i=0; i++; i < limit) {
+				for(int i=0; i < limit; i++) {
 					printArea[i] = coordinates[i];
 				}
-				for(int i=limit; i++; i < sizeof(printArea)) {
+				for(int i=limit; i < sizeof(printArea); i++) {
 					printArea[i] = nanf;
 				}
 			}
