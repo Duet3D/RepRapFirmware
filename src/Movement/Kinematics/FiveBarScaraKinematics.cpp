@@ -15,11 +15,12 @@
 #include "Movement/DDA.h"
 
 #include <limits>
+#include <algorithm>
 
 FiveBarScaraKinematics::FiveBarScaraKinematics()
 	: ZLeadscrewKinematics(KinematicsType::scara, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true)
 {
-	Recalc();
+	Recalc();	// TODO implement
 }
 
 // Return the name of the current kinematics
@@ -30,6 +31,20 @@ const char *FiveBarScaraKinematics::GetName(bool forStatusReport) const
 
 //////////////////////// private functions /////////////////////////
 
+
+int FiveBarScaraKinematics::getNumParameters(char c, GCodeBuffer gb) const {
+	String<MaxFilenameLength> str;
+	bool seen = false;
+	gb.TryGetPossiblyQuotedString(c, str.GetRef(), seen);
+
+	int count = 0;
+	size_t size = str.strlen();
+	for (int i = 0; i < size; i++) {
+		if (str[i] == ':') count++;
+	}
+
+	return count + 1;
+}
 
 // quadrants: 1 is right upper, 2 is left upper, 3 is left down, 4 is right down
 int FiveBarScaraKinematics::getQuadrant(int x, int y) const
@@ -230,7 +245,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 
 		// parameter X: x values of actuators
 		float paraX[2];
-		if (gb.TryGetFloatArray('X', 2, paraX, reply, seen))
+		if (gb.TryGetFloatArray('X', 2, paraX, reply, seen)) 	// X must be defined
 		{
 			error = true;
 			return true;
@@ -240,7 +255,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 
 		// parameter Y: y values of actuators
 		float paraY[2];
-		if (gb.TryGetFloatArray('Y', 2, paraY, reply, seen))
+		if (gb.TryGetFloatArray('Y', 2, paraY, reply, seen))	// Y must be defined
 		{
 			error = true;
 			return true;
@@ -248,32 +263,93 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		yOrigL = paraY[0];
 		yOrigR = paraY[1];
 
+		if(gb.Seen('L')) {
+			long wm = 0L;
+			if( gb.TryGetIValue('L', wm, seen) )	// L workmode must be defined
+			{
+				error = true;
+				return true;
+			}
+			workmode = (int) wm;
+		}
+		else {
+			workmode = 1;	// default
+		}
 
-
-
-		/*
-		gb.TryGetFValue('P', proximalArmLength, seen);
-		gb.TryGetFValue('D', distalArmLength, seen);
-		gb.TryGetFValue('S', segmentsPerSecond, seenNonGeometry);
-		gb.TryGetFValue('T', minSegmentLength, seenNonGeometry);
-		gb.TryGetFValue('X', xOffset, seen);
-		gb.TryGetFValue('Y', yOffset, seen);
-		if (gb.TryGetFloatArray('A', 2, thetaLimits, reply, seen))
-		{
+		float proximalLengths[2];
+		if(gb.TryGetFloatArray('P', 2, proximalLengths, reply, seen) ) {	// P proximal lengths must be defined
 			error = true;
 			return true;
 		}
-		if (gb.TryGetFloatArray('B', 2, psiLimits, reply, seen))
-		{
-			error = true;
-			return true;
+		proximalL = proximalLengths[0];
+		proximalR = proximalLengths[1];
+
+
+		int numParameters = getNumParameters('D', gb);
+		if(numParameters == 2) {
+			float distalLengths[2];
+			gb.TryGetFloatArray('D', 2, distalLengths, reply, seen);
+			distalL = distalLengths[0];
+			distalR = distalLengths[1];
 		}
-		if (gb.TryGetFloatArray('C', 3, crosstalk, reply, seen))
-		{
-			error = true;
-			return true;
+		else if(numParameters == 4) {
+			float distalLengths[4];
+			gb.TryGetFloatArray('D', 4, distalLengths, reply, seen);
+			distalL = distalLengths[0];
+			distalR = distalLengths[1];
+			cantL = distalLengths[2];
+			cantR = distalLengths[3];
 		}
-		*/
+
+		if(gb.Seen('B')) {
+			float homingAngles[2];
+			gb.TryGetFloatArray('B', 2, homingAngles, reply, seen);
+			homingAngleL = homingAngles[0];
+			homingAngleR = homingAngles[1];
+		}
+		else {
+			homingAngleL = 90.0;	// default
+			homingAngleR = 90.0;	// default
+		}
+
+		if(gb.Seen('A')) {
+			float angles[4];
+			gb.TryGetFloatArray('A', 4, angles, reply, seen);
+			constrMin = angles[0];
+			constrMax = angles[1];
+			proxDistAngleMin = angles[2];
+			proxDistAngleMax = angles[3];
+		}
+		else  {
+			constrMin = 15.0;
+			constrMax = 165.0;
+			proxDistAngleMin = 0.0;
+			proxDistAngleMax = 360.0;
+		}
+
+		// print area:
+		if(gb.Seen('Z')) {
+			int numParameters = getNumParameters('Z', gb);
+			if(numParameters > 0 && numParameters % 2 == 0) {
+				float coordinates[numParameters];
+				gb.TryGetFloatArray('Z', numParameters, coordinates, reply, seen);
+				int limit = std::min(numParameters, 40);
+				for(int i=0; i++; i < limit) {
+					printArea[i] = coordinates[i];
+				}
+				for(int i=limit; i++; i < sizeof(printArea)) {
+					printArea[i] = nanf;
+				}
+			}
+			printAreaElementsDefined = numParameters;
+		}
+		else {
+			printAreaElementsDefined = 0;
+		}
+
+		gb.TryGetFValue('S', segmentsPerSecond, seenNonGeometry);		// value defined in Kinematics.h
+		gb.TryGetFValue('T', minSegmentLength, seenNonGeometry);		// value defined in Kinematics.h
+
 
 		if (seen || seenNonGeometry)
 		{
@@ -281,15 +357,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		}
 		else if (!gb.Seen('K'))
 		{
-			/*
-			reply.printf("Kinematics is Scara with proximal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL
-							"%s, distal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL "%s, crosstalk %.1f:%.1f:%.1f, bed origin (%.1f, %.1f), segments/sec %d, min. segment length %.2f",
-							(double)proximalArmLength, (double)thetaLimits[0], (double)thetaLimits[1], (supportsContinuousRotation[0]) ? " (continuous)" : "",
-							(double)distalArmLength, (double)psiLimits[0], (double)psiLimits[1], (supportsContinuousRotation[0]) ? " (continuous)" : "",
-							(double)crosstalk[0], (double)crosstalk[1], (double)crosstalk[2],
-							(double)xOffset, (double)yOffset,
-							(int)segmentsPerSecond, (double)minSegmentLength);
-							*/
+			reply.printf("Kinematics is FiveBarScara, documented in https://duet3d.dozuki.com/Guide/Five+Bar+Parallel+SCARA/24?lang=en");
 		}
 		return seen;
 	}
