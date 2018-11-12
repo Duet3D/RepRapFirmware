@@ -377,35 +377,31 @@ float FiveBarScaraKinematics::getAngle(float x1, float y1, float xAngle, float y
 
 bool FiveBarScaraKinematics::isPointInsideDefinedPrintableArea(float x0, float y0) const
 {
-	if(printAreaElementsDefined == 4) { // rectangle
-		float x1 = printArea[0];
-		float y1 = printArea[1];
-		float x2 = printArea[2];
-		float y2 = printArea[3];
+	float x1 = printArea[0];
+	float y1 = printArea[1];
+	float x2 = printArea[2];
+	float y2 = printArea[3];
 
-		if(x1 < x2 && y1 > y2) {
-			if(x0 >= x1 && x0 <= x2 && y2 <= y0 && y1 >= y0) {
-				return true;
-			}
-			else {
-				return false;
-			}
-		}
-		else if(x1 > x2 && y1 < y2) {
-			if(x0 >= x2 && x0 <= x1 && y2 >= y0 && y1 <= y0) {
-				return true;
-			}
-			else {
-				return false;
-			}
+	if(x1 < x2 && y1 > y2) {
+		if(x0 >= x1 && x0 <= x2 && y2 <= y0 && y1 >= y0) {
+			return true;
 		}
 		else {
-			// TODO error log
+			return false;
 		}
 	}
-	else { // polygone
-		// TODO implement
+	else if(x1 > x2 && y1 < y2) {
+		if(x0 >= x2 && x0 <= x1 && y2 >= y0 && y1 <= y0) {
+			return true;
+		}
+		else {
+			return false;
+		}
 	}
+	else {
+		// TODO error log
+	}
+
 	return false;
 }
 
@@ -565,22 +561,16 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		if(gb.Seen('Z')) {
 			int arraysize = sizeof(printArea);
 			int numParameters = getNumParameters('Z', gb);
-			if(numParameters > 0 && numParameters % 2 == 0) {
-				float coordinates[numParameters];
-				gb.TryGetFloatArray('Z', numParameters, coordinates, reply, seen);
-				int limit = std::min(numParameters, arraysize);
-				for(int i=0; i < limit; i++) {
+			if(numParameters == 4) {
+				float coordinates[4];
+				gb.TryGetFloatArray('Z', 4, coordinates, reply, seen);
+				for(int i=0; i < 4; i++) {
 					printArea[i] = coordinates[i];
 				}
-				for(int i=limit; i < arraysize; i++) {
-					printArea[i] = 0.0;
-				}
 			}
-			printAreaElementsDefined = numParameters;
 			printAreaDefined = true;
 		}
 		else {
-			printAreaElementsDefined = 0;
 			printAreaDefined = false;
 		}
 
