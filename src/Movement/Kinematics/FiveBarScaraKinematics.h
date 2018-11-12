@@ -46,6 +46,7 @@ private:
 	static constexpr const char *Home5BarScaraFileName = "home5barscara.g";
 	
 	void Recalc();
+	int getNumParameters(char c, GCodeBuffer gb) const;
 	int getQuadrant(int x, int y) const;
 	bool isCantilevered(int mode) const;
 	float getAbsoluteAngle(float xOrig, float yOrig, float xDest, float yDest) const;
@@ -69,12 +70,19 @@ private:
 	float cantL;
 	float cantR;
 	int workmode;
+	float homingAngleL;
+	float homingAngleR;
+	float printArea[40];	// maximum 20 x/ycoordinates, concave
+	bool printAreaElementsDefined;
+	float constrMin;
+	float constrMax;
+	float proxDistAngleMin;
+	float proxDistAngleMax;
   
 	// Derived parameters
 
 	// State variables
 	mutable float cachedX0, cachedY0, cachedThetaL, cachedThetaR;
-	mutable float printAreaX0, printAreaY0, printAreaX1, printAreaY1;
 };
 
 #endif /* SRC_MOVEMENT_KINEMATICS_FIVEBARSCARAKINEMATICS_H_ */
