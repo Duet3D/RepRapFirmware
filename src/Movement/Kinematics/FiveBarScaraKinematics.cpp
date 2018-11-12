@@ -240,47 +240,42 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 {
 	if (mCode == 669)
 	{
+		// must be defined: X, Y, P, D
+		if(!gb.Seen('X') || !(gb.Seen('Y')) || !(gb.Seen('P')) || !(gb.Seen('D'))) {
+			error = true;
+			return true;
+		}
+
 		bool seen = false;
 		bool seenNonGeometry = false;
 
+
 		// parameter X: x values of actuators
 		float paraX[2];
-		if (gb.TryGetFloatArray('X', 2, paraX, reply, seen)) 	// X must be defined
-		{
-			error = true;
-			return true;
-		}
+		gb.TryGetFloatArray('X', 2, paraX, reply, seen);
 		xOrigL = paraX[0];
 		xOrigR = paraX[1];
 
+
 		// parameter Y: y values of actuators
 		float paraY[2];
-		if (gb.TryGetFloatArray('Y', 2, paraY, reply, seen))	// Y must be defined
-		{
-			error = true;
-			return true;
-		}
+		gb.TryGetFloatArray('Y', 2, paraY, reply, seen);
 		yOrigL = paraY[0];
 		yOrigR = paraY[1];
 
+
 		if(gb.Seen('L')) {
 			long wm = 0L;
-			if( gb.TryGetIValue('L', wm, seen) )	// L workmode must be defined
-			{
-				error = true;
-				return true;
-			}
+			gb.TryGetIValue('L', wm, seen);
 			workmode = (int) wm;
 		}
 		else {
 			workmode = 1;	// default
 		}
 
+
 		float proximalLengths[2];
-		if(gb.TryGetFloatArray('P', 2, proximalLengths, reply, seen) ) {	// P proximal lengths must be defined
-			error = true;
-			return true;
-		}
+		gb.TryGetFloatArray('P', 2, proximalLengths, reply, seen);
 		proximalL = proximalLengths[0];
 		proximalR = proximalLengths[1];
 
@@ -301,6 +296,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 			cantR = distalLengths[3];
 		}
 
+
 		if(gb.Seen('B')) {
 			float homingAngles[2];
 			gb.TryGetFloatArray('B', 2, homingAngles, reply, seen);
@@ -311,6 +307,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 			homingAngleL = 90.0;	// default
 			homingAngleR = 90.0;	// default
 		}
+
 
 		if(gb.Seen('A')) {
 			float angles[4];
@@ -327,7 +324,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 			proxDistAngleMax = 360.0;
 		}
 
-		// print area:
+
 		if(gb.Seen('Z')) {
 			int numParameters = getNumParameters('Z', gb);
 			if(numParameters > 0 && numParameters % 2 == 0) {
@@ -346,6 +343,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		else {
 			printAreaElementsDefined = 0;
 		}
+
 
 		gb.TryGetFValue('S', segmentsPerSecond, seenNonGeometry);		// value defined in Kinematics.h
 		gb.TryGetFValue('T', minSegmentLength, seenNonGeometry);		// value defined in Kinematics.h
