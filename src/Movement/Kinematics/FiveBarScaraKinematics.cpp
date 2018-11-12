@@ -196,7 +196,7 @@ int FiveBarScaraKinematics::getNumParameters(char c, GCodeBuffer gb) const {
 
 	int count = 0;
 	size_t size = str.strlen();
-	for (int i = 0; i < size; i++) {
+	for (size_t i = 0; i < size; i++) {
 		if (str[i] == ':') count++;
 	}
 
@@ -573,7 +573,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 					printArea[i] = coordinates[i];
 				}
 				for(int i=limit; i < arraysize; i++) {
-					printArea[i] = nanf;
+					printArea[i] = 0.0;
 				}
 			}
 			printAreaElementsDefined = numParameters;
