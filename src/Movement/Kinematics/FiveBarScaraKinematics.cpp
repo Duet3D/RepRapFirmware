@@ -408,27 +408,17 @@ bool FiveBarScaraKinematics::isPointInsideDefinedPrintableArea(float x0, float y
 	float x2 = printArea[2];
 	float y2 = printArea[3];
 
-	if(x1 < x2 && y1 > y2) {
-		if(x0 >= x1 && x0 <= x2 && y2 <= y0 && y1 >= y0) {
-			return true;
-		}
-		else {
-			return false;
-		}
-	}
-	else if(x1 > x2 && y1 < y2) {
-		if(x0 >= x2 && x0 <= x1 && y2 >= y0 && y1 <= y0) {
-			return true;
-		}
-		else {
-			return false;
-		}
+	float xmin = min(x1, x2);
+	float xmax = max(x1, x2);
+	float ymin = min(y1, y2);
+	float ymax = max(y1, y2);
+
+	if(x0 >= xmin && x0 <= xmax && y0 >= ymin && y0 <= ymax) {
+		return true;
 	}
 	else {
-		// TODO error log
+		return false;
 	}
-
-	return false;
 }
 
 bool FiveBarScaraKinematics::constraintsOk(float x_0, float y_0) const
