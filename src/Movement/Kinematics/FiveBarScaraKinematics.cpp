@@ -236,10 +236,10 @@ int FiveBarScaraKinematics::getQuadrant(int x, int y) const
 
 bool FiveBarScaraKinematics::isCantilevered(int mode) const
 {
-	if(cantL > 0 && mode == 1) {
+	if(cantL > 0.0 && mode == 1) {
 		return true;
 	}
-	else if(cantR > 0 && mode == 2) {
+	else if(cantR > 0.0 && mode == 2) {
 		return true;
 	}
 	return false;
@@ -515,6 +515,8 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 			gb.TryGetFloatArray('D', 2, distalLengths, reply, seen);
 			distalL = distalLengths[0];
 			distalR = distalLengths[1];
+			cantL = 0.0;
+			cantR = 0.0;
 		}
 		else if(numParameters == 4) {
 			float distalLengths[4];
