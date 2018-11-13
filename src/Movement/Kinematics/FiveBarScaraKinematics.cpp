@@ -256,24 +256,31 @@ float * FiveBarScaraKinematics::getIntersec(float firstRadius, float secondRadiu
 {
 	static float result[4];	// x,y of first point, then x,y of second
 
-	float distance = sqrt(pow((firstX - secondX),2) + pow((firstY - secondY),2));
+	// avoid pow() because it uses double
+	float firstRadius2 = firstRadius * firstRadius;
+	float secondRadius2 = secondRadius * secondRadius;
+
+	float distance2 = (firstX - secondX) * (firstX - secondX) + (firstY - secondY) * (firstY - secondY);
+	float distance = sqrt(distance2);
+
 	float delta = 0.25 * sqrt(
 			(distance + firstRadius + secondRadius)
 			* (distance + firstRadius - secondRadius)
 			* (distance - firstRadius + secondRadius)
 			* (-distance + firstRadius + secondRadius)
 		);
+
 	// calculate x
 	float term1x = (firstX + secondX) / 2;
-	float term2x = (secondX - firstX)*(pow(firstRadius,2) - pow(secondRadius,2)) / (2 * pow(distance,2));
-	float term3x = 2 * (firstY - secondY) / pow(distance,2) * delta;
+	float term2x = (secondX - firstX) * (firstRadius2 - secondRadius2) / (2 * distance2);
+	float term3x = 2 * (firstY - secondY) / (distance2) * delta;
 	float x1 = term1x + term2x + term3x;
 	float x2 = term1x + term2x - term3x;
 
 	// calculate y
 	float term1y = (firstY + secondY) / 2;
-	float term2y = (secondY - firstY)*(pow(firstRadius,2) - pow(secondRadius,2)) / (2 * pow(distance,2));
-	float term3y = 2 * (firstX - secondX) / pow(distance,2) * delta;
+	float term2y = (secondY - firstY)*(firstRadius2 - secondRadius2) / (2 * distance2);
+	float term3y = 2 * (firstX - secondX) / distance2 * delta;
 	float y1 = term1y + term2y - term3y;
 	float y2 = term1y + term2y + term3y;
 
@@ -523,7 +530,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 
 
 		if(gb.Seen('A')) {
-			float angles[4];
+			float angles[6];
 			gb.TryGetFloatArray('A', 4, angles, reply, seen);
 			constrMin = angles[0];
 			constrMax = angles[1];
@@ -559,7 +566,6 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 
 
 		if(gb.Seen('Z')) {
-			int arraysize = sizeof(printArea);
 			int numParameters = getNumParameters('Z', gb);
 			if(numParameters == 4) {
 				float coordinates[4];
