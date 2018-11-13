@@ -349,7 +349,7 @@ float * FiveBarScaraKinematics::getXYFromAngle(float angle, float length, float 
 	return result;
 }
 
-float * FiveBarScaraKinematics::getForward(float thetaL, float thetaR, int workmode) const
+float * FiveBarScaraKinematics::getForward(float thetaL, float thetaR) const
 {
 	static float result[6];	// xL, yL, xR, yR, x0, y0
 
@@ -585,13 +585,10 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 
 
 		if(gb.Seen('Z')) {
-			int numParameters = getNumParameters('Z', gb);
-			if(numParameters == 4) {
-				float coordinates[4];
-				gb.TryGetFloatArray('Z', 4, coordinates, reply, seen);
-				for(int i=0; i < 4; i++) {
-					printArea[i] = coordinates[i];
-				}
+			float coordinates[4];
+			gb.TryGetFloatArray('Z', 4, coordinates, reply, seen);
+			for(int i=0; i < 4; i++) {
+				printArea[i] = coordinates[i];
 			}
 			printAreaDefined = true;
 		}
@@ -659,7 +656,7 @@ void FiveBarScaraKinematics::MotorStepsToCartesian(const int32_t motorPos[], con
 	float x_0 = -1.0;
 	float y_0 = -1.0;
 
-	float *result = getForward(thetaL, thetaR, workmode);
+	float *result = getForward(thetaL, thetaR);
 	float x1 = result[4];
 	float y1 = result[5];
 
