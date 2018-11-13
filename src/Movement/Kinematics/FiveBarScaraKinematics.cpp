@@ -38,7 +38,12 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 
 	float thetaL = -1.0;
 	float thetaR = -1.0;
-	float xL, xR, yL, yR, x1, y1;
+	float xL = -1.0;
+	float xR = -1.0;
+	float yL = -1.0;
+	float yR = -1.0;
+	float x1 = -1.0;
+	float y1 = -1.0;
 
 	if(isCantilevered(1)) {
 		// calculate cantilevered side first:
@@ -156,9 +161,13 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 		float thetaL2 = theta[5];
 		if(workmode == 1) {
 			if(thetaL1 <= thetaL2) {
+				xL = theta[0];
+				yL = theta[1];
 				thetaL = thetaL1;
 			}
 			else {
+				xL = theta[3];
+				yL = theta[4];
 				thetaL = thetaL2;
 			}
 		}
@@ -168,9 +177,13 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 		float thetaR2 = theta[5];
 		if(workmode == 1) {
 			if(thetaR1 <= thetaR2) {
+				xR = theta[0];
+				yR = theta[1];
 				thetaR = thetaR1;
 			}
 			else {
+				xR = theta[3];
+				yR = theta[4];
 				thetaR = thetaR2;
 			}
 		}
@@ -223,7 +236,13 @@ int FiveBarScaraKinematics::getQuadrant(int x, int y) const
 
 bool FiveBarScaraKinematics::isCantilevered(int mode) const
 {
-	return true; // TODO implement
+	if(cantL > 0 && mode == 1) {
+		return true;
+	}
+	else if(cantR > 0 && mode == 2) {
+		return true;
+	}
+	return false;
 }
 
 float FiveBarScaraKinematics::getAbsoluteAngle(float xOrig, float yOrig, float xDest, float yDest) const
