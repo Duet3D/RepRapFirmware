@@ -533,8 +533,22 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 			homingAngleR = homingAngles[1];
 		}
 		else {
-			homingAngleL = 90.0;	// default
-			homingAngleR = 90.0;	// default
+			if(workmode == 1) {
+				homingAngleL = 20.0;	// default
+				homingAngleR = 10.0;	// default
+			}
+			else if(workmode == 2) {
+				homingAngleL = 110.0;	// default
+				homingAngleR = 20.0;	// default
+			}
+			else if(workmode == 4) {
+				homingAngleL = 110.0;	// default
+				homingAngleR = 100.0;	// default
+			}
+			else {
+				homingAngleL = 90.0;	// default
+				homingAngleR = 90.0;	// default
+			}
 		}
 
 
