@@ -171,7 +171,7 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 				thetaL = thetaL2;
 			}
 		}
-		else if(workmode == 2 || workmode == 3) {	// take bigger angle
+		else if(workmode == 2 || workmode == 4) {	// take bigger angle
 			if(thetaL1 <= thetaL2) {
 				xL = theta[3];
 				yL = theta[4];
@@ -199,7 +199,7 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 				thetaR = thetaR2;
 			}
 		}
-		else if(workmode == 3) {		// take bigger angle
+		else if(workmode == 4) {		// take bigger angle
 			if(thetaR1 <= thetaR2) {
 				xR = theta[3];
 				yR = theta[4];
