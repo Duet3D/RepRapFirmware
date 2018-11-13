@@ -160,7 +160,7 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 		float thetaL1 = theta[2];
 		float thetaL2 = theta[5];
 		if(workmode == 1) {
-			if(thetaL1 <= thetaL2) {
+			if(thetaL1 <= thetaL2) {	// take smaller angle
 				xL = theta[0];
 				yL = theta[1];
 				thetaL = thetaL1;
@@ -171,11 +171,23 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 				thetaL = thetaL2;
 			}
 		}
+		else if(workmode == 2 || workmode == 3) {	// take bigger angle
+			if(thetaL1 <= thetaL2) {
+				xL = theta[3];
+				yL = theta[4];
+				thetaL = thetaL2;
+			}
+			else {
+				xL = theta[0];
+				yL = theta[1];
+				thetaL = thetaL1;
+			}
+		}
 
 		theta = getTheta(proximalR, distalR, xOrigR, yOrigR, x_0, y_0);
 		float thetaR1 = theta[2];
 		float thetaR2 = theta[5];
-		if(workmode == 1) {
+		if(workmode == 1 || workmode == 2) {		// take smaller angle
 			if(thetaR1 <= thetaR2) {
 				xR = theta[0];
 				yR = theta[1];
@@ -185,6 +197,18 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 				xR = theta[3];
 				yR = theta[4];
 				thetaR = thetaR2;
+			}
+		}
+		else if(workmode == 3) {		// take bigger angle
+			if(thetaR1 <= thetaR2) {
+				xR = theta[3];
+				yR = theta[4];
+				thetaR = thetaR2;
+			}
+			else {
+				xR = theta[0];
+				yR = theta[1];
+				thetaR = thetaR1;
 			}
 		}
 	}
