@@ -53,7 +53,7 @@ private:
 	float * getIntersec(float firstRadius, float secondRadius, float firstX, float firstY, float secondX, float secondY) const;
 	float * getTheta(float proximal, float distal, float proxX, float proxY, float destX, float destY) const;
 	float * getXYFromAngle(float angle, float length, float origX, float origY) const;
-	float * getForward(float thetaL, float thetaR, int workmode) const;
+	float * getForward(float thetaL, float thetaR) const;
 	float * getInverse(float x0, float y0) const;
 	float getAngle(float x1, float y1, float xAngle, float yAngle, float x2, float y2) const;
 	bool isPointInsideDefinedPrintableArea(float x0, float y0) const;
