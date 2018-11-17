@@ -14,6 +14,13 @@
 
 // Standard setup for 5 Bar SCARA (parallel SCARA) machines assumed by this firmware
 
+enum class Arm : uint8_t
+{
+	left,
+	right
+};
+
+
 class FiveBarScaraKinematics : public ZLeadscrewKinematics
 {
 public:
@@ -51,7 +58,7 @@ private:
 	bool isCantilevered(int mode) const;
 	float getAbsoluteAngle(float xOrig, float yOrig, float xDest, float yDest) const;
 	float * getIntersec(float firstRadius, float secondRadius, float firstX, float firstY, float secondX, float secondY) const;
-	float * getTheta(float proximal, float distal, float proxX, float proxY, float destX, float destY) const;
+	float * getTheta(float proximal, float distal, float proxX, float proxY, float destX, float destY, Arm arm) const;
 	float * getXYFromAngle(float angle, float length, float origX, float origY) const;
 	float * getForward(float thetaL, float thetaR) const;
 	float * getInverse(float x0, float y0) const;
