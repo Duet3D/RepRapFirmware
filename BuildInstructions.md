@@ -3,13 +3,15 @@ Instructions for building dc42 fork of RepRapFirmware
 
 **Important!**
 
-RepRapFirmware is built from several Github projects. You need to use compatible branches of these projects. As at October 2018, development uses these branches:
+1. RepRapFirmware is built from several Github projects. You need to use compatible branches of these projects. As at October 2018, development uses these branches:
 
 - ReprapFirmware: v2-dev
 - CoreNG: main
 - FreeRTOS: main
 - RRFLibraries: main
 - DuetWiFiSocketServer: dev
+
+2. Only the RTOS configurations of RepRapFirmware are supported by the latest sources. Therefore, the Duet085 and Alligator builds of RepRapFirmware cannot be built. The non-RTOS builds of CoreNG are maintained for use by the DuetIAP project.
 
 **Instructions for building under Windows**
 
