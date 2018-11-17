@@ -4,6 +4,54 @@ Summary of important changes in recent versions
 Version 2.02RC3
 ===============
 
+Upgrade notes: see 2.02RC3
+
+New features/changed behaviour:
+- The mapped fan speed is now sent at the start of the fan speed list in the M408 response so that PanelDue can display it
+- Emergency stop commands sent by PanelDue running latest firmware are acted on immediately
+- After attempting to apply babystepping to existing queue moves, any residual babystepping is now actioned immediately instead of waiting for another move
+- If you try to move motors connected to internal drivers when VIN is too low or too high, a warning message is generated
+- Increased minimum fullsteps/second for stepper driver open load open detection from 4 to 20
+- I2C addresses can be specified in hex format in quotes, e.g. "0x71" or "x71"
+- M584 can now use dummy (high) driver numbers to assign an axis or extruder to no driver
+- M122 has an additional "power good" report to indicate whether the internal stepper drivers can be used
+- Added special support for coast-to-end in RecalculateMove (but pressure advance should work better than coast-to-end)
+- Improved the HTTP 'page not found' message
+- During printing, the count of layers printed was sometimes incorrect.
+- If G30 S-2 is commanded when no tool is selected, the command is not executed and an error message is generated
+- Lookahead errors were occasionally reported because of small rounding errors
+- The M918 command now resets and initialises the 12864 display
+- On the 12864 display, error messages can be acknowledged by a button press
+- The M260 command can now receive I2C bytes as well as send them
+- Added 'deprecated' message when legacy 3-, 4- or 5-point bed compensation is used
+- The Idle task is now included in task list
+
+Bug fixes:
+- G30 H parameters didn't work if deployprobe.g or retractprobe.g files were present
+- M600 didn't work and it halted the printer
+- A processor timing issue could cause the watchdog to trigger and reset the Duet as soon as it was enabled. This caused some Duet+DueX configurations to take several attempts to start up.
+- The new P parameter of the M557 command didn't work
+- Fixed some issues with querying the object model
+- After using G30 S-2 the tool offset was set in the wrong direction
+- After using G30 S-2 the user coordinates were not updated to account for new tool offset
+- Under some conditions the M400 command could greatly slow down movements, making it look as if the print had stalled
+- Http responses now use \r\n as the line ending, not \n
+- On the 12864 display, buttons sometimes disappeared when moving between them
+- On the 12864 display, the last byte of images didn't display correctly
+- On the 12864 display, in button commands, "menu" instead of "#0" was being replaced by the filename parameter
+- On the 12864 display, item numbers 79, 179 and 279 were not implemented
+- On the 12864 display, after displaying an error message the 20-second inactivity timeout was used before reverting to the main menu instead of the 6-second error message timeout
+
+Internal changes:
+- A mutex is used to serialise I2C access instead of a critical section lock
+- Rewrote the I2C driver
+- An interrupt is now used to better track changes to the DueXn endstop input status
+- A FreeRTOS timer task is no longer created
+- Brought the Arduino Due/RADDS build up to date with current version (it has enough RAM to support RTOS because it doesn't support networking)
+
+Version 2.02RC3
+===============
+
 Upgrade notes:
 - **Please test your Z probe after installing this release, before you rely on it for Z homing or bed probing!**
 - Duet Web Control version 1.22.4b1 is recommended with this firmware. On the Duet WiFi, DuetWiFiServer.bin version 1.21 remains compatible.
