@@ -118,13 +118,13 @@ To be fixed in 2.02 release:
 - [done, ok] Support string-valued object model values in JSON report
 - [done, ok] Array indices in variable substitution
 - [done, ok] Support conversion from numeric or boolean to string in variable substitution
-- [done, test] G30 H parameters don't work if deployprobe.g or retractprobe.g file present
-- [done, test] Execute residual babystepping immediately
+- [done, ok] G30 H parameters don't work if deployprobe.g or retractprobe.g file present
+- [done, ok] Execute residual babystepping immediately
 - [done, test] Warning message if trying to move motors on internal drivers but VIN too low or too high
 - [done, test] increase min fullsteps for motor open detection from 4 to 20
 - [done, test] I2C addresses can be specified in hex format e.g. "0x71" or "x71"
 - [done, test] M584 can now use dummy (high) driver numbers to assign an axis or extruder to no driver
-- [done, test] M122 to tell you if the drivers are enabled, or disabled and waiting for the correct voltage
+- [done, test] M122 to tell you if the drivers are enabled (power good), or disabled and waiting for the correct voltage
 - [done] Special support for coast-to-end in RecalculateMove
 - [done] Bring RADDS build up to date and use RTOS (not tested)
 - [done, ok] Improved 'page not found' message

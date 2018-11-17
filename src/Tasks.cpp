@@ -278,11 +278,6 @@ extern "C"
 	// This intercepts the 1ms system tick
 	void sysTickHook()
 	{
-		wdt_restart(WDT);							// kick the watchdog
-
-#if SAM4E || SAME70
-		rswdt_restart(RSWDT);						// kick the secondary watchdog
-#endif
 		reprap.Tick();
 	}
 

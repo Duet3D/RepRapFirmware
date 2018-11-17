@@ -241,20 +241,27 @@ void RepRap::Init()
 	display->Init();
 #endif
 
-	// Set up the timeout of the regular watchdog, and set up the backup watchdog if there is one
+	// Set up the timeout of the regular watchdog, and set up the backup watchdog if there is one.
 #if __LPC17xx__
 	wdt_init(1); // set wdt to 1 second. reset the processor on a watchdog fault
 #else
-	// The clock frequency for both watchdogs is 32768/128 = 256Hz
-	const uint16_t timeout = 32768/128;												// set watchdog timeout to 1 second (max allowed value is 4095 = 16 seconds)
-	wdt_init(WDT, WDT_MR_WDRSTEN, timeout, timeout);								// reset the processor on a watchdog fault
-#endif
+	{
+		// The clock frequency for both watchdogs is about 32768/128 = 256Hz
+		// The watchdogs on the SAM4E seem to be very timing-sensitive. On the Duet WiFi/Ethernet they were going off spuriously depending on how long the DueX initialisation took.
+		// The documentation says you mustn't write to the mode register within 3 slow clocks after kicking the watchdog.
+		// I have a theory that the converse is also true, i.e. after enabling the watchdog you mustn't kick it within 3 slow clocks
+		// So I've added a delay call before we set 'active' true (which enables kicking the watchdog), and that seems to fix the problem.
+		const uint16_t timeout = 32768/128;											// set watchdog timeout to 1 second (max allowed value is 4095 = 16 seconds)
+		wdt_init(WDT, WDT_MR_WDRSTEN, timeout, timeout);							// reset the processor on a watchdog fault
 
 #if SAM4E || SAME70
-	// The RSWDT must be initialised *after* the main WDT
-	const uint16_t rsTimeout = 16384/128;											// set secondary watchdog timeout to 0.5 second (max allowed value is 4095 = 16 seconds)
-	rswdt_init(RSWDT, RSWDT_MR_WDFIEN, rsTimeout, rsTimeout);						// generate an interrupt on a watchdog fault
-	NVIC_EnableIRQ(WDT_IRQn);														// enable the watchdog interrupt
+		// The RSWDT must be initialised *after* the main WDT
+		const uint16_t rsTimeout = 16384/128;										// set secondary watchdog timeout to 0.5 second (max allowed value is 4095 = 16 seconds)
+		rswdt_init(RSWDT, RSWDT_MR_WDFIEN, rsTimeout, rsTimeout);					// generate an interrupt on a watchdog fault
+		NVIC_EnableIRQ(WDT_IRQn);													// enable the watchdog interrupt
+#endif
+		delayMicroseconds(200);														// 200us is about 6 slow clocks
+	}
 #endif
 
 	active = true;						// must do this before we start the network or call Spin(), else the watchdog may time out
@@ -774,39 +781,48 @@ unsigned int RepRap::GetNumberOfContiguousTools() const
 
 void RepRap::Tick()
 {
-	if (active && !resetting)
+	// Kicking the watchdog before it has been initialised may trigger it!
+	if (active)
 	{
-		platform->Tick();
-		++ticksInSpinState;
-#ifdef RTOS
-		++heatTaskIdleTicks;
-		const bool heatTaskStuck = (heatTaskIdleTicks >= MaxTicksInSpinState);
-		if (heatTaskStuck || ticksInSpinState >= MaxTicksInSpinState)		// if we stall for 20 seconds, save diagnostic data and reset
-#else
-		if (ticksInSpinState >= MaxTicksInSpinState)						// if we stall for 20 seconds, save diagnostic data and reset
+		wdt_restart(WDT);							// kick the watchdog
+#if SAM4E || SAME70
+		rswdt_restart(RSWDT);						// kick the secondary watchdog
 #endif
-		{
-			resetting = true;
-			for (size_t i = 0; i < NumHeaters; i++)
-			{
-				platform->SetHeater(i, 0.0);
-			}
-			platform->DisableAllDrives();
 
-			// We now save the stack when we get stuck in a spin loop
+		if (!resetting)
+		{
+			platform->Tick();
+			++ticksInSpinState;
 #ifdef RTOS
-		    __asm volatile("mrs r2, psp");
-			register const uint32_t * stackPtr asm ("r2");					// we want the PSP not the MSP
-			platform->SoftwareReset(
-				(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
-				stackPtr + 5												// discard uninteresting registers, keep LR PC PSR
+			++heatTaskIdleTicks;
+			const bool heatTaskStuck = (heatTaskIdleTicks >= MaxTicksInSpinState);
+			if (heatTaskStuck || ticksInSpinState >= MaxTicksInSpinState)		// if we stall for 20 seconds, save diagnostic data and reset
 #else
-			register const uint32_t * stackPtr asm ("sp");
-			platform->SoftwareReset(
-				(uint16_t)SoftwareResetReason::stuckInSpin,
-				stackPtr + 5												// discard uninteresting registers, keep LR PC PSR
+				if (ticksInSpinState >= MaxTicksInSpinState)					// if we stall for 20 seconds, save diagnostic data and reset
 #endif
-				);
+			{
+				resetting = true;
+				for (size_t i = 0; i < NumHeaters; i++)
+				{
+					platform->SetHeater(i, 0.0);
+				}
+				platform->DisableAllDrives();
+
+				// We now save the stack when we get stuck in a spin loop
+#ifdef RTOS
+				__asm volatile("mrs r2, psp");
+				register const uint32_t * stackPtr asm ("r2");					// we want the PSP not the MSP
+				platform->SoftwareReset(
+					(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
+					stackPtr + 5												// discard uninteresting registers, keep LR PC PSR
+#else
+				register const uint32_t * stackPtr asm ("sp");
+				platform->SoftwareReset(
+					(uint16_t)SoftwareResetReason::stuckInSpin,
+					stackPtr + 5												// discard uninteresting registers, keep LR PC PSR
+#endif
+					);
+			}
 		}
 	}
 }
