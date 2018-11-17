@@ -110,6 +110,7 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 	return result;
 }
 
+// for a given Parameter, get number of values which are separated by :
 int FiveBarScaraKinematics::getNumParameters(char c, GCodeBuffer gb) const {
 	String<MaxFilenameLength> str;
 	bool seen = false;
@@ -142,6 +143,7 @@ int FiveBarScaraKinematics::getQuadrant(int x, int y) const
 }
 
 
+// return true if the Scara is cantilevered
 bool FiveBarScaraKinematics::isCantilevered(int mode) const
 {
 	if(cantL > 0.0 && mode == 1) {
@@ -153,6 +155,7 @@ bool FiveBarScaraKinematics::isCantilevered(int mode) const
 	return false;
 }
 
+// get angle between 0 and 360 for given origin and destination coordinates
 float FiveBarScaraKinematics::getAbsoluteAngle(float xOrig, float yOrig, float xDest, float yDest) const
 {
 	float length = sqrt(pow(xOrig - xDest, 2) + pow(yOrig - yDest,2));
@@ -290,6 +293,8 @@ float * FiveBarScaraKinematics::getXYFromAngle(float angle, float length, float 
 	return result;
 }
 
+// get forware kinematics: from theta actuators angles, calculate destination coordinates
+// optional cantilevered will be added later
 float * FiveBarScaraKinematics::getForward(float thetaL, float thetaR) const
 {
 	static float result[6];	// xL, yL, xR, yR, x0, y0
@@ -302,23 +307,22 @@ float * FiveBarScaraKinematics::getForward(float thetaL, float thetaR) const
 	float xR=xy1[0];
 	float yR=xy1[1];
 
-	float *dest = getIntersec(distalL, distalR, xL, yL, xR, yR);
-
-	float x_0 = dest[0];
-	float y_0 = dest[1];
-	if(workmode == 1 || workmode == 2 || workmode == 4) {
-		if(y_0 < dest[3]) {
-			x_0 = dest[2];
-			y_0 = dest[3];
-		}
-	}
+	float *dest = getIntersec(distalL, distalR, xL, yL, xR, yR); // two intersection points x,y
 
 	result[0] = xL;
 	result[1] = yL;
 	result[2] = xR;
 	result[3] = yR;
-	result[4] = x_0;
-	result[5] = y_0;
+	// take intersection with higher y
+	if(dest[0] < dest[3]) {
+		result[4] = dest[2];
+		result[5] = dest[3];
+	}
+	else {
+		result[4] = dest[0];
+		result[5] = dest[1];
+	}
+
 	return result;
 }
 
@@ -385,7 +389,7 @@ bool FiveBarScaraKinematics::constraintsOk(float x_0, float y_0) const
 		return false;
 	}
 
-	// check proxDistral angle L and R
+	// check proxDistal angle L and R
 	float angleProxDistL = getAngle(xOrigL, yOrigL, xL, yL, x1, y1);
 	if(proxDistLAngleMin > angleProxDistL || proxDistLAngleMax < angleProxDistL) {
 		return false;
@@ -417,20 +421,21 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		bool seenNonGeometry = false;
 
 
-		// parameter X: x values of actuators
+		// parameter X: x origins of actuators
 		float paraX[2];
 		gb.TryGetFloatArray('X', 2, paraX, reply, seen);
 		xOrigL = paraX[0];
 		xOrigR = paraX[1];
 
 
-		// parameter Y: y values of actuators
+		// parameter Y: y origins of actuators
 		float paraY[2];
 		gb.TryGetFloatArray('Y', 2, paraY, reply, seen);
 		yOrigL = paraY[0];
 		yOrigR = paraY[1];
 
 
+		// workmode, default 1 is left buckled, right bulged
 		if(gb.Seen('L')) {
 			long wm = 0L;
 			gb.TryGetIValue('L', wm, seen);
@@ -445,12 +450,14 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		}
 
 
+		// proximal arm lenghts
 		float proximalLengths[2];
 		gb.TryGetFloatArray('P', 2, proximalLengths, reply, seen);
 		proximalL = proximalLengths[0];
 		proximalR = proximalLengths[1];
 
 
+		// distal arm lengths and optional of cantilevered arm
 		int numParameters = getNumParameters('D', gb);
 		if(numParameters == 2) {
 			float distalLengths[2];
@@ -470,6 +477,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		}
 
 
+		// angle of the actuator in the home position
 		if(gb.Seen('B')) {
 			float homingAngles[2];
 			gb.TryGetFloatArray('B', 2, homingAngles, reply, seen);
@@ -496,6 +504,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		}
 
 
+		// angle constraints: between distals and between proximal and distal
 		if(gb.Seen('A')) {
 			float angles[6];
 			gb.TryGetFloatArray('A', 4, angles, reply, seen);
@@ -516,6 +525,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		}
 
 
+		// actuator angle constraints
 		if(gb.Seen('C')) {
 			float angles[4];
 			gb.TryGetFloatArray('C', 4, angles, reply, seen);
@@ -532,6 +542,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		}
 
 
+		// optional rectangle definition of a print area. Must match the workmode reachable area
 		if(gb.Seen('Z')) {
 			float coordinates[4];
 			gb.TryGetFloatArray('Z', 4, coordinates, reply, seen);
@@ -673,9 +684,11 @@ bool FiveBarScaraKinematics::IsReachable(float x, float y, bool isCoordinated) c
 // Return the initial Cartesian coordinates we assume after switching to this kinematics
 void FiveBarScaraKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const
 {
-	//positions[X_AXIS] = maxRadius - xOffset;
+	// x and y are unknown. The stepper angles shall be near the homing endstops, so some
+	// iterations turning left and right will find the endstop positions. The angles and
+	// coordinates are clearly defined then.
+
 	positions[X_AXIS] = 0.0;
-	//positions[Y_AXIS] = -yOffset;
 	positions[Y_AXIS] = 0.0;
 	for (size_t i = Z_AXIS; i < numAxes; ++i)
 	{
@@ -791,7 +804,7 @@ bool FiveBarScaraKinematics::IsContinuousRotationAxis(size_t axis) const
 // Recalculate the derived parameters
 void FiveBarScaraKinematics::Recalc()
 {
-	// no optimizations yet
+	// cached values exist yet
 }
 
 // End
