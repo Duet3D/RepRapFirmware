@@ -50,6 +50,9 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial1
 
+// SerialUSB
+constexpr Pin UsbVBusPin = NoPin;					// Pin used to monitor VBUS on USB port. Not needed for SAM3X.
+
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 // DRIVES
 //			                                    X   Y   Z  E1  E2  E3  E4  E5  E6

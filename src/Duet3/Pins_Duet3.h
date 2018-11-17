@@ -51,6 +51,8 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 #define SERIAL_AUX_DEVICE Serial
 #define SERIAL_WIFI_DEVICE Serial1
 
+constexpr Pin UsbVBusPin = PORTC_PIN(21);			// Pin used to monitor VBUS on USB port
+
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // DRIVES

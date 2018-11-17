@@ -48,18 +48,23 @@ const uint32_t DriversSpiClockFrequency = 2000000;			// 2MHz SPI clock
 const int DefaultStallGuardThreshold = 1;					// Range is -64..63. Zero seems to be too sensitive. Higher values reduce sensitivity of stall detection.
 
 // TMC2660 register addresses
-const uint32_t TMC_REG_DRVCTRL = 0;
-const uint32_t TMC_REG_CHOPCONF = 0x80000;
-const uint32_t TMC_REG_SMARTEN = 0xA0000;
-const uint32_t TMC_REG_SGCSCONF = 0xC0000;
-const uint32_t TMC_REG_DRVCONF = 0xE0000;
+const uint32_t TMC_REGNUM_MASK = 7 << 17;
+const uint32_t TMC_REG_DRVCTRL = 0 << 17;
+const uint32_t TMC_REG_CHOPCONF = 4 << 17;
+const uint32_t TMC_REG_SMARTEN = 5 << 17;
+const uint32_t TMC_REG_SGCSCONF = 6 << 17;
+const uint32_t TMC_REG_DRVCONF = 7 << 17;
 const uint32_t TMC_DATA_MASK = 0x0001FFFF;
 
 // DRVCONF register bits
-const uint32_t TMC_DRVCONF_RDSEL_0 = 0 << 4;
-const uint32_t TMC_DRVCONF_RDSEL_1 = 1 << 4;
-const uint32_t TMC_DRVCONF_RDSEL_2 = 2 << 4;
-const uint32_t TMC_DRVCONF_RDSEL_3 = 3 << 4;
+const uint32_t TMC_DRVCONF_RDSEL_SHIFT = 4;
+const uint32_t TMC_DRVCONF_RDSEL_MASK = 3 << TMC_DRVCONF_RDSEL_SHIFT;
+
+const uint32_t TMC_DRVCONF_RDSEL_0 = 0 << TMC_DRVCONF_RDSEL_SHIFT;
+const uint32_t TMC_DRVCONF_RDSEL_1 = 1 << TMC_DRVCONF_RDSEL_SHIFT;
+const uint32_t TMC_DRVCONF_RDSEL_2 = 2 << TMC_DRVCONF_RDSEL_SHIFT;
+const uint32_t TMC_DRVCONF_RDSEL_3 = 3 << TMC_DRVCONF_RDSEL_SHIFT;
+
 const uint32_t TMC_DRVCONF_VSENSE = 1 << 6;
 const uint32_t TMC_DRVCONF_SDOFF = 1 << 7;
 const uint32_t TMC_DRVCONF_TS2G_3P2 = 0 << 8;
@@ -93,7 +98,7 @@ const uint32_t TMC_CHOPCONF_TBL_SHIFT = 15;
 #define TMC_CHOPCONF_HSTRT(n)	((((uint32_t)n) & 7) << 4)
 #define TMC_CHOPCONF_HEND(n)	((((uint32_t)n) & 15) << 7)
 #define TMC_CHOPCONF_HDEC(n)	((((uint32_t)n) & 3) << 11)
-#define TMC_CHOPCONF_TBL(n)	(((uint32_t)n & 3) << 15)
+#define TMC_CHOPCONF_TBL(n)		(((uint32_t)n & 3) << 15)
 
 // Driver control register bits, when SDOFF=0
 const uint32_t TMC_DRVCTRL_MRES_MASK = 0x0F;
@@ -132,6 +137,9 @@ const uint32_t TMC_SMARTEN_SEIMIN_QTR = 1 << 15;
 
 const unsigned int NumWriteRegisters = 5;
 
+const uint32_t TMC_RR_SG_LOAD_SHIFT = 10;	// shift to get the stallguard load register
+const uint32_t TMC_RR_MSTEP_SHIFT = 10;		// shift to get the microestep position register
+
 // Chopper control register defaults
 // 0x901B4 as per datasheet example
 // CHM bit not set, so uses spread cycle mode
@@ -151,7 +159,7 @@ const uint32_t defaultSgscConfReg =
 // Driver configuration register
 const uint32_t defaultDrvConfReg =
 	  TMC_REG_DRVCONF
-	| TMC_DRVCONF_RDSEL_1				// read SG register in status
+	| TMC_DRVCONF_RDSEL_0				// read microstep register in status, until the drive is enabled
 	| TMC_DRVCONF_VSENSE				// use high sensitivity range
 	| TMC_DRVCONF_TS2G_0P8				// fast short-to-ground detection
 	| 0;
@@ -199,6 +207,8 @@ public:
 	uint32_t ReadLiveStatus() const;
 	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep);
 
+	uint32_t ReadMicrostepPosition() const { return mstepPosition; }
+
 private:
 	bool SetChopConf(uint32_t newVal);
 
@@ -230,10 +240,12 @@ private:
 	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection
 	uint32_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
 	uint32_t maxSgLoadRegister;								// the maximum value of the StallGuard bits we read
+	uint32_t mstepPosition;									// the current microstep position, or 0xFFFFFFFF if unknown
 
 	volatile uint32_t lastReadStatus;						// the status word that we read most recently, updated by the ISR
 	volatile uint32_t accumulatedStatus;
 	bool enabled;
+	volatile uint8_t rdselState;							// 0-3 = actual RDSEL value, 0xFF = unknown
 };
 
 // State structures for all drivers
@@ -382,6 +394,8 @@ pre(!driversPowered)
 	registers[DriveConfig] = defaultDrvConfReg;
 	registersToUpdate = UpdateAllRegisters;
 	accumulatedStatus = lastReadStatus = 0;
+	rdselState = 0xFF;
+	mstepPosition = 0xFFFFFFFF;
 	ResetLoadRegisters();
 	SetMicrostepping(DefaultMicrosteppingShift, DefaultInterpolation);
 	SetStallDetectThreshold(DefaultStallDetectThreshold);
@@ -457,6 +471,9 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const
 
 	case SmartDriverRegister::hdec:
 		return (configuredChopConfReg & TMC_CHOPCONF_HDEC_MASK) >> TMC_CHOPCONF_HDEC_SHIFT;
+
+	case SmartDriverRegister::mstepPos:
+		return mstepPosition;
 
 	case SmartDriverRegister::tpwmthrs:
 	default:
@@ -545,27 +562,38 @@ void TmcDriverState::SetCurrent(float current)
 	registersToUpdate |= 1u << StallGuardConfig;
 }
 
-// Enable or disable the driver. Also called from SetChopConf after the chopper control configuration has been changed.
+// Enable or disable the driver
 void TmcDriverState::Enable(bool en)
 {
 	if (enabled != en)
 	{
+		enabled = en;
+		UpdateChopConfRegister();
+
+		const irqflags_t flags = cpu_irq_save();
+		mstepPosition = 0xFFFFFFFF;								// microstep position is or is about to become invalid
 		if (en)
 		{
 			// Driver was disabled and we are enabling it, so clear the stall status
 			// Unfortunately this may not be sufficient, because the stall status probably won't be updated until the next full step position.
 			accumulatedStatus &= ~TMC_RR_SG;
 			lastReadStatus &= ~TMC_RR_SG;
+			registers[DriveConfig] = (registers[DriveConfig] & ~TMC_DRVCONF_RDSEL_MASK) | TMC_DRVCONF_RDSEL_1;		// read the stallguard level when drive is enabled
 		}
-		enabled = en;
-		UpdateChopConfRegister();
+		else
+		{
+			registers[DriveConfig] = (registers[DriveConfig] & ~TMC_DRVCONF_RDSEL_MASK) | TMC_DRVCONF_RDSEL_0;		// read the microstep position when drive is disabled
+		}
+		rdselState = 0xFF;
+		registersToUpdate |= 1 << DriveConfig;
+		cpu_irq_restore(flags);
 	}
 }
 
 void TmcDriverState::UpdateChopConfRegister()
 {
 	registers[ChopperControl] = (enabled) ? configuredChopConfReg : (configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK);
-	registersToUpdate |= 1u << ChopperControl;
+	registersToUpdate |= (1u << ChopperControl);
 }
 
 // Read the status
@@ -686,7 +714,7 @@ inline void TmcDriverState::TransferDone()
 		{
 			status &= ~TMC_RR_SG;								// remove the stall status bit
 		}
-		else
+		else if (rdselState == 1)
 		{
 			const uint32_t sgLoad = (status >> TMC_RR_SG_LOAD_SHIFT) & 1023;	// get the StallGuard load register
 			if (sgLoad < minSgLoadRegister)
@@ -698,12 +726,22 @@ inline void TmcDriverState::TransferDone()
 				maxSgLoadRegister = sgLoad;
 			}
 		}
+		if (rdselState == 0)
+		{
+			mstepPosition = (status >> TMC_RR_MSTEP_SHIFT) & 1023;
+		}
 		if ((status & TMC_RR_STST) != 0 || interval == 0 || interval > StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec)
 		{
 			status &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds
 		}
 		lastReadStatus = status;
 		accumulatedStatus |= status;
+
+		const uint32_t dataWritten = be32_to_cpu(spiDataOut) >> 8;
+		if ((dataWritten & TMC_REGNUM_MASK) == TMC_REG_DRVCONF)
+		{
+			rdselState = (dataWritten & TMC_DRVCONF_RDSEL_MASK) >> TMC_DRVCONF_RDSEL_SHIFT;
+		}
 	}
 }
 

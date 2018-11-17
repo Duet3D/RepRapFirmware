@@ -93,21 +93,19 @@ Closed investigations:
 - [no, we don't record print time] Distinguish between estimated/simulated/actual print time in M36
 - [problem gone away] chrishamm's watchdog issue, see his email of 2018-08-01
 - [tested, pause/resume works as intended] Check M106 R1 parameter, see https://forum.duet3d.com/topic/6538/resuming-print-fan-after-pause
+- [tested 2018-10-30, ok] Test extruder stall detection, https://forum.duet3d.com/topic/7300/issues-using-stall-detection-when-loading-filament
 
 Open investigations:
-- Test extruder stall detection, https://forum.duet3d.com/topic/7300/issues-using-stall-detection-when-loading-filament
 - [check] if a homing command in an SD print file is aborted due to e.g. G1 Z5 in the homing file, error message should be written to both DWC and PanelDue
-- 3 independent Z motors, https://forum.duet3d.com/topic/6974/problem-with-3-independent-z-axis-motors-and-endstops/26
-- incorrect babystepping, https://forum.duet3d.com/topic/6888/babystep-bug-w-incorrect-motion/2 (already fixed 1mm limit)
-- M226 not working? https://forum.duet3d.com/topic/6860/filament-change-no-reaction/3
-- Weird height map, https://forum.duet3d.com/topic/6472/mesh-grid-compensation/28
-- Full stepping problem, https://forum.duet3d.com/topic/6433/how-to-reduce-the-speed-of-extrusion/14
-- Print time estimation problem, see https://forum.duet3d.com/topic/5572/it-s-out-reprapfirmware-2-0-and-1-21-1-released/64 and https://forum.duet3d.com/topic/5572/it-s-out-reprapfirmware-2-0-and-1-21-1-released/73
-- Disconnections, https://forum.duet3d.com/topic/6487/running-bed-mesh-compensation/19
-- M122, https://forum.duet3d.com/topic/6725/m122-does-not-work-from-dwc-console
+- [tested, no fault found] incorrect babystepping, https://forum.duet3d.com/topic/6888/babystep-bug-w-incorrect-motion/2 (already fixed 1mm limit)
+- [tested, no fault found] M226 not working? https://forum.duet3d.com/topic/6860/filament-change-no-reaction/3
+- [replied] Weird height map, https://forum.duet3d.com/topic/6472/mesh-grid-compensation/28
+- [tested, no fault] Full stepping problem, https://forum.duet3d.com/topic/6433/how-to-reduce-the-speed-of-extrusion/14
 - DueX5 LEDs flashing at boot time, https://forum.duet3d.com/topic/6970/led-strip-flashing-on-boot-duex5
-- M24 after heater fault pause, https://forum.duet3d.com/topic/7154/firmware-2-01-resume-after-heater-fault-isn-t-working
+- [tested, no fault found] M24 after heater fault pause, https://forum.duet3d.com/topic/7154/firmware-2-01-resume-after-heater-fault-isn-t-working
 - check DAA working as intended, results are inconsistent. Problem when used with segmented kinematics because the acceleration is in multiple segments.
+- [is a DWC issue] Javascript error, https://forum.duet3d.com/topic/7489/auto-bed-compensation-javascript-error/12
+- [no fault] Babystepping not working, https://forum.duet3d.com/topic/7445/baby-stepping-not-working/20
 
 To be fixed in 2.02 release:
 - [done, ok] Send mapped fan speed at the start of the fan speed list in the M408 response for PanelDue
@@ -128,8 +126,28 @@ To be fixed in 2.02 release:
 - [done, test] M122 to tell you if the drivers are enabled, or disabled and waiting for the correct voltage
 - [done] Special support for coast-to-end in RecalculateMove
 - [done] Bring RADDS build up to date and use RTOS (not tested)
+- [done, ok] Improved 'page not found' message
+- [done, ok] Fix M600, it stops the machine
+- [done, test on Duet+DueX] Watchdog init
+- [possible fix implemented in 2.02RC4] 3 independent Z motors, https://forum.duet3d.com/topic/6974/problem-with-3-independent-z-axis-motors-and-endstops/26
+- [done, test DueX] Use a I2C mutex instead of a critical section lock
+- [done, test DueX + extra SX1509B] Rewrote i2C driver
+- [done, test] M557 P parameter not working, also not documented
+- [done, test] G30 S-2 tool offset is set in the wrong direction, https://forum.duet3d.com/topic/7523/g30-s-2-not-working-anymore
+- [done] After G30 S-2, update user coordinates to account for new tool offset
+- [no fault] Limits wrong when using workplace coordinates, also in thread https://forum.duet3d.com/topic/7523/g30-s-2-not-working-anymore
+- [done, ok] M918 to do dispay reset, https://forum.duet3d.com/topic/7316/firmware-2-02-release-candidate-3-now-available/67
+- [done, ok] When simulating ELM-absolute on delta, it knows there are 26 layers but only counts to 13. ELM-Kossel only counts to 17.
+- [rewritten i2C driver, test] DueX endstop not always updating, https://forum.duet3d.com/topic/7500/a-endstop-being-stuck-on/4
+- [done, ok] 12864 display buttons sometimes disappear when moving between them, https://forum.duet3d.com/topic/7641/duet-maestro-12864-lcd-button-display-glitches
+- [done, ok] 12864 display: last byte of images didn't display correctly
+- [done, ok] 12864 display: in button commands, "#0" should be substituted, not "menu"
+- [done, test] Don't start execuing a G30 S-2 command if no tool is selected
+- Look at https://forum.duet3d.com/topic/7644/lookahead-error-and-possibly-related-layer-shifting
 
 Future:
+- Auto mount SD card when it is inserted
+- Extruder motion until filament sensor senses motion stopped?
 - Allow jerk between printing and non-printing moves, so that coast-to-end works?
 - M408 P1 S"gcodes" returns an empty gcodes object, so does m408p1 f"gcodes.speedFactor"
 - Error handling in [variable] parser in GCodeBuffer class

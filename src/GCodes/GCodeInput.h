@@ -30,8 +30,6 @@ protected:
 };
 
 // This class wraps around an existing Stream device which lets us avoid double buffering.
-// The only downside is that we cannot (yet) look through the hardware buffer and check for requested emergency stops.
-// TODO: This will require some more work in the Arduino core.
 class StreamGCodeInput : public GCodeInput
 {
 public:

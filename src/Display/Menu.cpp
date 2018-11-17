@@ -69,7 +69,6 @@
 #include "ST7920/lcd7920.h"
 #include "RepRap.h"
 #include "Platform.h"
-#include "PrintMonitor.h"
 #include "Display/Display.h"
 #include "GCodes/GCodes.h"
 #include "Heating/Heat.h"
@@ -77,12 +76,12 @@
 #include "Tools/Tool.h"
 
 const uint32_t InactivityTimeout = 20000;		// inactivity timeout
-const uint32_t ErrorTimeout = 6000;				// how long wre display an error message for
+const uint32_t ErrorTimeout = 6000;				// how long we display an error message for
 
 Menu::Menu(Lcd7920& refLcd)
 	: lcd(refLcd),
 	  timeoutValue(0), lastActionTime(0),
-	  selectableItems(nullptr), unSelectableItems(nullptr), numNestedMenus(0), numSelectableItems(0), highlightedItem(0), itemIsSelected(false), displayingFixedMenu(false),
+	  selectableItems(nullptr), unSelectableItems(nullptr), highlightedItem(nullptr), numNestedMenus(0), itemIsSelected(false), displayingFixedMenu(false),
 	  errorColumn(0), rowOffset(0)
 {
 }
@@ -227,7 +226,7 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 	MenuItem::Visibility xVis = 0;
 	unsigned int decimals = 0;
 	unsigned int nparam = 0;
-	unsigned int width = DefaultNumberWidth;
+	unsigned int width = 0;
 	const char *text = "*";
 	const char *fname = "main";
 	const char *dirpath = "";
@@ -304,20 +303,15 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 	if (StringEquals(commandWord, "text"))
 	{
 		const char *const acText = AppendString(text);
-		MenuItem *pNewItem = new TextMenuItem(row, column, fontNumber, xVis, &(Menu::CheckVisibility), acText);
+		MenuItem * const pNewItem = new TextMenuItem(row, column, width, fontNumber, xVis, acText);
+		pNewItem->UpdateWidth(lcd, NumRows, NumCols);
 		AddItem(pNewItem, false);
-
-		if (pNewItem->Visible())
-		{
-			lcd.SetFont(fontNumber);
-			lcd.print(text);
-			row = lcd.GetRow() - currentMargin;
-			column = lcd.GetColumn() - currentMargin;
-		}
+		column += pNewItem->GetWidth();
 	}
 	else if (StringEquals(commandWord, "image") && fname != nullptr)
 	{
-		ImageMenuItem *pNewItem = new ImageMenuItem(row, column, fname);
+		ImageMenuItem * const pNewItem = new ImageMenuItem(row, column, xVis, fname);
+		pNewItem->UpdateWidth(lcd, NumRows, NumCols);
 		AddItem(pNewItem, false);
 		column += pNewItem->GetWidth();
 	}
@@ -326,34 +320,29 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 		const char * const textString = AppendString(text);
 		const char * const actionString = AppendString(action);
 		const char * const c_acFileString = AppendString(fname);
-		MenuItem::CheckFunction bF = &(Menu::CheckVisibility);
-		ButtonMenuItem *pNewItem = new ButtonMenuItem(row, column, fontNumber, xVis, bF, textString, actionString, c_acFileString);
+		ButtonMenuItem * const pNewItem = new ButtonMenuItem(row, column, width, fontNumber, xVis, textString, actionString, c_acFileString);
+		pNewItem->UpdateWidth(lcd, NumRows, NumCols);
 		AddItem(pNewItem, true);
-
-		// Print the button as well so that we can update the column
-		if (pNewItem->Visible())
-		{
-			lcd.SetFont(fontNumber);
-			lcd.print(text);
-			column = lcd.GetColumn() - currentMargin;
-		}
+		column += pNewItem->GetWidth();
 	}
 	else if (StringEquals(commandWord, "value"))
 	{
-		AddItem(new ValueMenuItem(row, column, fontNumber, width, nparam, decimals), false);
-		column += width;
+		ValueMenuItem * const pNewItem = new ValueMenuItem(row, column, width, fontNumber, xVis, false, nparam, decimals);
+		AddItem(pNewItem, false);
+		column += pNewItem->GetWidth();
 	}
 	else if (StringEquals(commandWord, "alter"))
 	{
-		AddItem(new ValueMenuItem(row, column, fontNumber, width, nparam, decimals), true);
-		column += width;
+		ValueMenuItem * const pNewItem = new ValueMenuItem(row, column, width, fontNumber, xVis, true, nparam, decimals);
+		AddItem(pNewItem, true);
+		column += pNewItem->GetWidth();
 	}
 	else if (StringEquals(commandWord, "files"))
 	{
 		const char * const actionString = AppendString(action);
 		const char *const dir = AppendString(dirpath);
 		const char *const acFileString = AppendString(fname);
-		AddItem(new FilesMenuItem(row, 0, fontNumber, actionString, dir, acFileString, nparam), true);
+		AddItem(new FilesMenuItem(row, 0, NumCols, fontNumber, xVis, actionString, dir, acFileString, nparam), true);
 		row += nparam * lcd.GetFontHeight(fontNumber);
 		column = 0;
 	}
@@ -381,8 +370,7 @@ void Menu::ResetCache()
 		unSelectableItems = unSelectableItems->GetNext();
 		delete current;
 	}
-	numSelectableItems = 0;
-	highlightedItem = 0;
+	highlightedItem = nullptr;
 
 	return;
 }
@@ -439,13 +427,7 @@ void Menu::Reload()
 
 void Menu::AddItem(MenuItem *item, bool isSelectable)
 {
-	// NOTE: this works for rudimentary needs, but items will not "hop" from unselectable to selectable
-	//   list, even when conditions warrant the same, without a reload of the menu
-	MenuItem::AppendToList((item->Visible() && isSelectable) ? &selectableItems : &unSelectableItems, item);
-	if (item->Visible() && isSelectable)
-	{
-		++numSelectableItems;
-	}
+	MenuItem::AppendToList((isSelectable) ? &selectableItems : &unSelectableItems, item);
 }
 
 // Append a string to the string buffer and return its index
@@ -489,10 +471,9 @@ void Menu::EncoderAction_ExecuteHelper(const char *const cmd)
 
 void Menu::EncoderAction_EnterItemHelper()
 {
-	MenuItem *const item = FindHighlightedItem();
-	if (item != nullptr)
+	if (highlightedItem != nullptr && highlightedItem->IsVisible())
 	{
-		const char *const cmd = item->Select();
+		const char *const cmd = highlightedItem->Select();
 		if (cmd != nullptr)
 		{
 			char acCurrentCommand[MaxFilenameLength + 20];
@@ -510,7 +491,7 @@ void Menu::EncoderAction_EnterItemHelper()
 			}
 			EncoderAction_ExecuteHelper(pcCurrentCommand);
 		}
-		else if (item->CanAdjust())
+		else if (highlightedItem->CanAdjust())
 		{
 			itemIsSelected = true;
 		}
@@ -523,43 +504,37 @@ void Menu::EncoderAction_AdjustItemHelper(int action)
 	// before moving on to the next selectable item at the Menu level, we let the
 	// currently selected MenuItem try to handle the scroll action itself.  It will
 	// return the remainder of the scrolling that it was unable to accommodate.
-
-	MenuItem * const oStartItem = FindHighlightedItem();
-
-	// Let the current menu item attempt to handle scroll wheel first
-	action = oStartItem->Advance(action);
+	if (highlightedItem != nullptr && highlightedItem->IsVisible())
+	{
+		// Let the current menu item attempt to handle scroll wheel first
+		action = highlightedItem->Advance(action);
+	}
 
 	if (action != 0)
 	{
 		// Otherwise we move through the remaining selectable menu items
-		highlightedItem += action;
-		while (highlightedItem < 0)
-		{
-			highlightedItem += numSelectableItems;
-		}
-		while (highlightedItem >= numSelectableItems)
-		{
-			highlightedItem -= numSelectableItems;
-		}
+		AdvanceHighlightedItem(action);
 
-		// Let the newly selected MenuItem handle any selection setup
-		MenuItem * const oNewItem = FindHighlightedItem();
-		oNewItem->Enter(action > 0);
-
-		PixelNumber tLastOffset = rowOffset;
-		rowOffset = oNewItem->GetVisibilityRowOffset(tLastOffset, lcd.GetFontHeight(oNewItem->GetFontNumber()));
-
-		if (rowOffset != tLastOffset)
+		if (highlightedItem != nullptr)
 		{
-			// We have scrolled the whole menu, so redraw it
-			lcd.Clear();
-			for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
+			// Let the newly selected MenuItem handle any selection setup
+			highlightedItem->Enter(action > 0);
+
+			PixelNumber tLastOffset = rowOffset;
+			rowOffset = highlightedItem->GetVisibilityRowOffset(tLastOffset, lcd.GetFontHeight(highlightedItem->GetFontNumber()));
+
+			if (rowOffset != tLastOffset)
 			{
-				item->SetChanged();
-			}
-			for (MenuItem *item = unSelectableItems; item != nullptr; item = item->GetNext())
-			{
-				item->SetChanged();
+				// We have scrolled the whole menu, so redraw it
+				lcd.Clear();
+				for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
+				{
+					item->SetChanged();
+				}
+				for (MenuItem *item = unSelectableItems; item != nullptr; item = item->GetNext())
+				{
+					item->SetChanged();
+				}
 			}
 		}
 	}
@@ -567,10 +542,9 @@ void Menu::EncoderAction_AdjustItemHelper(int action)
 
 void Menu::EncoderAction_ExitItemHelper(int action)
 {
-	MenuItem * const item = FindHighlightedItem();
-	if (item != nullptr)
+	if (highlightedItem != nullptr && highlightedItem->IsVisible())
 	{
-		const bool done = item->Adjust(action);
+		const bool done = highlightedItem->Adjust(action);
 		if (done)
 		{
 			itemIsSelected = false;
@@ -588,20 +562,17 @@ void Menu::EncoderAction_ExitItemHelper(int action)
 // EncoderAction is what's called in response to all wheel/button actions; a convenient place to set new timeout values
 void Menu::EncoderAction(int action)
 {
-	if (numSelectableItems != 0)
+	if (itemIsSelected) // send the wheel action (scroll or click) to the item itself
 	{
-		if (itemIsSelected) // send the wheel action (scroll or click) to the item itself
-		{
-			EncoderAction_ExitItemHelper(action);
-		}
-		else if (action != 0) // scroll without an item under selection
-		{
-			EncoderAction_AdjustItemHelper(action);
-		}
-		else // click without an item under selection
-		{
-			EncoderAction_EnterItemHelper();
-		}
+		EncoderAction_ExitItemHelper(action);
+	}
+	else if (action != 0) // scroll without an item under selection
+	{
+		EncoderAction_AdjustItemHelper(action);
+	}
+	else // click without an item under selection
+	{
+		EncoderAction_EnterItemHelper();
 	}
 
 	lastActionTime = millis();
@@ -650,7 +621,7 @@ void Menu::Refresh()
 
 	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
 	{
-		item->Draw(lcd, rightMargin, (nItemBeingDrawnIndex == highlightedItem), rowOffset);
+		item->Draw(lcd, rightMargin, (item == highlightedItem), rowOffset);
 		++nItemBeingDrawnIndex;
 	}
 
@@ -660,71 +631,75 @@ void Menu::Refresh()
 	}
 }
 
-MenuItem *Menu::FindHighlightedItem() const
+// Move the highlighted item forwards or backwards through the selectable items, setting it to nullptr if nothing is selectable
+// On entry, n is nonzero
+void Menu::AdvanceHighlightedItem(int n)
 {
-	MenuItem *p = selectableItems;
-	for (int n = highlightedItem; n > 0 && p != nullptr; --n)
+	if (highlightedItem == nullptr)
 	{
-		p = p->GetNext();
+		// No item is selected, so pick the first selectable item
+		highlightedItem = FindNextSelectableItem(nullptr);
 	}
-	return p;
+	else if (n > 0)
+	{
+		for (;;)
+		{
+			MenuItem * const p = FindNextSelectableItem(highlightedItem);
+			if (n == 0 || p == nullptr || p == highlightedItem)
+			{
+				highlightedItem = p;
+				return;
+			}
+			--n;
+		}
+	}
+	else
+	{
+		for (;;)
+		{
+			MenuItem * const p = FindPrevSelectableItem(highlightedItem);
+			if (n == 0 || p == nullptr || p == highlightedItem)
+			{
+				highlightedItem = p;
+				return;
+			}
+			++n;
+		}
+	}
 }
 
-bool Menu::CheckVisibility(MenuItem::Visibility xVis)
+// FiNd the next selectable item, or the first one if nullptr is passed in
+MenuItem *Menu::FindNextSelectableItem(MenuItem *p) const
 {
-	bool bVisible = false;
-
-	switch (xVis)
+	MenuItem *current = (p == nullptr) ? p : p->GetNext();		// set search start point
+	do
 	{
-	case 0:
-		bVisible = true;
-		break;
+		if (current == nullptr)
+		{
+			current = selectableItems;
+		}
+		if (current == nullptr || current->IsVisible())
+		{
+			return current;
+		}
+		current = current->GetNext();
+	} while (current != p);
+	return (current != nullptr && current->IsVisible()) ? current : nullptr;
+}
 
-	case 2:
-		bVisible = reprap.GetGCodes().IsReallyPrinting();
-		break;
-
-	case 3:
-		bVisible = !reprap.GetGCodes().IsReallyPrinting();
-		break;
-
-	case 4:
-		bVisible = reprap.GetPrintMonitor().IsPrinting();
-		break;
-
-	case 5:
-		bVisible = !reprap.GetPrintMonitor().IsPrinting();
-		break;
-
-	case 6:
-		bVisible = reprap.GetGCodes().IsPaused() || reprap.GetGCodes().IsPausing();
-		break;
-
-	case 7:
-		bVisible = reprap.GetGCodes().IsReallyPrinting() || reprap.GetGCodes().IsResuming();
-		break;
-
-	case 10:
-		bVisible = reprap.GetPlatform().GetMassStorage()->IsDriveMounted(0);
-		break;
-
-	case 11:
-		bVisible = !reprap.GetPlatform().GetMassStorage()->IsDriveMounted(0);
-		break;
-
-	case 20:
-		bVisible = reprap.GetCurrentOrDefaultTool()->HasTemperatureFault();
-		break;
-
-	case 28:
-		bVisible = (Heat::HS_fault == reprap.GetHeat().GetStatus(reprap.GetHeat().GetBedHeater(0)));
-		break;
-
-	default:
-		break;
+MenuItem *Menu::FindPrevSelectableItem(MenuItem *p) const
+{
+	MenuItem *current = FindNextSelectableItem(nullptr);		// get first selectable item
+	while (current != nullptr)
+	{
+		MenuItem * const n = FindNextSelectableItem(current);
+		if (n == p)
+		{
+			break;
+		}
+		current = n;
 	}
-
-	return bVisible;
+	return current;
 }
 
 // End

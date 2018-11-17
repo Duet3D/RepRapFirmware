@@ -831,6 +831,18 @@ bool GCodeBuffer::TryGetUIValue(char c, uint32_t& val, bool& seen)
 	return ret;
 }
 
+// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
+bool GCodeBuffer::TryGetUIValueMaybeHex(char c, uint32_t& val, bool& seen)
+{
+	const bool ret = Seen(c);
+	if (ret)
+	{
+		val = GetUIValueMaybeHex();
+		seen = true;
+	}
+	return ret;
+}
+
 // If the specified parameter character is found, fetch 'value' as a Boolean and set 'seen'. Otherwise leave val and seen alone.
 bool GCodeBuffer::TryGetBValue(char c, bool& val, bool& seen)
 {

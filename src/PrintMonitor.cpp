@@ -125,36 +125,34 @@ void PrintMonitor::Spin()
 				warmUpDuration += (millis64() - heatingStartedTime) * MillisToSeconds;
 			}
 
-			if (!gCodes.DoingFileMacro() && reprap.GetMove().IsExtruding())
+			float currentZ;
+			if (gCodes.GetLastPrintingHeight(currentZ))
 			{
 				// Print is in progress and filament is being extruded
-				float liveCoordinates[MaxTotalDrivers];
-				reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-
 				if (currentLayer == 0)
 				{
 					currentLayer = 1;
 
 					// See if we need to determine the first layer height (usually smaller than the nozzle diameter)
-					if (printingFileInfo.firstLayerHeight == 0.0 && liveCoordinates[Z_AXIS] < platform.GetNozzleDiameter() * 1.5)
+					if (printingFileInfo.firstLayerHeight == 0.0 && currentZ < platform.GetNozzleDiameter() * 1.5)
 					{
-						printingFileInfo.firstLayerHeight = liveCoordinates[Z_AXIS];
+						printingFileInfo.firstLayerHeight = currentZ;
 					}
 				}
 				else if (currentLayer == 1)
 				{
 					// Check if we've finished the first layer
-					if (liveCoordinates[Z_AXIS] > printingFileInfo.firstLayerHeight + LAYER_HEIGHT_TOLERANCE)
+					if (currentZ > printingFileInfo.firstLayerHeight + LAYER_HEIGHT_TOLERANCE)
 					{
 						FirstLayerComplete();
 						currentLayer++;
 
-						lastLayerZ = liveCoordinates[Z_AXIS];
+						lastLayerZ = currentZ;
 						lastLayerChangeTime = GetPrintDuration();
 					}
 				}
 				// Else check for following layer changes
-				else if (liveCoordinates[Z_AXIS] > lastLayerZ + LAYER_HEIGHT_TOLERANCE)
+				else if (currentZ > lastLayerZ + LAYER_HEIGHT_TOLERANCE)
 				{
 					LayerComplete();
 					currentLayer++;
@@ -162,7 +160,7 @@ void PrintMonitor::Spin()
 					// If we know the layer height, compute what the current layer height should be. This is to handle slicers that use a different layer height for support.
 					lastLayerZ = (printingFileInfo.layerHeight > 0.0)
 									? printingFileInfo.firstLayerHeight + (currentLayer - 1) * printingFileInfo.layerHeight
-										: liveCoordinates[Z_AXIS];
+										: currentZ;
 					lastLayerChangeTime = GetPrintDuration();
 				}
 			}

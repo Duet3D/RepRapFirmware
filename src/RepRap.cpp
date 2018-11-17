@@ -240,6 +240,23 @@ void RepRap::Init()
 #if SUPPORT_12864_LCD
 	display->Init();
 #endif
+
+	// Set up the timeout of the regular watchdog, and set up the backup watchdog if there is one
+#if __LPC17xx__
+	wdt_init(1); // set wdt to 1 second. reset the processor on a watchdog fault
+#else
+	// The clock frequency for both watchdogs is 32768/128 = 256Hz
+	const uint16_t timeout = 32768/128;												// set watchdog timeout to 1 second (max allowed value is 4095 = 16 seconds)
+	wdt_init(WDT, WDT_MR_WDRSTEN, timeout, timeout);								// reset the processor on a watchdog fault
+#endif
+
+#if SAM4E || SAME70
+	// The RSWDT must be initialised *after* the main WDT
+	const uint16_t rsTimeout = 16384/128;											// set secondary watchdog timeout to 0.5 second (max allowed value is 4095 = 16 seconds)
+	rswdt_init(RSWDT, RSWDT_MR_WDFIEN, rsTimeout, rsTimeout);						// generate an interrupt on a watchdog fault
+	NVIC_EnableIRQ(WDT_IRQn);														// enable the watchdog interrupt
+#endif
+
 	active = true;						// must do this before we start the network or call Spin(), else the watchdog may time out
 
 	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
@@ -307,10 +324,6 @@ void RepRap::Init()
 # endif
 #endif
 	platform->MessageF(UsbMessage, "%s is up and running.\n", FIRMWARE_NAME);
-
-#if SUPPORT_12864_LCD
-	display->Start();
-#endif
 
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;

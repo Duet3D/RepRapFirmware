@@ -106,7 +106,7 @@ enum class StopPrintReason
 // The GCode interpreter
 
 class GCodes INHERIT_OBJECT_MODEL
-{   
+{
 public:
 	struct RawMove
 	{
@@ -133,7 +133,7 @@ public:
 
 		void SetDefaults();												// set up default values
 	};
-  
+
 	GCodes(Platform& p);
 	void Spin();														// Called in a tight loop to make this class work
 	void Init();														// Set it up
@@ -228,6 +228,7 @@ public:
 	void SetMappedFanSpeed(float f);									// Set the mapped fan speed
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);	// Handle G-Code replies
 	void EmergencyStop();												// Cancel everything
+	bool GetLastPrintingHeight(float& height) const;					// Get the height in user coordinates of the last printing move
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -310,10 +311,11 @@ private:
 	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute);	// Set workspace coordinates
 #endif
 
-	bool SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply);			// Configure heater protection (M143). Returns true if an error occurred
+	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply);	// Configure heater protection (M143)
 	void SetPidParameters(GCodeBuffer& gb, int heater, const StringRef& reply); // Set the P/I/D parameters for a heater
-	GCodeResult SetHeaterParameters(GCodeBuffer& gb, const StringRef& reply);	// Set the thermistor and ADC parameters for a heater, returning true if an error occurs
-	bool ManageTool(GCodeBuffer& gb, const StringRef& reply);					// Create a new tool definition, returning true if an error was reported
+	GCodeResult SetHeaterParameters(GCodeBuffer& gb, const StringRef& reply);	// Set the thermistor and ADC parameters for a heater
+	GCodeResult SetHeaterModel(GCodeBuffer& gb, const StringRef& reply);		// Set the heater model
+	GCodeResult ManageTool(GCodeBuffer& gb, const StringRef& reply);			// Create a new tool definition
 	void SetToolHeaters(Tool *tool, float temperature, bool both);				// Set all a tool's heaters to the temperature, for M104/M109
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance) const;
 																				// Wait for the heaters associated with the specified tool to reach their set temperatures
@@ -426,6 +428,7 @@ private:
 	bool active;								// Live and running?
 	bool isPaused;								// true if the print has been paused manually or automatically
 	bool pausePending;							// true if we have been asked to pause but we are running a macro
+	bool filamentChangePausePending;			// true if we have been asked to pause for a filament change but we are running a macro
 	bool runningConfigFile;						// We are running config.g during the startup process
 	bool doingToolChange;						// We are running tool change macros
 
@@ -436,6 +439,7 @@ private:
 
 	float currentUserPosition[MaxAxes];			// The current position of the axes as commanded by the input gcode, before accounting for tool offset and Z hop
 	float currentZHop;							// The amount of Z hop that is currently applied
+	float lastPrintingMoveHeight;				// the Z coordinate in the last printing move, or a negative value if we don't know it
 
 	// The following contain the details of moves that the Move module fetches
 	// CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!

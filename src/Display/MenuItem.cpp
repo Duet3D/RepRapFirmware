@@ -14,9 +14,10 @@
 #include "Display.h"
 #include "Tools/Tool.h"
 #include "Networking/Network.h"
+#include "PrintMonitor.h"
 
-MenuItem::MenuItem(PixelNumber r, PixelNumber c, FontNumber fn)
-	: row(r), column(c), fontNumber(fn), itemChanged(true), highlighted(false), next(nullptr)
+MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis)
+	: row(r), column(c), width(w), fontNumber(fn), visCase(vis), itemChanged(true), highlighted(false), next(nullptr)
 {
 }
 
@@ -30,56 +31,93 @@ MenuItem::MenuItem(PixelNumber r, PixelNumber c, FontNumber fn)
 	*root = item;
 }
 
-TextMenuItem::TextMenuItem(PixelNumber r, PixelNumber c, FontNumber fn, Visibility xVis, CheckFunction bF, const char* t)
-	: MenuItem(r, c, fn), text(t), m_xVisCase(xVis), m_bF(bF)
+bool MenuItem::IsVisible() const
 {
+	switch (visCase)
+	{
+	default:
+	case 0:		return true;
+	case 2:		return reprap.GetGCodes().IsReallyPrinting();
+	case 3:		return !reprap.GetGCodes().IsReallyPrinting();
+	case 4:		return reprap.GetPrintMonitor().IsPrinting();
+	case 5:		return !reprap.GetPrintMonitor().IsPrinting();
+	case 6:		return reprap.GetGCodes().IsPaused() || reprap.GetGCodes().IsPausing();
+	case 7:		return reprap.GetGCodes().IsReallyPrinting() || reprap.GetGCodes().IsResuming();
+	case 10:	return reprap.GetPlatform().GetMassStorage()->IsDriveMounted(0);
+	case 11:	return !reprap.GetPlatform().GetMassStorage()->IsDriveMounted(0);
+	case 20:	return reprap.GetCurrentOrDefaultTool()->HasTemperatureFault();
+	case 28:	return reprap.GetHeat().GetStatus(reprap.GetHeat().GetBedHeater(0)) == Heat::HS_fault;
+	}
 }
 
-bool TextMenuItem::Visible() const
+TextMenuItem::TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char* t)
+	: MenuItem(r, c, w, fn, vis), text(t)
 {
-	return m_bF(m_xVisCase);
 }
 
 void TextMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
 {
 	// We ignore the 'highlight' parameter because text items are not selectable
-	if (Visible() && itemChanged)
+	if (IsVisible() && itemChanged)
 	{
 		lcd.SetFont(fontNumber);
 		lcd.SetCursor(row - tOffset, column);
-		lcd.SetRightMargin(rightMargin);
+		lcd.SetRightMargin(min<PixelNumber>(rightMargin, column + width));
 		lcd.TextInvert(false);
 		lcd.print(text);
+		lcd.ClearToMargin();
 		itemChanged = false;
 	}
 }
 
-ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, FontNumber fn, Visibility xVis, CheckFunction bF, const char* t, const char* cmd, char const* acFile)
-	: MenuItem(r, c, fn), text(t), command(cmd), m_acFile(acFile), m_xVisCase(xVis), m_bF(bF)
+void TextMenuItem::UpdateWidth(Lcd7920& lcd, PixelNumber offScreenRow, PixelNumber numCols)
+{
+	if (width == 0)
+	{
+		lcd.SetFont(fontNumber);
+		lcd.SetCursor(offScreenRow, 0);
+		lcd.SetRightMargin(numCols);
+		lcd.TextInvert(false);
+		lcd.print(text);
+		width = lcd.GetColumn();
+	}
+}
+
+ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char* t, const char* cmd, char const* acFile)
+	: MenuItem(r, c, w, fn, vis), text(t), command(cmd), m_acFile(acFile)
 {
 	m_acCommand[0] = '\0';
 }
 
-bool ButtonMenuItem::Visible() const
-{
-	return m_bF(m_xVisCase);
-}
-
 void ButtonMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
 {
-	if (Visible() && (itemChanged || highlight != highlighted) && column < NumCols)
+	if (IsVisible() && (itemChanged || highlight != highlighted) && column < NumCols)
 	{
 		lcd.SetFont(fontNumber);
 		lcd.SetCursor(row - tOffset, column);
-		lcd.SetRightMargin(rightMargin);
-
+		lcd.SetRightMargin(min<PixelNumber>(rightMargin, column + width));
 		lcd.TextInvert(highlight);
-		lcd.print(text); // TODO: create Print(char[], bool) to combine these two lines
-
-		lcd.TextInvert(false);
+		lcd.WriteSpaces(1);				// space at start in case highlighted
+		lcd.print(text);
 		lcd.ClearToMargin();
+		lcd.TextInvert(false);
 		itemChanged = false;
 		highlighted = highlight;
+	}
+}
+
+void ButtonMenuItem::UpdateWidth(Lcd7920& lcd, PixelNumber offScreenRow, PixelNumber numCols)
+{
+	if (width == 0)
+	{
+		lcd.SetFont(fontNumber);
+		lcd.SetCursor(offScreenRow, 0);
+		lcd.SetRightMargin(numCols);
+		lcd.TextInvert(false);
+		lcd.WriteSpaces(1);				// space at start to allow for highlighting
+		lcd.print(text);
+		lcd.WriteSpaces(1);				// space at end to allow for highlighting
+		width = lcd.GetColumn();
 	}
 }
 
@@ -88,7 +126,7 @@ void ButtonMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight,
 // NOTE: menu names must not begin with 'G', 'M' or 'T'
 const char* ButtonMenuItem::Select()
 {
-	const int nReplacementIndex = StringContains(command, "menu");
+	const int nReplacementIndex = StringContains(command, "#0");
 	if (-1 != nReplacementIndex)
 	{
 		m_acCommand.copy(command, nReplacementIndex);
@@ -121,14 +159,13 @@ PixelNumber ButtonMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, P
 	return tOffsetRequest;
 }
 
-ValueMenuItem::ValueMenuItem(PixelNumber r, PixelNumber c, FontNumber fn, PixelNumber w, unsigned int v, unsigned int d)
-	: MenuItem(r, c, fn), valIndex(v), currentValue(0.0), width(w), decimals(d), adjusting(false)
+ValueMenuItem::ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, bool adj, unsigned int v, unsigned int d)
+	: MenuItem(r, c, ((w != 0) ? w : DefaultWidth), fn, vis), valIndex(v), currentValue(0.0), decimals(d), adjustable(adj), adjusting(false)
 {
 }
 
 void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
 {
-	lcd.SetFont(fontNumber);
 	bool error = false;
 	if (!adjusting)
 	{
@@ -251,9 +288,14 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 
 	if (itemChanged || (highlight != highlighted))
 	{
+		lcd.SetFont(fontNumber);
 		lcd.SetCursor(row - tOffset, column);
 		lcd.SetRightMargin(min<PixelNumber>(column + width, rightMargin));
 		lcd.TextInvert(highlight);
+		if (adjustable)
+		{
+			lcd.WriteSpaces(1);
+		}
 
 		if (error)
 		{
@@ -468,8 +510,8 @@ bool ValueMenuItem::Adjust(int clicks)
 	return Adjust_AlterHelper(clicks);
 }
 
-FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, FontNumber fn, const char *cmd, const char *dir, const char *acFile, unsigned int nf)
-	: MenuItem(r, c, fn), numDisplayLines(nf), command(cmd), initialDirectory(dir), m_acFile(acFile),
+FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *cmd, const char *dir, const char *acFile, unsigned int nf)
+	: MenuItem(r, c, w, fn, vis), numDisplayLines(nf), command(cmd), initialDirectory(dir), m_acFile(acFile),
         m_uListingFirstVisibleIndex(0), m_uListingSelectedIndex(0), m_oMS(reprap.GetPlatform().GetMassStorage())
 {
 	// There's no guarantee that initialDirectory has a trailing '/'
@@ -774,15 +816,14 @@ PixelNumber FilesMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, Pi
 // Byte 0 = number of columns
 // Byte 1 = number of rows
 // Remaining bytes = data, 1 row at a time. If the number of columns is not a multiple of 8 then the data for each row is padded to a multiple of 8 bits.
-ImageMenuItem::ImageMenuItem(PixelNumber r, PixelNumber c, const char *pFileName)
-	: MenuItem(r, c, 0)
+ImageMenuItem::ImageMenuItem(PixelNumber r, PixelNumber c, Visibility vis, const char *pFileName)
+	: MenuItem(r, c, 0, 0, vis)
 {
 	fileName.copy(pFileName);
 }
 
 void ImageMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
 {
-	// Highlighting is ignored for this item type because it can't be selected
 	if (itemChanged || highlight != highlighted)
 	{
 		FileStore * const fs = reprap.GetPlatform().OpenFile(MENU_DIR, fileName.c_str(), OpenMode::read);
@@ -795,7 +836,6 @@ void ImageMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 				const PixelNumber rows = widthAndHeight[1];
 				if (cols != 0 && cols <= NumCols && rows != 0)
 				{
-					lcd.SetRightMargin(rightMargin);
 					const size_t bytesPerRow = (cols + 7)/8;
 					for (PixelNumber irow = 0; irow < rows; ++irow)
 					{
@@ -816,17 +856,19 @@ void ImageMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 	}
 }
 
-PixelNumber ImageMenuItem::GetWidth() const
+void ImageMenuItem::UpdateWidth(Lcd7920& lcd, PixelNumber offScreenRow, PixelNumber numCols)
 {
-	FileStore * const fs = reprap.GetPlatform().OpenFile(MENU_DIR, fileName.c_str(), OpenMode::read);
-	if (fs == nullptr)
+	if (width == 0)
 	{
-		return 0;
+		FileStore * const fs = reprap.GetPlatform().OpenFile(MENU_DIR, fileName.c_str(), OpenMode::read);
+		if (fs != nullptr)
+		{
+			uint8_t w;
+			fs->Read(w);			// read the number of columns
+			fs->Close();
+			width = w;
+		}
 	}
-	uint8_t width;
-	fs->Read(width);			// read the number of columns
-	fs->Close();
-	return width;
 }
 
 // End

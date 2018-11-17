@@ -31,6 +31,7 @@ constexpr unsigned int MainTaskStackWords = 2040;
 
 static Task<MainTaskStackWords> mainTask;
 static Mutex spiMutex;
+static Mutex i2cMutex;
 static Mutex mallocMutex;
 
 extern "C" void MainTask(void * pvParameters);
@@ -97,6 +98,7 @@ extern "C" void MainTask(void *pvParameters)
 {
 	mallocMutex.Create("Malloc");
 	spiMutex.Create("SPI");
+	i2cMutex.Create("I2C");
 #endif
 	reprap.Init();
 	for (;;)
@@ -223,6 +225,15 @@ namespace Tasks
 	{
 #ifdef RTOS
 		return &spiMutex;
+#else
+		return nullptr;
+#endif
+	}
+
+	const Mutex *GetI2CMutex()
+	{
+#ifdef RTOS
+		return &i2cMutex;
 #else
 		return nullptr;
 #endif

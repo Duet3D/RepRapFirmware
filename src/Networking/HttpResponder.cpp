@@ -8,7 +8,6 @@
 #include "HttpResponder.h"
 #include "Socket.h"
 #include "GCodes/GCodes.h"
-#include "PrintMonitor.h"
 #include "General/IP4String.h"
 
 #define KO_START "rr_"
@@ -628,15 +627,15 @@ bool HttpResponder::SendFileInfo(bool quitEarly)
 	if (gotFileInfo)
 	{
 		// Got it - send the response now
-		outBuf->copy(	"HTTP/1.1 200 OK\n"
-						"Cache-Control: no-cache, no-store, must-revalidate\n"
-						"Pragma: no-cache\n"
-						"Expires: 0\n"
-						"Access-Control-Allow-Origin: *\n"
-						"Content-Type: application/json\n"
+		outBuf->copy(	"HTTP/1.1 200 OK\r\n"
+						"Cache-Control: no-cache, no-store, must-revalidate\r\n"
+						"Pragma: no-cache\r\n"
+						"Expires: 0\r\n"
+						"Access-Control-Allow-Origin: *\r\n"
+						"Content-Type: application/json\r\n"
 					);
-		outBuf->catf("Content-Length: %u\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
-		outBuf->cat("Connection: close\n\n");
+		outBuf->catf("Content-Length: %u\r\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
+		outBuf->cat("Connection: close\r\n\r\n");
 		outBuf->Append(jsonResponse);
 		if (outBuf->HadOverflow())
 		{
@@ -755,7 +754,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 
 		if (fileToSend == nullptr)
 		{
-			RejectMessage("page not found", 404);
+			RejectMessage("page not found<br>Check that the SD card is mounted and has the correct files in its /www folder", 404);
 			return;
 		}
 		fileBeingSent = fileToSend;
@@ -771,15 +770,15 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 		fileBeingSent = fileToSend;
 	}
 
-	outBuf->copy("HTTP/1.1 200 OK\n");
+	outBuf->copy("HTTP/1.1 200 OK\r\n");
 
 	// Don't cache files served by rr_download
 	if (!isWebFile)
 	{
-		outBuf->cat(	"Cache-Control: no-cache, no-store, must-revalidate\n"
-						"Pragma: no-cache\n"
-						"Expires: 0\n"
-						"Access-Control-Allow-Origin: *\n"
+		outBuf->cat(	"Cache-Control: no-cache, no-store, must-revalidate\r\n"
+						"Pragma: no-cache\r\n"
+						"Expires: 0\r\n"
+						"Access-Control-Allow-Origin: *\r\n"
 					);
 	}
 
@@ -817,15 +816,15 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 	{
 		contentType = "application/octet-stream";
 	}
-	outBuf->catf("Content-Type: %s\n", contentType);
+	outBuf->catf("Content-Type: %s\r\n", contentType);
 
 	if (zip && fileToSend != nullptr)
 	{
-		outBuf->cat("Content-Encoding: gzip\n");
-		outBuf->catf("Content-Length: %lu\n", fileToSend->Length());
+		outBuf->cat("Content-Encoding: gzip\r\n");
+		outBuf->catf("Content-Length: %lu\r\n", fileToSend->Length());
 	}
 
-	outBuf->cat("Connection: close\n\n");
+	outBuf->cat("Connection: close\r\n\r\n");
 	Commit();
 }
 
@@ -858,15 +857,15 @@ void HttpResponder::SendGCodeReply()
 		}
 
 		// Send the whole G-Code reply as plain text to the client
-		outBuf->copy(	"HTTP/1.1 200 OK\n"
-						"Cache-Control: no-cache, no-store, must-revalidate\n"
-						"Pragma: no-cache\n"
-						"Expires: 0\n"
-						"Access-Control-Allow-Origin: *\n"
-						"Content-Type: text/plain\n"
+		outBuf->copy(	"HTTP/1.1 200 OK\r\n"
+						"Cache-Control: no-cache, no-store, must-revalidate\r\n"
+						"Pragma: no-cache\r\n"
+						"Expires: 0\r\n"
+						"Access-Control-Allow-Origin: *\r\n"
+						"Content-Type: text/plain\r\n"
 					);
-		outBuf->catf("Content-Length: %u\n", gcodeReply.DataLength());
-		outBuf->cat("Connection: close\n\n");
+		outBuf->catf("Content-Length: %u\r\n", gcodeReply.DataLength());
+		outBuf->cat("Connection: close\r\n\r\n");
 		outStack.Append(gcodeReply);
 
 		// Possibly clean up the G-code reply once again
@@ -973,16 +972,16 @@ void HttpResponder::SendJsonResponse(const char* command)
 	// so other tasks may allocate buffers meanwhile, and the previous mechanism for ensuring that there is sufficient
 	// buffer space remaining don't work.
 	// This response is currently about 230 bytes long in the worst case.
-	outBuf->copy(	"HTTP/1.1 200 OK\n"
-					"Cache-Control: no-cache, no-store, must-revalidate\n"
-					"Pragma: no-cache\n"
-					"Expires: 0\n"
-					"Access-Control-Allow-Origin: *\n"
-					"Content-Type: application/json\n"
+	outBuf->copy(	"HTTP/1.1 200 OK\r\n"
+					"Cache-Control: no-cache, no-store, must-revalidate\r\n"
+					"Pragma: no-cache\r\n"
+					"Expires: 0\r\n"
+					"Access-Control-Allow-Origin: *\r\n"
+					"Content-Type: application/json\r\n"
 				);
 	const unsigned int replyLength = (jsonResponse != nullptr) ? jsonResponse->Length() : 0;
-	outBuf->catf("Content-Length: %u\n", replyLength);
-	outBuf->catf("Connection: %s\n\n", keepOpen ? "keep-alive" : "close");
+	outBuf->catf("Content-Length: %u\r\n", replyLength);
+	outBuf->catf("Connection: %s\r\n\r\n", keepOpen ? "keep-alive" : "close");
 	outBuf->Append(jsonResponse);
 
 	if (outBuf->HadOverflow())
@@ -1068,15 +1067,15 @@ void HttpResponder::ProcessRequest()
 
 		if (StringEquals(commandWords[0], "OPTIONS"))
 		{
-			outBuf->copy(	"HTTP/1.1 200 OK\n"
-							"Allow: OPTIONS, GET, POST\n"
-							"Cache-Control: no-cache, no-store, must-revalidate\n"
-							"Pragma: no-cache\n"
-							"Expires: 0\n"
-							"Access-Control-Allow-Origin: *\n"
-							"Access-Control-Allow-Headers: Content-Type\n"
-							"Content-Length: 0\n"
-							"\n"
+			outBuf->copy(	"HTTP/1.1 200 OK\r\n"
+							"Allow: OPTIONS, GET, POST\r\n"
+							"Cache-Control: no-cache, no-store, must-revalidate\r\n"
+							"Pragma: no-cache\r\n"
+							"Expires: 0\r\n"
+							"Access-Control-Allow-Origin: *\r\n"
+							"Access-Control-Allow-Headers: Content-Type\r\n"
+							"Content-Length: 0\r\n"
+							"\r\n"
 						);
 			if (outBuf->HadOverflow())
 			{
@@ -1193,7 +1192,7 @@ void HttpResponder::RejectMessage(const char* response, unsigned int code)
 
 	if (outBuf != nullptr || OutputBuffer::Allocate(outBuf))
 	{
-		outBuf->printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
+		outBuf->printf("HTTP/1.1 %u %s\r\nConnection: close\r\n\r\n", code, response);
 		outBuf->catf("%s%s%s", ErrorPagePart1, response, ErrorPagePart2);
 		Commit();
 	}

@@ -105,7 +105,7 @@ void Network::Init()
 		responders = new HttpResponder(responders);
 	}
 
-	strcpy(hostname, DEFAULT_HOSTNAME);
+	SafeStrncpy(hostname, DEFAULT_HOSTNAME, ARRAY_SIZE(hostname));
 
 	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
 

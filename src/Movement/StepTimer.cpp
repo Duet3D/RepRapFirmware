@@ -114,7 +114,7 @@ namespace StepTimer
 #ifdef MOVE_DEBUG
 			++numInterruptsScheduled;
 			nextInterruptTime = tim;
-			nextInterruptScheduledAt = StepTimer::GetInterruptClocks();
+			nextInterruptScheduledAt = GetInterruptClocks();
 #endif
 		return false;
 	}
@@ -136,7 +136,7 @@ namespace StepTimer
 	bool ScheduleSoftTimerInterrupt(uint32_t tim)
 	{
 		const irqflags_t flags = cpu_irq_save();
-		const int32_t diff = (int32_t)(tim - StepTimer::GetInterruptClocksInterruptsDisabled());	// see how long we have to go
+		const int32_t diff = (int32_t)(tim - GetInterruptClocksInterruptsDisabled());	// see how long we have to go
 		if (diff < (int32_t)DDA::MinInterruptInterval)					// if less than about 6us or already passed
 		{
 			cpu_irq_restore(flags);
@@ -205,7 +205,7 @@ void STEP_TC_HANDLER()
 			stepTimerPendingStatus &= ~TC_SR_CPAS;
 #ifdef MOVE_DEBUG
 			++numInterruptsExecuted;
-			lastInterruptTime = Platform::GetInterruptClocks();
+			lastInterruptTime = GetInterruptClocks();
 #endif
 			reprap.GetMove().Interrupt();							// execute the step interrupt
 		}
@@ -230,7 +230,7 @@ void STEP_TC_HANDLER()
 
 # ifdef MOVE_DEBUG
         ++numInterruptsExecuted;
-        lastInterruptTime = Platform::GetInterruptClocks();
+        lastInterruptTime = GetInterruptClocks();
 # endif
 		reprap.GetMove().Interrupt();                                // execute the step interrupt
 	}
@@ -255,7 +255,7 @@ void STEP_TC_HANDLER()
 		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;		// disable the interrupt
 #ifdef MOVE_DEBUG
 		++numInterruptsExecuted;
-		lastInterruptTime = Platform::GetInterruptClocks();
+		lastInterruptTime = GetInterruptClocks();
 #endif
 		reprap.GetMove().Interrupt();								// execute the step interrupt
 	}

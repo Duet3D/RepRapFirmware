@@ -78,6 +78,9 @@ constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper driv
 constexpr size_t NUM_SERIAL_CHANNELS = 1;			// The number of serial IO channels (USB only)
 #define SERIAL_MAIN_DEVICE SerialUSB
 
+// SerialUSB
+constexpr Pin UsbVBusPin = 47;						// Pin used to monitor VBUS on USB port
+
 #define I2C_IFACE	Wire							// First and only I2C interface
 #define I2C_IRQn	WIRE_ISR_ID
 
