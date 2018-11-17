@@ -66,9 +66,6 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 				thetaL = theta[5];
 			}
 		}
-		else {
-			// unsupported workmode => TODO error log or exception
-		}
 
 		// calculate x1,y1, i.e. where the distal arms meet
 		float fraction = distalL / (distalL + cantL);
@@ -95,9 +92,6 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 				thetaR = theta[5];
 			}
 		}
-		else {
-			// unsupported workmode => TODO error log or exception
-		}
 	}
 	else if(isCantilevered(2)) {
 		// calculate cantilevered side first:
@@ -119,9 +113,6 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 				yR = theta[4];
 				thetaR = theta[5];
 			}
-		}
-		else {
-			// unsupported workmode => TODO error log or exception
 		}
 
 		// calculate x1,y1, i.e. where the distal arms meet
@@ -149,66 +140,59 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 				thetaL = theta[5];
 			}
 		}
-		else {
-			// unsupported workmode => TODO error log or exception
-		}
 	}
 	else {	// not cantilevered, hotend is at top joint
 		float *theta = getTheta(proximalL, distalL, xOrigL, yOrigL, x_0, y_0);
 		x1 = x_0;
 		y1 = y_0;
-		float thetaL1 = theta[2];
-		float thetaL2 = theta[5];
 		if(workmode == 1) {
-			if(thetaL1 <= thetaL2) {	// take smaller angle
+			if(theta[2] <= theta[5]) {	// take smaller angle
 				xL = theta[0];
 				yL = theta[1];
-				thetaL = thetaL1;
+				thetaL = theta[2];
 			}
 			else {
 				xL = theta[3];
 				yL = theta[4];
-				thetaL = thetaL2;
+				thetaL = theta[5];
 			}
 		}
 		else if(workmode == 2 || workmode == 4) {	// take bigger angle
-			if(thetaL1 <= thetaL2) {
+			if(theta[2] <= theta[5]) {
 				xL = theta[3];
 				yL = theta[4];
-				thetaL = thetaL2;
+				thetaL = theta[5];
 			}
 			else {
 				xL = theta[0];
 				yL = theta[1];
-				thetaL = thetaL1;
+				thetaL = theta[2];
 			}
 		}
 
 		theta = getTheta(proximalR, distalR, xOrigR, yOrigR, x_0, y_0);
-		float thetaR1 = theta[2];
-		float thetaR2 = theta[5];
 		if(workmode == 1 || workmode == 2) {		// take smaller angle
-			if(thetaR1 <= thetaR2) {
+			if(theta[2] <= theta[5]) {
 				xR = theta[0];
 				yR = theta[1];
-				thetaR = thetaR1;
+				thetaR = theta[2];
 			}
 			else {
 				xR = theta[3];
 				yR = theta[4];
-				thetaR = thetaR2;
+				thetaR = theta[5];
 			}
 		}
 		else if(workmode == 4) {		// take bigger angle
-			if(thetaR1 <= thetaR2) {
+			if(theta[2] <= theta[5]) {
 				xR = theta[3];
 				yR = theta[4];
-				thetaR = thetaR2;
+				thetaR = theta[5];
 			}
 			else {
 				xR = theta[0];
 				yR = theta[1];
-				thetaR = thetaR1;
+				thetaR = theta[2];
 			}
 		}
 	}
@@ -395,9 +379,6 @@ float * FiveBarScaraKinematics::getForward(float thetaL, float thetaR) const
 			y_0 = dest[3];
 		}
 	}
-	else {
-		// TODO error log or exception unsupported workmode
-	}
 
 	result[0] = xL;
 	result[1] = yL;
@@ -521,6 +502,10 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 			long wm = 0L;
 			gb.TryGetIValue('L', wm, seen);
 			workmode = (int) wm;
+			if(!(workmode == 1 || workmode == 2 || workmode == 4)) {
+				error = true;
+				return true;
+			}
 		}
 		else {
 			workmode = 1;	// default
@@ -755,6 +740,14 @@ bool FiveBarScaraKinematics::IsReachable(float x, float y, bool isCoordinated) c
 // Return the initial Cartesian coordinates we assume after switching to this kinematics
 void FiveBarScaraKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const
 {
+	//positions[X_AXIS] = maxRadius - xOffset;
+	positions[X_AXIS] = 0.0;
+	//positions[Y_AXIS] = -yOffset;
+	positions[Y_AXIS] = 0.0;
+	for (size_t i = Z_AXIS; i < numAxes; ++i)
+	{
+		positions[i] = 0.0;
+	}
 }
 
 // Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
@@ -859,12 +852,13 @@ void FiveBarScaraKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *no
 bool FiveBarScaraKinematics::IsContinuousRotationAxis(size_t axis) const
 {
 	//return axis < 2 && supportsContinuousRotation[axis];
-	return axis < 2;
+	return false;
 }
 
 // Recalculate the derived parameters
 void FiveBarScaraKinematics::Recalc()
 {
+	// no optimizations yet
 }
 
 // End
