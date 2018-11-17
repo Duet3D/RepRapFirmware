@@ -2336,7 +2336,7 @@ void Platform::Diagnostics(MessageType mtype)
 #endif
 
 #ifdef I2C_IFACE
-	const TwoWireErrors errs = I2C_IFACE.GetErrorCounts(true);
+	const TwoWire::ErrorCounts errs = I2C_IFACE.GetErrorCounts(true);
 	MessageF(mtype, "I2C nak errors %" PRIu32 ", send timeouts %" PRIu32 ", receive timeouts %" PRIu32 ", finishTimeouts %" PRIu32 "\n",
 		errs.naks, errs.sendTimeouts, errs.recvTimeouts, errs.finishTimeouts);
 #endif
@@ -4640,10 +4640,6 @@ uint32_t Platform::Random()
 
 void Platform::Tick()
 {
-#if SAM4E || SAME70
-	rswdt_restart(RSWDT);							// kick the secondary watchdog (the primary one is kicked in CoreNG)
-#endif
-
 #if HAS_VOLTAGE_MONITOR
 	if (tickState != 0)
 	{

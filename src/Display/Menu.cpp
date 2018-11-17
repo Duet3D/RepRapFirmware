@@ -81,7 +81,8 @@ const uint32_t ErrorTimeout = 6000;				// how long we display an error message f
 Menu::Menu(Lcd7920& refLcd)
 	: lcd(refLcd),
 	  timeoutValue(0), lastActionTime(0),
-	  selectableItems(nullptr), unSelectableItems(nullptr), highlightedItem(nullptr), numNestedMenus(0), itemIsSelected(false), displayingFixedMenu(false),
+	  selectableItems(nullptr), unSelectableItems(nullptr), highlightedItem(nullptr), numNestedMenus(0),
+	  itemIsSelected(false), displayingFixedMenu(false), displayingErrorMessage(false),
 	  errorColumn(0), rowOffset(0)
 {
 }
@@ -190,6 +191,7 @@ void Menu::LoadError(const char *msg, unsigned int line)
 
 	lastActionTime = millis();
 	timeoutValue = ErrorTimeout;
+	displayingErrorMessage = true;
 }
 
 // Parse a line in a menu layout file returning any error message, or nullptr if there was no error.
@@ -357,6 +359,8 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 
 void Menu::ResetCache()
 {
+	highlightedItem = nullptr;
+
 	// Delete the existing items
 	while (selectableItems != nullptr)
 	{
@@ -370,29 +374,22 @@ void Menu::ResetCache()
 		unSelectableItems = unSelectableItems->GetNext();
 		delete current;
 	}
-	highlightedItem = nullptr;
-
-	return;
 }
 
 void Menu::Reload()
 {
 	ResetCache();
+	displayingErrorMessage = false;
 
 	lcd.SetRightMargin(NumCols - currentMargin);
 	const char * const fname = filenames[numNestedMenus - 1].c_str();
 	FileStore * const file = reprap.GetPlatform().OpenFile(MENU_DIR, fname, OpenMode::read);
 	if (file == nullptr)
 	{
-		LoadError("Can't open menu file", 0);
+		LoadError("File not found", 0);
 	}
 	else
 	{
-#if 0
-		lcd.print("Menu");
-		lcd.SetCursor(currentMargin + lcd.GetFontHeight() + 1, currentMargin);
-		lcd.print(fname);
-#else
 		row = 0;
 		column = 0;
 		fontNumber = 0;
@@ -419,9 +416,8 @@ void Menu::Reload()
 				break;
 			}
 		}
-#endif
+
 		file->Close();
-		//Refresh();
 	}
 }
 
@@ -463,9 +459,13 @@ void Menu::EncoderAction_ExecuteHelper(const char *const cmd)
 		// "menu" returns the filename (e.g. "main")
 		// "return" returns the command itself ("return")
 		if (0 == strcmp("return", cmd))
-			Pop(); // up one level
+		{
+			Pop();										// up one level
+		}
 		else
+		{
 			Load(cmd);
+		}
 	}
 }
 
@@ -562,21 +562,35 @@ void Menu::EncoderAction_ExitItemHelper(int action)
 // EncoderAction is what's called in response to all wheel/button actions; a convenient place to set new timeout values
 void Menu::EncoderAction(int action)
 {
-	if (itemIsSelected) // send the wheel action (scroll or click) to the item itself
+	if (displayingErrorMessage)
 	{
-		EncoderAction_ExitItemHelper(action);
+		// Allow the message to be cancelled by a push
+		if (action == 0)
+		{
+			timeoutValue = 1;					// cancel the timeout at the next tick
+		}
 	}
-	else if (action != 0) // scroll without an item under selection
+	else
 	{
-		EncoderAction_AdjustItemHelper(action);
-	}
-	else // click without an item under selection
-	{
-		EncoderAction_EnterItemHelper();
-	}
+		if (itemIsSelected) // send the wheel action (scroll or click) to the item itself
+		{
+			EncoderAction_ExitItemHelper(action);
+		}
+		else if (action != 0) // scroll without an item under selection
+		{
+			EncoderAction_AdjustItemHelper(action);
+		}
+		else // click without an item under selection
+		{
+			EncoderAction_EnterItemHelper();
+		}
 
-	lastActionTime = millis();
-	timeoutValue = InactivityTimeout;
+		if (!displayingErrorMessage)			// if the operation did not result in an error
+		{
+			lastActionTime = millis();
+			timeoutValue = InactivityTimeout;
+		}
+	}
 }
 
 /*static*/ const char *Menu::SkipWhitespace(const char *s)
@@ -609,20 +623,17 @@ void Menu::Refresh()
 	}
 	else if (displayingFixedMenu || (timeoutValue != 0 && (millis() - lastActionTime > timeoutValue)))
 	{
-		// Showing fixed menu but SD card is now mounted, or 10 seconds following latest user action
+		// Showing fixed menu but SD card is now mounted, or 6 seconds following latest user action
 		// Go to the top menu (just discard information)
+		timeoutValue = 0;
 		numNestedMenus = 0;
 		Load("main");
-		timeoutValue = 0;
 	}
 
 	const PixelNumber rightMargin = NumCols - currentMargin;
-	int nItemBeingDrawnIndex = 0;
-
 	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
 	{
 		item->Draw(lcd, rightMargin, (item == highlightedItem), rowOffset);
-		++nItemBeingDrawnIndex;
 	}
 
 	for (MenuItem *item = unSelectableItems; item != nullptr; item = item->GetNext())

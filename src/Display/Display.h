@@ -20,7 +20,7 @@ public:
 
 	void Init();
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply);
-	void Spin(bool full);
+	void Spin();
 	void Exit();
 	void Beep(unsigned int frequency, unsigned int milliseconds);
 	void SuccessBeep();

@@ -284,9 +284,13 @@ constexpr float DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full P
 constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command for full power
 
 // I2C
-constexpr uint32_t I2cClockFreq = 100000;				// clock frequency in Hz
-constexpr uint32_t I2cSendTimeoutMicroseconds = 10000;	// max time to wait for i2C send complete
-constexpr uint32_t I2cRecvTimeoutMicroseconds = 10000;	// max time to wait for i2C receive complete
+// A note on the i2C clock frequency.
+// On a Duet WiFi attached to a DueX5 through 160mm of ribbon cable, the cable capacitance in combination with the 4K7 pullup resistors slows down the
+// I2C signal rise time to about 500ns. This is above the 300ns maximum specified for both the ATSAM4E and the SX1509B.
+// It appears that the slow rise time interferes with the watchdog timer resets, because at 200MHz clock frequency the system gets stuck
+// in a boot loop caused by the watchdog timer going off.
+// At 100kHz I2C clock frequency, these issues are rare.
+constexpr uint32_t I2cClockFreq = 100000;				// clock frequency in Hz. 100kHz is 10us per bit, so about 90us per byte if there is no clock stretching
 constexpr size_t MaxI2cBytes = 32;						// max bytes in M260 or M261 command
 
 // File handling

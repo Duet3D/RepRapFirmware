@@ -62,6 +62,7 @@ private:
 	size_t numNestedMenus;
 	bool itemIsSelected;
 	bool displayingFixedMenu;
+	bool displayingErrorMessage;
 
 	// Variables used while parsing
 	size_t commandBufferIndex;

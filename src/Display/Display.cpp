@@ -17,9 +17,6 @@ constexpr int DefaultPulsesPerClick = -4;			// values that work with displays I 
 extern const LcdFont font11x14;
 extern const LcdFont font7x11;
 
-const LcdFont& smallFont = font7x11;
-const LcdFont& largeFont = font11x14;
-
 const LcdFont * const fonts[] = { &font7x11, &font11x14 };
 const size_t SmallFontNumber = 0;
 const size_t LargeFontNumber = 1;
@@ -34,30 +31,27 @@ void Display::Init()
 	encoder.Init(DefaultPulsesPerClick);
 }
 
-void Display::Spin(bool full)
+void Display::Spin()
 {
 	if (present)
 	{
 		encoder.Poll();
 
-		if (full)
+		if (!updatingFirmware)
 		{
-			if (!updatingFirmware)
+			// Check encoder and update display
+			const int ch = encoder.GetChange();
+			if (ch != 0)
 			{
-				// Check encoder and update display
-				const int ch = encoder.GetChange();
-				if (ch != 0)
-				{
-					menu.EncoderAction(ch);
-				}
-				else if (encoder.GetButtonPress())
-				{
-					menu.EncoderAction(0);
-				}
-				menu.Refresh();
+				menu.EncoderAction(ch);
 			}
-			lcd.FlushSome();
+			else if (encoder.GetButtonPress())
+			{
+				menu.EncoderAction(0);
+			}
+			menu.Refresh();
 		}
+		lcd.FlushSome();
 
 		if (beepActive && millis() - whenBeepStarted > beepLength)
 		{

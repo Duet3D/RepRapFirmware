@@ -742,7 +742,25 @@ pre(state == provisional)
 		else
 		{
 			// Either just stopped going up, or going down
-			laDDA->endSpeed = laDDA->targetNextSpeed;
+			if (laDDA->targetNextSpeed < laDDA->endSpeed)
+			{
+				// This situation should not normally happen except by a small amount because of rounding error.
+				// Don't reduce the end speed of the current move, because that may make the move infeasible.
+				// Report a lookahead error if the change is too large to be accounted for by rounding error.
+				if (laDDA->targetNextSpeed < laDDA->endSpeed * 0.99)
+				{
+					reprap.GetMove().RecordLookaheadError();
+					if (reprap.Debug(moduleMove))
+					{
+						debugPrintf("DDA.cpp(%d) tn=%f ", __LINE__, (double)laDDA->targetNextSpeed);
+						laDDA->DebugPrint();
+					}
+				}
+			}
+			else
+			{
+				laDDA->endSpeed = laDDA->targetNextSpeed;
+			}
 LA_DEBUG;
 			laDDA->RecalculateMove();
 
@@ -917,7 +935,7 @@ void DDA::RecalculateMove()
 					reprap.GetMove().RecordLookaheadError();
 					if (reprap.Debug(moduleMove))
 					{
-						debugPrintf("DDA.cpp(%d) na=%.3f", __LINE__, (double)newAcceleration);
+						debugPrintf("DDA.cpp(%d) na=%f", __LINE__, (double)newAcceleration);
 						DebugPrint();
 					}
 				}
@@ -935,7 +953,7 @@ void DDA::RecalculateMove()
 					reprap.GetMove().RecordLookaheadError();
 					if (reprap.Debug(moduleMove))
 					{
-						debugPrintf("DDA.cpp(%d) nd=%.3f", __LINE__, (double)newDeceleration);
+						debugPrintf("DDA.cpp(%d) nd=%f", __LINE__, (double)newDeceleration);
 						DebugPrint();
 					}
 				}
@@ -965,20 +983,8 @@ void DDA::RecalculateMove()
 // Decide what speed we would really like this move to end at.
 // On entry, targetNextSpeed is the speed we would like the next move after this one to start at and this one to end at
 // On return, targetNextSpeed is the actual speed we can achieve without exceeding the jerk limits.
-// Do not reduce targetNextSpeed below the existing value of endSpeed because that may make the move infeasible.
 void DDA::MatchSpeeds()
 {
-	if (targetNextSpeed < endSpeed)
-	{
-		reprap.GetMove().RecordLookaheadError();
-		if (reprap.Debug(moduleMove))
-		{
-			debugPrintf("DDA.cpp(%d) tn=%.3f ", __LINE__, (double)targetNextSpeed);
-			DebugPrint();
-		}
-		return;
-	}
-
 	for (size_t drive = 0; drive < MaxTotalDrivers; ++drive)
 	{
 		if (   (pddm[drive] != nullptr && pddm[drive]->state == DMState::moving)
@@ -991,16 +997,6 @@ void DDA::MatchSpeeds()
 			if (jerk > allowedJerk)
 			{
 				targetNextSpeed = allowedJerk/totalFraction;
-				if (targetNextSpeed < endSpeed)
-				{
-					reprap.GetMove().RecordLookaheadError();
-					if (reprap.Debug(moduleMove))
-					{
-						debugPrintf("DDA.cpp(%d) tn=%.3f ", __LINE__, (double)targetNextSpeed);
-						DebugPrint();
-					}
-					return;
-				}
 			}
 		}
 	}

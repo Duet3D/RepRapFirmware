@@ -412,7 +412,7 @@ void RepRap::Spin()
 #ifdef DUET_NG
 	ticksInSpinState = 0;
 	spinningModule = moduleDuetExpansion;
-	DuetExpansion::Spin(true);
+	DuetExpansion::Spin();
 #endif
 
 	ticksInSpinState = 0;
@@ -422,7 +422,7 @@ void RepRap::Spin()
 #if SUPPORT_12864_LCD
 	ticksInSpinState = 0;
 	spinningModule = moduleDisplay;
-	display->Spin(true);
+	display->Spin();
 #endif
 
 	ticksInSpinState = 0;

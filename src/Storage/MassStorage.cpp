@@ -706,7 +706,7 @@ void MassStorage::Spin()
 		{
 			if (fil.closeRequested)
 			{
-				// We cannot do this in ISRs, so do it here
+				// We could not close this file in an ISR, so do it here
 				fil.Close();
 			}
 		}

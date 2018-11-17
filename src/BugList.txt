@@ -101,11 +101,12 @@ Open investigations:
 - [tested, no fault found] M226 not working? https://forum.duet3d.com/topic/6860/filament-change-no-reaction/3
 - [replied] Weird height map, https://forum.duet3d.com/topic/6472/mesh-grid-compensation/28
 - [tested, no fault] Full stepping problem, https://forum.duet3d.com/topic/6433/how-to-reduce-the-speed-of-extrusion/14
-- DueX5 LEDs flashing at boot time, https://forum.duet3d.com/topic/6970/led-strip-flashing-on-boot-duex5
+- [I2C issue, hopefully resolved] DueX5 LEDs flashing at boot time, https://forum.duet3d.com/topic/6970/led-strip-flashing-on-boot-duex5
 - [tested, no fault found] M24 after heater fault pause, https://forum.duet3d.com/topic/7154/firmware-2-01-resume-after-heater-fault-isn-t-working
 - check DAA working as intended, results are inconsistent. Problem when used with segmented kinematics because the acceleration is in multiple segments.
 - [is a DWC issue] Javascript error, https://forum.duet3d.com/topic/7489/auto-bed-compensation-javascript-error/12
 - [no fault] Babystepping not working, https://forum.duet3d.com/topic/7445/baby-stepping-not-working/20
+- [no fault] Look at GCode file filament estimation in https://forum.duet3d.com/topic/7584/time-estimates-not-working/6
 
 To be fixed in 2.02 release:
 - [done, ok] Send mapped fan speed at the start of the fan speed list in the M408 response for PanelDue
@@ -138,18 +139,26 @@ To be fixed in 2.02 release:
 - [no fault] Limits wrong when using workplace coordinates, also in thread https://forum.duet3d.com/topic/7523/g30-s-2-not-working-anymore
 - [done, ok] M918 to do dispay reset, https://forum.duet3d.com/topic/7316/firmware-2-02-release-candidate-3-now-available/67
 - [done, ok] When simulating ELM-absolute on delta, it knows there are 26 layers but only counts to 13. ELM-Kossel only counts to 17.
-- [rewritten i2C driver, test] DueX endstop not always updating, https://forum.duet3d.com/topic/7500/a-endstop-being-stuck-on/4
 - [done, ok] 12864 display buttons sometimes disappear when moving between them, https://forum.duet3d.com/topic/7641/duet-maestro-12864-lcd-button-display-glitches
 - [done, ok] 12864 display: last byte of images didn't display correctly
 - [done, ok] 12864 display: in button commands, "#0" should be substituted, not "menu"
-- [done, test] Don't start execuing a G30 S-2 command if no tool is selected
-- Look at https://forum.duet3d.com/topic/7644/lookahead-error-and-possibly-related-layer-shifting
+- [done, test] Don't start executing a G30 S-2 command if no tool is selected
+- [done] http responses now use \r\n as the line ending, not \n
+- [done] Lookahead errors were occasionally caused by rounding, https://forum.duet3d.com/topic/7644/lookahead-error-and-possibly-related-layer-shifting
+- [done, ok] 12864 display item numbers 79, 179 and 279 were not implemented
+- [done, ok] 12864 display corrected error message timeout, also error messages can be acknowledged by a button press
+- [rewritten i2C driver, test] DueX endstop not always updating, https://forum.duet3d.com/topic/7500/a-endstop-being-stuck-on/4
+- [done, ok] Use an interrupt to better track changes to the DueXn endstop input status
+- [done] M260 can now receive I2C bytes as well as send them
+- [done] Added 'deprecated' message when legacy 3-, 4- or 5-point bed compensation is used
+- [done, ok] Idle task is now included in task list
 
 Future:
+- After looking for G1 Z commands in gcode file analyser, check that there is extrusion after it
+- M260 allow bytes to be specified in hex, more generally allow hex anywhere?
 - Auto mount SD card when it is inserted
 - Extruder motion until filament sensor senses motion stopped?
 - Allow jerk between printing and non-printing moves, so that coast-to-end works?
-- M408 P1 S"gcodes" returns an empty gcodes object, so does m408p1 f"gcodes.speedFactor"
 - Error handling in [variable] parser in GCodeBuffer class
 - WiFi auto reconnect should not log all unsuccessful connection attempts, just the first one
 - Option to send M280 servo commands just a few times instead of continuously, for E3D
@@ -166,6 +175,7 @@ Future:
 - Workplace offsets are supposed to be persistant (check NIST), https://www.duet3d.com/forum/thread.php?pid=43755#p43755
 - At the end of a simulation, restore the original workplace coordinate selection
 - CNC: look at G17/18/19, see https://forum.duet3d.com/topic/4669/ooznest-workbee-screw-driven
+
 
 - Allow extruder movement in tpre? https://forum.duet3d.com/topic/7263/controlling-stepper-motors-via-drive-numbers-eg-g1-d4-700-f100/4
 - M207 per-tool values, https://forum.duet3d.com/topic/6855/add-drive-extruder-parameter-to-m207/6

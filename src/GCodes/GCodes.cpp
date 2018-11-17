@@ -2342,7 +2342,9 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 							extrusionAmount *= volumetricExtrusionFactors[drive];
 						}
 						rawExtruderTotalByDrive[drive] += extrusionAmount;
-						if (!doingToolChange)			// don't count extrusion done in tool change macros towards total filament consumed, it distorts the print progress
+
+						// Don't count extrusion done in filament loading or tool change macros towards total filament consumed, it distorts the print progress
+						if (moveBuffer.moveType == 0 && !doingToolChange)
 						{
 							rawExtruderTotal += extrusionAmount;
 						}
@@ -2372,7 +2374,9 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 								extrusionAmount *= volumetricExtrusionFactors[drive];
 							}
 							rawExtruderTotalByDrive[drive] += extrusionAmount;
-							if (!doingToolChange)		// don't count extrusion done in tool change macros towards total filament consumed, it distorts the print progress
+
+							// Don't count extrusion done in filament loading or tool change macros towards total filament consumed, it distorts the print progress
+							if (moveBuffer.moveType == 0 && !doingToolChange)
 							{
 								rawExtruderTotal += extrusionAmount;
 							}
@@ -5145,7 +5149,7 @@ int GCodes::GetHeaterNumber(unsigned int itemNumber) const
 {
 	if (itemNumber < 80)
 	{
-		const Tool * const tool = reprap.GetTool(itemNumber);
+		const Tool * const tool = (itemNumber == 79) ? reprap.GetCurrentTool() : reprap.GetTool(itemNumber);
 		return (tool != nullptr && tool->HeaterCount() != 0) ? tool->Heater(0) : -1;
 	}
 	if (itemNumber < 90)
@@ -5164,7 +5168,7 @@ float GCodes::GetItemActiveTemperature(unsigned int itemNumber) const
 {
 	if (itemNumber < 80)
 	{
-		const Tool * const tool = reprap.GetTool(itemNumber);
+		const Tool * const tool = (itemNumber == 79) ? reprap.GetCurrentTool() : reprap.GetTool(itemNumber);
 		return (tool != nullptr) ? tool->GetToolHeaterActiveTemperature(0) : 0.0;
 	}
 
@@ -5175,7 +5179,7 @@ float GCodes::GetItemStandbyTemperature(unsigned int itemNumber) const
 {
 	if (itemNumber < 80)
 	{
-		const Tool * const tool = reprap.GetTool(itemNumber);
+		const Tool * const tool = (itemNumber == 79) ? reprap.GetCurrentTool() : reprap.GetTool(itemNumber);
 		return (tool != nullptr) ? tool->GetToolHeaterStandbyTemperature(0) : 0.0;
 	}
 
@@ -5186,7 +5190,7 @@ void GCodes::SetItemActiveTemperature(unsigned int itemNumber, float temp)
 {
 	if (itemNumber < 80)
 	{
-		Tool * const tool = reprap.GetTool(itemNumber);
+		Tool * const tool = (itemNumber == 79) ? reprap.GetCurrentTool() : reprap.GetTool(itemNumber);
 		if (tool != nullptr)
 		{
 			tool->SetToolHeaterActiveTemperature(0, temp);
@@ -5202,7 +5206,7 @@ void GCodes::SetItemStandbyTemperature(unsigned int itemNumber, float temp)
 {
 	if (itemNumber < 80)
 	{
-		Tool * const tool = reprap.GetTool(itemNumber);
+		Tool * const tool = (itemNumber == 79) ? reprap.GetCurrentTool() : reprap.GetTool(itemNumber);
 		if (tool != nullptr)
 		{
 			tool->SetToolHeaterStandbyTemperature(0, temp);

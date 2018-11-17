@@ -1029,7 +1029,7 @@ GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 			size_t bytesTransferred;
 			{
 				MutexLocker lock(Tasks::GetI2CMutex());
-				bytesTransferred = I2C_IFACE.Transfer(address, bValues, numToSend, numToReceive, I2cSendTimeoutMicroseconds);
+				bytesTransferred = I2C_IFACE.Transfer(address, bValues, numToSend, numToReceive);
 			}
 
 			if (bytesTransferred < numToSend)
@@ -1081,7 +1081,7 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 				size_t bytesRead;
 				{
 					MutexLocker lock(Tasks::GetI2CMutex());
-					bytesRead = I2C_IFACE.Transfer(address, bValues, 0, numBytes, I2cRecvTimeoutMicroseconds);
+					bytesRead = I2C_IFACE.Transfer(address, bValues, 0, numBytes);
 				}
 
 				reply.copy("Received");

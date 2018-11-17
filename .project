@@ -3,6 +3,9 @@
 	<name>RepRapFirmware</name>
 	<comment></comment>
 	<projects>
+		<project>CoreNG</project>
+		<project>FreeRTOS</project>
+		<project>RRFLibraries</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
