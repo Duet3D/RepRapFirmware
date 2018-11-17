@@ -47,25 +47,11 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 
 	if(isCantilevered(1)) {
 		// calculate cantilevered side first:
-		float *theta = getTheta(proximalL, distalL + cantL, xOrigL, yOrigL, x_0, y_0);
+
+		float *theta = getTheta(proximalL, distalL + cantL, xOrigL, yOrigL, x_0, y_0, Arm::left);
 		xL = theta[0];
 		yL = theta[1];
 		thetaL = theta[2];
-
-		if(workmode == 1) {
-			if(theta[0] < theta[3]) {
-				xL = theta[3];
-				yL = theta[4];
-				thetaL = theta[5];
-			}
-		}
-		else if(workmode == 2 || workmode == 4) {
-			if(theta[0] > theta[3]) {
-				xL = theta[3];
-				yL = theta[4];
-				thetaL = theta[5];
-			}
-		}
 
 		// calculate x1,y1, i.e. where the distal arms meet
 		float fraction = distalL / (distalL + cantL);
@@ -73,47 +59,17 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 		y1 = (y_0 - yL) * fraction + yL;
 
 		// calculate right, non cantilevered side:
-		theta = getTheta(proximalR, distalR, xOrigR, yOrigR, x1, y1);
+		theta = getTheta(proximalR, distalR, xOrigR, yOrigR, x1, y1, Arm::right);
 		xR = theta[0];
 		yR = theta[1];
 		thetaR = theta[2];
-
-		if(workmode == 1 || workmode == 2) {
-			if(theta[0] < theta[3]) {
-				xR = theta[3];
-				yR = theta[4];
-				thetaR = theta[5];
-			}
-		}
-		else if(workmode == 4) {
-			if(theta[0] > theta[3]) {
-				xR = theta[3];
-				yR = theta[4];
-				thetaR = theta[5];
-			}
-		}
 	}
 	else if(isCantilevered(2)) {
 		// calculate cantilevered side first:
-		float *theta = getTheta(proximalR, distalR + cantR, xOrigR, yOrigR, x_0, y_0);
+		float *theta = getTheta(proximalR, distalR + cantR, xOrigR, yOrigR, x_0, y_0, Arm::right);
 		xR = theta[0];
 		yR = theta[1];
 		thetaR = theta[2];
-
-		if(workmode == 1 || workmode == 2) {
-			if(theta[0] < theta[3]) {
-				xR = theta[3];
-				yR = theta[4];
-				thetaR = theta[5];
-			}
-		}
-		else if(workmode == 4) {
-			if(theta[0] > theta[3]) {
-				xR = theta[3];
-				yR = theta[4];
-				thetaR = theta[5];
-			}
-		}
 
 		// calculate x1,y1, i.e. where the distal arms meet
 		float fraction = distalR / (distalR + cantR);
@@ -121,80 +77,24 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 		y1 = (y_0 - yR) * fraction + yR;
 
 		// calculate left, non cantilevered side:
-		theta = getTheta(proximalL, distalL, xOrigL, yOrigL, x1, y1);
+		theta = getTheta(proximalL, distalL, xOrigL, yOrigL, x1, y1, Arm::left);
 		xL = theta[0];
 		yL = theta[1];
 		thetaL = theta[2];
 
-		if(workmode == 1) {
-			if(theta[0] < theta[3]) {
-				xL = theta[3];
-				yL = theta[4];
-				thetaL = theta[5];
-			}
-		}
-		else if(workmode == 2 || workmode == 4) {
-			if(theta[0] > theta[3]) {
-				xL = theta[3];
-				yL = theta[4];
-				thetaL = theta[5];
-			}
-		}
 	}
 	else {	// not cantilevered, hotend is at top joint
-		float *theta = getTheta(proximalL, distalL, xOrigL, yOrigL, x_0, y_0);
+		float *theta = getTheta(proximalL, distalL, xOrigL, yOrigL, x_0, y_0, Arm::left);
 		x1 = x_0;
 		y1 = y_0;
-		if(workmode == 1) {
-			if(theta[2] <= theta[5]) {	// take smaller angle
-				xL = theta[0];
-				yL = theta[1];
-				thetaL = theta[2];
-			}
-			else {
-				xL = theta[3];
-				yL = theta[4];
-				thetaL = theta[5];
-			}
-		}
-		else if(workmode == 2 || workmode == 4) {	// take bigger angle
-			if(theta[2] <= theta[5]) {
-				xL = theta[3];
-				yL = theta[4];
-				thetaL = theta[5];
-			}
-			else {
-				xL = theta[0];
-				yL = theta[1];
-				thetaL = theta[2];
-			}
-		}
+		xL = theta[0];
+		yL = theta[1];
+		thetaL = theta[2];
 
-		theta = getTheta(proximalR, distalR, xOrigR, yOrigR, x_0, y_0);
-		if(workmode == 1 || workmode == 2) {		// take smaller angle
-			if(theta[2] <= theta[5]) {
-				xR = theta[0];
-				yR = theta[1];
-				thetaR = theta[2];
-			}
-			else {
-				xR = theta[3];
-				yR = theta[4];
-				thetaR = theta[5];
-			}
-		}
-		else if(workmode == 4) {		// take bigger angle
-			if(theta[2] <= theta[5]) {
-				xR = theta[3];
-				yR = theta[4];
-				thetaR = theta[5];
-			}
-			else {
-				xR = theta[0];
-				yR = theta[1];
-				thetaR = theta[2];
-			}
-		}
+		theta = getTheta(proximalR, distalR, xOrigR, yOrigR, x_0, y_0, Arm::right);
+		xR = theta[0];
+		yR = theta[1];
+		thetaR = theta[2];
 	}
 
 	// xL, yL, thetaL, xR, yR, thetaR, x1, y1 (joint of distals)
@@ -319,8 +219,10 @@ float * FiveBarScaraKinematics::getIntersec(float firstRadius, float secondRadiu
 	return result;
 }
 
-
-float * FiveBarScaraKinematics::getTheta(float prox, float distal, float proxX, float proxY, float destX, float destY) const
+// return coordinates and theta angles or both possible solutions
+// first solution in [0], [1], [2] is the angle which fits to the current workmode
+float * FiveBarScaraKinematics::getTheta(float prox, float distal, float proxX, float proxY, float destX, float destY,
+		Arm arm) const
 {
 	static float result[6];	// x,y,theta of first point, then x,y,theta of second solution
 
@@ -332,13 +234,44 @@ float * FiveBarScaraKinematics::getTheta(float prox, float distal, float proxX, 
 
 	float thetaA = getAbsoluteAngle(proxX, proxY, x1, y1);
 	float thetaB = getAbsoluteAngle(proxX, proxY, x2, y2);
+	bool aSmallerB = thetaA < thetaB;
 
-	result[0] = x1;
-	result[1] = y1;
-	result[2] = thetaA;
-	result[3] = x2;
-	result[4] = y2;
-	result[5] = thetaB;
+	if(workmode == 1 || (workmode == 2 && arm == Arm::right)) { // smaller angle is correct
+		if(aSmallerB) {
+			result[0] = x1;
+			result[1] = y1;
+			result[2] = thetaA;
+			result[3] = x2;
+			result[4] = y2;
+			result[5] = thetaB;
+		}
+		else {
+			result[0] = x2;
+			result[1] = y2;
+			result[2] = thetaB;
+			result[3] = x1;
+			result[4] = y1;
+			result[5] = thetaA;
+		}
+	}
+	else {	// bigger theta
+		if(aSmallerB) {
+			result[0] = x2;
+			result[1] = y2;
+			result[2] = thetaB;
+			result[3] = x1;
+			result[4] = y1;
+			result[5] = thetaA;
+		}
+		else {
+			result[0] = x1;
+			result[1] = y1;
+			result[2] = thetaA;
+			result[3] = x2;
+			result[4] = y2;
+			result[5] = thetaB;
+		}
+	}
 
 	return result;
 }
