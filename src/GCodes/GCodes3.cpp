@@ -30,7 +30,7 @@
 # include "Movement/StepperDrivers/TMC51xx.h"
 #endif
 
-//#include "ODriveUART.h"
+#include "ODriveUART.h"
 // Each ODrive needs two pos references, and I can't make getter/setters of the ODriveUART
 // object work. The getter always returns 0.0, regardless how I try to change the variable
 float pos_reference[4] = { 0.0, 0.0, 0.0, 0.0 };
