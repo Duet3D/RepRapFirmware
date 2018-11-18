@@ -15,7 +15,7 @@
 #include "Movement/DDA.h"
 
 #include <limits>
-#include <algorithm>
+//#include <algorithm>
 
 FiveBarScaraKinematics::FiveBarScaraKinematics()
 	: ZLeadscrewKinematics(KinematicsType::scara, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true)
@@ -182,7 +182,7 @@ bool FiveBarScaraKinematics::isCantilevered(int mode) const
 // get angle between 0 and 360 for given origin and destination coordinates
 float FiveBarScaraKinematics::getAbsoluteAngle(float xOrig, float yOrig, float xDest, float yDest) const
 {
-	float length = sqrt(pow(xOrig - xDest, 2) + pow(yOrig - yDest,2));
+	float length = sqrt((xOrig - xDest) * (xOrig - xDest) + (yOrig - yDest) * (yOrig - yDest));
 
 	float y = abs(yOrig - yDest);
 	float angle = asin(y / length) * 180.0 / M_PI;
