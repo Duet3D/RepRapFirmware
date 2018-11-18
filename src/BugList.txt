@@ -94,6 +94,7 @@ Closed investigations:
 - [problem gone away] chrishamm's watchdog issue, see his email of 2018-08-01
 - [tested, pause/resume works as intended] Check M106 R1 parameter, see https://forum.duet3d.com/topic/6538/resuming-print-fan-after-pause
 - [tested 2018-10-30, ok] Test extruder stall detection, https://forum.duet3d.com/topic/7300/issues-using-stall-detection-when-loading-filament
+- [no fault] Limits wrong when using workplace coordinates, also in thread https://forum.duet3d.com/topic/7523/g30-s-2-not-working-anymore
 
 Open investigations:
 - [check] if a homing command in an SD print file is aborted due to e.g. G1 Z5 in the homing file, error message should be written to both DWC and PanelDue
@@ -120,40 +121,46 @@ To be fixed in 2.02 release:
 - [done, ok] Support conversion from numeric or boolean to string in variable substitution
 - [done, ok] G30 H parameters don't work if deployprobe.g or retractprobe.g file present
 - [done, ok] Execute residual babystepping immediately
-- [done, test] Warning message if trying to move motors on internal drivers but VIN too low or too high
-- [done, test] increase min fullsteps for motor open detection from 4 to 20
-- [done, test] I2C addresses can be specified in hex format e.g. "0x71" or "x71"
-- [done, test] M584 can now use dummy (high) driver numbers to assign an axis or extruder to no driver
-- [done, test] M122 to tell you if the drivers are enabled (power good), or disabled and waiting for the correct voltage
 - [done] Special support for coast-to-end in RecalculateMove
 - [done] Bring RADDS build up to date and use RTOS (not tested)
 - [done, ok] Improved 'page not found' message
 - [done, ok] Fix M600, it stops the machine
-- [done, test on Duet+DueX] Watchdog init
+- [done, ok] Watchdog init
 - [possible fix implemented in 2.02RC4] 3 independent Z motors, https://forum.duet3d.com/topic/6974/problem-with-3-independent-z-axis-motors-and-endstops/26
-- [done, test DueX] Use a I2C mutex instead of a critical section lock
-- [done, test DueX + extra SX1509B] Rewrote i2C driver
-- [done, test] M557 P parameter not working, also not documented
-- [done, test] G30 S-2 tool offset is set in the wrong direction, https://forum.duet3d.com/topic/7523/g30-s-2-not-working-anymore
-- [done] After G30 S-2, update user coordinates to account for new tool offset
-- [no fault] Limits wrong when using workplace coordinates, also in thread https://forum.duet3d.com/topic/7523/g30-s-2-not-working-anymore
+- [done, ok] Use a I2C mutex instead of a critical section lock
+- [done, tested DueX + extra SX1509B] Rewrote i2C driver
 - [done, ok] M918 to do dispay reset, https://forum.duet3d.com/topic/7316/firmware-2-02-release-candidate-3-now-available/67
 - [done, ok] When simulating ELM-absolute on delta, it knows there are 26 layers but only counts to 13. ELM-Kossel only counts to 17.
 - [done, ok] 12864 display buttons sometimes disappear when moving between them, https://forum.duet3d.com/topic/7641/duet-maestro-12864-lcd-button-display-glitches
 - [done, ok] 12864 display: last byte of images didn't display correctly
 - [done, ok] 12864 display: in button commands, "#0" should be substituted, not "menu"
-- [done, test] Don't start executing a G30 S-2 command if no tool is selected
 - [done] http responses now use \r\n as the line ending, not \n
 - [done] Lookahead errors were occasionally caused by rounding, https://forum.duet3d.com/topic/7644/lookahead-error-and-possibly-related-layer-shifting
 - [done, ok] 12864 display item numbers 79, 179 and 279 were not implemented
 - [done, ok] 12864 display corrected error message timeout, also error messages can be acknowledged by a button press
-- [rewritten i2C driver, test] DueX endstop not always updating, https://forum.duet3d.com/topic/7500/a-endstop-being-stuck-on/4
+- [done, seems ok] DueX endstop not always updating, https://forum.duet3d.com/topic/7500/a-endstop-being-stuck-on/4
 - [done, ok] Use an interrupt to better track changes to the DueXn endstop input status
-- [done] M260 can now receive I2C bytes as well as send them
-- [done] Added 'deprecated' message when legacy 3-, 4- or 5-point bed compensation is used
+- [done, ok] M260 can now receive I2C bytes as well as send them
 - [done, ok] Idle task is now included in task list
+- [done, ok] Added 'deprecated' message when legacy 3-, 4- or 5-point bed compensation is used
+- [done, ok] Warning message if trying to move motors on internal drivers but VIN too low or too high
+- [done, ok] increase min fullsteps for motor open detection from 4 to 20
+- [done, ok] I2C addresses can be specified in hex format e.g. "0x71" or "x71"
+- [done, ok] M584 can now use dummy (high) driver numbers to assign an axis or extruder to no driver
+- [done, ok] M122 to tell you if the drivers are enabled (power good), or disabled and waiting for the correct voltage
+- [done, partial fail] M557 P parameter not working, also not documented
+- [done, partial fail] G30 S-2 tool offset is set in the wrong direction, https://forum.duet3d.com/topic/7523/g30-s-2-not-working-anymore
+- [done, partial fail] After G30 S-2, update user coordinates to account for new tool offset
+- [done, ok] Don't start executing a G30 S-2 command if no tool is selected
+
+Failed tests:
+- [fixed, ok] G32 "Points must be in clockwise order starting near X=0 Y=0" => "starting near minimum X and Y"
+- [fixed, ok] G30 S-2 works OK when initial tool Z offset is 0 but not otherwise
+- [fixed, ok] M557 with even P parameter on circular bed does too few points
+- [bad connection on hot end] Crane Quad hot end reads about 60C at room temperature
 
 Future:
+- Option for an endstop input to trigger an emergency pause
 - After looking for G1 Z commands in gcode file analyser, check that there is extrusion after it
 - M260 allow bytes to be specified in hex, more generally allow hex anywhere?
 - Auto mount SD card when it is inserted

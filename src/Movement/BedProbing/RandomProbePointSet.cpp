@@ -95,10 +95,10 @@ bool RandomProbePointSet::SetProbedBedEquation(size_t numPoints, const StringRef
 {
 	if (!GoodProbePointOrdering(numPoints))
 	{
-		reply.printf("Probe points P0 to P%u must be in clockwise order starting near X=0 Y=0", min<unsigned int>(numPoints, 4) - 1);
+		reply.printf("Probe points P0 to P%u must be in clockwise order starting near minimum X and Y", min<unsigned int>(numPoints, 4) - 1);
 		if (numPoints >= 5)
 		{
-			reply.cat(" and P4 must be near the centre");
+			reply.cat(", and P4 must be near the centre");
 		}
 		return true;
 	}
