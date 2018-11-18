@@ -32,20 +32,10 @@ const char *FiveBarScaraKinematics::GetName(bool forStatusReport) const
 //////////////////////// private functions /////////////////////////
 
 
-float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
+void FiveBarScaraKinematics::getInverse(const float coords[]) const
 {
-	static float result[8];	// xL, yL, thetaL, xR, yR, thetaR, x1, y1 (joint of distals)
-
-	if(x_0 == cachedX0 && y_0 == cachedY0) {
-		result[0] = cachedXL;
-		result[1] = cachedYL;
-		result[2] = cachedThetaL;
-		result[3] = cachedXR;
-		result[4] = cachedYR;
-		result[5] = cachedThetaR;
-		result[6] = cachedX1;
-		result[7] = cachedY1;
-		return result;
+	if(!cachedInvalid && coords[0] == cachedX0 && coords[1] == cachedY0) {		// already solved
+		return;
 	}
 
 	float thetaL = -1.0;
@@ -56,6 +46,9 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 	float yR = -1.0;
 	float x1 = -1.0;
 	float y1 = -1.0;
+
+	float x_0 = coords[0];
+	float y_0 = coords[1];
 
 	if(isCantilevered(1)) {
 		// calculate cantilevered side first:
@@ -109,29 +102,24 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 		thetaR = theta[2];
 	}
 
-	// cache values
-	cachedX0 = x_0;
-	cachedY0 = y_0;
-	cachedXL = xL;
-	cachedYL = yL;
-	cachedThetaL = thetaL;
-	cachedXR = xR;
-	cachedYR = yR;
-	cachedThetaR = thetaR;
-	cachedX1 = x1;
-	cachedY1 = y1;
+	if(constraintsOk(coords)) {
+		cachedX0 = x_0;
+		cachedY0 = y_0;
+		cachedXL = xL;
+		cachedYL = yL;
+		cachedThetaL = thetaL;
+		cachedXR = xR;
+		cachedYR = yR;
+		cachedThetaR = thetaR;
+		cachedX1 = x1;
+		cachedY1 = y1;
+		cachedInvalid = false;
+	}
+	else {
+		cachedInvalid = true;
+	}
 
-	// xL, yL, thetaL, xR, yR, thetaR, x1, y1 (joint of distals)
-	result[0] = xL;
-	result[1] = yL;
-	result[2] = thetaL;
-	result[3] = xR;
-	result[4] = yR;
-	result[5] = thetaR;
-	result[6] = x1;
-	result[7] = y1;
-
-	return result;
+	return;
 }
 
 // for a given Parameter, get number of values which are separated by :
@@ -387,42 +375,48 @@ bool FiveBarScaraKinematics::isPointInsideDefinedPrintableArea(float x0, float y
 	}
 }
 
-bool FiveBarScaraKinematics::constraintsOk(float x_0, float y_0) const
+bool FiveBarScaraKinematics::constraintsOk(const float coords[]) const
 {
-	float *inv = getInverse(x_0, y_0);	// xL, yL, thetaL, xR, yR, thetaR, x1, y1 (joint of distals)
-	float xL = inv[0];
-	float yL = inv[1];
-	float thetaL = inv[2];
-	float xR = inv[3];
-	float yR = inv[4];
-	float thetaR = inv[5];
-	float x1 = inv[6];
-	float y1 = inv[7];
+	if(!cachedInvalid && coords[0] == cachedX0 && coords[1] == cachedY0) {	// already solved and ok
+		return true;
+	}
 
-	// check theta angles
-	if(actuatorAngleLMin > thetaL || actuatorAngleLMax < thetaL) {
+	getInverse(coords);	// xL, yL, thetaL, xR, yR, thetaR, x1, y1 (joint of distals)
+
+	if(cachedInvalid) {
 		return false;
 	}
-	if(actuatorAngleRMin > thetaR || actuatorAngleRMax < thetaR) {
+
+	// check theta angles
+	if(actuatorAngleLMin > cachedThetaL || actuatorAngleLMax < cachedThetaL) {
+		cachedInvalid = true;
+		return false;
+	}
+	if(actuatorAngleRMin > cachedThetaR || actuatorAngleRMax < cachedThetaR) {
+		cachedInvalid = true;
 		return false;
 	}
 
 	// check constr
-	float constr = getAngle(xL, yL, x1, y1, xR, yR);
+	float constr = getAngle(cachedXL, cachedYL, cachedX1, cachedY1, cachedXR, cachedYR);
 	if(constrMin > constr || constrMax < constr) {
+		cachedInvalid = true;
 		return false;
 	}
 
 	// check proxDistal angle L and R
-	float angleProxDistL = getAngle(xOrigL, yOrigL, xL, yL, x1, y1);
+	float angleProxDistL = getAngle(xOrigL, yOrigL, cachedXL, cachedYL, cachedX1, cachedY1);
 	if(proxDistLAngleMin > angleProxDistL || proxDistLAngleMax < angleProxDistL) {
+		cachedInvalid = true;
 		return false;
 	}
-	float angleProxDistR = getAngle(xOrigR, yOrigR, xR, yR, x1, y1);
+	float angleProxDistR = getAngle(xOrigR, yOrigR, cachedXR, cachedYR, cachedX1, cachedY1);
 	if(proxDistRAngleMin > angleProxDistR || proxDistRAngleMax < angleProxDistR) {
+		cachedInvalid = true;
 		return false;
 	}
 
+	cachedInvalid = false;
 	return true;
 }
 
@@ -606,7 +600,7 @@ bool FiveBarScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes
 	// First limit all axes according to M208
 	const bool m208Limited = Kinematics::LimitPosition(coords, numVisibleAxes, axesHomed, isCoordinated);
 
-	if(!constraintsOk(coords[0], coords[1])) {
+	if(!constraintsOk(coords)) {
 		return true;
 	}
 
@@ -618,12 +612,11 @@ bool FiveBarScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes
 // In the following, theta is the proximal arm angle relative to the X axis, psi is the distal arm angle relative to the proximal arm
 bool FiveBarScaraKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const
 {
-	float x_0 = machinePos[0];
-	float y_0 = machinePos[1];
-	float *inv = getInverse(x_0, y_0);	// xL, yL, thetaL, xR, yR, thetaR, x1, y1 (joint of distals)
+	float coords[2] = {machinePos[0], machinePos[1]};
+	getInverse(coords);
 
-	motorPos[X_AXIS] = lrintf(inv[2] * stepsPerMm[X_AXIS]);
-	motorPos[Y_AXIS] = lrintf(inv[5] * stepsPerMm[Y_AXIS]);
+	motorPos[X_AXIS] = lrintf(cachedThetaL * stepsPerMm[X_AXIS]);
+	motorPos[Y_AXIS] = lrintf(cachedThetaR * stepsPerMm[Y_AXIS]);
 	motorPos[Z_AXIS] = lrintf(machinePos[Z_AXIS] * stepsPerMm[Z_AXIS]);
 
 	// Transform any additional axes linearly
@@ -702,7 +695,8 @@ bool FiveBarScaraKinematics::IsReachable(float x, float y, bool isCoordinated) c
 		}
 	}
 	else {
-		if(constraintsOk(x, y)) {
+		float coords[2] = {x, y};
+		if(constraintsOk(coords)) {
 			return true;
 		}
 	}
@@ -835,5 +829,6 @@ void FiveBarScaraKinematics::Recalc()
 {
 	cachedX0 = std::numeric_limits<float>::quiet_NaN(); // make sure that the cached values won't match any coordinates}
 	cachedY0 = std::numeric_limits<float>::quiet_NaN(); // make sure that the cached values won't match any coordinates}
+	cachedInvalid = true;
 }
 // End
