@@ -1,10 +1,12 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 2.02RC3
+Version 2.02RC4
 ===============
 
-Upgrade notes: see 2.02RC3
+Upgrade notes:
+- Duet Web Control version 1.22.5 is recommended with this firmware. On the Duet WiFi, DuetWiFiServer.bin version 1.21 remains compatible.
+- If you were not already running 2.02RC1 or RC2 or RC3 then see also the important upgrade notes for 2.02RC1
 
 New features/changed behaviour:
 - The mapped fan speed is now sent at the start of the fan speed list in the M408 response so that PanelDue can display it
