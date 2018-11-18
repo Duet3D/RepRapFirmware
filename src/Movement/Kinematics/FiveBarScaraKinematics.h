@@ -61,10 +61,10 @@ private:
 	float * getTheta(float proximal, float distal, float proxX, float proxY, float destX, float destY, Arm arm) const;
 	float * getXYFromAngle(float angle, float length, float origX, float origY) const;
 	float * getForward(float thetaL, float thetaR) const;
-	float * getInverse(float x0, float y0) const;
+	void getInverse(const float coords[]) const;
 	float getAngle(float x1, float y1, float xAngle, float yAngle, float x2, float y2) const;
 	bool isPointInsideDefinedPrintableArea(float x0, float y0) const;
-	bool constraintsOk(float x0, float y0) const;
+	bool constraintsOk(const float coords[]) const;
 
 	// Primary parameters
 	float xOrigL;
@@ -100,6 +100,7 @@ private:
 	// State variables
 	mutable float cachedX0, cachedY0, cachedThetaL, cachedThetaR, cachedXL, cachedXR, cachedYL, cachedYR,
 		cachedX1, cachedY1;
+	mutable bool cachedInvalid;
 };
 
 #endif /* SRC_MOVEMENT_KINEMATICS_FIVEBARSCARAKINEMATICS_H_ */
