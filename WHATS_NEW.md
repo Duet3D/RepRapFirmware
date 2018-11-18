@@ -14,7 +14,8 @@ New features/changed behaviour:
 - After attempting to apply babystepping to existing queue moves, any residual babystepping is now actioned immediately instead of waiting for another move
 - If you try to move motors connected to internal drivers when VIN is too low or too high, a warning message is generated
 - Increased minimum fullsteps/second for stepper driver open load open detection from 4 to 20
-- I2C addresses can be specified in hex format in quotes, e.g. "0x71" or "x71"
+- The M260 command can now receive I2C bytes as well as send them, use the new R parameter to specify how many
+- I2C addresses in M260 and M261 commands can be specified in hex format in quotes, e.g. "0x71" or "x71"
 - M584 can now use dummy (high) driver numbers to assign an axis or extruder to no driver
 - M122 has an additional "power good" report to indicate whether the internal stepper drivers can be used
 - Added special support for coast-to-end in RecalculateMove (but pressure advance should work better than coast-to-end)
@@ -24,7 +25,6 @@ New features/changed behaviour:
 - Lookahead errors were occasionally reported because of small rounding errors
 - The M918 command now resets and initialises the 12864 display
 - On the 12864 display, error messages can be acknowledged by a button press
-- The M260 command can now receive I2C bytes as well as send them
 - Added 'deprecated' message when legacy 3-, 4- or 5-point bed compensation is used
 - The Idle task is now included in task list
 
