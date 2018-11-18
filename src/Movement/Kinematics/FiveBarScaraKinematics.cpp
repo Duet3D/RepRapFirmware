@@ -36,6 +36,18 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 {
 	static float result[8];	// xL, yL, thetaL, xR, yR, thetaR, x1, y1 (joint of distals)
 
+	if(x_0 == cachedX0 && y_0 == cachedY0) {
+		result[0] = cachedXL;
+		result[1] = cachedYL;
+		result[2] = cachedThetaL;
+		result[3] = cachedXR;
+		result[4] = cachedYR;
+		result[5] = cachedThetaR;
+		result[6] = cachedX1;
+		result[7] = cachedY1;
+		return result;
+	}
+
 	float thetaL = -1.0;
 	float thetaR = -1.0;
 	float xL = -1.0;
@@ -96,6 +108,18 @@ float * FiveBarScaraKinematics::getInverse(float x_0, float y_0) const
 		yR = theta[1];
 		thetaR = theta[2];
 	}
+
+	// cache values
+	cachedX0 = x_0;
+	cachedY0 = y_0;
+	cachedXL = xL;
+	cachedYL = yL;
+	cachedThetaL = thetaL;
+	cachedXR = xR;
+	cachedYR = yR;
+	cachedThetaR = thetaR;
+	cachedX1 = x1;
+	cachedY1 = y1;
 
 	// xL, yL, thetaL, xR, yR, thetaR, x1, y1 (joint of distals)
 	result[0] = xL;
@@ -581,6 +605,11 @@ bool FiveBarScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes
 {
 	// First limit all axes according to M208
 	const bool m208Limited = Kinematics::LimitPosition(coords, numVisibleAxes, axesHomed, isCoordinated);
+
+	if(!constraintsOk(coords[0], coords[1])) {
+		return true;
+	}
+
 	return m208Limited;
 }
 
@@ -804,7 +833,7 @@ bool FiveBarScaraKinematics::IsContinuousRotationAxis(size_t axis) const
 // Recalculate the derived parameters
 void FiveBarScaraKinematics::Recalc()
 {
-	// cached values exist yet
+	cachedX0 = std::numeric_limits<float>::quiet_NaN(); // make sure that the cached values won't match any coordinates}
+	cachedY0 = std::numeric_limits<float>::quiet_NaN(); // make sure that the cached values won't match any coordinates}
 }
-
 // End
