@@ -98,6 +98,8 @@ private:
 	// Derived parameters
 
 	// State variables
+	mutable float cachedX0, cachedY0, cachedThetaL, cachedThetaR, cachedXL, cachedXR, cachedYL, cachedYR,
+		cachedX1, cachedY1;
 };
 
 #endif /* SRC_MOVEMENT_KINEMATICS_FIVEBARSCARAKINEMATICS_H_ */
