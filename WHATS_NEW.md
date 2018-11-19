@@ -11,7 +11,7 @@ Upgrade notes:
 New features/changed behaviour:
 - The mapped fan speed is now sent at the start of the fan speed list in the M408 response so that PanelDue can display it
 - Emergency stop commands sent by PanelDue running latest firmware are acted on immediately
-- After attempting to apply babystepping to existing queue moves, any residual babystepping is now actioned immediately instead of waiting for another move
+- After attempting to apply babystepping to existing queued moves, any residual babystepping is now actioned immediately instead of waiting for another move
 - If you try to move motors connected to internal drivers when VIN is too low or too high, a warning message is generated
 - Increased minimum fullsteps/second for stepper driver open load open detection from 4 to 20
 - The M260 command can now receive I2C bytes as well as send them, use the new R parameter to specify how many
@@ -22,7 +22,6 @@ New features/changed behaviour:
 - Improved the HTTP 'page not found' message
 - During printing, the count of layers printed was sometimes incorrect.
 - If G30 S-2 is commanded when no tool is selected, the command is not executed and an error message is generated
-- Lookahead errors were occasionally reported because of small rounding errors
 - The M918 command now resets and initialises the 12864 display
 - On the 12864 display, error messages can be acknowledged by a button press
 - Added 'deprecated' message when legacy 3-, 4- or 5-point bed compensation is used
@@ -37,6 +36,7 @@ Bug fixes:
 - After using G30 S-2 the tool offset was set in the wrong direction
 - After using G30 S-2 the user coordinates were not updated to account for new tool offset
 - Under some conditions the M400 command could greatly slow down movements, making it look as if the print had stalled
+- Lookahead errors were occasionally reported because of small rounding errors
 - Http responses now use \r\n as the line ending, not \n
 - On the 12864 display, buttons sometimes disappeared when moving between them
 - On the 12864 display, the last byte of images didn't display correctly
