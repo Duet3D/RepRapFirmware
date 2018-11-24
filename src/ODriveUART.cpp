@@ -157,4 +157,3 @@ size_t ODriveUART::readString(char* str, size_t size) {
 	str[found_chars] = '\0';
 	return found_chars;
 }
-/* End of tucked in file ODriveUART.cpp */

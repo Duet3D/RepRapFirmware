@@ -31,6 +31,9 @@
 #endif
 
 #include "ODriveUART.h"
+
+#include <algorithm> // for std::copy_n
+
 // Each ODrive needs two pos references, and I can't make getter/setters of the ODriveUART
 // object work. The getter always returns 0.0, regardless how I try to change the variable
 float pos_reference[4] = { 0.0, 0.0, 0.0, 0.0 };
@@ -197,7 +200,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 }
 
 // Sends the gcode and the value to the i2c addr
-GCodeResult GCodes::I2cForward(GCodeBuffer& gb, uint8_t addr, uint8_t *data, size_t data_size, const StringRef& reply)
+GCodeResult GCodes::I2cForward(const GCodeBuffer & gb, const uint8_t addr, const uint8_t *data, const size_t dataSize, const StringRef& reply)
 {
 	const char *buffer = gb.Buffer();
 
@@ -209,31 +212,41 @@ GCodeResult GCodes::I2cForward(GCodeBuffer& gb, uint8_t addr, uint8_t *data, siz
 	else if (buffer[3] == ' ' || buffer[3] == '\0') glen = 3;
 	else if (buffer[4] == ' ' || buffer[4] == '\0') glen = 4;
 
-	uint8_t send[5+data_size] = { '\0' };
+	uint8_t send[MaxI2cBytes] = { '\0' };
   for(size_t i = 0; i < glen; i++)
   {
     send[i] = (uint8_t)buffer[i];
   }
-  send[glen] = ' '; // space to separate gcode and data
-  for(size_t i = 0; i < data_size; i++)
+
+  send[glen] = (uint8_t)' '; // space to separate gcode and data
+
+  for(size_t i = 0; i < dataSize; i++)
   {
     send[i + glen + 1] = data[i];
   }
 
+  size_t numToSend = glen + 1 + dataSize;
 	platform.InitI2c();
-  size_t bytesTransferred = 0;
+  size_t bytesSent = 0;
   {
     MutexLocker lock(Tasks::GetI2CMutex());
-    bytesTransferred = I2C_IFACE.Transfer((int)addr, send, glen + 1 + data_size, 0);
+    bytesSent = I2C_IFACE.Transfer((int)addr, send, numToSend, 0);
   }
 
-	reply.printf("Sent %d bytes to i2c addr 0x%02x", bytesTransferred, addr);
+	if (bytesSent != numToSend)
+	{
+		reply.copy("I2C transmission error");
+		return GCodeResult::error;
+	}
+
+	reply.printf("Sent %d bytes to i2c addr 0x%02x", bytesSent, addr);
+
 	return GCodeResult::ok;
 }
 
-GCodeResult GCodes::I2cForward(GCodeBuffer& gb, uint8_t addr, const StringRef& reply)
+GCodeResult GCodes::I2cForward(const GCodeBuffer& gb, const uint8_t addr, const StringRef& reply)
 {
-	static uint8_t *dummydata;
+	constexpr uint8_t *dummydata = nullptr;
 	return I2cForward(gb, addr, dummydata, 0, reply);
 }
 
@@ -241,11 +254,16 @@ float GCodes::I2cRequestFloat(uint8_t addr)
 {
 	I2cFloat r;
 	platform.InitI2c();
+	size_t bytesReceived = 0;
 	{
 		MutexLocker lock(Tasks::GetI2CMutex());
-		I2C_IFACE.Transfer(addr, r.bval, 0, 4);
+		bytesReceived = I2C_IFACE.Transfer((uint16_t)addr, r.bval, 0, sizeof(r.fval));
 	}
 
+	if (bytesReceived != sizeof(r.fval))
+	{
+		return nanf("");
+	}
 	return r.fval;
 }
 
@@ -326,17 +344,22 @@ void GCodes::GetEncoderPositionsUART(const StringRef& reply)
 
 
 // This handles M114 S1
-void GCodes::GetAxisPositionsFromEncodersI2C(const StringRef& reply)
+GCodeResult GCodes::GetAxisPositionsFromEncodersI2C(const StringRef& reply)
 {
 	reply.copy("[");
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(axis);
-		uint8_t driver = axisConfig.driverNumbers[0]; // Only supports single driver
-		uint8_t i2cValue = platform.GetExternalI2c(driver);
-		if (i2cValue)
+		const uint8_t driver = axisConfig.driverNumbers[0]; // Only supports single driver
+		const uint8_t i2cAddr = platform.GetExternalI2c(driver);
+		if (i2cAddr)
 		{
-			float ang = I2cRequestFloat(i2cValue);
+			float ang = I2cRequestFloat(i2cAddr);
+			if(ang == nanf(""))
+			{
+				reply.cat("I2C transmission error\n");
+				return GCodeResult::error;
+			}
 			if(platform.GetInvertReportedAngle(driver) == platform.GetDirectionValue(driver))
 			{
 				ang = -ang;
@@ -351,6 +374,7 @@ void GCodes::GetAxisPositionsFromEncodersI2C(const StringRef& reply)
 		}
 	}
 	reply.cat(" ],\n");
+	return GCodeResult::ok;
 }
 
 // This handles G95
