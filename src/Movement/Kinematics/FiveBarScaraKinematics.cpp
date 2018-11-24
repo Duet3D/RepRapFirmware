@@ -53,10 +53,11 @@ void FiveBarScaraKinematics::getInverse(const float coords[]) const
 	if(isCantilevered(1)) {
 		// calculate cantilevered side first:
 
-		float *theta = getTheta(proximalL, distalL + cantL, xOrigL, yOrigL, x_0, y_0, Arm::left);
-		xL = theta[0];
-		yL = theta[1];
-		thetaL = theta[2];
+		float lefttheta[6];
+		getTheta(lefttheta, proximalL, distalL + cantL, xOrigL, yOrigL, x_0, y_0, Arm::left);
+		xL = lefttheta[0];
+		yL = lefttheta[1];
+		thetaL = lefttheta[2];
 
 		// calculate x1,y1, i.e. where the distal arms meet
 		float fraction = distalL / (distalL + cantL);
@@ -64,17 +65,19 @@ void FiveBarScaraKinematics::getInverse(const float coords[]) const
 		y1 = (y_0 - yL) * fraction + yL;
 
 		// calculate right, non cantilevered side:
-		theta = getTheta(proximalR, distalR, xOrigR, yOrigR, x1, y1, Arm::right);
-		xR = theta[0];
-		yR = theta[1];
-		thetaR = theta[2];
+		float righttheta[6];
+		getTheta(righttheta, proximalR, distalR, xOrigR, yOrigR, x1, y1, Arm::right);
+		xR = righttheta[0];
+		yR = righttheta[1];
+		thetaR = righttheta[2];
 	}
 	else if(isCantilevered(2)) {
 		// calculate cantilevered side first:
-		float *theta = getTheta(proximalR, distalR + cantR, xOrigR, yOrigR, x_0, y_0, Arm::right);
-		xR = theta[0];
-		yR = theta[1];
-		thetaR = theta[2];
+		float righttheta[6];
+		getTheta(righttheta, proximalR, distalR + cantR, xOrigR, yOrigR, x_0, y_0, Arm::right);
+		xR = righttheta[0];
+		yR = righttheta[1];
+		thetaR = righttheta[2];
 
 		// calculate x1,y1, i.e. where the distal arms meet
 		float fraction = distalR / (distalR + cantR);
@@ -82,24 +85,27 @@ void FiveBarScaraKinematics::getInverse(const float coords[]) const
 		y1 = (y_0 - yR) * fraction + yR;
 
 		// calculate left, non cantilevered side:
-		theta = getTheta(proximalL, distalL, xOrigL, yOrigL, x1, y1, Arm::left);
-		xL = theta[0];
-		yL = theta[1];
-		thetaL = theta[2];
+		float lefttheta[6];
+		getTheta(lefttheta, proximalL, distalL, xOrigL, yOrigL, x1, y1, Arm::left);
+		xL = lefttheta[0];
+		yL = lefttheta[1];
+		thetaL = lefttheta[2];
 
 	}
 	else {	// not cantilevered, hotend is at top joint
-		float *theta = getTheta(proximalL, distalL, xOrigL, yOrigL, x_0, y_0, Arm::left);
+		float lefttheta[6];
+		getTheta(lefttheta, proximalL, distalL, xOrigL, yOrigL, x_0, y_0, Arm::left);
 		x1 = x_0;
 		y1 = y_0;
-		xL = theta[0];
-		yL = theta[1];
-		thetaL = theta[2];
+		xL = lefttheta[0];
+		yL = lefttheta[1];
+		thetaL = lefttheta[2];
 
-		theta = getTheta(proximalR, distalR, xOrigR, yOrigR, x_0, y_0, Arm::right);
-		xR = theta[0];
-		yR = theta[1];
-		thetaR = theta[2];
+		float righttheta[6];
+		getTheta(righttheta, proximalR, distalR, xOrigR, yOrigR, x_0, y_0, Arm::right);
+		xR = righttheta[0];
+		yR = righttheta[1];
+		thetaR = righttheta[2];
 	}
 
 	if(constraintsOk(coords)) {
@@ -193,10 +199,10 @@ float FiveBarScaraKinematics::getAbsoluteAngle(float xOrig, float yOrig, float x
 }
 
 // first circle, second circle. Return the two intersection points
-float * FiveBarScaraKinematics::getIntersec(float firstRadius, float secondRadius, float firstX, float firstY,
+void FiveBarScaraKinematics::getIntersec(float result[], float firstRadius, float secondRadius, float firstX, float firstY,
 		float secondX, float secondY) const
 {
-	static float result[4];	// x,y of first point, then x,y of second
+	//static float result[4];	// x,y of first point, then x,y of second
 
 	// avoid pow() because it uses double
 	float firstRadius2 = firstRadius * firstRadius;
@@ -230,22 +236,20 @@ float * FiveBarScaraKinematics::getIntersec(float firstRadius, float secondRadiu
 	result[1] = y1;
 	result[2] = x2;
 	result[3] = y2;
-
-	return result;
 }
 
 // return coordinates and theta angles or both possible solutions
 // first solution in [0], [1], [2] is the angle which fits to the current workmode
-float * FiveBarScaraKinematics::getTheta(float prox, float distal, float proxX, float proxY, float destX, float destY,
-		Arm arm) const
+// result: x,y,theta of first point, then x,y,theta of second solution
+void FiveBarScaraKinematics::getTheta(float result[], float prox, float distal, float proxX,
+		float proxY, float destX, float destY, Arm arm) const
 {
-	static float result[6];	// x,y,theta of first point, then x,y,theta of second solution
-
-	float *xyArr = getIntersec(prox, distal, proxX, proxY, destX, destY);
-	float x1 = xyArr[0];
-	float y1 = xyArr[1];
-	float x2 = xyArr[2];
-	float y2 = xyArr[3];
+	float inter12[4];
+	getIntersec(inter12, prox, distal, proxX, proxY, destX, destY);
+	float x1 = inter12[0];
+	float y1 = inter12[1];
+	float x2 = inter12[2];
+	float y2 = inter12[3];
 
 	float thetaA = getAbsoluteAngle(proxX, proxY, x1, y1);
 	float thetaB = getAbsoluteAngle(proxX, proxY, x2, y2);
@@ -287,55 +291,51 @@ float * FiveBarScaraKinematics::getTheta(float prox, float distal, float proxX, 
 			result[5] = thetaB;
 		}
 	}
-
-	return result;
 }
 
 // from given point with angle and length, calculate destination
-float * FiveBarScaraKinematics::getXYFromAngle(float angle, float length, float origX, float origY) const
+// resultcoords: x, y
+void FiveBarScaraKinematics::getXYFromAngle(float resultcoords[], float angle, float length,
+		float origX, float origY) const
 {
-	static float result[2];	// x,y
-
 	float xL = length * cos(angle * M_PI / 180.0);
 	float yL = length * sin(angle * M_PI / 180.0);
 
-	result[0] = xL + origX;
-	result[1] = yL + origY;
-
-	return result;
+	resultcoords[0] = xL + origX;
+	resultcoords[1] = yL + origY;
 }
 
 // get forware kinematics: from theta actuators angles, calculate destination coordinates
 // optional cantilevered will be added later
-float * FiveBarScaraKinematics::getForward(float thetaL, float thetaR) const
+// resultcoords: xL, yL, xR, yR, x0, y0
+void FiveBarScaraKinematics::getForward(float resultcoords[], float thetaL, float thetaR) const
 {
-	static float result[6];	// xL, yL, xR, yR, x0, y0
+	float coordsL[2];
+	getXYFromAngle(coordsL, thetaL, proximalL, xOrigL, yOrigL);
+	float xL = coordsL[0];
+	float yL = coordsL[1];
 
-	float *xy1 = getXYFromAngle(thetaL, proximalL, xOrigL, yOrigL);
-	float xL=xy1[0];
-	float yL=xy1[1];
+	float coordsR[2];
+	getXYFromAngle(coordsR, thetaR, proximalR, xOrigR, yOrigR);
+	float xR = coordsR[0];
+	float yR = coordsR[1];
 
-	xy1 = getXYFromAngle(thetaR, proximalR, xOrigR, yOrigR);
-	float xR=xy1[0];
-	float yR=xy1[1];
+	float inter12[4];
+	getIntersec(inter12, distalL, distalR, xL, yL, xR, yR); // two intersection points x,y
 
-	float *dest = getIntersec(distalL, distalR, xL, yL, xR, yR); // two intersection points x,y
-
-	result[0] = xL;
-	result[1] = yL;
-	result[2] = xR;
-	result[3] = yR;
+	resultcoords[0] = xL;
+	resultcoords[1] = yL;
+	resultcoords[2] = xR;
+	resultcoords[3] = yR;
 	// take intersection with higher y
-	if(dest[0] < dest[3]) {
-		result[4] = dest[2];
-		result[5] = dest[3];
+	if(inter12[0] < inter12[3]) {
+		resultcoords[4] = inter12[2];
+		resultcoords[5] = inter12[3];
 	}
 	else {
-		result[4] = dest[0];
-		result[5] = dest[1];
+		resultcoords[4] = inter12[0];
+		resultcoords[5] = inter12[1];
 	}
-
-	return result;
 }
 
 // 1 - angle - 2 are ordered clockwise. The angle is at the inner/right side, between 2 and 1 clockwise
@@ -637,29 +637,32 @@ void FiveBarScaraKinematics::MotorStepsToCartesian(const int32_t motorPos[], con
 	float x_0 = -1.0;
 	float y_0 = -1.0;
 
-	float *result = getForward(thetaL, thetaR);
-	float x1 = result[4];
-	float y1 = result[5];
+	float resultcoords[6];
+	getForward(resultcoords, thetaL, thetaR);
+	float x1 = resultcoords[4];
+	float y1 = resultcoords[5];
 
 	if(isCantilevered(1)) {	// left distal is prolongued
-		float xL = result[0];
-		float yL = result[1];
+		float xL = resultcoords[0];
+		float yL = resultcoords[1];
 
 		// calculate cantilever from psiL
 		float psiL = getAbsoluteAngle(xL, yL, x1, y1);
-		float *destXY = getXYFromAngle(psiL, cantL, x1, y1);
-		x_0 = destXY[0];
-		y_0 = destXY[1];
+		float dest[2];
+		getXYFromAngle(dest, psiL, cantL, x1, y1);
+		x_0 = dest[0];
+		y_0 = dest[1];
 	}
 	else if(isCantilevered(2)) { // right distal is prolongued
-		float xR = result[2];
-		float yR = result[3];
+		float xR = resultcoords[2];
+		float yR = resultcoords[3];
 
 		// now calculate cantilever from psiR
 		float psiR = getAbsoluteAngle(xR, yR, x1, y1);
-		float *destXY = getXYFromAngle(psiR, cantR, x1, y1);
-		x_0 = destXY[0];
-		y_0 = destXY[1];
+		float dest[2];
+		getXYFromAngle(dest, psiR, cantR, x1, y1);
+		x_0 = dest[0];
+		y_0 = dest[1];
 	}
 	else {
 		x_0 = x1;
