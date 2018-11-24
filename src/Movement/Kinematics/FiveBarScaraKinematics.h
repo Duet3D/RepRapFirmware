@@ -57,10 +57,10 @@ private:
 	int getQuadrant(int x, int y) const;
 	bool isCantilevered(int mode) const;
 	float getAbsoluteAngle(float xOrig, float yOrig, float xDest, float yDest) const;
-	float * getIntersec(float firstRadius, float secondRadius, float firstX, float firstY, float secondX, float secondY) const;
-	float * getTheta(float proximal, float distal, float proxX, float proxY, float destX, float destY, Arm arm) const;
-	float * getXYFromAngle(float angle, float length, float origX, float origY) const;
-	float * getForward(float thetaL, float thetaR) const;
+	void getIntersec(float result12[], float firstRadius, float secondRadius, float firstX, float firstY, float secondX, float secondY) const;
+	void getTheta(float result[], float proximal, float distal, float proxX, float proxY, float destX, float destY, Arm arm) const;
+	void getXYFromAngle(float resultcoords[], float angle, float length, float origX, float origY) const;
+	void getForward(float resultcoords[], float thetaL, float thetaR) const;
 	void getInverse(const float coords[]) const;
 	float getAngle(float x1, float y1, float xAngle, float yAngle, float x2, float y2) const;
 	bool isPointInsideDefinedPrintableArea(float x0, float y0) const;
