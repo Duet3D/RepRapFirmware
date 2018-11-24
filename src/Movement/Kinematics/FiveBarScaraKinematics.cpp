@@ -15,7 +15,6 @@
 #include "Movement/DDA.h"
 
 #include <limits>
-//#include <algorithm>
 
 FiveBarScaraKinematics::FiveBarScaraKinematics()
 	: ZLeadscrewKinematics(KinematicsType::scara, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true)
@@ -31,7 +30,7 @@ const char *FiveBarScaraKinematics::GetName(bool forStatusReport) const
 
 //////////////////////// private functions /////////////////////////
 
-
+// no results returnes. All results are stored in the cached variables.
 void FiveBarScaraKinematics::getInverse(const float coords[]) const
 {
 	if(!cachedInvalid && coords[0] == cachedX0 && coords[1] == cachedY0) {		// already solved
@@ -202,10 +201,7 @@ float FiveBarScaraKinematics::getAbsoluteAngle(float xOrig, float yOrig, float x
 void FiveBarScaraKinematics::getIntersec(float result[], float firstRadius, float secondRadius, float firstX, float firstY,
 		float secondX, float secondY) const
 {
-	//static float result[4];	// x,y of first point, then x,y of second
-
-	// avoid pow() because it uses double
-	float firstRadius2 = firstRadius * firstRadius;
+	float firstRadius2 = firstRadius * firstRadius;		// avoid pow() because it uses double
 	float secondRadius2 = secondRadius * secondRadius;
 
 	float distance2 = (firstX - secondX) * (firstX - secondX) + (firstY - secondY) * (firstY - secondY);
@@ -327,6 +323,7 @@ void FiveBarScaraKinematics::getForward(float resultcoords[], float thetaL, floa
 	resultcoords[1] = yL;
 	resultcoords[2] = xR;
 	resultcoords[3] = yR;
+
 	// take intersection with higher y
 	if(inter12[0] < inter12[3]) {
 		resultcoords[4] = inter12[2];
