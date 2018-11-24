@@ -766,7 +766,8 @@ private:
 	uint8_t nextDriveToPoll;
 	bool driversPowered;
 #endif
-    ODriveUART odrive0;
+    ODriveUART odrive0{};
+    ODriveUART odrive1{};
 
 #if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
 	bool warnDriversNotPowered;

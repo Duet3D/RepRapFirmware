@@ -290,13 +290,13 @@ int GCodes::ConnectODriveUARTToSerialChannel(size_t whichODrive, size_t whichCha
 //TODO: SERIAL_AUX2_DEVICE is not available on DuetWifi 1.0
 // We want to use SERIAL_WIFI_DEVICE, but that one meant for use like controlling ODrives
 // so it's baud rate is not even included in the baudRates array
-//#if defined(SERIAL_AUX2_DEVICE)
-//            //commsParams[whichODrive] = 0; // Don't require checksum from ODrive
-//            reprap.GetPlatform().GetODrive0().SetSerial(SERIAL_AUX2_DEVICE);
-//            return 0;
-//#else
-//#error "SERIAL_AUX2_DEVICE not defined"
-//#endif
+#if defined(SERIAL_WIFI_DEVICE)
+            //commsParams[whichODrive] = 0; // Don't require checksum from ODrive
+            reprap.GetPlatform().GetODrive0().SetSerial(SERIAL_WIFI_DEVICE);
+            return 0;
+#else
+#error "SERIAL_WIFI_DEVICE not defined"
+#endif
 		}
     }
     else
