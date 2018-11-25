@@ -30,14 +30,9 @@
 # include "Movement/StepperDrivers/TMC51xx.h"
 #endif
 
-#include "ODriveUART.h"
+#include "ODrive.h"
 
 #include <algorithm> // for std::copy_n
-
-// Each ODrive needs two pos references, and I can't make getter/setters of the ODriveUART
-// object work. The getter always returns 0.0, regardless how I try to change the variable
-float pos_reference[4] = { 0.0, 0.0, 0.0, 0.0 };
-int32_t cpr[4] = { 0 };
 
 #include "Wire.h"
 
@@ -268,59 +263,60 @@ float GCodes::I2cRequestFloat(uint8_t addr)
 }
 
 // This handles M569 Q
-int GCodes::ConnectODriveUARTToSerialChannel(size_t whichODrive, size_t whichChannel, uint32_t atWhatBaud, const StringRef& reply)
+int GCodes::ConnectODriveToSerialChannel(size_t whichODrive, size_t whichChannel, uint32_t atWhatBaud, const StringRef& reply)
 {
-    if (whichODrive == 0) // Only one odrive is created in Platform::Init() for now
-    {
-		//commsParams[whichODrive] = 0; // Don't require checksum from ODrive
-		if (atWhatBaud > 0)
+	ODrive& odrv = (whichODrive == 0) ? reprap.GetPlatform().GetWriteableODrive0() : reprap.GetPlatform().GetWriteableODrive1();
+	if (whichODrive > 1)
+	{
+		reply.printf("ODrive number %u doesn't exist.", whichODrive);
+		return 1;
+	}
+	//commsParams[whichODrive] = 0; // Don't require checksum from ODrive
+	if (atWhatBaud > 0)
+	{
+		if (whichChannel == 2)
 		{
-		    if (reprap.GetPlatform().GetBaudRate(whichChannel) != atWhatBaud)
-		    {
-		        reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
-		        reply.printf("Warning: reset serial channel %u to %lu baud.", whichChannel, atWhatBaud);
-				// See for example Networking/ESP8266WiFi/WifiFirmwareUploader.cpp line 614
-				// for a much more serious attempt at establishing a UART connection
-		    }
+			// Cannot set baud rate of SERIAL_WIFI_DEVICE
 		}
-		if (whichChannel == 0)
-		{
+		else if (reprap.GetPlatform().GetBaudRate(whichChannel) != atWhatBaud)
+	    {
+	        reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
+	        reply.catf("Reset serial channel %u to %lu baud.", whichChannel, atWhatBaud);
+	    }
+	}
+	if (whichChannel == 0)
+	{
 #if defined(SERIAL_MAIN_DEVICE)
-			reprap.GetPlatform().GetODrive0().SetSerial(SERIAL_MAIN_DEVICE);
-			return 0;
+		odrv.SetSerial(SERIAL_MAIN_DEVICE);
+		return 0;
 #else
 #error "SERIAL_MAIN_DEVICE not defined"
 #endif
-		}
-		else if (whichChannel == 1)
-        {
+	}
+	else if (whichChannel == 1)
+	{
 #if defined(SERIAL_AUX_DEVICE)
-            reprap.GetPlatform().GetODrive0().SetSerial(SERIAL_AUX_DEVICE);
-			reprap.GetPlatform().GetODrive0().flush(); // TODO: Don't know if this is enough
-            // TODO: Should we setAuxDetected() here, or would that spam us with stuff meant for Panel Due?
-            return 0;
+		odrv.SetSerial(SERIAL_AUX_DEVICE);
+		odrv.flush(); // TODO: Don't know if this is enough
+		// TODO: Should we setAuxDetected() here, or would that spam us with stuff meant for Panel Due?
+		return 0;
 #else
 #error "SERIAL_AUX_DEVICE not defined"
 #endif
-        }
-		else if (whichChannel == 2)
-		{
-//TODO: SERIAL_AUX2_DEVICE is not available on DuetWifi 1.0
-// We want to use SERIAL_WIFI_DEVICE, but that one meant for use like controlling ODrives
-// so it's baud rate is not even included in the baudRates array
+	}
+	else if (whichChannel == 2)
+	{
+	//TODO: SERIAL_AUX2_DEVICE is not available on DuetWifi 1.0
+	// We want to use SERIAL_WIFI_DEVICE, but that one meant for use like controlling ODrives
+	// so it's baud rate is not even included in the baudRates array
 #if defined(SERIAL_WIFI_DEVICE)
-            //commsParams[whichODrive] = 0; // Don't require checksum from ODrive
-            reprap.GetPlatform().GetODrive0().SetSerial(SERIAL_WIFI_DEVICE);
-            return 0;
+		//commsParams[whichODrive] = 0; // Don't require checksum from ODrive
+		odrv.SetSerial(SERIAL_WIFI_DEVICE);
+		return 0;
 #else
 #error "SERIAL_WIFI_DEVICE not defined"
 #endif
-		}
-    }
-    else
-    {
-        reply.copy("ODrive %u does not exist.", whichODrive);
-    }
+	}
     return 1;
 }
 
@@ -329,15 +325,17 @@ int GCodes::ConnectODriveUARTToSerialChannel(size_t whichODrive, size_t whichCha
 void GCodes::GetEncoderPositionsUART(const StringRef& reply)
 {
 
-	float pos[4] = { 0.0, 0.0, 0.0, 0.0 };
-	float ang[4] = { 0.0, 0.0, 0.0, 0.0 };
+	float posCount[4] = { 0.0, 0.0, 0.0, 0.0 }; // motor shaft angular position in units of encoder counts
+	float angDeg[4] = { 0.0, 0.0, 0.0, 0.0 };
 
 	reply.copy("[");
-	for (size_t i = 0; i < 2; i++)
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		pos[i] = reprap.GetPlatform().GetODrive0().AskForEncoderPosEstimate(i) - pos_reference[i];
-		ang[i] = 360.0*pos[i]/(float)cpr[i];
-		reply.catf("%.2f, ", (double)ang[i]);
+		const ODrive& odrv = reprap.GetPlatform().GetODrive(axis);
+		ODriveAxis odrvAxis = odrv.AxisToODriveAxis(axis);
+		posCount[axis] = odrv.AskForEncoderPosEstimate(odrvAxis) - odrv.GetEncoderPosReference(odrvAxis);
+		angDeg[axis] = 360.0*posCount[axis]/odrv.GetCountsPerRev(odrvAxis);
+		reply.catf("%.2f, ", (double)angDeg[axis]);
 	}
 	reply.cat(" ],\n");
 }
@@ -381,59 +379,58 @@ GCodeResult GCodes::GetAxisPositionsFromEncodersI2C(const StringRef& reply)
 GCodeResult GCodes::SetTorqueMode(GCodeBuffer& gb, const StringRef& reply)
 {
 	GCodeResult res = GCodeResult::ok;
+	constexpr float maxTorque = 127.0f; // TODO: This is part of protocol that RRF, Marlin, Mechaduino Firmware, and Smart Stepper Firmware must agree on
+										// Putting that directly into this function is a bit fragile.
 
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		if (gb.Seen(machineAxisLetters[axis]))
 		{
 			const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(axis);
-			uint8_t driver = axisConfig.driverNumbers[0]; // Only supports single driver
-			uint8_t i2cValue = platform.GetExternalI2c(driver);
-			if (i2cValue)
+			const uint8_t driver = axisConfig.driverNumbers[0]; // Only supports single driver
+			const uint8_t i2cAddr = platform.GetExternalI2c(driver);
+			if (i2cAddr)
 			{
 				I2cFloat torque;
 				torque.fval = gb.GetFValue();
-				if (fabs(torque.fval < 255.0)) // 255 is the motor's maximum torque
+				if (fabs(torque.fval < maxTorque))
 				{
 					torque.fval = fabs(torque.fval); // We want G95 to always drive axis backwards, never forwards
-					if (platform.GetDirectionValue(driver)) torque.fval = -torque.fval;
-					if ((res = I2cForward(gb, i2cValue, torque.bval, 4, reply)) != GCodeResult::ok) return res;
+					if (platform.GetDirectionValue(driver))
+					{
+						torque.fval = -torque.fval;
+					}
+					if ((res = I2cForward(gb, i2cAddr, torque.bval, 4, reply)) != GCodeResult::ok)
+					{
+						return res;
+					}
 				}
 			}
 			else
 			{
-				// Enable torque mode in some non-i2c way
-				if (axis == 0 || axis == 1)
+				// Enable torque mode on UART connected ODrives
+				const ODrive& odrv = reprap.GetPlatform().GetODrive(axis);
+				ODriveAxis odrvAxis = odrv.AxisToODriveAxis(axis);
+				float torque = gb.GetFValue();
+				if (fabs(torque) < 0.1)
 				{
-					float torque = gb.GetFValue();
-					if (fabs(torque) < 0.1)
-					{ // Set axis in position mode
-						// Set the current to zero
-						reprap.GetPlatform().GetODrive0().SetCurrent(axis, 0.0);
-
-						// Tell ODrive that current position is the desired one
-						float desiredPos = reprap.GetPlatform().GetODrive0().AskForEncoderPosEstimate(axis);
-						reprap.GetPlatform().GetODrive0().SetPosSetpoint(axis, desiredPos);
-
-						// Tell ODrive to enter position mode
-						reprap.GetPlatform().GetODrive0().EnablePositionControlMode(axis);
-
-						// This should have done both, but it didn't...
-						//reprap.GetPlatform().GetODrive0().SetPosition(axis, desiredPos);
-
-						reply.catf("Set axis %d to position mode.", axis);
-					}
-					else if (fabs(torque) < 127.0)
-					{
-						// Calculate the right current, including its sign
-						torque = -1.0*fabs(torque);
-						if (platform.GetDirectionValue(driver)) torque = -torque;
-						// Limit max current to 30 A. Use units that max out at 127 to match Mechaduino and Smart Stepper behaviour.
-						float current = torque*30.0/127.0;
-						// Enable current control mode on the ODrive at desider current
-						reprap.GetPlatform().GetODrive0().SetCurrent(axis, current);
-						reply.catf("Set torque of axis %d to %.3f out of 127.0. (current: %.3f A).", axis, (double)torque, (double)current);
-					}
+					// Special behaviour if ~0 torque requested: return to pos mode
+					odrv.SetCurrent(odrvAxis, 0.0);
+					const float desiredPos = odrv.AskForEncoderPosEstimate(odrvAxis);
+					odrv.SetPosSetpoint(odrvAxis, desiredPos);
+					odrv.EnablePositionControlMode(odrvAxis);
+					reply.catf("Set axis %d to position mode.", odrvAxis);
+				}
+				else if (fabs(torque) < maxTorque)
+				{
+					// Calculate the right current, including its sign
+					torque = -1.0*fabs(torque);
+					if (platform.GetDirectionValue(driver)) torque = -torque;
+					constexpr float maxCurrentA = 30.0f;
+					// Limit max current. Use units that max out at maxTorque to match Mechaduino and Smart Stepper behaviour.
+					const float currentA = (torque/maxTorque)*maxCurrentA;
+					odrv.SetCurrent(odrvAxis, currentA);
+					reply.catf("Set torque of axis %d to %.3f out of %.3f. (current: %.3f A).", axis, (double)torque, (double)maxTorque, (double)currentA);
 				}
 			}
 		}
@@ -463,26 +460,21 @@ GCodeResult GCodes::MarkEncoderRef(GCodeBuffer& gb, const StringRef& reply)
 		if (gb.Seen(machineAxisLetters[axis]) || noneSeen)
 		{
 			const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(axis);
-			uint8_t driver = axisConfig.driverNumbers[0]; // Only supports single driver
-			uint8_t i2cValue = platform.GetExternalI2c(driver);
-			if (i2cValue)
+			const uint8_t driver = axisConfig.driverNumbers[0]; // Only supports single driver
+			const uint8_t i2cAddr = platform.GetExternalI2c(driver);
+			if (i2cAddr)
 			{
-				if ((res = I2cForward(gb, i2cValue, reply)) != GCodeResult::ok) return res;
+				if ((res = I2cForward(gb, i2cAddr, reply)) != GCodeResult::ok) return res;
 			}
 			else
 			{
-				// Mark encoder reference point in some non-i2c way
-				if (axis == 0 || axis == 1)
-				{
-					pos_reference[axis] = reprap.GetPlatform().GetODrive0().AskForEncoderPosEstimate(axis);
-					cpr[axis] = reprap.GetPlatform().GetODrive0().AskForEncoderConfigCpr(axis);
-					reply.catf("Set pos_reference[%d] to %.3f and cpr[%d] to %lu.", axis, (double)pos_reference[axis], axis, cpr[axis]);
-				}
-				else if (axis == 2 || axis == 3)
-				{
-					// Todo odrive1 doesn't exist in this firmware yet
-					//reprap.GetPlatform().GetODrive(1).SetEncoderPosReference(axis);
-				}
+				// Mark encoder reference point on UART connected ODrives
+				ODrive& odrv = reprap.GetPlatform().GetWriteableODrive(axis);
+				ODriveAxis odrvAxis = odrv.AxisToODriveAxis(axis);
+				odrv.StoreEncoderPosReference(odrvAxis);
+				odrv.StoreCountsPerRev(odrvAxis);
+				reply.catf("Set odrv.encoderPosReference[%d] to %.3f and countsPerRev[%d] to %.3f.",
+						odrvAxis, (double)odrv.GetEncoderPosReference(odrvAxis), odrvAxis, (double)odrv.GetCountsPerRev(odrvAxis));
 			}
 		}
 	}
@@ -1446,21 +1438,24 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 }
 
 // Deal with M569
-GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
+GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply)
 {
-
-    uint32_t qvals[3];
-    bool seenQ = false;
-    gb.TryGetUIArray('Q', 3, qvals, reply, seenQ);
-    if (seenQ)
-    {
-        reply.printf("Yup, got %lu, %lu, %lu.", qvals[0], qvals[1], qvals[2]);
-        if (ConnectODriveUARTToSerialChannel((size_t)qvals[0], (size_t)qvals[1], qvals[2], reply) == 0)
-        {
-            //reply.printf("Connected ODrive %lu to serial %lu at %lu baud.", qvals[0], qvals[1], qvals[2]);
-            // TODO: Also associate ODrive qvals[0] with drive from P-parmeter
-        }
-    }
+	uint32_t qvals[3];
+	bool seenQ = false;
+	gb.TryGetUIArray('Q', 3, qvals, reply, seenQ);
+	if (seenQ)
+	{
+		reply.printf("Connecting ODrive %u to serial %u at %lu baud...", (size_t)qvals[0], (size_t)qvals[1], qvals[2]);
+		if (ConnectODriveToSerialChannel((size_t)qvals[0], (size_t)qvals[1], qvals[2], reply) == 0)
+		{
+			reply.cat("Success.");
+			// TODO: Also associate ODrive qvals[0] with drive from P-parmeter
+		}
+		else
+		{
+			reply.cat("Failure.");
+		}
+	}
 
 	if (gb.Seen('P'))
 	{

@@ -32,7 +32,6 @@ Licence: GPL
 #include "FilamentMonitors/FilamentMonitor.h"
 #include "RestorePoint.h"
 #include "Movement/BedProbing/Grid.h"
-//#include "ODriveUART.h"
 
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
@@ -153,7 +152,7 @@ public:
 	void GetCurrentCoordinates(const StringRef& s) const;				// Write where we are into a string
 	GCodeResult GetAxisPositionsFromEncodersI2C(const StringRef& reply);// Get encoder position since G96, calculate moved mm, and write to string
 	void GetEncoderPositionsUART(const StringRef& reply);				// Get encoder position since G96, convert units to degrees, and write to string
-	int ConnectODriveUARTToSerialChannel(size_t whichODrive, size_t whichChannel, uint32_t atWhatBaud, const StringRef& reply);
+	int ConnectODriveToSerialChannel(size_t whichODrive, size_t whichChannel, uint32_t atWhatBaud, const StringRef& reply);
 	float I2cRequestFloat(uint8_t addr);						 		// Send only the name of the gcode, ask for a float back
 	bool DoingFileMacro() const;										// Or still busy processing a macro file?
 	float FractionOfFilePrinted() const;								// Get fraction of file printed

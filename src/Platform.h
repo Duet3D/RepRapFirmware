@@ -43,7 +43,7 @@ Licence: GPL
 #include "ZProbe.h"
 #include "ZProbeProgrammer.h"
 #include <General/IPAddress.h>
-#include "ODriveUART.h"
+#include "ODrive.h"
 
 #if defined(DUET_NG)
 # include "DueXn.h"
@@ -566,7 +566,11 @@ public:
 	unsigned int GetNumSmartDrivers() const { return numSmartDrivers; }
 #endif
 
-    ODriveUART GetODrive0() { return odrive0; }
+	// TODO: if HAS_ODRIVES
+	ODrive& GetWriteableODrive0() { return odrive0; }; // Use when you tell RRF which Duet pins are physically connected to which ODrive pins
+	ODrive& GetWriteableODrive1() { return odrive1; }; // ditto
+	ODrive& GetWriteableODrive(size_t axis); // Use when saving ODrive state inside RRF
+	const ODrive& GetODrive(size_t axis); // Prefer this for all other ODrive uses
 
 #if HAS_STALL_DETECT
 	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf);
@@ -688,6 +692,10 @@ private:
 	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
 #endif
 
+	// TODO: if HAS_ODRIVES
+	ODrive odrive0;
+	ODrive odrive1;
+
 	// Logging
 	Logger *logger;
 
@@ -766,8 +774,6 @@ private:
 	uint8_t nextDriveToPoll;
 	bool driversPowered;
 #endif
-    ODriveUART odrive0{};
-    ODriveUART odrive1{};
 
 #if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
 	bool warnDriversNotPowered;

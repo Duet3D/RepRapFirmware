@@ -55,7 +55,7 @@
 # include "Movement/StepperDrivers/TMC51xx.h"
 #endif
 
-#include "ODriveUART.h"
+#include "ODrive.h"
 
 #if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
@@ -492,8 +492,6 @@ void Platform::Init()
 	temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadADrivers = openLoadBDrivers = notOpenLoadADrivers = notOpenLoadBDrivers = 0;
 #endif
 
-    //ODriveUART odrive0(SERIAL_AUX_DEVICE); // ODrive should be created together with platform object. Connect serial later with M569 Q0:1:115200
-
 #if HAS_STALL_DETECT
 	stalledDrivers = 0;
 	logOnStallDrivers = pauseOnStallDrivers = rehomeOnStallDrivers = 0;
@@ -633,6 +631,12 @@ void Platform::Init()
 	InitialiseInterrupts();
 
 	active = true;
+
+	// TODO: Implement gcode that let users configure other mappings from RRF axis to ODriveAxis
+	odrive0.SetRRFToODriveAxis(M0,0);
+	odrive0.SetRRFToODriveAxis(M1,1);
+	odrive1.SetRRFToODriveAxis(M0,2);
+	odrive1.SetRRFToODriveAxis(M1,3);
 }
 
 void Platform::SetZProbeDefaults()
@@ -4810,6 +4814,26 @@ void Platform::Tick()
 	}
 
 	AnalogInStartConversion();
+}
+
+ODrive& Platform::GetWriteableODrive(size_t axis)
+{
+	return const_cast<ODrive&>(GetODrive(axis));
+}
+
+const ODrive& Platform::GetODrive(size_t axis)
+{
+	if (odrive0.AxisToODriveAxis(axis) != NO_AXIS)
+	{
+		// If both ODrives have axis mapped to M0 or M1
+		// then odrive0 is returned
+		return odrive0;
+	}
+	if (odrive1.AxisToODriveAxis(axis) != NO_AXIS)
+	{
+		return odrive1;
+	}
+	return odrive0; // TODO: error handling...
 }
 
 // Pragma pop_options is not supported on this platform
