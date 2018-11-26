@@ -33,6 +33,20 @@ enum class ResponseSource
 	Generic
 };
 
+// Message box data
+struct MessageBox
+{
+	bool active;
+	String<MaxMessageLength> message;
+	String<MaxTitleLength> title;
+	int mode;
+	uint32_t seq;
+	uint32_t timer, timeout;
+	AxesBitmap controls;
+
+	MessageBox() : active(false), seq(0) { }
+};
+
 class RepRap INHERIT_OBJECT_MODEL
 {
 public:
@@ -90,6 +104,8 @@ public:
 #endif
 #if SUPPORT_12864_LCD
  	Display& GetDisplay() const;
+ 	const char *GetLatestMessage(uint16_t& sequence) const;
+ 	const MessageBox& GetMessageBox() const { return mbox; }
 #endif
 
 	void Tick();
@@ -175,15 +191,10 @@ private:
 	String<MACHINE_NAME_LENGTH> myName;
 
 	unsigned int beepFrequency, beepDuration;
-	char message[MaxMessageLength + 1];
+	String<MaxMessageLength> message;
+	uint16_t messageSequence;
 
-	// Message box data
-	bool displayMessageBox;
-	String<MaxMessageLength> boxMessage, boxTitle;
-	int boxMode;
-	uint32_t boxSeq;
-	uint32_t boxTimer, boxTimeout;
-	AxesBitmap boxControls;
+	MessageBox mbox;					// message box data
 
 	// Deferred diagnostics
 	MessageType diagnosticsDestination;

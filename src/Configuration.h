@@ -220,6 +220,7 @@ constexpr size_t SHORT_GCODE_LENGTH = 61;				// maximum length of a GCode that w
 #endif
 
 constexpr size_t MaxMessageLength = 256;
+constexpr size_t MaxTitleLength = 61;
 
 #if SAM4E || SAM4S || SAME70
 constexpr size_t MaxFilenameLength = 120;				// Maximum length of a filename including the path

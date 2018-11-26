@@ -109,7 +109,7 @@ Open investigations:
 - [no fault] Babystepping not working, https://forum.duet3d.com/topic/7445/baby-stepping-not-working/20
 - [no fault] Look at GCode file filament estimation in https://forum.duet3d.com/topic/7584/time-estimates-not-working/6
 
-To be fixed in 2.02 release:
+Fixed in 2.02RC4:
 - [done, ok] Send mapped fan speed at the start of the fan speed list in the M408 response for PanelDue
 - [done, ok] PanelDue emergency stop interrupt from UART driver
 - [done, ok] M408 P1 F"gcodes" returns an empty gcodes object
@@ -159,13 +159,44 @@ Failed tests:
 - [fixed, ok] M557 with even P parameter on circular bed does too few points
 - [bad connection on hot end] Crane Quad hot end reads about 60C at room temperature
 
+To be fixed in 2.02 release:
+- [can't reproduce] Investigate macros causing a hang, https://forum.duet3d.com/topic/7782/issues-with-macros-halting-the-printer/11
+- [can't reproduce] re-test M226, https://forum.duet3d.com/topic/7747/reprapfirmware-2-02rc4-released/29
+- investigate incorrect layer count, https://forum.duet3d.com/topic/7747/reprapfirmware-2-02rc4-released/31
+- investigate slow movement, https://forum.duet3d.com/topic/6974/problem-with-3-independent-z-axis-motors-and-endstops/32
+- [done, ok] 12864 display of speed factor wrong, https://forum.duet3d.com/topic/7747/reprapfirmware-2-02rc4-released/10
+- [done, ok] 12864 button menu handling wrong, https://forum.duet3d.com/topic/7747/reprapfirmware-2-02rc4-released/14
+- [tested, ok] Test error handling when the mesh is badly defined, https://forum.duet3d.com/topic/7759/solved-duet-2-wifi-java-error/10
+- [done, retest] Change "Resume-after-power-fail state saved" message to something appropriate for an ordinary pause, https://forum.duet3d.com/topic/7784/power-fail-triggers-unexpectedly/3
+- [done, ok] SCARA: after prox and distal are homed allow XY moves, https://forum.duet3d.com/topic/7747/reprapfirmware-2-02rc4-released/24
+- [done, test] Support M851, offset is negated + using M851 causes M500 to save Z probe parameters
+- [done, test] If G31 parameters were read from config-override.g (m501) then a subsequent M500 command saves them too
+- [done, retest] Save workplace coordinate systems in M500
+- [done, retest] Shorten M591 response by removing unnecessary text
+- [done, test] When delta auto calibration produces NaNs, abort calibration and emit an error message suggesting a smaller probing radius
+- [done, test] M106 Pnn Svv always set full PWM if vv > 1 and there were additional parameters e.g. F, https://forum.duet3d.com/topic/7810/question-about-m106/6
+- [done] Possible fix for Z and U moving at different speeds, https://forum.duet3d.com/topic/7755/drive-3-is-slower-as-drive-2-at-homing-in-z-solved/32
+- [done, test] For SimpleFilamentMonitor, include filament present/not present status in M591 report
+- [done, ok] M117 on 12864, https://forum.duet3d.com/topic/7826/display-characters-text-in-macro/4
+- [done, test] M291 and manual Z-probing on 12864? https://forum.duet3d.com/topic/7826/display-characters-text-in-macro/4
+- [done, ok] Heater turn on momentarily when Duet is reset
+- [done, test] When G53 is in effect, don't apply tool offsets or axis mapping
+- Don't alow both S0 and T0 in M291, it creates a message that can't be dismissed
+
+Test failures:
+- M291 T"title" P"message" S0 creates a messasge that can't be dismissed
+- M291 not working on 12864, clears rectangular area but that's all
+
 Future:
 - Option for an endstop input to trigger an emergency pause
+- In CNC or laser mode, don't segment G0 moves for mesh bed compensation, https://forum.duet3d.com/topic/7728/go-vs-g1-movement/11
+- Z homing switch offset in M208 or elswhere, https://forum.duet3d.com/topic/7767/z-offset-is-negated-in-homing-g-macro
 - After looking for G1 Z commands in gcode file analyser, check that there is extrusion after it
 - M260 allow bytes to be specified in hex, more generally allow hex anywhere?
 - Auto mount SD card when it is inserted
+- Option to set an idle timer, https://forum.duet3d.com/topic/7758/configuring-idle-timeout
 - Extruder motion until filament sensor senses motion stopped?
-- Allow jerk between printing and non-printing moves, so that coast-to-end works?
+- Allow jerk between printing and non-printing moves, so that coast-to-end works? already made a change for coast-to-end.
 - Error handling in [variable] parser in GCodeBuffer class
 - WiFi auto reconnect should not log all unsuccessful connection attempts, just the first one
 - Option to send M280 servo commands just a few times instead of continuously, for E3D

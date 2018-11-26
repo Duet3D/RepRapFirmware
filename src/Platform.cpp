@@ -542,9 +542,9 @@ void Platform::Init()
 		// pinMode is safe to call when the pin is NoPin, so we don't need to check it here
 		pinMode(HEAT_ON_PINS[heater],
 #if ACTIVE_LOW_HEAT_ON
-				OUTPUT_LOW
-#else
 				OUTPUT_HIGH
+#else
+				OUTPUT_LOW
 #endif
 			);
 	}
@@ -2795,18 +2795,18 @@ bool Platform::WritePlatformParameters(FileStore *f, bool includingG31) const
 		ok = true;
 	}
 
-	if (ok && includingG31)
+	if (ok && (includingG31 || irZProbeParameters.saveToConfigOverride || alternateZProbeParameters.saveToConfigOverride || switchZProbeParameters.saveToConfigOverride))
 	{
 		ok = f->Write("; Z probe parameters\n");
-		if (ok)
+		if (ok && (includingG31 || irZProbeParameters.saveToConfigOverride))
 		{
 			ok = irZProbeParameters.WriteParameters(f, 1);
 		}
-		if (ok)
+		if (ok && (includingG31 || alternateZProbeParameters.saveToConfigOverride))
 		{
 			ok = alternateZProbeParameters.WriteParameters(f, 3);
 		}
-		if (ok)
+		if (ok && (includingG31 || switchZProbeParameters.saveToConfigOverride))
 		{
 			ok = switchZProbeParameters.WriteParameters(f, 4);
 		}

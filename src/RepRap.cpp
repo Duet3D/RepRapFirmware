@@ -183,7 +183,6 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 #endif
 	spinningModule(noModule), debug(0), stopped(false),
 	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0),
-	displayMessageBox(false), boxSeq(0),
 	diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false)
 {
 	OutputBuffer::Init();
@@ -209,7 +208,8 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 	printMonitor = new PrintMonitor(*platform, *gCodes);
 
 	SetPassword(DEFAULT_PASSWORD);
-	message[0] = 0;
+	message.Clear();
+	messageSequence = 0;
 }
 
 void RepRap::Init()
@@ -924,17 +924,17 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	// Output notifications
 	{
 		const bool sendBeep = ((source == ResponseSource::AUX || !platform->HaveAux()) && beepDuration != 0 && beepFrequency != 0);
-		const bool sendMessage = (message[0] != 0);
+		const bool sendMessage = !message.IsEmpty();
 
 		float timeLeft = 0.0;
 		MutexLocker lock(messageBoxMutex);
-		if (displayMessageBox && boxTimer != 0)
+		if (mbox.active && mbox.timer != 0)
 		{
-			timeLeft = (float)(boxTimeout) / 1000.0 - (float)(millis() - boxTimer) / 1000.0;
-			displayMessageBox = (timeLeft > 0.0);
+			timeLeft = (float)(mbox.timeout) / 1000.0 - (float)(millis() - mbox.timer) / 1000.0;
+			mbox.active = (timeLeft > 0.0);
 		}
 
-		if (sendBeep || sendMessage || displayMessageBox)
+		if (sendBeep || sendMessage || mbox.active)
 		{
 			response->cat(",\"output\":{");
 
@@ -942,7 +942,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			if (sendBeep)
 			{
 				response->catf("\"beepDuration\":%u,\"beepFrequency\":%u", beepDuration, beepFrequency);
-				if (sendMessage || displayMessageBox)
+				if (sendMessage || mbox.active)
 				{
 					response->cat(",");
 				}
@@ -953,22 +953,22 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			if (sendMessage)
 			{
 				response->cat("\"message\":");
-				response->EncodeString(message, ARRAY_SIZE(message), false);
-				if (displayMessageBox)
+				response->EncodeString(message.GetRef(), false);
+				if (mbox.active)
 				{
 					response->cat(",");
 				}
-				message[0] = 0;
+				message.Clear();
 			}
 
 			// Report message box
-			if (displayMessageBox)
+			if (mbox.active)
 			{
 				response->cat("\"msgBox\":{\"msg\":");
-				response->EncodeString(boxMessage.c_str(), boxMessage.Capacity(), false);
+				response->EncodeString(mbox.message.GetRef(), false);
 				response->cat(",\"title\":");
-				response->EncodeString(boxTitle.c_str(), boxTitle.Capacity(), false);
-				response->catf(",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%" PRIu32 "}", boxMode, boxSeq, (double)timeLeft, boxControls);
+				response->EncodeString(mbox.title.GetRef(), false);
+				response->catf(",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%" PRIu32 "}", mbox.mode, mbox.seq, (double)timeLeft, mbox.controls);
 			}
 			response->cat("}");
 		}
@@ -1010,7 +1010,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
-			response->catf("%c%.1f", ch, (double)(gCodes->GetExtrusionFactor(extruder) * 100.0));
+			response->catf("%c%.1f", ch, (double)(gCodes->GetExtrusionFactor(extruder)));
 			ch = ',';
 		}
 		response->cat((ch == '[') ? "[]" : "]");
@@ -1327,7 +1327,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			const ZProbe probeParams = platform->GetCurrentZProbeParameters();
 
 			// Trigger threshold
-			response->catf(",\"probe\":{\"threshold\":%" PRIi32, probeParams.adcValue);
+			response->catf(",\"probe\":{\"threshold\":%d", probeParams.adcValue);
 
 			// Trigger height
 			response->catf(",\"height\":%.2f", (double)probeParams.triggerHeight);
@@ -1724,7 +1724,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	ch = '[';
 	for (size_t i = 0; i < GetExtrudersInUse(); ++i)
 	{
-		response->catf("%c%.2f", ch, (double)(gCodes->GetExtrusionFactor(i) * 100.0));
+		response->catf("%c%.2f", ch, (double)(gCodes->GetExtrusionFactor(i)));
 		ch = ',';
 	}
 	response->cat((ch == '[') ? "[]" : "]");
@@ -1805,20 +1805,20 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		float timeLeft = 0.0;
 		MutexLocker lock(messageBoxMutex);
 
-		if (displayMessageBox && boxTimer != 0)
+		if (mbox.active && mbox.timer != 0)
 		{
-			timeLeft = (float)(boxTimeout) / 1000.0 - (float)(millis() - boxTimer) / 1000.0;
-			displayMessageBox = (timeLeft > 0.0);
+			timeLeft = (float)(mbox.timeout) / 1000.0 - (float)(millis() - mbox.timer) / 1000.0;
+			mbox.active = (timeLeft > 0.0);
 		}
 
-		if (displayMessageBox)
+		if (mbox.active)
 		{
 			response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%" PRIu32 "",
-							boxMode, boxSeq, (double)timeLeft, boxControls);
+							mbox.mode, mbox.seq, (double)timeLeft, mbox.controls);
 			response->cat(",\"msgBox.msg\":");
-			response->EncodeString(boxMessage.c_str(), boxMessage.Capacity(), false);
+			response->EncodeString(mbox.message.GetRef(), false);
 			response->cat(",\"msgBox.title\":");
-			response->EncodeString(boxTitle.c_str(), boxTitle.Capacity(), false);
+			response->EncodeString(mbox.title.GetRef(), false);
 		}
 		else
 		{
@@ -2139,7 +2139,8 @@ void RepRap::Beep(unsigned int freq, unsigned int ms)
 // Send a short message. We send it to both PanelDue and the web interface.
 void RepRap::SetMessage(const char *msg)
 {
-	SafeStrncpy(message, msg, ARRAY_SIZE(message));
+	message.copy(msg);
+	++messageSequence;
 
 	if (platform->HaveAux())
 	{
@@ -2151,21 +2152,21 @@ void RepRap::SetMessage(const char *msg)
 void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls)
 {
 	MutexLocker lock(messageBoxMutex);
-	boxMessage.copy(msg);
-	boxTitle.copy(title);
-	boxMode = mode;
-	boxTimer = (timeout <= 0.0) ? 0 : millis();
-	boxTimeout = round(max<float>(timeout, 0.0) * 1000.0);
-	boxControls = controls;
-	displayMessageBox = true;
-	++boxSeq;
+	mbox.message.copy(msg);
+	mbox.title.copy(title);
+	mbox.mode = mode;
+	mbox.timer = (timeout <= 0.0) ? 0 : millis();
+	mbox.timeout = round(max<float>(timeout, 0.0) * 1000.0);
+	mbox.controls = controls;
+	mbox.active = true;
+	++mbox.seq;
 }
 
 // Clear pending message box
 void RepRap::ClearAlert()
 {
 	MutexLocker lock(messageBoxMutex);
-	displayMessageBox = false;
+	mbox.active = false;
 }
 
 // Get the status character for the new-style status response
@@ -2357,5 +2358,15 @@ void RepRap::ReportInternalError(const char *file, const char *func, int line) c
 {
 	platform->MessageF(ErrorMessage, "Internal Error in %s at %s(%d)\n", func, file, line);
 }
+
+#if SUPPORT_12864_LCD
+
+const char *RepRap::GetLatestMessage(uint16_t& sequence) const
+{
+	sequence = messageSequence;
+	return message.c_str();
+}
+
+#endif
 
 // End
