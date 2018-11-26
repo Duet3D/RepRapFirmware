@@ -37,6 +37,9 @@ public:
 	// Construct a GLCD driver.
 	Lcd7920(Pin csPin, const LcdFont * const fnts[], size_t nFonts);
 
+	constexpr PixelNumber GetNumRows() const { return NumRows; }
+	constexpr PixelNumber GetNumCols() const { return NumCols; }
+
 	// Write a single character in the current font. Called by the 'print' functions.
 	//  c = character to write
 	// Returns the number of characters written (1 if we wrote it, 0 otherwise)

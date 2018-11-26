@@ -34,6 +34,8 @@ private:
 	Menu menu;
 	uint32_t whenBeepStarted;
 	uint32_t beepLength;
+	uint16_t mboxSeq;
+	bool mboxActive;
 	bool present;					// true if we have processed M918
 	bool beepActive;
 	bool updatingFirmware;

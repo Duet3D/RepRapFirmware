@@ -17,8 +17,12 @@
 class MenuItem
 {
 public:
+	typedef uint8_t Alignment;
 	typedef uint8_t FontNumber;
 	typedef uint8_t Visibility;
+
+	static constexpr Alignment LeftAlign = 0, CentreAlign = 1, RightAlign = 2;
+	static constexpr Visibility AlwaysVisible = 0;
 
 	// Draw this element on the LCD respecting 'maxWidth' and 'highlight'
 	virtual void Draw(Lcd7920& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) = 0;
@@ -26,22 +30,24 @@ public:
 	// Select this element with a push of the encoder.
 	// If it returns nullptr then go into adjustment mode, if we can adjust the item.
 	// Else execute the returned command.
-	virtual const char* Select() { return  nullptr; }
+	virtual const char* Select() { return nullptr; }
 
 	// Actions to be taken when the menu system selects this item
-	virtual void Enter(bool bForwardDirection) {};
+	virtual void Enter(bool forwardDirection) {};
 
-	// Actions to be taken when the menu system receives encoder counts
-	// and this item is currently selected
+	// Actions to be taken when the menu system receives encoder counts and this item is currently selected
 	// TODO: may be able to merge down with Adjust()
 	virtual int Advance(int nCounts) { return nCounts; }
 
+	// Return true if we can select this element for adjustment
+	virtual bool CanAdjust() { return false; }
+
 	// Adjust this element, returning true if we have finished adjustment.
 	// 'clicks' is the number of encoder clicks to adjust by, or 0 if the button was pushed.
-	virtual bool CanAdjust() { return false; }
 	virtual bool Adjust(int clicks) { return true; }
 
-	virtual void UpdateWidth(Lcd7920& lcd, PixelNumber offScreenRow, PixelNumber numCols) { }
+	// If the width was specified as zero, update it with the actual width
+	virtual void UpdateWidth(Lcd7920& lcd) { }
 
 	virtual ~MenuItem() { }
 
@@ -58,10 +64,18 @@ public:
 	static void AppendToList(MenuItem **root, MenuItem *item);
 
 protected:
-	MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility v);
+	MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility v);
+
+	// Print the item starting at the current cursor position, which may be off screen. Used to find the width and also to really print the item.
+	// Overridden for items that support variable alignment
+	virtual void CorePrint(Lcd7920& lcd) { }
+
+	// Print the item at the correct place with the correct alignment
+	void PrintAligned(Lcd7920& lcd, PixelNumber tOffset, PixelNumber rightMargin);
 
 	const PixelNumber row, column;
 	PixelNumber width;
+	const Alignment align;
 	const FontNumber fontNumber;
 	const Visibility visCase;
 
@@ -78,9 +92,12 @@ public:
 	void* operator new(size_t sz) { return Allocate<TextMenuItem>(); }
 	void operator delete(void* p) { Release<TextMenuItem>(p); }
 
-	TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *t);
+	TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, const char *t);
 	void Draw(Lcd7920& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) override;
-	void UpdateWidth(Lcd7920& lcd, PixelNumber offScreenRow, PixelNumber numCols) override;
+	void UpdateWidth(Lcd7920& lcd) override;
+
+protected:
+	void CorePrint(Lcd7920& lcd) override;
 
 private:
 	const char *text;
@@ -94,10 +111,13 @@ public:
 
 	ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *t, const char *cmd, const char *acFile);
 	void Draw(Lcd7920& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) override;
-	void UpdateWidth(Lcd7920& lcd, PixelNumber offScreenRow, PixelNumber numCols) override;
+	void UpdateWidth(Lcd7920& lcd) override;
 	const char* Select() override;
 
 	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const override;
+
+protected:
+	void CorePrint(Lcd7920& lcd) override;
 
 private:
 	const char *text;
@@ -115,7 +135,7 @@ public:
 	void* operator new(size_t sz) { return Allocate<ValueMenuItem>(); }
 	void operator delete(void* p) { Release<ValueMenuItem>(p); }
 
-	ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, bool adj, unsigned int v, unsigned int d);
+	ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, bool adj, unsigned int v, unsigned int d);
 	void Draw(Lcd7920& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) override;
 	const char* Select() override;
 	bool CanAdjust() override { return true; }
@@ -125,6 +145,9 @@ public:
 
 	unsigned int GetReferencedToolNumber() const;
 
+protected:
+	void CorePrint(Lcd7920& lcd) override;
+
 private:
 	bool Adjust_SelectHelper();
 	bool Adjust_AlterHelper(int clicks);
@@ -133,9 +156,11 @@ private:
 
 	const unsigned int valIndex;
 	float currentValue;
+	const char *textValue;				// for temporary use when printing
 	uint8_t decimals;
 	bool adjustable;
 	bool adjusting;
+	bool error;							// for temporary use when printing
 };
 
 class FilesMenuItem : public MenuItem
@@ -193,7 +218,7 @@ public:
 	ImageMenuItem(PixelNumber r, PixelNumber c, Visibility vis, const char *pFileName);
 
 	void Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) override;
-	void UpdateWidth(Lcd7920& lcd, PixelNumber offScreenRow, PixelNumber numCols) override;
+	void UpdateWidth(Lcd7920& lcd) override;
 
 private:
 	String<MaxFilenameLength> fileName;

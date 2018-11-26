@@ -82,7 +82,7 @@ Menu::Menu(Lcd7920& refLcd)
 	: lcd(refLcd),
 	  timeoutValue(0), lastActionTime(0),
 	  selectableItems(nullptr), unSelectableItems(nullptr), highlightedItem(nullptr), numNestedMenus(0),
-	  itemIsSelected(false), displayingFixedMenu(false), displayingErrorMessage(false),
+	  itemIsSelected(false), displayingFixedMenu(false), displayingErrorMessage(false), displayingMessageBox(false),
 	  errorColumn(0), rowOffset(0)
 {
 }
@@ -92,31 +92,8 @@ void Menu::Load(const char* filename)
 	if (numNestedMenus < MaxMenuNesting)
 	{
 		filenames[numNestedMenus].copy(filename);
-		rowOffset = 0;
-
-		if (numNestedMenus == 0)
-		{
-			currentMargin = 0;
-			lcd.Clear();
-		}
-		else
-		{
-			currentMargin = 0;
-			const PixelNumber right = NumCols;
-			const PixelNumber bottom = NumRows;
-			lcd.Clear(currentMargin, currentMargin, bottom, right);
-
-			// Draw the outline
-			// lcd.Line(currentMargin, currentMargin, bottom, currentMargin, PixelMode::PixelSet);
-			// lcd.Line(currentMargin, currentMargin, currentMargin, right, PixelMode::PixelSet);
-			// lcd.Line(bottom, currentMargin, bottom, right, PixelMode::PixelSet);
-			// lcd.Line(currentMargin, right, bottom, right, PixelMode::PixelSet);
-
-			// currentMargin += InnerMargin;
-		}
-
 		++numNestedMenus;
-		displayingFixedMenu = false;
+		rowOffset = 0;
 		Reload();
 	}
 }
@@ -158,6 +135,70 @@ void Menu::LoadFixedMenu()
 	}
 }
 
+// Display a M291 message box
+void Menu::DisplayMessageBox(const MessageBox& mbox)
+{
+	ResetCache();
+	displayingMessageBox = true;
+	timeoutValue = 0;
+
+	const PixelNumber topBottomMargin = 4;
+	const PixelNumber sideMargin = 4;
+
+	// Draw and a box and clear the interior
+	lcd.SetRightMargin(NumCols);
+	lcd.Line(topBottomMargin, sideMargin, topBottomMargin, NumCols - sideMargin - 1, PixelMode::PixelSet);
+	lcd.Line(topBottomMargin, NumCols - sideMargin - 1, NumRows - topBottomMargin - 1, NumCols - sideMargin - 1, PixelMode::PixelSet);
+	lcd.Line(NumRows - topBottomMargin - 1, sideMargin, NumRows - topBottomMargin - 1, NumCols - sideMargin - 1, PixelMode::PixelSet);
+	lcd.Line(topBottomMargin, sideMargin, NumRows - topBottomMargin - 1, sideMargin, PixelMode::PixelSet);
+	lcd.Clear(topBottomMargin + 1, sideMargin + 1, NumRows - topBottomMargin - 1, NumCols - sideMargin - 1);
+
+	// We could draw the static text directly, but it is easier to use the existing classes
+	const uint8_t fontToUse = 0;
+	const PixelNumber insideMargin = 2;
+	const PixelNumber rowHeight = lcd.GetFontHeight(fontToUse) + 1;
+	const PixelNumber top = topBottomMargin + 1 + insideMargin;
+	const PixelNumber left = sideMargin + 1 + insideMargin;
+	const PixelNumber right = NumCols - left;
+	const PixelNumber availableWidth = right - left;
+	// TODO centre the following text items
+	AddItem(new TextMenuItem(top, left, availableWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, mbox.title.c_str()), false);
+	AddItem(new TextMenuItem(top + rowHeight, left, availableWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, mbox.message.c_str()), false);	// only 1 row for now
+
+	// Add whichever XYZ jog buttons we have been asked to display - assume only XYZ for now
+	const PixelNumber axisButtonWidth = availableWidth/4;
+	const PixelNumber axisButtonStep = (availableWidth - 3 *axisButtonWidth)/2 + axisButtonWidth;
+	if (mbox.controls & X_AXIS)
+	{
+		AddItem(new ValueMenuItem(top + 2 * rowHeight, left, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 510, 1), true);
+	}
+	if (mbox.controls & Y_AXIS)
+	{
+		AddItem(new ValueMenuItem(top + 2 * rowHeight, axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 511, 1), true);
+	}
+	if (mbox.controls & Z_AXIS)
+	{
+		AddItem(new ValueMenuItem(top + 2 * rowHeight, 2 * axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 512, 2), true);
+	}
+
+	const PixelNumber okCancelButtonWidth = 30;
+	if (mbox.mode & 2)
+	{
+		AddItem(new ButtonMenuItem(top + 3 * rowHeight, left, okCancelButtonWidth, fontToUse, MenuItem::AlwaysVisible, "OK", "M292 P0", nullptr), true);
+	}
+	if (mbox.mode & 1)
+	{
+		AddItem(new ButtonMenuItem(top + 3 * rowHeight, right - okCancelButtonWidth, okCancelButtonWidth, fontToUse, MenuItem::AlwaysVisible, "Cancel", "M292 P1", nullptr), true);
+	}
+}
+
+// Clear the message box and display the menu underneath it
+void Menu::ClearMessageBox()
+{
+	displayingMessageBox = false;
+	Reload();
+}
+
 void Menu::Pop()
 {
 	// currentMargin = 0;
@@ -172,7 +213,7 @@ void Menu::LoadError(const char *msg, unsigned int line)
 	// Remove selectable items that may obscure view of the error message
 	ResetCache();
 
-	lcd.Clear(currentMargin, currentMargin, NumRows - currentMargin, NumCols - currentMargin);
+	lcd.Clear();
 	lcd.SetFont(0);
 	lcd.print("Error loading menu\nFile: ");
 	lcd.print((numNestedMenus > 0) ? filenames[numNestedMenus - 1].c_str() : "(none)");
@@ -229,6 +270,7 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 	unsigned int decimals = 0;
 	unsigned int nparam = 0;
 	unsigned int width = 0;
+	unsigned int alignment = 0;
 	const char *text = "*";
 	const char *fname = "main";
 	const char *dirpath = "";
@@ -271,6 +313,14 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 			width = SafeStrtoul(args, &args);
 			break;
 
+		case 'H':
+			alignment = SafeStrtoul(args, &args);
+			break;
+
+		case '"':			// a string with no letter is a T argument
+			ch = 'T';
+			--args;
+			// no break
 		case 'T':
 		case 'L':
 		case 'A':
@@ -305,15 +355,15 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 	if (StringEquals(commandWord, "text"))
 	{
 		const char *const acText = AppendString(text);
-		MenuItem * const pNewItem = new TextMenuItem(row, column, width, fontNumber, xVis, acText);
-		pNewItem->UpdateWidth(lcd, NumRows, NumCols);
+		MenuItem * const pNewItem = new TextMenuItem(row, column, width, alignment, fontNumber, xVis, acText);
+		pNewItem->UpdateWidth(lcd);
 		AddItem(pNewItem, false);
 		column += pNewItem->GetWidth();
 	}
 	else if (StringEquals(commandWord, "image") && fname != nullptr)
 	{
 		ImageMenuItem * const pNewItem = new ImageMenuItem(row, column, xVis, fname);
-		pNewItem->UpdateWidth(lcd, NumRows, NumCols);
+		pNewItem->UpdateWidth(lcd);
 		AddItem(pNewItem, false);
 		column += pNewItem->GetWidth();
 	}
@@ -323,19 +373,19 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 		const char * const actionString = AppendString(action);
 		const char * const c_acFileString = AppendString(fname);
 		ButtonMenuItem * const pNewItem = new ButtonMenuItem(row, column, width, fontNumber, xVis, textString, actionString, c_acFileString);
-		pNewItem->UpdateWidth(lcd, NumRows, NumCols);
+		pNewItem->UpdateWidth(lcd);
 		AddItem(pNewItem, true);
 		column += pNewItem->GetWidth();
 	}
 	else if (StringEquals(commandWord, "value"))
 	{
-		ValueMenuItem * const pNewItem = new ValueMenuItem(row, column, width, fontNumber, xVis, false, nparam, decimals);
+		ValueMenuItem * const pNewItem = new ValueMenuItem(row, column, width, alignment, fontNumber, xVis, false, nparam, decimals);
 		AddItem(pNewItem, false);
 		column += pNewItem->GetWidth();
 	}
 	else if (StringEquals(commandWord, "alter"))
 	{
-		ValueMenuItem * const pNewItem = new ValueMenuItem(row, column, width, fontNumber, xVis, true, nparam, decimals);
+		ValueMenuItem * const pNewItem = new ValueMenuItem(row, column, width, alignment, fontNumber, xVis, true, nparam, decimals);
 		AddItem(pNewItem, true);
 		column += pNewItem->GetWidth();
 	}
@@ -378,6 +428,28 @@ void Menu::ResetCache()
 
 void Menu::Reload()
 {
+	displayingFixedMenu = false;
+	if (numNestedMenus == 1)
+	{
+		currentMargin = 0;
+		lcd.Clear();
+	}
+	else
+	{
+		currentMargin = 0;
+		const PixelNumber right = NumCols;
+		const PixelNumber bottom = NumRows;
+		lcd.Clear(currentMargin, currentMargin, bottom, right);
+
+		// Draw the outline
+		// lcd.Line(currentMargin, currentMargin, bottom, currentMargin, PixelMode::PixelSet);
+		// lcd.Line(currentMargin, currentMargin, currentMargin, right, PixelMode::PixelSet);
+		// lcd.Line(bottom, currentMargin, bottom, right, PixelMode::PixelSet);
+		// lcd.Line(currentMargin, right, bottom, right, PixelMode::PixelSet);
+
+		// currentMargin += InnerMargin;
+	}
+
 	ResetCache();
 	displayingErrorMessage = false;
 
@@ -442,34 +514,25 @@ const char *Menu::AppendString(const char *s)
 // TODO: there is no error handling if a command within a sequence cannot be accepted...
 void Menu::EncoderAction_ExecuteHelper(const char *const cmd)
 {
-	if (cmd[0] == 'G' || cmd[0] == 'M' || cmd[0] == 'T')
+	if (StringEquals(cmd, "return"))
+	{
+		Pop();										// up one level
+	}
+	else if (StringStartsWith(cmd, "menu "))
+	{
+		Load(cmd + 5);
+	}
+	else if (toupper(cmd[0]) == 'G' || toupper(cmd[0]) == 'M' || toupper(cmd[0]) == 'T')
 	{
 		const bool success = reprap.GetGCodes().ProcessCommandFromLcd(cmd);
-		if (success)
-		{
-			// reprap.GetDisplay().SuccessBeep();
-		}
-		else
+		if (!success)
 		{
 			reprap.GetDisplay().ErrorBeep();			// long low beep
 		}
 	}
-	else
-	{
-		// "menu" returns the filename (e.g. "main")
-		// "return" returns the command itself ("return")
-		if (0 == strcmp("return", cmd))
-		{
-			Pop();										// up one level
-		}
-		else
-		{
-			Load(cmd);
-		}
-	}
 }
 
-void Menu::EncoderAction_EnterItemHelper()
+void Menu::EncoderActionEnterItemHelper()
 {
 	if (highlightedItem != nullptr && highlightedItem->IsVisible())
 	{
@@ -498,7 +561,7 @@ void Menu::EncoderAction_EnterItemHelper()
 	}
 }
 
-void Menu::EncoderAction_AdjustItemHelper(int action)
+void Menu::EncoderActionScrollItemHelper(int action)
 {
 	// Based mainly on file listing requiring we handle list of unknown length
 	// before moving on to the next selectable item at the Menu level, we let the
@@ -540,23 +603,6 @@ void Menu::EncoderAction_AdjustItemHelper(int action)
 	}
 }
 
-void Menu::EncoderAction_ExitItemHelper(int action)
-{
-	if (highlightedItem != nullptr && highlightedItem->IsVisible())
-	{
-		const bool done = highlightedItem->Adjust(action);
-		if (done)
-		{
-			itemIsSelected = false;
-		}
-	}
-	else
-	{
-		// Should not get here
-		itemIsSelected = false;
-	}
-}
-
 // Perform the specified encoder action
 // If 'action' is zero then the button was pressed, else 'action' is the number of clicks (+ve for clockwise)
 // EncoderAction is what's called in response to all wheel/button actions; a convenient place to set new timeout values
@@ -572,20 +618,31 @@ void Menu::EncoderAction(int action)
 	}
 	else
 	{
-		if (itemIsSelected) // send the wheel action (scroll or click) to the item itself
+		if (itemIsSelected)						// send the wheel action (scroll or click) to the item itself
 		{
-			EncoderAction_ExitItemHelper(action);
+			if (highlightedItem != nullptr && highlightedItem->IsVisible())
+			{
+				const bool done = highlightedItem->Adjust(action);
+				if (done)
+				{
+					itemIsSelected = false;
+				}
+			}
+			else
+			{
+				itemIsSelected = false;			// should not get here
+			}
 		}
-		else if (action != 0) // scroll without an item under selection
+		else if (action != 0)					// scroll without an item under selection
 		{
-			EncoderAction_AdjustItemHelper(action);
+			EncoderActionScrollItemHelper(action);
 		}
-		else // click without an item under selection
+		else									// click without an item under selection
 		{
-			EncoderAction_EnterItemHelper();
+			EncoderActionEnterItemHelper();
 		}
 
-		if (!displayingErrorMessage)			// if the operation did not result in an error
+		if (!displayingErrorMessage && !displayingMessageBox)	// if the operation did not result in an error and we are not displaying a message box
 		{
 			lastActionTime = millis();
 			timeoutValue = InactivityTimeout;
@@ -629,7 +686,11 @@ void Menu::Refresh()
 		numNestedMenus = 0;
 		Load("main");
 	}
+	DrawAll();
+}
 
+void Menu::DrawAll()
+{
 	const PixelNumber rightMargin = NumCols - currentMargin;
 	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
 	{
@@ -640,6 +701,13 @@ void Menu::Refresh()
 	{
 		item->Draw(lcd, rightMargin, false, rowOffset);
 	}
+}
+
+// Clear any highlighting. Call Refresh() after calling this to clear it on the display.
+void Menu::ClearHighlighting()
+{
+	highlightedItem = nullptr;
+	itemIsSelected = false;
 }
 
 // Move the highlighted item forwards or backwards through the selectable items, setting it to nullptr if nothing is selectable

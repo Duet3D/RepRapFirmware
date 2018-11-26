@@ -406,38 +406,42 @@ void Lcd7920::TextInvert(bool b)
 	}
 }
 
+// Clear a rectangular block of pixels starting at rows, scol ending just before erow, ecol
 void Lcd7920::Clear(PixelNumber sRow, PixelNumber sCol, PixelNumber eRow, PixelNumber eCol)
 {
 	if (eCol > NumCols) { eCol = NumCols; }
 	if (eRow > NumRows) { eRow = NumRows; }
 	if (sCol < eCol && sRow < eRow)
 	{
+		uint8_t sMask = ~(0xFF >> (sCol & 7));		// mask of bits we want to keep in the first byte of each row that we modify
+		const uint8_t eMask = 0xFF >> (eCol & 7);	// mask of bits we want to keep in the last byte of each row that we modify
+		if ((sCol & ~7) == (eCol & ~7))
+		{
+			sMask |= eMask;							// special case of just clearing some middle bits
+		}
 		for (PixelNumber row = sRow; row < eRow; ++row)
 		{
-			PixelNumber col = sCol;
-			if ((col & 7) != 0)
+			uint8_t * p = image + ((row * (NumCols/8)) + (sCol/8));
+			uint8_t * const endp = image + ((row * (NumCols/8)) + (eCol/8));
+			*p &= sMask;
+			if (p != endp)
 			{
-				uint8_t * const p = image + ((row * (NumCols/8)) + (col/8));
-				*p &= ~(0xFF >> (col & 7));
-				col = (col & ~7) + 1;
-			}
-			while (col < eCol)
-			{
-				image[(row * (NumCols/8)) + (col/8)] = 0;
-				col += 8;
-			}
-			if ((eCol & 7) != 0)
-			{
-				uint8_t * const p = image + ((row * (NumCols/8)) + (col/8));
-				*p &= (0xFF >> (col & 7));
+				while (++p < endp)
+				{
+					*p = 0;
+				}
+				if ((eCol & 7) != 0)
+				{
+					*p &= eMask;
+				}
 			}
 		}
 
 		// Flag cleared part as dirty
-		startRow = sRow;
-		endRow = eRow;
-		startCol = sCol;
-		endCol = eCol;
+		if (sCol < startCol) { startCol = sCol; }
+		if (eCol >= endCol) { endCol = eCol; }
+		if (sRow < startRow) { startRow = sRow; }
+		if (eRow >= endRow) { endRow = eRow; }
 
 		SetCursor(sRow, sCol);
 		textInverted = false;
@@ -458,7 +462,10 @@ void Lcd7920::Line(PixelNumber y0, PixelNumber x0, PixelNumber y1, PixelNumber x
 	for (;;)
 	{
 		SetPixel(y0, x0, mode);
-		if (x0 == x1 && y0 == y1) break;
+		if (x0 == x1 && y0 == y1)
+		{
+			break;
+		}
 		int e2 = err + err;
 		if (e2 > -dy)
 		{

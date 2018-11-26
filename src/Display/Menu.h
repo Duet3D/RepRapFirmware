@@ -10,6 +10,8 @@
 
 #include "MenuItem.h"
 
+class MessageBox;
+
 // Class to represent either a full page menu or a popup menu.
 // For space reasons we store only a single instance of this class. Each nested menu is indented by a fixed margin from its parent.
 class Menu
@@ -20,19 +22,22 @@ public:
 	void Pop();
 	void EncoderAction(int action);
 	void Refresh();
+	void ClearHighlighting();
+	void DisplayMessageBox(const MessageBox& mbox);
+	void ClearMessageBox();
 
 private:
 	void LoadFixedMenu();
 	void ResetCache();
 	void Reload();
+	void DrawAll();
 	const char *ParseMenuLine(char * s);
 	void LoadError(const char *msg, unsigned int line);
 	void AddItem(MenuItem *item, bool isSelectable);
 	const char *AppendString(const char *s);
 
-	void EncoderAction_EnterItemHelper();
-	void EncoderAction_AdjustItemHelper(int action);
-	void EncoderAction_ExitItemHelper(int action);
+	void EncoderActionEnterItemHelper();
+	void EncoderActionScrollItemHelper(int action);
 	void EncoderAction_ExecuteHelper(const char *const cmd);
 
 	void AdvanceHighlightedItem(int n);
@@ -63,6 +68,7 @@ private:
 	bool itemIsSelected;
 	bool displayingFixedMenu;
 	bool displayingErrorMessage;
+	bool displayingMessageBox;
 
 	// Variables used while parsing
 	size_t commandBufferIndex;

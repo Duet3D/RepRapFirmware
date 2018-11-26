@@ -22,7 +22,8 @@ const size_t SmallFontNumber = 0;
 const size_t LargeFontNumber = 1;
 
 Display::Display()
-	: lcd(LcdCSPin, fonts, ARRAY_SIZE(fonts)), encoder(EncoderPinA, EncoderPinB, EncoderPinSw), menu(lcd), present(false), beepActive(false), updatingFirmware(false)
+	: lcd(LcdCSPin, fonts, ARRAY_SIZE(fonts)), encoder(EncoderPinA, EncoderPinB, EncoderPinSw), menu(lcd),
+	  mboxSeq(0), mboxActive(false), present(false), beepActive(false), updatingFirmware(false)
 {
 }
 
@@ -49,6 +50,30 @@ void Display::Spin()
 			{
 				menu.EncoderAction(0);
 			}
+
+			const MessageBox& mbox = reprap.GetMessageBox();
+			if (mbox.active)
+			{
+				if (!mboxActive || mboxSeq != mbox.seq)
+				{
+					// New message box to display
+					if (!mboxActive)
+					{
+						menu.ClearHighlighting();					// cancel highlighting and adjustment
+						menu.Refresh();
+					}
+					mboxActive = true;
+					mboxSeq = mbox.seq;
+					menu.DisplayMessageBox(mbox);
+				}
+			}
+			else if (mboxActive)
+			{
+				// Message box has been cancelled from this or another input channel
+				menu.ClearMessageBox();
+				mboxActive = false;
+			}
+
 			menu.Refresh();
 		}
 		lcd.FlushSome();
