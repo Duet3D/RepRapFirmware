@@ -175,7 +175,7 @@ bool FiveBarScaraKinematics::isCantilevered(int mode) const
 // get angle between 0 and 360 for given origin and destination coordinates
 float FiveBarScaraKinematics::getAbsoluteAngle(float xOrig, float yOrig, float xDest, float yDest) const
 {
-	float length = sqrt((xOrig - xDest) * (xOrig - xDest) + (yOrig - yDest) * (yOrig - yDest));
+	float length = sqrtf(fsquare(xOrig - xDest) + fsquare(yOrig - yDest));
 
 	float y = abs(yOrig - yDest);
 	float angle = asin(y / length) * 180.0 / M_PI;
@@ -201,13 +201,13 @@ float FiveBarScaraKinematics::getAbsoluteAngle(float xOrig, float yOrig, float x
 void FiveBarScaraKinematics::getIntersec(float result[], float firstRadius, float secondRadius, float firstX, float firstY,
 		float secondX, float secondY) const
 {
-	float firstRadius2 = firstRadius * firstRadius;		// avoid pow() because it uses double
-	float secondRadius2 = secondRadius * secondRadius;
+	float firstRadius2 = fsquare(firstRadius);
+	float secondRadius2 = fsquare(secondRadius);
 
 	float distance2 = (firstX - secondX) * (firstX - secondX) + (firstY - secondY) * (firstY - secondY);
-	float distance = sqrt(distance2);
+	float distance = sqrtf(distance2);
 
-	float delta = 0.25 * sqrt(
+	float delta = 0.25 * sqrtf(
 			(distance + firstRadius + secondRadius)
 			* (distance + firstRadius - secondRadius)
 			* (distance - firstRadius + secondRadius)
