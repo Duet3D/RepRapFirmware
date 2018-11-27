@@ -161,24 +161,23 @@ void Menu::DisplayMessageBox(const MessageBox& mbox)
 	const PixelNumber left = sideMargin + 1 + insideMargin;
 	const PixelNumber right = NumCols - left;
 	const PixelNumber availableWidth = right - left;
-	// TODO centre the following text items
 	AddItem(new TextMenuItem(top, left, availableWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, mbox.title.c_str()), false);
 	AddItem(new TextMenuItem(top + rowHeight, left, availableWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, mbox.message.c_str()), false);	// only 1 row for now
 
 	// Add whichever XYZ jog buttons we have been asked to display - assume only XYZ for now
 	const PixelNumber axisButtonWidth = availableWidth/4;
 	const PixelNumber axisButtonStep = (availableWidth - 3 *axisButtonWidth)/2 + axisButtonWidth;
-	if (mbox.controls & X_AXIS)
+	if (IsBitSet(mbox.controls, X_AXIS))
 	{
 		AddItem(new ValueMenuItem(top + 2 * rowHeight, left, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 510, 1), true);
 	}
-	if (mbox.controls & Y_AXIS)
+	if (IsBitSet(mbox.controls, Y_AXIS))
 	{
-		AddItem(new ValueMenuItem(top + 2 * rowHeight, axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 511, 1), true);
+		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 511, 1), true);
 	}
-	if (mbox.controls & Z_AXIS)
+	if (IsBitSet(mbox.controls, Z_AXIS))
 	{
-		AddItem(new ValueMenuItem(top + 2 * rowHeight, 2 * axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 512, 2), true);
+		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + 2 * axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 512, 2), true);
 	}
 
 	const PixelNumber okCancelButtonWidth = 30;

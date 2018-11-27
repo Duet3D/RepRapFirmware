@@ -193,7 +193,7 @@ PixelNumber ButtonMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, P
 }
 
 ValueMenuItem::ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, bool adj, unsigned int v, unsigned int d)
-	: MenuItem(r, c, ((w != 0) ? w : DefaultWidth), a, fn, vis), valIndex(v), currentValue(0.0), decimals(d), adjustable(adj), adjusting(false)
+	: MenuItem(r, c, ((w != 0) ? w : DefaultWidth), a, fn, vis), valIndex(v), currentValue(0.0), decimals(d), adjusting(AdjustMode::displaying), adjustable(adj)
 {
 }
 
@@ -234,7 +234,7 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 			currentValue = (float)newSeq;
 		}
 	}
-	else if (!adjusting)
+	else if (adjusting != AdjustMode::adjusting)
 	{
 		const unsigned int itemNumber = valIndex % 100;
 		const float oldValue = currentValue;
@@ -274,69 +274,28 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 			// case 1 is the latest message sent by M117, but it handled at the start
 
 			case 10: // X
-				{
-					float m[MaxAxes];
-					reprap.GetMove().GetCurrentMachinePosition(m, false);
-					currentValue = m[X_AXIS];
-				}
-				break;
-
 			case 11: // Y
-				{
-					float m[MaxAxes];
-					reprap.GetMove().GetCurrentMachinePosition(m, false);
-					currentValue = m[Y_AXIS];
-				}
-				break;
-
 			case 12: // Z
-				{
-					float m[MaxAxes];
-					reprap.GetMove().GetCurrentMachinePosition(m, false);
-					currentValue = m[Z_AXIS];
-				}
-				break;
-
-			case 13: // E0
-				currentValue = reprap.GetGCodes().GetRawExtruderTotalByDrive(0);
-				break;
-
-			case 14: // E1
-				currentValue = reprap.GetGCodes().GetRawExtruderTotalByDrive(1);
-				break;
-
-			case 15: // E2
-				currentValue = reprap.GetGCodes().GetRawExtruderTotalByDrive(2);
-				break;
-
-			case 16: // E3
-				currentValue = reprap.GetGCodes().GetRawExtruderTotalByDrive(3);
-				break;
-
-			// TODO: drives on some configurations could go up to 519, avoid this collision:
-			case 19: // Z baby-step
-				currentValue = reprap.GetGCodes().GetBabyStepOffset();
+			case 13: // U
+			case 14: // V
+			case 15: // W
+				currentValue = reprap.GetGCodes().GetUserPosition()[itemNumber - 10];
 				break;
 
 			case 20:
 				currentValue = reprap.GetCurrentToolNumber();
 				break;
 
+			case 21: // Z baby-step
+				currentValue = reprap.GetGCodes().GetBabyStepOffset();
+				break;
+
 			// Platform's IP address is the "planned", Network's IP address is the "actual"
 			case 30:
-				currentValue = reprap.GetNetwork().GetIPAddress(0).GetQuad(0);
-				break;
-
 			case 31:
-				currentValue = reprap.GetNetwork().GetIPAddress(0).GetQuad(1);
-				break;
-
 			case 32:
-				currentValue = reprap.GetNetwork().GetIPAddress(0).GetQuad(2);
-				break;
-
 			case 33:
-				currentValue = reprap.GetNetwork().GetIPAddress(0).GetQuad(3);
+				currentValue = reprap.GetNetwork().GetIPAddress(0).GetQuad(itemNumber - 30);
 				break;
 
 			default:
@@ -365,7 +324,7 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 
 const char* ValueMenuItem::Select()
 {
-	adjusting = true;
+	adjusting = AdjustMode::adjusting;
 	return nullptr;
 }
 
@@ -377,80 +336,76 @@ PixelNumber ValueMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, Pi
 
 bool ValueMenuItem::Adjust_SelectHelper()
 {
-	const unsigned int itemNumber = GetReferencedToolNumber();
-
-	bool error = false;
-	switch (valIndex/100)
+	if (adjusting == AdjustMode::adjusting)
 	{
-	case 1: // heater active temperature
-		if (1 > currentValue) // 0 is off
+		const unsigned int itemNumber = GetReferencedToolNumber();
+
+		bool error = false;
+		switch (valIndex/100)
 		{
-			reprap.GetGCodes().SetItemActiveTemperature(itemNumber, -273.15f);
-		}
-		else // otherwise ensure the tool is made active at the same time (really only matters for 79)
-		{
-			if (80 > itemNumber)
+		case 1: // heater active temperature
+			if (1 > currentValue) // 0 is off
 			{
-				reprap.SelectTool(itemNumber, false);
+				reprap.GetGCodes().SetItemActiveTemperature(itemNumber, -273.15f);
 			}
-			reprap.GetGCodes().SetItemActiveTemperature(itemNumber, currentValue);
-		}
-		break;
-
-	case 2: // heater standby temperature
-		reprap.GetGCodes().SetItemStandbyTemperature(itemNumber, (1 > currentValue) ? -273.15f : currentValue);
-		break;
-
-	case 3: // fan %
-		if (itemNumber == 99)
-		{
-			reprap.GetGCodes().SetMappedFanSpeed(currentValue * 0.01);
-		}
-		else
-		{
-			reprap.GetPlatform().SetFanValue(itemNumber, currentValue * 0.01);
-		}
-		break;
-
-	case 4: // extruder %
-		reprap.GetGCodes().SetExtrusionFactor(itemNumber, currentValue);
-		break;
-
-	case 5: // misc.
-		switch (itemNumber)
-		{
-		case 0:
-			reprap.GetGCodes().SetSpeedFactor(currentValue);
+			else // otherwise ensure the tool is made active at the same time (really only matters for 79)
+			{
+				if (80 > itemNumber)
+				{
+					reprap.SelectTool(itemNumber, false);
+				}
+				reprap.GetGCodes().SetItemActiveTemperature(itemNumber, currentValue);
+			}
 			break;
 
-		case 19:	// baby stepping
+		case 2: // heater standby temperature
+			reprap.GetGCodes().SetItemStandbyTemperature(itemNumber, (1 > currentValue) ? -273.15f : currentValue);
 			break;
 
-		case 20:
-			reprap.SelectTool(currentValue, false);
+		case 3: // fan %
+			if (itemNumber == 99)
+			{
+				reprap.GetGCodes().SetMappedFanSpeed(currentValue * 0.01);
+			}
+			else
+			{
+				reprap.GetPlatform().SetFanValue(itemNumber, currentValue * 0.01);
+			}
+			break;
+
+		case 4: // extruder %
+			reprap.GetGCodes().SetExtrusionFactor(itemNumber, currentValue);
+			break;
+
+		case 5: // misc.
+			switch (itemNumber)
+			{
+			case 0:
+				reprap.GetGCodes().SetSpeedFactor(currentValue);
+				break;
+
+			case 20:
+				reprap.SelectTool(currentValue, false);
+				break;
+
+			default:
+				error = true;
+				break;
+			}
 			break;
 
 		default:
-			if (itemNumber >= 510 && itemNumber < reprap.GetGCodes().GetVisibleAxes())
-			{
-				break;	// axis jogging
-			}
 			error = true;
 			break;
 		}
-		break;
 
-	default:
-		error = true;
-		break;
+		if (error)
+		{
+			reprap.GetDisplay().ErrorBeep();
+		}
 	}
 
-	if (error)
-	{
-		reprap.GetDisplay().ErrorBeep();
-	}
-	adjusting = false;
-
+	adjusting = AdjustMode::displaying;
 	return true;
 }
 
@@ -515,25 +470,27 @@ bool ValueMenuItem::Adjust_AlterHelper(int clicks)
 			currentValue = constrain<float>(currentValue + (float)clicks, 10, 500);
 			break;
 
-		case 19: // 519 baby stepping
-			{
-				String<SHORT_GCODE_LENGTH> cmd;
-				cmd.printf("M290 Z%.2f", (double)(0.02 * clicks));
-				(void) reprap.GetGCodes().ProcessCommandFromLcd(cmd.c_str());
-			}
-			break;
-
 		case 20: // 520 Tool Selection
 			currentValue = (float)constrain<int>((int)currentValue + clicks, -1, 255);
 			break;
 
-		default:
-			if (itemNumber >= 510 && itemNumber < 500 + reprap.GetGCodes().GetVisibleAxes())	// 510-518 axis position adjustment
+		case 21: // 521 baby stepping
 			{
 				String<SHORT_GCODE_LENGTH> cmd;
-				const float amount = ((itemNumber == 512) ? 0.02 : 0.1) * clicks;
-				cmd.printf("M120 G91 G1 F3000 %c%.2f M121", 'X' + (itemNumber - 510), (double)amount);
+				cmd.printf("M290 Z%.2f", (double)(0.02 * clicks));
 				(void) reprap.GetGCodes().ProcessCommandFromLcd(cmd.c_str());
+				adjusting = AdjustMode::liveAdjusting;
+			}
+			break;
+
+		default:
+			if (itemNumber >= 10 && itemNumber < 10 + reprap.GetGCodes().GetVisibleAxes())	// 510-518 axis position adjustment
+			{
+				String<SHORT_GCODE_LENGTH> cmd;
+				const float amount = ((itemNumber == 12) ? 0.02 : 0.1) * clicks;			// 0.02mm Z resolution, 0.1mm for other axes
+				cmd.printf("M120 G91 G1 F3000 %c%.2f M121", 'X' + (itemNumber - 10), (double)amount);
+				(void) reprap.GetGCodes().ProcessCommandFromLcd(cmd.c_str());
+				adjusting = AdjustMode::liveAdjusting;
 			}
 			break;
 		}

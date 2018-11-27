@@ -149,6 +149,8 @@ protected:
 	void CorePrint(Lcd7920& lcd) override;
 
 private:
+	enum class AdjustMode : uint8_t { displaying, adjusting, liveAdjusting };
+
 	bool Adjust_SelectHelper();
 	bool Adjust_AlterHelper(int clicks);
 
@@ -158,8 +160,8 @@ private:
 	float currentValue;
 	const char *textValue;				// for temporary use when printing
 	uint8_t decimals;
+	AdjustMode adjusting;
 	bool adjustable;
-	bool adjusting;
 	bool error;							// for temporary use when printing
 };
 
