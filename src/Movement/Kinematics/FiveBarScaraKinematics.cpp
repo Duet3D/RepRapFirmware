@@ -204,7 +204,7 @@ void FiveBarScaraKinematics::getIntersec(float result[], float firstRadius, floa
 	float firstRadius2 = fsquare(firstRadius);
 	float secondRadius2 = fsquare(secondRadius);
 
-	float distance2 = (firstX - secondX) * (firstX - secondX) + (firstY - secondY) * (firstY - secondY);
+	float distance2 = fsquare(firstX - secondX) + fsquare(firstY - secondY);
 	float distance = sqrtf(distance2);
 
 	float delta = 0.25 * sqrtf(
