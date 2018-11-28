@@ -61,7 +61,11 @@ GCodeResult GCodes::SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply)
 	gb.TryGetFValue(axisLetters[X_AXIS], params.xOffset, seen);
 	gb.TryGetFValue(axisLetters[Y_AXIS], params.yOffset, seen);
 	gb.TryGetFValue(axisLetters[Z_AXIS], params.triggerHeight, seen);
-	gb.TryGetIValue('P', params.adcValue, seen);
+	if (gb.Seen('P'))
+	{
+		seen = true;
+		params.adcValue = gb.GetIValue();
+	}
 
 	if (gb.Seen('C'))
 	{
@@ -84,12 +88,16 @@ GCodeResult GCodes::SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply)
 		{
 			return GCodeResult::notFinished;
 		}
+		if (gb.MachineState().runningM501)
+		{
+			params.saveToConfigOverride = true;			// we are loading these parameters from config-override.g, so a subsequent M500 should save them to config-override.g
+		}
 		platform.SetZProbeParameters(probeType, params);
 	}
 	else if (seenT)
 	{
 		// Don't bother printing temperature coefficient and calibration temperature because we will probably remove them soon
-		reply.printf("Threshold %" PRIi32 ", trigger height %.2f, offsets X%.1f Y%.1f", params.adcValue, (double)params.triggerHeight, (double)params.xOffset, (double)params.yOffset);
+		reply.printf("Threshold %d, trigger height %.2f, offsets X%.1f Y%.1f", params.adcValue, (double)params.triggerHeight, (double)params.xOffset, (double)params.yOffset);
 	}
 	else
 	{
@@ -264,6 +272,26 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 	}
 
 	return GCodeResult::badOrMissingParameter;
+}
+
+// Save any modified workplace coordinate offsets to file returning true if successful. Used by M500.
+bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const
+{
+	for (size_t cs = 0; cs < NumCoordinateSystems; ++cs)
+	{
+		String<ScratchStringLength> scratchString;
+		scratchString.printf("G10 L2 P%u", cs + 1);
+		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+		{
+			scratchString.catf(" %c%.2f", axisLetters[axis], (double)workplaceCoordinates[cs][axis]);
+		}
+		scratchString.cat('\n');
+		if (!f->Write(scratchString.c_str()))
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 #endif
@@ -549,7 +577,7 @@ GCodeResult GCodes::SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply)
 
 	if (gb.Seen('A'))
 	{
-		params.maxTaps = gb.GetUIValue();
+		params.maxTaps = min<uint32_t>(gb.GetUIValue(), ZProbe::MaxTapsLimit);
 		seen = true;
 	}
 
@@ -695,7 +723,6 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 			uint32_t drivers[MaxDriversPerAxis];
 			gb.GetUnsignedArray(drivers, numValues, false);
 
-			// Check all the driver numbers are in range
 			AxisDriversConfig config;
 			config.numDrivers = numValues;
 			for (size_t i = 0; i < numValues; ++i)
@@ -718,8 +745,8 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 					currentUserPosition[drive] = 0.0;			// set its requested user position too in case it is visible
 					++numTotalAxes;
 					numVisibleAxes = numTotalAxes;				// assume any new axes are visible unless there is a P parameter
+					reprap.GetMove().SetNewPosition(moveBuffer.coords, true);	// tell the Move system where the new axis is
 				}
-				reprap.GetMove().SetNewPosition(moveBuffer.coords, true);	// tell the Move system where any new axes are
 				platform.SetAxisDriversConfig(drive, config);
 				if (numTotalAxes + numExtruders > MaxTotalDrivers)
 				{
@@ -746,10 +773,10 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('P'))
 	{
 		seen = true;
-		const int nva = gb.GetIValue();
-		if (nva >= (int)MinAxes && (unsigned int)nva <= numTotalAxes)
+		const unsigned int nva = gb.GetUIValue();
+		if (nva >= MinAxes && nva <= numTotalAxes)
 		{
-			numVisibleAxes = (size_t)nva;
+			numVisibleAxes = nva;
 		}
 		else
 		{

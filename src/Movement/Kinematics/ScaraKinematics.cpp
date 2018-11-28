@@ -326,10 +326,10 @@ AxesBitmap ScaraKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 // Return the set of axes that must be homed prior to regular movement of the specified axes
 AxesBitmap ScaraKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
 {
-	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
-	if ((axesMoving & xyzAxes) != 0)
+	constexpr AxesBitmap xyAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS);
+	if ((axesMoving & xyAxes) != 0)
 	{
-		axesMoving |= xyzAxes;
+		axesMoving |= xyAxes;
 	}
 	return axesMoving;
 }

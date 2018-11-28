@@ -116,7 +116,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 	}
 	else if (!seen)
 	{
-		reply.printf("Extruder drive %u has no filament sensor", extruder);
+		reply.printf("Extruder %u has no filament sensor", extruder);
 	}
 	return GCodeResult::ok;
 }

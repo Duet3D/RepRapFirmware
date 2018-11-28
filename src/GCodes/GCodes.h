@@ -309,6 +309,7 @@ private:
 
 #if SUPPORT_WORKPLACE_COORDINATES
 	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute);	// Set workspace coordinates
+	bool WriteWorkplaceCoordinates(FileStore *f) const;
 #endif
 
 	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply);	// Configure heater protection (M143)
@@ -504,7 +505,7 @@ private:
 	float pausedFanSpeeds[NUM_FANS];			// Fan speeds when the print was paused or a tool change started
 	float lastDefaultFanSpeed;					// Last speed given in a M106 command with on fan number
 	float pausedDefaultFanSpeed;				// The speed of the default print cooling fan when the print was paused or a tool change started
-	float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
+	float speedFactor;							// speed factor as a percentage (normally 100.0)
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 	float volumetricExtrusionFactors[MaxExtruders]; // Volumetric extrusion factors
 	float currentBabyStepZOffset;				// The accumulated Z offset due to baby stepping requests

@@ -2187,7 +2187,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 			}
 			if (ok)
 			{
-				platform.Message(LoggedGenericMessage, "Resume-after-power-fail state saved\n");
+				platform.Message(LoggedGenericMessage, "Resume state saved\n");
 			}
 			else
 			{
@@ -2424,17 +2424,20 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	if (gb.Seen('H') || (machineType != MachineType::laser && gb.Seen('S')))
 	{
 		const int ival = gb.GetIValue();
-		if (ival == 1 || ival == 2 || ival == 3)
+		if (ival >= 1 && ival <= 3)
 		{
 			moveBuffer.moveType = ival;
 			moveBuffer.xAxes = DefaultXAxisMapping;
 			moveBuffer.yAxes = DefaultYAxisMapping;
 		}
-		else if (ival == 99)		// temporary code to log Z probe change positions
-		{
-			moveBuffer.endStopsToCheck |= LogProbeChanges;
-		}
 	}
+#if SUPPORT_WORKPLACE_COORDINATES
+	else if (gb.MachineState().UsingG54())
+	{
+		moveBuffer.xAxes = DefaultXAxisMapping;
+		moveBuffer.yAxes = DefaultYAxisMapping;
+	}
+#endif
 
 	// Check for 'R' parameter to move relative to a restore point
 	const RestorePoint * rp = nullptr;
@@ -2490,7 +2493,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 #endif
 #endif
 
-	if (moveBuffer.moveType != 0)
+	if (moveBuffer.moveType != 0 || gb.MachineState().UsingG54())
 	{
 		// This may be a raw motor move, in which case we need the current raw motor positions in moveBuffer.coords.
 		// If it isn't a raw motor move, it will still be applied without axis or bed transform applied,
@@ -2517,7 +2520,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 
 			SetBit(axesMentioned, axis);
 			const float moveArg = gb.GetFValue() * distanceScale;
-			if (moveBuffer.moveType != 0)
+			if (moveBuffer.moveType != 0 || gb.MachineState().UsingG54())
 			{
 				if (gb.MachineState().axesRelative)
 				{
@@ -2536,12 +2539,6 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 			{
 				currentUserPosition[axis] += moveArg;
 			}
-#if SUPPORT_WORKPLACE_COORDINATES
-			else if (gb.MachineState().useMachineCoordinates || gb.MachineState().useMachineCoordinatesSticky)
-			{
-				currentUserPosition[axis] = moveArg - workplaceCoordinates[currentCoordinateSystem][axis];
-			}
-#endif
 			else
 			{
 				currentUserPosition[axis] = moveArg;
@@ -2589,12 +2586,20 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	}
 	else
 	{
-		if (&gb == fileGCode && !gb.IsDoingFileMacro() && moveBuffer.hasExtrusion && (axesMentioned & ((1 << X_AXIS) | (1 << Y_AXIS))) != 0)
+		if (gb.MachineState().UsingG54())
 		{
-			lastPrintingMoveHeight = currentUserPosition[Z_AXIS];
+			gb.SetState(GCodeState::waitingForSpecialMoveToComplete);			// we need to update the user coordinates after the move
+		}
+		else
+		{
+			if (&gb == fileGCode && !gb.IsDoingFileMacro() && moveBuffer.hasExtrusion && (axesMentioned & ((1 << X_AXIS) | (1 << Y_AXIS))) != 0)
+			{
+				lastPrintingMoveHeight = currentUserPosition[Z_AXIS];
+			}
+
+			ToolOffsetTransform(currentUserPosition, moveBuffer.coords, axesMentioned);	// apply tool offset, axis mapping, baby stepping, Z hop and axis scaling
 		}
 
-		ToolOffsetTransform(currentUserPosition, moveBuffer.coords, axesMentioned);	// apply tool offset, axis mapping, baby stepping, Z hop and axis scaling
 		AxesBitmap effectiveAxesHomed = axesHomed;
 		if (doingManualBedProbe)
 		{
@@ -2629,7 +2634,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 			const float moveTime = xyLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
 			totalSegments = (unsigned int)max<int>(1, min<int>(rintf(xyLength/kin.GetMinSegmentLength()), rintf(moveTime * kin.GetSegmentsPerSecond())));
 		}
-		else if (reprap.GetMove().IsUsingMesh())
+		else if (reprap.GetMove().IsUsingMesh() && (isCoordinated || machineType == MachineType::fff))
 		{
 			const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
 			totalSegments = max<unsigned int>(1, heightMap.GetMinimumSegments(currentUserPosition[X_AXIS] - initialX, currentUserPosition[Y_AXIS] - initialY));
@@ -2714,13 +2719,6 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		currentUserPosition[X_AXIS] += xParam;
 		currentUserPosition[Y_AXIS] += yParam;
 	}
-#if SUPPORT_WORKPLACE_COORDINATES
-	else if (gb.MachineState().useMachineCoordinates || gb.MachineState().useMachineCoordinatesSticky)
-	{
-		currentUserPosition[X_AXIS] = xParam - workplaceCoordinates[currentCoordinateSystem][X_AXIS];
-		currentUserPosition[Y_AXIS] = yParam - workplaceCoordinates[currentCoordinateSystem][Y_AXIS];
-	}
-#endif
 	else
 	{
 		currentUserPosition[X_AXIS] = xParam;
@@ -4747,6 +4745,13 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 		ok = reprap.WriteToolParameters(f);
 	}
 
+#if SUPPORT_WORKPLACE_COORDINATES
+	if (ok)
+	{
+		ok = WriteWorkplaceCoordinates(f);
+	}
+#endif
+
 	if (!f->Close())
 	{
 		ok = false;
@@ -5089,24 +5094,24 @@ void GCodes::CheckHeaterFault()
 	}
 }
 
-// Return the current speed factor
+// Return the current speed factor as a percentage
 float GCodes::GetSpeedFactor() const
 {
 	return speedFactor;
 }
 
-// Return a current extrusion factor
+// Return a current extrusion factor as a percentage
 float GCodes::GetExtrusionFactor(size_t extruder)
 {
-	return (extruder < numExtruders) ? extrusionFactors[extruder] : 0.0;
+	return (extruder < numExtruders) ? extrusionFactors[extruder] * 100.0 : 0.0;
 }
 
-// Set an extrusion factor
+// Set a percentage extrusion factor
 void GCodes::SetExtrusionFactor(size_t extruder, float factor)
 {
 	if (extruder < numExtruders)
 	{
-		extrusionFactors[extruder] = constrain<float>(factor, 0.0, 2.0);
+		extrusionFactors[extruder] = constrain<float>(factor, 0.0, 200.0)/100.0;
 	}
 }
 

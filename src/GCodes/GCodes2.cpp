@@ -2193,12 +2193,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 291:	// Display message, optionally wait for acknowledgement
 		{
-			String<MaxMessageLength> title;
 			bool seen = false;
+			String<MaxMessageLength> title;
 			gb.TryGetQuotedString('R', title.GetRef(), seen);
 
 			String<MaxMessageLength> message;
 			gb.TryGetQuotedString('P', message.GetRef(), seen);
+
 			if (seen)
 			{
 				int32_t sParam = 1;
@@ -2226,6 +2227,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					tParam = 0.0;
 				}
 
+				if (sParam == 0 && tParam <= 0.0)
+				{
+					reply.copy("Attempt to create a message box that cannot be dismissed");
+					result = GCodeResult::error;
+					break;
+				}
+
 				AxesBitmap axisControls = 0;
 				for (size_t axis = 0; axis < numTotalAxes; axis++)
 				{
@@ -2242,8 +2250,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
 				}
 
-				// TODO: consider displaying the message box on all relevant devices. Acknowledging any one of them needs to clear them all.
-				// Currently, if mt is http or aux or generic, we display the message box both in DWC and on PanelDue.
+				// Display the message box on all relevant devices. Acknowledging any one of them clears them all.
 				const MessageType mt = GetMessageBoxDevice(gb);						// get the display device
 				platform.SendAlert(mt, message.c_str(), title.c_str(), (int)sParam, tParam, axisControls);
 			}
@@ -3903,6 +3910,22 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 #endif
 
+	case 851: // Set Z probe offset, only for Marlin compatibility
+		{
+			ZProbe params = platform.GetCurrentZProbeParameters();
+			if (gb.Seen('Z'))
+			{
+				params.triggerHeight = -gb.GetFValue();
+				params.saveToConfigOverride = true;
+				platform.SetZProbeParameters(platform.GetZProbeType(), params);
+			}
+			else
+			{
+				reply.printf("Z probe offset is %.2fmm", (double)(-params.triggerHeight));
+			}
+		}
+		break;
+
 	case 905: // Set current RTC date and time
 		result = SetDateTime(gb, reply);
 		break;
@@ -4223,7 +4246,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 {
 	if (outBuf != nullptr)
 	{
-		// We only have an OutputBuffer when rslt == GCodeResult::ok
+		// We only ever have an OutputBuffer when rslt == GCodeResult::ok
 		gb.timerRunning = false;
 		UnlockAll(gb);
 		HandleReply(gb, outBuf);
