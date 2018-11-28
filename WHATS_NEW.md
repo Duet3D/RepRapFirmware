@@ -1,6 +1,40 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.02RC5
+===============
+
+Upgrade notes:
+- Duet Web Control version 1.22.5 is recommended with this firmware. On the Duet WiFi, DuetWiFiServer.bin version 1.21 remains compatible.
+- If you use the G54 command, note that this now causes tool offsets not to be applied
+- If you use a 12864 display then you will have to change any buttons that use the 'menu' action. You may also wish to add a 'value N501' item to your menus to allow M117 messages to be displayed.
+- If you were not already running 2.02RC1 or RC2 or RC3 then see also the important upgrade notes for 2.02RC1
+
+New features and changed behaviour:
+- 12864 display items 510-518 now display user position, not machine position
+- 12864 display can now show 1-line M117 messages
+- 12864 display can now show M291 messages boxes and the dialog for and manual Z-probing
+- 12864 now supports adjusting baby stepping and XYZ position directly using the encoder
+- 12864 display now allows you to left-, centre- or right-align 'text', 'value' and 'alter' items, and the text within buttons is centre-aligned
+- 12864 menu files are now allowed to start with letters G, M and T as well as all other letters
+- Changed "Resume-after-power-fail state saved" message to "Resume state saved"
+- If G31 parameters were read from config-override.g (M501) then a subsequent M500 command saves them too
+- M500 information saved to config-override.g now includes the workplace coordinate offsets
+- Shortened M591 responses by removing unnecessary text
+- The M591 report for a simple (switch) filament monitor now includes the filament present/not present status
+- When delta auto calibration produces NaNs, calibration is abandoned and an error message is produced
+- Implemented a possible fix for Z and U moving at different speeds, https://forum.duet3d.com/topic/7755/drive-3-is-slower-as-drive-2-at-homing-in-z-solved/32
+- When G53 is in effect, tool offsets and axis mapping are no longer applied
+- In the M291 command, you can no longer specify S0 and T0 together because that would create a message that can never time out of be dismissed
+- Added support for M851 for Marlin compatibility. M851 Znn is equivalent to G31 Z-nn except that is also causes a subsequent M500 command to include the G31 parameters in config-override.g, as if M500 P31 had been used instead.
+
+Bug fixes:
+- Heaters were turning on momentarily when the Duet was reset
+- M106 Svv and M106 Pn Svv were always setting max PWM if vv > 1 and there were additional parameters in the command e.g. F
+- On SCARA printers, XY movements can once again be done before Z is homed
+- 12864 display of speed factor was wrong
+- 12864 button handling of 'menu' command was wrong
+
 Version 2.02RC4
 ===============
 
