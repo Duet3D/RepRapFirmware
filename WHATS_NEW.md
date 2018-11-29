@@ -6,7 +6,7 @@ Version 2.02RC5
 
 Upgrade notes:
 - Duet Web Control version 1.22.5 is recommended with this firmware. On the Duet WiFi, DuetWiFiServer.bin version 1.21 remains compatible.
-- If you use the G54 command, note that this now causes tool offsets not to be applied
+- If you use the G53 command, note that this now causes tool offsets not to be applied
 - If you use a 12864 display then you will have to change any buttons that use the 'menu' action. You may also wish to add a 'value N501' item to your menus to allow M117 messages to be displayed.
 - If you were not already running 2.02RC1 or RC2 or RC3 then see also the important upgrade notes for 2.02RC1
 
