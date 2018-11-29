@@ -9,7 +9,9 @@ enum ODriveAxis { M0=0, M1=1, NO_AXIS=-1 };
 class ODrive {
 public:
 	ODrive();
-	ODrive(Stream& serial);
+	ODrive(Stream&);
+	ODrive(size_t, size_t);
+	ODrive(size_t, size_t, Stream&);
 
 	enum AxisState_t {
 		AXIS_STATE_UNDEFINED = 0, //<! will fall through to idle
@@ -60,6 +62,7 @@ public:
 
 	ODriveAxis AxisToODriveAxis(size_t axis) const; // arg is RRF axis
 	void SetRRFToODriveAxis(ODriveAxis odrvAxis, size_t axis);
+	size_t GetAxisMap(ODriveAxis odrvAxis) { return axes[odrvAxis]; };
 
 private:
 	float encoderPosReference[2]; // One ODrive board can control two axes

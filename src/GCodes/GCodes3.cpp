@@ -312,6 +312,8 @@ int GCodes::ConnectODriveToSerialChannel(size_t whichODrive, size_t whichChannel
 #if defined(SERIAL_WIFI_DEVICE)
 		//commsParams[whichODrive] = 0; // Don't require checksum from ODrive
 		odrv.SetSerial(SERIAL_WIFI_DEVICE);
+		SERIAL_WIFI_DEVICE.end();
+		SERIAL_WIFI_DEVICE.begin(115200);
 		return 0;
 #else
 #error "SERIAL_WIFI_DEVICE not defined"
@@ -470,10 +472,11 @@ GCodeResult GCodes::MarkEncoderRef(GCodeBuffer& gb, const StringRef& reply)
 			{
 				// Mark encoder reference point on UART connected ODrives
 				ODrive& odrv = reprap.GetPlatform().GetWriteableODrive(axis);
+				reply.catf("axis: %d, ODrive axis map {%d, %d}, ", axis, odrv.GetAxisMap(M0), odrv.GetAxisMap(M1));
 				ODriveAxis odrvAxis = odrv.AxisToODriveAxis(axis);
 				odrv.StoreEncoderPosReference(odrvAxis);
 				odrv.StoreCountsPerRev(odrvAxis);
-				reply.catf("Set odrv.encoderPosReference[%d] to %.3f and countsPerRev[%d] to %.3f.",
+				reply.catf("Set odrv.encoderPosReference[%d] to %.3f and countsPerRev[%d] to %.3f\n",
 						odrvAxis, (double)odrv.GetEncoderPosReference(odrvAxis), odrvAxis, (double)odrv.GetCountsPerRev(odrvAxis));
 			}
 		}
@@ -1448,6 +1451,10 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply)
 		reply.printf("Connecting ODrive %u to serial %u at %lu baud...", (size_t)qvals[0], (size_t)qvals[1], qvals[2]);
 		if (ConnectODriveToSerialChannel((size_t)qvals[0], (size_t)qvals[1], qvals[2], reply) == 0)
 		{
+			if (qvals[1] == 2)
+			{
+				reply.catf("Setting baud of serial %u is not yet implemented. Hard coded value 115200 will be used.", (size_t)qvals[1]);
+			}
 			reply.cat("Success.");
 			// TODO: Also associate ODrive qvals[0] with drive from P-parmeter
 		}

@@ -10,6 +10,12 @@ ODrive::ODrive()
 ODrive::ODrive(Stream& serial)
 	: encoderPosReference{0.0f, 0.0f}, serial_{serial}, axes{0, 1}{}
 
+ODrive::ODrive(size_t axis0, size_t axis1)
+	: encoderPosReference{0.0f, 0.0f}, serial_{SERIAL_AUX_DEVICE}, axes{axis0, axis1}{}
+
+ODrive::ODrive(size_t axis0, size_t axis1, Stream& serial)
+	: encoderPosReference{0.0f, 0.0f}, serial_{serial}, axes{axis0, axis1}{}
+
 void ODrive::SetSerial(Stream& serial)
 {
 	serial_ = serial;
