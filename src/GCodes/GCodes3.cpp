@@ -272,17 +272,15 @@ int GCodes::ConnectODriveToSerialChannel(size_t whichODrive, size_t whichChannel
 		return 1;
 	}
 	//commsParams[whichODrive] = 0; // Don't require checksum from ODrive
-	if (atWhatBaud > 0)
+	if (whichChannel < NUM_SERIAL_CHANNELS)
 	{
-		if (whichChannel == 2)
-		{
-			// Cannot set baud rate of SERIAL_WIFI_DEVICE
-		}
-		else if (reprap.GetPlatform().GetBaudRate(whichChannel) != atWhatBaud)
-	    {
-	        reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
-	        reply.catf("Reset serial channel %u to %lu baud.", whichChannel, atWhatBaud);
-	    }
+	    reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
+	    reply.catf("Reset serial channel %u to %lu baud.", whichChannel, atWhatBaud);
+	}
+	else
+	{
+		reply.printf("Serial channel %u doesn't exist.", whichChannel);
+		return 1;
 	}
 	if (whichChannel == 0)
 	{
@@ -307,16 +305,11 @@ int GCodes::ConnectODriveToSerialChannel(size_t whichODrive, size_t whichChannel
 	else if (whichChannel == 2)
 	{
 	//TODO: SERIAL_AUX2_DEVICE is not available on DuetWifi 1.0
-	// We want to use SERIAL_WIFI_DEVICE, but that one meant for use like controlling ODrives
-	// so it's baud rate is not even included in the baudRates array
-#if defined(SERIAL_WIFI_DEVICE)
-		//commsParams[whichODrive] = 0; // Don't require checksum from ODrive
-		odrv.SetSerial(SERIAL_WIFI_DEVICE);
-		SERIAL_WIFI_DEVICE.end();
-		SERIAL_WIFI_DEVICE.begin(115200);
+#if defined(SERIAL_AUX2_DEVICE)
+		odrv.SetSerial(SERIAL_AUX2_DEVICE);
 		return 0;
 #else
-#error "SERIAL_WIFI_DEVICE not defined"
+#error "SERIAL_AUX2_DEVICE not defined"
 #endif
 	}
     return 1;

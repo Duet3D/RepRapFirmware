@@ -693,8 +693,8 @@ private:
 #endif
 
 	// TODO: if HAS_ODRIVES
-	ODrive odrive0{0,1};
-	ODrive odrive1{2,3, SERIAL_WIFI_DEVICE};
+	ODrive odrive0{0,1, SERIAL_AUX_DEVICE};
+	ODrive odrive1{2,3, SERIAL_AUX2_DEVICE};
 
 	// Logging
 	Logger *logger;

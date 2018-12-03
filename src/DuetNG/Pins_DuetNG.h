@@ -50,10 +50,11 @@ constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the
 constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
-constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
+constexpr size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels not counting the WiFi serial connection (USB and two auxiliary UARTs)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
 #define SERIAL_WIFI_DEVICE Serial1
+#define SERIAL_AUX2_DEVICE Serial2
 
 constexpr Pin UsbVBusPin = 54;						// Pin used to monitor VBUS on USB port
 
@@ -70,6 +71,11 @@ constexpr Pin GlobalTmc2660EnablePin = 38;			// The pin that drives ENN of all T
 constexpr Pin ENABLE_PINS[NumDirectDrivers] = { 78, 41, 42, 49, 57, 87, 88, 89, 90, 31, 82, 60 };
 constexpr Pin STEP_PINS[NumDirectDrivers] = { 70, 71, 72, 69, 68, 66, 65, 64, 67, 91, 84, 85 };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { 75, 76, 77, 01, 73, 92, 86, 80, 81, 32, 83, 25 };
+
+// Pin assignments etc. using USART0 in UART mode
+Usart * const USART_SERIAL_AUX2 = USART0;
+constexpr Pin SerialAux2TxPin = 27;
+constexpr Pin SerialAux2RxPin = 26;
 
 // Pin assignments etc. using USART1 in SPI mode
 Usart * const USART_TMC2660 = USART1;

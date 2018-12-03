@@ -631,12 +631,6 @@ void Platform::Init()
 	InitialiseInterrupts();
 
 	active = true;
-
-	// TODO: Implement gcode that let users configure other mappings from RRF axis to ODriveAxis
-	//odrive0.SetRRFToODriveAxis(M0,0);
-	//odrive0.SetRRFToODriveAxis(M1,1);
-	//odrive1.SetRRFToODriveAxis(M0,2);
-	//odrive1.SetRRFToODriveAxis(M1,3);
 }
 
 void Platform::SetZProbeDefaults()
