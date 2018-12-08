@@ -6,6 +6,9 @@
  */
 
 #include "MenuItem.h"
+
+#if SUPPORT_12864_LCD
+
 #include "RepRap.h"
 #include "Heating/Heat.h"
 #include "Platform.h"
@@ -121,7 +124,6 @@ void TextMenuItem::UpdateWidth(Lcd7920& lcd)
 ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char* t, const char* cmd, char const* acFile)
 	: MenuItem(r, c, w, CentreAlign, fn, vis), text(t), command(cmd), m_acFile(acFile)
 {
-	m_acCommand[0] = '\0';
 }
 
 void ButtonMenuItem::CorePrint(Lcd7920& lcd)
@@ -155,22 +157,26 @@ void ButtonMenuItem::UpdateWidth(Lcd7920& lcd)
 }
 
 // TODO WS1: if we overflow the command or directory string, we should probably offer a return value that tells the caller to do nothing...
-
-// NOTE: menu names must not begin with 'G', 'M' or 'T'
-const char* ButtonMenuItem::Select()
+bool ButtonMenuItem::Select(const StringRef& cmd)
 {
 	const int nReplacementIndex = StringContains(command, "#0");
 	if (-1 != nReplacementIndex)
 	{
-		m_acCommand.copy(command, nReplacementIndex);
-		m_acCommand.cat(m_acFile);
+		cmd.copy(command, nReplacementIndex);
+		cmd.cat(m_acFile);
 	}
 	else
 	{
-		m_acCommand.copy(command);
+		cmd.copy(command);
+		if (StringEquals(command, "menu") && strlen(m_acFile) != 0)
+		{
+			// For backwards compatibility, if 'menu' is used without any parameters, use the L parameter as the name of the menu file
+			cmd.cat(' ');
+			cmd.cat(m_acFile);
+		}
 	}
 
-	return m_acCommand.c_str();
+	return true;
 }
 
 PixelNumber ButtonMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const
@@ -322,10 +328,10 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 	}
 }
 
-const char* ValueMenuItem::Select()
+bool ValueMenuItem::Select(const StringRef& cmd)
 {
 	adjusting = AdjustMode::adjusting;
-	return nullptr;
+	return false;
 }
 
 PixelNumber ValueMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const
@@ -518,11 +524,11 @@ FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNu
         m_uListingFirstVisibleIndex(0), m_uListingSelectedIndex(0), m_oMS(reprap.GetPlatform().GetMassStorage())
 {
 	// There's no guarantee that initialDirectory has a trailing '/'
-	m_acCurrentDirectory.copy(initialDirectory);
-	const size_t len = m_acCurrentDirectory.strlen();
-	if (len == 0 || '/' != m_acCurrentDirectory[len - 1])
+	currentDirectory.copy(initialDirectory);
+	const size_t len = currentDirectory.strlen();
+	if (len == 0 || '/' != currentDirectory[len - 1])
 	{
-		m_acCurrentDirectory.cat('/');
+		currentDirectory.cat('/');
 	}
 
 	EnterDirectory();
@@ -540,7 +546,7 @@ void FilesMenuItem::EnterDirectory()
 
 	m_uHardItemsInDirectory = 0;
 	FileInfo oFileInfo;
-	if (m_oMS->FindFirst(m_acCurrentDirectory.c_str(), oFileInfo))
+	if (m_oMS->FindFirst(currentDirectory.c_str(), oFileInfo))
 	{
 		do
 		{
@@ -548,11 +554,13 @@ void FilesMenuItem::EnterDirectory()
 		}
 		while (m_oMS->FindNext(oFileInfo));
 	}
+
+	itemChanged = true;							// force a redraw
 }
 
 bool FilesMenuItem::bInSubdirectory() const
 {
-	const char *pcPathElement = m_acCurrentDirectory.c_str();
+	const char *pcPathElement = currentDirectory.c_str();
 	unsigned int uNumSlashes = 0;
 
 	while ('\0' != *pcPathElement)
@@ -611,7 +619,7 @@ void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 
 		// Seek to the first file that is in view
 		FileInfo oFileInfo;
-		bool gotFileInfo = m_oMS->FindFirst(m_acCurrentDirectory.c_str(), oFileInfo);
+		bool gotFileInfo = m_oMS->FindFirst(currentDirectory.c_str(), oFileInfo);
 		while (gotFileInfo && dirEntriesToSkip != 0)
 		{
 			--dirEntriesToSkip;
@@ -631,7 +639,7 @@ void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 				{
 					lcd.print("./");
 				}
-				lcd.print(oFileInfo.fileName);
+				lcd.print(oFileInfo.fileName.c_str());
 				lcd.ClearToMargin();
 				if (highlight && m_uListingSelectedIndex == line + m_uListingFirstVisibleIndex)
 				{
@@ -722,10 +730,8 @@ int FilesMenuItem::Advance(int nCounts)
 	return nCounts;
 }
 
-const char* FilesMenuItem::Select()
+bool FilesMenuItem::Select(const StringRef& cmd)
 {
-	const char* acReVal = nullptr;
-
 	// Several cases:
 	// TEST 1. ".." entry - call EnterDirectory(), using saved state information
 	// TEST 2. Directory - call EnterDirectory(), adding to saved state information
@@ -737,11 +743,11 @@ const char* FilesMenuItem::Select()
 	{
 		// TODO: go up one level rather than to logical root
 		// There's no guarantee that initialDirectory has a trailing '/'
-		m_acCurrentDirectory.copy(initialDirectory);
-		const size_t len = m_acCurrentDirectory.strlen();
-		if (len == 0 || '/' != m_acCurrentDirectory[len - 1])
+		currentDirectory.copy(initialDirectory);
+		const size_t len = currentDirectory.strlen();
+		if (len == 0 || '/' != currentDirectory[len - 1])
 		{
-			m_acCurrentDirectory.cat('/');
+			currentDirectory.cat('/');
 		}
 		EnterDirectory();
 	}
@@ -756,7 +762,7 @@ const char* FilesMenuItem::Select()
 
 		// Seek to the selected file
 		FileInfo oFileInfo;
-		bool gotFileInfo = m_oMS->FindFirst(m_acCurrentDirectory.c_str(), oFileInfo);
+		bool gotFileInfo = m_oMS->FindFirst(currentDirectory.c_str(), oFileInfo);
 		while (gotFileInfo && dirEntriesToSkip != 0)
 		{
 			--dirEntriesToSkip;
@@ -764,13 +770,13 @@ const char* FilesMenuItem::Select()
 		}
 		m_oMS->AbandonFindNext();
 
-		if (gotFileInfo) // handles empty directory (no action)
+		if (gotFileInfo)	// handles empty directory (no action)
 		{
 			if (oFileInfo.isDirectory)
 			{
 				// Build the new directory, and ensure it's terminated with a forward slash
-				m_acCurrentDirectory.cat(oFileInfo.fileName);
-				m_acCurrentDirectory.cat('/');
+				currentDirectory.cat(oFileInfo.fileName.c_str());
+				currentDirectory.cat('/');
 				EnterDirectory();
 			}
 			else
@@ -778,33 +784,33 @@ const char* FilesMenuItem::Select()
 				int nReplacementIndex = StringContains(command, "#0");
 				if (nReplacementIndex != -1)
 				{
-					m_acCommand.copy(command, nReplacementIndex);
-					m_acCommand.cat('"');
-					m_acCommand.cat(m_acCurrentDirectory.c_str());
-					m_acCommand.cat(oFileInfo.fileName);
-					m_acCommand.cat('"');
-					m_acCommand.cat(command + nReplacementIndex + strlen("#0"));
+					cmd.copy(command, nReplacementIndex);
+					cmd.cat('"');
+					cmd.cat(currentDirectory.c_str());
+					cmd.cat(oFileInfo.fileName.c_str());
+					cmd.cat('"');
+					cmd.cat(command + nReplacementIndex + strlen("#0"));
 				}
 				else
 				{
-					m_acCommand.copy(command);
+					cmd.copy(command);
 				}
 
 				// TODO: do this on the way in and it might be less work...
 				//   On the other hand, this only occurs when an item is selected so it's O(1) vs. O(n)
-				nReplacementIndex = StringContains(m_acCommand.c_str(), "menu");
+				nReplacementIndex = StringContains(cmd.c_str(), "menu");
 				if (nReplacementIndex != -1)
 				{
-					m_acCommand.Truncate(nReplacementIndex);
-					m_acCommand.cat(m_acFile);
+					cmd.Truncate(nReplacementIndex);
+					cmd.cat(m_acFile);
 				}
 
-				acReVal = m_acCommand.c_str();
+				return true;
 			}
 		}
 	}
 
-	return acReVal;
+	return false;
 }
 
 PixelNumber FilesMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const
@@ -872,5 +878,7 @@ void ImageMenuItem::UpdateWidth(Lcd7920& lcd)
 		}
 	}
 }
+
+#endif
 
 // End

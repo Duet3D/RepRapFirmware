@@ -8,6 +8,10 @@
 #ifndef SRC_DISPLAY_MENU_H_
 #define SRC_DISPLAY_MENU_H_
 
+#include "RepRapFirmware.h"
+
+#if SUPPORT_12864_LCD
+
 #include "MenuItem.h"
 
 class MessageBox;
@@ -81,5 +85,7 @@ private:
 	// Buffer for commands to be executed when the user presses a selected item
 	char commandBuffer[CommandBufferSize];
 };
+
+#endif
 
 #endif /* SRC_DISPLAY_MENU_H_ */

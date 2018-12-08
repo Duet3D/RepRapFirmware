@@ -8,8 +8,11 @@
 #ifndef SRC_DISPLAY_MENUITEM_H_
 #define SRC_DISPLAY_MENUITEM_H_
 
-#include "General/FreelistManager.h"
 #include "RepRapFirmware.h"
+
+#if SUPPORT_12864_LCD
+
+#include "General/FreelistManager.h"
 #include "ST7920/lcd7920.h"
 #include "Storage/MassStorage.h"
 
@@ -28,9 +31,9 @@ public:
 	virtual void Draw(Lcd7920& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) = 0;
 
 	// Select this element with a push of the encoder.
-	// If it returns nullptr then go into adjustment mode, if we can adjust the item.
-	// Else execute the returned command.
-	virtual const char* Select() { return nullptr; }
+	// If it returns nullptr false go into adjustment mode, if we can adjust the item.
+	// If it returns true, execute the command returned via the parameter.
+	virtual bool Select(const StringRef& cmd) { return false; }
 
 	// Actions to be taken when the menu system selects this item
 	virtual void Enter(bool forwardDirection) {};
@@ -112,7 +115,7 @@ public:
 	ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *t, const char *cmd, const char *acFile);
 	void Draw(Lcd7920& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) override;
 	void UpdateWidth(Lcd7920& lcd) override;
-	const char* Select() override;
+	bool Select(const StringRef& cmd) override;
 
 	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const override;
 
@@ -123,10 +126,6 @@ private:
 	const char *text;
 	const char *command;
 	const char *m_acFile; // used when action ("command") is "menu"
-
-	// Scratch -- consumer is required to use as soon as it's returned
-	// NOT THREAD SAFE!
-	String<MaxFilenameLength + 20> m_acCommand; // TODO fix to proper max length
 };
 
 class ValueMenuItem : public MenuItem
@@ -137,7 +136,7 @@ public:
 
 	ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, bool adj, unsigned int v, unsigned int d);
 	void Draw(Lcd7920& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) override;
-	const char* Select() override;
+	bool Select(const StringRef& cmd) override;
 	bool CanAdjust() override { return true; }
 	bool Adjust(int clicks) override;
 
@@ -175,7 +174,7 @@ public:
 	void Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) override;
 	void Enter(bool bForwardDirection) override;
 	int Advance(int nCounts) override;
-	const char* Select() override;
+	bool Select(const StringRef& cmd) override;
 
 	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const override;
 
@@ -192,14 +191,10 @@ private:
 	const char *m_acFile; // used when action ("command") includes "menu"
 
 	// Working
-	String<MaxFilenameLength> m_acCurrentDirectory;
+	String<MaxFilenameLength> currentDirectory;
 
 	bool bInSubdirectory() const;
 	unsigned int uListingEntries() const;
-
-	// Scratch -- consumer is required to use as soon as it's returned
-	// NOT THREAD SAFE!
-	String<MaxFilenameLength + 20> m_acCommand; // TODO fix to proper max length
 
 	// Files on the file system, real count i.e. no ".." included
 	unsigned int m_uHardItemsInDirectory;
@@ -225,5 +220,7 @@ public:
 private:
 	String<MaxFilenameLength> fileName;
 };
+
+#endif
 
 #endif /* SRC_DISPLAY_MENUITEM_H_ */

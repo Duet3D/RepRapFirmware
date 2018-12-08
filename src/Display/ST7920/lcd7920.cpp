@@ -1,13 +1,12 @@
 // Driver for 128x64 graphical LCD with ST7920 controller
 // D Crocker, Escher Technologies Ltd.
 
-#include "RepRapFirmware.h"
-#include "Pins.h"
-#include "Tasks.h"
+#include "lcd7920.h"
 
 #if SUPPORT_12864_LCD
 
-#include "lcd7920.h"
+#include "Pins.h"
+#include "Tasks.h"
 
 const uint32_t SpiClockFrequency = 2000000;			// 2.0MHz (minimum clock cycle time for ST7920 is 400ns @ Vdd=4.5V, min. clock width 200ns high and 20ns low)
 
@@ -40,7 +39,7 @@ inline void Lcd7920::DataDelay()
 	delayMicroseconds(LcdDataDelayMicros);
 }
 
-Lcd7920::Lcd7920(uint8_t csPin, const LcdFont * const fnts[], size_t nFonts)
+Lcd7920::Lcd7920(Pin csPin, const LcdFont * const fnts[], size_t nFonts)
 	: fonts(fnts), numFonts(nFonts), currentFontNumber(0), numContinuationBytesLeft(0), textInverted(false)
 {
 	device.csPin = csPin;

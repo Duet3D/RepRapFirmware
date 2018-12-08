@@ -669,15 +669,15 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 		transaction->SetFileToWrite(fileToSend);
 	}
 
-	transaction->Write("HTTP/1.1 200 OK\n");
+	transaction->Write("HTTP/1.1 200 OK\r\n");
 
 	// Don't cache files served by rr_download
 	if (!isWebFile)
 	{
-		transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
-		transaction->Write("Pragma: no-cache\n");
-		transaction->Write("Expires: 0\n");
-		transaction->Write("Access-Control-Allow-Origin: *\n");
+		transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\r\n");
+		transaction->Write("Pragma: no-cache\r\n");
+		transaction->Write("Expires: 0\r\n");
+		transaction->Write("Access-Control-Allow-Origin: *\r\n");
 	}
 
 	const char* contentType;
@@ -714,15 +714,15 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 	{
 		contentType = "application/octet-stream";
 	}
-	transaction->Printf("Content-Type: %s\n", contentType);
+	transaction->Printf("Content-Type: %s\r\n", contentType);
 
 	if (zip && fileToSend != nullptr)
 	{
-		transaction->Write("Content-Encoding: gzip\n");
-		transaction->Printf("Content-Length: %lu\n", fileToSend->Length());
+		transaction->Write("Content-Encoding: gzip\r\n");
+		transaction->Printf("Content-Length: %lu\r\n", fileToSend->Length());
 	}
 
-	transaction->Write("Connection: close\n\n");
+	transaction->Write("Connection: close\r\n\r\n");
 	transaction->Commit(false);
 }
 
@@ -753,14 +753,14 @@ void Webserver::HttpInterpreter::SendGCodeReply()
 
 	// Send the whole G-Code reply as plain text to the client
 	NetworkTransaction *transaction = webserver->currentTransaction;
-	transaction->Write("HTTP/1.1 200 OK\n");
-	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
-	transaction->Write("Pragma: no-cache\n");
-	transaction->Write("Expires: 0\n");
-	transaction->Write("Access-Control-Allow-Origin: *\n");
-	transaction->Write("Content-Type: text/plain\n");
-	transaction->Printf("Content-Length: %u\n", gcodeReply->DataLength());
-	transaction->Write("Connection: close\n\n");
+	transaction->Write("HTTP/1.1 200 OK\r\n");
+	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\r\n");
+	transaction->Write("Pragma: no-cache\r\n");
+	transaction->Write("Expires: 0\r\n");
+	transaction->Write("Access-Control-Allow-Origin: *\r\n");
+	transaction->Write("Content-Type: text/plain\r\n");
+	transaction->Printf("Content-Length: %u\r\n", gcodeReply->DataLength());
+	transaction->Write("Connection: close\r\n\r\n");
 	transaction->Write(gcodeReply);
 	transaction->Commit(false);
 
@@ -845,14 +845,14 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 		}
 	}
 
-	transaction->Write("HTTP/1.1 200 OK\n");
-	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
-	transaction->Write("Pragma: no-cache\n");
-	transaction->Write("Expires: 0\n");
-	transaction->Write("Access-Control-Allow-Origin: *\n");
-	transaction->Write("Content-Type: application/json\n");
-	transaction->Printf("Content-Length: %u\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
-	transaction->Printf("Connection: %s\n\n", keepOpen ? "keep-alive" : "close");
+	transaction->Write("HTTP/1.1 200 OK\r\n");
+	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\r\n");
+	transaction->Write("Pragma: no-cache\r\n");
+	transaction->Write("Expires: 0\r\n");
+	transaction->Write("Access-Control-Allow-Origin: *\r\n");
+	transaction->Write("Content-Type: application/json\r\n");
+	transaction->Printf("Content-Length: %u\r\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
+	transaction->Printf("Connection: %s\r\n\r\n", keepOpen ? "keep-alive" : "close");
 	transaction->Write(jsonResponse);
 
 	transaction->Commit(keepOpen);
@@ -1487,15 +1487,15 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 	{
 		NetworkTransaction *transaction = webserver->currentTransaction;
 
-		transaction->Write("HTTP/1.1 200 OK\n");
-		transaction->Write("Allow: OPTIONS, GET, POST\n");
-		transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
-		transaction->Write("Pragma: no-cache\n");
-		transaction->Write("Expires: 0\n");
-		transaction->Write("Access-Control-Allow-Origin: *\n");
-		transaction->Write("Access-Control-Allow-Headers: Content-Type\n");
-		transaction->Write("Content-Length: 0\n");
-		transaction->Write("\n");
+		transaction->Write("HTTP/1.1 200 OK\r\n");
+		transaction->Write("Allow: OPTIONS, GET, POST\r\n");
+		transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\r\n");
+		transaction->Write("Pragma: no-cache\r\n");
+		transaction->Write("Expires: 0\r\n");
+		transaction->Write("Access-Control-Allow-Origin: *\r\n");
+		transaction->Write("Access-Control-Allow-Headers: Content-Type\r\n");
+		transaction->Write("Content-Length: 0\r\n");
+		transaction->Write("\r\n");
 		transaction->Commit(false);
 
 		ResetState();
@@ -1599,7 +1599,7 @@ bool Webserver::HttpInterpreter::RejectMessage(const char* response, unsigned in
 	platform->MessageF(UsbMessage, "Webserver: rejecting message with: %s\n", response);
 
 	NetworkTransaction *transaction = webserver->currentTransaction;
-	transaction->Printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
+	transaction->Printf("HTTP/1.1 %u %s\nConnection: close\r\n\r\n", code, response);
 	transaction->Commit(false);
 
 	ResetState();
@@ -1735,14 +1735,14 @@ void Webserver::HttpInterpreter::ProcessDeferredRequest()
 			deferredRequestConnection = NoConnection;
 
 			// Got it - send the response now
-			transaction->Write("HTTP/1.1 200 OK\n");
-			transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
-			transaction->Write("Pragma: no-cache\n");
-			transaction->Write("Expires: 0\n");
-			transaction->Write("Access-Control-Allow-Origin: *\n");
-			transaction->Write("Content-Type: application/json\n");
-			transaction->Printf("Content-Length: %u\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
-			transaction->Printf("Connection: close\n\n");
+			transaction->Write("HTTP/1.1 200 OK\r\n");
+			transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\r\n");
+			transaction->Write("Pragma: no-cache\r\n");
+			transaction->Write("Expires: 0\r\n");
+			transaction->Write("Access-Control-Allow-Origin: *\r\n");
+			transaction->Write("Content-Type: application/json\r\n");
+			transaction->Printf("Content-Length: %u\r\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
+			transaction->Printf("Connection: close\r\n\r\n");
 			transaction->Write(jsonResponse);
 
 			transaction->Commit(false);
@@ -1941,10 +1941,10 @@ void Webserver::FtpInterpreter::ProcessLine()
 			// but check the password
 			else if (StringStartsWith(clientMessage, "PASS"))
 			{
-				char pass[PASSWORD_LENGTH];
+				char pass[RepRapPasswordLength];
 				int pass_length = 0;
 				bool reading_pass = false;
-				for(size_t i = 4; i < clientPointer && i < PASSWORD_LENGTH + 3; i++)
+				for(size_t i = 4; i < clientPointer && i < RepRapPasswordLength + 3; i++)
 				{
 					reading_pass |= (clientMessage[i] != ' ' && clientMessage[i] != '\t');
 					if (reading_pass)

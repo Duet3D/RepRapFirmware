@@ -43,6 +43,9 @@ constexpr size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels 
 #define SERIAL_AUX_DEVICE Serial
 #define SERIAL_AUX2_DEVICE Serial1
 
+// SerialUSB
+constexpr Pin UsbVBusPin = NoPin;					// Pin used to monitor VBUS on USB port. Not needed for SAM3X.
+
 #define I2C_IFACE	Wire1							// Which TWI channel we use
 #define I2C_IRQn	WIRE1_ISR_ID					// Which interrupt it uses
 

@@ -2,6 +2,9 @@
 #define LCD7920_H
 
 #include "RepRapFirmware.h"
+
+#if SUPPORT_12864_LCD
+
 #include "Print.h"
 #include "SharedSpi.h"
 
@@ -160,5 +163,7 @@ private:
 	size_t writeNative(uint16_t c);					// write a decoded character
 	void SetDirty(PixelNumber r, PixelNumber c);
 };
+
+#endif
 
 #endif

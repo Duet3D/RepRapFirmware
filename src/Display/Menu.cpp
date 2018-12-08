@@ -66,6 +66,9 @@
  */
 
 #include "Menu.h"
+
+#if SUPPORT_12864_LCD
+
 #include "ST7920/lcd7920.h"
 #include "RepRap.h"
 #include "Platform.h"
@@ -535,14 +538,10 @@ void Menu::EncoderActionEnterItemHelper()
 {
 	if (highlightedItem != nullptr && highlightedItem->IsVisible())
 	{
-		const char *const cmd = highlightedItem->Select();
-		if (cmd != nullptr)
+		String<MaxFilenameLength> command;
+		if (highlightedItem->Select(command.GetRef()))
 		{
-			char acCurrentCommand[MaxFilenameLength + 20];
-			SafeStrncpy(acCurrentCommand, cmd, strlen(cmd) + 1);
-
-			char *pcCurrentCommand = acCurrentCommand;
-
+			char *pcCurrentCommand = command.GetRef().Pointer();
 			int nNextCommandIndex = StringContains(pcCurrentCommand, "|");
 			while (-1 != nNextCommandIndex)
 			{
@@ -779,5 +778,7 @@ MenuItem *Menu::FindPrevSelectableItem(MenuItem *p) const
 	}
 	return current;
 }
+
+#endif
 
 // End

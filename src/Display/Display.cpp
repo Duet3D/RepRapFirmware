@@ -7,6 +7,8 @@
 
 #include "Display.h"
 
+#if SUPPORT_12864_LCD
+
 #include "GCodes/GCodes.h"
 #include "GCodes/GCodeBuffer.h"
 #include "IoPorts.h"
@@ -22,33 +24,28 @@ const size_t SmallFontNumber = 0;
 const size_t LargeFontNumber = 1;
 
 Display::Display()
-	: lcd(LcdCSPin, fonts, ARRAY_SIZE(fonts)), encoder(EncoderPinA, EncoderPinB, EncoderPinSw), menu(lcd),
-	  mboxSeq(0), mboxActive(false), present(false), beepActive(false), updatingFirmware(false)
+	: lcd(nullptr), menu(nullptr), encoder(nullptr),
+	  mboxSeq(0), mboxActive(false), beepActive(false), updatingFirmware(false)
 {
-}
-
-void Display::Init()
-{
-	encoder.Init(DefaultPulsesPerClick);
 }
 
 void Display::Spin()
 {
-	if (present)
+	if (lcd != nullptr)
 	{
-		encoder.Poll();
+		encoder->Poll();
 
 		if (!updatingFirmware)
 		{
 			// Check encoder and update display
-			const int ch = encoder.GetChange();
+			const int ch = encoder->GetChange();
 			if (ch != 0)
 			{
-				menu.EncoderAction(ch);
+				menu->EncoderAction(ch);
 			}
-			else if (encoder.GetButtonPress())
+			else if (encoder->GetButtonPress())
 			{
-				menu.EncoderAction(0);
+				menu->EncoderAction(0);
 			}
 
 			const MessageBox& mbox = reprap.GetMessageBox();
@@ -59,24 +56,24 @@ void Display::Spin()
 					// New message box to display
 					if (!mboxActive)
 					{
-						menu.ClearHighlighting();					// cancel highlighting and adjustment
-						menu.Refresh();
+						menu->ClearHighlighting();					// cancel highlighting and adjustment
+						menu->Refresh();
 					}
 					mboxActive = true;
 					mboxSeq = mbox.seq;
-					menu.DisplayMessageBox(mbox);
+					menu->DisplayMessageBox(mbox);
 				}
 			}
 			else if (mboxActive)
 			{
 				// Message box has been cancelled from this or another input channel
-				menu.ClearMessageBox();
+				menu->ClearMessageBox();
 				mboxActive = false;
 			}
 
-			menu.Refresh();
+			menu->Refresh();
 		}
-		lcd.FlushSome();
+		lcd->FlushSome();
 
 		if (beepActive && millis() - whenBeepStarted > beepLength)
 		{
@@ -88,18 +85,18 @@ void Display::Spin()
 
 void Display::Exit()
 {
-	if (present)
+	if (lcd != nullptr)
 	{
 		IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
 		if (!updatingFirmware)
 		{
-			lcd.TextInvert(false);
-			lcd.Clear();
-			lcd.SetFont(LargeFontNumber);
-			lcd.SetCursor(20, 0);
-			lcd.print("Shutting down...");
+			lcd->TextInvert(false);
+			lcd->Clear();
+			lcd->SetFont(LargeFontNumber);
+			lcd->SetCursor(20, 0);
+			lcd->print("Shutting down...");
 		}
-		lcd.FlushAll();
+		lcd->FlushAll();
 	}
 }
 
@@ -107,7 +104,7 @@ void Display::Exit()
 //   that is, in rapid succession of commands, only the last beep issued will be heard by the user
 void Display::Beep(unsigned int frequency, unsigned int milliseconds)
 {
-	if (present)
+	if (lcd != nullptr)
 	{
 		whenBeepStarted = millis();
 		beepLength = milliseconds;
@@ -136,11 +133,24 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply)
 		switch (gb.GetUIValue())
 		{
 		case 1:		// 12864 display
-			present = true;
-			lcd.Init();
+			if (lcd == nullptr)
+			{
+				lcd = new Lcd7920(LcdCSPin, fonts, ARRAY_SIZE(fonts));
+			}
+			lcd->Init();
 			IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
-			lcd.SetFont(SmallFontNumber);
-			menu.Load("main");
+			lcd->SetFont(SmallFontNumber);
+
+			if (encoder == nullptr)
+			{
+				encoder = new RotaryEncoder(EncoderPinA, EncoderPinB, EncoderPinSw);
+				encoder->Init(DefaultPulsesPerClick);
+			}
+			if (menu == nullptr)
+			{
+				menu = new Menu(*lcd);
+			}
+			menu->Load("main");
 			break;
 
 		default:
@@ -149,17 +159,17 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply)
 		}
 	}
 
-	if (gb.Seen('E'))
+	if (gb.Seen('E') && encoder != nullptr)
 	{
 		seen = true;
-		encoder.Init(gb.GetIValue());			// configure encoder pulses per click and direction
+		encoder->Init(gb.GetIValue());			// configure encoder pulses per click and direction
 	}
 
 	if (!seen)
 	{
-		if (present)
+		if (lcd != nullptr)
 		{
-			reply.printf("12864 display is configured, pulses-per-click is %d", encoder.GetPulsesPerClick());
+			reply.printf("12864 display is configured, pulses-per-click is %d", encoder->GetPulsesPerClick());
 		}
 		else
 		{
@@ -173,16 +183,18 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply)
 void Display::UpdatingFirmware()
 {
 	updatingFirmware = true;
-	if (present)
+	if (lcd != nullptr)
 	{
 		IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
-		lcd.TextInvert(false);
-		lcd.Clear();
-		lcd.SetFont(LargeFontNumber);
-		lcd.SetCursor(20, 0);
-		lcd.print("Updating firmware...");
-		lcd.FlushAll();
+		lcd->TextInvert(false);
+		lcd->Clear();
+		lcd->SetFont(LargeFontNumber);
+		lcd->SetCursor(20, 0);
+		lcd->print("Updating firmware...");
+		lcd->FlushAll();
 	}
 }
+
+#endif
 
 // End
