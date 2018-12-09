@@ -96,7 +96,7 @@ const char *OutputBuffer::Read(size_t len)
 
 size_t OutputBuffer::printf(const char *fmt, ...)
 {
-	char formatBuffer[FORMAT_STRING_LENGTH];
+	char formatBuffer[FormatStringLength];
 	va_list vargs;
 	va_start(vargs, fmt);
 	SafeVsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
@@ -107,7 +107,7 @@ size_t OutputBuffer::printf(const char *fmt, ...)
 
 size_t OutputBuffer::vprintf(const char *fmt, va_list vargs)
 {
-	char formatBuffer[FORMAT_STRING_LENGTH];
+	char formatBuffer[FormatStringLength];
 	SafeVsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
 
 	return cat(formatBuffer);
@@ -115,7 +115,7 @@ size_t OutputBuffer::vprintf(const char *fmt, va_list vargs)
 
 size_t OutputBuffer::catf(const char *fmt, ...)
 {
-	char formatBuffer[FORMAT_STRING_LENGTH];
+	char formatBuffer[FormatStringLength];
 	va_list vargs;
 	va_start(vargs, fmt);
 	SafeVsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
@@ -230,86 +230,78 @@ size_t OutputBuffer::cat(StringRef &str)
 	return cat(str.c_str(), str.strlen());
 }
 
-// Encode a string in JSON format and append it to a string buffer and return the number of bytes written
-size_t OutputBuffer::EncodeString(const char *src, size_t srcLength, bool allowControlChars, bool encapsulateString, bool prependAsterisk)
+// Encode a character in JSON format, and append it to the buffer and return the number of bytes written
+size_t OutputBuffer::EncodeChar(char c)
 {
-	size_t bytesWritten = 0;
-	if (encapsulateString)
+	char esc;
+	switch (c)
 	{
-		bytesWritten += cat('"');
+	case '\r':
+		esc = 'r';
+		break;
+	case '\n':
+		esc = 'n';
+		break;
+	case '\t':
+		esc = 't';
+		break;
+	case '"':
+	case '\\':
+#if 1
+	// Escaping '/' is optional in JSON, although doing so so confuses PanelDue (fixed in PanelDue firmware version 1.15 and later). As it's optional, we don't do it.
+#else
+	case '/':
+#endif
+		esc = c;
+		break;
+	default:
+		esc = 0;
+		break;
 	}
+
+	if (esc != 0)
+	{
+		cat('\\');
+		cat(esc);
+		return 2;
+	}
+
+	cat(c);
+	return 1;
+}
+
+// Encode a string in JSON format and append it to the buffer and return the number of bytes written
+size_t OutputBuffer::EncodeString(const char *src, bool allowControlChars, bool prependAsterisk)
+{
+	size_t bytesWritten = cat('"');
 	if (prependAsterisk)
 	{
 		bytesWritten += cat('*');
 	}
 
-	if (srcLength != 0)
+	if (src != nullptr)
 	{
-		size_t srcPointer = 1;
-		char c = *src++;
-		while (srcPointer <= srcLength && c != 0 && (c >= ' ' || allowControlChars))
+		char c;
+		while ((c = *src++) != 0 && (c >= ' ' || allowControlChars))
 		{
-			char esc;
-			switch (c)
-			{
-			case '\r':
-				esc = 'r';
-				break;
-			case '\n':
-				esc = 'n';
-				break;
-			case '\t':
-				esc = 't';
-				break;
-			case '"':
-			case '\\':
-#if 1
-			// Escaping '/' is optional in JSON, although doing so so confuses PanelDue (fixed in PanelDue firmware version 1.15 and later).
-			// As it's optional, we don't do it.
-#else
-			case '/':
-#endif
-				esc = c;
-				break;
-			default:
-				esc = 0;
-				break;
-			}
-
-			if (esc != 0)
-			{
-				bytesWritten += cat('\\');
-				bytesWritten += cat(esc);
-			}
-			else
-			{
-				bytesWritten += cat(c);
-			}
-
-			c = *src++;
-			srcPointer++;
+			bytesWritten += EncodeChar(c);
 		}
 	}
 
-	if (encapsulateString)
-	{
-		bytesWritten += cat('"');
-	}
+	bytesWritten += cat('"');
 	return bytesWritten;
 }
 
-size_t OutputBuffer::EncodeString(const StringRef& str, bool allowControlChars, bool encapsulateString)
-{
-	return EncodeString(str.c_str(), str.Capacity(), encapsulateString);
-}
-
-size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
+size_t OutputBuffer::EncodeReply(OutputBuffer *src)
 {
 	size_t bytesWritten = cat('"');
 
 	while (src != nullptr)
 	{
-		bytesWritten += EncodeString(src->Data(), src->DataLength(), allowControlChars, false);
+		for (size_t index = 0; index < src->DataLength(); ++index)
+		{
+			bytesWritten += EncodeChar(src->Data()[index]);
+		}
 		src = Release(src);
 	}
 
@@ -401,6 +393,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 }
 
 // Truncate an output buffer to free up more memory. Returns the number of released bytes.
+// This never releases the first buffer in the chain, so call it with a large value of bytesNeeded to release all buffers except the first.
 /*static */ size_t OutputBuffer::Truncate(OutputBuffer *buffer, size_t bytesNeeded)
 {
 	// Can we free up space from this chain? Don't break it up if it's referenced anywhere else
@@ -430,7 +423,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 	} while (previousItem != buffer && releasedBytes < bytesNeeded);
 
 	// Update all the references to the last item
-	for(OutputBuffer *item = buffer; item != nullptr; item = item->Next())
+	for (OutputBuffer *item = buffer; item != nullptr; item = item->Next())
 	{
 		item->last = previousItem;
 	}

@@ -162,7 +162,6 @@ Platform::Platform() :
 #endif
 		lastFanCheckTime(0), auxGCodeReply(nullptr), tickState(0), debugCode(0), lastWarningMillis(0), deliberateError(false), i2cInitialised(false)
 {
-	// Files
 	massStorage = new MassStorage(this);
 }
 
@@ -187,7 +186,7 @@ void Platform::Init()
 	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 
 	// Ensure that the main LEDs are turned off.
-	// The main LED output is active, just like a heater on the Duet 2 series.
+	// The main LED output is active low, just like a heater on the Duet 2 series.
 	// The secondary LED control dims the LED via the external controller when the output is high. So both outputs must be initialised high.
 	for (size_t i = 0; i < NumLeds; ++i)
 	{
@@ -204,34 +203,24 @@ void Platform::Init()
 
 	// Comms
 	baudRates[0] = MAIN_BAUD_RATE;
+	commsParams[0] = 0;
+	usbMutex.Create("USB");
+	SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
+
 #ifdef SERIAL_AUX_DEVICE
 	baudRates[1] = AUX_BAUD_RATE;
-#endif
-#ifdef SERIAL_AUX2_DEVICE
-	baudRates[2] = AUX2_BAUD_RATE;
-#endif
-	commsParams[0] = 0;
-#ifdef SERIAL_AUX_DEVICE
 	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
-#endif
-#ifdef SERIAL_AUX2_DEVICE
-	commsParams[2] = 0;
-#endif
-
-	usbMutex.Create("USB");
-#ifdef SERIAL_AUX_DEVICE
 	auxMutex.Create("Aux");
 	auxDetected = false;
 	auxSeq = 0;
-#endif
-
-	SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
-#ifdef SERIAL_AUX_DEVICE
 	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
 #endif
+
 #ifdef SERIAL_AUX2_DEVICE
-	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
+	baudRates[2] = AUX2_BAUD_RATE;
+	commsParams[2] = 0;
 	aux2Mutex.Create("Aux2");
+	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 #endif
 
 	compatibility = Compatibility::marlin;		// default to Marlin because the common host programs expect the "OK" response to commands
@@ -1160,7 +1149,7 @@ void Platform::SendAuxMessage(const char* msg)
 	if (OutputBuffer::Allocate(buf))
 	{
 		buf->copy("{\"message\":");
-		buf->EncodeString(msg, strlen(msg), false, true);
+		buf->EncodeString(msg, false);
 		buf->cat("}\n");
 		auxOutput.Push(buf);
 		FlushAuxMessages();
@@ -1198,9 +1187,14 @@ Compatibility Platform::Emulating() const
 	return (compatibility == Compatibility::reprapFirmware) ? Compatibility::me : compatibility;
 }
 
+bool Platform::EmulatingMarlin() const
+{
+	return compatibility == Compatibility::marlin || compatibility == Compatibility::nanoDLP;
+}
+
 void Platform::SetEmulating(Compatibility c)
 {
-	if (c != Compatibility::me && c != Compatibility::reprapFirmware && c != Compatibility::marlin)
+	if (c != Compatibility::me && c != Compatibility::reprapFirmware && c != Compatibility::marlin && c != Compatibility::nanoDLP)
 	{
 		Message(ErrorMessage, "Attempt to emulate unsupported firmware.\n");
 	}
@@ -1513,6 +1507,9 @@ void Platform::Spin()
 # if HAS_VOLTAGE_MONITOR
 	else if (currentVin >= driverPowerOnAdcReading && currentVin <= driverNormalVoltageAdcReading)
 	{
+		openLoadATimer.Stop();
+		openLoadBTimer.Stop();
+		temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadADrivers = openLoadBDrivers = notOpenLoadADrivers = notOpenLoadBDrivers = 0;
 		driversPowered = true;
 	}
 # endif
@@ -1522,13 +1519,10 @@ void Platform::Spin()
 	const uint32_t now = millis();
 
 	// Update the time
-	if (realTime != 0)
+	if (IsDateTimeSet() && now - timeLastUpdatedMillis >= 1000)
 	{
-		if (now - timeLastUpdatedMillis >= 1000)
-		{
-			++realTime;							// this assumes that time_t is a seconds-since-epoch counter, which is not guaranteed by the C standard
-			timeLastUpdatedMillis += 1000;
-		}
+		++realTime;								// this assumes that time_t is a seconds-since-epoch counter, which is not guaranteed by the C standard
+		timeLastUpdatedMillis += 1000;
 	}
 
 	// Thermostatically-controlled fans (do this after getting TMC driver status)
@@ -2557,6 +2551,41 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s",
 					(double)(tim1 * 10000)/StepTimer::StepClockRate, (ok1) ? "ok" : "ERROR",
 							(double)(tim2 * 10000)/StepTimer::StepClockRate, (ok2) ? "ok" : "ERROR");
+		}
+		break;
+
+	case (int)DiagnosticTestType::TimeSinCos:		// Show the sin/cosine calculation time. The displayed value is subject to interrupts.
+		{
+			uint32_t tim1 = 0;
+			bool ok1 = true;
+			for (unsigned int i = 0; i < 100; ++i)
+			{
+				const float angle = 0.01 * i;
+				const uint32_t now1 = StepTimer::GetInterruptClocks();
+				const float f1 = RepRap::SinfCosf(angle);
+				tim1 += StepTimer::GetInterruptClocks() - now1;
+				if (f1 >= 1.5)
+				{
+					ok1 = false;		// need to use f1 to prevent the calculations being omitted
+				}
+			}
+
+			uint32_t tim2 = 0;
+			bool ok2 = true;
+			for (unsigned int i = 0; i < 100; ++i)
+			{
+				const double angle = (double)0.01 * i;
+				const uint32_t now2 = StepTimer::GetInterruptClocks();
+				const double d1 = RepRap::SinCos(angle);
+				tim2 += StepTimer::GetInterruptClocks() - now2;
+				if (d1 >= (double)1.5)
+				{
+					ok1 = false;		// need to use f1 to prevent the calculations being omitted
+				}
+			}
+			reply.printf("Sine + cosine: float %.2fus %s, double %.2fus %s",
+				(double)(tim1 * 10000)/StepTimer::StepClockRate, (ok1) ? "ok" : "ERROR",
+					(double)(tim2 * 10000)/StepTimer::StepClockRate, (ok2) ? "ok" : "ERROR");
 		}
 		break;
 
@@ -3718,7 +3747,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 
 void Platform::MessageF(MessageType type, const char *fmt, va_list vargs)
 {
-	String<FORMAT_STRING_LENGTH> formatString;
+	String<FormatStringLength> formatString;
 	if ((type & ErrorMessageFlag) != 0)
 	{
 		formatString.copy("Error: ");
@@ -3753,7 +3782,7 @@ void Platform::Message(MessageType type, const char *message)
 	}
 	else
 	{
-		String<FORMAT_STRING_LENGTH> formatString;
+		String<FormatStringLength> formatString;
 		formatString.copy(((type & ErrorMessageFlag) != 0) ? "Error: " : "Warning: ");
 		formatString.cat(message);
 		RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
@@ -4575,16 +4604,6 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 #endif
 
 // Real-time clock
-
-bool Platform::IsDateTimeSet() const
-{
-	return realTime != 0;
-}
-
-time_t Platform::GetDateTime() const
-{
-	return realTime;
-}
 
 bool Platform::SetDateTime(time_t time)
 {

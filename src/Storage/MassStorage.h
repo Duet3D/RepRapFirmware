@@ -15,10 +15,10 @@
 // Info returned by FindFirst/FindNext calls
 struct FileInfo
 {
-	bool isDirectory;
-	char fileName[MaxFilenameLength];
-	uint32_t size;
 	time_t lastModified;
+	uint32_t size;
+	String<MaxFilenameLength> fileName;
+	bool isDirectory;
 };
 
 class MassStorage

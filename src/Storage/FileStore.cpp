@@ -25,7 +25,7 @@ void FileStore::Init()
 // Invalidate the file if it uses the specified FATFS object
 bool FileStore::Invalidate(const FATFS *fs, bool doClose)
 {
-	if (file.fs == fs)
+	if (file.obj.fs == fs)
 	{
 		if (doClose)
 		{
@@ -33,7 +33,7 @@ bool FileStore::Invalidate(const FATFS *fs, bool doClose)
 		}
 		else
 		{
-			file.fs = nullptr;
+			file.obj.fs = nullptr;
 			if (writeBuffer != nullptr)
 			{
 				reprap.GetPlatform().GetMassStorage()->ReleaseWriteBuffer(writeBuffer);
@@ -49,7 +49,7 @@ bool FileStore::Invalidate(const FATFS *fs, bool doClose)
 // Return true if the file is open on the specified file system
 bool FileStore::IsOpenOn(const FATFS *fs) const
 {
-	return openCount != 0 && file.fs == fs;
+	return openCount != 0 && file.obj.fs == fs;
 }
 
 // Open a local file (for example on an SD card).
@@ -236,7 +236,7 @@ FilePosition FileStore::Position() const
 
 uint32_t FileStore::ClusterSize() const
 {
-	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.fs->csize * 512u : 1;	// we divide by the cluster size so return 1 not 0 if there is an error
+	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.obj.fs->csize * 512u : 1;	// we divide by the cluster size so return 1 not 0 if there is an error
 }
 
 #if 0	// not currently used
@@ -255,10 +255,10 @@ FilePosition FileStore::Length() const
 		return 0;
 
 	case FileUseMode::readOnly:
-		return file.fsize;
+		return f_size(&file);
 
 	case FileUseMode::readWrite:
-		return (writeBuffer != nullptr) ? file.fsize + writeBuffer->BytesStored() : file.fsize;
+		return (writeBuffer != nullptr) ? f_size(&file) + writeBuffer->BytesStored() : f_size(&file);
 
 	case FileUseMode::invalidated:
 	default:
@@ -407,7 +407,7 @@ bool FileStore::Write(const char *s, size_t len)
 
 	case FileUseMode::invalidated:
 	default:
-		return 0;
+		return false;
 	}
 }
 

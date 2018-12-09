@@ -905,7 +905,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
-			response->catf("%c%.1f", ch, (double)liveCoordinates[gCodes->GetTotalAxes() + extruder]);
+			response->catf("%c%.1f", ch, HideNan(liveCoordinates[gCodes->GetTotalAxes() + extruder]));
 			ch = ',';
 		}
 		if (ch == '[')							// we may have no extruders
@@ -944,7 +944,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				response->catf("\"beepDuration\":%u,\"beepFrequency\":%u", beepDuration, beepFrequency);
 				if (sendMessage || mbox.active)
 				{
-					response->cat(",");
+					response->cat(',');
 				}
 				beepFrequency = beepDuration = 0;
 			}
@@ -953,10 +953,10 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			if (sendMessage)
 			{
 				response->cat("\"message\":");
-				response->EncodeString(message.GetRef(), false);
+				response->EncodeString(message, false);
 				if (mbox.active)
 				{
-					response->cat(",");
+					response->cat(',');
 				}
 				message.Clear();
 			}
@@ -965,12 +965,12 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			if (mbox.active)
 			{
 				response->cat("\"msgBox\":{\"msg\":");
-				response->EncodeString(mbox.message.GetRef(), false);
+				response->EncodeString(mbox.message, false);
 				response->cat(",\"title\":");
-				response->EncodeString(mbox.title.GetRef(), false);
+				response->EncodeString(mbox.title, false);
 				response->catf(",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%" PRIu32 "}", mbox.mode, mbox.seq, (double)timeLeft, mbox.controls);
 			}
-			response->cat("}");
+			response->cat('}');
 		}
 	}
 
@@ -1000,7 +1000,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				ch = ',';
 
 				const char *fanName = GetPlatform().GetFanName(fan);
-				response->EncodeString(fanName, strlen(fanName), true);
+				response->EncodeString(fanName, true);
 			}
 			response->cat((ch == '[') ? "[]" : "]");
 		}
@@ -1128,9 +1128,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			{
 				response->cat(ch);
 				ch = ',';
-
-				const char *heaterName = GetHeat().GetHeaterName(heater);
-				response->EncodeString(heaterName, (heaterName == nullptr) ? 0 : strlen(heaterName), true);
+				response->EncodeString(GetHeat().GetHeaterName(heater), true);
 			}
 			response->cat((ch == '[') ? "[]" : "]");
 		}
@@ -1151,7 +1149,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 				if (tool->Next() != nullptr)
 				{
-					response->cat(",");
+					response->cat(',');
 				}
 			}
 
@@ -1168,7 +1166,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 				if (tool->Next() != nullptr)
 				{
-					response->cat(",");
+					response->cat(',');
 				}
 			}
 		}
@@ -1187,7 +1185,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				}
 				first = false;
 				response->cat("{\"name\":");
-				response->EncodeString(nm, strlen(nm), false, true);
+				response->EncodeString(nm, false, true);
 				TemperatureError err;
 				const float t = heat->GetTemperature(heater, err);
 				response->catf(",\"temp\":%.1f}", (double)t);
@@ -1320,7 +1318,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		// Machine name
 		response->cat(",\"name\":");
-		response->EncodeString(myName.c_str(), myName.Capacity(), false);
+		response->EncodeString(myName, false);
 
 		/* Probe */
 		{
@@ -1350,7 +1348,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				if (toolName[0] != 0)
 				{
 					response->cat(",\"name\":");
-					response->EncodeString(toolName, strlen(toolName), false);
+					response->EncodeString(toolName, false);
 				}
 
 				// Heaters
@@ -1360,7 +1358,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 					response->catf("%d", tool->Heater(heater));
 					if (heater + 1 < tool->HeaterCount())
 					{
-						response->cat(",");
+						response->cat(',');
 					}
 				}
 
@@ -1371,7 +1369,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 					response->catf("%d", tool->Drive(drive));
 					if (drive + 1 < tool->DriveCount())
 					{
-						response->cat(",");
+						response->cat(',');
 					}
 				}
 
@@ -1388,7 +1386,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 						}
 						else
 						{
-							response->cat(",");
+							response->cat(',');
 						}
 						response->catf("%u", xi);
 					}
@@ -1405,7 +1403,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 						}
 						else
 						{
-							response->cat(",");
+							response->cat(',');
 						}
 						response->catf("%u", yi);
 					}
@@ -1420,7 +1418,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				{
 					const char *filamentName = tool->GetFilament()->GetName();
 					response->catf(",\"filament\":");
-					response->EncodeString(filamentName, strlen(filamentName), false);
+					response->EncodeString(filamentName, false);
 				}
 
 				// Offsets
@@ -1433,7 +1431,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
   				// Do we have any more tools?
 				response->cat((tool->Next() != nullptr) ? "]}," : "]}");
 			}
-			response->cat("]");
+			response->cat(']');
 		}
 
 		// MCU temperatures
@@ -1513,13 +1511,13 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		if (response != nullptr)
 		{
 			// Send the response to the last command. Do this last
-			response->catf(",\"seq\":%" PRIu32 ",\"resp\":", platform->GetAuxSeq());			// send the response sequence number
+			response->catf(",\"seq\":%" PRIu32 ",\"resp\":", platform->GetAuxSeq());	// send the response sequence number
 
 			// Send the JSON response
-			response->EncodeReply(reply, true);										// also releases the OutputBuffer chain
+			response->EncodeReply(reply);												// also releases the OutputBuffer chain
 		}
 	}
-	response->cat("}");
+	response->cat('}');
 
 	return response;
 }
@@ -1585,8 +1583,10 @@ OutputBuffer *RepRap::GetConfigResponse()
 		response->catf(" + %s", additionalExpansionName);
 	}
 #endif
-	response->catf("\",\"firmwareName\":\"%s\"", FIRMWARE_NAME);
-	response->catf(",\"firmwareVersion\":\"%s\"", VERSION);
+	response->cat("\",\"firmwareName\":");
+	response->EncodeString(FIRMWARE_NAME, false);
+	response->cat(",\"firmwareVersion\":");
+	response->EncodeString(VERSION, false);
 
 #if HAS_WIFI_NETWORKING
 	// If we have WiFi networking, send the WiFi module firmware version
@@ -1675,7 +1675,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	{
 		response->catf(",%.1f", (double)(heat->GetActiveTemperature(heater)));
 	}
-	response->cat("]");
+	response->cat(']');
 
 	// Send the heater standby temperatures
 	response->catf(",\"standby\":[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetStandbyTemperature(bedHeater)));
@@ -1683,7 +1683,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	{
 		response->catf(",%.1f", (double)(heat->GetStandbyTemperature(heater)));
 	}
-	response->cat("]");
+	response->cat(']');
 
 	// Send the heater statuses (0=off, 1=standby, 2=active, 3 = fault)
 	response->catf(",\"hstat\":[%d", (bedHeater == -1) ? 0 : static_cast<int>(heat->GetStatus(bedHeater)));
@@ -1691,7 +1691,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	{
 		response->catf(",%d", static_cast<int>(heat->GetStatus(heater)));
 	}
-	response->cat("]");
+	response->cat(']');
 
 	// Send XYZ positions
 	const size_t numVisibleAxes = gCodes->GetVisibleAxes();
@@ -1704,7 +1704,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	{
 		// Coordinates may be NaNs, for example when delta or SCARA homing fails. Replace any NaNs or infinities by 9999.9 to prevent JSON parsing errors.
 		const float coord = userPos[axis];
-		response->catf("%c%.3f", ch, (double)((std::isnan(coord) || std::isinf(coord)) ? 9999.9 : coord));
+		response->catf("%c%.3f", ch, HideNan(coord));
 		ch = ',';
 	}
 
@@ -1715,7 +1715,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	ch = '[';
 	for (size_t drive = 0; drive < numVisibleAxes; drive++)
 	{
-		response->catf("%c%.3f", ch, (double)liveCoordinates[drive]);
+		response->catf("%c%.3f", ch, HideNan(liveCoordinates[drive]));
 		ch = ',';
 	}
 
@@ -1816,9 +1816,9 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 			response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%" PRIu32 "",
 							mbox.mode, mbox.seq, (double)timeLeft, mbox.controls);
 			response->cat(",\"msgBox.msg\":");
-			response->EncodeString(mbox.message.GetRef(), false);
+			response->EncodeString(mbox.message, false);
 			response->cat(",\"msgBox.title\":");
-			response->EncodeString(mbox.title.GetRef(), false);
+			response->EncodeString(mbox.title, false);
 		}
 		else
 		{
@@ -1842,9 +1842,9 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		// Add the static fields
 		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\",\"volumes\":%u,\"numTools\":%u,\"myName\":",
 						move->GetGeometryString(), numVisibleAxes, gCodes->GetTotalAxes(), gCodes->GetAxisLetters(), NumSdCards, GetNumberOfContiguousTools());
-		response->EncodeString(myName.c_str(), myName.Capacity(), false);
+		response->EncodeString(myName, false);
 		response->cat(",\"firmwareName\":");
-		response->EncodeString(FIRMWARE_NAME, strlen(FIRMWARE_NAME), false);
+		response->EncodeString(FIRMWARE_NAME, false);
 	}
 
 	const int auxSeq = (int)platform->GetAuxSeq();
@@ -1855,10 +1855,10 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		response->catf(",\"seq\":%d,\"resp\":", auxSeq);					// send the response sequence number
 
 		// Send the JSON response
-		response->EncodeReply(platform->GetAuxGCodeReply(), true);			// also releases the OutputBuffer chain
+		response->EncodeReply(platform->GetAuxGCodeReply());				// also releases the OutputBuffer chain
 	}
 
-	response->cat("}");
+	response->cat('}');
 	return response;
 }
 
@@ -1874,7 +1874,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 	}
 
 	response->copy("{\"dir\":");
-	response->EncodeString(dir, strlen(dir), false);
+	response->EncodeString(dir, false);
 	response->catf(",\"first\":%u,\"files\":[", startAt);
 	unsigned int err;
 	unsigned int nextFile = 0;
@@ -1892,7 +1892,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 		err = 0;
 		FileInfo fileInfo;
 		unsigned int filesFound = 0;
-		bool gotFile = platform->GetMassStorage()->FindFirst(dir, fileInfo);	// TODO error handling here
+		bool gotFile = platform->GetMassStorage()->FindFirst(dir, fileInfo);
 
 		size_t bytesLeft = OutputBuffer::GetBytesLeft(response);	// don't write more bytes than we can
 
@@ -1903,7 +1903,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 				if (filesFound >= startAt)
 				{
 					// Make sure we can end this response properly
-					if (bytesLeft < strlen(fileInfo.fileName) * 2 + 20)
+					if (bytesLeft < strlen(fileInfo.fileName.c_str()) * 2 + 20)
 					{
 						// No more space available - stop here
 						platform->GetMassStorage()->AbandonFindNext();
@@ -1917,11 +1917,11 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 						bytesLeft -= response->cat(',');
 					}
 
-					bytesLeft -= response->EncodeString(fileInfo.fileName, MaxFilenameLength, false, true, flagsDirs && fileInfo.isDirectory);
+					bytesLeft -= response->EncodeString(fileInfo.fileName, false, flagsDirs && fileInfo.isDirectory);
 				}
 				++filesFound;
 			}
-			gotFile = platform->GetMassStorage()->FindNext(fileInfo);	// TODO error handling here
+			gotFile = platform->GetMassStorage()->FindNext(fileInfo);
 		}
 	}
 
@@ -1947,7 +1947,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 	}
 
 	response->copy("{\"dir\":");
-	response->EncodeString(dir, strlen(dir), false);
+	response->EncodeString(dir, false);
 	response->catf(",\"first\":%u,\"files\":[", startAt);
 	unsigned int err;
 	unsigned int nextFile = 0;
@@ -1975,7 +1975,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 				if (filesFound >= startAt)
 				{
 					// Make sure we can end this response properly
-					if (bytesLeft < strlen(fileInfo.fileName) * 2 + 50)
+					if (bytesLeft < strlen(fileInfo.fileName.c_str()) * 2 + 50)
 					{
 						// No more space available - stop here
 						platform->GetMassStorage()->AbandonFindNext();
@@ -1991,7 +1991,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 
 					// Write another file entry
 					bytesLeft -= response->catf("{\"type\":\"%c\",\"name\":", fileInfo.isDirectory ? 'd' : 'f');
-					bytesLeft -= response->EncodeString(fileInfo.fileName, MaxFilenameLength, false);
+					bytesLeft -= response->EncodeString(fileInfo.fileName, false);
 					bytesLeft -= response->catf(",\"size\":%" PRIu32, fileInfo.size);
 
 					const struct tm * const timeInfo = gmtime(&fileInfo.lastModified);
@@ -2081,8 +2081,8 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 				}
 			}
 			response->cat("],\"generatedBy\":");
-			response->EncodeString(info.generatedBy.c_str(), info.generatedBy.Capacity(), false);
-			response->cat("}");
+			response->EncodeString(info.generatedBy, false);
+			response->cat('}');
 		}
 		else
 		{
@@ -2197,7 +2197,7 @@ bool RepRap::NoPasswordSet() const
 
 bool RepRap::CheckPassword(const char *pw) const
 {
-	String<PASSWORD_LENGTH> copiedPassword;
+	String<RepRapPasswordLength> copiedPassword;
 	copiedPassword.CopyAndPad(pw);
 	return password.ConstantTimeEquals(copiedPassword);
 }
@@ -2351,6 +2351,18 @@ bool RepRap::WriteToolParameters(FileStore *f) const
 /*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b)
 {
 	return a/b;
+}
+
+// Helper function for diagnostic tests in Platform.cpp, to calculate sine and cosine
+/*static*/ float RepRap::SinfCosf(float angle)
+{
+	return sinf(angle) + cosf(angle);
+}
+
+// Helper function for diagnostic tests in Platform.cpp, to calculate sine and cosine
+/*static*/ double RepRap::SinCos(double angle)
+{
+	return sin(angle) + cos(angle);
 }
 
 // Report an internal error

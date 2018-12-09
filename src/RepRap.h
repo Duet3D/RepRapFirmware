@@ -133,6 +133,8 @@ public:
 	void ReportInternalError(const char *file, const char *func, int line) const;	// Report an internal error
 
 	static uint32_t DoDivide(uint32_t a, uint32_t b);		// helper function for diagnostic tests
+	static float SinfCosf(float angle);						// helper function for diagnostic tests
+	static double SinCos(double angle);						// helper function for diagnostic tests
 
 #ifdef RTOS
 	void KickHeatTaskWatchdog() { heatTaskIdleTicks = 0; }
@@ -187,8 +189,8 @@ private:
 	bool resetting;
 	bool processingConfig;
 
-	String<PASSWORD_LENGTH> password;
-	String<MACHINE_NAME_LENGTH> myName;
+	String<RepRapPasswordLength> password;
+	String<MachineNameLength> myName;
 
 	unsigned int beepFrequency, beepDuration;
 	String<MaxMessageLength> message;

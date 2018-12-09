@@ -163,7 +163,8 @@ enum class Compatibility : uint8_t
 	marlin = 2,
 	teacup = 3,
 	sprinter = 4,
-	repetier = 5
+	repetier = 5,
+	nanoDLP = 6
 };
 
 /***************************************************************************************************/
@@ -201,6 +202,7 @@ enum class DiagnosticTestType : int
 	PrintExpanderStatus = 101,		// print DueXn expander status
 #endif
 	TimeSquareRoot = 102,			// do a timing test on the square root function
+	TimeSinCos = 103,				// do a timing test on the trig functions
 
 	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
 	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
@@ -309,6 +311,8 @@ public:
 
 	Compatibility Emulating() const;
 	void SetEmulating(Compatibility c);
+	bool EmulatingMarlin() const;
+
 	void Diagnostics(MessageType mtype);
 	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d);
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
@@ -331,16 +335,16 @@ public:
 	void Tick() __attribute__((hot));						// Process a systick interrupt
 
 	// Real-time clock
-	bool IsDateTimeSet() const;						// Has the RTC been set yet?
-	time_t GetDateTime() const;						// Retrieves the current RTC datetime and returns true if it's valid
-	bool SetDateTime(time_t time);					// Sets the current RTC date and time or returns false on error
+	bool IsDateTimeSet() const { return realTime != 0; }	// Has the RTC been set yet?
+	time_t GetDateTime() const { return realTime; }			// Retrieves the current RTC datetime and returns true if it's valid
+	bool SetDateTime(time_t time);							// Sets the current RTC date and time or returns false on error
 
   	// Communications and data storage
-	OutputBuffer *GetAuxGCodeReply();				// Returns cached G-Code reply for AUX devices and clears its reference
+	OutputBuffer *GetAuxGCodeReply();						// Returns cached G-Code reply for AUX devices and clears its reference
 	void AppendAuxReply(OutputBuffer *buf, bool rawMessage);
 	void AppendAuxReply(const char *msg, bool rawMessage);
     uint32_t GetAuxSeq() { return auxSeq; }
-    bool HaveAux() const { return auxDetected; }	// Any device on the AUX line?
+    bool HaveAux() const { return auxDetected; }			// Any device on the AUX line?
     void SetAuxDetected() { auxDetected = true; }
 
 	void SetIPAddress(IPAddress ip);

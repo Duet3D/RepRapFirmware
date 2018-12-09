@@ -1147,7 +1147,7 @@ void GCodeBuffer::WriteToFile()
 			fileBeingWritten->Close();
 			fileBeingWritten = nullptr;
 			SetFinished(true);
-			const char* const r = (reprap.GetPlatform().Emulating() == Compatibility::marlin) ? "Done saving file." : "";
+			const char* const r = (reprap.GetPlatform().EmulatingMarlin()) ? "Done saving file." : "";
 			reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, r);
 			return;
 		}
@@ -1208,7 +1208,7 @@ void GCodeBuffer::FinishWritingBinary()
 	binaryWriting = false;
 	if (crcOk)
 	{
-		const char* const r = (reprap.GetPlatform().Emulating() == Compatibility::marlin) ? "Done saving file." : "";
+		const char* const r = (reprap.GetPlatform().EmulatingMarlin()) ? "Done saving file." : "";
 		reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, r);
 	}
 	else
@@ -1248,7 +1248,7 @@ void GCodeBuffer::FileEnded()
 			fileBeingWritten->Close();
 			fileBeingWritten = nullptr;
 			SetFinished(true);
-			const char* const r = (reprap.GetPlatform().Emulating() == Compatibility::marlin) ? "Done saving file." : "";
+			const char* const r = (reprap.GetPlatform().EmulatingMarlin()) ? "Done saving file." : "";
 			reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, r);
 		}
 	}
