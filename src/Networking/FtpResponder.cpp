@@ -680,7 +680,7 @@ void FtpResponder::ProcessLine()
 					const struct tm * const timeInfo = gmtime(&fileInfo.lastModified);
 					dataBuf->catf("%crw-rw-rw- 1 ftp ftp %13lu %s %02d %04d %s\r\n",
 							dirChar, fileInfo.size, massStorage->GetMonthName(timeInfo->tm_mon + 1),
-							timeInfo->tm_mday, timeInfo->tm_year + 1900, fileInfo.fileName);
+							timeInfo->tm_mday, timeInfo->tm_year + 1900, fileInfo.fileName.c_str());
 				} while (massStorage->FindNext(fileInfo));
 			}
 		}

@@ -15,6 +15,8 @@ const size_t KoFirst = 3;
 
 const char* const overflowResponse = "overflow";
 const char* const badEscapeResponse = "bad escape";
+const char* const serviceUnavailableResponse = "HTTP/1.1 503 Service Unavailable\r\n\r\n";
+static_assert(ARRAY_SIZE(serviceUnavailableResponse) <= OUTPUT_BUFFER_SIZE, "OUTPUT_BUFFER_SIZE too small");
 
 const uint32_t HttpReceiveTimeout = 2000;
 
@@ -936,19 +938,30 @@ void HttpResponder::SendJsonResponse(const char* command)
 	if (jsonResponse == nullptr)
 	{
 		// We ran out of buffers at some point.
-		// Unfortunately the protocol is prone to deadlocking, because if most output buffer are used up holding a GCode reply,
+		// Unfortunately the protocol is prone to deadlocking, because if most output buffers are used up holding a GCode reply,
 		// there may be insufficient buffers left to compose the status response to tell DWC that it needs to fetch that GCode reply.
-		// Until we fix the protocol, the best we can do is time out and throw the GCode response away.
+		// Until we fix the protocol, the best we can do is time out and throw some GCode responses away.
 		if (millis() - startedProcessingRequestAt >= MaxBufferWaitTime)
 		{
 			{
+				// Looks like we've run out of buffers and waiting hasn't help, so release some of the responses that are waiting to go
 				MutexLocker lock(gcodeReplyMutex);
 				OutputBuffer *buf = gcodeReply.Pop();
-				OutputBuffer::ReleaseAll(buf);
+				if (buf != nullptr)
+				{
+					OutputBuffer::ReleaseAll(buf);
+					return;					// next time we try, hopefully there will be a spare buffer
+				}
 			}
+
+			// We've freed all the buffer we have
 			ReportOutputBufferExhaustion(__FILE__, __LINE__);
+
+			// We know that we have an output buffer, but it may be too short to send a long reply, so send a short one
+			outBuf->copy(serviceUnavailableResponse);
+			Commit(ResponderState::free, false);
+			return;
 		}
-		return;
 	}
 
 	// Send the JSON response
@@ -997,18 +1010,25 @@ void HttpResponder::SendJsonResponse(const char* command)
 			{
 				MutexLocker lock(gcodeReplyMutex);
 				OutputBuffer *buf = gcodeReply.Pop();
-				OutputBuffer::ReleaseAll(buf);
+				if (buf != nullptr)
+				{
+					OutputBuffer::ReleaseAll(buf);
+					return;
+				}
 			}
 			ReportOutputBufferExhaustion(__FILE__, __LINE__);
+			OutputBuffer::Truncate(outBuf, 999999);				// release all buffers except the first one
+			outBuf->copy(serviceUnavailableResponse);
+			Commit(ResponderState::free, false);
+			return;
 		}
 	}
-	else
+
+	// Here if everything is OK
+	Commit(keepOpen ? ResponderState::reading : ResponderState::free, false);
+	if (reprap.Debug(moduleWebserver))
 	{
-		Commit(keepOpen ? ResponderState::reading : ResponderState::free, false);
-		if (reprap.Debug(moduleWebserver))
-		{
-			debugPrintf("Sending JSON reply, length %u\n", replyLength);
-		}
+		debugPrintf("Sending JSON reply, length %u\n", replyLength);
 	}
 }
 

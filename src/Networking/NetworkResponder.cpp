@@ -176,7 +176,7 @@ void NetworkResponder::ConnectionLost()
 void NetworkResponder::StartUpload(FileStore *file, const char *fileName)
 {
 	fileBeingUploaded.Set(file);
-	SafeStrncpy(filenameBeingUploaded, fileName, ARRAY_SIZE(filenameBeingUploaded));
+	filenameBeingUploaded.copy(fileName);
 	responderState = ResponderState::uploading;
 	uploadError = false;
 }
@@ -187,9 +187,9 @@ void NetworkResponder::CancelUpload()
 	if (fileBeingUploaded.IsLive())
 	{
 		fileBeingUploaded.Close();
-		if (filenameBeingUploaded[0] != 0)
+		if (!filenameBeingUploaded.IsEmpty())
 		{
-			GetPlatform().GetMassStorage()->Delete(FS_PREFIX, filenameBeingUploaded);
+			GetPlatform().GetMassStorage()->Delete(FS_PREFIX, filenameBeingUploaded.c_str());
 		}
 	}
 }
@@ -218,21 +218,21 @@ void NetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified
 	}
 
 	// Delete the file again if an error has occurred
-	if (filenameBeingUploaded[0] != 0)
+	if (!filenameBeingUploaded.IsEmpty())
 	{
 		if (uploadError)
 		{
-			GetPlatform().GetMassStorage()->Delete(FS_PREFIX, filenameBeingUploaded);
+			GetPlatform().GetMassStorage()->Delete(FS_PREFIX, filenameBeingUploaded.c_str());
 		}
 		else if (fileLastModified != 0)
 		{
 			// Update the file timestamp if it was specified
-			(void)GetPlatform().GetMassStorage()->SetLastModifiedTime(nullptr, filenameBeingUploaded, fileLastModified);
+			(void)GetPlatform().GetMassStorage()->SetLastModifiedTime(nullptr, filenameBeingUploaded.c_str(), fileLastModified);
 		}
 	}
 
 	// Clean up again
-	filenameBeingUploaded[0] = 0;
+	filenameBeingUploaded.Clear();
 }
 
 IPAddress NetworkResponder::GetRemoteIP() const
