@@ -694,7 +694,7 @@ private:
 
 	// TODO: if HAS_ODRIVES
 	ODrive odrive0{0,1, SERIAL_AUX_DEVICE};
-	ODrive odrive1{2,3, SERIAL_AUX2_DEVICE};
+	ODrive odrive1{2,3, SERIAL_AUX_DEVICE};
 
 	// Logging
 	Logger *logger;

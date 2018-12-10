@@ -271,47 +271,62 @@ int GCodes::ConnectODriveToSerialChannel(size_t whichODrive, size_t whichChannel
 		reply.printf("ODrive number %u doesn't exist.", whichODrive);
 		return 1;
 	}
-	//commsParams[whichODrive] = 0; // Don't require checksum from ODrive
-	if (whichChannel < NUM_SERIAL_CHANNELS)
+	#if defined(SERIAL_AUX_DEVICE)
+	if (whichChannel == 1)
 	{
 	    reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
-	    reply.catf("Reset serial channel %u to %lu baud.", whichChannel, atWhatBaud);
-	}
-	else
-	{
-		reply.printf("Serial channel %u doesn't exist.", whichChannel);
-		return 1;
-	}
-	if (whichChannel == 0)
-	{
-#if defined(SERIAL_MAIN_DEVICE)
-		odrv.SetSerial(SERIAL_MAIN_DEVICE);
-		return 0;
-#else
-#error "SERIAL_MAIN_DEVICE not defined"
-#endif
-	}
-	else if (whichChannel == 1)
-	{
-#if defined(SERIAL_AUX_DEVICE)
 		odrv.SetSerial(SERIAL_AUX_DEVICE);
 		odrv.flush(); // TODO: Don't know if this is enough
-		// TODO: Should we setAuxDetected() here, or would that spam us with stuff meant for Panel Due?
 		return 0;
-#else
-#error "SERIAL_AUX_DEVICE not defined"
-#endif
 	}
-	else if (whichChannel == 2)
+	#endif
+	#if defined(SERIAL_AUX2_DEVICE)
+	if (whichChannel == 2)
 	{
-	//TODO: SERIAL_AUX2_DEVICE is not available on DuetWifi 1.0
-#if defined(SERIAL_AUX2_DEVICE)
+		reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
 		odrv.SetSerial(SERIAL_AUX2_DEVICE);
 		return 0;
-#else
-#error "SERIAL_AUX2_DEVICE not defined"
-#endif
 	}
+	#endif
+	#if defined(SERIAL_STOLEN_DEVICE)
+	if (whichChannel == 99) // 99 Is the special steal-the-shared-spi serial channel
+	{
+		#if USART_SPI
+		if (!commsInitDone) // TODO: encapsulate and tuck away in lower abstraction layer
+		{
+			Usart0IsUart = true;
+			commsInitDone = true;
+
+			pmc_enable_periph_clk(ID_SSPI);
+
+			// Configure the USART Tx and Rx pins
+			ConfigurePin(g_APinDescription[APIN_USART_SSPI_MOSI]);
+			ConfigurePin(g_APinDescription[APIN_USART_SSPI_MISO]);
+
+			const usart_serial_options_t usart_console_settings = {
+				atWhatBaud,
+				US_MR_CHRL_8_BIT,
+				US_MR_PAR_NO,
+				US_MR_NBSTOP_1_BIT
+			};
+			// We do intend to "steal" the shared SPI pins, so use SPI defines
+			usart_serial_init(USART_SSPI, &usart_console_settings);
+
+
+			reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
+			odrv.SetSerial(SERIAL_STOLEN_DEVICE);
+			return 0;
+		}
+		else
+		#endif // USART_SPI
+		{
+			Usart0IsSpi ?
+				reply.printf("Already configured shared SPI with M305 or M918.") :
+				reply.printf("Can't reconfigure SPI pins to serial on this board.")
+		}
+	}
+	#endif // defined(SERIAL_STOLEN_DEVICE)
+	reply.printf("Channel %u is not available.", whichChannel);
     return 1;
 }
 
