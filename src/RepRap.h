@@ -166,6 +166,7 @@ private:
 
 #if SUPPORT_12864_LCD
  	Display *display;
+	bool displaySpins = false;
 #endif
 
  	Mutex toolListMutex, messageBoxMutex;
@@ -218,6 +219,7 @@ inline PortControl& RepRap::GetPortControl() const { return *portControl; }
 
 #if SUPPORT_12864_LCD
 inline Display& RepRap::GetDisplay() const { return *display; }
+void RepRap::SpinDisplay() const;
 #endif
 
 inline bool RepRap::Debug(Module m) const { return debug & (1 << m); }

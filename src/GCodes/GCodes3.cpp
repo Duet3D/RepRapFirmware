@@ -15,6 +15,7 @@
 #include "Tools/Tool.h"
 #include "PrintMonitor.h"
 #include "Tasks.h"
+#include "SharedSpi.h"
 
 #if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
@@ -265,68 +266,62 @@ float GCodes::I2cRequestFloat(uint8_t addr)
 // This handles M569 Q
 int GCodes::ConnectODriveToSerialChannel(size_t whichODrive, size_t whichChannel, uint32_t atWhatBaud, const StringRef& reply)
 {
-	ODrive& odrv = (whichODrive == 0) ? reprap.GetPlatform().GetWriteableODrive0() : reprap.GetPlatform().GetWriteableODrive1();
 	if (whichODrive > 1)
 	{
 		reply.printf("ODrive number %u doesn't exist.", whichODrive);
 		return 1;
 	}
-	#if defined(SERIAL_AUX_DEVICE)
-	if (whichChannel == 1)
+	ODrive& odrv = (whichODrive == 0)
+		? reprap.GetPlatform().GetWriteableODrive0()
+		: reprap.GetPlatform().GetWriteableODrive1();
+
+	switch (whichChannel)
 	{
-	    reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
-		odrv.SetSerial(SERIAL_AUX_DEVICE);
-		odrv.flush(); // TODO: Don't know if this is enough
-		return 0;
-	}
-	#endif
-	#if defined(SERIAL_AUX2_DEVICE)
-	if (whichChannel == 2)
-	{
-		reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
-		odrv.SetSerial(SERIAL_AUX2_DEVICE);
-		return 0;
-	}
-	#endif
-	#if defined(SERIAL_STOLEN_DEVICE)
-	if (whichChannel == 99) // 99 Is the special steal-the-shared-spi serial channel
-	{
-		#if USART_SPI
-		if (!commsInitDone) // TODO: encapsulate and tuck away in lower abstraction layer
-		{
-			Usart0IsUart = true;
-			commsInitDone = true;
-
-			pmc_enable_periph_clk(ID_SSPI);
-
-			// Configure the USART Tx and Rx pins
-			ConfigurePin(g_APinDescription[APIN_USART_SSPI_MOSI]);
-			ConfigurePin(g_APinDescription[APIN_USART_SSPI_MISO]);
-
-			const usart_serial_options_t usart_console_settings = {
-				atWhatBaud,
-				US_MR_CHRL_8_BIT,
-				US_MR_PAR_NO,
-				US_MR_NBSTOP_1_BIT
-			};
-			// We do intend to "steal" the shared SPI pins, so use SPI defines
-			usart_serial_init(USART_SSPI, &usart_console_settings);
-
-
-			reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
-			odrv.SetSerial(SERIAL_STOLEN_DEVICE);
+		#if defined(SERIAL_AUX_DEVICE)
+		case 1:
+		    reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
+			odrv.SetSerial(SERIAL_AUX_DEVICE);
+			odrv.flush(); // TODO: Don't know if this is enough
 			return 0;
-		}
-		else
-		#endif // USART_SPI
+		#endif
+		#if defined(SERIAL_AUX2_DEVICE)
+		case 2:
+			reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
+			odrv.SetSerial(SERIAL_AUX2_DEVICE);
+			return 0;
+		#endif
+		#if defined(SERIAL_STOLEN_DEVICE)
+		case 99:  // 99 Is the special steal-the-shared-spi serial channel
 		{
-			Usart0IsSpi ?
-				reply.printf("Already configured shared SPI with M305 or M918.") :
-				reply.printf("Can't reconfigure SPI pins to serial on this board.")
+			static bool Usart0IsUart = false;
+			#if USART_SPI
+			usartSetupResult retVal = uartOnSspiPinsInit(atWhatBaud);
+			switch(retVal)
+			{
+				case usartSetupResult::success:
+					Usart0IsUart = true;
+					odrv.SetSerial(SERIAL_STOLEN_DEVICE);
+					return 0;
+				case usartSetupResult::uartSetupAlready:
+					Usart0IsUart = true;
+					odrv.SetSerial(SERIAL_STOLEN_DEVICE);
+					return 0;
+				case usartSetupResult::spiSetupAlready:
+					reply.copy("SPI was already configured on the shared SPI pins.");
+					return 0;
+				default:
+					reply.printf("Error: usartSetupResult %u not supported.", (uint8_t)retVal);
+					return 1;
+			}
+			#else
+			reply.printf("Can't reconfigure SPI pins to serial on this board.");
+			#endif // USART_SPI
+			return 1;
 		}
+		#endif // defined(SERIAL_STOLEN_DEVICE)
+		default:
+			reply.printf("Channel %u is not available.", whichChannel);
 	}
-	#endif // defined(SERIAL_STOLEN_DEVICE)
-	reply.printf("Channel %u is not available.", whichChannel);
     return 1;
 }
 

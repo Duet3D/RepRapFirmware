@@ -4147,6 +4147,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 #if SUPPORT_12864_LCD
 	case 918: // Configure direct-connect display
+		reprap.SpinDisplay();
 		result = reprap.GetDisplay().Configure(gb, reply);
 		break;
 #endif

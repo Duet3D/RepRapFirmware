@@ -352,7 +352,10 @@ void RepRap::Exit()
 	portControl->Exit();
 #endif
 #if SUPPORT_12864_LCD
- 	display->Exit();
+	if (displaySpins)
+	{
+		display->Exit();
+	}
 #endif
 	network->Exit();
 	platform->Exit();
@@ -425,12 +428,6 @@ void RepRap::Spin()
 	ticksInSpinState = 0;
 	spinningModule = moduleFilamentSensors;
 	FilamentMonitor::Spin(true);
-
-#if SUPPORT_12864_LCD
-	ticksInSpinState = 0;
-	spinningModule = moduleDisplay;
-	display->Spin();
-#endif
 
 	ticksInSpinState = 0;
 	spinningModule = noModule;
@@ -616,6 +613,13 @@ void RepRap::PrintDebug()
 		}
 	}
 	platform->Message(GenericMessage, "\n");
+}
+
+void RepRap::SpinDisplay() const {
+	ticksInSpinState = 0;
+	spinningModule = moduleDisplay;
+	display->Spin();
+	displaySpins = true;
 }
 
 // Add a tool.
