@@ -1,6 +1,39 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.02RC6
+===============
+
+Upgrade notes:
+- Duet Web Control version 1.22.5 is recommended with this firmware. On the Duet WiFi, DuetWiFiServer.bin version 1.21 remains compatible.
+- If you use the G53 command, note that this now causes tool offsets not to be applied
+- If you use a 12864 display then you may wish to add a 'value N501' item to your menus to allow M117 messages to be displayed.
+- If you were not already running 2.02RC1 or RC2 or RC3 then see also the important upgrade notes for 2.02RC1
+
+New features and changed behaviour:
+- On 12864 display, if a 'menu' action is used with no parameter, the F parameter is used for compatibility menus written for 2.02RC4 and older firmware versions
+- When M500 is used the current date/time if known is included in the header comment in config-override.g
+- The "motor may be disconnected" message is now suppressed if the motor current is below 300mA
+- Added nanoDLP support (M650, M651 and M555 P6)
+- If the HTTP server runs out of buffers while trying to service a request it now returns a 503 http error
+- Memory for a 12864 display and the associated menu system is not allocated until M918 is processed
+- G2 and G3 moves now use a variable segment length that depends on the arc radius
+- M226 and M600 are now supported even when no file is being printed
+- M206 now sets the offsets for the current workplace instead of workplace 0
+- Upgraded to latest version of FatFS
+- Added M122 P103 subfunction to measure the sin + cosine calculation time
+
+Bug fixes:
+- When VIN power comes up, the open-load status bits are cleared to avoid spurious open load warnings
+- Fixed behaviour when moves call for extrusion amounts smaller than one microstep
+- Fixed issue with different U and Z homing speeds the second and subsequent times that Z is homed, when two Z motors are split into Z and U for homing
+- A baby stepping move after an extruding move when the printer was idle replicated the extrusion
+- On the 12864 display, when entering a subfolder from a file list, the screen did not update until you rotated the encoder
+- G1 R1 moves in resume.g used the wrong coordinates in 2.02RC5
+- The scheduled move count was too high by 1 after an emergency pause
+- The print progress calculated from filament used was incorrect when using a mixing tool if the sum of mix values was not 1 (e.g. when ditto printing)
+- On SCARA printers, a G30 command immediately after homing the proximal and distal arms could fail due to rounding errors
+
 Version 2.02RC5
 ===============
 
