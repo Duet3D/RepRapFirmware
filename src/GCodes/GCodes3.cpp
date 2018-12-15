@@ -293,24 +293,25 @@ int GCodes::ConnectODriveToSerialChannel(size_t whichODrive, size_t whichChannel
 		#if defined(SERIAL_STOLEN_DEVICE)
 		case 99:  // 99 Is the special steal-the-shared-spi serial channel
 		{
-			static bool Usart0IsUart = false;
-			#if USART_SPI
-			usartSetupResult retVal = uartOnSspiPinsInit(atWhatBaud);
+			//#if SAM4E || SAM4S || (SAME70 && !defined(SAME70XPLD))
+			#if SAM4E // Just havent' tested on other boards
+			usartUartSetupResult retVal = uartOnSspiPinsInit(atWhatBaud);
 			switch(retVal)
 			{
-				case usartSetupResult::success:
-					Usart0IsUart = true;
+				case usartUartSetupResult::success:
 					odrv.SetSerial(SERIAL_STOLEN_DEVICE);
 					return 0;
-				case usartSetupResult::uartSetupAlready:
-					Usart0IsUart = true;
+				case usartUartSetupResult::uartSetupAlready:
 					odrv.SetSerial(SERIAL_STOLEN_DEVICE);
 					return 0;
-				case usartSetupResult::spiSetupAlready:
+				case usartUartSetupResult::spiSetupAlready:
 					reply.copy("SPI was already configured on the shared SPI pins.");
 					return 0;
+				case usartUartSetupResult::error:
+					reply.copy("uartOnSspiPinsInit() returned error.");
+					return 0;
 				default:
-					reply.printf("Error: usartSetupResult %u not supported.", (uint8_t)retVal);
+					reply.printf("Error: usartUartSetupResult %u not handled.", (uint8_t)retVal);
 					return 1;
 			}
 			#else

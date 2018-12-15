@@ -72,6 +72,9 @@ public:
 	void SetPassword(const char* pw);
 
 	void AddTool(Tool* t);
+#if SUPPORT_12864_LCD
+	void SpinDisplay() const;
+#endif
 	void DeleteTool(Tool* t);
 	void SelectTool(int toolNumber, bool simulating);
 	void StandbyTool(int toolNumber, bool simulating);
@@ -219,7 +222,6 @@ inline PortControl& RepRap::GetPortControl() const { return *portControl; }
 
 #if SUPPORT_12864_LCD
 inline Display& RepRap::GetDisplay() const { return *display; }
-void RepRap::SpinDisplay() const;
 #endif
 
 inline bool RepRap::Debug(Module m) const { return debug & (1 << m); }
