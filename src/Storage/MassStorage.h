@@ -24,7 +24,7 @@ struct FileInfo
 class MassStorage
 {
 public:
-	FileStore* OpenFile(const char* directory, const char* fileName, OpenMode mode);
+	FileStore* OpenFile(const char* directory, const char* fileName, OpenMode mode, uint32_t preAllocSize);
 	bool FindFirst(const char *directory, FileInfo &file_info);
 	bool FindNext(FileInfo &file_info);
 	void AbandonFindNext();

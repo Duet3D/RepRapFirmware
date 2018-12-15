@@ -113,7 +113,7 @@ void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer)
 	freeWriteBuffers = buffer;
 }
 
-FileStore* MassStorage::OpenFile(const char* directory, const char* fileName, OpenMode mode)
+FileStore* MassStorage::OpenFile(const char* directory, const char* fileName, OpenMode mode, uint32_t preAllocSize)
 {
 	{
 		MutexLocker lock(fsMutex);
@@ -121,7 +121,7 @@ FileStore* MassStorage::OpenFile(const char* directory, const char* fileName, Op
 		{
 			if (files[i].usageMode == FileUseMode::free)
 			{
-				return (files[i].Open(directory, fileName, mode)) ? &files[i]: nullptr;
+				return (files[i].Open(directory, fileName, mode, preAllocSize)) ? &files[i]: nullptr;
 			}
 		}
 	}
@@ -708,7 +708,7 @@ void MassStorage::Spin()
 void MassStorage::RecordSimulationTime(const char *printingFilename, uint32_t simSeconds)
 {
 	const char * const GCodeDir = reprap.GetPlatform().GetGCodeDir();
-	FileStore * const file = OpenFile(GCodeDir, printingFilename, OpenMode::append);
+	FileStore * const file = OpenFile(GCodeDir, printingFilename, OpenMode::append, 0);
 	bool ok = (file != nullptr);
 	if (ok)
 	{

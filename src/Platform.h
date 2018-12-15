@@ -366,7 +366,10 @@ public:
 	friend class FileStore;
 
 	MassStorage* GetMassStorage() const;
-	FileStore* OpenFile(const char* directory, const char* fileName, OpenMode mode) { return massStorage->OpenFile(directory, fileName, mode); }
+	FileStore* OpenFile(const char* directory, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0)
+	{
+		return massStorage->OpenFile(directory, fileName, mode, preAllocSize);
+	}
 
 	const char* GetWebDir() const; 					// Where the html etc files are
 	const char* GetGCodeDir() const; 				// Where the gcodes are

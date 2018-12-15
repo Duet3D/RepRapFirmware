@@ -1138,7 +1138,7 @@ void HttpResponder::ProcessRequest()
 					}
 
 					// Start a new file upload
-					FileStore *file = GetPlatform().OpenFile(FS_PREFIX, filename, OpenMode::write);
+					FileStore *file = GetPlatform().OpenFile(FS_PREFIX, filename, OpenMode::write, postFileLength);
 					if (file == nullptr)
 					{
 						RejectMessage("could not create file");
