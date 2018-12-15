@@ -38,7 +38,7 @@ Version 2.02RC5
 ===============
 
 Known issues:
-- G1 R1 commands in resume.g (and in other system macro files) are not executed correctly. If you habve these commands in your resume.g file, please comment them out.
+- G1 R1 commands in resume.g (and in other system macro files) are not executed correctly. If you have these commands in your resume.g file, please comment them out.
 
 Upgrade notes:
 - Duet Web Control version 1.22.5 is recommended with this firmware. On the Duet WiFi, DuetWiFiServer.bin version 1.21 remains compatible.
