@@ -150,8 +150,8 @@ public:
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const;			// Get the current step interval for this axis or extruder
 #endif
 
-	static int32_t MotorEndPointToMachine(size_t drive, float coord);				// Convert a single motor position to number of steps
-	static float MotorEndpointToPosition(int32_t endpoint, size_t drive);			// Convert number of motor steps to motor position
+	static int32_t MotorMovementToSteps(size_t drive, float coord);					// Convert a single motor position to number of steps
+	static float MotorStepsToMovement(size_t drive, int32_t endpoint);				// Convert number of motor steps to motor position
 
 protected:
 	DECLARE_OBJECT_MODEL

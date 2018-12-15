@@ -117,7 +117,7 @@ void ObjectModelTableEntry::ReportItemAsJson(OutputBuffer *buf, const char *filt
 		break;
 
 	case TYPE_OF(const char*):
-		buf->EncodeString((const char*)nParam, strlen((const char*)nParam), true, true, false);
+		buf->EncodeString((const char*)nParam, true);
 		break;
 
 	case TYPE_OF(Bitmap32):

@@ -615,7 +615,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					outBuf->copy("GCode files:\n");
 				}
 
-				bool encapsulateList = ((&gb != serialGCode && &gb != telnetGCode) || platform.Emulating() != Compatibility::marlin);
+				bool encapsulateList = ((&gb != serialGCode && &gb != telnetGCode) || !platform.EmulatingMarlin());
 				FileInfo fileInfo;
 				if (platform.GetMassStorage()->FindFirst(dir.c_str(), fileInfo))
 				{
@@ -623,11 +623,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					do {
 						if (encapsulateList)
 						{
-							outBuf->catf("%c%s%c%c", FILE_LIST_BRACKET, fileInfo.fileName, FILE_LIST_BRACKET, FILE_LIST_SEPARATOR);
+							outBuf->catf("%c%s%c%c", FILE_LIST_BRACKET, fileInfo.fileName.c_str(), FILE_LIST_BRACKET, FILE_LIST_SEPARATOR);
 						}
 						else
 						{
-							outBuf->catf("%s\n", fileInfo.fileName);
+							outBuf->catf("%s\n", fileInfo.fileName.c_str());
 						}
 					} while (platform.GetMassStorage()->FindNext(fileInfo));
 
@@ -688,7 +688,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (QueueFileToPrint(filename.c_str(), reply))
 				{
 					reprap.GetPrintMonitor().StartingPrint(filename.c_str());
-					if (platform.Emulating() == Compatibility::marlin && (&gb == serialGCode || &gb == telnetGCode))
+					if (platform.EmulatingMarlin() && (&gb == serialGCode || &gb == telnetGCode))
 					{
 						reply.copy("File opened\nFile selected");
 					}
@@ -779,8 +779,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
-	case 226: // Gcode Initiated Pause
-		if (&gb == fileGCode)						// ignore M226 if it did't come from within a file being printed
+	case 226: // Synchronous pause, normally initiated from within the file being printed
+		if (!isPaused && !IsPausing())
 		{
 			if (gb.IsDoingFileMacro())
 			{
@@ -788,7 +788,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else
 			{
-				if (!LockMovement(gb))				// lock movement before calling DoPause
+				if (!LockMovementAndWaitForStandstill(gb))	// lock movement before calling DoPause, also wait for movement to complete
 				{
 					return false;
 				}
@@ -797,8 +797,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
-	case 600: // Filament change pause
-		if (&gb == fileGCode)						// ignore M600 if it did't come from within a file being printed
+	case 600: // Filament change pause, synchronous
+		if (!isPaused && !IsPausing())
 		{
 			if (gb.IsDoingFileMacro())
 			{
@@ -806,7 +806,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else
 			{
-				if (!LockMovement(gb))				// lock movement before calling DoPause
+				if (!LockMovementAndWaitForStandstill(gb))	// lock movement before calling DoPause, also wait for movement to complete
 				{
 					return false;
 				}
@@ -1533,7 +1533,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 117:	// Display message
 		{
-			String<MaxFilenameLength> msg;
+			String<MediumStringLength> msg;
 			gb.GetUnprecedentedString(msg.GetRef());
 			reprap.SetMessage(msg.c_str());
 		}
@@ -2180,7 +2180,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (amountPushed != difference && segmentsLeft == 0 && reprap.GetMove().AllMovesAreFinished())
 			{
 				// The pipeline is empty, so execute the babystepping move immediately
-				moveBuffer.SetDefaults();
+				SetMoveBufferDefaults();
 				moveBuffer.feedRate = platform.MaxFeedrate(Z_AXIS);
 				NewMoveAvailable(1);
 			}
@@ -2527,7 +2527,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 #if SUPPORT_OBJECT_MODEL
 			case 1:
 				{
-					String<MaxFilenameLength> filter;
+					String<MediumStringLength> filter;
 					bool dummy;
 					gb.TryGetQuotedString('F', filter.GetRef(), dummy);
 					if (!OutputBuffer::Allocate(outBuf))
@@ -2755,7 +2755,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 550: // Set/report machine name
 		{
-			String<MACHINE_NAME_LENGTH> name;
+			String<MachineNameLength> name;
 			bool seen = false;
 			gb.TryGetPossiblyQuotedString('P', name.GetRef(), seen);
 			if (seen)
@@ -2771,7 +2771,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 551: // Set password (no option to report it)
 		{
-			String<PASSWORD_LENGTH> password;
+			String<RepRapPasswordLength> password;
 			bool seen = false;
 			gb.TryGetPossiblyQuotedString('P', password.GetRef(), seen);
 			if (seen)
@@ -2899,7 +2899,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 			case Compatibility::me:
 			case Compatibility::reprapFirmware:
-				reply.cat("RepRap Firmware (i.e. in native mode)");
+				reply.cat("RepRapFirmware (i.e. in native mode)");
 				break;
 
 			case Compatibility::marlin:
@@ -2916,6 +2916,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 			case Compatibility::repetier:
 				reply.cat("Repetier");
+				break;
+
+			case Compatibility::nanoDLP:
+				reply.cat("nanoDLP");
 				break;
 
 			default:
@@ -3533,6 +3537,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	// For case 600, see 226
+
+	case 650:	// Set peel move parameters - ignored
+		break;
+
+	case 651:	// Execute DLP peel move
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return false;
+		}
+		DoFileMacro(gb, PEEL_MOVE_G, true);
+		break;
 
 	case 665: // Set delta configuration
 		if (!LockMovementAndWaitForStandstill(gb))

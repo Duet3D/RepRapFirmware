@@ -98,6 +98,12 @@ bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoor
 		armMode = !armMode;
 	}
 
+	// Save the original and transformed coordinates so that we don't need to calculate them again if we are commanded to move to this position
+	cachedX = machinePos[0];
+	cachedY = machinePos[1];
+	cachedTheta = theta;
+	cachedPsi = psi;
+	cachedArmMode = armMode;
 	return true;
 }
 
@@ -143,8 +149,12 @@ void ScaraKinematics::MotorStepsToCartesian(const int32_t motorPos[], const floa
 	const float theta = ((float)motorPos[X_AXIS]/stepsPerMm[X_AXIS]);
     const float psi = ((float)motorPos[Y_AXIS]/stepsPerMm[Y_AXIS]) + (crosstalk[0] * theta);
 
-    machinePos[X_AXIS] = (cosf(theta * DegreesToRadians) * proximalArmLength + cosf((psi + theta) * DegreesToRadians) * distalArmLength) - xOffset;
-    machinePos[Y_AXIS] = (sinf(theta * DegreesToRadians) * proximalArmLength + sinf((psi + theta) * DegreesToRadians) * distalArmLength) - yOffset;
+    // Cache the current values so that a Z probe at this position won't fail due to rounding error when transforming the XY coordinates back
+    currentArmMode = cachedArmMode = (motorPos[Y_AXIS] >= 0);
+    cachedTheta = theta;
+    cachedPsi = psi;
+    cachedX = machinePos[X_AXIS] = (cosf(theta * DegreesToRadians) * proximalArmLength + cosf((psi + theta) * DegreesToRadians) * distalArmLength) - xOffset;
+    cachedY = machinePos[Y_AXIS] = (sinf(theta * DegreesToRadians) * proximalArmLength + sinf((psi + theta) * DegreesToRadians) * distalArmLength) - yOffset;
 
     // On some machines (e.g. Helios), the X and/or Y arm motors also affect the Z height
     machinePos[Z_AXIS] = ((float)motorPos[Z_AXIS]/stepsPerMm[Z_AXIS]) + (crosstalk[1] * theta) + (crosstalk[2] * psi);
@@ -221,18 +231,7 @@ bool ScaraKinematics::IsReachable(float x, float y, bool isCoordinated) const
 	// See if we can transform the position
 	float theta, psi;
 	bool armMode = currentArmMode;
-	const bool reachable = CalculateThetaAndPsi(coords, isCoordinated, theta, psi, armMode);
-	if (reachable)
-	{
-		// Save the original and transformed coordinates so that we don't need to calculate them again if we are commanded to move to this position
-		cachedX = x;
-		cachedY = y;
-		cachedTheta = theta;
-		cachedPsi = psi;
-		cachedArmMode = armMode;
-	}
-
-    return reachable;
+	return CalculateThetaAndPsi(coords, isCoordinated, theta, psi, armMode);
 }
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
@@ -245,12 +244,6 @@ bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesB
 	bool armMode = currentArmMode;
 	if (CalculateThetaAndPsi(coords, isCoordinated, theta, psi, armMode))
 	{
-		// Save the original and transformed coordinates so that we don't need to calculate them again if we are commanded to move to this position
-		cachedX = coords[0];
-		cachedY = coords[1];
-		cachedTheta = theta;
-		cachedPsi = psi;
-		cachedArmMode = armMode;
 		return m208Limited;
 	}
 
@@ -392,7 +385,7 @@ bool ScaraKinematics::QueryTerminateHomingMove(size_t axis) const
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
-// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
+// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
 void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
 {
 	switch (axis)

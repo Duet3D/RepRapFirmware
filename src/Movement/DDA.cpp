@@ -290,17 +290,17 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
 	{
 		accelerations[drive] = normalAccelerations[drive];
-		if (drive >= numTotalAxes || (!doMotorMapping && drive < numVisibleAxes))
-		{
-			endPoint[drive] = Move::MotorEndPointToMachine(drive, nextMove.coords[drive]);
-		}
-
 		endCoordinates[drive] = nextMove.coords[drive];
-		int32_t delta;
+		int32_t delta;													// this will be the net number of steps
+
 		if (drive < numTotalAxes)
 		{
+			if (!doMotorMapping && drive < numVisibleAxes)
+			{
+				endPoint[drive] = Move::MotorMovementToSteps(drive, nextMove.coords[drive]);
+			}
 			delta = endPoint[drive] - positionNow[drive];
-			if (k.IsContinuousRotationAxis(drive) && nextMove.moveType != 1 && nextMove.moveType != 2)
+			if (k.IsContinuousRotationAxis(drive) && nextMove.moveType == 0)
 			{
 				const int32_t stepsPerRotation = lrintf(360.0 * reprap.GetPlatform().DriveStepsPerUnit(drive));
 				if (delta > stepsPerRotation/2)
@@ -312,27 +312,34 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 					delta += stepsPerRotation;
 				}
 			}
-		}
-		else
-		{
-			delta = endPoint[drive];
-		}
-
-		if (drive < numTotalAxes && doMotorMapping)
-		{
-			const float positionDelta = nextMove.coords[drive] - prev->GetEndCoordinate(drive, false);
-			directionVector[drive] = positionDelta;
-			if (positionDelta != 0.0 && (IsBitSet(nextMove.yAxes, drive) || IsBitSet(nextMove.xAxes, drive)))
+			if (doMotorMapping)
 			{
-				xyMoving = true;
+				const float positionDelta = nextMove.coords[drive] - prev->GetEndCoordinate(drive, false);
+				directionVector[drive] = positionDelta;
+				if (positionDelta != 0.0 && (IsBitSet(nextMove.yAxes, drive) || IsBitSet(nextMove.xAxes, drive)))
+				{
+					xyMoving = true;
+				}
+			}
+			else
+			{
+				directionVector[drive] = (float)delta/reprap.GetPlatform().DriveStepsPerUnit(drive);
 			}
 		}
 		else
 		{
-			directionVector[drive] = (float)delta/reprap.GetPlatform().DriveStepsPerUnit(drive);
-			if (drive >= numTotalAxes && nextMove.coords[drive] > 0.0)
+			// It's an extruder drive. We defer calculating the steps because they may be affected by nonlinear extrusion, which we can't calculate until we
+			// know the speed of the move, and because extruder movement is relative so we need to accumulate fractions of a whole step between moves.
+			const float movement = nextMove.coords[drive];
+			directionVector[drive] = movement;
+			if (movement != 0.0)
 			{
-				extruding = true;						// flag this move as extruding even if the number of extruder microsteps is zero
+				extruding = true;
+				delta = (movement > 0.0) ? 1 : -1;		// set 1 step for now, it will be recalculated later
+			}
+			else
+			{
+				delta = 0;
 			}
 		}
 
@@ -347,8 +354,6 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 			if (drive >= numTotalAxes)
 			{
 				// It's an extruder movement
-				nextMove.coords[drive] -= directionVector[drive];
-														// subtract the amount of extrusion we actually did to leave the residue outstanding
 				if (xyMoving && nextMove.usePressureAdvance)
 				{
 					const float compensationTime = reprap.GetPlatform().GetPressureAdvance(drive - numTotalAxes);
@@ -1044,7 +1049,7 @@ pre(disableDeltaMapping || drive < MaxAxes)
 {
 	if (disableMotorMapping)
 	{
-		return Move::MotorEndpointToPosition(endPoint[drive], drive);
+		return Move::MotorStepsToMovement(drive, endPoint[drive]);
 	}
 	else
 	{
@@ -1177,7 +1182,7 @@ inline void DDA::AdjustAcceleration()
 
 // Prepare this DDA for execution.
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
-void DDA::Prepare(uint8_t simMode)
+void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 {
 	if (   xyMoving
 		&& reprap.GetMove().IsDRCenabled()
@@ -1246,7 +1251,7 @@ void DDA::Prepare(uint8_t simMode)
 #endif
 
 		// Handle all drivers
-		const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
+		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 		Platform& platform = reprap.GetPlatform();
 		for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
 		{
@@ -1269,7 +1274,7 @@ void DDA::Prepare(uint8_t simMode)
 					else
 					{
 						reprap.GetPlatform().EnableDrive(drive);
-						if (drive >= numAxes)
+						if (drive >= numTotalAxes)
 						{
 							// If there is any extruder jerk in this move, in theory that means we need to instantly extrude or retract some amount of filament.
 							// Pass the speed change to PrepareExtruder
@@ -1283,7 +1288,7 @@ void DDA::Prepare(uint8_t simMode)
 							{
 								speedChange = 0.0;
 							}
-							pdm->PrepareExtruder(*this, params, speedChange, usePressureAdvance);
+							pdm->PrepareExtruder(*this, params, extrusionPending[drive - numTotalAxes], speedChange, usePressureAdvance);
 
 							// Check for sensible values, print them if they look dubious
 							if (reprap.Debug(moduleDda)
@@ -1350,7 +1355,7 @@ void DDA::Prepare(uint8_t simMode)
 				}
 				else
 				{
-					if (drive < numAxes)
+					if (drive < numTotalAxes)
 					{
 						const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
 						for (size_t i = 0; i < config.numDrivers; ++i)
@@ -1364,7 +1369,7 @@ void DDA::Prepare(uint8_t simMode)
 					}
 					else
 					{
-						const uint8_t driver = platform.GetExtruderDriver(drive - numAxes);
+						const uint8_t driver = platform.GetExtruderDriver(drive - numTotalAxes);
 						if (driver >= NumDirectDrivers)
 						{
 							CanInterface::AddMovement(*this, params, driver - NumDirectDrivers, *pdm);

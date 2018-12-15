@@ -27,11 +27,10 @@ const size_t NumFirmwareUpdateModules = 1;
 // The physical capabilities of the machine
 
 // Alligator + Piggy module max 7 stepper driver
-const size_t DRIVES = 7;						// The number of drives in the machine, including X, Y, and Z plus extruder drives
-#define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g }
-const size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
-// Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
-#define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f }
+constexpr size_t NumDirectDrivers = 7;				// The number of drives in the machine, including X, Y, and Z plus extruder drives
+constexpr size_t MaxTotalDrivers = NumDirectDrivers;
+
+constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t NumEndstops = 6;					// The number of inputs we have for endstops, filament sensors etc.
 // Alligator + Piggy module max 5 heaters
@@ -42,21 +41,22 @@ constexpr size_t NumThermistorInputs = 5;
 
 constexpr size_t MaxAxes = 7;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
-constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
+constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 
 constexpr size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels (USB and two auxiliary UARTs)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
 #define SERIAL_AUX2_DEVICE Serial1
 
-// The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
-// DRIVES
-const Pin ENABLE_PINS[DRIVES] = { 24, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
-const Pin STEP_PINS[DRIVES] = { X16, X14, X1, 5, 28, 11, X9 };
-const Pin DIRECTION_PINS[DRIVES] = { 2, 78, X13, 4, 27, 29, 12};
+constexpr Pin UsbVBusPin = NoPin;					// Pin used to monitor VBUS on USB port. Not needed for SAM3X.
+
+// The numbers of entries in each array must correspond with the values of NumDirectDrivers, MaxAxes, or NumHeaters. Set values to NoPin to flag unavailability.
+const Pin ENABLE_PINS[NumDirectDrivers] = { 24, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
+const Pin STEP_PINS[NumDirectDrivers] = { X16, X14, X1, 5, 28, 11, X9 };
+const Pin DIRECTION_PINS[NumDirectDrivers] = { 2, 78, X13, 4, 27, 29, 12};
 
 // MICROSTEPPING Pins
-const Pin MICROSTEPPING_PINS[DRIVES - MinAxes] = { X12, X10, 44, 45 };
+const Pin MICROSTEPPING_PINS[NumDirectDrivers - MinAxes] = { X12, X10, 44, 45 };
 
 // Motor FAULT Pin
 const Pin MotorFaultDetectPin = 22;

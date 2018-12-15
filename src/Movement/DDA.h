@@ -39,7 +39,8 @@ public:
 
 	DDA(DDA* n);
 
-	bool Init(GCodes::RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
+	bool Init(GCodes::RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));
+																	// Set up a new move, returning true if it represents real movement
 	bool Init(const float_t steps[MaxTotalDrivers]);				// Set up a raw (unmapped) motor move
 	void Init();													// Set up initial positions for machine startup
 	bool Start(uint32_t tim) __attribute__ ((hot));					// Start executing the DDA, i.e. move the move.
@@ -48,7 +49,7 @@ public:
 	void SetPrevious(DDA *p) { prev = p; }
 	void Complete() { state = completed; }
 	bool Free();
-	void Prepare(uint8_t simMode) __attribute__ ((hot));			// Calculate all the values and freeze this DDA
+	void Prepare(uint8_t simMode, float extrusionPending[]) __attribute__ ((hot));	// Calculate all the values and freeze this DDA
 	bool HasStepError() const;
 	bool CanPauseAfter() const { return canPauseAfter; }
 	bool IsPrintingMove() const { return isPrintingMove; }			// Return true if this involves both XY movement and extrusion

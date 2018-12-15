@@ -345,8 +345,8 @@ void Platform::Init()
 	// AXES
 	for (size_t axis = 0; axis < MaxAxes; ++axis)
 	{
-		axisMinima[axis] = 0.0;
-		axisMaxima[axis] = 200.0;
+		axisMinima[axis] = DefaultAxisMinimum;
+		axisMaxima[axis] = DefaultAxisMaximum;
 	}
 	axisMaximaProbed = axisMinimaProbed = 0;
 
@@ -400,7 +400,7 @@ void Platform::Init()
 		}
 	}
 
-	for (size_t endstop = 0; endstop <  NumEndstops; ++endstop)
+	for (Pin p : endStopPins)
 	{
 #if defined(DUET_NG) || defined(DUET_06_085) || defined(__RADDS__) || defined(__ALLIGATOR__)
 		// Enable pullup resistors on endstop inputs here if necessary.
@@ -411,9 +411,9 @@ void Platform::Init()
 		// Note: if we don't have a DueX board connected, the pullups on endstop inputs 5-9 must always be enabled.
 		// Also the pullups on endstop inputs 10-11 must always be enabled.
 		// I don't know whether RADDS and Alligator have hardware pullup resistors or not. I'll assume they might not.
-		pinMode(endStopPins[endstop], INPUT_PULLUP);			// enable pullup on endstop input
+		pinMode(p, INPUT_PULLUP);			// enable pullup on endstop input
 #else
-		pinMode(endStopPins[endstop], INPUT);					// don't enable pullup on endstop input
+		pinMode(p, INPUT);					// don't enable pullup on endstop input
 #endif
 	}
 
@@ -521,15 +521,15 @@ void Platform::Init()
 
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
 	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
-	for (size_t i = 0; i < MaxSpiTempSensors; ++i)
+	for (Pin p : SpiTempSensorCsPins)
 	{
-		setPullup(SpiTempSensorCsPins[i], true);
+		pinMode(p, INPUT_PULLUP);
 	}
 
-	for (size_t heater = 0; heater < NumHeaters; heater++)
+	for (Pin p : HEAT_ON_PINS)
 	{
 		// pinMode is safe to call when the pin is NoPin, so we don't need to check it here
-		pinMode(HEAT_ON_PINS[heater],
+		pinMode(p,
 #if ACTIVE_LOW_HEAT_ON
 				OUTPUT_HIGH
 #else
@@ -1415,7 +1415,7 @@ void Platform::Spin()
 
 				// The driver often produces a transient open-load error, especially in stealthchop mode, so we require the condition to persist before we report it.
 				// Also, false open load indications persist when in standstill, if the phase has zero current in that position
-				if ((stat & TMC_RR_OLA) != 0)
+				if ((stat & TMC_RR_OLA) != 0 && motorCurrents[nextDriveToPoll] * motorCurrentFraction[nextDriveToPoll] >= MinimumOpenLoadMotorCurrent)
 				{
 					if (!openLoadATimer.IsRunning())
 					{
@@ -1433,7 +1433,7 @@ void Platform::Spin()
 					}
 				}
 
-				if ((stat & TMC_RR_OLB) != 0)
+				if ((stat & TMC_RR_OLB) != 0 && motorCurrents[nextDriveToPoll] * motorCurrentFraction[nextDriveToPoll] >= MinimumOpenLoadMotorCurrent)
 				{
 					if (!openLoadBTimer.IsRunning())
 					{
@@ -1906,9 +1906,9 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		if (stk != nullptr)
 		{
 			srdBuf[slot].sp = reinterpret_cast<uint32_t>(stk);
-			for (size_t i = 0; i < ARRAY_SIZE(srdBuf[slot].stack); ++i)
+			for (uint32_t& stval : srdBuf[slot].stack)
 			{
-				srdBuf[slot].stack[i] = (stk < &_estack) ? *stk : 0xFFFFFFFF;
+				stval = (stk < &_estack) ? *stk : 0xFFFFFFFF;
 				++stk;
 			}
 		}
@@ -2235,9 +2235,9 @@ void Platform::Diagnostics(MessageType mtype)
 			{
 				// We saved a stack dump, so print it
 				scratchString.Clear();
-				for (size_t i = 0; i < ARRAY_SIZE(srdBuf[slot].stack); ++i)
+				for (uint32_t stval : srdBuf[slot].stack)
 				{
-					scratchString.catf(" %08" PRIx32, srdBuf[slot].stack[i]);
+					scratchString.catf(" %08" PRIx32, stval);
 				}
 				MessageF(mtype, "Stack:%s\n", scratchString.c_str());
 			}
@@ -2285,7 +2285,7 @@ void Platform::Diagnostics(MessageType mtype)
 	// Show the motor stall status
 	for (size_t drive = 0; drive < numSmartDrivers; ++drive)
 	{
-		String<100> driverStatus;
+		String<MediumStringLength> driverStatus;
 		SmartDrivers::AppendDriverStatus(drive, driverStatus.GetRef());
 		MessageF(mtype, "Driver %u:%s\n", drive, driverStatus.c_str());
 	}

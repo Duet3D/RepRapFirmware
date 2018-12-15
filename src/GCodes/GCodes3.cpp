@@ -120,7 +120,7 @@ GCodeResult GCodes::SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Deal with G60
-GCodeResult GCodes::SavePosition(GCodeBuffer& gb,const  StringRef& reply)
+GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply)
 {
 	const uint32_t sParam = (gb.Seen('S')) ? gb.GetUIValue() : 0;
 	if (sParam < ARRAY_SIZE(numberedRestorePoints))
@@ -201,7 +201,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 		if (gb.Seen(axisLetters[axis]))
 		{
 #if SUPPORT_WORKPLACE_COORDINATES
-			workplaceCoordinates[0][axis]
+			workplaceCoordinates[currentCoordinateSystem][axis]
 #else
 			axisOffsets[axis]
 #endif
@@ -450,7 +450,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		{
 			axesHomedBeforeSimulation = axesHomed;
 			axesHomed = LowestNBits<AxesBitmap>(numVisibleAxes);	// pretend all axes are homed
-			reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
+			SavePosition(simulationRestorePoint, gb);
 			simulationRestorePoint.feedRate = gb.MachineState().feedRate;
 		}
 		simulationTime = 0.0;
@@ -488,8 +488,7 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 				// Starting a new simulation, so save the current position
 				axesHomedBeforeSimulation = axesHomed;
 				axesHomed = LowestNBits<AxesBitmap>(numVisibleAxes);	// pretend all axes are homed
-				reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-				simulationRestorePoint.feedRate = gb.MachineState().feedRate;
+				SavePosition(simulationRestorePoint, gb);
 			}
 			simulationTime = 0.0;
 		}
@@ -736,22 +735,20 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 			{
 				++drive;
 			}
-			if (drive < MaxAxes)
+			if (drive == numTotalAxes && drive < MaxAxes)
 			{
-				if (drive == numTotalAxes)
-				{
-					axisLetters[drive] = c;						// assign the drive to this drive letter
-					moveBuffer.coords[drive] = 0.0;				// user has defined a new axis, so set its position
-					currentUserPosition[drive] = 0.0;			// set its requested user position too in case it is visible
-					++numTotalAxes;
-					numVisibleAxes = numTotalAxes;				// assume any new axes are visible unless there is a P parameter
-					reprap.GetMove().SetNewPosition(moveBuffer.coords, true);	// tell the Move system where the new axis is
-				}
-				platform.SetAxisDriversConfig(drive, config);
-				if (numTotalAxes + numExtruders > MaxTotalDrivers)
-				{
-					numExtruders = MaxTotalDrivers - numTotalAxes;		// if we added axes, we may have fewer extruders now
-				}
+				axisLetters[drive] = c;								// assign the drive to this drive letter
+				++numTotalAxes;
+				numVisibleAxes = numTotalAxes;						// assume any new axes are visible unless there is a P parameter
+				float initialCoords[MaxAxes];
+				reprap.GetMove().GetKinematics().GetAssumedInitialPosition(drive + 1, initialCoords);
+				moveBuffer.coords[drive] = initialCoords[drive];	// user has defined a new axis, so set its position
+				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+			}
+			platform.SetAxisDriversConfig(drive, config);
+			if (numTotalAxes + numExtruders > MaxTotalDrivers)
+			{
+				numExtruders = MaxTotalDrivers - numTotalAxes;		// if we added axes, we may have fewer extruders now
 			}
 		}
 		++lettersToTry;
@@ -787,7 +784,10 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 
 	if (seen)
 	{
-		UpdateCurrentUserPosition();			// make sure that any new visible axes are up to date
+		// In the DDA ring, the axis positions for invisible non-moving axes are not always copied over from previous moves.
+		// So if we have more visible axes than before, then we need to update their positions to get them in sync.
+		// We could do this only when we increase the number of visible axes, but for simplicity we do it always.
+		reprap.GetMove().SetNewPosition(moveBuffer.coords, true);		// tell the Move system where the axes are
 	}
 	else
 	{
@@ -844,7 +844,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			}
 
 			// Save the current axis coordinates
-			memcpy(toolChangeRestorePoint.moveCoords, currentUserPosition, ARRAY_SIZE(currentUserPosition) * sizeof(currentUserPosition[0]));
+			SavePosition(toolChangeRestorePoint, gb);
 
 			// Prepare another move similar to G1 .. S3
 			moveBuffer.moveType = 3;

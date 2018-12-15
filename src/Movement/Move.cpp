@@ -244,6 +244,7 @@ void Move::Spin()
 				if (ddaRingAddPointer->Init(specialMoveCoords))
 				{
 					ddaRingAddPointer = ddaRingAddPointer->GetNext();
+					scheduledMoves++;
 					if (moveState == MoveState::idle || moveState == MoveState::timing)
 					{
 						// We were previously idle, so we have a state change
@@ -268,14 +269,6 @@ void Move::Spin()
 			{
 				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
 				{
-#if 0	// disabled this because it causes jerky movements on the SCARA printer
-					// Add on the extrusion left over from last time.
-					const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-					for (size_t drive = numAxes; drive < DRIVES; ++drive)
-					{
-						nextMove.coords[drive] += extrusionPending[drive - numAxes];
-					}
-#endif
 					if (nextMove.moveType == 0)
 					{
 						AxisAndBedTransform(nextMove.coords, nextMove.xAxes, nextMove.yAxes, true);
@@ -284,8 +277,8 @@ void Move::Spin()
 					if (ddaRingAddPointer->Init(nextMove, !IsRawMotorMove(nextMove.moveType)))
 					{
 						ddaRingAddPointer = ddaRingAddPointer->GetNext();
-						idleCount = 0;
 						scheduledMoves++;
+						idleCount = 0;
 						if (moveState == MoveState::idle || moveState == MoveState::timing)
 						{
 							moveState = MoveState::collecting;
@@ -298,14 +291,6 @@ void Move::Spin()
 							lastStateChangeTime = now;
 						}
 					}
-
-#if 0	// see above
-					// Save the amount of extrusion not done
-					for (size_t drive = numAxes; drive < DRIVES; ++drive)
-					{
-						extrusionPending[drive - numAxes] = nextMove.coords[drive];
-					}
-#endif
 				}
 			}
 		}
@@ -338,7 +323,7 @@ void Move::Spin()
 #endif
 			   )
 			{
-				dda->Prepare(simulationMode);
+				dda->Prepare(simulationMode, extrusionPending);
 			}
 			if (dda->GetState() == DDA::frozen)
 			{
@@ -402,7 +387,7 @@ void Move::Spin()
 #endif
 			   )
 			{
-				cdda->Prepare(simulationMode);
+				cdda->Prepare(simulationMode, extrusionPending);
 			}
 			preparedTime += cdda->GetTimeLeft();
 			++preparedCount;
@@ -569,9 +554,16 @@ bool Move::LowPowerOrStallPause(RestorePoint& rp)
 	{
 		// We are executing a move that has a file address, so we can interrupt it
 		StepTimer::DisableStepInterrupt();
+#if SUPPORT_LASER
+		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
+		{
+			reprap.GetPlatform().SetLaserPwm(0);
+		}
+#endif
 		dda->MoveAborted();
 		CurrentMoveCompleted();							// updates live endpoints, extrusion, ddaRingGetPointer, currentDda etc.
 		--completedMoves;								// this move wasn't really completed
+		--scheduledMoves;								// ...but it is no longer scheduled either
 		abortedMove = true;
 	}
 	else
@@ -720,13 +712,13 @@ void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrive
 		const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 		for (size_t drive = numAxes; drive < numDrives; ++drive)
 		{
-			ep[drive] = MotorEndPointToMachine(drive, coords[drive]);
+			ep[drive] = MotorMovementToSteps(drive, coords[drive]);
 		}
 	}
 }
 
 // Convert distance to steps for a particular drive
-int32_t Move::MotorEndPointToMachine(size_t drive, float coord)
+int32_t Move::MotorMovementToSteps(size_t drive, float coord)
 {
 	return lrintf(coord * reprap.GetPlatform().DriveStepsPerUnit(drive));
 }
@@ -744,16 +736,16 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 {
 	const bool b = kinematics->CartesianToMotorSteps(machinePos, reprap.GetPlatform().GetDriveStepsPerUnit(),
 														reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), motorPos, isCoordinated);
-	if (reprap.Debug(moduleMove) && reprap.Debug(moduleDda))
+	if (b)
 	{
-		if (b)
+		if (reprap.Debug(moduleMove) && reprap.Debug(moduleDda))
 		{
 			debugPrintf("Transformed %.2f %.2f %.2f to %" PRIu32 " %" PRIu32 " %" PRIu32 "\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
 		}
-		else
-		{
-			debugPrintf("Unable to transform %.2f %.2f %.2f\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2]);
-		}
+	}
+	else if (reprap.Debug(moduleMove))
+	{
+		debugPrintf("Unable to transform %.2f %.2f %.2f\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2]);
 	}
 	return b;
 }
@@ -1129,7 +1121,7 @@ void Move::GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping)
 	}
 }
 
-/*static*/ float Move::MotorEndpointToPosition(int32_t endpoint, size_t drive)
+/*static*/ float Move::MotorStepsToMovement(size_t drive, int32_t endpoint)
 {
 	return ((float)(endpoint))/reprap.GetPlatform().DriveStepsPerUnit(drive);
 }

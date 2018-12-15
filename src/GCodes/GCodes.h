@@ -130,8 +130,6 @@ public:
 		uint8_t hasExtrusion : 1;										// true if the move includes extrusion - only valid if the move was set up by SetupMove
 		uint8_t isCoordinated : 1;										// true if this is a coordinates move
 		uint8_t usingStandardFeedrate : 1;								// true if this move uses the standard feed rate
-
-		void SetDefaults();												// set up default values
 	};
 
 	GCodes(Platform& p);
@@ -367,6 +365,8 @@ private:
 	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode);		// Handle M37 to change the simulation mode
 
 	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const; // Write the config-override file
+	bool WriteConfigOverrideHeader(FileStore *f) const;							// Write the config-override header
+
 	void CopyConfigFinalValues(GCodeBuffer& gb);							// Copy the feed rate etc. from the daemon to the input channels
 
 	void ClearBabyStepping() { currentBabyStepZOffset = 0.0; }
@@ -386,10 +386,21 @@ private:
 	void NewMoveAvailable(unsigned int sl);								// Flag that a new move is available
 	void NewMoveAvailable();											// Flag that a new move is available
 
+	void SetMoveBufferDefaults();										// Set up default values in the move buffer
+
 #if SUPPORT_12864_LCD
 	int GetHeaterNumber(unsigned int itemNumber) const;
 #endif
 	Pwm_t ConvertLaserPwm(float reqVal) const;
+
+	inline float GetWorkplaceOffset(size_t axis) const
+	{
+#if SUPPORT_WORKPLACE_COORDINATES
+		return workplaceCoordinates[currentCoordinateSystem][axis];
+#else
+		return axisOffsets[axis];
+#endif
+	}
 
 #ifdef SERIAL_AUX_DEVICE
 	static bool emergencyStopCommanded;
@@ -482,7 +493,6 @@ private:
 	float rawExtruderTotalByDrive[MaxExtruders]; // Extrusion amount in the last G1 command with an E parameter when in absolute extrusion mode
 	float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
 	float distanceScale;						// MM or inches
-	float arcSegmentLength;						// Length of segments that we split arc moves into
 
 #if SUPPORT_WORKPLACE_COORDINATES
 	static const size_t NumCoordinateSystems = 9;
@@ -599,6 +609,7 @@ private:
 	static constexpr const char* RESUME_AFTER_POWER_FAIL_G = "resurrect.g";
 	static constexpr const char* RESUME_PROLOGUE_G = "resurrect-prologue.g";
 	static constexpr const char* FILAMENT_CHANGE_G = "filament-change.g";
+	static constexpr const char* PEEL_MOVE_G = "peel-move.g";
 #if HAS_SMART_DRIVERS
 	static constexpr const char* REHOME_G = "rehome.g";
 #endif

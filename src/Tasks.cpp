@@ -28,7 +28,7 @@ extern char _end;
 
 // The main task currently runs GCodes, so it needs to be large enough to hold the matrices used for auto calibration.
 // The timer and idle tasks currently never do I/O, so they can be much smaller.
-constexpr unsigned int MainTaskStackWords = 2040;
+constexpr unsigned int MainTaskStackWords = 1600;
 constexpr unsigned int IdleTaskStackWords = 60;
 
 static Task<IdleTaskStackWords> idleTask;

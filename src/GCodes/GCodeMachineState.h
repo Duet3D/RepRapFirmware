@@ -120,7 +120,7 @@ public:
 	post(!result.IsLive(); result.state == GCodeState::normal);
 
 	// Return true if the G54 command is in effect
-	bool UsingG54() const { return useMachineCoordinates || useMachineCoordinatesSticky; }
+	bool UsingMachineCoordinates() const { return useMachineCoordinates || useMachineCoordinatesSticky; }
 
 	// Copy values that may have been altered by config.g into this state record
 	void CopyStateFrom(const GCodeMachineState& other)

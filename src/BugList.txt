@@ -167,7 +167,7 @@ To be investigated for 2.02RC5 or release:
 - [probing speed was too high] Multiple G29 commands in succession, https://forum.duet3d.com/topic/7920/bed-compensation-g29-problems
 - [may be fixed by possible fix for for Z and U moving at different speeds] investigate slow movement, https://forum.duet3d.com/topic/6974/problem-with-3-independent-z-axis-motors-and-endstops/32
 
-To be fixed in 2.02RC5:
+Fixed in 2.02RC5:
 - [done, ok] 12864 display of speed factor wrong, https://forum.duet3d.com/topic/7747/reprapfirmware-2-02rc4-released/10
 - [done, ok] 12864 button menu handling wrong, https://forum.duet3d.com/topic/7747/reprapfirmware-2-02rc4-released/14
 - [done, ok] 12864 items 510- display user position not machine position
@@ -184,14 +184,41 @@ To be fixed in 2.02RC5:
 - [done, ok] M106 Pnn Svv always set full PWM if vv > 1 and there were additional parameters e.g. F, https://forum.duet3d.com/topic/7810/question-about-m106/6
 - [done] Possible fix for Z and U moving at different speeds, https://forum.duet3d.com/topic/7755/drive-3-is-slower-as-drive-2-at-homing-in-z-solved/32
 - [done, ok] For SimpleFilamentMonitor, include filament present/not present status in M591 report
-- [done, ok] Heater turn on momentarily when Duet is reset
+- [done, ok] Heaters turn on momentarily when Duet is reset
 - [done, ok] When G53 is in effect, don't apply tool offsets or axis mapping
-- [done, ok] Don't alow both S0 and T0 in M291, it creates a message that can't be dismissed
+- [done, ok] Don't allow both S0 and T0 in M291, it creates a message that can't be dismissed
+
+To be fixed in 2.02RC6:
+- [done] When VIN power comes up (again), clear out open-load status bits to avoid spurious open load warnings
+- [done, ok] Fix behaviour when extrusion per move is < 1 step, https://forum.duet3d.com/topic/7949/my-experience-with-relative-extrusion-problem-and-solution/13
+- [still can't reproduce] Investigate macro using M291 again, https://forum.duet3d.com/topic/7782/issues-with-macros-halting-the-printer/26
+- [done, ok] 12864 fallback: if 'menu' action is used with no parameter, use the F parameter
+- [done, ok] Different U and Z homing speeds is back and worse, https://forum.duet3d.com/topic/7755/drive-3-is-slower-as-drive-2-at-homing-in-z-solved/30
+- [done, ok] A baby stepping move after an extruding move when the printer is idle replicates the same extrusion, https://forum.duet3d.com/topic/7940/firmware-2-02rc5-now-available
+- [done, test] Suppress motor disconnected message if motor current is very low, https://forum.duet3d.com/topic/7994/possible-bug/4
+- [done, ok] When entering a subfolder on the 12864 display from a file list, the screen does not update until you rotate the encoder, https://forum.duet3d.com/topic/8014/12864-display-sd-print-subfolder-screen-update
+- [done, ok] Add date/time if known to config-override.g
+- [done, ok] Resume after pause doesn't use workplace coordinate offsets, https://forum.duet3d.com/topic/4557/cnc-coordinate-systems/29 and https://forum.duet3d.com/topic/7940/firmware-2-02rc5-now-available/16
+- [done, ok] Add nanoDLP to compatibility options, also add M650 and M651 support
+- [done] Return a 503 http error when we run out of buffers while trying to compose a http reply
+- [done] M206 now sets offsets for the current workplace, not workplace 0
+- [done] memory for 12864 display and menu system is not allocated until M918 is processed
+- [done, test] scheduled vs. completed move count wrong, https://forum.duet3d.com/topic/8052/print-stopped-at-83-for-seemingly-no-reason/2
+- [done, ok] G2/G3 moves use a variable arg segment length
+- [done, ok] Add sin + cosine calculation time
+- [done, ok] New version of FatFS
+- [done, ok] Allow M226 and M600 even when no file is being printed
+- [done, test] Print progress based on requested extrusion *before* mixing, for ditto printing
+- [done, ok] G30 after SCARA homing prox and distal sometimes failed due to rounding error in arm calculation, https://forum.duet3d.com/post/72199
 
 Future:
+- Run script if thermal error? https://forum.duet3d.com/topic/8038/suggestion-run-script-in-case-of-thermal-error
+- Run script on filament error?
+- In CNC mode, allow Fanuc-style X and/or Y coordinates without repeating the G0 or G1 command
 - Option for an endstop input to trigger an emergency pause
+- Count steps until homing switch is triggered compared to original, https://forum.duet3d.com/topic/8017/request-check-for-lost-steps
 - In CNC or laser mode, don't segment G0 moves for mesh bed compensation, https://forum.duet3d.com/topic/7728/go-vs-g1-movement/11
-- Z homing switch offset in M208 or elswhere, https://forum.duet3d.com/topic/7767/z-offset-is-negated-in-homing-g-macro
+- Z homing switch offset in M208 or elsewhere, https://forum.duet3d.com/topic/7767/z-offset-is-negated-in-homing-g-macro
 - After looking for G1 Z commands in gcode file analyser, check that there is extrusion after it
 - M260 allow bytes to be specified in hex, more generally allow hex anywhere?
 - Auto mount SD card when it is inserted

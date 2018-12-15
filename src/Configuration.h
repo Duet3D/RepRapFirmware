@@ -47,6 +47,11 @@ constexpr float DefaultXYInstantDv = 15.0;				// mm/sec
 constexpr float DefaultZInstantDv = 0.2;
 constexpr float DefaultEInstantDv = 2.0;
 
+constexpr float DefaultAxisMinimum = 0.0;
+constexpr float DefaultAxisMaximum = 200.0;
+
+constexpr float MinimumOpenLoadMotorCurrent = 300;		// minimum current in mA for the open load status to be taken seriously
+
 // Timeouts
 constexpr uint32_t FanCheckInterval = 500;				// Milliseconds
 constexpr uint32_t OpenLoadTimeout = 500;				// Milliseconds
@@ -205,7 +210,7 @@ constexpr int DefaultZProbeADValue = 500;				// Default trigger threshold
 constexpr float TRIANGLE_ZERO = -0.001;					// Millimetres
 constexpr float SILLY_Z_VALUE = -9999.0;				// Millimetres
 
-// String lengths. Try not to have too many different ones.
+// String lengths. Try not to have too many different ones, because each one causes an instantiation of the String template
 constexpr size_t MaxMessageLength = 256;
 constexpr size_t MaxTitleLength = 61;
 
@@ -221,6 +226,7 @@ constexpr size_t MaxHeaterNameLength = 20;				// Maximum number of characters in
 constexpr size_t MaxFanNameLength = 20;					// Maximum number of characters in a fan name
 
 constexpr size_t FormatStringLength = 256;
+constexpr size_t GCodeReplyLength = 256;				// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer
 constexpr size_t MachineNameLength = 40;
 constexpr size_t RepRapPasswordLength = 20;
 constexpr size_t MediumStringLength = MaxFilenameLength;
