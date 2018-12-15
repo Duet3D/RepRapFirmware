@@ -33,7 +33,7 @@ RepRapFirmware has pioneered a number of advances in 3D printing including:
 
 Supported hardware
 ==================
-Version 2 of this fork of RepRapFirmware supports electronics based on SAM4E, SAM4S and SAME70 processors; in particular the Duet WiFi, Duet Ethernet, Duet Maestro, the forthcoming Duet 3 range, and some specialist OEM boards. There is another fork that supports electronics that use the LPC1768/1769 processors.
+Version 2 of this fork of RepRapFirmware supports electronics based on SAM4E, SAM4S and SAME70 processors; in particular the Duet WiFi, Duet Ethernet, Duet Maestro, the forthcoming Duet 3 range, and some specialist OEM boards. There is another fork that supports electronics that use the LPC1768/1769 processors. There is also an untested (by me) build for Arduino Due/RADDS
 
 Version 1 of this fork also supports hardware built around the SAM3X8E processor, such as Duet 06, Duet 085, Arduino Due/RADDS and Alligator. I no longer develop version 1 but if someone else wants to continue development of version 1 or add support for these processors in version 2, I will consider accepting related pull requests. Please note, version 2 uses FreeRTOS, and the additional memory requirement makes it difficult to fit both RTOS and LWIP network support into the 96Kb RAM limit of the SAM3X8E. One way to resolve this might be to use the TCP/IP stack that is available with FreeRTOS.
 
