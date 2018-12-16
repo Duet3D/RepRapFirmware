@@ -16,6 +16,7 @@
 #include "PrintMonitor.h"
 #include "Tasks.h"
 #include "SharedSpi.h"
+#include "usart/usart.h"
 
 #if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
@@ -299,7 +300,32 @@ int GCodes::ConnectODriveToSerialChannel(size_t whichODrive, size_t whichChannel
 			switch(retVal)
 			{
 				case usartUartSetupResult::success:
-					odrv.SetSerial(SERIAL_STOLEN_DEVICE);
+					//reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
+					//odrv.SetSerial(SERIAL_STOLEN_DEVICE);
+					//odrv.flush(); // TODO: Don't know if this is enough
+
+					{
+						uint32_t count = 0;
+						while (!usart_is_tx_ready(USART0))
+						{
+							delayMicroseconds(10);
+							++count;
+							if(count > 1000)
+							{
+								reply.copy("Timeout. TX doesn't get ready.");
+								return 1;
+							}
+						}
+						usart_putchar(USART0, 'c'); // current
+						usart_putchar(USART0, ' ');
+						usart_putchar(USART0, '0'); // of motor 0
+						usart_putchar(USART0, ' ');
+						usart_putchar(USART0, '0'); // Should be 0.2 A
+						usart_putchar(USART0, '.');
+						usart_putchar(USART0, '2');
+						usart_putchar(USART0, '\n');
+						reply.copy("Ok, everything should be done.");
+					}
 					return 0;
 				case usartUartSetupResult::uartSetupAlready:
 					odrv.SetSerial(SERIAL_STOLEN_DEVICE);
