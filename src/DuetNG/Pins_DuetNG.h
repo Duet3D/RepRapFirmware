@@ -54,7 +54,7 @@ constexpr size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels 
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
 #define SERIAL_WIFI_DEVICE Serial1
-#define SERIAL_STOLEN_DEVICE Serial2
+#define SERIAL_STOLEN_DEVICE Serial2				// The stolen device will be local shared between GCodes3.cpp, ODrive.cpp and SharedSpi.cpp
 
 constexpr Pin UsbVBusPin = 54;						// Pin used to monitor VBUS on USB port
 

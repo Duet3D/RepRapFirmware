@@ -4008,7 +4008,8 @@ void Platform::SetBaudRate(size_t chan, uint32_t br)
 
 uint32_t Platform::GetBaudRate(size_t chan) const
 {
-	return (chan < NUM_SERIAL_CHANNELS) ? baudRates[chan] : 0;
+	return (chan < NUM_SERIAL_CHANNELS) ? baudRates[chan] :
+		(chan == 99) ? baudRates[NUM_SERIAL_CHANNELS-1] : 0;
 }
 
 void Platform::SetCommsProperties(size_t chan, uint32_t cp)
@@ -4048,7 +4049,6 @@ void Platform::ResetChannel(size_t chan)
 		SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 		break;
 #endif
-
 	default:
 		break;
 	}
