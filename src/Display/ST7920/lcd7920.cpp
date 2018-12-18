@@ -538,7 +538,7 @@ void Lcd7920::Bitmap(PixelNumber x0, PixelNumber y0, PixelNumber width, PixelNum
 	if (y0 + height > endRow) endRow = y0 + height;
 }
 
-// Draw a single bitmap row
+// Draw a single bitmap row. 'left' and 'width' do not need to be divisible by 8.
 void Lcd7920::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert)
 {
 	if (width != 0)														// avoid possible arithmetic underflow
@@ -566,14 +566,15 @@ void Lcd7920::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, co
 			++firstColIndex;
 		}
 
-		// Do the last byte
-		const unsigned int lastDataShift = 7 - ((left + width - 1) % 8);	// number of trailing bits in the last byte that we leave alone
+		// Do the last byte. 'accumulator' contains up to 'firstDataShift' of the most significant bits.
+		const unsigned int lastDataShift = 7 - ((left + width - 1) % 8);	// number of trailing bits in the last byte that we leave alone, 0 to 7
 		const uint8_t lastMask = (1u << lastDataShift) - 1;					// mask for bits we want to keep;
+		accumulator |= (*data ^ inv) >> firstDataShift;
+		accumulator &= ~lastMask;
 		accumulator |= *p & lastMask;
-		const uint8_t newVal = accumulator | (((*data ^ inv) << firstDataShift) & ~lastMask);
-		if (newVal != *p)
+		if (accumulator != *p)
 		{
-			*p = newVal;
+			*p = accumulator;
 			SetDirty(top, 8 * firstColIndex);
 		}
 	}

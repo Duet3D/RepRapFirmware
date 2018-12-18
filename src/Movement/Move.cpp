@@ -705,6 +705,7 @@ void Move::SetPositions(const float move[MaxTotalDrivers])
 	}
 }
 
+// This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered and DDA::SetPositions
 void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const
 {
 	if (CartesianToMotorSteps(coords, ep, true))
@@ -732,20 +733,21 @@ void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes
 
 // Convert Cartesian coordinates to motor steps, axes only, returning true if successful.
 // Used to perform movement and G92 commands.
+// This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered, DDA::SetPositions and Move::EndPointToMachine
 bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const
 {
 	const bool b = kinematics->CartesianToMotorSteps(machinePos, reprap.GetPlatform().GetDriveStepsPerUnit(),
 														reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), motorPos, isCoordinated);
-	if (b)
+	if (reprap.Debug(moduleMove) && !inInterrupt())
 	{
-		if (reprap.Debug(moduleMove) && reprap.Debug(moduleDda))
+		if (!b)
+		{
+			debugPrintf("Unable to transform %.2f %.2f %.2f\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2]);
+		}
+		else if (reprap.Debug(moduleDda))
 		{
 			debugPrintf("Transformed %.2f %.2f %.2f to %" PRIu32 " %" PRIu32 " %" PRIu32 "\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
 		}
-	}
-	else if (reprap.Debug(moduleMove))
-	{
-		debugPrintf("Unable to transform %.2f %.2f %.2f\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2]);
 	}
 	return b;
 }

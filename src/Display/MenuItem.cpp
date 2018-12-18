@@ -853,7 +853,6 @@ void ImageMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 							break;
 						}
 						lcd.BitmapRow(row - tOffset + irow, column,  cols, buffer, highlight);
-						++irow;
 					}
 				}
 			}

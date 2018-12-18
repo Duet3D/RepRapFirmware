@@ -188,7 +188,7 @@ Fixed in 2.02RC5:
 - [done, ok] When G53 is in effect, don't apply tool offsets or axis mapping
 - [done, ok] Don't allow both S0 and T0 in M291, it creates a message that can't be dismissed
 
-To be fixed in 2.02RC6:
+Fixed in 2.02RC6:
 - [done] When VIN power comes up (again), clear out open-load status bits to avoid spurious open load warnings
 - [done, ok] Fix behaviour when extrusion per move is < 1 step, https://forum.duet3d.com/topic/7949/my-experience-with-relative-extrusion-problem-and-solution/13
 - [still can't reproduce] Investigate macro using M291 again, https://forum.duet3d.com/topic/7782/issues-with-macros-halting-the-printer/26
@@ -211,7 +211,14 @@ To be fixed in 2.02RC6:
 - [done, test] Print progress based on requested extrusion *before* mixing, for ditto printing
 - [done, ok] G30 after SCARA homing prox and distal sometimes failed due to rounding error in arm calculation, https://forum.duet3d.com/post/72199
 
+Todo before 2.02 release:
+- [done, ok] Pre-allocate SD card storage when doing HTTP file upload
+- [done, test] Bug fix for homing CoreXY with DDA+Move debug enabled (thanks @sdavi)
+- [done, test] Set 12864 CS pin low at startup
+- [done, ok] 12864 image display is wrong for multi-line images
+
 Future:
+- Add I2C success count to I2C stats
 - Run script if thermal error? https://forum.duet3d.com/topic/8038/suggestion-run-script-in-case-of-thermal-error
 - Run script on filament error?
 - In CNC mode, allow Fanuc-style X and/or Y coordinates without repeating the G0 or G1 command

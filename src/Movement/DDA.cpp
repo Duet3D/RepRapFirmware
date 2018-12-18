@@ -1032,6 +1032,7 @@ bool DDA::FetchEndPosition(volatile int32_t ep[MaxTotalDrivers], volatile float 
 	return endCoordinatesValid;
 }
 
+// This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered
 void DDA::SetPositions(const float move[MaxTotalDrivers], size_t numDrives)
 {
 	reprap.GetMove().EndPointToMachine(move, endPoint, numDrives);
@@ -1740,9 +1741,9 @@ bool DDA::Step()
 		// Keep this loop as fast as possible, in the case that there are no endstops to check!
 
 		// 1. Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops or the Z probe.
-		if (endStopsToCheck != 0)										// if any homing switches or the Z probe is enabled in this move
+		if (endStopsToCheck != 0)		// if any homing switches or the Z probe is enabled in this move
 		{
-			CheckEndstops(platform);	// Call out to a separate function because this may help cache usage in the more common case where we don't call it
+			CheckEndstops(platform);	// call out to a separate function because this may help cache usage in the more common case where we don't call it
 			if (state == completed)		// we may have completed the move due to triggering an endstop switch or Z probe
 			{
 				break;

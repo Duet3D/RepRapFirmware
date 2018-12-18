@@ -814,14 +814,13 @@ void RepRap::Tick()
 				register const uint32_t * stackPtr asm ("r2");					// we want the PSP not the MSP
 				platform->SoftwareReset(
 					(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
-					stackPtr + 5												// discard uninteresting registers, keep LR PC PSR
+					stackPtr + 5);												// discard uninteresting registers, keep LR PC PSR
 #else
 				register const uint32_t * stackPtr asm ("sp");
 				platform->SoftwareReset(
 					(uint16_t)SoftwareResetReason::stuckInSpin,
-					stackPtr + 5												// discard uninteresting registers, keep LR PC PSR
+					stackPtr + 5);												// discard uninteresting registers, keep LR PC PSR
 #endif
-					);
 			}
 		}
 	}
@@ -1903,7 +1902,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 				if (filesFound >= startAt)
 				{
 					// Make sure we can end this response properly
-					if (bytesLeft < strlen(fileInfo.fileName.c_str()) * 2 + 20)
+					if (bytesLeft < fileInfo.fileName.strlen() * 2 + 20)
 					{
 						// No more space available - stop here
 						platform->GetMassStorage()->AbandonFindNext();
@@ -1975,7 +1974,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 				if (filesFound >= startAt)
 				{
 					// Make sure we can end this response properly
-					if (bytesLeft < strlen(fileInfo.fileName.c_str()) * 2 + 50)
+					if (bytesLeft < fileInfo.fileName.strlen() * 2 + 50)
 					{
 						// No more space available - stop here
 						platform->GetMassStorage()->AbandonFindNext();
