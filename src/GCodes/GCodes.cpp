@@ -180,6 +180,9 @@ void GCodes::Init()
 #ifdef SERIAL_AUX_DEVICE
 	SERIAL_AUX_DEVICE.SetInterruptCallback(GCodes::CommandEmergencyStop);
 #endif
+#ifdef SERIAL_STOLEN_DEVICE
+	SERIAL_STOLEN_DEVICE.SetInterruptCallback(GCodes::CommandEmergencyStop);
+#endif
 }
 
 // This is called from Init and when doing an emergency stop

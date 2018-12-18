@@ -281,117 +281,24 @@ int GCodes::ConnectODriveToSerialChannel(size_t whichODrive, size_t whichChannel
 		#if defined(SERIAL_AUX_DEVICE)
 		case 1:
 		    reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
-			odrv.SetSerial(SERIAL_AUX_DEVICE);
+			odrv.SetSerial(&SERIAL_AUX_DEVICE);
 			odrv.flush(); // TODO: Don't know if this is enough
 			return 0;
 		#endif
 		#if defined(SERIAL_AUX2_DEVICE)
 		case 2:
 			reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
-			odrv.SetSerial(SERIAL_AUX2_DEVICE);
+			odrv.SetSerial(&SERIAL_AUX2_DEVICE);
 			return 0;
 		#endif
 		#if defined(SERIAL_STOLEN_DEVICE)
 		case 99:  // 99 Is the special steal-the-shared-spi serial channel
-			//reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
-			//ConfigurePin(g_APinDescription[APIN_USART_SSPI_MOSI]);
-			//ConfigurePin(g_APinDescription[APIN_USART_SSPI_MISO]);
-
-			SERIAL_STOLEN_DEVICE.begin(atWhatBaud, (int)1);
-			//SERIAL_STOLEN_DEVICE.begin(atWhatBaud);
+			ConfigurePin(g_APinDescription[APIN_USART_SSPI_MOSI]);
+			ConfigurePin(g_APinDescription[APIN_USART_SSPI_MISO]);
+			SERIAL_STOLEN_DEVICE.begin(atWhatBaud); // Something is done in this begin that breaks serial upon uploadning and flashing new firmware
 			SERIAL_STOLEN_DEVICE.setInterruptPriority(NvicPriorityPanelDueUart);
-			//uartOnSspiPinsInit(atWhatBaud);
-					{
-						uint32_t count = 0;
-						while (!usart_is_tx_ready(USART0))
-						{
-							delayMicroseconds(10);
-							++count;
-							if(count > 1000)
-							{
-								reply.copy("Timeout. TX doesn't get ready.");
-								return 1;
-							}
-						}
-						usart_putchar(USART0, 'c'); // current
-						usart_putchar(USART0, ' ');
-						usart_putchar(USART0, '0'); // of motor 0
-						usart_putchar(USART0, ' ');
-						usart_putchar(USART0, '0'); // Should be 0.2 A
-						usart_putchar(USART0, '.');
-						usart_putchar(USART0, '2');
-						usart_putchar(USART0, '\n');
-					}
-			//SERIAL_STOLEN_DEVICE.end();
-			odrv.SetSerial(SERIAL_STOLEN_DEVICE);
+			odrv.SetSerial(&SERIAL_STOLEN_DEVICE);
 			return 0;
-
-			//static RingBuffer rx_buffer3;
-			//static RingBuffer tx_buffer3;
-			//static StolenUSARTClass stolenSerial(USART0, USART0_IRQn, ID_USART0, &rx_buffer3, &tx_buffer3);
-			//void USART0_Handler(void)
-			//{
-			//	stolenSerial.IrqHandler();
-			//}
-			//stolenSerial.begin(atWhatBaud);
-			//odrv.SetSerial(stolenSerial);
-			//return 0;
-
-
-		//{
-		//	//#if SAM4E || SAM4S || (SAME70 && !defined(SAME70XPLD))
-		//	#if SAM4E // Just havent' tested on other boards
-		//	// TODO: uartOnSspiPins should be called from
-		//	// USARTClass::begin() in cores/arduino/USARTClass.h/cpp
-		//	usartUartSetupResult retVal = uartOnSspiPinsInit(atWhatBaud);
-		//	switch(retVal)
-		//	{
-		//		case usartUartSetupResult::success:
-		//			//reprap.GetPlatform().SetBaudRate(whichChannel, atWhatBaud);
-		//			odrv.SetSerial(SERIAL_STOLEN_DEVICE);
-		//			//odrv.flush(); // TODO: Don't know if this is enough
-
-		//			//{
-		//			//	uint32_t count = 0;
-		//			//	while (!usart_is_tx_ready(USART0))
-		//			//	{
-		//			//		delayMicroseconds(10);
-		//			//		++count;
-		//			//		if(count > 1000)
-		//			//		{
-		//			//			reply.copy("Timeout. TX doesn't get ready.");
-		//			//			return 1;
-		//			//		}
-		//			//	}
-		//			//	usart_putchar(USART0, 'c'); // current
-		//			//	usart_putchar(USART0, ' ');
-		//			//	usart_putchar(USART0, '0'); // of motor 0
-		//			//	usart_putchar(USART0, ' ');
-		//			//	usart_putchar(USART0, '0'); // Should be 0.2 A
-		//			//	usart_putchar(USART0, '.');
-		//			//	usart_putchar(USART0, '2');
-		//			//	usart_putchar(USART0, '\n');
-		//			//}
-		//			reply.copy("Ok, everything should be done.");
-		//			return 0;
-		//		case usartUartSetupResult::uartSetupAlready:
-		//			odrv.SetSerial(SERIAL_STOLEN_DEVICE);
-		//			return 0;
-		//		case usartUartSetupResult::spiSetupAlready:
-		//			reply.copy("SPI was already configured on the shared SPI pins.");
-		//			return 0;
-		//		case usartUartSetupResult::error:
-		//			reply.copy("uartOnSspiPinsInit() returned error.");
-		//			return 0;
-		//		default:
-		//			reply.printf("Error: usartUartSetupResult %u not handled.", (uint8_t)retVal);
-		//			return 1;
-		//	}
-		//	#else
-		//	reply.printf("Can't reconfigure SPI pins to serial on this board.");
-		//	#endif // USART_SPI
-		//	return 1;
-		//}
 		#endif // defined(SERIAL_STOLEN_DEVICE)
 		default:
 			reply.printf("Channel %u is not available.", whichChannel);

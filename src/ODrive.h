@@ -9,9 +9,9 @@ enum ODriveAxis { M0=0, M1=1, NO_AXIS=-1 };
 class ODrive {
 public:
 	ODrive();
-	ODrive(Stream&);
+	ODrive(Stream*);
 	ODrive(size_t, size_t);
-	ODrive(size_t, size_t, Stream&);
+	ODrive(size_t, size_t, Stream*);
 
 	enum AxisState_t {
 		AXIS_STATE_UNDEFINED = 0, //<! will fall through to idle
@@ -34,7 +34,7 @@ public:
 	};
 
 	// Commands
-	void SetSerial(Stream& serial);
+	void SetSerial(Stream* serial_ptr_in);
 	void SetPosition(ODriveAxis motorNumber, float position) const; // TODO: this doesn't seem to work...
 
 	// Hangprinter needs
@@ -67,7 +67,7 @@ public:
 private:
 	float encoderPosReference[2]; // One ODrive board can control two axes
 	float countsPerRev[2];
-	Stream& serial_;
+	Stream* serial_ptr;
 	size_t axes[2];
 
 	size_t readString(char*, size_t) const;
