@@ -312,8 +312,9 @@ constexpr size_t FILE_BUFFER_SIZE = 128;
 #define DEFAULT_MACHINE_NAME	"My Duet"				// Default machine name
 #define DEFAULT_HOSTNAME 		"duet"					// Default netbios name
 
-#define INDEX_PAGE_FILE "reprap.htm"
-#define FOUR04_PAGE_FILE "html404.htm"
+#define INDEX_PAGE_FILE			"index.html"
+#define OLD_INDEX_PAGE_FILE		"reprap.htm"
+#define FOUR04_PAGE_FILE		"html404.htm"
 
 // Filesystem and upload defaults
 #define FS_PREFIX "0:"

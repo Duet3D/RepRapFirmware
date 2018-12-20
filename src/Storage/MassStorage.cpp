@@ -215,7 +215,7 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 		{
 			res = f_readdir(&findDir, &entry);
 			if (res != FR_OK || entry.fname[0] == 0) break;
-			if (!StringEquals(entry.fname, ".") && !StringEquals(entry.fname, ".."))
+			if (!StringEqualsIgnoreCase(entry.fname, ".") && !StringEqualsIgnoreCase(entry.fname, ".."))
 			{
 				file_info.isDirectory = (entry.fattrib & AM_DIR);
 				file_info.fileName.copy(entry.fname);
@@ -275,18 +275,19 @@ const char* MassStorage::GetMonthName(const uint8_t month)
 }
 
 // Delete a file or directory
-bool MassStorage::Delete(const char* directory, const char* fileName, bool silent)
+bool MassStorage::Delete(const char* directory, const char* fileName)
 {
 	String<MaxFilenameLength> location;
 	CombineName(location.GetRef(), directory, fileName);
 
 	FRESULT unlinkReturn;
+	bool isOpen = false;
 
 	// Start new scope to lock the filesystem for the minimum time
 	{
 		MutexLocker lock(fsMutex);
 
-		// First check whether the file is open - don't allow it to be deleted if it is
+		// First check whether the file is open - don't allow it to be deleted if it is, because that may corrupt the file system
 		FIL file;
 		const FRESULT openReturn = f_open(&file, location.c_str(), FA_OPEN_EXISTING | FA_READ);
 		if (openReturn == FR_OK)
@@ -295,20 +296,29 @@ bool MassStorage::Delete(const char* directory, const char* fileName, bool silen
 			{
 				if (fil.file.obj.fs == file.obj.fs && fil.file.dir_sect == file.dir_sect && fil.file.dir_ptr == file.dir_ptr )
 				{
-					reprap.GetPlatform().MessageF(ErrorMessage, "Cannot delete file %s because it is open\n", location.c_str());
-					f_close(&file);
-					return false;
+					isOpen = true;
+					break;
 				}
 			}
 			f_close(&file);
 		}
 
-		unlinkReturn = f_unlink(location.c_str());
+		if (!isOpen)
+		{
+			unlinkReturn = f_unlink(location.c_str());
+		}
+	}
+
+	if (isOpen)
+	{
+		reprap.GetPlatform().MessageF(ErrorMessage, "Cannot delete file %s because it is open\n", location.c_str());
+		return false;
 	}
 
 	if (unlinkReturn != FR_OK)
 	{
-		if (!silent)
+		// If the error was that the file or path doesn't exist, don't generate a global error message, but still return false
+		if (unlinkReturn != FR_NO_FILE && unlinkReturn != FR_NO_PATH)
 		{
 			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to delete file %s\n", location.c_str());
 		}
@@ -380,7 +390,7 @@ bool MassStorage::DirectoryExists(const StringRef& path) const
 	const size_t len = path.strlen();
 	if (len != 0 && (path[len - 1] == '/' || path[len - 1] == '\\'))
 	{
-		path[len - 1] = 0;
+		path.Truncate(len - 1);
 	}
 
 	DIR dir;

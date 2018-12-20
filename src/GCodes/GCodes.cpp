@@ -2171,7 +2171,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 			}
 			else
 			{
-				platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G, true);
+				platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G);
 				platform.MessageF(ErrorMessage, "Failed to write or close file %s\n", RESUME_AFTER_POWER_FAIL_G);
 			}
 		}
@@ -4252,7 +4252,7 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 			return GCodeResult::error;
 		}
 
-		if (StringEquals(filamentName.c_str(), tool->GetFilament()->GetName()))
+		if (StringEqualsIgnoreCase(filamentName.c_str(), tool->GetFilament()->GetName()))
 		{
 			// Filament already loaded - nothing to do
 			return GCodeResult::ok;
@@ -4423,7 +4423,7 @@ void GCodes::StopPrint(StopPrintReason reason)
 			printingFilename, printMinutes/60u, printMinutes % 60u);
 		if (reason == StopPrintReason::normalCompletion && simulationMode == 0)
 		{
-			platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G, true);
+			platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G);
 		}
 	}
 

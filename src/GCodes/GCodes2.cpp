@@ -898,7 +898,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			String<MaxFilenameLength> filename;
 			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
-				platform.GetMassStorage()->Delete(platform.GetGCodeDir(), filename.c_str(), false);
+				platform.GetMassStorage()->Delete(platform.GetGCodeDir(), filename.c_str());
 			}
 			else
 			{

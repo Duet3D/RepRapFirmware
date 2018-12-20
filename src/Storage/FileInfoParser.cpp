@@ -43,7 +43,7 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 		return false;
 	}
 
-	if (parseState != notParsing && !StringEquals(fileName, filenameBeingParsed.c_str()))
+	if (parseState != notParsing && !StringEqualsIgnoreCase(fileName, filenameBeingParsed.c_str()))
 	{
 		// We are already parsing a different file
 		if (millis() - lastFileParseTime < MaxFileParseInterval)

@@ -254,15 +254,15 @@ bool StringEndsWith(const char* string, const char* ending)
 {
 	int j = strlen(string);
 	int k = strlen(ending);
-	return k <= j && StringEquals(&string[j - k], ending);
+	return k <= j && StringEqualsIgnoreCase(&string[j - k], ending);
 }
 
-bool StringEquals(const char* s1, const char* s2)
+bool StringEqualsIgnoreCase(const char* s1, const char* s2)
 {
 	int i = 0;
 	while(s1[i] && s2[i])
 	{
-		if(tolower(s1[i]) != tolower(s2[i]))
+		if (tolower(s1[i]) != tolower(s2[i]))
 		{
 			return false;
 		}

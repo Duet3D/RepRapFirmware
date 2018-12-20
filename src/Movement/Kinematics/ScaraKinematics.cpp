@@ -356,11 +356,11 @@ AxesBitmap ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap a
 	if (ret == 0)
 	{
 	// Change the returned name if it is X or Y
-		if (StringEquals(filename.c_str(), "homex.g"))
+		if (StringEqualsIgnoreCase(filename.c_str(), "homex.g"))
 		{
 			filename.copy(HomeProximalFileName);
 		}
-		else if (StringEquals(filename.c_str(), "homey.g"))
+		else if (StringEqualsIgnoreCase(filename.c_str(), "homey.g"))
 		{
 			filename.copy(HomeDistalFileName);
 		}

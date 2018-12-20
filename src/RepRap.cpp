@@ -2032,7 +2032,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 	if (filename != nullptr && filename[0] != 0)
 	{
 		GCodeFileInfo info;
-		if (!platform->GetMassStorage()->GetFileInfo(GCODE_DIR, filename, info, quitEarly))
+		if (!platform->GetMassStorage()->GetFileInfo(platform->GetGCodeDir(), filename, info, quitEarly))
 		{
 			// This may take a few runs...
 			return false;

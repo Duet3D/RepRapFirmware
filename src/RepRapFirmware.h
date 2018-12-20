@@ -164,7 +164,7 @@ inline void delay(uint32_t ms)
 
 bool StringEndsWith(const char* string, const char* ending);
 bool StringStartsWith(const char* string, const char* starting);
-bool StringEquals(const char* s1, const char* s2);
+bool StringEqualsIgnoreCase(const char* s1, const char* s2);
 int StringContains(const char* string, const char* match);
 void SafeStrncpy(char *dst, const char *src, size_t length) pre(length != 0);
 void SafeStrncat(char *dst, const char *src, size_t length) pre(length != 0);

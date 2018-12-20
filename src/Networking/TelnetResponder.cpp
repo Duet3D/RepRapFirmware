@@ -267,7 +267,7 @@ void TelnetResponder::CharFromClient(char c)
 void TelnetResponder::ProcessLine()
 {
 	// Special commands for Telnet
-	if (StringEquals(clientMessage, "exit") || StringEquals(clientMessage, "quit"))
+	if (StringEqualsIgnoreCase(clientMessage, "exit") || StringEqualsIgnoreCase(clientMessage, "quit"))
 	{
 		if (outBuf != nullptr || OutputBuffer::Allocate(outBuf))
 		{

@@ -214,8 +214,13 @@ Fixed in 2.02RC6:
 Todo before 2.02 release:
 - [done, ok] Pre-allocate SD card storage when doing HTTP file upload
 - [done, test] Bug fix for homing CoreXY with DDA+Move debug enabled (thanks @sdavi)
-- [done, test] Set 12864 CS pin low at startup
+- [done, ok] Set 12864 CS pin low at startup
 - [done, ok] 12864 image display is wrong for multi-line images
+- [done, test] Suppress global error message from file delete if the file or path doesn't exist, https://forum.duet3d.com/topic/8194/cura-duet-reprap-firmware-integration-question/4
+- [done] Add CORS header to http reject message, see email from chrishamm
+- [done] Add content-length header to rr_download response
+- [done] Redirect http directory requests to index.html
+- [done] HTML index file is now index.html, falls back to reprap.html
 
 Future:
 - Add I2C success count to I2C stats
@@ -248,8 +253,8 @@ Future:
 - Workplace offsets are supposed to be persistant (check NIST), https://www.duet3d.com/forum/thread.php?pid=43755#p43755
 - At the end of a simulation, restore the original workplace coordinate selection
 - CNC: look at G17/18/19, see https://forum.duet3d.com/topic/4669/ooznest-workbee-screw-driven
-
-
+- Option in M92 to specify what microstepping the values are specified at, https://forum.duet3d.com/topic/8225/m92-parameter-to-indicate-microstepping/4
+- Trigger option to do emergency pause? https://forum.duet3d.com/topic/7846/pause-and-store-print-state-on-network-signal-ups/4
 - Allow extruder movement in tpre? https://forum.duet3d.com/topic/7263/controlling-stepper-motors-via-drive-numbers-eg-g1-d4-700-f100/4
 - M207 per-tool values, https://forum.duet3d.com/topic/6855/add-drive-extruder-parameter-to-m207/6
 - Command to copy output from the following commands to the log file?
@@ -291,12 +296,7 @@ Future:
 - When uploading while a file is being printed, don't allow the currently-printing file to be replaced
 - Option to send stall warning messages when not printing from SD card, https://forum.duet3d.com/topic/6720/stall-protection-on-pyserial-print
 - Custom macros to execute on stall detection, including extruder stall detection https://forum.duet3d.com/topic/6730/stall-detection-custom-actions
-
 - When Z probe readings are out of tolerance, display the lowest difference seen between consecutive readings?
-
-- check that we never enable the drivers before we set vsense
-
-- [don't do] Don't report the motor current for a non-existent extruder
 - dual extrusion layer counting, see https://www.duet3d.com/forum/thread.php?pid=34816#p34816
 - M140/M190 with no P parameter sets all bed heater temperatures (same for M141/M191)
 - M291 to lock movement and wait for it to finish?
@@ -306,14 +306,9 @@ Future:
 - M40 to run eject.g [don't do, not NIST standard?]
 - configurable minimum extrusion temperature (per extruder?)
 - case-insensitive http headers
-
 - Send reduce power command to PanelDue when main power turned off?
 - Document multiple bed and chamber heaters
 - [mostly done] Check all classes for correct initialisation
-
-Bug investigations:
-- [done] step errors, https://www.duet3d.com/forum/thread.php?pid=33741#p33741
-- [no fault, possibly related to low extruder steps/mm] SeeMeCNC scaling problem, see email of 2018-04-01
 
 Investigations:
 
