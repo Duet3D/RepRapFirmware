@@ -1,6 +1,31 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.02RC7
+===============
+
+Upgrade notes:
+- Duet Web Control version 1.22.6 is recommended with this firmware. On the Duet WiFi, DuetWiFiServer.bin version 1.21 remains compatible.
+- If you use the G53 command, note that this now causes tool offsets not to be applied
+- If you use a 12864 display then you may wish to add a 'value N501' item to your menus to allow M117 messages to be displayed.
+- If you were not already running 2.02RC1 or later then see also the important upgrade notes for 2.02RC1
+
+New features and changed behaviour:
+- If a file delete request fails because the file or the path is not found, the firmware no longer generates a global error message (but it still returns an error to the caller)
+- The HTTP reject message now includes a CORS header, for future versions of DWC
+- A content-length header is included whenever a file is returned, for future versions of DWC
+- HTTP requests to fetch a directory are redirected to index.html in /www, for future versions of DWC
+- The HTTP index page is now index.html, but it falls back to reprap.htm if index.html is not found
+- In CNC mode, a GCode line that either starts with an axis letter and follows a G0/1/2/3 command or starts with I or J and follows a G2/3 command is assumed to repeat the previous command using the new parameters
+- G2/G3 commands now only require that a nonzero I or J parameter is provided; and if the final XY coordinates are not specified, or are equal to the initial XY coordinates, then the firmware generates a complete circle
+- When uploading a file via HTTP the firmware now pre-allocates SD card storage for it
+- Added P104 subfunction of M122 command to perform SD card write timing
+
+Bug fixes:
+- Homing a CoreXY machine with both DDA and Move debug enabled caused a crash (thanks @sdavi)
+- On the Duet Maestro the 12864 display CS pin is now set low at startup, to avoid spurious characters being displayed if other SPI activity occurs before the display is initialised
+- On the 12864 display, multi-line images did not display correctly
+
 Version 2.02RC6
 ===============
 
