@@ -354,7 +354,7 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 	lcd.SetCursor(row + currentMargin, column + currentMargin);
 
 	// Create an object resident in memory corresponding to the menu layout file's description
-	if (StringEquals(commandWord, "text"))
+	if (StringEqualsIgnoreCase(commandWord, "text"))
 	{
 		const char *const acText = AppendString(text);
 		MenuItem * const pNewItem = new TextMenuItem(row, column, width, alignment, fontNumber, xVis, acText);
@@ -362,14 +362,14 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 		AddItem(pNewItem, false);
 		column += pNewItem->GetWidth();
 	}
-	else if (StringEquals(commandWord, "image") && fname != nullptr)
+	else if (StringEqualsIgnoreCase(commandWord, "image") && fname != nullptr)
 	{
 		ImageMenuItem * const pNewItem = new ImageMenuItem(row, column, xVis, fname);
 		pNewItem->UpdateWidth(lcd);
 		AddItem(pNewItem, false);
 		column += pNewItem->GetWidth();
 	}
-	else if (StringEquals(commandWord, "button"))
+	else if (StringEqualsIgnoreCase(commandWord, "button"))
 	{
 		const char * const textString = AppendString(text);
 		const char * const actionString = AppendString(action);
@@ -379,19 +379,19 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 		AddItem(pNewItem, true);
 		column += pNewItem->GetWidth();
 	}
-	else if (StringEquals(commandWord, "value"))
+	else if (StringEqualsIgnoreCase(commandWord, "value"))
 	{
 		ValueMenuItem * const pNewItem = new ValueMenuItem(row, column, width, alignment, fontNumber, xVis, false, nparam, decimals);
 		AddItem(pNewItem, false);
 		column += pNewItem->GetWidth();
 	}
-	else if (StringEquals(commandWord, "alter"))
+	else if (StringEqualsIgnoreCase(commandWord, "alter"))
 	{
 		ValueMenuItem * const pNewItem = new ValueMenuItem(row, column, width, alignment, fontNumber, xVis, true, nparam, decimals);
 		AddItem(pNewItem, true);
 		column += pNewItem->GetWidth();
 	}
-	else if (StringEquals(commandWord, "files"))
+	else if (StringEqualsIgnoreCase(commandWord, "files"))
 	{
 		const char * const actionString = AppendString(action);
 		const char *const dir = AppendString(dirpath);
@@ -516,11 +516,11 @@ const char *Menu::AppendString(const char *s)
 // TODO: there is no error handling if a command within a sequence cannot be accepted...
 void Menu::EncoderAction_ExecuteHelper(const char *const cmd)
 {
-	if (StringEquals(cmd, "return"))
+	if (StringEqualsIgnoreCase(cmd, "return"))
 	{
 		Pop();										// up one level
 	}
-	else if (StringStartsWith(cmd, "menu "))
+	else if (StringStartsWithIgnoreCase(cmd, "menu "))
 	{
 		Load(cmd + 5);
 	}

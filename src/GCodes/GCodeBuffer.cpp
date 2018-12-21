@@ -19,7 +19,9 @@ static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(const char* id, MessageType mt, bool usesCodeQueue)
 	: machineState(new GCodeMachineState()), identity(id), fileBeingWritten(nullptr), writingFileSize(0), eofStringCounter(0),
-	  toolNumberAdjust(0), responseMessageType(mt), checksumRequired(false), queueCodes(usesCodeQueue), binaryWriting(false)
+	  toolNumberAdjust(0), responseMessageType(mt),
+	  hasCommandNumber(false), commandLetter('Q'),
+	  checksumRequired(false), queueCodes(usesCodeQueue), binaryWriting(false)
 {
 	Init();
 }
@@ -291,12 +293,13 @@ bool GCodeBuffer::LineFinished()
 void GCodeBuffer::DecodeCommand()
 {
 	// Check for a valid command letter at the start
-	commandLetter = toupper(gcodeBuffer[commandStart]);
-	hasCommandNumber = false;
-	commandNumber = -1;
+	const char cl = toupper(gcodeBuffer[commandStart]);
 	commandFraction = -1;
-	if (commandLetter == 'G' || commandLetter == 'M' || commandLetter == 'T')
+	if (cl == 'G' || cl == 'M' || cl == 'T')
 	{
+		commandLetter = cl;
+		hasCommandNumber = false;
+		commandNumber = -1;
 		parameterStart = commandStart + 1;
 		const bool negative = (gcodeBuffer[parameterStart] == '-');
 		if (negative)
@@ -353,11 +356,30 @@ void GCodeBuffer::DecodeCommand()
 			}
 		}
 	}
-	else
+	else if (   hasCommandNumber
+			 && commandLetter == 'G'
+			 && commandNumber <= 3
+			 && (   (cl == 'X' || cl == 'Y' || cl == 'Z')
+				 || ((cl == 'I' || cl == 'J') && commandNumber >= 2)
+				)
+			 && reprap.GetGCodes().GetMachineType() == MachineType::cnc
+			)
 	{
+		// Fanuc-style GCode, repeat the existing G0/G1/G2/G3 command with the new parameters
 		parameterStart = commandStart;
 		commandEnd = gcodeLineEnd;
 	}
+	else
+	{
+		// Bad command
+		commandLetter = cl;
+		hasCommandNumber = false;
+		commandNumber = -1;
+		commandFraction = -1;
+		parameterStart = commandStart;
+		commandEnd = gcodeLineEnd;
+	}
+
 	bufferState = GCodeBufferState::ready;
 }
 

@@ -2592,6 +2592,9 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 		}
 		break;
 
+	case (int)DiagnosticTestType::TimeSDWrite:
+		return reprap.GetGCodes().StartSDTiming(gb, reply);
+
 #ifdef DUET_NG
 	case (int)DiagnosticTestType::PrintExpanderStatus:
 		reply.printf("Expander status %04X\n", DuetExpansion::DiagnosticRead());

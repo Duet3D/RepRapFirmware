@@ -836,10 +836,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 		{
 			outBuf->cat("Content-Encoding: gzip\r\n");
 		}
-		if (zip || !isWebFile)
-		{
-			outBuf->catf("Content-Length: %lu\r\n", fileToSend->Length());
-		}
+		outBuf->catf("Content-Length: %lu\r\n", fileToSend->Length());
 	}
 
 	outBuf->cat("Connection: close\r\n\r\n");

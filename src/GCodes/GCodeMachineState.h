@@ -81,6 +81,8 @@ enum class GCodeState : uint8_t
 	loadingFilament,
 	unloadingFilament,
 
+	timingSDwrite,
+
 #if HAS_VOLTAGE_MONITOR
 	powerFailPausing1
 #endif

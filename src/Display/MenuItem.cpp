@@ -168,7 +168,7 @@ bool ButtonMenuItem::Select(const StringRef& cmd)
 	else
 	{
 		cmd.copy(command);
-		if (StringEquals(command, "menu") && strlen(m_acFile) != 0)
+		if (StringEqualsIgnoreCase(command, "menu") && strlen(m_acFile) != 0)
 		{
 			// For backwards compatibility, if 'menu' is used without any parameters, use the L parameter as the name of the menu file
 			cmd.cat(' ');

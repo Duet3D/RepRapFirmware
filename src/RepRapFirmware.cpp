@@ -252,15 +252,15 @@ void delay(uint32_t ms)
 
 bool StringEndsWith(const char* string, const char* ending)
 {
-	int j = strlen(string);
-	int k = strlen(ending);
+	const size_t j = strlen(string);
+	const size_t k = strlen(ending);
 	return k <= j && StringEqualsIgnoreCase(&string[j - k], ending);
 }
 
 bool StringEqualsIgnoreCase(const char* s1, const char* s2)
 {
-	int i = 0;
-	while(s1[i] && s2[i])
+	size_t i = 0;
+	while (s1[i] != 0 && s2[i] != 0)
 	{
 		if (tolower(s1[i]) != tolower(s2[i]))
 		{
@@ -269,21 +269,41 @@ bool StringEqualsIgnoreCase(const char* s1, const char* s2)
 		i++;
 	}
 
-	return !(s1[i] || s2[i]);
+	return s1[i] == 0 && s2[i] == 0;
 }
 
 bool StringStartsWith(const char* string, const char* starting)
 {
-	int j = strlen(string);
-	int k = strlen(starting);
+	const size_t j = strlen(string);
+	const size_t k = strlen(starting);
 	if (k > j)
 	{
 		return false;
 	}
 
-	for(int i = 0; i < k; i++)
+	for (size_t i = 0; i < k; i++)
 	{
 		if (string[i] != starting[i])
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool StringStartsWithIgnoreCase(const char* string, const char* starting)
+{
+	const size_t j = strlen(string);
+	const size_t k = strlen(starting);
+	if (k > j)
+	{
+		return false;
+	}
+
+	for (size_t i = 0; i < k; i++)
+	{
+		if (tolower(string[i]) != tolower(starting[i]))
 		{
 			return false;
 		}

@@ -78,7 +78,7 @@ GCodes::GCodes(Platform& p) :
 #if HAS_VOLTAGE_MONITOR
 	powerFailScript(nullptr),
 #endif
-	isFlashing(false), fileBeingHashed(nullptr), lastWarningMillis(0)
+	isFlashing(false), fileBeingHashed(nullptr), lastWarningMillis(0), sdTimingFile(nullptr)
 {
 	fileInput = new FileGCodeInput();
 	fileGCode = new GCodeBuffer("file", GenericMessage, true);
@@ -1448,6 +1448,35 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		break;
 #endif
 
+	case GCodeState::timingSDwrite:
+		for (uint32_t writtenThisTime = 0; writtenThisTime < 100 * 1024; )
+		{
+			if (timingBytesWritten >= timingBytesRequested)
+			{
+				sdTimingFile->Close();
+				const uint32_t ms = millis() - timingStartMillis;
+				const float fileMbytes = (float)timingBytesWritten/(float)(1024 * 1024);
+				const float mbPerSec = (fileMbytes * 1000.0)/(float)ms;
+				reply.printf("SD write speed for %.1fMbyte file was %.2fMBytes/sec", (double)fileMbytes, (double)mbPerSec);
+				platform.GetMassStorage()->Delete(platform.GetGCodeDir(), TimingFileName);
+				gb.SetState(GCodeState::normal);
+				break;
+			}
+
+			if (!sdTimingFile->Write(reply.c_str(), reply.Capacity()))
+			{
+				sdTimingFile->Close();
+				platform.GetMassStorage()->Delete(platform.GetGCodeDir(), TimingFileName);
+				reply.copy("Error writing to timing file");
+				error = true;
+				gb.SetState(GCodeState::normal);
+				break;
+			}
+			timingBytesWritten += reply.Capacity();
+			writtenThisTime += reply.Capacity();
+		}
+		break;
+
 	default:				// should not happen
 		platform.Message(ErrorMessage, "Undefined GCodeState\n");
 		gb.SetState(GCodeState::normal);
@@ -2648,11 +2677,9 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 {
 	// Get the axis parameters
 	float xParam, yParam;
-	bool seenXY = false;
 	if (gb.Seen('X'))
 	{
 		xParam = gb.GetFValue() * distanceScale;
-		seenXY = true;
 	}
 	else
 	{
@@ -2662,7 +2689,6 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	if (gb.Seen('Y'))
 	{
 		yParam = gb.GetFValue() * distanceScale;
-		seenXY = true;
 	}
 	else
 	{
@@ -2670,11 +2696,9 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	}
 
 	float iParam, jParam;
-	bool seenIJ = false;
 	if (gb.Seen('I'))
 	{
 		iParam = gb.GetFValue() * distanceScale;
-		seenIJ = true;
 	}
 	else
 	{
@@ -2684,16 +2708,15 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	if (gb.Seen('J'))
 	{
 		jParam = gb.GetFValue() * distanceScale;
-		seenIJ = true;
 	}
 	else
 	{
 		jParam = 0.0;
 	}
 
-	if (!(seenXY && seenIJ))		// at least one of XY and IJ must be specified
+	if (iParam == 0.0 && jParam == 0.0)			// at least one of IJ must be specified and nonzero
 	{
-		return "G2/G3: missing parameter";
+		return "G2/G3: missing I or J parameter";
 	}
 
 	memcpy(moveBuffer.initialCoords, moveBuffer.coords, numVisibleAxes * sizeof(moveBuffer.initialCoords[0]));
@@ -2704,6 +2727,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 
 	// Work out the new user position
 	const bool axesRelative = gb.MachineState().axesRelative;
+	const float initialX = currentUserPosition[X_AXIS], initialY = currentUserPosition[Y_AXIS];
 	if (axesRelative)
 	{
 		currentUserPosition[X_AXIS] += xParam;
@@ -2715,9 +2739,12 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		currentUserPosition[Y_AXIS] = yParam;
 	}
 
-	AxesBitmap axesMentioned = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS);
+	// CNC machines usually do a full circle if the initial and final XY coordinates are the same.
+	// Usually this is because X and Y were not given, but repeating the coordinates is permitted.
+	const bool wholeCircle = (initialX == currentUserPosition[X_AXIS] && initialY == currentUserPosition[Y_AXIS]);
 
 	// Get any additional axes
+	AxesBitmap axesMentioned = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS);
 	for (size_t axis = Z_AXIS; axis < numVisibleAxes; axis++)
 	{
 		if (gb.Seen(axisLetters[axis]))
@@ -2813,13 +2840,21 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	arcCurrentAngle = atan2(-jParam, -iParam);
 
 	// Calculate the total angle moved, which depends on which way round we are going
-	float totalArc = (clockwise) ? arcCurrentAngle - finalTheta : finalTheta - arcCurrentAngle;
-	if (totalArc < 0)
+	float totalArc;
+	if (wholeCircle)
 	{
-		totalArc += TwoPi;
+		totalArc = TwoPi;
+	}
+	else
+	{
+		totalArc = (clockwise) ? arcCurrentAngle - finalTheta : finalTheta - arcCurrentAngle;
+		if (totalArc < 0.0)
+		{
+			totalArc += TwoPi;
+		}
 	}
 
-	// Compute how many segments we need to move, but don't store it yet
+	// Compute how many segments we need to move
 	// For the arc to deviate up to MaxArcDeviation from the ideal, the segment length should be sqrt(8 * arcRadius * MaxArcDeviation + fsquare(MaxArcDeviation))
 	// We leave out the square term because it is very small
 	const float arcSegmentLength = constrain<float>(sqrt(8 * arcRadius * MaxArcDeviation), MinArcSegmentLength, MaxArcSegmentLength);
@@ -5136,6 +5171,26 @@ bool GCodes::GetLastPrintingHeight(float& height) const
 		return true;
 	}
 	return false;
+}
+
+// Start timing SD card file writing
+GCodeResult GCodes::StartSDTiming(GCodeBuffer& gb, const StringRef& reply)
+{
+	const float bytesReq = (gb.Seen('S')) ? gb.GetFValue() : 10.0;
+	timingBytesRequested = (uint32_t)(bytesReq * (float)(1024 * 1024));
+	FileStore * const f = platform.OpenFile(platform.GetGCodeDir(), TimingFileName, OpenMode::write, timingBytesRequested);
+	if (f == nullptr)
+	{
+		reply.copy("Failed to create file");
+		return GCodeResult::error;
+	}
+	sdTimingFile = f;
+
+	platform.Message(gb.GetResponseMessageType(), "Testing SD card write speed...\n");
+	timingBytesWritten = 0;
+	timingStartMillis = millis();
+	gb.SetState(GCodeState::timingSDwrite);
+	return GCodeResult::ok;
 }
 
 #if SUPPORT_12864_LCD

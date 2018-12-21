@@ -220,13 +220,15 @@ Todo before 2.02 release:
 - [done] Add CORS header to http reject message, see email from chrishamm
 - [done] Add content-length header to rr_download response
 - [done] Redirect http directory requests to index.html
-- [done] HTML index file is now index.html, falls back to reprap.html
+- [done, ok] HTML index file is now index.html, falls back to reprap.html
+- [done, ok] Support Fanuc-style CNC commands?
+- [done, ok] Support Fanuc-style G2/G3 whole circle moves
+- [done] Add SD card write timing
 
 Future:
 - Add I2C success count to I2C stats
 - Run script if thermal error? https://forum.duet3d.com/topic/8038/suggestion-run-script-in-case-of-thermal-error
 - Run script on filament error?
-- In CNC mode, allow Fanuc-style X and/or Y coordinates without repeating the G0 or G1 command
 - Option for an endstop input to trigger an emergency pause
 - Count steps until homing switch is triggered compared to original, https://forum.duet3d.com/topic/8017/request-check-for-lost-steps
 - In CNC or laser mode, don't segment G0 moves for mesh bed compensation, https://forum.duet3d.com/topic/7728/go-vs-g1-movement/11

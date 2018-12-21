@@ -228,6 +228,8 @@ public:
 	void EmergencyStop();												// Cancel everything
 	bool GetLastPrintingHeight(float& height) const;					// Get the height in user coordinates of the last printing move
 
+	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply);	// Start timing SD card file writing
+
 protected:
 	DECLARE_OBJECT_MODEL
 
@@ -584,6 +586,14 @@ private:
 	// Misc
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
+
+	static constexpr uint32_t SdTimingByteIncrement = 8 * 1024;	// how many timing bytes we write at a time
+	static constexpr const char *TimingFileName = "test.tst";	// the name of the file we write
+	FileStore *sdTimingFile;					// file handle being used for SD card write timing
+	uint32_t timingBytesRequested;				// how many bytes we were asked to write
+	uint32_t timingBytesWritten;				// how many timing bytes we have written so far
+	uint32_t timingStartMillis;
+
 	int8_t lastAuxStatusReportType;				// The type of the last status report requested by PanelDue
 	bool isWaiting;								// True if waiting to reach temperature
 	bool cancelWait;							// Set true to cancel waiting
