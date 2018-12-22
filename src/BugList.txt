@@ -226,6 +226,7 @@ Todo before 2.02 release:
 - [done] Add SD card write timing
 
 Future:
+- Remove string allocation from ActOnMCode to save stack space
 - Add I2C success count to I2C stats
 - Run script if thermal error? https://forum.duet3d.com/topic/8038/suggestion-run-script-in-case-of-thermal-error
 - Run script on filament error?

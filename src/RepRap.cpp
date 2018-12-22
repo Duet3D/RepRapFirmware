@@ -2181,8 +2181,8 @@ char RepRap::GetStatusCharacter() const
 			: (gCodes->IsResuming()) 									? 'R'	// Resuming
 			: (gCodes->IsPaused()) 										? 'S'	// Paused / Stopped
 			: (printMonitor->IsPrinting() && gCodes->IsSimulating())	? 'M'	// Simulating
-			: (gCodes->IsDoingToolChange())								? 'T'	// Changing tool
 			: (printMonitor->IsPrinting())							  	? 'P'	// Printing
+			: (gCodes->IsDoingToolChange())								? 'T'	// Changing tool
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement()) 	? 'B'	// Busy
 			:															  'I';	// Idle
 }
