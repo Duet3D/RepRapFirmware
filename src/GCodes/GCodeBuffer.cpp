@@ -359,7 +359,7 @@ void GCodeBuffer::DecodeCommand()
 	else if (   hasCommandNumber
 			 && commandLetter == 'G'
 			 && commandNumber <= 3
-			 && (   (cl == 'X' || cl == 'Y' || cl == 'Z')
+			 && (   strchr(reprap.GetGCodes().GetAxisLetters(), cl) != nullptr
 				 || ((cl == 'I' || cl == 'J') && commandNumber >= 2)
 				)
 			 && reprap.GetGCodes().GetMachineType() == MachineType::cnc

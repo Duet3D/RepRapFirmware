@@ -162,7 +162,7 @@ inline void delay(uint32_t ms)
 
 #endif
 
-bool StringEndsWith(const char* string, const char* ending);
+bool StringEndsWithIgnoreCase(const char* string, const char* ending);
 bool StringStartsWith(const char* string, const char* starting);
 bool StringStartsWithIgnoreCase(const char* string, const char* starting);
 bool StringEqualsIgnoreCase(const char* s1, const char* s2);

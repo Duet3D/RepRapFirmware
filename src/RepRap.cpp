@@ -2179,12 +2179,10 @@ char RepRap::GetStatusCharacter() const
 #endif
 			: (gCodes->IsPausing()) 									? 'D'	// Pausing / Decelerating
 			: (gCodes->IsResuming()) 									? 'R'	// Resuming
-			: (gCodes->IsDoingToolChange())								? 'T'	// Changing tool
 			: (gCodes->IsPaused()) 										? 'S'	// Paused / Stopped
-			: (printMonitor->IsPrinting())
-			  ? ((gCodes->IsSimulating())								? 'M'	// Simulating
-			  :															  'P'	// Printing
-				)
+			: (printMonitor->IsPrinting() && gCodes->IsSimulating())	? 'M'	// Simulating
+			: (gCodes->IsDoingToolChange())								? 'T'	// Changing tool
+			: (printMonitor->IsPrinting())							  	? 'P'	// Printing
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement()) 	? 'B'	// Busy
 			:															  'I';	// Idle
 }

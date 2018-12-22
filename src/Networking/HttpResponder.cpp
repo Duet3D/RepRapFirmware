@@ -724,8 +724,8 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 			++nameOfFileToSend;						// all web files are relative to the /www folder, so remove the leading '/'
 		}
 
-		// If we are asked to return a directory, return the root index file
-		if (reprap.GetPlatform().GetMassStorage()->DirectoryExists(GetPlatform().GetWebDir(), nameOfFileToSend))
+		// If we are asked to return the root, return the index file
+		if (nameOfFileToSend[0] == 0)
 		{
 			nameOfFileToSend = INDEX_PAGE_FILE;
 		}
@@ -733,7 +733,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 		for (;;)
 		{
 			// Try to open a gzipped version of the file first
-			if (!StringEndsWith(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
+			if (!StringEndsWithIgnoreCase(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
 			{
 				String<MaxFilenameLength> nameBuf;
 				nameBuf.copy(nameOfFileToSend);
@@ -746,19 +746,29 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 				}
 			}
 
-			// If that failed, try to open the normal version of the file
+			// That failed, so try to open the normal version of the file
 			fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
-
-			if (fileToSend != nullptr || !StringEqualsIgnoreCase(nameOfFileToSend, INDEX_PAGE_FILE))
+			if (fileToSend != nullptr)
 			{
 				break;
 			}
 
-			nameOfFileToSend = OLD_INDEX_PAGE_FILE;			// the index file wasn't found, so try the old one
+			if (StringEqualsIgnoreCase(nameOfFileToSend, INDEX_PAGE_FILE))
+			{
+				nameOfFileToSend = OLD_INDEX_PAGE_FILE;			// the index file wasn't found, so try the old one
+			}
+			else if (!strchr(nameOfFileToSend, '.'))			// if we were asked to return a file without a '.' in the name, return the index page
+			{
+				nameOfFileToSend = INDEX_PAGE_FILE;
+			}
+			else
+			{
+				break;
+			}
 		}
 
 		// If we still couldn't find the file and it was an HTML file, return the 404 error page
-		if (fileToSend == nullptr && (StringEndsWith(nameOfFileToSend, ".html") || StringEndsWith(nameOfFileToSend, ".htm")))
+		if (fileToSend == nullptr && (StringEndsWithIgnoreCase(nameOfFileToSend, ".html") || StringEndsWithIgnoreCase(nameOfFileToSend, ".htm")))
 		{
 			nameOfFileToSend = FOUR04_PAGE_FILE;
 			fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
@@ -795,32 +805,32 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 	}
 
 	const char* contentType;
-	if (StringEndsWith(nameOfFileToSend, ".png"))
+	if (StringEndsWithIgnoreCase(nameOfFileToSend, ".png"))
 	{
 		contentType = "image/png";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".ico"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".ico"))
 	{
 		contentType = "image/x-icon";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".js"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".js"))
 	{
 		contentType = "application/javascript";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".css"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".css"))
 	{
 		contentType = "text/css";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".htm") || StringEndsWith(nameOfFileToSend, ".html"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".htm") || StringEndsWithIgnoreCase(nameOfFileToSend, ".html"))
 	{
 		contentType = "text/html";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".zip"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".zip"))
 	{
 		contentType = "application/zip";
 		zip = true;
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".g") || StringEndsWith(nameOfFileToSend, ".gc") || StringEndsWith(nameOfFileToSend, ".gcode"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".g") || StringEndsWithIgnoreCase(nameOfFileToSend, ".gc") || StringEndsWithIgnoreCase(nameOfFileToSend, ".gcode"))
 	{
 		contentType = "text/plain";
 	}

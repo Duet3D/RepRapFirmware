@@ -250,7 +250,7 @@ void delay(uint32_t ms)
 
 // String testing
 
-bool StringEndsWith(const char* string, const char* ending)
+bool StringEndsWithIgnoreCase(const char* string, const char* ending)
 {
 	const size_t j = strlen(string);
 	const size_t k = strlen(ending);

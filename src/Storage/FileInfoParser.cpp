@@ -92,8 +92,8 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 		}
 
 		// If the file is empty or not a G-Code file, we don't need to parse anything
-		if (fileBeingParsed->Length() == 0 || (!StringEndsWith(fileName, ".gcode") && !StringEndsWith(fileName, ".g")
-					&& !StringEndsWith(fileName, ".gco") && !StringEndsWith(fileName, ".gc")))
+		if (fileBeingParsed->Length() == 0 || (!StringEndsWithIgnoreCase(fileName, ".gcode") && !StringEndsWithIgnoreCase(fileName, ".g")
+					&& !StringEndsWithIgnoreCase(fileName, ".gco") && !StringEndsWithIgnoreCase(fileName, ".gc")))
 		{
 			fileBeingParsed->Close();
 			parsedFileInfo.incomplete = false;
@@ -524,7 +524,7 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len)
 		else if (c == ';')
 		{
 			static const char kisslicerHeightString[] = " END_LAYER_OBJECT z=";
-			if (len > 31 && StringStartsWith(buf, kisslicerHeightString))
+			if (len > 31 && StringStartsWithIgnoreCase(buf, kisslicerHeightString))
 			{
 				parsedFileInfo.objectHeight = SafeStrtof(buf + sizeof(kisslicerHeightString)/sizeof(char) - 1, nullptr);
 				return true;
@@ -793,7 +793,7 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
 				if (*pos == 'h')
 				{
 					hours = secs;
-					if (StringStartsWith(pos, "hours"))
+					if (StringStartsWithIgnoreCase(pos, "hours"))
 					{
 						pos += 5;
 					}
@@ -810,7 +810,7 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
 				if (*pos == 'm')
 				{
 					minutes = secs;
-					if (StringStartsWith(pos, "minutes"))
+					if (StringStartsWithIgnoreCase(pos, "minutes"))
 					{
 						pos += 7;
 					}
