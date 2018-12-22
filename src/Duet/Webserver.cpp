@@ -626,7 +626,7 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 		}
 
 		// Try to open a gzipped version of the file first
-		if (!StringEndsWith(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
+		if (!StringEndsWithIgnoreCase(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
 		{
 			char nameBuf[MaxFilenameLength + 1];
 			strcpy(nameBuf, nameOfFileToSend);
@@ -645,7 +645,7 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 		}
 
 		// If we still couldn't find the file and it was an HTML file, return the 404 error page
-		if (fileToSend == nullptr && (StringEndsWith(nameOfFileToSend, ".html") || StringEndsWith(nameOfFileToSend, ".htm")))
+		if (fileToSend == nullptr && (StringEndsWithIgnoreCase(nameOfFileToSend, ".html") || StringEndsWithIgnoreCase(nameOfFileToSend, ".htm")))
 		{
 			nameOfFileToSend = FOUR04_PAGE_FILE;
 			fileToSend = platform->OpenFile(platform->GetWebDir(), nameOfFileToSend, OpenMode::read);
@@ -681,32 +681,32 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 	}
 
 	const char* contentType;
-	if (StringEndsWith(nameOfFileToSend, ".png"))
+	if (StringEndsWithIgnoreCase(nameOfFileToSend, ".png"))
 	{
 		contentType = "image/png";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".ico"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".ico"))
 	{
 		contentType = "image/x-icon";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".js"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".js"))
 	{
 		contentType = "application/javascript";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".css"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".css"))
 	{
 		contentType = "text/css";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".htm") || StringEndsWith(nameOfFileToSend, ".html"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".htm") || StringEndsWithIgnoreCase(nameOfFileToSend, ".html"))
 	{
 		contentType = "text/html";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".zip"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".zip"))
 	{
 		contentType = "application/zip";
 		zip = true;
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".g") || StringEndsWith(nameOfFileToSend, ".gc") || StringEndsWith(nameOfFileToSend, ".gcode"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".g") || StringEndsWithIgnoreCase(nameOfFileToSend, ".gc") || StringEndsWithIgnoreCase(nameOfFileToSend, ".gcode"))
 	{
 		contentType = "text/plain";
 	}
@@ -784,13 +784,13 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 	{
 		UpdateAuthentication();
 
-		if (StringEquals(command, "reply"))			// rr_reply
+		if (StringEqualsIgnoreCase(command, "reply"))			// rr_reply
 		{
 			SendGCodeReply();
 			return;
 		}
 
-		if (StringEquals(command, "configfile"))	// rr_configfile [DEPRECATED]
+		if (StringEqualsIgnoreCase(command, "configfile"))	// rr_configfile [DEPRECATED]
 		{
 			String<MaxFilenameLength> fileName;
 			MassStorage::CombineName(fileName.GetRef(), platform->GetSysDir(), platform->GetConfigFile());
@@ -798,7 +798,7 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 			return;
 		}
 
-		if (StringEquals(command, "download"))
+		if (StringEqualsIgnoreCase(command, "download"))
 		{
 			const char* const filename = GetKeyValue("name");
 			if (filename != nullptr)
@@ -836,10 +836,10 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 		// Check that the browser wants to persist the connection too
 		for (size_t i = 0; i < numHeaderKeys; ++i)
 		{
-			if (StringEquals(headers[i].key, "Connection"))
+			if (StringEqualsIgnoreCase(headers[i].key, "Connection"))
 			{
 				// Comment out the following line to disable persistent connections
-				keepOpen = StringEquals(headers[i].value, "keep-alive");
+				keepOpen = StringEqualsIgnoreCase(headers[i].value, "keep-alive");
 				break;
 			}
 		}
@@ -868,7 +868,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 {
 	keepOpen = false;	// assume we don't want to persist the connection
 
-	if (StringEquals(request, "connect") && GetKeyValue("password") != nullptr)
+	if (StringEqualsIgnoreCase(request, "connect") && GetKeyValue("password") != nullptr)
 	{
 		if (IsAuthenticated() || reprap.CheckPassword(GetKeyValue("password")))
 		{
@@ -907,11 +907,11 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 	{
 		RejectMessage("Not authorized", 401);
 	}
-	else if (StringEquals(request, "disconnect"))
+	else if (StringEqualsIgnoreCase(request, "disconnect"))
 	{
 		response->printf("{\"err\":%d}", RemoveAuthentication() ? 0 : 1);
 	}
-	else if (StringEquals(request, "status"))
+	else if (StringEqualsIgnoreCase(request, "status"))
 	{
 		int type = 0;
 		if (GetKeyValue("type") != nullptr)
@@ -933,29 +933,29 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 			response = reprap.GetLegacyStatusResponse(1, 0);
 		}
 	}
-	else if (StringEquals(request, "gcode") && GetKeyValue("gcode") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "gcode") && GetKeyValue("gcode") != nullptr)
 	{
 		NetworkGCodeInput * const httpInput = reprap.GetGCodes().GetHTTPInput();
 		httpInput->Put(HttpMessage, GetKeyValue("gcode"));
 		response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
 	}
-	else if (StringEquals(request, "upload"))
+	else if (StringEqualsIgnoreCase(request, "upload"))
 	{
 		response->printf("{\"err\":%d}", (uploadedBytes == postFileLength) ? 0 : 1);
 	}
-	else if (StringEquals(request, "delete") && GetKeyValue("name") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "delete") && GetKeyValue("name") != nullptr)
 	{
 		const bool ok = platform->GetMassStorage()->Delete(FS_PREFIX, GetKeyValue("name"));
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
-	else if (StringEquals(request, "filelist") && GetKeyValue("dir") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "filelist") && GetKeyValue("dir") != nullptr)
 	{
 		OutputBuffer::Release(response);
 		const char* const firstVal = GetKeyValue("first");
 		const unsigned int startAt = (firstVal == nullptr) ? 0 : (unsigned int)SafeStrtol(firstVal);
 		response = reprap.GetFilelistResponse(GetKeyValue("dir"), startAt);		// this may return nullptr
 	}
-	else if (StringEquals(request, "files"))
+	else if (StringEqualsIgnoreCase(request, "files"))
 	{
 		OutputBuffer::Release(response);
 		const char* dir = GetKeyValue("dir");
@@ -969,7 +969,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 		const bool flagDirs = flagDirsVal != nullptr && atoi(flagDirsVal) == 1;
 		response = reprap.GetFilesResponse(dir, startAt, flagDirs);				// this may return nullptr
 	}
-	else if (StringEquals(request, "fileinfo"))
+	else if (StringEqualsIgnoreCase(request, "fileinfo"))
 	{
 		if (deferredRequestConnection != NoConnection)
 		{
@@ -995,7 +995,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 			ProcessDeferredRequest();
 		}
 	}
-	else if (StringEquals(request, "move"))
+	else if (StringEqualsIgnoreCase(request, "move"))
 	{
 		const char* const oldVal = GetKeyValue("old");
 		const char* const newVal = GetKeyValue("new");
@@ -1003,15 +1003,15 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 		if (oldVal != nullptr && newVal != nullptr)
 		{
 			MassStorage * const ms = platform->GetMassStorage();
-			if (StringEquals(GetKeyValue("deleteexisting"), "yes") && ms->FileExists(oldVal) && ms->FileExists(newVal))
+			if (StringEqualsIgnoreCase(GetKeyValue("deleteexisting"), "yes") && ms->FileExists(oldVal) && ms->FileExists(newVal))
 			{
-				ms->Delete(nullptr, newVal, true);
+				ms->Delete(nullptr, newVal);
 			}
 			success = ms->Rename(oldVal, newVal);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
-	else if (StringEquals(request, "mkdir"))
+	else if (StringEqualsIgnoreCase(request, "mkdir"))
 	{
 		const char* const dirVal = GetKeyValue("dir");
 		bool success = false;
@@ -1021,7 +1021,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
-	else if (StringEquals(request, "config"))
+	else if (StringEqualsIgnoreCase(request, "config"))
 	{
 		OutputBuffer::Release(response);
 		response = reprap.GetConfigResponse();
@@ -1036,7 +1036,7 @@ const char* Webserver::HttpInterpreter::GetKeyValue(const char *key) const
 {
 	for (size_t i = 0; i < numQualKeys; ++i)
 	{
-		if (StringEquals(qualifiers[i].key, key))
+		if (StringEqualsIgnoreCase(qualifiers[i].key, key))
 		{
 			return qualifiers[i].value;
 		}
@@ -1464,7 +1464,7 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 		return RejectMessage("too few command words");
 	}
 
-	if (StringEquals(commandWords[0], "GET"))
+	if (StringEqualsIgnoreCase(commandWords[0], "GET"))
 	{
 		if (StringStartsWith(commandWords[1], KO_START))
 		{
@@ -1483,7 +1483,7 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 		return true;
 	}
 
-	if (StringEquals(commandWords[0], "OPTIONS"))
+	if (StringEqualsIgnoreCase(commandWords[0], "OPTIONS"))
 	{
 		NetworkTransaction *transaction = webserver->currentTransaction;
 
@@ -1502,10 +1502,10 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 		return true;
 	}
 
-	if (IsAuthenticated() && StringEquals(commandWords[0], "POST"))
+	if (IsAuthenticated() && StringEqualsIgnoreCase(commandWords[0], "POST"))
 	{
-		const bool isUploadRequest = (StringEquals(commandWords[1], KO_START "upload"))
-								  || (commandWords[1][0] == '/' && StringEquals(commandWords[1] + 1, KO_START "upload"));
+		const bool isUploadRequest = (StringEqualsIgnoreCase(commandWords[1], KO_START "upload"))
+								  || (commandWords[1][0] == '/' && StringEqualsIgnoreCase(commandWords[1] + 1, KO_START "upload"));
 		if (isUploadRequest)
 		{
 			const char* const filename = GetKeyValue("name");
@@ -1521,7 +1521,7 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 				bool contentLengthFound = false;
 				for (size_t i = 0; i < numHeaderKeys; i++)
 				{
-					if (StringEquals(headers[i].key, "Content-Length"))
+					if (StringEqualsIgnoreCase(headers[i].key, "Content-Length"))
 					{
 						postFileLength = atoi(headers[i].value);
 						contentLengthFound = true;
@@ -1974,17 +1974,17 @@ void Webserver::FtpInterpreter::ProcessLine()
 
 		case authenticated:
 			// get system type
-			if (StringEquals(clientMessage, "SYST"))
+			if (StringEqualsIgnoreCase(clientMessage, "SYST"))
 			{
 				SendReply(215, "UNIX Type: L8");
 			}
 			// get features
-			else if (StringEquals(clientMessage, "FEAT"))
+			else if (StringEqualsIgnoreCase(clientMessage, "FEAT"))
 			{
 				SendFeatures();
 			}
 			// get current dir
-			else if (StringEquals(clientMessage, "PWD"))
+			else if (StringEqualsIgnoreCase(clientMessage, "PWD"))
 			{
 				NetworkTransaction *transaction = webserver->currentTransaction;
 				transaction->Printf("257 \"%s\"\r\n", currentDir);
@@ -1997,7 +1997,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				ChangeDirectory(filename.c_str());
 			}
 			// change to parent of current directory
-			else if (StringEquals(clientMessage, "CDUP"))
+			else if (StringEqualsIgnoreCase(clientMessage, "CDUP"))
 			{
 				ChangeDirectory("..");
 			}
@@ -2022,7 +2022,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				SendReply(500, "Unknown command.");
 			}
 			// enter passive mode mode
-			else if (StringEquals(clientMessage, "PASV"))
+			else if (StringEqualsIgnoreCase(clientMessage, "PASV"))
 			{
 				/* get local IP address */
 				const uint8_t * const ip_address = network->GetIPAddress();
@@ -2041,7 +2041,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				transaction->Commit(true);
 			}
 			// PASV commands are not supported in this state
-			else if (StringEquals(clientMessage, "LIST") || StringStartsWith(clientMessage, "RETR") || StringStartsWith(clientMessage, "STOR"))
+			else if (StringEqualsIgnoreCase(clientMessage, "LIST") || StringStartsWith(clientMessage, "RETR") || StringStartsWith(clientMessage, "STOR"))
 			{
 				SendReply(425, "Use PASV first.");
 			}
@@ -2135,12 +2135,12 @@ void Webserver::FtpInterpreter::ProcessLine()
 				}
 			}
 			// no op
-			else if (StringEquals(clientMessage, "NOOP"))
+			else if (StringEqualsIgnoreCase(clientMessage, "NOOP"))
 			{
 				SendReply(200, "NOOP okay.");
 			}
 			// end connection
-			else if (StringEquals(clientMessage, "QUIT"))
+			else if (StringEqualsIgnoreCase(clientMessage, "QUIT"))
 			{
 				SendReply(221, "Goodbye.", false);
 				ResetState();
@@ -2288,7 +2288,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 
 		case doingPasvIO:
 			// abort current transfer
-			if (StringEquals(clientMessage, "ABOR"))
+			if (StringEqualsIgnoreCase(clientMessage, "ABOR"))
 			{
 				if (IsUploading())
 				{
@@ -2372,13 +2372,13 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 			SafeStrncpy(combinedPath, newDirectory, MaxFilenameLength);
 			combinedPath[MaxFilenameLength - 1] = 0;
 		}
-		else if (StringEquals(newDirectory, "."))
+		else if (StringEqualsIgnoreCase(newDirectory, "."))
 		{
 			SafeStrncpy(combinedPath, currentDir, ARRAY_SIZE(combinedPath));
 		}
-		else if (StringEquals(newDirectory, "..")) // go up
+		else if (StringEqualsIgnoreCase(newDirectory, "..")) // go up
 		{
-			if (StringEquals(currentDir, "/"))
+			if (StringEqualsIgnoreCase(currentDir, "/"))
 			{
 				// we're already at the root, so we can't go up any more
 				SendReply(550, "Failed to change directory.");
@@ -2408,7 +2408,7 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 		}
 
 		/* Make sure the new path does not end with a '/', because FatFs won't see the directory otherwise */
-		if (StringEndsWith(combinedPath, "/") && strlen(combinedPath) > 1)
+		if (StringEndsWithIgnoreCase(combinedPath, "/") && strlen(combinedPath) > 1)
 		{
 			combinedPath[strlen(combinedPath) -1] = 0;
 		}
@@ -2641,7 +2641,7 @@ bool Webserver::TelnetInterpreter::ProcessLine()
 
 		case authenticated:
 			// Special commands for Telnet
-			if (StringEquals(clientMessage, "exit") || StringEquals(clientMessage, "quit"))
+			if (StringEqualsIgnoreCase(clientMessage, "exit") || StringEqualsIgnoreCase(clientMessage, "quit"))
 			{
 				transaction->Write("Goodbye.\r\n");
 				transaction->Commit(false);

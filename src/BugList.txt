@@ -213,17 +213,17 @@ Fixed in 2.02RC6:
 
 Todo before 2.02 release:
 - [done, ok] Pre-allocate SD card storage when doing HTTP file upload
-- [done, test] Bug fix for homing CoreXY with DDA+Move debug enabled (thanks @sdavi)
+- [done] Bug fix for homing CoreXY with DDA+Move debug enabled (thanks @sdavi)
 - [done, ok] Set 12864 CS pin low at startup
 - [done, ok] 12864 image display is wrong for multi-line images
-- [done, test] Suppress global error message from file delete if the file or path doesn't exist, https://forum.duet3d.com/topic/8194/cura-duet-reprap-firmware-integration-question/4
+- [done] Suppress global error message from file delete if the file or path doesn't exist, https://forum.duet3d.com/topic/8194/cura-duet-reprap-firmware-integration-question/4
 - [done] Add CORS header to http reject message, see email from chrishamm
 - [done] Add content-length header to rr_download response
 - [done] Redirect http directory requests to index.html
 - [done, ok] HTML index file is now index.html, falls back to reprap.html
 - [done, ok] Support Fanuc-style CNC commands?
 - [done, ok] Support Fanuc-style G2/G3 whole circle moves
-- [done] Add SD card write timing
+- [done, ok] Add SD card write timing
 
 Future:
 - Remove string allocation from ActOnMCode to save stack space
