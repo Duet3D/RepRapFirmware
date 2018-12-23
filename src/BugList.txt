@@ -211,7 +211,7 @@ Fixed in 2.02RC6:
 - [done, test] Print progress based on requested extrusion *before* mixing, for ditto printing
 - [done, ok] G30 after SCARA homing prox and distal sometimes failed due to rounding error in arm calculation, https://forum.duet3d.com/post/72199
 
-Todo before 2.02 release:
+Done in 2.02RC7:
 - [done, ok] Pre-allocate SD card storage when doing HTTP file upload
 - [done] Bug fix for homing CoreXY with DDA+Move debug enabled (thanks @sdavi)
 - [done, ok] Set 12864 CS pin low at startup
@@ -225,8 +225,23 @@ Todo before 2.02 release:
 - [done, ok] Support Fanuc-style G2/G3 whole circle moves
 - [done, ok] Add SD card write timing
 
+Todo before 2.02 release:
+- [done] Step clock on Duet Maestro going backwards, https://forum.duet3d.com/topic/8264/steptimer-getinterruptclocks-isn-t-incrementing
+- Investigate Duet Maestro socket behaviour when cable disconnected, see email from chris
+
+2.03:
+- Object model
+- Conditionals, loops and maths in GCode commands
+- S-curve acceleration
+- Endstop assignment, including option for 1 endstop per motor
+- Faster file upload?
+- Some features from the list below
+
 Future:
+- New DuetWiFiServer using RTOS and a later Expressiv SDK version
 - Remove string allocation from ActOnMCode to save stack space
+- Easier way to support multiple endstops on axes (combine with facility to reassign endstop inputs)
+- Junction deviation instead of jerk? probably combin with S-curve acceleration.
 - Add I2C success count to I2C stats
 - Run script if thermal error? https://forum.duet3d.com/topic/8038/suggestion-run-script-in-case-of-thermal-error
 - Run script on filament error?
@@ -234,7 +249,7 @@ Future:
 - Count steps until homing switch is triggered compared to original, https://forum.duet3d.com/topic/8017/request-check-for-lost-steps
 - In CNC or laser mode, don't segment G0 moves for mesh bed compensation, https://forum.duet3d.com/topic/7728/go-vs-g1-movement/11
 - Z homing switch offset in M208 or elsewhere, https://forum.duet3d.com/topic/7767/z-offset-is-negated-in-homing-g-macro
-- After looking for G1 Z commands in gcode file analyser, check that there is extrusion after it
+- After looking for G1 Z commands to find object height in gcode file analyser, check that there is extrusion after it
 - M260 allow bytes to be specified in hex, more generally allow hex anywhere?
 - Auto mount SD card when it is inserted
 - Option to set an idle timer, https://forum.duet3d.com/topic/7758/configuring-idle-timeout
@@ -242,18 +257,15 @@ Future:
 - Allow jerk between printing and non-printing moves, so that coast-to-end works? already made a change for coast-to-end.
 - Error handling in [variable] parser in GCodeBuffer class
 - WiFi auto reconnect should not log all unsuccessful connection attempts, just the first one
-- Option to send M280 servo commands just a few times instead of continuously, for E3D
-- M3 R parameter so it can restore the spinder/laser after a pause (https://forum.duet3d.com/topic/5418/cnc-laser-m3-unpause-r-parameter)
+- Option to send M280 servo commands just a few times instead of continuously
+- M3 R parameter so it can restore the spindle/laser after a pause (https://forum.duet3d.com/topic/5418/cnc-laser-m3-unpause-r-parameter)
 - Adjust laser power during acceleration/deceleration
 - First layer segmentation, to help with baby stepping? Or another way to implement live babystepping?
-- Complete the object model
-- Conditional GCode
-- Object model variables in 12864 display
+- Object model variables in 12864 display menus
 - CNC shutdown when movement outside limits attempted not working well, https://forum.duet3d.com/topic/6186/stable-firmware-2-01-duet-2-and-1-22-duet-06-085-released/55
 - Better dead time measurement during auto tuning. Measure both turn-on and turn-off?
-- Bezier speed curves or other S-curve acceleration, e.g. look at https://github.com/MarlinFirmware/Marlin/pull/10373/files
+- Feedforward heater control for fan and extrusion speed changes
 - If wifi module gets stuck in starting or changing mode state, reset it again
-- Workplace offsets are supposed to be persistant (check NIST), https://www.duet3d.com/forum/thread.php?pid=43755#p43755
 - At the end of a simulation, restore the original workplace coordinate selection
 - CNC: look at G17/18/19, see https://forum.duet3d.com/topic/4669/ooznest-workbee-screw-driven
 - Option in M92 to specify what microstepping the values are specified at, https://forum.duet3d.com/topic/8225/m92-parameter-to-indicate-microstepping/4
@@ -264,12 +276,9 @@ Future:
 - Track which devices use which pins
 - Hangprinter PRs
 - PR to have any enabled driver report 50C
-- M116 parameter to set allowed temperature difference
 - Alternative G10 command to set offsets from known current tool position, see https://forum.duet3d.com/topic/6465/g92-g10-m585-for-setting-head-position-not-machine-position/4
 - Keep sending M408 responses to PanelDue while waiting for movement to complete, or M400 or homing move or similar
 - Extra logging? [did some extra in 2.02RC3] https://forum.duet3d.com/topic/7103/extend-m929-logging-capabilities/5
-- Junction deviation instead of jerk?
-- Still doesn't always find the DueX5, see https://forum.duet3d.com/topic/6239/unstable-after-firmware-upgrade/3. Is the Heat task affecting the timing? Need new I2C driver?
 - Danny's modified SCARA kinematics (workpiece is on a plate, extruder is fixed)
 - Look at pushover notification support, https://forum.duet3d.com/topic/169/notification-via-pushover-or-other-service/45
 - M81: don't give low voltage warnings when main power has just been turned off
@@ -303,15 +312,17 @@ Future:
 - dual extrusion layer counting, see https://www.duet3d.com/forum/thread.php?pid=34816#p34816
 - M140/M190 with no P parameter sets all bed heater temperatures (same for M141/M191)
 - M291 to lock movement and wait for it to finish?
-- Add timeout to hsmci_send_cmd_execute, see https://www.duet3d.com/forum/thread.php?pid=35654#p35654
-- Bug: pressure advance attempts high speed or acceleration extruder movements on bench setup (was it caused by hitting limits?)
 - Bug: https://www.duet3d.com/forum/thread.php?pid=34772#p34772 (needs RRF fix too?)
-- M40 to run eject.g [don't do, not NIST standard?]
 - configurable minimum extrusion temperature (per extruder?)
 - case-insensitive http headers
 - Send reduce power command to PanelDue when main power turned off?
-- Document multiple bed and chamber heaters
-- [mostly done] Check all classes for correct initialisation
+- Option to not broadcast SSID?
+- Support faster homing by using interrupts to check homing switch states
+- Allow manual bed probing to be aborted
+- Don't do pressure advance during accel/decel of sequences of short segments
+- Add T parameter to M207
+- look at supporting SIZE in FTP
+- Make mp.delta.hmz0sK, hmz0scK and dsk 64-bit in SAM4E versions, to increase movement limit - also increase K2?
 
 Investigations:
 
@@ -325,16 +336,4 @@ Investigations:
 [done BUT still wrong in lwip 2] inconsistend oversize vs. len
 p->ref == 1 in WiFi
 
-Later versions:
-
-- Check https://www.duet3d.com/forum/thread.php?pid=33951#p33951
-
-- Option to not broadcast SSID?
-- Support faster homing by using interrupts to check homing switch states
-- Allow manual bed probing to be aborted
-- Don't do pressure advance during accel/decel of sequences of short segments
-- Arc move with same finish and start coordinates to do complete circle
-- Add T parameter to M207
-- look at supporting SIZE in FTP
-- Make mp.delta.hmz0sK, hmz0scK and dsk 64-bit in SAM4E versions, to increase movement limit - also increase K2?
 

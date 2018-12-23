@@ -20,8 +20,7 @@ namespace StepTimer
 	void Init();
 
 	// Function GetInterruptClocksInterruptsDisabled() is quite long for SAM4S and SAME70 processors, so it is moved to StepTimer.cpp and no longer inlined
-	// On other processor we have had trouble with the compiler moving instructions around too much when it is inlined.
-	// So we don't inline it any more.
+	// On other processors we have had trouble with the compiler moving instructions around too much when it is inlined, so we don't inline it any more.
 	uint32_t GetInterruptClocksInterruptsDisabled() __attribute__ ((hot));	// Get the interrupt clock count, when we know already that interrupts are disabled
 
 #if SAM4S || SAME70		// if the TCs are 16-bit

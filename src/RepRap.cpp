@@ -465,7 +465,14 @@ void RepRap::Spin()
 	}
 	else
 	{
-		const uint32_t dt = StepTimer::GetInterruptClocks() - lastTime;
+		const uint32_t now = StepTimer::GetInterruptClocks();
+		const uint32_t dt = now - lastTime;
+#if 0 //DEBUG
+		if (dt > 1000000)
+		{
+			platform->MessageF(ErrorMessage, "dt %" PRIu32 " now %08" PRIx32 " last %08" PRIx32 "\n", dt, now, lastTime);
+		}
+#endif
 		if (dt < fastLoop)
 		{
 			fastLoop = dt;
