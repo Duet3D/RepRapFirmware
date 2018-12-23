@@ -241,7 +241,7 @@ Future:
 - New DuetWiFiServer using RTOS and a later Expressiv SDK version
 - Remove string allocation from ActOnMCode to save stack space
 - Easier way to support multiple endstops on axes (combine with facility to reassign endstop inputs)
-- Junction deviation instead of jerk? probably combin with S-curve acceleration.
+- Junction deviation instead of jerk? Probably combine with S-curve acceleration.
 - Add I2C success count to I2C stats
 - Run script if thermal error? https://forum.duet3d.com/topic/8038/suggestion-run-script-in-case-of-thermal-error
 - Run script on filament error?
