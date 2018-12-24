@@ -12,9 +12,9 @@
 #ifndef VERSION
 #ifdef RTOS
 # define RTOSVER		"(RTOS)"
-# define MAIN_VERSION	"2.02RC7+"
+# define MAIN_VERSION	"2.02"
 #else
-# define MAIN_VERSION	"1.22"
+# define MAIN_VERSION	"1.23"
 # define RTOSVER
 #endif
 
@@ -22,7 +22,7 @@
 #endif
 
 #ifndef DATE
-# define DATE "2018-12-23b2"
+# define DATE "2018-12-24b1"
 #endif
 
 #define AUTHORS "reprappro, dc42, chrishamm, t3p3, dnewman, printm3d"

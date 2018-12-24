@@ -760,7 +760,7 @@ private:
 	// Digipots
 	MCP4461 mcpDuet;
 	MCP4461 mcpExpansion;
-	Pin potWipes[8];												// we have only 8 digipots, on the Duet 0.8.5 we use the DAC for the 9th
+	uint8_t potWipes[8];											// we have only 8 digipots, on the Duet 0.8.5 we use the DAC for the 9th
 	float senseResistor;
 	float maxStepperDigipotVoltage;
 	float stepperDacVoltageRange, stepperDacVoltageOffset;

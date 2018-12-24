@@ -225,11 +225,11 @@ Done in 2.02RC7:
 - [done, ok] Support Fanuc-style G2/G3 whole circle moves
 - [done, ok] Add SD card write timing
 
-Todo before 2.02 release:
+Done in 2.02 release:
 - [done] Step clock on Duet Maestro going backwards, https://forum.duet3d.com/topic/8264/steptimer-getinterruptclocks-isn-t-incrementing
-- Investigate Duet Maestro socket behaviour when cable disconnected, see email from chris
+- [can't reproduce] Investigate Duet Maestro socket behaviour when cable disconnected, see email from chris
 
-2.03:
+2.03 planned:
 - Object model
 - Conditionals, loops and maths in GCode commands
 - S-curve acceleration

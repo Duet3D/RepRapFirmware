@@ -619,29 +619,48 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 		if (nameOfFileToSend[0] == '/')
 		{
 			++nameOfFileToSend;						// all web files are relative to the /www folder, so remove the leading '/'
-			if (nameOfFileToSend[0] == 0)
+		}
+
+		if (nameOfFileToSend[0] == 0)
+		{
+			nameOfFileToSend = INDEX_PAGE_FILE;
+		}
+
+		for (;;)
+		{
+			// Try to open a gzipped version of the file first
+			if (!StringEndsWithIgnoreCase(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
+			{
+				char nameBuf[MaxFilenameLength + 1];
+				strcpy(nameBuf, nameOfFileToSend);
+				strcat(nameBuf, ".gz");
+				fileToSend = platform->OpenFile(platform->GetWebDir(), nameBuf, OpenMode::read);
+				if (fileToSend != nullptr)
+				{
+					zip = true;
+					break;
+				}
+			}
+
+			// That failed, try to open the normal version of the file
+			fileToSend = platform->OpenFile(platform->GetWebDir(), nameOfFileToSend, OpenMode::read);
+			if (fileToSend != nullptr)
+			{
+				break;
+			}
+
+			if (StringEqualsIgnoreCase(nameOfFileToSend, INDEX_PAGE_FILE))
+			{
+				nameOfFileToSend = OLD_INDEX_PAGE_FILE;			// the index file wasn't found, so try the old one
+			}
+			else if (!strchr(nameOfFileToSend, '.'))			// if we were asked to return a file without a '.' in the name, return the index page
 			{
 				nameOfFileToSend = INDEX_PAGE_FILE;
 			}
-		}
-
-		// Try to open a gzipped version of the file first
-		if (!StringEndsWithIgnoreCase(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
-		{
-			char nameBuf[MaxFilenameLength + 1];
-			strcpy(nameBuf, nameOfFileToSend);
-			strcat(nameBuf, ".gz");
-			fileToSend = platform->OpenFile(platform->GetWebDir(), nameBuf, OpenMode::read);
-			if (fileToSend != nullptr)
+			else
 			{
-				zip = true;
+				break;
 			}
-		}
-
-		// If that failed, try to open the normal version of the file
-		if (fileToSend == nullptr)
-		{
-			fileToSend = platform->OpenFile(platform->GetWebDir(), nameOfFileToSend, OpenMode::read);
 		}
 
 		// If we still couldn't find the file and it was an HTML file, return the 404 error page
@@ -650,25 +669,19 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 			nameOfFileToSend = FOUR04_PAGE_FILE;
 			fileToSend = platform->OpenFile(platform->GetWebDir(), nameOfFileToSend, OpenMode::read);
 		}
-
-		if (fileToSend == nullptr)
-		{
-			RejectMessage("not found", 404);
-			return;
-		}
-		transaction->SetFileToWrite(fileToSend);
 	}
 	else
 	{
 		fileToSend = platform->OpenFile(FS_PREFIX, nameOfFileToSend, OpenMode::read);
-		if (fileToSend == nullptr)
-		{
-			RejectMessage("not found", 404);
-			return;
-		}
-		transaction->SetFileToWrite(fileToSend);
 	}
 
+	if (fileToSend == nullptr)
+	{
+		RejectMessage("not found", 404);
+		return;
+	}
+
+	transaction->SetFileToWrite(fileToSend);
 	transaction->Write("HTTP/1.1 200 OK\r\n");
 
 	// Don't cache files served by rr_download
@@ -716,12 +729,12 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 	}
 	transaction->Printf("Content-Type: %s\r\n", contentType);
 
-	if (zip && fileToSend != nullptr)
+	if (zip)
 	{
 		transaction->Write("Content-Encoding: gzip\r\n");
-		transaction->Printf("Content-Length: %lu\r\n", fileToSend->Length());
 	}
 
+	transaction->Printf("Content-Length: %lu\r\n", fileToSend->Length());
 	transaction->Write("Connection: close\r\n\r\n");
 	transaction->Commit(false);
 }

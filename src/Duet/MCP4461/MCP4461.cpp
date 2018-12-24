@@ -68,7 +68,9 @@ void MCP4461::setVolatileWiper(uint8_t wiper, uint16_t wiper_value)
 
 	uint8_t i2cBytes[2] = { c_byte, d_byte };
 	MutexLocker lock(Tasks::GetI2CMutex());
-	MCP_WIRE.Transfer(_mcp4461_address, i2cBytes, 2, 0, nullptr);
+	MCP_WIRE.Transfer(_mcp4461_address, i2cBytes, 2, 0);
+
+	delayMicroseconds(5);				// bus needs to be free for 4.7us before the next command
 }
 
 void MCP4461::setNonVolatileWiper(uint8_t wiper, uint16_t wiper_value)
@@ -101,7 +103,9 @@ void MCP4461::setNonVolatileWiper(uint8_t wiper, uint16_t wiper_value)
 
 	uint8_t i2cBytes[2] = { c_byte, d_byte };
 	MutexLocker lock(Tasks::GetI2CMutex());
-	MCP_WIRE.Transfer(_mcp4461_address, i2cBytes, 2, 0, nullptr);
+	MCP_WIRE.Transfer(_mcp4461_address, i2cBytes, 2, 0);
+
+	delay(20);						// writing to nonvolatile memory takes up to 10ms to complete
 }
   
 // End

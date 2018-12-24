@@ -779,7 +779,6 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 			RejectMessage("page not found<br>Check that the SD card is mounted and has the correct files in its /www folder", 404);
 			return;
 		}
-		fileBeingSent = fileToSend;
 	}
 	else
 	{
@@ -789,9 +788,9 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 			RejectMessage("file not found", 404);
 			return;
 		}
-		fileBeingSent = fileToSend;
 	}
 
+	fileBeingSent = fileToSend;
 	outBuf->copy("HTTP/1.1 200 OK\r\n");
 
 	// Don't cache files served by rr_download
@@ -840,15 +839,12 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 	}
 	outBuf->catf("Content-Type: %s\r\n", contentType);
 
-	if (fileToSend != nullptr)
+	if (zip)
 	{
-		if (zip)
-		{
-			outBuf->cat("Content-Encoding: gzip\r\n");
-		}
-		outBuf->catf("Content-Length: %lu\r\n", fileToSend->Length());
+		outBuf->cat("Content-Encoding: gzip\r\n");
 	}
 
+	outBuf->catf("Content-Length: %lu\r\n", fileToSend->Length());
 	outBuf->cat("Connection: close\r\n\r\n");
 	Commit();
 }
