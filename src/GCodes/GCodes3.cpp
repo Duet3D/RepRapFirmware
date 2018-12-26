@@ -293,13 +293,19 @@ int GCodes::ConnectODriveToSerialChannel(size_t whichODrive, size_t whichChannel
 		#endif
 		#if defined(SERIAL_STOLEN_DEVICE)
 		case 99:  // 99 Is the special steal-the-shared-spi serial channel
-			signalThatSspiPinsAreUsedForUart();
-			ConfigurePin(g_APinDescription[APIN_USART_SSPI_MOSI]);
-			ConfigurePin(g_APinDescription[APIN_USART_SSPI_MISO]);
-			SERIAL_STOLEN_DEVICE.begin(atWhatBaud); // Something is done in this begin that breaks serial upon uploadning and flashing new firmware
-			SERIAL_STOLEN_DEVICE.setInterruptPriority(NvicPriorityPanelDueUart);
-			odrv.SetSerial(&SERIAL_STOLEN_DEVICE);
-			return 0;
+			if (signalThatSspiPinsAreUsedForUart() == 0)
+			{
+				ConfigurePin(g_APinDescription[APIN_USART_SSPI_MOSI]);
+				ConfigurePin(g_APinDescription[APIN_USART_SSPI_MISO]);
+				SERIAL_STOLEN_DEVICE.begin(atWhatBaud); // Something is done in this begin that breaks serial upon uploadning and flashing new firmware
+				SERIAL_STOLEN_DEVICE.setInterruptPriority(NvicPriorityPanelDueUart);
+				odrv.SetSerial(&SERIAL_STOLEN_DEVICE);
+				return 0;
+			}
+			else
+			{
+				return 1;
+			}
 		#endif // defined(SERIAL_STOLEN_DEVICE)
 		default:
 			reply.printf("Channel %u is not available.", whichChannel);
