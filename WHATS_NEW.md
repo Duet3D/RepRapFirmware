@@ -1,11 +1,174 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.02 (Duet 2 series) and 1.23 (Duet 06/085)
+===================================================
+
+Upgrade notes:
+- **Very important!** If you use M452 to put your machine into Laser mode, you must replace all S parameters in G1 commands in homing files etc. by H parameters. This is because S is now used to control laser power.
+- Previously, you could omit the P0 parameter when configuring fan 0. The P0 parameter is now compulsory when configuring fan 0. The only parameters now recognised in M106 commands with no P parameter are S and R.
+- If you use the G53 command, note that this now causes tool offsets not to be applied
+- If you use a 12864 display, you may wish to add a 'value N501' item to your menus to allow M117 messages to be displayed.
+- Please note, the Duet 06/085 release has undergone mimimal testing.
+
+Changes to how G, M and T codes are executed:
+- G0 and G1: The primary parameter letter used to control the move type has been changed from S to H. This is because S is the standard parameter to control laser power on a laser cutter or engraver. However, unless you use M452 to put the firmware into Laser mode, you can continue to use S to set the move type.
+- When switched into Laser mode (M452), the S parameter on G1 commands sets the laser power. A G1 command with no S parameter keeps the previous laser power. A G0 move always turns the laser off.
+- G2/G3 commands now only require that a nonzero I or J parameter is provided; and if the final XY coordinates are not specified, or are equal to the initial XY coordinates, then the firmware generates a complete circle
+- In CNC mode, a GCode line that either starts with an axis letter and follows a G0/1/2/3 command or starts with I or J and follows a G2/3 command is assumed to repeat the previous command using the new parameters
+- G2 and G3 moves now use a variable segment length that depends on the arc radius
+- G10 L2 and G10 L20 can now be used with no P parameter, meaning use the current coordinate system
+- If G30 S-2 is commanded when no tool is selected, the command is not executed and an error message is generated
+- When G53 is in effect, tool offsets and axis mapping are no longer applied
+- G60 now saves the current tool as well as the current user coordinates
+- M106 supports a new X parameter to set the maximum allowed fan PWM (thanks @wikriker)
+- M106 supports a new A parameter to map the fan to a different fan output or a heater output, or to re-enable a disabled fan
+- M116 now accepts an optional S parameter to specify the acceptable temperature difference
+- M122 has an additional "power good" report to indicate whether the internal stepper drivers can be used
+- M122 now has P103 subfunction to measure the sin + cosine calculation time
+- M122 now has P104 subfunction to perform SD card write timing
+- M205 is supported to set the jerk limits (in mm/sec) as an alternative to M566
+- M208 now accepts Xaa:bb Ycc:dd etc. as an alternative to separate M208 S0 and M208 s1 commands
+- M206 now sets the offsets for the current workplace instead of workplace 0
+- M226 is now supported even when no file is being printed
+- M260 can now receive I2C bytes as well as send them, use the new R parameter to specify how many
+- In M260 and M261, I2C addresses can be specified in hex format in quotes, e.g. "0x71" or "x71"
+- M291 no longer allows S0 and T0 together because that would create a message that can never time out of be dismissed
+- M302 now allows the minimum extrusion and retraction temperatures to be configured (thanks @wikriker)
+- M305 temperature sensor type 300-307 now supports a C parameter to select the input channel and a D parameter to select differential mode
+- M408 now accepts a P parameter. P0 (default) gives the previous behaviour. P1 S"filter" now returns those parts of the object model that match "filter".
+- The mapped fan speed is now sent at the start of the fan speed list in the M408 response so that PanelDue can display it
+- If G31 parameters were read from config-override.g (M501) then a subsequent M500 command saves them too
+- M500 information saved to config-override.g now includes the workplace coordinate offsets
+- When M500 is used the current date/time if known is included in the header comment in config-override.g
+- M555 P6 selects nanoDLP compatibility mode
+- M557 now supports a P parameter to set the number of X and Y points, as an alternative to using the S parameter to set the spacing
+- M558: zero or negative Z probe tolerance (S parameter) with A parameter > 1 now means always average all readings
+- M558 now accepts a C parameter to select the endstop number when the mode is 4. M558 P6 is translated to M558 P4 C4, and M558 P7 is translated to M558 P4 C2.
+- Added M569 parameters B, H and V to configure blanking time value, hysteresis values (2 or 3 of them) and stealthchop/spreadCycle switchover register value. Also added these values to the M569 report when only a P parameter is given.
+- M569 accepts a new F parameter for the off-time. Valid values are 1 to 15. 
+- M569 now rejects disallowed combinations of TOFF and TBL in the chopper control register of TMC2660 or TMC22xx drivers are rejected
+- M584 can now use dummy (high) driver numbers to assign an axis or extruder to no driver
+- M591 responses have been shortened by removing unnecessary text
+- The M591 report for a simple (switch) filament monitor now includes the filament present/not present status
+- M600 is supported
+- M650 and M651 are supported (for nanDLP)
+- M703 is supported (thanks chrishamm)
+- M851 is supported for Marlin compatibility. M851 Znn is equivalent to G31 Z-nn except that is also causes a subsequent M500 command to include the G31 parameters in config-override.g, as if M500 P31 had been used instead.
+- In M906 if you set the motor idle current percentage to 0 then all drives will be disabled when all motors have been idle for the idle timeout and all axes will be flagged as not homed
+- M918 now resets and initialises the 12864 display
+- M918 with no parameters now reports current display and encoder settings
+- T R# (where # is a restore point number) is now supported
+
+Motion control changes:
+- After attempting to apply babystepping to existing queued moves, any residual babystepping is now actioned immediately instead of waiting for another move
+- When TMC22xx drivers on the Duet Maestro are configured in stealthChop mode, the driver is programmed to switch over to spreadCycle automatically at high speeds
+- Added special support for coast-to-end in RecalculateMove (but pressure advance should work better than coast-to-end)
+- A message is displayed when the stepper drivers report open-circuit motors
+- Dynamic acceleration control/dynamic ringing cancellation is supported. Use M593 to configure it.
+- If you try to move motors connected to internal drivers when VIN is too low or too high, a warning message is generated
+
+Web server changes:
+- The HTTP reject message now includes a CORS header, for future versions of DWC
+- A content-length header is included whenever a file is returned, for future versions of DWC
+- HTTP requests to fetch a directory are redirected to index.html in /www, for future versions of DWC
+- The HTTP index page is now index.html, but it falls back to reprap.htm if index.html is not found
+- When uploading a file via HTTP the firmware now pre-allocates SD card storage for it
+- If the HTTP server runs out of buffers while trying to service a request it now returns a 503 http error
+- Improved the HTTP 'page not found' message
+- Http responses now use \r\n as the line ending, not \n
+
+Duet Maestro 12864 display changes:
+- Support for 12864 displays on Duet Maestro greatly improved (thanks to M3D for much of this)
+- 12864 display items 510-518 now display user position, not machine position
+- 12864 display can now show 1-line M117 messages
+- 12864 display can now show M291 messages boxes and the dialog for and manual Z-probing
+- 12864 now supports adjusting baby stepping and XYZ position directly using the encoder
+- 12864 display now allows you to left-, centre- or right-align 'text', 'value' and 'alter' items, and the text within buttons is centre-aligned
+- 12864 menu files are now allowed to start with letters G, M and T as well as all other letters
+- On the 12864 display, error messages can be acknowledged by a button press
+- The maximum length of a menu file line for the Duet Maestro 12864 display has been increased from 80 to 100 characters
+
+Other new features and changed behaviour:
+- When the WiFi module is in client mode it tries to auto-reconnect continuously if the connection is lost
+- If a file delete request fails because the file or the path is not found, the firmware no longer generates a global error message (but it still returns an error to the caller)
+- Changed "Resume-after-power-fail state saved" message to "Resume state saved"
+- When delta auto calibration produces NaNs, calibration is abandoned and an error message is produced
+- Emergency stop commands sent by PanelDue running latest firmware are acted on immediately
+- Added 'deprecated' message when legacy 3-, 4- or 5-point bed compensation is used
+- The Idle task is now included in task list
+- When storage module debug is enabled, failing to open a file is now a warning not an error because it is a normal occurrence when optional files are not present (e.g. tool change files, start.g, stop.g)
+- Increased number of restore points from 3 to 6
+- Implemented the object model framework and a few variables
+- Z leadscrew or manual be levelling adjustment results are now logged even if the process failed, if logging is enabled
+- Mesh probing results are now logged, if logging is enabled
+- Error and warning messages generated by incorrect GCode commands are now logged, if logging is enabled
+- Added paused coordinates to 'printing paused' message
+- If a bad curve fit occurs during tuning, the values found are displayed as A, C and D instead of G, tc and td to better relate to M307
+- Hardware configurations with more or fewer endstop inputs than motor drivers are supported
+- When a print is paused, the coordinates of the pause point are included in the "Printing paused" message
+- If heater tuning fails due to a bad curve fit, the parameters measured are reported as A, C and D (to match the M307 parameter letters) instead of G, tc and td
+- On Duet Ethernet and Duet Maestro the physical link speed and half/full duplex status is included in the Network section of the M122 report
+- The total number of axes is now passed to DWC and PanelDue as well as the number of visible axes
+
+Internal changes:
+- Memory for a 12864 display and the associated menu system is not allocated until M918 is processed
+- Upgraded to latest version of FatFS
+
+Bug fixes:
+- During printing, the count of layers printed was sometimes incorrect.
+- On the Duet Maestro, the step timer clock sometimes returned the incorrect value. This could cause occasional jerky movement and possibly lost steps.
+- Homing a CoreXY machine with both DDA and Move debug enabled caused a crash (thanks @sdavi)
+- Fixed behaviour when moves call for extrusion amounts smaller than one microstep
+- On the Duet Maestro the 12864 display CS pin is now set low at startup, to avoid spurious characters being displayed if other SPI activity occurs before the display is initialised
+- On the 12864 display, multi-line images did not display correctly
+- On the 12864 display, the last byte of images didn't display correctly
+- On the 12864 display, when entering a subfolder from a file list, the screen did not update until you rotated the encoder
+- On the 12864 display, buttons sometimes disappeared when moving between them
+- On the 12864 display, item numbers 79, 179 and 279 were not implemented
+- On the 12864 display, after displaying an error message the 20-second inactivity timeout was used before reverting to the main menu instead of the 6-second error message timeout
+- On the Duet 2 Maestro, if the SD card menu on the 12864 display was used then the network kept disconnecting
+- 12864 display of speed factor was wrong
+- Fixed potential buffer overflow issues in 12864 menu code
+- The scheduled move count was too high by 1 after an emergency pause
+- The print progress calculated from filament used was incorrect when using a mixing tool if the sum of mix values was not 1 (e.g. when ditto printing)
+- On SCARA printers, a G30 command immediately after homing the proximal and distal arms could fail due to rounding errors
+- Heaters were turning on momentarily when the Duet was reset
+- M106 Svv and M106 Pn Svv were always setting max PWM if vv > 1 and there were additional parameters in the command e.g. F
+- G30 H parameters didn't work if deployprobe.g or retractprobe.g files were present
+- A processor timing issue could cause the watchdog to trigger and reset the Duet as soon as it was enabled. This caused some Duet+DueX configurations to take several attempts to start up.
+- After using G30 S-2 the tool offset was set in the wrong direction
+- After using G30 S-2 the user coordinates were not updated to account for new tool offset
+- Under some conditions the M400 command could greatly slow down movements, making it look as if the print had stalled
+- Lookahead errors were occasionally reported because of small rounding errors
+- Further limited the amount of CPU time used to refresh the 12864 display
+- Fixed incorrect check for G2/G3 missing parameter
+- Fix CoreXYUV stall detection
+- Absolute babystepping was restricted to 1mm change
+- After using G10 L2 or G10 L20 to change workplace coordinate offsets, the user positions of axes other than X and Y were not updated
+- M915 now recognises the E parameter
+- M915 output was truncated if no drives were specified
+- On the Duet 2 Maestro, if a BLTouch Z probe was used then the pin didn't always stay retracted after the probe was triggered
+- If G30 S-1 was sent with the Z probe type set to zero then reported trigger height was an undefined value
+- Additional axes on delta printers were not coordinated with XYZ movement
+- DWC disconnected when a message box and a beep were pending at the same time
+- The code to report overheating TMC22xx or TMC2660 drivers to Duet Web Control, Panel Due console and USB hosts wasn't working
+- On a delta printer, if you created additional axes then the movement of these axes was not coordinated with the effector movement
+- If your GCode generated a beep (M300) and a dialog box (M291) in quick succession, a bad JSON response was constructed, causing Duet Web Control to disconnect
+- The list of GCode files and folders displayed by DWC was incomplete if there were too many files. The list is now complete if DWC 1.22.1 or later is used.
+- I2C errors sometimes occurred if there was a task switch in the middle of an I2C transaction
+- The E parameter was ignored in G0 commands
+- Fixed bad JSON response when the 'first' parameter of a rr_filelist HTML command was non-zero
+- M106 Snn commands with no P parameter failed if fan 0 had been disabled but the print cooling fan was mapped to another fan in the current tool definition
+- If config.g invoked a macro then final values were copied to GCode sources too early and a subsequent M501 command wasn't acted on (thanks chrishamm)
+- If an emergency stop occurred during execution of a macro, an internal seek error message was sometimes generated. Emergency stop now closes any active print files and macro files.
+
 Version 2.01 (Duet 2 series) and 1.22 (Duet 06/085)
 ===================================================
 
 Upgrade notes:
 - Compatible files are DuetWiFiserver 1.21 and DuetWebControl 1.21.2-dc42. Use of DWC 1.21 or earlier may result in "Not authorized" disconnections if you have a password set.
+- On the Duet WiFi and Duet Ethernet, in previous versions drivers 3 to 11 inclusive defaulted to being extruder drives. In this version, only drivers 2 to 9 inclusive default to extruder drives. This is to avoid issues when users try to change microstepping on all extruder drives. If you want to use drivers 10 and 11 as extruder drive,s you will have to assign them explicitly using M584. Also if have not used M584 to assign drives and you are listing all the extruder drives in a command (e.g. M906 E1000:1000:1000:1000:1000:1000:1000:1000:1000) then you will need to reduce the number of E values listed from 9 to 7.
 
 Bug fixes:
 - The assumed Z position at power up had an undefined value
