@@ -63,7 +63,7 @@ protected:
 	void FinishUpload(uint32_t fileLength, time_t fileLastModified);
 	virtual void CancelUpload();
 
-	uint32_t GetRemoteIP() const;
+	IPAddress GetRemoteIP() const;
 	void ReportOutputBufferExhaustion(const char *sourceFile, int line);
 
 	static Platform& GetPlatform() { return reprap.GetPlatform(); }
@@ -84,8 +84,8 @@ protected:
 
 	// File uploads
 	FileData fileBeingUploaded;
-	char filenameBeingUploaded[MaxFilenameLength];
-	uint32_t postFileLength, uploadedBytes;				// How many POST bytes do we expect and how many have already been written?
+	String<MaxFilenameLength> filenameBeingUploaded;
+	uint32_t postFileLength, uploadedBytes;				// how many POST bytes do we expect and how many have already been written?
 	time_t fileLastModified;
 	bool uploadError;
 };

@@ -34,12 +34,40 @@
  */
 
 #include "Move.h"
+#include "StepTimer.h"
 #include "Platform.h"
 #include "GCodes/GCodeBuffer.h"
 #include "Tools/Tool.h"
 
-constexpr uint32_t UsualMinimumPreparedTime = StepClockRate/10;			// 100ms
-constexpr uint32_t AbsoluteMinimumPreparedTime = StepClockRate/20;		// 50ms
+#if SUPPORT_CAN_EXPANSION
+# include "CAN/CanInterface.h"
+#endif
+
+constexpr uint32_t UsualMinimumPreparedTime = StepTimer::StepClockRate/10;			// 100ms
+constexpr uint32_t AbsoluteMinimumPreparedTime = StepTimer::StepClockRate/20;		// 50ms
+
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(Move, _ret)
+
+const ObjectModelTableEntry Move::objectModelTable[] =
+{
+	// These entries must be in alphabetical order
+	{ "drcEnabled", OBJECT_MODEL_FUNC(&(self->drcEnabled)), TYPE_OF(bool), ObjectModelTableEntry::none },
+	{ "drcMinimumAcceleration", OBJECT_MODEL_FUNC(&(self->drcMinimumAcceleration)), TYPE_OF(float), ObjectModelTableEntry::none },
+	{ "drcPeriod", OBJECT_MODEL_FUNC(&(self->drcPeriod)), TYPE_OF(float), ObjectModelTableEntry::none },
+	{ "maxPrintingAcceleration", OBJECT_MODEL_FUNC(&(self->maxPrintingAcceleration)), TYPE_OF(float), ObjectModelTableEntry::none },
+	{ "maxTravelAcceleration", OBJECT_MODEL_FUNC(&(self->maxTravelAcceleration)), TYPE_OF(float), ObjectModelTableEntry::none },
+};
+
+DEFINE_GET_OBJECT_MODEL_TABLE(Move)
+
+#endif
 
 Move::Move() : currentDda(nullptr), active(false), scheduledMoves(0), completedMoves(0)
 {
@@ -77,6 +105,7 @@ void Move::Init()
 	maxPrintingAcceleration = maxTravelAcceleration = 10000.0;
 	drcEnabled = false;											// disable dynamic ringing cancellation
 	drcMinimumAcceleration = 10.0;
+	drcPeriod = 50.0;
 
 	// Clear the transforms
 	SetIdentityTransform();
@@ -85,8 +114,8 @@ void Move::Init()
 	// Put the origin on the lookahead ring with default velocity in the previous position to the first one that will be used.
 	// Do this by calling SetLiveCoordinates and SetPositions, so that the motor coordinates will be correct too even on a delta.
 	{
-		float move[DRIVES];
-		for (size_t i = 0; i < DRIVES; i++)
+		float move[MaxTotalDrivers];
+		for (size_t i = 0; i < MaxTotalDrivers; i++)
 		{
 			move[i] = 0.0;
 			liveEndPoints[i] = 0;								// not actually right for a delta, but better than printing random values in response to M114
@@ -121,7 +150,7 @@ void Move::Init()
 
 void Move::Exit()
 {
-	Platform::DisableStepInterrupt();
+	StepTimer::DisableStepInterrupt();
 
 	// Clear the DDA ring so that we don't report any moves as pending
 	currentDda = nullptr;
@@ -182,7 +211,7 @@ void Move::Spin()
 #endif
 						  ddaRingAddPointer->GetState() == DDA::empty
 					   && ddaRingAddPointer->GetNext()->GetState() != DDA::provisional		// function Prepare needs to access the endpoints in the previous move, so don't change them
-					   && DriveMovement::NumFree() >= (int)DRIVES							// check that we won't run out of DMs
+					   && DriveMovement::NumFree() >= (int)MaxTotalDrivers					// check that we won't run out of DMs
 					  );
 	if (canAddMove)
 	{
@@ -202,7 +231,7 @@ void Move::Spin()
 			prevMoveTime = dda->GetClocksNeeded();
 		}
 
-		canAddMove = (unPreparedTime < StepClockRate/2 || unPreparedTime + prevMoveTime < 2 * StepClockRate);
+		canAddMove = (unPreparedTime < StepTimer::StepClockRate/2 || unPreparedTime + prevMoveTime < 2 * StepTimer::StepClockRate);
 	}
 
 	if (canAddMove)
@@ -215,6 +244,7 @@ void Move::Spin()
 				if (ddaRingAddPointer->Init(specialMoveCoords))
 				{
 					ddaRingAddPointer = ddaRingAddPointer->GetNext();
+					scheduledMoves++;
 					if (moveState == MoveState::idle || moveState == MoveState::timing)
 					{
 						// We were previously idle, so we have a state change
@@ -239,14 +269,6 @@ void Move::Spin()
 			{
 				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
 				{
-#if 0	// disabled this because it causes jerky movements on the SCARA printer
-					// Add on the extrusion left over from last time.
-					const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-					for (size_t drive = numAxes; drive < DRIVES; ++drive)
-					{
-						nextMove.coords[drive] += extrusionPending[drive - numAxes];
-					}
-#endif
 					if (nextMove.moveType == 0)
 					{
 						AxisAndBedTransform(nextMove.coords, nextMove.xAxes, nextMove.yAxes, true);
@@ -255,8 +277,8 @@ void Move::Spin()
 					if (ddaRingAddPointer->Init(nextMove, !IsRawMotorMove(nextMove.moveType)))
 					{
 						ddaRingAddPointer = ddaRingAddPointer->GetNext();
-						idleCount = 0;
 						scheduledMoves++;
+						idleCount = 0;
 						if (moveState == MoveState::idle || moveState == MoveState::timing)
 						{
 							moveState = MoveState::collecting;
@@ -269,14 +291,6 @@ void Move::Spin()
 							lastStateChangeTime = now;
 						}
 					}
-
-#if 0	// see above
-					// Save the amount of extrusion not done
-					for (size_t drive = numAxes; drive < DRIVES; ++drive)
-					{
-						extrusionPending[drive - numAxes] = nextMove.coords[drive];
-					}
-#endif
 				}
 			}
 		}
@@ -288,7 +302,7 @@ void Move::Spin()
 		DDA *cdda;													// currentDda is declared volatile, so copy it in the next line
 		if (simulationMode != 0 && (cdda = currentDda) != nullptr)
 		{
-			simulationTime += (float)cdda->GetClocksNeeded()/StepClockRate;
+			simulationTime += (float)cdda->GetClocksNeeded()/StepTimer::StepClockRate;
 			cdda->Complete();
 			CurrentMoveCompleted();
 		}
@@ -301,11 +315,15 @@ void Move::Spin()
 		if (!canAddMove || idleCount > 10)							// better to have a few moves in the queue so that we can do lookahead
 		{
 			// Prepare one move and execute it. We assume that we will enter the next if-block before it completes, giving us time to prepare more moves.
-			Platform::DisableStepInterrupt();						// should be disabled already because we weren't executing a move, but make sure
+			StepTimer::DisableStepInterrupt();						// should be disabled already because we weren't executing a move, but make sure
 			DDA * const dda = ddaRingGetPointer;					// capture volatile variable
-			if (dda->GetState() == DDA::provisional)
+			if (   dda->GetState() == DDA::provisional
+#if SUPPORT_CAN_EXPANSION
+				&& CanInterface::CanPrepareMove()
+#endif
+			   )
 			{
-				dda->Prepare(simulationMode);
+				dda->Prepare(simulationMode, extrusionPending);
 			}
 			if (dda->GetState() == DDA::frozen)
 			{
@@ -315,7 +333,7 @@ void Move::Spin()
 				}
 				else
 				{
-					if (StartNextMove(Platform::GetInterruptClocks()))	// start the next move
+					if (StartNextMove(StepTimer::GetInterruptClocks()))	// start the next move
 					{
 						Interrupt();
 					}
@@ -357,15 +375,19 @@ void Move::Spin()
 		}
 
 		// If the number of prepared moves will execute in less than the minimum time, prepare another move.
-		// Try to avoid preparing deceleration-only moves
+		// Try to avoid preparing deceleration-only moves too early
 		while (st == DDA::provisional
 				&& preparedTime < (int32_t)UsualMinimumPreparedTime		// prepare moves one eighth of a second ahead of when they will be needed
 				&& preparedCount < DdaRingLength/2 - 1					// but don't prepare as much as half the ring
 			  )
 		{
-			if (cdda->IsGoodToPrepare() || preparedTime < (int32_t)AbsoluteMinimumPreparedTime)
+			if (   (cdda->IsGoodToPrepare() || preparedTime < (int32_t)AbsoluteMinimumPreparedTime)
+#if SUPPORT_CAN_EXPANSION
+				&& CanInterface::CanPrepareMove()
+#endif
+			   )
 			{
-				cdda->Prepare(simulationMode);
+				cdda->Prepare(simulationMode, extrusionPending);
 			}
 			preparedTime += cdda->GetTimeLeft();
 			++preparedCount;
@@ -518,10 +540,10 @@ bool Move::PausePrint(RestorePoint& rp)
 	return true;
 }
 
-#if HAS_VOLTAGE_MONITOR
+#if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 
 // Pause the print immediately, returning true if we were able to skip or abort any moves and setting up to the move we aborted
-bool Move::LowPowerPause(RestorePoint& rp)
+bool Move::LowPowerOrStallPause(RestorePoint& rp)
 {
 	const DDA * const savedDdaRingAddPointer = ddaRingAddPointer;
 	bool abortedMove = false;
@@ -531,10 +553,17 @@ bool Move::LowPowerPause(RestorePoint& rp)
 	if (dda != nullptr && dda->GetFilePosition() != noFilePosition)
 	{
 		// We are executing a move that has a file address, so we can interrupt it
-		Platform::DisableStepInterrupt();
+		StepTimer::DisableStepInterrupt();
+#if SUPPORT_LASER
+		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
+		{
+			reprap.GetPlatform().SetLaserPwm(0);
+		}
+#endif
 		dda->MoveAborted();
 		CurrentMoveCompleted();							// updates live endpoints, extrusion, ddaRingGetPointer, currentDda etc.
 		--completedMoves;								// this move wasn't really completed
+		--scheduledMoves;								// ...but it is no longer scheduled either
 		abortedMove = true;
 	}
 	else
@@ -654,9 +683,9 @@ void Move::Diagnostics(MessageType mtype)
 }
 
 // Set the current position to be this
-void Move::SetNewPosition(const float positionNow[DRIVES], bool doBedCompensation)
+void Move::SetNewPosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation)
 {
-	float newPos[DRIVES];
+	float newPos[MaxTotalDrivers];
 	memcpy(newPos, positionNow, sizeof(newPos));			// copy to local storage because Transform modifies it
 	AxisAndBedTransform(newPos, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes(), doBedCompensation);
 	SetLiveCoordinates(newPos);
@@ -664,11 +693,11 @@ void Move::SetNewPosition(const float positionNow[DRIVES], bool doBedCompensatio
 }
 
 // These are the actual numbers we want in the positions, so don't transform them.
-void Move::SetPositions(const float move[DRIVES])
+void Move::SetPositions(const float move[MaxTotalDrivers])
 {
 	if (DDARingEmpty())
 	{
-		ddaRingAddPointer->GetPrevious()->SetPositions(move, DRIVES);
+		ddaRingAddPointer->GetPrevious()->SetPositions(move, MaxTotalDrivers);
 	}
 	else
 	{
@@ -676,6 +705,7 @@ void Move::SetPositions(const float move[DRIVES])
 	}
 }
 
+// This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered and DDA::SetPositions
 void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const
 {
 	if (CartesianToMotorSteps(coords, ep, true))
@@ -683,13 +713,13 @@ void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrive
 		const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 		for (size_t drive = numAxes; drive < numDrives; ++drive)
 		{
-			ep[drive] = MotorEndPointToMachine(drive, coords[drive]);
+			ep[drive] = MotorMovementToSteps(drive, coords[drive]);
 		}
 	}
 }
 
 // Convert distance to steps for a particular drive
-int32_t Move::MotorEndPointToMachine(size_t drive, float coord)
+int32_t Move::MotorMovementToSteps(size_t drive, float coord)
 {
 	return lrintf(coord * reprap.GetPlatform().DriveStepsPerUnit(drive));
 }
@@ -703,19 +733,20 @@ void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes
 
 // Convert Cartesian coordinates to motor steps, axes only, returning true if successful.
 // Used to perform movement and G92 commands.
+// This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered, DDA::SetPositions and Move::EndPointToMachine
 bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const
 {
 	const bool b = kinematics->CartesianToMotorSteps(machinePos, reprap.GetPlatform().GetDriveStepsPerUnit(),
 														reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), motorPos, isCoordinated);
-	if (reprap.Debug(moduleMove) && reprap.Debug(moduleDda))
+	if (reprap.Debug(moduleMove) && !inInterrupt())
 	{
-		if (b)
-		{
-			debugPrintf("Transformed %.2f %.2f %.2f to %" PRIu32 " %" PRIu32 " %" PRIu32 "\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
-		}
-		else
+		if (!b)
 		{
 			debugPrintf("Unable to transform %.2f %.2f %.2f\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2]);
+		}
+		else if (reprap.Debug(moduleDda))
+		{
+			debugPrintf("Transformed %.2f %.2f %.2f to %" PRIu32 " %" PRIu32 " %" PRIu32 "\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
 		}
 	}
 	return b;
@@ -1034,7 +1065,7 @@ void Move::CurrentMoveCompleted()
 	// Save the current motor coordinates, and the machine Cartesian coordinates if known
 	liveCoordinatesValid = currentDda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	for (size_t drive = numAxes; drive < DRIVES; ++drive)
+	for (size_t drive = numAxes; drive < MaxTotalDrivers; ++drive)
 	{
 		extrusionAccumulators[drive - numAxes] += currentDda->GetStepsTaken(drive);
 		if (currentDda->IsNonPrintingExtruderMove(drive))
@@ -1092,7 +1123,7 @@ void Move::GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping)
 	}
 }
 
-/*static*/ float Move::MotorEndpointToPosition(int32_t endpoint, size_t drive)
+/*static*/ float Move::MotorStepsToMovement(size_t drive, int32_t endpoint)
 {
 	return ((float)(endpoint))/reprap.GetPlatform().DriveStepsPerUnit(drive);
 }
@@ -1118,7 +1149,7 @@ void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, AxesBitmap
 
 // Return the current live XYZ and extruder coordinates
 // Interrupts are assumed enabled on entry
-void Move::LiveCoordinates(float m[DRIVES], AxesBitmap xAxes, AxesBitmap yAxes)
+void Move::LiveCoordinates(float m[MaxTotalDrivers], AxesBitmap xAxes, AxesBitmap yAxes)
 {
 	// The live coordinates and live endpoints are modified by the ISR, so be careful to get a self-consistent set of them
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();		// do this before we disable interrupts
@@ -1127,13 +1158,13 @@ void Move::LiveCoordinates(float m[DRIVES], AxesBitmap xAxes, AxesBitmap yAxes)
 	if (liveCoordinatesValid)
 	{
 		// All coordinates are valid, so copy them across
-		memcpy(m, const_cast<const float *>(liveCoordinates), sizeof(m[0]) * DRIVES);
+		memcpy(m, const_cast<const float *>(liveCoordinates), sizeof(m[0]) * MaxTotalDrivers);
 		cpu_irq_enable();
 	}
 	else
 	{
 		// Only the extruder coordinates are valid, so we need to convert the motor endpoints to coordinates
-		memcpy(m + numTotalAxes, const_cast<const float *>(liveCoordinates + numTotalAxes), sizeof(m[0]) * (DRIVES - numTotalAxes));
+		memcpy(m + numTotalAxes, const_cast<const float *>(liveCoordinates + numTotalAxes), sizeof(m[0]) * (MaxTotalDrivers - numTotalAxes));
 		int32_t tempEndPoints[MaxAxes];
 		memcpy(tempEndPoints, const_cast<const int32_t*>(liveEndPoints), sizeof(tempEndPoints));
 		cpu_irq_enable();
@@ -1154,9 +1185,9 @@ void Move::LiveCoordinates(float m[DRIVES], AxesBitmap xAxes, AxesBitmap yAxes)
 
 // These are the actual numbers that we want to be the coordinates, so don't transform them.
 // The caller must make sure that no moves are in progress or pending when calling this
-void Move::SetLiveCoordinates(const float coords[DRIVES])
+void Move::SetLiveCoordinates(const float coords[MaxTotalDrivers])
 {
-	for (size_t drive = 0; drive < DRIVES; drive++)
+	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
 	{
 		liveCoordinates[drive] = coords[drive];
 	}
@@ -1166,8 +1197,9 @@ void Move::SetLiveCoordinates(const float coords[DRIVES])
 
 void Move::ResetExtruderPositions()
 {
+	const size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
 	cpu_irq_disable();
-	for (size_t eDrive = reprap.GetGCodes().GetTotalAxes(); eDrive < DRIVES; eDrive++)
+	for (size_t eDrive = totalAxes; eDrive < MaxTotalDrivers; eDrive++)
 	{
 		liveCoordinates[eDrive] = 0.0;
 	}
@@ -1180,7 +1212,7 @@ void Move::ResetExtruderPositions()
 int32_t Move::GetAccumulatedExtrusion(size_t extruder, bool& nonPrinting)
 {
 	const size_t drive = extruder + reprap.GetGCodes().GetTotalAxes();
-	if (drive < DRIVES)
+	if (drive < MaxTotalDrivers)
 	{
 		const irqflags_t flags = cpu_irq_save();
 		const int32_t ret = extrusionAccumulators[extruder];
@@ -1270,7 +1302,10 @@ void Move::AdjustLeadscrews(const floatc_t corrections[])
 	const AxisDriversConfig& config = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS);
 	for (size_t i = 0; i < config.numDrivers; ++i)
 	{
-		specialMoveCoords[config.driverNumbers[i]] = corrections[i];
+		if (config.driverNumbers[i] < MaxTotalDrivers)
+		{
+			specialMoveCoords[config.driverNumbers[i]] = corrections[i];
+		}
 	}
 	specialMoveAvailable = true;
 }

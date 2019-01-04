@@ -170,7 +170,7 @@ void WiFiSocket::Poll(bool full)
 			}
 			localPort = resp.Value().localPort;
 			remotePort = resp.Value().remotePort;
-			remoteIPAddress = resp.Value().remoteIp;
+			remoteIPAddress.SetV4LittleEndian(resp.Value().remoteIp);
 			DiscardReceivedData();
 			if (state != SocketState::waitingForResponder)
 			{

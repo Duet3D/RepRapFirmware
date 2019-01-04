@@ -30,13 +30,37 @@ constexpr float ABS_ZERO = -273.15;						// Celsius
 constexpr float NEARLY_ABS_ZERO = -273.0;				// Celsius
 constexpr float ROOM_TEMPERATURE = 21.0;				// Celsius
 
+// Axes
+constexpr float DefaultXYMaxFeedrate = 100;				// mm/sec
+constexpr float DefaultZMaxFeedrate = 5.0;
+constexpr float DefaultEMaxFeedrate = 20.0;
+
+constexpr float DefaultXYAcceleration = 500.0;			// mm/sec^2
+constexpr float DefaultZAcceleration = 20.0;
+constexpr float DefaultEAcceleration = 250.0;
+
+constexpr float DefaultXYDriveStepsPerUnit = 80.0;		// steps/mm
+constexpr float DefaultZDriveStepsPerUnit = 4000.0;
+constexpr float DefaultEDriveStepsPerUnit = 420.0;
+
+constexpr float DefaultXYInstantDv = 15.0;				// mm/sec
+constexpr float DefaultZInstantDv = 0.2;
+constexpr float DefaultEInstantDv = 2.0;
+
+constexpr float DefaultAxisMinimum = 0.0;
+constexpr float DefaultAxisMaximum = 200.0;
+
+constexpr float MinimumOpenLoadMotorCurrent = 300;		// minimum current in mA for the open load status to be taken seriously
+
 // Timeouts
-constexpr uint32_t LongTime = 300000;					// Milliseconds (5 minutes)
 constexpr uint32_t FanCheckInterval = 500;				// Milliseconds
+constexpr uint32_t OpenLoadTimeout = 500;				// Milliseconds
 constexpr uint32_t MinimumWarningInterval = 4000;		// Milliseconds, must be at least as long as FanCheckInterval
 constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
 constexpr uint32_t DriverCoolingTimeout = 4000;			// Milliseconds
 constexpr float DefaultMessageTimeout = 10.0;			// How long a message is displayed by default, in seconds
+
+constexpr uint32_t MinimumOpenLoadFullStepsPerSec = 20;	// this is 4mm/sec @ 80steps/mm
 
 // FanCheckInterval must be lower than MinimumWarningInterval to avoid giving driver over temperature warnings too soon when thermostatic control of electronics cooling fans is used
 static_assert(FanCheckInterval < MinimumWarningInterval, "FanCheckInterval too large");
@@ -131,7 +155,7 @@ constexpr unsigned int FirstLinearAdcChannel = 300;		// Temperature sensor chann
 constexpr unsigned int FirstDhtTemperatureChannel = 400;	// Temperature sensor channel 400 for DHTxx temperature
 constexpr unsigned int FirstDhtHumidityChannel = 450;		// Temperature sensor channel 401 for DHTxx humidity
 constexpr unsigned int FirstPT1000Channel = 500;		// Temperature sensor channels 500... are PT1000 sensors connected to thermistor inputs
-constexpr unsigned int CpuTemperatureSenseChannel = 1000;  // Sensor 1000 is the MCJU's own temperature sensor
+constexpr unsigned int CpuTemperatureSenseChannel = 1000;  // Sensor 1000 is the MCU's own temperature sensor
 constexpr unsigned int FirstTmcDriversSenseChannel = 1001; // Sensors 1001..1002 are the TMC2660 driver temperature sense
 constexpr unsigned int NumTmcDriversSenseChannels = 2;	// Sensors 1001..1002 are the TMC2660 driver temperature sense
 
@@ -186,10 +210,26 @@ constexpr int DefaultZProbeADValue = 500;				// Default trigger threshold
 constexpr float TRIANGLE_ZERO = -0.001;					// Millimetres
 constexpr float SILLY_Z_VALUE = -9999.0;				// Millimetres
 
-// String lengths
-constexpr size_t FORMAT_STRING_LENGTH = 256;
-constexpr size_t MACHINE_NAME_LENGTH = 40;
-constexpr size_t PASSWORD_LENGTH = 20;
+// String lengths. Try not to have too many different ones, because each one causes an instantiation of the String template
+constexpr size_t MaxMessageLength = 256;
+constexpr size_t MaxTitleLength = 61;
+
+#if SAM4E || SAM4S || SAME70
+constexpr size_t MaxFilenameLength = 120;				// Maximum length of a filename including the path
+constexpr size_t MaxVariableNameLength = 120;
+#else
+constexpr size_t MaxFilenameLength = 100;
+constexpr size_t MaxVariableNameLength = 100;
+#endif
+
+constexpr size_t MaxHeaterNameLength = 20;				// Maximum number of characters in a heater name
+constexpr size_t MaxFanNameLength = 20;					// Maximum number of characters in a fan name
+
+constexpr size_t FormatStringLength = 256;
+constexpr size_t GCodeReplyLength = 256;				// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer
+constexpr size_t MachineNameLength = 40;
+constexpr size_t RepRapPasswordLength = 20;
+constexpr size_t MediumStringLength = MaxFilenameLength;
 
 #if SAM4E || SAM4S || SAME70
 // Increased GCODE_LENGTH on the SAM4 because M587 and M589 commands on the Duet WiFi can get very long
@@ -200,22 +240,15 @@ constexpr size_t GCODE_LENGTH = 101;					// maximum number of non-comment charac
 constexpr size_t SHORT_GCODE_LENGTH = 61;				// maximum length of a GCode that we can queue to synchronise it to a move
 #endif
 
-constexpr size_t MaxMessageLength = 256;
-
-#if SAM4E || SAM4S || SAME70
-constexpr size_t MaxFilenameLength = 120;				// Maximum length of a filename including the path
-#else
-constexpr size_t MaxFilenameLength = 100;
-#endif
-
-constexpr size_t MaxHeaterNameLength = 20;				// Maximum number of characters in a heater name
-constexpr size_t MaxFanNameLength = 20;					// Maximum number of characters in a fan name
-
 // Output buffer length and number of buffers
 // When using RTOS, it is best if it is possible to fit an HTTP response header in a single buffer. Our headers are currently about 230 bytes long.
 // A note on reserved buffers: the worst case is when a GCode with a long response is processed. After string the response, there must be enough buffer space
 // for the HTTP responder to return a status response. Otherwise DWC never gets to know that it needs to make a rr_reply call and the system deadlocks.
-#if SAM4E || SAM4S || SAME70
+#if SAME70
+constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
+constexpr size_t OUTPUT_BUFFER_COUNT = 32;				// How many OutputBuffer instances do we have?
+constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response
+#elif SAM4E || SAM4S
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 20;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response
@@ -236,13 +269,15 @@ constexpr float DefaultRetractSpeed = 1000.0;			// The default firmware retracti
 constexpr float DefaultRetractLength = 2.0;
 constexpr float MinimumMovementSpeed = 0.5;				// The minimum movement speed (extruding moves will go slower than this if the extrusion rate demands it)
 
-constexpr float DefaultArcSegmentLength = 0.2;			// G2 and G3 arc movement commands get split into segments this long
+constexpr float MaxArcDeviation = 0.02;					// maximum deviation from ideal arc due to segmentation
+constexpr float MinArcSegmentLength = 0.2;				// G2 and G3 arc movement commands get split into segments at least this long
+constexpr float MaxArcSegmentLength = 2.0;				// G2 and G3 arc movement commands get split into segments at most this long
 
 constexpr uint32_t DefaultIdleTimeout = 30000;			// Milliseconds
 constexpr float DefaultIdleCurrentFactor = 0.3;			// Proportion of normal motor current that we use for idle hold
 
 constexpr float DefaultNonlinearExtrusionLimit = 0.2;	// Maximum additional commanded extrusion to compensate for nonlinearity
-constexpr size_t NumRestorePoints = 3;					// Number of restore points, must be at least 3
+constexpr size_t NumRestorePoints = 6;					// Number of restore points, must be at least 3
 
 // Triggers
 constexpr unsigned int MaxTriggers = 10;				// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
@@ -258,6 +293,16 @@ constexpr size_t MaxSpindles = 4;						// Maximum number of configurable spindle
 constexpr float DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full PWM
 constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command for full power
 
+// I2C
+// A note on the i2C clock frequency.
+// On a Duet WiFi attached to a DueX5 through 160mm of ribbon cable, the cable capacitance in combination with the 4K7 pullup resistors slows down the
+// I2C signal rise time to about 500ns. This is above the 300ns maximum specified for both the ATSAM4E and the SX1509B.
+// It appears that the slow rise time interferes with the watchdog timer resets, because at 200MHz clock frequency the system gets stuck
+// in a boot loop caused by the watchdog timer going off.
+// At 100kHz I2C clock frequency, these issues are rare.
+constexpr uint32_t I2cClockFreq = 100000;				// clock frequency in Hz. 100kHz is 10us per bit, so about 90us per byte if there is no clock stretching
+constexpr size_t MaxI2cBytes = 32;						// max bytes in M260 or M261 command
+
 // File handling
 constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of simultaneous web requests + files being printed
 constexpr size_t FILE_BUFFER_SIZE = 128;
@@ -267,8 +312,9 @@ constexpr size_t FILE_BUFFER_SIZE = 128;
 #define DEFAULT_MACHINE_NAME	"My Duet"				// Default machine name
 #define DEFAULT_HOSTNAME 		"duet"					// Default netbios name
 
-#define INDEX_PAGE_FILE "reprap.htm"
-#define FOUR04_PAGE_FILE "html404.htm"
+#define INDEX_PAGE_FILE			"index.html"
+#define OLD_INDEX_PAGE_FILE		"reprap.htm"
+#define FOUR04_PAGE_FILE		"html404.htm"
 
 // Filesystem and upload defaults
 #define FS_PREFIX "0:"
@@ -290,8 +336,5 @@ constexpr size_t FILE_BUFFER_SIZE = 128;
 constexpr char LIST_SEPARATOR = ':';
 constexpr char FILE_LIST_SEPARATOR = ',';
 constexpr char FILE_LIST_BRACKET = '"';
-
-// Misc
-constexpr size_t MaxI2cBytes = 32;
 
 #endif

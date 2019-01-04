@@ -35,8 +35,11 @@ bool SimpleFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 	}
 	else
 	{
-		reply.printf("Simple filament sensor on endstop %d, %s, output %s when no filament",
-			GetEndstopNumber(), (enabled) ? "enabled" : "disabled", (highWhenNoFilament) ? "high" : "low");
+		reply.printf("Simple filament sensor on endstop %d, %s, output %s when no filament, filament present: %s",
+						GetEndstopNumber(),
+						(enabled) ? "enabled" : "disabled",
+						(highWhenNoFilament) ? "high" : "low",
+						(filamentPresent) ? "yes" : "no");
 	}
 
 	return false;

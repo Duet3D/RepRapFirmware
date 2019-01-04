@@ -1,9 +1,10 @@
 /**
+ *
  * \file
  *
- * \brief Ethernet management definitions for the Standalone lwIP example.
+ * \brief GMAC (Gigabit MAC) driver for lwIP.
  *
- * Copyright (c) 2012 Atmel Corporation. All rights reserved.
+ * Copyright (c) 2015 Atmel Corporation. All rights reserved.
  *
  * \asf_license_start
  *
@@ -41,56 +42,40 @@
  *
  */
 
-#ifndef ETHERNET_SAM_H_INCLUDED
-#define ETHERNET_SAM_H_INCLUDED
+#ifndef ETHERNETIF_H_INCLUDED
+#define ETHERNETIF_H_INCLUDED
 
-#include "same70_gmac.h"
-#include "lwip/netif.h"
-#include <stddef.h>
-
-/// @cond 0
-/**INDENT-OFF**/
 #ifdef __cplusplus
 extern "C" {
 #endif
-/**INDENT-ON**/
-/// @endcond
+
+#include "lwip/err.h"
+#include "lwip/ip_addr.h"
+#include "lwip/netif.h"
+#include "netif/etharp.h"
+
+err_t ethernetif_init(struct netif *netif);				// called by LwIP to initialise the interface
+
+bool ethernetif_input(struct netif *netif);				// checks for a new packet and returns true if one was processed
 
 
-// Perform low-level initialisation of the network interface
-void init_ethernet(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[]);
+#if 1	// chrishamm
 
-// Configure the ethernet interface
-void ethernet_configure_interface(const uint8_t macAddress[], const char *hostname);
+void ethernetif_hardware_init(void);					// initialises the low-level hardware interface
 
-// Perform ethernet auto-negotiation and establish link. Returns true when ready
-bool ethernet_establish_link(void);
+bool ethernetif_establish_link(void);					// attempts to establish link and returns true on success
 
-// Is the link still up? Also updates the interface status if the link has gone down
-bool ethernet_link_established(void);
+bool ethernetif_link_established(void);					// asks the PHY if the link is still up
 
-// Update IPv4 configuration on demand
-void ethernet_set_configuration(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[]);
+typedef void (*gmac_dev_tx_cb_t) (uint32_t ul_status);	// copied from gmac_raw.h
+void ethernetif_set_rx_callback(gmac_dev_tx_cb_t callback);
 
-// Must be called periodically to keep the LwIP timers running
-void ethernet_timers_update(void);
+void ethernetif_set_mac_address(const uint8_t macAddress[]);
 
-// Reads all stored network packets and processes them
-void ethernet_task(void);
+#endif
 
-// Set the RX callback for incoming network packets
-void ethernet_set_rx_callback(gmac_dev_tx_cb_t callback);
-
-// Returns the network interface's current IPv4 address
-const uint8_t *ethernet_get_ipaddress();
-
-
-/// @cond 0
-/**INDENT-OFF**/
 #ifdef __cplusplus
 }
 #endif
-/**INDENT-ON**/
-/// @endcond
 
-#endif /* ETHERNET_SAM_H_INCLUDED */
+#endif /* ETHERNETIF_H_INCLUDED */

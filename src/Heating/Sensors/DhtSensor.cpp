@@ -6,16 +6,17 @@
  */
 
 #include "DhtSensor.h"
-#include "Platform.h"
 #include "RepRap.h"
 #include "GCodes/GCodeBuffer.h"
+#include "Movement/StepTimer.h"
+#include "IoPorts.h"
 
 #if SUPPORT_DHT_SENSOR
 
 constexpr uint32_t MinimumReadInterval = 2000;		// ms
 constexpr uint32_t MaximumReadTime = 20;			// ms
 constexpr uint32_t MinimumOneBitLength = 50;		// microseconds
-constexpr uint32_t MinimumOneBitStepClocks = (StepClockRate * MinimumOneBitLength)/1000000;
+constexpr uint32_t MinimumOneBitStepClocks = (StepTimer::StepClockRate * MinimumOneBitLength)/1000000;
 
 # include "Tasks.h"
 
@@ -170,7 +171,7 @@ void DhtSensorHardwareInterface::Interrupt()
 {
 	if (numPulses < ARRAY_SIZE(pulses))
 	{
-		const uint16_t now = Platform::GetInterruptClocks16();
+		const uint16_t now = StepTimer::GetInterruptClocks16();
 		if (IoPort::ReadPin(sensorPin))
 		{
 			lastPulseTime = now;

@@ -14,8 +14,14 @@
 #  endif
 # elif defined(__SAM4E8E__)
 #  define PLATFORM DuetNG
-# elif defined(__SAME70Q21__)
-#  define PLATFORM SAME70_TEST
+# elif defined(__SAME70Q21__) || defined(__SAME70Q20B__) || defined(__SAME70Q21B__)
+#  if defined(DUET3)
+#   define PLATFORM Duet3
+#  elif defined(SAME70XPLD)
+#   define PLATFORM SAME70xpld
+#  else
+#   error Unknown platform
+#  endif
 # elif defined(DUET_M)
 #  define PLATFORM DuetM
 # elif defined(PCCB)
@@ -72,8 +78,20 @@
 # define SUPPORT_TMC22xx		0
 #endif
 
-#define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx)
-#define HAS_STALL_DETECT		SUPPORT_TMC2660
+#ifndef SUPPORT_TMC51xx
+# define SUPPORT_TMC51xx		0
+#endif
+
+#ifndef SUPPORT_CAN_EXPANSION
+# define SUPPORT_CAN_EXPANSION	0
+#endif
+
+#ifndef SUPPORT_OBJECT_MODEL
+# define SUPPORT_OBJECT_MODEL	0
+#endif
+
+#define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx || SUPPORT_TMC51xx)
+#define HAS_STALL_DETECT		(SUPPORT_TMC2660 || SUPPORT_TMC51xx)
 
 // HAS_LWIP_NETWORKING refers to Lwip 2 support in the Networking folder, not legacy SAM3XA networking using Lwip 1
 #ifndef HAS_LWIP_NETWORKING

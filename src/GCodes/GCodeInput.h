@@ -11,7 +11,7 @@
 #include "RepRapFirmware.h"
 #include "Storage/FileData.h"
 #include "MessageType.h"
-#include "RTOSIface.h"
+#include "RTOSIface/RTOSIface.h"
 
 const size_t GCodeInputBufferSize = 256;				// How many bytes can we cache per input source?
 const size_t GCodeInputFileReadThreshold = 128;			// How many free bytes must be available before data is read from the SD card?
@@ -30,8 +30,6 @@ protected:
 };
 
 // This class wraps around an existing Stream device which lets us avoid double buffering.
-// The only downside is that we cannot (yet) look through the hardware buffer and check for requested emergency stops.
-// TODO: This will require some more work in the Arduino core.
 class StreamGCodeInput : public GCodeInput
 {
 public:

@@ -40,6 +40,9 @@ enum class GCodeState : uint8_t
 	pausing1,
 	pausing2,
 
+	filamentChangePause1,
+	filamentChangePause2,
+
 	resuming1,
 	resuming2,
 	resuming3,
@@ -78,6 +81,8 @@ enum class GCodeState : uint8_t
 	loadingFilament,
 	unloadingFilament,
 
+	timingSDwrite,
+
 #if HAS_VOLTAGE_MONITOR
 	powerFailPausing1
 #endif
@@ -115,6 +120,9 @@ public:
 
 	static GCodeMachineState *Allocate()
 	post(!result.IsLive(); result.state == GCodeState::normal);
+
+	// Return true if the G54 command is in effect
+	bool UsingMachineCoordinates() const { return useMachineCoordinates || useMachineCoordinatesSticky; }
 
 	// Copy values that may have been altered by config.g into this state record
 	void CopyStateFrom(const GCodeMachineState& other)

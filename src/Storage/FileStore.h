@@ -30,9 +30,13 @@ class FileStore
 public:
 	FileStore();
 
-    bool Open(const char* directory, const char* fileName, OpenMode mode);
+    bool Open(const char* directory, const char* fileName, OpenMode mode, uint32_t preAllocSize);
 	bool Read(char& b);								// Read 1 byte
+	bool Read(uint8_t& b)
+		{ return Read((char&)b); }					// Read 1 byte
 	int Read(char* buf, size_t nBytes);				// Read a block of nBytes length
+	int Read(uint8_t* buf, size_t nBytes)
+		{ return Read((char*)buf, nBytes); }		// Read a block of nBytes length
 	int ReadLine(char* buf, size_t nBytes);			// As Read but stop after '\n' or '\r\n' and null-terminate
 	FileWriteBuffer *GetWriteBuffer() const;		// Return a pointer to the remaining space for writing
 	bool Write(char b);								// Write 1 byte

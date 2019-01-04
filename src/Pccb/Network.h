@@ -4,10 +4,11 @@
 #include "RepRapFirmware.h"
 #include "MessageType.h"
 #include "GCodes/GCodeResult.h"
+#include "General/IPAddress.h"
 
-const uint8_t DefaultIpAddress[4] = { 0, 0, 0, 0 };
-const uint8_t DefaultNetMask[4] = { 0, 0, 0, 0 };
-const uint8_t DefaultGateway[4] = { 0, 0, 0, 0 };
+const IPAddress DefaultIpAddress;
+const IPAddress DefaultNetMask;
+const IPAddress DefaultGateway;
 const uint8_t macAddress[6] = { 0, 0, 0, 0, 0, 0 };
 
 const uint8_t DefaultMacAddress[6] = { 0, 0, 0, 0, 0, 0 };
@@ -33,7 +34,7 @@ public:
 
 	GCodeResult GetNetworkState(unsigned int interface, const StringRef& reply);
 
-	void SetEthernetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[]) { }
+	void SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) { }
 	void SetMacAddress(unsigned int interface, const uint8_t mac[]) { }
 	const uint8_t *GetMacAddress(unsigned int interface) const { return macAddress; }
 

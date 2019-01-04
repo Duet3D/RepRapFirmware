@@ -73,7 +73,7 @@ public:
 
 	// Global settings
 	const uint8_t *GetIPAddress() const;
-	void SetEthernetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[]);
+	void SetEthernetIPAddress(IPAddress ipAddress, IPAddress netmask, IPAddress gateway);
 	void SetHostname(const char *name);
 	void SetMacAddress(unsigned int interface, const uint8_t mac[]);
 	const uint8_t *GetMacAddress(unsigned int interface) const { return macAddress; }

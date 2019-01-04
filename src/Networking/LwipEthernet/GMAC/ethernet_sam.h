@@ -1,10 +1,9 @@
 /**
- *
  * \file
  *
- * \brief GMAC (Gigabit MAC) driver for lwIP.
+ * \brief Ethernet management definitions for the Standalone lwIP example.
  *
- * Copyright (c) 2015 Atmel Corporation. All rights reserved.
+ * Copyright (c) 2012 Atmel Corporation. All rights reserved.
  *
  * \asf_license_start
  *
@@ -42,32 +41,42 @@
  *
  */
 
-#ifndef ETHERNETIF_H_INCLUDED
-#define ETHERNETIF_H_INCLUDED
+#ifndef ETHERNET_SAM_H_INCLUDED
+#define ETHERNET_SAM_H_INCLUDED
 
-#include "lwip/err.h"
-#include "lwip/ip_addr.h"
+#include <cstdint>
+#include <cstddef>
+#include <General/IPAddress.h>
+
+#include "same70_gmac.h"
 #include "lwip/netif.h"
-#include "netif/etharp.h"
 
-err_t ethernetif_init(struct netif *netif);				// called by LwIP to initialise the interface
+// Perform low-level initialisation of the network interface
+void init_ethernet(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay);
 
-bool ethernetif_input(struct netif *netif);				// checks for a new packet and returns true if one was processed
+// Configure the ethernet interface
+void ethernet_configure_interface(const uint8_t macAddress[], const char *hostname);
+
+// Perform ethernet auto-negotiation and establish link. Returns true when ready
+bool ethernet_establish_link(void);
+
+// Is the link still up? Also updates the interface status if the link has gone down
+bool ethernet_link_established(void);
+
+// Update IPv4 configuration on demand
+void ethernet_set_configuration(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay);
+
+// Must be called periodically to keep the LwIP timers running
+void ethernet_timers_update(void);
+
+// Reads all stored network packets and processes them
+void ethernet_task(void);
+
+// Set the RX callback for incoming network packets
+void ethernet_set_rx_callback(gmac_dev_tx_cb_t callback);
+
+// Returns the network interface's current IPv4 address
+void ethernet_get_ipaddress(IPAddress& ipAddress, IPAddress& netMask, IPAddress& gateWay);
 
 
-#if 1	// chrishamm
-
-void ethernetif_hardware_init(void);					// initialises the low-level hardware interface
-
-bool ethernetif_establish_link(void);					// attempts to establish link and returns true on success
-
-bool ethernetif_link_established(void);					// asks the PHY if the link is still up
-
-typedef void (*gmac_dev_tx_cb_t) (uint32_t ul_status);	// copied from gmac_raw.h
-void ethernetif_set_rx_callback(gmac_dev_tx_cb_t callback);
-
-void ethernetif_set_mac_address(const uint8_t macAddress[]);
-
-#endif
-
-#endif /* ETHERNETIF_H_INCLUDED */
+#endif /* ETHERNET_SAM_H_INCLUDED */

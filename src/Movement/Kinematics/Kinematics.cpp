@@ -22,7 +22,6 @@
 #include "GCodes/GCodes.h"
 
 const char * const Kinematics::HomeAllFileName = "homeall.g";
-const char * const Kinematics::StandardHomingFileNames[] = AXES_("homex.g", "homey.g", "homez.g", "homeu.g", "homev.g", "homew.g", "homea.g", "homeb.g", "homec.g");
 
 // Constructor. Pass segsPerSecond <= 0.0 to get non-segmented kinematics.
 Kinematics::Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0)
@@ -104,12 +103,13 @@ void Kinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) co
 // If we can proceed with homing some axes, return the name of the homing file to be called.
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
 // This default is suitable for most kinematics.
-const char* Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const
+AxesBitmap Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
 {
 	const AxesBitmap allAxes = LowestNBits<AxesBitmap>(numVisibleAxes);
 	if ((toBeHomed & allAxes) == allAxes)
 	{
-		return HomeAllFileName;
+		filename.copy(HomeAllFileName);
+		return 0;
 	}
 
 	// If Z homing is done using a Z probe then X and Y must be homed before Z
@@ -117,26 +117,19 @@ const char* Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alrea
 	const AxesBitmap homeFirst = AxesToHomeBeforeProbing();
 
 	// Return the homing file for the lowest axis that we have been asked to home
-	const char * const axisNames = reprap.GetGCodes().GetAxisLetters();
-	const char lettersToTry[] = "XYZUVWABC";
-	static_assert(ARRAY_SIZE(lettersToTry) >= MaxAxes, "lettersToTry too short");
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		if (IsBitSet(toBeHomed, axis) && (axis != Z_AXIS || !homeZLast || (alreadyHomed & homeFirst) == homeFirst))
 		{
-            for (size_t actualAxis = 0; actualAxis < MaxAxes; actualAxis++)
-            {
-                if (axisNames[axis] == lettersToTry[actualAxis])
-                {
-                    return StandardHomingFileNames[actualAxis];
-                }
-            }
+			filename.copy("home");
+			filename.cat(tolower(reprap.GetGCodes().GetAxisLetters()[axis]));
+			filename.cat(".g");
+			return 0;
 		}
 	}
 
 	// Error, we can't home any axes that we were asked to home. It can only be because we can't home the Z axis.
-	mustHomeFirst = homeFirst & ~alreadyHomed;
-	return nullptr;
+	return homeFirst & ~alreadyHomed;
 }
 
 /*static*/ Kinematics *Kinematics::Create(KinematicsType k)

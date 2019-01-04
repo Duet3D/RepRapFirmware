@@ -75,8 +75,8 @@ bool LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bo
 	}
 	else
 	{
-		reply.printf("Duet3D laser filament monitor%s on endstop input %u, %s, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
-						(switchOpenMask != 0) ? " with microswitch" : "",
+		reply.printf("Duet3D laser filament monitor%s on input %u, %s, allow %ld%% to %ld%%, check every %.1fmm, ",
+						(switchOpenMask != 0) ? " with switch" : "",
 						GetEndstopNumber(),
 						(comparisonEnabled) ? "enabled" : "disabled",
 						lrintf(minMovementAllowed * 100.0),
@@ -93,10 +93,10 @@ bool LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bo
 		}
 		else
 		{
-			reply.catf("current position %.1f, brightness %u, shutter %u, ", (double)GetCurrentPosition(), qualityWord & 0x00FF, (qualityWord >> 8) & 0x3F);
+			reply.catf("current pos %.1f, brightness %u, shutter %u, ", (double)GetCurrentPosition(), qualityWord & 0x00FF, (qualityWord >> 8) & 0x3F);
 			if (laserMonitorState != LaserMonitorState::calibrating && totalExtrusionCommanded > 10.0)
 			{
-				reply.catf("measured minimum %ld%%, average %ld%%, maximum %ld%% over %.1fmm",
+				reply.catf("measured min %ld%% avg %ld%% max %ld%% over %.1fmm",
 					lrintf(100 * minMovementRatio),
 					lrintf((100 * totalMovementMeasured)/totalExtrusionCommanded),
 					lrintf(100 * maxMovementRatio),

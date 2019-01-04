@@ -22,8 +22,9 @@ Licence: GPL
 #define REPRAP_H
 
 #include "RepRapFirmware.h"
+#include "ObjectModel/ObjectModel.h"
 #include "MessageType.h"
-#include "RTOSIface.h"
+#include "RTOSIface/RTOSIface.h"
 
 enum class ResponseSource
 {
@@ -32,7 +33,21 @@ enum class ResponseSource
 	Generic
 };
 
-class RepRap
+// Message box data
+struct MessageBox
+{
+	bool active;
+	String<MaxMessageLength> message;
+	String<MaxTitleLength> title;
+	int mode;
+	uint32_t seq;
+	uint32_t timer, timeout;
+	AxesBitmap controls;
+
+	MessageBox() : active(false), seq(0) { }
+};
+
+class RepRap INHERIT_OBJECT_MODEL
 {
 public:
 	RepRap();
@@ -89,6 +104,8 @@ public:
 #endif
 #if SUPPORT_12864_LCD
  	Display& GetDisplay() const;
+ 	const char *GetLatestMessage(uint16_t& sequence) const;
+ 	const MessageBox& GetMessageBox() const { return mbox; }
 #endif
 
 	void Tick();
@@ -116,10 +133,15 @@ public:
 	void ReportInternalError(const char *file, const char *func, int line) const;	// Report an internal error
 
 	static uint32_t DoDivide(uint32_t a, uint32_t b);		// helper function for diagnostic tests
+	static float SinfCosf(float angle);						// helper function for diagnostic tests
+	static double SinCos(double angle);						// helper function for diagnostic tests
 
 #ifdef RTOS
 	void KickHeatTaskWatchdog() { heatTaskIdleTicks = 0; }
 #endif
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0);
@@ -167,19 +189,14 @@ private:
 	bool resetting;
 	bool processingConfig;
 
-	String<PASSWORD_LENGTH> password;
-	String<MACHINE_NAME_LENGTH> myName;
+	String<RepRapPasswordLength> password;
+	String<MachineNameLength> myName;
 
 	unsigned int beepFrequency, beepDuration;
-	char message[MaxMessageLength + 1];
+	String<MaxMessageLength> message;
+	uint16_t messageSequence;
 
-	// Message box data
-	bool displayMessageBox;
-	String<MaxMessageLength> boxMessage, boxTitle;
-	int boxMode;
-	uint32_t boxSeq;
-	uint32_t boxTimer, boxTimeout;
-	AxesBitmap boxControls;
+	MessageBox mbox;					// message box data
 
 	// Deferred diagnostics
 	MessageType diagnosticsDestination;

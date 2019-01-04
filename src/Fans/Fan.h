@@ -9,7 +9,6 @@
 #define SRC_FAN_H_
 
 #include "RepRapFirmware.h"
-#include "Libraries/General/StringRef.h"
 
 class GCodeBuffer;
 

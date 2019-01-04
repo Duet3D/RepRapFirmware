@@ -29,13 +29,11 @@
 #include "HttpResponder.h"
 #include "FtpResponder.h"
 #include "TelnetResponder.h"
-#include "Libraries/General/IP4String.h"
+#include "General/IP4String.h"
 #include "Version.h"
+#include "Movement/StepTimer.h"
 
 #ifdef RTOS
-
-# include "Tasks.h"
-# include "RTOSIface.h"
 
 constexpr size_t NetworkStackWords = 550;
 static Task<NetworkStackWords> networkTask;
@@ -44,7 +42,7 @@ static Task<NetworkStackWords> networkTask;
 
 Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderToPoll(nullptr)
 {
-#if defined(SAME70_TEST_BOARD)
+#if defined(DUET3) || defined(SAME70XPLD)
 	interfaces[0] = new LwipEthernetInterface(p);
 	interfaces[1] = new WiFiInterface(p);
 #elif defined(DUET_NG)
@@ -55,6 +53,30 @@ Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderT
 # error Unknown board
 #endif
 }
+
+#if SUPPORT_OBJECT_MODEL
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+static const ObjectModelArrayDescriptor interfaceArrayDescriptor =
+{
+	[] (ObjectModel *self) -> size_t { return NumNetworkInterfaces; },
+	[] (ObjectModel *self, size_t n) -> void* { return (void *)(((Network*)self)->GetInterface(n)); }
+};
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(Network, _ret)
+
+const ObjectModelTableEntry Network::objectModelTable[] =
+{
+	// These entries must be in alphabetical order
+	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfaceArrayDescriptor), TYPE_OF(ObjectModel) | IsArray, ObjectModelTableEntry::none }
+};
+
+DEFINE_GET_OBJECT_MODEL_TABLE(Network)
+
+#endif
 
 // Note that Platform::Init() must be called before this to that Platform::IsDuetWiFi() returns the correct value
 void Network::Init()
@@ -83,7 +105,7 @@ void Network::Init()
 		responders = new HttpResponder(responders);
 	}
 
-	strcpy(hostname, DEFAULT_HOSTNAME);
+	SafeStrncpy(hostname, DEFAULT_HOSTNAME, ARRAY_SIZE(hostname));
 
 	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
 
@@ -268,7 +290,7 @@ bool Network::IsWiFiInterface(unsigned int interface) const
 // Main spin loop. If 'full' is true then we are being called from the main spin loop. If false then we are being called during HSMCI idle time.
 void Network::Spin(bool full)
 {
-	const uint32_t lastTime = Platform::GetInterruptClocks();
+	const uint32_t lastTime = StepTimer::GetInterruptClocks();
 
 	// Keep the network modules running
 	for (NetworkInterface *iface : interfaces)
@@ -296,7 +318,7 @@ void Network::Spin(bool full)
 	HttpResponder::CheckSessions();		// time out any sessions that have gone away
 
 	// Keep track of the loop time
-	const uint32_t dt = Platform::GetInterruptClocks() - lastTime;
+	const uint32_t dt = StepTimer::GetInterruptClocks() - lastTime;
 	if (dt < fastLoop)
 	{
 		fastLoop = dt;
@@ -320,7 +342,7 @@ void Network::Diagnostics(MessageType mtype)
 {
 	platform.Message(mtype, "=== Network ===\n");
 
-	platform.MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+	platform.MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepTimer::StepClocksToMillis), (double)(fastLoop * StepTimer::StepClocksToMillis));
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
 
@@ -360,15 +382,20 @@ int Network::EnableState(unsigned int interface) const
 	return -1;
 }
 
-void Network::SetEthernetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[])
+void Network::SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway)
 {
 	for (NetworkInterface *iface : interfaces)
 	{
 		if (!iface->IsWiFiInterface())
 		{
-			iface->SetIPAddress(ipAddress, netmask, gateway);
+			iface->SetIPAddress(p_ipAddress, p_netmask, p_gateway);
 		}
 	}
+}
+
+IPAddress Network::GetIPAddress(unsigned int interface) const
+{
+	return (interface < NumNetworkInterfaces) ? interfaces[interface]->GetIPAddress() : IPAddress();
 }
 
 void Network::SetHostname(const char *name)

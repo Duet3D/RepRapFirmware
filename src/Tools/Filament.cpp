@@ -118,7 +118,7 @@ void Filament::LoadAssignment()
 {
 	for (Filament *f = filamentList; f != nullptr; f = f->next)
 	{
-		if (StringEquals(f->name, filamentName))
+		if (StringEqualsIgnoreCase(f->name, filamentName))
 		{
 			return true;
 		}

@@ -275,8 +275,14 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			for (size_t j = 0; j < numFactors; ++j)
 			{
 				const size_t adjustedJ = (numFactors == 8 && j >= 6) ? j + 1 : j;		// skip diagonal rod length if doing 8-factor calibration
-				derivativeMatrix(i, j) =
+				const floatc_t d =
 					ComputeDerivative(adjustedJ, probeMotorPositions(i, DELTA_A_AXIS), probeMotorPositions(i, DELTA_B_AXIS), probeMotorPositions(i, DELTA_C_AXIS));
+				if (isnan(d))			// a couple of users have reported getting Nans in the derivative, probably due to points being unreachable
+				{
+					reply.printf("Auto calibration failed because probe point P%u was unreachable using the current delta parameters. Try a smaller probing radius.", i);
+					return true;
+				}
+				derivativeMatrix(i, j) = d;
 			}
 		}
 
@@ -689,25 +695,16 @@ AxesBitmap LinearDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 // This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 // If we can proceed with homing some axes, return the name of the homing file to be called.
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
-const char* LinearDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const
+AxesBitmap LinearDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
 {
 	// If homing X, Y or Z we must home all the towers
 	if ((toBeHomed & LowestNBits<AxesBitmap>(DELTA_AXES)) != 0)
 	{
-		return "homedelta.g";
+		filename.copy("homedelta.g");
+		return 0;
 	}
 
-	// Return the homing file for the lowest axis that we have been asked to home
-	for (size_t axis = DELTA_AXES; axis < numVisibleAxes; ++axis)
-	{
-		if (IsBitSet(toBeHomed, axis))
-		{
-			return StandardHomingFileNames[axis];
-		}
-	}
-
-	mustHomeFirst = 0;
-	return nullptr;
+	return Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing.

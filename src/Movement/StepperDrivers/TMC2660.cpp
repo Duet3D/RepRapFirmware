@@ -12,7 +12,15 @@
 #include "TMC2660.h"
 #include "RepRap.h"
 #include "Movement/Move.h"
-#include "sam/drivers/pdc/pdc.h"
+#include "Movement/StepTimer.h"
+
+# if SAME70
+#  include "sam/drivers/xdmac/xdmac.h"
+#  include "DmacManager.h"
+# else
+#  include "sam/drivers/pdc/pdc.h"
+# endif
+
 #include "sam/drivers/usart/usart.h"
 
 const float MaximumMotorCurrent = 2400.0;
@@ -25,8 +33,6 @@ const unsigned int DefaultMinimumStepsPerSecond = 200;		// for stall detection: 
 static size_t numTmc2660Drivers;
 
 static bool driversPowered = false;
-
-const int ChopperControlRegisterMode = 999;					// mode passed to get/set microstepping to indicate we want the chopper control register
 
 // The SPI clock speed is a compromise:
 // - too high and polling the driver chips take too much of the CPU time
@@ -42,18 +48,23 @@ const uint32_t DriversSpiClockFrequency = 2000000;			// 2MHz SPI clock
 const int DefaultStallGuardThreshold = 1;					// Range is -64..63. Zero seems to be too sensitive. Higher values reduce sensitivity of stall detection.
 
 // TMC2660 register addresses
-const uint32_t TMC_REG_DRVCTRL = 0;
-const uint32_t TMC_REG_CHOPCONF = 0x80000;
-const uint32_t TMC_REG_SMARTEN = 0xA0000;
-const uint32_t TMC_REG_SGCSCONF = 0xC0000;
-const uint32_t TMC_REG_DRVCONF = 0xE0000;
+const uint32_t TMC_REGNUM_MASK = 7 << 17;
+const uint32_t TMC_REG_DRVCTRL = 0 << 17;
+const uint32_t TMC_REG_CHOPCONF = 4 << 17;
+const uint32_t TMC_REG_SMARTEN = 5 << 17;
+const uint32_t TMC_REG_SGCSCONF = 6 << 17;
+const uint32_t TMC_REG_DRVCONF = 7 << 17;
 const uint32_t TMC_DATA_MASK = 0x0001FFFF;
 
 // DRVCONF register bits
-const uint32_t TMC_DRVCONF_RDSEL_0 = 0 << 4;
-const uint32_t TMC_DRVCONF_RDSEL_1 = 1 << 4;
-const uint32_t TMC_DRVCONF_RDSEL_2 = 2 << 4;
-const uint32_t TMC_DRVCONF_RDSEL_3 = 3 << 4;
+const uint32_t TMC_DRVCONF_RDSEL_SHIFT = 4;
+const uint32_t TMC_DRVCONF_RDSEL_MASK = 3 << TMC_DRVCONF_RDSEL_SHIFT;
+
+const uint32_t TMC_DRVCONF_RDSEL_0 = 0 << TMC_DRVCONF_RDSEL_SHIFT;
+const uint32_t TMC_DRVCONF_RDSEL_1 = 1 << TMC_DRVCONF_RDSEL_SHIFT;
+const uint32_t TMC_DRVCONF_RDSEL_2 = 2 << TMC_DRVCONF_RDSEL_SHIFT;
+const uint32_t TMC_DRVCONF_RDSEL_3 = 3 << TMC_DRVCONF_RDSEL_SHIFT;
+
 const uint32_t TMC_DRVCONF_VSENSE = 1 << 6;
 const uint32_t TMC_DRVCONF_SDOFF = 1 << 7;
 const uint32_t TMC_DRVCONF_TS2G_3P2 = 0 << 8;
@@ -73,15 +84,21 @@ const uint32_t TMC_DRVCONF_TST = 1 << 16;
 // Chopper control register bits
 const uint32_t TMC_CHOPCONF_TOFF_MASK = 15;
 const uint32_t TMC_CHOPCONF_TOFF_SHIFT = 0;
-#define TMC_CHOPCONF_TOFF(n)	((((uint32_t)n) & 15) << 0)
-#define TMC_CHOPCONF_HSTRT(n)	((((uint32_t)n) & 7) << 4)
-#define TMC_CHOPCONF_HEND(n)	((((uint32_t)n) & 15) << 7)
-#define TMC_CHOPCONF_HDEC(n)	((((uint32_t)n) & 3) << 11)
+const uint32_t TMC_CHOPCONF_HSTRT_MASK = (7 << 4);
+const uint32_t TMC_CHOPCONF_HSTRT_SHIFT = 4;
+const uint32_t TMC_CHOPCONF_HEND_MASK = (15 << 7);
+const uint32_t TMC_CHOPCONF_HEND_SHIFT = 7;
+const uint32_t TMC_CHOPCONF_HDEC_MASK = (3 << 11);
+const uint32_t TMC_CHOPCONF_HDEC_SHIFT = 11;
 const uint32_t TMC_CHOPCONF_RNDTF = 1 << 13;
 const uint32_t TMC_CHOPCONF_CHM = 1 << 14;
 const uint32_t TMC_CHOPCONF_TBL_MASK = (3 << 15);
 const uint32_t TMC_CHOPCONF_TBL_SHIFT = 15;
-#define TMC_CHOPCONF_TBL(n)	(((uint32_t)n & 3) << 15)
+#define TMC_CHOPCONF_TOFF(n)	((((uint32_t)n) & 15) << 0)
+#define TMC_CHOPCONF_HSTRT(n)	((((uint32_t)n) & 7) << 4)
+#define TMC_CHOPCONF_HEND(n)	((((uint32_t)n) & 15) << 7)
+#define TMC_CHOPCONF_HDEC(n)	((((uint32_t)n) & 3) << 11)
+#define TMC_CHOPCONF_TBL(n)		(((uint32_t)n & 3) << 15)
 
 // Driver control register bits, when SDOFF=0
 const uint32_t TMC_DRVCTRL_MRES_MASK = 0x0F;
@@ -120,6 +137,9 @@ const uint32_t TMC_SMARTEN_SEIMIN_QTR = 1 << 15;
 
 const unsigned int NumWriteRegisters = 5;
 
+const uint32_t TMC_RR_SG_LOAD_SHIFT = 10;	// shift to get the stallguard load register
+const uint32_t TMC_RR_MSTEP_SHIFT = 10;		// shift to get the microestep position register
+
 // Chopper control register defaults
 // 0x901B4 as per datasheet example
 // CHM bit not set, so uses spread cycle mode
@@ -139,7 +159,7 @@ const uint32_t defaultSgscConfReg =
 // Driver configuration register
 const uint32_t defaultDrvConfReg =
 	  TMC_REG_DRVCONF
-	| TMC_DRVCONF_RDSEL_1				// read SG register in status
+	| TMC_DRVCONF_RDSEL_0				// read microstep register in status, until the drive is enabled
 	| TMC_DRVCONF_VSENSE				// use high sensitivity range
 	| TMC_DRVCONF_TS2G_0P8				// fast short-to-ground detection
 	| 0;
@@ -165,11 +185,6 @@ public:
 	void SetAxisNumber(size_t p_axisNumber);
 	void WriteAll();
 
-	bool SetChopConf(uint32_t newVal);
-	bool SetOffTime(uint32_t newVal);
-	uint32_t GetChopConf() const;
-	uint32_t GetOffTime() const;
-	void SetCoolStep(uint16_t coolStepConfig);
 	bool SetMicrostepping(uint32_t shift, bool interpolate);
 	unsigned int GetMicrostepping(bool& interpolation) const;		// Get microstepping
 	bool SetDriverMode(unsigned int mode);
@@ -183,13 +198,20 @@ public:
 	void AppendStallConfig(const StringRef& reply) const;
 	void AppendDriverStatus(const StringRef& reply);
 
+	bool SetRegister(SmartDriverRegister reg, uint32_t regVal);
+	uint32_t GetRegister(SmartDriverRegister reg) const;
+
 	void TransferDone() __attribute__ ((hot));						// called by the ISR when the SPI transfer has completed
 	void StartTransfer() __attribute__ ((hot));						// called to start a transfer
 
 	uint32_t ReadLiveStatus() const;
 	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep);
 
+	uint32_t ReadMicrostepPosition() const { return mstepPosition; }
+
 private:
+	bool SetChopConf(uint32_t newVal);
+
 	void ResetLoadRegisters()
 	{
 		minSgLoadRegister = 1023;
@@ -218,21 +240,25 @@ private:
 	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection
 	uint32_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
 	uint32_t maxSgLoadRegister;								// the maximum value of the StallGuard bits we read
+	uint32_t mstepPosition;									// the current microstep position, or 0xFFFFFFFF if unknown
 
 	volatile uint32_t lastReadStatus;						// the status word that we read most recently, updated by the ISR
 	volatile uint32_t accumulatedStatus;
 	bool enabled;
+	volatile uint8_t rdselState;							// 0-3 = actual RDSEL value, 0xFF = unknown
 };
 
 // State structures for all drivers
 static TmcDriverState driverStates[MaxSmartDrivers];
 
+#if !SAME70
 // PDC address
 static Pdc * const spiPdc =
-#if TMC2660_USES_USART
+# if TMC2660_USES_USART
 			usart_get_pdc_base(USART_TMC2660);
-#else
+# else
 			spi_get_pdc_base(SPI_TMC2660);
+# endif
 #endif
 
 // Words to send and receive driver SPI data from/to
@@ -245,6 +271,97 @@ static TmcDriverState * volatile currentDriver = nullptr;	// volatile because th
 // Set up the PDC to send a register and receive the status
 /*static*/ inline void TmcDriverState::SetupDMA(uint32_t outVal)
 {
+#if SAME70
+	/* From the data sheet:
+	 * Single Block Transfer With Single Microblock
+		1. Read the XDMAC Global Channel Status Register (XDMAC_GS) to select a free channel. [we use fixed channel numbers instead.]
+		2. Clear the pending Interrupt Status bit(s) by reading the selected XDMAC Channel x Interrupt Status
+		Register (XDMAC_CISx).
+		3. Write the XDMAC Channel x Source Address Register (XDMAC_CSAx) for channel x.
+		4. Write the XDMAC Channel x Destination Address Register (XDMAC_CDAx) for channel x.
+		5. Program field UBLEN in the XDMAC Channel x Microblock Control Register (XDMAC_CUBCx) with
+		the number of data.
+		6. Program the XDMAC Channel x Configuration Register (XDMAC_CCx):
+		6.1. Clear XDMAC_CCx.TYPE for a memory-to-memory transfer, otherwise set this bit.
+		6.2. Configure XDMAC_CCx.MBSIZE to the memory burst size used.
+		6.3. Configure XDMAC_CCx.SAM and DAM to Memory Addressing mode.
+		6.4. Configure XDMAC_CCx.DSYNC to select the peripheral transfer direction.
+		6.5. Configure XDMAC_CCx.CSIZE to configure the channel chunk size (only relevant for
+		peripheral synchronized transfer).
+		6.6. Configure XDMAC_CCx.DWIDTH to configure the transfer data width.
+		6.7. Configure XDMAC_CCx.SIF, XDMAC_CCx.DIF to configure the master interface used to
+		read data and write data, respectively.
+		6.8. Configure XDMAC_CCx.PERID to select the active hardware request line (only relevant for
+		a peripheral synchronized transfer).
+		6.9. Set XDMAC_CCx.SWREQ to use a software request (only relevant for a peripheral
+		synchronized transfer).
+		7. Clear the following five registers:
+		– XDMAC Channel x Next Descriptor Control Register (XDMAC_CNDCx)
+		– XDMAC Channel x Block Control Register (XDMAC_CBCx)
+		– XDMAC Channel x Data Stride Memory Set Pattern Register (XDMAC_CDS_MSPx)
+		– XDMAC Channel x Source Microblock Stride Register (XDMAC_CSUSx)
+		– XDMAC Channel x Destination Microblock Stride Register (XDMAC_CDUSx)
+		This indicates that the linked list is disabled, there is only one block and striding is disabled.
+		8. Enable the Microblock interrupt by writing a ‘1’ to bit BIE in the XDMAC Channel x Interrupt Enable
+		Register (XDMAC_CIEx). Enable the Channel x Interrupt Enable bit by writing a ‘1’ to bit IEx in the
+		XDMAC Global Interrupt Enable Register (XDMAC_GIE).
+		9. Enable channel x by writing a ‘1’ to bit ENx in the XDMAC Global Channel Enable Register
+		(XDMAC_GE). XDMAC_GS.STx (XDMAC Channel x Status bit) is set by hardware.
+		10. Once completed, the DMA channel sets XDMAC_CISx.BIS (End of Block Interrupt Status bit) and
+		generates an interrupt. XDMAC_GS.STx is cleared by hardware. The software can either wait for
+		an interrupt or poll the channel status bit.
+
+		The following code is adapted form the code in the HSMCI driver.
+	*/
+
+	// Receive
+	{
+		xdmac_channel_disable(XDMAC, DmacChanTmcRx);
+		xdmac_channel_config_t p_cfg = {0, 0, 0, 0, 0, 0, 0, 0};
+		p_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN
+						| XDMAC_CC_MBSIZE_SINGLE
+						| XDMAC_CC_DSYNC_PER2MEM
+						| XDMAC_CC_CSIZE_CHK_1
+						| XDMAC_CC_DWIDTH_BYTE
+						| XDMAC_CC_SIF_AHB_IF1
+						| XDMAC_CC_DIF_AHB_IF0
+						| XDMAC_CC_SAM_FIXED_AM
+						| XDMAC_CC_DAM_INCREMENTED_AM
+						| XDMAC_CC_PERID(TMC2660_DmaRxPerid);
+		p_cfg.mbr_ubc = 3;
+		HSMCI->HSMCI_MR |= HSMCI_MR_FBYTE;
+		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(USART_TMC2660->US_RHR));
+		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&spiDataIn);
+		xdmac_configure_transfer(XDMAC, DmacChanTmcRx, &p_cfg);
+	}
+
+	// Transmit
+	{
+		xdmac_channel_disable(XDMAC, DmacChanTmcTx);
+		xdmac_channel_config_t p_cfg = {0, 0, 0, 0, 0, 0, 0, 0};
+		p_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN
+						| XDMAC_CC_MBSIZE_SINGLE
+						| XDMAC_CC_DSYNC_MEM2PER
+						| XDMAC_CC_CSIZE_CHK_1
+						| XDMAC_CC_DWIDTH_BYTE
+						| XDMAC_CC_SIF_AHB_IF0
+						| XDMAC_CC_DIF_AHB_IF1
+						| XDMAC_CC_SAM_INCREMENTED_AM
+						| XDMAC_CC_DAM_FIXED_AM
+						| XDMAC_CC_PERID(TMC2660_DmaTxPerid);
+		p_cfg.mbr_ubc = 3;
+		HSMCI->HSMCI_MR |= HSMCI_MR_FBYTE;
+		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(&spiDataOut);
+		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&(USART_TMC2660->US_THR));
+		xdmac_configure_transfer(XDMAC, DmacChanTmcTx, &p_cfg);
+	}
+
+	// SPI sends data MSB first, but the firmware uses little-endian mode, so we need to reverse the byte order
+	spiDataOut = cpu_to_be32(outVal << 8);
+
+	xdmac_channel_enable(XDMAC, DmacChanTmcRx);
+	xdmac_channel_enable(XDMAC, DmacChanTmcTx);
+#else
 	// Faster code, not using the ASF
 	spiPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);		// disable the PDC
 
@@ -258,6 +375,7 @@ static TmcDriverState * volatile currentDriver = nullptr;	// volatile because th
 	spiPdc->PERIPH_RCR = 3;
 
 	spiPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTEN | PERIPH_PTCR_TXTEN);			// enable the PDC
+#endif
 }
 
 // Initialise the state of the driver and its CS pin
@@ -276,6 +394,8 @@ pre(!driversPowered)
 	registers[DriveConfig] = defaultDrvConfReg;
 	registersToUpdate = UpdateAllRegisters;
 	accumulatedStatus = lastReadStatus = 0;
+	rdselState = 0xFF;
+	mstepPosition = 0xFFFFFFFF;
 	ResetLoadRegisters();
 	SetMicrostepping(DefaultMicrosteppingShift, DefaultInterpolation);
 	SetStallDetectThreshold(DefaultStallDetectThreshold);
@@ -294,6 +414,73 @@ inline void TmcDriverState::WriteAll()
 	registersToUpdate = UpdateAllRegisters;
 }
 
+bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal)
+{
+	switch(reg)
+	{
+	case SmartDriverRegister::chopperControl:
+		return SetChopConf(regVal);
+
+	case SmartDriverRegister::coolStep:
+		registers[SmartEnable] = TMC_REG_SMARTEN | (regVal & 0xFFFF);
+		registersToUpdate |= 1u << SmartEnable;
+		return true;
+
+	case SmartDriverRegister::toff:
+		return SetChopConf((configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK) | ((regVal << TMC_CHOPCONF_TOFF_SHIFT) & TMC_CHOPCONF_TOFF_MASK));
+
+	case SmartDriverRegister::tblank:
+		return SetChopConf((configuredChopConfReg & ~TMC_CHOPCONF_TBL_MASK) | ((regVal << TMC_CHOPCONF_TBL_SHIFT) & TMC_CHOPCONF_TBL_MASK));
+
+	case SmartDriverRegister::hstart:
+		return SetChopConf((configuredChopConfReg & ~TMC_CHOPCONF_HSTRT_MASK) | ((regVal << TMC_CHOPCONF_HSTRT_SHIFT) & TMC_CHOPCONF_HSTRT_MASK));
+
+	case SmartDriverRegister::hend:
+		return SetChopConf((configuredChopConfReg & ~TMC_CHOPCONF_HEND_MASK) | ((regVal << TMC_CHOPCONF_HEND_SHIFT) & TMC_CHOPCONF_HEND_MASK));
+
+	case SmartDriverRegister::hdec:
+		return SetChopConf((configuredChopConfReg & ~TMC_CHOPCONF_HDEC_MASK) | ((regVal << TMC_CHOPCONF_HDEC_SHIFT) & TMC_CHOPCONF_HDEC_MASK));
+
+	case SmartDriverRegister::tpwmthrs:
+	default:
+		return false;
+	}
+}
+
+uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const
+{
+	switch(reg)
+	{
+	case SmartDriverRegister::chopperControl:
+		return configuredChopConfReg & TMC_DATA_MASK;
+
+	case SmartDriverRegister::coolStep:
+		return registers[SmartEnable] & TMC_DATA_MASK;
+
+	case SmartDriverRegister::toff:
+		return (configuredChopConfReg & TMC_CHOPCONF_TOFF_MASK) >> TMC_CHOPCONF_TOFF_SHIFT;
+
+	case SmartDriverRegister::tblank:
+		return (configuredChopConfReg & TMC_CHOPCONF_TBL_MASK) >> TMC_CHOPCONF_TBL_SHIFT;
+
+	case SmartDriverRegister::hstart:
+		return (configuredChopConfReg & TMC_CHOPCONF_HSTRT_MASK) >> TMC_CHOPCONF_HSTRT_SHIFT;
+
+	case SmartDriverRegister::hend:
+		return (configuredChopConfReg & TMC_CHOPCONF_HEND_MASK) >> TMC_CHOPCONF_HEND_SHIFT;
+
+	case SmartDriverRegister::hdec:
+		return (configuredChopConfReg & TMC_CHOPCONF_HDEC_MASK) >> TMC_CHOPCONF_HDEC_SHIFT;
+
+	case SmartDriverRegister::mstepPos:
+		return mstepPosition;
+
+	case SmartDriverRegister::tpwmthrs:
+	default:
+		return 0;
+	}
+}
+
 // Check the new chopper control register, update it and return true if it is legal
 bool TmcDriverState::SetChopConf(uint32_t newVal)
 {
@@ -304,19 +491,18 @@ bool TmcDriverState::SetChopConf(uint32_t newVal)
 	{
 		return false;
 	}
+	if ((newVal & TMC_CHOPCONF_CHM) == 0)
+	{
+		const uint32_t hstrt = (newVal & TMC_CHOPCONF_HSTRT_MASK) >> TMC_CHOPCONF_HSTRT_SHIFT;
+		const uint32_t hend = (newVal & TMC_CHOPCONF_HEND_MASK) >> TMC_CHOPCONF_HEND_SHIFT;
+		if (hstrt + hend > 15)
+		{
+			return false;
+		}
+	}
 	configuredChopConfReg = (newVal & 0x0001FFFF) | TMC_REG_CHOPCONF;		// save the new value
 	UpdateChopConfRegister();												// send the new value, keeping the current Enable status
 	return true;
-}
-
-// Set the off time in the chopper control register
-bool TmcDriverState::SetOffTime(uint32_t newVal)
-{
-	if (newVal > 15)
-	{
-		return false;
-	}
-	return SetChopConf((configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK) | ((newVal << TMC_CHOPCONF_TOFF_SHIFT) & TMC_CHOPCONF_TOFF_MASK));
 }
 
 // Set the driver mode
@@ -376,44 +562,55 @@ void TmcDriverState::SetCurrent(float current)
 	registersToUpdate |= 1u << StallGuardConfig;
 }
 
-// Enable or disable the driver. Also called from SetChopConf after the chopper control configuration has been changed.
+// Enable or disable the driver
 void TmcDriverState::Enable(bool en)
 {
 	if (enabled != en)
 	{
+		enabled = en;
+		UpdateChopConfRegister();
+
+		const irqflags_t flags = cpu_irq_save();
+		mstepPosition = 0xFFFFFFFF;								// microstep position is or is about to become invalid
 		if (en)
 		{
 			// Driver was disabled and we are enabling it, so clear the stall status
 			// Unfortunately this may not be sufficient, because the stall status probably won't be updated until the next full step position.
 			accumulatedStatus &= ~TMC_RR_SG;
 			lastReadStatus &= ~TMC_RR_SG;
+			registers[DriveConfig] = (registers[DriveConfig] & ~TMC_DRVCONF_RDSEL_MASK) | TMC_DRVCONF_RDSEL_1;		// read the stallguard level when drive is enabled
 		}
-		enabled = en;
-		UpdateChopConfRegister();
+		else
+		{
+			registers[DriveConfig] = (registers[DriveConfig] & ~TMC_DRVCONF_RDSEL_MASK) | TMC_DRVCONF_RDSEL_0;		// read the microstep position when drive is disabled
+		}
+		rdselState = 0xFF;
+		registersToUpdate |= 1 << DriveConfig;
+		cpu_irq_restore(flags);
 	}
 }
 
 void TmcDriverState::UpdateChopConfRegister()
 {
 	registers[ChopperControl] = (enabled) ? configuredChopConfReg : (configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK);
-	registersToUpdate |= 1u << ChopperControl;
+	registersToUpdate |= (1u << ChopperControl);
 }
 
 // Read the status
 inline uint32_t TmcDriverState::ReadLiveStatus() const
 {
 	const uint32_t ret = lastReadStatus & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
-	return (enabled) ? ret : ret & ~TMC_RR_SG;
+	return (enabled) ? ret : ret & ~(TMC_RR_SG | TMC_RR_OLA | TMC_RR_OLB);
 }
 
 // Read the status
 uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep)
 {
-	const uint32_t mask = (enabled) ? 0xFFFFFFFF : ~TMC_RR_SG;
+	const uint32_t mask = (enabled) ? 0xFFFFFFFF : ~(TMC_RR_SG | TMC_RR_OLA | TMC_RR_OLB);
 	bitsToKeep &= mask;
 	const irqflags_t flags = cpu_irq_save();
 	const uint32_t status = accumulatedStatus;
-	accumulatedStatus &= bitsToKeep;
+	accumulatedStatus = (status & bitsToKeep) | lastReadStatus;		// so that the next call to ReadAccumulatedStatus isn't missing some bits
 	cpu_irq_restore(flags);
 	return status & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST) & mask;
 }
@@ -440,13 +637,7 @@ void TmcDriverState::SetStallDetectFilter(bool sgFilter)
 
 void TmcDriverState::SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond)
 {
-	maxStallStepInterval = StepClockRate/max<unsigned int>(stepsPerSecond, 1);
-}
-
-void TmcDriverState::SetCoolStep(uint16_t coolStepConfig)
-{
-	registers[SmartEnable] = TMC_REG_SMARTEN | coolStepConfig;
-	registersToUpdate |= 1u << SmartEnable;
+	maxStallStepInterval = StepTimer::StepClockRate/max<unsigned int>(stepsPerSecond, 1);
 }
 
 void TmcDriverState::AppendStallConfig(const StringRef& reply) const
@@ -458,7 +649,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const
 		threshold -= 128;
 	}
 	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 ", coolstep %" PRIx32,
-				threshold, ((filtered) ? "on" : "off"), StepClockRate/maxStallStepInterval, registers[SmartEnable] & 0xFFFF);
+				threshold, ((filtered) ? "on" : "off"), StepTimer::StepClockRate/maxStallStepInterval, registers[SmartEnable] & 0xFFFF);
 }
 
 // Append the driver status to a string, and reset the min/max load values
@@ -476,11 +667,11 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply)
 	{
 		reply.cat(" short-to-ground");
 	}
-	if ((lastReadStatus & TMC_RR_OLA) && !(lastReadStatus & TMC_RR_STST))
+	if (lastReadStatus & TMC_RR_OLA)
 	{
 		reply.cat(" open-load-A");
 	}
-	if ((lastReadStatus & TMC_RR_OLB) && !(lastReadStatus & TMC_RR_STST))
+	if (lastReadStatus & TMC_RR_OLB)
 	{
 		reply.cat(" open-load-B");
 	}
@@ -511,18 +702,6 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const
 	return 1u << microstepShiftFactor;
 }
 
-// Get chopper control register
-uint32_t TmcDriverState::GetChopConf() const
-{
-	return configuredChopConfReg & TMC_DATA_MASK;
-}
-
-// Get the off time from the chopper control register
-uint32_t TmcDriverState::GetOffTime() const
-{
-	return (configuredChopConfReg & TMC_CHOPCONF_TOFF_MASK) >> TMC_CHOPCONF_TOFF_SHIFT;
-}
-
 // This is called by the ISR when the SPI transfer has completed
 inline void TmcDriverState::TransferDone()
 {
@@ -535,7 +714,7 @@ inline void TmcDriverState::TransferDone()
 		{
 			status &= ~TMC_RR_SG;								// remove the stall status bit
 		}
-		else
+		else if (rdselState == 1)
 		{
 			const uint32_t sgLoad = (status >> TMC_RR_SG_LOAD_SHIFT) & 1023;	// get the StallGuard load register
 			if (sgLoad < minSgLoadRegister)
@@ -547,8 +726,22 @@ inline void TmcDriverState::TransferDone()
 				maxSgLoadRegister = sgLoad;
 			}
 		}
+		if (rdselState == 0)
+		{
+			mstepPosition = (status >> TMC_RR_MSTEP_SHIFT) & 1023;
+		}
+		if ((status & TMC_RR_STST) != 0 || interval == 0 || interval > StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec)
+		{
+			status &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds
+		}
 		lastReadStatus = status;
 		accumulatedStatus |= status;
+
+		const uint32_t dataWritten = be32_to_cpu(spiDataOut) >> 8;
+		if ((dataWritten & TMC_REGNUM_MASK) == TMC_REG_DRVCONF)
+		{
+			rdselState = (dataWritten & TMC_DRVCONF_RDSEL_MASK) >> TMC_DRVCONF_RDSEL_SHIFT;
+		}
 	}
 }
 
@@ -591,13 +784,21 @@ inline void TmcDriverState::StartTransfer()
 #endif
 
 	fastDigitalWriteLow(pin);							// set CS low
-	SetupDMA(regVal);									// set up the PDC
+	SetupDMA(regVal);									// set up the PDC or DMAC
 
-#if TMC2660_USES_USART
+	// Enable the interrupt
+#if SAME70
+	xdmac_channel_enable_interrupt(XDMAC, DmacChanTmcRx, XDMAC_CIE_BIE);
+#elif TMC2660_USES_USART
 	USART_TMC2660->US_IER = US_IER_ENDRX;				// enable end-of-transfer interrupt
-	USART_TMC2660->US_CR = US_CR_RXEN | US_CR_TXEN;		// enable transmitter and receiver
 #else
 	SPI_TMC2660->SPI_IER = SPI_IER_ENDRX;				// enable end-of-transfer interrupt
+#endif
+
+	// Enable the transfer
+#if TMC2660_USES_USART
+	USART_TMC2660->US_CR = US_CR_RXEN | US_CR_TXEN;		// enable transmitter and receiver
+#else
 	SPI_TMC2660->SPI_CR = SPI_CR_SPIEN;					// enable SPI
 #endif
 
@@ -633,7 +834,9 @@ void TMC2660_SPI_Handler(void)
 
 	// Driver power is down or there is no current driver, so stop polling
 
-#if TMC2660_USES_USART
+#if SAME70
+	xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcRx, XDMAC_CIE_BIE);
+#elif TMC2660_USES_USART
 	USART_TMC2660->US_IDR = US_IDR_ENDRX;
 #else
 	SPI_TMC2660->SPI_IDR = SPI_IDR_ENDRX;
@@ -648,7 +851,7 @@ namespace SmartDrivers
 {
 	// Initialise the driver interface and the drivers, leaving each drive disabled.
 	// It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
-	void Init(const Pin driverSelectPins[DRIVES], size_t numTmcDrivers)
+	void Init(const Pin driverSelectPins[NumDirectDrivers], size_t numTmcDrivers)
 	{
 		numTmc2660Drivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
 
@@ -702,6 +905,13 @@ namespace SmartDrivers
 		{
 			driverStates[driver].Init(driver, driverSelectPins[driver]);		// axes are mapped straight through to drivers initially
 		}
+
+#if SAME70
+		pmc_enable_periph_clk(ID_XDMAC);
+		xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcTx, 0xFFFFFFFF);
+		xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcRx, 0xFFFFFFFF);
+		xdmac_enable_interrupt(XDMAC, DmacChanTmcRx);
+#endif
 	}
 
 	void SetAxisNumber(size_t driver, uint32_t axisNumber)
@@ -781,26 +991,6 @@ namespace SmartDrivers
 		return (driver < numTmc2660Drivers) ? driverStates[driver].GetDriverMode() : DriverMode::unknown;
 	}
 
-	bool SetChopperControlRegister(size_t driver, uint32_t ccr)
-	{
-		return driver < numTmc2660Drivers && driverStates[driver].SetChopConf(ccr);
-	}
-
-	uint32_t GetChopperControlRegister(size_t driver)
-	{
-		return (driver < numTmc2660Drivers) ? driverStates[driver].GetChopConf() : 0;
-	}
-
-	bool SetOffTime(size_t driver, uint32_t offTime)
-	{
-		return driver < numTmc2660Drivers && driverStates[driver].SetOffTime(offTime);
-	}
-
-	uint32_t GetOffTime(size_t driver)
-	{
-		return (driver < numTmc2660Drivers) ? driverStates[driver].GetOffTime() : 0;
-	}
-
 	// Flag the the drivers have been powered up.
 	// Before the first call to this function with powered true, you must call Init().
 	void Spin(bool powered)
@@ -864,14 +1054,6 @@ namespace SmartDrivers
 		}
 	}
 
-	void SetCoolStep(size_t drive, uint16_t coolStepConfig)
-	{
-		if (drive < numTmc2660Drivers)
-		{
-			driverStates[drive].SetCoolStep(coolStepConfig);
-		}
-	}
-
 	void AppendStallConfig(size_t driver, const StringRef& reply)
 	{
 		if (driver < numTmc2660Drivers)
@@ -896,6 +1078,16 @@ namespace SmartDrivers
 	void SetStandstillCurrentPercent(size_t driver, float percent)
 	{
 		// not supported so nothing to see here
+	}
+
+	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal)
+	{
+		return (driver < numTmc2660Drivers) && driverStates[driver].SetRegister(reg, regVal);
+	}
+
+	uint32_t GetRegister(size_t driver, SmartDriverRegister reg)
+	{
+		return (driver < numTmc2660Drivers) ? driverStates[driver].GetRegister(reg) : 0;
 	}
 
 };	// end namespace

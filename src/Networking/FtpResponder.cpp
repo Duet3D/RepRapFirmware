@@ -470,7 +470,7 @@ void FtpResponder::ProcessLine()
 			}
 		}
 		// end connection
-		else if (StringEquals(clientMessage, "QUIT"))
+		else if (StringEqualsIgnoreCase(clientMessage, "QUIT"))
 		{
 			outBuf->copy("221 Goodbye.\r\n");
 			Commit();
@@ -485,13 +485,13 @@ void FtpResponder::ProcessLine()
 
 	case ResponderState::reading:
 		// get system type
-		if (StringEquals(clientMessage, "SYST"))
+		if (StringEqualsIgnoreCase(clientMessage, "SYST"))
 		{
 			outBuf->copy("215 UNIX Type: L8\r\n");
 			Commit(ResponderState::reading);
 		}
 		// get features
-		else if (StringEquals(clientMessage, "FEAT"))
+		else if (StringEqualsIgnoreCase(clientMessage, "FEAT"))
 		{
 			outBuf->copy(	"211-Features:\r\n"
 							"PASV\r\n"			// support PASV mode
@@ -500,7 +500,7 @@ void FtpResponder::ProcessLine()
 			Commit(ResponderState::reading);
 		}
 		// get current dir
-		else if (StringEquals(clientMessage, "PWD"))
+		else if (StringEqualsIgnoreCase(clientMessage, "PWD"))
 		{
 			outBuf->printf("257 \"%s\"\r\n", currentDirectory);
 			Commit(ResponderState::reading);
@@ -512,7 +512,7 @@ void FtpResponder::ProcessLine()
 			ChangeDirectory(directory);
 		}
 		// change to parent of current directory
-		else if (StringEquals(clientMessage, "CDUP"))
+		else if (StringEqualsIgnoreCase(clientMessage, "CDUP"))
 		{
 			ChangeDirectory("..");
 		}
@@ -520,11 +520,11 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "TYPE"))
 		{
 			const char *type = GetParameter("TYPE");
-			if (StringEquals(type, "I"))
+			if (StringEqualsIgnoreCase(type, "I"))
 			{
 				outBuf->copy("200 Switching to Binary mode.\r\n");
 			}
-			else if (StringEquals(type, "A"))
+			else if (StringEqualsIgnoreCase(type, "A"))
 			{
 				outBuf->copy("200 Switching to ASCII mode.\r\n");
 			}
@@ -535,7 +535,7 @@ void FtpResponder::ProcessLine()
 			Commit(ResponderState::reading);
 		}
 		// enter passive mode mode
-		else if (StringEquals(clientMessage, "PASV"))
+		else if (StringEqualsIgnoreCase(clientMessage, "PASV"))
 		{
 			// reset error conditions
 			uploadError = sendError = false;
@@ -551,9 +551,9 @@ void FtpResponder::ProcessLine()
 			}
 
 			// send FTP response
-			const uint8_t * const ipAddress = skt->GetInterface()->GetIPAddress();
+			const IPAddress ipAddress = skt->GetInterface()->GetIPAddress();
 			outBuf->printf("227 Entering Passive Mode (%d,%d,%d,%d,%d,%d)\r\n",
-					ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3],
+					ipAddress.GetQuad(0), ipAddress.GetQuad(1), ipAddress.GetQuad(2), ipAddress.GetQuad(3),
 					passivePort / 256, passivePort % 256);
 			Commit(ResponderState::waitingForPasvPort);
 		}
@@ -641,13 +641,13 @@ void FtpResponder::ProcessLine()
 			Commit(ResponderState::reading);
 		}
 		// no op
-		else if (StringEquals(clientMessage, "NOOP"))
+		else if (StringEqualsIgnoreCase(clientMessage, "NOOP"))
 		{
 			outBuf->copy("200 NOOP okay.\r\n");
 			Commit(ResponderState::reading);
 		}
 		// end connection
-		else if (StringEquals(clientMessage, "QUIT"))
+		else if (StringEqualsIgnoreCase(clientMessage, "QUIT"))
 		{
 			outBuf->copy("221 Goodbye.\r\n");
 			Commit();
@@ -680,7 +680,7 @@ void FtpResponder::ProcessLine()
 					const struct tm * const timeInfo = gmtime(&fileInfo.lastModified);
 					dataBuf->catf("%crw-rw-rw- 1 ftp ftp %13lu %s %02d %04d %s\r\n",
 							dirChar, fileInfo.size, massStorage->GetMonthName(timeInfo->tm_mon + 1),
-							timeInfo->tm_mday, timeInfo->tm_year + 1900, fileInfo.fileName);
+							timeInfo->tm_mday, timeInfo->tm_year + 1900, fileInfo.fileName.c_str());
 				} while (massStorage->FindNext(fileInfo));
 			}
 		}
@@ -688,11 +688,11 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "TYPE"))
 		{
 			const char *type = GetParameter("TYPE");
-			if (StringEquals(type, "I"))
+			if (StringEqualsIgnoreCase(type, "I"))
 			{
 				outBuf->copy("200 Switching to Binary mode.\r\n");
 			}
-			else if (StringEquals(type, "A"))
+			else if (StringEqualsIgnoreCase(type, "A"))
 			{
 				outBuf->copy("200 Switching to ASCII mode.\r\n");
 			}
@@ -737,7 +737,7 @@ void FtpResponder::ProcessLine()
 			}
 		}
 		// abort current operation
-		else if (StringEquals(clientMessage, "ABOR"))
+		else if (StringEqualsIgnoreCase(clientMessage, "ABOR"))
 		{
 			CloseDataPort();
 
@@ -745,7 +745,7 @@ void FtpResponder::ProcessLine()
 			Commit(ResponderState::reading);
 		}
 		// end connection
-		else if (StringEquals(clientMessage, "QUIT"))
+		else if (StringEqualsIgnoreCase(clientMessage, "QUIT"))
 		{
 			CloseDataPort();
 
@@ -763,7 +763,7 @@ void FtpResponder::ProcessLine()
 	case ResponderState::uploading:
 	case ResponderState::sendingPasvData:
 		// abort current transfer
-		if (StringEquals(clientMessage, "ABOR"))
+		if (StringEqualsIgnoreCase(clientMessage, "ABOR"))
 		{
 			CancelUpload();
 			CloseDataPort();
@@ -812,14 +812,14 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 		{
 			combinedPath.copy(newDirectory);
 		}
-		else if (StringEquals(newDirectory, "."))
+		else if (StringEqualsIgnoreCase(newDirectory, "."))
 		{
 			combinedPath.copy(currentDirectory);
 		}
-		else if (StringEquals(newDirectory, ".."))	// Go up
+		else if (StringEqualsIgnoreCase(newDirectory, ".."))	// Go up
 		{
 			// Check if we're already at the root directory
-			if (StringEquals(currentDirectory, "/"))
+			if (StringEqualsIgnoreCase(currentDirectory, "/"))
 			{
 				outBuf->copy("550 Failed to change directory.\r\n");
 				Commit(responderState);

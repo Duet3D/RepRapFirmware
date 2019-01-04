@@ -24,6 +24,7 @@
 #include "Heating/Heat.h"
 #include "Movement/DDA.h"
 #include "Movement/Move.h"
+#include "Movement/StepTimer.h"
 #include "Network.h"
 #include "PrintMonitor.h"
 #include "FilamentMonitors/FilamentMonitor.h"
@@ -33,11 +34,14 @@
 #include "SoftTimer.h"
 #include "Logger.h"
 #include "Tasks.h"
-#include "Libraries/Math/Isqrt.h"
+#include "DmacManager.h"
+#include "Math/Isqrt.h"
 #include "Wire.h"
 
-#include "sam/drivers/tc/tc.h"
-#include "sam/drivers/hsmci/hsmci.h"
+#ifndef __LPC17xx__
+# include "sam/drivers/tc/tc.h"
+# include "sam/drivers/hsmci/hsmci.h"
+#endif
 
 #include "sd_mmc.h"
 
@@ -46,6 +50,9 @@
 #endif
 #if SUPPORT_TMC22xx
 # include "Movement/StepperDrivers/TMC22xx.h"
+#endif
+#if SUPPORT_TMC51xx
+# include "Movement/StepperDrivers/TMC51xx.h"
 #endif
 
 #if HAS_WIFI_NETWORKING
@@ -64,28 +71,6 @@ extern uint32_t _estack;			// defined in the linker script
  || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_VREF_MONITOR) || !defined(ACTIVE_LOW_HEAT_ON) \
  || !defined(SUPPORT_NONLINEAR_EXTRUSION)
 # error Missing feature definition
-#endif
-
-#if USE_CACHE
-
-#include "sam/drivers/cmcc/cmcc.h"
-
-inline void EnableCache()
-{
-	cmcc_invalidate_all(CMCC);
-	cmcc_enable(CMCC);
-}
-
-inline void DisableCache()
-{
-	cmcc_disable(CMCC);
-}
-
-#else
-
-inline void EnableCache() {}
-inline void DisableCache() {}
-
 #endif
 
 #if HAS_VOLTAGE_MONITOR
@@ -147,7 +132,7 @@ extern "C" void UrgentInit()
 	// When the reset button is pressed on pre-production Duet WiFi boards, if the TMC2660 drivers were previously enabled then we get
 	// uncommanded motor movements if the STEP lines pick up any noise. Try to reduce that by initialising the pins that control the drivers early here.
 	// On the production boards the ENN line is pulled high by an external pullup resistor and that prevents motor movements.
-	for (size_t drive = 0; drive < DRIVES; ++drive)
+	for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
 	{
 		pinMode(STEP_PINS[drive], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
@@ -158,6 +143,9 @@ extern "C" void UrgentInit()
 #if defined(DUET_M)
 	// The prototype boards don't have a pulldown on LCD_BEEP, which causes a hissing sound from the beeper on the 12864 display until the pin is initialised
 	pinMode(LcdBeepPin, OUTPUT_LOW);
+
+	// Set the 12864 display CS pin low to prevent it from receiving garbage due to other SPI traffic
+	pinMode(LcdCSPin, OUTPUT_LOW);
 
 	// On the prototype boards the stepper driver expansion ports don't have external pullup resistors on their enable pins
 	pinMode(ENABLE_PINS[5], OUTPUT_HIGH);
@@ -174,11 +162,9 @@ Platform::Platform() :
 		logger(nullptr), board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
 #if HAS_SMART_DRIVERS
 		nextDriveToPoll(0),
-		onBoardDriversFanRunning(false), offBoardDriversFanRunning(false), onBoardDriversFanStartMillis(0), offBoardDriversFanStartMillis(0),
 #endif
 		lastFanCheckTime(0), auxGCodeReply(nullptr), tickState(0), debugCode(0), lastWarningMillis(0), deliberateError(false), i2cInitialised(false)
 {
-	// Files
 	massStorage = new MassStorage(this);
 }
 
@@ -203,7 +189,7 @@ void Platform::Init()
 	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 
 	// Ensure that the main LEDs are turned off.
-	// The main LED output is active, just like a heater on the Duet 2 series.
+	// The main LED output is active low, just like a heater on the Duet 2 series.
 	// The secondary LED control dims the LED via the external controller when the output is high. So both outputs must be initialised high.
 	for (size_t i = 0; i < NumLeds; ++i)
 	{
@@ -211,49 +197,52 @@ void Platform::Init()
 	}
 #endif
 
+#if SAME70
+	DmacManager::Init();
+#endif
+
 	// Real-time clock
 	realTime = 0;
 
 	// Comms
 	baudRates[0] = MAIN_BAUD_RATE;
+	commsParams[0] = 0;
+	usbMutex.Create("USB");
+	SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
+
 #ifdef SERIAL_AUX_DEVICE
 	baudRates[1] = AUX_BAUD_RATE;
-#endif
-#ifdef SERIAL_AUX2_DEVICE
-	baudRates[2] = AUX2_BAUD_RATE;
-#endif
-	commsParams[0] = 0;
-#ifdef SERIAL_AUX_DEVICE
 	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
-#endif
-#ifdef SERIAL_AUX2_DEVICE
-	commsParams[2] = 0;
-#endif
-
-	usbMutex.Create("USB");
-#ifdef SERIAL_AUX_DEVICE
 	auxMutex.Create("Aux");
 	auxDetected = false;
 	auxSeq = 0;
-#endif
-
-	SERIAL_MAIN_DEVICE.begin(baudRates[0]);
-#ifdef SERIAL_AUX_DEVICE
 	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
 #endif
+
 #ifdef SERIAL_AUX2_DEVICE
-	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
+	baudRates[2] = AUX2_BAUD_RATE;
+	commsParams[2] = 0;
 	aux2Mutex.Create("Aux2");
+	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 #endif
 
 	compatibility = Compatibility::marlin;		// default to Marlin because the common host programs expect the "OK" response to commands
 
-	// File management
+	// File management and SD card interfaces
+	for (size_t i = 0; i < NumSdCards; ++i)
+	{
+		const Pin p = SdCardDetectPins[i];
+		if (p != NoPin)
+		{
+			setPullup(p, true);
+		}
+	}
+
 	massStorage->Init();
 
-	ARRAY_INIT(ipAddress, DefaultIpAddress);
-	ARRAY_INIT(netMask, DefaultNetMask);
-	ARRAY_INIT(gateWay, DefaultGateway);
+	ipAddress = DefaultIpAddress;
+	netMask = DefaultNetMask;
+	gateWay = DefaultGateway;
 
 #if SAM4E || SAM4S || SAME70
 	// Read the unique ID of the MCU
@@ -321,12 +310,33 @@ void Platform::Init()
 	pinMode(SpiFLASHcsPin,OUTPUT_HIGH);														// Init Spi FLASH Cs pin, not implemented, default unselected
 #endif
 
-	// DRIVES
+#if defined(__LPC17xx__)
+# if HAS_DRIVER_CURRENT_CONTROL
+	mcp4451.begin();
+# endif
+	Microstepping::Init(); // basic class to remember the Microstepping.
+#endif
+
 	ARRAY_INIT(endStopPins, END_STOP_PINS);
-	ARRAY_INIT(maxFeedrates, MAX_FEEDRATES);
-	ARRAY_INIT(accelerations, ACCELERATIONS);
-	ARRAY_INIT(driveStepsPerUnit, DRIVE_STEPS_PER_UNIT);
-	ARRAY_INIT(instantDvs, INSTANT_DVS);
+
+	// Drives
+	maxFeedrates[X_AXIS] = maxFeedrates[Y_AXIS] = DefaultXYMaxFeedrate;
+	accelerations[X_AXIS] = accelerations[Y_AXIS] = DefaultXYAcceleration;
+	driveStepsPerUnit[X_AXIS] = driveStepsPerUnit[Y_AXIS] = DefaultXYDriveStepsPerUnit;
+	instantDvs[X_AXIS] = instantDvs[Y_AXIS] = DefaultXYInstantDv;
+
+	maxFeedrates[Z_AXIS] = DefaultZMaxFeedrate;
+	accelerations[Z_AXIS] = DefaultZAcceleration;
+	driveStepsPerUnit[Z_AXIS] = DefaultZDriveStepsPerUnit;
+	instantDvs[Z_AXIS] = DefaultZInstantDv;
+
+	for (size_t drive = E0_AXIS; drive < MaxTotalDrivers; ++drive)
+	{
+		maxFeedrates[drive] = DefaultEMaxFeedrate;
+		accelerations[drive] = DefaultEAcceleration;
+		driveStepsPerUnit[drive] = DefaultEDriveStepsPerUnit;
+		instantDvs[drive] = DefaultEInstantDv;
+	}
 
 	// Z PROBE
 	zProbeType = ZProbeType::none;				// default is to use no Z probe
@@ -336,40 +346,39 @@ void Platform::Init()
 	InitZProbe();								// this also sets up zProbeModulationPin
 
 	// AXES
-	ARRAY_INIT(axisMaxima, AXIS_MAXIMA);
-	ARRAY_INIT(axisMinima, AXIS_MINIMA);
+	for (size_t axis = 0; axis < MaxAxes; ++axis)
+	{
+		axisMinima[axis] = DefaultAxisMinimum;
+		axisMaxima[axis] = DefaultAxisMaximum;
+	}
 	axisMaximaProbed = axisMinimaProbed = 0;
 
 	idleCurrentFactor = DefaultIdleCurrentFactor;
 
-	// SD card interfaces
-	for (size_t i = 0; i < NumSdCards; ++i)
-	{
-		const Pin p = SdCardDetectPins[i];
-		if (p != NoPin)
-		{
-			setPullup(p, true);
-		}
-	}
-
 	// Motors
+#ifndef __LPC17xx__
 	// Disable parallel writes to all pins. We re-enable them for the step pins.
 	PIOA->PIO_OWDR = 0xFFFFFFFF;
 	PIOB->PIO_OWDR = 0xFFFFFFFF;
 	PIOC->PIO_OWDR = 0xFFFFFFFF;
-#ifdef PIOD
+# ifdef PIOD
 	PIOD->PIO_OWDR = 0xFFFFFFFF;
-#endif
-#ifdef PIOE
+# endif
+# ifdef PIOE
 	PIOE->PIO_OWDR = 0xFFFFFFFF;
+# endif
 #endif
 
-	for (size_t drive = 0; drive < DRIVES; drive++)
+	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
 	{
 		enableValues[drive] = 0;					// assume active low enable signal
 		directions[drive] = true;					// drive moves forwards by default
+		motorCurrents[drive] = 0.0;
+		motorCurrentFraction[drive] = 1.0;
+		driverState[drive] = DriverStatus::disabled;
 
 		// Map axes and extruders straight through
+		driveDriverBits[drive] = driveDriverBits[drive + MaxTotalDrivers] = CalcDriverBitmap(drive);	// this returns 0 for remote drivers
 		if (drive < MaxAxes)
 		{
 			axisDrivers[drive].numDrivers = 1;
@@ -378,32 +387,36 @@ void Platform::Init()
 			endStopInputType[drive] = EndStopInputType::activeHigh;	// assume all endstops use active high logic e.g. normally-closed switch to ground
 		}
 
-		driveDriverBits[drive] = driveDriverBits[drive + DRIVES] = CalcDriverBitmap(drive);
+		if (drive < NumDirectDrivers)
+		{
+			// Set up the control pins and endstops
+			pinMode(STEP_PINS[drive], OUTPUT_LOW);
+			pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
+#if !defined(DUET3)
+			pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
+#endif
 
-		// Set up the control pins and endstops
-		pinMode(STEP_PINS[drive], OUTPUT_LOW);
-		pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
-		pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
+#ifndef __LPC17xx__
+			const PinDescription& pinDesc = g_APinDescription[STEP_PINS[drive]];
+			pinDesc.pPort->PIO_OWER = pinDesc.ulPin;				// enable parallel writes to the step pins
+#endif
+		}
+	}
 
-		const PinDescription& pinDesc = g_APinDescription[STEP_PINS[drive]];
-		pinDesc.pPort->PIO_OWER = pinDesc.ulPin;				// enable parallel writes to the step pins
-
-		motorCurrents[drive] = 0.0;
-		motorCurrentFraction[drive] = 1.0;
-		driverState[drive] = DriverStatus::disabled;
-
+	for (Pin p : endStopPins)
+	{
+#if defined(DUET_NG) || defined(DUET_06_085) || defined(__RADDS__) || defined(__ALLIGATOR__)
 		// Enable pullup resistors on endstop inputs here if necessary.
-#if defined(DUET_NG) || defined(DUET_06_085)
 		// The Duets have hardware pullup resistors/LEDs except for the two on the CONN_LCD connector.
 		// They have RC filtering on the main endstop inputs, so best not to enable the pullup resistors on these.
 		// 2017-12-19: some users are having trouble with the endstops not being recognised in recent firmware versions.
 		// Probably the LED+resistor isn't pulling them up fast enough. So enable the pullup resistors again.
 		// Note: if we don't have a DueX board connected, the pullups on endstop inputs 5-9 must always be enabled.
 		// Also the pullups on endstop inputs 10-11 must always be enabled.
-		setPullup(endStopPins[drive], true);					// enable pullup on endstop input
-#elif defined(__RADDS__) || defined(__ALLIGATOR__)
 		// I don't know whether RADDS and Alligator have hardware pullup resistors or not. I'll assume they might not.
-		setPullup(endStopPins[drive], true);
+		pinMode(p, INPUT_PULLUP);			// enable pullup on endstop input
+#else
+		pinMode(p, INPUT);					// don't enable pullup on endstop input
 #endif
 	}
 
@@ -428,6 +441,8 @@ void Platform::Init()
 	// The SX1509B has an independent power on reset, so give it some time
 	delay(200);
 	expansionBoard = DuetExpansion::DueXnInit();
+
+#if HAS_SMART_DRIVERS
 	switch (expansionBoard)
 	{
 	case ExpansionBoardType::DueX2:
@@ -442,6 +457,7 @@ void Platform::Init()
 		numSmartDrivers = 5;									// assume that any additional drivers are dumb enable/step/dir ones
 		break;
 	}
+#endif
 
 	if (expansionBoard != ExpansionBoardType::none)
 	{
@@ -457,14 +473,19 @@ void Platform::Init()
 	numSmartDrivers = MaxSmartDrivers;							// for now we assume that expansion drivers are smart too
 #elif defined(PCCB)
 	numSmartDrivers = MaxSmartDrivers;
+#elif defined(DUET3)
+	numSmartDrivers = MaxSmartDrivers;
 #endif
 
 #if HAS_SMART_DRIVERS
 	// Initialise TMC driver module
 	driversPowered = false;
+# if SUPPORT_TMC51xx
+	SmartDrivers::Init();
+# else
 	SmartDrivers::Init(ENABLE_PINS, numSmartDrivers);
-	temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadDrivers = 0;
-	onBoardDriversFanRunning = offBoardDriversFanRunning = false;
+# endif
+	temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadADrivers = openLoadBDrivers = notOpenLoadADrivers = notOpenLoadBDrivers = 0;
 #endif
 
 #if HAS_STALL_DETECT
@@ -476,6 +497,10 @@ void Platform::Init()
 #if HAS_VOLTAGE_MONITOR
 	autoSaveEnabled = false;
 	autoSaveState = AutoSaveState::starting;
+#endif
+
+#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
+	warnDriversNotPowered = false;
 #endif
 
 	extrusionAncilliaryPwmValue = 0.0;
@@ -499,19 +524,19 @@ void Platform::Init()
 
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
 	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
-	for (size_t i = 0; i < MaxSpiTempSensors; ++i)
+	for (Pin p : SpiTempSensorCsPins)
 	{
-		setPullup(SpiTempSensorCsPins[i], true);
+		pinMode(p, INPUT_PULLUP);
 	}
 
-	for (size_t heater = 0; heater < Heaters; heater++)
+	for (Pin p : HEAT_ON_PINS)
 	{
 		// pinMode is safe to call when the pin is NoPin, so we don't need to check it here
-		pinMode(HEAT_ON_PINS[heater],
+		pinMode(p,
 #if ACTIVE_LOW_HEAT_ON
-				OUTPUT_LOW
-#else
 				OUTPUT_HIGH
+#else
+				OUTPUT_LOW
 #endif
 			);
 	}
@@ -599,7 +624,9 @@ void Platform::Init()
 	memset(logicalPinModes, PIN_MODE_NOT_CONFIGURED, sizeof(logicalPinModes));		// set all pins to "not configured"
 
 	// Kick everything off
-	InitialiseInterrupts();		// also sets 'active' to true
+	InitialiseInterrupts();
+
+	active = true;
 }
 
 void Platform::SetZProbeDefaults()
@@ -635,10 +662,10 @@ void Platform::InitZProbe()
 		pinMode(zProbeModulationPin, OUTPUT_LOW);		// enable the alternate sensor
 		break;
 
-	case ZProbeType::e0Switch:
+	case ZProbeType::endstopSwitch:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
-		pinMode(zProbePin, INPUT_PULLUP);
-		pinMode(endStopPins[E0_AXIS], INPUT);
+		pinMode(zProbePin, INPUT_PULLUP);				// don't leave it floating
+		pinMode(GetEndstopPin(GetCurrentZProbeParameters().inputChannel), INPUT);
 		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
 		break;
 
@@ -649,20 +676,6 @@ void Platform::InitZProbe()
 	default:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(zProbePin, INPUT_PULLUP);
-		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
-		break;
-
-	case ZProbeType::e1Switch:
-		AnalogInEnableChannel(zProbeAdcChannel, false);
-		pinMode(zProbePin, INPUT_PULLUP);
-		pinMode(endStopPins[E0_AXIS + 1], INPUT);
-		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
-		break;
-
-	case ZProbeType::zSwitch:
-		AnalogInEnableChannel(zProbeAdcChannel, false);
-		pinMode(zProbePin, INPUT_PULLUP);
-		pinMode(endStopPins[Z_AXIS], INPUT);
 		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
 		break;
 	}
@@ -679,10 +692,8 @@ int Platform::GetZProbeReading() const
 		{
 		case ZProbeType::analog:				// Simple or intelligent IR sensor
 		case ZProbeType::alternateAnalog:		// Alternate sensor
-		case ZProbeType::e0Switch:				// Switch connected to E0 endstop input
+		case ZProbeType::endstopSwitch:			// Switch connected to an endstop input
 		case ZProbeType::digital:				// Switch connected to Z probe input
-		case ZProbeType::e1Switch:				// Switch connected to E1 endstop input
-		case ZProbeType::zSwitch:				// Switch connected to Z endstop input
 			zProbeVal = (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));
 			break;
 
@@ -783,9 +794,10 @@ void Platform::SetZProbeType(unsigned int pt)
 
 void Platform::SetProbing(bool isProbing)
 {
-	if (zProbeType > ZProbeType::alternateAnalog)
+	// For Z probe types other than 1/2/3 and bltouch we set the modulation pin high at the start of a probing move and low at the end
+	// Don't do this for bltouch because on the Maestro, the MOD pin is normally used as the servo control output
+	if (zProbeType > ZProbeType::alternateAnalog && zProbeType != ZProbeType::blTouch)
 	{
-		// For Z probe types other than 1/2/3 we set the modulation pin high at the start of a probing move and low at the end
 		digitalWrite(zProbeModulationPin, isProbing);
 	}
 }
@@ -803,9 +815,7 @@ const ZProbe& Platform::GetZProbeParameters(ZProbeType probeType) const
 		return irZProbeParameters;
 	case ZProbeType::alternateAnalog:
 		return alternateZProbeParameters;
-	case ZProbeType::e0Switch:
-	case ZProbeType::e1Switch:
-	case ZProbeType::zSwitch:
+	case ZProbeType::endstopSwitch:
 	default:
 		return switchZProbeParameters;
 	}
@@ -828,17 +838,15 @@ void Platform::SetZProbeParameters(ZProbeType probeType, const ZProbe& params)
 		alternateZProbeParameters = params;
 		break;
 
-	case ZProbeType::e0Switch:
-	case ZProbeType::e1Switch:
-	case ZProbeType::zSwitch:
+	case ZProbeType::endstopSwitch:
 	default:
 		switchZProbeParameters = params;
 		break;
 	}
 }
 
-// Program the Z probe, returning true if error
-bool Platform::ProgramZProbe(GCodeBuffer& gb, const StringRef& reply)
+// Program the Z probe
+GCodeResult Platform::ProgramZProbe(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (gb.Seen('S'))
 	{
@@ -852,15 +860,15 @@ bool Platform::ProgramZProbe(GCodeBuffer& gb, const StringRef& reply)
 				if (zProbeProgram[i] > 255)
 				{
 					reply.copy("Out of range value in program bytes");
-					return true;
+					return GCodeResult::error;
 				}
 			}
 			zProbeProg.SendProgram(zProbeProgram, len);
-			return false;
+			return GCodeResult::ok;
 		}
 	}
 	reply.copy("No program bytes provided");
-	return true;
+	return GCodeResult::error;
 }
 
 // Set the state of the Z probe modulation pin
@@ -942,8 +950,8 @@ void Platform::UpdateFirmware()
 	char* const data = reinterpret_cast<char *>(data32);
 
 #if SAM4E || SAM4S || SAME70
-	// The EWP command is not supported for non-8KByte sectors in the SAM4 series.
-	// So we have to unlock and erase the complete 64Kb sector first.
+	// The EWP command is not supported for non-8KByte sectors in the SAM4 and SAME70 series.
+	// So we have to unlock and erase the complete 64Kb or 128kb sector first. One sector is always enough to contain the IAP.
 	flash_unlock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
 	flash_erase_sector(IAP_FLASH_START);
 
@@ -1144,7 +1152,7 @@ void Platform::SendAuxMessage(const char* msg)
 	if (OutputBuffer::Allocate(buf))
 	{
 		buf->copy("{\"message\":");
-		buf->EncodeString(msg, strlen(msg), false, true);
+		buf->EncodeString(msg, false);
 		buf->cat("}\n");
 		auxOutput.Push(buf);
 		FlushAuxMessages();
@@ -1182,9 +1190,14 @@ Compatibility Platform::Emulating() const
 	return (compatibility == Compatibility::reprapFirmware) ? Compatibility::me : compatibility;
 }
 
+bool Platform::EmulatingMarlin() const
+{
+	return compatibility == Compatibility::marlin || compatibility == Compatibility::nanoDLP;
+}
+
 void Platform::SetEmulating(Compatibility c)
 {
-	if (c != Compatibility::me && c != Compatibility::reprapFirmware && c != Compatibility::marlin)
+	if (c != Compatibility::me && c != Compatibility::reprapFirmware && c != Compatibility::marlin && c != Compatibility::nanoDLP)
 	{
 		Message(ErrorMessage, "Attempt to emulate unsupported firmware.\n");
 	}
@@ -1198,28 +1211,22 @@ void Platform::SetEmulating(Compatibility c)
 	}
 }
 
-void Platform::UpdateNetworkAddress(uint8_t dst[4], const uint8_t src[4])
+void Platform::SetIPAddress(IPAddress ip)
 {
-	for (uint8_t i = 0; i < 4; i++)
-	{
-		dst[i] = src[i];
-	}
+	ipAddress = ip;
 	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, gateWay, netMask);
 }
 
-void Platform::SetIPAddress(uint8_t ip[])
+void Platform::SetGateWay(IPAddress gw)
 {
-	UpdateNetworkAddress(ipAddress, ip);
+	gateWay = gw;
+	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, gateWay, netMask);
 }
 
-void Platform::SetGateWay(uint8_t gw[])
+void Platform::SetNetMask(IPAddress nm)
 {
-	UpdateNetworkAddress(gateWay, gw);
-}
-
-void Platform::SetNetMask(uint8_t nm[])
-{
-	UpdateNetworkAddress(netMask, nm);
+	netMask = nm;
+	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, gateWay, netMask);
 }
 
 // Flush messages to aux, returning true if there is more to send
@@ -1324,6 +1331,21 @@ void Platform::Spin()
 		return;
 	}
 
+#ifdef DUET3
+	// Blink the LED
+	{
+		static uint32_t lastTime = 0;
+		static bool diagState = true;
+		const uint32_t now = millis();
+		if (now - lastTime >= 500)
+		{
+			lastTime = now;
+			diagState = !diagState;
+			digitalWrite(DiagPin, diagState);
+		}
+	}
+#endif
+
 	massStorage->Spin();
 
 	// Try to flush messages to serial ports
@@ -1356,6 +1378,7 @@ void Platform::Spin()
 	// The tick ISR also looks for over-voltage events, but it just disables the driver without changing driversPowerd or numOverVoltageEvents
 	if (driversPowered)
 	{
+# if HAS_VOLTAGE_MONITOR
 		if (currentVin < driverPowerOffAdcReading)
 		{
 			driversPowered = false;
@@ -1369,8 +1392,9 @@ void Platform::Spin()
 			lastOverVoltageValue = currentVin;					// save this because the voltage may have changed by the time we report it
 		}
 		else
+# endif
 		{
-			// Check one TMC2660 for temperature warning or temperature shutdown
+			// Check one TMC2660 or TMC2224 for temperature warning or temperature shutdown
 			if (enableValues[nextDriveToPoll] >= 0)				// don't poll driver if it is flagged "no poll"
 			{
 				const uint32_t stat = SmartDrivers::GetAccumulatedStatus(nextDriveToPoll, 0);
@@ -1378,19 +1402,10 @@ void Platform::Spin()
 				if (stat & TMC_RR_OT)
 				{
 					temperatureShutdownDrivers |= mask;
-					temperatureWarningDrivers &= ~mask;			// no point in setting warning as well as error
 				}
-				else
+				else if (stat & TMC_RR_OTPW)
 				{
-					temperatureShutdownDrivers &= ~mask;
-					if (stat & TMC_RR_OTPW)
-					{
-						temperatureWarningDrivers |= mask;
-					}
-					else
-					{
-						temperatureWarningDrivers &= ~mask;
-					}
+					temperatureWarningDrivers |= mask;
 				}
 				if (stat & TMC_RR_S2G)
 				{
@@ -1400,14 +1415,45 @@ void Platform::Spin()
 				{
 					shortToGroundDrivers &= ~mask;
 				}
-				if ((stat & (TMC_RR_OLA | TMC_RR_OLB)) != 0 && (stat & TMC_RR_STST) == 0)
+
+				// The driver often produces a transient open-load error, especially in stealthchop mode, so we require the condition to persist before we report it.
+				// Also, false open load indications persist when in standstill, if the phase has zero current in that position
+				if ((stat & TMC_RR_OLA) != 0 && motorCurrents[nextDriveToPoll] * motorCurrentFraction[nextDriveToPoll] >= MinimumOpenLoadMotorCurrent)
 				{
-					openLoadDrivers |= mask;
+					if (!openLoadATimer.IsRunning())
+					{
+						openLoadATimer.Start();
+						openLoadADrivers = notOpenLoadADrivers = 0;
+					}
+					openLoadADrivers |= mask;
 				}
-				else
+				else if (openLoadATimer.IsRunning())
 				{
-					openLoadDrivers &= ~mask;
+					notOpenLoadADrivers |= mask;
+					if ((openLoadADrivers & ~notOpenLoadADrivers) == 0)
+					{
+						openLoadATimer.Stop();
+					}
 				}
+
+				if ((stat & TMC_RR_OLB) != 0 && motorCurrents[nextDriveToPoll] * motorCurrentFraction[nextDriveToPoll] >= MinimumOpenLoadMotorCurrent)
+				{
+					if (!openLoadBTimer.IsRunning())
+					{
+						openLoadBTimer.Start();
+						openLoadBDrivers = notOpenLoadBDrivers = 0;
+					}
+					openLoadBDrivers |= mask;
+				}
+				else if (openLoadBTimer.IsRunning())
+				{
+					notOpenLoadBDrivers |= mask;
+					if ((openLoadBDrivers & ~notOpenLoadBDrivers) == 0)
+					{
+						openLoadBTimer.Stop();
+					}
+				}
+
 #if HAS_STALL_DETECT
 				if ((stat & TMC_RR_SG) != 0)
 				{
@@ -1461,23 +1507,25 @@ void Platform::Spin()
 			}
 		}
 	}
+# if HAS_VOLTAGE_MONITOR
 	else if (currentVin >= driverPowerOnAdcReading && currentVin <= driverNormalVoltageAdcReading)
 	{
+		openLoadATimer.Stop();
+		openLoadBTimer.Stop();
+		temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadADrivers = openLoadBDrivers = notOpenLoadADrivers = notOpenLoadBDrivers = 0;
 		driversPowered = true;
 	}
+# endif
 	SmartDrivers::Spin(driversPowered);
 #endif
 
 	const uint32_t now = millis();
 
 	// Update the time
-	if (realTime != 0)
+	if (IsDateTimeSet() && now - timeLastUpdatedMillis >= 1000)
 	{
-		if (now - timeLastUpdatedMillis >= 1000)
-		{
-			++realTime;							// this assumes that time_t is a seconds-since-epoch counter, which is not guaranteed by the C standard
-			timeLastUpdatedMillis += 1000;
-		}
+		++realTime;								// this assumes that time_t is a seconds-since-epoch counter, which is not guaranteed by the C standard
+		timeLastUpdatedMillis += 1000;
 	}
 
 	// Thermostatically-controlled fans (do this after getting TMC driver status)
@@ -1505,21 +1553,36 @@ void Platform::Spin()
 #if HAS_SMART_DRIVERS
 			ReportDrivers(ErrorMessage, shortToGroundDrivers, "short-to-ground", reported);
 			ReportDrivers(ErrorMessage, temperatureShutdownDrivers, "over temperature shutdown", reported);
-			// Don't report open load because we get too many spurious open load reports
-			//ReportDrivers(openLoadDrivers, "Error: Open load", reported);
+			if (openLoadATimer.CheckAndStop(OpenLoadTimeout))
+			{
+				ReportDrivers(WarningMessage, openLoadADrivers, "motor phase A may be disconnected", reported);
+			}
+			if (openLoadBTimer.CheckAndStop(OpenLoadTimeout))
+			{
+				ReportDrivers(WarningMessage, openLoadBDrivers, "motor phase B may be disconnected", reported);
+			}
 
 			// Don't warn about a hot driver if we recently turned on a fan to cool it
 			if (temperatureWarningDrivers != 0)
 			{
-				// Don't warn about over-temperature drivers if we have recently turned on a fan to cool them
-				const bool onBoardOtw = (temperatureWarningDrivers & ((1u << 5) - 1)) != 0;
-				const bool offBoardOtw = (temperatureWarningDrivers & ~((1u << 5) - 1)) != 0;
-				if (   (onBoardOtw && (!onBoardDriversFanRunning || now - onBoardDriversFanStartMillis >= DriverCoolingTimeout))
-					|| (offBoardOtw && (!offBoardDriversFanRunning || now - offBoardDriversFanStartMillis >= DriverCoolingTimeout))
-				   )
+				const DriversBitmap driversMonitored[NumTmcDriversSenseChannels] =
+# ifdef DUET_NG
+					{ LowestNBits<DriversBitmap>(5), LowestNBits<DriversBitmap>(5) << 5 };			// first channel is Duet, second is DueX5
+# else
+					{ LowestNBits<DriversBitmap>(NumDirectDrivers), LowestNBits<DriversBitmap>(NumDirectDrivers) };		// both channels monitor all drivers
+# endif
+				for (unsigned int i = 0; i < NumTmcDriversSenseChannels; ++i)
 				{
-					ReportDrivers(WarningMessage, temperatureWarningDrivers, "high temperature", reported);
+					if (driversFanTimers[i].IsRunning())
+					{
+						const bool timedOut = driversFanTimers[i].CheckAndStop(DriverCoolingTimeout);
+						if (!timedOut)
+						{
+							temperatureWarningDrivers &= ~driversMonitored[i];
+						}
+					}
 				}
+				ReportDrivers(WarningMessage, temperatureWarningDrivers, "high temperature", reported);
 			}
 #endif
 
@@ -1530,7 +1593,7 @@ void Platform::Spin()
 				String<ScratchStringLength> scratchString;
 				ListDrivers(scratchString.GetRef(), stalledDriversToLog);
 				stalledDriversToLog = 0;
-				float liveCoordinates[DRIVES];
+				float liveCoordinates[MaxTotalDrivers];
 				reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 				MessageF(WarningMessage, "Driver(s)%s stalled at Z height %.2f", scratchString.c_str(), (double)liveCoordinates[Z_AXIS]);
 				reported = true;
@@ -1554,7 +1617,7 @@ void Platform::Spin()
 
 			// Check for a VSSA fault
 #if HAS_VREF_MONITOR
-			constexpr uint32_t MaxVssaFilterSum = (15 * 4096 * ThermistorAverageReadings * 4)/2200;
+			constexpr uint32_t MaxVssaFilterSum = (15 * 4096 * ThermistorAverageReadings * 4)/2200;		// VSSA fuse should have <= 15 ohms resistance
 			if (adcFilters[VssaFilterIndex].GetSum() > MaxVssaFilterSum)
 			{
 				Message(ErrorMessage, "VSSA fault, check thermistor wiring\n");
@@ -1566,6 +1629,16 @@ void Platform::Spin()
 			   )
 			{
 				Message(ErrorMessage, "VSSA fault, check thermistor wiring\n");
+				reported = true;
+			}
+#endif
+
+#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
+			// Check for attempts to move motors when not powered
+			if (warnDriversNotPowered)
+			{
+				Message(ErrorMessage, "Attempt to move motors when VIN is not in range");
+				warnDriversNotPowered = false;
 				reported = true;
 			}
 #endif
@@ -1627,22 +1700,24 @@ void Platform::Spin()
 
 // Report driver status conditions that require attention.
 // Sets 'reported' if we reported anything, else leaves 'reported' alone.
-void Platform::ReportDrivers(MessageType mt, DriversBitmap whichDrivers, const char* text, bool& reported)
+void Platform::ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char* text, bool& reported)
 {
 	if (whichDrivers != 0)
 	{
 		String<ScratchStringLength> scratchString;
-		scratchString.printf("%s on drivers", text);
-		for (unsigned int drive = 0; whichDrivers != 0; ++drive)
+		scratchString.printf("%s reported by driver(s)", text);
+		DriversBitmap wd = whichDrivers;
+		for (unsigned int drive = 0; wd != 0; ++drive)
 		{
-			if ((whichDrivers & 1) != 0)
+			if ((wd & 1) != 0)
 			{
 				scratchString.catf(" %u", drive);
 			}
-			whichDrivers >>= 1;
+			wd >>= 1;
 		}
 		MessageF(mt, "%s\n", scratchString.c_str());
 		reported = true;
+		whichDrivers = 0;
 	}
 }
 
@@ -1659,7 +1734,7 @@ bool Platform::AnyAxisMotorStalled(size_t drive) const
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
 		{
 			const uint8_t driver = axisDrivers[drive].driverNumbers[i];
-			if (driver < DRIVES && (SmartDrivers::GetLiveStatus(driver) & TMC_RR_SG) != 0)
+			if (driver < numSmartDrivers && (SmartDrivers::GetLiveStatus(driver) & TMC_RR_SG) != 0)
 			{
 				return true;
 			}
@@ -1672,7 +1747,7 @@ bool Platform::AnyAxisMotorStalled(size_t drive) const
 bool Platform::ExtruderMotorStalled(size_t extruder) const pre(drive < DRIVES)
 {
 	const uint8_t driver = extruderDrivers[extruder];
-	return driver < DRIVES && (SmartDrivers::GetLiveStatus(driver) & TMC_RR_SG) != 0;
+	return driver < NumDirectDrivers && (SmartDrivers::GetLiveStatus(driver) & TMC_RR_SG) != 0;
 }
 
 #endif
@@ -1733,6 +1808,8 @@ float Platform::AdcReadingToCpuTemperature(uint32_t adcVal) const
 	return (voltage - 1.44) * (1000.0/4.7) + 27.0 + mcuTemperatureAdjust;			// accuracy at 27C is +/-13C
 #elif SAM3XA
 	return (voltage - 0.8) * (1000.0/2.65) + 27.0 + mcuTemperatureAdjust;			// accuracy at 27C is +/-45C
+#elif SAME70
+	return (voltage - 0.72) * (1000.0/2.33) + 25.0 + mcuTemperatureAdjust;			// accuracy at 25C is +/-34C
 #else
 # error undefined CPU temp conversion
 #endif
@@ -1832,9 +1909,9 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		if (stk != nullptr)
 		{
 			srdBuf[slot].sp = reinterpret_cast<uint32_t>(stk);
-			for (size_t i = 0; i < ARRAY_SIZE(srdBuf[slot].stack); ++i)
+			for (uint32_t& stval : srdBuf[slot].stack)
 			{
-				srdBuf[slot].stack[i] = (stk < &_estack) ? *stk : 0xFFFFFFFF;
+				stval = (stk < &_estack) ? *stk : 0xFFFFFFFF;
 				++stk;
 			}
 		}
@@ -1871,13 +1948,15 @@ void NETWORK_TC_HANDLER()
 
 void Platform::InitialiseInterrupts()
 {
-#if SAM4E || SAM7E
+#if SAM4E || SAM7E || __LPC17xx__
 	NVIC_SetPriority(WDT_IRQn, NvicPriorityWatchdog);			// set priority for watchdog interrupts
 #endif
 
-#ifdef RTOS
+#if HAS_HIGH_SPEED_SD && defined(RTOS)
 	NVIC_SetPriority(HSMCI_IRQn, NvicPriorityHSMCI);			// set priority for SD interface interrupts
-#else
+#endif
+
+#ifndef RTOS
 	// Set the tick interrupt to the highest priority. We need to to monitor the heaters and kick the watchdog.
 	NVIC_SetPriority(SysTick_IRQn, NvicPrioritySystick);		// set priority for tick interrupts
 #endif
@@ -1907,30 +1986,14 @@ void Platform::InitialiseInterrupts()
 	NVIC_SetPriority(TMC2660_SPI_IRQn, NvicPriorityDriversSerialTMC);	// set priority for TMC2660 SPI interrupt
 #endif
 
-	// Timer interrupt for stepper motors
-	// The clock rate we use is a compromise. Too fast and the 64-bit square roots take a long time to execute. Too slow and we lose resolution.
-	// We choose a clock divisor of 128 which gives
-	// 1.524us resolution on the Duet 085 (84MHz clock)
-	// 1.067us resolution on the Duet WiFi (120MHz clock)
-	// 0.853us resolution on the SAM E70 (150MHz clock)
-	pmc_set_writeprotect(false);
-	pmc_enable_periph_clk(STEP_TC_ID);
-	tc_init(STEP_TC, STEP_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK4 | TC_CMR_EEVT_XC0);	// must set TC_CMR_EEVT nonzero to get RB compare interrupts
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = ~(uint32_t)0; // interrupts disabled for now
-#if SAM4S || SAME70		// if 16-bit TCs
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_COVFS;	// enable the overflow interrupt so that we can use it to extend the count to 32-bits
-#endif
-	tc_start(STEP_TC, STEP_TC_CHAN);
-	tc_get_status(STEP_TC, STEP_TC_CHAN);					// clear any pending interrupt
-	NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);		// set priority for this IRQ
-	NVIC_EnableIRQ(STEP_TC_IRQN);
+	StepTimer::Init();										// initialise the step pulse timer
 
 #if HAS_LWIP_NETWORKING
 	pmc_enable_periph_clk(NETWORK_TC_ID);
 # if SAME70
 	// Timer interrupt to keep the networking timers running (called at 18Hz, which is almost as low as we can get because the timer is 16-bit)
 	tc_init(NETWORK_TC, NETWORK_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
-	const uint32_t rc = (VARIANT_MCK/128)/18;				// 128 because we selected TIMER_CLOCK4 above (16-bit counter)
+	const uint32_t rc = (SystemPeripheralClock()/128)/18;				// 128 because we selected TIMER_CLOCK4 above (16-bit counter)
 # else
 	// Timer interrupt to keep the networking timers running (called at 16Hz)
 	tc_init(NETWORK_TC, NETWORK_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK2);
@@ -1939,27 +2002,33 @@ void Platform::InitialiseInterrupts()
 	tc_write_ra(NETWORK_TC, NETWORK_TC_CHAN, rc/2);			// 50% high, 50% low
 	tc_write_rc(NETWORK_TC, NETWORK_TC_CHAN, rc);
 	tc_start(NETWORK_TC, NETWORK_TC_CHAN);
-	NETWORK_TC ->TC_CHANNEL[NETWORK_TC_CHAN].TC_IER = TC_IER_CPCS;
-	NETWORK_TC ->TC_CHANNEL[NETWORK_TC_CHAN].TC_IDR = ~TC_IER_CPCS;
+	NETWORK_TC->TC_CHANNEL[NETWORK_TC_CHAN].TC_IER = TC_IER_CPCS;
+	NETWORK_TC->TC_CHANNEL[NETWORK_TC_CHAN].TC_IDR = ~TC_IER_CPCS;
 	NVIC_SetPriority(NETWORK_TC_IRQN, NvicPriorityNetworkTick);
 	NVIC_EnableIRQ(NETWORK_TC_IRQN);
 
 	// Set up the Ethernet interface priority here to because we have access to the priority definitions
 # if SAME70
 	NVIC_SetPriority(GMAC_IRQn, NvicPriorityEthernet);
+	NVIC_SetPriority(XDMAC_IRQn, NvicPriorityDMA);
 # else
 	NVIC_SetPriority(EMAC_IRQn, NvicPriorityEthernet);
 # endif
 #endif
 
+#if __LPC17xx__
+	//SD: Int for GPIO pins on port 0 and 2 share EINT3
+	NVIC_SetPriority(EINT3_IRQn, NvicPriorityPins);
+#else
 	NVIC_SetPriority(PIOA_IRQn, NvicPriorityPins);
 	NVIC_SetPriority(PIOB_IRQn, NvicPriorityPins);
 	NVIC_SetPriority(PIOC_IRQn, NvicPriorityPins);
-#ifdef ID_PIOD
+# ifdef ID_PIOD
 	NVIC_SetPriority(PIOD_IRQn, NvicPriorityPins);
-#endif
-#ifdef ID_PIOE
+# endif
+# ifdef ID_PIOE
 	NVIC_SetPriority(PIOE_IRQn, NvicPriorityPins);
+# endif
 #endif
 
 #if SAME70
@@ -1968,31 +2037,22 @@ void Platform::InitialiseInterrupts()
 	NVIC_SetPriority(UDP_IRQn, NvicPriorityUSB);
 #elif SAM3XA
 	NVIC_SetPriority(UOTGHS_IRQn, NvicPriorityUSB);
+#elif __LPC17xx__
+	NVIC_SetPriority(USB_IRQn, NvicPriorityUSB);
 #else
 # error
 #endif
 
 #if defined(DUET_NG) || defined(DUET_M) || defined(DUET_06_085)
 	NVIC_SetPriority(I2C_IRQn, NvicPriorityTwi);
+#elif __LPC17xx__
+	NVIC_SetPriority(I2C0_IRQn, NvicPriorityTwi);
+	NVIC_SetPriority(I2C1_IRQn, NvicPriorityTwi);
 #endif
 
 	// Tick interrupt for ADC conversions
 	tickState = 0;
 	currentFilterNumber = 0;
-
-	// Set up the timeout of the regulator watchdog, and set up the backup watchdog if there is one
-	// The clock frequency for both watchdogs is 32768/128 = 256Hz
-	const uint16_t timeout = 32768/128;												// set watchdog timeout to 1 second (max allowed value is 4095 = 16 seconds)
-	wdt_init(WDT, WDT_MR_WDRSTEN, timeout, timeout);								// reset the processor on a watchdog fault
-
-#if SAM4E || SAME70
-	// The RSWDT must be initialised *after* the main WDT
-	const uint16_t rsTimeout = 16384/128;											// set secondary watchdog timeout to 0.5 second (max allowed value is 4095 = 16 seconds)
-	rswdt_init(RSWDT, RSWDT_MR_WDFIEN, rsTimeout, rsTimeout);						// generate an interrupt on a watchdog fault
-	NVIC_EnableIRQ(WDT_IRQn);														// enable the watchdog interrupt
-#endif
-
-	active = true;							// this enables the tick interrupt, which keeps the watchdog happy
 }
 
 //*************************************************************************************************
@@ -2069,23 +2129,43 @@ void Platform::Diagnostics(MessageType mtype)
 
 	Message(mtype, "=== Platform ===\n");
 
+#ifndef __LPC17xx__
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
 	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software",
-#ifdef DUET_NG
+# ifdef DUET_NG
 	// On the SAM4E a watchdog reset may be reported as a user reset because of the capacitor on the NRST pin.
 	// The SAM4S is the same but the Duet M has a diode in the reset circuit to avoid this problem.
 									"reset button or watchdog",
-#else
+# else
 									"reset button",
-#endif
+# endif
 									"?", "?", "?" };
 	MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: %s\n",
 			(unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60),
 			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
+#endif //end ifndef __LPC17xx__
 
 	// Show the reset code stored at the last software reset
 	{
+#if __LPC17xx__
+		SoftwareResetData srdBuf[1];
+		int slot = -1;
+
+		for (int s = SoftwareResetData::numberOfSlots - 1; s >= 0; s--)
+		{
+			SoftwareResetData *sptr = reinterpret_cast<SoftwareResetData *>(LPC_GetSoftwareResetDataSlotPtr(s));
+			if(sptr->magic != 0xFFFF)
+			{
+				//slot = s;
+				MessageF(mtype, "Flash Slot[%d]: \n", s);
+				slot=0;// we only have 1 slot in the array, set this to zero to be compatible with existing code below
+				//copy the data into srdBuff
+				LPC_ReadSoftwareResetDataSlot(s, &srdBuf[0], sizeof(srdBuf[0]));
+				break;
+			}
+		}
+#else
 		SoftwareResetData srdBuf[SoftwareResetData::numberOfSlots];
 		memset(srdBuf, 0, sizeof(srdBuf));
 		int slot = -1;
@@ -2112,6 +2192,7 @@ void Platform::Diagnostics(MessageType mtype)
 			}
 			while (slot >= 0 && srdBuf[slot].magic == 0xFFFF);
 		}
+#endif
 
 		if (slot >= 0 && srdBuf[slot].magic == SoftwareResetData::magicValue)
 		{
@@ -2157,9 +2238,9 @@ void Platform::Diagnostics(MessageType mtype)
 			{
 				// We saved a stack dump, so print it
 				scratchString.Clear();
-				for (size_t i = 0; i < ARRAY_SIZE(srdBuf[slot].stack); ++i)
+				for (uint32_t stval : srdBuf[slot].stack)
 				{
-					scratchString.catf(" %08" PRIx32, srdBuf[slot].stack[i]);
+					scratchString.catf(" %08" PRIx32, stval);
 				}
 				MessageF(mtype, "Stack:%s\n", scratchString.c_str());
 			}
@@ -2196,9 +2277,10 @@ void Platform::Diagnostics(MessageType mtype)
 
 #if HAS_VOLTAGE_MONITOR
 	// Show the supply voltage
-	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 ", over voltage events: %" PRIu32 "\n",
+	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 ", over voltage events: %" PRIu32 ", power good: %s\n",
 		(double)AdcReadingToPowerVoltage(lowestVin), (double)AdcReadingToPowerVoltage(currentVin), (double)AdcReadingToPowerVoltage(highestVin),
-				numUnderVoltageEvents, numOverVoltageEvents);
+				numUnderVoltageEvents, numOverVoltageEvents,
+				(driversPowered) ? "yes" : "no");
 	lowestVin = highestVin = currentVin;
 #endif
 
@@ -2206,17 +2288,9 @@ void Platform::Diagnostics(MessageType mtype)
 	// Show the motor stall status
 	for (size_t drive = 0; drive < numSmartDrivers; ++drive)
 	{
-		String<100> driverStatus;
+		String<MediumStringLength> driverStatus;
 		SmartDrivers::AppendDriverStatus(drive, driverStatus.GetRef());
 		MessageF(mtype, "Driver %u:%s\n", drive, driverStatus.c_str());
-	}
-#endif
-
-#ifdef DUET_NG
-	if (expansionBoard == ExpansionBoardType::DueX2 || expansionBoard == ExpansionBoardType::DueX5)
-	{
-		const bool stalled = digitalRead(DueX_SG);
-		MessageF(mtype, "Expansion motor(s) stall indication: %s\n", (stalled) ? "yes" : "no");
 	}
 #endif
 
@@ -2257,9 +2331,15 @@ void Platform::Diagnostics(MessageType mtype)
 	MessageF(mtype, "Soft timer interrupts executed %u, next %u scheduled at %u, now %u\n",
 		numSoftTimerInterruptsExecuted, STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RB, lastSoftTimerInterruptScheduledAt, GetInterruptClocks());
 #endif
+
+#ifdef I2C_IFACE
+	const TwoWire::ErrorCounts errs = I2C_IFACE.GetErrorCounts(true);
+	MessageF(mtype, "I2C nak errors %" PRIu32 ", send timeouts %" PRIu32 ", receive timeouts %" PRIu32 ", finishTimeouts %" PRIu32 "\n",
+		errs.naks, errs.sendTimeouts, errs.recvTimeouts, errs.finishTimeouts);
+#endif
 }
 
-bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
+GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 {
 	static const uint32_t dummy[2] = { 0, 0 };
 
@@ -2296,12 +2376,12 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 				bool seen = false;
 				if (gb.TryGetFloatArray('T', numTemps, tempMinMax, reply, seen, false))
 				{
-					return true;
+					return GCodeResult::error;
 				}
 				if (!seen)
 				{
 					reply.copy("Missing T parameter");
-					return true;
+					return GCodeResult::error;
 				}
 
 				const float currentMcuTemperature = AdcReadingToCpuTemperature(adcFilters[CpuTempFilterIndex].GetSum());
@@ -2330,12 +2410,12 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 				bool seen = false;
 				if (gb.TryGetFloatArray('V', numVoltages, voltageMinMax, reply, seen, false))
 				{
-					return true;
+					return GCodeResult::error;
 				}
 				if (!seen)
 				{
 					reply.copy("Missing V parameter");
-					return true;
+					return GCodeResult::error;
 				}
 
 				const float voltage = AdcReadingToPowerVoltage(currentVin);
@@ -2431,6 +2511,8 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 		(void)*(reinterpret_cast<const volatile char*>(0x20800000));
 #elif SAM3XA
 		(void)*(reinterpret_cast<const volatile char*>(0x20200000));
+#elif __LPC17xx__
+		Message(WarningMessage, "TODO:: Skipping test on LPC");//????
 #else
 # error
 #endif
@@ -2447,9 +2529,9 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 			for (uint32_t i = 0; i < 100; ++i)
 			{
 				const uint32_t num1 = 0x7265ac3d + i;
-				const uint32_t now1 = Platform::GetInterruptClocks();
+				const uint32_t now1 = StepTimer::GetInterruptClocks();
 				const uint32_t num1a = isqrt64((uint64_t)num1 * num1);
-				tim1 += Platform::GetInterruptClocks() - now1;
+				tim1 += StepTimer::GetInterruptClocks() - now1;
 				if (num1a != num1)
 				{
 					ok1 = false;
@@ -2461,19 +2543,57 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 			for (uint32_t i = 0; i < 100; ++i)
 			{
 				const uint32_t num2 = 0x0000a4c5 + i;
-				const uint32_t now2 = Platform::GetInterruptClocks();
+				const uint32_t now2 = StepTimer::GetInterruptClocks();
 				const uint32_t num2a = isqrt64((uint64_t)num2 * num2);
-				tim2 += Platform::GetInterruptClocks() - now2;
+				tim2 += StepTimer::GetInterruptClocks() - now2;
 				if (num2a != num2)
 				{
 					ok2 = false;
 				}
 			}
-			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s\n",
-					(double)(tim1 * 10000)/StepClockRate, (ok1) ? "ok" : "ERROR",
-							(double)(tim2 * 10000)/StepClockRate, (ok2) ? "ok" : "ERROR");
+			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s",
+					(double)(tim1 * 10000)/StepTimer::StepClockRate, (ok1) ? "ok" : "ERROR",
+							(double)(tim2 * 10000)/StepTimer::StepClockRate, (ok2) ? "ok" : "ERROR");
 		}
 		break;
+
+	case (int)DiagnosticTestType::TimeSinCos:		// Show the sin/cosine calculation time. The displayed value is subject to interrupts.
+		{
+			uint32_t tim1 = 0;
+			bool ok1 = true;
+			for (unsigned int i = 0; i < 100; ++i)
+			{
+				const float angle = 0.01 * i;
+				const uint32_t now1 = StepTimer::GetInterruptClocks();
+				const float f1 = RepRap::SinfCosf(angle);
+				tim1 += StepTimer::GetInterruptClocks() - now1;
+				if (f1 >= 1.5)
+				{
+					ok1 = false;		// need to use f1 to prevent the calculations being omitted
+				}
+			}
+
+			uint32_t tim2 = 0;
+			bool ok2 = true;
+			for (unsigned int i = 0; i < 100; ++i)
+			{
+				const double angle = (double)0.01 * i;
+				const uint32_t now2 = StepTimer::GetInterruptClocks();
+				const double d1 = RepRap::SinCos(angle);
+				tim2 += StepTimer::GetInterruptClocks() - now2;
+				if (d1 >= (double)1.5)
+				{
+					ok1 = false;		// need to use f1 to prevent the calculations being omitted
+				}
+			}
+			reply.printf("Sine + cosine: float %.2fus %s, double %.2fus %s",
+				(double)(tim1 * 10000)/StepTimer::StepClockRate, (ok1) ? "ok" : "ERROR",
+					(double)(tim2 * 10000)/StepTimer::StepClockRate, (ok2) ? "ok" : "ERROR");
+		}
+		break;
+
+	case (int)DiagnosticTestType::TimeSDWrite:
+		return reprap.GetGCodes().StartSDTiming(gb, reply);
 
 #ifdef DUET_NG
 	case (int)DiagnosticTestType::PrintExpanderStatus:
@@ -2485,23 +2605,27 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
 		break;
 	}
 
-	return false;
+	return GCodeResult::ok;
 }
 
 #if HAS_SMART_DRIVERS
 
 // This is called when a fan that monitors driver temperatures is turned on when it was off
-void Platform::DriverCoolingFansOn(uint32_t driverChannelsMonitored)
+void Platform::DriverCoolingFansOnOff(uint32_t driverChannelsMonitored, bool on)
 {
-	if (driverChannelsMonitored & 1)
+	for (unsigned int i = 0; i < NumTmcDriversSenseChannels; ++i)
 	{
-		onBoardDriversFanStartMillis = millis();
-		onBoardDriversFanRunning = true;
-	}
-	if (driverChannelsMonitored & 2)
-	{
-		offBoardDriversFanStartMillis = millis();
-		offBoardDriversFanRunning = true;
+		if ((driverChannelsMonitored & (1 << i)) != 0)
+		{
+			if (on)
+			{
+				driversFanTimers[i].Start();
+			}
+			else
+			{
+				driversFanTimers[i].Stop();
+			}
+		}
 	}
 }
 
@@ -2514,7 +2638,7 @@ void Platform::SetHeater(size_t heater, float power, PwmFrequency freq)
 	{
 		if (freq == 0)
 		{
-			freq = (reprap.GetHeat().IsBedOrChamberHeater(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;	// use sefault PWM frequency
+			freq = (reprap.GetHeat().IsBedOrChamberHeater(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;	// use default PWM frequency
 		}
 		const float pwm =
 #if ACTIVE_LOW_HEAT_ON
@@ -2551,7 +2675,7 @@ void Platform::UpdateConfiguredHeaters()
 	}
 
 	// Check tool heaters
-	for(size_t heater = 0; heater < Heaters; heater++)
+	for (size_t heater = 0; heater < NumHeaters; heater++)
 	{
 		if (reprap.IsHeaterAssignedToTool(heater))
 		{
@@ -2597,6 +2721,15 @@ EndStopHit Platform::Stopped(size_t drive) const
 													: AnyAxisMotorStalled(drive);
 					break;
 
+				case KinematicsType::coreXYUV:
+					// Both X and Y motors are involved in homing X or Y, and both U and V motors are involved in homing U and V
+					motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
+										? AnyAxisMotorStalled(X_AXIS) || AnyAxisMotorStalled(Y_AXIS)
+											: (drive == U_AXIS || drive == V_AXIS)
+												? AnyAxisMotorStalled(U_AXIS) || AnyAxisMotorStalled(V_AXIS)
+													: AnyAxisMotorStalled(drive);
+					break;
+
 				case KinematicsType::coreXZ:
 					// Both X and Z motors are involved in homing X or Z
 					motorIsStalled = (drive == X_AXIS || drive == Z_AXIS)
@@ -2616,7 +2749,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 #endif
 
 		case EndStopInputType::activeLow:
-			if (endStopPins[drive] != NoPin)
+			if (drive < NumEndstops && endStopPins[drive] != NoPin)
 			{
 				const bool b = IoPort::ReadPin(endStopPins[drive]);
 				return (b) ? EndStopHit::noStop : (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
@@ -2624,7 +2757,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 			break;
 
 		case EndStopInputType::activeHigh:
-			if (endStopPins[drive] != NoPin)
+			if (drive < NumEndstops && endStopPins[drive] != NoPin)
 			{
 				const bool b = !IoPort::ReadPin(endStopPins[drive]);
 				return (b) ? EndStopHit::noStop : (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
@@ -2636,7 +2769,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 		}
 	}
 #if HAS_STALL_DETECT
-	else if (drive < DRIVES)
+	else if (drive < NumDirectDrivers)
 	{
 		// Endstop is for an extruder drive, so use stall detection
 		return (ExtruderMotorStalled(drive - numAxes)) ? EndStopHit::highHit : EndStopHit::noStop;
@@ -2648,14 +2781,14 @@ EndStopHit Platform::Stopped(size_t drive) const
 // Return the state of the endstop input, regardless of whether we are actually using it as an endstop
 bool Platform::EndStopInputState(size_t drive) const
 {
-	return endStopPins[drive] != NoPin && IoPort::ReadPin(endStopPins[drive]);
+	return drive < NumEndstops && endStopPins[drive] != NoPin && IoPort::ReadPin(endStopPins[drive]);
 }
 
-// Get the statues of all the endstop inputs, regardless of what they are used for. Used for triggers.
+// Get the statuses of all the endstop inputs, regardless of what they are used for. Used for triggers.
 uint32_t Platform::GetAllEndstopStates() const
 {
 	uint32_t rslt = 0;
-	for (unsigned int drive = 0; drive < DRIVES; ++drive)
+	for (unsigned int drive = 0; drive < NumEndstops; ++drive)
 	{
 		const Pin pin = endStopPins[drive];
 		if (pin != NoPin && IoPort::ReadPin(pin))
@@ -2697,18 +2830,18 @@ bool Platform::WritePlatformParameters(FileStore *f, bool includingG31) const
 		ok = true;
 	}
 
-	if (ok && includingG31)
+	if (ok && (includingG31 || irZProbeParameters.saveToConfigOverride || alternateZProbeParameters.saveToConfigOverride || switchZProbeParameters.saveToConfigOverride))
 	{
 		ok = f->Write("; Z probe parameters\n");
-		if (ok)
+		if (ok && (includingG31 || irZProbeParameters.saveToConfigOverride))
 		{
 			ok = irZProbeParameters.WriteParameters(f, 1);
 		}
-		if (ok)
+		if (ok && (includingG31 || alternateZProbeParameters.saveToConfigOverride))
 		{
 			ok = alternateZProbeParameters.WriteParameters(f, 3);
 		}
-		if (ok)
+		if (ok && (includingG31 || switchZProbeParameters.saveToConfigOverride))
 		{
 			ok = switchZProbeParameters.WriteParameters(f, 4);
 		}
@@ -2744,7 +2877,7 @@ void Platform::SetDirection(size_t drive, bool direction)
 	const bool isSlowDriver = (GetDriversBitmap(drive) & GetSlowDriversBitmap()) != 0;
 	if (isSlowDriver)
 	{
-		while (GetInterruptClocks() - DDA::lastStepLowTime < GetSlowDriverDirHoldClocks()) { }
+		while (StepTimer::GetInterruptClocks() - DDA::lastStepLowTime < GetSlowDriverDirHoldClocks()) { }
 	}
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	if (drive < numAxes)
@@ -2754,59 +2887,74 @@ void Platform::SetDirection(size_t drive, bool direction)
 			SetDriverDirection(axisDrivers[drive].driverNumbers[i], direction);
 		}
 	}
-	else if (drive < DRIVES)
+	else if (drive < NumDirectDrivers)
 	{
 		SetDriverDirection(extruderDrivers[drive - numAxes], direction);
 	}
-	else if (drive < 2 * DRIVES)
+	else if (drive >= MaxTotalDrivers && drive < MaxTotalDrivers + NumDirectDrivers)
 	{
-		SetDriverDirection(drive - DRIVES, direction);
+		SetDriverDirection(drive - MaxTotalDrivers, direction);
 	}
 	if (isSlowDriver)
 	{
-		DDA::lastDirChangeTime = GetInterruptClocks();
+		DDA::lastDirChangeTime = StepTimer::GetInterruptClocks();
 	}
 }
 
 // Enable a driver. Must not be called from an ISR, or with interrupts disabled.
 void Platform::EnableDriver(size_t driver)
 {
-	if (driver < DRIVES && driverState[driver] != DriverStatus::enabled)
+#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
+	if (driver < numSmartDrivers && !driversPowered)
 	{
-		driverState[driver] = DriverStatus::enabled;
-		UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
-
-#if HAS_SMART_DRIVERS
-		if (driver < numSmartDrivers)
-		{
-			SmartDrivers::EnableDrive(driver, true);
-		}
-		else
-		{
-#endif
-			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
-#if HAS_SMART_DRIVERS
-		}
-#endif
+		warnDriversNotPowered = true;
 	}
+	else
+	{
+#endif
+		if (driver < NumDirectDrivers && driverState[driver] != DriverStatus::enabled)
+		{
+			driverState[driver] = DriverStatus::enabled;
+			UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
+
+#if defined(DUET3) && HAS_SMART_DRIVERS
+			SmartDrivers::EnableDrive(driver, true);		// all drivers driven directly by the main board are smart
+#elif HAS_SMART_DRIVERS
+			if (driver < numSmartDrivers)
+			{
+				SmartDrivers::EnableDrive(driver, true);
+			}
+			else
+			{
+				digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
+			}
+#else
+			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
+#endif
+		}
+#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
+	}
+#endif
 }
 
 // Disable a driver
 void Platform::DisableDriver(size_t driver)
 {
-	if (driver < DRIVES)
+	if (driver < NumDirectDrivers)
 	{
-#if HAS_SMART_DRIVERS
+#if defined(DUET3) && HAS_SMART_DRIVERS
+		SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
+#elif HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
 		{
 			SmartDrivers::EnableDrive(driver, false);
 		}
 		else
 		{
-#endif
 			digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
-#if HAS_SMART_DRIVERS
 		}
+#else
+		digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
 #endif
 		driverState[driver] = DriverStatus::disabled;
 	}
@@ -2823,7 +2971,7 @@ void Platform::EnableDrive(size_t drive)
 			EnableDriver(axisDrivers[drive].driverNumbers[i]);
 		}
 	}
-	else if (drive < DRIVES)
+	else if (drive < NumDirectDrivers)
 	{
 		EnableDriver(extruderDrivers[drive - numAxes]);
 	}
@@ -2840,7 +2988,7 @@ void Platform::DisableDrive(size_t drive)
 			DisableDriver(axisDrivers[drive].driverNumbers[i]);
 		}
 	}
-	else if (drive < DRIVES)
+	else if (drive < NumDirectDrivers)
 	{
 		DisableDriver(extruderDrivers[drive - numAxes]);
 	}
@@ -2849,7 +2997,7 @@ void Platform::DisableDrive(size_t drive)
 // Disable all drives. Called from emergency stop and the tick ISR.
 void Platform::DisableAllDrives()
 {
-	for (size_t drive = 0; drive < DRIVES; drive++)
+	for (size_t drive = 0; drive < NumDirectDrivers; drive++)
 	{
 		if (!inInterrupt())		// on the Duet 06/085 we need interrupts running to send the I2C commands to set motor currents
 		{
@@ -2870,7 +3018,7 @@ void Platform::SetDriversIdle()
 	}
 	else
 	{
-		for (size_t driver = 0; driver < DRIVES; ++driver)
+		for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 		{
 			if (driverState[driver] == DriverStatus::enabled)
 			{
@@ -2884,7 +3032,7 @@ void Platform::SetDriversIdle()
 // Set the current for a drive. Current is in mA.
 void Platform::SetDriverCurrent(size_t driver, float currentOrPercent, int code)
 {
-	if (driver < DRIVES)
+	if (driver < NumDirectDrivers)
 	{
 		switch (code)
 		{
@@ -2921,7 +3069,7 @@ void Platform::SetMotorCurrent(size_t drive, float currentOrPercent, int code)
 		}
 
 	}
-	else if (drive < DRIVES)
+	else if (drive < NumDirectDrivers)
 	{
 		SetDriverCurrent(extruderDrivers[drive - numAxes], currentOrPercent, code);
 	}
@@ -2930,7 +3078,7 @@ void Platform::SetMotorCurrent(size_t drive, float currentOrPercent, int code)
 // This must not be called from an ISR, or with interrupts disabled.
 void Platform::UpdateMotorCurrent(size_t driver)
 {
-	if (driver < DRIVES)
+	if (driver < NumDirectDrivers)
 	{
 		float current = motorCurrents[driver];
 		if (driverState[driver] == DriverStatus::idle)
@@ -2987,6 +3135,23 @@ void Platform::UpdateMotorCurrent(size_t driver)
 		{
 			dacPiggy.setChannel(7-driver, current * 0.102);
 		}
+#elif defined(__LPC17xx__)
+# if HAS_DRIVER_CURRENT_CONTROL
+		//Has digipots to set current control for drivers
+		//Current is in mA
+		const uint16_t pot = (unsigned short) (current * digipotFactor / 1000);
+		if (pot > 256) { pot = 255; }
+		if (driver < 4)
+		{
+			mcp4451.setMCP4461Address(0x2C); //A0 and A1 Grounded. (001011 00)
+			mcp4451.setVolatileWiper(POT_WIPES[driver], pot);
+		}
+		else
+		{
+			mcp4451.setMCP4461Address(0x2D); //A0 Vcc, A1 Grounded. (001011 01)
+			mcp4451.setVolatileWiper(POT_WIPES[driver-4], pot);
+		}
+# endif
 #else
 		// otherwise we can't set the motor current
 #endif
@@ -2998,10 +3163,10 @@ void Platform::UpdateMotorCurrent(size_t driver)
 float Platform::GetMotorCurrent(size_t drive, int code) const
 {
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	if (drive < DRIVES && drive < numAxes + reprap.GetGCodes().GetNumExtruders())
+	if (drive < NumDirectDrivers && drive < numAxes + reprap.GetGCodes().GetNumExtruders())
 	{
 		const uint8_t driver = (drive < numAxes) ? axisDrivers[drive].driverNumbers[0] : extruderDrivers[drive - numAxes];
-		if (driver < DRIVES)
+		if (driver < NumDirectDrivers)
 		{
 			switch (code)
 			{
@@ -3027,7 +3192,7 @@ float Platform::GetMotorCurrent(size_t drive, int code) const
 void Platform::SetIdleCurrentFactor(float f)
 {
 	idleCurrentFactor = constrain<float>(f, 0.0, 1.0);
-	for (size_t driver = 0; driver < DRIVES; ++driver)
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
 		if (driverState[driver] == DriverStatus::idle)
 		{
@@ -3039,7 +3204,7 @@ void Platform::SetIdleCurrentFactor(float f)
 // Set the microstepping for a driver, returning true if successful
 bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode)
 {
-	if (driver < DRIVES)
+	if (driver < NumDirectDrivers)
 	{
 #if HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
@@ -3054,6 +3219,8 @@ bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, in
 		}
 #elif defined(__ALLIGATOR__)
 		return Microstepping::Set(driver, microsteps); // no mode in Alligator board
+#elif __LPC17xx__
+		return Microstepping::Set(driver, microsteps);
 #else
 		// Assume only x16 microstepping supported
 		return microsteps == 16;
@@ -3076,7 +3243,7 @@ bool Platform::SetMicrostepping(size_t drive, int microsteps, bool interp)
 		}
 		return ok;
 	}
-	else if (drive < DRIVES)
+	else if (drive < NumDirectDrivers)
 	{
 		return SetDriverMicrostepping(extruderDrivers[drive - numAxes], microsteps, interp);
 	}
@@ -3097,6 +3264,9 @@ unsigned int Platform::GetDriverMicrostepping(size_t driver, bool& interpolation
 #elif defined(__ALLIGATOR__)
 	interpolation = false;
 	return Microstepping::Read(driver); // no mode, no interpolation for Alligator
+#elif __LPC17xx__
+	interpolation = false;
+	return Microstepping::Read(driver); //get the value we saved
 #else
 	interpolation = false;
 	return 16;
@@ -3111,7 +3281,7 @@ unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
 	{
 		return GetDriverMicrostepping(axisDrivers[drive].driverNumbers[0], interpolation);
 	}
-	else if (drive < DRIVES)
+	else if (drive < NumDirectDrivers)
 	{
 		return GetDriverMicrostepping(extruderDrivers[drive - numAxes], interpolation);
 	}
@@ -3134,7 +3304,8 @@ void Platform::SetEnableValue(size_t driver, int8_t eVal)
 		temperatureShutdownDrivers &= mask;
 		temperatureWarningDrivers &= mask;
 		shortToGroundDrivers &= mask;
-		openLoadDrivers &= mask;
+		openLoadADrivers &= mask;
+		openLoadBDrivers &= mask;
 	}
 #endif
 }
@@ -3180,7 +3351,7 @@ void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4])
 		if (microseconds[i] > MinStepPulseTiming)
 		{
 			slowDriversBitmap |= CalcDriverBitmap(driver);		// this drive does need extended timing
-			const uint32_t clocks = (uint32_t)(((float)StepClockRate * microseconds[i] * 0.000001) + 0.99);	// convert microseconds to step clocks, rounding up
+			const uint32_t clocks = (uint32_t)(((float)StepTimer::StepClockRate * microseconds[i] * 0.000001) + 0.99);	// convert microseconds to step clocks, rounding up
 			if (clocks > slowDriverStepTimingClocks[i])
 			{
 				slowDriverStepTimingClocks[i] = clocks;
@@ -3189,15 +3360,17 @@ void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4])
 	}
 }
 
-void Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const
+// Get the driver step timing, returning true if we are using slower timing than standard
+bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const
 {
 	const bool isSlowDriver = ((slowDriversBitmap & CalcDriverBitmap(driver)) != 0);
 	for (size_t i = 0; i < 4; ++i)
 	{
 		microseconds[i] = (isSlowDriver)
-							? (float)slowDriverStepTimingClocks[i] * 1000000.0/(float)StepClockRate
+							? (float)slowDriverStepTimingClocks[i] * 1000000.0/(float)StepTimer::StepClockRate
 								: 0.0;
 	}
+	return isSlowDriver;
 }
 
 // Set or report the parameters for the specified fan
@@ -3223,11 +3396,6 @@ float Platform::GetFanValue(size_t fan) const
 	return (fan < NUM_FANS) ? fans[fan].GetConfiguredPwm() : -1;
 }
 
-// This is a bit of a compromise - old RepRaps used fan speeds in the range
-// [0, 255], which is very hardware dependent.  It makes much more sense
-// to specify speeds in [0.0, 1.0].  This looks at the value supplied (which
-// the G Code reader will get right for a float or an int) and attempts to
-// do the right thing whichever the user has done.
 void Platform::SetFanValue(size_t fan, float speed)
 {
 	if (fan < NUM_FANS)
@@ -3242,11 +3410,14 @@ void Platform::SetFanValue(size_t fan, float speed)
 void Platform::EnableSharedFan(bool enable)
 {
 	const size_t sharedFanNumber = NUM_FANS - 1;
-	fans[sharedFanNumber].Init((enable) ? COOLING_FAN_PINS[sharedFanNumber] : NoPin, FansHardwareInverted(sharedFanNumber), DefaultFanPwmFreq);
+	fans[sharedFanNumber].Init(
+				(enable) ? COOLING_FAN_PINS[sharedFanNumber] : NoPin,
+				(enable) ? Fan0LogicalPin + sharedFanNumber : NoLogicalPin,
+				FansHardwareInverted(sharedFanNumber),
+				DefaultFanPwmFreq);
 }
 
 #endif
-
 
 // Check if the given fan can be controlled manually so that DWC can decide whether or not to show the corresponding fan
 // controls. This is the case if no thermostatic control is enabled and if the fan was configured at least once before.
@@ -3313,7 +3484,7 @@ void Platform::InitFans()
 				SetBit(bedAndChamberHeaterMask, chamberHeater);
 			}
 		}
-		fans[1].SetHeatersMonitored(LowestNBits<Fan::HeatersMonitoredBitmap>(Heaters) & ~bedAndChamberHeaterMask);
+		fans[1].SetHeatersMonitored(LowestNBits<Fan::HeatersMonitoredBitmap>(NumHeaters) & ~bedAndChamberHeaterMask);
 		fans[1].SetPwm(1.0);												// set it full on
 #elif defined(PCCB)
 		// Fan 3 needs to be set explicitly to zero PWM, otherwise it turns on because the MCU output pin isn't set low
@@ -3582,7 +3753,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 
 void Platform::MessageF(MessageType type, const char *fmt, va_list vargs)
 {
-	String<FORMAT_STRING_LENGTH> formatString;
+	String<FormatStringLength> formatString;
 	if ((type & ErrorMessageFlag) != 0)
 	{
 		formatString.copy("Error: ");
@@ -3617,7 +3788,7 @@ void Platform::Message(MessageType type, const char *message)
 	}
 	else
 	{
-		String<FORMAT_STRING_LENGTH> formatString;
+		String<FormatStringLength> formatString;
 		formatString.copy(((type & ErrorMessageFlag) != 0) ? "Error: " : "Warning: ");
 		formatString.cat(message);
 		RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
@@ -3656,7 +3827,7 @@ void Platform::SendAlert(MessageType mt, const char *message, const char *title,
 }
 
 // Configure logging according to the M929 command received, returning true if error
-bool Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (gb.Seen('S'))
 	{
@@ -3680,7 +3851,7 @@ bool Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply)
 				if (!gb.GetQuotedString(filename))
 				{
 					reply.copy("Missing filename in M929 command");
-					return true;
+					return GCodeResult::error;
 				}
 			}
 			else
@@ -3694,7 +3865,7 @@ bool Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply)
 	{
 		reply.printf("Event logging is %s", (logger != nullptr && logger->IsActive()) ? "enabled" : "disabled");
 	}
-	return false;
+	return GCodeResult::ok;
 }
 
 // This is called from EmergencyStop. It closes the log file and stops logging.
@@ -3795,15 +3966,13 @@ uint32_t Platform::GetCommsProperties(size_t chan) const
 }
 
 // Re-initialise a serial channel.
-// Ideally, this would be part of the Line class. However, the Arduino core inexplicably fails to make the serial I/O begin() and end() members
-// virtual functions of a base class, which makes that difficult to do.
 void Platform::ResetChannel(size_t chan)
 {
 	switch(chan)
 	{
 	case 0:
 		SERIAL_MAIN_DEVICE.end();
-		SERIAL_MAIN_DEVICE.begin(baudRates[0]);
+		SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
 		break;
 
 #ifdef SERIAL_AUX_DEVICE
@@ -3829,8 +3998,10 @@ void Platform::SetBoardType(BoardType bt)
 {
 	if (bt == BoardType::Auto)
 	{
-#if defined(SAME70_TEST_BOARD)
-		board = BoardType::SamE70TestBoard;
+#if defined(DUET3)
+		board = BoardType::Duet3_10;
+#elif defined(SAME70XPLD)
+		board = BoardType::SAME70XPLD_0;
 #elif defined(DUET_NG)
 		// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
 		pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500. We assume that this forces the ESP8266 UART output pin to high impedance.
@@ -3875,6 +4046,8 @@ void Platform::SetBoardType(BoardType bt)
 		board = BoardType::Alligator_2;
 #elif defined(PCCB)
 		board = BoardType::PCCB_10;
+#elif defined(__LPC17xx__)
+		board = BoardType::Lpc;
 #else
 # error Undefined board type
 #endif
@@ -3896,8 +4069,10 @@ const char* Platform::GetElectronicsString() const
 {
 	switch (board)
 	{
-#if defined(SAME70_TEST_BOARD)
-	case BoardType::SamE70TestBoard:		return "SAM E70 prototype 1";
+#if defined(DUET3)
+	case BoardType::Duet3_10:				return "Duet 3 prototype 1";
+#elif defined(SAME70XPLD)
+	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
 #elif defined(DUET_NG)
 	case BoardType::DuetWiFi_10:			return "Duet WiFi 1.0 or 1.01";
 	case BoardType::DuetWiFi_102:			return "Duet WiFi 1.02 or later";
@@ -3915,6 +4090,8 @@ const char* Platform::GetElectronicsString() const
 	case BoardType::Alligator_2:			return "Alligator r2";
 #elif defined(PCCB)
 	case BoardType::PCCB_10:				return "PCCB 1.0";
+#elif defined(__LPC17xx__)
+	case BoardType::Lpc:					return LPC_ELECTRONICS_STRING;
 #else
 # error Undefined board type
 #endif
@@ -3927,8 +4104,10 @@ const char* Platform::GetBoardString() const
 {
 	switch (board)
 	{
-#if defined(SAME70_TEST_BOARD)
-	case BoardType::SamE70TestBoard:		return "same70prototype1";
+#if defined(DUET3)
+	case BoardType::Duet3_10:				return "duet3proto";
+#elif defined(SAME70XPLD)
+	case BoardType::SAME70XPLD_0:			return "same70xpld";
 #elif defined(DUET_NG)
 	case BoardType::DuetWiFi_10:			return "duetwifi10";
 	case BoardType::DuetWiFi_102:			return "duetwifi102";
@@ -3946,6 +4125,8 @@ const char* Platform::GetBoardString() const
 	case BoardType::Alligator_2:			return "alligator2";
 #elif defined(PCCB)
 	case BoardType::PCCB_10:				return "pccb10";
+#elif defined(__LPC17xx__)
+	case BoardType::Lpc:					return LPC_BOARD_STRING;
 #else
 # error Undefined board type
 #endif
@@ -3968,7 +4149,7 @@ bool Platform::GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firm
 {
 	firmwarePin = NoPin;										// assume failure
 	invert = false;												// this is the common case
-	if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + (int)Heaters)		// pins 0-9 correspond to heater channels
+	if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + (int)NumHeaters)		// pins 0-9 correspond to heater channels
 	{
 		// For safety, we don't allow a heater channel to be used for servos until the heater has been disabled
 		if (!reprap.GetHeat().IsHeaterEnabled(logicalPin - Heater0LogicalPin))
@@ -4061,7 +4242,7 @@ bool Platform::GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firm
 // For fan pin mapping
 bool Platform::TranslateFanPin(LogicalPin logicalPin, Pin& firmwarePin, bool& invert) const
 {
-	if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + (int)Heaters)		// pins 0-9 correspond to heater channels
+	if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + (int)NumHeaters)		// pins 0-9 correspond to heater channels
 	{
 		// For safety, we don't allow a heater channel to be used for fans until the heater has been disabled
 		if (!reprap.GetHeat().IsHeaterEnabled(logicalPin - Heater0LogicalPin))
@@ -4088,7 +4269,7 @@ bool Platform::TranslateFanPin(LogicalPin logicalPin, Pin& firmwarePin, bool& in
 // Append the name of a logical pin to a string
 void Platform::AppendPinName(LogicalPin logicalPin, const StringRef& str) const
 {
-	if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + (int)Heaters)		// pins 0-9 correspond to heater channels
+	if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + (int)NumHeaters)		// pins 0-9 correspond to heater channels
 	{
 		str.catf("H%u", logicalPin - Heater0LogicalPin);
 	}
@@ -4245,22 +4426,22 @@ float Platform::GetTmcDriversTemperature(unsigned int board) const
 #if HAS_STALL_DETECT
 
 // Configure the motor stall detection, returning true if an error was encountered
-bool Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf)
 {
 	// Build a bitmap of all the drivers referenced
 	// First looks for explicit driver numbers
 	DriversBitmap drivers = 0;
 	if (gb.Seen('P'))
 	{
-		uint32_t drives[DRIVES];
-		size_t dCount = DRIVES;
+		uint32_t drives[NumDirectDrivers];
+		size_t dCount = NumDirectDrivers;
 		gb.GetUnsignedArray(drives, dCount, false);
 		for (size_t i = 0; i < dCount; i++)
 		{
 			if (drives[i] >= numSmartDrivers)
 			{
 				reply.printf("Invalid drive number '%" PRIu32 "'", drives[i]);
-				return true;
+				return GCodeResult::error;
 			}
 			SetBit(drivers, drives[i]);
 		}
@@ -4273,7 +4454,30 @@ bool Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply)
 		{
 			for (size_t j = 0; j < axisDrivers[i].numDrivers; ++j)
 			{
-				SetBit(drivers, axisDrivers[i].driverNumbers[j]);
+				const uint8_t driver = axisDrivers[i].driverNumbers[j];
+				if (driver < numSmartDrivers)
+				{
+					SetBit(drivers, driver);
+				}
+			}
+		}
+	}
+
+	// Look for extruders
+	if (gb.Seen('E'))
+	{
+		uint32_t extruderNumbers[MaxExtruders];
+		size_t numSeen = MaxExtruders;
+		gb.GetUnsignedArray(extruderNumbers, numSeen, false);
+		for (size_t i = 0; i < numSeen; ++i)
+		{
+			if (extruderNumbers[i] < MaxExtruders)
+			{
+				const uint8_t driver = GetExtruderDriver(extruderNumbers[i]);
+				if (driver < numSmartDrivers)
+				{
+					SetBit(drivers, driver);
+				}
 			}
 		}
 	}
@@ -4324,7 +4528,7 @@ bool Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply)
 		{
 			if (IsBitSet(drivers, drive))
 			{
-				SmartDrivers::SetCoolStep(drive, coolStepConfig);
+				SmartDrivers::SetRegister(drive, SmartDriverRegister::coolStep, coolStepConfig);
 			}
 		}
 	}
@@ -4361,50 +4565,51 @@ bool Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply)
 		}
 	}
 
-	if (!seen)
+	if (seen)
 	{
-		if (drivers == 0)
-		{
-			drivers = LowestNBits<DriversBitmap>(numSmartDrivers);
-		}
-		bool printed = false;
-		for (size_t drive = 0; drive < numSmartDrivers; ++drive)
-		{
-			if (IsBitSet(drivers, drive))
-			{
-				if (printed)
-				{
-					reply.cat('\n');
-				}
-				reply.catf("Driver %u: ", drive);
-				SmartDrivers::AppendStallConfig(drive, reply);
-				reply.catf(", action: %s",
-							(IsBitSet(rehomeOnStallDrivers, drive)) ? "rehome"
-								: (IsBitSet(pauseOnStallDrivers, drive)) ? "pause"
-									: (IsBitSet(logOnStallDrivers, drive)) ? "log"
-										: "none"
-						  );
-				printed = true;
-			}
-		}
-
+		return GCodeResult::ok;
 	}
-	return false;
+
+	// Print the stall status
+	if (!OutputBuffer::Allocate(buf))
+	{
+		return GCodeResult::notFinished;
+	}
+
+	if (drivers == 0)
+	{
+		drivers = LowestNBits<DriversBitmap>(numSmartDrivers);
+	}
+
+	bool printed = false;
+	for (size_t drive = 0; drive < numSmartDrivers; ++drive)
+	{
+		if (IsBitSet(drivers, drive))
+		{
+			if (printed)
+			{
+				buf->cat('\n');
+			}
+			buf->catf("Driver %u: ", drive);
+			reply.Clear();										// we use 'reply' as a temporary buffer
+			SmartDrivers::AppendStallConfig(drive, reply);
+			buf->cat(reply.c_str());
+			buf->catf(", action: %s",
+						(IsBitSet(rehomeOnStallDrivers, drive)) ? "rehome"
+							: (IsBitSet(pauseOnStallDrivers, drive)) ? "pause"
+								: (IsBitSet(logOnStallDrivers, drive)) ? "log"
+									: "none"
+					  );
+			printed = true;
+		}
+	}
+
+	return GCodeResult::ok;
 }
 
 #endif
 
 // Real-time clock
-
-bool Platform::IsDateTimeSet() const
-{
-	return realTime != 0;
-}
-
-time_t Platform::GetDateTime() const
-{
-	return realTime;
-}
 
 bool Platform::SetDateTime(time_t time)
 {
@@ -4422,14 +4627,18 @@ bool Platform::SetDateTime(time_t time)
 	return ok;
 }
 
-// Misc
+// Initialise the I2C interface, if not already done
 void Platform::InitI2c()
 {
 #if defined(I2C_IFACE)
 	if (!i2cInitialised)
 	{
-		I2C_IFACE.begin();
-		i2cInitialised = true;
+		MutexLocker lock(Tasks::GetI2CMutex());
+		if (!i2cInitialised)			// test it again, now that we own the mutex
+		{
+			I2C_IFACE.BeginMaster(I2cClockFreq);
+			i2cInitialised = true;
+		}
 	}
 #endif
 }
@@ -4439,183 +4648,11 @@ void Platform::InitI2c()
 // Get a pseudo-random number
 uint32_t Platform::Random()
 {
-	const uint32_t clocks = GetInterruptClocks();
+	const uint32_t clocks = StepTimer::GetInterruptClocks();
 	return clocks ^ uniqueId[0] ^ uniqueId[1] ^ uniqueId[2] ^ uniqueId[3];
 }
 
 #endif
-
-// Step pulse timer interrupt
-void STEP_TC_HANDLER() __attribute__ ((hot));
-
-#if SAM4S || SAME70
-// Static data used by step ISR
-volatile uint32_t Platform::stepTimerPendingStatus = 0;	// for holding status bits that we have read (and therefore cleared) but haven't serviced yet
-volatile uint32_t Platform::stepTimerHighWord = 0;		// upper 16 bits of step timer
-#endif
-
-void STEP_TC_HANDLER()
-{
-#if SAM4S || SAME70
-	// On the SAM4 we need to check for overflow whenever we read the step clock counter, and that clears the status flags.
-	// So we store the un-serviced status flags.
-	for (;;)
-	{
-		uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR | Platform::stepTimerPendingStatus;	// read the status register, which clears the status bits, and or-in any pending status bits
-		tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;			// select only enabled interrupts
-		if (tcsr == 0)
-		{
-			break;
-		}
-
-		if ((tcsr & TC_SR_COVFS) != 0)
-		{
-			Platform::stepTimerHighWord += (1u << 16);
-			Platform::stepTimerPendingStatus &= ~TC_SR_COVFS;
-		}
-
-		if ((tcsr & TC_SR_CPAS) != 0)								// the step interrupt uses RA compare
-		{
-			STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;	// disable the interrupt
-			Platform::stepTimerPendingStatus &= ~TC_SR_CPAS;
-#ifdef MOVE_DEBUG
-			++numInterruptsExecuted;
-			lastInterruptTime = Platform::GetInterruptClocks();
-#endif
-			reprap.GetMove().Interrupt();							// execute the step interrupt
-		}
-
-		if ((tcsr & TC_SR_CPBS) != 0)
-		{
-			STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;	// disable the interrupt
-			Platform::stepTimerPendingStatus &= ~TC_SR_CPBS;
-#ifdef SOFT_TIMER_DEBUG
-			++numSoftTimerInterruptsExecuted;
-#endif
-			SoftTimer::Interrupt();
-		}
-	}
-#else
-	uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR;		// read the status register, which clears the status bits, and or-in any pending status bits
-	tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;				// select only enabled interrupts
-
-	if ((tcsr & TC_SR_CPAS) != 0)									// the step interrupt uses RA compare
-	{
-		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;		// disable the interrupt
-#ifdef MOVE_DEBUG
-		++numInterruptsExecuted;
-		lastInterruptTime = Platform::GetInterruptClocks();
-#endif
-		reprap.GetMove().Interrupt();								// execute the step interrupt
-	}
-
-	if ((tcsr & TC_SR_CPBS) != 0)
-	{
-		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;		// disable the interrupt
-#ifdef SOFT_TIMER_DEBUG
-		++numSoftTimerInterruptsExecuted;
-#endif
-		SoftTimer::Interrupt();
-	}
-#endif
-}
-
-#if SAM4S || SAME70
-
-// Get the interrupt clock count, when we know that interrupts are already disabled
-// The TCs on the SAM4S and SAME70 are only 16 bits wide, so we maintain the upper 16 bits in software
-/*static*/ uint32_t Platform::GetInterruptClocksInterruptsDisabled()
-{
-	uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR;	// get the status to see whether there is an overflow
-	tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;			// clear any bits that don't generate interrupts
-	uint32_t lowWord = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;	// get the timer low word
-	uint32_t highWord = stepTimerHighWord;						// get the volatile high word
-	if ((tcsr & TC_SR_COVFS) != 0)								// if the timer has overflowed
-	{
-		highWord += (1u << 16);									// overflow is pending, so increment the high word
-		stepTimerHighWord = highWord;							// and save it
-		tcsr &= ~TC_SR_COVFS;									// we handled the overflow, don't do it again
-		lowWord = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;		// read the low word again in case the overflow occurred just after we read it the first time
-	}
-	if (tcsr != 0)												// if there were any other pending status bits that generate interrupts
-	{
-		stepTimerPendingStatus |= tcsr;							// save the other pending bits
-		NVIC_SetPendingIRQ(STEP_TC_IRQN);						// set step timer interrupt pending
-	}
-	return (lowWord & 0x0000FFFF) | highWord;
-}
-
-#endif
-
-// Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
-/*static*/ bool Platform::ScheduleStepInterrupt(uint32_t tim)
-{
-	const irqflags_t flags = cpu_irq_save();
-	const int32_t diff = (int32_t)(tim - GetInterruptClocksInterruptsDisabled());	// see how long we have to go
-	if (diff < (int32_t)DDA::MinInterruptInterval)						// if less than about 6us or already passed
-	{
-		cpu_irq_restore(flags);
-		return true;													// tell the caller to simulate an interrupt instead
-	}
-
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RA = tim;						// set up the compare register
-
-	// We would like to clear any pending step interrupt. To do this, we must read the TC status register.
-	// Unfortunately, this would clear any other pending interrupts from the same TC.
-	// So we don't, and the step ISR must allow for getting called prematurely.
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPAS;				// enable the interrupt
-	cpu_irq_restore(flags);
-
-#ifdef MOVE_DEBUG
-		++numInterruptsScheduled;
-		nextInterruptTime = tim;
-		nextInterruptScheduledAt = Platform::GetInterruptClocks();
-#endif
-	return false;
-}
-
-// Make sure we get no step interrupts
-/*static*/ void Platform::DisableStepInterrupt()
-{
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;
-#if SAM4S || SAME70
-	stepTimerPendingStatus &= ~TC_SR_CPAS;
-#endif
-}
-
-// Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
-/*static*/ bool Platform::ScheduleSoftTimerInterrupt(uint32_t tim)
-{
-	const irqflags_t flags = cpu_irq_save();
-	const int32_t diff = (int32_t)(tim - GetInterruptClocksInterruptsDisabled());	// see how long we have to go
-	if (diff < (int32_t)DDA::MinInterruptInterval)					// if less than about 6us or already passed
-	{
-		cpu_irq_restore(flags);
-		return true;												// tell the caller to simulate an interrupt instead
-	}
-
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RB = tim;					// set up the compare register
-
-	// We would like to clear any pending step interrupt. To do this, we must read the TC status register.
-	// Unfortunately, this would clear any other pending interrupts from the same TC.
-	// So we don't, and the timer ISR must allow for getting called prematurely.
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPBS;			// enable the interrupt
-	cpu_irq_restore(flags);
-
-#ifdef SOFT_TIMER_DEBUG
-	lastSoftTimerInterruptScheduledAt = GetInterruptClocks();
-#endif
-	return false;
-}
-
-// Make sure we get no step interrupts
-/*static*/ void Platform::DisableSoftTimerInterrupt()
-{
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;
-#if SAM4S || SAME70
-	stepTimerPendingStatus &= ~TC_SR_CPBS;
-#endif
-}
 
 // Process a 1ms tick interrupt
 // This function must be kept fast so as not to disturb the stepper timing, so don't do any floating point maths in here.
@@ -4628,13 +4665,9 @@ void STEP_TC_HANDLER()
 
 void Platform::Tick()
 {
-#if SAM4E || SAME70
-	rswdt_restart(RSWDT);							// kick the secondary watchdog (the primary one is kicked in CoreNG)
-#endif
-
+#if HAS_VOLTAGE_MONITOR
 	if (tickState != 0)
 	{
-#if HAS_VOLTAGE_MONITOR
 		// Read the power input voltage
 		currentVin = AnalogInReadChannel(vInMonitorAdcChannel);
 		if (currentVin > highestVin)
@@ -4653,8 +4686,8 @@ void Platform::Tick()
 			// We deliberately do not clear driversPowered here or increase the over voltage event count - we let the spin loop handle that
 		}
 # endif
-#endif
 	}
+#endif
 
 	switch (tickState)
 	{

@@ -129,7 +129,7 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 		if (gb.Seen('H'))		// Set thermostatically-controlled heaters
 		{
 			seen = true;
-			int32_t heaters[Heaters + MaxVirtualHeaters];		// signed because we use H-1 to disable thermostatic mode
+			int32_t heaters[NumHeaters + MaxVirtualHeaters];		// signed because we use H-1 to disable thermostatic mode
 			size_t numH = ARRAY_SIZE(heaters);
 			gb.GetIntArray(heaters, numH, false);
 
@@ -138,14 +138,14 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 			for (size_t h = 0; h < numH; ++h)
 			{
 				const int hnum = heaters[h];
-				if (hnum >= 0 && hnum < (int)Heaters)
+				if (hnum >= 0 && hnum < (int)NumHeaters)
 				{
 					SetBit(heatersMonitored, (unsigned int)hnum);
 				}
 				else if (hnum >= (int)FirstVirtualHeater && hnum < (int)(FirstVirtualHeater + MaxVirtualHeaters))
 				{
 					// Heaters 100, 101... are virtual heaters i.e. CPU and driver temperatures
-					SetBit(heatersMonitored, Heaters + (unsigned int)hnum - FirstVirtualHeater);
+					SetBit(heatersMonitored, NumHeaters + (unsigned int)hnum - FirstVirtualHeater);
 				}
 			}
 			if (heatersMonitored != 0)
@@ -162,8 +162,7 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 		// We only act on the 'S' parameter here if we have processed other parameters
 		if (seen && gb.Seen('S'))		// Set new fan value - process this after processing 'H' or it may not be acted on
 		{
-			const float f = constrain<float>(gb.GetFValue(), 0.0, 255.0);
-			SetPwm(f);
+			SetPwm(ConvertOldStylePwm(gb.GetFValue()));
 		}
 
 		if (seen)
@@ -191,11 +190,11 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 			if (heatersMonitored != 0)
 			{
 				reply.catf(", temperature: %.1f:%.1fC, heaters:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);
-				for (unsigned int i = 0; i < Heaters + MaxVirtualHeaters; ++i)
+				for (unsigned int i = 0; i < NumHeaters + MaxVirtualHeaters; ++i)
 				{
 					if (IsBitSet(heatersMonitored, i))
 					{
-						reply.catf(" %u", (i < Heaters) ? i : FirstVirtualHeater + i - Heaters);
+						reply.catf(" %u", (i < NumHeaters) ? i : FirstVirtualHeater + i - NumHeaters);
 					}
 				}
 				reply.catf(", current speed: %d%%:", (int)(lastVal * 100.0));
@@ -206,13 +205,10 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 	return seen;
 }
 
+// Set the PWM. 'speed' is in the interval 0.0..1.0.
 void Fan::SetPwm(float speed)
 {
-	if (speed > 1.0)
-	{
-		speed /= 255.0;
-	}
-	val = constrain<float>(speed, 0.0, 1.0);
+	val = speed;
 	Refresh();
 }
 
@@ -264,21 +260,21 @@ void Fan::Refresh()
 	{
 		reqVal = 0.0;
 		const bool bangBangMode = (triggerTemperatures[1] <= triggerTemperatures[0]);
-		for (size_t h = 0; h < Heaters + MaxVirtualHeaters; ++h)
+		for (size_t h = 0; h < NumHeaters + MaxVirtualHeaters; ++h)
 		{
 			// Check if this heater is both monitored by this fan and in use
 			if (   IsBitSet(heatersMonitored, h)
-				&& (h < reprap.GetToolHeatersInUse() || (h >= Heaters && h < Heaters + MaxVirtualHeaters) || reprap.GetHeat().IsBedOrChamberHeater(h))
+				&& (h < reprap.GetToolHeatersInUse() || (h >= NumHeaters && h < NumHeaters + MaxVirtualHeaters) || reprap.GetHeat().IsBedOrChamberHeater(h))
 			   )
 			{
 				// This heater is both monitored and potentially active
-				if (h < Heaters && reprap.GetHeat().IsTuning(h))
+				if (h < NumHeaters && reprap.GetHeat().IsTuning(h))
 				{
 					reqVal = 1.0;			// when turning the PID for a monitored heater, turn the fan on
 				}
 				else
 				{
-					const size_t heaterHumber = (h >= Heaters) ? (h - Heaters) + FirstVirtualHeater : h;
+					const size_t heaterHumber = (h >= NumHeaters) ? (h - NumHeaters) + FirstVirtualHeater : h;
 					TemperatureError err;
 					const float ht = reprap.GetHeat().GetTemperature(heaterHumber, err);
 					if (err != TemperatureError::success || ht < BAD_LOW_TEMPERATURE || ht >= triggerTemperatures[1])
@@ -316,7 +312,7 @@ void Fan::Refresh()
 #if HAS_SMART_DRIVERS
 			if (driverChannelsMonitored != 0)
 			{
-				reprap.GetPlatform().DriverCoolingFansOn(driverChannelsMonitored);		// tell Platform that we have started a fan that cools drivers
+				reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, true);		// tell Platform that we have started a fan that cools drivers
 			}
 #endif
 			if (reqVal < 1.0 && blipTime != 0)
@@ -339,6 +335,12 @@ void Fan::Refresh()
 			}
 		}
 	}
+#if HAS_SMART_DRIVERS
+	else if (driverChannelsMonitored != 0 && lastVal != 0.0)
+	{
+		reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, false);			// tell Platform that we have stopped a fan that cools drivers
+	}
+#endif
 
 	SetHardwarePwm(reqVal);
 	lastVal = reqVal;

@@ -46,12 +46,12 @@
 #include "RepRap.h"
 #include "Webserver.h"
 #include "Version.h"
-#include "Libraries/General/IP4String.h"
+#include "General/IP4String.h"
+
+#include "ethernet_sam.h"
 
 extern "C"
 {
-#include "ethernet_sam.h"
-
 #include "lwipopts.h"
 
 #ifdef LWIP_STATS
@@ -780,7 +780,7 @@ const uint8_t *Network::GetIPAddress() const
 	return ethernet_get_ipaddress();
 }
 
-void Network::SetEthernetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[])
+void Network::SetEthernetIPAddress(IPAddress ipAddress, IPAddress netmask, IPAddress gateway)
 {
 	if (state == NetworkObtainingIP || state == NetworkActive)
 	{

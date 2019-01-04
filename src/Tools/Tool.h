@@ -77,6 +77,8 @@ public:
 	void SetToolHeaterActiveTemperature(size_t heaterNumber, float temp);
 	void SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp);
 
+	bool HasTemperatureFault() const { return heaterFault; }
+
 	friend class RepRap;
 
 protected:
@@ -104,8 +106,8 @@ private:
 	float offset[MaxAxes];
 	float mix[MaxExtruders];
 	bool canExceedMixSumOf1;
-	float activeTemperatures[Heaters];
-	float standbyTemperatures[Heaters];
+	float activeTemperatures[NumHeaters];
+	float standbyTemperatures[NumHeaters];
 	size_t driveCount;
 	size_t heaterCount;
 	int myNumber;
@@ -113,7 +115,7 @@ private:
 	AxesBitmap axisOffsetsProbed;
 	FansBitmap fanMapping;
 	uint8_t drives[MaxExtruders];
-	int8_t heaters[Heaters];
+	int8_t heaters[NumHeaters];
 
 	ToolState state;
 	bool heaterFault;

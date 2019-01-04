@@ -6,6 +6,7 @@
 #include "Platform.h"
 #include "RepRap.h"
 #include "Libraries/Fatfs/diskio.h"
+#include "Movement/StepTimer.h"
 
 uint32_t FileStore::longestWriteTime = 0;
 
@@ -24,7 +25,7 @@ void FileStore::Init()
 // Invalidate the file if it uses the specified FATFS object
 bool FileStore::Invalidate(const FATFS *fs, bool doClose)
 {
-	if (file.fs == fs)
+	if (file.obj.fs == fs)
 	{
 		if (doClose)
 		{
@@ -32,7 +33,7 @@ bool FileStore::Invalidate(const FATFS *fs, bool doClose)
 		}
 		else
 		{
-			file.fs = nullptr;
+			file.obj.fs = nullptr;
 			if (writeBuffer != nullptr)
 			{
 				reprap.GetPlatform().GetMassStorage()->ReleaseWriteBuffer(writeBuffer);
@@ -48,16 +49,17 @@ bool FileStore::Invalidate(const FATFS *fs, bool doClose)
 // Return true if the file is open on the specified file system
 bool FileStore::IsOpenOn(const FATFS *fs) const
 {
-	return openCount != 0 && file.fs == fs;
+	return openCount != 0 && file.obj.fs == fs;
 }
 
 // Open a local file (for example on an SD card).
 // This is protected - only Platform can access it.
-bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
+bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode, uint32_t preAllocSize)
 {
 	String<MaxFilenameLength> location;
 	MassStorage::CombineName(location.GetRef(), directory, fileName);
 	const bool writing = (mode == OpenMode::write || mode == OpenMode::append);
+	writeBuffer = nullptr;
 
 	if (writing)
 	{
@@ -90,7 +92,10 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 		// We only do this if the mode is write, not append, because we don't want to use up a large buffer to append messages to the log file,
 		// especially as we need to flush messages to SD card regularly.
 		// Currently, append mode is used for the log file and for appending simulated print times to GCodes files (which required read access too).
-		writeBuffer = (mode == OpenMode::write) ? reprap.GetPlatform().GetMassStorage()->AllocateWriteBuffer() : nullptr;
+		if (mode == OpenMode::write)
+		{
+			writeBuffer = reprap.GetPlatform().GetMassStorage()->AllocateWriteBuffer();
+		}
 	}
 
 	const FRESULT openReturn = f_open(&file, location.c_str(),
@@ -99,17 +104,32 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 												: FA_OPEN_EXISTING | FA_READ);
 	if (openReturn != FR_OK)
 	{
+		if (writeBuffer != nullptr)
+		{
+			reprap.GetPlatform().GetMassStorage()->ReleaseWriteBuffer(writeBuffer);
+			writeBuffer = nullptr;
+		}
+
 		// We no longer report an error if opening a file in read mode fails unless debugging is enabled, because sometimes that is quite normal.
 		// It is up to the caller to report an error if necessary.
 		if (reprap.Debug(modulePlatform))
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "Can't open %s to %s, error code %d\n", location.c_str(), (writing) ? "write" : "read", (int)openReturn);
+			reprap.GetPlatform().MessageF(WarningMessage, "Failed to open %s to %s, error code %d\n", location.c_str(), (writing) ? "write" : "read", (int)openReturn);
 		}
 		return false;
 	}
+
 	crc.Reset();
 	usageMode = (writing) ? FileUseMode::readWrite : FileUseMode::readOnly;
 	openCount = 1;
+	if (mode == OpenMode::write && preAllocSize != 0)
+	{
+		const FRESULT expandReturn = f_expand(&file, preAllocSize, 1);		// try to pre-allocate contiguous space - it doesn't matter if it fails
+		if (reprap.Debug(moduleStorage))
+		{
+			debugPrintf("Preallocating %" PRIu32 " bytes returned %d\n", preAllocSize, (int)expandReturn);
+		}
+	}
 	return true;
 }
 
@@ -235,7 +255,7 @@ FilePosition FileStore::Position() const
 
 uint32_t FileStore::ClusterSize() const
 {
-	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.fs->csize * 512u : 1;	// we divide by the cluster size so return 1 not 0 if there is an error
+	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.obj.fs->csize * 512u : 1;	// we divide by the cluster size so return 1 not 0 if there is an error
 }
 
 #if 0	// not currently used
@@ -254,10 +274,10 @@ FilePosition FileStore::Length() const
 		return 0;
 
 	case FileUseMode::readOnly:
-		return file.fsize;
+		return f_size(&file);
 
 	case FileUseMode::readWrite:
-		return (writeBuffer != nullptr) ? file.fsize + writeBuffer->BytesStored() : file.fsize;
+		return (writeBuffer != nullptr) ? f_size(&file) + writeBuffer->BytesStored() : f_size(&file);
 
 	case FileUseMode::invalidated:
 	default:
@@ -335,10 +355,10 @@ int FileStore::ReadLine(char* buf, size_t nBytes)
 
 FRESULT FileStore::Store(const char *s, size_t len, size_t *bytesWritten)
 {
-	uint32_t time = Platform::GetInterruptClocks();
+	uint32_t time = StepTimer::GetInterruptClocks();
 	crc.Update(s, len);
 	const FRESULT writeStatus = f_write(&file, s, len, bytesWritten);
-	time = Platform::GetInterruptClocks() - time;
+	time = StepTimer::GetInterruptClocks() - time;
 	if (time > longestWriteTime)
 	{
 		longestWriteTime = time;
@@ -406,7 +426,7 @@ bool FileStore::Write(const char *s, size_t len)
 
 	case FileUseMode::invalidated:
 	default:
-		return 0;
+		return false;
 	}
 }
 
@@ -472,7 +492,7 @@ bool FileStore::Truncate()
 // Return the file write time in milliseconds, and clear it
 float FileStore::GetAndClearLongestWriteTime()
 {
-	const float ret = (float)longestWriteTime * StepClocksToMillis;
+	const float ret = (float)longestWriteTime * StepTimer::StepClocksToMillis;
 	longestWriteTime = 0;
 	return ret;
 }

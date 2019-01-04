@@ -11,7 +11,7 @@
 //***************************************************************************************************
 // Alligator Microstepping static class
 
-uint8_t microsteppingPins[ DRIVES - MinAxes ];
+uint8_t microsteppingPins[ NumDirectDrivers - MinAxes ];
 
 void Microstepping::Init() {
 
@@ -19,7 +19,7 @@ void Microstepping::Init() {
 	static_assert(sizeof(microsteppingPins) == sizeof(MICROSTEPPING_PINS), "Incompatible array types");
 	memcpy(microsteppingPins, MICROSTEPPING_PINS, sizeof(MICROSTEPPING_PINS));
 
-	for(uint8_t pin=0; pin < (DRIVES-MinAxes); pin++ ) {
+	for(uint8_t pin=0; pin < (NumDirectDrivers - MinAxes); pin++ ) {
 		pinMode( microsteppingPins[pin], OUTPUT_HIGH);
 	}
 }
@@ -27,7 +27,7 @@ void Microstepping::Init() {
 bool Microstepping::Set(uint8_t drive, uint8_t value) {
 
 	// Do not exceed the maximum value
-	if ( drive >= (DRIVES - MinAxes) )
+	if ( drive >= (NumDirectDrivers - MinAxes) )
 	{
 		return false;
 	}
@@ -45,7 +45,7 @@ bool Microstepping::Set(uint8_t drive, uint8_t value) {
 uint8_t Microstepping::Read( uint8_t drive ) {
 
 	// Do not exceed the maximum value
-	if ( drive < (DRIVES - MinAxes) )
+	if ( drive < (NumDirectDrivers - MinAxes) )
 	{
 		return ( digitalRead(microsteppingPins[drive]) == LOW ? 16 : 32 );
 	}

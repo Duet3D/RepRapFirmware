@@ -52,32 +52,34 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 
 #ifdef PCCB_X5
 
-constexpr size_t DRIVES = 6;						// The maximum number of drives supported by the electronics
+constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics
 constexpr size_t MaxSmartDrivers = 5;				// The maximum number of smart drivers
-# define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f }
 
 #else
 
-constexpr size_t DRIVES = 8;						// The maximum number of drives supported by the electronics
+constexpr size_t NumDirectDrivers = 8;				// The maximum number of drives supported by the electronics
 constexpr size_t MaxSmartDrivers = 2;				// The maximum number of smart drivers
-# define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h }
 
 #endif
 
-constexpr size_t Heaters = 2;						// The number of heaters in the machine. PCCB has no heaters, but we pretend that the LED pins are heaters.
+constexpr size_t MaxTotalDrivers = NumDirectDrivers;
+
+constexpr size_t NumEndstops = 4;					// The number of inputs we have for endstops, filament sensors etc.
+constexpr size_t NumHeaters = 2;					// The number of heaters in the machine. PCCB has no heaters, but we pretend that the LED pins are heaters.
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 2;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, <= DRIVES
-// Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
-#define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f }
 
-constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
+constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t NUM_SERIAL_CHANNELS = 1;			// The number of serial IO channels (USB only)
 #define SERIAL_MAIN_DEVICE SerialUSB
+
+// SerialUSB
+constexpr Pin UsbVBusPin = PortCPin(11);			// Pin used to monitor VBUS on USB port
 
 #define I2C_IFACE	Wire							// First and only I2C interface
 #define I2C_IRQn	WIRE_ISR_ID
@@ -89,10 +91,10 @@ constexpr Pin GlobalTmc22xxEnablePin = 1;			// The pin that drives ENN of all in
 
 #ifdef PCCB_X5
 
-constexpr Pin GlobalTmc2660EnablePin = 52;			// The pin that drives ENN of all drivers on the DueX5
-constexpr Pin ENABLE_PINS[DRIVES] = { 61, 35, 41, 55, 0, 64 };
-constexpr Pin STEP_PINS[DRIVES] = { 60, 38, 58, 56, 46, 50 };
-constexpr Pin DIRECTION_PINS[DRIVES] = { 17, 57, 54, 34, 1, 53 };
+constexpr Pin GlobalTmc2660EnablePin = PortCPin(16); // The pin that drives ENN of all drivers on the DueX5
+constexpr Pin ENABLE_PINS[NumDirectDrivers] =		{ PortBPin(14), PortCPin(25), PortCPin( 5), PortCPin(19), PortAPin( 0), PortCPin(28) };
+constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin(24), PortCPin( 2), PortCPin(22), PortCPin(20), PortCPin(10), PortCPin(14) };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortAPin(17), PortCPin(21), PortCPin(18), PortCPin(13), PortAPin( 1), PortCPin(17) };
 
 Spi * const SPI_TMC2660 = SPI;
 constexpr uint32_t ID_TMC2660_SPI = ID_SPI;
@@ -100,15 +102,15 @@ constexpr IRQn TMC2660_SPI_IRQn = SPI_IRQn;
 # define TMC2660_SPI_Handler	SPI_Handler
 
 // Pin assignments, using USART1 in SPI mode
-constexpr Pin TMC2660MosiPin = 13;					// PA13
-constexpr Pin TMC2660MisoPin = 12;					// PA12
-constexpr Pin TMC2660SclkPin = 14;					// PA14
+constexpr Pin TMC2660MosiPin = PortAPin(13);
+constexpr Pin TMC2660MisoPin = PortAPin(12);
+constexpr Pin TMC2660SclkPin = PortAPin(14);
 
 #else
 
-constexpr Pin ENABLE_PINS[DRIVES] = { NoPin, NoPin, 61, 35, 41, 55, 0, 64 };
-constexpr Pin STEP_PINS[DRIVES] = { 40, 43, 60, 38, 58, 56, 46, 50 };
-constexpr Pin DIRECTION_PINS[DRIVES] = { 8, 11, 17, 57, 54, 34, 1, 53 };
+constexpr Pin ENABLE_PINS[NumDirectDrivers] =		{ NoPin,		NoPin,		  PortBPin(14), PortCPin(25), PortCPin( 5), PortCPin(19), PortAPin( 0), PortCPin(28) };
+constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin( 4), PortCPin( 7), PortCPin(24), PortCPin( 2), PortCPin(22), PortCPin(20), PortCPin(10), PortCPin(14) };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortAPin( 8), PortAPin(11), PortAPin(17), PortCPin(21), PortCPin(18), PortCPin(13), PortAPin( 1), PortCPin(17) };
 
 Uart * const TMC22xxUarts[MaxSmartDrivers] = { UART0, UART1 };
 constexpr uint32_t TMC22xxUartIds[MaxSmartDrivers] = { ID_UART0, ID_UART1 };
@@ -133,17 +135,13 @@ const uint32_t TransferTimeout = 10;						// any transfer should complete within
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-#ifdef PCCB_X5
-constexpr Pin END_STOP_PINS[DRIVES] = { 25, 67, 24, 63, NoPin, NoPin };
-#else
-constexpr Pin END_STOP_PINS[DRIVES] = { 25, 67, 24, 63, NoPin, NoPin, NoPin, NoPin };
-#endif
+constexpr Pin END_STOP_PINS[NumEndstops] = { PortAPin(24), PortAPin(25), PortCPin(31), PortCPin(27) };
 
 // Heaters and thermistors
-constexpr Pin HEAT_ON_PINS[Heaters] = { 36, 59 };					// these are actually the LED control pins
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 20, 49 }; 	// Thermistor pin numbers
-constexpr Pin VssaSensePin = 19;
-constexpr Pin VrefSensePin = 27;
+constexpr Pin HEAT_ON_PINS[NumHeaters] = { PortCPin(0), PortCPin(23) };					// these are actually the LED control pins
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortAPin(20), PortCPin(13) }; 	// thermistor pin numbers
+constexpr Pin VssaSensePin = PortAPin(19);
+constexpr Pin VrefSensePin = PortBPin(1);
 
 // Default thermistor parameters - on PCCB we default both thermistors to the same parameters
 constexpr float BED_R25 = 100000.0;
@@ -160,14 +158,14 @@ constexpr float THERMISTOR_SERIES_RS = 2200.0;
 constexpr size_t MaxSpiTempSensors = 1;		//TODO which SPI channels does PCCB route to the DueX?
 
 // Digital pins the 31855s have their select lines tied to
-constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { 63 };				// SPI0_CS6 if a DueX5 is connected
+constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { PortCPin(27) };				// SPI0_CS6 if a DueX5 is connected
 
 // Pin that controls the ATX power on/off
 constexpr Pin ATX_POWER_PIN = NoPin;
 
 // Analogue pin numbers
 constexpr Pin Z_PROBE_PIN = NoPin;											// Z probe analog input
-constexpr Pin PowerMonitorVinDetectPin = 48;								// Vin monitor
+constexpr Pin PowerMonitorVinDetectPin = PortCPin(12);						// Vin monitor
 constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 voltage divider
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
@@ -177,24 +175,24 @@ constexpr Pin DiagPin = NoPin;
 // Cooling fans
 constexpr size_t NUM_FANS = 4;
 constexpr size_t NumTachos = 2;
-constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { 16, 39, 15, 37 };				// PWML2, PWML3, TIOA1, PWML1
-constexpr Pin TachoPins[NumTachos] = { 26, 66 };
+constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { PortAPin(16), PortCPin(3), PortAPin(15), PortCPin(1) };		// PWML2, PWML3, TIOA1, PWML1
+constexpr Pin TachoPins[NumTachos] = { PortBPin(0), PortCPin(30) };
 
 // Main LED control
 constexpr size_t NumLeds = 2;												// number of main LEDs
-constexpr Pin LedOnPins[NumLeds] = { 36, 59 };								// LED control pins
+constexpr Pin LedOnPins[NumLeds] = { PortCPin(0), PortCPin(23) };								// LED control pins
 
 // DotStar LED control (USART0 is SharedSPI,
 Usart * const DotStarUsart = USART1;
 constexpr uint32_t DotStarUsartId = ID_USART1;
-constexpr Pin DotStarMosiPin = 22;
-constexpr Pin DotStarSclkPin = 23;
+constexpr Pin DotStarMosiPin = PortAPin(22);
+constexpr Pin DotStarSclkPin = PortAPin(23);
 constexpr IRQn DotStarUsartIRQn = USART1_IRQn;
 const uint32_t DotStarSpiClockFrequency = 100000;		// try sending at 100kHz
 
 // SD cards
 constexpr size_t NumSdCards = 1;
-constexpr Pin SdCardDetectPins[NumSdCards] = { 44 };
+constexpr Pin SdCardDetectPins[NumSdCards] = { PortCPin(8) };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin };
 constexpr Pin SdSpiCSPins[1] = { NoPin };
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
@@ -204,10 +202,10 @@ constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 // This is the mapping from logical pins 60+ to firmware pin numbers
 constexpr Pin SpecialPinMap[] =
 {
-	18, 21, 51, 59, 62, 65													// PA18/AD1, PA21/AD8, PC15/AD11, PC22, PC23, PC29
+	PortAPin(18), PortAPin(21), PortCPin(15), PortCPin(29)					// PA18/AD1, PA21/AD8, PC15/AD11, PC29
 };
 
-constexpr int HighestLogicalPin = 65;										// highest logical pin number on this electronics
+constexpr int HighestLogicalPin = 63;										// highest logical pin number on this electronics
 
 // SAM4S Flash locations (may be expanded in the future)
 constexpr uint32_t IAP_FLASH_START = 0x00470000;

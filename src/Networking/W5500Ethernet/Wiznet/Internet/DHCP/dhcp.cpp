@@ -200,24 +200,22 @@ typedef struct {
 } RIP_MSG;
 
 
+uint8_t DHCP_SOCKET;								// Socket number for DHCP
 
-uint8_t DHCP_SOCKET;                      // Socket number for DHCP
-
-uint8_t DHCP_SIP[4];                      // DHCP Server IP address
+IPAddress DHCP_SIP;									// DHCP Server IP address
 
 // Network information from DHCP Server
-uint8_t OLD_allocated_ip[4]   = {0, };    // Previous IP address
-uint8_t DHCP_allocated_ip[4]  = {0, };    // IP address from DHCP
-uint8_t DHCP_allocated_gw[4]  = {0, };    // Gateway address from DHCP
-uint8_t DHCP_allocated_sn[4]  = {0, };    // Subnet mask from DHCP
-uint8_t DHCP_allocated_dns[4] = {0, };    // DNS address from DHCP
+IPAddress OLD_allocated_ip;							// Previous IP address
+IPAddress DHCP_allocated_ip;						// IP address from DHCP
+IPAddress DHCP_allocated_gw;						// Gateway address from DHCP
+IPAddress DHCP_allocated_sn;    					// Subnet mask from DHCP
+IPAddress DHCP_allocated_dns;						// DNS address from DHCP
 
-
-DhcpState dhcp_state = DhcpState::init;   // DHCP state
+DhcpState dhcp_state = DhcpState::init;				// DHCP state
 int8_t   dhcp_retry_count;
 
 uint32_t dhcp_lease_time;
-volatile uint32_t dhcp_tick_1s;                 // unit 1 second
+volatile uint32_t dhcp_tick_1s;             	    // unit 1 second
 uint32_t dhcp_tick_next;
 
 uint32_t DHCP_XID;      							// Any number
@@ -416,11 +414,8 @@ void send_DHCP_DISCOVER(void)
 	}
 
 	// send broadcasting packet
-	uint8_t ip[4];
-	ip[0] = 255;
-	ip[1] = 255;
-	ip[2] = 255;
-	ip[3] = 255;
+	IPAddress ip;
+	ip.SetBroadcast();			// 255.155.255.255
 
 	DEBUG_PRINTF("> Send DHCP_DISCOVER\n");
 
@@ -434,26 +429,20 @@ void send_DHCP_REQUEST(void)
 	
 	makeDHCPMSG();
 
-	uint8_t ip[4];
+	IPAddress ip;
 	if (dhcp_state == DhcpState::leased || dhcp_state == DhcpState::rerequest)
 	{
 		*((uint8_t*)(&pDHCPMSG->flags))   = ((DHCP_FLAGSUNICAST & 0xFF00)>> 8);
 		*((uint8_t*)(&pDHCPMSG->flags)+1) = (DHCP_FLAGSUNICAST & 0x00FF);
-		pDHCPMSG->ciaddr[0] = DHCP_allocated_ip[0];
-		pDHCPMSG->ciaddr[1] = DHCP_allocated_ip[1];
-		pDHCPMSG->ciaddr[2] = DHCP_allocated_ip[2];
-		pDHCPMSG->ciaddr[3] = DHCP_allocated_ip[3];
-		ip[0] = DHCP_SIP[0];
-		ip[1] = DHCP_SIP[1];
-		ip[2] = DHCP_SIP[2];
-		ip[3] = DHCP_SIP[3];
+		pDHCPMSG->ciaddr[0] = DHCP_allocated_ip.GetQuad(0);
+		pDHCPMSG->ciaddr[1] = DHCP_allocated_ip.GetQuad(1);
+		pDHCPMSG->ciaddr[2] = DHCP_allocated_ip.GetQuad(2);
+		pDHCPMSG->ciaddr[3] = DHCP_allocated_ip.GetQuad(3);
+		ip = DHCP_SIP;
 	}
 	else
 	{
-		ip[0] = 255;
-		ip[1] = 255;
-		ip[2] = 255;
-		ip[3] = 255;
+		ip.SetBroadcast();		// 255.255.255.255
 	}
 
 	size_t k = 4;      // because MAGIC_COOKIE already made by makeDHCPMSG()
@@ -477,17 +466,17 @@ void send_DHCP_REQUEST(void)
 	{
 		pDHCPMSG->OPT[k++] = dhcpRequestedIPaddr;
 		pDHCPMSG->OPT[k++] = 0x04;
-		pDHCPMSG->OPT[k++] = DHCP_allocated_ip[0];
-		pDHCPMSG->OPT[k++] = DHCP_allocated_ip[1];
-		pDHCPMSG->OPT[k++] = DHCP_allocated_ip[2];
-		pDHCPMSG->OPT[k++] = DHCP_allocated_ip[3];
+		pDHCPMSG->OPT[k++] = DHCP_allocated_ip.GetQuad(0);
+		pDHCPMSG->OPT[k++] = DHCP_allocated_ip.GetQuad(1);
+		pDHCPMSG->OPT[k++] = DHCP_allocated_ip.GetQuad(2);
+		pDHCPMSG->OPT[k++] = DHCP_allocated_ip.GetQuad(3);
 	
 		pDHCPMSG->OPT[k++] = dhcpServerIdentifier;
 		pDHCPMSG->OPT[k++] = 0x04;
-		pDHCPMSG->OPT[k++] = DHCP_SIP[0];
-		pDHCPMSG->OPT[k++] = DHCP_SIP[1];
-		pDHCPMSG->OPT[k++] = DHCP_SIP[2];
-		pDHCPMSG->OPT[k++] = DHCP_SIP[3];
+		pDHCPMSG->OPT[k++] = DHCP_SIP.GetQuad(0);
+		pDHCPMSG->OPT[k++] = DHCP_SIP.GetQuad(1);
+		pDHCPMSG->OPT[k++] = DHCP_SIP.GetQuad(2);
+		pDHCPMSG->OPT[k++] = DHCP_SIP.GetQuad(3);
 	}
 
 	// host name
@@ -548,17 +537,17 @@ void send_DHCP_DECLINE(void)
 
 	pDHCPMSG->OPT[k++] = dhcpRequestedIPaddr;
 	pDHCPMSG->OPT[k++] = 0x04;
-	pDHCPMSG->OPT[k++] = DHCP_allocated_ip[0];
-	pDHCPMSG->OPT[k++] = DHCP_allocated_ip[1];
-	pDHCPMSG->OPT[k++] = DHCP_allocated_ip[2];
-	pDHCPMSG->OPT[k++] = DHCP_allocated_ip[3];
+	pDHCPMSG->OPT[k++] = DHCP_allocated_ip.GetQuad(0);
+	pDHCPMSG->OPT[k++] = DHCP_allocated_ip.GetQuad(1);
+	pDHCPMSG->OPT[k++] = DHCP_allocated_ip.GetQuad(2);
+	pDHCPMSG->OPT[k++] = DHCP_allocated_ip.GetQuad(3);
 
 	pDHCPMSG->OPT[k++] = dhcpServerIdentifier;
 	pDHCPMSG->OPT[k++] = 0x04;
-	pDHCPMSG->OPT[k++] = DHCP_SIP[0];
-	pDHCPMSG->OPT[k++] = DHCP_SIP[1];
-	pDHCPMSG->OPT[k++] = DHCP_SIP[2];
-	pDHCPMSG->OPT[k++] = DHCP_SIP[3];
+	pDHCPMSG->OPT[k++] = DHCP_SIP.GetQuad(0);
+	pDHCPMSG->OPT[k++] = DHCP_SIP.GetQuad(1);
+	pDHCPMSG->OPT[k++] = DHCP_SIP.GetQuad(2);
+	pDHCPMSG->OPT[k++] = DHCP_SIP.GetQuad(3);
 
 	pDHCPMSG->OPT[k++] = endOption;
 
@@ -568,11 +557,8 @@ void send_DHCP_DECLINE(void)
 	}
 
 	//send broadcasting packet
-	uint8_t ip[4];
-	ip[0] = 0xFF;
-	ip[1] = 0xFF;
-	ip[2] = 0xFF;
-	ip[3] = 0xFF;
+	IPAddress ip;
+	ip.SetBroadcast();
 
 	DEBUG_PRINTF("\n> Send DHCP_DECLINE\n");
 
@@ -627,31 +613,23 @@ int8_t parseDHCPMSG(void)
 					case subnetMask :
 						p++;
 						p++;
-						DHCP_allocated_sn[0] = *p++;
-						DHCP_allocated_sn[1] = *p++;
-						DHCP_allocated_sn[2] = *p++;
-						DHCP_allocated_sn[3] = *p++;
+						DHCP_allocated_sn.SetV4(p);
+						p += 4;
 						break;
 					case routersOnSubnet :
 						{
 							p++;
 							const uint8_t opt_len = *p++;
-							DHCP_allocated_gw[0] = *p++;
-							DHCP_allocated_gw[1] = *p++;
-							DHCP_allocated_gw[2] = *p++;
-							DHCP_allocated_gw[3] = *p++;
-							p = p + (opt_len - 4);
+							DHCP_allocated_gw.SetV4(p);
+							p += opt_len;
 						}
 						break;
 					case dns :
 						{
 							p++;
 							const uint8_t opt_len = *p++;
-							DHCP_allocated_dns[0] = *p++;
-							DHCP_allocated_dns[1] = *p++;
-							DHCP_allocated_dns[2] = *p++;
-							DHCP_allocated_dns[3] = *p++;
-							p = p + (opt_len - 4);
+							DHCP_allocated_dns.SetV4(p);
+							p += opt_len;
 						}
 						break;
 					case dhcpIPaddrLeaseTime :
@@ -671,10 +649,8 @@ int8_t parseDHCPMSG(void)
 						{
 							p++;
 							p++;
-							DHCP_SIP[0] = *p++;
-							DHCP_SIP[1] = *p++;
-							DHCP_SIP[2] = *p++;
-							DHCP_SIP[3] = *p++;
+							DHCP_SIP.SetV4(p);
+							p += 4;
 						}
 						break;
 
@@ -720,10 +696,7 @@ DhcpRunResult DHCP_run(void)
 	switch (dhcp_state)
 	{
 	case DhcpState::init:
-		DHCP_allocated_ip[0] = 0;
-		DHCP_allocated_ip[1] = 0;
-		DHCP_allocated_ip[2] = 0;
-		DHCP_allocated_ip[3] = 0;
+		DHCP_allocated_ip.SetNull();
 		send_DHCP_DISCOVER();
 		dhcp_state = DhcpState::discover;
 		break;
@@ -732,10 +705,7 @@ DhcpRunResult DHCP_run(void)
 		if (type == DHCP_OFFER)
 		{
 			DEBUG_PRINTF("> Receive DHCP_OFFER\n");
-			DHCP_allocated_ip[0] = pDHCPMSG->yiaddr[0];
-			DHCP_allocated_ip[1] = pDHCPMSG->yiaddr[1];
-			DHCP_allocated_ip[2] = pDHCPMSG->yiaddr[2];
-			DHCP_allocated_ip[3] = pDHCPMSG->yiaddr[3];
+			DHCP_allocated_ip.SetV4(pDHCPMSG->yiaddr);
 
 			send_DHCP_REQUEST();
 			dhcp_state = DhcpState::request;
@@ -750,9 +720,9 @@ DhcpRunResult DHCP_run(void)
 		if (type == DHCP_ACK)
 		{
 			DEBUG_PRINTF("> Receive DHCP_ACK, lease time = %u\n", (unsigned int)dhcp_lease_time);
-			uint8_t currentIp[4];
+			IPAddress currentIp;
 			getSIPR(currentIp);
-			if (memcmp(DHCP_allocated_ip, currentIp, 4) == 0)
+			if (DHCP_allocated_ip == currentIp)
 			{
 				// We have been given the IP address we are already using.
 				// Don't check for an address conflict, because I have a suspicion that we end up replying to the ARP request ourselves.
@@ -813,10 +783,7 @@ DhcpRunResult DHCP_run(void)
 		if ((dhcp_lease_time != INFINITE_LEASETIME) && ((dhcp_lease_time/2) < dhcp_tick_1s))
 		{
 			DEBUG_PRINTF("> Maintain the IP address \n");
-			OLD_allocated_ip[0] = DHCP_allocated_ip[0];
-			OLD_allocated_ip[1] = DHCP_allocated_ip[1];
-			OLD_allocated_ip[2] = DHCP_allocated_ip[2];
-			OLD_allocated_ip[3] = DHCP_allocated_ip[3];
+			OLD_allocated_ip = DHCP_allocated_ip;
 
 			DHCP_XID++;
 
@@ -831,10 +798,7 @@ DhcpRunResult DHCP_run(void)
 		if (type == DHCP_ACK)
 		{
 			dhcp_retry_count = 0;
-			if (OLD_allocated_ip[0] != DHCP_allocated_ip[0] ||
-				OLD_allocated_ip[1] != DHCP_allocated_ip[1] ||
-				OLD_allocated_ip[2] != DHCP_allocated_ip[2] ||
-				OLD_allocated_ip[3] != DHCP_allocated_ip[3])
+			if (OLD_allocated_ip != DHCP_allocated_ip)
 			{
 				ret = DhcpRunResult::DHCP_IP_CHANGED;
 				dhcp_ip_update();
@@ -949,7 +913,7 @@ void DHCP_init(uint8_t s, uint32_t seed, const char *hname)
 	strncpy(HOST_NAME, hname, sizeof(HOST_NAME));
 	HOST_NAME[sizeof(HOST_NAME) - 1] = 0;
 
-	uint8_t zeroip[4] = {0,0,0,0};
+	IPAddress zeroip;
 	getSHAR(DHCP_CHADDR);
 	DEBUG_PRINTF("MAC address: %02x:%02x:%02x:%02x:%02x:%02x\n", DHCP_CHADDR[0], DHCP_CHADDR[1], DHCP_CHADDR[2], DHCP_CHADDR[3], DHCP_CHADDR[4], DHCP_CHADDR[5]);
 
@@ -993,36 +957,24 @@ void DHCP_time_handler(void)
 	dhcp_tick_1s++;
 }
 
-void getIPfromDHCP(uint8_t* ip)
+IPAddress getIPfromDHCP()
 {
-	ip[0] = DHCP_allocated_ip[0];
-	ip[1] = DHCP_allocated_ip[1];
-	ip[2] = DHCP_allocated_ip[2];	
-	ip[3] = DHCP_allocated_ip[3];
+	return DHCP_allocated_ip;
 }
 
-void getGWfromDHCP(uint8_t* ip)
+IPAddress getGWfromDHCP()
 {
-	ip[0] =DHCP_allocated_gw[0];
-	ip[1] =DHCP_allocated_gw[1];
-	ip[2] =DHCP_allocated_gw[2];
-	ip[3] =DHCP_allocated_gw[3];			
+	return DHCP_allocated_gw;
 }
 
-void getSNfromDHCP(uint8_t* ip)
+IPAddress getSNfromDHCP()
 {
-	ip[0] = DHCP_allocated_sn[0];
-	ip[1] = DHCP_allocated_sn[1];
-	ip[2] = DHCP_allocated_sn[2];
-	ip[3] = DHCP_allocated_sn[3];
+	return DHCP_allocated_sn;
 }
 
-void getDNSfromDHCP(uint8_t* ip)
+IPAddress getDNSfromDHCP()
 {
-	ip[0] = DHCP_allocated_dns[0];
-	ip[1] = DHCP_allocated_dns[1];
-	ip[2] = DHCP_allocated_dns[2];
-	ip[3] = DHCP_allocated_dns[3];
+	return DHCP_allocated_dns;
 }
 
 uint32_t getDHCPLeasetime(void)

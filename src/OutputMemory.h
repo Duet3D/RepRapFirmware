@@ -54,9 +54,14 @@ class OutputBuffer
 		size_t cat(const char *src, size_t len);
 		size_t cat(StringRef &str);
 
-		size_t EncodeString(const char *src, size_t srcLength, bool allowControlChars, bool encapsulateString = true, bool prependAsterisk = false);
-		size_t EncodeString(const StringRef& str, bool allowControlChars, bool encapsulateString = true);
-		size_t EncodeReply(OutputBuffer *src, bool allowControlChars);
+		size_t EncodeString(const char *src, bool allowControlChars, bool prependAsterisk = false);
+
+		template<size_t Len> size_t EncodeString(const String<Len>& str, bool allowControlChars, bool prependAsterisk = false)
+		{
+			return EncodeString(str.c_str(), allowControlChars, prependAsterisk);
+		}
+
+		size_t EncodeReply(OutputBuffer *src);
 
 		uint32_t GetAge() const;
 
@@ -87,6 +92,7 @@ class OutputBuffer
 		static unsigned int GetFreeBuffers() { return OUTPUT_BUFFER_COUNT - usedOutputBuffers; }
 
 	private:
+		size_t EncodeChar(char c);
 
 		OutputBuffer *next;
 		OutputBuffer *last;

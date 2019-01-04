@@ -35,17 +35,9 @@ public:
   void setMCP4461Address(uint8_t);
   void setVolatileWiper(uint8_t, uint16_t);
   void setNonVolatileWiper(uint8_t, uint16_t);
-  void setVolatileWipers(uint16_t);
-  void setNonVolatileWipers(uint16_t);
-  void toggleWiper(uint8_t); //NOT YET IMPLEMENTED
-  uint16_t getVolatileWiper(uint8_t);
-  uint16_t getNonVolatileWiper(uint8_t);
-  uint16_t getStatus();
 
 private:
   uint8_t _mcp4461_address;
-  uint8_t _wiper;
-  uint8_t _value;
 };
 
 #endif //MCP4461_H

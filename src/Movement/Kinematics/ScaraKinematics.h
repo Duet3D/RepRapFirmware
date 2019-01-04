@@ -38,7 +38,7 @@ public:
 	HomingMode GetHomingMode() const override { return homeIndividualMotors; }
 	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const override;
 	AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const override;
-	const char* GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const override;
+	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const override;
 	bool QueryTerminateHomingMove(size_t axis) const override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const override;

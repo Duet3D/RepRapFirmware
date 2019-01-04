@@ -190,7 +190,7 @@
 #define LWIP_MDNS_RESPONDER         1
 #define LWIP_NUM_NETIF_CLIENT_DATA  (LWIP_MDNS_RESPONDER)
 
-#ifdef __SAME70Q21__
+#if defined(__SAME70Q21__) || defined(__SAME70Q20B__) || defined(__SAME70Q21B__)
 extern uint32_t trueRandom(void);
 # define LWIP_RAND					trueRandom
 #else

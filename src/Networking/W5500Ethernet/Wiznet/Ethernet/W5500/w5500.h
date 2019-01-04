@@ -52,6 +52,7 @@
 #include <cstdint>
 #include <cstddef>
 #include "spi/spi.h"
+#include <General/IPAddress.h>
 
 // The following functions are defined in Network.cpp and used by this module
 extern void SpiAssertSS();
@@ -1301,6 +1302,12 @@ void     WIZCHIP_READ_BUF (uint32_t AddrSel, uint8_t* pBuf, uint16_t len);
  */
 void     WIZCHIP_WRITE_BUF(uint32_t AddrSel, const uint8_t* pBuf, uint16_t len);
 
+// Read into an IPAddress
+void WIZCHIP_READ_IP(uint32_t AddrSel, IPAddress& ip);
+
+// Write to an IPAddress
+void WIZCHIP_WRITE_IP(uint32_t AddrSel, const IPAddress& ip);
+
 /////////////////////////////////
 // Common Register I/O function //
 /////////////////////////////////
@@ -1333,9 +1340,9 @@ static inline uint8_t getMR()
  * @param (uint8_t*)gar Pointer variable to set gateway IP address. It should be allocated 4 bytes.
  * @sa getGAR()
  */
-static inline void setGAR(const uint8_t *gar)
+static inline void setGAR(const IPAddress& gar)
 {
-	WIZCHIP_WRITE_BUF(GAR, gar, 4);
+	WIZCHIP_WRITE_IP(GAR, gar);
 }
 
 /**
@@ -1344,9 +1351,9 @@ static inline void setGAR(const uint8_t *gar)
  * @param (uint8_t*)gar Pointer variable to get gateway IP address. It should be allocated 4 bytes.
  * @sa setGAR()
  */
-static inline void getGAR(uint8_t *gar)
+static inline void getGAR(IPAddress& gar)
 {
-	WIZCHIP_READ_BUF(GAR, gar, 4);
+	WIZCHIP_READ_IP(GAR, gar);
 }
 
 /**
@@ -1355,11 +1362,10 @@ static inline void getGAR(uint8_t *gar)
  * @param (uint8_t*)subr Pointer variable to set subnet mask address. It should be allocated 4 bytes.
  * @sa getSUBR()
  */
-static inline void setSUBR(const uint8_t *subr)
+static inline void setSUBR(const IPAddress& subr)
 {
-	WIZCHIP_WRITE_BUF(SUBR, subr, 4);
+	WIZCHIP_WRITE_IP(SUBR, subr);
 }
-
 
 /**
  * @ingroup Common_register_access_function
@@ -1367,9 +1373,9 @@ static inline void setSUBR(const uint8_t *subr)
  * @param (uint8_t*)subr Pointer variable to get subnet mask address. It should be allocated 4 bytes.
  * @sa setSUBR()
  */
-static inline void getSUBR(uint8_t* subr)
+static inline void getSUBR(IPAddress& subr)
 {
-	WIZCHIP_READ_BUF(SUBR, subr, 4);
+	WIZCHIP_READ_IP(SUBR, subr);
 }
 
 /**
@@ -1400,9 +1406,9 @@ static inline void getSHAR(uint8_t *shar)
  * @param (uint8_t*)sipr Pointer variable to set local IP address. It should be allocated 4 bytes.
  * @sa getSIPR()
  */
-static inline void setSIPR(const uint8_t *sipr)
+static inline void setSIPR(const IPAddress& sipr)
 {
-	WIZCHIP_WRITE_BUF(SIPR, sipr, 4);
+	WIZCHIP_WRITE_IP(SIPR, sipr);
 }
 
 /**
@@ -1411,9 +1417,9 @@ static inline void setSIPR(const uint8_t *sipr)
  * @param (uint8_t*)sipr Pointer variable to get local IP address. It should be allocated 4 bytes.
  * @sa setSIPR()
  */
-static inline void getSIPR(uint8_t *sipr)
+static inline void getSIPR(IPAddress& sipr)
 {
-	WIZCHIP_READ_BUF(SIPR, sipr, 4);
+	WIZCHIP_READ_IP(SIPR, sipr);
 }
 
 /**
@@ -1913,9 +1919,9 @@ static inline void getSn_DHAR(uint8_t sn, uint8_t *dhar)
  * @param (uint8_t*)dipr Pointer variable to set socket n destination IP address. It should be allocated 4 bytes.
  * @sa getSn_DIPR()
  */
-static inline void setSn_DIPR(uint8_t sn, const uint8_t *dipr)
+static inline void setSn_DIPR(uint8_t sn, const IPAddress& dipr)
 {
-	WIZCHIP_WRITE_BUF(Sn_DIPR(sn), dipr, 4);
+	WIZCHIP_WRITE_IP(Sn_DIPR(sn), dipr);
 }
 
 /**
@@ -1925,9 +1931,9 @@ static inline void setSn_DIPR(uint8_t sn, const uint8_t *dipr)
  * @param (uint8_t*)dipr Pointer variable to get socket n destination IP address. It should be allocated 4 bytes.
  * @sa setSn_DIPR()
  */
-static inline void getSn_DIPR(uint8_t sn, uint8_t *dipr)
+static inline void getSn_DIPR(uint8_t sn, IPAddress& dipr)
 {
-	WIZCHIP_READ_BUF(Sn_DIPR(sn), dipr, 4);
+	WIZCHIP_READ_IP(Sn_DIPR(sn), dipr);
 }
 
 /**

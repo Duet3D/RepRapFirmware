@@ -27,35 +27,36 @@ const size_t NumFirmwareUpdateModules = 1;
 // The physical capabilities of the machine
 
 // Alligator + Piggy module max 7 stepper driver
-const size_t DRIVES = 7;						// The number of drives in the machine, including X, Y, and Z plus extruder drives
-#define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g }
-const size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
-// Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
-#define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f }
+constexpr size_t NumDirectDrivers = 7;				// The number of drives in the machine, including X, Y, and Z plus extruder drives
+constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 
+constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
+
+constexpr size_t NumEndstops = 6;					// The number of inputs we have for endstops, filament sensors etc.
 // Alligator + Piggy module max 5 heaters
-constexpr size_t Heaters = 5;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
+constexpr size_t NumHeaters = 5;					// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 5;
 
 constexpr size_t MaxAxes = 7;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
-constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
+constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 
 constexpr size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels (USB and two auxiliary UARTs)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
 #define SERIAL_AUX2_DEVICE Serial1
 
-// The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
-// DRIVES
-const Pin ENABLE_PINS[DRIVES] = { 24, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
-const Pin STEP_PINS[DRIVES] = { X16, X14, X1, 5, 28, 11, X9 };
-const Pin DIRECTION_PINS[DRIVES] = { 2, 78, X13, 4, 27, 29, 12};
+constexpr Pin UsbVBusPin = NoPin;					// Pin used to monitor VBUS on USB port. Not needed for SAM3X.
+
+// The numbers of entries in each array must correspond with the values of NumDirectDrivers, MaxAxes, or NumHeaters. Set values to NoPin to flag unavailability.
+const Pin ENABLE_PINS[NumDirectDrivers] = { 24, NoPin, NoPin, NoPin, NoPin, NoPin, NoPin };
+const Pin STEP_PINS[NumDirectDrivers] = { X16, X14, X1, 5, 28, 11, X9 };
+const Pin DIRECTION_PINS[NumDirectDrivers] = { 2, 78, X13, 4, 27, 29, 12};
 
 // MICROSTEPPING Pins
-const Pin MICROSTEPPING_PINS[DRIVES - MinAxes] = { X12, X10, 44, 45 };
+const Pin MICROSTEPPING_PINS[NumDirectDrivers - MinAxes] = { X12, X10, 44, 45 };
 
 // Motor FAULT Pin
 const Pin MotorFaultDetectPin = 22;
@@ -66,7 +67,7 @@ const Pin MotorFaultDetectPin = 22;
 // Alligator End-stop pinout mapping for RepRapFirmware:
 // 5V SIGN SIGN GND , 5V SIGN SIGN GND, 5V SIGN   SIGN    GND
 //     X    E0            Y    E1           Z   E2-Zprobe
-const Pin END_STOP_PINS[DRIVES] = { 33, 35, 38, 34, 37, 39, NoPin };
+const Pin END_STOP_PINS[NumEndstops] = { 33, 35, 38, 34, 37, 39 };
 
 // SPI DAC Motor for Current Vref
 const size_t MaxSpiDac = 2;
@@ -77,7 +78,7 @@ const Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 1, 0, 2, 3, 4 };	// Analogue 
 
 // h1,h2,h3,h4: X2,8,9,X8 is hardware PWM
 // b: X3 is not hardware PWM
-const Pin HEAT_ON_PINS[Heaters] = { X3, X2, 8, 9, X8 };
+const Pin HEAT_ON_PINS[NumHeaters] = { X3, X2, 8, 9, X8 };
 
 // Default thermistor parameters
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930

@@ -311,25 +311,16 @@ AxesBitmap RotaryDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 // This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 // If we can proceed with homing some axes, return the name of the homing file to be called.
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
-const char* RotaryDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const
+AxesBitmap RotaryDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
 {
 	// If homing X, Y or Z we must home all the towers
 	if ((toBeHomed & LowestNBits<AxesBitmap>(DELTA_AXES)) != 0)
 	{
-		return "homedelta.g";
+		filename.copy("homedelta.g");
+		return 0;
 	}
 
-	// Return the homing file for the lowest axis that we have been asked to home
-	for (size_t axis = DELTA_AXES; axis < numVisibleAxes; ++axis)
-	{
-		if (IsBitSet(toBeHomed, axis))
-		{
-			return StandardHomingFileNames[axis];
-		}
-	}
-
-	mustHomeFirst = 0;
-	return nullptr;
+	return Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing.
@@ -340,7 +331,7 @@ bool RotaryDeltaKinematics::QueryTerminateHomingMove(size_t axis) const
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
-// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
+// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
 void RotaryDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
 {
 	if (axis < DELTA_AXES)
