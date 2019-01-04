@@ -386,7 +386,7 @@ GCodeResult GCodes::SetTorqueMode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				I2cFloat torque;
 				torque.fval = gb.GetFValue();
-				if (fabs(torque.fval < maxTorque))
+				if (fabs(torque.fval) < maxTorque)
 				{
 					torque.fval = fabs(torque.fval); // We want G95 to always drive axis backwards, never forwards
 					if (platform.GetDirectionValue(driver))
@@ -417,7 +417,7 @@ GCodeResult GCodes::SetTorqueMode(GCodeBuffer& gb, const StringRef& reply)
 				else if (fabs(torque) < maxTorque)
 				{
 					// Calculate the right current, including its sign
-					torque = -1.0*fabs(torque);
+					torque = fabs(torque);
 					if (platform.GetDirectionValue(driver)) torque = -torque;
 					constexpr float maxCurrentA = 30.0f;
 					// Limit max current. Use units that max out at maxTorque to match Mechaduino and Smart Stepper behaviour.
