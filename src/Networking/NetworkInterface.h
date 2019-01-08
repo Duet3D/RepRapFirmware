@@ -11,7 +11,7 @@
 #include "Network.h"
 
 // Abstract base class for network modules
-class NetworkInterface
+class NetworkInterface INHERIT_OBJECT_MODEL
 {
 public:
 	virtual void Init() = 0;
@@ -31,8 +31,8 @@ public:
 	virtual GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) = 0;
 	virtual GCodeResult ReportProtocols(const StringRef& reply) const = 0;
 
-	virtual const uint8_t *GetIPAddress() const = 0;
-	virtual void SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[]) = 0;
+	virtual IPAddress GetIPAddress() const = 0;
+	virtual void SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) = 0;
 	virtual void SetMacAddress(const uint8_t mac[]) = 0;
 	virtual const uint8_t *GetMacAddress() const = 0;
 
@@ -40,6 +40,8 @@ public:
 
 	virtual void OpenDataPort(Port port) = 0;
 	virtual void TerminateDataPort() = 0;
+
+	Mutex interfaceMutex;							// mutex to protect against multiple tasks using the same interface concurrently. Public so that sockets can lock it.
 
 protected:
 	Port portNumbers[NumProtocols];					// port number used for each protocol

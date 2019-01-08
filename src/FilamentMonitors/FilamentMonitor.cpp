@@ -17,14 +17,21 @@
 #include "PrintMonitor.h"
 
 // Static data
+Mutex FilamentMonitor::filamentSensorsMutex;
 FilamentMonitor *FilamentMonitor::filamentSensors[MaxExtruders] = { 0 };
 
 // Default destructor
 FilamentMonitor::~FilamentMonitor()
 {
+}
+
+// Call this to disable the interrupt before deleting or re-configuring a filament monitor
+void FilamentMonitor::Disable()
+{
 	if (pin != NoPin)
 	{
 		detachInterrupt(pin);
+		pin = NoPin;
 	}
 }
 
@@ -59,6 +66,59 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 		return true;
 	}
 	return false;
+}
+
+// Static initialisation
+/*static*/ void FilamentMonitor::InitStatic()
+{
+	filamentSensorsMutex.Create("FilamentSensors");
+}
+
+// Handle M591
+/*static*/ GCodeResult FilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, unsigned int extruder)
+{
+
+	bool seen = false;
+	long newSensorType;
+	gb.TryGetIValue('P', newSensorType, seen);
+
+	MutexLocker lock(filamentSensorsMutex);
+	FilamentMonitor*& sensor = filamentSensors[extruder];
+
+	if (seen)
+	{
+		// We are setting the filament monitor type, so see if it has changed
+		if (sensor != nullptr && newSensorType != sensor->GetType())
+		{
+			// We already have a sensor of a different type, so delete the old sensor
+			sensor->Disable();
+			delete sensor;
+			sensor = nullptr;
+		}
+
+		if (sensor == nullptr)
+		{
+			sensor = Create(extruder, newSensorType);					// create the new sensor type, if any
+		}
+	}
+
+	if (sensor != nullptr)
+	{
+		// Configure the sensor
+		const bool error = sensor->Configure(gb, reply, seen);
+		if (error)
+		{
+			sensor->Disable();
+			delete sensor;
+			sensor = nullptr;
+		}
+		return GetGCodeResultFromError(error);
+	}
+	else if (!seen)
+	{
+		reply.printf("Extruder %u has no filament sensor", extruder);
+	}
+	return GCodeResult::ok;
 }
 
 // Factory function
@@ -115,6 +175,8 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 
 /*static*/ void FilamentMonitor::Spin(bool full)
 {
+	MutexLocker lock(filamentSensorsMutex);
+
 	// Filament sensors
 	for (size_t extruder = 0; extruder < MaxExtruders; ++extruder)
 	{
@@ -162,30 +224,6 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 			}
 		}
 	}
-}
-
-// Return the filament sensor associated with a particular extruder
-/*static*/ FilamentMonitor *FilamentMonitor::GetFilamentSensor(unsigned int extruder)
-{
-	return (extruder < MaxExtruders) ? filamentSensors[extruder] : nullptr;
-}
-
-// Set the filament sensor associated with a particular extruder
-/*static*/ bool FilamentMonitor::SetFilamentSensorType(unsigned int extruder, int newSensorType)
-{
-	if (extruder < MaxExtruders)
-	{
-		FilamentMonitor*& sensor = filamentSensors[extruder];
-		const int oldSensorType = (sensor == nullptr) ? 0 : sensor->GetType();
-		if (newSensorType != oldSensorType)
-		{
-			delete sensor;
-			sensor = Create(extruder, newSensorType);
-			return true;
-		}
-	}
-
-	return false;
 }
 
 // Send diagnostics info

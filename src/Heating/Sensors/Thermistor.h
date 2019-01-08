@@ -22,7 +22,7 @@ class Thermistor : public TemperatureSensor
 {
 public:
 	Thermistor(unsigned int channel, bool p_isPT1000);						// create an instance with default values
-	bool Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error) override; // configure the sensor from M305 parameters
+	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override; // configure the sensor from M305 parameters
 	void Init() override;
 	TemperatureError GetTemperature(float& t) override;
 
@@ -33,6 +33,7 @@ private:
 	void CalcDerivedParameters();											// calculate shA and shB
 
 	// The following are configurable parameters
+	unsigned int thermistorInputChannel;
 	float r25, beta, shC, seriesR;											// parameters declared in the M305 command
 	bool isPT1000;															// true if it is a PT1000 sensor, not a thermistor
 

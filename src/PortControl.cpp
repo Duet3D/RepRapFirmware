@@ -9,6 +9,7 @@
 #include "GCodes/GCodeBuffer.h"
 #include "Movement/Move.h"
 #include "Movement/DDA.h"
+#include "Movement/StepTimer.h"
 
 #if SUPPORT_IOBITS
 
@@ -32,7 +33,7 @@ void PortControl::Exit()
 
 void PortControl::Spin(bool full)
 {
-	if (numConfiguredPorts != 0)
+	if (numConfiguredPorts != 0 && reprap.GetGCodes().GetMachineType() != MachineType::laser)
 	{
 		cpu_irq_disable();
 		const DDA * cdda = reprap.GetMove().GetCurrentDDA();
@@ -44,7 +45,7 @@ void PortControl::Spin(bool full)
 		}
 		else
 		{
-			const uint32_t now = Platform::GetInterruptClocks() + advanceClocks;
+			const uint32_t now = StepTimer::GetInterruptClocks() + advanceClocks;
 			uint32_t moveEndTime = cdda->GetMoveStartTime();
 			DDA::DDAState st = cdda->GetState();
 			do
@@ -101,7 +102,7 @@ bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
 	{
 		seen = true;
 		advanceMillis = (unsigned int)constrain<int>(gb.GetIValue(), 0, 1000);
-		advanceClocks = (advanceMillis * (uint64_t)DDA::stepClockRate)/1000;
+		advanceClocks = (advanceMillis * (uint64_t)StepTimer::StepClockRate)/1000;
 	}
 	if (!seen)
 	{

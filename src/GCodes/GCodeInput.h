@@ -11,6 +11,7 @@
 #include "RepRapFirmware.h"
 #include "Storage/FileData.h"
 #include "MessageType.h"
+#include "RTOSIface/RTOSIface.h"
 
 const size_t GCodeInputBufferSize = 256;				// How many bytes can we cache per input source?
 const size_t GCodeInputFileReadThreshold = 128;			// How many free bytes must be available before data is read from the SD card?
@@ -21,15 +22,14 @@ class GCodeInput
 {
 public:
 	virtual void Reset() = 0;							// Clean all the cached data from this input
-	bool FillBuffer(GCodeBuffer *gb);					// Fill a GCodeBuffer with the last available G-code
+	virtual bool FillBuffer(GCodeBuffer *gb);			// Fill a GCodeBuffer with the last available G-code
 	virtual size_t BytesCached() const = 0;				// How many bytes have been cached?
+
+protected:
 	virtual char ReadByte() = 0;						// Get the next byte from the source
 };
 
-
 // This class wraps around an existing Stream device which lets us avoid double buffering.
-// The only downside is that we cannot (yet) look through the hardware buffer and check for requested emergency stops.
-// TODO: This will require some more work in the Arduino core.
 class StreamGCodeInput : public GCodeInput
 {
 public:
@@ -37,6 +37,8 @@ public:
 
 	void Reset() override;
 	size_t BytesCached() const override;				// How many bytes have been cached?
+
+protected:
 	char ReadByte() override;
 
 private:
@@ -69,37 +71,48 @@ public:
 
 	void Reset() override;
 	size_t BytesCached() const override;				// How many bytes have been cached?
-	char ReadByte() override;
-
-	void Put(MessageType mtype, const char c);			// Append a single character
-	void Put(MessageType mtype, const char *buf);		// Append a null-terminated string to the buffer
-	void Put(MessageType mtype, const char *buf, size_t len);	// Append a generic string to the buffer
-
 	size_t BufferSpaceLeft() const;						// How much space do we have left?
 
-private:
-	GCodeInputState state;
-
 protected:
-	uint32_t buf32[(GCodeInputBufferSize + 3) / 4];
-	char * const buffer;
+	char ReadByte() override;
+
+	GCodeInputState state;
 	size_t writingPointer, readingPointer;
+	char buffer[GCodeInputBufferSize];
 };
+
+enum class GCodeInputReadResult : uint8_t { haveData, noData, error };
 
 // This class is an expansion of the RegularGCodeInput class to buffer G-codes and to rewind file positions when
 // nested G-code files are started. However buffered codes are not explicitly checked for M112.
 class FileGCodeInput : public RegularGCodeInput
 {
 public:
+
 	FileGCodeInput() : RegularGCodeInput(), lastFile(nullptr) { }
 
 	void Reset() override;								// This should be called when the associated file is being closed
 	void Reset(const FileData &file);					// Should be called when a specific G-code or macro file is closed or re-opened outside the reading context
 
-	bool ReadFromFile(FileData &file);					// Read another chunk of G-codes from the file and return true if more data is available
+	GCodeInputReadResult ReadFromFile(FileData &file);	// Read another chunk of G-codes from the file and return true if more data is available
 
 private:
 	FileStore *lastFile;
+};
+
+// This class receives its data from the network task
+class NetworkGCodeInput: public RegularGCodeInput
+{
+public:
+	NetworkGCodeInput();
+
+	bool FillBuffer(GCodeBuffer *gb) override;			// Fill a GCodeBuffer with the last available G-code
+	void Put(MessageType mtype, const char *buf);		// Append a null-terminated string to the buffer
+
+private:
+	void Put(MessageType mtype, char c);				// Append a single character
+
+	Mutex bufMutex;
 };
 
 #endif

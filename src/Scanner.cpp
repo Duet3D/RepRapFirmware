@@ -13,6 +13,8 @@
 #include "Platform.h"
 
 
+const char* const SCANNER_ON_G = "scanner_on.g";
+const char* const SCANNER_OFF_G = "scanner_off.g";
 const char* const ALIGN_ON_G = "align_on.g";
 const char* const ALIGN_OFF_G = "align_off.g";
 const char* const SCAN_PRE_G = "scan_pre.g";
@@ -20,11 +22,26 @@ const char* const SCAN_POST_G = "scan_post.g";
 const char* const CALIBRATE_PRE_G = "calibrate_pre.g";
 const char* const CALIBRATE_POST_G = "calibrate_post.g";
 
+#if SCANNER_AS_SEPARATE_TASK
+
+# include "Tasks.h"
+
+constexpr uint32_t ScannerTaskStackWords = 400;			// task stack size in dwords
+static Task<ScannerTaskStackWords> *scannerTask = nullptr;
+
+extern "C" void ScannerTask(void * pvParameters)
+{
+	for (;;)
+	{
+		reprap.GetScanner().Spin();
+		RTOSIface::Yield();
+	}
+}
+
+#endif
 
 void Scanner::Init()
 {
-	longWait = millis();
-
 	enabled = false;
 	SetState(ScannerState::Disconnected);
 	bufferPointer = 0;
@@ -67,7 +84,6 @@ void Scanner::Spin()
 	// Is the 3D scanner extension enabled at all and is a device registered?
 	if (!IsEnabled() || state == ScannerState::Disconnected)
 	{
-		platform.ClassReport(longWait);
 		return;
 	}
 
@@ -90,8 +106,8 @@ void Scanner::Spin()
 		}
 		SetState(ScannerState::Disconnected);
 
-		// Cannot do anything else...
-		platform.ClassReport(longWait);
+		// Run a macro to perform custom actions when the scanner is removed
+		DoFileMacro(SCANNER_OFF_G);
 		return;
 	}
 
@@ -102,9 +118,7 @@ void Scanner::Spin()
 			if (!IsDoingFileMacro())
 			{
 				// Send ALIGN ON to the scanner
-				SERIAL_MAIN_DEVICE.write("ALIGN ON\n");
-				SERIAL_MAIN_DEVICE.flush();
-
+				platform.Message(MessageType::BlockingUsbMessage, "ALIGN ON\n");
 				SetState(ScannerState::Idle);
 			}
 			break;
@@ -113,9 +127,7 @@ void Scanner::Spin()
 			if (!IsDoingFileMacro())
 			{
 				// Send ALIGN OFF to the scanner
-				SERIAL_MAIN_DEVICE.write("ALIGN OFF\n");
-				SERIAL_MAIN_DEVICE.flush();
-
+				platform.Message(MessageType::BlockingUsbMessage, "ALIGN OFF\n");
 				SetState(ScannerState::Idle);
 			}
 			break;
@@ -124,13 +136,7 @@ void Scanner::Spin()
 			if (!IsDoingFileMacro())
 			{
 				// Pre macro complete, build and send SCAN command
-				String<MaxFilenameLength + 16> scanCommand;
-				scanCommand.GetRef().printf("SCAN %d %s\n", scanParam, scanFilename.c_str());
-
-				SERIAL_MAIN_DEVICE.write(scanCommand.c_str());
-				SERIAL_MAIN_DEVICE.flush();
-
-				// Advance to the next state
+				platform.MessageF(MessageType::BlockingUsbMessage, "SCAN %d %d %d %s\n", scanRange, scanResolution, scanMode, scanFilename.c_str());
 				SetState(ScannerState::Scanning);
 			}
 			break;
@@ -149,10 +155,7 @@ void Scanner::Spin()
 			if (!IsDoingFileMacro())
 			{
 				// Pre macro complete, send CALIBRATE
-				SERIAL_MAIN_DEVICE.write("CALIBRATE\n");
-				SERIAL_MAIN_DEVICE.flush();
-
-				// Advance to the next state
+				platform.MessageF(MessageType::BlockingUsbMessage, "CALIBRATE %d\n", calibrationMode);
 				SetState(ScannerState::Calibrating);
 			}
 			break;
@@ -168,28 +171,25 @@ void Scanner::Spin()
 			break;
 
 		case ScannerState::Uploading:
+		{
 			// Write incoming scan data from USB to the file
-			while (SERIAL_MAIN_DEVICE.available() > 0)
+			int bytesToRead = SERIAL_MAIN_DEVICE.available();
+			FileWriteBuffer *buf = fileBeingUploaded->GetWriteBuffer();
+			if (buf != nullptr)
 			{
-				char b = static_cast<char>(SERIAL_MAIN_DEVICE.read());
-				if (fileBeingUploaded->Write(&b, sizeof(char)))
+				// Copy whole blocks from the USB RX buffer
+				if (bytesToRead > (int)buf->BytesLeft())
 				{
-					uploadBytesLeft--;
-					if (uploadBytesLeft == 0)
-					{
-						if (reprap.Debug(moduleScanner))
-						{
-							platform.MessageF(HttpMessage, "Finished uploading %u bytes of scan data\n", uploadSize);
-						}
-
-						fileBeingUploaded->Close();
-						fileBeingUploaded = nullptr;
-
-						SetState(ScannerState::Idle);
-						break;
-					}
+					bytesToRead = buf->BytesLeft();
 				}
-				else
+
+				SERIAL_MAIN_DEVICE.readBytes(buf->Data() + buf->BytesStored(), bytesToRead);
+				buf->DataStored(bytesToRead);
+				uploadBytesLeft -= bytesToRead;
+
+				// Note we call FileStore::Write here instead of FileStore::Flush because we
+				// do not want to update the FS table every time an upload buffer is written
+				if ((buf->BytesLeft() == 0 || uploadBytesLeft == 0) && !fileBeingUploaded->Write(buf->Data(), 0))
 				{
 					fileBeingUploaded->Close();
 					fileBeingUploaded = nullptr;
@@ -200,7 +200,51 @@ void Scanner::Spin()
 					break;
 				}
 			}
+			else
+			{
+				// Write data character by character if there is no file write buffer available
+				while (bytesToRead > 0)
+				{
+					char b = static_cast<char>(SERIAL_MAIN_DEVICE.read());
+					bytesToRead--;
+
+					if (fileBeingUploaded->Write(&b, sizeof(char)))
+					{
+						uploadBytesLeft--;
+						if (uploadBytesLeft == 0)
+						{
+							// Upload complete
+							break;
+						}
+					}
+					else
+					{
+						fileBeingUploaded->Close();
+						fileBeingUploaded = nullptr;
+						platform.GetMassStorage()->Delete(SCANS_DIRECTORY, uploadFilename);
+
+						platform.Message(ErrorMessage, "Failed to write scan file\n");
+						SetState(ScannerState::Idle);
+						break;
+					}
+				}
+			}
+
+			// Have we finished this upload?
+			if (fileBeingUploaded != nullptr && uploadBytesLeft == 0)
+			{
+				if (reprap.Debug(moduleScanner))
+				{
+					platform.MessageF(HttpMessage, "Finished uploading %u bytes of scan data\n", uploadSize);
+				}
+
+				fileBeingUploaded->Close();
+				fileBeingUploaded = nullptr;
+
+				SetState(ScannerState::Idle);
+			}
 			break;
+		}
 
 		default:
 			// Pick up incoming commands only if the GCodeBuffer is idle.
@@ -226,8 +270,6 @@ void Scanner::Spin()
 			}
 			break;
 	}
-
-	platform.ClassReport(longWait);
 }
 
 // Process incoming commands from the scanner board
@@ -240,11 +282,9 @@ void Scanner::ProcessCommand()
 	}
 
 	// Register request: M751
-	if (StringEquals(buffer, "M751"))
+	if (StringEqualsIgnoreCase(buffer, "M751"))
 	{
-		SERIAL_MAIN_DEVICE.write("OK\n");
-		SERIAL_MAIN_DEVICE.flush();
-
+		platform.Message(MessageType::BlockingUsbMessage, "OK\n");
 		SetState(ScannerState::Idle);
 	}
 
@@ -256,7 +296,7 @@ void Scanner::ProcessCommand()
 	}
 
 	// Switch to post-processing mode: POSTPROCESS
-	else if (StringEquals(buffer, "POSTPROCESS"))
+	else if (StringEqualsIgnoreCase(buffer, "POSTPROCESS"))
 	{
 		SetState(ScannerState::PostProcessing);
 	}
@@ -264,7 +304,7 @@ void Scanner::ProcessCommand()
 	// Progress indicator: PROGRESS <PERCENT>
 	else if (StringStartsWith(buffer, "PROGRESS "))
 	{
-		float parsedProgress = atof(&buffer[9]);
+		const float parsedProgress = SafeStrtof(&buffer[9]);
 		progress = constrain<float>(parsedProgress, 0.0f, 100.0f);
 	}
 
@@ -301,8 +341,8 @@ void Scanner::ProcessCommand()
 		}
 	}
 
-	// Acknowledgement: OK
-	else if (StringEquals(buffer, "OK"))
+	// Acknowledgment: OK
+	else if (StringEqualsIgnoreCase(buffer, "OK"))
 	{
 		if (state == ScannerState::Scanning)
 		{
@@ -341,27 +381,30 @@ void Scanner::ProcessCommand()
 bool Scanner::Enable()
 {
 	enabled = true;
+#if SCANNER_AS_SEPARATE_TASK
+	if (scannerTask == nullptr)
+	{
+		scannerTask = new Task<ScannerTaskStackWords>;
+		scannerTask->Create(ScannerTask, "SCANNER", nullptr, TaskBase::SpinPriority);
+	}
+#endif
 	return true;
 }
 
 // Register a scanner device
-bool Scanner::Register()
+void Scanner::Register()
 {
-	if (IsRegistered())
+	if (!IsRegistered())
 	{
-		// Don't do anything if a device is already registered
-		return true;
+		platform.Message(MessageType::BlockingUsbMessage, "OK\n");
+		SetState(ScannerState::Idle);
+
+		DoFileMacro(SCANNER_ON_G);
 	}
-
-	SERIAL_MAIN_DEVICE.write("OK\n");
-	SERIAL_MAIN_DEVICE.flush();
-
-	SetState(ScannerState::Idle);
-	return true;
 }
 
 // Initiate a new scan
-bool Scanner::StartScan(const char *filename, int param)
+bool Scanner::StartScan(const char *filename, int range, int resolution, int mode)
 {
 	if (state != ScannerState::Idle)
 	{
@@ -375,8 +418,10 @@ bool Scanner::StartScan(const char *filename, int param)
 	}
 
 	// Copy the scan length/degree and the filename
-	scanParam = param;
 	scanFilename.copy(filename);
+	scanRange = range;
+	scanResolution = resolution;
+	scanMode = mode;
 
 	// Run the scan_pre macro and wait for it to finish
 	DoFileMacro(SCAN_PRE_G);
@@ -402,10 +447,9 @@ bool Scanner::Cancel()
 	}
 
 	// Send CANCEL request to the scanner
-	SERIAL_MAIN_DEVICE.write("CANCEL\n");
-	SERIAL_MAIN_DEVICE.flush();
-
+	platform.Message(MessageType::BlockingUsbMessage, "CANCEL\n");
 	SetState(ScannerState::Idle);
+
 	return true;
 }
 
@@ -437,18 +481,15 @@ bool Scanner::Shutdown()
 		return false;
 	}
 
-	// Send SHUTDOWN to the scanner
-	SERIAL_MAIN_DEVICE.write("SHUTDOWN\n");
-	SERIAL_MAIN_DEVICE.flush();
-
-	// Unregister it
+	// Send SHUTDOWN to the scanner and unregister it
+	platform.Message(MessageType::BlockingUsbMessage, "SHUTDOWN\n");
 	SetState(ScannerState::Disconnected);
 
 	return true;
 }
 
 // Calibrate the 3D scanner
-bool Scanner::Calibrate()
+bool Scanner::Calibrate(int mode)
 {
 	if (state != ScannerState::Idle)
 	{
@@ -462,6 +503,7 @@ bool Scanner::Calibrate()
 	}
 
 	// In theory it would be good to verify if this succeeds, but the scanner client cannot give feedback (yet)
+	calibrationMode = mode;
 	DoFileMacro(CALIBRATE_PRE_G);
 	SetState(ScannerState::CalibratingPre);
 
@@ -523,7 +565,7 @@ void Scanner::DoFileMacro(const char *filename)
 	if (platform.GetMassStorage()->FileExists(SYS_DIR, filename))
 	{
 		String<MaxFilenameLength + 7> gcode;
-		gcode.GetRef().printf("M98 P%s\n", filename);
+		gcode.printf("M98 P%s\n", filename);
 		serialGCode->Put(gcode.c_str());
 	}
 }

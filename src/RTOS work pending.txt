@@ -1,0 +1,46 @@
+Changes to RRF for RTOS
+
+[done] Include FreeRTOS library in the link library list and run RRF as a single FreeRTOS task
+[done] Run Heat as a separate task
+[done] Replace delay() by a version that calls FreeRTOS
+[done] Have hsmciIdleFunc suspend the calling task pending an interrupt
+[done] Use a mutex to protect fatfs from being reentered, preferably a separate mutex for each volume
+[done] Use a mutex to protect the shared SPI subsystem from reentrant calls, and use it the filesystem and the temperature sensor reading system
+[done] Use a mutex when allocating file handles
+[done] Use a mutex to protect the find first/next buffer
+[done] make getting file info thread safe
+[done] buffer allocation needs to be thread safe
+[done] tool list traversal to be thread safe
+[done] make USB and serial out channels thread safe
+[done] make message box output thread safe
+[done except for mutexes on network and telnet] Make Platform::Message thread safe
+[done] Get rid of shared scratchString
+[done] Make interface between Network received data and GCodeBuffer thread safe, ready for running as separate tasks
+[done] FileGCodeInput: do away with unnecessary local buffer
+[done] Run Network as a separate task
+Run Move as a separate task. Probably needs a mutex to protect calls into it, e.g. babystepping and pause.
+Use DMA for SharedSPI transfers, suspend the calling task while waiting on a transfer
+Do a SAM4S version of FreeRTOS, then do a SAM4S_RTOS build of RRF
+Stop allocating file buffers on the stack?
+Find maximum stack sizes and optimise stacks
+Run all network responders as separate tasks? Would need mutex on network interface access
+
+Bugs
+
+[done] IAP fails to update firmware
+[done I think] M122 output is too big for the available buffers, unless the Network task reads the output fast enough
+[probably related to above] Duet WiFi gets into a state in which it returns empty JSON messages after sending M122 from DWC. Output buffer starvation?
+[done] Disconnects when getting file info forCandyBowlx8comments.gcode when running RTOS build
+[seems better now] File upload speed is a little lower when using RTOS - may be fixed when network is a separate task
+[seems ok now, was probably main stack overslow] Report that Pause works, but then hangs
+[done] Heater tuning crashes the firmware
+[believed fixed] DWC disconnects randomly with JSON parse errors
+ 
+
+Deferred work
+
+Use our own vsnprintf, and stop using sscanf. Should save a significant amount of stack space.
+Check whether we use any time conversion functoins that use _reent
+SAME70 uses a different memory model i.e. not strongly-ordered. Does this have any consequences for the code so far?
+Are there any aspects of Platform that are not thread-safe? e.g. GCodes setting multiple interdependent variables while network reports on them?
+Use a mutex to protect HSMCI from reentrant calls (only needed if/when we support more than one HSMCI volume, which is unlikely but possoible on the SAME70)

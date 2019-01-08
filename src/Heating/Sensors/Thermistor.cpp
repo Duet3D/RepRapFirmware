@@ -21,25 +21,28 @@
 
 // Create an instance with default values
 Thermistor::Thermistor(unsigned int channel, bool p_isPT1000)
-	: TemperatureSensor(channel - FirstThermistorChannel, (p_isPT1000) ? "PT1000" : "Thermistor"), isPT1000(p_isPT1000)
+	: TemperatureSensor(channel, (p_isPT1000) ? "PT1000" : "Thermistor"), isPT1000(p_isPT1000)
 #if !HAS_VREF_MONITOR
 		, adcLowOffset(0), adcHighOffset(0)
 #endif
 {
-	r25 = (channel == FirstThermistorChannel) ? BED_R25 : EXT_R25;
-	beta = (channel == FirstThermistorChannel) ? BED_BETA : EXT_BETA;
-	shC = (channel == FirstThermistorChannel) ? BED_SHC : EXT_SHC;
+	thermistorInputChannel = (isPT1000) ? channel - FirstPT1000Channel : channel - FirstThermistorChannel;
 	seriesR = THERMISTOR_SERIES_RS;
+
+	// The following only apply to thermistors
+	r25 = (channel == 0) ? BED_R25 : EXT_R25;
+	beta = (channel == 0) ? BED_BETA : EXT_BETA;
+	shC = (channel == 0) ? BED_SHC : EXT_SHC;
 	CalcDerivedParameters();
 }
 
 void Thermistor::Init()
 {
-	reprap.GetPlatform().GetAdcFilter(GetSensorChannel() - FirstThermistorChannel).Init((1 << AdcBits) - 1);
+	reprap.GetPlatform().GetAdcFilter(thermistorInputChannel).Init((1 << AdcBits) - 1);
 }
 
 // Configure the temperature sensor
-bool Thermistor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error)
+GCodeResult Thermistor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
 {
 	bool seen = false;
 	if (mCode == 305)
@@ -93,13 +96,13 @@ bool Thermistor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer&
 		}
 	}
 
-	return seen;
+	return GCodeResult::ok;
 }
 
 // Get the temperature
 TemperatureError Thermistor::GetTemperature(float& t)
 {
-	const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(GetSensorChannel() - FirstThermistorChannel);
+	const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(thermistorInputChannel);
 
 #if HAS_VREF_MONITOR
 	// Use the actual VSSA and VREF values read by the ADC
@@ -143,7 +146,7 @@ TemperatureError Thermistor::GetTemperature(float& t)
 		if (isPT1000)
 		{
 			// We want 100 * the equivalent PT100 resistance, which is 10 * the actual PT1000 resistance
-			uint16_t ohmsx100 = (uint16_t)rintf(resistance * 10);
+			uint16_t ohmsx100 = (uint16_t)rintf(constrain<float>(resistance * 10, 0.0, 65535.0));
 #ifdef DUET_NG
 			// The VSSA PTC fuse on the later Duets has a resistance of a few ohms
 			ohmsx100 -= 20;			// assume 2 ohms and only one PT1000 sensor

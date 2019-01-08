@@ -95,6 +95,21 @@ void WIZCHIP_WRITE_BUF(uint32_t AddrSel, const uint8_t* pBuf, uint16_t len)
 	WizSpi::ReleaseSS();
 }
 
+// Read into an IPAddress
+void WIZCHIP_READ_IP(uint32_t AddrSel, IPAddress& ip)
+{
+	uint8_t ipBuf[4];
+	WIZCHIP_READ_BUF(AddrSel, ipBuf, 4);
+	ip.SetV4(ipBuf);
+}
+
+// Write to an IPAddress
+void WIZCHIP_WRITE_IP(uint32_t AddrSel, const IPAddress& ip)
+{
+	uint8_t ipBuf[4];
+	ip.UnpackV4(ipBuf);
+	WIZCHIP_WRITE_BUF(AddrSel, ipBuf, 4);
+}
 
 uint16_t getSn_TX_FSR(uint8_t sn)
 {

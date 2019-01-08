@@ -8,9 +8,10 @@
 #include "SimpleFilamentMonitor.h"
 #include "RepRap.h"
 #include "Platform.h"
+#include "GCodes/GCodeBuffer.h"
 
 SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int extruder, int type)
-	: FilamentMonitor(extruder, type), highWhenNoFilament(type == 2), filamentPresent(false)
+	: FilamentMonitor(extruder, type), highWhenNoFilament(type == 2), filamentPresent(false), enabled(false)
 {
 }
 
@@ -22,13 +23,23 @@ bool SimpleFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 		return true;
 	}
 
+	if (gb.Seen('S'))
+	{
+		seen = true;
+		enabled = (gb.GetIValue() > 0);
+	}
+
 	if (seen)
 	{
 		Check(true, false, false, 0.0);
 	}
 	else
 	{
-		reply.printf("Simple filament sensor on endstop %d, output %s when no filament", GetEndstopNumber(), (highWhenNoFilament) ? "high" : "low");
+		reply.printf("Simple filament sensor on endstop %d, %s, output %s when no filament, filament present: %s",
+						GetEndstopNumber(),
+						(enabled) ? "enabled" : "disabled",
+						(highWhenNoFilament) ? "high" : "low",
+						(filamentPresent) ? "yes" : "no");
 	}
 
 	return false;
@@ -54,14 +65,14 @@ void SimpleFilamentMonitor::Poll()
 FilamentSensorStatus SimpleFilamentMonitor::Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed)
 {
 	Poll();
-	return (filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;
+	return (!enabled || filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;
 }
 
 // Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
 FilamentSensorStatus SimpleFilamentMonitor::Clear(bool full)
 {
 	Poll();
-	return (filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;
+	return (!enabled || filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;
 }
 
 // Print diagnostic info for this sensor

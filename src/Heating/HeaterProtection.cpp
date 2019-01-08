@@ -16,7 +16,7 @@ HeaterProtection::HeaterProtection(size_t index) : next(nullptr)
 {
 	// By default each heater protection element is mapped to its corresponding heater.
 	// All other heater protection elements are unused and can be optionally assigned.
-	heater = supervisedHeater = (index >= Heaters) ? -1 : (int8_t)index;
+	heater = supervisedHeater = (index >= NumHeaters) ? -1 : (int8_t)index;
 }
 
 void HeaterProtection::Init(float tempLimit)

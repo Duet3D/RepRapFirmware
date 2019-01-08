@@ -98,7 +98,7 @@ void Filament::LoadAssignment()
 						timeInfo->tm_year + 1900, timeInfo->tm_mon, timeInfo->tm_mday, timeInfo->tm_hour, timeInfo->tm_min);
 	}
 	buf.cat('\n');
-	file->Write(buf.Pointer());
+	file->Write(buf.c_str());
 
 	// Write column headers and one row for each loaded filament
 	file->Write("extruder,filament\n");
@@ -107,7 +107,7 @@ void Filament::LoadAssignment()
 		if (f->IsLoaded())
 		{
 			buf.printf("%d,%s\n", f->GetExtruder(), f->GetName());
-			file->Write(buf.Pointer());
+			file->Write(buf.c_str());
 		}
 	}
 
@@ -118,7 +118,7 @@ void Filament::LoadAssignment()
 {
 	for (Filament *f = filamentList; f != nullptr; f = f->next)
 	{
-		if (StringEquals(f->name, filamentName))
+		if (StringEqualsIgnoreCase(f->name, filamentName))
 		{
 			return true;
 		}

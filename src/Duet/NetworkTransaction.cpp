@@ -228,7 +228,7 @@ void NetworkTransaction::Write(OutputStack *stack)
 	{
 		if (CanWrite())
 		{
-			sendStack->Append(stack);
+			sendStack->Append(*stack);
 		}
 		else
 		{

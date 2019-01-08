@@ -17,7 +17,7 @@ enum class GCodeState : uint8_t
 	normal,												// not doing anything and ready to process a new GCode
 
 	waitingForSpecialMoveToComplete,					// doing a special move, so we must wait for it to finish before processing another GCode
-	waitingForArcMoveToComplete,						// doing an arc move, so we must check whether it completes normally
+	waitingForSegmentedMoveToGo,						// doing an arc move, so we must check whether it completes normally
 
 	probingToolOffset,
 
@@ -40,6 +40,9 @@ enum class GCodeState : uint8_t
 	pausing1,
 	pausing2,
 
+	filamentChangePause1,
+	filamentChangePause2,
+
 	resuming1,
 	resuming2,
 	resuming3,
@@ -50,23 +53,25 @@ enum class GCodeState : uint8_t
 	stopping,
 	sleeping,
 
-	// These next 7 must be contiguous
+	// These next 9 must be contiguous
 	gridProbing1,
 	gridProbing2a,
 	gridProbing2b,
 	gridProbing3,
 	gridProbing4,
+	gridProbing4a,
 	gridProbing5,
 	gridProbing6,
 	gridProbing7,
 
-	// These next 9 must be contiguous
+	// These next 10 must be contiguous
 	probingAtPoint0,
 	probingAtPoint1,
 	probingAtPoint2a,
 	probingAtPoint2b,
 	probingAtPoint3,
 	probingAtPoint4,
+	probingAtPoint4a,
 	probingAtPoint5,
 	probingAtPoint6,
 	probingAtPoint7,
@@ -75,6 +80,8 @@ enum class GCodeState : uint8_t
 	doingFirmwareUnRetraction,
 	loadingFilament,
 	unloadingFilament,
+
+	timingSDwrite,
 
 #if HAS_VOLTAGE_MONITOR
 	powerFailPausing1
@@ -89,7 +96,7 @@ public:
 	GCodeMachineState();
 
 	GCodeMachineState *previous;
-	float feedrate;
+	float feedRate;
 	FileData fileState;
 	ResourceBitmap lockedResources;
 	const char *errorMessage;
@@ -114,12 +121,15 @@ public:
 	static GCodeMachineState *Allocate()
 	post(!result.IsLive(); result.state == GCodeState::normal);
 
+	// Return true if the G54 command is in effect
+	bool UsingMachineCoordinates() const { return useMachineCoordinates || useMachineCoordinatesSticky; }
+
 	// Copy values that may have been altered by config.g into this state record
 	void CopyStateFrom(const GCodeMachineState& other)
 	{
 		drivesRelative = other.drivesRelative;
 		axesRelative = other.axesRelative;
-		feedrate = other.feedrate;
+		feedRate = other.feedRate;
 	}
 
 	static void Release(GCodeMachineState *ms);

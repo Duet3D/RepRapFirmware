@@ -51,12 +51,16 @@ void TelnetResponder::ConnectionLost()
 {
 	if ((responderState == ResponderState::reading) || (responderState == ResponderState::sending))
 	{
-		numSessions--;
+		MutexLocker lock(gcodeReplyMutex);
+
+		if (numSessions != 0)
+		{
+			numSessions--;
+		}
 		if (gcodeReply != nullptr && clientsServed > numSessions)
 		{
 			// Make sure the G-code reply is freed after it is sent to all clients
 			OutputBuffer::ReleaseAll(gcodeReply);
-			gcodeReply = nullptr;
 			clientsServed = 0;
 		}
 	}
@@ -66,9 +70,11 @@ void TelnetResponder::ConnectionLost()
 
 bool TelnetResponder::SendGCodeReply()
 {
-	bool clearReply = false;
+	MutexLocker lock(gcodeReplyMutex);
+
 	if (gcodeReply != nullptr)
 	{
+		bool clearReply = false;
 		clientsServed++;
 		if (clientsServed < numSessions)
 		{
@@ -88,7 +94,7 @@ bool TelnetResponder::SendGCodeReply()
 		}
 
 		// Send the whole G-Code reply as plain text to the client
-		outStack->Push(gcodeReply);
+		outStack.Push(gcodeReply);
 
 		// Possibly clean up the G-code reply once again
 		if (clearReply)
@@ -261,7 +267,7 @@ void TelnetResponder::CharFromClient(char c)
 void TelnetResponder::ProcessLine()
 {
 	// Special commands for Telnet
-	if (StringEquals(clientMessage, "exit") || StringEquals(clientMessage, "quit"))
+	if (StringEqualsIgnoreCase(clientMessage, "exit") || StringEqualsIgnoreCase(clientMessage, "quit"))
 	{
 		if (outBuf != nullptr || OutputBuffer::Allocate(outBuf))
 		{
@@ -276,17 +282,24 @@ void TelnetResponder::ProcessLine()
 	else if (reprap.GetGCodes().GetTelnetInput()->BufferSpaceLeft() >= clientPointer + 1)
 	{
 		// All other codes are stored for the GCodes class
-		RegularGCodeInput * const telnetInput = reprap.GetGCodes().GetTelnetInput();
+		NetworkGCodeInput * const telnetInput = reprap.GetGCodes().GetTelnetInput();
 		telnetInput->Put(TelnetMessage, clientMessage);
 		haveCompleteLine = false;
 		clientPointer = 0;
 	}
 }
 
+/*static*/ void TelnetResponder::InitStatic()
+{
+	gcodeReplyMutex.Create("TelnetGCodeReply");
+}
+
 /*static*/ void TelnetResponder::HandleGCodeReply(const char *reply)
 {
 	if (reply != nullptr && numSessions > 0)
 	{
+		MutexLocker lock(gcodeReplyMutex);
+
 		// We need a valid OutputBuffer to start the conversion from NL to CRNL
 		if (gcodeReply == nullptr && !OutputBuffer::Allocate(gcodeReply))
 		{
@@ -319,6 +332,8 @@ void TelnetResponder::ProcessLine()
 {
 	if (reply != nullptr && numSessions > 0)
 	{
+		MutexLocker lock(gcodeReplyMutex);
+
 		// We need a valid OutputBuffer to start the conversion from NL to CRNL
 		if (gcodeReply == nullptr && !OutputBuffer::Allocate(gcodeReply))
 		{
@@ -364,5 +379,6 @@ void TelnetResponder::Diagnostics(MessageType mt) const
 unsigned int TelnetResponder::numSessions = 0;
 unsigned int TelnetResponder::clientsServed = 0;
 OutputBuffer *TelnetResponder::gcodeReply = nullptr;
+Mutex TelnetResponder::gcodeReplyMutex;
 
 // End

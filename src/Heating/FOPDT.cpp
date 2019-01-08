@@ -7,9 +7,6 @@
 
 #include "FOPDT.h"
 #include "Storage/FileStore.h"
-#include "Libraries/General/StringRef.h"
-
-extern StringRef scratchString;
 
 // Heater 6 on the Duet 0.8.5 is disabled by default at startup so that we can use fan 2.
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
@@ -72,14 +69,15 @@ void FopDt::SetM301PidParameters(const M301PidParameters& pp)
 // Write the model parameters to file returning true if no error
 bool FopDt::WriteParameters(FileStore *f, size_t heater) const
 {
+	String<ScratchStringLength> scratchString;
 	scratchString.printf("M307 H%u A%.1f C%.1f D%.1f S%.2f V%.1f B%d\n",
 							heater, (double)gain, (double)timeConstant, (double)deadTime, (double)maxPwm, (double)standardVoltage, (usePid) ? 0 : 1);
-	bool ok = f->Write(scratchString.Pointer());
+	bool ok = f->Write(scratchString.c_str());
 	if (ok && pidParametersOverridden)
 	{
 		const M301PidParameters pp = GetM301PidParameters(false);
 		scratchString.printf("M301 H%u P%.1f I%.3f D%.1f\n", heater, (double)pp.kP, (double)pp.kI, (double)pp.kD);
-		ok = f->Write(scratchString.Pointer());
+		ok = f->Write(scratchString.c_str());
 	}
 	return ok;
 }

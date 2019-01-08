@@ -93,14 +93,23 @@ struct PrepParams
 {
 	// Parameters used for all types of motion
 	float decelStartDistance;
-	uint32_t topSpeedTimesCdivA;
+	uint32_t topSpeedTimesCdivD;
 
 	// Parameters used only for extruders
 	float compFactor;
 
+#if SUPPORT_CAN_EXPANSION
+	// Parameters used by CAN expansion
+	float accelTime, steadyTime, decelTime;
+	float initialSpeedFraction, finalSpeedFraction;
+#endif
+
 	// Parameters used only for delta moves
-	float initialX;
-	float initialY;
+	float initialX, initialY;
+#if SUPPORT_CAN_EXPANSION
+	float finalX, finalY;
+	float zMovement;
+#endif
 	const LinearDeltaKinematics *dparams;
 	float diagonalSquared;
 	float a2plusb2;								// sum of the squares of the X and Y movement fractions
@@ -126,7 +135,7 @@ public:
 	bool CalcNextStepTimeDelta(const DDA &dda, bool live) __attribute__ ((hot));
 	void PrepareCartesianAxis(const DDA& dda, const PrepParams& params) __attribute__ ((hot));
 	void PrepareDeltaAxis(const DDA& dda, const PrepParams& params) __attribute__ ((hot));
-	void PrepareExtruder(const DDA& dda, const PrepParams& params, float speedChange, bool doCompensation) __attribute__ ((hot));
+	void PrepareExtruder(const DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation) __attribute__ ((hot));
 	void ReduceSpeed(const DDA& dda, uint32_t inverseSpeedFactor);
 	void DebugPrint(char c, bool withDelta) const;
 	int32_t GetNetStepsLeft() const;
@@ -134,6 +143,10 @@ public:
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const;	// Get the current full step interval for this axis or extruder
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+	int32_t GetSteps() const { return (direction) ? totalSteps : -totalSteps; }
 #endif
 
 	static void InitialAllocate(unsigned int num);
@@ -171,18 +184,19 @@ private:
 	uint32_t stepInterval;								// how many clocks between steps
 
 	// The following only needs to be stored per-drive if we are supporting pressure advance
-	uint64_t twoDistanceToStopTimesCsquaredDivA;
+	uint64_t twoDistanceToStopTimesCsquaredDivD;
 
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
 	union MoveParams
 	{
 		struct CartesianParameters						// Parameters for Cartesian and extruder movement, including extruder pressure advance
 		{
-			// The following don't depend on how the move is executed, so they could be set up in Init()
+			// The following don't depend on how the move is executed, so they could be set up in Init() if we use fixed acceleration/deceleration
 			uint64_t twoCsquaredTimesMmPerStepDivA;		// 2 * clock^2 * mmPerStepInHyperCuboidSpace / acceleration
+			uint64_t twoCsquaredTimesMmPerStepDivD;		// 2 * clock^2 * mmPerStepInHyperCuboidSpace / deceleration
 
 			// The following depend on how the move is executed, so they must be set up in Prepare()
-			int64_t fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA;		// this one can be negative
+			int64_t fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD;		// this one can be negative
 			uint32_t accelStopStep;						// the first step number at which we are no longer accelerating
 			uint32_t decelStartStep;					// the first step number at which we are decelerating
 			uint32_t mmPerStepTimesCKdivtopSpeed;		// mmPerStepInHyperCuboidSpace * clock / topSpeed
@@ -192,8 +206,9 @@ private:
 
 		struct DeltaParameters							// Parameters for delta movement
 		{
-			// The following don't depend on how the move is executed, so they can be set up in Init
+			// The following don't depend on how the move is executed, so they could be set up in Init() if we use fixed acceleration/deceleration
 			uint64_t twoCsquaredTimesMmPerStepDivA;		// this could be stored in the DDA if all towers use the same steps/mm
+			uint64_t twoCsquaredTimesMmPerStepDivD;		// 2 * clock^2 * mmPerStepInHyperCuboidSpace / deceleration
 			int64_t dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared;
 			int32_t hmz0sK;								// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)
 			int32_t minusAaPlusBbTimesKs;
@@ -311,8 +326,8 @@ inline void DriveMovement::Release(DriveMovement *item)
 // Get the current full step interval for this axis or extruder
 inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const
 {
-	return ((nextStep >> microstepShift) != 0)		// if at least 1 full step done
-		? stepInterval << microstepShift			// return the interval between steps converted to full steps
+	return (nextStep < totalSteps && nextStep > (1u << microstepShift))		// if at least 1 full step done
+		? stepInterval << microstepShift									// return the interval between steps converted to full steps
 			: 0;
 }
 

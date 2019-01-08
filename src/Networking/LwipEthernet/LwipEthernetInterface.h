@@ -48,8 +48,8 @@ public:
 	bool IsWiFiInterface() const override { return false; }
 
 	void UpdateHostname(const char *hostname) override;
-	const uint8_t *GetIPAddress() const override;
-	void SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[]) override;
+	IPAddress GetIPAddress() const override;
+	void SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) override;
 	void SetMacAddress(const uint8_t mac[]) override;
 	const uint8_t *GetMacAddress() const override { return macAddress; }
 
@@ -58,6 +58,9 @@ public:
 
 	void OpenDataPort(Port port) override;
 	void TerminateDataPort() override;
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	enum class NetworkState
@@ -101,6 +104,9 @@ private:
 	bool initialised;
 	bool usingDhcp;
 
+	IPAddress ipAddress;
+	IPAddress netmask;
+	IPAddress gateway;
 	uint8_t macAddress[6];
 };
 

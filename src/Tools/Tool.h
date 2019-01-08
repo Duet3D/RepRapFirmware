@@ -58,8 +58,6 @@ public:
 	int Heater(size_t heaterNumber) const;
 	const char *GetName() const;
 	int Number() const;
-	void SetVariables(const float* standby, const float* active);
-	void GetVariables(float* standby, float* active) const;
 	void DefineMix(const float m[]);
 	const float* GetMix() const;
 	float MaxFeedrate() const;
@@ -71,6 +69,13 @@ public:
 	Tool *Next() const { return next; }
 	ToolState GetState() const { return state; }
 	bool WriteSettings(FileStore *f) const;			// write the tool's settings to file
+
+	float GetToolHeaterActiveTemperature(size_t heaterNumber) const;
+	float GetToolHeaterStandbyTemperature(size_t heaterNumber) const;
+	void SetToolHeaterActiveTemperature(size_t heaterNumber, float temp);
+	void SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp);
+
+	bool HasTemperatureFault() const { return heaterFault; }
 
 	friend class RepRap;
 
@@ -96,8 +101,8 @@ private:
 	char *name;
 	float offset[MaxAxes];
 	float mix[MaxExtruders];
-	float activeTemperatures[Heaters];
-	float standbyTemperatures[Heaters];
+	float activeTemperatures[NumHeaters];
+	float standbyTemperatures[NumHeaters];
 	size_t driveCount;
 	size_t heaterCount;
 	int myNumber;
@@ -105,7 +110,7 @@ private:
 	AxesBitmap axisOffsetsProbed;
 	FansBitmap fanMapping;
 	uint8_t drives[MaxExtruders];
-	int8_t heaters[Heaters];
+	int8_t heaters[NumHeaters];
 
 	ToolState state;
 	bool heaterFault;

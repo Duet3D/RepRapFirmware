@@ -46,12 +46,12 @@
 #include "RepRap.h"
 #include "Webserver.h"
 #include "Version.h"
-#include "Libraries/General/IP4String.h"
+#include "General/IP4String.h"
+
+#include "ethernet_sam.h"
 
 extern "C"
 {
-#include "ethernet_sam.h"
-
 #include "lwipopts.h"
 
 #ifdef LWIP_STATS
@@ -160,8 +160,11 @@ static void ethernet_rx_callback(uint32_t ul_status)
 
 static void conn_err(void *arg, err_t err)
 {
-	// Report the error to the monitor
-	reprap.GetPlatform().MessageF(UsbMessage, "Network: Connection error, code %d\n", err);
+	if (reprap.Debug(moduleNetwork) && !inInterrupt())
+	{
+		// Report the error to the monitor
+		reprap.GetPlatform().MessageF(UsbMessage, "Network: Connection error, code %d\n", err);
+	}
 
 	// Tell the higher levels about the error
 	ConnectionState *cs = (ConnectionState*)arg;
@@ -179,7 +182,10 @@ static err_t conn_recv(void *arg, tcp_pcb *pcb, pbuf *p, err_t err)
 	{
 		if (cs->pcb != pcb)
 		{
-			reprap.GetPlatform().Message(UsbMessage, "Network: Mismatched pcb in conn_recv!\n");
+			if (reprap.Debug(moduleNetwork) && !inInterrupt())
+			{
+				reprap.GetPlatform().Message(UsbMessage, "Network: Mismatched pcb in conn_recv!\n");
+			}
 			tcp_abort(pcb);
 			return ERR_ABRT;
 		}
@@ -422,7 +428,6 @@ void Network::Spin(bool full)
 					UnlockLWIP();
 
 					platform.Message(UsbMessage, "Network down\n");
-					platform.ClassReport(longWait);
 					return;
 				}
 
@@ -457,7 +462,6 @@ void Network::Spin(bool full)
 
 						UnlockLWIP();
 						platform.MessageF(UsbMessage, "Network up, IP=%s\n", IP4String(ip).c_str());
-						platform.ClassReport(longWait);
 						return;
 					}
 				}
@@ -514,7 +518,6 @@ void Network::Spin(bool full)
 
 		UnlockLWIP();
 	}
-	platform.ClassReport(longWait);
 	webserver->Spin();
 }
 
@@ -777,7 +780,7 @@ const uint8_t *Network::GetIPAddress() const
 	return ethernet_get_ipaddress();
 }
 
-void Network::SetEthernetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[])
+void Network::SetEthernetIPAddress(IPAddress ipAddress, IPAddress netmask, IPAddress gateway)
 {
 	if (state == NetworkObtainingIP || state == NetworkActive)
 	{

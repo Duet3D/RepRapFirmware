@@ -17,12 +17,12 @@
 #include "Networking/HttpResponder.h"
 #include "Networking/FtpResponder.h"
 #include "Networking/TelnetResponder.h"
-#include "Libraries/General/IP4String.h"
+#include "General/IP4String.h"
 #include "Version.h"
+#include "GMAC/ethernet_sam.h"
 
 extern "C"
 {
-#include "GMAC/ethernet_sam.h"
 
 #ifdef LWIP_STATS
 #include "lwip/stats.h"
@@ -138,8 +138,33 @@ LwipEthernetInterface::LwipEthernetInterface(Platform& p) : platform(p), closeDa
 	}
 }
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(LwipEthernetInterface, _ret)
+
+const ObjectModelTableEntry LwipEthernetInterface::objectModelTable[] =
+{
+	// These entries must be in alphabetical order
+	{ "gateway", OBJECT_MODEL_FUNC(&(self->gateway)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+	{ "ip", OBJECT_MODEL_FUNC(&(self->ipAddress)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+	{ "name", OBJECT_MODEL_FUNC_NOSELF("ethernet"), TYPE_OF(const char *), ObjectModelTableEntry::none },
+	{ "netmask", OBJECT_MODEL_FUNC(&(self->netmask)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+};
+
+DEFINE_GET_OBJECT_MODEL_TABLE(LwipEthernetInterface)
+
+#endif
+
 void LwipEthernetInterface::Init()
 {
+	interfaceMutex.Create("Lwip");
+	//TODO we don't yet use this mutex anywhere!
+
 	// Clear the PCBs
 	for (size_t i = 0; i < NumTcpPorts; ++i)
 	{
@@ -325,11 +350,11 @@ void LwipEthernetInterface::Exit()
 // Get the network state into the reply buffer, returning true if there is some sort of error
 GCodeResult LwipEthernetInterface::GetNetworkState(const StringRef& reply)
 {
-	const uint8_t * const config_ip = platform.GetIPAddress();
+	ethernet_get_ipaddress(ipAddress, netmask, gateway);
 	const int enableState = EnableState();
 	reply.printf("Ethernet is %s, configured IP address: %s, actual IP address: %s",
-			(enableState == 0) ? "disabled" : "enabled",
-					IP4String(config_ip).c_str(), IP4String(ethernet_get_ipaddress()).c_str());
+					(enableState == 0) ? "disabled" : "enabled",
+					IP4String(platform.GetIPAddress()).c_str(), IP4String(ipAddress).c_str());
 	return GCodeResult::ok;
 }
 
@@ -392,14 +417,13 @@ void LwipEthernetInterface::Spin(bool full)
 		case NetworkState::establishingLink:
 			if (ethernet_establish_link())
 			{
-				const uint8_t *ipAddress = platform.GetIPAddress();
-				usingDhcp = (ipAddress[0] == 0 && ipAddress[1] == 0 && ipAddress[2] == 0 && ipAddress[3] == 0);
+				usingDhcp = platform.GetIPAddress().IsNull();
 				if (usingDhcp)
 				{
 					// IP address is all zeros, so use DHCP
 					state = NetworkState::obtainingIP;
 //					debugPrintf("Link established, getting IP address\n");
-					uint8_t nullAddress[4] = { 0, 0, 0, 0 };
+					IPAddress nullAddress;
 					ethernet_set_configuration(nullAddress, nullAddress, nullAddress);
 					dhcp_start(&gs_net_if);
 				}
@@ -422,8 +446,8 @@ void LwipEthernetInterface::Spin(bool full)
 					DoEthernetTask();
 
 					// Have we obtained an IP address yet?
-					const uint8_t * const ip = ethernet_get_ipaddress();
-					if (ip[0] != 0 || ip[1] != 0 || ip[2] != 0 || ip[3] != 0)
+					ethernet_get_ipaddress(ipAddress, netmask, gateway);
+					if (!ipAddress.IsNull())
 					{
 						// Notify the mDNS responder about this
 						state = NetworkState::connected;
@@ -449,7 +473,8 @@ void LwipEthernetInterface::Spin(bool full)
 			{
 				InitSockets();
 				RebuildMdnsServices();
-				platform.MessageF(NetworkInfoMessage, "Ethernet running, IP address = %s\n", IP4String(ethernet_get_ipaddress()).c_str());
+				ethernet_get_ipaddress(ipAddress, netmask, gateway);
+				platform.MessageF(NetworkInfoMessage, "Ethernet running, IP address = %s\n", IP4String(ipAddress).c_str());
 				state = NetworkState::active;
 			}
 			break;
@@ -564,23 +589,23 @@ bool LwipEthernetInterface::ConnectionEstablished(tcp_pcb *pcb)
 	return false;
 }
 
-const uint8_t *LwipEthernetInterface::GetIPAddress() const
+IPAddress LwipEthernetInterface::GetIPAddress() const
 {
-	return ethernet_get_ipaddress();
+	return ipAddress;
 }
 
-void LwipEthernetInterface::SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[])
+void LwipEthernetInterface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway)
 {
 	if (state == NetworkState::obtainingIP || state == NetworkState::active)
 	{
-		const bool wantDhcp = (ipAddress[0] == 0 && ipAddress[1] == 0 && ipAddress[2] == 0 && ipAddress[3] == 0);
+		const bool wantDhcp = p_ipAddress.IsNull();
 		if (wantDhcp)
 		{
 			// Acquire dynamic IP address
 			if (!usingDhcp)
 			{
 				state = NetworkState::obtainingIP;
-				uint8_t nullAddress[4] = { 0, 0, 0, 0 };
+				IPAddress nullAddress;
 				ethernet_set_configuration(nullAddress, nullAddress, nullAddress);
 				dhcp_start(&gs_net_if);
 				usingDhcp = true;
@@ -599,7 +624,7 @@ void LwipEthernetInterface::SetIPAddress(const uint8_t ipAddress[], const uint8_
 				usingDhcp = false;
 			}
 
-			ethernet_set_configuration(ipAddress, netmask, gateway);
+			ethernet_set_configuration(p_ipAddress, p_netmask, p_gateway);
 			mdns_resp_netif_settings_changed(&gs_net_if);
 		}
 	}

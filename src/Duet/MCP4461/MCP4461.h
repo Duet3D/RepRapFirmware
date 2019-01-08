@@ -6,7 +6,7 @@
 #define DEFAULT_ADDRESS 0x2C  //With A0 and A1 grounded
 #define DEFAULT_WIPER_VALUE 0x80  //Default to the wipers in midrange
 
-// meory addresses (all shifted 4 bits left)
+// memory addresses (all shifted 4 bits left)
 //For all the Wipers 0x100 = Full scale, 0x80 = mid scale, 0x0 = Zero scale
 #define MCP4461_VW0 0x00
 #define MCP4461_VW1 0x10
@@ -35,17 +35,9 @@ public:
   void setMCP4461Address(uint8_t);
   void setVolatileWiper(uint8_t, uint16_t);
   void setNonVolatileWiper(uint8_t, uint16_t);
-  void setVolatileWipers(uint16_t);
-  void setNonVolatileWipers(uint16_t);
-  void toggleWiper(uint8_t); //NOT YET IMPLEMENTED
-  uint16_t getVolatileWiper(uint8_t);
-  uint16_t getNonVolatileWiper(uint8_t);
-  uint16_t getStatus();
 
 private:
   uint8_t _mcp4461_address;
-  uint8_t _wiper;
-  uint8_t _value;
 };
 
 #endif //MCP4461_H

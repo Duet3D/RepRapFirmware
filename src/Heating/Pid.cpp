@@ -55,10 +55,7 @@ void PID::Init(float pGain, float pTc, float pTd, bool usePid, bool inverted)
 	model.SetParameters(pGain, pTc, pTd, 1.0, GetHighestTemperatureLimit(), 0.0, usePid, inverted, 0);
 	Reset();
 
-	if (model.IsEnabled())
-	{
-		SetHeater(0.0);
-	}
+	SetHeater(0.0);							// set up the pin even if the heater is not enabled (for PCCB)
 
 	// Time the sensor was last sampled.  During startup, we use the current
 	// time as the initial value so as to not trigger an immediate warning from the Tick ISR.
@@ -89,7 +86,7 @@ bool PID::SetModel(float gain, float tc, float td, float maxPwm, float voltage, 
 	if (rslt)
 	{
 #if defined(DUET_06_085)
-		if (heater == Heaters - 1)
+		if (heater == NumHeaters - 1)
 		{
 			// The last heater on the Duet 0.8.5 + DueX4 shares its pin with Fan1
 			platform.EnableSharedFan(!model.IsEnabled());
@@ -752,7 +749,7 @@ void PID::DoTuningStep()
 			const int peakIndex = GetPeakTempIndex();
 			if (peakIndex < 0)
 			{
-				if (millis() - tuningPhaseStartTime < 60 * 1000)			// allow 1 minute for the bed temperature reach peal temperature
+				if (millis() - tuningPhaseStartTime < 60 * 1000)			// allow 1 minute for the bed temperature reach peak temperature
 				{
 					return;			// still waiting for peak temperature
 				}
@@ -901,7 +898,8 @@ void PID::CalculateModel()
 	{
 		DisplayBuffer("At completion");
 	}
-	const float tc = (float)((tuningReadingsTaken - 1) * tuningReadingInterval)/(1000.0 * logf((tuningTempReadings[0] - tuningStartTemp)/(tuningTempReadings[tuningReadingsTaken - 1] - tuningStartTemp)));
+	const float tc = (float)((tuningReadingsTaken - 1) * tuningReadingInterval)
+						/(1000.0 * logf((tuningTempReadings[0] - tuningStartTemp)/(tuningTempReadings[tuningReadingsTaken - 1] - tuningStartTemp)));
 	const float heatingTime = (tuningHeatingTime - tuningPeakDelay) * 0.001;
 	const float gain = (tuningHeaterOffTemp - tuningStartTemp)/(1.0 - expf(-heatingTime/tc));
 
@@ -928,7 +926,7 @@ void PID::CalculateModel()
 	}
 	else
 	{
-		platform.MessageF(WarningMessage, "Auto tune of heater %u failed due to bad curve fit (G=%.1f, tc=%.1f, td=%.1f)\n", heater, (double)gain, (double)tc, (double)td);
+		platform.MessageF(WarningMessage, "Auto tune of heater %u failed due to bad curve fit (A=%.1f, C=%.1f, D=%.1f)\n", heater, (double)gain, (double)tc, (double)td);
 	}
 }
 
@@ -942,7 +940,7 @@ void PID::DisplayBuffer(const char *intro)
 		{
 			buf->catf(" %.1f", (double)tuningTempReadings[i]);
 		}
-		buf->cat("\n");
+		buf->cat('\n');
 		platform.Message(UsbMessage, buf);
 	}
 }

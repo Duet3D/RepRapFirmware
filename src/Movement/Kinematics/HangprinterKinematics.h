@@ -33,7 +33,7 @@ public:
 	HomingMode GetHomingMode() const override { return homeIndividualMotors; }
 	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const override;
 	AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const override;
-	const char* GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const override;
+	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const override;
 	bool QueryTerminateHomingMove(size_t axis) const override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 	bool WriteResumeSettings(FileStore *f) const override;
@@ -43,14 +43,21 @@ private:
 	static constexpr float DefaultSegmentsPerSecond = 100.0;
 	static constexpr float DefaultMinSegmentSize = 0.2;
 
+	// Basic facts about movement system
+	static constexpr size_t HANGPRINTER_AXES = 4;
+	static constexpr size_t A_AXIS = 0;
+	static constexpr size_t B_AXIS = 1;
+	static constexpr size_t C_AXIS = 2;
+	static constexpr size_t D_AXIS = 3;
+
 	void Init();
 	void Recalc();
-    float LineLengthASquared(const float machinePos[3], const float anchor[3]) const;	// Calculate the square of the line length from a spool from a Cartesian coordinate
+	float LineLengthSquared(const float machinePos[3], const float anchor[3]) const;	// Calculate the square of the line length from a spool from a Cartesian coordinate
 	void InverseTransform(float La, float Lb, float Lc, float machinePos[3]) const;
 
 	floatc_t ComputeDerivative(unsigned int deriv, float La, float Lb, float Lc) const;	// Compute the derivative of height with respect to a parameter at a set of motor endpoints
 	void Adjust(size_t numFactors, const floatc_t v[]);									// Perform 3-, 6- or 9-factor adjustment
-	void PrintParameters(StringRef& reply) const;										// Print all the parameters for debugging
+	void PrintParameters(const StringRef& reply) const;									// Print all the parameters for debugging
 
 	float anchorA[3], anchorB[3], anchorC[3];				// XYZ coordinates of the anchors
 	float anchorDz;

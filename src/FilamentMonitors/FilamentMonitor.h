@@ -10,6 +10,8 @@
 
 #include "RepRapFirmware.h"
 #include "MessageType.h"
+#include "GCodes/GCodeResult.h"
+#include "RTOSIface/RTOSIface.h"
 
 enum class FilamentSensorStatus : uint8_t
 {
@@ -39,11 +41,17 @@ public:
 	// ISR for when the pin state changes. It should return true if the ISR wants the commanded extrusion to be fetched.
 	virtual bool Interrupt() = 0;
 
+	// Call this to disable the interrupt before deleting a filament monitor
+	virtual void Disable();
+
 	// Override the virtual destructor if your derived class allocates any dynamic memory
 	virtual ~FilamentMonitor();
 
 	// Return the type of this sensor
 	int GetType() const { return type; }
+
+	// Static initialisation
+	static void InitStatic();
 
 	// Return an error message corresponding to a status code
 	static const char *GetErrorMessage(FilamentSensorStatus f);
@@ -51,11 +59,9 @@ public:
 	// Poll the filament sensors
 	static void Spin(bool full);
 
-	// Return the filament sensor associated with a particular extruder
-	static FilamentMonitor *GetFilamentSensor(unsigned int extruder);
-
-	// Set the filament sensor associated with a particular extruder
-	static bool SetFilamentSensorType(unsigned int extruder, int newSensorType);
+	// Handle M591
+	static GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, unsigned int extruder)
+	pre(extruder < MaxExtruders);
 
 	// Send diagnostics info
 	static void Diagnostics(MessageType mtype);
@@ -75,6 +81,7 @@ private:
 
 	static void InterruptEntry(CallbackParameter param);
 
+	static Mutex filamentSensorsMutex;
 	static FilamentMonitor *filamentSensors[MaxExtruders];
 
 	int32_t isrExtruderStepsCommanded;

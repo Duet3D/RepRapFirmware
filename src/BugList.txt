@@ -1,144 +1,328 @@
+Duet 3 work list
+- Configure ESP SPI pins and channel from Pins.h
+- Driver on/off voltages to be defined in Pins.h, they depend on the board
+- Enable dotstar support
+- SWdebug stuff for main board
+- fan/heater output flexible configuration
+- endstop/Z probe flexible configuration
+- leadscrew adjustment moves not implemented on remote drivers
+- hiccup delay times will need sending to CAN drivers
+
 RRF 1.20 work list
 
-Done in 1.21RC1:
-- [done, reported ok] nonlinear extrusion bug, see https://www.duet3d.com/forum/thread.php?pid=34811#p34811 (not updating netSteps?)
-- [done, ok] M574 reported active low switches as "unknown type"
-- [done, ok] If no temp sensor configured, M305 Px should say so instead of allocating a thermistor
-- [done] "Warning: Error: short to ground on driver(s) 3"
-- [done, ok] Bug: M350 E32 affects only 1st extruder
-- [done, ok] FTP listen failed problem, \bin\curl\curl -vvv ftp://192.168.1.98/sys/bed.g
-- [done, test] M304 bug fix
-- [done, test] Support M260 I2C code
-- [done, test] Support M261 I2C code
-- [done, test] absolute babystepping mode
-- [done, test] Missing check on valid pin number in attachInterrupt, causes reset if you try to use a filament monitor on a DueX endstop input
-- [don't do, instead consider new GCode to set pause point + G92 R option] add G92 Z command to resurrect.g
-- [done, ok] Jerky curves with pressure advance, see https://www.duet3d.com/forum/thread.php?pid=35688#p35688 also see Ian's blog. Need to reduce extruder jerk speed due to the need to jerk steps.
-- [done, test] Endstops 5-10 when no DueX board present
-- [done, ok] Show board revision as 1.02 if VSSA sense present
-- [done] Disabled cache
-- [done, ok] Double probe touch
+WiFi:
+- [resolve library incompatibility] New ESP8266 SDK
+- [done] check what's new in Arduino ESP 2.4.1
+- In client mode, if a disconnection occurs do continuous retries until wifi stopped
 
-Done in 1.21RC2:
-- [done, ok] Unified wifi/Ethernet firmware
-- [done, working] Support Ideamaker filament used, see https://github.com/dc42/RepRapFirmware/issues/151
-- [done, working] bltouch separate probe type
-- [done, working] option to disable heaters when probing, B1 in M558
-- [done, working] constant time password compare
-- [done, ok judging from M671 readback] M671 to allow 1 pair of XY coordinates to clear settings
-- [done, SCARA looks OK] SCARA and polar continuous rotation
-- [done, ok] start.g file
-- [done, ok] M0/M1 from PanelDue etc. no longer cancels a non-paused print
-- [done, ok] when Z probe readings are out of tolerance, use the average in G32 bed probing
-- [done, test] count and report I2C errors in diagnostics
-- [done, working] G29 fixes (square delta height map and multi touch)
-- [done, working] M207 retract hop changed while retracted
-- [done, all working] Test expansion connector endstop inputs
-- [done, working] Test 404 page when no files present, change it to give a useful message instead of blank screen
+Implemented in 2.02beta1:
+- [done, needs community testing] Dynamic acceleration control/dynamic ringing control
+- [done, ch says issue appears fixed] I2C errors - disable task scheduling during I2C transactions
+- [done, ok] G0 E0 moves didn't move the extruder drive
+- [done, ok, document] M569 TOFF parameter, https://forum.duet3d.com/topic/5392/does-m906-set-rms-or-peak-current/28
+- [done, ok, document] @wilriker PR for M106 PWM limit
+- [done, ok, document] PR to allow min extrude/retract temperatures to be set
+- [done, ok] Pass DWC totalAxes as well as visibleAxes, for Machine Properties report - https://forum.duet3d.com/topic/6261/cannot-understand-web-page-for-machine-properties/21
+- [done, ok] Fix rr_filelist first/next issue reported by Christian
+- [done, ok] M106 S# fails if fan 0 is disabled and print cooling fan is mapped
+- [done, ok] Laser support via G1 S parameter, see https://forum.duet3d.com/topic/4702/laser-cnc-support-in-rrf-gcode-semantics/4
+- [done, ok] H parameter as an alternative to S in G0/G1 commands (compulsory for Laser machines)
+- [done scheduler suspend, tested OK] I2C not working with M260, also need to suspend scheduler. See https://forum.duet3d.com/topic/6340/sending-data-over-i2c-transmission-error/2.
+- [done, ok] Setting idle current to zero to disable motors, see https://forum.duet3d.com/topic/6333/question-over-stepper-powerdown-timeout/
+- [done, ok] On Maestro/Ethernet include link speed and duplex in network diagnostics
+- [done, ok] Attempts to set chopper control registers with invalid TOFF/TBL combinations are rejected
+- [done, ok] Support A parameter in M106 command
+- [done] Emergency stop terminates all printing files/macros
+- [done] ch change: add support for M703 (run filament config)
+- [done] ch bug fix: if config.g invoked a macro then final values were copied to GCode sources too early and M501 wasn't recognised
+- [done] PCCB build: endstop 0 and 1 are now assigned to Z and X respectively
+- [done] added check for timeout when sending to the W5500 but not receiving
 
-1.21RC3:
-- [done, ok] Duet Ethernet/M DHCP fixes
-- [done, ok] prohibit movement until homed
-- [done, ok] recovery time before all taps, not just the first
-- [done, ok] https://www.duet3d.com/forum/thread.php?pid=37605#p37605 (rotating magnet filament monitor)
-- [done, ok] During simulation, send status 'M'
-- [done, ok] M39 result to include cluster size
-- [done, ok] No error message if you try to turn off a non existent bed or chamber heater
-- [done, ok] Implement G60
-- [done, ok] bug fix for M556 S0
-- [done, ok] check G2/G3 against axis limits
-- [done, ok] M671 to allow correction factor 'F'
-- [done, ok] can set standstill current fraction on Duet M
-- [done, ok] https://www.duet3d.com/forum/thread.php?pid=37629#p37629 (issues getting info from large files)
-- [done, ok] https://www.duet3d.com/forum/thread.php?pid=39637#p39637 (ftp doesn't work with 1.21RC2 DWS)
-- [done, no test] added M118 support from chrishamm
-- [done, no test] when using any external drivers, don't change DIR before end of STEP pulse
-- [done] bug fix for multi tap with M558 P9
-- [done, test] M452, M453 and M573 option to invert laser/spindle/extrusion signal (I1 parameter)
-- [done, test?] endstops 5-9 allowed for simple filament sensors
-- [done, believed fixed] https://www.duet3d.com/forum/thread.php?pid=40154#p40154 (incorrect resume point after pause)
-- [done, should be better] https://www.duet3d.com/forum/thread.php?pid=40183#p40183, https://www.duet3d.com/forum/thread.php?pid=39509#p39509 (not starting up correctly in access point mode)
-- [done] Attempted movements outside limits or when not homed cause current print file to be aborted
+Done in 2.02RC2:
+- [done, test] Fix additional axes on delta not coordinated
+- [done] DWC disconnects when a message box and a beep are pending at the same time
+- [done, ok on DuetM, test on Duet2] No warning messages when TMC2224 drivers overheat, https://forum.duet3d.com/topic/6309/little-monster-s-hort-to-ground/13
+- [done] Different numbers of endstop inputs and motor drivers
+- [done, ok] Support mixed stealthchop/spread cycle mode on Maestro via TPWMTHRS register, https://forum.duet3d.com/topic/6512/duet-2-maestro-stealthchop-default/7
+- [done, test] Add paused coordinates to 'printing paused' message? https://reprap.org/forum/read.php?416,832303,832440#msg-832440
+- [done] If a bad curve fit occurs during tuning, display the values as A, C and D instead of G, tc and td to better relate to M307
+- [done, M3D testing] Merge in Matt's display changes
 
-Done in 1.21RC4:
-- [done] for CoreXZ require just X and Y to be homed before probing (so that G30 can be used to home Z axis)
-- [done] G10 L2
-- [done] G10 L20
-- [done, test] Suppress heater fault detection when heaters are suspended
-- [done] DuetWiFiServer: new SDK version
-- [problem gone away with latest DuetWiFiServer] Duet WiFi (Kossel): disconnects every time after I upload file xyzCalibration_cube s3d.gcode due to incomplete json reply, but can reconnect afterwards
-- [done, ok] Ethernet: set W5500 to auto negotiate
-- [done, test] Check min. 8 character password in M589, see https://www.duet3d.com/forum/thread.php?pid=40914#p40914
-- [done, test] I parameter on M452, M453 and M573 didn't work
-- [done, test] M564 H0 to allow axis movement before homing on Cartesian/CoreXY printers
-- [done, test] Filament length comment generated by Cura, see https://www.duet3d.com/forum/thread.php?pid=40913#p40913
-- [done, test] Doesn't cancel homeall.g if there is an illegal Z move at the start, https://www.duet3d.com/forum/thread.php?pid=41082#p41082
-- [done] Corrected Z probe input pin in RADDS build
-- [done, test] in M589 check password is empty or at least 8 characters
-- [done] Multi tap on G30
-- [done, didn't help] Possible fix to Duet 06/085 failure to start when using DHCP
-- [ok] Test smart effector sensitivity programming
+Done in 2.02RC3:
+- [done, test] Zero or negative Z probe tolerance means always average all readings (G30 and G29)
+- [done, test] When storage debug enabled, failing to open a file is a warning not an error
+- [done, test] Improve motor phase open circuit message and make it a warning not an error
+- [done, test] Increase number of restore points from 3 to 4
+- [done, test] G60 to save current tool as well as position
+- [done, test] Allow T R2 etc.
+- [done, ok] M918 should echo current settings (Maestro only)
+- [done, test] Fix Duet 3 map extruders to remote drivers
+- [done, test] Limit amount of CPU time used to refesh the 12864 display, https://forum.duet3d.com/topic/6676/firmware-2-02-release-candidate-1-now-available
+- [done, test] Fixed incorrect check for G2/G3 missing parameter
+- [done, ask Ian to test] Fix CoreXYUV stall detection
+- [done, test] Absolute babystepping should't be restricted to 1mm change, https://forum.duet3d.com/topic/6888/babystep-bug-w-incorrect-motion/2
+- [done, ok I think] CH report that movements don't always start
+- [done, test] Implement M600
+- [done] current loop ADC channel PR
+- [done, test] WiFi auto reconnect
+- [done, ok] Object model preliminary code including M408 P1
+- [done, test] Workplace coordinate Z reading wrong, https://forum.duet3d.com/topic/7187/problem-with-setting-working-coordinate-systems
+- [done, test] Support M208 Xaa:bb Ycc:dd etc.
+- [done, ok] M915 should recognise E parameter
+- [done, ok, also test M20 and M503 - ok] M915 output gets truncated and not terminated, problem for octoprint, https://github.com/dc42/RepRapFirmware/issues/212
+- [increased minimum speed for open load detection] spurious drive disconnected messages in RC2, https://forum.duet3d.com/topic/6765/firmware-2-02rc2-released/14
+- [done, test] M557 option to set number of X and Y points instead of limits and spacing
+- [done, test] support M205 for setting jerk
+- [done, test] Add S parameter to M116 to specify acceptable temperature difference
+- [done] When Z probe type is set to bltouch don't turn Z mod pin on/off at start and end of probing
+- [done, test] Allow endstop input number to be specified in M558
+- [done, ok] G30 S-1 when no Z probe, https://forum.duet3d.com/topic/6510/a-couple-of-dwc-odd-things/2
+- [done] Log Z leadscrew/manual adjustment calibration results even if calibration failed
+- [done] Log mesh probing results to file
+- [done] Fix 12864 fan speed display issue (displays 3000 after processing M106 S30)
 
-Remaining:
-- [done] M116 fix, see https://www.duet3d.com/forum/thread.php?pid=41954#p41954. Also M109, M190, M191
-- [done] queue M291 non-blocking messages
-- [done, networking seems OK inc. DHCP] Duet 06/085 DHCP issue; rewrite dhcp_recv without goto? https://www.duet3d.com/forum/thread.php?pid=34605#p34605 and https://www.duet3d.com/forum/thread.php?pid=41923#p41923
-- [done, hard to test] Error: Pop(): stack underflow! https://www.duet3d.com/forum/thread.php?pid=41967#p41967
-- [done, test] Short delay after M558, https://www.duet3d.com/forum/thread.php?pid=41967#p41967
-- [done, test] G10 L20 sign error, https://www.duet3d.com/forum/thread.php?pid=42044#p42044
-- [done, test] When G54 etc. are sent, update user coordinates immediately
-- [done, test] G54 is the default coordinate system; G53 only lasts until end of line
-- [done, test] DWC and PD report user coordinates, nt machine coordinates
-- [done] new step pulse timing for slow drivers
-- check out G30 H parameter, https://www.duet3d.com/forum/thread.php?pid=42322#p42322
-
-- Error message if you attempt movement with VIN < minimum
-- How should we lift X on a CoreXZ printer before homing?
-- if a homing command in an SD print file is aborted due to e.g. G1 Z5 in the homing file, error message should be written to both DWC and PanelDue
-- stall detect on Z axis
-- Files generated by Cura doesn't detect layer changes, see https://www.duet3d.com/forum/thread.php?pid=40865#p40865
+Closed investigations:
+- [no fault] stall detect on Z axis
 - [re-test using new DuetWiFiServer] "Failed to change mode" messages after M552 S2/S0/S1 cycle
 - [can't reproduce] "Attempt to seek on a non-open file", https://www.duet3d.com/forum/thread.php?pid=41175#p41175
-
-- min/max RSSI display?
-
-- [hopefully this is fixed by the DHCP fixes] https://www.duet3d.com/forum/thread.php?pid=37797#p37797 (Duet Ethernet long delays between moves)
+- [hopefully this is fixed by the DHCP fixes, or else there is a DueX involved] https://www.duet3d.com/forum/thread.php?pid=37797#p37797 (Duet Ethernet long delays between moves)
 - [no idea, bus fault in pbuf_cat] Look at https://www.duet3d.com/forum/thread.php?pid=37551#p37551
+- [no fault located, re-test] Fix Duet 3 ABC axes
+- [no fault located, re-test] Wait for all moves to stop before M584
+- [no, it already adds 22 checksum bits] Add check digit to serial number
+- [no, we don't record print time] Distinguish between estimated/simulated/actual print time in M36
+- [problem gone away] chrishamm's watchdog issue, see his email of 2018-08-01
+- [tested, pause/resume works as intended] Check M106 R1 parameter, see https://forum.duet3d.com/topic/6538/resuming-print-fan-after-pause
+- [tested 2018-10-30, ok] Test extruder stall detection, https://forum.duet3d.com/topic/7300/issues-using-stall-detection-when-loading-filament
+- [no fault] Limits wrong when using workplace coordinates, also in thread https://forum.duet3d.com/topic/7523/g30-s-2-not-working-anymore
 
-- save theta, phi in move and then in DDA?
+Open investigations:
+- [check] if a homing command in an SD print file is aborted due to e.g. G1 Z5 in the homing file, error message should be written to both DWC and PanelDue
+- [tested, no fault found] incorrect babystepping, https://forum.duet3d.com/topic/6888/babystep-bug-w-incorrect-motion/2 (already fixed 1mm limit)
+- [tested, no fault found] M226 not working? https://forum.duet3d.com/topic/6860/filament-change-no-reaction/3
+- [replied] Weird height map, https://forum.duet3d.com/topic/6472/mesh-grid-compensation/28
+- [tested, no fault] Full stepping problem, https://forum.duet3d.com/topic/6433/how-to-reduce-the-speed-of-extrusion/14
+- [I2C issue, hopefully resolved] DueX5 LEDs flashing at boot time, https://forum.duet3d.com/topic/6970/led-strip-flashing-on-boot-duex5
+- [tested, no fault found] M24 after heater fault pause, https://forum.duet3d.com/topic/7154/firmware-2-01-resume-after-heater-fault-isn-t-working
+- check DAA working as intended, results are inconsistent. Problem when used with segmented kinematics because the acceleration is in multiple segments.
+- [is a DWC issue] Javascript error, https://forum.duet3d.com/topic/7489/auto-bed-compensation-javascript-error/12
+- [no fault] Babystepping not working, https://forum.duet3d.com/topic/7445/baby-stepping-not-working/20
+- [no fault] Look at GCode file filament estimation in https://forum.duet3d.com/topic/7584/time-estimates-not-working/6
+
+Fixed in 2.02RC4:
+- [done, ok] Send mapped fan speed at the start of the fan speed list in the M408 response for PanelDue
+- [done, ok] PanelDue emergency stop interrupt from UART driver
+- [done, ok] M408 P1 F"gcodes" returns an empty gcodes object
+- [done, ok] Variable substitution in GCode commands
+- [done, ok] In object model, "interface"->"interfaces" to look better in JSON response
+- [done, ok in DWC and PanelDue, test on 12864] Object model returned wrong value for speed factor
+- [done, ok] Support string-valued object model values in JSON report
+- [done, ok] Array indices in variable substitution
+- [done, ok] Support conversion from numeric or boolean to string in variable substitution
+- [done, ok] G30 H parameters don't work if deployprobe.g or retractprobe.g file present
+- [done, ok] Execute residual babystepping immediately
+- [done] Special support for coast-to-end in RecalculateMove
+- [done] Bring RADDS build up to date and use RTOS (not tested)
+- [done, ok] Improved 'page not found' message
+- [done, ok] Fix M600, it stops the machine
+- [done, ok] Watchdog init
+- [possible fix implemented in 2.02RC4] 3 independent Z motors, https://forum.duet3d.com/topic/6974/problem-with-3-independent-z-axis-motors-and-endstops/26
+- [done, ok] Use a I2C mutex instead of a critical section lock
+- [done, tested DueX + extra SX1509B] Rewrote i2C driver
+- [done, ok] M918 to do dispay reset, https://forum.duet3d.com/topic/7316/firmware-2-02-release-candidate-3-now-available/67
+- [done, ok] When simulating ELM-absolute on delta, it knows there are 26 layers but only counts to 13. ELM-Kossel only counts to 17.
+- [done, ok] 12864 display buttons sometimes disappear when moving between them, https://forum.duet3d.com/topic/7641/duet-maestro-12864-lcd-button-display-glitches
+- [done, ok] 12864 display: last byte of images didn't display correctly
+- [done, ok] 12864 display: in button commands, "#0" should be substituted, not "menu"
+- [done] http responses now use \r\n as the line ending, not \n
+- [done] Lookahead errors were occasionally caused by rounding, https://forum.duet3d.com/topic/7644/lookahead-error-and-possibly-related-layer-shifting
+- [done, ok] 12864 display item numbers 79, 179 and 279 were not implemented
+- [done, ok] 12864 display corrected error message timeout, also error messages can be acknowledged by a button press
+- [done, seems ok] DueX endstop not always updating, https://forum.duet3d.com/topic/7500/a-endstop-being-stuck-on/4
+- [done, ok] Use an interrupt to better track changes to the DueXn endstop input status
+- [done, ok] M260 can now receive I2C bytes as well as send them
+- [done, ok] Idle task is now included in task list
+- [done, ok] Added 'deprecated' message when legacy 3-, 4- or 5-point bed compensation is used
+- [done, ok] Warning message if trying to move motors on internal drivers but VIN too low or too high
+- [done, ok] increase min fullsteps for motor open detection from 4 to 20
+- [done, ok] I2C addresses can be specified in hex format e.g. "0x71" or "x71"
+- [done, ok] M584 can now use dummy (high) driver numbers to assign an axis or extruder to no driver
+- [done, ok] M122 to tell you if the drivers are enabled (power good), or disabled and waiting for the correct voltage
+- [done, partial fail] M557 P parameter not working, also not documented
+- [done, partial fail] G30 S-2 tool offset is set in the wrong direction, https://forum.duet3d.com/topic/7523/g30-s-2-not-working-anymore
+- [done, partial fail] After G30 S-2, update user coordinates to account for new tool offset
+- [done, ok] Don't start executing a G30 S-2 command if no tool is selected
+
+Failed tests:
+- [fixed, ok] G32 "Points must be in clockwise order starting near X=0 Y=0" => "starting near minimum X and Y"
+- [fixed, ok] G30 S-2 works OK when initial tool Z offset is 0 but not otherwise
+- [fixed, ok] M557 with even P parameter on circular bed does too few points
+- [bad connection on hot end] Crane Quad hot end reads about 60C at room temperature
+
+To be investigated for 2.02RC5 or release:
+- [tested, ok] Test error handling when the mesh is badly defined, https://forum.duet3d.com/topic/7759/solved-duet-2-wifi-java-error/10
+- [review M292 handling, even though can't reproduce - I can't see a problem] Investigate macros causing a hang, https://forum.duet3d.com/topic/7782/issues-with-macros-halting-the-printer/11
+- [can't reproduce] re-test M226, https://forum.duet3d.com/topic/7747/reprapfirmware-2-02rc4-released/29
+- [was caused by spurious E0 in an travel move] investigate incorrect layer count, https://forum.duet3d.com/topic/7747/reprapfirmware-2-02rc4-released/31
+- [probing speed was too high] Multiple G29 commands in succession, https://forum.duet3d.com/topic/7920/bed-compensation-g29-problems
+- [may be fixed by possible fix for for Z and U moving at different speeds] investigate slow movement, https://forum.duet3d.com/topic/6974/problem-with-3-independent-z-axis-motors-and-endstops/32
+
+Fixed in 2.02RC5:
+- [done, ok] 12864 display of speed factor wrong, https://forum.duet3d.com/topic/7747/reprapfirmware-2-02rc4-released/10
+- [done, ok] 12864 button menu handling wrong, https://forum.duet3d.com/topic/7747/reprapfirmware-2-02rc4-released/14
+- [done, ok] 12864 items 510- display user position not machine position
+- [done, ok] M117 on 12864, https://forum.duet3d.com/topic/7826/display-characters-text-in-macro/4
+- [done, ok] M291 and manual Z-probing on 12864, https://forum.duet3d.com/topic/7826/display-characters-text-in-macro/4
+- [done, ok] Live XYZ movement and baby stepping on 12864
+- [done, retest] Change "Resume-after-power-fail state saved" message to something appropriate for an ordinary pause, https://forum.duet3d.com/topic/7784/power-fail-triggers-unexpectedly/3
+- [done, ok] SCARA: after prox and distal are homed allow XY moves, https://forum.duet3d.com/topic/7747/reprapfirmware-2-02rc4-released/24
+- [done, ok] Support M851, offset is negated + using M851 causes M500 to save Z probe parameters
+- [done, ok] If G31 parameters were read from config-override.g (m501) then a subsequent M500 command saves them too
+- [done, ok] Save workplace coordinate systems in M500
+- [done, ok] Shorten M591 response by removing unnecessary text
+- [done, can't test] When delta auto calibration produces NaNs, abort calibration and emit an error message suggesting a smaller probing radius
+- [done, ok] M106 Pnn Svv always set full PWM if vv > 1 and there were additional parameters e.g. F, https://forum.duet3d.com/topic/7810/question-about-m106/6
+- [done] Possible fix for Z and U moving at different speeds, https://forum.duet3d.com/topic/7755/drive-3-is-slower-as-drive-2-at-homing-in-z-solved/32
+- [done, ok] For SimpleFilamentMonitor, include filament present/not present status in M591 report
+- [done, ok] Heaters turn on momentarily when Duet is reset
+- [done, ok] When G53 is in effect, don't apply tool offsets or axis mapping
+- [done, ok] Don't allow both S0 and T0 in M291, it creates a message that can't be dismissed
+
+Fixed in 2.02RC6:
+- [done] When VIN power comes up (again), clear out open-load status bits to avoid spurious open load warnings
+- [done, ok] Fix behaviour when extrusion per move is < 1 step, https://forum.duet3d.com/topic/7949/my-experience-with-relative-extrusion-problem-and-solution/13
+- [still can't reproduce] Investigate macro using M291 again, https://forum.duet3d.com/topic/7782/issues-with-macros-halting-the-printer/26
+- [done, ok] 12864 fallback: if 'menu' action is used with no parameter, use the F parameter
+- [done, ok] Different U and Z homing speeds is back and worse, https://forum.duet3d.com/topic/7755/drive-3-is-slower-as-drive-2-at-homing-in-z-solved/30
+- [done, ok] A baby stepping move after an extruding move when the printer is idle replicates the same extrusion, https://forum.duet3d.com/topic/7940/firmware-2-02rc5-now-available
+- [done, test] Suppress motor disconnected message if motor current is very low, https://forum.duet3d.com/topic/7994/possible-bug/4
+- [done, ok] When entering a subfolder on the 12864 display from a file list, the screen does not update until you rotate the encoder, https://forum.duet3d.com/topic/8014/12864-display-sd-print-subfolder-screen-update
+- [done, ok] Add date/time if known to config-override.g
+- [done, ok] Resume after pause doesn't use workplace coordinate offsets, https://forum.duet3d.com/topic/4557/cnc-coordinate-systems/29 and https://forum.duet3d.com/topic/7940/firmware-2-02rc5-now-available/16
+- [done, ok] Add nanoDLP to compatibility options, also add M650 and M651 support
+- [done] Return a 503 http error when we run out of buffers while trying to compose a http reply
+- [done] M206 now sets offsets for the current workplace, not workplace 0
+- [done] memory for 12864 display and menu system is not allocated until M918 is processed
+- [done, test] scheduled vs. completed move count wrong, https://forum.duet3d.com/topic/8052/print-stopped-at-83-for-seemingly-no-reason/2
+- [done, ok] G2/G3 moves use a variable arg segment length
+- [done, ok] Add sin + cosine calculation time
+- [done, ok] New version of FatFS
+- [done, ok] Allow M226 and M600 even when no file is being printed
+- [done, test] Print progress based on requested extrusion *before* mixing, for ditto printing
+- [done, ok] G30 after SCARA homing prox and distal sometimes failed due to rounding error in arm calculation, https://forum.duet3d.com/post/72199
+
+Done in 2.02RC7:
+- [done, ok] Pre-allocate SD card storage when doing HTTP file upload
+- [done] Bug fix for homing CoreXY with DDA+Move debug enabled (thanks @sdavi)
+- [done, ok] Set 12864 CS pin low at startup
+- [done, ok] 12864 image display is wrong for multi-line images
+- [done] Suppress global error message from file delete if the file or path doesn't exist, https://forum.duet3d.com/topic/8194/cura-duet-reprap-firmware-integration-question/4
+- [done] Add CORS header to http reject message, see email from chrishamm
+- [done] Add content-length header to rr_download response
+- [done] Redirect http directory requests to index.html
+- [done, ok] HTML index file is now index.html, falls back to reprap.html
+- [done, ok] Support Fanuc-style CNC commands?
+- [done, ok] Support Fanuc-style G2/G3 whole circle moves
+- [done, ok] Add SD card write timing
+
+Done in 2.02 release:
+- [done] Step clock on Duet Maestro going backwards, https://forum.duet3d.com/topic/8264/steptimer-getinterruptclocks-isn-t-incrementing
+- [can't reproduce] Investigate Duet Maestro socket behaviour when cable disconnected, see email from chris
+
+2.03 planned:
+- Object model
+- Conditionals, loops and maths in GCode commands
+- S-curve acceleration
+- Endstop assignment, including option for 1 endstop per motor
+- Faster file upload?
+- Some features from the list below
+
+Future:
+- New DuetWiFiServer using RTOS and a later Expressiv SDK version
+- Remove string allocation from ActOnMCode to save stack space
+- Easier way to support multiple endstops on axes (combine with facility to reassign endstop inputs)
+- Junction deviation instead of jerk? Probably combine with S-curve acceleration.
+- Add I2C success count to I2C stats
+- Run script if thermal error? https://forum.duet3d.com/topic/8038/suggestion-run-script-in-case-of-thermal-error
+- Run script on filament error?
+- Option for an endstop input to trigger an emergency pause
+- Count steps until homing switch is triggered compared to original, https://forum.duet3d.com/topic/8017/request-check-for-lost-steps
+- In CNC or laser mode, don't segment G0 moves for mesh bed compensation, https://forum.duet3d.com/topic/7728/go-vs-g1-movement/11
+- Z homing switch offset in M208 or elsewhere, https://forum.duet3d.com/topic/7767/z-offset-is-negated-in-homing-g-macro
+- After looking for G1 Z commands to find object height in gcode file analyser, check that there is extrusion after it
+- M260 allow bytes to be specified in hex, more generally allow hex anywhere?
+- Auto mount SD card when it is inserted
+- Option to set an idle timer, https://forum.duet3d.com/topic/7758/configuring-idle-timeout
+- Extruder motion until filament sensor senses motion stopped?
+- Allow jerk between printing and non-printing moves, so that coast-to-end works? already made a change for coast-to-end.
+- Error handling in [variable] parser in GCodeBuffer class
+- WiFi auto reconnect should not log all unsuccessful connection attempts, just the first one
+- Option to send M280 servo commands just a few times instead of continuously
+- M3 R parameter so it can restore the spindle/laser after a pause (https://forum.duet3d.com/topic/5418/cnc-laser-m3-unpause-r-parameter)
+- Adjust laser power during acceleration/deceleration
+- First layer segmentation, to help with baby stepping? Or another way to implement live babystepping?
+- Object model variables in 12864 display menus
+- CNC shutdown when movement outside limits attempted not working well, https://forum.duet3d.com/topic/6186/stable-firmware-2-01-duet-2-and-1-22-duet-06-085-released/55
+- Better dead time measurement during auto tuning. Measure both turn-on and turn-off?
+- Feedforward heater control for fan and extrusion speed changes
+- If wifi module gets stuck in starting or changing mode state, reset it again
+- At the end of a simulation, restore the original workplace coordinate selection
+- CNC: look at G17/18/19, see https://forum.duet3d.com/topic/4669/ooznest-workbee-screw-driven
+- Option in M92 to specify what microstepping the values are specified at, https://forum.duet3d.com/topic/8225/m92-parameter-to-indicate-microstepping/4
+- Trigger option to do emergency pause? https://forum.duet3d.com/topic/7846/pause-and-store-print-state-on-network-signal-ups/4
+- Allow extruder movement in tpre? https://forum.duet3d.com/topic/7263/controlling-stepper-motors-via-drive-numbers-eg-g1-d4-700-f100/4
+- M207 per-tool values, https://forum.duet3d.com/topic/6855/add-drive-extruder-parameter-to-m207/6
+- Command to copy output from the following commands to the log file?
+- Track which devices use which pins
+- Hangprinter PRs
+- PR to have any enabled driver report 50C
+- Alternative G10 command to set offsets from known current tool position, see https://forum.duet3d.com/topic/6465/g92-g10-m585-for-setting-head-position-not-machine-position/4
+- Keep sending M408 responses to PanelDue while waiting for movement to complete, or M400 or homing move or similar
+- Extra logging? [did some extra in 2.02RC3] https://forum.duet3d.com/topic/7103/extend-m929-logging-capabilities/5
+- Danny's modified SCARA kinematics (workpiece is on a plate, extruder is fixed)
+- Look at pushover notification support, https://forum.duet3d.com/topic/169/notification-via-pushover-or-other-service/45
+- M81: don't give low voltage warnings when main power has just been turned off
+- M81: option to invert polarity?
+- Add S4 option to G1 command, like S1 but no endstop checks (needed for CoreXY, CoreXZ)
+- M569 command to allow selection of smart/dumb driver (including on Duet M), also allow all 12 drivers to be smart
+- Apostrophe in quoted filename: can we make apostrophe special in SSIDs/passwords but not filenames?
+- M140 command to set default bed heaters for M140 S commands (e.g. M140 P0:1:2)
+- Consider: Heater faults to run M81 even when not doing a build (https://forum.duet3d.com/topic/6225/configure-action-on-heater-fault/7)
+- Option to repeat G32 until deviation/leadscrew adjustment is below a threshold or a retry count reached (and allow for probing failures)
+- Macro option when a motor stall is detected, https://forum.duet3d.com/topic/7026/more-options-for-stall-detection
+- Update PanelDue firmware via Duet
+- Use Heat task to read DHT sensors?
+- Add option R4 to M915 command, to do an emergency stop (useful for Z motor)
+- GCodes corresponding to rr_move and rr_mkdir, https://forum.duet3d.com/topic/5470/firmware-2-0rc6-and-1-21-1rc6-released/13
+- support G12 clean tool?
+- Add fan PWM limit, https://forum.duet3d.com/topic/5370/m106-feature-request-limit-max-pwm-parameter/4
+- after homing, warn if outside M208 movement limits on SCARA, polar etc.
+- Unexpected heaters off/tool selection behaviour, https://www.duet3d.com/forum/thread.php?pid=43059#p43059
+- warn when using : where ; was probably meant
+- Error message if you attempt movement with VIN < minimum
+- When VIN power too low and stepper drivers turned off, flag axes as not homed?
+- min/max RSSI display?
 - report RSSI in M552?
-
-- When Z probe readings are out of tolerance, display the lowest difference seen between consecutive readings
-
-- laser control, https://www.duet3d.com/forum/thread.php?pid=37891#p37891
-- slow DWC but fast FTP, https://www.duet3d.com/forum/thread.php?pid=38345#p38345
-- no stall detect on Z axis, https://www.duet3d.com/forum/thread.php?pid=38504#p38504, https://www.duet3d.com/forum/thread.php?pid=39484#p39484
-- Pressure advance, see https://www.duet3d.com/forum/thread.php?pid=38036#p38036
-- check that we never enable the drivers before we set vsense
-
-- [don't do] Don't report the motor current for a non-existent extruder
-- SD card read error handling?
+- Auto mount main SD card when inserted
+- Add warning message when print exceeds bounds
+- When uploading while a file is being printed, don't allow the currently-printing file to be replaced
+- Option to send stall warning messages when not printing from SD card, https://forum.duet3d.com/topic/6720/stall-protection-on-pyserial-print
+- Custom macros to execute on stall detection, including extruder stall detection https://forum.duet3d.com/topic/6730/stall-detection-custom-actions
+- When Z probe readings are out of tolerance, display the lowest difference seen between consecutive readings?
 - dual extrusion layer counting, see https://www.duet3d.com/forum/thread.php?pid=34816#p34816
 - M140/M190 with no P parameter sets all bed heater temperatures (same for M141/M191)
 - M291 to lock movement and wait for it to finish?
-- Add timeout to hsmci_send_cmd_execute, see https://www.duet3d.com/forum/thread.php?pid=35654#p35654
-- Bug: pressure advance attempts high speed or acceleration extruder movements on bench setup (was it caused by hitting limits?)
 - Bug: https://www.duet3d.com/forum/thread.php?pid=34772#p34772 (needs RRF fix too?)
-- When VIN power too low, flag axes as not homed?
-- M40 to run eject.g [don't do, not NIST standard]
 - configurable minimum extrusion temperature (per extruder?)
-- M81: don't give low voltage warnings when main power is off
 - case-insensitive http headers
-
-Remaining:
 - Send reduce power command to PanelDue when main power turned off?
-- Document multiple bed and chamber heaters
-- Check all classes for correct initialisation
-- sd_mmc_spi doesn't acquire/release the SPI bus. Need to change this for RTOS.
-- If wifi module gets stuck in starting state, reset it again
-
-Bug investigations:
-- [done] step errors, https://www.duet3d.com/forum/thread.php?pid=33741#p33741
+- Option to not broadcast SSID?
+- Support faster homing by using interrupts to check homing switch states
+- Allow manual bed probing to be aborted
+- Don't do pressure advance during accel/decel of sequences of short segments
+- Add T parameter to M207
+- look at supporting SIZE in FTP
+- Make mp.delta.hmz0sK, hmz0scK and dsk 64-bit in SAM4E versions, to increase movement limit - also increase K2?
 
 Investigations:
 
@@ -152,23 +336,4 @@ Investigations:
 [done BUT still wrong in lwip 2] inconsistend oversize vs. len
 p->ref == 1 in WiFi
 
-Later versions:
 
-- Multiple bed heaters, https://www.duet3d.com/forum/thread.php?pid=33903#p33903
-- Use M140H1:2:3 to set multiple bed heater numbers
-- Check https://www.duet3d.com/forum/thread.php?pid=33951#p33951
-
-- Option to not broadcast SSID?
-- On file read error during SD card print, treat like a temperature fault
-- Support faster homing by using interrupts to check homing switch states
-- Allow manual bed probing to be aborted
-- Implement G1 S4? (like S2 but always relative)
-- Add work coordinates? https://www.duet3d.com/forum/thread.php?pid=27128#p27128
-- Don't do pressure advance during accel/decel of sequences of short segments
-- Axis limits on arc moves
-- Arc move with same finish and start coordinates to do complete circle
-- Add T parameter to M207
-- look at supporting SIZE in FTP
-- Make mp.delta.hmz0sK, hmz0scK and dsk 64-bit in SAM4E versions, to increase movement limit - also increase K2?
-
-- SAME7 boot loader - could base on SAM-BA, see http://hobbygenius.co.uk/blog/1633

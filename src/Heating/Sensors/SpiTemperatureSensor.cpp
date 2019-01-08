@@ -6,6 +6,7 @@
  */
 
 #include "SpiTemperatureSensor.h"
+#include "Tasks.h"
 
 SpiTemperatureSensor::SpiTemperatureSensor(unsigned int channel, const char *name, unsigned int relativeChannel, uint8_t spiMode, uint32_t clockFrequency)
 	: TemperatureSensor(channel, name)
@@ -27,24 +28,26 @@ void SpiTemperatureSensor::InitSpi()
 // Send and receive 1 to 8 bytes of data and return the result as a single 32-bit word
 TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[], size_t nbytes, uint32_t& rslt) const
 {
-	if (!sspi_acquire())
-	{
-		return TemperatureError::busBusy;
-	}
-
-	sspi_master_setup_device(&device);
-	delayMicroseconds(1);
-	sspi_select_device(&device);
-	delayMicroseconds(1);
-
 	uint8_t rawBytes[8];
-	spi_status_t sts = sspi_transceive_packet(dataOut, rawBytes, nbytes);
+	spi_status_t sts;
+	{
+		MutexLocker lock(Tasks::GetSpiMutex(), 50);
+		if (!lock)
+		{
+			return TemperatureError::busBusy;
+		}
 
-	delayMicroseconds(1);
-	sspi_deselect_device(&device);
-	delayMicroseconds(1);
+		sspi_master_setup_device(&device);
+		delayMicroseconds(1);
+		sspi_select_device(&device);
+		delayMicroseconds(1);
 
-	sspi_release();
+		sts = sspi_transceive_packet(dataOut, rawBytes, nbytes);
+
+		delayMicroseconds(1);
+		sspi_deselect_device(&device);
+		delayMicroseconds(1);
+	}
 
 	if (sts != SPI_OK)
 	{

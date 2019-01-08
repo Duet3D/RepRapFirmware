@@ -9,8 +9,9 @@
 #define SRC_MOVEMENT_RANDOMPROBEPOINTSET_H_
 
 #include "RepRapFirmware.h"
+#include "ObjectModel/ObjectModel.h"
 
-class RandomProbePointSet
+class RandomProbePointSet INHERIT_OBJECT_MODEL
 {
 public:
 	RandomProbePointSet();
@@ -44,6 +45,9 @@ public:
 	void ReportProbeHeights(size_t numPoints, const StringRef& reply) const;	// Print out the probe heights and any errors
 	void DebugPrint(size_t numPoints) const;
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
 	bool GoodProbePointOrdering(size_t numPoints) const;				// Check that the probe points are in the right order
     float SecondDegreeTransformZ(float x, float y) const;				// Used for second degree bed equation
@@ -62,7 +66,7 @@ private:
 		probeError = 8
 	};
 
-	unsigned int numBedCompensationPoints;								// The number of points we are actually using for bed compensation, 0 means identity bed transform
+	uint32_t numBedCompensationPoints;								// The number of points we are actually using for bed compensation, 0 means identity bed transform
 
 	// Variables used to report what has been probed
 	float xBedProbePoints[MaxProbePoints];								// The X coordinates of the points on the bed at which to probe

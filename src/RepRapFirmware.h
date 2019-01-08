@@ -35,9 +35,12 @@ typedef uint16_t PwmFrequency;		// type used to represent a PWM frequency. 0 som
 #include "Configuration.h"
 #include "Pins.h"
 
-#include "Libraries/General/StringRef.h"
+#include "General/SafeStrtod.h"
+#include "General/SafeVsnprintf.h"
+#include "General/StringRef.h"
 
 // Module numbers and names, used for diagnostics and debug
+// All of these including noModule must be <= 15 because we 'or' the module number into the software reset code
 enum Module : uint8_t
 {
 	modulePlatform = 0,
@@ -105,22 +108,69 @@ typedef float floatc_t;						// type of matrix element used for calibration
 typedef uint32_t AxesBitmap;				// Type of a bitmap representing a set of axes
 typedef uint32_t DriversBitmap;				// Type of a bitmap representing a set of driver numbers
 typedef uint32_t FansBitmap;				// Type of a bitmap representing a set of fan numbers
+typedef uint16_t Pwm_t;						// Type of a PWM value when we don't want to use floats
+
+// Logical pins used for general output, servos, CCN and laser control
+typedef uint16_t LogicalPin;				// Type used to represent logical pin numbers
+constexpr LogicalPin NoLogicalPin = 0xFFFFu;
+
+#if SUPPORT_IOBITS
+typedef uint16_t IoBits_t;					// Type of the port control bitmap (G1 P parameter)
+#endif
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+union LaserPwmOrIoBits
+{
+#if SUPPORT_LASER
+	Pwm_t laserPwm;							// the laser PWM to use for this move
+#endif
+#if SUPPORT_IOBITS
+	IoBits_t ioBits;						// I/O bits to set/clear at the start of this move
+#endif
+
+	void Clear()							// set to zero, whichever one it is
+	{
+#if SUPPORT_LASER
+		laserPwm = 0;
+#else
+		ioBits = 0;
+#endif
+	}
+};
+#endif
 
 // A single instance of the RepRap class contains all the others
 extern RepRap reprap;
 
 // Debugging support
 extern "C" void debugPrintf(const char* fmt, ...) __attribute__ ((format (printf, 1, 2)));
-#define DEBUG_HERE do { } while (false)
-//#define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
+//#define DEBUG_HERE do { } while (false)
+#define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
 
 // Functions and globals not part of any class
-bool StringEndsWith(const char* string, const char* ending);
+
+#ifdef RTOS
+
+void delay(uint32_t ms);
+
+#else
+
+inline void delay(uint32_t ms)
+{
+	coreDelay(ms);
+}
+
+#endif
+
+bool StringEndsWithIgnoreCase(const char* string, const char* ending);
 bool StringStartsWith(const char* string, const char* starting);
-bool StringEquals(const char* s1, const char* s2);
+bool StringStartsWithIgnoreCase(const char* string, const char* starting);
+bool StringEqualsIgnoreCase(const char* s1, const char* s2);
 int StringContains(const char* string, const char* match);
 void SafeStrncpy(char *dst, const char *src, size_t length) pre(length != 0);
 void SafeStrncat(char *dst, const char *src, size_t length) pre(length != 0);
+
+double HideNan(float val);
 
 void ListDrivers(const StringRef& str, DriversBitmap drivers);
 
@@ -156,6 +206,22 @@ private:
 
 // Macro to create a SimpleRange from an array
 #define ARRAY_INDICES(_arr) (SimpleRange<size_t>(ARRAY_SIZE(_arr)))
+
+// A simple milliseconds timer class
+class MillisTimer
+{
+public:
+	MillisTimer() { running = false; }
+	void Start();
+	void Stop() { running = false; }
+	bool Check(uint32_t timeoutMillis) const;
+	bool CheckAndStop(uint32_t timeoutMillis);
+	bool IsRunning() const { return running; }
+
+private:
+	uint32_t whenStarted;
+	bool running;
+};
 
 // Helper functions to work on bitmaps of various lengths.
 // The primary purpose of these is to allow us to switch between 16, 32 and 64-bit bitmaps.
@@ -205,10 +271,14 @@ template<typename BitmapType> BitmapType UnsignedArrayToBitMap(const uint32_t *a
 	return res;
 }
 
-// A string buffer used for temporary purposes
-extern StringRef scratchString;
+// Convert a PWM that is possibly in the old style 0..255 to be in the range 0.0..1.0
+float ConvertOldStylePwm(float v);
 
 // Common definitions used by more than one module
+
+constexpr size_t ScratchStringLength = 220;							// standard length of a scratch string, enough to print delta parameters to
+constexpr size_t ShortScratchStringLength = 50;
+
 constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
 constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
 constexpr size_t CoreXYU_AXES = 5;									// The number of axes in a CoreXYU machine (there is a hidden V axis)
@@ -232,25 +302,66 @@ constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;
 
+//-------------------------------------------------------------------------------------------------
 // Interrupt priorities - must be chosen with care! 0 is the highest priority, 15 is the lowest.
-#if SAM4E || SAME70
+// This interacts with FreeRTOS config constant configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY which is currently defined as 3 for the SAME70 and 5 for the SAM4x.
+// ISRs with better (numerically lower) priorities than this value cannot make FreeRTOS calls, but those interrupts wont be disabled even in FreeRTOS critical sections.
+
+#if SAME70
+// We have only 8 interrupt priority levels
+// Use priority 2 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
+
 const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
-#endif
+const uint32_t NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
+const uint32_t NvicPriorityWiFiUart = 2;		// UART used to receive debug data from the WiFi module
+const uint32_t NvicPriorityMCan = 2;			// CAN interface
+
+# ifndef RTOS
+const uint32_t NvicPrioritySystick = 3;			// systick kicks the watchdog and starts the ADC conversions, so must be quite high
+# endif
+
+const uint32_t NvicPriorityPins = 3;			// priority for GPIO pin interrupts - filament sensors must be higher than step
+const uint32_t NvicPriorityStep = 4;			// step interrupt is next highest, it can preempt most other interrupts
+const uint32_t NvicPriorityUSB = 5;				// USB interrupt
+const uint32_t NvicPriorityHSMCI = 5;			// HSMCI command complete interrupt
+
+# if HAS_LWIP_NETWORKING
+const uint32_t NvicPriorityNetworkTick = 6;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
+const uint32_t NvicPriorityEthernet = 6;		// priority for Ethernet interface
+# endif
+
+const uint32_t NvicPriorityDMA = 6;				// end-of-DMA interrupt used by TMC drivers and HSMCI
+const uint32_t NvicPrioritySpi = 6;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
+
+#else
+// We have 16 priority levels
+// Use priority 4 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
+
+# if SAM4E
+const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
+# endif
 
 const uint32_t NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
-const uint32_t NvicPriorityDriversSerialTMC = 2;// USART or UART used to control and monitor the smart drivers
+const uint32_t NvicPriorityDriversSerialTMC = 2; // USART or UART used to control and monitor the smart drivers
+
+# ifndef RTOS
 const uint32_t NvicPrioritySystick = 3;			// systick kicks the watchdog and starts the ADC conversions, so must be quite high
-const uint32_t NvicPriorityPins = 4;			// priority for GPIO pin interrupts - filament sensors must be higher than step
-const uint32_t NvicPriorityStep = 5;			// step interrupt is next highest, it can preempt most other interrupts
-const uint32_t NvicPriorityWiFiUart = 6;		// UART used to receive debug data from the WiFi module
-const uint32_t NvicPriorityUSB = 6;				// USB interrupt
+# endif
 
-#if HAS_LWIP_NETWORKING
-const uint32_t NvicPriorityNetworkTick = 7;		// priority for network tick interrupt
-const uint32_t NvicPriorityEthernet = 7;		// priority for Ethernet interface
+const uint32_t NvicPriorityPins = 5;			// priority for GPIO pin interrupts - filament sensors must be higher than step
+const uint32_t NvicPriorityStep = 6;			// step interrupt is next highest, it can preempt most other interrupts
+const uint32_t NvicPriorityWiFiUart = 7;		// UART used to receive debug data from the WiFi module
+const uint32_t NvicPriorityUSB = 7;				// USB interrupt
+const uint32_t NvicPriorityHSMCI = 7;			// HSMCI command complete interrupt
+
+# if HAS_LWIP_NETWORKING
+const uint32_t NvicPriorityNetworkTick = 8;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
+const uint32_t NvicPriorityEthernet = 8;		// priority for Ethernet interface
+# endif
+
+const uint32_t NvicPrioritySpi = 8;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
+const uint32_t NvicPriorityTwi = 9;				// TWI is used to read endstop and other inputs on the DueXn
+
 #endif
-
-const uint32_t NvicPrioritySpi = 7;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
-const uint32_t NvicPriorityTwi = 8;				// TWI is used to read endstop and other inputs on the DueXn
 
 #endif

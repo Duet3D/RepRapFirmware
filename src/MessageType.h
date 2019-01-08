@@ -29,6 +29,7 @@ enum MessageType : uint16_t
 	RawMessageFlag = 0x400,				// Do not encapsulate this message
 
 	// Common combinations
+	NoDestinationMessage = 0,												// A message that is going nowhere
 	DebugMessage = BlockingUsbMessage,										// A debug message to send in blocking mode to USB
 	GenericMessage = UsbMessage | LcdMessage | HttpMessage | TelnetMessage,	// A message that is to be sent to the web, Telnet, USB and panel
 	LoggedGenericMessage = GenericMessage | LogMessage,						// A GenericMessage that is also logged

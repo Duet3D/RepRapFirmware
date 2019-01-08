@@ -60,7 +60,7 @@ Tool * Tool::freelist = nullptr;
 	}
 	for (size_t i = 0; i < hCount; ++i)
 	{
-		if (h[i] < 0 || h[i] >= (int)Heaters)
+		if (h[i] < 0 || h[i] >= (int)NumHeaters)
 		{
 			reply.copy("Tool creation: bad heater number");
 			return nullptr;
@@ -68,12 +68,16 @@ Tool * Tool::freelist = nullptr;
 	}
 
 	Tool *t;
-	if (freelist != nullptr)
 	{
+		TaskCriticalSectionLocker lock;
 		t = freelist;
-		freelist = t->next;
+		if (t != nullptr)
+		{
+			freelist = t->next;
+		}
 	}
-	else
+
+	if (t == nullptr)
 	{
 		t = new Tool;
 	}
@@ -146,6 +150,8 @@ Tool * Tool::freelist = nullptr;
 		delete t->name;
 		t->name = nullptr;
 		t->filament = nullptr;
+
+		TaskCriticalSectionLocker lock;
 		t->next = freelist;
 		freelist = t;
 	}
@@ -282,7 +288,7 @@ bool Tool::AllHeatersAtHighTemperature(bool forExtrusion) const
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
 		const float temperature = reprap.GetHeat().GetTemperature(heaters[heater]);
-		if (temperature < HOT_ENOUGH_TO_RETRACT || (temperature < HOT_ENOUGH_TO_EXTRUDE && forExtrusion))
+		if (temperature < reprap.GetHeat().GetRetractionMinTemp() || (forExtrusion && temperature < reprap.GetHeat().GetExtrusionMinTemp()))
 		{
 			return false;
 		}
@@ -309,51 +315,6 @@ void Tool::Standby()
 		reprap.GetHeat().Standby(heaters[heater], this);
 	}
 	state = ToolState::standby;
-}
-
-void Tool::SetVariables(const float* standby, const float* active)
-{
-	for (size_t heater = 0; heater < heaterCount; heater++)
-	{
-		if (active[heater] < NEARLY_ABS_ZERO && standby[heater] < NEARLY_ABS_ZERO)
-		{
-			// Temperatures close to ABS_ZERO turn off all associated heaters
-			reprap.GetHeat().SwitchOff(heaters[heater]);
-		}
-		else
-		{
-			const float minTemperatureLimit = reprap.GetHeat().GetLowestTemperatureLimit(heaters[heater]);
-			const float maxTemperatureLimit = reprap.GetHeat().GetHighestTemperatureLimit(heaters[heater]);
-			const Tool * const currentTool = reprap.GetCurrentTool();
-			if (active[heater] > minTemperatureLimit && active[heater] < maxTemperatureLimit)
-			{
-				activeTemperatures[heater] = active[heater];
-
-				if (currentTool == nullptr || currentTool == this)
-				{
-					reprap.GetHeat().SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
-				}
-			}
-			if (standby[heater] > minTemperatureLimit && standby[heater] < maxTemperatureLimit)
-			{
-				standbyTemperatures[heater] = standby[heater];
-				const Tool *lastStandbyTool = reprap.GetHeat().GetLastStandbyTool(heaters[heater]);
-				if (currentTool == nullptr || currentTool == this || lastStandbyTool == nullptr || lastStandbyTool  == this)
-				{
-					reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
-				}
-			}
-		}
-	}
-}
-
-void Tool::GetVariables(float* standby, float* active) const
-{
-	for (size_t heater = 0; heater < heaterCount; heater++)
-	{
-		active[heater] = activeTemperatures[heater];
-		standby[heater] = standbyTemperatures[heater];
-	}
 }
 
 // May be called from ISR
@@ -428,14 +389,14 @@ bool Tool::WriteSettings(FileStore *f) const
 			c = ':';
 		}
 		buf.cat('\n');
-		ok = f->Write(buf.Pointer());
+		ok = f->Write(buf.c_str());
 	}
 
 	if (ok && state != ToolState::off)
 	{
 		// Select tool
 		buf.printf("T%d P0\n", myNumber);
-		ok = f->Write(buf.Pointer());
+		ok = f->Write(buf.c_str());
 	}
 
 	return ok;
@@ -447,6 +408,77 @@ void Tool::SetOffset(size_t axis, float offs, bool byProbing)
 	if (byProbing)
 	{
 		SetBit(axisOffsetsProbed, axis);
+	}
+}
+
+float Tool::GetToolHeaterActiveTemperature(size_t heaterNumber) const
+{
+	return (heaterNumber < heaterCount) ? activeTemperatures[heaterNumber] : 0.0;
+}
+
+float Tool::GetToolHeaterStandbyTemperature(size_t heaterNumber) const
+{
+	return (heaterNumber < heaterCount) ? standbyTemperatures[heaterNumber] : 0.0;
+}
+
+void Tool::SetToolHeaterActiveTemperature(size_t heaterNumber, float temp)
+{
+	if (heaterNumber < heaterCount)
+	{
+		const Tool * const currentTool = reprap.GetCurrentTool();
+		const bool setHeater = (currentTool == nullptr || currentTool == this);
+		if (temp < NEARLY_ABS_ZERO)								// temperatures close to ABS_ZERO turn off the heater
+		{
+			activeTemperatures[heaterNumber] = 0;
+			if (setHeater)
+			{
+				reprap.GetHeat().SwitchOff(heaters[heaterNumber]);
+			}
+		}
+		else
+		{
+			const float minTemperatureLimit = reprap.GetHeat().GetLowestTemperatureLimit(heaters[heaterNumber]);
+			const float maxTemperatureLimit = reprap.GetHeat().GetHighestTemperatureLimit(heaters[heaterNumber]);
+			if (temp > minTemperatureLimit && temp < maxTemperatureLimit)
+			{
+				activeTemperatures[heaterNumber] = temp;
+				if (setHeater)
+				{
+					reprap.GetHeat().SetActiveTemperature(heaters[heaterNumber], activeTemperatures[heaterNumber]);
+				}
+			}
+		}
+	}
+}
+
+void Tool::SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp)
+{
+	if (heaterNumber < heaterCount)
+	{
+		const Tool * const currentTool = reprap.GetCurrentTool();
+		const Tool * const lastStandbyTool = reprap.GetHeat().GetLastStandbyTool(heaters[heaterNumber]);
+		const bool setHeater = (currentTool == nullptr || currentTool == this || lastStandbyTool == nullptr || lastStandbyTool == this);
+		if (temp < NEARLY_ABS_ZERO)								// temperatures close to ABS_ZERO turn off the heater
+		{
+			standbyTemperatures[heaterNumber] = 0;
+			if (setHeater)
+			{
+				reprap.GetHeat().SwitchOff(heaters[heaterNumber]);
+			}
+		}
+		else
+		{
+			const float minTemperatureLimit = reprap.GetHeat().GetLowestTemperatureLimit(heaters[heaterNumber]);
+			const float maxTemperatureLimit = reprap.GetHeat().GetHighestTemperatureLimit(heaters[heaterNumber]);
+			if (temp > minTemperatureLimit && temp < maxTemperatureLimit)
+			{
+				standbyTemperatures[heaterNumber] = temp;
+				if (setHeater)
+				{
+					reprap.GetHeat().SetStandbyTemperature(heaters[heaterNumber], standbyTemperatures[heaterNumber]);
+				}
+			}
+		}
 	}
 }
 

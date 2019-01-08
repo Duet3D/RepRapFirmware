@@ -1,7 +1,16 @@
 *.d
 *.o
+*.s
+*.map
 !Release/*.bin
 !Release/*/*.bin
 !Release/*/*/*.bin
 *~
 *orig
+/Alligator/
+/Duet085/
+/Duet2_RTOS/
+/DuetM_RTOS/
+/RADDS_RTOS/
+/SAME70_RTOS/
+.settings/language.settings.xml

@@ -205,19 +205,23 @@ AxesBitmap PolarKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallow
 // If we can proceed with homing some axes, return the name of the homing file to be called. Optionally, update 'alreadyHomed' to indicate
 // that some additional axes should be considered not homed.
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
-const char* PolarKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const
+AxesBitmap PolarKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
 {
 	// Ask the base class which homing file we should call first
-	const char* ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, mustHomeFirst);
-	// Change the returned name if it is X or Y
-	if (ret == StandardHomingFileNames[X_AXIS])
+	AxesBitmap ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
+	if (ret == 0)
 	{
-		ret = HomeRadiusFileName;
+		// Change the returned name if it is X or Y
+		if (StringEqualsIgnoreCase(filename.c_str(), "homex.g"))
+		{
+			filename.copy(HomeRadiusFileName);
+		}
+		else if (StringEqualsIgnoreCase(filename.c_str(), "homey.g"))
+		{
+			filename.copy(HomeBedFileName);
+		}
 	}
-	else if (ret == StandardHomingFileNames[Y_AXIS])
-	{
-		ret = HomeBedFileName;
-	}
+
 	return ret;
 }
 

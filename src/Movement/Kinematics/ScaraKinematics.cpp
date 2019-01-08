@@ -35,6 +35,7 @@ const char *ScaraKinematics::GetName(bool forStatusReport) const
 // Calculate theta, psi and the new arm mode from a target position.
 // If the position is not reachable because it is out of radius limits, set theta and psi to NaN and return false.
 // Otherwise set theta and psi to the required values and return true if they are in range.
+// Note: theta and psi are now returned in degrees.
 bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoordinated, float& theta, float& psi, bool& armMode) const
 {
 	const float x = machinePos[X_AXIS] + xOffset;
@@ -49,7 +50,7 @@ bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoor
 		return false;		// not reachable
 	}
 
-	psi = acosf(cosPsi);
+	psi = acosf(cosPsi) * RadiansToDegrees;
 	const float sinPsi = sqrtf(square);
 	const float SCARA_K1 = proximalArmLength + distalArmLength * cosPsi;
 	const float SCARA_K2 = distalArmLength * sinPsi;
@@ -63,7 +64,7 @@ bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoor
 			// The following equations choose arm mode 0 i.e. distal arm rotated anticlockwise relative to proximal arm
 			if (supportsContinuousRotation[1] || (psi >= psiLimits[0] && psi <= psiLimits[1]))
 			{
-				theta = atan2f(SCARA_K1 * y - SCARA_K2 * x, SCARA_K1 * x + SCARA_K2 * y);
+				theta = atan2f(SCARA_K1 * y - SCARA_K2 * x, SCARA_K1 * x + SCARA_K2 * y) * RadiansToDegrees;
 				if (supportsContinuousRotation[0] || (theta >= thetaLimits[0] && theta <= thetaLimits[1]))
 				{
 					break;
@@ -75,7 +76,7 @@ bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoor
 			// The following equations choose arm mode 1 i.e. distal arm rotated clockwise relative to proximal arm
 			if (supportsContinuousRotation[1] || ((-psi) >= psiLimits[0] && (-psi) <= psiLimits[1]))
 			{
-				theta = atan2f(SCARA_K1 * y + SCARA_K2 * x, SCARA_K1 * x - SCARA_K2 * y);
+				theta = atan2f(SCARA_K1 * y + SCARA_K2 * x, SCARA_K1 * x - SCARA_K2 * y) * RadiansToDegrees;
 				if (supportsContinuousRotation[0] || (theta >= thetaLimits[0] && theta <= thetaLimits[1]))
 				{
 					psi = -psi;
@@ -97,6 +98,12 @@ bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoor
 		armMode = !armMode;
 	}
 
+	// Save the original and transformed coordinates so that we don't need to calculate them again if we are commanded to move to this position
+	cachedX = machinePos[0];
+	cachedY = machinePos[1];
+	cachedTheta = theta;
+	cachedPsi = psi;
+	cachedArmMode = armMode;
 	return true;
 }
 
@@ -123,8 +130,8 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 
 //debugPrintf("psi = %.2f, theta = %.2f\n", psi * RadiansToDegrees, theta * RadiansToDegrees);
 
-	motorPos[X_AXIS] = lrintf(theta * RadiansToDegrees * stepsPerMm[X_AXIS]);
-	motorPos[Y_AXIS] = lrintf((psi - (crosstalk[0] * theta)) * RadiansToDegrees * stepsPerMm[Y_AXIS]);
+	motorPos[X_AXIS] = lrintf(theta * stepsPerMm[X_AXIS]);
+	motorPos[Y_AXIS] = lrintf((psi - (crosstalk[0] * theta)) * stepsPerMm[Y_AXIS]);
 	motorPos[Z_AXIS] = lrintf((machinePos[Z_AXIS] - (crosstalk[1] * theta) - (crosstalk[2] * psi)) * stepsPerMm[Z_AXIS]);
 
 	// Transform any additional axes linearly
@@ -139,11 +146,15 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 // For Scara, the X and Y components of stepsPerMm are actually steps per degree angle.
 void ScaraKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
 {
-	const float theta = ((float)motorPos[X_AXIS]/stepsPerMm[X_AXIS]) * DegreesToRadians;
-    const float psi = (((float)motorPos[Y_AXIS]/stepsPerMm[Y_AXIS]) * DegreesToRadians) + (crosstalk[0] * theta);
+	const float theta = ((float)motorPos[X_AXIS]/stepsPerMm[X_AXIS]);
+    const float psi = ((float)motorPos[Y_AXIS]/stepsPerMm[Y_AXIS]) + (crosstalk[0] * theta);
 
-    machinePos[X_AXIS] = (cosf(theta) * proximalArmLength + cosf(psi + theta) * distalArmLength) - xOffset;
-    machinePos[Y_AXIS] = (sinf(theta) * proximalArmLength + sinf(psi + theta) * distalArmLength) - yOffset;
+    // Cache the current values so that a Z probe at this position won't fail due to rounding error when transforming the XY coordinates back
+    currentArmMode = cachedArmMode = (motorPos[Y_AXIS] >= 0);
+    cachedTheta = theta;
+    cachedPsi = psi;
+    cachedX = machinePos[X_AXIS] = (cosf(theta * DegreesToRadians) * proximalArmLength + cosf((psi + theta) * DegreesToRadians) * distalArmLength) - xOffset;
+    cachedY = machinePos[Y_AXIS] = (sinf(theta * DegreesToRadians) * proximalArmLength + sinf((psi + theta) * DegreesToRadians) * distalArmLength) - yOffset;
 
     // On some machines (e.g. Helios), the X and/or Y arm motors also affect the Z height
     machinePos[Z_AXIS] = ((float)motorPos[Z_AXIS]/stepsPerMm[Z_AXIS]) + (crosstalk[1] * theta) + (crosstalk[2] * psi);
@@ -192,9 +203,9 @@ bool ScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 		else if (!gb.Seen('K'))
 		{
 			reply.printf("Kinematics is Scara with proximal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL
-							", distal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL ", crosstalk %.1f:%.1f:%.1f, bed origin (%.1f, %.1f), segments/sec %d, min. segment length %.2f",
-							(double)proximalArmLength, (double)thetaLimits[0], (double)thetaLimits[1],
-							(double)distalArmLength, (double)psiLimits[0], (double)psiLimits[1],
+							"%s, distal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL "%s, crosstalk %.1f:%.1f:%.1f, bed origin (%.1f, %.1f), segments/sec %d, min. segment length %.2f",
+							(double)proximalArmLength, (double)thetaLimits[0], (double)thetaLimits[1], (supportsContinuousRotation[0]) ? " (continuous)" : "",
+							(double)distalArmLength, (double)psiLimits[0], (double)psiLimits[1], (supportsContinuousRotation[0]) ? " (continuous)" : "",
 							(double)crosstalk[0], (double)crosstalk[1], (double)crosstalk[2],
 							(double)xOffset, (double)yOffset,
 							(int)segmentsPerSecond, (double)minSegmentLength);
@@ -220,18 +231,7 @@ bool ScaraKinematics::IsReachable(float x, float y, bool isCoordinated) const
 	// See if we can transform the position
 	float theta, psi;
 	bool armMode = currentArmMode;
-	const bool reachable = CalculateThetaAndPsi(coords, isCoordinated, theta, psi, armMode);
-	if (reachable)
-	{
-		// Save the original and transformed coordinates so that we don't need to calculate them again if we are commanded to move to this position
-		cachedX = x;
-		cachedY = y;
-		cachedTheta = theta;
-		cachedPsi = psi;
-		cachedArmMode = armMode;
-	}
-
-    return reachable;
+	return CalculateThetaAndPsi(coords, isCoordinated, theta, psi, armMode);
 }
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
@@ -244,12 +244,6 @@ bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesB
 	bool armMode = currentArmMode;
 	if (CalculateThetaAndPsi(coords, isCoordinated, theta, psi, armMode))
 	{
-		// Save the original and transformed coordinates so that we don't need to calculate them again if we are commanded to move to this position
-		cachedX = coords[0];
-		cachedY = coords[1];
-		cachedTheta = theta;
-		cachedPsi = psi;
-		cachedArmMode = armMode;
 		return m208Limited;
 	}
 
@@ -291,8 +285,8 @@ bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesB
 		// Radius is in range but at least one arm angle isn't
 		cachedTheta = theta = constrain<float>(theta, thetaLimits[0], thetaLimits[1]);
 		cachedPsi = psi = constrain<float>(psi, psiLimits[0], psiLimits[1]);
-		cachedX = coords[X_AXIS] = (cosf(psi) * proximalArmLength + cosf(psi + theta) * distalArmLength) - xOffset;
-		cachedY = coords[Y_AXIS] = (sinf(psi) * proximalArmLength + sinf(psi + theta) * distalArmLength) - yOffset;
+		cachedX = coords[X_AXIS] = (cosf(psi * DegreesToRadians) * proximalArmLength + cosf((psi + theta) * DegreesToRadians) * distalArmLength) - xOffset;
+		cachedY = coords[Y_AXIS] = (sinf(psi * DegreesToRadians) * proximalArmLength + sinf((psi + theta) * DegreesToRadians) * distalArmLength) - yOffset;
 		cachedArmMode = currentArmMode;
 	}
 
@@ -325,10 +319,10 @@ AxesBitmap ScaraKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 // Return the set of axes that must be homed prior to regular movement of the specified axes
 AxesBitmap ScaraKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const
 {
-	constexpr AxesBitmap xyzAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS) |  MakeBitmap<AxesBitmap>(Z_AXIS);
-	if ((axesMoving & xyzAxes) != 0)
+	constexpr AxesBitmap xyAxes = MakeBitmap<AxesBitmap>(X_AXIS) |  MakeBitmap<AxesBitmap>(Y_AXIS);
+	if ((axesMoving & xyAxes) != 0)
 	{
-		axesMoving |= xyzAxes;
+		axesMoving |= xyAxes;
 	}
 	return axesMoving;
 }
@@ -344,7 +338,7 @@ size_t ScaraKinematics::NumHomingButtons(size_t numVisibleAxes) const
 	{
 		return 1;
 	}
-	if (!storage->FileExists(SYS_DIR, StandardHomingFileNames[Z_AXIS]))
+	if (!storage->FileExists(SYS_DIR, "homez.g"))
 	{
 		return 2;
 	}
@@ -354,25 +348,29 @@ size_t ScaraKinematics::NumHomingButtons(size_t numVisibleAxes) const
 // This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 // If we can proceed with homing some axes, return the name of the homing file to be called.
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
-const char* ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const
+AxesBitmap ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
 {
 	// Ask the base class which homing file we should call first
-	const char* ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, mustHomeFirst);
-	// Change the returned name if it is X or Y
-	if (ret == StandardHomingFileNames[X_AXIS])
-	{
-		ret = HomeProximalFileName;
-	}
-	else if (ret == StandardHomingFileNames[Y_AXIS])
-	{
-		ret = HomeDistalFileName;
-	}
+	AxesBitmap ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
 
-	// Some SCARA printers cannot have individual axes homed safely. So it the user doesn't provide the homing file for an axis, default to homeall.
-	const MassStorage *storage = reprap.GetPlatform().GetMassStorage();
-	if (!storage->FileExists(SYS_DIR, ret))
+	if (ret == 0)
 	{
-		ret = HomeAllFileName;
+	// Change the returned name if it is X or Y
+		if (StringEqualsIgnoreCase(filename.c_str(), "homex.g"))
+		{
+			filename.copy(HomeProximalFileName);
+		}
+		else if (StringEqualsIgnoreCase(filename.c_str(), "homey.g"))
+		{
+			filename.copy(HomeDistalFileName);
+		}
+
+		// Some SCARA printers cannot have individual axes homed safely. So it the user doesn't provide the homing file for an axis, default to homeall.
+		const MassStorage *storage = reprap.GetPlatform().GetMassStorage();
+		if (!storage->FileExists(SYS_DIR, filename.c_str()))
+		{
+			filename.copy(HomeAllFileName);
+		}
 	}
 	return ret;
 }
@@ -387,7 +385,7 @@ bool ScaraKinematics::QueryTerminateHomingMove(size_t axis) const
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
-// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
+// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
 void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
 {
 	switch (axis)
@@ -468,7 +466,7 @@ void ScaraKinematics::Recalc()
 	}
 	else
 	{
-		const float minAngle = min<float>(fabs(psiLimits[0]), fabs(psiLimits[1])) * DegreesToRadians;
+		const float minAngle = min<float>(fabsf(psiLimits[0]), fabsf(psiLimits[1])) * DegreesToRadians;
 		maxRadius = sqrtf(proximalArmLengthSquared + distalArmLengthSquared + (twoPd * cosf(minAngle)));
 	}
 	maxRadius *= 0.995;

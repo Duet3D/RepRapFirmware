@@ -26,11 +26,11 @@ const char *LinearDeltaKinematics::GetName(bool forStatusReport) const
 
 void LinearDeltaKinematics::Init()
 {
-	diagonal = defaultDiagonal;
-	radius = defaultDeltaRadius;
+	diagonal = DefaultDiagonal;
+	radius = DefaultDeltaRadius;
 	xTilt = yTilt = 0.0;
-	printRadius = defaultPrintRadius;
-	homedHeight = defaultDeltaHomedHeight;
+	printRadius = DefaultPrintRadius;
+	homedHeight = DefaultDeltaHomedHeight;
     doneAutoCalibration = false;
 
 	for (size_t axis = 0; axis < DELTA_AXES; ++axis)
@@ -68,7 +68,7 @@ void LinearDeltaKinematics::Recalc()
 	// Calculate the base carriage height when the printer is homed, i.e. the carriages are at the endstops less the corrections
 	const float tempHeight = diagonal;		// any sensible height will do here
 	float machinePos[DELTA_AXES];
-	InverseTransform(tempHeight, tempHeight, tempHeight, machinePos);
+	ForwardTransform(tempHeight, tempHeight, tempHeight, machinePos);
 	homedCarriageHeight = homedHeight + tempHeight - machinePos[Z_AXIS];
 	printRadiusSquared = fsquare(printRadius);
 }
@@ -87,7 +87,6 @@ void LinearDeltaKinematics::NormaliseEndstopAdjustments()
 // Calculate the motor position for a single tower from a Cartesian coordinate.
 float LinearDeltaKinematics::Transform(const float machinePos[], size_t axis) const
 {
-	//TODO find a way of returning error if we can't transform the position
 	if (axis < DELTA_AXES)
 	{
 		return sqrtf(D2 - fsquare(machinePos[X_AXIS] - towerX[axis]) - fsquare(machinePos[Y_AXIS] - towerY[axis]))
@@ -102,7 +101,7 @@ float LinearDeltaKinematics::Transform(const float machinePos[], size_t axis) co
 }
 
 // Calculate the Cartesian coordinates from the motor coordinates
-void LinearDeltaKinematics::InverseTransform(float Ha, float Hb, float Hc, float machinePos[DELTA_AXES]) const
+void LinearDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float machinePos[DELTA_AXES]) const
 {
 	const float Fa = coreFa + fsquare(Ha);
 	const float Fb = coreFb + fsquare(Hb);
@@ -129,10 +128,18 @@ void LinearDeltaKinematics::InverseTransform(float Ha, float Hb, float Hc, float
 // Convert Cartesian coordinates to motor steps
 bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const
 {
-	//TODO return false if we can't transform the position
+	bool ok = true;
 	for (size_t axis = 0; axis < min<size_t>(numVisibleAxes, DELTA_AXES); ++axis)
 	{
-		motorPos[axis] = lrintf(Transform(machinePos, axis) * stepsPerMm[axis]);
+		const float pos = Transform(machinePos, axis);
+		if (isnan(pos) || isinf(pos))
+		{
+			ok = false;
+		}
+		else
+		{
+			motorPos[axis] = lrintf(pos * stepsPerMm[axis]);
+		}
 	}
 
 	// Transform any additional axes linearly
@@ -140,13 +147,13 @@ bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], cons
 	{
 		motorPos[axis] = lrintf(machinePos[axis] * stepsPerMm[axis]);
 	}
-	return true;
+	return ok;
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
 void LinearDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
 {
-	InverseTransform(motorPos[DELTA_A_AXIS]/stepsPerMm[DELTA_A_AXIS], motorPos[DELTA_B_AXIS]/stepsPerMm[DELTA_B_AXIS], motorPos[DELTA_C_AXIS]/stepsPerMm[DELTA_C_AXIS], machinePos);
+	ForwardTransform(motorPos[DELTA_A_AXIS]/stepsPerMm[DELTA_A_AXIS], motorPos[DELTA_B_AXIS]/stepsPerMm[DELTA_B_AXIS], motorPos[DELTA_C_AXIS]/stepsPerMm[DELTA_C_AXIS], machinePos);
 
 	// Convert any additional axes linearly
 	for (size_t drive = DELTA_AXES; drive < numVisibleAxes; ++drive)
@@ -230,8 +237,9 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 
 	if (reprap.Debug(moduleMove))
 	{
-		PrintParameters(scratchString);
-		debugPrintf("%s\n", scratchString.Pointer());
+		String<ScratchStringLength> scratchString;
+		PrintParameters(scratchString.GetRef());
+		debugPrintf("%s\n", scratchString.c_str());
 	}
 
 	// The following is for printing out the calculation time, see later
@@ -267,8 +275,14 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			for (size_t j = 0; j < numFactors; ++j)
 			{
 				const size_t adjustedJ = (numFactors == 8 && j >= 6) ? j + 1 : j;		// skip diagonal rod length if doing 8-factor calibration
-				derivativeMatrix(i, j) =
+				const floatc_t d =
 					ComputeDerivative(adjustedJ, probeMotorPositions(i, DELTA_A_AXIS), probeMotorPositions(i, DELTA_B_AXIS), probeMotorPositions(i, DELTA_C_AXIS));
+				if (isnan(d))			// a couple of users have reported getting Nans in the derivative, probably due to points being unreachable
+				{
+					reply.printf("Auto calibration failed because probe point P%u was unreachable using the current delta parameters. Try a smaller probing radius.", i);
+					return true;
+				}
+				derivativeMatrix(i, j) = d;
 			}
 		}
 
@@ -356,7 +370,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 					probeMotorPositions(i, axis) += solution[axis];
 				}
 				float newPosition[DELTA_AXES];
-				InverseTransform(probeMotorPositions(i, DELTA_A_AXIS), probeMotorPositions(i, DELTA_B_AXIS), probeMotorPositions(i, DELTA_C_AXIS), newPosition);
+				ForwardTransform(probeMotorPositions(i, DELTA_A_AXIS), probeMotorPositions(i, DELTA_B_AXIS), probeMotorPositions(i, DELTA_C_AXIS), newPosition);
 				corrections[i] = newPosition[Z_AXIS];
 				expectedResiduals[i] = probePoints.GetZHeight(i) + newPosition[Z_AXIS];
 				sumOfSquares += fcsquare(expectedResiduals[i]);
@@ -383,13 +397,14 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 	//debugPrintf("Time taken %dms\n", (reprap.GetPlatform()->GetInterruptClocks() - startTime) * 1000 / DDA::stepClockRate);
 	if (reprap.Debug(moduleMove))
 	{
-		PrintParameters(scratchString);
-		debugPrintf("%s\n", scratchString.Pointer());
+		String<ScratchStringLength> scratchString;
+		PrintParameters(scratchString.GetRef());
+		debugPrintf("%s\n", scratchString.c_str());
 	}
 
 	reply.printf("Calibrated %d factors using %d points, deviation before %.3f after %.3f",
 			numFactors, numPoints, (double)sqrtf(initialSumOfSquares/numPoints), (double)expectedRmsError);
-	reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.Pointer());
+	reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.c_str());
 
     doneAutoCalibration = true;
     return false;
@@ -456,7 +471,7 @@ floatc_t LinearDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, 
 	}
 
 	float newPos[DELTA_AXES];
-	hiParams.InverseTransform((deriv == 0) ? ha + perturb : ha, (deriv == 1) ? hb + perturb : hb, (deriv == 2) ? hc + perturb : hc, newPos);
+	hiParams.ForwardTransform((deriv == 0) ? ha + perturb : ha, (deriv == 1) ? hb + perturb : hb, (deriv == 2) ? hc + perturb : hc, newPos);
 	if (deriv == 7)
 	{
 		return -newPos[X_AXIS]/printRadius;
@@ -467,7 +482,7 @@ floatc_t LinearDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, 
 	}
 
 	const float zHi = newPos[Z_AXIS];
-	loParams.InverseTransform((deriv == 0) ? ha - perturb : ha, (deriv == 1) ? hb - perturb : hb, (deriv == 2) ? hc - perturb : hc, newPos);
+	loParams.ForwardTransform((deriv == 0) ? ha - perturb : ha, (deriv == 1) ? hb - perturb : hb, (deriv == 2) ? hc - perturb : hc, newPos);
 	const float zLo = newPos[Z_AXIS];
 
 	return ((floatc_t)zHi - (floatc_t)zLo)/(floatc_t)(2 * perturb);
@@ -533,7 +548,7 @@ void LinearDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[])
 }
 
 // Print all the parameters for debugging
-void LinearDeltaKinematics::PrintParameters(StringRef& reply) const
+void LinearDeltaKinematics::PrintParameters(const StringRef& reply) const
 {
 	reply.printf("Stops X%.3f Y%.3f Z%.3f height %.3f diagonal %.3f radius %.3f xcorr %.2f ycorr %.2f zcorr %.2f xtilt %.3f%% ytilt %.3f%%\n",
 		(double)endstopAdjustments[DELTA_A_AXIS], (double)endstopAdjustments[DELTA_B_AXIS], (double)endstopAdjustments[DELTA_C_AXIS], (double)homedHeight, (double)diagonal, (double)radius,
@@ -546,15 +561,16 @@ bool LinearDeltaKinematics::WriteCalibrationParameters(FileStore *f) const
 	bool ok = f->Write("; Delta parameters\n");
 	if (ok)
 	{
+		String<ScratchStringLength> scratchString;
 		scratchString.printf("M665 L%.3f R%.3f H%.3f B%.1f X%.3f Y%.3f Z%.3f\n",
 			(double)diagonal, (double)radius, (double)homedHeight, (double)printRadius, (double)angleCorrections[DELTA_A_AXIS], (double)angleCorrections[DELTA_B_AXIS], (double)angleCorrections[DELTA_C_AXIS]);
-		ok = f->Write(scratchString.Pointer());
-	}
-	if (ok)
-	{
-		scratchString.printf("M666 X%.3f Y%.3f Z%.3f A%.2f B%.2f\n",
-			(double)endstopAdjustments[X_AXIS], (double)endstopAdjustments[Y_AXIS], (double)endstopAdjustments[Z_AXIS], (double)(xTilt * 100.0), (double)(yTilt * 100.0));
-		ok = f->Write(scratchString.Pointer());
+		ok = f->Write(scratchString.c_str());
+		if (ok)
+		{
+			scratchString.printf("M666 X%.3f Y%.3f Z%.3f A%.2f B%.2f\n",
+				(double)endstopAdjustments[X_AXIS], (double)endstopAdjustments[Y_AXIS], (double)endstopAdjustments[Z_AXIS], (double)(xTilt * 100.0), (double)(yTilt * 100.0));
+			ok = f->Write(scratchString.c_str());
+		}
 	}
 	return ok;
 }
@@ -580,16 +596,9 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 	case 665:
 		{
 			bool seen = false;
-			if (gb.Seen('L'))
-			{
-				diagonal = gb.GetFValue();
-				seen = true;
-			}
-			if (gb.Seen('R'))
-			{
-				radius = gb.GetFValue();
-				seen = true;
-			}
+			gb.TryGetFValue('L', diagonal, seen);
+			gb.TryGetFValue('R', radius, seen);
+
 			if (gb.Seen('B'))
 			{
 				printRadius = gb.GetFValue();
@@ -601,24 +610,9 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 				p.SetAxisMaximum(Y_AXIS, printRadius, false);
 				seen = true;
 			}
-			if (gb.Seen('X'))
-			{
-				// X tower position correction
-				angleCorrections[DELTA_A_AXIS] = gb.GetFValue();
-				seen = true;
-			}
-			if (gb.Seen('Y'))
-			{
-				// Y tower position correction
-				angleCorrections[DELTA_B_AXIS] = gb.GetFValue();
-				seen = true;
-			}
-			if (gb.Seen('Z'))
-			{
-				// Z tower position correction
-				angleCorrections[DELTA_C_AXIS] = gb.GetFValue();
-				seen = true;
-			}
+			gb.TryGetFValue('X', angleCorrections[DELTA_A_AXIS], seen);
+			gb.TryGetFValue('Y', angleCorrections[DELTA_B_AXIS], seen);
+			gb.TryGetFValue('Z', angleCorrections[DELTA_C_AXIS], seen);
 
 			if (gb.Seen('H'))
 			{
@@ -646,21 +640,10 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 	case 666:
 		{
 			bool seen = false;
-			if (gb.Seen('X'))
-			{
-				endstopAdjustments[X_AXIS] = gb.GetFValue();
-				seen = true;
-			}
-			if (gb.Seen('Y'))
-			{
-				endstopAdjustments[Y_AXIS] = gb.GetFValue();
-				seen = true;
-			}
-			if (gb.Seen('Z'))
-			{
-				endstopAdjustments[Z_AXIS] = gb.GetFValue();
-				seen = true;
-			}
+			gb.TryGetFValue('X', endstopAdjustments[DELTA_A_AXIS], seen);
+			gb.TryGetFValue('Y', endstopAdjustments[DELTA_B_AXIS], seen);
+			gb.TryGetFValue('Z', endstopAdjustments[DELTA_C_AXIS], seen);
+
 			if (gb.Seen('A'))
 			{
 				xTilt = gb.GetFValue() * 0.01;
@@ -712,25 +695,16 @@ AxesBitmap LinearDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 // This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 // If we can proceed with homing some axes, return the name of the homing file to be called.
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
-const char* LinearDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const
+AxesBitmap LinearDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
 {
 	// If homing X, Y or Z we must home all the towers
 	if ((toBeHomed & LowestNBits<AxesBitmap>(DELTA_AXES)) != 0)
 	{
-		return "homedelta.g";
+		filename.copy("homedelta.g");
+		return 0;
 	}
 
-	// Return the homing file for the lowest axis that we have been asked to home
-	for (size_t axis = DELTA_AXES; axis < numVisibleAxes; ++axis)
-	{
-		if (IsBitSet(toBeHomed, axis))
-		{
-			return StandardHomingFileNames[axis];
-		}
-	}
-
-	mustHomeFirst = 0;
-	return nullptr;
+	return Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing.
@@ -744,9 +718,18 @@ bool LinearDeltaKinematics::QueryTerminateHomingMove(size_t axis) const
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
 void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
 {
-	if (highEnd)
+	if (axis < DELTA_AXES)
 	{
-		const float hitPoint = GetHomedCarriageHeight(axis);
+		if (highEnd)
+		{
+			const float hitPoint = GetHomedCarriageHeight(axis);
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+		}
+	}
+	else
+	{
+		// Assume that any additional axes are linear
+		const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
 		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 	}
 }

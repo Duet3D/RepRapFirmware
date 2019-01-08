@@ -12,9 +12,6 @@
 #include "Kinematics.h"
 
 constexpr size_t DELTA_AXES = 3;
-constexpr size_t DELTA_A_AXIS = 0;
-constexpr size_t DELTA_B_AXIS = 1;
-constexpr size_t DELTA_C_AXIS = 2;
 
 // Class to hold the parameter for a delta machine.
 class LinearDeltaKinematics : public Kinematics
@@ -42,7 +39,7 @@ public:
 	HomingMode GetHomingMode() const override { return homeIndividualMotors; }
 	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const override;
 	AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const override;
-	const char* GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const override;
+	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const override;
 	bool QueryTerminateHomingMove(size_t axis) const override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 	bool WriteResumeSettings(FileStore *f) const override;
@@ -60,37 +57,42 @@ private:
 	void Recalc();
 	void NormaliseEndstopAdjustments();												// Make the average of the endstop adjustments zero
     float Transform(const float headPos[], size_t axis) const;						// Calculate the motor position for a single tower from a Cartesian coordinate
-    void InverseTransform(float Ha, float Hb, float Hc, float headPos[]) const;		// Calculate the Cartesian position from the motor positions
+    void ForwardTransform(float Ha, float Hb, float Hc, float headPos[]) const;		// Calculate the Cartesian position from the motor positions
 
 	floatc_t ComputeDerivative(unsigned int deriv, float ha, float hb, float hc) const;	// Compute the derivative of height with respect to a parameter at a set of motor endpoints
 	void Adjust(size_t numFactors, const floatc_t v[]);								// Perform 3-, 4-, 6- or 7-factor adjustment
-	void PrintParameters(StringRef& reply) const;									// Print all the parameters for debugging
+	void PrintParameters(const StringRef& reply) const;								// Print all the parameters for debugging
 
-	// Delta parameter defaults
-	const float defaultDiagonal = 215.0;
-	const float defaultDeltaRadius = 105.6;
-	const float defaultPrintRadius = 80.0;				// mm
-	const float defaultDeltaHomedHeight = 240.0;		// mm
+	// Axis names used internally
+	static constexpr size_t DELTA_A_AXIS = 0;
+	static constexpr size_t DELTA_B_AXIS = 1;
+	static constexpr size_t DELTA_C_AXIS = 2;
+
+	// Delta parameter defaults in mm
+	static constexpr float DefaultDiagonal = 215.0;
+	static constexpr float DefaultDeltaRadius = 105.6;
+	static constexpr float DefaultPrintRadius = 80.0;
+	static constexpr float DefaultDeltaHomedHeight = 240.0;
 
 	// Core parameters
-    float diagonal;										// The diagonal rod length, all 3 are assumed to be the same length
-    float radius;										// The nominal delta radius, before any fine tuning of tower positions
-    float angleCorrections[DELTA_AXES];					// Tower position corrections
-    float endstopAdjustments[DELTA_AXES];				// How much above or below the ideal position each endstop is
-    float printRadius;
-    float homedHeight;
-    float xTilt, yTilt;									// How much we need to raise Z for each unit of movement in the +X and +Y directions
+	float diagonal;										// The diagonal rod length, all 3 are assumed to be the same length
+	float radius;										// The nominal delta radius, before any fine tuning of tower positions
+	float angleCorrections[DELTA_AXES];					// Tower position corrections
+	float endstopAdjustments[DELTA_AXES];				// How much above or below the ideal position each endstop is
+	float printRadius;
+	float homedHeight;
+	float xTilt, yTilt;									// How much we need to raise Z for each unit of movement in the +X and +Y directions
 
-    // Derived values
-    float towerX[DELTA_AXES];							// The X coordinate of each tower
-    float towerY[DELTA_AXES];							// The Y coordinate of each tower
-    float printRadiusSquared;
-    float homedCarriageHeight;
+	// Derived values
+	float towerX[DELTA_AXES];							// The X coordinate of each tower
+	float towerY[DELTA_AXES];							// The Y coordinate of each tower
+	float printRadiusSquared;
+	float homedCarriageHeight;
 	float Xbc, Xca, Xab, Ybc, Yca, Yab;
 	float coreFa, coreFb, coreFc;
-    float Q, Q2, D2;
+	float Q, Q2, D2;
 
-    bool doneAutoCalibration;							// True if we have done auto calibration
+	bool doneAutoCalibration;							// True if we have done auto calibration
 };
 
 #endif /* LINEARDELTAKINEMATICS_H_ */

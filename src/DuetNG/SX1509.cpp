@@ -21,15 +21,18 @@ local, and you've found our code helpful, please buy us a round!
 Distributed as-is; no warranty is given.
 ******************************************************************************/
 
-#include "Core.h"
+#include "RepRapFirmware.h"
 #include "Wire.h"
+#include "Tasks.h"
 #include "SX1509.h"
 #include "SX1509Registers.h"
-#include "Pins.h"
+#include "RTOSIface/RTOSIface.h"
 
-SX1509::SX1509() : _clkX(0), errorCount(0)
+SX1509::SX1509() : _clkX(0)
 {
 }
+
+//************* Public functions. These must all acquire and release the I2C mutex around any I2C transactions. ***********
 
 // Test for the presence of a SX1509B. The I2C subsystem must be initialised before calling this.
 bool SX1509::begin(uint8_t address)
@@ -38,10 +41,13 @@ bool SX1509::begin(uint8_t address)
 	deviceAddress =  address;
 	
 	reset();
+	delay(2);														// not sure this is needed, but it may help
 
 	pwmPins = 0;
 
 	// Communication test. We'll read from two registers with different default values to verify communication.
+	MutexLocker lock(Tasks::GetI2CMutex());
+
 	const uint16_t testRegisters = readWord(REG_INTERRUPT_MASK_A);	// this should return 0xFF00
 	const bool ok = (testRegisters == 0xFF00);
 	if (ok)
@@ -53,41 +59,14 @@ bool SX1509::begin(uint8_t address)
 	return ok;
 }
 
+// Reset the SX1509B
 void SX1509::reset()
 {
+	MutexLocker lock(Tasks::GetI2CMutex());
+
 	// Software reset command sequence:
 	writeByte(REG_RESET, 0x12);
 	writeByte(REG_RESET, 0x34);
-}
-
-void SX1509::setBitsInWord(uint8_t registerAddress, uint16_t bits)
-{
-	if (bits != 0)
-	{
-		const uint16_t regVal = readWord(registerAddress);
-		writeWord(registerAddress, regVal | bits);
-	}
-}
-
-void SX1509::clearBitsInWord(uint8_t registerAddress, uint16_t bits)
-{
-	if (bits != 0)
-	{
-		const uint16_t regVal = readWord(registerAddress);
-		writeWord(registerAddress, regVal & (~bits));
-	}
-}
-
-void SX1509::analogWriteMultiple(uint16_t pins, uint8_t pwm)
-{
-	for (uint8_t pin = 0; pins != 0; ++pin)
-	{
-		if ((pins & 1u) != 0)
-		{
-			analogWrite(pin, pwm);
-		}
-		pins >>= 1;
-	}
 }
 
 void SX1509::pinMode(uint8_t pin, PinMode inOut)
@@ -100,6 +79,8 @@ void SX1509::pinMode(uint8_t pin, PinMode inOut)
 // So we track which pins are in PWM (i.e. LED driver) mode, and we never try to switch them back to being ordinary outputs.
 void SX1509::pinModeMultiple(uint16_t pins, PinMode inOut)
 {
+	MutexLocker lock(Tasks::GetI2CMutex());
+
 	switch (inOut)
 	{
 	case INPUT:
@@ -175,6 +156,8 @@ void SX1509::pinModeMultiple(uint16_t pins, PinMode inOut)
 
 void SX1509::digitalWrite(uint8_t pin, bool highLow)
 {
+	MutexLocker lock(Tasks::GetI2CMutex());
+
 	if (((1u << pin) & pwmPins) != 0)
 	{
 		analogWrite(pin, (highLow) ? 255 : 0);
@@ -191,6 +174,8 @@ void SX1509::digitalWrite(uint8_t pin, bool highLow)
 
 bool SX1509::digitalRead(uint8_t pin)
 {
+	MutexLocker lock(Tasks::GetI2CMutex());
+
 	if (pin >= 8)
 	{
 		return (readByte(REG_DATA_B) & (1u << (pin - 8))) != 0;
@@ -203,6 +188,8 @@ bool SX1509::digitalRead(uint8_t pin)
 
 uint16_t SX1509::digitalReadAll()
 {
+	MutexLocker lock(Tasks::GetI2CMutex());
+
 	return readWord(REG_DATA_B);
 }
 
@@ -253,6 +240,8 @@ void SX1509::ledDriverInitMultiple(uint16_t pins, bool log, bool openDrain)
 
 void SX1509::analogWrite(uint8_t pin, uint8_t iOn)
 {
+	MutexLocker lock(Tasks::GetI2CMutex());
+
 	// Write the on intensity of pin
 	// Linear mode: Ion = iOn
 	// Log mode: Ion = f(iOn)
@@ -260,260 +249,6 @@ void SX1509::analogWrite(uint8_t pin, uint8_t iOn)
 	// This means that we need to invert the intensity, and log mode doesn't make sense.
 	writeByte(REG_I_ON[pin], ~iOn);
 }
-
-#if 0	// these functions are not used
-
-void SX1509::blink(uint8_t pin, unsigned long tOn, unsigned long tOff, uint8_t onIntensity, uint8_t offIntensity)
-{
-	const uint8_t onReg = calculateLEDTRegister(tOn);
-	const uint8_t offReg = calculateLEDTRegister(tOff);
-	
-	setupBlink(pin, onReg, offReg, onIntensity, offIntensity, 0, 0, false, false);
-}
-
-void SX1509::breathe(uint8_t pin, unsigned long tOn, unsigned long tOff, unsigned long rise, unsigned long fall, uint8_t onInt, uint8_t offInt, bool log, bool openDrain)
-{
-	offInt = constrain<uint8_t>(offInt, 0, 7);
-	
-	const uint8_t onReg = calculateLEDTRegister(tOn);
-	const uint8_t offReg = calculateLEDTRegister(tOff);
-	
-	const uint8_t riseTime = calculateSlopeRegister(rise, onInt, offInt);
-	const uint8_t fallTime = calculateSlopeRegister(fall, onInt, offInt);
-	
-	setupBlink(pin, onReg, offReg, onInt, offInt, riseTime, fallTime, log, openDrain);
-}
-
-void SX1509::setupBlink(uint8_t pin, uint8_t tOn, uint8_t tOff, uint8_t onIntensity, uint8_t offIntensity, uint8_t tRise, uint8_t tFall, bool log, bool openDrain)
-{
-	ledDriverInit(pin, log, openDrain);
-	
-	// Keep parameters within their limits:
-	tOn &= 0x1F;	// tOn should be a 5-bit value
-	tOff &= 0x1F;	// tOff should be a 5-bit value
-	offIntensity &= 0x07;
-	// Write the time on
-	// 1-15:  TON = 64 * tOn * (255/ClkX)
-	// 16-31: TON = 512 * tOn * (255/ClkX)
-	writeByte(REG_T_ON[pin], tOn);
-	
-	// Write the time/intensity off register
-	// 1-15:  TOFF = 64 * tOff * (255/ClkX)
-	// 16-31: TOFF = 512 * tOff * (255/ClkX)
-	// linear Mode - IOff = 4 * offIntensity
-	// log mode - Ioff = f(4 * offIntensity)
-	writeByte(REG_OFF[pin], (tOff << 3) | offIntensity);
-	
-	// Write the on intensity:
-	writeByte(REG_I_ON[pin], onIntensity);
-	
-	// Prepare tRise and tFall
-	tRise &= 0x1F;	// tRise is a 5-bit value
-	tFall &= 0x1F;	// tFall is a 5-bit value
-	
-	// Write regTRise
-	// 0: Off
-	// 1-15:  TRise =      (regIOn - (4 * offIntensity)) * tRise * (255/ClkX)
-	// 16-31: TRise = 16 * (regIOn - (4 * offIntensity)) * tRise * (255/ClkX)
-	if (REG_T_RISE[pin] != 0xFF)
-	{
-		writeByte(REG_T_RISE[pin], tRise);
-	}
-
-	// Write regTFall
-	// 0: off
-	// 1-15:  TFall =      (regIOn - (4 * offIntensity)) * tFall * (255/ClkX)
-	// 16-31: TFall = 16 * (regIOn - (4 * offIntensity)) * tFall * (255/ClkX)
-	if (REG_T_FALL[pin] != 0xFF)
-	{
-		writeByte(REG_T_FALL[pin], tFall);
-	}
-}
-
-void SX1509::keypad(uint8_t rows, uint8_t columns, unsigned int sleepTime, uint8_t scanTime, uint8_t debounceTime)
-{
-	// Set regDir 0:7 outputs, 8:15 inputs:
-	uint16_t tempWord = readWord(REG_DIR_B);
-	for (uint8_t i = 0; i<rows; i++)
-	{
-		tempWord &= ~(1 << i);
-	}
-	for (uint8_t i = 8; i < (columns * 2); i++)
-	{
-		tempWord |= (1u << i);
-	}
-	writeWord(REG_DIR_B, tempWord);
-	
-	// Set regOpenDrain on 0:7:
-	uint8_t tempByte = readByte(REG_OPEN_DRAIN_A);
-	for (uint8_t i = 0; i < rows; i++)
-	{
-		tempByte |= (1u << i);
-	}
-	writeByte(REG_OPEN_DRAIN_A, tempByte);
-	
-	// Set regPullUp on 8:15:
-	tempByte = readByte(REG_PULL_UP_B);
-	for (uint8_t i=0; i < columns; i++)
-	{
-		tempByte |= (1u << i);
-	}
-	writeByte(REG_PULL_UP_B, tempByte);
-	
-	// Debounce Time must be less than scan time
-	debounceTime = constrain<uint8_t>(debounceTime, 1, 64);
-	scanTime = constrain<uint8_t>(scanTime, 1, 128);
-	if (debounceTime >= scanTime)
-	{
-		debounceTime = scanTime >> 1; // Force debounceTime to be less than scanTime
-	}
-	debounceKeypad(debounceTime, rows, columns);
-	
-	// Calculate scanTimeBits, based on scanTime
-	uint8_t scanTimeBits = 0;
-	for (uint8_t i = 7; i > 0; i--)
-	{
-		if ((scanTime & (1u << i)) != 0)
-		{
-			scanTimeBits = i;
-			break;
-		}
-	}
-	
-	// Calculate sleepTimeBits, based on sleepTime
-	uint8_t sleepTimeBits = 0;
-	if (sleepTime != 0)
-	{
-		for (uint8_t i = 7; i != 0; i--)
-		{
-			if ((sleepTime & (1u << (i + 6))) != 0)
-			{
-				sleepTimeBits = i;
-				break;
-			}
-		}
-		// If sleepTime was non-zero, but less than 128, 
-		// assume we wanted to turn sleep on, set it to minimum:
-		if (sleepTimeBits == 0)
-		{
-			sleepTimeBits = 1;
-		}
-	}
-	
-	// RegKeyConfig1 sets the auto sleep time and scan time per row
-	sleepTimeBits = (sleepTimeBits & 0b111)<<4;	
-	scanTimeBits &= 0b111;	// Scan time is bits 2:0
-	tempByte = sleepTime | scanTimeBits;
-	writeByte(REG_KEY_CONFIG_1, tempByte);
-	
-	// RegKeyConfig2 tells the SX1509 how many rows and columns we've got going
-	rows = (rows - 1) & 0b111;	// 0 = off, 0b001 = 2 rows, 0b111 = 8 rows, etc.
-	columns = (columns - 1) & 0b111;	// 0b000 = 1 column, ob111 = 8 columns, etc.
-	writeByte(REG_KEY_CONFIG_2, (rows << 3) | columns);
-}
-
-uint16_t SX1509::readKeypad()
-{
-	return ~readWord(REG_KEY_DATA_1);
-}
-
-uint8_t SX1509::getRow(uint16_t keyData)
-{
-	const uint8_t rowData = uint8_t(keyData & 0x00FF);
-	
-	for (uint8_t i = 0; i < 8; i++)
-	{
-		if (rowData & (1u << i))
-		{
-			return i;
-		}
-	}
-	return 0;
-}
-
-uint8_t SX1509::getCol(uint16_t keyData)
-{
-	const uint8_t colData = uint8_t((keyData & 0xFF00) >> 8);
-	
-	for (uint8_t i = 0; i < 8; i++)
-	{
-		if (colData & (1u << i))
-		{
-			return i;
-		}
-	}
-	return 0;
-	
-}
-
-void SX1509::debounceConfig(uint8_t configValue)
-{
-	// First make sure clock is configured
-	uint8_t tempByte = readByte(REG_MISC);
-	if ((tempByte & 0x70) == 0)
-	{
-		tempByte |= (1<<4);	// Just default to no divider if not set
-		writeByte(REG_MISC, tempByte);
-	}
-	tempByte = readByte(REG_CLOCK);
-	if ((tempByte & 0x60) == 0)
-	{
-		tempByte |= (1<<6);	// default to internal osc.
-		writeByte(REG_CLOCK, tempByte);
-	}
-	
-	configValue &= 0b111;	// 3-bit value
-	writeByte(REG_DEBOUNCE_CONFIG, configValue);
-}
-
-void SX1509::debounceTime(uint8_t time)
-{
-	// Debounce time-to-uint8_t map: (assuming fOsc = 2MHz)
-	// 0: 0.5ms		1: 1ms
-	// 2: 2ms		3: 4ms
-	// 4: 8ms		5: 16ms
-	// 6: 32ms		7: 64ms
-	// 2^(n-1)
-	uint8_t configValue = 0;
-	// We'll check for the highest set bit position, 
-	// and use that for debounceConfig
-	for (int i = 7; i >= 0; i--)
-	{
-		if ((time & (1u << i)) != 0)
-		{
-			configValue = i + 1;
-			break;
-		}
-	}
-	configValue = constrain<uint8_t>(configValue, 0, 7);
-	
-	debounceConfig(configValue);
-}
-
-void SX1509::debouncePin(uint8_t pin)
-{
-	unsigned int debounceEnable = readWord(REG_DEBOUNCE_ENABLE_B);
-	debounceEnable |= (1<<pin);
-	writeWord(REG_DEBOUNCE_ENABLE_B, debounceEnable);
-}
-
-void SX1509::debounceKeypad(uint8_t time, uint8_t numRows, uint8_t numCols)
-{
-	// Set up debounce time:
-	debounceTime(time);
-	
-	// Set up debounce pins:
-	for (uint8_t i = 0; i < numRows; i++)
-	{
-		debouncePin(i);
-	}
-	for (uint8_t i = 0; i < (8 + numCols); i++)
-	{
-		debouncePin(i);
-	}
-}
-
-#endif
 
 void SX1509::enableInterrupt(uint8_t pin, uint8_t riseFall)
 {
@@ -544,6 +279,8 @@ void SX1509::enableInterruptMultiple(uint16_t pins, uint8_t riseFall)
 		sensitivity = 0;
 	}
 
+	MutexLocker lock(Tasks::GetI2CMutex());
+
 	uint32_t pinMask = readDword(REG_SENSE_HIGH_B);
 	for (unsigned int i = 0; i < 16; ++i)
 	{
@@ -572,6 +309,38 @@ uint16_t SX1509::interruptSource(bool clear)
 bool SX1509::checkInterrupt(uint8_t pin)
 {
 	return (interruptSource(false) & (1u << pin)) != 0;
+}
+
+//********* Private functions. The I2C mutex must be owned by the caller. ***********
+
+void SX1509::setBitsInWord(uint8_t registerAddress, uint16_t bits)
+{
+	if (bits != 0)
+	{
+		const uint16_t regVal = readWord(registerAddress);
+		writeWord(registerAddress, regVal | bits);
+	}
+}
+
+void SX1509::clearBitsInWord(uint8_t registerAddress, uint16_t bits)
+{
+	if (bits != 0)
+	{
+		const uint16_t regVal = readWord(registerAddress);
+		writeWord(registerAddress, regVal & (~bits));
+	}
+}
+
+void SX1509::analogWriteMultiple(uint16_t pins, uint8_t pwm)
+{
+	for (uint8_t pin = 0; pins != 0; ++pin)
+	{
+		if ((pins & 1u) != 0)
+		{
+			analogWrite(pin, pwm);
+		}
+		pins >>= 1;
+	}
 }
 
 void SX1509::clock(uint8_t oscDivider)
@@ -642,29 +411,13 @@ uint8_t SX1509::calculateSlopeRegister(int ms, uint8_t onIntensity, uint8_t offI
 //		- Currently returns 0 if communication has timed out
 uint8_t SX1509::readByte(uint8_t registerAddress)
 {
-	unsigned int timeout = ReceiveTimeout;
-
-	I2C_IFACE.beginTransmission(deviceAddress);
-	I2C_IFACE.write(registerAddress);
-	if (I2C_IFACE.endTransmission() != 0)
+	uint8_t data[2];
+	data[0] = registerAddress;
+	if (I2C_IFACE.Transfer(deviceAddress, data, 1, 1) == 2)
 	{
-		++errorCount;
-		return 0;
+		return data[1];
 	}
-	I2C_IFACE.requestFrom(deviceAddress, (uint8_t) 1);
-
-	while ((I2C_IFACE.available() < 1) && (timeout != 0))
-	{
-		timeout--;
-	}
-		
-	if (timeout == 0)
-	{
-		++errorCount;
-		return 0;
-	}
-
-	return I2C_IFACE.read();
+	return 0;
 }
 
 // readWord(uint8_t registerAddress)
@@ -674,86 +427,40 @@ uint8_t SX1509::readByte(uint8_t registerAddress)
 //		- The lsb of the return value will contain the value read from registerAddress + 1
 uint16_t SX1509::readWord(uint8_t registerAddress)
 {
-	unsigned int timeout = ReceiveTimeout * 2;
-
-	I2C_IFACE.beginTransmission(deviceAddress);
-	I2C_IFACE.write(registerAddress);
-	if (I2C_IFACE.endTransmission() != 0)
+	uint8_t data[3];
+	data[0] = registerAddress;
+	if (I2C_IFACE.Transfer(deviceAddress, data, 1, 2) == 3)
 	{
-		++errorCount;
-		return 0;
+		return (data[1] << 8) | data[2];
 	}
-	I2C_IFACE.requestFrom(deviceAddress, (uint8_t) 2);
-
-	while (I2C_IFACE.available() < 2 && timeout != 0)
-	{
-		timeout--;
-	}
-		
-	if (timeout == 0)
-	{
-		++errorCount;
-		return 0;
-	}
-	
-	const uint16_t msb = (I2C_IFACE.read() & 0x00FF) << 8;
-	const uint16_t lsb = (I2C_IFACE.read() & 0x00FF);
-	return msb | lsb;
+	return 0;
 }
 
 // readDword(uint8_t registerAddress)
-//	This function will read a two-uint8_t word beginning at registerAddress
+//	This function will read a four-uint8_t word beginning at registerAddress
 //	- A 32-bit unsigned int will be returned.
 //		- The msb of the return value will contain the value read from registerAddress
 //		- The lsb of the return value will contain the value read from registerAddress + 1
 uint32_t SX1509::readDword(uint8_t registerAddress)
 {
-	unsigned int timeout = ReceiveTimeout * 2;
-
-	I2C_IFACE.beginTransmission(deviceAddress);
-	I2C_IFACE.write(registerAddress);
-	if (I2C_IFACE.endTransmission() != 0)
+	uint8_t data[5];
+	data[0] = registerAddress;
+	if (I2C_IFACE.Transfer(deviceAddress, data, 1, 4) == 5)
 	{
-		++errorCount;
-		return 0;
+		return (data[1] << 24) | (data[2] << 16) | (data[3] << 8) | data[4];
 	}
-	I2C_IFACE.requestFrom(deviceAddress, (uint8_t) 4);
-
-	while ((I2C_IFACE.available() < 4) && (timeout != 0))
-	{
-		timeout--;
-	}
-
-	if (timeout == 0)
-	{
-		++errorCount;
-		return 0;
-	}
-
-	uint32_t rslt = I2C_IFACE.read() & 0x00FF;
-	rslt <<= 8;
-	rslt |= (I2C_IFACE.read() & 0x00FF);
-	rslt <<= 8;
-	rslt |= (I2C_IFACE.read() & 0x00FF);
-	rslt <<= 8;
-	rslt |= (I2C_IFACE.read() & 0x00FF);
-	return rslt;
+	return 0;
 }
 
 // writeByte(uint8_t registerAddress, uint8_t writeValue)
 //	This function writes a single uint8_t to a single register on the SX509.
 //	- writeValue is written to registerAddress
-//	- deviceAddres should already be set from the constructor
+//	- deviceAddress should already be set from the constructor
 //	- No return value.
 void SX1509::writeByte(uint8_t registerAddress, uint8_t writeValue)
 {
-	I2C_IFACE.beginTransmission(deviceAddress);
-	I2C_IFACE.write(registerAddress);
-	I2C_IFACE.write(writeValue);
-	if (I2C_IFACE.endTransmission() != 0)
-	{
-		++errorCount;
-	}
+	uint8_t data[2] = { registerAddress, writeValue };
+	(void)I2C_IFACE.Transfer(deviceAddress, data, 2, 0);
 }
 
 // writeWord(uint8_t registerAddress, uint16_t writeValue)
@@ -763,14 +470,8 @@ void SX1509::writeByte(uint8_t registerAddress, uint8_t writeValue)
 //	- No return value.
 void SX1509::writeWord(uint8_t registerAddress, uint16_t writeValue)
 {
-	I2C_IFACE.beginTransmission(deviceAddress);
-	I2C_IFACE.write(registerAddress);
-	I2C_IFACE.write((uint8_t)(writeValue >> 8));
-	I2C_IFACE.write((uint8_t)writeValue);
-	if (I2C_IFACE.endTransmission() != 0)
-	{
-		++errorCount;
-	}
+	uint8_t data[3] = { registerAddress, (uint8_t)(writeValue >> 8), (uint8_t)writeValue };
+	(void)I2C_IFACE.Transfer(deviceAddress, data, 3, 0);
 }
 
 // writeDword(uint8_t registerAddress, uint32_t writeValue)
@@ -778,16 +479,8 @@ void SX1509::writeWord(uint8_t registerAddress, uint16_t writeValue)
 //	- No return value.
 void SX1509::writeDword(uint8_t registerAddress, uint32_t writeValue)
 {
-	I2C_IFACE.beginTransmission(deviceAddress);
-	I2C_IFACE.write(registerAddress);
-	I2C_IFACE.write((uint8_t)(writeValue >> 24));
-	I2C_IFACE.write((uint8_t)(writeValue >> 16));
-	I2C_IFACE.write((uint8_t)(writeValue >> 8));
-	I2C_IFACE.write((uint8_t)writeValue);
-	if (I2C_IFACE.endTransmission() != 0)
-	{
-		++errorCount;
-	}
+	uint8_t data[5] = { registerAddress, (uint8_t)(writeValue >> 24), (uint8_t)(writeValue >> 16), (uint8_t)(writeValue >> 8), (uint8_t)writeValue };
+	(void)I2C_IFACE.Transfer(deviceAddress, data, 5, 0);
 }
 
 // End

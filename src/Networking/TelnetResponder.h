@@ -18,6 +18,7 @@ public:
 	bool Accept(Socket *s, NetworkProtocol protocol) override;	// ask the responder to accept this connection, returns true if it did
 	void Terminate(NetworkProtocol protocol) override;			// terminate the responder if it is serving the specified protocol
 
+	static void InitStatic();
 	static void HandleGCodeReply(const char *reply);
 	static void HandleGCodeReply(OutputBuffer *reply);
 	void Diagnostics(MessageType mtype) const override;
@@ -37,6 +38,7 @@ private:
 	static unsigned int numSessions;
 	static unsigned int clientsServed;
 	static OutputBuffer *gcodeReply;
+	static Mutex gcodeReplyMutex;
 
 	static const uint32_t TelnetSetupDuration = 4000;	// ignore the first Telnet request within this duration (in ms)
 };

@@ -106,7 +106,7 @@ void CoreXYUKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normali
 	const float vecY = normalisedDirectionVector[1];
 
 	// Limit the XY motor accelerations
-	const float vecMaxXY = max<float>(fabs(vecX + vecY), fabs(vecX - vecY));		// pick the case for the motor that is working hardest
+	const float vecMaxXY = max<float>(fabsf(vecX + vecY), fabsf(vecX - vecY));		// pick the case for the motor that is working hardest
 	if (vecMaxXY > 0.01)															// avoid division by zero or near-zero
 	{
 		const Platform& platform = reprap.GetPlatform();
@@ -114,14 +114,14 @@ void CoreXYUKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normali
 		const float aY = platform.Acceleration(1);
 		const float vX = platform.MaxFeedrate(0);
 		const float vY = platform.MaxFeedrate(1);
-		const float aMax = (fabs(vecX) + fabs(vecY)) * aX * aY/(vecMaxXY * (fabs(vecX) * aY + fabs(vecY) * aX));
-		const float vMax = (fabs(vecX) + fabs(vecY)) * vX * vY/(vecMaxXY * (fabs(vecX) * vY + fabs(vecY) * vX));
+		const float aMax = (fabsf(vecX) + fabsf(vecY)) * aX * aY/(vecMaxXY * (fabsf(vecX) * aY + fabsf(vecY) * aX));
+		const float vMax = (fabsf(vecX) + fabsf(vecY)) * vX * vY/(vecMaxXY * (fabsf(vecX) * vY + fabsf(vecY) * vX));
 		dda.LimitSpeedAndAcceleration(vMax, aMax);
 	}
 
 	// Limit the UV motor accelerations
 	const float vecU = normalisedDirectionVector[3];
-	const float vecMaxUV = max<float>(fabs(vecU + vecY), fabs(vecU - vecY));		// pick the case for the motor that is working hardest
+	const float vecMaxUV = max<float>(fabsf(vecU + vecY), fabsf(vecU - vecY));		// pick the case for the motor that is working hardest
 	if (vecMaxUV > 0.01)															// avoid division by zero or near-zero
 	{
 		const Platform& platform = reprap.GetPlatform();
@@ -129,8 +129,8 @@ void CoreXYUKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normali
 		const float aY = platform.Acceleration(1);
 		const float vU = platform.MaxFeedrate(3);
 		const float vY = platform.MaxFeedrate(1);
-		const float aMax = (fabs(vecU) + fabs(vecY)) * aU * aY/(vecMaxUV * (fabs(vecU) * aY + fabs(vecY) * aU));
-		const float vMax = (fabs(vecU) + fabs(vecY)) * vU * vY/(vecMaxUV * (fabs(vecU) * vY + fabs(vecY) * vU));
+		const float aMax = (fabsf(vecU) + fabsf(vecY)) * aU * aY/(vecMaxUV * (fabsf(vecU) * aY + fabsf(vecY) * aU));
+		const float vMax = (fabsf(vecU) + fabsf(vecY)) * vU * vY/(vecMaxUV * (fabsf(vecU) * vY + fabsf(vecY) * vU));
 		dda.LimitSpeedAndAcceleration(vMax, aMax);
 	}
 }

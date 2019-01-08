@@ -4,8 +4,13 @@
 
 #ifndef _DISKIO
 
+#ifdef __cplusplus
+unsigned int DiskioGetAndClearMaxRetryCount();
+extern "C" {
+#endif
+
 #define _READONLY	0	/* 1: Remove write functions */
-#define _USE_IOCTL	1	/* 1: Use disk_ioctl fucntion */
+#define _USE_IOCTL	1	/* 1: Use disk_ioctl function */
 
 #include "integer.h"
 
@@ -34,8 +39,6 @@ DRESULT disk_read (BYTE, BYTE*, DWORD, BYTE);
 DRESULT disk_write (BYTE, const BYTE*, DWORD, BYTE);
 #endif
 DRESULT disk_ioctl (BYTE, BYTE, void*);
-
-
 
 /* Disk Status Bits (DSTATUS) */
 
@@ -75,4 +78,9 @@ DRESULT disk_ioctl (BYTE, BYTE, void*);
 
 
 #define _DISKIO
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

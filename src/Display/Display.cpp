@@ -7,104 +7,173 @@
 
 #include "Display.h"
 
+#if SUPPORT_12864_LCD
+
 #include "GCodes/GCodes.h"
 #include "GCodes/GCodeBuffer.h"
-#include "IoPort.h"
+#include "IoPorts.h"
 #include "Pins.h"
 
 constexpr int DefaultPulsesPerClick = -4;			// values that work with displays I have are 2 and -4
 
 extern const LcdFont font11x14;
-//extern const LcdFont font10x10;
+extern const LcdFont font7x11;
 
-static int val = 0;
+const LcdFont * const fonts[] = { &font7x11, &font11x14 };
+const size_t SmallFontNumber = 0;
+const size_t LargeFontNumber = 1;
 
 Display::Display()
-	: lcd(LcdCSPin), encoder(EncoderPinA, EncoderPinB, EncoderPinSw), present(false)
+	: lcd(nullptr), menu(nullptr), encoder(nullptr),
+	  mboxSeq(0), mboxActive(false), beepActive(false), updatingFirmware(false)
 {
-	//TODO init menus here
 }
 
-void Display::Init()
+void Display::Spin()
 {
-	lcd.Init();
-	encoder.Init(DefaultPulsesPerClick);
-
-	//TODO display top menu here
-	// For now we just print some text to test the display
-	lcd.SetFont(&font11x14);
-
-	lcd.SetCursor(5, 5);
-	lcd.SetRightMargin(128);
-	lcd.print(reprap.GetPlatform().GetElectronicsString());
-
-	lcd.SetCursor(20, 5);
-	lcd.SetRightMargin(50);
-	lcd.print(val);
-
-	IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
-	beepActive = false;
-}
-
-void Display::Spin(bool full)
-{
-	encoder.Poll();
-	if (full)
+	if (lcd != nullptr)
 	{
-		// Check encoder and update display here
-		// For now we just test the encoder functionality
-		const int ch = encoder.GetChange();
-		const bool pressed = encoder.GetButtonPress();
+		encoder->Poll();
 
-		if (ch != 0)
+		if (!updatingFirmware)
 		{
-			val += ch;
-		}
-		if (pressed)
-		{
-			val += 100;
-		}
-		if (ch != 0 || pressed)
-		{
-			if (val < 0) val += 1000;
-			if (val >= 1000) val -= 1000;
-			lcd.SetCursor(20, 5);
-			lcd.SetRightMargin(50);
-			lcd.print(val);
-			lcd.ClearToMargin();
-		}
+			// Check encoder and update display
+			const int ch = encoder->GetChange();
+			if (ch != 0)
+			{
+				menu->EncoderAction(ch);
+			}
+			else if (encoder->GetButtonPress())
+			{
+				menu->EncoderAction(0);
+			}
 
-		lcd.FlushSome();
-	}
+			const MessageBox& mbox = reprap.GetMessageBox();
+			if (mbox.active)
+			{
+				if (!mboxActive || mboxSeq != mbox.seq)
+				{
+					// New message box to display
+					if (!mboxActive)
+					{
+						menu->ClearHighlighting();					// cancel highlighting and adjustment
+						menu->Refresh();
+					}
+					mboxActive = true;
+					mboxSeq = mbox.seq;
+					menu->DisplayMessageBox(mbox);
+				}
+			}
+			else if (mboxActive)
+			{
+				// Message box has been cancelled from this or another input channel
+				menu->ClearMessageBox();
+				mboxActive = false;
+			}
 
-	if (beepActive && millis() - whenBeepStarted > beepLength)
-	{
-		IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);
+			menu->Refresh();
+		}
+		lcd->FlushSome();
+
+		if (beepActive && millis() - whenBeepStarted > beepLength)
+		{
+			IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);
+			beepActive = false;
+		}
 	}
 }
 
 void Display::Exit()
 {
-	// TODO display a "shutdown" message, or turn the display off?
+	if (lcd != nullptr)
+	{
+		IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
+		if (!updatingFirmware)
+		{
+			lcd->TextInvert(false);
+			lcd->Clear();
+			lcd->SetFont(LargeFontNumber);
+			lcd->SetCursor(20, 0);
+			lcd->print("Shutting down...");
+		}
+		lcd->FlushAll();
+	}
 }
 
+// NOTE: nothing enforces that this beep concludes before another is begun;
+//   that is, in rapid succession of commands, only the last beep issued will be heard by the user
 void Display::Beep(unsigned int frequency, unsigned int milliseconds)
 {
-	whenBeepStarted = millis();
-	beepLength = milliseconds;
-	beepActive = true;
-	IoPort::WriteAnalog(LcdBeepPin, 0.5, (uint16_t)frequency);
+	if (lcd != nullptr)
+	{
+		whenBeepStarted = millis();
+		beepLength = milliseconds;
+		beepActive = true;
+		IoPort::WriteAnalog(LcdBeepPin, 0.5, (uint16_t)frequency);
+	}
+}
+
+void Display::SuccessBeep()
+{
+	Beep(2000, 100);
+}
+
+void Display::ErrorBeep()
+{
+	Beep(500, 1000);
 }
 
 GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
-	if (gb.Seen('P') && gb.GetUIValue() == 1)
+	bool seen = false;
+
+	if (gb.Seen('P'))
 	{
-		// 12864 display configuration
-		present = true;
-		if (gb.Seen('E'))
+		seen = true;
+		switch (gb.GetUIValue())
 		{
-			encoder.Init(gb.GetIValue());			// configure encoder pulses per click and direction
+		case 1:		// 12864 display
+			if (lcd == nullptr)
+			{
+				lcd = new Lcd7920(LcdCSPin, fonts, ARRAY_SIZE(fonts));
+			}
+			lcd->Init();
+			IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
+			lcd->SetFont(SmallFontNumber);
+
+			if (encoder == nullptr)
+			{
+				encoder = new RotaryEncoder(EncoderPinA, EncoderPinB, EncoderPinSw);
+				encoder->Init(DefaultPulsesPerClick);
+			}
+			if (menu == nullptr)
+			{
+				menu = new Menu(*lcd);
+			}
+			menu->Load("main");
+			break;
+
+		default:
+			reply.copy("Unknown display type");
+			return GCodeResult::error;
+		}
+	}
+
+	if (gb.Seen('E') && encoder != nullptr)
+	{
+		seen = true;
+		encoder->Init(gb.GetIValue());			// configure encoder pulses per click and direction
+	}
+
+	if (!seen)
+	{
+		if (lcd != nullptr)
+		{
+			reply.printf("12864 display is configured, pulses-per-click is %d", encoder->GetPulsesPerClick());
+		}
+		else
+		{
+			reply.copy("12864 display is not present or not configured");
 		}
 	}
 	return GCodeResult::ok;
@@ -113,13 +182,19 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply)
 // Suspend normal operation and display an "Updating firmware" message
 void Display::UpdatingFirmware()
 {
-	IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
-	lcd.TextInvert(false);
-	lcd.Clear();
-	lcd.SetFont(&font11x14);
-	lcd.SetCursor(20, 0);
-	lcd.print("Updating firmware...");
-	lcd.FlushAll();
+	updatingFirmware = true;
+	if (lcd != nullptr)
+	{
+		IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
+		lcd->TextInvert(false);
+		lcd->Clear();
+		lcd->SetFont(LargeFontNumber);
+		lcd->SetCursor(20, 0);
+		lcd->print("Updating firmware...");
+		lcd->FlushAll();
+	}
 }
+
+#endif
 
 // End

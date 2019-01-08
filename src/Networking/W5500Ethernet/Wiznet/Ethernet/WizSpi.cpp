@@ -10,7 +10,6 @@
 #include "Pins.h"
 
 // Define exactly one of the following as 1, the other as zero
-// The PDC seems to be too slow to work reliably without getting transmit underruns, so we use the DMAC now.
 #define USE_PDC		1		// use peripheral DMA controller
 #define USE_DMAC	0		// use general DMA controller
 
@@ -54,9 +53,14 @@ static inline void spi_tx_dma_disable()
 	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS);
 }
 
-static bool spi_dma_check_rx_complete()
+static inline bool spi_dma_check_rx_complete()
 {
-	return pdc_read_rx_counter(spi_pdc) == 0;
+	return (SPI->SPI_SR & SPI_SR_ENDRX) != 0;
+}
+
+static inline bool spi_dma_check_tx_complete()
+{
+	return (SPI->SPI_SR & SPI_SR_ENDTX) != 0;
 }
 
 static void spi_tx_dma_setup(const uint8_t *buf, uint32_t length)
@@ -151,7 +155,7 @@ static void spi_rx_dma_setup(const TransactionBuffer *buf)
 
 #if USE_PDC || USE_DMAC
 
-static void spi_dma_disable()
+static inline void spi_dma_disable()
 {
 	spi_tx_dma_disable();
 	spi_rx_dma_disable();
@@ -230,7 +234,6 @@ namespace WizSpi
 		NVIC_DisableIRQ(SPI_IRQn);
 		spi_disable(SPI);
 #if USE_PDC || USE_DMA
-		spi_dma_check_rx_complete();
 		spi_dma_disable();
 #endif
 	}
@@ -362,7 +365,6 @@ namespace WizSpi
 #if USE_PDC
 			spi_rx_dma_setup(rx_data, len);
 			spi_rx_dma_enable();
-			while (pdc_read_tx_counter(spi_pdc) != 0) { }
 			uint32_t timeout = SPI_TIMEOUT;
 			while (!spi_dma_check_rx_complete() && timeout != 0)
 			{
@@ -408,24 +410,35 @@ namespace WizSpi
 	// Send some data
 	spi_status_t SendBurst(const uint8_t* tx_data, size_t len)
 	{
-#if USE_PDC
-		spi_tx_dma_setup(tx_data, len);
-		spi_tx_dma_enable();
-		while (pdc_read_tx_counter(spi_pdc) != 0) { }
-		spi_tx_dma_disable();
-#else
-		for (uint32_t i = 0; i < len; ++i)
+		if (len != 0)
 		{
-			uint32_t dOut = (uint32_t)*tx_data++;
-			if (waitForTxReady())
+#if USE_PDC
+			spi_tx_dma_setup(tx_data, len);
+			spi_tx_dma_enable();
+			uint32_t timeout = SPI_TIMEOUT;
+			while (!spi_dma_check_tx_complete() && timeout != 0)	// wait for transmit complete
+			{
+				--timeout;
+			}
+			spi_tx_dma_disable();
+			if (timeout == 0)
 			{
 				return SPI_ERROR_TIMEOUT;
 			}
+#else
+			for (uint32_t i = 0; i < len; ++i)
+			{
+				uint32_t dOut = (uint32_t)*tx_data++;
+				if (waitForTxReady())
+				{
+					return SPI_ERROR_TIMEOUT;
+				}
 
-			SPI->SPI_TDR = dOut;						// write to transmit register
-			(void)SPI->SPI_RDR;
-		}
+				SPI->SPI_TDR = dOut;						// write to transmit register
+				(void)SPI->SPI_RDR;
+			}
 #endif
+		}
 		return SPI_OK;
 	}
 

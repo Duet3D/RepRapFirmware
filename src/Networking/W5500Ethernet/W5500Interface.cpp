@@ -15,7 +15,7 @@
 #include "HttpResponder.h"
 #include "FtpResponder.h"
 #include "TelnetResponder.h"
-#include "Libraries/General/IP4String.h"
+#include "General/IP4String.h"
 
 W5500Interface::W5500Interface(Platform& p)
 	: platform(p), lastTickMillis(0), state(NetworkState::disabled), activated(false)
@@ -33,8 +33,32 @@ W5500Interface::W5500Interface(Platform& p)
 	}
 }
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(W5500Interface, _ret)
+
+const ObjectModelTableEntry W5500Interface::objectModelTable[] =
+{
+	// These entries must be in alphabetical order
+	{ "gateway", OBJECT_MODEL_FUNC(&(self->gateway)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+	{ "ip", OBJECT_MODEL_FUNC(&(self->ipAddress)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+	{ "name", OBJECT_MODEL_FUNC_NOSELF("ethernet"), TYPE_OF(const char *), ObjectModelTableEntry::none },
+	{ "netmask", OBJECT_MODEL_FUNC(&(self->netmask)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+};
+
+DEFINE_GET_OBJECT_MODEL_TABLE(W5500Interface)
+
+#endif
+
 void W5500Interface::Init()
 {
+	interfaceMutex.Create("W5500");
+
 	// Ensure that the W5500 chip is in the reset state
 	pinMode(W5500ResetPin, OUTPUT_LOW);
 	lastTickMillis = millis();
@@ -53,6 +77,8 @@ GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, i
 
 	if (protocol < NumProtocols)
 	{
+		MutexLocker lock(interfaceMutex);
+
 		const Port portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
 		if (portToUse != portNumbers[protocol] && state == NetworkState::active)
 		{
@@ -87,6 +113,8 @@ GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const Stri
 {
 	if (protocol < NumProtocols)
 	{
+		MutexLocker lock(interfaceMutex);
+
 		if (state == NetworkState::active)
 		{
 			ShutdownProtocol(protocol);
@@ -102,6 +130,8 @@ GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const Stri
 
 void W5500Interface::StartProtocol(NetworkProtocol protocol)
 {
+	MutexLocker lock(interfaceMutex);
+
 	switch(protocol)
 	{
 	case HttpProtocol:
@@ -126,6 +156,8 @@ void W5500Interface::StartProtocol(NetworkProtocol protocol)
 
 void W5500Interface::ShutdownProtocol(NetworkProtocol protocol)
 {
+	MutexLocker lock(interfaceMutex);
+
 	switch(protocol)
 	{
 	case HttpProtocol:
@@ -202,7 +234,7 @@ void W5500Interface::Exit()
 // Get the network state into the reply buffer, returning true if there is some sort of error
 GCodeResult W5500Interface::GetNetworkState(const StringRef& reply)
 {
-	const uint8_t * const config_ip = platform.GetIPAddress();
+	const IPAddress config_ip = platform.GetIPAddress();
 	const int enableState = EnableState();
 	reply.printf("Network is %s, configured IP address: %s, actual IP address: %s",
 			(enableState == 0) ? "disabled" : "enabled",
@@ -222,6 +254,8 @@ void W5500Interface::SetMacAddress(const uint8_t mac[])
 // Start up the network
 void W5500Interface::Start()
 {
+	MutexLocker lock(interfaceMutex);
+
 	SetIPAddress(platform.GetIPAddress(), platform.NetMask(), platform.GateWay());
 	pinMode(W5500ResetPin, OUTPUT_LOW);
 	delayMicroseconds(550);						// W550 reset pulse must be at least 500us long
@@ -252,6 +286,8 @@ void W5500Interface::Stop()
 {
 	if (state != NetworkState::disabled)
 	{
+		MutexLocker lock(interfaceMutex);
+
 		if (usingDhcp)
 		{
 			DHCP_stop();
@@ -273,21 +309,25 @@ void W5500Interface::Spin(bool full)
 		break;
 
 	case NetworkState::establishingLink:
-		if (full && wizphy_getphylink() == PHY_LINK_ON)
 		{
-			usingDhcp = (ipAddress[0] == 0 && ipAddress[1] == 0 && ipAddress[2] == 0 && ipAddress[3] == 0);
-			if (usingDhcp)
+			MutexLocker lock(interfaceMutex);
+
+			if (full && wizphy_getphylink() == PHY_LINK_ON)
 			{
-				// IP address is all zeros, so use DHCP
-//				debugPrintf("Link established, getting IP address\n");
-				DHCP_init(DhcpSocketNumber, platform.Random(), reprap.GetNetwork().GetHostname());
-				lastTickMillis = millis();
-				state = NetworkState::obtainingIP;
-			}
-			else
-			{
-//				debugPrintf("Link established, network running\n");
-				state = NetworkState::connected;
+				usingDhcp = ipAddress.IsNull();
+				if (usingDhcp)
+				{
+					// IP address is all zeros, so use DHCP
+//					debugPrintf("Link established, getting IP address\n");
+					DHCP_init(DhcpSocketNumber, platform.Random(), reprap.GetNetwork().GetHostname());
+					lastTickMillis = millis();
+					state = NetworkState::obtainingIP;
+				}
+				else
+				{
+//					debugPrintf("Link established, network running\n");
+					state = NetworkState::connected;
+				}
 			}
 		}
 		break;
@@ -295,6 +335,8 @@ void W5500Interface::Spin(bool full)
 	case NetworkState::obtainingIP:
 		if (full)
 		{
+			MutexLocker lock(interfaceMutex);
+
 			if (wizphy_getphylink() == PHY_LINK_ON)
 			{
 				const uint32_t now = millis();
@@ -334,45 +376,49 @@ void W5500Interface::Spin(bool full)
 		break;
 
 	case NetworkState::active:
-		// Check that the link is still up
-		if (wizphy_getphylink() == PHY_LINK_ON)
 		{
-			// Maintain DHCP
-			if (full && usingDhcp)
-			{
-				const uint32_t now = millis();
-				if (now - lastTickMillis >= 1000)
-				{
-					lastTickMillis += 1000;
-					DHCP_time_handler();
-				}
-				const DhcpRunResult ret = DHCP_run();
-				if (ret == DhcpRunResult::DHCP_IP_CHANGED || ret == DhcpRunResult::DHCP_IP_ASSIGN)
-				{
-//					debugPrintf("IP address changed\n");
-					getSIPR(ipAddress);
-				}
-			}
+			MutexLocker lock(interfaceMutex);
 
-			// Poll the next TCP socket
-			sockets[nextSocketToPoll]->Poll(full);
+			// Check that the link is still up
+			if (wizphy_getphylink() == PHY_LINK_ON)
+			{
+				// Maintain DHCP
+				if (full && usingDhcp)
+				{
+					const uint32_t now = millis();
+					if (now - lastTickMillis >= 1000)
+					{
+						lastTickMillis += 1000;
+						DHCP_time_handler();
+					}
+					const DhcpRunResult ret = DHCP_run();
+					if (ret == DhcpRunResult::DHCP_IP_CHANGED || ret == DhcpRunResult::DHCP_IP_ASSIGN)
+					{
+//						debugPrintf("IP address changed\n");
+						getSIPR(ipAddress);
+					}
+				}
 
-			// Move on to the next TCP socket for next time
-			++nextSocketToPoll;
-			if (nextSocketToPoll == NumW5500TcpSockets)
-			{
-				nextSocketToPoll = 0;
+				// Poll the next TCP socket
+				sockets[nextSocketToPoll]->Poll(full);
+
+				// Move on to the next TCP socket for next time
+				++nextSocketToPoll;
+				if (nextSocketToPoll == NumW5500TcpSockets)
+				{
+					nextSocketToPoll = 0;
+				}
 			}
-		}
-		else if (full)
-		{
-//			debugPrintf("Lost phy link\n");
-			if (usingDhcp)
+			else if (full)
 			{
-				DHCP_stop();
+//				debugPrintf("Lost phy link\n");
+				if (usingDhcp)
+				{
+					DHCP_stop();
+				}
+				TerminateSockets();
+				state = NetworkState::establishingLink;
 			}
-			TerminateSockets();
-			state = NetworkState::establishingLink;
 		}
 		break;
 	}
@@ -380,8 +426,14 @@ void W5500Interface::Spin(bool full)
 
 void W5500Interface::Diagnostics(MessageType mtype)
 {
-	platform.MessageF(mtype, "=== Network ===\nState: %d\n", (int)state);
-	HttpResponder::CommonDiagnostics(mtype);
+	uint8_t phycfgr;
+	{
+		MutexLocker lock(interfaceMutex);
+		phycfgr = getPHYCFGR();
+	}
+	const char * const linkSpeed = ((phycfgr & 1) == 0) ? "down" : ((phycfgr & 2) != 0) ? "100Mbps" : "10Mbps";
+	const char * const linkDuplex = ((phycfgr & 1) == 0) ? "" : ((phycfgr & 4) != 0) ? " full duplex" : " half duplex";
+	platform.MessageF(mtype, "Interface state %d, link %s%s\n", (int)state, linkSpeed, linkDuplex);
 }
 
 // Enable or disable the network
@@ -413,11 +465,11 @@ int W5500Interface::EnableState() const
 	return (state == NetworkState::disabled) ? 0 : 1;
 }
 
-void W5500Interface::SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[])
+void W5500Interface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway)
 {
-	memcpy(ipAddress, p_ipAddress, sizeof(ipAddress));
-	memcpy(netmask, p_netmask, sizeof(netmask));
-	memcpy(gateway, p_gateway, sizeof(gateway));
+	ipAddress = p_ipAddress;
+	netmask = p_netmask;
+	gateway = p_gateway;
 }
 
 void W5500Interface::OpenDataPort(Port port)

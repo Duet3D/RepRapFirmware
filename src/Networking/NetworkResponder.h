@@ -13,24 +13,11 @@
 #include "NetworkDefs.h"
 #include "Storage/FileData.h"
 #include "NetworkBuffer.h"
+#include "OutputMemory.h"
 
 // Forward declarations
 class NetworkResponder;
 class Socket;
-
-// Class to implement a simple lock
-class NetworkResponderLock
-{
-public:
-	NetworkResponderLock() : owner(nullptr) { }
-
-	bool Acquire(const NetworkResponder *who);
-	void Release(const NetworkResponder *who);
-	bool IsOwnedBy(const NetworkResponder *who) const { return owner == who; }
-
-private:
-	const NetworkResponder *owner;
-};
 
 // Network responder base class
 class NetworkResponder
@@ -52,7 +39,7 @@ protected:
 		uploading,										// uploading a file to SD card
 
 		// HTTP responder additional states
-		gettingFileInfoLock,							// waiting to get the file info lock
+		processingRequest,
 		gettingFileInfo,								// getting file info
 
 		// FTP responder additional states
@@ -68,7 +55,7 @@ protected:
 
 	NetworkResponder(NetworkResponder *n);
 
-	void Commit(ResponderState nextState = ResponderState::free);
+	void Commit(ResponderState nextState = ResponderState::free, bool report = true);
 	virtual void SendData();
 	virtual void ConnectionLost();
 
@@ -76,7 +63,8 @@ protected:
 	void FinishUpload(uint32_t fileLength, time_t fileLastModified);
 	virtual void CancelUpload();
 
-	uint32_t GetRemoteIP() const;
+	IPAddress GetRemoteIP() const;
+	void ReportOutputBufferExhaustion(const char *sourceFile, int line);
 
 	static Platform& GetPlatform() { return reprap.GetPlatform(); }
 	static Network& GetNetwork() { return reprap.GetNetwork(); }
@@ -90,14 +78,14 @@ protected:
 
 	// Buffers for sending responses
 	OutputBuffer *outBuf;
-	OutputStack *outStack;
+	OutputStack outStack;								// not volatile because only one task accesses it
 	FileStore *fileBeingSent;
 	NetworkBuffer *fileBuffer;
 
 	// File uploads
 	FileData fileBeingUploaded;
-	char filenameBeingUploaded[MaxFilenameLength];
-	uint32_t postFileLength, uploadedBytes;				// How many POST bytes do we expect and how many have already been written?
+	String<MaxFilenameLength> filenameBeingUploaded;
+	uint32_t postFileLength, uploadedBytes;				// how many POST bytes do we expect and how many have already been written?
 	time_t fileLastModified;
 	bool uploadError;
 };

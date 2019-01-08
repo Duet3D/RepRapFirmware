@@ -44,17 +44,14 @@
 #ifndef ETHERNET_SAM_H_INCLUDED
 #define ETHERNET_SAM_H_INCLUDED
 
+#include <General/IPAddress.h>
+
+extern "C" {
+
 #include "lwip/src/include/lwip/netif.h"
 #include "emac/emac.h"							// for emac_dev_tx_cb_t
 
-/// @cond 0
-/**INDENT-OFF**/
-#ifdef __cplusplus
-extern "C" {
-#endif
-/**INDENT-ON**/
-/// @endcond
-
+}
 
 // Perform low-level initialisation of the network interface
 void init_ethernet();
@@ -69,10 +66,10 @@ bool ethernet_establish_link(void);
 bool ethernet_link_established(void);
 
 // Initialise network interface and set network interface status callback
-void start_ethernet(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[], netif_status_callback_fn status_cb);
+void start_ethernet(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay, netif_status_callback_fn status_cb);
 
 // Update IPv4 configuration on demand
-void ethernet_set_configuration(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[]);
+void ethernet_set_configuration(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay);
 
 // Must be called periodically to keep the LwIP timers running
 void ethernet_timers_update(void);
@@ -85,14 +82,5 @@ void ethernet_set_rx_callback(emac_dev_tx_cb_t callback);
 
 // Returns the network interface's current IPv4 address
 const uint8_t *ethernet_get_ipaddress();
-
-
-/// @cond 0
-/**INDENT-OFF**/
-#ifdef __cplusplus
-}
-#endif
-/**INDENT-ON**/
-/// @endcond
 
 #endif /* ETHERNET_SAM_H_INCLUDED */

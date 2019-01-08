@@ -35,7 +35,7 @@ bool CoreBaseKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const St
 				seen = true;
 			}
 		}
-		if (!seen && !gb.Seen('K'))
+		if (!seen && !gb.Seen('S'))
 		{
 			reply.printf("Kinematics is %s with axis factors", GetName());
 			for (size_t axis = 0; axis < XYZ_AXES; ++axis)

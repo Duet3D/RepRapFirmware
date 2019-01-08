@@ -207,7 +207,7 @@ int8_t  listen(uint8_t sn);
  *                @ref SOCKERR_TIMEOUT   - Timeout occurred during request connection\n
  *                @ref SOCK_BUSY         - In non-block io mode, it returned immediately\n
  */
-int8_t  connect(uint8_t sn, uint8_t * addr, uint16_t port);
+int8_t  connect(uint8_t sn, IPAddress addr, uint16_t port);
 
 void disconnectNoWait(uint8_t sn);
 
@@ -236,7 +236,7 @@ void disconnectNoWait(uint8_t sn);
  *                        @ref SOCKERR_TIMEOUT     - Timeout occurred \n
  *                        @ref SOCK_BUSY           - Socket is busy. 
  */
-int32_t sendto(uint8_t sn, const uint8_t * buf, uint16_t len, const uint8_t * addr, uint16_t port);
+int32_t sendto(uint8_t sn, const uint8_t * buf, uint16_t len, IPAddress destIp, uint16_t port);
 
 /**
  * @ingroup WIZnet_socket_APIs

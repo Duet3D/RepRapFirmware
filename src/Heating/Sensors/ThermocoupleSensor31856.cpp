@@ -60,7 +60,7 @@ ThermocoupleSensor31856::ThermocoupleSensor31856(unsigned int channel)
 }
 
 // Configure this temperature sensor
-bool ThermocoupleSensor31856::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error)
+GCodeResult ThermocoupleSensor31856::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
 {
 	if (mCode == 305)
 	{
@@ -90,7 +90,7 @@ bool ThermocoupleSensor31856::Configure(unsigned int mCode, unsigned int heater,
 			else
 			{
 				reply.copy("Bad thermocouple type letter in M305 command");
-				return true;
+				return GCodeResult::error;
 			}
 		}
 
@@ -100,7 +100,7 @@ bool ThermocoupleSensor31856::Configure(unsigned int mCode, unsigned int heater,
 			reply.catf(", thermocouple type %c, reject %dHz", TypeLetters[thermocoupleType], (cr0 & 0x01) ? 50 : 60);
 		}
 	}
-	return false;
+	return GCodeResult::ok;
 }
 
 // Perform the actual hardware initialization for attaching and using this device on the SPI hardware bus.

@@ -20,7 +20,7 @@ const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in
 
 CurrentLoopTemperatureSensor::CurrentLoopTemperatureSensor(unsigned int channel)
 	: SpiTemperatureSensor(channel, "Current Loop", channel - FirstLinearAdcChannel, MCP3204_SpiMode, MCP3204_Frequency),
-	  tempAt4mA(DefaultTempAt4mA), tempAt20mA(DefaultTempAt20mA)
+	  tempAt4mA(DefaultTempAt4mA), tempAt20mA(DefaultTempAt20mA), chipChannel(DefaultChipChannel), isDifferential(false)
 {
 	CalcDerivedParameters();
 }
@@ -49,13 +49,15 @@ void CurrentLoopTemperatureSensor::Init()
 }
 
 // Configure this temperature sensor
-bool CurrentLoopTemperatureSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply, bool& error)
+GCodeResult CurrentLoopTemperatureSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
 {
 	if (mCode == 305)
 	{
 		bool seen = false;
 		gb.TryGetFValue('L', tempAt4mA, seen);
 		gb.TryGetFValue('H', tempAt20mA, seen);
+		gb.TryGetUIValue('C', chipChannel, seen);
+		gb.TryGetUIValue('D', isDifferential, seen);
 		TryConfigureHeaterName(gb, seen);
 
 		if (seen)
@@ -68,7 +70,7 @@ bool CurrentLoopTemperatureSensor::Configure(unsigned int mCode, unsigned int he
 			reply.catf(", temperature range %.1f to %.1fC", (double)tempAt4mA, (double)tempAt20mA);
 		}
 	}
-	return false;
+	return GCodeResult::ok;
 }
 
 TemperatureError CurrentLoopTemperatureSensor::GetTemperature(float& t)
@@ -91,16 +93,32 @@ void CurrentLoopTemperatureSensor::CalcDerivedParameters()
 // Try to get a temperature reading from the linear ADC by doing an SPI transaction
 void CurrentLoopTemperatureSensor::TryGetLinearAdcTemperature()
 {
-	// The MCP3204 waits for a high input input bit before it does anything. Call this clock 1.
-	// The next input bit it high for single-ended operation, low for differential. This is clock 2.
-	// The next 3 input bits are the channel selection bits. These are clocks 3..5.
-	// Clock 6 produces a null bit on its trailing edge, which is read by the processor on clock 7.
-	// Clocks 7..18 produce data bits B11..B0 on their trailing edges, which are read by the MCU on the leading edges of clocks 8-19.
-	// If we supply further clocks, then clocks 18..29 are the same data but LSB first, omitting bit 0.
-	// Clocks 30 onwards will be zeros.
-	// So we need to use at least 19 clocks. We round this up to 24 clocks, and we check that the extra 5 bits we receive are the 5 least significant data bits in reverse order.
+	/*
+	 * The MCP3204 waits for a high input input bit before it does anything. Call this clock 1.
+	 * The next input bit it high for single-ended operation, low for differential. This is clock 2.
+	 * The next 3 input bits are the channel selection bits. These are clocks 3..5.
+	 * Clock 6 produces a null bit on its trailing edge, which is read by the processor on clock 7.
+	 * Clocks 7..18 produce data bits B11..B0 on their trailing edges, which are read by the MCU on the leading edges of clocks 8-19.
+	 * If we supply further clocks, then clocks 18..29 are the same data but LSB first, omitting bit 0.
+	 * Clocks 30 onwards will be zeros.
+	 * So we need to use at least 19 clocks. We round this up to 24 clocks, and we check that the extra 5 bits we receive are the 5 least significant data bits in reverse order.
+	 *
+	 * MCP3204 & MCP3208
+	 * Single CH0 "C0" - Differential CH0-CH1 "80"
+	 * Single CH1 "C8" - Differential CH1-CH0 "88"
+	 * Single CH2 "D0" - Differential CH2-CH3 "90"
+	 * Single CH3 "D8" - Differential CH3-CH2 "98"
+	 * MCP3208 Only
+	 * Single CH4 "E0" - Differential CH4-CH5 "A0"
+	 * Single CH5 "E8" - Differential CH5-CH4 "A8"
+	 * Single CH6 "F0" - Differential CH6-CH7 "B0"
+	 * Single CH7 "F8" - Differential CH7-CH6 "B8"
+	 *
+	 * These values represent clocks 1 to 5.
+	 */
 
-	static const uint8_t adcData[] = { 0xC0, 0x00, 0x00 };		// start bit, single ended, channel 0
+	const uint8_t channelByte = ((isDifferential) ? 0x80 : 0xC0) | (chipChannel * 0x08);
+	static const uint8_t adcData[] = { channelByte, 0x00, 0x00 };
 	uint32_t rawVal;
 	lastResult = DoSpiTransaction(adcData, 3, rawVal);
 	//debugPrintf("ADC data %u\n", rawVal);

@@ -4,12 +4,9 @@
 #define FIRMWARE_NAME "RepRapFirmware for Duet"
 
 // Features definition
-#define HAS_LWIP_NETWORKING		1
-#define HAS_WIFI_NETWORKING		0
+#define HAS_LEGACY_NETWORKING	1
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
-#define HAS_SMART_DRIVERS		0
-#define HAS_STALL_DETECT		0
 #define HAS_VOLTAGE_MONITOR		0
 #define HAS_VREF_MONITOR		0
 #define ACTIVE_LOW_HEAT_ON		1
@@ -27,27 +24,27 @@ constexpr size_t NumFirmwareUpdateModules = 1;
 #define SUPPORT_DHT_SENSOR	0					// set nonzero to support DHT temperature/humidity sensors
 
 // The physical capabilities of the machine
+constexpr size_t NumDirectDrivers = 9;
+constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 
-constexpr size_t DRIVES = 9;						// The number of drives in the machine, including X, Y, and Z plus extruder drives
-#define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h,i }
-
-constexpr size_t Heaters = 7;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
-#define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d,e,f,g }
-
+constexpr size_t NumEndstops = 9;					// The number of inputs we have for endstops, filament sensors etc.
+constexpr size_t NumHeaters = 7;					// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
+constexpr size_t NumThermistorInputs = 7;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
-// Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
-#define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f }
 
-constexpr size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
+constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels (USB and two auxiliary UARTs)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
 #define SERIAL_AUX2_DEVICE Serial1
+
+// SerialUSB
+constexpr Pin UsbVBusPin = NoPin;					// Pin used to monitor VBUS on USB port. Not needed for SAM3X.
 
 #define I2C_IFACE	Wire1							// Which TWI channel we use
 #define I2C_IRQn	WIRE1_ISR_ID					// Which interrupt it uses
@@ -56,14 +53,14 @@ constexpr size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels 
 
 // Drives
 
-constexpr Pin ENABLE_PINS[DRIVES] = { 29, 27, X1, X0, 37, X8, 50, 47, X13 };
-constexpr Pin STEP_PINS[DRIVES] = { 14, 25, 5, X2, 41, 39, X4, 49, X10 };
-constexpr Pin DIRECTION_PINS[DRIVES] = { 15, 26, 4, X3, 35, 53, 51, 48, X11 };
+constexpr Pin ENABLE_PINS[NumDirectDrivers] = { 29, 27, X1, X0, 37, X8, 50, 47, X13 };
+constexpr Pin STEP_PINS[NumDirectDrivers] = { 14, 25, 5, X2, 41, 39, X4, 49, X10 };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { 15, 26, 4, X3, 35, 53, 51, 48, X11 };
 
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-constexpr Pin END_STOP_PINS[DRIVES] = { 11, 28, 60, 31, 24, 46, 45, 44, X9 };
+constexpr Pin END_STOP_PINS[NumEndstops] = { 11, 28, 60, 31, 24, 46, 45, 44, X9 };
 
 // Indices for motor current digipots (if any): first 4 are for digipot 1 (on duet), second 4 for digipot 2 (on expansion board)
 constexpr uint8_t POT_WIPES[8] = { 1, 3, 2, 0, 1, 3, 2, 0 };
@@ -73,8 +70,8 @@ constexpr float STEPPER_DAC_VOLTAGE_RANGE = 2.02;							// Stepper motor current
 constexpr float STEPPER_DAC_VOLTAGE_OFFSET = -0.025;						// Stepper motor current offset voltage for E1 if using a DAC
 
 // HEATERS
-constexpr Pin TEMP_SENSE_PINS[Heaters] = { 5, 4, 0, 7, 8, 9, 11 };			// Analogue pin numbers
-constexpr Pin HEAT_ON_PINS[Heaters] = { 6, X5, X7, 7, 8, 9, X17 };			// Heater Channel 7 (pin X17) is shared with Fan1
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 5, 4, 0, 7, 8, 9, 11 };	// Analogue pin numbers
+constexpr Pin HEAT_ON_PINS[NumHeaters] = { 6, X5, X7, 7, 8, 9, X17 };			// Heater Channel 7 (pin X17) is shared with Fan1
 
 // Default thermistor parameters
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
@@ -117,8 +114,9 @@ constexpr Pin ATX_POWER_PIN = 12;											// Arduino Due pin number that contr
 constexpr Pin Z_PROBE_PIN = 64;												// aka A10
 
 // Digital pin number to turn the IR LED on (high) or off (low)
-constexpr Pin Z_PROBE_MOD_PIN06 = 52;											// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)
+constexpr Pin Z_PROBE_MOD_PIN06 = 52;										// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)
 constexpr Pin Z_PROBE_MOD_PIN07 = X12;										// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.7 and v0.8.5 (PC10)
+constexpr Pin DiagPin = NoPin;
 
 // Pin number that the DAC that controls the second extruder motor current on the Duet 0.8.5 is connected to
 constexpr int Dac0DigitalPin = 66;											// Arduino Due pin number corresponding to DAC0 output pin
@@ -126,7 +124,8 @@ constexpr int Dac0DigitalPin = 66;											// Arduino Due pin number correspon
 // COOLING FANS
 constexpr size_t NUM_FANS = 2;
 constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { X6, X17 };						// Pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
-constexpr Pin COOLING_FAN_RPM_PIN = 23;										// Pin PA15
+constexpr size_t NumTachos = 1;
+constexpr Pin TachoPins[NumTachos] = { 23 };								// Pin PA15
 
 // SD cards
 constexpr size_t NumSdCards = 2;
