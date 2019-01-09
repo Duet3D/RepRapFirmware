@@ -3201,6 +3201,17 @@ void Platform::SetIdleCurrentFactor(float f)
 	}
 }
 
+void Platform::SetDriveStepsPerUnitForMicrostepping(size_t axisOrExtruder, float value, unsigned int microstepping)
+{
+	bool dummy;
+	const unsigned int currentMicrostepping = GetMicrostepping(axisOrExtruder, dummy);
+	if (currentMicrostepping != microstepping)
+	{
+		value = value * (float)currentMicrostepping / (float)microstepping;
+	}
+	SetDriveStepsPerUnit(axisOrExtruder, value);
+}
+
 // Set the microstepping for a driver, returning true if successful
 bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode)
 {

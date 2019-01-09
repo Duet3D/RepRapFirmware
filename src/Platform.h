@@ -417,6 +417,7 @@ public:
 	const float *GetDriveStepsPerUnit() const
 		{ return driveStepsPerUnit; }
 	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value);
+	void SetDriveStepsPerUnitForMicrostepping(size_t axisOrExtruder, float value, unsigned int microstepping);
 	float Acceleration(size_t axisOrExtruder) const;
 	const float* Accelerations() const;
 	void SetAcceleration(size_t axisOrExtruder, float value);
