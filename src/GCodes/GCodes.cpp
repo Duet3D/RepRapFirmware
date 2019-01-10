@@ -3740,7 +3740,7 @@ bool GCodes::ChangeMicrostepping(size_t drive, unsigned int microsteps, bool int
 	if (success)
 	{
 		// We changed the microstepping, so adjust the steps/mm to compensate
-		platform.SetDriveStepsPerUnit(drive, platform.DriveStepsPerUnit(drive) * (float)microsteps / (float)oldSteps);
+		platform.SetDriveStepsPerUnit(drive, platform.DriveStepsPerUnit(drive), oldSteps);
 	}
 	return success;
 }

@@ -416,8 +416,7 @@ public:
 	float DriveStepsPerUnit(size_t axisOrExtruder) const;
 	const float *GetDriveStepsPerUnit() const
 		{ return driveStepsPerUnit; }
-	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value);
-	void SetDriveStepsPerUnitForMicrostepping(size_t axisOrExtruder, float value, unsigned int microstepping);
+	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t microstepping);
 	float Acceleration(size_t axisOrExtruder) const;
 	const float* Accelerations() const;
 	void SetAcceleration(size_t axisOrExtruder, float value);
@@ -960,11 +959,6 @@ inline const char* Platform::GetDefaultFile() const
 inline float Platform::DriveStepsPerUnit(size_t drive) const
 {
 	return driveStepsPerUnit[drive];
-}
-
-inline void Platform::SetDriveStepsPerUnit(size_t drive, float value)
-{
-	driveStepsPerUnit[drive] = max<float>(value, 1.0);	// don't allow zero or negative
 }
 
 inline float Platform::Acceleration(size_t drive) const
