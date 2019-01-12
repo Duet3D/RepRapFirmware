@@ -106,7 +106,7 @@ private:
 
 	// rr_fileinfo requests
 	uint32_t startedProcessingRequestAt;			// when we started processing the current HTTP request
-	char filenameBeingProcessed[MaxFilenameLength];	// The filename being processed (for rr_fileinfo)
+	String<MaxFilenameLength> filenameBeingProcessed;	// The filename being processed (for rr_fileinfo)
 
 	// Keeping track of HTTP sessions
 	static HttpSession sessions[MaxHttpSessions];

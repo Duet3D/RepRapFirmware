@@ -496,10 +496,10 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	requestedSpeed = min<float>(max<float>(reqSpeed, MinimumMovementSpeed), VectorBoxIntersection(normalisedDirectionVector, reprap.GetPlatform().MaxFeedrates(), MaxTotalDrivers));
 
 	// On a Cartesian printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
-	// for diagonal moves. On other architectures, this is not OK and any movement in the XY plane should be limited to the X/Y axis values, which we assume to be equal.
+	// for diagonal moves. On other architectures, this is not OK and any movement in the XY plane should be limited on other ways.
 	if (doMotorMapping)
 	{
-		k.LimitSpeedAndAcceleration(*this, normalisedDirectionVector);	// give the kinematics the chance to further restrict the speed and acceleration
+		k.LimitSpeedAndAcceleration(*this, normalisedDirectionVector, numVisibleAxes);	// give the kinematics the chance to further restrict the speed and acceleration
 	}
 
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed

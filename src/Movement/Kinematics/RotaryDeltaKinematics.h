@@ -26,7 +26,7 @@ public:
 	void SetCalibrationDefaults() override { Init(); }
 	bool WriteCalibrationParameters(FileStore *f) const override;
 	bool IsReachable(float x, float y, bool isCoordinated) const override;
-	bool LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated) const override;
+	bool LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
 	AxesBitmap AxesToHomeBeforeProbing() const override { return MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS); }
 	size_t NumHomingButtons(size_t numVisibleAxes) const override { return 0; }
@@ -37,7 +37,7 @@ public:
 	bool QueryTerminateHomingMove(size_t axis) const override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 	bool WriteResumeSettings(FileStore *f) const override;
-	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const override;
+	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes) const override;
 
 private:
 	void Init();

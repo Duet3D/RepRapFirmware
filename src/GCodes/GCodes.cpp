@@ -638,7 +638,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tpost.g to finish executing
 		{
 			// Restore the original Z axis user position, so that different tool Z offsets work even if the first move after the tool change doesn't have a Z coordinate
-			currentUserPosition[Z_AXIS] = toolChangeRestorePoint.moveCoords[Z_AXIS];
+			// Only do this if we are running as an FDM printer, because it's not appropriate for CNC machines.
+			if (machineType == MachineType::fff)
+			{
+				currentUserPosition[Z_AXIS] = toolChangeRestorePoint.moveCoords[Z_AXIS];
+			}
 			gb.MachineState().feedRate = toolChangeRestorePoint.feedRate;
 			// We don't restore the default fan speed in case the user wants to use a different one for the new tool
 			doingToolChange = false;
@@ -1457,7 +1461,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				const uint32_t ms = millis() - timingStartMillis;
 				const float fileMbytes = (float)timingBytesWritten/(float)(1024 * 1024);
 				const float mbPerSec = (fileMbytes * 1000.0)/(float)ms;
-				reply.printf("SD write speed for %.1fMbyte file was %.2fMBytes/sec", (double)fileMbytes, (double)mbPerSec);
+				reply.printf("SD write speed for %.1fMbyte file was %.2fMbytes/sec", (double)fileMbytes, (double)mbPerSec);
 				platform.GetMassStorage()->Delete(platform.GetGCodeDir(), TimingFileName);
 				gb.SetState(GCodeState::normal);
 				break;
@@ -2624,7 +2628,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		{
 			ClearBit(effectiveAxesHomed, Z_AXIS);								// if doing a manual Z probe, don't limit the Z movement
 		}
-		if (limitAxes && reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, effectiveAxesHomed, moveBuffer.isCoordinated))
+		if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, effectiveAxesHomed, moveBuffer.isCoordinated, limitAxes))
 		{
 			if (machineType != MachineType::fff)
 			{
@@ -2770,7 +2774,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 
 	// Transform to machine coordinates and check that it is within limits
 	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);			// set the final position
-	if (limitAxes && reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, true))
+	if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, true, limitAxes))
 	{
 		// Abandon the move
 		return "G2/G3: outside machine limits";
@@ -2974,7 +2978,7 @@ bool GCodes::ReadMove(RawMove& m)
 		}
 
 		// Limit the end position at each segment. This is needed for arc moves on any printer, and for [segmented] straight moves on SCARA printers.
-		if (limitAxes && reprap.GetMove().GetKinematics().LimitPosition(m.coords, numVisibleAxes, axesHomed, true))
+		if (reprap.GetMove().GetKinematics().LimitPosition(m.coords, numVisibleAxes, axesHomed, true, limitAxes))
 		{
 			segMoveState = SegmentedMoveState::aborted;
 			doingArcMove = false;

@@ -746,7 +746,7 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 		}
 		else if (reprap.Debug(moduleDda))
 		{
-			debugPrintf("Transformed %.2f %.2f %.2f to %" PRIu32 " %" PRIu32 " %" PRIu32 "\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
+			debugPrintf("Transformed %.2f %.2f %.2f to %" PRIi32 " %" PRIi32 " %" PRIi32 "\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
 		}
 	}
 	return b;

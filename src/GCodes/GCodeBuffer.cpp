@@ -436,7 +436,7 @@ FilePosition GCodeBuffer::GetFilePosition(size_t bytesCached) const
 	return noFilePosition;
 }
 
-// Is 'c' in the G Code string?
+// Is 'c' in the G Code string? 'c' must be uppercase.
 // Leave the pointer there for a subsequent read.
 bool GCodeBuffer::Seen(char c)
 {
@@ -451,7 +451,7 @@ bool GCodeBuffer::Seen(char c)
 		}
 		else if (!inQuotes)
 		{
-			if (inBrackets == 0 && toupper(b) == c)
+			if (inBrackets == 0 && toupper(b) == c && (c != 'E' || (unsigned int)readPointer == parameterStart || !isdigit(gcodeBuffer[readPointer - 1])))
 			{
 				return true;
 			}

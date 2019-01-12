@@ -13,9 +13,9 @@
 LaserFilamentMonitor::LaserFilamentMonitor(unsigned int extruder, int type)
 	: Duet3DFilamentMonitor(extruder, type),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
-	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false)
+	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false), checkNonPrintingMoves(false)
 {
-	switchOpenMask = (type == 6) ? TypeLaserSwitchOpenMask : 0;
+	switchOpenMask = (type == 6) ? TypeLaserSwitchOpenBitMask : 0;
 	Init();
 }
 
@@ -24,7 +24,10 @@ void LaserFilamentMonitor::Init()
 	sensorValue = 0;
 	parityErrorCount = framingErrorCount = 0;
 	lastMeasurementTime = 0;
+	imageQuality = shutter = brightness = lastErrorCode = 0;
+	version = 1;
 	backwards = false;
+	sensorError = false;
 	InitReceiveBuffer();
 	Reset();
 }
@@ -69,13 +72,20 @@ bool LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bo
 		comparisonEnabled = (gb.GetIValue() > 0);
 	}
 
+	if (gb.Seen('A'))
+	{
+		seen = true;
+		checkNonPrintingMoves = (gb.GetIValue() > 0);
+	}
+
 	if (seen)
 	{
 		Init();
 	}
 	else
 	{
-		reply.printf("Duet3D laser filament monitor%s on input %u, %s, allow %ld%% to %ld%%, check every %.1fmm, ",
+		reply.printf("Duet3D laser filament monitor v%u%s on input %u, %s, allow %ld%% to %ld%%, check every %.1fmm, ",
+						version,
 						(switchOpenMask != 0) ? " with switch" : "",
 						GetEndstopNumber(),
 						(comparisonEnabled) ? "enabled" : "disabled",
@@ -87,13 +97,21 @@ bool LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bo
 		{
 			reply.cat("no data received");
 		}
-		else if ((sensorValue & TypeLaserErrorMask) != 0)
+		else if (sensorError)
 		{
 			reply.cat("error");
+			if (lastErrorCode != 0)
+			{
+				reply.catf(" %u", lastErrorCode);
+			}
 		}
 		else
 		{
-			reply.catf("current pos %.1f, brightness %u, shutter %u, ", (double)GetCurrentPosition(), qualityWord & 0x00FF, (qualityWord >> 8) & 0x3F);
+			reply.catf("current pos %.1f, brightness %u, shutter %u, ", (double)GetCurrentPosition(), brightness, shutter);
+			if (imageQuality != 0)
+			{
+				reply.catf("quality %u, ", imageQuality);
+			}
 			if (laserMonitorState != LaserMonitorState::calibrating && totalExtrusionCommanded > 10.0)
 			{
 				reply.catf("measured min %ld%% avg %ld%% max %ld%% over %.1fmm",
@@ -115,12 +133,13 @@ bool LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bo
 // Return the current position
 float LaserFilamentMonitor::GetCurrentPosition() const
 {
-	int32_t pos = (int32_t)(sensorValue & TypeLaserPositionMask);
-	if (pos > 512)
+	const uint16_t positionRange = (sensorValue & TypeLaserLargeDataRangeBitMask) ? TypeLaserLargeRange : TypeLaserDefaultRange;
+	int32_t pos = (int32_t)(sensorValue & (positionRange - 1));
+	if (pos > positionRange/2)
 	{
-		pos -= 1024;
+		pos -= positionRange;
 	}
-	return (float)pos * 0.02;									// each count is nominally 0.02mm of filament motion @ 5 * 254 cpi
+	return (float)pos * ((sensorValue & TypeLaserLargeDataRangeBitMask) ? 0.01 : 0.02);		// each count is nominally 0.01 or 0.02mm of filament motion
 }
 
 // Deal with any received data
@@ -143,14 +162,47 @@ void LaserFilamentMonitor::HandleIncomingData()
 			{
 				++parityErrorCount;
 			}
-			else if ((val & TypeLaserQualityMask) != 0)
-			{
-				qualityWord = val & ~(TypeLaserQualityMask | TypeLaserParityMask);		// record the quality report
-			}
 			else
 			{
-				receivedPositionReport = true;
-				dataReceived = true;
+				switch (val & TypeLaserMessageTypeMask)
+				{
+				case TypeLaserMessageTypePosition:
+					receivedPositionReport = true;
+					dataReceived = true;
+					sensorError = false;
+					break;
+
+				case TypeLaserMessageTypeError:
+					lastErrorCode = val & 0x00FF;
+					sensorError = true;
+					break;
+
+				case TypeLaserMessageTypeQuality:
+					brightness = val & 0x00FF;
+					shutter = (val >> 8) & 0x1F;
+					break;
+
+				case TypeLaserMessageTypeInfo:
+					switch (val & TypeLaserInfoTypeMask)
+					{
+					case TypeLaserInfoTypeVersion:
+						version = val & 0x00FF;
+						break;
+
+					case TypeLaserInfoTypeImageQuality:
+						imageQuality = val & 0x00FF;
+						break;
+
+					case TypeLaserInfoTypeBrightness:
+						brightness = val & 0x00FF;
+						break;
+
+					case TypeLaserInfoTypeShutter:
+						shutter = val & 0x00FF;
+						break;
+					}
+					break;
+				}
 			}
 		}
 		else
@@ -162,9 +214,10 @@ void LaserFilamentMonitor::HandleIncomingData()
 		{
 			// We have a completed a position report
 			lastMeasurementTime = millis();
-			const uint16_t positionChange = (val - sensorValue) & TypeLaserPositionMask;	// position change in range 0..1023
-			const int32_t movement = (positionChange <= 512) ? (int32_t)positionChange : (int32_t)positionChange - 1024;
-			movementMeasuredSinceLastSync += (float)movement * 0.02;
+			const uint16_t positionRange = (val & TypeLaserLargeDataRangeBitMask) ? TypeLaserLargeRange : TypeLaserDefaultRange;
+			const uint16_t positionChange = (val - sensorValue) & (positionRange - 1);			// 10- or 11-bit position change
+			const int32_t movement = (positionChange <= positionRange/2) ? (int32_t)positionChange : (int32_t)positionChange - positionRange;
+			movementMeasuredSinceLastSync += (float)movement * ((val & TypeLaserLargeDataRangeBitMask) ? 0.01 : 0.02);
 			sensorValue = val;
 
 			if (haveStartBitData)					// if we have a synchronised  value for the amount of extrusion commanded
@@ -179,7 +232,7 @@ void LaserFilamentMonitor::HandleIncomingData()
 		}
 		else
 		{
-			// A receive error occurred, or we received a quality report not a position report. Any start bit data we stored is wrong.
+			// A receive error occurred, or we received an error, quality or info report not a position report. Any start bit data we stored is wrong.
 			if (haveStartBitData)
 			{
 				extrusionCommandedSinceLastSync += extrusionCommandedAtStartBit;
@@ -200,11 +253,11 @@ void LaserFilamentMonitor::HandleIncomingData()
 FilamentSensorStatus LaserFilamentMonitor::Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed)
 {
 	// 1. Update the extrusion commanded and whether we have had an extruding but non-printing move
-	if (hadNonPrintingMove)
+	if (hadNonPrintingMove && !checkNonPrintingMoves)
 	{
 		hadNonPrintingMoveSinceLastSync = true;
 	}
-	else
+	else if (!hadNonPrintingMoveSinceLastSync)			// optimisation to save an unnecessary floating point addition
 	{
 		extrusionCommandedSinceLastSync += filamentConsumed;
 	}
@@ -227,7 +280,7 @@ FilamentSensorStatus LaserFilamentMonitor::Check(bool full, bool hadNonPrintingM
 	FilamentSensorStatus ret = FilamentSensorStatus::ok;
 	if (full)
 	{
-		if ((sensorValue & TypeLaserErrorMask) != 0)
+		if (sensorError)
 		{
 			ret = FilamentSensorStatus::sensorError;
 		}
@@ -339,7 +392,7 @@ FilamentSensorStatus LaserFilamentMonitor::Clear(bool full)
 	FilamentSensorStatus ret = FilamentSensorStatus::ok;
 	if (full)
 	{
-		if ((sensorValue & TypeLaserErrorMask) != 0)
+		if (sensorError)
 		{
 			ret = FilamentSensorStatus::sensorError;
 		}
@@ -355,7 +408,7 @@ FilamentSensorStatus LaserFilamentMonitor::Clear(bool full)
 void LaserFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder)
 {
 	const char* const statusText = (!dataReceived) ? "no data received"
-									: ((sensorValue & TypeLaserErrorMask) != 0) ? "error"
+									: (sensorError) ? "error"
 										: ((sensorValue & switchOpenMask) != 0) ? "no filament"
 											: "ok";
 	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: position %.2f, %s, ", extruder, (double)GetCurrentPosition(), statusText);

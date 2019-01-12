@@ -229,12 +229,50 @@ Done in 2.02 release:
 - [done] Step clock on Duet Maestro going backwards, https://forum.duet3d.com/topic/8264/steptimer-getinterruptclocks-isn-t-incrementing
 - [can't reproduce] Investigate Duet Maestro socket behaviour when cable disconnected, see email from chris
 
+2.02.1 planned:
+- [done, ok] MBytes/sec -> Mbytes/sec in M122 P104 report
+- [done, ok] Remove 'RTOS' from firmware name?
+- [done, ok] G1 X1E1 no longer gets treated as if it also has an E parameter
+- [done, ok] On 12864 display increment default column by 1 extra to leave a space
+- [done, ok] Bug: setting M558 A parameter to anything >31 sets it to 0 instead of to 31
+- [done, ok] Slicer PE time estimate string, https://forum.duet3d.com/topic/8440/rrf-2-02-slic3r-pe-1-41-2-filament-used-and-print-times-wrong and SodaStreamHolder gcode file
+- [done, ok so far, poss homing issue] Generalised Cartesian/Core kinematics inc. markForged
+- [done, ok] M572 and M221 with no extruder drive number to set all extruders used by the current tool, https://forum.duet3d.com/topic/8444/setting-pressure-advance-in-filament-file
+- [done, oks with new filament monitor, test with old] Support filament sensor firmware v2
+- [done, ok] Improve efficiency of debug print in WiFiInterface: don't keep calling cat and strlen
+- [done, test] Disable mdns in legacy Duets, https://forum.duet3d.com/topic/8352/duet-0-6-randomly-reboots/5
+- [done, test] rr_fileinfo and M36 with no filename to include estimated print time and simulation time in the response, as in the report with a filename
+- [done, test] In CNC and laser mode update user Z coordinate after tool change, https://forum.duet3d.com/topic/8181/tool-offset-honored-but-not-displayed-correctly
+- [done, test] On SCARA and delta printers, apply geometric limits even if not applying M208 limits
+- [done, test] G92 should not constrain the passed coordinates to the M208 limits if M564 S0 has been used to disable limits
+- Reports that DueX5 endstops stop working after a while, https://forum.duet3d.com/topic/8284/firmware-2-02-released/9
+- Slow startup move issue, https://forum.duet3d.com/topic/8284/firmware-2-02-released/7 (adding S2 fixes it)
+- M291 issue, https://forum.duet3d.com/topic/8381/m291-s2-does-not-block-macro-execution/5
+- In laser mode allow M3 instead of S to control laser power? (wait for feedback, not as simple as it looked)
+- [check latest forum response, possibly caused by M208 checks] Investigate @frafa's SCARA issue, https://forum.duet3d.com/post/76024
+- [await reply from Mario] Is there any benefit to setting RNDTF in M569?
+- Danny's G1->G0 request? [added IntermediatePositionsReachable function]
+- Warm up time not always displayed in 2.02
+- For PanelDue, send heater data for the first heater in each tool, https://forum.duet3d.com/topic/8458/hide-unused-heater-channels-paneldue-5/4
+- Investigate 12864 display heater fault warning, https://forum.duet3d.com/topic/7718/12864-display-current-tool-temperatures/6
+- PR to allow steps/mm to be quoted in M92, https://forum.duet3d.com/topic/8225/m92-parameter-to-indicate-microstepping/6
+
 2.03 planned:
+- Stop print after a short to ground report? https://forum.duet3d.com/topic/8239/duet-maestro-short-to-ground/10
+- Option to enable a trigger when not printing (C3?), https://forum.duet3d.com/topic/8459/m581-external-trigger
+- Implement G43?
+- What does M48 do in Marlin?
+- Option in M452 to allow G1 S or M3 to control laser? Also whether S is sticky.
+- Allow hex input everywhere
+- On Maestro, delay between first enabling the driver and moving the motor; or a separate command to enable a motor.
+- When installing DuetWiFiServer, PanelDue message keeps disappearing
+- Overlap SD card write and network fetch, for faster file upload?
 - Object model
 - Conditionals, loops and maths in GCode commands
 - S-curve acceleration
 - Endstop assignment, including option for 1 endstop per motor
-- Faster file upload?
+- G2/G3 R parameter instead of IJ
+- Generalised CoreXY kinematics inc MarkForged
 - Some features from the list below
 
 Future:

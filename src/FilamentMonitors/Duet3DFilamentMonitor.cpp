@@ -28,10 +28,10 @@ void Duet3DFilamentMonitor::InitReceiveBuffer()
 // ISR for when the pin state changes. It should return true if the ISR wants the commanded extrusion to be fetched.
 bool Duet3DFilamentMonitor::Interrupt()
 {
-	bool wantReading = false;
 	uint32_t now = StepTimer::GetInterruptClocks();
+	bool wantReading = false;
 	const size_t writePointer = edgeCaptureWritePointer;			// capture volatile variable
-	if ((writePointer + 1) % EdgeCaptureBufferSize != edgeCaptureReadPointer)
+	if ((writePointer + 1) % EdgeCaptureBufferSize != edgeCaptureReadPointer)	// if buffer is not full
 	{
 		if (IoPort::ReadPin(GetPin()))
 		{
@@ -50,12 +50,12 @@ bool Duet3DFilamentMonitor::Interrupt()
 			{
 				return false;
 			}
-			now -= 40;												// partial correction for skew caused by debounce filter on Duet endstop inputs (measured skew = 74)
+			now -= 40;												// partial correction for skew caused by debounce filter on older Duet endstop inputs (measured skew = 74)
 		}
-	}
 
-	edgeCaptures[writePointer] = now;								// record the time at which this edge was detected
-	edgeCaptureWritePointer = (writePointer + 1) % EdgeCaptureBufferSize;
+		edgeCaptures[writePointer] = now;							// record the time at which this edge was detected
+		edgeCaptureWritePointer = (writePointer + 1) % EdgeCaptureBufferSize;
+	}
 	return wantReading;
 }
 

@@ -765,10 +765,12 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
 {
 	static const char* const PrintTimeStrings[] =
 	{
-		" estimated printing time",		// slic3r PE		"; estimated printing time = 1h 5m 24s"
-		";TIME",						// Cura				";TIME:38846"
-		" Build time"					// S3D				";   Build time: 0 hours 42 minutes"
-										// also KISSlicer	"; Estimated Build Time:   332.83 minutes"
+		// Note: if a string in this table is a leading or embedded substring of another, the longer one must come first
+		" estimated printing time (normal mode)",	// slic3r PE later versions	"; estimated printing time (normal mode) = 1h 5m 24s"
+		" estimated printing time",					// slic3r PE older versions	"; estimated printing time = 1h 5m 24s"
+		";TIME",									// Cura						";TIME:38846"
+		" Build time"								// S3D						";   Build time: 0 hours 42 minutes"
+													// also KISSlicer			"; Estimated Build Time:   332.83 minutes"
 	};
 
 	for (const char * ptStr : PrintTimeStrings)

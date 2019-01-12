@@ -169,7 +169,7 @@ bool LinearDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) co
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
-bool LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated) const
+bool LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
 	const AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
@@ -187,7 +187,7 @@ bool LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes,
 			limited = true;
 		}
 
-		if (coords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
+		if (applyM208Limits && coords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
 		{
 			coords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
 			limited = true;
@@ -205,7 +205,7 @@ bool LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes,
 	}
 
 	// Limit any additional axes according to the M208 limits
-	if (LimitPositionFromAxis(coords, Z_AXIS + 1, numVisibleAxes, axesHomed))
+	if (applyM208Limits && LimitPositionFromAxis(coords, Z_AXIS + 1, numVisibleAxes, axesHomed))
 	{
 		limited = true;
 	}
@@ -317,8 +317,17 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			PrintMatrix("Normal matrix", normalMatrix, numFactors, numFactors + 1);
 		}
 
+		if (!normalMatrix.GaussJordan(numFactors, numFactors + 1))
+		{
+			reply.copy("Unable to calculate calibration parameters. Please choose different probe points.");
+			return true;
+		}
+
 		floatc_t solution[NumDeltaFactors];
-		normalMatrix.GaussJordan(solution, numFactors);
+		for (size_t i = 0; i < numFactors; ++i)
+		{
+			solution[i] = normalMatrix(i, numFactors);
+		}
 
 		if (reprap.Debug(moduleMove))
 		{
@@ -736,7 +745,7 @@ void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.
 // The speeds in Cartesian space have already been limited.
-void LinearDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const
+void LinearDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes) const
 {
 	// Limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration
 	const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));

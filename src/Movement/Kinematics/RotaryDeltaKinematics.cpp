@@ -236,7 +236,7 @@ bool RotaryDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) co
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
-bool RotaryDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated) const
+bool RotaryDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
 	const AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
@@ -267,7 +267,7 @@ bool RotaryDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes,
 	}
 
 	// Limit any additional axes according to the M208 limits
-	if (LimitPositionFromAxis(coords, Z_AXIS + 1, numVisibleAxes, axesHomed))
+	if (applyM208Limits && LimitPositionFromAxis(coords, Z_AXIS + 1, numVisibleAxes, axesHomed))
 	{
 		limited = true;
 	}
@@ -359,7 +359,7 @@ bool RotaryDeltaKinematics::WriteResumeSettings(FileStore *f) const
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.
 // The speeds in Cartesian space have already been limited.
-void RotaryDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const
+void RotaryDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes) const
 {
 	// Limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration
 	const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));

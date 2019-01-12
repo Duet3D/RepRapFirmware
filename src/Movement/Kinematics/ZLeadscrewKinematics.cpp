@@ -229,8 +229,17 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 		PrintMatrix("Normal matrix", normalMatrix, numFactors, numFactors + 1);
 	}
 
+	if (!normalMatrix.GaussJordan(numFactors, numFactors + 1))
+	{
+		reply.copy("Unable to calculate screw corrections. Please choose different probe points.");
+		return true;
+	}
+
 	floatc_t solution[MaxLeadscrews];
-	normalMatrix.GaussJordan(solution, numFactors);
+	for (size_t i = 0; i < numFactors; ++i)
+	{
+		solution[i] = normalMatrix(i, numFactors);
+	}
 
 	if (reprap.Debug(moduleMove))
 	{

@@ -14,7 +14,7 @@ RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int extrud
 	: Duet3DFilamentMonitor(extruder, type),
 	  mmPerRev(DefaultMmPerRev),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
-	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false), checkNonPrintingMoves(true)
+	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false), checkNonPrintingMoves(false)
 {
 	switchOpenMask = (type == 4) ? TypeMagnetSwitchOpenMask : 0;
 	Init();
@@ -69,6 +69,12 @@ bool RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& 
 	{
 		seen = true;
 		comparisonEnabled = (gb.GetIValue() > 0);
+	}
+
+	if (gb.Seen('A'))
+	{
+		seen = true;
+		checkNonPrintingMoves = (gb.GetIValue() > 0);
 	}
 
 	if (seen)
@@ -177,7 +183,7 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::Check(bool full, bool hadNon
 	{
 		hadNonPrintingMoveSinceLastSync = true;
 	}
-	else
+	else if (!hadNonPrintingMoveSinceLastSync)			// optimisation to save an unnecessary floating point addition
 	{
 		extrusionCommandedSinceLastSync += filamentConsumed;
 	}

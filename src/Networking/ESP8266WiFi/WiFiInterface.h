@@ -161,7 +161,8 @@ private:
 	// For processing debug messages from the WiFi module
 	bool serialRunning;
 	bool debugPrintPending;
-	String<150> debugMessageBuffer;
+	char debugMessageBuffer[200];
+	size_t debugMessageChars;
 };
 
 #endif

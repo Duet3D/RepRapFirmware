@@ -284,13 +284,14 @@ extern "C"
 	// Exception handlers
 	// By default the Usage Fault, Bus Fault and Memory Management fault handlers are not enabled,
 	// so they escalate to a Hard Fault and we don't need to provide separate exception handlers for them.
+	void hardFaultDispatcher(const uint32_t *pulFaultStackAddress) __attribute((noreturn));
 	void hardFaultDispatcher(const uint32_t *pulFaultStackAddress)
 	{
 	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pulFaultStackAddress + 5);
 	}
 
 	// The fault handler implementation calls a function called hardFaultDispatcher()
-	void HardFault_Handler() __attribute__((naked));
+	void HardFault_Handler() __attribute__((naked, noreturn));
 	void HardFault_Handler()
 	{
 	    __asm volatile
@@ -305,12 +306,13 @@ extern "C"
 	    );
 	}
 
+	void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress) __attribute((noreturn));
 	void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress)
 	{
 	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::wdtFault, pulFaultStackAddress + 5);
 	}
 
-	void WDT_Handler() __attribute__((naked));
+	void WDT_Handler() __attribute__((naked, noreturn));
 	void WDT_Handler()
 	{
 	    __asm volatile
@@ -325,6 +327,7 @@ extern "C"
 	    );
 	}
 
+	void otherFaultDispatcher(const uint32_t *pulFaultStackAddress) __attribute((noreturn));
 	void otherFaultDispatcher(const uint32_t *pulFaultStackAddress)
 	{
 	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::otherFault, pulFaultStackAddress + 5);
@@ -332,7 +335,7 @@ extern "C"
 
 	// 2017-05-25: A user is getting 'otherFault' reports, so now we do a stack dump for those too.
 	// The fault handler implementation calls a function called otherFaultDispatcher()
-	void OtherFault_Handler() __attribute__((naked));
+	void OtherFault_Handler() __attribute__((naked, noreturn));
 	void OtherFault_Handler()
 	{
 	    __asm volatile
@@ -352,16 +355,17 @@ extern "C"
 	void NMI_Handler        () { reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::NMI); }
 	void UsageFault_Handler () { reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::usageFault); }
 
-	void DebugMon_Handler   () __attribute__ ((alias("OtherFault_Handler")));
+	void DebugMon_Handler   () __attribute__ ((noreturn,alias("OtherFault_Handler")));
 
 #ifdef RTOS
 	// FreeRTOS hooks that we need to provide
+	void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName) __attribute((noreturn));
 	void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName)
 	{
 	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::stackOverflow, pulFaultStackAddress);
 	}
 
-	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) __attribute((naked));
+	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) __attribute((naked, noreturn));
 	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName)
 	{
 		// r0 = pxTask, r1 = pxTaskName
@@ -374,13 +378,15 @@ extern "C"
 	        " handler_sovf_address_const: .word stackOverflowDispatcher \n"
 	    );
 	}
+#endif
 
+	void assertCalledDispatcher(const uint32_t *pulFaultStackAddress) __attribute((noreturn));
 	void assertCalledDispatcher(const uint32_t *pulFaultStackAddress)
 	{
 	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress);
 	}
 
-	void vAssertCalled(uint32_t line, const char *file) __attribute((naked));
+	void vAssertCalled(uint32_t line, const char *file) __attribute((naked, noreturn));
 	void vAssertCalled(uint32_t line, const char *file)
 	{
 	    __asm volatile
@@ -392,8 +398,12 @@ extern "C"
 	        " handler_asrt_address_const: .word assertCalledDispatcher  \n"
 	    );
 	}
-#endif
+}
 
+namespace std
+{
+	// We need to define this function in order to use lambda functions with captures
+	void __throw_bad_function_call() { vAssertCalled(__LINE__, __FILE__); }
 }
 
 // End

@@ -389,6 +389,7 @@ private:
 	void NewMoveAvailable();											// Flag that a new move is available
 
 	void SetMoveBufferDefaults();										// Set up default values in the move buffer
+	void ChangeExtrusionFactor(unsigned int extruder, float factor);	// Change a live extrusion factor
 
 #if SUPPORT_12864_LCD
 	int GetHeaterNumber(unsigned int itemNumber) const;

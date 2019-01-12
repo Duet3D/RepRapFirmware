@@ -2032,85 +2032,80 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 	return response;
 }
 
-// Get information for the specified file, or the currently printing file, in JSON format
+// Get information for the specified file, or the currently printing file (if 'filename' is null or empty), in JSON format
 bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly)
 {
-	// Poll file info for a specific file
-	if (filename != nullptr && filename[0] != 0)
+	const bool specificFile = (filename != nullptr && filename[0] != 0);
+	GCodeFileInfo info;
+	if (specificFile)
 	{
-		GCodeFileInfo info;
+		// Poll file info for a specific file
 		if (!platform->GetMassStorage()->GetFileInfo(platform->GetGCodeDir(), filename, info, quitEarly))
 		{
 			// This may take a few runs...
 			return false;
 		}
+	}
+	else if (!printMonitor->GetPrintingFileInfo(info))
+	{
+		return false;
+	}
 
-		if (info.isValid)
+	if (!OutputBuffer::Allocate(response))
+	{
+		return false;
+	}
+
+	if (info.isValid)
+	{
+		response->printf("{\"err\":0,\"size\":%lu,",info.fileSize);
+		const struct tm * const timeInfo = gmtime(&info.lastModifiedTime);
+		if (timeInfo->tm_year > /*19*/80)
 		{
-			if (!OutputBuffer::Allocate(response))
-			{
-				// Should never happen
-				return false;
-			}
+			response->catf("\"lastModified\":\"%04u-%02u-%02uT%02u:%02u:%02u\",",
+					timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
+					timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
+		}
 
-			response->printf("{\"err\":0,\"size\":%lu,",info.fileSize);
-			const struct tm * const timeInfo = gmtime(&info.lastModifiedTime);
-			if (timeInfo->tm_year > /*19*/80)
-			{
-				response->catf("\"lastModified\":\"%04u-%02u-%02uT%02u:%02u:%02u\",",
-						timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
-						timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
-			}
+		response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,",
+			(double)info.objectHeight, (double)info.firstLayerHeight, (double)info.layerHeight);
+		if (info.printTime != 0)
+		{
+			response->catf("\"printTime\":%" PRIu32 ",", info.printTime);
+		}
+		if (info.simulatedTime != 0)
+		{
+			response->catf("\"simulatedTime\":%" PRIu32 ",", info.simulatedTime);
+		}
 
-			response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,",
-				(double)info.objectHeight, (double)info.firstLayerHeight, (double)info.layerHeight);
-			if (info.printTime != 0)
-			{
-				response->catf("\"printTime\":%" PRIu32 ",", info.printTime);
-			}
-			if (info.simulatedTime != 0)
-			{
-				response->catf("\"simulatedTime\":%" PRIu32 ",", info.simulatedTime);
-			}
-			response->cat("\"filament\":");
-			char ch = '[';
-			if (info.numFilaments == 0)
-			{
-				response->cat(ch);
-			}
-			else
-			{
-				for (size_t i = 0; i < info.numFilaments; ++i)
-				{
-					response->catf("%c%.1f", ch, (double)info.filamentNeeded[i]);
-					ch = ',';
-				}
-			}
-			response->cat("],\"generatedBy\":");
-			response->EncodeString(info.generatedBy, false);
-			response->cat('}');
+		response->cat("\"filament\":");
+		char ch = '[';
+		if (info.numFilaments == 0)
+		{
+			response->cat(ch);
 		}
 		else
 		{
-			if (!OutputBuffer::Allocate(response))
+			for (size_t i = 0; i < info.numFilaments; ++i)
 			{
-				return false;
+				response->catf("%c%.1f", ch, (double)info.filamentNeeded[i]);
+				ch = ',';
 			}
-
-			response->copy("{\"err\":1}");
 		}
-	}
-	else if (GetPrintMonitor().IsPrinting())
-	{
-		return GetPrintMonitor().GetPrintingFileInfoResponse(response);
+		response->cat("]");
+
+		if (!specificFile)
+		{
+			response->catf(",\"printDuration\":%d,\"fileName\":", (int)printMonitor->GetPrintDuration());
+			response->EncodeString(printMonitor->GetPrintingFilename(), false);
+		}
+
+		response->cat(",\"generatedBy\":");
+		response->EncodeString(info.generatedBy, false);
+		response->cat('}');
 	}
 	else
 	{
-		if (!OutputBuffer::Allocate(response))
-		{
-			return false;
-		}
-
 		response->copy("{\"err\":1}");
 	}
 	return true;

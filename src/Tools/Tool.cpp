@@ -482,4 +482,20 @@ void Tool::SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp)
 	}
 }
 
+void Tool::IterateExtruders(std::function<void(unsigned int)> f) const
+{
+	for (size_t i = 0; i < driveCount; ++i)
+	{
+		f(drives[i]);
+	}
+}
+
+void Tool::IterateHeaters(std::function<void(int)> f) const
+{
+	for (size_t i = 0; i < heaterCount; ++i)
+	{
+		f(heaters[i]);
+	}
+}
+
 // End

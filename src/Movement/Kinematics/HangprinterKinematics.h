@@ -26,7 +26,7 @@ public:
 	void SetCalibrationDefaults() override { Init(); }
 	bool WriteCalibrationParameters(FileStore *f) const override;
 	bool IsReachable(float x, float y, bool isCoordinated) const override;
-	bool LimitPosition(float position[], size_t numAxes, AxesBitmap axesHomed, bool isCoordinated) const override;
+	bool LimitPosition(float position[], size_t numAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
 	size_t NumHomingButtons(size_t numVisibleAxes) const override { return 0; }
 	const char* HomingButtonNames() const override { return "ABCD"; }
@@ -37,7 +37,7 @@ public:
 	bool QueryTerminateHomingMove(size_t axis) const override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 	bool WriteResumeSettings(FileStore *f) const override;
-	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const override;
+	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes) const override;
 
 private:
 	static constexpr float DefaultSegmentsPerSecond = 100.0;

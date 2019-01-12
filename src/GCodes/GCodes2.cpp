@@ -2062,28 +2062,42 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 221:	// Set/report extrusion factor override percentage
 		{
-			int32_t extruder = 0;
-			bool dummy;
-			gb.TryGetIValue('D', extruder, dummy);
+			uint32_t extruder;
+			bool seenD = false;
+			gb.TryGetUIValue('D', extruder, seenD);
 
-			if (extruder >= 0 && extruder < (int32_t)numExtruders)
+			const Tool * const ct = reprap.GetCurrentTool();
+			if (!seenD && ct == nullptr)
 			{
-				if (gb.Seen('S'))	// S parameter sets the override percentage
+				reply.copy("No tool selected");
+				result = GCodeResult::error;
+			}
+			else if (gb.Seen('S'))	// S parameter sets the override percentage
+			{
+				const float extrusionFactor = gb.GetFValue() / 100.0;
+				if (extrusionFactor >= 0.0)
 				{
-					const float extrusionFactor = gb.GetFValue() / 100.0;
-					if (extrusionFactor >= 0.0)
+					if (seenD)
 					{
-						if (segmentsLeft != 0 && !moveBuffer.isFirmwareRetraction)
+						if (extruder < numExtruders)
 						{
-							moveBuffer.coords[extruder + numTotalAxes] *= extrusionFactor/extrusionFactors[extruder];	// last move not gone, so update it
+							ChangeExtrusionFactor(extruder, extrusionFactor);
 						}
-						extrusionFactors[extruder] = extrusionFactor;
+					}
+					else
+					{
+						ct->IterateExtruders([this, extrusionFactor](unsigned int extruder) { ChangeExtrusionFactor(extruder, extrusionFactor); });
 					}
 				}
-				else
-				{
-					reply.printf("Extrusion factor override for extruder %" PRIi32 ": %.1f%%", extruder, (double)(extrusionFactors[extruder] * 100.0));
-				}
+			}
+			else if (seenD)
+			{
+				reply.printf("Extrusion factor override for extruder %" PRIi32 ": %.1f%%", extruder, (double)(extrusionFactors[extruder] * 100.0));
+			}
+			else
+			{
+				reply.copy("Extrusion factor(s) for current tool:");
+				ct->IterateExtruders([reply, this](unsigned int extruder) { reply.catf(" %.1f%%", (double)(extrusionFactors[extruder] * 100.0)); });
 			}
 		}
 		break;
@@ -3227,6 +3241,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					platform.SetPressureAdvance(eDrive[i], advance);
 				}
 			}
+			else
+			{
+				const Tool * const ct = reprap.GetCurrentTool();
+				if (ct == nullptr)
+				{
+					reply.copy("No tool selected");
+					result = GCodeResult::error;
+				}
+				else
+				{
+					ct->IterateExtruders([advance](unsigned int extruder) { reprap.GetPlatform().SetPressureAdvance(extruder, advance); });
+				}
+			}
 		}
 		else
 		{
@@ -3573,7 +3600,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			if (changed || changedMode)
 			{
-				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false))
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false, false))
 				{
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 				}
@@ -3658,7 +3685,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
 						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 					}
-					if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false))
+					if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false, false))
 					{
 						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 					}
@@ -3705,7 +3732,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 				}
-				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false))
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false, false))
 				{
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 				}

@@ -318,7 +318,7 @@ public:
 	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d);
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
-	void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr);
+	void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr) __attribute((noreturn));
 	bool AtxPower() const;
 	void AtxPowerOn();
 	void AtxPowerOff(bool defer);
