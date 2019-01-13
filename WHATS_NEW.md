@@ -1,6 +1,31 @@
 Summary of important changes in recent versions
 ===============================================
 
+Coming Soon in version 2.03beta1
+================================
+
+New features/changed behaviour:
+- On 12864 display increment default column by 1 extra to leave a space
+- Recognise Slicer PE latest version time estimate string, https://forum.duet3d.com/topic/8440/rrf-2-02-slic3r-pe-1-41-2-filament-used-and-print-times-wrong and SodaStreamHolder gcode file
+- Support generalised Cartesian/Core kinematics inc. markForged
+- M572 and M221 with no extruder drive number now sets all extruders used by the current tool, https://forum.duet3d.com/topic/8444/setting-pressure-advance-in-filament-file
+- Support experimental filament sensor firmware v2
+- Disable mdns in legacy Duets, https://forum.duet3d.com/topic/8352/duet-0-6-randomly-reboots/5
+- rr_fileinfo and M36 with no filename now includes estimated print time and simulation time in the response, as in the report with a filename
+- In CNC and laser mode update user Z coordinate after tool change, https://forum.duet3d.com/topic/8181/tool-offset-honored-but-not-displayed-correctly
+- On SCARA and delta printers, apply geometric limits even if not applying M208 limits
+- MBytes/sec -> Mbytes/sec in M122 P104 report
+- Remove 'RTOS' from firmware name
+
+Bug fixes:
+- G1 X1E1 no longer gets treated as if it also has an E parameter
+- Setting M558 A parameter to anything >31 set it to 0 instead of to 31
+- G92 should not constrain the passed coordinates to the M208 limits if M564 S0 has been used to disable limits
+
+Internal changes:
+- Improve efficiency of debug print in WiFiInterface: don't keep calling cat and strlen
+- Cartesian/CoreXY/CoreXYU/CoreXZ/CoreXYUV kinematics all use the generalised Cartesian kinematics
+
 Version 2.02 (Duet 2 series) and 1.23 (Duet 06/085)
 ===================================================
 
