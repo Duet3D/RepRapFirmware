@@ -245,6 +245,7 @@ Done in 2.02 release:
 - [done, test] In CNC and laser mode update user Z coordinate after tool change, https://forum.duet3d.com/topic/8181/tool-offset-honored-but-not-displayed-correctly
 - [done, test] On SCARA and delta printers, apply geometric limits even if not applying M208 limits
 - [done, test] G92 should not constrain the passed coordinates to the M208 limits if M564 S0 has been used to disable limits
+- [done, test] Bug fix: month number written to height map.csv and filament files was too low by 1
 - Reports that DueX5 endstops stop working after a while, https://forum.duet3d.com/topic/8284/firmware-2-02-released/9
 - Slow startup move issue, https://forum.duet3d.com/topic/8284/firmware-2-02-released/7 (adding S2 fixes it)
 - M291 issue, https://forum.duet3d.com/topic/8381/m291-s2-does-not-block-macro-execution/5
@@ -258,6 +259,7 @@ Done in 2.02 release:
 - PR to allow steps/mm to be quoted in M92, https://forum.duet3d.com/topic/8225/m92-parameter-to-indicate-microstepping/6
 - Generalised Cartesian axes; need to return bitmap of 'axes' involved for stall detect homing, see Platform::Stopped
 - Deffered allocation of DMs: don't create DMs for nonlocal drives, pass #steps to CAN interface instead
+- Remove the DM array
 
 2.03 planned:
 - Stop print after a short to ground report? https://forum.duet3d.com/topic/8239/duet-maestro-short-to-ground/10
