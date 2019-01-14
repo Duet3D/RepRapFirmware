@@ -1123,6 +1123,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 92: // Set/report steps/mm for some axes
 		{
+			bool seenUstepMultiplier = false;
+			uint32_t ustepMultiplier = 0;
+			gb.TryGetUIValue('S', ustepMultiplier, seenUstepMultiplier);
+
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
@@ -1132,7 +1136,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					{
 						return false;
 					}
-					platform.SetDriveStepsPerUnit(axis, gb.GetFValue());
+					platform.SetDriveStepsPerUnit(axis, gb.GetFValue(), ustepMultiplier);
 					seen = true;
 				}
 			}
@@ -1151,7 +1155,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				// The user may not have as many extruders as we allow for, so just set the ones for which a value is provided
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform.SetDriveStepsPerUnit(numTotalAxes + e, eVals[e]);
+					platform.SetDriveStepsPerUnit(numTotalAxes + e, eVals[e], ustepMultiplier);
 				}
 			}
 
