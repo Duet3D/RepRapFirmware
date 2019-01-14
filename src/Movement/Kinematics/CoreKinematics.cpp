@@ -56,11 +56,15 @@ void CoreKinematics::Recalc()
 	// Calculate the first and last motors for each axis, and first and last axis controlled by each motor.
 	// These are used to optimise calculations and homing behaviour.
 	// It doesn't matter if an axis doesn't actually use all the motors from its first to its last inclusive.
+	// Also determine which motors are shared by two or more axes.
 	for (size_t i = 0; i < MaxAxes; ++i)
 	{
 		firstMotor[i] = firstAxis[i] = MaxAxes;
 		lastMotor[i] = lastAxis[i] = 0;
 	}
+
+	AxesBitmap usedMotors = 0;
+	AxesBitmap sharedMotors = 0;
 
 	for (size_t axis = 0; axis < MaxAxes; ++axis)
 	{
@@ -76,6 +80,7 @@ void CoreKinematics::Recalc()
 				{
 					lastMotor[axis] = motor;
 				}
+
 				if (axis < firstAxis[motor])
 				{
 					firstAxis[motor] = axis;
@@ -84,7 +89,28 @@ void CoreKinematics::Recalc()
 				{
 					lastAxis[motor] = axis;
 				}
+
+				if (IsBitSet(usedMotors, motor))
+				{
+					SetBit(sharedMotors, motor);
+				}
+				else
+				{
+					SetBit(usedMotors, motor);
+				}
 			}
+		}
+	}
+
+	// Now we can work out which axes have shared motors
+	axesWithSharedMotors = 0;
+	for (size_t axis = 0; axis < MaxAxes; ++axis)
+	{
+		if (   firstMotor[axis] != axis || lastMotor[axis] != axis			// if we share the motor for another axis
+			|| IsBitSet(sharedMotors, axis)									// or another axis shares our motor
+		   )
+		{
+			SetBit(axesWithSharedMotors, axis);
 		}
 	}
 
@@ -111,9 +137,9 @@ void CoreKinematics::Recalc()
 }
 
 // Return true if the axis doesn't have a single dedicated motor
-bool CoreKinematics::HasSharedMotor(size_t axis) const
+inline bool CoreKinematics::HasSharedMotor(size_t axis) const
 {
-	return firstMotor[axis] != axis || lastMotor[axis] != axis;
+	return IsBitSet(axesWithSharedMotors, axis);
 }
 
 CoreKinematics::CoreKinematics(KinematicsType k) : ZLeadscrewKinematics(k), modified(false)

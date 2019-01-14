@@ -55,8 +55,8 @@ DriveMovement::DriveMovement(DriveMovement *next) : nextDM(next)
 
 // Non static members
 
-// Prepare this DM for a Cartesian axis move
-void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params)
+// Prepare this DM for a Cartesian axis move, returning true if there are steps to do
+bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params)
 {
 	const float stepsPerMm = (float)totalSteps/dda.totalDistance;
 	mp.cart.twoCsquaredTimesMmPerStepDivA = roundU64((double)(StepTimer::StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.acceleration));
@@ -85,10 +85,17 @@ void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	// No reverse phase
 	reverseStartStep = totalSteps + 1;
 	mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD = 0;
+
+	// Prepare for the first step
+	nextStep = 0;
+	nextStepTime = 0;
+	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
+	stepsTillRecalc = 0;							// so that we don't skip the calculation
+	return CalcNextStepTimeCartesian(dda, false);
 }
 
-// Prepare this DM for a Delta axis move
-void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
+// Prepare this DM for a Delta axis move, returning true if there are steps to do
+bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 {
 	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
 	const float A = params.initialX - params.dparams->GetTowerX(drive);
@@ -168,10 +175,17 @@ void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 		mp.delta.decelStartDsK = roundU32(params.decelStartDistance * stepsPerMm * K2);
 		twoDistanceToStopTimesCsquaredDivD = isquare64(params.topSpeedTimesCdivD) + roundU64((params.decelStartDistance * (StepTimer::StepClockRateSquared * 2))/dda.deceleration);
 	}
+
+	// Prepare for the first step
+	nextStep = 0;
+	nextStepTime = 0;
+	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
+	stepsTillRecalc = 0;							// so that we don't skip the calculation
+	return CalcNextStepTimeDelta(dda, false);
 }
 
-// Prepare this DM for an extruder move
-void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation)
+// Prepare this DM for an extruder move, returning true if there are steps to do
+bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation)
 {
 	// Calculate the requested extrusion amount and a few other things
 	float dv = dda.directionVector[drive];
@@ -289,6 +303,13 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 			mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivD = 0;
 		}
 	}
+
+	// Prepare for the first step
+	nextStep = 0;
+	nextStepTime = 0;
+	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
+	stepsTillRecalc = 0;							// so that we don't skip the calculation
+	return CalcNextStepTimeCartesian(dda, false);
 }
 
 void DriveMovement::DebugPrint(char c, bool isDeltaMovement) const

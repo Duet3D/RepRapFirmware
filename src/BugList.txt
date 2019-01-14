@@ -256,6 +256,8 @@ Done in 2.02 release:
 - For PanelDue, send heater data for the first heater in each tool, https://forum.duet3d.com/topic/8458/hide-unused-heater-channels-paneldue-5/4
 - Investigate 12864 display heater fault warning, https://forum.duet3d.com/topic/7718/12864-display-current-tool-temperatures/6
 - PR to allow steps/mm to be quoted in M92, https://forum.duet3d.com/topic/8225/m92-parameter-to-indicate-microstepping/6
+- Generalised Cartesian axes; need to return bitmap of 'axes' involved for stall detect homing, see Platform::Stopped
+- Deffered allocation of DMs: don't create DMs for nonlocal drives, pass #steps to CAN interface instead
 
 2.03 planned:
 - Stop print after a short to ground report? https://forum.duet3d.com/topic/8239/duet-maestro-short-to-ground/10

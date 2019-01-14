@@ -32,6 +32,7 @@ private:
 
 	FixedMatrix<float, MaxAxes, MaxAxes> inverseMatrix;		// maps coordinates to motor positions
 	FixedMatrix<float, MaxAxes, MaxAxes> forwardMatrix;		// maps motor positions to coordinates
+	AxesBitmap axesWithSharedMotors;						// bitmap of axes without exclusive control of the corresponding motor, or that use other motors
 	bool modified;											// true if matrix has been altered
 	uint8_t firstMotor[MaxAxes], lastMotor[MaxAxes];		// first and last motor used by each axis
 	uint8_t firstAxis[MaxAxes], lastAxis[MaxAxes];			// first and last axis that each motor controls

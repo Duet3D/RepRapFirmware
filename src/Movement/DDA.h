@@ -13,6 +13,8 @@
 #include "StepTimer.h"
 #include "GCodes/GCodes.h"			// for class RawMove
 
+#define DEFER_DM_ALLOC	(1)
+
 #ifdef DUET_NG
 #define DDA_LOG_PROBE_CHANGES	0
 #else
@@ -170,17 +172,20 @@ private:
 	{
 		struct
 		{
-			uint8_t endCoordinatesValid : 1;		// True if endCoordinates can be relied on
-			uint8_t isDeltaMovement : 1;			// True if this is a delta printer movement
-			uint8_t canPauseAfter : 1;				// True if we can pause at the end of this move
-			uint8_t isPrintingMove : 1;				// True if this move includes XY movement and extrusion
-			uint8_t usePressureAdvance : 1;			// True if pressure advance should be applied to any forward extrusion
-			uint8_t hadLookaheadUnderrun : 1;		// True if the lookahead queue was not long enough to optimise this move
-			uint8_t xyMoving : 1;					// True if movement along an X axis or the Y axis was requested, even it if's too small to do
-			uint8_t goingSlow : 1;					// True if we have slowed the movement because the Z probe is approaching its threshold
-			uint8_t isLeadscrewAdjustmentMove : 1;	// True if this is a leadscrews adjustment move
-			uint8_t usingStandardFeedrate : 1;		// True if this move uses the standard feed rate
-			uint8_t hadHiccup : 1;					// True if we had a hiccup while executing this move
+			uint16_t endCoordinatesValid : 1;		// True if endCoordinates can be relied on
+			uint16_t isDeltaMovement : 1;			// True if this is a delta printer movement
+			uint16_t canPauseAfter : 1;				// True if we can pause at the end of this move
+			uint16_t isPrintingMove : 1;			// True if this move includes XY movement and extrusion
+			uint16_t usePressureAdvance : 1;		// True if pressure advance should be applied to any forward extrusion
+			uint16_t hadLookaheadUnderrun : 1;		// True if the lookahead queue was not long enough to optimise this move
+			uint16_t xyMoving : 1;					// True if movement along an X axis or the Y axis was requested, even it if's too small to do
+			uint16_t goingSlow : 1;					// True if we have slowed the movement because the Z probe is approaching its threshold
+			uint16_t isLeadscrewAdjustmentMove : 1;	// True if this is a leadscrews adjustment move
+			uint16_t usingStandardFeedrate : 1;		// True if this move uses the standard feed rate
+			uint16_t hadHiccup : 1;					// True if we had a hiccup while executing this move
+#if DEFER_DM_ALLOC
+			uint16_t continuousRotationShortcut : 1; // True if continuous rotation axes take shortcuts
+#endif
 		};
 		uint16_t flags;								// so that we can print all the flags at once for debugging
 	};
