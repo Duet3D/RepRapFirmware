@@ -39,7 +39,7 @@ bool Duet3DFilamentMonitor::Interrupt()
 			{
 				return false;
 			}
-			if (state == RxdState::waitingForStartBit && writePointer == edgeCaptureReadPointer)
+			if (state == RxdState::waitingForStartBit && writePointer == edgeCaptureReadPointer && !HaveIsrStepsCommanded())
 			{
 				wantReading = true;									// if this is a possible start bit, ask for the extrusion commanded
 			}

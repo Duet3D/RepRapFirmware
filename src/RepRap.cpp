@@ -139,11 +139,6 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 		DuetExpansion::Spin(false);
 	}
 #endif
-
-	if (reprap.GetSpinningModule() != moduleFilamentSensors)
-	{
-		FilamentMonitor::Spin(false);
-	}
 }
 
 #endif
@@ -424,7 +419,7 @@ void RepRap::Spin()
 
 	ticksInSpinState = 0;
 	spinningModule = moduleFilamentSensors;
-	FilamentMonitor::Spin(true);
+	FilamentMonitor::Spin();
 
 #if SUPPORT_12864_LCD
 	ticksInSpinState = 0;

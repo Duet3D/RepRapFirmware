@@ -282,6 +282,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	xyMoving = false;
 	bool axesMoving = false;
 	bool extruding = false;												// we set this true if extrusion was commanded, even if it is too small to do
+	bool forwardExtruding = false;
 	bool realMove = false;
 	float accelerations[MaxTotalDrivers];
 	const float * const normalAccelerations = reprap.GetPlatform().Accelerations();
@@ -350,6 +351,10 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 			{
 				realMove = true;
 				extruding = true;
+				if (movement > 0.0)
+				{
+					forwardExtruding = true;
+				}
 #if !DEFER_DM_ALLOC
 				DriveMovement*& pdm = pddm[drive];
 				pdm = DriveMovement::Allocate(drive, DMState::moving);
@@ -410,7 +415,8 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 
 	canPauseAfter = nextMove.canPauseAfter;
 	usingStandardFeedrate = nextMove.usingStandardFeedrate;
-	isPrintingMove = xyMoving && extruding;
+	isPrintingMove = xyMoving && forwardExtruding;				// require forward extrusion so that wipe-while-retracting doesn't count
+	isNonPrintingExtruderMove = extruding && !isPrintingMove;	// flag used by filament monitors - we can ignore Z movement
 	usePressureAdvance = nextMove.usePressureAdvance;
 	hadLookaheadUnderrun = false;
 	hadHiccup = false;

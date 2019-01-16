@@ -78,6 +78,7 @@ public:
 	float GetTotalDistance() const { return totalDistance; }
 	void LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration);	// Limit the speed an acceleration of this move
 
+	// Filament monitor support
 	int32_t GetStepsTaken(size_t drive) const;
 	bool IsNonPrintingExtruderMove(size_t drive) const;
 
@@ -87,6 +88,7 @@ public:
 
 	uint32_t GetClocksNeeded() const { return clocksNeeded; }
 	bool IsGoodToPrepare() const;
+	bool IsNonPrintingExtruderMove() const { return isNonPrintingExtruderMove; }
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const { return laserPwmOrIoBits; }
@@ -183,6 +185,7 @@ private:
 			uint16_t isLeadscrewAdjustmentMove : 1;	// True if this is a leadscrews adjustment move
 			uint16_t usingStandardFeedrate : 1;		// True if this move uses the standard feed rate
 			uint16_t hadHiccup : 1;					// True if we had a hiccup while executing this move
+			uint16_t isNonPrintingExtruderMove : 1;		// True if this move is a fast extruder-only move, probably a retract/re-prime
 #if DEFER_DM_ALLOC
 			uint16_t continuousRotationShortcut : 1; // True if continuous rotation axes take shortcuts
 #endif

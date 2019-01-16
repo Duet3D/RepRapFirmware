@@ -30,10 +30,10 @@ public:
 
 	// Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 	// 'filamentConsumed' is the net amount of extrusion since the last call to this function.
-	virtual FilamentSensorStatus Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed) = 0;
+	virtual FilamentSensorStatus Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) = 0;
 
 	// Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
-	virtual FilamentSensorStatus Clear(bool full) = 0;
+	virtual FilamentSensorStatus Clear() = 0;
 
 	// Print diagnostic info for this sensor
 	virtual void Diagnostics(MessageType mtype, unsigned int extruder) = 0;
@@ -57,7 +57,7 @@ public:
 	static const char *GetErrorMessage(FilamentSensorStatus f);
 
 	// Poll the filament sensors
-	static void Spin(bool full);
+	static void Spin();
 
 	// Handle M591
 	static GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, unsigned int extruder)
@@ -74,6 +74,7 @@ protected:
 	int GetEndstopNumber() const { return endstopNumber; }
 
 	Pin GetPin() const { return pin; }
+	bool HaveIsrStepsCommanded() const { return haveIsrStepsCommanded; }
 
 private:
 	// Create a filament sensor returning null if not a valid sensor type
@@ -85,11 +86,12 @@ private:
 	static FilamentMonitor *filamentSensors[MaxExtruders];
 
 	int32_t isrExtruderStepsCommanded;
+	uint32_t isrMillis;
 	unsigned int extruderNumber;
 	int type;
 	int endstopNumber;
 	Pin pin;
-	bool isrWasNonPrinting;
+	bool isrWasPrinting;
 	bool haveIsrStepsCommanded;
 };
 

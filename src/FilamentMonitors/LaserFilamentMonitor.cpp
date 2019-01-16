@@ -9,6 +9,12 @@
 #include "GCodes/GCodeBuffer.h"
 #include "Platform.h"
 #include "RepRap.h"
+#include "Movement/Move.h"
+
+// Unless we set the option to compare filament on all type of move, we reject readings if the last retract or reprime move wasn't completed
+// well before the start bit was received. This is because those moves have high accelerations and decelerations, so the measurement delay
+// is more likely to cause errors. This constant sets the delay required after a retract or reprime move before we accept the measurement.
+const int32_t SyncDelayMillis = 10;
 
 LaserFilamentMonitor::LaserFilamentMonitor(unsigned int extruder, int type)
 	: Duet3DFilamentMonitor(extruder, type),
@@ -37,7 +43,7 @@ void LaserFilamentMonitor::Reset()
 	extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
 	laserMonitorState = LaserMonitorState::idle;
 	haveStartBitData = false;
-	hadNonPrintingMoveSinceLastSync = true;			// force a resync
+	synced = false;							// force a resync
 }
 
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
@@ -213,64 +219,54 @@ void LaserFilamentMonitor::HandleIncomingData()
 		if (receivedPositionReport)
 		{
 			// We have a completed a position report
-			lastMeasurementTime = millis();
 			const uint16_t positionRange = (val & TypeLaserLargeDataRangeBitMask) ? TypeLaserLargeRange : TypeLaserDefaultRange;
 			const uint16_t positionChange = (val - sensorValue) & (positionRange - 1);			// 10- or 11-bit position change
 			const int32_t movement = (positionChange <= positionRange/2) ? (int32_t)positionChange : (int32_t)positionChange - positionRange;
 			movementMeasuredSinceLastSync += (float)movement * ((val & TypeLaserLargeDataRangeBitMask) ? 0.01 : 0.02);
-			sensorValue = val;
 
-			if (haveStartBitData)					// if we have a synchronised  value for the amount of extrusion commanded
+			const uint32_t now = millis();
+			sensorValue = val;
+			lastMeasurementTime = now;
+
+			if (haveStartBitData)	// if we have a synchronised  value for the amount of extrusion commanded
 			{
-				if (!hadNonPrintingMoveAtStartBit)
+				if (synced)
 				{
-					extrusionCommandedThisSegment += extrusionCommandedAtStartBit;
-					movementMeasuredThisSegment += movementMeasuredSinceLastSync;
+					if (   checkNonPrintingMoves
+						|| (wasPrintingAtStartBit && (int32_t)(lastSyncTime - reprap.GetMove().ExtruderPrintingSince()) >= SyncDelayMillis)
+					   )
+					{
+						// We can use this measurement
+						extrusionCommandedThisSegment += extrusionCommandedAtCandidateStartBit;
+						movementMeasuredThisSegment += movementMeasuredSinceLastSync;
+					}
 				}
+				lastSyncTime = candidateStartBitTime;
+				extrusionCommandedSinceLastSync -= extrusionCommandedAtCandidateStartBit;
 				movementMeasuredSinceLastSync = 0.0;
-			}
-		}
-		else
-		{
-			// A receive error occurred, or we received an error, quality or info report not a position report. Any start bit data we stored is wrong.
-			if (haveStartBitData)
-			{
-				extrusionCommandedSinceLastSync += extrusionCommandedAtStartBit;
-				if (hadNonPrintingMoveAtStartBit)
-				{
-					hadNonPrintingMoveSinceLastSync = true;
-				}
+				synced = checkNonPrintingMoves || wasPrintingAtStartBit;
 			}
 		}
 		haveStartBitData = false;
 	}
 }
 
-// Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
+// Call the following at intervals to check the status. This is only called when printing is in progress.
 // 'filamentConsumed' is the net amount of extrusion since the last call to this function.
 // 'hadNonPrintingMove' is true if filamentConsumed includes extruder movement from non-printing moves.
 // 'fromIsr' is true if this measurement was taken at the end of the ISR because a potential start bit was seen
-FilamentSensorStatus LaserFilamentMonitor::Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed)
+FilamentSensorStatus LaserFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed)
 {
 	// 1. Update the extrusion commanded and whether we have had an extruding but non-printing move
-	if (hadNonPrintingMove && !checkNonPrintingMoves)
-	{
-		hadNonPrintingMoveSinceLastSync = true;
-	}
-	else if (!hadNonPrintingMoveSinceLastSync)			// optimisation to save an unnecessary floating point addition
-	{
-		extrusionCommandedSinceLastSync += filamentConsumed;
-	}
+	extrusionCommandedSinceLastSync += filamentConsumed;
 
 	// 2. If this call passes values synced to the start bit, save the data for the next completed measurement.
 	if (fromIsr && IsWaitingForStartBit())
 	{
-		extrusionCommandedAtStartBit = extrusionCommandedSinceLastSync;
-		hadNonPrintingMoveAtStartBit = hadNonPrintingMoveSinceLastSync;
+		extrusionCommandedAtCandidateStartBit = extrusionCommandedSinceLastSync;
+		wasPrintingAtStartBit = isPrinting;
+		candidateStartBitTime = isrMillis;
 		haveStartBitData = true;
-
-		extrusionCommandedSinceLastSync = 0.0;
-		hadNonPrintingMoveSinceLastSync = false;
 	}
 
 	// 3. Process the receive buffer and update everything if we have received anything or had a receive error
@@ -278,27 +274,24 @@ FilamentSensorStatus LaserFilamentMonitor::Check(bool full, bool hadNonPrintingM
 
 	// 4. Decide whether it is time to do a comparison, and return the status
 	FilamentSensorStatus ret = FilamentSensorStatus::ok;
-	if (full)
+	if (sensorError)
 	{
-		if (sensorError)
-		{
-			ret = FilamentSensorStatus::sensorError;
-		}
-		else if ((sensorValue & switchOpenMask) != 0)
-		{
-			ret = FilamentSensorStatus::noFilament;
-		}
-		else if (extrusionCommandedThisSegment >= minimumExtrusionCheckLength)
-		{
-			ret = CheckFilament(extrusionCommandedThisSegment, movementMeasuredThisSegment, false);
-			extrusionCommandedThisSegment = movementMeasuredThisSegment = 0.0;
-		}
-		else if (extrusionCommandedThisSegment + extrusionCommandedSinceLastSync >= minimumExtrusionCheckLength * 2 && millis() - lastMeasurementTime > 220 && !IsReceiving())
-		{
-			// A sync is overdue
-			ret = CheckFilament(extrusionCommandedThisSegment + extrusionCommandedSinceLastSync, movementMeasuredThisSegment + movementMeasuredSinceLastSync, true);
-			extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
-		}
+		ret = FilamentSensorStatus::sensorError;
+	}
+	else if ((sensorValue & switchOpenMask) != 0)
+	{
+		ret = FilamentSensorStatus::noFilament;
+	}
+	else if (extrusionCommandedThisSegment >= minimumExtrusionCheckLength)
+	{
+		ret = CheckFilament(extrusionCommandedThisSegment, movementMeasuredThisSegment, false);
+		extrusionCommandedThisSegment = movementMeasuredThisSegment = 0.0;
+	}
+	else if (extrusionCommandedThisSegment + extrusionCommandedSinceLastSync >= minimumExtrusionCheckLength * 2 && millis() - lastMeasurementTime > 220 && !IsReceiving())
+	{
+		// A sync is overdue
+		ret = CheckFilament(extrusionCommandedThisSegment + extrusionCommandedSinceLastSync, movementMeasuredThisSegment + movementMeasuredSinceLastSync, true);
+		extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
 	}
 
 	return ret;
@@ -383,23 +376,20 @@ FilamentSensorStatus LaserFilamentMonitor::CheckFilament(float amountCommanded, 
 	return ret;
 }
 
-// Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
-FilamentSensorStatus LaserFilamentMonitor::Clear(bool full)
+// Clear the measurement state. Called when we are not printing a file. Return the present/not present status if available.
+FilamentSensorStatus LaserFilamentMonitor::Clear()
 {
+	Reset();							// call this first so that haveStartBitData and synced are false when we call HandleIncomingData
 	HandleIncomingData();
-	Reset();
 
 	FilamentSensorStatus ret = FilamentSensorStatus::ok;
-	if (full)
+	if (sensorError)
 	{
-		if (sensorError)
-		{
-			ret = FilamentSensorStatus::sensorError;
-		}
-		else if ((sensorValue & switchOpenMask) != 0)
-		{
-			ret = FilamentSensorStatus::noFilament;
-		}
+		ret = FilamentSensorStatus::sensorError;
+	}
+	else if ((sensorValue & switchOpenMask) != 0)
+	{
+		ret = FilamentSensorStatus::noFilament;
 	}
 	return ret;
 }

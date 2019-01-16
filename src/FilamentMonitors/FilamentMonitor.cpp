@@ -168,12 +168,13 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 	FilamentMonitor * const fm = static_cast<FilamentMonitor*>(param.vp);
 	if (fm->Interrupt())
 	{
-		fm->isrExtruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(fm->extruderNumber, fm->isrWasNonPrinting);
+		fm->isrExtruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(fm->extruderNumber, fm->isrWasPrinting);
 		fm->haveIsrStepsCommanded = true;
+		fm->isrMillis = millis();
 	}
 }
 
-/*static*/ void FilamentMonitor::Spin(bool full)
+/*static*/ void FilamentMonitor::Spin()
 {
 	MutexLocker lock(filamentSensorsMutex);
 
@@ -184,14 +185,16 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 		{
 			FilamentMonitor& fs = *filamentSensors[extruder];
 			GCodes& gCodes = reprap.GetGCodes();
-			bool wasNonPrinting;
+			bool isPrinting;
 			bool fromIsr;
 			int32_t extruderStepsCommanded;
+			uint32_t isrMillis;
 			cpu_irq_disable();
 			if (fs.haveIsrStepsCommanded)
 			{
 				extruderStepsCommanded = fs.isrExtruderStepsCommanded;
-				wasNonPrinting = fs.isrWasNonPrinting;
+				isPrinting = fs.isrWasPrinting;
+				isrMillis = fs.isrMillis;
 				fs.haveIsrStepsCommanded = false;
 				cpu_irq_enable();
 				fromIsr = true;
@@ -199,14 +202,15 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 			else
 			{
 				cpu_irq_enable();
-				extruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(extruder, wasNonPrinting);		// get and clear the net extrusion commanded
+				extruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(extruder, isPrinting);		// get and clear the net extrusion commanded
 				fromIsr = false;
+				isrMillis = 0;
 			}
 			if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
 			{
 				const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(extruder + gCodes.GetTotalAxes());
-				const FilamentSensorStatus fstat = fs.Check(full, wasNonPrinting, fromIsr, extrusionCommanded);
-				if (full && fstat != FilamentSensorStatus::ok)
+				const FilamentSensorStatus fstat = fs.Check(isPrinting, fromIsr, isrMillis, extrusionCommanded);
+				if (fstat != FilamentSensorStatus::ok)
 				{
 					if (reprap.Debug(moduleFilamentSensors))
 					{
@@ -220,7 +224,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 			}
 			else
 			{
-				fs.Clear(full);
+				fs.Clear();
 			}
 		}
 	}

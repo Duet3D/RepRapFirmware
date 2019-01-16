@@ -16,8 +16,8 @@ public:
 	LaserFilamentMonitor(unsigned int extruder, int type);
 
 	bool Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) override;
-	FilamentSensorStatus Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed) override;
-	FilamentSensorStatus Clear(bool full) override;
+	FilamentSensorStatus Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) override;
+	FilamentSensorStatus Clear() override;
 	void Diagnostics(MessageType mtype, unsigned int extruder) override;
 
 private:
@@ -74,10 +74,17 @@ private:
 	bool checkNonPrintingMoves;
 
 	// Other data
-	uint32_t lastMeasurementTime;							// the last time we received a value
 	uint32_t framingErrorCount;								// the number of framing errors we received
 	uint32_t parityErrorCount;								// the number of words with bad parity we received
 
+	uint32_t candidateStartBitTime;							// the time that we received a possible start bit
+	float extrusionCommandedAtCandidateStartBit;			// the amount of extrusion commanded since the previous comparison when we received the possible start bit
+
+	uint32_t lastSyncTime;									// the last time we took a measurement that was synced to a start bit
+	float extrusionCommandedSinceLastSync;
+	float movementMeasuredSinceLastSync;
+
+	uint32_t lastMeasurementTime;							// the last time we received a value
 	uint16_t sensorValue;									// last known filament position (10 or 11 bits)
 	uint16_t switchOpenMask;								// mask to isolate the switch open bit(s) from the sensor value
 	uint8_t version;										// sensor/firmware version
@@ -87,12 +94,9 @@ private:
 	uint8_t lastErrorCode;									// the last error code received
 	bool sensorError;										// true if received an error report (cleared by a position report)
 
-	float extrusionCommandedAtStartBit;						// the amount of extrusion commanded since the previous comparison when we received the start bit
-	float extrusionCommandedSinceLastSync;
-	float movementMeasuredSinceLastSync;
-	bool hadNonPrintingMoveAtStartBit;
-	bool hadNonPrintingMoveSinceLastSync;
+	bool wasPrintingAtStartBit;
 	bool haveStartBitData;
+	bool synced;
 
 	float extrusionCommandedThisSegment;					// the amount of extrusion commanded since we last did a comparison
 	float movementMeasuredThisSegment;						// the accumulated movement since the previous comparison
