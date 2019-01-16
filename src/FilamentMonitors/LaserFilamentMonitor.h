@@ -76,6 +76,7 @@ private:
 	// Other data
 	uint32_t framingErrorCount;								// the number of framing errors we received
 	uint32_t parityErrorCount;								// the number of words with bad parity we received
+	uint32_t overdueCount;									// the number of times a position report was overdue
 
 	uint32_t candidateStartBitTime;							// the time that we received a possible start bit
 	float extrusionCommandedAtCandidateStartBit;			// the amount of extrusion commanded since the previous comparison when we received the possible start bit

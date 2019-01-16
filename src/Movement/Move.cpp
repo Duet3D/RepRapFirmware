@@ -211,9 +211,6 @@ void Move::Spin()
 #endif
 						  ddaRingAddPointer->GetState() == DDA::empty
 					   && ddaRingAddPointer->GetNext()->GetState() != DDA::provisional		// function Prepare needs to access the endpoints in the previous move, so don't change them
-#if !DEFER_DM_ALLOC
-					   && DriveMovement::NumFree() >= (int)MaxTotalDrivers					// check that we won't run out of DMs
-#endif
 					  );
 	if (canAddMove)
 	{
@@ -323,9 +320,7 @@ void Move::Spin()
 #if SUPPORT_CAN_EXPANSION
 				&& CanInterface::CanPrepareMove()
 #endif
-#if DEFER_DM_ALLOC
 				&& DriveMovement::NumFree() >= (int)MaxTotalDrivers	// check that we won't run out of DMs
-#endif
 			   )
 			{
 				dda->Prepare(simulationMode, extrusionPending);

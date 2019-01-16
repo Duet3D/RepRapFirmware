@@ -29,7 +29,7 @@ RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int extrud
 void RotatingMagnetFilamentMonitor::Init()
 {
 	sensorValue = 0;
-	framingErrorCount = 0;
+	framingErrorCount = overrunErrorCount = polarityErrorCount = overdueCount = 0;
 	calibrationStarted = dataReceived = false;
 	lastMeasurementTime = 0;
 	InitReceiveBuffer();
@@ -211,7 +211,10 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::Check(bool isPrinting, bool 
 		ret = CheckFilament(extrusionCommandedThisSegment, movementMeasuredThisSegment, false);
 		extrusionCommandedThisSegment = movementMeasuredThisSegment = 0.0;
 	}
-	else if (extrusionCommandedThisSegment + extrusionCommandedSinceLastSync >= minimumExtrusionCheckLength * 2 && millis() - lastMeasurementTime > 220 && !IsReceiving())
+	else if (   extrusionCommandedThisSegment + extrusionCommandedSinceLastSync >= minimumExtrusionCheckLength * 3
+			 && millis() - lastMeasurementTime > 500
+			 && !IsReceiving()
+			)
 	{
 		// A sync is overdue
 		ret = CheckFilament(extrusionCommandedThisSegment + extrusionCommandedSinceLastSync, movementMeasuredThisSegment + movementMeasuredSinceLastSync, true);
@@ -288,19 +291,12 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCo
 // Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
 FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear()
 {
-	HandleIncomingData();								// to keep the diagnostics up to date
 	Reset();
+	HandleIncomingData();								// to keep the diagnostics up to date
 
-	FilamentSensorStatus ret = FilamentSensorStatus::ok;
-	if ((sensorValue & TypeMagnetErrorMask) != 0)
-	{
-		ret = FilamentSensorStatus::sensorError;
-	}
-	else if ((sensorValue & switchOpenMask) != 0)
-	{
-		ret = FilamentSensorStatus::noFilament;
-	}
-	return ret;
+	return ((sensorValue & TypeMagnetErrorMask) != 0) ? FilamentSensorStatus::sensorError
+			: ((sensorValue & switchOpenMask) != 0) ? FilamentSensorStatus::noFilament
+				: FilamentSensorStatus::ok;
 }
 
 // Print diagnostic info for this sensor
@@ -310,15 +306,11 @@ void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int 
 									: ((sensorValue & TypeMagnetErrorMask) != 0) ? "error"
 										: ((sensorValue & switchOpenMask) != 0) ? "no filament"
 											: "ok";
-	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: position %.2f, %s, ", extruder, (double)GetCurrentPosition(), statusText);
-	if (dataReceived)
-	{
-		reprap.GetPlatform().MessageF(mtype, "%" PRIu32 " framing errors, ", framingErrorCount);
-	}
+	reprap.GetPlatform().MessageF(mtype, "Extruder %u: pos %.2f, %s, ", extruder, (double)GetCurrentPosition(), statusText);
 	if (calibrationStarted && fabsf(totalMovementMeasured) > 1.0 && totalExtrusionCommanded > 20.0)
 	{
 		const float measuredMmPerRev = totalExtrusionCommanded/totalMovementMeasured;
-		reprap.GetPlatform().MessageF(mtype, "measured sensitivity %.2fmm/rev, measured minimum %ld%%, maximum %ld%% over %.1fmm\n",
+		reprap.GetPlatform().MessageF(mtype, "measured sens %.2fmm/rev min %ld%% max %ld%% over %.1fmm",
 			(double)measuredMmPerRev,
 			lrintf(100 * minMovementRatio),
 			lrintf(100 * maxMovementRatio),
@@ -326,7 +318,12 @@ void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int 
 	}
 	else
 	{
-		reprap.GetPlatform().Message(mtype, "no calibration data\n");
+		reprap.GetPlatform().Message(mtype, "no calibration data");
+	}
+	if (dataReceived)
+	{
+		reprap.GetPlatform().MessageF(mtype, ", errs: frame %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32  " ovdue %" PRIu32 "\n",
+			framingErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
 	}
 }
 

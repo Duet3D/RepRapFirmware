@@ -13,12 +13,10 @@
 #include "StepTimer.h"
 #include "GCodes/GCodes.h"			// for class RawMove
 
-#define DEFER_DM_ALLOC	(1)
-
 #ifdef DUET_NG
-#define DDA_LOG_PROBE_CHANGES	0
+# define DDA_LOG_PROBE_CHANGES	0
 #else
-#define DDA_LOG_PROBE_CHANGES	0		// save memory on the wired Duet
+# define DDA_LOG_PROBE_CHANGES	0	// save memory on the wired Duet
 #endif
 
 /**
@@ -80,7 +78,6 @@ public:
 
 	// Filament monitor support
 	int32_t GetStepsTaken(size_t drive) const;
-	bool IsNonPrintingExtruderMove(size_t drive) const;
 
 	float GetProportionDone(bool moveWasAborted) const;						// Return the proportion of extrusion for the complete multi-segment move already done
 
@@ -142,13 +139,14 @@ public:
 	static uint32_t lastDirChangeTime;								// when we last change the DIR signal to a slow driver
 
 private:
-	DriveMovement *FindDM(size_t drive) const;
+	DriveMovement *FindDM(size_t drive) const;						// find the DM for a drive if there is one even if it is completed
+	DriveMovement *FindActiveDM(size_t drive) const;				// find the DM for a drive if there is one but only if it is active
 	void RecalculateMove() __attribute__ ((hot));
 	void MatchSpeeds() __attribute__ ((hot));
 	void ReduceHomingSpeed();										// called to reduce homing speed when a near-endstop is triggered
 	void StopDrive(size_t drive);									// stop movement of a drive and recalculate the endpoint
 	void InsertDM(DriveMovement *dm) __attribute__ ((hot));
-	void RemoveDM(size_t drive);
+	void DeactivateDM(size_t drive);
 	void ReleaseDMs();
 	bool IsDecelerationMove() const;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const;								// return true if this move is or have been might have been intended to be an acceleration-only move
@@ -186,9 +184,7 @@ private:
 			uint16_t usingStandardFeedrate : 1;		// True if this move uses the standard feed rate
 			uint16_t hadHiccup : 1;					// True if we had a hiccup while executing this move
 			uint16_t isNonPrintingExtruderMove : 1;		// True if this move is a fast extruder-only move, probably a retract/re-prime
-#if DEFER_DM_ALLOC
 			uint16_t continuousRotationShortcut : 1; // True if continuous rotation axes take shortcuts
-#endif
 		};
 		uint16_t flags;								// so that we can print all the flags at once for debugging
 	};
@@ -251,14 +247,41 @@ private:
 	void LogProbePosition();
 #endif
 
-    DriveMovement* firstDM;						// list of contained DMs that need steps, in step time order
-	DriveMovement *pddm[MaxTotalDrivers];		// These describe the state of each drive movement
+    DriveMovement* activeDMs;					// list of associated DMs that need steps, in step time order
+    DriveMovement* completedDMs;				// list of associated DMs that don't need any more steps
 };
 
-// Find the DriveMovement record for a given drive, or return nullptr if there isn't one
+// Find the DriveMovement record for a given drive even if it is completed, or return nullptr if there isn't one
 inline DriveMovement *DDA::FindDM(size_t drive) const
 {
-	return pddm[drive];
+	for (DriveMovement* dm = activeDMs; dm != nullptr; dm = dm->nextDM)
+	{
+		if (dm->drive == drive)
+		{
+			return dm;
+		}
+	}
+	for (DriveMovement* dm = completedDMs; dm != nullptr; dm = dm->nextDM)
+	{
+		if (dm->drive == drive)
+		{
+			return dm;
+		}
+	}
+	return nullptr;
+}
+
+// Find the active DriveMovement record for a given drive, or return nullptr if there isn't one
+inline DriveMovement *DDA::FindActiveDM(size_t drive) const
+{
+	for (DriveMovement* dm = activeDMs; dm != nullptr; dm = dm->nextDM)
+	{
+		if (dm->drive == drive)
+		{
+			return dm;
+		}
+	}
+	return nullptr;
 }
 
 // Force an end point
@@ -273,7 +296,7 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 // Get the current full step interval for this axis or extruder
 inline uint32_t DDA::GetStepInterval(size_t axis, uint32_t microstepShift) const
 {
-	const DriveMovement * const dm = FindDM(axis);
+	const DriveMovement * const dm = FindActiveDM(axis);
 	return (dm != nullptr) ? dm->GetStepInterval(microstepShift) : 0;
 }
 

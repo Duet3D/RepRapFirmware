@@ -263,6 +263,7 @@ Done in 2.02 release:
 - DAA to handle requested accel/decl > max
 - Reports that DueX5 endstops stop working after a while, https://forum.duet3d.com/topic/8284/firmware-2-02-released/9
 - I2C error recovery?
+- Test babystepping with the deferred DM allocation
 
 2.03 planned:
 - Stop print after a short to ground report? https://forum.duet3d.com/topic/8239/duet-maestro-short-to-ground/10

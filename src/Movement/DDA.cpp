@@ -115,22 +115,25 @@ void DDA::LogProbePosition()
 
 DDA::DDA(DDA* n) : next(n), prev(nullptr), state(empty)
 {
-	for (DriveMovement*& p : pddm)
-	{
-		p = nullptr;
-	}
+	activeDMs = completedDMs = nullptr;
 }
 
 void DDA::ReleaseDMs()
 {
-	for (DriveMovement*& p : pddm)
+	// Normally there should be no active DMs, but release any that there may be
+	for (DriveMovement* dm = activeDMs; dm != nullptr; )
 	{
-		if (p != nullptr)
-		{
-			DriveMovement::Release(p);
-			p = nullptr;
-		}
+		DriveMovement* const next = dm->nextDM;
+		DriveMovement::Release(dm);
+		dm = next;
 	}
+	for (DriveMovement* dm = completedDMs; dm != nullptr; )
+	{
+		DriveMovement* const next = dm->nextDM;
+		DriveMovement::Release(dm);
+		dm = next;
+	}
+	activeDMs = completedDMs = nullptr;
 }
 
 // Return the number of clocks this DDA still needs to execute.
@@ -148,7 +151,7 @@ pre(state == executing || state == frozen || state == completed)
 // for multiple motors simultaneously, there is no need to preserve round-robin order.
 inline void DDA::InsertDM(DriveMovement *dm)
 {
-	DriveMovement **dmp = &firstDM;
+	DriveMovement **dmp = &activeDMs;
 	while (*dmp != nullptr && (*dmp)->nextStepTime < dm->nextStepTime)
 	{
 		dmp = &((*dmp)->nextDM);
@@ -157,17 +160,20 @@ inline void DDA::InsertDM(DriveMovement *dm)
 	*dmp = dm;
 }
 
-// Remove this drive from the list of drives with steps due
+// Remove this drive from the list of drives with steps due and put it in the completed list
 // Called from the step ISR only.
-void DDA::RemoveDM(size_t drive)
+void DDA::DeactivateDM(size_t drive)
 {
-	DriveMovement **dmp = &firstDM;
+	DriveMovement **dmp = &activeDMs;
 	while (*dmp != nullptr)
 	{
 		DriveMovement * const dm = *dmp;
 		if (dm->drive == drive)
 		{
 			(*dmp) = dm->nextDM;
+			dm->state = DMState::idle;
+			dm->nextDM = completedDMs;
+			completedDMs = dm;
 			break;
 		}
 		dmp = &(dm->nextDM);
@@ -213,20 +219,13 @@ void DDA::DebugPrint() const
 void DDA::DebugPrintAll() const
 {
 	DebugPrint();
-	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	for (size_t axis = 0; axis < numAxes; ++axis)
+	for (DriveMovement* dm = activeDMs; dm != nullptr; dm = dm->nextDM)
 	{
-		if (pddm[axis] != nullptr)
-		{
-			pddm[axis]->DebugPrint(reprap.GetGCodes().GetAxisLetters()[axis], isDeltaMovement);
-		}
+		dm->DebugPrint(isDeltaMovement);
 	}
-	for (size_t i = numAxes; i < MaxTotalDrivers; ++i)
+	for (DriveMovement* dm = completedDMs; dm != nullptr; dm = dm->nextDM)
 	{
-		if (pddm[i] != nullptr && pddm[i]->state != DMState::idle)
-		{
-			pddm[i]->DebugPrint((char)('0' + (i - numAxes)), false);
-		}
+		dm->DebugPrint(isDeltaMovement);
 	}
 }
 
@@ -301,20 +300,6 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 			}
 
 			int32_t delta = endPoint[drive] - positionNow[drive];
-#if !DEFER_DM_ALLOC
-			if (k.IsContinuousRotationAxis(drive) && nextMove.moveType == 0)
-			{
-				const int32_t stepsPerRotation = lrintf(360.0 * reprap.GetPlatform().DriveStepsPerUnit(drive));
-				if (delta > stepsPerRotation/2)
-				{
-					delta -= stepsPerRotation;
-				}
-				else if (delta < -stepsPerRotation/2)
-				{
-					delta += stepsPerRotation;
-				}
-			}
-#endif
 			if (doMotorMapping)
 			{
 				const float positionDelta = nextMove.coords[drive] - prev->GetEndCoordinate(drive, false);
@@ -333,12 +318,6 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 			{
 				realMove = true;
 				axesMoving = true;
-#if !DEFER_DM_ALLOC
-				DriveMovement*& pdm = pddm[drive];
-				pdm = DriveMovement::Allocate(drive, DMState::moving);
-				pdm->totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
-				pdm->direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
-#endif
 			}
 		}
 		else
@@ -355,12 +334,6 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 				{
 					forwardExtruding = true;
 				}
-#if !DEFER_DM_ALLOC
-				DriveMovement*& pdm = pddm[drive];
-				pdm = DriveMovement::Allocate(drive, DMState::moving);
-				pdm->totalSteps = 1;						// this will be recalculated later
-				pdm->direction = (movement > 0.0);			// set direction of net movement
-#endif
 				if (xyMoving && nextMove.usePressureAdvance)
 				{
 					const float compensationTime = reprap.GetPlatform().GetPressureAdvance(drive - numTotalAxes);
@@ -388,23 +361,6 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 		return false;
 	}
 
-#if !DEFER_DM_ALLOC
-	// 2a. If it's a delta move, we need a DM for each tower even if its carriage has no net movement
-	if (isDeltaMovement)
-	{
-		for (size_t drive = 0; drive < DELTA_AXES; ++drive)
-		{
-			DriveMovement*& pdm = pddm[drive];
-			if (pdm == nullptr)
-			{
-				pdm = DriveMovement::Allocate(drive, DMState::moving);
-				pdm->totalSteps = 0;
-				pdm->direction = true;
-			}
-		}
-	}
-#endif
-
 	// 3. Store some values
 	xAxes = nextMove.xAxes;
 	yAxes = nextMove.yAxes;
@@ -425,10 +381,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a raw motor move
 	endCoordinatesValid = (endStopsToCheck == 0) && doMotorMapping;
-
-#if DEFER_DM_ALLOC
 	continuousRotationShortcut = (nextMove.moveType == 0);
-#endif
 
 #if SUPPORT_IOBITS
 	laserPwmOrIoBits = nextMove.laserPwmOrIoBits;
@@ -558,12 +511,6 @@ bool DDA::Init(const float_t adjustments[MaxTotalDrivers])
 		if (delta != 0)
 		{
 			realMove = true;
-#if !DEFER_DM_ALLOC
-			DriveMovement*& pdm = pddm[drive];
-			pdm = DriveMovement::Allocate(drive + MaxTotalDrivers, DMState::moving);
-			pdm->totalSteps = labs(delta);
-			pdm->direction = (delta >= 0);
-#endif
 		}
 	}
 
@@ -584,9 +531,7 @@ bool DDA::Init(const float_t adjustments[MaxTotalDrivers])
 	hadLookaheadUnderrun = false;
 	hadHiccup = false;
 	goingSlow = false;
-#if DEFER_DM_ALLOC
 	continuousRotationShortcut = false;
-#endif
 	endStopsToCheck = 0;
 	virtualExtruderPosition = prev->virtualExtruderPosition;
 	xAxes = prev->xAxes;
@@ -812,29 +757,14 @@ float DDA::AdvanceBabyStepping(float amount)
 		float babySteppingToDo = 0.0;
 		if (amount != 0.0 && cdda->xyMoving)
 		{
-#if !DEFER_DM_ALLOC
-			// If not on a delta printer, check that we have a DM for the Z axis
-			bool ok = (cdda->isDeltaMovement || cdda->pddm[Z_AXIS] != nullptr);
-			if (!ok)
-			{
-				cdda->pddm[Z_AXIS] = DriveMovement::Allocate(Z_AXIS, DMState::idle);
-				ok = (cdda->pddm[Z_AXIS] != nullptr);
-			}
-
-			if (ok)
-			{
-#endif
-				// Limit the babystepping Z speed to the lower of 0.1 times the original XYZ speed and 0.5 times the Z jerk
-				const float maxBabySteppingAmount = cdda->totalDistance * min<float>(0.1, 0.5 * reprap.GetPlatform().GetInstantDv(Z_AXIS)/cdda->topSpeed);
-				babySteppingToDo = constrain<float>(amount, -maxBabySteppingAmount, maxBabySteppingAmount);
-				cdda->directionVector[Z_AXIS] += babySteppingToDo/cdda->totalDistance;
-				cdda->totalDistance *= cdda->NormaliseXYZ();
-				cdda->RecalculateMove();
-				babySteppingDone += babySteppingToDo;
-				amount -= babySteppingToDo;
-#if !DEFER_DM_ALLOC
-			}
-#endif
+			// Limit the babystepping Z speed to the lower of 0.1 times the original XYZ speed and 0.5 times the Z jerk
+			const float maxBabySteppingAmount = cdda->totalDistance * min<float>(0.1, 0.5 * reprap.GetPlatform().GetInstantDv(Z_AXIS)/cdda->topSpeed);
+			babySteppingToDo = constrain<float>(amount, -maxBabySteppingAmount, maxBabySteppingAmount);
+			cdda->directionVector[Z_AXIS] += babySteppingToDo/cdda->totalDistance;
+			cdda->totalDistance *= cdda->NormaliseXYZ();
+			cdda->RecalculateMove();
+			babySteppingDone += babySteppingToDo;
+			amount -= babySteppingToDo;
 		}
 
 		// Even if there is no babystepping to do this move, we may need to adjust the end coordinates
@@ -844,72 +774,11 @@ float DDA::AdvanceBabyStepping(float amount)
 			for (size_t tower = 0; tower < DELTA_AXES; ++tower)
 			{
 				cdda->endPoint[tower] += (int32_t)(babySteppingDone * reprap.GetPlatform().DriveStepsPerUnit(tower));
-#if !DEFER_DM_ALLOC
-				if (babySteppingToDo != 0.0)
-				{
-					int32_t steps = (int32_t)(babySteppingToDo * reprap.GetPlatform().DriveStepsPerUnit(tower));
-					DriveMovement* const pdm = cdda->pddm[tower];
-					if (pdm != nullptr)
-					{
-						if (pdm->direction)		// if moving up
-						{
-							steps += (int32_t)pdm->totalSteps;
-						}
-						else
-						{
-							steps -= (int32_t)pdm->totalSteps;
-						}
-						if (steps >= 0)
-						{
-							pdm->direction = true;
-							pdm->totalSteps = (uint32_t)steps;
-						}
-						else
-						{
-							pdm->direction = false;
-							pdm->totalSteps = (uint32_t)(-steps);
-						}
-					}
-				}
-#endif
 			}
 		}
 		else
 		{
 			cdda->endPoint[Z_AXIS] += (int32_t)(babySteppingDone * reprap.GetPlatform().DriveStepsPerUnit(Z_AXIS));
-#if !DEFER_DM_ALLOC
-			if (babySteppingToDo != 0.0)
-			{
-				int32_t steps = (int32_t)(babySteppingToDo * reprap.GetPlatform().DriveStepsPerUnit(Z_AXIS));
-				DriveMovement* const pdm = cdda->pddm[Z_AXIS];			// must be non-null because we allocated one earlier if necessary
-				if (pdm->state == DMState::moving)
-				{
-					if (pdm->direction)		// if moving up
-					{
-						steps += (int32_t)pdm->totalSteps;
-					}
-					else
-					{
-						steps -= (int32_t)pdm->totalSteps;
-					}
-				}
-				else
-				{
-					pdm->state = DMState::moving;
-				}
-
-				if (steps >= 0)
-				{
-					pdm->direction = true;
-					pdm->totalSteps = (uint32_t)steps;
-				}
-				else
-				{
-					pdm->direction = false;
-					pdm->totalSteps = (uint32_t)(-steps);
-				}
-			}
-#endif
 		}
 
 		// Now do the next move
@@ -994,11 +863,7 @@ void DDA::RecalculateMove()
 		const Platform& p = reprap.GetPlatform();
 		for (size_t drive = 0; drive < MaxTotalDrivers; ++drive)
 		{
-#if DEFER_DM_ALLOC
 			if (endSpeed * fabsf(directionVector[drive]) > p.GetInstantDv(drive))
-#else
-			if (pddm[drive] != nullptr && pddm[drive]->state == DMState::moving && endSpeed * fabsf(directionVector[drive]) > p.GetInstantDv(drive))
-#endif
 			{
 				canPauseAfter = false;
 				break;
@@ -1018,13 +883,7 @@ void DDA::MatchSpeeds()
 {
 	for (size_t drive = 0; drive < MaxTotalDrivers; ++drive)
 	{
-#if DEFER_DM_ALLOC
 		if (directionVector[drive] != 0.0 || next->directionVector[drive] != 0.0)
-#else
-		if (   (pddm[drive] != nullptr && pddm[drive]->state == DMState::moving)
-			|| (next->pddm[drive] != nullptr && next->pddm[drive]->state == DMState::moving)
-		   )
-#endif
 		{
 			const float totalFraction = fabsf(directionVector[drive] - next->directionVector[drive]);
 			const float jerk = totalFraction * targetNextSpeed;
@@ -1275,7 +1134,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 		topSpeedTimesCdivDPlusDecelStartClocks = params.topSpeedTimesCdivD + (uint32_t)roundU32(decelStartTime * StepTimer::StepClockRate);
 		extraAccelerationClocks = roundS32((accelStopTime - (accelDistance/topSpeed)) * StepTimer::StepClockRate);
 
-		firstDM = nullptr;
+		activeDMs = completedDMs = nullptr;
 
 #if SUPPORT_CAN_EXPANSION
 		CanInterface::StartMovement(*this);
@@ -1286,22 +1145,14 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 		Platform& platform = reprap.GetPlatform();
 		for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
 		{
-#if !DEFER_DM_ALLOC
-			DriveMovement* const pdm = FindDM(drive);
-			if (pdm != nullptr && pdm->state == DMState::moving)
-			{
-#endif
 				if (isLeadscrewAdjustmentMove)
 				{
-#if DEFER_DM_ALLOC
 					const int32_t delta = lrintf(directionVector[drive] * reprap.GetPlatform().DriveStepsPerUnit(Z_AXIS));
 					if (delta != 0)
 					{
 						DriveMovement* const pdm = DriveMovement::Allocate(drive + MaxTotalDrivers, DMState::moving);
-						pddm[drive] = pdm;
 						pdm->totalSteps = labs(delta);
 						pdm->direction = (delta >= 0);
-#endif
 						if (drive < NumDirectDrivers)							// if the drive is local
 						{
 							reprap.GetPlatform().EnableDrive(Z_AXIS);			// ensure all Z motors are enabled
@@ -1317,6 +1168,8 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 							else
 							{
 								pdm->state = DMState::idle;
+								pdm->nextDM = completedDMs;
+								completedDMs = pdm;
 							}
 						}
 						else
@@ -1325,21 +1178,19 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 #if SUPPORT_CAN_EXPANSION
 							//TODO support leadscrew adjustment moves on remote drivers
 #endif
+							pdm->state = DMState::idle;
+							pdm->nextDM = completedDMs;
+							completedDMs = pdm;
 						}
-#if DEFER_DM_ALLOC
 					}
-#endif
 				}
 				else if (isDeltaMovement && drive < DELTA_AXES)
 				{
-#if DEFER_DM_ALLOC
 					// On a delta we need to allocate a DM for all three towers even if there is no net movement
 					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
-					pddm[drive] = pdm;
 					const int32_t delta = endPoint[drive] - prev->endPoint[drive];
 					pdm->totalSteps = labs(delta);
 					pdm->direction = (delta >= 0);
-#endif
 					if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 					{
 						reprap.GetPlatform().EnableDrive(drive);
@@ -1355,11 +1206,15 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 						else
 						{
 							pdm->state = DMState::idle;
+							pdm->nextDM = completedDMs;
+							completedDMs = pdm;
 						}
 					}
 					else
 					{
 						pdm->state = DMState::idle;								// no local drivers involved
+						pdm->nextDM = completedDMs;
+						completedDMs = pdm;
 					}
 
 #if SUPPORT_CAN_EXPANSION
@@ -1377,12 +1232,10 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 				else if (drive < numTotalAxes)
 				{
 					// It's a linear drive
-#if DEFER_DM_ALLOC
 					int32_t delta = endPoint[drive] - prev->endPoint[drive];
 					if (delta != 0)
 					{
 						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
-						pddm[drive] = pdm;
 						if (continuousRotationShortcut && reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
 						{
 							// This is a continuous rotation axis, so we may have adjusted the move to cross the 180 degrees position
@@ -1398,7 +1251,6 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 						}
 						pdm->totalSteps = labs(delta);
 						pdm->direction = (delta >= 0);
-#endif
 						if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 						{
 							reprap.GetPlatform().EnableDrive(drive);
@@ -1414,11 +1266,15 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 							else
 							{
 								pdm->state = DMState::idle;
+								pdm->nextDM = completedDMs;
+								completedDMs = pdm;
 							}
 						}
 						else
 						{
 							pdm->state = DMState::idle;								// no local drivers involved
+							pdm->nextDM = completedDMs;
+							completedDMs = pdm;
 						}
 
 #if SUPPORT_CAN_EXPANSION
@@ -1432,19 +1288,14 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 							}
 						}
 #endif
-#if DEFER_DM_ALLOC
 					}
-#endif
 				}
 				else
 				{
 					// It's an extruder drive
-#if DEFER_DM_ALLOC
 					if (directionVector[drive] != 0.0)
 					{
 						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
-						pddm[drive] = pdm;
-#endif
 						if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 						{
 							reprap.GetPlatform().EnableDrive(drive);
@@ -1482,11 +1333,15 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 							else
 							{
 								pdm->state = DMState::idle;
+								pdm->nextDM = completedDMs;
+								completedDMs = pdm;
 							}
 						}
 						else
 						{
 							pdm->state = DMState::idle;								// no local drivers involved
+							pdm->nextDM = completedDMs;
+							completedDMs = pdm;
 						}
 
 #if SUPPORT_CAN_EXPANSION
@@ -1496,13 +1351,8 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 							CanInterface::AddMovement(*this, params, driver - NumDirectDrivers, *pdm);
 						}
 #endif
-#if DEFER_DM_ALLOC
 					}
-#endif
 				}
-#if !DEFER_DM_ALLOC
-			}
-#endif
 		}
 
 		const DDAState st = prev->state;
@@ -1775,14 +1625,14 @@ pre(state == frozen)
 	}
 #endif
 
-	if (firstDM != nullptr)
+	if (activeDMs != nullptr)
 	{
 		unsigned int extrusions = 0, retractions = 0;		// bitmaps of extruding and retracting drives
 		const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 		for (size_t i = 0; i < NumDirectDrivers; ++i)
 		{
-			DriveMovement* const pdm = FindDM(i);
-			if (pdm != nullptr && pdm->state == DMState::moving)
+			DriveMovement* const pdm = FindActiveDM(i);
+			if (pdm != nullptr)
 			{
 				const size_t drive = pdm->drive;
 				reprap.GetPlatform().SetDirection(drive, pdm->direction);
@@ -1803,19 +1653,29 @@ pre(state == frozen)
 		bool extruding = false;
 		if (extrusions != 0 || retractions != 0)
 		{
+			// Check for trying to extrude or retract when the hot end temperature is too low
 			const unsigned int prohibitedMovements = reprap.GetProhibitedExtruderMovements(extrusions, retractions);
-			for (DriveMovement **dmpp = &firstDM; *dmpp != nullptr; )
+			for (DriveMovement **dmpp = &activeDMs; *dmpp != nullptr; )
 			{
-				const size_t drive = (*dmpp)->drive;
-				const bool thisDriveExtruding = drive >= numAxes && drive < NumDirectDrivers;
-				if (thisDriveExtruding && (prohibitedMovements & (1 << (drive - numAxes))) != 0)
+				DriveMovement* const dm = *dmpp;
+				const size_t drive = dm->drive;
+				if (drive >= numAxes && drive < NumDirectDrivers)
 				{
-					*dmpp = (*dmpp)->nextDM;
+					if ((prohibitedMovements & (1 << (drive - numAxes))) != 0)
+					{
+						*dmpp = dm->nextDM;
+						dm->nextDM = completedDMs;
+						completedDMs = dm;
+					}
+					else
+					{
+						extruding = true;
+						dmpp = &(dm->nextDM);
+					}
 				}
 				else
 				{
-					extruding = extruding || thisDriveExtruding;
-					dmpp = &((*dmpp)->nextDM);
+					dmpp = &(dm->nextDM);
 				}
 			}
 		}
@@ -1830,9 +1690,9 @@ pre(state == frozen)
 			platform.ExtrudeOff();
 		}
 
-		if (firstDM != nullptr)
+		if (activeDMs != nullptr)
 		{
-			return StepTimer::ScheduleStepInterrupt(firstDM->nextStepTime + moveStartTime);
+			return StepTimer::ScheduleStepInterrupt(activeDMs->nextStepTime + moveStartTime);
 		}
 	}
 
@@ -1876,7 +1736,7 @@ bool DDA::Step()
 			isrStartTime = iClocks;		// first time through, so make a note of the ISR start time
 		}
 		const uint32_t elapsedTime = (iClocks - moveStartTime) + MinInterruptInterval;
-		DriveMovement* dm = firstDM;
+		DriveMovement* dm = activeDMs;
 		uint32_t driversStepping = 0;
 		while (dm != nullptr && elapsedTime >= dm->nextStepTime)		// if the next step is due
 		{
@@ -1914,8 +1774,8 @@ bool DDA::Step()
 		// 4. Remove those drives from the list, calculate the next step times, update the direction pins where necessary,
 		//    and re-insert them so as to keep the list in step-time order.
 		//    Note that the call to CalcNextStepTime may change the state of Direction pin.
-		DriveMovement *dmToInsert = firstDM;							// head of the chain we need to re-insert
-		firstDM = dm;													// remove the chain from the list
+		DriveMovement *dmToInsert = activeDMs;							// head of the chain we need to re-insert
+		activeDMs = dm;													// remove the chain from the list
 		while (dmToInsert != dm)										// note that both of these may be nullptr
 		{
 			const bool hasMoreSteps = (isDeltaMovement && dmToInsert->drive < DELTA_AXES)
@@ -1926,6 +1786,11 @@ bool DDA::Step()
 			{
 				InsertDM(dmToInsert);
 			}
+			else
+			{
+				dmToInsert->nextDM = completedDMs;
+				completedDMs = dmToInsert;
+			}
 			dmToInsert = nextToInsert;
 		}
 
@@ -1933,13 +1798,13 @@ bool DDA::Step()
 		Platform::StepDriversLow();										// set all step pins low
 
 		// 6. Check for move completed
-		if (firstDM == nullptr)
+		if (activeDMs == nullptr)
 		{
 			break;
 		}
 
 		// 7. Check whether we have been in this ISR for too long already and need to take a break
-		uint32_t nextStepDue = firstDM->nextStepTime + moveStartTime;
+		uint32_t nextStepDue = activeDMs->nextStepTime + moveStartTime;
 		const uint32_t clocksTaken = (StepTimer::GetInterruptClocks16() - isrStartTime) & 0x0000FFFF;
 		if (clocksTaken >= DDA::MaxStepInterruptTime && (nextStepDue - isrStartTime) < (clocksTaken + DDA::MinInterruptInterval))
 		{
@@ -1961,7 +1826,7 @@ bool DDA::Step()
 		repeat = StepTimer::ScheduleStepInterrupt(nextStepDue);
 	} while (repeat);
 
-	if (state == executing && firstDM == nullptr)
+	if (state == executing && activeDMs == nullptr)
 	{
 		// There are no steps left for this move, but don't say that the move has completed unless the allocated time for it has nearly elapsed,
 		// otherwise we tend to skip moves that use no drivers on this board
@@ -1988,17 +1853,16 @@ bool DDA::Step()
 // For extruder drivers, we need to be able to calculate how much of the extrusion was completed after calling this.
 void DDA::StopDrive(size_t drive)
 {
-	DriveMovement* const pdm = FindDM(drive);
-	if (pdm != nullptr && pdm->state == DMState::moving)
+	DriveMovement* const pdm = FindActiveDM(drive);
+	if (pdm != nullptr)
 	{
-		pdm->state = DMState::idle;
 		if (drive < reprap.GetGCodes().GetTotalAxes())
 		{
 			endPoint[drive] -= pdm->GetNetStepsLeft();
 			endCoordinatesValid = false;			// the XYZ position is no longer valid
 		}
-		RemoveDM(drive);
-		if (firstDM == nullptr)
+		DeactivateDM(drive);
+		if (activeDMs == nullptr)
 		{
 			state = completed;
 		}
@@ -2120,11 +1984,6 @@ int32_t DDA::GetStepsTaken(size_t drive) const
 {
 	const DriveMovement * const dmp = FindDM(drive);
 	return (dmp != nullptr) ? dmp->GetNetStepsTaken() : 0;
-}
-
-bool DDA::IsNonPrintingExtruderMove(size_t drive) const
-{
-	return !isPrintingMove && FindDM(drive) != nullptr;
 }
 
 void DDA::LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration)

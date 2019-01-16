@@ -13,7 +13,7 @@
 
 // Constructors
 Duet3DFilamentMonitor::Duet3DFilamentMonitor(unsigned int extruder, int type)
-	: FilamentMonitor(extruder, type)
+	: FilamentMonitor(extruder, type), overrunErrorCount(0), polarityErrorCount(0)
 {
 	InitReceiveBuffer();
 }
@@ -37,6 +37,7 @@ bool Duet3DFilamentMonitor::Interrupt()
 		{
 			if ((writePointer & 1) == 0)							// low-to-high transitions should occur on odd indices
 			{
+				++polarityErrorCount;
 				return false;
 			}
 			if (state == RxdState::waitingForStartBit && writePointer == edgeCaptureReadPointer && !HaveIsrStepsCommanded())
@@ -48,6 +49,7 @@ bool Duet3DFilamentMonitor::Interrupt()
 		{
 			if ((writePointer & 1) != 0)							// high-to-low transitions should occur on even indices
 			{
+				++polarityErrorCount;
 				return false;
 			}
 			now -= 40;												// partial correction for skew caused by debounce filter on older Duet endstop inputs (measured skew = 74)
@@ -56,6 +58,10 @@ bool Duet3DFilamentMonitor::Interrupt()
 		edgeCaptures[writePointer] = now;							// record the time at which this edge was detected
 		edgeCaptureWritePointer = (writePointer + 1) % EdgeCaptureBufferSize;
 	}
+	else
+	{
+		++overrunErrorCount;
+	}
 	return wantReading;
 }
 
@@ -63,11 +69,11 @@ bool Duet3DFilamentMonitor::Interrupt()
 Duet3DFilamentMonitor::PollResult Duet3DFilamentMonitor::PollReceiveBuffer(uint16_t& measurement)
 {
 	// For the Duet3D sensors we need to decode the received data from the transition times recorded in the edgeCaptures array
-	static constexpr uint32_t BitsPerSecond = 1000;									// the nominal bit rate that the data is transmitted at
-	static constexpr uint32_t NominalBitLength = StepTimer::StepClockRate/BitsPerSecond;		// the nominal bit length in step clocks
-	static constexpr uint32_t MinBitLength = (NominalBitLength * 10)/13;			// allow 30% clock speed tolerance
-	static constexpr uint32_t MaxBitLength = (NominalBitLength * 13)/10;			// allow 30% clock speed tolerance
-	static constexpr uint32_t ErrorRecoveryDelayBits = 8;							// before a start bit we want the line to be low for this long
+	static constexpr uint32_t BitsPerSecond = 1000;							// the nominal bit rate that the data is transmitted at
+	static constexpr uint32_t NominalBitLength = StepTimer::StepClockRate/BitsPerSecond;	// the nominal bit length in step clocks
+	static constexpr uint32_t MinBitLength = (NominalBitLength * 10)/13;	// allow 30% clock speed tolerance
+	static constexpr uint32_t MaxBitLength = (NominalBitLength * 13)/10;	// allow 30% clock speed tolerance
+	static constexpr uint32_t ErrorRecoveryDelayBits = 8;					// before a start bit we want the line to be low for this long
 	static constexpr uint32_t ErrorRecoveryTime = NominalBitLength * ErrorRecoveryDelayBits;
 
 	bool again;
@@ -118,7 +124,6 @@ Duet3DFilamentMonitor::PollResult Duet3DFilamentMonitor::PollReceiveBuffer(uint1
 					nibblesAssembled = 0;
 					state = RxdState::waitingForNibble;
 					again = true;
-					//debugPrintf("sb %u\n", startBitLength);
 				}
 				else
 				{
@@ -153,6 +158,7 @@ Duet3DFilamentMonitor::PollResult Duet3DFilamentMonitor::PollReceiveBuffer(uint1
 							nextBitChangeIndex = (lastBitChangeIndex + 1u) % EdgeCaptureBufferSize;
 							if (nextBitChangeIndex != writePointer && edgeCaptures[nextBitChangeIndex] - nibbleStartTime < samplePoint)
 							{
+								// We recorded two edges within one sample period
 								edgeCaptureReadPointer = nextBitChangeIndex;
 								state = RxdState::errorRecovery3;
 								again = true;

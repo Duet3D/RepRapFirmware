@@ -137,7 +137,7 @@ public:
 	bool PrepareDeltaAxis(const DDA& dda, const PrepParams& params) __attribute__ ((hot));
 	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation) __attribute__ ((hot));
 	void ReduceSpeed(const DDA& dda, uint32_t inverseSpeedFactor);
-	void DebugPrint(char c, bool withDelta) const;
+	void DebugPrint(bool isDeltaMovement) const;
 	int32_t GetNetStepsLeft() const;
 	int32_t GetNetStepsTaken() const;
 

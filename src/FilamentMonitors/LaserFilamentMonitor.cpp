@@ -28,7 +28,7 @@ LaserFilamentMonitor::LaserFilamentMonitor(unsigned int extruder, int type)
 void LaserFilamentMonitor::Init()
 {
 	sensorValue = 0;
-	parityErrorCount = framingErrorCount = 0;
+	parityErrorCount = framingErrorCount = overrunErrorCount = polarityErrorCount = overdueCount = 0;
 	lastMeasurementTime = 0;
 	imageQuality = shutter = brightness = lastErrorCode = 0;
 	version = 1;
@@ -287,7 +287,10 @@ FilamentSensorStatus LaserFilamentMonitor::Check(bool isPrinting, bool fromIsr, 
 		ret = CheckFilament(extrusionCommandedThisSegment, movementMeasuredThisSegment, false);
 		extrusionCommandedThisSegment = movementMeasuredThisSegment = 0.0;
 	}
-	else if (extrusionCommandedThisSegment + extrusionCommandedSinceLastSync >= minimumExtrusionCheckLength * 2 && millis() - lastMeasurementTime > 220 && !IsReceiving())
+	else if (   extrusionCommandedThisSegment + extrusionCommandedSinceLastSync >= minimumExtrusionCheckLength * 3
+			 && millis() - lastMeasurementTime > 500
+			 && !IsReceiving()
+			)
 	{
 		// A sync is overdue
 		ret = CheckFilament(extrusionCommandedThisSegment + extrusionCommandedSinceLastSync, movementMeasuredThisSegment + movementMeasuredSinceLastSync, true);
@@ -382,16 +385,9 @@ FilamentSensorStatus LaserFilamentMonitor::Clear()
 	Reset();							// call this first so that haveStartBitData and synced are false when we call HandleIncomingData
 	HandleIncomingData();
 
-	FilamentSensorStatus ret = FilamentSensorStatus::ok;
-	if (sensorError)
-	{
-		ret = FilamentSensorStatus::sensorError;
-	}
-	else if ((sensorValue & switchOpenMask) != 0)
-	{
-		ret = FilamentSensorStatus::noFilament;
-	}
-	return ret;
+	return (sensorError) ? FilamentSensorStatus::sensorError
+			: ((sensorValue & switchOpenMask) != 0) ? FilamentSensorStatus::noFilament
+				: FilamentSensorStatus::ok;
 }
 
 // Print diagnostic info for this sensor
@@ -401,14 +397,10 @@ void LaserFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder)
 									: (sensorError) ? "error"
 										: ((sensorValue & switchOpenMask) != 0) ? "no filament"
 											: "ok";
-	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: position %.2f, %s, ", extruder, (double)GetCurrentPosition(), statusText);
-	if (dataReceived)
-	{
-		reprap.GetPlatform().MessageF(mtype, "framing errors %" PRIu32 ", parity errors %" PRIu32 ", ", framingErrorCount, parityErrorCount);
-	}
+	reprap.GetPlatform().MessageF(mtype, "Extruder %u: pos %.2f, %s, ", extruder, (double)GetCurrentPosition(), statusText);
 	if (laserMonitorState != LaserMonitorState::calibrating && totalExtrusionCommanded > 10.0)
 	{
-		reprap.GetPlatform().MessageF(mtype, "measured minimum %ld%%, average %ld%%, maximum %ld%% over %.1fmm\n",
+		reprap.GetPlatform().MessageF(mtype, "measured min %ld%% avg %ld%% max %ld%% over %.1fmm",
 			lrintf(100 * minMovementRatio),
 			lrintf((100 * totalMovementMeasured)/totalExtrusionCommanded),
 			lrintf(100 * maxMovementRatio),
@@ -416,7 +408,16 @@ void LaserFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder)
 	}
 	else
 	{
-		reprap.GetPlatform().Message(mtype, "no calibration data\n");
+		reprap.GetPlatform().Message(mtype, "no calibration data");
+	}
+	if (dataReceived)
+	{
+		reprap.GetPlatform().MessageF(mtype, ", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32  " ovdue %" PRIu32 "\n",
+			framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
+	}
+	else
+	{
+		reprap.GetPlatform().Message(mtype, "\n");
 	}
 }
 

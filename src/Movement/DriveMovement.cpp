@@ -312,8 +312,10 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	return CalcNextStepTimeCartesian(dda, false);
 }
 
-void DriveMovement::DebugPrint(char c, bool isDeltaMovement) const
+void DriveMovement::DebugPrint(bool isDeltaMovement) const
 {
+	const size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
+	char c = (drive < totalAxes) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + (drive - totalAxes));
 	if (state != DMState::idle)
 	{
 		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32
@@ -321,7 +323,7 @@ void DriveMovement::DebugPrint(char c, bool isDeltaMovement) const
 					c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval,
 					twoDistanceToStopTimesCsquaredDivD);
 
-		if (isDeltaMovement)
+		if (isDeltaMovement && drive < DELTA_AXES)
 		{
 			debugPrintf("hmz0sK=%" PRIi32 " minusAaPlusBbTimesKs=%" PRIi32 " dSquaredMinusAsquaredMinusBsquared=%" PRId64 "\n"
 						"2c2mmsda=%" PRIu64 "2c2mmsdd=%" PRIu64 " asdsk=%" PRIu32 " dsdsk=%" PRIu32 " mmstcdts=%" PRIu32 "\n",
