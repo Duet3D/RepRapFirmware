@@ -5,26 +5,28 @@ Coming Soon in version 2.03beta1
 ================================
 
 New features/changed behaviour:
-- On 12864 display increment default column by 1 extra to leave a space
-- Recognise Slicer PE latest version time estimate string, https://forum.duet3d.com/topic/8440/rrf-2-02-slic3r-pe-1-41-2-filament-used-and-print-times-wrong and SodaStreamHolder gcode file
-- Support generalised Cartesian/Core kinematics inc. markForged
+- Support for generalised Cartesian/Core kinematics inc. markForged. The old Cartesian, CoreXY, CoreXZ, CoreXYU and CoreXYUV kinematics classes are replaced by the new CoreKinematics class. No changes are needed to config.g except that M667 no longer supports XYZ parameters (using M669 matrix parameters instead).
 - M572 and M221 with no extruder drive number now sets all extruders used by the current tool, https://forum.duet3d.com/topic/8444/setting-pressure-advance-in-filament-file
-- Support experimental filament sensor firmware v2
-- Disable mdns in legacy Duets, https://forum.duet3d.com/topic/8352/duet-0-6-randomly-reboots/5
-- rr_fileinfo and M36 with no filename now includes estimated print time and simulation time in the response, as in the report with a filename
-- In CNC and laser mode update user Z coordinate after tool change, https://forum.duet3d.com/topic/8181/tool-offset-honored-but-not-displayed-correctly
-- On SCARA and delta printers, apply geometric limits even if not applying M208 limits
-- MBytes/sec -> Mbytes/sec in M122 P104 report
-- Remove 'RTOS' from firmware name
+- On the 12864 display, the default column for an item is now 1 extra pixel past the end of the previous item, so as to leave a thin space between them
+- Recognise Slicer PE latest version time estimate string, https://forum.duet3d.com/topic/8440/rrf-2-02-slic3r-pe-1-41-2-filament-used-and-print-times-wrong
+- Reworked some of the filament monitor code to try to reduce the tolerance needed when using 'good' filaments, also add support for  experimental v2 laser filament sensor firmware
+- Disable mdns in legacy Duets because of code quality issues casing reboots, https://forum.duet3d.com/topic/8352/duet-0-6-randomly-reboots/5
+- rr_fileinfo and M36 with no filename now include estimated print time and simulation time in the response for DWC2
+- In CNC and laser mode the user Z coordinate is updated after a tool change, https://forum.duet3d.com/topic/8181/tool-offset-honored-but-not-displayed-correctly
+- On SCARA and delta printers, geometric limits are now applied even when not applying M208 limits due to use of M564 S0
+- New S-3 function for G30 command. G30 S-3 probes the bed and sets the Z probe trigger height to the stopped height.
+- M92 command now includes an optional S parameter to specify the microstepping that the steps/mm is quotes at. If the actual microstepping in use is different, the specified steps/mm will be adjusted accordingly.
 
 Bug fixes:
 - G1 X1E1 no longer gets treated as if it also has an E parameter
 - Setting M558 A parameter to anything >31 set it to 0 instead of to 31
 - G92 should not constrain the passed coordinates to the M208 limits if M564 S0 has been used to disable limits
 
-Internal changes:
+Minor and internal changes:
 - Improve efficiency of debug print in WiFiInterface: don't keep calling cat and strlen
-- Cartesian/CoreXY/CoreXYU/CoreXZ/CoreXYUV kinematics all use the generalised Cartesian kinematics
+- Allocation of DriveMovement objects is deferred until DDAs are frozen and prepared for execution (in preparation for implementing S-curve acceleration). This is a fairly major change that could have unforeseen consequences.
+- MBytes/sec -> Mbytes/sec in M122 P104 report
+- Remove 'RTOS' from firmware name. All 2.0 series firmware uses RTOS.
 
 Version 2.02 (Duet 2 series) and 1.23 (Duet 06/085)
 ===================================================
