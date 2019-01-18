@@ -5,7 +5,7 @@ Coming Soon in version 2.03beta1
 ================================
 
 New features/changed behaviour:
-- Support for generalised Cartesian/Core kinematics inc. markForged. The old Cartesian, CoreXY, CoreXZ, CoreXYU and CoreXYUV kinematics classes are replaced by the new CoreKinematics class. No changes are needed to config.g except that M667 no longer supports XYZ parameters (using M669 matrix parameters instead).
+- Support for generalised Cartesian/Core kinematics inc. markForged. The old Cartesian, CoreXY, CoreXZ, CoreXYU and CoreXYUV kinematics classes are replaced by the new CoreKinematics class. No changes are needed to config.g except that M667 no longer supports XYZ parameters (use M669 matrix parameters instead).
 - M572 and M221 with no extruder drive number now sets all extruders used by the current tool, https://forum.duet3d.com/topic/8444/setting-pressure-advance-in-filament-file
 - On the 12864 display, the default column for an item is now 1 extra pixel past the end of the previous item, so as to leave a thin space between them
 - Recognise Slicer PE latest version time estimate string, https://forum.duet3d.com/topic/8440/rrf-2-02-slic3r-pe-1-41-2-filament-used-and-print-times-wrong
@@ -27,6 +27,18 @@ Minor and internal changes:
 - Allocation of DriveMovement objects is deferred until DDAs are frozen and prepared for execution (in preparation for implementing S-curve acceleration). This is a fairly major change that could have unforeseen consequences.
 - MBytes/sec -> Mbytes/sec in M122 P104 report
 - Remove 'RTOS' from firmware name. All 2.0 series firmware uses RTOS.
+
+Still to do:
+- Investigate @frafa's SCARA issue, https://forum.duet3d.com/post/76024
+- Warm up time not always displayed in 2.02
+- For PanelDue, send heater data for the first heater in each tool, https://forum.duet3d.com/topic/8458/hide-unused-heater-channels-paneldue-5/4
+- Investigate 12864 display heater fault warning, https://forum.duet3d.com/topic/7718/12864-display-current-tool-temperatures/6
+- More work for Duet 3 second prototype
+- DAA to handle requested accel/decl > max configured by M201 or m204
+- Reports that DueX5 endstops stop working after a while, https://forum.duet3d.com/topic/8284/firmware-2-02-released/9
+- I2C error recovery?
+- Option to turn G1 non-extruding moves to G0 moves on SCARA printers, where a G1 move is not possible?
+- Allow RNDTF to be set in TMC2660 drivers when in spreadCycle mode?
 
 Version 2.02 (Duet 2 series) and 1.23 (Duet 06/085)
 ===================================================
