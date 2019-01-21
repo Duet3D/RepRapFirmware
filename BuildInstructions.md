@@ -23,7 +23,8 @@ Instructions for building dc42 fork of RepRapFirmware under Windows
 
 6. Load Eclipse and tell it to import the CoreNG and ReprapFirmware projects (and DuetWiFiSocketServer if you have included it).
 
-7. If your compiler and tools are in a folder other than C:\Program Files (x86)\GNU Tools ARM Embedded\6 2017-q2-update\bin (if building 1.20alpha3 or later) or C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\bin (if building earlier versions), configure the path to the tools in both projects. You will find this in the project settings under C/C++ Build -> Settings -> Cross Settings.
+7. In Windows -> Preferences -> C/C++ -> Build -> Build Variables set GccPath to the
+  folder where arm-none-eabi-g++ can be found.
 
 8. Ensure there is a copy of make.exe on your PATH. If you installed Arduino 1.5.8 into C:/Arduino-1.5.8 then there will be one in C:\Arduino-1.5.8\hardware\arduino\sam\system\CMSIS\Examples\cmsis_example\gcc_arm.
 
@@ -42,8 +43,7 @@ Using Homebrew-Cask makes it very easy to install new software on macOS: https:/
 
 5. Open Eclipse and import RepRapFirmware, FreeRTOS and CoreNG projects.
 
-6. Right click "RepRapFirmware" project and select Properties. Go To "C/C++ Build -> Settings" and change the path: /usr/local/bin/ (or some other other path where arm-none-eabi-g++ and other binaries are located)
+6. In Windows -> Preferences -> C/C++ -> Build -> Build Variables set GccPath to the
+  folder where arm-none-eabi-g++ can be found.
 
-7. Do the same for CoreNG project.
-
-8. Build CoreNG and FreeRTOS first, then RepRapFirmware. The Duet WiFi and Duet Ethernet builds of RRF use the SAM4E build of CoreNG. The Duet085 build of RRF (which also runs on the Duet06) uses the SAM3X build of CoreNG. The RADDS build of RRF has its own build of CoreNG.
+7. Build CoreNG and FreeRTOS first, then RepRapFirmware. The Duet WiFi and Duet Ethernet builds of RRF use the SAM4E build of CoreNG. The Duet085 build of RRF (which also runs on the Duet06) uses the SAM3X build of CoreNG. The RADDS build of RRF has its own build of CoreNG.
