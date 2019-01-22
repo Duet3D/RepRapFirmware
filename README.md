@@ -10,7 +10,7 @@ If you wish to obtain support, report suspected firmware issues or make suggesti
 
 Pull requests
 =============
-If you wish to submit a pull request that changes the existing behaviour of RepRapFirmware, please discuss the change with me and other users first via the forum at https://forum.duet3d.com/. RepRapFirmware is used in a wide variery of different machines and a change that may suit you may cause difficulties for other users.
+If you wish to submit a pull request that changes the existing behaviour of RepRapFirmware, please discuss the change with me and other users first via the forum at https://forum.duet3d.com/. RepRapFirmware is used in a wide variery of different machines and a change that may suit you may cause difficulties for other users. **I will reject any PRs that have not been discussed with me unless they are trivial bug fixes.**
 
 Overview and history
 ====================
