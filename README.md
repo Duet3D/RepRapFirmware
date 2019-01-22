@@ -1,4 +1,4 @@
-This is firmware for controlling 3D printers and related devices using electronics based on ATSAM main processors. The current processors supported are the ATSAM4E, ATSAM4S, SAME70 and SAME5x. The legacy SAM3X processor is also supported. There is a fork of thie firmware that supports LPC1768/1769 processors.
+This is firmware for controlling 3D printers and related devices using electronics based on ATSAM main processors. The current processors supported are the ATSAM4E, ATSAM4S and SAME70. The legacy SAM3X processor is also supported. There is a fork of this firmware that supports LPC1768/1769 processors. The SAME5x processor is supported in the related project Duet3Expansion.
 
 Documentation
 =============
@@ -26,10 +26,11 @@ RepRapFirmware has pioneered a number of advances in 3D printing including:
 * Segmentation-free delta motion (January 2015)
 * Simulation mode, for establishing an accurate print time before committing to a print (January 2015)
 * Least-squares auto calibration of delta printers (April 2015)
+* Support for SPI-configured stepper drivers (August 2016)
+* Resume-after-power fail as a standard feature of the firmware (October 2017)
 * Compensation for the variation in extruder steps/mm with speed that is a feature of common types of extruder (January 2018)
 * Compensation of heater power for changes in power supply voltage
-* Support for SPI-configured stepper drivers
-* Resume-after-power fail as a standard feature of the firmware
+* Dynamic acceleration control to control ringing
 
 Supported hardware
 ==================
