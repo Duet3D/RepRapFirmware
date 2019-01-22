@@ -1,4 +1,4 @@
-This is firmware for controlling 3D printers and related devices using electronics based on ATSAM main processors.
+This is firmware for controlling 3D printers and related devices using electronics based on ATSAM main processors. The current processors supported are the ATSAM4E, ATSAM4S, SAME70 and SAME5x. The legacy SAM3X processor is also supported. There is a fork of thie firmware that supports LPC1768/1769 processors.
 
 Documentation
 =============
