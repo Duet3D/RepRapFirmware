@@ -1080,9 +1080,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		const int8_t bedHeater = (NumBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
 		if (bedHeater != -1)
 		{
-			response->catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
+			response->catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d,\"standby\":%.1f},",
 				(double)heat->GetTemperature(bedHeater), (double)heat->GetActiveTemperature(bedHeater),
-					heat->GetStatus(bedHeater), bedHeater);
+					heat->GetStatus(bedHeater), bedHeater, (double)heat->GetStandbyTemperature(bedHeater));
 		}
 
 		/* Chamber */
