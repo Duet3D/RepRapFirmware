@@ -9,8 +9,12 @@
 *orig
 /Alligator/
 /Duet085/
+/Duet085_RTOS/
 /Duet2_RTOS/
+/Duet3/
 /DuetM_RTOS/
+/PCCB/
+/PCCB_X5/
 /RADDS_RTOS/
-/SAME70_RTOS/
+/SAME70XPLD/
 .settings/language.settings.xml

@@ -43,7 +43,7 @@ RepRapFirmware is built from several Github projects. You need to use compatible
 
 12. Load Eclipse and tell it to import the CoreNG and RepRapFirmware projects (and DuetWiFiSocketServer and RRFLibraries if you have included them).
 
-13. If your compiler and tools are in a folder other than C:\Program Files (x86)\GNU Tools ARM Embedded\7 2018-q2-update\bin, configure the path to the tools in both projects by changing the GccPath build variable.
+13. The build depends on the Eclipse workspace variable 'GccPath_Arm_7_2018_q2" being set to the directory where your arm-none-eabi-g++ compiler resides. For example "C:\Program Files (x86)\GNU Tools ARM Embedded\7 2018-q2-update\bin" on Windows. To set it, go to Windows -> Preferences -> C/C++ -> Build -> Build Variables and click "Add..."
 
 14. Build CoreNG first, also build FreeRTOS and RRFLibraries if needed. Then clean and build RepRapFirmware (the clean step is needed to make Eclipse notice that the output library files in the other projects have been built). The Duet WiFi and Duet Ethernet builds of RRF use the SAM4E_RTOS builds of CoreNG and RRFLibraries and the SAM4E build of FreeRTOS. The Duet Maestro uses the SAM4S_RTOS build of CoreNG and RRFLibraries, and the SAM4S build of FreeRTOS. The Duet085 build of RRF (which also runs on the Duet06) uses the SAM3X build of CoreNG and RRFLibraries. The RADDS build of RRF uses the RADDS_RTOS build of CoreNG and the SAM3X_RTOS build of RRFLibraries.
 
@@ -59,8 +59,6 @@ Using Homebrew-Cask makes it very easy to install new software on macOS: https:/
 
 5. Open Eclipse and import RepRapFirmware, FreeRTOS, RRFLibraries and CoreNG projects.
 
-6. Right click "RepRapFirmware" project and select Properties. Go To "C/C++ Build -> Settings" and change the path: /usr/local/bin/ (or some other other path where arm-none-eabi-g++ and other binaries are located)
+6. The build depends on the Eclipse workspace variable 'GccPath_Arm_7_2018_q2" being set to the directory where your arm-none-eabi-g++ compiler resides. To set it, go to Windows -> Preferences -> C/C++ -> Build -> Build Variables and click "Add..."
 
-7. Do the same for CoreNG project.
-
-8. Build CoreNG, FreeRTOS and RRFLibraries first, then RepRapFirmware. See the instructions for Windows (above) for the configurations needed.
+7. Build CoreNG, FreeRTOS and RRFLibraries first, then RepRapFirmware. See the instructions for Windows (above) for the configurations needed.
