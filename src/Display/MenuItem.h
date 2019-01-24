@@ -49,8 +49,11 @@ public:
 	// 'clicks' is the number of encoder clicks to adjust by, or 0 if the button was pushed.
 	virtual bool Adjust(int clicks) { return true; }
 
-	// If the width was specified as zero, update it with the actual width
-	virtual void UpdateWidth(Lcd7920& lcd) { }
+	// If the width was specified as zero, update it with the actual width. Also update the height.
+	virtual void UpdateWidthAndHeight(Lcd7920& lcd) = 0;
+
+	// DC: I don't know what this one is for, the person who wrote it didn't document it
+	virtual PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const { return 0; }
 
 	virtual ~MenuItem() { }
 
@@ -59,10 +62,12 @@ public:
 	void SetChanged() { itemChanged = true; }
 	bool IsVisible() const;
 
-	virtual PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const { return 0; }
+	// Erase this item if it is drawn but should not be visible
+	void EraseIfInvisible(Lcd7920& lcd, PixelNumber tOffset);
 
 	// Return the width of this item in pixels
 	PixelNumber GetWidth() const { return width; }
+	PixelNumber GetHeight() const { return height; }
 
 	static void AppendToList(MenuItem **root, MenuItem *item);
 
@@ -77,13 +82,14 @@ protected:
 	void PrintAligned(Lcd7920& lcd, PixelNumber tOffset, PixelNumber rightMargin);
 
 	const PixelNumber row, column;
-	PixelNumber width;
+	PixelNumber width, height;
 	const Alignment align;
 	const FontNumber fontNumber;
 	const Visibility visCase;
 
 	bool itemChanged;
 	bool highlighted;
+	bool drawn;
 
 private:
 	MenuItem *next;
@@ -97,7 +103,7 @@ public:
 
 	TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, const char *t);
 	void Draw(Lcd7920& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) override;
-	void UpdateWidth(Lcd7920& lcd) override;
+	void UpdateWidthAndHeight(Lcd7920& lcd) override;
 
 protected:
 	void CorePrint(Lcd7920& lcd) override;
@@ -114,7 +120,7 @@ public:
 
 	ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *t, const char *cmd, const char *acFile);
 	void Draw(Lcd7920& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) override;
-	void UpdateWidth(Lcd7920& lcd) override;
+	void UpdateWidthAndHeight(Lcd7920& lcd) override;
 	bool Select(const StringRef& cmd) override;
 
 	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const override;
@@ -139,6 +145,7 @@ public:
 	bool Select(const StringRef& cmd) override;
 	bool CanAdjust() override { return true; }
 	bool Adjust(int clicks) override;
+	void UpdateWidthAndHeight(Lcd7920& lcd) override;
 
 	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const override;
 
@@ -175,6 +182,7 @@ public:
 	void Enter(bool bForwardDirection) override;
 	int Advance(int nCounts) override;
 	bool Select(const StringRef& cmd) override;
+	void UpdateWidthAndHeight(Lcd7920& lcd) override;
 
 	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const override;
 
@@ -215,7 +223,7 @@ public:
 	ImageMenuItem(PixelNumber r, PixelNumber c, Visibility vis, const char *pFileName);
 
 	void Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) override;
-	void UpdateWidth(Lcd7920& lcd) override;
+	void UpdateWidthAndHeight(Lcd7920& lcd) override;
 
 private:
 	String<MaxFilenameLength> fileName;

@@ -221,11 +221,11 @@ void DDA::DebugPrintAll() const
 	DebugPrint();
 	for (DriveMovement* dm = activeDMs; dm != nullptr; dm = dm->nextDM)
 	{
-		dm->DebugPrint(isDeltaMovement);
+		dm->DebugPrint();
 	}
 	for (DriveMovement* dm = completedDMs; dm != nullptr; dm = dm->nextDM)
 	{
-		dm->DebugPrint(isDeltaMovement);
+		dm->DebugPrint();
 	}
 }
 
@@ -441,9 +441,9 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 		// We use the Cartesian motion system to implement these moves, so the feed rate will be interpreted in Cartesian coordinates.
 		// This is wrong, we want the feed rate to apply to the drive that is moving the farthest.
 		float maxDistance = 0.0;
-		for (size_t axis = 0; axis < DELTA_AXES; ++axis)
+		for (size_t axis = 0; axis < numTotalAxes; ++axis)
 		{
-			if (normalisedDirectionVector[axis] > maxDistance)
+			if (k.GetMotionType(axis) == MotionType::segmentFreeDelta && normalisedDirectionVector[axis] > maxDistance)
 			{
 				maxDistance = normalisedDirectionVector[axis];
 			}
@@ -462,7 +462,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	// for diagonal moves. On other architectures, this is not OK and any movement in the XY plane should be limited on other ways.
 	if (doMotorMapping)
 	{
-		k.LimitSpeedAndAcceleration(*this, normalisedDirectionVector, numVisibleAxes);	// give the kinematics the chance to further restrict the speed and acceleration
+		k.LimitSpeedAndAcceleration(*this, normalisedDirectionVector, numVisibleAxes, continuousRotationShortcut);	// give the kinematics the chance to further restrict the speed and acceleration
 	}
 
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
@@ -741,6 +741,7 @@ LA_DEBUG;
 }
 
 // Try to push babystepping earlier in the move queue, returning the amount we pushed
+//TODO this won't work for CoreXZ, rotary delta, Kappa, or SCARA with Z crosstalk
 float DDA::AdvanceBabyStepping(float amount)
 {
 	DDA *cdda = this;
@@ -771,9 +772,12 @@ float DDA::AdvanceBabyStepping(float amount)
 		cdda->endCoordinates[Z_AXIS] += babySteppingDone;
 		if (cdda->isDeltaMovement)
 		{
-			for (size_t tower = 0; tower < DELTA_AXES; ++tower)
+			for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
 			{
-				cdda->endPoint[tower] += (int32_t)(babySteppingDone * reprap.GetPlatform().DriveStepsPerUnit(tower));
+				if (reprap.GetMove().GetKinematics().GetMotionType(axis) == MotionType::segmentFreeDelta)
+				{
+					cdda->endPoint[axis] += (int32_t)(babySteppingDone * reprap.GetPlatform().DriveStepsPerUnit(axis));
+				}
 			}
 		}
 		else
@@ -960,34 +964,47 @@ inline void DDA::AdjustAcceleration()
 {
 	// Try to reduce the acceleration/deceleration of the move to cancel ringing
 	const float idealPeriod = reprap.GetMove().GetDRCperiod();
-	const float accTime = (topSpeed - startSpeed)/acceleration;
-	const bool adjustAcceleration =
-		(accTime < idealPeriod && ((prev->state != DDAState::frozen && prev->state != DDAState::executing) || !prev->IsAccelerationMove()));
-	float proposedAcceleration, proposedAccelDistance;
-	if (adjustAcceleration)
+
+	float proposedAcceleration = acceleration, proposedAccelDistance = accelDistance;
+	bool adjustAcceleration = false;
+	if ((prev->state != DDAState::frozen && prev->state != DDAState::executing) || !prev->IsAccelerationMove())
 	{
-		proposedAcceleration = (topSpeed - startSpeed)/idealPeriod;
-		proposedAccelDistance = (fsquare(topSpeed) - fsquare(startSpeed))/(2 * proposedAcceleration);
-	}
-	else
-	{
-		proposedAcceleration = acceleration;
-		proposedAccelDistance = accelDistance;
+		const float accelTime = (topSpeed - startSpeed)/acceleration;
+		if (accelTime < idealPeriod)
+		{
+			proposedAcceleration = (topSpeed - startSpeed)/idealPeriod;
+			adjustAcceleration = true;
+		}
+		else if (accelTime < idealPeriod * 2)
+		{
+			proposedAcceleration = (topSpeed - startSpeed)/(idealPeriod * 2);
+			adjustAcceleration = true;
+		}
+		if (adjustAcceleration)
+		{
+			proposedAccelDistance = (fsquare(topSpeed) - fsquare(startSpeed))/(2 * proposedAcceleration);
+		}
 	}
 
-	const float decelTime = (topSpeed - endSpeed)/deceleration;
-	const float adjustDeceleration =
-		(decelTime < idealPeriod && (next->state != DDAState::provisional || !next->IsDecelerationMove()));
-	float proposedDeceleration, proposedDecelDistance;
-	if (adjustDeceleration)
+	float proposedDeceleration = deceleration, proposedDecelDistance = decelDistance;
+	bool adjustDeceleration = false;
+	if (next->state != DDAState::provisional || !next->IsDecelerationMove())
 	{
-		proposedDeceleration = (topSpeed - endSpeed)/idealPeriod;
-		proposedDecelDistance = (fsquare(topSpeed) - fsquare(endSpeed))/(2 * proposedDeceleration);
-	}
-	else
-	{
-		proposedDeceleration = deceleration;
-		proposedDecelDistance = decelDistance;
+		const float decelTime = (topSpeed - endSpeed)/deceleration;
+		if (decelTime < idealPeriod)
+		{
+			proposedDeceleration = (topSpeed - endSpeed)/idealPeriod;
+			adjustDeceleration = true;
+		}
+		else if (decelTime < idealPeriod * 2)
+		{
+			proposedDeceleration = (topSpeed - endSpeed)/(idealPeriod * 2);
+			adjustDeceleration = true;
+		}
+		if (adjustDeceleration)
+		{
+			proposedDecelDistance = (fsquare(topSpeed) - fsquare(endSpeed))/(2 * proposedDeceleration);
+		}
 	}
 
 	if (adjustAcceleration || adjustDeceleration)
@@ -1111,8 +1128,6 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 			params.zMovement = GetEndCoordinate(Z_AXIS, false) - prev->GetEndCoordinate(Z_AXIS, false);
 #endif
 			params.dparams = static_cast<const LinearDeltaKinematics*>(&(reprap.GetMove().GetKinematics()));
-			params.diagonalSquared = params.dparams->GetDiagonalSquared();
-			params.a2b2D2 = params.a2plusb2 * params.diagonalSquared;
 		}
 
 		// Convert the accelerate/decelerate distances to times
@@ -1184,9 +1199,9 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 						}
 					}
 				}
-				else if (isDeltaMovement && drive < DELTA_AXES)
+				else if (isDeltaMovement && reprap.GetMove().GetKinematics().GetMotionType(drive) == MotionType::segmentFreeDelta)
 				{
-					// On a delta we need to allocate a DM for all three towers even if there is no net movement
+					// On a delta we need to allocate a DM for all towers even if there is no net movement
 					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
 					const int32_t delta = endPoint[drive] - prev->endPoint[drive];
 					pdm->totalSteps = labs(delta);
@@ -1778,7 +1793,7 @@ bool DDA::Step()
 		activeDMs = dm;													// remove the chain from the list
 		while (dmToInsert != dm)										// note that both of these may be nullptr
 		{
-			const bool hasMoreSteps = (isDeltaMovement && dmToInsert->drive < DELTA_AXES)
+			const bool hasMoreSteps = (isDeltaMovement && dmToInsert->isDelta)
 					? dmToInsert->CalcNextStepTimeDelta(*this, true)
 					: dmToInsert->CalcNextStepTimeCartesian(*this, true);
 			DriveMovement * const nextToInsert = dmToInsert->nextDM;
@@ -1945,7 +1960,7 @@ void DDA::ReduceHomingSpeed()
 			DriveMovement* const pdm = FindDM(drive);
 			if (pdm != nullptr && pdm->state == DMState::moving)
 			{
-				pdm->ReduceSpeed(*this, ProbingSpeedReductionFactor);
+				pdm->ReduceSpeed(ProbingSpeedReductionFactor);
 			}
 		}
 	}

@@ -29,7 +29,7 @@ enum class KinematicsType : uint8_t
 	hangprinter,
 	polar,
 	coreXYUV,
-	linearDeltaPlusZ,	// reserved for @sga, see https://forum.duet3d.com/topic/5775/aditional-carterian-z-axis-on-delta-printer
+	reserved,	// reserved for @sga, see https://forum.duet3d.com/topic/5775/aditional-carterian-z-axis-on-delta-printer
 	rotaryDelta,		// not yet implemented
 	markForged,
 
@@ -166,10 +166,14 @@ public:
 
 	// Limit the speed and acceleration of a move to values that the mechanics can handle.
 	// The speeds along individual Cartesian axes have already been limited before this is called.
-	virtual void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes) const = 0;
+	virtual void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const = 0;
 
 	// Return true if the specified axis is a continuous rotation axis
 	virtual bool IsContinuousRotationAxis(size_t axis) const { return false; }
+
+	// Return a bitmap of the motors that are involved in homing a particular axis or tower. Used for implementing stall detection endstops.
+	// Usually it is just the corresponding motor, but CoreXY and similar kinematics move multiple motors to home an individual axis.
+	virtual AxesBitmap MotorsUsedToHomeAxis(size_t axis) const;
 
 	// Override this virtual destructor if your constructor allocates any dynamic memory
 	virtual ~Kinematics() { }

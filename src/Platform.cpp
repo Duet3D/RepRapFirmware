@@ -747,7 +747,7 @@ int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
 }
 
 // Get our best estimate of the Z probe temperature
-float Platform::GetZProbeTemperature()
+float Platform::GetZProbeTemperature() const
 {
 	for (size_t i = 0; i < NumBedHeaters; i++)
 	{
@@ -765,7 +765,7 @@ float Platform::GetZProbeTemperature()
 	return 25.0;							// assume 25C if we can't read the bed temperature
 }
 
-float Platform::ZProbeStopHeight()
+float Platform::GetZProbeStopHeight() const
 {
 	return GetCurrentZProbeParameters().GetStopHeight(GetZProbeTemperature());
 }
@@ -2684,17 +2684,17 @@ void Platform::UpdateConfiguredHeaters()
 	}
 }
 
-EndStopHit Platform::Stopped(size_t drive) const
+EndStopHit Platform::Stopped(size_t axisOrExtruder) const
 {
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	if (drive < numAxes)
+	if (axisOrExtruder < numAxes)
 	{
-		switch (endStopInputType[drive])
+		switch (endStopInputType[axisOrExtruder])
 		{
 		case EndStopInputType::zProbe:
 			{
 				const EndStopHit rslt = GetZProbeResult();
-				return (rslt == EndStopHit::lowHit && endStopPos[drive] == EndStopPosition::highEndStop)
+				return (rslt == EndStopHit::lowHit && endStopPos[axisOrExtruder] == EndStopPosition::highEndStop)
 						? EndStopHit::highHit
 							: rslt;
 			}
@@ -2702,65 +2702,40 @@ EndStopHit Platform::Stopped(size_t drive) const
 #if HAS_STALL_DETECT
 		case EndStopInputType::motorStall:
 			{
-				bool motorIsStalled;
-				switch (reprap.GetMove().GetKinematics().GetKinematicsType())
+				bool motorIsStalled = false;
+				AxesBitmap motorsUsed = reprap.GetMove().GetKinematics().MotorsUsedToHomeAxis(axisOrExtruder);
+				for (size_t motor = 0; motorsUsed != 0; ++motor)
 				{
-				case KinematicsType::coreXY:
-					// Both X and Y motors are involved in homing X or Y
-					motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
-										? AnyAxisMotorStalled(X_AXIS) || AnyAxisMotorStalled(Y_AXIS)
-											: AnyAxisMotorStalled(drive);
-					break;
-
-				case KinematicsType::coreXYU:
-					// Both X and Y motors are involved in homing X or Y, and both U and V motors are involved in homing U
-					motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
-										? AnyAxisMotorStalled(X_AXIS) || AnyAxisMotorStalled(Y_AXIS)
-											: (drive == U_AXIS)
-												? AnyAxisMotorStalled(U_AXIS) || AnyAxisMotorStalled(V_AXIS)
-													: AnyAxisMotorStalled(drive);
-					break;
-
-				case KinematicsType::coreXYUV:
-					// Both X and Y motors are involved in homing X or Y, and both U and V motors are involved in homing U and V
-					motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
-										? AnyAxisMotorStalled(X_AXIS) || AnyAxisMotorStalled(Y_AXIS)
-											: (drive == U_AXIS || drive == V_AXIS)
-												? AnyAxisMotorStalled(U_AXIS) || AnyAxisMotorStalled(V_AXIS)
-													: AnyAxisMotorStalled(drive);
-					break;
-
-				case KinematicsType::coreXZ:
-					// Both X and Z motors are involved in homing X or Z
-					motorIsStalled = (drive == X_AXIS || drive == Z_AXIS)
-										? AnyAxisMotorStalled(X_AXIS) || AnyAxisMotorStalled(Z_AXIS)
-											: AnyAxisMotorStalled(drive);
-					break;
-
-				default:
-					motorIsStalled = AnyAxisMotorStalled(drive);
-					break;
+					if (IsBitSet(motorsUsed, motor))
+					{
+						if (AnyAxisMotorStalled(motor))
+						{
+							motorIsStalled = true;
+							break;
+						}
+						ClearBit(motorsUsed, motor);
+					}
 				}
 				return (!motorIsStalled) ? EndStopHit::noStop
-						: (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit
+						: (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit
 							: EndStopHit::lowHit;
 			}
 			break;
 #endif
 
 		case EndStopInputType::activeLow:
-			if (drive < NumEndstops && endStopPins[drive] != NoPin)
+			if (axisOrExtruder < NumEndstops && endStopPins[axisOrExtruder] != NoPin)
 			{
-				const bool b = IoPort::ReadPin(endStopPins[drive]);
-				return (b) ? EndStopHit::noStop : (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
+				const bool b = IoPort::ReadPin(endStopPins[axisOrExtruder]);
+				return (b) ? EndStopHit::noStop : (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
 			}
 			break;
 
 		case EndStopInputType::activeHigh:
-			if (drive < NumEndstops && endStopPins[drive] != NoPin)
+			if (axisOrExtruder < NumEndstops && endStopPins[axisOrExtruder] != NoPin)
 			{
-				const bool b = !IoPort::ReadPin(endStopPins[drive]);
-				return (b) ? EndStopHit::noStop : (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
+				const bool b = !IoPort::ReadPin(endStopPins[axisOrExtruder]);
+				return (b) ? EndStopHit::noStop : (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
 			}
 			break;
 
@@ -2769,10 +2744,10 @@ EndStopHit Platform::Stopped(size_t drive) const
 		}
 	}
 #if HAS_STALL_DETECT
-	else if (drive < NumDirectDrivers)
+	else if (axisOrExtruder < NumDirectDrivers)
 	{
 		// Endstop is for an extruder drive, so use stall detection
-		return (ExtruderMotorStalled(drive - numAxes)) ? EndStopHit::highHit : EndStopHit::noStop;
+		return (ExtruderMotorStalled(axisOrExtruder - numAxes)) ? EndStopHit::highHit : EndStopHit::noStop;
 	}
 #endif
 	return EndStopHit::noStop;

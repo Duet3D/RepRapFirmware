@@ -24,14 +24,19 @@ public:
 	bool QueryTerminateHomingMove(size_t axis) const override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 	HomingMode GetHomingMode() const override { return homeCartesianAxes; }
-	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes) const override;
+	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const override;
+	AxesBitmap MotorsUsedToHomeAxis(size_t axis) const override;
 
 private:
 	void Recalc();											// recalculate internal variables following a configuration change
 	bool HasSharedMotor(size_t axis) const;					// return true if the axis doesn't have a single dedicated motor
 
+	// Primary parameters
 	FixedMatrix<float, MaxAxes, MaxAxes> inverseMatrix;		// maps coordinates to motor positions
+
+	// Derived parameters
 	FixedMatrix<float, MaxAxes, MaxAxes> forwardMatrix;		// maps motor positions to coordinates
+	AxesBitmap motorsUsedByAxis[MaxAxes];					// which motors are used to move each axis
 	AxesBitmap axesWithSharedMotors;						// bitmap of axes without exclusive control of the corresponding motor, or that use other motors
 	bool modified;											// true if matrix has been altered
 	uint8_t firstMotor[MaxAxes], lastMotor[MaxAxes];		// first and last motor used by each axis

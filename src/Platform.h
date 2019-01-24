@@ -465,7 +465,7 @@ public:
 
 	// Z probe
 	void SetZProbeDefaults();
-	float ZProbeStopHeight();
+	float GetZProbeStopHeight() const;
 	float GetZProbeDiveHeight() const;
 	float GetZProbeStartingHeight();
 	float GetZProbeTravelSpeed() const;
@@ -484,7 +484,7 @@ public:
 	void SetZProbeModState(bool b) const;
 
 	// Heat and temperature
-	float GetZProbeTemperature();							// Get our best estimate of the Z probe temperature
+	float GetZProbeTemperature() const;						// Get our best estimate of the Z probe temperature
 
 	volatile ThermistorAveragingFilter& GetAdcFilter(size_t channel)
 	pre(channel < ARRAY_SIZE(adcFilters))

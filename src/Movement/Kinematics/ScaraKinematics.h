@@ -42,7 +42,7 @@ public:
 	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const override;
 	bool QueryTerminateHomingMove(size_t axis) const override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
-	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes) const override;
+	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const override;
 	bool IsContinuousRotationAxis(size_t axis) const override;
 
 private:
@@ -69,6 +69,7 @@ private:
 	float crosstalk[3];								// proximal to distal, proximal to X and distal to Z crosstalk
 	float xOffset;									// where bed X=0 is relative to the proximal joint
 	float yOffset;									// where bed Y=0 is relative to the proximal joint
+	float requestedMinRadius;						// requested minimum radius
 	bool supportsContinuousRotation[2];				// true if the (proximal, distal) arms support continuous rotation
 
 	// Derived parameters

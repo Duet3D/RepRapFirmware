@@ -948,7 +948,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					break;
 				}
 
-				g30zHeightError = moveBuffer.coords[Z_AXIS] - platform.ZProbeStopHeight();
+				g30zHeightError = moveBuffer.coords[Z_AXIS] - platform.GetZProbeStopHeight();
 				g30zHeightErrorSum += g30zHeightError;
 			}
 
@@ -1215,7 +1215,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					float m[MaxAxes];
 					reprap.GetMove().GetCurrentMachinePosition(m, false);		// get height without bed compensation
 					g30zStoppedHeight = m[Z_AXIS] - g30HValue;					// save for later
-					g30zHeightError = g30zStoppedHeight - platform.ZProbeStopHeight();
+					g30zHeightError = g30zStoppedHeight - platform.GetZProbeStopHeight();
 					g30zHeightErrorSum += g30zHeightError;
 				}
 			}
@@ -1223,9 +1223,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			if (g30ProbePointIndex < 0)											// if no P parameter
 			{
 				// Simple G30 probing move
-				if (g30SValue == -1 || g30SValue == -2)
+				if (g30SValue == -1 || g30SValue == -2 || g30SValue == -3)
 				{
-					// G30 S-1 command taps once and reports the height, S-2 sets the tool offset to the negative of the current height
+					// G30 S-1 command taps once and reports the height, S-2 sets the tool offset to the negative of the current height, S-3 sets the Z probe trigger height
 					gb.SetState(GCodeState::probingAtPoint7);					// special state for reporting the stopped height at the end
 					if (platform.GetZProbeType() != ZProbeType::none && !probeIsDeployed)
 					{
@@ -1237,7 +1237,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				if (tapsDone == 1 && !hadProbingError)
 				{
 					// Reset the Z axis origin according to the height error so that we can move back up to the dive height
-					moveBuffer.coords[Z_AXIS] = platform.ZProbeStopHeight();
+					moveBuffer.coords[Z_AXIS] = platform.GetZProbeStopHeight();
 					reprap.GetMove().SetNewPosition(moveBuffer.coords, false);
 					reprap.GetMove().SetZeroHeightError(moveBuffer.coords);
 					g30zHeightError = 0;										// there is no longer any height error from this probe
@@ -1343,8 +1343,16 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case GCodeState::probingAtPoint7:
-		// Here when we have finished executing G30 S-1 or S-2 including retracting the probe if necessary
-		if (g30SValue == -2)
+		// Here when we have finished executing G30 S-1 or S-2 or S-3 including retracting the probe if necessary
+		if (g30SValue == -3)
+		{
+			// Adjust the Z probe trigger height to the stop height
+			ZProbe zp = platform.GetCurrentZProbeParameters();
+			zp.triggerHeight = g30zStoppedHeight;
+			platform.SetZProbeParameters(platform.GetZProbeType(), zp);
+			reply.printf("Z probe trigger height set to %.3f mm", (double)g30zStoppedHeight);
+		}
+		else if (g30SValue == -2)
 		{
 			// Adjust the Z offset of the current tool to account for the height error
 			Tool * const tool = reprap.GetCurrentTool();
@@ -3143,7 +3151,7 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply)
 // We already own the movement lock before this is called.
 GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 {
-	g30SValue = (gb.Seen('S')) ? gb.GetIValue() : -3;		// S-3 is equivalent to having no S parameter
+	g30SValue = (gb.Seen('S')) ? gb.GetIValue() : -4;		// S-4 or lower is equivalent to having no S parameter
 	if (g30SValue == -2 && reprap.GetCurrentTool() == nullptr)
 	{
 		reply.copy("G30 S-2 commanded with no tool selected");
@@ -3750,30 +3758,33 @@ bool GCodes::ChangeMicrostepping(size_t drive, unsigned int microsteps, bool int
 }
 
 // Set the speeds of fans mapped for the current tool to lastDefaultFanSpeed
-void GCodes::SetMappedFanSpeed()
+void GCodes::SetMappedFanSpeed(float f)
 {
-	if (reprap.GetCurrentTool() == nullptr)
+	lastDefaultFanSpeed = f;
+	const Tool * const ct = reprap.GetCurrentTool();
+	if (ct == nullptr)
 	{
-		platform.SetFanValue(0, lastDefaultFanSpeed);
+		platform.SetFanValue(0, f);
 	}
 	else
 	{
-		const uint32_t fanMap = reprap.GetCurrentTool()->GetFanMapping();
+		const uint32_t fanMap = ct->GetFanMapping();
 		for (size_t i = 0; i < NUM_FANS; ++i)
 		{
 			if (IsBitSet(fanMap, i))
 			{
-				platform.SetFanValue(i, lastDefaultFanSpeed);
+				platform.SetFanValue(i, f);
 			}
 		}
 	}
 }
 
-// Set the mapped fan speed
-void GCodes::SetMappedFanSpeed(float f)
+// Return true if this fan number is currently being used as a print cooling fan
+bool GCodes::IsMappedFan(unsigned int fanNumber)
 {
-	lastDefaultFanSpeed = f;
-	SetMappedFanSpeed();
+	const Tool * const ct = reprap.GetCurrentTool();
+	return (ct == nullptr) ? fanNumber == 0
+		: IsBitSet(ct->GetFanMapping(), fanNumber);
 }
 
 // Save the speeds of all fans

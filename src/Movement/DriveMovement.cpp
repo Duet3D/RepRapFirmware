@@ -91,6 +91,7 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	nextStepTime = 0;
 	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
+	isDelta = false;
 	return CalcNextStepTimeCartesian(dda, false);
 }
 
@@ -101,7 +102,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 	const float A = params.initialX - params.dparams->GetTowerX(drive);
 	const float B = params.initialY - params.dparams->GetTowerY(drive);
 	const float aAplusbB = A * dda.directionVector[X_AXIS] + B * dda.directionVector[Y_AXIS];
-	const float dSquaredMinusAsquaredMinusBsquared = params.diagonalSquared - fsquare(A) - fsquare(B);
+	const float dSquaredMinusAsquaredMinusBsquared = params.dparams->GetDiagonalSquared(drive) - fsquare(A) - fsquare(B);
 	const float h0MinusZ0 = sqrtf(dSquaredMinusAsquaredMinusBsquared);
 	mp.delta.hmz0sK = roundS32(h0MinusZ0 * stepsPerMm * DriveMovement::K2);
 	mp.delta.minusAaPlusBbTimesKs = -roundS32(aAplusbB * stepsPerMm * DriveMovement::K2);
@@ -120,7 +121,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 	{
 		// The distance to reversal is the solution to a quadratic equation. One root corresponds to the carriages being below the bed,
 		// the other root corresponds to the carriages being above the bed.
-		const float drev = ((dda.directionVector[Z_AXIS] * sqrtf(params.a2b2D2 - fsquare(A * dda.directionVector[Y_AXIS] - B * dda.directionVector[X_AXIS])))
+		const float drev = ((dda.directionVector[Z_AXIS] * sqrtf(params.a2plusb2 * params.dparams->GetDiagonalSquared(drive) - fsquare(A * dda.directionVector[Y_AXIS] - B * dda.directionVector[X_AXIS])))
 							- aAplusbB)/params.a2plusb2;
 		if (drev > 0.0 && drev < dda.totalDistance)		// if the reversal point is within range
 		{
@@ -181,6 +182,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 	nextStepTime = 0;
 	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
+	isDelta = true;
 	return CalcNextStepTimeDelta(dda, false);
 }
 
@@ -309,10 +311,11 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	nextStepTime = 0;
 	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
+	isDelta = false;
 	return CalcNextStepTimeCartesian(dda, false);
 }
 
-void DriveMovement::DebugPrint(bool isDeltaMovement) const
+void DriveMovement::DebugPrint() const
 {
 	const size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
 	char c = (drive < totalAxes) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + (drive - totalAxes));
@@ -323,7 +326,7 @@ void DriveMovement::DebugPrint(bool isDeltaMovement) const
 					c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval,
 					twoDistanceToStopTimesCsquaredDivD);
 
-		if (isDeltaMovement && drive < DELTA_AXES)
+		if (isDelta)
 		{
 			debugPrintf("hmz0sK=%" PRIi32 " minusAaPlusBbTimesKs=%" PRIi32 " dSquaredMinusAsquaredMinusBsquared=%" PRId64 "\n"
 						"2c2mmsda=%" PRIu64 "2c2mmsdd=%" PRIu64 " asdsk=%" PRIu32 " dsdsk=%" PRIu32 " mmstcdts=%" PRIu32 "\n",
@@ -573,9 +576,9 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 }
 
 // Reduce the speed of this movement. Called to reduce the homing speed when we detect we are near the endstop for a drive.
-void DriveMovement::ReduceSpeed(const DDA& dda, uint32_t inverseSpeedFactor)
+void DriveMovement::ReduceSpeed(uint32_t inverseSpeedFactor)
 {
-	if (dda.isDeltaMovement && drive < DELTA_AXES)
+	if (isDelta)
 	{
 		// Force the linear motion phase
 		mp.delta.accelStopDsK = 0;

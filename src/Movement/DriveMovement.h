@@ -111,9 +111,7 @@ struct PrepParams
 	float zMovement;
 #endif
 	const LinearDeltaKinematics *dparams;
-	float diagonalSquared;
 	float a2plusb2;								// sum of the squares of the X and Y movement fractions
-	float a2b2D2;
 };
 
 enum class DMState : uint8_t
@@ -136,8 +134,8 @@ public:
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) __attribute__ ((hot));
 	bool PrepareDeltaAxis(const DDA& dda, const PrepParams& params) __attribute__ ((hot));
 	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation) __attribute__ ((hot));
-	void ReduceSpeed(const DDA& dda, uint32_t inverseSpeedFactor);
-	void DebugPrint(bool isDeltaMovement) const;
+	void ReduceSpeed(uint32_t inverseSpeedFactor);
+	void DebugPrint() const;
 	int32_t GetNetStepsLeft() const;
 	int32_t GetNetStepsTaken() const;
 
@@ -172,7 +170,8 @@ private:
 	uint8_t drive;										// the drive that this DM controls
 	uint8_t microstepShift : 4,							// log2 of the microstepping factor (for when we use dynamic microstepping adjustment)
 			direction : 1,								// true=forwards, false=backwards
-			fullCurrent : 1;							// true if the drivers are set to the full current, false if they are set to the standstill current
+			fullCurrent : 1,							// true if the drivers are set to the full current, false if they are set to the standstill current
+			isDelta : 1;								// true if this DM uses segment-free delta kinematics
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
 	uint32_t totalSteps;								// total number of steps for this move

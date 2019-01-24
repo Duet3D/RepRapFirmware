@@ -257,13 +257,29 @@ void PolarKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const f
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.
 // The speeds in Cartesian space have already been limited.
-void PolarKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes) const
+void PolarKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const
 {
-	const int32_t turntableMovement = labs(dda.DriveCoordinates()[1] - dda.GetPrevious()->DriveCoordinates()[1]);
+	int32_t turntableMovement = labs(dda.DriveCoordinates()[1] - dda.GetPrevious()->DriveCoordinates()[1]);
 	if (turntableMovement != 0)
 	{
-		const float stepRatio = dda.GetTotalDistance() * reprap.GetPlatform().DriveStepsPerUnit(1)/turntableMovement;
-		dda.LimitSpeedAndAcceleration(stepRatio * maxTurntableSpeed, stepRatio * maxTurntableAcceleration);
+		const float stepsPerDegree = reprap.GetPlatform().DriveStepsPerUnit(1);
+		if (continuousRotationShortcut)
+		{
+			const int32_t stepsPerRotation = lrintf(360.0 * stepsPerDegree);
+			if (turntableMovement > stepsPerRotation/2)
+			{
+				turntableMovement -= stepsPerRotation;
+			}
+			else if (turntableMovement < -stepsPerRotation/2)
+			{
+				turntableMovement += stepsPerRotation;
+			}
+		}
+		if (turntableMovement != 0)
+		{
+			const float stepRatio = dda.GetTotalDistance() * stepsPerDegree/abs(turntableMovement);
+			dda.LimitSpeedAndAcceleration(stepRatio * maxTurntableSpeed, stepRatio * maxTurntableAcceleration);
+		}
 	}
 }
 

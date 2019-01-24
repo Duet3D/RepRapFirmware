@@ -22,7 +22,7 @@ ScaraKinematics::ScaraKinematics()
 	thetaLimits[1] = DefaultMaxTheta;
 	psiLimits[0] = DefaultMinPsi;
 	psiLimits[1] = DefaultMaxPsi;
-	crosstalk[0] = crosstalk[1] = crosstalk[2] = 0.0;
+	crosstalk[0] = crosstalk[1] = crosstalk[2] = requestedMinRadius = 0.0;
 	Recalc();
 }
 
@@ -195,6 +195,7 @@ bool ScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 			error = true;
 			return true;
 		}
+		gb.TryGetFValue('R', requestedMinRadius, seen);
 
 		if (seen || seenNonGeometry)
 		{
@@ -438,7 +439,7 @@ void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const f
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.
 // The speeds in Cartesian space have already been limited.
-void ScaraKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes) const
+void ScaraKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const
 {
 	// For now we limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration.
 	// Limiting the angular rates of the arms would be better.
@@ -465,8 +466,9 @@ void ScaraKinematics::Recalc()
 	distalArmLengthSquared = fsquare(distalArmLength);
 	twoPd = proximalArmLength * distalArmLength * 2;
 
-	minRadius = sqrtf(proximalArmLengthSquared + distalArmLengthSquared
-						- twoPd * max<float>(cosf(psiLimits[0] * DegreesToRadians), cosf(psiLimits[1] * DegreesToRadians))) * 1.005;
+	minRadius = max<float>(sqrtf(proximalArmLengthSquared + distalArmLengthSquared
+							- twoPd * max<float>(cosf(psiLimits[0] * DegreesToRadians), cosf(psiLimits[1] * DegreesToRadians))) * 1.005,
+							requestedMinRadius);
 
 	// If the total angle range is greater than 360 degrees, we assume that it supports continuous rotation
 	supportsContinuousRotation[0] = (thetaLimits[1] - thetaLimits[0] > 360.0);

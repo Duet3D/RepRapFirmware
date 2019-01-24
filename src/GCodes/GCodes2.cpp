@@ -1243,6 +1243,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (seenFanNum)
 				{
 					platform.SetFanValue(fanNum, f);
+					if (IsMappedFan(fanNum))
+					{
+						lastDefaultFanSpeed = f;
+					}
 				}
 				else
 				{
@@ -1262,16 +1266,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				}
 				else
 				{
-					lastDefaultFanSpeed = pausedDefaultFanSpeed;
-					SetMappedFanSpeed();
+					SetMappedFanSpeed(pausedDefaultFanSpeed);
 				}
 			}
 		}
 		break;
 
 	case 107: // Fan off - deprecated
-		lastDefaultFanSpeed = 0.0;
-		SetMappedFanSpeed();
+		SetMappedFanSpeed(0.0);
 		break;
 
 	case 108: // Cancel waiting for temperature
@@ -3641,7 +3643,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			const KinematicsType oldK = move.GetKinematics().GetKinematicsType();		// get the current kinematics type so we can tell whether it changed
 
 			bool seen = false;
-			bool changedToCartesian = false;
 			if (gb.Seen('S'))
 			{
 				// Switch to the correct CoreXY mode
@@ -3650,7 +3651,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 				case 0:
 					move.SetKinematics(KinematicsType::cartesian);
-					changedToCartesian = true;
 					break;
 
 				case 1:
@@ -3671,14 +3671,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 			if (result == GCodeResult::ok)
 			{
-				if (!changedToCartesian)		// don't ask the kinematics to process M667 if we switched to Cartesian mode
+				if (gb.Seen('X') || gb.Seen('Y') || gb.Seen('Z'))
 				{
-					bool error = false;
-					if (move.GetKinematics().Configure(667, gb, reply, error))
-					{
-						seen = true;
-					}
-					result = GetGCodeResultFromError(error);
+					reply.copy("M667 XYZ parameters are no longer supported, use M669 matrix parameters instead");
+					result = GCodeResult::error;
 				}
 
 				if (seen)

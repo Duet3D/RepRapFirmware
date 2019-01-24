@@ -68,10 +68,12 @@ void CoreKinematics::Recalc()
 
 	for (size_t axis = 0; axis < MaxAxes; ++axis)
 	{
+		motorsUsedByAxis[axis] = 0;
 		for (size_t motor = 0; motor < MaxAxes; ++motor)
 		{
 			if (inverseMatrix(axis, motor) != 0.0)
 			{
+				SetBit(motorsUsedByAxis[axis], motor);
 				if (motor < firstMotor[axis])
 				{
 					firstMotor[axis] = motor;
@@ -236,16 +238,6 @@ bool CoreKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const String
 	bool seen;
 	switch (mCode)
 	{
-	case 667:
-		seen = gb.Seen('S');
-		if (gb.Seen('X') || gb.Seen('Y') || gb.Seen('Z'))
-		{
-			seen = true;
-			error = true;
-			reply.copy("M667 XYZ parameters are no longer supported. Please use M669 matrix paramerters instead.");
-		}
-		break;
-
 	case 669:
 		{
 			seen = gb.Seen('K');
@@ -388,7 +380,7 @@ void CoreKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const fl
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle
 // The speeds along individual Cartesian axes have already been limited before this is called, so we need only be concerned with shared motors
-void CoreKinematics::LimitSpeedAndAcceleration(DDA& dda, const float* normalisedDirectionVector, size_t numVisibleAxes) const
+void CoreKinematics::LimitSpeedAndAcceleration(DDA& dda, const float* normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const
 {
 	// For each shared motor, calculate how much of the total move it contributes
 	float motorMovements[MaxAxes];
@@ -424,6 +416,13 @@ void CoreKinematics::LimitSpeedAndAcceleration(DDA& dda, const float* normalised
 			dda.LimitSpeedAndAcceleration(reprap.GetPlatform().MaxFeedrate(motor)/mm, reprap.GetPlatform().Acceleration(motor)/mm);
 		}
 	}
+}
+
+// Return a bitmap of the motors that are involved in homing a particular axis or tower. Used for implementing stall detection endstops.
+// Usually it is just the corresponding motor (hence this default implementation), but CoreXY and similar kinematics move multiple motors to home an individual axis.
+AxesBitmap CoreKinematics::MotorsUsedToHomeAxis(size_t axis) const
+{
+	return motorsUsedByAxis[axis];
 }
 
 // End

@@ -223,7 +223,7 @@ public:
 #endif
 
 	float GetMappedFanSpeed() const { return lastDefaultFanSpeed; }		// Get the mapped fan speed
-	void SetMappedFanSpeed(float f);									// Set the mapped fan speed
+	void SetMappedFanSpeed(float f);									// Set the speeds of fans mapped for the current tool
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);	// Handle G-Code replies
 	void EmergencyStop();												// Cancel everything
 	bool GetLastPrintingHeight(float& height) const;					// Get the height in user coordinates of the last printing move
@@ -350,7 +350,7 @@ private:
 	bool DoEmergencyPause();													// Do an emergency pause following loss of power or a motor stall
 #endif
 
-	void SetMappedFanSpeed();													// Set the speeds of fans mapped for the current tool
+	bool IsMappedFan(unsigned int fanNumber);									// Return true if this fan number is currently being used as a print cooling fan
 	void SaveFanSpeeds();														// Save the speeds of all fans
 
 	GCodeResult SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply);		// Handle M558
