@@ -517,4 +517,17 @@ bool Tool::UsesHeater(int8_t heater) const
 	return false;
 }
 
+int Tool::GetHeaterAssignedToTool(int8_t global_heater) const
+{
+	for (size_t i = 0; i < heaterCount; i++)
+	{
+		if (heaters[i] == global_heater)
+		{
+			return i;
+		}
+	}
+
+	return -1;
+}
+
 // End
