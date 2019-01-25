@@ -84,6 +84,8 @@ public:
 	void IterateExtruders(std::function<void(unsigned int)> f) const;
 	void IterateHeaters(std::function<void(int)> f) const;
 
+	int GetHeaterAssignedToTool(int8_t global_heater) const;
+
 	friend class RepRap;
 
 protected:

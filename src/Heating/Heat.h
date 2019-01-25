@@ -155,6 +155,8 @@ public:
 
 	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
 
+	const char *HeaterStatusToString(HeaterStatus status) const;
+
 private:
 	Heat(const Heat&);											// Private copy constructor to prevent copying
 

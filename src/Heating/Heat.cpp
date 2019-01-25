@@ -743,4 +743,22 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const
 	return (buf.strlen() == 0) || f->Write(buf.c_str());
 }
 
+const char *Heat::HeaterStatusToString(HeaterStatus status) const
+{
+	switch(status) {
+	case HeaterStatus::HS_off:
+		return "Off";
+	case HeaterStatus::HS_standby:
+		return "Standby";
+	case HeaterStatus::HS_active:
+		return "Active";
+	case HeaterStatus::HS_fault:
+		return "Fault";
+	case HeaterStatus::HS_tuning:
+		return "Tuning";
+	default:
+		return "unknown";
+	}
+}
+
 // End

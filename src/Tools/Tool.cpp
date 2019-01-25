@@ -498,4 +498,17 @@ void Tool::IterateHeaters(std::function<void(int)> f) const
 	}
 }
 
+int Tool::GetHeaterAssignedToTool(int8_t global_heater) const
+{
+	for (size_t i = 0; i < heaterCount; i++)
+	{
+		if (heaters[i] == global_heater)
+		{
+			return i;
+		}
+	}
+
+	return -1;
+}
+
 // End

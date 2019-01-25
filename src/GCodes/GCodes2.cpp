@@ -2381,6 +2381,109 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		result = SetHeaterModel(gb, reply);
 		break;
 
+	case 308: // Set generic heater state
+	{
+		/*
+		 * M308 Generic Heater Control
+		 * 	Pnnn Heater number
+		 * 	Snnn Active Temp
+		 * 	Rnnn Standby Temp
+		 * 	Tnnn State: 0 = off, 1 = standby 2 = on.
+		 */
+		Heat& heat = reprap.GetHeat();
+		bool seen = false;
+		uint8_t currentHeater = 0;
+
+		if (gb.Seen('P')) {
+			currentHeater = gb.GetUIValue();
+			if (currentHeater >= NumHeaters)
+			{
+				reply.printf("Invalid heater index '%d'", currentHeater);
+				result = GCodeResult::error;
+				break;
+			}
+		} else {
+			reply.copy("P parameter must be specified");
+			result = GCodeResult::error;
+			break;
+		}
+
+		const Heat::HeaterStatus currentHeaterStatus = heat.GetStatus(currentHeater);
+		if (currentHeaterStatus > Heat::HS_active) {
+			reply.printf("Heater is currently in %s state",
+				heat.HeaterStatusToString(currentHeaterStatus));
+			result = GCodeResult::error;
+			break;
+		}
+
+		Tool* tool = reprap.GetCurrentTool();
+		ToolState toolState = tool->GetState();
+		int toolHeater = tool->GetHeaterAssignedToTool(currentHeater);
+
+		// Active temperature
+		if (gb.Seen('S'))
+		{
+			seen = true;
+			if (toolHeater >= 0) {
+				tool->SetToolHeaterActiveTemperature(toolHeater, gb.GetFValue());
+			} else {
+				heat.SetActiveTemperature(currentHeater, gb.GetFValue());
+			}
+		}
+
+		if (gb.Seen('R'))
+		{
+			seen = true;
+			if (toolHeater >= 0) {
+				tool->SetToolHeaterStandbyTemperature(toolHeater, gb.GetFValue());
+			} else {
+				heat.SetStandbyTemperature(currentHeater, gb.GetFValue());
+			}
+		}
+
+		if (gb.Seen('T'))
+		{
+			seen = true;
+			const int8_t state = gb.GetIValue();
+			if (state < Heat::HS_off || state > Heat::HS_active) {
+				reply.copy("T parameter must be 0(off), 1(standby) or 2(active)");
+				result = GCodeResult::error;
+				break;
+			}
+
+			if ((reprap.GetPrintMonitor().IsPrinting() || IsPausing() || IsPaused() || IsResuming())
+				&& toolState == ToolState::active && toolHeater >= 0) {
+				reply.printf("The state of active tool %d can't be changed while printing, pausing or resuming",
+					tool->Number());
+				result = GCodeResult::error;
+				break;
+			}
+
+			switch(state) {
+			case Heat::HS_off:
+				heat.SwitchOff(currentHeater);
+				break;
+			case Heat::HS_standby:
+				heat.Standby(currentHeater, nullptr);
+				break;
+			case Heat::HS_active:
+				heat.Activate(currentHeater);
+				break;
+			}
+		}
+
+		if (!seen)
+		{
+			reply.printf("Heater %d State: '%s', Active temp: %.1f" DEGREE_SYMBOL \
+				", Standby temp: %.1f" DEGREE_SYMBOL ", Current temp: %.1f" DEGREE_SYMBOL,
+				currentHeater, heat.HeaterStatusToString(currentHeaterStatus),
+				(double)heat.GetActiveTemperature(currentHeater),
+				(double)heat.GetStandbyTemperature(currentHeater),
+				(double)heat.GetTemperature(currentHeater));
+		}
+	}
+	break;
+
 	case 350: // Set/report microstepping
 		{
 			bool interp = (gb.Seen('I') && gb.GetIValue() > 0);
