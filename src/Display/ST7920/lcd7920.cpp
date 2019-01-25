@@ -25,7 +25,7 @@ const uint8_t LcdSetDdramAddress = 0x80;			// add the address we want to set
 // LCD extended instructions
 const uint8_t LcdSetGdramAddress = 0x80;
 
-const unsigned int LcdCommandDelayMicros = 72 - 8; // 72us required, less 7us time to send the command @ 2.0MHz
+const unsigned int LcdCommandDelayMicros = 72 - 8;	// 72us required, less 7us time to send the command @ 2.0MHz
 const unsigned int LcdDataDelayMicros = 4;			// delay between sending data bytes
 const unsigned int LcdDisplayClearDelayMillis = 3;	// 1.6ms should be enough
 
@@ -64,11 +64,13 @@ void Lcd7920::Init()
 		delayMicroseconds(1);
 
 		sendLcdCommand(LcdFunctionSetBasicAlpha);
-		delay(1);
+		delay(2);
 		sendLcdCommand(LcdFunctionSetBasicAlpha);
 		CommandDelay();
 		sendLcdCommand(LcdEntryModeSet);
 		CommandDelay();
+		sendLcdCommand(LcdDisplayClear);					// need this on some displays to ensure that the alpha RAM is clear (M3D Kanji problem)
+		delay(LcdDisplayClearDelayMillis);
 		sendLcdCommand(LcdFunctionSetExtendedGraphic);
 		CommandDelay();
 
