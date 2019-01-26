@@ -1084,8 +1084,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		const int8_t chamberHeater = (NumChamberHeaters > 0) ? heat->GetChamberHeater(0) : -1;
 		if (chamberHeater != -1)
 		{
-			response->catf("\"chamber\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
+			response->catf("\"chamber\":{\"current\":%.1f,\"active\":%.1f,\"standby\":%.1f,\"state\":%d,\"heater\":%d},",
 				(double)heat->GetTemperature(chamberHeater), (double)heat->GetActiveTemperature(chamberHeater),
+				(double)heat->GetStandbyTemperature(chamberHeater),
 					heat->GetStatus(chamberHeater), chamberHeater);
 		}
 
@@ -1093,8 +1094,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		const int8_t cabinetHeater = (NumChamberHeaters > 1) ? heat->GetChamberHeater(1) : -1;
 		if (cabinetHeater != -1)
 		{
-			response->catf("\"cabinet\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
+			response->catf("\"cabinet\":{\"current\":%.1f,\"active\":%.1f,\"standby\":%.1f,\"state\":%d,\"heater\":%d},",
 				(double)heat->GetTemperature(cabinetHeater), (double)heat->GetActiveTemperature(cabinetHeater),
+				(double)heat->GetStandbyTemperature(cabinetHeater),
 					heat->GetStatus(cabinetHeater), cabinetHeater);
 		}
 
@@ -1106,6 +1108,26 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		for (size_t heater = 0; heater < NumHeaters; heater++)
 		{
 			response->catf("%c%.1f", ch, (double)heat->GetTemperature(heater));
+			ch = ',';
+		}
+		response->cat((ch == '[') ? "[]" : "]");
+
+		// Current temperatures
+		response->cat(",\"active\":");
+		ch = '[';
+		for (size_t heater = 0; heater < NumHeaters; heater++)
+		{
+			response->catf("%c%.1f", ch, (double)heat->GetActiveTemperature(heater));
+			ch = ',';
+		}
+		response->cat((ch == '[') ? "[]" : "]");
+
+		// Current temperatures
+		response->cat(",\"standby\":");
+		ch = '[';
+		for (size_t heater = 0; heater < NumHeaters; heater++)
+		{
+			response->catf("%c%.1f", ch, (double)heat->GetStandbyTemperature(heater));
 			ch = ',';
 		}
 		response->cat((ch == '[') ? "[]" : "]");
