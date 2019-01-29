@@ -210,7 +210,7 @@ public:
 	uint32_t ReadMicrostepPosition() const { return mstepPosition; }
 
 private:
-	bool SetChopConf(uint32_t newVal);
+	bool SetChopConf(uint32_t newVal, bool raw = false);
 
 	void ResetLoadRegisters()
 	{
@@ -419,7 +419,7 @@ bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal)
 	switch(reg)
 	{
 	case SmartDriverRegister::chopperControl:
-		return SetChopConf(regVal);
+		return SetChopConf(regVal, true);
 
 	case SmartDriverRegister::coolStep:
 		registers[SmartEnable] = TMC_REG_SMARTEN | (regVal & 0xFFFF);
@@ -482,12 +482,16 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const
 }
 
 // Check the new chopper control register, update it and return true if it is legal
-bool TmcDriverState::SetChopConf(uint32_t newVal)
+bool TmcDriverState::SetChopConf(uint32_t newVal, bool raw)
 {
-	// TOFF = 0 turns the driver off so it is not allowed.
-	// TOFF = 1 is not allowed if TBL = 0.
 	const uint32_t toff = (newVal & TMC_CHOPCONF_TOFF_MASK) >> TMC_CHOPCONF_TOFF_SHIFT;
-	if (toff == 0 || (toff == 1 && ((newVal & TMC_CHOPCONF_TBL_MASK) == 0)))
+	// TOFF = 0 turns the driver off so it is not allowed unless given via Cnnn parameter.
+	if (!raw && toff == 0)
+	{
+		return false;
+	}
+	// TOFF = 1 is not allowed if TBL = 0.
+	if (toff == 1 && ((newVal & TMC_CHOPCONF_TBL_MASK) == 0))
 	{
 		return false;
 	}
