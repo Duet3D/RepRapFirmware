@@ -183,6 +183,18 @@ constexpr size_t MaxGridProbePoints = 121;				// 121 allows us to probe 200x200 
 constexpr size_t MaxXGridPoints = 21;					// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
 constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
+#elif __LPC17xx__
+# if defined(LPC_NETWORKING)
+constexpr size_t MaxGridProbePoints = 121;    			// 121 allows us to probe 200x200 at 20mm intervals
+constexpr size_t MaxXGridPoints = 21;         			// Maximum number of grid points in one X row
+constexpr size_t MaxProbePoints = 32;       			// Maximum number of G30 probe points
+constexpr size_t MaxCalibrationPoints = 16; 			// Should a power of 2 for speed
+# else
+constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
+constexpr size_t MaxXGridPoints = 41;					// Maximum number of grid points in one X row
+constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
+constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
+# endif
 #else
 # error
 #endif
@@ -256,6 +268,10 @@ constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buf
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 16;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buffers after long responses
+#elif __LPC17xx__
+constexpr uint16_t OUTPUT_BUFFER_SIZE = 256;            // How many bytes does each OutputBuffer hold?
+constexpr size_t OUTPUT_BUFFER_COUNT = 15;              // How many OutputBuffer instances do we have?
+constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;           // Number of reserved output buffers after long responses. Must be enough for an HTTP header
 #else
 # error
 #endif
@@ -304,7 +320,16 @@ constexpr uint32_t I2cClockFreq = 100000;				// clock frequency in Hz. 100kHz is
 constexpr size_t MaxI2cBytes = 32;						// max bytes in M260 or M261 command
 
 // File handling
-constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of simultaneous web requests + files being printed
+#if defined(__LPC17xx__)
+# if defined (ESP_NETWORKING)
+constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
+# else
+constexpr size_t MAX_FILES = 4;							// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
+# endif
+#else
+constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
+#endif
+
 constexpr size_t FILE_BUFFER_SIZE = 128;
 
 // Webserver stuff

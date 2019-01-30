@@ -24,6 +24,10 @@
 #include "ESP8266WiFi/WiFiInterface.h"
 #endif
 
+#if HAS_RTOSPLUSTCP_NETWORKING
+#include "RTOSPlusTCPEthernet/RTOSPlusTCPEthernetInterface.h"
+#endif
+
 #include "Platform.h"
 #include "RepRap.h"
 #include "HttpResponder.h"
@@ -35,7 +39,12 @@
 
 #ifdef RTOS
 
+#if __LPC17xx__
+constexpr size_t NetworkStackWords = 470;
+#else
 constexpr size_t NetworkStackWords = 550;
+#endif
+
 static Task<NetworkStackWords> networkTask;
 
 #endif
@@ -49,6 +58,8 @@ Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderT
 	interfaces[0] = nullptr;			// we set this up in Init()
 #elif defined(DUET_M)
 	interfaces[0] = new W5500Interface(p);
+#elif defined(__LPC17xx__)
+	interfaces[0] = new RTOSPlusTCPEthernetInterface(p);
 #else
 # error Unknown board
 #endif
@@ -82,7 +93,9 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Network)
 void Network::Init()
 {
 	httpMutex.Create("HTTP");
+#if SUPPORT_TELNET
 	telnetMutex.Create("Telnet");
+#endif
 
 #if defined(DUET_NG)
 	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new W5500Interface(platform));
@@ -90,16 +103,23 @@ void Network::Init()
 
 	// Create the responders
 	HttpResponder::InitStatic();
+
+#if SUPPORT_TELNET
 	TelnetResponder::InitStatic();
 
 	for (size_t i = 0; i < NumTelnetResponders; ++i)
 	{
 		responders = new TelnetResponder(responders);
 	}
+#endif
+
+#if SUPPORT_FTP
 	for (size_t i = 0; i < NumFtpResponders; ++i)
 	{
 		responders = new FtpResponder(responders);
 	}
+#endif
+
 	for (size_t i = 0; i < NumHttpResponders; ++i)
 	{
 		responders = new HttpResponder(responders);
@@ -469,8 +489,10 @@ void Network::HandleHttpGCodeReply(const char *msg)
 
 void Network::HandleTelnetGCodeReply(const char *msg)
 {
+#if SUPPORT_TELNET
 	MutexLocker lock(telnetMutex);
 	TelnetResponder::HandleGCodeReply(msg);
+#endif
 }
 
 void Network::HandleHttpGCodeReply(OutputBuffer *buf)
@@ -481,8 +503,12 @@ void Network::HandleHttpGCodeReply(OutputBuffer *buf)
 
 void Network::HandleTelnetGCodeReply(OutputBuffer *buf)
 {
+#if SUPPORT_TELNET
 	MutexLocker lock(telnetMutex);
 	TelnetResponder::HandleGCodeReply(buf);
+#else
+	OutputBuffer::Release(buf);
+#endif
 }
 
 uint32_t Network::GetHttpReplySeq()

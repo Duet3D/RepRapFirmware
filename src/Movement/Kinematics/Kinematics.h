@@ -43,17 +43,17 @@ enum class MotionType : uint8_t
 	segmentFreeDelta
 };
 
+// Class used to define homing mode
+enum class HomingMode : uint8_t
+{
+	homeCartesianAxes,
+	homeIndividualMotors,
+	homeSharedMotors
+};
+
 class Kinematics
 {
 public:
-	// Class used to define homing mode
-	enum HomingMode : uint8_t
-	{
-		homeCartesianAxes,
-		homeIndividualMotors,
-		homeSharedMotors
-	};
-
 	// Functions that must be defined in each derived class that implements a kinematics
 
 	// Return the name of the current kinematics.
@@ -171,9 +171,10 @@ public:
 	// Return true if the specified axis is a continuous rotation axis
 	virtual bool IsContinuousRotationAxis(size_t axis) const { return false; }
 
-	// Return a bitmap of the motors that are involved in homing a particular axis or tower. Used for implementing stall detection endstops.
-	// Usually it is just the corresponding motor, but CoreXY and similar kinematics move multiple motors to home an individual axis.
-	virtual AxesBitmap MotorsUsedToHomeAxis(size_t axis) const;
+	// Return a bitmap of the motors that cause movement of a particular axis or tower.
+	// This is used to determine which motors we need to enable to move a particular axis, and which motors to monitor for stall detect homing.
+	// For example, the first XY move made by a CoreXY machine may be a diagonal move, and it's important to enable the non-moving motor too.
+	virtual AxesBitmap GetConnectedAxes(size_t axis) const;
 
 	// Override this virtual destructor if your constructor allocates any dynamic memory
 	virtual ~Kinematics() { }

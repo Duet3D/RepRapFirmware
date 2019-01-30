@@ -6,6 +6,9 @@
  */
 
 #include "FtpResponder.h"
+
+#if SUPPORT_FTP
+
 #include "Socket.h"
 #include "Network.h"
 #include "NetworkInterface.h"
@@ -898,5 +901,7 @@ void FtpResponder::CloseDataPort()
 		fileBeingSent = nullptr;
 	}
 }
+
+#endif
 
 // End

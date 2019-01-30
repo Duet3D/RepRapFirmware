@@ -939,7 +939,7 @@ void Platform::UpdateFirmware()
 	DisableCache();
 
 	// Step 1 - Write update binary to Flash and overwrite the remaining space with zeros
-	// Leave the last 1KB of Flash memory untouched, so we can reuse the NvData after this update
+	// On the SAM3X, leave the last 1KB of Flash memory untouched, so we can reuse the NvData after this update
 
 #if !defined(IFLASH_PAGE_SIZE) && defined(IFLASH0_PAGE_SIZE)
 # define IFLASH_PAGE_SIZE	IFLASH0_PAGE_SIZE
@@ -1903,7 +1903,9 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		srdBuf[slot].icsr = SCB->ICSR;
 		srdBuf[slot].bfar = SCB->BFAR;
 #ifdef RTOS
-		srdBuf[slot].taskName = *reinterpret_cast<const uint32_t*>(pcTaskGetName(nullptr));
+		// Get the task name if we can. There may be no task executing, so we must allow for this.
+		const TaskHandle_t currentTask = xTaskGetCurrentTaskHandle();
+		srdBuf[slot].taskName = (currentTask == nullptr) ? 0 : *reinterpret_cast<const uint32_t*>(pcTaskGetName(currentTask));
 #endif
 
 		if (stk != nullptr)
@@ -2702,18 +2704,35 @@ EndStopHit Platform::Stopped(size_t axisOrExtruder) const
 #if HAS_STALL_DETECT
 		case EndStopInputType::motorStall:
 			{
-				bool motorIsStalled = false;
-				AxesBitmap motorsUsed = reprap.GetMove().GetKinematics().MotorsUsedToHomeAxis(axisOrExtruder);
-				for (size_t motor = 0; motorsUsed != 0; ++motor)
+				bool motorIsStalled;
+				const Kinematics& k = reprap.GetMove().GetKinematics();
+				if (k.GetHomingMode() == HomingMode::homeIndividualMotors)
 				{
-					if (IsBitSet(motorsUsed, motor))
+					motorIsStalled = AnyAxisMotorStalled(axisOrExtruder);
+				}
+				else
+				{
+					AxesBitmap connectedAxes = k.GetConnectedAxes(axisOrExtruder);
+					if (connectedAxes == MakeBitmap<AxesBitmap>(axisOrExtruder))
 					{
-						if (AnyAxisMotorStalled(motor))
+						// Optimisation: no need to search the connectedAxes bitmap in the common case of no connected axes
+						motorIsStalled = AnyAxisMotorStalled(axisOrExtruder);
+					}
+					else
+					{
+						motorIsStalled = false;
+						for (size_t motor = 0; connectedAxes != 0; ++motor)
 						{
-							motorIsStalled = true;
-							break;
+							if (IsBitSet(connectedAxes, motor))
+							{
+								if (AnyAxisMotorStalled(motor))
+								{
+									motorIsStalled = true;
+									break;
+								}
+								ClearBit(connectedAxes, motor);
+							}
 						}
-						ClearBit(motorsUsed, motor);
 					}
 				}
 				return (!motorIsStalled) ? EndStopHit::noStop

@@ -431,7 +431,7 @@ bool Move::SetKinematics(KinematicsType k)
 // Return true if this is a raw motor move
 bool Move::IsRawMotorMove(uint8_t moveType) const
 {
-	return moveType == 2 || ((moveType == 1 || moveType == 3) && kinematics->GetHomingMode() != Kinematics::HomingMode::homeCartesianAxes);
+	return moveType == 2 || ((moveType == 1 || moveType == 3) && kinematics->GetHomingMode() != HomingMode::homeCartesianAxes);
 }
 
 // Return true if the specified point is accessible to the Z probe
@@ -729,6 +729,11 @@ int32_t Move::MotorMovementToSteps(size_t drive, float coord)
 void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
 {
 	kinematics->MotorStepsToCartesian(motorPos, reprap.GetPlatform().GetDriveStepsPerUnit(), numVisibleAxes, numTotalAxes, machinePos);
+	if (reprap.Debug(moduleMove) && !inInterrupt())
+	{
+		debugPrintf("Forward transformed %" PRIi32 " %" PRIi32 " %" PRIi32 " to %.2f %.2f %.2f\n",
+			motorPos[0], motorPos[1], motorPos[2], (double)machinePos[0], (double)machinePos[1], (double)machinePos[2]);
+	}
 }
 
 // Convert Cartesian coordinates to motor steps, axes only, returning true if successful.
@@ -746,7 +751,8 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 		}
 		else if (reprap.Debug(moduleDda))
 		{
-			debugPrintf("Transformed %.2f %.2f %.2f to %" PRIi32 " %" PRIi32 " %" PRIi32 "\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
+			debugPrintf("Transformed %.2f %.2f %.2f to %" PRIi32 " %" PRIi32 " %" PRIi32 "\n",
+				(double)machinePos[0], (double)machinePos[1], (double)machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
 		}
 	}
 	return b;

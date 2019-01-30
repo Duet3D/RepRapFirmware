@@ -30,6 +30,8 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
+#define SUPPORT_FTP				1
+#define SUPPORT_TELNET			1
 
 #define USE_CACHE				1					// set nonzero to enable the cache
 

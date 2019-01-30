@@ -30,7 +30,7 @@ public:
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
 	AxesBitmap AxesToHomeBeforeProbing() const override { return MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS); }
 	size_t NumHomingButtons(size_t numVisibleAxes) const override { return 0; }
-	HomingMode GetHomingMode() const override { return homeIndividualMotors; }
+	HomingMode GetHomingMode() const override { return HomingMode::homeIndividualMotors; }
 	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const override;
 	AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const override;
 	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const override;

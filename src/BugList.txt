@@ -271,11 +271,30 @@ Done in 2.02 release:
 - I2C error recovery?
 - Pressure advance issue? https://forum.duet3d.com/topic/8672/extruder-motors-skip-steps-with-pressure-advance-enabled/3
 - After pausing a print, if Cancel is pressed, cancel initial heating first like M108 does
-- 4-tower delta kinematics
+- [done, test] 4-tower delta kinematics
 - Bug: M997 S1 sent from USB keeps returning M105 status reports while the wifi firmware is flashing
 - Test with Duet 3
+- On delta, G1 Y-100 after homing hits endstops - new limit check not working properly
+- [done, ok] Fix M3D Kanji problem on some displays
+- Make G2/G3 segment length lower at low speeds, https://forum.duet3d.com/post/79040
+- Implement G17, error on G18/G19.
+- M453 do the switch even if bad P parameter used
+- [done, test] Core kinematics: enable all necessary motors
+- Command (M18/M84?) to enable specified motors or axes
+- Add check for M208 min > max
+- Don't keep sending "wifi reported error" messages during reconnection attempts, https://forum.duet3d.com/topic/8837/wifi-reported-error
+- [done, ok] fixed a crash in the crash handler when no task was active
+- [done] Support L parameter in M585, thanks chrishamm
 
-Look at icon generation, https://forum.duet3d.com/topic/8177/icon-generation/7
+Investigations
+
+- [done, DWC bug, tell chrishamm] JSON (?), https://forum.duet3d.com/topic/8816/java-errors/5
+- HaqXY
+- I2C, 
+- [investigated, awaiting feedback] Kulitorum segmented speed issue, https://forum.duet3d.com/topic/8789/max-actual-speed-at-high-path-detail/10
+- Low steps/mm and pressure advance, https://forum.duet3d.com/topic/8672/extruder-motors-skip-steps-with-pressure-advance-enabled/67
+- Retraction problem, https://forum.duet3d.com/post/79485
+- Icon generation, https://forum.duet3d.com/topic/8177/icon-generation/7
 
 2.03 planned:
 - Stop print after a short to ground report? https://forum.duet3d.com/topic/8239/duet-maestro-short-to-ground/10

@@ -42,6 +42,7 @@ const EndstopChecks ZProbeActive = 1 << 31;				// must be distinct from 1 << (an
 const EndstopChecks HomeAxes = 1 << 30;					// must be distinct from 1 << (any drive number)
 const EndstopChecks LogProbeChanges = 1 << 29;			// must be distinct from 1 << (any drive number)
 const EndstopChecks UseSpecialEndstop = 1 << 28;		// must be distinct from 1 << (any drive number)
+const EndstopChecks ActiveLowEndstop = 1 << 27;			// must be distinct from 1 << (any drive number)
 
 typedef uint32_t TriggerInputsBitmap;					// Bitmap of input pins that a single trigger number responds to
 typedef uint32_t TriggerNumbersBitmap;					// Bitmap of trigger numbers

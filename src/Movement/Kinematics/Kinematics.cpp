@@ -130,9 +130,9 @@ AxesBitmap Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alread
 	return homeFirst & ~alreadyHomed;
 }
 
-// Return a bitmap of the motors that are involved in homing a particular axis or tower. Used for implementing stall detection endstops.
+// Return a bitmap of the motors that affect this axis or tower. Used for implementing stall detection endstops and energising additional motors.
 // Usually it is just the corresponding motor (hence this default implementation), but CoreXY and similar kinematics move multiple motors to home an individual axis.
-AxesBitmap Kinematics::MotorsUsedToHomeAxis(size_t axis) const
+AxesBitmap Kinematics::GetConnectedAxes(size_t axis) const
 {
 	return MakeBitmap<AxesBitmap>(axis);
 }

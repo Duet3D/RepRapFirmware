@@ -34,7 +34,6 @@ void CoreKinematics::Recalc()
 
 		// Apply the Gauss-Jordan operation to transform the right half into the inverse of the inverse matrix
 		const bool ok = tempMatrix.GaussJordan(MaxAxes, 2 * MaxAxes);
-
 		if (ok)
 		{
 			// Copy the right half to the forward matrix
@@ -61,28 +60,15 @@ void CoreKinematics::Recalc()
 	{
 		firstMotor[i] = firstAxis[i] = MaxAxes;
 		lastMotor[i] = lastAxis[i] = 0;
+		connectedAxes[i] = 0;
 	}
-
-	AxesBitmap usedMotors = 0;
-	AxesBitmap sharedMotors = 0;
 
 	for (size_t axis = 0; axis < MaxAxes; ++axis)
 	{
-		motorsUsedByAxis[axis] = 0;
 		for (size_t motor = 0; motor < MaxAxes; ++motor)
 		{
-			if (inverseMatrix(axis, motor) != 0.0)
+			if (inverseMatrix(axis, motor) != 0.0)							// if this axis needs this motor driven
 			{
-				SetBit(motorsUsedByAxis[axis], motor);
-				if (motor < firstMotor[axis])
-				{
-					firstMotor[axis] = motor;
-				}
-				if (motor > lastMotor[axis])
-				{
-					lastMotor[axis] = motor;
-				}
-
 				if (axis < firstAxis[motor])
 				{
 					firstAxis[motor] = axis;
@@ -91,35 +77,28 @@ void CoreKinematics::Recalc()
 				{
 					lastAxis[motor] = axis;
 				}
-
-				if (IsBitSet(usedMotors, motor))
-				{
-					SetBit(sharedMotors, motor);
-				}
-				else
-				{
-					SetBit(usedMotors, motor);
-				}
+				SetBit(connectedAxes[axis], motor);
 			}
-		}
-	}
 
-	// Now we can work out which axes have shared motors
-	axesWithSharedMotors = 0;
-	for (size_t axis = 0; axis < MaxAxes; ++axis)
-	{
-		if (   firstMotor[axis] != axis || lastMotor[axis] != axis			// if we share the motor for another axis
-			|| IsBitSet(sharedMotors, axis)									// or another axis shares our motor
-		   )
-		{
-			SetBit(axesWithSharedMotors, axis);
+			if (forwardMatrix(motor, axis) != 0.0)							// if this motor affects this axes
+			{
+				if (motor < firstMotor[axis])
+				{
+					firstMotor[axis] = motor;
+				}
+				if (motor > lastMotor[axis])
+				{
+					lastMotor[axis] = motor;
+				}
+				SetBit(connectedAxes[axis], motor);
+			}
 		}
 	}
 
 	if (reprap.Debug(moduleMove))
 	{
-		PrintMatrix("Inverse", inverseMatrix, MaxAxes, MaxAxes);
-		PrintMatrix("Forward", forwardMatrix, MaxAxes, MaxAxes);
+		PrintMatrix("Inverse", inverseMatrix);
+		PrintMatrix("Forward", forwardMatrix);
 
 		String<MediumStringLength> s;
 		s.copy("First/last motors:");
@@ -141,7 +120,7 @@ void CoreKinematics::Recalc()
 // Return true if the axis doesn't have a single dedicated motor
 inline bool CoreKinematics::HasSharedMotor(size_t axis) const
 {
-	return IsBitSet(axesWithSharedMotors, axis);
+	return connectedAxes[axis] != MakeBitmap<AxesBitmap>(axis);
 }
 
 CoreKinematics::CoreKinematics(KinematicsType k) : ZLeadscrewKinematics(k), modified(false)
@@ -420,9 +399,9 @@ void CoreKinematics::LimitSpeedAndAcceleration(DDA& dda, const float* normalised
 
 // Return a bitmap of the motors that are involved in homing a particular axis or tower. Used for implementing stall detection endstops.
 // Usually it is just the corresponding motor (hence this default implementation), but CoreXY and similar kinematics move multiple motors to home an individual axis.
-AxesBitmap CoreKinematics::MotorsUsedToHomeAxis(size_t axis) const
+AxesBitmap CoreKinematics::GetConnectedAxes(size_t axis) const
 {
-	return motorsUsedByAxis[axis];
+	return connectedAxes[axis];
 }
 
 // End

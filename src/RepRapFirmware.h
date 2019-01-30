@@ -337,7 +337,7 @@ const uint32_t NvicPrioritySpi = 6;				// SPI is used for network transfers on D
 // We have 16 priority levels
 // Use priority 4 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 
-# if SAM4E
+# if SAM4E || __LPC17xx__
 const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 # endif
 

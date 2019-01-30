@@ -857,6 +857,12 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			{
 				moveBuffer.endStopsToCheck = UseSpecialEndstop;
 				SetBit(moveBuffer.endStopsToCheck, endStopToUse);
+
+				if (gb.Seen('L') && gb.GetIValue() == 0)
+				{
+					// By default custom endstops are active-high when triggered, so allow this to be inverted
+					moveBuffer.endStopsToCheck |= ActiveLowEndstop;
+				}
 			}
 			moveBuffer.xAxes = DefaultXAxisMapping;
 			moveBuffer.yAxes = DefaultYAxisMapping;

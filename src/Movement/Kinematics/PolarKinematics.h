@@ -24,7 +24,7 @@ public:
 	bool LimitPosition(float position[], size_t numAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
 	const char* HomingButtonNames() const override { return "RTZUVWABC"; }
-	HomingMode GetHomingMode() const override { return homeIndividualMotors; }
+	HomingMode GetHomingMode() const override { return HomingMode::homeIndividualMotors; }
 	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const override;
 	AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const override;
 	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const override;

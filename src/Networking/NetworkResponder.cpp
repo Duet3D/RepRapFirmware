@@ -125,7 +125,10 @@ void NetworkResponder::SendData()
 			}
 
 			fileBuffer->Taken(sent);
-			if (sent < remaining)
+
+			if (   sent < remaining				// if we couldn't send it all...
+				|| fileBuffer->IsEmpty()		// ...or if we've sent the whole buffer, return to allow other sockets to be polled
+			   )
 			{
 				return;
 			}
