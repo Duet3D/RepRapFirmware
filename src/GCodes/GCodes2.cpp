@@ -2671,6 +2671,44 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+	case 470: // mkdir
+		{
+			String<MaxFilenameLength> dirName;
+			if (!gb.Seen('P') || !gb.GetQuotedString(dirName.GetRef()))
+			{
+				reply.copy("Bad or missing P parameter");
+				result = GCodeResult::error;
+				break;
+			}
+			platform.GetMassStorage()->MakeDirectory(dirName.c_str());
+		}
+		break;
+
+	case 471: // move/rename file/directory
+		{
+			String<MaxFilenameLength> oldVal;
+			if (!gb.Seen('S') || !gb.GetQuotedString(oldVal.GetRef()))
+			{
+				reply.copy("Bad or missing S parameter");
+				result = GCodeResult::error;
+				break;
+			}
+			String<MaxFilenameLength> newVal;
+			if (!gb.Seen('T') || !gb.GetQuotedString(newVal.GetRef()))
+			{
+				reply.copy("Bad or issing T parameter");
+				result = GCodeResult::error;
+				break;
+			}
+			MassStorage * const ms = platform.GetMassStorage();
+			if (gb.Seen('D') && gb.GetUIValue() == 1 && ms->FileExists(oldVal.c_str()) && ms->FileExists(newVal.c_str()))
+			{
+				ms->Delete(nullptr, newVal.c_str());
+			}
+			ms->Rename(oldVal.c_str(), newVal.c_str());
+		}
+		break;
+
 	case 500: // Store parameters in config-override.g
 		result = WriteConfigOverrideFile(gb, reply);
 		break;
