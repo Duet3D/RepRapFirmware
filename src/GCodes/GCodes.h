@@ -44,6 +44,8 @@ const EndstopChecks LogProbeChanges = 1 << 29;			// must be distinct from 1 << (
 const EndstopChecks UseSpecialEndstop = 1 << 28;		// must be distinct from 1 << (any drive number)
 const EndstopChecks ActiveLowEndstop = 1 << 27;			// must be distinct from 1 << (any drive number)
 
+constexpr uint32_t ZProbeEndstopNumber = 1000;          // This is the special number to address the ZProbe as endstop
+
 typedef uint32_t TriggerInputsBitmap;					// Bitmap of input pins that a single trigger number responds to
 typedef uint32_t TriggerNumbersBitmap;					// Bitmap of trigger numbers
 

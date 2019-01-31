@@ -819,7 +819,8 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 // Deal with a M585
 GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 {
-	if (reprap.GetCurrentTool() == nullptr)
+	const unsigned int tValue = gb.Seen('T') ? gb.GetUIValue() : 0;
+	if (tValue == 0 && reprap.GetCurrentTool() == nullptr)
 	{
 		reply.copy("No tool selected!");
 		return GCodeResult::error;
@@ -836,7 +837,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 		{
 			// Get parameters first and check them
 			const int endStopToUse = gb.Seen('E') ? gb.GetIValue() : -1;
-			if (endStopToUse > (int)NumEndstops)
+			if (endStopToUse >= (int)NumEndstops && endStopToUse != (int)ZProbeEndstopNumber)
 			{
 				reply.copy("Invalid endstop number");
 				return GCodeResult::error;
@@ -848,22 +849,29 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 
 			// Prepare another move similar to G1 .. S3
 			moveBuffer.moveType = 3;
+			axesToSenseLength = 0;
+			bool customEndstop = endStopToUse >= 0;
 			if (endStopToUse < 0)
 			{
 				moveBuffer.endStopsToCheck = 0;
 				SetBit(moveBuffer.endStopsToCheck, axis);
 			}
+			else if (endStopToUse == (int)ZProbeEndstopNumber)
+			{
+				moveBuffer.endStopsToCheck = ZProbeActive;
+			}
 			else
 			{
 				moveBuffer.endStopsToCheck = UseSpecialEndstop;
 				SetBit(moveBuffer.endStopsToCheck, endStopToUse);
-
-				if (gb.Seen('L') && gb.GetIValue() == 0)
-				{
-					// By default custom endstops are active-high when triggered, so allow this to be inverted
-					moveBuffer.endStopsToCheck |= ActiveLowEndstop;
-				}
 			}
+
+			// By default custom endstops are active-high when triggered, so allow this to be inverted
+			if (customEndstop && gb.Seen('L') && gb.GetIValue() == 0)
+			{
+				moveBuffer.endStopsToCheck |= ActiveLowEndstop;
+			}
+
 			moveBuffer.xAxes = DefaultXAxisMapping;
 			moveBuffer.yAxes = DefaultYAxisMapping;
 			moveBuffer.usePressureAdvance = false;
@@ -899,7 +907,17 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 
 			// Kick off new movement
 			NewMoveAvailable(1);
-			gb.SetState(GCodeState::probingToolOffset);
+
+			// Tool probe
+			if (tValue == 0)
+			{
+				gb.SetState(GCodeState::probingToolOffset);
+			}
+			// Workpiece probe
+			else if (tValue == 1)
+			{
+				gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
+			}
 		}
 	}
 
