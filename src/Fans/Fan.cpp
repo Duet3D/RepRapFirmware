@@ -17,6 +17,7 @@ void Fan::Init(Pin p_pin, LogicalPin lp, bool hwInverted, PwmFrequency p_freq)
 	val = lastVal = 0.0;
 	minVal = 0.1;				// 10% minimum fan speed
 	maxVal = 1.0;				// 100% maximum fan speed
+	scaling = false;
 	blipTime = 100;				// 100ms fan blip
 	freq = p_freq;
 	pin = p_pin;
@@ -107,23 +108,21 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 		if (gb.Seen('L'))		// Set minimum speed
 		{
 			seen = true;
-			float speed = gb.GetFValue();
-			if (speed > 1.0)
-			{
-				speed /= 255.0;
-			}
-			minVal = constrain<float>(speed, 0.0, maxVal);
+			const float minSpeed = ConvertOldStylePwm(gb.GetFValue());
+			minVal = constrain<float>(minSpeed, 0.0, maxVal);
 		}
 
 		if (gb.Seen('X'))		// Set maximum speed
 		{
 			seen = true;
-			float speed = gb.GetFValue();
-			if (speed > 1.0)
-			{
-				speed /= 255.0;
-			}
-			maxVal = constrain<float>(speed, minVal, 1.0);
+			const float maxSpeed = ConvertOldStylePwm(gb.GetFValue());
+			maxVal = constrain<float>(maxSpeed, minVal, 1.0);
+		}
+
+		if (gb.Seen('W'))       // Enable scaling between min and max
+		{
+			seen = true;
+			scaling = (gb.GetUIValue() == 1);
 		}
 
 		if (gb.Seen('H'))		// Set thermostatically-controlled heaters
@@ -180,11 +179,13 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 			}
 			reply.cat(" pin: ");
 			reprap.GetPlatform().AppendPinName(logicalPin, reply);
-			reply.catf(", frequency: %uHz, speed: %d%%, min: %d%%, max: %d%%, blip: %.2f, inverted: %s",
+			reply.catf(", frequency: %uHz, speed: %d%%, physical speed: %d%%, min: %d%%, max: %d%%, scaling: %s, blip: %.2f, inverted: %s",
 						(unsigned int)freq,
 						(int)(val * 100.0),
+						(int)(lastPwm * 100.0),
 						(int)(minVal * 100.0),
 						(int)(maxVal * 100.0),
+						(scaling ? "yes" : "no"),
 						(double)(blipTime * MillisToSeconds),
 						(inverted) ? "yes" : "no");
 			if (heatersMonitored != 0)
@@ -288,8 +289,15 @@ void Fan::Refresh()
 					}
 					else if (lastVal != 0.0 && ht + ThermostatHysteresis > triggerTemperatures[0])		// if the fan is on, add a hysteresis before turning it off
 					{
-						const float minFanSpeed = (bangBangMode) ? max<float>(0.5, val) : minVal;
-						reqVal = constrain<float>(reqVal, minFanSpeed, maxVal);
+						if (scaling)
+						{
+							reqVal = (bangBangMode) ? max<float>(0.5, val) : reqVal;
+						}
+						else
+						{
+							const float minFanSpeed = (bangBangMode) ? max<float>(0.5, val) : minVal;
+							reqVal = constrain<float>(reqVal, minFanSpeed, maxVal);
+						}
 					}
 #if HAS_SMART_DRIVERS
 					const unsigned int channel = reprap.GetHeat().GetHeaterChannel(heaterHumber);
@@ -305,7 +313,14 @@ void Fan::Refresh()
 
 	if (reqVal > 0.0)
 	{
-		reqVal = constrain<float>(reqVal, minVal, maxVal);
+		if (scaling)
+		{
+			reqVal = (maxVal - minVal) * reqVal + minVal;
+		}
+		else
+		{
+			reqVal = constrain<float>(reqVal, minVal, maxVal);
+		}
 		if (lastVal == 0.0)
 		{
 			// We are turning this fan on

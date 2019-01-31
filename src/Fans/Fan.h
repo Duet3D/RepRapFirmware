@@ -45,6 +45,7 @@ private:
 	float lastVal;
 	float minVal;
 	float maxVal;
+	bool scaling;                           // scale all speeds between min and max
 	float triggerTemperatures[2];
 	float lastPwm;
 	uint32_t blipTime;						// in milliseconds
