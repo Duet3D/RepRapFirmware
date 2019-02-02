@@ -114,7 +114,8 @@ public:
 	// Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
 	// The default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
 	// applyM208Limits determines whether the m208 limits are applied, otherwise just the geometric limitations of the architecture are applied.
-	virtual bool LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const;
+	// If initialCoords is null, just limit the final coordinates; else limit all points on a straight line between the two.
+	virtual bool LimitPosition(float finalCoords[], float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const;
 
 	// Return true if the intermediate XY positions of a straight line move are reachable without exceeding geometric limits, given that the start and end positions are reachable.
 	// This matters for SCARA and similar printers. On most other printers, if the start and end point are reachable, so are all the intermediate points.

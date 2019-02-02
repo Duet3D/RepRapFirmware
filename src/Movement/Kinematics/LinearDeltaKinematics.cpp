@@ -73,19 +73,32 @@ void LinearDeltaKinematics::Recalc()
 	for (size_t axis = 0; axis < numTowers; ++axis)
 	{
 		D2[axis] = fsquare(diagonals[axis]);
-		homedCarriageHeights[axis] = homedHeight + sqrtf(D2[axis] - fsquare(radius));
 		if (axis < UsualNumTowers)
 		{
-			homedCarriageHeights[axis] += endstopAdjustments[axis];
-			const float heightLimit = homedCarriageHeights[axis] - diagonals[axis];
-			if (heightLimit < alwaysReachableHeight)
-			{
-				alwaysReachableHeight = heightLimit;
-			}
+			homedCarriageHeights[axis] = homedHeight + sqrtf(D2[axis] - fsquare(radius)) + endstopAdjustments[axis];
+		}
+		else
+		{
+			homedCarriageHeights[axis] = homedHeight + sqrtf(D2[axis] - fsquare(towerX[axis]) - fsquare(towerY[axis]));
+		}
+		const float heightLimit = homedCarriageHeights[axis] - diagonals[axis];
+		if (heightLimit < alwaysReachableHeight)
+		{
+			alwaysReachableHeight = heightLimit;
 		}
 	}
 
 	printRadiusSquared = fsquare(printRadius);
+
+	if (reprap.Debug(moduleMove))
+	{
+		debugPrintf("HCH:");
+		for (size_t i = 0; i < numTowers; ++i)
+		{
+			debugPrintf(" %.2f", (double)homedCarriageHeights[i]);
+		}
+		debugPrintf("\n");
+	}
 }
 
 // Make the average of the endstop adjustments zero, without changing the individual homed carriage heights
@@ -143,7 +156,7 @@ void LinearDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float
 bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const
 {
 	bool ok = true;
-	for (size_t axis = 0; axis < min<size_t>(numVisibleAxes, numTowers); ++axis)
+	for (size_t axis = 0; axis < numTowers; ++axis)
 	{
 		const float pos = Transform(machinePos, axis);
 		if (isnan(pos) || isinf(pos))
@@ -183,46 +196,116 @@ bool LinearDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) co
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
-bool LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
+bool LinearDeltaKinematics::LimitPosition(float finalCoords[], float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
 	const AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
+
+	// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
+	// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
 	if ((axesHomed & allAxes) == allAxes)
 	{
-		// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
-		// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
 		// Constrain the move to be within the build radius
-		const float diagonalSquared = fsquare(coords[X_AXIS]) + fsquare(coords[Y_AXIS]);
+		const float diagonalSquared = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);
 		if (diagonalSquared > printRadiusSquared)
 		{
 			const float factor = sqrtf(printRadiusSquared / diagonalSquared);
-			coords[X_AXIS] *= factor;
-			coords[Y_AXIS] *= factor;
+			finalCoords[X_AXIS] *= factor;
+			finalCoords[Y_AXIS] *= factor;
 			limited = true;
 		}
 
-		if (applyM208Limits && coords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
+		// Constrain the position to be withint the reachable height
+		if (initialCoords == nullptr)
 		{
-			coords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
-			limited = true;
-		}
-		else if (coords[Z_AXIS] > alwaysReachableHeight)
-		{
-			// Determine the maximum reachable height at this position
-			for (size_t tower = 0; tower < UsualNumTowers; ++tower)
+			// Asking to limit a single position
+			if (finalCoords[Z_AXIS] > alwaysReachableHeight)
 			{
-				const float carriageHeight = Transform(coords, tower);
-				if (carriageHeight > homedCarriageHeights[tower])
+				for (size_t tower = 0; tower < UsualNumTowers; ++tower)
 				{
-					coords[Z_AXIS] -= (carriageHeight - homedCarriageHeights[tower]);
-					limited = true;
+					const float carriageHeight = Transform(finalCoords, tower);
+					if (carriageHeight > homedCarriageHeights[tower])
+					{
+						finalCoords[Z_AXIS] -= (carriageHeight - homedCarriageHeights[tower]);
+						limited = true;
+					}
 				}
 			}
+
+		}
+		else if (finalCoords[Z_AXIS] > alwaysReachableHeight || initialCoords[Z_AXIS] > alwaysReachableHeight)
+		{
+			// Asking to limit all positions along a straight line
+			// Determine the maximum reachable height at this position and all intermediate positions
+			const float dx = finalCoords[X_AXIS] - initialCoords[X_AXIS],
+						dy = finalCoords[Y_AXIS] - initialCoords[Y_AXIS];
+			const float P = fsquare(dx) + fsquare(dy);
+			float dz = finalCoords[Z_AXIS] - initialCoords[Z_AXIS];
+			float Q = P + fsquare(dz);
+			if (Q != 0.0)			// if there is any XYZ movement
+			{
+				for (size_t tower = 0; tower < numTowers; ++tower)
+				{
+					bool again;
+					const float tx = towerX[tower] - initialCoords[X_AXIS],
+								ty = towerY[tower] - initialCoords[Y_AXIS];
+					do
+					{
+						again = false;
+
+						// Determine the coordinates of the closest point of approach to the tower
+						const float t = (dz * sqrtf(Q * (fsquare(diagonals[tower]) * P - fsquare(dx * ty - dy * tx))) + (dx * tx + dy * ty) * P);
+						if (t > 0.0)
+						{
+							float tempCoords[XYZ_AXES];
+							float PQ = P * Q;
+							if (t < PQ)
+							{
+								tempCoords[X_AXIS] = initialCoords[X_AXIS] + dx * (t/PQ);
+								tempCoords[Y_AXIS] = initialCoords[Y_AXIS] + dy * (t/PQ);
+								tempCoords[Z_AXIS] = initialCoords[Z_AXIS] + dz * (t/PQ);
+							}
+							else
+							{
+								tempCoords[X_AXIS] = finalCoords[X_AXIS];
+								tempCoords[Y_AXIS] = finalCoords[Y_AXIS];
+								tempCoords[Z_AXIS] = finalCoords[Z_AXIS];
+							}
+							const float carriageHeight = Transform(tempCoords, tower);
+							if (carriageHeight > homedCarriageHeights[tower])
+							{
+								float reductionNeeded = carriageHeight - homedCarriageHeights[tower];
+								if (t < PQ)
+								{
+									reductionNeeded *= PQ/t;
+								}
+								finalCoords[Z_AXIS] -= reductionNeeded + 0.5;		// over-correct to speed up convergence. 0.5mm is better than 0.1mm and as good as 1mm.
+								limited = true;
+
+								// Changing the end point Z coordinate will have moved the closest point of approach, so we need to iterate
+								again = true;
+								dz = finalCoords[Z_AXIS] - initialCoords[Z_AXIS];
+								Q = P + fsquare(dz);
+								if (reprap.Debug(moduleMove))
+								{
+									debugPrintf("Limit tower %u, t=%.2f\n", tower, (double)(t/PQ));
+								}
+							}
+						}
+					} while (again);
+				}
+			}
+		}
+
+		if (applyM208Limits && finalCoords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
+		{
+			finalCoords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
+			limited = true;
 		}
 	}
 
 	// Limit any additional axes according to the M208 limits
-	if (applyM208Limits && LimitPositionFromAxis(coords, Z_AXIS + 1, numVisibleAxes, axesHomed))
+	if (applyM208Limits && LimitPositionFromAxis(finalCoords, numTowers, numVisibleAxes, axesHomed))
 	{
 		limited = true;
 	}
@@ -709,7 +792,11 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 				seen = true;
 			}
 
-			if (!seen)
+			if (seen)
+			{
+				Recalc();
+			}
+			else
 			{
 				reply.printf("Endstop adjustments X%.2f Y%.2f Z%.2f, tilt X%.2f%% Y%.2f%%",
 					(double)endstopAdjustments[X_AXIS], (double)endstopAdjustments[Y_AXIS], (double)endstopAdjustments[Z_AXIS],

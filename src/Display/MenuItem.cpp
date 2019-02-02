@@ -653,9 +653,16 @@ void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 		// Seek to the first file that is in view
 		FileInfo oFileInfo;
 		bool gotFileInfo = m_oMS->FindFirst(currentDirectory.c_str(), oFileInfo);
-		while (gotFileInfo && dirEntriesToSkip != 0)
+		while (gotFileInfo)
 		{
-			--dirEntriesToSkip;
+			if (oFileInfo.fileName[0] != '.')
+			{
+				if (dirEntriesToSkip == 0)
+				{
+					break;
+				}
+				--dirEntriesToSkip;
+			}
 			gotFileInfo =  m_oMS->FindNext(oFileInfo);
 		}
 
@@ -690,7 +697,11 @@ void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 			{
 				break;		// skip getting more file info for efficiency
 			}
-			gotFileInfo = m_oMS->FindNext(oFileInfo);
+
+			do
+			{
+				gotFileInfo = m_oMS->FindNext(oFileInfo);
+			} while (gotFileInfo && oFileInfo.fileName[0] == '.');
 		}
 
 		m_oMS->AbandonFindNext();				// release the mutex, there may be more files that we don't have room to display

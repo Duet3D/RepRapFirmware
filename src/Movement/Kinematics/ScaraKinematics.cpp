@@ -248,15 +248,15 @@ bool ScaraKinematics::IntermediatePositionsReachable(const float initialCoords[]
 }
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
-bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
+bool ScaraKinematics::LimitPosition(float finalCoords[], float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
 	// First limit all axes according to M208
 	const bool m208Limited = (applyM208Limits)
-								? Kinematics::LimitPositionFromAxis(coords, 0, axesHomed, isCoordinated)
+								? Kinematics::LimitPositionFromAxis(finalCoords, 0, axesHomed, isCoordinated)
 								: false;
 	float theta, psi;
 	bool armMode = currentArmMode;
-	if (CalculateThetaAndPsi(coords, isCoordinated, theta, psi, armMode))
+	if (CalculateThetaAndPsi(finalCoords, isCoordinated, theta, psi, armMode))
 	{
 		return m208Limited;
 	}
@@ -265,8 +265,8 @@ bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesB
 	if (std::isnan(theta))
 	{
 		// We are radius-limited
-		float x = coords[X_AXIS] + xOffset;
-		float y = coords[Y_AXIS] + yOffset;
+		float x = finalCoords[X_AXIS] + xOffset;
+		float y = finalCoords[Y_AXIS] + yOffset;
 		const float r = sqrtf(fsquare(x) + fsquare(y));
 		if (r < minRadius)
 		{
@@ -289,18 +289,18 @@ bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesB
 			y *= maxRadius/r;
 		}
 
-		coords[X_AXIS] = x - xOffset;
-		coords[Y_AXIS] = y - yOffset;
+		finalCoords[X_AXIS] = x - xOffset;
+		finalCoords[Y_AXIS] = y - yOffset;
 	}
 
 	// Recalculate theta and psi, but don't allow arm mode changes this time
-	if (!CalculateThetaAndPsi(coords, true, theta, psi, armMode) && !std::isnan(theta))
+	if (!CalculateThetaAndPsi(finalCoords, true, theta, psi, armMode) && !std::isnan(theta))
 	{
 		// Radius is in range but at least one arm angle isn't
 		cachedTheta = theta = constrain<float>(theta, thetaLimits[0], thetaLimits[1]);
 		cachedPsi = psi = constrain<float>(psi, psiLimits[0], psiLimits[1]);
-		cachedX = coords[X_AXIS] = (cosf(psi * DegreesToRadians) * proximalArmLength + cosf((psi + theta) * DegreesToRadians) * distalArmLength) - xOffset;
-		cachedY = coords[Y_AXIS] = (sinf(psi * DegreesToRadians) * proximalArmLength + sinf((psi + theta) * DegreesToRadians) * distalArmLength) - yOffset;
+		cachedX = finalCoords[X_AXIS] = (cosf(psi * DegreesToRadians) * proximalArmLength + cosf((psi + theta) * DegreesToRadians) * distalArmLength) - xOffset;
+		cachedY = finalCoords[Y_AXIS] = (sinf(psi * DegreesToRadians) * proximalArmLength + sinf((psi + theta) * DegreesToRadians) * distalArmLength) - yOffset;
 		cachedArmMode = currentArmMode;
 	}
 

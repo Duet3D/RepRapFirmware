@@ -202,6 +202,14 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		result = RetractFilament(gb, false);
 		break;
 
+	case 17:	// Select XY plane for G2/G3
+		break;	// we only support the XY plane, so this is a NOP
+
+	case 18:	// Select XZ plane
+	case 19:	// Select YZ plane
+		result = GCodeResult::errorNotSupported;
+		break;
+
 	case 20: // Inches (which century are we living in, here?)
 		distanceScale = InchToMm;
 		break;
@@ -312,7 +320,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else
 			{
-				result = GCodeResult::notSupported;
+				result = GCodeResult::errorNotSupported;
 			}
 		}
 		break;
@@ -335,7 +343,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	default:
-		result = GCodeResult::notSupported;
+		result = GCodeResult::warningNotSupported;
 	}
 
 	return HandleResult(gb, result, reply, nullptr);
@@ -365,20 +373,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			reply.copy("Pause the print before attempting to cancel it");
 			result = GCodeResult::error;
 		}
+		else if (isWaiting)
+		{
+			cancelWait = true;								// was waiting for heating to complete, so cancel it
+			return false;
+		}
+		else if (   !LockMovementAndWaitForStandstill(gb)	// wait until everything has stopped
+				 || !IsCodeQueueIdle()						// must also wait until deferred command queue has caught up
+			    )
+		{
+			return false;
+		}
 		else
 		{
-			if (   !LockMovementAndWaitForStandstill(gb)	// wait until everything has stopped
-				|| !IsCodeQueueIdle()						// must also wait until deferred command queue has caught up
-			   )
-			{
-				return false;
-			}
-
-			const bool wasPaused = isPaused;			// isPaused gets cleared by CancelPrint
-			const bool wasSimulating = IsSimulating();	// simulationMode may get cleared by CancelPrint
+			const bool wasPaused = isPaused;				// isPaused gets cleared by CancelPrint
+			const bool wasSimulating = IsSimulating();		// simulationMode may get cleared by CancelPrint
 			StopPrint((&gb == fileGCode) ? StopPrintReason::normalCompletion : StopPrintReason::userCancelled);
 
-			if (!wasSimulating)							// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
+			if (!wasSimulating)								// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
 			{
 				// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
 				if (wasPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false))
@@ -2620,7 +2632,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			return false;
 		}
 		{
-			uint32_t slot = gb.Seen('S') ? gb.GetUIValue() : 0;
+			const MachineType oldMachineType = machineType;
+			machineType = MachineType::cnc;								// switch to CNC mode even if the spindle parameter is bad
+			const uint32_t slot = gb.Seen('S') ? gb.GetUIValue() : 0;
 			if (slot >= MaxSpindles)
 			{
 				reply.copy("Invalid spindle index");
@@ -2663,9 +2677,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				spindle.SetToolNumber(gb.GetIValue());
 			}
 
-			if (machineType != MachineType::cnc)
+			// M453 may be repeated to set up multiple spindles, so only print the message on the initial switch
+			if (oldMachineType != MachineType::cnc)
 			{
-				machineType = MachineType::cnc;
 				reply.copy("CNC mode selected");
 			}
 		}
@@ -3606,7 +3620,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			if (changed || changedMode)
 			{
-				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false, false))
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false))
 				{
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 				}
@@ -3685,7 +3699,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
 						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 					}
-					if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false, false))
+					if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false))
 					{
 						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 					}
@@ -3732,7 +3746,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 				}
-				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false, false))
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false))
 				{
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 				}
@@ -4200,7 +4214,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	default:
-		result = GCodeResult::notSupported;
+		result = GCodeResult::warningNotSupported;
 		break;
 	}
 
@@ -4300,16 +4314,22 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 	case GCodeResult::notFinished:
 		return false;
 
-	case GCodeResult::notSupported:
+	case GCodeResult::warningNotSupported:
 		gb.PrintCommand(reply);
 		reply.cat(" command is not supported");
 		rslt = GCodeResult::warning;
 		break;
 
+	case GCodeResult::errorNotSupported:
+		gb.PrintCommand(reply);
+		reply.cat(" command is not supported");
+		rslt = GCodeResult::error;
+		break;
+
 	case GCodeResult::notSupportedInCurrentMode:
 		gb.PrintCommand(reply);
 		reply.catf(" command is not supported in machine mode %s", GetMachineModeString());
-		rslt = GCodeResult::warning;
+		rslt = GCodeResult::error;
 		break;
 
 	case GCodeResult::badOrMissingParameter:

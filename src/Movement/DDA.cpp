@@ -253,7 +253,7 @@ void DDA::Init()
 bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 {
 	// 0. If there are more total axes than visible axes, then we must ignore any movement data in nextMove for the invisible axes.
-	// The call to CartesianToMotorSteps may adjust the invisible axis endpoints for architectures such as CoreXYU, so set them up here.
+	// The call to CartesianToMotorSteps may adjust the invisible axis endpoints for architectures such as CoreXYU and delta with >3 towers, so set them up here.
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
 	const int32_t * const positionNow = prev->DriveCoordinates();
@@ -302,11 +302,18 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 			int32_t delta = endPoint[drive] - positionNow[drive];
 			if (doMotorMapping)
 			{
-				const float positionDelta = nextMove.coords[drive] - prev->GetEndCoordinate(drive, false);
-				directionVector[drive] = positionDelta;
-				if (positionDelta != 0.0 && (IsBitSet(nextMove.yAxes, drive) || IsBitSet(nextMove.xAxes, drive)))
+				if (drive >= numVisibleAxes)
 				{
-					xyMoving = true;
+					directionVector[drive] = 0.0;
+				}
+				else
+				{
+					const float positionDelta = endCoordinates[drive] - prev->GetEndCoordinate(drive, false);
+					directionVector[drive] = positionDelta;
+					if (positionDelta != 0.0 && (IsBitSet(nextMove.yAxes, drive) || IsBitSet(nextMove.xAxes, drive)))
+					{
+						xyMoving = true;
+					}
 				}
 			}
 			else

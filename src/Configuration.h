@@ -286,8 +286,9 @@ constexpr float DefaultRetractLength = 2.0;
 constexpr float MinimumMovementSpeed = 0.5;				// The minimum movement speed (extruding moves will go slower than this if the extrusion rate demands it)
 
 constexpr float MaxArcDeviation = 0.02;					// maximum deviation from ideal arc due to segmentation
-constexpr float MinArcSegmentLength = 0.2;				// G2 and G3 arc movement commands get split into segments at least this long
+constexpr float MinArcSegmentLength = 0.1;				// G2 and G3 arc movement commands get split into segments at least this long
 constexpr float MaxArcSegmentLength = 2.0;				// G2 and G3 arc movement commands get split into segments at most this long
+constexpr float MinArcSegmentsPerSec = 50;
 
 constexpr uint32_t DefaultIdleTimeout = 30000;			// Milliseconds
 constexpr float DefaultIdleCurrentFactor = 0.3;			// Proportion of normal motor current that we use for idle hold

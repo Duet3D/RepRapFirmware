@@ -134,12 +134,12 @@ bool PolarKinematics::IsReachable(float x, float y, bool isCoordinated) const
 }
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
-bool PolarKinematics::LimitPosition(float position[], size_t numAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
+bool PolarKinematics::LimitPosition(float finalCoords[], float * null initialCoords, size_t numAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
 	const bool m208Limited = (applyM208Limits)
-								? Kinematics::LimitPositionFromAxis(position, Z_AXIS, numAxes, axesHomed)	// call base class function to limit Z and higher axes
+								? Kinematics::LimitPositionFromAxis(finalCoords, Z_AXIS, numAxes, axesHomed)	// call base class function to limit Z and higher axes
 								: false;
-	const float r2 = fsquare(position[0]) + fsquare(position[1]);
+	const float r2 = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);
 	bool radiusLimited;
 	if (r2 < minRadiusSquared)
 	{
@@ -147,21 +147,21 @@ bool PolarKinematics::LimitPosition(float position[], size_t numAxes, AxesBitmap
 		const float r = sqrtf(r2);
 		if (r < 0.01)
 		{
-			position[0] = minRadius;
-			position[1] = 0.0;
+			finalCoords[X_AXIS] = minRadius;
+			finalCoords[Y_AXIS] = 0.0;
 		}
 		else
 		{
-			position[0] *= minRadius/r;
-			position[1] *= minRadius/r;
+			finalCoords[X_AXIS] *= minRadius/r;
+			finalCoords[Y_AXIS] *= minRadius/r;
 		}
 	}
 	else if (r2 > maxRadiusSquared)
 	{
 		radiusLimited = true;
 		const float r = sqrtf(r2);
-		position[0] *= maxRadius/r;
-		position[1] *= maxRadius/r;
+		finalCoords[X_AXIS] *= maxRadius/r;
+		finalCoords[Y_AXIS] *= maxRadius/r;
 	}
 	else
 	{

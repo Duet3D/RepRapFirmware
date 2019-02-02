@@ -747,12 +747,26 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 	{
 		if (!b)
 		{
-			debugPrintf("Unable to transform %.2f %.2f %.2f\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2]);
+			debugPrintf("Unable to transform");
+			for (size_t i = 0; i < reprap.GetGCodes().GetVisibleAxes(); ++i)
+			{
+				debugPrintf(" %.2f", (double)machinePos[i]);
+			}
+			debugPrintf("\n");
 		}
 		else if (reprap.Debug(moduleDda))
 		{
-			debugPrintf("Transformed %.2f %.2f %.2f to %" PRIi32 " %" PRIi32 " %" PRIi32 "\n",
-				(double)machinePos[0], (double)machinePos[1], (double)machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
+			debugPrintf("Transformed");
+			for (size_t i = 0; i < reprap.GetGCodes().GetVisibleAxes(); ++i)
+			{
+				debugPrintf(" %.2f", (double)machinePos[i]);
+			}
+			debugPrintf(" to");
+			for (size_t i = 0; i < reprap.GetGCodes().GetTotalAxes(); ++i)
+			{
+				debugPrintf(" %" PRIi32, motorPos[i]);
+			}
+			debugPrintf("\n");
 		}
 	}
 	return b;

@@ -229,7 +229,7 @@ Done in 2.02 release:
 - [done] Step clock on Duet Maestro going backwards, https://forum.duet3d.com/topic/8264/steptimer-getinterruptclocks-isn-t-incrementing
 - [can't reproduce] Investigate Duet Maestro socket behaviour when cable disconnected, see email from chris
 
-2.02.1 planned:
+2.03 planned:
 - [done, ok] MBytes/sec -> Mbytes/sec in M122 P104 report
 - [done, ok] Remove 'RTOS' from firmware name?
 - [done, ok] G1 X1E1 no longer gets treated as if it also has an E parameter
@@ -257,6 +257,19 @@ Done in 2.02 release:
 - [done, test] PR to send standby bed temperature in M408
 - [done] Scara R parameter to set min radius, https://github.com/dc42/RepRapFirmware/issues/221
 - [done, test] DAA to handle requested accel/decl > max
+- [done, ok] fixed a crash in the crash handler when no task was active
+- [done] Support L parameter in M585, thanks chrishamm
+- [done, test] Suppress filenames starting with '.' in the 12864 display
+- [done, test] Implement G17, error on G18/G19.
+- [done, test] Core kinematics: enable all necessary motors
+- [done, ok] Fix M3D Kanji problem on some displays
+- [done, ok] 4-tower delta kinematics
+- [done, test] Make G2/G3 segment length lower at low speeds, https://forum.duet3d.com/post/79040
+- [done, test] Bug: M997 S1 sent from USB keeps returning M105 status reports while the wifi firmware is flashing, and PanelDue 'flashing' update messages get erased
+- [done, test] M453 do the switch to CNC mode even if bad P parameter used
+- [done, test] After pausing a print, if Cancel is pressed, cancel initial heating first like M108 does
+- [done, ok] G2/G3 R parameter instead of IJ
+- [done, ok] On delta, G1 Y-100 after homing hits endstops - new limit check not working properly
 - [could be related to visibility issue] Investigate 12864 display heater fault warning, https://forum.duet3d.com/topic/7718/12864-display-current-tool-temperatures/6
 - Slow startup move issue, https://forum.duet3d.com/topic/8284/firmware-2-02-released/7 (adding S2 fixes it)
 - M291 issue, https://forum.duet3d.com/topic/8381/m291-s2-does-not-block-macro-execution/5
@@ -270,21 +283,12 @@ Done in 2.02 release:
 - Reports that DueX5 endstops stop working after a while, https://forum.duet3d.com/topic/8284/firmware-2-02-released/9
 - I2C error recovery?
 - Pressure advance issue? https://forum.duet3d.com/topic/8672/extruder-motors-skip-steps-with-pressure-advance-enabled/3
-- After pausing a print, if Cancel is pressed, cancel initial heating first like M108 does
-- [done, test] 4-tower delta kinematics
-- Bug: M997 S1 sent from USB keeps returning M105 status reports while the wifi firmware is flashing
 - Test with Duet 3
-- On delta, G1 Y-100 after homing hits endstops - new limit check not working properly
-- [done, ok] Fix M3D Kanji problem on some displays
-- Make G2/G3 segment length lower at low speeds, https://forum.duet3d.com/post/79040
-- Implement G17, error on G18/G19.
-- M453 do the switch even if bad P parameter used
-- [done, test] Core kinematics: enable all necessary motors
 - Command (M18/M84?) to enable specified motors or axes
 - Add check for M208 min > max
 - Don't keep sending "wifi reported error" messages during reconnection attempts, https://forum.duet3d.com/topic/8837/wifi-reported-error
-- [done, ok] fixed a crash in the crash handler when no task was active
-- [done] Support L parameter in M585, thanks chrishamm
+- test that M500 saves all delta rod lentghs correctly
+- M24 in filament-change.g macro doesn't resume the print
 
 Investigations
 
@@ -296,7 +300,7 @@ Investigations
 - Retraction problem, https://forum.duet3d.com/post/79485
 - Icon generation, https://forum.duet3d.com/topic/8177/icon-generation/7
 
-2.03 planned:
+2.04 planned:
 - Stop print after a short to ground report? https://forum.duet3d.com/topic/8239/duet-maestro-short-to-ground/10
 - Option to enable a trigger when not printing (C3?), https://forum.duet3d.com/topic/8459/m581-external-trigger
 - Implement G43?
@@ -310,7 +314,6 @@ Investigations
 - Conditionals, loops and maths in GCode commands
 - S-curve acceleration
 - Endstop assignment, including option for 1 endstop per motor
-- G2/G3 R parameter instead of IJ
 - Generalised CoreXY kinematics inc MarkForged
 - Some features from the list below
 
@@ -412,5 +415,4 @@ Investigations:
 [no fault] https://www.duet3d.com/forum/thread.php?pid=30851#p30851 (split axis motor goes the wrong way)
 [done BUT still wrong in lwip 2] inconsistend oversize vs. len
 p->ref == 1 in WiFi
-
 

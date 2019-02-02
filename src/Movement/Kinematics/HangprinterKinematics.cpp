@@ -173,7 +173,7 @@ bool HangprinterKinematics::IsReachable(float x, float y, bool isCoordinated) co
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
-bool HangprinterKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
+bool HangprinterKinematics::LimitPosition(float finalCoords[], float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
 	const AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
@@ -182,25 +182,25 @@ bool HangprinterKinematics::LimitPosition(float coords[], size_t numVisibleAxes,
 		// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
 		// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
 		// Constrain the move to be within the build radius
-		const float diagonalSquared = fsquare(coords[X_AXIS]) + fsquare(coords[Y_AXIS]);
+		const float diagonalSquared = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);
 		if (diagonalSquared > printRadiusSquared)
 		{
 			const float factor = sqrtf(printRadiusSquared / diagonalSquared);
-			coords[X_AXIS] *= factor;
-			coords[Y_AXIS] *= factor;
+			finalCoords[X_AXIS] *= factor;
+			finalCoords[Y_AXIS] *= factor;
 			limited = true;
 		}
 
 		if (applyM208Limits)
 		{
-			if (coords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
+			if (finalCoords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
 			{
-				coords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
+				finalCoords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
 				limited = true;
 			}
-			else if (coords[Z_AXIS] > reprap.GetPlatform().AxisMaximum(Z_AXIS))
+			else if (finalCoords[Z_AXIS] > reprap.GetPlatform().AxisMaximum(Z_AXIS))
 			{
-				coords[Z_AXIS] = reprap.GetPlatform().AxisMaximum(Z_AXIS);
+				finalCoords[Z_AXIS] = reprap.GetPlatform().AxisMaximum(Z_AXIS);
 				limited = true;
 			}
 		}

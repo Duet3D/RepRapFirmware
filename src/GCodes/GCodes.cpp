@@ -760,11 +760,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 
 	case GCodeState::flashing1:
 #if HAS_WIFI_NETWORKING
-		CheckReportDue(gb, reply);						// this is so that the ATE gets status reports and can tell when flashing is complete
-
 		// Update additional modules before the main firmware
 		if (FirmwareUpdater::IsReady())
 		{
+			CheckReportDue(gb, reply);						// this is so that the ATE gets status reports and can tell when flashing is complete
 			bool updating = false;
 			for (unsigned int module = 1; module < NumFirmwareUpdateModules; ++module)
 			{
@@ -2636,7 +2635,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		{
 			ClearBit(effectiveAxesHomed, Z_AXIS);								// if doing a manual Z probe, don't limit the Z movement
 		}
-		if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, effectiveAxesHomed, moveBuffer.isCoordinated, limitAxes))
+		if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, moveBuffer.initialCoords, numVisibleAxes, effectiveAxesHomed, moveBuffer.isCoordinated, limitAxes))
 		{
 			if (machineType != MachineType::fff)
 			{
@@ -2708,27 +2707,65 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	}
 
 	float iParam, jParam;
-	if (gb.Seen('I'))
+	if (gb.Seen('R'))
 	{
-		iParam = gb.GetFValue() * distanceScale;
+		// We've been given a radius, which takes precedence over I and J parameters
+		const float rParam = gb.GetFValue() * distanceScale;
+
+		// Get the XY coordinates of the midpoints between the start and end points X and Y distances between start and end points
+		float deltaX, deltaY;
+		if (gb.MachineState().axesRelative)
+		{
+			deltaX = xParam;
+			deltaY = yParam;
+		}
+		else
+		{
+			deltaX = xParam - currentUserPosition[X_AXIS];
+			deltaY = yParam - currentUserPosition[Y_AXIS];
+		}
+
+		const float dSquared = fsquare(deltaX) + fsquare(deltaY);	// square of the distance between start and end points
+		const float hSquared = fsquare(rParam) - dSquared/4;		// square of the length of the perpendicular from the mid point to the arc centre
+
+		// The distance between start and end points must not be zero, and the perpendicular must have a real length (possibly zero)
+		if (dSquared == 0.0 || hSquared < 0.0)
+		{
+			return "G2/G3: bad combination of parameter values";
+		}
+
+		float hDivD = sqrtf(hSquared/dSquared);
+		if (clockwise)
+		{
+			hDivD = -hDivD;
+		}
+		iParam = deltaX/2 + deltaY * hDivD;
+		jParam = deltaY/2 - deltaX * hDivD;
 	}
 	else
 	{
-		iParam = 0.0;
-	}
+		if (gb.Seen('I'))
+		{
+			iParam = gb.GetFValue() * distanceScale;
+		}
+		else
+		{
+			iParam = 0.0;
+		}
 
-	if (gb.Seen('J'))
-	{
-		jParam = gb.GetFValue() * distanceScale;
-	}
-	else
-	{
-		jParam = 0.0;
-	}
+		if (gb.Seen('J'))
+		{
+			jParam = gb.GetFValue() * distanceScale;
+		}
+		else
+		{
+			jParam = 0.0;
+		}
 
-	if (iParam == 0.0 && jParam == 0.0)			// at least one of IJ must be specified and nonzero
-	{
-		return "G2/G3: missing I or J parameter";
+		if (iParam == 0.0 && jParam == 0.0)			// at least one of IJ must be specified and nonzero
+		{
+			return "G2/G3: no I or J or R parameter";
+		}
 	}
 
 	memcpy(moveBuffer.initialCoords, moveBuffer.coords, numVisibleAxes * sizeof(moveBuffer.initialCoords[0]));
@@ -2782,7 +2819,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 
 	// Transform to machine coordinates and check that it is within limits
 	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);			// set the final position
-	if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, true, limitAxes))
+	if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, true, limitAxes))
 	{
 		// Abandon the move
 		return "G2/G3: outside machine limits";
@@ -2845,7 +2882,6 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	}
 #endif
 
-
 	moveBuffer.usePressureAdvance = moveBuffer.hasExtrusion;
 
 	arcRadius = sqrtf(iParam * iParam + jParam * jParam);
@@ -2869,7 +2905,12 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	// Compute how many segments we need to move
 	// For the arc to deviate up to MaxArcDeviation from the ideal, the segment length should be sqrt(8 * arcRadius * MaxArcDeviation + fsquare(MaxArcDeviation))
 	// We leave out the square term because it is very small
-	const float arcSegmentLength = constrain<float>(sqrt(8 * arcRadius * MaxArcDeviation), MinArcSegmentLength, MaxArcSegmentLength);
+	// In CNC applications even very small deviations can be visible, so we use a smaller segment length at low speeds
+	const float arcSegmentLength = constrain<float>
+									(	min<float>(sqrt(8 * arcRadius * MaxArcDeviation), moveBuffer.feedRate * (1.0/MinArcSegmentsPerSec)),
+										MinArcSegmentLength,
+										MaxArcSegmentLength
+									);
 	totalSegments = max<unsigned int>((unsigned int)((arcRadius * totalArc)/arcSegmentLength + 0.8), 1u);
 	arcAngleIncrement = totalArc/totalSegments;
 	if (clockwise)
@@ -2986,7 +3027,7 @@ bool GCodes::ReadMove(RawMove& m)
 		}
 
 		// Limit the end position at each segment. This is needed for arc moves on any printer, and for [segmented] straight moves on SCARA printers.
-		if (reprap.GetMove().GetKinematics().LimitPosition(m.coords, numVisibleAxes, axesHomed, true, limitAxes))
+		if (reprap.GetMove().GetKinematics().LimitPosition(m.coords, nullptr, numVisibleAxes, axesHomed, true, limitAxes))
 		{
 			segMoveState = SegmentedMoveState::aborted;
 			doingArcMove = false;
