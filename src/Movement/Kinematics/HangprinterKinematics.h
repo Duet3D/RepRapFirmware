@@ -43,6 +43,7 @@ public:
 	uint32_t GetFullStepsPerMotorRev(size_t axis) override;
 
 private:
+	float MotorPosToLinePos(const int32_t motorPos, size_t axis) const;
 	static constexpr float DefaultSegmentsPerSecond = 100.0;
 	static constexpr float DefaultMinSegmentSize = 0.2;
 
@@ -67,18 +68,18 @@ private:
 	float printRadius;
 	// Line buildup compensation
 	float spoolBuildupFactor;
-	float mountedLine[HANGPRINTER_AXES], spoolRadii[HANGPRINTER_AXES];
+	float spoolRadii[HANGPRINTER_AXES];
 	uint32_t mechanicalAdvantage[HANGPRINTER_AXES], linesPerSpool[HANGPRINTER_AXES];
 	uint32_t motorGearTeeth[HANGPRINTER_AXES], spoolGearTeeth[HANGPRINTER_AXES], fullStepsPerMotorRev[HANGPRINTER_AXES];
 
 	// Derived parameters
+	float k0[HANGPRINTER_AXES], spoolRadiiSq[HANGPRINTER_AXES], k2[HANGPRINTER_AXES], lineLengthsOrigin[HANGPRINTER_AXES];
 	float printRadiusSquared;
 	float Da2, Db2, Dc2;
 	float Xab, Xbc, Xca;
 	float Yab, Ybc, Yca;
 	float Zab, Zbc, Zca;
 	float P, Q, R, P2, U, A;
-	float k0[HANGPRINTER_AXES], k1[HANGPRINTER_AXES], k2[HANGPRINTER_AXES], sqrtk1[HANGPRINTER_AXES], lineLengthsOrigin[HANGPRINTER_AXES]; // For line buildup compensation
 
 	bool doneAutoCalibration;							// True if we have done auto calibration
 };
