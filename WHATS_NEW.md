@@ -4,29 +4,44 @@ Summary of important changes in recent versions
 Coming Soon in version 2.03beta1
 ================================
 
+Upgrade notes:
+- If you have a CoreXY or other Core architecture printer, and you were using any axis factor parameters in your M667 command in config.g, those parameters are no longer supported. You will need to use M669 matrix parameters instead.
+- Caution: the support for CoreXY and other Core kinematics has been rewritten. Please exercise caution if your machne uses Core kinematics. You may wish to reduce motor current until you are satisfied that everything is working.
+- Caution: some of the code that supports stall-detection endstops has been rewritten. If your printer uses stall detection endstops, excercise caution.
+
 New features/changed behaviour:
-- Support for generalised Cartesian/Core kinematics inc. markForged. The old Cartesian, CoreXY, CoreXZ, CoreXYU and CoreXYUV kinematics classes are replaced by the new CoreKinematics class. No changes are needed to config.g except that M667 no longer supports XYZ parameters (use M669 matrix parameters instead).
+- Support for generalised Cartesian/Core kinematics inc. MarkForged and variants thereof
+- Support for different rod lengths on each tower of a delta printer
+- Support for additional towers on delta printers (up to 6 in total)
+- When the first move on a machine with CoreXY or similar kinematics is a diagonal move, all relevant motors are now enabled to lock them even if only one of them needs to move
 - M572 and M221 with no extruder drive number now sets all extruders used by the current tool, https://forum.duet3d.com/topic/8444/setting-pressure-advance-in-filament-file
 - On the 12864 display, the default column for an item is now 1 extra pixel past the end of the previous item, so as to leave a thin space between them
 - Recognise Slicer PE latest version time estimate string, https://forum.duet3d.com/topic/8440/rrf-2-02-slic3r-pe-1-41-2-filament-used-and-print-times-wrong
-- Reworked some of the filament monitor code to try to reduce the tolerance needed when using 'good' filaments, also add support for  experimental v2 laser filament sensor firmware
-- Disable mdns in legacy Duets because of code quality issues casing reboots, https://forum.duet3d.com/topic/8352/duet-0-6-randomly-reboots/5
+- Reworked some of the filament monitor code to try to reduce the tolerance needed when using 'good' filaments, also added support for  experimental v2 laser filament sensor firmware
+- Disable mdns in legacy Duets because of code quality issues causing reboots, https://forum.duet3d.com/topic/8352/duet-0-6-randomly-reboots/5
 - rr_fileinfo and M36 with no filename now include estimated print time and simulation time in the response for DWC2
 - In CNC and laser mode the user Z coordinate is updated after a tool change, https://forum.duet3d.com/topic/8181/tool-offset-honored-but-not-displayed-correctly
 - On SCARA and delta printers, geometric limits are now applied even when not applying M208 limits due to use of M564 S0
 - New S-3 function for G30 command. G30 S-3 probes the bed and sets the Z probe trigger height to the stopped height.
-- M92 command now includes an optional S parameter to specify the microstepping that the steps/mm is quotes at. If the actual microstepping in use is different, the specified steps/mm will be adjusted accordingly.
+- M92 command now includes an optional S parameter to specify the microstepping that the steps/mm is quotes at. If the actual microstepping in use is different, the specified steps/mm will be adjusted accordingly (thanks wikriker).
+- M575 command L parameter for inverting probe logic level is supported (thanks chrishamm)
+- The M408 S2 and http status responses now include the bed standby temperature (thanks gtjoseph)
 
 Bug fixes:
 - G1 X1E1 no longer gets treated as if it also has an E parameter
 - Setting M558 A parameter to anything >31 set it to 0 instead of to 31
 - G92 should not constrain the passed coordinates to the M208 limits if M564 S0 has been used to disable limits
+- On the 12864 display, fields that became visible and then became hidden again were not erased from the screen
+- If an assertion failure occurred in the FreeRTOS kernel when no task was active, or a stack overflow was detected when no task was active, the crash handler itself crashed while trying to retrieve the task name, so the stored software reset data was incorrect
 
-Minor and internal changes:
-- Improve efficiency of debug print in WiFiInterface: don't keep calling cat and strlen
-- Allocation of DriveMovement objects is deferred until DDAs are frozen and prepared for execution (in preparation for implementing S-curve acceleration). This is a fairly major change that could have unforeseen consequences.
+Minor changes:
 - MBytes/sec -> Mbytes/sec in M122 P104 report
 - Remove 'RTOS' from firmware name. All 2.0 series firmware uses RTOS.
+
+Internal changes:
+- The Cartesian, CoreXY, CoreXZ, CoreXYU and CoreXYUV kinematics classes have been replaced by a single CoreKinematics class. This class uses matrices to define the mapping between motors and axes, so it supports any kinematics for which the axis movements are a linear combination of motor movements. The matrices can be adjusted using the M669 command.
+- Improve efficiency of debug print in WiFiInterface: don't keep calling cat and strlen
+- Allocation of DriveMovement objects is deferred until DDAs are frozen and prepared for execution (in preparation for implementing S-curve acceleration). This should aso allow us to reduce the number of DriveMovement objects allocated.
 
 Still to do:
 - Investigate @frafa's SCARA issue, https://forum.duet3d.com/post/76024
