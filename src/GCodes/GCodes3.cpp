@@ -325,9 +325,16 @@ void GCodes::GetEncoderPositionsUART(const StringRef& reply)
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		const ODrive& odrv = reprap.GetPlatform().GetODrive(axis);
-		ODriveAxis odrvAxis = odrv.AxisToODriveAxis(axis);
+		const ODriveAxis odrvAxis = odrv.AxisToODriveAxis(axis);
 		posCount[axis] = odrv.AskForEncoderPosEstimate(odrvAxis) - odrv.GetEncoderPosReference(odrvAxis);
 		angDeg[axis] = 360.0*posCount[axis]/odrv.GetCountsPerRev(odrvAxis);
+
+		// Correct sign
+		if (!platform.GetDirectionValue(platform.GetAxisDriversConfig(axis).driverNumbers[0]))
+		{
+			angDeg[axis] *= -1.0;
+		}
+
 		reply.catf("%.2f, ", (double)angDeg[axis]);
 	}
 	reply.cat(" ],\n");
