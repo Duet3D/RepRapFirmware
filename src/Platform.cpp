@@ -25,6 +25,7 @@
 #include "Movement/DDA.h"
 #include "Movement/Move.h"
 #include "Movement/StepTimer.h"
+#include "Tools/Tool.h"
 #include "Network.h"
 #include "PrintMonitor.h"
 #include "FilamentMonitors/FilamentMonitor.h"
@@ -61,6 +62,12 @@
 
 #if SUPPORT_12864_LCD
 # include "Display/Display.h"
+#endif
+
+#if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
+# include "Networking/HttpResponder.h"
+# include "Networking/FtpResponder.h"
+# include "Networking/TelnetResponder.h"
 #endif
 
 #include <climits>
@@ -2596,6 +2603,19 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 
 	case (int)DiagnosticTestType::TimeSDWrite:
 		return reprap.GetGCodes().StartSDTiming(gb, reply);
+
+	case (int)DiagnosticTestType::PrintObjectSizes:
+		reply.printf(
+				"DDA %u, DM %u, Tool %u"
+#if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
+				", HTTP resp %u, FTP resp %u, Telnet resp %u"
+#endif
+				, sizeof(DDA), sizeof(DriveMovement), sizeof(Tool)
+#if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
+				, sizeof(HttpResponder), sizeof(FtpResponder), sizeof(TelnetResponder)
+#endif
+			);
+		break;
 
 #ifdef DUET_NG
 	case (int)DiagnosticTestType::PrintExpanderStatus:

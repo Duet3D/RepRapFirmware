@@ -32,7 +32,7 @@ const char* const ErrorPagePart2 =
 	"</p>\n"
 	"</body>\n";
 
-HttpResponder::HttpResponder(NetworkResponder *n) : NetworkResponder(n)
+HttpResponder::HttpResponder(NetworkResponder *n) : UploadingNetworkResponder(n)
 {
 }
 
@@ -647,6 +647,7 @@ bool HttpResponder::SendFileInfo(bool quitEarly)
 		}
 		else
 		{
+			filenameBeingProcessed.Clear();
 			Commit();
 		}
 	}
@@ -1319,7 +1320,7 @@ void HttpResponder::CancelUpload()
 			}
 		}
 	}
-	NetworkResponder::CancelUpload();
+	UploadingNetworkResponder::CancelUpload();
 }
 
 // This overrides the version in class NetworkResponder

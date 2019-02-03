@@ -204,6 +204,7 @@ enum class DiagnosticTestType : int
 	TimeSquareRoot = 102,			// do a timing test on the square root function
 	TimeSinCos = 103,				// do a timing test on the trig functions
 	TimeSDWrite = 104,				// do a write timing test on the SD card
+	PrintObjectSizes = 105,			// print the sizes of various objects
 
 	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
 	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long

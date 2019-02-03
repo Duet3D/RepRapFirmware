@@ -18,19 +18,18 @@
 
 // Define the number of DDAs and DMs.
 // A DDA represents a move in the queue.
-// Each DDA needs one DM per drive that it moves.
-// However, DM's are large, so we provide fewer than DRIVES * DdaRingLength of them. The planner checks that enough DMs are available before filling in a new DDA.
+// Each DDA needs one DM per drive that it moves, but only when it has been prepared and frozen
 
 #if SAME70
-const unsigned int DdaRingLength = 30;
-const unsigned int NumDms = DdaRingLength * 12;						// allow enough for plenty of CAN expansion
+const unsigned int DdaRingLength = 40;
+const unsigned int NumDms = 20 * 12;								// allow enough for plenty of CAN expansion
 #elif SAM4E || SAM4S
-const unsigned int DdaRingLength = 30;
-const unsigned int NumDms = DdaRingLength * 8;						// suitable for e.g. a delta + 5 input hot end
+const unsigned int DdaRingLength = 40;
+const unsigned int NumDms = 20 * 8;									// suitable for e.g. a delta + 5 input hot end
 #else
 // We are more memory-constrained on the SAM3X
 const unsigned int DdaRingLength = 20;
-const unsigned int NumDms = DdaRingLength * 5;						// suitable for e.g. a delta + 2-input hot end
+const unsigned int NumDms = 20 * 5;									// suitable for e.g. a delta + 2-input hot end
 #endif
 
 constexpr uint32_t MovementStartDelayClocks = StepTimer::StepClockRate/100;		// 10ms delay between preparing the first move and starting it

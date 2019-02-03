@@ -8,9 +8,9 @@
 #ifndef SRC_NETWORKING_FTPRESPONDER_H_
 #define SRC_NETWORKING_FTPRESPONDER_H_
 
-#include "NetworkResponder.h"
+#include "UploadingNetworkResponder.h"
 
-class FtpResponder : public NetworkResponder
+class FtpResponder : public UploadingNetworkResponder
 {
 public:
 	FtpResponder(NetworkResponder *n);
@@ -46,11 +46,11 @@ protected:
 	void CloseDataPort();
 
 	bool haveCompleteLine;
+	bool haveFileToMove;
 	char clientMessage[ftpMessageLength];
 	size_t clientPointer;
 
-	char currentDirectory[MaxFilenameLength];
-	String<MaxFilenameLength> fileToMove;
+	String<MaxFilenameLength> currentDirectory;
 };
 
 #endif /* SRC_NETWORKING_FTPRESPONDER_H_ */
