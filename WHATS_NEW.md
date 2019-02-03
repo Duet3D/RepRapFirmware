@@ -1,24 +1,28 @@
 Summary of important changes in recent versions
 ===============================================
 
-Coming Soon in version 2.03beta1
-================================
+Version 2.03beta1
+=================
 
 Upgrade notes:
 - If you have a CoreXY or other Core architecture printer, and you were using any axis factor parameters in your M667 command in config.g, those parameters are no longer supported. You will need to use M669 matrix parameters instead.
-- Caution: the support for CoreXY and other Core kinematics has been rewritten. Please exercise caution if your machne uses Core kinematics. You may wish to reduce motor current until you are satisfied that everything is working.
-- Caution: some of the code that supports stall-detection endstops has been rewritten. If your printer uses stall detection endstops, excercise caution.
+- ***Caution:*** the support for CoreXY and other Core kinematics has been rewritten. Please exercise caution if your machine uses Core kinematics. Reduce motor current and test small relative movements of each axis, until you are satisfied that everything is working.
+- ***Caution:*** some of the code that supports stall-detection endstops has been rewritten. If your printer uses stall detection endstops, test homing carefully.
 
 New features/changed behaviour:
 - Support for generalised Cartesian/Core kinematics inc. MarkForged and variants thereof
 - Support for different rod lengths on each tower of a delta printer
 - Support for additional towers on delta printers (up to 6 in total)
-- When the first move on a machine with CoreXY or similar kinematics is a diagonal move, all relevant motors are now enabled to lock them even if only one of them needs to move
+- When the first move on a machine with CoreXY or similar kinematics is a diagonal move, all relevant motors are now enabled, in order to lock them even if only one of them needs to move
+- G2/G3 commands using the R (radius) parameter instead of IJ arc centre parameters are now supported
+- When dynamic acceleration adjustment (DAA) is activated, if the maximum acceleration was configured lower than the required value, DAA was not applied. Now it checks to see whether the acceleration can be halved to still get some benefit from DAA.
 - M572 and M221 with no extruder drive number now sets all extruders used by the current tool, https://forum.duet3d.com/topic/8444/setting-pressure-advance-in-filament-file
 - On the 12864 display, the default column for an item is now 1 extra pixel past the end of the previous item, so as to leave a thin space between them
-- Recognise Slicer PE latest version time estimate string, https://forum.duet3d.com/topic/8440/rrf-2-02-slic3r-pe-1-41-2-filament-used-and-print-times-wrong
+- On the 12864 display, when displaying print files, filenames beginning with '.' are no longer displayed
+- The SPI clock frequency of the 12864 display can now be configured using the M918 F parameter
+- Slicer PE changed the comment string it uses to provide estimated print times. RRF now recognises the new format as well as the old one, https://forum.duet3d.com/topic/8440/rrf-2-02-slic3r-pe-1-41-2-filament-used-and-print-times-wrong
 - Reworked some of the filament monitor code to try to reduce the tolerance needed when using 'good' filaments, also added support for  experimental v2 laser filament sensor firmware
-- Disable mdns in legacy Duets because of code quality issues causing reboots, https://forum.duet3d.com/topic/8352/duet-0-6-randomly-reboots/5
+- Disabled mdns in legacy Duets because of code quality issues causing reboots, https://forum.duet3d.com/topic/8352/duet-0-6-randomly-reboots/5
 - rr_fileinfo and M36 with no filename now include estimated print time and simulation time in the response for DWC2
 - In CNC and laser mode the user Z coordinate is updated after a tool change, https://forum.duet3d.com/topic/8181/tool-offset-honored-but-not-displayed-correctly
 - On SCARA and delta printers, geometric limits are now applied even when not applying M208 limits due to use of M564 S0
@@ -26,13 +30,25 @@ New features/changed behaviour:
 - M92 command now includes an optional S parameter to specify the microstepping that the steps/mm is quotes at. If the actual microstepping in use is different, the specified steps/mm will be adjusted accordingly (thanks wikriker).
 - M575 command L parameter for inverting probe logic level is supported (thanks chrishamm)
 - The M408 S2 and http status responses now include the bed standby temperature (thanks gtjoseph)
+- The M669 parameters to define SCARA kinematics now include an R (minimum radius) parameter, to handle machines for which the minimum available radius is sometimes higher than the radius when the distal axis is homed
+- G17 is implemented (it does nothing), and G17/G17 report an error
+- The segment length used by G2/G3 now depends on both the radius and the speed of the move, not just the radius as in RRF 2.02. So small segment lengths are used when doing CNC milling at low speeds.
+- If a print is paused and then cancelled while the printer is still heating up, heating is cancelled
+- Added M122 P105 subfunction to display the sizes of various objects allocated by RRF
 
 Bug fixes:
 - G1 X1E1 no longer gets treated as if it also has an E parameter
 - Setting M558 A parameter to anything >31 set it to 0 instead of to 31
 - G92 should not constrain the passed coordinates to the M208 limits if M564 S0 has been used to disable limits
+- On Polar printers, moves that crossed the boundary between -180deg and +180deg turntable positions were executed very slowly
 - On the 12864 display, fields that became visible and then became hidden again were not erased from the screen
 - If an assertion failure occurred in the FreeRTOS kernel when no task was active, or a stack overflow was detected when no task was active, the crash handler itself crashed while trying to retrieve the task name, so the stored software reset data was incorrect
+- On a few 12864 displays, Kanji characters were displayed on tpo of the graphics display
+- On delta printers, the code to limit the height at the end of a move to the reachable height didn't always ensure that the heights of the intermediate positions were reachable
+- When height map and filament files were written, the month number in the date written in the header was too low by 1
+- If a M106 Pnn Snn command is received, and fan #nn is being used as a print cooling fan, the reported print cooling fan speed is now updated
+- When the WiFi firmware was being updated, general status responses are no longer sent to USB or PanelDue, so that the firmware update progress messages are clearer
+- M453 switches to CNC mode even if the P parameter was not valid
 
 Minor changes:
 - MBytes/sec -> Mbytes/sec in M122 P104 report
@@ -41,19 +57,8 @@ Minor changes:
 Internal changes:
 - The Cartesian, CoreXY, CoreXZ, CoreXYU and CoreXYUV kinematics classes have been replaced by a single CoreKinematics class. This class uses matrices to define the mapping between motors and axes, so it supports any kinematics for which the axis movements are a linear combination of motor movements. The matrices can be adjusted using the M669 command.
 - Improve efficiency of debug print in WiFiInterface: don't keep calling cat and strlen
-- Allocation of DriveMovement objects is deferred until DDAs are frozen and prepared for execution (in preparation for implementing S-curve acceleration). This should aso allow us to reduce the number of DriveMovement objects allocated.
-
-Still to do:
-- Investigate @frafa's SCARA issue, https://forum.duet3d.com/post/76024
-- Warm up time not always displayed in 2.02
-- For PanelDue, send heater data for the first heater in each tool, https://forum.duet3d.com/topic/8458/hide-unused-heater-channels-paneldue-5/4
-- Investigate 12864 display heater fault warning, https://forum.duet3d.com/topic/7718/12864-display-current-tool-temperatures/6
-- More work for Duet 3 second prototype
-- DAA to handle requested accel/decl > max configured by M201 or m204
-- Reports that DueX5 endstops stop working after a while, https://forum.duet3d.com/topic/8284/firmware-2-02-released/9
-- I2C error recovery?
-- Option to turn G1 non-extruding moves to G0 moves on SCARA printers, where a G1 move is not possible?
-- Allow RNDTF to be set in TMC2660 drivers when in spreadCycle mode?
+- Allocation of DriveMovement objects is deferred until DDAs are frozen and prepared for execution, in preparation for implementing S-curve acceleration. This also reduces the number of DriveMovement objects needed.
+- Refactored the network responder classes to reduce memory usage
 
 Version 2.02 (Duet 2 series) and 1.23 (Duet 06/085)
 ===================================================
