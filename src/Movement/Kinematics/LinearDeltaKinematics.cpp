@@ -891,7 +891,7 @@ bool LinearDeltaKinematics::QueryTerminateHomingMove(size_t axis) const
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
-// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
+// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
 void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
 {
 	if (axis < numTowers)

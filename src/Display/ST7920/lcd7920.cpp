@@ -51,6 +51,12 @@ Lcd7920::Lcd7920(Pin csPin, const LcdFont * const fnts[], size_t nFonts)
 #endif
 }
 
+// Set the SPI clock frequency
+void Lcd7920::SetSpiClockFrequency(uint32_t freq)
+{
+	device.clockFrequency = freq;
+}
+
 void Lcd7920::Init()
 {
 	sspi_master_init(&device, 8);

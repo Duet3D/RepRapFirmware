@@ -270,6 +270,7 @@ Done in 2.02 release:
 - [done, test] After pausing a print, if Cancel is pressed, cancel initial heating first like M108 does
 - [done, ok] G2/G3 R parameter instead of IJ
 - [done, ok] On delta, G1 Y-100 after homing hits endstops - new limit check not working properly
+- [done, ok] Configurable 12864 SPI frequency
 - [could be related to visibility issue] Investigate 12864 display heater fault warning, https://forum.duet3d.com/topic/7718/12864-display-current-tool-temperatures/6
 - Slow startup move issue, https://forum.duet3d.com/topic/8284/firmware-2-02-released/7 (adding S2 fixes it)
 - M291 issue, https://forum.duet3d.com/topic/8381/m291-s2-does-not-block-macro-execution/5
@@ -287,7 +288,7 @@ Done in 2.02 release:
 - Command (M18/M84?) to enable specified motors or axes
 - Add check for M208 min > max
 - Don't keep sending "wifi reported error" messages during reconnection attempts, https://forum.duet3d.com/topic/8837/wifi-reported-error
-- test that M500 saves all delta rod lentghs correctly
+- test that M500 saves all delta rod lengths correctly
 - M24 in filament-change.g macro doesn't resume the print
 
 Investigations
