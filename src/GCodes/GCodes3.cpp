@@ -277,10 +277,16 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 // Save any modified workplace coordinate offsets to file returning true if successful. Used by M500.
 bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const
 {
+	bool written = false;
 	for (size_t cs = 0; cs < NumCoordinateSystems; ++cs)
 	{
 		String<ScratchStringLength> scratchString;
-		scratchString.printf("G10 L2 P%u", cs + 1);
+		if (!written)
+		{
+			scratchString.copy("; Workplace coordinates\n");
+			written = true;
+		}
+		scratchString.catf("G10 L2 P%u", cs + 1);
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
 			scratchString.catf(" %c%.2f", axisLetters[axis], (double)workplaceCoordinates[cs][axis]);

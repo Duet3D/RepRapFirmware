@@ -3565,6 +3565,10 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply)
 	}
 
 	bool settingOffset = false;
+	// Tool offsets will either be included in config-override.g
+	// if they are being loaded from there, i.e. while a M501 is in progress
+	// or if the parameter O (like in config-_O_verride.g) with value 1 has been given
+	bool includeWithM500 = (gb.MachineState().runningM501) || (gb.Seen('O') && gb.GetUIValue() == 1);
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		if (gb.Seen(axisLetters[axis]))
@@ -3574,7 +3578,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply)
 				return GCodeResult::notFinished;
 			}
 			settingOffset = true;
-			tool->SetOffset(axis, gb.GetFValue(), gb.MachineState().runningM501);
+			tool->SetOffset(axis, gb.GetFValue(), includeWithM500);
 		}
 	}
 
