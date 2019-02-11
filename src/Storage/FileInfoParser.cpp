@@ -43,7 +43,7 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 		return false;
 	}
 
-	if (parseState != notParsing && !StringEquals(fileName, filenameBeingParsed.c_str()))
+	if (parseState != notParsing && !StringEqualsIgnoreCase(fileName, filenameBeingParsed.c_str()))
 	{
 		// We are already parsing a different file
 		if (millis() - lastFileParseTime < MaxFileParseInterval)
@@ -92,8 +92,8 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 		}
 
 		// If the file is empty or not a G-Code file, we don't need to parse anything
-		if (fileBeingParsed->Length() == 0 || (!StringEndsWith(fileName, ".gcode") && !StringEndsWith(fileName, ".g")
-					&& !StringEndsWith(fileName, ".gco") && !StringEndsWith(fileName, ".gc")))
+		if (fileBeingParsed->Length() == 0 || (!StringEndsWithIgnoreCase(fileName, ".gcode") && !StringEndsWithIgnoreCase(fileName, ".g")
+					&& !StringEndsWithIgnoreCase(fileName, ".gco") && !StringEndsWithIgnoreCase(fileName, ".gc")))
 		{
 			fileBeingParsed->Close();
 			parsedFileInfo.incomplete = false;
@@ -524,7 +524,7 @@ bool FileInfoParser::FindHeight(const char* buf, size_t len)
 		else if (c == ';')
 		{
 			static const char kisslicerHeightString[] = " END_LAYER_OBJECT z=";
-			if (len > 31 && StringStartsWith(buf, kisslicerHeightString))
+			if (len > 31 && StringStartsWithIgnoreCase(buf, kisslicerHeightString))
 			{
 				parsedFileInfo.objectHeight = SafeStrtof(buf + sizeof(kisslicerHeightString)/sizeof(char) - 1, nullptr);
 				return true;
@@ -765,10 +765,12 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
 {
 	static const char* const PrintTimeStrings[] =
 	{
-		" estimated printing time",		// slic3r PE		"; estimated printing time = 1h 5m 24s"
-		";TIME",						// Cura				";TIME:38846"
-		" Build time"					// S3D				";   Build time: 0 hours 42 minutes"
-										// also KISSlicer	"; Estimated Build Time:   332.83 minutes"
+		// Note: if a string in this table is a leading or embedded substring of another, the longer one must come first
+		" estimated printing time (normal mode)",	// slic3r PE later versions	"; estimated printing time (normal mode) = 1h 5m 24s"
+		" estimated printing time",					// slic3r PE older versions	"; estimated printing time = 1h 5m 24s"
+		";TIME",									// Cura						";TIME:38846"
+		" Build time"								// S3D						";   Build time: 0 hours 42 minutes"
+													// also KISSlicer			"; Estimated Build Time:   332.83 minutes"
 	};
 
 	for (const char * ptStr : PrintTimeStrings)
@@ -793,7 +795,7 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
 				if (*pos == 'h')
 				{
 					hours = secs;
-					if (StringStartsWith(pos, "hours"))
+					if (StringStartsWithIgnoreCase(pos, "hours"))
 					{
 						pos += 5;
 					}
@@ -810,7 +812,7 @@ bool FileInfoParser::FindPrintTime(const char* buf, size_t len)
 				if (*pos == 'm')
 				{
 					minutes = secs;
-					if (StringStartsWith(pos, "minutes"))
+					if (StringStartsWithIgnoreCase(pos, "minutes"))
 					{
 						pos += 7;
 					}

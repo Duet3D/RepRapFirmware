@@ -710,7 +710,7 @@ void WifiFirmwareUploader::Spin()
 		uploadPort.end();					// disable the port, it has a high interrupt priority
 		if (uploadResult == EspUploadResult::success)
 		{
-			reprap.GetPlatform().Message(FirmwareUpdateMessage, "Upload successful\n");
+			MessageF("Upload successful\n");
 			if (restartModeOnCompletion == 1)
 			{
 				interface.Start();

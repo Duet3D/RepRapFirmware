@@ -8,7 +8,6 @@
 #include "HttpResponder.h"
 #include "Socket.h"
 #include "GCodes/GCodes.h"
-#include "PrintMonitor.h"
 #include "General/IP4String.h"
 
 #define KO_START "rr_"
@@ -16,6 +15,8 @@ const size_t KoFirst = 3;
 
 const char* const overflowResponse = "overflow";
 const char* const badEscapeResponse = "bad escape";
+const char* const serviceUnavailableResponse = "HTTP/1.1 503 Service Unavailable\r\n\r\n";
+static_assert(ARRAY_SIZE(serviceUnavailableResponse) <= OUTPUT_BUFFER_SIZE, "OUTPUT_BUFFER_SIZE too small");
 
 const uint32_t HttpReceiveTimeout = 2000;
 
@@ -31,7 +32,7 @@ const char* const ErrorPagePart2 =
 	"</p>\n"
 	"</body>\n";
 
-HttpResponder::HttpResponder(NetworkResponder *n) : NetworkResponder(n)
+HttpResponder::HttpResponder(NetworkResponder *n) : UploadingNetworkResponder(n)
 {
 }
 
@@ -447,7 +448,7 @@ bool HttpResponder::CharFromClient(char c)
 bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response, bool& keepOpen)
 {
 	keepOpen = false;	// assume we don't want to persist the connection
-	if (StringEquals(request, "connect") && GetKeyValue("password") != nullptr)
+	if (StringEqualsIgnoreCase(request, "connect") && GetKeyValue("password") != nullptr)
 	{
 		if (!CheckAuthenticated())
 		{
@@ -488,12 +489,12 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		RejectMessage("Not authorized", 401);
 		return false;
 	}
-	else if (StringEquals(request, "disconnect"))
+	else if (StringEqualsIgnoreCase(request, "disconnect"))
 	{
 		response->printf("{\"err\":%d}", (RemoveAuthentication()) ? 0 : 1);
 		reprap.GetPlatform().MessageF(LogMessage, "HTTP client %s disconnected\n", IP4String(GetRemoteIP()).c_str());
 	}
-	else if (StringEquals(request, "status"))
+	else if (StringEqualsIgnoreCase(request, "status"))
 	{
 		const char *typeString = GetKeyValue("type");
 		if (typeString != nullptr)
@@ -515,29 +516,29 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			response = reprap.GetLegacyStatusResponse(1, 0);
 		}
 	}
-	else if (StringEquals(request, "gcode") && GetKeyValue("gcode") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "gcode") && GetKeyValue("gcode") != nullptr)
 	{
 		NetworkGCodeInput * const httpInput = reprap.GetGCodes().GetHTTPInput();
 		httpInput->Put(HttpMessage, GetKeyValue("gcode"));
 		response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
 	}
-	else if (StringEquals(request, "upload"))
+	else if (StringEqualsIgnoreCase(request, "upload"))
 	{
 		response->printf("{\"err\":%d}", (uploadError) ? 1 : 0);
 	}
-	else if (StringEquals(request, "delete") && GetKeyValue("name") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "delete") && GetKeyValue("name") != nullptr)
 	{
 		const bool ok = GetPlatform().GetMassStorage()->Delete(FS_PREFIX, GetKeyValue("name"));
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
-	else if (StringEquals(request, "filelist") && GetKeyValue("dir") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "filelist") && GetKeyValue("dir") != nullptr)
 	{
 		OutputBuffer::Release(response);
 		const char* const firstVal = GetKeyValue("first");
 		const unsigned int startAt = (firstVal == nullptr) ? 0 : (unsigned int)SafeStrtol(firstVal);
 		response = reprap.GetFilelistResponse(GetKeyValue("dir"), startAt);		// this may return nullptr
 	}
-	else if (StringEquals(request, "files"))
+	else if (StringEqualsIgnoreCase(request, "files"))
 	{
 		OutputBuffer::Release(response);
 		const char* dir = GetKeyValue("dir");
@@ -551,23 +552,23 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		const bool flagDirs = flagDirsVal != nullptr && SafeStrtol(flagDirsVal) == 1;
 		response = reprap.GetFilesResponse(dir, startAt, flagDirs);				// this may return nullptr
 	}
-	else if (StringEquals(request, "fileinfo"))
+	else if (StringEqualsIgnoreCase(request, "fileinfo"))
 	{
 		const char* const nameVal = GetKeyValue("name");
 		if (nameVal != nullptr)
 		{
 			// Regular rr_fileinfo?name=xxx call
-			SafeStrncpy(filenameBeingProcessed, nameVal, ARRAY_SIZE(filenameBeingProcessed));
+			filenameBeingProcessed.copy(nameVal);
 		}
 		else
 		{
 			// Simple rr_fileinfo call to get info about the file being printed
-			filenameBeingProcessed[0] = 0;
+			filenameBeingProcessed.Clear();
 		}
 		responderState = ResponderState::gettingFileInfo;
 		return false;
 	}
-	else if (StringEquals(request, "move"))
+	else if (StringEqualsIgnoreCase(request, "move"))
 	{
 		const char* const oldVal = GetKeyValue("old");
 		const char* const newVal = GetKeyValue("new");
@@ -575,15 +576,15 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		if (oldVal != nullptr && newVal != nullptr)
 		{
 			MassStorage * const ms = GetPlatform().GetMassStorage();
-			if (StringEquals(GetKeyValue("deleteexisting"), "yes") && ms->FileExists(oldVal) && ms->FileExists(newVal))
+			if (StringEqualsIgnoreCase(GetKeyValue("deleteexisting"), "yes") && ms->FileExists(oldVal) && ms->FileExists(newVal))
 			{
-				ms->Delete(nullptr, newVal, true);
+				ms->Delete(nullptr, newVal);
 			}
 			success = ms->Rename(oldVal, newVal);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
-	else if (StringEquals(request, "mkdir"))
+	else if (StringEqualsIgnoreCase(request, "mkdir"))
 	{
 		const char* const dirVal = GetKeyValue("dir");
 		bool success = false;
@@ -593,7 +594,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
-	else if (StringEquals(request, "config"))
+	else if (StringEqualsIgnoreCase(request, "config"))
 	{
 		OutputBuffer::Release(response);
 		response = reprap.GetConfigResponse();
@@ -611,7 +612,7 @@ const char* HttpResponder::GetKeyValue(const char *key) const
 {
 	for (size_t i = 0; i < numQualKeys; ++i)
 	{
-		if (StringEquals(qualifiers[i].key, key))
+		if (StringEqualsIgnoreCase(qualifiers[i].key, key))
 		{
 			return qualifiers[i].value;
 		}
@@ -624,19 +625,19 @@ const char* HttpResponder::GetKeyValue(const char *key) const
 bool HttpResponder::SendFileInfo(bool quitEarly)
 {
 	OutputBuffer *jsonResponse = nullptr;
-	bool gotFileInfo = reprap.GetFileInfoResponse(filenameBeingProcessed, jsonResponse, quitEarly);
+	bool gotFileInfo = reprap.GetFileInfoResponse(filenameBeingProcessed.c_str(), jsonResponse, quitEarly);
 	if (gotFileInfo)
 	{
 		// Got it - send the response now
-		outBuf->copy(	"HTTP/1.1 200 OK\n"
-						"Cache-Control: no-cache, no-store, must-revalidate\n"
-						"Pragma: no-cache\n"
-						"Expires: 0\n"
-						"Access-Control-Allow-Origin: *\n"
-						"Content-Type: application/json\n"
+		outBuf->copy(	"HTTP/1.1 200 OK\r\n"
+						"Cache-Control: no-cache, no-store, must-revalidate\r\n"
+						"Pragma: no-cache\r\n"
+						"Expires: 0\r\n"
+						"Access-Control-Allow-Origin: *\r\n"
+						"Content-Type: application/json\r\n"
 					);
-		outBuf->catf("Content-Length: %u\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
-		outBuf->cat("Connection: close\n\n");
+		outBuf->catf("Content-Length: %u\r\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
+		outBuf->cat("Connection: close\r\n\r\n");
 		outBuf->Append(jsonResponse);
 		if (outBuf->HadOverflow())
 		{
@@ -646,6 +647,7 @@ bool HttpResponder::SendFileInfo(bool quitEarly)
 		}
 		else
 		{
+			filenameBeingProcessed.Clear();
 			Commit();
 		}
 	}
@@ -721,33 +723,53 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 		if (nameOfFileToSend[0] == '/')
 		{
 			++nameOfFileToSend;						// all web files are relative to the /www folder, so remove the leading '/'
-			if (nameOfFileToSend[0] == 0)
+		}
+
+		// If we are asked to return the root, return the index file
+		if (nameOfFileToSend[0] == 0)
+		{
+			nameOfFileToSend = INDEX_PAGE_FILE;
+		}
+
+		for (;;)
+		{
+			// Try to open a gzipped version of the file first
+			if (!StringEndsWithIgnoreCase(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
+			{
+				String<MaxFilenameLength> nameBuf;
+				nameBuf.copy(nameOfFileToSend);
+				nameBuf.cat(".gz");
+				fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameBuf.c_str(), OpenMode::read);
+				if (fileToSend != nullptr)
+				{
+					zip = true;
+					break;
+				}
+			}
+
+			// That failed, so try to open the normal version of the file
+			fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
+			if (fileToSend != nullptr)
+			{
+				break;
+			}
+
+			if (StringEqualsIgnoreCase(nameOfFileToSend, INDEX_PAGE_FILE))
+			{
+				nameOfFileToSend = OLD_INDEX_PAGE_FILE;			// the index file wasn't found, so try the old one
+			}
+			else if (!strchr(nameOfFileToSend, '.'))			// if we were asked to return a file without a '.' in the name, return the index page
 			{
 				nameOfFileToSend = INDEX_PAGE_FILE;
 			}
-		}
-
-		// Try to open a gzipped version of the file first
-		if (!StringEndsWith(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
-		{
-			String<MaxFilenameLength> nameBuf;
-			nameBuf.copy(nameOfFileToSend);
-			nameBuf.cat(".gz");
-			fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameBuf.c_str(), OpenMode::read);
-			if (fileToSend != nullptr)
+			else
 			{
-				zip = true;
+				break;
 			}
 		}
 
-		// If that failed, try to open the normal version of the file
-		if (fileToSend == nullptr)
-		{
-			fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
-		}
-
 		// If we still couldn't find the file and it was an HTML file, return the 404 error page
-		if (fileToSend == nullptr && (StringEndsWith(nameOfFileToSend, ".html") || StringEndsWith(nameOfFileToSend, ".htm")))
+		if (fileToSend == nullptr && (StringEndsWithIgnoreCase(nameOfFileToSend, ".html") || StringEndsWithIgnoreCase(nameOfFileToSend, ".htm")))
 		{
 			nameOfFileToSend = FOUR04_PAGE_FILE;
 			fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
@@ -755,10 +777,9 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 
 		if (fileToSend == nullptr)
 		{
-			RejectMessage("page not found", 404);
+			RejectMessage("page not found<br>Check that the SD card is mounted and has the correct files in its /www folder", 404);
 			return;
 		}
-		fileBeingSent = fileToSend;
 	}
 	else
 	{
@@ -768,48 +789,48 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 			RejectMessage("file not found", 404);
 			return;
 		}
-		fileBeingSent = fileToSend;
 	}
 
-	outBuf->copy("HTTP/1.1 200 OK\n");
+	fileBeingSent = fileToSend;
+	outBuf->copy("HTTP/1.1 200 OK\r\n");
 
 	// Don't cache files served by rr_download
 	if (!isWebFile)
 	{
-		outBuf->cat(	"Cache-Control: no-cache, no-store, must-revalidate\n"
-						"Pragma: no-cache\n"
-						"Expires: 0\n"
-						"Access-Control-Allow-Origin: *\n"
+		outBuf->cat(	"Cache-Control: no-cache, no-store, must-revalidate\r\n"
+						"Pragma: no-cache\r\n"
+						"Expires: 0\r\n"
+						"Access-Control-Allow-Origin: *\r\n"
 					);
 	}
 
 	const char* contentType;
-	if (StringEndsWith(nameOfFileToSend, ".png"))
+	if (StringEndsWithIgnoreCase(nameOfFileToSend, ".png"))
 	{
 		contentType = "image/png";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".ico"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".ico"))
 	{
 		contentType = "image/x-icon";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".js"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".js"))
 	{
 		contentType = "application/javascript";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".css"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".css"))
 	{
 		contentType = "text/css";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".htm") || StringEndsWith(nameOfFileToSend, ".html"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".htm") || StringEndsWithIgnoreCase(nameOfFileToSend, ".html"))
 	{
 		contentType = "text/html";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".zip"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".zip"))
 	{
 		contentType = "application/zip";
 		zip = true;
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".g") || StringEndsWith(nameOfFileToSend, ".gc") || StringEndsWith(nameOfFileToSend, ".gcode"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".g") || StringEndsWithIgnoreCase(nameOfFileToSend, ".gc") || StringEndsWithIgnoreCase(nameOfFileToSend, ".gcode"))
 	{
 		contentType = "text/plain";
 	}
@@ -817,15 +838,15 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 	{
 		contentType = "application/octet-stream";
 	}
-	outBuf->catf("Content-Type: %s\n", contentType);
+	outBuf->catf("Content-Type: %s\r\n", contentType);
 
-	if (zip && fileToSend != nullptr)
+	if (zip)
 	{
-		outBuf->cat("Content-Encoding: gzip\n");
-		outBuf->catf("Content-Length: %lu\n", fileToSend->Length());
+		outBuf->cat("Content-Encoding: gzip\r\n");
 	}
 
-	outBuf->cat("Connection: close\n\n");
+	outBuf->catf("Content-Length: %lu\r\n", fileToSend->Length());
+	outBuf->cat("Connection: close\r\n\r\n");
 	Commit();
 }
 
@@ -858,15 +879,15 @@ void HttpResponder::SendGCodeReply()
 		}
 
 		// Send the whole G-Code reply as plain text to the client
-		outBuf->copy(	"HTTP/1.1 200 OK\n"
-						"Cache-Control: no-cache, no-store, must-revalidate\n"
-						"Pragma: no-cache\n"
-						"Expires: 0\n"
-						"Access-Control-Allow-Origin: *\n"
-						"Content-Type: text/plain\n"
+		outBuf->copy(	"HTTP/1.1 200 OK\r\n"
+						"Cache-Control: no-cache, no-store, must-revalidate\r\n"
+						"Pragma: no-cache\r\n"
+						"Expires: 0\r\n"
+						"Access-Control-Allow-Origin: *\r\n"
+						"Content-Type: text/plain\r\n"
 					);
-		outBuf->catf("Content-Length: %u\n", gcodeReply.DataLength());
-		outBuf->cat("Connection: close\n\n");
+		outBuf->catf("Content-Length: %u\r\n", gcodeReply.DataLength());
+		outBuf->cat("Connection: close\r\n\r\n");
 		outStack.Append(gcodeReply);
 
 		// Possibly clean up the G-code reply once again
@@ -890,13 +911,13 @@ void HttpResponder::SendJsonResponse(const char* command)
 	// Update the authentication status and try to handle "text/plain" requests here
 	if (CheckAuthenticated())
 	{
-		if (StringEquals(command, "reply"))			// rr_reply
+		if (StringEqualsIgnoreCase(command, "reply"))			// rr_reply
 		{
 			SendGCodeReply();
 			return;
 		}
 
-		if (StringEquals(command, "configfile"))	// rr_configfile [DEPRECATED]
+		if (StringEqualsIgnoreCase(command, "configfile"))	// rr_configfile [DEPRECATED]
 		{
 			String<MaxFilenameLength> fileName;
 			MassStorage::CombineName(fileName.GetRef(), GetPlatform().GetSysDir(), GetPlatform().GetConfigFile());
@@ -904,7 +925,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 			return;
 		}
 
-		if (StringEquals(command, "download"))
+		if (StringEqualsIgnoreCase(command, "download"))
 		{
 			const char* const filename = GetKeyValue("name");
 			if (filename != nullptr)
@@ -937,19 +958,30 @@ void HttpResponder::SendJsonResponse(const char* command)
 	if (jsonResponse == nullptr)
 	{
 		// We ran out of buffers at some point.
-		// Unfortunately the protocol is prone to deadlocking, because if most output buffer are used up holding a GCode reply,
+		// Unfortunately the protocol is prone to deadlocking, because if most output buffers are used up holding a GCode reply,
 		// there may be insufficient buffers left to compose the status response to tell DWC that it needs to fetch that GCode reply.
-		// Until we fix the protocol, the best we can do is time out and throw the GCode response away.
+		// Until we fix the protocol, the best we can do is time out and throw some GCode responses away.
 		if (millis() - startedProcessingRequestAt >= MaxBufferWaitTime)
 		{
 			{
+				// Looks like we've run out of buffers and waiting hasn't help, so release some of the responses that are waiting to go
 				MutexLocker lock(gcodeReplyMutex);
 				OutputBuffer *buf = gcodeReply.Pop();
-				OutputBuffer::ReleaseAll(buf);
+				if (buf != nullptr)
+				{
+					OutputBuffer::ReleaseAll(buf);
+					return;					// next time we try, hopefully there will be a spare buffer
+				}
 			}
+
+			// We've freed all the buffer we have
 			ReportOutputBufferExhaustion(__FILE__, __LINE__);
+
+			// We know that we have an output buffer, but it may be too short to send a long reply, so send a short one
+			outBuf->copy(serviceUnavailableResponse);
+			Commit(ResponderState::free, false);
+			return;
 		}
-		return;
 	}
 
 	// Send the JSON response
@@ -959,10 +991,10 @@ void HttpResponder::SendJsonResponse(const char* command)
 		// Check that the browser wants to persist the connection too
 		for (size_t i = 0; i < numHeaderKeys; ++i)
 		{
-			if (StringEquals(headers[i].key, "Connection"))
+			if (StringEqualsIgnoreCase(headers[i].key, "Connection"))
 			{
 				// Comment out the following line to disable persistent connections
-				keepOpen = StringEquals(headers[i].value, "keep-alive");
+				keepOpen = StringEqualsIgnoreCase(headers[i].value, "keep-alive");
 				break;
 			}
 		}
@@ -973,16 +1005,16 @@ void HttpResponder::SendJsonResponse(const char* command)
 	// so other tasks may allocate buffers meanwhile, and the previous mechanism for ensuring that there is sufficient
 	// buffer space remaining don't work.
 	// This response is currently about 230 bytes long in the worst case.
-	outBuf->copy(	"HTTP/1.1 200 OK\n"
-					"Cache-Control: no-cache, no-store, must-revalidate\n"
-					"Pragma: no-cache\n"
-					"Expires: 0\n"
-					"Access-Control-Allow-Origin: *\n"
-					"Content-Type: application/json\n"
+	outBuf->copy(	"HTTP/1.1 200 OK\r\n"
+					"Cache-Control: no-cache, no-store, must-revalidate\r\n"
+					"Pragma: no-cache\r\n"
+					"Expires: 0\r\n"
+					"Access-Control-Allow-Origin: *\r\n"
+					"Content-Type: application/json\r\n"
 				);
 	const unsigned int replyLength = (jsonResponse != nullptr) ? jsonResponse->Length() : 0;
-	outBuf->catf("Content-Length: %u\n", replyLength);
-	outBuf->catf("Connection: %s\n\n", keepOpen ? "keep-alive" : "close");
+	outBuf->catf("Content-Length: %u\r\n", replyLength);
+	outBuf->catf("Connection: %s\r\n\r\n", keepOpen ? "keep-alive" : "close");
 	outBuf->Append(jsonResponse);
 
 	if (outBuf->HadOverflow())
@@ -998,18 +1030,25 @@ void HttpResponder::SendJsonResponse(const char* command)
 			{
 				MutexLocker lock(gcodeReplyMutex);
 				OutputBuffer *buf = gcodeReply.Pop();
-				OutputBuffer::ReleaseAll(buf);
+				if (buf != nullptr)
+				{
+					OutputBuffer::ReleaseAll(buf);
+					return;
+				}
 			}
 			ReportOutputBufferExhaustion(__FILE__, __LINE__);
+			OutputBuffer::Truncate(outBuf, 999999);				// release all buffers except the first one
+			outBuf->copy(serviceUnavailableResponse);
+			Commit(ResponderState::free, false);
+			return;
 		}
 	}
-	else
+
+	// Here if everything is OK
+	Commit(keepOpen ? ResponderState::reading : ResponderState::free, false);
+	if (reprap.Debug(moduleWebserver))
 	{
-		Commit(keepOpen ? ResponderState::reading : ResponderState::free, false);
-		if (reprap.Debug(moduleWebserver))
-		{
-			debugPrintf("Sending JSON reply, length %u\n", replyLength);
-		}
+		debugPrintf("Sending JSON reply, length %u\n", replyLength);
 	}
 }
 
@@ -1049,7 +1088,7 @@ void HttpResponder::ProcessRequest()
 	// Reserve an output buffer before we process the request, or we won't be able to reply
 	if (outBuf != nullptr || OutputBuffer::Allocate(outBuf))
 	{
-		if (StringEquals(commandWords[0], "GET"))
+		if (StringEqualsIgnoreCase(commandWords[0], "GET"))
 		{
 			if (StringStartsWith(commandWords[1], KO_START))
 			{
@@ -1066,17 +1105,17 @@ void HttpResponder::ProcessRequest()
 			return;
 		}
 
-		if (StringEquals(commandWords[0], "OPTIONS"))
+		if (StringEqualsIgnoreCase(commandWords[0], "OPTIONS"))
 		{
-			outBuf->copy(	"HTTP/1.1 200 OK\n"
-							"Allow: OPTIONS, GET, POST\n"
-							"Cache-Control: no-cache, no-store, must-revalidate\n"
-							"Pragma: no-cache\n"
-							"Expires: 0\n"
-							"Access-Control-Allow-Origin: *\n"
-							"Access-Control-Allow-Headers: Content-Type\n"
-							"Content-Length: 0\n"
-							"\n"
+			outBuf->copy(	"HTTP/1.1 200 OK\r\n"
+							"Allow: OPTIONS, GET, POST\r\n"
+							"Cache-Control: no-cache, no-store, must-revalidate\r\n"
+							"Pragma: no-cache\r\n"
+							"Expires: 0\r\n"
+							"Access-Control-Allow-Origin: *\r\n"
+							"Access-Control-Allow-Headers: Content-Type\r\n"
+							"Content-Length: 0\r\n"
+							"\r\n"
 						);
 			if (outBuf->HadOverflow())
 			{
@@ -1090,10 +1129,10 @@ void HttpResponder::ProcessRequest()
 			return;
 		}
 
-		if (CheckAuthenticated() && StringEquals(commandWords[0], "POST"))
+		if (CheckAuthenticated() && StringEqualsIgnoreCase(commandWords[0], "POST"))
 		{
-			const bool isUploadRequest = (StringEquals(commandWords[1], KO_START "upload"))
-									  || (commandWords[1][0] == '/' && StringEquals(commandWords[1] + 1, KO_START "upload"));
+			const bool isUploadRequest = (StringEqualsIgnoreCase(commandWords[1], KO_START "upload"))
+									  || (commandWords[1][0] == '/' && StringEqualsIgnoreCase(commandWords[1] + 1, KO_START "upload"));
 			if (isUploadRequest)
 			{
 				const char* const filename = GetKeyValue("name");
@@ -1103,7 +1142,7 @@ void HttpResponder::ProcessRequest()
 					bool contentLengthFound = false;
 					for (size_t i = 0; i < numHeaderKeys; i++)
 					{
-						if (StringEquals(headers[i].key, "Content-Length"))
+						if (StringEqualsIgnoreCase(headers[i].key, "Content-Length"))
 						{
 							postFileLength = atoi(headers[i].value);
 							contentLengthFound = true;
@@ -1119,7 +1158,7 @@ void HttpResponder::ProcessRequest()
 					}
 
 					// Start a new file upload
-					FileStore *file = GetPlatform().OpenFile(FS_PREFIX, filename, OpenMode::write);
+					FileStore *file = GetPlatform().OpenFile(FS_PREFIX, filename, OpenMode::write, postFileLength);
 					if (file == nullptr)
 					{
 						RejectMessage("could not create file");
@@ -1193,7 +1232,10 @@ void HttpResponder::RejectMessage(const char* response, unsigned int code)
 
 	if (outBuf != nullptr || OutputBuffer::Allocate(outBuf))
 	{
-		outBuf->printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
+		outBuf->printf("HTTP/1.1 %u %s\r\n"
+			"Connection: close\r\n"
+			"Access-Control-Allow-Origin: *\r\n"
+			"\r\n", code, response);
 		outBuf->catf("%s%s%s", ErrorPagePart1, response, ErrorPagePart2);
 		Commit();
 	}
@@ -1278,7 +1320,7 @@ void HttpResponder::CancelUpload()
 			}
 		}
 	}
-	NetworkResponder::CancelUpload();
+	UploadingNetworkResponder::CancelUpload();
 }
 
 // This overrides the version in class NetworkResponder

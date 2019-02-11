@@ -1,34 +1,33 @@
 // Driver for 128x64 graphical LCD with ST7920 controller
 // D Crocker, Escher Technologies Ltd.
 
-#include "RepRapFirmware.h"
-#include "Pins.h"
-#include "Tasks.h"
+#include "lcd7920.h"
 
 #if SUPPORT_12864_LCD
 
-#include "lcd7920.h"
+#include "Pins.h"
+#include "Tasks.h"
 
-const uint32_t SpiClockFrequency = 2000000;			// 2.0MHz (minimum clock cycle time for ST7920 is 400ns @ Vdd=4.5V, min. clock width 200ns high and 20ns low)
+// The LCD SPI clock frequency is now defined in the Pins.h file for the configuration being built
 
 // LCD basic instructions. These all take 72us to execute except LcdDisplayClear, which takes 1.6ms
-const uint8_t LcdDisplayClear = 0x01;
-const uint8_t LcdHome = 0x02;
-const uint8_t LcdEntryModeSet = 0x06;				// move cursor right and increment address when writing data
-const uint8_t LcdDisplayOff = 0x08;
-const uint8_t LcdDisplayOn = 0x0C;					// add 0x02 for cursor on and/or 0x01 for cursor blink on
-const uint8_t LcdFunctionSetBasicAlpha = 0x20;
-const uint8_t LcdFunctionSetBasicGraphic = 0x22;
-const uint8_t LcdFunctionSetExtendedAlpha = 0x24;
-const uint8_t LcdFunctionSetExtendedGraphic = 0x26;
-const uint8_t LcdSetDdramAddress = 0x80;			// add the address we want to set
+constexpr uint8_t LcdDisplayClear = 0x01;
+constexpr uint8_t LcdHome = 0x02;
+constexpr uint8_t LcdEntryModeSet = 0x06;				// move cursor right and increment address when writing data
+constexpr uint8_t LcdDisplayOff = 0x08;
+constexpr uint8_t LcdDisplayOn = 0x0C;					// add 0x02 for cursor on and/or 0x01 for cursor blink on
+constexpr uint8_t LcdFunctionSetBasicAlpha = 0x20;
+constexpr uint8_t LcdFunctionSetBasicGraphic = 0x22;
+constexpr uint8_t LcdFunctionSetExtendedAlpha = 0x24;
+constexpr uint8_t LcdFunctionSetExtendedGraphic = 0x26;
+constexpr uint8_t LcdSetDdramAddress = 0x80;			// add the address we want to set
 
 // LCD extended instructions
-const uint8_t LcdSetGdramAddress = 0x80;
+constexpr uint8_t LcdSetGdramAddress = 0x80;
 
-const unsigned int LcdCommandDelayMicros = 72 - 8; // 72us required, less 7us time to send the command @ 2.0MHz
-const unsigned int LcdDataDelayMicros = 4;			// delay between sending data bytes
-const unsigned int LcdDisplayClearDelayMillis = 3;	// 1.6ms should be enough
+constexpr unsigned int LcdCommandDelayMicros = 72 - 8;	// 72us required, less 7us time to send the command @ 2.0MHz
+constexpr unsigned int LcdDataDelayMicros = 4;			// delay between sending data bytes
+constexpr unsigned int LcdDisplayClearDelayMillis = 3;	// 1.6ms should be enough
 
 inline void Lcd7920::CommandDelay()
 {
@@ -40,13 +39,22 @@ inline void Lcd7920::DataDelay()
 	delayMicroseconds(LcdDataDelayMicros);
 }
 
-Lcd7920::Lcd7920(uint8_t csPin, const LcdFont * const fnts[], size_t nFonts)
+Lcd7920::Lcd7920(Pin csPin, const LcdFont * const fnts[], size_t nFonts)
 	: fonts(fnts), numFonts(nFonts), currentFontNumber(0), numContinuationBytesLeft(0), textInverted(false)
 {
 	device.csPin = csPin;
 	device.csPolarity = true;						// active high chip select
 	device.spiMode = 0;
-	device.clockFrequency = SpiClockFrequency;
+	device.clockFrequency = LcdSpiClockFrequency;
+#if __LPC17xx__
+    device.sspChannel = LcdSpiChannel;
+#endif
+}
+
+// Set the SPI clock frequency
+void Lcd7920::SetSpiClockFrequency(uint32_t freq)
+{
+	device.clockFrequency = freq;
 }
 
 void Lcd7920::Init()
@@ -65,11 +73,13 @@ void Lcd7920::Init()
 		delayMicroseconds(1);
 
 		sendLcdCommand(LcdFunctionSetBasicAlpha);
-		delay(1);
+		delay(2);
 		sendLcdCommand(LcdFunctionSetBasicAlpha);
 		CommandDelay();
 		sendLcdCommand(LcdEntryModeSet);
 		CommandDelay();
+		sendLcdCommand(LcdDisplayClear);					// need this on some displays to ensure that the alpha RAM is clear (M3D Kanji problem)
+		delay(LcdDisplayClearDelayMillis);
 		sendLcdCommand(LcdFunctionSetExtendedGraphic);
 		CommandDelay();
 
@@ -228,8 +238,7 @@ size_t Lcd7920::writeNative(uint16_t ch)
 		const uint16_t cmask = (1u << currentFont->height) - 1;
 
 		uint8_t nCols = *fontPtr++;
-
-		if (lastCharColData != 0)	// if we have written anything other than spaces
+		if (lastCharColData != 0)		// if we have written anything other than spaces
 		{
 			uint8_t numSpaces = currentFont->numSpaces;
 
@@ -308,6 +317,46 @@ size_t Lcd7920::writeNative(uint16_t ch)
 	return 1;
 }
 
+// Write a space
+void Lcd7920::WriteSpaces(PixelNumber numPixels)
+{
+	const LcdFont * const currentFont = fonts[currentFontNumber];
+	uint8_t ySize = currentFont->height;
+	if (row >= NumRows)
+	{
+		ySize = 0;				// we still execute the code, so that the caller can tell how many columns the text will occupy by writing it off-screen
+	}
+	else if (row + ySize > NumRows)
+	{
+		ySize = NumRows - row;
+	}
+
+	while (numPixels != 0 && column < NumCols)
+	{
+		if (ySize != 0)
+		{
+			const uint8_t mask = 0x80 >> (column & 7);
+			uint8_t *p = image + ((row * (NumCols/8)) + (column/8));
+			for (uint8_t i = 0; i < ySize && p < (image + sizeof(image)); ++i)
+			{
+				const uint8_t oldVal = *p;
+				const uint8_t newVal = (textInverted) ? oldVal | mask : oldVal & ~mask;
+				if (newVal != oldVal)
+				{
+					*p = newVal;
+					SetDirty(row + i, column);
+				}
+				p += (NumCols/8);
+			}
+		}
+		--numPixels;
+		++column;
+	}
+
+	lastCharColData = 0;
+	justSetCursor = false;
+}
+
 // Set the left margin. This is where the cursor goes to when we print newline.
 void Lcd7920::SetLeftMargin(PixelNumber c)
 {
@@ -360,42 +409,49 @@ void Lcd7920::TextInvert(bool b)
 	if (b != textInverted)
 	{
 		textInverted = b;
-		lastCharColData = (justSetCursor && !textInverted) ? 0u : 0xFFFF;
+		if (!justSetCursor)
+		{
+			lastCharColData = 0xFFFF;				// force a space when switching between normal and inverted text
+		}
 	}
 }
 
+// Clear a rectangular block of pixels starting at rows, scol ending just before erow, ecol
 void Lcd7920::Clear(PixelNumber sRow, PixelNumber sCol, PixelNumber eRow, PixelNumber eCol)
 {
 	if (eCol > NumCols) { eCol = NumCols; }
 	if (eRow > NumRows) { eRow = NumRows; }
 	if (sCol < eCol && sRow < eRow)
 	{
+		uint8_t sMask = ~(0xFF >> (sCol & 7));		// mask of bits we want to keep in the first byte of each row that we modify
+		const uint8_t eMask = 0xFF >> (eCol & 7);	// mask of bits we want to keep in the last byte of each row that we modify
+		if ((sCol & ~7) == (eCol & ~7))
+		{
+			sMask |= eMask;							// special case of just clearing some middle bits
+		}
 		for (PixelNumber row = sRow; row < eRow; ++row)
 		{
-			PixelNumber col = sCol;
-			if ((col & 7) != 0)
+			uint8_t * p = image + ((row * (NumCols/8)) + (sCol/8));
+			uint8_t * const endp = image + ((row * (NumCols/8)) + (eCol/8));
+			*p &= sMask;
+			if (p != endp)
 			{
-				uint8_t * const p = image + ((row * (NumCols/8)) + (col/8));
-				*p &= ~(0xFF >> (col & 7));
-				col = (col & ~7) + 1;
-			}
-			while (col < eCol)
-			{
-				image[(row * (NumCols/8)) + (col/8)] = 0;
-				col += 8;
-			}
-			if ((eCol & 7) != 0)
-			{
-				uint8_t * const p = image + ((row * (NumCols/8)) + (col/8));
-				*p &= (0xFF >> (col & 7));
+				while (++p < endp)
+				{
+					*p = 0;
+				}
+				if ((eCol & 7) != 0)
+				{
+					*p &= eMask;
+				}
 			}
 		}
 
 		// Flag cleared part as dirty
-		startRow = sRow;
-		endRow = eRow;
-		startCol = sCol;
-		endCol = eCol;
+		if (sCol < startCol) { startCol = sCol; }
+		if (eCol >= endCol) { endCol = eCol; }
+		if (sRow < startRow) { startRow = sRow; }
+		if (eRow >= endRow) { endRow = eRow; }
 
 		SetCursor(sRow, sCol);
 		textInverted = false;
@@ -416,7 +472,10 @@ void Lcd7920::Line(PixelNumber y0, PixelNumber x0, PixelNumber y1, PixelNumber x
 	for (;;)
 	{
 		SetPixel(y0, x0, mode);
-		if (x0 == x1 && y0 == y1) break;
+		if (x0 == x1 && y0 == y1)
+		{
+			break;
+		}
 		int e2 = err + err;
 		if (e2 > -dy)
 		{
@@ -490,7 +549,7 @@ void Lcd7920::Bitmap(PixelNumber x0, PixelNumber y0, PixelNumber width, PixelNum
 	if (y0 + height > endRow) endRow = y0 + height;
 }
 
-// Draw a single bitmap row
+// Draw a single bitmap row. 'left' and 'width' do not need to be divisible by 8.
 void Lcd7920::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert)
 {
 	if (width != 0)														// avoid possible arithmetic underflow
@@ -518,14 +577,15 @@ void Lcd7920::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, co
 			++firstColIndex;
 		}
 
-		// Do the last byte
-		const unsigned int lastDataShift = 7 - ((left + width - 1) % 8);	// number of trailing bits in the last byte that we leave alone
+		// Do the last byte. 'accumulator' contains up to 'firstDataShift' of the most significant bits.
+		const unsigned int lastDataShift = 7 - ((left + width - 1) % 8);	// number of trailing bits in the last byte that we leave alone, 0 to 7
 		const uint8_t lastMask = (1u << lastDataShift) - 1;					// mask for bits we want to keep;
+		accumulator |= (*data ^ inv) >> firstDataShift;
+		accumulator &= ~lastMask;
 		accumulator |= *p & lastMask;
-		const uint8_t newVal = accumulator | (((*data ^ inv) << (8 - firstDataShift)) & ~lastMask);
-		if (newVal != *p)
+		if (accumulator != *p)
 		{
-			*p = newVal;
+			*p = accumulator;
 			SetDirty(top, 8 * firstColIndex);
 		}
 	}
@@ -598,7 +658,7 @@ void Lcd7920::SetCursor(PixelNumber r, PixelNumber c)
 {
 	row = r;
 	column = c;
-	lastCharColData = (textInverted) ? 0xFFFF : 0u;    // flag that we just set the cursor position, so no space before next character
+	lastCharColData = 0u;    // flag that we just set the cursor position, so no space before next character
 	justSetCursor = true;
 }
 

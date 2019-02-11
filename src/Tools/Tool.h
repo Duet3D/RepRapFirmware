@@ -28,6 +28,10 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
+#undef array
+#include <functional>
+#define array _ecv_array
+
 constexpr size_t ToolNameLength = 32;						// maximum allowed length for tool names
 constexpr AxesBitmap DefaultXAxisMapping = 1u << X_AXIS;	// by default, X is mapped to X
 constexpr AxesBitmap DefaultYAxisMapping = 1u << Y_AXIS;	// by default, Y is mapped to Y
@@ -76,6 +80,9 @@ public:
 	void SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp);
 
 	bool HasTemperatureFault() const { return heaterFault; }
+
+	void IterateExtruders(std::function<void(unsigned int)> f) const;
+	void IterateHeaters(std::function<void(int)> f) const;
 
 	friend class RepRap;
 

@@ -24,6 +24,7 @@ class ObjectModel;
 
 union ExpressionValue
 {
+	bool bVal;
 	float fVal;
 	int32_t iVal;
 	uint32_t uVal;
@@ -32,8 +33,10 @@ union ExpressionValue
 };
 
 // Dummy types, used to define type codes
-class Bitmap32 { };
-class Enum32 { };
+class Bitmap32;
+class Enum32;
+class Float2;			// float printed to 2 decimal places instead of 1
+class Float3;			// float printed to 3 decimal places instead of 1
 
 class ObjectModel
 {
@@ -55,35 +58,15 @@ public:
 	// Get the value of an object when we don't know what its type is
 	TypeCode GetObjectValue(ExpressionValue& val, const char *idString);
 
-	// Get values of various types from the object model, returning true if successful
-	template<class T> bool GetObjectValue(T& val, const char *idString);
+	// Specialisation of above for float, allowing conversion from integer to float
+	bool GetObjectValue(float& val, const char *idString);
 
-	bool GetStringObjectValue(const StringRef& str, const char* idString) const;
-	bool GetLongEnumObjectValue(const StringRef& str, const char *idString) const;
-	bool GetShortEnumObjectValue(uint32_t &val, const char *idString) const;
-	bool GetBitmapObjectValue(uint32_t &val, const char *idString) const;
-
-	// Try to set values of various types from the object model, returning true if successful
-	bool SetFloatObjectValue(float val, const char *idString);
-	bool SetUnsignedObjectValue(uint32_t val, const char *idString);
-	bool SetSignedObjectValue(int32_t val, const char *idString);
-	bool SetStringObjectValue(const StringRef& str, const char *idString);
-	bool SetLongEnumObjectValue(const StringRef& str, const char *idString);
-	bool SetShortEnumObjectValue(uint32_t val, const char *idString);
-	bool SetBitmapObjectValue(uint32_t val, const char *idString);
-	bool SetBoolObjectValue(bool val, const char *idString);
-
-	// Try to adjust values of various types from the object model, returning true if successful
-	bool AdjustFloatObjectValue(float val, const char *idString);
-	bool AdjustUnsignedObjectValue(int32_t val, const char *idString);
-	bool AdjustSignedObjectValue(int32_t val, const char *idString);
-	bool ToggleBoolObjectValue(const char *idString);
+	// Specialisation of above for int, allowing conversion from unsigned to signed
+	bool GetObjectValue(int32_t& val, const char *idString);
 
 	// Get the object model table entry for the current level object in the query
 	const ObjectModelTableEntry *FindObjectModelTableEntry(const char *idString);
 
-	// Get the object model table entry for the leaf object in the query
-	const ObjectModelTableEntry *FindObjectModelLeafEntry(const char *idString);
 	// Skip the current element in the ID or filter string
 	static const char* GetNextElement(const char *id);
 
@@ -107,11 +90,13 @@ template<> constexpr TypeCode TypeOf<bool> () { return 1; }
 template<> constexpr TypeCode TypeOf<uint32_t> () { return 2; }
 template<> constexpr TypeCode TypeOf<int32_t>() { return 3; }
 template<> constexpr TypeCode TypeOf<float>() { return 4; }
-template<> constexpr TypeCode TypeOf<Bitmap32>() { return 5; }
-template<> constexpr TypeCode TypeOf<Enum32>() { return 6; }
-template<> constexpr TypeCode TypeOf<ObjectModel>() { return 7; }
-template<> constexpr TypeCode TypeOf<const char *>() { return 8; }
-template<> constexpr TypeCode TypeOf<IPAddress>() { return 9; }
+template<> constexpr TypeCode TypeOf<Float2>() { return 5; }
+template<> constexpr TypeCode TypeOf<Float3>() { return 6; }
+template<> constexpr TypeCode TypeOf<Bitmap32>() { return 7; }
+template<> constexpr TypeCode TypeOf<Enum32>() { return 8; }
+template<> constexpr TypeCode TypeOf<ObjectModel>() { return 9; }
+template<> constexpr TypeCode TypeOf<const char *>() { return 10; }
+template<> constexpr TypeCode TypeOf<IPAddress>() { return 11; }
 
 #define TYPE_OF(_t) (TypeOf<_t>())
 
@@ -161,48 +146,9 @@ public:
 	// Compare the name of this field with the filter string that we are trying to match
 	int IdCompare(const char *id) const;
 
-	// Return true if this field is an object, not a primitive type
-	bool IsObject() const { return type == TYPE_OF(ObjectModel); }
-
-	// Follow the path specified by the ifString until we reach the end of it
-	const ObjectModelTableEntry *FindLeafEntry(ObjectModel *self, const char *idString) const;
-
-	// Check the type is correct, call the function and return the pointer
-	void* GetValuePointer(ObjectModel *self, TypeCode t) const;
-
 	// Private function to report a value of primitive type
 	static void ReportItemAsJson(OutputBuffer *buf, const char *filter, ObjectModel::ReportFlags flags, void *nParam, TypeCode type);
 };
-
-// Function to retrieve a value by searching the object model
-// Returns true if success
-template<class T> bool ObjectModel::GetObjectValue(T& val, const char *idString)
-{
-	const ObjectModelTableEntry * const e = FindObjectModelLeafEntry(idString);
-	if (e == nullptr)
-	{
-		return false;
-	}
-	const T *p = (float*)(e->GetValuePointer(this, TYPE_OF(T)));
-	if (p == nullptr)
-	{
-		return false;
-	}
-	val = *p;
-	return true;
-}
-
-// Specialisation of above for float, allowing conversion from integer to float
-template<> bool ObjectModel::GetObjectValue(float& val, const char *idString);
-
-// Specialisation of above for int, allowing conversion from unsigned to signed
-template<> bool ObjectModel::GetObjectValue(int32_t& val, const char *idString);
-
-template<class T> T* ObjectModel::GetObjectPointer(const char* idString)
-{
-	const ObjectModelTableEntry *e = FindObjectModelLeafEntry(idString);
-	return (e == nullptr) ? nullptr : (T*)(e->GetValuePointer(this, TYPE_OF(T)));
-}
 
 // Use this macro to inherit form ObjectModel
 #define INHERIT_OBJECT_MODEL	: public ObjectModel

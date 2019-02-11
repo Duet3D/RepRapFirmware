@@ -940,7 +940,7 @@ void PID::DisplayBuffer(const char *intro)
 		{
 			buf->catf(" %.1f", (double)tuningTempReadings[i]);
 		}
-		buf->cat("\n");
+		buf->cat('\n');
 		platform.Message(UsbMessage, buf);
 	}
 }

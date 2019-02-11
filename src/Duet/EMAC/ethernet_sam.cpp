@@ -41,13 +41,11 @@
  *
  */
 
-#include <string.h>
-//#include "board.h"
-//#include "gpio.h"
 #include "ethernet_sam.h"
-//#include "emac.h"
 #include "ethernet_phy.h"
-//#include "sysclk.h"
+
+extern "C" {
+
 /* lwIP includes */
 #include "lwip/src/include/lwip/sys.h"
 #include "lwip/src/include/lwip/api.h"
@@ -67,6 +65,10 @@
 #endif
 #include "lwip/src/include/netif/etharp.h"
 #include "ethernetif.h"
+
+}
+
+#include <cstring>
 
 /* Global variable containing MAC Config (hw addr, IP, GW, ...) */
 struct netif gs_net_if;
@@ -131,12 +133,12 @@ void ethernet_timers_update(void)
 
 // Added by AB. This must be called only once!
 
-void start_ethernet(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[], netif_status_callback_fn status_cb)
+void start_ethernet(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay, netif_status_callback_fn status_cb)
 {
 	struct ip_addr x_ip_addr, x_net_mask, x_gateway;
 	extern err_t ethernetif_init(struct netif *netif);
 
-	IP4_ADDR(&x_ip_addr, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);		// set IP address
+	x_ip_addr.addr = ipAddress.GetV4LittleEndian();
 
 	if (x_ip_addr.addr == 0)
 	{
@@ -145,8 +147,8 @@ void start_ethernet(const uint8_t ipAddress[], const uint8_t netMask[], const ui
 	}
 	else
 	{
-		IP4_ADDR(&x_net_mask, netMask[0], netMask[1], netMask[2], netMask[3]);			// set network mask
-		IP4_ADDR(&x_gateway, gateWay[0], gateWay[1], gateWay[2], gateWay[3]);			// set gateway
+		x_net_mask.addr = netMask.GetV4LittleEndian();
+		x_gateway.addr = gateWay.GetV4LittleEndian();
 	}
 
 	/* Add data to netif */
@@ -172,7 +174,7 @@ void start_ethernet(const uint8_t ipAddress[], const uint8_t netMask[], const ui
 }
 
 // This sets the IP configuration on-the-fly
-void ethernet_set_configuration(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[])
+void ethernet_set_configuration(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay)
 {
 	if ((gs_net_if.flags & NETIF_FLAG_DHCP) != 0)
 	{
@@ -181,9 +183,9 @@ void ethernet_set_configuration(const uint8_t ipAddress[], const uint8_t netMask
 	}
 
 	struct ip_addr x_ip_addr, x_net_mask, x_gateway;
-	IP4_ADDR(&x_ip_addr, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
-	IP4_ADDR(&x_net_mask, netMask[0], netMask[1], netMask[2], netMask[3]);
-	IP4_ADDR(&x_gateway, gateWay[0], gateWay[1], gateWay[2], gateWay[3]);
+	x_ip_addr.addr = ipAddress.GetV4LittleEndian();
+	x_net_mask.addr = netMask.GetV4LittleEndian();
+	x_gateway.addr = gateWay.GetV4LittleEndian();
 
 	if (x_ip_addr.addr == 0)
 	{

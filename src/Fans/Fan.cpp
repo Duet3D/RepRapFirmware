@@ -162,8 +162,7 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 		// We only act on the 'S' parameter here if we have processed other parameters
 		if (seen && gb.Seen('S'))		// Set new fan value - process this after processing 'H' or it may not be acted on
 		{
-			const float f = constrain<float>(gb.GetFValue(), 0.0, 255.0);
-			SetPwm(f);
+			SetPwm(ConvertOldStylePwm(gb.GetFValue()));
 		}
 
 		if (seen)

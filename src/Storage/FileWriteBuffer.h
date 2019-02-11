@@ -13,6 +13,9 @@
 #if SAM4E || SAM4S || SAME70
 const size_t NumFileWriteBuffers = 2;					// Number of write buffers
 const size_t FileWriteBufLen = 8192;					// Size of each write buffer
+#elif __LPC17xx__
+const size_t NumFileWriteBuffers = 1;
+const size_t FileWriteBufLen = 2*256; //4096; save some memory on LPC for networking
 #else
 const size_t NumFileWriteBuffers = 1;
 const size_t FileWriteBufLen = 4096;

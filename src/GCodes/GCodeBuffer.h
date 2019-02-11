@@ -35,22 +35,24 @@ public:
 	float GetFValue() __attribute__((hot));				// Get a float after a key letter
 	int32_t GetIValue() __attribute__((hot));			// Get an integer after a key letter
 	uint32_t GetUIValue();								// Get an unsigned integer value
+	uint32_t GetUIValueMaybeHex();						// Get an unsigned integer value that might be written in hex format
 	bool GetIPAddress(IPAddress& returnedIp);			// Get an IP address quad after a key letter
-	bool GetMacAddress(uint8_t mac[6]);					// Get a MAX address sextet after a key letter
+	bool GetMacAddress(uint8_t mac[6]);					// Get a MAC address sextet after a key letter
 	bool GetUnprecedentedString(const StringRef& str);	// Get a string with no preceding key letter
 	bool GetQuotedString(const StringRef& str);			// Get and copy a quoted string
 	bool GetPossiblyQuotedString(const StringRef& str);	// Get and copy a string which may or may not be quoted
-	const void GetFloatArray(float arr[], size_t& length, bool doPad) __attribute__((hot)); // Get a :-separated list of floats after a key letter
+	const void GetFloatArray(float arr[], size_t& length, bool doPad) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
 	const void GetIntArray(int32_t arr[], size_t& length, bool doPad);			// Get a :-separated list of ints after a key letter
 	const void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
 
 	bool TryGetFValue(char c, float& val, bool& seen);
 	bool TryGetIValue(char c, int32_t& val, bool& seen);
 	bool TryGetUIValue(char c, uint32_t& val, bool& seen);
+	bool TryGetUIValueMaybeHex(char c, uint32_t& val, bool& seen);
 	bool TryGetBValue(char c, bool& val, bool& seen);
 	bool TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad = false);
 	bool TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad = false);
- 	bool TryGetQuotedString(char c, const StringRef& str, bool& seen);
+	bool TryGetQuotedString(char c, const StringRef& str, bool& seen);
 	bool TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen);
 
 	const char* Buffer() const;
@@ -122,11 +124,12 @@ private:
 	float ReadFloatValue(const char *p, const char **endptr);
 	uint32_t ReadUIValue(const char *p, const char **endptr);
 	int32_t ReadIValue(const char *p, const char **endptr);
-	bool GetStringExpression(const StringRef& str)
-		pre (readPointer >= 0; gcodeBuffer[readPointer] == '{'; str.IsEmpty());
 
 #if SUPPORT_OBJECT_MODEL
-	TypeCode EvaluateExpression(const char *p, const char **endptr, ExpressionValue& rslt);
+	bool GetStringExpression(const StringRef& str)
+		pre (readPointer >= 0; gcodeBuffer[readPointer] == '['; str.IsEmpty());
+	TypeCode EvaluateExpression(const char *p, const char **endptr, ExpressionValue& rslt)
+		pre (readPointer >= 0; gcodeBuffer[readPointer] == '[');
 #endif
 
 	GCodeMachineState *machineState;					// Machine state for this gcode source

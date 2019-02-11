@@ -52,49 +52,46 @@ void CanInterface::StartMovement(const DDA& dda)
 }
 
 // This is called by DDA::Prepare for each active CAN DM in the move
-void CanInterface::AddMovement(const DDA& dda, const PrepParams& params, size_t canDriver, const DriveMovement& dm)
+// If steps == 0 then the drivers just need to be enabled
+void CanInterface::AddMovement(const DDA& dda, const PrepParams& params, size_t canDriver, size_t steps)
 {
-	const size_t steps = dm.GetSteps();
-	if (steps != 0)
+	const size_t expansionBoardNumber = canDriver/DriversPerCanBoard;
+	CanMessageBuffer*& buf = movementBuffers[expansionBoardNumber];
+	if (buf == nullptr)
 	{
-		const size_t expansionBoardNumber = canDriver/DriversPerCanBoard;
-		CanMessageBuffer*& buf = movementBuffers[expansionBoardNumber];
+		buf = CanMessageBuffer::Allocate();
 		if (buf == nullptr)
 		{
-			buf = CanMessageBuffer::Allocate();
-			if (buf == nullptr)
-			{
-				return;		//TODO error handling
-			}
-
-			buf->expansionBoardId = expansionBoardNumber + 1;
-
-			// Common parameters
-			buf->msg.accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
-			buf->msg.steadyClocks = lrintf(params.steadyTime * StepTimer::StepClockRate);
-			buf->msg.decelClocks = lrintf(params.decelTime * StepTimer::StepClockRate);
-			buf->msg.initialSpeedFraction = params.initialSpeedFraction;
-			buf->msg.finalSpeedFraction = params.finalSpeedFraction;
-			buf->msg.flags.deltaDrives = 0;							//TODO
-			buf->msg.flags.endStopsToCheck = 0;						//TODO
-			buf->msg.flags.pressureAdvanceDrives = 0;				//TODO
-			buf->msg.flags.stopAllDrivesOnEndstopHit = false;		//TODO
-			// Additional parameters for delta movements
-			buf->msg.initialX = params.initialX;
-			buf->msg.finalX = params.finalX;
-			buf->msg.initialY = params.initialY;
-			buf->msg.finalY = params.finalY;
-			buf->msg.zMovement = params.zMovement;
-
-			// Clear out the per-drive fields
-			for (size_t drive = 0; drive < DriversPerCanBoard; ++drive)
-			{
-				buf->msg.perDrive[drive].steps = 0;
-			}
+			return;		//TODO error handling
 		}
 
-		buf->msg.perDrive[canDriver % DriversPerCanBoard].steps = steps;
+		buf->expansionBoardId = expansionBoardNumber + 1;
+
+		// Common parameters
+		buf->msg.accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
+		buf->msg.steadyClocks = lrintf(params.steadyTime * StepTimer::StepClockRate);
+		buf->msg.decelClocks = lrintf(params.decelTime * StepTimer::StepClockRate);
+		buf->msg.initialSpeedFraction = params.initialSpeedFraction;
+		buf->msg.finalSpeedFraction = params.finalSpeedFraction;
+		buf->msg.flags.deltaDrives = 0;							//TODO
+		buf->msg.flags.endStopsToCheck = 0;						//TODO
+		buf->msg.flags.pressureAdvanceDrives = 0;				//TODO
+		buf->msg.flags.stopAllDrivesOnEndstopHit = false;		//TODO
+		// Additional parameters for delta movements
+		buf->msg.initialX = params.initialX;
+		buf->msg.finalX = params.finalX;
+		buf->msg.initialY = params.initialY;
+		buf->msg.finalY = params.finalY;
+		buf->msg.zMovement = params.zMovement;
+
+		// Clear out the per-drive fields
+		for (size_t drive = 0; drive < DriversPerCanBoard; ++drive)
+		{
+			buf->msg.perDrive[drive].steps = 0;
+		}
 	}
+
+	buf->msg.perDrive[canDriver % DriversPerCanBoard].steps = steps;
 }
 
 // This is called by DDA::Prepare when all DMs for CAN drives` have been processed

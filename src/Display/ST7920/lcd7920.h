@@ -2,6 +2,9 @@
 #define LCD7920_H
 
 #include "RepRapFirmware.h"
+
+#if SUPPORT_12864_LCD
+
 #include "Print.h"
 #include "SharedSpi.h"
 
@@ -37,10 +40,19 @@ public:
 	// Construct a GLCD driver.
 	Lcd7920(Pin csPin, const LcdFont * const fnts[], size_t nFonts);
 
+	constexpr PixelNumber GetNumRows() const { return NumRows; }
+	constexpr PixelNumber GetNumCols() const { return NumCols; }
+
+	// Set the SPI clock frequency
+	void SetSpiClockFrequency(uint32_t freq);
+
 	// Write a single character in the current font. Called by the 'print' functions.
 	//  c = character to write
 	// Returns the number of characters written (1 if we wrote it, 0 otherwise)
 	virtual size_t write(uint8_t c);		// write a character
+
+	// Write a space
+	void WriteSpaces(PixelNumber numPixels);
 
 	// Initialize the display. Call this in setup(). Also call setFont to select initial text font.
 	void Init();
@@ -154,5 +166,7 @@ private:
 	size_t writeNative(uint16_t c);					// write a decoded character
 	void SetDirty(PixelNumber r, PixelNumber c);
 };
+
+#endif
 
 #endif

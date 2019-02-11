@@ -55,7 +55,7 @@ CRC32::CRC32()
 	Reset();
 }
 
-void CRC32::Update(char c)
+inline void CRC32::Update(char c)
 {
 	crc = (CRC_32_TAB[(crc ^ c) & 0xFF] ^ (crc >> 8));
 }

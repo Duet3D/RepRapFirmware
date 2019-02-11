@@ -1,9 +1,8 @@
-#include "RepRapFirmware.h"
-#include "Pins.h"
+#include "RotaryEncoder.h"
 
 #if SUPPORT_12864_LCD
 
-#include "RotaryEncoder.h"
+#include "Pins.h"
 #include "IoPorts.h"
 
 RotaryEncoder::RotaryEncoder(Pin p0, Pin p1, Pin pb)

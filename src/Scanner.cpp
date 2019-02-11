@@ -282,7 +282,7 @@ void Scanner::ProcessCommand()
 	}
 
 	// Register request: M751
-	if (StringEquals(buffer, "M751"))
+	if (StringEqualsIgnoreCase(buffer, "M751"))
 	{
 		platform.Message(MessageType::BlockingUsbMessage, "OK\n");
 		SetState(ScannerState::Idle);
@@ -296,7 +296,7 @@ void Scanner::ProcessCommand()
 	}
 
 	// Switch to post-processing mode: POSTPROCESS
-	else if (StringEquals(buffer, "POSTPROCESS"))
+	else if (StringEqualsIgnoreCase(buffer, "POSTPROCESS"))
 	{
 		SetState(ScannerState::PostProcessing);
 	}
@@ -342,7 +342,7 @@ void Scanner::ProcessCommand()
 	}
 
 	// Acknowledgment: OK
-	else if (StringEquals(buffer, "OK"))
+	else if (StringEqualsIgnoreCase(buffer, "OK"))
 	{
 		if (state == ScannerState::Scanning)
 		{

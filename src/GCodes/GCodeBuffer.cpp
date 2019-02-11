@@ -12,13 +12,16 @@
 #include "GCodeInput.h"
 #include "Platform.h"
 #include "RepRap.h"
+#include "General/IP4String.h"
 
 static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML file?
 
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(const char* id, MessageType mt, bool usesCodeQueue)
 	: machineState(new GCodeMachineState()), identity(id), fileBeingWritten(nullptr), writingFileSize(0), eofStringCounter(0),
-	  toolNumberAdjust(0), responseMessageType(mt), checksumRequired(false), queueCodes(usesCodeQueue), binaryWriting(false)
+	  toolNumberAdjust(0), responseMessageType(mt),
+	  hasCommandNumber(false), commandLetter('Q'),
+	  checksumRequired(false), queueCodes(usesCodeQueue), binaryWriting(false)
 {
 	Init();
 }
@@ -290,12 +293,13 @@ bool GCodeBuffer::LineFinished()
 void GCodeBuffer::DecodeCommand()
 {
 	// Check for a valid command letter at the start
-	commandLetter = toupper(gcodeBuffer[commandStart]);
-	hasCommandNumber = false;
-	commandNumber = -1;
+	const char cl = toupper(gcodeBuffer[commandStart]);
 	commandFraction = -1;
-	if (commandLetter == 'G' || commandLetter == 'M' || commandLetter == 'T')
+	if (cl == 'G' || cl == 'M' || cl == 'T')
 	{
+		commandLetter = cl;
+		hasCommandNumber = false;
+		commandNumber = -1;
 		parameterStart = commandStart + 1;
 		const bool negative = (gcodeBuffer[parameterStart] == '-');
 		if (negative)
@@ -352,11 +356,30 @@ void GCodeBuffer::DecodeCommand()
 			}
 		}
 	}
-	else
+	else if (   hasCommandNumber
+			 && commandLetter == 'G'
+			 && commandNumber <= 3
+			 && (   strchr(reprap.GetGCodes().GetAxisLetters(), cl) != nullptr
+				 || ((cl == 'I' || cl == 'J') && commandNumber >= 2)
+				)
+			 && reprap.GetGCodes().GetMachineType() == MachineType::cnc
+			)
 	{
+		// Fanuc-style GCode, repeat the existing G0/G1/G2/G3 command with the new parameters
 		parameterStart = commandStart;
 		commandEnd = gcodeLineEnd;
 	}
+	else
+	{
+		// Bad command
+		commandLetter = cl;
+		hasCommandNumber = false;
+		commandNumber = -1;
+		commandFraction = -1;
+		parameterStart = commandStart;
+		commandEnd = gcodeLineEnd;
+	}
+
 	bufferState = GCodeBufferState::ready;
 }
 
@@ -413,7 +436,7 @@ FilePosition GCodeBuffer::GetFilePosition(size_t bytesCached) const
 	return noFilePosition;
 }
 
-// Is 'c' in the G Code string?
+// Is 'c' in the G Code string? 'c' must be uppercase.
 // Leave the pointer there for a subsequent read.
 bool GCodeBuffer::Seen(char c)
 {
@@ -428,7 +451,7 @@ bool GCodeBuffer::Seen(char c)
 		}
 		else if (!inQuotes)
 		{
-			if (inBrackets == 0 && toupper(b) == c)
+			if (inBrackets == 0 && toupper(b) == c && (c != 'E' || (unsigned int)readPointer == parameterStart || !isdigit(gcodeBuffer[readPointer - 1])))
 			{
 				return true;
 			}
@@ -611,7 +634,19 @@ bool GCodeBuffer::GetQuotedString(const StringRef& str)
 	if (readPointer >= 0)
 	{
 		++readPointer;				// skip the character that introduced the string
-		return gcodeBuffer[readPointer] == '"' && InternalGetQuotedString(str);
+		switch (gcodeBuffer[readPointer])
+		{
+		case '"':
+			return InternalGetQuotedString(str);
+
+#if SUPPORT_OBJECT_MODEL
+		case '[':
+			return GetStringExpression(str);
+#endif
+
+		default:
+			return false;
+		}
 	}
 
 	INTERNAL_ERROR;
@@ -621,6 +656,7 @@ bool GCodeBuffer::GetQuotedString(const StringRef& str)
 // Given that the current character is double-quote, fetch the quoted string
 bool GCodeBuffer::InternalGetQuotedString(const StringRef& str)
 {
+	str.Clear();
 	++readPointer;
 	for (;;)
 	{
@@ -655,6 +691,7 @@ bool GCodeBuffer::InternalGetQuotedString(const StringRef& str)
 }
 
 // Get and copy a string which may or may not be quoted. If it is not quoted, it ends at the first space or control character.
+// Return true if successful.
 bool GCodeBuffer::GetPossiblyQuotedString(const StringRef& str)
 {
 	if (readPointer >= 0)
@@ -667,7 +704,7 @@ bool GCodeBuffer::GetPossiblyQuotedString(const StringRef& str)
 	return false;
 }
 
-// Get and copy a string which may or may not be quoted, starting at readPointer
+// Get and copy a string which may or may not be quoted, starting at readPointer. Return true if successful.
 bool GCodeBuffer::InternalGetPossiblyQuotedString(const StringRef& str)
 {
 	str.Clear();
@@ -675,10 +712,13 @@ bool GCodeBuffer::InternalGetPossiblyQuotedString(const StringRef& str)
 	{
 		return InternalGetQuotedString(str);
 	}
+
+#if SUPPORT_OBJECT_MODEL
 	if (gcodeBuffer[readPointer] == '[')
 	{
 		return GetStringExpression(str);
 	}
+#endif
 
 	commandEnd = gcodeLineEnd;				// the string is the remainder of the line of gcode
 	for (;;)
@@ -738,6 +778,45 @@ uint32_t GCodeBuffer::GetUIValue()
 	return 0;
 }
 
+// Get an uint32 after a G Code letter, interpreting quoted numbers starting with x or X or 0x or 0X as hex
+uint32_t GCodeBuffer::GetUIValueMaybeHex()
+{
+	if (readPointer >= 0)
+	{
+		int base = 10;
+		size_t skip = 1;
+
+		// Allow "0xNNNN" or "xNNNN" where NNNN are hex digits
+		if (gcodeBuffer[readPointer + 1] == '"')
+		{
+			switch (gcodeBuffer[readPointer + 2])
+			{
+			case 'x':
+			case 'X':
+				base = 16;
+				skip = 3;
+				break;
+
+			case '0':
+				if (gcodeBuffer[readPointer + 3] == 'x' || gcodeBuffer[readPointer + 3] == 'X')
+				{
+					base = 16;
+					skip = 4;
+				}
+				break;
+
+			default:
+				break;
+			}
+		}
+		const uint32_t result = SafeStrtoul(&gcodeBuffer[readPointer + skip], nullptr, base);
+		readPointer = -1;
+		return result;
+	}
+ 	INTERNAL_ERROR;
+	return 0;
+}
+
 // If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
 bool GCodeBuffer::TryGetFValue(char c, float& val, bool& seen)
 {
@@ -769,6 +848,18 @@ bool GCodeBuffer::TryGetUIValue(char c, uint32_t& val, bool& seen)
 	if (ret)
 	{
 		val = GetUIValue();
+		seen = true;
+	}
+	return ret;
+}
+
+// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
+bool GCodeBuffer::TryGetUIValueMaybeHex(char c, uint32_t& val, bool& seen)
+{
+	const bool ret = Seen(c);
+	if (ret)
+	{
+		val = GetUIValueMaybeHex();
 		seen = true;
 	}
 	return ret;
@@ -1078,7 +1169,7 @@ void GCodeBuffer::WriteToFile()
 			fileBeingWritten->Close();
 			fileBeingWritten = nullptr;
 			SetFinished(true);
-			const char* const r = (reprap.GetPlatform().Emulating() == Compatibility::marlin) ? "Done saving file." : "";
+			const char* const r = (reprap.GetPlatform().EmulatingMarlin()) ? "Done saving file." : "";
 			reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, r);
 			return;
 		}
@@ -1139,7 +1230,7 @@ void GCodeBuffer::FinishWritingBinary()
 	binaryWriting = false;
 	if (crcOk)
 	{
-		const char* const r = (reprap.GetPlatform().Emulating() == Compatibility::marlin) ? "Done saving file." : "";
+		const char* const r = (reprap.GetPlatform().EmulatingMarlin()) ? "Done saving file." : "";
 		reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, r);
 	}
 	else
@@ -1179,7 +1270,7 @@ void GCodeBuffer::FileEnded()
 			fileBeingWritten->Close();
 			fileBeingWritten = nullptr;
 			SetFinished(true);
-			const char* const r = (reprap.GetPlatform().Emulating() == Compatibility::marlin) ? "Done saving file." : "";
+			const char* const r = (reprap.GetPlatform().EmulatingMarlin()) ? "Done saving file." : "";
 			reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, r);
 		}
 	}
@@ -1266,29 +1357,53 @@ int32_t GCodeBuffer::ReadIValue(const char *p, const char **endptr)
 	return SafeStrtol(p, endptr);
 }
 
+#if SUPPORT_OBJECT_MODEL
+
 // Get a string expression. The current character is '['.
 bool GCodeBuffer::GetStringExpression(const StringRef& str)
 {
-	++readPointer;
-	for (;;)
+	ExpressionValue val;
+	switch (EvaluateExpression(gcodeBuffer + readPointer, nullptr, val))
 	{
-		const char c = gcodeBuffer[readPointer];
-		if (c == 0)
-		{
-			return false;
-		}
-		++readPointer;
-		// For now we don't process the characters between { } and just return a standard string
-		if (c == ']')
-		{
-			str.copy("string_variables_not_implemented");
-			break;
-		}
+	case TYPE_OF(const char*):
+		str.copy(val.sVal);
+		break;
+
+	case TYPE_OF(float):
+		str.printf("%.1f", (double)val.fVal);
+		break;
+
+	case TYPE_OF(Float2):
+		str.printf("%.2f", (double)val.fVal);
+		break;
+
+	case TYPE_OF(Float3):
+		str.printf("%.3f", (double)val.fVal);
+		break;
+
+	case TYPE_OF(uint32_t):
+		str.printf("%" PRIu32, val.uVal);			// convert unsigned integer to string
+		break;
+
+	case TYPE_OF(int32_t):
+		str.printf("%" PRIi32, val.uVal);			// convert signed integer to string
+		break;
+
+	case TYPE_OF(bool):
+		str.copy((val.bVal) ? "true" : "false");	// convert bool to string
+		break;
+
+	case TYPE_OF(IPAddress):
+		str.copy(IP4String(val.uVal).c_str());
+		break;
+
+	default:
+		//TODO report error
+		return false;
 	}
+
 	return true;
 }
-
-#if SUPPORT_OBJECT_MODEL
 
 // Evaluate an expression. the current character is '['.
 TypeCode GCodeBuffer::EvaluateExpression(const char *p, const char **endptr, ExpressionValue& rslt)
@@ -1298,8 +1413,17 @@ TypeCode GCodeBuffer::EvaluateExpression(const char *p, const char **endptr, Exp
 	if (isalpha(*p))			// if it's a variable name
 	{
 		const char * const start = p;
-		while (isalpha(*p) || isdigit(*p) || *p == '_')
+		unsigned int numBrackets = 0;
+		while (isalpha(*p) || isdigit(*p) || *p == '_' || *p == '.' || *p == '[' || (*p == ']' && numBrackets != 0))
 		{
+			if (*p == '[')
+			{
+				++numBrackets;
+			}
+			else if (*p == ']')
+			{
+				-- numBrackets;
+			}
 			++p;
 		}
 		String<MaxVariableNameLength> varName;

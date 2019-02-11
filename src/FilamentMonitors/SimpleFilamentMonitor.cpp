@@ -31,12 +31,15 @@ bool SimpleFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 
 	if (seen)
 	{
-		Check(true, false, false, 0.0);
+		Check(false, false, 0, 0.0);
 	}
 	else
 	{
-		reply.printf("Simple filament sensor on endstop %d, %s, output %s when no filament",
-			GetEndstopNumber(), (enabled) ? "enabled" : "disabled", (highWhenNoFilament) ? "high" : "low");
+		reply.printf("Simple filament sensor on endstop %d, %s, output %s when no filament, filament present: %s",
+						GetEndstopNumber(),
+						(enabled) ? "enabled" : "disabled",
+						(highWhenNoFilament) ? "high" : "low",
+						(filamentPresent) ? "yes" : "no");
 	}
 
 	return false;
@@ -59,14 +62,14 @@ void SimpleFilamentMonitor::Poll()
 
 // Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 // 'filamentConsumed' is the net amount of extrusion since the last call to this function.
-FilamentSensorStatus SimpleFilamentMonitor::Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed)
+FilamentSensorStatus SimpleFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed)
 {
 	Poll();
 	return (!enabled || filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;
 }
 
 // Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
-FilamentSensorStatus SimpleFilamentMonitor::Clear(bool full)
+FilamentSensorStatus SimpleFilamentMonitor::Clear()
 {
 	Poll();
 	return (!enabled || filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;

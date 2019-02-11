@@ -9,12 +9,18 @@
 #include "GCodes/GCodeBuffer.h"
 #include "Platform.h"
 #include "RepRap.h"
+#include "Movement/Move.h"
+
+// Unless we set the option to compare filament on all type of move, we reject readings if the last retract or reprime move wasn't completed
+// well before the start bit was received. This is because those moves have high accelerations and decelerations, so the measurement delay
+// is more likely to cause errors. This constant sets the delay required after a retract or reprime move before we accept the measurement.
+const int32_t SyncDelayMillis = 10;
 
 RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int extruder, int type)
 	: Duet3DFilamentMonitor(extruder, type),
 	  mmPerRev(DefaultMmPerRev),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
-	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false), checkNonPrintingMoves(true)
+	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false), checkNonPrintingMoves(false)
 {
 	switchOpenMask = (type == 4) ? TypeMagnetSwitchOpenMask : 0;
 	Init();
@@ -23,7 +29,7 @@ RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int extrud
 void RotatingMagnetFilamentMonitor::Init()
 {
 	sensorValue = 0;
-	framingErrorCount = 0;
+	framingErrorCount = overrunErrorCount = polarityErrorCount = overdueCount = 0;
 	calibrationStarted = dataReceived = false;
 	lastMeasurementTime = 0;
 	InitReceiveBuffer();
@@ -35,7 +41,7 @@ void RotatingMagnetFilamentMonitor::Reset()
 	extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
 	comparisonStarted = false;
 	haveStartBitData = false;
-	hadNonPrintingMoveSinceLastSync = true;			// force a resync
+	wasPrintingAtStartBit = false;			// force a resync
 }
 
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
@@ -71,14 +77,20 @@ bool RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& 
 		comparisonEnabled = (gb.GetIValue() > 0);
 	}
 
+	if (gb.Seen('A'))
+	{
+		seen = true;
+		checkNonPrintingMoves = (gb.GetIValue() > 0);
+	}
+
 	if (seen)
 	{
 		Init();
 	}
 	else
 	{
-		reply.printf("Duet3D rotating magnet filament monitor%s on endstop input %u, %s, sensitivity %.2fmm/rev, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
-						(switchOpenMask != 0) ? " with microswitch" : "",
+		reply.printf("Duet3D rotating magnet filament monitor%s on input %u, %s, sensitivity %.2fmm/rev, allow %ld%% to %ld%%, check every %.1fmm, ",
+						(switchOpenMask != 0) ? " with switch" : "",
 						GetEndstopNumber(),
 						(comparisonEnabled) ? "enabled" : "disabled",
 						(double)mmPerRev,
@@ -95,11 +107,11 @@ bool RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& 
 		}
 		else
 		{
-			reply.catf("current position %.1f, ", (double)GetCurrentPosition());
+			reply.catf("current pos %.1f, ", (double)GetCurrentPosition());
 			if (calibrationStarted && fabsf(totalMovementMeasured) > 1.0 && totalExtrusionCommanded > 20.0)
 			{
 				const float measuredMmPerRev = totalExtrusionCommanded/totalMovementMeasured;
-				reply.catf("measured sensitivity %.2fmm/rev, measured minimum %ld%%, maximum %ld%% over %.1fmm\n",
+				reply.catf("measured sensitivity %.2fmm/rev, min %ld%% max %ld%% over %.1fmm\n",
 					(double)measuredMmPerRev,
 					lrintf(100 * minMovementRatio),
 					lrintf(100 * maxMovementRatio),
@@ -135,11 +147,16 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData()
 
 			if (haveStartBitData)					// if we have a synchronised value for the amount of extrusion commanded
 			{
-				if (!hadNonPrintingMoveAtStartBit)
+				if (   checkNonPrintingMoves
+					|| (wasPrintingAtStartBit && (int32_t)(lastSyncTime - reprap.GetMove().ExtruderPrintingSince()) > SyncDelayMillis)
+				   )
 				{
-					extrusionCommandedThisSegment += extrusionCommandedAtStartBit;
+					// We can use this measurement
+					extrusionCommandedThisSegment += extrusionCommandedAtCandidateStartBit;
 					movementMeasuredThisSegment += movementMeasuredSinceLastSync;
 				}
+				lastSyncTime = candidateStartBitTime;
+				extrusionCommandedSinceLastSync -= extrusionCommandedAtCandidateStartBit;
 				movementMeasuredSinceLastSync = 0.0;
 			}
 		}
@@ -147,14 +164,6 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData()
 		{
 			// A receive error occurred. Any start bit data we stored is wrong.
 			++framingErrorCount;
-			if (haveStartBitData)
-			{
-				extrusionCommandedSinceLastSync += extrusionCommandedAtStartBit;
-				if (hadNonPrintingMoveAtStartBit)
-				{
-					hadNonPrintingMoveSinceLastSync = true;
-				}
-			}
 		}
 		haveStartBitData = false;
 	}
@@ -170,27 +179,18 @@ float RotatingMagnetFilamentMonitor::GetCurrentPosition() const
 // 'filamentConsumed' is the net amount of extrusion commanded since the last call to this function.
 // 'hadNonPrintingMove' is true if filamentConsumed includes extruder movement from non-printing moves.
 // 'fromIsr' is true if this measurement was taken dat the end of the ISR because a potential start bit was seen
-FilamentSensorStatus RotatingMagnetFilamentMonitor::Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed)
+FilamentSensorStatus RotatingMagnetFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed)
 {
 	// 1. Update the extrusion commanded and whether we have had an extruding but non-printing move
-	if (hadNonPrintingMove && !checkNonPrintingMoves)
-	{
-		hadNonPrintingMoveSinceLastSync = true;
-	}
-	else
-	{
-		extrusionCommandedSinceLastSync += filamentConsumed;
-	}
+	extrusionCommandedSinceLastSync += filamentConsumed;
 
 	// 2. If this call passes values synced to the start bit, save the data for the next completed measurement.
 	if (fromIsr && IsWaitingForStartBit())
 	{
-		extrusionCommandedAtStartBit = extrusionCommandedSinceLastSync;
-		hadNonPrintingMoveAtStartBit = hadNonPrintingMoveSinceLastSync;
+		extrusionCommandedAtCandidateStartBit = extrusionCommandedSinceLastSync;
+		wasPrintingAtStartBit = isPrinting;
+		candidateStartBitTime = isrMillis;
 		haveStartBitData = true;
-
-		extrusionCommandedSinceLastSync = 0.0;
-		hadNonPrintingMoveSinceLastSync = false;
 	}
 
 	// 3. Process the receive buffer and update everything if we have received anything or had a receive error
@@ -198,27 +198,27 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::Check(bool full, bool hadNon
 
 	// 4. Decide whether it is time to do a comparison, and return the status
 	FilamentSensorStatus ret = FilamentSensorStatus::ok;
-	if (full)
+	if ((sensorValue & TypeMagnetErrorMask) != 0)
 	{
-		if ((sensorValue & TypeMagnetErrorMask) != 0)
-		{
-			ret = FilamentSensorStatus::sensorError;
-		}
-		else if ((sensorValue & switchOpenMask) != 0)
-		{
-			ret = FilamentSensorStatus::noFilament;
-		}
-		else if (extrusionCommandedThisSegment >= minimumExtrusionCheckLength)
-		{
-			ret = CheckFilament(extrusionCommandedThisSegment, movementMeasuredThisSegment, false);
-			extrusionCommandedThisSegment = movementMeasuredThisSegment = 0.0;
-		}
-		else if (extrusionCommandedThisSegment + extrusionCommandedSinceLastSync >= minimumExtrusionCheckLength * 2 && millis() - lastMeasurementTime > 220 && !IsReceiving())
-		{
-			// A sync is overdue
-			ret = CheckFilament(extrusionCommandedThisSegment + extrusionCommandedSinceLastSync, movementMeasuredThisSegment + movementMeasuredSinceLastSync, true);
-			extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
-		}
+		ret = FilamentSensorStatus::sensorError;
+	}
+	else if ((sensorValue & switchOpenMask) != 0)
+	{
+		ret = FilamentSensorStatus::noFilament;
+	}
+	else if (extrusionCommandedThisSegment >= minimumExtrusionCheckLength)
+	{
+		ret = CheckFilament(extrusionCommandedThisSegment, movementMeasuredThisSegment, false);
+		extrusionCommandedThisSegment = movementMeasuredThisSegment = 0.0;
+	}
+	else if (   extrusionCommandedThisSegment + extrusionCommandedSinceLastSync >= minimumExtrusionCheckLength * 3
+			 && millis() - lastMeasurementTime > 500
+			 && !IsReceiving()
+			)
+	{
+		// A sync is overdue
+		ret = CheckFilament(extrusionCommandedThisSegment + extrusionCommandedSinceLastSync, movementMeasuredThisSegment + movementMeasuredSinceLastSync, true);
+		extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
 	}
 
 	return ret;
@@ -289,24 +289,14 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCo
 }
 
 // Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
-FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear(bool full)
+FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear()
 {
-	HandleIncomingData();								// to keep the diagnostics up to date
 	Reset();
+	HandleIncomingData();								// to keep the diagnostics up to date
 
-	FilamentSensorStatus ret = FilamentSensorStatus::ok;
-	if (full)
-	{
-		if ((sensorValue & TypeMagnetErrorMask) != 0)
-		{
-			ret = FilamentSensorStatus::sensorError;
-		}
-		else if ((sensorValue & switchOpenMask) != 0)
-		{
-			ret = FilamentSensorStatus::noFilament;
-		}
-	}
-	return ret;
+	return ((sensorValue & TypeMagnetErrorMask) != 0) ? FilamentSensorStatus::sensorError
+			: ((sensorValue & switchOpenMask) != 0) ? FilamentSensorStatus::noFilament
+				: FilamentSensorStatus::ok;
 }
 
 // Print diagnostic info for this sensor
@@ -316,15 +306,11 @@ void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int 
 									: ((sensorValue & TypeMagnetErrorMask) != 0) ? "error"
 										: ((sensorValue & switchOpenMask) != 0) ? "no filament"
 											: "ok";
-	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: position %.2f, %s, ", extruder, (double)GetCurrentPosition(), statusText);
-	if (dataReceived)
-	{
-		reprap.GetPlatform().MessageF(mtype, "%" PRIu32 " framing errors, ", framingErrorCount);
-	}
+	reprap.GetPlatform().MessageF(mtype, "Extruder %u: pos %.2f, %s, ", extruder, (double)GetCurrentPosition(), statusText);
 	if (calibrationStarted && fabsf(totalMovementMeasured) > 1.0 && totalExtrusionCommanded > 20.0)
 	{
 		const float measuredMmPerRev = totalExtrusionCommanded/totalMovementMeasured;
-		reprap.GetPlatform().MessageF(mtype, "measured sensitivity %.2fmm/rev, measured minimum %ld%%, maximum %ld%% over %.1fmm\n",
+		reprap.GetPlatform().MessageF(mtype, "measured sens %.2fmm/rev min %ld%% max %ld%% over %.1fmm",
 			(double)measuredMmPerRev,
 			lrintf(100 * minMovementRatio),
 			lrintf(100 * maxMovementRatio),
@@ -332,7 +318,12 @@ void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int 
 	}
 	else
 	{
-		reprap.GetPlatform().Message(mtype, "no calibration data\n");
+		reprap.GetPlatform().Message(mtype, "no calibration data");
+	}
+	if (dataReceived)
+	{
+		reprap.GetPlatform().MessageF(mtype, ", errs: frame %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32  " ovdue %" PRIu32 "\n",
+			framingErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
 	}
 }
 

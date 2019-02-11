@@ -8,9 +8,9 @@
 #ifndef SRC_NETWORKING_HTTPRESPONDER_H_
 #define SRC_NETWORKING_HTTPRESPONDER_H_
 
-#include "NetworkResponder.h"
+#include "UploadingNetworkResponder.h"
 
-class HttpResponder : public NetworkResponder
+class HttpResponder : public UploadingNetworkResponder
 {
 public:
 	HttpResponder(NetworkResponder *n);
@@ -106,7 +106,7 @@ private:
 
 	// rr_fileinfo requests
 	uint32_t startedProcessingRequestAt;			// when we started processing the current HTTP request
-	char filenameBeingProcessed[MaxFilenameLength];	// The filename being processed (for rr_fileinfo)
+	// rr_fileinfo also uses fileBeingProcessed in the networkResponder class
 
 	// Keeping track of HTTP sessions
 	static HttpSession sessions[MaxHttpSessions];

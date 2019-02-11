@@ -48,6 +48,7 @@
 #include "conf_sd_mmc.h"
 
 #include "RepRapFirmware.h"
+#include "RepRap.h"
 #include "Tasks.h"
 
 #include <cstring>
@@ -166,7 +167,11 @@ DSTATUS disk_status(BYTE drv)
  */
 DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
 {
-//	debugPrintf("R %u %u\n", sector, count);
+	if (reprap.Debug(moduleStorage))
+	{
+		debugPrintf("Read %u %u %lu\n", drv, count, sector);
+	}
+
 #if ACCESS_MEM_TO_RAM
 	MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 
@@ -226,7 +231,11 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
 #if _READONLY == 0
 DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count)
 {
-//	debugPrintf("W %u %u\n", sector, count);
+	if (reprap.Debug(moduleStorage))
+	{
+		debugPrintf("Write %u %u %lu\n", drv, count, sector);
+	}
+
 #if ACCESS_MEM_TO_RAM
 	MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 

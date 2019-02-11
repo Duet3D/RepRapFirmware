@@ -40,6 +40,7 @@ typedef uint16_t PwmFrequency;		// type used to represent a PWM frequency. 0 som
 #include "General/StringRef.h"
 
 // Module numbers and names, used for diagnostics and debug
+// All of these including noModule must be <= 15 because we 'or' the module number into the software reset code
 enum Module : uint8_t
 {
 	modulePlatform = 0,
@@ -165,9 +166,10 @@ inline void delay(uint32_t ms)
 
 #endif
 
-bool StringEndsWith(const char* string, const char* ending);
+bool StringEndsWithIgnoreCase(const char* string, const char* ending);
 bool StringStartsWith(const char* string, const char* starting);
-bool StringEquals(const char* s1, const char* s2);
+bool StringStartsWithIgnoreCase(const char* string, const char* starting);
+bool StringEqualsIgnoreCase(const char* s1, const char* s2);
 int StringContains(const char* string, const char* match);
 void SafeStrncpy(char *dst, const char *src, size_t length) pre(length != 0);
 void SafeStrncat(char *dst, const char *src, size_t length) pre(length != 0);
@@ -339,7 +341,7 @@ const uint32_t NvicPrioritySpi = 6;				// SPI is used for network transfers on D
 // We have 16 priority levels
 // Use priority 4 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 
-# if SAM4E
+# if SAM4E || __LPC17xx__
 const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 # endif
 

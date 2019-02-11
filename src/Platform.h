@@ -163,7 +163,8 @@ enum class Compatibility : uint8_t
 	marlin = 2,
 	teacup = 3,
 	sprinter = 4,
-	repetier = 5
+	repetier = 5,
+	nanoDLP = 6
 };
 
 /***************************************************************************************************/
@@ -201,6 +202,9 @@ enum class DiagnosticTestType : int
 	PrintExpanderStatus = 101,		// print DueXn expander status
 #endif
 	TimeSquareRoot = 102,			// do a timing test on the square root function
+	TimeSinCos = 103,				// do a timing test on the trig functions
+	TimeSDWrite = 104,				// do a write timing test on the SD card
+	PrintObjectSizes = 105,			// print the sizes of various objects
 
 	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
 	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
@@ -309,11 +313,13 @@ public:
 
 	Compatibility Emulating() const;
 	void SetEmulating(Compatibility c);
+	bool EmulatingMarlin() const;
+
 	void Diagnostics(MessageType mtype);
-	bool DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d);
+	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d);
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
-	void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr);
+	void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr) __attribute((noreturn));
 	bool AtxPower() const;
 	void AtxPowerOn();
 	void AtxPowerOff(bool defer);
@@ -331,16 +337,16 @@ public:
 	void Tick() __attribute__((hot));						// Process a systick interrupt
 
 	// Real-time clock
-	bool IsDateTimeSet() const;						// Has the RTC been set yet?
-	time_t GetDateTime() const;						// Retrieves the current RTC datetime and returns true if it's valid
-	bool SetDateTime(time_t time);					// Sets the current RTC date and time or returns false on error
+	bool IsDateTimeSet() const { return realTime != 0; }	// Has the RTC been set yet?
+	time_t GetDateTime() const { return realTime; }			// Retrieves the current RTC datetime and returns true if it's valid
+	bool SetDateTime(time_t time);							// Sets the current RTC date and time or returns false on error
 
   	// Communications and data storage
-	OutputBuffer *GetAuxGCodeReply();				// Returns cached G-Code reply for AUX devices and clears its reference
+	OutputBuffer *GetAuxGCodeReply();						// Returns cached G-Code reply for AUX devices and clears its reference
 	void AppendAuxReply(OutputBuffer *buf, bool rawMessage);
 	void AppendAuxReply(const char *msg, bool rawMessage);
     uint32_t GetAuxSeq() { return auxSeq; }
-    bool HaveAux() const { return auxDetected; }	// Any device on the AUX line?
+    bool HaveAux() const { return auxDetected; }			// Any device on the AUX line?
     void SetAuxDetected() { auxDetected = true; }
 
 	void SetIPAddress(IPAddress ip);
@@ -362,7 +368,10 @@ public:
 	friend class FileStore;
 
 	MassStorage* GetMassStorage() const;
-	FileStore* OpenFile(const char* directory, const char* fileName, OpenMode mode) { return massStorage->OpenFile(directory, fileName, mode); }
+	FileStore* OpenFile(const char* directory, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0)
+	{
+		return massStorage->OpenFile(directory, fileName, mode, preAllocSize);
+	}
 
 	const char* GetWebDir() const; 					// Where the html etc files are
 	const char* GetGCodeDir() const; 				// Where the gcodes are
@@ -408,7 +417,7 @@ public:
 	float DriveStepsPerUnit(size_t axisOrExtruder) const;
 	const float *GetDriveStepsPerUnit() const
 		{ return driveStepsPerUnit; }
-	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value);
+	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t microstepping);
 	float Acceleration(size_t axisOrExtruder) const;
 	const float* Accelerations() const;
 	void SetAcceleration(size_t axisOrExtruder, float value);
@@ -457,7 +466,7 @@ public:
 
 	// Z probe
 	void SetZProbeDefaults();
-	float ZProbeStopHeight();
+	float GetZProbeStopHeight() const;
 	float GetZProbeDiveHeight() const;
 	float GetZProbeStartingHeight();
 	float GetZProbeTravelSpeed() const;
@@ -472,11 +481,11 @@ public:
 	bool HomingZWithProbe() const;
 	bool WritePlatformParameters(FileStore *f, bool includingG31) const;
 	void SetProbing(bool isProbing);
-	bool ProgramZProbe(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply);
 	void SetZProbeModState(bool b) const;
 
 	// Heat and temperature
-	float GetZProbeTemperature();							// Get our best estimate of the Z probe temperature
+	float GetZProbeTemperature() const;						// Get our best estimate of the Z probe temperature
 
 	volatile ThermistorAveragingFilter& GetAdcFilter(size_t channel)
 	pre(channel < ARRAY_SIZE(adcFilters))
@@ -566,7 +575,7 @@ public:
 	Pin GetEndstopPin(int endstop) const;			// Get the firmware pin number for an endstop
 
 	// Logging support
-	bool ConfigureLogging(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureLogging(GCodeBuffer& gb, const StringRef& reply);
 
 	// Ancillary PWM
 	void SetExtrusionAncilliaryPwmValue(float v);
@@ -702,7 +711,7 @@ private:
 
 	void InitialiseInterrupts();
 
-	// DRIVES
+	// Drives
 	void SetDriverCurrent(size_t driver, float current, int code);
 	void UpdateMotorCurrent(size_t driver);
 	void SetDriverDirection(uint8_t driver, bool direction)
@@ -741,6 +750,10 @@ private:
 	bool driversPowered;
 #endif
 
+#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
+	bool warnDriversNotPowered;
+#endif
+
 #if HAS_STALL_DETECT
 	DriversBitmap logOnStallDrivers, pauseOnStallDrivers, rehomeOnStallDrivers;
 	DriversBitmap stalledDrivers, stalledDriversToLog, stalledDriversToPause, stalledDriversToRehome;
@@ -750,7 +763,7 @@ private:
 	// Digipots
 	MCP4461 mcpDuet;
 	MCP4461 mcpExpansion;
-	Pin potWipes[8];												// we have only 8 digipots, on the Duet 0.8.5 we use the DAC for the 9th
+	uint8_t potWipes[8];											// we have only 8 digipots, on the Duet 0.8.5 we use the DAC for the 9th
 	float senseResistor;
 	float maxStepperDigipotVoltage;
 	float stepperDacVoltageRange, stepperDacVoltageOffset;
@@ -949,11 +962,6 @@ inline const char* Platform::GetDefaultFile() const
 inline float Platform::DriveStepsPerUnit(size_t drive) const
 {
 	return driveStepsPerUnit[drive];
-}
-
-inline void Platform::SetDriveStepsPerUnit(size_t drive, float value)
-{
-	driveStepsPerUnit[drive] = max<float>(value, 1.0);	// don't allow zero or negative
 }
 
 inline float Platform::Acceleration(size_t drive) const

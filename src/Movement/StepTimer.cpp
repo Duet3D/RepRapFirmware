@@ -16,8 +16,8 @@
 
 #if SAM4S || SAME70
 // Static data used by step ISR
-volatile uint32_t stepTimerPendingStatus = 0;	// for holding status bits that we have read (and therefore cleared) but haven't serviced yet
-volatile uint32_t stepTimerHighWord = 0;		// upper 16 bits of step timer
+static volatile uint32_t stepTimerPendingStatus = 0;	// for holding status bits that we have read (and therefore cleared) but haven't serviced yet
+static volatile uint32_t stepTimerHighWord = 0;			// upper 16 bits of step timer
 #endif
 
 namespace StepTimer
@@ -29,33 +29,33 @@ namespace StepTimer
 		// We choose a clock divisor of 128 which gives
 		// 1.524us resolution on the Duet 085 (84MHz clock)
 		// 1.067us resolution on the Duet WiFi (120MHz clock)
-		// 0.853us resolution on the SAM E70 (150MHz clock)
+		// 0.853us resolution on the SAM E70 (150MHz peripheral clock)
 
 #if __LPC17xx__
 		//LPC has 32bit timers
 		//Using the same 128 divisor (as also specified in DDA)
 		//LPC Timers default to /4 -->  (SystemCoreClock/4)
-		const uint32_t res = (VARIANT_MCK/128);					// 1.28us for 100MHz (LPC1768) and 1.067us for 120MHz (LPC1769)
+		const uint32_t res = (VARIANT_MCK/128);						// 1.28us for 100MHz (LPC1768) and 1.067us for 120MHz (LPC1769)
 
 		//Start a free running Timer using Match Registers 0 and 1 to generate interrupts
-		LPC_SC->PCONP |= ((uint32_t) 1<<SBIT_PCTIM0);			// Ensure the Power bit is set for the Timer
-		STEP_TC->MCR = 0;										// disable all MRx interrupts
-		STEP_TC->PR   =  (getPclk(PCLK_TIMER0) / res) - 1;		// Set the LPC Prescaler (i.e. TC increment every 32 TimerClock Ticks)
-		STEP_TC->TC  = 0x00;  									// Restart the Timer Count
-		NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);		// set high priority for this IRQ; it's time-critical
+		LPC_SC->PCONP |= ((uint32_t) 1<<SBIT_PCTIM0);				// Ensure the Power bit is set for the Timer
+		STEP_TC->MCR = 0;											// disable all MRx interrupts
+		STEP_TC->PR   =  (getPclk(PCLK_TIMER0) / res) - 1;			// Set the LPC Prescaler (i.e. TC increment every 32 TimerClock Ticks)
+		STEP_TC->TC  = 0x00;  										// Restart the Timer Count
+		NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);			// set high priority for this IRQ; it's time-critical
 		NVIC_EnableIRQ(STEP_TC_IRQN);
-		STEP_TC->TCR  = (1 <<SBIT_CNTEN);						// Start Timer
+		STEP_TC->TCR  = (1 <<SBIT_CNTEN);							// Start Timer
 #else
 		pmc_set_writeprotect(false);
 		pmc_enable_periph_clk(STEP_TC_ID);
 		tc_init(STEP_TC, STEP_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK4 | TC_CMR_EEVT_XC0);	// must set TC_CMR_EEVT nonzero to get RB compare interrupts
-		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = ~(uint32_t)0; // interrupts disabled for now
-#if SAM4S || SAME70												// if 16-bit TCs
-		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_COVFS; // enable the overflow interrupt so that we can use it to extend the count to 32-bits
+		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = ~(uint32_t)0;	// interrupts disabled for now
+#if SAM4S || SAME70													// if 16-bit TCs
+		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_COVFS;	// enable the overflow interrupt so that we can use it to extend the count to 32-bits
 #endif
 		tc_start(STEP_TC, STEP_TC_CHAN);
-		tc_get_status(STEP_TC, STEP_TC_CHAN);					// clear any pending interrupt
-		NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);		// set priority for this IRQ
+		tc_get_status(STEP_TC, STEP_TC_CHAN);						// clear any pending interrupt
+		NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);			// set priority for this IRQ
 		NVIC_EnableIRQ(STEP_TC_IRQN);
 #endif
 	}
@@ -66,23 +66,34 @@ namespace StepTimer
 	// The TCs on the SAM4S and SAME70 are only 16 bits wide, so we maintain the upper 16 bits in software
 	uint32_t GetInterruptClocksInterruptsDisabled()
 	{
-		uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR;	// get the status to see whether there is an overflow
-		tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;			// clear any bits that don't generate interrupts
 		uint32_t lowWord = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;	// get the timer low word
-		uint32_t highWord = stepTimerHighWord;						// get the volatile high word
-		if ((tcsr & TC_SR_COVFS) != 0)								// if the timer has overflowed
+		uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR;	// get the status to see whether there is an overflow
+		while ((tcsr & TC_SR_COVFS) != 0)							// if the timer has overflowed
 		{
-			highWord += (1u << 16);									// overflow is pending, so increment the high word
-			stepTimerHighWord = highWord;							// and save it
-			tcsr &= ~TC_SR_COVFS;									// we handled the overflow, don't do it again
-			lowWord = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;		// read the low word again in case the overflow occurred just after we read it the first time
+			lowWord = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;		// get the timer low word
+			stepTimerHighWord += (1u << 16);
+			tcsr = (tcsr & ~TC_SR_COVFS) | STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR;
 		}
+
+		tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;			// clear any bits that don't generate interrupts
 		if (tcsr != 0)												// if there were any other pending status bits that generate interrupts
 		{
 			stepTimerPendingStatus |= tcsr;							// save the other pending bits
 			NVIC_SetPendingIRQ(STEP_TC_IRQN);						// set step timer interrupt pending
 		}
-		return (lowWord & 0x0000FFFF) | highWord;
+		return (lowWord & 0x0000FFFF) | stepTimerHighWord;
+	}
+
+#else
+
+	// Get the interrupt clock count. Despite the name, on these processors we don't need to disable interrupts before calling this.
+	uint32_t GetInterruptClocksInterruptsDisabled()
+	{
+#if __LPC17xx__
+        return STEP_TC->TC;
+#else
+        return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
+#endif
 	}
 
 #endif
@@ -108,13 +119,13 @@ namespace StepTimer
 		// Unfortunately, this would clear any other pending interrupts from the same TC.
 		// So we don't, and the step ISR must allow for getting called prematurely.
 		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPAS;		// enable the interrupt
-		cpu_irq_restore(flags);
 #endif
+		cpu_irq_restore(flags);
 
 #ifdef MOVE_DEBUG
 			++numInterruptsScheduled;
 			nextInterruptTime = tim;
-			nextInterruptScheduledAt = StepTimer::GetInterruptClocks();
+			nextInterruptScheduledAt = GetInterruptClocks();
 #endif
 		return false;
 	}
@@ -136,7 +147,7 @@ namespace StepTimer
 	bool ScheduleSoftTimerInterrupt(uint32_t tim)
 	{
 		const irqflags_t flags = cpu_irq_save();
-		const int32_t diff = (int32_t)(tim - StepTimer::GetInterruptClocksInterruptsDisabled());	// see how long we have to go
+		const int32_t diff = (int32_t)(tim - GetInterruptClocksInterruptsDisabled());	// see how long we have to go
 		if (diff < (int32_t)DDA::MinInterruptInterval)					// if less than about 6us or already passed
 		{
 			cpu_irq_restore(flags);
@@ -205,7 +216,7 @@ void STEP_TC_HANDLER()
 			stepTimerPendingStatus &= ~TC_SR_CPAS;
 #ifdef MOVE_DEBUG
 			++numInterruptsExecuted;
-			lastInterruptTime = Platform::GetInterruptClocks();
+			lastInterruptTime = GetInterruptClocks();
 #endif
 			reprap.GetMove().Interrupt();							// execute the step interrupt
 		}
@@ -230,7 +241,7 @@ void STEP_TC_HANDLER()
 
 # ifdef MOVE_DEBUG
         ++numInterruptsExecuted;
-        lastInterruptTime = Platform::GetInterruptClocks();
+        lastInterruptTime = GetInterruptClocks();
 # endif
 		reprap.GetMove().Interrupt();                                // execute the step interrupt
 	}
@@ -255,7 +266,7 @@ void STEP_TC_HANDLER()
 		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;		// disable the interrupt
 #ifdef MOVE_DEBUG
 		++numInterruptsExecuted;
-		lastInterruptTime = Platform::GetInterruptClocks();
+		lastInterruptTime = GetInterruptClocks();
 #endif
 		reprap.GetMove().Interrupt();								// execute the step interrupt
 	}

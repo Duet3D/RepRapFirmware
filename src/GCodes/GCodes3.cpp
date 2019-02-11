@@ -14,6 +14,7 @@
 #include "RepRap.h"
 #include "Tools/Tool.h"
 #include "PrintMonitor.h"
+#include "Tasks.h"
 
 #if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
@@ -60,7 +61,11 @@ GCodeResult GCodes::SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply)
 	gb.TryGetFValue(axisLetters[X_AXIS], params.xOffset, seen);
 	gb.TryGetFValue(axisLetters[Y_AXIS], params.yOffset, seen);
 	gb.TryGetFValue(axisLetters[Z_AXIS], params.triggerHeight, seen);
-	gb.TryGetIValue('P', params.adcValue, seen);
+	if (gb.Seen('P'))
+	{
+		seen = true;
+		params.adcValue = gb.GetIValue();
+	}
 
 	if (gb.Seen('C'))
 	{
@@ -83,12 +88,16 @@ GCodeResult GCodes::SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply)
 		{
 			return GCodeResult::notFinished;
 		}
+		if (gb.MachineState().runningM501)
+		{
+			params.saveToConfigOverride = true;			// we are loading these parameters from config-override.g, so a subsequent M500 should save them to config-override.g
+		}
 		platform.SetZProbeParameters(probeType, params);
 	}
 	else if (seenT)
 	{
 		// Don't bother printing temperature coefficient and calibration temperature because we will probably remove them soon
-		reply.printf("Threshold %" PRIi32 ", trigger height %.2f, offsets X%.1f Y%.1f", params.adcValue, (double)params.triggerHeight, (double)params.xOffset, (double)params.yOffset);
+		reply.printf("Threshold %d, trigger height %.2f, offsets X%.1f Y%.1f", params.adcValue, (double)params.triggerHeight, (double)params.xOffset, (double)params.yOffset);
 	}
 	else
 	{
@@ -111,7 +120,7 @@ GCodeResult GCodes::SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Deal with G60
-GCodeResult GCodes::SavePosition(GCodeBuffer& gb,const  StringRef& reply)
+GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply)
 {
 	const uint32_t sParam = (gb.Seen('S')) ? gb.GetUIValue() : 0;
 	if (sParam < ARRAY_SIZE(numberedRestorePoints))
@@ -157,7 +166,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 	if (axesIncluded != 0)
 	{
 		ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-		if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, LowestNBits<AxesBitmap>(numVisibleAxes), false))	// pretend that all axes are homed
+		if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, LowestNBits<AxesBitmap>(numVisibleAxes), false, limitAxes))	// pretend that all axes are homed
 		{
 			ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// make sure the limits are reflected in the user position
 		}
@@ -192,7 +201,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 		if (gb.Seen(axisLetters[axis]))
 		{
 #if SUPPORT_WORKPLACE_COORDINATES
-			workplaceCoordinates[0][axis]
+			workplaceCoordinates[currentCoordinateSystem][axis]
 #else
 			axisOffsets[axis]
 #endif
@@ -265,17 +274,31 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 	return GCodeResult::badOrMissingParameter;
 }
 
+// Save any modified workplace coordinate offsets to file returning true if successful. Used by M500.
+bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const
+{
+	for (size_t cs = 0; cs < NumCoordinateSystems; ++cs)
+	{
+		String<ScratchStringLength> scratchString;
+		scratchString.printf("G10 L2 P%u", cs + 1);
+		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+		{
+			scratchString.catf(" %c%.2f", axisLetters[axis], (double)workplaceCoordinates[cs][axis]);
+		}
+		scratchString.cat('\n');
+		if (!f->Write(scratchString.c_str()))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 #endif
 
 // Define the probing grid, called when we see an M557 command
 GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 {
-	if (gb.Seen('P'))
-	{
-		reply.copy("Error: M557 P parameter is no longer supported. Use a bed.g file instead.\n");
-		return GCodeResult::error;
-	}
-
 	if (!LockMovement(gb))							// to ensure that probing is not already in progress
 	{
 		return GCodeResult::notFinished;
@@ -363,6 +386,10 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 			if (seenP && numPoints[0] >= 2)
 			{
 				effectiveXRadius = radius - 0.1;
+				if (numPoints[1] % 2 == 0)
+				{
+					effectiveXRadius *= sqrtf(1.0 - 1.0/(float)((numPoints[1] - 1) * (numPoints[1] - 1)));
+				}
 				spacings[0] = (2 * effectiveXRadius)/(numPoints[0] - 1);
 			}
 			else
@@ -376,6 +403,10 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 			if (seenP && numPoints[1] >= 2)
 			{
 				effectiveYRadius = radius - 0.1;
+				if (numPoints[0] % 2 == 0)
+				{
+					effectiveYRadius *= sqrtf(1.0 - 1.0/(float)((numPoints[0] - 1) * (numPoints[0] - 1)));
+				}
 				spacings[1] = (2 * effectiveYRadius)/(numPoints[1] - 1);
 			}
 			else
@@ -419,7 +450,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		{
 			axesHomedBeforeSimulation = axesHomed;
 			axesHomed = LowestNBits<AxesBitmap>(numVisibleAxes);	// pretend all axes are homed
-			reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
+			SavePosition(simulationRestorePoint, gb);
 			simulationRestorePoint.feedRate = gb.MachineState().feedRate;
 		}
 		simulationTime = 0.0;
@@ -457,8 +488,7 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 				// Starting a new simulation, so save the current position
 				axesHomedBeforeSimulation = axesHomed;
 				axesHomed = LowestNBits<AxesBitmap>(numVisibleAxes);	// pretend all axes are homed
-				reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-				simulationRestorePoint.feedRate = gb.MachineState().feedRate;
+				SavePosition(simulationRestorePoint, gb);
 			}
 			simulationTime = 0.0;
 		}
@@ -546,7 +576,7 @@ GCodeResult GCodes::SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply)
 
 	if (gb.Seen('A'))
 	{
-		params.maxTaps = gb.GetUIValue();
+		params.maxTaps = min<uint32_t>(gb.GetUIValue(), ZProbe::MaxTapsLimit);
 		seen = true;
 	}
 
@@ -679,7 +709,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 		return GCodeResult::notFinished;
 	}
 
-	bool seen = false, badDrive = false;
+	bool seen = false;
 	const char *lettersToTry = "XYZUVWABC";
 	char c;
 	while ((c = *lettersToTry) != 0)
@@ -692,24 +722,11 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 			uint32_t drivers[MaxDriversPerAxis];
 			gb.GetUnsignedArray(drivers, numValues, false);
 
-			// Check all the driver numbers are in range
 			AxisDriversConfig config;
 			config.numDrivers = numValues;
 			for (size_t i = 0; i < numValues; ++i)
 			{
-				if (drivers[i] >= MaxTotalDrivers)
-				{
-					badDrive = true;
-				}
-				else
-				{
-					config.driverNumbers[i] = (uint8_t)drivers[i];
-				}
-			}
-
-			if (badDrive)
-			{
-				break;
+				config.driverNumbers[i] = (uint8_t)min<uint32_t>(drivers[i], 255);
 			}
 
 			// Find the drive number allocated to this axis, or allocate a new one if necessary
@@ -718,22 +735,20 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 			{
 				++drive;
 			}
-			if (drive < MaxAxes)
+			if (drive == numTotalAxes && drive < MaxAxes)
 			{
-				if (drive == numTotalAxes)
-				{
-					axisLetters[drive] = c;						// assign the drive to this drive letter
-					moveBuffer.coords[drive] = 0.0;				// user has defined a new axis, so set its position
-					currentUserPosition[drive] = 0.0;			// set its requested user position too in case it is visible
-					++numTotalAxes;
-					numVisibleAxes = numTotalAxes;				// assume any new axes are visible unless there is a P parameter
-				}
-				reprap.GetMove().SetNewPosition(moveBuffer.coords, true);	// tell the Move system where any new axes are
-				platform.SetAxisDriversConfig(drive, config);
-				if (numTotalAxes + numExtruders > MaxTotalDrivers)
-				{
-					numExtruders = MaxTotalDrivers - numTotalAxes;		// if we added axes, we may have fewer extruders now
-				}
+				axisLetters[drive] = c;								// assign the drive to this drive letter
+				++numTotalAxes;
+				numVisibleAxes = numTotalAxes;						// assume any new axes are visible unless there is a P parameter
+				float initialCoords[MaxAxes];
+				reprap.GetMove().GetKinematics().GetAssumedInitialPosition(drive + 1, initialCoords);
+				moveBuffer.coords[drive] = initialCoords[drive];	// user has defined a new axis, so set its position
+				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+			}
+			platform.SetAxisDriversConfig(drive, config);
+			if (numTotalAxes + numExtruders > MaxTotalDrivers)
+			{
+				numExtruders = MaxTotalDrivers - numTotalAxes;		// if we added axes, we may have fewer extruders now
 			}
 		}
 		++lettersToTry;
@@ -748,62 +763,54 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 		numExtruders = numValues;
 		for (size_t i = 0; i < numValues; ++i)
 		{
-			if (drivers[i] >= MaxTotalDrivers)
-			{
-				badDrive = true;
-			}
-			else
-			{
-				platform.SetExtruderDriver(i, (uint8_t)drivers[i]);
-			}
+			platform.SetExtruderDriver(i, (uint8_t)min<uint32_t>(drivers[i], 255));
 		}
 	}
 
-	if (badDrive)
+	if (gb.Seen('P'))
 	{
-		reply.copy("Invalid driver number");
-		return GCodeResult::error;
+		seen = true;
+		const unsigned int nva = gb.GetUIValue();
+		if (nva >= MinAxes && nva <= numTotalAxes)
+		{
+			numVisibleAxes = nva;
+		}
+		else
+		{
+			reply.copy("Invalid number of visible axes");
+			return GCodeResult::error;
+		}
+	}
+
+	if (seen)
+	{
+		// In the DDA ring, the axis positions for invisible non-moving axes are not always copied over from previous moves.
+		// So if we have more visible axes than before, then we need to update their positions to get them in sync.
+		// We could do this only when we increase the number of visible axes, but for simplicity we do it always.
+		reprap.GetMove().SetNewPosition(moveBuffer.coords, true);		// tell the Move system where the axes are
 	}
 	else
 	{
-		if (gb.Seen('P'))
+		reply.copy("Driver assignments:");
+		for (size_t drive = 0; drive < numTotalAxes; ++ drive)
 		{
-			seen = true;
-			const int nva = gb.GetIValue();
-			if (nva >= (int)MinAxes && (unsigned int)nva <= numTotalAxes)
-			{
-				numVisibleAxes = (size_t)nva;
-			}
-			else
-			{
-				reply.copy("Invalid number of visible axes");
-				return GCodeResult::error;
-			}
-		}
-
-		if (!seen)
-		{
-			reply.copy("Driver assignments:");
-			for (size_t drive = 0; drive < numTotalAxes; ++ drive)
-			{
-				reply.cat(' ');
-				const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(drive);
-				char c = axisLetters[drive];
-				for (size_t i = 0; i < axisConfig.numDrivers; ++i)
-				{
-					reply.catf("%c%u", c, axisConfig.driverNumbers[i]);
-					c = ':';
-				}
-			}
 			reply.cat(' ');
-			char c = extrudeLetter;
-			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+			const AxisDriversConfig& axisConfig = platform.GetAxisDriversConfig(drive);
+			char c = axisLetters[drive];
+			for (size_t i = 0; i < axisConfig.numDrivers; ++i)
 			{
-				reply.catf("%c%u", c, platform.GetExtruderDriver(extruder));
+				reply.catf("%c%u", c, axisConfig.driverNumbers[i]);
 				c = ':';
 			}
-			reply.catf(", %u axes visible", numVisibleAxes);
 		}
+		reply.cat(' ');
+		char c = extrudeLetter;
+		for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+		{
+			reply.catf("%c%u", c, platform.GetExtruderDriver(extruder));
+			c = ':';
+		}
+		reply.catf(", %u axes visible", numVisibleAxes);
 	}
 
 	return GCodeResult::ok;
@@ -836,7 +843,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			}
 
 			// Save the current axis coordinates
-			memcpy(toolChangeRestorePoint.moveCoords, currentUserPosition, ARRAY_SIZE(currentUserPosition) * sizeof(currentUserPosition[0]));
+			SavePosition(toolChangeRestorePoint, gb);
 
 			// Prepare another move similar to G1 .. S3
 			moveBuffer.moveType = 3;
@@ -1075,35 +1082,68 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 	return GCodeResult::ok;
 }
 
-// Handle M260
+// Handle M260 - send and possibly receive via I2C
 GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 {
 #if defined(I2C_IFACE)
 	if (gb.Seen('A'))
 	{
-		const uint32_t address = gb.GetUIValue();
+		const uint32_t address = gb.GetUIValueMaybeHex();
+		uint32_t numToReceive = 0;
+		bool seenR;
+		gb.TryGetUIValue('R', numToReceive, seenR);
+		int32_t values[MaxI2cBytes];
+		size_t numToSend;
 		if (gb.Seen('B'))
 		{
-			int32_t values[MaxI2cBytes];
-			size_t numValues = MaxI2cBytes;
-			gb.GetIntArray(values, numValues, false);
-			if (numValues != 0)
-			{
-				TaskCriticalSectionLocker Lock;
+			numToSend = MaxI2cBytes;
+			gb.GetIntArray(values, numToSend, false);		//TODO allow hex values
+		}
+		else
+		{
+			numToSend = 0;
+		}
 
-				platform.InitI2c();
-				I2C_IFACE.beginTransmission((int)address);
-				for (size_t i = 0; i < numValues; ++i)
-				{
-					I2C_IFACE.write((uint8_t)values[i]);
-				}
-				if (I2C_IFACE.endTransmission() == 0)
-				{
-					return GCodeResult::ok;
-				}
+		if (numToSend + numToReceive != 0)
+		{
+			if (numToSend + numToReceive > MaxI2cBytes)
+			{
+				numToReceive = MaxI2cBytes - numToSend;
+			}
+			uint8_t bValues[MaxI2cBytes];
+			for (size_t i = 0; i < numToSend; ++i)
+			{
+				bValues[i] = (uint8_t)values[i];
+			}
+
+			platform.InitI2c();
+			size_t bytesTransferred;
+			{
+				MutexLocker lock(Tasks::GetI2CMutex());
+				bytesTransferred = I2C_IFACE.Transfer(address, bValues, numToSend, numToReceive);
+			}
+
+			if (bytesTransferred < numToSend)
+			{
 				reply.copy("I2C transmission error");
 				return GCodeResult::error;
 			}
+			else if (numToReceive != 0)
+			{
+				reply.copy("Received");
+				if (bytesTransferred == numToSend)
+				{
+					reply.cat(" nothing");
+				}
+				else
+				{
+					for (size_t i = numToSend; i < bytesTransferred; ++i)
+					{
+						reply.catf(" %02x", bValues[i]);
+					}
+				}
+			}
+			return (bytesTransferred == numToSend + numToReceive) ? GCodeResult::ok : GCodeResult::error;
 		}
 	}
 
@@ -1120,29 +1160,35 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 #if defined(I2C_IFACE)
 	if (gb.Seen('A'))
 	{
-		const uint32_t address = gb.GetUIValue();
+		const uint32_t address = gb.GetUIValueMaybeHex();
 		if (gb.Seen('B'))
 		{
-			uint32_t numBytes = gb.GetUIValue();
+			const uint32_t numBytes = gb.GetUIValue();
 			if (numBytes > 0 && numBytes <= MaxI2cBytes)
 			{
-				TaskCriticalSectionLocker Lock;
-
 				platform.InitI2c();
-				I2C_IFACE.requestFrom(address, numBytes);
-				reply.copy("Received");
-				const uint32_t now = millis();
-				do
-				{
-					if (I2C_IFACE.available() != 0)
-					{
-						const unsigned int b = I2C_IFACE.read() & 0x00FF;
-						reply.catf(" %02x", b);
-						--numBytes;
-					}
-				} while (numBytes != 0 && now - millis() < 3);
 
-				return GCodeResult::ok;
+				uint8_t bValues[MaxI2cBytes];
+				size_t bytesRead;
+				{
+					MutexLocker lock(Tasks::GetI2CMutex());
+					bytesRead = I2C_IFACE.Transfer(address, bValues, 0, numBytes);
+				}
+
+				reply.copy("Received");
+				if (bytesRead == 0)
+				{
+					reply.cat(" nothing");
+				}
+				else
+				{
+					for (size_t i = 0; i < bytesRead; ++i)
+					{
+						reply.catf(" %02x", bValues[i]);
+					}
+				}
+
+				return (bytesRead == numBytes) ? GCodeResult::ok : GCodeResult::error;
 			}
 		}
 	}
@@ -1207,7 +1253,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 					}
 				}
 
-				if (gb.TryGetUIValue('C', val, seen))		// set chopper control register
+				if (gb.TryGetUIValueMaybeHex('C', val, seen))		// set chopper control register
 				{
 					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::chopperControl, val))
 					{
@@ -1316,6 +1362,20 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 							SmartDrivers::GetRegister(drive, SmartDriverRegister::hdec)
 						);
 
+#if SUPPORT_TMC2660
+					{
+						const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
+						if (mstepPos < 1024)
+						{
+							reply.catf(", pos %" PRIu32, mstepPos);
+						}
+						else
+						{
+							reply.cat(", pos unknown");
+						}
+					}
+#endif
+
 #if SUPPORT_TMC22xx || SUPPORT_TMC51xx
 					{
 						const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
@@ -1341,6 +1401,95 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 		}
 	}
 	return GCodeResult::ok;
+}
+
+// Set the heater model (M307)
+GCodeResult GCodes::SetHeaterModel(GCodeBuffer& gb, const StringRef& reply)
+{
+	if (gb.Seen('H'))
+	{
+		const unsigned int heater = gb.GetUIValue();
+		if (heater < NumHeaters)
+		{
+			const FopDt& model = reprap.GetHeat().GetHeaterModel(heater);
+			bool seen = false;
+			float gain = model.GetGain(),
+				tc = model.GetTimeConstant(),
+				td = model.GetDeadTime(),
+				maxPwm = model.GetMaxPwm(),
+				voltage = model.GetVoltage();
+			uint32_t freq = model.GetPwmFrequency();
+			int32_t dontUsePid = model.UsePid() ? 0 : 1;
+			int32_t inversionParameter = 0;
+
+			gb.TryGetFValue('A', gain, seen);
+			gb.TryGetFValue('C', tc, seen);
+			gb.TryGetFValue('D', td, seen);
+			gb.TryGetIValue('B', dontUsePid, seen);
+			gb.TryGetFValue('S', maxPwm, seen);
+			gb.TryGetFValue('V', voltage, seen);
+			gb.TryGetIValue('I', inversionParameter, seen);
+			gb.TryGetUIValue('F', freq, seen);
+
+			if (seen)
+			{
+				const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
+				if (!reprap.GetHeat().SetHeaterModel(heater, gain, tc, td, maxPwm, voltage,
+														dontUsePid == 0, inverseTemperatureControl, (uint16_t)min<uint32_t>(freq, MaxHeaterPwmFrequency)))
+				{
+					reply.copy("bad model parameters");
+					return GCodeResult::error;
+				}
+
+				const bool invertedPwmSignal = (inversionParameter == 2 || inversionParameter == 3);
+				reprap.GetHeat().SetHeaterSignalInverted(heater, invertedPwmSignal);
+			}
+			else if (!model.IsEnabled())
+			{
+				reply.printf("Heater %u is disabled", heater);
+			}
+			else
+			{
+				const char* mode = (!model.UsePid()) ? "bang-bang"
+									: (model.ArePidParametersOverridden()) ? "custom PID"
+										: "PID";
+				const bool pwmSignalInverted = reprap.GetHeat().IsHeaterSignalInverted(heater);
+				const char* const inverted = model.IsInverted()
+										? (pwmSignalInverted ? "PWM signal and temperature control" : "temperature control")
+										: (pwmSignalInverted ? "PWM signal" : "no");
+
+				reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, calibration voltage %.1f, mode %s, inverted %s, frequency ",
+						heater, (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode, inverted);
+				if (model.GetPwmFrequency() == 0)
+				{
+					reply.cat("default");
+				}
+				else
+				{
+					reply.catf("%uHz", model.GetPwmFrequency());
+				}
+				if (model.UsePid())
+				{
+					// When reporting the PID parameters, we scale them by 255 for compatibility with older firmware and other firmware
+					M301PidParameters params = model.GetM301PidParameters(false);
+					reply.catf("\nComputed PID parameters for setpoint change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
+					params = model.GetM301PidParameters(true);
+					reply.catf("\nComputed PID parameters for load change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
+				}
+			}
+		}
+	}
+	return GCodeResult::ok;
+}
+
+// Change a live extrusion factor
+void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor)
+{
+	if (segmentsLeft != 0 && !moveBuffer.isFirmwareRetraction)
+	{
+		moveBuffer.coords[extruder + numTotalAxes] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
+	}
+	extrusionFactors[extruder] = factor;
 }
 
 // End

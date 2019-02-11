@@ -619,94 +619,107 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 		if (nameOfFileToSend[0] == '/')
 		{
 			++nameOfFileToSend;						// all web files are relative to the /www folder, so remove the leading '/'
-			if (nameOfFileToSend[0] == 0)
+		}
+
+		if (nameOfFileToSend[0] == 0)
+		{
+			nameOfFileToSend = INDEX_PAGE_FILE;
+		}
+
+		for (;;)
+		{
+			// Try to open a gzipped version of the file first
+			if (!StringEndsWithIgnoreCase(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
+			{
+				char nameBuf[MaxFilenameLength + 1];
+				strcpy(nameBuf, nameOfFileToSend);
+				strcat(nameBuf, ".gz");
+				fileToSend = platform->OpenFile(platform->GetWebDir(), nameBuf, OpenMode::read);
+				if (fileToSend != nullptr)
+				{
+					zip = true;
+					break;
+				}
+			}
+
+			// That failed, try to open the normal version of the file
+			fileToSend = platform->OpenFile(platform->GetWebDir(), nameOfFileToSend, OpenMode::read);
+			if (fileToSend != nullptr)
+			{
+				break;
+			}
+
+			if (StringEqualsIgnoreCase(nameOfFileToSend, INDEX_PAGE_FILE))
+			{
+				nameOfFileToSend = OLD_INDEX_PAGE_FILE;			// the index file wasn't found, so try the old one
+			}
+			else if (!strchr(nameOfFileToSend, '.'))			// if we were asked to return a file without a '.' in the name, return the index page
 			{
 				nameOfFileToSend = INDEX_PAGE_FILE;
 			}
-		}
-
-		// Try to open a gzipped version of the file first
-		if (!StringEndsWith(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= MaxFilenameLength)
-		{
-			char nameBuf[MaxFilenameLength + 1];
-			strcpy(nameBuf, nameOfFileToSend);
-			strcat(nameBuf, ".gz");
-			fileToSend = platform->OpenFile(platform->GetWebDir(), nameBuf, OpenMode::read);
-			if (fileToSend != nullptr)
+			else
 			{
-				zip = true;
+				break;
 			}
 		}
 
-		// If that failed, try to open the normal version of the file
-		if (fileToSend == nullptr)
-		{
-			fileToSend = platform->OpenFile(platform->GetWebDir(), nameOfFileToSend, OpenMode::read);
-		}
-
 		// If we still couldn't find the file and it was an HTML file, return the 404 error page
-		if (fileToSend == nullptr && (StringEndsWith(nameOfFileToSend, ".html") || StringEndsWith(nameOfFileToSend, ".htm")))
+		if (fileToSend == nullptr && (StringEndsWithIgnoreCase(nameOfFileToSend, ".html") || StringEndsWithIgnoreCase(nameOfFileToSend, ".htm")))
 		{
 			nameOfFileToSend = FOUR04_PAGE_FILE;
 			fileToSend = platform->OpenFile(platform->GetWebDir(), nameOfFileToSend, OpenMode::read);
 		}
-
-		if (fileToSend == nullptr)
-		{
-			RejectMessage("not found", 404);
-			return;
-		}
-		transaction->SetFileToWrite(fileToSend);
 	}
 	else
 	{
 		fileToSend = platform->OpenFile(FS_PREFIX, nameOfFileToSend, OpenMode::read);
-		if (fileToSend == nullptr)
-		{
-			RejectMessage("not found", 404);
-			return;
-		}
-		transaction->SetFileToWrite(fileToSend);
 	}
 
-	transaction->Write("HTTP/1.1 200 OK\n");
+	if (fileToSend == nullptr)
+	{
+		RejectMessage("not found", 404);
+		return;
+	}
+
+	transaction->SetFileToWrite(fileToSend);
+	transaction->Write("HTTP/1.1 200 OK\r\n");
 
 	// Don't cache files served by rr_download
 	if (!isWebFile)
 	{
-		transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
-		transaction->Write("Pragma: no-cache\n");
-		transaction->Write("Expires: 0\n");
-		transaction->Write("Access-Control-Allow-Origin: *\n");
+		transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\r\n");
+		transaction->Write("Pragma: no-cache\r\n");
+		transaction->Write("Expires: 0\r\n");
+		transaction->Write("Access-Control-Allow-Origin: *\r\n");
 	}
 
 	const char* contentType;
-	if (StringEndsWith(nameOfFileToSend, ".png"))
+	if (StringEndsWithIgnoreCase(nameOfFileToSend, ".png"))
 	{
 		contentType = "image/png";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".ico"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".ico"))
 	{
 		contentType = "image/x-icon";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".js"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".js"))
 	{
 		contentType = "application/javascript";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".css"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".css"))
 	{
 		contentType = "text/css";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".htm") || StringEndsWith(nameOfFileToSend, ".html"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".htm") || StringEndsWithIgnoreCase(nameOfFileToSend, ".html"))
 	{
 		contentType = "text/html";
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".zip"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".zip"))
 	{
 		contentType = "application/zip";
 		zip = true;
 	}
-	else if (StringEndsWith(nameOfFileToSend, ".g") || StringEndsWith(nameOfFileToSend, ".gc") || StringEndsWith(nameOfFileToSend, ".gcode"))
+	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".g") || StringEndsWithIgnoreCase(nameOfFileToSend, ".gc") || StringEndsWithIgnoreCase(nameOfFileToSend, ".gcode"))
 	{
 		contentType = "text/plain";
 	}
@@ -714,15 +727,15 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 	{
 		contentType = "application/octet-stream";
 	}
-	transaction->Printf("Content-Type: %s\n", contentType);
+	transaction->Printf("Content-Type: %s\r\n", contentType);
 
-	if (zip && fileToSend != nullptr)
+	if (zip)
 	{
-		transaction->Write("Content-Encoding: gzip\n");
-		transaction->Printf("Content-Length: %lu\n", fileToSend->Length());
+		transaction->Write("Content-Encoding: gzip\r\n");
 	}
 
-	transaction->Write("Connection: close\n\n");
+	transaction->Printf("Content-Length: %lu\r\n", fileToSend->Length());
+	transaction->Write("Connection: close\r\n\r\n");
 	transaction->Commit(false);
 }
 
@@ -753,14 +766,14 @@ void Webserver::HttpInterpreter::SendGCodeReply()
 
 	// Send the whole G-Code reply as plain text to the client
 	NetworkTransaction *transaction = webserver->currentTransaction;
-	transaction->Write("HTTP/1.1 200 OK\n");
-	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
-	transaction->Write("Pragma: no-cache\n");
-	transaction->Write("Expires: 0\n");
-	transaction->Write("Access-Control-Allow-Origin: *\n");
-	transaction->Write("Content-Type: text/plain\n");
-	transaction->Printf("Content-Length: %u\n", gcodeReply->DataLength());
-	transaction->Write("Connection: close\n\n");
+	transaction->Write("HTTP/1.1 200 OK\r\n");
+	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\r\n");
+	transaction->Write("Pragma: no-cache\r\n");
+	transaction->Write("Expires: 0\r\n");
+	transaction->Write("Access-Control-Allow-Origin: *\r\n");
+	transaction->Write("Content-Type: text/plain\r\n");
+	transaction->Printf("Content-Length: %u\r\n", gcodeReply->DataLength());
+	transaction->Write("Connection: close\r\n\r\n");
 	transaction->Write(gcodeReply);
 	transaction->Commit(false);
 
@@ -784,13 +797,13 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 	{
 		UpdateAuthentication();
 
-		if (StringEquals(command, "reply"))			// rr_reply
+		if (StringEqualsIgnoreCase(command, "reply"))			// rr_reply
 		{
 			SendGCodeReply();
 			return;
 		}
 
-		if (StringEquals(command, "configfile"))	// rr_configfile [DEPRECATED]
+		if (StringEqualsIgnoreCase(command, "configfile"))	// rr_configfile [DEPRECATED]
 		{
 			String<MaxFilenameLength> fileName;
 			MassStorage::CombineName(fileName.GetRef(), platform->GetSysDir(), platform->GetConfigFile());
@@ -798,7 +811,7 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 			return;
 		}
 
-		if (StringEquals(command, "download"))
+		if (StringEqualsIgnoreCase(command, "download"))
 		{
 			const char* const filename = GetKeyValue("name");
 			if (filename != nullptr)
@@ -836,23 +849,23 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 		// Check that the browser wants to persist the connection too
 		for (size_t i = 0; i < numHeaderKeys; ++i)
 		{
-			if (StringEquals(headers[i].key, "Connection"))
+			if (StringEqualsIgnoreCase(headers[i].key, "Connection"))
 			{
 				// Comment out the following line to disable persistent connections
-				keepOpen = StringEquals(headers[i].value, "keep-alive");
+				keepOpen = StringEqualsIgnoreCase(headers[i].value, "keep-alive");
 				break;
 			}
 		}
 	}
 
-	transaction->Write("HTTP/1.1 200 OK\n");
-	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
-	transaction->Write("Pragma: no-cache\n");
-	transaction->Write("Expires: 0\n");
-	transaction->Write("Access-Control-Allow-Origin: *\n");
-	transaction->Write("Content-Type: application/json\n");
-	transaction->Printf("Content-Length: %u\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
-	transaction->Printf("Connection: %s\n\n", keepOpen ? "keep-alive" : "close");
+	transaction->Write("HTTP/1.1 200 OK\r\n");
+	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\r\n");
+	transaction->Write("Pragma: no-cache\r\n");
+	transaction->Write("Expires: 0\r\n");
+	transaction->Write("Access-Control-Allow-Origin: *\r\n");
+	transaction->Write("Content-Type: application/json\r\n");
+	transaction->Printf("Content-Length: %u\r\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
+	transaction->Printf("Connection: %s\r\n\r\n", keepOpen ? "keep-alive" : "close");
 	transaction->Write(jsonResponse);
 
 	transaction->Commit(keepOpen);
@@ -868,7 +881,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 {
 	keepOpen = false;	// assume we don't want to persist the connection
 
-	if (StringEquals(request, "connect") && GetKeyValue("password") != nullptr)
+	if (StringEqualsIgnoreCase(request, "connect") && GetKeyValue("password") != nullptr)
 	{
 		if (IsAuthenticated() || reprap.CheckPassword(GetKeyValue("password")))
 		{
@@ -907,11 +920,11 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 	{
 		RejectMessage("Not authorized", 401);
 	}
-	else if (StringEquals(request, "disconnect"))
+	else if (StringEqualsIgnoreCase(request, "disconnect"))
 	{
 		response->printf("{\"err\":%d}", RemoveAuthentication() ? 0 : 1);
 	}
-	else if (StringEquals(request, "status"))
+	else if (StringEqualsIgnoreCase(request, "status"))
 	{
 		int type = 0;
 		if (GetKeyValue("type") != nullptr)
@@ -933,29 +946,29 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 			response = reprap.GetLegacyStatusResponse(1, 0);
 		}
 	}
-	else if (StringEquals(request, "gcode") && GetKeyValue("gcode") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "gcode") && GetKeyValue("gcode") != nullptr)
 	{
 		NetworkGCodeInput * const httpInput = reprap.GetGCodes().GetHTTPInput();
 		httpInput->Put(HttpMessage, GetKeyValue("gcode"));
 		response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
 	}
-	else if (StringEquals(request, "upload"))
+	else if (StringEqualsIgnoreCase(request, "upload"))
 	{
 		response->printf("{\"err\":%d}", (uploadedBytes == postFileLength) ? 0 : 1);
 	}
-	else if (StringEquals(request, "delete") && GetKeyValue("name") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "delete") && GetKeyValue("name") != nullptr)
 	{
 		const bool ok = platform->GetMassStorage()->Delete(FS_PREFIX, GetKeyValue("name"));
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
-	else if (StringEquals(request, "filelist") && GetKeyValue("dir") != nullptr)
+	else if (StringEqualsIgnoreCase(request, "filelist") && GetKeyValue("dir") != nullptr)
 	{
 		OutputBuffer::Release(response);
 		const char* const firstVal = GetKeyValue("first");
 		const unsigned int startAt = (firstVal == nullptr) ? 0 : (unsigned int)SafeStrtol(firstVal);
 		response = reprap.GetFilelistResponse(GetKeyValue("dir"), startAt);		// this may return nullptr
 	}
-	else if (StringEquals(request, "files"))
+	else if (StringEqualsIgnoreCase(request, "files"))
 	{
 		OutputBuffer::Release(response);
 		const char* dir = GetKeyValue("dir");
@@ -969,7 +982,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 		const bool flagDirs = flagDirsVal != nullptr && atoi(flagDirsVal) == 1;
 		response = reprap.GetFilesResponse(dir, startAt, flagDirs);				// this may return nullptr
 	}
-	else if (StringEquals(request, "fileinfo"))
+	else if (StringEqualsIgnoreCase(request, "fileinfo"))
 	{
 		if (deferredRequestConnection != NoConnection)
 		{
@@ -995,7 +1008,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 			ProcessDeferredRequest();
 		}
 	}
-	else if (StringEquals(request, "move"))
+	else if (StringEqualsIgnoreCase(request, "move"))
 	{
 		const char* const oldVal = GetKeyValue("old");
 		const char* const newVal = GetKeyValue("new");
@@ -1003,15 +1016,15 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 		if (oldVal != nullptr && newVal != nullptr)
 		{
 			MassStorage * const ms = platform->GetMassStorage();
-			if (StringEquals(GetKeyValue("deleteexisting"), "yes") && ms->FileExists(oldVal) && ms->FileExists(newVal))
+			if (StringEqualsIgnoreCase(GetKeyValue("deleteexisting"), "yes") && ms->FileExists(oldVal) && ms->FileExists(newVal))
 			{
-				ms->Delete(nullptr, newVal, true);
+				ms->Delete(nullptr, newVal);
 			}
 			success = ms->Rename(oldVal, newVal);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
-	else if (StringEquals(request, "mkdir"))
+	else if (StringEqualsIgnoreCase(request, "mkdir"))
 	{
 		const char* const dirVal = GetKeyValue("dir");
 		bool success = false;
@@ -1021,7 +1034,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
-	else if (StringEquals(request, "config"))
+	else if (StringEqualsIgnoreCase(request, "config"))
 	{
 		OutputBuffer::Release(response);
 		response = reprap.GetConfigResponse();
@@ -1036,7 +1049,7 @@ const char* Webserver::HttpInterpreter::GetKeyValue(const char *key) const
 {
 	for (size_t i = 0; i < numQualKeys; ++i)
 	{
-		if (StringEquals(qualifiers[i].key, key))
+		if (StringEqualsIgnoreCase(qualifiers[i].key, key))
 		{
 			return qualifiers[i].value;
 		}
@@ -1464,7 +1477,7 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 		return RejectMessage("too few command words");
 	}
 
-	if (StringEquals(commandWords[0], "GET"))
+	if (StringEqualsIgnoreCase(commandWords[0], "GET"))
 	{
 		if (StringStartsWith(commandWords[1], KO_START))
 		{
@@ -1483,29 +1496,29 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 		return true;
 	}
 
-	if (StringEquals(commandWords[0], "OPTIONS"))
+	if (StringEqualsIgnoreCase(commandWords[0], "OPTIONS"))
 	{
 		NetworkTransaction *transaction = webserver->currentTransaction;
 
-		transaction->Write("HTTP/1.1 200 OK\n");
-		transaction->Write("Allow: OPTIONS, GET, POST\n");
-		transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
-		transaction->Write("Pragma: no-cache\n");
-		transaction->Write("Expires: 0\n");
-		transaction->Write("Access-Control-Allow-Origin: *\n");
-		transaction->Write("Access-Control-Allow-Headers: Content-Type\n");
-		transaction->Write("Content-Length: 0\n");
-		transaction->Write("\n");
+		transaction->Write("HTTP/1.1 200 OK\r\n");
+		transaction->Write("Allow: OPTIONS, GET, POST\r\n");
+		transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\r\n");
+		transaction->Write("Pragma: no-cache\r\n");
+		transaction->Write("Expires: 0\r\n");
+		transaction->Write("Access-Control-Allow-Origin: *\r\n");
+		transaction->Write("Access-Control-Allow-Headers: Content-Type\r\n");
+		transaction->Write("Content-Length: 0\r\n");
+		transaction->Write("\r\n");
 		transaction->Commit(false);
 
 		ResetState();
 		return true;
 	}
 
-	if (IsAuthenticated() && StringEquals(commandWords[0], "POST"))
+	if (IsAuthenticated() && StringEqualsIgnoreCase(commandWords[0], "POST"))
 	{
-		const bool isUploadRequest = (StringEquals(commandWords[1], KO_START "upload"))
-								  || (commandWords[1][0] == '/' && StringEquals(commandWords[1] + 1, KO_START "upload"));
+		const bool isUploadRequest = (StringEqualsIgnoreCase(commandWords[1], KO_START "upload"))
+								  || (commandWords[1][0] == '/' && StringEqualsIgnoreCase(commandWords[1] + 1, KO_START "upload"));
 		if (isUploadRequest)
 		{
 			const char* const filename = GetKeyValue("name");
@@ -1521,7 +1534,7 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 				bool contentLengthFound = false;
 				for (size_t i = 0; i < numHeaderKeys; i++)
 				{
-					if (StringEquals(headers[i].key, "Content-Length"))
+					if (StringEqualsIgnoreCase(headers[i].key, "Content-Length"))
 					{
 						postFileLength = atoi(headers[i].value);
 						contentLengthFound = true;
@@ -1599,7 +1612,7 @@ bool Webserver::HttpInterpreter::RejectMessage(const char* response, unsigned in
 	platform->MessageF(UsbMessage, "Webserver: rejecting message with: %s\n", response);
 
 	NetworkTransaction *transaction = webserver->currentTransaction;
-	transaction->Printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
+	transaction->Printf("HTTP/1.1 %u %s\nConnection: close\r\n\r\n", code, response);
 	transaction->Commit(false);
 
 	ResetState();
@@ -1735,14 +1748,14 @@ void Webserver::HttpInterpreter::ProcessDeferredRequest()
 			deferredRequestConnection = NoConnection;
 
 			// Got it - send the response now
-			transaction->Write("HTTP/1.1 200 OK\n");
-			transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
-			transaction->Write("Pragma: no-cache\n");
-			transaction->Write("Expires: 0\n");
-			transaction->Write("Access-Control-Allow-Origin: *\n");
-			transaction->Write("Content-Type: application/json\n");
-			transaction->Printf("Content-Length: %u\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
-			transaction->Printf("Connection: close\n\n");
+			transaction->Write("HTTP/1.1 200 OK\r\n");
+			transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\r\n");
+			transaction->Write("Pragma: no-cache\r\n");
+			transaction->Write("Expires: 0\r\n");
+			transaction->Write("Access-Control-Allow-Origin: *\r\n");
+			transaction->Write("Content-Type: application/json\r\n");
+			transaction->Printf("Content-Length: %u\r\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
+			transaction->Printf("Connection: close\r\n\r\n");
 			transaction->Write(jsonResponse);
 
 			transaction->Commit(false);
@@ -1941,10 +1954,10 @@ void Webserver::FtpInterpreter::ProcessLine()
 			// but check the password
 			else if (StringStartsWith(clientMessage, "PASS"))
 			{
-				char pass[PASSWORD_LENGTH];
+				char pass[RepRapPasswordLength];
 				int pass_length = 0;
 				bool reading_pass = false;
-				for(size_t i = 4; i < clientPointer && i < PASSWORD_LENGTH + 3; i++)
+				for(size_t i = 4; i < clientPointer && i < RepRapPasswordLength + 3; i++)
 				{
 					reading_pass |= (clientMessage[i] != ' ' && clientMessage[i] != '\t');
 					if (reading_pass)
@@ -1974,17 +1987,17 @@ void Webserver::FtpInterpreter::ProcessLine()
 
 		case authenticated:
 			// get system type
-			if (StringEquals(clientMessage, "SYST"))
+			if (StringEqualsIgnoreCase(clientMessage, "SYST"))
 			{
 				SendReply(215, "UNIX Type: L8");
 			}
 			// get features
-			else if (StringEquals(clientMessage, "FEAT"))
+			else if (StringEqualsIgnoreCase(clientMessage, "FEAT"))
 			{
 				SendFeatures();
 			}
 			// get current dir
-			else if (StringEquals(clientMessage, "PWD"))
+			else if (StringEqualsIgnoreCase(clientMessage, "PWD"))
 			{
 				NetworkTransaction *transaction = webserver->currentTransaction;
 				transaction->Printf("257 \"%s\"\r\n", currentDir);
@@ -1997,7 +2010,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				ChangeDirectory(filename.c_str());
 			}
 			// change to parent of current directory
-			else if (StringEquals(clientMessage, "CDUP"))
+			else if (StringEqualsIgnoreCase(clientMessage, "CDUP"))
 			{
 				ChangeDirectory("..");
 			}
@@ -2022,7 +2035,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				SendReply(500, "Unknown command.");
 			}
 			// enter passive mode mode
-			else if (StringEquals(clientMessage, "PASV"))
+			else if (StringEqualsIgnoreCase(clientMessage, "PASV"))
 			{
 				/* get local IP address */
 				const uint8_t * const ip_address = network->GetIPAddress();
@@ -2041,7 +2054,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				transaction->Commit(true);
 			}
 			// PASV commands are not supported in this state
-			else if (StringEquals(clientMessage, "LIST") || StringStartsWith(clientMessage, "RETR") || StringStartsWith(clientMessage, "STOR"))
+			else if (StringEqualsIgnoreCase(clientMessage, "LIST") || StringStartsWith(clientMessage, "RETR") || StringStartsWith(clientMessage, "STOR"))
 			{
 				SendReply(425, "Use PASV first.");
 			}
@@ -2135,12 +2148,12 @@ void Webserver::FtpInterpreter::ProcessLine()
 				}
 			}
 			// no op
-			else if (StringEquals(clientMessage, "NOOP"))
+			else if (StringEqualsIgnoreCase(clientMessage, "NOOP"))
 			{
 				SendReply(200, "NOOP okay.");
 			}
 			// end connection
-			else if (StringEquals(clientMessage, "QUIT"))
+			else if (StringEqualsIgnoreCase(clientMessage, "QUIT"))
 			{
 				SendReply(221, "Goodbye.", false);
 				ResetState();
@@ -2288,7 +2301,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 
 		case doingPasvIO:
 			// abort current transfer
-			if (StringEquals(clientMessage, "ABOR"))
+			if (StringEqualsIgnoreCase(clientMessage, "ABOR"))
 			{
 				if (IsUploading())
 				{
@@ -2372,13 +2385,13 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 			SafeStrncpy(combinedPath, newDirectory, MaxFilenameLength);
 			combinedPath[MaxFilenameLength - 1] = 0;
 		}
-		else if (StringEquals(newDirectory, "."))
+		else if (StringEqualsIgnoreCase(newDirectory, "."))
 		{
 			SafeStrncpy(combinedPath, currentDir, ARRAY_SIZE(combinedPath));
 		}
-		else if (StringEquals(newDirectory, "..")) // go up
+		else if (StringEqualsIgnoreCase(newDirectory, "..")) // go up
 		{
-			if (StringEquals(currentDir, "/"))
+			if (StringEqualsIgnoreCase(currentDir, "/"))
 			{
 				// we're already at the root, so we can't go up any more
 				SendReply(550, "Failed to change directory.");
@@ -2408,7 +2421,7 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 		}
 
 		/* Make sure the new path does not end with a '/', because FatFs won't see the directory otherwise */
-		if (StringEndsWith(combinedPath, "/") && strlen(combinedPath) > 1)
+		if (StringEndsWithIgnoreCase(combinedPath, "/") && strlen(combinedPath) > 1)
 		{
 			combinedPath[strlen(combinedPath) -1] = 0;
 		}
@@ -2641,7 +2654,7 @@ bool Webserver::TelnetInterpreter::ProcessLine()
 
 		case authenticated:
 			// Special commands for Telnet
-			if (StringEquals(clientMessage, "exit") || StringEquals(clientMessage, "quit"))
+			if (StringEqualsIgnoreCase(clientMessage, "exit") || StringEqualsIgnoreCase(clientMessage, "quit"))
 			{
 				transaction->Write("Goodbye.\r\n");
 				transaction->Commit(false);

@@ -3,6 +3,8 @@
 
 #include "RepRapFirmware.h"
 
+#if SUPPORT_12864_LCD
+
 // Class to manage a rotary encoder with a push button
 class RotaryEncoder
 {
@@ -28,5 +30,7 @@ public:
 	bool GetButtonPress();
 	int GetPulsesPerClick() const { return ppc; }
 };
+
+#endif
 
 #endif

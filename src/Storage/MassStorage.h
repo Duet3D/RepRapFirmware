@@ -15,22 +15,22 @@
 // Info returned by FindFirst/FindNext calls
 struct FileInfo
 {
-	bool isDirectory;
-	char fileName[MaxFilenameLength];
-	uint32_t size;
 	time_t lastModified;
+	uint32_t size;
+	String<MaxFilenameLength> fileName;
+	bool isDirectory;
 };
 
 class MassStorage
 {
 public:
-	FileStore* OpenFile(const char* directory, const char* fileName, OpenMode mode);
+	FileStore* OpenFile(const char* directory, const char* fileName, OpenMode mode, uint32_t preAllocSize);
 	bool FindFirst(const char *directory, FileInfo &file_info);
 	bool FindNext(FileInfo &file_info);
 	void AbandonFindNext();
 	const char* GetMonthName(const uint8_t month);
 	static void CombineName(const StringRef& out, const char* directory, const char* fileName);
-	bool Delete(const char* directory, const char* fileName, bool silent = false);
+	bool Delete(const char* directory, const char* fileName);
 	bool MakeDirectory(const char *parentDir, const char *dirName);
 	bool MakeDirectory(const char *directory);
 	bool Rename(const char *oldFilename, const char *newFilename);

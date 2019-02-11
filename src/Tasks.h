@@ -40,6 +40,7 @@ namespace Tasks
 	void Diagnostics(MessageType mtype);
 	uint32_t GetNeverUsedRam();
 	const Mutex *GetSpiMutex();
+	const Mutex *GetI2CMutex();
 }
 
 #endif /* SRC_TASKS_H_ */

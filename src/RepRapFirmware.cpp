@@ -229,10 +229,15 @@ bool MillisTimer::CheckAndStop(uint32_t timeoutMillis)
 // For debug use
 void debugPrintf(const char* fmt, ...)
 {
-	va_list vargs;
-	va_start(vargs, fmt);
-	reprap.GetPlatform().MessageF(DebugMessage, fmt, vargs);
-	va_end(vargs);
+	// Calls to debugPrintf() from with ISRs are unsafe, both because of timing issues and because the call to Platform::MessageF tries to acquire a mutex.
+	// So ignore the call if we are coming from within an ISR.
+	if (!inInterrupt())
+	{
+		va_list vargs;
+		va_start(vargs, fmt);
+		reprap.GetPlatform().MessageF(DebugMessage, fmt, vargs);
+		va_end(vargs);
+	}
 }
 
 #ifdef RTOS
@@ -246,40 +251,60 @@ void delay(uint32_t ms)
 
 // String testing
 
-bool StringEndsWith(const char* string, const char* ending)
+bool StringEndsWithIgnoreCase(const char* string, const char* ending)
 {
-	int j = strlen(string);
-	int k = strlen(ending);
-	return k <= j && StringEquals(&string[j - k], ending);
+	const size_t j = strlen(string);
+	const size_t k = strlen(ending);
+	return k <= j && StringEqualsIgnoreCase(&string[j - k], ending);
 }
 
-bool StringEquals(const char* s1, const char* s2)
+bool StringEqualsIgnoreCase(const char* s1, const char* s2)
 {
-	int i = 0;
-	while(s1[i] && s2[i])
+	size_t i = 0;
+	while (s1[i] != 0 && s2[i] != 0)
 	{
-		if(tolower(s1[i]) != tolower(s2[i]))
+		if (tolower(s1[i]) != tolower(s2[i]))
 		{
 			return false;
 		}
 		i++;
 	}
 
-	return !(s1[i] || s2[i]);
+	return s1[i] == 0 && s2[i] == 0;
 }
 
 bool StringStartsWith(const char* string, const char* starting)
 {
-	int j = strlen(string);
-	int k = strlen(starting);
+	const size_t j = strlen(string);
+	const size_t k = strlen(starting);
 	if (k > j)
 	{
 		return false;
 	}
 
-	for(int i = 0; i < k; i++)
+	for (size_t i = 0; i < k; i++)
 	{
 		if (string[i] != starting[i])
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool StringStartsWithIgnoreCase(const char* string, const char* starting)
+{
+	const size_t j = strlen(string);
+	const size_t k = strlen(starting);
+	if (k > j)
+	{
+		return false;
+	}
+
+	for (size_t i = 0; i < k; i++)
+	{
+		if (tolower(string[i]) != tolower(starting[i]))
 		{
 			return false;
 		}

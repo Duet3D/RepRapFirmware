@@ -32,6 +32,10 @@ protected:
 	bool IsReceiving() const;
 	bool IsWaitingForStartBit() const;
 
+protected:
+	uint32_t overrunErrorCount;
+	uint32_t polarityErrorCount;
+
 private:
 	static constexpr size_t EdgeCaptureBufferSize = 64;				// must be a power of 2
 
@@ -42,7 +46,7 @@ private:
 
 	enum class RxdState : uint8_t
 	{
-		waitingForStartBit,
+		waitingForStartBit = 0,
 		waitingForEndOfStartBit,
 		waitingForNibble,
 		errorRecovery1,
@@ -51,12 +55,12 @@ private:
 		errorRecovery4
 	};
 
-	RxdState state;
 	uint32_t startBitLength;
 	uint32_t errorRecoveryStartTime;
 	size_t lastBitChangeIndex;
 	uint16_t valueBeingAssembled;
 	uint8_t nibblesAssembled;
+	RxdState state;
 };
 
 #endif /* SRC_FILAMENTSENSORS_DUET3DFILAMENTMONITOR_H_ */

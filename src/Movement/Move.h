@@ -18,19 +18,18 @@
 
 // Define the number of DDAs and DMs.
 // A DDA represents a move in the queue.
-// Each DDA needs one DM per drive that it moves.
-// However, DM's are large, so we provide fewer than DRIVES * DdaRingLength of them. The planner checks that enough DMs are available before filling in a new DDA.
+// Each DDA needs one DM per drive that it moves, but only when it has been prepared and frozen
 
 #if SAME70
-const unsigned int DdaRingLength = 30;
-const unsigned int NumDms = DdaRingLength * 12;						// allow enough for plenty of CAN expansion
+const unsigned int DdaRingLength = 40;
+const unsigned int NumDms = 20 * 12;								// allow enough for plenty of CAN expansion
 #elif SAM4E || SAM4S
-const unsigned int DdaRingLength = 30;
-const unsigned int NumDms = DdaRingLength * 8;						// suitable for e.g. a delta + 5 input hot end
+const unsigned int DdaRingLength = 40;
+const unsigned int NumDms = 20 * 8;									// suitable for e.g. a delta + 5 input hot end
 #else
 // We are more memory-constrained on the SAM3X
 const unsigned int DdaRingLength = 20;
-const unsigned int NumDms = DdaRingLength * 5;						// suitable for e.g. a delta + 2-input hot end
+const unsigned int NumDms = 20 * 5;									// suitable for e.g. a delta + 2-input hot end
 #endif
 
 constexpr uint32_t MovementStartDelayClocks = StepTimer::StepClockRate/100;		// 10ms delay between preparing the first move and starting it
@@ -143,16 +142,18 @@ public:
 
 	void AdjustLeadscrews(const floatc_t corrections[]);							// Called by some Kinematics classes to adjust the leadscrews
 
-	int32_t GetAccumulatedExtrusion(size_t extruder, bool& nonPrinting);			// Return and reset the accumulated extrusion amount
+	int32_t GetAccumulatedExtrusion(size_t extruder, bool& isPrinting);				// Return and reset the accumulated commanded extrusion amount
 
 	bool WriteResumeSettings(FileStore *f) const;									// Write settings for resuming the print
+
+	uint32_t ExtruderPrintingSince() const { return extrudersPrintingSince; }		// When we started doing normal moves after the most recent extruder-only move
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const;			// Get the current step interval for this axis or extruder
 #endif
 
-	static int32_t MotorEndPointToMachine(size_t drive, float coord);				// Convert a single motor position to number of steps
-	static float MotorEndpointToPosition(int32_t endpoint, size_t drive);			// Convert number of motor steps to motor position
+	static int32_t MotorMovementToSteps(size_t drive, float coord);					// Convert a single motor position to number of steps
+	static float MotorStepsToMovement(size_t drive, int32_t endpoint);				// Convert number of motor steps to motor position
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -205,7 +206,8 @@ private:
 	volatile bool liveCoordinatesValid;					// True if the XYZ live coordinates are reliable (the extruder ones always are)
 	volatile int32_t liveEndPoints[MaxTotalDrivers];	// The XYZ endpoints of the last completed move in motor coordinates
 	volatile int32_t extrusionAccumulators[MaxExtruders]; // Accumulated extruder motor steps
-	volatile bool extruderNonPrinting[MaxExtruders];	// Set whenever the extruder starts a non-printing move
+	volatile uint32_t extrudersPrintingSince;			// The milliseconds clock time when extrudersPrinting was set to true
+	volatile bool extrudersPrinting;					// Set whenever an extruder starts a printing move, cleared by a non-printing extruder move
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes
 	float& tanXY = tangents[0];
@@ -254,12 +256,23 @@ inline bool Move::AllMovesAreFinished()
 	return NoLiveMovement();
 }
 
-// Start the next move. Must be called with interrupts disabled, to avoid a race with the step ISR.
+// Start the next move. Return true if the
+// Must be called with base priority greater than the step interrupt, to avoid a race with the step ISR.
 inline bool Move::StartNextMove(uint32_t startTime)
 pre(ddaRingGetPointer->GetState() == DDA::frozen)
 {
-	currentDda = ddaRingGetPointer;
-	return currentDda->Start(startTime);
+	DDA * const cdda = ddaRingGetPointer;			// capture volatile variable
+	if (cdda->IsNonPrintingExtruderMove())
+	{
+		extrudersPrinting = false;
+	}
+	else if (!extrudersPrinting)
+	{
+		extrudersPrinting = true;
+		extrudersPrintingSince = millis();
+	}
+	currentDda = cdda;
+	return cdda->Start(startTime);
 }
 
 // This is the function that is called by the timer interrupt to step the motors.

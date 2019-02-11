@@ -20,7 +20,8 @@
 
 const ObjectModelTableEntry RandomProbePointSet::objectModelTable[] =
 {
-	{ "numBedCompensationPoints", OBJECT_MODEL_FUNC(&(self->numBedCompensationPoints)), TYPE_OF(uint32_t), ObjectModelTableEntry::none }
+	// These entries must be in alphabetical order
+	{ "numPointsProbed", OBJECT_MODEL_FUNC(&(self->numBedCompensationPoints)), TYPE_OF(uint32_t), ObjectModelTableEntry::none }
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RandomProbePointSet)
@@ -94,10 +95,10 @@ bool RandomProbePointSet::SetProbedBedEquation(size_t numPoints, const StringRef
 {
 	if (!GoodProbePointOrdering(numPoints))
 	{
-		reply.printf("Probe points P0 to P%u must be in clockwise order starting near X=0 Y=0", min<unsigned int>(numPoints, 4) - 1);
+		reply.printf("Probe points P0 to P%u must be in clockwise order starting near minimum X and Y", min<unsigned int>(numPoints, 4) - 1);
 		if (numPoints >= 5)
 		{
-			reply.cat(" and P4 must be near the centre");
+			reply.cat(", and P4 must be near the centre");
 		}
 		return true;
 	}
@@ -165,6 +166,9 @@ bool RandomProbePointSet::SetProbedBedEquation(size_t numPoints, const StringRef
 		}
 
 		numBedCompensationPoints = numPoints;
+
+		reprap.GetPlatform().Message(WarningMessage,
+			"3/4/5-point bed compensation is deprecated and will be removed in a future firmware release. Please use G29 mesh bed compensation instead.\n");
 
 		// Report what points the bed equation fits
 		reply.copy("Bed equation fits points");

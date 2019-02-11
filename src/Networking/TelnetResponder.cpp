@@ -6,6 +6,9 @@
  */
 
 #include "TelnetResponder.h"
+
+#if SUPPORT_TELNET
+
 #include "Socket.h"
 #include "OutputMemory.h"
 #include "GCodes/GCodes.h"
@@ -267,7 +270,7 @@ void TelnetResponder::CharFromClient(char c)
 void TelnetResponder::ProcessLine()
 {
 	// Special commands for Telnet
-	if (StringEquals(clientMessage, "exit") || StringEquals(clientMessage, "quit"))
+	if (StringEqualsIgnoreCase(clientMessage, "exit") || StringEqualsIgnoreCase(clientMessage, "quit"))
 	{
 		if (outBuf != nullptr || OutputBuffer::Allocate(outBuf))
 		{
@@ -380,5 +383,7 @@ unsigned int TelnetResponder::numSessions = 0;
 unsigned int TelnetResponder::clientsServed = 0;
 OutputBuffer *TelnetResponder::gcodeReply = nullptr;
 Mutex TelnetResponder::gcodeReplyMutex;
+
+#endif
 
 // End

@@ -20,7 +20,7 @@ namespace CanInterface
 {
 	void Init();
 	void StartMovement(const DDA& dda);
-	void AddMovement(const DDA& dda, const PrepParams& params, size_t canDriver, const DriveMovement& dm);
+	void AddMovement(const DDA& dda, const PrepParams& params, size_t canDriver, size_t steps);
 	void FinishMovement(uint32_t moveStartTime);
 	bool CanPrepareMove();
 }

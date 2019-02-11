@@ -136,7 +136,7 @@ static inline void DisableEspInterrupt()
 
 WiFiInterface::WiFiInterface(Platform& p) : platform(p), uploader(nullptr), ftpDataPort(0), closeDataPort(false),
 		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
-		espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0), serialRunning(false)
+		espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0), serialRunning(false), debugMessageChars(0)
 {
 	wifiInterface = this;
 
@@ -167,9 +167,11 @@ WiFiInterface::WiFiInterface(Platform& p) : platform(p), uploader(nullptr), ftpD
 
 const ObjectModelTableEntry WiFiInterface::objectModelTable[] =
 {
+	// These entries must be in alphabetical order
+	{ "gateway", OBJECT_MODEL_FUNC(&(self->gateway)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
 	{ "ip", OBJECT_MODEL_FUNC(&(self->ipAddress)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
+	{ "name", OBJECT_MODEL_FUNC_NOSELF("wifi"), TYPE_OF(const char *), ObjectModelTableEntry::none },
 	{ "netmask", OBJECT_MODEL_FUNC(&(self->netmask)), TYPE_OF(IPAddress), ObjectModelTableEntry::none },
-	{ "gateway", OBJECT_MODEL_FUNC(&(self->gateway)), TYPE_OF(IPAddress), ObjectModelTableEntry::none }
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(WiFiInterface)
@@ -698,8 +700,8 @@ void WiFiInterface::Spin(bool full)
 			}
 			else if (c != '\r')
 			{
-				debugMessageBuffer.cat(c);
-				if (debugMessageBuffer.strlen() == debugMessageBuffer.Capacity())
+				debugMessageBuffer[debugMessageChars++] = c;
+				if (debugMessageChars == ARRAY_SIZE(debugMessageBuffer) - 1)
 				{
 					debugPrintPending = true;
 				}
@@ -714,9 +716,10 @@ void WiFiInterface::Spin(bool full)
 		{
 			if (reprap.Debug(moduleWiFi))
 			{
-				debugPrintf("WiFi: %s\n", debugMessageBuffer.c_str());
+				debugMessageBuffer[debugMessageChars] = 0;
+				debugPrintf("WiFi: %s\n", debugMessageBuffer);
 			}
-			debugMessageBuffer.Clear();
+			debugMessageChars = 0;
 			debugPrintPending = false;
 		}
 	}
@@ -1802,7 +1805,7 @@ void WiFiInterface::StartWiFi()
 	digitalWrite(EspResetPin, HIGH);
 	ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to UART1
 	Serial1.begin(WiFiBaudRate);								// initialise the UART, to receive debug info
-	debugMessageBuffer.Clear();
+	debugMessageChars = 0;
 	serialRunning = true;
 	debugPrintPending = false;
 }
