@@ -27,6 +27,7 @@ LaserFilamentMonitor::LaserFilamentMonitor(unsigned int extruder, int type)
 
 void LaserFilamentMonitor::Init()
 {
+	dataReceived = false;
 	sensorValue = 0;
 	parityErrorCount = framingErrorCount = overrunErrorCount = polarityErrorCount = overdueCount = 0;
 	lastMeasurementTime = 0;
