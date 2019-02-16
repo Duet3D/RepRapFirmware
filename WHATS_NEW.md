@@ -1,6 +1,33 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.03beta2
+=================
+
+Upgrade notes:
+- The M135 command is no longer supported, but AFAIK nobody used it
+- Important! See 2.03beta1 upgrade notes too.
+
+New features/changed behaviour:
+- M574 allows endstop input numbers to be configured (C parameter). Currently only the first input number specified for each axis is monitored.
+- M203 Inn sets minimum movement speed
+- M203 now reports speeds in mm/sec
+- M208 reports error if min >= max
+- Allow hex inputs anywhere in G/M code parameters where an unsigned value is required
+- Requested fan speed is now scaled by the M106 X parameter
+- Shrunk the DDA and Tool structures to reduce RAM usage
+- M111 Sn for n != 0 now requires a P parameter, to reduce issues caused by Repitier Host using the M111 command for other purposes
+- Increased temperature sampling rate from 2 to 4 samples/sec
+- Increased the allowed number of consecutive temperature reading errors from 5 to 8
+- Removed M135 command
+
+Bug fixes:
+- Fixed 12864 display scrolling when the folder included filenames starting with '.'
+- Fixed remaining M105 status response received when M997 S1 sent from USB
+- Fixed firmware update messages getting erased on PanelDue during M997 S1
+- M408 Sn was hanging for N>5
+- Fixed leadscrew adjustment bug introduced in 2.03beta1
+
 Version 2.03beta1
 =================
 
