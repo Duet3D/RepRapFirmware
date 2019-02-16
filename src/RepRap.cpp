@@ -586,9 +586,9 @@ void RepRap::SetDebug(Module m, bool enable)
 	PrintDebug();
 }
 
-void RepRap::SetDebug(bool enable)
+void RepRap::ClearDebug()
 {
-	debug = (enable) ? 0xFFFF : 0;
+	debug = 0;
 }
 
 void RepRap::PrintDebug()
@@ -1801,7 +1801,9 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	// Short messages are now pushed directly to PanelDue, so don't include them here as well
 	// We no longer send the amount of http buffer space here because the web interface doesn't use these forms of status response
 
-	// Deal with the message box, if there is one
+	// Deal with the message box.
+	// Don't send it if we are flashing firmware, because when we flash firmware we send messages directly to PanelDue and we don't want them to get cleared.
+	if (!gCodes->IsFlashing())
 	{
 		float timeLeft = 0.0;
 		MutexLocker lock(messageBoxMutex);
@@ -1848,11 +1850,11 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		response->EncodeString(FIRMWARE_NAME, false);
 	}
 
+	// Send the response to the last command. Do this last because it can be long and may need to be truncated.
 	const int auxSeq = (int)platform->GetAuxSeq();
 	if (type < 2 || (seq != -1 && auxSeq != seq))
 	{
 
-		// Send the response to the last command. Do this last because it can be long and may need to be truncated.
 		response->catf(",\"seq\":%d,\"resp\":", auxSeq);					// send the response sequence number
 
 		// Send the JSON response

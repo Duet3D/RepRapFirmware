@@ -137,7 +137,7 @@ TemperatureError RtdSensor31865::TryInitRtd() const
 	return sts;
 }
 
-TemperatureError RtdSensor31865::GetTemperature(float& t)
+TemperatureError RtdSensor31865::TryGetTemperature(float& t)
 {
 	if (inInterrupt() || millis() - lastReadingTime < MinimumReadInterval)
 	{

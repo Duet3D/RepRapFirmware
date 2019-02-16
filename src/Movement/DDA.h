@@ -28,7 +28,7 @@ class DDA
 
 public:
 
-	enum DDAState : unsigned char
+	enum DDAState : uint8_t
 	{
 		empty,				// empty or being filled in
 		provisional,		// ready, but could be subject to modifications
@@ -41,7 +41,7 @@ public:
 
 	bool Init(GCodes::RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));
 																	// Set up a new move, returning true if it represents real movement
-	bool Init(const float_t steps[MaxTotalDrivers]);				// Set up a raw (unmapped) motor move
+	bool Init(const float steps[MaxTotalDrivers]);					// Set up a raw (unmapped) motor move
 	void Init();													// Set up initial positions for machine startup
 	bool Start(uint32_t tim) __attribute__ ((hot));					// Start executing the DDA, i.e. move the move.
 	bool Step() __attribute__ ((hot));								// Take one step of the DDA, called by timed interrupt.
@@ -92,7 +92,7 @@ public:
 #endif
 
 #if SUPPORT_IOBITS
-	uint32_t GetMoveStartTime() const { return moveStartTime; }
+	uint32_t GetMoveStartTime() const { return afterPrepare.moveStartTime; }
 	IoBits_t GetIoBits() const { return laserPwmOrIoBits.ioBits; }
 #endif
 
@@ -176,19 +176,20 @@ private:
 	{
 		struct
 		{
-			uint16_t endCoordinatesValid : 1;		// True if endCoordinates can be relied on
-			uint16_t isDeltaMovement : 1;			// True if this is a delta printer movement
-			uint16_t canPauseAfter : 1;				// True if we can pause at the end of this move
-			uint16_t isPrintingMove : 1;			// True if this move includes XY movement and extrusion
-			uint16_t usePressureAdvance : 1;		// True if pressure advance should be applied to any forward extrusion
-			uint16_t hadLookaheadUnderrun : 1;		// True if the lookahead queue was not long enough to optimise this move
-			uint16_t xyMoving : 1;					// True if movement along an X axis or the Y axis was requested, even it if's too small to do
-			uint16_t goingSlow : 1;					// True if we have slowed the movement because the Z probe is approaching its threshold
-			uint16_t isLeadscrewAdjustmentMove : 1;	// True if this is a leadscrews adjustment move
-			uint16_t usingStandardFeedrate : 1;		// True if this move uses the standard feed rate
-			uint16_t hadHiccup : 1;					// True if we had a hiccup while executing this move
-			uint16_t isNonPrintingExtruderMove : 1;		// True if this move is a fast extruder-only move, probably a retract/re-prime
-			uint16_t continuousRotationShortcut : 1; // True if continuous rotation axes take shortcuts
+			uint16_t endCoordinatesValid : 1,		// True if endCoordinates can be relied on
+					 isDeltaMovement : 1,			// True if this is a delta printer movement
+					 canPauseAfter : 1,				// True if we can pause at the end of this move
+					 isPrintingMove : 1,			// True if this move includes XY movement and extrusion
+					 usePressureAdvance : 1,		// True if pressure advance should be applied to any forward extrusion
+					 hadLookaheadUnderrun : 1,		// True if the lookahead queue was not long enough to optimise this move
+					 xyMoving : 1,					// True if movement along an X axis or the Y axis was requested, even it if's too small to do
+					 goingSlow : 1,					// True if we have slowed the movement because the Z probe is approaching its threshold
+					 isLeadscrewAdjustmentMove : 1,	// True if this is a leadscrews adjustment move
+					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
+					 hadHiccup : 1,					// True if we had a hiccup while executing this move
+					 isNonPrintingExtruderMove : 1,	// True if this move is a fast extruder-only move, probably a retract/re-prime
+					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
+					 usesEndstops : 1;				// True if this move monitors endstops of Z probe
 		};
 		uint16_t flags;								// so that we can print all the flags at once for debugging
 	};
@@ -216,8 +217,6 @@ private:
 	float startSpeed;
 	float endSpeed;
 	float topSpeed;
-	float accelDistance;
-	float decelDistance;
 
 	float proportionLeft;					// what proportion of the extrusion in the G1 or G0 move of which this is a part remains to be done after this segment is complete
 	uint32_t clocksNeeded;
@@ -227,9 +226,11 @@ private:
 		// Values that are needed only before Prepare is called
 		struct
 		{
+			float accelDistance;
+			float decelDistance;
 			float targetNextSpeed;				// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
 			float maxAcceleration;				// the maximum allowed acceleration for this move according to the limits set by M201
-		};
+		} beforePrepare;
 
 		// Values that are not set or accessed before Prepare is called
 		struct
@@ -242,7 +243,7 @@ private:
 
 			// These are used only in delta calculations
 		    int32_t cKc;						// The Z movement fraction multiplied by Kc and converted to integer
-		};
+		} afterPrepare;
 	};
 
 #if DDA_LOG_PROBE_CHANGES

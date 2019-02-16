@@ -34,8 +34,23 @@ const unsigned int NumDms = 20 * 5;									// suitable for e.g. a delta + 2-inp
 
 constexpr uint32_t MovementStartDelayClocks = StepTimer::StepClockRate/100;		// 10ms delay between preparing the first move and starting it
 
-// This is the master movement class.  It controls all movement in the machine.
+enum EndstopHitAction
+{
+	noStop = 0,
+	stopDriver = 1,
+	stopAxis = 2,
+	stopAll = 3
+};
 
+struct EndstopAction
+{
+	uint16_t driver : 4,			// which driver to stop if the action is stopDriver
+			 axis : 4,				// which axis to stop if the action is stopAxis, and which axis to set the position of if setAxisPos is true
+			 action : 2,			// the EndstopHitAction for this endstop
+			 setAxisPos : 1;		// whether or not to set the axis position to its min or max
+};
+
+// This is the master movement class.  It controls all movement in the machine.
 class Move INHERIT_OBJECT_MODEL
 {
 public:
@@ -232,6 +247,11 @@ private:
 
 	float specialMoveCoords[MaxTotalDrivers];			// Amounts by which to move individual motors (leadscrew adjustment move)
 	bool specialMoveAvailable;							// True if a leadscrew adjustment move is pending
+
+	EndstopAction endstopActions[NumEndstops];
+#if HAS_STALL_DETECT
+	EndstopAction stallActions[NumDirectDrivers];
+#endif
 };
 
 //******************************************************************************************************

@@ -583,7 +583,10 @@ void FilesMenuItem::EnterDirectory()
 	{
 		do
 		{
-			++m_uHardItemsInDirectory;
+			if (oFileInfo.fileName[0] != '.')
+			{
+				++m_uHardItemsInDirectory;
+			}
 		}
 		while (m_oMS->FindNext(oFileInfo));
 	}

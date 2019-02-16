@@ -156,7 +156,7 @@ void Heat::Init()
 #ifdef RTOS
 	heaterTask.Create(HeaterTask, "HEAT", nullptr, TaskBase::HeatPriority);
 #else
-	lastTime = millis() - platform.HeatSampleInterval();		// flag the PIDS as due for spinning
+	lastTime = millis() - HeatSampleIntervalMillis;		// flag the PIDS as due for spinning
 	active = true;
 #endif
 }
@@ -182,9 +182,9 @@ void Heat::Task()
 	lastWakeTime = xTaskGetTickCount();
 	for (;;)
 	{
-		for (size_t heater = 0; heater < NumHeaters; heater++)
+		for (PID *& p : pids)
 		{
-			pids[heater]->Spin();
+			p->Spin();
 		}
 
 		// See if we have finished tuning a PID
@@ -197,7 +197,7 @@ void Heat::Task()
 		reprap.KickHeatTaskWatchdog();
 
 		// Delay until it is time again
-		vTaskDelayUntil(&lastWakeTime, platform.HeatSampleInterval());
+		vTaskDelayUntil(&lastWakeTime, HeatSampleIntervalMillis);
 	}
 }
 
@@ -209,12 +209,12 @@ void Heat::Spin()
 	{
 		// See if it is time to spin the PIDs
 		const uint32_t now = millis();
-		if (now - lastTime >= platform.HeatSampleInterval())
+		if (now - lastTime >= HeatSampleIntervalMillis)
 		{
 			lastTime = now;
-			for (size_t heater = 0; heater < NumHeaters; heater++)
+			for (PID *& p : pids)
 			{
-				pids[heater]->Spin();
+				p->Spin();
 			}
 
 			// See if we have finished tuning a PID
@@ -371,7 +371,7 @@ float Heat::GetStandbyTemperature(int8_t heater) const
 
 float Heat::GetHighestTemperatureLimit(int8_t heater) const
 {
-	float limit = BAD_ERROR_TEMPERATURE;
+	float limit = BadErrorTemperature;
 	if (heater >= 0 && heater < (int)NumHeaters)
 	{
 		for (const HeaterProtection *prot : heaterProtections)
@@ -379,7 +379,7 @@ float Heat::GetHighestTemperatureLimit(int8_t heater) const
 			if (prot->GetSupervisedHeater() == heater && prot->GetTrigger() == HeaterProtectionTrigger::TemperatureExceeded)
 			{
 				const float t = prot->GetTemperatureLimit();
-				if (limit == BAD_ERROR_TEMPERATURE || t > limit)
+				if (limit == BadErrorTemperature || t > limit)
 				{
 					limit = t;
 				}
@@ -691,20 +691,20 @@ float Heat::GetTemperature(size_t heater, TemperatureError& err)
 	if (spp == nullptr)
 	{
 		err = TemperatureError::unknownHeater;
-		return BAD_ERROR_TEMPERATURE;
+		return BadErrorTemperature;
 	}
 
 	if (*spp == nullptr)
 	{
 		err = TemperatureError::unknownChannel;
-		return BAD_ERROR_TEMPERATURE;
+		return BadErrorTemperature;
 	}
 
 	float t;
 	err = (*spp)->GetTemperature(t);
 	if (err != TemperatureError::success)
 	{
-		t = BAD_ERROR_TEMPERATURE;
+		t = BadErrorTemperature;
 	}
 	return t;
 }

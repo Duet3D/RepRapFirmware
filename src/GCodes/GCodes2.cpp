@@ -1066,7 +1066,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				float val = ConvertOldStylePwm(gb.GetFValue());
 
 				// The SX1509B I/O expander chip doesn't seem to work if you set PWM mode and then set digital output mode.
-				// This cases a problem if M42 is used to write to some pins and then M670 is used to set up the G1 P parameter port mapping.
+				// This causes a problem if M42 is used to write to some pins and then M670 is used to set up the G1 P parameter port mapping.
 				// The first part of the fix for this is to not select PWM mode if we don't need to.
 				bool usePwm;
 				uint16_t freq;
@@ -1407,9 +1407,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				reprap.SetDebug(static_cast<Module>(gb.GetIValue()), dbv);
 			}
+			else if (dbv)
+			{
+				// Repetier Host sends M111 with various S parameters to enable echo and similar features, which used to turn on all out debugging.
+				// But it's not useful to enable all debugging anyway. So we no longer allow debugging to be enabled without a P parameter.
+				reply.copy("Use P parameter to specify which module to debug");
+			}
 			else
 			{
-				reprap.SetDebug(dbv);
+				// M111 S0 still clears all debugging
+				reprap.ClearDebug();
 			}
 		}
 		else
@@ -1629,16 +1636,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
-	case 135: // Set PID sample interval
-		if (gb.Seen('S'))
-		{
-			platform.SetHeatSampleTime(gb.GetFValue() * 0.001);  // Value is in milliseconds; we want seconds
-		}
-		else
-		{
-			reply.printf("Heat sample time is %.3f seconds", (double)platform.GetHeatSampleTime());
-		}
-		break;
+	// M135 (set PID sample interval) is no longer supported
 
 	case 140: // Bed temperature
 	case 141: // Chamber temperature
@@ -1906,15 +1904,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
-	case 203: // Set/print maximum feedrates
+	case 203: // Set/print minimum/maximum feedrates
 		{
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; ++axis)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					platform.SetMaxFeedrate(axis, gb.GetFValue() * distanceScale * SecondsToMinutes); // G Code feedrates are in mm/minute; we need mm/sec
 					seen = true;
+					platform.SetMaxFeedrate(axis, gb.GetFValue() * distanceScale * SecondsToMinutes);
 				}
 			}
 
@@ -1930,20 +1928,27 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				}
 			}
 
+			if (gb.Seen('I'))
+			{
+				seen = true;
+				platform.SetMinMovementSpeed(gb.GetFValue() * distanceScale * SecondsToMinutes);
+			}
+
 			if (!seen)
 			{
-				reply.copy("Maximum feedrates: ");
+				reply.copy("Max speeds (mm/sec): ");
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.MaxFeedrate(axis) / (distanceScale * SecondsToMinutes)));
+					reply.catf("%c: %.1f, ", axisLetters[axis], (double)platform.MaxFeedrate(axis));
 				}
 				reply.cat("E:");
 				char sep = ' ';
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					reply.catf("%c%.1f", sep, (double)(platform.MaxFeedrate(extruder + numTotalAxes) / (distanceScale * SecondsToMinutes)));
+					reply.catf("%c%.1f", sep, (double)platform.MaxFeedrate(extruder + numTotalAxes));
 					sep = ':';
 				}
+				reply.catf(", min. speed %.2f", (double)platform.MinMovementSpeed());
 			}
 		}
 		break;
@@ -2002,23 +2007,42 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
+					seen = true;
 					float values[2];
 					size_t numValues = 2;
 					gb.GetFloatArray(values, numValues, false);
+					bool ok;
 					if (numValues == 2)
 					{
-						platform.SetAxisMinimum(axis, values[0], gb.MachineState().runningM501);
-						platform.SetAxisMaximum(axis, values[1], gb.MachineState().runningM501);
+						ok = values[1] > values[0];
+						if (ok)
+						{
+							platform.SetAxisMinimum(axis, values[0], gb.MachineState().runningM501);
+							platform.SetAxisMaximum(axis, values[1], gb.MachineState().runningM501);
+						}
 					}
 					else if (setMin)
 					{
-						platform.SetAxisMinimum(axis, values[0], gb.MachineState().runningM501);
+						ok = platform.AxisMaximum(axis) > values[0];
+						if (ok)
+						{
+							platform.SetAxisMinimum(axis, values[0], gb.MachineState().runningM501);
+						}
 					}
 					else
 					{
-						platform.SetAxisMaximum(axis, values[0], gb.MachineState().runningM501);
+						ok = values[0] > platform.AxisMinimum(axis);
+						if (ok)
+						{
+							platform.SetAxisMaximum(axis, values[0], gb.MachineState().runningM501);
+						}
 					}
-					seen = true;
+
+					if (!ok)
+					{
+						reply.printf("%c axis maximum must be greater than minimum", axisLetters[axis]);
+						result = GCodeResult::error;
+					}
 				}
 			}
 
@@ -3300,46 +3324,86 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 574: // Set endstop configuration
 		{
-			bool seen = false;
 			const uint8_t inputType = (gb.Seen('S')) ? gb.GetUIValue() : 1;
+
+			unsigned int axesSeen = 0;
+			size_t lastAxisSeen;
 			for (size_t axis = 0; axis < numTotalAxes; ++axis)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
+					++axesSeen;
+					lastAxisSeen = axis;
 					const int ival = gb.GetIValue();
 					if (ival >= 0 && ival <= 3)
 					{
-						platform.SetEndStopConfiguration(axis, (EndStopPosition) ival, (EndStopInputType)inputType);
-						seen = true;
-					}
-				}
-			}
-			if (!seen)
-			{
-				reply.copy("Endstop configuration:");
-				EndStopPosition config;
-				EndStopInputType inputType;
-				for (size_t axis = 0; axis < numTotalAxes; ++axis)
-				{
-					platform.GetEndStopConfiguration(axis, config, inputType);
-					reply.catf(" %c: %s", axisLetters[axis],
-								(config == EndStopPosition::highEndStop) ? "high end"
-									: (config == EndStopPosition::lowEndStop) ? "low end"
-										: "none");
-					if (config == EndStopPosition::noEndStop)
-					{
-						reply.cat(',');
+						platform.SetEndStopConfiguration(axis, (EndStopPosition)ival, (EndStopInputType)inputType);
 					}
 					else
 					{
-						reply.catf(" %s,",
-									(inputType == EndStopInputType::activeHigh) ? "active high switch"
-										: (inputType == EndStopInputType::activeLow) ? "active low switch"
+						reply.copy("Invalid endstop type");
+						result = GCodeResult::error;
+						break;
+					}
+				}
+			}
+
+			if (gb.Seen('C'))
+			{
+				if (axesSeen == 1)
+				{
+					uint32_t inputNumbers[MaxDriversPerAxis];
+					size_t numInputs = MaxDriversPerAxis;
+					gb.GetUnsignedArray(inputNumbers, numInputs, false);
+					platform.SetAxisEndstopConfig(lastAxisSeen, numInputs, inputNumbers);
+				}
+				else
+				{
+					reply.copy("Invalid use of C parameter");
+					result = GCodeResult::error;
+				}
+			}
+
+			if (axesSeen == 0)
+			{
+				reply.copy("Endstop configuration");
+				EndStopPosition config;
+				EndStopInputType inputType;
+				char sep = ':';
+				for (size_t axis = 0; axis < numTotalAxes; ++axis)
+				{
+					platform.GetEndStopConfiguration(axis, config, inputType);
+					reply.catf("%c %c: %s", sep, axisLetters[axis],
+								(config == EndStopPosition::highEndStop) ? "high end"
+									: (config == EndStopPosition::lowEndStop) ? "low end"
+										: "none");
+					if (config != EndStopPosition::noEndStop)
+					{
+						if (inputType == EndStopInputType::activeHigh || inputType == EndStopInputType::activeLow)
+						{
+							const AxisEndstopConfig& es = platform.GetAxisEndstopConfig(axis);
+							if (es.numEndstops == 1)
+							{
+								reply.catf(" input %u", es.endstopNumbers[0]);
+							}
+							else
+							{
+								reply.cat(" inputs");
+								for (size_t i = 0; i < es.numEndstops; ++i)
+								{
+									reply.catf(" %u", es.endstopNumbers[i]);
+								}
+							}
+						}
+						reply.catf(" %s",
+									(inputType == EndStopInputType::activeHigh) ? "active high"
+										: (inputType == EndStopInputType::activeLow) ? "active low"
 											: (inputType == EndStopInputType::zProbe) ? "Z probe"
 												: (inputType == EndStopInputType::motorStall) ? "motor stall"
 													: "unknown type"
 									);
 					}
+					sep = ',';
 				}
 			}
 		}

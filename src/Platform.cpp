@@ -327,6 +327,7 @@ void Platform::Init()
 	ARRAY_INIT(endStopPins, END_STOP_PINS);
 
 	// Drives
+	minimumMovementSpeed = DefaultMinFeedrate;
 	maxFeedrates[X_AXIS] = maxFeedrates[Y_AXIS] = DefaultXYMaxFeedrate;
 	accelerations[X_AXIS] = accelerations[Y_AXIS] = DefaultXYAcceleration;
 	driveStepsPerUnit[X_AXIS] = driveStepsPerUnit[Y_AXIS] = DefaultXYDriveStepsPerUnit;
@@ -390,6 +391,8 @@ void Platform::Init()
 		{
 			axisDrivers[drive].numDrivers = 1;
 			axisDrivers[drive].driverNumbers[0] = (uint8_t)drive;
+			axisEndstops[drive].numEndstops = 1;
+			axisEndstops[drive].endstopNumbers[0] = (uint8_t)drive;
 			endStopPos[drive] = EndStopPosition::lowEndStop;		// default to low endstop
 			endStopInputType[drive] = EndStopInputType::activeHigh;	// assume all endstops use active high logic e.g. normally-closed switch to ground
 		}
@@ -399,7 +402,7 @@ void Platform::Init()
 			// Set up the control pins and endstops
 			pinMode(STEP_PINS[drive], OUTPUT_LOW);
 			pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
-#if !defined(DUET3)
+#ifndef DUET3
 			pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
 #endif
 
@@ -527,7 +530,6 @@ void Platform::Init()
 			configuredHeaters |= (1 << chamberHeater);
 		}
 	}
-	heatSampleTicks = HEAT_SAMPLE_TIME * SecondsToMillis;
 
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
 	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
@@ -2763,18 +2765,32 @@ EndStopHit Platform::Stopped(size_t axisOrExtruder) const
 #endif
 
 		case EndStopInputType::activeLow:
-			if (axisOrExtruder < NumEndstops && endStopPins[axisOrExtruder] != NoPin)
 			{
-				const bool b = IoPort::ReadPin(endStopPins[axisOrExtruder]);
-				return (b) ? EndStopHit::noStop : (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
+				const AxisEndstopConfig& config = axisEndstops[axisOrExtruder];
+				if (config.numEndstops != 0)
+				{
+					const uint8_t input = config.endstopNumbers[0];
+					if (input < NumEndstops)
+					{
+						const bool b = IoPort::ReadPin(endStopPins[input]);
+						return (b) ? EndStopHit::noStop : (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
+					}
+				}
 			}
 			break;
 
 		case EndStopInputType::activeHigh:
-			if (axisOrExtruder < NumEndstops && endStopPins[axisOrExtruder] != NoPin)
 			{
-				const bool b = !IoPort::ReadPin(endStopPins[axisOrExtruder]);
-				return (b) ? EndStopHit::noStop : (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
+				const AxisEndstopConfig& config = axisEndstops[axisOrExtruder];
+				if (config.numEndstops != 0)
+				{
+					const uint8_t input = config.endstopNumbers[0];
+					if (input < NumEndstops)
+					{
+						const bool b = !IoPort::ReadPin(endStopPins[input]);
+						return (b) ? EndStopHit::noStop : (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
+					}
+				}
 			}
 			break;
 
@@ -3338,15 +3354,17 @@ void Platform::SetEnableValue(size_t driver, int8_t eVal)
 #endif
 }
 
-void Platform::SetAxisDriversConfig(size_t axis, const AxisDriversConfig& config)
+void Platform::SetAxisDriversConfig(size_t axis, size_t numValues, const uint32_t driverNumbers[])
 {
-	axisDrivers[axis] = config;
+	axisDrivers[axis].numDrivers = numValues;
 	uint32_t bitmap = 0;
-	for (size_t i = 0; i < config.numDrivers; ++i)
+	for (size_t i = 0; i < numValues; ++i)
 	{
-		bitmap |= CalcDriverBitmap(config.driverNumbers[i]);
+		const uint8_t driver = min<uint32_t>(driverNumbers[i], 255);
+		axisDrivers[axis].driverNumbers[i] = driver;
+		bitmap |= CalcDriverBitmap(driver);
 #if HAS_SMART_DRIVERS
-		SmartDrivers::SetAxisNumber(config.driverNumbers[i], axis);
+		SmartDrivers::SetAxisNumber(driver, axis);
 #endif
 	}
 	driveDriverBits[axis] = bitmap;
@@ -3531,6 +3549,15 @@ void Platform::GetEndStopConfiguration(size_t axis, EndStopPosition& esType, End
 {
 	esType = endStopPos[axis];
 	inputType = endStopInputType[axis];
+}
+
+void Platform::SetAxisEndstopConfig(size_t axis, size_t numValues, const uint32_t inputNumbers[])
+{
+	axisEndstops[axis].numEndstops = numValues;
+	for (size_t i = 0; i < numValues; ++i)
+	{
+		axisEndstops[axis].endstopNumbers[i] = min<uint32_t>(inputNumbers[i], 255);
+	}
 }
 
 //-----------------------------------------------------------------------------------------------------

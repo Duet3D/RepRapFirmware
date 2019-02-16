@@ -623,7 +623,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
 			{
-				if (reprap.GetTool(gb.MachineState().newToolNumber) != nullptr && (gb.MachineState().toolChangeParam & TPostBit) != 0)
+				if (reprap.GetCurrentTool() != nullptr && (gb.MachineState().toolChangeParam & TPostBit) != 0)
 				{
 					String<ShortScratchStringLength> scratchString;
 					scratchString.printf("tpost%d.g", gb.MachineState().newToolNumber);
@@ -760,10 +760,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 
 	case GCodeState::flashing1:
 #if HAS_WIFI_NETWORKING
+		if (&gb == auxGCode)								// if M997 S1 is sent from USB, don't keep sending temperature reports
+		{
+			CheckReportDue(gb, reply);						// this is so that the ATE gets status reports and can tell when flashing is complete
+		}
+
 		// Update additional modules before the main firmware
 		if (FirmwareUpdater::IsReady())
 		{
-			CheckReportDue(gb, reply);						// this is so that the ATE gets status reports and can tell when flashing is complete
 			bool updating = false;
 			for (unsigned int module = 1; module < NumFirmwareUpdateModules; ++module)
 			{
@@ -3652,12 +3656,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 
 	// Check tool number
 	bool seen = false;
-	const int toolNumber = gb.GetIValue();
-	if (toolNumber < 0)
-	{
-		reply.copy("Tool number must be positive");
-		return GCodeResult::error;
-	}
+	const unsigned int toolNumber = gb.GetUIValue();
 
 	// Check tool name
 	String<ToolNameLength> name;
@@ -3672,8 +3671,8 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	// Check drives
-	int32_t drives[MaxExtruders]; 	 		// There can never be more than we have...
-	size_t dCount = numExtruders;			// Sets the limit and returns the count
+	int32_t drives[MaxExtrudersPerTool];
+	size_t dCount = MaxExtrudersPerTool;	// Sets the limit and returns the count
 	if (gb.Seen('D'))
 	{
 		gb.GetIntArray(drives, dCount, false);
@@ -3685,8 +3684,8 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	// Check heaters
-	int32_t heaters[NumHeaters];
-	size_t hCount = NumHeaters;
+	int32_t heaters[MaxHeatersPerTool];
+	size_t hCount = MaxHeatersPerTool;
 	if (gb.Seen('H'))
 	{
 		gb.GetIntArray(heaters, hCount, false);
@@ -4079,7 +4078,7 @@ GCodeResult GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('S'))
 	{
 		const float limit = gb.GetFValue();
-		if (limit <= BAD_LOW_TEMPERATURE || limit >= BAD_ERROR_TEMPERATURE)
+		if (limit <= BadLowTemperature || limit >= BadErrorTemperature)
 		{
 			reply.copy("Invalid temperature limit");
 			return GCodeResult::error;
@@ -4980,6 +4979,9 @@ OutputBuffer *GCodes::GenerateJsonStatusResponse(int type, int seq, ResponseSour
 			statusResponse = reprap.GetLegacyStatusResponse(type + 2, seq);
 			break;
 
+		default:				// need a default clause to prevent the command hanging by always returning a null buffer
+			type = 2;
+			// no break
 		case 2:
 		case 3:
 		case 4:

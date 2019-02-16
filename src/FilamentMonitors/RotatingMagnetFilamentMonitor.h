@@ -34,8 +34,8 @@ private:
 	static constexpr uint16_t TypeMagnetV2ParityMask = 0x8000;
 
 	// Definitions for identifying the top level type of a message
-	static constexpr uint16_t TypeMagnetV2MessageTypeMask = 0x6000;
-	static constexpr uint16_t TypeMagnetV2MessageTypePosition = 0x0000;
+	static constexpr uint16_t TypeMagnetV2MessageTypeMask = 0x6C00;
+	static constexpr uint16_t TypeMagnetV2MessageTypePosition = 0x0800;
 	static constexpr uint16_t TypeMagnetV2MessageTypeError = 0x2000;
 	static constexpr uint16_t TypeMagnetV2MessageTypeInfo = 0x6000;
 

@@ -31,7 +31,6 @@ void RotatingMagnetFilamentMonitor::Init()
 	dataReceived = false;
 	sensorValue = 0;
 	parityErrorCount = framingErrorCount = overrunErrorCount = polarityErrorCount = overdueCount = 0;
-	dataReceived = false;
 	lastMeasurementTime = 0;
 	lastErrorCode = 0;
 	version = 1;
@@ -138,6 +137,12 @@ bool RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& 
 	return false;
 }
 
+// Return the current wheel angle
+float RotatingMagnetFilamentMonitor::GetCurrentPosition() const
+{
+	return (sensorValue & TypeMagnetAngleMask) * (360.0/1024.0);
+}
+
 // Deal with any received data
 void RotatingMagnetFilamentMonitor::HandleIncomingData()
 {
@@ -145,12 +150,11 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData()
 	PollResult res;
 	while ((res = PollReceiveBuffer(val)) != PollResult::incomplete)
 	{
-		// We have either received a report or there has been a receive error
+		// We have either received a report or there has been a framing error
 		bool receivedPositionReport = false;
 		if (res == PollResult::complete)
 		{
-			// We have a completed a position report
-			// Check the parity
+			// We have a completed a position report. Check the parity.
 			uint8_t data8 = (uint8_t)((val >> 8) ^ val);
 			data8 ^= (data8 >> 4);
 			data8 ^= (data8 >> 2);
@@ -226,18 +230,19 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData()
 
 		if (receivedPositionReport)
 		{
-			lastMeasurementTime = millis();
+			// We have a completed a position report
 			const uint16_t angleChange = (val - sensorValue) & TypeMagnetAngleMask;			// angle change in range 0..1023
 			const int32_t movement = (angleChange <= 512) ? (int32_t)angleChange : (int32_t)angleChange - 1024;
 			movementMeasuredSinceLastSync += (float)movement/1024;
 			sensorValue = val;
+			lastMeasurementTime = millis();
 
 			if (haveStartBitData)					// if we have a synchronised value for the amount of extrusion commanded
 			{
 				if (synced)
 				{
 					if (   checkNonPrintingMoves
-						|| (wasPrintingAtStartBit && (int32_t)(lastSyncTime - reprap.GetMove().ExtruderPrintingSince()) > SyncDelayMillis)
+						|| (wasPrintingAtStartBit && (int32_t)(lastSyncTime - reprap.GetMove().ExtruderPrintingSince()) >= SyncDelayMillis)
 					   )
 					{
 						// We can use this measurement
@@ -255,16 +260,10 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData()
 	}
 }
 
-// Return the current wheel angle
-float RotatingMagnetFilamentMonitor::GetCurrentPosition() const
-{
-	return (sensorValue & TypeMagnetAngleMask) * (360.0/1024.0);
-}
-
-// Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
+// Call the following at intervals to check the status. This is only called when printing is in progress.
 // 'filamentConsumed' is the net amount of extrusion commanded since the last call to this function.
 // 'hadNonPrintingMove' is true if filamentConsumed includes extruder movement from non-printing moves.
-// 'fromIsr' is true if this measurement was taken dat the end of the ISR because a potential start bit was seen
+// 'fromIsr' is true if this measurement was taken at the end of the ISR because a potential start bit was seen
 FilamentSensorStatus RotatingMagnetFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed)
 {
 	// 1. Update the extrusion commanded and whether we have had an extruding but non-printing move
@@ -394,10 +393,10 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCo
 	return ret;
 }
 
-// Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
+// Clear the measurement state. Called when we are not printing a file. Return the present/not present status if available.
 FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear()
 {
-	Reset();
+	Reset();											// call this first so that haveStartBitData and synced are false when we call HandleIncomingData
 	HandleIncomingData();								// to keep the diagnostics up to date
 
 	return (sensorError) ? FilamentSensorStatus::sensorError
@@ -413,7 +412,7 @@ void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int 
 										: ((sensorValue & switchOpenMask) != 0) ? "no filament"
 											: "ok";
 	reprap.GetPlatform().MessageF(mtype, "Extruder %u: pos %.2f, %s, ", extruder, (double)GetCurrentPosition(), statusText);
-	if (magneticMonitorState != MagneticMonitorState::calibrating && totalExtrusionCommanded > 20.0)
+	if (magneticMonitorState != MagneticMonitorState::calibrating && totalExtrusionCommanded > 10.0)
 	{
 		const float measuredMmPerRev = totalExtrusionCommanded/totalMovementMeasured;
 		reprap.GetPlatform().MessageF(mtype, "measured sens %.2fmm/rev min %ld%% max %ld%% over %.1fmm",

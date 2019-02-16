@@ -92,6 +92,11 @@ inline int64_t roundS64(double d)
 struct PrepParams
 {
 	// Parameters used for all types of motion
+	float totalDistance;
+	float accelDistance;
+	float decelDistance;
+	float acceleration;
+	float deceleration;
 	float decelStartDistance;
 	uint32_t topSpeedTimesCdivD;
 

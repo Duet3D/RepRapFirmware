@@ -49,7 +49,7 @@ class Tool
 {
 public:
 
-	static Tool *Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, const StringRef& reply);
+	static Tool *Create(unsigned int toolNumber, const char *name, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, const StringRef& reply);
 	static void Delete(Tool *t);
 
 	float GetOffset(size_t axis) const pre(axis < MaxAxes);
@@ -105,19 +105,19 @@ private:
 
 	Tool* next;
 	Filament *filament;
-	char *name;
+	const char *name;
 	float offset[MaxAxes];
-	float mix[MaxExtruders];
-	float activeTemperatures[NumHeaters];
-	float standbyTemperatures[NumHeaters];
-	size_t driveCount;
-	size_t heaterCount;
-	int myNumber;
+	float mix[MaxExtrudersPerTool];
+	float activeTemperatures[MaxHeatersPerTool];
+	float standbyTemperatures[MaxHeatersPerTool];
+	uint8_t driveCount;
+	uint8_t heaterCount;
+	uint16_t myNumber;
 	AxesBitmap xMapping, yMapping;
 	AxesBitmap axisOffsetsProbed;
 	FansBitmap fanMapping;
-	uint8_t drives[MaxExtruders];
-	int8_t heaters[NumHeaters];
+	uint8_t drives[MaxExtrudersPerTool];
+	int8_t heaters[MaxHeatersPerTool];
 
 	ToolState state;
 	bool heaterFault;

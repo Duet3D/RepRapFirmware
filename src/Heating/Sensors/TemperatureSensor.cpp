@@ -19,12 +19,23 @@
 #endif
 
 // Constructor
-TemperatureSensor::TemperatureSensor(unsigned int chan, const char *t) : sensorChannel(chan), sensorType(t), heaterName(nullptr) {}
+TemperatureSensor::TemperatureSensor(unsigned int chan, const char *t) : sensorChannel(chan), sensorType(t), heaterName(nullptr), lastError(TemperatureError::success) {}
 
 // Virtual destructor
 TemperatureSensor::~TemperatureSensor()
 {
 	delete heaterName;
+}
+
+// Try to get a temperature reading
+TemperatureError TemperatureSensor::GetTemperature(float& t)
+{
+	const TemperatureError rslt = TryGetTemperature(t);
+	if (rslt != TemperatureError::success)
+	{
+		lastError = rslt;
+	}
+	return rslt;
 }
 
 // Set the name - normally called only once, so we allow heap memory to be allocated
@@ -66,7 +77,7 @@ void TemperatureSensor::CopyBasicHeaterDetails(unsigned int heater, const String
 	{
 		reply.catf(" (%s)", heaterName);
 	}
-	reply.catf(" uses %s sensor channel %u", sensorType, sensorChannel);
+	reply.catf(" uses %s sensor channel %u, last error: %s", sensorType, sensorChannel, TemperatureErrorString(lastError));
 }
 
 // Configure then heater name, if it is provided

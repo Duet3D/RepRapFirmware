@@ -42,7 +42,7 @@ constexpr size_t MaxTotalDrivers = NumDirectDrivers; // The maximum number of dr
 constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 
 constexpr size_t NumEndstops = 12;					// The number of inputs we have for endstops, filament sensors etc.
-constexpr size_t NumHeaters = 8;					// The number of heaters in the machine; 0 is the heated bed even if there isn't one
+constexpr size_t NumHeaters = 8;					// The number of heaters in the machine
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 8;
 
@@ -51,6 +51,9 @@ constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the
 
 constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
+
+constexpr size_t MaxHeatersPerTool = 4;
+constexpr size_t MaxExtrudersPerTool = 6;
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
