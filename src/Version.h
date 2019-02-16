@@ -11,9 +11,9 @@
 
 #ifndef VERSION
 #ifdef RTOS
-# define MAIN_VERSION	"2.03beta1"
+# define MAIN_VERSION	"2.03beta2"
 #else
-# define MAIN_VERSION	"1.24beta1"
+# define MAIN_VERSION	"1.24beta2"
 #endif
 
 # define VERSION MAIN_VERSION

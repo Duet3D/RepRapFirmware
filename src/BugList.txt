@@ -287,7 +287,6 @@ Planned for 2.03beta2:
 - [done, ok] Add error for M208 min >= max
 - [done, ok] Allow hex input everywhere that an unsigned value is expected
 - [done, ok] Fix leadscrew adjustment bug in 2.03beta1
-- [done, ok] Bug: M997 S1 sent from USB keeps returning M105 status reports while the wifi firmware is flashing, and PanelDue 'flashing' update messages get erased
 - [done for single endstop per axis, ok] M574 endstop assignment, including option for >1 endstop per motor
 - [done, ok] Bug: M406 S6 or with other invalid S parameter never completes
 - [done, ok] M111 Sn where n != 0 no longer enables all debugging, for better compatibility with Repetier host
