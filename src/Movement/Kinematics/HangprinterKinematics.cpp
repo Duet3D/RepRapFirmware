@@ -24,7 +24,7 @@ constexpr float DefaultPrintRadius = 1500.0;
 
 // Constructor
 HangprinterKinematics::HangprinterKinematics()
-	: Kinematics(KinematicsType::hangprinter, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true)
+	: Kinematics(KinematicsType::hangprinter, DefaultSegmentsPerSecond, DefaultMinSegmentSize, false)
 {
 	Init();
 }
@@ -38,9 +38,9 @@ void HangprinterKinematics::Init()
 	 * Default buildup factor for 0.50 mm FireLine: 0.0078
 	 * Default buildup factor for 0.39 mm FireLine: 0.00475
 	 * In practice you might want to compensate a bit more or a bit less */
-	constexpr float DefaultSpoolBuildupFactor = 0.7;
+	constexpr float DefaultSpoolBuildupFactor = 0.007;
 	/* Measure and set spool radii with M669 to achieve better accuracy */
-	constexpr float DefaultSpoolRadii[4] = { 55.0, 55.0, 55.0, 55.0};
+	constexpr float DefaultSpoolRadii[4] = { 55.0, 55.0, 55.0, 55.0}; // HP3 default
 	/* If axis runs lines back through pulley system, set mechanical advantage accordingly with M669 */
 	constexpr uint32_t DefaultMechanicalAdvantage[4] = { 1, 1, 1, 1}; // HP3 default
 	constexpr uint32_t DefaultLinesPerSpool[4] = { 2, 2, 2, 3}; // HP3 default
