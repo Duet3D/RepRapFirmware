@@ -32,7 +32,7 @@ const char* const ErrorPagePart2 =
 	"</p>\n"
 	"</body>\n";
 
-HttpResponder::HttpResponder(NetworkResponder *n) : NetworkResponder(n)
+HttpResponder::HttpResponder(NetworkResponder *n) : UploadingNetworkResponder(n)
 {
 }
 
@@ -558,12 +558,12 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		if (nameVal != nullptr)
 		{
 			// Regular rr_fileinfo?name=xxx call
-			SafeStrncpy(filenameBeingProcessed, nameVal, ARRAY_SIZE(filenameBeingProcessed));
+			filenameBeingProcessed.copy(nameVal);
 		}
 		else
 		{
 			// Simple rr_fileinfo call to get info about the file being printed
-			filenameBeingProcessed[0] = 0;
+			filenameBeingProcessed.Clear();
 		}
 		responderState = ResponderState::gettingFileInfo;
 		return false;
@@ -625,7 +625,7 @@ const char* HttpResponder::GetKeyValue(const char *key) const
 bool HttpResponder::SendFileInfo(bool quitEarly)
 {
 	OutputBuffer *jsonResponse = nullptr;
-	bool gotFileInfo = reprap.GetFileInfoResponse(filenameBeingProcessed, jsonResponse, quitEarly);
+	bool gotFileInfo = reprap.GetFileInfoResponse(filenameBeingProcessed.c_str(), jsonResponse, quitEarly);
 	if (gotFileInfo)
 	{
 		// Got it - send the response now
@@ -647,6 +647,7 @@ bool HttpResponder::SendFileInfo(bool quitEarly)
 		}
 		else
 		{
+			filenameBeingProcessed.Clear();
 			Commit();
 		}
 	}
@@ -1319,7 +1320,7 @@ void HttpResponder::CancelUpload()
 			}
 		}
 	}
-	NetworkResponder::CancelUpload();
+	UploadingNetworkResponder::CancelUpload();
 }
 
 // This overrides the version in class NetworkResponder

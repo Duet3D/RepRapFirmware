@@ -73,7 +73,7 @@ GCodeResult CurrentLoopTemperatureSensor::Configure(unsigned int mCode, unsigned
 	return GCodeResult::ok;
 }
 
-TemperatureError CurrentLoopTemperatureSensor::GetTemperature(float& t)
+TemperatureError CurrentLoopTemperatureSensor::TryGetTemperature(float& t)
 {
 	if (!inInterrupt() && millis() - lastReadingTime >= MinimumReadInterval)
 	{

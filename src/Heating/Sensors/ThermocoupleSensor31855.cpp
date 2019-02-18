@@ -73,7 +73,7 @@ void ThermocoupleSensor31855::Init()
 	lastReadingTime = millis();
 }
 
-TemperatureError ThermocoupleSensor31855::GetTemperature(float& t)
+TemperatureError ThermocoupleSensor31855::TryGetTemperature(float& t)
 {
 	if (inInterrupt() || millis() - lastReadingTime < MinimumReadInterval)
 	{

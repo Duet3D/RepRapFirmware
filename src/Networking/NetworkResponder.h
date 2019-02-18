@@ -59,10 +59,6 @@ protected:
 	virtual void SendData();
 	virtual void ConnectionLost();
 
-	void StartUpload(FileStore *file, const char *fileName);
-	void FinishUpload(uint32_t fileLength, time_t fileLastModified);
-	virtual void CancelUpload();
-
 	IPAddress GetRemoteIP() const;
 	void ReportOutputBufferExhaustion(const char *sourceFile, int line);
 
@@ -81,13 +77,6 @@ protected:
 	OutputStack outStack;								// not volatile because only one task accesses it
 	FileStore *fileBeingSent;
 	NetworkBuffer *fileBuffer;
-
-	// File uploads
-	FileData fileBeingUploaded;
-	String<MaxFilenameLength> filenameBeingUploaded;
-	uint32_t postFileLength, uploadedBytes;				// how many POST bytes do we expect and how many have already been written?
-	time_t fileLastModified;
-	bool uploadError;
 };
 
 #endif /* SRC_NETWORKING_NETWORKRESPONDER_H_ */

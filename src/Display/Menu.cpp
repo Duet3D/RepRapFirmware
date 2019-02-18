@@ -358,16 +358,14 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 	{
 		const char *const acText = AppendString(text);
 		MenuItem * const pNewItem = new TextMenuItem(row, column, width, alignment, fontNumber, xVis, acText);
-		pNewItem->UpdateWidth(lcd);
 		AddItem(pNewItem, false);
-		column += pNewItem->GetWidth();
+		column += pNewItem->GetWidth() + 1;
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "image") && fname != nullptr)
 	{
 		ImageMenuItem * const pNewItem = new ImageMenuItem(row, column, xVis, fname);
-		pNewItem->UpdateWidth(lcd);
 		AddItem(pNewItem, false);
-		column += pNewItem->GetWidth();
+		column += pNewItem->GetWidth() + 1;
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "button"))
 	{
@@ -375,21 +373,20 @@ const char *Menu::ParseMenuLine(char * const commandWord)
 		const char * const actionString = AppendString(action);
 		const char * const c_acFileString = AppendString(fname);
 		ButtonMenuItem * const pNewItem = new ButtonMenuItem(row, column, width, fontNumber, xVis, textString, actionString, c_acFileString);
-		pNewItem->UpdateWidth(lcd);
 		AddItem(pNewItem, true);
-		column += pNewItem->GetWidth();
+		column += pNewItem->GetWidth() + 1;
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "value"))
 	{
 		ValueMenuItem * const pNewItem = new ValueMenuItem(row, column, width, alignment, fontNumber, xVis, false, nparam, decimals);
 		AddItem(pNewItem, false);
-		column += pNewItem->GetWidth();
+		column += pNewItem->GetWidth() + 1;
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "alter"))
 	{
 		ValueMenuItem * const pNewItem = new ValueMenuItem(row, column, width, alignment, fontNumber, xVis, true, nparam, decimals);
 		AddItem(pNewItem, true);
-		column += pNewItem->GetWidth();
+		column += pNewItem->GetWidth() + 1;
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "files"))
 	{
@@ -497,6 +494,7 @@ void Menu::Reload()
 
 void Menu::AddItem(MenuItem *item, bool isSelectable)
 {
+	item->UpdateWidthAndHeight(lcd);
 	MenuItem::AppendToList((isSelectable) ? &selectableItems : &unSelectableItems, item);
 }
 
@@ -689,6 +687,18 @@ void Menu::Refresh()
 
 void Menu::DrawAll()
 {
+	// First erase any displayed items that should now be invisible
+	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
+	{
+		item->EraseIfInvisible(lcd, rowOffset);
+	}
+
+	for (MenuItem *item = unSelectableItems; item != nullptr; item = item->GetNext())
+	{
+		item->EraseIfInvisible(lcd, rowOffset);
+	}
+
+	// Now draw items
 	const PixelNumber rightMargin = NumCols - currentMargin;
 	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
 	{

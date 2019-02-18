@@ -15,6 +15,9 @@ SpiTemperatureSensor::SpiTemperatureSensor(unsigned int channel, const char *nam
 	device.csPolarity = false;						// active low chip select
 	device.spiMode = spiMode;
 	device.clockFrequency = clockFrequency;
+#if defined(__LPC17xx__)
+    device.sspChannel = TempSensorSSPChannel;		// use SSP0 on LPC
+#endif
 	lastTemperature = 0.0;
 	lastResult = TemperatureError::notInitialised;
 }
@@ -31,7 +34,7 @@ TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[],
 	uint8_t rawBytes[8];
 	spi_status_t sts;
 	{
-		MutexLocker lock(Tasks::GetSpiMutex(), 50);
+		MutexLocker lock(Tasks::GetSpiMutex(), 10);
 		if (!lock)
 		{
 			return TemperatureError::busBusy;

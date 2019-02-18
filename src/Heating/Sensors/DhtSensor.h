@@ -71,9 +71,11 @@ public:
 	DhtTemperatureSensor(unsigned int channel);
 	~DhtTemperatureSensor();
 
-	TemperatureError GetTemperature(float& t) override;
 	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override;
 	void Init() override;
+
+protected:
+	TemperatureError TryGetTemperature(float& t) override;
 };
 
 // This class represents a DHT humidity sensor
@@ -83,9 +85,11 @@ public:
 	DhtHumiditySensor(unsigned int channel);
 	~DhtHumiditySensor();
 
-	TemperatureError GetTemperature(float& t) override;
 	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override;
 	void Init() override;
+
+protected:
+	TemperatureError TryGetTemperature(float& t) override;
 };
 
 #endif

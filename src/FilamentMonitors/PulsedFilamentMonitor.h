@@ -16,8 +16,8 @@ public:
 	PulsedFilamentMonitor(unsigned int extruder, int type);
 
 	bool Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) override;
-	FilamentSensorStatus Check(bool full, bool hadNonPrintingMove, bool fromIsr, float filamentConsumed) override;
-	FilamentSensorStatus Clear(bool full) override;
+	FilamentSensorStatus Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) override;
+	FilamentSensorStatus Clear() override;
 	void Diagnostics(MessageType mtype, unsigned int extruder) override;
 	bool Interrupt() override;
 
@@ -41,13 +41,14 @@ private:
 
 	// Other data
 	uint32_t sensorValue;									// how many pulses received
+	uint32_t lastIsrTime;									// the time we recorded an interrupt
+	uint32_t lastSyncTime;									// the last time we synced a measurement
 	uint32_t lastMeasurementTime;							// the last time we received a value
 
 	float extrusionCommandedAtInterrupt;					// the amount of extrusion commanded (mm) when we received the interrupt since the last sync
 	float extrusionCommandedSinceLastSync;					// the amount of extrusion commanded (mm) since the last sync
 	float movementMeasuredSinceLastSync;					// the amount of movement in complete rotations of the wheel since the last sync
-	bool hadNonPrintingMoveAtInterrupt;
-	bool hadNonPrintingMoveSinceLastSync;
+	bool wasPrintingAtInterrupt;
 	bool haveInterruptData;
 
 	float extrusionCommandedThisSegment;					// the amount of extrusion commanded (mm) since we last did a comparison

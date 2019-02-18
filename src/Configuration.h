@@ -47,6 +47,8 @@ constexpr float DefaultXYInstantDv = 15.0;				// mm/sec
 constexpr float DefaultZInstantDv = 0.2;
 constexpr float DefaultEInstantDv = 2.0;
 
+constexpr float DefaultMinFeedrate = 0.5;				// The minimum movement speed (extruding moves will go slower than this if the extrusion rate demands it)
+
 constexpr float DefaultAxisMinimum = 0.0;
 constexpr float DefaultAxisMaximum = 200.0;
 
@@ -72,21 +74,21 @@ constexpr unsigned int AUX2_BAUD_RATE = 115200;			// Ditto - for second auxiliar
 constexpr uint32_t SERIAL_MAIN_TIMEOUT = 1000;			// timeout in ms for sending data to the main serial/USB port
 
 // Heater values
-constexpr float HEAT_SAMPLE_TIME = 0.5;					// Seconds
-constexpr float HEAT_PWM_AVERAGE_TIME = 5.0;			// Seconds
+constexpr uint32_t HeatSampleIntervalMillis = 250;		// interval between taking temperature samples
+constexpr float HeatPwmAverageTime = 5.0;				// Seconds
 
 constexpr float TEMPERATURE_CLOSE_ENOUGH = 1.0;			// Celsius
 constexpr float TEMPERATURE_LOW_SO_DONT_CARE = 40.0;	// Celsius
 constexpr float HOT_ENOUGH_TO_EXTRUDE = 160.0;			// Celsius
 constexpr float HOT_ENOUGH_TO_RETRACT = 90.0;			// Celsius
 
-constexpr uint8_t MAX_BAD_TEMPERATURE_COUNT = 4;		// Number of bad temperature samples permitted before a heater fault is reported
-constexpr float BAD_LOW_TEMPERATURE = -10.0;			// Celsius
+constexpr unsigned int MaxBadTemperatureCount = 2000/HeatSampleIntervalMillis;	// Number of bad temperature samples permitted before a heater fault is reported (2 seconds)
+constexpr float BadLowTemperature = -10.0;				// Celsius
 constexpr float DefaultExtruderTemperatureLimit = 290.0; // Celsius - E3D say to tighten the hot end at 285C
 constexpr float DefaultBedTemperatureLimit = 125.0;		// Celsius
-constexpr float HOT_END_FAN_TEMPERATURE = 45.0;			// Temperature at which a thermostatic hot end fan comes on
+constexpr float HotEndFanTemperature = 45.0;			// Temperature at which a thermostatic hot end fan comes on
 constexpr float ThermostatHysteresis = 1.0;				// How much hysteresis we use to prevent noise turning fans on/off too often
-constexpr float BAD_ERROR_TEMPERATURE = 2000.0;			// Must exceed any reasonable 5temperature limit including DEFAULT_TEMPERATURE_LIMIT
+constexpr float BadErrorTemperature = 2000.0;			// Must exceed any reasonable temperature limit including DEFAULT_TEMPERATURE_LIMIT
 constexpr uint32_t DefaultHeaterFaultTimeout = 10 * 60 * 1000;	// How long we wait (in milliseconds) for user intervention after a heater fault before shutting down
 
 constexpr PwmFrequency MaxHeaterPwmFrequency = 1000;	// maximum supported heater PWM frequency, to avoid overheating the mosfets
@@ -183,6 +185,18 @@ constexpr size_t MaxGridProbePoints = 121;				// 121 allows us to probe 200x200 
 constexpr size_t MaxXGridPoints = 21;					// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
 constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
+#elif __LPC17xx__
+# if defined(LPC_NETWORKING)
+constexpr size_t MaxGridProbePoints = 121;    			// 121 allows us to probe 200x200 at 20mm intervals
+constexpr size_t MaxXGridPoints = 21;         			// Maximum number of grid points in one X row
+constexpr size_t MaxProbePoints = 32;       			// Maximum number of G30 probe points
+constexpr size_t MaxCalibrationPoints = 16; 			// Should a power of 2 for speed
+# else
+constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
+constexpr size_t MaxXGridPoints = 41;					// Maximum number of grid points in one X row
+constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
+constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
+# endif
 #else
 # error
 #endif
@@ -256,6 +270,10 @@ constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buf
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 16;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buffers after long responses
+#elif __LPC17xx__
+constexpr uint16_t OUTPUT_BUFFER_SIZE = 256;            // How many bytes does each OutputBuffer hold?
+constexpr size_t OUTPUT_BUFFER_COUNT = 15;              // How many OutputBuffer instances do we have?
+constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;           // Number of reserved output buffers after long responses. Must be enough for an HTTP header
 #else
 # error
 #endif
@@ -267,11 +285,11 @@ constexpr float DefaultFeedRate = 3000.0;				// The initial requested feed rate 
 constexpr float DefaultG0FeedRate = 18000;				// The initial feed rate for G0 commands after resetting the printer, in mm/min
 constexpr float DefaultRetractSpeed = 1000.0;			// The default firmware retraction and un-retraction speed, in mm
 constexpr float DefaultRetractLength = 2.0;
-constexpr float MinimumMovementSpeed = 0.5;				// The minimum movement speed (extruding moves will go slower than this if the extrusion rate demands it)
 
 constexpr float MaxArcDeviation = 0.02;					// maximum deviation from ideal arc due to segmentation
-constexpr float MinArcSegmentLength = 0.2;				// G2 and G3 arc movement commands get split into segments at least this long
+constexpr float MinArcSegmentLength = 0.1;				// G2 and G3 arc movement commands get split into segments at least this long
 constexpr float MaxArcSegmentLength = 2.0;				// G2 and G3 arc movement commands get split into segments at most this long
+constexpr float MinArcSegmentsPerSec = 50;
 
 constexpr uint32_t DefaultIdleTimeout = 30000;			// Milliseconds
 constexpr float DefaultIdleCurrentFactor = 0.3;			// Proportion of normal motor current that we use for idle hold
@@ -304,7 +322,16 @@ constexpr uint32_t I2cClockFreq = 100000;				// clock frequency in Hz. 100kHz is
 constexpr size_t MaxI2cBytes = 32;						// max bytes in M260 or M261 command
 
 // File handling
-constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of simultaneous web requests + files being printed
+#if defined(__LPC17xx__)
+# if defined (ESP_NETWORKING)
+constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
+# else
+constexpr size_t MAX_FILES = 4;							// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
+# endif
+#else
+constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
+#endif
+
 constexpr size_t FILE_BUFFER_SIZE = 128;
 
 // Webserver stuff

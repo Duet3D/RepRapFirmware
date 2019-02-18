@@ -173,7 +173,7 @@ bool HangprinterKinematics::IsReachable(float x, float y, bool isCoordinated) co
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
-bool HangprinterKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated) const
+bool HangprinterKinematics::LimitPosition(float finalCoords[], float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
 	const AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
@@ -182,24 +182,27 @@ bool HangprinterKinematics::LimitPosition(float coords[], size_t numVisibleAxes,
 		// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
 		// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
 		// Constrain the move to be within the build radius
-		const float diagonalSquared = fsquare(coords[X_AXIS]) + fsquare(coords[Y_AXIS]);
+		const float diagonalSquared = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);
 		if (diagonalSquared > printRadiusSquared)
 		{
 			const float factor = sqrtf(printRadiusSquared / diagonalSquared);
-			coords[X_AXIS] *= factor;
-			coords[Y_AXIS] *= factor;
+			finalCoords[X_AXIS] *= factor;
+			finalCoords[Y_AXIS] *= factor;
 			limited = true;
 		}
 
-		if (coords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
+		if (applyM208Limits)
 		{
-			coords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
-			limited = true;
-		}
-		else if (coords[Z_AXIS] > reprap.GetPlatform().AxisMaximum(Z_AXIS))
-		{
-			coords[Z_AXIS] = reprap.GetPlatform().AxisMaximum(Z_AXIS);
-			limited = true;
+			if (finalCoords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
+			{
+				finalCoords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
+				limited = true;
+			}
+			else if (finalCoords[Z_AXIS] > reprap.GetPlatform().AxisMaximum(Z_AXIS))
+			{
+				finalCoords[Z_AXIS] = reprap.GetPlatform().AxisMaximum(Z_AXIS);
+				limited = true;
+			}
 		}
 	}
 	return limited;
@@ -266,7 +269,7 @@ AxesBitmap HangprinterKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.
 // The speeds in Cartesian space have already been limited.
-void HangprinterKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const
+void HangprinterKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const
 {
 	// Limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration
 	const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
@@ -420,8 +423,17 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			PrintMatrix("Normal matrix", normalMatrix, numFactors, numFactors + 1);
 		}
 
+		if (!normalMatrix.GaussJordan(numFactors, numFactors + 1))
+		{
+			reply.copy("Unable to calculate calibration parameters. Please choose different probe points.");
+			return true;
+		}
+
 		floatc_t solution[NumHangprinterFactors];
-		normalMatrix.GaussJordan(solution, numFactors);
+		for (size_t i = 0; i < numFactors; ++i)
+		{
+			solution[i] = normalMatrix(i, numFactors);
+		}
 
 		if (reprap.Debug(moduleMove))
 		{

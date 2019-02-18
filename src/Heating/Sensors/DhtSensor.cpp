@@ -38,7 +38,7 @@ extern "C" void DhtDataTransition(CallbackParameter cp)
 
 DhtSensorHardwareInterface::DhtSensorHardwareInterface(Pin p_pin)
 	: sensorPin(p_pin), type(DhtSensorType::none), lastResult(TemperatureError::notInitialised),
-	  lastTemperature(BAD_ERROR_TEMPERATURE), lastHumidity(BAD_ERROR_TEMPERATURE), badTemperatureCount(0)
+	  lastTemperature(BadErrorTemperature), lastHumidity(BadErrorTemperature), badTemperatureCount(0)
 {
 	IoPort::SetPinMode(sensorPin, INPUT_PULLUP);
 }
@@ -152,7 +152,7 @@ DhtSensorHardwareInterface *DhtSensorHardwareInterface::Create(unsigned int rela
 {
 	if (relativeChannel >= MaxSpiTempSensors)
 	{
-		t = BAD_ERROR_TEMPERATURE;
+		t = BadErrorTemperature;
 		return TemperatureError::unknownChannel;
 	}
 
@@ -160,7 +160,7 @@ DhtSensorHardwareInterface *DhtSensorHardwareInterface::Create(unsigned int rela
 
 	if (activeSensors[relativeChannel] == nullptr)
 	{
-		t = BAD_ERROR_TEMPERATURE;
+		t = BadErrorTemperature;
 		return TemperatureError::notInitialised;
 	}
 
@@ -224,15 +224,15 @@ void DhtSensorHardwareInterface::TakeReading()
 			lastResult = rslt;
 			badTemperatureCount = 0;
 		}
-		else if (badTemperatureCount < MAX_BAD_TEMPERATURE_COUNT)
+		else if (badTemperatureCount < MaxBadTemperatureCount)
 		{
 			badTemperatureCount++;
 		}
 		else
 		{
 			lastResult = rslt;
-			lastTemperature = BAD_ERROR_TEMPERATURE;
-			lastHumidity = BAD_ERROR_TEMPERATURE;
+			lastTemperature = BadErrorTemperature;
+			lastHumidity = BadErrorTemperature;
 		}
 	}
 }
@@ -334,7 +334,7 @@ DhtTemperatureSensor::~DhtTemperatureSensor()
 	// We don't delete the hardware interface object because the humidity channel may still be using it
 }
 
-TemperatureError DhtTemperatureSensor::GetTemperature(float& t)
+TemperatureError DhtTemperatureSensor::TryGetTemperature(float& t)
 {
 	return DhtSensorHardwareInterface::GetTemperatureOrHumidity(GetSensorChannel() - FirstDhtTemperatureChannel, t, false);
 }
@@ -360,7 +360,7 @@ DhtHumiditySensor::~DhtHumiditySensor()
 	// We don't delete the hardware interface object because the temperature channel may still be using it
 }
 
-TemperatureError DhtHumiditySensor::GetTemperature(float& t)
+TemperatureError DhtHumiditySensor::TryGetTemperature(float& t)
 {
 	return DhtSensorHardwareInterface::GetTemperatureOrHumidity(GetSensorChannel() - FirstDhtHumidityChannel, t, true);
 }

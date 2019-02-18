@@ -13,7 +13,7 @@
 #include "GCodes/GCodeBuffer.h"
 
 
-LinearDeltaKinematics::LinearDeltaKinematics() : Kinematics(KinematicsType::linearDelta, -1.0, 0.0, true)
+LinearDeltaKinematics::LinearDeltaKinematics() : Kinematics(KinematicsType::linearDelta, -1.0, 0.0, true), numTowers(UsualNumTowers)
 {
 	Init();
 }
@@ -26,17 +26,21 @@ const char *LinearDeltaKinematics::GetName(bool forStatusReport) const
 
 void LinearDeltaKinematics::Init()
 {
-	diagonal = DefaultDiagonal;
 	radius = DefaultDeltaRadius;
 	xTilt = yTilt = 0.0;
 	printRadius = DefaultPrintRadius;
 	homedHeight = DefaultDeltaHomedHeight;
     doneAutoCalibration = false;
 
-	for (size_t axis = 0; axis < DELTA_AXES; ++axis)
+	for (size_t axis = 0; axis < UsualNumTowers; ++axis)
 	{
 		angleCorrections[axis] = 0.0;
 		endstopAdjustments[axis] = 0.0;
+	}
+
+	for (size_t axis = 0; axis < MaxTowers; ++axis)
+	{
+		diagonals[axis] = DefaultDiagonal;
 		towerX[axis] = towerY[axis] = 0.0;
 	}
 
@@ -63,14 +67,38 @@ void LinearDeltaKinematics::Recalc()
 	coreFc = fsquare(towerX[DELTA_C_AXIS]) + fsquare(towerY[DELTA_C_AXIS]);
 	Q = (Xca * Yab - Xab * Yca) * 2;
 	Q2 = fsquare(Q);
-	D2 = fsquare(diagonal);
 
-	// Calculate the base carriage height when the printer is homed, i.e. the carriages are at the endstops less the corrections
-	const float tempHeight = diagonal;		// any sensible height will do here
-	float machinePos[DELTA_AXES];
-	ForwardTransform(tempHeight, tempHeight, tempHeight, machinePos);
-	homedCarriageHeight = homedHeight + tempHeight - machinePos[Z_AXIS];
+	// Calculate the base carriage heights when the printer is homed, i.e. the carriages are at the endstops, and the always-reachable height
+	alwaysReachableHeight = homedHeight;
+	for (size_t axis = 0; axis < numTowers; ++axis)
+	{
+		D2[axis] = fsquare(diagonals[axis]);
+		if (axis < UsualNumTowers)
+		{
+			homedCarriageHeights[axis] = homedHeight + sqrtf(D2[axis] - fsquare(radius)) + endstopAdjustments[axis];
+		}
+		else
+		{
+			homedCarriageHeights[axis] = homedHeight + sqrtf(D2[axis] - fsquare(towerX[axis]) - fsquare(towerY[axis]));
+		}
+		const float heightLimit = homedCarriageHeights[axis] - diagonals[axis];
+		if (heightLimit < alwaysReachableHeight)
+		{
+			alwaysReachableHeight = heightLimit;
+		}
+	}
+
 	printRadiusSquared = fsquare(printRadius);
+
+	if (reprap.Debug(moduleMove))
+	{
+		debugPrintf("HCH:");
+		for (size_t i = 0; i < numTowers; ++i)
+		{
+			debugPrintf(" %.2f", (double)homedCarriageHeights[i]);
+		}
+		debugPrintf("\n");
+	}
 }
 
 // Make the average of the endstop adjustments zero, without changing the individual homed carriage heights
@@ -81,15 +109,14 @@ void LinearDeltaKinematics::NormaliseEndstopAdjustments()
 	endstopAdjustments[DELTA_B_AXIS] -= eav;
 	endstopAdjustments[DELTA_C_AXIS] -= eav;
 	homedHeight += eav;
-	homedCarriageHeight += eav;				// no need for a full recalc, this is sufficient
 }
 
 // Calculate the motor position for a single tower from a Cartesian coordinate.
 float LinearDeltaKinematics::Transform(const float machinePos[], size_t axis) const
 {
-	if (axis < DELTA_AXES)
+	if (axis < numTowers)
 	{
-		return sqrtf(D2 - fsquare(machinePos[X_AXIS] - towerX[axis]) - fsquare(machinePos[Y_AXIS] - towerY[axis]))
+		return sqrtf(D2[axis] - fsquare(machinePos[X_AXIS] - towerX[axis]) - fsquare(machinePos[Y_AXIS] - towerY[axis]))
 			 + machinePos[Z_AXIS]
 			 + (machinePos[X_AXIS] * xTilt)
 			 + (machinePos[Y_AXIS] * yTilt);
@@ -101,7 +128,7 @@ float LinearDeltaKinematics::Transform(const float machinePos[], size_t axis) co
 }
 
 // Calculate the Cartesian coordinates from the motor coordinates
-void LinearDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float machinePos[DELTA_AXES]) const
+void LinearDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float machinePos[XYZ_AXES]) const
 {
 	const float Fa = coreFa + fsquare(Ha);
 	const float Fb = coreFb + fsquare(Hb);
@@ -117,7 +144,7 @@ void LinearDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float
 
 	const float A = U2 + R2 + Q2;
 	const float minusHalfB = S * U + P * R + Ha * Q2 + towerX[DELTA_A_AXIS] * U * Q - towerY[DELTA_A_AXIS] * R * Q;
-	const float C = fsquare(S + towerX[DELTA_A_AXIS] * Q) + fsquare(P - towerY[DELTA_A_AXIS] * Q) + (fsquare(Ha) - D2) * Q2;
+	const float C = fsquare(S + towerX[DELTA_A_AXIS] * Q) + fsquare(P - towerY[DELTA_A_AXIS] * Q) + (fsquare(Ha) - D2[DELTA_A_AXIS]) * Q2;
 
 	const float z = (minusHalfB - sqrtf(fsquare(minusHalfB) - A * C)) / A;
 	machinePos[X_AXIS] = (U * z - S) / Q;
@@ -129,7 +156,7 @@ void LinearDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float
 bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const
 {
 	bool ok = true;
-	for (size_t axis = 0; axis < min<size_t>(numVisibleAxes, DELTA_AXES); ++axis)
+	for (size_t axis = 0; axis < numTowers; ++axis)
 	{
 		const float pos = Transform(machinePos, axis);
 		if (isnan(pos) || isinf(pos))
@@ -143,7 +170,7 @@ bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], cons
 	}
 
 	// Transform any additional axes linearly
-	for (size_t axis = DELTA_AXES; axis < numVisibleAxes; ++axis)
+	for (size_t axis = numTowers; axis < numVisibleAxes; ++axis)
 	{
 		motorPos[axis] = lrintf(machinePos[axis] * stepsPerMm[axis]);
 	}
@@ -156,7 +183,7 @@ void LinearDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], cons
 	ForwardTransform(motorPos[DELTA_A_AXIS]/stepsPerMm[DELTA_A_AXIS], motorPos[DELTA_B_AXIS]/stepsPerMm[DELTA_B_AXIS], motorPos[DELTA_C_AXIS]/stepsPerMm[DELTA_C_AXIS], machinePos);
 
 	// Convert any additional axes linearly
-	for (size_t drive = DELTA_AXES; drive < numVisibleAxes; ++drive)
+	for (size_t drive = numTowers; drive < numVisibleAxes; ++drive)
 	{
 		machinePos[drive] = motorPos[drive]/stepsPerMm[drive];
 	}
@@ -169,43 +196,116 @@ bool LinearDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) co
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
-bool LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated) const
+bool LinearDeltaKinematics::LimitPosition(float finalCoords[], float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
 	const AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
+
+	// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
+	// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
 	if ((axesHomed & allAxes) == allAxes)
 	{
-		// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
-		// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
 		// Constrain the move to be within the build radius
-		const float diagonalSquared = fsquare(coords[X_AXIS]) + fsquare(coords[Y_AXIS]);
+		const float diagonalSquared = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);
 		if (diagonalSquared > printRadiusSquared)
 		{
 			const float factor = sqrtf(printRadiusSquared / diagonalSquared);
-			coords[X_AXIS] *= factor;
-			coords[Y_AXIS] *= factor;
+			finalCoords[X_AXIS] *= factor;
+			finalCoords[Y_AXIS] *= factor;
 			limited = true;
 		}
 
-		if (coords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
+		// Constrain the position to be withint the reachable height
+		if (initialCoords == nullptr)
 		{
-			coords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
-			limited = true;
-		}
-		else
-		{
-			// Determine the maximum reachable height at this radius, in the worst case when the head is on a radius to a tower
-			const float maxHeight = homedCarriageHeight - sqrtf(D2 - fsquare(radius - sqrtf(diagonalSquared)));
-			if (coords[Z_AXIS] > maxHeight)
+			// Asking to limit a single position
+			if (finalCoords[Z_AXIS] > alwaysReachableHeight)
 			{
-				coords[Z_AXIS] = maxHeight;
-				limited = true;
+				for (size_t tower = 0; tower < UsualNumTowers; ++tower)
+				{
+					const float carriageHeight = Transform(finalCoords, tower);
+					if (carriageHeight > homedCarriageHeights[tower])
+					{
+						finalCoords[Z_AXIS] -= (carriageHeight - homedCarriageHeights[tower]);
+						limited = true;
+					}
+				}
 			}
+
+		}
+		else if (finalCoords[Z_AXIS] > alwaysReachableHeight || initialCoords[Z_AXIS] > alwaysReachableHeight)
+		{
+			// Asking to limit all positions along a straight line
+			// Determine the maximum reachable height at this position and all intermediate positions
+			const float dx = finalCoords[X_AXIS] - initialCoords[X_AXIS],
+						dy = finalCoords[Y_AXIS] - initialCoords[Y_AXIS];
+			const float P = fsquare(dx) + fsquare(dy);
+			float dz = finalCoords[Z_AXIS] - initialCoords[Z_AXIS];
+			float Q = P + fsquare(dz);
+			if (Q != 0.0)			// if there is any XYZ movement
+			{
+				for (size_t tower = 0; tower < numTowers; ++tower)
+				{
+					bool again;
+					const float tx = towerX[tower] - initialCoords[X_AXIS],
+								ty = towerY[tower] - initialCoords[Y_AXIS];
+					do
+					{
+						again = false;
+
+						// Determine the coordinates of the closest point of approach to the tower
+						const float t = (dz * sqrtf(Q * (fsquare(diagonals[tower]) * P - fsquare(dx * ty - dy * tx))) + (dx * tx + dy * ty) * P);
+						if (t > 0.0)
+						{
+							float tempCoords[XYZ_AXES];
+							float PQ = P * Q;
+							if (t < PQ)
+							{
+								tempCoords[X_AXIS] = initialCoords[X_AXIS] + dx * (t/PQ);
+								tempCoords[Y_AXIS] = initialCoords[Y_AXIS] + dy * (t/PQ);
+								tempCoords[Z_AXIS] = initialCoords[Z_AXIS] + dz * (t/PQ);
+							}
+							else
+							{
+								tempCoords[X_AXIS] = finalCoords[X_AXIS];
+								tempCoords[Y_AXIS] = finalCoords[Y_AXIS];
+								tempCoords[Z_AXIS] = finalCoords[Z_AXIS];
+							}
+							const float carriageHeight = Transform(tempCoords, tower);
+							if (carriageHeight > homedCarriageHeights[tower])
+							{
+								float reductionNeeded = carriageHeight - homedCarriageHeights[tower];
+								if (t < PQ)
+								{
+									reductionNeeded *= PQ/t;
+								}
+								finalCoords[Z_AXIS] -= reductionNeeded + 0.5;		// over-correct to speed up convergence. 0.5mm is better than 0.1mm and as good as 1mm.
+								limited = true;
+
+								// Changing the end point Z coordinate will have moved the closest point of approach, so we need to iterate
+								again = true;
+								dz = finalCoords[Z_AXIS] - initialCoords[Z_AXIS];
+								Q = P + fsquare(dz);
+								if (reprap.Debug(moduleMove))
+								{
+									debugPrintf("Limit tower %u, t=%.2f\n", tower, (double)(t/PQ));
+								}
+							}
+						}
+					} while (again);
+				}
+			}
+		}
+
+		if (applyM208Limits && finalCoords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
+		{
+			finalCoords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
+			limited = true;
 		}
 	}
 
 	// Limit any additional axes according to the M208 limits
-	if (LimitPositionFromAxis(coords, Z_AXIS + 1, numVisibleAxes, axesHomed))
+	if (applyM208Limits && LimitPositionFromAxis(finalCoords, numTowers, numVisibleAxes, axesHomed))
 	{
 		limited = true;
 	}
@@ -246,13 +346,13 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 	//uint32_t startTime = reprap.GetPlatform()->GetInterruptClocks();
 
 	// Transform the probing points to motor endpoints and store them in a matrix, so that we can do multiple iterations using the same data
-	FixedMatrix<floatc_t, MaxCalibrationPoints, DELTA_AXES> probeMotorPositions;
+	FixedMatrix<floatc_t, MaxCalibrationPoints, UsualNumTowers> probeMotorPositions;
 	floatc_t corrections[MaxCalibrationPoints];
 	floatc_t initialSumOfSquares = 0.0;
 	for (size_t i = 0; i < numPoints; ++i)
 	{
 		corrections[i] = 0.0;
-		float machinePos[DELTA_AXES];
+		float machinePos[XYZ_AXES];
 		const floatc_t zp = reprap.GetMove().GetProbeCoordinates(i, machinePos[X_AXIS], machinePos[Y_AXIS], probePoints.PointWasCorrected(i));
 		machinePos[Z_AXIS] = 0.0;
 
@@ -317,8 +417,17 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			PrintMatrix("Normal matrix", normalMatrix, numFactors, numFactors + 1);
 		}
 
+		if (!normalMatrix.GaussJordan(numFactors, numFactors + 1))
+		{
+			reply.copy("Unable to calculate calibration parameters. Please choose different probe points.");
+			return true;
+		}
+
 		floatc_t solution[NumDeltaFactors];
-		normalMatrix.GaussJordan(solution, numFactors);
+		for (size_t i = 0; i < numFactors; ++i)
+		{
+			solution[i] = normalMatrix(i, numFactors);
+		}
 
 		if (reprap.Debug(moduleMove))
 		{
@@ -342,22 +451,22 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 		}
 
 		// Save the old homed carriage heights before we change the endstop corrections
-		float homedCarriageHeights[DELTA_AXES];
-		for (size_t drive = 0; drive < DELTA_AXES; ++drive)
+		float oldHomedCarriageHeights[UsualNumTowers];
+		for (size_t drive = 0; drive < UsualNumTowers; ++drive)
 		{
-			homedCarriageHeights[drive] = GetHomedCarriageHeight(drive);
+			oldHomedCarriageHeights[drive] = GetHomedCarriageHeight(drive);
 		}
 
 		Adjust(numFactors, solution);	// adjust the delta parameters
 
-		float heightAdjust[DELTA_AXES];
-		for (size_t drive = 0; drive < DELTA_AXES; ++drive)
+		float heightAdjust[UsualNumTowers];
+		for (size_t drive = 0; drive < UsualNumTowers; ++drive)
 		{
-			heightAdjust[drive] =  GetHomedCarriageHeight(drive) - homedCarriageHeights[drive];
+			heightAdjust[drive] =  GetHomedCarriageHeight(drive) - oldHomedCarriageHeights[drive];
 		}
 
 		// Adjust the motor endpoints to allow for the change to endstop adjustments
-		reprap.GetMove().AdjustMotorPositions(heightAdjust, DELTA_AXES);
+		reprap.GetMove().AdjustMotorPositions(heightAdjust, UsualNumTowers);
 
 		// Calculate the expected probe heights using the new parameters
 		{
@@ -365,11 +474,11 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			floatc_t sumOfSquares = 0.0;
 			for (size_t i = 0; i < numPoints; ++i)
 			{
-				for (size_t axis = 0; axis < DELTA_AXES; ++axis)
+				for (size_t axis = 0; axis < UsualNumTowers; ++axis)
 				{
 					probeMotorPositions(i, axis) += solution[axis];
 				}
-				float newPosition[DELTA_AXES];
+				float newPosition[XYZ_AXES];
 				ForwardTransform(probeMotorPositions(i, DELTA_A_AXIS), probeMotorPositions(i, DELTA_B_AXIS), probeMotorPositions(i, DELTA_C_AXIS), newPosition);
 				corrections[i] = newPosition[Z_AXIS];
 				expectedResiduals[i] = probePoints.GetZHeight(i) + newPosition[Z_AXIS];
@@ -413,7 +522,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 // Return the type of motion computation needed by an axis
 MotionType LinearDeltaKinematics::GetMotionType(size_t axis) const
 {
-	return (axis < DELTA_AXES) ? MotionType::segmentFreeDelta : MotionType::linear;
+	return (axis < numTowers) ? MotionType::segmentFreeDelta : MotionType::linear;
 }
 
 // Compute the derivative of height with respect to a parameter at the specified motor endpoints.
@@ -458,8 +567,11 @@ floatc_t LinearDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, 
 		break;
 
 	case 6:
-		hiParams.diagonal += perturb;
-		loParams.diagonal -= perturb;
+		for (size_t tower = 0; tower < UsualNumTowers; ++tower)
+		{
+			hiParams.diagonals[tower] += perturb;
+			loParams.diagonals[tower] -= perturb;
+		}
 		hiParams.Recalc();
 		loParams.Recalc();
 		break;
@@ -470,7 +582,7 @@ floatc_t LinearDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, 
 		break;
 	}
 
-	float newPos[DELTA_AXES];
+	float newPos[XYZ_AXES];
 	hiParams.ForwardTransform((deriv == 0) ? ha + perturb : ha, (deriv == 1) ? hb + perturb : hb, (deriv == 2) ? hc + perturb : hc, newPos);
 	if (deriv == 7)
 	{
@@ -499,8 +611,6 @@ floatc_t LinearDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, 
 //  Y tilt adjustment
 void LinearDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[])
 {
-	const float oldCarriageHeightA = GetHomedCarriageHeight(DELTA_A_AXIS);	// save for later
-
 	// Update endstop adjustments
 	endstopAdjustments[DELTA_A_AXIS] += (float)v[0];
 	endstopAdjustments[DELTA_B_AXIS] += (float)v[1];
@@ -518,7 +628,10 @@ void LinearDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[])
 
 			if (numFactors == 7 || numFactors == 9)
 			{
-				diagonal += (float)v[6];
+				for (size_t tower = 0; tower < UsualNumTowers; ++tower)
+				{
+					diagonals[tower] += (float)v[6];
+				}
 			}
 
 			if (numFactors == 8)
@@ -532,15 +645,9 @@ void LinearDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[])
 				yTilt += (float)v[8]/printRadius;
 			}
 		}
-
-		Recalc();
 	}
 
-	// Adjusting the diagonal and the tower positions affects the homed carriage height.
-	// We need to adjust homedHeight to allow for this, to get the change that was requested in the endstop corrections.
-	const float heightError = GetHomedCarriageHeight(DELTA_A_AXIS) - oldCarriageHeightA - (float)v[0];
-	homedHeight -= heightError;
-	homedCarriageHeight -= heightError;
+	Recalc();
 
 	// Note: if we adjusted the X and Y tilts, and there are any endstop adjustments, then the homed position won't be exactly in the centre
 	// and changing the tilt will therefore affect the homed height. We ignore this for now. If it is ever significant, a second autocalibration
@@ -550,9 +657,16 @@ void LinearDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[])
 // Print all the parameters for debugging
 void LinearDeltaKinematics::PrintParameters(const StringRef& reply) const
 {
-	reply.printf("Stops X%.3f Y%.3f Z%.3f height %.3f diagonal %.3f radius %.3f xcorr %.2f ycorr %.2f zcorr %.2f xtilt %.3f%% ytilt %.3f%%\n",
-		(double)endstopAdjustments[DELTA_A_AXIS], (double)endstopAdjustments[DELTA_B_AXIS], (double)endstopAdjustments[DELTA_C_AXIS], (double)homedHeight, (double)diagonal, (double)radius,
-		(double)angleCorrections[DELTA_A_AXIS], (double)angleCorrections[DELTA_B_AXIS], (double)angleCorrections[DELTA_C_AXIS], (double)(xTilt * 100.0), (double)(yTilt * 100.0));
+	reply.printf("Stops X%.3f Y%.3f Z%.3f height %.3f diagonals",
+		(double)endstopAdjustments[DELTA_A_AXIS], (double)endstopAdjustments[DELTA_B_AXIS], (double)endstopAdjustments[DELTA_C_AXIS], (double)homedHeight);
+	for (size_t tower = 0; tower < numTowers; ++tower)
+	{
+		reply.catf("%c%.3f", (tower == 0) ? ' ' : ':', (double)diagonals[tower]);
+	}
+	reply.catf(" radius %.3f xcorr %.2f ycorr %.2f zcorr %.2f xtilt %.3f%% ytilt %.3f%%\n",
+		(double)radius,
+		(double)angleCorrections[DELTA_A_AXIS], (double)angleCorrections[DELTA_B_AXIS], (double)angleCorrections[DELTA_C_AXIS],
+		(double)(xTilt * 100.0), (double)(yTilt * 100.0));
 }
 
 // Write the parameters that are set by auto calibration to a file, returning true if success
@@ -562,8 +676,15 @@ bool LinearDeltaKinematics::WriteCalibrationParameters(FileStore *f) const
 	if (ok)
 	{
 		String<ScratchStringLength> scratchString;
-		scratchString.printf("M665 L%.3f R%.3f H%.3f B%.1f X%.3f Y%.3f Z%.3f\n",
-			(double)diagonal, (double)radius, (double)homedHeight, (double)printRadius, (double)angleCorrections[DELTA_A_AXIS], (double)angleCorrections[DELTA_B_AXIS], (double)angleCorrections[DELTA_C_AXIS]);
+		scratchString.copy("M665 ");
+		for (size_t tower = 0; tower < numTowers; ++tower)
+		{
+			scratchString.catf("%c%.3f", (tower == 0) ? 'L' : ':', (double)diagonals[tower]);
+		}
+
+		scratchString.catf(" R%.3f H%.3f B%.1f X%.3f Y%.3f Z%.3f\n",
+			(double)radius, (double)homedHeight, (double)printRadius,
+			(double)angleCorrections[DELTA_A_AXIS], (double)angleCorrections[DELTA_B_AXIS], (double)angleCorrections[DELTA_C_AXIS]);
 		ok = f->Write(scratchString.c_str());
 		if (ok)
 		{
@@ -596,7 +717,18 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 	case 665:
 		{
 			bool seen = false;
-			gb.TryGetFValue('L', diagonal, seen);
+			if (gb.Seen('L'))
+			{
+				seen = true;
+				size_t numValues = MaxAxes;
+				gb.GetFloatArray(diagonals, numValues, false);
+				while (numValues < 3)
+				{
+					diagonals[numValues++] = diagonals[0];
+				}
+				numTowers = numValues;
+			}
+
 			gb.TryGetFValue('R', radius, seen);
 
 			if (gb.Seen('B'))
@@ -628,9 +760,14 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			}
 			else
 			{
-				reply.printf("Diagonal %.3f, delta radius %.3f, homed height %.3f, bed radius %.1f"
+				reply.copy("Diagonals");
+				for (size_t tower = 0; tower < numTowers; ++tower)
+				{
+					reply.catf("%c%.3f", (tower == 0) ? ' ' : ':', (double)diagonals[tower]);
+				}
+				reply.catf(", delta radius %.3f, homed height %.3f, bed radius %.1f"
 							 ", X %.3f" DEGREE_SYMBOL ", Y %.3f" DEGREE_SYMBOL ", Z %.3f" DEGREE_SYMBOL,
-							 (double)diagonal, (double)radius,
+							 (double)radius,
 							 (double)homedHeight, (double)printRadius,
 							 (double)angleCorrections[DELTA_A_AXIS], (double)angleCorrections[DELTA_B_AXIS], (double)angleCorrections[DELTA_C_AXIS]);
 			}
@@ -655,13 +792,52 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 				seen = true;
 			}
 
-			if (!seen)
+			if (seen)
+			{
+				Recalc();
+			}
+			else
 			{
 				reply.printf("Endstop adjustments X%.2f Y%.2f Z%.2f, tilt X%.2f%% Y%.2f%%",
 					(double)endstopAdjustments[X_AXIS], (double)endstopAdjustments[Y_AXIS], (double)endstopAdjustments[Z_AXIS],
 					(double)(xTilt * 100.0), (double)(yTilt * 100.0));
 			}
 			return seen;
+		}
+
+	case 669:
+		{
+			// X and Y give the X and Y coordinates of the additional towers beyond the first three
+			// The correct number of L parameters must have been given in the M665 command first
+			size_t numX = 0, numY = 0;
+			if (gb.Seen('X'))
+			{
+				numX = MaxTowers - UsualNumTowers;
+				gb.GetFloatArray(towerX + UsualNumTowers, numX, false);
+				if (numX != numTowers - UsualNumTowers)
+				{
+					reply.copy("Wrong number of X values");
+					error = true;
+					return true;
+				}
+			}
+			if (gb.Seen('Y'))
+			{
+				numY = MaxTowers - UsualNumTowers;
+				gb.GetFloatArray(towerY + UsualNumTowers, numY, false);
+				if (numY != numTowers - UsualNumTowers)
+				{
+					reply.copy("Wrong number of Y values");
+					error = true;
+					return true;
+				}
+			}
+			if (numX != 0 || numY != 0)
+			{
+				Recalc();				// recalculate the homed carriage heights
+				return true;
+			}
+			return Kinematics::Configure(mCode, gb, reply, error);
 		}
 
 	default:
@@ -698,7 +874,7 @@ AxesBitmap LinearDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 AxesBitmap LinearDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const
 {
 	// If homing X, Y or Z we must home all the towers
-	if ((toBeHomed & LowestNBits<AxesBitmap>(DELTA_AXES)) != 0)
+	if ((toBeHomed & LowestNBits<AxesBitmap>(XYZ_AXES)) != 0)
 	{
 		filename.copy("homedelta.g");
 		return 0;
@@ -715,15 +891,14 @@ bool LinearDeltaKinematics::QueryTerminateHomingMove(size_t axis) const
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
-// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
+// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
 void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
 {
-	if (axis < DELTA_AXES)
+	if (axis < numTowers)
 	{
 		if (highEnd)
 		{
-			const float hitPoint = GetHomedCarriageHeight(axis);
-			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+			dda.SetDriveCoordinate(lrintf(homedCarriageHeights[axis] * stepsPerMm[axis]), axis);
 		}
 	}
 	else
@@ -736,7 +911,7 @@ void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.
 // The speeds in Cartesian space have already been limited.
-void LinearDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const
+void LinearDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const
 {
 	// Limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration
 	const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));

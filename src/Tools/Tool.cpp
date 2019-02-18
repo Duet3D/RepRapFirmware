@@ -34,7 +34,7 @@
 Tool * Tool::freelist = nullptr;
 
 // Create a new tool and return a pointer to it. If an error occurs, put an error message in 'reply' and return nullptr.
-/*static*/ Tool *Tool::Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, const StringRef& reply)
+/*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *name, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, const StringRef& reply)
 {
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
@@ -97,8 +97,9 @@ Tool * Tool::freelist = nullptr;
 	const size_t nameLength = strlen(name);
 	if (nameLength != 0)
 	{
-		t->name = new char[nameLength + 1];
-		SafeStrncpy(t->name, name, nameLength + 1);
+		char *toolName = new char[nameLength + 1];
+		SafeStrncpy(toolName, name, nameLength + 1);
+		t->name = toolName;
 	}
 	else
 	{
@@ -106,10 +107,10 @@ Tool * Tool::freelist = nullptr;
 	}
 
 	t->next = nullptr;
-	t->myNumber = toolNumber;
+	t->myNumber = (uint16_t)toolNumber;
 	t->state = ToolState::off;
-	t->driveCount = dCount;
-	t->heaterCount = hCount;
+	t->driveCount = (uint8_t)dCount;
+	t->heaterCount = (uint8_t)hCount;
 	t->xMapping = xMap;
 	t->yMapping = yMap;
 	t->fanMapping = fanMap;
@@ -160,7 +161,7 @@ Tool * Tool::freelist = nullptr;
 
 void Tool::Print(const StringRef& reply) const
 {
-	reply.printf("Tool %d - ", myNumber);
+	reply.printf("Tool %u - ", myNumber);
 	if (name != nullptr)
 	{
 		reply.catf("name: %s; ", name);
@@ -501,6 +502,22 @@ void Tool::SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp)
 				}
 			}
 		}
+	}
+}
+
+void Tool::IterateExtruders(std::function<void(unsigned int)> f) const
+{
+	for (size_t i = 0; i < driveCount; ++i)
+	{
+		f(drives[i]);
+	}
+}
+
+void Tool::IterateHeaters(std::function<void(int)> f) const
+{
+	for (size_t i = 0; i < heaterCount; ++i)
+	{
+		f(heaters[i]);
 	}
 }
 

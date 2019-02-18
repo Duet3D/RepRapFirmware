@@ -42,6 +42,7 @@ const EndstopChecks ZProbeActive = 1 << 31;				// must be distinct from 1 << (an
 const EndstopChecks HomeAxes = 1 << 30;					// must be distinct from 1 << (any drive number)
 const EndstopChecks LogProbeChanges = 1 << 29;			// must be distinct from 1 << (any drive number)
 const EndstopChecks UseSpecialEndstop = 1 << 28;		// must be distinct from 1 << (any drive number)
+const EndstopChecks ActiveLowEndstop = 1 << 27;			// must be distinct from 1 << (any drive number)
 
 typedef uint32_t TriggerInputsBitmap;					// Bitmap of input pins that a single trigger number responds to
 typedef uint32_t TriggerNumbersBitmap;					// Bitmap of trigger numbers
@@ -223,7 +224,7 @@ public:
 #endif
 
 	float GetMappedFanSpeed() const { return lastDefaultFanSpeed; }		// Get the mapped fan speed
-	void SetMappedFanSpeed(float f);									// Set the mapped fan speed
+	void SetMappedFanSpeed(float f);									// Set the speeds of fans mapped for the current tool
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);	// Handle G-Code replies
 	void EmergencyStop();												// Cancel everything
 	bool GetLastPrintingHeight(float& height) const;					// Get the height in user coordinates of the last printing move
@@ -350,7 +351,7 @@ private:
 	bool DoEmergencyPause();													// Do an emergency pause following loss of power or a motor stall
 #endif
 
-	void SetMappedFanSpeed();													// Set the speeds of fans mapped for the current tool
+	bool IsMappedFan(unsigned int fanNumber);									// Return true if this fan number is currently being used as a print cooling fan
 	void SaveFanSpeeds();														// Save the speeds of all fans
 
 	GCodeResult SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply);		// Handle M558
@@ -389,6 +390,7 @@ private:
 	void NewMoveAvailable();											// Flag that a new move is available
 
 	void SetMoveBufferDefaults();										// Set up default values in the move buffer
+	void ChangeExtrusionFactor(unsigned int extruder, float factor);	// Change a live extrusion factor
 
 #if SUPPORT_12864_LCD
 	int GetHeaterNumber(unsigned int itemNumber) const;

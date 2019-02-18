@@ -24,7 +24,7 @@ void Fan::Init(Pin p_pin, LogicalPin lp, bool hwInverted, PwmFrequency p_freq)
 	hardwareInverted = hwInverted;
 	inverted = blipping = false;
 	heatersMonitored = 0;
-	triggerTemperatures[0] = triggerTemperatures[1] = HOT_END_FAN_TEMPERATURE;
+	triggerTemperatures[0] = triggerTemperatures[1] = HotEndFanTemperature;
 	lastPwm = -1.0;				// force a refresh
 	Refresh();
 }
@@ -277,7 +277,7 @@ void Fan::Refresh()
 					const size_t heaterHumber = (h >= NumHeaters) ? (h - NumHeaters) + FirstVirtualHeater : h;
 					TemperatureError err;
 					const float ht = reprap.GetHeat().GetTemperature(heaterHumber, err);
-					if (err != TemperatureError::success || ht < BAD_LOW_TEMPERATURE || ht >= triggerTemperatures[1])
+					if (err != TemperatureError::success || ht < BadLowTemperature || ht >= triggerTemperatures[1])
 					{
 						reqVal = max<float>(reqVal, (bangBangMode) ? max<float>(0.5, val) : 1.0);
 					}
@@ -305,7 +305,7 @@ void Fan::Refresh()
 
 	if (reqVal > 0.0)
 	{
-		reqVal = constrain<float>(reqVal, minVal, maxVal);
+		reqVal = max<float>(reqVal * maxVal, minVal);		// scale the requested PWM by the maximum, enforce the minimum
 		if (lastVal == 0.0)
 		{
 			// We are turning this fan on

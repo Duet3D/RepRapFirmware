@@ -24,7 +24,9 @@ public:
 	Thermistor(unsigned int channel, bool p_isPT1000);						// create an instance with default values
 	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override; // configure the sensor from M305 parameters
 	void Init() override;
-	TemperatureError GetTemperature(float& t) override;
+
+protected:
+	TemperatureError TryGetTemperature(float& t) override;
 
 private:
 	// For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf

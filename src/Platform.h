@@ -204,6 +204,7 @@ enum class DiagnosticTestType : int
 	TimeSquareRoot = 102,			// do a timing test on the square root function
 	TimeSinCos = 103,				// do a timing test on the trig functions
 	TimeSDWrite = 104,				// do a write timing test on the SD card
+	PrintObjectSizes = 105,			// print the sizes of various objects
 
 	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
 	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
@@ -288,8 +289,14 @@ enum class ErrorCode : uint32_t
 
 struct AxisDriversConfig
 {
-	size_t numDrivers;								// Number of drivers assigned to each axis
+	uint8_t numDrivers;								// Number of drivers assigned to each axis
 	uint8_t driverNumbers[MaxDriversPerAxis];		// The driver numbers assigned - only the first numDrivers are meaningful
+};
+
+struct AxisEndstopConfig
+{
+	uint8_t numEndstops;							// Number of endstop inputs assigned to each axis
+	uint8_t endstopNumbers[MaxDriversPerAxis];		// The endstop numbers assigned - only the first numEndstops are meaningful
 };
 
 // The main class that defines the RepRap machine for the benefit of the other classes
@@ -318,7 +325,7 @@ public:
 	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d);
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
-	void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr);
+	void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr) __attribute((noreturn));
 	bool AtxPower() const;
 	void AtxPowerOn();
 	void AtxPowerOff(bool defer);
@@ -416,13 +423,15 @@ public:
 	float DriveStepsPerUnit(size_t axisOrExtruder) const;
 	const float *GetDriveStepsPerUnit() const
 		{ return driveStepsPerUnit; }
-	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value);
+	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t microstepping);
 	float Acceleration(size_t axisOrExtruder) const;
 	const float* Accelerations() const;
 	void SetAcceleration(size_t axisOrExtruder, float value);
 	float MaxFeedrate(size_t axisOrExtruder) const;
-	const float* MaxFeedrates() const;
+	const float* MaxFeedrates() const { return maxFeedrates; }
 	void SetMaxFeedrate(size_t axisOrExtruder, float value);
+	float MinMovementSpeed() const { return minimumMovementSpeed; }
+	void SetMinMovementSpeed(float value) { minimumMovementSpeed = max<float>(value, 0.01); }
 	float GetInstantDv(size_t axis) const;
 	void SetInstantDv(size_t axis, float value);
 	EndStopHit Stopped(size_t axisOrExtruder) const;
@@ -436,19 +445,31 @@ public:
 	void SetPressureAdvance(size_t extruder, float factor);
 
 	void SetEndStopConfiguration(size_t axis, EndStopPosition endstopPos, EndStopInputType inputType)
-	pre(axis < MaxAxes);
+		pre(axis < MaxAxes);
 
 	void GetEndStopConfiguration(size_t axis, EndStopPosition& endstopPos, EndStopInputType& inputType) const
-	pre(axis < MaxAxes);
+		pre(axis < MaxAxes);
+
+	const AxisEndstopConfig& GetAxisEndstopConfig(size_t axis) const
+		pre(axis < MaxAxes)
+		{ return axisEndstops[axis]; }
+	void SetAxisEndstopConfig(size_t axis, size_t numValues, const uint32_t inputNumbers[])
+		pre(axis < MaxAxes);
 
 	uint32_t GetAllEndstopStates() const;
-	void SetAxisDriversConfig(size_t axis, const AxisDriversConfig& config);
+
 	const AxisDriversConfig& GetAxisDriversConfig(size_t axis) const
+		pre(axis < MaxAxes)
 		{ return axisDrivers[axis]; }
-	void SetExtruderDriver(size_t extruder, uint8_t driver);
+	void SetAxisDriversConfig(size_t axis, size_t numValues, const uint32_t driverNumbers[])
+		pre(axis < MaxAxes);
 	uint8_t GetExtruderDriver(size_t extruder) const
+		pre(extruder < MaxExtruders)
 		{ return extruderDrivers[extruder]; }
+	void SetExtruderDriver(size_t extruder, uint8_t driver)
+		pre(extruder < MaxExtruders);
 	uint32_t GetDriversBitmap(size_t axisOrExtruder) const	// get the bitmap of driver step bits for this axis or extruder
+		pre(axisOrExtruder < 2 * MaxTotalDrivers)
 		{ return driveDriverBits[axisOrExtruder]; }
 	static void StepDriversLow();							// set all step pins low
 	static void StepDriversHigh(uint32_t driverMap);		// set the specified step pins high
@@ -465,7 +486,7 @@ public:
 
 	// Z probe
 	void SetZProbeDefaults();
-	float ZProbeStopHeight();
+	float GetZProbeStopHeight() const;
 	float GetZProbeDiveHeight() const;
 	float GetZProbeStartingHeight();
 	float GetZProbeTravelSpeed() const;
@@ -484,7 +505,7 @@ public:
 	void SetZProbeModState(bool b) const;
 
 	// Heat and temperature
-	float GetZProbeTemperature();							// Get our best estimate of the Z probe temperature
+	float GetZProbeTemperature() const;						// Get our best estimate of the Z probe temperature
 
 	volatile ThermistorAveragingFilter& GetAdcFilter(size_t channel)
 	pre(channel < ARRAY_SIZE(adcFilters))
@@ -495,9 +516,6 @@ public:
 	void SetHeater(size_t heater, float power, PwmFrequency freq = 0)	// power is a fraction in [0,1]
 	pre(heater < Heaters);
 
-	uint32_t HeatSampleInterval() const;
-	void SetHeatSampleTime(float st);
-	float GetHeatSampleTime() const;
 	void UpdateConfiguredHeaters();
 
 	// Fans
@@ -721,6 +739,7 @@ private:
 	int8_t enableValues[MaxTotalDrivers];
 	Pin endStopPins[NumEndstops];
 	float maxFeedrates[MaxTotalDrivers];
+	float minimumMovementSpeed;
 	float accelerations[MaxTotalDrivers];
 	float driveStepsPerUnit[MaxTotalDrivers];
 	float instantDvs[MaxTotalDrivers];
@@ -731,6 +750,7 @@ private:
 	float motorCurrents[MaxTotalDrivers];				// the normal motor current for each stepper driver
 	float motorCurrentFraction[MaxTotalDrivers];		// the percentages of normal motor current that each driver is set to
 	AxisDriversConfig axisDrivers[MaxAxes];				// the driver numbers assigned to each axis
+	AxisEndstopConfig axisEndstops[MaxAxes];			// the endstop input numbers assigned to each axis
 	uint8_t extruderDrivers[MaxExtruders];				// the driver number assigned to each extruder
 	uint32_t driveDriverBits[2 * MaxTotalDrivers];		// the bitmap of driver port bits for each axis or extruder, followed by the raw versions
 	uint32_t slowDriverStepTimingClocks[4];				// minimum step high, step low, dir setup and dir hold timing for slow drivers
@@ -799,7 +819,6 @@ private:
 
 	// Heaters
 	uint32_t configuredHeaters;										// bitmask of all real heaters in use
-	uint32_t heatSampleTicks;
 
 	// Fans
 	Fan fans[NUM_FANS];
@@ -961,11 +980,6 @@ inline float Platform::DriveStepsPerUnit(size_t drive) const
 	return driveStepsPerUnit[drive];
 }
 
-inline void Platform::SetDriveStepsPerUnit(size_t drive, float value)
-{
-	driveStepsPerUnit[drive] = max<float>(value, 1.0);	// don't allow zero or negative
-}
-
 inline float Platform::Acceleration(size_t drive) const
 {
 	return accelerations[drive];
@@ -984,11 +998,6 @@ inline void Platform::SetAcceleration(size_t drive, float value)
 inline float Platform::MaxFeedrate(size_t drive) const
 {
 	return maxFeedrates[drive];
-}
-
-inline const float* Platform::MaxFeedrates() const
-{
-	return maxFeedrates;
 }
 
 inline void Platform::SetMaxFeedrate(size_t drive, float value)
@@ -1091,23 +1100,6 @@ inline void Platform::ExtrudeOff()
 //********************************************************************************************************
 
 // Drive the RepRap machine - Heat and temperature
-
-inline uint32_t Platform::HeatSampleInterval() const
-{
-	return heatSampleTicks;
-}
-
-inline float Platform::GetHeatSampleTime() const
-{
-	return (float)heatSampleTicks/1000.0;
-}
-inline void Platform::SetHeatSampleTime(float st)
-{
-	if (st > 0)
-	{
-		heatSampleTicks = (uint32_t)(st * 1000.0);
-	}
-}
 
 inline IPAddress Platform::GetIPAddress() const
 {

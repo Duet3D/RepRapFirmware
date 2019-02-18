@@ -8,26 +8,26 @@
 #include "Pins.h"
 #include "Tasks.h"
 
-const uint32_t SpiClockFrequency = 2000000;			// 2.0MHz (minimum clock cycle time for ST7920 is 400ns @ Vdd=4.5V, min. clock width 200ns high and 20ns low)
+// The LCD SPI clock frequency is now defined in the Pins.h file for the configuration being built
 
 // LCD basic instructions. These all take 72us to execute except LcdDisplayClear, which takes 1.6ms
-const uint8_t LcdDisplayClear = 0x01;
-const uint8_t LcdHome = 0x02;
-const uint8_t LcdEntryModeSet = 0x06;				// move cursor right and increment address when writing data
-const uint8_t LcdDisplayOff = 0x08;
-const uint8_t LcdDisplayOn = 0x0C;					// add 0x02 for cursor on and/or 0x01 for cursor blink on
-const uint8_t LcdFunctionSetBasicAlpha = 0x20;
-const uint8_t LcdFunctionSetBasicGraphic = 0x22;
-const uint8_t LcdFunctionSetExtendedAlpha = 0x24;
-const uint8_t LcdFunctionSetExtendedGraphic = 0x26;
-const uint8_t LcdSetDdramAddress = 0x80;			// add the address we want to set
+constexpr uint8_t LcdDisplayClear = 0x01;
+constexpr uint8_t LcdHome = 0x02;
+constexpr uint8_t LcdEntryModeSet = 0x06;				// move cursor right and increment address when writing data
+constexpr uint8_t LcdDisplayOff = 0x08;
+constexpr uint8_t LcdDisplayOn = 0x0C;					// add 0x02 for cursor on and/or 0x01 for cursor blink on
+constexpr uint8_t LcdFunctionSetBasicAlpha = 0x20;
+constexpr uint8_t LcdFunctionSetBasicGraphic = 0x22;
+constexpr uint8_t LcdFunctionSetExtendedAlpha = 0x24;
+constexpr uint8_t LcdFunctionSetExtendedGraphic = 0x26;
+constexpr uint8_t LcdSetDdramAddress = 0x80;			// add the address we want to set
 
 // LCD extended instructions
-const uint8_t LcdSetGdramAddress = 0x80;
+constexpr uint8_t LcdSetGdramAddress = 0x80;
 
-const unsigned int LcdCommandDelayMicros = 72 - 8; // 72us required, less 7us time to send the command @ 2.0MHz
-const unsigned int LcdDataDelayMicros = 4;			// delay between sending data bytes
-const unsigned int LcdDisplayClearDelayMillis = 3;	// 1.6ms should be enough
+constexpr unsigned int LcdCommandDelayMicros = 72 - 8;	// 72us required, less 7us time to send the command @ 2.0MHz
+constexpr unsigned int LcdDataDelayMicros = 4;			// delay between sending data bytes
+constexpr unsigned int LcdDisplayClearDelayMillis = 3;	// 1.6ms should be enough
 
 inline void Lcd7920::CommandDelay()
 {
@@ -45,7 +45,16 @@ Lcd7920::Lcd7920(Pin csPin, const LcdFont * const fnts[], size_t nFonts)
 	device.csPin = csPin;
 	device.csPolarity = true;						// active high chip select
 	device.spiMode = 0;
-	device.clockFrequency = SpiClockFrequency;
+	device.clockFrequency = LcdSpiClockFrequency;
+#if __LPC17xx__
+    device.sspChannel = LcdSpiChannel;
+#endif
+}
+
+// Set the SPI clock frequency
+void Lcd7920::SetSpiClockFrequency(uint32_t freq)
+{
+	device.clockFrequency = freq;
 }
 
 void Lcd7920::Init()
@@ -64,11 +73,13 @@ void Lcd7920::Init()
 		delayMicroseconds(1);
 
 		sendLcdCommand(LcdFunctionSetBasicAlpha);
-		delay(1);
+		delay(2);
 		sendLcdCommand(LcdFunctionSetBasicAlpha);
 		CommandDelay();
 		sendLcdCommand(LcdEntryModeSet);
 		CommandDelay();
+		sendLcdCommand(LcdDisplayClear);					// need this on some displays to ensure that the alpha RAM is clear (M3D Kanji problem)
+		delay(LcdDisplayClearDelayMillis);
 		sendLcdCommand(LcdFunctionSetExtendedGraphic);
 		CommandDelay();
 

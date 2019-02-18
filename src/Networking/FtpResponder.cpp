@@ -6,15 +6,17 @@
  */
 
 #include "FtpResponder.h"
+
+#if SUPPORT_FTP
+
 #include "Socket.h"
 #include "Network.h"
 #include "NetworkInterface.h"
 #include "Platform.h"
 
-FtpResponder::FtpResponder(NetworkResponder *n) : NetworkResponder(n), dataSocket(nullptr),
-	passivePort(0),	passivePortOpenTime(0), dataBuf(nullptr)
+FtpResponder::FtpResponder(NetworkResponder *n) : UploadingNetworkResponder(n), dataSocket(nullptr),
+	passivePort(0),	passivePortOpenTime(0), dataBuf(nullptr), haveFileToMove(false)
 {
-	fileToMove.Clear();
 }
 
 // Ask the responder to accept this connection, returns true if it did
@@ -446,6 +448,9 @@ void FtpResponder::ProcessLine()
 	switch (responderState)
 	{
 	case ResponderState::authenticating:
+		haveFileToMove = false;
+		filenameBeingProcessed.Clear();
+
 		// don't check the user name
 		if (StringStartsWith(clientMessage, "USER"))
 		{
@@ -458,7 +463,7 @@ void FtpResponder::ProcessLine()
 			const char *password = GetParameter("PASS");
 			if (reprap.NoPasswordSet() || reprap.CheckPassword(password))
 			{
-				strcpy(currentDirectory, "/");
+				currentDirectory.copy("/");
 
 				outBuf->copy("230 Login successful.\r\n");
 				Commit(ResponderState::reading);
@@ -502,7 +507,7 @@ void FtpResponder::ProcessLine()
 		// get current dir
 		else if (StringEqualsIgnoreCase(clientMessage, "PWD"))
 		{
-			outBuf->printf("257 \"%s\"\r\n", currentDirectory);
+			outBuf->printf("257 \"%s\"\r\n", currentDirectory.c_str());
 			Commit(ResponderState::reading);
 		}
 		// set current dir
@@ -567,7 +572,7 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "DELE"))
 		{
 			const char *filename = GetParameter("DELE");
-			if (GetPlatform().GetMassStorage()->Delete(currentDirectory, filename))
+			if (GetPlatform().GetMassStorage()->Delete(currentDirectory.c_str(), filename))
 			{
 				outBuf->copy("250 Delete operation successful.\r\n");
 			}
@@ -581,7 +586,7 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "RMD"))
 		{
 			const char *filename = GetParameter("RMD");
-			if (GetPlatform().GetMassStorage()->Delete(currentDirectory, filename))
+			if (GetPlatform().GetMassStorage()->Delete(currentDirectory.c_str(), filename))
 			{
 				outBuf->copy("250 Remove directory operation successful.\r\n");
 			}
@@ -596,7 +601,7 @@ void FtpResponder::ProcessLine()
 		{
 			const char *filename = GetParameter("MKD");
 			String<MaxFilenameLength> location;
-			MassStorage::CombineName(location.GetRef(), currentDirectory, filename);
+			MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename);
 
 			if (GetPlatform().GetMassStorage()->MakeDirectory(location.c_str()))
 			{
@@ -612,10 +617,11 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "RNFR"))
 		{
 			const char *filename = GetParameter("RNFR");
-			MassStorage::CombineName(fileToMove.GetRef(), currentDirectory, filename);
+			MassStorage::CombineName(filenameBeingProcessed.GetRef(), currentDirectory.c_str(), filename);
 
-			if (GetPlatform().GetMassStorage()->FileExists(fileToMove.c_str()))
+			if (GetPlatform().GetMassStorage()->FileExists(filenameBeingProcessed.c_str()))
 			{
+				haveFileToMove = true;
 				outBuf->copy("350 Ready to RNTO.\r\n");
 			}
 			else
@@ -628,9 +634,9 @@ void FtpResponder::ProcessLine()
 		{
 			const char *filename = GetParameter("RNTO");
 			String<MaxFilenameLength> location;
-			MassStorage::CombineName(location.GetRef(), currentDirectory, filename);
+			MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename);
 
-			if (GetPlatform().GetMassStorage()->Rename(fileToMove.c_str(), location.c_str()))
+			if (haveFileToMove && GetPlatform().GetMassStorage()->Rename(filenameBeingProcessed.c_str(), location.c_str()))
 			{
 				outBuf->copy("250 Rename successful.\r\n");
 			}
@@ -638,6 +644,7 @@ void FtpResponder::ProcessLine()
 			{
 				outBuf->copy("500 Could not rename file or directory\r\n");
 			}
+			haveFileToMove = false;
 			Commit(ResponderState::reading);
 		}
 		// no op
@@ -649,6 +656,8 @@ void FtpResponder::ProcessLine()
 		// end connection
 		else if (StringEqualsIgnoreCase(clientMessage, "QUIT"))
 		{
+			haveFileToMove = false;
+			filenameBeingProcessed.Clear();
 			outBuf->copy("221 Goodbye.\r\n");
 			Commit();
 		}
@@ -671,7 +680,7 @@ void FtpResponder::ProcessLine()
 			// build directory listing, dataBuf is sent later in the Spin loop
 			MassStorage * const massStorage = GetPlatform().GetMassStorage();
 			FileInfo fileInfo;
-			if (massStorage->FindFirst(currentDirectory, fileInfo))
+			if (massStorage->FindFirst(currentDirectory.c_str(), fileInfo))
 			{
 				do {
 					// Example for a typical UNIX-like file list:
@@ -705,8 +714,12 @@ void FtpResponder::ProcessLine()
 		// upload a file
 		else if (StringStartsWith(clientMessage, "STOR"))
 		{
-			const char *filename = GetParameter("STOR");
-			FileStore *file = GetPlatform().OpenFile(currentDirectory, filename, OpenMode::write);
+			// Variable filenameBeingProcessed is used for both uploading and for renaming files, so clear it here and clear haveFileToMove
+			haveFileToMove = false;
+			filenameBeingProcessed.Clear();
+
+			const char * const filename = GetParameter("STOR");
+			FileStore * const file = GetPlatform().OpenFile(currentDirectory.c_str(), filename, OpenMode::write);
 			if (file != nullptr)
 			{
 				StartUpload(file, filename);
@@ -723,8 +736,8 @@ void FtpResponder::ProcessLine()
 		// download a file
 		else if (StringStartsWith(clientMessage, "RETR"))
 		{
-			const char *filename = GetParameter("RETR");
-			fileBeingSent = GetPlatform().OpenFile(currentDirectory, filename, OpenMode::read);
+			const char * const filename = GetParameter("RETR");
+			fileBeingSent = GetPlatform().OpenFile(currentDirectory.c_str(), filename, OpenMode::read);
 			if (fileBeingSent != nullptr)
 			{
 				outBuf->printf("150 Opening data connection for %s (%lu bytes).\r\n", filename, fileBeingSent->Length());
@@ -814,12 +827,12 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 		}
 		else if (StringEqualsIgnoreCase(newDirectory, "."))
 		{
-			combinedPath.copy(currentDirectory);
+			combinedPath.copy(currentDirectory.c_str());
 		}
 		else if (StringEqualsIgnoreCase(newDirectory, ".."))	// Go up
 		{
 			// Check if we're already at the root directory
-			if (StringEqualsIgnoreCase(currentDirectory, "/"))
+			if (StringEqualsIgnoreCase(currentDirectory.c_str(), "/"))
 			{
 				outBuf->copy("550 Failed to change directory.\r\n");
 				Commit(responderState);
@@ -827,7 +840,7 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 			}
 
 			// No - find the parent directory
-			combinedPath.copy(currentDirectory);
+			combinedPath.copy(currentDirectory.c_str());
 			for(int i = combinedPath.strlen() - 2; i >= 0; i--)
 			{
 				if (combinedPath[i] == '/')
@@ -839,7 +852,7 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 		}
 		else									// Go to child directory
 		{
-			combinedPath.copy(currentDirectory);
+			combinedPath.copy(currentDirectory.c_str());
 			if (!combinedPath.EndsWith('/') && combinedPath.strlen() > 1)
 			{
 				combinedPath.cat('/');
@@ -856,7 +869,7 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 		// Verify the final path and change it if possible
 		if (GetPlatform().GetMassStorage()->DirectoryExists(combinedPath.GetRef()))
 		{
-			SafeStrncpy(currentDirectory, combinedPath.c_str(), ARRAY_SIZE(currentDirectory));
+			currentDirectory.copy(combinedPath.c_str());
 			outBuf->copy("250 Directory successfully changed.\r\n");
 			Commit(responderState);
 		}
@@ -898,5 +911,7 @@ void FtpResponder::CloseDataPort()
 		fileBeingSent = nullptr;
 	}
 }
+
+#endif
 
 // End

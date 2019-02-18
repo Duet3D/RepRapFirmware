@@ -20,7 +20,7 @@
 #include "PrintMonitor.h"
 
 MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis)
-	: row(r), column(c), width(w), align(a), fontNumber(fn), visCase(vis), itemChanged(true), highlighted(false), next(nullptr)
+	: row(r), column(c), width(w), height(0), align(a), fontNumber(fn), visCase(vis), itemChanged(true), highlighted(false), drawn(false), next(nullptr)
 {
 }
 
@@ -88,6 +88,16 @@ bool MenuItem::IsVisible() const
 	}
 }
 
+// Erase this item if it is drawn but should not be visible
+void MenuItem::EraseIfInvisible(Lcd7920& lcd, PixelNumber tOffset)
+{
+	if (drawn && !IsVisible())
+	{
+		lcd.Clear(row - tOffset, column, row + height, column + width);
+		drawn = false;
+	}
+}
+
 TextMenuItem::TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, const char* t)
 	: MenuItem(r, c, w, a, fn, vis), text(t)
 {
@@ -105,10 +115,11 @@ void TextMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, P
 	{
 		PrintAligned(lcd, tOffset, rightMargin);
 		itemChanged = false;
+		drawn = true;
 	}
 }
 
-void TextMenuItem::UpdateWidth(Lcd7920& lcd)
+void TextMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
 {
 	if (width == 0)
 	{
@@ -118,6 +129,11 @@ void TextMenuItem::UpdateWidth(Lcd7920& lcd)
 		lcd.TextInvert(false);
 		lcd.print(text);
 		width = lcd.GetColumn();
+	}
+	if (height == 0)
+	{
+		lcd.SetFont(fontNumber);
+		height = lcd.GetFontHeight();
 	}
 }
 
@@ -140,10 +156,11 @@ void ButtonMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight,
 		highlighted = highlight;
 		PrintAligned(lcd, tOffset, rightMargin);
 		itemChanged = false;
+		drawn = true;
 	}
 }
 
-void ButtonMenuItem::UpdateWidth(Lcd7920& lcd)
+void ButtonMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
 {
 	if (width == 0)
 	{
@@ -153,6 +170,11 @@ void ButtonMenuItem::UpdateWidth(Lcd7920& lcd)
 		lcd.TextInvert(false);
 		CorePrint(lcd);
 		width = lcd.GetColumn();
+	}
+	if (height == 0)
+	{
+		lcd.SetFont(fontNumber);
+		height = lcd.GetFontHeight();
 	}
 }
 
@@ -325,6 +347,7 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 		highlighted = highlight;
 		PrintAligned(lcd, tOffset, rightMargin);
 		itemChanged = false;
+		drawn = true;
 	}
 }
 
@@ -332,6 +355,16 @@ bool ValueMenuItem::Select(const StringRef& cmd)
 {
 	adjusting = AdjustMode::adjusting;
 	return false;
+}
+
+void ValueMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
+{
+	// The width is always set for a ValueMenuItem so we just need to determine the height
+	if (height == 0)
+	{
+		lcd.SetFont(fontNumber);
+		height = lcd.GetFontHeight();
+	}
 }
 
 PixelNumber ValueMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const
@@ -550,7 +583,10 @@ void FilesMenuItem::EnterDirectory()
 	{
 		do
 		{
-			++m_uHardItemsInDirectory;
+			if (oFileInfo.fileName[0] != '.')
+			{
+				++m_uHardItemsInDirectory;
+			}
 		}
 		while (m_oMS->FindNext(oFileInfo));
 	}
@@ -620,9 +656,16 @@ void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 		// Seek to the first file that is in view
 		FileInfo oFileInfo;
 		bool gotFileInfo = m_oMS->FindFirst(currentDirectory.c_str(), oFileInfo);
-		while (gotFileInfo && dirEntriesToSkip != 0)
+		while (gotFileInfo)
 		{
-			--dirEntriesToSkip;
+			if (oFileInfo.fileName[0] != '.')
+			{
+				if (dirEntriesToSkip == 0)
+				{
+					break;
+				}
+				--dirEntriesToSkip;
+			}
 			gotFileInfo =  m_oMS->FindNext(oFileInfo);
 		}
 
@@ -657,12 +700,17 @@ void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 			{
 				break;		// skip getting more file info for efficiency
 			}
-			gotFileInfo = m_oMS->FindNext(oFileInfo);
+
+			do
+			{
+				gotFileInfo = m_oMS->FindNext(oFileInfo);
+			} while (gotFileInfo && oFileInfo.fileName[0] == '.');
 		}
 
 		m_oMS->AbandonFindNext();				// release the mutex, there may be more files that we don't have room to display
 
 		itemChanged = false;
+		drawn = true;
 		highlighted = highlight;
 	}
 }
@@ -813,6 +861,16 @@ bool FilesMenuItem::Select(const StringRef& cmd)
 	return false;
 }
 
+void FilesMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
+{
+	// The width is always set for a FilesMenuItem so we just need to determine the height
+	if (height == 0)
+	{
+		lcd.SetFont(fontNumber);
+		height = lcd.GetFontHeight() * numDisplayLines;
+	}
+}
+
 PixelNumber FilesMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const
 {
 	// TODO
@@ -859,21 +917,23 @@ void ImageMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 			fs->Close();
 		}
 		itemChanged = false;
+		drawn = true;
 		highlighted = highlight;
 	}
 }
 
-void ImageMenuItem::UpdateWidth(Lcd7920& lcd)
+void ImageMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
 {
-	if (width == 0)
+	if (width == 0 || height == 0)
 	{
 		FileStore * const fs = reprap.GetPlatform().OpenFile(MENU_DIR, fileName.c_str(), OpenMode::read);
 		if (fs != nullptr)
 		{
-			uint8_t w;
-			fs->Read(w);			// read the number of columns
+			uint8_t w[2];
+			fs->Read(w, 2);			// read the number of columns
 			fs->Close();
-			width = w;
+			width = w[0];
+			height = w[1];
 		}
 	}
 }

@@ -100,7 +100,7 @@ GCodeResult Thermistor::Configure(unsigned int mCode, unsigned int heater, GCode
 }
 
 // Get the temperature
-TemperatureError Thermistor::GetTemperature(float& t)
+TemperatureError Thermistor::TryGetTemperature(float& t)
 {
 	const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(thermistorInputChannel);
 
@@ -118,13 +118,15 @@ TemperatureError Thermistor::GetTemperature(float& t)
 		// Assume a maximum ADC reading offset of 100.
 		constexpr int32_t maxDrop = ((4096 << Thermistor::AdcOversampleBits) * 15)/492 + (100 << Thermistor::AdcOversampleBits);
 
-		if (   averagedVrefReading < (4096 << Thermistor::AdcOversampleBits) - maxDrop
-			|| averagedVssaReading > maxDrop
-		   )
+		if (averagedVrefReading < (4096 << Thermistor::AdcOversampleBits) - maxDrop)
 		{
-//debugPrintf("vref=%" PRIi32 " vssa=%" PRIi32 " maxdrop=%" PRIi32 "\n", averagedVrefReading, averagedVssaReading, maxDrop);
-			t = BAD_ERROR_TEMPERATURE;
-			return TemperatureError::overOrUnderVoltage;
+			t = BadErrorTemperature;
+			return TemperatureError::badVref;
+		}
+		if (averagedVssaReading > maxDrop)
+		{
+			t = BadErrorTemperature;
+			return TemperatureError::badVssa;
 		}
 #else
 	if (tempFilter.IsValid())
@@ -157,7 +159,7 @@ TemperatureError Thermistor::GetTemperature(float& t)
 		// Else it's a thermistor
 		const float logResistance = log(resistance);
 		const float recipT = shA + shB * logResistance + shC * logResistance * logResistance * logResistance;
-		const float temp =  (recipT > 0.0) ? (1.0/recipT) + ABS_ZERO : BAD_ERROR_TEMPERATURE;
+		const float temp =  (recipT > 0.0) ? (1.0/recipT) + ABS_ZERO : BadErrorTemperature;
 
 		if (temp < MinimumConnectedTemperature)
 		{
@@ -171,8 +173,8 @@ TemperatureError Thermistor::GetTemperature(float& t)
 	}
 
 	// Filter is not ready yet
-	t = BAD_ERROR_TEMPERATURE;
-	return TemperatureError::busBusy;
+	t = BadErrorTemperature;
+	return TemperatureError::notReady;
 }
 
 // Calculate shA and shB from the other parameters

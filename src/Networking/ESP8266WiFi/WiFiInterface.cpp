@@ -136,7 +136,7 @@ static inline void DisableEspInterrupt()
 
 WiFiInterface::WiFiInterface(Platform& p) : platform(p), uploader(nullptr), ftpDataPort(0), closeDataPort(false),
 		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
-		espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0), serialRunning(false)
+		espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0), serialRunning(false), debugMessageChars(0)
 {
 	wifiInterface = this;
 
@@ -700,8 +700,8 @@ void WiFiInterface::Spin(bool full)
 			}
 			else if (c != '\r')
 			{
-				debugMessageBuffer.cat(c);
-				if (debugMessageBuffer.strlen() == debugMessageBuffer.Capacity())
+				debugMessageBuffer[debugMessageChars++] = c;
+				if (debugMessageChars == ARRAY_SIZE(debugMessageBuffer) - 1)
 				{
 					debugPrintPending = true;
 				}
@@ -716,9 +716,10 @@ void WiFiInterface::Spin(bool full)
 		{
 			if (reprap.Debug(moduleWiFi))
 			{
-				debugPrintf("WiFi: %s\n", debugMessageBuffer.c_str());
+				debugMessageBuffer[debugMessageChars] = 0;
+				debugPrintf("WiFi: %s\n", debugMessageBuffer);
 			}
-			debugMessageBuffer.Clear();
+			debugMessageChars = 0;
 			debugPrintPending = false;
 		}
 	}
@@ -1804,7 +1805,7 @@ void WiFiInterface::StartWiFi()
 	digitalWrite(EspResetPin, HIGH);
 	ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to UART1
 	Serial1.begin(WiFiBaudRate);								// initialise the UART, to receive debug info
-	debugMessageBuffer.Clear();
+	debugMessageChars = 0;
 	serialRunning = true;
 	debugPrintPending = false;
 }

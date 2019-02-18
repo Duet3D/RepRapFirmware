@@ -166,7 +166,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 	if (axesIncluded != 0)
 	{
 		ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-		if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, LowestNBits<AxesBitmap>(numVisibleAxes), false))	// pretend that all axes are homed
+		if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, LowestNBits<AxesBitmap>(numVisibleAxes), false, limitAxes))	// pretend that all axes are homed
 		{
 			ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// make sure the limits are reflected in the user position
 		}
@@ -722,13 +722,6 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 			uint32_t drivers[MaxDriversPerAxis];
 			gb.GetUnsignedArray(drivers, numValues, false);
 
-			AxisDriversConfig config;
-			config.numDrivers = numValues;
-			for (size_t i = 0; i < numValues; ++i)
-			{
-				config.driverNumbers[i] = (uint8_t)min<uint32_t>(drivers[i], 255);
-			}
-
 			// Find the drive number allocated to this axis, or allocate a new one if necessary
 			size_t drive = 0;
 			while (drive < numTotalAxes && axisLetters[drive] != c)
@@ -745,7 +738,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 				moveBuffer.coords[drive] = initialCoords[drive];	// user has defined a new axis, so set its position
 				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 			}
-			platform.SetAxisDriversConfig(drive, config);
+			platform.SetAxisDriversConfig(drive, numValues, drivers);
 			if (numTotalAxes + numExtruders > MaxTotalDrivers)
 			{
 				numExtruders = MaxTotalDrivers - numTotalAxes;		// if we added axes, we may have fewer extruders now
@@ -857,6 +850,12 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			{
 				moveBuffer.endStopsToCheck = UseSpecialEndstop;
 				SetBit(moveBuffer.endStopsToCheck, endStopToUse);
+
+				if (gb.Seen('L') && gb.GetIValue() == 0)
+				{
+					// By default custom endstops are active-high when triggered, so allow this to be inverted
+					moveBuffer.endStopsToCheck |= ActiveLowEndstop;
+				}
 			}
 			moveBuffer.xAxes = DefaultXAxisMapping;
 			moveBuffer.yAxes = DefaultYAxisMapping;
@@ -1032,7 +1031,7 @@ GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 #if defined(I2C_IFACE)
 	if (gb.Seen('A'))
 	{
-		const uint32_t address = gb.GetUIValueMaybeHex();
+		const uint32_t address = gb.GetUIValue();
 		uint32_t numToReceive = 0;
 		bool seenR;
 		gb.TryGetUIValue('R', numToReceive, seenR);
@@ -1104,7 +1103,7 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 #if defined(I2C_IFACE)
 	if (gb.Seen('A'))
 	{
-		const uint32_t address = gb.GetUIValueMaybeHex();
+		const uint32_t address = gb.GetUIValue();
 		if (gb.Seen('B'))
 		{
 			const uint32_t numBytes = gb.GetUIValue();
@@ -1197,7 +1196,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 					}
 				}
 
-				if (gb.TryGetUIValueMaybeHex('C', val, seen))		// set chopper control register
+				if (gb.TryGetUIValue('C', val, seen))		// set chopper control register
 				{
 					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::chopperControl, val))
 					{
@@ -1424,6 +1423,16 @@ GCodeResult GCodes::SetHeaterModel(GCodeBuffer& gb, const StringRef& reply)
 		}
 	}
 	return GCodeResult::ok;
+}
+
+// Change a live extrusion factor
+void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor)
+{
+	if (segmentsLeft != 0 && !moveBuffer.isFirmwareRetraction)
+	{
+		moveBuffer.coords[extruder + numTotalAxes] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
+	}
+	extrusionFactors[extruder] = factor;
 }
 
 // End

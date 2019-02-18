@@ -29,6 +29,8 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
+#define SUPPORT_FTP				1
+#define SUPPORT_TELNET			1
 
 #define USE_CACHE				0					// Cache controller disabled for now
 
@@ -45,6 +47,9 @@ constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the
 
 constexpr size_t MaxExtruders = MaxTotalDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
+
+constexpr size_t MaxHeatersPerTool = 4;
+constexpr size_t MaxExtrudersPerTool = 6;
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB

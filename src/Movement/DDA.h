@@ -14,9 +14,9 @@
 #include "GCodes/GCodes.h"			// for class RawMove
 
 #ifdef DUET_NG
-#define DDA_LOG_PROBE_CHANGES	0
+# define DDA_LOG_PROBE_CHANGES	0
 #else
-#define DDA_LOG_PROBE_CHANGES	0		// save memory on the wired Duet
+# define DDA_LOG_PROBE_CHANGES	0	// save memory on the wired Duet
 #endif
 
 /**
@@ -28,7 +28,7 @@ class DDA
 
 public:
 
-	enum DDAState : unsigned char
+	enum DDAState : uint8_t
 	{
 		empty,				// empty or being filled in
 		provisional,		// ready, but could be subject to modifications
@@ -41,7 +41,7 @@ public:
 
 	bool Init(GCodes::RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));
 																	// Set up a new move, returning true if it represents real movement
-	bool Init(const float_t steps[MaxTotalDrivers]);				// Set up a raw (unmapped) motor move
+	bool Init(const float steps[MaxTotalDrivers]);					// Set up a raw (unmapped) motor move
 	void Init();													// Set up initial positions for machine startup
 	bool Start(uint32_t tim) __attribute__ ((hot));					// Start executing the DDA, i.e. move the move.
 	bool Step() __attribute__ ((hot));								// Take one step of the DDA, called by timed interrupt.
@@ -76,8 +76,8 @@ public:
 	float GetTotalDistance() const { return totalDistance; }
 	void LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration);	// Limit the speed an acceleration of this move
 
+	// Filament monitor support
 	int32_t GetStepsTaken(size_t drive) const;
-	bool IsNonPrintingExtruderMove(size_t drive) const;
 
 	float GetProportionDone(bool moveWasAborted) const;						// Return the proportion of extrusion for the complete multi-segment move already done
 
@@ -85,13 +85,14 @@ public:
 
 	uint32_t GetClocksNeeded() const { return clocksNeeded; }
 	bool IsGoodToPrepare() const;
+	bool IsNonPrintingExtruderMove() const { return isNonPrintingExtruderMove; }
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const { return laserPwmOrIoBits; }
 #endif
 
 #if SUPPORT_IOBITS
-	uint32_t GetMoveStartTime() const { return moveStartTime; }
+	uint32_t GetMoveStartTime() const { return afterPrepare.moveStartTime; }
 	IoBits_t GetIoBits() const { return laserPwmOrIoBits.ioBits; }
 #endif
 
@@ -117,6 +118,10 @@ public:
 	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
 	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
+#elif __LPC17xx__
+    static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000;		// the smallest sensible interval between calculations (40us) in step timer clocks
+    static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
+    static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
 #else
 	static constexpr uint32_t MinCalcIntervalDelta = (60 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (60us) in step timer clocks
 	static constexpr uint32_t MinCalcIntervalCartesian = (60 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
@@ -138,13 +143,14 @@ public:
 	static uint32_t lastDirChangeTime;								// when we last change the DIR signal to a slow driver
 
 private:
-	DriveMovement *FindDM(size_t drive) const;
+	DriveMovement *FindDM(size_t drive) const;						// find the DM for a drive if there is one even if it is completed
+	DriveMovement *FindActiveDM(size_t drive) const;				// find the DM for a drive if there is one but only if it is active
 	void RecalculateMove() __attribute__ ((hot));
 	void MatchSpeeds() __attribute__ ((hot));
 	void ReduceHomingSpeed();										// called to reduce homing speed when a near-endstop is triggered
 	void StopDrive(size_t drive);									// stop movement of a drive and recalculate the endpoint
 	void InsertDM(DriveMovement *dm) __attribute__ ((hot));
-	void RemoveDM(size_t drive);
+	void DeactivateDM(size_t drive);
 	void ReleaseDMs();
 	bool IsDecelerationMove() const;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const;								// return true if this move is or have been might have been intended to be an acceleration-only move
@@ -170,17 +176,20 @@ private:
 	{
 		struct
 		{
-			uint8_t endCoordinatesValid : 1;		// True if endCoordinates can be relied on
-			uint8_t isDeltaMovement : 1;			// True if this is a delta printer movement
-			uint8_t canPauseAfter : 1;				// True if we can pause at the end of this move
-			uint8_t isPrintingMove : 1;				// True if this move includes XY movement and extrusion
-			uint8_t usePressureAdvance : 1;			// True if pressure advance should be applied to any forward extrusion
-			uint8_t hadLookaheadUnderrun : 1;		// True if the lookahead queue was not long enough to optimise this move
-			uint8_t xyMoving : 1;					// True if movement along an X axis or the Y axis was requested, even it if's too small to do
-			uint8_t goingSlow : 1;					// True if we have slowed the movement because the Z probe is approaching its threshold
-			uint8_t isLeadscrewAdjustmentMove : 1;	// True if this is a leadscrews adjustment move
-			uint8_t usingStandardFeedrate : 1;		// True if this move uses the standard feed rate
-			uint8_t hadHiccup : 1;					// True if we had a hiccup while executing this move
+			uint16_t endCoordinatesValid : 1,		// True if endCoordinates can be relied on
+					 isDeltaMovement : 1,			// True if this is a delta printer movement
+					 canPauseAfter : 1,				// True if we can pause at the end of this move
+					 isPrintingMove : 1,			// True if this move includes XY movement and extrusion
+					 usePressureAdvance : 1,		// True if pressure advance should be applied to any forward extrusion
+					 hadLookaheadUnderrun : 1,		// True if the lookahead queue was not long enough to optimise this move
+					 xyMoving : 1,					// True if movement along an X axis or the Y axis was requested, even it if's too small to do
+					 goingSlow : 1,					// True if we have slowed the movement because the Z probe is approaching its threshold
+					 isLeadscrewAdjustmentMove : 1,	// True if this is a leadscrews adjustment move
+					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
+					 hadHiccup : 1,					// True if we had a hiccup while executing this move
+					 isNonPrintingExtruderMove : 1,	// True if this move is a fast extruder-only move, probably a retract/re-prime
+					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
+					 usesEndstops : 1;				// True if this move monitors endstops of Z probe
 		};
 		uint16_t flags;								// so that we can print all the flags at once for debugging
 	};
@@ -208,8 +217,6 @@ private:
 	float startSpeed;
 	float endSpeed;
 	float topSpeed;
-	float accelDistance;
-	float decelDistance;
 
 	float proportionLeft;					// what proportion of the extrusion in the G1 or G0 move of which this is a part remains to be done after this segment is complete
 	uint32_t clocksNeeded;
@@ -219,9 +226,11 @@ private:
 		// Values that are needed only before Prepare is called
 		struct
 		{
+			float accelDistance;
+			float decelDistance;
 			float targetNextSpeed;				// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
 			float maxAcceleration;				// the maximum allowed acceleration for this move according to the limits set by M201
-		};
+		} beforePrepare;
 
 		// Values that are not set or accessed before Prepare is called
 		struct
@@ -234,7 +243,7 @@ private:
 
 			// These are used only in delta calculations
 		    int32_t cKc;						// The Z movement fraction multiplied by Kc and converted to integer
-		};
+		} afterPrepare;
 	};
 
 #if DDA_LOG_PROBE_CHANGES
@@ -243,14 +252,41 @@ private:
 	void LogProbePosition();
 #endif
 
-    DriveMovement* firstDM;						// list of contained DMs that need steps, in step time order
-	DriveMovement *pddm[MaxTotalDrivers];		// These describe the state of each drive movement
+    DriveMovement* activeDMs;					// list of associated DMs that need steps, in step time order
+    DriveMovement* completedDMs;				// list of associated DMs that don't need any more steps
 };
 
-// Find the DriveMovement record for a given drive, or return nullptr if there isn't one
+// Find the DriveMovement record for a given drive even if it is completed, or return nullptr if there isn't one
 inline DriveMovement *DDA::FindDM(size_t drive) const
 {
-	return pddm[drive];
+	for (DriveMovement* dm = activeDMs; dm != nullptr; dm = dm->nextDM)
+	{
+		if (dm->drive == drive)
+		{
+			return dm;
+		}
+	}
+	for (DriveMovement* dm = completedDMs; dm != nullptr; dm = dm->nextDM)
+	{
+		if (dm->drive == drive)
+		{
+			return dm;
+		}
+	}
+	return nullptr;
+}
+
+// Find the active DriveMovement record for a given drive, or return nullptr if there isn't one
+inline DriveMovement *DDA::FindActiveDM(size_t drive) const
+{
+	for (DriveMovement* dm = activeDMs; dm != nullptr; dm = dm->nextDM)
+	{
+		if (dm->drive == drive)
+		{
+			return dm;
+		}
+	}
+	return nullptr;
 }
 
 // Force an end point
@@ -265,7 +301,7 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 // Get the current full step interval for this axis or extruder
 inline uint32_t DDA::GetStepInterval(size_t axis, uint32_t microstepShift) const
 {
-	const DriveMovement * const dm = FindDM(axis);
+	const DriveMovement * const dm = FindActiveDM(axis);
 	return (dm != nullptr) ? dm->GetStepInterval(microstepShift) : 0;
 }
 

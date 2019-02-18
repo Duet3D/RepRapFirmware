@@ -16,7 +16,9 @@ public:
 	CurrentLoopTemperatureSensor(unsigned int channel);
 	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override;
 	void Init() override;
-	TemperatureError GetTemperature(float& t) override;
+
+protected:
+	TemperatureError TryGetTemperature(float& t) override;
 
 private:
 	void TryGetLinearAdcTemperature();

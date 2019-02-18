@@ -202,6 +202,14 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		result = RetractFilament(gb, false);
 		break;
 
+	case 17:	// Select XY plane for G2/G3
+		break;	// we only support the XY plane, so this is a NOP
+
+	case 18:	// Select XZ plane
+	case 19:	// Select YZ plane
+		result = GCodeResult::errorNotSupported;
+		break;
+
 	case 20: // Inches (which century are we living in, here?)
 		distanceScale = InchToMm;
 		break;
@@ -312,7 +320,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else
 			{
-				result = GCodeResult::notSupported;
+				result = GCodeResult::errorNotSupported;
 			}
 		}
 		break;
@@ -335,7 +343,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	default:
-		result = GCodeResult::notSupported;
+		result = GCodeResult::warningNotSupported;
 	}
 
 	return HandleResult(gb, result, reply, nullptr);
@@ -365,20 +373,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			reply.copy("Pause the print before attempting to cancel it");
 			result = GCodeResult::error;
 		}
+		else if (isWaiting)
+		{
+			cancelWait = true;								// was waiting for heating to complete, so cancel it
+			return false;
+		}
+		else if (   !LockMovementAndWaitForStandstill(gb)	// wait until everything has stopped
+				 || !IsCodeQueueIdle()						// must also wait until deferred command queue has caught up
+			    )
+		{
+			return false;
+		}
 		else
 		{
-			if (   !LockMovementAndWaitForStandstill(gb)	// wait until everything has stopped
-				|| !IsCodeQueueIdle()						// must also wait until deferred command queue has caught up
-			   )
-			{
-				return false;
-			}
-
-			const bool wasPaused = isPaused;			// isPaused gets cleared by CancelPrint
-			const bool wasSimulating = IsSimulating();	// simulationMode may get cleared by CancelPrint
+			const bool wasPaused = isPaused;				// isPaused gets cleared by CancelPrint
+			const bool wasSimulating = IsSimulating();		// simulationMode may get cleared by CancelPrint
 			StopPrint((&gb == fileGCode) ? StopPrintReason::normalCompletion : StopPrintReason::userCancelled);
 
-			if (!wasSimulating)							// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
+			if (!wasSimulating)								// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
 			{
 				// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
 				if (wasPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false))
@@ -1054,7 +1066,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				float val = ConvertOldStylePwm(gb.GetFValue());
 
 				// The SX1509B I/O expander chip doesn't seem to work if you set PWM mode and then set digital output mode.
-				// This cases a problem if M42 is used to write to some pins and then M670 is used to set up the G1 P parameter port mapping.
+				// This causes a problem if M42 is used to write to some pins and then M670 is used to set up the G1 P parameter port mapping.
 				// The first part of the fix for this is to not select PWM mode if we don't need to.
 				bool usePwm;
 				uint16_t freq;
@@ -1123,6 +1135,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 92: // Set/report steps/mm for some axes
 		{
+			bool seenUstepMultiplier = false;
+			uint32_t ustepMultiplier = 0;
+			gb.TryGetUIValue('S', ustepMultiplier, seenUstepMultiplier);
+
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
@@ -1132,7 +1148,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					{
 						return false;
 					}
-					platform.SetDriveStepsPerUnit(axis, gb.GetFValue());
+					platform.SetDriveStepsPerUnit(axis, gb.GetFValue(), ustepMultiplier);
 					seen = true;
 				}
 			}
@@ -1151,7 +1167,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				// The user may not have as many extruders as we allow for, so just set the ones for which a value is provided
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform.SetDriveStepsPerUnit(numTotalAxes + e, eVals[e]);
+					platform.SetDriveStepsPerUnit(numTotalAxes + e, eVals[e], ustepMultiplier);
 				}
 			}
 
@@ -1239,6 +1255,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (seenFanNum)
 				{
 					platform.SetFanValue(fanNum, f);
+					if (IsMappedFan(fanNum))
+					{
+						lastDefaultFanSpeed = f;
+					}
 				}
 				else
 				{
@@ -1258,16 +1278,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				}
 				else
 				{
-					lastDefaultFanSpeed = pausedDefaultFanSpeed;
-					SetMappedFanSpeed();
+					SetMappedFanSpeed(pausedDefaultFanSpeed);
 				}
 			}
 		}
 		break;
 
 	case 107: // Fan off - deprecated
-		lastDefaultFanSpeed = 0.0;
-		SetMappedFanSpeed();
+		SetMappedFanSpeed(0.0);
 		break;
 
 	case 108: // Cancel waiting for temperature
@@ -1389,9 +1407,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				reprap.SetDebug(static_cast<Module>(gb.GetIValue()), dbv);
 			}
+			else if (dbv)
+			{
+				// Repetier Host sends M111 with various S parameters to enable echo and similar features, which used to turn on all out debugging.
+				// But it's not useful to enable all debugging anyway. So we no longer allow debugging to be enabled without a P parameter.
+				reply.copy("Use P parameter to specify which module to debug");
+			}
 			else
 			{
-				reprap.SetDebug(dbv);
+				// M111 S0 still clears all debugging
+				reprap.ClearDebug();
 			}
 		}
 		else
@@ -1611,16 +1636,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
-	case 135: // Set PID sample interval
-		if (gb.Seen('S'))
-		{
-			platform.SetHeatSampleTime(gb.GetFValue() * 0.001);  // Value is in milliseconds; we want seconds
-		}
-		else
-		{
-			reply.printf("Heat sample time is %.3f seconds", (double)platform.GetHeatSampleTime());
-		}
-		break;
+	// M135 (set PID sample interval) is no longer supported
 
 	case 140: // Bed temperature
 	case 141: // Chamber temperature
@@ -1888,15 +1904,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
-	case 203: // Set/print maximum feedrates
+	case 203: // Set/print minimum/maximum feedrates
 		{
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; ++axis)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					platform.SetMaxFeedrate(axis, gb.GetFValue() * distanceScale * SecondsToMinutes); // G Code feedrates are in mm/minute; we need mm/sec
 					seen = true;
+					platform.SetMaxFeedrate(axis, gb.GetFValue() * distanceScale * SecondsToMinutes);
 				}
 			}
 
@@ -1912,20 +1928,27 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				}
 			}
 
+			if (gb.Seen('I'))
+			{
+				seen = true;
+				platform.SetMinMovementSpeed(gb.GetFValue() * distanceScale * SecondsToMinutes);
+			}
+
 			if (!seen)
 			{
-				reply.copy("Maximum feedrates: ");
+				reply.copy("Max speeds (mm/sec): ");
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.MaxFeedrate(axis) / (distanceScale * SecondsToMinutes)));
+					reply.catf("%c: %.1f, ", axisLetters[axis], (double)platform.MaxFeedrate(axis));
 				}
 				reply.cat("E:");
 				char sep = ' ';
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					reply.catf("%c%.1f", sep, (double)(platform.MaxFeedrate(extruder + numTotalAxes) / (distanceScale * SecondsToMinutes)));
+					reply.catf("%c%.1f", sep, (double)platform.MaxFeedrate(extruder + numTotalAxes));
 					sep = ':';
 				}
+				reply.catf(", min. speed %.2f", (double)platform.MinMovementSpeed());
 			}
 		}
 		break;
@@ -1984,23 +2007,42 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
+					seen = true;
 					float values[2];
 					size_t numValues = 2;
 					gb.GetFloatArray(values, numValues, false);
+					bool ok;
 					if (numValues == 2)
 					{
-						platform.SetAxisMinimum(axis, values[0], gb.MachineState().runningM501);
-						platform.SetAxisMaximum(axis, values[1], gb.MachineState().runningM501);
+						ok = values[1] > values[0];
+						if (ok)
+						{
+							platform.SetAxisMinimum(axis, values[0], gb.MachineState().runningM501);
+							platform.SetAxisMaximum(axis, values[1], gb.MachineState().runningM501);
+						}
 					}
 					else if (setMin)
 					{
-						platform.SetAxisMinimum(axis, values[0], gb.MachineState().runningM501);
+						ok = platform.AxisMaximum(axis) > values[0];
+						if (ok)
+						{
+							platform.SetAxisMinimum(axis, values[0], gb.MachineState().runningM501);
+						}
 					}
 					else
 					{
-						platform.SetAxisMaximum(axis, values[0], gb.MachineState().runningM501);
+						ok = values[0] > platform.AxisMinimum(axis);
+						if (ok)
+						{
+							platform.SetAxisMaximum(axis, values[0], gb.MachineState().runningM501);
+						}
 					}
-					seen = true;
+
+					if (!ok)
+					{
+						reply.printf("%c axis maximum must be greater than minimum", axisLetters[axis]);
+						result = GCodeResult::error;
+					}
 				}
 			}
 
@@ -2062,28 +2104,42 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 221:	// Set/report extrusion factor override percentage
 		{
-			int32_t extruder = 0;
-			bool dummy;
-			gb.TryGetIValue('D', extruder, dummy);
+			uint32_t extruder;
+			bool seenD = false;
+			gb.TryGetUIValue('D', extruder, seenD);
 
-			if (extruder >= 0 && extruder < (int32_t)numExtruders)
+			const Tool * const ct = reprap.GetCurrentTool();
+			if (!seenD && ct == nullptr)
 			{
-				if (gb.Seen('S'))	// S parameter sets the override percentage
+				reply.copy("No tool selected");
+				result = GCodeResult::error;
+			}
+			else if (gb.Seen('S'))	// S parameter sets the override percentage
+			{
+				const float extrusionFactor = gb.GetFValue() / 100.0;
+				if (extrusionFactor >= 0.0)
 				{
-					const float extrusionFactor = gb.GetFValue() / 100.0;
-					if (extrusionFactor >= 0.0)
+					if (seenD)
 					{
-						if (segmentsLeft != 0 && !moveBuffer.isFirmwareRetraction)
+						if (extruder < numExtruders)
 						{
-							moveBuffer.coords[extruder + numTotalAxes] *= extrusionFactor/extrusionFactors[extruder];	// last move not gone, so update it
+							ChangeExtrusionFactor(extruder, extrusionFactor);
 						}
-						extrusionFactors[extruder] = extrusionFactor;
+					}
+					else
+					{
+						ct->IterateExtruders([this, extrusionFactor](unsigned int extruder) { ChangeExtrusionFactor(extruder, extrusionFactor); });
 					}
 				}
-				else
-				{
-					reply.printf("Extrusion factor override for extruder %" PRIi32 ": %.1f%%", extruder, (double)(extrusionFactors[extruder] * 100.0));
-				}
+			}
+			else if (seenD)
+			{
+				reply.printf("Extrusion factor override for extruder %" PRIi32 ": %.1f%%", extruder, (double)(extrusionFactors[extruder] * 100.0));
+			}
+			else
+			{
+				reply.copy("Extrusion factor(s) for current tool:");
+				ct->IterateExtruders([reply, this](unsigned int extruder) { reply.catf(" %.1f%%", (double)(extrusionFactors[extruder] * 100.0)); });
 			}
 		}
 		break;
@@ -2600,7 +2656,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			return false;
 		}
 		{
-			uint32_t slot = gb.Seen('S') ? gb.GetUIValue() : 0;
+			const MachineType oldMachineType = machineType;
+			machineType = MachineType::cnc;								// switch to CNC mode even if the spindle parameter is bad
+			const uint32_t slot = gb.Seen('S') ? gb.GetUIValue() : 0;
 			if (slot >= MaxSpindles)
 			{
 				reply.copy("Invalid spindle index");
@@ -2643,9 +2701,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				spindle.SetToolNumber(gb.GetIValue());
 			}
 
-			if (machineType != MachineType::cnc)
+			// M453 may be repeated to set up multiple spindles, so only print the message on the initial switch
+			if (oldMachineType != MachineType::cnc)
 			{
-				machineType = MachineType::cnc;
 				reply.copy("CNC mode selected");
 			}
 		}
@@ -3236,6 +3294,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					platform.SetPressureAdvance(eDrive[i], advance);
 				}
 			}
+			else
+			{
+				const Tool * const ct = reprap.GetCurrentTool();
+				if (ct == nullptr)
+				{
+					reply.copy("No tool selected");
+					result = GCodeResult::error;
+				}
+				else
+				{
+					ct->IterateExtruders([advance](unsigned int extruder) { reprap.GetPlatform().SetPressureAdvance(extruder, advance); });
+				}
+			}
 		}
 		else
 		{
@@ -3262,46 +3333,86 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 574: // Set endstop configuration
 		{
-			bool seen = false;
 			const uint8_t inputType = (gb.Seen('S')) ? gb.GetUIValue() : 1;
+
+			unsigned int axesSeen = 0;
+			size_t lastAxisSeen;
 			for (size_t axis = 0; axis < numTotalAxes; ++axis)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
+					++axesSeen;
+					lastAxisSeen = axis;
 					const int ival = gb.GetIValue();
 					if (ival >= 0 && ival <= 3)
 					{
-						platform.SetEndStopConfiguration(axis, (EndStopPosition) ival, (EndStopInputType)inputType);
-						seen = true;
-					}
-				}
-			}
-			if (!seen)
-			{
-				reply.copy("Endstop configuration:");
-				EndStopPosition config;
-				EndStopInputType inputType;
-				for (size_t axis = 0; axis < numTotalAxes; ++axis)
-				{
-					platform.GetEndStopConfiguration(axis, config, inputType);
-					reply.catf(" %c: %s", axisLetters[axis],
-								(config == EndStopPosition::highEndStop) ? "high end"
-									: (config == EndStopPosition::lowEndStop) ? "low end"
-										: "none");
-					if (config == EndStopPosition::noEndStop)
-					{
-						reply.cat(',');
+						platform.SetEndStopConfiguration(axis, (EndStopPosition)ival, (EndStopInputType)inputType);
 					}
 					else
 					{
-						reply.catf(" %s,",
-									(inputType == EndStopInputType::activeHigh) ? "active high switch"
-										: (inputType == EndStopInputType::activeLow) ? "active low switch"
+						reply.copy("Invalid endstop type");
+						result = GCodeResult::error;
+						break;
+					}
+				}
+			}
+
+			if (gb.Seen('C'))
+			{
+				if (axesSeen == 1)
+				{
+					uint32_t inputNumbers[MaxDriversPerAxis];
+					size_t numInputs = MaxDriversPerAxis;
+					gb.GetUnsignedArray(inputNumbers, numInputs, false);
+					platform.SetAxisEndstopConfig(lastAxisSeen, numInputs, inputNumbers);
+				}
+				else
+				{
+					reply.copy("Invalid use of C parameter");
+					result = GCodeResult::error;
+				}
+			}
+
+			if (axesSeen == 0)
+			{
+				reply.copy("Endstop configuration");
+				EndStopPosition config;
+				EndStopInputType inputType;
+				char sep = ':';
+				for (size_t axis = 0; axis < numTotalAxes; ++axis)
+				{
+					platform.GetEndStopConfiguration(axis, config, inputType);
+					reply.catf("%c %c: %s", sep, axisLetters[axis],
+								(config == EndStopPosition::highEndStop) ? "high end"
+									: (config == EndStopPosition::lowEndStop) ? "low end"
+										: "none");
+					if (config != EndStopPosition::noEndStop)
+					{
+						if (inputType == EndStopInputType::activeHigh || inputType == EndStopInputType::activeLow)
+						{
+							const AxisEndstopConfig& es = platform.GetAxisEndstopConfig(axis);
+							if (es.numEndstops == 1)
+							{
+								reply.catf(" input %u", es.endstopNumbers[0]);
+							}
+							else
+							{
+								reply.cat(" inputs");
+								for (size_t i = 0; i < es.numEndstops; ++i)
+								{
+									reply.catf(" %u", es.endstopNumbers[i]);
+								}
+							}
+						}
+						reply.catf(" %s",
+									(inputType == EndStopInputType::activeHigh) ? "active high"
+										: (inputType == EndStopInputType::activeLow) ? "active low"
 											: (inputType == EndStopInputType::zProbe) ? "Z probe"
 												: (inputType == EndStopInputType::motorStall) ? "motor stall"
 													: "unknown type"
 									);
 					}
+					sep = ',';
 				}
 			}
 		}
@@ -3582,7 +3693,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			if (changed || changedMode)
 			{
-				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false))
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false))
 				{
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 				}
@@ -3619,7 +3730,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			const KinematicsType oldK = move.GetKinematics().GetKinematicsType();		// get the current kinematics type so we can tell whether it changed
 
 			bool seen = false;
-			bool changedToCartesian = false;
 			if (gb.Seen('S'))
 			{
 				// Switch to the correct CoreXY mode
@@ -3628,7 +3738,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 				case 0:
 					move.SetKinematics(KinematicsType::cartesian);
-					changedToCartesian = true;
 					break;
 
 				case 1:
@@ -3649,14 +3758,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 			if (result == GCodeResult::ok)
 			{
-				if (!changedToCartesian)		// don't ask the kinematics to process M667 if we switched to Cartesian mode
+				if (gb.Seen('X') || gb.Seen('Y') || gb.Seen('Z'))
 				{
-					bool error = false;
-					if (move.GetKinematics().Configure(667, gb, reply, error))
-					{
-						seen = true;
-					}
-					result = GetGCodeResultFromError(error);
+					reply.copy("M667 XYZ parameters are no longer supported, use M669 matrix parameters instead");
+					result = GCodeResult::error;
 				}
 
 				if (seen)
@@ -3667,7 +3772,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
 						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 					}
-					if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false))
+					if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false))
 					{
 						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 					}
@@ -3714,7 +3819,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 				}
-				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false))
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false))
 				{
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 				}
@@ -4182,7 +4287,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	default:
-		result = GCodeResult::notSupported;
+		result = GCodeResult::warningNotSupported;
 		break;
 	}
 
@@ -4282,16 +4387,22 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 	case GCodeResult::notFinished:
 		return false;
 
-	case GCodeResult::notSupported:
+	case GCodeResult::warningNotSupported:
 		gb.PrintCommand(reply);
 		reply.cat(" command is not supported");
 		rslt = GCodeResult::warning;
 		break;
 
+	case GCodeResult::errorNotSupported:
+		gb.PrintCommand(reply);
+		reply.cat(" command is not supported");
+		rslt = GCodeResult::error;
+		break;
+
 	case GCodeResult::notSupportedInCurrentMode:
 		gb.PrintCommand(reply);
 		reply.catf(" command is not supported in machine mode %s", GetMachineModeString());
-		rslt = GCodeResult::warning;
+		rslt = GCodeResult::error;
 		break;
 
 	case GCodeResult::badOrMissingParameter:

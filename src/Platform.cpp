@@ -25,6 +25,7 @@
 #include "Movement/DDA.h"
 #include "Movement/Move.h"
 #include "Movement/StepTimer.h"
+#include "Tools/Tool.h"
 #include "Network.h"
 #include "PrintMonitor.h"
 #include "FilamentMonitors/FilamentMonitor.h"
@@ -61,6 +62,12 @@
 
 #if SUPPORT_12864_LCD
 # include "Display/Display.h"
+#endif
+
+#if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
+# include "Networking/HttpResponder.h"
+# include "Networking/FtpResponder.h"
+# include "Networking/TelnetResponder.h"
 #endif
 
 #include <climits>
@@ -320,6 +327,7 @@ void Platform::Init()
 	ARRAY_INIT(endStopPins, END_STOP_PINS);
 
 	// Drives
+	minimumMovementSpeed = DefaultMinFeedrate;
 	maxFeedrates[X_AXIS] = maxFeedrates[Y_AXIS] = DefaultXYMaxFeedrate;
 	accelerations[X_AXIS] = accelerations[Y_AXIS] = DefaultXYAcceleration;
 	driveStepsPerUnit[X_AXIS] = driveStepsPerUnit[Y_AXIS] = DefaultXYDriveStepsPerUnit;
@@ -383,6 +391,8 @@ void Platform::Init()
 		{
 			axisDrivers[drive].numDrivers = 1;
 			axisDrivers[drive].driverNumbers[0] = (uint8_t)drive;
+			axisEndstops[drive].numEndstops = 1;
+			axisEndstops[drive].endstopNumbers[0] = (uint8_t)drive;
 			endStopPos[drive] = EndStopPosition::lowEndStop;		// default to low endstop
 			endStopInputType[drive] = EndStopInputType::activeHigh;	// assume all endstops use active high logic e.g. normally-closed switch to ground
 		}
@@ -392,7 +402,7 @@ void Platform::Init()
 			// Set up the control pins and endstops
 			pinMode(STEP_PINS[drive], OUTPUT_LOW);
 			pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
-#if !defined(DUET3)
+#ifndef DUET3
 			pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
 #endif
 
@@ -520,7 +530,6 @@ void Platform::Init()
 			configuredHeaters |= (1 << chamberHeater);
 		}
 	}
-	heatSampleTicks = HEAT_SAMPLE_TIME * SecondsToMillis;
 
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
 	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
@@ -747,7 +756,7 @@ int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
 }
 
 // Get our best estimate of the Z probe temperature
-float Platform::GetZProbeTemperature()
+float Platform::GetZProbeTemperature() const
 {
 	for (size_t i = 0; i < NumBedHeaters; i++)
 	{
@@ -765,7 +774,7 @@ float Platform::GetZProbeTemperature()
 	return 25.0;							// assume 25C if we can't read the bed temperature
 }
 
-float Platform::ZProbeStopHeight()
+float Platform::GetZProbeStopHeight() const
 {
 	return GetCurrentZProbeParameters().GetStopHeight(GetZProbeTemperature());
 }
@@ -939,7 +948,7 @@ void Platform::UpdateFirmware()
 	DisableCache();
 
 	// Step 1 - Write update binary to Flash and overwrite the remaining space with zeros
-	// Leave the last 1KB of Flash memory untouched, so we can reuse the NvData after this update
+	// On the SAM3X, leave the last 1KB of Flash memory untouched, so we can reuse the NvData after this update
 
 #if !defined(IFLASH_PAGE_SIZE) && defined(IFLASH0_PAGE_SIZE)
 # define IFLASH_PAGE_SIZE	IFLASH0_PAGE_SIZE
@@ -1903,7 +1912,9 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		srdBuf[slot].icsr = SCB->ICSR;
 		srdBuf[slot].bfar = SCB->BFAR;
 #ifdef RTOS
-		srdBuf[slot].taskName = *reinterpret_cast<const uint32_t*>(pcTaskGetName(nullptr));
+		// Get the task name if we can. There may be no task executing, so we must allow for this.
+		const TaskHandle_t currentTask = xTaskGetCurrentTaskHandle();
+		srdBuf[slot].taskName = (currentTask == nullptr) ? 0 : *reinterpret_cast<const uint32_t*>(pcTaskGetName(currentTask));
 #endif
 
 		if (stk != nullptr)
@@ -2595,6 +2606,19 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 	case (int)DiagnosticTestType::TimeSDWrite:
 		return reprap.GetGCodes().StartSDTiming(gb, reply);
 
+	case (int)DiagnosticTestType::PrintObjectSizes:
+		reply.printf(
+				"DDA %u, DM %u, Tool %u"
+#if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
+				", HTTP resp %u, FTP resp %u, Telnet resp %u"
+#endif
+				, sizeof(DDA), sizeof(DriveMovement), sizeof(Tool)
+#if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
+				, sizeof(HttpResponder), sizeof(FtpResponder), sizeof(TelnetResponder)
+#endif
+			);
+		break;
+
 #ifdef DUET_NG
 	case (int)DiagnosticTestType::PrintExpanderStatus:
 		reply.printf("Expander status %04X\n", DuetExpansion::DiagnosticRead());
@@ -2684,17 +2708,17 @@ void Platform::UpdateConfiguredHeaters()
 	}
 }
 
-EndStopHit Platform::Stopped(size_t drive) const
+EndStopHit Platform::Stopped(size_t axisOrExtruder) const
 {
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	if (drive < numAxes)
+	if (axisOrExtruder < numAxes)
 	{
-		switch (endStopInputType[drive])
+		switch (endStopInputType[axisOrExtruder])
 		{
 		case EndStopInputType::zProbe:
 			{
 				const EndStopHit rslt = GetZProbeResult();
-				return (rslt == EndStopHit::lowHit && endStopPos[drive] == EndStopPosition::highEndStop)
+				return (rslt == EndStopHit::lowHit && endStopPos[axisOrExtruder] == EndStopPosition::highEndStop)
 						? EndStopHit::highHit
 							: rslt;
 			}
@@ -2703,64 +2727,70 @@ EndStopHit Platform::Stopped(size_t drive) const
 		case EndStopInputType::motorStall:
 			{
 				bool motorIsStalled;
-				switch (reprap.GetMove().GetKinematics().GetKinematicsType())
+				const Kinematics& k = reprap.GetMove().GetKinematics();
+				if (k.GetHomingMode() == HomingMode::homeIndividualMotors)
 				{
-				case KinematicsType::coreXY:
-					// Both X and Y motors are involved in homing X or Y
-					motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
-										? AnyAxisMotorStalled(X_AXIS) || AnyAxisMotorStalled(Y_AXIS)
-											: AnyAxisMotorStalled(drive);
-					break;
-
-				case KinematicsType::coreXYU:
-					// Both X and Y motors are involved in homing X or Y, and both U and V motors are involved in homing U
-					motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
-										? AnyAxisMotorStalled(X_AXIS) || AnyAxisMotorStalled(Y_AXIS)
-											: (drive == U_AXIS)
-												? AnyAxisMotorStalled(U_AXIS) || AnyAxisMotorStalled(V_AXIS)
-													: AnyAxisMotorStalled(drive);
-					break;
-
-				case KinematicsType::coreXYUV:
-					// Both X and Y motors are involved in homing X or Y, and both U and V motors are involved in homing U and V
-					motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
-										? AnyAxisMotorStalled(X_AXIS) || AnyAxisMotorStalled(Y_AXIS)
-											: (drive == U_AXIS || drive == V_AXIS)
-												? AnyAxisMotorStalled(U_AXIS) || AnyAxisMotorStalled(V_AXIS)
-													: AnyAxisMotorStalled(drive);
-					break;
-
-				case KinematicsType::coreXZ:
-					// Both X and Z motors are involved in homing X or Z
-					motorIsStalled = (drive == X_AXIS || drive == Z_AXIS)
-										? AnyAxisMotorStalled(X_AXIS) || AnyAxisMotorStalled(Z_AXIS)
-											: AnyAxisMotorStalled(drive);
-					break;
-
-				default:
-					motorIsStalled = AnyAxisMotorStalled(drive);
-					break;
+					motorIsStalled = AnyAxisMotorStalled(axisOrExtruder);
+				}
+				else
+				{
+					AxesBitmap connectedAxes = k.GetConnectedAxes(axisOrExtruder);
+					if (connectedAxes == MakeBitmap<AxesBitmap>(axisOrExtruder))
+					{
+						// Optimisation: no need to search the connectedAxes bitmap in the common case of no connected axes
+						motorIsStalled = AnyAxisMotorStalled(axisOrExtruder);
+					}
+					else
+					{
+						motorIsStalled = false;
+						for (size_t motor = 0; connectedAxes != 0; ++motor)
+						{
+							if (IsBitSet(connectedAxes, motor))
+							{
+								if (AnyAxisMotorStalled(motor))
+								{
+									motorIsStalled = true;
+									break;
+								}
+								ClearBit(connectedAxes, motor);
+							}
+						}
+					}
 				}
 				return (!motorIsStalled) ? EndStopHit::noStop
-						: (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit
+						: (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit
 							: EndStopHit::lowHit;
 			}
 			break;
 #endif
 
 		case EndStopInputType::activeLow:
-			if (drive < NumEndstops && endStopPins[drive] != NoPin)
 			{
-				const bool b = IoPort::ReadPin(endStopPins[drive]);
-				return (b) ? EndStopHit::noStop : (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
+				const AxisEndstopConfig& config = axisEndstops[axisOrExtruder];
+				if (config.numEndstops != 0)
+				{
+					const uint8_t input = config.endstopNumbers[0];
+					if (input < NumEndstops)
+					{
+						const bool b = IoPort::ReadPin(endStopPins[input]);
+						return (b) ? EndStopHit::noStop : (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
+					}
+				}
 			}
 			break;
 
 		case EndStopInputType::activeHigh:
-			if (drive < NumEndstops && endStopPins[drive] != NoPin)
 			{
-				const bool b = !IoPort::ReadPin(endStopPins[drive]);
-				return (b) ? EndStopHit::noStop : (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
+				const AxisEndstopConfig& config = axisEndstops[axisOrExtruder];
+				if (config.numEndstops != 0)
+				{
+					const uint8_t input = config.endstopNumbers[0];
+					if (input < NumEndstops)
+					{
+						const bool b = !IoPort::ReadPin(endStopPins[input]);
+						return (b) ? EndStopHit::noStop : (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
+					}
+				}
 			}
 			break;
 
@@ -2769,10 +2799,10 @@ EndStopHit Platform::Stopped(size_t drive) const
 		}
 	}
 #if HAS_STALL_DETECT
-	else if (drive < NumDirectDrivers)
+	else if (axisOrExtruder < NumDirectDrivers)
 	{
 		// Endstop is for an extruder drive, so use stall detection
-		return (ExtruderMotorStalled(drive - numAxes)) ? EndStopHit::highHit : EndStopHit::noStop;
+		return (ExtruderMotorStalled(axisOrExtruder - numAxes)) ? EndStopHit::highHit : EndStopHit::noStop;
 	}
 #endif
 	return EndStopHit::noStop;
@@ -3201,6 +3231,20 @@ void Platform::SetIdleCurrentFactor(float f)
 	}
 }
 
+void Platform::SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t microstepping)
+{
+	if (microstepping > 0)
+	{
+		bool dummy;
+		const unsigned int currentMicrostepping = GetMicrostepping(axisOrExtruder, dummy);
+		if (currentMicrostepping != microstepping)
+		{
+			value = value * (float)currentMicrostepping / (float)microstepping;
+		}
+	}
+	driveStepsPerUnit[axisOrExtruder] = max<float>(value, 1.0);	// don't allow zero or negative
+}
+
 // Set the microstepping for a driver, returning true if successful
 bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode)
 {
@@ -3310,15 +3354,17 @@ void Platform::SetEnableValue(size_t driver, int8_t eVal)
 #endif
 }
 
-void Platform::SetAxisDriversConfig(size_t axis, const AxisDriversConfig& config)
+void Platform::SetAxisDriversConfig(size_t axis, size_t numValues, const uint32_t driverNumbers[])
 {
-	axisDrivers[axis] = config;
+	axisDrivers[axis].numDrivers = numValues;
 	uint32_t bitmap = 0;
-	for (size_t i = 0; i < config.numDrivers; ++i)
+	for (size_t i = 0; i < numValues; ++i)
 	{
-		bitmap |= CalcDriverBitmap(config.driverNumbers[i]);
+		const uint8_t driver = min<uint32_t>(driverNumbers[i], 255);
+		axisDrivers[axis].driverNumbers[i] = driver;
+		bitmap |= CalcDriverBitmap(driver);
 #if HAS_SMART_DRIVERS
-		SmartDrivers::SetAxisNumber(config.driverNumbers[i], axis);
+		SmartDrivers::SetAxisNumber(driver, axis);
 #endif
 	}
 	driveDriverBits[axis] = bitmap;
@@ -3503,6 +3549,15 @@ void Platform::GetEndStopConfiguration(size_t axis, EndStopPosition& esType, End
 {
 	esType = endStopPos[axis];
 	inputType = endStopInputType[axis];
+}
+
+void Platform::SetAxisEndstopConfig(size_t axis, size_t numValues, const uint32_t inputNumbers[])
+{
+	axisEndstops[axis].numEndstops = numValues;
+	for (size_t i = 0; i < numValues; ++i)
+	{
+		axisEndstops[axis].endstopNumbers[i] = min<uint32_t>(inputNumbers[i], 255);
+	}
 }
 
 //-----------------------------------------------------------------------------------------------------

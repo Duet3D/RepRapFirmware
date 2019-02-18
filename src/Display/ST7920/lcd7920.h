@@ -43,6 +43,9 @@ public:
 	constexpr PixelNumber GetNumRows() const { return NumRows; }
 	constexpr PixelNumber GetNumCols() const { return NumCols; }
 
+	// Set the SPI clock frequency
+	void SetSpiClockFrequency(uint32_t freq);
+
 	// Write a single character in the current font. Called by the 'print' functions.
 	//  c = character to write
 	// Returns the number of characters written (1 if we wrote it, 0 otherwise)

@@ -35,6 +35,8 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		1					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_OBJECT_MODEL	1
+#define SUPPORT_FTP				1
+#define SUPPORT_TELNET			1
 
 // The physical capabilities of the machine
 
@@ -52,6 +54,9 @@ constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the
 
 constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
+
+constexpr size_t MaxHeatersPerTool = 2;
+constexpr size_t MaxExtrudersPerTool = 4;
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
@@ -146,6 +151,11 @@ constexpr Pin SdSpiCSPins[1] = { 34 };
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
 // 12864 LCD
+// The ST7920 datasheet specifies minimum clock cycle time 400ns @ Vdd=4.5V, min. clock width 200ns high and 20ns low.
+// This assumes that the Vih specification is met, which is 0.7 * Vcc = 3.5V @ Vcc=5V
+// The Duet Maestro level shifts all 3 LCD signals to 5V, so we meet the Vih specification and can reliably run at 2MHz.
+// For other electronics, there are reports that operation with 3.3V LCD signals may work if you reduce the clock frequency.
+constexpr uint32_t LcdSpiClockFrequency = 2000000;		// 2.0MHz
 constexpr Pin LcdCSPin = 45;
 constexpr Pin LcdBeepPin = 15;
 constexpr Pin EncoderPinA = 31;

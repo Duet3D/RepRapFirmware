@@ -45,7 +45,7 @@ public:
 			saveToConfigOverride : 1, // true if the trigger height should be saved to config-override.g
 			inputChannel : 4;		// input channel, use when the selected Z probe type is a switch
 
-	static constexpr unsigned int MaxTapsLimit = 32;
+	static constexpr unsigned int MaxTapsLimit = 31;	// must be low enough to fit in the maxTaps field
 
 	void Init(float h);
 	float GetStopHeight(float temperature) const;

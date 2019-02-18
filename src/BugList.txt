@@ -229,12 +229,113 @@ Done in 2.02 release:
 - [done] Step clock on Duet Maestro going backwards, https://forum.duet3d.com/topic/8264/steptimer-getinterruptclocks-isn-t-incrementing
 - [can't reproduce] Investigate Duet Maestro socket behaviour when cable disconnected, see email from chris
 
-2.03 planned:
+Done in 2.03beta1:
+- [done, ok] MBytes/sec -> Mbytes/sec in M122 P104 report
+- [done, ok] Remove 'RTOS' from firmware name?
+- [done, ok] G1 X1E1 no longer gets treated as if it also has an E parameter
+- [done, ok] On 12864 display increment default column by 1 extra to leave a space
+- [done, ok] Bug: setting M558 A parameter to anything >31 sets it to 0 instead of to 31
+- [done, ok] Slicer PE time estimate string, https://forum.duet3d.com/topic/8440/rrf-2-02-slic3r-pe-1-41-2-filament-used-and-print-times-wrong and SodaStreamHolder gcode file
+- [done, ok so far, poss homing issue] Generalised Cartesian/Core kinematics inc. markForged
+- [done, ok] M572 and M221 with no extruder drive number to set all extruders used by the current tool, https://forum.duet3d.com/topic/8444/setting-pressure-advance-in-filament-file
+- [done, ok with new filament monitor, test with old] Support filament sensor firmware v2
+- [done, ok] Improve efficiency of debug print in WiFiInterface: don't keep calling cat and strlen
+- [done, ok] Filament monitor to use time since end of last nonprinting extruder move
+- [done, ok] Fix continuous rotation speed error bug on Polar kinematics, https://forum.duet3d.com/topic/8747/polar-printing-polar-axis-rotation-issue/3
+- [done, ok, needs community test] Generalised Cartesian kinematics
+- [done, ok] fixed a crash in the crash handler when no task was active
+- [done, ok] Fix M3D Kanji problem on some displays
+- [done, ok] 4-tower delta kinematics
+- [done, ok] G2/G3 R parameter instead of IJ
+- [done, ok] On delta, G1 Y-100 after homing hits endstops - new limit check not working properly
+- [done, ok] Configurable 12864 SPI frequency
+- [done, ok] PR to send standby bed temperature in M408
+- [done, ok but test with babystepping] Deferred DM allocation and removal of DM array
+- [done] Support L parameter in M585, thanks chrishamm
+- [done] Scara R parameter to set min radius, https://github.com/dc42/RepRapFirmware/issues/221
+- [done, test] Disable mdns in legacy Duets, https://forum.duet3d.com/topic/8352/duet-0-6-randomly-reboots/5
+- [done, test] rr_fileinfo and M36 with no filename to include estimated print time and simulation time in the response, as in the report with a filename
+- [done, test] In CNC and laser mode update user Z coordinate after tool change, https://forum.duet3d.com/topic/8181/tool-offset-honored-but-not-displayed-correctly
+- [done, test] On SCARA and delta printers, apply geometric limits even if not applying M208 limits
+- [done, test] G92 should not constrain the passed coordinates to the M208 limits if M564 S0 has been used to disable limits
+- [done, test] Bug fix: month number written to height map.csv and filament files was too low by 1
+- [done, test] wilriker PR to allow steps/mm to be quoted in M92, https://forum.duet3d.com/topic/8225/m92-parameter-to-indicate-microstepping/6
+- [done, test] G30 S-3 option, to set trigger height to stopped height
+- [done, test] Bug: 12864 display needs to be refreshed when a change in printer state alters visibility
+- [done, test] When M106 Pn Sxxx received, if n = current print cooling fan number, update the print cooling fan speed variable, https://forum.duet3d.com/topic/8540/part-fan-value-missing/6
+- [done, test] DAA to handle requested accel/decl > max
+- [done, doesn't scroll correctly at the end of the list, fixed in beta2] Suppress filenames starting with '.' in the 12864 display
+- [done, ok] Implement G17, error on G18/G19.
+- [done, test] Core kinematics: enable all necessary motors
+- [done, test] Make G2/G3 segment length lower at low speeds, https://forum.duet3d.com/post/79040
+- [done, still not quite right, fixed in beta2] Bug: M997 S1 sent from USB keeps returning M105 status reports while the wifi firmware is flashing, and PanelDue 'flashing' update messages get erased
+- [done, ok] M453 do the switch to CNC mode even if bad P parameter used
+- [done, test] After pausing a print, if Cancel is pressed, cancel initial heating first like M108 does
+- [done, ok] M122 P105 prints object sizes
+
+Planned for 2.03beta2:
+- [done, ok] Bug: M997 S1 sent from USB returns one M105 status reports when flashing wifi firmware completes, and PanelDue 'flashing' update messages get erased
+- [ok] Suppress filenames starting with '.' in the 12864 display
+- [done, ok] M305 P# report includes the last error
+- [done, ok] Remove M135
+- [done] Increase temperature sampling from 2 to 4 samples/sec and increase max consecutive bad temperature count from 4 to 8
+- [done, ok] Shrunk the DDA by 8 bytes (another 4 may be possible)
+- [done] Shrunk each Tool from 196 to 140 bytes
+- [done, ok] M203 Innn to set minimum movement speed
+- [done, ok] M203 now reports feedrates in mm/sec and includes minimum speed
+- [done, ok] Scale fan PWM up to M106 X value
+- [done, ok] Add error for M208 min >= max
+- [done, ok] Allow hex input everywhere that an unsigned value is expected
+- [done, ok] Fix leadscrew adjustment bug in 2.03beta1
+- [done for single endstop per axis, ok] M574 endstop assignment, including option for >1 endstop per motor
+- [done, ok] Bug: M406 S6 or with other invalid S parameter never completes
+- [done, ok] M111 Sn where n != 0 no longer enables all debugging, for better compatibility with Repetier host
+- Test endstop input high/low noise immunity, decide on pullup enable/disable
+- Test that M500 saves all delta rod lengths correctly
+- Test with Duet 3
+- Test heater tuning (sample rate changed)
+
+- Z height based on plasma voltage or force
+- [could be related to visibility issue] Investigate 12864 display heater fault warning, https://forum.duet3d.com/topic/7718/12864-display-current-tool-temperatures/6
+- Slow startup move issue, https://forum.duet3d.com/topic/8284/firmware-2-02-released/7 (adding S2 fixes it)
+- M291 issue, https://forum.duet3d.com/topic/8381/m291-s2-does-not-block-macro-execution/5
+- In laser mode allow M3 instead of S to control laser power? (wait for feedback, not as simple as it looked)
+- [check latest forum response, possibly caused by M208 checks] Investigate @frafa's SCARA issue, https://forum.duet3d.com/post/76024
+- [await reply from Mario] Is there any benefit to setting RNDTF in M569?
+- Danny's G1->G0 request? [added IntermediatePositionsReachable function]
+- Warm up time not always displayed in 2.02
+- For PanelDue, send heater data for the first heater in each tool, https://forum.duet3d.com/topic/8458/hide-unused-heater-channels-paneldue-5/4 and https://forum.duet3d.com/topic/8933/paneldue-two-tools-same-heater-one-pair-of-temp-buttons/2
+- Deferred allocation of DMs: don't create DMs for nonlocal drives, pass #steps to CAN interface instead
+- Reports that DueX5 endstops stop working after a while, https://forum.duet3d.com/topic/8284/firmware-2-02-released/9
+- I2C error recovery?
+- Pressure advance issue? https://forum.duet3d.com/topic/8672/extruder-motors-skip-steps-with-pressure-advance-enabled/3
+- Command (M18/M84?) to enable specified motors or axes
+- Don't keep sending "wifi reported error" messages during reconnection attempts, https://forum.duet3d.com/topic/8837/wifi-reported-error
+- M24 in filament-change.g macro doesn't resume the print
+
+Investigations
+
+- [done, DWC bug, tell chrishamm] JSON (?), https://forum.duet3d.com/topic/8816/java-errors/5
+- [done, ok now] HaqXY
+- [await response] Tool offset not applied in tpost? https://forum.duet3d.com/topic/9002/tpost-g-does-not-apply-tool-offset
+- I2C error recovery 
+- [investigated, awaiting feedback] Kulitorum segmented speed issue, https://forum.duet3d.com/topic/8789/max-actual-speed-at-high-path-detail/10
+- Low steps/mm and pressure advance, https://forum.duet3d.com/topic/8672/extruder-motors-skip-steps-with-pressure-advance-enabled/67
+- Retraction problem, https://forum.duet3d.com/post/79485
+- Icon generation, https://forum.duet3d.com/topic/8177/icon-generation/7
+
+2.04 planned:
+- Stop print after a short to ground report? https://forum.duet3d.com/topic/8239/duet-maestro-short-to-ground/10
+- Option to enable a trigger when not printing (C3?), https://forum.duet3d.com/topic/8459/m581-external-trigger
+- Implement G43?
+- What does M48 do in Marlin?
+- Option in M452 to allow G1 S or M3 to control laser? Also whether S is sticky.
+- On Maestro, delay between first enabling the driver and moving the motor; or a separate command to enable a motor.
+- When installing DuetWiFiServer, PanelDue message keeps disappearing
+- Overlap SD card write and network fetch, for faster file upload?
 - Object model
 - Conditionals, loops and maths in GCode commands
 - S-curve acceleration
-- Endstop assignment, including option for 1 endstop per motor
-- Faster file upload?
 - Some features from the list below
 
 Future:
@@ -335,5 +436,4 @@ Investigations:
 [no fault] https://www.duet3d.com/forum/thread.php?pid=30851#p30851 (split axis motor goes the wrong way)
 [done BUT still wrong in lwip 2] inconsistend oversize vs. len
 p->ref == 1 in WiFi
-
 

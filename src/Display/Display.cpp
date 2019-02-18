@@ -137,6 +137,10 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply)
 			{
 				lcd = new Lcd7920(LcdCSPin, fonts, ARRAY_SIZE(fonts));
 			}
+			if (gb.Seen('F'))
+			{
+				lcd->SetSpiClockFrequency(gb.GetUIValue());
+			}
 			lcd->Init();
 			IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
 			lcd->SetFont(SmallFontNumber);
