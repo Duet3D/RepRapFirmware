@@ -107,23 +107,15 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 		if (gb.Seen('L'))		// Set minimum speed
 		{
 			seen = true;
-			float speed = gb.GetFValue();
-			if (speed > 1.0)
-			{
-				speed /= 255.0;
-			}
-			minVal = constrain<float>(speed, 0.0, maxVal);
+			float minSpeed = ConvertOldStylePwm(gb.GetFValue());
+			minVal = constrain<float>(minSpeed, 0.0, maxVal);
 		}
 
 		if (gb.Seen('X'))		// Set maximum speed
 		{
 			seen = true;
-			float speed = gb.GetFValue();
-			if (speed > 1.0)
-			{
-				speed /= 255.0;
-			}
-			maxVal = constrain<float>(speed, minVal, 1.0);
+			float maxSpeed = ConvertOldStylePwm(gb.GetFValue());
+			maxVal = constrain<float>(maxSpeed, minVal, 1.0);
 		}
 
 		if (gb.Seen('H'))		// Set thermostatically-controlled heaters
