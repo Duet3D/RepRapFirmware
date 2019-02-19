@@ -900,6 +900,7 @@ void HttpResponder::SendGCodeReply()
 	Commit();
 }
 
+// Send a JSON response to the current command. outBuf is non-null on entry.
 void HttpResponder::SendJsonResponse(const char* command)
 {
 	// Try to authorise the user automatically to retain compatibility with the old web interface
@@ -970,6 +971,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 				if (buf != nullptr)
 				{
 					OutputBuffer::ReleaseAll(buf);
+					OutputBuffer::ReleaseAll(outBuf);
 					return;					// next time we try, hopefully there will be a spare buffer
 				}
 			}
@@ -980,8 +982,8 @@ void HttpResponder::SendJsonResponse(const char* command)
 			// We know that we have an output buffer, but it may be too short to send a long reply, so send a short one
 			outBuf->copy(serviceUnavailableResponse);
 			Commit(ResponderState::free, false);
-			return;
 		}
+		return;
 	}
 
 	// Send the JSON response
@@ -1019,8 +1021,6 @@ void HttpResponder::SendJsonResponse(const char* command)
 
 	if (outBuf->HadOverflow())
 	{
-		// We ran out of buffers. Release the buffers we have and return false. The caller will retry later.
-		OutputBuffer::ReleaseAll(outBuf);
 		// We ran out of buffers at some point.
 		// Unfortunately the protocol is prone to deadlocking, because if most output buffer are used up holding a GCode reply,
 		// there may be insufficient buffers left to compose the status response to tell DWC that it needs to fetch that GCode reply.
@@ -1033,6 +1033,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 				if (buf != nullptr)
 				{
 					OutputBuffer::ReleaseAll(buf);
+					OutputBuffer::ReleaseAll(outBuf);
 					return;
 				}
 			}
@@ -1040,8 +1041,13 @@ void HttpResponder::SendJsonResponse(const char* command)
 			OutputBuffer::Truncate(outBuf, 999999);				// release all buffers except the first one
 			outBuf->copy(serviceUnavailableResponse);
 			Commit(ResponderState::free, false);
-			return;
 		}
+		else
+		{
+			// We ran out of buffers. Release the buffers we have and return false. The caller will retry later.
+			OutputBuffer::ReleaseAll(outBuf);
+		}
+		return;
 	}
 
 	// Here if everything is OK

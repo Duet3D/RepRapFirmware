@@ -273,7 +273,7 @@ Done in 2.03beta1:
 - [done, test] After pausing a print, if Cancel is pressed, cancel initial heating first like M108 does
 - [done, ok] M122 P105 prints object sizes
 
-Planned for 2.03beta2:
+Done in 2.03beta2:
 - [done, ok] Bug: M997 S1 sent from USB returns one M105 status reports when flashing wifi firmware completes, and PanelDue 'flashing' update messages get erased
 - [ok] Suppress filenames starting with '.' in the 12864 display
 - [done, ok] M305 P# report includes the last error
@@ -290,10 +290,26 @@ Planned for 2.03beta2:
 - [done for single endstop per axis, ok] M574 endstop assignment, including option for >1 endstop per motor
 - [done, ok] Bug: M406 S6 or with other invalid S parameter never completes
 - [done, ok] M111 Sn where n != 0 no longer enables all debugging, for better compatibility with Repetier host
+- [tested, ok] Test heater tuning (sample rate changed)
+
+Planned for 2.03:
+- [done] HttpResponder fix from sdavi
+- [done, test] Bug fix: if axis scaling was used then baby stepping, tool offsets and workplace coordinate offsets were not correctly accounted for when converting machine positoin to user position
+- [done] Duet085: allow 2 additional fans
+- [partly done, test babystepping, test resurrect.g file M291 command correct] Y babystepping, https://forum.duet3d.com/topic/8015/change-z-babystepping-to-y-babystepping-for-belt-printers/14
+- M585 needs to use custom endstop specified in E parameter
+- M143 A3 option to turn off whole machine immediately?
+- Turn off power in emergency stop? https://forum.duet3d.com/topic/9158/ps_on-m81-incorporated-into-the-emergency-stop-functions/5
+- If a print is ended or cancelled with G10 in effect, cancel the Z lift. Also, if Z lift value is changed while G10 is in effect, the Z position will be wrong.
+- Clear filament sensor alerts after they are acknowledged, https://forum.duet3d.com/topic/9072/filament-out-warning-always-present/8
+- [done, test] Stop movement when changing pressure advance with M572, https://forum.duet3d.com/topic/9140/extruder-behaves-strangle-when-disabling-pressure-advance/10
+- [done] Stop movement when changing endstop config in M574
+- Consider compensating probe trigger height for other heater temperature than bed
+- For PanelDue, send heater data for the first heater in each tool (does PD handle #heaters and #tools separately?) https://forum.duet3d.com/topic/8458/hide-unused-heater-channels-paneldue-5/4 and https://forum.duet3d.com/topic/8933/paneldue-two-tools-same-heater-one-pair-of-temp-buttons/2
+
 - Test endstop input high/low noise immunity, decide on pullup enable/disable
 - Test that M500 saves all delta rod lengths correctly
 - Test with Duet 3
-- Test heater tuning (sample rate changed)
 
 - Z height based on plasma voltage or force
 - [could be related to visibility issue] Investigate 12864 display heater fault warning, https://forum.duet3d.com/topic/7718/12864-display-current-tool-temperatures/6
@@ -304,7 +320,6 @@ Planned for 2.03beta2:
 - [await reply from Mario] Is there any benefit to setting RNDTF in M569?
 - Danny's G1->G0 request? [added IntermediatePositionsReachable function]
 - Warm up time not always displayed in 2.02
-- For PanelDue, send heater data for the first heater in each tool, https://forum.duet3d.com/topic/8458/hide-unused-heater-channels-paneldue-5/4 and https://forum.duet3d.com/topic/8933/paneldue-two-tools-same-heater-one-pair-of-temp-buttons/2
 - Deferred allocation of DMs: don't create DMs for nonlocal drives, pass #steps to CAN interface instead
 - Reports that DueX5 endstops stop working after a while, https://forum.duet3d.com/topic/8284/firmware-2-02-released/9
 - I2C error recovery?

@@ -403,10 +403,10 @@ unsigned int Move::GetNumProbePoints() const
 	return probePoints.GetNumBedCompensationPoints();
 }
 
-// Try to push some babystepping through the lookahead queue
-float Move::PushBabyStepping(float amount)
+// Try to push some babystepping through the lookahead queue, returning the amount pushed
+float Move::PushBabyStepping(size_t axis, float amount)
 {
-	return ddaRingAddPointer->AdvanceBabyStepping(amount);
+	return ddaRingAddPointer->AdvanceBabyStepping(axis, amount);
 }
 
 // Change the kinematics to the specified type if it isn't already

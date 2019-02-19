@@ -1015,7 +1015,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			ch = ',';
 		}
 		response->cat((ch == '[') ? "[]" : "]");
-		response->catf(",\"babystep\":%.3f}", (double)gCodes->GetBabyStepOffset());
+		response->catf(",\"babystep\":%.3f}", (double)gCodes->GetBabyStepOffset(Z_AXIS));
 	}
 
 	// G-code reply sequence for webserver (sequence number for AUX is handled later)
@@ -1731,7 +1731,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send the baby stepping offset
-	response->catf(",\"babystep\":%.03f", (double)(gCodes->GetBabyStepOffset()));
+	response->catf(",\"babystep\":%.03f", (double)(gCodes->GetBabyStepOffset(Z_AXIS)));
 
 	// Send the current tool number
 	response->catf(",\"tool\":%d", GetCurrentToolNumber());

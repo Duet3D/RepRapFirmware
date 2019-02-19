@@ -69,7 +69,7 @@ public:
     float GetRequestedSpeed() const { return requestedSpeed; }
     float GetTopSpeed() const { return topSpeed; }
     float GetVirtualExtruderPosition() const { return virtualExtruderPosition; }
-	float AdvanceBabyStepping(float amount);						// Try to push babystepping earlier in the move queue
+	float AdvanceBabyStepping(size_t axis, float amount);					// Try to push babystepping earlier in the move queue
 	bool IsHomingAxes() const { return (endStopsToCheck & HomeAxes) != 0; }
 	uint32_t GetXAxes() const { return xAxes; }
 	uint32_t GetYAxes() const { return yAxes; }

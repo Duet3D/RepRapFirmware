@@ -87,7 +87,7 @@ public:
 	bool UseMesh(bool b);											// Try to enable mesh bed compensation and report the final state
 	bool IsUsingMesh() const { return usingMesh; }					// Return true if we are using mesh compensation
 	unsigned int GetNumProbePoints() const;							// Return the number of currently used probe points
-	float PushBabyStepping(float amount);							// Try to push some babystepping through the lookahead queue
+	float PushBabyStepping(size_t axis, float amount);				// Try to push some babystepping through the lookahead queue
 
 	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply);			// process M204
 	GCodeResult ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef& reply);	// process M593

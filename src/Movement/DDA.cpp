@@ -737,8 +737,13 @@ LA_DEBUG;
 
 // Try to push babystepping earlier in the move queue, returning the amount we pushed
 //TODO this won't work for CoreXZ, rotary delta, Kappa, or SCARA with Z crosstalk
-float DDA::AdvanceBabyStepping(float amount)
+float DDA::AdvanceBabyStepping(size_t axis, float amount)
 {
+	if (axis != Z_AXIS)
+	{
+		return 0.0;				// only Z axis babystepping is supported at present
+	}
+
 	DDA *cdda = this;
 	while (cdda->prev->state == DDAState::provisional)
 	{
