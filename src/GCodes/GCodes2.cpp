@@ -2005,7 +2005,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
-				if (gb.Seen(machineAxisLetters[axis]))
+				if (gb.Seen(axisLetters[axis]))
 				{
 					float values[2];
 					size_t numValues = 2;
