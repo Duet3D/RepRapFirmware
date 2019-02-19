@@ -169,7 +169,9 @@ public:
 
 	float GetRawExtruderTotalByDrive(size_t extruder) const;			// Get the total extrusion since start of print, for one drive
 	float GetTotalRawExtrusion() const { return rawExtruderTotal; }		// Get the total extrusion since start of print, all drives
-	float GetBabyStepOffset() const { return currentBabyStepZOffset; }	// Get the current baby stepping Z offset
+	float GetBabyStepOffset(size_t axis) const
+		pre(axis < maxAxes)
+		{ return currentBabyStepOffsets[axis]; }						// Get the current baby stepping offset for an axis
 	const float *GetUserPosition() const { return currentUserPosition; }	// Return the current user position
 
 #if HAS_NETWORKING
@@ -372,8 +374,6 @@ private:
 
 	void CopyConfigFinalValues(GCodeBuffer& gb);							// Copy the feed rate etc. from the daemon to the input channels
 
-	void ClearBabyStepping() { currentBabyStepZOffset = 0.0; }
-
 	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;					// Decide which device to display a message box on
 	void DoManualProbe(GCodeBuffer& gb);									// Do a manual bed probe
 
@@ -522,7 +522,7 @@ private:
 	float speedFactor;							// speed factor as a percentage (normally 100.0)
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 	float volumetricExtrusionFactors[MaxExtruders]; // Volumetric extrusion factors
-	float currentBabyStepZOffset;				// The accumulated Z offset due to baby stepping requests
+	float currentBabyStepOffsets[MaxAxes];		// The accumulated axis offsets due to baby stepping requests
 
 	// Z probe
 	GridDefinition defaultGrid;					// The grid defined by the M557 command in config.g

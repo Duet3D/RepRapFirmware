@@ -2205,45 +2205,62 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 290:	// Baby stepping
-		if (gb.Seen('S') || gb.Seen('Z'))
 		{
-			const float fval = gb.GetFValue();
-			if (!LockMovement(gb))
+			const bool absolute = (gb.Seen('R') && gb.GetIValue() == 0);
+			bool seen = false, haveResidual = false;
+			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
-				return false;
+				if (gb.Seen(axisLetters[axis]) || (axis == 2 && gb.Seen('S')))			// S is a synonym for Z
+				{
+					const float fval = gb.GetFValue();
+					if (!LockMovement(gb))
+					{
+						return false;
+					}
+					seen = true;
+					float difference;
+					if (absolute)
+					{
+						difference = fval - currentBabyStepOffsets[axis];
+						currentBabyStepOffsets[axis] = fval;
+					}
+					else
+					{
+						difference = constrain<float>(fval, -1.0, 1.0);
+						currentBabyStepOffsets[axis] += difference;
+					}
+
+					const float amountPushed = reprap.GetMove().PushBabyStepping(axis, difference);
+					moveBuffer.initialCoords[axis] += amountPushed;
+
+					// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
+					// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
+					moveBuffer.coords[axis] += difference;
+					if (amountPushed != difference)
+					{
+						haveResidual = true;
+					}
+				}
 			}
 
-			const bool absolute = (gb.Seen('R') && gb.GetIValue() == 0);
-			float difference;
-			if (absolute)
+			if (seen)
 			{
-				difference = fval - currentBabyStepZOffset;
-				currentBabyStepZOffset = fval;
+				if (haveResidual && segmentsLeft == 0 && reprap.GetMove().AllMovesAreFinished())
+				{
+					// The pipeline is empty, so execute the babystepping move immediately
+					SetMoveBufferDefaults();
+					moveBuffer.feedRate = DefaultFeedRate;
+					NewMoveAvailable(1);
+				}
 			}
 			else
 			{
-				difference = constrain<float>(fval, -1.0, 1.0);
-				currentBabyStepZOffset += difference;
+				reply.printf("Baby stepping offsets (mm):");
+				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+				{
+					reply.catf(" %x:%.3f", axisLetters[axis], (double)currentBabyStepOffsets[axis]);
+				}
 			}
-
-			const float amountPushed = reprap.GetMove().PushBabyStepping(difference);
-			moveBuffer.initialCoords[Z_AXIS] += amountPushed;
-
-			// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
-			// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
-			moveBuffer.coords[Z_AXIS] += difference;
-
-			if (amountPushed != difference && segmentsLeft == 0 && reprap.GetMove().AllMovesAreFinished())
-			{
-				// The pipeline is empty, so execute the babystepping move immediately
-				SetMoveBufferDefaults();
-				moveBuffer.feedRate = platform.MaxFeedrate(Z_AXIS);
-				NewMoveAvailable(1);
-			}
-		}
-		else
-		{
-			reply.printf("Baby stepping offset is %.3fmm", (double)GetBabyStepOffset());
 		}
 		break;
 
@@ -3268,6 +3285,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 572: // Set/report pressure advance
 		if (gb.Seen('S'))
 		{
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
 			const float advance = gb.GetFValue();
 			if (gb.Seen('D'))
 			{
@@ -3332,6 +3353,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
+					if (!LockMovementAndWaitForStandstill(gb))
+					{
+						return false;
+					}
 					++axesSeen;
 					lastAxisSeen = axis;
 					const int ival = gb.GetIValue();
