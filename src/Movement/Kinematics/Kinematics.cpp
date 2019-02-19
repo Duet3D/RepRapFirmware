@@ -24,8 +24,13 @@
 const char * const Kinematics::HomeAllFileName = "homeall.g";
 
 // Constructor. Pass segsPerSecond <= 0.0 to get non-segmented kinematics.
-Kinematics::Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0)
-	: segmentsPerSecond(segsPerSecond), minSegmentLength(minSegLength), useSegmentation(segsPerSecond > 0.0), useRawG0(doUseRawG0), type(t)
+Kinematics::Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0, bool doUseSegmentationZ)
+	: segmentsPerSecond(segsPerSecond),
+	minSegmentLength(minSegLength),
+	useSegmentation(segsPerSecond > 0.0),
+	useRawG0(doUseRawG0),
+	useSegmentationZ(segsPerSecond > 0.0 && doUseSegmentationZ),
+	type(t)
 {
 	reprap.GetGCodes().SetMachineAxisLetters(MachineAxisNames(), 3);
 }

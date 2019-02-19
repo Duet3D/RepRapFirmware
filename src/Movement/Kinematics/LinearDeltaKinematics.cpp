@@ -13,7 +13,7 @@
 #include "GCodes/GCodeBuffer.h"
 
 
-LinearDeltaKinematics::LinearDeltaKinematics() : Kinematics(KinematicsType::linearDelta, -1.0, 0.0, true)
+LinearDeltaKinematics::LinearDeltaKinematics() : Kinematics(KinematicsType::linearDelta, -1.0, 0.0, true, false)
 {
 	Init();
 }

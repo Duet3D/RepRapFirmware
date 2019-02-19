@@ -15,7 +15,7 @@
 
 // Constructor
 PolarKinematics::PolarKinematics()
-	: Kinematics(KinematicsType::polar, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true),
+	: Kinematics(KinematicsType::polar, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true, false),
 	  minRadius(0.0), maxRadius(DefaultMaxRadius), homedRadius(0.0),
 	  maxTurntableSpeed(DefaultMaxTurntableSpeed), maxTurntableAcceleration(DefaultMaxTurntableAcceleration)
 {

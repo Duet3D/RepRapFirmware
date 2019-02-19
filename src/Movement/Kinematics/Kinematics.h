@@ -187,12 +187,13 @@ public:
 
 	bool UseSegmentation() const { return useSegmentation; }
 	bool UseRawG0() const { return useRawG0; }
+	bool UseSegmentationZ() const { return useSegmentationZ; }
 	float GetSegmentsPerSecond() const pre(UseSegmentation()) { return segmentsPerSecond; }
 	float GetMinSegmentLength() const pre(UseSegmentation()) { return minSegmentLength; }
 
 protected:
 	// Constructor. Pass segsPerSecond <= 0.0 to get non-segmented motion.
-	Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0);
+	Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0, bool doUseSegmentationZ);
 
 	// Apply the M208 limits to the Cartesian position that the user wants to move to for all axes from the specified one upwards
 	// Return true if any coordinates were changed
@@ -210,6 +211,7 @@ protected:
 private:
 	bool useSegmentation;					// true if we have to approximate linear movement using segmentation
 	bool useRawG0;							// true if we normally use segmentation but we do not need to segment travel moves
+	bool useSegmentationZ;					// true if we have to approximate linear movement using segmentation, even along Z
 	KinematicsType type;
 };
 

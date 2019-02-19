@@ -2546,6 +2546,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	// Deal with XYZ movement
 	const float initialX = currentUserPosition[X_AXIS];
 	const float initialY = currentUserPosition[Y_AXIS];
+	const float initialZ = currentUserPosition[Z_AXIS];
 	AxesBitmap axesMentioned = 0;
   const float moveArg = gb.GetFValue() * distanceScale;
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
@@ -2692,9 +2693,14 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		{
 			// This kinematics approximates linear motion by means of segmentation.
 			// We assume that the segments will be smaller than the mesh spacing.
-			const float xyLength = sqrtf(fsquare(currentUserPosition[X_AXIS] - initialX) + fsquare(currentUserPosition[Y_AXIS] - initialY));
-			const float moveTime = xyLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
-			totalSegments = (unsigned int)max<int>(1, min<int>(rintf(xyLength/kin.GetMinSegmentLength()), rintf(moveTime * kin.GetSegmentsPerSecond())));
+			float moveLengthSquared = fsquare(currentUserPosition[X_AXIS] - initialX) + fsquare(currentUserPosition[Y_AXIS] - initialY);
+			if (kin.UseSegmentationZ())
+			{
+				moveLengthSquared += fsquare(currentUserPosition[Z_AXIS] - initialZ);
+			}
+			const float moveLength = sqrtf(moveLengthSquared);
+			const float moveTime = moveLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
+			totalSegments = (unsigned int)max<int>(1, min<int>(rintf(moveLength/kin.GetMinSegmentLength()), rintf(moveTime * kin.GetSegmentsPerSecond())));
 		}
 		else if (reprap.GetMove().IsUsingMesh() && (isCoordinated || machineType == MachineType::fff))
 		{

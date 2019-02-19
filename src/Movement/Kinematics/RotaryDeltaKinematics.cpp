@@ -14,7 +14,7 @@
 const float RotaryDeltaKinematics::NormalTowerAngles[DELTA_AXES] = { -150.0, -30.0, 90.0 };
 
 // Constructor
-RotaryDeltaKinematics::RotaryDeltaKinematics() : Kinematics(KinematicsType::rotaryDelta, DefaultSegmentsPerSecond, DefaultMinSegmentSize, false)
+RotaryDeltaKinematics::RotaryDeltaKinematics() : Kinematics(KinematicsType::rotaryDelta, DefaultSegmentsPerSecond, DefaultMinSegmentSize, false, false)
 {
 	Init();
 }

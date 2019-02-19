@@ -24,7 +24,7 @@ constexpr float DefaultPrintRadius = 1500.0;
 
 // Constructor
 HangprinterKinematics::HangprinterKinematics()
-	: Kinematics(KinematicsType::hangprinter, DefaultSegmentsPerSecond, DefaultMinSegmentSize, false)
+	: Kinematics(KinematicsType::hangprinter, DefaultSegmentsPerSecond, DefaultMinSegmentSize, false, true)
 {
 	Init();
 }

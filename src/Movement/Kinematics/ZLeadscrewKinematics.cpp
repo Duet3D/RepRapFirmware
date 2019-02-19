@@ -16,12 +16,12 @@
 const float M3ScrewPitch = 0.5;
 
 ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k)
-	: Kinematics(k, -1.0, 0.0, true), numLeadscrews(0), correctionFactor(1.0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
+	: Kinematics(k, -1.0, 0.0, true, false), numLeadscrews(0), correctionFactor(1.0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
 {
 }
 
 ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k, float segsPerSecond, float minSegLength, bool doUseRawG0)
-	: Kinematics(k, segsPerSecond, minSegLength, doUseRawG0), numLeadscrews(0), correctionFactor(1.0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
+	: Kinematics(k, segsPerSecond, minSegLength, doUseRawG0, false), numLeadscrews(0), correctionFactor(1.0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
 {
 }
 
