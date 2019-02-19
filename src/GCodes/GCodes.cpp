@@ -2275,6 +2275,11 @@ bool GCodes::LockMovementAndWaitForStandstill(const GCodeBuffer& gb)
 		// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
 		UpdateCurrentUserPosition();
 	}
+	else
+	{
+		// Reset the moveBuffer coords to match previous user position
+		memcpy(moveBuffer.coords, moveBuffer.initialCoords, numVisibleAxes * sizeof(moveBuffer.initialCoords[0]));
+	}
 	return true;
 }
 
