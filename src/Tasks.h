@@ -41,6 +41,7 @@ namespace Tasks
 	uint32_t GetNeverUsedRam();
 	const Mutex *GetSpiMutex();
 	const Mutex *GetI2CMutex();
+	const Mutex *GetSysDirMutex();
 }
 
 #endif /* SRC_TASKS_H_ */

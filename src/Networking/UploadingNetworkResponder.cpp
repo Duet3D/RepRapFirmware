@@ -37,7 +37,7 @@ void UploadingNetworkResponder::CancelUpload()
 		fileBeingUploaded.Close();
 		if (!filenameBeingProcessed.IsEmpty())
 		{
-			GetPlatform().GetMassStorage()->Delete(nullptr, filenameBeingProcessed.c_str());
+			GetPlatform().GetMassStorage()->Delete(filenameBeingProcessed.c_str());
 			filenameBeingProcessed.Clear();
 		}
 	}
@@ -71,12 +71,12 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 	{
 		if (uploadError)
 		{
-			GetPlatform().GetMassStorage()->Delete(nullptr, filenameBeingProcessed.c_str());
+			GetPlatform().GetMassStorage()->Delete(filenameBeingProcessed.c_str());
 		}
 		else if (fileLastModified != 0)
 		{
 			// Update the file timestamp if it was specified
-			(void)GetPlatform().GetMassStorage()->SetLastModifiedTime(nullptr, filenameBeingProcessed.c_str(), fileLastModified);
+			(void)GetPlatform().GetMassStorage()->SetLastModifiedTime(filenameBeingProcessed.c_str(), fileLastModified);
 		}
 		filenameBeingProcessed.Clear();
 	}

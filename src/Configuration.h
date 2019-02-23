@@ -236,13 +236,14 @@ constexpr size_t MaxFilenameLength = 100;
 constexpr size_t MaxVariableNameLength = 100;
 #endif
 
-constexpr size_t MaxHeaterNameLength = 20;				// Maximum number of characters in a heater name
-constexpr size_t MaxFanNameLength = 20;					// Maximum number of characters in a fan name
+constexpr size_t StringLength20 = 20;
+constexpr size_t MaxHeaterNameLength = StringLength20;	// Maximum number of characters in a heater name
+constexpr size_t MaxFanNameLength = StringLength20;		// Maximum number of characters in a fan name
 
 constexpr size_t FormatStringLength = 256;
 constexpr size_t GCodeReplyLength = 256;				// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer
 constexpr size_t MachineNameLength = 40;
-constexpr size_t RepRapPasswordLength = 20;
+constexpr size_t RepRapPasswordLength = StringLength20;
 constexpr size_t MediumStringLength = MaxFilenameLength;
 
 #if SAM4E || SAM4S || SAME70
@@ -347,7 +348,7 @@ constexpr size_t FILE_BUFFER_SIZE = 128;
 #define FS_PREFIX "0:"
 #define WEB_DIR "0:/www/"							// Place to find web files on the SD card
 #define GCODE_DIR "0:/gcodes/"						// Ditto - G-Codes
-#define SYS_DIR "0:/sys/"							// Ditto - System files
+#define DEFAULT_SYS_DIR "0:/sys/"					// Ditto - System files (can be changed using M505)
 #define MACRO_DIR "0:/macros/"						// Ditto - Macro files
 #define SCANS_DIRECTORY "0:/scans/"					// Directory for uploaded 3D scans
 #define FILAMENTS_DIRECTORY "0:/filaments/"			// Directory for filament configurations

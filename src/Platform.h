@@ -371,20 +371,26 @@ public:
 	EUI48EEPROM eui48MacAddress;
 #endif
 
-	friend class FileStore;
-
+	// File functions
 	MassStorage* GetMassStorage() const;
-	FileStore* OpenFile(const char* directory, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0)
-	{
-		return massStorage->OpenFile(directory, fileName, mode, preAllocSize);
-	}
+	FileStore* OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const;
+	bool Delete(const char* folder, const char *filename) const;
+	bool FileExists(const char* folder, const char *filename) const;
+	bool DirectoryExists(const char *folder, const char *dir) const;
 
 	const char* GetWebDir() const; 					// Where the html etc files are
 	const char* GetGCodeDir() const; 				// Where the gcodes are
-	const char* GetSysDir() const;  				// Where the system files are
 	const char* GetMacroDir() const;				// Where the user-defined macros are
 	const char* GetConfigFile() const; 				// Where the configuration is stored (in the system dir).
 	const char* GetDefaultFile() const;				// Where the default configuration is stored (in the system dir).
+
+	// Function to work with the system files folder
+	void SetSysDir(const char* dir);				// Set the system files path
+	bool SysFileExists(const char *filename) const;
+	FileStore* OpenSysFile(const char *filename, OpenMode mode) const;
+	bool DeleteSysFile(const char *filename) const;
+	void MakeSysFileName(const StringRef& result, const char *filename) const;
+	void GetSysDir(const StringRef & path) const;
 
 	// Message output (see MessageType for further details)
 	void Message(MessageType type, const char *message);
@@ -626,6 +632,8 @@ public:
 private:
 	Platform(const Platform&);						// private copy constructor to make sure we don't try to copy a Platform
 
+	const char* InternalGetSysDir() const;  		// where the system files are - not thread-safe!
+
 	void RawMessage(MessageType type, const char *message);	// called by Message after handling error/warning flags
 
 	void ResetChannel(size_t chan);					// re-initialise a serial channel
@@ -764,8 +772,9 @@ private:
 	MillisTimer openLoadATimer, openLoadBTimer;
 	MillisTimer driversFanTimers[NumTmcDriversSenseChannels];		// driver cooling fan timers
 	uint8_t nextDriveToPoll;
-	bool driversPowered;
 #endif
+
+	bool driversPowered;
 
 #if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
 	bool warnDriversNotPowered;
@@ -852,6 +861,7 @@ private:
 
 	// Files
 	MassStorage* massStorage;
+	const char *sysDir;
   
 	// Data used by the tick interrupt handler
 
@@ -948,12 +958,6 @@ inline const char* Platform::GetWebDir() const
 inline const char* Platform::GetGCodeDir() const
 {
 	return GCODE_DIR;
-}
-
-// Where the system files are
-inline const char* Platform::GetSysDir() const
-{
-	return SYS_DIR;
 }
 
 inline const char* Platform::GetMacroDir() const

@@ -170,7 +170,8 @@ Platform::Platform() :
 #if HAS_SMART_DRIVERS
 		nextDriveToPoll(0),
 #endif
-		lastFanCheckTime(0), auxGCodeReply(nullptr), tickState(0), debugCode(0), lastWarningMillis(0), deliberateError(false), i2cInitialised(false)
+		lastFanCheckTime(0), auxGCodeReply(nullptr), sysDir(nullptr), tickState(0), debugCode(0),
+		lastWarningMillis(0), deliberateError(false), i2cInitialised(false)
 {
 	massStorage = new MassStorage(this);
 }
@@ -487,9 +488,10 @@ void Platform::Init()
 	numSmartDrivers = MaxSmartDrivers;
 #endif
 
+	driversPowered = false;
+
 #if HAS_SMART_DRIVERS
 	// Initialise TMC driver module
-	driversPowered = false;
 # if SUPPORT_TMC51xx
 	SmartDrivers::Init();
 # else
@@ -895,7 +897,7 @@ bool Platform::HomingZWithProbe() const
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
 bool Platform::CheckFirmwareUpdatePrerequisites(const StringRef& reply)
 {
-	FileStore * const firmwareFile = OpenFile(GetSysDir(), IAP_FIRMWARE_FILE, OpenMode::read);
+	FileStore * const firmwareFile = OpenFile(DEFAULT_SYS_DIR, IAP_FIRMWARE_FILE, OpenMode::read);
 	if (firmwareFile == nullptr)
 	{
 		reply.printf("Firmware binary \"%s\" not found", IAP_FIRMWARE_FILE);
@@ -918,7 +920,7 @@ bool Platform::CheckFirmwareUpdatePrerequisites(const StringRef& reply)
 		return false;
 	}
 
-	if (!GetMassStorage()->FileExists(GetSysDir(), IAP_UPDATE_FILE))
+	if (!FileExists(DEFAULT_SYS_DIR, IAP_UPDATE_FILE))
 	{
 		reply.printf("In-application programming binary \"%s\" not found", IAP_UPDATE_FILE);
 		return false;
@@ -930,7 +932,7 @@ bool Platform::CheckFirmwareUpdatePrerequisites(const StringRef& reply)
 // Update the firmware. Prerequisites should be checked before calling this.
 void Platform::UpdateFirmware()
 {
-	FileStore * const iapFile = OpenFile(GetSysDir(), IAP_UPDATE_FILE, OpenMode::read);
+	FileStore * const iapFile = OpenFile(DEFAULT_SYS_DIR, IAP_UPDATE_FILE, OpenMode::read);
 	if (iapFile == nullptr)
 	{
 		MessageF(FirmwareUpdateMessage, "IAP not found\n");
@@ -1382,12 +1384,11 @@ void Platform::Spin()
 		for (;;) {}
 	}
 
-#if HAS_SMART_DRIVERS
 	// Check whether the TMC drivers need to be initialised.
 	// The tick ISR also looks for over-voltage events, but it just disables the driver without changing driversPowerd or numOverVoltageEvents
 	if (driversPowered)
 	{
-# if HAS_VOLTAGE_MONITOR
+#if HAS_VOLTAGE_MONITOR
 		if (currentVin < driverPowerOffAdcReading)
 		{
 			driversPowered = false;
@@ -1401,8 +1402,9 @@ void Platform::Spin()
 			lastOverVoltageValue = currentVin;					// save this because the voltage may have changed by the time we report it
 		}
 		else
-# endif
+#endif
 		{
+#if HAS_SMART_DRIVERS
 			// Check one TMC2660 or TMC2224 for temperature warning or temperature shutdown
 			if (enableValues[nextDriveToPoll] >= 0)				// don't poll driver if it is flagged "no poll"
 			{
@@ -1463,7 +1465,7 @@ void Platform::Spin()
 					}
 				}
 
-#if HAS_STALL_DETECT
+# if HAS_STALL_DETECT
 				if ((stat & TMC_RR_SG) != 0)
 				{
 					if ((stalledDrivers & mask) == 0)
@@ -1488,10 +1490,10 @@ void Platform::Spin()
 				{
 					stalledDrivers &= ~mask;
 				}
-#endif
+# endif
 			}
 
-#if HAS_STALL_DETECT
+# if HAS_STALL_DETECT
 			// Action any pause or rehome actions due to motor stalls. This may have to be done more than once.
 			if (stalledDriversToRehome != 0)
 			{
@@ -1507,24 +1509,31 @@ void Platform::Spin()
 					stalledDriversToPause = 0;
 				}
 			}
-#endif
+# endif
 			// Advance drive number ready for next time
 			++nextDriveToPoll;
 			if (nextDriveToPoll == numSmartDrivers)
 			{
 				nextDriveToPoll = 0;
 			}
+#endif		// HAS_SMART_DRIVERS
 		}
 	}
-# if HAS_VOLTAGE_MONITOR
+#if HAS_VOLTAGE_MONITOR
 	else if (currentVin >= driverPowerOnAdcReading && currentVin <= driverNormalVoltageAdcReading)
+#else
+	else
+#endif
 	{
+		driversPowered = true;
+#if HAS_SMART_DRIVERS
 		openLoadATimer.Stop();
 		openLoadBTimer.Stop();
 		temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadADrivers = openLoadBDrivers = notOpenLoadADrivers = notOpenLoadBDrivers = 0;
-		driversPowered = true;
+#endif
 	}
-# endif
+
+#if HAS_SMART_DRIVERS
 	SmartDrivers::Spin(driversPowered);
 #endif
 
@@ -4196,6 +4205,94 @@ bool Platform::IsDuetWiFi() const
 	return board == BoardType::DuetWiFi_10 || board == BoardType::DuetWiFi_102;
 }
 #endif
+
+// Where the system files are. Not thread safe!
+const char* Platform::InternalGetSysDir() const
+{
+	return (sysDir != nullptr) ? sysDir : DEFAULT_SYS_DIR;
+}
+
+// Open a file
+FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize) const
+{
+	String<MaxFilenameLength> location;
+	MassStorage::CombineName(location.GetRef(), folder, fileName);
+	return massStorage->OpenFile(location.c_str(), mode, preAllocSize);
+}
+
+bool Platform::Delete(const char* folder, const char *filename) const
+{
+	String<MaxFilenameLength> location;
+	MassStorage::CombineName(location.GetRef(), folder, filename);
+	return massStorage->Delete(location.c_str());
+}
+
+bool Platform::FileExists(const char* folder, const char *filename) const
+{
+	String<MaxFilenameLength> location;
+	MassStorage::CombineName(location.GetRef(), folder, filename);
+	return massStorage->FileExists(location.c_str());
+}
+
+bool Platform::DirectoryExists(const char *folder, const char *dir) const
+{
+	String<MaxFilenameLength> location;
+	MassStorage::CombineName(location.GetRef(), folder, dir);
+	return massStorage->DirectoryExists(location.c_str());
+}
+
+// Set the system files path
+void Platform::SetSysDir(const char* dir)
+{
+	String<MaxFilenameLength> newSysDir;
+	MutexLocker lock(Tasks::GetSysDirMutex());
+
+	massStorage->CombineName(newSysDir.GetRef(), InternalGetSysDir(), dir);
+	if (!newSysDir.EndsWith('/'))
+	{
+		newSysDir.cat('/');
+	}
+
+	const size_t len = newSysDir.strlen() + 1;
+	char* const nsd = new char[len];
+	memcpy(nsd, newSysDir.c_str(), len);
+	const char *nsd2 = nsd;
+	std::swap(sysDir, nsd2);
+	delete nsd2;
+}
+
+bool Platform::SysFileExists(const char *filename) const
+{
+	String<MaxFilenameLength> location;
+	MakeSysFileName(location.GetRef(), filename);
+	return massStorage->FileExists(location.c_str());
+}
+
+FileStore* Platform::OpenSysFile(const char *filename, OpenMode mode) const
+{
+	String<MaxFilenameLength> location;
+	MakeSysFileName(location.GetRef(), filename);
+	return massStorage->OpenFile(location.c_str(), mode, 0);
+}
+
+bool Platform::DeleteSysFile(const char *filename) const
+{
+	String<MaxFilenameLength> location;
+	MakeSysFileName(location.GetRef(), filename);
+	return massStorage->Delete(location.c_str());
+}
+
+void Platform::MakeSysFileName(const StringRef& result, const char *filename) const
+{
+	MutexLocker lock(Tasks::GetSysDirMutex());
+	MassStorage::CombineName(result, InternalGetSysDir(), filename);
+}
+
+void Platform::GetSysDir(const StringRef & path) const
+{
+	MutexLocker lock(Tasks::GetSysDirMutex());
+	path.copy(InternalGetSysDir());
+}
 
 // User I/O and servo support
 // Translate a logical pin to a firmware pin and whether the output of that pin is normally inverted

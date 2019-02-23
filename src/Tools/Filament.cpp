@@ -41,7 +41,7 @@ void Filament::Unload()
 
 void Filament::LoadAssignment()
 {
-	FileStore *file = reprap.GetPlatform().OpenFile(SYS_DIR, FilamentAssignmentFile, OpenMode::read);
+	FileStore *file = reprap.GetPlatform().OpenSysFile(FilamentAssignmentFile, OpenMode::read);
 	if (file == nullptr)
 	{
 		// May happen, but not critical
@@ -78,7 +78,7 @@ void Filament::LoadAssignment()
 
 /*static*/ void Filament::SaveAssignments()
 {
-	FileStore *file = reprap.GetPlatform().OpenFile(SYS_DIR, FilamentAssignmentFile, OpenMode::write);
+	FileStore * const file = reprap.GetPlatform().OpenSysFile(FilamentAssignmentFile, OpenMode::write);
 	if (file == nullptr)
 	{
 		// Should never happen

@@ -41,6 +41,7 @@ static Task<MainTaskStackWords> mainTask;
 
 static Mutex spiMutex;
 static Mutex i2cMutex;
+static Mutex sysDirMutex;
 static Mutex mallocMutex;
 
 extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize)
@@ -145,6 +146,7 @@ extern "C" void MainTask(void *pvParameters)
 	mallocMutex.Create("Malloc");
 	spiMutex.Create("SPI");
 	i2cMutex.Create("I2C");
+	sysDirMutex.Create("SysDir");
 #endif
 	reprap.Init();
 	for (;;)
@@ -336,6 +338,15 @@ namespace Tasks
 	{
 #ifdef RTOS
 		return &i2cMutex;
+#else
+		return nullptr;
+#endif
+	}
+
+	const Mutex *GetSysDirMutex()
+	{
+#ifdef RTOS
+		return &sysDirMutex;
 #else
 		return nullptr;
 #endif

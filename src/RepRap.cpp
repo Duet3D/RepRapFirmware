@@ -279,14 +279,14 @@ void RepRap::Init()
 			// Run the configuration file
 			const char *configFile = platform->GetConfigFile();
 			platform->Message(UsbMessage, "\nExecuting ");
-			if (platform->GetMassStorage()->FileExists(platform->GetSysDir(), configFile))
+			if (platform->SysFileExists(configFile))
 			{
-				platform->MessageF(UsbMessage, "%s...", platform->GetConfigFile());
+				platform->MessageF(UsbMessage, "%s...", configFile);
 			}
 			else
 			{
-				platform->MessageF(UsbMessage, "%s (no configuration file found)...", platform->GetDefaultFile());
 				configFile = platform->GetDefaultFile();
+				platform->MessageF(UsbMessage, "%s (no configuration file found)...", configFile);
 			}
 
 			if (gCodes->RunConfigFile(configFile))
@@ -2037,7 +2037,9 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 	if (specificFile)
 	{
 		// Poll file info for a specific file
-		if (!platform->GetMassStorage()->GetFileInfo(platform->GetGCodeDir(), filename, info, quitEarly))
+		String<MaxFilenameLength> filePath;
+		MassStorage::CombineName(filePath.GetRef(), platform->GetGCodeDir(), filename);
+		if (!platform->GetMassStorage()->GetFileInfo(filePath.c_str(), info, quitEarly))
 		{
 			// This may take a few runs...
 			return false;

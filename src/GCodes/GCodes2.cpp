@@ -910,7 +910,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			String<MaxFilenameLength> filename;
 			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
-				platform.GetMassStorage()->Delete(platform.GetGCodeDir(), filename.c_str());
+				platform.Delete(platform.GetGCodeDir(), filename.c_str());
 			}
 			else
 			{
@@ -2771,7 +2771,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 
 			// Read the entire file
-			FileStore * const f = platform.OpenFile(platform.GetSysDir(), platform.GetConfigFile(), OpenMode::read);
+			FileStore * const f = platform.OpenSysFile(platform.GetConfigFile(), OpenMode::read);
 			if (f == nullptr)
 			{
 				reply.copy("Configuration file not found");
@@ -2800,6 +2800,26 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				}
 				f->Close();
 			}
+		}
+		break;
+
+	case 505:	// set sys folder
+		if (gb.Seen('P'))
+		{
+			// Lock movement to try to prevent other threads opening system files while we change the system path
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
+			String<MaxFilenameLength> path;
+			gb.GetQuotedString(path.GetRef());
+			platform.SetSysDir(path.c_str());
+		}
+		else
+		{
+			String<MaxFilenameLength> path;
+			platform.GetSysDir(path.GetRef());
+			reply.printf("Sys file path is %s", path.c_str());
 		}
 		break;
 
@@ -3035,37 +3055,44 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 559:
 	case 560: // Binary writing
-	{
-		const char* folder = platform.GetSysDir();
-		const char* defaultFile = platform.GetConfigFile();
-		if (code == 560)
 		{
-			folder = platform.GetWebDir();
-			defaultFile = INDEX_PAGE_FILE;
+			String<MaxFilenameLength> sysDir;
+			const char* defaultFile;
+			const char *folder;
+			if (code == 560)
+			{
+				folder = platform.GetWebDir();
+				defaultFile = INDEX_PAGE_FILE;
+			}
+			else
+			{
+				platform.GetSysDir(sysDir.GetRef());
+				folder = sysDir.c_str();
+				defaultFile = platform.GetConfigFile();
+			}
+			String<MaxFilenameLength> filename;
+			if (gb.Seen('P'))
+			{
+				gb.GetPossiblyQuotedString(filename.GetRef());
+			}
+			else
+			{
+				filename.copy(defaultFile);
+			}
+			const FilePosition size = (gb.Seen('S') ? (FilePosition)gb.GetIValue() : 0);
+			const uint32_t crc32 = (gb.Seen('C') ? gb.GetUIValue() : 0);
+			const bool ok = gb.OpenFileToWrite(folder, filename.c_str(), size, true, crc32);
+			if (ok)
+			{
+				reply.printf("Writing to file: %s", filename.c_str());
+			}
+			else
+			{
+				reply.printf("Can't open file %s for writing.", filename.c_str());
+				result = GCodeResult::error;
+			}
 		}
-		String<MaxFilenameLength> filename;
-		if (gb.Seen('P'))
-		{
-			gb.GetPossiblyQuotedString(filename.GetRef());
-		}
-		else
-		{
-			filename.copy(defaultFile);
-		}
-		const FilePosition size = (gb.Seen('S') ? (FilePosition)gb.GetIValue() : 0);
-		const uint32_t crc32 = (gb.Seen('C') ? gb.GetUIValue() : 0);
-		const bool ok = gb.OpenFileToWrite(folder, filename.c_str(), size, true, crc32);
-		if (ok)
-		{
-			reply.printf("Writing to file: %s", filename.c_str());
-		}
-		else
-		{
-			reply.printf("Can't open file %s for writing.", filename.c_str());
-			result = GCodeResult::error;
-		}
-	}
-	break;
+		break;
 
 	case 561: // Set identity transform and disable height map
 		if (!LockMovementAndWaitForStandstill(gb))
@@ -4234,12 +4261,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 #endif
 
 	case 916:
-		if (!platform.GetMassStorage()->FileExists(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G))
+		if (!platform.SysFileExists(RESUME_AFTER_POWER_FAIL_G))
 		{
 			reply.copy("No resume file found");
 			result = GCodeResult::error;
 		}
-		else if (!platform.GetMassStorage()->FileExists(platform.GetSysDir(), RESUME_PROLOGUE_G))
+		else if (!platform.SysFileExists(RESUME_PROLOGUE_G))
 		{
 			reply.printf("Resume prologue file '%s' not found", RESUME_PROLOGUE_G);
 			result = GCodeResult::error;

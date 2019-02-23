@@ -1477,7 +1477,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				const float fileMbytes = (float)timingBytesWritten/(float)(1024 * 1024);
 				const float mbPerSec = (fileMbytes * 1000.0)/(float)ms;
 				reply.printf("SD write speed for %.1fMbyte file was %.2fMbytes/sec", (double)fileMbytes, (double)mbPerSec);
-				platform.GetMassStorage()->Delete(platform.GetGCodeDir(), TimingFileName);
+				platform.Delete(platform.GetGCodeDir(), TimingFileName);
 				gb.SetState(GCodeState::normal);
 				break;
 			}
@@ -1485,7 +1485,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			if (!sdTimingFile->Write(reply.c_str(), reply.Capacity()))
 			{
 				sdTimingFile->Close();
-				platform.GetMassStorage()->Delete(platform.GetGCodeDir(), TimingFileName);
+				platform.Delete(platform.GetGCodeDir(), TimingFileName);
 				reply.copy("Error writing to timing file");
 				error = true;
 				gb.SetState(GCodeState::normal);
@@ -1712,8 +1712,8 @@ void GCodes::CheckTriggers()
 		else
 		{
 			ClearBit(triggersPending, lowestTriggerPending);		// clear the trigger
-			String<25> filename;
-			filename.printf(SYS_DIR "trigger%u.g", lowestTriggerPending);
+			String<StringLength20> filename;
+			filename.printf("trigger%u.g", lowestTriggerPending);
 			DoFileMacro(*daemonGCode, filename.c_str(), true);
 		}
 	}
@@ -1728,7 +1728,7 @@ void GCodes::CheckFilament()
 		&& LockMovement(*autoPauseGCode)							// need to lock movement before executing the pause macro
 	   )
 	{
-		String<100> filamentErrorString;
+		String<MediumStringLength> filamentErrorString;
 		filamentErrorString.printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentMonitor::GetErrorMessage(lastFilamentError));
 		DoPause(*autoPauseGCode, PauseReason::filament, filamentErrorString.c_str());
 		lastFilamentError = FilamentSensorStatus::ok;
@@ -2098,7 +2098,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 	const char* const printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
 	if (printingFilename != nullptr)
 	{
-		FileStore * const f = platform.OpenFile(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G, OpenMode::write);
+		FileStore * const f = platform.OpenSysFile(RESUME_AFTER_POWER_FAIL_G, OpenMode::write);
 		if (f == nullptr)
 		{
 			platform.MessageF(ErrorMessage, "Failed to create file %s", RESUME_AFTER_POWER_FAIL_G);
@@ -2224,7 +2224,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 			}
 			else
 			{
-				platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G);
+				platform.DeleteSysFile(RESUME_AFTER_POWER_FAIL_G);
 				platform.MessageF(ErrorMessage, "Failed to write or close file %s\n", RESUME_AFTER_POWER_FAIL_G);
 			}
 		}
@@ -2648,7 +2648,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		{
 			ClearBit(effectiveAxesHomed, Z_AXIS);								// if doing a manual Z probe, don't limit the Z movement
 		}
-		if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, moveBuffer.initialCoords, numVisibleAxes, effectiveAxesHomed, moveBuffer.isCoordinated, limitAxes))
+		if (moveBuffer.moveType == 0 && reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, moveBuffer.initialCoords, numVisibleAxes, effectiveAxesHomed, moveBuffer.isCoordinated, limitAxes))
 		{
 			if (machineType != MachineType::fff)
 			{
@@ -3108,7 +3108,7 @@ void GCodes::EmergencyStop()
 // 0 = running a system macro automatically
 bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning)
 {
-	FileStore * const f = platform.OpenFile(platform.GetSysDir(), fileName, OpenMode::read);
+	FileStore * const f = platform.OpenSysFile(fileName, OpenMode::read);
 	if (f == nullptr)
 	{
 		if (reportMissing)
@@ -3329,7 +3329,7 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 		heightMapFileName.copy(DefaultHeightMapFile);
 	}
 
-	FileStore * const f = platform.OpenFile(platform.GetSysDir(), heightMapFileName.c_str(), OpenMode::read);
+	FileStore * const f = platform.OpenSysFile(heightMapFileName.c_str(), OpenMode::read);
 	if (f == nullptr)
 	{
 		reply.printf("Height map file %s not found", heightMapFileName.c_str());
@@ -3364,7 +3364,7 @@ bool GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 		heightMapFileName.copy(DefaultHeightMapFile);
 	}
 
-	FileStore * const f = platform.OpenFile(platform.GetSysDir(), heightMapFileName.c_str(), OpenMode::write);
+	FileStore * const f = platform.OpenSysFile(heightMapFileName.c_str(), OpenMode::write);
 	bool err;
 	if (f == nullptr)
 	{
@@ -3377,7 +3377,7 @@ bool GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 		f->Close();
 		if (err)
 		{
-			platform.GetMassStorage()->Delete(platform.GetSysDir(), heightMapFileName.c_str());
+			platform.DeleteSysFile(heightMapFileName.c_str());
 			reply.catf("Failed to save height map to file %s", heightMapFileName.c_str());
 		}
 		else
@@ -4363,7 +4363,7 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 			return GCodeResult::error;
 		}
 
-		if (!platform.GetMassStorage()->DirectoryExists(FILAMENTS_DIRECTORY, filamentName.c_str()))
+		if (!platform.DirectoryExists(FILAMENTS_DIRECTORY, filamentName.c_str()))
 		{
 			reply.copy("Filament configuration directory not found");
 			return GCodeResult::error;
@@ -4522,7 +4522,7 @@ void GCodes::StopPrint(StopPrintReason reason)
 			printingFilename, printMinutes/60u, printMinutes % 60u);
 		if (reason == StopPrintReason::normalCompletion && simulationMode == 0)
 		{
-			platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G);
+			platform.DeleteSysFile(RESUME_AFTER_POWER_FAIL_G);
 		}
 	}
 
@@ -4786,7 +4786,7 @@ bool GCodes::AllAxesAreHomed() const
 GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const
 {
 	const char* const fileName = CONFIG_OVERRIDE_G;
-	FileStore * const f = platform.OpenFile(platform.GetSysDir(), fileName, OpenMode::write);
+	FileStore * const f = platform.OpenSysFile(fileName, OpenMode::write);
 	if (f == nullptr)
 	{
 		reply.printf("Failed to create file %s", fileName);
@@ -4828,7 +4828,7 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 	if (!ok)
 	{
 		reply.printf("Failed to write file %s", fileName);
-		platform.GetMassStorage()->Delete(platform.GetSysDir(), fileName);
+		platform.DeleteSysFile(fileName);
 		return GCodeResult::error;
 	}
 

@@ -528,7 +528,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	}
 	else if (StringEqualsIgnoreCase(request, "delete") && GetKeyValue("name") != nullptr)
 	{
-		const bool ok = GetPlatform().GetMassStorage()->Delete(FS_PREFIX, GetKeyValue("name"));
+		const bool ok = GetPlatform().Delete(FS_PREFIX, GetKeyValue("name"));
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
 	else if (StringEqualsIgnoreCase(request, "filelist") && GetKeyValue("dir") != nullptr)
@@ -578,7 +578,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			MassStorage * const ms = GetPlatform().GetMassStorage();
 			if (StringEqualsIgnoreCase(GetKeyValue("deleteexisting"), "yes") && ms->FileExists(oldVal) && ms->FileExists(newVal))
 			{
-				ms->Delete(nullptr, newVal);
+				ms->Delete(newVal);
 			}
 			success = ms->Rename(oldVal, newVal);
 		}
@@ -921,7 +921,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 		if (StringEqualsIgnoreCase(command, "configfile"))	// rr_configfile [DEPRECATED]
 		{
 			String<MaxFilenameLength> fileName;
-			MassStorage::CombineName(fileName.GetRef(), GetPlatform().GetSysDir(), GetPlatform().GetConfigFile());
+			GetPlatform().MakeSysFileName(fileName.GetRef(), GetPlatform().GetConfigFile());
 			SendFile(fileName.c_str(), false);
 			return;
 		}
