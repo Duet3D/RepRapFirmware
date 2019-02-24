@@ -2277,8 +2277,7 @@ bool GCodes::LockMovementAndWaitForStandstill(const GCodeBuffer& gb)
 	}
 	else
 	{
-		// Reset the moveBuffer coords to match previous user position
-		memcpy(moveBuffer.coords, moveBuffer.initialCoords, numVisibleAxes * sizeof(moveBuffer.initialCoords[0]));
+		SetMachinePosition(moveBuffer.initialCoords, false);
 	}
 	return true;
 }
