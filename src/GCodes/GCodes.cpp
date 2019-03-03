@@ -2483,13 +2483,11 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		}
 	}
 
-#if SUPPORT_WORKPLACE_COORDINATES
 	if (moveBuffer.moveType == 0 && rp == nullptr && gb.MachineState().UsingMachineCoordinates())
 	{
 		moveBuffer.xAxes = DefaultXAxisMapping;
 		moveBuffer.yAxes = DefaultYAxisMapping;
 	}
-#endif
 
 	// Check for laser power setting or IOBITS
 #if SUPPORT_LASER || SUPPORT_IOBITS
@@ -2557,7 +2555,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 
 			SetBit(axesMentioned, axis);
 			const float moveArg = gb.GetFValue() * distanceScale;
-			if (moveBuffer.moveType != 0 || (rp == nullptr && gb.MachineState().UsingMachineCoordinates()))
+			if (moveBuffer.moveType != 0 || (rp == nullptr && gb.MachineState().g53Active))
 			{
 				if (gb.MachineState().axesRelative)
 				{
@@ -2623,7 +2621,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	}
 	else
 	{
-		if (rp == nullptr && gb.MachineState().UsingMachineCoordinates())
+		if (rp == nullptr && gb.MachineState().g53Active)
 		{
 			gb.SetState(GCodeState::waitingForSpecialMoveToComplete);			// we need to update the user coordinates after the move
 		}
@@ -2634,8 +2632,8 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 				lastPrintingMoveHeight = currentUserPosition[Z_AXIS];
 			}
 
-			ToolOffsetTransform(currentUserPosition, moveBuffer.coords, axesMentioned);	// apply tool offset, axis mapping, baby stepping, Z hop and axis scaling
-
+			ToolOffsetTransform(currentUserPosition, moveBuffer.coords, axesMentioned, !gb.MachineState().runningSystemMacro);
+																				// apply tool offset, axis mapping, baby stepping, Z hop and axis scaling
 			// If we are emulating Marlin for nanoDLP then we need to set a special end state
 			if (platform.Emulating() == Compatibility::nanoDLP && &gb == serialGCode && !DoingFileMacro())
 			{
@@ -2831,7 +2829,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	}
 
 	// Transform to machine coordinates and check that it is within limits
-	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);			// set the final position
+	ToolOffsetTransform(currentUserPosition, moveBuffer.coords, axesMentioned, !gb.MachineState().runningSystemMacro);			// set the final position
 	if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, true, limitAxes))
 	{
 		// Abandon the move
@@ -3131,7 +3129,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	gb.MachineState().runningM502 = (codeRunning == 502);
 	if (codeRunning != 98)
 	{
-		gb.MachineState().useMachineCoordinatesSticky = true;	// running a system macro e.g. homing or tool change, so don't use workplace coordinates
+		gb.MachineState().runningSystemMacro = true;	// running a system macro e.g. homing or tool change, so don't use workplace coordinates
 	}
 	gb.SetState(GCodeState::normal);
 	gb.Init();
@@ -4598,14 +4596,19 @@ void GCodes::RestorePosition(const RestorePoint& rp, GCodeBuffer *gb)
 // Convert user coordinates to head reference point coordinates, optionally allowing for X axis mapping
 // If the X axis is mapped to some other axes not including X, then the X coordinate of coordsOut will be left unchanged.
 // So make sure it is suitably initialised before calling this.
-void GCodes::ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes)
+void GCodes::ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes, bool applyWorkplaceOffsets)
 {
 	const Tool * const currentTool = reprap.GetCurrentTool();
 	if (currentTool == nullptr)
 	{
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			coordsOut[axis] = (coordsIn[axis] * axisScaleFactors[axis]) + GetWorkplaceOffset(axis) + currentBabyStepOffsets[axis];
+			float outCoord = (coordsIn[axis] * axisScaleFactors[axis]) + currentBabyStepOffsets[axis];
+			if (applyWorkplaceOffsets)
+			{
+				outCoord += GetWorkplaceOffset(axis);
+			}
+			coordsOut[axis] = outCoord;
 		}
 	}
 	else
@@ -4618,7 +4621,11 @@ void GCodes::ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[
 				&& (axis != Y_AXIS || IsBitSet(yAxes, Y_AXIS))
 			   )
 			{
-				const float totalOffset = GetWorkplaceOffset(axis) - currentTool->GetOffset(axis) + currentBabyStepOffsets[axis];
+				float totalOffset = currentBabyStepOffsets[axis] - currentTool->GetOffset(axis);
+				if (applyWorkplaceOffsets)
+				{
+					totalOffset += GetWorkplaceOffset(axis);
+				}
 				const size_t inputAxis = (IsBitSet(explicitAxes, axis)) ? axis
 										: (IsBitSet(xAxes, axis)) ? X_AXIS
 											: (IsBitSet(yAxes, axis)) ? Y_AXIS

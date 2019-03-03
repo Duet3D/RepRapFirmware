@@ -102,6 +102,7 @@ private:
 	void SetTemperatureFault(int8_t dudHeater);
 	void ResetTemperatureFault(int8_t wasDudHeater);
 	bool AllHeatersAtHighTemperature(bool forExtrusion) const;
+	bool UsesHeater(int8_t heater) const;
 
 	Tool* next;
 	Filament *filament;

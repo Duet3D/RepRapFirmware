@@ -416,7 +416,7 @@ void GCodeBuffer::SetFinished(bool f)
 		}
 		else
 		{
-			machineState->useMachineCoordinates = false;		// G53 does not persist beyond the current line
+			machineState->g53Active = false;		// G53 does not persist beyond the current line
 			Init();
 		}
 	}
@@ -1014,8 +1014,8 @@ bool GCodeBuffer::PushState()
 	ms->runningM501 = machineState->runningM501;
 	ms->runningM502 = machineState->runningM502;
 	ms->volumetricExtrusion = false;
-	ms->useMachineCoordinates = false;
-	ms->useMachineCoordinatesSticky = machineState->useMachineCoordinatesSticky || machineState->useMachineCoordinates;
+	ms->g53Active = false;
+	ms->runningSystemMacro = machineState->runningSystemMacro;
 	ms->messageAcknowledged = false;
 	ms->waitingForAcknowledgement = false;
 	machineState = ms;

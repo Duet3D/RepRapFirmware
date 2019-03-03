@@ -288,7 +288,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 
 #if SUPPORT_WORKPLACE_COORDINATES
 	case 53:	// Temporarily use machine coordinates
-		gb.MachineState().useMachineCoordinates = true;
+		gb.MachineState().g53Active = true;
 		break;
 
 	case 54:	// Switch to coordinate system 1
@@ -314,8 +314,8 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 			if (cs < NumCoordinateSystems)
 			{
 				currentCoordinateSystem = cs;											// this is the zero-base coordinate system number
-				gb.MachineState().useMachineCoordinates = false;
-				gb.MachineState().useMachineCoordinatesSticky = false;
+				gb.MachineState().g53Active = false;
+				gb.MachineState().runningSystemMacro = false;
 				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates
 			}
 			else
@@ -1376,7 +1376,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else
 			{
-				// If we already have an active tool and we are setting temperatures for a different tool, set that tool's heaters to standby in case it is off
 				if (applicableTool == currentTool)
 				{
 					// Even though the tool is selected, we may have turned it off e.g. when upgrading the WiFi firmware or following a heater fault that has been cleared.
@@ -1385,6 +1384,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				}
 				else
 				{
+					// If we already have an active tool and we are setting temperatures for a different tool, set that tool's heaters to standby in case it is off
 					reprap.StandbyTool(applicableTool->Number(), simulationMode != 0);
 				}
 
@@ -2284,11 +2284,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					break;
 				}
 
-				if (sParam >= 2 && !LockMovementAndWaitForStandstill(gb))
-				{
-					return false;					// if it's a blocking message, wait for movement to stop before displaying it
-				}
-
 				float tParam;
 				if (sParam == 0 || sParam == 1)
 				{
@@ -2313,6 +2308,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					if (gb.Seen(axisLetters[axis]) && gb.GetIValue() > 0)
 					{
 						SetBit(axisControls, axis);
+					}
+				}
+
+				// If any axis jog buttons are enabled, wait for movement to stop and lock the movement system
+				if (axisControls != 0)
+				{
+					if (!LockMovementAndWaitForStandstill(gb))
+					{
+						return false;
 					}
 				}
 

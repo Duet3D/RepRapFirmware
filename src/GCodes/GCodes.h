@@ -333,7 +333,8 @@ private:
 
 	void SetMachinePosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation = true); // Set the current position to be this
 	void UpdateCurrentUserPosition();											// Get the current position from the Move class
-	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = 0);	// Convert user coordinates to head reference point coordinates
+	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = 0, bool applyWorkplaceOffsets = true);
+																				// Convert user coordinates to head reference point coordinates
 	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]);	// Convert head reference point coordinates to user coordinates
 	const char *TranslateEndStopResult(EndStopHit es);							// Translate end stop result to text
 	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);					// Retract or un-retract filaments

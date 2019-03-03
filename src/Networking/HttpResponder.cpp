@@ -15,7 +15,7 @@ const size_t KoFirst = 3;
 
 const char* const overflowResponse = "overflow";
 const char* const badEscapeResponse = "bad escape";
-const char* const serviceUnavailableResponse = "HTTP/1.1 503 Service Unavailable\r\n\r\n";
+const char serviceUnavailableResponse[] = "HTTP/1.1 503 Service Unavailable\r\n\r\n";
 static_assert(ARRAY_SIZE(serviceUnavailableResponse) <= OUTPUT_BUFFER_SIZE, "OUTPUT_BUFFER_SIZE too small");
 
 const uint32_t HttpReceiveTimeout = 2000;
@@ -704,7 +704,7 @@ bool HttpResponder::RemoveAuthentication()
 
 			for (size_t k = i + 1; k < numSessions; ++k)
 			{
-				memcpy(&sessions[k - 1], &sessions[k], sizeof(HttpSession));
+				sessions[k - 1] = sessions[k];
 			}
 			numSessions--;
 			return true;
@@ -1408,7 +1408,7 @@ void HttpResponder::Diagnostics(MessageType mt) const
 			// Check for timed out sessions
 			for (size_t k = i + 1; k < numSessions; k++)
 			{
-				memcpy(&sessions[k - 1], &sessions[k], sizeof(HttpSession));
+				sessions[k - 1] = sessions[k];
 			}
 			numSessions--;
 			clientsTimedOut++;

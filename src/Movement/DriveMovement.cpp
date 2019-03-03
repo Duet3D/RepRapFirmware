@@ -196,7 +196,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 	// Add the nonlinear extrusion correction to totalExtrusion
-	if (dda.isPrintingMove)
+	if (dda.flags.isPrintingMove)
 	{
 		float a, b, limit;
 		if (reprap.GetPlatform().GetExtrusionCoefficients(extruder, a, b, limit))

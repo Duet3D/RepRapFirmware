@@ -10,6 +10,7 @@
 
 #include "RepRapFirmware.h"
 #include "MessageType.h"
+#include "DDARing.h"
 #include "DDA.h"								// needed because of our inline functions
 #include "BedProbing/RandomProbePointSet.h"
 #include "BedProbing/Grid.h"
@@ -62,13 +63,13 @@ public:
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const; // Get the current position in untransformed coords
 	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, AxesBitmap xAxes, AxesBitmap yAxes) const;
 																	// Return the position (after all queued moves have been executed) in transformed coords
-	int32_t GetEndPoint(size_t drive) const { return liveEndPoints[drive]; } 	// Get the current position of a motor
+	int32_t GetEndPoint(size_t drive) const;					 	// Get the current position of a motor
 	void LiveCoordinates(float m[MaxTotalDrivers], AxesBitmap xAxes, AxesBitmap yAxes);	// Gives the last point at the end of the last complete DDA transformed to user coords
 	void Interrupt() __attribute__ ((hot));							// The hardware's (i.e. platform's)  interrupt should call this.
 	bool AllMovesAreFinished();										// Is the look-ahead ring empty?  Stops more moves being added as well.
 	void DoLookAhead() __attribute__ ((hot));						// Run the look-ahead procedure
 	void SetNewPosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation); // Set the current position to be this
-	void SetLiveCoordinates(const float coords[MaxTotalDrivers]);			// Force the live coordinates (see above) to be these
+	void SetLiveCoordinates(const float coords[MaxTotalDrivers]);	// Force the live coordinates (see above) to be these
 	void ResetExtruderPositions();									// Resets the extrusion amounts of the live coordinates
 	void SetXYBedProbePoint(size_t index, float x, float y);		// Record the X and Y coordinates of a probe point
 	void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError); // Record the Z coordinate of a probe point
@@ -100,7 +101,6 @@ public:
 	float IsDRCenabled() const { return drcEnabled; }
 
 	void Diagnostics(MessageType mtype);							// Report useful stuff
-	void RecordLookaheadError() { ++numLookaheadErrors; }			// Record a lookahead error
 
 	// Kinematics and related functions
 	Kinematics& GetKinematics() const { return *kinematics; }
@@ -120,27 +120,22 @@ public:
 
 	bool IsRawMotorMove(uint8_t moveType) const;									// Return true if this is a raw motor move
 
-	void CurrentMoveCompleted() __attribute__ ((hot));								// Signal that the current move has just been completed
-	bool TryStartNextMove(uint32_t startTime) __attribute__ ((hot));				// Try to start another move, returning true if Step() needs to be called immediately
 	float IdleTimeout() const;														// Returns the idle timeout in seconds
 	void SetIdleTimeout(float timeout);												// Set the idle timeout in seconds
 
 	void Simulate(uint8_t simMode);													// Enter or leave simulation mode
-	float GetSimulationTime() const { return simulationTime; }						// Get the accumulated simulation time
-	void PrintCurrentDda() const;													// For debugging
+	float GetSimulationTime() const { return mainDDARing.GetSimulationTime(); }		// Get the accumulated simulation time
 
 	bool PausePrint(RestorePoint& rp);												// Pause the print as soon as we can, returning true if we were able to
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 	bool LowPowerOrStallPause(RestorePoint& rp);									// Pause the print immediately, returning true if we were able to
 #endif
 
-	bool NoLiveMovement() const;													// Is a move running, or are there any queued?
+	bool NoLiveMovement() const { return mainDDARing.IsIdle(); }					// Is a move running, or are there any queued?
 
-	bool IsExtruding() const;														// Is filament being extruded?
-
-	uint32_t GetScheduledMoves() const { return scheduledMoves; }					// How many moves have been scheduled?
-	uint32_t GetCompletedMoves() const { return completedMoves; }					// How many moves have been completed?
-	void ResetMoveCounters() { scheduledMoves = completedMoves = 0; }
+	uint32_t GetScheduledMoves() const { return mainDDARing.GetScheduledMoves(); }	// How many moves have been scheduled?
+	uint32_t GetCompletedMoves() const { return mainDDARing.GetCompletedMoves(); }	// How many moves have been completed?
+	void ResetMoveCounters() { mainDDARing.ResetMoveCounters(); }
 
 	HeightMap& AccessHeightMap() { return heightMap; }								// Access the bed probing grid
 	const GridDefinition& GetGrid() const { return heightMap.GetGrid(); }			// Get the grid definition
@@ -149,10 +144,10 @@ public:
 
 	const RandomProbePointSet& GetProbePoints() const { return probePoints; }		// Return the probe point set constructed from G30 commands
 
-	const DDA *GetCurrentDDA() const { return currentDda; }							// Return the DDA of the currently-executing move
+	const DDA *GetCurrentDDA() const { return mainDDARing.GetCurrentDDA(); }		// Return the DDA of the currently-executing move
 
-	float GetTopSpeed() const;
-	float GetRequestedSpeed() const;
+	float GetTopSpeed() const { return mainDDARing.GetTopSpeed(); }
+	float GetRequestedSpeed() const { return mainDDARing.GetRequestedSpeed(); }
 
 	void AdjustLeadscrews(const floatc_t corrections[]);							// Called by some Kinematics classes to adjust the leadscrews
 
@@ -160,7 +155,7 @@ public:
 
 	bool WriteResumeSettings(FileStore *f) const;									// Write settings for resuming the print
 
-	uint32_t ExtruderPrintingSince() const { return extrudersPrintingSince; }		// When we started doing normal moves after the most recent extruder-only move
+	uint32_t ExtruderPrintingSince() const { return mainDDARing.ExtruderPrintingSince(); }	// When we started doing normal moves after the most recent extruder-only move
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const;			// Get the current step interval for this axis or extruder
@@ -181,22 +176,14 @@ private:
 		timing			// no moves being executed or in queue, motors are at full current
 	};
 
-	bool StartNextMove(uint32_t startTime) __attribute__ ((hot));								// Start the next move, returning true if Step() needs to be called immediately
 	void BedTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;			// Take a position and apply the bed compensations
 	void InverseBedTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;	// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;			// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;	// Go from an axis transformed point back to user coordinates
-	void SetPositions(const float move[MaxTotalDrivers]);										// Force the machine coordinates to be these
+	void SetPositions(const float move[MaxTotalDrivers]) { return mainDDARing.SetPositions(move); }	// Force the machine coordinates to be these;
 	float GetInterpolatedHeightError(float xCoord, float yCoord) const;							// Get the height error at an XY position
 
-	bool DDARingAdd();									// Add a processed look-ahead entry to the DDA ring
-	DDA* DDARingGet();									// Get the next DDA ring entry to be run
-	bool DDARingEmpty() const;							// Anything there?
-
-	DDA* volatile currentDda;
-	DDA* ddaRingAddPointer;
-	DDA* volatile ddaRingGetPointer;
-	DDA* ddaRingCheckPointer;
+	DDARing mainDDARing;
 
 	bool active;										// Are we live and running?
 	uint8_t simulationMode;								// Are we simulating, or really printing?
@@ -208,20 +195,9 @@ private:
 	float drcPeriod;									// the period of ringing that we don't want to excite
 	float drcMinimumAcceleration;						// the minimum value that we reduce acceleration to
 
-	unsigned int numLookaheadUnderruns;					// How many times we have run out of moves to adjust during lookahead
-	unsigned int numPrepareUnderruns;					// How many times we wanted a new move but there were only un-prepared moves in the queue
-	unsigned int numLookaheadErrors;					// How many times our lookahead algorithm failed
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
-	float simulationTime;								// Print time since we started simulating
-
-	float extrusionPending[MaxExtruders];				// Extrusion not done due to rounding to nearest step
-	volatile float liveCoordinates[MaxTotalDrivers];	// The endpoint that the machine moved to in the last completed move
-	volatile bool liveCoordinatesValid;					// True if the XYZ live coordinates are reliable (the extruder ones always are)
-	volatile int32_t liveEndPoints[MaxTotalDrivers];	// The XYZ endpoints of the last completed move in motor coordinates
-	volatile int32_t extrusionAccumulators[MaxExtruders]; // Accumulated extruder motor steps
-	volatile uint32_t extrudersPrintingSince;			// The milliseconds clock time when extrudersPrinting was set to true
-	volatile bool extrudersPrinting;					// Set whenever an extruder starts a printing move, cleared by a non-printing extruder move
+	uint32_t numHiccups;								// How many times we delayed an interrupt to avoid using too much CPU time in interrupts
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes
 	float& tanXY = tangents[0];
@@ -241,10 +217,6 @@ private:
 
 	Kinematics *kinematics;								// What kinematics we are using
 
-	unsigned int stepErrors;							// count of step errors, for diagnostics
-	uint32_t scheduledMoves;							// Move counters for the code queue
-	volatile uint32_t completedMoves;					// This one is modified by an ISR, hence volatile
-
 	float specialMoveCoords[MaxTotalDrivers];			// Amounts by which to move individual motors (leadscrew adjustment move)
 	bool specialMoveAvailable;							// True if a leadscrew adjustment move is pending
 
@@ -256,15 +228,42 @@ private:
 
 //******************************************************************************************************
 
-inline bool Move::DDARingEmpty() const
+// Get the current position in untransformed coords
+inline void Move::GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const
 {
-	return ddaRingGetPointer == ddaRingAddPointer		// by itself this means the ring is empty or full
-		&& ddaRingAddPointer->GetState() == DDA::DDAState::empty;
+	return mainDDARing.GetCurrentMachinePosition(m, disableMotorMapping);
 }
 
-inline bool Move::NoLiveMovement() const
+// Get the current position of a motor
+inline int32_t Move::GetEndPoint(size_t drive) const
 {
-	return DDARingEmpty() && currentDda == nullptr;		// must test currentDda and DDARingEmpty *in this order* !
+	return mainDDARing.GetEndPoint(drive);
+}
+
+// Perform motor endpoint adjustment
+inline void Move::AdjustMotorPositions(const float_t adjustment[], size_t numMotors)
+{
+	mainDDARing.AdjustMotorPositions(adjustment, numMotors);
+}
+
+// Return the current live XYZ and extruder coordinates
+// Interrupts are assumed enabled on entry
+inline void Move::LiveCoordinates(float m[MaxTotalDrivers], AxesBitmap xAxes, AxesBitmap yAxes)
+{
+	mainDDARing.LiveCoordinates(m);
+	InverseAxisAndBedTransform(m, xAxes, yAxes);
+}
+
+// These are the actual numbers that we want to be the coordinates, so don't transform them.
+// The caller must make sure that no moves are in progress or pending when calling this
+inline void Move::SetLiveCoordinates(const float coords[MaxTotalDrivers])
+{
+	mainDDARing.SetLiveCoordinates(coords);
+}
+
+inline void Move::ResetExtruderPositions()
+{
+	mainDDARing.ResetExtruderPositions();
 }
 
 // To wait until all the current moves in the buffers are complete, call this function repeatedly and wait for it to return true.
@@ -275,45 +274,13 @@ inline bool Move::AllMovesAreFinished()
 	return NoLiveMovement();
 }
 
-// Start the next move. Return true if the
-// Must be called with base priority greater than the step interrupt, to avoid a race with the step ISR.
-inline bool Move::StartNextMove(uint32_t startTime)
-pre(ddaRingGetPointer->GetState() == DDA::frozen)
-{
-	DDA * const cdda = ddaRingGetPointer;			// capture volatile variable
-	if (cdda->IsNonPrintingExtruderMove())
-	{
-		extrudersPrinting = false;
-	}
-	else if (!extrudersPrinting)
-	{
-		extrudersPrinting = true;
-		extrudersPrintingSince = millis();
-	}
-	currentDda = cdda;
-	return cdda->Start(startTime);
-}
-
-// This is the function that is called by the timer interrupt to step the motors.
-// This may occasionally get called prematurely.
-inline void Move::Interrupt()
-{
-	if (currentDda != nullptr)
-	{
-		do
-		{
-		} while (currentDda->Step());
-	}
-}
-
 #if HAS_SMART_DRIVERS
 
 // Get the current step interval for this axis or extruder, or 0 if it is not moving
 // This is called from the stepper drivers SPI interface ISR
 inline uint32_t Move::GetStepInterval(size_t axis, uint32_t microstepShift) const
 {
-	const DDA * const cdda = currentDda;		// capture volatile variable
-	return (cdda != nullptr && simulationMode == 0) ? cdda->GetStepInterval(axis, microstepShift) : 0;
+	return (simulationMode == 0) ? mainDDARing.GetStepInterval(axis, microstepShift) : 0;
 }
 
 #endif

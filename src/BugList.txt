@@ -293,6 +293,12 @@ Done in 2.03beta2:
 - [tested, ok] Test heater tuning (sample rate changed)
 
 Planned for 2.03:
+- abort SD print if G28 or G32 or G29 fails, https://forum.duet3d.com/topic/9383/way-to-cancel-print-after-g32-failure/9
+- [done] M291 only lock movement if jog buttons are enabled, https://forum.duet3d.com/topic/8988/wishlist-interrupt-tool-change-from-a-trigger/16
+- [done, test] Apply tool offsets in tpre.g and tpost.g
+- Check that in all modes, if insufficient axes are homed then the SD job is aborted
+- In CNC or Laser mode, abort job if it goes outside machine limits, https://forum.duet3d.com/topic/9269/yet-another-cnc-improvement-outside-machine-limits/4
+- In simulation mode, if the job was aborted for any reason, report this instead of reporting the simulated print time
 - [done, ok] Bug: 12864 display selects wrong file to print if files starting with '.' are present
 - [done] HttpResponder fix from sdavi
 - [done, test] Bug fix: if axis scaling was used then baby stepping, tool offsets and workplace coordinate offsets were not correctly accounted for when converting machine positoin to user position
@@ -310,6 +316,7 @@ Planned for 2.03:
 - For PanelDue, send heater data for the first heater in each tool (does PD handle #heaters and #tools separately?) https://forum.duet3d.com/topic/8458/hide-unused-heater-channels-paneldue-5/4 and https://forum.duet3d.com/topic/8933/paneldue-two-tools-same-heater-one-pair-of-temp-buttons/2
 - Implement M410 quick stop
 - Implement power loss m582 trigger action?
+- On heater fault shutdown, do we try to turn off power? https://forum.duet3d.com/topic/9283/controlled-shut-down-of-24-volt-power-supply-by-ssr/4
 
 - Test endstop input high/low noise immunity, decide on pullup enable/disable
 - Test that M500 saves all delta rod lengths correctly

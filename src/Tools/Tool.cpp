@@ -310,10 +310,15 @@ void Tool::Activate()
 
 void Tool::Standby()
 {
+	const Tool * const currentTool = reprap.GetCurrentTool();
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
-		reprap.GetHeat().Standby(heaters[heater], this);
+		// Don't switch a heater to standby if the active tool is using it and is different from this tool
+		if (currentTool == this || currentTool == nullptr || !currentTool->UsesHeater(heater))
+		{
+			reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
+			reprap.GetHeat().Standby(heaters[heater], this);
+		}
 	}
 	state = ToolState::standby;
 }
@@ -497,6 +502,19 @@ void Tool::IterateHeaters(std::function<void(int)> f) const
 	{
 		f(heaters[i]);
 	}
+}
+
+// Return true if this tool uses the specified heater
+bool Tool::UsesHeater(int8_t heater) const
+{
+	for (size_t i = 0; i < heaterCount; ++i)
+	{
+		if (heaters[i] == heater)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 // End
