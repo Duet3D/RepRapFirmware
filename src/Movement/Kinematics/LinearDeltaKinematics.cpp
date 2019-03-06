@@ -35,13 +35,13 @@ void LinearDeltaKinematics::Init()
 	for (size_t axis = 0; axis < UsualNumTowers; ++axis)
 	{
 		angleCorrections[axis] = 0.0;
-		endstopAdjustments[axis] = 0.0;
 	}
 
 	for (size_t axis = 0; axis < MaxTowers; ++axis)
 	{
 		diagonals[axis] = DefaultDiagonal;
 		towerX[axis] = towerY[axis] = 0.0;
+		endstopAdjustments[axis] = 0.0;
 	}
 
 	Recalc();
@@ -73,14 +73,9 @@ void LinearDeltaKinematics::Recalc()
 	for (size_t axis = 0; axis < numTowers; ++axis)
 	{
 		D2[axis] = fsquare(diagonals[axis]);
-		if (axis < UsualNumTowers)
-		{
-			homedCarriageHeights[axis] = homedHeight + sqrtf(D2[axis] - fsquare(radius)) + endstopAdjustments[axis];
-		}
-		else
-		{
-			homedCarriageHeights[axis] = homedHeight + sqrtf(D2[axis] - fsquare(towerX[axis]) - fsquare(towerY[axis]));
-		}
+		homedCarriageHeights[axis] = homedHeight
+									+ sqrtf(D2[axis] - ((axis < UsualNumTowers) ? fsquare(radius) : fsquare(towerX[axis]) - fsquare(towerY[axis])))
+									+ endstopAdjustments[axis];
 		const float heightLimit = homedCarriageHeights[axis] - diagonals[axis];
 		if (heightLimit < alwaysReachableHeight)
 		{
@@ -777,9 +772,10 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 	case 666:
 		{
 			bool seen = false;
-			gb.TryGetFValue('X', endstopAdjustments[DELTA_A_AXIS], seen);
-			gb.TryGetFValue('Y', endstopAdjustments[DELTA_B_AXIS], seen);
-			gb.TryGetFValue('Z', endstopAdjustments[DELTA_C_AXIS], seen);
+			for (size_t tower = 0; tower < numTowers; ++tower)
+			{
+				gb.TryGetFValue("XYZUVW"[tower], endstopAdjustments[tower], seen);
+			}
 
 			if (gb.Seen('A'))
 			{

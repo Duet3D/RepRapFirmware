@@ -24,7 +24,11 @@ public:
 	void RecycleDDAs();
 	bool CanAddMove() const;
 	bool AddStandardMove(GCodes::RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
-	bool AddSpecialMove(const float specialMoveCoords[]);
+	bool AddSpecialMove(float feedRate, const float coords[]);
+#if SUPPORT_ASYNC_MOVES
+	bool AddAsyncMove(float feedRate, const float coords[]);
+#endif
+
 	void Spin(uint8_t simulationMode, unsigned int idleCount);					// Try to process moves in the ring, returning true if the ring is idle
 	bool IsIdle() const;														// Return true if this DDA ring is idle
 

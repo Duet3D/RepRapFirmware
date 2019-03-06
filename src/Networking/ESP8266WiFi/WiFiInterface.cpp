@@ -33,7 +33,7 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 # define ESP_SPI_IRQn		SPI_IRQn
 # define ESP_SPI_HANDLER	SPI_Handler
 
-#elif defined(DUET3) || defined(SAME70XPLD)
+#elif defined(DUET3_V03) || defined(SAME70XPLD)
 
 # define USE_PDC			0		// use peripheral DMA controller
 # define USE_DMAC			0		// use general DMA controller

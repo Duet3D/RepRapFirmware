@@ -9,6 +9,10 @@
 #include "RepRap.h"
 #include "Move.h"
 
+#if SUPPORT_CAN_EXPANSION
+# include "CAN/CanInterface.h"
+#endif
+
 constexpr uint32_t UsualMinimumPreparedTime = StepTimer::StepClockRate/10;			// 100ms
 constexpr uint32_t AbsoluteMinimumPreparedTime = StepTimer::StepClockRate/20;		// 50ms
 
@@ -137,7 +141,7 @@ bool DDARing::CanAddMove() const
 // Add a new move, returning true if it represents real movement
 bool DDARing::AddStandardMove(GCodes::RawMove &nextMove, bool doMotorMapping)
 {
-	if (addPointer->Init(*this, nextMove, doMotorMapping))
+	if (addPointer->InitStandardMove(*this, nextMove, doMotorMapping))
 	{
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
@@ -146,10 +150,10 @@ bool DDARing::AddStandardMove(GCodes::RawMove &nextMove, bool doMotorMapping)
 	return false;
 }
 
-// Add a raw (unmapped) motor move
-bool DDARing::AddSpecialMove(const float specialMoveCoords[])
+// Add a leadscrew levelling motor move
+bool DDARing::AddSpecialMove(float feedRate, const float coords[])
 {
-	if (addPointer->Init(*this, specialMoveCoords))
+	if (addPointer->InitLeadscrewMove(*this, feedRate, coords))
 	{
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
@@ -157,6 +161,22 @@ bool DDARing::AddSpecialMove(const float specialMoveCoords[])
 	}
 	return false;
 }
+
+#if SUPPORT_ASYNC_MOVES
+
+// Add an asynchronous motor move
+bool DDARing::AddAsyncMove(float feedRate, const float coords[])
+{
+	if (addPointer->InitAsyncMove(*this, feedRate, coords))
+	{
+		addPointer = addPointer->GetNext();
+		scheduledMoves++;
+		return true;
+	}
+	return false;
+}
+
+#endif
 
 void DDARing::Spin(uint8_t simulationMode, unsigned int idleCount)
 {
@@ -180,7 +200,6 @@ void DDARing::Spin(uint8_t simulationMode, unsigned int idleCount)
 		if (!CanAddMove() || idleCount > 10)						// better to have a few moves in the queue so that we can do lookahead
 		{
 			// Prepare one move and execute it. We assume that we will enter the next if-block before it completes, giving us time to prepare more moves.
-			StepTimer::DisableStepInterrupt();						// should be disabled already because we weren't executing a move, but make sure
 			DDA * const dda = getPointer;							// capture volatile variable
 			if (   dda->GetState() == DDA::provisional
 #if SUPPORT_CAN_EXPANSION
@@ -204,6 +223,7 @@ void DDARing::Spin(uint8_t simulationMode, unsigned int idleCount)
 					std::optional<uint32_t> nextInterruptTime = GetNextInterruptTime();
 					if (nextInterruptTime)
 					{
+//TODO problem here: the other ring may need an earlier interrupt!
 						if (StepTimer::ScheduleStepInterrupt(nextInterruptTime.value()))
 						{
 							Interrupt(p);

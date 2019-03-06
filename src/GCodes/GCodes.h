@@ -139,6 +139,9 @@ public:
 	void Exit();														// Shut it down
 	void Reset();														// Reset some parameter to defaults
 	bool ReadMove(RawMove& m);											// Called by the Move class to get a movement set by the last G Code
+#if SUPPORT_ASYNC_MOVES
+	bool ReadAuxMove(RawMove &m);
+#endif
 	void ClearMove();
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply);	// Open a file of G Codes to run
 	void StartPrinting(bool fromStart);									// Start printing the file already selected
@@ -463,6 +466,11 @@ private:
 	RawMove moveBuffer;							// Move details to pass to Move class
 	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
 	unsigned int totalSegments;					// The total number of segments left in the complete move
+
+#if SUPPORT_ASYNC_MOVES
+	RawMove auxMoveBuffer;
+	bool auxMoveAvailable;
+#endif
 
 	unsigned int segmentsLeftToStartAt;
 	float moveFractionToStartAt;				// how much of the next move was printed before the power failure

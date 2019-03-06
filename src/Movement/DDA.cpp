@@ -124,7 +124,6 @@ DDA::DDA(DDA* n) : next(n), prev(nullptr), state(empty)
 		ep = 0;
 	}
 
-	state = empty;
 	flags.all = 0;						// in particular we need to set endCoordinatesValid to false
 	virtualExtruderPosition = 0;
 	filePos = noFilePosition;
@@ -247,7 +246,7 @@ void DDA::DebugPrintAll() const
 
 // Set up a real move. Return true if it represents real movement, else false.
 // Either way, return the amount of extrusion we didn't do in the extruder coordinates of nextMove
-bool DDA::Init(DDARing& ring, GCodes::RawMove &nextMove, bool doMotorMapping)
+bool DDA::InitStandardMove(DDARing& ring, GCodes::RawMove &nextMove, bool doMotorMapping)
 {
 	// 0. If there are more total axes than visible axes, then we must ignore any movement data in nextMove for the invisible axes.
 	// The call to CartesianToMotorSteps may adjust the invisible axis endpoints for architectures such as CoreXYU and delta with >3 towers, so set them up here.
@@ -492,8 +491,8 @@ bool DDA::Init(DDARing& ring, GCodes::RawMove &nextMove, bool doMotorMapping)
 	return true;
 }
 
-// Set up a raw (unmapped) motor move returning true if the move does anything
-bool DDA::Init(DDARing& ring, const float adjustments[MaxTotalDrivers])
+// Set up a leadscrew motor move returning true if the move does anything
+bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustments[MaxTotalDrivers])
 {
 	// 1. Compute the new endpoints and the movement vector
 	bool realMove = false;
@@ -556,7 +555,7 @@ bool DDA::Init(DDARing& ring, const float adjustments[MaxTotalDrivers])
 	totalDistance = Normalise(directionVector, MaxTotalDrivers, MaxTotalDrivers);
 
 	// 6. Set the speed to the smaller of the requested and maximum speed.
-	requestedSpeed = reprap.GetPlatform().MaxFeedrate(Z_AXIS);
+	requestedSpeed = feedrate;
 
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
 	startSpeed = endSpeed = 0.0;
@@ -565,6 +564,16 @@ bool DDA::Init(DDARing& ring, const float adjustments[MaxTotalDrivers])
 	state = provisional;
 	return true;
 }
+
+# if SUPPORT_ASYNC_MOVES
+
+// Set up a leadscrew motor move returning true if the move does anything
+bool DDA::InitAsyncMove(DDARing& ring, float feedrate, const float adjustments[MaxTotalDrivers])
+{
+	return false;	//TODO
+}
+
+#endif
 
 // Return true if this move is or might have been intended to be a deceleration-only move
 // A move planned as a deceleration-only move may have a short acceleration segment at the start because of rounding error

@@ -227,6 +227,11 @@ void GCodes::Reset()
 	}
 
 	ClearMove();
+
+#if SUPPORT_ASYNC_MOVES
+	auxMoveAvailable = false;
+#endif
+
 	for (float& f : currentBabyStepOffsets)
 	{
 		f = 0.0;										// clear babystepping before calling ToolOffsetInverseTransform
@@ -3061,6 +3066,21 @@ bool GCodes::ReadMove(RawMove& m)
 
 	return true;
 }
+
+#if SUPPORT_ASYNC_MOVES
+
+bool GCodes::ReadAuxMove(RawMove &m)
+{
+	if (auxMoveAvailable)
+	{
+		m = auxMoveBuffer;
+		auxMoveAvailable = false;
+		return true;
+	}
+	return false;
+}
+
+#endif
 
 void GCodes::ClearMove()
 {

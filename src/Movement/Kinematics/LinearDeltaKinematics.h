@@ -80,7 +80,7 @@ private:
 	float diagonals[MaxTowers];							// The diagonal rod lengths
 	float radius;										// The nominal delta radius, before any fine tuning of tower positions
 	float angleCorrections[UsualNumTowers];				// Tower position corrections for the first 3 axes
-	float endstopAdjustments[UsualNumTowers];			// How much above or below the ideal position each endstop is
+	float endstopAdjustments[MaxTowers];				// How much above or below the ideal position each endstop is
 	float printRadius;
 	float homedHeight;
 	float xTilt, yTilt;									// How much we need to raise Z for each unit of movement in the +X and +Y directions

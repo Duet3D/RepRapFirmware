@@ -71,12 +71,18 @@ Move::Move() : active(false)
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
 	kinematics = Kinematics::Create(KinematicsType::cartesian);			// default to Cartesian
 	mainDDARing.Init1(DdaRingLength);
+#if SUPPORT_ASYNC_MOVES
+	auxDDARing.Init1(AuxDdaRingLength);
+#endif
 	DriveMovement::InitialAllocate(NumDms);
 }
 
 void Move::Init()
 {
 	mainDDARing.Init2();
+#if SUPPORT_ASYNC_MOVES
+	auxDDARing.Init2();
+#endif
 
 	maxPrintingAcceleration = maxTravelAcceleration = 10000.0;
 	drcEnabled = false;											// disable dynamic ringing cancellation
@@ -142,7 +148,7 @@ void Move::Spin()
 		{
 			if (simulationMode < 2)
 			{
-				if (mainDDARing.AddSpecialMove(specialMoveCoords))
+				if (mainDDARing.AddSpecialMove(reprap.GetPlatform().MaxFeedrate(Z_AXIS), specialMoveCoords))
 				{
 					if (moveState == MoveState::idle || moveState == MoveState::timing)
 					{
@@ -195,8 +201,24 @@ void Move::Spin()
 
 	mainDDARing.Spin(simulationMode, idleCount);			// let the DDA ring process moves
 
+#if SUPPORT_ASYNC_MOVES
+	if (auxDDARing.CanAddMove())
+	{
+		GCodes::RawMove auxMove;
+		if (reprap.GetGCodes().ReadAuxMove(auxMove))
+		{
+			auxDDARing.AddAsyncMove(auxMove.feedRate, auxMove.coords);
+		}
+	}
+	auxDDARing.Spin(simulationMode, idleCount);				// let the DDA ring process moves
+#endif
+
 	// Reduce motor current to standby if the main ring has been idle for long enough
-	if (mainDDARing.IsIdle())
+	if (   mainDDARing.IsIdle()
+#if SUPPORT_ASYNC_MOVES
+		&& auxDDARing.IsIdle()
+#endif
+	   )
 	{
 		if (moveState == MoveState::executing && !reprap.GetGCodes().IsPaused())
 		{
@@ -695,14 +717,34 @@ void Move::Interrupt()
 	{
 		mainDDARing.Interrupt(p);
 		std::optional<uint32_t> nextStepTime = mainDDARing.GetNextInterruptTime();
-		if (!nextStepTime)
+
+#if SUPPORT_ASYNC_MOVES
+		auxDDARing.Interrupt(p);
+		std::optional<uint32_t> nextAuxStepTime = auxDDARing.GetNextInterruptTime();
+		if (nextStepTime.has_value())
+		{
+			if (nextAuxStepTime.has_value() && (int32_t)(nextStepTime.value() - nextAuxStepTime.value()) > 0)
+			{
+				nextStepTime = nextAuxStepTime;
+			}
+		}
+		else if (nextAuxStepTime.has_value())
+		{
+			nextStepTime = nextAuxStepTime;
+		}
+		else
 		{
 			break;
 		}
-
-		// 7. Check whether we have been in this ISR for too long already and need to take a break
+#else
+		if (!nextStepTime.has_value())
+		{
+			break;
+		}
+#endif
+		// Check whether we have been in this ISR for too long already and need to take a break
 		const uint32_t clocksTaken = (StepTimer::GetInterruptClocks() - isrStartTime) & 0x0000FFFF;
-		if (clocksTaken >= DDA::MaxStepInterruptTime && ((uint16_t)nextStepTime.value() - isrStartTime) < (clocksTaken + DDA::MinInterruptInterval))
+		if (clocksTaken >= DDA::MaxStepInterruptTime && (nextStepTime.value() - isrStartTime) < (clocksTaken + DDA::MinInterruptInterval))
 		{
 			// Force a break by updating the move start time
 			const uint32_t delayClocks = (clocksTaken + DDA::MinInterruptInterval) - (nextStepTime.value() - isrStartTime);

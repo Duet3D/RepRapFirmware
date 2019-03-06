@@ -26,6 +26,7 @@ public:
 	HomingMode GetHomingMode() const override { return HomingMode::homeCartesianAxes; }
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const override;
 	AxesBitmap GetConnectedAxes(size_t axis) const override;
+	AxesBitmap GetLinearAxes() const override;
 
 private:
 	void Recalc();											// recalculate internal variables following a configuration change

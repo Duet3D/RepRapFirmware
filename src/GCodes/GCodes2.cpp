@@ -399,7 +399,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				}
 
 				gb.SetState((code == 0) ? GCodeState::stopping : GCodeState::sleeping);
-				DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false);
+				if (!DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false))
+				{
+					reprap.GetHeat().SwitchOffAll(true);	// no stop.g file found, so default to turning all heaters off
+				}
 			}
 		}
 		break;
@@ -2207,50 +2210,90 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 290:	// Baby stepping
 		{
 			const bool absolute = (gb.Seen('R') && gb.GetIValue() == 0);
-			bool seen = false, haveResidual = false;
+			bool seen = false;
+#if SUPPORT_ASYNC_MOVES
+			bool live = true;
+#endif
+			float differences[MaxAxes];
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
 				if (gb.Seen(axisLetters[axis]) || (axis == 2 && gb.Seen('S')))			// S is a synonym for Z
 				{
-					const float fval = gb.GetFValue();
-					if (!LockMovement(gb))
-					{
-						return false;
-					}
 					seen = true;
-					float difference;
+					const float fval = gb.GetFValue();
 					if (absolute)
 					{
-						difference = fval - currentBabyStepOffsets[axis];
+						differences[axis] = fval - currentBabyStepOffsets[axis];
 						currentBabyStepOffsets[axis] = fval;
 					}
 					else
 					{
-						difference = constrain<float>(fval, -1.0, 1.0);
-						currentBabyStepOffsets[axis] += difference;
+						differences[axis] = constrain<float>(fval, -1.0, 1.0);
+						currentBabyStepOffsets[axis] += differences[axis];
 					}
-
-					const float amountPushed = reprap.GetMove().PushBabyStepping(axis, difference);
-					moveBuffer.initialCoords[axis] += amountPushed;
-
-					// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
-					// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
-					moveBuffer.coords[axis] += difference;
-					if (amountPushed != difference)
+#if SUPPORT_ASYNC_MOVES
+					if (!IsBitSet(reprap.GetMove().GetKinematics().GetLinearAxes(), axis))
 					{
-						haveResidual = true;
+						live = false;		// we can only live babystep linear axes
 					}
+#endif
+				}
+				else
+				{
+					differences[axis] = 0.0;
 				}
 			}
 
 			if (seen)
 			{
-				if (haveResidual && segmentsLeft == 0 && reprap.GetMove().AllMovesAreFinished())
+#if SUPPORT_ASYNC_MOVES
+				if (live)	// we can live babystep Z only on a SCARA
 				{
-					// The pipeline is empty, so execute the babystepping move immediately
-					SetMoveBufferDefaults();
-					moveBuffer.feedRate = DefaultFeedRate;
-					NewMoveAvailable(1);
+					if (auxMoveAvailable)
+					{
+						return false;									// wait until the previous aux move has gone
+					}
+
+					auxMoveBuffer.feedRate = DefaultFeedRate;
+					for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+					{
+						auxMoveBuffer.coords[axis] = differences[axis];
+						auxMoveBuffer.feedRate = min<float>(auxMoveBuffer.feedRate, platform.MaxFeedrate(axis));
+					}
+					auxMoveBuffer.feedRate /= 4;						// allow for other movement taking place at the same time
+					auxMoveAvailable = true;
+				}
+				else
+#endif
+				{
+					if (!LockMovement(gb))
+					{
+						return false;
+					}
+
+					bool haveResidual = false;
+					// Perform babystepping synchronously with moves
+					for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+					{
+						const float amountPushed = reprap.GetMove().PushBabyStepping(axis, differences[axis]);
+						moveBuffer.initialCoords[axis] += amountPushed;
+
+						// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
+						// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
+						moveBuffer.coords[axis] += differences[axis];
+						if (amountPushed != differences[axis])
+						{
+							haveResidual = true;
+						}
+					}
+
+					if (haveResidual && segmentsLeft == 0 && reprap.GetMove().AllMovesAreFinished())
+					{
+						// The pipeline is empty, so execute the babystepping move immediately
+						SetMoveBufferDefaults();
+						moveBuffer.feedRate = DefaultFeedRate;
+						NewMoveAvailable(1);
+					}
 				}
 			}
 			else

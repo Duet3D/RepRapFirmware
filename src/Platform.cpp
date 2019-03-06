@@ -403,7 +403,7 @@ void Platform::Init()
 			// Set up the control pins and endstops
 			pinMode(STEP_PINS[drive], OUTPUT_LOW);
 			pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
-#ifndef DUET3
+#if !(defined(DUET3_V03) || defined(DUET3_V05))
 			pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
 #endif
 
@@ -484,7 +484,7 @@ void Platform::Init()
 	numSmartDrivers = MaxSmartDrivers;							// for now we assume that expansion drivers are smart too
 #elif defined(PCCB)
 	numSmartDrivers = MaxSmartDrivers;
-#elif defined(DUET3)
+#elif defined(DUET3_V03) || defined(DUET3_V05)
 	numSmartDrivers = MaxSmartDrivers;
 #endif
 
@@ -1342,7 +1342,7 @@ void Platform::Spin()
 		return;
 	}
 
-#ifdef DUET3
+#if defined(DUET3_V03) || defined(DUET3_V05)
 	// Blink the LED
 	{
 		static uint32_t lastTime = 0;
@@ -2956,7 +2956,7 @@ void Platform::EnableDriver(size_t driver)
 			driverState[driver] = DriverStatus::enabled;
 			UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
 
-#if defined(DUET3) && HAS_SMART_DRIVERS
+#if (defined(DUET3_V03) || defined(DUET3_V05)) && HAS_SMART_DRIVERS
 			SmartDrivers::EnableDrive(driver, true);		// all drivers driven directly by the main board are smart
 #elif HAS_SMART_DRIVERS
 			if (driver < numSmartDrivers)
@@ -2981,7 +2981,7 @@ void Platform::DisableDriver(size_t driver)
 {
 	if (driver < NumDirectDrivers)
 	{
-#if defined(DUET3) && HAS_SMART_DRIVERS
+#if (defined(DUET3_V03) || defined(DUET3_V05)) && HAS_SMART_DRIVERS
 		SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
 #elif HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
@@ -4062,8 +4062,10 @@ void Platform::SetBoardType(BoardType bt)
 {
 	if (bt == BoardType::Auto)
 	{
-#if defined(DUET3)
-		board = BoardType::Duet3_10;
+#if defined(DUET3_V03)
+		board = BoardType::Duet3_03;
+#elif defined(DUET3_V05)
+		board = BoardType::Duet3_05;
 #elif defined(SAME70XPLD)
 		board = BoardType::SAME70XPLD_0;
 #elif defined(DUET_NG)
@@ -4133,8 +4135,10 @@ const char* Platform::GetElectronicsString() const
 {
 	switch (board)
 	{
-#if defined(DUET3)
-	case BoardType::Duet3_10:				return "Duet 3 prototype 1";
+#if defined(DUET3_V03)
+	case BoardType::Duet3_03:				return "Duet 3 prototype v0.3";
+#elif defined(DUET3_V05)
+	case BoardType::Duet3_05:				return "Duet 3 prototype v0.5";
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
 #elif defined(DUET_NG)
@@ -4168,8 +4172,10 @@ const char* Platform::GetBoardString() const
 {
 	switch (board)
 	{
-#if defined(DUET3)
-	case BoardType::Duet3_10:				return "duet3proto";
+#if defined(DUET3_V03)
+	case BoardType::Duet3_03:				return "duet3proto";
+#elif defined(DUET3_V05)
+	case BoardType::Duet3_05:				return "duet3proto";
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "same70xpld";
 #elif defined(DUET_NG)

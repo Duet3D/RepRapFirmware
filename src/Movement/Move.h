@@ -22,15 +22,23 @@
 // Each DDA needs one DM per drive that it moves, but only when it has been prepared and frozen
 
 #if SAME70
-const unsigned int DdaRingLength = 40;
-const unsigned int NumDms = 20 * 12;								// allow enough for plenty of CAN expansion
+
+constexpr unsigned int DdaRingLength = 40;
+constexpr unsigned int AuxDdaRingLength = 3;
+constexpr unsigned int NumDms = (DdaRingLength/2 * 12) + (AuxDdaRingLength * 3);	// allow enough for plenty of CAN expansion
+
 #elif SAM4E || SAM4S
-const unsigned int DdaRingLength = 40;
-const unsigned int NumDms = 20 * 8;									// suitable for e.g. a delta + 5 input hot end
+
+constexpr unsigned int DdaRingLength = 40;
+constexpr unsigned int AuxDdaRingLength = 3;
+const unsigned int NumDms = (DdaRingLength/2 * 8) + (AuxDdaRingLength * 3);			// suitable for e.g. a delta + 5 input hot end
+
 #else
+
 // We are more memory-constrained on the SAM3X
 const unsigned int DdaRingLength = 20;
 const unsigned int NumDms = 20 * 5;									// suitable for e.g. a delta + 2-input hot end
+
 #endif
 
 constexpr uint32_t MovementStartDelayClocks = StepTimer::StepClockRate/100;		// 10ms delay between preparing the first move and starting it
@@ -183,7 +191,11 @@ private:
 	void SetPositions(const float move[MaxTotalDrivers]) { return mainDDARing.SetPositions(move); }	// Force the machine coordinates to be these;
 	float GetInterpolatedHeightError(float xCoord, float yCoord) const;							// Get the height error at an XY position
 
-	DDARing mainDDARing;
+	DDARing mainDDARing;								// The DDA ring used for regular moves
+
+#if SUPPORT_ASYNC_MOVES
+	DDARing auxDDARing;									// the DDA ring used for live babystepping, height following and other asynchronous moves
+#endif
 
 	bool active;										// Are we live and running?
 	uint8_t simulationMode;								// Are we simulating, or really printing?
