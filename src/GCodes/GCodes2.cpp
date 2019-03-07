@@ -3536,6 +3536,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		result = reprap.GetMove().ConfigureDynamicAcceleration(gb, reply);
 		break;
 
+	case 594: // Configure stepper brakes per axis
+		result = platform.ConfigureAxisBrakes(gb, reply);
+		break;
+
 	// For case 600, see 226
 
 	case 650:	// Set peel move parameters - ignored
@@ -3547,13 +3551,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			return false;
 		}
 		DoFileMacro(gb, PEEL_MOVE_G, true);
-		break;
-
-	case 594: // Configure stepper brakes per axis
-		if (!platform.ConfigureAxisBrakes(gb, reply))
-		{
-			result = GCodeResult::error;
-		}
 		break;
 
 	case 665: // Set delta configuration

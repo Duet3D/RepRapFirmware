@@ -434,7 +434,7 @@ public:
 	float AxisTotalLength(size_t axis) const;
 	float GetPressureAdvance(size_t extruder) const;
 	void SetPressureAdvance(size_t extruder, float factor);
-	bool ConfigureAxisBrakes(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureAxisBrakes(GCodeBuffer& gb, const StringRef& reply);
 
 	void SetEndStopConfiguration(size_t axis, EndStopPosition endstopPos, EndStopInputType inputType)
 	pre(axis < MaxAxes);
