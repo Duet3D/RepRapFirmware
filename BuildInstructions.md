@@ -43,7 +43,7 @@ RepRapFirmware is built from several Github projects. You need to use compatible
 
 11. If you want to build firmware versions later than 2.02RC1, also download and project RRFLibraries from my github repo and add that project to the workspace.
 
-12. Load Eclipse and tell it to import the CoreNG and RepRapFirmware projects (and DuetWiFiSocketServer and RRFLibraries if you have included them).
+12. Load Eclipse and tell it to import the CoreNG and RepRapFirmware projects, also FreeRTOS, DuetWiFiSocketServer and RRFLibraries if you have included them.
 
 13. The build depends on the Eclipse workspace variable 'ArmGccPath" being set to the directory where your arm-none-eabi-g++ compiler resides. For example "C:\Program Files (x86)\GNU Tools ARM Embedded\7 2018-q2-update\bin" on Windows. To set it, go to Windows -> Preferences -> C/C++ -> Build -> Build Variables and click "Add..."
 
