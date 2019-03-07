@@ -3,9 +3,9 @@ Instructions for building dc42 fork of RepRapFirmware
 
 **Important!**
 
-RepRapFirmware is built from several Github projects. You need to use compatible branches of these projects. As at 27 December 2018, the current (version 2.02) source code is on these branches:
+RepRapFirmware is built from several Github projects. You need to use compatible branches of these projects. As at 07 March 2019, the current (version 2.03 beta) source code is on these branches:
 
-- ReprapFirmware: main
+- RepRapFirmware: dev
 - CoreNG: main
 - FreeRTOS: main
 - RRFLibraries: main
