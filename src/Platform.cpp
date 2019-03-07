@@ -3915,7 +3915,7 @@ void Platform::SetPressureAdvance(size_t extruder, float factor)
 	}
 }
 
-bool Platform::ConfigureAxisBrakes(GCodeBuffer& gb, const StringRef& reply) 
+bool Platform::ConfigureAxisBrakes(GCodeBuffer& gb, const StringRef& reply)
 {
 
 	bool success = true;
@@ -3931,23 +3931,31 @@ bool Platform::ConfigureAxisBrakes(GCodeBuffer& gb, const StringRef& reply)
 		{
 			seen = true;
 			LogicalPin logicalPin = gb.GetIValue();
-			// Negative pin values indicate to ignore 
+			// Negative pin values indicate to ignore
 			if (logicalPin >= 0) {
 				if (printed)
 				{
 					reply.cat('\n');
 				}
-				if (axisBrakes[i].Set(logicalPin, PinAccess::write, invert)) 
+				if (axisBrakes[i].Set(logicalPin, PinAccess::write, invert))
 				{
 					reply.catf("Assigned brake for Axis %c on Logical pin %d", axis, logicalPin);
-				} 
-				else 
+				}
+				else
 				{
 					reply.catf("Logical pin %d is not available for writing", logicalPin);
 					success = false;
 				}
 				printed = true;
 			}
+			else
+			{
+				axisBrakes[i].Clear();
+			}
+		}
+		else
+		{
+			axisBrakes[i].Clear();
 		}
 	}
 
