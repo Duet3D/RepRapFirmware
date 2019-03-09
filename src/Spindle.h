@@ -35,6 +35,7 @@ public:
 	float GetRpm() const { return configuredRpm; }
 	void SetRpm(float rpm);
 
+	void TurnOn();
 	void TurnOff();
 };
 

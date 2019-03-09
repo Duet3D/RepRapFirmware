@@ -33,8 +33,13 @@ void Spindle::SetPwmFrequency(float freq)
 
 void Spindle::SetRpm(float rpm)
 {
-	const float pwm = abs(rpm / maxRpm);
-	if (rpm >= 0.0)
+	configuredRpm = rpm;
+}
+
+void Spindle::TurnOn()
+{
+	const float pwm = abs(configuredRpm / maxRpm);
+	if (configuredRpm >= 0.0)
 	{
 		spindleReversePort.WriteAnalog(0.0);
 		spindleForwardPort.WriteAnalog(pwm);
@@ -44,7 +49,7 @@ void Spindle::SetRpm(float rpm)
 		spindleReversePort.WriteAnalog(pwm);
 		spindleForwardPort.WriteAnalog(0.0);
 	}
-	currentRpm = configuredRpm = rpm;
+	currentRpm = configuredRpm;
 }
 
 void Spindle::TurnOff()
@@ -53,5 +58,7 @@ void Spindle::TurnOff()
 	spindleForwardPort.WriteAnalog(0.0);
 	currentRpm = 0.0;
 }
+
+
 
 // End
