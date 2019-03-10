@@ -263,6 +263,7 @@ void RepRap::Init()
 
 	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
+#if !defined(DUET3_V05)					// Duet 3 0.5 has no local SD card
 	// Try to mount the first SD card
 	{
 		GCodeResult rslt;
@@ -305,10 +306,11 @@ void RepRap::Init()
 		}
 		else
 		{
-			delay(3000);		// Wait a few seconds so users have a chance to see this
+			delay(3000);			// Wait a few seconds so users have a chance to see this
 			platform->MessageF(UsbMessage, "%s\n", reply.c_str());
 		}
 	}
+#endif
 	processingConfig = false;
 
 	// Enable network (unless it's disabled)
@@ -319,10 +321,6 @@ void RepRap::Init()
 # ifdef RTOS
 	HSMCI->HSMCI_IDR = 0xFFFFFFFF;	// disable all HSMCI interrupts
 	NVIC_EnableIRQ(HSMCI_IRQn);
-#  if SAME70
-	XDMAC->XDMAC_CHID[CONF_HSMCI_XDMAC_CHANNEL].XDMAC_CID = 0xFFFFFFFF;	// disable all XDMAC interrupts from the HSMCI channel
-	NVIC_EnableIRQ(XDMAC_IRQn);
-#  endif
 # endif
 #endif
 	platform->MessageF(UsbMessage, "%s is up and running.\n", FIRMWARE_NAME);

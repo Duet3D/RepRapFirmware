@@ -676,12 +676,22 @@ void ethernetif_hardware_init(void)
 	/* Clear interrupts */
 	gmac_get_priority_interrupt_status(GMAC, GMAC_QUE_2);
 	gmac_get_priority_interrupt_status(GMAC, GMAC_QUE_1);
+#if (SAMV71B || SAME70B)
+	gmac_get_priority_interrupt_status(GMAC, GMAC_QUE_3);
+	gmac_get_priority_interrupt_status(GMAC, GMAC_QUE_4);
+	gmac_get_priority_interrupt_status(GMAC, GMAC_QUE_5);
+#endif
 
 	/* Set Tx Priority */
 	gs_tx_desc_null.addr = (uint32_t)0xFFFFFFFF;
 	gs_tx_desc_null.status.val = GMAC_TXD_WRAP | GMAC_TXD_USED;
 	gmac_set_tx_priority_queue(GMAC, (uint32_t)&gs_tx_desc_null, GMAC_QUE_2);
 	gmac_set_tx_priority_queue(GMAC, (uint32_t)&gs_tx_desc_null, GMAC_QUE_1);
+#if (SAMV71B || SAME70B)
+	gmac_set_tx_priority_queue(GMAC, (uint32_t)&gs_tx_desc_null, GMAC_QUE_3);
+	gmac_set_tx_priority_queue(GMAC, (uint32_t)&gs_tx_desc_null, GMAC_QUE_4);
+	gmac_set_tx_priority_queue(GMAC, (uint32_t)&gs_tx_desc_null, GMAC_QUE_5);
+#endif
 
 	/* Set Rx Priority */
 	gs_rx_desc_null.addr.val = (uint32_t)0xFFFFFFFF & GMAC_RXD_ADDR_MASK;
@@ -689,6 +699,11 @@ void ethernetif_hardware_init(void)
 	gs_rx_desc_null.status.val = 0;
 	gmac_set_rx_priority_queue(GMAC, (uint32_t)&gs_rx_desc_null, GMAC_QUE_2);
 	gmac_set_rx_priority_queue(GMAC, (uint32_t)&gs_rx_desc_null, GMAC_QUE_1);
+#if (SAMV71B || SAME70B)
+	gmac_set_rx_priority_queue(GMAC, (uint32_t)&gs_rx_desc_null, GMAC_QUE_3);
+	gmac_set_rx_priority_queue(GMAC, (uint32_t)&gs_rx_desc_null, GMAC_QUE_4);
+	gmac_set_rx_priority_queue(GMAC, (uint32_t)&gs_rx_desc_null, GMAC_QUE_5);
+#endif
 
 	gmac_rx_init(&gs_gmac_dev);
 	gmac_tx_init(&gs_gmac_dev);

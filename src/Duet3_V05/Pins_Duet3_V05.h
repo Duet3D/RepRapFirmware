@@ -99,15 +99,16 @@ constexpr size_t NumHeaters = 4;
 constexpr size_t NumFans = 6;
 constexpr size_t NumEndstops = 8;
 
-// Endstops
-constexpr Pin END_STOP_PINS[NumEndstops] = { PORTD_PIN(30), PORTE_PIN(4), PORTA_PIN(18), PORTE_PIN(5), PORTA_PIN(17), PORTA_PIN(19), PORTB_PIN(3), PORTC_PIN(0) };
+// Endstops. If we want to connect a PanelDue to IO7 then we may need to disable endstop 7 here.
+//constexpr Pin END_STOP_PINS[NumEndstops] = { PORTD_PIN(30), PORTE_PIN(4), PORTA_PIN(18), PORTE_PIN(5), PORTA_PIN(17), PORTA_PIN(19), PORTB_PIN(3), PORTD_PIN(25) };
+constexpr Pin END_STOP_PINS[NumEndstops] = { PORTD_PIN(30), PORTE_PIN(4), PORTA_PIN(18), PORTE_PIN(5), PORTA_PIN(17), PORTA_PIN(19), PORTB_PIN(3), NoPin };
 
 // Heater and thermistors
 constexpr Pin HEAT_ON_PINS[NumHeaters] = { PORTA_PIN(7), PORTA_PIN(24), PORTA_PIN(16), PORTA_PIN(11) };
 
-// Cooling fans
+// Cooling fans. The last one (OUT_10) is the servo connector, not a real fan.
 constexpr size_t NUM_FANS = 7;
-constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { PORTA_PIN(15), PORTC_PIN(5), PORTA_PIN(0), PORTC_PIN(11), PORTC_PIN(8), PORTA_PIN(12), PORTC_PIN(23) };
+constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { PORTA_PIN(15), PORTC_PIN(5), PORTA_PIN(8), PORTC_PIN(11), PORTC_PIN(8), PORTA_PIN(12), PORTC_PIN(23) };
 
 constexpr Pin Z_PROBE_PIN = PORTE_PIN(3);		// IO8
 constexpr Pin Z_PROBE_MOD_PIN = PORTE_PIN(1);	// IO8_OUT
