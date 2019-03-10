@@ -3,9 +3,9 @@ Instructions for building dc42 fork of RepRapFirmware
 
 **Important!**
 
-RepRapFirmware is built from several Github projects. You need to use compatible branches of these projects. As at 27 December 2018, the current (version 2.02) source code is on these branches:
+RepRapFirmware is built from several Github projects. You need to use compatible branches of these projects. As at 07 March 2019, the current (version 2.03 beta) source code is on these branches:
 
-- ReprapFirmware: main
+- RepRapFirmware: dev
 - CoreNG: main
 - FreeRTOS: main
 - RRFLibraries: main
@@ -13,13 +13,15 @@ RepRapFirmware is built from several Github projects. You need to use compatible
 
 **Instructions for building under Windows**
 
-1. Download and install the gcc cross-compiler:
+1. Download and install the gcc cross-compiler from https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads:
 
-- To build firmware version 2.01beta2 and later, you need version 2018-q2-update. You can download an installer for this version from https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads.
+- To build firmware version 2.03beta3 and later use version 2018-q4-major
 
-- To build firmware version 1.20alpha3 and later, you need version 2017-q2-update. You may still be able to download an installer for this version from https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads.
+- To build firmware version 2.01beta2 and later, use version 2018-q2-update
 
-- To build firmware version 1.20alpha2 and earlier you need version arm-none-eabi-4.8.3-2014q1. A simple way of doing this is to download Arduino version 1.5.8 and install it into folder C:/Arduino-1.5.8. The compiler and associated tools will then be in folder C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\bin. If you already have a later version of Arduino installed including the add-on for SAM processors, you will find the compiler and tools in a different folder, for example C:\Users\<YOUR USER NAME>\AppData\Local\Arduino15\packages\arduino\tools\arm-none-eabi-gcc\4.8.3-2014q1\bin.
+- To build firmware version 1.20alpha3 and later, use version 2017-q2-update
+
+- To build firmware version 1.20alpha2 and earlier, use version arm-none-eabi-4.8.3-2014q1. A simple way of doing this is to download Arduino version 1.5.8 and install it into folder C:/Arduino-1.5.8. The compiler and associated tools will then be in folder C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\bin. If you already have a later version of Arduino installed including the add-on for SAM processors, you will find the compiler and tools in a different folder, for example C:\Users\<YOUR USER NAME>\AppData\Local\Arduino15\packages\arduino\tools\arm-none-eabi-gcc\4.8.3-2014q1\bin.
 
 2. Download and install Eclipse IDE for C/C++ Developers version 2018-09, from http://www.eclipse.org/downloads/eclipse-packages/. You do not need the Arduino add-on.
 
@@ -41,7 +43,7 @@ RepRapFirmware is built from several Github projects. You need to use compatible
 
 11. If you want to build firmware versions later than 2.02RC1, also download and project RRFLibraries from my github repo and add that project to the workspace.
 
-12. Load Eclipse and tell it to import the CoreNG and RepRapFirmware projects (and DuetWiFiSocketServer and RRFLibraries if you have included them).
+12. Load Eclipse and tell it to import the CoreNG and RepRapFirmware projects, also FreeRTOS, DuetWiFiSocketServer and RRFLibraries if you have included them.
 
 13. The build depends on the Eclipse workspace variable 'ArmGccPath" being set to the directory where your arm-none-eabi-g++ compiler resides. For example "C:\Program Files (x86)\GNU Tools ARM Embedded\7 2018-q2-update\bin" on Windows. To set it, go to Windows -> Preferences -> C/C++ -> Build -> Build Variables and click "Add..."
 
