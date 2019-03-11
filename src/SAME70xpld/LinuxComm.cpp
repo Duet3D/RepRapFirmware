@@ -6,7 +6,7 @@
  */
 
 
-#include <LinuxComm.h>
+#include "LinuxComm.h"
 #include <LinuxMessageFormats.h>
 
 #include "Platform.h"
@@ -15,10 +15,6 @@
 #include "GCodes/GCodeInput.h"
 
 #if HAS_LINUX_INTERFACE
-
-#if !defined(SAME70_TEST_BOARD)
-# error Unsupported board
-#endif
 
 static_assert(HAS_WIFI_NETWORKING == 0, "Cannot use ESP WiFi and Linux SPI comms because there is only one SPI channel available");
 

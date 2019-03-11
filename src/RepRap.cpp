@@ -27,7 +27,7 @@
 #endif
 
 #if HAS_LINUX_INTERFACE
-# include "SAME70_TEST/LinuxComm.h"
+# include "SAME70xpld/LinuxComm.h"
 #endif
 
 #if HAS_HIGH_SPEED_SD

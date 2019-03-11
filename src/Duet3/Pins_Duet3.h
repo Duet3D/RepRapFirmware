@@ -11,7 +11,7 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 // Features definition
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		1
-#define HAS_CPU_TEMP_SENSOR		1
+#define HAS_CPU_TEMP_SENSOR		0
 #define HAS_HIGH_SPEED_SD		1
 
 #define SUPPORT_TMC51xx			1

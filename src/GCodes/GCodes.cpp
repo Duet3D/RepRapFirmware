@@ -40,7 +40,7 @@
 # include "FirmwareUpdater.h"
 #endif
 #if HAS_LINUX_INTERFACE
-# include "SAME70_TEST/LinuxComm.h"
+# include "SAME70xpld/LinuxComm.h"
 #endif
 
 #if SUPPORT_DOTSTAR_LED

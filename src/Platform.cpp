@@ -65,7 +65,7 @@
 #endif
 
 #if HAS_LINUX_INTERFACE
-# include "SAME70_TEST/LinuxComm.h"
+# include "SAME70xpld/LinuxComm.h"
 #endif
 #if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
 # include "Networking/HttpResponder.h"
@@ -3690,7 +3690,7 @@ void Platform::RawMessage(MessageType type, const char *message)
 			usbOutputBuffer->cat(message);
 		}
 	}
-#if HAS_LINUX_COMMS
+#if HAS_LINUX_INTERFACE
 	else if ((type & SpiMessage) != 0)
 	{
 		reprap.GetLinuxComm().HandleGCodeReply(message);
@@ -3727,7 +3727,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 	{
 		++numDestinations;
 	}
-#if HAS_LINUX_COMMS
+#if HAS_LINUX_INTERFACE
 	if ((type & SpiMessage) != 0)
 	{
 		++numDestinations;

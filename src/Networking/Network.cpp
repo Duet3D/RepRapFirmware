@@ -53,7 +53,6 @@ Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderT
 {
 #if defined(DUET3) || defined(SAME70XPLD)
 	interfaces[0] = new LwipEthernetInterface(p);
-	interfaces[1] = new WiFiInterface(p);
 #elif defined(DUET_NG)
 	interfaces[0] = nullptr;			// we set this up in Init()
 #elif defined(DUET_M)

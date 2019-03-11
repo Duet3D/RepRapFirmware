@@ -15,9 +15,9 @@
 #include "RTOSIface/RTOSIface.h"
 #include "ObjectModel/ObjectModel.h"
 
-#if defined(DUET3) || defined(SAME70XPLD)
+#if defined(DUET3)
 const size_t NumNetworkInterfaces = 2;
-#elif defined(DUET_NG) || defined(DUET_M) || defined(__LPC17xx__)
+#elif defined(DUET_NG) || defined(DUET_M) || defined(__LPC17xx__) || defined(SAME70XPLD)
 const size_t NumNetworkInterfaces = 1;
 #else
 # error Wrong Network.h file included
