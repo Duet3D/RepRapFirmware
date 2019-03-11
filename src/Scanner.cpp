@@ -71,7 +71,7 @@ void Scanner::Exit()
 		{
 			fileBeingUploaded->Close();
 			fileBeingUploaded = nullptr;
-			platform.GetMassStorage()->Delete(SCANS_DIRECTORY, uploadFilename);
+			platform.Delete(SCANS_DIRECTORY, uploadFilename);
 		}
 
 		// Pretend the scanner is no longer connected
@@ -102,7 +102,7 @@ void Scanner::Spin()
 		{
 			fileBeingUploaded->Close();
 			fileBeingUploaded = nullptr;
-			platform.GetMassStorage()->Delete(SCANS_DIRECTORY, uploadFilename);
+			platform.Delete(SCANS_DIRECTORY, uploadFilename);
 		}
 		SetState(ScannerState::Disconnected);
 
@@ -193,7 +193,7 @@ void Scanner::Spin()
 				{
 					fileBeingUploaded->Close();
 					fileBeingUploaded = nullptr;
-					platform.GetMassStorage()->Delete(SCANS_DIRECTORY, uploadFilename);
+					platform.Delete(SCANS_DIRECTORY, uploadFilename);
 
 					platform.Message(ErrorMessage, "Failed to write scan file\n");
 					SetState(ScannerState::Idle);
@@ -221,7 +221,7 @@ void Scanner::Spin()
 					{
 						fileBeingUploaded->Close();
 						fileBeingUploaded = nullptr;
-						platform.GetMassStorage()->Delete(SCANS_DIRECTORY, uploadFilename);
+						platform.Delete(SCANS_DIRECTORY, uploadFilename);
 
 						platform.Message(ErrorMessage, "Failed to write scan file\n");
 						SetState(ScannerState::Idle);
@@ -562,7 +562,7 @@ bool Scanner::IsDoingFileMacro() const
 // Perform a file macro using the GCodeBuffer
 void Scanner::DoFileMacro(const char *filename)
 {
-	if (platform.GetMassStorage()->FileExists(SYS_DIR, filename))
+	if (platform.SysFileExists(filename))
 	{
 		String<MaxFilenameLength + 7> gcode;
 		gcode.printf("M98 P%s\n", filename);

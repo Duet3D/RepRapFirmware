@@ -32,7 +32,7 @@ namespace FirmwareUpdater
 			reply.copy("Invalid combination of firmware update modules");
 			return false;
 		}
-		if ((moduleMap & (1 << WifiFirmwareModule)) != 0 && !reprap.GetPlatform().GetMassStorage()->FileExists(SYS_DIR, WIFI_FIRMWARE_FILE))
+		if ((moduleMap & (1 << WifiFirmwareModule)) != 0 && !reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, WIFI_FIRMWARE_FILE))
 		{
 			reply.printf("File %s not found", WIFI_FIRMWARE_FILE);
 			return false;
@@ -69,7 +69,7 @@ namespace FirmwareUpdater
 					WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
 					if (uploader != nullptr)
 					{
-						uploader->SendUpdateFile(WIFI_FIRMWARE_FILE, SYS_DIR, WifiFirmwareUploader::FirmwareAddress);
+						uploader->SendUpdateFile(WIFI_FIRMWARE_FILE, DEFAULT_SYS_DIR, WifiFirmwareUploader::FirmwareAddress);
 					}
 				}
 				break;

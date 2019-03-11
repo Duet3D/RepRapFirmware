@@ -722,13 +722,6 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 			uint32_t drivers[MaxDriversPerAxis];
 			gb.GetUnsignedArray(drivers, numValues, false);
 
-			AxisDriversConfig config;
-			config.numDrivers = numValues;
-			for (size_t i = 0; i < numValues; ++i)
-			{
-				config.driverNumbers[i] = (uint8_t)min<uint32_t>(drivers[i], 255);
-			}
-
 			// Find the drive number allocated to this axis, or allocate a new one if necessary
 			size_t drive = 0;
 			while (drive < numTotalAxes && axisLetters[drive] != c)
@@ -745,7 +738,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 				moveBuffer.coords[drive] = initialCoords[drive];	// user has defined a new axis, so set its position
 				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 			}
-			platform.SetAxisDriversConfig(drive, config);
+			platform.SetAxisDriversConfig(drive, numValues, drivers);
 			if (numTotalAxes + numExtruders > MaxTotalDrivers)
 			{
 				numExtruders = MaxTotalDrivers - numTotalAxes;		// if we added axes, we may have fewer extruders now
@@ -1088,7 +1081,7 @@ GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 #if defined(I2C_IFACE)
 	if (gb.Seen('A'))
 	{
-		const uint32_t address = gb.GetUIValueMaybeHex();
+		const uint32_t address = gb.GetUIValue();
 		uint32_t numToReceive = 0;
 		bool seenR;
 		gb.TryGetUIValue('R', numToReceive, seenR);
@@ -1160,7 +1153,7 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 #if defined(I2C_IFACE)
 	if (gb.Seen('A'))
 	{
-		const uint32_t address = gb.GetUIValueMaybeHex();
+		const uint32_t address = gb.GetUIValue();
 		if (gb.Seen('B'))
 		{
 			const uint32_t numBytes = gb.GetUIValue();
@@ -1253,7 +1246,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 					}
 				}
 
-				if (gb.TryGetUIValueMaybeHex('C', val, seen))		// set chopper control register
+				if (gb.TryGetUIValue('C', val, seen))		// set chopper control register
 				{
 					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::chopperControl, val))
 					{

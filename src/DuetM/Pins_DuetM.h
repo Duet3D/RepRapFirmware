@@ -37,6 +37,7 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
+#define SUPPORT_ASYNC_MOVES		1
 
 // The physical capabilities of the machine
 
@@ -54,6 +55,9 @@ constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the
 
 constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
+
+constexpr size_t MaxHeatersPerTool = 2;
+constexpr size_t MaxExtrudersPerTool = 4;
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB

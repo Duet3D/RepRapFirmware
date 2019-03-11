@@ -104,8 +104,10 @@ constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in millisec
 enum class BoardType : uint8_t
 {
 	Auto = 0,
-#if defined(DUET3)
-	Duet3_10 = 1
+#if defined(DUET3_V03)
+	Duet3_03 = 1
+#elif defined(DUET3_V05)
+	Duet3_05 = 1
 #elif defined(SAME70XPLD)
 	SAME70XPLD_0 = 1
 #elif defined(DUET_NG)
@@ -289,8 +291,14 @@ enum class ErrorCode : uint32_t
 
 struct AxisDriversConfig
 {
-	size_t numDrivers;								// Number of drivers assigned to each axis
+	uint8_t numDrivers;								// Number of drivers assigned to each axis
 	uint8_t driverNumbers[MaxDriversPerAxis];		// The driver numbers assigned - only the first numDrivers are meaningful
+};
+
+struct AxisEndstopConfig
+{
+	uint8_t numEndstops;							// Number of endstop inputs assigned to each axis
+	uint8_t endstopNumbers[MaxDriversPerAxis];		// The endstop numbers assigned - only the first numEndstops are meaningful
 };
 
 // The main class that defines the RepRap machine for the benefit of the other classes
@@ -365,20 +373,26 @@ public:
 	EUI48EEPROM eui48MacAddress;
 #endif
 
-	friend class FileStore;
-
+	// File functions
 	MassStorage* GetMassStorage() const;
-	FileStore* OpenFile(const char* directory, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0)
-	{
-		return massStorage->OpenFile(directory, fileName, mode, preAllocSize);
-	}
+	FileStore* OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const;
+	bool Delete(const char* folder, const char *filename) const;
+	bool FileExists(const char* folder, const char *filename) const;
+	bool DirectoryExists(const char *folder, const char *dir) const;
 
 	const char* GetWebDir() const; 					// Where the html etc files are
 	const char* GetGCodeDir() const; 				// Where the gcodes are
-	const char* GetSysDir() const;  				// Where the system files are
 	const char* GetMacroDir() const;				// Where the user-defined macros are
 	const char* GetConfigFile() const; 				// Where the configuration is stored (in the system dir).
 	const char* GetDefaultFile() const;				// Where the default configuration is stored (in the system dir).
+
+	// Function to work with the system files folder
+	void SetSysDir(const char* dir);				// Set the system files path
+	bool SysFileExists(const char *filename) const;
+	FileStore* OpenSysFile(const char *filename, OpenMode mode) const;
+	bool DeleteSysFile(const char *filename) const;
+	void MakeSysFileName(const StringRef& result, const char *filename) const;
+	void GetSysDir(const StringRef & path) const;
 
 	// Message output (see MessageType for further details)
 	void Message(MessageType type, const char *message);
@@ -422,8 +436,10 @@ public:
 	const float* Accelerations() const;
 	void SetAcceleration(size_t axisOrExtruder, float value);
 	float MaxFeedrate(size_t axisOrExtruder) const;
-	const float* MaxFeedrates() const;
+	const float* MaxFeedrates() const { return maxFeedrates; }
 	void SetMaxFeedrate(size_t axisOrExtruder, float value);
+	float MinMovementSpeed() const { return minimumMovementSpeed; }
+	void SetMinMovementSpeed(float value) { minimumMovementSpeed = max<float>(value, 0.01); }
 	float GetInstantDv(size_t axis) const;
 	void SetInstantDv(size_t axis, float value);
 	EndStopHit Stopped(size_t axisOrExtruder) const;
@@ -437,19 +453,31 @@ public:
 	void SetPressureAdvance(size_t extruder, float factor);
 
 	void SetEndStopConfiguration(size_t axis, EndStopPosition endstopPos, EndStopInputType inputType)
-	pre(axis < MaxAxes);
+		pre(axis < MaxAxes);
 
 	void GetEndStopConfiguration(size_t axis, EndStopPosition& endstopPos, EndStopInputType& inputType) const
-	pre(axis < MaxAxes);
+		pre(axis < MaxAxes);
+
+	const AxisEndstopConfig& GetAxisEndstopConfig(size_t axis) const
+		pre(axis < MaxAxes)
+		{ return axisEndstops[axis]; }
+	void SetAxisEndstopConfig(size_t axis, size_t numValues, const uint32_t inputNumbers[])
+		pre(axis < MaxAxes);
 
 	uint32_t GetAllEndstopStates() const;
-	void SetAxisDriversConfig(size_t axis, const AxisDriversConfig& config);
+
 	const AxisDriversConfig& GetAxisDriversConfig(size_t axis) const
+		pre(axis < MaxAxes)
 		{ return axisDrivers[axis]; }
-	void SetExtruderDriver(size_t extruder, uint8_t driver);
+	void SetAxisDriversConfig(size_t axis, size_t numValues, const uint32_t driverNumbers[])
+		pre(axis < MaxAxes);
 	uint8_t GetExtruderDriver(size_t extruder) const
+		pre(extruder < MaxExtruders)
 		{ return extruderDrivers[extruder]; }
+	void SetExtruderDriver(size_t extruder, uint8_t driver)
+		pre(extruder < MaxExtruders);
 	uint32_t GetDriversBitmap(size_t axisOrExtruder) const	// get the bitmap of driver step bits for this axis or extruder
+		pre(axisOrExtruder < 2 * MaxTotalDrivers)
 		{ return driveDriverBits[axisOrExtruder]; }
 	static void StepDriversLow();							// set all step pins low
 	static void StepDriversHigh(uint32_t driverMap);		// set the specified step pins high
@@ -496,9 +524,6 @@ public:
 	void SetHeater(size_t heater, float power, PwmFrequency freq = 0)	// power is a fraction in [0,1]
 	pre(heater < Heaters);
 
-	uint32_t HeatSampleInterval() const;
-	void SetHeatSampleTime(float st);
-	float GetHeatSampleTime() const;
 	void UpdateConfiguredHeaters();
 
 	// Fans
@@ -610,6 +635,8 @@ public:
   
 private:
 	Platform(const Platform&);						// private copy constructor to make sure we don't try to copy a Platform
+
+	const char* InternalGetSysDir() const;  		// where the system files are - not thread-safe!
 
 	void RawMessage(MessageType type, const char *message);	// called by Message after handling error/warning flags
 
@@ -724,6 +751,7 @@ private:
 	int8_t enableValues[MaxTotalDrivers];
 	Pin endStopPins[NumEndstops];
 	float maxFeedrates[MaxTotalDrivers];
+	float minimumMovementSpeed;
 	float accelerations[MaxTotalDrivers];
 	float driveStepsPerUnit[MaxTotalDrivers];
 	float instantDvs[MaxTotalDrivers];
@@ -734,6 +762,7 @@ private:
 	float motorCurrents[MaxTotalDrivers];				// the normal motor current for each stepper driver
 	float motorCurrentFraction[MaxTotalDrivers];		// the percentages of normal motor current that each driver is set to
 	AxisDriversConfig axisDrivers[MaxAxes];				// the driver numbers assigned to each axis
+	AxisEndstopConfig axisEndstops[MaxAxes];			// the endstop input numbers assigned to each axis
 	uint8_t extruderDrivers[MaxExtruders];				// the driver number assigned to each extruder
 	uint32_t driveDriverBits[2 * MaxTotalDrivers];		// the bitmap of driver port bits for each axis or extruder, followed by the raw versions
 	uint32_t slowDriverStepTimingClocks[4];				// minimum step high, step low, dir setup and dir hold timing for slow drivers
@@ -747,8 +776,9 @@ private:
 	MillisTimer openLoadATimer, openLoadBTimer;
 	MillisTimer driversFanTimers[NumTmcDriversSenseChannels];		// driver cooling fan timers
 	uint8_t nextDriveToPoll;
-	bool driversPowered;
 #endif
+
+	bool driversPowered;
 
 #if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
 	bool warnDriversNotPowered;
@@ -802,7 +832,6 @@ private:
 
 	// Heaters
 	uint32_t configuredHeaters;										// bitmask of all real heaters in use
-	uint32_t heatSampleTicks;
 
 	// Fans
 	Fan fans[NUM_FANS];
@@ -836,6 +865,7 @@ private:
 
 	// Files
 	MassStorage* massStorage;
+	const char *sysDir;
   
 	// Data used by the tick interrupt handler
 
@@ -934,12 +964,6 @@ inline const char* Platform::GetGCodeDir() const
 	return GCODE_DIR;
 }
 
-// Where the system files are
-inline const char* Platform::GetSysDir() const
-{
-	return SYS_DIR;
-}
-
 inline const char* Platform::GetMacroDir() const
 {
 	return MACRO_DIR;
@@ -982,11 +1006,6 @@ inline void Platform::SetAcceleration(size_t drive, float value)
 inline float Platform::MaxFeedrate(size_t drive) const
 {
 	return maxFeedrates[drive];
-}
-
-inline const float* Platform::MaxFeedrates() const
-{
-	return maxFeedrates;
 }
 
 inline void Platform::SetMaxFeedrate(size_t drive, float value)
@@ -1089,23 +1108,6 @@ inline void Platform::ExtrudeOff()
 //********************************************************************************************************
 
 // Drive the RepRap machine - Heat and temperature
-
-inline uint32_t Platform::HeatSampleInterval() const
-{
-	return heatSampleTicks;
-}
-
-inline float Platform::GetHeatSampleTime() const
-{
-	return (float)heatSampleTicks/1000.0;
-}
-inline void Platform::SetHeatSampleTime(float st)
-{
-	if (st > 0)
-	{
-		heatSampleTicks = (uint32_t)(st * 1000.0);
-	}
-}
 
 inline IPAddress Platform::GetIPAddress() const
 {
@@ -1216,7 +1218,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
 #endif
 
-#if defined(DUET_NG) || defined(DUET_M) || defined(PCCB) || defined(DUET3) || defined(SAME70XPLD)
+#if defined(DUET_NG) || defined(DUET_M) || defined(PCCB) || defined(DUET3_V03) || defined(DUET3_V05) || defined(SAME70XPLD)
 	return pinDesc.ulPin;
 #elif defined(DUET_06_085)
 	return (pinDesc.pPort == PIOA) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
@@ -1238,7 +1240,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 {
 #if defined(DUET_NG)
 	PIOD->PIO_ODSR = driverMap;				// on Duet WiFi all step pins are on port D
-#elif defined(DUET_M) || defined(PCCB) || defined(DUET3) || defined(SAME70XPLD)
+#elif defined(DUET_M) || defined(PCCB) || defined(DUET3_V03) || defined(DUET3_V05) || defined(SAME70XPLD)
 	PIOC->PIO_ODSR = driverMap;				// on Duet Maestro all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = driverMap;
@@ -1270,8 +1272,8 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 {
 #if defined(DUET_NG)
 	PIOD->PIO_ODSR = 0;						// on Duet WiFi all step pins are on port D
-#elif defined(DUET_M) || defined(PCCB) || defined(DUET3) || defined(SAME70XPLD)
-	PIOC->PIO_ODSR = 0;						// on Duet Maestro all step pins are on port C
+#elif defined(DUET_M) || defined(PCCB) || defined(DUET3_V03) || defined(DUET3_V05) || defined(SAME70XPLD)
+	PIOC->PIO_ODSR = 0;						// on Duet Maestro, Duet 3 and PCCB all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = 0;
 	PIOC->PIO_ODSR = 0;

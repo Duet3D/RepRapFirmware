@@ -27,6 +27,7 @@ LaserFilamentMonitor::LaserFilamentMonitor(unsigned int extruder, int type)
 
 void LaserFilamentMonitor::Init()
 {
+	dataReceived = false;
 	sensorValue = 0;
 	parityErrorCount = framingErrorCount = overrunErrorCount = polarityErrorCount = overdueCount = 0;
 	lastMeasurementTime = 0;
@@ -159,7 +160,7 @@ void LaserFilamentMonitor::HandleIncomingData()
 		bool receivedPositionReport = false;
 		if (res == PollResult::complete)
 		{
-			// Check the parity
+			// We have a completed a position report. Check the parity.
 			uint8_t data8 = (uint8_t)((val >> 8) ^ val);
 			data8 ^= (data8 >> 4);
 			data8 ^= (data8 >> 2);
@@ -223,10 +224,8 @@ void LaserFilamentMonitor::HandleIncomingData()
 			const uint16_t positionChange = (val - sensorValue) & (positionRange - 1);			// 10- or 11-bit position change
 			const int32_t movement = (positionChange <= positionRange/2) ? (int32_t)positionChange : (int32_t)positionChange - positionRange;
 			movementMeasuredSinceLastSync += (float)movement * ((val & TypeLaserLargeDataRangeBitMask) ? 0.01 : 0.02);
-
-			const uint32_t now = millis();
 			sensorValue = val;
-			lastMeasurementTime = now;
+			lastMeasurementTime = millis();
 
 			if (haveStartBitData)	// if we have a synchronised  value for the amount of extrusion commanded
 			{
@@ -252,7 +251,7 @@ void LaserFilamentMonitor::HandleIncomingData()
 }
 
 // Call the following at intervals to check the status. This is only called when printing is in progress.
-// 'filamentConsumed' is the net amount of extrusion since the last call to this function.
+// 'filamentConsumed' is the net amount of extrusion commanded since the last call to this function.
 // 'hadNonPrintingMove' is true if filamentConsumed includes extruder movement from non-printing moves.
 // 'fromIsr' is true if this measurement was taken at the end of the ISR because a potential start bit was seen
 FilamentSensorStatus LaserFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed)
@@ -382,8 +381,8 @@ FilamentSensorStatus LaserFilamentMonitor::CheckFilament(float amountCommanded, 
 // Clear the measurement state. Called when we are not printing a file. Return the present/not present status if available.
 FilamentSensorStatus LaserFilamentMonitor::Clear()
 {
-	Reset();							// call this first so that haveStartBitData and synced are false when we call HandleIncomingData
-	HandleIncomingData();
+	Reset();											// call this first so that haveStartBitData and synced are false when we call HandleIncomingData
+	HandleIncomingData();								// to keep the diagnostics up to date
 
 	return (sensorError) ? FilamentSensorStatus::sensorError
 			: ((sensorValue & switchOpenMask) != 0) ? FilamentSensorStatus::noFilament

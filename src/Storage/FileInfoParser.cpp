@@ -35,7 +35,7 @@ FileInfoParser::FileInfoParser()
 	parserMutex.Create("FileInfoParser");
 }
 
-bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GCodeFileInfo& info, bool quitEarly)
+bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly)
 {
 	MutexLocker lock(parserMutex, MAX_FILEINFO_PROCESS_TIME);
 	if (!lock)
@@ -43,7 +43,7 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 		return false;
 	}
 
-	if (parseState != notParsing && !StringEqualsIgnoreCase(fileName, filenameBeingParsed.c_str()))
+	if (parseState != notParsing && !StringEqualsIgnoreCase(filePath, filenameBeingParsed.c_str()))
 	{
 		// We are already parsing a different file
 		if (millis() - lastFileParseTime < MaxFileParseInterval)
@@ -60,13 +60,13 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 	{
 		// See if we can access the file
 		// Webserver may call rr_fileinfo for a directory, check this case here
-		if (reprap.GetPlatform().GetMassStorage()->DirectoryExists(directory, fileName))
+		if (reprap.GetPlatform().GetMassStorage()->DirectoryExists(filePath))
 		{
 			info.isValid = false;
 			return true;
 		}
 
-		fileBeingParsed = reprap.GetPlatform().OpenFile(directory, fileName, OpenMode::read);
+		fileBeingParsed = reprap.GetPlatform().GetMassStorage()->OpenFile(filePath, OpenMode::read, 0);
 		if (fileBeingParsed == nullptr)
 		{
 			// Something went wrong - we cannot open it
@@ -75,25 +75,25 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 		}
 
 		// File has been opened, let's start now
-		filenameBeingParsed.copy(fileName);
+		filenameBeingParsed.copy(filePath);
 		fileOverlapLength = 0;
 
 		// Set up the info struct
 		parsedFileInfo.Init();
 		parsedFileInfo.fileSize = fileBeingParsed->Length();
-		parsedFileInfo.lastModifiedTime = reprap.GetPlatform().GetMassStorage()->GetLastModifiedTime(directory, fileName);
+		parsedFileInfo.lastModifiedTime = reprap.GetPlatform().GetMassStorage()->GetLastModifiedTime(filePath);
 		parsedFileInfo.isValid = true;
 
 		// Record some debug values here
 		if (reprap.Debug(modulePrintMonitor))
 		{
 			accumulatedReadTime = accumulatedParseTime = 0;
-			reprap.GetPlatform().MessageF(UsbMessage, "-- Parsing file %s --\n", fileName);
+			reprap.GetPlatform().MessageF(UsbMessage, "-- Parsing file %s --\n", filePath);
 		}
 
 		// If the file is empty or not a G-Code file, we don't need to parse anything
-		if (fileBeingParsed->Length() == 0 || (!StringEndsWithIgnoreCase(fileName, ".gcode") && !StringEndsWithIgnoreCase(fileName, ".g")
-					&& !StringEndsWithIgnoreCase(fileName, ".gco") && !StringEndsWithIgnoreCase(fileName, ".gc")))
+		if (fileBeingParsed->Length() == 0 || (!StringEndsWithIgnoreCase(filePath, ".gcode") && !StringEndsWithIgnoreCase(filePath, ".g")
+					&& !StringEndsWithIgnoreCase(filePath, ".gco") && !StringEndsWithIgnoreCase(filePath, ".gc")))
 		{
 			fileBeingParsed->Close();
 			parsedFileInfo.incomplete = false;
@@ -131,7 +131,7 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 				const int nbytes = fileBeingParsed->Read(&buf[fileOverlapLength], sizeToRead);
 				if (nbytes != (int)sizeToRead)
 				{
-					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to read header of G-Code file \"%s\"\n", fileName);
+					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to read header of G-Code file \"%s\"\n", filePath);
 					parseState = notParsing;
 					fileBeingParsed->Close();
 					info = parsedFileInfo;
@@ -257,7 +257,7 @@ bool FileInfoParser::GetFileInfo(const char *directory, const char *fileName, GC
 				int nbytes = fileBeingParsed->Read(buf, sizeToRead);
 				if (nbytes != (int)sizeToRead)
 				{
-					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to read footer from G-Code file \"%s\"\n", fileName);
+					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to read footer from G-Code file \"%s\"\n", filePath);
 					parseState = notParsing;
 					fileBeingParsed->Close();
 					info = parsedFileInfo;

@@ -7,7 +7,7 @@
 
 
 #include "LinuxComm.h"
-#include <LinuxMessageFormats.h>
+#include "SAME70xpld/LinuxMessageFormats.h"
 
 #include "Platform.h"
 #include "RepRap.h"

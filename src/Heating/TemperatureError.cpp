@@ -19,12 +19,15 @@ const char* TemperatureErrorString(TemperatureError err)
 	case TemperatureError::timeout:			return "sensor timeout";
 	case TemperatureError::ioError:			return "sensor I/O error";
 	case TemperatureError::hardwareError:	return "sensor hardware error";
+	case TemperatureError::notReady:		return "sensor not ready";
 	case TemperatureError::busBusy:			return "sensor bus busy";
 	case TemperatureError::badResponse:		return "bad response from sensor";
 	case TemperatureError::unknownChannel:	return "unknown temperature sensor channel";
 	case TemperatureError::notInitialised:	return "sensor not initialised";
 	case TemperatureError::unknownHeater:	return "unknown heater";
 	case TemperatureError::overOrUnderVoltage:	return "sensor short to other wiring";
+	case TemperatureError::badVref:			return "bad Vref";
+	case TemperatureError::badVssa:			return "bad Vssa";
 	default:								return "unknown temperature sense error";
 	}
 }

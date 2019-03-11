@@ -25,13 +25,17 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
+#define SUPPORT_ASYNC_MOVES		1
 
 #define USE_CACHE				0					// Cache controller disabled for now
 
 // The physical capabilities of the machine
 
 constexpr size_t NumDirectDrivers = 5;				// The maximum number of drives supported by the electronics
-constexpr size_t MaxTotalDrivers = 5;				// The maximum number of smart drivers
+constexpr size_t MaxSmartDrivers = 5;				// The maximum number of smart drivers
+
+constexpr size_t MaxCanDrivers = 12;				// we need to set a limit until the DDA/DMs are restructured
+constexpr size_t MaxTotalDrivers = NumDirectDrivers + MaxCanDrivers;
 
 constexpr size_t NumEndstops = 5;					// The number of inputs we have for endstops, filament sensors etc.
 constexpr size_t NumHeaters = 4;					// The number of heaters in the machine; 0 is the heated bed even if there isn't one
@@ -43,6 +47,9 @@ constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the
 
 constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
+
+constexpr size_t MaxHeatersPerTool = 4;
+constexpr size_t MaxExtrudersPerTool = 6;
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB

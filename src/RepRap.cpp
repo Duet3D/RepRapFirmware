@@ -222,7 +222,7 @@ void RepRap::Init()
 	platform->Init();
 	network->Init();
 	SetName(DEFAULT_MACHINE_NAME);		// Network must be initialised before calling this because this calls SetHostName
-	gCodes->Init();
+	gCodes->Init();						// must be called before Move::Init
 #if SUPPORT_CAN_EXPANSION
 	CanInterface::Init();
 #endif
@@ -273,6 +273,7 @@ void RepRap::Init()
 
 	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
+#if !defined(DUET3_V05)					// Duet 3 0.5 has no local SD card
 	// Try to mount the first SD card
 	{
 		GCodeResult rslt;
@@ -289,14 +290,14 @@ void RepRap::Init()
 			// Run the configuration file
 			const char *configFile = platform->GetConfigFile();
 			platform->Message(UsbMessage, "\nExecuting ");
-			if (platform->GetMassStorage()->FileExists(platform->GetSysDir(), configFile))
+			if (platform->SysFileExists(configFile))
 			{
-				platform->MessageF(UsbMessage, "%s...", platform->GetConfigFile());
+				platform->MessageF(UsbMessage, "%s...", configFile);
 			}
 			else
 			{
-				platform->MessageF(UsbMessage, "%s (no configuration file found)...", platform->GetDefaultFile());
 				configFile = platform->GetDefaultFile();
+				platform->MessageF(UsbMessage, "%s (no configuration file found)...", configFile);
 			}
 
 			if (gCodes->RunConfigFile(configFile))
@@ -315,10 +316,11 @@ void RepRap::Init()
 		}
 		else
 		{
-			delay(3000);		// Wait a few seconds so users have a chance to see this
+			delay(3000);			// Wait a few seconds so users have a chance to see this
 			platform->MessageF(UsbMessage, "%s\n", reply.c_str());
 		}
 	}
+#endif
 	processingConfig = false;
 
 	// Enable network (unless it's disabled)
@@ -329,10 +331,6 @@ void RepRap::Init()
 # ifdef RTOS
 	HSMCI->HSMCI_IDR = 0xFFFFFFFF;	// disable all HSMCI interrupts
 	NVIC_EnableIRQ(HSMCI_IRQn);
-#  if SAME70
-	XDMAC->XDMAC_CHID[CONF_HSMCI_XDMAC_CHANNEL].XDMAC_CID = 0xFFFFFFFF;	// disable all XDMAC interrupts from the HSMCI channel
-	NVIC_EnableIRQ(XDMAC_IRQn);
-#  endif
 # endif
 #endif
 	platform->MessageF(UsbMessage, "%s is up and running.\n", FIRMWARE_NAME);
@@ -602,9 +600,9 @@ void RepRap::SetDebug(Module m, bool enable)
 	PrintDebug();
 }
 
-void RepRap::SetDebug(bool enable)
+void RepRap::ClearDebug()
 {
-	debug = (enable) ? 0xFFFF : 0;
+	debug = 0;
 }
 
 void RepRap::PrintDebug()
@@ -1031,7 +1029,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			ch = ',';
 		}
 		response->cat((ch == '[') ? "[]" : "]");
-		response->catf(",\"babystep\":%.3f}", (double)gCodes->GetBabyStepOffset());
+		response->catf(",\"babystep\":%.3f}", (double)gCodes->GetBabyStepOffset(Z_AXIS));
 	}
 
 	// G-code reply sequence for webserver (sequence number for AUX is handled later)
@@ -1766,7 +1764,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send the baby stepping offset
-	response->catf(",\"babystep\":%.03f", (double)(gCodes->GetBabyStepOffset()));
+	response->catf(",\"babystep\":%.03f", (double)(gCodes->GetBabyStepOffset(Z_AXIS)));
 
 	// Send the current tool number
 	response->catf(",\"tool\":%d", GetCurrentToolNumber());
@@ -1836,7 +1834,9 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	// Short messages are now pushed directly to PanelDue, so don't include them here as well
 	// We no longer send the amount of http buffer space here because the web interface doesn't use these forms of status response
 
-	// Deal with the message box, if there is one
+	// Deal with the message box.
+	// Don't send it if we are flashing firmware, because when we flash firmware we send messages directly to PanelDue and we don't want them to get cleared.
+	if (!gCodes->IsFlashing())
 	{
 		float timeLeft = 0.0;
 		MutexLocker lock(messageBoxMutex);
@@ -1883,11 +1883,11 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		response->EncodeString(FIRMWARE_NAME, false);
 	}
 
+	// Send the response to the last command. Do this last because it can be long and may need to be truncated.
 	const int auxSeq = (int)platform->GetAuxSeq();
 	if (type < 2 || (seq != -1 && auxSeq != seq))
 	{
 
-		// Send the response to the last command. Do this last because it can be long and may need to be truncated.
 		response->catf(",\"seq\":%d,\"resp\":", auxSeq);					// send the response sequence number
 
 		// Send the JSON response
@@ -2070,7 +2070,9 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 	if (specificFile)
 	{
 		// Poll file info for a specific file
-		if (!platform->GetMassStorage()->GetFileInfo(platform->GetGCodeDir(), filename, info, quitEarly))
+		String<MaxFilenameLength> filePath;
+		MassStorage::CombineName(filePath.GetRef(), platform->GetGCodeDir(), filename);
+		if (!platform->GetMassStorage()->GetFileInfo(filePath.c_str(), info, quitEarly))
 		{
 			// This may take a few runs...
 			return false;

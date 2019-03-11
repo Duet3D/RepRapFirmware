@@ -15,7 +15,9 @@ class ThermocoupleSensor31855 : public SpiTemperatureSensor
 public:
 	ThermocoupleSensor31855(unsigned int channel);
 	void Init() override;
-	TemperatureError GetTemperature(float& t) override;
+
+protected:
+	TemperatureError TryGetTemperature(float& t) override;
 };
 
 #endif /* SRC_HEATING_THERMOCOUPLESENSOR31855_H_ */

@@ -30,7 +30,7 @@ class FileStore
 public:
 	FileStore();
 
-    bool Open(const char* directory, const char* fileName, OpenMode mode, uint32_t preAllocSize);
+    bool Open(const char* filePath, OpenMode mode, uint32_t preAllocSize);
 	bool Read(char& b);								// Read 1 byte
 	bool Read(uint8_t& b)
 		{ return Read((char&)b); }					// Read 1 byte

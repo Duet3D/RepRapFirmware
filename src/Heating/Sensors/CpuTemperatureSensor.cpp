@@ -19,7 +19,7 @@ void CpuTemperatureSensor::Init()
 {
 }
 
-TemperatureError CpuTemperatureSensor::GetTemperature(float& t)
+TemperatureError CpuTemperatureSensor::TryGetTemperature(float& t)
 {
 	float minT, maxT;
 	reprap.GetPlatform().GetMcuTemperatures(minT, t, maxT);

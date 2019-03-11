@@ -32,7 +32,7 @@ const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in
 //  CJ=0		cold junction temperature sensing enabled
 //  FAULT=1		fault bit and output remain set until cleared explicitly
 //  FAULTCLR=1	clear any existing fault
-//  50/60Hz=1	reject 50Hz (should preferably be made configurable)
+//  50/60Hz=1	reject 50Hz (configurable via F parameter)
 const uint8_t DefaultCr0 = 0b10010111;
 const uint8_t Cr0ReadMask = 0b10111101;			// bits 1 and 6 auto clear, so ignore the value read
 
@@ -157,7 +157,7 @@ TemperatureError ThermocoupleSensor31856::TryInitThermocouple() const
 	return sts;
 }
 
-TemperatureError ThermocoupleSensor31856::GetTemperature(float& t)
+TemperatureError ThermocoupleSensor31856::TryGetTemperature(float& t)
 {
 	if (inInterrupt() || millis() - lastReadingTime < MinimumReadInterval)
 	{
@@ -188,7 +188,7 @@ TemperatureError ThermocoupleSensor31856::GetTemperature(float& t)
 			else
 			{
 				const int16_t rawTemp = (int16_t)(rawVal >> 16);			// keep just the most significant 2 bytes and interpret them as signed
-				t = lastTemperature = (float)rawTemp / 16.0;
+				t = lastTemperature = (float)rawTemp / 16;
 				lastResult = TemperatureError::success;
 			}
 		}

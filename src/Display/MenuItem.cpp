@@ -315,7 +315,7 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 				break;
 
 			case 21: // Z baby-step
-				currentValue = reprap.GetGCodes().GetBabyStepOffset();
+				currentValue = reprap.GetGCodes().GetBabyStepOffset(Z_AXIS);
 				break;
 
 			// Platform's IP address is the "planned", Network's IP address is the "actual"
@@ -583,7 +583,10 @@ void FilesMenuItem::EnterDirectory()
 	{
 		do
 		{
-			++m_uHardItemsInDirectory;
+			if (oFileInfo.fileName[0] != '.')
+			{
+				++m_uHardItemsInDirectory;
+			}
 		}
 		while (m_oMS->FindNext(oFileInfo));
 	}
@@ -808,9 +811,16 @@ bool FilesMenuItem::Select(const StringRef& cmd)
 		// Seek to the selected file
 		FileInfo oFileInfo;
 		bool gotFileInfo = m_oMS->FindFirst(currentDirectory.c_str(), oFileInfo);
-		while (gotFileInfo && dirEntriesToSkip != 0)
+		while (gotFileInfo)
 		{
-			--dirEntriesToSkip;
+			if (oFileInfo.fileName[0] != '.')
+			{
+				if (dirEntriesToSkip == 0)
+				{
+					break;
+				}
+				--dirEntriesToSkip;
+			}
 			gotFileInfo = m_oMS->FindNext(oFileInfo);
 		}
 		m_oMS->AbandonFindNext();

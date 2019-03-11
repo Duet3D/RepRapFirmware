@@ -3,6 +3,9 @@
  *
  *  Created on: 12 Sep 2018
  *      Author: David
+ *
+ * The purpose of this module is to service the DMA Complete interrupt from the XDMAC on the SAME70
+ * and route the interrupts caused by the various DMA channels to the corresponding drivers.
  */
 
 #include "DmacManager.h"
@@ -17,6 +20,11 @@ namespace DmacManager
 	void Init()
 	{
 		pmc_enable_periph_clk(ID_XDMAC);
+		for (unsigned int i = 0; i < NumDmaChannelsUsed; ++i)
+		{
+			XDMAC->XDMAC_CHID[i].XDMAC_CID = 0xFFFFFFFF;	// disable all XDMAC interrupts from the channel
+		}
+		NVIC_EnableIRQ(XDMAC_IRQn);
 	}
 
 	void SetInterruptCallback(const uint8_t channel, StandardCallbackFunction fn, CallbackParameter param)

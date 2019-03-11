@@ -115,8 +115,8 @@ public:
 		runningM501 : 1,
 		runningM502 : 1,
 		volumetricExtrusion : 1,
-		useMachineCoordinates : 1,			// true if seen G53 on this line of GCode
-		useMachineCoordinatesSticky : 1,	// true if using machine coordinates for the remainder of this macro
+		g53Active : 1,							// true if seen G53 on this line of GCode
+		runningSystemMacro : 1,					// true if running a system macro file
 		// Caution: these next 3 will be modified out-of-process when we use RTOS, so they will need to be individual bool variables
 		waitingForAcknowledgement : 1,
 		messageAcknowledged : 1,
@@ -125,8 +125,7 @@ public:
 	static GCodeMachineState *Allocate()
 	post(!result.IsLive(); result.state == GCodeState::normal);
 
-	// Return true if the G54 command is in effect
-	bool UsingMachineCoordinates() const { return useMachineCoordinates || useMachineCoordinatesSticky; }
+	bool UsingMachineCoordinates() const { return g53Active || runningSystemMacro; }
 
 	// Copy values that may have been altered by config.g into this state record
 	void CopyStateFrom(const GCodeMachineState& other)

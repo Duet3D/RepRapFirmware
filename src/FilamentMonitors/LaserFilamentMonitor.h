@@ -107,7 +107,6 @@ private:
 	float totalExtrusionCommanded;
 	float totalMovementMeasured;
 
-	uint8_t samplesReceived;
 	bool dataReceived;
 	bool backwards;
 

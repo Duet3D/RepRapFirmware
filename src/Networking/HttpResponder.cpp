@@ -15,7 +15,7 @@ const size_t KoFirst = 3;
 
 const char* const overflowResponse = "overflow";
 const char* const badEscapeResponse = "bad escape";
-const char* const serviceUnavailableResponse = "HTTP/1.1 503 Service Unavailable\r\n\r\n";
+const char serviceUnavailableResponse[] = "HTTP/1.1 503 Service Unavailable\r\n\r\n";
 static_assert(ARRAY_SIZE(serviceUnavailableResponse) <= OUTPUT_BUFFER_SIZE, "OUTPUT_BUFFER_SIZE too small");
 
 const uint32_t HttpReceiveTimeout = 2000;
@@ -528,7 +528,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	}
 	else if (StringEqualsIgnoreCase(request, "delete") && GetKeyValue("name") != nullptr)
 	{
-		const bool ok = GetPlatform().GetMassStorage()->Delete(FS_PREFIX, GetKeyValue("name"));
+		const bool ok = GetPlatform().Delete(FS_PREFIX, GetKeyValue("name"));
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
 	else if (StringEqualsIgnoreCase(request, "filelist") && GetKeyValue("dir") != nullptr)
@@ -578,7 +578,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			MassStorage * const ms = GetPlatform().GetMassStorage();
 			if (StringEqualsIgnoreCase(GetKeyValue("deleteexisting"), "yes") && ms->FileExists(oldVal) && ms->FileExists(newVal))
 			{
-				ms->Delete(nullptr, newVal);
+				ms->Delete(newVal);
 			}
 			success = ms->Rename(oldVal, newVal);
 		}
@@ -704,7 +704,7 @@ bool HttpResponder::RemoveAuthentication()
 
 			for (size_t k = i + 1; k < numSessions; ++k)
 			{
-				memcpy(&sessions[k - 1], &sessions[k], sizeof(HttpSession));
+				sessions[k - 1] = sessions[k];
 			}
 			numSessions--;
 			return true;
@@ -900,6 +900,7 @@ void HttpResponder::SendGCodeReply()
 	Commit();
 }
 
+// Send a JSON response to the current command. outBuf is non-null on entry.
 void HttpResponder::SendJsonResponse(const char* command)
 {
 	// Try to authorise the user automatically to retain compatibility with the old web interface
@@ -920,7 +921,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 		if (StringEqualsIgnoreCase(command, "configfile"))	// rr_configfile [DEPRECATED]
 		{
 			String<MaxFilenameLength> fileName;
-			MassStorage::CombineName(fileName.GetRef(), GetPlatform().GetSysDir(), GetPlatform().GetConfigFile());
+			GetPlatform().MakeSysFileName(fileName.GetRef(), GetPlatform().GetConfigFile());
 			SendFile(fileName.c_str(), false);
 			return;
 		}
@@ -970,6 +971,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 				if (buf != nullptr)
 				{
 					OutputBuffer::ReleaseAll(buf);
+					OutputBuffer::ReleaseAll(outBuf);
 					return;					// next time we try, hopefully there will be a spare buffer
 				}
 			}
@@ -980,8 +982,8 @@ void HttpResponder::SendJsonResponse(const char* command)
 			// We know that we have an output buffer, but it may be too short to send a long reply, so send a short one
 			outBuf->copy(serviceUnavailableResponse);
 			Commit(ResponderState::free, false);
-			return;
 		}
+		return;
 	}
 
 	// Send the JSON response
@@ -1019,8 +1021,6 @@ void HttpResponder::SendJsonResponse(const char* command)
 
 	if (outBuf->HadOverflow())
 	{
-		// We ran out of buffers. Release the buffers we have and return false. The caller will retry later.
-		OutputBuffer::ReleaseAll(outBuf);
 		// We ran out of buffers at some point.
 		// Unfortunately the protocol is prone to deadlocking, because if most output buffer are used up holding a GCode reply,
 		// there may be insufficient buffers left to compose the status response to tell DWC that it needs to fetch that GCode reply.
@@ -1033,6 +1033,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 				if (buf != nullptr)
 				{
 					OutputBuffer::ReleaseAll(buf);
+					OutputBuffer::ReleaseAll(outBuf);
 					return;
 				}
 			}
@@ -1040,8 +1041,13 @@ void HttpResponder::SendJsonResponse(const char* command)
 			OutputBuffer::Truncate(outBuf, 999999);				// release all buffers except the first one
 			outBuf->copy(serviceUnavailableResponse);
 			Commit(ResponderState::free, false);
-			return;
 		}
+		else
+		{
+			// We ran out of buffers. Release the buffers we have and return false. The caller will retry later.
+			OutputBuffer::ReleaseAll(outBuf);
+		}
+		return;
 	}
 
 	// Here if everything is OK
@@ -1402,7 +1408,7 @@ void HttpResponder::Diagnostics(MessageType mt) const
 			// Check for timed out sessions
 			for (size_t k = i + 1; k < numSessions; k++)
 			{
-				memcpy(&sessions[k - 1], &sessions[k], sizeof(HttpSession));
+				sessions[k - 1] = sessions[k];
 			}
 			numSessions--;
 			clientsTimedOut++;

@@ -38,6 +38,9 @@ constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the
 constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
+constexpr size_t MaxHeatersPerTool = 2;
+constexpr size_t MaxExtrudersPerTool = 5;
+
 constexpr size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels (USB and two auxiliary UARTs)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
@@ -122,8 +125,8 @@ constexpr Pin DiagPin = NoPin;
 constexpr int Dac0DigitalPin = 66;											// Arduino Due pin number corresponding to DAC0 output pin
 
 // COOLING FANS
-constexpr size_t NUM_FANS = 2;
-constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { X6, X17 };						// Pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
+constexpr size_t NUM_FANS = 4;
+constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { X6, X17, NoPin, NoPin };		// Pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead. Additional fans can be mapped to heater pins.
 constexpr size_t NumTachos = 1;
 constexpr Pin TachoPins[NumTachos] = { 23 };								// Pin PA15
 

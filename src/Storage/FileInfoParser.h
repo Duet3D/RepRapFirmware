@@ -60,7 +60,7 @@ public:
 	FileInfoParser();
 
 	// The following method needs to be called until it returns true - this may take a few runs
-	bool GetFileInfo(const char *directory, const char *fileName, GCodeFileInfo& info, bool quitEarly);
+	bool GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly);
 
 	static constexpr const char* SimulatedTimeString = "\n; Simulated print time";	// used by FileInfoParser and MassStorage
 

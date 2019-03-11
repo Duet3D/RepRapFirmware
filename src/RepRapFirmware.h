@@ -28,6 +28,8 @@ Licence: GPL
 #include <climits>		// for CHAR_BIT
 
 #include "ecv.h"
+#undef value			// needed because we include <optional>
+
 #include "Core.h"
 
 typedef uint16_t PwmFrequency;		// type used to represent a PWM frequency. 0 sometimes means "default".

@@ -572,7 +572,7 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "DELE"))
 		{
 			const char *filename = GetParameter("DELE");
-			if (GetPlatform().GetMassStorage()->Delete(currentDirectory.c_str(), filename))
+			if (GetPlatform().Delete(currentDirectory.c_str(), filename))
 			{
 				outBuf->copy("250 Delete operation successful.\r\n");
 			}
@@ -586,7 +586,7 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "RMD"))
 		{
 			const char *filename = GetParameter("RMD");
-			if (GetPlatform().GetMassStorage()->Delete(currentDirectory.c_str(), filename))
+			if (GetPlatform().Delete(currentDirectory.c_str(), filename))
 			{
 				outBuf->copy("250 Remove directory operation successful.\r\n");
 			}

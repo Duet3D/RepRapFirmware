@@ -24,23 +24,22 @@ struct FileInfo
 class MassStorage
 {
 public:
-	FileStore* OpenFile(const char* directory, const char* fileName, OpenMode mode, uint32_t preAllocSize);
+	static void CombineName(const StringRef& out, const char* directory, const char* fileName);
+	static const char* GetMonthName(const uint8_t month);
+
+	FileStore* OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize);
 	bool FindFirst(const char *directory, FileInfo &file_info);
 	bool FindNext(FileInfo &file_info);
 	void AbandonFindNext();
-	const char* GetMonthName(const uint8_t month);
-	static void CombineName(const StringRef& out, const char* directory, const char* fileName);
-	bool Delete(const char* directory, const char* fileName);
+	bool Delete(const char* filePath);
 	bool MakeDirectory(const char *parentDir, const char *dirName);
 	bool MakeDirectory(const char *directory);
-	bool Rename(const char *oldFilename, const char *newFilename);
-	bool FileExists(const char *file) const;
-	bool FileExists(const char* directory, const char *fileName) const;
+	bool Rename(const char *oldFilePath, const char *newFilePath);
+	bool FileExists(const char *filePath) const;
 	bool DirectoryExists(const StringRef& path) const;								// Warning: if 'path' has a trailing '/' or '\\' character, it will be removed!
 	bool DirectoryExists(const char *path) const;
-	bool DirectoryExists(const char* directory, const char* subDirectory);
-	time_t GetLastModifiedTime(const char* directory, const char *fileName) const;
-	bool SetLastModifiedTime(const char* directory, const char *file, time_t time);
+	time_t GetLastModifiedTime(const char *filePath) const;
+	bool SetLastModifiedTime(const char *file, time_t time);
 	GCodeResult Mount(size_t card, const StringRef& reply, bool reportSuccess);
 	GCodeResult Unmount(size_t card, const StringRef& reply);
 	bool IsDriveMounted(size_t drive) const { return drive < NumSdCards && info[drive].isMounted; }
@@ -52,8 +51,8 @@ public:
 	unsigned int GetNumFreeFiles() const;
 	void Spin();
 	const Mutex& GetVolumeMutex(size_t vol) const { return info[vol].volMutex; }
-	bool GetFileInfo(const char *directory, const char *fileName, GCodeFileInfo& info, bool quitEarly) { return infoParser.GetFileInfo(directory, fileName, info, quitEarly); }
-	void RecordSimulationTime(const char *printingFilename, uint32_t simSeconds);	// Append the simulated printing time to the end of the file
+	bool GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) { return infoParser.GetFileInfo(filePath, info, quitEarly); }
+	void RecordSimulationTime(const char *printingFilePath, uint32_t simSeconds);	// Append the simulated printing time to the end of the file
 
 	enum class InfoResult : uint8_t
 	{

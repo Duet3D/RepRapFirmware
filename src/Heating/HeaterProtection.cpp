@@ -40,7 +40,7 @@ bool HeaterProtection::Check()
 		if (err != TemperatureError::success)
 		{
 			badTemperatureCount++;
-			if (badTemperatureCount > MAX_BAD_TEMPERATURE_COUNT)
+			if (badTemperatureCount > MaxBadTemperatureCount)
 			{
 				reprap.GetPlatform().MessageF(ErrorMessage, "Temperature reading error on heater %d\n", supervisedHeater);
 				return false;

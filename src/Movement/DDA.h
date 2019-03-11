@@ -13,22 +13,24 @@
 #include "StepTimer.h"
 #include "GCodes/GCodes.h"			// for class RawMove
 
+#include <optional>
+
 #ifdef DUET_NG
 # define DDA_LOG_PROBE_CHANGES	0
 #else
 # define DDA_LOG_PROBE_CHANGES	0	// save memory on the wired Duet
 #endif
 
-/**
- * This defines a single linear movement of the print head
- */
+class DDARing;
+
+// This defines a single coordinated movement of one or several motors
 class DDA
 {
 	friend class DriveMovement;
 
 public:
 
-	enum DDAState : unsigned char
+	enum DDAState : uint8_t
 	{
 		empty,				// empty or being filled in
 		provisional,		// ready, but could be subject to modifications
@@ -39,37 +41,42 @@ public:
 
 	DDA(DDA* n);
 
-	bool Init(GCodes::RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));
-																	// Set up a new move, returning true if it represents real movement
-	bool Init(const float_t steps[MaxTotalDrivers]);				// Set up a raw (unmapped) motor move
-	void Init();													// Set up initial positions for machine startup
-	bool Start(uint32_t tim) __attribute__ ((hot));					// Start executing the DDA, i.e. move the move.
-	bool Step() __attribute__ ((hot));								// Take one step of the DDA, called by timed interrupt.
+	bool InitStandardMove(DDARing& ring, GCodes::RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
+	bool InitLeadscrewMove(DDARing& ring, float feedrate, const float amounts[MaxTotalDrivers]);		// Set up a leadscrew motor move
+#if SUPPORT_ASYNC_MOVES
+	bool InitAsyncMove(DDARing& ring, float feedrate, const float amounts[MaxTotalDrivers]);			// Set up an async move
+#endif
+
+	void Start(Platform& p, uint32_t tim) __attribute__ ((hot));			// Start executing the DDA, i.e. move the move.
+	void StepDrivers(Platform& p) __attribute__ ((hot));					// Take one step of the DDA, called by timed interrupt.
+	std::optional<uint32_t> GetNextInterruptTime() const;					// Return the time that the next interrupt is needed
+
 	void SetNext(DDA *n) { next = n; }
 	void SetPrevious(DDA *p) { prev = p; }
 	void Complete() { state = completed; }
 	bool Free();
 	void Prepare(uint8_t simMode, float extrusionPending[]) __attribute__ ((hot));	// Calculate all the values and freeze this DDA
 	bool HasStepError() const;
-	bool CanPauseAfter() const { return canPauseAfter; }
-	bool IsPrintingMove() const { return isPrintingMove; }			// Return true if this involves both XY movement and extrusion
-	bool UsingStandardFeedrate() const { return usingStandardFeedrate; }
+	bool CanPauseAfter() const { return flags.canPauseAfter; }
+	bool IsPrintingMove() const { return flags.isPrintingMove; }			// Return true if this involves both XY movement and extrusion
+	bool UsingStandardFeedrate() const { return flags.usingStandardFeedrate; }
 
 	DDAState GetState() const { return state; }
 	DDA* GetNext() const { return next; }
 	DDA* GetPrevious() const { return prev; }
 	int32_t GetTimeLeft() const;
-	const int32_t *DriveCoordinates() const { return endPoint; }	// Get endpoints of a move in machine coordinates
-	void SetDriveCoordinate(int32_t a, size_t drive);				// Force an end point
+	void InsertHiccup(uint32_t delayClocks) { afterPrepare.moveStartTime += delayClocks; }
+	const int32_t *DriveCoordinates() const { return endPoint; }			// Get endpoints of a move in machine coordinates
+	void SetDriveCoordinate(int32_t a, size_t drive);						// Force an end point
 	void SetFeedRate(float rate) { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping);
 	bool FetchEndPosition(volatile int32_t ep[MaxTotalDrivers], volatile float endCoords[MaxTotalDrivers]);
-    void SetPositions(const float move[], size_t numDrives);		// Force the endpoints to be these
+    void SetPositions(const float move[], size_t numDrives);				// Force the endpoints to be these
     FilePosition GetFilePosition() const { return filePos; }
     float GetRequestedSpeed() const { return requestedSpeed; }
     float GetTopSpeed() const { return topSpeed; }
     float GetVirtualExtruderPosition() const { return virtualExtruderPosition; }
-	float AdvanceBabyStepping(float amount);						// Try to push babystepping earlier in the move queue
+	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount);					// Try to push babystepping earlier in the move queue
 	bool IsHomingAxes() const { return (endStopsToCheck & HomeAxes) != 0; }
 	uint32_t GetXAxes() const { return xAxes; }
 	uint32_t GetYAxes() const { return yAxes; }
@@ -85,16 +92,18 @@ public:
 
 	uint32_t GetClocksNeeded() const { return clocksNeeded; }
 	bool IsGoodToPrepare() const;
-	bool IsNonPrintingExtruderMove() const { return isNonPrintingExtruderMove; }
+	bool IsNonPrintingExtruderMove() const { return flags.isNonPrintingExtruderMove; }
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const { return laserPwmOrIoBits; }
 #endif
 
 #if SUPPORT_IOBITS
-	uint32_t GetMoveStartTime() const { return moveStartTime; }
+	uint32_t GetMoveStartTime() const { return afterPrepare.moveStartTime; }
 	IoBits_t GetIoBits() const { return laserPwmOrIoBits.ioBits; }
 #endif
+
+	uint32_t GetMoveFinishTime() const { return afterPrepare.moveStartTime + clocksNeeded; }
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const;	// Get the current full step interval for this axis or extruder
@@ -138,14 +147,13 @@ public:
 	static int32_t loggedProbePositions[XYZ_AXES * MaxLoggedProbePositions];
 #endif
 
-	static unsigned int numHiccups;									// how many times we delayed an interrupt to avoid using too much CPU time in interrupts
 	static uint32_t lastStepLowTime;								// when we last completed a step pulse to a slow driver
 	static uint32_t lastDirChangeTime;								// when we last change the DIR signal to a slow driver
 
 private:
 	DriveMovement *FindDM(size_t drive) const;						// find the DM for a drive if there is one even if it is completed
 	DriveMovement *FindActiveDM(size_t drive) const;				// find the DM for a drive if there is one but only if it is active
-	void RecalculateMove() __attribute__ ((hot));
+	void RecalculateMove(DDARing& ring) __attribute__ ((hot));
 	void MatchSpeeds() __attribute__ ((hot));
 	void ReduceHomingSpeed();										// called to reduce homing speed when a near-endstop is triggered
 	void StopDrive(size_t drive);									// stop movement of a drive and recalculate the endpoint
@@ -159,7 +167,7 @@ private:
 	float NormaliseXYZ();											// Make the direction vector unit-normal in XYZ
 	void AdjustAcceleration();										// Adjust the acceleration and deceleration to reduce ringing
 
-	static void DoLookahead(DDA *laDDA) __attribute__ ((hot));		// Try to smooth out moves in the queue
+	static void DoLookahead(DDARing& ring, DDA *laDDA) __attribute__ ((hot));	// Try to smooth out moves in the queue
     static float Normalise(float v[], size_t dim1, size_t dim2);  	// Normalise a vector of dim1 dimensions to unit length in the first dim1 dimensions
     static void Absolute(float v[], size_t dimensions);				// Put a vector in the positive hyperquadrant
     static float Magnitude(const float v[], size_t dimensions);  	// Return the length of a vector
@@ -176,22 +184,22 @@ private:
 	{
 		struct
 		{
-			uint16_t endCoordinatesValid : 1;		// True if endCoordinates can be relied on
-			uint16_t isDeltaMovement : 1;			// True if this is a delta printer movement
-			uint16_t canPauseAfter : 1;				// True if we can pause at the end of this move
-			uint16_t isPrintingMove : 1;			// True if this move includes XY movement and extrusion
-			uint16_t usePressureAdvance : 1;		// True if pressure advance should be applied to any forward extrusion
-			uint16_t hadLookaheadUnderrun : 1;		// True if the lookahead queue was not long enough to optimise this move
-			uint16_t xyMoving : 1;					// True if movement along an X axis or the Y axis was requested, even it if's too small to do
-			uint16_t goingSlow : 1;					// True if we have slowed the movement because the Z probe is approaching its threshold
-			uint16_t isLeadscrewAdjustmentMove : 1;	// True if this is a leadscrews adjustment move
-			uint16_t usingStandardFeedrate : 1;		// True if this move uses the standard feed rate
-			uint16_t hadHiccup : 1;					// True if we had a hiccup while executing this move
-			uint16_t isNonPrintingExtruderMove : 1;		// True if this move is a fast extruder-only move, probably a retract/re-prime
-			uint16_t continuousRotationShortcut : 1; // True if continuous rotation axes take shortcuts
+			uint16_t endCoordinatesValid : 1,		// True if endCoordinates can be relied on
+					 isDeltaMovement : 1,			// True if this is a delta printer movement
+					 canPauseAfter : 1,				// True if we can pause at the end of this move
+					 isPrintingMove : 1,			// True if this move includes XY movement and extrusion
+					 usePressureAdvance : 1,		// True if pressure advance should be applied to any forward extrusion
+					 hadLookaheadUnderrun : 1,		// True if the lookahead queue was not long enough to optimise this move
+					 xyMoving : 1,					// True if movement along an X axis or the Y axis was requested, even it if's too small to do
+					 goingSlow : 1,					// True if we have slowed the movement because the Z probe is approaching its threshold
+					 isLeadscrewAdjustmentMove : 1,	// True if this is a leadscrews adjustment move
+					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
+					 isNonPrintingExtruderMove : 1,	// True if this move is a fast extruder-only move, probably a retract/re-prime
+					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
+					 usesEndstops : 1;				// True if this move monitors endstops of Z probe
 		};
-		uint16_t flags;								// so that we can print all the flags at once for debugging
-	};
+		uint16_t all;								// so that we can print all the flags at once for debugging
+	} flags;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;		// laser PWM required or port state required during this move (here because it is currently 16 bits)
@@ -216,8 +224,6 @@ private:
 	float startSpeed;
 	float endSpeed;
 	float topSpeed;
-	float accelDistance;
-	float decelDistance;
 
 	float proportionLeft;					// what proportion of the extrusion in the G1 or G0 move of which this is a part remains to be done after this segment is complete
 	uint32_t clocksNeeded;
@@ -227,9 +233,11 @@ private:
 		// Values that are needed only before Prepare is called
 		struct
 		{
+			float accelDistance;
+			float decelDistance;
 			float targetNextSpeed;				// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
 			float maxAcceleration;				// the maximum allowed acceleration for this move according to the limits set by M201
-		};
+		} beforePrepare;
 
 		// Values that are not set or accessed before Prepare is called
 		struct
@@ -242,7 +250,7 @@ private:
 
 			// These are used only in delta calculations
 		    int32_t cKc;						// The Z movement fraction multiplied by Kc and converted to integer
-		};
+		} afterPrepare;
 	};
 
 #if DDA_LOG_PROBE_CHANGES
@@ -292,7 +300,7 @@ inline DriveMovement *DDA::FindActiveDM(size_t drive) const
 inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 {
 	endPoint[drive] = a;
-	endCoordinatesValid = false;
+	flags.endCoordinatesValid = false;
 }
 
 #if HAS_SMART_DRIVERS

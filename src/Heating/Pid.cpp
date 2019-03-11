@@ -75,7 +75,7 @@ void PID::Reset()
 	tuned = false;
 	averagePWM = lastPwm = 0.0;
 	heatingFaultCount = 0;
-	temperature = BAD_ERROR_TEMPERATURE;
+	temperature = BadErrorTemperature;
 }
 
 // Set the process model
@@ -202,11 +202,11 @@ void PID::Spin()
 		if (err != TemperatureError::success)
 		{
 			previousTemperaturesGood <<= 1;				// this reading isn't a good one
-			if (mode > HeaterMode::suspended)					// don't worry about errors when reading heaters that are switched off or flagged as having faults
+			if (mode > HeaterMode::suspended)			// don't worry about errors when reading heaters that are switched off or flagged as having faults
 			{
 				// Error may be a temporary error and may correct itself after a few additional reads
 				badTemperatureCount++;
-				if (badTemperatureCount > MAX_BAD_TEMPERATURE_COUNT)
+				if (badTemperatureCount > MaxBadTemperatureCount)
 				{
 					lastPwm = 0.0;
 					SetHeater(0.0);						// do this here just to be sure, in case the call to platform.Message causes a delay
@@ -231,8 +231,8 @@ void PID::Spin()
 			badTemperatureCount = 0;
 			if ((previousTemperaturesGood & (1 << (NumPreviousTemperatures - 1))) != 0)
 			{
-				const float tentativeDerivative = SecondsToMillis * (temperature - previousTemperatures[previousTemperatureIndex])
-								/ (float)(platform.HeatSampleInterval() * NumPreviousTemperatures);
+				const float tentativeDerivative = ((float)SecondsToMillis/HeatSampleIntervalMillis) * (temperature - previousTemperatures[previousTemperatureIndex])
+								/ (float)(NumPreviousTemperatures);
 				// Some sensors give occasional temperature spikes. We don't expect the temperature to increase by more than 10C/second.
 				if (fabsf(tentativeDerivative) <= 10.0)
 				{
@@ -264,7 +264,7 @@ void PID::Spin()
 							&& (float)(millis() - timeSetHeating) > model.GetDeadTime() * SecondsToMillis * 2)
 						{
 							++heatingFaultCount;
-							if (heatingFaultCount * platform.HeatSampleInterval() > maxHeatingFaultTime * SecondsToMillis)
+							if (heatingFaultCount * HeatSampleIntervalMillis > maxHeatingFaultTime * SecondsToMillis)
 							{
 								SetHeater(0.0);					// do this here just to be sure
 								mode = HeaterMode::fault;
@@ -291,7 +291,7 @@ void PID::Spin()
 				if (fabsf(error) > maxTempExcursion && temperature > MaxAmbientTemperature)
 				{
 					++heatingFaultCount;
-					if (heatingFaultCount * platform.HeatSampleInterval() > maxHeatingFaultTime * SecondsToMillis)
+					if (heatingFaultCount * HeatSampleIntervalMillis > maxHeatingFaultTime * SecondsToMillis)
 					{
 						SetHeater(0.0);					// do this here just to be sure
 						mode = HeaterMode::fault;
@@ -359,7 +359,7 @@ void PID::Spin()
 					{
 						const float errorToUse = error;
 						iAccumulator = constrain<float>
-										(iAccumulator + (errorToUse * params.kP * params.recipTi * platform.HeatSampleInterval() * MillisToSeconds),
+										(iAccumulator + (errorToUse * params.kP * params.recipTi * HeatSampleIntervalMillis * MillisToSeconds),
 											0.0, model.GetMaxPwm());
 						lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, model.GetMaxPwm());
 					}
@@ -423,7 +423,7 @@ void PID::Spin()
 
 		// Set the heater power and update the average PWM
 		SetHeater(lastPwm);
-		averagePWM = averagePWM * (1.0 - platform.HeatSampleInterval()/(HEAT_PWM_AVERAGE_TIME * SecondsToMillis)) + lastPwm;
+		averagePWM = averagePWM * (1.0 - HeatSampleIntervalMillis/(HeatPwmAverageTime * SecondsToMillis)) + lastPwm;
 		previousTemperatureIndex = (previousTemperatureIndex + 1) % NumPreviousTemperatures;
 
 		// For temperature sensors which do not require frequent sampling and averaging,
@@ -527,7 +527,7 @@ void PID::ResetFault()
 
 float PID::GetAveragePWM() const
 {
-	return averagePWM * platform.HeatSampleInterval()/(HEAT_PWM_AVERAGE_TIME * SecondsToMillis);
+	return averagePWM * HeatSampleIntervalMillis/(HeatPwmAverageTime * SecondsToMillis);
 }
 
 // Get a conservative estimate of the expected heating rate at the current temperature and average PWM. The result may be negative.
@@ -570,7 +570,7 @@ void PID::StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply)
 			// would be wasteful to allocate a permanent array just in case we are going to run it, so we make an exception here.
 			tuningTempReadings = new float[MaxTuningTempReadings];
 			tuningTempReadings[0] = temperature;
-			tuningReadingInterval = platform.HeatSampleInterval();
+			tuningReadingInterval = HeatSampleIntervalMillis;
 			tuningPwm = maxPwm;
 			tuningTargetTemp = targetTemp;
 			reply.printf("Auto tuning heater %d using target temperature %.1f" DEGREE_SYMBOL "C and PWM %.2f - do not leave printer unattended", heater, (double)targetTemp, (double)maxPwm);
@@ -679,7 +679,7 @@ void PID::DoTuningStep()
 	{
 	case HeaterMode::tuning0:
 		// Waiting for initial temperature to settle after any thermostatic fans have turned on
-		if (ReadingsStable(6000/platform.HeatSampleInterval(), 2.0))	// expect temperature to be stable within a 2C band for 6 seconds
+		if (ReadingsStable(6000/HeatSampleIntervalMillis, 2.0))			// expect temperature to be stable within a 2C band for 6 seconds
 		{
 			// Starting temperature is stable, so move on
 			tuningReadingsTaken = 1;
@@ -690,7 +690,7 @@ void PID::DoTuningStep()
 			tuningTempReadings[0] = tuningStartTemp = temperature;
 			timeSetHeating = tuningPhaseStartTime = millis();
 			lastPwm = tuningPwm;										// turn on heater at specified power
-			tuningReadingInterval = platform.HeatSampleInterval();		// reset sampling interval
+			tuningReadingInterval = HeatSampleIntervalMillis;			// reset sampling interval
 			mode = HeaterMode::tuning1;
 			platform.Message(GenericMessage, "Auto tune phase 1, heater on\n");
 			return;
@@ -734,7 +734,7 @@ void PID::DoTuningStep()
 				tuningReadingsTaken = 1;
 				tuningHeaterOffTemp = tuningTempReadings[0] = temperature;
 				tuningPhaseStartTime = millis();
-				tuningReadingInterval = platform.HeatSampleInterval();		// reset sampling interval
+				tuningReadingInterval = HeatSampleIntervalMillis;			// reset sampling interval
 				mode = HeaterMode::tuning2;
 				lastPwm = 0.0;
 				SetHeater(0.0);
@@ -772,7 +772,7 @@ void PID::DoTuningStep()
 				tuningReadingsTaken = 1;
 				tuningTempReadings[0] = temperature;
 				tuningPhaseStartTime = millis();
-				tuningReadingInterval = platform.HeatSampleInterval();		// reset sampling interval
+				tuningReadingInterval = HeatSampleIntervalMillis;			// reset sampling interval
 				mode = HeaterMode::tuning3;
 				platform.MessageF(GenericMessage, "Auto tune phase 3, peak temperature was %.1f\n", (double)tuningPeakTemperature);
 				return;

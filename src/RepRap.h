@@ -61,7 +61,7 @@ public:
 
 	bool Debug(Module module) const;
 	void SetDebug(Module m, bool enable);
-	void SetDebug(bool enable);
+	void ClearDebug();
 	void PrintDebug();
 	Module GetSpinningModule() const;
 

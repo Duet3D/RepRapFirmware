@@ -33,7 +33,7 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 # define ESP_SPI_IRQn		SPI_IRQn
 # define ESP_SPI_HANDLER	SPI_Handler
 
-#elif defined(DUET3) || defined(SAME70XPLD)
+#elif defined(DUET3_V03) || defined(SAME70XPLD)
 
 # define USE_PDC			0		// use peripheral DMA controller
 # define USE_DMAC			0		// use general DMA controller
@@ -82,7 +82,7 @@ struct MessageBufferOut
 struct MessageBufferIn
 {
 	MessageHeaderEspToSam hdr;
-	uint8_t data[MaxDataLength];	// data to receive
+	uint8_t data[MaxDataLength];	// data to send
 };
 
 static MessageBufferOut bufferOut;
@@ -1814,7 +1814,7 @@ void WiFiInterface::StartWiFi()
 void WiFiInterface::ResetWiFi()
 {
 	pinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
-	pinMode(APIN_Serial1_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins for now to avoid floating pins
+	pinMode(APIN_Serial1_TXD, INPUT_PULLUP);						// just enable pullups on TxD and RxD pins for now to avoid floating pins
 	pinMode(APIN_Serial1_RXD, INPUT_PULLUP);
 	currentMode = WiFiState::disabled;
 

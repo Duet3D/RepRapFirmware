@@ -2,7 +2,7 @@
 #define PINS_SAME70_H__
 
 #define FIRMWARE_NAME		"RepRapFirmware for Duet 3"
-#define DEFAULT_BOARD_TYPE BoardType::Duet3_10
+#define DEFAULT_BOARD_TYPE BoardType::Duet3_03
 const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
 #define IAP_FIRMWARE_FILE	"Duet3Firmware.bin"
 #define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
@@ -11,7 +11,7 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 // Features definition
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		1
-#define HAS_CPU_TEMP_SENSOR		0
+#define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
 
 #define SUPPORT_TMC51xx			1
@@ -31,6 +31,7 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
+#define SUPPORT_ASYNC_MOVES		1
 
 #define USE_CACHE				0					// Cache controller disabled for now
 
@@ -47,6 +48,9 @@ constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the
 
 constexpr size_t MaxExtruders = MaxTotalDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
+
+constexpr size_t MaxHeatersPerTool = 4;
+constexpr size_t MaxExtrudersPerTool = 6;
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB

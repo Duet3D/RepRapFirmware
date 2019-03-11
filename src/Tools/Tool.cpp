@@ -34,7 +34,7 @@
 Tool * Tool::freelist = nullptr;
 
 // Create a new tool and return a pointer to it. If an error occurs, put an error message in 'reply' and return nullptr.
-/*static*/ Tool *Tool::Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, const StringRef& reply)
+/*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *name, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, const StringRef& reply)
 {
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
@@ -97,8 +97,9 @@ Tool * Tool::freelist = nullptr;
 	const size_t nameLength = strlen(name);
 	if (nameLength != 0)
 	{
-		t->name = new char[nameLength + 1];
-		SafeStrncpy(t->name, name, nameLength + 1);
+		char *toolName = new char[nameLength + 1];
+		SafeStrncpy(toolName, name, nameLength + 1);
+		t->name = toolName;
 	}
 	else
 	{
@@ -106,10 +107,10 @@ Tool * Tool::freelist = nullptr;
 	}
 
 	t->next = nullptr;
-	t->myNumber = toolNumber;
+	t->myNumber = (uint16_t)toolNumber;
 	t->state = ToolState::off;
-	t->driveCount = dCount;
-	t->heaterCount = hCount;
+	t->driveCount = (uint8_t)dCount;
+	t->heaterCount = (uint8_t)hCount;
 	t->xMapping = xMap;
 	t->yMapping = yMap;
 	t->fanMapping = fanMap;
@@ -159,7 +160,7 @@ Tool * Tool::freelist = nullptr;
 
 void Tool::Print(const StringRef& reply) const
 {
-	reply.printf("Tool %d - ", myNumber);
+	reply.printf("Tool %u - ", myNumber);
 	if (name != nullptr)
 	{
 		reply.catf("name: %s; ", name);
@@ -309,10 +310,15 @@ void Tool::Activate()
 
 void Tool::Standby()
 {
+	const Tool * const currentTool = reprap.GetCurrentTool();
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
-		reprap.GetHeat().Standby(heaters[heater], this);
+		// Don't switch a heater to standby if the active tool is using it and is different from this tool
+		if (currentTool == this || currentTool == nullptr || !currentTool->UsesHeater(heater))
+		{
+			reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
+			reprap.GetHeat().Standby(heaters[heater], this);
+		}
 	}
 	state = ToolState::standby;
 }
@@ -496,6 +502,19 @@ void Tool::IterateHeaters(std::function<void(int)> f) const
 	{
 		f(heaters[i]);
 	}
+}
+
+// Return true if this tool uses the specified heater
+bool Tool::UsesHeater(int8_t heater) const
+{
+	for (size_t i = 0; i < heaterCount; ++i)
+	{
+		if (heaters[i] == heater)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 // End

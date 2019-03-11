@@ -1,6 +1,37 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.03beta2
+=================
+
+Upgrade notes:
+- The M135 command is no longer supported, but AFAIK nobody used it
+- Important! See 2.03beta1 upgrade notes too.
+
+Known issues:
+- Custom endstop input numbers in the M575 command (probe tool) don't work
+- On the 12864 display, if the gcodes folder on the SD card includes file whose names start with '.', then when when you select a file to print the wrong file may be printed
+
+New features/changed behaviour:
+- M574 allows endstop input numbers to be configured (C parameter). Currently only the first input number specified for each axis is monitored.
+- M203 Inn sets minimum movement speed
+- M203 now reports speeds in mm/sec
+- M208 reports error if min >= max
+- Allow hex inputs anywhere in G/M code parameters where an unsigned value is required
+- Requested fan speed is now scaled by the M106 X parameter
+- Shrunk the DDA and Tool structures to reduce RAM usage
+- M111 Sn for n != 0 now requires a P parameter, to reduce issues caused by Repitier Host using the M111 command for other purposes
+- Increased temperature sampling rate from 2 to 4 samples/sec
+- Increased the allowed number of consecutive temperature reading errors from 5 to 8
+- Removed M135 command
+
+Bug fixes:
+- Fixed 12864 display scrolling when the folder included filenames starting with '.'
+- Fixed remaining M105 status response received when M997 S1 sent from USB
+- Fixed firmware update messages getting erased on PanelDue during M997 S1
+- M408 Sn was hanging for N>5
+- Fixed leadscrew adjustment bug introduced in 2.03beta1
+
 Version 2.03beta1
 =================
 
@@ -8,6 +39,9 @@ Upgrade notes:
 - If you have a CoreXY or other Core architecture printer, and you were using any axis factor parameters in your M667 command in config.g, those parameters are no longer supported. You will need to use M669 matrix parameters instead.
 - ***Caution:*** the support for CoreXY and other Core kinematics has been rewritten. Please exercise caution if your machine uses Core kinematics. Reduce motor current and test small relative movements of each axis, until you are satisfied that everything is working.
 - ***Caution:*** some of the code that supports stall-detection endstops has been rewritten. If your printer uses stall detection endstops, test homing carefully.
+
+Known issues:
+- Bed levelling using multiple independent leadscrews doesn't work. The probing and calculation is done correctly but some leadscrews are adjusted in the wrong direction.
 
 New features/changed behaviour:
 - Support for generalised Cartesian/Core kinematics inc. MarkForged and variants thereof

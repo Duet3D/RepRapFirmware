@@ -139,6 +139,9 @@ public:
 	void Exit();														// Shut it down
 	void Reset();														// Reset some parameter to defaults
 	bool ReadMove(RawMove& m);											// Called by the Move class to get a movement set by the last G Code
+#if SUPPORT_ASYNC_MOVES
+	bool ReadAuxMove(RawMove &m);
+#endif
 	void ClearMove();
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply);	// Open a file of G Codes to run
 	void StartPrinting(bool fromStart);									// Start printing the file already selected
@@ -169,7 +172,9 @@ public:
 
 	float GetRawExtruderTotalByDrive(size_t extruder) const;			// Get the total extrusion since start of print, for one drive
 	float GetTotalRawExtrusion() const { return rawExtruderTotal; }		// Get the total extrusion since start of print, all drives
-	float GetBabyStepOffset() const { return currentBabyStepZOffset; }	// Get the current baby stepping Z offset
+	float GetBabyStepOffset(size_t axis) const
+		pre(axis < maxAxes)
+		{ return currentBabyStepOffsets[axis]; }						// Get the current baby stepping offset for an axis
 	const float *GetUserPosition() const { return currentUserPosition; }	// Return the current user position
 
 #if HAS_NETWORKING
@@ -334,7 +339,8 @@ private:
 
 	void SetMachinePosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation = true); // Set the current position to be this
 	void UpdateCurrentUserPosition();											// Get the current position from the Move class
-	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = 0);	// Convert user coordinates to head reference point coordinates
+	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = 0, bool applyWorkplaceOffsets = true);
+																				// Convert user coordinates to head reference point coordinates
 	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]);	// Convert head reference point coordinates to user coordinates
 	const char *TranslateEndStopResult(EndStopHit es);							// Translate end stop result to text
 	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);					// Retract or un-retract filaments
@@ -374,8 +380,6 @@ private:
 	bool WriteConfigOverrideHeader(FileStore *f) const;							// Write the config-override header
 
 	void CopyConfigFinalValues(GCodeBuffer& gb);							// Copy the feed rate etc. from the daemon to the input channels
-
-	void ClearBabyStepping() { currentBabyStepZOffset = 0.0; }
 
 	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;					// Decide which device to display a message box on
 	void DoManualProbe(GCodeBuffer& gb);									// Do a manual bed probe
@@ -468,6 +472,11 @@ private:
 	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
 	unsigned int totalSegments;					// The total number of segments left in the complete move
 
+#if SUPPORT_ASYNC_MOVES
+	RawMove auxMoveBuffer;
+	bool auxMoveAvailable;
+#endif
+
 	unsigned int segmentsLeftToStartAt;
 	float moveFractionToStartAt;				// how much of the next move was printed before the power failure
 	float moveFractionToSkip;
@@ -527,7 +536,7 @@ private:
 	float speedFactor;							// speed factor as a percentage (normally 100.0)
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 	float volumetricExtrusionFactors[MaxExtruders]; // Volumetric extrusion factors
-	float currentBabyStepZOffset;				// The accumulated Z offset due to baby stepping requests
+	float currentBabyStepOffsets[MaxAxes];		// The accumulated axis offsets due to baby stepping requests
 
 	// Z probe
 	GridDefinition defaultGrid;					// The grid defined by the M557 command in config.g
