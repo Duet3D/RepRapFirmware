@@ -306,7 +306,8 @@ Planned for 2.03:
 - [partly done, test babystepping, test resurrect.g file M291 command correct] Y babystepping, https://forum.duet3d.com/topic/8015/change-z-babystepping-to-y-babystepping-for-belt-printers/14
 - [on hold] investigate filame file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5
 - [done] support multiple DDA rings
-- support live Z baby stepping (could also be live X and Y on Cartesian printers, maybe even on CoreXY and delta)
+- [done, test] Implement M470/M471 PR
+- support live Z baby stepping (could also be live X and Y on Cartesian printers, maybe even on CoreXY)
 - abort SD print if G28 or G32 or G29 fails, https://forum.duet3d.com/topic/9383/way-to-cancel-print-after-g32-failure/9
 - Check that in all modes, if insufficient axes are homed then the SD job is aborted
 - In CNC or Laser mode, abort job if it goes outside machine limits, https://forum.duet3d.com/topic/9269/yet-another-cnc-improvement-outside-machine-limits/4
@@ -469,3 +470,4 @@ Investigations:
 [done BUT still wrong in lwip 2] inconsistend oversize vs. len
 p->ref == 1 in WiFi
 
+PCCB_X5

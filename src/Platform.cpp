@@ -192,10 +192,16 @@ void Platform::Init()
 
 	SetBoardType(BoardType::Auto);
 
-#ifdef PCCB
+#if defined(PCCB_10) || defined(PCCB_08_X5)
+	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
+#endif
+
+#if defined(PCCB_08) || defined(PCCB_08_X5)
 	// Make sure the on-board TMC22xx drivers are disabled
 	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+#endif
 
+#if defined(PCCB)
 	// Ensure that the main LEDs are turned off.
 	// The main LED output is active low, just like a heater on the Duet 2 series.
 	// The secondary LED control dims the LED via the external controller when the output is high. So both outputs must be initialised high.
@@ -4110,8 +4116,10 @@ void Platform::SetBoardType(BoardType bt)
 		board = BoardType::RADDS_15;
 #elif defined(__ALLIGATOR__)
 		board = BoardType::Alligator_2;
-#elif defined(PCCB)
-		board = BoardType::PCCB_10;
+#elif defined(PCCB_10)
+		board = BoardType::PCCB_v10;
+#elif defined(PCCB_08) || defined(PCCB_08_X5)
+		board = BoardType::PCCB_v08;
 #elif defined(__LPC17xx__)
 		board = BoardType::Lpc;
 #else
@@ -4156,8 +4164,10 @@ const char* Platform::GetElectronicsString() const
 	case BoardType::RADDS_15:				return "RADDS 1.5";
 #elif defined(__ALLIGATOR__)
 	case BoardType::Alligator_2:			return "Alligator r2";
-#elif defined(PCCB)
-	case BoardType::PCCB_10:				return "PCCB 1.0";
+#elif defined(PCCB_10)
+	case BoardType::PCCB_v10:				return "PC001373";
+#elif defined(PCCB_08) || defined(PCCB_08_X5)
+	case BoardType::PCCB_v08:				return "PCCB 0.8";
 #elif defined(__LPC17xx__)
 	case BoardType::Lpc:					return LPC_ELECTRONICS_STRING;
 #else
@@ -4193,8 +4203,10 @@ const char* Platform::GetBoardString() const
 	case BoardType::RADDS_15:				return "radds15";
 #elif defined(__ALLIGATOR__)
 	case BoardType::Alligator_2:			return "alligator2";
-#elif defined(PCCB)
-	case BoardType::PCCB_10:				return "pccb10";
+#elif defined(PCCB_10)
+	case BoardType::PCCB_v10:				return "pc001373";
+#elif defined(PCCB_08) || defined(PCCB_08_X5)
+	case BoardType::PCCB_v08:				return "pccb08";
 #elif defined(__LPC17xx__)
 	case BoardType::Lpc:					return LPC_BOARD_STRING;
 #else
@@ -4573,7 +4585,13 @@ float Platform::GetCurrentPowerVoltage() const
 // TMC driver temperatures
 float Platform::GetTmcDriversTemperature(unsigned int board) const
 {
+#ifdef PCCB_10
+	const uint16_t mask = (board == 0)
+							? ((1u << 2) - 1)						// drivers 0, 1 are on-board
+								: ((1u << 5) - 1) << 2;				// drivers 2-7 or on the DueX5
+#else
 	const uint16_t mask = ((1u << 5) - 1) << (5 * board);			// there are 5 drivers on each board
+#endif
 	return ((temperatureShutdownDrivers & mask) != 0) ? 150.0
 			: ((temperatureWarningDrivers & mask) != 0) ? 100.0
 				: 0.0;
