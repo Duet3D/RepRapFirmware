@@ -302,11 +302,17 @@ Planned for 2.03:
 - [done] Duet085: allow 2 additional fans
 - [done, test] Stop movement when changing pressure advance with M572, https://forum.duet3d.com/topic/9140/extruder-behaves-strangle-when-disabling-pressure-advance/10
 - [done] Stop movement when changing endstop config in M574
-- [done, test] Big fix: don't apply limit checking in non-FFF mode to move types other than zero, https://forum.duet3d.com/topic/9203/laser-mode-endstop-limit-and-homing/4
+- [done, test] Bug fix: don't apply limit checking in non-FFF mode to move types other than zero, https://forum.duet3d.com/topic/9203/laser-mode-endstop-limit-and-homing/4
 - [partly done, test babystepping, test resurrect.g file M291 command correct] Y babystepping, https://forum.duet3d.com/topic/8015/change-z-babystepping-to-y-babystepping-for-belt-printers/14
 - [on hold] investigate filame file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5
 - [done] support multiple DDA rings
-- [done, test] Implement M470/M471 PR
+- [done, test] Implement M470/M471 PR, thanks wilriker
+- [done, test] Fix 'nan' standard deviation when G30 P0 X0 Y0 Z-9999 S-1 is run
+- [done, test] Per-channel and push/pop inch/mm setting
+- [done, test] Ryan's M453 issue, https://forum.duet3d.com/topic/9363/m453-issue-after-homing
+- [done, test] Unsupported G and M codes try to run Gxx.g or Mxx.g
+- [done, test] M650 and M651 are no longer handled specially
+- [yes it already did] In simulation mode, does M109 implicity select a tool? https://forum.duet3d.com/topic/9595/simulation-error
 - support live Z baby stepping (could also be live X and Y on Cartesian printers, maybe even on CoreXY)
 - abort SD print if G28 or G32 or G29 fails, https://forum.duet3d.com/topic/9383/way-to-cancel-print-after-g32-failure/9
 - Check that in all modes, if insufficient axes are homed then the SD job is aborted

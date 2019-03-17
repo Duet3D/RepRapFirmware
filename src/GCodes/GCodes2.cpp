@@ -211,11 +211,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 20: // Inches (which century are we living in, here?)
-		distanceScale = InchToMm;
+		gb.MachineState().usingInches = true;
 		break;
 
 	case 21: // mm
-		distanceScale = 1.0;
+		gb.MachineState().usingInches = false;
 		break;
 
 	case 28: // Home
@@ -343,6 +343,16 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	default:
+		// See if there is a file in /sys named Gxx.g
+		if (code >= 0 && code < 10000)
+		{
+			String<StringLength20> macroName;
+			macroName.printf("G%d.g", code);
+			if (DoFileMacro(gb, macroName.c_str(), false, 98))
+			{
+				break;
+			}
+		}
 		result = GCodeResult::warningNotSupported;
 	}
 
@@ -1364,7 +1374,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				SetToolHeaters(applicableTool, temperature, true);
 			}
 
-			Tool *currentTool = reprap.GetCurrentTool();
+			Tool * const currentTool = reprap.GetCurrentTool();
 			if (code == 109 && currentTool == nullptr)
 			{
 				// Switch to the tool
@@ -1391,7 +1401,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					reprap.StandbyTool(applicableTool->Number(), simulationMode != 0);
 				}
 
-				if (code == 109)
+				if (code == 109 && simulationMode == 0)
 				{
 					gb.SetState(GCodeState::m109WaitForTemperature);
 				}
@@ -1872,7 +1882,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					platform.SetAcceleration(axis, gb.GetFValue() * distanceScale);
+					platform.SetAcceleration(axis, gb.ConvertDistance(gb.GetFValue()));
 					seen = true;
 				}
 			}
@@ -1885,22 +1895,22 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				gb.GetFloatArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform.SetAcceleration(numTotalAxes + e, eVals[e] * distanceScale);
+					platform.SetAcceleration(numTotalAxes + e, gb.ConvertDistance(eVals[e]));
 				}
 			}
 
 			if (!seen)
 			{
-				reply.printf("Accelerations: ");
+				reply.printf("Accelerations (mm/sec^2): ");
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.Acceleration(axis) / distanceScale));
+					reply.catf("%c: %.1f, ", axisLetters[axis], (double)platform.Acceleration(axis));
 				}
 				reply.cat("E:");
 				char sep = ' ';
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					reply.catf("%c%.1f", sep, (double)(platform.Acceleration(extruder + numTotalAxes) / distanceScale));
+					reply.catf("%c%.1f", sep, (double)platform.Acceleration(extruder + numTotalAxes));
 					sep = ':';
 				}
 			}
@@ -1915,7 +1925,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (gb.Seen(axisLetters[axis]))
 				{
 					seen = true;
-					platform.SetMaxFeedrate(axis, gb.GetFValue() * distanceScale * SecondsToMinutes);
+					platform.SetMaxFeedrate(axis, gb.ConvertDistance(gb.GetFValue()) * SecondsToMinutes);
 				}
 			}
 
@@ -1927,14 +1937,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				gb.GetFloatArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform.SetMaxFeedrate(numTotalAxes + e, eVals[e] * distanceScale * SecondsToMinutes);
+					platform.SetMaxFeedrate(numTotalAxes + e, gb.ConvertDistance(eVals[e]) * SecondsToMinutes);
 				}
 			}
 
 			if (gb.Seen('I'))
 			{
 				seen = true;
-				platform.SetMinMovementSpeed(gb.GetFValue() * distanceScale * SecondsToMinutes);
+				platform.SetMinMovementSpeed(gb.ConvertDistance(gb.GetFValue()) * SecondsToMinutes);
 			}
 
 			if (!seen)
@@ -2798,14 +2808,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			String<MaxFilenameLength> newVal;
 			if (!gb.Seen('T') || !gb.GetQuotedString(newVal.GetRef()))
 			{
-				reply.copy("Bad or issing T parameter");
+				reply.copy("Bad or missing T parameter");
 				result = GCodeResult::error;
 				break;
 			}
 			MassStorage * const ms = platform.GetMassStorage();
 			if (gb.Seen('D') && gb.GetUIValue() == 1 && ms->FileExists(oldVal.c_str()) && ms->FileExists(newVal.c_str()))
 			{
-				ms->Delete(nullptr, newVal.c_str());
+				ms->Delete(newVal.c_str());
 			}
 			ms->Rename(oldVal.c_str(), newVal.c_str());
 		}
@@ -3239,13 +3249,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 205: // Set/print maximum jerk speeds in mm/sec
 	case 566: // Set/print maximum jerk speeds in mm/min
 		{
-			const float multiplier = (code == 566) ? SecondsToMinutes * distanceScale : distanceScale;
+			const float multiplier1 = (code == 566) ? SecondsToMinutes : 1.0;
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					platform.SetInstantDv(axis, gb.GetFValue() * multiplier);
+					platform.SetInstantDv(axis, gb.ConvertDistance(gb.GetFValue()) * multiplier1);
 					seen = true;
 				}
 			}
@@ -3258,21 +3268,22 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				gb.GetFloatArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform.SetInstantDv(numTotalAxes + e, eVals[e] * multiplier);
+					platform.SetInstantDv(numTotalAxes + e, eVals[e] * multiplier1);
 				}
 			}
 			else if (!seen)
 			{
-				reply.copy("Maximum jerk rates: ");
+				const float multiplier2 = (code == 566) ? MinutesToSeconds : 1.0;
+				reply.printf("Maximum jerk rates (mm/%s): ", (code == 566) ? "min" : "sec");
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.GetInstantDv(axis) / multiplier));
+					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.GetInstantDv(axis) * multiplier2));
 				}
 				reply.cat("E:");
 				char sep = ' ';
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					reply.catf("%c%.1f", sep, (double)(platform.GetInstantDv(extruder + numTotalAxes) / multiplier));
+					reply.catf("%c%.1f", sep, (double)(platform.GetInstantDv(extruder + numTotalAxes) * multiplier2));
 					sep = ':';
 				}
 			}
@@ -3786,16 +3797,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	// For case 600, see 226
 
-	case 650:	// Set peel move parameters - ignored
-		break;
-
-	case 651:	// Execute DLP peel move
-		if (!LockMovementAndWaitForStandstill(gb))
-		{
-			return false;
-		}
-		DoFileMacro(gb, PEEL_MOVE_G, true);
-		break;
+	// M650 (set peel move parameters) and M651 (execute peel move) are no longer handled specially. Use macros to specify what they should do.
 
 	case 665: // Set delta configuration
 		if (!LockMovementAndWaitForStandstill(gb))
@@ -4415,6 +4417,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	default:
+		// See if there is a file in /sys named Mxx.g
+		if (code >= 0 && code < 10000)
+		{
+			String<StringLength20> macroName;
+			macroName.printf("M%d.g", code);
+			if (DoFileMacro(gb, macroName.c_str(), false, 98))
+			{
+				break;
+			}
+		}
 		result = GCodeResult::warningNotSupported;
 		break;
 	}

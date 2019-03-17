@@ -153,14 +153,14 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 				}
 			}
 			SetBit(axesIncluded, axis);
-			currentUserPosition[axis] = axisValue * distanceScale;
+			currentUserPosition[axis] = gb.ConvertDistance(axisValue);
 		}
 	}
 
 	// Handle any E parameter in the G92 command
 	if (gb.Seen(extrudeLetter))
 	{
-		virtualExtruderPosition = gb.GetFValue() * distanceScale;
+		virtualExtruderPosition = gb.ConvertDistance(gb.GetFValue());
 	}
 
 	if (axesIncluded != 0)
@@ -205,7 +205,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 #else
 			axisOffsets[axis]
 #endif
-						 = -(gb.GetFValue() * distanceScale);
+						 = -gb.ConvertDistance(gb.GetFValue());
 			seen = true;
 		}
 	}
@@ -217,7 +217,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 		{
 			reply.catf(" %c%.2f", axisLetters[axis],
 #if SUPPORT_WORKPLACE_COORDINATES
-				-(double)(workplaceCoordinates[0][axis]/distanceScale)
+				-(double)(gb.InverseConvertDistance(workplaceCoordinates[0][axis]))
 #else
 				-(double)(axisOffsets[axis]/distanceScale)
 #endif
@@ -241,7 +241,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 		{
 			if (gb.Seen(axisLetters[axis]))
 			{
-				const float coord = gb.GetFValue() * distanceScale;
+				const float coord = gb.ConvertDistance(gb.GetFValue());
 				if (!seen)
 				{
 					if (!LockMovementAndWaitForStandstill(gb))						// make sure the user coordinates are stable and up to date
@@ -265,7 +265,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 			reply.printf("Origin of workplace %" PRIu32 ":", cs);
 			for (size_t axis = 0; axis < numVisibleAxes; axis++)
 			{
-				reply.catf(" %c%.2f", axisLetters[axis], (double)(workplaceCoordinates[cs - 1][axis]/distanceScale));
+				reply.catf(" %c%.2f", axisLetters[axis], (double)gb.InverseConvertDistance(workplaceCoordinates[cs - 1][axis]));
 			}
 		}
 		return GCodeResult::ok;
@@ -885,7 +885,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			// Deal with feed rate
 			if (gb.Seen(feedrateLetter))
 			{
-				const float rate = gb.GetFValue() * distanceScale;
+				const float rate = gb.ConvertDistance(gb.GetFValue());
 				gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
 			}
 			moveBuffer.feedRate = gb.MachineState().feedRate;

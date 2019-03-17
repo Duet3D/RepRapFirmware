@@ -505,7 +505,6 @@ private:
 	float virtualExtruderPosition;				// Virtual extruder position of the last move fed into the Move class
 	float rawExtruderTotalByDrive[MaxExtruders]; // Extrusion amount in the last G1 command with an E parameter when in absolute extrusion mode
 	float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
-	float distanceScale;						// MM or inches
 
 #if SUPPORT_WORKPLACE_COORDINATES
 	static const size_t NumCoordinateSystems = 9;
@@ -630,7 +629,6 @@ private:
 	static constexpr const char* RESUME_AFTER_POWER_FAIL_G = "resurrect.g";
 	static constexpr const char* RESUME_PROLOGUE_G = "resurrect-prologue.g";
 	static constexpr const char* FILAMENT_CHANGE_G = "filament-change.g";
-	static constexpr const char* PEEL_MOVE_G = "peel-move.g";
 #if HAS_SMART_DRIVERS
 	static constexpr const char* REHOME_G = "rehome.g";
 #endif

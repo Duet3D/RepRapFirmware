@@ -72,12 +72,15 @@ bool Kinematics::LimitPositionFromAxis(float coords[], size_t firstAxis, size_t 
 		if (IsBitSet(axesHomed, axis))
 		{
 			float& f = coords[axis];
-			if (f < platform.AxisMinimum(axis))
+			// When homing a printer we convert the M208 axis limit to motor positions, then back again to get the user position.
+			// This value may not round-trip exactly due to rounding error and quantisation to the nearest step, especially if the steps/mm is not integral.
+			// So we allow a small error here without considering it to be out of limits.
+			if (f < platform.AxisMinimum(axis) - AxisRoundingError)
 			{
 				f = platform.AxisMinimum(axis);
 				limited = true;
 			}
-			else if (f > platform.AxisMaximum(axis))
+			else if (f > platform.AxisMaximum(axis) + AxisRoundingError)
 			{
 				f = platform.AxisMaximum(axis);
 				limited = true;

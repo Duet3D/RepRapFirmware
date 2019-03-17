@@ -113,6 +113,7 @@ public:
 		volumetricExtrusion : 1,
 		g53Active : 1,							// true if seen G53 on this line of GCode
 		runningSystemMacro : 1,					// true if running a system macro file
+		usingInches : 1,						// true if units are inches not mm
 		// Caution: these next 3 will be modified out-of-process when we use RTOS, so they will need to be individual bool variables
 		waitingForAcknowledgement : 1,
 		messageAcknowledged : 1,
@@ -129,6 +130,7 @@ public:
 		drivesRelative = other.drivesRelative;
 		axesRelative = other.axesRelative;
 		feedRate = other.feedRate;
+		usingInches = other.usingInches;
 	}
 
 	static void Release(GCodeMachineState *ms);

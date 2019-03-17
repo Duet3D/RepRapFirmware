@@ -130,7 +130,6 @@ void GCodes::Init()
 
 	Reset();
 
-	distanceScale = 1.0;
 	virtualExtruderPosition = rawExtruderTotal = 0.0;
 	for (float& f : rawExtruderTotalByDrive)
 	{
@@ -2312,7 +2311,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 	{
 		if (gb.Seen(feedrateLetter))
 		{
-			const float rate = gb.GetFValue() * distanceScale;
+			const float rate = gb.ConvertDistance(gb.GetFValue());
 			gb.MachineState().feedRate = (moveBuffer.moveType == 0)
 						? rate * speedFactor * (0.01 * SecondsToMinutes)
 						: rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
@@ -2357,7 +2356,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 			if (mc == 1)
 			{
 				// There may be multiple extruders present but only one value has been specified, so use mixing
-				const float moveArg = eMovement[0] * distanceScale;
+				const float moveArg = gb.ConvertDistance(eMovement[0]);
 				float requestedExtrusionAmount;
 				if (gb.MachineState().drivesRelative)
 				{
@@ -2407,7 +2406,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 					for (size_t eDrive = 0; eDrive < eMoveCount; eDrive++)
 					{
 						const int drive = tool->Drive(eDrive);
-						float extrusionAmount = eMovement[eDrive] * distanceScale;
+						float extrusionAmount = gb.ConvertDistance(eMovement[eDrive]);
 						if (extrusionAmount != 0.0)
 						{
 							if (gb.MachineState().volumetricExtrusion)
@@ -2559,7 +2558,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 			}
 
 			SetBit(axesMentioned, axis);
-			const float moveArg = gb.GetFValue() * distanceScale;
+			const float moveArg = gb.ConvertDistance(gb.GetFValue());
 			if (moveBuffer.moveType != 0 || (rp == nullptr && gb.MachineState().g53Active))
 			{
 				if (gb.MachineState().axesRelative)
@@ -2706,7 +2705,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	float xParam, yParam;
 	if (gb.Seen('X'))
 	{
-		xParam = gb.GetFValue() * distanceScale;
+		xParam = gb.ConvertDistance(gb.GetFValue());
 	}
 	else
 	{
@@ -2715,7 +2714,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 
 	if (gb.Seen('Y'))
 	{
-		yParam = gb.GetFValue() * distanceScale;
+		yParam = gb.ConvertDistance(gb.GetFValue());
 	}
 	else
 	{
@@ -2726,7 +2725,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	if (gb.Seen('R'))
 	{
 		// We've been given a radius, which takes precedence over I and J parameters
-		const float rParam = gb.GetFValue() * distanceScale;
+		const float rParam = gb.ConvertDistance(gb.GetFValue());
 
 		// Get the XY coordinates of the midpoints between the start and end points X and Y distances between start and end points
 		float deltaX, deltaY;
@@ -2762,7 +2761,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	{
 		if (gb.Seen('I'))
 		{
-			iParam = gb.GetFValue() * distanceScale;
+			iParam = gb.ConvertDistance(gb.GetFValue());
 		}
 		else
 		{
@@ -2771,7 +2770,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 
 		if (gb.Seen('J'))
 		{
-			jParam = gb.GetFValue() * distanceScale;
+			jParam = gb.ConvertDistance(gb.GetFValue());
 		}
 		else
 		{
@@ -2814,7 +2813,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
-			const float axisParam = gb.GetFValue() * distanceScale;
+			const float axisParam = gb.ConvertDistance(gb.GetFValue());
 			if (axesRelative)
 			{
 				currentUserPosition[axis] += axisParam;

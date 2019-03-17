@@ -63,8 +63,11 @@ public:
 	void SetToolNumberAdjust(int arg) { toolNumberAdjust = arg; }
 	void SetCommsProperties(uint32_t arg) { checksumRequired = (arg & 1); }
 	MessageType GetResponseMessageType() const { return responseMessageType; }
+
 	GCodeMachineState& MachineState() const { return *machineState; }
 	GCodeMachineState& OriginalMachineState() const;
+	float ConvertDistance(float distance) const;
+	float InverseConvertDistance(float distance) const;
 	bool PushState();									// Push state returning true if successful (i.e. stack not overflowed)
 	bool PopState();									// Pop state returning true if successful (i.e. no stack underrun)
 	void AbortFile(FileGCodeInput* fileInput);			// Abort execution of any files or macros being executed

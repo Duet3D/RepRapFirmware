@@ -1311,7 +1311,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 						const size_t driver = config.driverNumbers[i];
 						if (driver >= NumDirectDrivers)
 						{
-							CanInterface::AddMovement(*this, params, driver - NumDirectDrivers, labs(delta));
+							CanInterface::AddMovement(*this, params, driver - NumDirectDrivers, delta);
 						}
 						else
 						{

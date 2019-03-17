@@ -53,7 +53,7 @@ void CanInterface::StartMovement(const DDA& dda)
 
 // This is called by DDA::Prepare for each active CAN DM in the move
 // If steps == 0 then the drivers just need to be enabled
-void CanInterface::AddMovement(const DDA& dda, const PrepParams& params, size_t canDriver, size_t steps)
+void CanInterface::AddMovement(const DDA& dda, const PrepParams& params, size_t canDriver, int32_t steps)
 {
 	const size_t expansionBoardNumber = canDriver/DriversPerCanBoard;
 	CanMessageBuffer*& buf = movementBuffers[expansionBoardNumber];
