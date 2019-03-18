@@ -89,9 +89,9 @@ constexpr uint32_t GCONF_DIRECT_MODE = 1 << 16;				// 0: Normal operation, 1: Mo
 constexpr uint32_t GCONF_TEST_MODE = 1 << 17;				// 0: Normal operation, 1: Enable analog test output on pin ENCN_DCO. IHOLD[1..0] selects the function of ENCN_DCO: 0…2: T120, DAC, VDDH
 
 #if TMC_TYPE == 5130
-constexpr uint32_t DefaultGConfReg = 0;
+constexpr uint32_t DefaultGConfReg = GCONF_DIAG0_STALL | GCONF_DIAG0_PUSHPULL;
 #elif TMC_TYPE == 5160
-constexpr uint32_t DefaultGConfReg = GCONF_5160_MULTISTEP_FILT;
+constexpr uint32_t DefaultGConfReg = GCONF_5160_RECAL | GCONF_5160_MULTISTEP_FILT | GCONF_DIAG0_STALL | GCONF_DIAG0_PUSHPULL;
 #endif
 
 // General configuration and status registers
@@ -144,7 +144,7 @@ constexpr uint32_t DRVCONF_OTSELECT_MASK = (3 << 16);		// Selection of over temp
 															// Hint: Adapt overtemperature threshold as required to protect the MOSFETs or other components on the PCB.
 constexpr uint32_t DRVCONF_STRENGTH_SHIFT = 18;
 constexpr uint32_t DRVCONF_STRENGTH_MASK = (3 << 18);		// Selection of gate driver current. Adapts the gate driver current to the gate charge of the external MOSFETs.
-															// 00: Normal slope (Recommended) 01: Normal+TC (medium above OTPW level) 10: Fast slope. Reset Default = 10.
+															// 00: Normal slope (Recommended), 01: Normal+TC (medium above OTPW level), 10: Fast slope. Reset Default = 10.
 constexpr uint32_t DRVCONF_FILT_ISENSE_SHIFT = 20;
 constexpr uint32_t DRVCONF_FILT_ISENSE_MASK = (3 << 20);	// Filter time constant of sense amplifier to suppress ringing and coupling from second coil operation
 															// 00: low – 100ns 01: – 200ns 10: – 300ns 11: high – 400ns
@@ -832,7 +832,11 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock)
 			{
 				uint32_t interval;
 				if (   (regVal & TMC_RR_STST) != 0
+#ifdef SAME51
+					|| (interval = moveInstance->GetStepInterval(axisNumber, microstepShiftFactor)) == 0		// get the full step interval
+#else
 					|| (interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor)) == 0		// get the full step interval
+#endif
 					|| interval > StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec
 				   )
 				{

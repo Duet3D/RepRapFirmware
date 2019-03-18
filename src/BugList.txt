@@ -312,6 +312,7 @@ Planned for 2.03:
 - [done, test] Ryan's M453 issue, https://forum.duet3d.com/topic/9363/m453-issue-after-homing
 - [done, test] Unsupported G and M codes try to run Gxx.g or Mxx.g
 - [done, test] M650 and M651 are no longer handled specially
+- Filament monitors: disable if tool is not active/no commanded extrusion, or does it do that already?
 - [yes it already did] In simulation mode, does M109 implicity select a tool? https://forum.duet3d.com/topic/9595/simulation-error
 - support live Z baby stepping (could also be live X and Y on Cartesian printers, maybe even on CoreXY)
 - abort SD print if G28 or G32 or G29 fails, https://forum.duet3d.com/topic/9383/way-to-cancel-print-after-g32-failure/9
