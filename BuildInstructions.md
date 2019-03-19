@@ -6,9 +6,9 @@ Instructions for building dc42 fork of RepRapFirmware
 RepRapFirmware is built from several Github projects. You need to use compatible branches of these projects. As at 07 March 2019, the current (version 2.03 beta) source code is on these branches:
 
 - RepRapFirmware: dev
-- CoreNG: main
+- CoreNG: dev
 - FreeRTOS: main
-- RRFLibraries: main
+- RRFLibraries: dev
 - DuetWiFiSocketServer: dev
 
 **Instructions for building under Windows**
