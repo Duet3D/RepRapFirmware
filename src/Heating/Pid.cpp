@@ -715,7 +715,7 @@ void PID::DoTuningStep()
 				break;
 			}
 
-			const uint32_t timeoutMinutes = (isBedOrChamberHeater) ? 20 : 5;
+			const uint32_t timeoutMinutes = (isBedOrChamberHeater) ? 30 : 7;
 			if (heatingTime >= timeoutMinutes * 60 * (uint32_t)SecondsToMillis)
 			{
 				platform.Message(GenericMessage, "Auto tune cancelled because target temperature was not reached\n");
