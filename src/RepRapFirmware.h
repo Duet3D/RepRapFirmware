@@ -182,6 +182,31 @@ void ListDrivers(const StringRef& str, DriversBitmap drivers);
 // UTF8 code for the degree-symbol
 #define DEGREE_SYMBOL	"\xC2\xB0"	// Unicode degree-symbol as UTF8
 
+// Functions to change the base priority, to shut out interrupts up to a priority level
+
+// Get the base priority and shut out interrupts lower than or equal to a specified priority
+inline uint32_t ChangeBasePriority(uint32_t prio)
+{
+	const uint32_t oldPrio = __get_BASEPRI();
+	if (oldPrio == 0 || (prio << (8 - __NVIC_PRIO_BITS)) < oldPrio)
+	{
+		__set_BASEPRI(prio << (8 - __NVIC_PRIO_BITS));
+	}
+	return oldPrio;
+}
+
+// Restore the base priority following a call to ChangeBasePriority
+inline void RestoreBasePriority(uint32_t prio)
+{
+	__set_BASEPRI(prio);
+}
+
+// Set the base priority when we are not interested in the existing value i.e. definitely in non-interrupt code
+inline void SetBasePriority(uint32_t prio)
+{
+	__set_BASEPRI(prio << (8 - __NVIC_PRIO_BITS));
+}
+
 // Classes to facilitate range-based for loops that iterate from 0 up to just below a limit
 template<class T> class SimpleRangeIterator
 {

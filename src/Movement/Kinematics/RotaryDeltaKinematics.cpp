@@ -372,6 +372,13 @@ void RotaryDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *nor
 	}
 }
 
+// Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
+// This is called to determine whether we can babystep the specified axis independently of regular motion.
+AxesBitmap RotaryDeltaKinematics::GetLinearAxes() const
+{
+	return 0;
+}
+
 // Calculate the motor position for a single tower from a Cartesian coordinate.
 // If we first transform the XY coordinates so that +X is along the direction of the arm, then we need to solve this equation:
 //  L^2 = (U cos(theta) + (R - x))^2 + y^2 + (U sin(theta) + (H - z))^2

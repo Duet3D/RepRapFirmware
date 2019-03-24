@@ -42,13 +42,12 @@ public:
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 	bool WriteResumeSettings(FileStore *f) const override;
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const override;
+	AxesBitmap GetLinearAxes() const override;
 
     // Public functions specific to this class
 	float GetDiagonalSquared(size_t tower) const { return D2[tower]; }
     float GetTowerX(size_t axis) const { return towerX[axis]; }
     float GetTowerY(size_t axis) const { return towerY[axis]; }
-    float GetHomedCarriageHeight(size_t axis) const { return homedCarriageHeights[axis] + endstopAdjustments[axis]; }
-	float GetHomedHeight() const { return homedHeight; }
 
 private:
 	void Init();

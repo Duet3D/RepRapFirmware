@@ -179,8 +179,7 @@ public:
 
 	// Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
 	// This is called to determine whether we can babystep the specified axis independently of regular motion.
-	// This default assumes that only the Z axis is linear. Override for Cartesian and Core architectures.
-	virtual AxesBitmap GetLinearAxes() const { return MakeBitmap<AxesBitmap>(Z_AXIS); }
+	virtual AxesBitmap GetLinearAxes() const = 0;
 
 	// Override this virtual destructor if your constructor allocates any dynamic memory
 	virtual ~Kinematics() { }

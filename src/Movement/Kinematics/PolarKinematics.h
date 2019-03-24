@@ -32,6 +32,7 @@ public:
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const override;
 	bool IsContinuousRotationAxis(size_t axis) const override;
+	AxesBitmap GetLinearAxes() const override;
 
 private:
 	static constexpr float DefaultSegmentsPerSecond = 100.0;

@@ -114,7 +114,11 @@ public:
 		float coords[MaxTotalDrivers];									// new positions for the axes, amount of movement for the extruders
 		float initialCoords[MaxAxes];									// the initial positions of the axes
 		float feedRate;													// feed rate of this move
-		float virtualExtruderPosition;									// the virtual extruder position at the start of this move
+		union
+		{
+			float virtualExtruderPosition;								// the virtual extruder position at the start of this move, for normal moves
+			float acceleration;											// the requested acceleration, for async moves
+		};
 		FilePosition filePos;											// offset in the file being printed at the start of reading this move
 		float proportionLeft;											// what proportion of the entire move remains after this segment
 		AxesBitmap xAxes;												// axes that X is mapped to
@@ -131,6 +135,8 @@ public:
 		uint8_t hasExtrusion : 1;										// true if the move includes extrusion - only valid if the move was set up by SetupMove
 		uint8_t isCoordinated : 1;										// true if this is a coordinates move
 		uint8_t usingStandardFeedrate : 1;								// true if this move uses the standard feed rate
+
+		void SetDefaults(size_t firstDriveToZero);						// set up default values
 	};
 
 	GCodes(Platform& p);
@@ -156,8 +162,7 @@ public:
 
 	bool GetAxisIsHomed(unsigned int axis) const						// Has the axis been homed?
 		{ return IsBitSet(axesHomed, axis); }
-	void SetAxisIsHomed(unsigned int axis)								// Tell us that the axis is now homed
-		{ SetBit(axesHomed, axis); }
+	void SetAxisIsHomed(unsigned int axis);								// Tell us that the axis is now homed
 	void SetAxisNotHomed(unsigned int axis)								// Tell us that the axis is not homed
 		{ ClearBit(axesHomed, axis); }
 	void SetAllAxesNotHomed()											// Flag all axes as not homed
@@ -172,10 +177,9 @@ public:
 
 	float GetRawExtruderTotalByDrive(size_t extruder) const;			// Get the total extrusion since start of print, for one drive
 	float GetTotalRawExtrusion() const { return rawExtruderTotal; }		// Get the total extrusion since start of print, all drives
-	float GetBabyStepOffset(size_t axis) const
-		pre(axis < maxAxes)
-		{ return currentBabyStepOffsets[axis]; }						// Get the current baby stepping offset for an axis
-	const float *GetUserPosition() const { return currentUserPosition; }	// Return the current user position
+	float GetTotalBabyStepOffset(size_t axis) const
+		pre(axis < maxAxes);
+	const float *GetUserPosition() const { return currentUserPosition; } // Return the current user position
 
 #if HAS_NETWORKING
 	NetworkGCodeInput *GetHTTPInput() const { return httpInput; }
@@ -531,6 +535,9 @@ private:
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 	float volumetricExtrusionFactors[MaxExtruders]; // Volumetric extrusion factors
 	float currentBabyStepOffsets[MaxAxes];		// The accumulated axis offsets due to baby stepping requests
+#if SUPPORT_ASYNC_MOVES
+	float hiddenBabyStepOffsets[MaxAxes];		// The amount of live (async) baby stepping performed
+#endif
 
 	// Z probe
 	GridDefinition defaultGrid;					// The grid defined by the M557 command in config.g
@@ -587,6 +594,7 @@ private:
 
 	// Laser
 	float laserMaxPower;
+	bool laserPowerSticky;						// true if G1 S parameters are remembered across G1 commands
 
 	// Heater fault handler
 	HeaterFaultState heaterFaultState;			// whether there is a heater fault and what we have done about it so far
@@ -654,6 +662,16 @@ inline void GCodes::NewMoveAvailable()
 	const unsigned int sl = totalSegments;
 	__DMB();					// make sure that the move details have been written first
 	segmentsLeft = sl;			// set the number of segments to indicate that a move is available to be taken
+}
+
+// Get the total baby stepping offset for an axis
+inline float GCodes::GetTotalBabyStepOffset(size_t axis) const
+{
+#if SUPPORT_ASYNC_MOVES
+	return currentBabyStepOffsets[axis] + hiddenBabyStepOffsets[axis];
+#else
+	return currentBabyStepOffsets[axis];
+#endif
 }
 
 //*****************************************************************************************************

@@ -2520,23 +2520,25 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 		(void)RepRap::DoDivide(1, 0);					// call function in another module so it can't be optimised away
 		break;
 
-	case (int)DiagnosticTestType::UnalignedMemoryAccess:	// do an unaligned memory access to test exception handling
+	case (int)DiagnosticTestType::UnalignedMemoryAccess: // do an unaligned memory access to test exception handling
 		deliberateError = true;
 		SCB->CCR |= SCB_CCR_UNALIGN_TRP_Msk;			// by default, unaligned memory accesses are allowed, so change that
-		__DMB();										// make sure that instruction completes, don't allow prefetch
+		__DSB();										// make sure that instruction completes
+		__DMB();										// don't allow prefetch
 		(void)*(reinterpret_cast<const volatile char*>(dummy) + 1);
 		break;
 
 	case (int)DiagnosticTestType::BusFault:
-		deliberateError = true;
 		// Read from the "Undefined (Abort)" area
 #if SAME70
 		// FIXME: The SAME70 provides an MPU, maybe we should configure it as well?
 		// I guess this can wait until we have the RTOS working though.
 		Message(WarningMessage, "There is no abort area on the SAME70");
 #elif SAM4E || SAM4S
+		deliberateError = true;
 		(void)*(reinterpret_cast<const volatile char*>(0x20800000));
 #elif SAM3XA
+		deliberateError = true;
 		(void)*(reinterpret_cast<const volatile char*>(0x20200000));
 #elif __LPC17xx__
 		Message(WarningMessage, "TODO:: Skipping test on LPC");//????
@@ -3506,6 +3508,8 @@ bool Platform::FansHardwareInverted(size_t fanNumber) const
 	// The cooling fan output pin gets inverted on a Duet 0.6 or 0.7.
 	// We allow a second fan controlled by a mosfet on the PC4 pin, which is not inverted.
 	return fanNumber == 0 && (board == BoardType::Duet_06 || board == BoardType::Duet_07);
+#elif defined(PCCB_10)
+	return fanNumber == 5;
 #else
 	return false;
 #endif
@@ -3516,7 +3520,9 @@ void Platform::InitFans()
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
 		fans[i].Init(COOLING_FAN_PINS[i], Fan0LogicalPin + i, FansHardwareInverted(i),
-#ifdef PCCB
+#if defined(PCCB_10)
+						(i == 5) ? 25000 : DefaultFanPwmFreq				// PCCB fan 5 has 4-wire fan connectors for Intel-spec PWM fans
+#elif defined(PCCB_08) || defined(PCCB_08_X5)
 						(i == 3) ? 25000 : DefaultFanPwmFreq				// PCCB fan 3 has 4-wire fan connectors for Intel-spec PWM fans
 #else
 						DefaultFanPwmFreq

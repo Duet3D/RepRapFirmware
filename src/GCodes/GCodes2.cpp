@@ -2221,7 +2221,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			const bool absolute = (gb.Seen('R') && gb.GetIValue() == 0);
 			bool seen = false;
-#if SUPPORT_ASYNC_MOVES
+#if 0	//SUPPORT_ASYNC_MOVES
 			bool live = true;
 #endif
 			float differences[MaxAxes];
@@ -2233,16 +2233,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					const float fval = gb.GetFValue();
 					if (absolute)
 					{
-						differences[axis] = fval - currentBabyStepOffsets[axis];
-						currentBabyStepOffsets[axis] = fval;
+						differences[axis] = fval - GetTotalBabyStepOffset(axis);
 					}
 					else
 					{
 						differences[axis] = constrain<float>(fval, -1.0, 1.0);
-						currentBabyStepOffsets[axis] += differences[axis];
 					}
-#if SUPPORT_ASYNC_MOVES
-					if (!IsBitSet(reprap.GetMove().GetKinematics().GetLinearAxes(), axis))
+#if 0	//SUPPORT_ASYNC_MOVES
+					if (differences[axis] != 0.0 && !IsBitSet(reprap.GetMove().GetKinematics().GetLinearAxes(), axis))
 					{
 						live = false;		// we can only live babystep linear axes
 					}
@@ -2256,21 +2254,30 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 			if (seen)
 			{
-#if SUPPORT_ASYNC_MOVES
-				if (live)	// we can live babystep Z only on a SCARA
+#if 0	//SUPPORT_ASYNC_MOVES
+				if (live)
 				{
 					if (auxMoveAvailable)
 					{
 						return false;									// wait until the previous aux move has gone
 					}
 
+					auxMoveBuffer.SetDefaults(0);
 					auxMoveBuffer.feedRate = DefaultFeedRate;
+					auxMoveBuffer.acceleration = 9999.0;
 					for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 					{
-						auxMoveBuffer.coords[axis] = differences[axis];
-						auxMoveBuffer.feedRate = min<float>(auxMoveBuffer.feedRate, platform.MaxFeedrate(axis));
+						hiddenBabyStepOffsets[axis] += differences[axis];
+						if (differences[axis] != 0.0)
+						{
+							auxMoveBuffer.coords[axis] = differences[axis];
+							auxMoveBuffer.feedRate = min<float>(auxMoveBuffer.feedRate, platform.MaxFeedrate(axis));
+							auxMoveBuffer.acceleration = min<float>(auxMoveBuffer.acceleration, platform.Acceleration(axis));
+						}
 					}
 					auxMoveBuffer.feedRate /= 4;						// allow for other movement taking place at the same time
+					auxMoveBuffer.acceleration /= 4;
+					__DMB();
 					auxMoveAvailable = true;
 				}
 				else
@@ -2281,10 +2288,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						return false;
 					}
 
-					bool haveResidual = false;
 					// Perform babystepping synchronously with moves
+					bool haveResidual = false;
 					for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 					{
+						currentBabyStepOffsets[axis] += differences[axis];
 						const float amountPushed = reprap.GetMove().PushBabyStepping(axis, differences[axis]);
 						moveBuffer.initialCoords[axis] += amountPushed;
 
@@ -2311,7 +2319,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				reply.printf("Baby stepping offsets (mm):");
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
-					reply.catf(" %x:%.3f", axisLetters[axis], (double)currentBabyStepOffsets[axis]);
+					reply.catf(" %c:%.3f", axisLetters[axis], (double)GetTotalBabyStepOffset(axis));
 				}
 			}
 		}
@@ -2714,13 +2722,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				result = GCodeResult::error;
 			}
 		}
-		if (result == GCodeResult::ok && gb.Seen('F'))
+		if (result == GCodeResult::ok)
 		{
-			platform.SetLaserPwmFrequency(gb.GetFValue());
-		}
-		if (result == GCodeResult::ok && gb.Seen('R'))
-		{
-			laserMaxPower = max<float>(1.0, gb.GetFValue());
+			if (gb.Seen('S'))
+			{
+				laserPowerSticky = (gb.GetUIValue() == 1);
+			}
+			if (gb.Seen('F'))
+			{
+				platform.SetLaserPwmFrequency(gb.GetFValue());
+			}
+			if (gb.Seen('R'))
+			{
+				laserMaxPower = max<float>(1.0, gb.GetFValue());
+			}
 		}
 		break;
 

@@ -63,6 +63,23 @@ DEFINE_GET_OBJECT_MODEL_TABLE(GCodes)
 
 #endif
 
+// Set up some default values in the move buffer for special moves, e.g. for Z probing and firmware retraction
+void GCodes::RawMove::SetDefaults(size_t firstDriveToZero)
+{
+	moveType = 0;
+	isCoordinated = false;
+	usingStandardFeedrate = false;
+	usePressureAdvance = false;
+	endStopsToCheck = 0;
+	filePos = noFilePosition;
+	xAxes = DefaultXAxisMapping;
+	yAxes = DefaultYAxisMapping;
+	for (size_t drive = firstDriveToZero; drive < MaxTotalDrivers; ++drive)
+	{
+		coords[drive] = 0.0;			// clear extrusion
+	}
+}
+
 #ifdef SERIAL_AUX_DEVICE
 // Support for emergency stpo form PanelDue
 bool GCodes::emergencyStopCommanded = false;
@@ -157,6 +174,7 @@ void GCodes::Init()
 	lastAuxStatusReportType = -1;						// no status reports requested yet
 
 	laserMaxPower = DefaultMaxLaserPower;
+	laserPowerSticky = false;
 
 	heaterFaultState = HeaterFaultState::noFault;
 	heaterFaultTime = 0;
@@ -227,14 +245,18 @@ void GCodes::Reset()
 
 	ClearMove();
 
-#if SUPPORT_ASYNC_MOVES
-	auxMoveAvailable = false;
-#endif
-
 	for (float& f : currentBabyStepOffsets)
 	{
 		f = 0.0;										// clear babystepping before calling ToolOffsetInverseTransform
 	}
+
+#if SUPPORT_ASYNC_MOVES
+	auxMoveAvailable = false;
+	for (float& f : hiddenBabyStepOffsets)
+	{
+		f = 0.0;										// clear babystepping before calling ToolOffsetInverseTransform
+	}
+#endif
 
 	currentZHop = 0.0;									// clear this before calling ToolOffsetInverseTransform
 	lastPrintingMoveHeight = -1.0;
@@ -2153,7 +2175,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 				buf.copy("M116\nM290");
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
-					buf.catf(" %c%.3f", axisLetters[axis], (double)currentBabyStepOffsets[axis]);
+					buf.catf(" %c%.3f", axisLetters[axis], (double)GetTotalBabyStepOffset(axis));
 				}
 				buf.cat('\n');
 				ok = f->Write(buf.c_str());								// write baby stepping offsets
@@ -2238,7 +2260,11 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 void GCodes::Diagnostics(MessageType mtype)
 {
 	platform.Message(mtype, "=== GCodes ===\n");
+#if SUPPORT_ASYNC_MOVES
+	platform.MessageF(mtype, "Segments left: %u, aux move: %s\n", segmentsLeft, (auxMoveAvailable) ? "yes" : "no");
+#else
 	platform.MessageF(mtype, "Segments left: %u\n", segmentsLeft);
+#endif
 	platform.MessageF(mtype, "Stack records: %u allocated, %u in use\n", GCodeMachineState::GetNumAllocated(), GCodeMachineState::GetNumInUse());
 	const GCodeBuffer * const movementOwner = resourceOwners[MoveResource];
 	platform.MessageF(mtype, "Movement lock held by %s\n", (movementOwner == nullptr) ? "null" : movementOwner->GetIdentity());
@@ -2510,9 +2536,13 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		{
 			moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
 		}
-		else
+		else if (laserPowerSticky)
 		{
 			// leave the laser PWM alone because this is what LaserWeb expects
+		}
+		else
+		{
+			moveBuffer.laserPwmOrIoBits.laserPwm = 0;
 		}
 	}
 #endif
@@ -2874,9 +2904,13 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		{
 			moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
 		}
-		else
+		else if (laserPowerSticky)
 		{
 			// leave the laser PWM alone because this is what LaserWeb expects
+		}
+		else
+		{
+			moveBuffer.laserPwmOrIoBits.laserPwm = 0;
 		}
 	}
 # if SUPPORT_IOBITS
@@ -4808,6 +4842,16 @@ bool GCodes::AllAxesAreHomed() const
 	return (axesHomed & allAxes) == allAxes;
 }
 
+// Tell us that the axis is now homed
+void GCodes::SetAxisIsHomed(unsigned int axis)
+{
+	SetBit(axesHomed, axis);
+#if SUPPORT_ASYNC_MOVES
+	currentBabyStepOffsets[axis] += hiddenBabyStepOffsets[axis];
+	hiddenBabyStepOffsets[axis] = 0.0;
+#endif
+}
+
 // Write the config-override file returning true if an error occurred
 GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const
 {
@@ -5042,18 +5086,7 @@ OutputBuffer *GCodes::GenerateJsonStatusResponse(int type, int seq, ResponseSour
 // Set up some default values in the move buffer for special moves, e.g. for Z probing and firmware retraction
 void GCodes::SetMoveBufferDefaults()
 {
-	moveBuffer.moveType = 0;
-	moveBuffer.isCoordinated = false;
-	moveBuffer.usingStandardFeedrate = false;
-	moveBuffer.usePressureAdvance = false;
-	moveBuffer.endStopsToCheck = 0;
-	moveBuffer.filePos = noFilePosition;
-	moveBuffer.xAxes = DefaultXAxisMapping;
-	moveBuffer.yAxes = DefaultYAxisMapping;
-	for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; ++drive)
-	{
-		moveBuffer.coords[drive] = 0.0;			// clear extrusion
-	}
+	moveBuffer.SetDefaults(numTotalAxes);
 }
 
 // Resource locking/unlocking

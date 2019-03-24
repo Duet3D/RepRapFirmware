@@ -449,7 +449,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 		float oldHomedCarriageHeights[UsualNumTowers];
 		for (size_t drive = 0; drive < UsualNumTowers; ++drive)
 		{
-			oldHomedCarriageHeights[drive] = GetHomedCarriageHeight(drive);
+			oldHomedCarriageHeights[drive] = homedCarriageHeights[drive];
 		}
 
 		Adjust(numFactors, solution);	// adjust the delta parameters
@@ -457,7 +457,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 		float heightAdjust[UsualNumTowers];
 		for (size_t drive = 0; drive < UsualNumTowers; ++drive)
 		{
-			heightAdjust[drive] =  GetHomedCarriageHeight(drive) - oldHomedCarriageHeights[drive];
+			heightAdjust[drive] = homedCarriageHeights[drive] - oldHomedCarriageHeights[drive];
 		}
 
 		// Adjust the motor endpoints to allow for the change to endstop adjustments
@@ -918,6 +918,14 @@ void LinearDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *nor
 		const float maxAcceleration = min<float>(platform.Acceleration(X_AXIS), platform.Acceleration(Y_AXIS));
 		dda.LimitSpeedAndAcceleration(maxSpeed/xyFactor, maxAcceleration/xyFactor);
 	}
+}
+
+// Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
+// This is called to determine whether we can babystep the specified axis independently of regular motion.
+// The DDA class has special support for delta printers, so we can baystep the Z axis.
+AxesBitmap LinearDeltaKinematics::GetLinearAxes() const
+{
+	return MakeBitmap<AxesBitmap>(Z_AXIS);
 }
 
 // End
