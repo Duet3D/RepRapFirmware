@@ -16,13 +16,14 @@ Known issues:
 - Custom endstop input numbers in the M575 command (probe tool) don't work
 
 New features/changed behaviour:
+- M505 (set SD card system folder) is now implemented
+- M470 and M471 commands are now implemented (thanks wilriker)
 - On deltas with more than 3 towers, M666 can be used to set endstop corrections for all towers. The additional towers must be named UVW.
 - The M291 command no longer locks movement if no axis jog buttons in that command are enabled (https://forum.duet3d.com/topic/8988/wishlist-interrupt-tool-change-from-a-trigger/16)
 - Tool offsets are applied within the tpre#.g and tpost#.g macros
 - One the Duet 06/085 it is now possible to define 2 additional fans. The M106 A parameter can be used to map them to unused heater channels.
 - When changing pressure advance, movement is stopped momentarily to avoid sudden under- or over-extrusion (https://forum.duet3d.com/topic/9140/extruder-behaves-strangle-when-disabling-pressure-advance/10)
 - Baby stepping axes other than Z is now supported, however the current implementation doesn't apply it until all moves already in the pipeline have been completed (https://forum.duet3d.com/topic/8015/change-z-babystepping-to-y-babystepping-for-belt-printers/14)
-- M470 and M471 commands are now implemented (thanks wilriker)
 - G20 and G21 inch/mm unit setting commands are now applied per input channel and the settings are pushed/popped
 - If you try to use a G- or M-code that the firmware doesn't recognise, it will try to run a macro file of that name. For example, command M650 tries to run /sys/M650.g.
 - M650 and M651 are no longer recognised, unless you create macros M650.g and M651.g
