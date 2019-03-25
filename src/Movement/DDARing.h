@@ -49,7 +49,9 @@ public:
 	float GetSimulationTime() const { return simulationTime; }
 	void ResetSimulationTime() { simulationTime = 0.0; }
 
+#if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const;
+#endif
 
 	const DDA *GetCurrentDDA() const { return currentDda; }						// Return the DDA of the currently-executing move, or nullptr
 
@@ -72,8 +74,6 @@ public:
 	void RecordLookaheadError() { ++numLookaheadErrors; }						// Record a lookahead error
 
 	void Diagnostics(MessageType mtype, const char *prefix);
-
-//	const DDA *GetCurrentDDA() const { return currentDda; }						// Return the DDA of the currently-executing move
 
 private:
 	void StartNextMove(Platform& p, uint32_t startTime) __attribute__ ((hot));	// Start the next move, returning true if Step() needs to be called immediately
@@ -125,11 +125,13 @@ pre(ddaRingGetPointer->GetState() == DDA::frozen)
 	cdda->Start(p, startTime);
 }
 
+#if HAS_SMART_DRIVERS
 inline uint32_t DDARing::GetStepInterval(size_t axis, uint32_t microstepShift) const
 {
 	const DDA * const cdda = currentDda;		// capture volatile variable
 	return (cdda != nullptr) ? cdda->GetStepInterval(axis, microstepShift) : 0;
 }
+#endif
 
 // Return the time that the next step is due
 inline std::optional<uint32_t> DDARing::GetNextInterruptTime() const

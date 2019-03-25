@@ -77,13 +77,12 @@ Planned for 2.03:
 - [done, test] Apply tool offsets in tpre.g and tpost.g
 - [done, ok] Bug: 12864 display selects wrong file to print if files starting with '.' are present
 - [done] HttpResponder fix from sdavi
-- [done, test] Bug fix: if axis scaling was used then baby stepping, tool offsets and workplace coordinate offsets were not correctly accounted for when converting machine positoin to user position
+- [done, test] Bug fix: if axis scaling was used then baby stepping, tool offsets and workplace coordinate offsets were not correctly accounted for when converting machine position to user position
 - [done] Duet085: allow 2 additional fans
 - [done, test] Stop movement when changing pressure advance with M572, https://forum.duet3d.com/topic/9140/extruder-behaves-strangle-when-disabling-pressure-advance/10
 - [done] Stop movement when changing endstop config in M574
 - [done, test] Bug fix: don't apply limit checking in non-FFF mode to move types other than zero, https://forum.duet3d.com/topic/9203/laser-mode-endstop-limit-and-homing/4
 - [partly done, test babystepping, test resurrect.g file M291 command correct] Y babystepping, https://forum.duet3d.com/topic/8015/change-z-babystepping-to-y-babystepping-for-belt-printers/14
-- [on hold] investigate filame file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5
 - [done] support multiple DDA rings
 - [done, test] Implement M470/M471 PR, thanks wilriker
 - [done, test] Fix 'nan' standard deviation when G30 P0 X0 Y0 Z-9999 S-1 is run
@@ -93,7 +92,12 @@ Planned for 2.03:
 - [done, test] M650 and M651 are no longer handled specially
 - [done] Increase tuning timeouts to 30 mins for bed/chamber heaters and 7 minutes for extruder heaters
 - [done, test] Laser power is only sticky if S1 parameter is used in M452 command
+- [done] Calibration without homing afterwards left the machine position incorrect
 - [done] Bug fixes for deltas with >3 towers
+- [done] Setting a chamber heater sometimes crashed the firmware
+- [done] Support M505
+
+- [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5
 - Filament monitors: disable if tool is not active/no commanded extrusion, or does it do that already?
 - [yes it already did] In simulation mode, does M109 implicity select a tool? https://forum.duet3d.com/topic/9595/simulation-error
 - support live Z baby stepping (could also be live X and Y on Cartesian printers, maybe even on CoreXY)
@@ -116,7 +120,7 @@ Planned for 2.03:
 - Laser turns off, https://forum.duet3d.com/topic/9636/laser-turns-of-during-straight-lines/5
 - Test endstop input high/low noise immunity, decide on pullup enable/disable
 - Test that M500 saves all delta rod lengths correctly
-- Test with Duet 3
+- [ok] Test with Duet 3
 
 - Z height based on plasma voltage or force
 - [could be related to visibility issue] Investigate 12864 display heater fault warning, https://forum.duet3d.com/topic/7718/12864-display-current-tool-temperatures/6

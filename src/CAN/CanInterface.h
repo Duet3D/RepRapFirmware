@@ -23,6 +23,7 @@ namespace CanInterface
 	void AddMovement(const DDA& dda, const PrepParams& params, size_t canDriver, int32_t steps);
 	void FinishMovement(uint32_t moveStartTime);
 	bool CanPrepareMove();
+	void InsertHiccup(uint32_t numClocks);
 }
 
 #endif

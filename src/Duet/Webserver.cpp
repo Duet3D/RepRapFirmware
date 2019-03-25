@@ -348,7 +348,7 @@ void ProtocolInterpreter::Spin()
 		}
 		if (filenameBeingUploaded[0] != 0)
 		{
-			platform->GetMassStorage()->Delete(FS_PREFIX, filenameBeingUploaded);
+			platform->Delete(FS_PREFIX, filenameBeingUploaded);
 		}
 
 		uploadState = notUploading;
@@ -454,7 +454,7 @@ bool ProtocolInterpreter::FinishUpload(uint32_t fileLength)
 	// Delete the file again if an error has occurred
 	if (uploadState == uploadError && filenameBeingUploaded[0] != 0)
 	{
-		platform->GetMassStorage()->Delete(FS_PREFIX, filenameBeingUploaded);
+		platform->Delete(FS_PREFIX, filenameBeingUploaded);
 	}
 
 	// Clean up again
@@ -592,7 +592,7 @@ void Webserver::HttpInterpreter::DoFastUpload()
 		// Update the file timestamp if it was specified before
 		if (fileLastModified != 0)
 		{
-			(void)platform->GetMassStorage()->SetLastModifiedTime(nullptr, filename, fileLastModified);
+			(void)platform->GetMassStorage()->SetLastModifiedTime(filename, fileLastModified);
 		}
 
 		// Eventually send the JSON response
@@ -806,7 +806,7 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 		if (StringEqualsIgnoreCase(command, "configfile"))	// rr_configfile [DEPRECATED]
 		{
 			String<MaxFilenameLength> fileName;
-			MassStorage::CombineName(fileName.GetRef(), platform->GetSysDir(), platform->GetConfigFile());
+			MassStorage::CombineName(fileName.GetRef(), DEFAULT_SYS_DIR, platform->GetConfigFile());
 			SendFile(fileName.c_str(), false);
 			return;
 		}
@@ -958,7 +958,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 	}
 	else if (StringEqualsIgnoreCase(request, "delete") && GetKeyValue("name") != nullptr)
 	{
-		const bool ok = platform->GetMassStorage()->Delete(FS_PREFIX, GetKeyValue("name"));
+		const bool ok = platform->Delete(FS_PREFIX, GetKeyValue("name"));
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
 	else if (StringEqualsIgnoreCase(request, "filelist") && GetKeyValue("dir") != nullptr)
@@ -1018,7 +1018,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 			MassStorage * const ms = platform->GetMassStorage();
 			if (StringEqualsIgnoreCase(GetKeyValue("deleteexisting"), "yes") && ms->FileExists(oldVal) && ms->FileExists(newVal))
 			{
-				ms->Delete(nullptr, newVal);
+				ms->Delete(newVal);
 			}
 			success = ms->Rename(oldVal, newVal);
 		}
@@ -2062,7 +2062,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			else if (StringStartsWith(clientMessage, "DELE"))
 			{
 				ReadFilename(4);
-				if (platform->GetMassStorage()->Delete(currentDir, filename.c_str()))
+				if (platform->Delete(currentDir, filename.c_str()))
 				{
 					SendReply(250, "Delete operation successful.");
 				}
@@ -2075,7 +2075,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			else if (StringStartsWith(clientMessage, "RMD"))
 			{
 				ReadFilename(3);
-				if (platform->GetMassStorage()->Delete(currentDir, filename.c_str()))
+				if (platform->Delete(currentDir, filename.c_str()))
 				{
 					SendReply(250, "Remove directory operation successful.");
 				}

@@ -757,7 +757,7 @@ void Move::Interrupt()
 #endif
 			nextStepTime = nextStepTime.value() + DDA::HiccupTime;
 #if SUPPORT_CAN_EXPANSION
-			CanInterface::InsertHiccup(delayClocks);
+			CanInterface::InsertHiccup(DDA::HiccupTime);
 #endif
 			++numHiccups;
 		}

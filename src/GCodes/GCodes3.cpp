@@ -219,7 +219,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 #if SUPPORT_WORKPLACE_COORDINATES
 				-(double)(gb.InverseConvertDistance(workplaceCoordinates[0][axis]))
 #else
-				-(double)(axisOffsets[axis]/distanceScale)
+				-(double)(gb.InverseConvertDistance(axisOffsets[axis]))
 #endif
 													 );
 		}

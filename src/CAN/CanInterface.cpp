@@ -113,6 +113,11 @@ bool CanInterface::CanPrepareMove()
 	return CanMessageBuffer::FreeBuffers() >= NumCanBoards;
 }
 
+void CanInterface::InsertHiccup(uint32_t numClocks)
+{
+	//TODO
+}
+
 #endif
 
 // End
