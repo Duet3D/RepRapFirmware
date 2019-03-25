@@ -184,14 +184,20 @@ void ListDrivers(const StringRef& str, DriversBitmap drivers);
 
 // Functions to change the base priority, to shut out interrupts up to a priority level
 
+// From section 3.12.7 of http://infocenter.arm.com/help/topic/com.arm.doc.dui0553b/DUI0553.pdf:
+// When you write to BASEPRI_MAX, the instruction writes to BASEPRI only if either:
+// • Rn is non-zero and the current BASEPRI value is 0
+// • Rn is non-zero and less than the current BASEPRI value
+__attribute__( ( always_inline ) ) __STATIC_INLINE void __set_BASEPRI_MAX(uint32_t value)
+{
+  __ASM volatile ("MSR basepri_max, %0" : : "r" (value) : "memory");
+}
+
 // Get the base priority and shut out interrupts lower than or equal to a specified priority
 inline uint32_t ChangeBasePriority(uint32_t prio)
 {
 	const uint32_t oldPrio = __get_BASEPRI();
-	if (oldPrio == 0 || (prio << (8 - __NVIC_PRIO_BITS)) < oldPrio)
-	{
-		__set_BASEPRI(prio << (8 - __NVIC_PRIO_BITS));
-	}
+	__set_BASEPRI_MAX(prio << (8 - __NVIC_PRIO_BITS));
 	return oldPrio;
 }
 
@@ -334,8 +340,8 @@ const FilePosition noFilePosition = 0xFFFFFFFF;
 // This interacts with FreeRTOS config constant configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY which is currently defined as 3 for the SAME70 and 5 for the SAM4x.
 // ISRs with better (numerically lower) priorities than this value cannot make FreeRTOS calls, but those interrupts wont be disabled even in FreeRTOS critical sections.
 
-#if SAME70
-// We have only 8 interrupt priority levels
+#if __NVIC_PRIO_BITS == 3
+// We have only 8 interrupt priority levels on the SAME70
 // Use priority 2 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 
 const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
@@ -360,7 +366,7 @@ const uint32_t NvicPriorityEthernet = 6;		// priority for Ethernet interface
 const uint32_t NvicPriorityDMA = 6;				// end-of-DMA interrupt used by TMC drivers and HSMCI
 const uint32_t NvicPrioritySpi = 6;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
 
-#else
+#elif __NVIC_PRIO_BITS == 4
 // We have 16 priority levels
 // Use priority 4 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 

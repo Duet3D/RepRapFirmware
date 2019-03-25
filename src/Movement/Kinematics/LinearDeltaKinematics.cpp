@@ -74,7 +74,7 @@ void LinearDeltaKinematics::Recalc()
 	{
 		D2[axis] = fsquare(diagonals[axis]);
 		homedCarriageHeights[axis] = homedHeight
-									+ sqrtf(D2[axis] - ((axis < UsualNumTowers) ? fsquare(radius) : fsquare(towerX[axis]) - fsquare(towerY[axis])))
+									+ sqrtf(D2[axis] - ((axis < UsualNumTowers) ? fsquare(radius) : fsquare(towerX[axis]) + fsquare(towerY[axis])))
 									+ endstopAdjustments[axis];
 		const float heightLimit = homedCarriageHeights[axis] - diagonals[axis];
 		if (heightLimit < alwaysReachableHeight)
@@ -100,9 +100,10 @@ void LinearDeltaKinematics::Recalc()
 void LinearDeltaKinematics::NormaliseEndstopAdjustments()
 {
 	const float eav = (endstopAdjustments[DELTA_A_AXIS] + endstopAdjustments[DELTA_B_AXIS] + endstopAdjustments[DELTA_C_AXIS])/3.0;
-	endstopAdjustments[DELTA_A_AXIS] -= eav;
-	endstopAdjustments[DELTA_B_AXIS] -= eav;
-	endstopAdjustments[DELTA_C_AXIS] -= eav;
+	for (size_t i = 0; i < numTowers; ++i)
+	{
+		endstopAdjustments[i] -= eav;
+	}
 	homedHeight += eav;
 }
 
@@ -446,18 +447,17 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 		}
 
 		// Save the old homed carriage heights before we change the endstop corrections
-		float oldHomedCarriageHeights[UsualNumTowers];
-		for (size_t drive = 0; drive < UsualNumTowers; ++drive)
+		float heightAdjust[MaxTowers];
+		for (size_t drive = 0; drive < numTowers; ++drive)
 		{
-			oldHomedCarriageHeights[drive] = homedCarriageHeights[drive];
+			heightAdjust[drive] = homedCarriageHeights[drive];
 		}
 
 		Adjust(numFactors, solution);	// adjust the delta parameters
 
-		float heightAdjust[UsualNumTowers];
-		for (size_t drive = 0; drive < UsualNumTowers; ++drive)
+		for (size_t drive = 0; drive < numTowers; ++drive)
 		{
-			heightAdjust[drive] = homedCarriageHeights[drive] - oldHomedCarriageHeights[drive];
+			heightAdjust[drive] = homedCarriageHeights[drive] - heightAdjust[drive];
 		}
 
 		// Adjust the motor endpoints to allow for the change to endstop adjustments

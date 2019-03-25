@@ -118,7 +118,7 @@ public:
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const;
 																					// Convert motor coordinates to machine coordinates
 	void EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const;
-	void AdjustMotorPositions(const float_t adjustment[], size_t numMotors);		// Perform motor endpoint adjustment
+	void AdjustMotorPositions(const float adjustment[], size_t numMotors);			// Perform motor endpoint adjustment
 	const char* GetGeometryString() const { return kinematics->GetName(true); }
 	bool IsAccessibleProbePoint(float x, float y) const;
 
@@ -230,7 +230,7 @@ private:
 	Kinematics *kinematics;								// What kinematics we are using
 
 	float specialMoveCoords[MaxTotalDrivers];			// Amounts by which to move individual motors (leadscrew adjustment move)
-	bool specialMoveAvailable;							// True if a leadscrew adjustment move is pending
+	bool bedLevellingMoveAvailable;							// True if a leadscrew adjustment move is pending
 
 	EndstopAction endstopActions[NumEndstops];
 #if HAS_STALL_DETECT
@@ -253,7 +253,7 @@ inline int32_t Move::GetEndPoint(size_t drive) const
 }
 
 // Perform motor endpoint adjustment
-inline void Move::AdjustMotorPositions(const float_t adjustment[], size_t numMotors)
+inline void Move::AdjustMotorPositions(const float adjustment[], size_t numMotors)
 {
 	mainDDARing.AdjustMotorPositions(adjustment, numMotors);
 }

@@ -93,6 +93,7 @@ Planned for 2.03:
 - [done, test] M650 and M651 are no longer handled specially
 - [done] Increase tuning timeouts to 30 mins for bed/chamber heaters and 7 minutes for extruder heaters
 - [done, test] Laser power is only sticky if S1 parameter is used in M452 command
+- [done] Bug fixes for deltas with >3 towers
 - Filament monitors: disable if tool is not active/no commanded extrusion, or does it do that already?
 - [yes it already did] In simulation mode, does M109 implicity select a tool? https://forum.duet3d.com/topic/9595/simulation-error
 - support live Z baby stepping (could also be live X and Y on Cartesian printers, maybe even on CoreXY)

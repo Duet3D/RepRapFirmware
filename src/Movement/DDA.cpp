@@ -125,7 +125,7 @@ DDA::DDA(DDA* n) : next(n), prev(nullptr), state(empty)
 	}
 
 	flags.all = 0;						// in particular we need to set endCoordinatesValid to false
-	virtualExtruderPosition = 0;
+	virtualExtruderPosition = 0.0;
 	filePos = noFilePosition;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
@@ -206,10 +206,10 @@ void DDA::DebugPrintVector(const char *name, const float *vec, size_t len) const
 }
 
 // Print the text followed by the DDA only
-void DDA::DebugPrint() const
+void DDA::DebugPrint(const char *tag) const
 {
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	debugPrintf("DDA:");
+	debugPrintf("%s DDA:", tag);
 	if (flags.endCoordinatesValid)
 	{
 		float startCoordinates[MaxAxes];
@@ -231,9 +231,9 @@ void DDA::DebugPrint() const
 }
 
 // Print the DDA and active DMs
-void DDA::DebugPrintAll() const
+void DDA::DebugPrintAll(const char *tag) const
 {
-	DebugPrint();
+	DebugPrint(tag);
 	for (DriveMovement* dm = activeDMs; dm != nullptr; dm = dm->nextDM)
 	{
 		dm->DebugPrint();
@@ -381,6 +381,7 @@ bool DDA::InitStandardMove(DDARing& ring, GCodes::RawMove &nextMove, bool doMoto
 	flags.hadLookaheadUnderrun = false;
 	flags.isLeadscrewAdjustmentMove = false;
 	flags.goingSlow = false;
+	flags.controlLaser = true;
 
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a raw motor move
 	flags.endCoordinatesValid = (endStopsToCheck == 0) && doMotorMapping;
@@ -520,6 +521,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	flags.isDeltaMovement = false;
 	flags.isPrintingMove = false;
 	flags.xyMoving = false;
+	flags.controlLaser = false;
 	flags.canPauseAfter = true;
 	flags.usingStandardFeedrate = false;
 	flags.usePressureAdvance = false;
@@ -567,10 +569,69 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 
 # if SUPPORT_ASYNC_MOVES
 
-// Set up a leadscrew motor move returning true if the move does anything
-bool DDA::InitAsyncMove(DDARing& ring, float feedrate, const float adjustments[MaxTotalDrivers])
+// Set up an async motor move returning true if the move does anything.
+// All async moves are relative and linear.
+bool DDA::InitAsyncMove(DDARing& ring, float feedrate, float reqAcceleration, const float adjustments[MaxTotalDrivers])
 {
-	return false;	//TODO
+	// 1. Compute the new endpoints and the movement vector
+	bool realMove = false;
+
+	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
+	{
+		// Note, the correspondence between endCoordinates and endPoint will not be exact because of rounding error.
+		// This doesn't matter for the current application because we don't use either of these fields.
+
+		// If it's a delta then we can only do async tower moves in the Z direction and on any additional linear axes
+		const size_t axisToUse = (reprap.GetMove().GetKinematics().GetMotionType(drive) == MotionType::segmentFreeDelta) ? Z_AXIS : drive;
+		directionVector[drive] = adjustments[axisToUse];
+		const int32_t delta = lrintf(adjustments[axisToUse] * reprap.GetPlatform().DriveStepsPerUnit(drive));
+		endPoint[drive] = prev->endPoint[drive] + delta;
+		endCoordinates[drive] = prev->endCoordinates[drive];
+		if (delta != 0)
+		{
+			realMove = true;
+		}
+	}
+
+	// 2. Throw it away if there's no real movement.
+	if (!realMove)
+	{
+		return false;
+	}
+
+	// 3. Store some values
+	flags.isLeadscrewAdjustmentMove = false;
+	flags.isDeltaMovement = false;
+	flags.isPrintingMove = false;
+	flags.xyMoving = false;
+	flags.controlLaser = false;
+	flags.canPauseAfter = true;
+	flags.usingStandardFeedrate = false;
+	flags.usePressureAdvance = false;
+	flags.hadLookaheadUnderrun = false;
+	flags.goingSlow = false;
+	flags.continuousRotationShortcut = false;
+	endStopsToCheck = 0;
+	virtualExtruderPosition = 0;
+	xAxes = MakeBitmap<AxesBitmap>(X_AXIS);
+	yAxes = MakeBitmap<AxesBitmap>(Y_AXIS);
+	filePos = noFilePosition;
+	flags.endCoordinatesValid = false;
+
+	startSpeed = endSpeed = 0.0;
+	requestedSpeed = feedrate;
+	acceleration = deceleration = reqAcceleration;
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	laserPwmOrIoBits.Clear();
+#endif
+
+	// Currently we normalise the vector sum of all motor movements to unit length.
+	totalDistance = Normalise(directionVector, MaxTotalDrivers, MaxTotalDrivers);
+
+	RecalculateMove(ring);
+	state = provisional;
+	return true;
 }
 
 #endif
@@ -717,7 +778,7 @@ pre(state == provisional)
 					if (reprap.Debug(moduleMove))
 					{
 						debugPrintf("DDA.cpp(%d) tn=%f ", __LINE__, (double)laDDA->beforePrepare.targetNextSpeed);
-						laDDA->DebugPrint();
+						laDDA->DebugPrint("la");
 					}
 				}
 			}
@@ -841,7 +902,7 @@ void DDA::RecalculateMove(DDARing& ring)
 					if (reprap.Debug(moduleMove))
 					{
 						debugPrintf("DDA.cpp(%d) na=%f", __LINE__, (double)newAcceleration);
-						DebugPrint();
+						DebugPrint("rm");
 					}
 				}
 				acceleration = newAcceleration;
@@ -859,7 +920,7 @@ void DDA::RecalculateMove(DDARing& ring)
 					if (reprap.Debug(moduleMove))
 					{
 						debugPrintf("DDA.cpp(%d) nd=%f", __LINE__, (double)newDeceleration);
-						DebugPrint();
+						DebugPrint("rm");
 					}
 				}
 				deceleration = newDeceleration;
@@ -1186,7 +1247,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 							// Check for sensible values, print them if they look dubious
 							if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
 							{
-								DebugPrintAll();
+								DebugPrintAll("pr");
 							}
 							InsertDM(pdm);
 						}
@@ -1226,7 +1287,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 						// Check for sensible values, print them if they look dubious
 						if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
 						{
-							DebugPrintAll();
+							DebugPrintAll("pt");
 						}
 						InsertDM(pdm);
 					}
@@ -1292,7 +1353,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 							// Check for sensible values, print them if they look dubious
 							if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
 							{
-								DebugPrintAll();
+								DebugPrintAll("pr");
 							}
 							InsertDM(pdm);
 						}
@@ -1360,7 +1421,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 								   )
 							   )
 							{
-								DebugPrintAll();
+								DebugPrintAll("pr");
 							}
 							InsertDM(pdm);
 						}
@@ -1433,7 +1494,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 #endif
 		if (reprap.Debug(moduleDda) && reprap.Debug(moduleMove))		// temp show the prepared DDA if debug enabled for both modules
 		{
-			DebugPrintAll();
+			DebugPrintAll("pr");
 		}
 
 #if DDA_MOVE_DEBUG
@@ -1665,7 +1726,7 @@ void DDA::CheckEndstops(Platform& platform)
 // The remaining functions are speed-critical, so use full optimisation
 // The GCC optimize pragma appears to be broken, if we try to force O3 optimisation here then functions are never inlined
 
-// Start executing this move, returning true if Step() needs to be called immediately. Must be called with interrupts disabled, to avoid a race condition.
+// Start executing this move, returning true if Step() needs to be called immediately. Must be called with interrupts disabled or basepri >= set interrupt priority, to avoid a race condition.
 void DDA::Start(Platform& p, uint32_t tim)
 pre(state == frozen)
 {
@@ -1685,7 +1746,7 @@ pre(state == frozen)
 
 #if SUPPORT_LASER
 	// Deal with laser power
-	if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
+	if (reprap.GetGCodes().GetMachineType() == MachineType::laser && flags.controlLaser)
 	{
 		// Ideally we should ramp up the laser power as the machine accelerates, but for now we don't.
 		p.SetLaserPwm(laserPwmOrIoBits.laserPwm);

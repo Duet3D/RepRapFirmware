@@ -20,6 +20,9 @@ static volatile uint32_t stepTimerPendingStatus = 0;	// for holding status bits 
 static volatile uint32_t stepTimerHighWord = 0;			// upper 16 bits of step timer
 #endif
 
+static uint32_t nextStepInterruptScheduledAt;			// when the next interrupt is scheduled
+static bool stepInterruptIsScheduled = false;			// true if an interrupt is scheduled
+
 namespace StepTimer
 {
 	void Init()
@@ -99,15 +102,25 @@ namespace StepTimer
 #endif
 
 	// Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
+	// On entry, interrupts must be disabled or the base priority must be <= step interrupt priority.
 	/*static*/ bool ScheduleStepInterrupt(uint32_t tim)
 	{
+		if (stepInterruptIsScheduled && (int32_t)(tim - nextStepInterruptScheduledAt) > 0)
+		{
+			return false;											// an interrupt is already scheduled
+		}
+
+		// We need to disable all interrupts, because once we read the current step clock we have only 6us to set up the interrupt, or we will miss it
 		const irqflags_t flags = cpu_irq_save();
 		const int32_t diff = (int32_t)(tim - GetInterruptClocksInterruptsDisabled());	// see how long we have to go
 		if (diff < (int32_t)DDA::MinInterruptInterval)				// if less than about 6us or already passed
 		{
 			cpu_irq_restore(flags);
-			return true;											// tell the caller to simulate an interrupt instead
+			return true;											// tell the caller to execute the ISR instead
 		}
+
+		nextStepInterruptScheduledAt = tim;
+		stepInterruptIsScheduled = true;
 
 #ifdef __LPC17xx__
 		STEP_TC->MR0 = tim;
@@ -120,13 +133,13 @@ namespace StepTimer
 		// So we don't, and the step ISR must allow for getting called prematurely.
 		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPAS;		// enable the interrupt
 #endif
-		cpu_irq_restore(flags);
 
 #ifdef MOVE_DEBUG
 			++numInterruptsScheduled;
 			nextInterruptTime = tim;
-			nextInterruptScheduledAt = GetInterruptClocks();
+			nextInterruptScheduledAt = GetInterruptClocksInterruptsDisabled();
 #endif
+		cpu_irq_restore(flags);
 		return false;
 	}
 
@@ -141,11 +154,14 @@ namespace StepTimer
 		stepTimerPendingStatus &= ~TC_SR_CPAS;
 # endif
 #endif
+		stepInterruptIsScheduled = false;
 	}
 
 	// Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
+	// On entry, interrupts must be disabled or the base priority must be <= step interrupt priority.
 	bool ScheduleSoftTimerInterrupt(uint32_t tim)
 	{
+		// We need to disable all interrupts, because once we read the current step clock we have only 6us to set up the interrupt, or we will miss it
 		const irqflags_t flags = cpu_irq_save();
 		const int32_t diff = (int32_t)(tim - GetInterruptClocksInterruptsDisabled());	// see how long we have to go
 		if (diff < (int32_t)DDA::MinInterruptInterval)					// if less than about 6us or already passed
@@ -165,11 +181,11 @@ namespace StepTimer
 		// So we don't, and the timer ISR must allow for getting called prematurely.
 		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPBS;			// enable the interrupt
 #endif
-		cpu_irq_restore(flags);
 
 #ifdef SOFT_TIMER_DEBUG
-		lastSoftTimerInterruptScheduledAt = GetInterruptClocks();
+		lastSoftTimerInterruptScheduledAt = GetInterruptClocksInterruptsDisabled();
 #endif
+		cpu_irq_restore(flags);
 		return false;
 	}
 
@@ -218,6 +234,7 @@ void STEP_TC_HANDLER()
 			++numInterruptsExecuted;
 			lastInterruptTime = GetInterruptClocks();
 #endif
+			stepInterruptIsScheduled = false;
 			reprap.GetMove().Interrupt();							// execute the step interrupt
 		}
 
@@ -243,6 +260,7 @@ void STEP_TC_HANDLER()
         ++numInterruptsExecuted;
         lastInterruptTime = GetInterruptClocks();
 # endif
+		stepInterruptIsScheduled = false;
 		reprap.GetMove().Interrupt();                                // execute the step interrupt
 	}
 
@@ -258,6 +276,7 @@ void STEP_TC_HANDLER()
 //end __LPC17xx__
 
 #else
+	// SAM4E and SAM3X code
 	uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR;		// read the status register, which clears the status bits
 	tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;				// select only enabled interrupts
 
@@ -268,6 +287,7 @@ void STEP_TC_HANDLER()
 		++numInterruptsExecuted;
 		lastInterruptTime = GetInterruptClocks();
 #endif
+		stepInterruptIsScheduled = false;
 		reprap.GetMove().Interrupt();								// execute the step interrupt
 	}
 
