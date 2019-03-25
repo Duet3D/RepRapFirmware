@@ -13,6 +13,7 @@ Upgrade notes:
 - See also the upgrade notes for earlier 2.03 beta versions.
 
 Known issues:
+- Custom endstop input numbers in the M575 command (probe tool) don't work
 
 New features/changed behaviour:
 - On deltas with more than 3 towers, M666 can be used to set endstop corrections for all towers. The additional towers must be named UVW.
@@ -36,6 +37,7 @@ Bug fixes:
 - Running G30 P0 X0 Y0 Z-9999 S-1 sometimes reported the deviation as 'nan' instead of 0.0
 - In earlier 2.03beta versions, if you auto-calibrated a delta printer then the motor positions were slightly wrong afterwards until you homed the printer
 - On delta printers with more than 3 towers, the homed height calculation for additional towers used the Y coordinate incorrectly.
+- If you used M141 to define a chamber heater using a heater number other than 0 or 1, the firmware crashed
 
 Version 2.03beta2
 =================
