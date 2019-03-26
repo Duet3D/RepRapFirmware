@@ -13,7 +13,7 @@ Upgrade notes:
 - See also the upgrade notes for earlier 2.03 beta versions.
 
 Known issues:
-- Custom endstop input numbers in the M575 command (probe tool) don't work
+- Custom endstop input numbers in the M585 command (probe tool) don't work
 
 New features/changed behaviour:
 - M505 (set SD card system folder) is now implemented
@@ -48,7 +48,7 @@ Upgrade notes:
 - Important! See 2.03beta1 upgrade notes too.
 
 Known issues:
-- Custom endstop input numbers in the M575 command (probe tool) don't work
+- Custom endstop input numbers in the M585 command (probe tool) don't work
 - On the 12864 display, if the gcodes folder on the SD card includes file whose names start with '.', then when when you select a file to print the wrong file may be printed
 
 New features/changed behaviour:
