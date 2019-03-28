@@ -66,6 +66,23 @@ DEFINE_GET_OBJECT_MODEL_TABLE(GCodes)
 
 #endif
 
+// Set up some default values in the move buffer for special moves, e.g. for Z probing and firmware retraction
+void GCodes::RawMove::SetDefaults(size_t firstDriveToZero)
+{
+	moveType = 0;
+	isCoordinated = false;
+	usingStandardFeedrate = false;
+	usePressureAdvance = false;
+	endStopsToCheck = 0;
+	filePos = noFilePosition;
+	xAxes = DefaultXAxisMapping;
+	yAxes = DefaultYAxisMapping;
+	for (size_t drive = firstDriveToZero; drive < MaxTotalDrivers; ++drive)
+	{
+		coords[drive] = 0.0;			// clear extrusion
+	}
+}
+
 #ifdef SERIAL_AUX_DEVICE
 // Support for emergency stpo form PanelDue
 bool GCodes::emergencyStopCommanded = false;
@@ -139,7 +156,6 @@ void GCodes::Init()
 
 	Reset();
 
-	distanceScale = 1.0;
 	virtualExtruderPosition = rawExtruderTotal = 0.0;
 	for (float& f : rawExtruderTotalByDrive)
 	{
@@ -167,6 +183,7 @@ void GCodes::Init()
 	lastAuxStatusReportType = -1;						// no status reports requested yet
 
 	laserMaxPower = DefaultMaxLaserPower;
+	laserPowerSticky = false;
 
 	heaterFaultState = HeaterFaultState::noFault;
 	heaterFaultTime = 0;
@@ -241,14 +258,18 @@ void GCodes::Reset()
 
 	ClearMove();
 
-#if SUPPORT_ASYNC_MOVES
-	auxMoveAvailable = false;
-#endif
-
 	for (float& f : currentBabyStepOffsets)
 	{
 		f = 0.0;										// clear babystepping before calling ToolOffsetInverseTransform
 	}
+
+#if SUPPORT_ASYNC_MOVES
+	auxMoveAvailable = false;
+	for (float& f : hiddenBabyStepOffsets)
+	{
+		f = 0.0;										// clear babystepping before calling ToolOffsetInverseTransform
+	}
+#endif
 
 	currentZHop = 0.0;									// clear this before calling ToolOffsetInverseTransform
 	lastPrintingMoveHeight = -1.0;
@@ -580,7 +601,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					// Deal with feed rate
 					if (gb.Seen(feedrateLetter))
 					{
-						const float rate = gb.GetFValue() * distanceScale;
+						const float rate = gb.ConvertDistance(gb.GetFValue());
 						gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
 					}
 					moveBuffer.feedRate = gb.MachineState().feedRate;
@@ -624,7 +645,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					// Deal with feed rate
 					if (gb.Seen(feedrateLetter))
 					{
-						const float rate = gb.GetFValue() * distanceScale;
+						const float rate = gb.ConvertDistance(gb.GetFValue());
 						gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
 					}
 					moveBuffer.feedRate = gb.MachineState().feedRate;
@@ -666,7 +687,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					// Deal with feed rate
 					if (gb.Seen(feedrateLetter))
 					{
-						const float rate = gb.GetFValue() * distanceScale;
+						const float rate = gb.ConvertDistance(gb.GetFValue());
 						gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
 					}
 					moveBuffer.feedRate = gb.MachineState().feedRate;
@@ -2307,7 +2328,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 				buf.copy("M116\nM290");
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
-					buf.catf(" %c%.3f", axisLetters[axis], (double)currentBabyStepOffsets[axis]);
+					buf.catf(" %c%.3f", axisLetters[axis], (double)GetTotalBabyStepOffset(axis));
 				}
 				buf.cat('\n');
 				ok = f->Write(buf.c_str());								// write baby stepping offsets
@@ -2392,7 +2413,11 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 void GCodes::Diagnostics(MessageType mtype)
 {
 	platform.Message(mtype, "=== GCodes ===\n");
+#if SUPPORT_ASYNC_MOVES
+	platform.MessageF(mtype, "Segments left: %u, aux move: %s\n", segmentsLeft, (auxMoveAvailable) ? "yes" : "no");
+#else
 	platform.MessageF(mtype, "Segments left: %u\n", segmentsLeft);
+#endif
 	platform.MessageF(mtype, "Stack records: %u allocated, %u in use\n", GCodeMachineState::GetNumAllocated(), GCodeMachineState::GetNumInUse());
 	const GCodeBuffer * const movementOwner = resourceOwners[MoveResource];
 	platform.MessageF(mtype, "Movement lock held by %s\n", (movementOwner == nullptr) ? "null" : movementOwner->GetIdentity());
@@ -2465,7 +2490,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 	{
 		if (gb.Seen(feedrateLetter))
 		{
-			const float rate = gb.GetFValue() * distanceScale;
+			const float rate = gb.ConvertDistance(gb.GetFValue());
 			gb.MachineState().feedRate = (moveBuffer.moveType == 0)
 						? rate * speedFactor * (0.01 * SecondsToMinutes)
 						: rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
@@ -2510,7 +2535,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 			if (mc == 1)
 			{
 				// There may be multiple extruders present but only one value has been specified, so use mixing
-				const float moveArg = eMovement[0] * distanceScale;
+				const float moveArg = gb.ConvertDistance(eMovement[0]);
 				float requestedExtrusionAmount;
 				if (gb.MachineState().drivesRelative)
 				{
@@ -2560,7 +2585,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb)
 					for (size_t eDrive = 0; eDrive < eMoveCount; eDrive++)
 					{
 						const int drive = tool->Drive(eDrive);
-						float extrusionAmount = eMovement[eDrive] * distanceScale;
+						float extrusionAmount = gb.ConvertDistance(eMovement[eDrive]);
 						if (extrusionAmount != 0.0)
 						{
 							if (gb.MachineState().volumetricExtrusion)
@@ -2664,9 +2689,13 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		{
 			moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
 		}
-		else
+		else if (laserPowerSticky)
 		{
 			// leave the laser PWM alone because this is what LaserWeb expects
+		}
+		else
+		{
+			moveBuffer.laserPwmOrIoBits.laserPwm = 0;
 		}
 	}
 #endif
@@ -2712,7 +2741,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 			}
 
 			SetBit(axesMentioned, axis);
-			const float moveArg = gb.GetFValue() * distanceScale;
+			const float moveArg = gb.ConvertDistance(gb.GetFValue());
 			if (moveBuffer.moveType != 0 || (rp == nullptr && gb.MachineState().g53Active))
 			{
 				if (gb.MachineState().axesRelative)
@@ -2859,7 +2888,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	float xParam, yParam;
 	if (gb.Seen('X'))
 	{
-		xParam = gb.GetFValue() * distanceScale;
+		xParam = gb.ConvertDistance(gb.GetFValue());
 	}
 	else
 	{
@@ -2868,7 +2897,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 
 	if (gb.Seen('Y'))
 	{
-		yParam = gb.GetFValue() * distanceScale;
+		yParam = gb.ConvertDistance(gb.GetFValue());
 	}
 	else
 	{
@@ -2879,7 +2908,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	if (gb.Seen('R'))
 	{
 		// We've been given a radius, which takes precedence over I and J parameters
-		const float rParam = gb.GetFValue() * distanceScale;
+		const float rParam = gb.ConvertDistance(gb.GetFValue());
 
 		// Get the XY coordinates of the midpoints between the start and end points X and Y distances between start and end points
 		float deltaX, deltaY;
@@ -2915,7 +2944,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	{
 		if (gb.Seen('I'))
 		{
-			iParam = gb.GetFValue() * distanceScale;
+			iParam = gb.ConvertDistance(gb.GetFValue());
 		}
 		else
 		{
@@ -2924,7 +2953,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 
 		if (gb.Seen('J'))
 		{
-			jParam = gb.GetFValue() * distanceScale;
+			jParam = gb.ConvertDistance(gb.GetFValue());
 		}
 		else
 		{
@@ -2967,7 +2996,7 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
-			const float axisParam = gb.GetFValue() * distanceScale;
+			const float axisParam = gb.ConvertDistance(gb.GetFValue());
 			if (axesRelative)
 			{
 				currentUserPosition[axis] += axisParam;
@@ -3028,9 +3057,13 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		{
 			moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
 		}
-		else
+		else if (laserPowerSticky)
 		{
 			// leave the laser PWM alone because this is what LaserWeb expects
+		}
+		else
+		{
+			moveBuffer.laserPwmOrIoBits.laserPwm = 0;
 		}
 	}
 # if SUPPORT_IOBITS
@@ -4966,6 +4999,16 @@ bool GCodes::AllAxesAreHomed() const
 	return (axesHomed & allAxes) == allAxes;
 }
 
+// Tell us that the axis is now homed
+void GCodes::SetAxisIsHomed(unsigned int axis)
+{
+	SetBit(axesHomed, axis);
+#if SUPPORT_ASYNC_MOVES
+	currentBabyStepOffsets[axis] += hiddenBabyStepOffsets[axis];
+	hiddenBabyStepOffsets[axis] = 0.0;
+#endif
+}
+
 // Write the config-override file returning true if an error occurred
 GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const
 {
@@ -5200,18 +5243,7 @@ OutputBuffer *GCodes::GenerateJsonStatusResponse(int type, int seq, ResponseSour
 // Set up some default values in the move buffer for special moves, e.g. for Z probing and firmware retraction
 void GCodes::SetMoveBufferDefaults()
 {
-	moveBuffer.moveType = 0;
-	moveBuffer.isCoordinated = false;
-	moveBuffer.usingStandardFeedrate = false;
-	moveBuffer.usePressureAdvance = false;
-	moveBuffer.endStopsToCheck = 0;
-	moveBuffer.filePos = noFilePosition;
-	moveBuffer.xAxes = DefaultXAxisMapping;
-	moveBuffer.yAxes = DefaultYAxisMapping;
-	for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; ++drive)
-	{
-		moveBuffer.coords[drive] = 0.0;			// clear extrusion
-	}
+	moveBuffer.SetDefaults(numTotalAxes);
 }
 
 // Resource locking/unlocking

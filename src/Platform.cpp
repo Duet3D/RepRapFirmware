@@ -74,12 +74,13 @@
 #endif
 
 #include <climits>
+#include <utility>					// for std::swap
 
 extern uint32_t _estack;			// defined in the linker script
 
 #if !defined(HAS_LWIP_NETWORKING) || !defined(HAS_WIFI_NETWORKING) || !defined(HAS_CPU_TEMP_SENSOR) || !defined(HAS_HIGH_SPEED_SD) \
  || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_VREF_MONITOR) || !defined(ACTIVE_LOW_HEAT_ON) \
- || !defined(SUPPORT_NONLINEAR_EXTRUSION)
+ || !defined(SUPPORT_NONLINEAR_EXTRUSION) || !defined(SUPPORT_ASYNC_MOVES)
 # error Missing feature definition
 #endif
 
@@ -195,10 +196,16 @@ void Platform::Init()
 
 	SetBoardType(BoardType::Auto);
 
-#ifdef PCCB
+#if defined(PCCB_10) || defined(PCCB_08_X5)
+	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
+#endif
+
+#if defined(PCCB_08) || defined(PCCB_08_X5)
 	// Make sure the on-board TMC22xx drivers are disabled
 	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+#endif
 
+#if defined(PCCB)
 	// Ensure that the main LEDs are turned off.
 	// The main LED output is active low, just like a heater on the Duet 2 series.
 	// The secondary LED control dims the LED via the external controller when the output is high. So both outputs must be initialised high.
@@ -2516,23 +2523,25 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 		(void)RepRap::DoDivide(1, 0);					// call function in another module so it can't be optimised away
 		break;
 
-	case (int)DiagnosticTestType::UnalignedMemoryAccess:	// do an unaligned memory access to test exception handling
+	case (int)DiagnosticTestType::UnalignedMemoryAccess: // do an unaligned memory access to test exception handling
 		deliberateError = true;
 		SCB->CCR |= SCB_CCR_UNALIGN_TRP_Msk;			// by default, unaligned memory accesses are allowed, so change that
-		__DMB();										// make sure that instruction completes, don't allow prefetch
+		__DSB();										// make sure that instruction completes
+		__DMB();										// don't allow prefetch
 		(void)*(reinterpret_cast<const volatile char*>(dummy) + 1);
 		break;
 
 	case (int)DiagnosticTestType::BusFault:
-		deliberateError = true;
 		// Read from the "Undefined (Abort)" area
 #if SAME70
 		// FIXME: The SAME70 provides an MPU, maybe we should configure it as well?
 		// I guess this can wait until we have the RTOS working though.
 		Message(WarningMessage, "There is no abort area on the SAME70");
 #elif SAM4E || SAM4S
+		deliberateError = true;
 		(void)*(reinterpret_cast<const volatile char*>(0x20800000));
 #elif SAM3XA
+		deliberateError = true;
 		(void)*(reinterpret_cast<const volatile char*>(0x20200000));
 #elif __LPC17xx__
 		Message(WarningMessage, "TODO:: Skipping test on LPC");//????
@@ -3502,6 +3511,8 @@ bool Platform::FansHardwareInverted(size_t fanNumber) const
 	// The cooling fan output pin gets inverted on a Duet 0.6 or 0.7.
 	// We allow a second fan controlled by a mosfet on the PC4 pin, which is not inverted.
 	return fanNumber == 0 && (board == BoardType::Duet_06 || board == BoardType::Duet_07);
+#elif defined(PCCB_10)
+	return fanNumber == 5;
 #else
 	return false;
 #endif
@@ -3512,7 +3523,9 @@ void Platform::InitFans()
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
 		fans[i].Init(COOLING_FAN_PINS[i], Fan0LogicalPin + i, FansHardwareInverted(i),
-#ifdef PCCB
+#if defined(PCCB_10)
+						(i == 5) ? 25000 : DefaultFanPwmFreq				// PCCB fan 5 has 4-wire fan connectors for Intel-spec PWM fans
+#elif defined(PCCB_08) || defined(PCCB_08_X5)
 						(i == 3) ? 25000 : DefaultFanPwmFreq				// PCCB fan 3 has 4-wire fan connectors for Intel-spec PWM fans
 #else
 						DefaultFanPwmFreq
@@ -4131,8 +4144,10 @@ void Platform::SetBoardType(BoardType bt)
 		board = BoardType::RADDS_15;
 #elif defined(__ALLIGATOR__)
 		board = BoardType::Alligator_2;
-#elif defined(PCCB)
-		board = BoardType::PCCB_10;
+#elif defined(PCCB_10)
+		board = BoardType::PCCB_v10;
+#elif defined(PCCB_08) || defined(PCCB_08_X5)
+		board = BoardType::PCCB_v08;
 #elif defined(__LPC17xx__)
 		board = BoardType::Lpc;
 #else
@@ -4177,8 +4192,10 @@ const char* Platform::GetElectronicsString() const
 	case BoardType::RADDS_15:				return "RADDS 1.5";
 #elif defined(__ALLIGATOR__)
 	case BoardType::Alligator_2:			return "Alligator r2";
-#elif defined(PCCB)
-	case BoardType::PCCB_10:				return "PCCB 1.0";
+#elif defined(PCCB_10)
+	case BoardType::PCCB_v10:				return "PC001373";
+#elif defined(PCCB_08) || defined(PCCB_08_X5)
+	case BoardType::PCCB_v08:				return "PCCB 0.8";
 #elif defined(__LPC17xx__)
 	case BoardType::Lpc:					return LPC_ELECTRONICS_STRING;
 #else
@@ -4214,8 +4231,10 @@ const char* Platform::GetBoardString() const
 	case BoardType::RADDS_15:				return "radds15";
 #elif defined(__ALLIGATOR__)
 	case BoardType::Alligator_2:			return "alligator2";
-#elif defined(PCCB)
-	case BoardType::PCCB_10:				return "pccb10";
+#elif defined(PCCB_10)
+	case BoardType::PCCB_v10:				return "pc001373";
+#elif defined(PCCB_08) || defined(PCCB_08_X5)
+	case BoardType::PCCB_v08:				return "pccb08";
 #elif defined(__LPC17xx__)
 	case BoardType::Lpc:					return LPC_BOARD_STRING;
 #else
@@ -4594,7 +4613,13 @@ float Platform::GetCurrentPowerVoltage() const
 // TMC driver temperatures
 float Platform::GetTmcDriversTemperature(unsigned int board) const
 {
+#ifdef PCCB_10
+	const uint16_t mask = (board == 0)
+							? ((1u << 2) - 1)						// drivers 0, 1 are on-board
+								: ((1u << 5) - 1) << 2;				// drivers 2-7 or on the DueX5
+#else
 	const uint16_t mask = ((1u << 5) - 1) << (5 * board);			// there are 5 drivers on each board
+#endif
 	return ((temperatureShutdownDrivers & mask) != 0) ? 150.0
 			: ((temperatureWarningDrivers & mask) != 0) ? 100.0
 				: 0.0;

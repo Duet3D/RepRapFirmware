@@ -282,6 +282,13 @@ void HangprinterKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *nor
 	}
 }
 
+// Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
+// This is called to determine whether we can babystep the specified axis independently of regular motion.
+AxesBitmap HangprinterKinematics::GetLinearAxes() const
+{
+	return 0;
+}
+
 // Write the parameters that are set by auto calibration to a file, returning true if success
 bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const
 {

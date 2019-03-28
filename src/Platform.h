@@ -125,8 +125,10 @@ enum class BoardType : uint8_t
 	RADDS_15 = 1
 #elif defined(__ALLIGATOR__)
 	Alligator_2 = 1
-#elif defined(PCCB)
-	PCCB_10 = 1
+#elif defined(PCCB_10)
+	PCCB_v10 = 1
+#elif defined(PCCB_08) || defined(PCCB_08_X5)
+	PCCB_v08 = 1
 #else
 # error Unknown board
 #endif

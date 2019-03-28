@@ -22,7 +22,7 @@ bool SoftTimer::ScheduleCallback(Ticks when, Callback cb, void *param)
 	callback = cb;
 	cbParam = param;
 
-	const irqflags_t flags = cpu_irq_save();
+	const uint32_t baseprio = ChangeBasePriority(NvicPriorityStep);
 	const Ticks now = GetTimerTicksNow();
 	const int32_t howSoon = (int32_t)(when - now);
 	SoftTimer** ppst = const_cast<SoftTimer**>(&pendingList);
@@ -31,7 +31,7 @@ bool SoftTimer::ScheduleCallback(Ticks when, Callback cb, void *param)
 		// No other callbacks are scheduled, or this one is due earlier than the first existing one
 		if (StepTimer::ScheduleSoftTimerInterrupt(when))
 		{
-			cpu_irq_restore(flags);
+			RestoreBasePriority(baseprio);
 			return true;
 		}
 	}
@@ -45,14 +45,14 @@ bool SoftTimer::ScheduleCallback(Ticks when, Callback cb, void *param)
 
 	next = *ppst;
 	*ppst = this;
-	cpu_irq_restore(flags);
+	RestoreBasePriority(baseprio);
 	return false;
 }
 
 // Cancel any scheduled callback for this timer. Harmless if there is no callback scheduled.
 void SoftTimer::CancelCallback()
 {
-	const irqflags_t flags = cpu_irq_save();
+	const uint32_t baseprio = ChangeBasePriority(NvicPriorityStep);
 	for (SoftTimer** ppst = const_cast<SoftTimer**>(&pendingList); *ppst != nullptr; ppst = &((*ppst)->next))
 	{
 		if (*ppst == this)
@@ -61,7 +61,7 @@ void SoftTimer::CancelCallback()
 			break;
 		}
 	}
-	cpu_irq_restore(flags);
+	RestoreBasePriority(baseprio);
 }
 
 // Get the current tick count

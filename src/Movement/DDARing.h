@@ -26,10 +26,10 @@ public:
 	bool AddStandardMove(GCodes::RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
 	bool AddSpecialMove(float feedRate, const float coords[]);
 #if SUPPORT_ASYNC_MOVES
-	bool AddAsyncMove(float feedRate, const float coords[]);
+	bool AddAsyncMove(float feedRate, float reqAcceleration, const float coords[]);
 #endif
 
-	void Spin(uint8_t simulationMode, unsigned int idleCount);					// Try to process moves in the ring, returning true if the ring is idle
+	void Spin(uint8_t simulationMode, bool shouldStartMove);					// Try to process moves in the ring, returning true if the ring is idle
 	bool IsIdle() const;														// Return true if this DDA ring is idle
 
 	float PushBabyStepping(size_t axis, float amount);							// Try to push some babystepping through the lookahead queue, returning the amount pushed
@@ -61,7 +61,7 @@ public:
 	int32_t GetEndPoint(size_t drive) const { return liveEndPoints[drive]; } 	// Get the current position of a motor
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const; // Get the current position in untransformed coords
 	void SetPositions(const float move[MaxTotalDrivers]);						// Force the machine coordinates to be these
-	void AdjustMotorPositions(const float_t adjustment[], size_t numMotors);	// Perform motor endpoint adjustment
+	void AdjustMotorPositions(const float adjustment[], size_t numMotors);		// Perform motor endpoint adjustment
 	void LiveCoordinates(float m[MaxTotalDrivers]);								// Gives the last point at the end of the last complete DDA transformed to user coords
 	void SetLiveCoordinates(const float coords[MaxTotalDrivers]);				// Force the live coordinates (see above) to be these
 	void ResetExtruderPositions();												// Resets the extrusion amounts of the live coordinates
@@ -73,12 +73,11 @@ public:
 
 	void RecordLookaheadError() { ++numLookaheadErrors; }						// Record a lookahead error
 
-	void Diagnostics(MessageType mtype);
-
-//	const DDA *GetCurrentDDA() const { return currentDda; }						// Return the DDA of the currently-executing move
+	void Diagnostics(MessageType mtype, const char *prefix);
 
 private:
 	void StartNextMove(Platform& p, uint32_t startTime) __attribute__ ((hot));	// Start the next move, returning true if Step() needs to be called immediately
+	void PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode);
 
 	DDA* volatile currentDda;
 	DDA* addPointer;
@@ -108,7 +107,7 @@ private:
 };
 
 // Start the next move. Return true if the
-// Must be called with base priority greater than the step interrupt, to avoid a race with the step ISR.
+// Must be called with base priority greater than or equal to the step interrupt, to avoid a race with the step ISR.
 inline void DDARing::StartNextMove(Platform& p, uint32_t startTime)
 pre(ddaRingGetPointer->GetState() == DDA::frozen)
 {
@@ -127,13 +126,11 @@ pre(ddaRingGetPointer->GetState() == DDA::frozen)
 }
 
 #if HAS_SMART_DRIVERS
-
 inline uint32_t DDARing::GetStepInterval(size_t axis, uint32_t microstepShift) const
 {
 	const DDA * const cdda = currentDda;		// capture volatile variable
 	return (cdda != nullptr) ? cdda->GetStepInterval(axis, microstepShift) : 0;
 }
-
 #endif
 
 // Return the time that the next step is due

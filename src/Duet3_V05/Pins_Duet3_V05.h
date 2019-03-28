@@ -24,6 +24,7 @@ const size_t NumFirmwareUpdateModules = 1;
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
+#define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
@@ -106,9 +107,9 @@ constexpr Pin END_STOP_PINS[NumEndstops] = { PORTD_PIN(30), PORTE_PIN(4), PORTA_
 // Heater and thermistors
 constexpr Pin HEAT_ON_PINS[NumHeaters] = { PORTA_PIN(7), PORTA_PIN(24), PORTA_PIN(16), PORTA_PIN(11) };
 
-// Cooling fans. The last one (OUT_10) is the servo connector, not a real fan.
-constexpr size_t NUM_FANS = 7;
-constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { PORTA_PIN(15), PORTC_PIN(5), PORTA_PIN(8), PORTC_PIN(11), PORTC_PIN(8), PORTA_PIN(12), PORTC_PIN(23) };
+// Cooling fans
+constexpr size_t NUM_FANS = 6;
+constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { PORTA_PIN(15), PORTC_PIN(5), PORTA_PIN(8), PORTC_PIN(11), PORTC_PIN(8), PORTA_PIN(12) };
 
 constexpr Pin Z_PROBE_PIN = PORTE_PIN(3);		// IO8
 constexpr Pin Z_PROBE_MOD_PIN = PORTE_PIN(1);	// IO8_OUT
@@ -148,7 +149,7 @@ constexpr Pin ATX_POWER_PIN = PORTA_PIN(10);
 // Analogue pin numbers
 constexpr Pin PowerMonitorVinDetectPin = PORTA_PIN(20);
 
-constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 voltage divider (TBD)
+constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;			// we use an 11:1 voltage divider (TBD)
 
 constexpr Pin VssaSensePin = PORTC_PIN(13);
 constexpr Pin VrefSensePin = PORTE_PIN(0);
@@ -157,7 +158,7 @@ constexpr Pin VrefSensePin = PORTE_PIN(0);
 constexpr Pin DiagPin = PORTC_PIN(20);
 
 // SD cards
-constexpr size_t NumSdCards = 1;						// actually 0 cards, but 0 probably won't work yet
+constexpr size_t NumSdCards = 1;								// actually 0 cards, but 0 probably won't work yet
 constexpr Pin SdCardDetectPins[1] = { NoPin };
 constexpr Pin SdWriteProtectPins[1] = { NoPin };
 constexpr Pin SdSpiCSPins[1] = { NoPin };
@@ -172,9 +173,14 @@ constexpr Pin PhyResetPin = PORTD_PIN(11);
 // This is the mapping from logical pins 60+ to firmware pin numbers
 constexpr Pin SpecialPinMap[] =
 {
+	PORTB_PIN(7), PORTB_PIN(6), PORTC_PIN(14), PORTA_PIN(3),	// IO_0_OUT - IO_3_OUT
+	PORTA_PIN(3), PORTA_PIN(26), PORTA_PIN(0), PORTD_PIN(26),	// IO_4_OUT - IO_7_OUT (note IO_5_OUT not functional on prototypes)
+	PORTD_PIN(16), PORTD_PIN(15), PORTD_PIN(27), PORTC_PIN(22),	// U0_CS0 - U0_CS3
+	PORTC_PIN(23),												// Servo
+	PORTE_PIN(2)												// RPi data ready, for testing only (remove this for production)
 };
-constexpr Pin DueX5GpioPinMap[] = {};				// TBD
-constexpr int HighestLogicalPin = 50;										// highest logical pin number on this electronics
+
+constexpr int HighestLogicalPin = 73;							// highest logical pin number on this electronics
 
 // SAME70 Flash locations
 // These are designed to work with 1Mbyte flash processors as well as 2Mbyte

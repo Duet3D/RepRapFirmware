@@ -315,7 +315,7 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 				break;
 
 			case 21: // Z baby-step
-				currentValue = reprap.GetGCodes().GetBabyStepOffset(Z_AXIS);
+				currentValue = reprap.GetGCodes().GetTotalBabyStepOffset(Z_AXIS);
 				break;
 
 			// Platform's IP address is the "planned", Network's IP address is the "actual"

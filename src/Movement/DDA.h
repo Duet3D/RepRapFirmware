@@ -44,7 +44,7 @@ public:
 	bool InitStandardMove(DDARing& ring, GCodes::RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
 	bool InitLeadscrewMove(DDARing& ring, float feedrate, const float amounts[MaxTotalDrivers]);		// Set up a leadscrew motor move
 #if SUPPORT_ASYNC_MOVES
-	bool InitAsyncMove(DDARing& ring, float feedrate, const float amounts[MaxTotalDrivers]);			// Set up an async move
+	bool InitAsyncMove(DDARing& ring, float feedrate, float reqAcceleration, const float amounts[MaxTotalDrivers]);			// Set up an async move
 #endif
 
 	void Start(Platform& p, uint32_t tim) __attribute__ ((hot));			// Start executing the DDA, i.e. move the move.
@@ -109,8 +109,8 @@ public:
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const;	// Get the current full step interval for this axis or extruder
 #endif
 
-	void DebugPrint() const;												// print the DDA only
-	void DebugPrintAll() const;												// print the DDA and active DMs
+	void DebugPrint(const char *tag) const;									// print the DDA only
+	void DebugPrintAll(const char *tag) const;								// print the DDA and active DMs
 
 	// Note on the following constant:
 	// If we calculate the step interval on every clock, we reach a point where the calculation time exceeds the step interval.
@@ -123,18 +123,22 @@ public:
 	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
 	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
+	static constexpr uint32_t HiccupTime = 10;											// how long we hiccup for
 #elif SAM4E || SAM4S
 	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
 	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
+	static constexpr uint32_t HiccupTime = 10;											// how long we hiccup for
 #elif __LPC17xx__
     static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000;		// the smallest sensible interval between calculations (40us) in step timer clocks
     static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
     static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
+	static constexpr uint32_t HiccupTime = 10;											// how long we hiccup for
 #else
 	static constexpr uint32_t MinCalcIntervalDelta = (60 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (60us) in step timer clocks
 	static constexpr uint32_t MinCalcIntervalCartesian = (60 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t MinInterruptInterval = 4;									// about 6us minimum interval between interrupts, in step clocks
+	static constexpr uint32_t HiccupTime = 8;											// how long we hiccup for
 #endif
 	static constexpr uint32_t MaxStepInterruptTime = 10 * MinInterruptInterval;			// the maximum time we spend looping in the ISR , in step clocks
 	static constexpr uint32_t WakeupTime = StepTimer::StepClockRate/10000;				// stop resting 100us before the move is due to end
@@ -196,7 +200,8 @@ private:
 					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
 					 isNonPrintingExtruderMove : 1,	// True if this move is a fast extruder-only move, probably a retract/re-prime
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
-					 usesEndstops : 1;				// True if this move monitors endstops of Z probe
+					 usesEndstops : 1,				// True if this move monitors endstops of Z probe
+					 controlLaser : 1;				// True if this move controls the laser or iobits
 		};
 		uint16_t all;								// so that we can print all the flags at once for debugging
 	} flags;

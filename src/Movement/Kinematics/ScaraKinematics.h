@@ -44,6 +44,7 @@ public:
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const override;
 	bool IsContinuousRotationAxis(size_t axis) const override;
+	AxesBitmap GetLinearAxes() const override;
 
 private:
 	static constexpr float DefaultSegmentsPerSecond = 100.0;
@@ -66,7 +67,7 @@ private:
 	float distalArmLength;
 	float thetaLimits[2];							// minimum proximal joint angle
 	float psiLimits[2];								// minimum distal joint angle
-	float crosstalk[3];								// proximal to distal, proximal to X and distal to Z crosstalk
+	float crosstalk[3];								// proximal to distal, proximal to Z and distal to Z crosstalk
 	float xOffset;									// where bed X=0 is relative to the proximal joint
 	float yOffset;									// where bed Y=0 is relative to the proximal joint
 	float requestedMinRadius;						// requested minimum radius

@@ -1,6 +1,45 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.03beta3
+=================
+
+Upgrade notes:
+- There has been extensive refactoring of the step pulse generation code in this version. Because of this, we suggest that you do not use this firmware for long-running jobs until we all have more experience with it.
+- Tool changers, IDEX printers and similar using tpre#.g and tpost#.g files: tool offsets are now applied within the tpre#.g and tpost#.g macros.
+- Laser mode: for safety, the G1 S parameter is no longer sticky by default. You can make it sticky by adding parameter S1 to the M452 command.
+- Delta printers with more than 3 towers: you may need to adjust the positions of endstop switches for additional carriages, because an error in earlier firmware versions causes the homed carriage heights to be calculated incorrectly.
+- nanoDLP users: an empty macro file M650.g must be created in /sys, and file peel-move.g must be renamed to M651.g
+- See also the upgrade notes for earlier 2.03 beta versions.
+
+Known issues:
+- Custom endstop input numbers in the M585 command (probe tool) don't work
+
+New features/changed behaviour:
+- M505 (set SD card system folder) is now implemented
+- M470 and M471 commands are now implemented (thanks wilriker)
+- On deltas with more than 3 towers, M666 can be used to set endstop corrections for all towers. The additional towers must be named UVW.
+- The M291 command no longer locks movement if no axis jog buttons in that command are enabled (https://forum.duet3d.com/topic/8988/wishlist-interrupt-tool-change-from-a-trigger/16)
+- Tool offsets are applied within the tpre#.g and tpost#.g macros
+- One the Duet 06/085 it is now possible to define 2 additional fans. The M106 A parameter can be used to map them to unused heater channels.
+- When changing pressure advance, movement is stopped momentarily to avoid sudden under- or over-extrusion (https://forum.duet3d.com/topic/9140/extruder-behaves-strangle-when-disabling-pressure-advance/10)
+- Baby stepping axes other than Z is now supported, however the current implementation doesn't apply it until all moves already in the pipeline have been completed (https://forum.duet3d.com/topic/8015/change-z-babystepping-to-y-babystepping-for-belt-printers/14)
+- G20 and G21 inch/mm unit setting commands are now applied per input channel and the settings are pushed/popped
+- If you try to use a G- or M-code that the firmware doesn't recognise, it will try to run a macro file of that name. For example, command M650 tries to run /sys/M650.g.
+- M650 and M651 are no longer recognised, unless you create macros M650.g and M651.g
+- The heater tuning timeouts have been increased to 30 minutes for bed and chamber heaters (was 20 minutes) and 7 minutes for extruder heaters (was 5 minutes)
+
+Bug fixes:
+- On the 12864 display on the Duet Maestro, if the gcodes folder contained any files with names starting '.' or '..' (not counting the current and parent directories), then when selecting a file to print the wrong file might be selected
+- HttpResponder fix to better handle low buffer space situations (thanks sdavi)
+- If axis scaling and baby stepping were both used, then tool offsets and workplace coordinate offsets were not correctly accounted for when converting machine position to user position
+- In laser and CNC mode, limit checking was being applied to move types other than zero (https://forum.duet3d.com/topic/9203/laser-mode-endstop-limit-and-homing/4)
+- In laser and CNC modes, under certain conditions (in particular, when using non-rational steps/mm values) out-of-limits messages might be reported when attempting movement after homing (https://forum.duet3d.com/topic/9363/m453-issue-after-homing)
+- Running G30 P0 X0 Y0 Z-9999 S-1 sometimes reported the deviation as 'nan' instead of 0.0
+- In earlier 2.03beta versions, if you auto-calibrated a delta printer then the motor positions were slightly wrong afterwards until you homed the printer
+- On delta printers with more than 3 towers, the homed height calculation for additional towers used the Y coordinate incorrectly.
+- If you used M141 to define a chamber heater using a heater number other than 0 or 1, the firmware crashed
+
 Version 2.03beta2
 =================
 
@@ -9,7 +48,7 @@ Upgrade notes:
 - Important! See 2.03beta1 upgrade notes too.
 
 Known issues:
-- Custom endstop input numbers in the M575 command (probe tool) don't work
+- Custom endstop input numbers in the M585 command (probe tool) don't work
 - On the 12864 display, if the gcodes folder on the SD card includes file whose names start with '.', then when when you select a file to print the wrong file may be printed
 
 New features/changed behaviour:

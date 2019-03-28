@@ -96,7 +96,7 @@ void DDARing::RecycleDDAs()
 		{
 			if (reprap.Debug(moduleMove))
 			{
-				checkPointer->DebugPrintAll();
+				checkPointer->DebugPrintAll("rd");
 			}
 			++stepErrors;
 			reprap.GetPlatform().LogError(ErrorCode::BadMove);
@@ -165,9 +165,9 @@ bool DDARing::AddSpecialMove(float feedRate, const float coords[])
 #if SUPPORT_ASYNC_MOVES
 
 // Add an asynchronous motor move
-bool DDARing::AddAsyncMove(float feedRate, const float coords[])
+bool DDARing::AddAsyncMove(float feedRate,  float reqAcceleration, const float coords[])
 {
-	if (addPointer->InitAsyncMove(*this, feedRate, coords))
+	if (addPointer->InitAsyncMove(*this, feedRate, reqAcceleration, coords))
 	{
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
@@ -178,14 +178,14 @@ bool DDARing::AddAsyncMove(float feedRate, const float coords[])
 
 #endif
 
-void DDARing::Spin(uint8_t simulationMode, unsigned int idleCount)
+void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove)
 {
 	// If we are simulating, simulate completion of the current move.
 	// Do this here rather than at the end, so that when simulating, currentDda is non-null for most of the time and IsExtruding() returns the correct value
 	if (simulationMode != 0)
 	{
-		DDA *cdda;													// currentDda is declared volatile, so copy it in the next line
-		if (simulationMode != 0 && (cdda = currentDda) != nullptr)
+		DDA * const cdda = currentDda;								// currentDda is declared volatile, so copy it in the next line
+		if (cdda != nullptr)
 		{
 			simulationTime += (float)cdda->GetClocksNeeded()/StepTimer::StepClockRate;
 			cdda->Complete();
@@ -194,22 +194,14 @@ void DDARing::Spin(uint8_t simulationMode, unsigned int idleCount)
 	}
 
 	// See whether we need to kick off a move
-	if (currentDda == nullptr)
+	DDA *cdda = currentDda;											// capture volatile variable
+	if (cdda == nullptr)
 	{
 		// No DDA is executing, so start executing a new one if possible
-		if (!CanAddMove() || idleCount > 10)						// better to have a few moves in the queue so that we can do lookahead
+		if (shouldStartMove || !CanAddMove())
 		{
-			// Prepare one move and execute it. We assume that we will enter the next if-block before it completes, giving us time to prepare more moves.
+			PrepareMoves(getPointer, 0, 0, simulationMode);
 			DDA * const dda = getPointer;							// capture volatile variable
-			if (   dda->GetState() == DDA::provisional
-#if SUPPORT_CAN_EXPANSION
-				&& CanInterface::CanPrepareMove()
-#endif
-				&& DriveMovement::NumFree() >= (int)MaxTotalDrivers	// check that we won't run out of DMs
-			   )
-			{
-				dda->Prepare(simulationMode, extrusionPending);
-			}
 			if (dda->GetState() == DDA::frozen)
 			{
 				if (simulationMode != 0)
@@ -219,27 +211,26 @@ void DDARing::Spin(uint8_t simulationMode, unsigned int idleCount)
 				else
 				{
 					Platform& p = reprap.GetPlatform();
-					StartNextMove(p, StepTimer::GetInterruptClocks());	// start the next move
+					SetBasePriority(NvicPriorityStep);				// shut out step interrupt
+					StartNextMove(p, StepTimer::GetInterruptClocksInterruptsDisabled());	// start the next move
 					std::optional<uint32_t> nextInterruptTime = GetNextInterruptTime();
-					if (nextInterruptTime)
+					if (nextInterruptTime.has_value())
 					{
-//TODO problem here: the other ring may need an earlier interrupt!
 						if (StepTimer::ScheduleStepInterrupt(nextInterruptTime.value()))
 						{
 							Interrupt(p);
 						}
 					}
+					SetBasePriority(0);
 				}
 			}
 		}
 	}
-
-	DDA *cdda = currentDda;											// currentDda is volatile, so copy it
-	if (cdda != nullptr)
+	else
 	{
 		// See whether we need to prepare any moves. First count how many prepared or executing moves we have and how long they will take.
 		int32_t preparedTime = 0;
-		uint32_t preparedCount = 0;
+		unsigned int preparedCount = 0;
 		DDA::DDAState st;
 		while ((st = cdda->GetState()) == DDA::completed || st == DDA::executing || st == DDA::frozen)
 		{
@@ -248,30 +239,33 @@ void DDARing::Spin(uint8_t simulationMode, unsigned int idleCount)
 			cdda = cdda->GetNext();
 			if (cdda == addPointer)
 			{
-				break;
+				return;												// all moves are already prepared
 			}
 		}
 
-		// If the number of prepared moves will execute in less than the minimum time, prepare another move.
-		// Try to avoid preparing deceleration-only moves too early
-		while (st == DDA::provisional
-				&& preparedTime < (int32_t)UsualMinimumPreparedTime		// prepare moves one eighth of a second ahead of when they will be needed
-				&& preparedCount < numDdasInRing/2 - 1					// but don't prepare as much as half the ring
-			  )
-		{
-			if (   (cdda->IsGoodToPrepare() || preparedTime < (int32_t)AbsoluteMinimumPreparedTime)
+		PrepareMoves(cdda, preparedTime, preparedCount, simulationMode);
+	}
+}
+
+// Prepare some moves. moveTimeLeft is the total length remaining of moves that are already executing or prepared.
+void DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode)
+{
+	// If the number of prepared moves will execute in less than the minimum time, prepare another move.
+	// Try to avoid preparing deceleration-only moves too early
+	while (	  firstUnpreparedMove->GetState() == DDA::provisional
+		   && DriveMovement::NumFree() >= (int)MaxTotalDrivers		// check that we won't run out of DMs
+		   && moveTimeLeft < (int32_t)UsualMinimumPreparedTime		// prepare moves one eighth of a second ahead of when they will be needed
+		   && alreadyPrepared * 2 < numDdasInRing					// but don't prepare more than half the ring
+		   && (firstUnpreparedMove->IsGoodToPrepare() || moveTimeLeft < (int32_t)AbsoluteMinimumPreparedTime)
 #if SUPPORT_CAN_EXPANSION
-				&& CanInterface::CanPrepareMove()
+		   && CanInterface::CanPrepareMove()
 #endif
-			   )
-			{
-				cdda->Prepare(simulationMode, extrusionPending);
-			}
-			preparedTime += cdda->GetTimeLeft();
-			++preparedCount;
-			cdda = cdda->GetNext();
-			st = cdda->GetState();
-		}
+		  )
+	{
+		firstUnpreparedMove->Prepare(simulationMode, extrusionPending);
+		moveTimeLeft += firstUnpreparedMove->GetTimeLeft();
+		++alreadyPrepared;
+		firstUnpreparedMove = firstUnpreparedMove->GetNext();
 	}
 }
 
@@ -332,12 +326,14 @@ void DDARing::Interrupt(Platform& p)
 void DDARing::InsertHiccup(uint32_t delayClocks)
 {
 	DDA* const cdda = currentDda;					// capture volatile variable
-	cdda->InsertHiccup(delayClocks);
-	for (DDA *nextDda = cdda->GetNext(); nextDda->GetState() == DDA::frozen; nextDda = nextDda->GetNext())
+	if (cdda != nullptr)
 	{
-		nextDda->InsertHiccup(delayClocks);
+		cdda->InsertHiccup(delayClocks);
+		for (DDA *nextDda = cdda->GetNext(); nextDda->GetState() == DDA::frozen; nextDda = nextDda->GetNext())
+		{
+			nextDda->InsertHiccup(delayClocks);
+		}
 	}
-	// TODO tell CAN drivers about the hiccup
 }
 
 // This is called from the step ISR when the current move has been completed
@@ -358,13 +354,13 @@ void DDARing::CurrentMoveCompleted()
 
 int32_t DDARing::GetAccumulatedExtrusion(size_t extruder, size_t drive, bool& isPrinting)
 {
-	const irqflags_t flags = cpu_irq_save();
+	const uint32_t basepri = ChangeBasePriority(NvicPriorityStep);
 	const int32_t ret = extrusionAccumulators[extruder];
 	const DDA * const cdda = currentDda;						// capture volatile variable
 	const int32_t adjustment = (cdda == nullptr) ? 0 : cdda->GetStepsTaken(drive);
 	extrusionAccumulators[extruder] = -adjustment;
 	isPrinting = extrudersPrinting;
-	cpu_irq_restore(flags);
+	RestoreBasePriority(basepri);
 	return ret + adjustment;
 }
 
@@ -402,7 +398,7 @@ void DDARing::SetPositions(const float move[MaxTotalDrivers])
 }
 
 // Perform motor endpoint adjustment
-void DDARing::AdjustMotorPositions(const float_t adjustment[], size_t numMotors)
+void DDARing::AdjustMotorPositions(const float adjustment[], size_t numMotors)
 {
 	DDA * const lastQueuedMove = addPointer->GetPrevious();
 	const int32_t * const endCoordinates = lastQueuedMove->DriveCoordinates();
@@ -672,10 +668,10 @@ bool DDARing::LowPowerOrStallPause(RestorePoint& rp)
 
 #endif
 
-void DDARing::Diagnostics(MessageType mtype)
+void DDARing::Diagnostics(MessageType mtype, const char *prefix)
 {
-	reprap.GetPlatform().MessageF(mtype, "=== DDARing ===\nScheduled moves: %" PRIu32 ", completed moves: %" PRIu32 ", StepErrors: %u, LaErrors: %u, Underruns: %u, %u\n",
-		scheduledMoves, completedMoves, stepErrors, numLookaheadErrors, numLookaheadUnderruns, numPrepareUnderruns);
+	reprap.GetPlatform().MessageF(mtype, "=== %sDDARing ===\nScheduled moves: %" PRIu32 ", completed moves: %" PRIu32 ", StepErrors: %u, LaErrors: %u, Underruns: %u, %u\n",
+		prefix, scheduledMoves, completedMoves, stepErrors, numLookaheadErrors, numLookaheadUnderruns, numPrepareUnderruns);
 	stepErrors = numLookaheadUnderruns = numPrepareUnderruns = numLookaheadErrors = 0;
 }
 

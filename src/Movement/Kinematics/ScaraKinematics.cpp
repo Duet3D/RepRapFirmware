@@ -458,6 +458,13 @@ bool ScaraKinematics::IsContinuousRotationAxis(size_t axis) const
 	return axis < 2 && supportsContinuousRotation[axis];
 }
 
+// Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
+// This is called to determine whether we can babystep the specified axis independently of regular motion.
+AxesBitmap ScaraKinematics::GetLinearAxes() const
+{
+	return (crosstalk[1] == 0.0 && crosstalk[2] == 0.0) ? MakeBitmap<AxesBitmap>(Z_AXIS) : 0;
+}
+
 // Recalculate the derived parameters
 void ScaraKinematics::Recalc()
 {

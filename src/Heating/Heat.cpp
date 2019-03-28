@@ -323,7 +323,7 @@ bool Heat::IsBedHeater(int8_t heater) const
 
 void Heat::SetChamberHeater(size_t index, int8_t heater)
 {
-	const int chamberHeater = chamberHeaters[heater];
+	const int chamberHeater = chamberHeaters[index];
 	if (chamberHeater >= 0)
 	{
 		pids[chamberHeater]->SwitchOff();
