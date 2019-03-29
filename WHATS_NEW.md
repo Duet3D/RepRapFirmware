@@ -14,6 +14,7 @@ Upgrade notes:
 
 Known issues:
 - Custom endstop input numbers in the M585 command (probe tool) don't work
+- On the Duet 085, Fan 1 doesn't work
 
 New features/changed behaviour:
 - M505 (set SD card system folder) is now implemented
