@@ -9,7 +9,7 @@
 
 #include "GCodes.h"
 
-#include "GCodeBuffer.h"
+#include "GCodeBuffer/GCodeBuffer.h"
 #include "GCodeQueue.h"
 #include "Heating/Heat.h"
 #include "Movement/Move.h"
@@ -87,7 +87,8 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 	}
 
-	reply.printf("Bad command: %s", gb.Buffer());
+	reply.printf("Bad command: ");
+	gb.AppendFullCommand(reply);
 	HandleReply(gb, GCodeResult::error, reply.c_str());
 	return true;
 }
@@ -2150,7 +2151,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else if (seenD)
 			{
-				reply.printf("Extrusion factor override for extruder %" PRIi32 ": %.1f%%", extruder, (double)(extrusionFactors[extruder] * 100.0));
+				reply.printf("Extrusion factor override for extruder %" PRIu32 ": %.1f%%", extruder, (double)(extrusionFactors[extruder] * 100.0));
 			}
 			else
 			{
@@ -3322,7 +3323,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					gb.GetFloatArray(eVals, eCount, false);
 					if (eCount != tool->DriveCount())
 					{
-						reply.printf("Setting mix ratios - wrong number of E drives: %s", gb.Buffer());
+						reply.copy("Setting mix ratios - wrong number of E drives: ");
+						gb.AppendFullCommand(reply);
 					}
 					else
 					{

@@ -92,7 +92,7 @@ GCodeQueue::GCodeQueue() : freeItems(nullptr), queuedItems(nullptr)
 bool GCodeQueue::QueueCode(GCodeBuffer &gb)
 {
 	// Can we queue this code somewhere?
-	if (freeItems == nullptr || gb.CommandLength() > SHORT_GCODE_LENGTH - 1)
+	if (freeItems == nullptr || gb.DataLength() > BufferSizePerQueueItem)
 	{
 		return false;
 	}
@@ -202,7 +202,11 @@ void GCodeQueue::Diagnostics(MessageType mtype)
 		do
 		{
 			queueLength++;
-			reprap.GetPlatform().MessageF(mtype, "Queued '%s' for move %" PRIu32 "\n", item->code, item->executeAtMove);
+#if !HAS_LINUX_INTERFACE
+			// This may output binary gibberish if this code is stored in binary.
+			// We could restore this message by using GCodeBuffer::AppendFullCommand but there is probably no need to
+			reprap.GetPlatform().MessageF(mtype, "Queued '%s' for move %" PRIu32 "\n", item->data, item->executeAtMove);
+#endif
 		} while ((item = item->Next()) != nullptr);
 		reprap.GetPlatform().MessageF(mtype, "%d of %d codes have been queued.\n", queueLength, maxQueuedCodes);
 	}
@@ -213,15 +217,16 @@ void GCodeQueue::Diagnostics(MessageType mtype)
 void QueuedCode::AssignFrom(GCodeBuffer &gb)
 {
 	toolNumberAdjust = gb.GetToolNumberAdjust();
-	const size_t length = min<size_t>(gb.CommandLength(), ARRAY_SIZE(code) - 1);
-	memcpy(code, gb.CommandStart(), length);
-	code[length] = 0;
+
+	const size_t length = min<size_t>(gb.DataLength(), ARRAY_SIZE(data));
+	memcpy(data, gb.DataStart(), length);
+	dataLength = length;
 }
 
 void QueuedCode::AssignTo(GCodeBuffer *gb)
 {
 	gb->SetToolNumberAdjust(toolNumberAdjust);
-	gb->Put(code);
+	gb->Put(data, dataLength);
 }
 
 // End

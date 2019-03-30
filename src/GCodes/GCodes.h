@@ -432,9 +432,6 @@ private:
 #ifdef SERIAL_AUX_DEVICE
 	StreamGCodeInput* auxInput;											// ...for the GCodeBuffers below
 #endif
-#if HAS_LINUX_INTERFACE
-	NetworkGCodeInput* spiInput;										// ...for the GCodeBuffers below
-#endif
 
 	GCodeBuffer* gcodeSources[10];										// The various sources of gcodes
 

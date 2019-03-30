@@ -25,7 +25,8 @@
 
 #include "GCodes.h"
 
-#include "GCodeBuffer.h"
+#include "GCodeBuffer/GCodeBuffer.h"
+#include "GCodeBuffer/StringGCodeBuffer.h"
 #include "GCodeQueue.h"
 #include "Heating/Heat.h"
 #include "Heating/HeaterProtection.h"
@@ -40,7 +41,7 @@
 # include "FirmwareUpdater.h"
 #endif
 #if HAS_LINUX_INTERFACE
-# include "SAME70xpld/LinuxComm.h"
+# include <Linux/LinuxInterface.h>
 #endif
 
 #if SUPPORT_DOTSTAR_LED
@@ -101,37 +102,36 @@ GCodes::GCodes(Platform& p) :
 	isFlashing(false), fileBeingHashed(nullptr), lastWarningMillis(0), sdTimingFile(nullptr)
 {
 	fileInput = new FileGCodeInput();
-	fileGCode = new GCodeBuffer("file", GenericMessage, true);
+	fileGCode = new StringGCodeBuffer("file", GenericMessage, true);
 	serialInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
-	serialGCode = new GCodeBuffer("serial", UsbMessage, true);
+	serialGCode = new StringGCodeBuffer("serial", UsbMessage, true);
 #if HAS_NETWORKING
 	httpInput = new NetworkGCodeInput;
-	httpGCode = new GCodeBuffer("http", HttpMessage, false);
+	httpGCode = new StringGCodeBuffer("http", HttpMessage, false);
 	telnetInput = new NetworkGCodeInput;
-	telnetGCode = new GCodeBuffer("telnet", TelnetMessage, true);
+	telnetGCode = new StringGCodeBuffer("telnet", TelnetMessage, true);
 #else
 	httpGCode = telnetGCode = nullptr;
 #endif
 #ifdef SERIAL_AUX_DEVICE
 	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
-	auxGCode = new GCodeBuffer("aux", LcdMessage, false);
+	auxGCode = new StringGCodeBuffer("aux", LcdMessage, false);
 #else
 	auxGCode = nullptr;
 #endif
-	daemonGCode = new GCodeBuffer("daemon", GenericMessage, false);
+	daemonGCode = new StringGCodeBuffer("daemon", GenericMessage, false);
 #if SUPPORT_12864_LCD
 	lcdGCode = new GCodeBuffer("lcd", GenericMessage, false);
 #else
 	lcdGCode = nullptr;
 #endif
 #if HAS_LINUX_INTERFACE
-	spiInput = new NetworkGCodeInput();
-	spiGCode = new GCodeBuffer("spi", SpiMessage, false);
+	spiGCode = reprap.GetLinuxInterface().InitGCodeBuffer();
 #else
 	spiGCode = nullptr;
 #endif
-	queuedGCode = new GCodeBuffer("queue", GenericMessage, false);
-	autoPauseGCode = new GCodeBuffer("autopause", GenericMessage, false);
+	queuedGCode = new StringGCodeBuffer("queue", GenericMessage, false);
+	autoPauseGCode = new StringGCodeBuffer("autopause", GenericMessage, false);
 	codeQueue = new GCodeQueue();
 }
 
@@ -195,10 +195,6 @@ void GCodes::Init()
 
 #if SUPPORT_DOTSTAR_LED
 	DotStarLed::Init();
-#endif
-
-#if HAS_LINUX_INTERFACE
-	reprap.GetLinuxComm().SetGCodeInput(spiInput);
 #endif
 
 #ifdef SERIAL_AUX_DEVICE
@@ -1743,13 +1739,6 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 		}
 	}
 #endif
-#if HAS_LINUX_INTERFACE
-	else if (&gb == spiGCode)
-	{
-		// SPI communication to an external Linux board
-		spiInput->FillBuffer(spiGCode);
-	}
-#endif
 }
 
 void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
@@ -3284,7 +3273,18 @@ void GCodes::ClearMove()
 // Cancel any macro or print in progress
 void GCodes::AbortPrint(GCodeBuffer& gb)
 {
-	(void)gb.AbortFile(fileInput);				// stop executing any files or macros that this GCodeBuffer is running
+	if (gb.MachineState().fileState.IsLive())
+	{
+		do
+		{
+			if (gb.MachineState().fileState.IsLive())
+			{
+				fileInput->Reset(gb.MachineState().fileState);
+				gb.MachineState().fileState.Close();
+			}
+		} while (gb.PopState());				// abandon any macros
+	}
+
 	if (&gb == fileGCode)						// if the current command came from a file being printed
 	{
 		StopPrint(StopPrintReason::abort);

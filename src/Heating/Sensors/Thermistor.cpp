@@ -9,7 +9,7 @@
 #include "Thermistor.h"
 #include "Platform.h"
 #include "RepRap.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 // The Steinhart-Hart equation for thermistor resistance is:
 // 1/T = A + B ln(R) + C [ln(R)]^3

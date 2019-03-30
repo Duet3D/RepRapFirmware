@@ -9,6 +9,7 @@
 #define GCODEINPUT_H
 
 #include "RepRapFirmware.h"
+#include "GCodes/GCodeBuffer/StringGCodeBuffer.h"
 #include "Storage/FileData.h"
 #include "MessageType.h"
 #include "RTOSIface/RTOSIface.h"
@@ -22,7 +23,7 @@ class GCodeInput
 {
 public:
 	virtual void Reset() = 0;							// Clean all the cached data from this input
-	virtual bool FillBuffer(GCodeBuffer *gb);			// Fill a GCodeBuffer with the last available G-code
+	virtual bool FillBuffer(GCodeBuffer *gb);		// Fill a GCodeBuffer with the last available G-code
 	virtual size_t BytesCached() const = 0;				// How many bytes have been cached?
 
 protected:
@@ -106,7 +107,7 @@ class NetworkGCodeInput: public RegularGCodeInput
 public:
 	NetworkGCodeInput();
 
-	bool FillBuffer(GCodeBuffer *gb) override;			// Fill a GCodeBuffer with the last available G-code
+	bool FillBuffer(GCodeBuffer *gb) override;	// Fill a GCodeBuffer with the last available G-code
 	void Put(MessageType mtype, const char *buf);		// Append a null-terminated string to the buffer
 	void Put(MessageType mtype, char c);				// Append a single character. This does NOT lock the mutex!
 

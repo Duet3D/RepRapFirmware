@@ -8,7 +8,7 @@
 #include "RtdSensor31865.h"
 #include "RepRap.h"
 #include "Platform.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 const uint32_t MAX31865_Frequency = 4000000;	// maximum for MAX31865 is also 5MHz
 

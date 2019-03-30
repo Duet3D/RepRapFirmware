@@ -108,7 +108,7 @@ public:
  	const MessageBox& GetMessageBox() const { return mbox; }
 #endif
 #if HAS_LINUX_INTERFACE
-	LinuxComm& GetLinuxComm() const;
+ 	LinuxInterface& GetLinuxInterface() const;
 #endif
 
 	void Tick();
@@ -171,7 +171,7 @@ private:
  	Display *display;
 #endif
 #if HAS_LINUX_INTERFACE
-	LinuxComm *linuxComm;
+ 	LinuxInterface *linuxInterface;
 #endif
 
  	Mutex toolListMutex, messageBoxMutex;
@@ -226,7 +226,7 @@ inline PortControl& RepRap::GetPortControl() const { return *portControl; }
 inline Display& RepRap::GetDisplay() const { return *display; }
 #endif
 #if HAS_LINUX_INTERFACE
-inline LinuxComm& RepRap::GetLinuxComm() const { return *linuxComm; }
+inline LinuxInterface& RepRap::GetLinuxInterface() const { return *linuxInterface; }
 #endif
 
 inline bool RepRap::Debug(Module m) const { return debug & (1 << m); }

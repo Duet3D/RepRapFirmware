@@ -9,33 +9,18 @@
 
 #include "RepRap.h"
 #include "GCodes.h"
-#include "GCodeBuffer.h"
+#include "GCodeBuffer/GCodeBuffer.h"
 
 bool GCodeInput::FillBuffer(GCodeBuffer *gb)
 {
 	const size_t bytesToPass = min<size_t>(BytesCached(), GCODE_LENGTH);
+	char codeToWrite[bytesToPass];
 	for (size_t i = 0; i < bytesToPass; i++)
 	{
-		const char c = ReadByte();
-
-		if (gb->IsWritingBinary())
-		{
-			// HTML uploads are handled by the GCodes class
-			gb->WriteBinaryToFile(c);
-		}
-		else if (gb->Put(c))
-		{
-			if (gb->IsWritingFile())
-			{
-				gb->WriteToFile();
-			}
-
-			// Code is complete or has been written to file, so stop here
-			return true;
-		}
+		codeToWrite[i] = ReadByte();
 	}
 
-	return false;
+	return gb->Put(codeToWrite, bytesToPass);
 }
 
 // G-code input class for wrapping around Stream-based hardware ports

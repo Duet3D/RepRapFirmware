@@ -7,7 +7,7 @@
 
 #include "DhtSensor.h"
 #include "RepRap.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Movement/StepTimer.h"
 #include "IoPorts.h"
 

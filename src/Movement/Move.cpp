@@ -36,7 +36,7 @@
 #include "Move.h"
 #include "StepTimer.h"
 #include "Platform.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Tools/Tool.h"
 
 #if SUPPORT_CAN_EXPANSION

@@ -8,7 +8,7 @@
 
 #include "GCodes.h"
 
-#include "GCodeBuffer.h"
+#include "GCodeBuffer/GCodeBuffer.h"
 #include "Heating/Heat.h"
 #include "Movement/Move.h"
 #include "RepRap.h"

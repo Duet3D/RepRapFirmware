@@ -10,6 +10,7 @@ const size_t NumFirmwareUpdateModules = 1;
 // Features definition
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		0
+#define HAS_LINUX_INTERFACE		1
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		0
 
@@ -188,12 +189,9 @@ constexpr int HighestLogicalPin = 73;							// highest logical pin number on thi
 constexpr uint32_t IAP_FLASH_START = 0x004E0000;
 constexpr uint32_t IAP_FLASH_END = 0x004FFFFF;
 
-// Duet pin numbers to control the WiFi interface
-constexpr Pin EspResetPin = PORTA_PIN(5);					// Low on this in holds the WiFi module in reset (ESP_RESET)
-constexpr Pin EspDataReadyPin = PORTC_PIN(19);				// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
-constexpr Pin SamTfrReadyPin = PORTA_PIN(29);				// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
-constexpr Pin SamCsPin = PORTB_PIN(2);						// SPI NPCS pin, input from WiFi module
-Spi * const EspSpi = SPI0;
+// Duet pin numbers for the Linux interface
+constexpr Pin SamTfrReadyPin = PORTE_PIN(2);
+Spi * const LinuxSpi = SPI1;
 
 // Timer allocation
 // Network timer is timer 4 aka TC1 channel1
@@ -216,7 +214,9 @@ constexpr uint8_t DmacChanWiFiTx = 1;
 constexpr uint8_t DmacChanWiFiRx = 2;
 constexpr uint8_t DmacChanTmcTx = 3;
 constexpr uint8_t DmacChanTmcRx = 4;
+constexpr uint8_t DmacChanLinuxTx = 5;
+constexpr uint8_t DmacChanLinuxRx = 6;
 
-constexpr size_t NumDmaChannelsUsed = 5;
+constexpr size_t NumDmaChannelsUsed = 7;
 
 #endif

@@ -27,7 +27,7 @@
 #endif
 
 #if HAS_LINUX_INTERFACE
-# include "SAME70xpld/LinuxComm.h"
+# include "Linux/LinuxInterface.h"
 #endif
 
 #if HAS_HIGH_SPEED_SD
@@ -204,7 +204,7 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
  	display = new Display();
 #endif
 #if HAS_LINUX_INTERFACE
-	linuxComm = new LinuxComm();
+	linuxInterface = new LinuxInterface();
 #endif
 
 	printMonitor = new PrintMonitor(*platform, *gCodes);
@@ -243,7 +243,7 @@ void RepRap::Init()
 	display->Init();
 #endif
 #if HAS_LINUX_INTERFACE
-	linuxComm->Init();
+	linuxInterface->Init();
 #endif
 
 	// Set up the timeout of the regular watchdog, and set up the backup watchdog if there is one.
@@ -438,7 +438,7 @@ void RepRap::Spin()
 #if HAS_LINUX_INTERFACE
 	ticksInSpinState = 0;
 	spinningModule = moduleLinuxComm;
-	linuxComm->Spin();
+	linuxInterface->Spin();
 #endif
 
 	ticksInSpinState = 0;

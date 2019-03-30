@@ -65,7 +65,7 @@
 #endif
 
 #if HAS_LINUX_INTERFACE
-# include "SAME70xpld/LinuxComm.h"
+# include "Linux/LinuxInterface.h"
 #endif
 #if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
 # include "Networking/HttpResponder.h"
@@ -3742,7 +3742,7 @@ void Platform::RawMessage(MessageType type, const char *message)
 #if HAS_LINUX_INTERFACE
 	else if ((type & SpiMessage) != 0)
 	{
-		reprap.GetLinuxComm().HandleGCodeReply(message);
+		reprap.GetLinuxInterface().HandleGCodeReply(message);
 	}
 #endif
 }

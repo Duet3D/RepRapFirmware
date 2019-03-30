@@ -8,7 +8,7 @@
 #include "Fan.h"
 #include "Platform.h"
 #include "RepRap.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Heating/Heat.h"
 
 void Fan::Init(Pin p_pin, LogicalPin lp, bool hwInverted, PwmFrequency p_freq)

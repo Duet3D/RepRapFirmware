@@ -6,7 +6,7 @@
  */
 
 #include "Duet3DFilamentMonitor.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Platform.h"
 #include "Movement/StepTimer.h"
 #include "RepRap.h"

@@ -12,7 +12,7 @@
 #include "PulsedFilamentMonitor.h"
 #include "RepRap.h"
 #include "Platform.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Movement/Move.h"
 #include "PrintMonitor.h"
 

@@ -10,7 +10,7 @@
 #include "RepRap.h"
 #include "Platform.h"
 #include "Movement/Move.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 
 const float M3ScrewPitch = 0.5;

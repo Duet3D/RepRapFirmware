@@ -9,7 +9,7 @@
 #include "RepRap.h"
 #include "Platform.h"
 #include "Movement/DDA.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 const float RotaryDeltaKinematics::NormalTowerAngles[DELTA_AXES] = { -150.0, -30.0, 90.0 };
 

@@ -6,7 +6,7 @@
  */
 
 #include "RotatingMagnetFilamentMonitor.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Platform.h"
 #include "RepRap.h"
 #include "Movement/Move.h"

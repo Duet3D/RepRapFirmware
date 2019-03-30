@@ -9,7 +9,7 @@
 #include "RepRap.h"
 #include "Platform.h"
 #include "Storage/MassStorage.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Movement/DDA.h"
 
 #include <limits>
