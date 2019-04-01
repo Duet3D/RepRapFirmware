@@ -150,6 +150,7 @@ public:
 	const GridDefinition& GetGrid() const { return heightMap.GetGrid(); }			// Get the grid definition
 	bool LoadHeightMapFromFile(FileStore *f, const StringRef& r);					// Load the height map from a file returning true if an error occurred
 	bool SaveHeightMapToFile(FileStore *f) const;									// Save the height map to a file returning true if an error occurred
+	void SaveHeightMapToArray(float *arr) const;									// Save the height map Z coordinates to an array
 
 	const RandomProbePointSet& GetProbePoints() const { return probePoints; }		// Return the probe point set constructed from G30 commands
 

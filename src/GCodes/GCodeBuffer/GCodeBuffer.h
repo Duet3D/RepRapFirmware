@@ -17,13 +17,12 @@
 class GCodeBuffer
 {
 public:
-	GCodeBuffer(const char* id, MessageType mt, bool useCodeQueue);
+	GCodeBuffer(MessageType mt, bool useCodeQueue);
 	void Reset();										// Reset it to its state after start-up
 	virtual void Init();								// Set it up to parse another G-code
 	virtual void Diagnostics(MessageType mtype) = 0;	// Write some debug info
 	virtual bool Put(const char *data, size_t len) = 0;	// Add an entire chunk of data, overwriting any existing content
-	virtual void Put(const char *data) = 0;				// Add a null-terminated string, overwriting any existing content
-	virtual void FileEnded() { }						// Called when we reach the end of the file we are reading from
+	virtual void FileEnded() = 0;						// Called when we reach the end of the file we are reading from
 	virtual bool Seen(char c) __attribute__((hot)) = 0;	// Is a character present?
 
 	virtual char GetCommandLetter() const = 0;
@@ -74,7 +73,7 @@ public:
 	void SetState(GCodeState newState);
 	void SetState(GCodeState newState, const char *err);
 	void AdvanceState();
-	const char *GetIdentity() const { return identity; }
+	virtual const char *GetIdentity() const = 0;
 	bool CanQueueCodes() const;
 	void MessageAcknowledged(bool cancelled);
 
@@ -87,9 +86,10 @@ public:
 	virtual void FinishWritingBinary() { }
 
 	virtual FilePosition GetFilePosition(size_t bytesCached) const = 0;	// Get the file position at the start of the current command
+	virtual bool IsFileFinished() const;				// Returns true if the file has been finished
 
-	virtual const char* DataStart() const = 0;				// Get the start of the current command
-	virtual size_t DataLength() const = 0;					// Get the length of the current command
+	virtual const char* DataStart() const = 0;			// Get the start of the current command
+	virtual size_t DataLength() const = 0;				// Get the length of the current command
 
 	virtual void PrintCommand(const StringRef& s) const = 0;
 	virtual void AppendFullCommand(const StringRef &s) const = 0;
@@ -98,7 +98,6 @@ public:
 	bool timerRunning;									// true if we are waiting
 
 private:
-	const char* const identity;							// Where we are from (web, file, serial line etc)
 	const MessageType responseMessageType;				// The message type we use for responses to commands coming from this channel
 	const bool queueCodes;								// Can we queue certain G-codes from this source?
 
@@ -133,6 +132,11 @@ inline void GCodeBuffer::SetState(GCodeState newState, const char *err)
 inline void GCodeBuffer::AdvanceState()
 {
 	machineState->state = static_cast<GCodeState>(static_cast<uint8_t>(machineState->state) + 1);
+}
+
+inline bool GCodeBuffer::IsFileFinished() const
+{
+	return machineState->fileState.IsLive();
 }
 
 #endif /* SRC_GCODES_GCODEBUFFER_GCODEBUFFER_H */

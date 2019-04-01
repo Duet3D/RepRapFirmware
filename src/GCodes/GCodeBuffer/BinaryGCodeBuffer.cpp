@@ -9,8 +9,8 @@
 #include "Platform.h"
 #include "RepRap.h"
 
-BinaryGCodeBuffer::BinaryGCodeBuffer(const char* id, MessageType mt, bool usesCodeQueue)
-	: GCodeBuffer(id, mt, usesCodeQueue)
+BinaryGCodeBuffer::BinaryGCodeBuffer(CodeChannel c, MessageType mt, bool usesCodeQueue)
+	: GCodeBuffer(mt, usesCodeQueue), channel(c)
 {
 	// Init is called by the base class
 }
@@ -20,7 +20,7 @@ void BinaryGCodeBuffer::Init()
 	bufferLength = 0;
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	isIdle = true;
+	isIdle = isFileFinished = true;
 }
 
 void BinaryGCodeBuffer::Diagnostics(MessageType mtype)
@@ -60,12 +60,6 @@ bool BinaryGCodeBuffer::Put(const char *data, size_t len)
 	memcpy(buffer, data, len);
 	bufferLength = len;
 	return true;
-}
-
-void BinaryGCodeBuffer::Put(const char *data)
-{
-	// This method is not supported
-	INTERNAL_ERROR;
 }
 
 bool BinaryGCodeBuffer::Seen(char c)
@@ -315,6 +309,21 @@ void BinaryGCodeBuffer::SetFinished(bool f)
 		machineState->g53Active = false;		// G53 does not persist beyond the current line
 		Init();
 	}
+}
+
+const char *BinaryGCodeBuffer::GetIdentity() const
+{
+	// I would have put this into MessageFormats.cpp but then G++ complains about an unresolved reference
+	const char * const codeChannelName[] =
+	{
+		"file",
+		"http",
+		"telnet",
+		"spi"
+	};
+	static_assert(ARRAY_SIZE(codeChannelName) == (size_t)CodeChannel::SPI + 1, "ID relations do not match");
+
+	return codeChannelName[(uint8_t)channel];
 }
 
 FilePosition BinaryGCodeBuffer::GetFilePosition(size_t bytesCached) const

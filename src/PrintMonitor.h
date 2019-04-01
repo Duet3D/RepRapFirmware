@@ -64,6 +64,7 @@ class PrintMonitor
 
 		const char *GetPrintingFilename() const { return (isPrinting) ? filenameBeingPrinted.c_str() : nullptr; }
 		bool GetPrintingFileInfo(GCodeFileInfo& info);
+		void SetPrintingFileInfo(const char *filename, GCodeFileInfo& info);
 
 	private:
 		Platform& platform;

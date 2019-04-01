@@ -642,6 +642,12 @@ bool Move::SaveHeightMapToFile(FileStore *f) const
 	return heightMap.SaveToFile(f, zShift);
 }
 
+// Save the height map Z coordinates to an array
+void Move::SaveHeightMapToArray(float *arr) const
+{
+	return heightMap.SaveToArray(arr, zShift);
+}
+
 void Move::SetTaperHeight(float h)
 {
 	useTaper = (h > 1.0);

@@ -56,10 +56,17 @@ bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info)
 	return true;
 }
 
+void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info)
+{
+	filenameBeingPrinted.copy(filename);
+	printingFileInfo = info;
+	printingFileParsed = true;
+}
+
 void PrintMonitor::Spin()
 {
 	// File information about the file being printed must be available before layer estimations can be made
-	if (filenameBeingPrinted[0] != 0 && !printingFileParsed)
+	if (!filenameBeingPrinted.IsEmpty() && !printingFileParsed)
 	{
 		printingFileParsed = platform.GetMassStorage()->GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
 		if (!printingFileParsed)

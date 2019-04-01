@@ -10,9 +10,8 @@
 #include "GCodeBuffer.h"
 
 // Create a default GCodeBuffer
-GCodeBuffer::GCodeBuffer(const char* id, MessageType mt, bool usesCodeQueue)
-	: identity(id), responseMessageType(mt), queueCodes(usesCodeQueue), toolNumberAdjust(0),
-	  machineState(new GCodeMachineState())
+GCodeBuffer::GCodeBuffer(MessageType mt, bool usesCodeQueue)
+	: responseMessageType(mt), queueCodes(usesCodeQueue), toolNumberAdjust(0), machineState(new GCodeMachineState())
 {
 	Init();
 }

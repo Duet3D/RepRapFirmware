@@ -3742,7 +3742,7 @@ void Platform::RawMessage(MessageType type, const char *message)
 #if HAS_LINUX_INTERFACE
 	else if ((type & SpiMessage) != 0)
 	{
-		reprap.GetLinuxInterface().HandleGCodeReply(message);
+		reprap.GetLinuxInterface().HandleGCodeReply(type, message);
 	}
 #endif
 }
@@ -3840,10 +3840,10 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 			}
 		}
 
-#if HAS_LINUX_COMMS
+#if HAS_LINUX_INTERFACE
 		if ((type & SpiMessage) != 0)
 		{
-			reprap.GetLinuxComm().HandleGCodeReply(buffer);
+			reprap.GetLinuxInterface().HandleGCodeReply(type, buffer);
 		}
 #endif
 	}

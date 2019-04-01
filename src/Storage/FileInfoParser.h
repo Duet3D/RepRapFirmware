@@ -9,6 +9,7 @@
 #define SRC_STORAGE_FILEINFOPARSER_H_
 
 #include "RepRapFirmware.h"
+#include "GCodes/GCodeFileInfo.h"
 #include "RTOSIface/RTOSIface.h"
 
 const FilePosition GCODE_HEADER_SIZE = 20000uL;		// How many bytes to read from the header - I (DC) have a Kisslicer file with a layer height comment 14Kb from the start
@@ -26,25 +27,6 @@ const size_t GCODE_OVERLAP_SIZE = 100;				// Size of the overlapping buffer for 
 
 const uint32_t MAX_FILEINFO_PROCESS_TIME = 200;		// Maximum time to spend polling for file info in each call
 const uint32_t MaxFileParseInterval = 4000;			// Maximum interval between repeat requests to parse a file
-
-// Struct to hold Gcode file information
-struct GCodeFileInfo
-{
-	FilePosition fileSize;
-	time_t lastModifiedTime;
-	float layerHeight;
-	float firstLayerHeight;
-	float objectHeight;
-	float filamentNeeded[MaxExtruders];
-	uint32_t printTime;
-	uint32_t simulatedTime;
-	unsigned int numFilaments;
-	bool isValid;
-	bool incomplete;
-	String<50> generatedBy;
-
-	void Init();
-};
 
 enum FileParseState
 {

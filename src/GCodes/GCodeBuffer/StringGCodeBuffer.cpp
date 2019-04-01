@@ -16,8 +16,9 @@
 static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML file?
 
 StringGCodeBuffer::StringGCodeBuffer(const char* id, MessageType mt, bool usesCodeQueue)
-	: GCodeBuffer(id, mt, usesCodeQueue), fileBeingWritten(nullptr), writingFileSize(0), eofStringCounter(0),
-	  hasCommandNumber(false), commandLetter('Q'), checksumRequired(false), binaryWriting(false)
+	: GCodeBuffer(mt, usesCodeQueue), identity(id), fileBeingWritten(nullptr), writingFileSize(0),
+	  eofStringCounter(0), hasCommandNumber(false), commandLetter('Q'), checksumRequired(false),
+	  binaryWriting(false)
 {
 	// Init is called by base class
 	Init();

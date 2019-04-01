@@ -29,6 +29,9 @@ enum MessageType : uint16_t
 	WarningMessageFlag = 0x400,			// This is a warning message
 	RawMessageFlag = 0x800,				// Do not encapsulate this message
 
+	BinaryCodeReplyFlag = 0x1000,		// This message comes from a binary G-Code (TODO)
+	LastMessageFlag = 0x2000,			// This is the last message of an executing G-Code (TODO)
+
 	// Common combinations
 	NoDestinationMessage = 0,												// A message that is going nowhere
 	DebugMessage = BlockingUsbMessage,										// A debug message to send in blocking mode to USB

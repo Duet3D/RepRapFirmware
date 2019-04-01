@@ -470,7 +470,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 // OutputStack class implementation
 
 // Push an OutputBuffer chain to the stack
-void OutputStack::Push(OutputBuffer *buffer) volatile
+void OutputStack::Push(OutputBuffer *buffer, MessageType type) volatile
 {
 	if (buffer != nullptr)
 	{
@@ -480,7 +480,9 @@ void OutputStack::Push(OutputBuffer *buffer) volatile
 			if (count < OUTPUT_STACK_DEPTH)
 			{
 				buffer->whenQueued = millis();
-				items[count++] = buffer;
+				items[count] = buffer;
+				types[count] = type;
+				count++;
 				return;
 			}
 		}
@@ -503,6 +505,7 @@ OutputBuffer *OutputStack::Pop() volatile
 	for (size_t i = 1; i < count; i++)
 	{
 		items[i - 1] = items[i];
+		types[i - 1] = types[i];
 	}
 	count--;
 
@@ -513,6 +516,12 @@ OutputBuffer *OutputStack::Pop() volatile
 OutputBuffer *OutputStack::GetFirstItem() const volatile
 {
 	return (count == 0) ? nullptr : items[0];
+}
+
+// Returns the first item's type from the stack or NoDestinationMessage if none is available
+MessageType OutputStack::GetFirstItemType() const volatile
+{
+	return (count == 0) ? MessageType::NoDestinationMessage : types[0];
 }
 
 // Update the first item of the stack
@@ -533,6 +542,12 @@ void OutputStack::SetFirstItem(OutputBuffer *buffer) volatile
 OutputBuffer *OutputStack::GetLastItem() const volatile
 {
 	return (count == 0) ? nullptr : items[count - 1];
+}
+
+// Returns the type of the last item from the stack or NoDestinationMessage if none is available
+MessageType OutputStack::GetLastItemType() const volatile
+{
+	return (count == 0) ? MessageType::NoDestinationMessage : types[count - 1];
 }
 
 // Get the total length of all queued buffers
@@ -557,7 +572,9 @@ void OutputStack::Append(volatile OutputStack& stack) volatile
 	{
 		if (count < OUTPUT_STACK_DEPTH)
 		{
-			items[count++] = stack.items[i];
+			items[count] = stack.items[i];
+			types[count] = stack.types[i];
+			count++;
 		}
 		else
 		{

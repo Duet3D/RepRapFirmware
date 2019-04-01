@@ -363,14 +363,20 @@ FilePosition GCodes::GetFilePosition() const
 // We use triggerCGode as the source to prevent any triggers being executed until we have finished
 bool GCodes::RunConfigFile(const char* fileName)
 {
+#if HAS_LINUX_INTERFACE
+	// FIXME Due to the required work-around for this, triggers do not work any more.
+	// It seems like the only way to resolve this is by merging both GCodeBuffer types back together to one class.
+	runningConfigFile = DoFileMacro(*spiGCode, fileName, false);
+#else
 	runningConfigFile = DoFileMacro(*daemonGCode, fileName, false);
+#endif
 	return runningConfigFile;
 }
 
 // Return true if the daemon is busy running config.g or a trigger file
 bool GCodes::IsDaemonBusy() const
 {
-	return daemonGCode->MachineState().fileState.IsLive();
+	return !daemonGCode->IsFileFinished();
 }
 
 // Copy the feed rate etc. from the daemon to the input channels
@@ -1743,6 +1749,28 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 
 void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 {
+#if HAS_LINUX_INTERFACE
+	if (gb.IsFileFinished())
+	{
+		if (gb.MachineState().previous != nullptr)
+		{
+			// Finished a macro or finished processing config.g
+			if (runningConfigFile && gb.MachineState().previous->previous == nullptr)
+			{
+				CopyConfigFinalValues(gb);
+				runningConfigFile = false;
+			}
+			Pop(gb);
+			gb.Init();
+			if (gb.GetState() == GCodeState::normal)
+			{
+				UnlockAll(gb);
+				HandleReply(gb, GCodeResult::ok, "");
+				// FIXME: This probably breaks M600 and M226; bring in sync with DCS
+			}
+		}
+	}
+#elif HAS_HIGH_SPEED_SD
 	FileData& fd = gb.MachineState().fileState;
 
 	// Do we have more data to process?
@@ -1818,6 +1846,9 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 	}
+#else
+	INTERNAL_ERROR;
+#endif
 }
 
 // Restore positions etc. when exiting simulation mode
@@ -2188,7 +2219,7 @@ bool GCodes::LowVoltagePause()
 		// Run the auto-pause script
 		if (powerFailScript != nullptr)
 		{
-			autoPauseGCode->Put(powerFailScript);
+			((StringGCodeBuffer*)autoPauseGCode)->Put(powerFailScript);
 		}
 		autoPauseGCode->SetState(GCodeState::powerFailPausing1);
 		isPowerFailPaused = true;
@@ -3312,6 +3343,19 @@ void GCodes::EmergencyStop()
 // 0 = running a system macro automatically
 bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning)
 {
+#if HAS_LINUX_INTERFACE
+	if (!Push(gb))
+	{
+		return true;
+	}
+
+	// FIXME at present this only works for BinaryGCodeBuffer instances
+	if (!reprap.GetLinuxInterface().RequestMacroFile(gb, fileName, reportMissing))
+	{
+		Pop(gb);
+		return true;
+	}
+#elif HAS_HIGH_SPEED_SD
 	FileStore * const f = platform.OpenSysFile(fileName, OpenMode::read);
 	if (f == nullptr)
 	{
@@ -3326,10 +3370,13 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 
 	if (!Push(gb))
 	{
+		f->Close();
 		return true;
 	}
 	gb.MachineState().fileState.Set(f);
 	fileInput->Reset(gb.MachineState().fileState);
+#endif
+
 	gb.MachineState().doingFileMacro = true;
 	gb.MachineState().runningM501 = (codeRunning == 501);
 	gb.MachineState().runningM502 = (codeRunning == 502);

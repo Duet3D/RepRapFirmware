@@ -11,10 +11,13 @@
 #include "RepRapFirmware.h"
 #include "ObjectModel/ObjectModel.h"
 
+class DataTransfer;
+
 // This class defines the bed probing grid
 class GridDefinition INHERIT_OBJECT_MODEL
 {
 public:
+	friend class DataTransfer;
 	friend class HeightMap;
 
 	GridDefinition();
@@ -57,6 +60,8 @@ private:
 	bool isValid;
 };
 
+class DataTransfer;
+
 // Class to represent the height map
 class HeightMap
 {
@@ -71,6 +76,8 @@ public:
 	void SetGridHeight(size_t xIndex, size_t yIndex, float height);	// Set the height of a grid point
 
 	bool SaveToFile(FileStore *f, float zOffset) const				// Save the grid to file returning true if an error occurred
+	pre(IsValid());
+	void SaveToArray(float *array, float zOffset) const				// Save the grid Z coordinates to an array
 	pre(IsValid());
 
 	bool LoadFromFile(FileStore *f, const StringRef& r);			// Load the grid from file returning true if an error occurred

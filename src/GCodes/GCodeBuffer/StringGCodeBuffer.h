@@ -52,6 +52,8 @@ public:
 	void SetFinished(bool f) override;							// Set the G Code executed (or not)
 	void SetCommsProperties(uint32_t arg) override { checksumRequired = (arg & 1); }
 
+	const char *GetIdentity() const override { return identity; }
+
 	bool OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) override;	// open a file to write to
 	bool IsWritingFile() const override { return fileBeingWritten != nullptr; }		// returns true if writing a file
 	void WriteToFile() override;													// write the current GCode to file
@@ -69,6 +71,8 @@ public:
 	void AppendFullCommand(const StringRef &s) const override;
 
 private:
+
+	const char* const identity;							// Where we are from (web, file, serial line etc)
 
 	enum class GCodeBufferState : uint8_t
 	{
