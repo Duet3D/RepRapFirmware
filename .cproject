@@ -231,7 +231,7 @@
                     					
                     <sourceEntries>
                         						
-                        <entry excluding="src/Alligator|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/SAME70xpld|src/Display|src/Networking|src/Pccb|src/DuetNG|src/Duet3|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                        <entry excluding="src/Linux|src/Alligator|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/SAME70xpld|src/Display|src/Networking|src/Pccb|src/DuetNG|src/Duet3|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
                         					
                     </sourceEntries>
                     				
@@ -473,7 +473,7 @@
                     					
                     <sourceEntries>
                         						
-                        <entry excluding="src/Alligator|src/SAME70xpld|src/Display|src/Duet|src/Networking|src/Pccb|src/DuetNG|src/Duet3|src/DuetM" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                        <entry excluding="src/Linux|src/Alligator|src/SAME70xpld|src/Display|src/Duet|src/Networking|src/Pccb|src/DuetNG|src/Duet3|src/DuetM" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
                         					
                     </sourceEntries>
                     				
@@ -723,7 +723,7 @@
                     					
                     <sourceEntries>
                         						
-                        <entry excluding="src/Duet/Lwip/lwip/src/core/ipv6|src/SAME70xpld|src/Networking|src/DuetNG|src/Alligator/Lwip/lwip/src/include/ipv6|src/Alligator/Lwip/lwip/test|src/Duet/MCP4461|src/Duet/Lwip/lwip/test|src/Display|src/Pccb|src/Duet3|src/DuetM|src/Alligator/Lwip/lwip/src/core/ipv6|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                        <entry excluding="src/Linux|src/Duet/Lwip/lwip/src/core/ipv6|src/SAME70xpld|src/Networking|src/DuetNG|src/Alligator/Lwip/lwip/src/include/ipv6|src/Alligator/Lwip/lwip/test|src/Duet/MCP4461|src/Duet/Lwip/lwip/test|src/Display|src/Pccb|src/Duet3|src/DuetM|src/Alligator/Lwip/lwip/src/core/ipv6|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
                         					
                     </sourceEntries>
                     				
@@ -975,7 +975,7 @@
                     					
                     <sourceEntries>
                         						
-                        <entry excluding="src/Alligator|src/SAME70xpld|src/Duet|src/Pccb|src/Networking/LwipEthernet|src/Duet3|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                        <entry excluding="src/Linux|src/Alligator|src/SAME70xpld|src/Duet|src/Pccb|src/Networking/LwipEthernet|src/Duet3|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
                         					
                     </sourceEntries>
                     				
@@ -1225,7 +1225,7 @@
                     					
                     <sourceEntries>
                         						
-                        <entry excluding="src/Alligator|src/SAME70xpld|src/Duet|src/Networking/ESP8266WiFi|src/Pccb|src/Networking/LwipEthernet|src/DuetNG|src/Duet3|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                        <entry excluding="src/Linux|src/Alligator|src/SAME70xpld|src/Duet|src/Networking/ESP8266WiFi|src/Pccb|src/Networking/LwipEthernet|src/DuetNG|src/Duet3|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
                         					
                     </sourceEntries>
                     				
@@ -1499,7 +1499,7 @@
                     					
                     <sourceEntries>
                         						
-                        <entry excluding="src/SAME70xpld|src/Networking/LwipEthernet/Lwip/src/apps/snmp|src/Duet|src/Networking/LwipEthernet/Lwip/src/apps/httpd|/src/Networking/LwipEthernet/Lwip/test|src/DuetNG|src/Networking/LwipEthernet/Lwip/src/apps/tftp|src/Networking/W5500Ethernet|src/Alligator|src/Networking/LwipEthernet/Lwip/src/netif/ppp|src/Networking/LwipEthernet/Lwip/src/apps/lwiperf|src/Networking/LwipEthernet/Lwip/src/apps/sntp|src/Display|src/Pccb|/src/Networking/LwipEthernet/Lwip/src/apps/mqtt|src/DuetM|src/RADDS|src/Networking/LwipEthernet/Lwip/doc" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                        <entry excluding="src/Linux|src/SAME70xpld|src/Networking/LwipEthernet/Lwip/src/apps/snmp|src/Duet|src/Networking/LwipEthernet/Lwip/src/apps/httpd|/src/Networking/LwipEthernet/Lwip/test|src/DuetNG|src/Networking/LwipEthernet/Lwip/src/apps/tftp|src/Networking/W5500Ethernet|src/Alligator|src/Networking/LwipEthernet/Lwip/src/netif/ppp|src/Networking/LwipEthernet/Lwip/src/apps/lwiperf|src/Networking/LwipEthernet/Lwip/src/apps/sntp|src/Display|src/Pccb|/src/Networking/LwipEthernet/Lwip/src/apps/mqtt|src/DuetM|src/RADDS|src/Networking/LwipEthernet/Lwip/doc" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
                         					
                     </sourceEntries>
                     				
@@ -1751,7 +1751,7 @@
                     					
                     <sourceEntries>
                         						
-                        <entry excluding="src/Alligator|src/SAME70xpld|src/Display|src/Duet|src/Networking|src/Networking/ESP8266WiFi|src/Networking/LwipEthernet|src/DuetNG|src/Duet3|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                        <entry excluding="src/Linux|src/Alligator|src/SAME70xpld|src/Display|src/Duet|src/Networking|src/Networking/ESP8266WiFi|src/Networking/LwipEthernet|src/DuetNG|src/Duet3|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
                         					
                     </sourceEntries>
                     				
@@ -2003,7 +2003,7 @@
                     					
                     <sourceEntries>
                         						
-                        <entry excluding="src/Alligator|src/SAME70xpld|src/Display|src/Duet|src/Networking|src/Networking/ESP8266WiFi|src/Networking/LwipEthernet|src/DuetNG|src/Duet3|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                        <entry excluding="src/Linux|src/Alligator|src/SAME70xpld|src/Display|src/Duet|src/Networking|src/Networking/ESP8266WiFi|src/Networking/LwipEthernet|src/DuetNG|src/Duet3|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
                         					
                     </sourceEntries>
                     				
@@ -2279,7 +2279,7 @@
                     					
                     <sourceEntries>
                         						
-                        <entry excluding="src/Networking/ESP8266WiFi|src/Networking/LwipEthernet/Lwip/src/apps/snmp|src/Duet|src/Networking/LwipEthernet/Lwip/src/apps/httpd|/src/Networking/LwipEthernet/Lwip/test|src/DuetNG|src/Networking/LwipEthernet/Lwip/src/apps/tftp|src/Networking/W5500Ethernet|src/Alligator|src/Networking/LwipEthernet/Lwip/src/netif/ppp|src/Networking/LwipEthernet/Lwip/src/apps/lwiperf|src/Networking/LwipEthernet/Lwip/src/apps/sntp|src/Display|src/Pccb|/src/Networking/LwipEthernet/Lwip/src/apps/mqtt|src/DuetM|src/RADDS|src/Networking/LwipEthernet/Lwip/doc" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                        <entry excluding="src/Linux|src/Networking/ESP8266WiFi|src/Networking/LwipEthernet/Lwip/src/apps/snmp|src/Duet|src/Networking/LwipEthernet/Lwip/src/apps/httpd|/src/Networking/LwipEthernet/Lwip/test|src/DuetNG|src/Networking/LwipEthernet/Lwip/src/apps/tftp|src/Networking/W5500Ethernet|src/Alligator|src/Networking/LwipEthernet/Lwip/src/netif/ppp|src/Networking/LwipEthernet/Lwip/src/apps/lwiperf|src/Networking/LwipEthernet/Lwip/src/apps/sntp|src/Display|src/Pccb|/src/Networking/LwipEthernet/Lwip/src/apps/mqtt|src/DuetM|src/RADDS|src/Networking/LwipEthernet/Lwip/doc" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
                         					
                     </sourceEntries>
                     				
@@ -2531,7 +2531,7 @@
                     					
                     <sourceEntries>
                         						
-                        <entry excluding="src/Alligator|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/SAME70xpld|src/Display|src/Networking|src/Pccb|src/DuetNG|src/Duet3|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                        <entry excluding="src/Linux|src/Alligator|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/SAME70xpld|src/Display|src/Networking|src/Pccb|src/DuetNG|src/Duet3|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
                         					
                     </sourceEntries>
                     				
@@ -3057,7 +3057,7 @@
                     					
                     <sourceEntries>
                         						
-                        <entry excluding="src/Alligator|src/SAME70xpld|src/Display|src/Duet|src/Networking|src/Networking/ESP8266WiFi|src/Networking/LwipEthernet|src/DuetNG|src/Duet3|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                        <entry excluding="src/Linux|src/Alligator|src/SAME70xpld|src/Display|src/Duet|src/Networking|src/Networking/ESP8266WiFi|src/Networking/LwipEthernet|src/DuetNG|src/Duet3|src/DuetM|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
                         					
                     </sourceEntries>
                     				

@@ -1,50 +1,50 @@
 /*
- * BinaryGCodeBuffer.cpp
+ * BinaryParser.cpp
  *
  *  Created on: 30 Mar 2019
  *      Author: Christian
  */
 
-#include "BinaryGCodeBuffer.h"
+#include "BinaryParser.h"
+#include "GCodeBuffer.h"
 #include "Platform.h"
 #include "RepRap.h"
 
-BinaryGCodeBuffer::BinaryGCodeBuffer(CodeChannel c, MessageType mt, bool usesCodeQueue)
-	: GCodeBuffer(mt, usesCodeQueue), channel(c)
+BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) : gb(gcodeBuffer)
 {
-	// Init is called by the base class
+	header = reinterpret_cast<const CodeHeader*>(gcodeBuffer.buffer);
 }
 
-void BinaryGCodeBuffer::Init()
+void BinaryParser::Init()
 {
 	bufferLength = 0;
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	isIdle = isFileFinished = true;
+	isIdle = true;
 }
 
-void BinaryGCodeBuffer::Diagnostics(MessageType mtype)
+void BinaryParser::Diagnostics(MessageType mtype)
 {
 	String<ScratchStringLength> scratchString;
 	if (IsIdle())
 	{
-		scratchString.printf("%s is idle", GetIdentity());
+		scratchString.printf("%s* is idle", gb.GetIdentity());
 	}
 	else if (IsExecuting())
 	{
-		scratchString.printf("%s is doing \"", GetIdentity());
+		scratchString.printf("%s* is doing \"", gb.GetIdentity());
 		AppendFullCommand(scratchString.GetRef());
 		scratchString.cat('"');
 	}
 	else
 	{
-		scratchString.printf("%s is ready with \"", GetIdentity());
+		scratchString.printf("%s* is ready with \"", gb.GetIdentity());
 		AppendFullCommand(scratchString.GetRef());
 		scratchString.cat('"');
 	}
 
 	scratchString.cat(" in state(s)");
-	const GCodeMachineState *ms = machineState;
+	const GCodeMachineState *ms = gb.machineState;
 	do
 	{
 		scratchString.catf(" %d", (int)ms->state);
@@ -55,18 +55,17 @@ void BinaryGCodeBuffer::Diagnostics(MessageType mtype)
 	reprap.GetPlatform().Message(mtype, scratchString.c_str());
 }
 
-bool BinaryGCodeBuffer::Put(const char *data, size_t len)
+void BinaryParser::Put(const char *data, size_t len)
 {
-	memcpy(buffer, data, len);
+	memcpy(gb.buffer, data, len);
 	bufferLength = len;
-	return true;
 }
 
-bool BinaryGCodeBuffer::Seen(char c)
+bool BinaryParser::Seen(char c)
 {
 	if (bufferLength != 0)
 	{
-		const char *parameterStart = reinterpret_cast<const char*>(buffer) + sizeof(CodeHeader);
+		const char *parameterStart = reinterpret_cast<const char*>(gb.buffer) + sizeof(CodeHeader);
 		seenParameter = nullptr;
 		seenParameterValue = parameterStart + header->numParameters * sizeof(CodeParameter);
 
@@ -95,27 +94,27 @@ bool BinaryGCodeBuffer::Seen(char c)
 	return false;
 }
 
-char BinaryGCodeBuffer::GetCommandLetter() const
+char BinaryParser::GetCommandLetter() const
 {
 	return (bufferLength != 0) ? header->letter : 'Q';
 }
 
-bool BinaryGCodeBuffer::HasCommandNumber() const
+bool BinaryParser::HasCommandNumber() const
 {
 	return (bufferLength != 0 && (header->flags & CodeFlags::NoMajorCommandNumber) == 0);
 }
 
-int BinaryGCodeBuffer::GetCommandNumber() const
+int BinaryParser::GetCommandNumber() const
 {
 	return HasCommandNumber() ? header->majorCode : -1;
 }
 
-int8_t BinaryGCodeBuffer::GetCommandFraction() const
+int8_t BinaryParser::GetCommandFraction() const
 {
 	return (bufferLength != 0 && (header->flags & CodeFlags::NoMinorCommandNumber) == 0) ? header->minorCode : -1;
 }
 
-float BinaryGCodeBuffer::GetFValue()
+float BinaryParser::GetFValue()
 {
 	if (seenParameter != nullptr)
 	{
@@ -129,7 +128,7 @@ float BinaryGCodeBuffer::GetFValue()
 	return 0.0f;
 }
 
-int32_t BinaryGCodeBuffer::GetIValue()
+int32_t BinaryParser::GetIValue()
 {
 	if (seenParameter != nullptr)
 	{
@@ -143,7 +142,7 @@ int32_t BinaryGCodeBuffer::GetIValue()
 	return 0;
 }
 
-uint32_t BinaryGCodeBuffer::GetUIValue()
+uint32_t BinaryParser::GetUIValue()
 {
 	if (seenParameter != nullptr)
 	{
@@ -157,7 +156,7 @@ uint32_t BinaryGCodeBuffer::GetUIValue()
 	return 0;
 }
 
-bool BinaryGCodeBuffer::GetIPAddress(IPAddress& returnedIp)
+bool BinaryParser::GetIPAddress(IPAddress& returnedIp)
 {
 	if (seenParameter == nullptr)
 	{
@@ -211,7 +210,7 @@ bool BinaryGCodeBuffer::GetIPAddress(IPAddress& returnedIp)
 	return false;
 }
 
-bool BinaryGCodeBuffer::GetMacAddress(uint8_t mac[6])
+bool BinaryParser::GetMacAddress(uint8_t mac[6])
 {
 	if (seenParameter == nullptr)
 	{
@@ -258,19 +257,19 @@ bool BinaryGCodeBuffer::GetMacAddress(uint8_t mac[6])
 	return n == 6;
 }
 
-bool BinaryGCodeBuffer::GetUnprecedentedString(const StringRef& str)
+bool BinaryParser::GetUnprecedentedString(const StringRef& str)
 {
 	str.Clear();
 	WriteParameters(str, false);
 	return !str.IsEmpty();
 }
 
-bool BinaryGCodeBuffer::GetQuotedString(const StringRef& str)
+bool BinaryParser::GetQuotedString(const StringRef& str)
 {
 	return GetPossiblyQuotedString(str);
 }
 
-bool BinaryGCodeBuffer::GetPossiblyQuotedString(const StringRef& str)
+bool BinaryParser::GetPossiblyQuotedString(const StringRef& str)
 {
 	if (seenParameter != nullptr && (seenParameter->type == DataType::String || seenParameter->type == DataType::Expression))
 	{
@@ -286,52 +285,47 @@ bool BinaryGCodeBuffer::GetPossiblyQuotedString(const StringRef& str)
 }
 
 
-const void BinaryGCodeBuffer::GetFloatArray(float arr[], size_t& length, bool doPad)
+const void BinaryParser::GetFloatArray(float arr[], size_t& length, bool doPad)
 {
 	GetArray(arr, length, doPad);
 }
 
-const void BinaryGCodeBuffer::GetIntArray(int32_t arr[], size_t& length, bool doPad)
+const void BinaryParser::GetIntArray(int32_t arr[], size_t& length, bool doPad)
 {
 	GetArray(arr, length, doPad);
 }
 
-const void BinaryGCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad)
+const void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad)
 {
 	GetArray(arr, length, doPad);
 }
 
-void BinaryGCodeBuffer::SetFinished(bool f)
+void BinaryParser::SetFinished(bool f)
 {
 	isIdle = f;
 	if (f)
 	{
-		machineState->g53Active = false;		// G53 does not persist beyond the current line
+		gb.machineState->g53Active = false;		// G53 does not persist beyond the current line
 		Init();
 	}
 }
 
-const char *BinaryGCodeBuffer::GetIdentity() const
+FilePosition BinaryParser::GetFilePosition() const
 {
-	// I would have put this into MessageFormats.cpp but then G++ complains about an unresolved reference
-	const char * const codeChannelName[] =
-	{
-		"file",
-		"http",
-		"telnet",
-		"spi"
-	};
-	static_assert(ARRAY_SIZE(codeChannelName) == (size_t)CodeChannel::SPI + 1, "ID relations do not match");
-
-	return codeChannelName[(uint8_t)channel];
+	return (bufferLength != 0 && (header->flags & CodeFlags::FilePositionValid) != 0) ? header->filePosition : noFilePosition;
 }
 
-FilePosition BinaryGCodeBuffer::GetFilePosition(size_t bytesCached) const
+const char* BinaryParser::DataStart() const
 {
-	return (bufferLength != 0) ? header->filePosition : noFilePosition;
+	return gb.buffer;
 }
 
-void BinaryGCodeBuffer::PrintCommand(const StringRef& s) const
+size_t BinaryParser::DataLength() const
+{
+	return bufferLength;
+}
+
+void BinaryParser::PrintCommand(const StringRef& s) const
 {
 	if (bufferLength != 0 && (header->flags & CodeFlags::NoMajorCommandNumber) == 0)
 	{
@@ -347,7 +341,7 @@ void BinaryGCodeBuffer::PrintCommand(const StringRef& s) const
 	}
 }
 
-void BinaryGCodeBuffer::AppendFullCommand(const StringRef &s) const
+void BinaryParser::AppendFullCommand(const StringRef &s) const
 {
 	if (bufferLength != 0)
 	{
@@ -368,13 +362,13 @@ void BinaryGCodeBuffer::AppendFullCommand(const StringRef &s) const
 	}
 }
 
-size_t BinaryGCodeBuffer::AddPadding(size_t bytesRead) const
+size_t BinaryParser::AddPadding(size_t bytesRead) const
 {
     size_t padding = 4 - bytesRead % 4;
     return (padding != 4) ? bytesRead + padding : bytesRead;
 }
 
-template<typename T> const void BinaryGCodeBuffer::GetArray(T arr[], size_t& length, bool doPad)
+template<typename T> const void BinaryParser::GetArray(T arr[], size_t& length, bool doPad)
 {
 	if (seenParameter == nullptr)
 	{
@@ -433,11 +427,11 @@ template<typename T> const void BinaryGCodeBuffer::GetArray(T arr[], size_t& len
 	}
 }
 
-void BinaryGCodeBuffer::WriteParameters(const StringRef& s, bool quoteStrings) const
+void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const
 {
 	if (bufferLength != 0)
 	{
-		const char *parameterStart = reinterpret_cast<const char *>(buffer) + sizeof(CodeHeader);
+		const char *parameterStart = reinterpret_cast<const char *>(gb.buffer) + sizeof(CodeHeader);
 		const char *val = parameterStart + header->numParameters * sizeof(CodeParameter);
 		for (int i = 0; i < header->numParameters; i++)
 		{

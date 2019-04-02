@@ -35,7 +35,8 @@ public:
 	void ResendPacket(const PacketHeader *packet);			// Request retransmission of the given packet ID. This is always guaranteed to work
 	bool WriteState(uint32_t busyBuffers);
 	OutputBuffer *WriteCodeResponse(CodeChannel channel, MessageType type, OutputBuffer *response, bool isComplete);
-	bool WriteMacroRequest(const char *filename, bool reportMissing);
+	bool WriteMacroRequest(CodeChannel channel, const char *filename, bool reportMissing);
+	bool WriteAbortFileRequest(CodeChannel channel);
 	bool WriteObjectModel(OutputBuffer *data);
 	bool WriteHeightMap();
 

@@ -44,6 +44,7 @@ public:
 private:
 	QueuedCode *next;
 
+	bool isBinary;
 	char data[BufferSizePerQueueItem];
 	size_t dataLength;
 

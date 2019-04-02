@@ -393,19 +393,6 @@ bool DataTransfer::WriteState(uint32_t busyBuffers)
 	return true;
 }
 
-bool DataTransfer::WriteMacroRequest(const char *filename, bool reportMissing)
-{
-	size_t filenameLength = strlen(filename);
-	if (!CanWritePacket(sizeof(MacroRequest) + filenameLength))
-	{
-		return false;
-	}
-
-	WritePacketHeader(FirmwareRequest::MacroRequest, filenameLength);
-	WriteData(filename, filenameLength);
-	return true;
-}
-
 OutputBuffer *DataTransfer::WriteCodeResponse(CodeChannel channel, MessageType type, OutputBuffer *response, bool isComplete)
 {
 	// Try to write the packet header
@@ -419,14 +406,14 @@ OutputBuffer *DataTransfer::WriteCodeResponse(CodeChannel channel, MessageType t
 	// Write code reply header
 	CodeReplyHeader *replyHeader = WriteDataHeader<CodeReplyHeader>();
 	replyHeader->channel = channel;
-	replyHeader->flags = isComplete ? CodeReplyFlags::CodeComplete : 0;
+	replyHeader->flags = isComplete ? CodeReplyFlags::CodeComplete : CodeReplyFlags::NoFlags;
 	if ((type & MessageType::ErrorMessageFlag) != 0)
 	{
-		replyHeader->flags |= CodeReplyFlags::Error;
+		replyHeader->flags = (CodeReplyFlags)((uint8_t)replyHeader->flags | (uint8_t)CodeReplyFlags::Error);
 	}
 	else if ((type & MessageType::WarningMessageFlag) != 0)
 	{
-		replyHeader->flags |= CodeReplyFlags::Warning;
+		replyHeader->flags = (CodeReplyFlags)((uint8_t)replyHeader->flags | (uint8_t)CodeReplyFlags::Warning);
 	}
 	replyHeader->padding = 0;
 
@@ -451,13 +438,53 @@ OutputBuffer *DataTransfer::WriteCodeResponse(CodeChannel channel, MessageType t
 		if (response != nullptr)
 		{
 			// There is more data to come...
-			replyHeader->flags |= CodeReplyFlags::Push;
+			replyHeader->flags = (CodeReplyFlags)((uint8_t)replyHeader->flags | (uint8_t)CodeReplyFlags::Push);
 		}
 	}
 
 	// Finish packet and return what is left of the output buffer
 	header->length = bytesWritten;
 	return response;
+}
+
+bool DataTransfer::WriteMacroRequest(CodeChannel channel, const char *filename, bool reportMissing)
+{
+	size_t filenameLength = strlen(filename);
+	if (!CanWritePacket(sizeof(MacroRequest) + filenameLength))
+	{
+		return false;
+	}
+
+	// Write packet header
+	WritePacketHeader(FirmwareRequest::ExecuteMacro, filenameLength);
+
+	// Write header
+	MacroRequest *header = WriteDataHeader<MacroRequest>();
+	header->channel = channel;
+	header->reportMissing = reportMissing;
+	header->padding = 0;
+
+	// Write filename
+	WriteData(filename, filenameLength);
+	return true;
+}
+
+bool DataTransfer::WriteAbortFileRequest(CodeChannel channel)
+{
+	if (!CanWritePacket(sizeof(AbortFileRequest)))
+	{
+		return false;
+	}
+
+	// Write packet header
+	WritePacketHeader(FirmwareRequest::AbortFile, sizeof(AbortFileRequest));
+
+	// Write header
+	AbortFileRequest *header = WriteDataHeader<AbortFileRequest>();
+	header->channel = channel;
+	header->paddingA = 0;
+	header->paddingB = 0;
+	return true;
 }
 
 bool DataTransfer::WriteObjectModel(OutputBuffer *data)

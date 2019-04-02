@@ -9,7 +9,7 @@
 #include "WiFiInterface.h"
 #include "Platform.h"
 #include "RepRap.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "HttpResponder.h"
 #include "FtpResponder.h"
 #include "TelnetResponder.h"

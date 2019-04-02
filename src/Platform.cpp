@@ -2625,7 +2625,12 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 		break;
 
 	case (int)DiagnosticTestType::TimeSDWrite:
+#if HAS_HIGH_SPEED_SD
 		return reprap.GetGCodes().StartSDTiming(gb, reply);
+#else
+		reply.copy("No SD card interface available");
+		return GCodeResult::errorNotSupported;
+#endif
 
 	case (int)DiagnosticTestType::PrintObjectSizes:
 		reply.printf(

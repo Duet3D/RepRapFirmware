@@ -9,7 +9,7 @@
 
 #if SUPPORT_DOTSTAR_LED
 
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "sam/drivers/pdc/pdc.h"
 #include "sam/drivers/usart/usart.h"
 

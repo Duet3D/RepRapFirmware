@@ -85,7 +85,9 @@ enum class GCodeState : uint8_t
 	loadingFilament,
 	unloadingFilament,
 
+#if HAS_HIGH_SPEED_SD
 	timingSDwrite,
+#endif
 
 #if HAS_VOLTAGE_MONITOR
 	powerFailPausing1
@@ -101,7 +103,11 @@ public:
 
 	GCodeMachineState *previous;
 	float feedRate;
+#if HAS_HIGH_SPEED_SD
 	FileData fileState;
+#elif HAS_LINUX_INTERFACE
+	uint32_t fileId;							// virtual file ID to deal with stack push/pops when a file is being cancelled or finished in the wrong stack level
+#endif
 	ResourceBitmap lockedResources;
 	const char *errorMessage;
 	GCodeState state;
@@ -110,6 +116,9 @@ public:
 	unsigned int
 		drivesRelative : 1,
 		axesRelative : 1,
+#if HAS_LINUX_INTERFACE
+		isFileFinished : 1,
+#endif
 		doingFileMacro : 1,
 		waitWhileCooling : 1,
 		runningM501 : 1,
@@ -118,7 +127,6 @@ public:
 		g53Active : 1,							// true if seen G53 on this line of GCode
 		runningSystemMacro : 1,					// true if running a system macro file
 		usingInches : 1,						// true if units are inches not mm
-		// Caution: these next 3 will be modified out-of-process when we use RTOS, so they will need to be individual bool variables
 		waitingForAcknowledgement : 1,
 		messageAcknowledged : 1,
 		messageCancelled : 1;
@@ -126,6 +134,15 @@ public:
 	static GCodeMachineState *Allocate()
 	post(!result.IsLive(); result.state == GCodeState::normal);
 
+#if HAS_HIGH_SPEED_SD
+	bool DoingFile() const { return fileState.IsLive(); }
+#elif HAS_LINUX_INTERFACE
+	bool DoingFile() const { return fileId == 0; }
+
+	void SetFileExecuting();
+	void SetFileFinished();
+#endif
+	void CloseFile();
 	bool UsingMachineCoordinates() const { return g53Active || runningSystemMacro; }
 
 	// Copy values that may have been altered by config.g into this state record

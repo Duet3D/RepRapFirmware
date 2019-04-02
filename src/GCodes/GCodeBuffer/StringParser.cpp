@@ -1,5 +1,5 @@
 /*
- * GCodeBuffer.cpp
+ * StringParser.cpp
  *
  *  Created on: 6 Feb 2015
  *      Author: David
@@ -7,7 +7,9 @@
 
 //*************************************************************************************
 
-#include "StringGCodeBuffer.h"
+#include "StringParser.h"
+#include "GCodeBuffer.h"
+
 #include "GCodes/GCodes.h"
 #include "Platform.h"
 #include "RepRap.h"
@@ -15,18 +17,14 @@
 
 static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML file?
 
-StringGCodeBuffer::StringGCodeBuffer(const char* id, MessageType mt, bool usesCodeQueue)
-	: GCodeBuffer(mt, usesCodeQueue), identity(id), fileBeingWritten(nullptr), writingFileSize(0),
-	  eofStringCounter(0), hasCommandNumber(false), commandLetter('Q'), checksumRequired(false),
-	  binaryWriting(false)
+StringParser::StringParser(GCodeBuffer& gcodeBuffer)
+	: gb(gcodeBuffer), fileBeingWritten(nullptr), writingFileSize(0), eofStringCounter(0), toolNumberAdjust(0),
+	  hasCommandNumber(false), commandLetter('Q'), checksumRequired(false), binaryWriting(false)
 {
-	// Init is called by base class
-	Init();
 }
 
-void StringGCodeBuffer::Init()
+void StringParser::Init()
 {
-	GCodeBuffer::Init();
 	gcodeLineEnd = 0;
 	commandLength = 0;
 	readPointer = -1;
@@ -35,29 +33,29 @@ void StringGCodeBuffer::Init()
 	bufferState = GCodeBufferState::parseNotStarted;
 }
 
-void StringGCodeBuffer::Diagnostics(MessageType mtype)
+void StringParser::Diagnostics(MessageType mtype)
 {
 	String<ScratchStringLength> scratchString;
 	switch (bufferState)
 	{
 	case GCodeBufferState::parseNotStarted:
-		scratchString.printf("%s is idle", GetIdentity());
+		scratchString.printf("%s is idle", gb.GetIdentity());
 		break;
 
 	case GCodeBufferState::ready:
-		scratchString.printf("%s is ready with \"%s\"", GetIdentity(), gcodeBuffer);
+		scratchString.printf("%s is ready with \"%s\"", gb.GetIdentity(), gb.buffer);
 		break;
 
 	case GCodeBufferState::executing:
-		scratchString.printf("%s is doing \"%s\"", GetIdentity(), gcodeBuffer);
+		scratchString.printf("%s is doing \"%s\"", gb.GetIdentity(), gb.buffer);
 		break;
 
 	default:
-		scratchString.printf("%s is assembling a command", GetIdentity());
+		scratchString.printf("%s is assembling a command", gb.GetIdentity());
 	}
 
 	scratchString.cat(" in state(s)");
-	const GCodeMachineState *ms = machineState;
+	const GCodeMachineState *ms = gb.machineState;
 	do
 	{
 		scratchString.catf(" %d", (int)ms->state);
@@ -68,23 +66,23 @@ void StringGCodeBuffer::Diagnostics(MessageType mtype)
 	reprap.GetPlatform().Message(mtype, scratchString.c_str());
 }
 
-inline void StringGCodeBuffer::AddToChecksum(char c)
+inline void StringParser::AddToChecksum(char c)
 {
 	computedChecksum ^= (uint8_t)c;
 }
 
-inline void StringGCodeBuffer::StoreAndAddToChecksum(char c)
+inline void StringParser::StoreAndAddToChecksum(char c)
 {
 	computedChecksum ^= (uint8_t)c;
-	if (gcodeLineEnd < ARRAY_SIZE(gcodeBuffer))
+	if (gcodeLineEnd < ARRAY_SIZE(gb.buffer))
 	{
-		gcodeBuffer[gcodeLineEnd++] = c;
+		gb.buffer[gcodeLineEnd++] = c;
 	}
 }
 
 // Add a byte to the code being assembled.  If false is returned, the code is
 // not yet complete.  If true, it is complete and ready to be acted upon.
-bool StringGCodeBuffer::Put(char c)
+bool StringParser::Put(char c)
 {
 	if (c != 0)
 	{
@@ -232,7 +230,7 @@ bool StringGCodeBuffer::Put(char c)
 
 // This is called when we are fed a null, CR or LF character.
 // Return true if there is a completed command ready to be executed.
-bool StringGCodeBuffer::LineFinished()
+bool StringParser::LineFinished()
 {
 	if (gcodeLineEnd == 0)
 	{
@@ -241,26 +239,26 @@ bool StringGCodeBuffer::LineFinished()
 		return false;
 	}
 
-	if (gcodeLineEnd == ARRAY_SIZE(gcodeBuffer))
+	if (gcodeLineEnd == ARRAY_SIZE(gb.buffer))
 	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "G-Code buffer '%s' length overflow\n", GetIdentity());
+		reprap.GetPlatform().MessageF(ErrorMessage, "G-Code buffer '%s' length overflow\n", gb.GetIdentity());
 		Init();
 		return false;
 	}
 
-	gcodeBuffer[gcodeLineEnd] = 0;
+	gb.buffer[gcodeLineEnd] = 0;
 	const bool badChecksum = (hadChecksum && computedChecksum != declaredChecksum);
-	const bool missingChecksum = (checksumRequired && !hadChecksum && machineState->previous == nullptr);
+	const bool missingChecksum = (checksumRequired && !hadChecksum && gb.machineState->previous == nullptr);
 	if (reprap.Debug(moduleGcodes) && fileBeingWritten == nullptr)
 	{
-		reprap.GetPlatform().MessageF(DebugMessage, "%s%s: %s\n", GetIdentity(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gcodeBuffer);
+		reprap.GetPlatform().MessageF(DebugMessage, "%s%s: %s\n", gb.GetIdentity(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);
 	}
 
 	if (badChecksum)
 	{
 		if (hadLineNumber)
 		{
-			SafeSnprintf(gcodeBuffer, ARRAY_SIZE(gcodeBuffer), "M998 P%u", lineNumber);	// request resend
+			SafeSnprintf(gb.buffer, ARRAY_SIZE(gb.buffer), "M998 P%u", lineNumber);	// request resend
 		}
 		else
 		{
@@ -283,10 +281,10 @@ bool StringGCodeBuffer::LineFinished()
 // Decode this command command and find the start of the next one on the same line.
 // On entry, 'commandStart' has already been set to the address the start of where the command should be.
 // On return, the state must be set to 'ready' to indicate that a command is available and we should stop adding characters.
-void StringGCodeBuffer::DecodeCommand()
+void StringParser::DecodeCommand()
 {
 	// Check for a valid command letter at the start
-	const char cl = toupper(gcodeBuffer[commandStart]);
+	const char cl = toupper(gb.buffer[commandStart]);
 	commandFraction = -1;
 	if (cl == 'G' || cl == 'M' || cl == 'T')
 	{
@@ -294,34 +292,34 @@ void StringGCodeBuffer::DecodeCommand()
 		hasCommandNumber = false;
 		commandNumber = -1;
 		parameterStart = commandStart + 1;
-		const bool negative = (gcodeBuffer[parameterStart] == '-');
+		const bool negative = (gb.buffer[parameterStart] == '-');
 		if (negative)
 		{
 			++parameterStart;
 		}
-		if (isdigit(gcodeBuffer[parameterStart]))
+		if (isdigit(gb.buffer[parameterStart]))
 		{
 			hasCommandNumber = true;
 			// Read the number after the command letter
 			commandNumber = 0;
 			do
 			{
-				commandNumber = (10 * commandNumber) + (gcodeBuffer[parameterStart] - '0');
+				commandNumber = (10 * commandNumber) + (gb.buffer[parameterStart] - '0');
 				++parameterStart;
 			}
-			while (isdigit(gcodeBuffer[parameterStart]));
+			while (isdigit(gb.buffer[parameterStart]));
 			if (negative)
 			{
 				commandNumber = -commandNumber;
 			}
 
 			// Read the fractional digit, if any
-			if (gcodeBuffer[parameterStart] == '.')
+			if (gb.buffer[parameterStart] == '.')
 			{
 				++parameterStart;
-				if (isdigit(gcodeBuffer[parameterStart]))
+				if (isdigit(gb.buffer[parameterStart]))
 				{
-					commandFraction = gcodeBuffer[parameterStart] - '0';
+					commandFraction = gb.buffer[parameterStart] - '0';
 					++parameterStart;
 				}
 			}
@@ -332,7 +330,7 @@ void StringGCodeBuffer::DecodeCommand()
 		bool primed = false;
 		for (commandEnd = parameterStart; commandEnd < gcodeLineEnd; ++commandEnd)
 		{
-			const char c = gcodeBuffer[commandEnd];
+			const char c = gb.buffer[commandEnd];
 			char c2;
 			if (c == '"')
 			{
@@ -377,39 +375,26 @@ void StringGCodeBuffer::DecodeCommand()
 }
 
 // Add an entire string, overwriting any existing content and adding '\n' at the end if necessary to make it a complete line
-bool StringGCodeBuffer::Put(const char *data, size_t len)
+void StringParser::Put(const char *str, size_t len)
 {
 	Init();
-
 	for (size_t i = 0; i < len; i++)
 	{
-		const char c = data[i];
-		if (IsWritingBinary())
+		if (Put(str[i]))	// if the line is complete
 		{
-			// HTML uploads are handled by the GCodes class
-			WriteBinaryToFile(c);
-		}
-		else if (Put(c))
-		{
-			if (IsWritingFile())
-			{
-				WriteToFile();
-			}
-
-			// Code is complete or has been written to file, stop here
-			return true;
+			return;
 		}
 	}
 
-	return Put('\n');		// in case there wasn't one at the end of the string
+	(void)Put('\n');		// because there wasn't one at the end of the string
 }
 
-void StringGCodeBuffer::Put(const char *data)
+void StringParser::Put(const char *str)
 {
-	(void)Put(data, strlen(data));
+	Put(str, strlen(str));
 }
 
-void StringGCodeBuffer::SetFinished(bool f)
+void StringParser::SetFinished(bool f)
 {
 	if (f)
 	{
@@ -421,7 +406,7 @@ void StringGCodeBuffer::SetFinished(bool f)
 		}
 		else
 		{
-			machineState->g53Active = false;		// G53 does not persist beyond the current line
+			gb.machineState->g53Active = false;		// G53 does not persist beyond the current line
 			Init();
 		}
 	}
@@ -432,31 +417,43 @@ void StringGCodeBuffer::SetFinished(bool f)
 }
 
 // Get the file position at the start of the current command
-FilePosition StringGCodeBuffer::GetFilePosition(size_t bytesCached) const
+FilePosition StringParser::GetFilePosition(size_t bytesCached) const
 {
-	if (machineState->fileState.IsLive())
+#if HAS_HIGH_SPEED_SD
+	if (gb.machineState->fileState.IsLive())
 	{
-		return machineState->fileState.GetPosition() - bytesCached - commandLength + commandStart;
+		return gb.machineState->fileState.GetPosition() - bytesCached - commandLength + commandStart;
 	}
+#endif
 	return noFilePosition;
+}
+
+const char* StringParser::DataStart() const
+{
+	return gb.buffer + commandStart;
+}
+
+size_t StringParser::DataLength() const
+{
+	return commandEnd - commandStart;
 }
 
 // Is 'c' in the G Code string? 'c' must be uppercase.
 // Leave the pointer there for a subsequent read.
-bool StringGCodeBuffer::Seen(char c)
+bool StringParser::Seen(char c)
 {
 	bool inQuotes = false;
 	unsigned int inBrackets = 0;
 	for (readPointer = parameterStart; (unsigned int)readPointer < commandEnd; ++readPointer)
 	{
-		const char b = gcodeBuffer[readPointer];
+		const char b = gb.buffer[readPointer];
 		if (b == '"')
 		{
 			inQuotes = !inQuotes;
 		}
 		else if (!inQuotes)
 		{
-			if (inBrackets == 0 && toupper(b) == c && (c != 'E' || (unsigned int)readPointer == parameterStart || !isdigit(gcodeBuffer[readPointer - 1])))
+			if (inBrackets == 0 && toupper(b) == c && (c != 'E' || (unsigned int)readPointer == parameterStart || !isdigit(gb.buffer[readPointer - 1])))
 			{
 				return true;
 			}
@@ -475,11 +472,11 @@ bool StringGCodeBuffer::Seen(char c)
 }
 
 // Get a float after a G Code letter found by a call to Seen()
-float StringGCodeBuffer::GetFValue()
+float StringParser::GetFValue()
 {
 	if (readPointer >= 0)
 	{
-		const float result = ReadFloatValue(&gcodeBuffer[readPointer + 1], nullptr);
+		const float result = ReadFloatValue(&gb.buffer[readPointer + 1], nullptr);
 		readPointer = -1;
 		return result;
 	}
@@ -490,17 +487,17 @@ float StringGCodeBuffer::GetFValue()
 
 // Get a colon-separated list of floats after a key letter
 // If doPad is true then we allow just one element to be given, in which case we fill all elements with that value
-const void StringGCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
+const void StringParser::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{
 		size_t length = 0;
-		const char *p = gcodeBuffer + readPointer + 1;
+		const char *p = gb.buffer + readPointer + 1;
 		for (;;)
 		{
 			if (length >= returnedLength)		// array limit has been set in here
 			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
+				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode float array that is too long: %s\n", gb.buffer);
 				readPointer = -1;
 				returnedLength = 0;
 				return;
@@ -538,17 +535,17 @@ const void StringGCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength,
 }
 
 // Get a :-separated list of ints after a key letter
-const void StringGCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad)
+const void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{
 		size_t length = 0;
-		const char *p = gcodeBuffer + readPointer + 1;
+		const char *p = gb.buffer + readPointer + 1;
 		for (;;)
 		{
 			if (length >= returnedLength) // Array limit has been set in here
 			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode int array that is too long: %s\n", gcodeBuffer);
+				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode int array that is too long: %s\n", gb.buffer);
 				readPointer = -1;
 				returnedLength = 0;
 				return;
@@ -585,17 +582,17 @@ const void StringGCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength,
 }
 
 // Get a :-separated list of unsigned ints after a key letter
-const void StringGCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool doPad)
+const void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{
 		size_t length = 0;
-		const char *p = gcodeBuffer + readPointer + 1;
+		const char *p = gb.buffer + readPointer + 1;
 		for (;;)
 		{
 			if (length >= returnedLength) // Array limit has been set in here
 			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode unsigned array that is too long: %s\n", gcodeBuffer);
+				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode unsigned array that is too long: %s\n", gb.buffer);
 				readPointer = -1;
 				returnedLength = 0;
 				return;
@@ -633,13 +630,13 @@ const void StringGCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& returnedL
 }
 
 // Get and copy a quoted string returning true if successful
-bool StringGCodeBuffer::GetQuotedString(const StringRef& str)
+bool StringParser::GetQuotedString(const StringRef& str)
 {
 	str.Clear();
 	if (readPointer >= 0)
 	{
 		++readPointer;				// skip the character that introduced the string
-		switch (gcodeBuffer[readPointer])
+		switch (gb.buffer[readPointer])
 		{
 		case '"':
 			return InternalGetQuotedString(str);
@@ -659,32 +656,32 @@ bool StringGCodeBuffer::GetQuotedString(const StringRef& str)
 }
 
 // Given that the current character is double-quote, fetch the quoted string
-bool StringGCodeBuffer::InternalGetQuotedString(const StringRef& str)
+bool StringParser::InternalGetQuotedString(const StringRef& str)
 {
 	str.Clear();
 	++readPointer;
 	for (;;)
 	{
-		char c = gcodeBuffer[readPointer++];
+		char c = gb.buffer[readPointer++];
 		if (c < ' ')
 		{
 			return false;
 		}
 		if (c == '"')
 		{
-			if (gcodeBuffer[readPointer++] != '"')
+			if (gb.buffer[readPointer++] != '"')
 			{
 				return true;
 			}
 		}
 		else if (c == '\'')
 		{
-			if (isalpha(gcodeBuffer[readPointer]))
+			if (isalpha(gb.buffer[readPointer]))
 			{
 				// Single quote before an alphabetic character forces that character to lower case
-				c = tolower(gcodeBuffer[readPointer++]);
+				c = tolower(gb.buffer[readPointer++]);
 			}
-			else if (gcodeBuffer[readPointer] == c)
+			else if (gb.buffer[readPointer] == c)
 			{
 				// Two single quotes are used to represent one
 				++readPointer;
@@ -697,7 +694,7 @@ bool StringGCodeBuffer::InternalGetQuotedString(const StringRef& str)
 
 // Get and copy a string which may or may not be quoted. If it is not quoted, it ends at the first space or control character.
 // Return true if successful.
-bool StringGCodeBuffer::GetPossiblyQuotedString(const StringRef& str)
+bool StringParser::GetPossiblyQuotedString(const StringRef& str)
 {
 	if (readPointer >= 0)
 	{
@@ -710,16 +707,16 @@ bool StringGCodeBuffer::GetPossiblyQuotedString(const StringRef& str)
 }
 
 // Get and copy a string which may or may not be quoted, starting at readPointer. Return true if successful.
-bool StringGCodeBuffer::InternalGetPossiblyQuotedString(const StringRef& str)
+bool StringParser::InternalGetPossiblyQuotedString(const StringRef& str)
 {
 	str.Clear();
-	if (gcodeBuffer[readPointer] == '"')
+	if (gb.buffer[readPointer] == '"')
 	{
 		return InternalGetQuotedString(str);
 	}
 
 #if SUPPORT_OBJECT_MODEL
-	if (gcodeBuffer[readPointer] == '[')
+	if (gb.buffer[readPointer] == '[')
 	{
 		return GetStringExpression(str);
 	}
@@ -728,7 +725,7 @@ bool StringGCodeBuffer::InternalGetPossiblyQuotedString(const StringRef& str)
 	commandEnd = gcodeLineEnd;				// the string is the remainder of the line of gcode
 	for (;;)
 	{
-		const char c = gcodeBuffer[readPointer++];
+		const char c = gb.buffer[readPointer++];
 		if (c < ' ')
 		{
 			break;
@@ -744,11 +741,11 @@ bool StringGCodeBuffer::InternalGetPossiblyQuotedString(const StringRef& str)
 // command that sets the name of a file to be printed.  In
 // preference use GetString() which requires the string to have
 // been preceded by a tag letter.
-bool StringGCodeBuffer::GetUnprecedentedString(const StringRef& str)
+bool StringParser::GetUnprecedentedString(const StringRef& str)
 {
 	readPointer = parameterStart;
 	char c;
-	while ((unsigned int)readPointer < commandEnd && ((c = gcodeBuffer[readPointer]) == ' ' || c == '\t'))
+	while ((unsigned int)readPointer < commandEnd && ((c = gb.buffer[readPointer]) == ' ' || c == '\t'))
 	{
 		++readPointer;	// skip leading spaces
 	}
@@ -756,11 +753,11 @@ bool StringGCodeBuffer::GetUnprecedentedString(const StringRef& str)
 }
 
 // Get an int32 after a G Code letter
-int32_t StringGCodeBuffer::GetIValue()
+int32_t StringParser::GetIValue()
 {
 	if (readPointer >= 0)
 	{
-		const int32_t result = ReadIValue(&gcodeBuffer[readPointer + 1], nullptr);
+		const int32_t result = ReadIValue(&gb.buffer[readPointer + 1], nullptr);
 		readPointer = -1;
 		return result;
 	}
@@ -770,11 +767,11 @@ int32_t StringGCodeBuffer::GetIValue()
 }
 
 // Get an uint32 after a G Code letter
-uint32_t StringGCodeBuffer::GetUIValue()
+uint32_t StringParser::GetUIValue()
 {
 	if (readPointer >= 0)
 	{
-		const uint32_t result = ReadUIValue(&gcodeBuffer[readPointer + 1], nullptr);
+		const uint32_t result = ReadUIValue(&gb.buffer[readPointer + 1], nullptr);
 		readPointer = -1;
 		return result;
 	}
@@ -784,7 +781,7 @@ uint32_t StringGCodeBuffer::GetUIValue()
 }
 
 // Get an IP address quad after a key letter
-bool StringGCodeBuffer::GetIPAddress(IPAddress& returnedIp)
+bool StringParser::GetIPAddress(IPAddress& returnedIp)
 {
 	if (readPointer < 0)
 	{
@@ -792,7 +789,7 @@ bool StringGCodeBuffer::GetIPAddress(IPAddress& returnedIp)
 		return false;
 	}
 
-	const char* p = &gcodeBuffer[readPointer + 1];
+	const char* p = &gb.buffer[readPointer + 1];
 	uint8_t ip[4];
 	unsigned int n = 0;
 	for (;;)
@@ -829,7 +826,7 @@ bool StringGCodeBuffer::GetIPAddress(IPAddress& returnedIp)
 }
 
 // Get a MAX address sextet after a key letter
-bool StringGCodeBuffer::GetMacAddress(uint8_t mac[6])
+bool StringParser::GetMacAddress(uint8_t mac[6])
 {
 	if (readPointer < 0)
 	{
@@ -837,7 +834,7 @@ bool StringGCodeBuffer::GetMacAddress(uint8_t mac[6])
 		return false;
 	}
 
-	const char* p = gcodeBuffer + readPointer + 1;
+	const char* p = gb.buffer + readPointer + 1;
 	unsigned int n = 0;
 	for (;;)
 	{
@@ -866,8 +863,28 @@ bool StringGCodeBuffer::GetMacAddress(uint8_t mac[6])
 	return n == 6;
 }
 
+bool StringParser::IsIdle() const
+{
+	return bufferState != GCodeBufferState::ready && bufferState != GCodeBufferState::executing;
+}
+
+bool StringParser::IsCompletelyIdle() const
+{
+	return gb.GetState() == GCodeState::normal && IsIdle();
+}
+
+bool StringParser::IsReady() const
+{
+	return bufferState == GCodeBufferState::ready;
+}
+
+bool StringParser::IsExecuting() const
+{
+	return bufferState == GCodeBufferState::executing;
+}
+
 // Write the command to a string
-void StringGCodeBuffer::PrintCommand(const StringRef& s) const
+void StringParser::PrintCommand(const StringRef& s) const
 {
 	s.printf("%c%d", commandLetter, commandNumber);
 	if (commandFraction >= 0)
@@ -877,13 +894,13 @@ void StringGCodeBuffer::PrintCommand(const StringRef& s) const
 }
 
 // Append the full command content to a string
-void StringGCodeBuffer::AppendFullCommand(const StringRef &s) const
+void StringParser::AppendFullCommand(const StringRef &s) const
 {
-	s.cat(gcodeBuffer);
+	s.cat(gb.buffer);
 }
 
 // Open a file to write to
-bool StringGCodeBuffer::OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
+bool StringParser::OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
 {
 	fileBeingWritten = reprap.GetPlatform().OpenFile(directory, fileName, OpenMode::write);
 	eofStringCounter = 0;
@@ -899,7 +916,7 @@ bool StringGCodeBuffer::OpenFileToWrite(const char* directory, const char* fileN
 }
 
 // Write the current GCode to file
-void StringGCodeBuffer::WriteToFile()
+void StringParser::WriteToFile()
 {
 	if (GetCommandLetter() == 'M')
 	{
@@ -909,7 +926,7 @@ void StringGCodeBuffer::WriteToFile()
 			fileBeingWritten = nullptr;
 			SetFinished(true);
 			const char* const r = (reprap.GetPlatform().EmulatingMarlin()) ? "Done saving file." : "";
-			reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, r);
+			reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 			return;
 		}
 	}
@@ -920,17 +937,17 @@ void StringGCodeBuffer::WriteToFile()
 			SetFinished(true);
 			String<ShortScratchStringLength> scratchString;
 			scratchString.printf("%" PRIi32 "\n", GetIValue());
-			reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, scratchString.c_str());
+			reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, scratchString.c_str());
 			return;
 		}
 	}
 
-	fileBeingWritten->Write(gcodeBuffer);
+	fileBeingWritten->Write(gb.buffer);
 	fileBeingWritten->Write('\n');
 	SetFinished(true);
 }
 
-void StringGCodeBuffer::WriteBinaryToFile(char b)
+void StringParser::WriteBinaryToFile(char b)
 {
 	if (b == eofString[eofStringCounter] && writingFileSize == 0)
 	{
@@ -960,7 +977,7 @@ void StringGCodeBuffer::WriteBinaryToFile(char b)
 	FinishWritingBinary();
 }
 
-void StringGCodeBuffer::FinishWritingBinary()
+void StringParser::FinishWritingBinary()
 {
 	// If we get here then we have come to the end of the data
 	fileBeingWritten->Close();
@@ -970,16 +987,16 @@ void StringGCodeBuffer::FinishWritingBinary()
 	if (crcOk)
 	{
 		const char* const r = (reprap.GetPlatform().EmulatingMarlin()) ? "Done saving file." : "";
-		reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, r);
+		reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 	}
 	else
 	{
-		reprap.GetGCodes().HandleReply(*this, GCodeResult::error, "CRC32 checksum doesn't match");
+		reprap.GetGCodes().HandleReply(gb, GCodeResult::error, "CRC32 checksum doesn't match");
 	}
 }
 
 // This is called when we reach the end of the file we are reading from
-void StringGCodeBuffer::FileEnded()
+void StringParser::FileEnded()
 {
 	if (IsWritingBinary())
 	{
@@ -1000,7 +1017,7 @@ void StringGCodeBuffer::FileEnded()
 				gotM29 = (GetCommandLetter() == 'M' && GetCommandNumber() == 29);
 				if (!gotM29)				// if it wasn't M29, write it to file
 				{
-					fileBeingWritten->Write(gcodeBuffer);
+					fileBeingWritten->Write(gb.buffer);
 					fileBeingWritten->Write('\n');
 				}
 			}
@@ -1010,13 +1027,13 @@ void StringGCodeBuffer::FileEnded()
 			fileBeingWritten = nullptr;
 			SetFinished(true);
 			const char* const r = (reprap.GetPlatform().EmulatingMarlin()) ? "Done saving file." : "";
-			reprap.GetGCodes().HandleReply(*this, GCodeResult::ok, r);
+			reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 		}
 	}
 }
 
 // Functions to read values from lines of GCode, allowing for expressions and variable substitution
-float StringGCodeBuffer::ReadFloatValue(const char *p, const char **endptr)
+float StringParser::ReadFloatValue(const char *p, const char **endptr)
 {
 #if SUPPORT_OBJECT_MODEL
 	if (*p == '[')
@@ -1043,7 +1060,7 @@ float StringGCodeBuffer::ReadFloatValue(const char *p, const char **endptr)
 	return SafeStrtof(p, endptr);
 }
 
-uint32_t StringGCodeBuffer::ReadUIValue(const char *p, const char **endptr)
+uint32_t StringParser::ReadUIValue(const char *p, const char **endptr)
 {
 #if SUPPORT_OBJECT_MODEL
 	if (*p == '[')
@@ -1102,7 +1119,7 @@ uint32_t StringGCodeBuffer::ReadUIValue(const char *p, const char **endptr)
 	return result;
 }
 
-int32_t StringGCodeBuffer::ReadIValue(const char *p, const char **endptr)
+int32_t StringParser::ReadIValue(const char *p, const char **endptr)
 {
 #if SUPPORT_OBJECT_MODEL
 	if (*p == '[')
@@ -1129,10 +1146,10 @@ int32_t StringGCodeBuffer::ReadIValue(const char *p, const char **endptr)
 #if SUPPORT_OBJECT_MODEL
 
 // Get a string expression. The current character is '['.
-bool StringGCodeBuffer::GetStringExpression(const StringRef& str)
+bool StringParser::GetStringExpression(const StringRef& str)
 {
 	ExpressionValue val;
-	switch (EvaluateExpression(gcodeBuffer + readPointer, nullptr, val))
+	switch (EvaluateExpression(gb.buffer + readPointer, nullptr, val))
 	{
 	case TYPE_OF(const char*):
 		str.copy(val.sVal);
@@ -1175,7 +1192,7 @@ bool StringGCodeBuffer::GetStringExpression(const StringRef& str)
 }
 
 // Evaluate an expression. the current character is '['.
-TypeCode StringGCodeBuffer::EvaluateExpression(const char *p, const char **endptr, ExpressionValue& rslt)
+TypeCode StringParser::EvaluateExpression(const char *p, const char **endptr, ExpressionValue& rslt)
 {
 	++p;						// skip the '['
 	// For now the only form of expression we handle is [variable-name]

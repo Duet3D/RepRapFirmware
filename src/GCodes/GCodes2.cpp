@@ -589,6 +589,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+#if HAS_HIGH_SPEED_SD
 	case 20:		// List files on SD card
 		if (!LockFileSystem(gb))		// don't allow more than one at a time to avoid contention on output buffers
 		{
@@ -696,7 +697,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 23: // Set file to print
 	case 32: // Select file and start SD print
 		// We now allow a file that is being printed to chain to another file. This is required for the resume-after-power-fail functionality.
-		if (fileGCode->OriginalMachineState().fileState.IsLive() && (&gb) != fileGCode)
+		if (fileGCode->IsDoingFile() && (&gb) != fileGCode)
 		{
 			reply.copy("Cannot set file to print, because a file is already being printed");
 			result = GCodeResult::error;
@@ -804,6 +805,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 		break;
+#endif
 
 	case 226: // Synchronous pause, normally initiated from within the file being printed
 		if (!isPaused && !IsPausing())
@@ -866,6 +868,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+#if HAS_HIGH_SPEED_SD
 	case 26: // Set SD position
 		// This is used between executing M23 to set up the file to print, and M25 to print it
 		if (gb.Seen('S'))
@@ -1070,6 +1073,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 		break;
+#endif
 
 	case 42:	// Turn an output pin on or off
 		if (gb.Seen('P'))
@@ -2388,7 +2392,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				// If we need to wait for an acknowledgement, save the state and set waiting
 				if ((sParam == 2 || sParam == 3) && Push(gb))						// stack the machine state including the file position
 				{
-					gb.MachineState().fileState.Close();							// stop reading from file
+					gb.MachineState().CloseFile();
 					gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
 				}
 
@@ -2802,6 +2806,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+#if HAS_HIGH_SPEED_SD
 	case 470: // mkdir
 		{
 			String<MaxFilenameLength> dirName;
@@ -2843,6 +2848,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 500: // Store parameters in config-override.g
 		result = WriteConfigOverrideFile(gb, reply);
 		break;
+#endif
 
 	case 501: // Load parameters from config-override.g
 		if (!gb.MachineState().runningM502 && !gb.MachineState().runningM501)		// when running M502 we ignore config-override.g
@@ -2870,6 +2876,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+#if HAS_HIGH_SPEED_SD
 	case 503: // List variable settings
 		{
 			if (!LockFileSystem(gb))
@@ -2936,6 +2943,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			reply.printf("Sys file path is %s", path.c_str());
 		}
 		break;
+#endif
 
 	case 540: // Set/report MAC address
 		if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
@@ -3167,6 +3175,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		result = SetOrReportZProbe(gb, reply);
 		break;
 
+#if HAS_HIGH_SPEED_SD
 	case 559:
 	case 560: // Binary writing
 		{
@@ -3207,6 +3216,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 		break;
+#endif
 
 	case 561: // Set identity transform and disable height map
 		if (!LockMovementAndWaitForStandstill(gb))

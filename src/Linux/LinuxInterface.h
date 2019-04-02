@@ -11,12 +11,10 @@
 #include "GCodes/GCodeFileInfo.h"
 #include "MessageType.h"
 
-class GCodes;
 class Platform;
 
 class DataTransfer;
 class GCodeBuffer;
-class BinaryGCodeBuffer;
 
 class OutputBuffer;
 class OutputStack;
@@ -25,23 +23,20 @@ class OutputStack;
 class LinuxInterface
 {
 public:
-	friend class GCodes;
 	friend class Platform;
 
 	LinuxInterface();
 	void Init();
 	void Spin();
 
-	bool RequestMacroFile(GCodeBuffer& gb, const char *filename, bool reportMissing);
+	void PrintPaused(FilePosition position);
 
 private:
 	DataTransfer *transfer;
 
-	BinaryGCodeBuffer *spiGCodeBuffer;
-
 	GCodeFileInfo fileInfo;
 	OutputStack *gcodeReply;
-	GCodeBuffer *InitGCodeBuffer();									// accessed by GCodes, will be further enhanced
+
 	void HandleGCodeReply(MessageType type, const char *reply);		// accessed by Platform
 	void HandleGCodeReply(MessageType type, OutputBuffer *buffer);	// accessed by Platform
 };

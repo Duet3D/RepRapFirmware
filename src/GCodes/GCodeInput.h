@@ -9,7 +9,6 @@
 #define GCODEINPUT_H
 
 #include "RepRapFirmware.h"
-#include "GCodes/GCodeBuffer/StringGCodeBuffer.h"
 #include "Storage/FileData.h"
 #include "MessageType.h"
 #include "RTOSIface/RTOSIface.h"
@@ -109,9 +108,10 @@ public:
 
 	bool FillBuffer(GCodeBuffer *gb) override;	// Fill a GCodeBuffer with the last available G-code
 	void Put(MessageType mtype, const char *buf);		// Append a null-terminated string to the buffer
-	void Put(MessageType mtype, char c);				// Append a single character. This does NOT lock the mutex!
 
 private:
+	void Put(MessageType mtype, char c);				// Append a single character. This does NOT lock the mutex!
+
 	Mutex bufMutex;
 };
 

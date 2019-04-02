@@ -95,12 +95,16 @@ enum class PauseReason
 #endif
 };
 
+// Keep this in sync with PrintStopReason in Linux/MessageFormats.h
 enum class StopPrintReason
 {
 	normalCompletion,
 	userCancelled,
 	abort
 };
+
+// Number of GCodeBuffer instances
+constexpr size_t NumGCodeBuffers = 10;
 
 //****************************************************************************************************
 
@@ -149,11 +153,12 @@ public:
 	bool ReadAuxMove(RawMove &m);
 #endif
 	void ClearMove();
+#if HAS_HIGH_SPEED_SD
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply);	// Open a file of G Codes to run
+#endif
 	void StartPrinting(bool fromStart);									// Start printing the file already selected
 	void GetCurrentCoordinates(const StringRef& s) const;				// Write where we are into a string
 	bool DoingFileMacro() const;										// Or still busy processing a macro file?
-	float FractionOfFilePrinted() const;								// Get fraction of file printed
 	FilePosition GetFilePosition() const;								// Return the current position of the file being printed in bytes
 	void Diagnostics(MessageType mtype);								// Send helpful information out
 
@@ -185,6 +190,7 @@ public:
 	NetworkGCodeInput *GetHTTPInput() const { return httpInput; }
 	NetworkGCodeInput *GetTelnetInput() const { return telnetInput; }
 #endif
+	GCodeBuffer *GetGCodeBuffer(size_t index) const { return gcodeSources[index]; }
 
 	bool IsFlashing() const { return isFlashing; }						// Is a new firmware binary going to be flashed?
 
@@ -240,7 +246,9 @@ public:
 	void EmergencyStop();												// Cancel everything
 	bool GetLastPrintingHeight(float& height) const;					// Get the height in user coordinates of the last printing move
 
+#if HAS_HIGH_SPEED_SD
 	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply);	// Start timing SD card file writing
+#endif
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -377,11 +385,14 @@ private:
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply);		// Handle M997
 	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply);				// Handle M260
 	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply);			// Handle M261
+
+#if HAS_HIGH_SPEED_SD
 	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile);	// Handle M37 to simulate a whole file
 	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode);		// Handle M37 to change the simulation mode
 
 	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const; // Write the config-override file
 	bool WriteConfigOverrideHeader(FileStore *f) const;							// Write the config-override header
+#endif
 
 	void CopyConfigFinalValues(GCodeBuffer& gb);							// Copy the feed rate etc. from the daemon to the input channels
 
@@ -422,9 +433,12 @@ private:
 
 	Platform& platform;													// The RepRap machine
 
+#if HAS_HIGH_SPEED_SD
 	FileGCodeInput* fileInput;											// ...
+#endif
+#ifdef SERIAL_MAIN_DEVICE
 	StreamGCodeInput* serialInput;										// ...
-
+#endif
 #if HAS_NETWORKING
 	NetworkGCodeInput* httpInput;										// These cache incoming G-codes...
 	NetworkGCodeInput* telnetInput;										// ...
@@ -433,7 +447,7 @@ private:
 	StreamGCodeInput* auxInput;											// ...for the GCodeBuffers below
 #endif
 
-	GCodeBuffer* gcodeSources[10];										// The various sources of gcodes
+	GCodeBuffer* gcodeSources[NumGCodeBuffers];							// The various sources of gcodes
 
 	GCodeBuffer*& httpGCode = gcodeSources[0];
 	GCodeBuffer*& telnetGCode = gcodeSources[1];
@@ -520,8 +534,12 @@ private:
 	float axisOffsets[MaxAxes];					// M206 axis offsets
 #endif
 
+#if HAS_HIGH_SPEED_SD
 	FileData fileToPrint;						// The next file to print
 	FilePosition fileOffsetToPrint;				// The offset to print from
+#elif HAS_LINUX_INTERFACE
+	FilePosition lastFilePosition;				// last valid file position for print progress estimations
+#endif
 
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
 	bool limitAxes;								// Don't think outside the box
@@ -584,11 +602,13 @@ private:
 	// Code queue
 	GCodeQueue *codeQueue;						// Stores certain codes for deferred execution
 
+#if HAS_HIGH_SPEED_SD
 	// SHA1 hashing
 	FileStore *fileBeingHashed;
 	SHA1Context hash;
 	bool StartHash(const char* filename);
 	GCodeResult AdvanceHash(const StringRef &reply);
+#endif
 
 	// Filament monitoring
 	FilamentSensorStatus lastFilamentError;

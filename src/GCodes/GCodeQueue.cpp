@@ -218,15 +218,15 @@ void QueuedCode::AssignFrom(GCodeBuffer &gb)
 {
 	toolNumberAdjust = gb.GetToolNumberAdjust();
 
-	const size_t length = min<size_t>(gb.DataLength(), ARRAY_SIZE(data));
-	memcpy(data, gb.DataStart(), length);
-	dataLength = length;
+	isBinary = gb.IsBinary();
+	memcpy(data, gb.DataStart(), gb.DataLength());
+	dataLength = gb.DataLength();
 }
 
 void QueuedCode::AssignTo(GCodeBuffer *gb)
 {
 	gb->SetToolNumberAdjust(toolNumberAdjust);
-	gb->Put(data, dataLength);
+	gb->Put(data, dataLength, isBinary);
 }
 
 // End

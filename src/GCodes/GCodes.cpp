@@ -26,7 +26,6 @@
 #include "GCodes.h"
 
 #include "GCodeBuffer/GCodeBuffer.h"
-#include "GCodeBuffer/StringGCodeBuffer.h"
 #include "GCodeQueue.h"
 #include "Heating/Heat.h"
 #include "Heating/HeaterProtection.h"
@@ -39,9 +38,6 @@
 
 #if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
-#endif
-#if HAS_LINUX_INTERFACE
-# include <Linux/LinuxInterface.h>
 #endif
 
 #if SUPPORT_DOTSTAR_LED
@@ -99,39 +95,52 @@ GCodes::GCodes(Platform& p) :
 #if HAS_VOLTAGE_MONITOR
 	powerFailScript(nullptr),
 #endif
-	isFlashing(false), fileBeingHashed(nullptr), lastWarningMillis(0), sdTimingFile(nullptr)
+	isFlashing(false), lastWarningMillis(0), sdTimingFile(nullptr)
 {
+#if HAS_HIGH_SPEED_SD
+	fileBeingHashed = nullptr;
 	fileInput = new FileGCodeInput();
-	fileGCode = new StringGCodeBuffer("file", GenericMessage, true);
+#endif
+	fileGCode = new GCodeBuffer("file", GenericMessage, true);
+#if defined(SERIAL_MAIN_DEVICE)
 	serialInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
-	serialGCode = new StringGCodeBuffer("serial", UsbMessage, true);
+#endif
+#if defined(SERIAL_MAIN_DEVICE) || HAS_LINUX_INTERFACE
+	serialGCode = new GCodeBuffer("serial", UsbMessage, true);
+#else
+	serialGCode = nullptr;
+#endif
 #if HAS_NETWORKING
-	httpInput = new NetworkGCodeInput;
-	httpGCode = new StringGCodeBuffer("http", HttpMessage, false);
-	telnetInput = new NetworkGCodeInput;
-	telnetGCode = new StringGCodeBuffer("telnet", TelnetMessage, true);
+	httpInput = new NetworkGCodeInput();
+	telnetInput = new NetworkGCodeInput();
+#endif
+#if HAS_NETWORKING || HAS_LINUX_INTERFACE
+	httpGCode = new GCodeBuffer("http", HttpMessage, false);
+	telnetGCode = new GCodeBuffer("telnet", TelnetMessage, true);
 #else
 	httpGCode = telnetGCode = nullptr;
 #endif
 #ifdef SERIAL_AUX_DEVICE
 	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
-	auxGCode = new StringGCodeBuffer("aux", LcdMessage, false);
+#endif
+#if defined(SERIAL_AUX_DEVICE) || HAS_LINUX_INTERFACE
+	auxGCode = new GCodeBuffer("aux", LcdMessage, false);
 #else
 	auxGCode = nullptr;
 #endif
-	daemonGCode = new StringGCodeBuffer("daemon", GenericMessage, false);
-#if SUPPORT_12864_LCD
+	daemonGCode = new GCodeBuffer("daemon", GenericMessage, false);
+#if SUPPORT_12864_LCD || HAS_LINUX_INTERFACE
 	lcdGCode = new GCodeBuffer("lcd", GenericMessage, false);
 #else
 	lcdGCode = nullptr;
 #endif
+	queuedGCode = new GCodeBuffer("queue", GenericMessage, false);
 #if HAS_LINUX_INTERFACE
-	spiGCode = reprap.GetLinuxInterface().InitGCodeBuffer();
+	spiGCode = new GCodeBuffer("spi", SpiMessage, false);
 #else
 	spiGCode = nullptr;
 #endif
-	queuedGCode = new StringGCodeBuffer("queue", GenericMessage, false);
-	autoPauseGCode = new StringGCodeBuffer("autopause", GenericMessage, false);
+	autoPauseGCode = new GCodeBuffer("autopause", GenericMessage, false);
 	codeQueue = new GCodeQueue();
 }
 
@@ -222,7 +231,9 @@ void GCodes::Reset()
 
 	nextGcodeSource = 0;
 
+#if HAS_HIGH_SPEED_SD
 	fileToPrint.Close();
+#endif
 	speedFactor = 100.0;
 
 	for (size_t i = 0; i < MaxExtruders; ++i)
@@ -328,27 +339,11 @@ bool GCodes::DoingFileMacro() const
 	return false;
 }
 
-float GCodes::FractionOfFilePrinted() const
-{
-	const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
-	if (!fileBeingPrinted.IsLive())
-	{
-		return -1.0;
-	}
-
-	const FilePosition len = fileBeingPrinted.Length();
-	if (len == 0)
-	{
-		return 0.0;
-	}
-
-    const FilePosition bytesCached = fileGCode->IsDoingFileMacro() ? 0: fileInput->BytesCached();
-	return (float)(fileBeingPrinted.GetPosition() - bytesCached) / (float)len;
-}
-
-// Return the current position of the file being printed in bytes
+// Return the current position of the file being printed in bytes.
+// Unlike other methods returning file positions it never returns noFilePosition
 FilePosition GCodes::GetFilePosition() const
 {
+#if HAS_HIGH_SPEED_SD
 	const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
 	if (!fileBeingPrinted.IsLive())
 	{
@@ -357,26 +352,25 @@ FilePosition GCodes::GetFilePosition() const
 
     const FilePosition bytesCached = fileGCode->IsDoingFileMacro() ? 0: fileInput->BytesCached();
     return fileBeingPrinted.GetPosition() - bytesCached;
+#elif HAS_LINUX_INTERFACE
+    return (lastFilePosition == noFilePosition) ? 0 : lastFilePosition;
+#else
+    return 0;
+#endif
 }
 
 // Start running the config file
 // We use triggerCGode as the source to prevent any triggers being executed until we have finished
 bool GCodes::RunConfigFile(const char* fileName)
 {
-#if HAS_LINUX_INTERFACE
-	// FIXME Due to the required work-around for this, triggers do not work any more.
-	// It seems like the only way to resolve this is by merging both GCodeBuffer types back together to one class.
-	runningConfigFile = DoFileMacro(*spiGCode, fileName, false);
-#else
 	runningConfigFile = DoFileMacro(*daemonGCode, fileName, false);
-#endif
 	return runningConfigFile;
 }
 
 // Return true if the daemon is busy running config.g or a trigger file
 bool GCodes::IsDaemonBusy() const
 {
-	return !daemonGCode->IsFileFinished();
+	return daemonGCode->IsDoingFile();
 }
 
 // Copy the feed rate etc. from the daemon to the input channels
@@ -422,7 +416,7 @@ void GCodes::Spin()
 
 	// Get the GCodeBuffer that we want to process a command from. Give priority to auto-pause.
 	GCodeBuffer *gbp = autoPauseGCode;
-	if (gbp->IsCompletelyIdle() && !(gbp->MachineState().fileState.IsLive()))
+	if (gbp->IsCompletelyIdle() && !(gbp->IsDoingFile()))
 	{
 		do
 		{
@@ -1357,9 +1351,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				platform.SetProbing(true);
 				SetMoveBufferDefaults();
 				moveBuffer.endStopsToCheck = ZProbeActive;
-				moveBuffer.coords[Z_AXIS] = (GetAxisIsHomed(Z_AXIS) && limitAxes)
+				moveBuffer.coords[Z_AXIS] = (GetAxisIsHomed(Z_AXIS))
 											? -platform.GetZProbeDiveHeight()			// Z axis has been homed, so no point in going very far
-											: -1.1 * platform.AxisTotalLength(Z_AXIS);	// Z axis not homed yet or moving outside limits, so treat this as a homing move
+											: -1.1 * platform.AxisTotalLength(Z_AXIS);	// Z axis not homed yet, so treat this as a homing move
 				moveBuffer.feedRate = platform.GetCurrentZProbeParameters().probeSpeed;
 				NewMoveAvailable(1);
 				gb.AdvanceState();
@@ -1567,7 +1561,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			SetMoveBufferDefaults();
 			moveBuffer.coords[Z_AXIS] += retractHop;
 			moveBuffer.feedRate = platform.MaxFeedrate(Z_AXIS);
+#if HAS_HIGH_SPEED_SD
 			moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;
+#elif HAS_LINUX_INTERFACE
+			moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(0) : noFilePosition;
+#else
+			moveBuffer.filePos = noFilePosition;
+#endif
 			moveBuffer.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
 			currentZHop = retractHop;
 			NewMoveAvailable(1);
@@ -1592,7 +1592,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				}
 				moveBuffer.feedRate = unRetractSpeed;
 				moveBuffer.isFirmwareRetraction = true;
-				moveBuffer.filePos = (&gb == fileGCode) ? gb.MachineState().fileState.GetPosition() - fileInput->BytesCached() : noFilePosition;
+#if HAS_HIGH_SPEED_SD
+				moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;
+#elif HAS_LINUX_INTERFACE
+				moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(0) : noFilePosition;
+#else
+				moveBuffer.filePos = noFilePosition;
+#endif
 				moveBuffer.canPauseAfter = true;
 				NewMoveAvailable(1);
 			}
@@ -1641,6 +1647,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		break;
 #endif
 
+#if HAS_HIGH_SPEED_SD
 	case GCodeState::timingSDwrite:
 		for (uint32_t writtenThisTime = 0; writtenThisTime < 100 * 1024; )
 		{
@@ -1669,6 +1676,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			writtenThisTime += reply.Capacity();
 		}
 		break;
+#endif
 
 	default:				// should not happen
 		platform.Message(ErrorMessage, "Undefined GCodeState\n");
@@ -1704,7 +1712,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 	{
 		gb.SetFinished(ActOnCode(gb, reply));
 	}
-	else if (gb.MachineState().fileState.IsLive())
+	else if (gb.IsDoingFile())
 	{
 		DoFilePrint(gb, reply);
 	}
@@ -1749,28 +1757,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 
 void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 {
-#if HAS_LINUX_INTERFACE
-	if (gb.IsFileFinished())
-	{
-		if (gb.MachineState().previous != nullptr)
-		{
-			// Finished a macro or finished processing config.g
-			if (runningConfigFile && gb.MachineState().previous->previous == nullptr)
-			{
-				CopyConfigFinalValues(gb);
-				runningConfigFile = false;
-			}
-			Pop(gb);
-			gb.Init();
-			if (gb.GetState() == GCodeState::normal)
-			{
-				UnlockAll(gb);
-				HandleReply(gb, GCodeResult::ok, "");
-				// FIXME: This probably breaks M600 and M226; bring in sync with DCS
-			}
-		}
-	}
-#elif HAS_HIGH_SPEED_SD
+#if HAS_HIGH_SPEED_SD
 	FileData& fd = gb.MachineState().fileState;
 
 	// Do we have more data to process?
@@ -1845,6 +1832,62 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 		break;
+	}
+#elif HAS_LINUX_INTERFACE
+	if (gb.IsFileFinished())
+	{
+		gb.Init();								// mark buffer as empty
+
+		if (&gb == fileGCode && gb.MachineState().previous == nullptr)
+		{
+			// Finished printing SD card file.
+			// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
+			// Don't close the file until all moves have been completed, in case the print gets paused.
+			// Also, this keeps the state as 'Printing' until the print really has finished.
+			if (   LockMovementAndWaitForStandstill(gb)					// wait until movement has finished
+				&& IsCodeQueueIdle()									// must also wait until deferred command queue has caught up
+			   )
+			{
+				StopPrint(StopPrintReason::normalCompletion);
+			}
+		}
+		else
+		{
+			// Finished a macro or finished processing config.g
+			gb.MachineState().CloseFile();
+			if (runningConfigFile && gb.MachineState().previous->previous == nullptr)
+			{
+				CopyConfigFinalValues(gb);
+				runningConfigFile = false;
+			}
+			Pop(gb);
+			gb.Init();
+			if (gb.GetState() == GCodeState::normal)
+			{
+				UnlockAll(gb);
+				HandleReply(gb, GCodeResult::ok, "");
+				if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
+				{
+					gb.Put("M600");
+					filamentChangePausePending = false;
+				}
+				else if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
+				{
+					gb.Put("M226");
+					pausePending = false;
+				}
+			}
+		}
+	}
+	else if (&gb == fileGCode)
+	{
+		const FilePosition pos = gb.GetFilePosition(0);
+		if (pos != noFilePosition)
+		{
+			// Keep the last known file position up-to-date for the print monitor.
+			// DCS - or rather plugins - may send codes without valid file positions
+			lastFilePosition = pos;
+		}
 	}
 #else
 	INTERNAL_ERROR;
@@ -1990,9 +2033,13 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 			pauseRestorePoint.virtualExtruderPosition = virtualExtruderPosition;
 			pauseRestorePoint.proportionDone = 0.0;
 
-			// TODO: when using RTOS there is a possible race condition in the following,
-			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
+#if HAS_HIGH_SPEED_SD
 			pauseRestorePoint.filePos = fileGCode->GetFilePosition(fileInput->BytesCached());
+#elif HAS_LINUX_INTERFACE
+			pauseRestorePoint.filePos = fileGCode->GetFilePosition(0);
+#else
+			pauseRestorePoint.filePos = noFilePosition;
+#endif
 #if SUPPORT_LASER || SUPPORT_IOBITS
 			pauseRestorePoint.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
 #endif
@@ -2004,6 +2051,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 			pauseRestorePoint.moveCoords[axis] = currentUserPosition[axis];
 		}
 
+#if HAS_HIGH_SPEED_SD
 		// If we skipped any moves, reset the file pointer to the start of the first move we need to replay
 		// The following could be delayed until we resume the print
 		FileData& fdata = fileGCode->MachineState().fileState;
@@ -2014,6 +2062,9 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 			fileGCode->Init();															// clear the next move
 			UnlockAll(*fileGCode);														// release any locks it had
 		}
+#else
+		UnlockAll(*fileGCode);
+#endif
 
 		codeQueue->PurgeEntries();
 
@@ -2154,7 +2205,13 @@ bool GCodes::DoEmergencyPause()
 		pauseRestorePoint.feedRate = fileGCode->MachineState().feedRate;
 		pauseRestorePoint.virtualExtruderPosition = virtualExtruderPosition;
 
+#if HAS_HIGH_SPEED_SD
 		pauseRestorePoint.filePos = fileGCode->GetFilePosition(fileInput->BytesCached());
+#elif HAS_LINUX_INTERFACE
+		pauseRestorePoint.filePos = fileGCode->GetFilePosition(0);
+#else
+		pauseRestorePoint.filePos = noFilePosition;
+#endif
 		pauseRestorePoint.proportionDone = 0.0;
 #if SUPPORT_LASER || SUPPORT_IOBITS
 		pauseRestorePoint.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
@@ -2219,7 +2276,7 @@ bool GCodes::LowVoltagePause()
 		// Run the auto-pause script
 		if (powerFailScript != nullptr)
 		{
-			((StringGCodeBuffer*)autoPauseGCode)->Put(powerFailScript);
+			autoPauseGCode->Put(powerFailScript);
 		}
 		autoPauseGCode->SetState(GCodeState::powerFailPausing1);
 		isPowerFailPaused = true;
@@ -3152,7 +3209,13 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 void GCodes::FinaliseMove(GCodeBuffer& gb)
 {
 	moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0) && !doingArcMove;		// pausing during an arc move isn't save because the arc centre get recomputed incorrectly when we resume
+#if HAS_HIGH_SPEED_SD
 	moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;
+#elif HAS_LINUX_INTERFACE
+	moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(0) : noFilePosition;
+#else
+	moveBuffer.filePos = noFilePosition;
+#endif
 
 	if (totalSegments > 1)
 	{
@@ -3304,17 +3367,12 @@ void GCodes::ClearMove()
 // Cancel any macro or print in progress
 void GCodes::AbortPrint(GCodeBuffer& gb)
 {
-	if (gb.MachineState().fileState.IsLive())
-	{
-		do
-		{
-			if (gb.MachineState().fileState.IsLive())
-			{
-				fileInput->Reset(gb.MachineState().fileState);
-				gb.MachineState().fileState.Close();
-			}
-		} while (gb.PopState());				// abandon any macros
-	}
+	// Stop executing any files or macros that this GCodeBuffer is running
+#if HAS_HIGH_SPEED_SD
+	gb.AbortFile(fileInput);
+#elif HAS_LINUX_INTERFACE
+	gb.AbortFile();
+#endif
 
 	if (&gb == fileGCode)						// if the current command came from a file being printed
 	{
@@ -3343,19 +3401,7 @@ void GCodes::EmergencyStop()
 // 0 = running a system macro automatically
 bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning)
 {
-#if HAS_LINUX_INTERFACE
-	if (!Push(gb))
-	{
-		return true;
-	}
-
-	// FIXME at present this only works for BinaryGCodeBuffer instances
-	if (!reprap.GetLinuxInterface().RequestMacroFile(gb, fileName, reportMissing))
-	{
-		Pop(gb);
-		return true;
-	}
-#elif HAS_HIGH_SPEED_SD
+#if HAS_HIGH_SPEED_SD
 	FileStore * const f = platform.OpenSysFile(fileName, OpenMode::read);
 	if (f == nullptr)
 	{
@@ -3375,6 +3421,15 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	}
 	gb.MachineState().fileState.Set(f);
 	fileInput->Reset(gb.MachineState().fileState);
+#elif HAS_LINUX_INTERFACE
+	if (!Push(gb))
+	{
+		return true;
+	}
+
+	gb.RequestMacroFile(fileName, reportMissing);
+#else
+	return reportMissing;
 #endif
 
 	gb.MachineState().doingFileMacro = true;
@@ -3393,9 +3448,13 @@ void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb)
 {
 	if (gb.IsDoingFileMacro())
 	{
+#if HAS_HIGH_SPEED_SD
 		FileData &file = gb.MachineState().fileState;
 		fileInput->Reset(file);
 		file.Close();
+#elif HAS_LINUX_INTERFACE
+		gb.MachineState().CloseFile();
+#endif
 
 		gb.PopState();
 		gb.Init();
@@ -3533,7 +3592,7 @@ void GCodes::DoManualProbe(GCodeBuffer& gb)
 {
 	if (Push(gb))										// stack the machine state including the file position
 	{
-		gb.MachineState().fileState.Close();							// stop reading from file
+		gb.MachineState().CloseFile();									// stop reading from file
 		gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
 		const MessageType mt = GetMessageBoxDevice(gb);
 		platform.SendAlert(mt, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", 2, 0.0, MakeBitmap<AxesBitmap>(Z_AXIS));
@@ -3689,6 +3748,7 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 	}
 }
 
+#if HAS_HIGH_SPEED_SD
 // Set up a file to print, but don't print it yet.
 // If successful return true, else write an error message to reply and return false
 bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply)
@@ -3717,12 +3777,17 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply)
 	reply.printf("GCode file \"%s\" not found\n", fileName);
 	return false;
 }
+#endif
 
 // Start printing the file already selected
 void GCodes::StartPrinting(bool fromStart)
 {
+#if HAS_HIGH_SPEED_SD
 	fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
 	fileInput->Reset(fileGCode->OriginalMachineState().fileState);
+#elif HAS_LINUX_INTERFACE
+	lastFilePosition = 0;
+#endif
 	lastFilamentError = FilamentSensorStatus::ok;
 	lastPrintingMoveHeight = -1.0;
 	reprap.GetPrintMonitor().StartedPrint();
@@ -4009,7 +4074,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 
 	// Check if filament support is being enforced
 	const int filamentDrive = gb.Seen('L') ? gb.GetIValue()
-								: ((dCount == 1) ? drives[0] : -1);
+			: ((dCount == 1) ? drives[0] : -1);
 	if (seen)
 	{
 		// Add or delete tool, so start by deleting the old one with this number, if any
@@ -4521,7 +4586,13 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 		reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, xAxes, yAxes);
 		SetMoveBufferDefaults();
 		moveBuffer.isFirmwareRetraction = true;
+#if HAS_HIGH_SPEED_SD
 		moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;
+#elif HAS_LINUX_INTERFACE
+		moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(0) : noFilePosition;
+#else
+		moveBuffer.filePos = noFilePosition;
+#endif
 		moveBuffer.xAxes = xAxes;
 		moveBuffer.yAxes = yAxes;
 
@@ -4696,6 +4767,7 @@ void GCodes::StopPrint(StopPrintReason reason)
 	segmentsLeft = 0;
 	isPaused = pausePending = filamentChangePausePending = false;
 
+#if HAS_HIGH_SPEED_SD
 	FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
 
 	fileInput->Reset(fileBeingPrinted);
@@ -4705,6 +4777,10 @@ void GCodes::StopPrint(StopPrintReason reason)
 	{
 		fileBeingPrinted.Close();
 	}
+#elif HAS_LINUX_INTERFACE
+	fileGCode->MachineState().CloseFile();
+	lastFilePosition = noFilePosition;
+#endif
 
 	reprap.GetMove().ResetMoveCounters();
 	codeQueue->Clear();
@@ -4825,7 +4901,6 @@ void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const
 
 	rp.feedRate = gb.MachineState().feedRate;
 	rp.virtualExtruderPosition = virtualExtruderPosition;
-	rp.toolNumber = reprap.GetCurrentToolNumber();
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	rp.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
@@ -4991,6 +5066,7 @@ void GCodes::ListTriggers(const StringRef& reply, TriggerInputsBitmap mask)
 	}
 }
 
+#if HAS_HIGH_SPEED_SD
 // M38 (SHA1 hash of a file) implementation:
 bool GCodes::StartHash(const char* filename)
 {
@@ -5039,6 +5115,7 @@ GCodeResult GCodes::AdvanceHash(const StringRef &reply)
 	fileBeingHashed = nullptr;
 	return GCodeResult::ok;
 }
+#endif
 
 bool GCodes::AllAxesAreHomed() const
 {
@@ -5055,6 +5132,8 @@ void GCodes::SetAxisIsHomed(unsigned int axis)
 	hiddenBabyStepOffsets[axis] = 0.0;
 #endif
 }
+
+#if HAS_HIGH_SPEED_SD
 
 // Write the config-override file returning true if an error occurred
 GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const
@@ -5136,6 +5215,8 @@ bool GCodes::WriteConfigOverrideHeader(FileStore *f) const
 	}
 	return ok;
 }
+
+#endif
 
 // Report the temperatures of one tool in M105 format
 void GCodes::ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const
@@ -5414,7 +5495,7 @@ const char* GCodes::GetMachineModeString() const
 // The Heat module will generate an appropriate error message, so no need to do that here.
 void GCodes::HandleHeaterFault(int heater)
 {
-	if (heaterFaultState == HeaterFaultState::noFault && fileGCode->OriginalMachineState().fileState.IsLive())
+	if (heaterFaultState == HeaterFaultState::noFault && fileGCode->OriginalMachineState().DoingFile())
 	{
 		heaterFaultState = HeaterFaultState::pausePending;
 		heaterFaultTime = millis();
@@ -5504,6 +5585,8 @@ bool GCodes::GetLastPrintingHeight(float& height) const
 	return false;
 }
 
+#if HAS_HIGH_SPEED_SD
+
 // Start timing SD card file writing
 GCodeResult GCodes::StartSDTiming(GCodeBuffer& gb, const StringRef& reply)
 {
@@ -5523,6 +5606,8 @@ GCodeResult GCodes::StartSDTiming(GCodeBuffer& gb, const StringRef& reply)
 	gb.SetState(GCodeState::timingSDwrite);
 	return GCodeResult::ok;
 }
+
+#endif
 
 #if SUPPORT_12864_LCD
 

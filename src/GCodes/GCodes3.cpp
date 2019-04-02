@@ -435,6 +435,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 	return GCodeResult::error;
 }
 
+#if HAS_HIGH_SPEED_SD
 // Handle M37 to simulate a whole file
 GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile)
 {
@@ -498,6 +499,7 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 	}
 	return GCodeResult::ok;
 }
+#endif
 
 // Handle M558
 GCodeResult GCodes::SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply)

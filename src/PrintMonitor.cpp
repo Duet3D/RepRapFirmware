@@ -193,7 +193,7 @@ void PrintMonitor::FirstLayerComplete()
 {
 	firstLayerFilament = gCodes.GetTotalRawExtrusion();
 	firstLayerDuration = GetPrintDuration() - warmUpDuration;
-	firstLayerProgress = gCodes.FractionOfFilePrinted();
+	firstLayerProgress = FractionOfFilePrinted();
 
 	// Update layer-based estimation time (if the object and layer heights are known)
 	// This won't be very accurate, but at least something can be sent the web interface and to PanelDue
@@ -221,7 +221,7 @@ void PrintMonitor::LayerComplete()
 			filamentUsagePerLayer[numLayerSamples] = extrRawTotal - lastLayerFilament;
 			layerDurations[numLayerSamples] = GetPrintDuration() - lastLayerChangeTime;
 		}
-		fileProgressPerLayer[numLayerSamples] = gCodes.FractionOfFilePrinted();
+		fileProgressPerLayer[numLayerSamples] = FractionOfFilePrinted();
 		numLayerSamples++;
 	}
 	else
@@ -235,7 +235,7 @@ void PrintMonitor::LayerComplete()
 
 		layerDurations[MAX_LAYER_SAMPLES - 1] = GetPrintDuration() - lastLayerChangeTime;
 		filamentUsagePerLayer[MAX_LAYER_SAMPLES - 1] = extrRawTotal - lastLayerFilament;
-		fileProgressPerLayer[MAX_LAYER_SAMPLES - 1] = gCodes.FractionOfFilePrinted();
+		fileProgressPerLayer[MAX_LAYER_SAMPLES - 1] = FractionOfFilePrinted();
 	}
 	lastLayerFilament = extrRawTotal;
 
@@ -277,6 +277,15 @@ void PrintMonitor::StoppedPrint()
 	lastLayerChangeTime = lastLayerFilament = lastLayerZ = 0.0;
 }
 
+float PrintMonitor::FractionOfFilePrinted() const
+{
+	if (!printingFileInfo.isValid || printingFileInfo.fileSize == 0)
+	{
+		return -1.0;
+	}
+	return (float)reprap.GetGCodes().GetFilePosition() / (float)printingFileInfo.fileSize;
+}
+
 // Estimate the print time left in seconds on a preset estimation method
 float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 {
@@ -294,7 +303,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 		case fileBased:
 		{
 			// Can we provide an estimation at all?
-			const float fractionPrinted = gCodes.FractionOfFilePrinted();
+			const float fractionPrinted = FractionOfFilePrinted();
 			if (fractionPrinted < ESTIMATION_MIN_FILE_USAGE || heatingUp)
 			{
 				// No, we haven't printed enough of the file yet. We can't provide an estimation at this moment

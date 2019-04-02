@@ -273,7 +273,7 @@ void RepRap::Init()
 
 	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
-#if !defined(DUET3_V05)					// Duet 3 0.5 has no local SD card
+#if HAS_HIGH_SPEED_SD
 	// Try to mount the first SD card
 	{
 		GCodeResult rslt;
@@ -1508,7 +1508,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 
 		// Fraction of file printed
-		response->catf("],\"fractionPrinted\":%.1f", (double)((printMonitor->IsPrinting()) ? (gCodes->FractionOfFilePrinted() * 100.0) : 0.0));
+		response->catf("],\"fractionPrinted\":%.1f", (double)((printMonitor->IsPrinting()) ? (printMonitor->FractionOfFilePrinted() * 100.0) : 0.0));
 
 		// Byte position of the file being printed
 		response->catf(",\"filePosition\":%lu", gCodes->GetFilePosition());
@@ -1828,7 +1828,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	if (printMonitor->IsPrinting())
 	{
 		// Send the fraction printed
-		response->catf(",\"fraction_printed\":%.4f", (double)max<float>(0.0, gCodes->FractionOfFilePrinted()));
+		response->catf(",\"fraction_printed\":%.4f", (double)max<float>(0.0, printMonitor->FractionOfFilePrinted()));
 	}
 
 	// Short messages are now pushed directly to PanelDue, so don't include them here as well

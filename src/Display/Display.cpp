@@ -9,8 +9,8 @@
 
 #if SUPPORT_12864_LCD
 
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "GCodes/GCodes.h"
-#include "GCodes/GCodeBuffer.h"
 #include "IoPorts.h"
 #include "Pins.h"
 

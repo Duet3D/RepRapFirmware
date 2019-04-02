@@ -50,6 +50,7 @@ class PrintMonitor
 		void StartingPrint(const char *filename);		// Called to indicate a file will be printed (see M23)
 		void StartedPrint();							// Called whenever a new live print starts (see M24)
 		void StoppedPrint();							// Called whenever a file print has stopped
+		float FractionOfFilePrinted() const;			// Return the fraction printed (0..1)
 
 		// Return an estimate in seconds based on a specific estimation method
 		float EstimateTimeLeft(PrintEstimationMethod method) const;

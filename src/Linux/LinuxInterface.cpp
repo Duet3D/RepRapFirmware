@@ -10,12 +10,12 @@
 #include "DataTransfer.h"
 #include "MessageFormats.h"
 
-#include "RepRapFirmware.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "GCodes/GCodes.h"
-#include "GCodes/GCodeBuffer/BinaryGCodeBuffer.h"
 #include "Platform.h"
 #include "PrintMonitor.h"
 #include "RepRap.h"
+#include "RepRapFirmware.h"
 
 #if HAS_LINUX_INTERFACE
 
@@ -26,12 +26,10 @@ LinuxInterface::LinuxInterface() : transfer(new DataTransfer()), gcodeReply(new 
 void LinuxInterface::Init()
 {
 	transfer->Init();
-}
 
-GCodeBuffer *LinuxInterface::InitGCodeBuffer()
-{
-	spiGCodeBuffer = new BinaryGCodeBuffer(CodeChannel::SPI, MessageType::SpiMessage, true);
-	return spiGCodeBuffer;
+	// RepRap does not wait for config.g because DCS may not be running.
+	// Request it as the first action from the Linux controller
+	transfer->WriteMacroRequest(CodeChannel::daemon, CONFIG_FILE, true);
 }
 
 void LinuxInterface::Spin()
@@ -56,10 +54,17 @@ void LinuxInterface::Spin()
 			switch (request)
 			{
 			// Request the state of the G-Code buffers
-			case LinuxRequest::RequestState:
+			case LinuxRequest::GetState:
 			{
 				uint32_t busyBuffers = 0;
-				if (!spiGCodeBuffer->IsCompletelyIdle()) { busyBuffers |= (1 >> (uint16_t)CodeChannel::SPI); }
+				for (size_t i = 0; i < NumGCodeBuffers; i++)
+				{
+					if (!reprap.GetGCodes().GetGCodeBuffer(i)->IsCompletelyIdle())
+					{
+						busyBuffers |= (1 >> i);
+					}
+				}
+
 				if (!transfer->WriteState(busyBuffers))
 				{
 					transfer->ResendPacket(packet);
@@ -82,7 +87,17 @@ void LinuxInterface::Spin()
 			{
 				size_t dataLength = packet->length;
 				const char *data = transfer->ReadData(dataLength);
-				(void)spiGCodeBuffer->Put(data, dataLength);
+				const CodeReplyHeader *header = reinterpret_cast<const CodeReplyHeader*>(data);
+
+				GCodeBuffer *buffer = reprap.GetGCodes().GetGCodeBuffer((size_t)header->channel);
+				if (buffer->IsCompletelyIdle())
+				{
+					buffer->Put(data, dataLength, true);
+				}
+				else
+				{
+					transfer->ResendPacket(packet);
+				}
 				break;
 			}
 
@@ -137,8 +152,18 @@ void LinuxInterface::Spin()
 			// Print has been stopped
 			case LinuxRequest::PrintStopped:
 			{
-				StopPrintReason actualReason = (StopPrintReason)transfer->ReadPrintStoppedInfo();
-				reprap.GetGCodes().StopPrint(actualReason);
+				const PrintStoppedReason reason = transfer->ReadPrintStoppedInfo();
+				if (reason == PrintStoppedReason::normalCompletion)
+				{
+					// Just mark the print file as finished
+					GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((size_t)CodeChannel::file);
+					gb->SetPrintFinished();
+				}
+				else
+				{
+					// Stop the print with the given reason
+					reprap.GetGCodes().StopPrint((StopPrintReason)reason);
+				}
 				break;
 			}
 
@@ -149,7 +174,8 @@ void LinuxInterface::Spin()
 				bool error;
 				transfer->ReadMacroCompleteInfo(channel, error);
 
-				spiGCodeBuffer->FileEnded();
+				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((size_t)channel);
+				gb->MachineState().SetFileFinished();
 				break;
 			}
 
@@ -191,12 +217,27 @@ void LinuxInterface::Spin()
 
 		// Deal with macro file requests
 		bool reportMissing;
-		const char *requestedMacroFile = spiGCodeBuffer->GetRequestedMacroFile(reportMissing);
-		if (requestedMacroFile != nullptr)
+		for (size_t i = 0; i < NumGCodeBuffers; i++)
 		{
-			if (transfer->WriteMacroRequest(requestedMacroFile, reportMissing))
+			GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(i);
+			const CodeChannel channel = (CodeChannel)i;
+
+			// Handle macro start requests
+			const char *requestedMacroFile = gb->GetRequestedMacroFile(reportMissing);
+			if (requestedMacroFile != nullptr)
 			{
-				spiGCodeBuffer->SetRequestedMacroFile(nullptr, false);
+				if (transfer->WriteMacroRequest(channel, requestedMacroFile, reportMissing))
+				{
+					gb->RequestMacroFile(nullptr, false);
+				}
+			}
+			// Handle macro cancellation requests
+			else if (gb->IsMacroCancellationRequested())
+			{
+				if (transfer->WriteAbortFileRequest(channel))
+				{
+					gb->AcknowledgeCancellation();
+				}
 			}
 		}
 
@@ -205,20 +246,16 @@ void LinuxInterface::Spin()
 		{
 			MessageType type = gcodeReply->GetFirstItemType();
 			OutputBuffer *buffer = gcodeReply->GetFirstItem();
-			buffer = transfer->WriteCodeResponse(CodeChannel::SPI, type, buffer, /*(type & MessageType::LastMessageFlag) != 0*/ true);
+			// TODO make function to convert MessageType to CodeChannel
+			buffer = transfer->WriteCodeResponse(CodeChannel::spi, type, buffer, /*(type & MessageType::LastMessageFlag) != 0*/ true);
 			gcodeReply->SetFirstItem(buffer);
 		}
 	}
 }
 
-bool LinuxInterface::RequestMacroFile(GCodeBuffer& gb, const char *filename, bool reportMissing)
+void LinuxInterface::PrintPaused(FilePosition position)
 {
-	if (&gb == spiGCodeBuffer)
-	{
-		spiGCodeBuffer->SetRequestedMacroFile(filename, reportMissing);
-		return true;
-	}
-	return false;
+	// TODO enqueue packet
 }
 
 void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply)
