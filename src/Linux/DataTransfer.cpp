@@ -1,7 +1,7 @@
 /*
  * DataTransfer.cpp
  *
- *  Created on: Mar 28, 2019
+ *  Created on: 29 Mar 2019
  *      Author: Christian
  */
 
@@ -10,6 +10,7 @@
 #include "DataTransfer.h"
 
 #include "RepRapFirmware.h"
+#include "GCodes/GCodeMachineState.h"
 #include "Movement/Move.h"
 #include "Movement/BedProbing/Grid.h"
 #include "OutputMemory.h"
@@ -166,7 +167,7 @@ const char *DataTransfer::ReadData(size_t packetLength)
 void DataTransfer::ReadPrintStartedInfo(size_t packetLength, StringRef& filename, GCodeFileInfo& info)
 {
 	// Read header
-	PrintStartedInfo *header = ReadDataHeader<PrintStartedInfo>();
+	PrintStartedHeader *header = ReadDataHeader<PrintStartedHeader>();
 	info.fileSize = header->fileSize;
 	info.lastModifiedTime = header->lastModifiedTime;
 	info.layerHeight = header->layerHeight;
@@ -177,7 +178,7 @@ void DataTransfer::ReadPrintStartedInfo(size_t packetLength, StringRef& filename
 	info.numFilaments = header->numFilaments;
 
 	// Read filaments
-	const char *data = ReadData(packetLength - sizeof(PrintStartedInfo));
+	const char *data = ReadData(packetLength - sizeof(PrintStartedHeader));
 	size_t filamentsSize = info.numFilaments * sizeof(float);
 	memcpy(info.filamentNeeded, data, filamentsSize);
 	data += filamentsSize;
@@ -192,15 +193,21 @@ void DataTransfer::ReadPrintStartedInfo(size_t packetLength, StringRef& filename
 
 PrintStoppedReason DataTransfer::ReadPrintStoppedInfo()
 {
-	PrintStoppedInfo *header = ReadDataHeader<PrintStoppedInfo>();
+	PrintStoppedHeader *header = ReadDataHeader<PrintStoppedHeader>();
 	return header->reason;
 }
 
 void DataTransfer::ReadMacroCompleteInfo(CodeChannel& channel, bool &error)
 {
-	MacroCompleteInfo *header = ReadDataHeader<MacroCompleteInfo>();
+	MacroCompleteHeader *header = ReadDataHeader<MacroCompleteHeader>();
 	channel = header->channel;
 	error = header->error;
+}
+
+void DataTransfer::ReadLockUnlockRequest(CodeChannel& channel)
+{
+	LockUnlockHeader *header = ReadDataHeader<LockUnlockHeader>();
+	channel = header->channel;
 }
 
 void DataTransfer::ExchangeHeader()
@@ -380,20 +387,36 @@ template<typename T> T *DataTransfer::ReadDataHeader()
 	return reinterpret_cast<T*>(rxBuffer + rxPointer);
 }
 
-bool DataTransfer::WriteState(uint32_t busyBuffers)
+bool DataTransfer::WriteState(uint32_t busyChannels)
 {
-	if (!CanWritePacket(sizeof(StateResponse)))
+	if (!CanWritePacket(sizeof(ReportStateHeader)))
 	{
 		return false;
 	}
-	(void)WritePacketHeader(FirmwareRequest::ReportState, sizeof(StateResponse));
+	(void)WritePacketHeader(FirmwareRequest::ReportState, sizeof(ReportStateHeader));
 
-	StateResponse *state = WriteDataHeader<StateResponse>();
-	state->busyBuffers = busyBuffers;
+	ReportStateHeader *state = WriteDataHeader<ReportStateHeader>();
+	state->busyChannels = busyChannels;
 	return true;
 }
 
-OutputBuffer *DataTransfer::WriteCodeResponse(CodeChannel channel, MessageType type, OutputBuffer *response, bool isComplete)
+bool DataTransfer::WriteObjectModel(OutputBuffer *data)
+{
+	if (!CanWritePacket(data->Length()))
+	{
+		return false;
+	}
+
+	(void)WritePacketHeader(FirmwareRequest::ObjectModel, data->Length());
+	while (data != nullptr)
+	{
+		WriteData(data->UnreadData(), data->BytesLeft());
+		data = OutputBuffer::Release(data);
+	}
+	return true;
+}
+
+OutputBuffer *DataTransfer::WriteCodeReply(MessageType type, OutputBuffer *response)
 {
 	// Try to write the packet header
 	if (!CanWritePacket(sizeof(CodeReplyHeader) + 4))
@@ -403,21 +426,11 @@ OutputBuffer *DataTransfer::WriteCodeResponse(CodeChannel channel, MessageType t
 	}
 	PacketHeader *header = WritePacketHeader(FirmwareRequest::CodeReply);
 
-	// Write code reply header
+	// Write header
 	CodeReplyHeader *replyHeader = WriteDataHeader<CodeReplyHeader>();
-	replyHeader->channel = channel;
-	replyHeader->flags = isComplete ? CodeReplyFlags::CodeComplete : CodeReplyFlags::NoFlags;
-	if ((type & MessageType::ErrorMessageFlag) != 0)
-	{
-		replyHeader->flags = (CodeReplyFlags)((uint8_t)replyHeader->flags | (uint8_t)CodeReplyFlags::Error);
-	}
-	else if ((type & MessageType::WarningMessageFlag) != 0)
-	{
-		replyHeader->flags = (CodeReplyFlags)((uint8_t)replyHeader->flags | (uint8_t)CodeReplyFlags::Warning);
-	}
-	replyHeader->padding = 0;
+	replyHeader->messageType = type;
 
-	// Write payload
+	// Write code reply
 	size_t bytesWritten = sizeof(CodeReplyHeader);
 	if (response != nullptr)
 	{
@@ -438,7 +451,7 @@ OutputBuffer *DataTransfer::WriteCodeResponse(CodeChannel channel, MessageType t
 		if (response != nullptr)
 		{
 			// There is more data to come...
-			replyHeader->flags = (CodeReplyFlags)((uint8_t)replyHeader->flags | (uint8_t)CodeReplyFlags::Push);
+			replyHeader->messageType = (MessageType)(replyHeader->messageType | PushFlag);
 		}
 	}
 
@@ -450,7 +463,7 @@ OutputBuffer *DataTransfer::WriteCodeResponse(CodeChannel channel, MessageType t
 bool DataTransfer::WriteMacroRequest(CodeChannel channel, const char *filename, bool reportMissing)
 {
 	size_t filenameLength = strlen(filename);
-	if (!CanWritePacket(sizeof(MacroRequest) + filenameLength))
+	if (!CanWritePacket(sizeof(ExecuteMacroHeader) + filenameLength))
 	{
 		return false;
 	}
@@ -459,7 +472,7 @@ bool DataTransfer::WriteMacroRequest(CodeChannel channel, const char *filename, 
 	WritePacketHeader(FirmwareRequest::ExecuteMacro, filenameLength);
 
 	// Write header
-	MacroRequest *header = WriteDataHeader<MacroRequest>();
+	ExecuteMacroHeader *header = WriteDataHeader<ExecuteMacroHeader>();
 	header->channel = channel;
 	header->reportMissing = reportMissing;
 	header->padding = 0;
@@ -471,35 +484,76 @@ bool DataTransfer::WriteMacroRequest(CodeChannel channel, const char *filename, 
 
 bool DataTransfer::WriteAbortFileRequest(CodeChannel channel)
 {
-	if (!CanWritePacket(sizeof(AbortFileRequest)))
+	if (!CanWritePacket(sizeof(AbortFileHeader)))
 	{
 		return false;
 	}
 
 	// Write packet header
-	WritePacketHeader(FirmwareRequest::AbortFile, sizeof(AbortFileRequest));
+	WritePacketHeader(FirmwareRequest::AbortFile, sizeof(AbortFileHeader));
 
 	// Write header
-	AbortFileRequest *header = WriteDataHeader<AbortFileRequest>();
+	AbortFileHeader *header = WriteDataHeader<AbortFileHeader>();
 	header->channel = channel;
 	header->paddingA = 0;
 	header->paddingB = 0;
 	return true;
 }
 
-bool DataTransfer::WriteObjectModel(OutputBuffer *data)
+bool DataTransfer::WriteStackEvent(CodeChannel channel, GCodeMachineState& state)
 {
-	if (!CanWritePacket(data->Length()))
+	if (!CanWritePacket(sizeof(StackEventHeader)))
 	{
 		return false;
 	}
 
-	(void)WritePacketHeader(FirmwareRequest::ObjectModel, data->Length());
-	while (data != nullptr)
+	// Get stack depth
+	uint8_t stackDepth = 0;
+	for (GCodeMachineState *ms = &state; ms != nullptr; ms = ms->previous)
 	{
-		WriteData(data->UnreadData(), data->BytesLeft());
-		data = OutputBuffer::Release(data);
+		stackDepth++;
 	}
+
+	// Write packet header
+	WritePacketHeader(FirmwareRequest::StackEvent, sizeof(StackEventHeader));
+
+	// Write header
+	StackEventHeader *header = WriteDataHeader<StackEventHeader>();
+	header->channel = channel;
+	header->depth = stackDepth;
+	header->flags = StackEventFlags::none;
+	if (state.axesRelative)
+	{
+		header->flags = (StackEventFlags)(header->flags | StackEventFlags::axesRelative);
+	}
+	if (state.drivesRelative)
+	{
+		header->flags = (StackEventFlags)(header->flags | StackEventFlags::drivesRelative);
+	}
+	if (state.usingInches)
+	{
+		header->flags = (StackEventFlags)(header->flags | StackEventFlags::usingInches);
+	}
+	header->feedrate = state.feedRate;
+	return true;
+}
+
+bool DataTransfer::WritePrintPaused(FilePosition position, PrintPausedReason reason)
+{
+	if (!CanWritePacket(sizeof(PrintPausedHeader)))
+	{
+		return false;
+	}
+
+	// Write packet header
+	WritePacketHeader(FirmwareRequest::PrintPaused, sizeof(PrintPausedHeader));
+
+	// Write header
+	PrintPausedHeader *header = WriteDataHeader<PrintPausedHeader>();
+	header->filePosition = position;
+	header->pauseReason = reason;
+	header->paddingA = 0;
+	header->paddingB = 0;
 	return true;
 }
 
@@ -533,6 +587,24 @@ bool DataTransfer::WriteHeightMap()
 		float *zPoints = reinterpret_cast<float*>(txBuffer + txPointer + sizeof(HeightMapHeader));
 		reprap.GetMove().SaveHeightMapToArray(zPoints);
 	}
+	return true;
+}
+
+bool DataTransfer::WriteLocked(CodeChannel channel)
+{
+	if (!CanWritePacket(sizeof(LockUnlockHeader)))
+	{
+		return false;
+	}
+
+	// Write packet header
+	WritePacketHeader(FirmwareRequest::Locked, sizeof(LockUnlockHeader));
+
+	// Write header
+	LockUnlockHeader *header = WriteDataHeader<LockUnlockHeader>();
+	header->channel = channel;
+	header->paddingA = 0;
+	header->paddingB = 0;
 	return true;
 }
 

@@ -44,6 +44,10 @@
 # include "Fans/DotStarLed.h"
 #endif
 
+#if HAS_LINUX_INTERFACE
+# include "Linux/LinuxInterface.h"
+#endif
+
 #if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
@@ -101,14 +105,14 @@ GCodes::GCodes(Platform& p) :
 	fileBeingHashed = nullptr;
 	fileInput = new FileGCodeInput();
 #endif
-	fileGCode = new GCodeBuffer("file", GenericMessage, true);
+	fileGCode = new GCodeBuffer("file", FileBufferMessage, true);
 #if defined(SERIAL_MAIN_DEVICE)
 	serialInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
 #endif
 #if defined(SERIAL_MAIN_DEVICE) || HAS_LINUX_INTERFACE
-	serialGCode = new GCodeBuffer("serial", UsbMessage, true);
+	usbGCode = new GCodeBuffer("serial", UsbMessage, true);
 #else
-	serialGCode = nullptr;
+	usbGCode = nullptr;
 #endif
 #if HAS_NETWORKING
 	httpInput = new NetworkGCodeInput();
@@ -124,23 +128,23 @@ GCodes::GCodes(Platform& p) :
 	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
 #endif
 #if defined(SERIAL_AUX_DEVICE) || HAS_LINUX_INTERFACE
-	auxGCode = new GCodeBuffer("aux", LcdMessage, false);
+	auxGCode = new GCodeBuffer("aux", AuxMessage, false);
 #else
 	auxGCode = nullptr;
 #endif
-	daemonGCode = new GCodeBuffer("daemon", GenericMessage, false);
+	daemonGCode = new GCodeBuffer("daemon", DaemonBufferMessage, false);
 #if SUPPORT_12864_LCD || HAS_LINUX_INTERFACE
-	lcdGCode = new GCodeBuffer("lcd", GenericMessage, false);
+	lcdGCode = new GCodeBuffer("lcd", LcdMessage, false);
 #else
 	lcdGCode = nullptr;
 #endif
-	queuedGCode = new GCodeBuffer("queue", GenericMessage, false);
+	queuedGCode = new GCodeBuffer("queue", CodeQueueBufferMessage, false);
 #if HAS_LINUX_INTERFACE
 	spiGCode = new GCodeBuffer("spi", SpiMessage, false);
 #else
 	spiGCode = nullptr;
 #endif
-	autoPauseGCode = new GCodeBuffer("autopause", GenericMessage, false);
+	autoPauseGCode = new GCodeBuffer("autopause", AutoPauseBufferMessage, false);
 	codeQueue = new GCodeQueue();
 }
 
@@ -199,7 +203,7 @@ void GCodes::Init()
 	heaterFaultTimeout = DefaultHeaterFaultTimeout;
 
 #if SUPPORT_SCANNER
-	reprap.GetScanner().SetGCodeBuffer(serialGCode);
+	reprap.GetScanner().SetGCodeBuffer(usbGCode);
 #endif
 
 #if SUPPORT_DOTSTAR_LED
@@ -505,7 +509,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				}
 			}
 
-			if (platform.Emulating() == Compatibility::nanoDLP && &gb == serialGCode && !DoingFileMacro())
+			if (platform.Emulating() == Compatibility::nanoDLP && &gb == usbGCode && !DoingFileMacro())
 			{
 				reply.copy("Z_move_comp");
 			}
@@ -880,6 +884,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			}
 			platform.MessageF(LogMessage, "%s\n", reply.c_str());
 			gb.SetState(GCodeState::normal);
+
+#if HAS_LINUX_INTERFACE
+			reprap.GetLinuxInterface().ReportPause();
+#endif
 		}
 		break;
 
@@ -1733,14 +1741,14 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 		telnetInput->FillBuffer(telnetGCode);
 	}
 #endif
-	else if (   &gb == serialGCode
+	else if (   &gb == usbGCode
 #if SUPPORT_SCANNER
 			 && !reprap.GetScanner().IsRegistered()
 #endif
 			)
 	{
-		// USB interface. This line may be shared with a 3D scanner
-		serialInput->FillBuffer(serialGCode);
+		// USB. This line may be shared with an external 3D scanner
+		serialInput->FillBuffer(usbGCode);
 	}
 #ifdef SERIAL_AUX_DEVICE
 	else if (&gb == auxGCode)
@@ -2091,6 +2099,45 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 
 	gb.SetState((reason == PauseReason::filamentChange) ? GCodeState::filamentChangePause1 : GCodeState::pausing1);
 	isPaused = true;
+
+#if HAS_LINUX_INTERFACE
+	// Get the print pause reason that is compatible with the API
+	PrintPausedReason pauseReason = PrintPausedReason::user;
+	switch (reason)
+	{
+	case PauseReason::user:
+		pauseReason = PrintPausedReason::user;
+		break;
+	case PauseReason::gcode:
+		pauseReason = PrintPausedReason::gcode;
+		break;
+	case PauseReason::filamentChange:
+		pauseReason = PrintPausedReason::filamentChange;
+		break;
+	case PauseReason::trigger:
+		pauseReason = PrintPausedReason::trigger;
+		break;
+	case PauseReason::heaterFault:
+		pauseReason = PrintPausedReason::heaterFault;
+		break;
+	case PauseReason::filament:
+		pauseReason = PrintPausedReason::filament;
+		break;
+# if HAS_SMART_DRIVERS
+	case PauseReason::stall:
+		pauseReason = PrintPausedReason::stall;
+		break;
+# endif
+# if HAS_VOLTAGE_MONITOR
+	case PauseReason::lowVoltage:
+		pauseReason = PrintPausedReason::lowVoltage;
+		break;
+# endif
+	}
+
+	// Prepare notification for the Linux side
+	reprap.GetLinuxInterface().SetPauseReason(pauseRestorePoint.filePos, pauseReason);
+#endif
 
 	if (msg != nullptr)
 	{
@@ -2899,7 +2946,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 			ToolOffsetTransform(currentUserPosition, moveBuffer.coords, axesMentioned, !gb.MachineState().runningSystemMacro);
 																				// apply tool offset, axis mapping, baby stepping, Z hop and axis scaling
 			// If we are emulating Marlin for nanoDLP then we need to set a special end state
-			if (platform.Emulating() == Compatibility::nanoDLP && &gb == serialGCode && !DoingFileMacro())
+			if (platform.Emulating() == Compatibility::nanoDLP && &gb == usbGCode && !DoingFileMacro())
 			{
 				gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
 			}
@@ -3582,7 +3629,7 @@ MessageType GCodes::GetMessageBoxDevice(GCodeBuffer& gb) const
 	if (mt == GenericMessage)
 	{
 		// Command source was the file being printed, or a trigger. Send the message to PanelDue if there is one, else to the web server.
-		mt = (lastAuxStatusReportType >= 0) ? LcdMessage : HttpMessage;
+		mt = (lastAuxStatusReportType >= 0) ? AuxMessage : HttpMessage;
 	}
 	return mt;
 }
@@ -4176,7 +4223,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 		return;
 	}
 
-	const Compatibility c = (&gb == serialGCode || &gb == telnetGCode) ? platform.Emulating() : Compatibility::me;
+	const Compatibility c = (&gb == usbGCode || &gb == telnetGCode) ? platform.Emulating() : Compatibility::me;
 	const MessageType type = gb.GetResponseMessageType();
 	const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
 	const char* emulationType = nullptr;
@@ -4253,7 +4300,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply)
 		return;
 	}
 
-	const Compatibility c = (&gb == serialGCode || &gb == telnetGCode) ? platform.Emulating() : Compatibility::me;
+	const Compatibility c = (&gb == usbGCode || &gb == telnetGCode) ? platform.Emulating() : Compatibility::me;
 	const MessageType type = gb.GetResponseMessageType();
 	const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
 	const char* emulationType = nullptr;
@@ -5306,7 +5353,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 	{
 		if (now - gb.whenTimerStarted >= 1000)
 		{
-			if (platform.EmulatingMarlin() && (&gb == serialGCode || &gb == telnetGCode))
+			if (platform.EmulatingMarlin() && (&gb == usbGCode || &gb == telnetGCode))
 			{
 				// In Marlin emulation mode we should return a standard temperature report every second
 				GenerateTemperatureReport(reply);

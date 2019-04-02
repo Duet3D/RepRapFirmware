@@ -113,6 +113,8 @@ constexpr size_t NumGCodeBuffers = 10;
 class GCodes INHERIT_OBJECT_MODEL
 {
 public:
+	friend class LinuxInterface;
+
 	struct RawMove
 	{
 		float coords[MaxTotalDrivers];									// new positions for the axes, amount of movement for the extruders
@@ -190,7 +192,6 @@ public:
 	NetworkGCodeInput *GetHTTPInput() const { return httpInput; }
 	NetworkGCodeInput *GetTelnetInput() const { return telnetInput; }
 #endif
-	GCodeBuffer *GetGCodeBuffer(size_t index) const { return gcodeSources[index]; }
 
 	bool IsFlashing() const { return isFlashing; }						// Is a new firmware binary going to be flashed?
 
@@ -279,6 +280,7 @@ private:
 	void GrabMovement(const GCodeBuffer& gb);							// Grab the movement lock even if it is already owned
 	void UnlockAll(const GCodeBuffer& gb);								// Release all locks
 
+	GCodeBuffer *GetGCodeBuffer(size_t index) const { return gcodeSources[index]; }
 	void StartNextGCode(GCodeBuffer& gb, const StringRef& reply);		// Fetch a new or old GCode and process it
 	void RunStateMachine(GCodeBuffer& gb, const StringRef& reply);		// Execute a step of the state machine
 	void DoFilePrint(GCodeBuffer& gb, const StringRef& reply);			// Get G Codes from a file and print them
@@ -452,7 +454,7 @@ private:
 	GCodeBuffer*& httpGCode = gcodeSources[0];
 	GCodeBuffer*& telnetGCode = gcodeSources[1];
 	GCodeBuffer*& fileGCode = gcodeSources[2];
-	GCodeBuffer*& serialGCode = gcodeSources[3];
+	GCodeBuffer*& usbGCode = gcodeSources[3];
 	GCodeBuffer*& auxGCode = gcodeSources[4];							// This one is for the PanelDue on the async serial interface
 	GCodeBuffer*& daemonGCode = gcodeSources[5];						// Used for executing config.g and trigger macro files
 	GCodeBuffer*& queuedGCode = gcodeSources[6];

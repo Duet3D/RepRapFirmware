@@ -422,6 +422,10 @@ bool GCodeBuffer::PushState()
 	ms->messageAcknowledged = false;
 	ms->waitingForAcknowledgement = false;
 	machineState = ms;
+
+#if HAS_LINUX_INTERFACE
+	reportStack = true;
+#endif
 	return true;
 }
 
@@ -438,6 +442,10 @@ bool GCodeBuffer::PopState()
 
 	machineState = ms->previous;
 	GCodeMachineState::Release(ms);
+
+#if HAS_LINUX_INTERFACE
+	reportStack = true;
+#endif
 	return true;
 }
 
@@ -471,6 +479,8 @@ void GCodeBuffer::AbortFile()
 			}
 		} while (PopState());							// abandon any macros
 	}
+
+	cancelMacro = true;
 }
 
 bool GCodeBuffer::IsFileFinished() const
@@ -505,11 +515,6 @@ const char *GCodeBuffer::GetRequestedMacroFile(bool& reportMissing) const
 	return requestedMacroFile.IsEmpty() ? nullptr : requestedMacroFile.c_str();
 }
 
-void GCodeBuffer::RequestMacroCancellation()
-{
-	cancelMacro = true;
-}
-
 bool GCodeBuffer::IsMacroCancellationRequested() const
 {
 	return cancelMacro;
@@ -518,6 +523,16 @@ bool GCodeBuffer::IsMacroCancellationRequested() const
 void GCodeBuffer::AcknowledgeCancellation()
 {
 	cancelMacro = false;
+}
+
+bool GCodeBuffer::IsStackEventFlagged() const
+{
+	return reportStack;
+}
+
+void GCodeBuffer::AcknowledgeStackEvent()
+{
+	reportStack = false;
 }
 #endif
 
@@ -534,6 +549,15 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled)
 			ms->messageCancelled = cancelled;
 		}
 	}
+}
+
+MessageType GCodeBuffer::GetResponseMessageType() const
+{
+	if (isBinaryBuffer)
+	{
+		return (MessageType)((uint32_t)responseMessageType | (uint32_t)MessageType::BinaryCodeReplyFlag);
+	}
+	return responseMessageType;
 }
 
 FilePosition GCodeBuffer::GetFilePosition(size_t bytesCached) const

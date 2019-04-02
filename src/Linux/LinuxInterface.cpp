@@ -8,7 +8,6 @@
 
 #include "LinuxInterface.h"
 #include "DataTransfer.h"
-#include "MessageFormats.h"
 
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "GCodes/GCodes.h"
@@ -19,7 +18,7 @@
 
 #if HAS_LINUX_INTERFACE
 
-LinuxInterface::LinuxInterface() : transfer(new DataTransfer()), gcodeReply(new OutputStack())
+LinuxInterface::LinuxInterface() : transfer(new DataTransfer()), reportPause(false), gcodeReply(new OutputStack())
 {
 }
 
@@ -36,6 +35,7 @@ void LinuxInterface::Spin()
 {
 	if (transfer->IsReady())
 	{
+		// Process incoming packets
 		for (;;)
 		{
 			const PacketHeader *packet = transfer->ReadPacket();
@@ -56,16 +56,16 @@ void LinuxInterface::Spin()
 			// Request the state of the G-Code buffers
 			case LinuxRequest::GetState:
 			{
-				uint32_t busyBuffers = 0;
+				uint32_t busyChannels = 0;
 				for (size_t i = 0; i < NumGCodeBuffers; i++)
 				{
 					if (!reprap.GetGCodes().GetGCodeBuffer(i)->IsCompletelyIdle())
 					{
-						busyBuffers |= (1 >> i);
+						busyChannels |= (1 >> i);
 					}
 				}
 
-				if (!transfer->WriteState(busyBuffers))
+				if (!transfer->WriteState(busyChannels))
 				{
 					transfer->ResendPacket(packet);
 				}
@@ -87,7 +87,7 @@ void LinuxInterface::Spin()
 			{
 				size_t dataLength = packet->length;
 				const char *data = transfer->ReadData(dataLength);
-				const CodeReplyHeader *header = reinterpret_cast<const CodeReplyHeader*>(data);
+				const CodeHeader *header = reinterpret_cast<const CodeHeader*>(data);
 
 				GCodeBuffer *buffer = reprap.GetGCodes().GetGCodeBuffer((size_t)header->channel);
 				if (buffer->IsCompletelyIdle())
@@ -191,20 +191,26 @@ void LinuxInterface::Spin()
 
 			// Lock movement and wait for standstill
 			case LinuxRequest::LockMovementAndWaitForStandstill:
-#if 0
-				// TODO implement this: 1) check resource
-				// TODO possibly request resend as long as this does not return true, would guarantee it eventually works
-				reprap.GetGCodes().LockMovementAndWaitForStandstill(*spiGCodeBuffer);
-#endif
+			{
+				CodeChannel channel;
+				transfer->ReadLockUnlockRequest(channel);
+				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((size_t)channel);
+				if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(*gb))
+				{
+					transfer->ResendPacket(packet);
+				}
 				break;
+			}
 
 			// Unlock everything
 			case LinuxRequest::Unlock:
-#if 0
-				// TODO implement this
-				reprap.GetGCodes().UnlockAll(*spiGCodeBuffer);
-#endif
+			{
+				CodeChannel channel;
+				transfer->ReadLockUnlockRequest(channel);
+				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((size_t)channel);
+				reprap.GetGCodes().UnlockAll(*gb);
 				break;
+			}
 
 			// Invalid request
 			default:
@@ -212,6 +218,15 @@ void LinuxInterface::Spin()
 				INTERNAL_ERROR;
 				break;
 			}
+			}
+		}
+
+		// Deal with pause events
+		if (reportPause)
+		{
+			if (transfer->WritePrintPaused(pauseFilePosition, pauseReason))
+			{
+				reportPause = false;
 			}
 		}
 
@@ -239,6 +254,14 @@ void LinuxInterface::Spin()
 					gb->AcknowledgeCancellation();
 				}
 			}
+			// Handle stack changes
+			if (gb->IsStackEventFlagged())
+			{
+				if (transfer->WriteStackEvent(channel, gb->MachineState()))
+				{
+					gb->AcknowledgeStackEvent();
+				}
+			}
 		}
 
 		// Deal with code replies
@@ -246,16 +269,10 @@ void LinuxInterface::Spin()
 		{
 			MessageType type = gcodeReply->GetFirstItemType();
 			OutputBuffer *buffer = gcodeReply->GetFirstItem();
-			// TODO make function to convert MessageType to CodeChannel
-			buffer = transfer->WriteCodeResponse(CodeChannel::spi, type, buffer, /*(type & MessageType::LastMessageFlag) != 0*/ true);
+			buffer = transfer->WriteCodeReply(type, buffer);
 			gcodeReply->SetFirstItem(buffer);
 		}
 	}
-}
-
-void LinuxInterface::PrintPaused(FilePosition position)
-{
-	// TODO enqueue packet
 }
 
 void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply)

@@ -1,7 +1,7 @@
 /*
  * DataTransfer.h
  *
- *  Created on: Mar 29 2019
+ *  Created on: 29 Mar 2019
  *      Author: Christian
  */
 
@@ -17,6 +17,7 @@
 class BinaryGCodeBuffer;
 class StringRef;
 class OutputBuffer;
+class GCodeMachineState;
 class HeightMap;
 
 class DataTransfer {
@@ -31,14 +32,18 @@ public:
 	void ReadPrintStartedInfo(size_t packetLength, StringRef& filename, GCodeFileInfo &info);	// Read info about the started file print
 	PrintStoppedReason ReadPrintStoppedInfo();				// Read info about why the print has been stopped
 	void ReadMacroCompleteInfo(CodeChannel& channel, bool &error);	// Read info about a completed macro file
+	void ReadLockUnlockRequest(CodeChannel& channel);		// Read a lock/unlock request
 
-	void ResendPacket(const PacketHeader *packet);			// Request retransmission of the given packet ID. This is always guaranteed to work
-	bool WriteState(uint32_t busyBuffers);
-	OutputBuffer *WriteCodeResponse(CodeChannel channel, MessageType type, OutputBuffer *response, bool isComplete);
+	void ResendPacket(const PacketHeader *packet);
+	bool WriteState(uint32_t busyChannels);
+	bool WriteObjectModel(OutputBuffer *data);
+	OutputBuffer *WriteCodeReply(MessageType type, OutputBuffer *response);
 	bool WriteMacroRequest(CodeChannel channel, const char *filename, bool reportMissing);
 	bool WriteAbortFileRequest(CodeChannel channel);
-	bool WriteObjectModel(OutputBuffer *data);
+	bool WriteStackEvent(CodeChannel channel, GCodeMachineState& state);
+	bool WritePrintPaused(FilePosition position, PrintPausedReason reason);
 	bool WriteHeightMap();
+	bool WriteLocked(CodeChannel channel);
 
 	static void SpiInterrupt();
 

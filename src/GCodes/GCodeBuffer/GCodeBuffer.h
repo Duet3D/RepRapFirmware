@@ -92,9 +92,11 @@ public:
 	void RequestMacroFile(const char *filename, bool reportMissing);	// Request execution of a file macro
 	const char *GetRequestedMacroFile(bool& reportMissing) const;		// Return requested macro file or nullptr if none
 
-	void RequestMacroCancellation();					// Request current macro to be cancelled
 	bool IsMacroCancellationRequested() const;			// Is the cancellation of the current macro requested?
 	void AcknowledgeCancellation();						// Indicates that the current macro file is being cancelled
+
+	bool IsStackEventFlagged() const;					// Did the stack changed?
+	void AcknowledgeStackEvent();						// Indicates that the last stack event has been written
 #endif
 
 	GCodeState GetState() const;
@@ -105,7 +107,7 @@ public:
 
 	const char *GetIdentity() const { return identity; }
 	bool CanQueueCodes() const { return queueCodes; }
-	MessageType GetResponseMessageType() const { return responseMessageType; }
+	MessageType GetResponseMessageType() const;
 
 	int GetToolNumberAdjust() const { return toolNumberAdjust; }
 	void SetToolNumberAdjust(int arg) { toolNumberAdjust = arg; }
@@ -150,7 +152,8 @@ private:
 	String<MaxFilenameLength> requestedMacroFile;
 	uint8_t
 		reportMissingMacro : 1,
-		cancelMacro : 1;
+		cancelMacro : 1,
+		reportStack : 1;
 #endif
 };
 

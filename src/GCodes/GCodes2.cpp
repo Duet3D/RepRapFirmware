@@ -642,7 +642,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					outBuf->copy("GCode files:\n");
 				}
 
-				bool encapsulateList = ((&gb != serialGCode && &gb != telnetGCode) || !platform.EmulatingMarlin());
+				bool encapsulateList = ((&gb != usbGCode && &gb != telnetGCode) || !platform.EmulatingMarlin());
 				FileInfo fileInfo;
 				if (platform.GetMassStorage()->FindFirst(dir.c_str(), fileInfo))
 				{
@@ -715,7 +715,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (QueueFileToPrint(filename.c_str(), reply))
 				{
 					reprap.GetPrintMonitor().StartingPrint(filename.c_str());
-					if (platform.EmulatingMarlin() && (&gb == serialGCode || &gb == telnetGCode))
+					if (platform.EmulatingMarlin() && (&gb == usbGCode || &gb == telnetGCode))
 					{
 						reply.copy("File opened\nFile selected");
 					}
@@ -1596,7 +1596,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					type = UsbMessage;
 					break;
 				case 2:		// UART port
-					type = DirectLcdMessage;
+					type = DirectAuxMessage;
 					break;
 				case 3:		// HTTP
 					type = HttpMessage;
@@ -3606,7 +3606,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					switch (chan)
 					{
 					case 0:
-						serialGCode->SetCommsProperties(val);
+						usbGCode->SetCommsProperties(val);
 						break;
 					case 1:
 						if (auxGCode != nullptr)
@@ -4178,7 +4178,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 751: // Register 3D scanner extension over USB
-		if (&gb == serialGCode)
+		if (&gb == usbGCode)
 		{
 			if (reprap.GetScanner().IsEnabled())
 			{
