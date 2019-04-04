@@ -102,7 +102,7 @@ New features/changed behaviour:
 - On SCARA and delta printers, geometric limits are now applied even when not applying M208 limits due to use of M564 S0
 - New S-3 function for G30 command. G30 S-3 probes the bed and sets the Z probe trigger height to the stopped height.
 - M92 command now includes an optional S parameter to specify the microstepping that the steps/mm is quotes at. If the actual microstepping in use is different, the specified steps/mm will be adjusted accordingly (thanks wikriker).
-- M575 command L parameter for inverting probe logic level is supported (thanks chrishamm)
+- M585 command L parameter for inverting probe logic level is supported (thanks chrishamm)
 - The M408 S2 and http status responses now include the bed standby temperature (thanks gtjoseph)
 - The M669 parameters to define SCARA kinematics now include an R (minimum radius) parameter, to handle machines for which the minimum available radius is sometimes higher than the radius when the distal axis is homed
 - G17 is implemented (it does nothing), and G17/G17 report an error
