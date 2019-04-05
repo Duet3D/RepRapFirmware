@@ -3782,7 +3782,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 	}
 #endif
 #ifdef SERIAL_AUX2_DEVICE
-	if ((type & AuxMessage) != 0)
+	if ((type & LcdMessage) != 0)
 	{
 		++numDestinations;
 	}
@@ -3840,7 +3840,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 		}
 
 #if HAS_LINUX_INTERFACE
-		if ((type & BinaryCodeReplyFlag) != 0)
+		if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
 		{
 			reprap.GetLinuxInterface().HandleGCodeReply(type, buffer);
 		}
@@ -3869,9 +3869,10 @@ void Platform::MessageF(MessageType type, const char *fmt, va_list vargs)
 	RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
 
 #if HAS_LINUX_INTERFACE
-	if ((type & BinaryCodeReplyFlag) != 0)
+	if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
 	{
-		reprap.GetLinuxInterface().HandleGCodeReply(type, fmt);
+		formatString.vprintf(fmt, vargs);
+		reprap.GetLinuxInterface().HandleGCodeReply(type, formatString.c_str());
 	}
 #endif
 }
@@ -3899,7 +3900,7 @@ void Platform::Message(MessageType type, const char *message)
 	}
 
 #if HAS_LINUX_INTERFACE
-	if ((type & BinaryCodeReplyFlag) != 0)
+	if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
 	{
 		reprap.GetLinuxInterface().HandleGCodeReply(type, message);
 	}

@@ -105,6 +105,18 @@ void setup_spi(void *inBuffer, size_t bytesToRead, const void *outBuffer, size_t
 	NVIC_EnableIRQ(LINUX_SPI_IRQn);
 }
 
+void disable_spi()
+{
+	// Disable the XDMAC channel
+	xdmac_channel_disable(XDMAC, DmacChanLinuxRx);
+	xdmac_channel_disable(XDMAC, DmacChanLinuxTx);
+
+	// Disable SPI and indicate that no more data may be exchanged
+	spi_disable(LINUX_SPI);
+	digitalWrite(SamTfrReadyPin, false);
+	dataReceived = true;
+}
+
 extern "C" void LINUX_SPI_HANDLER(void)
 {
 	const uint32_t status = LINUX_SPI->SPI_SR;							// read status and clear interrupt
@@ -112,13 +124,7 @@ extern "C" void LINUX_SPI_HANDLER(void)
 	if ((status & SPI_SR_NSSR) != 0)
 	{
 		// Data has been transferred, disable XDMAC channels
-		xdmac_channel_disable(XDMAC, DmacChanLinuxRx);
-		xdmac_channel_disable(XDMAC, DmacChanLinuxTx);
-
-		// Disable SPI and indicate that no more data may be exchanged
-		spi_disable(LINUX_SPI);
-		digitalWrite(SamTfrReadyPin, false);
-		dataReceived = true;
+		disable_spi();
 	}
 }
 
@@ -140,9 +146,19 @@ void DataTransfer::Init() {
 	// Initialise SPI
 	spi_enable_clock(LINUX_SPI);
 	spi_disable(LINUX_SPI);
+}
 
-	// Kick off first transfer
-	ExchangeHeader();
+void DataTransfer::Diagnostics(MessageType mtype)
+{
+	reprap.GetPlatform().MessageF(mtype, "State: %d\n", (int)state);
+	reprap.GetPlatform().MessageF(mtype, "Last transfer: %" PRIu32 "ms ago\n", millis() - lastTransferTime);
+	reprap.GetPlatform().MessageF(mtype, "TX/RX pointers: %d/%d\n", (int)txPointer, (int)rxPointer);
+	reprap.GetPlatform().MessageF(mtype, "TX/RX responses: %" PRId32 "/%" PRId32 "\n", rxResponse, txResponse);
+}
+
+bool DataTransfer::IsConnected() const
+{
+	return millis() - lastTransferTime <= SpiTransferTimeout;
 }
 
 const PacketHeader *DataTransfer::ReadPacket()
@@ -152,22 +168,36 @@ const PacketHeader *DataTransfer::ReadPacket()
 		return nullptr;
 	}
 
-	PacketHeader *header = reinterpret_cast<PacketHeader*>(rxBuffer + rxPointer);
+	const PacketHeader *header = reinterpret_cast<const PacketHeader*>(rxBuffer + rxPointer);
+	debugPrintf("-> Packet #%d (request %d) from %d of %d\n", (int)header->id, (int)header->request, (int)rxPointer, rxHeader.dataLength);
 	rxPointer += sizeof(PacketHeader);
 	return header;
 }
 
-const char *DataTransfer::ReadData(size_t packetLength)
+const char *DataTransfer::ReadData(size_t dataLength)
 {
-	const char *data = rxBuffer + txPointer;
-	rxPointer += AddPadding(packetLength);
+	const char *data = rxBuffer + rxPointer;
+	rxPointer += AddPadding(dataLength);
 	return data;
+}
+
+template<typename T> const T *DataTransfer::ReadDataHeader()
+{
+	const T *header = reinterpret_cast<const T*>(rxBuffer + rxPointer);
+	rxPointer += sizeof(T);
+	return header;
+}
+
+uint8_t DataTransfer::ReadGetObjectModel()
+{
+	const ObjectModelHeader *header = ReadDataHeader<ObjectModelHeader>();
+	return header->module;
 }
 
 void DataTransfer::ReadPrintStartedInfo(size_t packetLength, StringRef& filename, GCodeFileInfo& info)
 {
 	// Read header
-	PrintStartedHeader *header = ReadDataHeader<PrintStartedHeader>();
+	const PrintStartedHeader *header = ReadDataHeader<PrintStartedHeader>();
 	info.fileSize = header->fileSize;
 	info.lastModifiedTime = header->lastModifiedTime;
 	info.layerHeight = header->layerHeight;
@@ -193,25 +223,27 @@ void DataTransfer::ReadPrintStartedInfo(size_t packetLength, StringRef& filename
 
 PrintStoppedReason DataTransfer::ReadPrintStoppedInfo()
 {
-	PrintStoppedHeader *header = ReadDataHeader<PrintStoppedHeader>();
+	const PrintStoppedHeader *header = ReadDataHeader<PrintStoppedHeader>();
 	return header->reason;
 }
 
 void DataTransfer::ReadMacroCompleteInfo(CodeChannel& channel, bool &error)
 {
-	MacroCompleteHeader *header = ReadDataHeader<MacroCompleteHeader>();
+	const MacroCompleteHeader *header = ReadDataHeader<MacroCompleteHeader>();
 	channel = header->channel;
 	error = header->error;
 }
 
 void DataTransfer::ReadLockUnlockRequest(CodeChannel& channel)
 {
-	LockUnlockHeader *header = ReadDataHeader<LockUnlockHeader>();
+	const LockUnlockHeader *header = ReadDataHeader<LockUnlockHeader>();
 	channel = header->channel;
 }
 
 void DataTransfer::ExchangeHeader()
 {
+	debugPrintf("- Transfer %" PRIu32 " -\n", sequenceNumber);
+
 	// Reset RX transfer header
 	rxHeader.formatCode = InvalidFormatCode;
 	rxHeader.numPackets = 0;
@@ -223,7 +255,7 @@ void DataTransfer::ExchangeHeader()
 
 	// Reset TX transfer header
 	txHeader.sequenceNumber = sequenceNumber++;
-	txHeader.dataLength = 0;
+	txHeader.dataLength = txPointer;
 	txHeader.checksumData = 0;				// TOOD
 	txHeader.checksumHeader = 0;			// TODO
 
@@ -252,12 +284,12 @@ void DataTransfer::ForceReset()
 
 volatile bool DataTransfer::IsReady()
 {
-	// TODO implement timeout here resetting the state if no transfer happens within X ms
 	if (dataReceived)
 	{
 		switch (state)
 		{
 		case SpiState::ExchangingHeader:
+			// (1) Exchanged transfer headers
 			if (rxHeader.formatCode != LinuxFormatCode)
 			{
 				ExchangeResponse(TransferResponse::BadFormat);
@@ -281,6 +313,7 @@ volatile bool DataTransfer::IsReady()
 			break;
 
 		case SpiState::ExchangingHeaderResponse:
+			// (2) Exchanged response to transfer header
 			switch (rxResponse)
 			{
 			case TransferResponse::Success:
@@ -317,6 +350,7 @@ volatile bool DataTransfer::IsReady()
 			break;
 
 		case SpiState::ExchangingData:
+			// (3) Exchanged data (if there is anything to transfer)
 #if 0
 			if (CalcChecksum(rxBuffer) != rxHeader.checksumData)
 			{
@@ -330,10 +364,12 @@ volatile bool DataTransfer::IsReady()
 			break;
 
 		case SpiState::ExchangingDataResponse:
+			// (4) Exchanged response to data transfer
 			if (rxResponse == TransferResponse::Success)
 			{
-				txPointer = 0;
+				rxPointer = txPointer = 0;
 				txHeader.numPackets = 0;
+				packetId = 0;
 
 				state = SpiState::ProcessingData;
 				return true;
@@ -351,7 +387,9 @@ volatile bool DataTransfer::IsReady()
 			break;
 
 		case SpiState::ProcessingData:
-			// Should never get here. If we do, there is something wrong in the DataProvider
+			// Should never get here. If we do, this means that StartNextTransfer has not been called
+			ExchangeResponse(TransferResponse::RequestStateReset);
+			state = SpiState::ResettingState;
 			INTERNAL_ERROR;
 			break;
 
@@ -373,18 +411,13 @@ volatile bool DataTransfer::IsReady()
 		}
 		lastTransferTime = millis();
 	}
-	else if (state != SpiState::ExchangingHeader && millis() - lastTransferTime > MaxTransferTime)
+	else if (state != SpiState::ExchangingHeader && !IsConnected())
 	{
 		// Reset failed transfers automatically after a certain time
-		state = SpiState::ExchangingHeader;
+		disable_spi();
+		ExchangeHeader();
 	}
 	return false;
-}
-
-template<typename T> T *DataTransfer::ReadDataHeader()
-{
-	rxPointer += sizeof(T);
-	return reinterpret_cast<T*>(rxBuffer + rxPointer);
 }
 
 bool DataTransfer::WriteState(uint32_t busyChannels)
@@ -400,14 +433,24 @@ bool DataTransfer::WriteState(uint32_t busyChannels)
 	return true;
 }
 
-bool DataTransfer::WriteObjectModel(OutputBuffer *data)
+bool DataTransfer::WriteObjectModel(uint8_t module, OutputBuffer *data)
 {
+	// Try to write the packet header. This packet type cannot deal with truncated messages
 	if (!CanWritePacket(data->Length()))
 	{
 		return false;
 	}
 
-	(void)WritePacketHeader(FirmwareRequest::ObjectModel, data->Length());
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::ObjectModel, sizeof(ObjectModelHeader) + data->Length());
+
+	// Write header
+	ObjectModelHeader *header = WriteDataHeader<ObjectModelHeader>();
+	header->length = data->Length();
+	header->module = module;
+	header->padding = 0;
+
+	// Write data
 	while (data != nullptr)
 	{
 		WriteData(data->UnreadData(), data->BytesLeft());
@@ -418,8 +461,8 @@ bool DataTransfer::WriteObjectModel(OutputBuffer *data)
 
 OutputBuffer *DataTransfer::WriteCodeReply(MessageType type, OutputBuffer *response)
 {
-	// Try to write the packet header
-	if (!CanWritePacket(sizeof(CodeReplyHeader) + 4))
+	// Try to write the packet header. This packet type can deal with truncated messages
+	if (!CanWritePacket(sizeof(CodeReplyHeader) + min<size_t>(24, response->Length())))
 	{
 		// Not enough space left
 		return response;
@@ -429,9 +472,10 @@ OutputBuffer *DataTransfer::WriteCodeReply(MessageType type, OutputBuffer *respo
 	// Write header
 	CodeReplyHeader *replyHeader = WriteDataHeader<CodeReplyHeader>();
 	replyHeader->messageType = type;
+	replyHeader->padding = 0;
 
 	// Write code reply
-	size_t bytesWritten = sizeof(CodeReplyHeader);
+	size_t bytesWritten = 0;
 	if (response != nullptr)
 	{
 		do
@@ -454,9 +498,10 @@ OutputBuffer *DataTransfer::WriteCodeReply(MessageType type, OutputBuffer *respo
 			replyHeader->messageType = (MessageType)(replyHeader->messageType | PushFlag);
 		}
 	}
+	replyHeader->length = bytesWritten;
 
 	// Finish packet and return what is left of the output buffer
-	header->length = bytesWritten;
+	header->length = sizeof(CodeReplyHeader) + bytesWritten;
 	return response;
 }
 
@@ -469,12 +514,13 @@ bool DataTransfer::WriteMacroRequest(CodeChannel channel, const char *filename, 
 	}
 
 	// Write packet header
-	WritePacketHeader(FirmwareRequest::ExecuteMacro, filenameLength);
+	WritePacketHeader(FirmwareRequest::ExecuteMacro, sizeof(ExecuteMacroHeader) + filenameLength);
 
 	// Write header
 	ExecuteMacroHeader *header = WriteDataHeader<ExecuteMacroHeader>();
 	header->channel = channel;
 	header->reportMissing = reportMissing;
+	header->length = filenameLength;
 	header->padding = 0;
 
 	// Write filename
@@ -625,14 +671,16 @@ PacketHeader *DataTransfer::WritePacketHeader(FirmwareRequest request, size_t da
 
 void DataTransfer::WriteData(const char *data, size_t length)
 {
+	// Strings can be concatenated here, don't add any padding yet
 	memcpy(txBuffer + txPointer, data, length);
 	txPointer += length;
 }
 
 template<typename T> T *DataTransfer::WriteDataHeader()
 {
+	T *header = reinterpret_cast<T*>(txBuffer + txPointer);
 	txPointer += sizeof(T);
-	return reinterpret_cast<T*>(txBuffer + txPointer);
+	return header;
 }
 
 #endif

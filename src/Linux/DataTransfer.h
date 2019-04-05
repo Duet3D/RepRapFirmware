@@ -24,11 +24,15 @@ class DataTransfer {
 public:
 	DataTransfer();
 	void Init();
+	void Diagnostics(MessageType mtype);
 
-	volatile bool IsReady();
+	bool IsConnected() const;								// Check if the connection to DCS is live
+	volatile bool IsReady();								// Returns true when data can be read
+	void StartNextTransfer() { ExchangeHeader(); }			// Kick off the next transfer
 
 	const PacketHeader *ReadPacket();						// Attempt to read the next packet header or return null. Advances the read pointer to the next packet or the packet's data
 	const char *ReadData(size_t packetLength);				// Read the packet data and advance to the next packet (if any)
+	uint8_t ReadGetObjectModel();							// Read an object model request
 	void ReadPrintStartedInfo(size_t packetLength, StringRef& filename, GCodeFileInfo &info);	// Read info about the started file print
 	PrintStoppedReason ReadPrintStoppedInfo();				// Read info about why the print has been stopped
 	void ReadMacroCompleteInfo(CodeChannel& channel, bool &error);	// Read info about a completed macro file
@@ -36,7 +40,7 @@ public:
 
 	void ResendPacket(const PacketHeader *packet);
 	bool WriteState(uint32_t busyChannels);
-	bool WriteObjectModel(OutputBuffer *data);
+	bool WriteObjectModel(uint8_t module, OutputBuffer *data);
 	OutputBuffer *WriteCodeReply(MessageType type, OutputBuffer *response);
 	bool WriteMacroRequest(CodeChannel channel, const char *filename, bool reportMissing);
 	bool WriteAbortFileRequest(CodeChannel channel);
@@ -79,7 +83,7 @@ private:
 	void ExchangeData();
 	void ForceReset();
 
-	template<typename T> T *ReadDataHeader();
+	template<typename T> const T *ReadDataHeader();
 
 	// Always keep enough tx space to allow resend requests in case RRF runs out of
 	// resources and cannot process an incoming request right away
@@ -93,7 +97,8 @@ private:
 	size_t AddPadding(size_t length) const;
 };
 
-const uint32_t MaxTransferTime = 500;		// Maximum allowed delay between successive data transfers (in ms)
+// This is intentionally quite high for development purposes
+const uint32_t SpiTransferTimeout = 3000;		// Maximum allowed delay between data transfers (in ms)
 
 inline void DataTransfer::ResendPacket(const PacketHeader *packet)
 {
@@ -108,7 +113,7 @@ inline bool DataTransfer::CanWritePacket(size_t dataLength) const
 inline size_t DataTransfer::AddPadding(size_t length) const
 {
 	size_t padding = 4 - length % 4;
-	return length + (padding == 4) ? 0 : padding;
+	return length + ((padding == 4) ? 0 : padding);
 }
 
 #endif /* SRC_LINUX_DATATRANSFER_H_ */

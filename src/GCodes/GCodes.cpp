@@ -110,7 +110,7 @@ GCodes::GCodes(Platform& p) :
 	serialInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
 #endif
 #if defined(SERIAL_MAIN_DEVICE) || HAS_LINUX_INTERFACE
-	usbGCode = new GCodeBuffer("serial", UsbMessage, true);
+	usbGCode = new GCodeBuffer("usb", UsbMessage, true);
 #else
 	usbGCode = nullptr;
 #endif

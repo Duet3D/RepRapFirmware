@@ -42,7 +42,7 @@ public:
 	const void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
 
 	bool IsIdle() const { return isIdle; }
-	bool IsCompletelyIdle() const { return isIdle; }
+	bool IsCompletelyIdle() const { return isIdle && bufferLength == 0; }
 	bool IsReady() const { return isIdle && bufferLength != 0; }		// Return true if a gcode is ready but hasn't been started yet
 	bool IsExecuting() const { return !isIdle && bufferLength != 0; }	// Return true if a gcode has been started and is not paused
 	void SetFinished(bool f);							// Set the G Code executed (or not)

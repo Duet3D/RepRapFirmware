@@ -27,8 +27,11 @@ void LinuxInterface::Init()
 	transfer->Init();
 
 	// RepRap does not wait for config.g because DCS may not be running.
-	// Request it as the first action from the Linux controller
+	// Request it from the Linux controller as the first action
 	transfer->WriteMacroRequest(CodeChannel::daemon, CONFIG_FILE, true);
+
+	// Start the first transfer
+	transfer->StartNextTransfer();
 }
 
 void LinuxInterface::Spin()
@@ -61,14 +64,13 @@ void LinuxInterface::Spin()
 				{
 					if (!reprap.GetGCodes().GetGCodeBuffer(i)->IsCompletelyIdle())
 					{
-						busyChannels |= (1 >> i);
+						busyChannels |= (1 << i);
 					}
 				}
 
-				if (!transfer->WriteState(busyChannels))
-				{
-					transfer->ResendPacket(packet);
-				}
+				// There is no need to request a retransmission here.
+				// If DCS does not update the status, it will automatically request it again next time
+				(void)transfer->WriteState(busyChannels);
 				break;
 			}
 
@@ -104,10 +106,13 @@ void LinuxInterface::Spin()
 			// Get the object model of a specific module
 			case LinuxRequest::GetObjectModel:
 			{
+				// TODO make use of supplied module
+				(void)transfer->ReadGetObjectModel();
+
 				OutputBuffer *buffer;
 				if (OutputBuffer::Allocate(buffer) && reprap.ReportAsJson(buffer, "", ObjectModel::flagsNone))
 				{
-					if (transfer->WriteObjectModel(buffer))
+					if (transfer->WriteObjectModel(0, buffer))
 					{
 						// The whole buffer chain has already been freed
 						buffer = nullptr;
@@ -272,7 +277,21 @@ void LinuxInterface::Spin()
 			buffer = transfer->WriteCodeReply(type, buffer);
 			gcodeReply->SetFirstItem(buffer);
 		}
+
+		// Start the next transfer
+		transfer->StartNextTransfer();
 	}
+	else if (!gcodeReply->IsEmpty() && !transfer->IsConnected())
+	{
+		// Don't cache messages if they cannot be sent
+		gcodeReply->ReleaseAll();
+	}
+}
+
+void LinuxInterface::Diagnostics(MessageType mtype)
+{
+	reprap.GetPlatform().Message(mtype, "=== Linux interface ===\n");
+	transfer->Diagnostics(mtype);
 }
 
 void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply)
@@ -287,7 +306,6 @@ void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply)
 		}
 		gcodeReply->Push(buffer, mt);
 	}
-
 	buffer->cat(reply);
 }
 

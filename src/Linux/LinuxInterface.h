@@ -29,6 +29,7 @@ public:
 	LinuxInterface();
 	void Init();
 	void Spin();
+	void Diagnostics(MessageType mtype);
 
 	void SetPauseReason(FilePosition position, PrintPausedReason reason);
 	void ReportPause();

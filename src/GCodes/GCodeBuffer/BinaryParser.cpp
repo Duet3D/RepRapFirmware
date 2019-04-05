@@ -12,7 +12,7 @@
 
 BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) : gb(gcodeBuffer)
 {
-	header = reinterpret_cast<const CodeHeader*>(gcodeBuffer.buffer);
+	header = reinterpret_cast<const CodeHeader *>(gcodeBuffer.buffer);
 }
 
 void BinaryParser::Init()
@@ -59,11 +59,19 @@ void BinaryParser::Put(const char *data, size_t len)
 {
 	memcpy(gb.buffer, data, len);
 	bufferLength = len;
+	isIdle = false;
+
+	if (reprap.Debug(moduleGcodes))
+	{
+		String<MaxCodeBufferSize> buf;
+		AppendFullCommand(buf.GetRef());
+		reprap.GetPlatform().MessageF(DebugMessage, "%s: %s\n", gb.GetIdentity(), buf.c_str());
+	}
 }
 
 bool BinaryParser::Seen(char c)
 {
-	if (bufferLength != 0)
+	if (bufferLength != 0 && header->numParameters != 0)
 	{
 		const char *parameterStart = reinterpret_cast<const char*>(gb.buffer) + sizeof(CodeHeader);
 		seenParameter = nullptr;
@@ -118,7 +126,22 @@ float BinaryParser::GetFValue()
 {
 	if (seenParameter != nullptr)
 	{
-		float value = seenParameter->floatValue;
+		float value;
+		switch (seenParameter->type)
+		{
+		case DataType::Float:
+			value = seenParameter->floatValue;
+			break;
+		case DataType::Int:
+			value = seenParameter->intValue;
+			break;
+		case DataType::UInt:
+			value = seenParameter->uintValue;
+			break;
+		default:
+			value = 0.0f;
+			break;
+		}
 		seenParameter = nullptr;
 		seenParameterValue = nullptr;
 		return value;
@@ -132,7 +155,22 @@ int32_t BinaryParser::GetIValue()
 {
 	if (seenParameter != nullptr)
 	{
-		int32_t value = seenParameter->intValue;
+		int32_t value;
+		switch (seenParameter->type)
+		{
+		case DataType::Float:
+			value = seenParameter->floatValue;
+			break;
+		case DataType::Int:
+			value = seenParameter->intValue;
+			break;
+		case DataType::UInt:
+			value = seenParameter->uintValue;
+			break;
+		default:
+			value = 0.0f;
+			break;
+		}
 		seenParameter = nullptr;
 		seenParameterValue = nullptr;
 		return value;
@@ -146,7 +184,22 @@ uint32_t BinaryParser::GetUIValue()
 {
 	if (seenParameter != nullptr)
 	{
-		uint32_t value = seenParameter->uintValue;
+		uint32_t value;
+		switch (seenParameter->type)
+		{
+		case DataType::Float:
+			value = seenParameter->floatValue;
+			break;
+		case DataType::Int:
+			value = seenParameter->intValue;
+			break;
+		case DataType::UInt:
+			value = seenParameter->uintValue;
+			break;
+		default:
+			value = 0.0f;
+			break;
+		}
 		seenParameter = nullptr;
 		seenParameterValue = nullptr;
 		return value;
@@ -365,7 +418,7 @@ void BinaryParser::AppendFullCommand(const StringRef &s) const
 size_t BinaryParser::AddPadding(size_t bytesRead) const
 {
     size_t padding = 4 - bytesRead % 4;
-    return (padding != 4) ? bytesRead + padding : bytesRead;
+    return bytesRead + ((padding == 4) ? 0 : padding);
 }
 
 template<typename T> const void BinaryParser::GetArray(T arr[], size_t& length, bool doPad)
