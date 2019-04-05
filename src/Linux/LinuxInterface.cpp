@@ -103,21 +103,14 @@ void LinuxInterface::Spin()
 				break;
 			}
 
-			// Get the object model of a specific module
+			// Get the object model of a specific module (TODO report real object model here instead of status responses)
 			case LinuxRequest::GetObjectModel:
 			{
-				// TODO make use of supplied module
-				(void)transfer->ReadGetObjectModel();
-
-				OutputBuffer *buffer;
-				if (OutputBuffer::Allocate(buffer) && reprap.ReportAsJson(buffer, "", ObjectModel::flagsNone))
+				uint8_t module = transfer->ReadGetObjectModel();
+				OutputBuffer *buffer = reprap.GetStatusResponse(module, ResponseSource::Generic);
+				if (buffer != nullptr)
 				{
-					if (transfer->WriteObjectModel(0, buffer))
-					{
-						// The whole buffer chain has already been freed
-						buffer = nullptr;
-					}
-					else
+					if (!transfer->WriteObjectModel(module, buffer))
 					{
 						// Failed to write the whole object model, try again later
 						transfer->ResendPacket(packet);
@@ -133,7 +126,7 @@ void LinuxInterface::Spin()
 				break;
 			}
 
-			// Set the object model value
+			// Set value in the object model
 			case LinuxRequest::SetObjectModel:
 			{
 				size_t dataLength = packet->length;
@@ -259,7 +252,9 @@ void LinuxInterface::Spin()
 					gb->AcknowledgeCancellation();
 				}
 			}
+
 			// Handle stack changes
+			// FIXME Report stack as well when the remote end has reset
 			if (gb->IsStackEventFlagged())
 			{
 				if (transfer->WriteStackEvent(channel, gb->MachineState()))

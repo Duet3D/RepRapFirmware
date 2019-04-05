@@ -97,9 +97,6 @@ private:
 	size_t AddPadding(size_t length) const;
 };
 
-// This is intentionally quite high for development purposes
-const uint32_t SpiTransferTimeout = 3000;		// Maximum allowed delay between data transfers (in ms)
-
 inline void DataTransfer::ResendPacket(const PacketHeader *packet)
 {
 	WritePacketHeader(FirmwareRequest::ResendPacket, 0, packet->id);
@@ -107,7 +104,7 @@ inline void DataTransfer::ResendPacket(const PacketHeader *packet)
 
 inline bool DataTransfer::CanWritePacket(size_t dataLength) const
 {
-	return txPointer + sizeof(PacketHeader) + dataLength <= FreeTxSpace();
+	return FreeTxSpace() >= sizeof(PacketHeader) + dataLength;
 }
 
 inline size_t DataTransfer::AddPadding(size_t length) const

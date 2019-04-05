@@ -437,7 +437,7 @@ void RepRap::Spin()
 
 #if HAS_LINUX_INTERFACE
 	ticksInSpinState = 0;
-	spinningModule = moduleLinuxComm;
+	spinningModule = moduleLinuxInterface;
 	linuxInterface->Spin();
 #endif
 
@@ -1268,21 +1268,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Cold Extrude/Retract
 		response->catf(",\"coldExtrudeTemp\":%.1f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_EXTRUDE));
 		response->catf(",\"coldRetractTemp\":%.1f", (double)(heat->ColdExtrude() ? 0.0 : HOT_ENOUGH_TO_RETRACT));
-
-		// Compensation type
-		response->cat(",\"compensation\":");
-		if (move->IsUsingMesh())
-		{
-			response->cat("\"Mesh\"");
-		}
-		else if (move->GetNumProbePoints() > 0)
-		{
-			response->catf("\"%u Point\"", move->GetNumProbePoints());
-		}
-		else
-		{
-			response->cat("\"None\"");
-		}
 
 		// Compensation type
 		response->cat(",\"compensation\":");

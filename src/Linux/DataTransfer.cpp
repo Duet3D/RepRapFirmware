@@ -130,8 +130,8 @@ extern "C" void LINUX_SPI_HANDLER(void)
 
 /*-----------------------------------------------------------------------------------*/
 
-DataTransfer::DataTransfer() : state(SpiState::ExchangingHeader), lastTransferTime(0), sequenceNumber(0),
-	rxPointer(0), txPointer(0), packetId(0)
+DataTransfer::DataTransfer() : state(SpiState::ExchangingHeader), lastTransferTime(0), sequenceNumber(1),
+	rxPointer(0), txPointer(0), packetId(1)
 {
 	// Prepare TX header
 	txHeader.formatCode = LinuxFormatCode;
@@ -169,7 +169,10 @@ const PacketHeader *DataTransfer::ReadPacket()
 	}
 
 	const PacketHeader *header = reinterpret_cast<const PacketHeader*>(rxBuffer + rxPointer);
-	debugPrintf("-> Packet #%d (request %d) from %d of %d\n", (int)header->id, (int)header->request, (int)rxPointer, rxHeader.dataLength);
+	if (reprap.Debug(moduleLinuxInterface))
+	{
+		reprap.GetPlatform().MessageF(DebugMessage, "-> Packet #%d (request %d) from %d of %d\n", (int)header->id, (int)header->request, (int)rxPointer, rxHeader.dataLength);
+	}
 	rxPointer += sizeof(PacketHeader);
 	return header;
 }
@@ -242,7 +245,10 @@ void DataTransfer::ReadLockUnlockRequest(CodeChannel& channel)
 
 void DataTransfer::ExchangeHeader()
 {
-	debugPrintf("- Transfer %" PRIu32 " -\n", sequenceNumber);
+	if (reprap.Debug(moduleLinuxInterface))
+	{
+		reprap.GetPlatform().MessageF(DebugMessage, "- Transfer %" PRIu32 " -\n", sequenceNumber);
+	}
 
 	// Reset RX transfer header
 	rxHeader.formatCode = InvalidFormatCode;
@@ -369,7 +375,7 @@ volatile bool DataTransfer::IsReady()
 			{
 				rxPointer = txPointer = 0;
 				txHeader.numPackets = 0;
-				packetId = 0;
+				packetId = 1;
 
 				state = SpiState::ProcessingData;
 				return true;

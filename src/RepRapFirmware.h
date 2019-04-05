@@ -61,7 +61,7 @@ enum Module : uint8_t
 	moduleFilamentSensors = 13,
 	moduleWiFi = 14,
 	moduleDisplay = 15,
-	moduleLinuxComm = 16,
+	moduleLinuxInterface = 16,
 	numModules = 17,				// make this one greater than the last module number
 	noModule = 18
 };
