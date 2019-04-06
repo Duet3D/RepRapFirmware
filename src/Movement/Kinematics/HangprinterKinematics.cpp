@@ -192,27 +192,31 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		else if (!gb.Seen('K'))
 		{
 			// TODO: use reply.catf, or move RGHJ to M92, instead of making FORMAT_STRING_LENGTH contain all this?
-			reply.printf("Kinematics is Hangprinter\nAnchor positions:\n%.2f, %.2f, %.2f\n%.2f, %.2f, %.2f\n%.2f, %.2f, %.2f\n"
+			reply.catf("Kinematics is Hangprinter\nAnchor positions:\n%.2f, %.2f, %.2f\n%.2f, %.2f, %.2f\n%.2f, %.2f, %.2f\n"
 				"%.2f\nPrint radius:\n%.1f\nSegments/s:\n%d\nMin segment length:\n%.2f\n"
-				"Spool buildup factor:\n%.4f\n"
-				"Spool radii:\n%.2f, %.2f, %.2f, %.2f\n"
-				"Mechanical Advantage:\n%d, %d, %d, %d\n"
-				"Lines per spool:\n%d, %d, %d, %d\n"
-				"Motor gear teeth\n%d, %d, %d, %d\n"
-				"Spool gear teeth\n%d, %d, %d, %d\n"
-				"Full steps per revolution\n%d, %d, %d, %d",
+				"Spool buildup factor:\n%.4f\n",
 				(double)anchorA[X_AXIS], (double)anchorA[Y_AXIS], (double)anchorA[Z_AXIS],
 				(double)anchorB[X_AXIS], (double)anchorB[Y_AXIS], (double)anchorB[Z_AXIS],
 				(double)anchorC[X_AXIS], (double)anchorC[Y_AXIS], (double)anchorC[Z_AXIS],
 				(double)anchorDz, (double)printRadius,
 				(int)segmentsPerSecond, (double)minSegmentLength,
-				(double)spoolBuildupFactor,
-				(double)spoolRadii[A_AXIS], (double)spoolRadii[B_AXIS], (double)spoolRadii[C_AXIS], (double)spoolRadii[D_AXIS],
-				(int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS], (int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS],
-				(int)linesPerSpool[A_AXIS], (int)linesPerSpool[B_AXIS], (int)linesPerSpool[C_AXIS], (int)linesPerSpool[D_AXIS],
-				(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS], (int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS],
-				(int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS], (int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS],
-				(int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS], (int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS]);
+				(double)spoolBuildupFactor
+        );
+      //reply.catf(
+			//	"Spool radii:\n%.2f, %.2f, %.2f, %.2f\n"
+			//	"Mechanical Advantage:\n%d, %d, %d, %d\n"
+			//	"Lines per spool:\n%d, %d, %d, %d\n",
+			//	(double)spoolRadii[A_AXIS], (double)spoolRadii[B_AXIS], (double)spoolRadii[C_AXIS], (double)spoolRadii[D_AXIS],
+			//	(int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS], (int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS],
+			//	(int)linesPerSpool[A_AXIS], (int)linesPerSpool[B_AXIS], (int)linesPerSpool[C_AXIS], (int)linesPerSpool[D_AXIS]
+      //  );
+      //reply.catf(
+			//	"Motor gear teeth\n%d, %d, %d, %d\n"
+			//	"Spool gear teeth\n%d, %d, %d, %d\n"
+			//	"Full steps per revolution\n%d, %d, %d, %d",
+			//	(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS], (int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS],
+			//	(int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS], (int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS],
+			//	(int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS], (int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS]);
 		}
 		return seen;
 	}
@@ -298,34 +302,7 @@ bool HangprinterKinematics::IsReachable(float x, float y, bool isCoordinated) co
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
 bool HangprinterKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated) const
 {
-	const AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
-	bool limited = false;
-	if ((axesHomed & allAxes) == allAxes)
-	{
-		// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
-		// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
-		// Constrain the move to be within the build radius
-		const float diagonalSquared = fsquare(coords[X_AXIS]) + fsquare(coords[Y_AXIS]);
-		if (diagonalSquared > printRadiusSquared)
-		{
-			const float factor = sqrtf(printRadiusSquared / diagonalSquared);
-			coords[X_AXIS] *= factor;
-			coords[Y_AXIS] *= factor;
-			limited = true;
-		}
-
-		if (coords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
-		{
-			coords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
-			limited = true;
-		}
-		else if (coords[Z_AXIS] > reprap.GetPlatform().AxisMaximum(Z_AXIS))
-		{
-			coords[Z_AXIS] = reprap.GetPlatform().AxisMaximum(Z_AXIS);
-			limited = true;
-		}
-	}
-	return limited;
+  return false;
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics

@@ -1050,7 +1050,9 @@ void DDA::SetPositions(const float move[MaxTotalDrivers], size_t numDrives)
 float DDA::GetEndCoordinate(size_t drive, bool disableMotorMapping)
 pre(disableDeltaMapping || drive < MaxAxes)
 {
-	if (disableMotorMapping)
+	//const bool hangprinter = reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter;
+
+	if (disableMotorMapping)// && !hangprinter)
 	{
 		return Move::MotorStepsToMovement(drive, endPoint[drive]);
 	}
@@ -1063,6 +1065,7 @@ pre(disableDeltaMapping || drive < MaxAxes)
 			endCoordinatesValid = true;
 		}
 		return endCoordinates[drive];
+		//return Move::MotorStepsToMovement(drive, endPoint[drive]);
 	}
 }
 

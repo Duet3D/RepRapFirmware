@@ -236,7 +236,7 @@ void Move::Spin()
 
 	if (canAddMove)
 	{
-		// OK to add another move. First check if a special move is available.
+		// OK to add another move. First check if an adjust-lead-screw move is available.
 		if (adjustLeadScrewsMoveAvailable)
 		{
 			if (simulationMode < 2)
@@ -686,7 +686,7 @@ void Move::Diagnostics(MessageType mtype)
 void Move::SetNewPosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation)
 {
 	float newPos[MaxTotalDrivers];
-	memcpy(newPos, positionNow, sizeof(newPos));			// copy to local storage because Transform modifies it
+	memcpy(newPos, positionNow, sizeof(newPos[0]) * MaxTotalDrivers);			// copy to local storage because Transform modifies it
 	AxisAndBedTransform(newPos, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes(), doBedCompensation);
 	SetLiveCoordinates(newPos);
 	SetPositions(newPos);
@@ -718,6 +718,9 @@ void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrive
 	}
 }
 
+// Warning! This function assumes linear relationship
+// between motor position and effector position
+// Will Not Work for Hangprinter
 // Convert distance to steps for a particular drive
 int32_t Move::MotorMovementToSteps(size_t drive, float coord)
 {
@@ -1126,6 +1129,9 @@ void Move::GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping)
 	}
 }
 
+// Warning! This function assumes linear relationship
+// between motor position and effector position
+// Should never be called when controlling a Hangprinter
 /*static*/ float Move::MotorStepsToMovement(size_t drive, int32_t endpoint)
 {
 	return ((float)(endpoint))/reprap.GetPlatform().DriveStepsPerUnit(drive);
