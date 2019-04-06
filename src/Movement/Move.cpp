@@ -143,7 +143,7 @@ void Move::Init()
 	simulationMode = 0;
 	simulationTime = 0.0;
 	longestGcodeWaitInterval = 0;
-	specialMoveAvailable = false;
+	adjustLeadScrewsMoveAvailable = false;
 
 	active = true;
 }
@@ -237,7 +237,7 @@ void Move::Spin()
 	if (canAddMove)
 	{
 		// OK to add another move. First check if a special move is available.
-		if (specialMoveAvailable)
+		if (adjustLeadScrewsMoveAvailable)
 		{
 			if (simulationMode < 2)
 			{
@@ -259,7 +259,7 @@ void Move::Spin()
 					}
 				}
 			}
-			specialMoveAvailable = false;
+			adjustLeadScrewsMoveAvailable = false;
 		}
 		else
 		{
@@ -1310,7 +1310,7 @@ void Move::AdjustLeadscrews(const floatc_t corrections[])
 			specialMoveCoords[config.driverNumbers[i]] = corrections[i];
 		}
 	}
-	specialMoveAvailable = true;
+	adjustLeadScrewsMoveAvailable = true;
 }
 
 // Return the idle timeout in seconds

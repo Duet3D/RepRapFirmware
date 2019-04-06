@@ -229,7 +229,7 @@ private:
 	volatile uint32_t completedMoves;					// This one is modified by an ISR, hence volatile
 
 	float specialMoveCoords[MaxTotalDrivers];			// Amounts by which to move individual motors (leadscrew adjustment move)
-	bool specialMoveAvailable;							// True if a leadscrew adjustment move is pending
+	bool adjustLeadScrewsMoveAvailable;							// True if a leadscrew adjustment move is pending
 };
 
 //******************************************************************************************************
