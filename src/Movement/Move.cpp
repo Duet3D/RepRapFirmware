@@ -274,6 +274,11 @@ void Move::Spin()
 						AxisAndBedTransform(nextMove.coords, nextMove.xAxes, nextMove.yAxes, true);
 					}
 
+                    // TODO: Hangprinter G1 S2 moves will get a IsRawMotorMove == true
+                    // so doMotorMapping = !IsRawMove == false
+                    // But Hangprinter must always do motor mapping
+                    // because otherwise we run into the faulty assumption that
+                    // axis position and step count correlate linearly
 					if (ddaRingAddPointer->Init(nextMove, !IsRawMotorMove(nextMove.moveType)))
 					{
 						ddaRingAddPointer = ddaRingAddPointer->GetNext();

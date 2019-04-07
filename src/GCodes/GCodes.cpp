@@ -2542,17 +2542,17 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		// If it isn't a raw motor move, it will still be applied without axis or bed transform applied,
 		// so make sure the initial coordinates don't have those either to avoid unwanted Z movement.
 		const bool hangprinter = reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter;
-		if (!hangprinter) // Hangprinter may use raw moves during print
+		if (hangprinter) // Hangprinter may use raw moves during print
 		{
-      const bool recoverAlterPositionState = moveBuffer.alterPositionState;
-      moveBuffer.alterPositionState = true;
-      LockMovementAndWaitForStandstill(gb);
-      moveBuffer.alterPositionState = recoverAlterPositionState;
+			const bool recoverAlterPositionState = moveBuffer.alterPositionState;
+			moveBuffer.alterPositionState = true;
+			LockMovementAndWaitForStandstill(gb);
+			moveBuffer.alterPositionState = recoverAlterPositionState;
 		}
-    else
-    {
+		else
+		{
 			reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, moveBuffer.moveType, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-    }
+		}
 	}
 
 	// Set up the initial coordinates
