@@ -419,7 +419,7 @@ GCodeResult GCodes::SetTorqueMode(GCodeBuffer& gb, const StringRef& reply)
 					const float desiredPos = odrv.AskForEncoderPosEstimate(odrvAxis);
 					odrv.SetPosSetpoint(odrvAxis, desiredPos);
 					odrv.EnablePositionControlMode(odrvAxis);
-					reply.catf("Set axis %d to position mode.", odrvAxis);
+					reply.printf("Set axis %d to position mode\n", odrvAxis);
 				}
 				else if (fabs(torque) < maxTorque)
 				{
@@ -430,7 +430,7 @@ GCodeResult GCodes::SetTorqueMode(GCodeBuffer& gb, const StringRef& reply)
 					// Limit max current. Use units that max out at maxTorque to match Mechaduino and Smart Stepper behaviour.
 					const float currentA = (torque/maxTorque)*maxCurrentA;
 					odrv.SetCurrent(odrvAxis, currentA);
-					reply.catf("Set torque of axis %d to %.3f out of %.3f. (current: %.3f A).", axis, (double)torque, (double)maxTorque, (double)currentA);
+					reply.printf("Axis %d torque: %.3f/%.3f. (%.3f A)\n", axis, (double)torque, (double)maxTorque, (double)currentA);
 				}
 			}
 		}

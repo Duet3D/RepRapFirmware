@@ -144,86 +144,83 @@ const char *HangprinterKinematics::GetName(bool forStatusReport) const
 // Return true if we changed any parameters. Set 'error' true if there was an error, otherwise leave it alone.
 bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) /*override*/
 {
+	bool seen = false;
+	#define GET_FLOAT_ARRAY(CHAR_, LEN_, ARR_) do { \
+		if(gb.TryGetFloatArray(CHAR_, LEN_, ARR_, reply, seen)) \
+		{ \
+			error = true; \
+			return true; \
+		} \
+	} while(0)
+
+	#define GET_UI_ARRAY_HPAX(CHAR_, ARR_) do { \
+		if(gb.TryGetUIArray(CHAR_, HANGPRINTER_AXES, ARR_, reply, seen)) \
+		{ \
+			error = true; \
+			return true; \
+		} \
+	} while(0)
+
 	if (mCode == 669)
 	{
-		bool seen = false;
-		bool seenNonGeometry = false;
-		gb.TryGetFValue('S', segmentsPerSecond, seenNonGeometry);
-		gb.TryGetFValue('T', minSegmentLength, seenNonGeometry);
-
-		#define GET_FLOAT_ARRAY(CHAR_, LEN_, ARR_) do { \
-			if(gb.TryGetFloatArray(CHAR_, LEN_, ARR_, reply, seen)) \
-			{ \
-				error = true; \
-				return true; \
-			} \
-		} while(0)
-
 		GET_FLOAT_ARRAY('A', 3, anchorA);
 		GET_FLOAT_ARRAY('B', 3, anchorB);
 		GET_FLOAT_ARRAY('C', 3, anchorC);
 		gb.TryGetFValue('D', anchorDz, seen);
-		gb.TryGetFValue('Q', spoolBuildupFactor, seen);
-		GET_FLOAT_ARRAY('R', HANGPRINTER_AXES, spoolRadii);
-
-		#define GET_UI_ARRAY_HPAX(CHAR_, ARR_) do { \
-			if(gb.TryGetUIArray(CHAR_, HANGPRINTER_AXES, ARR_, reply, seen)) \
-			{ \
-				error = true; \
-				return true; \
-			} \
-		} while(0)
-
-		GET_UI_ARRAY_HPAX('U', mechanicalAdvantage);
-		GET_UI_ARRAY_HPAX('O', linesPerSpool);
-		GET_UI_ARRAY_HPAX('L', motorGearTeeth);
-		GET_UI_ARRAY_HPAX('H', spoolGearTeeth);
-		GET_UI_ARRAY_HPAX('J', fullStepsPerMotorRev);
-
-		if (seen || seenNonGeometry)
-		{
-			Recalc();
-		}
 		if (gb.Seen('P'))
 		{
 			printRadius = gb.GetFValue();
 			seen = true;
 		}
-		else if (!gb.Seen('K'))
-		{
-			// TODO: use reply.catf, or move RGHJ to M92, instead of making FORMAT_STRING_LENGTH contain all this?
-			reply.catf("Kinematics is Hangprinter\nAnchor positions:\n%.2f, %.2f, %.2f\n%.2f, %.2f, %.2f\n%.2f, %.2f, %.2f\n"
-				"%.2f\nPrint radius:\n%.1f\nSegments/s:\n%d\nMin segment length:\n%.2f\n"
-				"Spool buildup factor:\n%.4f\n",
-				(double)anchorA[X_AXIS], (double)anchorA[Y_AXIS], (double)anchorA[Z_AXIS],
-				(double)anchorB[X_AXIS], (double)anchorB[Y_AXIS], (double)anchorB[Z_AXIS],
-				(double)anchorC[X_AXIS], (double)anchorC[Y_AXIS], (double)anchorC[Z_AXIS],
-				(double)anchorDz, (double)printRadius,
-				(int)segmentsPerSecond, (double)minSegmentLength,
-				(double)spoolBuildupFactor
-        );
-      //reply.catf(
-			//	"Spool radii:\n%.2f, %.2f, %.2f, %.2f\n"
-			//	"Mechanical Advantage:\n%d, %d, %d, %d\n"
-			//	"Lines per spool:\n%d, %d, %d, %d\n",
-			//	(double)spoolRadii[A_AXIS], (double)spoolRadii[B_AXIS], (double)spoolRadii[C_AXIS], (double)spoolRadii[D_AXIS],
-			//	(int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS], (int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS],
-			//	(int)linesPerSpool[A_AXIS], (int)linesPerSpool[B_AXIS], (int)linesPerSpool[C_AXIS], (int)linesPerSpool[D_AXIS]
-      //  );
-      //reply.catf(
-			//	"Motor gear teeth\n%d, %d, %d, %d\n"
-			//	"Spool gear teeth\n%d, %d, %d, %d\n"
-			//	"Full steps per revolution\n%d, %d, %d, %d",
-			//	(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS], (int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS],
-			//	(int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS], (int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS],
-			//	(int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS], (int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS]);
-		}
-		return seen;
+		gb.TryGetFValue('S', segmentsPerSecond, seen);
+		gb.TryGetFValue('T', minSegmentLength, seen);
+		reply.printf("Hangprinter\n"
+			"A:%.2f, %.2f, %.2f\n"
+			"B:%.2f, %.2f, %.2f\n"
+			"C:%.2f, %.2f, %.2f\n"
+			"D:%.2f\n"
+			"P:Print radius: %.1f\n"
+			"S:Segments/s: %d\n"
+			"T:Min segment length: %.2f\n",
+			(double)anchorA[X_AXIS], (double)anchorA[Y_AXIS], (double)anchorA[Z_AXIS],
+			(double)anchorB[X_AXIS], (double)anchorB[Y_AXIS], (double)anchorB[Z_AXIS],
+			(double)anchorC[X_AXIS], (double)anchorC[Y_AXIS], (double)anchorC[Z_AXIS],
+			(double)anchorDz, (double)printRadius,
+			(int)segmentsPerSecond, (double)minSegmentLength
+			);
 	}
-	else
+	else if (mCode == 666)
 	{
-		return Kinematics::Configure(mCode, gb, reply, error);
+		gb.TryGetFValue('Q', spoolBuildupFactor, seen);
+		GET_FLOAT_ARRAY('R', HANGPRINTER_AXES, spoolRadii);
+		GET_UI_ARRAY_HPAX('U', mechanicalAdvantage);
+		GET_UI_ARRAY_HPAX('O', linesPerSpool);
+		GET_UI_ARRAY_HPAX('L', motorGearTeeth);
+		GET_UI_ARRAY_HPAX('H', spoolGearTeeth);
+		GET_UI_ARRAY_HPAX('J', fullStepsPerMotorRev);
+		reply.printf(
+			"Q:Buildup fac %.4f\n"
+			"R:Spool r %.2f, %.2f, %.2f, %.2f\n"
+			"U:Mech Adv %d, %d, %d, %d\n"
+			"O:Lines/spool %d, %d, %d, %d\n"
+			"L:Motor gear teeth %d, %d, %d, %d\n"
+			"H:Spool gear teeth %d, %d, %d, %d\n"
+			"J:Full steps/rev %d, %d, %d, %d",
+			(double)spoolBuildupFactor,
+			(double)spoolRadii[A_AXIS], (double)spoolRadii[B_AXIS], (double)spoolRadii[C_AXIS], (double)spoolRadii[D_AXIS],
+			(int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS], (int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS],
+			(int)linesPerSpool[A_AXIS], (int)linesPerSpool[B_AXIS], (int)linesPerSpool[C_AXIS], (int)linesPerSpool[D_AXIS],
+			(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS], (int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS],
+			(int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS], (int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS],
+			(int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS], (int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS]
+			);
 	}
+
+	if (seen)
+	{
+		Recalc();
+	}
+	return seen;
 }
 
 // Calculate the square of the line length from a spool from a Cartesian coordinate
@@ -302,7 +299,7 @@ bool HangprinterKinematics::IsReachable(float x, float y, bool isCoordinated) co
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
 bool HangprinterKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated) const
 {
-  return false;
+	return false;
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics
@@ -713,13 +710,14 @@ void HangprinterKinematics::Adjust(size_t numFactors, const floatc_t v[])
 	Recalc();
 }
 
-// Print all the parameters for debugging
+// Printing all the parameters for debugging
+// is not possible because the print buffers are so small
 void HangprinterKinematics::PrintParameters(const StringRef& reply) const
 {
 	reply.printf("Anchor coordinates (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f)\n",
-					(double)anchorA[X_AXIS], (double)anchorA[Y_AXIS], (double)anchorA[Z_AXIS],
-					(double)anchorB[X_AXIS], (double)anchorB[Y_AXIS], (double)anchorB[Z_AXIS],
-					(double)anchorC[X_AXIS], (double)anchorC[Y_AXIS], (double)anchorC[Z_AXIS]);
+		(double)anchorA[X_AXIS], (double)anchorA[Y_AXIS], (double)anchorA[Z_AXIS],
+		(double)anchorB[X_AXIS], (double)anchorB[Y_AXIS], (double)anchorB[Z_AXIS],
+		(double)anchorC[X_AXIS], (double)anchorC[Y_AXIS], (double)anchorC[Z_AXIS]);
 }
 
 // End
