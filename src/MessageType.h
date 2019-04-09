@@ -49,13 +49,7 @@ enum MessageType : uint32_t
 	WarningMessage = GenericMessage | LogMessage | WarningMessageFlag,		// A warning message
 	FirmwareUpdateMessage = UsbMessage | ImmediateAuxMessage,				// A message that conveys progress of a firmware update
 	FirmwareUpdateErrorMessage = FirmwareUpdateMessage | ErrorMessageFlag,	// A message that reports an error during a firmware update
-	NetworkInfoMessage = UsbMessage | AuxMessage | LogMessage,			 	// A message that conveys information about the state of the network interface
-
-	// Combinations for GCodeBuffer instances
-	FileBufferMessage = FileMessage | GenericMessage,						// A message that comes from the file GCodeBuffer
-	DaemonBufferMessage = DaemonMessage | GenericMessage,					// A message that comes from the daemon GCodeBuffer
-	CodeQueueBufferMessage = CodeQueueMessage | GenericMessage,				// A message that comes from the queue GCodeBuffer
-	AutoPauseBufferMessage = AutoPauseMessage | GenericMessage				// A message that comes from the auto pause GCodeBuffer
+	NetworkInfoMessage = UsbMessage | AuxMessage | LogMessage			 	// A message that conveys information about the state of the network interface
 };
 
 inline MessageType AddError(MessageType mt)

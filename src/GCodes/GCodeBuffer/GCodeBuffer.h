@@ -24,7 +24,7 @@ public:
 	friend class BinaryParser;
 	friend class StringParser;
 
-	GCodeBuffer(const char *id, MessageType mt, bool useCodeQueue);
+	GCodeBuffer(const char *id, MessageType stringMt, MessageType binaryMt, bool usesCodeQueue);
 	void Reset();											// Reset it to its state after start-up
 	void Init();											// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype);					// Write some debug info
@@ -79,7 +79,7 @@ public:
 #if HAS_HIGH_SPEED_SD
 	void AbortFile(FileGCodeInput* fileInput);			// Abort execution of any files or macros being executed
 #elif HAS_LINUX_INTERFACE
-	void AbortFile();
+	void AbortFile(bool requestAbort = true);
 #endif
 
 	bool IsDoingFile() const;							// Return true if this source is executing a file
@@ -92,10 +92,11 @@ public:
 	void RequestMacroFile(const char *filename, bool reportMissing);	// Request execution of a file macro
 	const char *GetRequestedMacroFile(bool& reportMissing) const;		// Return requested macro file or nullptr if none
 
-	bool IsMacroCancellationRequested() const;			// Is the cancellation of the current macro requested?
-	void AcknowledgeCancellation();						// Indicates that the current macro file is being cancelled
+	bool IsAbortRequested() const;						// Is the cancellation of the current file requested?
+	void AcknowledgeAbort();							// Indicates that the current macro file is being cancelled
 
-	bool IsStackEventFlagged() const;					// Did the stack changed?
+	void ReportStack() { reportStack = true; }			// Flags current stack details to be reported
+	bool IsStackEventFlagged() const;					// Did the stack change?
 	void AcknowledgeStackEvent();						// Indicates that the last stack event has been written
 #endif
 
@@ -131,7 +132,8 @@ public:
 
 private:
 	const char *identity;
-	const MessageType responseMessageType;				// The message type we use for responses to commands coming from this channel
+	const MessageType responseMessageTypeString;		// The message type we use for responses to string codes coming from this channel
+	const MessageType responseMessageTypeBinary;				// The message type we use for responses to binary codes coming from this channel
 	const bool queueCodes;								// Can we queue certain G-codes from this source?
 
 	int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
@@ -152,7 +154,7 @@ private:
 	String<MaxFilenameLength> requestedMacroFile;
 	uint8_t
 		reportMissingMacro : 1,
-		cancelMacro : 1,
+		abortFile : 1,
 		reportStack : 1;
 #endif
 };

@@ -478,6 +478,10 @@ template<typename T> const void BinaryParser::GetArray(T arr[], size_t& length, 
 			arr[i] = arr[lastIndex];
 		}
 	}
+	else
+	{
+		length = lastIndex + 1;
+	}
 }
 
 void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const

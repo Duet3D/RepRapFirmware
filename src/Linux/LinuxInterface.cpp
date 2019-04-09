@@ -82,7 +82,7 @@ void LinuxInterface::Spin()
 			// Reset the controller
 			case LinuxRequest::Reset:
 				reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::user);
-				break;
+				return;
 
 			// Perform a G/M/T-code
 			case LinuxRequest::Code:
@@ -244,17 +244,21 @@ void LinuxInterface::Spin()
 					gb->RequestMacroFile(nullptr, false);
 				}
 			}
-			// Handle macro cancellation requests
-			else if (gb->IsMacroCancellationRequested())
+			// Handle file abort requests
+			else if (gb->IsAbortRequested())
 			{
 				if (transfer->WriteAbortFileRequest(channel))
 				{
-					gb->AcknowledgeCancellation();
+					gb->AcknowledgeAbort();
 				}
 			}
 
 			// Handle stack changes
-			// FIXME Report stack as well when the remote end has reset
+			if (transfer->LinuxHadReset())
+			{
+				gb->ReportStack();
+			}
+
 			if (gb->IsStackEventFlagged())
 			{
 				if (transfer->WriteStackEvent(channel, gb->MachineState()))
@@ -265,21 +269,32 @@ void LinuxInterface::Spin()
 		}
 
 		// Deal with code replies
-		if (!gcodeReply->IsEmpty())
+		bool dataSent = true;
+		while (!gcodeReply->IsEmpty() && dataSent)
 		{
 			MessageType type = gcodeReply->GetFirstItemType();
 			OutputBuffer *buffer = gcodeReply->GetFirstItem();
-			buffer = transfer->WriteCodeReply(type, buffer);
+			dataSent = !transfer->WriteCodeReply(type, buffer);
 			gcodeReply->SetFirstItem(buffer);
 		}
 
 		// Start the next transfer
 		transfer->StartNextTransfer();
 	}
-	else if (!gcodeReply->IsEmpty() && !transfer->IsConnected())
+	else if (!transfer->IsConnected())
 	{
 		// Don't cache messages if they cannot be sent
-		gcodeReply->ReleaseAll();
+		if (!gcodeReply->IsEmpty())
+		{
+			gcodeReply->ReleaseAll();
+		}
+
+		// Close all open G-code files
+		for (size_t i = 0; i < NumGCodeBuffers; i++)
+		{
+			reprap.GetGCodes().GetGCodeBuffer(i)->AbortFile(false);
+		}
+		reprap.GetGCodes().StopPrint(StopPrintReason::abort);
 	}
 }
 

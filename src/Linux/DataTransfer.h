@@ -28,7 +28,8 @@ public:
 
 	bool IsConnected() const;								// Check if the connection to DCS is live
 	volatile bool IsReady();								// Returns true when data can be read
-	void StartNextTransfer() { ExchangeHeader(); }			// Kick off the next transfer
+	void StartNextTransfer();								// Kick off the next transfer
+	bool LinuxHadReset() const;								// Check if the remote end reset
 
 	const PacketHeader *ReadPacket();						// Attempt to read the next packet header or return null. Advances the read pointer to the next packet or the packet's data
 	const char *ReadData(size_t packetLength);				// Read the packet data and advance to the next packet (if any)
@@ -41,7 +42,7 @@ public:
 	void ResendPacket(const PacketHeader *packet);
 	bool WriteState(uint32_t busyChannels);
 	bool WriteObjectModel(uint8_t module, OutputBuffer *data);
-	OutputBuffer *WriteCodeReply(MessageType type, OutputBuffer *response);
+	bool WriteCodeReply(MessageType type, OutputBuffer *&response);
 	bool WriteMacroRequest(CodeChannel channel, const char *filename, bool reportMissing);
 	bool WriteAbortFileRequest(CodeChannel channel);
 	bool WriteStackEvent(CodeChannel channel, GCodeMachineState& state);
@@ -58,14 +59,11 @@ private:
 		ExchangingHeaderResponse,
 		ExchangingData,
 		ExchangingDataResponse,
-		ProcessingData,
-
-		// This must remain the last entry as long as checksums are not implemented!
-		ResettingState
+		ProcessingData
 	} state;
 
 	// Transfer properties
-	uint32_t lastTransferTime, sequenceNumber;
+	uint32_t lastTransferTime, sequenceNumber, lastSequenceNumber;
 	TransferHeader rxHeader, txHeader;
 	int32_t rxResponse, txResponse;
 
@@ -79,9 +77,8 @@ private:
 	uint16_t packetId;
 
 	void ExchangeHeader();
-	void ExchangeResponse(int32_t response);
+	void ExchangeResponse(int32_t response, SpiState nextState);
 	void ExchangeData();
-	void ForceReset();
 
 	template<typename T> const T *ReadDataHeader();
 
@@ -96,6 +93,16 @@ private:
 
 	size_t AddPadding(size_t length) const;
 };
+
+inline bool DataTransfer::IsConnected() const
+{
+	return rxHeader.sequenceNumber != 0;
+}
+
+inline bool DataTransfer::LinuxHadReset() const
+{
+	return lastSequenceNumber > rxHeader.sequenceNumber;
+}
 
 inline void DataTransfer::ResendPacket(const PacketHeader *packet)
 {

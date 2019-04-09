@@ -105,12 +105,12 @@ GCodes::GCodes(Platform& p) :
 	fileBeingHashed = nullptr;
 	fileInput = new FileGCodeInput();
 #endif
-	fileGCode = new GCodeBuffer("file", FileBufferMessage, true);
+	fileGCode = new GCodeBuffer("file", GenericMessage, FileMessage, true);
 #if defined(SERIAL_MAIN_DEVICE)
 	serialInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
 #endif
 #if defined(SERIAL_MAIN_DEVICE) || HAS_LINUX_INTERFACE
-	usbGCode = new GCodeBuffer("usb", UsbMessage, true);
+	usbGCode = new GCodeBuffer("usb", UsbMessage, UsbMessage, true);
 #else
 	usbGCode = nullptr;
 #endif
@@ -119,8 +119,8 @@ GCodes::GCodes(Platform& p) :
 	telnetInput = new NetworkGCodeInput();
 #endif
 #if HAS_NETWORKING || HAS_LINUX_INTERFACE
-	httpGCode = new GCodeBuffer("http", HttpMessage, false);
-	telnetGCode = new GCodeBuffer("telnet", TelnetMessage, true);
+	httpGCode = new GCodeBuffer("http", HttpMessage, HttpMessage, false);
+	telnetGCode = new GCodeBuffer("telnet", TelnetMessage, HttpMessage, true);
 #else
 	httpGCode = telnetGCode = nullptr;
 #endif
@@ -128,23 +128,23 @@ GCodes::GCodes(Platform& p) :
 	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
 #endif
 #if defined(SERIAL_AUX_DEVICE) || HAS_LINUX_INTERFACE
-	auxGCode = new GCodeBuffer("aux", AuxMessage, false);
+	auxGCode = new GCodeBuffer("aux", AuxMessage, AuxMessage, false);
 #else
 	auxGCode = nullptr;
 #endif
-	daemonGCode = new GCodeBuffer("daemon", DaemonBufferMessage, false);
+	daemonGCode = new GCodeBuffer("daemon", GenericMessage, DaemonMessage, false);
 #if SUPPORT_12864_LCD || HAS_LINUX_INTERFACE
-	lcdGCode = new GCodeBuffer("lcd", LcdMessage, false);
+	lcdGCode = new GCodeBuffer("lcd", LcdMessage, LcdMessage, false);
 #else
 	lcdGCode = nullptr;
 #endif
-	queuedGCode = new GCodeBuffer("queue", CodeQueueBufferMessage, false);
+	queuedGCode = new GCodeBuffer("queue", GenericMessage, CodeQueueMessage, false);
 #if HAS_LINUX_INTERFACE
-	spiGCode = new GCodeBuffer("spi", SpiMessage, false);
+	spiGCode = new GCodeBuffer("spi", GenericMessage, SpiMessage, false);
 #else
 	spiGCode = nullptr;
 #endif
-	autoPauseGCode = new GCodeBuffer("autopause", AutoPauseBufferMessage, false);
+	autoPauseGCode = new GCodeBuffer("autopause", GenericMessage, AutoPauseMessage, false);
 	codeQueue = new GCodeQueue();
 }
 
@@ -2001,7 +2001,7 @@ void GCodes::DoEmergencyStop()
 {
 	reprap.EmergencyStop();
 	Reset();
-	platform.Message(GenericMessage, "Emergency Stop! Reset the controller to continue.");
+	platform.Message(GenericMessage, "Emergency Stop! Reset the controller to continue.\n");
 }
 
 // Pause the print. Before calling this, check that we are doing a file print that isn't already paused and get the movement lock.
@@ -3255,7 +3255,8 @@ const char* GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 // Adjust the move parameters to account for segmentation and/or part of the move having been done already
 void GCodes::FinaliseMove(GCodeBuffer& gb)
 {
-	moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0) && !doingArcMove;		// pausing during an arc move isn't save because the arc centre get recomputed incorrectly when we resume
+	// pausing during an arc move isn't save because the arc centre get recomputed incorrectly when we resume
+	moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0) && !doingArcMove;
 #if HAS_HIGH_SPEED_SD
 	moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;
 #elif HAS_LINUX_INTERFACE
@@ -4216,6 +4217,15 @@ void GCodes::SaveFanSpeeds()
 // Note that 'reply' may be empty. If it isn't, then we need to append newline when sending it.
 void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 {
+#if HAS_LINUX_INTERFACE
+	// Deal with replies to the Linux interface
+	if (gb.IsBinary())
+	{
+		platform.Message(gb.GetResponseMessageType(), reply);
+		return;
+	}
+#endif
+
 	// Don't report "ok" responses if a (macro) file is being processed
 	// Also check that this response was triggered by a gcode
 	if ((gb.MachineState().doingFileMacro || &gb == fileGCode) && reply[0] == 0)
@@ -4287,6 +4297,22 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 // Handle a successful response when the response is in an OutputBuffer
 void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply)
 {
+#if HAS_LINUX_INTERFACE
+	// Deal with replies to the Linux interface
+	if (gb.IsBinary())
+	{
+		if (reply == nullptr)
+		{
+			platform.Message(gb.GetResponseMessageType(), "");
+		}
+		else
+		{
+			platform.Message(gb.GetResponseMessageType(), reply);
+		}
+		return;
+	}
+#endif
+
 	// Although unlikely, it's possible that we get a nullptr reply. Don't proceed if this is the case
 	if (reply == nullptr)
 	{

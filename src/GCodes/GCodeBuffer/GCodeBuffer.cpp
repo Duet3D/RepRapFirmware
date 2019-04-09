@@ -15,11 +15,13 @@
 #include "StringParser.h"
 
 // Create a default GCodeBuffer
-GCodeBuffer::GCodeBuffer(const char *id, MessageType mt, bool usesCodeQueue)
-	: identity(id), responseMessageType(mt), queueCodes(usesCodeQueue), toolNumberAdjust(0),
+GCodeBuffer::GCodeBuffer(const char *id, MessageType stringMt, MessageType binaryMt, bool usesCodeQueue)
+	: identity(id), responseMessageTypeString(stringMt),
+	  responseMessageTypeBinary((MessageType)((uint32_t)binaryMt | (uint32_t)MessageType::BinaryCodeReplyFlag)),
+	  queueCodes(usesCodeQueue), toolNumberAdjust(0),
 	  binaryParser(*this), stringParser(*this), machineState(new GCodeMachineState())
 #if HAS_LINUX_INTERFACE
-	  , reportMissingMacro(false), cancelMacro(false)
+	  , reportMissingMacro(false), abortFile(false), reportStack(false)
 #endif
 {
 	Init();
@@ -35,7 +37,6 @@ void GCodeBuffer::Reset()
 // Set it up to parse another G-code
 void GCodeBuffer::Init()
 {
-	isBinaryBuffer = false;
 	binaryParser.Init();
 	stringParser.Init();
 
@@ -467,7 +468,7 @@ void GCodeBuffer::AbortFile(FileGCodeInput* fileInput)
 	}
 }
 #elif HAS_LINUX_INTERFACE
-void GCodeBuffer::AbortFile()
+void GCodeBuffer::AbortFile(bool requestAbort)
 {
 	if (machineState->DoingFile())
 	{
@@ -480,7 +481,7 @@ void GCodeBuffer::AbortFile()
 		} while (PopState());							// abandon any macros
 	}
 
-	cancelMacro = true;
+	abortFile = requestAbort;
 }
 
 bool GCodeBuffer::IsFileFinished() const
@@ -506,7 +507,7 @@ void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing)
 
 	requestedMacroFile.copy(filename);
 	reportMissingMacro = reportMissing;
-	cancelMacro = false;
+	abortFile = false;
 }
 
 const char *GCodeBuffer::GetRequestedMacroFile(bool& reportMissing) const
@@ -515,14 +516,14 @@ const char *GCodeBuffer::GetRequestedMacroFile(bool& reportMissing) const
 	return requestedMacroFile.IsEmpty() ? nullptr : requestedMacroFile.c_str();
 }
 
-bool GCodeBuffer::IsMacroCancellationRequested() const
+bool GCodeBuffer::IsAbortRequested() const
 {
-	return cancelMacro;
+	return abortFile;
 }
 
-void GCodeBuffer::AcknowledgeCancellation()
+void GCodeBuffer::AcknowledgeAbort()
 {
-	cancelMacro = false;
+	abortFile = false;
 }
 
 bool GCodeBuffer::IsStackEventFlagged() const
@@ -553,11 +554,7 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled)
 
 MessageType GCodeBuffer::GetResponseMessageType() const
 {
-	if (isBinaryBuffer)
-	{
-		return (MessageType)((uint32_t)responseMessageType | (uint32_t)MessageType::BinaryCodeReplyFlag);
-	}
-	return responseMessageType;
+	return isBinaryBuffer ? responseMessageTypeBinary : responseMessageTypeString;
 }
 
 FilePosition GCodeBuffer::GetFilePosition(size_t bytesCached) const

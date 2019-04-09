@@ -65,6 +65,7 @@ void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info
 
 void PrintMonitor::Spin()
 {
+#if HAS_HIGH_SPEED_SD
 	// File information about the file being printed must be available before layer estimations can be made
 	if (!filenameBeingPrinted.IsEmpty() && !printingFileParsed)
 	{
@@ -74,6 +75,14 @@ void PrintMonitor::Spin()
 			return;
 		}
 	}
+#elif HAS_LINUX_INTERFACE
+	if (!printingFileParsed)
+	{
+		return;
+	}
+#else
+	return;
+#endif
 
 	// Don't do any updates if the print has been paused
 	if (!gCodes.IsRunning())
@@ -175,8 +184,10 @@ float PrintMonitor::GetWarmUpDuration() const
 // Notifies this class that a file has been set for printing
 void PrintMonitor::StartingPrint(const char* filename)
 {
+#if HAS_HIGH_SPEED_SD
 	MassStorage::CombineName(filenameBeingPrinted.GetRef(), platform.GetGCodeDir(), filename);
 	printingFileParsed = platform.GetMassStorage()->GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
+#endif
 }
 
 // Tell this class that the file set for printing is now actually processed
