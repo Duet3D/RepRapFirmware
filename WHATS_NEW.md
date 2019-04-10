@@ -13,7 +13,8 @@ Upgrade notes:
 - See also the upgrade notes for earlier 2.03 beta versions.
 
 Known issues:
-- Custom endstop input numbers in the M575 command (probe tool) don't work
+- Custom endstop input numbers in the M585 command (probe tool) don't work
+- On the Duet 085, Fan 1 doesn't work
 
 New features/changed behaviour:
 - M505 (set SD card system folder) is now implemented
@@ -48,7 +49,7 @@ Upgrade notes:
 - Important! See 2.03beta1 upgrade notes too.
 
 Known issues:
-- Custom endstop input numbers in the M575 command (probe tool) don't work
+- Custom endstop input numbers in the M585 command (probe tool) don't work
 - On the 12864 display, if the gcodes folder on the SD card includes file whose names start with '.', then when when you select a file to print the wrong file may be printed
 
 New features/changed behaviour:
@@ -101,7 +102,7 @@ New features/changed behaviour:
 - On SCARA and delta printers, geometric limits are now applied even when not applying M208 limits due to use of M564 S0
 - New S-3 function for G30 command. G30 S-3 probes the bed and sets the Z probe trigger height to the stopped height.
 - M92 command now includes an optional S parameter to specify the microstepping that the steps/mm is quotes at. If the actual microstepping in use is different, the specified steps/mm will be adjusted accordingly (thanks wikriker).
-- M575 command L parameter for inverting probe logic level is supported (thanks chrishamm)
+- M585 command L parameter for inverting probe logic level is supported (thanks chrishamm)
 - The M408 S2 and http status responses now include the bed standby temperature (thanks gtjoseph)
 - The M669 parameters to define SCARA kinematics now include an R (minimum radius) parameter, to handle machines for which the minimum available radius is sometimes higher than the radius when the distal axis is homed
 - G17 is implemented (it does nothing), and G17/G17 report an error
