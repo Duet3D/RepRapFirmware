@@ -325,6 +325,14 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 			case 33:
 				currentValue = reprap.GetNetwork().GetIPAddress(0).GetQuad(itemNumber - 30);
 				break;
+			case 34: // Report current print progress
+				if(reprap.GetPrintMonitor().IsPrinting()){
+					currentValue =  reprap.GetGCodes().FractionOfFilePrinted() * 100;
+				}
+				else{
+					currentValue = 0;
+				}
+				break;
 
 			default:
 				error = true;
