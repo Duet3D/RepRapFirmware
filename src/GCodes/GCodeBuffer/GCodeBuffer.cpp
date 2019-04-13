@@ -19,7 +19,7 @@ GCodeBuffer::GCodeBuffer(const char *id, MessageType stringMt, MessageType binar
 	: identity(id), responseMessageTypeString(stringMt),
 	  responseMessageTypeBinary((MessageType)((uint32_t)binaryMt | (uint32_t)MessageType::BinaryCodeReplyFlag)),
 	  queueCodes(usesCodeQueue), toolNumberAdjust(0),
-	  binaryParser(*this), stringParser(*this), machineState(new GCodeMachineState())
+	  isBinaryBuffer(false), binaryParser(*this), stringParser(*this), machineState(new GCodeMachineState())
 #if HAS_LINUX_INTERFACE
 	  , reportMissingMacro(false), abortFile(false), reportStack(false)
 #endif

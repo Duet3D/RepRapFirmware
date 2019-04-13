@@ -55,6 +55,7 @@ public:
 private:
 	enum class SpiState
 	{
+		Initializing,
 		ExchangingHeader,
 		ExchangingHeaderResponse,
 		ExchangingData,
@@ -77,7 +78,7 @@ private:
 	uint16_t packetId;
 
 	void ExchangeHeader();
-	void ExchangeResponse(int32_t response, SpiState nextState);
+	void ExchangeResponse(int32_t response);
 	void ExchangeData();
 
 	template<typename T> const T *ReadDataHeader();

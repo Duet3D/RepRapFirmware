@@ -129,8 +129,9 @@ extern "C" void LINUX_SPI_HANDLER(void)
 
 /*-----------------------------------------------------------------------------------*/
 
-DataTransfer::DataTransfer() : state(SpiState::ExchangingHeader), lastTransferTime(0), sequenceNumber(1),
-	lastSequenceNumber(1), rxPointer(0), txPointer(0), packetId(1)
+DataTransfer::DataTransfer() : state(SpiState::Initializing), lastTransferTime(0), sequenceNumber(1),
+	lastSequenceNumber(1), rxResponse(TransferResponse::Success), txResponse(TransferResponse::Success),
+	rxPointer(0), txPointer(0), packetId(1)
 {
 	// Prepare RX header
 	rxHeader.sequenceNumber = 0;
@@ -148,6 +149,7 @@ void DataTransfer::Init() {
 	// Initialise SPI
 	spi_enable_clock(LINUX_SPI);
 	spi_disable(LINUX_SPI);
+	dataReceived = false;
 }
 
 void DataTransfer::Diagnostics(MessageType mtype)
@@ -267,11 +269,11 @@ void DataTransfer::ExchangeHeader()
 	state = SpiState::ExchangingHeader;
 }
 
-void DataTransfer::ExchangeResponse(int32_t response, SpiState nextState)
+void DataTransfer::ExchangeResponse(int32_t response)
 {
 	txResponse = response;
 	setup_spi(&rxResponse, sizeof(int32_t), &txResponse, sizeof(int32_t));
-	state = nextState;
+	state = (state == SpiState::ExchangingHeader) ? SpiState::ExchangingHeaderResponse : SpiState::ExchangingDataResponse;
 }
 
 void DataTransfer::ExchangeData()
@@ -293,12 +295,17 @@ volatile bool DataTransfer::IsReady()
 			// (1) Exchanged transfer headers
 			if (rxHeader.formatCode != LinuxFormatCode)
 			{
-				ExchangeResponse(TransferResponse::BadFormat, SpiState::ExchangingHeader);
+				ExchangeResponse(TransferResponse::BadFormat);
 				break;
 			}
 			if (rxHeader.protocolVersion != LinuxProtocolVersion)
 			{
-				ExchangeResponse(TransferResponse::BadProtocolVersion, SpiState::ExchangingHeader);
+				ExchangeResponse(TransferResponse::BadProtocolVersion);
+				break;
+			}
+			if (rxHeader.dataLength > LinuxTransferBufferSize)
+			{
+				ExchangeResponse(TransferResponse::BadDataLength);
 				break;
 			}
 #if 0
@@ -309,33 +316,21 @@ volatile bool DataTransfer::IsReady()
 			}
 #endif
 
-			ExchangeResponse(TransferResponse::Success, SpiState::ExchangingHeaderResponse);
+			ExchangeResponse(TransferResponse::Success);
 			break;
 
 		case SpiState::ExchangingHeaderResponse:
 			// (2) Exchanged response to transfer header
-			switch (rxResponse)
+			if (rxResponse == TransferResponse::Success && txResponse == TransferResponse::Success &&
+				rxHeader.dataLength != 0 && txHeader.dataLength != 0)
 			{
-			case TransferResponse::Success:
-				if (rxHeader.dataLength == 0 && txHeader.dataLength == 0)
-				{
-					// No data to send or receive, perform another header exchange
-					ExchangeHeader();
-				}
-				else
-				{
-					// Everything OK, perform data transfer
-					ExchangeData();
-				}
-				break;
-
-			case TransferResponse::BadChecksum:
-			case TransferResponse::BadFormat:
-			case TransferResponse::BadProtocolVersion:
-			default:
-				// This is entirely handled by DSF, no need to do anything here except to send the header again
+				// Everything OK, perform the next data transfer
+				ExchangeData();
+			}
+			else
+			{
+				// Reset the state and exchange the header once again
 				ExchangeHeader();
-				break;
 			}
 			break;
 
@@ -349,7 +344,7 @@ volatile bool DataTransfer::IsReady()
 			}
 #endif
 
-			ExchangeResponse(TransferResponse::Success, SpiState::ExchangingDataResponse);
+			ExchangeResponse(TransferResponse::Success);
 			break;
 
 		case SpiState::ExchangingDataResponse:
@@ -369,22 +364,27 @@ volatile bool DataTransfer::IsReady()
 			state = SpiState::ExchangingData;
 			break;
 
-		case SpiState::ProcessingData:
-			// Should never get here. If we do, this means that StartNextTransfer has not been called
+		default:
+			// Should never get here. If we do, this probably means that StartNextTransfer has not been called
 			state = SpiState::ExchangingHeader;
 			INTERNAL_ERROR;
 			break;
 		}
 	}
-	else if (IsConnected() && millis() - lastTransferTime > SpiTransferTimeout)
+	else if (state == SpiState::Initializing && millis() > SpiTransferTimeout)
+	{
+		// When an unexpected firmware reset from RRF occurs, the Linux interface may be in the middle of a transfer.
+		// Let it time out so that it wants to restart the transfer. This may be the case if e.g. a user sends M999 via USB
+		ExchangeHeader();
+	}
+	else if (state != SpiState::ExchangingHeader && millis() - lastTransferTime > SpiTransferTimeout)
 	{
 		// Reset failed transfers automatically after a certain time
-		if (state != SpiState::ExchangingHeader)
-		{
-			disable_spi();
-			ExchangeHeader();
-		}
-
+		disable_spi();
+		ExchangeHeader();
+	}
+	else if (IsConnected() && millis() - lastTransferTime > SpiConnectionTimeout)
+	{
 		// The Linux interface is no longer connected...
 		rxHeader.sequenceNumber = 0;
 	}
