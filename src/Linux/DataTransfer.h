@@ -31,6 +31,7 @@ public:
 	void StartNextTransfer();								// Kick off the next transfer
 	bool LinuxHadReset() const;								// Check if the remote end reset
 
+	size_t PacketsToRead() const;
 	const PacketHeader *ReadPacket();						// Attempt to read the next packet header or return null. Advances the read pointer to the next packet or the packet's data
 	const char *ReadData(size_t packetLength);				// Read the packet data and advance to the next packet (if any)
 	uint8_t ReadGetObjectModel();							// Read an object model request
@@ -103,6 +104,11 @@ inline bool DataTransfer::IsConnected() const
 inline bool DataTransfer::LinuxHadReset() const
 {
 	return lastSequenceNumber > rxHeader.sequenceNumber;
+}
+
+inline size_t DataTransfer::PacketsToRead() const
+{
+	return rxHeader.numPackets;
 }
 
 inline void DataTransfer::ResendPacket(const PacketHeader *packet)

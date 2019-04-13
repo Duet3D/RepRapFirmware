@@ -129,9 +129,9 @@ extern "C" void LINUX_SPI_HANDLER(void)
 
 /*-----------------------------------------------------------------------------------*/
 
-DataTransfer::DataTransfer() : state(SpiState::Initializing), lastTransferTime(0), sequenceNumber(1),
+DataTransfer::DataTransfer() : state(SpiState::Initializing), lastTransferTime(0), sequenceNumber(0),
 	lastSequenceNumber(1), rxResponse(TransferResponse::Success), txResponse(TransferResponse::Success),
-	rxPointer(0), txPointer(0), packetId(1)
+	rxPointer(0), txPointer(0), packetId(0)
 {
 	// Prepare RX header
 	rxHeader.sequenceNumber = 0;
@@ -259,6 +259,7 @@ void DataTransfer::ExchangeHeader()
 	rxHeader.checksumHeader = 0;
 
 	// Reset TX transfer header
+	txHeader.numPackets = packetId;
 	txHeader.sequenceNumber = sequenceNumber++;
 	txHeader.dataLength = txPointer;
 	txHeader.checksumData = 0;				// TOOD
@@ -352,8 +353,7 @@ volatile bool DataTransfer::IsReady()
 			if (rxResponse == TransferResponse::Success)
 			{
 				rxPointer = txPointer = 0;
-				txHeader.numPackets = 0;
-				packetId = 1;
+				packetId = 0;
 
 				state = SpiState::ProcessingData;
 				return true;
@@ -375,7 +375,7 @@ volatile bool DataTransfer::IsReady()
 	{
 		// When an unexpected firmware reset from RRF occurs, the Linux interface may be in the middle of a transfer.
 		// Let it time out so that it wants to restart the transfer. This may be the case if e.g. a user sends M999 via USB
-		ExchangeHeader();
+		StartNextTransfer();
 	}
 	else if (state != SpiState::ExchangingHeader && millis() - lastTransferTime > SpiTransferTimeout)
 	{
@@ -393,8 +393,8 @@ volatile bool DataTransfer::IsReady()
 
 void DataTransfer::StartNextTransfer()
 {
-	ExchangeHeader();
 	lastSequenceNumber = rxHeader.sequenceNumber;
+	ExchangeHeader();
 }
 
 bool DataTransfer::WriteState(uint32_t busyChannels)

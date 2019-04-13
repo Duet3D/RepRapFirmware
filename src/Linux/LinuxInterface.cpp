@@ -36,11 +36,15 @@ void LinuxInterface::Spin()
 	if (transfer->IsReady())
 	{
 		// Process incoming packets
-		for (;;)
+		for (size_t i = 0; i < transfer->PacketsToRead(); i++)
 		{
 			const PacketHeader *packet = transfer->ReadPacket();
 			if (packet == nullptr)
 			{
+				if (reprap.Debug(moduleLinuxInterface))
+				{
+					reprap.GetPlatform().Message(DebugMessage, "Error trying to read next SPI packet\n");
+				}
 				break;
 			}
 
@@ -209,10 +213,8 @@ void LinuxInterface::Spin()
 
 			// Invalid request
 			default:
-			{
 				INTERNAL_ERROR;
 				break;
-			}
 			}
 		}
 

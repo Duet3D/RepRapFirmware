@@ -34,7 +34,6 @@ public:
 	void SetPauseReason(FilePosition position, PrintPausedReason reason);
 	void ReportPause();
 
-
 private:
 	DataTransfer *transfer;
 
