@@ -333,7 +333,27 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 					currentValue = 0;
 				}
 				break;
-
+			case 35:
+			case 36:
+			case 37:
+				if(reprap.GetPrintMonitor().IsPrinting()){
+					int timeRemaining = static_cast<int>(reprap.GetPrintMonitor().EstimateTimeLeft(PrintEstimationMethod::fileBased));
+					switch(itemNumber){
+						case 35: //Hr
+						currentValue =  floor(timeRemaining / 3600);
+ 						break;
+						case 36: //Min
+						currentValue = (timeRemaining / 60) % 60;
+						break;
+						case 37: //Sec
+						currentValue = timeRemaining % 60;
+						break;
+						default:
+						currentValue = 0;
+						break;
+					}
+				}
+			break;
 			default:
 				error = true;
 			}
