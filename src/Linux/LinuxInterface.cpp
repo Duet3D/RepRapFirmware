@@ -27,8 +27,9 @@ void LinuxInterface::Init()
 	transfer->Init();
 
 	// RepRap does not wait for config.g because DCS may not be running.
-	// Request it from the Linux controller as the first action
+	// Request it from the Linux controller as the first action and kick off the first transfer
 	transfer->WriteMacroRequest(CodeChannel::daemon, CONFIG_FILE, true);
+	transfer->StartNextTransfer();
 }
 
 void LinuxInterface::Spin()

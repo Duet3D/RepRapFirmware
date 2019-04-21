@@ -27,7 +27,7 @@ constexpr size_t MaxCodeBufferSize = 192;			// maximum length of a G/M/T-code in
 static_assert(MaxCodeBufferSize % sizeof(uint32_t) == 0, "MaxCodeBufferSize must be a whole number of dwords");
 static_assert(MaxCodeBufferSize >= GCODE_LENGTH, "MaxCodeBufferSize must be at least as big as GCODE_LENGTH");
 
-constexpr uint32_t SpiTransferTimeout = 500;		// maximum allowed delay during a data transfer (in ms)
+constexpr uint32_t SpiTransferTimeout = 500;		// maximum allowed delay between data exchanges during a full transfer (in ms)
 constexpr uint32_t SpiConnectionTimeout = 4000;		// maximum time to wait for the next transfer (in ms)
 
 // Shared structures
@@ -42,13 +42,16 @@ struct TransferHeader
 	uint16_t checksumHeader;
 };
 
-enum TransferResponse : int32_t
+enum TransferResponse : uint32_t
 {
 	Success = 1,
 	BadFormat = 2,
 	BadProtocolVersion = 3,
 	BadDataLength = 4,
-	BadChecksum = 5
+	BadHeaderChecksum = 5,
+	BadDataChecksum = 6,
+
+	BadResponse = 0xFEFEFEFE
 };
 
 struct PacketHeader

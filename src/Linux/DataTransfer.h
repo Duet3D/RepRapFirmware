@@ -56,18 +56,19 @@ public:
 private:
 	enum class SpiState
 	{
-		Initializing,
 		ExchangingHeader,
 		ExchangingHeaderResponse,
 		ExchangingData,
 		ExchangingDataResponse,
-		ProcessingData
+		ProcessingData,
+		Resetting
 	} state;
 
 	// Transfer properties
-	uint32_t lastTransferTime, sequenceNumber, lastSequenceNumber;
+	uint32_t lastTransferTime;
+	uint16_t currentTransferNumber, lastTransferNumber;
 	TransferHeader rxHeader, txHeader;
-	int32_t rxResponse, txResponse;
+	uint32_t rxResponse, txResponse;
 
 	// Transfer buffers
 	uint32_t rxBuffer32[LinuxTransferBufferSize / 4], txBuffer32[LinuxTransferBufferSize / 4];
@@ -79,8 +80,10 @@ private:
 	uint16_t packetId;
 
 	void ExchangeHeader();
-	void ExchangeResponse(int32_t response);
+	void ExchangeResponse(uint32_t response);
 	void ExchangeData();
+	void ResetTransfer();
+	uint16_t CRC16(const char *buffer, size_t length) const;
 
 	template<typename T> const T *ReadDataHeader();
 
@@ -103,7 +106,7 @@ inline bool DataTransfer::IsConnected() const
 
 inline bool DataTransfer::LinuxHadReset() const
 {
-	return lastSequenceNumber > rxHeader.sequenceNumber;
+	return lastTransferNumber + 1 != rxHeader.sequenceNumber;
 }
 
 inline size_t DataTransfer::PacketsToRead() const
