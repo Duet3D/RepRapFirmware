@@ -26,6 +26,7 @@
 #include "Movement/Move.h"
 #include "Movement/StepTimer.h"
 #include "Tools/Tool.h"
+#include "Endstops/ZProbe.h"
 #include "Network.h"
 #include "PrintMonitor.h"
 #include "FilamentMonitors/FilamentMonitor.h"
@@ -76,7 +77,7 @@
 extern uint32_t _estack;			// defined in the linker script
 
 #if !defined(HAS_LWIP_NETWORKING) || !defined(HAS_WIFI_NETWORKING) || !defined(HAS_CPU_TEMP_SENSOR) || !defined(HAS_HIGH_SPEED_SD) \
- || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_VREF_MONITOR) || !defined(ACTIVE_LOW_HEAT_ON) \
+ || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_VREF_MONITOR) \
  || !defined(SUPPORT_NONLINEAR_EXTRUSION) || !defined(SUPPORT_ASYNC_MOVES)
 # error Missing feature definition
 #endif
@@ -101,16 +102,6 @@ constexpr uint16_t driverNormalVoltageAdcReading = PowerVoltageToAdcReading(27.5
 #endif
 
 const float MinStepPulseTiming = 0.2;				// we assume that we always generate step high and low times at least this wide without special action
-
-const LogicalPin Heater0LogicalPin = 0;
-const LogicalPin Fan0LogicalPin = 20;
-const LogicalPin EndstopXLogicalPin = 40;
-const LogicalPin Special0LogicalPin = 60;
-
-#ifdef DUET_NG
-const LogicalPin DueX5Gpio0LogicalPin = 100;
-const LogicalPin AdditionalExpansionLogicalPin = 120;
-#endif
 
 //#define MOVE_DEBUG
 
@@ -161,6 +152,16 @@ extern "C" void UrgentInit()
 #endif
 }
 
+DriversBitmap AxisDriversConfig::GetDriversBitmap() const
+{
+	DriversBitmap rslt = 0;
+	for (size_t i = 0; i < numDrivers; ++i)
+	{
+		SetBit(rslt, driverNumbers[i]);
+	}
+	return rslt;
+}
+
 //*************************************************************************************************
 // Platform class
 
@@ -182,10 +183,7 @@ Platform::Platform() :
 // Initialise the Platform. Note: this is the first module to be initialised, so don't call other modules from here!
 void Platform::Init()
 {
-	if (DiagPin != NoPin)
-	{
-		pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
-	}
+	pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
 
 	// Deal with power first (we assume this doesn't depend on identifying the board type)
 	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
@@ -197,70 +195,23 @@ void Platform::Init()
 	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
 #endif
 
-#if defined(PCCB_08) || defined(PCCB_08_X5)
+#if defined(PCCB_10)
+	pinMode(LedOnPins[0], OUTPUT_LOW);			// turn LED0 off, active high
+	pinMode(LedOnPins[0], OUTPUT_HIGH);			// turn LED1 off, active low
+#elif defined(PCCB_08) || defined(PCCB_08_X5)
 	// Make sure the on-board TMC22xx drivers are disabled
 	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
-#endif
-
-#if defined(PCCB)
-	// Ensure that the main LEDs are turned off.
-	// The main LED output is active low, just like a heater on the Duet 2 series.
-	// The secondary LED control dims the LED via the external controller when the output is high. So both outputs must be initialised high.
-	for (size_t i = 0; i < NumLeds; ++i)
-	{
-		pinMode(LedOnPins[i], OUTPUT_HIGH);
-	}
+	pinMode(LedOnPins[0], OUTPUT_HIGH);			// turn LED0 off, active low
+	pinMode(LedOnPins[0], OUTPUT_HIGH);			// turn LED1 off, active low
 #endif
 
 #if SAME70
 	DmacManager::Init();
 #endif
 
-	// Real-time clock
-	realTime = 0;
-
-	// Comms
-	baudRates[0] = MAIN_BAUD_RATE;
-	commsParams[0] = 0;
-	usbMutex.Create("USB");
-	SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
-
-#ifdef SERIAL_AUX_DEVICE
-	baudRates[1] = AUX_BAUD_RATE;
-	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
-	auxMutex.Create("Aux");
-	auxDetected = false;
-	auxSeq = 0;
-	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
-#endif
-
-#ifdef SERIAL_AUX2_DEVICE
-	baudRates[2] = AUX2_BAUD_RATE;
-	commsParams[2] = 0;
-	aux2Mutex.Create("Aux2");
-	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
-#endif
-
-	compatibility = Compatibility::marlin;		// default to Marlin because the common host programs expect the "OK" response to commands
-
-	// File management and SD card interfaces
-	for (size_t i = 0; i < NumSdCards; ++i)
-	{
-		const Pin p = SdCardDetectPins[i];
-		if (p != NoPin)
-		{
-			setPullup(p, true);
-		}
-	}
-
-	massStorage->Init();
-
-	ipAddress = DefaultIpAddress;
-	netMask = DefaultNetMask;
-	gateWay = DefaultGateway;
+	// Read the unique ID of the MCU, if it has one
 
 #if SAM4E || SAM4S || SAME70
-	// Read the unique ID of the MCU
 	memset(uniqueId, 0, sizeof(uniqueId));
 
 	DisableCache();
@@ -291,7 +242,88 @@ void Platform::Init()
 	{
 		ARRAY_INIT(defaultMacAddress, DefaultMacAddress);
 	}
-#elif defined(DUET_06_085)
+#endif
+
+	// Real-time clock
+	realTime = 0;
+
+	// Comms
+	baudRates[0] = MAIN_BAUD_RATE;
+	commsParams[0] = 0;
+	usbMutex.Create("USB");
+	SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
+
+#ifdef SERIAL_AUX_DEVICE
+	baudRates[1] = AUX_BAUD_RATE;
+	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
+	auxMutex.Create("Aux");
+	auxDetected = false;
+	auxSeq = 0;
+	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
+#endif
+
+#ifdef SERIAL_AUX2_DEVICE
+	baudRates[2] = AUX2_BAUD_RATE;
+	commsParams[2] = 0;
+	aux2Mutex.Create("Aux2");
+	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
+#endif
+
+	compatibility = Compatibility::marlin;		// default to Marlin because the common host programs expect the "OK" response to commands
+
+	// Initialise the IO port subsystem
+#if HAS_VARIABLE_PIN_LIST
+	// If HAS_VARIABLE_PIN_LIST then we must pass the correct pin mapping table for the board we are running on here
+	IoPort::Init(pinList);
+#else
+	IoPort::Init();
+#endif
+
+	// File management and SD card interfaces
+	for (size_t i = 0; i < NumSdCards; ++i)
+	{
+		setPullup(SdCardDetectPins[i], true);	// setPullup is safe to call with a NoPin argument
+	}
+
+	massStorage->Init();
+
+	// Ethernet networking defaults
+	ipAddress = DefaultIpAddress;
+	netMask = DefaultNetMask;
+	gateWay = DefaultGateway;
+
+	// Do hardware dependent initialisation
+
+#if defined(DUET_NG)
+	// Test for presence of a DueX2 or DueX5 expansion board and work out how many TMC2660 drivers we have
+	expansionBoard = DuetExpansion::DueXnInit();
+
+	switch (expansionBoard)
+	{
+	case ExpansionBoardType::DueX2:
+		numSmartDrivers = 7;
+		break;
+	case ExpansionBoardType::DueX5:
+		numSmartDrivers = 10;
+		break;
+	case ExpansionBoardType::none:
+	case ExpansionBoardType::DueX0:
+	default:
+		numSmartDrivers = 5;									// assume that any additional drivers are dumb enable/step/dir ones
+		break;
+	}
+
+	DuetExpansion::AdditionalOutputInit();
+
+#elif defined(DUET_M)
+	numSmartDrivers = MaxSmartDrivers;							// for now we assume that expansion drivers are smart too
+#elif defined(PCCB)
+	numSmartDrivers = MaxSmartDrivers;
+#elif defined(DUET3_V03) || defined(DUET3_V05)
+	numSmartDrivers = MaxSmartDrivers;
+#endif
+
+#if defined(DUET_06_085)
 	ARRAY_INIT(defaultMacAddress, DefaultMacAddress);
 
 	// Motor current setting on Duet 0.6 and 0.8.5
@@ -332,7 +364,8 @@ void Platform::Init()
 	Microstepping::Init(); // basic class to remember the Microstepping.
 #endif
 
-	ARRAY_INIT(endStopPins, END_STOP_PINS);
+	// Initialise endstops. On Duet 2 this must be done after testing for an expansion board.
+	endstops.Init();
 
 	// Drives
 	minimumMovementSpeed = DefaultMinFeedrate;
@@ -354,13 +387,6 @@ void Platform::Init()
 		instantDvs[drive] = DefaultEInstantDv;
 	}
 
-	// Z PROBE
-	zProbeType = ZProbeType::none;				// default is to use no Z probe
-	zProbePin = Z_PROBE_PIN;
-	zProbeAdcChannel = PinToAdcChannel(zProbePin);
-	SetZProbeDefaults();
-	InitZProbe();								// this also sets up zProbeModulationPin
-
 	// AXES
 	for (size_t axis = 0; axis < MaxAxes; ++axis)
 	{
@@ -372,6 +398,7 @@ void Platform::Init()
 	idleCurrentFactor = DefaultIdleCurrentFactor;
 
 	// Motors
+
 #ifndef __LPC17xx__
 	// Disable parallel writes to all pins. We re-enable them for the step pins.
 	PIOA->PIO_OWDR = 0xFFFFFFFF;
@@ -399,15 +426,11 @@ void Platform::Init()
 		{
 			axisDrivers[drive].numDrivers = 1;
 			axisDrivers[drive].driverNumbers[0] = (uint8_t)drive;
-			axisEndstops[drive].numEndstops = 1;
-			axisEndstops[drive].endstopNumbers[0] = (uint8_t)drive;
-			endStopPos[drive] = EndStopPosition::lowEndStop;		// default to low endstop
-			endStopInputType[drive] = EndStopInputType::activeHigh;	// assume all endstops use active high logic e.g. normally-closed switch to ground
 		}
 
 		if (drive < NumDirectDrivers)
 		{
-			// Set up the control pins and endstops
+			// Set up the control pins
 			pinMode(STEP_PINS[drive], OUTPUT_LOW);
 			pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
 #if !(defined(DUET3_V03) || defined(DUET3_V05))
@@ -421,28 +444,12 @@ void Platform::Init()
 		}
 	}
 
-	for (Pin p : endStopPins)
-	{
-#if defined(DUET_NG) || defined(DUET_06_085) || defined(__RADDS__) || defined(__ALLIGATOR__)
-		// Enable pullup resistors on endstop inputs here if necessary.
-		// The Duets have hardware pullup resistors/LEDs except for the two on the CONN_LCD connector.
-		// They have RC filtering on the main endstop inputs, so best not to enable the pullup resistors on these.
-		// 2017-12-19: some users are having trouble with the endstops not being recognised in recent firmware versions.
-		// Probably the LED+resistor isn't pulling them up fast enough. So enable the pullup resistors again.
-		// Note: if we don't have a DueX board connected, the pullups on endstop inputs 5-9 must always be enabled.
-		// Also the pullups on endstop inputs 10-11 must always be enabled.
-		// I don't know whether RADDS and Alligator have hardware pullup resistors or not. I'll assume they might not.
-		pinMode(p, INPUT_PULLUP);			// enable pullup on endstop input
-#else
-		pinMode(p, INPUT);					// don't enable pullup on endstop input
-#endif
-	}
-
 	for (uint32_t& entry : slowDriverStepTimingClocks)
 	{
 		entry = 0;												// reset all to zero as we have no known slow drivers yet
 	}
 	slowDriversBitmap = 0;										// assume no drivers need extended step pulse timing
+	EnableAllSteppingDrivers();									// no drivers disabled
 
 	for (size_t extr = 0; extr < MaxExtruders; ++extr)
 	{
@@ -453,47 +460,6 @@ void Platform::Init()
 		nonlinearExtrusionLimit[extr] = DefaultNonlinearExtrusionLimit;
 #endif
 	}
-
-#if defined(DUET_NG)
-	// Test for presence of a DueX2 or DueX5 expansion board and work out how many TMC2660 drivers we have
-	// The SX1509B has an independent power on reset, so give it some time
-	delay(200);
-	expansionBoard = DuetExpansion::DueXnInit();
-
-#if HAS_SMART_DRIVERS
-	switch (expansionBoard)
-	{
-	case ExpansionBoardType::DueX2:
-		numSmartDrivers = 7;
-		break;
-	case ExpansionBoardType::DueX5:
-		numSmartDrivers = 10;
-		break;
-	case ExpansionBoardType::none:
-	case ExpansionBoardType::DueX0:
-	default:
-		numSmartDrivers = 5;									// assume that any additional drivers are dumb enable/step/dir ones
-		break;
-	}
-#endif
-
-	if (expansionBoard != ExpansionBoardType::none)
-	{
-		for (size_t i =  0; i < ARRAY_SIZE(DUEX_END_STOP_PINS); ++i)
-		{
-			endStopPins[5 + i] = DUEX_END_STOP_PINS[i];			// reassign endstop pins 5-9
-		}
-	}
-
-	DuetExpansion::AdditionalOutputInit();
-
-#elif defined(DUET_M)
-	numSmartDrivers = MaxSmartDrivers;							// for now we assume that expansion drivers are smart too
-#elif defined(PCCB)
-	numSmartDrivers = MaxSmartDrivers;
-#elif defined(DUET3_V03) || defined(DUET3_V05)
-	numSmartDrivers = MaxSmartDrivers;
-#endif
 
 	driversPowered = false;
 
@@ -524,19 +490,20 @@ void Platform::Init()
 
 	extrusionAncilliaryPwmValue = 0.0;
 
+	// Initialise the configured heaters to just the default bed and chamber heaters
 	configuredHeaters = 0;
 	for (int8_t bedHeater : DefaultBedHeaters)
 	{
 		if (bedHeater >= 0)
 		{
-			configuredHeaters |= (1 << bedHeater);
+			SetBit(configuredHeaters, bedHeater);
 		}
 	}
 	for (int8_t chamberHeater : DefaultChamberHeaters)
 	{
 		if (chamberHeater >= 0)
 		{
-			configuredHeaters |= (1 << chamberHeater);
+			SetBit(configuredHeaters, chamberHeater);
 		}
 	}
 
@@ -547,20 +514,26 @@ void Platform::Init()
 		pinMode(p, INPUT_PULLUP);
 	}
 
-	for (Pin p : HEAT_ON_PINS)
+#ifdef PCCB
+	// Setup the LED ports as GPIO ports
+	for (size_t i = 0; i < NumDefaultGpioPorts; ++i)
 	{
-		// pinMode is safe to call when the pin is NoPin, so we don't need to check it here
-		pinMode(p,
-#if ACTIVE_LOW_HEAT_ON
-				OUTPUT_HIGH
-#else
-				OUTPUT_LOW
-#endif
-			);
+		const LogicalPin lpin = Led0LogicalPin + i;
+		heaterPorts[i].Allocate(lpin, PinUsedBy::gpio, PinAccess::pwm, false, NormalHeaterPwmFreq);
 	}
+#elif ALLOCATE_DEFAULT_PORTS
+	// Set up the default heater ports
+	for (size_t i = 0; i < ARRAY_SIZE(DefaultHeaterPortNames); ++i)
+	{
+		String<1> dummy;
+		heaterPorts[i].AssignPort(DefaultHeaterPortNames[i], dummy.GetRef(), PinUsedBy::heater, PinAccess::pwm);
+		heaterPorts[i].SetFrequency((IsBitSet(configuredHeaters, i)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq);
+	}
+#endif
 
 	for (size_t thermistor = 0; thermistor < NumThermistorInputs; thermistor++)
 	{
+		// TODO use ports for these?
 		pinMode(TEMP_SENSE_PINS[thermistor], AIN);
 		filteredAdcChannels[thermistor] = PinToAdcChannel(TEMP_SENSE_PINS[thermistor]);	// translate the pin number to the SAM ADC channel number;
 	}
@@ -586,40 +559,10 @@ void Platform::Init()
 
 	// Fans
 	InitFans();
-	for (size_t i = 0; i < NumTachos; ++i)
-	{
-		tachos[i].Init(TachoPins[i]);
-	}
 
 	// Hotend configuration
 	nozzleDiameter = NOZZLE_DIAMETER;
 	filamentWidth = FILAMENT_WIDTH;
-
-#if SUPPORT_INKJET
-	// Inkjet
-
-	inkjetBits = INKJET_BITS;
-	if (inkjetBits >= 0)
-	{
-		inkjetFireMicroseconds = INKJET_FIRE_MICROSECONDS;
-		inkjetDelayMicroseconds = INKJET_DELAY_MICROSECONDS;
-
-		inkjetSerialOut = INKJET_SERIAL_OUT;
-		pinMode(inkjetSerialOut, OUTPUT_LOW);
-
-		inkjetShiftClock = INKJET_SHIFT_CLOCK;
-		pinMode(inkjetShiftClock, OUTPUT_LOW);
-
-		inkjetStorageClock = INKJET_STORAGE_CLOCK;
-		pinMode(inkjetStorageClock, OUTPUT_LOW);
-
-		inkjetOutputEnable = INKJET_OUTPUT_ENABLE;
-		pinMode(inkjetOutputEnable, OUTPUT_HIGH);
-
-		inkjetClear = INKJET_CLEAR;
-		pinMode(inkjetClear, OUTPUT_HIGH);
-	}
-#endif
 
 #if HAS_CPU_TEMP_SENSOR
 	// MCU temperature monitoring
@@ -638,267 +581,10 @@ void Platform::Init()
 	numUnderVoltageEvents = previousUnderVoltageEvents = numOverVoltageEvents = previousOverVoltageEvents = 0;
 #endif
 
-	// Clear the spare pin configuration
-	memset(logicalPinModes, PIN_MODE_NOT_CONFIGURED, sizeof(logicalPinModes));		// set all pins to "not configured"
-
 	// Kick everything off
 	InitialiseInterrupts();
 
 	active = true;
-}
-
-void Platform::SetZProbeDefaults()
-{
-	switchZProbeParameters.Init(0.0);
-	irZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
-	alternateZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
-}
-
-void Platform::InitZProbe()
-{
-	zProbeOnFilter.Init(0);
-	zProbeOffFilter.Init(0);
-
-#ifdef DUET_06_085
-	zProbeModulationPin = (board == BoardType::Duet_07 || board == BoardType::Duet_085) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN06;
-#else
-	zProbeModulationPin = Z_PROBE_MOD_PIN;
-#endif
-
-	switch (zProbeType)
-	{
-	case ZProbeType::analog:
-	case ZProbeType::dumbModulated:
-		AnalogInEnableChannel(zProbeAdcChannel, true);
-		pinMode(zProbePin, AIN);
-		pinMode(zProbeModulationPin, OUTPUT_HIGH);		// enable the IR LED
-		break;
-
-	case ZProbeType::alternateAnalog:
-		AnalogInEnableChannel(zProbeAdcChannel, true);
-		pinMode(zProbePin, AIN);
-		pinMode(zProbeModulationPin, OUTPUT_LOW);		// enable the alternate sensor
-		break;
-
-	case ZProbeType::endstopSwitch:
-		AnalogInEnableChannel(zProbeAdcChannel, false);
-		pinMode(zProbePin, INPUT_PULLUP);				// don't leave it floating
-		pinMode(GetEndstopPin(GetCurrentZProbeParameters().inputChannel), INPUT);
-		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
-		break;
-
-	case ZProbeType::digital:
-	case ZProbeType::unfilteredDigital:
-	case ZProbeType::blTouch:
-	case ZProbeType::zMotorStall:
-	default:
-		AnalogInEnableChannel(zProbeAdcChannel, false);
-		pinMode(zProbePin, INPUT_PULLUP);
-		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
-		break;
-	}
-}
-
-// Return the Z probe data.
-// The ADC readings are 12 bits, so we convert them to 10-bit readings for compatibility with the old firmware.
-int Platform::GetZProbeReading() const
-{
-	int zProbeVal = 0;			// initialised to avoid spurious compiler warning
-	if (zProbeType == ZProbeType::unfilteredDigital || zProbeType == ZProbeType::blTouch || (zProbeOnFilter.IsValid() && zProbeOffFilter.IsValid()))
-	{
-		switch (zProbeType)
-		{
-		case ZProbeType::analog:				// Simple or intelligent IR sensor
-		case ZProbeType::alternateAnalog:		// Alternate sensor
-		case ZProbeType::endstopSwitch:			// Switch connected to an endstop input
-		case ZProbeType::digital:				// Switch connected to Z probe input
-			zProbeVal = (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));
-			break;
-
-		case ZProbeType::dumbModulated:		// Dumb modulated IR sensor.
-			// We assume that zProbeOnFilter and zProbeOffFilter average the same number of readings.
-			// Because of noise, it is possible to get a negative reading, so allow for this.
-			zProbeVal = (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum()) / (int)(4 * Z_PROBE_AVERAGE_READINGS));
-			break;
-
-		case ZProbeType::unfilteredDigital:		// Switch connected to Z probe input, no filtering
-		case ZProbeType::blTouch:				// blTouch is now unfiltered too
-			zProbeVal = GetRawZProbeReading()/4;
-			break;
-
-		case ZProbeType::zMotorStall:
-#if HAS_STALL_DETECT
-			{
-				const bool stalled = (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::coreXZ)
-										? AnyAxisMotorStalled(X_AXIS) || AnyAxisMotorStalled(Z_AXIS)
-										: AnyAxisMotorStalled(Z_AXIS);
-				zProbeVal = (stalled) ? 1000 : 0;
-			}
-#else
-			zProbeVal = 1000;
-#endif
-			break;
-
-		default:
-			return 0;
-		}
-	}
-
-	return (GetCurrentZProbeParameters().invertReading) ? 1000 - zProbeVal : zProbeVal;
-}
-
-// Return the Z probe secondary values.
-int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
-{
-	if (zProbeOnFilter.IsValid() && zProbeOffFilter.IsValid())
-	{
-		switch (zProbeType)
-		{
-		case ZProbeType::dumbModulated:		// modulated IR sensor
-			v1 = (int) (zProbeOnFilter.GetSum() / (4 * Z_PROBE_AVERAGE_READINGS));	// pass back the reading with IR turned on
-			return 1;
-		default:
-			break;
-		}
-	}
-	return 0;
-}
-
-// Get our best estimate of the Z probe temperature
-float Platform::GetZProbeTemperature() const
-{
-	for (size_t i = 0; i < NumBedHeaters; i++)
-	{
-		const int8_t bedHeater = reprap.GetHeat().GetBedHeater(i);
-		if (bedHeater >= 0)
-		{
-			TemperatureError err;
-			const float temp = reprap.GetHeat().GetTemperature(bedHeater, err);
-			if (err == TemperatureError::success)
-			{
-				return temp;
-			}
-		}
-	}
-	return 25.0;							// assume 25C if we can't read the bed temperature
-}
-
-float Platform::GetZProbeStopHeight() const
-{
-	return GetCurrentZProbeParameters().GetStopHeight(GetZProbeTemperature());
-}
-
-float Platform::GetZProbeDiveHeight() const
-{
-	return GetCurrentZProbeParameters().diveHeight;
-}
-
-float Platform::GetZProbeStartingHeight()
-{
-	const ZProbe& params = GetCurrentZProbeParameters();
-	return params.diveHeight + max<float>(params.GetStopHeight(GetZProbeTemperature()), 0.0);
-}
-
-float Platform::GetZProbeTravelSpeed() const
-{
-	return GetCurrentZProbeParameters().travelSpeed;
-}
-
-void Platform::SetZProbeType(unsigned int pt)
-{
-	zProbeType = (pt < (unsigned int)ZProbeType::numTypes) ? (ZProbeType)pt : ZProbeType::none;
-	InitZProbe();
-}
-
-void Platform::SetProbing(bool isProbing)
-{
-	// For Z probe types other than 1/2/3 and bltouch we set the modulation pin high at the start of a probing move and low at the end
-	// Don't do this for bltouch because on the Maestro, the MOD pin is normally used as the servo control output
-	if (zProbeType > ZProbeType::alternateAnalog && zProbeType != ZProbeType::blTouch)
-	{
-		digitalWrite(zProbeModulationPin, isProbing);
-	}
-}
-
-const ZProbe& Platform::GetZProbeParameters(ZProbeType probeType) const
-{
-	switch (probeType)
-	{
-	case ZProbeType::analog:
-	case ZProbeType::dumbModulated:
-	case ZProbeType::digital:
-	case ZProbeType::unfilteredDigital:
-	case ZProbeType::blTouch:
-	case ZProbeType::zMotorStall:
-		return irZProbeParameters;
-	case ZProbeType::alternateAnalog:
-		return alternateZProbeParameters;
-	case ZProbeType::endstopSwitch:
-	default:
-		return switchZProbeParameters;
-	}
-}
-
-void Platform::SetZProbeParameters(ZProbeType probeType, const ZProbe& params)
-{
-	switch (probeType)
-	{
-	case ZProbeType::analog:
-	case ZProbeType::dumbModulated:
-	case ZProbeType::digital:
-	case ZProbeType::unfilteredDigital:
-	case ZProbeType::blTouch:
-	case ZProbeType::zMotorStall:
-		irZProbeParameters = params;
-		break;
-
-	case ZProbeType::alternateAnalog:
-		alternateZProbeParameters = params;
-		break;
-
-	case ZProbeType::endstopSwitch:
-	default:
-		switchZProbeParameters = params;
-		break;
-	}
-}
-
-// Program the Z probe
-GCodeResult Platform::ProgramZProbe(GCodeBuffer& gb, const StringRef& reply)
-{
-	if (gb.Seen('S'))
-	{
-		uint32_t zProbeProgram[MaxZProbeProgramBytes];
-		size_t len = MaxZProbeProgramBytes;
-		gb.GetUnsignedArray(zProbeProgram, len, false);
-		if (len != 0)
-		{
-			for (size_t i = 0; i < len; ++i)
-			{
-				if (zProbeProgram[i] > 255)
-				{
-					reply.copy("Out of range value in program bytes");
-					return GCodeResult::error;
-				}
-			}
-			zProbeProg.SendProgram(zProbeProgram, len);
-			return GCodeResult::ok;
-		}
-	}
-	reply.copy("No program bytes provided");
-	return GCodeResult::error;
-}
-
-// Set the state of the Z probe modulation pin
-void Platform::SetZProbeModState(bool b) const
-{
-	IoPort::WriteDigital(zProbeModulationPin, b);
-}
-
-// Return true if we are using a bed probe to home Z
-bool Platform::HomingZWithProbe() const
-{
-	return zProbeType != ZProbeType::none && (endStopInputType[Z_AXIS] == EndStopInputType::zProbe || endStopPos[Z_AXIS] == EndStopPosition::noEndStop);
 }
 
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
@@ -1558,7 +1244,7 @@ void Platform::Spin()
 	{
 		lastFanCheckTime = now;
 		bool thermostaticFanRunning = false;
-		for (size_t fan = 0; fan < NUM_FANS; ++fan)
+		for (size_t fan = 0; fan < NumTotalFans; ++fan)
 		{
 			if (fans[fan].Check())
 			{
@@ -1817,7 +1503,7 @@ bool Platform::GetAutoSaveSettings(float& saveVoltage, float&resumeVoltage)
 bool Platform::WriteFanSettings(FileStore *f) const
 {
 	bool ok = true;
-	for (size_t fanNum = 0; ok && fanNum < NUM_FANS; ++fanNum)
+	for (size_t fanNum = 0; ok && fanNum < NumTotalFans; ++fanNum)
 	{
 		ok = fans[fanNum].WriteSettings(f, fanNum);
 	}
@@ -2674,22 +2360,9 @@ void Platform::DriverCoolingFansOnOff(uint32_t driverChannelsMonitored, bool on)
 #endif
 
 // Power is a fraction in [0,1]
-void Platform::SetHeater(size_t heater, float power, PwmFrequency freq)
+void Platform::SetHeater(size_t heater, float power)
 {
-	if (HEAT_ON_PINS[heater] != NoPin)
-	{
-		if (freq == 0)
-		{
-			freq = (reprap.GetHeat().IsBedOrChamberHeater(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;	// use default PWM frequency
-		}
-		const float pwm =
-#if ACTIVE_LOW_HEAT_ON
-			1.0 - power;
-#else
-			power;
-#endif
-		IoPort::WriteAnalog(HEAT_ON_PINS[heater], pwm, freq);
-	}
+	heaterPorts[heater].WriteAnalog(power);
 }
 
 void Platform::UpdateConfiguredHeaters()
@@ -2702,7 +2375,7 @@ void Platform::UpdateConfiguredHeaters()
 		const int8_t bedHeater = reprap.GetHeat().GetBedHeater(i);
 		if (bedHeater >= 0)
 		{
-			configuredHeaters |= (1 << bedHeater);
+			SetBit(configuredHeaters, bedHeater);
 		}
 	}
 
@@ -2712,149 +2385,18 @@ void Platform::UpdateConfiguredHeaters()
 		const int8_t chamberHeater = reprap.GetHeat().GetChamberHeater(i);
 		if (chamberHeater >= 0)
 		{
-			configuredHeaters |= (1 << chamberHeater);
+			SetBit(configuredHeaters, chamberHeater);
 		}
 	}
 
 	// Check tool heaters
-	for (size_t heater = 0; heater < NumHeaters; heater++)
+	for (size_t heater = 0; heater < NumTotalHeaters; heater++)
 	{
 		if (reprap.IsHeaterAssignedToTool(heater))
 		{
-			configuredHeaters |= (1 << heater);
+			SetBit(configuredHeaters, heater);
 		}
 	}
-}
-
-EndStopHit Platform::Stopped(size_t axisOrExtruder) const
-{
-	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	if (axisOrExtruder < numAxes)
-	{
-		switch (endStopInputType[axisOrExtruder])
-		{
-		case EndStopInputType::zProbe:
-			{
-				const EndStopHit rslt = GetZProbeResult();
-				return (rslt == EndStopHit::lowHit && endStopPos[axisOrExtruder] == EndStopPosition::highEndStop)
-						? EndStopHit::highHit
-							: rslt;
-			}
-
-#if HAS_STALL_DETECT
-		case EndStopInputType::motorStall:
-			{
-				bool motorIsStalled;
-				const Kinematics& k = reprap.GetMove().GetKinematics();
-				if (k.GetHomingMode() == HomingMode::homeIndividualMotors)
-				{
-					motorIsStalled = AnyAxisMotorStalled(axisOrExtruder);
-				}
-				else
-				{
-					AxesBitmap connectedAxes = k.GetConnectedAxes(axisOrExtruder);
-					if (connectedAxes == MakeBitmap<AxesBitmap>(axisOrExtruder))
-					{
-						// Optimisation: no need to search the connectedAxes bitmap in the common case of no connected axes
-						motorIsStalled = AnyAxisMotorStalled(axisOrExtruder);
-					}
-					else
-					{
-						motorIsStalled = false;
-						for (size_t motor = 0; connectedAxes != 0; ++motor)
-						{
-							if (IsBitSet(connectedAxes, motor))
-							{
-								if (AnyAxisMotorStalled(motor))
-								{
-									motorIsStalled = true;
-									break;
-								}
-								ClearBit(connectedAxes, motor);
-							}
-						}
-					}
-				}
-				return (!motorIsStalled) ? EndStopHit::noStop
-						: (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit
-							: EndStopHit::lowHit;
-			}
-			break;
-#endif
-
-		case EndStopInputType::activeLow:
-			{
-				const AxisEndstopConfig& config = axisEndstops[axisOrExtruder];
-				if (config.numEndstops != 0)
-				{
-					const uint8_t input = config.endstopNumbers[0];
-					if (input < NumEndstops)
-					{
-						const bool b = IoPort::ReadPin(endStopPins[input]);
-						return (b) ? EndStopHit::noStop : (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
-					}
-				}
-			}
-			break;
-
-		case EndStopInputType::activeHigh:
-			{
-				const AxisEndstopConfig& config = axisEndstops[axisOrExtruder];
-				if (config.numEndstops != 0)
-				{
-					const uint8_t input = config.endstopNumbers[0];
-					if (input < NumEndstops)
-					{
-						const bool b = !IoPort::ReadPin(endStopPins[input]);
-						return (b) ? EndStopHit::noStop : (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
-					}
-				}
-			}
-			break;
-
-		default:
-			break;
-		}
-	}
-#if HAS_STALL_DETECT
-	else if (axisOrExtruder < NumDirectDrivers)
-	{
-		// Endstop is for an extruder drive, so use stall detection
-		return (ExtruderMotorStalled(axisOrExtruder - numAxes)) ? EndStopHit::highHit : EndStopHit::noStop;
-	}
-#endif
-	return EndStopHit::noStop;
-}
-
-// Return the state of the endstop input, regardless of whether we are actually using it as an endstop
-bool Platform::EndStopInputState(size_t drive) const
-{
-	return drive < NumEndstops && endStopPins[drive] != NoPin && IoPort::ReadPin(endStopPins[drive]);
-}
-
-// Get the statuses of all the endstop inputs, regardless of what they are used for. Used for triggers.
-uint32_t Platform::GetAllEndstopStates() const
-{
-	uint32_t rslt = 0;
-	for (unsigned int drive = 0; drive < NumEndstops; ++drive)
-	{
-		const Pin pin = endStopPins[drive];
-		if (pin != NoPin && IoPort::ReadPin(pin))
-		{
-			rslt |= (1u << drive);
-		}
-	}
-	return rslt;
-}
-
-// Return the Z probe result. We assume that if the Z probe is used as an endstop, it is used as the low stop.
-EndStopHit Platform::GetZProbeResult() const
-{
-	const int zProbeVal = GetZProbeReading();
-	const int zProbeADValue = GetCurrentZProbeParameters().adcValue;
-	return (zProbeVal >= zProbeADValue) ? EndStopHit::lowHit
-			: (zProbeVal * 10 >= zProbeADValue * 9) ? EndStopHit::nearStop	// if we are at/above 90% of the target value
-				: EndStopHit::noStop;
 }
 
 // Write the platform parameters to file
@@ -2878,21 +2420,9 @@ bool Platform::WritePlatformParameters(FileStore *f, bool includingG31) const
 		ok = true;
 	}
 
-	if (ok && (includingG31 || irZProbeParameters.saveToConfigOverride || alternateZProbeParameters.saveToConfigOverride || switchZProbeParameters.saveToConfigOverride))
+	if (ok && includingG31)
 	{
-		ok = f->Write("; Z probe parameters\n");
-		if (ok && (includingG31 || irZProbeParameters.saveToConfigOverride))
-		{
-			ok = irZProbeParameters.WriteParameters(f, 1);
-		}
-		if (ok && (includingG31 || alternateZProbeParameters.saveToConfigOverride))
-		{
-			ok = alternateZProbeParameters.WriteParameters(f, 3);
-		}
-		if (ok && (includingG31 || switchZProbeParameters.saveToConfigOverride))
-		{
-			ok = switchZProbeParameters.WriteParameters(f, 4);
-		}
+		ok = endstops.WriteZProbeParameters(f, includingG31);
 	}
 
 	return ok;
@@ -3442,11 +2972,11 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const
 // then search for parameters used to configure the fan. If any are found, perform appropriate actions and return true.
 // If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
 // If no relevant parameters are found, print the existing ones to 'reply' and return false.
-bool Platform::ConfigureFan(unsigned int mcode, int fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
+bool Platform::ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
-	if (fanNum < 0 || fanNum >= (int)NUM_FANS)
+	if (fanNum >= NumTotalFans)
 	{
-		reply.printf("Fan number %d is invalid, must be between 0 and %u", fanNum, NUM_FANS - 1);
+		reply.printf("Fan number %u is invalid, must be between 0 and %u", fanNum, NumTotalFans - 1);
 		error = true;
 		return false;
 	}
@@ -3457,129 +2987,78 @@ bool Platform::ConfigureFan(unsigned int mcode, int fanNum, GCodeBuffer& gb, con
 // Get current cooling fan speed on a scale between 0 and 1
 float Platform::GetFanValue(size_t fan) const
 {
-	return (fan < NUM_FANS) ? fans[fan].GetConfiguredPwm() : -1;
+	return (fan < NumTotalFans) ? fans[fan].GetConfiguredPwm() : -1;
 }
 
 void Platform::SetFanValue(size_t fan, float speed)
 {
-	if (fan < NUM_FANS)
+	if (fan < NumTotalFans)
 	{
 		fans[fan].SetPwm(speed);
 	}
 }
 
-#if defined(DUET_06_085)
-
-// Enable or disable the fan that shares its PWM pin with the last heater. Called when we disable or enable the last heater.
-void Platform::EnableSharedFan(bool enable)
-{
-	const size_t sharedFanNumber = NUM_FANS - 1;
-	fans[sharedFanNumber].Init(
-				(enable) ? COOLING_FAN_PINS[sharedFanNumber] : NoPin,
-				(enable) ? Fan0LogicalPin + sharedFanNumber : NoLogicalPin,
-				FansHardwareInverted(sharedFanNumber),
-				DefaultFanPwmFreq);
-}
-
-#endif
-
 // Check if the given fan can be controlled manually so that DWC can decide whether or not to show the corresponding fan
 // controls. This is the case if no thermostatic control is enabled and if the fan was configured at least once before.
 bool Platform::IsFanControllable(size_t fan) const
 {
-	return fan < NUM_FANS && !fans[fan].HasMonitoredHeaters() && fans[fan].IsConfigured();
+	return fan < NumTotalFans && !fans[fan].HasMonitoredHeaters() && fans[fan].IsConfigured();
 }
 
 // Return the fan's name
 const char *Platform::GetFanName(size_t fan) const
 {
-	return fan < NUM_FANS ? fans[fan].GetName() : "";
+	return fan < NumTotalFans ? fans[fan].GetName() : "";
 }
 
-// Get current fan RPM
-uint32_t Platform::GetFanRPM(size_t tachoIndex) const
+// Get current fan RPM, or -1 if the fan is invalid or doesn't have a tacho pin
+int32_t Platform::GetFanRPM(size_t fanIndex) const
 {
-	return (tachoIndex < NumTachos) ? tachos[tachoIndex].GetRPM() : 0;
-}
-
-bool Platform::FansHardwareInverted(size_t fanNumber) const
-{
-#if defined(DUET_06_085)
-	// The cooling fan output pin gets inverted on a Duet 0.6 or 0.7.
-	// We allow a second fan controlled by a mosfet on the PC4 pin, which is not inverted.
-	return fanNumber == 0 && (board == BoardType::Duet_06 || board == BoardType::Duet_07);
-#elif defined(PCCB_10)
-	return fanNumber == 5;
-#else
-	return false;
-#endif
+	return (fanIndex < NumTotalFans) ? fans[fanIndex].GetRPM() : -1;
 }
 
 void Platform::InitFans()
 {
-	for (size_t i = 0; i < NUM_FANS; ++i)
+#if ALLOCATE_DEFAULT_PORTS
+	for (size_t i = 0; i < NumTotalFans; ++i)
 	{
-		fans[i].Init(COOLING_FAN_PINS[i], Fan0LogicalPin + i, FansHardwareInverted(i),
-#if defined(PCCB_10)
-						(i == 5) ? 25000 : DefaultFanPwmFreq				// PCCB fan 5 has 4-wire fan connectors for Intel-spec PWM fans
-#elif defined(PCCB_08) || defined(PCCB_08_X5)
-						(i == 3) ? 25000 : DefaultFanPwmFreq				// PCCB fan 3 has 4-wire fan connectors for Intel-spec PWM fans
-#else
-						DefaultFanPwmFreq
-#endif
-			);
-	}
-
-	if (NUM_FANS > 1)
-	{
-#if defined(DUET_06_085)
-		// Fan 1 on the Duet 0.8.5 shares its control pin with heater 6. Set it full on to make sure the heater (if present) is off.
-		fans[1].SetPwm(1.0);												// set it full on
-#elif defined(DUET_NG)
-		// On Duet WiFi/Ethernet we set fan 1 to be thermostatic by default, monitoring all heaters except the default bed and chamber heaters
-		Fan::HeatersMonitoredBitmap bedAndChamberHeaterMask = 0;
-		for (uint8_t bedHeater : DefaultBedHeaters)
+		fans[i].Init();
+		if (i < ARRAY_SIZE(DefaultFanPinNames))
 		{
-			if (bedHeater >= 0)
-			{
-				SetBit(bedAndChamberHeaterMask, bedHeater);
-			}
+			String<1> dummy;
+			(void)fans[i].AssignPorts(DefaultFanPinNames[i], dummy.GetRef());
 		}
-		for (uint8_t chamberHeater : DefaultChamberHeaters)
-		{
-			if (chamberHeater >= 0)
-			{
-				SetBit(bedAndChamberHeaterMask, chamberHeater);
-			}
-		}
-		fans[1].SetHeatersMonitored(LowestNBits<Fan::HeatersMonitoredBitmap>(NumHeaters) & ~bedAndChamberHeaterMask);
-		fans[1].SetPwm(1.0);												// set it full on
-#elif defined(PCCB)
-		// Fan 3 needs to be set explicitly to zero PWM, otherwise it turns on because the MCU output pin isn't set low
-		fans[3].SetPwm(0.0);
-#endif
+		fans[i].SetPwmFrequency((i < ARRAY_SIZE(DefaultFanFrequencies)) ? DefaultFanFrequencies[i] : DefaultFanPwmFreq);
 	}
-}
 
-void Platform::SetEndStopConfiguration(size_t axis, EndStopPosition esPos, EndStopInputType inputType)
-{
-	endStopPos[axis] = esPos;
-	endStopInputType[axis] = inputType;
-}
-
-void Platform::GetEndStopConfiguration(size_t axis, EndStopPosition& esType, EndStopInputType& inputType) const
-{
-	esType = endStopPos[axis];
-	inputType = endStopInputType[axis];
-}
-
-void Platform::SetAxisEndstopConfig(size_t axis, size_t numValues, const uint32_t inputNumbers[])
-{
-	axisEndstops[axis].numEndstops = numValues;
-	for (size_t i = 0; i < numValues; ++i)
+	// Handle board-specific fan configuration
+# if defined(DUET_06_085)
+	// Fan 1 on the Duet 0.8.5 shares its control pin with heater 6. Set it full on to make sure the heater (if present) is off.
+	fans[1].SetPwm(1.0);												// set it full on
+# elif defined(DUET_NG)
+	// On Duet WiFi/Ethernet we set fan 1 to be thermostatic by default, monitoring all heaters except the default bed and chamber heaters
+	Fan::HeatersMonitoredBitmap bedAndChamberHeaterMask = 0;
+	for (uint8_t bedHeater : DefaultBedHeaters)
 	{
-		axisEndstops[axis].endstopNumbers[i] = min<uint32_t>(inputNumbers[i], 255);
+		if (bedHeater >= 0)
+		{
+			SetBit(bedAndChamberHeaterMask, bedHeater);
+		}
 	}
+	for (uint8_t chamberHeater : DefaultChamberHeaters)
+	{
+		if (chamberHeater >= 0)
+		{
+			SetBit(bedAndChamberHeaterMask, chamberHeater);
+		}
+	}
+	fans[1].SetHeatersMonitored(LowestNBits<Fan::HeatersMonitoredBitmap>(NumTotalHeaters) & ~bedAndChamberHeaterMask);
+	fans[1].SetPwm(1.0);												// set it full on
+# elif defined(PCCB)
+	// Fan 3 needs to be set explicitly to zero PWM, otherwise it turns on because the MCU output pin isn't set low
+	fans[3].SetPwm(0.0);
+# endif
+#endif
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -4140,7 +3619,6 @@ void Platform::SetBoardType(BoardType bt)
 
 	if (active)
 	{
-		InitZProbe();							// select and initialise the Z probe modulation pin
 		InitFans();								// select whether cooling is inverted or not
 	}
 }
@@ -4319,160 +3797,6 @@ void Platform::GetSysDir(const StringRef & path) const
 	path.copy(InternalGetSysDir());
 }
 
-// User I/O and servo support
-// Translate a logical pin to a firmware pin and whether the output of that pin is normally inverted
-// Returns true if the pin is available
-bool Platform::GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firmwarePin, bool& invert)
-{
-	firmwarePin = NoPin;										// assume failure
-	invert = false;												// this is the common case
-	if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + (int)NumHeaters)		// pins 0-9 correspond to heater channels
-	{
-		// For safety, we don't allow a heater channel to be used for servos until the heater has been disabled
-		if (!reprap.GetHeat().IsHeaterEnabled(logicalPin - Heater0LogicalPin))
-		{
-			firmwarePin = HEAT_ON_PINS[logicalPin - Heater0LogicalPin];
-#if ACTIVE_LOW_HEAT_ON
-			invert = true;
-#else
-			invert = false;
-#endif
-		}
-	}
-	else if (logicalPin >= Fan0LogicalPin && logicalPin < Fan0LogicalPin + (int)NUM_FANS)		// pins 20- correspond to fan channels
-	{
-		// Don't allow a fan channel to be used unless the fan normally using it has been disabled or remapped
-		if (fans[logicalPin - Fan0LogicalPin].GetLogicalPin() != logicalPin
-#ifdef DUET_NG
-			// Fan pins on the DueX2/DueX5 cannot be used to control servos because the frequency is not well-defined.
-			&& (logicalPin <= Fan0LogicalPin + 2 || access != PinAccess::servo)
-#endif
-		   )
-		{
-			firmwarePin = COOLING_FAN_PINS[logicalPin - Fan0LogicalPin];
-#if defined(DUET_06_085)
-			invert = (board == BoardType::Duet_06 || board == BoardType::Duet_07);
-#endif
-		}
-	}
-	else if (logicalPin >= EndstopXLogicalPin && logicalPin < EndstopXLogicalPin + (int)ARRAY_SIZE(endStopPins))	// pins 40-49 correspond to endstop pins
-	{
-		if (access == PinAccess::read
-#ifdef DUET_NG
-			// Endstop pins on the DueX2/DueX5 can be used as digital outputs too
-			|| (access == PinAccess::write && logicalPin >= EndstopXLogicalPin + 5)
-#endif
-		   )
-		{
-			firmwarePin = endStopPins[logicalPin - EndstopXLogicalPin];
-		}
-	}
-	else if (logicalPin >= Special0LogicalPin && logicalPin < Special0LogicalPin + (int)ARRAY_SIZE(SpecialPinMap))
-	{
-		firmwarePin = SpecialPinMap[logicalPin - Special0LogicalPin];
-	}
-#ifdef DUET_NG
-	else if (logicalPin >= DueX5Gpio0LogicalPin && logicalPin < DueX5Gpio0LogicalPin + (int)ARRAY_SIZE(DueX5GpioPinMap))	// Pins 100-103 are the GPIO pins on the DueX2/X5
-	{
-		// GPIO pins on DueX5
-		if (access != PinAccess::servo)
-		{
-			firmwarePin = DueX5GpioPinMap[logicalPin - DueX5Gpio0LogicalPin];
-		}
-	}
-	else if (logicalPin >= AdditionalExpansionLogicalPin && logicalPin <= AdditionalExpansionLogicalPin + 15)
-	{
-		// Pins on additional SX1509B expansion
-		if (access != PinAccess::servo)
-		{
-			firmwarePin = AdditionalIoExpansionStart + (logicalPin - AdditionalExpansionLogicalPin);
-		}
-	}
-#endif
-
-	if (firmwarePin != NoPin)
-	{
-		// Check that the pin mode has been defined suitably
-		PinMode desiredMode;
-		if (access == PinAccess::write)
-		{
-			desiredMode = (invert) ? OUTPUT_HIGH : OUTPUT_LOW;
-		}
-		else if (access == PinAccess::pwm || access == PinAccess::servo)
-		{
-			desiredMode = (invert) ? OUTPUT_PWM_HIGH : OUTPUT_PWM_LOW;
-		}
-		else
-		{
-			desiredMode = INPUT_PULLUP;
-		}
-		if (logicalPinModes[logicalPin] != (int8_t)desiredMode)
-		{
-			IoPort::SetPinMode(firmwarePin, desiredMode);
-			logicalPinModes[logicalPin] = (int8_t)desiredMode;
-		}
-		return true;
-	}
-	return false;
-}
-
-// For fan pin mapping
-bool Platform::TranslateFanPin(LogicalPin logicalPin, Pin& firmwarePin, bool& invert) const
-{
-	if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + (int)NumHeaters)		// pins 0-9 correspond to heater channels
-	{
-		// For safety, we don't allow a heater channel to be used for fans until the heater has been disabled
-		if (!reprap.GetHeat().IsHeaterEnabled(logicalPin - Heater0LogicalPin))
-		{
-			firmwarePin = HEAT_ON_PINS[logicalPin - Heater0LogicalPin];
-#if ACTIVE_LOW_HEAT_ON
-			invert = true;
-#else
-			invert = false;
-#endif
-			return true;
-		}
-	}
-	else if (logicalPin >= Fan0LogicalPin && logicalPin < Fan0LogicalPin + (int)NUM_FANS)		// pins 20- correspond to fan channels
-	{
-		const unsigned int fanPinNum = logicalPin - Fan0LogicalPin;
-		firmwarePin = COOLING_FAN_PINS[fanPinNum];
-		invert = FansHardwareInverted(fanPinNum);
-		return true;
-	}
-	return false;
-}
-
-// Append the name of a logical pin to a string
-void Platform::AppendPinName(LogicalPin logicalPin, const StringRef& str) const
-{
-	if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + (int)NumHeaters)		// pins 0-9 correspond to heater channels
-	{
-		str.catf("H%u", logicalPin - Heater0LogicalPin);
-	}
-	else if (logicalPin >= Fan0LogicalPin && logicalPin < Fan0LogicalPin + (int)NUM_FANS)		// pins 20- correspond to fan channels
-	{
-		str.catf("F%u", logicalPin - Fan0LogicalPin);
-	}
-	else if (logicalPin >= EndstopXLogicalPin && logicalPin < EndstopXLogicalPin + (int)ARRAY_SIZE(endStopPins))	// pins 40-49 correspond to endstop pins
-	{
-		str.catf("E%u", logicalPin - EndstopXLogicalPin);
-	}
-	else if (logicalPin >= Special0LogicalPin && logicalPin < Special0LogicalPin + (int)ARRAY_SIZE(SpecialPinMap))
-	{
-		str.catf("S%u", logicalPin - Special0LogicalPin);
-	}
-	else
-	{
-		str.cat("unknown");
-	}
-}
-
-bool Platform::SetExtrusionAncilliaryPwmPin(LogicalPin logicalPin, bool invert)
-{
-	return extrusionAncilliaryPwmPort.Set(logicalPin, PinAccess::pwm, invert);
-}
-
 // CNC and laser support
 
 void Platform::SetLaserPwm(Pwm_t pwm)
@@ -4480,20 +3804,14 @@ void Platform::SetLaserPwm(Pwm_t pwm)
 	laserPort.WriteAnalog((float)pwm/65535);			// we don't currently have an function that accepts an integer PWM fraction
 }
 
-bool Platform::SetLaserPin(LogicalPin lp, bool invert)
+bool Platform::AssignLaserPin(GCodeBuffer& gb, const StringRef& reply)
 {
-	return laserPort.Set(lp, PinAccess::pwm, invert);
+	return laserPort.AssignPort(gb, reply, PinUsedBy::laser, PinAccess::pwm);
 }
 
-void Platform::SetLaserPwmFrequency(float freq)
+void Platform::SetLaserPwmFrequency(PwmFrequency freq)
 {
 	laserPort.SetFrequency(freq);
-}
-
-// Get the firmware pin number for an endstop, or NoPin if it is out of range
-Pin Platform::GetEndstopPin(int endstop) const
-{
-	return (endstop >= 0 && endstop < (int)ARRAY_SIZE(endStopPins)) ? endStopPins[endstop] : NoPin;
 }
 
 // Axis limits
@@ -4513,6 +3831,17 @@ void Platform::SetAxisMinimum(size_t axis, float value, bool byProbing)
 	{
 		SetBit(axisMinimaProbed, axis);
 	}
+}
+
+ZProbeType Platform::GetCurrentZProbeType() const
+{
+	return endstops.GetCurrentZProbe().GetProbeType();
+}
+
+void Platform::InitZProbeFilters()
+{
+	zProbeOnFilter.Init(0);
+	zProbeOffFilter.Init(0);
 }
 
 #if SUPPORT_INKJET
@@ -4826,6 +4155,155 @@ void Platform::InitI2c()
 #endif
 }
 
+// Configure an I/O port
+GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply)
+{
+	PwmFrequency freq = 0;
+	const bool seenFreq = gb.Seen('Q');
+	if (seenFreq)
+	{
+		freq = gb.GetPwmFrequency();
+	}
+
+	if (gb.Seen('F'))
+	{
+		const uint32_t fanNum = gb.GetUIValue();
+		if (fanNum < NumTotalFans)
+		{
+			Fan& fan = fans[fanNum];
+			const bool seenPin = gb.Seen('C');
+			if (seenPin)
+			{
+				if (!fan.AssignPorts(gb, reply))
+				{
+					return GCodeResult::error;
+				}
+			}
+			if (seenFreq)
+			{
+				fan.SetPwmFrequency(freq);
+			}
+			if (!seenPin && !seenFreq)
+			{
+				reply.printf("Fan %" PRIu32, fanNum);
+				fan.AppendPortDetails(reply);
+			}
+		}
+	}
+	else if (gb.Seen('H'))
+	{
+		const uint32_t heater = gb.GetUIValue();
+		if (heater < NumTotalHeaters)
+		{
+			PwmPort& port = heaterPorts[heater];
+			if (seenFreq)
+			{
+				freq = min<PwmFrequency>(freq, MaxHeaterPwmFrequency);
+			}
+			else
+			{
+				freq = (reprap.GetHeat().IsBedOrChamberHeater(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
+			}
+
+			const bool seenPin = gb.Seen('C');
+			if (seenPin)
+			{
+				reprap.GetHeat().SwitchOff(heater);
+				if (!port.AssignPort(gb, reply, PinUsedBy::heater, PinAccess::pwm))
+				{
+					return GCodeResult::error;
+				}
+			}
+			if (seenFreq)
+			{
+				port.SetFrequency(freq);
+			}
+			if (!seenPin && !seenFreq)
+			{
+				reply.printf("Heater %" PRIu32, heater);
+				port.AppendDetails(reply);
+			}
+		}
+		else
+		{
+			reply.copy("Heater number out of range");
+			return GCodeResult::error;
+		}
+	}
+	else
+	{
+		const bool seenServo = gb.Seen('S');
+		if (seenServo || gb.Seen('P'))
+		{
+			const uint32_t gpioNumber = gb.GetUIValue();
+			if (gpioNumber < MaxGpioPorts)
+			{
+				PwmPort& port = gpioPorts[gpioNumber];
+				if (gb.Seen('C'))
+				{
+					if (!port.AssignPort(gb, reply, PinUsedBy::gpio, (seenServo) ? PinAccess::servo : PinAccess::pwm))
+					{
+						return GCodeResult::error;
+					}
+					if (!seenFreq)
+					{
+						freq = (seenServo) ? ServoRefreshFrequency : DefaultPinWritePwmFreq;
+					}
+					port.SetFrequency(freq);
+				}
+				else if (seenFreq)
+				{
+					port.SetFrequency(freq);
+				}
+				else
+				{
+					reply.printf("GPIO/servo port %" PRIu32, gpioNumber);
+					port.AppendDetails(reply);
+				}
+			}
+			else
+			{
+				reply.copy("GPIO port number out of range");
+				return GCodeResult::error;
+			}
+		}
+		else
+		{
+			reply.copy("Missing F, H, L, R or V parameter");
+			return GCodeResult::error;
+		}
+	}
+	return GCodeResult::ok;
+}
+
+// Configure the ancillary PWM
+GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply)
+{
+	bool seen = false;
+	if (gb.Seen('P'))
+	{
+		seen = true;
+		if (!extrusionAncilliaryPwmPort.AssignPort(gb, reply, PinUsedBy::gpio, PinAccess::pwm))
+		{
+			return GCodeResult::error;
+		}
+		const PwmFrequency freq = (gb.Seen('F')) ? gb.GetPwmFrequency() : DefaultPinWritePwmFreq;
+		extrusionAncilliaryPwmPort.SetFrequency(freq);
+	}
+	if (gb.Seen('S'))
+	{
+		extrusionAncilliaryPwmValue = min<float>(gb.GetFValue(), 1.0);		// negative values are OK, they mean don't set the output
+		seen = true;
+	}
+
+	if (!seen)
+	{
+		reply.copy("Extrusion ancillary PWM");
+		extrusionAncilliaryPwmPort.AppendDetails(reply);
+	}
+	return GCodeResult::ok;
+}
+
 #if SAM4E || SAM4S || SAME70
 
 // Get a pseudo-random number
@@ -4872,6 +4350,7 @@ void Platform::Tick()
 	}
 #endif
 
+	const ZProbe& currentZProbe = GetCurrentZProbe();
 	switch (tickState)
 	{
 	case 1:
@@ -4883,8 +4362,7 @@ void Platform::Tick()
 			currentFilter.ProcessReading(AnalogInReadChannel(filteredAdcChannels[currentFilterNumber]));
 
 			// Guard against overly long delays between successive calls of PID::Spin().
-			// Do not call Time() here, it isn't safe. We use millis() instead.
-			if ((configuredHeaters & (1u << currentFilterNumber)) != 0 && (millis() - reprap.GetHeat().GetLastSampleTime(currentFilterNumber)) > maxPidSpinDelay)
+			if (IsBitSet(configuredHeaters, currentFilterNumber) && (millis() - reprap.GetHeat().GetLastSampleTime(currentFilterNumber)) > maxPidSpinDelay)
 			{
 				SetHeater(currentFilterNumber, 0.0);
 				LogError(ErrorCode::BadTemp);
@@ -4899,33 +4377,29 @@ void Platform::Tick()
 			// If we are not using a simple modulated IR sensor, process the Z probe reading on every tick for a faster response.
 			// If we are using a simple modulated IR sensor then we need to allow the reading to settle after turning the IR emitter on or off,
 			// so on alternate ticks we read it and switch the emitter
-			if (zProbeType != ZProbeType::dumbModulated)
+			if (currentZProbe.GetProbeType() != ZProbeType::dumbModulated)
 			{
-				const_cast<ZProbeAveragingFilter&>((tickState == 1) ? zProbeOnFilter : zProbeOffFilter).ProcessReading(GetRawZProbeReading());
+				const_cast<ZProbeAveragingFilter&>((tickState == 1) ? zProbeOnFilter : zProbeOffFilter).ProcessReading(currentZProbe.GetRawReading());
 			}
 			++tickState;
 		}
 		break;
 
 	case 2:
-		const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(GetRawZProbeReading());
-		if (zProbeType == ZProbeType::dumbModulated)									// if using a modulated IR sensor
-		{
-			digitalWrite(zProbeModulationPin, LOW);				// turn off the IR emitter
-		}
-
+		const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(currentZProbe.GetRawReading());
+		currentZProbe.SetIREmitter(false);
 		++tickState;
 		break;
 
 	case 4:			// last conversion started was the Z probe, with IR LED off if modulation is enabled
-		const_cast<ZProbeAveragingFilter&>(zProbeOffFilter).ProcessReading(GetRawZProbeReading());
-		// no break
+		const_cast<ZProbeAveragingFilter&>(zProbeOffFilter).ProcessReading(currentZProbe.GetRawReading());
+		currentZProbe.SetIREmitter(true);
+		tickState = 1;
+		break;
+
 	case 0:			// this is the state after initialisation, no conversion has been started
 	default:
-		if (zProbeType == ZProbeType::dumbModulated)									// if using a modulated IR sensor
-		{
-			digitalWrite(zProbeModulationPin, HIGH);			// turn on the IR emitter
-		}
+		currentZProbe.SetIREmitter(true);
 		tickState = 1;
 		break;
 	}

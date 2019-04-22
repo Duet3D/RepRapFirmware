@@ -13,6 +13,7 @@
 #include "Movement/Move.h"
 #include "RepRap.h"
 #include "Tools/Tool.h"
+#include "Endstops/ZProbe.h"
 #include "PrintMonitor.h"
 #include "Tasks.h"
 
@@ -31,93 +32,6 @@
 #endif
 
 #include "Wire.h"
-
-// Set or print the Z probe. Called by G31.
-// Note that G31 P or G31 P0 prints the parameters of the currently-selected Z probe.
-GCodeResult GCodes::SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply)
-{
-	ZProbeType probeType;
-	bool seenT = false;
-	if (gb.Seen('T'))
-	{
-		unsigned int tp = gb.GetUIValue();
-		if (tp == 0 || tp >= (unsigned int)ZProbeType::numTypes)
-		{
-			reply.copy("Invalid Z probe type");
-			return GCodeResult::error;
-		}
-
-		probeType = (ZProbeType)tp;
-		seenT = true;
-	}
-	else
-	{
-		probeType = platform.GetZProbeType();
-		seenT = false;
-	}
-
-	ZProbe params = platform.GetZProbeParameters(probeType);
-	bool seen = false;
-	gb.TryGetFValue(axisLetters[X_AXIS], params.xOffset, seen);
-	gb.TryGetFValue(axisLetters[Y_AXIS], params.yOffset, seen);
-	gb.TryGetFValue(axisLetters[Z_AXIS], params.triggerHeight, seen);
-	if (gb.Seen('P'))
-	{
-		seen = true;
-		params.adcValue = gb.GetIValue();
-	}
-
-	if (gb.Seen('C'))
-	{
-		params.temperatureCoefficient = gb.GetFValue();
-		seen = true;
-		if (gb.Seen('S'))
-		{
-			params.calibTemperature = gb.GetFValue();
-		}
-		else
-		{
-			// Use the current bed temperature as the calibration temperature if no value was provided
-			params.calibTemperature = platform.GetZProbeTemperature();
-		}
-	}
-
-	if (seen)
-	{
-		if (!LockMovementAndWaitForStandstill(gb))
-		{
-			return GCodeResult::notFinished;
-		}
-		if (gb.MachineState().runningM501)
-		{
-			params.saveToConfigOverride = true;			// we are loading these parameters from config-override.g, so a subsequent M500 should save them to config-override.g
-		}
-		platform.SetZProbeParameters(probeType, params);
-	}
-	else if (seenT)
-	{
-		// Don't bother printing temperature coefficient and calibration temperature because we will probably remove them soon
-		reply.printf("Threshold %d, trigger height %.2f, offsets X%.1f Y%.1f", params.adcValue, (double)params.triggerHeight, (double)params.xOffset, (double)params.yOffset);
-	}
-	else
-	{
-		const int v0 = platform.GetZProbeReading();
-		int v1, v2;
-		switch (platform.GetZProbeSecondaryValues(v1, v2))
-		{
-		case 1:
-			reply.printf("%d (%d)", v0, v1);
-			break;
-		case 2:
-			reply.printf("%d (%d, %d)", v0, v1, v2);
-			break;
-		default:
-			reply.printf("%d", v0);
-			break;
-		}
-	}
-	return GCodeResult::ok;
-}
 
 // Deal with G60
 GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply)
@@ -499,106 +413,12 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 	return GCodeResult::ok;
 }
 
-// Handle M558
-GCodeResult GCodes::SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply)
-{
-	bool seen = false;
-
-	// We must get and set the Z probe type first before setting the dive height etc., because different probe types may have different parameters
-	uint32_t requestedChannel = 0;
-	if (gb.Seen('P'))		// probe type
-	{
-		seen = true;
-		uint32_t requestedType = gb.GetUIValue();
-		switch (requestedType)
-		{
-		case (uint32_t)ZProbeType::endstopSwitch:
-			requestedChannel = E0_AXIS;						// default channel if no C parameter present
-			break;
-
-		case (uint32_t)ZProbeType::e1Switch_obsolete:
-			requestedChannel = E0_AXIS + 1;
-			requestedType = (uint32_t)ZProbeType::endstopSwitch;
-			break;
-
-		case (uint32_t)ZProbeType::zSwitch_obsolete:
-			requestedChannel = Z_AXIS;
-			requestedType = (uint32_t)ZProbeType::endstopSwitch;
-			break;
-
-		default:
-			break;
-		}
-		platform.SetZProbeType(requestedType);
-		DoDwellTime(gb, 100);								// delay a little to allow the averaging filters to accumulate data from the new source
-	}
-
-	// Do the input channel next so that 'seen' will be true only if the type and/or the channel has been specified
-	if (gb.Seen('C'))										// input channel
-	{
-		requestedChannel = gb.GetUIValue();
-		seen = true;
-	}
-
-	ZProbe params = platform.GetCurrentZProbeParameters();
-	if (seen)												// if seen P and/or C
-	{
-		params.inputChannel = requestedChannel;				// set the input to the default one for this type or the requested one
-	}
-
-	gb.TryGetFValue('H', params.diveHeight, seen);			// dive height
-	if (gb.Seen('F'))										// feed rate i.e. probing speed
-	{
-		params.probeSpeed = gb.GetFValue() * SecondsToMinutes;
-		seen = true;
-	}
-
-	if (gb.Seen('T'))		// travel speed to probe point
-	{
-		params.travelSpeed = gb.GetFValue() * SecondsToMinutes;
-		seen = true;
-	}
-
-	if (gb.Seen('I'))
-	{
-		params.invertReading = (gb.GetIValue() != 0);
-		seen = true;
-	}
-
-	if (gb.Seen('B'))
-	{
-		params.turnHeatersOff = (gb.GetIValue() == 1);
-		seen = true;
-	}
-
-	gb.TryGetFValue('R', params.recoveryTime, seen);		// Z probe recovery time
-	gb.TryGetFValue('S', params.tolerance, seen);			// tolerance when multi-tapping
-
-	if (gb.Seen('A'))
-	{
-		params.maxTaps = min<uint32_t>(gb.GetUIValue(), ZProbe::MaxTapsLimit);
-		seen = true;
-	}
-
-	if (seen)
-	{
-		platform.SetZProbeParameters(platform.GetZProbeType(), params);
-	}
-	else
-	{
-		reply.printf("Z Probe type %u, input %u, invert %s, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
-						(unsigned int)platform.GetZProbeType(), params.inputChannel, (params.invertReading) ? "yes" : "no", (double)params.diveHeight,
-						(int)(params.probeSpeed * MinutesToSeconds), (int)(params.travelSpeed * MinutesToSeconds),
-						(double)params.recoveryTime,
-						(params.turnHeatersOff) ? "suspended" : "normal",
-						params.maxTaps, (double)params.tolerance);
-	}
-	return GCodeResult::ok;
-}
-
 // Handle M581 and M582
 GCodeResult GCodes::CheckOrConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, int code)
 {
+#ifdef NO_TRIGGERS
+	return GCodeResult::errorNotSupported;
+#else
 	if (gb.Seen('T'))
 	{
 		unsigned int triggerNumber = gb.GetIValue();
@@ -606,7 +426,7 @@ GCodeResult GCodes::CheckOrConfigureTrigger(GCodeBuffer& gb, const StringRef& re
 		{
 			if (code == 582)
 			{
-				uint32_t states = platform.GetAllEndstopStates();
+				const uint32_t states = platform.GetEndstops().GetAllEndstopStates();
 				if ((triggers[triggerNumber].rising & states) != 0 || (triggers[triggerNumber].falling & ~states) != 0)
 				{
 					SetBit(triggersPending, triggerNumber);
@@ -699,6 +519,7 @@ GCodeResult GCodes::CheckOrConfigureTrigger(GCodeBuffer& gb, const StringRef& re
 
 	reply.copy("Missing T parameter");
 	return GCodeResult::error;
+#endif
 }
 
 // Deal with a M584
@@ -823,44 +644,29 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 		return GCodeResult::notFinished;
 	}
 
+	// See whether we are using a Z probe or just endstops
+	unsigned int probeNumberToUse;
+	const bool useProbe = gb.Seen('P');
+	if (useProbe)
+	{
+		probeNumberToUse = gb.GetUIValue();
+		if (platform.GetEndstops().GetZProbe(probeNumberToUse) == nullptr)
+		{
+			reply.copy("Invalid probe number");
+			return GCodeResult::error;
+		}
+	}
+
 	for (size_t axis = 0; axis < numTotalAxes; axis++)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
-			// Get parameters first and check them
-			const int endStopToUse = gb.Seen('E') ? gb.GetIValue() : -1;
-			if (endStopToUse > (int)NumEndstops)
-			{
-				reply.copy("Invalid endstop number");
-				return GCodeResult::error;
-				break;
-			}
-
 			// Save the current axis coordinates
 			SavePosition(toolChangeRestorePoint, gb);
 
 			// Prepare another move similar to G1 .. S3
+			moveBuffer.SetDefaults(numVisibleAxes);
 			moveBuffer.moveType = 3;
-			if (endStopToUse < 0)
-			{
-				moveBuffer.endStopsToCheck = 0;
-				SetBit(moveBuffer.endStopsToCheck, axis);
-			}
-			else
-			{
-				moveBuffer.endStopsToCheck = UseSpecialEndstop;
-				SetBit(moveBuffer.endStopsToCheck, endStopToUse);
-
-				if (gb.Seen('L') && gb.GetIValue() == 0)
-				{
-					// By default custom endstops are active-high when triggered, so allow this to be inverted
-					moveBuffer.endStopsToCheck |= ActiveLowEndstop;
-				}
-			}
-			moveBuffer.xAxes = DefaultXAxisMapping;
-			moveBuffer.yAxes = DefaultYAxisMapping;
-			moveBuffer.usePressureAdvance = false;
-			moveBuffer.filePos = noFilePosition;
 			moveBuffer.canPauseAfter = false;
 
 			// Decide which way and how far to go
@@ -875,13 +681,6 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 				moveBuffer.coords[axis] = (gb.Seen('S') && gb.GetIValue() > 0) ? platform.AxisMinimum(axis) : platform.AxisMaximum(axis);
 			}
 
-			// Zero every extruder drive
-			for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; drive++)
-			{
-				moveBuffer.coords[drive] = 0.0;
-			}
-			moveBuffer.hasExtrusion = false;
-
 			// Deal with feed rate
 			if (gb.Seen(feedrateLetter))
 			{
@@ -889,6 +688,16 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 				gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
 			}
 			moveBuffer.feedRate = gb.MachineState().feedRate;
+
+			if (useProbe)
+			{
+				platform.GetEndstops().EnableZProbe(probeNumberToUse);
+			}
+			else
+			{
+				platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis));
+			}
+			moveBuffer.checkEndstops = true;
 
 			// Kick off new movement
 			NewMoveAvailable(1);
@@ -1016,7 +825,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 
 	// If we get here then we have the module map, and all prerequisites are satisfied
 	isFlashing = true;										// this tells the web interface and PanelDue that we are about to flash firmware
-	if (DoDwellTime(gb, 1000) == GCodeResult::notFinished)	// wait a second so all HTTP clients and PanelDue are notified
+	if (!gb.DoDwellTime(1000))								// wait a second so all HTTP clients and PanelDue are notified
 	{
 		return GCodeResult::notFinished;
 	}
@@ -1352,7 +1161,7 @@ GCodeResult GCodes::SetHeaterModel(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('H'))
 	{
 		const unsigned int heater = gb.GetUIValue();
-		if (heater < NumHeaters)
+		if (heater < NumTotalHeaters)
 		{
 			const FopDt& model = reprap.GetHeat().GetHeaterModel(heater);
 			bool seen = false;
@@ -1361,7 +1170,6 @@ GCodeResult GCodes::SetHeaterModel(GCodeBuffer& gb, const StringRef& reply)
 				td = model.GetDeadTime(),
 				maxPwm = model.GetMaxPwm(),
 				voltage = model.GetVoltage();
-			uint32_t freq = model.GetPwmFrequency();
 			int32_t dontUsePid = model.UsePid() ? 0 : 1;
 			int32_t inversionParameter = 0;
 
@@ -1372,20 +1180,15 @@ GCodeResult GCodes::SetHeaterModel(GCodeBuffer& gb, const StringRef& reply)
 			gb.TryGetFValue('S', maxPwm, seen);
 			gb.TryGetFValue('V', voltage, seen);
 			gb.TryGetIValue('I', inversionParameter, seen);
-			gb.TryGetUIValue('F', freq, seen);
 
 			if (seen)
 			{
 				const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
-				if (!reprap.GetHeat().SetHeaterModel(heater, gain, tc, td, maxPwm, voltage,
-														dontUsePid == 0, inverseTemperatureControl, (uint16_t)min<uint32_t>(freq, MaxHeaterPwmFrequency)))
+				if (!reprap.GetHeat().SetHeaterModel(heater, gain, tc, td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl))
 				{
 					reply.copy("bad model parameters");
 					return GCodeResult::error;
 				}
-
-				const bool invertedPwmSignal = (inversionParameter == 2 || inversionParameter == 3);
-				reprap.GetHeat().SetHeaterSignalInverted(heater, invertedPwmSignal);
 			}
 			else if (!model.IsEnabled())
 			{
@@ -1393,23 +1196,14 @@ GCodeResult GCodes::SetHeaterModel(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else
 			{
-				const char* mode = (!model.UsePid()) ? "bang-bang"
-									: (model.ArePidParametersOverridden()) ? "custom PID"
-										: "PID";
-				const bool pwmSignalInverted = reprap.GetHeat().IsHeaterSignalInverted(heater);
-				const char* const inverted = model.IsInverted()
-										? (pwmSignalInverted ? "PWM signal and temperature control" : "temperature control")
-										: (pwmSignalInverted ? "PWM signal" : "no");
-
-				reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, calibration voltage %.1f, mode %s, inverted %s, frequency ",
-						heater, (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode, inverted);
-				if (model.GetPwmFrequency() == 0)
+				const char* const mode = (!model.UsePid()) ? "bang-bang"
+											: (model.ArePidParametersOverridden()) ? "custom PID"
+												: "PID";
+				reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, calibration voltage %.1f, mode %s", heater,
+							 (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode);
+				if (model.IsInverted())
 				{
-					reply.cat("default");
-				}
-				else
-				{
-					reply.catf("%uHz", model.GetPwmFrequency());
+					reply.cat(", inverted temperature control");
 				}
 				if (model.UsePid())
 				{

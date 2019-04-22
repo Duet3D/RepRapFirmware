@@ -6,6 +6,7 @@
  */
 
 #include "ZProbeProgrammer.h"
+#include "ZProbe.h"
 #include "RepRap.h"
 #include "Platform.h"
 
@@ -32,7 +33,7 @@ void ZProbeProgrammer::SendProgram(const uint32_t zProbeProgram[], size_t len)
 	bitsSent = 0;
 	bitTime = SoftTimer::GetTickRate()/bitsPerSecond;
 
-	reprap.GetPlatform().SetZProbeModState(false);				// start with 2 bits of zero
+	reprap.GetPlatform().GetCurrentZProbe().SetProgramOutput(false);				// start with 2 bits of zero
 	startTime = SoftTimer::GetTimerTicksNow();
 	timer.ScheduleCallback(startTime + 2 * bitTime, ZProbeProgrammer::TimerInterrupt, static_cast<void*>(this));
 }
@@ -83,7 +84,7 @@ bool ZProbeProgrammer::Interrupt(uint32_t& when)
 		break;
 	}
 
-	reprap.GetPlatform().SetZProbeModState(nextBit);
+	reprap.GetPlatform().GetCurrentZProbe().SetProgramOutput(nextBit);
 	if (bytesSent < numBytes)
 	{
 		when = startTime + ((bytesSent * 14) + bitsSent + 2) * bitTime;

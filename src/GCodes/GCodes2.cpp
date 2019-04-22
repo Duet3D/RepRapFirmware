@@ -18,6 +18,7 @@
 #include "PrintMonitor.h"
 #include "RepRap.h"
 #include "Tools/Tool.h"
+#include "Endstops/ZProbe.h"
 #include "FilamentMonitors/FilamentMonitor.h"
 #include "General/IP4String.h"
 #include "Movement/StepperDrivers/DriverMode.h"
@@ -268,7 +269,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 31: // Return the probe value, or set probe variables
-		result = SetPrintZProbe(gb, reply);
+		result = platform.GetEndstops().HandleG31(gb, reply);
 		break;
 
 	case 32: // Probe Z at multiple positions and generate the bed transform
@@ -1073,50 +1074,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 42:	// Turn an output pin on or off
 		if (gb.Seen('P'))
 		{
-			const LogicalPin logicalPin = gb.GetIValue();
-			if (gb.Seen('S'))
+			const uint32_t gpioPortNumber = gb.GetUIValue();
+			if (gpioPortNumber < MaxGpioPorts)
 			{
-				float val = ConvertOldStylePwm(gb.GetFValue());
-
-				// The SX1509B I/O expander chip doesn't seem to work if you set PWM mode and then set digital output mode.
-				// This causes a problem if M42 is used to write to some pins and then M670 is used to set up the G1 P parameter port mapping.
-				// The first part of the fix for this is to not select PWM mode if we don't need to.
-				bool usePwm;
-				uint16_t freq;
-				if (gb.Seen('F'))
+				if (gb.Seen('S'))
 				{
-					freq = constrain<int32_t>(gb.GetIValue(), 1, 65536);
-					usePwm = true;
+					const float val = gb.GetPwmValue();
+					platform.GetGpioPort(gpioPortNumber).WriteAnalog(val);
 				}
-				else
-				{
-					freq = DefaultPinWritePwmFreq;
-					usePwm = (val != 0.0 && val != 1.0);
-				}
-
-				Pin pin;
-				bool invert;
-				if (platform.GetFirmwarePin(logicalPin, (usePwm) ? PinAccess::pwm : PinAccess::write, pin, invert))
-				{
-					if (invert)
-					{
-						val = 1.0 - val;
-					}
-
-					if (usePwm)
-					{
-						IoPort::WriteAnalog(pin, val, freq);
-					}
-					else
-					{
-						IoPort::WriteDigital(pin, val == 1.0);
-					}
-				}
-				else
-				{
-					reply.printf("Logical pin %d is not available for writing", logicalPin);
-					result = GCodeResult::error;
-				}
+			}
+			else
+			{
+				reply.printf("Invalid gpio port %" PRIu32, gpioPortNumber);
+				result = GCodeResult::error;
 			}
 		}
 		break;
@@ -1243,8 +1213,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 106: // Set/report fan values
 		{
 			bool seenFanNum = false;
-			int32_t fanNum;
-			gb.TryGetIValue('P', fanNum, seenFanNum);
+			uint32_t fanNum;
+			gb.TryGetUIValue('P', fanNum, seenFanNum);
 			bool processed;
 
 			// 2018-08-09: only configure the fan if a fan number was given.
@@ -1264,7 +1234,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (!processed && gb.Seen('S'))
 			{
 				// Convert the parameter to an interval in 0.0..1.0 here so that we save the correct value in lastDefaultFanSpeed
-				const float f = ConvertOldStylePwm(gb.GetFValue());
+				const float f = gb.GetPwmValue();
 				if (seenFanNum)
 				{
 					platform.SetFanValue(fanNum, f);
@@ -1384,7 +1354,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				}
 
 				gb.MachineState().newToolNumber = applicableTool->Number();
-				gb.MachineState().toolChangeParam = (simulationMode == 0) ? 0 : DefaultToolChangeParam;
+				gb.MachineState().toolChangeParam = (simulationMode != 0) ? 0 : DefaultToolChangeParam;
 				gb.SetState(GCodeState::m109ToolChange0);
 			}
 			else
@@ -1499,8 +1469,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (gb.Seen('H'))
 			{
 				// Wait for specified heaters to be ready
-				uint32_t heaters[NumHeaters];
-				size_t heaterCount = NumHeaters;
+				uint32_t heaters[NumTotalHeaters];
+				size_t heaterCount = NumTotalHeaters;
 				gb.GetUnsignedArray(heaters, heaterCount, false);
 
 				for (size_t i = 0; i < heaterCount; i++)
@@ -1608,9 +1578,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 			if (result != GCodeResult::error)
 			{
-				String<GCODE_LENGTH> message;
 				if (gb.Seen(('S')))
 				{
+					String<GCODE_LENGTH> message;
 					gb.GetQuotedString(message.GetRef());
 					platform.Message(type, message.c_str());
 				}
@@ -1619,12 +1589,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 119:
-		reply.copy("Endstops - ");
-		for (size_t axis = 0; axis < numTotalAxes; axis++)
-		{
-			reply.catf("%c: %s, ", axisLetters[axis], TranslateEndStopResult(platform.Stopped(axis)));
-		}
-		reply.catf("Z probe: %s", TranslateEndStopResult(platform.GetZProbeResult()));
+		platform.GetEndstops().GetM119report(reply);
 		break;
 
 	case 120:
@@ -1675,7 +1640,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					heater = -1;
 				}
-				else if (heater >= (int)NumHeaters)
+				else if (heater >= (int)NumTotalHeaters)
 				{
 					reply.printf("Invalid heater number '%d'", heater);
 					result = GCodeResult::error;
@@ -2170,23 +2135,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 280:	// Servos
 		if (gb.Seen('P'))
 		{
-			const LogicalPin servoIndex = gb.GetIValue();
-			Pin servoPin;
-			bool invert;
-			if (platform.GetFirmwarePin(servoIndex, PinAccess::servo, servoPin, invert))
+			const uint32_t gpioPortNumber = gb.GetUIValue();
+			if (gpioPortNumber < MaxGpioPorts)
 			{
-				if (gb.Seen('I') && gb.GetIValue() > 0)
-				{
-					invert = !invert;
-				}
-
 				if (gb.Seen('S'))
 				{
 					float angleOrWidth = gb.GetFValue();
 					if (angleOrWidth < 0.0)
 					{
 						// Disable the servo by setting the pulse width to zero
-						IoPort::WriteAnalog(servoPin, (invert) ? 1.0 : 0.0, ServoRefreshFrequency);
+						platform.GetGpioPort(gpioPortNumber).WriteAnalog(0.0);
 					}
 					else
 					{
@@ -2199,19 +2157,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						{
 							angleOrWidth = MaxServoPulseWidth;
 						}
-						float pwm = angleOrWidth * (ServoRefreshFrequency/1e6);
-						if (invert)
-						{
-							pwm = 1.0 - pwm;
-						}
-						IoPort::WriteAnalog(servoPin, pwm, ServoRefreshFrequency);
+						platform.GetGpioPort(gpioPortNumber).WriteAnalog(angleOrWidth * (ServoRefreshFrequency/1e6));
 					}
 				}
 				// We don't currently allow the servo position to be read back
 			}
 			else
 			{
-				reply.printf("Invalid servo index %d in M280 command\n", servoIndex);
+				reply.printf("Invalid gpio port %" PRIu32, gpioPortNumber);
 				result = GCodeResult::error;
 			}
 		}
@@ -2372,14 +2325,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					}
 				}
 
-				// If any axis jog buttons are enabled, wait for movement to stop and lock the movement system
-				if (axisControls != 0)
-				{
-					if (!LockMovementAndWaitForStandstill(gb))
-					{
-						return false;
-					}
-				}
+				// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
 
 				// If we need to wait for an acknowledgement, save the state and set waiting
 				if ((sParam == 2 || sParam == 3) && Push(gb))						// stack the machine state including the file position
@@ -2427,16 +2373,28 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		bool seen = false;
 		if (gb.Seen('P'))
 		{
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
 			seen = true;
 			reprap.GetHeat().AllowColdExtrude(gb.GetIValue() > 0);
 		}
 		if (gb.Seen('S'))
 		{
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
 			seen = true;
 			reprap.GetHeat().SetExtrusionMinTemp(gb.GetFValue());
 		}
 		if (gb.Seen('R'))
 		{
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
 			seen = true;
 			reprap.GetHeat().SetRetractionMinTemp(gb.GetFValue());
 		}
@@ -2464,7 +2422,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 										: reprap.GetHeat().IsChamberHeater(heater) ? 50.0
 										: 200.0;
 			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : reprap.GetHeat().GetHeaterModel(heater).GetMaxPwm();
-			if (heater >= NumHeaters)
+			if (heater >= NumTotalHeaters)
 			{
 				reply.copy("Bad heater number in M303 command");
 			}
@@ -2603,7 +2561,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 401: // Deploy Z probe
-		if (platform.GetZProbeType() != ZProbeType::none)
+		if (platform.GetCurrentZProbeType() != ZProbeType::none)
 		{
 			probeIsDeployed = true;
 			DoFileMacro(gb, DEPLOYPROBE_G, false);
@@ -2611,7 +2569,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 402: // Retract Z probe
-		if (platform.GetZProbeType() != ZProbeType::none)
+		if (platform.GetCurrentZProbeType() != ZProbeType::none)
 		{
 			probeIsDeployed = false;
 			DoFileMacro(gb, RETRACTPROBE_G, false);
@@ -2698,29 +2656,30 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		machineType = MachineType::fff;
 		break;
 
+#if SUPPORT_LASER
 	case 452: // Select laser mode
 		if (!LockMovementAndWaitForStandstill(gb))
 		{
 			return false;
 		}
+
 		machineType = MachineType::laser;
-		if (gb.Seen('P'))
+		Move::CreateLaserTask();
+
+		if (gb.Seen('C'))
 		{
-			uint32_t lp = gb.GetUIValue();
-			if (lp > 65535)
-			{
-				lp = NoLogicalPin;
-			}
-			const bool invert = (gb.Seen('I') && gb.GetIValue() > 0);
-			if (platform.SetLaserPin((LogicalPin)lp, invert))
+			if (platform.AssignLaserPin(gb, reply))
 			{
 				reply.copy("Laser mode selected");
 			}
 			else
 			{
-				reply.copy("Bad P parameter");
 				result = GCodeResult::error;
 			}
+		}
+		if (gb.Seen('F'))
+		{
+			platform.SetLaserPwmFrequency(gb.GetPwmFrequency());
 		}
 		if (result == GCodeResult::ok)
 		{
@@ -2728,16 +2687,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				laserPowerSticky = (gb.GetUIValue() == 1);
 			}
-			if (gb.Seen('F'))
-			{
-				platform.SetLaserPwmFrequency(gb.GetFValue());
-			}
 			if (gb.Seen('R'))
 			{
 				laserMaxPower = max<float>(1.0, gb.GetFValue());
 			}
 		}
 		break;
+#endif
 
 	case 453: // Select CNC mode
 		if (!LockMovementAndWaitForStandstill(gb))
@@ -2756,30 +2712,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 
 			Spindle& spindle = platform.AccessSpindle(slot);
-			if (gb.Seen('P'))
+			if (gb.Seen('C'))
 			{
-				uint32_t pins[2] = { NoLogicalPin, NoLogicalPin };
-				size_t numPins = 2;
-				gb.GetUnsignedArray(pins, numPins, false);
-				if (pins[0] > 65535)
+				if (!spindle.AllocatePins(gb, reply))
 				{
-					pins[0] = NoLogicalPin;
-				}
-				if (numPins < 2 || pins[1] < 0 || pins[1] > 65535)
-				{
-					pins[1] = NoLogicalPin;
-				}
-				const bool invert = (gb.Seen('I') && gb.GetIValue() > 0);
-				if (!spindle.SetPins(pins[0], pins[1], invert))
-				{
-					reply.copy("Bad P parameter");
 					result = GCodeResult::error;
 					break;
 				}
 			}
 			if (gb.Seen('F'))
 			{
-				spindle.SetPwmFrequency(gb.GetFValue());
+				spindle.SetFrequency(gb.GetPwmFrequency());
 			}
 			if (gb.Seen('R'))
 			{
@@ -2861,7 +2804,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			reprap.GetHeat().SwitchOffAll(true);							// turn heaters off before changing the models
 			reprap.GetHeat().ResetHeaterModels();							// in case some heaters have no M307 commands in config.g
 			reprap.GetMove().GetKinematics().SetCalibrationDefaults();		// in case M665/M666/M667/M669 in config.g don't define all the parameters
-			platform.SetZProbeDefaults();
+			platform.GetEndstops().SetZProbeDefaults();
 			DoFileMacro(gb, CONFIG_FILE, true, code);
 		}
 		break;
@@ -3160,7 +3103,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 558: // Set or report Z probe type and for which axes it is used
-		result = SetOrReportZProbe(gb, reply);
+		result = platform.GetEndstops().HandleM558(gb, reply);
 		break;
 
 	case 559:
@@ -3216,7 +3159,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (gb.Seen('P'))
 		{
 			const unsigned int heater = gb.GetUIValue();
-			if (heater < NumHeaters)
+			if (heater < NumTotalHeaters)
 			{
 				reprap.ClearTemperatureFault(heater);
 			}
@@ -3229,7 +3172,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		else
 		{
 			// Clear all heater faults
-			for (unsigned int heater = 0; heater < NumHeaters; ++heater)
+			for (unsigned int heater = 0; heater < NumTotalHeaters; ++heater)
 			{
 				reprap.ClearTemperatureFault(heater);
 			}
@@ -3359,7 +3302,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (gb.Seen('H'))
 			{
 				const unsigned heater = gb.GetUIValue();
-				if (heater < NumHeaters)
+				if (heater < NumTotalHeaters)
 				{
 					bool seenValue = false;
 					float maxTempExcursion, maxFaultTime;
@@ -3385,39 +3328,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 571: // Set output on extrude
-		{
-			bool seen = false;
-			if (gb.Seen('P'))
-			{
-				const int pwmPin = gb.GetIValue();
-				const bool invert = (gb.Seen('I') && gb.GetIValue() > 0);
-				if (!platform.SetExtrusionAncilliaryPwmPin(pwmPin, invert))
-				{
-					reply.printf("Logical pin %d is already in use or not available for use by M571", pwmPin);
-					break;			// don't process 'S' parameter if the pin was wrong
-				}
-				seen = true;
-			}
-			if (gb.Seen('F'))
-			{
-				platform.SetExtrusionAncilliaryPwmFrequency(gb.GetFValue());
-			}
-			if (gb.Seen('S'))
-			{
-				platform.SetExtrusionAncilliaryPwmValue(gb.GetFValue());
-				seen = true;
-			}
-			if (!seen)
-			{
-				bool invert;
-				const LogicalPin pin = platform.GetExtrusionAncilliaryPwmPin(invert);
-				reply.printf("Extrusion ancillary PWM %.3f at %.1fHz on pin %u, %s",
-								(double)platform.GetExtrusionAncilliaryPwmValue(),
-								(double)platform.GetExtrusionAncilliaryPwmFrequency(),
-								(unsigned int)pin,
-								(invert) ? "inverted" : "not inverted");
-			}
-		}
+		result = platform.GetSetAncillaryPwm(gb, reply);
 		break;
 
 	case 572: // Set/report pressure advance
@@ -3474,7 +3385,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (gb.Seen('P'))
 		{
 			const unsigned int heater = gb.GetUIValue();
-			if (heater < NumHeaters)
+			if (heater < NumTotalHeaters)
 			{
 				reply.printf("Average heater %u PWM: %.3f", heater, (double)reprap.GetHeat().GetAveragePWM(heater));
 			}
@@ -3482,94 +3393,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 574: // Set endstop configuration
-		{
-			const uint8_t inputType = (gb.Seen('S')) ? gb.GetUIValue() : 1;
-
-			unsigned int axesSeen = 0;
-			size_t lastAxisSeen;
-			for (size_t axis = 0; axis < numTotalAxes; ++axis)
-			{
-				if (gb.Seen(axisLetters[axis]))
-				{
-					if (!LockMovementAndWaitForStandstill(gb))
-					{
-						return false;
-					}
-					++axesSeen;
-					lastAxisSeen = axis;
-					const int ival = gb.GetIValue();
-					if (ival >= 0 && ival <= 3)
-					{
-						platform.SetEndStopConfiguration(axis, (EndStopPosition)ival, (EndStopInputType)inputType);
-					}
-					else
-					{
-						reply.copy("Invalid endstop type");
-						result = GCodeResult::error;
-						break;
-					}
-				}
-			}
-
-			if (gb.Seen('C'))
-			{
-				if (axesSeen == 1)
-				{
-					uint32_t inputNumbers[MaxDriversPerAxis];
-					size_t numInputs = MaxDriversPerAxis;
-					gb.GetUnsignedArray(inputNumbers, numInputs, false);
-					platform.SetAxisEndstopConfig(lastAxisSeen, numInputs, inputNumbers);
-				}
-				else
-				{
-					reply.copy("Invalid use of C parameter");
-					result = GCodeResult::error;
-				}
-			}
-
-			if (axesSeen == 0)
-			{
-				reply.copy("Endstop configuration");
-				EndStopPosition config;
-				EndStopInputType inputType;
-				char sep = ':';
-				for (size_t axis = 0; axis < numTotalAxes; ++axis)
-				{
-					platform.GetEndStopConfiguration(axis, config, inputType);
-					reply.catf("%c %c: %s", sep, axisLetters[axis],
-								(config == EndStopPosition::highEndStop) ? "high end"
-									: (config == EndStopPosition::lowEndStop) ? "low end"
-										: "none");
-					if (config != EndStopPosition::noEndStop)
-					{
-						if (inputType == EndStopInputType::activeHigh || inputType == EndStopInputType::activeLow)
-						{
-							const AxisEndstopConfig& es = platform.GetAxisEndstopConfig(axis);
-							if (es.numEndstops == 1)
-							{
-								reply.catf(" input %u", es.endstopNumbers[0]);
-							}
-							else
-							{
-								reply.cat(" inputs");
-								for (size_t i = 0; i < es.numEndstops; ++i)
-								{
-									reply.catf(" %u", es.endstopNumbers[i]);
-								}
-							}
-						}
-						reply.catf(" %s",
-									(inputType == EndStopInputType::activeHigh) ? "active high"
-										: (inputType == EndStopInputType::activeLow) ? "active low"
-											: (inputType == EndStopInputType::zProbe) ? "Z probe"
-												: (inputType == EndStopInputType::motorStall) ? "motor stall"
-													: "unknown type"
-									);
-					}
-					sep = ',';
-				}
-			}
-		}
+		result = platform.GetEndstops().HandleM574(gb, reply);
 		break;
 
 	case 575: // Set communications parameters
@@ -3615,6 +3439,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 577: // Wait until endstop input is triggered
+#ifdef NO_TRIGGERS
+		result = GCodeResult::errorNotSupported;
+#else
 		if (gb.Seen('S'))
 		{
 			// Determine trigger type
@@ -3625,7 +3452,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					if (platform.EndStopInputState(axis) != triggerCondition)
+					if (platform.GetEndstops().EndStopInputState(axis) != triggerCondition)
 					{
 						result = GCodeResult::notFinished;
 						break;
@@ -3649,7 +3476,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						break;
 					}
 
-					if (platform.EndStopInputState(eDrive + E0_AXIS) != triggerCondition)
+					if (platform.GetEndstops().EndStopInputState(eDrive + E0_AXIS) != triggerCondition)
 					{
 						result = GCodeResult::notFinished;
 						break;
@@ -3657,6 +3484,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				}
 			}
 		}
+#endif
 		break;
 
 #if SUPPORT_INKJET
@@ -3976,6 +3804,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 #if SUPPORT_IOBITS
 	case 670:
+		Move::CreateLaserTask();
 		result = GetGCodeResultFromError(reprap.GetPortControl().Configure(gb, reply));
 		break;
 #endif
@@ -3993,7 +3822,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 672: // Program Z probe
-		result = platform.ProgramZProbe(gb, reply);
+		result = platform.GetEndstops().ProgramZProbe(gb, reply);
 		break;
 
 	case 701: // Load filament
@@ -4186,16 +4015,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 851: // Set Z probe offset, only for Marlin compatibility
 		{
-			ZProbe params = platform.GetCurrentZProbeParameters();
+			ZProbe& zp = platform.GetCurrentZProbe();
 			if (gb.Seen('Z'))
 			{
-				params.triggerHeight = -gb.GetFValue();
-				params.saveToConfigOverride = true;
-				platform.SetZProbeParameters(platform.GetZProbeType(), params);
+				zp.SetTriggerHeight(-gb.GetFValue());
+				zp.SetSaveToConfigOverride();
 			}
 			else
 			{
-				reply.printf("Z probe offset is %.2fmm", (double)(-params.triggerHeight));
+				reply.printf("Z probe offset is %.2fmm", (double)(-zp.GetConfiguredTriggerHeight()));
 			}
 		}
 		break;
@@ -4391,6 +4219,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		result = platform.ConfigureLogging(gb, reply);
 		break;
 
+	case 950:	// configure I/O pins
+		result = platform.ConfigurePort(gb, reply);
+		break;
+
 	case 997: // Perform firmware update
 		result = UpdateFirmware(gb, reply);
 		break;
@@ -4409,10 +4241,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 999:
-		result = DoDwellTime(gb, 1000);		// wait a second to allow the response to be sent back to the web server, otherwise it may retry
-		if (result != GCodeResult::notFinished)
+		if (!gb.DoDwellTime(1000))		// wait a second to allow the response to be sent back to the web server, otherwise it may retry
 		{
-			reprap.EmergencyStop();			// this disables heaters and drives - Duet WiFi pre-production boards need drives disabled here
+			return false;
+		}
+
+		reprap.EmergencyStop();			// this disables heaters and drives - Duet WiFi pre-production boards need drives disabled here
+		{
 			bool doErase;
 			if (gb.Seen('P'))
 			{
@@ -4531,7 +4366,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 	if (outBuf != nullptr)
 	{
 		// We only ever have an OutputBuffer when rslt == GCodeResult::ok
-		gb.timerRunning = false;
+		gb.StopTimer();
 		UnlockAll(gb);
 		HandleReply(gb, outBuf);
 		return true;
@@ -4581,7 +4416,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 
 	if (gb.GetState() == GCodeState::normal)
 	{
-		gb.timerRunning = false;
+		gb.StopTimer();
 		UnlockAll(gb);
 		HandleReply(gb, rslt, reply.c_str());
 	}

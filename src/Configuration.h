@@ -91,8 +91,6 @@ constexpr float ThermostatHysteresis = 1.0;				// How much hysteresis we use to 
 constexpr float BadErrorTemperature = 2000.0;			// Must exceed any reasonable temperature limit including DEFAULT_TEMPERATURE_LIMIT
 constexpr uint32_t DefaultHeaterFaultTimeout = 10 * 60 * 1000;	// How long we wait (in milliseconds) for user intervention after a heater fault before shutting down
 
-constexpr PwmFrequency MaxHeaterPwmFrequency = 1000;	// maximum supported heater PWM frequency, to avoid overheating the mosfets
-
 // Heating model default parameters. For the chamber heater, we use the same values as for the bed heater.
 // These parameters are about right for an E3Dv6 hot end with 30W heater.
 constexpr float DefaultHotEndHeaterGain = 340.0;
@@ -149,23 +147,26 @@ constexpr float MinimumConnectedTemperature = -5.0;		// Temperatures below this 
 static_assert(DefaultMaxTempExcursion > TEMPERATURE_CLOSE_ENOUGH, "DefaultMaxTempExcursion is too low");
 
 // Temperature sense channels
-constexpr unsigned int FirstThermistorChannel = 0;		// Temperature sensor channels 0... are thermistors
+constexpr unsigned int FirstThermistorChannel = 0;				// Temperature sensor channels 0... are thermistors
+constexpr unsigned int FirstLinearAnalogChannel = 50;			// Sensor channels 50.. are linear sensors connected to ADC ports
 constexpr unsigned int FirstMax31855ThermocoupleChannel = 100;	// Temperature sensor channels 100... are MAX31855 thermocouples
 constexpr unsigned int FirstMax31856ThermocoupleChannel = 150;	// Temperature sensor channels 150... are MAX31856 thermocouples
-constexpr unsigned int FirstRtdChannel = 200;			// Temperature sensor channels 200... are RTDs
-constexpr unsigned int FirstLinearAdcChannel = 300;		// Temperature sensor channels 300... use an ADC that provides a linear output over a temperature range
-constexpr unsigned int FirstDhtTemperatureChannel = 400;	// Temperature sensor channel 400 for DHTxx temperature
-constexpr unsigned int FirstDhtHumidityChannel = 450;		// Temperature sensor channel 401 for DHTxx humidity
-constexpr unsigned int FirstPT1000Channel = 500;		// Temperature sensor channels 500... are PT1000 sensors connected to thermistor inputs
-constexpr unsigned int CpuTemperatureSenseChannel = 1000;  // Sensor 1000 is the MCU's own temperature sensor
-constexpr unsigned int FirstTmcDriversSenseChannel = 1001; // Sensors 1001..1002 are the TMC2660 driver temperature sense
-constexpr unsigned int NumTmcDriversSenseChannels = 2;	// Sensors 1001..1002 are the TMC2660 driver temperature sense
+constexpr unsigned int FirstRtdChannel = 200;					// Temperature sensor channels 200... are RTDs
+constexpr unsigned int FirstLinearAdcChannel = 300;				// Temperature sensor channels 300... use an ADC that provides a linear output over a temperature range
+constexpr unsigned int FirstDhtTemperatureChannel = 400;		// Temperature sensor channel 400 for DHTxx temperature
+constexpr unsigned int FirstDhtHumidityChannel = 450;			// Temperature sensor channel 401 for DHTxx humidity
+constexpr unsigned int FirstPT1000Channel = 500;				// Temperature sensor channels 500... are PT1000 sensors connected to thermistor inputs
+constexpr unsigned int CpuTemperatureSenseChannel = 1000;		// Sensor 1000 is the MCU's own temperature sensor
+constexpr unsigned int FirstTmcDriversSenseChannel = 1001;		// Sensors 1001..1002 are the TMC2660 driver temperature sense
+constexpr unsigned int NumTmcDriversSenseChannels = 2;			// Sensors 1001..1002 are the TMC2660 driver temperature sense
 
 // PWM frequencies
-constexpr unsigned int SlowHeaterPwmFreq = 10;			// slow PWM frequency for bed and chamber heaters, compatible with DC/AC SSRs
-constexpr unsigned int NormalHeaterPwmFreq = 250;		// normal PWM frequency used for hot ends
+constexpr PwmFrequency MaxHeaterPwmFrequency = 1000;	// maximum supported heater PWM frequency, to avoid overheating the mosfets
+constexpr PwmFrequency SlowHeaterPwmFreq = 10;			// slow PWM frequency for bed and chamber heaters, compatible with DC/AC SSRs
+constexpr PwmFrequency NormalHeaterPwmFreq = 250;		// normal PWM frequency used for hot ends
 constexpr PwmFrequency DefaultFanPwmFreq = 250;			// increase to 25kHz using M106 command to meet Intel 4-wire PWM fan specification
-constexpr unsigned int DefaultPinWritePwmFreq = 500;	// default PWM frequency for M42 pin writes and extrusion ancillary PWM
+constexpr PwmFrequency DefaultPinWritePwmFreq = 500;	// default PWM frequency for M42 pin writes and extrusion ancillary PWM
+constexpr PwmFrequency ServoRefreshFrequency = 50;
 
 // Default Z probe values
 
@@ -211,6 +212,8 @@ constexpr unsigned int MaxSdCardTries = 3;				// Number of read or write attempt
 constexpr uint32_t SdCardRetryDelay = 30;				// Number of milliseconds delay between SD transfer retries. Looks like 10ms may be too low.
 
 // Z probing
+constexpr float DefaultZProbeTriggerHeight = 0.7;		// Millimetres
+constexpr float DefaultZProbeTemperature = 25.0;
 constexpr float DefaultZDive = 5.0;						// Millimetres
 constexpr float DefaultProbingSpeed = 2.0;				// Default Z probing speed mm/sec
 constexpr float DefaultZProbeTravelSpeed = 100.0;		// Default speed for travel to probe points
@@ -313,6 +316,7 @@ constexpr unsigned int MaxStackDepth = 5;				// Maximum depth of stack
 constexpr size_t MaxSpindles = 4;						// Maximum number of configurable spindles
 constexpr float DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full PWM
 constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command for full power
+constexpr uint32_t LaserPwmIntervalMillis = 10;			// Interval (ms) between adjusting the laser PWM during acceleration or deceleration
 
 // I2C
 // A note on the i2C clock frequency.

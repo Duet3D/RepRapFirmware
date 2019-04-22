@@ -135,8 +135,24 @@
 # define SUPPORT_ASYNC_MOVES	0
 #endif
 
+#ifndef HAS_VARIABLE_PIN_LIST
+# define HAS_VARIABLE_PIN_LIST	0
+#endif
+
+#ifndef ALLOCATE_DEFAULT_PORTS
+# define ALLOCATE_DEFAULT_PORTS	0
+#endif
+
 #if SUPPORT_DHT_SENSOR && !defined(RTOS)
 # error DHT sensor support requires RTOS
+#endif
+
+#if SUPPORT_LASER && !defined(RTOS)
+# error Laser support requires RTOS
+#endif
+
+#if SUPPORT_IOBITS && !defined(RTOS)
+# error IOBITS support requires RTOS
 #endif
 
 #endif // PINS_H__

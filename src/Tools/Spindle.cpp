@@ -7,28 +7,18 @@
 
 #include "Spindle.h"
 
-bool Spindle::SetPins(LogicalPin lpf, LogicalPin lpr, bool invert)
+// Allocate the pins returning true if successful
+bool Spindle::AllocatePins(GCodeBuffer& gb, const StringRef& reply)
 {
-	const bool ok1 = spindleForwardPort.Set(lpf, PinAccess::pwm, invert);
-	if (lpr == NoLogicalPin)
-	{
-		spindleReversePort.Clear();
-		return ok1;
-	}
-	const bool ok2 = spindleReversePort.Set(lpr, PinAccess::pwm, invert);
-	return ok1 && ok2;
+	IoPort * const ports[] = { &spindleForwardPort, &spindleReversePort };
+	const PinAccess access[] = { PinAccess::pwm, PinAccess::pwm };
+	return IoPort::AssignPorts(gb, reply, PinUsedBy::spindle, 2, ports, access);
 }
 
-void Spindle::GetPins(LogicalPin& lpf, LogicalPin& lpr, bool& invert) const
+void Spindle::SetFrequency(PwmFrequency freq)
 {
-	lpf = spindleForwardPort.GetLogicalPin(invert);
-	lpr = spindleReversePort.GetLogicalPin();
-}
-
-void Spindle::SetPwmFrequency(float freq)
-{
-	spindleReversePort.SetFrequency(freq);
 	spindleForwardPort.SetFrequency(freq);
+	spindleReversePort.SetFrequency(freq);
 }
 
 void Spindle::SetRpm(float rpm)

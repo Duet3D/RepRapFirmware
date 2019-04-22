@@ -10,26 +10,35 @@
 
 #include "RepRapFirmware.h"
 
-// Enumeration to describe what we want to do with a logical pin
-enum class PinAccess : int
-{
-	read,
-	write,
-	pwm,
-	servo
-};
-
 // Class to represent a port
 class IoPort
 {
 public:
 	IoPort();
-	void Clear();
-	bool Set(LogicalPin lp, PinAccess access, bool pInvert);
+	bool SetMode(PinAccess access);
+	void Release();
+	void AppendDetails(const StringRef& str);
 
-	LogicalPin GetLogicalPin() const { return logicalPort; }
-	LogicalPin GetLogicalPin(bool& pInvert) const { pInvert = invert; return logicalPort; }
-	void WriteDigital(bool high) const { if (pin != NoPin) { WriteDigital(pin, (invert) ? !high : high); } }
+	static size_t AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort * const ports[], const PinAccess access[]);
+	bool AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, PinAccess access);
+
+	static size_t AssignPorts(const char *pinNames, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort * const ports[], const PinAccess access[]);
+	bool AssignPort(const char *pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access);
+
+	void AppendPinName(const StringRef& str) const;
+	bool IsValid() const { return logicalPin < NumLogicalPins; }
+	bool GetInvert() const;
+	void SetInvert(bool pInvert);
+	void ToggleInvert(bool pInvert);
+
+	void WriteDigital(bool high) const;
+	bool Read() const;
+	uint16_t ReadAnalog() const;
+	bool AttachInterrupt(StandardCallbackFunction callback, enum InterruptMode mode, CallbackParameter param) const;
+	void DetachInterrupt() const;
+
+	// Initialise static data
+	static void Init();
 
 	// Low level port access
 	static void SetPinMode(Pin p, PinMode mode);
@@ -38,9 +47,17 @@ public:
 	static void WriteAnalog(Pin p, float pwm, uint16_t frequency);
 
 protected:
-	LogicalPin logicalPort;
-	Pin pin;
-	bool invert;
+	bool Allocate(const char *pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access);
+
+	static const char* TranslatePinAccess(PinAccess access);
+
+	LogicalPin logicalPin;									// the logical pin number
+	AnalogChannelNumber analogChannel;						// the analog channel number if it is an analog input, or -1 if not
+	bool hardwareInvert;									// whether the hardware includes inversion
+	bool totalInvert;										// whether the input or output should be inverted
+
+	static PinUsedBy portUsedBy[NumLogicalPins];			// the list of what each logical port is used by
+	static int8_t logicalPinModes[NumLogicalPins];			// what mode each logical pin is set to - would ideally be class PinMode not int8_t
 };
 
 // Class to represent a PWM output port
@@ -48,12 +65,14 @@ class PwmPort : public IoPort
 {
 public:
 	PwmPort();
-	void SetFrequency(float freq);
-	float GetFrequency() const { return (float)frequency; }
+
+	void AppendDetails(const StringRef& str);
+
+	void SetFrequency(PwmFrequency freq) { frequency = freq; }
 	void WriteAnalog(float pwm) const;
 
 private:
-	uint16_t frequency;
+	PwmFrequency frequency;
 };
 
 #endif /* SRC_PORT_H_ */

@@ -65,6 +65,7 @@ namespace DuetExpansion
 	ExpansionBoardType DueXnInit()
 	{
 		reprap.GetPlatform().InitI2c();						// initialise I2C
+		delay(200);											// the SX1509B has an independent power on reset, so give it some time
 
 		// DC 2018-07-12: occasionally the SX1509B isn't found after doing a software reset, so try a few more attempts
 		bool ret;

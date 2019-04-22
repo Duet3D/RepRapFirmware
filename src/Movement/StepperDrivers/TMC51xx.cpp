@@ -12,7 +12,9 @@
 #if SUPPORT_TMC51xx
 
 #include "RTOSIface/RTOSIface.h"
-#include <Movement/Move.h>
+#include "Movement/Move.h"
+#include "Movement/StepTimer.h"
+#include "Endstops/Endstop.h"
 
 #ifdef SAME51
 # include "HAL/IoPorts.h"
@@ -1080,7 +1082,7 @@ extern "C" void TmcLoop(void *)
 	{
 		if (driversState == DriversState::noPower)
 		{
-			TaskBase::Take(Mutex::TimeoutUnlimited);
+			TaskBase::Take();
 		}
 		else
 		{
@@ -1182,9 +1184,9 @@ namespace SmartDrivers
 
 #ifndef SAME51
 		// The pins are already set up for SPI in the pins table
-		ConfigurePin(GetPinDescription(TMC51xxMosiPin));
-		ConfigurePin(GetPinDescription(TMC51xxMisoPin));
-		ConfigurePin(GetPinDescription(TMC51xxSclkPin));
+		ConfigurePin(TMC51xxMosiPin);
+		ConfigurePin(TMC51xxMisoPin);
+		ConfigurePin(TMC51xxSclkPin);
 
 		// Enable the clock to the USART or SPI
 		pmc_enable_periph_clk(ID_TMC51xx_SPI);

@@ -33,8 +33,6 @@ Licence: GPL
 #define array _ecv_array
 
 constexpr size_t ToolNameLength = 32;						// maximum allowed length for tool names
-constexpr AxesBitmap DefaultXAxisMapping = 1u << X_AXIS;	// by default, X is mapped to X
-constexpr AxesBitmap DefaultYAxisMapping = 1u << Y_AXIS;	// by default, Y is mapped to Y
 
 enum class ToolState : uint8_t
 {

@@ -20,7 +20,7 @@ static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML
 GCodeBuffer::GCodeBuffer(const char* id, MessageType mt, bool usesCodeQueue)
 	: machineState(new GCodeMachineState()), identity(id), fileBeingWritten(nullptr), writingFileSize(0), eofStringCounter(0),
 	  toolNumberAdjust(0), responseMessageType(mt),
-	  hasCommandNumber(false), commandLetter('Q'),
+	  timerRunning(false), hasCommandNumber(false), commandLetter('Q'),
 	  checksumRequired(false), queueCodes(usesCodeQueue), binaryWriting(false)
 {
 	Init();
@@ -37,9 +37,35 @@ void GCodeBuffer::Init()
 	gcodeLineEnd = 0;
 	commandLength = 0;
 	readPointer = -1;
-	hadLineNumber = hadChecksum = timerRunning = false;
+	hadLineNumber = hadChecksum = false;
 	computedChecksum = 0;
 	bufferState = GCodeBufferState::parseNotStarted;
+}
+
+void GCodeBuffer::StartTimer()
+{
+	whenTimerStarted = millis();
+	timerRunning = true;
+}
+
+bool GCodeBuffer::DoDwellTime(uint32_t dwellMillis)
+{
+	const uint32_t now = millis();
+
+	// Are we already in the dwell?
+	if (timerRunning)
+	{
+		if (now - whenTimerStarted >= dwellMillis)
+		{
+			timerRunning = false;
+			return true;
+		}
+		return false;
+	}
+
+	// New dwell - set it up
+	StartTimer();
+	return false;
 }
 
 void GCodeBuffer::Diagnostics(MessageType mtype)
@@ -485,7 +511,7 @@ float GCodeBuffer::GetFValue()
 
 // Get a colon-separated list of floats after a key letter
 // If doPad is true then we allow just one element to be given, in which case we fill all elements with that value
-const void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
+void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{
@@ -533,7 +559,7 @@ const void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool 
 }
 
 // Get a :-separated list of ints after a key letter
-const void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad)
+void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{
@@ -580,7 +606,7 @@ const void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength, bool 
 }
 
 // Get a :-separated list of unsigned ints after a key letter
-const void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool doPad)
+void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{
@@ -732,6 +758,49 @@ bool GCodeBuffer::InternalGetPossiblyQuotedString(const StringRef& str)
 	}
 	str.StripTrailingSpaces();
 	return !str.IsEmpty();
+}
+
+bool GCodeBuffer::GetReducedString(const StringRef& str)
+{
+	str.Clear();
+	if (readPointer >= 0)
+	{
+		++readPointer;
+		if (gcodeBuffer[readPointer] != '"')
+		{
+			return false;
+		}
+		++readPointer;
+		for (;;)
+		{
+			const char c = gcodeBuffer[readPointer++];
+			switch(c)
+			{
+			case '"':
+				if (gcodeBuffer[readPointer++] != '"')
+				{
+					return true;
+				}
+				str.cat(c);
+				break;
+
+			case '_':
+			case '-':
+				break;
+
+			default:
+				if (c < ' ')
+				{
+					return false;
+				}
+				str.cat(tolower(c));
+				break;
+			}
+		}
+	}
+
+	INTERNAL_ERROR;
+	return false;
 }
 
 // This returns a string comprising the rest of the line, excluding any comment
@@ -975,6 +1044,23 @@ bool GCodeBuffer::GetMacAddress(uint8_t mac[6])
 	}
 	readPointer = -1;
 	return n == 6;
+}
+
+// Get a PWM frequency
+PwmFrequency GCodeBuffer::GetPwmFrequency()
+{
+	return (PwmFrequency)constrain<uint32_t>(GetUIValue(), 1, 65535);
+}
+
+// Get a PWM value. If may be in the old style 0..255 in which case convert it to be in the range 0.0..1.0
+float GCodeBuffer::GetPwmValue()
+{
+	float v = GetFValue();
+	if (v > 1.0)
+	{
+		v = v/255.0;
+	}
+	return constrain<float>(v, 0.0, 1.0);
 }
 
 // Get the original machine state before we pushed anything

@@ -10,7 +10,7 @@
 #include "Platform.h"
 #include "GCodes/GCodeBuffer.h"
 
-SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int extruder, int type)
+SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int extruder, unsigned int type)
 	: FilamentMonitor(extruder, type), highWhenNoFilament(type == 2), filamentPresent(false), enabled(false)
 {
 }
@@ -35,11 +35,12 @@ bool SimpleFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 	}
 	else
 	{
-		reply.printf("Simple filament sensor on endstop %d, %s, output %s when no filament, filament present: %s",
-						GetEndstopNumber(),
-						(enabled) ? "enabled" : "disabled",
-						(highWhenNoFilament) ? "high" : "low",
-						(filamentPresent) ? "yes" : "no");
+		reply.copy("Simple filament sensor on pin ");
+		GetPort().AppendPinName(reply);
+		reply.catf(", %s, output %s when no filament, filament present: %s",
+					(enabled) ? "enabled" : "disabled",
+					(highWhenNoFilament) ? "high" : "low",
+					(filamentPresent) ? "yes" : "no");
 	}
 
 	return false;
@@ -49,14 +50,14 @@ bool SimpleFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 bool SimpleFilamentMonitor::Interrupt()
 {
 	// Nothing needed here
-	detachInterrupt(GetPin());
+	GetPort().DetachInterrupt();
 	return false;
 }
 
 // Call the following regularly to keep the status up to date
 void SimpleFilamentMonitor::Poll()
 {
-	const bool b = IoPort::ReadPin(GetPin());
+	const bool b = GetPort().Read();
 	filamentPresent = (highWhenNoFilament) ? !b : b;
 }
 
@@ -78,6 +79,7 @@ FilamentSensorStatus SimpleFilamentMonitor::Clear()
 // Print diagnostic info for this sensor
 void SimpleFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder)
 {
+	Poll();
 	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: %s\n", extruder, (filamentPresent) ? "ok" : "no filament");
 }
 

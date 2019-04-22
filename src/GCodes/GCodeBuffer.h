@@ -37,12 +37,15 @@ public:
 	uint32_t GetUIValue();								// Get an unsigned integer value
 	bool GetIPAddress(IPAddress& returnedIp);			// Get an IP address quad after a key letter
 	bool GetMacAddress(uint8_t mac[6]);					// Get a MAC address sextet after a key letter
+	PwmFrequency GetPwmFrequency();						// Get a PWM frequency
+	float GetPwmValue();								// Get a PWM value
 	bool GetUnprecedentedString(const StringRef& str);	// Get a string with no preceding key letter
 	bool GetQuotedString(const StringRef& str);			// Get and copy a quoted string
 	bool GetPossiblyQuotedString(const StringRef& str);	// Get and copy a string which may or may not be quoted
-	const void GetFloatArray(float arr[], size_t& length, bool doPad) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
-	const void GetIntArray(int32_t arr[], size_t& length, bool doPad);			// Get a :-separated list of ints after a key letter
-	const void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
+	bool GetReducedString(const StringRef& str);		// Get and copy a quoted string, removing certain characters
+	void GetFloatArray(float arr[], size_t& length, bool doPad) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
+	void GetIntArray(int32_t arr[], size_t& length, bool doPad);			// Get a :-separated list of ints after a key letter
+	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
 
 	bool TryGetFValue(char c, float& val, bool& seen);
 	bool TryGetIValue(char c, int32_t& val, bool& seen);
@@ -95,8 +98,11 @@ public:
 
 	void PrintCommand(const StringRef& s) const;
 
-	uint32_t whenTimerStarted;							// when we started waiting
-	bool timerRunning;									// true if we are waiting
+	bool IsTimerRunning() const { return timerRunning; }
+	uint32_t WhenTimerStarted() const { return whenTimerStarted; }
+	void StartTimer();
+	void StopTimer() { timerRunning = false; }
+	bool DoDwellTime(uint32_t dwellMillis);				// execute a dwell returning true if it has finoshed
 
 private:
 
@@ -153,6 +159,9 @@ private:
 	unsigned int declaredChecksum;
 	int commandNumber;
 	uint32_t crc32;										// crc32 of the binary file
+
+	uint32_t whenTimerStarted;							// when we started waiting
+	uint8_t timerRunning;
 
 	uint8_t computedChecksum;
 	bool hadLineNumber;

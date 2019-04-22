@@ -16,7 +16,7 @@
 // is more likely to cause errors. This constant sets the delay required after a retract or reprime move before we accept the measurement.
 const int32_t SyncDelayMillis = 10;
 
-RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int extruder, int type)
+RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int extruder, unsigned int type)
 	: Duet3DFilamentMonitor(extruder, type),
 	  mmPerRev(DefaultMmPerRev),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
@@ -93,15 +93,14 @@ bool RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& 
 	}
 	else
 	{
-		reply.printf("Duet3D rotating magnet filament monitor v%u%s on input %u, %s, sensitivity %.2fmm/rev, allow %ld%% to %ld%%, check every %.1fmm, ",
-						version,
-						(switchOpenMask != 0) ? " with switch" : "",
-						GetEndstopNumber(),
-						(comparisonEnabled) ? "enabled" : "disabled",
-						(double)mmPerRev,
-						lrintf(minMovementAllowed * 100.0),
-						lrintf(maxMovementAllowed * 100.0),
-						(double)minimumExtrusionCheckLength);
+		reply.printf("Duet3D rotating magnet filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
+		GetPort().AppendPinName(reply);
+		reply.catf(", %s, sensitivity %.2fmm/rev, allow %ld%% to %ld%%, check every %.1fmm, ",
+					(comparisonEnabled) ? "enabled" : "disabled",
+					(double)mmPerRev,
+					lrintf(minMovementAllowed * 100.0),
+					lrintf(maxMovementAllowed * 100.0),
+					(double)minimumExtrusionCheckLength);
 
 		if (!dataReceived)
 		{

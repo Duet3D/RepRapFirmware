@@ -60,7 +60,7 @@ Tool * Tool::freelist = nullptr;
 	}
 	for (size_t i = 0; i < hCount; ++i)
 	{
-		if (h[i] < 0 || h[i] >= (int)NumHeaters)
+		if (h[i] < 0 || h[i] >= (int)NumTotalHeaters)
 		{
 			reply.copy("Tool creation: bad heater number");
 			return nullptr;
@@ -206,7 +206,7 @@ void Tool::Print(const StringRef& reply) const
 
 	reply.cat("; fans:");
 	sep = ' ';
-	for (size_t fi = 0; fi < NUM_FANS; ++fi)
+	for (size_t fi = 0; fi < NumTotalFans; ++fi)
 	{
 		if ((fanMapping & (1u << fi)) != 0)
 		{

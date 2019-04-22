@@ -41,10 +41,10 @@ public:
 
 	DDA(DDA* n);
 
-	bool InitStandardMove(DDARing& ring, GCodes::RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
+	bool InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
 	bool InitLeadscrewMove(DDARing& ring, float feedrate, const float amounts[MaxTotalDrivers]);		// Set up a leadscrew motor move
 #if SUPPORT_ASYNC_MOVES
-	bool InitAsyncMove(DDARing& ring, float feedrate, float reqAcceleration, const float amounts[MaxTotalDrivers]);			// Set up an async move
+	bool InitAsyncMove(DDARing& ring, const AsyncMove& nextMove);			// Set up an async move
 #endif
 
 	void Start(Platform& p, uint32_t tim) __attribute__ ((hot));			// Start executing the DDA, i.e. move the move.
@@ -77,7 +77,6 @@ public:
     float GetTopSpeed() const { return topSpeed; }
     float GetVirtualExtruderPosition() const { return virtualExtruderPosition; }
 	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount);					// Try to push babystepping earlier in the move queue
-	bool IsHomingAxes() const { return (endStopsToCheck & HomeAxes) != 0; }
 	uint32_t GetXAxes() const { return xAxes; }
 	uint32_t GetYAxes() const { return yAxes; }
 	float GetTotalDistance() const { return totalDistance; }
@@ -96,6 +95,10 @@ public:
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const { return laserPwmOrIoBits; }
+#endif
+
+#if SUPPORT_LASER
+	uint32_t ManageLaserPower() const;										// Manage the laser power
 #endif
 
 #if SUPPORT_IOBITS
@@ -151,6 +154,10 @@ public:
 	static int32_t loggedProbePositions[XYZ_AXES * MaxLoggedProbePositions];
 #endif
 
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	bool ControlLaser() const { return flags.controlLaser; }
+#endif
+
 	static uint32_t lastStepLowTime;								// when we last completed a step pulse to a slow driver
 	static uint32_t lastDirChangeTime;								// when we last change the DIR signal to a slow driver
 
@@ -200,8 +207,9 @@ private:
 					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
 					 isNonPrintingExtruderMove : 1,	// True if this move is a fast extruder-only move, probably a retract/re-prime
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
-					 usesEndstops : 1,				// True if this move monitors endstops of Z probe
-					 controlLaser : 1;				// True if this move controls the laser or iobits
+					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
+					 controlLaser : 1,				// True if this move controls the laser or iobits
+					 reduceAcceleration : 1;		// True if we should use low acceleration for this move
 		};
 		uint16_t all;								// so that we can print all the flags at once for debugging
 	} flags;
@@ -210,7 +218,6 @@ private:
 	LaserPwmOrIoBits laserPwmOrIoBits;		// laser PWM required or port state required during this move (here because it is currently 16 bits)
 #endif
 
-    EndstopChecks endStopsToCheck;			// Which endstops we are checking on this move
     AxesBitmap xAxes;						// Which axes are behaving as X axes
     AxesBitmap yAxes;						// Which axes are behaving as Y axes
 

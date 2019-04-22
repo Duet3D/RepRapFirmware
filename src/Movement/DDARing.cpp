@@ -139,7 +139,7 @@ bool DDARing::CanAddMove() const
 }
 
 // Add a new move, returning true if it represents real movement
-bool DDARing::AddStandardMove(GCodes::RawMove &nextMove, bool doMotorMapping)
+bool DDARing::AddStandardMove(const RawMove &nextMove, bool doMotorMapping)
 {
 	if (addPointer->InitStandardMove(*this, nextMove, doMotorMapping))
 	{
@@ -165,9 +165,9 @@ bool DDARing::AddSpecialMove(float feedRate, const float coords[])
 #if SUPPORT_ASYNC_MOVES
 
 // Add an asynchronous motor move
-bool DDARing::AddAsyncMove(float feedRate,  float reqAcceleration, const float coords[])
+bool DDARing::AddAsyncMove(const AsyncMove& nextMove)
 {
-	if (addPointer->InitAsyncMove(*this, feedRate, reqAcceleration, coords))
+	if (addPointer->InitAsyncMove(*this, nextMove))
 	{
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
@@ -212,7 +212,10 @@ void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove)
 				{
 					Platform& p = reprap.GetPlatform();
 					SetBasePriority(NvicPriorityStep);				// shut out step interrupt
-					StartNextMove(p, StepTimer::GetInterruptClocksInterruptsDisabled());	// start the next move
+#if SUPPORT_LASER || SUPPORT_IOBITS
+					const bool wakeLaser =
+#endif
+						StartNextMove(p, StepTimer::GetInterruptClocksInterruptsDisabled());
 					std::optional<uint32_t> nextInterruptTime = GetNextInterruptTime();
 					if (nextInterruptTime.has_value())
 					{
@@ -222,6 +225,12 @@ void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove)
 						}
 					}
 					SetBasePriority(0);
+#if SUPPORT_LASER || SUPPORT_IOBITS
+					if (wakeLaser)
+					{
+						Move::WakeLaserTask();
+					}
+#endif
 				}
 			}
 		}
@@ -287,7 +296,14 @@ void DDARing::TryStartNextMove(Platform& p, uint32_t startTime)
 	const DDA::DDAState st = getPointer->GetState();
 	if (st == DDA::frozen)
 	{
+#if SUPPORT_LASER || SUPPORT_IOBITS
+		if (StartNextMove(p, startTime))
+		{
+			Move::WakeLaserTaskFromISR();
+		}
+#else
 		StartNextMove(p, startTime);
+#endif
 	}
 	else
 	{
@@ -674,5 +690,26 @@ void DDARing::Diagnostics(MessageType mtype, const char *prefix)
 		prefix, scheduledMoves, completedMoves, stepErrors, numLookaheadErrors, numLookaheadUnderruns, numPrepareUnderruns);
 	stepErrors = numLookaheadUnderruns = numPrepareUnderruns = numLookaheadErrors = 0;
 }
+
+#if SUPPORT_LASER
+
+// Manage the laser power. Return the number of ticks until we should be called again, or 0 to be called at the start of the next move.
+uint32_t DDARing::ManageLaserPower() const
+{
+	SetBasePriority(NvicPriorityStep);
+	DDA * const cdda = currentDda;								// capture volatile variable
+	if (cdda != nullptr)
+	{
+		SetBasePriority(0);
+		return cdda->ManageLaserPower();
+	}
+
+	// If we get here then there is no active laser move
+	SetBasePriority(0);
+	reprap.GetPlatform().SetLaserPwm(0);						// turn off the laser
+	return 0;
+}
+
+#endif
 
 // End

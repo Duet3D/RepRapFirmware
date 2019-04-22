@@ -16,7 +16,7 @@
 // is more likely to cause errors. This constant sets the delay required after a retract or reprime move before we accept the measurement.
 const int32_t SyncDelayMillis = 10;
 
-PulsedFilamentMonitor::PulsedFilamentMonitor(unsigned int extruder, int type)
+PulsedFilamentMonitor::PulsedFilamentMonitor(unsigned int extruder, unsigned int type)
 	: FilamentMonitor(extruder, type),
 	  mmPerPulse(DefaultMmPerPulse),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
@@ -81,13 +81,14 @@ bool PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 	}
 	else
 	{
-		reply.printf("Pulse-type filament monitor on endstop input %u, %s, sensitivity %.2fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
-						GetEndstopNumber(),
-						(comparisonEnabled) ? "enabled" : "disabled",
-						(double)mmPerPulse,
-						lrintf(minMovementAllowed * 100.0),
-						lrintf(maxMovementAllowed * 100.0),
-						(double)minimumExtrusionCheckLength);
+		reply.copy("Pulse-type filament monitor on pin ");
+		GetPort().AppendPinName(reply);
+		reply.catf(", %s, sensitivity %.2fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
+					(comparisonEnabled) ? "enabled" : "disabled",
+					(double)mmPerPulse,
+					lrintf(minMovementAllowed * 100.0),
+					lrintf(maxMovementAllowed * 100.0),
+					(double)minimumExtrusionCheckLength);
 
 		if (samplesReceived < 2)
 		{

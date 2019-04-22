@@ -24,24 +24,18 @@ Licence: GPL
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-// Language-specific includes
-
-// Platform-specific includes
-
 #include "RepRapFirmware.h"
 #include "IoPorts.h"
 #include "DueFlashStorage.h"
 #include "Fans/Fan.h"
-#include "Fans/Tacho.h"
 #include "Heating/TemperatureError.h"
 #include "OutputMemory.h"
 #include "Storage/FileStore.h"
 #include "Storage/FileData.h"
 #include "Storage/MassStorage.h"	// must be after Pins.h because it needs NumSdCards defined
 #include "MessageType.h"
-#include "Spindle.h"
-#include "ZProbe.h"
-#include "ZProbeProgrammer.h"
+#include "Tools/Spindle.h"
+#include "Endstops/EndstopsManager.h"
 #include <General/IPAddress.h>
 
 #if defined(DUET_NG)
@@ -88,14 +82,13 @@ const int INKJET_DELAY_MICROSECONDS = 800;				// How long to wait before the nex
 
 // Z PROBE
 
-constexpr float Z_PROBE_STOP_HEIGHT = 0.7;						// Millimetres
 constexpr unsigned int Z_PROBE_AVERAGE_READINGS = 8;			// We average this number of readings with IR on, and the same number with IR off
 
 // HEATERS - The bed is assumed to be the at index 0
 
 // Define the number of temperature readings we average for each thermistor. This should be a power of 2 and at least 4 ^ AD_OVERSAMPLE_BITS.
 // Keep THERMISTOR_AVERAGE_READINGS * NUM_HEATERS * 2ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
-constexpr unsigned int ThermistorAverageReadings = 32;
+constexpr unsigned int ThermistorAverageReadings = 16;
 
 constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in milliseconds between successive temp samples by Pid::Spin() permitted for a temp sensor
 
@@ -132,31 +125,6 @@ enum class BoardType : uint8_t
 #else
 # error Unknown board
 #endif
-};
-
-enum class EndStopHit
-{
-  noStop = 0,		// no endstop hit
-  lowHit = 1,		// low switch hit, or Z-probe in use and above threshold
-  highHit = 2,		// high stop hit
-  nearStop = 3		// approaching Z-probe threshold
-};
-
-// The values of the following enumeration must tally with the X,Y,... parameters for the M574 command
-enum class EndStopPosition
-{
-	noEndStop = 0,
-	lowEndStop = 1,
-	highEndStop = 2
-};
-
-// Type of an endstop input - values must tally with the M574 command S parameter
-enum class EndStopInputType
-{
-	activeLow = 0,
-	activeHigh = 1,
-	zProbe = 2,
-	motorStall = 3
 };
 
 // Other firmware that we might switch to be compatible with.
@@ -293,14 +261,10 @@ enum class ErrorCode : uint32_t
 
 struct AxisDriversConfig
 {
+	DriversBitmap GetDriversBitmap() const;
+
 	uint8_t numDrivers;								// Number of drivers assigned to each axis
 	uint8_t driverNumbers[MaxDriversPerAxis];		// The driver numbers assigned - only the first numDrivers are meaningful
-};
-
-struct AxisEndstopConfig
-{
-	uint8_t numEndstops;							// Number of endstop inputs assigned to each axis
-	uint8_t endstopNumbers[MaxDriversPerAxis];		// The endstop numbers assigned - only the first numEndstops are meaningful
 };
 
 // The main class that defines the RepRap machine for the benefit of the other classes
@@ -309,9 +273,9 @@ class Platform
 public:
 	// Enumeration to describe the status of a drive
 	enum class DriverStatus : uint8_t { disabled, idle, enabled };
-  
+
 	Platform();
-  
+
 //-------------------------------------------------------------------------------------------------------------
 
 	// These are the functions that form the interface between Platform and the rest of the firmware.
@@ -339,6 +303,7 @@ public:
 
 #ifdef DUET_NG
 	bool IsDuetWiFi() const;
+	bool IsDueXPresent() const { return expansionBoard != ExpansionBoardType::none; }
 #endif
 
 	const uint8_t *GetDefaultMacAddress() const { return defaultMacAddress; }
@@ -444,8 +409,6 @@ public:
 	void SetMinMovementSpeed(float value) { minimumMovementSpeed = max<float>(value, 0.01); }
 	float GetInstantDv(size_t axis) const;
 	void SetInstantDv(size_t axis, float value);
-	EndStopHit Stopped(size_t axisOrExtruder) const;
-	bool EndStopInputState(size_t axis) const;
 	float AxisMaximum(size_t axis) const;
 	void SetAxisMaximum(size_t axis, float value, bool byProbing);
 	float AxisMinimum(size_t axis) const;
@@ -453,20 +416,6 @@ public:
 	float AxisTotalLength(size_t axis) const;
 	float GetPressureAdvance(size_t extruder) const;
 	void SetPressureAdvance(size_t extruder, float factor);
-
-	void SetEndStopConfiguration(size_t axis, EndStopPosition endstopPos, EndStopInputType inputType)
-		pre(axis < MaxAxes);
-
-	void GetEndStopConfiguration(size_t axis, EndStopPosition& endstopPos, EndStopInputType& inputType) const
-		pre(axis < MaxAxes);
-
-	const AxisEndstopConfig& GetAxisEndstopConfig(size_t axis) const
-		pre(axis < MaxAxes)
-		{ return axisEndstops[axis]; }
-	void SetAxisEndstopConfig(size_t axis, size_t numValues, const uint32_t inputNumbers[])
-		pre(axis < MaxAxes);
-
-	uint32_t GetAllEndstopStates() const;
 
 	const AxisDriversConfig& GetAxisDriversConfig(size_t axis) const
 		pre(axis < MaxAxes)
@@ -488,59 +437,46 @@ public:
 	uint32_t GetSlowDriverStepLowClocks() const { return slowDriverStepTimingClocks[1]; }
 	uint32_t GetSlowDriverDirSetupClocks() const { return slowDriverStepTimingClocks[2]; }
 	uint32_t GetSlowDriverDirHoldClocks() const { return slowDriverStepTimingClocks[3]; }
+	uint32_t GetSteppingEnabledDrivers() const { return steppingEnabledDriversBitmap; }
+	void DisableSteppingDriver(uint8_t driver) { steppingEnabledDriversBitmap &= ~CalcDriverBitmap(driver); }
+	void EnableAllSteppingDrivers() { steppingEnabledDriversBitmap = 0xFFFFFFFF; }
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 	bool GetExtrusionCoefficients(size_t extruder, float& a, float& b, float& limit) const;
 	void SetNonlinearExtrusion(size_t extruder, float a, float b, float limit);
 #endif
 
-	// Z probe
-	void SetZProbeDefaults();
-	float GetZProbeStopHeight() const;
-	float GetZProbeDiveHeight() const;
-	float GetZProbeStartingHeight();
-	float GetZProbeTravelSpeed() const;
-	int GetZProbeReading() const;
-	EndStopHit GetZProbeResult() const;
-	int GetZProbeSecondaryValues(int& v1, int& v2);
-	void SetZProbeType(unsigned int iZ);
-	ZProbeType GetZProbeType() const { return zProbeType; }
-	const ZProbe& GetZProbeParameters(ZProbeType probeType) const;
-	const ZProbe& GetCurrentZProbeParameters() const { return GetZProbeParameters(zProbeType); }
-	void SetZProbeParameters(ZProbeType probeType, const struct ZProbe& params);
-	bool HomingZWithProbe() const;
+	// Endstops and Z probe
+	EndstopsManager& GetEndstops() { return endstops; }
+	ZProbe& GetCurrentZProbe() { return endstops.GetCurrentZProbe(); }
+	ZProbeType GetCurrentZProbeType() const;
+	void InitZProbeFilters();
+	const volatile ZProbeAveragingFilter& GetZProbeOnFilter() const { return zProbeOnFilter; }
+	const volatile ZProbeAveragingFilter& GetZProbeOffFilter() const { return zProbeOffFilter; }
+
 	bool WritePlatformParameters(FileStore *f, bool includingG31) const;
-	void SetProbing(bool isProbing);
-	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply);
-	void SetZProbeModState(bool b) const;
 
 	// Heat and temperature
-	float GetZProbeTemperature() const;						// Get our best estimate of the Z probe temperature
-
 	volatile ThermistorAveragingFilter& GetAdcFilter(size_t channel)
 	pre(channel < ARRAY_SIZE(adcFilters))
 	{
 		return adcFilters[channel];
 	}
 
-	void SetHeater(size_t heater, float power, PwmFrequency freq = 0)	// power is a fraction in [0,1]
+	void SetHeater(size_t heater, float power)				// power is a fraction in [0,1]
 	pre(heater < Heaters);
-
 	void UpdateConfiguredHeaters();
 
 	// Fans
-	bool ConfigureFan(unsigned int mcode, int fanNumber, GCodeBuffer& gb, const StringRef& reply, bool& error);
+	bool ConfigureFan(unsigned int mcode, size_t fanNumber, GCodeBuffer& gb, const StringRef& reply, bool& error);
 
 	float GetFanValue(size_t fan) const;					// Result is returned in range 0..1
 	void SetFanValue(size_t fan, float speed);				// Accepts values between 0..1
-#if defined(DUET_06_085)
-	void EnableSharedFan(bool enable);						// enable/disable the fan that shares its PWM pin with the last heater
-#endif
 	bool IsFanControllable(size_t fan) const;
 	const char *GetFanName(size_t fan) const;
 
-	bool WriteFanSettings(FileStore *f) const;		// Save some resume information
-	uint32_t GetFanRPM(size_t tachoIndex) const;
+	bool WriteFanSettings(FileStore *f) const;				// Save some resume information
+	int32_t GetFanRPM(size_t fanIndex) const;
 
 	// Flash operations
 	void UpdateFirmware();
@@ -589,26 +525,11 @@ public:
 	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf);
 #endif
 
-	// User I/O and servo support
-	bool GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firmwarePin, bool& invert);
-
-	// For fan pin mapping
-	bool TranslateFanPin(LogicalPin logicalPin, Pin& firmwarePin, bool& invert) const;
-	void AppendPinName(LogicalPin lp, const StringRef& str) const;
-
-	// For filament sensor support
-	Pin GetEndstopPin(int endstop) const;			// Get the firmware pin number for an endstop
-
 	// Logging support
 	GCodeResult ConfigureLogging(GCodeBuffer& gb, const StringRef& reply);
 
 	// Ancillary PWM
-	void SetExtrusionAncilliaryPwmValue(float v);
-	float GetExtrusionAncilliaryPwmValue() const;
-	void SetExtrusionAncilliaryPwmFrequency(float f);
-	float GetExtrusionAncilliaryPwmFrequency() const;
-	bool SetExtrusionAncilliaryPwmPin(LogicalPin logicalPin, bool invert);
-	LogicalPin GetExtrusionAncilliaryPwmPin(bool& invert) const { return extrusionAncilliaryPwmPort.GetLogicalPin(invert); }
+	GCodeResult GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply);
 	void ExtrudeOn();
 	void ExtrudeOff();
 
@@ -616,13 +537,13 @@ public:
 	Spindle& AccessSpindle(size_t slot) { return spindles[slot]; }
 
 	void SetLaserPwm(Pwm_t pwm);
-	bool SetLaserPin(LogicalPin lp, bool invert);
-	LogicalPin GetLaserPin(bool& invert) const { return laserPort.GetLogicalPin(invert); }
-	void SetLaserPwmFrequency(float freq);
-	float GetLaserPwmFrequency() const { return laserPort.GetFrequency(); }
+	bool AssignLaserPin(GCodeBuffer& gb, const StringRef& reply);
+	void SetLaserPwmFrequency(PwmFrequency freq);
 
 	// Misc
 	void InitI2c();
+	GCodeResult ConfigurePort(GCodeBuffer& gb, const StringRef& reply);
+	const PwmPort& GetGpioPort(size_t gpioPortNumber) const pre(gpioPortNumber > MaxGpioPorts) { return gpioPorts[gpioPortNumber]; }
 
 #if SAM4E || SAM4S || SAME70
 	uint32_t Random();
@@ -632,7 +553,7 @@ public:
 	static uint8_t softwareResetDebugInfo;				// extra info for debugging
 
 	//-------------------------------------------------------------------------------------------------------
-  
+
 private:
 	Platform(const Platform&);						// private copy constructor to make sure we don't try to copy a Platform
 
@@ -710,12 +631,6 @@ private:
 	// Logging
 	Logger *logger;
 
-	// Z probes
-	ZProbe switchZProbeParameters;			// Z probe values for the switch Z-probe
-	ZProbe irZProbeParameters;				// Z probe values for the IR sensor
-	ZProbe alternateZProbeParameters;		// Z probe values for the alternate sensor
-	ZProbeType zProbeType;					// the type of Z probe we are currently using
-
 	// Network
 	IPAddress ipAddress;
 	IPAddress netMask;
@@ -749,7 +664,6 @@ private:
 	volatile DriverStatus driverState[MaxTotalDrivers];
 	bool directions[MaxTotalDrivers];
 	int8_t enableValues[MaxTotalDrivers];
-	Pin endStopPins[NumEndstops];
 	float maxFeedrates[MaxTotalDrivers];
 	float minimumMovementSpeed;
 	float accelerations[MaxTotalDrivers];
@@ -762,11 +676,11 @@ private:
 	float motorCurrents[MaxTotalDrivers];				// the normal motor current for each stepper driver
 	float motorCurrentFraction[MaxTotalDrivers];		// the percentages of normal motor current that each driver is set to
 	AxisDriversConfig axisDrivers[MaxAxes];				// the driver numbers assigned to each axis
-	AxisEndstopConfig axisEndstops[MaxAxes];			// the endstop input numbers assigned to each axis
 	uint8_t extruderDrivers[MaxExtruders];				// the driver number assigned to each extruder
 	uint32_t driveDriverBits[2 * MaxTotalDrivers];		// the bitmap of driver port bits for each axis or extruder, followed by the raw versions
 	uint32_t slowDriverStepTimingClocks[4];				// minimum step high, step low, dir setup and dir hold timing for slow drivers
 	uint32_t slowDriversBitmap;							// bitmap of driver port bits that need extended step pulse timing
+	uint32_t steppingEnabledDriversBitmap;				// mask of driver bits that we haven't disabled temporarily
 	float idleCurrentFactor;
 
 #if HAS_SMART_DRIVERS
@@ -803,12 +717,15 @@ private:
 	DAC084S085 dacPiggy;
 #endif
 
+	// Endstops
+	EndstopsManager endstops;
+
 	// Z probe
-	Pin zProbePin;
-	Pin zProbeModulationPin;
-	ZProbeProgrammer zProbeProg;
 	volatile ZProbeAveragingFilter zProbeOnFilter;					// Z probe readings we took with the IR turned on
 	volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off
+
+	// GPIO pins
+	PwmPort gpioPorts[MaxGpioPorts];
 
 	// Thermistors and temperature monitoring
 	volatile ThermistorAveragingFilter adcFilters[NumAdcFilters];	// ADC reading averaging filters
@@ -818,29 +735,21 @@ private:
 	float mcuTemperatureAdjust;
 #endif
 
-	void InitZProbe();
-	uint16_t GetRawZProbeReading() const;
-
 	// Axes and endstops
 	float axisMaxima[MaxAxes];
 	float axisMinima[MaxAxes];
 	AxesBitmap axisMinimaProbed, axisMaximaProbed;
-	EndStopPosition endStopPos[MaxAxes];
-	EndStopInputType endStopInputType[MaxAxes];
 
 	static bool WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam);
 
 	// Heaters
-	uint32_t configuredHeaters;										// bitmask of all real heaters in use
+	PwmPort heaterPorts[NumTotalHeaters];
+	HeatersBitmap configuredHeaters;										// bitmask of all real heaters in use
 
 	// Fans
-	Fan fans[NUM_FANS];
+	Fan fans[NumTotalFans];
 	uint32_t lastFanCheckTime;
 	void InitFans();
-	bool FansHardwareInverted(size_t fanNumber) const;
-
-	// Fan tachos
-	Tacho tachos[NumTachos];
 
   	// Serial/USB
 	uint32_t baudRates[NUM_SERIAL_CHANNELS];
@@ -866,7 +775,7 @@ private:
 	// Files
 	MassStorage* massStorage;
 	const char *sysDir;
-  
+
 	// Data used by the tick interrupt handler
 
 	// Heater #n, 0 <= n < HEATERS, uses "temperature channel" tc given by
@@ -943,9 +852,6 @@ private:
 
 	// Power on/off
 	bool deferredPowerDown;
-
-	// Direct pin manipulation
-	int8_t logicalPinModes[HighestLogicalPin + 1];		// what mode each logical pin is set to - would ideally be class PinMode not int8_t
 
 	// Misc
 	bool deliberateError;								// true if we deliberately caused an exception for testing purposes
@@ -1062,26 +968,6 @@ inline float Platform::AxisTotalLength(size_t axis) const
 	return axisMaxima[axis] - axisMinima[axis];
 }
 
-inline void Platform::SetExtrusionAncilliaryPwmValue(float v)
-{
-	extrusionAncilliaryPwmValue = min<float>(v, 1.0);			// negative values are OK, they mean don't set the output
-}
-
-inline float Platform::GetExtrusionAncilliaryPwmValue() const
-{
-	return extrusionAncilliaryPwmValue;
-}
-
-inline void Platform::SetExtrusionAncilliaryPwmFrequency(float f)
-{
-	extrusionAncilliaryPwmPort.SetFrequency(f);
-}
-
-inline float Platform::GetExtrusionAncilliaryPwmFrequency() const
-{
-	return extrusionAncilliaryPwmPort.GetFrequency();
-}
-
 // For the Duet we use the fan output for this
 // DC 2015-03-21: To allow users to control the cooling fan via gcodes generated by slic3r etc.,
 // only turn the fan on/off if the extruder ancilliary PWM has been set nonzero.
@@ -1127,33 +1013,6 @@ inline IPAddress Platform::GateWay() const
 inline float Platform::GetPressureAdvance(size_t extruder) const
 {
 	return (extruder < MaxExtruders) ? pressureAdvance[extruder] : 0.0;
-}
-
-// This is called by the tick ISR to get the raw Z probe reading to feed to the filter
-inline uint16_t Platform::GetRawZProbeReading() const
-{
-	switch (zProbeType)
-	{
-	case ZProbeType::analog:
-	case ZProbeType::dumbModulated:
-	case ZProbeType::alternateAnalog:
-		return min<uint16_t>(AnalogInReadChannel(zProbeAdcChannel), 4000);
-
-	case ZProbeType::endstopSwitch:
-		{
-			const bool b = IoPort::ReadPin(GetEndstopPin(GetCurrentZProbeParameters().inputChannel));
-			return (b) ? 4000 : 0;
-		}
-
-	case ZProbeType::digital:
-	case ZProbeType::unfilteredDigital:
-	case ZProbeType::blTouch:
-		return (IoPort::ReadPin(zProbePin)) ? 4000 : 0;
-
-	case ZProbeType::zMotorStall:
-	default:
-		return 4000;
-	}
 }
 
 inline float Platform::GetFilamentWidth() const

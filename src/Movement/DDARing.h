@@ -23,10 +23,10 @@ public:
 
 	void RecycleDDAs();
 	bool CanAddMove() const;
-	bool AddStandardMove(GCodes::RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
+	bool AddStandardMove(const RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
 	bool AddSpecialMove(float feedRate, const float coords[]);
 #if SUPPORT_ASYNC_MOVES
-	bool AddAsyncMove(float feedRate, float reqAcceleration, const float coords[]);
+	bool AddAsyncMove(const AsyncMove& nextMove);
 #endif
 
 	void Spin(uint8_t simulationMode, bool shouldStartMove);					// Try to process moves in the ring, returning true if the ring is idle
@@ -71,12 +71,15 @@ public:
 	bool LowPowerOrStallPause(RestorePoint& rp);								// Pause the print immediately, returning true if we were able to
 #endif
 
-	void RecordLookaheadError() { ++numLookaheadErrors; }						// Record a lookahead error
+#if SUPPORT_LASER
+	uint32_t ManageLaserPower() const;											// Manage the laser power
+#endif
 
+	void RecordLookaheadError() { ++numLookaheadErrors; }						// Record a lookahead error
 	void Diagnostics(MessageType mtype, const char *prefix);
 
 private:
-	void StartNextMove(Platform& p, uint32_t startTime) __attribute__ ((hot));	// Start the next move, returning true if Step() needs to be called immediately
+	bool StartNextMove(Platform& p, uint32_t startTime) __attribute__ ((hot));	// Start the next move, returning true if laser or IObits need to be controlled
 	void PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode);
 
 	DDA* volatile currentDda;
@@ -106,9 +109,9 @@ private:
 	volatile bool extrudersPrinting;											// Set whenever an extruder starts a printing move, cleared by a non-printing extruder move
 };
 
-// Start the next move. Return true if the
+// Start the next move. Return true if laser or IO bits need to be active
 // Must be called with base priority greater than or equal to the step interrupt, to avoid a race with the step ISR.
-inline void DDARing::StartNextMove(Platform& p, uint32_t startTime)
+inline bool DDARing::StartNextMove(Platform& p, uint32_t startTime)
 pre(ddaRingGetPointer->GetState() == DDA::frozen)
 {
 	DDA * const cdda = getPointer;			// capture volatile variable
@@ -123,6 +126,11 @@ pre(ddaRingGetPointer->GetState() == DDA::frozen)
 	}
 	currentDda = cdda;
 	cdda->Start(p, startTime);
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	return cdda->ControlLaser();
+#else
+	return false;
+#endif
 }
 
 #if HAS_SMART_DRIVERS

@@ -25,6 +25,7 @@ Licence: GPL
 #include "RepRapFirmware.h"
 #include "RepRap.h"			// for type ResponseSource
 #include "GCodeResult.h"
+#include "Movement/RawMove.h"
 #include "Libraries/sha1/sha1.h"
 #include "Platform.h"		// for type EndStopHit
 #include "GCodeInput.h"
@@ -109,45 +110,12 @@ enum class StopPrintReason
 class GCodes INHERIT_OBJECT_MODEL
 {
 public:
-	struct RawMove
-	{
-		float coords[MaxTotalDrivers];									// new positions for the axes, amount of movement for the extruders
-		float initialCoords[MaxAxes];									// the initial positions of the axes
-		float feedRate;													// feed rate of this move
-		union
-		{
-			float virtualExtruderPosition;								// the virtual extruder position at the start of this move, for normal moves
-			float acceleration;											// the requested acceleration, for async moves
-		};
-		FilePosition filePos;											// offset in the file being printed at the start of reading this move
-		float proportionLeft;											// what proportion of the entire move remains after this segment
-		AxesBitmap xAxes;												// axes that X is mapped to
-		AxesBitmap yAxes;												// axes that Y is mapped to
-		EndstopChecks endStopsToCheck;									// endstops to check
-#if SUPPORT_LASER || SUPPORT_IOBITS
-		LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
-#endif
-		uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
-
-		uint8_t isFirmwareRetraction : 1;								// true if this is a firmware retraction/un-retraction move
-		uint8_t usePressureAdvance : 1;									// true if we want to us extruder pressure advance, if there is any extrusion
-		uint8_t canPauseAfter : 1;										// true if we can pause just after this move and successfully restart
-		uint8_t hasExtrusion : 1;										// true if the move includes extrusion - only valid if the move was set up by SetupMove
-		uint8_t isCoordinated : 1;										// true if this is a coordinates move
-		uint8_t usingStandardFeedrate : 1;								// true if this move uses the standard feed rate
-
-		void SetDefaults(size_t firstDriveToZero);						// set up default values
-	};
-
 	GCodes(Platform& p);
 	void Spin();														// Called in a tight loop to make this class work
 	void Init();														// Set it up
 	void Exit();														// Shut it down
 	void Reset();														// Reset some parameter to defaults
 	bool ReadMove(RawMove& m);											// Called by the Move class to get a movement set by the last G Code
-#if SUPPORT_ASYNC_MOVES
-	bool ReadAuxMove(RawMove &m);
-#endif
 	void ClearMove();
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply);	// Open a file of G Codes to run
 	void StartPrinting(bool fromStart);									// Start printing the file already selected
@@ -222,6 +190,7 @@ public:
 
 	const char *GetAxisLetters() const { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
 	MachineType GetMachineType() const { return machineType; }
+	bool LockMovementAndWaitForStandstill(const GCodeBuffer& gb);		// Lock movement and wait for pending moves to finish
 
 #if SUPPORT_12864_LCD
 	bool ProcessCommandFromLcd(const char *cmd);						// Process a GCode command from the 12864 LCD returning true if the command was accepted
@@ -240,6 +209,10 @@ public:
 
 	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply);	// Start timing SD card file writing
 
+#if SUPPORT_WORKPLACE_COORDINATES
+	unsigned int GetWorkplaceCoordinateSystemNumber() const { return currentCoordinateSystem + 1; }
+#endif
+
 protected:
 	DECLARE_OBJECT_MODEL
 
@@ -254,8 +227,8 @@ private:
 	static const Resource MoveResource = 0;								// Movement system, including canned cycle variables
 	static const Resource FileSystemResource = 1;						// Non-sharable parts of the file system
 	static const Resource HeaterResourceBase = 2;
-	static const Resource FanResourceBase = HeaterResourceBase + NumHeaters;
-	static const size_t NumResources = FanResourceBase + NUM_FANS;
+	static const Resource FanResourceBase = HeaterResourceBase + NumTotalHeaters;
+	static const size_t NumResources = FanResourceBase + NumTotalFans;
 
 	static_assert(NumResources <= 32, "Too many resources to keep a bitmap of them in class GCodeMachineState");
 
@@ -264,7 +237,6 @@ private:
 	bool LockFan(const GCodeBuffer& gb, int fan);
 	bool LockFileSystem(const GCodeBuffer& gb);							// Lock the unshareable parts of the file system
 	bool LockMovement(const GCodeBuffer& gb);							// Lock movement
-	bool LockMovementAndWaitForStandstill(const GCodeBuffer& gb);		// Lock movement and wait for pending moves to finish
 	void GrabResource(const GCodeBuffer& gb, Resource r);				// Grab a resource even if it is already owned
 	void GrabMovement(const GCodeBuffer& gb);							// Grab the movement lock even if it is already owned
 	void UnlockAll(const GCodeBuffer& gb);								// Release all locks
@@ -293,12 +265,10 @@ private:
 	void AbortPrint(GCodeBuffer& gb);											// Cancel any print in progress
 
 	GCodeResult DoDwell(GCodeBuffer& gb);										// Wait for a bit
-	GCodeResult DoDwellTime(GCodeBuffer& gb, uint32_t dwellMillis);				// Really wait for a bit
 	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply);				// Home some axes
 	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply);			// Probes at a given position - see the comment at the head of the function itself
 	void InitialiseTaps();														// Set up to do the first of a possibly multi-tap probe
 	void SetBedEquationWithProbe(int sParam, const StringRef& reply);			// Probes a series of points and sets the bed equation
-	GCodeResult SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply);		// Either return the probe value, or set its threshold
 	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply);	// Deal with a G10
 	GCodeResult SetPositions(GCodeBuffer& gb);									// Deal with a G92
 	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply);		// Deal with a M584
@@ -343,7 +313,6 @@ private:
 	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = 0, bool applyWorkplaceOffsets = true);
 																				// Convert user coordinates to head reference point coordinates
 	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]);	// Convert head reference point coordinates to user coordinates
-	const char *TranslateEndStopResult(EndStopHit es);							// Translate end stop result to text
 	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);					// Retract or un-retract filaments
 	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply);			// Load the specified filament into a tool
 	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply);		// Unload the current filament from a tool
@@ -364,7 +333,6 @@ private:
 	bool IsMappedFan(unsigned int fanNumber);									// Return true if this fan number is currently being used as a print cooling fan
 	void SaveFanSpeeds();														// Save the speeds of all fans
 
-	GCodeResult SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply);		// Handle M558
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply);			// Define the probing grid, returning true if error
 	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply);			// Load the height map from file
 	bool SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;			// Save the height map to file
@@ -471,11 +439,6 @@ private:
 	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
 	unsigned int totalSegments;					// The total number of segments left in the complete move
 
-#if SUPPORT_ASYNC_MOVES
-	RawMove auxMoveBuffer;
-	bool auxMoveAvailable;
-#endif
-
 	unsigned int segmentsLeftToStartAt;
 	float moveFractionToStartAt;				// how much of the next move was printed before the power failure
 	float moveFractionToSkip;
@@ -512,7 +475,7 @@ private:
 
 #if SUPPORT_WORKPLACE_COORDINATES
 	static const size_t NumCoordinateSystems = 9;
-	unsigned int currentCoordinateSystem;
+	unsigned int currentCoordinateSystem;		// This is zero-based, where as the P parameter in the G10 command is 1-based
 	float workplaceCoordinates[NumCoordinateSystems][MaxAxes];	// Workplace coordinate offsets
 #else
 	float axisOffsets[MaxAxes];					// M206 axis offsets
@@ -528,7 +491,7 @@ private:
 	AxesBitmap toBeHomed;						// Bitmap of axes still to be homed
 	AxesBitmap axesHomed;						// Bitmap of which axes have been homed
 
-	float pausedFanSpeeds[NUM_FANS];			// Fan speeds when the print was paused or a tool change started
+	float pausedFanSpeeds[NumTotalFans];			// Fan speeds when the print was paused or a tool change started
 	float lastDefaultFanSpeed;					// Last speed given in a M106 command with on fan number
 	float pausedDefaultFanSpeed;				// The speed of the default print cooling fan when the print was paused or a tool change started
 	float speedFactor;							// speed factor as a percentage (normally 100.0)
@@ -642,7 +605,6 @@ private:
 #endif
 
 	static constexpr const float MinServoPulseWidth = 544.0, MaxServoPulseWidth = 2400.0;
-	static constexpr uint16_t ServoRefreshFrequency = 50;
 };
 
 // Flag that a new move is available for consumption by the Move subsystem

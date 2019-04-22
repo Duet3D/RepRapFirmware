@@ -10,7 +10,8 @@
 #include "Platform.h"
 #include "Move.h"
 #include "StepTimer.h"
-#include "Kinematics/LinearDeltaKinematics.h"		// for DELTA_AXES
+#include "Endstops/EndstopsManager.h"
+#include "Kinematics/LinearDeltaKinematics.h"
 
 #if SUPPORT_CAN_EXPANSION
 # include "CAN/CanInterface.h"
@@ -246,7 +247,7 @@ void DDA::DebugPrintAll(const char *tag) const
 
 // Set up a real move. Return true if it represents real movement, else false.
 // Either way, return the amount of extrusion we didn't do in the extruder coordinates of nextMove
-bool DDA::InitStandardMove(DDARing& ring, GCodes::RawMove &nextMove, bool doMotorMapping)
+bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping)
 {
 	// 0. If there are more total axes than visible axes, then we must ignore any movement data in nextMove for the invisible axes.
 	// The call to CartesianToMotorSteps may adjust the invisible axis endpoints for architectures such as CoreXYU and delta with >3 towers, so set them up here.
@@ -367,8 +368,8 @@ bool DDA::InitStandardMove(DDARing& ring, GCodes::RawMove &nextMove, bool doMoto
 	// 3. Store some values
 	xAxes = nextMove.xAxes;
 	yAxes = nextMove.yAxes;
-	flags.usesEndstops = (nextMove.endStopsToCheck != 0);
-	endStopsToCheck = nextMove.endStopsToCheck;					//TODO move this to DDARing
+	flags.checkEndstops = nextMove.checkEndstops;
+	flags.reduceAcceleration = nextMove.reduceAcceleration;
 	filePos = nextMove.filePos;
 	virtualExtruderPosition = nextMove.virtualExtruderPosition;
 	proportionLeft = nextMove.proportionLeft;
@@ -384,7 +385,7 @@ bool DDA::InitStandardMove(DDARing& ring, GCodes::RawMove &nextMove, bool doMoto
 	flags.controlLaser = true;
 
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a raw motor move
-	flags.endCoordinatesValid = (endStopsToCheck == 0) && doMotorMapping;
+	flags.endCoordinatesValid = !nextMove.checkEndstops && doMotorMapping;
 	flags.continuousRotationShortcut = (nextMove.moveType == 0);
 
 #if SUPPORT_IOBITS
@@ -392,7 +393,7 @@ bool DDA::InitStandardMove(DDARing& ring, GCodes::RawMove &nextMove, bool doMoto
 #endif
 
 	// If it's a Z probing move, limit the Z acceleration to better handle nozzle-contact probes
-	if ((endStopsToCheck & ZProbeActive) != 0 && accelerations[Z_AXIS] > ZProbeMaxAcceleration)
+	if (flags.reduceAcceleration && accelerations[Z_AXIS] > ZProbeMaxAcceleration)
 	{
 		accelerations[Z_AXIS] = ZProbeMaxAcceleration;
 	}
@@ -522,13 +523,14 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	flags.isPrintingMove = false;
 	flags.xyMoving = false;
 	flags.controlLaser = false;
+	flags.checkEndstops = false;
+	flags.reduceAcceleration = false;
 	flags.canPauseAfter = true;
 	flags.usingStandardFeedrate = false;
 	flags.usePressureAdvance = false;
 	flags.hadLookaheadUnderrun = false;
 	flags.goingSlow = false;
 	flags.continuousRotationShortcut = false;
-	endStopsToCheck = 0;
 	virtualExtruderPosition = prev->virtualExtruderPosition;
 	xAxes = prev->xAxes;
 	yAxes = prev->yAxes;
@@ -551,7 +553,6 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	laserPwmOrIoBits = prev->laserPwmOrIoBits;
 #endif
 
-
 	// 4. Normalise the direction vector and compute the amount of motion.
 	// Currently we normalise the vector sum of all Z motor movement to unit length.
 	totalDistance = Normalise(directionVector, MaxTotalDrivers, MaxTotalDrivers);
@@ -571,7 +572,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 
 // Set up an async motor move returning true if the move does anything.
 // All async moves are relative and linear.
-bool DDA::InitAsyncMove(DDARing& ring, float feedrate, float reqAcceleration, const float adjustments[MaxTotalDrivers])
+bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove)
 {
 	// 1. Compute the new endpoints and the movement vector
 	bool realMove = false;
@@ -583,8 +584,8 @@ bool DDA::InitAsyncMove(DDARing& ring, float feedrate, float reqAcceleration, co
 
 		// If it's a delta then we can only do async tower moves in the Z direction and on any additional linear axes
 		const size_t axisToUse = (reprap.GetMove().GetKinematics().GetMotionType(drive) == MotionType::segmentFreeDelta) ? Z_AXIS : drive;
-		directionVector[drive] = adjustments[axisToUse];
-		const int32_t delta = lrintf(adjustments[axisToUse] * reprap.GetPlatform().DriveStepsPerUnit(drive));
+		directionVector[drive] = nextMove.movements[axisToUse];
+		const int32_t delta = lrintf(nextMove.movements[axisToUse] * reprap.GetPlatform().DriveStepsPerUnit(drive));
 		endPoint[drive] = prev->endPoint[drive] + delta;
 		endCoordinates[drive] = prev->endCoordinates[drive];
 		if (delta != 0)
@@ -605,22 +606,25 @@ bool DDA::InitAsyncMove(DDARing& ring, float feedrate, float reqAcceleration, co
 	flags.isPrintingMove = false;
 	flags.xyMoving = false;
 	flags.controlLaser = false;
+	flags.checkEndstops = false;
+	flags.reduceAcceleration = false;
 	flags.canPauseAfter = true;
 	flags.usingStandardFeedrate = false;
 	flags.usePressureAdvance = false;
 	flags.hadLookaheadUnderrun = false;
 	flags.goingSlow = false;
 	flags.continuousRotationShortcut = false;
-	endStopsToCheck = 0;
 	virtualExtruderPosition = 0;
-	xAxes = MakeBitmap<AxesBitmap>(X_AXIS);
-	yAxes = MakeBitmap<AxesBitmap>(Y_AXIS);
+	xAxes = DefaultXAxisMapping;
+	yAxes = DefaultYAxisMapping;
 	filePos = noFilePosition;
 	flags.endCoordinatesValid = false;
 
-	startSpeed = endSpeed = 0.0;
-	requestedSpeed = feedrate;
-	acceleration = deceleration = reqAcceleration;
+	startSpeed = nextMove.startSpeed;
+	endSpeed = nextMove.endSpeed;
+	requestedSpeed = nextMove.requestedSpeed;
+	acceleration = nextMove.acceleration;
+	deceleration = nextMove.deceleration;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();
@@ -1618,23 +1622,63 @@ float DDA::NormaliseXYZ()
 
 void DDA::CheckEndstops(Platform& platform)
 {
-	if ((endStopsToCheck & ZProbeActive) != 0)						// if the Z probe is enabled in this move
+	for (;;)
 	{
-		// Check whether the Z probe has been triggered. On a delta at least, this must be done separately from endstop checks,
-		// because we have both a high endstop and a Z probe, and the Z motor is not the same thing as the Z axis.
-		switch (platform.GetZProbeResult())
+		const EndstopHitDetails hitDetails = platform.GetEndstops().CheckEndstops(flags.goingSlow);
+		switch (hitDetails.GetAction())
 		{
-		case EndStopHit::lowHit:
+		case EndstopHitAction::stopAll:
 			MoveAborted();											// set the state to completed and recalculate the endpoints
-			reprap.GetGCodes().MoveStoppedByZProbe();
+			if (hitDetails.isZProbe)
+			{
+				reprap.GetGCodes().MoveStoppedByZProbe();
+			}
+			else if (hitDetails.setAxisLow)
+			{
+				reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, false, reprap.GetPlatform().GetDriveStepsPerUnit(), *this);
+				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+			}
+			else if (hitDetails.setAxisHigh)
+			{
+				reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, true, reprap.GetPlatform().GetDriveStepsPerUnit(), *this);
+				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+			}
 			return;
 
-		case EndStopHit::nearStop:
-			ReduceHomingSpeed();
+		case EndstopHitAction::stopAxis:
+			StopDrive(hitDetails.axis);								// we must stop the drive before we mess with its coordinates
+			if (hitDetails.setAxisLow)
+			{
+				reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, false, reprap.GetPlatform().GetDriveStepsPerUnit(), *this);
+				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+			}
+			else if (hitDetails.setAxisHigh)
+			{
+				reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, true, reprap.GetPlatform().GetDriveStepsPerUnit(), *this);
+				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+			}
 			break;
 
-		default:
+		case EndstopHitAction::stopDriver:
+			platform.DisableSteppingDriver(hitDetails.driver);
+			if (hitDetails.setAxisLow)
+			{
+				reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, false, reprap.GetPlatform().GetDriveStepsPerUnit(), *this);
+				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+			}
+			else if (hitDetails.setAxisHigh)
+			{
+				reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, true, reprap.GetPlatform().GetDriveStepsPerUnit(), *this);
+				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+			}
 			break;
+
+		case EndstopHitAction::reduceSpeed:
+			ReduceHomingSpeed();									// must be just close
+			return;													// there can't be a higher priority endstop
+
+		default:
+			return;
 		}
 	}
 
@@ -1665,62 +1709,6 @@ void DDA::CheckEndstops(Platform& platform)
 		}
 	}
 #endif
-
-	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	for (size_t drive = 0; drive <
-#if HAS_STALL_DETECT
-									NumDirectDrivers
-#else
-									((endStopsToCheck & UseSpecialEndstop) == 0 ? numAxes : NumDirectDrivers)
-#endif
-											; ++drive)
-	{
-		if (IsBitSet(endStopsToCheck, drive))
-		{
-			const EndStopHit esh = ((endStopsToCheck & UseSpecialEndstop) != 0 && drive >= numAxes)
-					? (platform.EndStopInputState(drive) ? EndStopHit::lowHit : EndStopHit::noStop)
-							: platform.Stopped(drive);
-			switch (esh)
-			{
-			case EndStopHit::lowHit:
-			case EndStopHit::highHit:
-				if ((endStopsToCheck & UseSpecialEndstop) != 0)			// use non-default endstop while probing a tool offset
-				{
-					MoveAborted();
-				}
-				else
-				{
-					ClearBit(endStopsToCheck, drive);					// clear this check so that we can check for more
-					const Kinematics& kin = reprap.GetMove().GetKinematics();
-					if (drive < numAxes && kin.QueryTerminateHomingMove(drive))	// if not an extruder drive and this kinematics requires us to stop the move now
-					{
-						MoveAborted();									// this axis uses shared motors so stop the entire move
-					}
-					else
-					{
-						StopDrive(drive);								// we must stop the drive before we mess with its coordinates
-					}
-					if (drive < numAxes && IsHomingAxes())
-					{
-						kin.OnHomingSwitchTriggered(drive, esh == EndStopHit::highHit, reprap.GetPlatform().GetDriveStepsPerUnit(), *this);
-						reprap.GetGCodes().SetAxisIsHomed(drive);
-					}
-				}
-				break;
-
-			case EndStopHit::nearStop:
-				// Only reduce homing speed if there are no more axes to be homed. This allows us to home X and Y simultaneously.
-				if (endStopsToCheck == MakeBitmap<AxesBitmap>(drive))
-				{
-					ReduceHomingSpeed();
-				}
-				break;
-
-			default:
-				break;
-			}
-		}
-	}
 }
 
 // The remaining functions are speed-critical, so use full optimisation
@@ -1744,17 +1732,9 @@ pre(state == frozen)
 	}
 #endif
 
-#if SUPPORT_LASER
-	// Deal with laser power
-	if (reprap.GetGCodes().GetMachineType() == MachineType::laser && flags.controlLaser)
-	{
-		// Ideally we should ramp up the laser power as the machine accelerates, but for now we don't.
-		p.SetLaserPwm(laserPwmOrIoBits.laserPwm);
-	}
-#endif
-
 	if (activeDMs != nullptr)
 	{
+		p.EnableAllSteppingDrivers();							// make sure that all drivers are enabled
 		unsigned int extrusions = 0, retractions = 0;			// bitmaps of extruding and retracting drives
 		const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 		for (const DriveMovement* pdm = activeDMs; pdm != nullptr; pdm = pdm->nextDM)
@@ -1822,7 +1802,7 @@ uint32_t DDA::lastDirChangeTime = 0;
 void DDA::StepDrivers(Platform& p)
 {
 	// 1. Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops or the Z probe.
-	if (flags.usesEndstops)			// if any homing switches or the Z probe is enabled in this move
+	if (flags.checkEndstops)		// if any homing switches or the Z probe is enabled in this move
 	{
 		CheckEndstops(p);			// call out to a separate function because this may help cache usage in the more common case where we don't call it
 		if (state == completed)		// we may have completed the move due to triggering an endstop switch or Z probe
@@ -1841,6 +1821,7 @@ void DDA::StepDrivers(Platform& p)
 		dm = dm->nextDM;
 	}
 
+	driversStepping &= p.GetSteppingEnabledDrivers();
 	if ((driversStepping & p.GetSlowDriversBitmap()) == 0)	// if not using any external drivers
 	{
 		// 3. Step the drivers
@@ -2057,4 +2038,46 @@ void DDA::LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration)
 	}
 }
 
+#if SUPPORT_LASER
+
+// Manage the laser power. Return the number of ticks until we should be called again, or 0 to be called at the start of the next move.
+uint32_t DDA::ManageLaserPower() const
+{
+	if (!flags.controlLaser || laserPwmOrIoBits.laserPwm == 0)
+	{
+		reprap.GetPlatform().SetLaserPwm(0);
+		return 0;
+	}
+
+	const float timeMoving = (float)(afterPrepare.moveStartTime - StepTimer::GetInterruptClocksInterruptsDisabled()) * (1.0/StepTimer::StepClockRate);
+	const float accelSpeed = startSpeed + acceleration * timeMoving;
+	if (accelSpeed < topSpeed)
+	{
+		// Acceleration phase
+		const Pwm_t pwm = (Pwm_t)((accelSpeed/topSpeed) * laserPwmOrIoBits.laserPwm);
+		reprap.GetPlatform().SetLaserPwm(pwm);
+		return LaserPwmIntervalMillis;
+	}
+
+	const float decelSpeed = endSpeed + deceleration * (clocksNeeded - timeMoving);
+	if (decelSpeed < topSpeed)
+	{
+		// Deceleration phase
+		const Pwm_t pwm = (Pwm_t)((decelSpeed/topSpeed) * laserPwmOrIoBits.laserPwm);
+		reprap.GetPlatform().SetLaserPwm(pwm);
+		return LaserPwmIntervalMillis;
+	}
+
+	// We must be in the constant speed phase
+	reprap.GetPlatform().SetLaserPwm(laserPwmOrIoBits.laserPwm);
+	const uint32_t decelClocks = ((topSpeed - endSpeed)/deceleration) * StepTimer::StepClockRate;
+	if (timeMoving + decelClocks > clocksNeeded)
+	{
+		return LaserPwmIntervalMillis;
+	}
+	const uint32_t clocksToDecel = clocksNeeded - (timeMoving + decelClocks);
+	return lrintf(clocksToDecel * StepTimer::StepClocksToMillis) + LaserPwmIntervalMillis;
+}
+
+#endif
 // End

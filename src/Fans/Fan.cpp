@@ -10,19 +10,72 @@
 #include "RepRap.h"
 #include "GCodes/GCodeBuffer.h"
 #include "Heating/Heat.h"
+#include "Movement/StepTimer.h"
 
-void Fan::Init(Pin p_pin, LogicalPin lp, bool hwInverted, PwmFrequency p_freq)
+void FanInterrupt(CallbackParameter cb)
 {
+	static_cast<Fan *>(cb.vp)->Interrupt();
+}
+
+Fan::Fan() : fanInterruptCount(0), fanLastResetTime(0), fanInterval(0)
+{
+}
+
+bool Fan::AssignPorts(GCodeBuffer& gb, const StringRef& reply)
+{
+	IoPort* const ports[] = { &port, &tachoPort };
+	const PinAccess access1[] = { PinAccess::pwm, PinAccess::readWithPullup };
+	if (IoPort::AssignPorts(gb, reply, PinUsedBy::fan, 2, ports, access1) == 0)
+	{
+		const PinAccess access2[] = { PinAccess::write0, PinAccess::readWithPullup };
+		if (IoPort::AssignPorts(gb, reply, PinUsedBy::fan, 2, ports, access2) == 0)
+		{
+			return false;
+		}
+	}
+
+	// Tacho initialisation
+	if (tachoPort.IsValid())
+	{
+		tachoPort.AttachInterrupt(FanInterrupt, INTERRUPT_MODE_FALLING, this);
+	}
+
+	Refresh();
+	return true;
+}
+
+bool Fan::AssignPorts(const char *pinNames, const StringRef& reply)
+{
+	IoPort* const ports[] = { &port, &tachoPort };
+	const PinAccess access1[] = { PinAccess::pwm, PinAccess::readWithPullup };
+	if (IoPort::AssignPorts(pinNames, reply, PinUsedBy::fan, 2, ports, access1) == 0)
+	{
+		const PinAccess access2[] = { PinAccess::write0, PinAccess::readWithPullup };
+		if (IoPort::AssignPorts(pinNames, reply, PinUsedBy::fan, 2, ports, access2) == 0)
+		{
+			return false;
+		}
+	}
+
+	// Tacho initialisation
+	if (tachoPort.IsValid())
+	{
+		tachoPort.AttachInterrupt(FanInterrupt, INTERRUPT_MODE_FALLING, this);
+	}
+
+	Refresh();
+	return true;
+}
+
+void Fan::Init()
+{
+	// Fan output initialisation
 	isConfigured = false;
 	val = lastVal = 0.0;
 	minVal = 0.1;				// 10% minimum fan speed
 	maxVal = 1.0;				// 100% maximum fan speed
 	blipTime = 100;				// 100ms fan blip
-	freq = p_freq;
-	pin = p_pin;
-	logicalPin = lp;
-	hardwareInverted = hwInverted;
-	inverted = blipping = false;
+	blipping = false;
 	heatersMonitored = 0;
 	triggerTemperatures[0] = triggerTemperatures[1] = HotEndFanTemperature;
 	lastPwm = -1.0;				// force a refresh
@@ -30,65 +83,24 @@ void Fan::Init(Pin p_pin, LogicalPin lp, bool hwInverted, PwmFrequency p_freq)
 }
 
 // Set or report the parameters for this fan
-// If 'mcode' is an M-code used to set parameters for the current kinematics (which should only ever be 106)
+// If 'mcode' is an M-code used to set parameters for the f (which should only ever be 106)
 // then search for parameters used to configure the fan. If any are found, perform appropriate actions and return true.
 // If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
 // If no relevant parameters are found, print the existing ones to 'reply' and return false.
 // Exceptions:
-// 1. Only process the S parameter unless other values were processed.
+// 1. Only process the S parameter if other values were processed.
 // 2. Don't process the R parameter, but if it is present don't print the existing configuration.
-bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
+bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
 	bool seen = false;
 	if (mcode == 106)
 	{
-		// We allow a disabled fan to be re-enabled using the A parameter to specify the logical pin number
-		if (gb.Seen('A'))
-		{
-			seen = true;
-			const LogicalPin lp = gb.GetUIValue();
-			if (reprap.GetPlatform().TranslateFanPin(lp, pin, hardwareInverted))
-			{
-				logicalPin = lp;
-			}
-			else
-			{
-				reply.copy("Logical pin ");
-				reprap.GetPlatform().AppendPinName(lp, reply);
-				reply.catf(" is not available to use for fan %d", fanNum);
-				error = true;
-				return true;
-			}
-		}
-
-		// The remaining parameters are not available if the fan has been disabled
+		// Check that the fan is enabled
 		if (!IsEnabled())
 		{
-			reply.printf("Fan %d is disabled", fanNum);
+			reply.printf("Fan %u is disabled", fanNum);
 			error = true;
 			return true;											// say we have processed it
-		}
-
-		if (gb.Seen('I'))		// Invert cooling
-		{
-			seen = true;
-			const int invert = gb.GetIValue();
-			if (invert < 0)
-			{
-				Disable();
-			}
-			else
-			{
-				inverted = (invert > 0);
-			}
-		}
-
-		if (gb.Seen('F'))										// Set PWM frequency
-		{
-			seen = true;
-			freq = (PwmFrequency)constrain<int>(gb.GetIValue(), 1, 65535);
-			lastPwm = -1.0;										// force the PWM to be updated
-			Refresh();
 		}
 
 		if (gb.Seen('T'))
@@ -129,7 +141,7 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 		if (gb.Seen('H'))		// Set thermostatically-controlled heaters
 		{
 			seen = true;
-			int32_t heaters[NumHeaters + MaxVirtualHeaters];		// signed because we use H-1 to disable thermostatic mode
+			int32_t heaters[NumTotalHeaters + MaxVirtualHeaters];		// signed because we use H-1 to disable thermostatic mode
 			size_t numH = ARRAY_SIZE(heaters);
 			gb.GetIntArray(heaters, numH, false);
 
@@ -138,14 +150,14 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 			for (size_t h = 0; h < numH; ++h)
 			{
 				const int hnum = heaters[h];
-				if (hnum >= 0 && hnum < (int)NumHeaters)
+				if (hnum >= 0 && hnum < (int)NumTotalHeaters)
 				{
 					SetBit(heatersMonitored, (unsigned int)hnum);
 				}
 				else if (hnum >= (int)FirstVirtualHeater && hnum < (int)(FirstVirtualHeater + MaxVirtualHeaters))
 				{
 					// Heaters 100, 101... are virtual heaters i.e. CPU and driver temperatures
-					SetBit(heatersMonitored, NumHeaters + (unsigned int)hnum - FirstVirtualHeater);
+					SetBit(heatersMonitored, NumTotalHeaters + (unsigned int)hnum - FirstVirtualHeater);
 				}
 			}
 			if (heatersMonitored != 0)
@@ -162,7 +174,7 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 		// We only act on the 'S' parameter here if we have processed other parameters
 		if (seen && gb.Seen('S'))		// Set new fan value - process this after processing 'H' or it may not be acted on
 		{
-			SetPwm(ConvertOldStylePwm(gb.GetFValue()));
+			SetPwm(gb.GetPwmValue());
 		}
 
 		if (seen)
@@ -173,28 +185,25 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, const Strin
 		else if (!gb.Seen('R') && !gb.Seen('S'))
 		{
 			// Report the configuration of the specified fan
-			reply.printf("Fan %i", fanNum);
+			reply.printf("Fan %u", fanNum);
 			if (name.strlen() != 0)
 			{
 				reply.catf(" (%s)", name.c_str());
 			}
-			reply.cat(" pin: ");
-			reprap.GetPlatform().AppendPinName(logicalPin, reply);
-			reply.catf(", frequency: %uHz, speed: %d%%, min: %d%%, max: %d%%, blip: %.2f, inverted: %s",
-						(unsigned int)freq,
+			reply.catf(", speed: %d%%, min: %d%%, max: %d%%, blip: %.2f",
 						(int)(val * 100.0),
 						(int)(minVal * 100.0),
 						(int)(maxVal * 100.0),
-						(double)(blipTime * MillisToSeconds),
-						(inverted) ? "yes" : "no");
+						(double)(blipTime * MillisToSeconds)
+					  );
 			if (heatersMonitored != 0)
 			{
 				reply.catf(", temperature: %.1f:%.1fC, heaters:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);
-				for (unsigned int i = 0; i < NumHeaters + MaxVirtualHeaters; ++i)
+				for (unsigned int i = 0; i < NumTotalHeaters + MaxVirtualHeaters; ++i)
 				{
 					if (IsBitSet(heatersMonitored, i))
 					{
-						reply.catf(" %u", (i < NumHeaters) ? i : FirstVirtualHeater + i - NumHeaters);
+						reply.catf(" %u", (i < NumTotalHeaters) ? i : FirstVirtualHeater + i - NumTotalHeaters);
 					}
 				}
 				reply.catf(", current speed: %d%%:", (int)(lastVal * 100.0));
@@ -216,24 +225,11 @@ void Fan::SetPwm(float speed)
 // If you want make sure that the PWM is definitely updated, set lastPWM negative before calling this
 void Fan::SetHardwarePwm(float pwmVal)
 {
-	if (pin != NoPin)
+	// Only set the PWM if it has changed, to avoid a lot of I2C traffic when we have a DueX5 connected
+	if (pwmVal != lastPwm)
 	{
-		bool invert = hardwareInverted;
-		if (inverted)
-		{
-			invert = !invert;
-		}
-		if (invert)
-		{
-			pwmVal = 1.0 - pwmVal;
-		}
-
-		// Only set the PWM if it has changed, to avoid a lot of I2C traffic when we have a DueX5 connected
-		if (pwmVal != lastPwm)
-		{
-			lastPwm = pwmVal;
-			IoPort::WriteAnalog(pin, pwmVal, freq);
-		}
+		lastPwm = pwmVal;
+		port.WriteAnalog(pwmVal);
 	}
 }
 
@@ -260,21 +256,21 @@ void Fan::Refresh()
 	{
 		reqVal = 0.0;
 		const bool bangBangMode = (triggerTemperatures[1] <= triggerTemperatures[0]);
-		for (size_t h = 0; h < NumHeaters + MaxVirtualHeaters; ++h)
+		for (size_t h = 0; h < NumTotalHeaters + MaxVirtualHeaters; ++h)
 		{
 			// Check if this heater is both monitored by this fan and in use
 			if (   IsBitSet(heatersMonitored, h)
-				&& (h < reprap.GetToolHeatersInUse() || (h >= NumHeaters && h < NumHeaters + MaxVirtualHeaters) || reprap.GetHeat().IsBedOrChamberHeater(h))
+				&& (h < reprap.GetToolHeatersInUse() || (h >= NumTotalHeaters && h < NumTotalHeaters + MaxVirtualHeaters) || reprap.GetHeat().IsBedOrChamberHeater(h))
 			   )
 			{
 				// This heater is both monitored and potentially active
-				if (h < NumHeaters && reprap.GetHeat().IsTuning(h))
+				if (h < NumTotalHeaters && reprap.GetHeat().IsTuning(h))
 				{
 					reqVal = 1.0;			// when turning the PID for a monitored heater, turn the fan on
 				}
 				else
 				{
-					const size_t heaterHumber = (h >= NumHeaters) ? (h - NumHeaters) + FirstVirtualHeater : h;
+					const size_t heaterHumber = (h >= NumTotalHeaters) ? (h - NumTotalHeaters) + FirstVirtualHeater : h;
 					TemperatureError err;
 					const float ht = reprap.GetHeat().GetTemperature(heaterHumber, err);
 					if (err != TemperatureError::success || ht < BadLowTemperature || ht >= triggerTemperatures[1])
@@ -338,7 +334,7 @@ void Fan::Refresh()
 #if HAS_SMART_DRIVERS
 	else if (driverChannelsMonitored != 0 && lastVal != 0.0)
 	{
-		reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, false);			// tell Platform that we have stopped a fan that cools drivers
+		reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, false);	// tell Platform that we have stopped a fan that cools drivers
 	}
 #endif
 
@@ -357,14 +353,9 @@ bool Fan::Check()
 
 void Fan::Disable()
 {
-	if (pin != NoPin)
-	{
-		inverted = false;
-		lastPwm = -1;
-		SetHardwarePwm(0.0);
-	}
-	pin = NoPin;
-	logicalPin = NoLogicalPin;
+	lastPwm = -1;
+	SetHardwarePwm(0.0);
+	port.Release();
 }
 
 // Save the settings of this fan if it isn't thermostatic
@@ -372,13 +363,36 @@ bool Fan::WriteSettings(FileStore *f, size_t fanNum) const
 {
 	if (heatersMonitored == 0)
 	{
-		char bufSpace[50];
-		StringRef buf(bufSpace, ARRAY_SIZE(bufSpace));
-		buf.printf("M106 P%u S%.2f\n", fanNum, (double)val);
-		return f->Write(buf.c_str());
+		String<StringLength20> fanCommand;
+		fanCommand.printf("M106 P%u S%.2f\n", fanNum, (double)val);
+		return f->Write(fanCommand.c_str());
 	}
-
 	return true;
+}
+
+// Tacho support
+int32_t Fan::GetRPM() const
+{
+	// The ISR sets fanInterval to the number of step interrupt clocks it took to get fanMaxInterruptCount interrupts.
+	// We get 2 tacho pulses per revolution, hence 2 interrupts per revolution.
+	// When the fan stops, we get no interrupts and fanInterval stops getting updated. We must recognise this and return zero.
+	return (!tachoPort.IsValid())
+			? -1																			// we return -1 if there is no tacho configured
+			: (fanInterval != 0 && StepTimer::GetInterruptClocks() - fanLastResetTime < 3 * StepTimer::StepClockRate)	// if we have a reading and it is less than 3 seconds old
+			  ? (StepTimer::StepClockRate * fanMaxInterruptCount * (60/2))/fanInterval		// then calculate RPM assuming 2 interrupts per rev
+			  : 0;																			// else assume fan is off or tacho not connected
+}
+
+void Fan::Interrupt()
+{
+	++fanInterruptCount;
+	if (fanInterruptCount == fanMaxInterruptCount)
+	{
+		const uint32_t now = StepTimer::GetInterruptClocks();
+		fanInterval = now - fanLastResetTime;
+		fanLastResetTime = now;
+		fanInterruptCount = 0;
+	}
 }
 
 // End

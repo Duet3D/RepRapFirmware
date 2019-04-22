@@ -192,9 +192,9 @@ namespace WizSpi
 #endif
 
 		// Set up the SPI pins
-		ConfigurePin(g_APinDescription[APIN_SPI_SCK]);
-		ConfigurePin(g_APinDescription[APIN_SPI_MOSI]);
-		ConfigurePin(g_APinDescription[APIN_SPI_MISO]);
+		ConfigurePin(APIN_SPI_SCK);
+		ConfigurePin(APIN_SPI_MOSI);
+		ConfigurePin(APIN_SPI_MISO);
 		pinMode(APIN_SPI_SS0, OUTPUT_HIGH);					// use manual SS control
 
 		pmc_enable_periph_clk(ID_SPI);

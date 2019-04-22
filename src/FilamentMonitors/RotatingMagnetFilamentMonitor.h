@@ -13,7 +13,7 @@
 class RotatingMagnetFilamentMonitor : public Duet3DFilamentMonitor
 {
 public:
-	RotatingMagnetFilamentMonitor(unsigned int extruder, int type);
+	RotatingMagnetFilamentMonitor(unsigned int extruder, unsigned int type);
 
 	bool Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) override;
 	FilamentSensorStatus Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) override;
