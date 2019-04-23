@@ -3834,6 +3834,7 @@ void GCodes::StartPrinting(bool fromStart)
 	fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
 	fileInput->Reset(fileGCode->OriginalMachineState().fileState);
 #elif HAS_LINUX_INTERFACE
+	fileGCode->OriginalMachineState().SetFileExecuting();
 	lastFilePosition = 0;
 #endif
 	lastFilamentError = FilamentSensorStatus::ok;
