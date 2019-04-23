@@ -426,7 +426,7 @@ void Platform::Init()
 
 	for (Pin p : endStopPins)
 	{
-#if defined(DUET_NG) || defined(DUET_06_085) || defined(__RADDS__) || defined(__ALLIGATOR__)
+#if defined(DUET3_V05) || defined(DUET_NG) || defined(DUET_06_085) || defined(__RADDS__) || defined(__ALLIGATOR__)
 		// Enable pullup resistors on endstop inputs here if necessary.
 		// The Duets have hardware pullup resistors/LEDs except for the two on the CONN_LCD connector.
 		// They have RC filtering on the main endstop inputs, so best not to enable the pullup resistors on these.

@@ -66,7 +66,7 @@ private:
 
 	// Transfer properties
 	uint32_t lastTransferTime;
-	uint16_t currentTransferNumber, lastTransferNumber;
+	uint16_t lastTransferNumber;
 	TransferHeader rxHeader, txHeader;
 	uint32_t rxResponse, txResponse;
 
