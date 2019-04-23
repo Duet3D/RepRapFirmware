@@ -179,7 +179,8 @@ bool SwitchEndstop::Acknowledge(EndstopHitDetails what)
 }
 
 // Stall detection endstop
-StallDetectionEndstop::StallDetectionEndstop(uint8_t axis, EndStopPosition pos) : Endstop(axis, pos), driversMonitored(0)
+StallDetectionEndstop::StallDetectionEndstop(uint8_t axis, EndStopPosition pos, bool p_individualMotors)
+	: Endstop(axis, pos), driversMonitored(0), individualMotors(p_individualMotors)
 {
 }
 
@@ -220,7 +221,12 @@ EndstopHitDetails StallDetectionEndstop::CheckTriggered(bool goingSlow)
 				rslt.setAxisLow = true;
 			}
 		}
-		else if (numDriversLeft == 1)
+		else if (individualMotors && numDriversLeft > 1)
+		{
+			rslt.SetAction(EndstopHitAction::stopDriver);
+			rslt.driver = LowestSetBitNumber(relevantStalledDrivers);
+		}
+		else
 		{
 			rslt.SetAction(EndstopHitAction::stopAxis);
 			if (GetAtHighEnd())
@@ -231,11 +237,6 @@ EndstopHitDetails StallDetectionEndstop::CheckTriggered(bool goingSlow)
 			{
 				rslt.setAxisLow = true;
 			}
-		}
-		else
-		{
-			rslt.SetAction(EndstopHitAction::stopDriver);
-			rslt.driver = LowestSetBitNumber(relevantStalledDrivers);
 		}
 	}
 

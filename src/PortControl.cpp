@@ -75,7 +75,7 @@ uint32_t PortControl::UpdatePorts()
 bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
 	bool seen = false;
-	if (gb.Seen('P'))
+	if (gb.Seen('C'))
 	{
 		seen = true;
 		UpdatePorts(0);

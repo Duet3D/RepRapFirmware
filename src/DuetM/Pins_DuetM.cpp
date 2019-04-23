@@ -1,7 +1,7 @@
 /*
- * Pins_DuetNG.cpp
+ * Pins_DuetM.cpp
  *
- *  Created on: 31 Mar 2019
+ *  Created on: 15 Apr 2019
  *      Author: David
  */
 

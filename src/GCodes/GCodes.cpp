@@ -230,10 +230,12 @@ void GCodes::Reset()
 		f = 0.0;										// clear babystepping before calling ToolOffsetInverseTransform
 	}
 
+#if SUPPORT_ASYNC_MOVES
 	for (float& f : hiddenBabyStepOffsets)
 	{
 		f = 0.0;										// clear babystepping before calling ToolOffsetInverseTransform
 	}
+#endif
 
 	currentZHop = 0.0;									// clear this before calling ToolOffsetInverseTransform
 	lastPrintingMoveHeight = -1.0;

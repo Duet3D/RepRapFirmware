@@ -24,11 +24,12 @@ Fan::Fan() : fanInterruptCount(0), fanLastResetTime(0), fanInterval(0)
 bool Fan::AssignPorts(GCodeBuffer& gb, const StringRef& reply)
 {
 	IoPort* const ports[] = { &port, &tachoPort };
-	const PinAccess access1[] = { PinAccess::pwm, PinAccess::readWithPullup };
-	if (IoPort::AssignPorts(gb, reply, PinUsedBy::fan, 2, ports, access1) == 0)
+	PinAccess access[] = { PinAccess::pwm, PinAccess::readWithPullup };
+	if (IoPort::AssignPorts(gb, reply, PinUsedBy::fan, 2, ports, access) == 0)
 	{
-		const PinAccess access2[] = { PinAccess::write0, PinAccess::readWithPullup };
-		if (IoPort::AssignPorts(gb, reply, PinUsedBy::fan, 2, ports, access2) == 0)
+		access[0] = PinAccess::write0;					// if it isn't a PWM port, an on/off port will do
+		gb.Seen('C');									// re-prime the search
+		if (IoPort::AssignPorts(gb, reply, PinUsedBy::fan, 2, ports, access) == 0)
 		{
 			return false;
 		}

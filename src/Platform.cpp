@@ -191,18 +191,13 @@ void Platform::Init()
 
 	SetBoardType(BoardType::Auto);
 
-#if defined(PCCB_10) || defined(PCCB_08_X5)
+#if defined(DUET_NG) || defined(PCCB_10) || defined(PCCB_08_X5)
 	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
 #endif
 
-#if defined(PCCB_10)
-	pinMode(LedOnPins[0], OUTPUT_LOW);			// turn LED0 off, active high
-	pinMode(LedOnPins[0], OUTPUT_HIGH);			// turn LED1 off, active low
-#elif defined(PCCB_08) || defined(PCCB_08_X5)
+#if defined(DUET_M) || defined(PCCB_08) || defined(PCCB_08_X5)
 	// Make sure the on-board TMC22xx drivers are disabled
 	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
-	pinMode(LedOnPins[0], OUTPUT_HIGH);			// turn LED0 off, active low
-	pinMode(LedOnPins[0], OUTPUT_HIGH);			// turn LED1 off, active low
 #endif
 
 #if SAME70
@@ -516,17 +511,19 @@ void Platform::Init()
 
 #ifdef PCCB
 	// Setup the LED ports as GPIO ports
-	for (size_t i = 0; i < NumDefaultGpioPorts; ++i)
-	{
-		const LogicalPin lpin = Led0LogicalPin + i;
-		heaterPorts[i].Allocate(lpin, PinUsedBy::gpio, PinAccess::pwm, false, NormalHeaterPwmFreq);
-	}
-#elif ALLOCATE_DEFAULT_PORTS
-	// Set up the default heater ports
-	for (size_t i = 0; i < ARRAY_SIZE(DefaultHeaterPortNames); ++i)
+	for (size_t i = 0; i < ARRAY_SIZE(DefaultGpioPinNames); ++i)
 	{
 		String<1> dummy;
-		heaterPorts[i].AssignPort(DefaultHeaterPortNames[i], dummy.GetRef(), PinUsedBy::heater, PinAccess::pwm);
+		gpioPorts[i].AssignPort(DefaultGpioPinNames[i], dummy.GetRef(), PinUsedBy::gpio, PinAccess::pwm);
+	}
+#endif
+
+#if ALLOCATE_DEFAULT_PORTS
+	// Set up the default heater ports
+	for (size_t i = 0; i < ARRAY_SIZE(DefaultHeaterPinNames); ++i)
+	{
+		String<1> dummy;
+		heaterPorts[i].AssignPort(DefaultHeaterPinNames[i], dummy.GetRef(), PinUsedBy::heater, PinAccess::pwm);
 		heaterPorts[i].SetFrequency((IsBitSet(configuredHeaters, i)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq);
 	}
 #endif
@@ -3028,7 +3025,7 @@ void Platform::InitFans()
 			String<1> dummy;
 			(void)fans[i].AssignPorts(DefaultFanPinNames[i], dummy.GetRef());
 		}
-		fans[i].SetPwmFrequency((i < ARRAY_SIZE(DefaultFanFrequencies)) ? DefaultFanFrequencies[i] : DefaultFanPwmFreq);
+		fans[i].SetPwmFrequency((i < ARRAY_SIZE(DefaultFanPwmFrequencies)) ? DefaultFanPwmFrequencies[i] : DefaultFanPwmFreq);
 	}
 
 	// Handle board-specific fan configuration

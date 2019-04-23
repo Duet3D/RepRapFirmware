@@ -9,8 +9,13 @@
 #define SRC_MOVEMENT_HEIGHTCONTROL_HEIGHTCONTROLLER_H_
 
 #include "RepRapFirmware.h"
+#undef array
+
+#if SUPPORT_ASYNC_MOVES
+
 #include "GCodes/GCodeResult.h"
 #include <RTOSIface/RTOSIface.h>
+#include <memory>
 
 class HeightController
 {
@@ -30,7 +35,7 @@ private:
 	static constexpr unsigned int HeightControllerTaskStackWords = 100;
 	static constexpr uint32_t DefaultSampleInterval = 200;
 
-	Task<HeightControllerTaskStackWords> *heightControllerTask;
+	std::unique_ptr<Task<HeightControllerTaskStackWords>> heightControllerTask;
 	size_t sensorNumber;							// which sensor, normally a virtual heater
 	uint32_t sampleInterval;						// in milliseconds
 	uint32_t lastWakeTime;
@@ -57,5 +62,7 @@ private:
 	volatile PidState state;						// volatile because it is accessed by more than one task
 	bool lastReadingOk;
 };
+
+#endif
 
 #endif /* SRC_MOVEMENT_HEIGHTCONTROL_HEIGHTCONTROLLER_H_ */

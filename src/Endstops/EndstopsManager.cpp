@@ -31,7 +31,7 @@ void EndstopsManager::Init()
 	String<1> dummy;
 
 	// Configure default endstops
-	for (size_t axis = 0; axis < NumDefaultEndstops; ++axis)
+	for (size_t axis = 0; axis < ARRAY_SIZE(DefaultEndstopPinNames); ++axis)
 	{
 		SwitchEndstop * const sw = new SwitchEndstop(axis, EndStopPosition::lowEndStop);
 		sw->Configure(DefaultEndstopPinNames[axis], dummy.GetRef(), EndStopInputType::activeHigh);
@@ -170,8 +170,9 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 							(inputType == EndStopInputType::activeHigh) ? "active high switch"
 								: (inputType == EndStopInputType::activeLow) ? "active low switch"
 									: (inputType == EndStopInputType::zProbeAsEndstop) ? "Z probe"
-										: (inputType == EndStopInputType::motorStall) ? "motor stall"
-											: "unknown type"
+										: (inputType == EndStopInputType::motorStallAny) ? "motor stall (any motor)"
+											: (inputType == EndStopInputType::motorStallIndividual) ? "motor stall (individual motors)"
+											 : "unknown type"
 						 );
 				axisEndstops[axis]->AppendPinNames(reply);
 			}
@@ -195,7 +196,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 		return GCodeResult::error;
 	}
 
-	if (gb.Seen('C'))
+	if (gb.Seen('P'))					// we use P not C, because C may be an axis
 	{
 		// Setting the port number(s), so there must be just one axis and we must be using switch-type endstops
 		if (axesSeen > 1 || (inputType != EndStopInputType::activeLow && inputType != EndStopInputType::activeHigh))
@@ -216,7 +217,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 	}
 	else
 	{
-		// No C parameter, so there may be multiple axes
+		// No P parameter, so there may be multiple axes
 		for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
 		{
 			const char c = reprap.GetGCodes().GetAxisLetters()[axis];
@@ -232,10 +233,16 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 				{
 					switch (inputType)
 					{
-					case EndStopInputType::motorStall:
+					case EndStopInputType::motorStallAny:
 						// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
 						delete axisEndstops[axis];
-						axisEndstops[axis] = new StallDetectionEndstop(axis, pos);
+						axisEndstops[axis] = new StallDetectionEndstop(axis, pos, false);
+						break;
+
+					case EndStopInputType::motorStallIndividual:
+						// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
+						delete axisEndstops[axis];
+						axisEndstops[axis] = new StallDetectionEndstop(axis, pos, true);
 						break;
 
 					case EndStopInputType::zProbeAsEndstop:

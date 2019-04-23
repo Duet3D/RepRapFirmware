@@ -6,6 +6,9 @@
  */
 
 #include "HeightController.h"
+
+#if SUPPORT_ASYNC_MOVES
+
 #include "RepRap.h"
 #include "Platform.h"
 #include "GCodes/GCodeBuffer.h"
@@ -23,11 +26,6 @@ HeightController::HeightController(size_t p_sensorNumber)
 
 HeightController::~HeightController()
 {
-	if (heightControllerTask != nullptr)
-	{
-		delete heightControllerTask;
-		heightControllerTask = nullptr;
-	}
 }
 
 GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply)
@@ -77,9 +75,9 @@ extern "C" [[noreturn]] void HeightControllerTaskStart(void *p)
 void HeightController::Start()
 {
 	state = PidState::starting;
-	if (heightControllerTask == nullptr)
+	if (!heightControllerTask)
 	{
-		heightControllerTask = new Task<HeightControllerTaskStackWords>;
+		heightControllerTask = std::make_unique<Task<HeightControllerTaskStackWords>>();
 		heightControllerTask->Create(HeightControllerTaskStart, "HEIGHT", (void*)this, TaskBase::HeatPriority);
 	}
 	else
@@ -184,5 +182,7 @@ void HeightController::CalcDerivedValues()
 		maxZAdjustmentPerSample = interval * maxSpeed - accelDecelTime * (maxSpeed - startSpeed);
 	}
 }
+
+#endif
 
 // End

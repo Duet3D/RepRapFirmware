@@ -54,6 +54,10 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_DOTSTAR_LED		1					// set nonzero to support DotStar LED strips
+#define ALLOCATE_DEFAULT_PORTS	1
+
+#define NO_TRIGGERS		1	// Temporary!!!
+#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
 
 // The physical capabilities of the machine
 
@@ -76,15 +80,18 @@ constexpr size_t MaxSmartDrivers = 2;				// The maximum number of smart drivers
 
 constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 
-constexpr size_t NumEndstops = 4;					// The number of inputs we have for endstops, filament sensors etc.
-constexpr size_t NumHeaters = 2;					// The number of heaters in the machine. PCCB has no heaters, but we pretend that the LED pins are heaters.
+constexpr size_t NumTotalHeaters = 1;				// The number of heaters in the machine. PCCB has no heaters.
+constexpr size_t NumDefaultHeaters = 0;				// The number of heaters configured by default
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 2;
+
+constexpr size_t MaxGpioPorts = 5;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, <= DRIVES
 
 constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
+constexpr size_t NumDefaultExtruders = 0;			// The number of drivers that we configure as extruders by default
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t MaxHeatersPerTool = 2;
@@ -98,8 +105,6 @@ constexpr Pin UsbVBusPin = PortCPin(11);			// Pin used to monitor VBUS on USB po
 
 #define I2C_IFACE	Wire							// First and only I2C interface
 #define I2C_IRQn	WIRE_ISR_ID
-
-// The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // Drivers
 
@@ -146,8 +151,8 @@ constexpr Pin TMC22xxUartPins[MaxSmartDrivers] = { APINS_UART0, APINS_UART1 };
 // So at 500kbaud it takes about 128us to write a register, and 192us+ to read a register.
 // On the PCCB we have only 2 drivers, so we use a lower baud rate to reduce the CPU load
 
-const uint32_t DriversBaudRate = 100000;
-const uint32_t TransferTimeout = 10;				// any transfer should complete within 10 ticks @ 1ms/tick
+constexpr uint32_t DriversBaudRate = 100000;
+constexpr uint32_t TransferTimeout = 10;			// any transfer should complete within 10 ticks @ 1ms/tick
 
 #define UART_TMC_DRV0_Handler	UART0_Handler
 #define UART_TMC_DRV1_Handler	UART1_Handler
@@ -158,18 +163,7 @@ const uint32_t TransferTimeout = 10;				// any transfer should complete within 1
 constexpr Pin GlobalTmc22xxEnablePin = 1;			// The pin that drives ENN of all internal drivers
 #endif
 
-// Endstops
-// RepRapFirmware only has a single endstop per axis.
-// Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-
-#if defined(PCCB_10)
-constexpr Pin END_STOP_PINS[NumEndstops] = { PortAPin(24), PortAPin(25), PortCPin(6),  PortCPin(27) };
-#else
-constexpr Pin END_STOP_PINS[NumEndstops] = { PortAPin(24), PortAPin(25), PortCPin(31), PortCPin(27) };
-#endif
-
 // Heaters and thermistors
-constexpr Pin HEAT_ON_PINS[NumHeaters] = { PortCPin(0), PortCPin(23) };					// these are actually the LED control pins
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortAPin(20), PortCPin(13) }; 	// thermistor pin numbers
 constexpr Pin VssaSensePin = PortAPin(19);
 constexpr Pin VrefSensePin = PortBPin(1);
@@ -195,29 +189,16 @@ constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { PortCPin(27) };	// SPI0
 constexpr Pin ATX_POWER_PIN = NoPin;
 
 // Analogue pin numbers
-constexpr Pin Z_PROBE_PIN = NoPin;											// Z probe analog input
 constexpr Pin PowerMonitorVinDetectPin = PortCPin(12);						// Vin monitor
 constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 voltage divider
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
-constexpr Pin Z_PROBE_MOD_PIN = NoPin;
+constexpr size_t MaxZProbes = 1;
+
 constexpr Pin DiagPin = NoPin;
 
 // Cooling fans
-#if defined(PCCB_10)
-constexpr size_t NUM_FANS = 6;
-constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { PortAPin(16), PortAPin(15), PortCPin(3), PortBPin(2), PortBPin(3), PortCPin(1) };		// PWML2, TIOA1, PWML3, no PWM, no PWM, PWML1
-#else
-constexpr size_t NUM_FANS = 4;
-constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { PortAPin(16), PortCPin(3), PortAPin(15), PortCPin(1) };		// PWML2, PWML3, TIOA1, PWML1
-#endif
-
-constexpr size_t NumTachos = 2;
-constexpr Pin TachoPins[NumTachos] = { PortBPin(0), PortCPin(30) };
-
-// Main LED control
-constexpr size_t NumLeds = 2;												// number of main LEDs
-constexpr Pin LedOnPins[NumLeds] = { PortCPin(0), PortCPin(23) };			// LED control pins
+constexpr size_t NumTotalFans = 7;
 
 // DotStar LED control (USART0 is SharedSPI,
 Usart * const DotStarUsart = USART1;
@@ -234,15 +215,110 @@ constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin };
 constexpr Pin SdSpiCSPins[1] = { NoPin };
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
-// M42 and M208 commands now use logical pin numbers, not firmware pin numbers.
-// This next definition defines the highest one.
-// This is the mapping from logical pins 60+ to firmware pin numbers
-constexpr Pin SpecialPinMap[] =
+// Enum to represent allowed types of pin access
+// We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
+enum class PinCapability: uint8_t
 {
-	PortAPin(18), PortAPin(21), PortCPin(15), PortCPin(29)					// PA18/AD1, PA21/AD8, PC15/AD11, PC29
+	// Individual capabilities
+	read = 1,
+	ain = 2,
+	write = 4,
+	pwm = 8,
+
+	// Combinations
+	ainr = 1|2,
+	rw = 1|4,
+	wpwm = 4|8,
+	rwpwm = 1|4|8,
+	ainrw = 1|2|4,
+	ainrwpwm = 1|2|4|8
 };
 
-constexpr int HighestLogicalPin = 63;										// highest logical pin number on this electronics
+constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
+{
+	return (PinCapability)((uint8_t)a | (uint8_t)b);
+}
+
+// Struct to represent a pin that can be assigned to various functions
+// This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
+struct PinEntry
+{
+	bool CanDo(PinAccess access) const;
+	Pin GetPin() const { return pin; }
+	PinCapability GetCapability() const { return cap; }
+	const char* GetNames() const { return names; }
+
+	Pin pin;
+	PinCapability cap;
+	const char *names;
+};
+
+// List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
+// The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
+// Aliases are separate by the , character.
+// If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
+// for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DFueX.
+constexpr PinEntry PinTable[] =
+{
+	// LED outputs
+	{ PortCPin(0),	PinCapability::wpwm,	"led" },
+	{ PortCPin(23),	PinCapability::wpwm,	"!leddim" },
+
+	// Fan outputs
+#if defined(PCCB_10)
+	{ PortAPin(16),	PinCapability::wpwm,	"fan0" },
+	{ PortAPin(15),	PinCapability::wpwm,	"fan1" },
+	{ PortCPin(3),	PinCapability::wpwm,	"fan2" },
+	{ PortBPin(2),	PinCapability::write,	"fan3" },
+	{ PortBPin(3),	PinCapability::write,	"fan4" },
+	{ PortCPin(1),	PinCapability::wpwm,	"fan5" },
+#else
+	{ PortAPin(16),	PinCapability::wpwm,	"fan0" },
+	{ PortCPin(3),	PinCapability::wpwm,	"fan1" },
+	{ PortAPin(15),	PinCapability::wpwm,	"fan2" },
+	{ PortCPin(1),	PinCapability::wpwm,	"fan3" },
+#endif
+
+	// Tacho inputs
+	{ PortBPin(0),	PinCapability::read,	"tachoa" },
+	{ PortCPin(30),	PinCapability::read,	"tachob" },
+
+	// Endstop inputs
+#if defined(PCCB_10)
+	{ PortAPin(24),	PinCapability::read,	"stop0" },
+	{ PortAPin(25),	PinCapability::read,	"stop1" },
+	{ PortCPin(6),	PinCapability::read,	"stop2" },
+#else
+	{ PortAPin(24),	PinCapability::read,	"stop0" },
+	{ PortAPin(25),	PinCapability::read,	"stop1" },
+	{ PortCPin(31),	PinCapability::read,	"stop2" },
+#endif
+
+	// Misc expansion
+	{ PortAPin(18), PinCapability::ainrw,	"exp.pa18" },
+	{ PortAPin(21), PinCapability::ainrw,	"exp.pa21" },
+	{ PortCPin(15), PinCapability::ainrw,	"exp.pc15" },
+	{ PortCPin(29),	PinCapability::rwpwm,	"exp.pc29" }
+};
+
+constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
+
+// Function to look up a pin name pass back the corresponding index into the pin table
+bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
+
+// Default pin allocations
+constexpr const char *DefaultEndstopPinNames[] = { "nil", "nil", "stop0" };	// note: stop0 is the default Z endstop
+constexpr const char *DefaultZProbePinNames = "nil";
+constexpr const char *DefaultHeaterPinNames[] = { "nil" };
+constexpr const char *DefaultGpioPinNames[] = { "led0", "led1" };
+
+#if defined(PCCB_10)
+constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2", "fan3", "fan4", "!fan5+tachoa", "nil+tachob" };
+constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq, DefaultFanPwmFreq, DefaultFanPwmFreq, DefaultFanPwmFreq, DefaultFanPwmFreq, 25000 };
+#else
+constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2", "!fan3+tachoa", "nil+tachob" };
+constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq, DefaultFanPwmFreq, DefaultFanPwmFreq, 25000 };
+#endif
 
 // SAM4S Flash locations (may be expanded in the future)
 constexpr uint32_t IAP_FLASH_START = 0x00470000;

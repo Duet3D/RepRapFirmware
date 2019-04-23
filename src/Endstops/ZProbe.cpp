@@ -69,10 +69,10 @@ float ZProbe::GetActualTriggerHeight() const
 	return triggerHeight;
 }
 
-bool ZProbe::WriteParameters(FileStore *f, unsigned int probeType) const
+bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const
 {
 	String<ScratchStringLength> scratchString;
-	scratchString.printf("G31 T%u P%d X%.1f Y%.1f Z%.2f\n", probeType, adcValue, (double)xOffset, (double)yOffset, (double)triggerHeight);
+	scratchString.printf("G31 K%u P%d X%.1f Y%.1f Z%.2f\n", probeNumber, adcValue, (double)xOffset, (double)yOffset, (double)triggerHeight);
 	return f->Write(scratchString.c_str());
 }
 

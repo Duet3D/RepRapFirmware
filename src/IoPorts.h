@@ -26,7 +26,7 @@ public:
 	bool AssignPort(const char *pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access);
 
 	void AppendPinName(const StringRef& str) const;
-	bool IsValid() const { return logicalPin < NumLogicalPins; }
+	bool IsValid() const { return logicalPin < NumNamedPins; }
 	bool GetInvert() const;
 	void SetInvert(bool pInvert);
 	void ToggleInvert(bool pInvert);
@@ -56,8 +56,8 @@ protected:
 	bool hardwareInvert;									// whether the hardware includes inversion
 	bool totalInvert;										// whether the input or output should be inverted
 
-	static PinUsedBy portUsedBy[NumLogicalPins];			// the list of what each logical port is used by
-	static int8_t logicalPinModes[NumLogicalPins];			// what mode each logical pin is set to - would ideally be class PinMode not int8_t
+	static PinUsedBy portUsedBy[NumNamedPins];			// the list of what each logical port is used by
+	static int8_t logicalPinModes[NumNamedPins];			// what mode each logical pin is set to - would ideally be class PinMode not int8_t
 };
 
 // Class to represent a PWM output port

@@ -55,9 +55,9 @@ enum class EndStopInputType : unsigned int
 	activeLow = 0,
 	activeHigh = 1,
 	zProbeAsEndstop = 2,
-	motorStall = 3,
-	numInputTypes = 4,
-	realZProbe = 100
+	motorStallAny = 3,
+	motorStallIndividual = 4,
+	numInputTypes = 5
 };
 
 // This is used as the return type of function Stopped.

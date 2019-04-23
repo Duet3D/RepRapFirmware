@@ -60,7 +60,7 @@ constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
 
 constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
-constexpr size_t NumDefaultExtruders = 2;			// The number of drivers that we configure as extruder by default
+constexpr size_t NumDefaultExtruders = 2;			// The number of drivers that we configure as extruders by default
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t MaxHeatersPerTool = 8;
@@ -167,29 +167,23 @@ constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[1] = { PortCPin(24) };
 constexpr uint32_t ExpectedSdCardSpeed = 20000000;
 
-// Logical to physical pin mapping
-constexpr LogicalPin Heater0LogicalPin = 0;
-constexpr LogicalPin Fan0LogicalPin = 20;
-constexpr LogicalPin Endstop0LogicalPin = 40;
-constexpr LogicalPin Special0LogicalPin = 60;
-constexpr LogicalPin DefaultZProbeLogicalPin = 52;
-constexpr LogicalPin DefaultZProbeModLogicalPin = 65;
-
-constexpr LogicalPin DueXEndstop0LogicalPin = 140;
-constexpr LogicalPin TachoLogicalPin = 66;
-
-// Enum to represent allowed types of access
+// Enum to represent allowed types of pin access
 // We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
 enum class PinCapability: uint8_t
 {
+	// Individual capabilities
 	read = 1,
-	ain = 1+2,			// analog in, encompasses read because all analog input ports can also be used as digital input
+	ain = 2,
 	write = 4,
-	pwm = 4|8,			// pwm output, encompasses write because all PWM ports can be used as simple digital out ports
+	pwm = 8,
+
+	// Combinations
+	ainr = 1|2,
 	rw = 1|4,
+	wpwm = 4|8,
 	rwpwm = 1|4|8,
-	ainw = 1|2|4,
-	ainwpwm = 1|2|4|8
+	ainrw = 1|2|4,
+	ainrwpwm = 1|2|4|8
 };
 
 constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
@@ -198,7 +192,7 @@ constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
 }
 
 // Struct to represent a pin that can be assigned to various functions
-// This can be varied to suit the hardware. It is a struct not the class so that it can be direct initialised.
+// This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
 struct PinEntry
 {
 	bool CanDo(PinAccess access) const;
@@ -216,28 +210,28 @@ struct PinEntry
 // Aliases are separate by the , character.
 // If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
 // for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DFueX.
-constexpr PinEntry LogicalPinTable[] =
+constexpr PinEntry PinTable[] =
 {
 	// Duet 2 and DueX heater outputs
-	{ PortAPin(19),	PinCapability::pwm,		"!bedheat" },
-	{ PortAPin(20), PinCapability::pwm,		"!e0heat" },
-	{ PortAPin(16), PinCapability::pwm,		"!e1heat" },
-	{ PortCPin(3),	PinCapability::pwm,		"exp.heater3,exp.8,!duex.e2heat,!duex.pwm1" },
-	{ PortCPin(5),	PinCapability::pwm,		"exp.heater4,exp.13,!duex.e3heat,!duex.pwm2" },
-	{ PortCPin(8),	PinCapability::pwm,		"exp.heater5,exp.18,!duex.e4heat,!duex.pwm3" },
-	{ PortCPin(11),	PinCapability::pwm,		"exp.heater6,exp.23,!duex.e5heat,!duex.pwm4" },
-	{ PortAPin(15),	PinCapability::pwm,		"exp.heater7,exp.31,!duex.e6heat,!duex.pwm5" },
+	{ PortAPin(19),	PinCapability::wpwm,	"!bedheat" },
+	{ PortAPin(20), PinCapability::wpwm,	"!e0heat" },
+	{ PortAPin(16), PinCapability::wpwm,	"!e1heat" },
+	{ PortCPin(3),	PinCapability::wpwm,	"exp.heater3,exp.8,!duex.e2heat,!duex.pwm1" },
+	{ PortCPin(5),	PinCapability::wpwm,	"exp.heater4,exp.13,!duex.e3heat,!duex.pwm2" },
+	{ PortCPin(8),	PinCapability::wpwm,	"exp.heater5,exp.18,!duex.e4heat,!duex.pwm3" },
+	{ PortCPin(11),	PinCapability::wpwm,	"exp.heater6,exp.23,!duex.e5heat,!duex.pwm4" },
+	{ PortAPin(15),	PinCapability::wpwm,	"exp.heater7,exp.31,!duex.e6heat,!duex.pwm5" },
 
 	// Duet 2 and DueX fan outputs
-	{ PortCPin(23),	PinCapability::pwm,		"fan0" },
-	{ PortCPin(26),	PinCapability::pwm,		"fan1" },
-	{ PortAPin(0),	PinCapability::pwm,		"fan2" },
-	{ 212,			PinCapability::pwm,		"duex.fan3" },
-	{ 207,			PinCapability::pwm,		"duex.fan4" },
-	{ 206,			PinCapability::pwm,		"duex.fan5" },
-	{ 205,			PinCapability::pwm,		"duex.fan6" },
-	{ 204,			PinCapability::pwm,		"duex.fan7" },
-	{ 215,			PinCapability::pwm,		"duex.fan8" },
+	{ PortCPin(23),	PinCapability::wpwm,	"fan0" },
+	{ PortCPin(26),	PinCapability::wpwm,	"fan1" },
+	{ PortAPin(0),	PinCapability::wpwm,	"fan2" },
+	{ 212,			PinCapability::wpwm,	"duex.fan3" },
+	{ 207,			PinCapability::wpwm,	"duex.fan4" },
+	{ 206,			PinCapability::wpwm,	"duex.fan5" },
+	{ 205,			PinCapability::wpwm,	"duex.fan6" },
+	{ 204,			PinCapability::wpwm,	"duex.fan7" },
+	{ 215,			PinCapability::wpwm,	"duex.fan8" },
 
 	// Endstop inputs
 	{ PortCPin(14),	PinCapability::read,	"xstop" },
@@ -257,8 +251,9 @@ constexpr PinEntry LogicalPinTable[] =
 	{ 213,			PinCapability::read,	"duex.e6stop" },
 
 	// Misc
-	{ Z_PROBE_PIN,	PinCapability::ain,		"zprobe.in" },
-	{ Z_PROBE_MOD_PIN, PinCapability::write, "zprobe.mod"	},
+	{ Z_PROBE_PIN,	PinCapability::ainr,	"zprobe.in" },
+	{ Z_PROBE_MOD_PIN, PinCapability::write, "zprobe.mod" },
+	{ ATX_POWER_PIN, PinCapability::write,	"pson" },
 	{ PortAPin(24),	PinCapability::rw,		"duex.cs5" },
 	{ PortCPin(7),	PinCapability::rw,		"connlcd.encb,connlcd.3" },
 	{ PortAPin(8),	PinCapability::rw,		"connlcd.enca,connlcd.4" },
@@ -286,21 +281,17 @@ constexpr PinEntry LogicalPinTable[] =
 	{ 235,			PinCapability::rwpwm,	"sx1509b.15" }
 };
 
-constexpr unsigned int NumLogicalPins = ARRAY_SIZE(LogicalPinTable);
+constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
 
 // Default pin allocations
-constexpr size_t NumDefaultEndstops = 3;
-constexpr const char * DefaultEndstopPinNames[] = { "xstop", "ystop", "zstop" };
-
-constexpr const char * DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
-
-constexpr const char *DefaultHeaterPortNames[] = { "bedheat", "e0heat", "e1heat" };
-
+constexpr const char *DefaultEndstopPinNames[] = { "xstop", "ystop", "zstop" };
+constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
+constexpr const char *DefaultHeaterPinNames[] = { "bedheat", "e0heat", "e1heat" };
 constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2" };
-constexpr PwmFrequency DefaultFanFrequencies[] = { DefaultFanPwmFreq };
+constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
 
 // SAM4E Flash locations (may be expanded in the future)
 constexpr uint32_t IAP_FLASH_START = 0x00470000;

@@ -100,8 +100,8 @@ bool IoPort::AssignPort(const char* pinName, const StringRef& reply, PinUsedBy n
 
 // Members of class IoPort
 
-PinUsedBy IoPort::portUsedBy[NumLogicalPins];
-int8_t IoPort::logicalPinModes[NumLogicalPins];	// what mode each logical pin is set to - would ideally be class PinMode not int8_t
+PinUsedBy IoPort::portUsedBy[NumNamedPins];
+int8_t IoPort::logicalPinModes[NumNamedPins];	// what mode each logical pin is set to - would ideally be class PinMode not int8_t
 
 /*static*/ void IoPort::Init()
 {
@@ -123,7 +123,7 @@ void IoPort::Release()
 {
 	if (IsValid())
 	{
-		detachInterrupt(LogicalPinTable[logicalPin].pin);
+		detachInterrupt(PinTable[logicalPin].pin);
 		portUsedBy[logicalPin] = PinUsedBy::unused;
 		logicalPinModes[logicalPin] = PIN_MODE_NOT_CONFIGURED;
 	}
@@ -134,14 +134,14 @@ void IoPort::Release()
 
 bool IoPort::AttachInterrupt(StandardCallbackFunction callback, enum InterruptMode mode, CallbackParameter param) const
 {
-	return IsValid() && attachInterrupt(LogicalPinTable[logicalPin].pin, callback, mode, param);
+	return IsValid() && attachInterrupt(PinTable[logicalPin].pin, callback, mode, param);
 }
 
 void IoPort::DetachInterrupt() const
 {
 	if (IsValid())
 	{
-		detachInterrupt(LogicalPinTable[logicalPin].pin);
+		detachInterrupt(PinTable[logicalPin].pin);
 	}
 }
 
@@ -190,21 +190,29 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 		reply.printf("Unknown pin name '%s'", fullPinName);
 		return false;
 	}
-	if (portUsedBy[lp] != PinUsedBy::unused)
+
+	if (lp != NoLogicalPin)
 	{
-		reply.printf("Pin '%s' is not free", fullPinName);
+		if (portUsedBy[lp] != PinUsedBy::unused)
+		{
+			reply.printf("Pin '%s' is not free", fullPinName);
+			return false;
+		}
+		portUsedBy[lp] = neededFor;
 	}
 
 	logicalPin = lp;
 	hardwareInvert = hwInvert;
-	portUsedBy[lp] = neededFor;
 	SetInvert(inverted);
 
-	if (!SetMode(access))
+	if (lp != NoLogicalPin)
 	{
-		reply.printf("Pin '%s' does not support mode %s", fullPinName, TranslatePinAccess(access));
-		Release();
-		return false;
+		if (!SetMode(access))
+		{
+			reply.printf("Pin '%s' does not support mode %s", fullPinName, TranslatePinAccess(access));
+			Release();
+			return false;
+		}
 	}
 
 	return true;
@@ -241,7 +249,7 @@ bool IoPort::SetMode(PinAccess access)
 
 	if (logicalPinModes[logicalPin] != (int8_t)desiredMode)
 	{
-		const AnalogChannelNumber chan = PinToAdcChannel(LogicalPinTable[logicalPin].pin);
+		const AnalogChannelNumber chan = PinToAdcChannel(PinTable[logicalPin].pin);
 		if (chan != NO_ADC)
 		{
 			AnalogInEnableChannel(chan, access == PinAccess::readAnalog);
@@ -251,7 +259,7 @@ bool IoPort::SetMode(PinAccess access)
 		{
 			return false;
 		}
-		IoPort::SetPinMode(LogicalPinTable[logicalPin].pin, desiredMode);
+		IoPort::SetPinMode(PinTable[logicalPin].pin, desiredMode);
 		logicalPinModes[logicalPin] = (int8_t)desiredMode;
 	}
 	return true;
@@ -306,11 +314,11 @@ void IoPort::AppendPinName(const StringRef& str) const
 			str.cat('!');
 		}
 		const size_t insertPoint = str.strlen();
-		const char *pn = LogicalPinTable[logicalPin].GetNames();
+		const char *pn = PinTable[logicalPin].GetNames();
 		unsigned int numPrinted = 0;
 		do
 		{
-			bool inverted = *pn == '!';
+			bool inverted = (*pn == '!');
 			if (inverted)
 			{
 				++pn;
@@ -360,7 +368,7 @@ void IoPort::WriteDigital(bool high) const
 {
 	if (IsValid())
 	{
-		WriteDigital(LogicalPinTable[logicalPin].pin, (totalInvert) ? !high : high);
+		WriteDigital(PinTable[logicalPin].pin, (totalInvert) ? !high : high);
 	}
 }
 
@@ -368,7 +376,7 @@ bool IoPort::Read() const
 {
 	if (IsValid())
 	{
-		const bool b = ReadPin(LogicalPinTable[logicalPin].pin);
+		const bool b = ReadPin(PinTable[logicalPin].pin);
 		return (totalInvert) ? !b : b;
 	}
 	return false;
@@ -466,7 +474,7 @@ void PwmPort::WriteAnalog(float pwm) const
 {
 	if (IsValid())
 	{
-		IoPort::WriteAnalog(LogicalPinTable[logicalPin].pin, ((totalInvert) ? 1.0 - pwm : pwm), frequency);
+		IoPort::WriteAnalog(PinTable[logicalPin].pin, ((totalInvert) ? 1.0 - pwm : pwm), frequency);
 	}
 }
 

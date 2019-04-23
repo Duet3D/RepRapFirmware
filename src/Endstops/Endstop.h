@@ -110,9 +110,9 @@ public:
 	void* operator new(size_t sz) { return Allocate<StallDetectionEndstop>(); }
 	void operator delete(void* p) { Release<StallDetectionEndstop>(p); }
 
-	StallDetectionEndstop(uint8_t axis, EndStopPosition pos);
+	StallDetectionEndstop(uint8_t axis, EndStopPosition pos, bool p_individualMotors);
 
-	EndStopInputType GetEndstopType() const override { return EndStopInputType::motorStall; }
+	EndStopInputType GetEndstopType() const override { return (individualMotors) ? EndStopInputType::motorStallIndividual : EndStopInputType::motorStallAny; }
 	EndStopHit Stopped() const override;
 	void Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) override;
 	EndstopHitDetails CheckTriggered(bool goingSlow) override;
@@ -121,6 +121,7 @@ public:
 private:
 	DriversBitmap driversMonitored;
 	unsigned int numDriversLeft;
+	bool individualMotors;
 	bool stopAll;
 };
 
