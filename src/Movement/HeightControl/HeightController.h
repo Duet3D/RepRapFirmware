@@ -15,18 +15,16 @@
 
 #include "GCodes/GCodeResult.h"
 #include <RTOSIface/RTOSIface.h>
-#include <memory>
 
 class HeightController
 {
 public:
-	HeightController(size_t p_sensorNumber);
-	~HeightController();
+	HeightController();
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply);		// Start/stop height following
+	void Stop();									// stop height following mode
 
-	void Start();
-	void Stop();
 	[[noreturn]] void RunTask();
 
 private:
@@ -35,8 +33,8 @@ private:
 	static constexpr unsigned int HeightControllerTaskStackWords = 100;
 	static constexpr uint32_t DefaultSampleInterval = 200;
 
-	std::unique_ptr<Task<HeightControllerTaskStackWords>> heightControllerTask;
-	size_t sensorNumber;							// which sensor, normally a virtual heater
+	Task<HeightControllerTaskStackWords> *heightControllerTask;
+	int sensorNumber;								// which sensor, normally a virtual heater, or -1 if not configured
 	uint32_t sampleInterval;						// in milliseconds
 	uint32_t lastWakeTime;
 	float setPoint;									// the sensor output we are aiming for

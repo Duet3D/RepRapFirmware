@@ -267,12 +267,7 @@ void Platform::Init()
 	compatibility = Compatibility::marlin;		// default to Marlin because the common host programs expect the "OK" response to commands
 
 	// Initialise the IO port subsystem
-#if HAS_VARIABLE_PIN_LIST
-	// If HAS_VARIABLE_PIN_LIST then we must pass the correct pin mapping table for the board we are running on here
-	IoPort::Init(pinList);
-#else
 	IoPort::Init();
-#endif
 
 	// File management and SD card interfaces
 	for (size_t i = 0; i < NumSdCards; ++i)
@@ -407,6 +402,11 @@ void Platform::Init()
 # endif
 #endif
 
+	for (uint32_t& db : driveDriverBits)
+	{
+		db = 0;										// clear drives bitmap for all axes
+	}
+
 	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
 	{
 		enableValues[drive] = 0;					// assume active low enable signal
@@ -416,11 +416,17 @@ void Platform::Init()
 		driverState[drive] = DriverStatus::disabled;
 
 		// Map axes and extruders straight through
-		driveDriverBits[drive] = driveDriverBits[drive + MaxTotalDrivers] = CalcDriverBitmap(drive);	// this returns 0 for remote drivers
-		if (drive < MaxAxes)
+		if (drive < MinAxes)
 		{
-			axisDrivers[drive].numDrivers = 1;
-			axisDrivers[drive].driverNumbers[0] = (uint8_t)drive;
+			const size_t axis =
+#ifdef PCCB
+				(drive == 0) ? Z_AXIS : (drive == 1) ? X_AXIS : Y_AXIS;		// on PCCB we map Z X Y to drivers 0 1 2
+#else
+				drive;														// map axes straight through to drives
+#endif
+			driveDriverBits[axis] = driveDriverBits[axis + MaxTotalDrivers] = CalcDriverBitmap(drive);	// this returns 0 for remote drivers
+			axisDrivers[axis].numDrivers = 1;
+			axisDrivers[axis].driverNumbers[0] = (uint8_t)drive;
 		}
 
 		if (drive < NumDirectDrivers)
@@ -429,12 +435,12 @@ void Platform::Init()
 			pinMode(STEP_PINS[drive], OUTPUT_LOW);
 			pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
 #if !(defined(DUET3_V03) || defined(DUET3_V05))
-			pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
+			pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);			// this is OK for the TMC2660 CS pins too
 #endif
 
 #ifndef __LPC17xx__
 			const PinDescription& pinDesc = g_APinDescription[STEP_PINS[drive]];
-			pinDesc.pPort->PIO_OWER = pinDesc.ulPin;				// enable parallel writes to the step pins
+			pinDesc.pPort->PIO_OWER = pinDesc.ulPin;			// enable parallel writes to the step pins
 #endif
 		}
 	}

@@ -135,10 +135,6 @@
 # define SUPPORT_ASYNC_MOVES	0
 #endif
 
-#ifndef HAS_VARIABLE_PIN_LIST
-# define HAS_VARIABLE_PIN_LIST	0
-#endif
-
 #ifndef ALLOCATE_DEFAULT_PORTS
 # define ALLOCATE_DEFAULT_PORTS	0
 #endif

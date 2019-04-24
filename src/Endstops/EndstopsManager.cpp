@@ -293,7 +293,7 @@ bool EndstopsManager::HomingZWithProbe() const
 
 EndStopHit EndstopsManager::Stopped(size_t axis) const
 {
-	return axisEndstops[axis]->Stopped();
+	return (axisEndstops[axis] == nullptr) ? EndStopHit::noStop : axisEndstops[axis]->Stopped();
 }
 
 void EndstopsManager::GetM119report(const StringRef& reply)

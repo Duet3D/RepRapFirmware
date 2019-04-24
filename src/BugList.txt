@@ -113,8 +113,9 @@ No-longer-supported and changed parameters:
 
 Investigations
 
+- [no fault] Simple filament monitor P1 vs p2, https://forum.duet3d.com/topic/10201/filament-sensor-problem/5
 - [done, DWC bug, tell chrishamm] JSON (?), https://forum.duet3d.com/topic/8816/java-errors/5
-- M109 not running tool change files, https://forum.duet3d.com/topic/10108/m109-command-does-not-run-tool-change-macro-s/6
+- [done, test] M109 not running tool change files, https://forum.duet3d.com/topic/10108/m109-command-does-not-run-tool-change-macro-s/6
 - I2C error recovery 
 - [investigated, awaiting feedback] Kulitorum segmented speed issue, https://forum.duet3d.com/topic/8789/max-actual-speed-at-high-path-detail/10
 - Low steps/mm and pressure advance, https://forum.duet3d.com/topic/8672/extruder-motors-skip-steps-with-pressure-advance-enabled/67
@@ -128,13 +129,13 @@ Investigations
 - Support M73?
 - Prevent a file being rewritten/created while it is open by something else, https://forum.duet3d.com/topic/10191/something-to-avoid-when-you-are-calibrating-tweaking/4
 - [done] Network reset didn't work on Maestro
-- Support multiple tachos, https://forum.duet3d.com/topic/9990/duet2-multiple-fan-rpm-sense-display
+- [done] Support multiple tachos, https://forum.duet3d.com/topic/9990/duet2-multiple-fan-rpm-sense-display
 - 12864 list files on 2nd SD card, https://forum.duet3d.com/topic/10046/duet-maestro-2nd-sd-slot
 - [done, test] 12864 % complete PR
 - [done, test] 12864 time remaining PR
 - [done] M291 should never lock movement
 - [done, test] resurrect.g: put filename in quotes, and add R0 
-- M291 command should unlock movement if it is owned, e.g. if used within homeall.g and an SD file does G28
+- [done, test] M291 command should unlock movement if it is owned, e.g. if used within homeall.g and an SD file does G28
 - M291 should continue to update PanelDue even if from a macro invoked by PanelDue
 - [done but need to add GPIO pin map] M950 command to remap pins
 - [done] M302 to wait until moves have completed
@@ -142,9 +143,9 @@ Investigations
 - [done] applied latest FatFs patches
 - Mcode to send a message over the network
 - [done, test] Laser velocity ramping
-- Sort out M585 custom endstops E parameter. Perhaps remove endstops bitmap from DDA.
+- [done, test] Sort out M585 custom endstops E parameter. Perhaps remove endstops bitmap from DDA.
 - TMC5160 etc. need to use spreadCycle mode for homing moves?
-- New fan port mapping, including using unused Duex heaters as additional fans, https://forum.duet3d.com/topic/9799/address-more-than-9-fans-leds-w-duex5
+- [done, ok] New fan port mapping, including using unused Duex heaters as additional fans, https://forum.duet3d.com/topic/9799/address-more-than-9-fans-leds-w-duex5
 - Parse comments, use for layer number, object number/name
 - [done, not tested] Duet085 additional fan issue
 - [done, test] Include workplace coordinate # in status response, https://forum.duet3d.com/topic/9896/display-current-active-csys-p1-g54-p2-g55-next-to-x-y-z

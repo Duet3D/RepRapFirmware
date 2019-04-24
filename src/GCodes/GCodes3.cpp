@@ -617,12 +617,15 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 				c = ':';
 			}
 		}
-		reply.cat(' ');
-		char c = extrudeLetter;
-		for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+		if (numExtruders != 0)
 		{
-			reply.catf("%c%u", c, platform.GetExtruderDriver(extruder));
-			c = ':';
+			reply.cat(' ');
+			char c = extrudeLetter;
+			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+			{
+				reply.catf("%c%u", c, platform.GetExtruderDriver(extruder));
+				c = ':';
+			}
 		}
 		reply.catf(", %u axes visible", numVisibleAxes);
 	}

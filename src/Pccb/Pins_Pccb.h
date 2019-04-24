@@ -63,8 +63,8 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 
 #if defined(PCCB_10)
 
-constexpr size_t NumDirectDrivers = 8;				// The maximum number of drives supported by the electronics
-constexpr size_t MaxSmartDrivers = 8;				// The maximum number of smart drivers
+constexpr size_t NumDirectDrivers = 8;				// The maximum number of drives supported by the electronics (7 TMC2660, 1 dumb)
+constexpr size_t MaxSmartDrivers = 7;				// The maximum number of smart drivers
 
 #elif defined(PCCB_08_X5)
 
@@ -257,31 +257,36 @@ struct PinEntry
 // The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
 // Aliases are separate by the , character.
 // If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
-// for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DFueX.
+// for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
 constexpr PinEntry PinTable[] =
 {
 	// LED outputs
 	{ PortCPin(0),	PinCapability::wpwm,	"led" },
 	{ PortCPin(23),	PinCapability::wpwm,	"!leddim" },
 
-	// Fan outputs
 #if defined(PCCB_10)
+	// Fan outputs
 	{ PortAPin(16),	PinCapability::wpwm,	"fan0" },
 	{ PortAPin(15),	PinCapability::wpwm,	"fan1" },
 	{ PortCPin(3),	PinCapability::wpwm,	"fan2" },
 	{ PortBPin(2),	PinCapability::write,	"fan3" },
 	{ PortBPin(3),	PinCapability::write,	"fan4" },
 	{ PortCPin(1),	PinCapability::wpwm,	"fan5" },
+
+	// Tacho inputs
+	{ PortBPin(0),	PinCapability::read,	"fan5a.tach" },
+	{ PortCPin(30),	PinCapability::read,	"fan5b.tach" },
 #else
+	// Fan outputs
 	{ PortAPin(16),	PinCapability::wpwm,	"fan0" },
 	{ PortCPin(3),	PinCapability::wpwm,	"fan1" },
 	{ PortAPin(15),	PinCapability::wpwm,	"fan2" },
 	{ PortCPin(1),	PinCapability::wpwm,	"fan3" },
-#endif
 
 	// Tacho inputs
-	{ PortBPin(0),	PinCapability::read,	"tachoa" },
-	{ PortCPin(30),	PinCapability::read,	"tachob" },
+	{ PortBPin(0),	PinCapability::read,	"fan3a.tach" },
+	{ PortCPin(30),	PinCapability::read,	"fan3b.tach" },
+#endif
 
 	// Endstop inputs
 #if defined(PCCB_10)
@@ -307,16 +312,16 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
 
 // Default pin allocations
-constexpr const char *DefaultEndstopPinNames[] = { "nil", "nil", "stop0" };	// note: stop0 is the default Z endstop
+constexpr const char *DefaultEndstopPinNames[] = { "stop1", "nil", "stop0" };	// stop0 is the default Z endstop, stop1 is the X endstop
 constexpr const char *DefaultZProbePinNames = "nil";
 constexpr const char *DefaultHeaterPinNames[] = { "nil" };
-constexpr const char *DefaultGpioPinNames[] = { "led0", "led1" };
+constexpr const char *DefaultGpioPinNames[] = { "led", "leddim" };
 
 #if defined(PCCB_10)
-constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2", "fan3", "fan4", "!fan5+tachoa", "nil+tachob" };
+constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2", "fan3", "fan4", "!fan5+fan5a.tach", "nil+fan5b.tach" };
 constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq, DefaultFanPwmFreq, DefaultFanPwmFreq, DefaultFanPwmFreq, DefaultFanPwmFreq, 25000 };
 #else
-constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2", "!fan3+tachoa", "nil+tachob" };
+constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2", "!fan3+fan3a.tach", "nil+fan3btach" };
 constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq, DefaultFanPwmFreq, DefaultFanPwmFreq, 25000 };
 #endif
 

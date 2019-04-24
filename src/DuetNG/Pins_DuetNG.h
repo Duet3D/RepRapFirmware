@@ -50,7 +50,7 @@ constexpr size_t NumDirectDrivers = 12;				// The maximum number of drives suppo
 constexpr size_t MaxTotalDrivers = NumDirectDrivers; // The maximum number of drives including CAN expansion
 constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 
-constexpr size_t NumTotalHeaters = 8;				// The maximum number of heaters in the machine
+constexpr size_t NumTotalHeaters = 10;				// The maximum number of heaters in the machine
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 8;
 
@@ -209,7 +209,7 @@ struct PinEntry
 // The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
 // Aliases are separate by the , character.
 // If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
-// for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DFueX.
+// for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
 constexpr PinEntry PinTable[] =
 {
 	// Duet 2 and DueX heater outputs
@@ -239,11 +239,11 @@ constexpr PinEntry PinTable[] =
 	{ PortDPin(29),	PinCapability::read,	"zstop" },
 	{ PortDPin(10),	PinCapability::read,	"e0stop" },
 	{ PortCPin(16),	PinCapability::read,	"e1stop" },
-	{ PortEPin(0),	PinCapability::read,	"exp.e2stop,exp.4" },
-	{ PortEPin(1),	PinCapability::read,	"exp.e3stop,exp.9,duex.cs6" },
-	{ PortEPin(2),	PinCapability::read,	"exp.e4stop,exp.14,duex.cs7" },
-	{ PortEPin(3),	PinCapability::read,	"exp.e5stop,exp.19,duex.cs8" },
-	{ PortAPin(17),	PinCapability::read,	"exp.e6stop,exp.24" },
+	{ PortEPin(0),	PinCapability::rw,		"exp.e2stop,exp.4" },
+	{ PortEPin(1),	PinCapability::rw,		"exp.e3stop,exp.9,duex.cs6" },
+	{ PortEPin(2),	PinCapability::rw,		"exp.e4stop,exp.14,duex.cs7" },
+	{ PortEPin(3),	PinCapability::rw,		"exp.e5stop,exp.19,duex.cs8" },
+	{ PortAPin(17),	PinCapability::rw,		"exp.e6stop,exp.24" },
 	{ 200,			PinCapability::read,	"duex.e2stop" },
 	{ 203,			PinCapability::read,	"duex.e3stop" },
 	{ 202,			PinCapability::read,	"duex.e4stop" },

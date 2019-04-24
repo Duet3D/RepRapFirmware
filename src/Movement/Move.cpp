@@ -1039,6 +1039,27 @@ void Move::ReleaseAuxMove(bool hasNewMove)
 	auxMoveLocked = false;
 }
 
+// Configure height following
+GCodeResult Move::ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply)
+{
+	if (heightController == nullptr)
+	{
+		heightController = new HeightController;
+	}
+	return heightController->Configure(gb, reply);
+}
+
+// Start/stop height following
+GCodeResult Move::StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply)
+{
+	if (heightController == nullptr)
+	{
+		reply.copy("Height following has not been configured");
+		return GCodeResult::error;
+	}
+	return heightController->StartHeightFollowing(gb, reply);
+}
+
 #endif
 
 // End

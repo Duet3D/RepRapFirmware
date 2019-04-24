@@ -261,6 +261,7 @@ enum class ErrorCode : uint32_t
 
 struct AxisDriversConfig
 {
+	AxisDriversConfig() { numDrivers = 0; }
 	DriversBitmap GetDriversBitmap() const;
 
 	uint8_t numDrivers;								// Number of drivers assigned to each axis

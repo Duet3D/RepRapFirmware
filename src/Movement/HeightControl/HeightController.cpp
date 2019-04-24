@@ -16,21 +16,28 @@
 #include "Heating/Sensors/TemperatureSensor.h"
 #include "Movement/Move.h"
 
-HeightController::HeightController(size_t p_sensorNumber)
-	: heightControllerTask(nullptr), sensorNumber(p_sensorNumber),
+HeightController::HeightController()
+	: heightControllerTask(nullptr), sensorNumber(-1),
 		sampleInterval(DefaultSampleInterval), setPoint(1.0), pidP(1.0), configuredPidI(0.0), configuredPidD(0.0), iAccumulator(0.0),
 		zMin(5.0), zMax(10.0), state(PidState::stopped)
 {
 	CalcDerivedValues();
 }
 
-HeightController::~HeightController()
+extern "C" [[noreturn]] void HeightControllerTaskStart(void *p)
 {
+	static_cast<HeightController*>(p)->RunTask();
 }
 
 GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
 	bool seen = false;
+	uint32_t sn;
+	gb.TryGetUIValue('H', sn, seen);
+	if (seen)
+	{
+		sensorNumber = (int)sn;
+	}
 	gb.TryGetFValue('P', pidP, seen);
 	gb.TryGetFValue('I', configuredPidI, seen);
 	gb.TryGetFValue('D', configuredPidD, seen);
@@ -58,6 +65,16 @@ GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply)
 	if (seen || seenZ)
 	{
 		CalcDerivedValues();
+		if (heightControllerTask == nullptr && sensorNumber >= 0)
+		{
+			state = PidState::stopped;
+			heightControllerTask = new Task<HeightControllerTaskStackWords>;
+			heightControllerTask->Create(HeightControllerTaskStart, "HEIGHT", (void*)this, TaskBase::HeatPriority);
+		}
+	}
+	else if (sensorNumber < 0)
+	{
+		reply.copy("Height controller is not configured");
 	}
 	else
 	{
@@ -67,25 +84,55 @@ GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply)
 	return GCodeResult::ok;
 }
 
-extern "C" [[noreturn]] void HeightControllerTaskStart(void *p)
+// Start/stop height following
+GCodeResult HeightController::StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply)
 {
-	static_cast<HeightController*>(p)->RunTask();
-}
-
-void HeightController::Start()
-{
-	state = PidState::starting;
-	if (!heightControllerTask)
+	if (gb.Seen('P'))
 	{
-		heightControllerTask = std::make_unique<Task<HeightControllerTaskStackWords>>();
-		heightControllerTask->Create(HeightControllerTaskStart, "HEIGHT", (void*)this, TaskBase::HeatPriority);
+		if (gb.GetIValue() == 1)
+		{
+			// Start height following
+			if (sensorNumber < 0 || heightControllerTask == nullptr)
+			{
+				reply.copy("Height controller is not configured");
+				return GCodeResult::error;
+			}
+
+			bool dummy;
+			gb.TryGetFValue('S', setPoint, dummy);
+
+			float zLimits[2];
+			bool seenZ = false;
+			if (gb.TryGetFloatArray('Z', 2, zLimits, reply, seenZ, false))
+			{
+				return GCodeResult::error;
+			}
+			if (seenZ && zLimits[0] < zLimits[1])
+			{
+				zMin = zLimits[0];
+				zMax = zLimits[1];
+			}
+
+			if (state == PidState::stopped)
+			{
+				state = PidState::starting;
+				heightControllerTask->Give();
+			}
+		}
+		else
+		{
+			// Stop height following
+			Stop();
+		}
 	}
 	else
 	{
-		heightControllerTask->Give();
+		reply.printf("Height following mode is %sactive", (state == PidState::stopped) ? "in" : "");
 	}
+	return GCodeResult::ok;
 }
 
+// Stop height following mode
 void HeightController::Stop()
 {
 	state = PidState::stopped;
@@ -107,6 +154,10 @@ void HeightController::Stop()
 			reprap.GetMove().GetCurrentMachinePosition(machinePos, false);
 			currentZ = machinePos[Z_AXIS];
 			iAccumulator = constrain<float>(currentZ, zMin, zMax);
+		}
+		else if (sensorNumber < 0)
+		{
+			state = PidState::stopped;
 		}
 		else
 		{

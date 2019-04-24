@@ -181,6 +181,9 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 	{
 		expansionNumber = 0;
 	}
+
+	//TODO use expansionNumber as part of the logical pin number
+	(void)expansionNumber;
 #endif
 
 	LogicalPin lp;

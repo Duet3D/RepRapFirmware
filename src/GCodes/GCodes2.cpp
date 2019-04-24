@@ -3638,6 +3638,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		result = reprap.GetMove().ConfigureDynamicAcceleration(gb, reply);
 		break;
 
+#if SUPPORT_ASYNC_MOVES
+	case 594:	// Enter or leave height following mode
+		result = reprap.GetMove().StartHeightFollowing(gb, reply);
+		break;
+#endif
+
 	// For case 600, see 226
 
 	// M650 (set peel move parameters) and M651 (execute peel move) are no longer handled specially. Use macros to specify what they should do.
@@ -4222,6 +4228,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 950:	// configure I/O pins
 		result = platform.ConfigurePort(gb, reply);
 		break;
+
+#if SUPPORT_ASYNC_MOVES
+	case 951:	// configure height control
+		result = reprap.GetMove().ConfigureHeightFollowing(gb, reply);
+		break;
+#endif
 
 	case 997: // Perform firmware update
 		result = UpdateFirmware(gb, reply);

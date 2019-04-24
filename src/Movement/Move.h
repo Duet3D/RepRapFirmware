@@ -17,6 +17,10 @@
 #include "Kinematics/Kinematics.h"
 #include "GCodes/RestorePoint.h"
 
+#if SUPPORT_ASYNC_MOVES
+# include "HeightControl/HeightController.h"
+#endif
+
 // Define the number of DDAs and DMs.
 // A DDA represents a move in the queue.
 // Each DDA needs one DM per drive that it moves, but only when it has been prepared and frozen
@@ -154,8 +158,10 @@ public:
 #endif
 
 #if SUPPORT_ASYNC_MOVES
-	AsyncMove *LockAuxMove();															// Get and lock the aux move buffer
+	AsyncMove *LockAuxMove();														// Get and lock the aux move buffer
 	void ReleaseAuxMove(bool hasNewMove);											// Release the aux move buffer and optionally signal that it contains a move
+	GCodeResult ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply);	// Configure height following
+	GCodeResult StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply);		// Start/stop height following
 #endif
 
 	static int32_t MotorMovementToSteps(size_t drive, float coord);					// Convert a single motor position to number of steps
@@ -195,6 +201,7 @@ private:
 	AsyncMove auxMove;
 	volatile bool auxMoveLocked;
 	volatile bool auxMoveAvailable;
+	HeightController *heightController;
 #endif
 
 	bool active;										// Are we live and running?

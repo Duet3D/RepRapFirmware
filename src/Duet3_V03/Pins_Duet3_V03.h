@@ -25,6 +25,7 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
+#define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
@@ -35,18 +36,30 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 
 #define USE_CACHE				0					// Cache controller disabled for now
 
+#define NO_TRIGGERS		1	// Temporary!!!
+#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
+
 // The physical capabilities of the machine
 
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
 constexpr size_t MaxSmartDrivers = 6;				// The maximum number of smart drivers
-
 constexpr size_t MaxCanDrivers = 12;				// we need to set a limit until the DDA/DMs are restructured
 constexpr size_t MaxTotalDrivers = NumDirectDrivers + MaxCanDrivers;
+
+constexpr size_t NumTotalHeaters = 12;
+constexpr size_t NumDefaultHeaters = 0;
+constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
+constexpr size_t NumThermistorInputs = 4;
+
+constexpr size_t MaxZProbes = 4;
+
+constexpr size_t MaxGpioPorts = 12;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
 
 constexpr size_t MaxExtruders = MaxTotalDrivers - MinAxes;	// The maximum number of extruders
+constexpr size_t NumDefaultExtruders = 3;			// The number of drivers that we configure as extruders by default
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t MaxHeatersPerTool = 4;
@@ -86,43 +99,13 @@ constexpr Pin TMC51xxSclkPin = PortAPin(23);
 constexpr size_t NumPwmOutputs = 11;				// number of heater/fan/servo outputs
 constexpr size_t NumInputOutputs = 9;				// number of connectors we have for endstops, filament sensors, Z probes etc.
 
-#if 0
-
-// Flexible pin assignment
-//TODO
-
-#else
-
-// The following are temporary until we implement flexible pin usage
-// Assign 4 outputs to heaters and 6 to fans
-// Assign 8 I/O connectors as endstop inputs and the last one as the Z probe
-constexpr size_t NumHeaters = 4;
-constexpr size_t NumFans = 6;
-constexpr size_t NumEndstops = 8;
-
-// Endstops
-constexpr Pin END_STOP_PINS[NumEndstops] = { PortDPin(30), PortEPin(4), PortAPin(18), PortEPin(5), PortAPin(17), PortAPin(19), PortCPin(31), PortCPin(0) };
-
-// Heater and thermistors
-constexpr Pin HEAT_ON_PINS[NumHeaters] = { PortAPin(7), PortAPin(24), PortAPin(16), PortAPin(11) };
-
-// Cooling fans
-constexpr size_t NUM_FANS = 7;
-constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { PortAPin(15), PortCPin(5), PortAPin(8), PortCPin(11), PortCPin(8), PortAPin(0), PortCPin(23) };
-
-constexpr Pin Z_PROBE_PIN = PortEPin(3);		// IO8
-constexpr Pin Z_PROBE_MOD_PIN = PortEPin(1);	// IO8_OUT
-
-#endif
-
 constexpr size_t NumTachos = 3;
 constexpr Pin TachoPins[NumTachos] = { PortCPin(7), PortDPin(23), PortAPin(1) };
 
-constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
-
 // Thermistor/PT1000 inputs
-constexpr size_t NumThermistorInputs = 4;
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortBPin(3), PortCPin(15), PortCPin(0), PortCPin(30) };	// Thermistor/PT1000 pins
+constexpr Pin VssaSensePin = PortAPin(20);
+constexpr Pin VrefSensePin = PortEPin(0);
 
 // Default thermistor parameters
 constexpr float BED_R25 = 100000.0;
@@ -136,7 +119,6 @@ constexpr float EXT_SHC = 0.0;
 constexpr float THERMISTOR_SERIES_RS = 2200.0;
 
 // Number of SPI temperature sensors to support
-
 constexpr size_t MaxSpiTempSensors = 4;
 
 // Digital pins the 31855s have their select lines tied to
@@ -147,14 +129,13 @@ constexpr Pin ATX_POWER_PIN = PortAPin(10);
 
 // Analogue pin numbers
 constexpr Pin PowerMonitorVinDetectPin = PortCPin(13);
-
 constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 voltage divider (TBD)
-
-constexpr Pin VssaSensePin = PortAPin(20);
-constexpr Pin VrefSensePin = PortEPin(0);
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
 constexpr Pin DiagPin = PortCPin(20);
+
+// Cooling fans
+constexpr size_t NumTotalFans = 12;
 
 // SD cards
 constexpr size_t NumSdCards = 2;
@@ -167,14 +148,113 @@ constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 constexpr Pin PhyInterruptPin = PortCPin(6);
 constexpr Pin PhyResetPin = PortDPin(11);
 
-// M42 and M208 commands now use logical pin numbers, not firmware pin numbers.
-// This next definition defines the highest one.
-// This is the mapping from logical pins 60+ to firmware pin numbers
-constexpr Pin SpecialPinMap[] =
+// Enum to represent allowed types of pin access
+// We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
+enum class PinCapability: uint8_t
 {
+	// Individual capabilities
+	read = 1,
+	ain = 2,
+	write = 4,
+	pwm = 8,
+
+	// Combinations
+	ainr = 1|2,
+	rw = 1|4,
+	wpwm = 4|8,
+	rwpwm = 1|4|8,
+	ainrw = 1|2|4,
+	ainrwpwm = 1|2|4|8
 };
-constexpr Pin DueX5GpioPinMap[] = {};				// TBD
-constexpr int HighestLogicalPin = 50;										// highest logical pin number on this electronics
+
+constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
+{
+	return (PinCapability)((uint8_t)a | (uint8_t)b);
+}
+
+// Struct to represent a pin that can be assigned to various functions
+// This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
+struct PinEntry
+{
+	bool CanDo(PinAccess access) const;
+	Pin GetPin() const { return pin; }
+	PinCapability GetCapability() const { return cap; }
+	const char* GetNames() const { return names; }
+
+	Pin pin;
+	PinCapability cap;
+	const char *names;
+};
+
+// List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
+// The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
+// Aliases are separate by the , character.
+// If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
+// for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
+constexpr PinEntry PinTable[] =
+{
+	// Output connectors
+	{ PortAPin(7),	PinCapability::wpwm,	"out0" },
+	{ PortAPin(24), PinCapability::wpwm,	"out1" },
+	{ PortAPin(16),	PinCapability::wpwm,	"out2" },
+	{ PortAPin(11),	PinCapability::wpwm,	"out3" },
+	{ PortAPin(15),	PinCapability::wpwm,	"out4" },
+	{ PortCPin(5),	PinCapability::wpwm,	"out5" },
+	{ PortAPin(8),	PinCapability::wpwm,	"out6" },
+	{ PortCPin(11),	PinCapability::wpwm,	"out7" },
+	{ PortCPin(8),	PinCapability::wpwm,	"out8" },
+	{ PortAPin(0),	PinCapability::wpwm,	"out9" },
+	{ PortCPin(23),	PinCapability::wpwm,	"out10,servo" },
+	{ PortAPin(10),	PinCapability::write,	"pson" },
+
+	// Tacho inputs associated with outputs 4-6
+	{ PortCPin(7),	PinCapability::read,	"out4.tach" },
+	{ PortDPin(23),	PinCapability::read,	"out5.tach" },
+	{ PortAPin(1),	PinCapability::read,	"out6.tach" },
+
+	// IO connector inputs
+	//TODO some have ain capability too
+	{ PortDPin(30),	PinCapability::read,	"io0.in" },
+	{ PortEPin(4),	PinCapability::read,	"io1.in" },
+	{ PortAPin(18),	PinCapability::read,	"io2.in" },
+	{ PortEPin(5),	PinCapability::read,	"io3.in" },
+	{ PortAPin(17),	PinCapability::read,	"io4.in" },
+	{ PortAPin(19),	PinCapability::read,	"io5.in" },
+	{ PortCPin(31),	PinCapability::read,	"io6.in" },
+	{ PortCPin(0),	PinCapability::read,	"io7.in" },
+	{ PortEPin(3),	PinCapability::read,	"io8.in" },
+
+	// IO connector outputs
+	//TODO some have PWM capability too
+	{ PortBPin(7),	PinCapability::write,	"io0.out" },
+	{ PortBPin(6),	PinCapability::write,	"io1.out" },
+	{ PortCPin(14),	PinCapability::write,	"io2.out" },
+	{ PortAPin(3),	PinCapability::write,	"io3.out" },
+	{ PortAPin(2),	PinCapability::write,	"io4.out" },
+	{ PortEPin(2),	PinCapability::write,	"io5.out" },
+	{ PortAPin(12),	PinCapability::write,	"io6.out" },
+	{ PortCPin(29),	PinCapability::write,	"io7.out" },
+	{ PortEPin(1),	PinCapability::write,	"io8.out" },
+
+	// Misc
+	{ PortDPin(16),	PinCapability::rw,		"spi.cs0" },
+	{ PortDPin(15),	PinCapability::rw,		"spi.cs1" },
+	{ PortDPin(27),	PinCapability::rw,		"spi.cs2" },
+	{ PortCPin(22),	PinCapability::rw,		"spi.cs3" },
+	{ PortDPin(24),	PinCapability::rw,		"spi.cs4" }
+};
+
+constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
+
+// Function to look up a pin name pass back the corresponding index into the pin table
+bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
+
+// Default pin allocations
+constexpr const char *DefaultEndstopPinNames[] = { "nil" };
+constexpr const char *DefaultZProbePinNames = "^io8.in+io8.out";
+constexpr const char *DefaultHeaterPinNames[] = { "nil" };
+constexpr const char *DefaultFanPinNames[] = { "nil" };
+constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
 
 // SAME70 Flash locations
 // These are designed to work with 1Mbyte flash processors as well as 2Mbyte
