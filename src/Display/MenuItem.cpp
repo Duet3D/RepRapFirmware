@@ -262,13 +262,13 @@ void ValueMenuItem::CorePrint(Lcd7920& lcd)
 			break;
 
 		case PrintFormat::asIpAddress:
-			lcd.print(currentValue.u & 0x000F);
+			lcd.print(currentValue.u & 0x000000FF);
 			lcd.print(':');
-			lcd.print((currentValue.u >> 8) & 0x000F);
+			lcd.print((currentValue.u >> 8) & 0x0000000FF);
 			lcd.print(':');
-			lcd.print((currentValue.u >> 16) & 0x000F);
+			lcd.print((currentValue.u >> 16) & 0x0000000FF);
 			lcd.print(':');
-			lcd.print((currentValue.u >> 24) & 0x000F);
+			lcd.print((currentValue.u >> 24) & 0x0000000FF);
 			break;
 
 		case PrintFormat::asTime:
@@ -416,11 +416,17 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 				break;
 
 			case PrintFormat::asFloat:
-				itemChanged = currentValue.f == oldValue.f;
+				if (currentValue.f != oldValue.f)
+				{
+					itemChanged = true;
+				}
 				break;
 
 			case PrintFormat::asSigned:
-				itemChanged = currentValue.i == oldValue.i;
+				if (currentValue.i != oldValue.i)
+				{
+					itemChanged = true;
+				}
 				break;
 
 			case PrintFormat::asUnsigned:
@@ -428,7 +434,10 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 			case PrintFormat::asText:
 			case PrintFormat::asTime:
 			default:
-				itemChanged = currentValue.u == oldValue.u;
+				if (currentValue.u != oldValue.u)
+				{
+					itemChanged = true;
+				}
 				break;
 			}
 		}
