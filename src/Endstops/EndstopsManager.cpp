@@ -258,7 +258,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 						   )
 						{
 							// Asking for a switch endstop but we don't already have one, so we don't know what pin number(s) it should use
-							reply.printf("Logical pin number needed for witch-type endstop on %c axis", c);
+							reply.printf("Pin name needed for switch-type endstop on %c axis", c);
 							return GCodeResult::error;
 						}
 						else
