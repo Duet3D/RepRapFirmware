@@ -64,7 +64,8 @@ void LinuxInterface::Spin()
 				uint32_t busyChannels = 0;
 				for (size_t i = 0; i < NumGCodeBuffers; i++)
 				{
-					if (!reprap.GetGCodes().GetGCodeBuffer(i)->IsCompletelyIdle())
+					const GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(i);
+					if (!gb->IsCompletelyIdle() || gb->MachineState().state != GCodeState::normal || gb->IsFileFinished())
 					{
 						busyChannels |= (1 << i);
 					}
@@ -93,13 +94,19 @@ void LinuxInterface::Spin()
 				const char *data = transfer->ReadData(dataLength);
 				const CodeHeader *header = reinterpret_cast<const CodeHeader*>(data);
 
-				GCodeBuffer *buffer = reprap.GetGCodes().GetGCodeBuffer((size_t)header->channel);
-				if (buffer->IsCompletelyIdle())
+				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((size_t)header->channel);
+				if (gb->IsCompletelyIdle())
 				{
-					buffer->Put(data, dataLength, true);
+					// Fill up the buffer so another code can be started
+					gb->Put(data, dataLength, true);
 				}
 				else
 				{
+					// Still busy processing a file, request the code again
+					if (reprap.Debug(moduleLinuxInterface))
+					{
+						reprap.GetPlatform().MessageF(DebugMessage, "Received code for busy channel %d\n", (int)header->channel);
+					}
 					transfer->ResendPacket(packet);
 				}
 				break;

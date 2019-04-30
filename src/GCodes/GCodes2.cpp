@@ -414,6 +414,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					reprap.GetHeat().SwitchOffAll(true);	// no stop.g file found, so default to turning all heaters off
 				}
+				result = GCodeResult::stateNotFinished;
 			}
 		}
 		break;
@@ -1391,6 +1392,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				gb.MachineState().newToolNumber = applicableTool->Number();
 				gb.MachineState().toolChangeParam = (simulationMode == 0) ? 0 : DefaultToolChangeParam;
 				gb.SetState(GCodeState::m109ToolChange0);
+				result = GCodeResult::stateNotFinished;
 			}
 			else
 			{
@@ -1409,6 +1411,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (code == 109 && simulationMode == 0)
 				{
 					gb.SetState(GCodeState::m109WaitForTemperature);
+					result = GCodeResult::stateNotFinished;
 				}
 			}
 		}
@@ -4059,7 +4062,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					moveBuffer.coords[axisToUse] += correctionAngle * correctionFactor;
 
 					reply.printf("%c axis is off by %.2f deg", axisLetters[axisToUse], (double)correctionAngle);
-					HandleReply(gb, GCodeResult::ok, reply.c_str());
+					HandleReply(gb, GCodeResult::stateNotFinished, reply.c_str());
 				}
 				else if (reprap.GetMove().GetNumProbedProbePoints() >= 4)
 				{
@@ -4078,7 +4081,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					moveBuffer.coords[Z_AXIS] += zS;
 
 					reply.printf("%c is offset by %.2fmm, Z is offset by %.2fmm", (x2 == x1) ? 'Y' : 'X', (double)aS, (double)zS);
-					HandleReply(gb, GCodeResult::ok, reply.c_str());
+					HandleReply(gb, GCodeResult::stateNotFinished, reply.c_str());
 				}
 				else
 				{
@@ -4098,6 +4101,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				NewMoveAvailable(1);
 
 				gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
+				result = GCodeResult::stateNotFinished;
 			}
 		}
 		else
@@ -4587,6 +4591,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			macroName.printf("M%d.g", code);
 			if (DoFileMacro(gb, macroName.c_str(), false, 98))
 			{
+				// FIXME Every DoFileMacro call should not result in GCodeResult::ok but in GCodeResult::statenNotFinished
+				// or even something like GCodeResult::waitingForMacro like for this. That will require extra work though
 				break;
 			}
 		}
@@ -4727,12 +4733,9 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		break;
 	}
 
-	if (gb.GetState() == GCodeState::normal)
-	{
-		gb.timerRunning = false;
-		UnlockAll(gb);
-		HandleReply(gb, rslt, reply.c_str());
-	}
+	gb.timerRunning = false;
+	UnlockAll(gb);
+	HandleReply(gb, rslt, reply.c_str());
 	return true;
 }
 

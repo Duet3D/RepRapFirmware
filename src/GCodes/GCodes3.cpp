@@ -894,7 +894,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			// Kick off new movement
 			NewMoveAvailable(1);
 			gb.SetState(GCodeState::probingToolOffset);
-			break;
+			return GCodeResult::stateNotFinished;
 		}
 	}
 
@@ -944,7 +944,7 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply)
 			// Kick off new movement
 			NewMoveAvailable(1);
 			gb.SetState(GCodeState::probingCavity1);
-			break;
+			return GCodeResult::stateNotFinished;
 		}
 	}
 
@@ -1074,7 +1074,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 	}
 
 	gb.SetState(GCodeState::flashing1);
-	return GCodeResult::ok;
+	return GCodeResult::stateNotFinished;
 }
 
 // Handle M260 - send and possibly receive via I2C

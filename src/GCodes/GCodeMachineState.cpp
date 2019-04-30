@@ -25,7 +25,7 @@ GCodeMachineState::GCodeMachineState()
 {
 #if HAS_LINUX_INTERFACE
 	fileId = 0;
-	isFileFinished = true;
+	isFileFinished = false;
 #endif
 }
 
@@ -33,8 +33,8 @@ GCodeMachineState::GCodeMachineState()
 // Set the state to indicate a file is being processed
 void GCodeMachineState::SetFileExecuting()
 {
-	isFileFinished = false;
 	fileId = LastFileId++;
+	isFileFinished = false;
 }
 
 // Mark the currently executing file as finished
@@ -85,7 +85,7 @@ void GCodeMachineState::CloseFile()
 	ms->fileState.Close();
 #elif HAS_LINUX_INTERFACE
 	ms->fileId = 0;
-	ms->isFileFinished = true;
+	ms->isFileFinished = false;
 #endif
 	ms->previous = freeList;
 	freeList = ms;

@@ -13,8 +13,9 @@
 // Enumeration to specify the result of attempting to process a GCode command
 enum class GCodeResult : uint8_t
 {
-	notFinished,					// we havebn't finished processing this command
-	ok,								// we have finished processing this code in the current state, and if the GCodeState is 'normal' then we have finished it completely
+	stateNotFinished,				// we haven't finished processing this command in the current state
+	notFinished,					// we haven't finished processing this command
+	ok,								// we have finished processing this code
 	error,
 	warning,
 	warningNotSupported,

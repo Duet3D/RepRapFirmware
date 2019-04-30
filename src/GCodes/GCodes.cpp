@@ -1703,7 +1703,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			error = true;
 		}
 		gb.MachineState().errorMessage = nullptr;
-		HandleReply(gb, (error) ? GCodeResult::error : GCodeResult::ok, reply.c_str());
+		HandleReply(gb, GetGCodeResultFromError(error), reply.c_str());
 	}
 }
 
@@ -1873,7 +1873,6 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 			if (gb.GetState() == GCodeState::normal)
 			{
 				UnlockAll(gb);
-				HandleReply(gb, GCodeResult::ok, "");
 				if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
 				{
 					gb.Put("M600");
@@ -3552,7 +3551,7 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	gb.SetState(GCodeState::homing1);
-	return GCodeResult::ok;
+	return GCodeResult::stateNotFinished;
 }
 
 // This is called to execute a G30.
@@ -3620,7 +3619,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 			DoFileMacro(gb, DEPLOYPROBE_G, false);
 		}
 	}
-	return GCodeResult::ok;
+	return GCodeResult::stateNotFinished;
 }
 
 // Decide which device to display a message box on
@@ -3672,7 +3671,7 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 	{
 		DoFileMacro(gb, DEPLOYPROBE_G, false);
 	}
-	return GCodeResult::ok;
+	return GCodeResult::stateNotFinished;
 }
 
 GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
@@ -3707,7 +3706,7 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 		ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates to reflect any height map offset at the current position
 	}
 
-	return (err) ? GCodeResult::error : GCodeResult::ok;
+	return GetGCodeResultFromError(err);
 }
 
 // Save the height map and append the success or error message to 'reply', returning true if an error occurred
@@ -3843,11 +3842,13 @@ void GCodes::StartPrinting(bool fromStart)
 	platform.MessageF(LogMessage,
 						(simulationMode == 0) ? "Started printing file %s\n" : "Started simulating printing file %s\n",
 							reprap.GetPrintMonitor().GetPrintingFilename());
+#if HAS_HIGH_SPEED_SD
 	if (fromStart)
 	{
 		// Get the fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
 		DoFileMacro(*fileGCode, START_G, false);
 	}
+#endif
 }
 
 // Function to handle dwell delays. Returns true for dwell finished, false otherwise.
@@ -4222,7 +4223,14 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 	// Deal with replies to the Linux interface
 	if (gb.IsBinary())
 	{
-		platform.Message(gb.GetResponseMessageType(), reply);
+		if (rslt == GCodeResult::notFinished || rslt == GCodeResult::stateNotFinished)
+		{
+			platform.Message((MessageType)(gb.GetResponseMessageType() | PushFlag), reply);
+		}
+		else
+		{
+			platform.Message(gb.GetResponseMessageType(), reply);
+		}
 		return;
 	}
 #endif
@@ -4298,27 +4306,20 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 // Handle a successful response when the response is in an OutputBuffer
 void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply)
 {
-#if HAS_LINUX_INTERFACE
-	// Deal with replies to the Linux interface
-	if (gb.IsBinary())
-	{
-		if (reply == nullptr)
-		{
-			platform.Message(gb.GetResponseMessageType(), "");
-		}
-		else
-		{
-			platform.Message(gb.GetResponseMessageType(), reply);
-		}
-		return;
-	}
-#endif
-
 	// Although unlikely, it's possible that we get a nullptr reply. Don't proceed if this is the case
 	if (reply == nullptr)
 	{
 		return;
 	}
+
+#if HAS_LINUX_INTERFACE
+	// Deal with replies to the Linux interface
+	if (gb.IsBinary())
+	{
+		platform.Message(gb.GetResponseMessageType(), reply);
+		return;
+	}
+#endif
 
 	// Second UART device, e.g. dc42's PanelDue. Do NOT use emulation for this one!
 	if (&gb == auxGCode)
@@ -4716,7 +4717,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 		}
 		isRetracted = retract;
 	}
-	return GCodeResult::ok;
+	return (gb.GetState() == GCodeState::normal) ? GCodeResult::ok : GCodeResult::stateNotFinished;
 }
 
 // Load the specified filament into a tool
@@ -4780,7 +4781,7 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 		String<ScratchStringLength> scratchString;
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName.c_str(), LOAD_FILAMENT_G);
 		DoFileMacro(gb, scratchString.c_str(), true);
-		return GCodeResult::ok;
+		return GCodeResult::stateNotFinished;
 	}
 	else if (tool->GetFilament()->IsLoaded())
 	{
@@ -4820,7 +4821,7 @@ GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply)
 	String<ScratchStringLength> scratchString;
 	scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, tool->GetFilament()->GetName(), UNLOAD_FILAMENT_G);
 	DoFileMacro(gb, scratchString.c_str(), true);
-	return GCodeResult::ok;
+	return GCodeResult::stateNotFinished;
 }
 
 float GCodes::GetRawExtruderTotalByDrive(size_t extruder) const
@@ -4924,10 +4925,12 @@ void GCodes::StopPrint(StopPrintReason reason)
 		platform.MessageF(LoggedGenericMessage, "%s printing file %s, print time was %" PRIu32 "h %" PRIu32 "m\n",
 			(reason == StopPrintReason::normalCompletion) ? "Finished" : "Cancelled",
 			printingFilename, printMinutes/60u, printMinutes % 60u);
+#if HAS_HIGH_SPEED_SD
 		if (reason == StopPrintReason::normalCompletion && simulationMode == 0)
 		{
 			platform.DeleteSysFile(RESUME_AFTER_POWER_FAIL_G);
 		}
+#endif
 	}
 
 	updateFileWhenSimulationComplete = false;
