@@ -379,7 +379,7 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 				currentFormat = PrintFormat::asIpAddress;
 				break;
 
-			case 35:
+			case 35:	// Percentage of file that has been processed
 				currentValue.f = (reprap.GetPrintMonitor().IsPrinting())
 									? reprap.GetGCodes().FractionOfFilePrinted() * 100.0
 										: 0;
