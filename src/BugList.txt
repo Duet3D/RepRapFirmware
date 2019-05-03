@@ -98,7 +98,7 @@ Done for 2.03beta3:
 - [done] Support M505
 - [done] Duet085: allow 2 additional fans
 
-Done in 2.03beta4:
+Done in 2.03RC1:
 - [done] M291 don't lock movement ever
 - [done, test] resurrect.g: put filename in quotes, and add R0 to M290 command 
 - [done] M302 to wait until moves have completed
@@ -110,11 +110,11 @@ Done in 2.03beta4:
 - [done] fix issue with Fan 1 on Duet 085
 - [done, not tested] Duet085 additional fan issue
 - [done, test] Include workplace coordinate # in status response, https://forum.duet3d.com/topic/9896/display-current-active-csys-p1-g54-p2-g55-next-to-x-y-z
-
-Planned for 2.03:
 - [done, test] M291 command should unlock movement if it is owned, e.g. if used within homeall.g and an SD file does G28
 
-- [done] support multiple DDA rings
+Planned for 2.03:
+- I2C errors: can we recover from them?
+- If a print is ended or cancelled with G10 in effect, cancel the Z lift. Also, if Z lift value is changed while G10 is in effect, the Z position might be wrong.
 
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5
 - Filament monitors: disable if tool is not active/no commanded extrusion, or does it do that already?
@@ -124,10 +124,8 @@ Planned for 2.03:
 - Check that in all modes, if insufficient axes are homed then the SD job is aborted
 - In CNC or Laser mode, abort job if it goes outside machine limits, https://forum.duet3d.com/topic/9269/yet-another-cnc-improvement-outside-machine-limits/4
 - In simulation mode, if the job was aborted for any reason, report this instead of reporting the simulated print time
-- M585 needs to use custom endstop specified in E parameter
 - M143 A3 option to turn off whole machine immediately?
 - Turn off power in emergency stop? https://forum.duet3d.com/topic/9158/ps_on-m81-incorporated-into-the-emergency-stop-functions/5
-- If a print is ended or cancelled with G10 in effect, cancel the Z lift. Also, if Z lift value is changed while G10 is in effect, the Z position will be wrong.
 - Clear filament sensor alerts after they are acknowledged, https://forum.duet3d.com/topic/9072/filament-out-warning-always-present/8
 - Consider compensating probe trigger height for other heater temperature than bed
 - For PanelDue, send heater data for the first heater in each tool (does PD handle #heaters and #tools separately?) https://forum.duet3d.com/topic/8458/hide-unused-heater-channels-paneldue-5/4 and https://forum.duet3d.com/topic/8933/paneldue-two-tools-same-heater-one-pair-of-temp-buttons/2
@@ -139,7 +137,6 @@ Planned for 2.03:
 - Laser turns off, https://forum.duet3d.com/topic/9636/laser-turns-of-during-straight-lines/5
 - Test endstop input high/low noise immunity, decide on pullup enable/disable
 - Test that M500 saves all delta rod lengths correctly
-- [ok] Test with Duet 3
 
 - Z height based on plasma voltage or force
 - [could be related to visibility issue] Investigate 12864 display heater fault warning, https://forum.duet3d.com/topic/7718/12864-display-current-tool-temperatures/6
@@ -169,7 +166,7 @@ Investigations
 - Retraction problem, https://forum.duet3d.com/post/79485
 - Icon generation, https://forum.duet3d.com/topic/8177/icon-generation/7
 
-2.04 planned:
+3.x planned:
 - Option to calibrate bed tilt but not tower positoins, https://forum.duet3d.com/topic/9236/delta-auto-calibration-changes-in-bed-tilt-calculations/2
 - Stop print after a short to ground report? https://forum.duet3d.com/topic/8239/duet-maestro-short-to-ground/10
 - Option to enable a trigger when not printing (C3?), https://forum.duet3d.com/topic/8459/m581-external-trigger
