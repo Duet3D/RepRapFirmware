@@ -131,10 +131,6 @@
 # define SUPPORT_TELNET			HAS_NETWORKING
 #endif
 
-#ifndef SUPPORT_ASYNC_MOVES
-# define SUPPORT_ASYNC_MOVES	0
-#endif
-
 #if SUPPORT_DHT_SENSOR && !defined(RTOS)
 # error DHT sensor support requires RTOS
 #endif

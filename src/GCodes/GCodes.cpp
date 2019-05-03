@@ -250,14 +250,6 @@ void GCodes::Reset()
 		f = 0.0;										// clear babystepping before calling ToolOffsetInverseTransform
 	}
 
-#if SUPPORT_ASYNC_MOVES
-	auxMoveAvailable = false;
-	for (float& f : hiddenBabyStepOffsets)
-	{
-		f = 0.0;										// clear babystepping before calling ToolOffsetInverseTransform
-	}
-#endif
-
 	currentZHop = 0.0;									// clear this before calling ToolOffsetInverseTransform
 	lastPrintingMoveHeight = -1.0;
 	moveBuffer.xAxes = DefaultXAxisMapping;
@@ -2177,7 +2169,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 				{
 					buf.catf(" %c%.3f", axisLetters[axis], (double)GetTotalBabyStepOffset(axis));
 				}
-				buf.cat('\n');
+				buf.cat(" R0\n");
 				ok = f->Write(buf.c_str());								// write baby stepping offsets
 			}
 			if (ok && fileGCode->OriginalMachineState().volumetricExtrusion)
@@ -2260,11 +2252,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 void GCodes::Diagnostics(MessageType mtype)
 {
 	platform.Message(mtype, "=== GCodes ===\n");
-#if SUPPORT_ASYNC_MOVES
-	platform.MessageF(mtype, "Segments left: %u, aux move: %s\n", segmentsLeft, (auxMoveAvailable) ? "yes" : "no");
-#else
 	platform.MessageF(mtype, "Segments left: %u\n", segmentsLeft);
-#endif
 	platform.MessageF(mtype, "Stack records: %u allocated, %u in use\n", GCodeMachineState::GetNumAllocated(), GCodeMachineState::GetNumInUse());
 	const GCodeBuffer * const movementOwner = resourceOwners[MoveResource];
 	platform.MessageF(mtype, "Movement lock held by %s\n", (movementOwner == nullptr) ? "null" : movementOwner->GetIdentity());
@@ -3099,21 +3087,6 @@ bool GCodes::ReadMove(RawMove& m)
 
 	return true;
 }
-
-#if SUPPORT_ASYNC_MOVES
-
-bool GCodes::ReadAuxMove(RawMove &m)
-{
-	if (auxMoveAvailable)
-	{
-		m = auxMoveBuffer;
-		auxMoveAvailable = false;
-		return true;
-	}
-	return false;
-}
-
-#endif
 
 void GCodes::ClearMove()
 {
@@ -4846,10 +4819,6 @@ bool GCodes::AllAxesAreHomed() const
 void GCodes::SetAxisIsHomed(unsigned int axis)
 {
 	SetBit(axesHomed, axis);
-#if SUPPORT_ASYNC_MOVES
-	currentBabyStepOffsets[axis] += hiddenBabyStepOffsets[axis];
-	hiddenBabyStepOffsets[axis] = 0.0;
-#endif
 }
 
 // Write the config-override file returning true if an error occurred
@@ -5161,6 +5130,26 @@ bool GCodes::LockMovement(const GCodeBuffer& gb)
 void GCodes::GrabMovement(const GCodeBuffer& gb)
 {
 	GrabResource(gb, MoveResource);
+}
+
+void GCodes::UnlockMovement(const GCodeBuffer& gb)
+{
+	UnlockResource(gb, MoveResource);
+}
+
+// Unlock the resource if we own it
+void GCodes::UnlockResource(const GCodeBuffer& gb, Resource r)
+{
+	if (resourceOwners[r] == &gb)
+	{
+		GCodeMachineState * mc = &gb.MachineState();
+		do
+		{
+			ClearBit(mc->lockedResources, r);
+			mc = mc->previous;
+		} while (mc != nullptr);
+		resourceOwners[r] = nullptr;
+	}
 }
 
 // Release all locks, except those that were owned when the current macro was started

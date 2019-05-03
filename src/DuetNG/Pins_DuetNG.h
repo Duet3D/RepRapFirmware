@@ -32,7 +32,6 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
-#define SUPPORT_ASYNC_MOVES		1
 
 #define USE_CACHE				1					// set nonzero to enable the cache
 
@@ -193,17 +192,17 @@ constexpr uint32_t IAP_FLASH_START = 0x00470000;
 constexpr uint32_t IAP_FLASH_END = 0x0047FFFF;		// we allow a full 64K on the SAM4
 
 // Duet pin numbers to control the WiFi interface on the Duet WiFi
-constexpr Pin EspResetPin = 100;			// Low on this in holds the WiFi module in reset (ESP_RESET)
-constexpr Pin EspEnablePin = 101;			// High to enable the WiFi module, low to power it down (ESP_CH_PD)
-constexpr Pin EspDataReadyPin = 95;			// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
-constexpr Pin SamTfrReadyPin = 94;			// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
-constexpr Pin SamCsPin = 11;				// SPI NPCS pin, input from WiFi module
+constexpr Pin EspResetPin = PortEPin(4);			// Low on this in holds the WiFi module in reset (ESP_RESET)
+constexpr Pin EspEnablePin = PortEPin(5);			// High to enable the WiFi module, low to power it down (ESP_CH_PD)
+constexpr Pin EspDataReadyPin = PortDPin(31);		// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
+constexpr Pin SamTfrReadyPin = PortDPin(30);		// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
+constexpr Pin SamCsPin = PortAPin(11);				// SPI NPCS pin, input from WiFi module
 
 // Duet pin numbers to control the W5500 interface on the Duet Ethernet
-constexpr Pin W5500ResetPin = 100;			// Low on this in holds the W5500 module in reset (ESP_RESET)
-constexpr Pin W5500InterruptPin = 95;		// W5500 interrupt output, active low
-constexpr Pin W5500ModuleSensePin = 5;		// URXD1, tied to ground on the Ethernet module
-constexpr Pin W5500SsPin = 11;				// SPI NPCS pin, input from W5500 module
+constexpr Pin W5500ResetPin = PortEPin(4);			// Low on this in holds the W5500 module in reset (ESP_RESET)
+constexpr Pin W5500InterruptPin = PortDPin(31);		// W5500 interrupt output, active low
+constexpr Pin W5500ModuleSensePin = PortAPin(5);	// URXD1, tied to ground on the Ethernet module
+constexpr Pin W5500SsPin = PortAPin(11);			// SPI NPCS pin, input from W5500 module
 
 // Timer allocation (no network timer on DuetNG)
 // TC0 channel 0 is used for FAN2

@@ -25,9 +25,6 @@ public:
 	bool CanAddMove() const;
 	bool AddStandardMove(GCodes::RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
 	bool AddSpecialMove(float feedRate, const float coords[]);
-#if SUPPORT_ASYNC_MOVES
-	bool AddAsyncMove(float feedRate, float reqAcceleration, const float coords[]);
-#endif
 
 	void Spin(uint8_t simulationMode, bool shouldStartMove);					// Try to process moves in the ring, returning true if the ring is idle
 	bool IsIdle() const;														// Return true if this DDA ring is idle

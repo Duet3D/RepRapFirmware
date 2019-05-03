@@ -859,9 +859,9 @@ namespace SmartDrivers
 		pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
 
 		// The pins are already set up for SPI in the pins table
-		ConfigurePin(GetPinDescription(TMC2660MosiPin));
-		ConfigurePin(GetPinDescription(TMC2660MisoPin));
-		ConfigurePin(GetPinDescription(TMC2660SclkPin));
+		ConfigurePin(TMC2660MosiPin);
+		ConfigurePin(TMC2660MisoPin);
+		ConfigurePin(TMC2660SclkPin);
 
 		// Enable the clock to the USART or SPI
 		pmc_enable_periph_clk(ID_TMC2660_SPI);

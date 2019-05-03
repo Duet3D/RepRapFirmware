@@ -145,9 +145,6 @@ public:
 	void Exit();														// Shut it down
 	void Reset();														// Reset some parameter to defaults
 	bool ReadMove(RawMove& m);											// Called by the Move class to get a movement set by the last G Code
-#if SUPPORT_ASYNC_MOVES
-	bool ReadAuxMove(RawMove &m);
-#endif
 	void ClearMove();
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply);	// Open a file of G Codes to run
 	void StartPrinting(bool fromStart);									// Start printing the file already selected
@@ -240,6 +237,10 @@ public:
 
 	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply);	// Start timing SD card file writing
 
+#if SUPPORT_WORKPLACE_COORDINATES
+	unsigned int GetWorkplaceCoordinateSystemNumber() const { return currentCoordinateSystem + 1; }
+#endif
+
 protected:
 	DECLARE_OBJECT_MODEL
 
@@ -267,6 +268,8 @@ private:
 	bool LockMovementAndWaitForStandstill(const GCodeBuffer& gb);		// Lock movement and wait for pending moves to finish
 	void GrabResource(const GCodeBuffer& gb, Resource r);				// Grab a resource even if it is already owned
 	void GrabMovement(const GCodeBuffer& gb);							// Grab the movement lock even if it is already owned
+	void UnlockResource(const GCodeBuffer& gb, Resource r);				// Unlock the resource if we own it
+	void UnlockMovement(const GCodeBuffer& gb);							// Unlock the movement resource if we own it
 	void UnlockAll(const GCodeBuffer& gb);								// Release all locks
 
 	void StartNextGCode(GCodeBuffer& gb, const StringRef& reply);		// Fetch a new or old GCode and process it
@@ -471,11 +474,6 @@ private:
 	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
 	unsigned int totalSegments;					// The total number of segments left in the complete move
 
-#if SUPPORT_ASYNC_MOVES
-	RawMove auxMoveBuffer;
-	bool auxMoveAvailable;
-#endif
-
 	unsigned int segmentsLeftToStartAt;
 	float moveFractionToStartAt;				// how much of the next move was printed before the power failure
 	float moveFractionToSkip;
@@ -512,7 +510,7 @@ private:
 
 #if SUPPORT_WORKPLACE_COORDINATES
 	static const size_t NumCoordinateSystems = 9;
-	unsigned int currentCoordinateSystem;
+	unsigned int currentCoordinateSystem;		// This is zero-based, where as the P parameter in the G10 command is 1-based
 	float workplaceCoordinates[NumCoordinateSystems][MaxAxes];	// Workplace coordinate offsets
 #else
 	float axisOffsets[MaxAxes];					// M206 axis offsets
@@ -535,9 +533,6 @@ private:
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 	float volumetricExtrusionFactors[MaxExtruders]; // Volumetric extrusion factors
 	float currentBabyStepOffsets[MaxAxes];		// The accumulated axis offsets due to baby stepping requests
-#if SUPPORT_ASYNC_MOVES
-	float hiddenBabyStepOffsets[MaxAxes];		// The amount of live (async) baby stepping performed
-#endif
 
 	// Z probe
 	GridDefinition defaultGrid;					// The grid defined by the M557 command in config.g
@@ -667,11 +662,7 @@ inline void GCodes::NewMoveAvailable()
 // Get the total baby stepping offset for an axis
 inline float GCodes::GetTotalBabyStepOffset(size_t axis) const
 {
-#if SUPPORT_ASYNC_MOVES
-	return currentBabyStepOffsets[axis] + hiddenBabyStepOffsets[axis];
-#else
 	return currentBabyStepOffsets[axis];
-#endif
 }
 
 //*****************************************************************************************************

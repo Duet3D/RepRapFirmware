@@ -71,18 +71,12 @@ Move::Move() : active(false)
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
 	kinematics = Kinematics::Create(KinematicsType::cartesian);			// default to Cartesian
 	mainDDARing.Init1(DdaRingLength);
-#if SUPPORT_ASYNC_MOVES
-	auxDDARing.Init1(AuxDdaRingLength);
-#endif
 	DriveMovement::InitialAllocate(NumDms);
 }
 
 void Move::Init()
 {
 	mainDDARing.Init2();
-#if SUPPORT_ASYNC_MOVES
-	auxDDARing.Init2();
-#endif
 
 	maxPrintingAcceleration = maxTravelAcceleration = 10000.0;
 	drcEnabled = false;											// disable dynamic ringing cancellation
@@ -133,9 +127,6 @@ void Move::Spin()
 
 	// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
 	mainDDARing.RecycleDDAs();
-#if SUPPORT_ASYNC_MOVES
-	auxDDARing.RecycleDDAs();
-#endif
 
 	// See if we can add another move to the ring
 	bool canAddMove = (
@@ -204,27 +195,8 @@ void Move::Spin()
 
 	mainDDARing.Spin(simulationMode, idleCount > 10);	// let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount.
 
-#if SUPPORT_ASYNC_MOVES
-	if (auxDDARing.CanAddMove())
-	{
-		GCodes::RawMove auxMove;
-		if (reprap.GetGCodes().ReadAuxMove(auxMove))
-		{
-			if (auxDDARing.AddAsyncMove(auxMove.feedRate, auxMove.acceleration, auxMove.coords))
-			{
-				moveState = MoveState::collecting;
-			}
-		}
-	}
-	auxDDARing.Spin(simulationMode, true);				// let the DDA ring process moves
-#endif
-
 	// Reduce motor current to standby if the rings have been idle for long enough
-	if (   mainDDARing.IsIdle()
-#if SUPPORT_ASYNC_MOVES
-		&& auxDDARing.IsIdle()
-#endif
-	   )
+	if (mainDDARing.IsIdle())
 	{
 		if (moveState == MoveState::executing && !reprap.GetGCodes().IsPaused())
 		{
@@ -354,12 +326,7 @@ void Move::Diagnostics(MessageType mtype)
 	p.Message(mtype, "\n");
 #endif
 
-#if SUPPORT_ASYNC_MOVES
-	mainDDARing.Diagnostics(mtype, "Main");
-	auxDDARing.Diagnostics(mtype, "Aux");
-#else
 	mainDDARing.Diagnostics(mtype, "");
-#endif
 }
 
 // Set the current position to be this
@@ -728,33 +695,17 @@ void Move::Interrupt()
 	{
 		mainDDARing.Interrupt(p);
 		std::optional<uint32_t> nextStepTime = mainDDARing.GetNextInterruptTime();
-
-#if SUPPORT_ASYNC_MOVES
-		auxDDARing.Interrupt(p);
-		std::optional<uint32_t> nextAuxStepTime = auxDDARing.GetNextInterruptTime();
-		if (nextAuxStepTime.has_value() && (!nextStepTime.has_value() || (int32_t)(nextStepTime.value() - nextAuxStepTime.value()) > 0))
-		{
-			nextStepTime = nextAuxStepTime;
-		}
-		else if (!nextStepTime.has_value())
-		{
-			break;
-		}
-#else
 		if (!nextStepTime.has_value())
 		{
 			break;
 		}
-#endif
+
 		// Check whether we have been in this ISR for too long already and need to take a break
 		const uint16_t clocksTaken = StepTimer::GetInterruptClocks16() - (uint16_t)isrStartTime;
 		if (clocksTaken >= DDA::MaxStepInterruptTime && (nextStepTime.value() - isrStartTime) < (clocksTaken + DDA::MinInterruptInterval))
 		{
 			// Force a break by updating the move start time
 			mainDDARing.InsertHiccup(DDA::HiccupTime);
-#if SUPPORT_ASYNC_MOVES
-			auxDDARing.InsertHiccup(DDA::HiccupTime);
-#endif
 			nextStepTime = nextStepTime.value() + DDA::HiccupTime;
 #if SUPPORT_CAN_EXPANSION
 			CanInterface::InsertHiccup(DDA::HiccupTime);

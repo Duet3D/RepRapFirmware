@@ -1243,8 +1243,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 106: // Set/report fan values
 		{
 			bool seenFanNum = false;
-			int32_t fanNum;
-			gb.TryGetIValue('P', fanNum, seenFanNum);
+			uint32_t fanNum;
+			gb.TryGetUIValue('P', fanNum, seenFanNum);
 			bool processed;
 
 			// 2018-08-09: only configure the fan if a fan number was given.
@@ -1384,7 +1384,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				}
 
 				gb.MachineState().newToolNumber = applicableTool->Number();
-				gb.MachineState().toolChangeParam = (simulationMode == 0) ? 0 : DefaultToolChangeParam;
+				gb.MachineState().toolChangeParam = (simulationMode != 0) ? 0 : DefaultToolChangeParam;
 				gb.SetState(GCodeState::m109ToolChange0);
 			}
 			else
@@ -1608,9 +1608,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 			if (result != GCodeResult::error)
 			{
-				String<GCODE_LENGTH> message;
 				if (gb.Seen(('S')))
 				{
+					String<GCODE_LENGTH> message;
 					gb.GetQuotedString(message.GetRef());
 					platform.Message(type, message.c_str());
 				}
@@ -2221,9 +2221,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			const bool absolute = (gb.Seen('R') && gb.GetIValue() == 0);
 			bool seen = false;
-#if 0	//SUPPORT_ASYNC_MOVES
-			bool live = true;
-#endif
 			float differences[MaxAxes];
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
@@ -2239,12 +2236,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					{
 						differences[axis] = constrain<float>(fval, -1.0, 1.0);
 					}
-#if 0	//SUPPORT_ASYNC_MOVES
-					if (differences[axis] != 0.0 && !IsBitSet(reprap.GetMove().GetKinematics().GetLinearAxes(), axis))
-					{
-						live = false;		// we can only live babystep linear axes
-					}
-#endif
 				}
 				else
 				{
@@ -2254,64 +2245,34 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 			if (seen)
 			{
-#if 0	//SUPPORT_ASYNC_MOVES
-				if (live)
+				if (!LockMovement(gb))
 				{
-					if (auxMoveAvailable)
-					{
-						return false;									// wait until the previous aux move has gone
-					}
-
-					auxMoveBuffer.SetDefaults(0);
-					auxMoveBuffer.feedRate = DefaultFeedRate;
-					auxMoveBuffer.acceleration = 9999.0;
-					for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-					{
-						hiddenBabyStepOffsets[axis] += differences[axis];
-						if (differences[axis] != 0.0)
-						{
-							auxMoveBuffer.coords[axis] = differences[axis];
-							auxMoveBuffer.feedRate = min<float>(auxMoveBuffer.feedRate, platform.MaxFeedrate(axis));
-							auxMoveBuffer.acceleration = min<float>(auxMoveBuffer.acceleration, platform.Acceleration(axis));
-						}
-					}
-					auxMoveBuffer.feedRate /= 4;						// allow for other movement taking place at the same time
-					auxMoveBuffer.acceleration /= 4;
-					__DMB();
-					auxMoveAvailable = true;
+					return false;
 				}
-				else
-#endif
+
+				// Perform babystepping synchronously with moves
+				bool haveResidual = false;
+				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
-					if (!LockMovement(gb))
-					{
-						return false;
-					}
+					currentBabyStepOffsets[axis] += differences[axis];
+					const float amountPushed = reprap.GetMove().PushBabyStepping(axis, differences[axis]);
+					moveBuffer.initialCoords[axis] += amountPushed;
 
-					// Perform babystepping synchronously with moves
-					bool haveResidual = false;
-					for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+					// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
+					// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
+					moveBuffer.coords[axis] += differences[axis];
+					if (amountPushed != differences[axis])
 					{
-						currentBabyStepOffsets[axis] += differences[axis];
-						const float amountPushed = reprap.GetMove().PushBabyStepping(axis, differences[axis]);
-						moveBuffer.initialCoords[axis] += amountPushed;
-
-						// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
-						// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
-						moveBuffer.coords[axis] += differences[axis];
-						if (amountPushed != differences[axis])
-						{
-							haveResidual = true;
-						}
+						haveResidual = true;
 					}
+				}
 
-					if (haveResidual && segmentsLeft == 0 && reprap.GetMove().AllMovesAreFinished())
-					{
-						// The pipeline is empty, so execute the babystepping move immediately
-						SetMoveBufferDefaults();
-						moveBuffer.feedRate = DefaultFeedRate;
-						NewMoveAvailable(1);
-					}
+				if (haveResidual && segmentsLeft == 0 && reprap.GetMove().AllMovesAreFinished())
+				{
+					// The pipeline is empty, so execute the babystepping move immediately
+					SetMoveBufferDefaults();
+					moveBuffer.feedRate = DefaultFeedRate;
+					NewMoveAvailable(1);
 				}
 			}
 			else
@@ -2372,18 +2333,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					}
 				}
 
-				// If any axis jog buttons are enabled, wait for movement to stop and lock the movement system
-				if (axisControls != 0)
-				{
-					if (!LockMovementAndWaitForStandstill(gb))
-					{
-						return false;
-					}
-				}
+				// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
 
 				// If we need to wait for an acknowledgement, save the state and set waiting
 				if ((sParam == 2 || sParam == 3) && Push(gb))						// stack the machine state including the file position
 				{
+					UnlockMovement(gb);												// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
 					gb.MachineState().fileState.Close();							// stop reading from file
 					gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
 				}
@@ -2427,16 +2382,28 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		bool seen = false;
 		if (gb.Seen('P'))
 		{
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
 			seen = true;
 			reprap.GetHeat().AllowColdExtrude(gb.GetIValue() > 0);
 		}
 		if (gb.Seen('S'))
 		{
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
 			seen = true;
 			reprap.GetHeat().SetExtrusionMinTemp(gb.GetFValue());
 		}
 		if (gb.Seen('R'))
 		{
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
 			seen = true;
 			reprap.GetHeat().SetRetractionMinTemp(gb.GetFValue());
 		}
@@ -3486,7 +3453,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			const uint8_t inputType = (gb.Seen('S')) ? gb.GetUIValue() : 1;
 
 			unsigned int axesSeen = 0;
-			size_t lastAxisSeen;
 			for (size_t axis = 0; axis < numTotalAxes; ++axis)
 			{
 				if (gb.Seen(axisLetters[axis]))
@@ -3496,7 +3462,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						return false;
 					}
 					++axesSeen;
-					lastAxisSeen = axis;
 					const int ival = gb.GetIValue();
 					if (ival >= 0 && ival <= 3)
 					{
@@ -3508,22 +3473,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						result = GCodeResult::error;
 						break;
 					}
-				}
-			}
-
-			if (gb.Seen('C'))
-			{
-				if (axesSeen == 1)
-				{
-					uint32_t inputNumbers[MaxDriversPerAxis];
-					size_t numInputs = MaxDriversPerAxis;
-					gb.GetUnsignedArray(inputNumbers, numInputs, false);
-					platform.SetAxisEndstopConfig(lastAxisSeen, numInputs, inputNumbers);
-				}
-				else
-				{
-					reply.copy("Invalid use of C parameter");
-					result = GCodeResult::error;
 				}
 			}
 
@@ -3542,22 +3491,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 										: "none");
 					if (config != EndStopPosition::noEndStop)
 					{
-						if (inputType == EndStopInputType::activeHigh || inputType == EndStopInputType::activeLow)
-						{
-							const AxisEndstopConfig& es = platform.GetAxisEndstopConfig(axis);
-							if (es.numEndstops == 1)
-							{
-								reply.catf(" input %u", es.endstopNumbers[0]);
-							}
-							else
-							{
-								reply.cat(" inputs");
-								for (size_t i = 0; i < es.numEndstops; ++i)
-								{
-									reply.catf(" %u", es.endstopNumbers[i]);
-								}
-							}
-						}
 						reply.catf(" %s",
 									(inputType == EndStopInputType::activeHigh) ? "active high"
 										: (inputType == EndStopInputType::activeLow) ? "active low"

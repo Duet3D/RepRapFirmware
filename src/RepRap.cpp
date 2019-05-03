@@ -866,7 +866,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	// So we report 9999.9 instead.
 
 	// First the user coordinates
+#if SUPPORT_WORKPLACE_COORDINATES
+	response->catf("],\"system\":%u,\"xyz\":", gCodes->GetWorkplaceCoordinateSystemNumber());
+#else
 	response->cat("],\"xyz\":");
+#endif
 	const float * const userPos = gCodes->GetUserPosition();
 	ch = '[';
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)

@@ -193,10 +193,6 @@ private:
 
 	DDARing mainDDARing;								// The DDA ring used for regular moves
 
-#if SUPPORT_ASYNC_MOVES
-	DDARing auxDDARing;									// the DDA ring used for live babystepping, height following and other asynchronous moves
-#endif
-
 	bool active;										// Are we live and running?
 	uint8_t simulationMode;								// Are we simulating, or really printing?
 	MoveState moveState;								// whether the idle timer is active

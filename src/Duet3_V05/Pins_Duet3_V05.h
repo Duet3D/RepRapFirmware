@@ -57,19 +57,19 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 #define SERIAL_AUX_DEVICE Serial
 #define SERIAL_WIFI_DEVICE Serial1
 
-constexpr Pin UsbVBusPin = PORTC_PIN(21);			// Pin used to monitor VBUS on USB port
+constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB port
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // DRIVES
 
-constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PORTC_PIN(18), PORTC_PIN(16), PORTC_PIN(28), PORTC_PIN(01), PORTC_PIN(04), PORTC_PIN(9) };
-constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PORTB_PIN(05), PORTD_PIN(10), PORTA_PIN(04), PORTA_PIN(22), PORTC_PIN(03), PORTD_PIN(14) };
-constexpr Pin DIAG_PINS[NumDirectDrivers] =			{ PORTD_PIN(19), PORTC_PIN(17), PORTD_PIN(13), PORTC_PIN(02), PORTD_PIN(31), PORTC_PIN(10) };
+constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin(18), PortCPin(16), PortCPin(28), PortCPin(01), PortCPin(04), PortCPin(9) };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortBPin(05), PortDPin(10), PortAPin(04), PortAPin(22), PortCPin(03), PortDPin(14) };
+constexpr Pin DIAG_PINS[NumDirectDrivers] =			{ PortDPin(19), PortCPin(17), PortDPin(13), PortCPin(02), PortDPin(31), PortCPin(10) };
 
 // Pin assignments etc. using USART1 in SPI mode
-constexpr Pin GlobalTmc51xxEnablePin = PORTA_PIN(9);		// The pin that drives ENN of all TMC drivers
-constexpr Pin GlobalTmc51xxCSPin = PORTD_PIN(17);			// The pin that drives CS of all TMC drivers
+constexpr Pin GlobalTmc51xxEnablePin = PortAPin(9);		// The pin that drives ENN of all TMC drivers
+constexpr Pin GlobalTmc51xxCSPin = PortDPin(17);			// The pin that drives CS of all TMC drivers
 Usart * const USART_TMC51xx = USART1;
 constexpr uint32_t  ID_TMC51xx_SPI = ID_USART1;
 constexpr IRQn TMC51xx_SPI_IRQn = USART1_IRQn;
@@ -79,9 +79,9 @@ constexpr IRQn TMC51xx_SPI_IRQn = USART1_IRQn;
 #define TMC51xx_DmaTxPerid	((uint32_t)DmaTrigSource::usart1tx)
 #define TMC51xx_DmaRxPerid	((uint32_t)DmaTrigSource::usart1rx)
 
-constexpr Pin TMC51xxMosiPin = PORTB_PIN(4);
-constexpr Pin TMC51xxMisoPin = PORTA_PIN(21);
-constexpr Pin TMC51xxSclkPin = PORTA_PIN(23);
+constexpr Pin TMC51xxMosiPin = PortBPin(4);
+constexpr Pin TMC51xxMisoPin = PortAPin(21);
+constexpr Pin TMC51xxSclkPin = PortAPin(23);
 
 constexpr size_t NumPwmOutputs = 11;				// number of heater/fan/servo outputs
 constexpr size_t NumInputOutputs = 9;				// number of connectors we have for endstops, filament sensors, Z probes etc.
@@ -101,29 +101,29 @@ constexpr size_t NumFans = 6;
 constexpr size_t NumEndstops = 8;
 
 // Endstops. If we want to connect a PanelDue to IO7 then we may need to disable endstop 7 here.
-//constexpr Pin END_STOP_PINS[NumEndstops] = { PORTD_PIN(30), PORTE_PIN(4), PORTA_PIN(18), PORTE_PIN(5), PORTA_PIN(17), PORTA_PIN(19), PORTB_PIN(3), PORTD_PIN(25) };
-constexpr Pin END_STOP_PINS[NumEndstops] = { PORTD_PIN(30), PORTE_PIN(4), PORTA_PIN(18), PORTE_PIN(5), PORTA_PIN(17), PORTA_PIN(19), PORTB_PIN(3), NoPin };
+//constexpr Pin END_STOP_PINS[NumEndstops] = { PortDPin(30), PortEPin(4), PortAPin(18), PortEPin(5), PortAPin(17), PortAPin(19), PortBPin(3), PortDPin(25) };
+constexpr Pin END_STOP_PINS[NumEndstops] = { PortDPin(30), PortEPin(4), PortAPin(18), PortEPin(5), PortAPin(17), PortAPin(19), PortBPin(3), NoPin };
 
 // Heater and thermistors
-constexpr Pin HEAT_ON_PINS[NumHeaters] = { PORTA_PIN(7), PORTA_PIN(24), PORTA_PIN(16), PORTA_PIN(11) };
+constexpr Pin HEAT_ON_PINS[NumHeaters] = { PortAPin(7), PortAPin(24), PortAPin(16), PortAPin(11) };
 
 // Cooling fans
 constexpr size_t NUM_FANS = 6;
-constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { PORTA_PIN(15), PORTC_PIN(5), PORTA_PIN(8), PORTC_PIN(11), PORTC_PIN(8), PORTA_PIN(12) };
+constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { PortAPin(15), PortCPin(5), PortAPin(8), PortCPin(11), PortCPin(8), PortAPin(12) };
 
-constexpr Pin Z_PROBE_PIN = PORTE_PIN(3);		// IO8
-constexpr Pin Z_PROBE_MOD_PIN = PORTE_PIN(1);	// IO8_OUT
+constexpr Pin Z_PROBE_PIN = PortEPin(3);		// IO8
+constexpr Pin Z_PROBE_MOD_PIN = PortEPin(1);	// IO8_OUT
 
 #endif
 
 constexpr size_t NumTachos = 3;
-constexpr Pin TachoPins[NumTachos] = { PORTC_PIN(7), PORTD_PIN(23), PORTA_PIN(1) };
+constexpr Pin TachoPins[NumTachos] = { PortCPin(7), PortDPin(23), PortAPin(1) };
 
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
 
 // Thermistor/PT1000 inputs
 constexpr size_t NumThermistorInputs = 4;
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PORTC_PIN(31), PORTC_PIN(15), PORTC_PIN(29), PORTC_PIN(30) };	// Thermistor/PT1000 pins
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(31), PortCPin(15), PortCPin(29), PortCPin(30) };	// Thermistor/PT1000 pins
 
 // Default thermistor parameters
 constexpr float BED_R25 = 100000.0;
@@ -141,21 +141,21 @@ constexpr float THERMISTOR_SERIES_RS = 2200.0;
 constexpr size_t MaxSpiTempSensors = 4;
 
 // Digital pins the 31855s have their select lines tied to
-constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { PORTD_PIN(16), PORTD_PIN(15), PORTD_PIN(27), PORTC_PIN(22) };
+constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { PortDPin(16), PortDPin(15), PortDPin(27), PortCPin(22) };
 
 // Pin that controls the ATX power on/off
-constexpr Pin ATX_POWER_PIN = PORTA_PIN(10);
+constexpr Pin ATX_POWER_PIN = PortAPin(10);
 
 // Analogue pin numbers
-constexpr Pin PowerMonitorVinDetectPin = PORTA_PIN(20);
+constexpr Pin PowerMonitorVinDetectPin = PortAPin(20);
 
 constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;			// we use an 11:1 voltage divider (TBD)
 
-constexpr Pin VssaSensePin = PORTC_PIN(13);
-constexpr Pin VrefSensePin = PORTE_PIN(0);
+constexpr Pin VssaSensePin = PortCPin(13);
+constexpr Pin VrefSensePin = PortEPin(0);
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
-constexpr Pin DiagPin = PORTC_PIN(20);
+constexpr Pin DiagPin = PortCPin(20);
 
 // SD cards
 constexpr size_t NumSdCards = 1;								// actually 0 cards, but 0 probably won't work yet
@@ -165,19 +165,19 @@ constexpr Pin SdSpiCSPins[1] = { NoPin };
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 
 // Ethernet
-constexpr Pin PhyInterruptPin = PORTC_PIN(6);
-constexpr Pin PhyResetPin = PORTD_PIN(11);
+constexpr Pin PhyInterruptPin = PortCPin(6);
+constexpr Pin PhyResetPin = PortDPin(11);
 
 // M42 and M208 commands now use logical pin numbers, not firmware pin numbers.
 // This next definition defines the highest one.
 // This is the mapping from logical pins 60+ to firmware pin numbers
 constexpr Pin SpecialPinMap[] =
 {
-	PORTB_PIN(7), PORTB_PIN(6), PORTC_PIN(14), PORTA_PIN(3),	// IO_0_OUT - IO_3_OUT
-	PORTA_PIN(3), PORTA_PIN(26), PORTA_PIN(0), PORTD_PIN(26),	// IO_4_OUT - IO_7_OUT (note IO_5_OUT not functional on prototypes)
-	PORTD_PIN(16), PORTD_PIN(15), PORTD_PIN(27), PORTC_PIN(22),	// U0_CS0 - U0_CS3
-	PORTC_PIN(23),												// Servo
-	PORTE_PIN(2)												// RPi data ready, for testing only (remove this for production)
+	PortBPin(7), PortBPin(6), PortCPin(14), PortAPin(3),	// IO_0_OUT - IO_3_OUT
+	PortAPin(3), PortAPin(26), PortAPin(0), PortDPin(26),	// IO_4_OUT - IO_7_OUT (note IO_5_OUT not functional on prototypes)
+	PortDPin(16), PortDPin(15), PortDPin(27), PortCPin(22),	// U0_CS0 - U0_CS3
+	PortCPin(23),												// Servo
+	PortEPin(2)												// RPi data ready, for testing only (remove this for production)
 };
 
 constexpr int HighestLogicalPin = 73;							// highest logical pin number on this electronics
@@ -189,10 +189,10 @@ constexpr uint32_t IAP_FLASH_START = 0x004E0000;
 constexpr uint32_t IAP_FLASH_END = 0x004FFFFF;
 
 // Duet pin numbers to control the WiFi interface
-constexpr Pin EspResetPin = PORTA_PIN(5);					// Low on this in holds the WiFi module in reset (ESP_RESET)
-constexpr Pin EspDataReadyPin = PORTC_PIN(19);				// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
-constexpr Pin SamTfrReadyPin = PORTA_PIN(29);				// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
-constexpr Pin SamCsPin = PORTB_PIN(2);						// SPI NPCS pin, input from WiFi module
+constexpr Pin EspResetPin = PortAPin(5);					// Low on this in holds the WiFi module in reset (ESP_RESET)
+constexpr Pin EspDataReadyPin = PortCPin(19);				// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
+constexpr Pin SamTfrReadyPin = PortAPin(29);				// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
+constexpr Pin SamCsPin = PortBPin(2);						// SPI NPCS pin, input from WiFi module
 Spi * const EspSpi = SPI0;
 
 // Timer allocation

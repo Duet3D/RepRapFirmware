@@ -37,7 +37,6 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
-#define SUPPORT_ASYNC_MOVES		1
 
 // The physical capabilities of the machine
 
@@ -178,8 +177,9 @@ constexpr uint32_t IAP_FLASH_START = 0x00470000;
 constexpr uint32_t IAP_FLASH_END = 0x0047FFFF;								// we allow a full 64K on the SAM4
 
 // Duet pin numbers to control the W5500 interface
-constexpr Pin W5500ResetPin = 100;											// Low on this in holds the W5500 module in reset (ESP_RESET)
-constexpr Pin W5500SsPin = 11;												// SPI NPCS pin, input from W5500 module
+constexpr Pin W5500ResetPin = PortCPin(13);									// Low on this in holds the W5500 in reset
+constexpr Pin W5500SsPin = PortAPin(11);									// SPI NPCS pin to W5500
+constexpr Pin W5500IntPin = PortAPin(23);									// Interrupt from W5500
 
 // Timer allocation
 // TC0 channel 0 is used for step pulse generation and software timers

@@ -71,19 +71,19 @@ Done in 2.03beta2:
 - [done, ok] M111 Sn where n != 0 no longer enables all debugging, for better compatibility with Repetier host
 - [tested, ok] Test heater tuning (sample rate changed)
 
-Planned for 2.03:
+Done for 2.03beta3:
 - [done] Allow UVW tower endstop adjustments on deltas
 - [done] M291 only lock movement if jog buttons are enabled, https://forum.duet3d.com/topic/8988/wishlist-interrupt-tool-change-from-a-trigger/16
 - [done, test] Apply tool offsets in tpre.g and tpost.g
 - [done, ok] Bug: 12864 display selects wrong file to print if files starting with '.' are present
 - [done] HttpResponder fix from sdavi
 - [done, test] Bug fix: if axis scaling was used then baby stepping, tool offsets and workplace coordinate offsets were not correctly accounted for when converting machine position to user position
-- [done] Duet085: allow 2 additional fans
+- [done, but looks like it doesn't work properly] Duet085: allow 2 additional fans
 - [done, test] Stop movement when changing pressure advance with M572, https://forum.duet3d.com/topic/9140/extruder-behaves-strangle-when-disabling-pressure-advance/10
 - [done] Stop movement when changing endstop config in M574
 - [done, test] Bug fix: don't apply limit checking in non-FFF mode to move types other than zero, https://forum.duet3d.com/topic/9203/laser-mode-endstop-limit-and-homing/4
 - [partly done, test babystepping, test resurrect.g file M291 command correct] Y babystepping, https://forum.duet3d.com/topic/8015/change-z-babystepping-to-y-babystepping-for-belt-printers/14
-- [done] support multiple DDA rings
+- [done, but interference between them] support multiple DDA rings
 - [done, test] Implement M470/M471 PR, thanks wilriker
 - [done, test] Fix 'nan' standard deviation when G30 P0 X0 Y0 Z-9999 S-1 is run
 - [done, test] Per-channel and push/pop inch/mm setting
@@ -96,6 +96,25 @@ Planned for 2.03:
 - [done] Bug fixes for deltas with >3 towers
 - [done] Setting a chamber heater sometimes crashed the firmware
 - [done] Support M505
+- [done] Duet085: allow 2 additional fans
+
+Done in 2.03beta4:
+- [done] M291 don't lock movement ever
+- [done, test] resurrect.g: put filename in quotes, and add R0 to M290 command 
+- [done] M302 to wait until moves have completed
+- [done, test] 12864 % complete
+- [done, test] 12864 time remaining
+- [done, ok] 12864 IP address as one variable
+- [done, ok] 12864 auto % where applicable
+- [done] M109 didn't run tool change files if no tool was selected initially
+- [done] fix issue with Fan 1 on Duet 085
+- [done, not tested] Duet085 additional fan issue
+- [done, test] Include workplace coordinate # in status response, https://forum.duet3d.com/topic/9896/display-current-active-csys-p1-g54-p2-g55-next-to-x-y-z
+
+Planned for 2.03:
+- [done, test] M291 command should unlock movement if it is owned, e.g. if used within homeall.g and an SD file does G28
+
+- [done] support multiple DDA rings
 
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5
 - Filament monitors: disable if tool is not active/no commanded extrusion, or does it do that already?

@@ -950,7 +950,7 @@ namespace SmartDrivers
 
 #if TMC22xx_HAS_MUX
 		// Set up- the single UART that communicates with all TMC22xx drivers
-		ConfigurePin(GetPinDescription(TMC22xx_UART_PINS));					// the pins are already set up for UART use in the pins table
+		ConfigurePin(TMC22xx_UART_PINS);									// the pins are already set up for UART use in the pins table
 
 		// Enable the clock to the UART
 		pmc_enable_periph_clk(ID_TMC22xx_UART);
@@ -975,7 +975,7 @@ namespace SmartDrivers
 #if !TMC22xx_HAS_MUX
 			// Initialise the UART that controls this driver
 			// The pins are already set up for UART use in the pins table
-			ConfigurePin(GetPinDescription(TMC22xxUartPins[drive]));
+			ConfigurePin(TMC22xxUartPins[drive]);
 
 			// Enable the clock to the UART
 			pmc_enable_periph_clk(TMC22xxUartIds[drive]);

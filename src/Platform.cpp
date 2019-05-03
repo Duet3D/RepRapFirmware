@@ -77,7 +77,7 @@ extern uint32_t _estack;			// defined in the linker script
 
 #if !defined(HAS_LWIP_NETWORKING) || !defined(HAS_WIFI_NETWORKING) || !defined(HAS_CPU_TEMP_SENSOR) || !defined(HAS_HIGH_SPEED_SD) \
  || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_VREF_MONITOR) || !defined(ACTIVE_LOW_HEAT_ON) \
- || !defined(SUPPORT_NONLINEAR_EXTRUSION) || !defined(SUPPORT_ASYNC_MOVES)
+ || !defined(SUPPORT_NONLINEAR_EXTRUSION)
 # error Missing feature definition
 #endif
 
@@ -182,10 +182,7 @@ Platform::Platform() :
 // Initialise the Platform. Note: this is the first module to be initialised, so don't call other modules from here!
 void Platform::Init()
 {
-	if (DiagPin != NoPin)
-	{
-		pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
-	}
+	pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
 
 	// Deal with power first (we assume this doesn't depend on identifying the board type)
 	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
@@ -399,8 +396,6 @@ void Platform::Init()
 		{
 			axisDrivers[drive].numDrivers = 1;
 			axisDrivers[drive].driverNumbers[0] = (uint8_t)drive;
-			axisEndstops[drive].numEndstops = 1;
-			axisEndstops[drive].endstopNumbers[0] = (uint8_t)drive;
 			endStopPos[drive] = EndStopPosition::lowEndStop;		// default to low endstop
 			endStopInputType[drive] = EndStopInputType::activeHigh;	// assume all endstops use active high logic e.g. normally-closed switch to ground
 		}
@@ -2783,32 +2778,18 @@ EndStopHit Platform::Stopped(size_t axisOrExtruder) const
 #endif
 
 		case EndStopInputType::activeLow:
+			if (axisOrExtruder < NumEndstops && endStopPins[axisOrExtruder] != NoPin)
 			{
-				const AxisEndstopConfig& config = axisEndstops[axisOrExtruder];
-				if (config.numEndstops != 0)
-				{
-					const uint8_t input = config.endstopNumbers[0];
-					if (input < NumEndstops)
-					{
-						const bool b = IoPort::ReadPin(endStopPins[input]);
-						return (b) ? EndStopHit::noStop : (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
-					}
-				}
+				const bool b = IoPort::ReadPin(endStopPins[axisOrExtruder]);
+				return (b) ? EndStopHit::noStop : (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
 			}
 			break;
 
 		case EndStopInputType::activeHigh:
+			if (axisOrExtruder < NumEndstops && endStopPins[axisOrExtruder] != NoPin)
 			{
-				const AxisEndstopConfig& config = axisEndstops[axisOrExtruder];
-				if (config.numEndstops != 0)
-				{
-					const uint8_t input = config.endstopNumbers[0];
-					if (input < NumEndstops)
-					{
-						const bool b = !IoPort::ReadPin(endStopPins[input]);
-						return (b) ? EndStopHit::noStop : (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
-					}
-				}
+				const bool b = !IoPort::ReadPin(endStopPins[axisOrExtruder]);
+				return (b) ? EndStopHit::noStop : (endStopPos[axisOrExtruder] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
 			}
 			break;
 
@@ -3473,7 +3454,7 @@ void Platform::SetFanValue(size_t fan, float speed)
 // Enable or disable the fan that shares its PWM pin with the last heater. Called when we disable or enable the last heater.
 void Platform::EnableSharedFan(bool enable)
 {
-	const size_t sharedFanNumber = NUM_FANS - 1;
+	const size_t sharedFanNumber = 1;				// Fan 1 on Duet 085 is shared with heater 6
 	fans[sharedFanNumber].Init(
 				(enable) ? COOLING_FAN_PINS[sharedFanNumber] : NoPin,
 				(enable) ? Fan0LogicalPin + sharedFanNumber : NoLogicalPin,
@@ -3571,15 +3552,6 @@ void Platform::GetEndStopConfiguration(size_t axis, EndStopPosition& esType, End
 {
 	esType = endStopPos[axis];
 	inputType = endStopInputType[axis];
-}
-
-void Platform::SetAxisEndstopConfig(size_t axis, size_t numValues, const uint32_t inputNumbers[])
-{
-	axisEndstops[axis].numEndstops = numValues;
-	for (size_t i = 0; i < numValues; ++i)
-	{
-		axisEndstops[axis].endstopNumbers[i] = min<uint32_t>(inputNumbers[i], 255);
-	}
 }
 
 //-----------------------------------------------------------------------------------------------------

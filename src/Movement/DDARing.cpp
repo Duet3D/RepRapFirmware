@@ -162,22 +162,6 @@ bool DDARing::AddSpecialMove(float feedRate, const float coords[])
 	return false;
 }
 
-#if SUPPORT_ASYNC_MOVES
-
-// Add an asynchronous motor move
-bool DDARing::AddAsyncMove(float feedRate,  float reqAcceleration, const float coords[])
-{
-	if (addPointer->InitAsyncMove(*this, feedRate, reqAcceleration, coords))
-	{
-		addPointer = addPointer->GetNext();
-		scheduledMoves++;
-		return true;
-	}
-	return false;
-}
-
-#endif
-
 void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove)
 {
 	// If we are simulating, simulate completion of the current move.

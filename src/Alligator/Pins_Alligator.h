@@ -43,6 +43,9 @@ constexpr size_t MaxAxes = 7;						// The maximum number of movement axes in the
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 
+constexpr size_t MaxHeatersPerTool = 2;
+constexpr size_t MaxExtrudersPerTool = 5;
+
 constexpr size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels (USB and two auxiliary UARTs)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
