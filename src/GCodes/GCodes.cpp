@@ -5111,6 +5111,26 @@ void GCodes::GrabMovement(const GCodeBuffer& gb)
 	GrabResource(gb, MoveResource);
 }
 
+void GCodes::UnlockMovement(const GCodeBuffer& gb)
+{
+	UnlockResource(gb, MoveResource);
+}
+
+// Unlock the resource if we own it
+void GCodes::UnlockResource(const GCodeBuffer& gb, Resource r)
+{
+	if (resourceOwners[r] == &gb)
+	{
+		GCodeMachineState * mc = &gb.MachineState();
+		do
+		{
+			ClearBit(mc->lockedResources, r);
+			mc = mc->previous;
+		} while (mc != nullptr);
+		resourceOwners[r] = nullptr;
+	}
+}
+
 // Release all locks, except those that were owned when the current macro was started
 void GCodes::UnlockAll(const GCodeBuffer& gb)
 {

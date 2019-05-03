@@ -96,6 +96,19 @@ Done for 2.03beta3:
 - [done] Bug fixes for deltas with >3 towers
 - [done] Setting a chamber heater sometimes crashed the firmware
 - [done] Support M505
+- [done] Duet085: allow 2 additional fans
+
+Done in 2.03RC1:
+- [done, test] M291 command should unlock movement if it is owned, e.g. if used within homeall.g and an SD file does G28
+- [done, test] resurrect.g: put filename in quotes, and add R0 to M290 command
+- [done] 12864 display values 534-537
+- [done] applied latest FatFs patches
+- [done, test] M109 not running tool change files, https://forum.duet3d.com/topic/10108/m109-command-does-not-run-tool-change-macro-s/6
+- [done] M302 to wait until moves have completed
+- [done] fix issue with Fan 1 on Duet 085
+- [done, not tested] Duet085 additional fan issue
+- [done, test] Include workplace coordinate # in status response, https://forum.duet3d.com/topic/9896/display-current-active-csys-p1-g54-p2-g55-next-to-x-y-z
+- [done] Network reset didn't work on Maestro
 
 Planned for 3.0:
 No-longer-supported and changed parameters:
@@ -115,7 +128,6 @@ Investigations
 
 - [no fault] Simple filament monitor P1 vs p2, https://forum.duet3d.com/topic/10201/filament-sensor-problem/5
 - [done, DWC bug, tell chrishamm] JSON (?), https://forum.duet3d.com/topic/8816/java-errors/5
-- [done, test] M109 not running tool change files, https://forum.duet3d.com/topic/10108/m109-command-does-not-run-tool-change-macro-s/6
 - I2C error recovery 
 - [investigated, awaiting feedback] Kulitorum segmented speed issue, https://forum.duet3d.com/topic/8789/max-actual-speed-at-high-path-detail/10
 - Low steps/mm and pressure advance, https://forum.duet3d.com/topic/8672/extruder-motors-skip-steps-with-pressure-advance-enabled/67
@@ -124,31 +136,21 @@ Investigations
 - Icon generation, https://forum.duet3d.com/topic/8177/icon-generation/7
 - 2.03beta3 change in height setting, https://forum.duet3d.com/post/89780
 
+- [done] Support multiple tachos, https://forum.duet3d.com/topic/9990/duet2-multiple-fan-rpm-sense-display
+- G28 "File not found" - which file?
 - Support M524?
 - Support M530,531,532?
 - Support M73?
 - Prevent a file being rewritten/created while it is open by something else, https://forum.duet3d.com/topic/10191/something-to-avoid-when-you-are-calibrating-tweaking/4
-- [done] Network reset didn't work on Maestro
-- [done] Support multiple tachos, https://forum.duet3d.com/topic/9990/duet2-multiple-fan-rpm-sense-display
 - 12864 list files on 2nd SD card, https://forum.duet3d.com/topic/10046/duet-maestro-2nd-sd-slot
-- [done, test] 12864 % complete PR
-- [done, test] 12864 time remaining PR
-- [done] M291 should never lock movement
-- [done, test] resurrect.g: put filename in quotes, and add R0 
-- [done, test] M291 command should unlock movement if it is owned, e.g. if used within homeall.g and an SD file does G28
 - M291 should continue to update PanelDue even if from a macro invoked by PanelDue
 - [done but need to add GPIO pin map] M950 command to remap pins
-- [done] M302 to wait until moves have completed
-- [done] fix issue with Fan 1 on Duet 085
-- [done] applied latest FatFs patches
 - Mcode to send a message over the network
 - [done, test] Laser velocity ramping
 - [done, test] Sort out M585 custom endstops E parameter. Perhaps remove endstops bitmap from DDA.
 - TMC5160 etc. need to use spreadCycle mode for homing moves?
 - [done, ok] New fan port mapping, including using unused Duex heaters as additional fans, https://forum.duet3d.com/topic/9799/address-more-than-9-fans-leds-w-duex5
 - Parse comments, use for layer number, object number/name
-- [done, not tested] Duet085 additional fan issue
-- [done, test] Include workplace coordinate # in status response, https://forum.duet3d.com/topic/9896/display-current-active-csys-p1-g54-p2-g55-next-to-x-y-z
 - Filament change pause to run a different macro file
 
 - M291 doesn't pause a tool change if the message is blocking ie M291 S2, the message now appears at the correct time but the tool change carrys on anyway until completed, https://forum.duet3d.com/post/87973

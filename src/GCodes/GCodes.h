@@ -239,6 +239,8 @@ private:
 	bool LockMovement(const GCodeBuffer& gb);							// Lock movement
 	void GrabResource(const GCodeBuffer& gb, Resource r);				// Grab a resource even if it is already owned
 	void GrabMovement(const GCodeBuffer& gb);							// Grab the movement lock even if it is already owned
+	void UnlockResource(const GCodeBuffer& gb, Resource r);				// Unlock the resource if we own it
+	void UnlockMovement(const GCodeBuffer& gb);							// Unlock the movement resource if we own it
 	void UnlockAll(const GCodeBuffer& gb);								// Release all locks
 
 	void StartNextGCode(GCodeBuffer& gb, const StringRef& reply);		// Fetch a new or old GCode and process it

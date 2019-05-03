@@ -132,9 +132,9 @@ extern "C" void AppMain()
 	// Add the FreeRTOS internal tasks to the task list
 	idleTask.AddToList();
 
-#if configUSE_TIMERS
+# if configUSE_TIMERS
 	timerTask.AddToList();
-#endif
+# endif
 
 	// Create the startup task
 	mainTask.Create(MainTask, "MAIN", nullptr, TaskBase::SpinPriority);
@@ -147,7 +147,10 @@ extern "C" void MainTask(void *pvParameters)
 	spiMutex.Create("SPI");
 	i2cMutex.Create("I2C");
 	sysDirMutex.Create("SysDir");
+#else
+	SysTickInit();					// set up system tick interrupt
 #endif
+
 	reprap.Init();
 	for (;;)
 	{
@@ -357,8 +360,13 @@ namespace Tasks
 extern "C"
 {
 	// This intercepts the 1ms system tick
-	void sysTickHook()
+#ifdef RTOS
+	void vApplicationTickHook()
+#else
+	void SysTick_Handler()
+#endif
 	{
+		CoreSysTick();
 		reprap.Tick();
 
 #ifdef __LPC17xx__
@@ -456,26 +464,34 @@ extern "C"
 	void DebugMon_Handler   () __attribute__ ((noreturn,alias("OtherFault_Handler")));
 
 #ifdef RTOS
-	// FreeRTOS hooks that we need to provide
-	void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName) __attribute((noreturn));
-	void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName)
-	{
-	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::stackOverflow, pulFaultStackAddress);
-	}
 
-	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) __attribute((naked, noreturn));
-	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName)
-	{
-		// r0 = pxTask, r1 = pxTaskName
-	    __asm volatile
-	    (
-	    	" push {r0, r1, lr}											\n"		/* save parameters and call address on the stack */
-	    	" mov r0, sp												\n"
-	        " ldr r2, handler_sovf_address_const                        \n"
-	        " bx r2                                                     \n"
-	        " handler_sovf_address_const: .word stackOverflowDispatcher \n"
-	    );
-	}
+// FreeRTOS hooks that we need to provide
+void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName) __attribute((noreturn));
+void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName)
+{
+	reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::stackOverflow, pulFaultStackAddress);
+}
+
+void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) __attribute((naked, noreturn));
+void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName)
+{
+	// r0 = pxTask, r1 = pxTaskName
+	__asm volatile
+	(
+		" push {r0, r1, lr}											\n"		/* save parameters and call address on the stack */
+		" mov r0, sp												\n"
+		" ldr r2, handler_sovf_address_const                        \n"
+		" bx r2                                                     \n"
+		" handler_sovf_address_const: .word stackOverflowDispatcher \n"
+	);
+}
+
+#else
+
+// Handlers that FreeRTOS would provide if we were using it
+void SVC_Handler		( void ) __attribute__ ((noreturn, alias("OtherFault_Handler")));
+void PendSV_Handler		( void ) __attribute__ ((noreturn, alias("OtherFault_Handler")));
+
 #endif
 
 	void assertCalledDispatcher(const uint32_t *pulFaultStackAddress) __attribute((noreturn));

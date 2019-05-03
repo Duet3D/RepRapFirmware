@@ -386,9 +386,16 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 				currentFormat = PrintFormat::asPercent;
 				break;
 
-			case 36:	// Print time remaining
+			case 36:	// Print time remaining, file-based
 				currentValue.u = (reprap.GetPrintMonitor().IsPrinting())
 									? static_cast<int>(reprap.GetPrintMonitor().EstimateTimeLeft(PrintEstimationMethod::fileBased))
+										: 0;
+				currentFormat = PrintFormat::asTime;
+				break;
+
+			case 37:	// Print time remaining, filament-based
+				currentValue.u = (reprap.GetPrintMonitor().IsPrinting())
+									? static_cast<int>(reprap.GetPrintMonitor().EstimateTimeLeft(PrintEstimationMethod::filamentBased))
 										: 0;
 				currentFormat = PrintFormat::asTime;
 				break;
