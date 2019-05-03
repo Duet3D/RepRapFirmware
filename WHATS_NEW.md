@@ -1,6 +1,32 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.03RC1
+=================
+
+Upgrade notes:
+- The facility to map endstops using the A parameter in the M574 command has been withdrawn. Use RepRapFirmware 3 if you need an equivalent facility.
+- See also the upgrade notes for earlier releases, unless you are upgrading from 2.03beta3
+
+New features and changed behaviour:
+- Endstop mapping and M574 A parameter have been removed
+- Added 12864 menu items 534-537
+- M302 now waits for movement to stop
+- M291 now unlocks movement if it is locked, so that PanelDue or DWC can be used to jog axes if M291 was invoked from another input stream
+- The status response for DWC and returned by M408 S2 now includes the workplace coordinate system number with variable name "system"
+
+Bug fixes:
+- M585 works again
+- In resurrect.g file the M290 command now commands absolute babystepping, and the filename in M23 command is enclosed in double quote marks
+- The W5500 chip could not be reset on Duet Maestro
+- M109 did not run the tool change files if no tool was active initially
+- Fix (hopefully, not tested!) for issue with Fan 1 on Duet085
+
+Internal changes:
+- Use new CoreNG API with common RTOS/non-RTOS builds of CoreNG (same CoreNG as RRF 3)
+- File CAN/CanMessageFormats.h moved from project Duet3Expansion to RepRapFirmware
+- Removed async move queue facility, use RRF3 if you need that
+
 Version 2.03beta3
 =================
 
