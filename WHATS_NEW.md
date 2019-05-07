@@ -11,19 +11,25 @@ Upgrade notes:
 New features and changed behaviour:
 - Endstop mapping and M574 A parameter have been removed
 - Added 12864 menu items 534-539
+- The 12864 display no longer automatically adds a space column after each item, except for left-justified text items without an explicit width
+- The 12864 display system automatically appends a % character to value/alter items that are normally expressed in percent, e.g. fan speeds, print speed, extrusion factors
 - M302 now waits for movement to stop
 - M291 now unlocks movement if it is locked, so that PanelDue or DWC can be used to jog axes if M291 was invoked from another input stream
-- The status response for DWC and returned by M408 S2 now includes the workplace coordinate system number with variable name "system"
-- Increased maximum number of triggers from 10 to 16
+- The status response for DWC and returned by M408 S2 now includes the workplace coordinate system number with variable name "wpl"
 - On the Duet Maestro, stepper driver open load detection is now disabled when the driver is operating in stealthChop mode
+- Prints can now be paused and cancelled while they are waiting for temperatures to be reached
+- Increased maximum number of triggers from 10 to 16
+- Increased number of output buffers on Duet WiFi/Ethernet/Maestro from 20 to 24
 
 Bug fixes:
 - M585 works again
-- In resurrect.g file the M290 command now commands absolute babystepping, and the filename in M23 command is enclosed in double quote marks
+- In resurrect.g file the M290 command now commands absolute babystepping, the filename in M23 command is enclosed in double quote marks, ands the inches/mm setting is restored
 - The W5500 chip could not be reset on Duet Maestro
 - M109 did not run the tool change files if no tool was active initially
-- If a print finishes or is cancelled when Z hop is active because of a G10 command without a subsequent G11, the Z hop is cancelled
-- Fix (hopefully, not tested!) for issue with Fan 1 on Duet085
+- If a print finishes or is cancelled when Z hop is active because of a G10 command without a subsequent G11, the Z hop is cancelled (but not the associated retraction)
+- Blank lines in 12864 display menu files are now ignored
+- Visibility attributes were not correctly applied to 12864 display value, alter and image menu items
+- Fixed (hopefully - not tested!) issue with Fan 1 on Duet085 in 2.03 beta releases
 
 Internal changes:
 - Use new CoreNG API with common RTOS/non-RTOS builds of CoreNG (same CoreNG as RRF 3)
