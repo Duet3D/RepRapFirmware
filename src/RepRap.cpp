@@ -867,7 +867,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 	// First the user coordinates
 #if SUPPORT_WORKPLACE_COORDINATES
-	response->catf("],\"system\":%u,\"xyz\":", gCodes->GetWorkplaceCoordinateSystemNumber());
+	response->catf("],\"wpl\":%u,\"xyz\":", gCodes->GetWorkplaceCoordinateSystemNumber());
 #else
 	response->cat("],\"xyz\":");
 #endif
