@@ -301,7 +301,7 @@ constexpr size_t NumRestorePoints = 6;					// Number of restore points, must be 
 constexpr float AxisRoundingError = 0.05;				// Maximum possible error when we round trip a machine position to motor coordinates and back
 
 // Triggers
-constexpr unsigned int MaxTriggers = 10;				// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
+constexpr unsigned int MaxTriggers = 16;				// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 
 // Default nozzle and filament values
 constexpr float NOZZLE_DIAMETER = 0.5;					// Millimetres

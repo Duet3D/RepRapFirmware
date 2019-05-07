@@ -130,6 +130,7 @@ public:
 		drivesRelative = other.drivesRelative;
 		axesRelative = other.axesRelative;
 		feedRate = other.feedRate;
+		volumetricExtrusion = other.volumetricExtrusion;
 		usingInches = other.usingInches;
 	}
 

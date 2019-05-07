@@ -99,22 +99,26 @@ Done for 2.03beta3:
 - [done] Duet085: allow 2 additional fans
 
 Done in 2.03RC1:
-- [done] M291 don't lock movement ever
+- [done, ok] minor corrections to thermistor and PT1000 reading conversion
 - [done, test] resurrect.g: put filename in quotes, and add R0 to M290 command 
 - [done] M302 to wait until moves have completed
 - [done, test] 12864 % complete
 - [done, test] 12864 time remaining
 - [done, ok] 12864 IP address as one variable
 - [done, ok] 12864 auto % where applicable
-- [done] M109 didn't run tool change files if no tool was selected initially
+- [done, test] M109 didn't run tool change files if no tool was selected initially. Also test when a tool is selected initially.
 - [done] fix issue with Fan 1 on Duet 085
 - [done, not tested] Duet085 additional fan issue
 - [done, test] Include workplace coordinate # in status response, https://forum.duet3d.com/topic/9896/display-current-active-csys-p1-g54-p2-g55-next-to-x-y-z
-- [done, test] M291 command should unlock movement if it is owned, e.g. if used within homeall.g and an SD file does G28
+- [done, test] M291 don't ever lock movement, and unlock movement if it is owned and we are waiting for a response, e.g. if used within homeall.g and an SD file does G28
+- [done] Increase #triggers from 10 to 16
+- [done, test] If a print is ended or cancelled with G10 in effect, cancel the Z lift
+- [done, test] TMC2208 drivers: disable open load detection when in stealthChop mode
 
 Planned for 2.03:
 - I2C errors: can we recover from them?
-- If a print is ended or cancelled with G10 in effect, cancel the Z lift. Also, if Z lift value is changed while G10 is in effect, the Z position might be wrong.
+- check: is stop.g always run at end of SD print, not just in response to M0?
+- [ok] check: start.g should not be run when resurrecting a print
 
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5
 - Filament monitors: disable if tool is not active/no commanded extrusion, or does it do that already?

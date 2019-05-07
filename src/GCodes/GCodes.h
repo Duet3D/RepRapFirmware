@@ -46,6 +46,7 @@ const EndstopChecks ActiveLowEndstop = 1 << 27;			// must be distinct from 1 << 
 
 typedef uint32_t TriggerInputsBitmap;					// Bitmap of input pins that a single trigger number responds to
 typedef uint32_t TriggerNumbersBitmap;					// Bitmap of trigger numbers
+static_assert(MaxTriggers <= sizeof(TriggerNumbersBitmap) * CHAR_BIT, "need larger TriggerNumbersBitmap type");
 
 struct Trigger
 {
