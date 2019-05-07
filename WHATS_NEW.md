@@ -6,7 +6,7 @@ Version 2.03RC1
 
 Upgrade notes:
 - The facility to map endstops using the A parameter in the M574 command has been withdrawn. Use RepRapFirmware 3 if you need an equivalent facility.
-- See also the upgrade notes for earlier releases, unless you are upgrading from 2.03beta3
+- See also the upgrade notes for earlier releases, unless you are upgrading from 2.03beta3. **Tool change users please note:** tool offsets are now applied in tfree#.g and tpost#.g files.
 
 New features and changed behaviour:
 - Endstop mapping and M574 A parameter have been removed
@@ -14,12 +14,15 @@ New features and changed behaviour:
 - M302 now waits for movement to stop
 - M291 now unlocks movement if it is locked, so that PanelDue or DWC can be used to jog axes if M291 was invoked from another input stream
 - The status response for DWC and returned by M408 S2 now includes the workplace coordinate system number with variable name "system"
+- Increased maximum number of triggers from 10 to 16
+- On the Duet Maestro, stepper driver open load detection is now disabled when the driver is operating in stealthChop mode
 
 Bug fixes:
 - M585 works again
 - In resurrect.g file the M290 command now commands absolute babystepping, and the filename in M23 command is enclosed in double quote marks
 - The W5500 chip could not be reset on Duet Maestro
 - M109 did not run the tool change files if no tool was active initially
+- If a print finishes or is cancelled when Z hop is active because of a G10 command without a subsequent G11, the Z hop is cancelled
 - Fix (hopefully, not tested!) for issue with Fan 1 on Duet085
 
 Internal changes:
