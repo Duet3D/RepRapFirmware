@@ -10,7 +10,7 @@ Upgrade notes:
 
 New features and changed behaviour:
 - Endstop mapping and M574 A parameter have been removed
-- Added 12864 menu items 534-537
+- Added 12864 menu items 534-539
 - M302 now waits for movement to stop
 - M291 now unlocks movement if it is locked, so that PanelDue or DWC can be used to jog axes if M291 was invoked from another input stream
 - The status response for DWC and returned by M408 S2 now includes the workplace coordinate system number with variable name "system"
