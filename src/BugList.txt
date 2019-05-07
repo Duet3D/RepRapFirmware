@@ -99,21 +99,39 @@ Done for 2.03beta3:
 - [done] Duet085: allow 2 additional fans
 
 Done in 2.03RC1:
-- [done, ok] minor corrections to thermistor and PT1000 reading conversion
-- [done, test] resurrect.g: put filename in quotes, and add R0 to M290 command 
-- [done] M302 to wait until moves have completed
+- [done, ok, check in v3] minor corrections to thermistor and PT1000 reading conversion
+- [done, test, check in v3] resurrect.g: put filename in quotes, and add R0 to M290 command 
+- [done, check in v3] M302 to wait until moves have completed
 - [done, test] 12864 % complete
 - [done, test] 12864 time remaining
+- [done, test] 12864 requested and top speeds
 - [done, ok] 12864 IP address as one variable
 - [done, ok] 12864 auto % where applicable
-- [done, test] M109 didn't run tool change files if no tool was selected initially. Also test when a tool is selected initially.
+- [done, ok, check in v3] M109 didn't run tool change files if no tool was selected initially. Also test when a tool is selected initially.
 - [done] fix issue with Fan 1 on Duet 085
 - [done, not tested] Duet085 additional fan issue
 - [done, test] Include workplace coordinate # in status response, https://forum.duet3d.com/topic/9896/display-current-active-csys-p1-g54-p2-g55-next-to-x-y-z
 - [done, test] M291 don't ever lock movement, and unlock movement if it is owned and we are waiting for a response, e.g. if used within homeall.g and an SD file does G28
-- [done] Increase #triggers from 10 to 16
-- [done, test] If a print is ended or cancelled with G10 in effect, cancel the Z lift
-- [done, test] TMC2208 drivers: disable open load detection when in stealthChop mode
+- [done, check in v3] Increase #triggers from 10 to 16
+- [done, test, check ported to v3] If a print is ended or cancelled with G10 in effect, cancel the Z lift
+- [done, test, port to v3] TMC2208 drivers: disable open load detection when in stealthChop mode
+- [done, port to v3] increase number of output buffers to 24
+- [done, port to v3] inches/mm now handled in resurrect.g
+- [done, ok, port] Ignore blank lines in menu files
+- [done, test] 12864 menu items: visibility wasn't applied to alter/value/image items
+- [done, ok] Limit 12864 refresh rate to avoid fast-changing items flickering
+- [done, ok, port] Bug: was holding movement lock while waiting for bed or extruder to heat up, so unable to pause/cancel during heat up
+- [done, ok, port] Bug: fix crash when there were no selectable items in a menu
+- [done, ok, port] Only add 1 space after left-aligned text items with no explicit width
+
+To port to v3-dev:
+GCodes2.cpp
+GCodes.cpp
+GCodeMachineState.h
+Configuration.h
+Display.h, .cpp
+Menu.cpp
+MenuItem.cpp
 
 Planned for 2.03:
 - I2C errors: can we recover from them?

@@ -111,7 +111,7 @@ void TextMenuItem::CorePrint(Lcd7920& lcd)
 void TextMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
 {
 	// We ignore the 'highlight' parameter because text items are not selectable
-	if (IsVisible() && itemChanged)
+	if (IsVisible() && (!drawn || itemChanged))
 	{
 		PrintAligned(lcd, tOffset, rightMargin);
 		itemChanged = false;
@@ -129,6 +129,10 @@ void TextMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
 		lcd.TextInvert(false);
 		lcd.print(text);
 		width = lcd.GetColumn();
+		if (align == LeftAlign)
+		{
+			++width;			// add a space column after left-aligned text with no explicit width, so that the next item can follow immediately
+		}
 	}
 	if (height == 0)
 	{
@@ -144,14 +148,14 @@ ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Font
 
 void ButtonMenuItem::CorePrint(Lcd7920& lcd)
 {
-	lcd.WriteSpaces(1);					// space at start in case highlighted
+	lcd.WriteSpaces(1);				// space at start in case highlighted
 	lcd.print(text);
 	lcd.WriteSpaces(1);				// space at end to allow for highlighting
 }
 
 void ButtonMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
 {
-	if (IsVisible() && (itemChanged || highlight != highlighted) && column < lcd.GetNumCols())
+	if (IsVisible() && (itemChanged || !drawn || highlight != highlighted) && column < lcd.GetNumCols())
 	{
 		highlighted = highlight;
 		PrintAligned(lcd, tOffset, rightMargin);
@@ -272,11 +276,24 @@ void ValueMenuItem::CorePrint(Lcd7920& lcd)
 			break;
 
 		case PrintFormat::asTime:
-			lcd.print(currentValue.u/3600);
-			lcd.print(':');
-			lcd.print((currentValue.u / 60) % 60);
-			lcd.print(':');
-			lcd.print(currentValue.u % 60);
+			{
+				unsigned int hours = currentValue.u/3600,
+					minutes = (currentValue.u / 60) % 60,
+					seconds = currentValue.u % 60;
+				lcd.print(hours);
+				lcd.print(':');
+				if (minutes < 10)
+				{
+					lcd.print('0');
+				}
+				lcd.print(minutes);
+				lcd.print(':');
+				if (seconds < 10)
+				{
+					lcd.print('0');
+				}
+				lcd.print(seconds);
+			}
 			break;
 
 		case PrintFormat::undefined:
@@ -289,173 +306,184 @@ void ValueMenuItem::CorePrint(Lcd7920& lcd)
 
 void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
 {
-	error = false;
-	textValue = nullptr;
-
-	if (valIndex == 501)
+	if (IsVisible())
 	{
-		// Item 501 is a special case because it is text, not a number. We store the current message sequence number in currentValue.
-		uint16_t newSeq;
-		textValue = reprap.GetLatestMessage(newSeq);
-		if (newSeq != currentValue.u)
+		error = false;
+		textValue = nullptr;
+
+		if (valIndex == 501)
 		{
-			itemChanged = true;
-			currentValue.u = newSeq;
-			currentFormat = PrintFormat::asText;
-		}
-	}
-	else if (adjusting != AdjustMode::adjusting)
-	{
-		const unsigned int itemNumber = valIndex % 100;
-		const Value oldValue = currentValue;
-		currentFormat = PrintFormat::asFloat;
-
-		switch (valIndex/100)
-		{
-		case 0:		// heater current temperature
-			currentValue.f = max<float>(reprap.GetGCodes().GetItemCurrentTemperature(itemNumber), 0.0f);
-			break;
-
-		case 1:		// heater active temperature
-			currentValue.f = max<float>(reprap.GetGCodes().GetItemActiveTemperature(itemNumber), 0.0f);
-			break;
-
-		case 2:		// heater standby temperature
-			currentValue.f = max<float>(reprap.GetGCodes().GetItemStandbyTemperature(itemNumber), 0.0f);
-			break;
-
-		case 3:		// fan %
-			currentValue.f = ((itemNumber == 99)
-							? reprap.GetGCodes().GetMappedFanSpeed()
-							: reprap.GetPlatform().GetFanValue(itemNumber)
-						   ) * 100.0;
-			currentFormat = PrintFormat::asPercent;
-			break;
-
-		case 4:		// extruder %
-			currentValue.f = reprap.GetGCodes().GetExtrusionFactor(itemNumber);
-			currentFormat = PrintFormat::asPercent;
-			break;
-
-		case 5:		// misc
-			switch (itemNumber)
+			// Item 501 is a special case because it is text, not a number. We store the current message sequence number in currentValue.
+			uint16_t newSeq;
+			textValue = reprap.GetLatestMessage(newSeq);
+			if (newSeq != currentValue.u)
 			{
-			case 0:
-				currentValue.f = reprap.GetGCodes().GetSpeedFactor();
+				itemChanged = true;
+				currentValue.u = newSeq;
+				currentFormat = PrintFormat::asText;
+			}
+		}
+		else if (adjusting != AdjustMode::adjusting)
+		{
+			const unsigned int itemNumber = valIndex % 100;
+			const Value oldValue = currentValue;
+			currentFormat = PrintFormat::asFloat;
+
+			switch (valIndex/100)
+			{
+			case 0:		// heater current temperature
+				currentValue.f = max<float>(reprap.GetGCodes().GetItemCurrentTemperature(itemNumber), 0.0f);
+				break;
+
+			case 1:		// heater active temperature
+				currentValue.f = max<float>(reprap.GetGCodes().GetItemActiveTemperature(itemNumber), 0.0f);
+				break;
+
+			case 2:		// heater standby temperature
+				currentValue.f = max<float>(reprap.GetGCodes().GetItemStandbyTemperature(itemNumber), 0.0f);
+				break;
+
+			case 3:		// fan %
+				currentValue.f = ((itemNumber == 99)
+								? reprap.GetGCodes().GetMappedFanSpeed()
+								: reprap.GetPlatform().GetFanValue(itemNumber)
+							   ) * 100.0;
 				currentFormat = PrintFormat::asPercent;
 				break;
 
-			// case 1 is the latest message sent by M117, but it handled at the start
-
-			case 10: // X
-			case 11: // Y
-			case 12: // Z
-			case 13: // U
-			case 14: // V
-			case 15: // W
-				currentValue.f = reprap.GetGCodes().GetUserPosition()[itemNumber - 10];
-				break;
-
-			case 20:
-				currentValue.i = reprap.GetCurrentToolNumber();
-				currentFormat = PrintFormat::asSigned;
-				break;
-
-			case 21:	// Z baby-step
-				currentValue.f = reprap.GetGCodes().GetTotalBabyStepOffset(Z_AXIS);
-				break;
-
-			// Platform's IP address is the "planned", Network's IP address is the "actual"
-			case 30:
-			case 31:
-			case 32:
-			case 33:
-				currentValue.u = reprap.GetNetwork().GetIPAddress(0).GetQuad(itemNumber - 30);
-				currentFormat = PrintFormat::asUnsigned;
-				break;
-
-			case 34:	// IP address in one go
-				currentValue.u = reprap.GetNetwork().GetIPAddress(0).GetV4LittleEndian();
-				currentFormat = PrintFormat::asIpAddress;
-				break;
-
-			case 35:	// Percentage of file that has been processed
-				currentValue.f = (reprap.GetPrintMonitor().IsPrinting())
-									? reprap.GetGCodes().FractionOfFilePrinted() * 100.0
-										: 0;
+			case 4:		// extruder %
+				currentValue.f = reprap.GetGCodes().GetExtrusionFactor(itemNumber);
 				currentFormat = PrintFormat::asPercent;
 				break;
 
-			case 36:	// Print time remaining, file-based
-				currentValue.u = (reprap.GetPrintMonitor().IsPrinting())
-									? static_cast<int>(reprap.GetPrintMonitor().EstimateTimeLeft(PrintEstimationMethod::fileBased))
-										: 0;
-				currentFormat = PrintFormat::asTime;
-				break;
+			case 5:		// misc
+				switch (itemNumber)
+				{
+				case 0:
+					currentValue.f = reprap.GetGCodes().GetSpeedFactor();
+					currentFormat = PrintFormat::asPercent;
+					break;
 
-			case 37:	// Print time remaining, filament-based
-				currentValue.u = (reprap.GetPrintMonitor().IsPrinting())
-									? static_cast<int>(reprap.GetPrintMonitor().EstimateTimeLeft(PrintEstimationMethod::filamentBased))
-										: 0;
-				currentFormat = PrintFormat::asTime;
+				// case 1 is the latest message sent by M117, but it handled at the start
+
+				case 10: // X
+				case 11: // Y
+				case 12: // Z
+				case 13: // U
+				case 14: // V
+				case 15: // W
+					currentValue.f = reprap.GetGCodes().GetUserPosition()[itemNumber - 10];
+					break;
+
+				case 20:
+					currentValue.i = reprap.GetCurrentToolNumber();
+					currentFormat = PrintFormat::asSigned;
+					break;
+
+				case 21:	// Z baby-step
+					currentValue.f = reprap.GetGCodes().GetTotalBabyStepOffset(Z_AXIS);
+					break;
+
+				// Platform's IP address is the "planned", Network's IP address is the "actual"
+				case 30:
+				case 31:
+				case 32:
+				case 33:
+					currentValue.u = reprap.GetNetwork().GetIPAddress(0).GetQuad(itemNumber - 30);
+					currentFormat = PrintFormat::asUnsigned;
+					break;
+
+				case 34:	// IP address in one go
+					currentValue.u = reprap.GetNetwork().GetIPAddress(0).GetV4LittleEndian();
+					currentFormat = PrintFormat::asIpAddress;
+					break;
+
+				case 35:	// Percentage of file that has been processed
+					currentValue.f = (reprap.GetPrintMonitor().IsPrinting())
+										? reprap.GetGCodes().FractionOfFilePrinted() * 100.0
+											: 0;
+					currentFormat = PrintFormat::asPercent;
+					break;
+
+				case 36:	// Print time remaining, file-based
+					currentValue.u = (reprap.GetPrintMonitor().IsPrinting())
+										? static_cast<int>(reprap.GetPrintMonitor().EstimateTimeLeft(PrintEstimationMethod::fileBased))
+											: 0;
+					currentFormat = PrintFormat::asTime;
+					break;
+
+				case 37:	// Print time remaining, filament-based
+					currentValue.u = (reprap.GetPrintMonitor().IsPrinting())
+										? static_cast<int>(reprap.GetPrintMonitor().EstimateTimeLeft(PrintEstimationMethod::filamentBased))
+											: 0;
+					currentFormat = PrintFormat::asTime;
+					break;
+
+				case 38:	// requested speed
+					currentValue.f = reprap.GetMove().GetRequestedSpeed();
+					break;
+
+				case 39:	// top speed
+					currentValue.f = reprap.GetMove().GetTopSpeed();
+					break;
+
+				default:
+					error = true;
+				}
 				break;
 
 			default:
 				error = true;
+				break;
 			}
-			break;
 
-		default:
-			error = true;
-			break;
-		}
-
-		if (error)
-		{
-			itemChanged = true;
-		}
-		else
-		{
-			switch (currentFormat)
+			if (error)
 			{
-			case PrintFormat::undefined:
 				itemChanged = true;
-				break;
-
-			case PrintFormat::asFloat:
-				if (currentValue.f != oldValue.f)
+			}
+			else
+			{
+				switch (currentFormat)
 				{
+				case PrintFormat::undefined:
 					itemChanged = true;
-				}
-				break;
+					break;
 
-			case PrintFormat::asSigned:
-				if (currentValue.i != oldValue.i)
-				{
-					itemChanged = true;
-				}
-				break;
+				case PrintFormat::asFloat:
+					if (currentValue.f != oldValue.f)
+					{
+						itemChanged = true;
+					}
+					break;
 
-			case PrintFormat::asUnsigned:
-			case PrintFormat::asIpAddress:
-			case PrintFormat::asText:
-			case PrintFormat::asTime:
-			default:
-				if (currentValue.u != oldValue.u)
-				{
-					itemChanged = true;
+				case PrintFormat::asSigned:
+					if (currentValue.i != oldValue.i)
+					{
+						itemChanged = true;
+					}
+					break;
+
+				case PrintFormat::asUnsigned:
+				case PrintFormat::asIpAddress:
+				case PrintFormat::asText:
+				case PrintFormat::asTime:
+				default:
+					if (currentValue.u != oldValue.u)
+					{
+						itemChanged = true;
+					}
+					break;
 				}
-				break;
 			}
 		}
-	}
 
-	if (itemChanged || (highlight != highlighted))
-	{
-		highlighted = highlight;
-		PrintAligned(lcd, tOffset, rightMargin);
-		itemChanged = false;
-		drawn = true;
+		if (itemChanged || !drawn || (highlight != highlighted))
+		{
+			highlighted = highlight;
+			PrintAligned(lcd, tOffset, rightMargin);
+			itemChanged = false;
+			drawn = true;
+		}
 	}
 }
 
@@ -533,6 +561,9 @@ bool ValueMenuItem::Adjust_SelectHelper()
 
 			case 20:
 				reprap.SelectTool(currentValue.i, false);
+				break;
+
+			case 21: // baby stepping
 				break;
 
 			default:
@@ -727,7 +758,7 @@ unsigned int FilesMenuItem::uListingEntries() const
 void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
 {
 	// The 'highlight' parameter is not used to highlight this item, but it is still used to tell whether this item is selected or not
-	if (itemChanged || highlighted != highlight)
+	if (IsVisible() && (!drawn || itemChanged || highlighted != highlight))
 	{
 		lcd.SetFont(fontNumber);
 		lcd.SetRightMargin(rightMargin);
@@ -1005,7 +1036,7 @@ ImageMenuItem::ImageMenuItem(PixelNumber r, PixelNumber c, Visibility vis, const
 
 void ImageMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
 {
-	if (itemChanged || highlight != highlighted)
+	if (IsVisible() && (!drawn || itemChanged || highlight != highlighted))
 	{
 		FileStore * const fs = reprap.GetPlatform().OpenFile(MENU_DIR, fileName.c_str(), OpenMode::read);
 		if (fs != nullptr)

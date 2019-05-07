@@ -20,11 +20,14 @@ extern const LcdFont font11x14;
 extern const LcdFont font7x11;
 
 const LcdFont * const fonts[] = { &font7x11, &font11x14 };
-const size_t SmallFontNumber = 0;
-const size_t LargeFontNumber = 1;
+constexpr size_t SmallFontNumber = 0;
+constexpr size_t LargeFontNumber = 1;
+
+constexpr uint32_t NormalRefreshMillis = 250;
+constexpr uint32_t FastRefreshMillis = 50;
 
 Display::Display()
-	: lcd(nullptr), menu(nullptr), encoder(nullptr),
+	: lcd(nullptr), menu(nullptr), encoder(nullptr), lastRefreshMillis(0),
 	  mboxSeq(0), mboxActive(false), beepActive(false), updatingFirmware(false)
 {
 }
@@ -39,13 +42,16 @@ void Display::Spin()
 		{
 			// Check encoder and update display
 			const int ch = encoder->GetChange();
+			bool forceRefresh = false;
 			if (ch != 0)
 			{
 				menu->EncoderAction(ch);
+				forceRefresh = true;
 			}
 			else if (encoder->GetButtonPress())
 			{
 				menu->EncoderAction(0);
+				forceRefresh = true;
 			}
 
 			const MessageBox& mbox = reprap.GetMessageBox();
@@ -62,6 +68,7 @@ void Display::Spin()
 					mboxActive = true;
 					mboxSeq = mbox.seq;
 					menu->DisplayMessageBox(mbox);
+					forceRefresh = true;
 				}
 			}
 			else if (mboxActive)
@@ -69,9 +76,23 @@ void Display::Spin()
 				// Message box has been cancelled from this or another input channel
 				menu->ClearMessageBox();
 				mboxActive = false;
+				forceRefresh = true;
 			}
 
-			menu->Refresh();
+			const uint32_t now = millis();
+			if (forceRefresh)
+			{
+				menu->Refresh();
+				// To avoid a noticeable delay in updating the coordinates and babystepping offset when live adjusting them and we stop rotating the encoder,
+				// we force another update 50ms after any encoder actions
+				lastRefreshMillis = now - (NormalRefreshMillis - FastRefreshMillis);
+			}
+			else if (now - lastRefreshMillis >= NormalRefreshMillis)
+			{
+				menu->Refresh();
+				// When the encoder is inactive, we update at most 5 times per second, to avoid rapidly-changing values flickering on the display
+				lastRefreshMillis = now;
+			}
 		}
 		lcd->FlushSome();
 
