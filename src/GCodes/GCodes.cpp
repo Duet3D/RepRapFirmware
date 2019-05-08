@@ -2153,7 +2153,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 			}
 			if (ok)
 			{
-				buf.printf("M98 P%s\n", RESUME_PROLOGUE_G);					// call the prologue - must contain at least M116
+				buf.printf("M98 P\"%s\"\n", RESUME_PROLOGUE_G);					// call the prologue - must contain at least M116
 				ok = f->Write(buf.c_str())
 					&& platform.WriteFanSettings(f);						// set the speeds of non-thermostatic fans
 			}
@@ -2191,7 +2191,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 			}
 			if (ok)
 			{
-				buf.printf("M23 %s\nM26 S%" PRIu32 " P%.3f\n", printingFilename, pauseRestorePoint.filePos, (double)pauseRestorePoint.proportionDone);
+				buf.printf("M23 \"%s\"\nM26 S%" PRIu32 " P%.3f\n", printingFilename, pauseRestorePoint.filePos, (double)pauseRestorePoint.proportionDone);
 				ok = f->Write(buf.c_str());								// write filename and file position
 			}
 			if (ok)
