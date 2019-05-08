@@ -18,7 +18,7 @@ New features and changed behaviour:
 - M291 now unlocks movement if it is locked, so that PanelDue or DWC can be used to jog axes if M291 was invoked from another input stream
 - The status response for DWC and returned by M408 S2 now includes the workplace coordinate system number with variable name "wpl"
 - On the Duet Maestro, stepper driver open load detection is now disabled when the driver is operating in stealthChop mode
-- Prints can now be paused and cancelled while they are waiting for temperatures to be reached
+- Prints can now be baby stepped, paused and cancelled while they are waiting for temperatures to be reached
 - Increased maximum number of triggers from 10 to 16
 - Increased number of output buffers on Duet WiFi/Ethernet/Maestro from 20 to 24
 
