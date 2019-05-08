@@ -30,7 +30,7 @@ Bug fixes:
 - If a print finishes or is cancelled when Z hop is active because of a G10 command without a subsequent G11, the Z hop is cancelled (but not the associated retraction)
 - Blank lines in 12864 display menu files are now ignored
 - Visibility attributes were not correctly applied to 12864 display value, alter and image menu items
-- Fixed a couple of issues with the 12864 display "files" menu item when the file path refers to SD card 1. The SD card is mounted automatically if it isn't alrready mounted.
+- Fixed a couple of issues with the 12864 display "files" menu item when the file path refers to SD card 1. The SD card is mounted automatically if it isn't already mounted.
 - Fixed (hopefully - not tested!) issue with Fan 1 on Duet085 in 2.03 beta releases
 
 Internal changes:
