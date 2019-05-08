@@ -123,6 +123,7 @@ Done in 2.03RC1:
 - [done, ok, port] Bug: was holding movement lock while waiting for bed or extruder to heat up, so unable to pause/cancel during heat up
 - [done, ok, port] Bug: fix crash when there were no selectable items in a menu
 - [done, ok, port] Only add 1 space after left-aligned text items with no explicit width
+- [done, ok] Mount SD cards automatically if they are not mounted and we are asked to list files on them, andf display any error messages
 
 To port to v3-dev:
 GCodes2.cpp
@@ -131,7 +132,7 @@ GCodeMachineState.h
 Configuration.h
 Display.h, .cpp
 Menu.cpp
-MenuItem.cpp
+MenuItem.h, cpp
 
 Planned for 2.03:
 - I2C errors: can we recover from them?

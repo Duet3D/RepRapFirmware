@@ -47,7 +47,7 @@ void MenuItem::PrintAligned(Lcd7920& lcd, PixelNumber tOffset, PixelNumber right
 		const PixelNumber w = lcd.GetColumn() - column;
 		if (w < width)
 		{
-			colsToSkip = (align == 2)
+			colsToSkip = (align == RightAlign)
 							? width - w - 1				// when right aligning, leave 1 pixel of space at the end
 								: (width - w)/2;
 		}
@@ -703,7 +703,8 @@ FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNu
 		currentDirectory.cat('/');
 	}
 
-	EnterDirectory();
+	initialDirectoryNesting = GetDirectoryNesting();
+	sdCardState = notStarted;
 }
 
 void FilesMenuItem::vResetViewState()
@@ -733,10 +734,10 @@ void FilesMenuItem::EnterDirectory()
 	itemChanged = true;							// force a redraw
 }
 
-bool FilesMenuItem::bInSubdirectory() const
+uint8_t FilesMenuItem::GetDirectoryNesting() const
 {
 	const char *pcPathElement = currentDirectory.c_str();
-	unsigned int uNumSlashes = 0;
+	uint8_t uNumSlashes = 0;
 
 	while ('\0' != *pcPathElement)
 	{
@@ -746,8 +747,12 @@ bool FilesMenuItem::bInSubdirectory() const
 		}
 		++pcPathElement;
 	}
+	return uNumSlashes;
+}
 
-	return (1 < uNumSlashes);
+bool FilesMenuItem::bInSubdirectory() const
+{
+	return GetDirectoryNesting() > initialDirectoryNesting;
 }
 
 unsigned int FilesMenuItem::uListingEntries() const
@@ -758,100 +763,159 @@ unsigned int FilesMenuItem::uListingEntries() const
 void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
 {
 	// The 'highlight' parameter is not used to highlight this item, but it is still used to tell whether this item is selected or not
-	if (IsVisible() && (!drawn || itemChanged || highlighted != highlight))
+	if (!IsVisible())
 	{
-		lcd.SetFont(fontNumber);
-		lcd.SetRightMargin(rightMargin);
-		uint8_t line = 0;
-
-		// If we are in a subdirectory then we prepend ".." to the list of files
-		unsigned int dirEntriesToSkip;
-		if (bInSubdirectory())
+		sdCardState = notStarted;
+	}
+	else if (!drawn || itemChanged || highlighted != highlight)
+	{
+		switch (sdCardState)
 		{
-			if (m_uListingFirstVisibleIndex == 0)
+		case notStarted:
+			if (m_oMS->CheckDriveMounted(currentDirectory.c_str()))
 			{
-				lcd.SetCursor(row, column);
-				lcd.print("  ..");
-				lcd.ClearToMargin();
-				if (highlight && m_uListingSelectedIndex == 0)
-				{
-					// Overwriting the initial spaces with '>' avoids shifting the following text when we change the selection
-					lcd.SetCursor(row, column);
-					lcd.print(">");
-				}
-				line = 1;
-				dirEntriesToSkip = 0;
+				sdCardState = mounted;
+				EnterDirectory();
 			}
 			else
 			{
-				dirEntriesToSkip = m_uListingFirstVisibleIndex - 1;
+				sdCardState = mounting;
+			}
+			break;
+
+		case mounting:
+			{
+				const size_t card = (isdigit(currentDirectory[0]) && currentDirectory[1] == ':') ? currentDirectory[0] - '0' : 0;
+				String<StringLength40> reply;
+				switch(m_oMS->Mount(card, reply.GetRef(), false))
+				{
+				case GCodeResult::notFinished:
+					return;
+
+				case GCodeResult::ok:
+					sdCardState = mounted;
+					EnterDirectory();
+					break;
+
+				default:
+					reply.copy("Internal error");
+					// no break
+				case GCodeResult::error:
+					sdCardState = error;
+					lcd.SetFont(fontNumber);
+					lcd.SetCursor(row, column);
+					lcd.SetRightMargin(rightMargin);
+					lcd.ClearToMargin();
+					lcd.SetCursor(row, column);
+					lcd.print(reply.c_str());
+					break;
+				}
+			}
+			break;
+
+		case mounted:
+			ListFiles(lcd, rightMargin, highlight, tOffset);
+			break;
+
+		case error:
+			break;
+		}
+	}
+}
+
+void FilesMenuItem::ListFiles(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
+{
+	lcd.SetFont(fontNumber);
+	lcd.SetRightMargin(rightMargin);
+	uint8_t line = 0;
+
+	// If we are in a subdirectory then we prepend ".." to the list of files
+	unsigned int dirEntriesToSkip;
+	if (bInSubdirectory())
+	{
+		if (m_uListingFirstVisibleIndex == 0)
+		{
+			lcd.SetCursor(row, column);
+			lcd.print("  ..");
+			lcd.ClearToMargin();
+			if (highlight && m_uListingSelectedIndex == 0)
+			{
+				// Overwriting the initial spaces with '>' avoids shifting the following text when we change the selection
+				lcd.SetCursor(row, column);
+				lcd.print(">");
+			}
+			line = 1;
+			dirEntriesToSkip = 0;
+		}
+		else
+		{
+			dirEntriesToSkip = m_uListingFirstVisibleIndex - 1;
+		}
+	}
+	else
+	{
+		dirEntriesToSkip = m_uListingFirstVisibleIndex;
+	}
+
+	// Seek to the first file that is in view
+	FileInfo oFileInfo;
+	bool gotFileInfo = m_oMS->FindFirst(currentDirectory.c_str(), oFileInfo);
+	while (gotFileInfo)
+	{
+		if (oFileInfo.fileName[0] != '.')
+		{
+			if (dirEntriesToSkip == 0)
+			{
+				break;
+			}
+			--dirEntriesToSkip;
+		}
+		gotFileInfo =  m_oMS->FindNext(oFileInfo);
+	}
+
+	// We always iterate the entire viewport so that old listing lines that may not be overwritten are cleared
+	while (line < numDisplayLines)
+	{
+		lcd.SetCursor(row + (lcd.GetFontHeight() * line), column);
+
+		// If there's actually a file to describe (not just ensuring viewport line clear)
+		if (gotFileInfo)
+		{
+			lcd.print("  ");
+			if (oFileInfo.isDirectory)
+			{
+				lcd.print("./");
+			}
+			lcd.print(oFileInfo.fileName.c_str());
+			lcd.ClearToMargin();
+			if (highlight && m_uListingSelectedIndex == line + m_uListingFirstVisibleIndex)
+			{
+				lcd.SetCursor(row + (lcd.GetFontHeight() * line), column);
+				lcd.print(">");
 			}
 		}
 		else
 		{
-			dirEntriesToSkip = m_uListingFirstVisibleIndex;
+			lcd.ClearToMargin();
 		}
 
-		// Seek to the first file that is in view
-		FileInfo oFileInfo;
-		bool gotFileInfo = m_oMS->FindFirst(currentDirectory.c_str(), oFileInfo);
-		while (gotFileInfo)
+		++line;
+		if (line == numDisplayLines)
 		{
-			if (oFileInfo.fileName[0] != '.')
-			{
-				if (dirEntriesToSkip == 0)
-				{
-					break;
-				}
-				--dirEntriesToSkip;
-			}
-			gotFileInfo =  m_oMS->FindNext(oFileInfo);
+			break;		// skip getting more file info for efficiency
 		}
 
-		// We always iterate the entire viewport so that old listing lines that may not be overwritten are cleared
-		while (line < numDisplayLines)
+		do
 		{
-			lcd.SetCursor(row + (lcd.GetFontHeight() * line), column);
-
-			// If there's actually a file to describe (not just ensuring viewport line clear)
-			if (gotFileInfo)
-			{
-				lcd.print("  ");
-				if (oFileInfo.isDirectory)
-				{
-					lcd.print("./");
-				}
-				lcd.print(oFileInfo.fileName.c_str());
-				lcd.ClearToMargin();
-				if (highlight && m_uListingSelectedIndex == line + m_uListingFirstVisibleIndex)
-				{
-					lcd.SetCursor(row + (lcd.GetFontHeight() * line), column);
-					lcd.print(">");
-				}
-			}
-			else
-			{
-				lcd.ClearToMargin();
-			}
-
-			++line;
-			if (line == numDisplayLines)
-			{
-				break;		// skip getting more file info for efficiency
-			}
-
-			do
-			{
-				gotFileInfo = m_oMS->FindNext(oFileInfo);
-			} while (gotFileInfo && oFileInfo.fileName[0] == '.');
-		}
-
-		m_oMS->AbandonFindNext();				// release the mutex, there may be more files that we don't have room to display
-
-		itemChanged = false;
-		drawn = true;
-		highlighted = highlight;
+			gotFileInfo = m_oMS->FindNext(oFileInfo);
+		} while (gotFileInfo && oFileInfo.fileName[0] == '.');
 	}
+
+	m_oMS->AbandonFindNext();				// release the mutex, there may be more files that we don't have room to display
+
+	itemChanged = false;
+	drawn = true;
+	highlighted = highlight;
 }
 
 void FilesMenuItem::Enter(bool bForwardDirection)
@@ -859,7 +923,7 @@ void FilesMenuItem::Enter(bool bForwardDirection)
 	if (bForwardDirection || uListingEntries() == 0)
 	{
 		m_uListingSelectedIndex = 0;
-		m_uListingFirstVisibleIndex = 0;					// select the first item and start the list form the first item
+		m_uListingFirstVisibleIndex = 0;					// select the first item and start the list from the first item
 	}
 	else
 	{

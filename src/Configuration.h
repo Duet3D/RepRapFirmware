@@ -237,12 +237,13 @@ constexpr size_t MaxVariableNameLength = 100;
 #endif
 
 constexpr size_t StringLength20 = 20;
+constexpr size_t StringLength40 = 40;
+
 constexpr size_t MaxHeaterNameLength = StringLength20;	// Maximum number of characters in a heater name
 constexpr size_t MaxFanNameLength = StringLength20;		// Maximum number of characters in a fan name
-
 constexpr size_t FormatStringLength = 256;
 constexpr size_t GCodeReplyLength = 256;				// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer
-constexpr size_t MachineNameLength = 40;
+constexpr size_t MachineNameLength = StringLength40;
 constexpr size_t RepRapPasswordLength = StringLength20;
 constexpr size_t MediumStringLength = MaxFilenameLength;
 
