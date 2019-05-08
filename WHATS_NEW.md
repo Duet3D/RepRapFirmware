@@ -6,7 +6,8 @@ Version 2.03RC1
 
 Upgrade notes:
 - The facility to map endstops using the A parameter in the M574 command has been withdrawn. Use RepRapFirmware 3 if you need an equivalent facility.
-- See also the upgrade notes for earlier releases, unless you are upgrading from 2.03beta3. **Tool change users please note:** tool offsets are now applied in tfree#.g and tpost#.g files.
+- Duet Maestro users with a 12864 display may need to make minor changes to their menu files to correct for changes in spacing and automatic insertion of % characters after certain values e.g. fan speed
+- See also the upgrade notes for earlier releases, unless you are upgrading from 2.03beta3. **Tool change users please note:** tool offsets are now applied in tfree#.g and tpost#.g files (in firmware 2.02 they were not applied).
 
 New features and changed behaviour:
 - Endstop mapping and M574 A parameter have been removed
@@ -29,6 +30,7 @@ Bug fixes:
 - If a print finishes or is cancelled when Z hop is active because of a G10 command without a subsequent G11, the Z hop is cancelled (but not the associated retraction)
 - Blank lines in 12864 display menu files are now ignored
 - Visibility attributes were not correctly applied to 12864 display value, alter and image menu items
+- Fixed a couple of issues with the 12864 display "files" menu item when the file path refers to SD card 1. The SD card is mounted automatically if it isn't alrready mounted.
 - Fixed (hopefully - not tested!) issue with Fan 1 on Duet085 in 2.03 beta releases
 
 Internal changes:
