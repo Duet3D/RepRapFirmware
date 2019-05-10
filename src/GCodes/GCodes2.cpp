@@ -4724,6 +4724,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		break;
 
 	case GCodeResult::error:
+		if (!gb.IsBinary())
 		{
 			String<ScratchStringLength> scratchString;
 			gb.PrintCommand(scratchString.GetRef());

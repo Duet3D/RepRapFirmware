@@ -259,6 +259,9 @@ void DataTransfer::ReadHeightMap()
 			map.SetGridHeight(i, points[i]);
 		}
 	}
+
+	// Activate it
+	reprap.GetGCodes().ActivateHeightmap(true);
 }
 
 void DataTransfer::ReadLockUnlockRequest(CodeChannel& channel)
@@ -688,8 +691,9 @@ bool DataTransfer::WriteHeightMap()
 	// Write Z points
 	if (numPoints != 0)
 	{
-		float *zPoints = reinterpret_cast<float*>(txBuffer + txPointer + sizeof(HeightMapHeader));
+		float *zPoints = reinterpret_cast<float*>(txBuffer + txPointer);
 		reprap.GetMove().SaveHeightMapToArray(zPoints);
+		txPointer += numPoints * sizeof(float);
 	}
 	return true;
 }

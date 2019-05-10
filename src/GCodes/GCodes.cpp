@@ -1255,7 +1255,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			if (numPointsProbed >= 4)
 			{
 				reply.printf("%" PRIu32 " points probed, mean error %.3f, deviation %.3f\n", numPointsProbed, (double)mean, (double)deviation);
+#if HAS_HIGH_SPEED_SD
 				error = SaveHeightMap(gb, reply);
+#endif
 				reprap.GetMove().AccessHeightMap().ExtrapolateMissing();
 				reprap.GetMove().UseMesh(true);
 			}
@@ -3674,6 +3676,7 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 	return GCodeResult::ok;
 }
 
+#if HAS_HIGH_SPEED_SD
 GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 {
 	ClearBedMapping();
@@ -3696,14 +3699,11 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 	reply.printf("Failed to load height map from file %s: ", heightMapFileName.c_str());	// set up error message to append to
 	const bool err = reprap.GetMove().LoadHeightMapFromFile(f, reply);
 	f->Close();
-	reprap.GetMove().UseMesh(!err);
 
+	ActivateHeightmap(!err);
 	if (!err)
 	{
 		reply.Clear();															// wipe the error message
-		// Update the current position to allow for any bed compensation at the current XY coordinates
-		reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-		ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates to reflect any height map offset at the current position
 	}
 
 	return GetGCodeResultFromError(err);
@@ -3744,6 +3744,7 @@ bool GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 	}
 	return err;
 }
+#endif
 
 // Stop using bed compensation
 void GCodes::ClearBedMapping()
@@ -4223,18 +4224,26 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 	// Deal with replies to the Linux interface
 	if (gb.IsBinary())
 	{
+		MessageType type = gb.GetResponseMessageType();
 		if (rslt == GCodeResult::notFinished || gb.IsMacroRequested())
 		{
-			if (reply[0] != 0)
+			if (reply[0] == 0)
 			{
 				// Don't send empty push messages
-				platform.Message((MessageType)(gb.GetResponseMessageType() | PushFlag), reply);
+				return;
 			}
+			type = (MessageType)(type | PushFlag);
 		}
-		else
+
+		if (rslt == GCodeResult::warning)
 		{
-			platform.Message(gb.GetResponseMessageType(), reply);
+			type = (MessageType)(type | WarningMessageFlag | LogMessage);
 		}
+		else if (rslt == GCodeResult::error)
+		{
+			type = (MessageType)(type | ErrorMessageFlag | LogMessage);
+		}
+		platform.Message(type, reply);
 		return;
 	}
 #endif
@@ -5671,6 +5680,17 @@ void GCodes::AssignGrid(float xRange[2], float yRange[2], float radius, float sp
 {
 	defaultGrid.Set(xRange, yRange, radius, spacing);
 	reprap.GetMove().AccessHeightMap().SetGrid(defaultGrid);
+}
+
+void GCodes::ActivateHeightmap(bool activate)
+{
+	reprap.GetMove().UseMesh(activate);
+	if (activate)
+	{
+		// Update the current position to allow for any bed compensation at the current XY coordinates
+		reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
+		ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates to reflect any height map offset at the current position
+	}
 }
 
 #if HAS_HIGH_SPEED_SD

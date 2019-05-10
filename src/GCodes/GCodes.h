@@ -246,7 +246,9 @@ public:
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);	// Handle G-Code replies
 	void EmergencyStop();												// Cancel everything
 	bool GetLastPrintingHeight(float& height) const;					// Get the height in user coordinates of the last printing move
+
 	void AssignGrid(float xRange[2], float yRange[2], float radius, float spacing[2]);	// Assign the heightmap using the given parameters
+	void ActivateHeightmap(bool activate);										// (De-)Activate the height map
 
 #if HAS_HIGH_SPEED_SD
 	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply);	// Start timing SD card file writing
@@ -380,8 +382,10 @@ private:
 
 	GCodeResult SetOrReportZProbe(GCodeBuffer& gb, const StringRef &reply);		// Handle M558
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply);			// Define the probing grid, returning true if error
+#if HAS_HIGH_SPEED_SD
 	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply);			// Load the height map from file
 	bool SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;			// Save the height map to file
+#endif
 	void ClearBedMapping();														// Stop using bed compensation
 	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply);				// Start probing the grid, returning true if we didn't because of an error
 	GCodeResult CheckOrConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, int code);	// Handle M581 and M582

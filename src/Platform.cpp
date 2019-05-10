@@ -3776,7 +3776,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 		++numDestinations;
 	}
 #if HAS_LINUX_INTERFACE
-	if ((type & SpiMessage) != 0 || (type & BinaryCodeReplyFlag) != 0)
+	if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
 	{
 		++numDestinations;
 	}
@@ -3851,6 +3851,18 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 void Platform::MessageF(MessageType type, const char *fmt, va_list vargs)
 {
 	String<FormatStringLength> formatString;
+#if HAS_LINUX_INTERFACE
+	if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
+	{
+		formatString.vprintf(fmt, vargs);
+		reprap.GetLinuxInterface().HandleGCodeReply(type, formatString.c_str());
+		if ((type & BinaryCodeReplyFlag) != 0)
+		{
+			return;
+		}
+	}
+#endif
+
 	if ((type & ErrorMessageFlag) != 0)
 	{
 		formatString.copy("Error: ");
@@ -3867,14 +3879,6 @@ void Platform::MessageF(MessageType type, const char *fmt, va_list vargs)
 	}
 
 	RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
-
-#if HAS_LINUX_INTERFACE
-	if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
-	{
-		formatString.vprintf(fmt, vargs);
-		reprap.GetLinuxInterface().HandleGCodeReply(type, formatString.c_str());
-	}
-#endif
 }
 
 void Platform::MessageF(MessageType type, const char *fmt, ...)
@@ -3887,6 +3891,17 @@ void Platform::MessageF(MessageType type, const char *fmt, ...)
 
 void Platform::Message(MessageType type, const char *message)
 {
+#if HAS_LINUX_INTERFACE
+	if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
+	{
+		reprap.GetLinuxInterface().HandleGCodeReply(type, message);
+		if ((type & BinaryCodeReplyFlag) != 0)
+		{
+			return;
+		}
+	}
+#endif
+
 	if ((type & (ErrorMessageFlag | WarningMessageFlag)) == 0)
 	{
 		RawMessage(type, message);
@@ -3898,13 +3913,6 @@ void Platform::Message(MessageType type, const char *message)
 		formatString.cat(message);
 		RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
 	}
-
-#if HAS_LINUX_INTERFACE
-	if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
-	{
-		reprap.GetLinuxInterface().HandleGCodeReply(type, message);
-	}
-#endif
 }
 
 // Send a message box, which may require an acknowledgement
