@@ -3551,7 +3551,7 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	gb.SetState(GCodeState::homing1);
-	return GCodeResult::stateNotFinished;
+	return GCodeResult::ok;
 }
 
 // This is called to execute a G30.
@@ -3619,7 +3619,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 			DoFileMacro(gb, DEPLOYPROBE_G, false);
 		}
 	}
-	return GCodeResult::stateNotFinished;
+	return GCodeResult::ok;
 }
 
 // Decide which device to display a message box on
@@ -3671,7 +3671,7 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 	{
 		DoFileMacro(gb, DEPLOYPROBE_G, false);
 	}
-	return GCodeResult::stateNotFinished;
+	return GCodeResult::ok;
 }
 
 GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
@@ -4223,9 +4223,13 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 	// Deal with replies to the Linux interface
 	if (gb.IsBinary())
 	{
-		if (rslt == GCodeResult::notFinished || rslt == GCodeResult::stateNotFinished)
+		if (rslt == GCodeResult::notFinished || gb.IsMacroRequested())
 		{
-			platform.Message((MessageType)(gb.GetResponseMessageType() | PushFlag), reply);
+			if (reply[0] != 0)
+			{
+				// Don't send empty push messages
+				platform.Message((MessageType)(gb.GetResponseMessageType() | PushFlag), reply);
+			}
 		}
 		else
 		{
@@ -4717,7 +4721,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 		}
 		isRetracted = retract;
 	}
-	return (gb.GetState() == GCodeState::normal) ? GCodeResult::ok : GCodeResult::stateNotFinished;
+	return GCodeResult::ok;
 }
 
 // Load the specified filament into a tool
@@ -4781,18 +4785,16 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 		String<ScratchStringLength> scratchString;
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName.c_str(), LOAD_FILAMENT_G);
 		DoFileMacro(gb, scratchString.c_str(), true);
-		return GCodeResult::stateNotFinished;
 	}
 	else if (tool->GetFilament()->IsLoaded())
 	{
 		reply.printf("Loaded filament in the selected tool: %s", tool->GetFilament()->GetName());
-		return GCodeResult::ok;
 	}
 	else
 	{
 		reply.printf("No filament loaded in the selected tool");
-		return GCodeResult::ok;
 	}
+	return GCodeResult::ok;
 }
 
 // Unload the current filament from a tool
@@ -4821,7 +4823,7 @@ GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply)
 	String<ScratchStringLength> scratchString;
 	scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, tool->GetFilament()->GetName(), UNLOAD_FILAMENT_G);
 	DoFileMacro(gb, scratchString.c_str(), true);
-	return GCodeResult::stateNotFinished;
+	return GCodeResult::ok;
 }
 
 float GCodes::GetRawExtruderTotalByDrive(size_t extruder) const
@@ -4871,10 +4873,12 @@ void GCodes::StopPrint(StopPrintReason reason)
 	if (exitSimulationWhenFileComplete)
 	{
 		const float simSeconds = reprap.GetMove().GetSimulationTime() + simulationTime;
+#if HAS_HIGH_SPEED_SD
 		if (updateFileWhenSimulationComplete && reason == StopPrintReason::normalCompletion)
 		{
 			platform.GetMassStorage()->RecordSimulationTime(printingFilename, lrintf(simSeconds));
 		}
+#endif
 
 		exitSimulationWhenFileComplete = false;
 		simulationMode = 0;							// do this after we append the simulation info to the file so that DWC doesn't try to reload the file info too soon
@@ -5660,6 +5664,13 @@ bool GCodes::GetLastPrintingHeight(float& height) const
 		return true;
 	}
 	return false;
+}
+
+// Assign the heightmap using the given parameters
+void GCodes::AssignGrid(float xRange[2], float yRange[2], float radius, float spacing[2])
+{
+	defaultGrid.Set(xRange, yRange, radius, spacing);
+	reprap.GetMove().AccessHeightMap().SetGrid(defaultGrid);
 }
 
 #if HAS_HIGH_SPEED_SD

@@ -60,6 +60,7 @@ void BinaryParser::Put(const char *data, size_t len)
 	memcpy(gb.buffer, data, len);
 	bufferLength = len;
 	isIdle = false;
+	gb.machineState->g53Active = (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
 
 	if (reprap.Debug(moduleGcodes))
 	{

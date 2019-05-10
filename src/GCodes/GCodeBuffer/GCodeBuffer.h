@@ -89,8 +89,9 @@ public:
 	void SetPrintFinished();							// Mark the print file as finished
 	bool IsFileFinished() const;						// Return true if this source has finished execution of a file
 
-	void RequestMacroFile(const char *filename, bool reportMissing);	// Request execution of a file macro
-	const char *GetRequestedMacroFile(bool& reportMissing) const;		// Return requested macro file or nullptr if none
+	bool IsMacroRequested() const { return !requestedMacroFile.IsEmpty(); }		// Indicate if a macro file is being requested
+	void RequestMacroFile(const char *filename, bool reportMissing);			// Request execution of a file macro
+	const char *GetRequestedMacroFile(bool& reportMissing) const;				// Return requested macro file or nullptr if none
 
 	bool IsAbortRequested() const;						// Is the cancellation of the current file requested?
 	void AcknowledgeAbort();							// Indicates that the current macro file is being cancelled

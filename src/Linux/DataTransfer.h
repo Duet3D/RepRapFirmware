@@ -38,6 +38,7 @@ public:
 	void ReadPrintStartedInfo(size_t packetLength, StringRef& filename, GCodeFileInfo &info);	// Read info about the started file print
 	PrintStoppedReason ReadPrintStoppedInfo();				// Read info about why the print has been stopped
 	void ReadMacroCompleteInfo(CodeChannel& channel, bool &error);	// Read info about a completed macro file
+	void ReadHeightMap();									// Read heightmap parameters
 	void ReadLockUnlockRequest(CodeChannel& channel);		// Read a lock/unlock request
 
 	void ResendPacket(const PacketHeader *packet);

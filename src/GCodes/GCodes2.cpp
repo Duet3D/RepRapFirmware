@@ -236,9 +236,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 				result = ProbeGrid(gb, reply);
 				break;
 
+#if HAS_HIGH_SPEED_SD
 			case 1:		// load height map file
 				result = LoadHeightMap(gb, reply);
 				break;
+#endif
 
 			case 2:		// clear height map
 				ClearBedMapping();
@@ -414,7 +416,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					reprap.GetHeat().SwitchOffAll(true);	// no stop.g file found, so default to turning all heaters off
 				}
-				result = GCodeResult::stateNotFinished;
+				result = GCodeResult::ok;
 			}
 		}
 		break;
@@ -1392,7 +1394,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				gb.MachineState().newToolNumber = applicableTool->Number();
 				gb.MachineState().toolChangeParam = (simulationMode == 0) ? 0 : DefaultToolChangeParam;
 				gb.SetState(GCodeState::m109ToolChange0);
-				result = GCodeResult::stateNotFinished;
+				result = GCodeResult::ok;
 			}
 			else
 			{
@@ -1411,7 +1413,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (code == 109 && simulationMode == 0)
 				{
 					gb.SetState(GCodeState::m109WaitForTemperature);
-					result = GCodeResult::stateNotFinished;
+					result = GCodeResult::ok;
 				}
 			}
 		}
@@ -2576,6 +2578,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+#if HAS_HIGH_SPEED_SD
 	case 374: // Save grid and height map to file
 		result = GetGCodeResultFromError(SaveHeightMap(gb, reply));
 		break;
@@ -2587,6 +2590,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		result = LoadHeightMap(gb, reply);
 		break;
+#endif
 
 	case 376: // Set taper height
 		{
@@ -4062,7 +4066,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					moveBuffer.coords[axisToUse] += correctionAngle * correctionFactor;
 
 					reply.printf("%c axis is off by %.2f deg", axisLetters[axisToUse], (double)correctionAngle);
-					HandleReply(gb, GCodeResult::stateNotFinished, reply.c_str());
+					HandleReply(gb, GCodeResult::notFinished, reply.c_str());
 				}
 				else if (reprap.GetMove().GetNumProbedProbePoints() >= 4)
 				{
@@ -4081,7 +4085,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					moveBuffer.coords[Z_AXIS] += zS;
 
 					reply.printf("%c is offset by %.2fmm, Z is offset by %.2fmm", (x2 == x1) ? 'Y' : 'X', (double)aS, (double)zS);
-					HandleReply(gb, GCodeResult::stateNotFinished, reply.c_str());
+					HandleReply(gb, GCodeResult::notFinished, reply.c_str());
 				}
 				else
 				{
@@ -4101,7 +4105,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				NewMoveAvailable(1);
 
 				gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
-				result = GCodeResult::stateNotFinished;
 			}
 		}
 		else
@@ -4733,9 +4736,12 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		break;
 	}
 
-	gb.timerRunning = false;
-	UnlockAll(gb);
-	HandleReply(gb, rslt, reply.c_str());
+	if (gb.MachineState().state == GCodeState::normal)
+	{
+		gb.timerRunning = false;
+		UnlockAll(gb);
+		HandleReply(gb, rslt, reply.c_str());
+	}
 	return true;
 }
 

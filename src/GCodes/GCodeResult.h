@@ -13,7 +13,6 @@
 // Enumeration to specify the result of attempting to process a GCode command
 enum class GCodeResult : uint8_t
 {
-	stateNotFinished,				// we haven't finished processing this command in the current state
 	notFinished,					// we haven't finished processing this command
 	ok,								// we have finished processing this code
 	error,

@@ -74,6 +74,7 @@ public:
 	float GetInterpolatedHeightError(float x, float y) const;		// Compute the interpolated height error at the specified point
 	void ClearGridHeights();										// Clear all grid height corrections
 	void SetGridHeight(size_t xIndex, size_t yIndex, float height);	// Set the height of a grid point
+	void SetGridHeight(size_t index, float height);					// Set the height of a grid point
 
 	bool SaveToFile(FileStore *f, float zOffset) const				// Save the grid to file returning true if an error occurred
 	pre(IsValid());

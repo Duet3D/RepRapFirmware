@@ -254,7 +254,11 @@ void HeightMap::ClearGridHeights()
 // Set the height of a grid point
 void HeightMap::SetGridHeight(size_t xIndex, size_t yIndex, float height)
 {
-	size_t index = yIndex * def.numX + xIndex;
+	SetGridHeight(yIndex * def.numX + xIndex, height);
+}
+
+void HeightMap::SetGridHeight(size_t index, float height)
+{
 	if (index < MaxGridProbePoints)
 	{
 		gridHeights[index] = height;

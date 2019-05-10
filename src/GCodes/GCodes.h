@@ -246,6 +246,7 @@ public:
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);	// Handle G-Code replies
 	void EmergencyStop();												// Cancel everything
 	bool GetLastPrintingHeight(float& height) const;					// Get the height in user coordinates of the last printing move
+	void AssignGrid(float xRange[2], float yRange[2], float radius, float spacing[2]);	// Assign the heightmap using the given parameters
 
 #if HAS_HIGH_SPEED_SD
 	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply);	// Start timing SD card file writing

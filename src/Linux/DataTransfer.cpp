@@ -111,6 +111,7 @@ void disable_spi()
 	xdmac_channel_disable(XDMAC, DmacChanLinuxTx);
 
 	// Disable SPI and indicate that no more data may be exchanged
+	(void)LINUX_SPI->SPI_RDR;
 	spi_disable(LINUX_SPI);
 	digitalWrite(SamTfrReadyPin, false);
 }
@@ -234,6 +235,30 @@ void DataTransfer::ReadMacroCompleteInfo(CodeChannel& channel, bool &error)
 	const MacroCompleteHeader *header = ReadDataHeader<MacroCompleteHeader>();
 	channel = header->channel;
 	error = header->error;
+}
+
+void DataTransfer::ReadHeightMap()
+{
+	// Read heightmap header
+	const HeightMapHeader *header = ReadDataHeader<HeightMapHeader>();
+	float *xRange = new float[2] { header->xMin, header->xMax };
+	float *yRange = new float[2] { header->yMin, header->yMax };
+	float *spacing = new float[2] { header->xSpacing, header->ySpacing };
+	reprap.GetGCodes().AssignGrid(xRange, yRange, header->radius, spacing);
+
+	// Read Z coordinates
+	const size_t numPoints = header->numX * header->numY;
+	const float *points = reinterpret_cast<const float *>(ReadData(sizeof(float) * numPoints));
+
+	HeightMap& map = reprap.GetMove().AccessHeightMap();
+	map.ClearGridHeights();
+	for (size_t i = 0; i < numPoints; i++)
+	{
+		if (!isnan(points[i]))
+		{
+			map.SetGridHeight(i, points[i]);
+		}
+	}
 }
 
 void DataTransfer::ReadLockUnlockRequest(CodeChannel& channel)
@@ -657,7 +682,8 @@ bool DataTransfer::WriteHeightMap()
 	header->yMax = grid.yMax;
 	header->ySpacing = grid.ySpacing;
 	header->radius = grid.radius;
-	header->numPoints = numPoints;
+	header->numX = grid.numX;
+	header->numY = grid.numY;
 
 	// Write Z points
 	if (numPoints != 0)
