@@ -1878,6 +1878,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 			if (gb.GetState() == GCodeState::normal)
 			{
 				UnlockAll(gb);
+				HandleReply(gb, GCodeResult::ok, "");
 				if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
 				{
 					gb.Put("M600");
@@ -3802,18 +3803,6 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply)
 	FileStore * const f = platform.OpenFile(platform.GetGCodeDir(), fileName, OpenMode::read);
 	if (f != nullptr)
 	{
-		fileGCode->SetToolNumberAdjust(0);								// clear tool number adjustment
-		fileGCode->MachineState().volumetricExtrusion = false;			// default to non-volumetric extrusion
-
-		// Reset all extruder positions when starting a new print
-		virtualExtruderPosition = 0.0;
-		for (size_t extruder = 0; extruder < MaxExtruders; extruder++)
-		{
-			rawExtruderTotalByDrive[extruder] = 0.0;
-		}
-		rawExtruderTotal = 0.0;
-		reprap.GetMove().ResetExtruderPositions();
-
 		fileToPrint.Set(f);
 		fileOffsetToPrint = 0;
 		moveFractionToStartAt = 0.0;
@@ -3828,18 +3817,32 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply)
 // Start printing the file already selected
 void GCodes::StartPrinting(bool fromStart)
 {
+	fileGCode->SetToolNumberAdjust(0);								// clear tool number adjustment
+	fileGCode->MachineState().volumetricExtrusion = false;			// default to non-volumetric extrusion
+
+	// Reset all extruder positions when starting a new print
+	virtualExtruderPosition = 0.0;
+	for (size_t extruder = 0; extruder < MaxExtruders; extruder++)
+	{
+		rawExtruderTotalByDrive[extruder] = 0.0;
+	}
+	rawExtruderTotal = 0.0;
+	reprap.GetMove().ResetExtruderPositions();
+
 #if HAS_HIGH_SPEED_SD
 	fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
 	fileInput->Reset(fileGCode->OriginalMachineState().fileState);
 #elif HAS_LINUX_INTERFACE
 	fileGCode->OriginalMachineState().SetFileExecuting();
 #endif
+
 	lastFilamentError = FilamentSensorStatus::ok;
 	lastPrintingMoveHeight = -1.0;
 	reprap.GetPrintMonitor().StartedPrint();
 	platform.MessageF(LogMessage,
 						(simulationMode == 0) ? "Started printing file %s\n" : "Started simulating printing file %s\n",
 							reprap.GetPrintMonitor().GetPrintingFilename());
+
 #if HAS_HIGH_SPEED_SD
 	if (fromStart)
 	{
