@@ -366,7 +366,7 @@ void BinaryParser::SetFinished(bool f)
 
 FilePosition BinaryParser::GetFilePosition() const
 {
-	return (bufferLength != 0 && (header->flags & CodeFlags::FilePositionValid) != 0) ? header->filePosition : noFilePosition;
+	return ((header->flags & CodeFlags::FilePositionValid) != 0) ? header->filePosition : noFilePosition;
 }
 
 const char* BinaryParser::DataStart() const

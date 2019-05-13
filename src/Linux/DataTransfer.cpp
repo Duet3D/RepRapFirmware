@@ -94,26 +94,28 @@ void setup_spi(void *inBuffer, size_t bytesToRead, const void *outBuffer, size_t
 
 	// Enable SPI and notify the RaspPi we are ready
 	spi_enable(LINUX_SPI);
-	digitalWrite(SamTfrReadyPin, true);
 
 	// Enable end-of-transfer interrupt
 	(void)LINUX_SPI->SPI_SR;						// clear any pending interrupt
 	LINUX_SPI->SPI_IER = SPI_IER_NSSR;				// enable the NSS rising interrupt
-
 	NVIC_SetPriority(LINUX_SPI_IRQn, NvicPrioritySpi);
 	NVIC_EnableIRQ(LINUX_SPI_IRQn);
+
+	// Begin transfer
+	fastDigitalWriteHigh(SamTfrReadyPin);
 }
 
 void disable_spi()
 {
+	// Stop transfer
+	fastDigitalWriteLow(SamTfrReadyPin);
+
 	// Disable the XDMAC channel
 	xdmac_channel_disable(XDMAC, DmacChanLinuxRx);
 	xdmac_channel_disable(XDMAC, DmacChanLinuxTx);
 
-	// Disable SPI and indicate that no more data may be exchanged
-	(void)LINUX_SPI->SPI_RDR;
+	// Disable SPI
 	spi_disable(LINUX_SPI);
-	digitalWrite(SamTfrReadyPin, false);
 }
 
 extern "C" void LINUX_SPI_HANDLER(void)
@@ -122,9 +124,9 @@ extern "C" void LINUX_SPI_HANDLER(void)
 	LINUX_SPI->SPI_IDR = SPI_IER_NSSR;									// disable the interrupt
 	if ((status & SPI_SR_NSSR) != 0)
 	{
-		// Data has been transferred, disable XDMAC channels
-		dataReceived = true;
+		// Data has been transferred, disable transfer ready pin and XDMAC channels
 		disable_spi();
+		dataReceived = true;
 	}
 }
 
@@ -211,6 +213,7 @@ void DataTransfer::ReadPrintStartedInfo(size_t packetLength, StringRef& filename
 	info.simulatedTime = header->simulatedTime;
 
 	// Read filaments
+	memset(info.filamentNeeded, 0, ARRAY_SIZE(info.filamentNeeded) * sizeof(float));
 	const char *data = ReadData(packetLength - sizeof(PrintStartedHeader));
 	size_t filamentsSize = info.numFilaments * sizeof(float);
 	memcpy(info.filamentNeeded, data, filamentsSize);
@@ -272,41 +275,21 @@ void DataTransfer::ReadLockUnlockRequest(CodeChannel& channel)
 
 void DataTransfer::ExchangeHeader()
 {
-	if (reprap.Debug(moduleLinuxInterface))
-	{
-		reprap.GetPlatform().MessageF(DebugMessage, "- Transfer %d -\n", (int)txHeader.sequenceNumber);
-	}
-
-	// Reset RX transfer header
-	rxHeader.formatCode = InvalidFormatCode;
-	rxHeader.numPackets = 0;
-	rxHeader.protocolVersion = 0;
-	rxHeader.dataLength = 0;
-	rxHeader.checksumData = 0;
-	rxHeader.checksumHeader = 0;
-
-	// Reset TX transfer header
-	txHeader.numPackets = packetId;
-	txHeader.dataLength = txPointer;
-	// checksumData is calculated in StartNextTransfer()
-	txHeader.checksumHeader = CRC16(reinterpret_cast<const char *>(&txHeader), sizeof(TransferHeader) - sizeof(uint16_t));
-
-	// Set up SPI transfer
-	setup_spi(&rxHeader, sizeof(TransferHeader), &txHeader, sizeof(TransferHeader));
 	state = SpiState::ExchangingHeader;
+	setup_spi(&rxHeader, sizeof(TransferHeader), &txHeader, sizeof(TransferHeader));
 }
 
 void DataTransfer::ExchangeResponse(uint32_t response)
 {
 	txResponse = response;
-	setup_spi(&rxResponse, sizeof(uint32_t), &txResponse, sizeof(uint32_t));
 	state = (state == SpiState::ExchangingHeader) ? SpiState::ExchangingHeaderResponse : SpiState::ExchangingDataResponse;
+	setup_spi(&rxResponse, sizeof(uint32_t), &txResponse, sizeof(uint32_t));
 }
 
 void DataTransfer::ExchangeData()
 {
-	setup_spi(rxBuffer, rxHeader.dataLength, txBuffer, txHeader.dataLength);
 	state = SpiState::ExchangingData;
+	setup_spi(rxBuffer, rxHeader.dataLength, txBuffer, txHeader.dataLength);
 }
 
 void DataTransfer::ResetTransfer()
@@ -464,7 +447,7 @@ volatile bool DataTransfer::IsReady()
 		disable_spi();
 		ExchangeHeader();
 	}
-	else if (IsConnected() && millis() - lastTransferTime > SpiConnectionTimeout)
+	else if (!IsConnected())
 	{
 		// The Linux interface is no longer connected...
 		rxHeader.sequenceNumber = 0;
@@ -474,9 +457,28 @@ volatile bool DataTransfer::IsReady()
 
 void DataTransfer::StartNextTransfer()
 {
+	if (reprap.Debug(moduleLinuxInterface))
+	{
+		reprap.GetPlatform().MessageF(DebugMessage, "- Transfer %d -\n", (int)txHeader.sequenceNumber);
+	}
 	lastTransferNumber = rxHeader.sequenceNumber;
+
+	// Reset RX transfer header
+	rxHeader.formatCode = InvalidFormatCode;
+	rxHeader.numPackets = 0;
+	rxHeader.protocolVersion = 0;
+	rxHeader.dataLength = 0;
+	rxHeader.checksumData = 0;
+	rxHeader.checksumHeader = 0;
+
+	// Set up TX transfer header
+	txHeader.numPackets = packetId;
 	txHeader.sequenceNumber++;
+	txHeader.dataLength = txPointer;
 	txHeader.checksumData = CRC16(txBuffer, txPointer);
+	txHeader.checksumHeader = CRC16(reinterpret_cast<const char *>(&txHeader), sizeof(TransferHeader) - sizeof(uint16_t));
+
+	// Begin SPI transfer
 	ExchangeHeader();
 }
 
@@ -635,6 +637,10 @@ bool DataTransfer::WriteStackEvent(CodeChannel channel, GCodeMachineState& state
 	if (state.drivesRelative)
 	{
 		header->flags = (StackEventFlags)(header->flags | StackEventFlags::drivesRelative);
+	}
+	if (state.volumetricExtrusion)
+	{
+		header->flags = (StackEventFlags)(header->flags | StackEventFlags::volumetricExtrusion);
 	}
 	if (state.usingInches)
 	{

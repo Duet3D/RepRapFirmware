@@ -161,8 +161,9 @@ enum StackEventFlags : uint16_t
 {
 	none = 0,
 	drivesRelative = 1,
-	axesRelative = 2,
-	usingInches = 4
+	volumetricExtrusion = 2,
+	axesRelative = 4,
+	usingInches = 8
 };
 
 struct StackEventHeader

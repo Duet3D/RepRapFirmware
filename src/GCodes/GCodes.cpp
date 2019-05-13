@@ -357,7 +357,8 @@ FilePosition GCodes::GetFilePosition() const
     const FilePosition bytesCached = fileGCode->IsDoingFileMacro() ? 0: fileInput->BytesCached();
     return fileBeingPrinted.GetPosition() - bytesCached;
 #elif HAS_LINUX_INTERFACE
-    return (lastFilePosition == noFilePosition) ? 0 : lastFilePosition;
+    const FilePosition pos = fileGCode->GetFilePosition(0);
+    return (pos == noFilePosition) ? 0 : pos;
 #else
     return 0;
 #endif
@@ -1650,7 +1651,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
+# if HAS_HIGH_SPEED_SD
 			SaveResumeInfo(true);											// create the resume file so that we can resume after power down
+# endif
 			platform.Message(LoggedGenericMessage, "Print auto-paused due to low voltage\n");
 			gb.SetState(GCodeState::normal);
 		}
@@ -1888,16 +1891,6 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 	}
-	else if (&gb == fileGCode)
-	{
-		const FilePosition pos = gb.GetFilePosition(0);
-		if (pos != noFilePosition)
-		{
-			// Keep the last known file position up-to-date for the print monitor.
-			// DCS - or rather plugins - may send codes without valid file positions
-			lastFilePosition = pos;
-		}
-	}
 #else
 	INTERNAL_ERROR;
 #endif
@@ -2072,7 +2065,8 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 			UnlockAll(*fileGCode);														// release any locks it had
 		}
 #else
-		UnlockAll(*fileGCode);
+		fileGCode->Init();																// clear the next move
+		UnlockAll(*fileGCode);															// release any locks it had
 #endif
 
 		codeQueue->PurgeEntries();
@@ -2093,10 +2087,12 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 	SaveFanSpeeds();
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
 
+#if HAS_HIGH_SPEED_SD
 	if (simulationMode == 0)
 	{
 		SaveResumeInfo(false);															// create the resume file so that we can resume after power down
 	}
+#endif
 
 	gb.SetState((reason == PauseReason::filamentChange) ? GCodeState::filamentChangePause1 : GCodeState::pausing1);
 	isPaused = true;
@@ -2106,9 +2102,6 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 	PrintPausedReason pauseReason = PrintPausedReason::user;
 	switch (reason)
 	{
-	case PauseReason::user:
-		pauseReason = PrintPausedReason::user;
-		break;
 	case PauseReason::gcode:
 		pauseReason = PrintPausedReason::gcode;
 		break;
@@ -2134,6 +2127,9 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 		pauseReason = PrintPausedReason::lowVoltage;
 		break;
 # endif
+	default:
+		pauseReason = PrintPausedReason::user;
+		break;
 	}
 
 	// Prepare notification for the Linux side
@@ -2397,6 +2393,7 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers)
 
 #endif
 
+#if HAS_HIGH_SPEED_SD
 void GCodes::SaveResumeInfo(bool wasPowerFailure)
 {
 	const char* const printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
@@ -2534,6 +2531,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 		}
 	}
 }
+#endif
 
 void GCodes::Diagnostics(MessageType mtype)
 {
@@ -3835,7 +3833,6 @@ void GCodes::StartPrinting(bool fromStart)
 	fileInput->Reset(fileGCode->OriginalMachineState().fileState);
 #elif HAS_LINUX_INTERFACE
 	fileGCode->OriginalMachineState().SetFileExecuting();
-	lastFilePosition = 0;
 #endif
 	lastFilamentError = FilamentSensorStatus::ok;
 	lastPrintingMoveHeight = -1.0;
@@ -4865,7 +4862,6 @@ void GCodes::StopPrint(StopPrintReason reason)
 	}
 #elif HAS_LINUX_INTERFACE
 	fileGCode->MachineState().CloseFile();
-	lastFilePosition = noFilePosition;
 #endif
 
 	reprap.GetMove().ResetMoveCounters();

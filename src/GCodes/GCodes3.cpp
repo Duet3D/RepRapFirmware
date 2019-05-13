@@ -441,7 +441,8 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 	return GCodeResult::error;
 }
 
-#if HAS_HIGH_SPEED_SD
+
+#if HAS_HIGH_SPEED_SD || HAS_LINUX_INTERFACE
 // Handle M37 to simulate a whole file
 GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile)
 {
@@ -451,7 +452,9 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		return GCodeResult::error;
 	}
 
+# if HAS_HIGH_SPEED_SD
 	if (QueueFileToPrint(file.c_str(), reply))
+# endif
 	{
 		if (simulationMode == 0)
 		{
@@ -474,7 +477,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 	return GCodeResult::error;
 }
 
-// handle M37 to change the simulation mode
+// Handle M37 to change the simulation mode
 GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode)
 {
 	if (newSimulationMode != simulationMode)

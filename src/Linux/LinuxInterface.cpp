@@ -18,7 +18,8 @@
 
 #if HAS_LINUX_INTERFACE
 
-LinuxInterface::LinuxInterface() : transfer(new DataTransfer()), reportPause(false), gcodeReply(new OutputStack())
+LinuxInterface::LinuxInterface() : transfer(new DataTransfer()), wasConnected(false), numDisconnects(0),
+	reportPause(false), gcodeReply(new OutputStack())
 {
 }
 
@@ -293,8 +294,11 @@ void LinuxInterface::Spin()
 		// Start the next transfer
 		transfer->StartNextTransfer();
 	}
-	else if (!transfer->IsConnected())
+	else if (wasConnected && !transfer->IsConnected())
 	{
+		wasConnected = false;
+		numDisconnects++;
+
 		// Don't cache messages if they cannot be sent
 		if (!gcodeReply->IsEmpty())
 		{
@@ -313,11 +317,17 @@ void LinuxInterface::Spin()
 void LinuxInterface::Diagnostics(MessageType mtype)
 {
 	reprap.GetPlatform().Message(mtype, "=== Linux interface ===\n");
+	reprap.GetPlatform().MessageF(mtype, "Number of disconnects: %" PRIu32 "\n", numDisconnects);
 	transfer->Diagnostics(mtype);
 }
 
 void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply)
 {
+	if (!transfer->IsConnected())
+	{
+		return;
+	}
+
 	OutputBuffer *buffer = gcodeReply->GetLastItem();
 	if (buffer == nullptr || buffer->IsReferenced() || gcodeReply->GetLastItemType() != mt)
 	{
@@ -333,6 +343,12 @@ void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply)
 
 void LinuxInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer)
 {
+	if (!transfer->IsConnected())
+	{
+		OutputBuffer::ReleaseAll(buffer);
+		return;
+	}
+
 	gcodeReply->Push(buffer, mt);
 }
 

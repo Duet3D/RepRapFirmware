@@ -745,6 +745,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 		break;
+#endif
 
 	case 24: // Print/resume-printing the selected file
 		if (IsPausing() || IsResuming())
@@ -776,6 +777,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					}
 				}
 			}
+#if HAS_HIGH_SPEED_SD
 			else if (!fileToPrint.IsLive())
 			{
 				reply.copy("Cannot print, because no file is selected!");
@@ -783,14 +785,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else
 			{
-#if HAS_VOLTAGE_MONITOR
+# if HAS_VOLTAGE_MONITOR
 				if (!platform.IsPowerOk())
 				{
 					reply.copy("Cannot start a print while power voltage is low");
 					result = GCodeResult::error;
 				}
 				else
-#endif
+# endif
 				{
 					bool fromStart = (fileOffsetToPrint == 0);
 					if (!fromStart)
@@ -806,9 +808,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					StartPrinting(fromStart);
 				}
 			}
+#endif
 		}
 		break;
-#endif
 
 	case 226: // Synchronous pause, normally initiated from within the file being printed
 		if (!isPaused && !IsPausing())
@@ -939,10 +941,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 		break;
+#endif
 
 		// For case 32, see case 23
 
+#if HAS_HIGH_SPEED_SD || HAS_LINUX_INTERFACE
 	case 36:	// Return file information
+# if HAS_HIGH_SPEED_SD
 		if (!LockFileSystem(gb))									// getting file info takes several calls and isn't reentrant
 		{
 			return false;
@@ -957,9 +962,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			result = (done) ? GCodeResult::ok : GCodeResult::notFinished;
 		}
+# else
+		reprap.GetFileInfoResponse(nullptr, outBuf, true);
+# endif
 		break;
 
 	case 37:	// Simulation mode on/off, or simulate a whole file
+# if HAS_LINUX_INTERFACE
+		if (!gb.IsBinary())
+		{
+			reply.copy("M37 can be only started from the Linux interface");
+			result = GCodeResult::error;
+		}
+		else
+# endif
 		{
 			bool seen = false;
 			String<MaxFilenameLength> simFileName;
@@ -986,7 +1002,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 		break;
+#endif
 
+#if HAS_HIGH_SPEED_SD
 	case 38: // Report SHA1 of file
 		if (!LockFileSystem(gb))								// getting file hash takes several calls and isn't reentrant
 		{

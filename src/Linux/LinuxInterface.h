@@ -36,6 +36,8 @@ public:
 
 private:
 	DataTransfer *transfer;
+	bool wasConnected;
+	uint32_t numDisconnects;
 
 	GCodeFileInfo fileInfo;
 	FilePosition pauseFilePosition;

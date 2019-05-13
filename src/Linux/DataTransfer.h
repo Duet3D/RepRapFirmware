@@ -102,7 +102,7 @@ private:
 
 inline bool DataTransfer::IsConnected() const
 {
-	return rxHeader.sequenceNumber != 0;
+	return lastTransferTime != 0 && (millis() - lastTransferTime < SpiConnectionTimeout);
 }
 
 inline bool DataTransfer::LinuxHadReset() const

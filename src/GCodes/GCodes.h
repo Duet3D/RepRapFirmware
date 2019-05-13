@@ -393,10 +393,12 @@ private:
 	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply);				// Handle M260
 	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply);			// Handle M261
 
-#if HAS_HIGH_SPEED_SD
-	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile);	// Handle M37 to simulate a whole file
+#if HAS_HIGH_SPEED_SD || HAS_LINUX_INTERFACE
 	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode);		// Handle M37 to change the simulation mode
+	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile);	// Handle M37 to simulate a whole file
+#endif
 
+#if HAS_HIGH_SPEED_SD
 	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const; // Write the config-override file
 	bool WriteConfigOverrideHeader(FileStore *f) const;							// Write the config-override header
 #endif
@@ -411,7 +413,9 @@ private:
 	void EndSimulation(GCodeBuffer *gb);								// Restore positions etc. when exiting simulation mode
 	bool IsCodeQueueIdle() const;										// Return true if the code queue is idle
 
+#if HAS_HIGH_SPEED_SD
 	void SaveResumeInfo(bool wasPowerFailure);
+#endif
 
 	void NewMoveAvailable(unsigned int sl);								// Flag that a new move is available
 	void NewMoveAvailable();											// Flag that a new move is available
@@ -544,8 +548,6 @@ private:
 #if HAS_HIGH_SPEED_SD
 	FileData fileToPrint;						// The next file to print
 	FilePosition fileOffsetToPrint;				// The offset to print from
-#elif HAS_LINUX_INTERFACE
-	FilePosition lastFilePosition;				// last valid file position for print progress estimations
 #endif
 
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
