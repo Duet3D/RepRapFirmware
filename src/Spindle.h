@@ -9,7 +9,7 @@
 #define SPINDLE_H
 
 #include "RepRapFirmware.h"
-#include "IoPorts.h"
+#include "Hardware/IoPorts.h"
 
 class Spindle
 {

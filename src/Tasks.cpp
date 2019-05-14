@@ -137,7 +137,7 @@ extern "C" void AppMain()
 # endif
 
 	// Create the startup task
-	mainTask.Create(MainTask, "MAIN", nullptr, TaskBase::SpinPriority);
+	mainTask.Create(MainTask, "MAIN", nullptr, TaskPriority::SpinPriority);
 	vTaskStartScheduler();			// doesn't return
 }
 

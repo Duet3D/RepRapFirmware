@@ -12,7 +12,7 @@
 #if SUPPORT_TMC51xx
 
 #include "RTOSIface/RTOSIface.h"
-#include <Movement/Move.h>
+#include "Movement/Move.h"
 
 #ifdef SAME51
 # include "HAL/IoPorts.h"
@@ -20,7 +20,7 @@
 # include "peripheral_clk_config.h"
 # include "HAL/SAME5x.h"
 #elif SAME70
-# include "DmacManager.h"
+# include "Hardware/DmacManager.h"
 #endif
 
 //#define TMC_TYPE	5130
@@ -1289,7 +1289,7 @@ namespace SmartDrivers
 		xdmac_enable_interrupt(XDMAC, DmacChanTmcRx);
 #endif
 
-		tmcTask.Create(TmcLoop, "TMC", nullptr, TaskBase::TmcPriority);
+		tmcTask.Create(TmcLoop, "TMC", nullptr, TaskPriority::TmcPriority);
 	}
 
 	void SetAxisNumber(size_t driver, uint32_t axisNumber)

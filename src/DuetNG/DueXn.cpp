@@ -10,22 +10,28 @@
 #include "Platform.h"
 #include "RepRap.h"
 #include "Wire.h"
+#include "Hardware/I2C.h"
 
 namespace DuetExpansion
 {
-	const uint8_t DueXnAddress = 0x3E;					// address of the SX1509B on the DueX2/DueX5
+	constexpr uint8_t DueXnAddress = 0x3E;						// address of the SX1509B on the DueX2/DueX5
+	static constexpr unsigned int DueXTaskStackWords = 100;		// task stack size in dwords
 
 	static SX1509 dueXnExpander;
 	static uint16_t dueXnInputMask;
 	static uint16_t dueXnInputBits = 0;
 	static ExpansionBoardType dueXnBoardType = ExpansionBoardType::none;
-	static volatile bool dueXstateChanged = false;
 
 	const uint8_t AdditionalIoExpanderAddress = 0x71;	// address of the SX1509B we allow for general I/O expansion
 
 	static SX1509 additionalIoExpander;
 	static bool additionalIoExpanderPresent = false;
 	static uint16_t additionalIoInputBits = 0;
+
+	static volatile bool taskWaiting = false;
+	static volatile bool inputsChanged = false;
+
+	Task<DueXTaskStackWords> *dueXTask = nullptr;
 
 	// The original DueX2 and DueX5 boards had 2 board ID pins, bits 14 and 15.
 	// The new ones use bit 15 for fan 8, so not we just have bit 14.
@@ -56,15 +62,44 @@ namespace DuetExpansion
 	const unsigned int Gpio4Bit = 8;
 	const uint16_t AllGpioBits = (1u << Gpio1Bit) | (1u << Gpio2Bit) | (1u << Gpio3Bit) | (1u <<Gpio4Bit);
 
+	// ISR for when the SX1509B on the DueX indicates that the state of an input has changed.
+	// Note, we must only wake up the DueX task if it is waiting on this specific interrupt.
+	// Otherwise we might wake it prematurely when it is waiting for an I2C transaction to be completed.
 	static void DueXIrq(CallbackParameter p)
 	{
-		dueXstateChanged = true;
+		inputsChanged = true;
+		if (taskWaiting)
+		{
+			taskWaiting = false;
+			dueXTask->GiveFromISR();
+		}
+	}
+
+	extern "C" [[noreturn]] void DueXTask(void * pvParameters)
+	{
+		for (;;)
+		{
+			inputsChanged = false;
+			dueXnInputBits = dueXnExpander.digitalReadAll();
+
+			cpu_irq_disable();
+			if (!inputsChanged)
+			{
+				taskWaiting = true;
+				cpu_irq_enable();
+				TaskBase::Take();
+			}
+			else
+			{
+				cpu_irq_enable();
+			}
+		}
 	}
 
 	// Identify which expansion board (if any) is attached and initialise it
 	ExpansionBoardType DueXnInit()
 	{
-		reprap.GetPlatform().InitI2c();						// initialise I2C
+		I2C::Init();										// initialise I2C
 
 		// DC 2018-07-12: occasionally the SX1509B isn't found after doing a software reset, so try a few more attempts
 		bool ret;
@@ -103,8 +138,10 @@ namespace DuetExpansion
 			attachInterrupt(DueX_INT, DueXIrq, InterruptMode::INTERRUPT_MODE_FALLING, nullptr);
 
 			// Clear any initial interrupts
-			(void)dueXnExpander.interruptSource(true);
-			dueXnInputBits = dueXnExpander.digitalReadAll();
+			(void)dueXnExpander.interruptSourceAndClear();
+
+			dueXTask = new Task<DueXTaskStackWords>();
+			dueXTask->Create(DueXTask, "DUEX", nullptr, TaskPriority::DueXPriority);
 		}
 
 		return dueXnBoardType;
@@ -113,7 +150,7 @@ namespace DuetExpansion
 	// Look for an additional output pin expander
 	void AdditionalOutputInit()
 	{
-		reprap.GetPlatform().InitI2c();						// initialise I2C
+		I2C::Init();										// initialise I2C
 
 		bool ret;
 		unsigned int attempts = 0;
@@ -153,20 +190,6 @@ namespace DuetExpansion
 	const char* array null GetAdditionalExpansionBoardName()
 	{
 		return (additionalIoExpanderPresent) ? "SX1509B expander" : nullptr;
-	}
-
-	// Update the input bits. The purpose of this is so that the step interrupt can pick up values that are fairly up-to-date,
-	// even though it is not safe for it to call expander.digitalReadAll(). When we move to RTOS, this will be a high priority task.
-	void Spin()
-	{
-		if (dueXnBoardType != ExpansionBoardType::none && dueXstateChanged && !inInterrupt() && __get_BASEPRI() == 0)
-		{
-			// Interrupt occurred, so input data may have changed
-			dueXstateChanged = false;
-			dueXnInputBits = dueXnExpander.digitalReadAll();
-		}
-
-		// We don't have an interrupt from the additional I/O expander, so we don't poll it here
 	}
 
 	// Set the I/O mode of a pin

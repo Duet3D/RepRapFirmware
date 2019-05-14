@@ -22,17 +22,17 @@ Distributed as-is; no warranty is given.
 ******************************************************************************/
 
 #include "RepRapFirmware.h"
-#include "Wire.h"
 #include "Tasks.h"
 #include "SX1509.h"
 #include "SX1509Registers.h"
-#include "RTOSIface/RTOSIface.h"
+#include "Hardware/I2C.h"
 
 SX1509::SX1509() : _clkX(0)
 {
 }
 
-//************* Public functions. These must all acquire and release the I2C mutex around any I2C transactions. ***********
+// Public functions
+// Any operation requiring multiple I2C transactions must acquire and release the I2C mutex around them.
 
 // Test for the presence of a SX1509B. The I2C subsystem must be initialised before calling this.
 bool SX1509::begin(uint8_t address)
@@ -156,26 +156,24 @@ void SX1509::pinModeMultiple(uint16_t pins, PinMode inOut)
 
 void SX1509::digitalWrite(uint8_t pin, bool highLow)
 {
-	MutexLocker lock(Tasks::GetI2CMutex());
-
 	if (((1u << pin) & pwmPins) != 0)
 	{
 		analogWrite(pin, (highLow) ? 255 : 0);
 	}
 	else if (highLow)
 	{
+		MutexLocker lock(Tasks::GetI2CMutex());
 		setBitsInWord(REG_DATA_B, 1u << pin);
 	}
 	else
 	{
+		MutexLocker lock(Tasks::GetI2CMutex());
 		clearBitsInWord(REG_DATA_B, 1u << pin);
 	}
 }
 
 bool SX1509::digitalRead(uint8_t pin)
 {
-	MutexLocker lock(Tasks::GetI2CMutex());
-
 	if (pin >= 8)
 	{
 		return (readByte(REG_DATA_B) & (1u << (pin - 8))) != 0;
@@ -188,8 +186,6 @@ bool SX1509::digitalRead(uint8_t pin)
 
 uint16_t SX1509::digitalReadAll()
 {
-	MutexLocker lock(Tasks::GetI2CMutex());
-
 	return readWord(REG_DATA_B);
 }
 
@@ -240,8 +236,6 @@ void SX1509::ledDriverInitMultiple(uint16_t pins, bool log, bool openDrain)
 
 void SX1509::analogWrite(uint8_t pin, uint8_t iOn)
 {
-	MutexLocker lock(Tasks::GetI2CMutex());
-
 	// Write the on intensity of pin
 	// Linear mode: Ion = iOn
 	// Log mode: Ion = f(iOn)
@@ -292,23 +286,26 @@ void SX1509::enableInterruptMultiple(uint16_t pins, uint8_t riseFall)
 	}
 
 	writeDword(REG_SENSE_HIGH_B, pinMask);
-
 	clearBitsInWord(REG_INTERRUPT_MASK_B, pins);
 }
 
-uint16_t SX1509::interruptSource(bool clear)
+uint16_t SX1509::interruptSource()
 {
-	const uint16_t intSource = readWord(REG_INTERRUPT_SOURCE_B);
-	if (clear)
-	{
-		writeWord(REG_INTERRUPT_SOURCE_B, 0xFFFF);	// Clear interrupts
-	}
+	return readWord(REG_INTERRUPT_SOURCE_B);
+}
+
+uint16_t SX1509::interruptSourceAndClear()
+{
+	MutexLocker lock(Tasks::GetI2CMutex());
+
+	const uint16_t intSource = interruptSource();
+	writeWord(REG_INTERRUPT_SOURCE_B, intSource);	// Clear interrupts
 	return intSource;
 }
 
 bool SX1509::checkInterrupt(uint8_t pin)
 {
-	return (interruptSource(false) & (1u << pin)) != 0;
+	return (interruptSource() & (1u << pin)) != 0;
 }
 
 //********* Private functions. The I2C mutex must be owned by the caller. ***********
@@ -413,7 +410,7 @@ uint8_t SX1509::readByte(uint8_t registerAddress)
 {
 	uint8_t data[2];
 	data[0] = registerAddress;
-	if (I2C_IFACE.Transfer(deviceAddress, data, 1, 1) == 2)
+	if (I2C::Transfer(deviceAddress, data, 1, 1) == 2)
 	{
 		return data[1];
 	}
@@ -429,7 +426,7 @@ uint16_t SX1509::readWord(uint8_t registerAddress)
 {
 	uint8_t data[3];
 	data[0] = registerAddress;
-	if (I2C_IFACE.Transfer(deviceAddress, data, 1, 2) == 3)
+	if (I2C::Transfer(deviceAddress, data, 1, 2) == 3)
 	{
 		return (data[1] << 8) | data[2];
 	}
@@ -445,7 +442,7 @@ uint32_t SX1509::readDword(uint8_t registerAddress)
 {
 	uint8_t data[5];
 	data[0] = registerAddress;
-	if (I2C_IFACE.Transfer(deviceAddress, data, 1, 4) == 5)
+	if (I2C::Transfer(deviceAddress, data, 1, 4) == 5)
 	{
 		return (data[1] << 24) | (data[2] << 16) | (data[3] << 8) | data[4];
 	}
@@ -460,7 +457,7 @@ uint32_t SX1509::readDword(uint8_t registerAddress)
 void SX1509::writeByte(uint8_t registerAddress, uint8_t writeValue)
 {
 	uint8_t data[2] = { registerAddress, writeValue };
-	(void)I2C_IFACE.Transfer(deviceAddress, data, 2, 0);
+	(void)I2C::Transfer(deviceAddress, data, 2, 0);
 }
 
 // writeWord(uint8_t registerAddress, uint16_t writeValue)
@@ -471,7 +468,7 @@ void SX1509::writeByte(uint8_t registerAddress, uint8_t writeValue)
 void SX1509::writeWord(uint8_t registerAddress, uint16_t writeValue)
 {
 	uint8_t data[3] = { registerAddress, (uint8_t)(writeValue >> 8), (uint8_t)writeValue };
-	(void)I2C_IFACE.Transfer(deviceAddress, data, 3, 0);
+	(void)I2C::Transfer(deviceAddress, data, 3, 0);
 }
 
 // writeDword(uint8_t registerAddress, uint32_t writeValue)
@@ -480,7 +477,7 @@ void SX1509::writeWord(uint8_t registerAddress, uint16_t writeValue)
 void SX1509::writeDword(uint8_t registerAddress, uint32_t writeValue)
 {
 	uint8_t data[5] = { registerAddress, (uint8_t)(writeValue >> 24), (uint8_t)(writeValue >> 16), (uint8_t)(writeValue >> 8), (uint8_t)writeValue };
-	(void)I2C_IFACE.Transfer(deviceAddress, data, 5, 0);
+	(void)I2C::Transfer(deviceAddress, data, 5, 0);
 }
 
 // End

@@ -43,7 +43,7 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 # include "task.h"
 
 # if SAME70
-#  include "DmacManager.h"
+#  include "Hardware/DmacManager.h"
 # endif
 
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
@@ -408,12 +408,6 @@ void RepRap::Spin()
 	ticksInSpinState = 0;
 	spinningModule = modulePrintMonitor;
 	printMonitor->Spin();
-
-#ifdef DUET_NG
-	ticksInSpinState = 0;
-	spinningModule = moduleDuetExpansion;
-	DuetExpansion::Spin();
-#endif
 
 	ticksInSpinState = 0;
 	spinningModule = moduleFilamentSensors;

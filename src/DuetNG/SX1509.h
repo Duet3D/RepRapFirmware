@@ -233,11 +233,9 @@ public:
 	//	Output: 16-bit value, with a single bit set representing the pin(s) that
 	//		generated an interrupt. E.g. a return value of	0x0104 would mean pins 8
 	//		and 3 (bits 8 and 3) have generated an interrupt.
-	//  Input:
-	//  	- clear: boolean commanding whether the interrupt should be cleared
-	//  	  after reading or not.
 	// -----------------------------------------------------------------------------
-	uint16_t interruptSource(bool clear);
+	uint16_t interruptSource();
+	uint16_t interruptSourceAndClear();
 
 	// -----------------------------------------------------------------------------
 	// checkInterrupt(void): Checks if a single pin generated an interrupt.

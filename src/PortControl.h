@@ -9,7 +9,7 @@
 #define SRC_PORTCONTROL_H_
 
 #include "RepRapFirmware.h"
-#include "IoPorts.h"			// for PinConfiguration
+#include "Hardware/IoPorts.h"			// for PinConfiguration
 
 class GCodeBuffer;
 

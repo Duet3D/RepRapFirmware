@@ -29,7 +29,7 @@ Licence: GPL
 // Platform-specific includes
 
 #include "RepRapFirmware.h"
-#include "IoPorts.h"
+#include "Hardware/IoPorts.h"
 #include "DueFlashStorage.h"
 #include "Fans/Fan.h"
 #include "Fans/Tacho.h"
@@ -610,7 +610,6 @@ public:
 	float GetLaserPwmFrequency() const { return laserPort.GetFrequency(); }
 
 	// Misc
-	void InitI2c();
 
 #if SAM4E || SAM4S || SAME70
 	uint32_t Random();
@@ -936,7 +935,6 @@ private:
 
 	// Misc
 	bool deliberateError;								// true if we deliberately caused an exception for testing purposes
-	bool i2cInitialised;								// true if the I2C subsystem has been initialised
 };
 
 // Where the htm etc files are

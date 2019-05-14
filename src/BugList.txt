@@ -135,8 +135,8 @@ Menu.cpp
 MenuItem.h, cpp
 
 Planned for 2.03:
-- I2C errors: can we recover from them?
-- check: is stop.g always run at end of SD print, not just in response to M0?
+- [done, community to test] I2C errors: recover from them
+- [done, ok] Separate task to keep DuetX endstop input state up to date
 - [ok] check: start.g should not be run when resurrecting a print
 
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5

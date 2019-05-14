@@ -9,7 +9,7 @@
 #include "RepRap.h"
 #include "GCodes/GCodeBuffer.h"
 #include "Movement/StepTimer.h"
-#include "IoPorts.h"
+#include "Hardware/IoPorts.h"
 
 #if SUPPORT_DHT_SENSOR
 
@@ -137,7 +137,7 @@ DhtSensorHardwareInterface *DhtSensorHardwareInterface::Create(unsigned int rela
 	if (dhtTask == nullptr)
 	{
 		dhtTask = new Task<DhtTaskStackWords>;
-		dhtTask->Create(DhtTask, "DHTSENSOR", nullptr, TaskBase::HeatPriority);
+		dhtTask->Create(DhtTask, "DHTSENSOR", nullptr, TaskPriority::DhtPriority);
 	}
 
 	return activeSensors[relativeChannel];

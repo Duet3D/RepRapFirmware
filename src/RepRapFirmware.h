@@ -335,6 +335,24 @@ constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;
 
+#ifdef RTOS
+
+// Task priorities
+namespace TaskPriority
+{
+	static constexpr int SpinPriority = 1;							// priority for tasks that rarely block
+	static constexpr int HeatPriority = 2;
+	static constexpr int DhtPriority = 2;
+	static constexpr int TmcPriority = 2;
+	static constexpr int AinPriority = 2;
+	static constexpr int DueXPriority = 3;
+	static constexpr int LaserPriority = 3;
+	static constexpr int CanSenderPriority = 3;
+	static constexpr int CanReceiverPriority = 3;
+}
+
+#endif
+
 //-------------------------------------------------------------------------------------------------
 // Interrupt priorities - must be chosen with care! 0 is the highest priority, 15 is the lowest.
 // This interacts with FreeRTOS config constant configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY which is currently defined as 3 for the SAME70 and 5 for the SAM4x.
