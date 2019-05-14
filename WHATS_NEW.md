@@ -8,6 +8,10 @@ Upgrade notes:
 - DueX2 and DueX5 users: if you have been experiencing high I2C error counts, then in the past this usually led to the machine printing very slowly when the errors started occurring. Changes to the I2C drivers should allow the machine to recover from the error in most cases. However, if it does not recover then the machine will most likely continue to run as normal, except that the states of endstops on the DueX will not be read correctly and commands to change settings of fans on the DueX won't work. So watch out for these different symptoms.
 - See upgrade notes for 2.03RC1.
 
+Compatible files:
+- DuetWiFiServer 1.23
+- DuetWebControl 1.22.6 or 2.0.0-RC6
+
 New features and changed behaviour:
 - When a DueX is attached, a separate task is now used to read the states of DueX endstop inputs when they change. This should give much lower latency.
 
@@ -22,6 +26,10 @@ Upgrade notes:
 - The facility to map endstops using the A parameter in the M574 command has been withdrawn. Use RepRapFirmware 3 if you need an equivalent facility.
 - Duet Maestro users with a 12864 display may need to make minor changes to their menu files to correct for changes in spacing and automatic insertion of % characters after certain values e.g. fan speed
 - See also the upgrade notes for earlier releases, unless you are upgrading from 2.03beta3. **Tool change users please note:** tool offsets are now applied in tfree#.g and tpost#.g files (in firmware 2.02 they were not applied).
+
+Compatible files:
+- DuetWiFiServer 1.23
+- DuetWebControl 1.22.6 or 2.0.0-RC6
 
 New features and changed behaviour:
 - Endstop mapping and M574 A parameter have been removed
