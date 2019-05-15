@@ -45,6 +45,9 @@ constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the
 constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
+constexpr size_t MaxHeatersPerTool = 2;
+constexpr size_t MaxExtrudersPerTool = 5;
+
 constexpr size_t NUM_SERIAL_CHANNELS = 2;
 // Use TX0/RX0 for the auxiliary serial line
 #define SERIAL_MAIN_DEVICE SerialUSB

@@ -99,16 +99,47 @@ Done for 2.03beta3:
 - [done] Duet085: allow 2 additional fans
 
 Done in 2.03RC1:
-- [done, test] M291 command should unlock movement if it is owned, e.g. if used within homeall.g and an SD file does G28
+- [done, test] M291 don't ever lock movement, and unlock movement if it is owned and we are waiting for a response, e.g. if used within homeall.g and an SD file does G28
 - [done, test] resurrect.g: put filename in quotes, and add R0 to M290 command
-- [done] 12864 display values 534-537
+- [done, test] 12864 % complete
+- [done, ok] 12864 time remaining
+- [done, ok] 12864 requested and top speeds
+- [done, ok] 12864 IP address as one variable
+- [done, ok] 12864 auto % where applicable
+- [done, test] 12864 menu items: visibility wasn't applied to alter/value/image items
+- [done, ok] Limit 12864 refresh rate to avoid fast-changing items flickering
+- [done, ok, port] Only add 1 space after left-aligned text items with no explicit width on 12864
+- [done, ok, port] Bug: fix crash when there were no selectable items in a menu on 12864
+- [done, ok, port] Ignore blank lines in menu files for 12864
+- [done, ok] Mount SD cards automatically if they are not mounted and we are asked to list files on them on 12864, and display any error messages
 - [done] applied latest FatFs patches
-- [done, test] M109 not running tool change files, https://forum.duet3d.com/topic/10108/m109-command-does-not-run-tool-change-macro-s/6
-- [done] M302 to wait until moves have completed
-- [done] fix issue with Fan 1 on Duet 085
+- [done, ok, check in v3] M109 not running tool change files, https://forum.duet3d.com/topic/10108/m109-command-does-not-run-tool-change-macro-s/6
+- [done, check in v3] M302 to wait until moves have completed
 - [done, not tested] Duet085 additional fan issue
 - [done, test] Include workplace coordinate # in status response, https://forum.duet3d.com/topic/9896/display-current-active-csys-p1-g54-p2-g55-next-to-x-y-z
 - [done] Network reset didn't work on Maestro
+- [done, ok, check in v3] minor corrections to thermistor and PT1000 reading conversion
+- [done, check in v3] Increase #triggers from 10 to 16
+- [done, test, check ported to v3] If a print is ended or cancelled with G10 in effect, cancel the Z lift
+- [done, reported ok, port to v3] TMC2208 drivers: disable open load detection when in stealthChop mode
+- [done, port to v3] increase number of output buffers to 24
+- [done, port to v3] inches/mm now handled in resurrect.g
+- [done, ok, port] Bug: was holding movement lock while waiting for bed or extruder to heat up, so unable to pause/cancel during heat up
+
+Done in 2.03RC2:
+- [done, community to test] I2C errors: recover from them
+- [done, ok] Separate task to keep DuetX endstop input state up to date
+- [done, ok] Duet06/085 PWM ports not working properly
+- [ok] check: start.g should not be run when resurrecting a print
+
+To port to v3-dev:
+GCodes2.cpp
+GCodes.cpp
+GCodeMachineState.h
+Configuration.h
+Display.h, .cpp
+Menu.cpp
+MenuItem.h, cpp
 
 Planned for 3.0:
 No-longer-supported and changed parameters:
@@ -124,8 +155,11 @@ No-longer-supported and changed parameters:
 - G31 if using temperature coefficient (C parameter) must also specify heater using H parameter (or default 0?)
 - Duet WiFi/Ethernet: only heaters 0-2 and fans 0-2 are pre-allocated, and only drivers 3-4 default to being extruders
 
-Investigations
+- [done] Support multiple tachos, https://forum.duet3d.com/topic/9990/duet2-multiple-fan-rpm-sense-display
+- Allow at least 1 more heater on Duet Maestro
+- M558 probe types that imply ports: should they allocate the default port?
 
+Investigations
 - [no fault] Simple filament monitor P1 vs p2, https://forum.duet3d.com/topic/10201/filament-sensor-problem/5
 - [done, DWC bug, tell chrishamm] JSON (?), https://forum.duet3d.com/topic/8816/java-errors/5
 - I2C error recovery 
@@ -135,8 +169,16 @@ Investigations
 - Retraction problem, https://forum.duet3d.com/post/79485
 - Icon generation, https://forum.duet3d.com/topic/8177/icon-generation/7
 - 2.03beta3 change in height setting, https://forum.duet3d.com/post/89780
+- [done, DWC bug, tell chrishamm] JSON (?), https://forum.duet3d.com/topic/8816/java-errors/5
+- [done, ok now] HaqXY
+- [await response] Tool offset not applied in tpost? https://forum.duet3d.com/topic/9002/tpost-g-does-not-apply-tool-offset
+- I2C error recovery 
+- [investigated, awaiting feedback] Kulitorum segmented speed issue, https://forum.duet3d.com/topic/8789/max-actual-speed-at-high-path-detail/10
+- Low steps/mm and pressure advance, https://forum.duet3d.com/topic/8672/extruder-motors-skip-steps-with-pressure-advance-enabled/67
+- Retraction problem, https://forum.duet3d.com/post/79485
+- Icon generation, https://forum.duet3d.com/topic/8177/icon-generation/7
 
-- [done] Support multiple tachos, https://forum.duet3d.com/topic/9990/duet2-multiple-fan-rpm-sense-display
+Planned for future
 - G28 "File not found" - which file?
 - Support M524?
 - Support M530,531,532?
@@ -164,7 +206,6 @@ Investigations
 - In simulation mode, if the job was aborted for any reason, report this instead of reporting the simulated print time
 - M143 A3 option to turn off whole machine immediately?
 - Turn off power in emergency stop? https://forum.duet3d.com/topic/9158/ps_on-m81-incorporated-into-the-emergency-stop-functions/5
-- If a print is ended or cancelled with G10 in effect, cancel the Z lift. Also, if Z lift value is changed while G10 is in effect, the Z position will be wrong.
 - Clear filament sensor alerts after they are acknowledged, https://forum.duet3d.com/topic/9072/filament-out-warning-always-present/8
 - [done? check] Compensate probe trigger height for other heater temperature than bed
 - For PanelDue, send heater data for the first heater in each tool (does PD handle #heaters and #tools separately?) https://forum.duet3d.com/topic/8458/hide-unused-heater-channels-paneldue-5/4 and https://forum.duet3d.com/topic/8933/paneldue-two-tools-same-heater-one-pair-of-temp-buttons/2
@@ -176,7 +217,6 @@ Investigations
 - Laser turns off, https://forum.duet3d.com/topic/9636/laser-turns-of-during-straight-lines/5
 - Test endstop input high/low noise immunity, decide on pullup enable/disable
 - Test that M500 saves all delta rod lengths correctly
-- [ok] Test with Duet 3
 
 - [async moves part done] Z height based on plasma voltage or force
 - [could be related to visibility issue] Investigate 12864 display heater fault warning, https://forum.duet3d.com/topic/7718/12864-display-current-tool-temperatures/6
@@ -195,8 +235,8 @@ Investigations
 - Don't keep sending "wifi reported error" messages during reconnection attempts, https://forum.duet3d.com/topic/8837/wifi-reported-error
 - M24 in filament-change.g macro doesn't resume the print
 
-2.04 planned:
-- Option to calibrate bed tilt but not tower positoins, https://forum.duet3d.com/topic/9236/delta-auto-calibration-changes-in-bed-tilt-calculations/2
+3.x planned:
+- Option to calibrate bed tilt but not tower positions, https://forum.duet3d.com/topic/9236/delta-auto-calibration-changes-in-bed-tilt-calculations/2
 - Stop print after a short to ground report? https://forum.duet3d.com/topic/8239/duet-maestro-short-to-ground/10
 - Option to enable a trigger when not printing (C3?), https://forum.duet3d.com/topic/8459/m581-external-trigger
 - Implement G43?

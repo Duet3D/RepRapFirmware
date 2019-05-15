@@ -4,8 +4,8 @@
 	<comment></comment>
 	<projects>
 		<project>CoreNG</project>
-		<project>FreeRTOS</project>
 		<project>RRFLibraries</project>
+		<project>FreeRTOS</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
