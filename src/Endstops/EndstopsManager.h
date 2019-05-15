@@ -22,7 +22,7 @@ public:
 	void Init();
 
 	// Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command
-	void EnableAxisEndstops(AxesBitmap axes);
+	void EnableAxisEndstops(AxesBitmap axes, bool forHoming);
 
 	// Set up the active endstops for Z probing
 	void EnableZProbe(size_t probeNumber);
@@ -66,13 +66,15 @@ private:
 	// Translate end stop result to text
 	static const char *TranslateEndStopResult(EndStopHit es, bool atHighEnd);
 
-	EndstopOrZProbe * volatile activeEndstops;					// linked list of endstops and Z probes that are active for the current move
+	EndstopOrZProbe * volatile activeEndstops;			// linked list of endstops and Z probes that are active for the current move
 	size_t currentZProbeNumber;							// which Z probe we are using
 
 	Endstop *axisEndstops[MaxAxes];						// the endstops assigned to each axis (each one may have several switches), each may be null
 	ZProbe *zProbes[MaxZProbes];						// the Z probes used. The first one is always non-null.
 
 	ZProbeProgrammer zProbeProg;
+
+	bool isHomingMove;									// true if calls to CheckEndstops are for the purpose of homing
 };
 
 #endif /* SRC_ENDSTOPS_ENDSTOPMANAGER_H_ */

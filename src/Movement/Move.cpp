@@ -970,7 +970,7 @@ void Move::CreateLaserTask()
 	if (laserTask == nullptr)
 	{
 		laserTask = new Task<LaserTaskStackWords>;
-		laserTask->Create(LaserTaskStart, "LASER", nullptr, TaskBase::LaserPriority);
+		laserTask->Create(LaserTaskStart, "LASER", nullptr, TaskPriority::LaserPriority);
 	}
 }
 

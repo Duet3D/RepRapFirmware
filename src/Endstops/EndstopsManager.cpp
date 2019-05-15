@@ -13,7 +13,7 @@
 #include "GCodes/GCodes.h"
 #include "Movement/Move.h"
 
-EndstopsManager::EndstopsManager() : activeEndstops(nullptr)
+EndstopsManager::EndstopsManager() : activeEndstops(nullptr), isHomingMove(false)
 {
 	for (Endstop *& es : axisEndstops)
 	{
@@ -56,9 +56,10 @@ void EndstopsManager::AddToActive(EndstopOrZProbe& e)
 }
 
 // Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command
-void EndstopsManager::EnableAxisEndstops(AxesBitmap axes)
+void EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming)
 {
 	activeEndstops = nullptr;
+	isHomingMove = forHoming;
 	const Kinematics& kin = reprap.GetMove().GetKinematics();
 	for (size_t axis = 0; axis < reprap.GetGCodes().GetVisibleAxes(); ++axis)
 	{
@@ -74,6 +75,7 @@ void EndstopsManager::EnableAxisEndstops(AxesBitmap axes)
 void EndstopsManager::EnableZProbe(size_t probeNumber)
 {
 	activeEndstops = nullptr;
+	isHomingMove = false;
 	if (probeNumber < MaxZProbes && zProbes[probeNumber] != nullptr)
 	{
 		AddToActive(*zProbes[probeNumber]);
@@ -88,10 +90,15 @@ EndstopHitDetails EndstopsManager::CheckEndstops(bool goingSlow)
 	EndstopOrZProbe *actioned = nullptr;
 	for (EndstopOrZProbe *esp = activeEndstops; esp != nullptr; esp = esp->GetNext())
 	{
-		const EndstopHitDetails hd = esp->CheckTriggered(goingSlow);
+		EndstopHitDetails hd = esp->CheckTriggered(goingSlow);
 		if (hd.GetAction() == EndstopHitAction::stopAll)
 		{
 			activeEndstops = nullptr;						// no need to do anything else
+			if (!isHomingMove)
+			{
+				hd.setAxisHigh = false;
+				hd.setAxisLow = false;
+			}
 			return hd;
 		}
 		if (hd.GetAction() > ret.GetAction())
@@ -100,6 +107,7 @@ EndstopHitDetails EndstopsManager::CheckEndstops(bool goingSlow)
 			actioned = esp;
 		}
 	}
+
 	if (ret.GetAction() > EndstopHitAction::reduceSpeed)
 	{
 		if (actioned->Acknowledge(ret))
@@ -123,6 +131,11 @@ EndstopHitDetails EndstopsManager::CheckEndstops(bool goingSlow)
 				prev = es;
 				es = es->GetNext();
 			}
+		}
+		if (!isHomingMove)
+		{
+			ret.setAxisHigh = false;
+			ret.setAxisLow = false;
 		}
 	}
 	return ret;

@@ -699,7 +699,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else
 			{
-				platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis));
+				platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis), false);
 			}
 			moveBuffer.checkEndstops = true;
 

@@ -373,6 +373,7 @@ namespace TaskPriority
 	static constexpr int DhtPriority = 2;
 	static constexpr int TmcPriority = 2;
 	static constexpr int AinPriority = 2;
+	static constexpr int HeightFollowingPriority = 2;
 	static constexpr int DueXPriority = 3;
 	static constexpr int LaserPriority = 3;
 	static constexpr int CanSenderPriority = 3;

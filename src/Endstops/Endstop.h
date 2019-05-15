@@ -10,7 +10,7 @@
 
 #include "RepRapFirmware.h"
 #include "EndstopDefs.h"
-#include "IoPorts.h"
+#include "Hardware/IoPorts.h"
 #include <General/FreelistManager.h>
 
 class AxisDriversConfig;

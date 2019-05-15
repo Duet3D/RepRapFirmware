@@ -9,7 +9,7 @@
 #define SRC_FAN_H_
 
 #include "RepRapFirmware.h"
-#include "IoPorts.h"
+#include "Hardware/IoPorts.h"
 
 class GCodeBuffer;
 

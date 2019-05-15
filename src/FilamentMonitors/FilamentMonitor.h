@@ -9,7 +9,7 @@
 #define SRC_FILAMENTSENSORS_FILAMENTMONITOR_H_
 
 #include "RepRapFirmware.h"
-#include "IoPorts.h"
+#include "Hardware/IoPorts.h"
 #include "MessageType.h"
 #include "GCodes/GCodeResult.h"
 #include "RTOSIface/RTOSIface.h"

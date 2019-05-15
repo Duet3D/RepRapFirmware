@@ -4142,22 +4142,6 @@ bool Platform::SetDateTime(time_t time)
 	return ok;
 }
 
-// Initialise the I2C interface, if not already done
-void Platform::InitI2c()
-{
-#if defined(I2C_IFACE)
-	if (!i2cInitialised)
-	{
-		MutexLocker lock(Tasks::GetI2CMutex());
-		if (!i2cInitialised)			// test it again, now that we own the mutex
-		{
-			I2C_IFACE.BeginMaster(I2cClockFreq);
-			i2cInitialised = true;
-		}
-	}
-#endif
-}
-
 // Configure an I/O port
 GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply)
 {

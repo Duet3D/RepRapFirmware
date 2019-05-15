@@ -137,7 +137,7 @@ DhtSensorHardwareInterface *DhtSensorHardwareInterface::Create(unsigned int rela
 	if (dhtTask == nullptr)
 	{
 		dhtTask = new Task<DhtTaskStackWords>;
-		dhtTask->Create(DhtTask, "DHTSENSOR", nullptr, TaskPriority::DhtPriority);
+		dhtTask->Create(DhtTaskStart, "DHTSENSOR", nullptr, TaskPriority::DhtPriority);
 	}
 
 	return activeSensors[relativeChannel];

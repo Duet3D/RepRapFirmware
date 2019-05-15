@@ -69,7 +69,7 @@ GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply)
 		{
 			state = PidState::stopped;
 			heightControllerTask = new Task<HeightControllerTaskStackWords>;
-			heightControllerTask->Create(HeightControllerTaskStart, "HEIGHT", (void*)this, TaskBase::HeatPriority);
+			heightControllerTask->Create(HeightControllerTaskStart, "HEIGHT", (void*)this, TaskPriority::HeightFollowingPriority);
 		}
 	}
 	else if (sensorNumber < 0)
