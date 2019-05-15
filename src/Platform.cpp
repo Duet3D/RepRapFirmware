@@ -36,9 +36,9 @@
 #include "SoftTimer.h"
 #include "Logger.h"
 #include "Tasks.h"
-#include "DmacManager.h"
+#include "Hardware/DmacManager.h"
 #include "Math/Isqrt.h"
-#include "Wire.h"
+#include "Hardware/I2C.h"
 
 #ifndef __LPC17xx__
 # include "sam/drivers/tc/tc.h"
@@ -167,13 +167,13 @@ DriversBitmap AxisDriversConfig::GetDriversBitmap() const
 
 uint8_t Platform::softwareResetDebugInfo = 0;			// extra info for debugging
 
-Platform::Platform() :
-		logger(nullptr), board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
+Platform::Platform()
+	: logger(nullptr), board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
 #if HAS_SMART_DRIVERS
-		nextDriveToPoll(0),
+	  nextDriveToPoll(0),
 #endif
-		lastFanCheckTime(0), auxGCodeReply(nullptr), sysDir(nullptr), tickState(0), debugCode(0),
-		lastWarningMillis(0), deliberateError(false), i2cInitialised(false)
+	  lastFanCheckTime(0), auxGCodeReply(nullptr), sysDir(nullptr), tickState(0), debugCode(0),
+	  lastWarningMillis(0), deliberateError(false)
 {
 	massStorage = new MassStorage(this);
 }
@@ -317,7 +317,7 @@ void Platform::Init()
 	ARRAY_INIT(defaultMacAddress, DefaultMacAddress);
 
 	// Motor current setting on Duet 0.6 and 0.8.5
-	InitI2c();
+	I2C::Init();
 	mcpExpansion.setMCP4461Address(0x2E);		// not required for mcpDuet, as this uses the default address
 	ARRAY_INIT(potWipes, POT_WIPES);
 	senseResistor = SENSE_RESISTOR;
@@ -2050,8 +2050,8 @@ void Platform::Diagnostics(MessageType mtype)
 
 #ifdef I2C_IFACE
 	const TwoWire::ErrorCounts errs = I2C_IFACE.GetErrorCounts(true);
-	MessageF(mtype, "I2C nak errors %" PRIu32 ", send timeouts %" PRIu32 ", receive timeouts %" PRIu32 ", finishTimeouts %" PRIu32 "\n",
-		errs.naks, errs.sendTimeouts, errs.recvTimeouts, errs.finishTimeouts);
+	MessageF(mtype, "I2C nak errors %" PRIu32 ", send timeouts %" PRIu32 ", receive timeouts %" PRIu32 ", finishTimeouts %" PRIu32 ", resets %" PRIu32 "\n",
+		errs.naks, errs.sendTimeouts, errs.recvTimeouts, errs.finishTimeouts, errs.resets);
 #endif
 }
 

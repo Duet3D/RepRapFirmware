@@ -31,7 +31,6 @@ namespace DuetExpansion
 	void DigitalWrite(Pin pin, bool high);						// Write a pin
 	void AnalogOut(Pin pin, float pwm);							// Set the PWM value on this pin
 	uint16_t DiagnosticRead();									// Diagnose the SX1509 by setting all pins as inputs and reading them
-	void Spin();												// Task to keep the endstop inputs up to date
 	void Diagnostics(MessageType mtype);						// Print diagnostic data
 };
 
