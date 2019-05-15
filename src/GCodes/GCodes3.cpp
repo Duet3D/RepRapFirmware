@@ -16,6 +16,7 @@
 #include "Endstops/ZProbe.h"
 #include "PrintMonitor.h"
 #include "Tasks.h"
+#include "Hardware/I2C.h"
 
 #if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
@@ -871,12 +872,8 @@ GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 				bValues[i] = (uint8_t)values[i];
 			}
 
-			platform.InitI2c();
-			size_t bytesTransferred;
-			{
-				MutexLocker lock(Tasks::GetI2CMutex());
-				bytesTransferred = I2C_IFACE.Transfer(address, bValues, numToSend, numToReceive);
-			}
+			I2C::Init();
+			const size_t bytesTransferred = I2C::Transfer(address, bValues, numToSend, numToReceive);
 
 			if (bytesTransferred < numToSend)
 			{
@@ -921,14 +918,10 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 			const uint32_t numBytes = gb.GetUIValue();
 			if (numBytes > 0 && numBytes <= MaxI2cBytes)
 			{
-				platform.InitI2c();
+				I2C::Init();
 
 				uint8_t bValues[MaxI2cBytes];
-				size_t bytesRead;
-				{
-					MutexLocker lock(Tasks::GetI2CMutex());
-					bytesRead = I2C_IFACE.Transfer(address, bValues, 0, numBytes);
-				}
+				const size_t bytesRead = I2C::Transfer(address, bValues, 0, numBytes);
 
 				reply.copy("Received");
 				if (bytesRead == 0)

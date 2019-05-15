@@ -384,11 +384,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			reply.copy("Pause the print before attempting to cancel it");
 			result = GCodeResult::error;
 		}
-		else if (isWaiting)
-		{
-			cancelWait = true;								// was waiting for heating to complete, so cancel it
-			return false;
-		}
 		else if (   !LockMovementAndWaitForStandstill(gb)	// wait until everything has stopped
 				 || !IsCodeQueueIdle()						// must also wait until deferred command queue has caught up
 			    )
@@ -399,6 +394,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			const bool wasPaused = isPaused;				// isPaused gets cleared by CancelPrint
 			const bool wasSimulating = IsSimulating();		// simulationMode may get cleared by CancelPrint
+			isWaiting = cancelWait = false;					// we may have been waiting for temperatures to be reached
 			StopPrint((&gb == fileGCode) ? StopPrintReason::normalCompletion : StopPrintReason::userCancelled);
 
 			if (!wasSimulating)								// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
@@ -793,9 +789,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					{
 						// We executed M23 to set the file offset, which normally means that we are executing resurrect.g.
 						// We need to copy the absolute/relative and volumetric extrusion flags over
-						fileGCode->OriginalMachineState().drivesRelative = gb.MachineState().drivesRelative;
-						fileGCode->OriginalMachineState().feedRate = gb.MachineState().feedRate;
-						fileGCode->OriginalMachineState().volumetricExtrusion = gb.MachineState().volumetricExtrusion;
+						fileGCode->OriginalMachineState().CopyStateFrom(gb.MachineState());
 						fileToPrint.Seek(fileOffsetToPrint);
 						moveFractionToSkip = moveFractionToStartAt;
 					}
@@ -1285,6 +1279,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			return false;
 		}
+		UnlockMovement(gb);									// allow babystepping and pausing while heating
+
 		// no break
 	case 104:
 		// New behaviour from 1.20beta12:
@@ -1760,6 +1756,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			return false;
 		}
+
+		UnlockMovement(gb);									// allow babystepping and pausing while heating
 		{
 			// Check if the heater index is passed
 			const uint32_t index = gb.Seen('P') ? gb.GetUIValue() : 0;
@@ -2174,9 +2172,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			const bool absolute = (gb.Seen('R') && gb.GetIValue() == 0);
 			bool seen = false;
-#if 0	//SUPPORT_ASYNC_MOVES
-			bool live = true;
-#endif
 			float differences[MaxAxes];
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
@@ -2192,12 +2187,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					{
 						differences[axis] = constrain<float>(fval, -1.0, 1.0);
 					}
-#if 0	//SUPPORT_ASYNC_MOVES
-					if (differences[axis] != 0.0 && !IsBitSet(reprap.GetMove().GetKinematics().GetLinearAxes(), axis))
-					{
-						live = false;		// we can only live babystep linear axes
-					}
-#endif
 				}
 				else
 				{
@@ -2207,64 +2196,34 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 			if (seen)
 			{
-#if 0	//SUPPORT_ASYNC_MOVES
-				if (live)
+				if (!LockMovement(gb))
 				{
-					if (auxMoveAvailable)
-					{
-						return false;									// wait until the previous aux move has gone
-					}
-
-					auxMoveBuffer.SetDefaults(0);
-					auxMoveBuffer.feedRate = DefaultFeedRate;
-					auxMoveBuffer.acceleration = 9999.0;
-					for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-					{
-						hiddenBabyStepOffsets[axis] += differences[axis];
-						if (differences[axis] != 0.0)
-						{
-							auxMoveBuffer.coords[axis] = differences[axis];
-							auxMoveBuffer.feedRate = min<float>(auxMoveBuffer.feedRate, platform.MaxFeedrate(axis));
-							auxMoveBuffer.acceleration = min<float>(auxMoveBuffer.acceleration, platform.Acceleration(axis));
-						}
-					}
-					auxMoveBuffer.feedRate /= 4;						// allow for other movement taking place at the same time
-					auxMoveBuffer.acceleration /= 4;
-					__DMB();
-					auxMoveAvailable = true;
+					return false;
 				}
-				else
-#endif
+
+				// Perform babystepping synchronously with moves
+				bool haveResidual = false;
+				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
-					if (!LockMovement(gb))
-					{
-						return false;
-					}
+					currentBabyStepOffsets[axis] += differences[axis];
+					const float amountPushed = reprap.GetMove().PushBabyStepping(axis, differences[axis]);
+					moveBuffer.initialCoords[axis] += amountPushed;
 
-					// Perform babystepping synchronously with moves
-					bool haveResidual = false;
-					for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+					// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
+					// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
+					moveBuffer.coords[axis] += differences[axis];
+					if (amountPushed != differences[axis])
 					{
-						currentBabyStepOffsets[axis] += differences[axis];
-						const float amountPushed = reprap.GetMove().PushBabyStepping(axis, differences[axis]);
-						moveBuffer.initialCoords[axis] += amountPushed;
-
-						// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
-						// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
-						moveBuffer.coords[axis] += differences[axis];
-						if (amountPushed != differences[axis])
-						{
-							haveResidual = true;
-						}
+						haveResidual = true;
 					}
+				}
 
-					if (haveResidual && segmentsLeft == 0 && reprap.GetMove().AllMovesAreFinished())
-					{
-						// The pipeline is empty, so execute the babystepping move immediately
-						SetMoveBufferDefaults();
-						moveBuffer.feedRate = DefaultFeedRate;
-						NewMoveAvailable(1);
-					}
+				if (haveResidual && segmentsLeft == 0 && reprap.GetMove().AllMovesAreFinished())
+				{
+					// The pipeline is empty, so execute the babystepping move immediately
+					SetMoveBufferDefaults();
+					moveBuffer.feedRate = DefaultFeedRate;
+					NewMoveAvailable(1);
 				}
 			}
 			else

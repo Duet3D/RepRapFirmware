@@ -47,6 +47,7 @@ const EndstopChecks ActiveLowEndstop = 1 << 27;			// must be distinct from 1 << 
 
 typedef uint32_t TriggerInputsBitmap;					// Bitmap of input pins that a single trigger number responds to
 typedef uint32_t TriggerNumbersBitmap;					// Bitmap of trigger numbers
+static_assert(MaxTriggers <= sizeof(TriggerNumbersBitmap) * CHAR_BIT, "need larger TriggerNumbersBitmap type");
 
 struct Trigger
 {
@@ -500,9 +501,6 @@ private:
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 	float volumetricExtrusionFactors[MaxExtruders]; // Volumetric extrusion factors
 	float currentBabyStepOffsets[MaxAxes];		// The accumulated axis offsets due to baby stepping requests
-#if SUPPORT_ASYNC_MOVES
-	float hiddenBabyStepOffsets[MaxAxes];		// The amount of live (async) baby stepping performed
-#endif
 
 	// Z probe
 	GridDefinition defaultGrid;					// The grid defined by the M557 command in config.g
@@ -631,11 +629,7 @@ inline void GCodes::NewMoveAvailable()
 // Get the total baby stepping offset for an axis
 inline float GCodes::GetTotalBabyStepOffset(size_t axis) const
 {
-#if SUPPORT_ASYNC_MOVES
-	return currentBabyStepOffsets[axis] + hiddenBabyStepOffsets[axis];
-#else
 	return currentBabyStepOffsets[axis];
-#endif
 }
 
 //*****************************************************************************************************
