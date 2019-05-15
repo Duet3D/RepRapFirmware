@@ -202,6 +202,9 @@ protected:
 	void vResetViewState();
 
 private:
+	void ListFiles(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset);
+	uint8_t GetDirectoryNesting() const;
+
 	const unsigned int numDisplayLines;
 
 	const char *command;
@@ -222,6 +225,9 @@ private:
 	unsigned int m_uListingSelectedIndex;
 
 	MassStorage *const m_oMS;
+
+	enum CardState : uint8_t { notStarted, mounting, mounted, error } sdCardState;
+	uint8_t initialDirectoryNesting;
 };
 
 class ImageMenuItem final : public MenuItem

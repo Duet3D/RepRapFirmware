@@ -22,7 +22,7 @@
 # include "peripheral_clk_config.h"
 # include "HAL/SAME5x.h"
 #elif SAME70
-# include "DmacManager.h"
+# include "Hardware/DmacManager.h"
 #endif
 
 //#define TMC_TYPE	5130
@@ -1194,9 +1194,9 @@ namespace SmartDrivers
 
 #if TMC51xx_USES_SERCOM
 		// Temporary fixed pin assignment
-		gpio_set_pin_function(PORTB_PIN(24), PINMUX_PB24C_SERCOM0_PAD0);		// MOSI
-		gpio_set_pin_function(PORTB_PIN(25), PINMUX_PB25C_SERCOM0_PAD1);		// SCLK
-		gpio_set_pin_function(PORTC_PIN(25), PINMUX_PC25C_SERCOM0_PAD3);		// MISO
+		gpio_set_pin_function(PortBPin(24), PINMUX_PB24C_SERCOM0_PAD0);		// MOSI
+		gpio_set_pin_function(PortBPin(25), PINMUX_PB25C_SERCOM0_PAD1);		// SCLK
+		gpio_set_pin_function(PortCPin(25), PINMUX_PC25C_SERCOM0_PAD3);		// MISO
 
 		// Enable the clock
 		hri_gclk_write_PCHCTRL_reg(GCLK, SERCOM0_GCLK_ID_CORE, CONF_GCLK_SERCOM0_CORE_SRC | (1 << GCLK_PCHCTRL_CHEN_Pos));
@@ -1291,7 +1291,7 @@ namespace SmartDrivers
 		xdmac_enable_interrupt(XDMAC, DmacChanTmcRx);
 #endif
 
-		tmcTask.Create(TmcLoop, "TMC", nullptr, TaskBase::TmcPriority);
+		tmcTask.Create(TmcLoop, "TMC", nullptr, TaskPriority::TmcPriority);
 	}
 
 	void SetAxisNumber(size_t driver, uint32_t axisNumber)

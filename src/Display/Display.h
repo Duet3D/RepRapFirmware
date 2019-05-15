@@ -38,6 +38,7 @@ private:
 	RotaryEncoder *encoder;
 	uint32_t whenBeepStarted;
 	uint32_t beepLength;
+	uint32_t lastRefreshMillis;
 	uint16_t mboxSeq;
 	bool mboxActive;
 	bool beepActive;

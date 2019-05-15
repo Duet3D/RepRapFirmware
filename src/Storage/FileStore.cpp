@@ -319,13 +319,14 @@ int FileStore::Read(char* extBuf, size_t nBytes)
 
 // As Read but stop after '\n' or '\r\n' and null-terminate the string.
 // If the next line is too long to fit in the buffer then the line will be split.
+// Return the number of characters in the line excluding the null terminator, or -1 if end of file or a read error occurs.
 int FileStore::ReadLine(char* buf, size_t nBytes)
 {
 	const FilePosition lineStart = Position();
 	const int r = Read(buf, nBytes);
-	if (r < 0)
+	if (r <= 0)
 	{
-		return r;
+		return -1;
 	}
 
 	int i = 0;
