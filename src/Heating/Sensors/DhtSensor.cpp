@@ -25,7 +25,7 @@ Mutex DhtSensorHardwareInterface::dhtMutex;
 Task<DhtSensorHardwareInterface::DhtTaskStackWords> *DhtSensorHardwareInterface::dhtTask = nullptr;
 DhtSensorHardwareInterface *DhtSensorHardwareInterface::activeSensors[MaxSpiTempSensors] = { 0 };
 
-extern "C" void DhtTask(void * pvParameters)
+extern "C" [[noreturn]] void DhtTaskStart(void * pvParameters)
 {
 	DhtSensorHardwareInterface::SensorTask();
 }
@@ -137,7 +137,7 @@ DhtSensorHardwareInterface *DhtSensorHardwareInterface::Create(unsigned int rela
 	if (dhtTask == nullptr)
 	{
 		dhtTask = new Task<DhtTaskStackWords>;
-		dhtTask->Create(DhtTask, "DHTSENSOR", nullptr, TaskPriority::DhtPriority);
+		dhtTask->Create(DhtTaskStart, "DHTSENSOR", nullptr, TaskPriority::DhtPriority);
 	}
 
 	return activeSensors[relativeChannel];
@@ -239,7 +239,7 @@ void DhtSensorHardwareInterface::TakeReading()
 
 // Code executed by the DHT sensor task.
 // This is run at the same priority as the Heat task, so it must not sit in any spin loops.
-/*static*/ void DhtSensorHardwareInterface::SensorTask()
+/*static*/ [[noreturn]] void DhtSensorHardwareInterface::SensorTask()
 {
 	for (;;)
 	{
