@@ -86,7 +86,6 @@ int ZProbe::GetReading() const
 		{
 		case ZProbeType::analog:				// Simple or intelligent IR sensor
 		case ZProbeType::alternateAnalog:		// Alternate sensor
-		case ZProbeType::endstopSwitch:			// Switch connected to an endstop input
 		case ZProbeType::digital:				// Switch connected to Z probe input
 			zProbeVal = (int) ((p.GetZProbeOnFilter().GetSum() + p.GetZProbeOffFilter().GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));
 			break;
@@ -188,7 +187,6 @@ uint16_t ZProbe::GetRawReading() const
 	case ZProbeType::alternateAnalog:
 		return min<uint16_t>(inputPort.ReadAnalog(), 4000);
 
-	case ZProbeType::endstopSwitch:
 	case ZProbeType::digital:
 	case ZProbeType::unfilteredDigital:
 	case ZProbeType::blTouch:
@@ -294,11 +292,17 @@ GCodeResult ZProbe::HandleM558(GCodeBuffer& gb, const StringRef &reply, unsigned
 	{
 		seen = true;
 		const uint32_t requestedType = gb.GetUIValue();
-		if (requestedType >= (uint32_t)ZProbeType::numTypes)
+		if (   requestedType >= (uint32_t)ZProbeType::numTypes
+			|| requestedType == (uint32_t)ZProbeType::endstopSwitch_obsolete
+			|| requestedType == (uint32_t)ZProbeType::e1Switch_obsolete
+			|| requestedType == (uint32_t)ZProbeType::zSwitch_obsolete
+		   )
 		{
 			reply.copy("Invalid Z probe type");
+			type = ZProbeType::none;
 			return GCodeResult::error;
 		}
+
 		type = (ZProbeType)requestedType;
 		if (!gb.DoDwellTime(100))							// delay a little to allow the averaging filters to accumulate data from the new source
 		{
@@ -306,35 +310,42 @@ GCodeResult ZProbe::HandleM558(GCodeBuffer& gb, const StringRef &reply, unsigned
 		}
 	}
 
+	// Determine the required pin access
+	PinAccess access[2];
+	switch (type)
+	{
+	case ZProbeType::analog:
+	case ZProbeType::dumbModulated:
+		access[0] = PinAccess::readAnalog;
+		access[1] = PinAccess::write1;
+		break;
+
+	case ZProbeType::alternateAnalog:
+		access[0] = PinAccess::readAnalog;
+		access[1] = PinAccess::write0;
+		break;
+
+	default:
+		access[0] = PinAccess::readWithPullup;
+		access[1] = PinAccess::write0;
+		break;
+	}
+
 	// Do the input channel next so that 'seen' will be true only if the type and/or the channel has been specified
 	if (gb.Seen('C'))										// input channel
 	{
 		seen = true;
 		IoPort* const ports[] = { &inputPort, &modulationPort };
-		PinAccess access[2];
-		switch (type)
-		{
-		case ZProbeType::analog:
-		case ZProbeType::dumbModulated:
-			access[0] = PinAccess::readAnalog;
-			access[1] = PinAccess::write1;
-			break;
-
-		case ZProbeType::alternateAnalog:
-			access[0] = PinAccess::readAnalog;
-			access[1] = PinAccess::write0;
-			break;
-
-		default:
-			access[0] = PinAccess::readWithPullup;
-			access[1] = PinAccess::write0;
-			break;
-		}
 
 		if (!IoPort::AssignPorts(gb, reply, PinUsedBy::zprobe, 2, ports, access))
 		{
 			return GCodeResult::error;
 		}
+	}
+	else if (seen)											// if we had a P parameter then the type may have changed
+	{
+		(void)inputPort.SetMode(access[0]);
+		(void)modulationPort.SetMode(access[1]);
 	}
 
 	gb.TryGetFValue('H', diveHeight, seen);					// dive height

@@ -3148,7 +3148,6 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	{
 		if (reportMissing)
 		{
-			// Don't use snprintf into scratchString here, because fileName may be aliased to scratchString
 			platform.MessageF(WarningMessage, "Macro file %s not found.\n", fileName);
 			return true;
 		}

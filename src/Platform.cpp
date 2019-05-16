@@ -404,16 +404,17 @@ void Platform::Init()
 
 	for (uint32_t& db : driveDriverBits)
 	{
-		db = 0;										// clear drives bitmap for all axes
+		db = 0;													// clear drives bitmap for all axes
 	}
 
 	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
 	{
-		enableValues[drive] = 0;					// assume active low enable signal
-		directions[drive] = true;					// drive moves forwards by default
+		enableValues[drive] = 0;								// assume active low enable signal
+		directions[drive] = true;								// drive moves forwards by default
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
 		driverState[drive] = DriverStatus::disabled;
+		driveDriverBits[drive + MaxTotalDrivers] = CalcDriverBitmap(drive);
 
 		// Map axes and extruders straight through
 		if (drive < MinAxes)
@@ -422,9 +423,9 @@ void Platform::Init()
 #ifdef PCCB
 				(drive == 0) ? Z_AXIS : (drive == 1) ? X_AXIS : Y_AXIS;		// on PCCB we map Z X Y to drivers 0 1 2
 #else
-				drive;														// map axes straight through to drives
+				drive;											// map axes straight through to drives
 #endif
-			driveDriverBits[axis] = driveDriverBits[axis + MaxTotalDrivers] = CalcDriverBitmap(drive);	// this returns 0 for remote drivers
+			driveDriverBits[axis] = CalcDriverBitmap(drive);	// this returns 0 for remote drivers
 			axisDrivers[axis].numDrivers = 1;
 			axisDrivers[axis].driverNumbers[0] = (uint8_t)drive;
 		}
