@@ -171,10 +171,6 @@ const PacketHeader *DataTransfer::ReadPacket()
 	}
 
 	const PacketHeader *header = reinterpret_cast<const PacketHeader*>(rxBuffer + rxPointer);
-	if (reprap.Debug(moduleLinuxInterface))
-	{
-		reprap.GetPlatform().MessageF(DebugMessage, "-> Packet #%d (request %d) from %d of %d\n", (int)header->id, (int)header->request, (int)rxPointer, rxHeader.dataLength);
-	}
 	rxPointer += sizeof(PacketHeader);
 	return header;
 }
@@ -292,18 +288,25 @@ void DataTransfer::ExchangeData()
 	setup_spi(rxBuffer, rxHeader.dataLength, txBuffer, txHeader.dataLength);
 }
 
-void DataTransfer::ResetTransfer()
+void DataTransfer::ResetTransfer(bool ownRequest)
 {
-	// Output warning message
 	if (reprap.Debug(moduleLinuxInterface))
 	{
-		reprap.GetPlatform().MessageF(DebugMessage, "Received bad response %" PRIu32 "\n", rxResponse);
+		reprap.GetPlatform().Message(DebugMessage, ownRequest ? "Resetting transfer\n" : "Resetting transfer due to Linux request\n");
 	}
 
-	// Invalidate the data to send
-	txResponse = TransferResponse::BadResponse;
-	setup_spi(&rxResponse, sizeof(uint32_t), &txResponse, sizeof(uint32_t));
-	state = SpiState::Resetting;
+	if (ownRequest)
+	{
+		// Invalidate the data to send
+		txResponse = TransferResponse::BadResponse;
+		setup_spi(&rxResponse, sizeof(uint32_t), &txResponse, sizeof(uint32_t));
+		state = SpiState::Resetting;
+	}
+	else
+	{
+		// Linux wants to reset the state
+		ExchangeHeader();
+	}
 }
 
 volatile bool DataTransfer::IsReady()
@@ -328,12 +331,18 @@ volatile bool DataTransfer::IsReady()
 			const uint32_t headerResponse = *reinterpret_cast<const uint32_t*>(&rxHeader);
 			if (headerResponse == TransferResponse::BadResponse)
 			{
-				ExchangeHeader();
+				// Linux wants to restart the transfer
+				ResetTransfer(false);
 				break;
 			}
 
-			if (rxHeader.checksumHeader != CRC16(reinterpret_cast<const char *>(&rxHeader), sizeof(TransferHeader) - sizeof(uint16_t)))
+			const uint16_t checksum = CRC16(reinterpret_cast<const char *>(&rxHeader), sizeof(TransferHeader) - sizeof(uint16_t));
+			if (rxHeader.checksumHeader != checksum)
 			{
+				if (reprap.Debug(moduleLinuxInterface))
+				{
+					reprap.GetPlatform().MessageF(DebugMessage, "Bad header checksum (expected %04" PRIx32 ", got %04" PRIx32 ")\n", (uint32_t)rxHeader.checksumHeader, (uint32_t)checksum);
+				}
 				ExchangeResponse(TransferResponse::BadHeaderChecksum);
 				break;
 			}
@@ -372,8 +381,12 @@ volatile bool DataTransfer::IsReady()
 					ExchangeHeader();
 				}
 			}
-			else if (rxResponse == TransferResponse::BadHeaderChecksum || rxResponse == TransferResponse::BadResponse ||
-					 txResponse == TransferResponse::BadHeaderChecksum)
+			else if (rxResponse == TransferResponse::BadResponse)
+			{
+				// Linux wants to restart the transfer
+				ResetTransfer(false);
+			}
+			else if (rxResponse == TransferResponse::BadHeaderChecksum || txResponse == TransferResponse::BadHeaderChecksum)
 			{
 				// Failed to exchange header, restart the full transfer
 				ExchangeHeader();
@@ -381,26 +394,37 @@ volatile bool DataTransfer::IsReady()
 			else
 			{
 				// Received invalid response code
-				ResetTransfer();
+				ResetTransfer(true);
 			}
 			break;
 
 		case SpiState::ExchangingData:
+		{
 			// (3) Exchanged data
 			if (rxBuffer32[0] == TransferResponse::BadResponse)
 			{
+				if (reprap.Debug(moduleLinuxInterface))
+				{
+					reprap.GetPlatform().Message(DebugMessage, "Resetting state due to Linux request\n");
+				}
 				ExchangeHeader();
 				break;
 			}
 
-			if (rxHeader.checksumData != CRC16(rxBuffer, rxHeader.dataLength))
+			const uint16_t checksum = CRC16(rxBuffer, rxHeader.dataLength);
+			if (rxHeader.checksumData != checksum)
 			{
+				if (reprap.Debug(moduleLinuxInterface))
+				{
+					reprap.GetPlatform().MessageF(DebugMessage, "Bad data checksum (expected %04" PRIx32 ", got %04" PRIx32 ")\n", (uint32_t)rxHeader.checksumData, (uint32_t)checksum);
+				}
 				ExchangeResponse(TransferResponse::BadDataChecksum);
 				break;
 			}
 
 			ExchangeResponse(TransferResponse::Success);
 			break;
+		}
 
 		case SpiState::ExchangingDataResponse:
 			// (4) Exchanged response to data transfer
@@ -412,20 +436,21 @@ volatile bool DataTransfer::IsReady()
 				state = SpiState::ProcessingData;
 				return true;
 			}
+
+			if (rxResponse == TransferResponse::BadResponse)
+			{
+				// Linux wants to restart the transfer
+				ResetTransfer(false);
+			}
 			else if (rxResponse == TransferResponse::BadDataChecksum || txResponse == TransferResponse::BadDataChecksum)
 			{
 				// Resend the data if a checksum error occurred
 				ExchangeData();
 			}
-			else if (rxResponse == TransferResponse::BadResponse)
-			{
-				// Linux received bad response, restart the full transfer
-				ExchangeHeader();
-			}
 			else
 			{
 				// Received invalid response, reset the SPI transfer
-				ResetTransfer();
+				ResetTransfer(true);
 			}
 			break;
 
@@ -457,10 +482,6 @@ volatile bool DataTransfer::IsReady()
 
 void DataTransfer::StartNextTransfer()
 {
-	if (reprap.Debug(moduleLinuxInterface))
-	{
-		reprap.GetPlatform().MessageF(DebugMessage, "- Transfer %d -\n", (int)txHeader.sequenceNumber);
-	}
 	lastTransferNumber = rxHeader.sequenceNumber;
 
 	// Reset RX transfer header

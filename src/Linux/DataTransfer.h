@@ -83,7 +83,7 @@ private:
 	void ExchangeHeader();
 	void ExchangeResponse(uint32_t response);
 	void ExchangeData();
-	void ResetTransfer();
+	void ResetTransfer(bool ownRequest);
 	uint16_t CRC16(const char *buffer, size_t length) const;
 
 	template<typename T> const T *ReadDataHeader();
