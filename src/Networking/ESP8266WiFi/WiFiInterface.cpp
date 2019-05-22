@@ -1422,7 +1422,7 @@ static void spi_tx_dma_setup(const void *buf, uint32_t transferLength)
 
 	xdmac_tx_cfg.mbr_ubc = transferLength;
 	xdmac_tx_cfg.mbr_sa = reinterpret_cast<uint32_t>(buf);
-	xdmac_tx_cfg.mbr_da = reinterpret_cast<uint32_t>(&(SPI0->SPI_TDR));
+	xdmac_tx_cfg.mbr_da = reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_TDR));
 	xdmac_tx_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN |
 			XDMAC_CC_MBSIZE_SINGLE |
 			XDMAC_CC_DSYNC_MEM2PER |
@@ -1475,7 +1475,7 @@ static void spi_rx_dma_setup(const void *buf, uint32_t transferLength)
 
 	xdmac_rx_cfg.mbr_ubc = transferLength;
 	xdmac_rx_cfg.mbr_da = reinterpret_cast<uint32_t>(buf);
-	xdmac_rx_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(SPI0->SPI_RDR));
+	xdmac_rx_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_RDR));
 	xdmac_rx_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN |
 			XDMAC_CC_MBSIZE_SINGLE |
 			XDMAC_CC_DSYNC_PER2MEM |

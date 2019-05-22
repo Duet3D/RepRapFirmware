@@ -27,7 +27,7 @@ public:
 	void Diagnostics(MessageType mtype);
 
 	bool IsConnected() const;								// Check if the connection to DCS is live
-	volatile bool IsReady();								// Returns true when data can be read
+	bool IsReady();											// Returns true when data can be read
 	void StartNextTransfer();								// Kick off the next transfer
 	bool LinuxHadReset() const;								// Check if the remote end reset
 
@@ -68,6 +68,7 @@ private:
 	// Transfer properties
 	uint32_t lastTransferTime;
 	uint16_t lastTransferNumber;
+	unsigned int failedTransfers;
 	TransferHeader rxHeader, txHeader;
 	uint32_t rxResponse, txResponse;
 

@@ -32,8 +32,9 @@ const uint32_t LINUX_XDMAC_RX_CH_NUM = 4;
 static xdmac_channel_config_t xdmac_tx_cfg, xdmac_rx_cfg;
 
 volatile bool dataReceived = false;
+volatile unsigned int spiTxUnderruns = 0, spiRxOverruns = 0;
 
-void setup_spi(void *inBuffer, size_t bytesToRead, const void *outBuffer, size_t bytesToWrite)
+void setup_spi(void *inBuffer, const void *outBuffer, size_t bytesToTransfer)
 {
 	// Reset SPI
 	spi_reset(LINUX_SPI);
@@ -45,7 +46,7 @@ void setup_spi(void *inBuffer, size_t bytesToRead, const void *outBuffer, size_t
 	spi_set_bits_per_transfer(LINUX_SPI, 0, SPI_CSR_BITS_8_BIT);
 
 	// Initialize channel config for transmitter
-	xdmac_tx_cfg.mbr_ubc = bytesToWrite;
+	xdmac_tx_cfg.mbr_ubc = bytesToTransfer;
 	xdmac_tx_cfg.mbr_sa = (uint32_t)outBuffer;
 	xdmac_tx_cfg.mbr_da = (uint32_t)&(LINUX_SPI->SPI_TDR);
 	xdmac_tx_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN |
@@ -69,7 +70,7 @@ void setup_spi(void *inBuffer, size_t bytesToRead, const void *outBuffer, size_t
 	xdmac_disable_interrupt(XDMAC, DmacChanLinuxTx);
 
 	// Initialize channel config for receiver
-	xdmac_rx_cfg.mbr_ubc = bytesToRead;
+	xdmac_rx_cfg.mbr_ubc = bytesToTransfer;
 	xdmac_rx_cfg.mbr_da = (uint32_t)inBuffer;
 	xdmac_rx_cfg.mbr_sa = (uint32_t)&(LINUX_SPI->SPI_RDR);
 	xdmac_rx_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN |
@@ -102,15 +103,15 @@ void setup_spi(void *inBuffer, size_t bytesToRead, const void *outBuffer, size_t
 	NVIC_EnableIRQ(LINUX_SPI_IRQn);
 
 	// Begin transfer
-	fastDigitalWriteHigh(SamTfrReadyPin);
+	fastDigitalWriteHigh(LinuxTfrReadyPin);
 }
 
 void disable_spi()
 {
 	// Stop transfer
-	fastDigitalWriteLow(SamTfrReadyPin);
+	fastDigitalWriteLow(LinuxTfrReadyPin);
 
-	// Disable the XDMAC channel
+	// Disable the XDMAC channels
 	xdmac_channel_disable(XDMAC, DmacChanLinuxRx);
 	xdmac_channel_disable(XDMAC, DmacChanLinuxTx);
 
@@ -127,12 +128,22 @@ extern "C" void LINUX_SPI_HANDLER(void)
 		// Data has been transferred, disable transfer ready pin and XDMAC channels
 		disable_spi();
 		dataReceived = true;
+
+		// Check if any error occurred
+		if ((status & SPI_SR_OVRES) != 0)
+		{
+			++spiRxOverruns;
+		}
+		if ((status & SPI_SR_UNDES) != 0)
+		{
+			++spiTxUnderruns;
+		}
 	}
 }
 
 /*-----------------------------------------------------------------------------------*/
 
-DataTransfer::DataTransfer() : state(SpiState::ExchangingData), lastTransferTime(0), lastTransferNumber(0),
+DataTransfer::DataTransfer() : state(SpiState::ExchangingData), lastTransferTime(0), lastTransferNumber(0), failedTransfers(0),
 	rxResponse(TransferResponse::Success), txResponse(TransferResponse::Success), rxPointer(0), txPointer(0), packetId(0)
 {
 	// Prepare RX header
@@ -147,7 +158,13 @@ DataTransfer::DataTransfer() : state(SpiState::ExchangingData), lastTransferTime
 
 void DataTransfer::Init() {
 	// Initialise transfer ready pin
-	pinMode(SamTfrReadyPin, PinMode::OUTPUT_LOW);
+	pinMode(LinuxTfrReadyPin, OUTPUT_LOW);
+
+	// Initialize SPI pins
+	ConfigurePin(g_APinDescription[APIN_SPI1_MOSI]);
+	ConfigurePin(g_APinDescription[APIN_SPI1_MISO]);
+	ConfigurePin(g_APinDescription[APIN_SPI1_SCK]);
+	ConfigurePin(g_APinDescription[APIN_SPI1_SS0]);
 
 	// Initialise SPI
 	spi_enable_clock(LINUX_SPI);
@@ -157,10 +174,10 @@ void DataTransfer::Init() {
 
 void DataTransfer::Diagnostics(MessageType mtype)
 {
-	reprap.GetPlatform().MessageF(mtype, "State: %d\n", (int)state);
+	reprap.GetPlatform().MessageF(mtype, "State: %d, failed transfers: %u\n", (int)state, failedTransfers);
 	reprap.GetPlatform().MessageF(mtype, "Last transfer: %" PRIu32 "ms ago\n", millis() - lastTransferTime);
-	reprap.GetPlatform().MessageF(mtype, "TX/RX pointers: %d/%d\n", (int)txPointer, (int)rxPointer);
-	reprap.GetPlatform().MessageF(mtype, "TX/RX responses: %" PRId32 "/%" PRId32 "\n", rxResponse, txResponse);
+	reprap.GetPlatform().MessageF(mtype, "RX/TX seq numbers: %d/%d\n", (int)rxHeader.sequenceNumber, (int)txHeader.sequenceNumber);
+	reprap.GetPlatform().MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
 }
 
 const PacketHeader *DataTransfer::ReadPacket()
@@ -272,20 +289,21 @@ void DataTransfer::ReadLockUnlockRequest(CodeChannel& channel)
 void DataTransfer::ExchangeHeader()
 {
 	state = SpiState::ExchangingHeader;
-	setup_spi(&rxHeader, sizeof(TransferHeader), &txHeader, sizeof(TransferHeader));
+	setup_spi(&rxHeader, &txHeader, sizeof(TransferHeader));
 }
 
 void DataTransfer::ExchangeResponse(uint32_t response)
 {
 	txResponse = response;
 	state = (state == SpiState::ExchangingHeader) ? SpiState::ExchangingHeaderResponse : SpiState::ExchangingDataResponse;
-	setup_spi(&rxResponse, sizeof(uint32_t), &txResponse, sizeof(uint32_t));
+	setup_spi(&rxResponse, &txResponse, sizeof(uint32_t));
 }
 
 void DataTransfer::ExchangeData()
 {
+	size_t bytesToExchange = max<size_t>(rxHeader.dataLength, txHeader.dataLength);
 	state = SpiState::ExchangingData;
-	setup_spi(rxBuffer, rxHeader.dataLength, txBuffer, txHeader.dataLength);
+	setup_spi(rxBuffer, txBuffer, bytesToExchange);
 }
 
 void DataTransfer::ResetTransfer(bool ownRequest)
@@ -294,12 +312,13 @@ void DataTransfer::ResetTransfer(bool ownRequest)
 	{
 		reprap.GetPlatform().Message(DebugMessage, ownRequest ? "Resetting transfer\n" : "Resetting transfer due to Linux request\n");
 	}
+	failedTransfers++;
 
 	if (ownRequest)
 	{
 		// Invalidate the data to send
 		txResponse = TransferResponse::BadResponse;
-		setup_spi(&rxResponse, sizeof(uint32_t), &txResponse, sizeof(uint32_t));
+		setup_spi(&rxResponse, &txResponse, sizeof(uint32_t));
 		state = SpiState::Resetting;
 	}
 	else
@@ -309,7 +328,7 @@ void DataTransfer::ResetTransfer(bool ownRequest)
 	}
 }
 
-volatile bool DataTransfer::IsReady()
+bool DataTransfer::IsReady()
 {
 	if (dataReceived)
 	{

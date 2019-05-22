@@ -293,9 +293,15 @@ void LinuxInterface::Spin()
 
 		// Start the next transfer
 		transfer->StartNextTransfer();
+		wasConnected = true;
 	}
 	else if (wasConnected && !transfer->IsConnected())
 	{
+		if (reprap.Debug(moduleLinuxInterface))
+		{
+			reprap.GetPlatform().Message(DebugMessage, "Lost connection to Linux\n");
+		}
+
 		wasConnected = false;
 		numDisconnects++;
 

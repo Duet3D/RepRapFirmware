@@ -190,7 +190,7 @@ constexpr uint32_t IAP_FLASH_START = 0x004E0000;
 constexpr uint32_t IAP_FLASH_END = 0x004FFFFF;
 
 // Duet pin numbers for the Linux interface
-constexpr Pin SamTfrReadyPin = PORTE_PIN(2);
+constexpr Pin LinuxTfrReadyPin = PORTE_PIN(2);
 Spi * const LinuxSpi = SPI1;
 
 // Timer allocation
