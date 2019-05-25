@@ -385,7 +385,7 @@ void Tool::DefineMix(const float m[])
 }
 
 // Write the tool's settings to file returning true if successful
-bool Tool::WriteSettings(FileStore *f) const
+bool Tool::WriteSettings(FileStore *f, bool isCurrent) const
 {
 	char bufSpace[50];
 	StringRef buf(bufSpace, ARRAY_SIZE(bufSpace));
@@ -414,8 +414,8 @@ bool Tool::WriteSettings(FileStore *f) const
 
 	if (ok && state != ToolState::off)
 	{
-		// Select tool
-		buf.printf("T%d P0\n", myNumber);
+		// Select tool. Don't run tool change files unless it is the current tool, and in that case don't run the tfree file.
+		buf.printf("T%d P%u\n", myNumber, (isCurrent) ? 6 : 0);
 		ok = f->Write(buf.c_str());
 	}
 
