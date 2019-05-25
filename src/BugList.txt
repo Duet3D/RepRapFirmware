@@ -147,6 +147,9 @@ To do/investigate before RC3:
 - [done, ok] M563 P# with no other parameters: better response formatting when no heaters or no drives
 - [done] Added extra diagnostics for when a filename is too long
 - [done, test with over-long filenames] Added missing newline at end of some error messages
+- [done] in resurrect.g, for tool changer, select tool after running reasurrect-prologue and run tpre and tpost files when selecting current tool
+- [done] In resurrect.g, set up fan speeds after the tool is selected so that the mapped fan speed is correct
+
 - [no fault] Investigate https://forum.duet3d.com/post/94668 (filament load macro using stall detect not working)
 
 Planned for 3.0:

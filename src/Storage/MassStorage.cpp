@@ -157,6 +157,10 @@ void MassStorage::CloseAllFiles()
 			}
 		}
 	}
+	else
+	{
+		outbuf.Clear();
+	}
 	if (!hadError)
 	{
 		hadError = outbuf.cat(fileName);

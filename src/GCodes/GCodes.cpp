@@ -2123,7 +2123,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 		}
 		else
 		{
-			String<200> bufferSpace;
+			String<FormatStringLength> bufferSpace;
 			const StringRef buf = bufferSpace.GetRef();
 
 			// Write the header comment
@@ -2138,28 +2138,24 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 			buf.cat("\nG21\n");												// set units to mm because we will be writing positions in mm
 			bool ok = f->Write(buf.c_str())
 					&& reprap.GetHeat().WriteBedAndChamberTempSettings(f)	// turn on bed and chamber heaters
-					&& reprap.WriteToolSettings(f)							// set tool temperatures, tool mix ratios etc.
 					&& reprap.GetMove().WriteResumeSettings(f);				// load grid, if we are using one
 			if (ok)
 			{
 				// Write a G92 command to say where the head is. This is useful if we can't Z-home the printer with a print on the bed and the Z steps/mm is high.
-				buf.copy("G92");
+				// The paused coordinates include any tool offsets and baby step offsets, so remove those.
+				// Also ensure that no tool is selected, in case config.g selects one and it has an offset.
+				buf.copy("T-1 P0\nG92");
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
-					buf.catf(" %c%.3f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
+					const float totalOffset = currentBabyStepOffsets[axis] - GetCurrentToolOffset(axis);
+					buf.catf(" %c%.3f", axisLetters[axis], (double)(pauseRestorePoint.moveCoords[axis] - totalOffset));
 				}
 				buf.cat('\n');
 				ok = f->Write(buf.c_str());
 			}
 			if (ok)
 			{
-				buf.printf("M98 P\"%s\"\n", RESUME_PROLOGUE_G);					// call the prologue - must contain at least M116
-				ok = f->Write(buf.c_str())
-					&& platform.WriteFanSettings(f);						// set the speeds of non-thermostatic fans
-			}
-			if (ok)
-			{
-				buf.printf("M106 S%.2f\n", (double)lastDefaultFanSpeed);
+				buf.printf("M98 P\"%s\"\n", RESUME_PROLOGUE_G);				// call the prologue
 				ok = f->Write(buf.c_str());
 			}
 			if (ok)
@@ -2170,8 +2166,42 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 					buf.catf(" %c%.3f", axisLetters[axis], (double)GetTotalBabyStepOffset(axis));
 				}
 				buf.cat(" R0\n");
-				ok = f->Write(buf.c_str());								// write baby stepping offsets
+				ok = f->Write(buf.c_str());									// write baby stepping offsets
 			}
+
+#if SUPPORT_WORKPLACE_COORDINATES
+			// Restore the coordinate offsets of all workplaces
+			if (ok)
+			{
+				ok = WriteWorkplaceCoordinates(f);
+			}
+
+			if (ok)
+			{
+				// Switch to the correct workplace. 'currentCoordinateSystem' is 0-based.
+				if (currentCoordinateSystem <= 5)
+				{
+					buf.printf("G%u\n", 54 + currentCoordinateSystem);
+				}
+				else
+				{
+					buf.printf("G59.%u\n", currentCoordinateSystem - 5);
+				}
+				ok = f->Write(buf.c_str());
+			}
+#else
+			if (ok)
+			{
+				buf.copy("M206");
+				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+				{
+					buf.catf(" %c%.3f", axisLetters[axis], (double)-axisOffsets[axis]);
+				}
+				buf.cat('\n');
+				ok = f->Write(buf.c_str());
+			}
+#endif
+
 			if (ok && fileGCode->OriginalMachineState().volumetricExtrusion)
 			{
 				buf.copy("M200 ");
@@ -2182,17 +2212,27 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 					c = ':';
 				}
 				buf.cat('\n');
-				ok = f->Write(buf.c_str());								// write volumetric extrusion factors
+				ok = f->Write(buf.c_str());									// write volumetric extrusion factors
 			}
 			if (ok)
 			{
-				buf.printf("G92 E%.5f\n%s\n", (double)virtualExtruderPosition, (fileGCode->OriginalMachineState().drivesRelative) ? "M83" : "M82");
-				ok = f->Write(buf.c_str());								// write virtual extruder position and absolute/relative extrusion flag
+				ok = reprap.WriteToolSettings(f);							// set tool temperatures, tool mix ratios etc.
+			}
+			if (ok)
+			{
+				buf.printf("M106 S%.2f\n", (double)lastDefaultFanSpeed);
+				ok = f->Write(buf.c_str())									// set the speed of the print fan after we have selected the tool
+					&& platform.WriteFanSettings(f);						// set the speeds of all non-thermostatic fans after setting the default fan speed
+			}
+			if (ok)
+			{
+				buf.printf("M116\nG92 E%.5f\n%s\n", (double)virtualExtruderPosition, (fileGCode->OriginalMachineState().drivesRelative) ? "M83" : "M82");
+				ok = f->Write(buf.c_str());									// write virtual extruder position and absolute/relative extrusion flag
 			}
 			if (ok)
 			{
 				buf.printf("M23 \"%s\"\nM26 S%" PRIu32 " P%.3f\n", printingFilename, pauseRestorePoint.filePos, (double)pauseRestorePoint.proportionDone);
-				ok = f->Write(buf.c_str());								// write filename and file position
+				ok = f->Write(buf.c_str());									// write filename and file position
 			}
 			if (ok)
 			{
@@ -2230,46 +2270,13 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 				}
 #endif
 				buf.cat("\n");
-				ok = f->Write(buf.c_str());								// restore feed rate and output bits or laser power
+				ok = f->Write(buf.c_str());									// restore feed rate and output bits or laser power
 			}
-
-#if SUPPORT_WORKPLACE_COORDINATES
-			// Restore the coordinate offsets of all workplaces
-			if (ok)
-			{
-				ok = WriteWorkplaceCoordinates(f);
-			}
-
-			if (ok)
-			{
-				// Switch to the correct workplace. 'currentCoordinateSystem' is 0-based.
-				if (currentCoordinateSystem <= 5)
-				{
-					buf.printf("G%u\n", 54 + currentCoordinateSystem);
-				}
-				else
-				{
-					buf.printf("G59.%u\n", currentCoordinateSystem - 5);
-				}
-				ok = f->Write(buf.c_str());
-			}
-#else
-			if (ok)
-			{
-				buf.copy("M206");
-				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-				{
-					buf.catf(" %c%.3f", axisLetters[axis], (double)-axisOffsets[axis]);
-				}
-				buf.cat('\n');
-				ok = f->Write(buf.c_str());
-			}
-#endif
 
 			if (ok)
 			{
 				buf.printf("%s\nM24\n", (fileGCode->OriginalMachineState().usingInches) ? "G20" : "G21");
-				ok = f->Write(buf.c_str());								// restore inches/mm and resume printing
+				ok = f->Write(buf.c_str());									// restore inches/mm and resume printing
 			}
 			if (!f->Close())
 			{

@@ -2294,14 +2294,14 @@ bool RepRap::WriteToolSettings(FileStore *f) const
 	{
 		if (t != currentTool)
 		{
-			ok = t->WriteSettings(f);
+			ok = t->WriteSettings(f, false);
 		}
 	}
 
 	// Finally write the setting of the active tool and the commands to select it
 	if (ok && currentTool != nullptr)
 	{
-		ok = currentTool->WriteSettings(f);
+		ok = currentTool->WriteSettings(f, true);
 	}
 	return ok;
 }
