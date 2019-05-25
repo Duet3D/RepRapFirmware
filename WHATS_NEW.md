@@ -1,6 +1,36 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.03RC3
+=================
+Upgrade notes:
+- Please be careful with using workplace coordinate offsets (G10 L2, G10 L20, G54-G59) because the code that handles them has undergone major changes, so it may contain new bugs. Also see the note on changed behaviour of G60 below.
+- See also the upgrade notes for version 2.03RC2 if you are not coming from that version
+
+Feature improvements/changed behaviour:
+- Restore points (created by G60 and created automatically at the start of a pause or a tool change) now have their coordinates stored independently of any workplace offsets. So if you create a restore point and then change the workplace offsets, when you go back to the restore point it will go back to the same machine position regardless of the change in workplace offsets.
+- In CoreNG, increment I2C reset count when resetting the I2C system
+- Recognise filament usage comment in Prusa slicer
+- G53 is now available even when workplace coordinates not supported in build (cancels tool offsets)
+- When using a mixing extruder, the feed rate is now scaled in proportion to total mix, for serial extruder drives etc.
+- Allow M203 max speeds lower than 1mm/sec
+- Enable laser in Duet085 build
+- M584 formatting improvement when a has no extruders
+- M563 P# formatting improvements when the tool has no heaters or no drives
+- Added extra diagnostics for when a filename is too long
+
+Bug fixes:
+- Independent leadscrew moves for true bed levelling didn't work when driver numbers >= MaxAxes were used to drive Z motors
+- Added missing newline at end of some error messages
+- M585 L parameter was not working
+- In resume.g a G1 R command went to the wrong coordinates if workplace coordinate offsets were being used
+- Homing files when workplace coordinate offsets were active cause other axes to move
+- Resurrect.g now works when workplace offsets are used, and it restores the current workplace # and all workplace offsets
+- In resurrect.g, the current tool is now selected after running resurrect-prologue, and its tpre and tpost files are run (for tool changer)
+- In resurrect.g, fan speeds are now set up after the tool is selected so that the mapped fan speed is correct
+- In resurrect.g, when setting the last known position with G92 prior to calling resurrect-prologue.g, allow for tool offsets
+- Babystepping could cause an incorrect Z coordinate to be set under some conditions
+
 Version 2.03RC2
 =================
 
