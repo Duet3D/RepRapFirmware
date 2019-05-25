@@ -123,22 +123,33 @@ Done in 2.03RC1:
 - [done, ok, port] Bug: was holding movement lock while waiting for bed or extruder to heat up, so unable to pause/cancel during heat up
 - [done, ok, port] Bug: fix crash when there were no selectable items in a menu
 - [done, ok, port] Only add 1 space after left-aligned text items with no explicit width
-- [done, ok] Mount SD cards automatically if they are not mounted and we are asked to list files on them, andf display any error messages
+- [done, ok] Mount SD cards automatically if they are not mounted and we are asked to list files on them from 12864 display, and display any error messages
 
-To port to v3-dev:
-GCodes2.cpp
-GCodes.cpp
-GCodeMachineState.h
-Configuration.h
-Display.h, .cpp
-Menu.cpp
-MenuItem.h, cpp
-
-Planned for 2.03:
+Done in 2.0RC2:
 - [done, community to test] I2C errors: recover from them
 - [done, ok] Separate task to keep DuetX endstop input state up to date
-- [ok] check: start.g should not be run when resurrecting a print
 
+To do/investigate before RC3:
+- [done] M584 formatting improvement when no extruders
+- [done] Probably issue with leadscrew move when driver numbers >= MaxAxes are used to drive Z motors
+- [done] In CoreNG, increment I2C reset count when resetting the I2C system
+- [done, ok] Recognise filament usage comment in Prusa slicer, https://forum.duet3d.com/post/95091
+- [done, test] M585 L parameter still not working
+- [done, test] In resume.g a G1 R command goes to the wrong coordinates. Save restore point in machine coordinates always? But we do need to take tool offsets into account.
+- [should be ok now, reproduce original problem, test] Homing files when workplace coordinates were active cause other axes to move, RL and https://forum.duet3d.com/topic/10480/new-firmware-2-03rc2-available/16
+- [should be ok now that restore points are in machine coordinates; test] Resurrect.g all coordinates need to be machine coordinates
+- [done, test] Resurrect.g restore workplace # and workplace offsets
+- [done] Probable error with babystepping: incorrect sign when doing tool offset inverse transform, so it restores an incorrect Z position
+- [done] G53 now available even when workplace coordinates not supported in build (cancels tool offsets)
+- [done, test] For E3D: scale feed rate in proportion to total mix, for serial extruder drives etc.
+- [done, test] Allow M203 max speeds lower than 1mm/sec, https://forum.duet3d.com/post/95049
+- [done] Enable laser in Duet085 build
+- [done, ok] M563 P# with no other parameters: better response formatting when no heaters or no drives
+- [done] Added extra diagnostics for when a filename is too long
+- [done, test with over-long filenames] Added missing newline at end of some error messages
+- [no fault] Investigate https://forum.duet3d.com/post/94668 (filament load macro using stall detect not working)
+
+Planned for 3.0:
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5
 - Filament monitors: disable if tool is not active/no commanded extrusion, or does it do that already?
 - [yes it already did] In simulation mode, does M109 implicity select a tool? https://forum.duet3d.com/topic/9595/simulation-error

@@ -752,7 +752,7 @@ void Move::SetXYBedProbePoint(size_t index, float x, float y)
 {
 	if (index >= MaxProbePoints)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Z probe point index out of range.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Z probe point index out of range\n");
 	}
 	else
 	{
@@ -764,7 +764,7 @@ void Move::SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wa
 {
 	if (index >= MaxProbePoints)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Z probe point Z index out of range.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Z probe point Z index out of range\n");
 	}
 	else
 	{

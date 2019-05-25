@@ -241,7 +241,7 @@ void HangprinterKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 }
 
 // Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
-uint32_t HangprinterKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
+AxesBitmap HangprinterKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 {
 	// If all of X, Y and Z have been specified then we know the positions of all 4 spool motors, otherwise we don't
 	const uint32_t xyzAxes = (1u << X_AXIS) | (1u << Y_AXIS) | (1u << Z_AXIS);

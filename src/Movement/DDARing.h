@@ -86,7 +86,6 @@ private:
 	volatile int32_t liveEndPoints[MaxTotalDrivers];							// The XYZ endpoints of the last completed move in motor coordinates
 
 	unsigned int numDdasInRing;
-	EndstopChecks endstopsToCheck;
 
 	uint32_t scheduledMoves;													// Move counters for the code queue
 	volatile uint32_t completedMoves;											// This one is modified by an ISR, hence volatile

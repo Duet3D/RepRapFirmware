@@ -712,7 +712,7 @@ void RepRap::StandbyTool(int toolNumber, bool simulating)
 	}
 	else
 	{
-		platform->MessageF(ErrorMessage, "Attempt to standby a non-existent tool: %d.\n", toolNumber);
+		platform->MessageF(ErrorMessage, "Attempt to standby a non-existent tool: %d\n", toolNumber);
 	}
 }
 
@@ -865,12 +865,10 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 #else
 	response->cat("],\"xyz\":");
 #endif
-	const float * const userPos = gCodes->GetUserPosition();
 	ch = '[';
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
-		const float coord = userPos[axis];
-		response->catf("%c%.3f", ch, HideNan(coord));
+		response->catf("%c%.3f", ch, HideNan(gCodes->GetUserCoordinate(axis)));
 		ch = ',';
 	}
 
@@ -965,7 +963,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				response->EncodeString(mbox.message, false);
 				response->cat(",\"title\":");
 				response->EncodeString(mbox.title, false);
-				response->catf(",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%" PRIu32 "}", mbox.mode, mbox.seq, (double)timeLeft, mbox.controls);
+				response->catf(",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%u}", mbox.mode, mbox.seq, (double)timeLeft, mbox.controls);
 			}
 			response->cat('}');
 		}
@@ -1695,13 +1693,11 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 	// First the user coordinates
 	response->catf(",\"pos\":");			// announce the user position
-	const float * const userPos = gCodes->GetUserPosition();
 	ch = '[';
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
 		// Coordinates may be NaNs, for example when delta or SCARA homing fails. Replace any NaNs or infinities by 9999.9 to prevent JSON parsing errors.
-		const float coord = userPos[axis];
-		response->catf("%c%.3f", ch, HideNan(coord));
+		response->catf("%c%.3f", ch, HideNan(gCodes->GetUserCoordinate(axis)));
 		ch = ',';
 	}
 
@@ -1812,7 +1808,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 		if (mbox.active)
 		{
-			response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%" PRIu32 "",
+			response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%u",
 							mbox.mode, mbox.seq, (double)timeLeft, mbox.controls);
 			response->cat(",\"msgBox.msg\":");
 			response->EncodeString(mbox.message, false);

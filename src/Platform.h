@@ -995,7 +995,7 @@ inline float Platform::MaxFeedrate(size_t drive) const
 
 inline void Platform::SetMaxFeedrate(size_t drive, float value)
 {
-	maxFeedrates[drive] = max<float>(value, 1.0);		// don't allow zero or negative
+	maxFeedrates[drive] = max<float>(value, minimumMovementSpeed);	// don't allow zero or negative, but do allow small values
 }
 
 inline float Platform::GetInstantDv(size_t drive) const

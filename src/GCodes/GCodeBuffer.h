@@ -33,6 +33,7 @@ public:
 	int8_t GetCommandFraction() const { return commandFraction; }
 
 	float GetFValue() __attribute__((hot));				// Get a float after a key letter
+	float GetDistance();								// Get a distance or coordinate and convert it from inches to mm if necessary
 	int32_t GetIValue() __attribute__((hot));			// Get an integer after a key letter
 	uint32_t GetUIValue();								// Get an unsigned integer value
 	bool GetIPAddress(IPAddress& returnedIp);			// Get an IP address quad after a key letter
@@ -40,9 +41,9 @@ public:
 	bool GetUnprecedentedString(const StringRef& str);	// Get a string with no preceding key letter
 	bool GetQuotedString(const StringRef& str);			// Get and copy a quoted string
 	bool GetPossiblyQuotedString(const StringRef& str);	// Get and copy a string which may or may not be quoted
-	const void GetFloatArray(float arr[], size_t& length, bool doPad) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
-	const void GetIntArray(int32_t arr[], size_t& length, bool doPad);			// Get a :-separated list of ints after a key letter
-	const void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
+	void GetFloatArray(float arr[], size_t& length, bool doPad) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
+	void GetIntArray(int32_t arr[], size_t& length, bool doPad);		// Get a :-separated list of ints after a key letter
+	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
 
 	bool TryGetFValue(char c, float& val, bool& seen);
 	bool TryGetIValue(char c, int32_t& val, bool& seen);

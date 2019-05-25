@@ -483,9 +483,15 @@ float GCodeBuffer::GetFValue()
 	return 0.0;
 }
 
+// Get a distance or coordinate and convert it from inches to mm if necessary
+float GCodeBuffer::GetDistance()
+{
+	return ConvertDistance(GetFValue());
+}
+
 // Get a colon-separated list of floats after a key letter
 // If doPad is true then we allow just one element to be given, in which case we fill all elements with that value
-const void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
+void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{
@@ -533,7 +539,7 @@ const void GCodeBuffer::GetFloatArray(float arr[], size_t& returnedLength, bool 
 }
 
 // Get a :-separated list of ints after a key letter
-const void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad)
+void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{
@@ -580,7 +586,7 @@ const void GCodeBuffer::GetIntArray(int32_t arr[], size_t& returnedLength, bool 
 }
 
 // Get a :-separated list of unsigned ints after a key letter
-const void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool doPad)
+void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{

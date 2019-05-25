@@ -269,8 +269,7 @@ void PID::Spin()
 								SetHeater(0.0);					// do this here just to be sure
 								mode = HeaterMode::fault;
 								reprap.GetGCodes().HandleHeaterFault(heater);
-								platform.MessageF(ErrorMessage,
-											"Heating fault on heater %d, temperature rising much more slowly than the expected %.1f" DEGREE_SYMBOL "C/sec\n",
+								platform.MessageF(ErrorMessage, "Heating fault on heater %d, temperature rising much more slowly than the expected %.1f" DEGREE_SYMBOL "C/sec\n",
 											heater, (double)expectedRate);
 								reprap.FlagTemperatureFault(heater);
 							}

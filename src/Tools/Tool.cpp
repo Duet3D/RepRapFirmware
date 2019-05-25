@@ -166,24 +166,38 @@ void Tool::Print(const StringRef& reply) const
 		reply.catf("name: %s; ", name);
 	}
 
-	reply.cat("drives:");
-	char sep = ' ';
-	for (size_t drive = 0; drive < driveCount; drive++)
+	if (driveCount == 0)
 	{
-		reply.catf("%c%d", sep, drives[drive]);
-		sep = ',';
+		reply.cat("no drives");
+	}
+	else
+	{
+		reply.cat("drives:");
+		char sep = ' ';
+		for (size_t drive = 0; drive < driveCount; drive++)
+		{
+			reply.catf("%c%d", sep, drives[drive]);
+			sep = ',';
+		}
 	}
 
-	reply.cat("; heaters (active/standby temps):");
-	sep = ' ';
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	if (heaterCount == 0)
 	{
-		reply.catf("%c%d (%.1f/%.1f)", sep, heaters[heater], (double)activeTemperatures[heater], (double)standbyTemperatures[heater]);
-		sep = ',';
+		reply.cat("; no heaters");
+	}
+	else
+	{
+		reply.cat("; heaters (active/standby temps):");
+		char sep = ' ';
+		for (size_t heater = 0; heater < heaterCount; heater++)
+		{
+			reply.catf("%c%d (%.1f/%.1f)", sep, heaters[heater], (double)activeTemperatures[heater], (double)standbyTemperatures[heater]);
+			sep = ',';
+		}
 	}
 
 	reply.cat("; xmap:");
-	sep = ' ';
+	char sep = ' ';
 	for (size_t xi = 0; xi < MaxAxes; ++xi)
 	{
 		if ((xMapping & (1u << xi)) != 0)

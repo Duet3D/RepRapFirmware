@@ -305,7 +305,7 @@ int FileStore::Read(char* extBuf, size_t nBytes)
 			FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
 			if (readStatus != FR_OK)
 			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "Cannot read file, error code %d.\n", (int)readStatus);
+				reprap.GetPlatform().MessageF(ErrorMessage, "Cannot read file, error code %d\n", (int)readStatus);
 				return -1;
 			}
 			return (int)bytes_read;

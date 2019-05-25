@@ -22,6 +22,7 @@ constexpr size_t NumFirmwareUpdateModules = 1;
 #define SUPPORT_ROLAND		0					// set nonzero to support Roland mill
 #define SUPPORT_SCANNER		0					// set nonzero to support FreeLSS scanners
 #define SUPPORT_DHT_SENSOR	0					// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_LASER		1					// set nonzero to support laser cutters
 
 // The physical capabilities of the machine
 constexpr size_t NumDirectDrivers = 9;

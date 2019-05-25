@@ -80,8 +80,8 @@ public:
 	Tool* GetTool(int toolNumber) const;
 	Tool* GetCurrentOrDefaultTool() const;
 	const Tool* GetFirstTool() const { return toolList; }				// Return the lowest-numbered tool
-	uint32_t GetCurrentXAxes() const;									// Get the current axes used as X axes
-	uint32_t GetCurrentYAxes() const;									// Get the current axes used as Y axes
+	AxesBitmap GetCurrentXAxes() const;									// Get the current axes used as X axes
+	AxesBitmap GetCurrentYAxes() const;									// Get the current axes used as Y axes
 	bool IsHeaterAssignedToTool(int8_t heater) const;
 	unsigned int GetNumberOfContiguousTools() const;
 

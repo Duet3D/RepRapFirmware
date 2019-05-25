@@ -286,27 +286,23 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		DoFileMacro(gb, BED_EQUATION_G, true);	// Try to execute bed.g
 		break;
 
-#if SUPPORT_WORKPLACE_COORDINATES
 	case 53:	// Temporarily use machine coordinates
 		gb.MachineState().g53Active = true;
 		break;
 
+#if SUPPORT_WORKPLACE_COORDINATES
 	case 54:	// Switch to coordinate system 1
 	case 55:	// Switch to coordinate system 2
 	case 56:	// Switch to coordinate system 3
 	case 57:	// Switch to coordinate system 4
 	case 58:	// Switch to coordinate system 5
 	case 59:	// Switch to coordinate system 6,7,8,9
-		if (!LockMovementAndWaitForStandstill(gb))
-		{
-			return false;
-		}
 		{
 			unsigned int cs = code - 54;
 			if (code == 59)
 			{
 				const int8_t fraction = gb.GetCommandFraction();
-				if (fraction >= 0)
+				if (fraction > 0)
 				{
 					cs += (unsigned int)fraction;
 				}
@@ -314,9 +310,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 			if (cs < NumCoordinateSystems)
 			{
 				currentCoordinateSystem = cs;											// this is the zero-base coordinate system number
-				gb.MachineState().g53Active = false;
-				gb.MachineState().runningSystemMacro = false;
-				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates
+				gb.MachineState().g53Active = false;									// cancel any active G53
 			}
 			else
 			{
@@ -1206,7 +1200,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			String<MaxFilenameLength> filename;
 			gb.GetPossiblyQuotedString(filename.GetRef());
-			DoFileMacro(gb, filename.c_str(), true, 98);
+			DoFileMacro(gb, filename.c_str(), true, code);
 		}
 		break;
 
@@ -1880,7 +1874,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					platform.SetAcceleration(axis, gb.ConvertDistance(gb.GetFValue()));
+					platform.SetAcceleration(axis, gb.GetDistance());
 					seen = true;
 				}
 			}
@@ -1918,12 +1912,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 203: // Set/print minimum/maximum feedrates
 		{
 			bool seen = false;
+
+			// Do the minimum first, because we constrain the maximum rates to be no lower than it
+			if (gb.Seen('I'))
+			{
+				seen = true;
+				platform.SetMinMovementSpeed(gb.GetDistance() * SecondsToMinutes);
+			}
+
 			for (size_t axis = 0; axis < numTotalAxes; ++axis)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
 					seen = true;
-					platform.SetMaxFeedrate(axis, gb.ConvertDistance(gb.GetFValue()) * SecondsToMinutes);
+					platform.SetMaxFeedrate(axis, gb.GetDistance() * SecondsToMinutes);
 				}
 			}
 
@@ -1937,12 +1939,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					platform.SetMaxFeedrate(numTotalAxes + e, gb.ConvertDistance(eVals[e]) * SecondsToMinutes);
 				}
-			}
-
-			if (gb.Seen('I'))
-			{
-				seen = true;
-				platform.SetMinMovementSpeed(gb.ConvertDistance(gb.GetFValue()) * SecondsToMinutes);
 			}
 
 			if (!seen)
@@ -3235,7 +3231,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					platform.SetInstantDv(axis, gb.ConvertDistance(gb.GetFValue()) * multiplier1);
+					platform.SetInstantDv(axis, gb.GetDistance() * multiplier1);
 					seen = true;
 				}
 			}
