@@ -414,20 +414,23 @@ void Platform::Init()
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
 		driverState[drive] = DriverStatus::disabled;
-		driveDriverBits[drive + MaxTotalDrivers] = CalcDriverBitmap(drive);
+		driveDriverBits[drive] = driveDriverBits[drive + MaxTotalDrivers] = CalcDriverBitmap(drive);
 
 		// Map axes and extruders straight through
 		if (drive < MinAxes)
 		{
-			const size_t axis =
 #ifdef PCCB
-				(drive == 0) ? Z_AXIS : (drive == 1) ? X_AXIS : Y_AXIS;		// on PCCB we map Z X Y to drivers 0 1 2
-#else
-				drive;											// map axes straight through to drives
-#endif
-			driveDriverBits[axis] = CalcDriverBitmap(drive);	// this returns 0 for remote drivers
+			const size_t axis = (drive == 0) ? Z_AXIS
+								: (drive == 1) ? X_AXIS
+									: Y_AXIS;					// on PCCB we map Z X Y to drivers 0 1 2
+			driveDriverBits[axis] = CalcDriverBitmap(drive);	// overwrite the default value set up earlier
 			axisDrivers[axis].numDrivers = 1;
 			axisDrivers[axis].driverNumbers[0] = (uint8_t)drive;
+#else
+			const size_t axis = drive;							// map axes straight through to drives
+			axisDrivers[axis].numDrivers = 1;
+			axisDrivers[axis].driverNumbers[0] = (uint8_t)drive;
+#endif
 		}
 
 		if (drive < NumDirectDrivers)
