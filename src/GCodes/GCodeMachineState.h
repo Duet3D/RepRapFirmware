@@ -122,8 +122,6 @@ public:
 	static GCodeMachineState *Allocate()
 	post(!result.IsLive(); result.state == GCodeState::normal);
 
-	bool UsingMachineCoordinates() const { return g53Active || runningSystemMacro; }
-
 	// Copy values that may have been altered by config.g into this state record
 	void CopyStateFrom(const GCodeMachineState& other)
 	{

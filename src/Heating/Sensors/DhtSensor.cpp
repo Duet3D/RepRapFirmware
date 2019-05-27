@@ -239,7 +239,7 @@ void DhtSensorHardwareInterface::TakeReading()
 
 // Code executed by the DHT sensor task.
 // This is run at the same priority as the Heat task, so it must not sit in any spin loops.
-[[noreturn]] void DhtSensorHardwareInterface::SensorTask()
+/*static*/ [[noreturn]] void DhtSensorHardwareInterface::SensorTask()
 {
 	for (;;)
 	{

@@ -37,14 +37,6 @@ Licence: GPL
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
 
-// Type for specifying which endstops we want to check
-typedef AxesBitmap EndstopChecks;						// must be large enough to hold a bitmap of drive numbers or ZProbeActive
-const EndstopChecks ZProbeActive = 1 << 31;				// must be distinct from 1 << (any drive number)
-const EndstopChecks HomeAxes = 1 << 30;					// must be distinct from 1 << (any drive number)
-const EndstopChecks LogProbeChanges = 1 << 29;			// must be distinct from 1 << (any drive number)
-const EndstopChecks UseSpecialEndstop = 1 << 28;		// must be distinct from 1 << (any drive number)
-const EndstopChecks ActiveLowEndstop = 1 << 27;			// must be distinct from 1 << (any drive number)
-
 typedef uint32_t TriggerInputsBitmap;					// Bitmap of input pins that a single trigger number responds to
 typedef uint32_t TriggerNumbersBitmap;					// Bitmap of trigger numbers
 static_assert(MaxTriggers <= sizeof(TriggerNumbersBitmap) * CHAR_BIT, "need larger TriggerNumbersBitmap type");
@@ -148,7 +140,7 @@ public:
 	float GetTotalRawExtrusion() const { return rawExtruderTotal; }		// Get the total extrusion since start of print, all drives
 	float GetTotalBabyStepOffset(size_t axis) const
 		pre(axis < maxAxes);
-	const float *GetUserPosition() const { return currentUserPosition; } // Return the current user position
+	float GetUserCoordinate(size_t axis) const;							// Get the current user coordinate in the current workspace coordinate system
 
 #if HAS_NETWORKING
 	NetworkGCodeInput *GetHTTPInput() const { return httpInput; }
@@ -280,7 +272,7 @@ private:
 	GCodeResult SavePosition(GCodeBuffer& gb,const  StringRef& reply);			// Deal with G60
 	GCodeResult ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply);		// Deal with M569
 
-	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb);					// Set up the extrusion of a move
+	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove);	// Set up the extrusion of a move
 
 	bool Push(GCodeBuffer& gb);													// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb);													// Pop feedrate etc
@@ -313,9 +305,11 @@ private:
 
 	void SetMachinePosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation = true); // Set the current position to be this
 	void UpdateCurrentUserPosition();											// Get the current position from the Move class
-	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = 0, bool applyWorkplaceOffsets = true);
+	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = 0);
 																				// Convert user coordinates to head reference point coordinates
 	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]);	// Convert head reference point coordinates to user coordinates
+	float GetCurrentToolOffset(size_t axis) const;								// Get an axis offset of the current tool
+
 	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);					// Retract or un-retract filaments
 	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply);			// Load the specified filament into a tool
 	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply);		// Unload the current filament from a tool
@@ -376,6 +370,7 @@ private:
 #endif
 	Pwm_t ConvertLaserPwm(float reqVal) const;
 
+	// This function is called by other functions to account correctly for workplace coordinates, depending on whether the build configuration supports them.
 	inline float GetWorkplaceOffset(size_t axis) const
 	{
 #if SUPPORT_WORKPLACE_COORDINATES
@@ -432,7 +427,10 @@ private:
 	char *powerFailScript;						// the commands run when there is a power failure
 #endif
 
-	float currentUserPosition[MaxAxes];			// The current position of the axes as commanded by the input gcode, before accounting for tool offset and Z hop
+	// The current user position now holds the requested user position after applying workplace coordinate offsets.
+	// So we must subtract the workplace coordinate offsets when we want to display them.
+	// We have chosen this approach because it allows us to switch workplace coordinates systems or turn off applying workplace offsets without having to update currentUserPosition.
+	float currentUserPosition[MaxAxes];			// The current position of the axes as commanded by the input gcode, after accounting for workplace offset, before accounting for tool offset and Z hop
 	float currentZHop;							// The amount of Z hop that is currently applied
 	float lastPrintingMoveHeight;				// the Z coordinate in the last printing move, or a negative value if we don't know it
 

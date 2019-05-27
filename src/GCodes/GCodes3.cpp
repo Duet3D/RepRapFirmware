@@ -75,7 +75,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 	// Handle any E parameter in the G92 command
 	if (gb.Seen(extrudeLetter))
 	{
-		virtualExtruderPosition = gb.ConvertDistance(gb.GetFValue());
+		virtualExtruderPosition = gb.GetDistance();
 	}
 
 	if (axesIncluded != 0)
@@ -120,7 +120,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 #else
 			axisOffsets[axis]
 #endif
-						 = -gb.ConvertDistance(gb.GetFValue());
+						 = -gb.GetDistance();
 			seen = true;
 		}
 	}
@@ -156,7 +156,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 		{
 			if (gb.Seen(axisLetters[axis]))
 			{
-				const float coord = gb.ConvertDistance(gb.GetFValue());
+				const float coord = gb.GetDistance();
 				if (!seen)
 				{
 					if (!LockMovementAndWaitForStandstill(gb))						// make sure the user coordinates are stable and up to date
@@ -171,11 +171,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 			}
 		}
 
-		if (seen)
-		{
-			ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates in case we are using the workspace we just changed
-		}
-		else
+		if (!seen)
 		{
 			reply.printf("Origin of workplace %" PRIu32 ":", cs);
 			for (size_t axis = 0; axis < numVisibleAxes; axis++)
@@ -189,7 +185,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 	return GCodeResult::badOrMissingParameter;
 }
 
-// Save any modified workplace coordinate offsets to file returning true if successful. Used by M500.
+// Save all the workplace coordinate offsets to file returning true if successful. Used by M500 and by SaveResumeInfo.
 bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const
 {
 	for (size_t cs = 0; cs < NumCoordinateSystems; ++cs)
@@ -688,7 +684,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			// Deal with feed rate
 			if (gb.Seen(feedrateLetter))
 			{
-				const float rate = gb.ConvertDistance(gb.GetFValue());
+				const float rate = gb.GetDistance();
 				gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
 			}
 			moveBuffer.feedRate = gb.MachineState().feedRate;

@@ -125,77 +125,38 @@ Done in 2.03RC1:
 - [done, port to v3] increase number of output buffers to 24
 - [done, port to v3] inches/mm now handled in resurrect.g
 - [done, ok, port] Bug: was holding movement lock while waiting for bed or extruder to heat up, so unable to pause/cancel during heat up
+- [done, ok, port] Bug: fix crash when there were no selectable items in a menu
+- [done, ok, port] Only add 1 space after left-aligned text items with no explicit width
+- [done, ok] Mount SD cards automatically if they are not mounted and we are asked to list files on them from 12864 display, and display any error messages
 
-Done in 2.03RC2:
+Done in 2.0RC2:
 - [done, community to test] I2C errors: recover from them
 - [done, ok] Separate task to keep DuetX endstop input state up to date
-- [done, ok] Duet06/085 PWM ports not working properly
-- [ok] check: start.g should not be run when resurrecting a print
 
-To port to v3-dev:
-GCodes2.cpp
-GCodes.cpp
-GCodeMachineState.h
-Configuration.h
-Display.h, .cpp
-Menu.cpp
-MenuItem.h, cpp
+To do/investigate before RC3:
+- [done] M584 formatting improvement when no extruders
+- [done] Probably issue with leadscrew move when driver numbers >= MaxAxes are used to drive Z motors
+- [done] In CoreNG, increment I2C reset count when resetting the I2C system
+- [done, ok] Recognise filament usage comment in Prusa slicer, https://forum.duet3d.com/post/95091
+- [done, test] M585 L parameter still not working
+- [done, test] In resume.g a G1 R command goes to the wrong coordinates. Save restore point in machine coordinates always? But we do need to take tool offsets into account.
+- [should be ok now, reproduce original problem, test] Homing files when workplace coordinates were active cause other axes to move, RL and https://forum.duet3d.com/topic/10480/new-firmware-2-03rc2-available/16
+- [should be ok now that restore points are in machine coordinates; test] Resurrect.g all coordinates need to be machine coordinates
+- [done, test] Resurrect.g restore workplace # and workplace offsets
+- [done] Probable error with babystepping: incorrect sign when doing tool offset inverse transform, so it restores an incorrect Z position
+- [done] G53 now available even when workplace coordinates not supported in build (cancels tool offsets)
+- [done, test] For E3D: scale feed rate in proportion to total mix, for serial extruder drives etc.
+- [done, test] Allow M203 max speeds lower than 1mm/sec, https://forum.duet3d.com/post/95049
+- [done] Enable laser in Duet085 build
+- [done, ok] M563 P# with no other parameters: better response formatting when no heaters or no drives
+- [done] Added extra diagnostics for when a filename is too long
+- [done, test with over-long filenames] Added missing newline at end of some error messages
+- [done] in resurrect.g, for tool changer, select tool after running reasurrect-prologue and run tpre and tpost files when selecting current tool
+- [done] In resurrect.g, set up fan speeds after the tool is selected so that the mapped fan speed is correct
+
+- [no fault] Investigate https://forum.duet3d.com/post/94668 (filament load macro using stall detect not working)
 
 Planned for 3.0:
-No-longer-supported and changed parameters:
-- M42 and M208 I not supported, and P is GPIO pin#
-- M106 A, I, F
-- M307 F, I2 and I3 (I3 == I1). M307 A-1 C-1 D-1 no longer frees the pin.
-- M558 C parameter must be pin name, added K parameter
-- M574 C parameter is pin name(s)
-- M577 ???
-- M581 ???
-- M585 C parameter replaced by P = probe number. L parameter removed.
-- M591 C parameter is pin name
-- G31 if using temperature coefficient (C parameter) must also specify heater using H parameter (or default 0?)
-- Duet WiFi/Ethernet: only heaters 0-2 and fans 0-2 are pre-allocated, and only drivers 3-4 default to being extruders
-
-- [done] Support multiple tachos, https://forum.duet3d.com/topic/9990/duet2-multiple-fan-rpm-sense-display
-- Allow at least 1 more heater on Duet Maestro
-- M558 probe types that imply ports: should they allocate the default port?
-
-Investigations
-- [no fault] Simple filament monitor P1 vs p2, https://forum.duet3d.com/topic/10201/filament-sensor-problem/5
-- [done, DWC bug, tell chrishamm] JSON (?), https://forum.duet3d.com/topic/8816/java-errors/5
-- I2C error recovery 
-- [investigated, awaiting feedback] Kulitorum segmented speed issue, https://forum.duet3d.com/topic/8789/max-actual-speed-at-high-path-detail/10
-- Low steps/mm and pressure advance, https://forum.duet3d.com/topic/8672/extruder-motors-skip-steps-with-pressure-advance-enabled/67
-- https://forum.duet3d.com/topic/9771/synchronize-prompts-between-dwc-and-paneldue/5
-- Retraction problem, https://forum.duet3d.com/post/79485
-- Icon generation, https://forum.duet3d.com/topic/8177/icon-generation/7
-- 2.03beta3 change in height setting, https://forum.duet3d.com/post/89780
-- [done, DWC bug, tell chrishamm] JSON (?), https://forum.duet3d.com/topic/8816/java-errors/5
-- [done, ok now] HaqXY
-- [await response] Tool offset not applied in tpost? https://forum.duet3d.com/topic/9002/tpost-g-does-not-apply-tool-offset
-- I2C error recovery 
-- [investigated, awaiting feedback] Kulitorum segmented speed issue, https://forum.duet3d.com/topic/8789/max-actual-speed-at-high-path-detail/10
-- Low steps/mm and pressure advance, https://forum.duet3d.com/topic/8672/extruder-motors-skip-steps-with-pressure-advance-enabled/67
-- Retraction problem, https://forum.duet3d.com/post/79485
-- Icon generation, https://forum.duet3d.com/topic/8177/icon-generation/7
-
-Planned for future
-- G28 "File not found" - which file?
-- Support M524?
-- Support M530,531,532?
-- Support M73?
-- Prevent a file being rewritten/created while it is open by something else, https://forum.duet3d.com/topic/10191/something-to-avoid-when-you-are-calibrating-tweaking/4
-- 12864 list files on 2nd SD card, https://forum.duet3d.com/topic/10046/duet-maestro-2nd-sd-slot
-- M291 should continue to update PanelDue even if from a macro invoked by PanelDue
-- [done but need to add GPIO pin map] M950 command to remap pins
-- Mcode to send a message over the network
-- [done, test] Laser velocity ramping
-- [done, test] Sort out M585 custom endstops E parameter. Perhaps remove endstops bitmap from DDA.
-- TMC5160 etc. need to use spreadCycle mode for homing moves?
-- [done, ok] New fan port mapping, including using unused Duex heaters as additional fans, https://forum.duet3d.com/topic/9799/address-more-than-9-fans-leds-w-duex5
-- Parse comments, use for layer number, object number/name
-- Filament change pause to run a different macro file
-
-- M291 doesn't pause a tool change if the message is blocking ie M291 S2, the message now appears at the correct time but the tool change carrys on anyway until completed, https://forum.duet3d.com/post/87973
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5
 - Filament monitors: disable if tool is not active/no commanded extrusion, or does it do that already?
 - [yes it already did] In simulation mode, does M109 implicity select a tool? https://forum.duet3d.com/topic/9595/simulation-error

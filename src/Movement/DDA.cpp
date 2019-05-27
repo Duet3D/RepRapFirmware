@@ -427,7 +427,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	}
 
 	// 5. Compute the maximum acceleration available
-	float normalisedDirectionVector[MaxTotalDrivers];		// used to hold a unit-length vector in the direction of motion
+	float normalisedDirectionVector[MaxTotalDrivers];			// used to hold a unit-length vector in the direction of motion
 	memcpy(normalisedDirectionVector, directionVector, sizeof(normalisedDirectionVector));
 	Absolute(normalisedDirectionVector, MaxTotalDrivers);
 	acceleration = beforePrepare.maxAcceleration = VectorBoxIntersection(normalisedDirectionVector, accelerations, MaxTotalDrivers);
@@ -1232,7 +1232,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 		// Handle all drivers
 		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 		Platform& platform = reprap.GetPlatform();
-		AxesBitmap additionalMotorsToEnable = 0, motorsEnabled = 0;
+		AxesBitmap additionalAxisMotorsToEnable = 0, axisMotorsEnabled = 0;
 		for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
 		{
 			if (flags.isLeadscrewAdjustmentMove)
@@ -1384,8 +1384,8 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 						}
 					}
 #endif
-					SetBit(motorsEnabled, drive);
-					additionalMotorsToEnable |= reprap.GetMove().GetKinematics().GetConnectedAxes(drive);
+					SetBit(axisMotorsEnabled, drive);
+					additionalAxisMotorsToEnable |= reprap.GetMove().GetKinematics().GetConnectedAxes(drive);
 				}
 			}
 			else
@@ -1459,12 +1459,12 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 		}
 
 		// On CoreXY and similar architectures, we also need to enable the motors controlling any connected axes
-		additionalMotorsToEnable &= ~motorsEnabled;
-		for (size_t drive = 0; additionalMotorsToEnable != 0; ++drive)
+		additionalAxisMotorsToEnable &= ~axisMotorsEnabled;
+		for (size_t drive = 0; additionalAxisMotorsToEnable != 0; ++drive)
 		{
-			if (IsBitSet(additionalMotorsToEnable, drive))
+			if (IsBitSet(additionalAxisMotorsToEnable, drive))
 			{
-				ClearBit(additionalMotorsToEnable, drive);
+				ClearBit(additionalAxisMotorsToEnable, drive);
 #if SUPPORT_CAN_EXPANSION
 				const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
 				for (size_t i = 0; i < config.numDrivers; ++i)

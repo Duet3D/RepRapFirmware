@@ -1352,7 +1352,7 @@ void Platform::Spin()
 			// Check for attempts to move motors when not powered
 			if (warnDriversNotPowered)
 			{
-				Message(ErrorMessage, "Attempt to move motors when VIN is not in range");
+				Message(ErrorMessage, "Attempt to move motors when VIN is not in range\n");
 				warnDriversNotPowered = false;
 				reported = true;
 			}

@@ -139,7 +139,7 @@ typedef double floatc_t;					// type of matrix element used for calibration
 typedef float floatc_t;						// type of matrix element used for calibration
 #endif
 
-typedef uint32_t AxesBitmap;				// Type of a bitmap representing a set of axes
+typedef uint16_t AxesBitmap;				// Type of a bitmap representing a set of axes
 typedef uint32_t DriversBitmap;				// Type of a bitmap representing a set of driver numbers
 typedef uint32_t FansBitmap;				// Type of a bitmap representing a set of fan numbers
 typedef uint32_t HeatersBitmap;				// Type of a bitmap representing a set of heater numbers

@@ -359,7 +359,7 @@ void FtpResponder::DoUpload()
 		if (!fileBeingUploaded.Write(buffer, len))
 		{
 			uploadError = true;
-			GetPlatform().Message(ErrorMessage, "Could not write upload data!\n");
+			GetPlatform().Message(ErrorMessage, "FTP: could not write upload data\n");
 			CancelUpload();
 
 			responderState = ResponderState::pasvTransferComplete;
