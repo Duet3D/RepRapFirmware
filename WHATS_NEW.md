@@ -194,7 +194,7 @@ New features/changed behaviour:
 - M585 command L parameter for inverting probe logic level is supported (thanks chrishamm)
 - The M408 S2 and http status responses now include the bed standby temperature (thanks gtjoseph)
 - The M669 parameters to define SCARA kinematics now include an R (minimum radius) parameter, to handle machines for which the minimum available radius is sometimes higher than the radius when the distal axis is homed
-- G17 is implemented (it does nothing), and G17/G17 report an error
+- G17 is implemented (it does nothing), and G18/G19 report an error
 - The segment length used by G2/G3 now depends on both the radius and the speed of the move, not just the radius as in RRF 2.02. So small segment lengths are used when doing CNC milling at low speeds.
 - If a print is paused and then cancelled while the printer is still heating up, heating is cancelled
 - Added M122 P105 subfunction to display the sizes of various objects allocated by RRF
