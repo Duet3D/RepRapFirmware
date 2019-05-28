@@ -21,6 +21,10 @@ enum class GCodeState : uint8_t
 
 	probingToolOffset,
 
+	findCenterOfCavityMin,
+	findCenterOfCavityR,
+	findCenterOfCavityMax,
+
 	homing1,
 	homing2,
 

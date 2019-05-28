@@ -3787,6 +3787,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		result = platform.GetEndstops().ProgramZProbe(gb, reply);
 		break;
 
+	case 675:
+		result = FindCenterOfCavity(gb, reply);
+		break;
+
 	case 701: // Load filament
 		result = LoadFilament(gb, reply);
 		break;

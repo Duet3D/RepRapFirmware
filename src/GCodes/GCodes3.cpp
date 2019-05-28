@@ -708,6 +708,85 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 	return GCodeResult::ok;
 }
 
+GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, const bool towardsMin)
+{
+	if (reprap.GetCurrentTool() == nullptr)
+	{
+		reply.copy("No tool selected!");
+		return GCodeResult::error;
+	}
+
+	if (!LockMovementAndWaitForStandstill(gb))
+	{
+		return GCodeResult::notFinished;
+	}
+
+	// See whether we are using a Z probe or just endstops
+	unsigned int probeNumberToUse;
+	const bool useProbe = gb.Seen('P');
+	if (useProbe)
+	{
+		probeNumberToUse = gb.GetUIValue();
+		if (platform.GetEndstops().GetZProbe(probeNumberToUse) == nullptr)
+		{
+			reply.copy("Invalid probe number");
+			return GCodeResult::error;
+		}
+	}
+
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
+	{
+		if (gb.Seen(axisLetters[axis]))
+		{
+
+			// Prepare a move similar to G1 .. S3
+			moveBuffer.SetDefaults(numVisibleAxes);
+			moveBuffer.moveType = 3;
+			moveBuffer.canPauseAfter = false;
+
+			moveBuffer.coords[axis] = towardsMin ? platform.AxisMinimum(axis) : platform.AxisMaximum(axis);
+
+			// Deal with feed rate
+			if (gb.Seen(feedrateLetter))
+			{
+				const float rate = gb.GetDistance();
+				gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
+			}
+			else
+			{
+				reply.copy("No feed rate provided.");
+				return GCodeResult::badOrMissingParameter;
+			}
+			moveBuffer.feedRate = gb.MachineState().feedRate;
+
+			if (useProbe)
+			{
+				platform.GetEndstops().EnableZProbe(probeNumberToUse);
+			}
+			else
+			{
+				platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis), false);
+			}
+			moveBuffer.checkEndstops = true;
+
+			// Kick off new movement
+			NewMoveAvailable(1);
+
+			if (towardsMin)
+			{
+				gb.SetState(GCodeState::findCenterOfCavityMin);
+			}
+			else
+			{
+				gb.SetState(GCodeState::findCenterOfCavityMax);
+			}
+			// Only do one axis at a time
+			break;
+		}
+	}
+	return GCodeResult::ok;
+}
+
 // Deal with a M905
 GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply)
 {
