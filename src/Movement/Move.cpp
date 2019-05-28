@@ -290,27 +290,32 @@ void Move::Diagnostics(MessageType mtype)
 #endif
 
 	// Show the current probe position heights and type of bed compensation in use
-	p.Message(mtype, "Bed compensation in use: ");
+	String<StringLength40> bedCompString;
 	if (usingMesh)
 	{
-		p.Message(mtype, "mesh\n");
+		bedCompString.copy("mesh");
 	}
 	else if (probePoints.GetNumBedCompensationPoints() != 0)
 	{
-		p.MessageF(mtype, "%d point\n", probePoints.GetNumBedCompensationPoints());
+		bedCompString.printf("%d point", probePoints.GetNumBedCompensationPoints());
 	}
 	else
 	{
-		p.Message(mtype, "none\n");
+		bedCompString.copy("none");
 	}
+	p.MessageF(mtype, "Bed compensation in use: %s, comp offset %.3f\n", bedCompString.c_str(), (double)zShift);
 
-	p.Message(mtype, "Bed probe heights:");
-	// To keep the response short so that it doesn't get truncated when sending it via HTTP, we only show the first 5 bed probe points
-	for (size_t i = 0; i < 5; ++i)
+	// Only print the probe point heights if we are using old-style compensation
+	if (!usingMesh && probePoints.GetNumBedCompensationPoints() != 0)
 	{
-		p.MessageF(mtype, " %.3f", (double)probePoints.GetZHeight(i));
+		// To keep the response short so that it doesn't get truncated when sending it via HTTP, we only show the first 5 bed probe points
+		bedCompString.Clear();
+		for (size_t i = 0; i < 5; ++i)
+		{
+			bedCompString.catf(" %.3f", (double)probePoints.GetZHeight(i));
+		}
+		p.MessageF(mtype, "Bed probe heights:%s\n", bedCompString.c_str());
 	}
-	p.Message(mtype, "\n");
 
 #if DDA_LOG_PROBE_CHANGES
 	// Temporary code to print Z probe trigger positions

@@ -1231,7 +1231,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				if (!zProbeTriggered)
 				{
 					platform.Message(ErrorMessage, "Z probe was not triggered during probing move\n");
-					g30zHeightError = 0.0;
+					g30zHeightErrorSum = g30zHeightError = 0.0;
 					hadProbingError = true;
 				}
 				else
@@ -1265,7 +1265,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					moveBuffer.coords[Z_AXIS] = platform.GetZProbeStopHeight();
 					reprap.GetMove().SetNewPosition(moveBuffer.coords, false);
 					reprap.GetMove().SetZeroHeightError(moveBuffer.coords);
-					g30zHeightError = 0;										// there is no longer any height error from this probe
+					g30zHeightErrorSum = g30zHeightError = 0;					// there is no longer any height error from this probe
 					SetAxisIsHomed(Z_AXIS);										// this is only correct if the Z axis is Cartesian-like, but other architectures must be homed before probing anyway
 				}
 			}
@@ -1321,7 +1321,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 
 				// We no longer flag this as a probing error, instead we take the average and issue a warning
 				g30zHeightError = g30zHeightErrorSum/tapsDone;
-				if (params.tolerance > 0.0)			// zero or negative tolerance means always average all readings
+				if (params.tolerance > 0.0)			// zero or negative tolerance means always average all readings, so no warning message
 				{
 					platform.Message(WarningMessage, "Z probe readings not consistent\n");
 				}
