@@ -129,7 +129,7 @@ Done in 2.0RC2:
 - [done, community to test] I2C errors: recover from them
 - [done, ok] Separate task to keep DuetX endstop input state up to date
 
-To do/investigate before RC3:
+Done in 2.0 RC3:
 - [done] M584 formatting improvement when no extruders
 - [done] Probably issue with leadscrew move when driver numbers >= MaxAxes are used to drive Z motors
 - [done] In CoreNG, increment I2C reset count when resetting the I2C system
@@ -151,6 +151,11 @@ To do/investigate before RC3:
 - [done] In resurrect.g, set up fan speeds after the tool is selected so that the mapped fan speed is correct
 
 - [no fault] Investigate https://forum.duet3d.com/post/94668 (filament load macro using stall detect not working)
+
+For 2.03RC4:
+- Print Z shift in Move diagnostics
+- In Move diagnostics, only print bed probe heights if 3/4/5-point bed compensatoin is in use
+- Bug fix for Z shift if Z probe averaging mnode is being used
 
 Planned for 3.0:
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5
