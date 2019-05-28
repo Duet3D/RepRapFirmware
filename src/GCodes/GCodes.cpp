@@ -547,6 +547,75 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+	case GCodeState::findCenterOfCavityMin:
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			// We're trying to find the center of the cavity and we've moved all the way back until the corresponding
+			// endstop has been triggered. This means we can save the minimum position
+			SavePosition(findCenterOfCavityRestorePoint, gb);
+
+			// Move away from the endstop
+			const float rVal = gb.Seen('R') ? gb.GetFValue() : 5.0;
+			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+			{
+				if (gb.Seen(axisLetters[axis]))
+				{
+					for (size_t axs = 0; axs < numVisibleAxes; ++axs)
+					{
+						moveBuffer.coords[axs] = currentUserPosition[axs];
+					}
+					// Add R to the current position
+					moveBuffer.coords[axis] += rVal;
+
+					SetMoveBufferDefaults();
+					moveBuffer.feedRate = findCenterOfCavityRestorePoint.feedRate;
+					moveBuffer.canPauseAfter = false;
+					moveBuffer.hasExtrusion = false;
+
+					NewMoveAvailable(1);
+
+					break;
+				}
+			}
+			gb.SetState(GCodeState::findCenterOfCavityR);
+		}
+		break;
+
+	case GCodeState::findCenterOfCavityR:
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			// Kick off another probing move to the axis maximum
+			FindCenterOfCavity(gb, reply, false);
+		}
+		break;
+
+	case GCodeState::findCenterOfCavityMax:
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			// We get here when both the minimum and maximum values have been probed
+			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+			{
+				if (gb.Seen(axisLetters[axis]))
+				{
+					for (size_t axs = 0; axs < numVisibleAxes; ++axs)
+					{
+						moveBuffer.coords[axs] = findCenterOfCavityRestorePoint.moveCoords[axs];
+					}
+					moveBuffer.coords[axis] += (currentUserPosition[axis] - findCenterOfCavityRestorePoint.moveCoords[axis]) / 2;
+
+					SetMoveBufferDefaults();
+					moveBuffer.feedRate = findCenterOfCavityRestorePoint.feedRate;
+					moveBuffer.hasExtrusion = false;
+
+					gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
+					NewMoveAvailable(1);
+
+					break;
+				}
+			}
+		}
+		break;
+
 	case GCodeState::homing1:
 		if (toBeHomed == 0)
 		{
