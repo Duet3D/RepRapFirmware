@@ -870,34 +870,17 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		gb.SetState(GCodeState::normal);
 		break;
 
-	case GCodeState::stopping:		// MO after executing stop.g if present
-	case GCodeState::sleeping:		// M1 after executing sleep.g if present
-		// Deselect the active tool and turn off all heaters, unless parameter Hn was used with n > 0
-		if (!gb.Seen('H') || gb.GetIValue() <= 0)
-		{
-			Tool* tool = reprap.GetCurrentTool();
-			if (tool != nullptr)
-			{
-				reprap.StandbyTool(tool->Number(), simulationMode != 0);
-			}
-			reprap.GetHeat().SwitchOffAll(true);
-		}
+	case GCodeState::stoppingWithHeatersOff:	// MO or M1 after executing stop.g/sleep.g if present
+		reprap.GetHeat().SwitchOffAll(true);
+		// no break
 
-		// chrishamm 2014-18-10: Although RRP says M0 is supposed to turn off all drives and heaters,
-		// I think M1 is sufficient for this purpose. Leave M0 for a normal reset.
-		if (gb.GetState() == GCodeState::sleeping)
-		{
-			DisableDrives();
-		}
-		else
-		{
-			platform.SetDriversIdle();
-		}
+	case GCodeState::stoppingWithHeatersOn:		// M0 H1 or M1 H1 after executing stop.g/sleep.g if present
+		platform.SetDriversIdle();
 		gb.SetState(GCodeState::normal);
 		break;
 
 	// States used for grid probing
-	case GCodeState::gridProbing1:	// ready to move to next grid probe point
+	case GCodeState::gridProbing1:		// ready to move to next grid probe point
 		{
 			// Move to the current probe point
 			Move& move = reprap.GetMove();
@@ -1131,6 +1114,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					++gridXindex;
 				}
 			}
+
 			if (gridYindex == hm.GetGrid().NumYpoints())
 			{
 				// Done all the points
@@ -1150,14 +1134,19 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 	case GCodeState::gridProbing7:
 		// Finished probing the grid, and retracted the probe if necessary
 		{
-			float mean, deviation;
-			const uint32_t numPointsProbed = reprap.GetMove().AccessHeightMap().GetStatistics(mean, deviation);
+			float mean, deviation, minError, maxError;
+			const uint32_t numPointsProbed = reprap.GetMove().AccessHeightMap().GetStatistics(mean, deviation, minError, maxError);
 			if (numPointsProbed >= 4)
 			{
-				reply.printf("%" PRIu32 " points probed, mean error %.3f, deviation %.3f\n", numPointsProbed, (double)mean, (double)deviation);
+				reply.printf("%" PRIu32 " points probed, min error %.3f, max error %.3f, mean %.3f, deviation %.3f\n",
+								numPointsProbed, (double)minError, (double)maxError, (double)mean, (double)deviation);
 				error = SaveHeightMap(gb, reply);
 				reprap.GetMove().AccessHeightMap().ExtrapolateMissing();
 				reprap.GetMove().UseMesh(true);
+				if (fabsf(mean) >= 2 * deviation)
+				{
+					platform.Message(WarningMessage, "Height map has a substantial Z offset. Recommend use Z-probe to re-establish Z=0 position, then re-probe the mesh.\n");
+				}
 			}
 			else
 			{
@@ -1297,7 +1286,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				if (!zProbeTriggered)
 				{
 					platform.Message(ErrorMessage, "Z probe was not triggered during probing move\n");
-					g30zHeightError = 0.0;
+					g30zHeightErrorSum = g30zHeightError = 0.0;
 					hadProbingError = true;
 				}
 				else
@@ -1331,7 +1320,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					moveBuffer.coords[Z_AXIS] = zp.GetActualTriggerHeight();
 					reprap.GetMove().SetNewPosition(moveBuffer.coords, false);
 					reprap.GetMove().SetZeroHeightError(moveBuffer.coords);
-					g30zHeightError = 0;										// there is no longer any height error from this probe
+					g30zHeightErrorSum = g30zHeightError = 0;					// there is no longer any height error from this probe
 					SetAxisIsHomed(Z_AXIS);										// this is only correct if the Z axis is Cartesian-like, but other architectures must be homed before probing anyway
 				}
 			}
@@ -1390,7 +1379,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 
 				// We no longer flag this as a probing error, instead we take the average and issue a warning
 				g30zHeightError = g30zHeightErrorSum/tapsDone;
-				if (params.GetTolerance() > 0.0)			// zero or negative tolerance means always average all readings
+				if (params.GetTolerance() > 0.0)			// zero or negative tolerance means always average all readings, so no warning message
 				{
 					platform.Message(WarningMessage, "Z probe readings not consistent\n");
 				}
