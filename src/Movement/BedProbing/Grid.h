@@ -80,8 +80,8 @@ public:
 	bool UseHeightMap(bool b);
 	bool UsingHeightMap() const { return useMap; }
 
-	unsigned int GetStatistics(float& mean, float& deviation) const; // Return number of points probed, mean and RMS deviation
-
+	unsigned int GetStatistics(float& mean, float& deviation, float& minError, float& maxError) const;
+																	// Return number of points probed, mean and RMS deviation, min and max error
 	void ExtrapolateMissing();										// Extrapolate missing points to ensure consistency
 
 private:

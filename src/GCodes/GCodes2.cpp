@@ -398,11 +398,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					break;
 				}
 
-				gb.SetState((code == 0) ? GCodeState::stopping : GCodeState::sleeping);
-				if (!DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false))
-				{
-					reprap.GetHeat().SwitchOffAll(true);	// no stop.g file found, so default to turning all heaters off
-				}
+				const bool leaveHeatersOn = (gb.Seen('H') && gb.GetIValue() > 0);
+				gb.SetState((leaveHeatersOn) ? GCodeState::stoppingWithHeatersOn : GCodeState::stoppingWithHeatersOff);
+				(void)DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false);
 			}
 		}
 		break;

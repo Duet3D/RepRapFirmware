@@ -238,6 +238,7 @@ constexpr size_t MaxVariableNameLength = 100;
 
 constexpr size_t StringLength20 = 20;
 constexpr size_t StringLength40 = 40;
+constexpr size_t StringLength500 = 500;					// Used when writing the height map
 
 constexpr size_t MaxHeaterNameLength = StringLength20;	// Maximum number of characters in a heater name
 constexpr size_t MaxFanNameLength = StringLength20;		// Maximum number of characters in a fan name
