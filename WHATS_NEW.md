@@ -1,6 +1,27 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.03RC4
+=================
+Upgrade notes:
+- See the upgrade notes for 2.03RC3.
+
+Feature improvements/changed behaviour:
+- The Move section of the diagnostics output now includes the Z shift
+- The Move section of the diagnostics output only includes bed probe heights if 3/4/5-point bed compensation is in use
+- M1 no longer disables drives (you can do that in sleep.g)
+- M0/M1 with a stop.g/sleep.g file no longer deselects the tool, it just turns off tool heaters unless the H1 parameter is present
+- After grid probing, the min/max errors are printed as well as mean and standard deviation, and recorded in the height map file
+- Implemented M675 (thanks wilriker)
+- If you run mesh bed probing and there is a substantial height offset, a warning is generated
+- If you load a mesh and the Z datum has not been set by probing and there is a Z probe, a warning is generated
+- M114 displays the bed compensation amount at current position
+
+Bug fixes:
+- In 2.03RC3, G10 L20 gave wrong results when a workplace coordinate offset was in use
+- If Z probe averaging mode was being used when mesh probing, an incorrect Z shift could be applied
+- M0 H1 turned heaters off after running stop.g instead of leaving them on
+
 Version 2.03RC3
 =================
 Upgrade notes:
