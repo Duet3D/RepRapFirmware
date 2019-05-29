@@ -850,7 +850,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	ch = '[';
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
+		response->catf("%c%d", ch, (gCodes->IsAxisHomed(axis)) ? 1 : 0);
 		ch = ',';
 	}
 
@@ -1779,7 +1779,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	ch = '[';
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
+		response->catf("%c%d", ch, (gCodes->IsAxisHomed(axis)) ? 1 : 0);
 		ch = ',';
 	}
 	response->cat(']');
