@@ -1143,9 +1143,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				error = SaveHeightMap(gb, reply);
 				reprap.GetMove().AccessHeightMap().ExtrapolateMissing();
 				reprap.GetMove().UseMesh(true);
-				if (fabsf(mean) >= 2 * deviation)
+				const float absMean = fabsf(mean);
+				if (absMean >= 0.05 && absMean >= 2 * deviation)
 				{
-					platform.Message(WarningMessage, "Height map has a substantial Z offset. Recommend use Z-probe to re-establish Z=0 position, then re-probe the mesh.\n");
+					platform.Message(WarningMessage, "the height map has a substantial Z offset. Suggest use Z-probe to establish Z=0 datum, then re-probe the mesh.\n");
 				}
 			}
 			else
@@ -1255,7 +1256,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				platform.GetEndstops().EnableCurrentZProbe();
 				moveBuffer.checkEndstops = true;
 				moveBuffer.reduceAcceleration = true;
-				moveBuffer.coords[Z_AXIS] = (GetAxisIsHomed(Z_AXIS))
+				moveBuffer.coords[Z_AXIS] = (IsAxisHomed(Z_AXIS))
 											? -zp.GetDiveHeight()						// Z axis has been homed, so no point in going very far
 											: -1.1 * platform.AxisTotalLength(Z_AXIS);	// Z axis not homed yet, so treat this as a homing move
 				moveBuffer.feedRate = zp.GetProbingSpeed();
@@ -1322,6 +1323,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					reprap.GetMove().SetZeroHeightError(moveBuffer.coords);
 					g30zHeightErrorSum = g30zHeightError = 0;					// there is no longer any height error from this probe
 					SetAxisIsHomed(Z_AXIS);										// this is only correct if the Z axis is Cartesian-like, but other architectures must be homed before probing anyway
+					zDatumSetByProbing = true;
 				}
 			}
 
@@ -1420,6 +1422,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			else if (g30SValue >= -1)
 			{
 				error = reprap.GetMove().FinishedBedProbing(g30SValue, reply);
+				if (!error && reprap.GetMove().GetKinematics().SupportsAutoCalibration())
+				{
+					zDatumSetByProbing = true;			// if we successfully auto calibrated or adjusted leadscrews, we've set the Z datum by probing
+				}
 			}
 			gb.SetState(GCodeState::normal);
 		}
@@ -2209,7 +2215,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 					const float totalOffset = currentBabyStepOffsets[axis] - GetCurrentToolOffset(axis);
 					buf.catf(" %c%.3f", axisLetters[axis], (double)(pauseRestorePoint.moveCoords[axis] - totalOffset));
 				}
-				buf.cat('\n');
+				buf.cat("\nG60 S1\n");										// save the coordinates as restore point 1 too
 				ok = f->Write(buf.c_str());
 			}
 			if (ok)
@@ -3497,15 +3503,19 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 	f->Close();
 	reprap.GetMove().UseMesh(!err);
 
-	if (!err)
+	if (err)
 	{
-		reply.Clear();															// wipe the error message
-		// Update the current position to allow for any bed compensation at the current XY coordinates
-		reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-		ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// update user coordinates to reflect any height map offset at the current position
+		return GCodeResult::error;
 	}
 
-	return (err) ? GCodeResult::error : GCodeResult::ok;
+	reply.Clear();						// get rid of the error message
+	if (!zDatumSetByProbing && platform.GetZProbeType() != ZProbeType::none)
+	{
+		reply.copy("the height map was loaded when the current Z=0 datum was not determined probing. This may result in a height offset.");
+		return GCodeResult::warning;
+	}
+
+	return GCodeResult::ok;
 }
 
 // Save the height map and append the success or error message to 'reply', returning true if an error occurred
@@ -3556,18 +3566,6 @@ void GCodes::ClearBedMapping()
 // Coordinates are updated at the end of each movement, so this won't tell you where you are mid-movement.
 void GCodes::GetCurrentCoordinates(const StringRef& s) const
 {
-	// Get the live machine coordinates, we'll need them later
-	float liveCoordinates[MaxTotalDrivers];
-	reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-	const Tool * const currentTool = reprap.GetCurrentTool();
-	if (currentTool != nullptr)
-	{
-		for (size_t i = 0; i < numVisibleAxes; ++i)
-		{
-			liveCoordinates[i] += currentTool->GetOffset(i);
-		}
-	}
-
 	// Start with the axis coordinates
 	s.Clear();
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
@@ -3575,6 +3573,10 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 		// Don't put a space after the colon in the response, it confuses Pronterface
 		s.catf("%c:%.3f ", axisLetters[axis], HideNan(GetUserCoordinate(axis)));
 	}
+
+	// Get the live machine coordinates, we'll need them later
+	float liveCoordinates[MaxTotalDrivers];
+	reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 
 	// Now the extruder coordinates
 	for (size_t i = numTotalAxes; i < MaxTotalDrivers; i++)
@@ -3592,10 +3594,17 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 
 	// Add the machine coordinates because they may be different from the user coordinates under some conditions
 	s.cat(" Machine");
+	float machineCoordinates[MaxAxes];
+	ToolOffsetTransform(currentUserPosition, machineCoordinates);
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		s.catf(" %.3f", HideNan(liveCoordinates[axis]));
+		s.catf(" %.3f", HideNan(machineCoordinates[axis]));
 	}
+
+	// Add the bed compensation
+	const float machineZ = machineCoordinates[Z_AXIS];
+	reprap.GetMove().AxisAndBedTransform(machineCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes(), true);
+	s.catf(" Bed comp %.3f", (double)(machineCoordinates[Z_AXIS] - machineZ));
 }
 
 // Set up a file to print, but don't print it yet.
@@ -4745,7 +4754,7 @@ void GCodes::RestorePosition(const RestorePoint& rp, GCodeBuffer *gb)
 // Convert user coordinates to head reference point coordinates, optionally allowing for X axis mapping
 // If the X axis is mapped to some other axes not including X, then the X coordinate of coordsOut will be left unchanged.
 // So make sure it is suitably initialised before calling this.
-void GCodes::ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes)
+void GCodes::ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes) const
 {
 	const Tool * const currentTool = reprap.GetCurrentTool();
 	if (currentTool == nullptr)
@@ -4779,7 +4788,7 @@ void GCodes::ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[
 
 // Convert head reference point coordinates to user coordinates, allowing for XY axis mapping
 // Caution: coordsIn and coordsOut may address the same array!
-void GCodes::ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes])
+void GCodes::ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const
 {
 	const Tool * const currentTool = reprap.GetCurrentTool();
 	if (currentTool == nullptr)
@@ -4929,6 +4938,23 @@ bool GCodes::AllAxesAreHomed() const
 void GCodes::SetAxisIsHomed(unsigned int axis)
 {
 	SetBit(axesHomed, axis);
+}
+
+// Tell us that the axis is not homed
+void GCodes::SetAxisNotHomed(unsigned int axis)
+{
+	ClearBit(axesHomed, axis);
+	if (axis == Z_AXIS)
+	{
+		zDatumSetByProbing = false;
+	}
+}
+
+// Flag all axes as not homed
+void GCodes::SetAllAxesNotHomed()
+{
+	axesHomed = 0;
+	zDatumSetByProbing = false;
 }
 
 // Write the config-override file returning true if an error occurred

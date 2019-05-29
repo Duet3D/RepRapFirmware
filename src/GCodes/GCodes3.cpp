@@ -87,6 +87,10 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
 		}
 		reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
 		axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
+		if (IsBitSet(axesIncluded, Z_AXIS))
+		{
+			zDatumSetByProbing -= false;
+		}
 
 #if SUPPORT_ROLAND
 		if (reprap.GetRoland()->Active())
@@ -165,9 +169,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 					}
 					seen = true;
 				}
-				workplaceCoordinates[cs - 1][axis] = (compute)
-													? currentUserPosition[axis] - coord + workplaceCoordinates[currentCoordinateSystem][axis]
-														: coord;
+				workplaceCoordinates[cs - 1][axis] = (compute) ? currentUserPosition[axis] - coord : coord;
 			}
 		}
 
