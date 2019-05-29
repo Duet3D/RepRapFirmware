@@ -268,6 +268,7 @@ private:
 	GCodeResult SetPositions(GCodeBuffer& gb);									// Deal with a G92
 	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply);		// Deal with a M584
 	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply);				// Deal with a M585
+	GCodeResult FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, const bool towardsMin = true);	// Deal with a M675
 	GCodeResult SetDateTime(GCodeBuffer& gb,const  StringRef& reply);			// Deal with a M905
 	GCodeResult SavePosition(GCodeBuffer& gb,const  StringRef& reply);			// Deal with G60
 	GCodeResult ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply);		// Deal with M569
@@ -465,6 +466,7 @@ private:
 	RestorePoint numberedRestorePoints[NumRestorePoints];				// Restore points accessible using the R parameter in the G0/G1 command
 	RestorePoint& pauseRestorePoint = numberedRestorePoints[1];			// The position and feed rate when we paused the print
 	RestorePoint& toolChangeRestorePoint = numberedRestorePoints[2];	// The position and feed rate when we freed a tool
+	RestorePoint& findCenterOfCavityRestorePoint = numberedRestorePoints[3];	// The position and feed rate when we found the lower boundary of cavity
 
 	size_t numTotalAxes;						// How many axes we have
 	size_t numVisibleAxes;						// How many axes are visible

@@ -708,6 +708,70 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 	return GCodeResult::ok;
 }
 
+GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, const bool towardsMin)
+{
+	if (reprap.GetCurrentTool() == nullptr)
+	{
+		reply.copy("No tool selected!");
+		return GCodeResult::error;
+	}
+
+	if (!LockMovementAndWaitForStandstill(gb))
+	{
+		return GCodeResult::notFinished;
+	}
+
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
+	{
+		if (gb.Seen(axisLetters[axis]))
+		{
+
+			SetMoveBufferDefaults();
+
+			// Prepare a move similar to G1 .. S3
+			moveBuffer.moveType = 3;
+			SetBit(moveBuffer.endStopsToCheck, axis);
+			axesToSenseLength = 0;
+
+			doingArcMove = false;
+
+			moveBuffer.canPauseAfter = false;
+			moveBuffer.hasExtrusion = false;
+
+			moveBuffer.coords[axis] = towardsMin ? platform.AxisMinimum(axis) : platform.AxisMaximum(axis);
+
+			// Deal with feed rate
+			if (gb.Seen(feedrateLetter))
+			{
+				const float rate = gb.ConvertDistance(gb.GetFValue());
+				gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
+			}
+			else
+			{
+				reply.copy("No feed rate provided.");
+				return GCodeResult::badOrMissingParameter;
+			}
+			moveBuffer.feedRate = gb.MachineState().feedRate;
+
+			if (towardsMin)
+			{
+				gb.SetState(GCodeState::findCenterOfCavityMin);
+			}
+			else
+			{
+				gb.SetState(GCodeState::findCenterOfCavityMax);
+			}
+
+			// Kick off new movement
+			NewMoveAvailable(1);
+
+			// Only do one axis at a time
+			break;
+		}
+	}
+	return GCodeResult::ok;
+}
+
 // Deal with a M905
 GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply)
 {

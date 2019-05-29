@@ -157,9 +157,15 @@ Done in 2.0 RC3:
 - [no fault] Investigate https://forum.duet3d.com/post/94668 (filament load macro using stall detect not working)
 
 For 2.03RC4:
-- Print Z shift in Move diagnostics
-- In Move diagnostics, only print bed probe heights if 3/4/5-point bed compensatoin is in use
-- Bug fix for Z shift if Z probe averaging mnode is being used
+- [done] Print Z shift in Move diagnostics
+- [done] In Move diagnostics, only print bed probe heights if 3/4/5-point bed compensatoin is in use
+- [done] Bug fix for Z shift if Z probe averaging mnode is being used
+- Check behaviour of mesh probing with an offset probe
+- [done, test]Bug fix: M0 H1 turns heaters off there is a stop.g file
+- [done] M1 no longer disables drives (you can do that in sleep.g)
+- [done] M0/M1 with a stop.g/sleep.g file no longer deselects the tool, it just turns off tool heaters if no H1 parameter
+- [done, test, test height map view in DWC] After grid probing, print min/max error as well as mean and std dev, also record them in the height map file
+- M675 PR
 
 Planned for 3.0:
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5

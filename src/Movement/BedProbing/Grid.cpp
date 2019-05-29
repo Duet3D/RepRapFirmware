@@ -278,7 +278,7 @@ unsigned int HeightMap::GetMinimumSegments(float deltaX, float deltaY) const
 // Save the grid to file returning true if an error occurred
 bool HeightMap::SaveToFile(FileStore *f, float zOffset) const
 {
-	String<500> bufferSpace;
+	String<StringLength500> bufferSpace;
 	const StringRef buf = bufferSpace.GetRef();
 
 	// Write the header comment
@@ -290,9 +290,10 @@ bool HeightMap::SaveToFile(FileStore *f, float zOffset) const
 		buf.catf(" generated at %04u-%02u-%02u %02u:%02u",
 						timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday, timeInfo->tm_hour, timeInfo->tm_min);
 	}
-	float mean, deviation;
-	(void)GetStatistics(mean, deviation);
-	buf.catf(", mean error %.3f, deviation %.3f\n", (double)(mean + zOffset), (double)deviation);
+	float mean, deviation, minError, maxError;
+	(void)GetStatistics(mean, deviation, minError, maxError);
+	buf.catf(", min error %.3f, max error %.3f, mean %.3f, deviation %.3f\n",
+				(double)(minError + zOffset), (double)(maxError + zOffset), (double)(mean + zOffset), (double)deviation);
 	if (!f->Write(buf.c_str()))
 	{
 		return true;
@@ -422,19 +423,30 @@ bool HeightMap::LoadFromFile(FileStore *f, const StringRef& r)
 	return true;											// an error occurred
 }
 
-// Return number of points probed, mean and RMS deviation
-unsigned int HeightMap::GetStatistics(float& mean, float& deviation) const
+// Return number of points probed, mean and RMS deviation, min and max error
+unsigned int HeightMap::GetStatistics(float& mean, float& deviation, float& minError, float& maxError) const
 {
 	double heightSum = 0.0, heightSquaredSum = 0.0;
+	minError = 9999.0;
+	maxError = -9999.0;
 	unsigned int numProbed = 0;
 	for (uint32_t i = 0; i < def.NumPoints(); ++i)
 	{
 		if (IsHeightSet(i))
 		{
 			++numProbed;
-			const double heightError = (double)gridHeights[i];
-			heightSum += heightError;
-			heightSquaredSum += dsquare(heightError);
+			const float fHeightError = gridHeights[i];
+			if (fHeightError > maxError)
+			{
+				maxError = fHeightError;
+			}
+			if (fHeightError < minError)
+			{
+				minError = fHeightError;
+			}
+			const double dHeightError = (double)fHeightError;
+			heightSum += dHeightError;
+			heightSquaredSum += dsquare(dHeightError);
 		}
 	}
 	if (numProbed == 0)
