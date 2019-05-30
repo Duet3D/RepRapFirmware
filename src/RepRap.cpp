@@ -2311,7 +2311,7 @@ bool RepRap::WriteToolSettings(FileStore *f) const
 }
 
 // Save some information in config-override.g
-bool RepRap::WriteToolParameters(FileStore *f) const
+bool RepRap::WriteToolParameters(FileStore *f, const bool forceWrite) const
 {
 	bool ok = true, written = false;
 	MutexLocker lock(toolListMutex);
@@ -2329,7 +2329,7 @@ bool RepRap::WriteToolParameters(FileStore *f) const
 			scratchString.catf("G10 P%d", t->Number());
 			for (size_t axis = 0; axis < MaxAxes; ++axis)
 			{
-				if (IsBitSet(axesProbed, axis))
+				if (forceWrite || IsBitSet(axesProbed, axis))
 				{
 					scratchString.catf(" %c%.2f", gCodes->GetAxisLetters()[axis], (double)(t->GetOffset(axis)));
 				}
