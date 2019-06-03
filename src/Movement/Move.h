@@ -23,8 +23,8 @@
 
 #if SAME70
 
-constexpr unsigned int DdaRingLength = 40;
-constexpr unsigned int AuxDdaRingLength = 3;
+constexpr unsigned int DdaRingLength = 60;
+constexpr unsigned int AuxDdaRingLength = 5;
 constexpr unsigned int NumDms = (DdaRingLength/2 * 12) + (AuxDdaRingLength * 3);	// allow enough for plenty of CAN expansion
 
 #elif SAM4E || SAM4S

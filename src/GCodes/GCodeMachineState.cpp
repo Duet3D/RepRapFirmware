@@ -54,6 +54,7 @@ void GCodeMachineState::CloseFile()
 	{
 		if (ms->fileId == fileId)
 		{
+			ms->isFileFinished = false;
 			ms->fileId = 0;
 		}
 	}

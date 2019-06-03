@@ -206,6 +206,11 @@ void GCodes::Init()
 	reprap.GetScanner().SetGCodeBuffer(usbGCode);
 #endif
 
+#if HAS_LINUX_INTERFACE
+	// config.g cannot be executed when the firmware boots but request it from Linux
+	RunConfigFile(platform.GetConfigFile());
+#endif
+
 #if SUPPORT_DOTSTAR_LED
 	DotStarLed::Init();
 #endif
@@ -365,7 +370,6 @@ FilePosition GCodes::GetFilePosition() const
 }
 
 // Start running the config file
-// We use triggerCGode as the source to prevent any triggers being executed until we have finished
 bool GCodes::RunConfigFile(const char* fileName)
 {
 	runningConfigFile = DoFileMacro(*daemonGCode, fileName, false);
