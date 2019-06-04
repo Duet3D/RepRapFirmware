@@ -45,7 +45,7 @@ protected:
 
 	void CloseDataPort();
 
-	bool haveCompleteLine;
+	bool haveCompleteLine = false;
 	bool haveFileToMove;
 	char clientMessage[ftpMessageLength];
 	size_t clientPointer;
