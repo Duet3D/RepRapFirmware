@@ -3029,13 +3029,15 @@ void Platform::InitFans()
 #if ALLOCATE_DEFAULT_PORTS
 	for (size_t i = 0; i < NumTotalFans; ++i)
 	{
-		fans[i].Init();
 		if (i < ARRAY_SIZE(DefaultFanPinNames))
 		{
 			String<1> dummy;
 			(void)fans[i].AssignPorts(DefaultFanPinNames[i], dummy.GetRef());
 		}
-		fans[i].SetPwmFrequency((i < ARRAY_SIZE(DefaultFanPwmFrequencies)) ? DefaultFanPwmFrequencies[i] : DefaultFanPwmFreq);
+		if (i < ARRAY_SIZE(DefaultFanPwmFrequencies))
+		{
+			fans[i].SetPwmFrequency(DefaultFanPwmFrequencies[i]);
+		}
 	}
 
 	// Handle board-specific fan configuration

@@ -86,7 +86,7 @@ constexpr unsigned int MaxBadTemperatureCount = 2000/HeatSampleIntervalMillis;	/
 constexpr float BadLowTemperature = -10.0;				// Celsius
 constexpr float DefaultExtruderTemperatureLimit = 290.0; // Celsius - E3D say to tighten the hot end at 285C
 constexpr float DefaultBedTemperatureLimit = 125.0;		// Celsius
-constexpr float HotEndFanTemperature = 45.0;			// Temperature at which a thermostatic hot end fan comes on
+constexpr float DefaultHotEndFanTemperature = 45.0;			// Temperature at which a thermostatic hot end fan comes on
 constexpr float ThermostatHysteresis = 1.0;				// How much hysteresis we use to prevent noise turning fans on/off too often
 constexpr float BadErrorTemperature = 2000.0;			// Must exceed any reasonable temperature limit including DEFAULT_TEMPERATURE_LIMIT
 constexpr uint32_t DefaultHeaterFaultTimeout = 10 * 60 * 1000;	// How long we wait (in milliseconds) for user intervention after a heater fault before shutting down
@@ -167,6 +167,10 @@ constexpr PwmFrequency NormalHeaterPwmFreq = 250;		// normal PWM frequency used 
 constexpr PwmFrequency DefaultFanPwmFreq = 250;			// increase to 25kHz using M106 command to meet Intel 4-wire PWM fan specification
 constexpr PwmFrequency DefaultPinWritePwmFreq = 500;	// default PWM frequency for M42 pin writes and extrusion ancillary PWM
 constexpr PwmFrequency ServoRefreshFrequency = 50;
+
+// Fan defaults
+constexpr float DefaultMinFanPwm = 0.1;					// minimum fan PWM
+constexpr uint32_t DefaultFanBlipTime = 100;			// fan blip time in milliseconds
 
 // Default Z probe values
 

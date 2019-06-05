@@ -33,7 +33,6 @@ public:
 
 	bool AssignPorts(GCodeBuffer& gb, const StringRef& reply);
 	bool AssignPorts(const char *pinNames, const StringRef& reply);
-	void Init();
 	void SetPwm(float speed);
 	void SetPwmFrequency(PwmFrequency freq) { port.SetFrequency(freq); }
 	bool HasMonitoredHeaters() const { return heatersMonitored != 0; }
