@@ -152,7 +152,7 @@ Done in 2.0 RC3:
 
 - [no fault] Investigate https://forum.duet3d.com/post/94668 (filament load macro using stall detect not working)
 
-For 2.03RC4:
+In 2.03RC4:
 - [done] Print Z shift in Move diagnostics
 - [done] In Move diagnostics, only print bed probe heights if 3/4/5-point bed compensation is in use
 - [done] Bug fix for Z shift if Z probe averaging mode is being used
@@ -165,6 +165,18 @@ For 2.03RC4:
 - [done] Warning if you load a mesh and the Z datum has not been set by probing and there is a Z probe
 - [done] Fix 2.03RC3 bug: G10 L20 gave wrong results when a workplace coordinate offset was in use
 - [done] M114 displays bed compensation amount at current position
+
+In 2.03RC5:
+- [done] After running stop.g ensure all moves are finished before setting motors to idle current, https://forum.duet3d.com/post/96452
+- [done] When downloading a .zip file don't set content-encoding to gzip, https://forum.duet3d.com/post/96469
+- [done, test] When disabling HTTP protocol or disabling the network, release any associated resources e.g. output buffers. Similarly for FTP and Telnet.
+- [done, ok] Delta printer: after homing, allows attempts to move Z up beyond endstop switches, https://forum.duet3d.com/topic/10735/delta-printer-max-limits
+- [done, ok] FTP responder: initialise haveCompleteLine (thanks gtjoseph)
+- [done] In SCARA printers/laser cutters (not CNC), if we can't do a coordinated travel move due to unreachable intermediate positions, try an uncoordinated one
+
+Outstanding issues:
+- Running out of output buffers and not freeing them up, https://forum.duet3d.com/post/96586
+- Inconsistent Z0 position, https://forum.duet3d.com/user/caveman
 
 Planned for 3.0:
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5

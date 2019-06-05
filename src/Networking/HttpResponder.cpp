@@ -828,7 +828,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".zip"))
 	{
 		contentType = "application/zip";
-		zip = true;
+		// Don't set zip true here, the content-encoding isn't gzip
 	}
 	else if (StringEndsWithIgnoreCase(nameOfFileToSend, ".g") || StringEndsWithIgnoreCase(nameOfFileToSend, ".gc") || StringEndsWithIgnoreCase(nameOfFileToSend, ".gcode"))
 	{
@@ -1303,9 +1303,9 @@ void HttpResponder::DoUpload()
 }
 
 // This is called to force termination if we implement the specified protocol
-void HttpResponder::Terminate(NetworkProtocol protocol)
+void HttpResponder::Terminate(NetworkProtocol protocol, NetworkInterface *interface)
 {
-	if (responderState != ResponderState::free && (protocol == HttpProtocol || protocol == AnyProtocol))
+	if (responderState != ResponderState::free && (protocol == HttpProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{
 		ConnectionLost();
 	}
@@ -1347,6 +1347,13 @@ void HttpResponder::Diagnostics(MessageType mt) const
 /*static*/ void HttpResponder::InitStatic()
 {
 	gcodeReplyMutex.Create("HttpGCodeReply");
+}
+
+// This is called when we are shutting down the network or just this protocol. It may be called even if this protocol isn't enabled.
+/*static*/ void HttpResponder::Disable()
+{
+	MutexLocker lock(gcodeReplyMutex);
+	gcodeReply.ReleaseAll();
 }
 
 // This is called from the GCodes task to store a response, which is picked up by the Network task

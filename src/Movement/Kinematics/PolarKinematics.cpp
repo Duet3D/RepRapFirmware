@@ -134,7 +134,7 @@ bool PolarKinematics::IsReachable(float x, float y, bool isCoordinated) const
 }
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
-bool PolarKinematics::LimitPosition(float finalCoords[], float * null initialCoords, size_t numAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
+LimitPositionResult PolarKinematics::LimitPosition(float finalCoords[], const float * null initialCoords, size_t numAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
 	const bool m208Limited = (applyM208Limits)
 								? Kinematics::LimitPositionFromAxis(finalCoords, Z_AXIS, numAxes, axesHomed)	// call base class function to limit Z and higher axes
@@ -168,7 +168,7 @@ bool PolarKinematics::LimitPosition(float finalCoords[], float * null initialCoo
 		radiusLimited = false;
 	}
 
-	return m208Limited || radiusLimited;
+	return (m208Limited || radiusLimited) ? LimitPositionResult::adjusted : LimitPositionResult::ok;
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics
