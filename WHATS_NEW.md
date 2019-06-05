@@ -1,6 +1,23 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.03RC5
+=================
+Upgrade notes:
+- See the upgrade notes for 2.03RC3.
+
+Feature improvements/changed behaviour:
+- When disabling HTTP protocol or disabling the network, release any associated resources e.g. output buffers. Similarly for FTP and Telnet.
+- In SCARA printers/laser cutters (not CNC machines), if we can't do a coordinated travel move due to unreachable intermediate positions, try an uncoordinated one
+- Duet Maestro build now supports laser cutters
+
+Bug fixes:
+- After running stop.g ensure all moves are finished before setting motors to idle current
+- When downloading a .zip file don't set content-encoding to gzip
+- Delta printer limit checking didn't work in some cases
+- FTP responder: initialise haveCompleteLine (thanks gtjoseph)
+- On SCARA printers, when attempting to move beyond arm limits, the XY coordinates computed from the adjusted motor endpoints were incorrect 
+
 Version 2.03RC4
 =================
 Upgrade notes:
