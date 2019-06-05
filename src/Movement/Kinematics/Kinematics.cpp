@@ -56,9 +56,9 @@ bool Kinematics::IsReachable(float x, float y, bool isCoordinated) const
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
 // This default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
-bool Kinematics::LimitPosition(float finalCoords[], float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
+LimitPositionResult Kinematics::LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
-	return (applyM208Limits) ? LimitPositionFromAxis(finalCoords, 0, numVisibleAxes, axesHomed) : false;
+	return (applyM208Limits && LimitPositionFromAxis(finalCoords, 0, numVisibleAxes, axesHomed)) ? LimitPositionResult::adjusted : LimitPositionResult::ok;
 }
 
 // Apply the M208 limits to the Cartesian position that the user wants to move to for all axes from the specified one upwards

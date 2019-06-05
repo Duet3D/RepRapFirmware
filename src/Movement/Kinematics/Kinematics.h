@@ -29,7 +29,7 @@ enum class KinematicsType : uint8_t
 	hangprinter,
 	polar,
 	coreXYUV,
-	reserved,	// reserved for @sga, see https://forum.duet3d.com/topic/5775/aditional-carterian-z-axis-on-delta-printer
+	reserved,			// reserved for @sga, see https://forum.duet3d.com/topic/5775/aditional-carterian-z-axis-on-delta-printer
 	rotaryDelta,		// not yet implemented
 	markForged,
 
@@ -49,6 +49,15 @@ enum class HomingMode : uint8_t
 	homeCartesianAxes,
 	homeIndividualMotors,
 	homeSharedMotors
+};
+
+// Return value from limitPosition
+enum class LimitPositionResult : uint8_t
+{
+	ok,									// the final position is reachable, so are all the intermediate positions
+	adjusted,							// the final position was unreachable so it has been limited, the intermediate positions are now reachable
+	intermediateUnreachable,			// the final position is reachable but intermediate positions are not
+	adjustedAndIntermediateUnreachable	// we adjusted the final position to make it reachable, but intermediate positions are still urreachable
 };
 
 class Kinematics
@@ -115,11 +124,7 @@ public:
 	// The default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
 	// applyM208Limits determines whether the m208 limits are applied, otherwise just the geometric limitations of the architecture are applied.
 	// If initialCoords is null, just limit the final coordinates; else limit all points on a straight line between the two.
-	virtual bool LimitPosition(float finalCoords[], float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const;
-
-	// Return true if the intermediate XY positions of a straight line move are reachable without exceeding geometric limits, given that the start and end positions are reachable.
-	// This matters for SCARA and similar printers. On most other printers, if the start and end point are reachable, so are all the intermediate points.
-	virtual bool IntermediatePositionsReachable(const float initialCoords[], const float finalCoords[], float margin) const { return true; }
+	virtual LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const;
 
 	// Return the set of axes that must have been homed before bed probing is allowed
 	// The default implementation requires just X and Y, but some kinematics require additional axes to be homed (e.g. delta, CoreXZ)

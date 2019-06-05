@@ -236,7 +236,7 @@ bool RotaryDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) co
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
-bool RotaryDeltaKinematics::LimitPosition(float finalCoords[], float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
+LimitPositionResult RotaryDeltaKinematics::LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
 	const AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
@@ -272,7 +272,7 @@ bool RotaryDeltaKinematics::LimitPosition(float finalCoords[], float * null init
 		limited = true;
 	}
 
-	return limited;
+	return (limited) ? LimitPositionResult::adjusted : LimitPositionResult::ok;
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics

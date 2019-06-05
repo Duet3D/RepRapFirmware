@@ -3626,7 +3626,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			if (changed || changedMode)
 			{
-				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false))
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false) != LimitPositionResult::ok)
 				{
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 				}
@@ -3705,7 +3705,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
 						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 					}
-					if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false))
+					if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false) != LimitPositionResult::ok)
 					{
 						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 					}
@@ -3752,7 +3752,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 				}
-				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false))
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false) != LimitPositionResult::ok)
 				{
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 				}
