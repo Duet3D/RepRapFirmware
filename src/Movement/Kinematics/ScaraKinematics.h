@@ -75,6 +75,7 @@ private:
 	// Derived parameters
 	float minRadius;
 	float maxRadius;
+	float minRadiusSquared;
 	float proximalArmLengthSquared;
 	float distalArmLengthSquared;
 	float twoPd;

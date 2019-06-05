@@ -2631,10 +2631,10 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 	{
 		moveBuffer.laserPwmOrIoBits = rp->laserPwmOrIoBits;
 	}
-#if SUPPORT_LASER
+# if SUPPORT_LASER
 	else if (machineType == MachineType::laser)
 	{
-		if (!isCoordinated || moveBuffer.moveType != 0)
+		if (!moveBuffer.isCoordinated || moveBuffer.moveType != 0)
 		{
 			moveBuffer.laserPwmOrIoBits.laserPwm = 0;
 		}
@@ -2651,8 +2651,8 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 			moveBuffer.laserPwmOrIoBits.laserPwm = 0;
 		}
 	}
-#endif
-#if SUPPORT_IOBITS
+# endif
+# if SUPPORT_IOBITS
 	else
 	{
 		// Update the iobits parameter
@@ -2665,7 +2665,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 			// Leave moveBuffer.ioBits alone so that we keep the previous value
 		}
 	}
-#endif
+# endif
 #endif
 
 	if (moveBuffer.moveType != 0)
@@ -2844,7 +2844,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		// Apply segmentation if necessary. To speed up simulation on SCARA printers, we don't apply kinematics segmentation when simulating.
 		// Note for when we use RTOS: as soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
 		const Kinematics& kin = reprap.GetMove().GetKinematics();
-		if (kin.UseSegmentation() && simulationMode != 1 && (moveBuffer.hasExtrusion || isCoordinated || !kin.UseRawG0()))
+		if (kin.UseSegmentation() && simulationMode != 1 && (moveBuffer.hasExtrusion || moveBuffer.isCoordinated || !kin.UseRawG0()))
 		{
 			// This kinematics approximates linear motion by means of segmentation.
 			// We assume that the segments will be smaller than the mesh spacing.
@@ -2852,7 +2852,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 			const float moveTime = xyLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
 			totalSegments = (unsigned int)max<int>(1, min<int>(rintf(xyLength/kin.GetMinSegmentLength()), rintf(moveTime * kin.GetSegmentsPerSecond())));
 		}
-		else if (reprap.GetMove().IsUsingMesh() && (isCoordinated || machineType == MachineType::fff))
+		else if (reprap.GetMove().IsUsingMesh() && (moveBuffer.isCoordinated || machineType == MachineType::fff))
 		{
 			const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
 			totalSegments = max<unsigned int>(1, heightMap.GetMinimumSegments(currentUserPosition[X_AXIS] - initialX, currentUserPosition[Y_AXIS] - initialY));
