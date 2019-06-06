@@ -177,10 +177,13 @@ In 2.03RC5:
 - [done, ok] Delta printer: after homing, allows attempts to move Z up beyond endstop switches, https://forum.duet3d.com/topic/10735/delta-printer-max-limits
 - [done, ok] FTP responder: initialise haveCompleteLine (thanks gtjoseph)
 - [done] In SCARA printers/laser cutters (not CNC), if we can't do a coordinated travel move due to unreachable intermediate positions, try an uncoordinated one
+- [done] Duet Maestro build now supports laser cutters
+- [done] SCARA bug: when attempting to move beyond arm limits the cached X and Y are inconsistent with the cached theta and psi
 
 Outstanding issues:
 - Running out of output buffers and not freeing them up, https://forum.duet3d.com/post/96586
 - Inconsistent Z0 position, https://forum.duet3d.com/user/caveman
+- [defer] When writing resurrect.g after a pause, 
 
 Planned for 3.0:
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5
