@@ -1000,21 +1000,25 @@ void Move::LaserTaskRun()
 
 		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
 		{
+# if SUPPORT_LASER
 			// Manage the laser power
 			uint32_t ticks;
 			while ((ticks = mainDDARing.ManageLaserPower()) != 0)
 			{
 				delay(ticks);
 			}
+# endif
 		}
 		else
 		{
+# if SUPPORT_IOBITS
 			// Manage the IOBits
 			uint32_t ticks;
 			while ((ticks = reprap.GetPortControl().UpdatePorts()) != 0)
 			{
 				delay(ticks);
 			}
+# endif
 		}
 	}
 }
