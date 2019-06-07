@@ -264,7 +264,7 @@ bool Move::SetKinematics(KinematicsType k)
 {
 	if (kinematics->GetKinematicsType() != k)
 	{
-		Kinematics *nk = Kinematics::Create(k);
+		Kinematics * const nk = Kinematics::Create(k);
 		if (nk == nullptr)
 		{
 			return false;

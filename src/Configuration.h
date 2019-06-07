@@ -172,6 +172,10 @@ constexpr PwmFrequency ServoRefreshFrequency = 50;
 constexpr float DefaultMinFanPwm = 0.1;					// minimum fan PWM
 constexpr uint32_t DefaultFanBlipTime = 100;			// fan blip time in milliseconds
 
+// M577 and M581
+constexpr unsigned int MaxM577Ports = 4;
+constexpr unsigned int MaxPortsPerTrigger = 4;
+
 // Default Z probe values
 
 // The maximum number of probe points is constrained by RAM usage:

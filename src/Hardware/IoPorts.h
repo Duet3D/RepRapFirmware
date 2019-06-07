@@ -40,6 +40,8 @@ public:
 	// Initialise static data
 	static void Init();
 
+	static void AppendPinNames(const StringRef& str, size_t numPorts, IoPort * const ports[]);
+
 	// Low level port access
 	static void SetPinMode(Pin p, PinMode mode);
 	static bool ReadPin(Pin p);
@@ -52,13 +54,16 @@ protected:
 	static const char* TranslatePinAccess(PinAccess access);
 
 	LogicalPin logicalPin;									// the logical pin number
-	AnalogChannelNumber analogChannel;						// the analog channel number if it is an analog input, or -1 if not
-	bool hardwareInvert;									// whether the hardware includes inversion
-	bool totalInvert;										// whether the input or output should be inverted
+	int8_t analogChannel;									// the analog channel number if it is an analog input
+	uint8_t hardwareInvert : 1,								// true if the hardware includes inversion
+			totalInvert : 1,								// true if the value should be inverted when reading/writing the pin
+			isSharedInput : 1;								// true if we are using this pin as a shared input
 
-	static PinUsedBy portUsedBy[NumNamedPins];			// the list of what each logical port is used by
+	static PinUsedBy portUsedBy[NumNamedPins];				// the list of what each logical port is used by
 	static int8_t logicalPinModes[NumNamedPins];			// what mode each logical pin is set to - would ideally be class PinMode not int8_t
 };
+
+static_assert(sizeof(IoPort) == 4, "Unexpected size for class IoPort");		// try to keep these small because triggers have arrays of them
 
 // Class to represent a PWM output port
 class PwmPort : public IoPort

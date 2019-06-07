@@ -414,100 +414,117 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 	return GCodeResult::ok;
 }
 
-// Handle M581 and M582
-GCodeResult GCodes::CheckOrConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, int code)
+// Handle M577
+GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply)
 {
-#ifdef NO_TRIGGERS
-	return GCodeResult::errorNotSupported;
-#else
+	if (gb.Seen('P'))
+	{
+		IoPort ports[MaxM577Ports];
+		IoPort *portAddrs[MaxM577Ports];
+		PinAccess access[MaxM577Ports];
+		for (size_t i = 0; i < MaxM577Ports; ++i)
+		{
+			portAddrs[i] = &ports[i];
+			access[i] = PinAccess::read;
+		}
+		const unsigned int numPortsUsed = IoPort::AssignPorts(gb, reply, PinUsedBy::temporaryInput, MaxM577Ports, portAddrs, access);
+		if (numPortsUsed == 0)
+		{
+			return GCodeResult::error;
+		}
+
+		for (unsigned int i = 0; i < numPortsUsed; ++i)
+		{
+			if (!ports[i].Read())
+			{
+				return GCodeResult::notFinished;
+			}
+		}
+	}
+
+	return GCodeResult::ok;
+}
+
+// Handle M581
+GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, int code)
+{
 	if (gb.Seen('T'))
 	{
-		unsigned int triggerNumber = gb.GetIValue();
+		const unsigned int triggerNumber = gb.GetIValue();
 		if (triggerNumber < MaxTriggers)
 		{
-			if (code == 582)
+			Trigger& tr = triggers[triggerNumber];
+			bool seen = false;
+			if (gb.Seen('C'))
 			{
-				const uint32_t states = platform.GetEndstops().GetAllEndstopStates();
-				if ((triggers[triggerNumber].rising & states) != 0 || (triggers[triggerNumber].falling & ~states) != 0)
+				seen = true;
+				tr.condition = gb.GetIValue();
+			}
+			else if (tr.IsUnused())
+			{
+				tr.condition = 0;					// this is a new trigger, so set no condition
+			}
+
+			if (gb.Seen('P'))
+			{
+				seen = true;
+				IoPort *portAddrs[ARRAY_SIZE(tr.ports)];
+				PinAccess access[ARRAY_SIZE(tr.ports)];
+				for (size_t i = 0; i < ARRAY_SIZE(tr.ports); ++i)
 				{
-					SetBit(triggersPending, triggerNumber);
+					portAddrs[i] = &tr.ports[i];
+					access[i] = PinAccess::read;
+				}
+				const unsigned int numPortsUsed = IoPort::AssignPorts(gb, reply, PinUsedBy::temporaryInput, ARRAY_SIZE(tr.ports), portAddrs, access);
+				if (numPortsUsed == 0)
+				{
+					return GCodeResult::error;
+				}
+
+				tr.inputStates = 0;
+				(void)tr.Check();					// set up initial input states
+				return GCodeResult::ok;
+			}
+
+			if (!seen)
+			{
+				IoPort *portAddrs[ARRAY_SIZE(tr.ports)];
+				for (size_t i = 0; i < ARRAY_SIZE(tr.ports); ++i)
+				{
+					portAddrs[i] = &tr.ports[i];
+				}
+				reply.printf("Trigger %u fires on an edge on pin(s) ", triggerNumber);
+				IoPort::AppendPinNames(reply, ARRAY_SIZE(tr.ports), portAddrs);
+				if (triggers[triggerNumber].condition == 1)
+				{
+					reply.cat(" when printing from SD card");
 				}
 			}
-			else
+		}
+		else
+		{
+			reply.copy("Trigger number out of range");
+			return GCodeResult::error;
+		}
+	}
+
+	reply.copy("Missing T parameter");
+	return GCodeResult::error;
+}
+
+// Handle M582
+GCodeResult GCodes::CheckTrigger(GCodeBuffer& gb, const StringRef& reply, int code)
+{
+	if (gb.Seen('T'))
+	{
+		const unsigned int triggerNumber = gb.GetIValue();
+		if (triggerNumber < MaxTriggers)
+		{
+			Trigger& tr = triggers[triggerNumber];
+			tr.inputStates = 0;
+			if (tr.Check())
 			{
-				bool seen = false;
-				if (gb.Seen('C'))
-				{
-					seen = true;
-					triggers[triggerNumber].condition = gb.GetIValue();
-				}
-				else if (triggers[triggerNumber].IsUnused())
-				{
-					triggers[triggerNumber].condition = 0;		// this is a new trigger, so set no condition
-				}
-				if (gb.Seen('S'))
-				{
-					seen = true;
-					int sval = gb.GetIValue();
-					TriggerInputsBitmap triggerMask = 0;
-					for (size_t axis = 0; axis < numTotalAxes; ++axis)
-					{
-						if (gb.Seen(axisLetters[axis]))
-						{
-							SetBit(triggerMask, axis);
-						}
-					}
-					if (gb.Seen(extrudeLetter))
-					{
-						uint32_t eStops[MaxExtruders];
-						size_t numEntries = MaxExtruders;
-						gb.GetUnsignedArray(eStops, numEntries, false);
-						for (size_t i = 0; i < numEntries; ++i)
-						{
-							if (eStops[i] < MaxExtruders)
-							{
-								SetBit(triggerMask, eStops[i] + E0_AXIS);
-							}
-						}
-					}
-					switch(sval)
-					{
-					case -1:
-						if (triggerMask == 0)
-						{
-							triggers[triggerNumber].rising = triggers[triggerNumber].falling = 0;
-						}
-						else
-						{
-							triggers[triggerNumber].rising &= (~triggerMask);
-							triggers[triggerNumber].falling &= (~triggerMask);
-						}
-						break;
-
-					case 0:
-						triggers[triggerNumber].falling |= triggerMask;
-						break;
-
-					case 1:
-						triggers[triggerNumber].rising |= triggerMask;
-						break;
-
-					default:
-						platform.Message(ErrorMessage, "Bad S parameter in M581 command\n");
-					}
-				}
-				if (!seen)
-				{
-					reply.printf("Trigger %u fires on a rising edge on ", triggerNumber);
-					ListTriggers(reply, triggers[triggerNumber].rising);
-					reply.cat(" or a falling edge on ");
-					ListTriggers(reply, triggers[triggerNumber].falling);
-					reply.cat(" endstop inputs");
-					if (triggers[triggerNumber].condition == 1)
-					{
-						reply.cat(" when printing from SD card");
-					}
-				}
+				SetBit(triggersPending, triggerNumber);
 			}
 			return GCodeResult::ok;
 		}
@@ -520,7 +537,6 @@ GCodeResult GCodes::CheckOrConfigureTrigger(GCodeBuffer& gb, const StringRef& re
 
 	reply.copy("Missing T parameter");
 	return GCodeResult::error;
-#endif
 }
 
 // Deal with a M584

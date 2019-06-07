@@ -3393,52 +3393,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 577: // Wait until endstop input is triggered
-#ifdef NO_TRIGGERS
-		result = GCodeResult::errorNotSupported;
-#else
-		if (gb.Seen('S'))
-		{
-			// Determine trigger type
-			bool triggerCondition = (gb.GetIValue() > 0);
-
-			// Axis endstops
-			for (size_t axis=0; axis < numTotalAxes; axis++)
-			{
-				if (gb.Seen(axisLetters[axis]))
-				{
-					if (platform.GetEndstops().EndStopInputState(axis) != triggerCondition)
-					{
-						result = GCodeResult::notFinished;
-						break;
-					}
-				}
-			}
-
-			// Extruder drives
-			if (gb.Seen(extrudeLetter))
-			{
-				size_t eDriveCount = MaxExtruders;
-				uint32_t eDrives[MaxExtruders];
-				gb.GetUnsignedArray(eDrives, eDriveCount, false);
-				for (size_t extruder = 0; extruder < eDriveCount; extruder++)
-				{
-					const size_t eDrive = eDrives[extruder];
-					if (eDrive >= MaxExtruders)
-					{
-						reply.printf("Invalid extruder drive '%u'", eDrive);
-						result = GCodeResult::error;
-						break;
-					}
-
-					if (platform.GetEndstops().EndStopInputState(eDrive + E0_AXIS) != triggerCondition)
-					{
-						result = GCodeResult::notFinished;
-						break;
-					}
-				}
-			}
-		}
-#endif
+		result = WaitForPin(gb, reply);
 		break;
 
 #if SUPPORT_INKJET
@@ -3501,8 +3456,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 #endif
 
 	case 581: // Configure external trigger
+		result = ConfigureTrigger(gb, reply, code);
+		break;
+
 	case 582: // Check external trigger
-		result = CheckOrConfigureTrigger(gb, reply, code);
+		result = CheckTrigger(gb, reply, code);
 		break;
 
 	case 584: // Set axis/extruder to stepper driver(s) mapping

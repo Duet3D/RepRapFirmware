@@ -115,13 +115,13 @@ int8_t IoPort::logicalPinModes[NumNamedPins];	// what mode each logical pin is s
 	}
 }
 
-IoPort::IoPort() : logicalPin(NoLogicalPin), analogChannel(NO_ADC), hardwareInvert(false), totalInvert(false)
+IoPort::IoPort() : logicalPin(NoLogicalPin), analogChannel(NO_ADC), hardwareInvert(false), totalInvert(false), isSharedInput(false)
 {
 }
 
 void IoPort::Release()
 {
-	if (IsValid())
+	if (IsValid() && !isSharedInput)
 	{
 		detachInterrupt(PinTable[logicalPin].pin);
 		portUsedBy[logicalPin] = PinUsedBy::unused;
@@ -132,14 +132,15 @@ void IoPort::Release()
 	hardwareInvert = totalInvert = false;
 }
 
+// Attach an interrupt to the pin. Nor permitted if we allocated the pin in shared input mode.
 bool IoPort::AttachInterrupt(StandardCallbackFunction callback, enum InterruptMode mode, CallbackParameter param) const
 {
-	return IsValid() && attachInterrupt(PinTable[logicalPin].pin, callback, mode, param);
+	return IsValid() && !isSharedInput && attachInterrupt(PinTable[logicalPin].pin, callback, mode, param);
 }
 
 void IoPort::DetachInterrupt() const
 {
-	if (IsValid())
+	if (IsValid() && !isSharedInput)
 	{
 		detachInterrupt(PinTable[logicalPin].pin);
 	}
@@ -150,18 +151,25 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 {
 	Release();
 
-	const bool inverted = (*pn == '!');
-	if (inverted)
+	bool inverted = false;
+	for (;;)
 	{
-		++pn;
-	}
-	if (*pn == '^')
-	{
-		++pn;
-		if (access == PinAccess::read)
+		if (*pn == '!')
 		{
-			access = PinAccess::readWithPullup;
+			inverted = !inverted;
 		}
+		else if (*pn == '^')
+		{
+			if (access == PinAccess::read)
+			{
+				access = PinAccess::readWithPullup;
+			}
+		}
+		else
+		{
+			break;
+		}
+		++pn;
 	}
 
 	const char *const fullPinName = pn;			// the full pin name less the inversion and pullup flags
@@ -194,23 +202,31 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 		return false;
 	}
 
-	if (lp != NoLogicalPin)
+	if (lp != NoLogicalPin)					// if not assigning "nil"
 	{
-		if (portUsedBy[lp] != PinUsedBy::unused)
+		bool doSetMode = true;
+		if (portUsedBy[lp] == PinUsedBy::unused || (portUsedBy[lp] == PinUsedBy::temporaryInput && neededFor != PinUsedBy::temporaryInput))
 		{
-			reply.printf("Pin '%s' is not free", fullPinName);
-			return false;
+			portUsedBy[lp] = neededFor;
 		}
-		portUsedBy[lp] = neededFor;
-	}
+		else
+		{
+			const PinMode pm = (PinMode)logicalPinModes[lp];
+			if (   neededFor != PinUsedBy::temporaryInput
+				|| (pm != INPUT && pm != INPUT_PULLUP)
+			   )
+			{
+				reply.printf("Pin '%s' is not free", fullPinName);
+				return false;
+			}
+			doSetMode = false;
+		}
+		logicalPin = lp;
+		hardwareInvert = hwInvert;
+		isSharedInput = (neededFor == PinUsedBy::temporaryInput);
+		SetInvert(inverted);
 
-	logicalPin = lp;
-	hardwareInvert = hwInvert;
-	SetInvert(inverted);
-
-	if (lp != NoLogicalPin)
-	{
-		if (!SetMode(access))
+		if (doSetMode && !SetMode(access))
 		{
 			reply.printf("Pin '%s' does not support mode %s", fullPinName, TranslatePinAccess(access));
 			Release();
@@ -367,6 +383,29 @@ void IoPort::AppendPinName(const StringRef& str) const
 	}
 }
 
+/*static*/ void IoPort::AppendPinNames(const StringRef& str, size_t numPorts, IoPort * const ports[])
+{
+	for (size_t i = 0; i < numPorts; ++i)
+	{
+		if (ports[i]->IsValid())
+		{
+			if (i != 0)
+			{
+				str.cat('+');
+			}
+			ports[i]->AppendPinName(str);
+		}
+		else
+		{
+			if (i == 0)
+			{
+				str.cat("nil");
+			}
+			break;
+		}
+	}
+}
+
 void IoPort::WriteDigital(bool high) const
 {
 	if (IsValid())
@@ -388,7 +427,7 @@ bool IoPort::Read() const
 // Note, for speed when this is called from the ISR we do not apply 'invert' to the analog reading
 uint16_t IoPort::ReadAnalog() const
 {
-	return (analogChannel != NO_ADC) ? AnalogInReadChannel(analogChannel) : 0;
+	return (analogChannel != NO_ADC) ? AnalogInReadChannel((AnalogChannelNumber)analogChannel) : 0;
 }
 
 // Low level pin access methods

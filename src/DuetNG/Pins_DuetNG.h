@@ -41,7 +41,6 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 
 #define USE_CACHE				1					// set nonzero to enable the cache
 
-#define NO_TRIGGERS		1	// Temporary!!!
 #define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
 
 // The physical capabilities of the machine
@@ -319,5 +318,37 @@ constexpr Pin W5500SsPin = PortAPin(11);			// SPI NPCS pin, input from W5500 mod
 #define STEP_TC_IRQN		TC2_IRQn
 #define STEP_TC_HANDLER		TC2_Handler
 #define STEP_TC_ID			ID_TC2
+
+namespace StepPins
+{
+	// *** These next three functions must use the same bit assignments in the drivers bitmap ***
+	// Each stepper driver must be assigned one bit in a 32-bit word, in such a way that multiple drivers can be stepped efficiently
+	// and more or less simultaneously by doing parallel writes to several bits in one or more output ports.
+	// All our step pins are on port D, so the bitmap is just the map of step bits in port D.
+
+	// Calculate the step bit for a driver. This doesn't need to be fast. It must return 0 if the driver is remote.
+	static inline uint32_t CalcDriverBitmap(size_t driver)
+	{
+		return (driver < NumDirectDrivers)
+				? g_APinDescription[STEP_PINS[driver]].ulPin
+				: 0;
+	}
+
+	// Set the specified step pins high
+	// This needs to be as fast as possible, so we do a parallel write to the port(s).
+	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
+	static inline void StepDriversHigh(uint32_t driverMap)
+	{
+		PIOD->PIO_ODSR = driverMap;				// on Duet WiFi/Ethernet all step pins are on port D
+	}
+
+	// Set all step pins low
+	// This needs to be as fast as possible, so we do a parallel write to the port(s).
+	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
+	static inline void StepDriversLow()
+	{
+		PIOD->PIO_ODSR = 0;						// on Duet WiFi/Ethernet all step pins are on port D
+	}
+}
 
 #endif

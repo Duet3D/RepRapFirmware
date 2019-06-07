@@ -82,6 +82,16 @@ void EndstopsManager::EnableZProbe(size_t probeNumber)
 	}
 }
 
+// Enable extruder endstops
+void EndstopsManager::EnableExtruderEndstop(size_t extruder)
+{
+#ifdef NO_EXTRUDER_ENDSTOPS
+	// do nothing for  now
+#else
+	qq;		//TODO
+#endif
+}
+
 // Check the endstops.
 // If an endstop has triggered, remove it from the active list, return its action, and return a pointer to it via 'es'.
 EndstopHitDetails EndstopsManager::CheckEndstops(bool goingSlow)

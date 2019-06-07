@@ -30,10 +30,8 @@ public:
 	// Set up the active endstops for Z probing with the current probe
 	void EnableCurrentZProbe() { EnableZProbe(currentZProbeNumber); }
 
-#ifndef NO_EXTRUDER_ENDSTOPS
 	// Enable extruder endstops
 	void EnableExtruderEndstop(size_t extruder);
-#endif
 
 	// Get the first endstop that has triggered and remove it from the active list if appropriate
 	EndstopHitDetails CheckEndstops(bool goingSlow);

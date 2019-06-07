@@ -1822,10 +1822,10 @@ void DDA::StepDrivers(Platform& p)
 	}
 
 	driversStepping &= p.GetSteppingEnabledDrivers();
-	if ((driversStepping & p.GetSlowDriversBitmap()) == 0)	// if not using any external drivers
+	if ((driversStepping & p.GetSlowDriversBitmap()) == 0)			// if not using any slow drivers
 	{
 		// 3. Step the drivers
-		Platform::StepDriversHigh(driversStepping);					// generate the steps
+		StepPins::StepDriversHigh(driversStepping);					// generate the steps
 	}
 	else
 	{
@@ -1835,12 +1835,12 @@ void DDA::StepDrivers(Platform& p)
 		{
 			now = StepTimer::GetInterruptClocks();
 		}
-		Platform::StepDriversHigh(driversStepping);					// generate the steps
+		StepPins::StepDriversHigh(driversStepping);					// generate the steps
 		lastStepPulseTime = StepTimer::GetInterruptClocks();
 
 		// 3a. Reset all step pins low. Do this now because some external drivers don't like the direction pins being changed before the end of the step pulse.
 		while (StepTimer::GetInterruptClocks() - lastStepPulseTime < p.GetSlowDriverStepHighClocks()) {}
-		Platform::StepDriversLow();									// set all step pins low
+		StepPins::StepDriversLow();									// set all step pins low
 		lastStepLowTime = lastStepPulseTime = StepTimer::GetInterruptClocks();
 	}
 
@@ -1868,7 +1868,7 @@ void DDA::StepDrivers(Platform& p)
 	}
 
 	// 5. Reset all step pins low. We already did this if we are using any external drivers, but doing it again does no harm.
-	Platform::StepDriversLow();										// set all step pins low
+	StepPins::StepDriversLow();										// set all step pins low
 
 	// If there are no more steps to do and the time for the move has nearly expired, flag the move as complete
 	if (activeDMs == nullptr && StepTimer::GetInterruptClocks() - afterPrepare.moveStartTime + WakeupTime >= clocksNeeded)

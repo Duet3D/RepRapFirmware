@@ -266,9 +266,6 @@ void GCodes::Reset()
 	pausePending = filamentChangePausePending = false;
 	probeIsDeployed = false;
 	moveBuffer.filePos = noFilePosition;
-#ifndef NO_TRIGGERS
-	lastEndstopStates = platform.GetEndstops().GetAllEndstopStates();
-#endif
 	firmwareUpdateModuleMap = 0;
 	lastFilamentError = FilamentSensorStatus::ok;
 
@@ -1749,60 +1746,46 @@ void GCodes::EndSimulation(GCodeBuffer *gb)
 // Check for and execute triggers
 void GCodes::CheckTriggers()
 {
-#ifndef NO_TRIGGERS
-	// Check for endstop state changes that activate new triggers
-	const TriggerInputsBitmap oldEndstopStates = lastEndstopStates;
-	lastEndstopStates = platform.GetEndstops().GetAllEndstopStates();
-	const TriggerInputsBitmap risen = lastEndstopStates & ~oldEndstopStates,
-					  	  	  fallen = ~lastEndstopStates & oldEndstopStates;
-	unsigned int lowestTriggerPending = MaxTriggers;
-	for (unsigned int triggerNumber = 0; triggerNumber < MaxTriggers; ++triggerNumber)
+	for (unsigned int i = 0; i < MaxTriggers; ++i)
 	{
-		const Trigger& ct = triggers[triggerNumber];
-		if (   ((ct.rising & risen) != 0 || (ct.falling & fallen) != 0)
-			&& (ct.condition == 0 || (ct.condition == 1 && reprap.GetPrintMonitor().IsPrinting()))
-		   )
+		if (!IsBitSet(triggersPending, i) && triggers[i].Check())
 		{
-			SetBit(triggersPending, triggerNumber);
-		}
-		if (triggerNumber < lowestTriggerPending && IsBitSet(triggersPending, triggerNumber))
-		{
-			lowestTriggerPending = triggerNumber;
+			SetBit(triggersPending, i);
 		}
 	}
 
 	// If any triggers are pending, activate the one with the lowest number
-	if (lowestTriggerPending == 0)
+	if (triggersPending != 0)
 	{
-		ClearBit(triggersPending, lowestTriggerPending);			// clear the trigger
-		DoEmergencyStop();
-	}
-	else if (lowestTriggerPending < MaxTriggers						// if a trigger is pending
-			 && !IsDaemonBusy()
-			 && daemonGCode->GetState() == GCodeState::normal		// and we are not already executing a trigger or config.g
-			)
-	{
-		if (lowestTriggerPending == 1)
+		const unsigned int lowestTriggerPending = LowestSetBitNumber(triggersPending);
+		if (lowestTriggerPending == 0)
 		{
-			if (!IsReallyPrinting())
+			ClearBit(triggersPending, lowestTriggerPending);			// clear the trigger
+			DoEmergencyStop();
+		}
+		else if (!IsDaemonBusy() && daemonGCode->GetState() == GCodeState::normal)	// if we are not already executing a trigger or config.g
+		{
+			if (lowestTriggerPending == 1)
 			{
-				ClearBit(triggersPending, lowestTriggerPending);	// ignore a pause trigger if we are already paused
+				if (!IsReallyPrinting())
+				{
+					ClearBit(triggersPending, lowestTriggerPending);	// ignore a pause trigger if we are already paused or not printing
+				}
+				else if (LockMovement(*daemonGCode))					// need to lock movement before executing the pause macro
+				{
+					ClearBit(triggersPending, lowestTriggerPending);	// clear the trigger
+					DoPause(*daemonGCode, PauseReason::trigger, "Print paused by external trigger");
+				}
 			}
-			else if (LockMovement(*daemonGCode))					// need to lock movement before executing the pause macro
+			else
 			{
-				ClearBit(triggersPending, lowestTriggerPending);	// clear the trigger
-				DoPause(*daemonGCode, PauseReason::trigger, "Print paused by external trigger");
+				ClearBit(triggersPending, lowestTriggerPending);		// clear the trigger
+				String<StringLength20> filename;
+				filename.printf("trigger%u.g", lowestTriggerPending);
+				DoFileMacro(*daemonGCode, filename.c_str(), true);
 			}
 		}
-		else
-		{
-			ClearBit(triggersPending, lowestTriggerPending);		// clear the trigger
-			String<StringLength20> filename;
-			filename.printf("trigger%u.g", lowestTriggerPending);
-			DoFileMacro(*daemonGCode, filename.c_str(), true);
-		}
 	}
-#endif
 }
 
 // Check for and respond to filament errors
@@ -2510,24 +2493,22 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 					if (thisMix != 0.0)
 					{
 						totalMix += thisMix;
-						const int drive = tool->Drive(eDrive);
+						const int extruder = tool->Drive(eDrive);
 						float extrusionAmount = requestedExtrusionAmount * thisMix;
 						if (gb.MachineState().volumetricExtrusion)
 						{
-							extrusionAmount *= volumetricExtrusionFactors[drive];
+							extrusionAmount *= volumetricExtrusionFactors[extruder];
 						}
 						if (isPrintingMove && moveBuffer.moveType == 0 && !doingToolChange)
 						{
-							rawExtruderTotalByDrive[drive] += extrusionAmount;
+							rawExtruderTotalByDrive[extruder] += extrusionAmount;
 						}
 
-						moveBuffer.coords[drive + numTotalAxes] = extrusionAmount * extrusionFactors[drive];
-#ifndef NO_EXTRUDER_ENDSTOPS
+						moveBuffer.coords[extruder + numTotalAxes] = extrusionAmount * extrusionFactors[extruder];
 						if (moveBuffer.moveType == 1)
 						{
 							platform.GetEndstops().EnableExtruderEndstop(extruder);
 						}
-#endif
 					}
 				}
 				if (!isPrintingMove && moveBuffer.usingStandardFeedrate)
@@ -2559,12 +2540,10 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 								rawExtruderTotal += extrusionAmount;
 							}
 							moveBuffer.coords[extruder + numTotalAxes] = extrusionAmount * extrusionFactors[extruder] * volumetricExtrusionFactors[extruder];
-#ifndef NO_EXTRUDER_ENDSTOPS
 							if (moveBuffer.moveType == 1)
 							{
 								platform.GetEndstops().EnableExtruderEndstop(extruder);
 							}
-#endif
 						}
 					}
 				}
@@ -4881,40 +4860,6 @@ float GCodes::GetCurrentToolOffset(size_t axis) const
 float GCodes::GetUserCoordinate(size_t axis) const
 {
 	return (axis < MaxAxes) ? currentUserPosition[axis] - GetWorkplaceOffset(axis) : 0.0;
-}
-
-// Append a list of trigger endstops to a message
-void GCodes::ListTriggers(const StringRef& reply, TriggerInputsBitmap mask)
-{
-#ifndef NO_TRIGGERS
-	if (mask == 0)
-	{
-		reply.cat("(none)");
-	}
-	else
-	{
-		bool printed = false;
-		for (unsigned int i = 0; i < NumTotalEndstops; ++i)
-		{
-			if (IsBitSet(mask, i))
-			{
-				if (printed)
-				{
-					reply.cat(' ');
-				}
-				if (i < numVisibleAxes)
-				{
-					reply.cat(axisLetters[i]);
-				}
-				else if (i >= numTotalAxes)
-				{
-					reply.catf("E%d", i - numTotalAxes);
-				}
-				printed = true;
-			}
-		}
-	}
-#endif
 }
 
 // M38 (SHA1 hash of a file) implementation:

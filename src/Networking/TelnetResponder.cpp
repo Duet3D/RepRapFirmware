@@ -301,6 +301,9 @@ void TelnetResponder::ProcessLine()
 /*static*/ void TelnetResponder::Disable()
 {
 	MutexLocker lock(gcodeReplyMutex);
+
+	clientsServed = 0;
+	numSessions = 0;
 	OutputBuffer::ReleaseAll(gcodeReply);
 }
 
