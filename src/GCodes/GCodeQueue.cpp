@@ -9,6 +9,7 @@
 
 #include "RepRap.h"
 #include "GCodes.h"
+#include "GCodeBuffer.h"
 #include "Movement/Move.h"
 
 // GCodeQueue class
@@ -140,6 +141,17 @@ bool GCodeQueue::FillBuffer(GCodeBuffer *gb)
 	code->next = freeItems;
 	freeItems = code;
 	return true;
+}
+
+// These inherited virtual functions need to be defined but are not called
+void GCodeQueue::Reset()
+{
+	Clear();
+}
+
+size_t GCodeQueue::BytesCached() const
+{
+	return 0;
 }
 
 // Return true if there is nothing to do

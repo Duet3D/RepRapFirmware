@@ -12,10 +12,11 @@ unsigned int GCodeMachineState::numAllocated = 0;
 
 // Create a default initialised GCodeMachineState
 GCodeMachineState::GCodeMachineState()
-	: previous(nullptr), feedRate(DefaultFeedRate * SecondsToMinutes), fileState(), lockedResources(0), errorMessage(nullptr), state(GCodeState::normal),
+	: previous(nullptr), feedRate(DefaultFeedRate * SecondsToMinutes), fileState(), lockedResources(0), errorMessage(nullptr), lineNumber(0),
 	  drivesRelative(false), axesRelative(false), doingFileMacro(false), runningM501(false), runningM502(false),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
-	  waitingForAcknowledgement(false), messageAcknowledged(false)
+	  waitingForAcknowledgement(false), messageAcknowledged(false),
+	  indentLevel(0), state(GCodeState::normal)
 {
 }
 
@@ -53,6 +54,25 @@ GCodeMachineState::GCodeMachineState()
 		--inUse;
 	}
 	return inUse;
+}
+
+GCodeMachineState::BlockState& GCodeMachineState::CurrentBlockState()
+{
+	return blockStates[min<size_t>(indentLevel, ARRAY_SIZE(blockStates) - 1)];
+}
+
+void GCodeMachineState::CreateBlock()
+{
+	++indentLevel;
+	CurrentBlockState().SetPlainBlock();
+}
+
+void GCodeMachineState::EndBlock()
+{
+	if (indentLevel != 0)
+	{
+		--indentLevel;
+	}
 }
 
 // End

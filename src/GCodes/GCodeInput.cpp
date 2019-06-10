@@ -11,7 +11,7 @@
 #include "GCodes.h"
 #include "GCodeBuffer.h"
 
-bool GCodeInput::FillBuffer(GCodeBuffer *gb)
+bool StandardGCodeInput::FillBuffer(GCodeBuffer *gb)
 {
 	const size_t bytesToPass = min<size_t>(BytesCached(), GCODE_LENGTH);
 	for (size_t i = 0; i < bytesToPass; i++)

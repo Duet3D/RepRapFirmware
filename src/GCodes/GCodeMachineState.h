@@ -97,17 +97,49 @@ class GCodeMachineState
 {
 public:
 	typedef uint32_t ResourceBitmap;
+
+	// Class to record the state of blocks whe3n using conditional GCode
+	class BlockState
+	{
+	public:
+		BlockState() : blockType(PlainBlock) {}
+
+		bool IsLoop() const { return blockType == LoopBlock; }
+		bool IsIfTrueBlock() const { return blockType == IfTrueBlock; }
+		bool IsIfFalseBlock() const { return blockType == IfFalseBlock; }
+		bool IsPlainBlock() const { return blockType == PlainBlock; }
+
+		uint32_t GetLineNumber() const { return lineNumber; }
+		FilePosition GetFilePosition() const { return fpos; }
+
+		void SetLoopBlock(FilePosition filePos, uint32_t lineNum) { fpos = filePos; lineNumber = lineNum; }
+		void SetPlainBlock() { blockType = PlainBlock; }
+		void SetIfTrueBlock() { blockType = IfTrueBlock; }
+		void SetIfFalseBlock() { blockType = IfFalseBlock; }
+
+	private:
+		FilePosition fpos;											// the file offset at which the current block started
+		uint32_t lineNumber : 30,									// the line number at which the current block started
+				 blockType : 2;										// the type of this block
+
+		static constexpr uint8_t PlainBlock = 0;
+		static constexpr uint8_t IfTrueBlock = 1;
+		static constexpr uint8_t IfFalseBlock = 2;
+		static constexpr uint8_t LoopBlock = 3;
+	};
+
 	GCodeMachineState();
 
 	GCodeMachineState *previous;
 	float feedRate;
 	FileData fileState;
 	ResourceBitmap lockedResources;
+	BlockState blockStates[MaxBlockIndent];
 	const char *errorMessage;
-	GCodeState state;
-	uint8_t toolChangeParam;
+	uint32_t lineNumber;
+
 	int16_t newToolNumber;
-	unsigned int
+	uint16_t
 		drivesRelative : 1,
 		axesRelative : 1,
 		doingFileMacro : 1,
@@ -118,10 +150,13 @@ public:
 		g53Active : 1,							// true if seen G53 on this line of GCode
 		runningSystemMacro : 1,					// true if running a system macro file
 		usingInches : 1,						// true if units are inches not mm
-		// Caution: these next 3 will be modified out-of-process when we use RTOS, so they will need to be individual bool variables
+		// Caution: these next 3 might be modified out-of-process when we use RTOS, if so they will need to be individual bool variables
 		waitingForAcknowledgement : 1,
 		messageAcknowledged : 1,
 		messageCancelled : 1;
+	uint16_t indentLevel;
+	GCodeState state;
+	uint8_t toolChangeParam;
 
 	static GCodeMachineState *Allocate()
 	post(!result.IsLive(); result.state == GCodeState::normal);
@@ -135,6 +170,11 @@ public:
 		volumetricExtrusion = other.volumetricExtrusion;
 		usingInches = other.usingInches;
 	}
+
+	BlockState& CurrentBlockState();
+
+	void CreateBlock();
+	void EndBlock();
 
 	static void Release(GCodeMachineState *ms);
 	static unsigned int GetNumAllocated() { return numAllocated; }

@@ -17,10 +17,10 @@
 static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML file?
 
 // Create a default GCodeBuffer
-GCodeBuffer::GCodeBuffer(const char* id, MessageType mt, bool usesCodeQueue)
-	: machineState(new GCodeMachineState()), identity(id), fileBeingWritten(nullptr), writingFileSize(0), eofStringCounter(0),
-	  toolNumberAdjust(0), responseMessageType(mt),
-	  timerRunning(false), hasCommandNumber(false), commandLetter('Q'),
+GCodeBuffer::GCodeBuffer(const char* id, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, bool usesCodeQueue)
+	: machineState(new GCodeMachineState()), identity(id), normalInput(normalIn), fileInput(fileIn), fileBeingWritten(nullptr), writingFileSize(0),
+	  toolNumberAdjust(0), indentToSkipTo(NoIndentSkip), responseMessageType(mt),
+	  eofStringCounter(0), timerRunning(false), hasCommandNumber(false), commandLetter('Q'),
 	  checksumRequired(false), queueCodes(usesCodeQueue), binaryWriting(false)
 {
 	Init();
@@ -28,7 +28,7 @@ GCodeBuffer::GCodeBuffer(const char* id, MessageType mt, bool usesCodeQueue)
 
 void GCodeBuffer::Reset()
 {
-	while (PopState()) { }
+	while (PopState(false)) { }
 	Init();
 }
 
@@ -40,6 +40,7 @@ void GCodeBuffer::Init()
 	hadLineNumber = hadChecksum = false;
 	computedChecksum = 0;
 	bufferState = GCodeBufferState::parseNotStarted;
+	commandIndent = 0;
 }
 
 void GCodeBuffer::StartTimer()
@@ -116,7 +117,7 @@ inline void GCodeBuffer::StoreAndAddToChecksum(char c)
 }
 
 // Add a byte to the code being assembled.  If false is returned, the code is
-// not yet complete.  If true, it is complete and ready to be acted upon.
+// not yet complete.  If true, it is complete and ready to be acted upon and 'indent' is the number of leading white space characters..
 bool GCodeBuffer::Put(char c)
 {
 	if (c != 0)
@@ -151,12 +152,13 @@ bool GCodeBuffer::Put(char c)
 				hadLineNumber = true;
 				AddToChecksum(c);
 				bufferState = GCodeBufferState::parsingLineNumber;
-				lineNumber = 0;
+				receivedLineNumber = 0;
 				break;
 
 			case ' ':
 			case '\t':
 				AddToChecksum(c);
+				++commandIndent;
 				break;
 
 			default:
@@ -171,7 +173,7 @@ bool GCodeBuffer::Put(char c)
 			if (isDigit(c))
 			{
 				AddToChecksum(c);
-				lineNumber = (10 * lineNumber) + (c - '0');
+				receivedLineNumber = (10 * receivedLineNumber) + (c - '0');
 				break;
 			}
 			else
@@ -293,7 +295,7 @@ bool GCodeBuffer::LineFinished()
 	{
 		if (hadLineNumber)
 		{
-			SafeSnprintf(gcodeBuffer, ARRAY_SIZE(gcodeBuffer), "M998 P%u", lineNumber);	// request resend
+			SafeSnprintf(gcodeBuffer, ARRAY_SIZE(gcodeBuffer), "M998 P%u", receivedLineNumber);	// request resend
 		}
 		else
 		{
@@ -308,13 +310,214 @@ bool GCodeBuffer::LineFinished()
 		return false;
 	}
 
+	++machineState->lineNumber;
+	if (machineState->fileState.IsLive())
+	{
+		if (indentToSkipTo < commandIndent)
+		{
+			Init();
+			return false;													// continue skipping this block
+		}
+		bool skippedIfFalse = false;
+		if (indentToSkipTo != NoIndentSkip && indentToSkipTo >= commandIndent)
+		{
+			// Finished skipping the nested block
+			if (indentToSkipTo == commandIndent)
+			{
+				skippedIfFalse = (machineState->CurrentBlockState().IsIfFalseBlock());
+				machineState->CurrentBlockState().SetPlainBlock();			// we've ended the loop or if-block
+			}
+			indentToSkipTo = NoIndentSkip;									// no longer skipping
+		}
+		if (ProcessConditionalGCode(skippedIfFalse))
+		{
+			Init();
+			return false;
+		}
+	}
 	commandStart = 0;
 	DecodeCommand();
 	return true;
 }
 
-// Decode this command command and find the start of the next one on the same line.
-// On entry, 'commandStart' has already been set to the address the start of where the command should be.
+// Check for and process a conditional GCode language command returning true if we found one, false if it's a regular line of GCode that we need to process
+// 'expectingElse' is true if we just finished skipping and if-block when the condition was false and there might be an 'else'
+bool GCodeBuffer::ProcessConditionalGCode(bool skippedIfFalse)
+{
+	if (commandIndent > machineState->indentLevel)
+	{
+		CreateBlocks();					// indentation has increased so start new block(s)
+	}
+	else if (commandIndent < machineState->indentLevel)
+	{
+		if (EndBlocks())
+		{
+			return true;
+		}
+	}
+
+	// Check for language commands. First count the number of lowercase characters.
+	unsigned int i = 0;
+	while (gcodeBuffer[i] >= 'a' && gcodeBuffer[i] <= 'z')
+	{
+		++i;
+		if (i == 6)
+		{
+			break;				// all command words are less than 6 characters long
+		}
+	}
+
+	if (i >= 2 && i < 6 && (gcodeBuffer[i] == 0 || gcodeBuffer[i] == ' ' || gcodeBuffer[i] == '\t'))		// if the command word is properly terminated
+	{
+		switch (i)
+		{
+		case 2:
+			if (StringStartsWith(gcodeBuffer, "if"))
+			{
+				ProcessIfCommand();
+				return true;
+			}
+			break;
+
+		case 3:
+			if (StringStartsWith(gcodeBuffer, "var"))
+			{
+				ProcessVarCommand();
+				return true;
+			}
+			break;
+
+		case 4:
+			if (StringStartsWith(gcodeBuffer, "else"))
+			{
+				ProcessElseCommand(skippedIfFalse);
+				return true;
+			}
+			break;
+
+		case 5:
+			if (StringStartsWith(gcodeBuffer, "while"))
+			{
+				ProcessWhileCommand();
+				return true;
+			}
+
+			if (StringStartsWith(gcodeBuffer, "break"))
+			{
+				ProcessBreakCommand();
+				return true;
+			}
+			break;
+		}
+	}
+
+	return false;
+}
+
+// Create new code blocks
+void GCodeBuffer::CreateBlocks()
+{
+	while (machineState->indentLevel < commandIndent)
+	{
+		machineState->CreateBlock();
+	}
+}
+
+// End blocks returning true if nothing more to process on this line
+bool GCodeBuffer::EndBlocks()
+{
+	while (machineState->indentLevel > commandIndent)
+	{
+		machineState->EndBlock();
+		if (machineState->CurrentBlockState().IsLoop())
+		{
+			// Go back to the start of the loop and re-evaluate the while-part
+			machineState->lineNumber = machineState->CurrentBlockState().GetLineNumber();
+			RestartFrom(machineState->CurrentBlockState().GetFilePosition());
+			return true;
+		}
+	}
+	return false;
+}
+
+void GCodeBuffer::ProcessIfCommand()
+{
+	if (EvaluateCondition("if"))
+	{
+		machineState->CurrentBlockState().SetIfTrueBlock();
+	}
+	else
+	{
+		machineState->CurrentBlockState().SetIfFalseBlock();
+		indentToSkipTo = machineState->indentLevel;					// skip forwards to the end of the block
+	}
+}
+
+void GCodeBuffer::ProcessElseCommand(bool skippedIfFalse)
+{
+	if (skippedIfFalse)
+	{
+		machineState->CurrentBlockState().SetPlainBlock();				// execute the else-block, treating it like a plain block
+	}
+	else if (machineState->CurrentBlockState().IsIfTrueBlock())
+	{
+		indentToSkipTo = machineState->indentLevel;						// skip forwards to the end of the if-block
+	}
+	else
+	{
+		ReportProgramError("'else' did not follow 'if");
+		indentToSkipTo = machineState->indentLevel;						// skip forwards to the end of the block
+	}
+}
+
+void GCodeBuffer::ProcessWhileCommand()
+{
+	if (EvaluateCondition("while"))
+	{
+		machineState->CurrentBlockState().SetLoopBlock(GetFilePosition(), machineState->lineNumber);
+	}
+	else
+	{
+		indentToSkipTo = machineState->indentLevel;					// skip forwards to the end of the block
+	}
+}
+
+void GCodeBuffer::ProcessBreakCommand()
+{
+	do
+	{
+		if (machineState->indentLevel == 0)
+		{
+			ReportProgramError("'break' was not inside a loop");
+			return;
+		}
+		machineState->EndBlock();
+	} while (!machineState->CurrentBlockState().IsLoop());
+	machineState->CurrentBlockState().SetPlainBlock();
+}
+
+void GCodeBuffer::ProcessVarCommand()
+{
+	ReportProgramError("'var' not implemented yet");
+}
+
+// Evaluate the condition that should follow 'if' or 'while'
+// If we fail, report an error and return false
+bool GCodeBuffer::EvaluateCondition(const char* keyword)
+{
+	reprap.GetPlatform().MessageF(AddError(responseMessageType), "Failed to evaluate condition after '%s'\n", keyword);
+	return false;
+}
+
+// Report a program error
+void GCodeBuffer::ReportProgramError(const char *str)
+{
+	reprap.GetPlatform().MessageF(AddError(responseMessageType), "%s\n", str);
+}
+
+// Decode this command and find the start of the next one on the same line.
+// On entry, 'commandStart' has already been set to the address the start of where the command should be
+// and 'commandIndent' is the number of leading whitespace characters at the start of the current line.
 // On return, the state must be set to 'ready' to indicate that a command is available and we should stop adding characters.
 void GCodeBuffer::DecodeCommand()
 {
@@ -453,11 +656,11 @@ void GCodeBuffer::SetFinished(bool f)
 }
 
 // Get the file position at the start of the current command
-FilePosition GCodeBuffer::GetFilePosition(size_t bytesCached) const
+FilePosition GCodeBuffer::GetFilePosition() const
 {
 	if (machineState->fileState.IsLive())
 	{
-		return machineState->fileState.GetPosition() - bytesCached - commandLength + commandStart;
+		return machineState->fileState.GetPosition() - fileInput->BytesCached() - commandLength + commandStart;
 	}
 	return noFilePosition;
 }
@@ -1093,7 +1296,7 @@ float GCodeBuffer::InverseConvertDistance(float distance) const
 }
 
 // Push state returning true if successful (i.e. stack not overflowed)
-bool GCodeBuffer::PushState()
+bool GCodeBuffer::PushState(bool preserveLineNumber)
 {
 	// Check the current stack depth
 	unsigned int depth = 0;
@@ -1111,6 +1314,7 @@ bool GCodeBuffer::PushState()
 	ms->feedRate = machineState->feedRate;
 	ms->fileState.CopyFrom(machineState->fileState);
 	ms->lockedResources = machineState->lockedResources;
+	ms->lineNumber = (preserveLineNumber) ? machineState->lineNumber : 0;
 	ms->drivesRelative = machineState->drivesRelative;
 	ms->axesRelative = machineState->axesRelative;
 	ms->usingInches = machineState->usingInches;
@@ -1128,7 +1332,7 @@ bool GCodeBuffer::PushState()
 }
 
 // Pop state returning true if successful (i.e. no stack underrun)
-bool GCodeBuffer::PopState()
+bool GCodeBuffer::PopState(bool preserveLineNumber)
 {
 	GCodeMachineState * const ms = machineState;
 	if (ms->previous == nullptr)
@@ -1139,13 +1343,17 @@ bool GCodeBuffer::PopState()
 	}
 
 	machineState = ms->previous;
+	if (preserveLineNumber)
+	{
+		machineState->lineNumber = ms->lineNumber;
+	}
 	GCodeMachineState::Release(ms);
 	return true;
 }
 
 // Abort execution of any files or macros being executed, returning true if any files were closed
 // We now avoid popping the state if we were not executing from a file, so that if DWC or PanelDue is used to jog the axes before they are homed, we don't report stack underflow.
-void GCodeBuffer::AbortFile(FileGCodeInput* fileInput)
+void GCodeBuffer::AbortFile()
 {
 	if (machineState->fileState.IsLive())
 	{
@@ -1156,7 +1364,7 @@ void GCodeBuffer::AbortFile(FileGCodeInput* fileInput)
 				fileInput->Reset(machineState->fileState);
 				machineState->fileState.Close();
 			}
-		} while (PopState());							// abandon any macros
+		} while (PopState(false));							// abandon any macros
 	}
 }
 
@@ -1291,6 +1499,28 @@ void GCodeBuffer::FinishWritingBinary()
 	{
 		reprap.GetGCodes().HandleReply(*this, GCodeResult::error, "CRC32 checksum doesn't match");
 	}
+}
+
+void GCodeBuffer::StartFileMacro(FileStore *f, int codeRunning)
+{
+	machineState->fileState.Set(f);
+	fileInput->Reset(machineState->fileState);
+	machineState->doingFileMacro = true;
+	machineState->runningM501 = (codeRunning == 501);
+	machineState->runningM502 = (codeRunning == 502);
+	if (codeRunning != 98)
+	{
+		machineState->runningSystemMacro = true;	// running a system macro e.g. homing or tool change, so don't use workplace coordinates
+	}
+	SetState(GCodeState::normal);
+	Init();
+}
+
+void GCodeBuffer::RestartFrom(FilePosition pos)
+{
+	fileInput->Reset(machineState->fileState);		// clear the buffered data
+	machineState->fileState.Seek(pos);				// replay the abandoned instructions when we resume
+	Init();											// clear the next move
 }
 
 // This is called when we reach the end of the file we are reading from

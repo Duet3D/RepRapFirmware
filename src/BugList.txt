@@ -180,10 +180,14 @@ In 2.03RC5:
 - [done] Duet Maestro build now supports laser cutters
 - [done] SCARA bug: when attempting to move beyond arm limits the cached X and Y are inconsistent with the cached theta and psi
 
+For 2.03 release:
+- Add virtual extruder position to M114 response for Octoprint, https://forum.duet3d.com/topic/10821/returning-virtual-extruder-position-in-m114/3
+- When disabling network or a protocol, set the number of active HTTP and/or Telnet clients to 0
+
 Outstanding issues:
 - Running out of output buffers and not freeing them up, https://forum.duet3d.com/post/96586
 - Inconsistent Z0 position, https://forum.duet3d.com/user/caveman
-- [defer] When writing resurrect.g after a pause, 
+- [defer] When writing resurrect.g after a pause, the G92 coordinates are wrong
 
 Planned for 3.0:
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5

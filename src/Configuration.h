@@ -176,6 +176,9 @@ constexpr uint32_t DefaultFanBlipTime = 100;			// fan blip time in milliseconds
 constexpr unsigned int MaxM577Ports = 4;
 constexpr unsigned int MaxPortsPerTrigger = 4;
 
+// Conditional GCode support
+constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. Each level of indentation introduced a new block.
+
 // Default Z probe values
 
 // The maximum number of probe points is constrained by RAM usage:

@@ -252,8 +252,8 @@ private:
 
 	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove);	// Set up the extrusion of a move
 
-	bool Push(GCodeBuffer& gb);													// Push feedrate etc on the stack
-	void Pop(GCodeBuffer& gb);													// Pop feedrate etc
+	bool Push(GCodeBuffer& gb, bool preserveLineNumber);						// Push feedrate etc on the stack
+	void Pop(GCodeBuffer& gb, bool preserveLineNumber);							// Pop feedrate etc
 	void DisableDrives();														// Turn the motors off
 																				// Start saving GCodes in a file
 	bool SendConfigToLine();													// Deal with M503
@@ -366,15 +366,9 @@ private:
 
 	Platform& platform;													// The RepRap machine
 
-	FileGCodeInput* fileInput;											// ...
-	StreamGCodeInput* serialInput;										// ...
-
 #if HAS_NETWORKING
 	NetworkGCodeInput* httpInput;										// These cache incoming G-codes...
 	NetworkGCodeInput* telnetInput;										// ...
-#endif
-#ifdef SERIAL_AUX_DEVICE
-	StreamGCodeInput* auxInput;											// ...for the GCodeBuffers below
 #endif
 
 	GCodeBuffer* gcodeSources[9];										// The various sources of gcodes

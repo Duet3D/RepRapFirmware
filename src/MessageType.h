@@ -43,7 +43,7 @@ enum MessageType : uint16_t
 
 inline MessageType AddError(MessageType mt)
 {
-	return (MessageType)(mt | ErrorMessageFlag);
+	return (MessageType)(mt | ErrorMessageFlag | LogMessage);
 }
 
 #endif /* MESSAGETYPE_H_ */

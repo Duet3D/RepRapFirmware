@@ -10,6 +10,7 @@
 
 #include "RepRapFirmware.h"
 #include "GCodeMachineState.h"
+#include "GCodeInput.h"
 #include "MessageType.h"
 #include "ObjectModel/ObjectModel.h"
 
@@ -17,7 +18,7 @@
 class GCodeBuffer
 {
 public:
-	GCodeBuffer(const char* id, MessageType mt, bool useCodeQueue);
+	GCodeBuffer(const char* id, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, bool useCodeQueue);
 	void Reset();										// Reset it to its state after start-up
 	void Init(); 										// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype);				// Write some debug info
@@ -72,9 +73,9 @@ public:
 	GCodeMachineState& OriginalMachineState() const;
 	float ConvertDistance(float distance) const;
 	float InverseConvertDistance(float distance) const;
-	bool PushState();									// Push state returning true if successful (i.e. stack not overflowed)
-	bool PopState();									// Pop state returning true if successful (i.e. no stack underrun)
-	void AbortFile(FileGCodeInput* fileInput);			// Abort execution of any files or macros being executed
+	bool PushState(bool preserveLineNumber);			// Push state returning true if successful (i.e. stack not overflowed)
+	bool PopState(bool preserveLineNumber);				// Pop state returning true if successful (i.e. no stack underrun)
+	void AbortFile();									// Abort execution of any files or macros being executed
 
 	bool IsDoingFileMacro() const;						// Return true if this source is executing a file macro
 	GCodeState GetState() const;
@@ -84,7 +85,7 @@ public:
 	const char *GetIdentity() const { return identity; }
 	bool CanQueueCodes() const;
 	void MessageAcknowledged(bool cancelled);
-	FilePosition GetFilePosition(size_t bytesCached) const;	// Get the file position at the start of the current command
+	FilePosition GetFilePosition() const;				// Get the file position at the start of the current command
 
 	bool OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32);	// open a file to write to
 	bool IsWritingFile() const { return fileBeingWritten != nullptr; }		// returns true if writing a file
@@ -103,7 +104,13 @@ public:
 	uint32_t WhenTimerStarted() const { return whenTimerStarted; }
 	void StartTimer();
 	void StopTimer() { timerRunning = false; }
-	bool DoDwellTime(uint32_t dwellMillis);				// execute a dwell returning true if it has finoshed
+	bool DoDwellTime(uint32_t dwellMillis);									// execute a dwell returning true if it has finoshed
+
+	void StartFileMacro(FileStore *f, int codeRunning);
+	void RestartFrom(FilePosition pos);
+
+	FileGCodeInput *GetFileInput() const { return fileInput; }	//TEMPORARY!
+	GCodeInput *GetNormalInput() const { return normalInput; }	//TEMPORARY!
 
 private:
 
@@ -140,35 +147,53 @@ private:
 		pre (readPointer >= 0; gcodeBuffer[readPointer] == '[');
 #endif
 
+	bool ProcessConditionalGCode(bool skippedIfFalse);	// Check for and process a conditional GCode language command returning true if we found one
+	void CreateBlocks();								// Create new code blocks
+	bool EndBlocks();									// End blocks returning true if nothing more to process on this line
+	void ProcessIfCommand();
+	void ProcessElseCommand(bool skippedIfFalse);
+	void ProcessWhileCommand();
+	void ProcessBreakCommand();
+	void ProcessVarCommand();
+	bool EvaluateCondition(const char* keyword);
+	void ReportProgramError(const char *str);
+
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 	const char* const identity;							// Where we are from (web, file, serial line etc)
-	unsigned int commandStart;							// Index in the buffer of the command letter of this command
-	unsigned int parameterStart;
+	GCodeInput *normalInput;							// Our normal input stream, or nullptr if there isn't one
+	FileGCodeInput *fileInput;							// Our file input stream for when we are reading form a print file or a macro file, may be shared with other GCodeBuffers
+
+	unsigned int commandStart;							// Index in the buffer of the command letter of the current command
+	unsigned int parameterStart;						// Index in the buffer where the parameters of the current command start
 	unsigned int commandEnd;							// Index in the buffer of one past the last character of this command
 	unsigned int commandLength;							// Number of characters we read to build this command including the final \r or \n
 	unsigned int gcodeLineEnd;							// Number of characters in the entire line of gcode
-	int readPointer;									// Where in the buffer to read next
-	GCodeBufferState bufferState;						// Idle, executing or paused
+	int readPointer;									// Where in the buffer to read next, or -1
 
 	FileStore *fileBeingWritten;						// If we are copying GCodes to a file, which file it is
 	FilePosition writingFileSize;						// Size of the file being written, or zero if not known
-	uint8_t eofStringCounter;							// Check the...
 
 	int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
-	const MessageType responseMessageType;				// The message type we use for responses to commands coming from this channel
-	unsigned int lineNumber;
+	unsigned int receivedLineNumber;
 	unsigned int declaredChecksum;
 	int commandNumber;
 	uint32_t crc32;										// crc32 of the binary file
-
 	uint32_t whenTimerStarted;							// when we started waiting
-	uint8_t timerRunning;
 
+	uint16_t indentToSkipTo;
+	static constexpr uint16_t NoIndentSkip = 0xFFFF;	// must be greater than any real indent
+
+	const MessageType responseMessageType;				// The message type we use for responses to commands coming from this channel
+
+	GCodeBufferState bufferState;						// Idle, executing or paused
+	uint8_t eofStringCounter;							// Check the...
+	uint8_t timerRunning;
 	uint8_t computedChecksum;
 	bool hadLineNumber;
 	bool hadChecksum;
 	bool hasCommandNumber;
 	char commandLetter;
+	uint8_t commandIndent;								// Number of whitespace characters before the line number or the first command starts
 
 	char gcodeBuffer[GCODE_LENGTH];						// The G Code
 	bool checksumRequired;								// True if we only accept commands with a valid checksum

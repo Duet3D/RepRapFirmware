@@ -869,7 +869,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			// Pronterface keeps sending M27 commands if "Monitor status" is checked, and it specifically expects the following response syntax
 			FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
-			reply.printf("SD printing byte %lu/%lu", fileBeingPrinted.GetPosition() - fileInput->BytesCached(), fileBeingPrinted.Length());
+			reply.printf("SD printing byte %lu/%lu", GetFilePosition(), fileBeingPrinted.Length());
 		}
 		else
 		{
@@ -1581,11 +1581,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 120:
-		Push(gb);
+		Push(gb, true);
 		break;
 
 	case 121:
-		Pop(gb);
+		Pop(gb, true);
 		break;
 
 	case 122:
@@ -2281,7 +2281,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
 
 				// If we need to wait for an acknowledgement, save the state and set waiting
-				if ((sParam == 2 || sParam == 3) && Push(gb))						// stack the machine state including the file position
+				if ((sParam == 2 || sParam == 3) && Push(gb, true))					// stack the machine state including the file position
 				{
 					UnlockMovement(gb);												// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
 					gb.MachineState().fileState.Close();							// stop reading from file
