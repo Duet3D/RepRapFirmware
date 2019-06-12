@@ -414,24 +414,7 @@ void Platform::Init()
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
 		driverState[drive] = DriverStatus::disabled;
-		driveDriverBits[drive] = driveDriverBits[drive + MaxTotalDrivers] = StepPins::CalcDriverBitmap(drive);
-
-		// Map axes and extruders straight through
-		if (drive < MinAxes)
-		{
-#ifdef PCCB
-			const size_t axis = (drive == 0) ? Z_AXIS
-								: (drive == 1) ? X_AXIS
-									: Y_AXIS;					// on PCCB we map Z X Y to drivers 0 1 2
-			driveDriverBits[axis] = StepPins::CalcDriverBitmap(drive);	// overwrite the default value set up earlier
-			axisDrivers[axis].numDrivers = 1;
-			axisDrivers[axis].driverNumbers[0] = (uint8_t)drive;
-#else
-			const size_t axis = drive;							// map axes straight through to drives
-			axisDrivers[axis].numDrivers = 1;
-			axisDrivers[axis].driverNumbers[0] = (uint8_t)drive;
-#endif
-		}
+		driveDriverBits[drive] = driveDriverBits[drive + MaxTotalDrivers] = StepPins::CalcDriverBitmap(drive);	// map straight through by default
 
 		if (drive < NumDirectDrivers)
 		{
@@ -447,6 +430,19 @@ void Platform::Init()
 			pinDesc.pPort->PIO_OWER = pinDesc.ulPin;			// enable parallel writes to the step pins
 #endif
 		}
+	}
+
+	// Set up default axis mapping
+	for (size_t axis = 0; axis < MinAxes; ++axis)
+	{
+#ifdef PCCB
+		const size_t drive = (axis + 1) % 3;					// on PCCB we map axes X Y Z to drivers 1 2 0
+#else
+		const size_t drive = axis;								// on most boards we map axes straight through to drives
+#endif
+		driveDriverBits[axis] = StepPins::CalcDriverBitmap(drive);	// overwrite the default value set up earlier
+		axisDrivers[axis].numDrivers = 1;
+		axisDrivers[axis].driverNumbers[0] = (uint8_t)drive;
 	}
 
 	for (uint32_t& entry : slowDriverStepTimingClocks)
