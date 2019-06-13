@@ -1353,6 +1353,9 @@ void HttpResponder::Diagnostics(MessageType mt) const
 /*static*/ void HttpResponder::Disable()
 {
 	MutexLocker lock(gcodeReplyMutex);
+
+	clientsServed = 0;
+	numSessions = 0;
 	gcodeReply.ReleaseAll();
 }
 

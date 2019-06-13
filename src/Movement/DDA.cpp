@@ -473,18 +473,18 @@ bool DDA::InitStandardMove(DDARing& ring, GCodes::RawMove &nextMove, bool doMoto
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
 	endSpeed = 0.0;							// until the next move asks us to adjust it
 
-	if (prev->state != provisional || flags.isPrintingMove != prev->flags.isPrintingMove || flags.xyMoving != prev->flags.xyMoving)
-	{
-		// There is no previous move that we can adjust, so this move must start at zero speed.
-		startSpeed = 0.0;
-	}
-	else
+	if (prev->state == provisional && (move.GetJerkPolicy() != 0 || (flags.isPrintingMove == prev->flags.isPrintingMove && flags.xyMoving == prev->flags.xyMoving)))
 	{
 		// Try to meld this move to the previous move to avoid stop/start
 		// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = v^2 - 2as
 		prev->beforePrepare.targetNextSpeed = min<float>(sqrtf(deceleration * totalDistance * 2.0), requestedSpeed);
 		DoLookahead(ring, prev);
 		startSpeed = prev->endSpeed;
+	}
+	else
+	{
+		// There is no previous move that we can adjust, so start at zero speed.
+		startSpeed = 0.0;
 	}
 
 	RecalculateMove(ring);

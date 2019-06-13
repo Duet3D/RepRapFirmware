@@ -165,6 +165,9 @@ public:
 
 	uint32_t ExtruderPrintingSince() const { return mainDDARing.ExtruderPrintingSince(); }	// When we started doing normal moves after the most recent extruder-only move
 
+	unsigned int GetJerkPolicy() const { return jerkPolicy; }
+	void SetJerkPolicy(unsigned int jp) { jerkPolicy = jp; }
+
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const;			// Get the current step interval for this axis or extruder
 #endif
@@ -203,6 +206,7 @@ private:
 	float drcPeriod;									// the period of ringing that we don't want to excite
 	float drcMinimumAcceleration;						// the minimum value that we reduce acceleration to
 
+	unsigned int jerkPolicy;							// When we allow jerk
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
 	uint32_t numHiccups;								// How many times we delayed an interrupt to avoid using too much CPU time in interrupts

@@ -66,10 +66,16 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
 #endif
 
-Move::Move() : active(false)
+Move::Move()
+	: active(false),
+	  drcEnabled(false),											// disable dynamic ringing cancellation
+	  maxPrintingAcceleration(10000.0), maxTravelAcceleration(10000.0),
+	  drcPeriod(0.025),												// 40Hz
+	  drcMinimumAcceleration(10.0),
+	  jerkPolicy(0)
 {
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
-	kinematics = Kinematics::Create(KinematicsType::cartesian);			// default to Cartesian
+	kinematics = Kinematics::Create(KinematicsType::cartesian);		// default to Cartesian
 	mainDDARing.Init1(DdaRingLength);
 	DriveMovement::InitialAllocate(NumDms);
 }
@@ -77,11 +83,6 @@ Move::Move() : active(false)
 void Move::Init()
 {
 	mainDDARing.Init2();
-
-	maxPrintingAcceleration = maxTravelAcceleration = 10000.0;
-	drcEnabled = false;											// disable dynamic ringing cancellation
-	drcMinimumAcceleration = 10.0;
-	drcPeriod = 50.0;
 
 	// Clear the transforms
 	SetIdentityTransform();

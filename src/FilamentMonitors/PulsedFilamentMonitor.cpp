@@ -81,7 +81,7 @@ bool PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 	}
 	else
 	{
-		reply.printf("Pulse-type filament monitor on endstop input %u, %s, sensitivity %.2fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
+		reply.printf("Pulse-type filament monitor on endstop input %u, %s, sensitivity %.3fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
 						GetEndstopNumber(),
 						(comparisonEnabled) ? "enabled" : "disabled",
 						(double)mmPerPulse,
