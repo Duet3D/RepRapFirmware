@@ -1,29 +1,27 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 2.03RC5
-=================
+Version 2.03
+============
+Compatible files:
+- DuetWiFiServer 1.23
+- DuetWebControl 1.22.6 or 2.0.0-RC6
+
 Upgrade notes:
-- See the upgrade notes for 2.03RC3.
+- Restore points (created by G60 and created automatically at the start of a pause or a tool change) now have their coordinates stored independently of any workplace offsets. So if you create a restore point and then change the workplace offsets, when you go back to the restore point it will go back to the same machine position regardless of the change in workplace offsets.
+- Tool changers, IDEX printers and similar using tpre#.g and tpost#.g files: tool offsets are now applied within the tpre#.g and tpost#.g macros.
+- DueX2 and DueX5 users: if you have been experiencing high I2C error counts, then in the past this usually led to the machine printing very slowly when the errors started occurring. Changes to the I2C drivers should allow the machine to recover from the error in most cases. However, if it does not recover then the machine will most likely continue to run as normal, except that the states of endstops on the DueX will not be read correctly and commands to change settings of fans on the DueX won't work. So watch out for these different symptoms.
+- Duet Maestro users with a 12864 display may need to make minor changes to their menu files to correct for changes in spacing and automatic insertion of % characters after certain values e.g. fan speed
+- Laser mode: for safety, the G1 S parameter is no longer sticky by default. You can make it sticky by adding parameter S1 to the M452 command.
+- If you have a CoreXY or other Core architecture printer, and you were using any axis factor parameters in your M667 command in config.g, those parameters are no longer supported. You will need to use M669 matrix parameters instead.
+- nanoDLP users: an empty macro file M650.g must be created in /sys, and file peel-move.g must be renamed to M651.g
+- The M135 command is no longer supported, but AFAIK nobody used it
 
 Feature improvements/changed behaviour:
-- When disabling HTTP protocol or disabling the network, release any associated resources e.g. output buffers. Similarly for FTP and Telnet.
+- Added M566 P parameter to control the jerk policy
+- The M114 response now includes the virtual extruder position (for Octoprint) and the bed compensation amount at the current position
 - In SCARA printers/laser cutters (not CNC machines), if we can't do a coordinated travel move due to unreachable intermediate positions, try an uncoordinated one
 - Duet Maestro build now supports laser cutters
-
-Bug fixes:
-- After running stop.g ensure all moves are finished before setting motors to idle current
-- When downloading a .zip file don't set content-encoding to gzip
-- Delta printer limit checking didn't work in some cases
-- FTP responder: initialise haveCompleteLine (thanks gtjoseph)
-- On SCARA printers, when attempting to move beyond arm limits, the XY coordinates computed from the adjusted motor endpoints were incorrect 
-
-Version 2.03RC4
-=================
-Upgrade notes:
-- See the upgrade notes for 2.03RC3.
-
-Feature improvements/changed behaviour:
 - The Move section of the diagnostics output now includes the Z shift
 - The Move section of the diagnostics output only includes bed probe heights if 3/4/5-point bed compensation is in use
 - M1 no longer disables drives (you can do that in sleep.g)
@@ -32,21 +30,7 @@ Feature improvements/changed behaviour:
 - Implemented M675 (thanks wilriker)
 - If you run mesh bed probing and there is a substantial height offset, a warning is generated
 - If you load a mesh and the Z datum has not been set by probing and there is a Z probe, a warning is generated
-- M114 displays the bed compensation amount at current position
-
-Bug fixes:
-- In 2.03RC3, G10 L20 gave wrong results when a workplace coordinate offset was in use
-- If Z probe averaging mode was being used when mesh probing, an incorrect Z shift could be applied
-- M0 H1 turned heaters off after running stop.g instead of leaving them on
-
-Version 2.03RC3
-=================
-Upgrade notes:
-- Please be careful with using workplace coordinate offsets (G10 L2, G10 L20, G54-G59) because the code that handles them has undergone major changes, so it may contain new bugs. Also see the note on changed behaviour of G60 below.
-- See also the upgrade notes for version 2.03RC2 if you are not coming from that version
-
-Feature improvements/changed behaviour:
-- Restore points (created by G60 and created automatically at the start of a pause or a tool change) now have their coordinates stored independently of any workplace offsets. So if you create a restore point and then change the workplace offsets, when you go back to the restore point it will go back to the same machine position regardless of the change in workplace offsets.
+- Delta printer limit checking has been rewritten to be more accurate
 - In CoreNG, increment I2C reset count when resetting the I2C system
 - Recognise filament usage comment in Prusa slicer
 - G53 is now available even when workplace coordinates not supported in build (cancels tool offsets)
@@ -56,51 +40,7 @@ Feature improvements/changed behaviour:
 - M584 formatting improvement when a has no extruders
 - M563 P# formatting improvements when the tool has no heaters or no drives
 - Added extra diagnostics for when a filename is too long
-
-Bug fixes:
-- Independent leadscrew moves for true bed levelling didn't work when driver numbers >= MaxAxes were used to drive Z motors
-- Added missing newline at end of some error messages
-- M585 L parameter was not working
-- In resume.g a G1 R command went to the wrong coordinates if workplace coordinate offsets were being used
-- Homing files when workplace coordinate offsets were active cause other axes to move
-- Resurrect.g now works when workplace offsets are used, and it restores the current workplace # and all workplace offsets
-- In resurrect.g, the current tool is now selected after running resurrect-prologue, and its tpre and tpost files are run (for tool changer)
-- In resurrect.g, fan speeds are now set up after the tool is selected so that the mapped fan speed is correct
-- In resurrect.g, when setting the last known position with G92 prior to calling resurrect-prologue.g, allow for tool offsets
-- Babystepping could cause an incorrect Z coordinate to be set under some conditions
-
-Version 2.03RC2
-=================
-
-Upgrade notes:
-- DueX2 and DueX5 users: if you have been experiencing high I2C error counts, then in the past this usually led to the machine printing very slowly when the errors started occurring. Changes to the I2C drivers should allow the machine to recover from the error in most cases. However, if it does not recover then the machine will most likely continue to run as normal, except that the states of endstops on the DueX will not be read correctly and commands to change settings of fans on the DueX won't work. So watch out for these different symptoms.
-- See upgrade notes for 2.03RC1.
-
-Compatible files:
-- DuetWiFiServer 1.23
-- DuetWebControl 1.22.6 or 2.0.0-RC6
-
-New features and changed behaviour:
 - When a DueX is attached, a separate task is now used to read the states of DueX endstop inputs when they change. This should give much lower latency.
-
-Bug fixes:
-- When I2C timeouts occurred, no attempt was made to reset the I2C controller before the next I2C transaction attempt. The I2C driver now resets the controller on the Duet MCU after an I2C error, also it retries the failed transaction twice.
-- Some PWM channels didn't work correctly in the Due06/085 build (this was also fixed in temporary release 2.03RC1+1).
-
-Version 2.03RC1
-=================
-
-Upgrade notes:
-- The facility to map endstops using the A parameter in the M574 command has been withdrawn. Use RepRapFirmware 3 if you need an equivalent facility.
-- Duet Maestro users with a 12864 display may need to make minor changes to their menu files to correct for changes in spacing and automatic insertion of % characters after certain values e.g. fan speed
-- See also the upgrade notes for earlier releases, unless you are upgrading from 2.03beta3. **Tool change users please note:** tool offsets are now applied in tfree#.g and tpost#.g files (in firmware 2.02 they were not applied).
-
-Compatible files:
-- DuetWiFiServer 1.23
-- DuetWebControl 1.22.6 or 2.0.0-RC6
-
-New features and changed behaviour:
-- Endstop mapping and M574 A parameter have been removed
 - Added 12864 menu items 534-539
 - The 12864 display no longer automatically adds a space column after each item, except for left-justified text items without an explicit width
 - The 12864 display system automatically appends a % character to value/alter items that are normally expressed in percent, e.g. fan speeds, print speed, extrusion factors
@@ -111,39 +51,6 @@ New features and changed behaviour:
 - Prints can now be baby stepped, paused and cancelled while they are waiting for temperatures to be reached
 - Increased maximum number of triggers from 10 to 16
 - Increased number of output buffers on Duet WiFi/Ethernet/Maestro from 20 to 24
-
-Bug fixes:
-- M585 works again
-- In resurrect.g file the M290 command now commands absolute babystepping, the filename in M23 command is enclosed in double quote marks, and the inches/mm setting is restored
-- The W5500 chip could not be reset on Duet Maestro
-- M109 did not run the tool change files if no tool was active initially
-- If a print finishes or is cancelled when Z hop is active because of a G10 command without a subsequent G11, the Z hop is cancelled (but not the associated retraction)
-- Blank lines in 12864 display menu files are now ignored
-- Visibility attributes were not correctly applied to 12864 display value, alter and image menu items
-- Fixed a couple of issues with the 12864 display "files" menu item when the file path refers to SD card 1. The SD card is mounted automatically if it isn't already mounted.
-- Fixed (hopefully - not tested!) issue with Fan 1 on Duet085 in 2.03 beta releases
-
-Internal changes:
-- Use new CoreNG API with common RTOS/non-RTOS builds of CoreNG (same CoreNG as RRF 3)
-- File CAN/CanMessageFormats.h moved from project Duet3Expansion to RepRapFirmware
-- Removed async move queue facility, use RRF3 if you need that
-
-Version 2.03beta3
-=================
-
-Upgrade notes:
-- There has been extensive refactoring of the step pulse generation code in this version. Because of this, we suggest that you do not use this firmware for long-running jobs until we all have more experience with it.
-- Tool changers, IDEX printers and similar using tpre#.g and tpost#.g files: tool offsets are now applied within the tpre#.g and tpost#.g macros.
-- Laser mode: for safety, the G1 S parameter is no longer sticky by default. You can make it sticky by adding parameter S1 to the M452 command.
-- Delta printers with more than 3 towers: you may need to adjust the positions of endstop switches for additional carriages, because an error in earlier firmware versions causes the homed carriage heights to be calculated incorrectly.
-- nanoDLP users: an empty macro file M650.g must be created in /sys, and file peel-move.g must be renamed to M651.g
-- See also the upgrade notes for earlier 2.03 beta versions.
-
-Known issues:
-- Custom endstop input numbers in the M585 command (probe tool) don't work
-- On the Duet 085, Fan 1 doesn't work
-
-New features/changed behaviour:
 - M505 (set SD card system folder) is now implemented
 - M470 and M471 commands are now implemented (thanks wilriker)
 - On deltas with more than 3 towers, M666 can be used to set endstop corrections for all towers. The additional towers must be named UVW.
@@ -156,61 +63,14 @@ New features/changed behaviour:
 - If you try to use a G- or M-code that the firmware doesn't recognise, it will try to run a macro file of that name. For example, command M650 tries to run /sys/M650.g.
 - M650 and M651 are no longer recognised, unless you create macros M650.g and M651.g
 - The heater tuning timeouts have been increased to 30 minutes for bed and chamber heaters (was 20 minutes) and 7 minutes for extruder heaters (was 5 minutes)
-
-Bug fixes:
-- On the 12864 display on the Duet Maestro, if the gcodes folder contained any files with names starting '.' or '..' (not counting the current and parent directories), then when selecting a file to print the wrong file might be selected
-- HttpResponder fix to better handle low buffer space situations (thanks sdavi)
-- If axis scaling and baby stepping were both used, then tool offsets and workplace coordinate offsets were not correctly accounted for when converting machine position to user position
-- In laser and CNC mode, limit checking was being applied to move types other than zero (https://forum.duet3d.com/topic/9203/laser-mode-endstop-limit-and-homing/4)
-- In laser and CNC modes, under certain conditions (in particular, when using non-rational steps/mm values) out-of-limits messages might be reported when attempting movement after homing (https://forum.duet3d.com/topic/9363/m453-issue-after-homing)
-- Running G30 P0 X0 Y0 Z-9999 S-1 sometimes reported the deviation as 'nan' instead of 0.0
-- In earlier 2.03beta versions, if you auto-calibrated a delta printer then the motor positions were slightly wrong afterwards until you homed the printer
-- On delta printers with more than 3 towers, the homed height calculation for additional towers used the Y coordinate incorrectly.
-- If you used M141 to define a chamber heater using a heater number other than 0 or 1, the firmware crashed
-
-Version 2.03beta2
-=================
-
-Upgrade notes:
-- The M135 command is no longer supported, but AFAIK nobody used it
-- Important! See 2.03beta1 upgrade notes too.
-
-Known issues:
-- Custom endstop input numbers in the M585 command (probe tool) don't work
-- On the 12864 display, if the gcodes folder on the SD card includes file whose names start with '.', then when when you select a file to print the wrong file may be printed
-
-New features/changed behaviour:
-- M574 allows endstop input numbers to be configured (C parameter). Currently only the first input number specified for each axis is monitored.
 - M203 Inn sets minimum movement speed
 - M203 now reports speeds in mm/sec
 - M208 reports error if min >= max
 - Allow hex inputs anywhere in G/M code parameters where an unsigned value is required
 - Requested fan speed is now scaled by the M106 X parameter
-- Shrunk the DDA and Tool structures to reduce RAM usage
 - M111 Sn for n != 0 now requires a P parameter, to reduce issues caused by Repitier Host using the M111 command for other purposes
 - Increased temperature sampling rate from 2 to 4 samples/sec
 - Increased the allowed number of consecutive temperature reading errors from 5 to 8
-- Removed M135 command
-
-Bug fixes:
-- Fixed 12864 display scrolling when the folder included filenames starting with '.'
-- Fixed remaining M105 status response received when M997 S1 sent from USB
-- Fixed firmware update messages getting erased on PanelDue during M997 S1
-- M408 Sn was hanging for N>5
-- Fixed leadscrew adjustment bug introduced in 2.03beta1
-
-Version 2.03beta1
-=================
-
-Upgrade notes:
-- If you have a CoreXY or other Core architecture printer, and you were using any axis factor parameters in your M667 command in config.g, those parameters are no longer supported. You will need to use M669 matrix parameters instead.
-- ***Caution:*** the support for CoreXY and other Core kinematics has been rewritten. Please exercise caution if your machine uses Core kinematics. Reduce motor current and test small relative movements of each axis, until you are satisfied that everything is working.
-- ***Caution:*** some of the code that supports stall-detection endstops has been rewritten. If your printer uses stall detection endstops, test homing carefully.
-
-Known issues:
-- Bed levelling using multiple independent leadscrews doesn't work. The probing and calculation is done correctly but some leadscrews are adjusted in the wrong direction.
-
-New features/changed behaviour:
 - Support for generalised Cartesian/Core kinematics inc. MarkForged and variants thereof
 - Support for different rod lengths on each tower of a delta printer
 - Support for additional towers on delta printers (up to 6 in total)
@@ -236,9 +96,50 @@ New features/changed behaviour:
 - The segment length used by G2/G3 now depends on both the radius and the speed of the move, not just the radius as in RRF 2.02. So small segment lengths are used when doing CNC milling at low speeds.
 - If a print is paused and then cancelled while the printer is still heating up, heating is cancelled
 - Added M122 P105 subfunction to display the sizes of various objects allocated by RRF
+- Removed M135 command
 
 Bug fixes:
-- G1 X1E1 no longer gets treated as if it also has an E parameter
+- When disabling HTTP protocol or disabling the network, release any output buffers and set the number of sessions to zero. Similarly for Telnet.
+- After running stop.g ensure all moves are finished before setting motors to idle current
+- When downloading a .zip file don't set content-encoding to gzip
+- FTP responder: initialise haveCompleteLine (thanks gtjoseph)
+- On SCARA printers, when attempting to move beyond arm limits, the XY coordinates computed from the adjusted motor endpoints were incorrect 
+- If Z probe averaging mode was being used when mesh probing, an incorrect Z shift could be applied
+- M0 H1 turned heaters off after running stop.g instead of leaving them on
+- Independent leadscrew moves for true bed levelling didn't work when driver numbers >= MaxAxes were used to drive Z motors
+- Added missing newline at end of some error messages
+- M585 L parameter was not working
+- In resume.g a G1 R command went to the wrong coordinates if workplace coordinate offsets were being used
+- Homing files when workplace coordinate offsets were active cause other axes to move
+- Resurrect.g now works when workplace offsets are used, and it restores the current workplace # and all workplace offsets
+- In resurrect.g, the current tool is now selected after running resurrect-prologue, and its tpre and tpost files are run (for tool changer)
+- In resurrect.g, fan speeds are now set up after the tool is selected so that the mapped fan speed is correct
+- In resurrect.g, when setting the last known position with G92 prior to calling resurrect-prologue.g, allow for tool offsets
+- Babystepping could cause an incorrect Z coordinate to be set under some conditions
+- When I2C timeouts occurred, no attempt was made to reset the I2C controller before the next I2C transaction attempt. The I2C driver now resets the controller on the Duet MCU after an I2C error, also it retries the failed transaction twice.
+- Some PWM channels didn't work correctly in the Due06/085 build (this was also fixed in temporary release 2.03RC1+1).
+- In resurrect.g file the M290 command now commands absolute babystepping, the filename in M23 command is enclosed in double quote marks, and the inches/mm setting is restored
+- The W5500 chip could not be reset on Duet Maestro
+- M109 did not run the tool change files if no tool was active initially
+- If a print finishes or is cancelled when Z hop is active because of a G10 command without a subsequent G11, the Z hop is cancelled (but not the associated retraction)
+- Blank lines in 12864 display menu files are now ignored
+- Visibility attributes were not correctly applied to 12864 display value, alter and image menu items
+- Fixed a couple of issues with the 12864 display "files" menu item when the file path refers to SD card 1. The SD card is mounted automatically if it isn't already mounted.
+- On the 12864 display on the Duet Maestro, if the gcodes folder contained any files with names starting '.' or '..' (not counting the current and parent directories), then when selecting a file to print the wrong file might be selected
+- HttpResponder fix to better handle low buffer space situations (thanks sdavi)
+- If axis scaling and baby stepping were both used, then tool offsets and workplace coordinate offsets were not correctly accounted for when converting machine position to user position
+- In laser and CNC mode, limit checking was being applied to move types other than zero (https://forum.duet3d.com/topic/9203/laser-mode-endstop-limit-and-homing/4)
+- In laser and CNC modes, under certain conditions (in particular, when using non-rational steps/mm values) out-of-limits messages might be reported when attempting movement after homing (https://forum.duet3d.com/topic/9363/m453-issue-after-homing)
+- Running G30 P0 X0 Y0 Z-9999 S-1 sometimes reported the deviation as 'nan' instead of 0.0
+- In earlier 2.03beta versions, if you auto-calibrated a delta printer then the motor positions were slightly wrong afterwards until you homed the printer
+- On delta printers with more than 3 towers, the homed height calculation for additional towers used the Y coordinate incorrectly.
+- If you used M141 to define a chamber heater using a heater number other than 0 or 1, the firmware crashed
+- Fixed 12864 display scrolling when the folder included filenames starting with '.'
+- Fixed remaining M105 status response received when M997 S1 sent from USB
+- Fixed firmware update messages getting erased on PanelDue during M997 S1
+- M408 Sn was hanging for N>5
+- Fixed leadscrew adjustment bug introduced in 2.03beta1
+- Commands such as G1 X1E1 no longer get treated as if they also have an E parameter
 - Setting M558 A parameter to anything >31 set it to 0 instead of to 31
 - G92 should not constrain the passed coordinates to the M208 limits if M564 S0 has been used to disable limits
 - On Polar printers, moves that crossed the boundary between -180deg and +180deg turntable positions were executed very slowly
@@ -250,16 +151,7 @@ Bug fixes:
 - If a M106 Pnn Snn command is received, and fan #nn is being used as a print cooling fan, the reported print cooling fan speed is now updated
 - When the WiFi firmware was being updated, general status responses are no longer sent to USB or PanelDue, so that the firmware update progress messages are clearer
 - M453 switches to CNC mode even if the P parameter was not valid
-
-Minor changes:
 - MBytes/sec -> Mbytes/sec in M122 P104 report
-- Remove 'RTOS' from firmware name. All 2.0 series firmware uses RTOS.
-
-Internal changes:
-- The Cartesian, CoreXY, CoreXZ, CoreXYU and CoreXYUV kinematics classes have been replaced by a single CoreKinematics class. This class uses matrices to define the mapping between motors and axes, so it supports any kinematics for which the axis movements are a linear combination of motor movements. The matrices can be adjusted using the M669 command.
-- Improve efficiency of debug print in WiFiInterface: don't keep calling cat and strlen
-- Allocation of DriveMovement objects is deferred until DDAs are frozen and prepared for execution, in preparation for implementing S-curve acceleration. This also reduces the number of DriveMovement objects needed.
-- Refactored the network responder classes to reduce memory usage
 
 Version 2.02 (Duet 2 series) and 1.23 (Duet 06/085)
 ===================================================
