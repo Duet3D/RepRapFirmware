@@ -61,7 +61,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(GCodes)
 #endif
 
 #ifdef SERIAL_AUX_DEVICE
-// Support for emergency stpo form PanelDue
+// Support for emergency stop from PanelDue
 bool GCodes::emergencyStopCommanded = false;
 
 void GCodes::CommandEmergencyStop(UARTClass *p)
