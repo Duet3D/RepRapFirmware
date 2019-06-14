@@ -83,7 +83,7 @@ bool PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 	{
 		reply.copy("Pulse-type filament monitor on pin ");
 		GetPort().AppendPinName(reply);
-		reply.catf(", %s, sensitivity %.2fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
+		reply.catf(", %s, sensitivity %.3fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
 					(comparisonEnabled) ? "enabled" : "disabled",
 					(double)mmPerPulse,
 					lrintf(minMovementAllowed * 100.0),
