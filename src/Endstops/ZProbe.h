@@ -34,6 +34,7 @@ public:
 	float GetConfiguredTriggerHeight() const { return triggerHeight; }
 	float GetActualTriggerHeight() const;
 	float GetDiveHeight() const { return diveHeight; }
+	float GetStartingHeight() const { return diveHeight + GetActualTriggerHeight(); }
 	float GetProbingSpeed() const { return probeSpeed; }
 	float GetTravelSpeed() const { return travelSpeed; }
 	float GetRecoveryTime() const { return recoveryTime; }

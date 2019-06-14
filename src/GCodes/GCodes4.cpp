@@ -470,7 +470,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					const ZProbe& zp = platform.GetCurrentZProbe();
 					moveBuffer.coords[X_AXIS] = x - zp.GetXOffset();
 					moveBuffer.coords[Y_AXIS] = y - zp.GetYOffset();
-					moveBuffer.coords[Z_AXIS] = zp.GetDiveHeight();
+					moveBuffer.coords[Z_AXIS] = zp.GetStartingHeight();
 					moveBuffer.feedRate = zp.GetTravelSpeed();
 					NewMoveAvailable(1);
 
@@ -551,7 +551,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					platform.GetEndstops().EnableCurrentZProbe();
 					moveBuffer.checkEndstops = true;
 					moveBuffer.reduceAcceleration = true;
-					moveBuffer.coords[Z_AXIS] = -zp.GetDiveHeight();
+					moveBuffer.coords[Z_AXIS] = -zp.GetDiveHeight() + zp.GetActualTriggerHeight();
 					moveBuffer.feedRate = zp.GetProbingSpeed();
 					NewMoveAvailable(1);
 					gb.AdvanceState();
@@ -603,7 +603,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		SetMoveBufferDefaults();
 		{
 			const ZProbe& zp = platform.GetCurrentZProbe();
-			moveBuffer.coords[Z_AXIS] = zp.GetDiveHeight();
+			moveBuffer.coords[Z_AXIS] = zp.GetStartingHeight();
 			moveBuffer.feedRate = zp.GetTravelSpeed();
 		}
 		NewMoveAvailable(1);
@@ -743,7 +743,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		SetMoveBufferDefaults();
 		{
 			const ZProbe& zp = platform.GetCurrentZProbe();
-			moveBuffer.coords[Z_AXIS] = zp.GetDiveHeight();
+			moveBuffer.coords[Z_AXIS] = zp.GetStartingHeight();
 			moveBuffer.feedRate = zp.GetTravelSpeed();
 		}
 		NewMoveAvailable(1);
@@ -758,7 +758,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			SetMoveBufferDefaults();
 			(void)reprap.GetMove().GetProbeCoordinates(g30ProbePointIndex, moveBuffer.coords[X_AXIS], moveBuffer.coords[Y_AXIS], true);
 			const ZProbe& zp = platform.GetCurrentZProbe();
-			moveBuffer.coords[Z_AXIS] = zp.GetDiveHeight();
+			moveBuffer.coords[Z_AXIS] = zp.GetStartingHeight();
 			moveBuffer.feedRate = zp.GetTravelSpeed();
 			NewMoveAvailable(1);
 
@@ -832,7 +832,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				moveBuffer.checkEndstops = true;
 				moveBuffer.reduceAcceleration = true;
 				moveBuffer.coords[Z_AXIS] = (IsAxisHomed(Z_AXIS))
-											? -zp.GetDiveHeight()						// Z axis has been homed, so no point in going very far
+											? -zp.GetDiveHeight() + zp.GetActualTriggerHeight()	// Z axis has been homed, so no point in going very far
 											: -1.1 * platform.AxisTotalLength(Z_AXIS);	// Z axis not homed yet, so treat this as a homing move
 				moveBuffer.feedRate = zp.GetProbingSpeed();
 				NewMoveAvailable(1);
@@ -915,7 +915,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		SetMoveBufferDefaults();
 		{
 			const ZProbe& zp = platform.GetCurrentZProbe();
-			moveBuffer.coords[Z_AXIS] = zp.GetDiveHeight();
+			moveBuffer.coords[Z_AXIS] = zp.GetStartingHeight();
 			moveBuffer.feedRate = zp.GetTravelSpeed();
 		}
 		NewMoveAvailable(1);
