@@ -21,9 +21,9 @@ enum class GCodeState : uint8_t
 
 	probingToolOffset,
 
-	probingCavity1,
-	probingCavity2,
-	probingCavity3,
+	findCenterOfCavityMin,
+	findCenterOfCavityR,
+	findCenterOfCavityMax,
 
 	homing1,
 	homing2,
@@ -54,8 +54,8 @@ enum class GCodeState : uint8_t
 	flashing1,
 	flashing2,
 
-	stopping,
-	sleeping,
+	stoppingWithHeatersOff,
+	stoppingWithHeatersOn,
 
 	// These next 9 must be contiguous
 	gridProbing1,
@@ -151,6 +151,7 @@ public:
 		drivesRelative = other.drivesRelative;
 		axesRelative = other.axesRelative;
 		feedRate = other.feedRate;
+		volumetricExtrusion = other.volumetricExtrusion;
 		usingInches = other.usingInches;
 	}
 

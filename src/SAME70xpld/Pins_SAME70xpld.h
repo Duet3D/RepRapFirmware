@@ -67,7 +67,7 @@ constexpr Pin UsbVBusPin = NoPin;					// Pin used to monitor VBUS on USB port
 // DRIVES
 
 constexpr Pin ENABLE_PINS[NumDirectDrivers] = { NoPin, NoPin, NoPin, NoPin, NoPin };
-constexpr Pin STEP_PINS[NumDirectDrivers] = { PORTC_PIN(19), PORTC_PIN(19), PORTC_PIN(19), PORTC_PIN(19), PORTC_PIN(19) };	// Do not use NoPin in this list! Code assumes all on port C
+constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(19), PortCPin(19), PortCPin(19), PortCPin(19), PortCPin(19) };	// Do not use NoPin in this list! Code assumes all on port C
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { NoPin, NoPin, NoPin, NoPin, NoPin };
 
 // Endstops
@@ -76,7 +76,7 @@ constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { NoPin, NoPin, NoPin, NoPin, N
 constexpr Pin END_STOP_PINS[NumEndstops] = { NoPin, NoPin, NoPin, NoPin, NoPin };
 
 // Heater and thermistors
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PORTC_PIN(31), PORTD_PIN(30), PORTC_PIN(13), PORTC_PIN(30) };
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(31), PortDPin(30), PortCPin(13), PortCPin(30) };
 																			// Thermistor pin numbers (labelled AD1-2 and AD4-5 on XPLD, but AD5 has a 0R resistor missing)
 constexpr Pin HEAT_ON_PINS[NumHeaters] = { NoPin, NoPin, NoPin, NoPin };	// Heater pin numbers (TBD)
 
@@ -120,7 +120,7 @@ constexpr Pin TachoPins[NumTachos] = { NoPin };								// TBD
 
 // SD cards
 constexpr size_t NumSdCards = 2;
-constexpr Pin SdCardDetectPins[NumSdCards] = { PORTC_PIN(16), NoPin };
+constexpr Pin SdCardDetectPins[NumSdCards] = { PortCPin(16), NoPin };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[1] = { NoPin };
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
@@ -140,10 +140,10 @@ constexpr uint32_t IAP_FLASH_START = 0x004E0000;
 constexpr uint32_t IAP_FLASH_END = 0x004FFFFF;
 
 // Duet pin numbers to control the WiFi interface
-constexpr Pin EspResetPin = PORTB_PIN(1);					// Low on this in holds the WiFi module in reset (ESP_RESET)
-constexpr Pin EspDataReadyPin = PORTA_PIN(19);				// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
-constexpr Pin SamTfrReadyPin = PORTC_PIN(31);				// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
-constexpr Pin SamCsPin = PORTB_PIN(2);						// SPI NPCS pin, input from WiFi module
+constexpr Pin EspResetPin = PortBPin(1);					// Low on this in holds the WiFi module in reset (ESP_RESET)
+constexpr Pin EspDataReadyPin = PortAPin(19);				// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
+constexpr Pin SamTfrReadyPin = PortCPin(31);				// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
+constexpr Pin SamCsPin = PortBPin(2);						// SPI NPCS pin, input from WiFi module
 
 // Timer allocation
 #define NETWORK_TC			(TC0)

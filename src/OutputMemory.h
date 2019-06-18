@@ -130,7 +130,7 @@ class OutputStack
 		void Clear() volatile { count = 0; }
 
 		// Push an OutputBuffer chain
-		void Push(OutputBuffer *buffer, MessageType type = MessageType::NoDestinationMessage) volatile;
+		void Push(OutputBuffer *buffer, MessageType type = NoDestinationMessage) volatile;
 
 		// Pop an OutputBuffer chain or return NULL if none is available
 		OutputBuffer *Pop() volatile;

@@ -379,7 +379,7 @@ void CanSender::Init()
 	configure_mcan();
 
 	// Create the task that sends CAN messages
-	canSenderTask.Create(CanSenderLoop, "CanSender", nullptr, TaskBase::CanSenderPriority);
+	canSenderTask.Create(CanSenderLoop, "CanSender", nullptr, TaskPriority::CanSenderPriority);
 }
 
 // Add a buffer to the end of the send queue

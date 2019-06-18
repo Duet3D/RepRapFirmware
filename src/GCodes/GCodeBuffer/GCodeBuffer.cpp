@@ -43,6 +43,32 @@ void GCodeBuffer::Init()
 	timerRunning = false;
 }
 
+void GCodeBuffer::StartTimer()
+{
+	whenTimerStarted = millis();
+	timerRunning = true;
+}
+
+bool GCodeBuffer::DoDwellTime(uint32_t dwellMillis)
+{
+	const uint32_t now = millis();
+
+	// Are we already in the dwell?
+	if (timerRunning)
+	{
+		if (now - whenTimerStarted >= dwellMillis)
+		{
+			timerRunning = false;
+			return true;
+		}
+		return false;
+	}
+
+	// New dwell - set it up
+	StartTimer();
+	return false;
+}
+
 // Write some debug info
 void GCodeBuffer::Diagnostics(MessageType mtype)
 {
@@ -126,6 +152,12 @@ float GCodeBuffer::GetFValue()
 	return isBinaryBuffer ? binaryParser.GetFValue() : stringParser.GetFValue();
 }
 
+// Get a distance or coordinate and convert it from inches to mm if necessary
+float GCodeBuffer::GetDistance()
+{
+	return ConvertDistance(GetFValue());
+}
+
 // Get an integer after a key letter
 int32_t GCodeBuffer::GetIValue()
 {
@@ -168,8 +200,13 @@ bool GCodeBuffer::GetPossiblyQuotedString(const StringRef& str)
 	return isBinaryBuffer ? binaryParser.GetPossiblyQuotedString(str) : stringParser.GetPossiblyQuotedString(str);
 }
 
+bool GCodeBuffer::GetReducedString(const StringRef& str)
+{
+	return isBinaryBuffer ? binaryParser.GetReducedString(str) : stringParser.GetReducedString(str);
+}
+
 // Get a colon-separated list of floats after a key letter
-const void GCodeBuffer::GetFloatArray(float arr[], size_t& length, bool doPad)
+void GCodeBuffer::GetFloatArray(float arr[], size_t& length, bool doPad)
 {
 	if (isBinaryBuffer)
 	{
@@ -182,7 +219,7 @@ const void GCodeBuffer::GetFloatArray(float arr[], size_t& length, bool doPad)
 }
 
 // Get a :-separated list of ints after a key letter
-const void GCodeBuffer::GetIntArray(int32_t arr[], size_t& length, bool doPad)
+void GCodeBuffer::GetIntArray(int32_t arr[], size_t& length, bool doPad)
 {
 	if (isBinaryBuffer)
 	{
@@ -195,7 +232,7 @@ const void GCodeBuffer::GetIntArray(int32_t arr[], size_t& length, bool doPad)
 }
 
 // Get a :-separated list of unsigned ints after a key letter
-const void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad)
+void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad)
 {
 	if (isBinaryBuffer)
 	{
@@ -321,6 +358,23 @@ bool GCodeBuffer::TryGetPossiblyQuotedString(char c, const StringRef& str, bool&
 		return true;
 	}
 	return false;
+}
+
+// Get a PWM frequency
+PwmFrequency GCodeBuffer::GetPwmFrequency()
+{
+	return (PwmFrequency)constrain<uint32_t>(GetUIValue(), 1, 65535);
+}
+
+// Get a PWM value. If may be in the old style 0..255 in which case convert it to be in the range 0.0..1.0
+float GCodeBuffer::GetPwmValue()
+{
+	float v = GetFValue();
+	if (v > 1.0)
+	{
+		v = v/255.0;
+	}
+	return constrain<float>(v, 0.0, 1.0);
 }
 
 bool GCodeBuffer::IsIdle() const
@@ -557,10 +611,17 @@ MessageType GCodeBuffer::GetResponseMessageType() const
 	return isBinaryBuffer ? responseMessageTypeBinary : responseMessageTypeString;
 }
 
+#if HAS_HIGH_SPEED_SD
 FilePosition GCodeBuffer::GetFilePosition(size_t bytesCached) const
 {
 	return isBinaryBuffer ? binaryParser.GetFilePosition() : stringParser.GetFilePosition(bytesCached);
 }
+#else
+FilePosition GCodeBuffer::GetFilePosition() const
+{
+	return isBinaryBuffer ? binaryParser.GetFilePosition() : stringParser.GetFilePosition(0);
+}
+#endif
 
 bool GCodeBuffer::OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
 {

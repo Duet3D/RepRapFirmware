@@ -39,20 +39,20 @@ float tuningVoltageAccumulator;				// sum of the voltage readings we take during
 
 // Member functions and constructors
 
-PID::PID(Platform& p, int8_t h) : platform(p), heaterProtection(nullptr), heater(h), mode(HeaterMode::off), invertPwmSignal(false)
+PID::PID(Platform& p, int8_t h) : platform(p), heaterProtection(nullptr), heater(h), mode(HeaterMode::off)
 {
 }
 
 inline void PID::SetHeater(float power) const
 {
-	platform.SetHeater(heater, invertPwmSignal ? (1.0 - power) : power, model.GetPwmFrequency());
+	platform.SetHeater(heater, power);
 }
 
 void PID::Init(float pGain, float pTc, float pTd, bool usePid, bool inverted)
 {
 	maxTempExcursion = DefaultMaxTempExcursion;
 	maxHeatingFaultTime = DefaultMaxHeatingFaultTime;
-	model.SetParameters(pGain, pTc, pTd, 1.0, GetHighestTemperatureLimit(), 0.0, usePid, inverted, 0);
+	model.SetParameters(pGain, pTc, pTd, 1.0, GetHighestTemperatureLimit(), 0.0, usePid, inverted);
 	Reset();
 
 	SetHeater(0.0);							// set up the pin even if the heater is not enabled (for PCCB)
@@ -79,10 +79,10 @@ void PID::Reset()
 }
 
 // Set the process model
-bool PID::SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, PwmFrequency pwmFreq)
+bool PID::SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted)
 {
 	const float temperatureLimit = GetHighestTemperatureLimit();
-	const bool rslt = model.SetParameters(gain, tc, td, maxPwm, temperatureLimit, voltage, usePid, inverted, pwmFreq);
+	const bool rslt = model.SetParameters(gain, tc, td, maxPwm, temperatureLimit, voltage, usePid, inverted);
 	if (rslt)
 	{
 #if defined(DUET_06_085)
@@ -269,8 +269,7 @@ void PID::Spin()
 								SetHeater(0.0);					// do this here just to be sure
 								mode = HeaterMode::fault;
 								reprap.GetGCodes().HandleHeaterFault(heater);
-								platform.MessageF(ErrorMessage,
-											"Heating fault on heater %d, temperature rising much more slowly than the expected %.1f" DEGREE_SYMBOL "C/sec\n",
+								platform.MessageF(ErrorMessage, "Heating fault on heater %d, temperature rising much more slowly than the expected %.1f" DEGREE_SYMBOL "C/sec\n",
 											heater, (double)expectedRate);
 								reprap.FlagTemperatureFault(heater);
 							}
@@ -916,7 +915,7 @@ void PID::CalculateModel()
 #else
 						0.0,
 #endif
-		true, false, model.GetPwmFrequency());
+		true, false);
 	if (tuned)
 	{
 		platform.MessageF(LoggedGenericMessage,

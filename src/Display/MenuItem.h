@@ -95,7 +95,7 @@ private:
 	MenuItem *next;
 };
 
-class TextMenuItem : public MenuItem
+class TextMenuItem final : public MenuItem
 {
 public:
 	void* operator new(size_t sz) { return Allocate<TextMenuItem>(); }
@@ -112,7 +112,7 @@ private:
 	const char *text;
 };
 
-class ButtonMenuItem : public MenuItem
+class ButtonMenuItem final : public MenuItem
 {
 public:
 	void* operator new(size_t sz) { return Allocate<ButtonMenuItem>(); }
@@ -134,7 +134,7 @@ private:
 	const char *m_acFile; // used when action ("command") is "menu"
 };
 
-class ValueMenuItem : public MenuItem
+class ValueMenuItem final : public MenuItem
 {
 public:
 	void* operator new(size_t sz) { return Allocate<ValueMenuItem>(); }
@@ -156,6 +156,7 @@ protected:
 
 private:
 	enum class AdjustMode : uint8_t { displaying, adjusting, liveAdjusting };
+	enum class PrintFormat : uint8_t { undefined, asFloat, asUnsigned, asSigned, asPercent, asText, asIpAddress, asTime };
 
 	bool Adjust_SelectHelper();
 	bool Adjust_AlterHelper(int clicks);
@@ -163,15 +164,24 @@ private:
 	static constexpr PixelNumber DefaultWidth =  25;			// default numeric field width
 
 	const unsigned int valIndex;
-	float currentValue;
 	const char *textValue;				// for temporary use when printing
+
+	// Variables currentValue, currentFormat and decimals together define the display format of the item
+	union Value
+	{	float f;
+		uint32_t u;
+		int32_t i;
+	};
+
+	Value currentValue;
+	PrintFormat currentFormat;
 	uint8_t decimals;
 	AdjustMode adjusting;
 	bool adjustable;
 	bool error;							// for temporary use when printing
 };
 
-class FilesMenuItem : public MenuItem
+class FilesMenuItem final : public MenuItem
 {
 public:
 	void* operator new(size_t sz) { return Allocate<FilesMenuItem>(); }
@@ -192,6 +202,9 @@ protected:
 	void vResetViewState();
 
 private:
+	void ListFiles(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset);
+	uint8_t GetDirectoryNesting() const;
+
 	const unsigned int numDisplayLines;
 
 	const char *command;
@@ -212,9 +225,12 @@ private:
 	unsigned int m_uListingSelectedIndex;
 
 	MassStorage *const m_oMS;
+
+	enum CardState : uint8_t { notStarted, mounting, mounted, error } sdCardState;
+	uint8_t initialDirectoryNesting;
 };
 
-class ImageMenuItem : public MenuItem
+class ImageMenuItem final : public MenuItem
 {
 public:
 	void* operator new(size_t sz) { return Allocate<ImageMenuItem>(); }

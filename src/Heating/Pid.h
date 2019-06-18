@@ -72,12 +72,7 @@ public:
 	const FopDt& GetModel() const					// Get the process model
 		{ return model; }
 
-	bool SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, PwmFrequency pwmFreq);	// Set the process model
-
-	bool IsHeaterSignalInverted() const				// Is the PWM output signal inverted?
-		{ return invertPwmSignal; }
-	void SetHeaterSignalInverted(bool inverted)		// Set PWM output signal inversion
-		{ invertPwmSignal = inverted; }
+	bool SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted);	// Set the process model
 
 	bool IsHeaterEnabled() const					// Is this heater enabled?
 		{ return model.IsEnabled(); }
@@ -128,7 +123,6 @@ private:
 	int8_t heater;									// The index of our heater
 	uint8_t previousTemperaturesGood;				// Bitmap indicating which previous temperature were good readings
 	HeaterMode mode;								// Current state of the heater
-	bool invertPwmSignal;							// Invert the final PWM output signal (same behaviour as with HEAT_ON in earlier firmware versions)
 	bool active;									// Are we active or standby?
 	bool tuned;										// True if tuning was successful
 	uint8_t badTemperatureCount;					// Count of sequential dud readings

@@ -9,6 +9,7 @@
 #define SRC_FILAMENTSENSORS_FILAMENTMONITOR_H_
 
 #include "RepRapFirmware.h"
+#include "Hardware/IoPorts.h"
 #include "MessageType.h"
 #include "GCodes/GCodeResult.h"
 #include "RTOSIface/RTOSIface.h"
@@ -48,7 +49,7 @@ public:
 	virtual ~FilamentMonitor();
 
 	// Return the type of this sensor
-	int GetType() const { return type; }
+	unsigned int GetType() const { return type; }
 
 	// Static initialisation
 	static void InitStatic();
@@ -67,18 +68,16 @@ public:
 	static void Diagnostics(MessageType mtype);
 
 protected:
-	FilamentMonitor(unsigned int extruder, int t) : extruderNumber(extruder), type(t), pin(NoPin) { }
+	FilamentMonitor(unsigned int extruder, unsigned int t) : extruderNumber(extruder), type(t) { }
 
 	bool ConfigurePin(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen);
 
-	int GetEndstopNumber() const { return endstopNumber; }
-
-	Pin GetPin() const { return pin; }
+	const IoPort& GetPort() const { return port; }
 	bool HaveIsrStepsCommanded() const { return haveIsrStepsCommanded; }
 
 private:
 	// Create a filament sensor returning null if not a valid sensor type
-	static FilamentMonitor *Create(unsigned int extruder, int type);
+	static FilamentMonitor *Create(unsigned int extruder, unsigned int type);
 
 	static void InterruptEntry(CallbackParameter param);
 
@@ -88,9 +87,8 @@ private:
 	int32_t isrExtruderStepsCommanded;
 	uint32_t isrMillis;
 	unsigned int extruderNumber;
-	int type;
-	int endstopNumber;
-	Pin pin;
+	unsigned int type;
+	IoPort port;
 	bool isrWasPrinting;
 	bool haveIsrStepsCommanded;
 };

@@ -60,13 +60,13 @@ public:
 	int8_t GetBedHeater(size_t index) const						// Get a hot bed heater number
 	pre(index < NumBedHeaters);
 	void SetBedHeater(size_t index, int8_t heater)				// Set a hot bed heater number
-	pre(index < NumBedHeaters; -1 <= heater; heater < NumHeaters);
+	pre(index < NumBedHeaters; -1 <= heater; heater < NumTotalHeaters);
 	bool IsBedHeater(int8_t heater) const;						// Check if this heater is a bed heater
 
 	int8_t GetChamberHeater(size_t index) const					// Get a chamber heater number
 	pre(index < NumChamberHeaters);
 	void SetChamberHeater(size_t index, int8_t heater)			// Set a chamber heater number
-	pre(index < NumChamberHeaters; -1 <= heater; heater < NumHeaters);
+	pre(index < NumChamberHeaters; -1 <= heater; heater < NumTotalHeaters);
 	bool IsChamberHeater(int8_t heater) const;					// Check if this heater is a chamber heater
 
 	void SetActiveTemperature(int8_t heater, float t);
@@ -89,46 +89,40 @@ public:
 	void Diagnostics(MessageType mtype);						// Output useful information
 
 	float GetAveragePWM(size_t heater) const					// Return the running average PWM to the heater as a fraction in [0, 1].
-	pre(heater < NumHeaters);
+	pre(heater < NumTotalHeaters);
 
 	bool IsBedOrChamberHeater(int8_t heater) const;				// Queried by the Platform class
 
 	uint32_t GetLastSampleTime(size_t heater) const
-	pre(heater < NumHeaters);
+	pre(heater < NumTotalHeaters);
 
 	void StartAutoTune(size_t heater, float temperature, float maxPwm, const StringRef& reply) // Auto tune a PID
-	pre(heater < NumHeaters);
+	pre(heater < NumTotalHeaters);
 
 	bool IsTuning(size_t heater) const							// Return true if the specified heater is auto tuning
-	pre(heater < NumHeaters);
+	pre(heater < NumTotalHeaters);
 
 	void GetAutoTuneStatus(const StringRef& reply) const;		// Get the status of the current or last auto tune
 
 	const FopDt& GetHeaterModel(size_t heater) const			// Get the process model for the specified heater
-	pre(heater < NumHeaters);
+	pre(heater < NumTotalHeaters);
 
-	bool SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, PwmFrequency pwmFreq) // Set the heater process model
-	pre(heater < NumHeaters);
-
-	bool IsHeaterSignalInverted(size_t heater)					// Set PWM signal inversion
-	pre(heater < NumHeaters);
-
-	void SetHeaterSignalInverted(size_t heater, bool IsInverted)	// Set PWM signal inversion
-	pre(heater < NumHeaters);
+	bool SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted) // Set the heater process model
+	pre(heater < NumTotalHeaters);
 
 	void GetFaultDetectionParameters(size_t heater, float& maxTempExcursion, float& maxFaultTime) const
-	pre(heater < NumHeaters);
+	pre(heater < NumTotalHeaters);
 
 	void SetFaultDetectionParameters(size_t heater, float maxTempExcursion, float maxFaultTime)
-	pre(heater < NumHeaters);
+	pre(heater < NumTotalHeaters);
 
 	bool IsHeaterEnabled(size_t heater) const					// Is this heater enabled?
-	pre(heater < NumHeaters);
+	pre(heater < NumTotalHeaters);
 
 	float GetHighestTemperatureLimit() const;					// Get the highest temperature limit of any heater
 
 	void SetM301PidParameters(size_t heater, const M301PidParameters& params)
-	pre(heater < NumHeaters);
+	pre(heater < NumTotalHeaters);
 
 	bool WriteModelParameters(FileStore *f) const;				// Write heater model parameters to file returning true if no error
 
@@ -141,12 +135,12 @@ public:
 	void UpdateHeaterProtection();								// Updates the PIDs and HeaterProtection items when a heater is remapped
 
 	bool CheckHeater(size_t heater)								// Check if the heater is able to operate
-	pre(heater < NumHeaters);
+	pre(heater < NumTotalHeaters);
 
 	float GetTemperature(size_t heater, TemperatureError& err); // Result is in degrees Celsius
 
 	const Tool* GetLastStandbyTool(int heater) const
-	pre(heater >= 0; heater < NumHeaters)
+	pre(heater >= 0; heater < NumTotalHeaters)
 	{
 		return lastStandbyTools[heater];
 	}
@@ -163,12 +157,12 @@ private:
 
 	Platform& platform;											// The instance of the RepRap hardware class
 
-	HeaterProtection *heaterProtections[NumHeaters + NumExtraHeaterProtections];	// Heater protection instances to guarantee legal heater temperature ranges
+	HeaterProtection *heaterProtections[NumTotalHeaters + NumExtraHeaterProtections];	// Heater protection instances to guarantee legal heater temperature ranges
 
-	PID* pids[NumHeaters];										// A PID controller for each heater
-	const Tool* lastStandbyTools[NumHeaters];					// The last tool that caused the corresponding heater to be set to standby
+	PID* pids[NumTotalHeaters];										// A PID controller for each heater
+	const Tool* lastStandbyTools[NumTotalHeaters];					// The last tool that caused the corresponding heater to be set to standby
 
-	TemperatureSensor *heaterSensors[NumHeaters];				// The sensor used by the real heaters
+	TemperatureSensor *heaterSensors[NumTotalHeaters];				// The sensor used by the real heaters
 	TemperatureSensor *virtualHeaterSensors[MaxVirtualHeaters];	// Sensors for virtual heaters
 
 #ifdef RTOS
@@ -236,19 +230,9 @@ inline const FopDt& Heat::GetHeaterModel(size_t heater) const
 }
 
 // Set the heater process model
-inline bool Heat::SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, PwmFrequency pwmFreq)
+inline bool Heat::SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted)
 {
-	return pids[heater]->SetModel(gain, tc, td, maxPwm, voltage, usePid, inverted, pwmFreq);
-}
-
-inline bool Heat::IsHeaterSignalInverted(size_t heater)
-{
-	return pids[heater]->IsHeaterSignalInverted();
-}
-
-inline void Heat::SetHeaterSignalInverted(size_t heater, bool IsInverted)
-{
-	pids[heater]->SetHeaterSignalInverted(IsInverted);
+	return pids[heater]->SetModel(gain, tc, td, maxPwm, voltage, usePid, inverted);
 }
 
 // Is the heater enabled?

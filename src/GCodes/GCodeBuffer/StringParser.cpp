@@ -487,7 +487,7 @@ float StringParser::GetFValue()
 
 // Get a colon-separated list of floats after a key letter
 // If doPad is true then we allow just one element to be given, in which case we fill all elements with that value
-const void StringParser::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
+void StringParser::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{
@@ -535,7 +535,7 @@ const void StringParser::GetFloatArray(float arr[], size_t& returnedLength, bool
 }
 
 // Get a :-separated list of ints after a key letter
-const void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad)
+void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{
@@ -582,7 +582,7 @@ const void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength, bool
 }
 
 // Get a :-separated list of unsigned ints after a key letter
-const void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool doPad)
+void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool doPad)
 {
 	if (readPointer >= 0)
 	{
@@ -734,6 +734,57 @@ bool StringParser::InternalGetPossiblyQuotedString(const StringRef& str)
 	}
 	str.StripTrailingSpaces();
 	return !str.IsEmpty();
+}
+
+bool StringParser::GetReducedString(const StringRef& str)
+{
+	str.Clear();
+	if (readPointer < 0)
+	{
+		return false;
+	}
+
+	// Reduced strings must start with a double-quote
+	if (readPointer == 0)
+	{
+		++readPointer;
+		if (gb.buffer[readPointer] != '"')
+		{
+			return false;
+		}
+	}
+
+	++readPointer;
+	for (;;)
+	{
+		const char c = gb.buffer[readPointer++];
+		switch(c)
+		{
+		case '"':
+			if (gb.buffer[readPointer++] != '"')
+			{
+				return true;
+			}
+			str.cat(c);
+			break;
+
+		case '_':
+		case '-':
+		case ' ':
+			break;
+
+		default:
+			if (c < ' ')
+			{
+				return false;
+			}
+			str.cat(tolower(c));
+			break;
+		}
+	}
+
+	INTERNAL_ERROR;
+	return false;
 }
 
 // This returns a string comprising the rest of the line, excluding any comment

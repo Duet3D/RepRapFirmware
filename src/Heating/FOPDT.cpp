@@ -11,13 +11,13 @@
 // Heater 6 on the Duet 0.8.5 is disabled by default at startup so that we can use fan 2.
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
 FopDt::FopDt()
-	: gain(DefaultHotEndHeaterGain), timeConstant(DefaultHotEndHeaterTimeConstant), deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0), standardVoltage(0.0), pwmFreq(0),
+	: gain(DefaultHotEndHeaterGain), timeConstant(DefaultHotEndHeaterTimeConstant), deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0), standardVoltage(0.0),
 	  enabled(false), usePid(true), inverted(false), pidParametersOverridden(false)
 {
 }
 
 // Check the model parameters are sensible, if they are then save them and return true.
-bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted, PwmFrequency pPwmFreq)
+bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted)
 {
 	if (pg == -1.0 && ptc == -1.0 && pdt == -1.0)
 	{
@@ -38,7 +38,6 @@ bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float t
 		usePid = pUsePid;
 		inverted = pInverted;
 		enabled = true;
-		pwmFreq = pPwmFreq;
 		CalcPidConstants();
 		return true;
 	}

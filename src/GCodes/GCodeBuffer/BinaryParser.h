@@ -37,9 +37,10 @@ public:
 	bool GetUnprecedentedString(const StringRef& str);	// Get a string with no preceding key letter
 	bool GetQuotedString(const StringRef& str);			// Get and copy a quoted string
 	bool GetPossiblyQuotedString(const StringRef& str);	// Get and copy a string which may or may not be quoted
-	const void GetFloatArray(float arr[], size_t& length, bool doPad) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
-	const void GetIntArray(int32_t arr[], size_t& length, bool doPad);			// Get a :-separated list of ints after a key letter
-	const void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
+	bool GetReducedString(const StringRef& str);		// Get and copy a quoted string, removing certain characters
+	void GetFloatArray(float arr[], size_t& length, bool doPad) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
+	void GetIntArray(int32_t arr[], size_t& length, bool doPad);			// Get a :-separated list of ints after a key letter
+	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
 
 	bool IsIdle() const { return isIdle; }
 	bool IsCompletelyIdle() const { return isIdle && bufferLength == 0; }
@@ -60,11 +61,13 @@ private:
 	GCodeBuffer& gb;
 
 	size_t AddPadding(size_t bytesRead) const;
-	template<typename T> const void GetArray(T arr[], size_t& length, bool doPad) __attribute__((hot));
+	template<typename T> void GetArray(T arr[], size_t& length, bool doPad) __attribute__((hot));
 	void WriteParameters(const StringRef& s, bool quoteStrings) const;
 
 	size_t bufferLength;
 	const CodeHeader *header;
+
+	int reducedBytesRead;
 	const CodeParameter *seenParameter;
 	const char *seenParameterValue;
 

@@ -12,7 +12,7 @@
 #include "RepRap.h"
 
 // Constructors
-Duet3DFilamentMonitor::Duet3DFilamentMonitor(unsigned int extruder, int type)
+Duet3DFilamentMonitor::Duet3DFilamentMonitor(unsigned int extruder, unsigned int type)
 	: FilamentMonitor(extruder, type), overrunErrorCount(0), polarityErrorCount(0)
 {
 	InitReceiveBuffer();
@@ -33,7 +33,7 @@ bool Duet3DFilamentMonitor::Interrupt()
 	const size_t writePointer = edgeCaptureWritePointer;			// capture volatile variable
 	if ((writePointer + 1) % EdgeCaptureBufferSize != edgeCaptureReadPointer)	// if buffer is not full
 	{
-		if (IoPort::ReadPin(GetPin()))
+		if (GetPort().Read())
 		{
 			if ((writePointer & 1) == 0)							// low-to-high transitions should occur on odd indices
 			{

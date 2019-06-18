@@ -13,7 +13,7 @@
 class LaserFilamentMonitor : public Duet3DFilamentMonitor
 {
 public:
-	LaserFilamentMonitor(unsigned int extruder, int type);
+	LaserFilamentMonitor(unsigned int extruder, unsigned int type);
 
 	bool Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) override;
 	FilamentSensorStatus Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) override;

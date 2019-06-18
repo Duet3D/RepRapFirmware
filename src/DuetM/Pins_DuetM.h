@@ -8,10 +8,10 @@
 #ifndef SRC_DUETM_PINS_DUETM_H_
 #define SRC_DUETM_PINS_DUETM_H_
 
-# define FIRMWARE_NAME "RepRapFirmware for Duet 2 Maestro"
-# define DEFAULT_BOARD_TYPE BoardType::DuetM_10
+#define FIRMWARE_NAME "RepRapFirmware for Duet 2 Maestro"
+#define DEFAULT_BOARD_TYPE BoardType::DuetM_10
 constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
-# define IAP_FIRMWARE_FILE	"DuetMaestroFirmware.bin"
+#define IAP_FIRMWARE_FILE	"DuetMaestroFirmware.bin"
 #define IAP_UPDATE_FILE		"iap4s.bin"
 
 // Features definition
@@ -39,6 +39,10 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
 #define SUPPORT_ASYNC_MOVES		1
+#define ALLOCATE_DEFAULT_PORTS	1
+
+#define NO_TRIGGERS		1	// Temporary!!!
+#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
 
 // The physical capabilities of the machine
 
@@ -46,15 +50,18 @@ constexpr size_t NumDirectDrivers = 7;				// The maximum number of drives suppor
 constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 constexpr size_t MaxSmartDrivers = 7;				// The maximum number of smart drivers
 
-constexpr size_t NumEndstops = 5;					// The number of inputs we have for endstops, filament sensors etc.
-constexpr size_t NumHeaters = 3;					// The number of heaters/thermistors in the machine. Duet M has 3 heaters but 4 thermistors.
+constexpr size_t NumTotalHeaters = 4;				// The maximum number of heaters in the machine
+constexpr size_t NumDefaultHeaters = 3;				// The number of heaters configured by default
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 4;
+
+constexpr size_t MaxGpioPorts = 10;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
 
 constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
+constexpr size_t NumDefaultExtruders = 4;			// The number of drivers that we configure as extruders by default
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t MaxHeatersPerTool = 2;
@@ -65,7 +72,7 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 #define SERIAL_AUX_DEVICE Serial
 
 // SerialUSB
-constexpr Pin UsbVBusPin = 47;						// Pin used to monitor VBUS on USB port
+constexpr Pin UsbVBusPin = PortCPin(11);			// Pin used to monitor VBUS on USB port
 
 #define I2C_IFACE	Wire							// First and only I2C interface
 #define I2C_IRQn	WIRE_ISR_ID
@@ -74,15 +81,15 @@ constexpr Pin UsbVBusPin = 47;						// Pin used to monitor VBUS on USB port
 
 // Drivers
 constexpr Pin GlobalTmc22xxEnablePin = 1;			// The pin that drives ENN of all drivers
-constexpr Pin ENABLE_PINS[NumDirectDrivers] = { NoPin, NoPin, NoPin, NoPin, NoPin, 63, 61 };
-constexpr Pin STEP_PINS[NumDirectDrivers] = { 56, 38, 64, 40, 41, 67, 57 };
-constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { 54, 8, 30, 33, 42, 18, 60 };
+constexpr Pin ENABLE_PINS[NumDirectDrivers] = { NoPin, NoPin, NoPin, NoPin, NoPin, PortCPin(27), PortCPin(25) };
+constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(20), PortCPin(2), PortCPin(28), PortCPin(4), PortCPin(5), PortCPin(31), PortCPin(21) };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortCPin(18), PortAPin(8), PortBPin(4), PortBPin(7), PortCPin(6), PortAPin(18), PortCPin(24) };
 
 // UART interface to stepper drivers
 Uart * const UART_TMC22xx = UART0;
-const IRQn TMC22xx_UART_IRQn = UART0_IRQn;
-const uint32_t ID_TMC22xx_UART = ID_UART0;
-const uint8_t TMC22xx_UART_PINS = APINS_UART0;
+constexpr IRQn TMC22xx_UART_IRQn = UART0_IRQn;
+constexpr uint32_t ID_TMC22xx_UART = ID_UART0;
+constexpr uint8_t TMC22xx_UART_PINS = APINS_UART0;
 #define TMC22xx_UART_Handler	UART0_Handler
 
 // Define the baud rate used to send/receive data to/from the drivers.
@@ -91,21 +98,15 @@ const uint8_t TMC22xx_UART_PINS = APINS_UART0;
 // To write a register we need to send 8 bytes. To read a register we send 4 bytes and receive 8 bytes after a programmable delay.
 // So at 500kbaud it takes about 128us to write a register, and 192us+ to read a register.
 // In testing I found that 500kbaud was not reliable, so now using 200kbaud.
-const uint32_t DriversBaudRate = 200000;
-const uint32_t TransferTimeout = 10;				// any transfer should complete within 10 ticks @ 1ms/tick
+constexpr uint32_t DriversBaudRate = 200000;
+constexpr uint32_t TransferTimeout = 10;				// any transfer should complete within 10 ticks @ 1ms/tick
 
-constexpr Pin TMC22xxMuxPins[3] = { 50, 52, 53 };	// Pins that control the UART multiplexer, LSB first
+constexpr Pin TMC22xxMuxPins[3] = { PortCPin(14), PortCPin(16), PortCPin(17) };	// Pins that control the UART multiplexer, LSB first
 
-// Endstops
-// RepRapFirmware only has a single endstop per axis.
-// Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-constexpr Pin END_STOP_PINS[NumEndstops] = { 24, 32, 46, 25, 43 };
-
-// Heaters and thermistors
-constexpr Pin HEAT_ON_PINS[NumHeaters] = { 36, 37, 16 };					// Heater pin numbers
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 20, 26, 66, 27 }; 	// Thermistor pin numbers
-constexpr Pin VssaSensePin = 19;
-constexpr Pin VrefSensePin = 17;
+// Thermistors
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortAPin(20), PortBPin(0), PortCPin(30), PortBPin(1) }; 	// Thermistor pin numbers
+constexpr Pin VssaSensePin = PortAPin(19);
+constexpr Pin VrefSensePin = PortAPin(17);
 
 // Default thermistor parameters
 constexpr float BED_R25 = 100000.0;
@@ -122,34 +123,29 @@ constexpr float THERMISTOR_SERIES_RS = 2200.0;
 constexpr size_t MaxSpiTempSensors = 2;
 
 // Digital pins the 31855s have their select lines tied to
-constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { 35, 55 };			// SPI0_CS1, SPI0_CS2
-
-// DHTxx data pin
-//constexpr Pin DhtDataPin = 97;											// Pin CS6
+constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { PortBPin(14), PortCPin(19) };			// SPI0_CS1, SPI0_CS2
 
 // Pin that controls the ATX power on/off
-constexpr Pin ATX_POWER_PIN = 0;
+constexpr Pin ATX_POWER_PIN = PortAPin(0);
 
 // Analogue pin numbers
-constexpr Pin Z_PROBE_PIN = 51;												// Z probe analog input
-constexpr Pin PowerMonitorVinDetectPin = 48;								// Vin monitor
+constexpr Pin PowerMonitorVinDetectPin = PortCPin(12);						// Vin monitor
 constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 voltage divider
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
-constexpr Pin Z_PROBE_MOD_PIN = 62;
+constexpr size_t MaxZProbes = 2;
+constexpr Pin Z_PROBE_PIN = PortCPin(15);									// Z probe analog input
+constexpr Pin Z_PROBE_MOD_PIN = PortCPin(26);
 constexpr Pin DiagPin = Z_PROBE_MOD_PIN;
 
 // Cooling fans
-constexpr size_t NUM_FANS = 3;
-constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { 59, 58, 65 };
-constexpr size_t NumTachos = 1;
-constexpr Pin TachoPins[NumTachos] = { 21 };
+constexpr size_t NumTotalFans = 4;
 
 // SD cards
 constexpr size_t NumSdCards = 2;
-constexpr Pin SdCardDetectPins[NumSdCards] = { 44, NoPin };
+constexpr Pin SdCardDetectPins[NumSdCards] = { PortCPin(8), NoPin };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[1] = { 34 };
+constexpr Pin SdSpiCSPins[1] = { PortCPin(2) };
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
 // 12864 LCD
@@ -158,29 +154,104 @@ constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 // The Duet Maestro level shifts all 3 LCD signals to 5V, so we meet the Vih specification and can reliably run at 2MHz.
 // For other electronics, there are reports that operation with 3.3V LCD signals may work if you reduce the clock frequency.
 constexpr uint32_t LcdSpiClockFrequency = 2000000;		// 2.0MHz
-constexpr Pin LcdCSPin = 45;
-constexpr Pin LcdBeepPin = 15;
-constexpr Pin EncoderPinA = 31;
-constexpr Pin EncoderPinB = 39;
-constexpr Pin EncoderPinSw = 7;
+constexpr Pin LcdCSPin = PortCPin(9);
+constexpr Pin LcdBeepPin = PortAPin(15);
+constexpr Pin EncoderPinA = PortBPin(5);
+constexpr Pin EncoderPinB = PortCPin(3);
+constexpr Pin EncoderPinSw = PortAPin(7);
 
-// M42 and M208 commands now use logical pin numbers, not firmware pin numbers.
-// This next definition defines the highest one.
-// This is the mapping from logical pins 60+ to firmware pin numbers
-constexpr Pin SpecialPinMap[] =
+// Enum to represent allowed types of pin access
+// We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
+enum class PinCapability: uint8_t
 {
-	21, 22, 3, 4, Z_PROBE_MOD_PIN											// PA21/RXD1/AD8, PA22/TXD1/AD9, PA3/TWD0, PA4/TWC, Z_MOD
+	// Individual capabilities
+	read = 1,
+	ain = 2,
+	write = 4,
+	pwm = 8,
+
+	// Combinations
+	ainr = 1|2,
+	rw = 1|4,
+	wpwm = 4|8,
+	rwpwm = 1|4|8,
+	ainrw = 1|2|4,
+	ainrwpwm = 1|2|4|8
 };
 
-constexpr int HighestLogicalPin = 64;										// highest logical pin number on this electronics
+constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
+{
+	return (PinCapability)((uint8_t)a | (uint8_t)b);
+}
+
+// Struct to represent a pin that can be assigned to various functions
+// This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
+struct PinEntry
+{
+	bool CanDo(PinAccess access) const;
+	Pin GetPin() const { return pin; }
+	PinCapability GetCapability() const { return cap; }
+	const char* GetNames() const { return names; }
+
+	Pin pin;
+	PinCapability cap;
+	const char *names;
+};
+
+// List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
+// The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
+// Aliases are separate by the , character.
+// If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
+// for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
+constexpr PinEntry PinTable[] =
+{
+	// Heater outputs
+	{ PortCPin(0),	PinCapability::wpwm,	"!bedheat" },
+	{ PortCPin(1),	PinCapability::wpwm,	"!e0heat" },
+	{ PortAPin(16), PinCapability::wpwm,	"!e1heat" },
+
+	// Fan outputs
+	{ PortCPin(23),	PinCapability::wpwm,	"fan0" },
+	{ PortCPin(22),	PinCapability::wpwm,	"fan1" },
+	{ PortCPin(29),	PinCapability::wpwm,	"fan2" },
+
+	// Endstop inputs
+	{ PortAPin(24),	PinCapability::read,	"xstop" },
+	{ PortBPin(6),	PinCapability::read,	"ystop" },
+	{ PortCPin(10),	PinCapability::read,	"zstop" },
+	{ PortAPin(25),	PinCapability::read,	"e0stop" },
+	{ PortCPin(7),	PinCapability::read,	"e1stop" },
+
+	// Misc
+	{ Z_PROBE_PIN,	PinCapability::ainr,	"zprobe.in" },
+	{ Z_PROBE_MOD_PIN, PinCapability::write, "zprobe.mod,servo" },
+	{ ATX_POWER_PIN, PinCapability::write,	"pson" },
+	{ PortAPin(21), PinCapability::ainrw,	"exp.pa21" },
+	{ PortAPin(22), PinCapability::ainrw,	"exp.pa22" },
+	{ PortAPin(3),	PinCapability::rw,		"exp.pa3" },
+	{ PortAPin(4),	PinCapability::rw,		"exp.pa4" },
+};
+
+constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
+
+// Function to look up a pin name pass back the corresponding index into the pin table
+bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
+
+// Default pin allocations
+constexpr const char *DefaultEndstopPinNames[] = { "xstop", "ystop", "zstop" };
+constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
+constexpr const char *DefaultHeaterPinNames[] = { "bedheat", "e0heat", "e1heat" };
+constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2" };
+constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
 
 // SAM4S Flash locations (may be expanded in the future)
 constexpr uint32_t IAP_FLASH_START = 0x00470000;
 constexpr uint32_t IAP_FLASH_END = 0x0047FFFF;								// we allow a full 64K on the SAM4
 
 // Duet pin numbers to control the W5500 interface
-constexpr Pin W5500ResetPin = 100;											// Low on this in holds the W5500 module in reset (ESP_RESET)
-constexpr Pin W5500SsPin = 11;												// SPI NPCS pin, input from W5500 module
+constexpr Pin W5500ResetPin = PortCPin(13);									// Low on this in holds the W5500 in reset
+constexpr Pin W5500SsPin = PortAPin(11);									// SPI NPCS pin to W5500
+constexpr Pin W5500IntPin = PortAPin(23);									// Interrupt from W5500
 
 // Timer allocation
 // TC0 channel 0 is used for step pulse generation and software timers

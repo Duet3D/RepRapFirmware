@@ -31,71 +31,65 @@ void PortControl::Exit()
 	numConfiguredPorts = 0;
 }
 
-void PortControl::Spin(bool full)
+// Update the IO bits. Return the number of milliseconds before we need to be called again, or 0 to be called when movement restarts.
+uint32_t PortControl::UpdatePorts()
 {
-	if (numConfiguredPorts != 0 && reprap.GetGCodes().GetMachineType() != MachineType::laser)
+	if (numConfiguredPorts == 0)
 	{
-		cpu_irq_disable();
-		const DDA * cdda = reprap.GetMove().GetCurrentDDA();
-		if (cdda == nullptr)
-		{
-			// Movement has stopped, so turn all ports off
-			cpu_irq_enable();
-			UpdatePorts(0);
-		}
-		else
-		{
-			const uint32_t now = StepTimer::GetInterruptClocks() + advanceClocks;
-			uint32_t moveEndTime = cdda->GetMoveStartTime();
-			DDA::DDAState st = cdda->GetState();
-			do
-			{
-				moveEndTime += cdda->GetClocksNeeded();
-				if ((int32_t)(moveEndTime - now) >= 0)
-				{
-					break;
-				}
-				cdda = cdda->GetNext();
-				st = cdda->GetState();
-			} while (st == DDA::executing || st == DDA::frozen);
-			cpu_irq_enable();
-
-			const IoBits_t bits = (st == DDA::executing || st == DDA::frozen || st == DDA::provisional) ? cdda->GetIoBits() : 0;
-			UpdatePorts(bits);
-		}
+		return 0;
 	}
+
+	SetBasePriority(NvicPriorityStep);
+	const DDA * cdda = reprap.GetMove().GetCurrentDDA();
+	if (cdda == nullptr)
+	{
+		// Movement has stopped, so turn all ports off
+		SetBasePriority(0);
+		UpdatePorts(0);
+		return 0;
+	}
+
+	// Find the DDA whose IO port bits we should set now
+	const uint32_t now = StepTimer::GetInterruptClocks() + advanceClocks;
+	uint32_t moveEndTime = cdda->GetMoveStartTime();
+	DDA::DDAState st = cdda->GetState();
+	do
+	{
+		moveEndTime += cdda->GetClocksNeeded();
+		if ((int32_t)(moveEndTime - now) >= 0)
+		{
+			SetBasePriority(0);
+			UpdatePorts(cdda->GetIoBits());
+			return (moveEndTime - now + StepTimer::StepClockRate/1000 - 1)/(StepTimer::StepClockRate/1000);
+		}
+		cdda = cdda->GetNext();
+		st = cdda->GetState();
+	} while (st == DDA::executing || st == DDA::frozen);
+
+	SetBasePriority(0);
+	UpdatePorts(0);
+	return 0;
 }
 
+// Set up the GPIO ports returning true if error
 bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
 	bool seen = false;
-	if (gb.Seen('P'))
+	if (gb.Seen('C'))
 	{
 		seen = true;
 		UpdatePorts(0);
-		numConfiguredPorts = 0;
-		uint32_t portNumbers[MaxPorts];
-		size_t numPorts = MaxPorts;
-		gb.GetUnsignedArray(portNumbers, numPorts, false);
-		for (size_t i = 0; i < numPorts; ++i)
+		IoPort * portAddresses[MaxPorts];
+		PinAccess access[MaxPorts];
+		for (size_t i = 0; i < MaxPorts; ++i)
 		{
-			const uint32_t pnum = portNumbers[i];
-			if (pnum > HighestLogicalPin)
-			{
-				reply.printf("Port number %ld out of range", pnum);
-				return true;
-			}
-			IoPort& pm = portMap[i];
-			if (!pm.Set((LogicalPin)pnum, PinAccess::write, false))
-			{
-				reply.printf("Port number %ld is not available", pnum);
-				return true;
-			}
-			pm.WriteDigital(false);				// ensure the port is off
-			if (i >= numConfiguredPorts)
-			{
-				numConfiguredPorts = i + 1;
-			}
+			portAddresses[i] = &portMap[i];
+			access[i] = PinAccess::write0;
+		}
+		numConfiguredPorts = IoPort::AssignPorts(gb, reply, PinUsedBy::gpio, MaxPorts, portAddresses, access);
+		if (numConfiguredPorts == 0)
+		{
+			return true;
 		}
 	}
 	if (gb.Seen('T'))
@@ -113,10 +107,11 @@ bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
-			reply.cat("port numbers");
+			reply.cat("ports");
 			for (size_t i = 0; i < numConfiguredPorts; ++i)
 			{
-				reply.catf(" %u", (unsigned int)portMap[i].GetLogicalPin());
+				reply.cat(' ');
+				portMap[i].AppendPinName(reply);
 			}
 		}
 	}

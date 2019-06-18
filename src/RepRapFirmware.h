@@ -31,15 +31,47 @@ Licence: GPL
 #undef value			// needed because we include <optional>
 
 #include "Core.h"
+#include "General/StringRef.h"
 
-typedef uint16_t PwmFrequency;		// type used to represent a PWM frequency. 0 sometimes means "default".
+// Definitions needed by Pins.h and/or Configuration.h
+// Logical pins used for general output, servos, CCN and laser control
+typedef uint16_t LogicalPin;				// type used to represent logical pin numbers
+constexpr LogicalPin NoLogicalPin = 0xFFFF;
+constexpr const char *NoPinName = "nil";
+
+typedef uint16_t PwmFrequency;				// type used to represent a PWM frequency. 0 sometimes means "default".
+
+// Enumeration to describe what we want to do with a pin
+enum class PinAccess : int
+{
+	read,
+	readWithPullup,
+	readAnalog,
+	write0,
+	write1,
+	pwm,
+	servo
+};
+
+enum class PinUsedBy : uint8_t
+{
+	unused = 0,
+	heater,
+	fan,
+	endstop,
+	zprobe,
+	tacho,
+	spindle,
+	laser,
+	gpio,
+	filamentMonitor
+};
 
 #include "Configuration.h"
 #include "Pins.h"
 
 #include "General/SafeStrtod.h"
 #include "General/SafeVsnprintf.h"
-#include "General/StringRef.h"
 
 // Module numbers and names, used for diagnostics and debug
 // All of these including noModule must be <= 15 because we 'or' the module number into the software reset code
@@ -111,14 +143,11 @@ typedef double floatc_t;					// type of matrix element used for calibration
 typedef float floatc_t;						// type of matrix element used for calibration
 #endif
 
-typedef uint32_t AxesBitmap;				// Type of a bitmap representing a set of axes
+typedef uint16_t AxesBitmap;				// Type of a bitmap representing a set of axes
 typedef uint32_t DriversBitmap;				// Type of a bitmap representing a set of driver numbers
 typedef uint32_t FansBitmap;				// Type of a bitmap representing a set of fan numbers
+typedef uint32_t HeatersBitmap;				// Type of a bitmap representing a set of heater numbers
 typedef uint16_t Pwm_t;						// Type of a PWM value when we don't want to use floats
-
-// Logical pins used for general output, servos, CCN and laser control
-typedef uint16_t LogicalPin;				// Type used to represent logical pin numbers
-constexpr LogicalPin NoLogicalPin = 0xFFFFu;
 
 #if SUPPORT_IOBITS
 typedef uint16_t IoBits_t;					// Type of the port control bitmap (G1 P parameter)
@@ -150,7 +179,6 @@ extern RepRap reprap;
 
 // Debugging support
 extern "C" void debugPrintf(const char* fmt, ...) __attribute__ ((format (printf, 1, 2)));
-//#define DEBUG_HERE do { } while (false)
 #define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
 
 // Functions and globals not part of any class
@@ -308,9 +336,6 @@ template<typename BitmapType> BitmapType UnsignedArrayToBitMap(const uint32_t *a
 	return res;
 }
 
-// Convert a PWM that is possibly in the old style 0..255 to be in the range 0.0..1.0
-float ConvertOldStylePwm(float v);
-
 // Common definitions used by more than one module
 
 constexpr size_t ScratchStringLength = 220;							// standard length of a scratch string, enough to print delta parameters to
@@ -321,6 +346,9 @@ constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices
 constexpr size_t CoreXYU_AXES = 5;									// The number of axes in a CoreXYU machine (there is a hidden V axis)
 constexpr size_t CoreXYUV_AXES = 5;									// The number of axes in a CoreXYUV machine
 constexpr size_t U_AXIS = 3, V_AXIS = 4;							// The indices of the U and V motors in a CoreXYU machine (needed by Platform)
+
+constexpr AxesBitmap DefaultXAxisMapping = MakeBitmap<AxesBitmap>(X_AXIS);	// by default, X is mapped to X
+constexpr AxesBitmap DefaultYAxisMapping = MakeBitmap<AxesBitmap>(Y_AXIS);	// by default, Y is mapped to Y
 
 // Common conversion factors
 constexpr float MinutesToSeconds = 60.0;
@@ -338,6 +366,25 @@ constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 // Type of an offset in a file
 typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;
+
+#ifdef RTOS
+
+// Task priorities
+namespace TaskPriority
+{
+	static constexpr int SpinPriority = 1;							// priority for tasks that rarely block
+	static constexpr int HeatPriority = 2;
+	static constexpr int DhtPriority = 2;
+	static constexpr int TmcPriority = 2;
+	static constexpr int AinPriority = 2;
+	static constexpr int HeightFollowingPriority = 2;
+	static constexpr int DueXPriority = 3;
+	static constexpr int LaserPriority = 3;
+	static constexpr int CanSenderPriority = 3;
+	static constexpr int CanReceiverPriority = 3;
+}
+
+#endif
 
 //-------------------------------------------------------------------------------------------------
 // Interrupt priorities - must be chosen with care! 0 is the highest priority, 15 is the lowest.

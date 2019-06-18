@@ -15,10 +15,13 @@
 #include "Movement/BedProbing/Grid.h"
 #include "OutputMemory.h"
 #include "RepRap.h"
+#include "RTOSIface/RTOSIface.h"
 
 #if HAS_LINUX_INTERFACE
 
+# include "matrix/matrix.h"
 # include "xdmac/xdmac.h"
+
 
 # define LINUX_SPI				SPI1
 # define LINUX_SPI_ID			ID_SPI1
@@ -31,7 +34,7 @@ const uint32_t LINUX_XDMAC_RX_CH_NUM = 4;
 
 static xdmac_channel_config_t xdmac_tx_cfg, xdmac_rx_cfg;
 
-volatile bool dataReceived = false;
+volatile bool dataReceived = false, transferReadyHigh = false;
 volatile unsigned int spiTxUnderruns = 0, spiRxOverruns = 0;
 
 void setup_spi(void *inBuffer, const void *outBuffer, size_t bytesToTransfer)
@@ -103,14 +106,12 @@ void setup_spi(void *inBuffer, const void *outBuffer, size_t bytesToTransfer)
 	NVIC_EnableIRQ(LINUX_SPI_IRQn);
 
 	// Begin transfer
-	fastDigitalWriteHigh(LinuxTfrReadyPin);
+	transferReadyHigh = !transferReadyHigh;
+	digitalWrite(LinuxTfrReadyPin, transferReadyHigh);
 }
 
 void disable_spi()
 {
-	// Stop transfer
-	fastDigitalWriteLow(LinuxTfrReadyPin);
-
 	// Disable the XDMAC channels
 	xdmac_channel_disable(XDMAC, DmacChanLinuxRx);
 	xdmac_channel_disable(XDMAC, DmacChanLinuxTx);
@@ -161,15 +162,28 @@ void DataTransfer::Init() {
 	pinMode(LinuxTfrReadyPin, OUTPUT_LOW);
 
 	// Initialize SPI pins
-	ConfigurePin(g_APinDescription[APIN_SPI1_MOSI]);
-	ConfigurePin(g_APinDescription[APIN_SPI1_MISO]);
-	ConfigurePin(g_APinDescription[APIN_SPI1_SCK]);
-	ConfigurePin(g_APinDescription[APIN_SPI1_SS0]);
+	ConfigurePin(APIN_SPI1_MOSI);
+	ConfigurePin(APIN_SPI1_MISO);
+	ConfigurePin(APIN_SPI1_SCK);
+	ConfigurePin(APIN_SPI1_SS0);
 
 	// Initialise SPI
 	spi_enable_clock(LINUX_SPI);
 	spi_disable(LINUX_SPI);
 	dataReceived = false;
+
+#if false
+	// This does not seem to change anything...
+	// The XDMAC is master 4+5 and the SRAM is slave 0+1. Give the XDMAC the highest priority.
+	matrix_set_slave_default_master_type(0, MATRIX_DEFMSTR_LAST_DEFAULT_MASTER);
+	matrix_set_slave_priority(0, MATRIX_PRAS_M4PR(10));
+	matrix_set_slave_priority(1, MATRIX_PRAS_M5PR(11));
+	// Set the slave slot cycle limit.
+	// If we leave it at the default value of 511 clock cycles, we get transmit underruns due to the HSMCI using the bus for too long.
+	// A value of 8 seems to work. I haven't tried other values yet.
+	matrix_set_slave_slot_cycle(0, 8);
+	matrix_set_slave_slot_cycle(1, 8);
+#endif
 }
 
 void DataTransfer::Diagnostics(MessageType mtype)
@@ -488,6 +502,7 @@ bool DataTransfer::IsReady()
 	else if (state != SpiState::ExchangingHeader && millis() - lastTransferTime > SpiTransferTimeout)
 	{
 		// Reset failed transfers automatically after a certain period of time
+		transferReadyHigh = false;
 		disable_spi();
 		ExchangeHeader();
 	}

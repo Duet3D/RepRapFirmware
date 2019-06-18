@@ -114,7 +114,7 @@ AxesBitmap Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alread
 	}
 
 	// If Z homing is done using a Z probe then X and Y must be homed before Z
-	const bool homeZLast = (IsBitSet(toBeHomed, Z_AXIS) && reprap.GetPlatform().HomingZWithProbe());
+	const bool homeZLast = (IsBitSet(toBeHomed, Z_AXIS) && reprap.GetPlatform().GetEndstops().HomingZWithProbe());
 	const AxesBitmap homeFirst = AxesToHomeBeforeProbing();
 
 	// Return the homing file for the lowest axis that we have been asked to home

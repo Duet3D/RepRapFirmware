@@ -1,6 +1,95 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.03RC3
+=================
+Upgrade notes:
+- Please be careful with using workplace coordinate offsets (G10 L2, G10 L20, G54-G59) because the code that handles them has undergone major changes, so it may contain new bugs. Also see the note on changed behaviour of G60 below.
+- See also the upgrade notes for version 2.03RC2 if you are not coming from that version
+
+Feature improvements/changed behaviour:
+- Restore points (created by G60 and created automatically at the start of a pause or a tool change) now have their coordinates stored independently of any workplace offsets. So if you create a restore point and then change the workplace offsets, when you go back to the restore point it will go back to the same machine position regardless of the change in workplace offsets.
+- In CoreNG, increment I2C reset count when resetting the I2C system
+- Recognise filament usage comment in Prusa slicer
+- G53 is now available even when workplace coordinates not supported in build (cancels tool offsets)
+- When using a mixing extruder, the feed rate is now scaled in proportion to total mix, for serial extruder drives etc.
+- Allow M203 max speeds lower than 1mm/sec
+- Enable laser in Duet085 build
+- M584 formatting improvement when a has no extruders
+- M563 P# formatting improvements when the tool has no heaters or no drives
+- Added extra diagnostics for when a filename is too long
+
+Bug fixes:
+- Independent leadscrew moves for true bed levelling didn't work when driver numbers >= MaxAxes were used to drive Z motors
+- Added missing newline at end of some error messages
+- M585 L parameter was not working
+- In resume.g a G1 R command went to the wrong coordinates if workplace coordinate offsets were being used
+- Homing files when workplace coordinate offsets were active cause other axes to move
+- Resurrect.g now works when workplace offsets are used, and it restores the current workplace # and all workplace offsets
+- In resurrect.g, the current tool is now selected after running resurrect-prologue, and its tpre and tpost files are run (for tool changer)
+- In resurrect.g, fan speeds are now set up after the tool is selected so that the mapped fan speed is correct
+- In resurrect.g, when setting the last known position with G92 prior to calling resurrect-prologue.g, allow for tool offsets
+- Babystepping could cause an incorrect Z coordinate to be set under some conditions
+
+Version 2.03RC2
+=================
+
+Upgrade notes:
+- DueX2 and DueX5 users: if you have been experiencing high I2C error counts, then in the past this usually led to the machine printing very slowly when the errors started occurring. Changes to the I2C drivers should allow the machine to recover from the error in most cases. However, if it does not recover then the machine will most likely continue to run as normal, except that the states of endstops on the DueX will not be read correctly and commands to change settings of fans on the DueX won't work. So watch out for these different symptoms.
+- See upgrade notes for 2.03RC1.
+
+Compatible files:
+- DuetWiFiServer 1.23
+- DuetWebControl 1.22.6 or 2.0.0-RC6
+
+New features and changed behaviour:
+- When a DueX is attached, a separate task is now used to read the states of DueX endstop inputs when they change. This should give much lower latency.
+
+Bug fixes:
+- When I2C timeouts occurred, no attempt was made to reset the I2C controller before the next I2C transaction attempt. The I2C driver now resets the controller on the Duet MCU after an I2C error, also it retries the failed transaction twice.
+- Some PWM channels didn't work correctly in the Due06/085 build (this was also fixed in temporary release 2.03RC1+1).
+
+Version 2.03RC1
+=================
+
+Upgrade notes:
+- The facility to map endstops using the A parameter in the M574 command has been withdrawn. Use RepRapFirmware 3 if you need an equivalent facility.
+- Duet Maestro users with a 12864 display may need to make minor changes to their menu files to correct for changes in spacing and automatic insertion of % characters after certain values e.g. fan speed
+- See also the upgrade notes for earlier releases, unless you are upgrading from 2.03beta3. **Tool change users please note:** tool offsets are now applied in tfree#.g and tpost#.g files (in firmware 2.02 they were not applied).
+
+Compatible files:
+- DuetWiFiServer 1.23
+- DuetWebControl 1.22.6 or 2.0.0-RC6
+
+New features and changed behaviour:
+- Endstop mapping and M574 A parameter have been removed
+- Added 12864 menu items 534-539
+- The 12864 display no longer automatically adds a space column after each item, except for left-justified text items without an explicit width
+- The 12864 display system automatically appends a % character to value/alter items that are normally expressed in percent, e.g. fan speeds, print speed, extrusion factors
+- M302 now waits for movement to stop
+- M291 now unlocks movement if it is locked, so that PanelDue or DWC can be used to jog axes if M291 was invoked from another input stream
+- The status response for DWC and returned by M408 S2 now includes the workplace coordinate system number with variable name "wpl"
+- On the Duet Maestro, stepper driver open load detection is now disabled when the driver is operating in stealthChop mode
+- Prints can now be baby stepped, paused and cancelled while they are waiting for temperatures to be reached
+- Increased maximum number of triggers from 10 to 16
+- Increased number of output buffers on Duet WiFi/Ethernet/Maestro from 20 to 24
+
+Bug fixes:
+- M585 works again
+- In resurrect.g file the M290 command now commands absolute babystepping, the filename in M23 command is enclosed in double quote marks, and the inches/mm setting is restored
+- The W5500 chip could not be reset on Duet Maestro
+- M109 did not run the tool change files if no tool was active initially
+- If a print finishes or is cancelled when Z hop is active because of a G10 command without a subsequent G11, the Z hop is cancelled (but not the associated retraction)
+- Blank lines in 12864 display menu files are now ignored
+- Visibility attributes were not correctly applied to 12864 display value, alter and image menu items
+- Fixed a couple of issues with the 12864 display "files" menu item when the file path refers to SD card 1. The SD card is mounted automatically if it isn't already mounted.
+- Fixed (hopefully - not tested!) issue with Fan 1 on Duet085 in 2.03 beta releases
+
+Internal changes:
+- Use new CoreNG API with common RTOS/non-RTOS builds of CoreNG (same CoreNG as RRF 3)
+- File CAN/CanMessageFormats.h moved from project Duet3Expansion to RepRapFirmware
+- Removed async move queue facility, use RRF3 if you need that
+
 Version 2.03beta3
 =================
 
@@ -14,6 +103,7 @@ Upgrade notes:
 
 Known issues:
 - Custom endstop input numbers in the M585 command (probe tool) don't work
+- On the Duet 085, Fan 1 doesn't work
 
 New features/changed behaviour:
 - M505 (set SD card system folder) is now implemented
@@ -101,10 +191,10 @@ New features/changed behaviour:
 - On SCARA and delta printers, geometric limits are now applied even when not applying M208 limits due to use of M564 S0
 - New S-3 function for G30 command. G30 S-3 probes the bed and sets the Z probe trigger height to the stopped height.
 - M92 command now includes an optional S parameter to specify the microstepping that the steps/mm is quotes at. If the actual microstepping in use is different, the specified steps/mm will be adjusted accordingly (thanks wikriker).
-- M575 command L parameter for inverting probe logic level is supported (thanks chrishamm)
+- M585 command L parameter for inverting probe logic level is supported (thanks chrishamm)
 - The M408 S2 and http status responses now include the bed standby temperature (thanks gtjoseph)
 - The M669 parameters to define SCARA kinematics now include an R (minimum radius) parameter, to handle machines for which the minimum available radius is sometimes higher than the radius when the distal axis is homed
-- G17 is implemented (it does nothing), and G17/G17 report an error
+- G17 is implemented (it does nothing), and G18/G19 report an error
 - The segment length used by G2/G3 now depends on both the radius and the speed of the move, not just the radius as in RRF 2.02. So small segment lengths are used when doing CNC milling at low speeds.
 - If a print is paused and then cancelled while the printer is still heating up, heating is cancelled
 - Added M122 P105 subfunction to display the sizes of various objects allocated by RRF

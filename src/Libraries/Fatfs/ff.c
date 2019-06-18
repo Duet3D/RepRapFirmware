@@ -1904,7 +1904,11 @@ static int cmp_lfn (		/* 1:matched, 0:not matched */
 	for (wc = 1, s = 0; s < 13; s++) {		/* Process all characters in the entry */
 		uc = ld_word(dir + LfnOfs[s]);		/* Pick an LFN character */
 		if (wc != 0) {
+#if 1	// patch ff13c_p3.c
+			if (i >= FF_MAX_LFN + 1 || ff_wtoupper(uc) != ff_wtoupper(lfnbuf[i++])) {	/* Compare it */
+#else
 			if (i >= FF_MAX_LFN || ff_wtoupper(uc) != ff_wtoupper(lfnbuf[i++])) {	/* Compare it */
+#endif
 				return 0;					/* Not matched */
 			}
 			wc = uc;
@@ -1940,15 +1944,24 @@ static int pick_lfn (	/* 1:succeeded, 0:buffer overflow or invalid LFN entry */
 	for (wc = 1, s = 0; s < 13; s++) {		/* Process all characters in the entry */
 		uc = ld_word(dir + LfnOfs[s]);		/* Pick an LFN character */
 		if (wc != 0) {
+#if 1	// patch ff13c_p3.c
+			if (i >= FF_MAX_LFN + 1) return 0;	/* Buffer overflow? */
+#else
 			if (i >= FF_MAX_LFN) return 0;	/* Buffer overflow? */
+#endif
 			lfnbuf[i++] = wc = uc;			/* Store it */
 		} else {
 			if (uc != 0xFFFF) return 0;		/* Check filler */
 		}
 	}
 
+#if 1	// patch ff13c_p3.c
+	if ((dir[LDIR_Ord] & LLEF) && wc != 0) {	/* Put terminator if it is the last LFN part and not terminated */
+		if (i >= FF_MAX_LFN + 1) return 0;	/* Buffer overflow? */
+#else
 	if (dir[LDIR_Ord] & LLEF) {				/* Put terminator if it is the last LFN part */
 		if (i >= FF_MAX_LFN) return 0;		/* Buffer overflow? */
+#endif
 		lfnbuf[i] = 0;
 	}
 
@@ -2669,6 +2682,9 @@ static void get_fileinfo (
 {
 	UINT si, di;
 #if FF_USE_LFN
+#if 1	// patch ff13c_p2.c
+	BYTE lcf;
+#endif
 	WCHAR wc, hs;
 	FATFS *fs = dp->obj.fs;
 #else
@@ -2729,9 +2745,18 @@ static void get_fileinfo (
 		if (di == 0) {	/* If LFN and SFN both are invalid, this object is inaccesible */
 			fno->fname[di++] = '?';
 		} else {
+#if 1	// patch ff13c_p2.c
+			for (si = di = 0, lcf = NS_BODY; fno->altname[si]; si++, di++) {	/* Copy altname[] to fname[] with case information */
+#else
 			for (si = di = 0; fno->altname[si]; si++, di++) {	/* Copy altname[] to fname[] with case information */
+#endif
 				wc = (WCHAR)fno->altname[si];
+#if 1	// patch ff13c_p2.c
+				if (wc == '.') lcf = NS_EXT;
+				if (IsUpper(wc) && (dp->dir[DIR_NTres] & lcf)) wc += 0x20;
+#else
 				if (IsUpper(wc) && (dp->dir[DIR_NTres] & ((si >= 9) ? NS_EXT : NS_BODY))) wc += 0x20;
+#endif
 				fno->fname[di] = (TCHAR)wc;
 			}
 		}
@@ -5670,7 +5695,11 @@ FRESULT f_mkfs (
 		b_fat = b_vol + 32;										/* FAT start at offset 32 */
 		sz_fat = ((sz_vol / au + 2) * 4 + ss - 1) / ss;			/* Number of FAT sectors */
 		b_data = (b_fat + sz_fat + sz_blk - 1) & ~(sz_blk - 1);	/* Align data area to the erase block boundary */
+#if 1	// patch ff13c_p1.c
+		if (b_data - b_vol >= sz_vol / 2) LEAVE_MKFS(FR_MKFS_ABORTED);	/* Too small volume? */
+#else
 		if (b_data >= sz_vol / 2) LEAVE_MKFS(FR_MKFS_ABORTED);	/* Too small volume? */
+#endif
 		n_clst = (sz_vol - (b_data - b_vol)) / au;				/* Number of clusters */
 		if (n_clst <16) LEAVE_MKFS(FR_MKFS_ABORTED);			/* Too few clusters? */
 		if (n_clst > MAX_EXFAT) LEAVE_MKFS(FR_MKFS_ABORTED);	/* Too many clusters? */

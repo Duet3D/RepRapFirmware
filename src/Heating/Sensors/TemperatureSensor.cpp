@@ -1,9 +1,10 @@
-#include <Heating/Sensors/CurrentLoopTemperatureSensor.h>
 #include "TemperatureSensor.h"
 #include "Thermistor.h"
 #include "ThermocoupleSensor31855.h"
 #include "ThermocoupleSensor31856.h"
 #include "RtdSensor31865.h"
+#include "CurrentLoopTemperatureSensor.h"
+#include "LinearAnalogSensor.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 #if HAS_CPU_TEMP_SENSOR
@@ -100,6 +101,10 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int channel)
 	if (channel < NumThermistorInputs)
 	{
 		ts = new Thermistor(channel, false);
+	}
+	else if (FirstLinearAnalogChannel <= channel && channel < FirstLinearAnalogChannel + NumThermistorInputs)
+	{
+		ts = new LinearAnalogSensor(channel);
 	}
 	else if (FirstPT1000Channel <= channel && channel < FirstPT1000Channel + NumThermistorInputs)
 	{

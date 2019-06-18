@@ -27,8 +27,8 @@ namespace DotStarLed
 	{
 		// Set up the USART pins for SPI mode
 		// The pins are already set up for SPI in the pins table
-		ConfigurePin(GetPinDescription(DotStarMosiPin));
-		ConfigurePin(GetPinDescription(DotStarSclkPin));
+		ConfigurePin(DotStarMosiPin);
+		ConfigurePin(DotStarSclkPin);
 
 		// Enable the clock to the USART
 		pmc_enable_periph_clk(DotStarUsartId);

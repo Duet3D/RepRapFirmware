@@ -446,23 +446,25 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			debugPrintf("\n");
 		}
 
-		// Save the old homed carriage heights before we change the endstop corrections
-		float heightAdjust[MaxTowers];
-		for (size_t drive = 0; drive < numTowers; ++drive)
 		{
-			heightAdjust[drive] = homedCarriageHeights[drive];
+			// Save the old homed carriage heights before we change the endstop corrections
+			float heightAdjust[UsualNumTowers];
+			for (size_t drive = 0; drive < UsualNumTowers; ++drive)
+			{
+				heightAdjust[drive] = homedCarriageHeights[drive];
+			}
+
+			Adjust(numFactors, solution);	// adjust the delta parameters
+
+			for (size_t drive = 0; drive < UsualNumTowers; ++drive)
+			{
+				heightAdjust[drive] = homedCarriageHeights[drive] - heightAdjust[drive];
+			}
+
+			// Adjust the motor endpoints to allow for the change to endstop adjustments
+			reprap.GetMove().AdjustMotorPositions(heightAdjust, UsualNumTowers);
 		}
-
-		Adjust(numFactors, solution);	// adjust the delta parameters
-
-		for (size_t drive = 0; drive < numTowers; ++drive)
-		{
-			heightAdjust[drive] = homedCarriageHeights[drive] - heightAdjust[drive];
-		}
-
-		// Adjust the motor endpoints to allow for the change to endstop adjustments
-		reprap.GetMove().AdjustMotorPositions(heightAdjust, UsualNumTowers);
-
+		
 		// Calculate the expected probe heights using the new parameters
 		{
 			floatc_t expectedResiduals[MaxCalibrationPoints];

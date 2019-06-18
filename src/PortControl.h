@@ -9,7 +9,7 @@
 #define SRC_PORTCONTROL_H_
 
 #include "RepRapFirmware.h"
-#include "IoPorts.h"			// for PinConfiguration
+#include "Hardware/IoPorts.h"
 
 class GCodeBuffer;
 
@@ -21,7 +21,7 @@ public:
 	PortControl();
 	void Init();
 	void Exit();
-	void Spin(bool full);
+	uint32_t UpdatePorts();
 	bool Configure(GCodeBuffer& gb, const StringRef& reply);
 
 private:

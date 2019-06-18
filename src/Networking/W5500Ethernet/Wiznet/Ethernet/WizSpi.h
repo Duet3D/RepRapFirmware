@@ -8,6 +8,7 @@
 #ifndef SRC_DUETNG_DUETETHERNET_ETHERNET3_UTILITY_WIZSPI_H_
 #define SRC_DUETNG_DUETETHERNET_ETHERNET3_UTILITY_WIZSPI_H_
 
+#include "RepRapFirmware.h"
 #include "spi/spi.h"
 
 namespace WizSpi

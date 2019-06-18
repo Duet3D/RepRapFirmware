@@ -28,11 +28,7 @@ FilamentMonitor::~FilamentMonitor()
 // Call this to disable the interrupt before deleting or re-configuring a filament monitor
 void FilamentMonitor::Disable()
 {
-	if (pin != NoPin)
-	{
-		detachInterrupt(pin);
-		pin = NoPin;
-	}
+	port.Release();
 }
 
 // Try to get the pin number from the GCode command in the buffer, setting Seen if a pin number was provided and returning true if error.
@@ -42,27 +38,22 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 	if (gb.Seen('C'))
 	{
 		seen = true;
-		// The C parameter is an endstop number in RRF
-		const int endstop = gb.GetIValue();
-		const Pin p = reprap.GetPlatform().GetEndstopPin(endstop);
-		if (p == NoPin)
+		if (!port.AssignPort(gb, reply, PinUsedBy::filamentMonitor, PinAccess::readWithPullup))
 		{
-			reply.copy("bad endstop number");
 			return true;
 		}
-		endstopNumber = endstop;
-		pin = p;
+
 		haveIsrStepsCommanded = false;
-		if (interruptMode != INTERRUPT_MODE_NONE && !attachInterrupt(pin, InterruptEntry, interruptMode, this))
+		if (interruptMode != INTERRUPT_MODE_NONE && !port.AttachInterrupt(InterruptEntry, interruptMode, this))
 		{
-			reply.copy("unsuitable endstop number");
+			reply.copy("unsuitable pin");
 			return true;
 		}
 	}
 	else if (seen)
 	{
 		// We already had a P parameter, therefore it is an error not to have a C parameter too
-		reply.copy("no endstop number given");
+		reply.copy("no pin name given");
 		return true;
 	}
 	return false;
@@ -79,8 +70,8 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 {
 
 	bool seen = false;
-	long newSensorType;
-	gb.TryGetIValue('P', newSensorType, seen);
+	uint32_t newSensorType;
+	gb.TryGetUIValue('P', newSensorType, seen);
 
 	MutexLocker lock(filamentSensorsMutex);
 	FilamentMonitor*& sensor = filamentSensors[extruder];
@@ -122,7 +113,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 }
 
 // Factory function
-/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, int type)
+/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int type)
 {
 	switch (type)
 	{

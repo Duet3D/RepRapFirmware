@@ -38,6 +38,7 @@
 #include "Platform.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Tools/Tool.h"
+#include "Endstops/ZProbe.h"
 
 #if SUPPORT_CAN_EXPANSION
 # include "CAN/CanInterface.h"
@@ -80,8 +81,11 @@ Move::Move() : active(false)
 void Move::Init()
 {
 	mainDDARing.Init2();
+
 #if SUPPORT_ASYNC_MOVES
 	auxDDARing.Init2();
+	auxMoveAvailable = false;
+	auxMoveLocked = false;
 #endif
 
 	maxPrintingAcceleration = maxTravelAcceleration = 10000.0;
@@ -121,7 +125,7 @@ void Move::Spin()
 {
 	if (!active)
 	{
-		GCodes::RawMove nextMove;
+		RawMove nextMove;
 		(void) reprap.GetGCodes().ReadMove(nextMove);			// throw away any move that GCodes tries to pass us
 		return;
 	}
@@ -172,7 +176,7 @@ void Move::Spin()
 		else
 		{
 			// If there's a G Code move available, add it to the DDA ring for processing.
-			GCodes::RawMove nextMove;
+			RawMove nextMove;
 			if (reprap.GetGCodes().ReadMove(nextMove))		// if we have a new move
 			{
 				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
@@ -205,16 +209,13 @@ void Move::Spin()
 	mainDDARing.Spin(simulationMode, idleCount > 10);	// let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount.
 
 #if SUPPORT_ASYNC_MOVES
-	if (auxDDARing.CanAddMove())
+	if (auxMoveAvailable && auxDDARing.CanAddMove())
 	{
-		GCodes::RawMove auxMove;
-		if (reprap.GetGCodes().ReadAuxMove(auxMove))
+		if (auxDDARing.AddAsyncMove(auxMove))
 		{
-			if (auxDDARing.AddAsyncMove(auxMove.feedRate, auxMove.acceleration, auxMove.coords))
-			{
-				moveState = MoveState::collecting;
-			}
+			moveState = MoveState::collecting;
 		}
+		auxMoveAvailable = false;
 	}
 	auxDDARing.Spin(simulationMode, true);				// let the DDA ring process moves
 #endif
@@ -289,8 +290,8 @@ bool Move::IsRawMotorMove(uint8_t moveType) const
 // Return true if the specified point is accessible to the Z probe
 bool Move::IsAccessibleProbePoint(float x, float y) const
 {
-	const ZProbe& params = reprap.GetPlatform().GetCurrentZProbeParameters();
-	return kinematics->IsReachable(x - params.xOffset, y - params.yOffset, false);
+	const ZProbe& params = reprap.GetPlatform().GetEndstops().GetCurrentZProbe();
+	return kinematics->IsReachable(x - params.GetXOffset(), y - params.GetYOffset(), false);
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
@@ -324,27 +325,32 @@ void Move::Diagnostics(MessageType mtype)
 #endif
 
 	// Show the current probe position heights and type of bed compensation in use
-	p.Message(mtype, "Bed compensation in use: ");
+	String<StringLength40> bedCompString;
 	if (usingMesh)
 	{
-		p.Message(mtype, "mesh\n");
+		bedCompString.copy("mesh");
 	}
 	else if (probePoints.GetNumBedCompensationPoints() != 0)
 	{
-		p.MessageF(mtype, "%d point\n", probePoints.GetNumBedCompensationPoints());
+		bedCompString.printf("%d point", probePoints.GetNumBedCompensationPoints());
 	}
 	else
 	{
-		p.Message(mtype, "none\n");
+		bedCompString.copy("none");
 	}
+	p.MessageF(mtype, "Bed compensation in use: %s, comp offset %.3f\n", bedCompString.c_str(), (double)zShift);
 
-	p.Message(mtype, "Bed probe heights:");
-	// To keep the response short so that it doesn't get truncated when sending it via HTTP, we only show the first 5 bed probe points
-	for (size_t i = 0; i < 5; ++i)
+	// Only print the probe point heights if we are using old-style compensation
+	if (!usingMesh && probePoints.GetNumBedCompensationPoints() != 0)
 	{
-		p.MessageF(mtype, " %.3f", (double)probePoints.GetZHeight(i));
+		// To keep the response short so that it doesn't get truncated when sending it via HTTP, we only show the first 5 bed probe points
+		bedCompString.Clear();
+		for (size_t i = 0; i < 5; ++i)
+		{
+			bedCompString.catf(" %.3f", (double)probePoints.GetZHeight(i));
+		}
+		p.MessageF(mtype, "Bed probe heights:%s\n", bedCompString.c_str());
 	}
-	p.Message(mtype, "\n");
 
 #if DDA_LOG_PROBE_CHANGES
 	// Temporary code to print Z probe trigger positions
@@ -813,7 +819,7 @@ void Move::SetXYBedProbePoint(size_t index, float x, float y)
 {
 	if (index >= MaxProbePoints)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Z probe point index out of range.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Z probe point index out of range\n");
 	}
 	else
 	{
@@ -825,7 +831,7 @@ void Move::SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wa
 {
 	if (index >= MaxProbePoints)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Z probe point Z index out of range.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Z probe point Z index out of range\n");
 	}
 	else
 	{
@@ -842,9 +848,9 @@ float Move::GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePo
 	y = probePoints.GetYCoord(count);
 	if (wantNozzlePosition)
 	{
-		const ZProbe& rp = reprap.GetPlatform().GetCurrentZProbeParameters();
-		x -= rp.xOffset;
-		y -= rp.yOffset;
+		const ZProbe& rp = reprap.GetPlatform().GetEndstops().GetCurrentZProbe();
+		x -= rp.GetXOffset();
+		y -= rp.GetYOffset();
 	}
 	return probePoints.GetZHeight(count);
 }
@@ -962,5 +968,115 @@ GCodeResult Move::ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef&
 	}
 	return GCodeResult::ok;
 }
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+
+// Laser and IOBits support
+
+Task<Move::LaserTaskStackWords> *Move::laserTask = nullptr;		// the task used to manage laser power or IOBits
+
+extern "C" void LaserTaskStart(void * pvParameters)
+{
+	reprap.GetMove().LaserTaskRun();
+}
+
+// This is called when laser mode is selected or IOBits is enabled
+void Move::CreateLaserTask()
+{
+	TaskCriticalSectionLocker lock;
+	if (laserTask == nullptr)
+	{
+		laserTask = new Task<LaserTaskStackWords>;
+		laserTask->Create(LaserTaskStart, "LASER", nullptr, TaskPriority::LaserPriority);
+	}
+}
+
+// Wake up the laser task. Call this at the start of a new move from standstill (not from an ISR)
+void Move::WakeLaserTask()
+{
+	laserTask->Give();
+}
+
+// Wake up the laser task. Call this at the start of a new move from standstill (not from an ISR)
+void Move::WakeLaserTaskFromISR()
+{
+	laserTask->GiveFromISR();
+}
+
+void Move::LaserTaskRun()
+{
+	for (;;)
+	{
+		// Sleep until we are woken up by the start of a move
+		TaskBase::Take();
+
+		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
+		{
+			// Manage the laser power
+			uint32_t ticks;
+			while ((ticks = mainDDARing.ManageLaserPower()) != 0)
+			{
+				delay(ticks);
+			}
+		}
+		else
+		{
+			// Manage the IOBits
+			uint32_t ticks;
+			while ((ticks = reprap.GetPortControl().UpdatePorts()) != 0)
+			{
+				delay(ticks);
+			}
+		}
+	}
+}
+
+#endif
+
+#if SUPPORT_ASYNC_MOVES
+
+// Get and lock the aux move buffer. If successful, return a pointer to the buffer.
+// The caller must not attempt to lock the aux buffer more than once, and must call ReleaseAuxMove to release the buffer.
+AsyncMove *Move::LockAuxMove()
+{
+	InterruptCriticalSectionLocker lock;
+	if (!auxMoveLocked && !auxMoveAvailable)
+	{
+		auxMoveLocked = true;
+		return &auxMove;
+	}
+	return nullptr;
+}
+
+// Release the aux move buffer and optionally signal that it contains a move
+// The caller must have locked the buffer before calling this. If it calls with hasNewMove true, it must have populated the move buffer with the move details
+void Move::ReleaseAuxMove(bool hasNewMove)
+{
+	auxMoveAvailable = hasNewMove;
+	auxMoveLocked = false;
+}
+
+// Configure height following
+GCodeResult Move::ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply)
+{
+	if (heightController == nullptr)
+	{
+		heightController = new HeightController;
+	}
+	return heightController->Configure(gb, reply);
+}
+
+// Start/stop height following
+GCodeResult Move::StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply)
+{
+	if (heightController == nullptr)
+	{
+		reply.copy("Height following has not been configured");
+		return GCodeResult::error;
+	}
+	return heightController->StartHeightFollowing(gb, reply);
+}
+
+#endif
 
 // End

@@ -11,6 +11,7 @@
 #include "PrintMonitor.h"
 #include "Tools/Tool.h"
 #include "Tools/Filament.h"
+#include "Endstops/ZProbe.h"
 #include "Tasks.h"
 #include "Version.h"
 
@@ -47,7 +48,7 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 # include "task.h"
 
 # if SAME70
-#  include "DmacManager.h"
+#  include "Hardware/DmacManager.h"
 # endif
 
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
@@ -409,21 +410,9 @@ void RepRap::Spin()
 	scanner->Spin();
 #endif
 
-#if SUPPORT_IOBITS
-	ticksInSpinState = 0;
-	spinningModule = modulePortControl;
-	portControl->Spin(true);
-#endif
-
 	ticksInSpinState = 0;
 	spinningModule = modulePrintMonitor;
 	printMonitor->Spin();
-
-#ifdef DUET_NG
-	ticksInSpinState = 0;
-	spinningModule = moduleDuetExpansion;
-	DuetExpansion::Spin();
-#endif
 
 	ticksInSpinState = 0;
 	spinningModule = moduleFilamentSensors;
@@ -737,7 +726,7 @@ void RepRap::StandbyTool(int toolNumber, bool simulating)
 	}
 	else
 	{
-		platform->MessageF(ErrorMessage, "Attempt to standby a non-existent tool: %d.\n", toolNumber);
+		platform->MessageF(ErrorMessage, "Attempt to standby a non-existent tool: %d\n", toolNumber);
 	}
 }
 
@@ -821,7 +810,7 @@ void RepRap::Tick()
 #endif
 			{
 				resetting = true;
-				for (size_t i = 0; i < NumHeaters; i++)
+				for (size_t i = 0; i < NumTotalHeaters; i++)
 				{
 					platform->SetHeater(i, 0.0);
 				}
@@ -875,7 +864,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	ch = '[';
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
+		response->catf("%c%d", ch, (gCodes->IsAxisHomed(axis)) ? 1 : 0);
 		ch = ',';
 	}
 
@@ -885,13 +874,15 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	// So we report 9999.9 instead.
 
 	// First the user coordinates
+#if SUPPORT_WORKPLACE_COORDINATES
+	response->catf("],\"wpl\":%u,\"xyz\":", gCodes->GetWorkplaceCoordinateSystemNumber());
+#else
 	response->cat("],\"xyz\":");
-	const float * const userPos = gCodes->GetUserPosition();
+#endif
 	ch = '[';
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
-		const float coord = userPos[axis];
-		response->catf("%c%.3f", ch, HideNan(coord));
+		response->catf("%c%.3f", ch, HideNan(gCodes->GetUserCoordinate(axis)));
 		ch = ',';
 	}
 
@@ -986,7 +977,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				response->EncodeString(mbox.message, false);
 				response->cat(",\"title\":");
 				response->EncodeString(mbox.title, false);
-				response->catf(",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%" PRIu32 "}", mbox.mode, mbox.seq, (double)timeLeft, mbox.controls);
+				response->catf(",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%u}", mbox.mode, mbox.seq, (double)timeLeft, mbox.controls);
 			}
 			response->cat('}');
 		}
@@ -1000,7 +991,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Cooling fan value
 		response->cat(",\"fanPercent\":");
 		ch = '[';
-		for (size_t i = 0; i < NUM_FANS; i++)
+		for (size_t i = 0; i < NumTotalFans; i++)
 		{
 			response->catf("%c%d", ch, (int)lrintf(platform->GetFanValue(i) * 100.0));
 			ch = ',';
@@ -1012,7 +1003,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		{
 			response->cat(",\"fanNames\":");
 			ch = '[';
-			for (size_t fan = 0; fan < NUM_FANS; fan++)
+			for (size_t fan = 0; fan < NumTotalFans; fan++)
 			{
 				response->cat(ch);
 				ch = ',';
@@ -1046,9 +1037,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->cat(",\"sensors\":{");
 
 		// Probe
-		const int v0 = platform->GetZProbeReading();
+		const int v0 = platform->GetCurrentZProbe().GetReading();
 		int v1, v2;
-		switch (platform->GetZProbeSecondaryValues(v1, v2))
+		switch (platform->GetCurrentZProbe().GetSecondaryValues(v1, v2))
 		{
 			case 1:
 				response->catf("\"probeValue\":%d,\"probeSecondary\":[%d]", v0, v1);
@@ -1062,26 +1053,14 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 
 		// Send fan RPM value(s)
-		if (NumTachos != 0)
+		response->cat(",\"fanRPM\":");
+		char ch = '[';
+		for (size_t i = 0; i < NumTotalFans; ++i)
 		{
-			response->cat(",\"fanRPM\":");
-			// For compatibility with older versions of DWC, if there is only one tacho value then we send it as a simple variable
-			if (NumTachos > 1)
-			{
-				char ch = '[';
-				for (size_t i = 0; i < NumTachos; ++i)
-				{
-					response->catf("%c%" PRIu32, ch, platform->GetFanRPM(i));
-					ch = ',';
-				}
-				response->cat(']');
-			}
-			else
-			{
-				response->catf("%" PRIu32, platform->GetFanRPM(0));
-			}
+			response->catf("%c%" PRIi32, ch, platform->GetFanRPM(i));
+			ch = ',';
 		}
-		response->cat('}');		// end sensors
+		response->cat("]}");		// end fan RPMs and sensors
 	}
 
 	/* Temperatures */
@@ -1120,7 +1099,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Current temperatures
 		response->cat("\"current\":");
 		ch = '[';
-		for (size_t heater = 0; heater < NumHeaters; heater++)
+		for (size_t heater = 0; heater < NumTotalHeaters; heater++)
 		{
 			response->catf("%c%.1f", ch, (double)heat->GetTemperature(heater));
 			ch = ',';
@@ -1130,7 +1109,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Current states
 		response->cat(",\"state\":");
 		ch = '[';
-		for (size_t heater = 0; heater < NumHeaters; heater++)
+		for (size_t heater = 0; heater < NumTotalHeaters; heater++)
 		{
 			response->catf("%c%d", ch, heat->GetStatus(heater));
 			ch = ',';
@@ -1142,7 +1121,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		{
 			response->cat(",\"names\":");
 			ch = '[';
-			for (size_t heater = 0; heater < NumHeaters; heater++)
+			for (size_t heater = 0; heater < NumTotalHeaters; heater++)
 			{
 				response->cat(ch);
 				ch = ',';
@@ -1286,7 +1265,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		// Controllable Fans
 		FansBitmap controllableFans = 0;
-		for (size_t fan = 0; fan < NUM_FANS; fan++)
+		for (size_t fan = 0; fan < NumTotalFans; fan++)
 		{
 			if (platform->IsFanControllable(fan))
 			{
@@ -1301,19 +1280,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Endstops
 		uint32_t endstops = 0;
 		const size_t numTotalAxes = gCodes->GetTotalAxes();
-		for (size_t drive = 0; drive < NumEndstops; drive++)
+		for (size_t axis = 0; axis < numTotalAxes; axis++)
 		{
-			if (drive < numTotalAxes)
+			if (platform->GetEndstops().Stopped(axis) == EndStopHit::atStop)
 			{
-				const EndStopHit es = platform->Stopped(drive);
-				if (es == EndStopHit::highHit || es == EndStopHit::lowHit)
-				{
-					endstops |= (1u << drive);
-				}
-			}
-			else if (platform->EndStopInputState(drive))
-			{
-				endstops |= (1u << drive);
+				endstops |= (1u << axis);
 			}
 		}
 		response->catf(",\"endstops\":%" PRIu32, endstops);
@@ -1344,16 +1315,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		/* Probe */
 		{
-			const ZProbe probeParams = platform->GetCurrentZProbeParameters();
+			const ZProbe zp = platform->GetCurrentZProbe();
 
-			// Trigger threshold
-			response->catf(",\"probe\":{\"threshold\":%d", probeParams.adcValue);
-
-			// Trigger height
-			response->catf(",\"height\":%.2f", (double)probeParams.triggerHeight);
-
-			// Type
-			response->catf(",\"type\":%u}", (unsigned int)platform->GetZProbeType());
+			// Trigger threshold, trigger height, type
+			response->catf(",\"probe\":{\"threshold\":%d,\"height\":%.2f,\"type\":%u}",
+							zp.GetAdcValue(), (double)zp.GetConfiguredTriggerHeight(), (unsigned int)zp.GetProbeType());
 		}
 
 		/* Tool Mapping */
@@ -1720,13 +1686,11 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 	// First the user coordinates
 	response->catf(",\"pos\":");			// announce the user position
-	const float * const userPos = gCodes->GetUserPosition();
 	ch = '[';
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
 		// Coordinates may be NaNs, for example when delta or SCARA homing fails. Replace any NaNs or infinities by 9999.9 to prevent JSON parsing errors.
-		const float coord = userPos[axis];
-		response->catf("%c%.3f", ch, HideNan(coord));
+		response->catf("%c%.3f", ch, HideNan(gCodes->GetUserCoordinate(axis)));
 		ch = ',';
 	}
 
@@ -1758,9 +1722,9 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->catf(",\"tool\":%d", GetCurrentToolNumber());
 
 	// Send the Z probe value
-	const int v0 = platform->GetZProbeReading();
+	const int v0 = platform->GetCurrentZProbe().GetReading();
 	int v1, v2;
-	switch (platform->GetZProbeSecondaryValues(v1, v2))
+	switch (platform->GetCurrentZProbe().GetSecondaryValues(v1, v2))
 	{
 	case 1:
 		response->catf(",\"probe\":\"%d (%d)\"", v0, v1);
@@ -1776,39 +1740,28 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	// Send the fan settings, for PanelDue firmware 1.13 and later
 	// Currently, PanelDue assumes that the first value is the print cooling fan speed and only uses that one, so send the mapped fan speed first
 	response->catf(",\"fanPercent\":[%.1f", (double)(gCodes->GetMappedFanSpeed() * 100.0));
-	for (size_t i = 0; i < NUM_FANS; ++i)
+	for (size_t i = 0; i < NumTotalFans; ++i)
 	{
 		response->catf(",%.1f", (double)(platform->GetFanValue(i) * 100.0));
 	}
 	response->cat(']');
 
 	// Send fan RPM value(s)
-	if (NumTachos != 0)
+	response->cat(",\"fanRPM\":");
+	ch = '[';
+	for (size_t i = 0; i < NumTotalFans; ++i)
 	{
-		response->cat(",\"fanRPM\":");
-		// For compatibility with older versions of DWC and PanelDue, if there is only one tacho value then we send it as a simple variable
-		if (NumTachos > 1)
-		{
-			char ch = '[';
-			for (size_t i = 0; i < NumTachos; ++i)
-			{
-				response->catf("%c%" PRIu32, ch, platform->GetFanRPM(i));
-				ch = ',';
-			}
-			response->cat(']');
-		}
-		else
-		{
-			response->catf("%" PRIu32, platform->GetFanRPM(0));
-		}
+		response->catf("%c%" PRIi32, ch, platform->GetFanRPM(i));
+		ch = ',';
 	}
+	response->cat(']');
 
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
 	response->cat(",\"homed\":");
 	ch = '[';
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
+		response->catf("%c%d", ch, (gCodes->IsAxisHomed(axis)) ? 1 : 0);
 		ch = ',';
 	}
 	response->cat(']');
@@ -1837,7 +1790,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 		if (mbox.active)
 		{
-			response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%" PRIu32 "",
+			response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%u",
 							mbox.mode, mbox.seq, (double)timeLeft, mbox.controls);
 			response->cat(",\"msgBox.msg\":");
 			response->EncodeString(mbox.message, false);
@@ -2323,14 +2276,14 @@ bool RepRap::WriteToolSettings(FileStore *f) const
 	{
 		if (t != currentTool)
 		{
-			ok = t->WriteSettings(f);
+			ok = t->WriteSettings(f, false);
 		}
 	}
 
 	// Finally write the setting of the active tool and the commands to select it
 	if (ok && currentTool != nullptr)
 	{
-		ok = currentTool->WriteSettings(f);
+		ok = currentTool->WriteSettings(f, true);
 	}
 	return ok;
 }

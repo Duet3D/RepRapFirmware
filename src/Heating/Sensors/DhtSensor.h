@@ -48,7 +48,7 @@ private:
 	void TakeReading();
 	TemperatureError ProcessReadings();
 
-	static constexpr uint32_t DhtTaskStackWords = 100;		// task stack size in dwords. 80 was not enough. Use 300 if debugging is enabled.
+	static constexpr unsigned int DhtTaskStackWords = 100;		// task stack size in dwords. 80 was not enough. Use 300 if debugging is enabled.
 	static Mutex dhtMutex;
 	static Task<DhtTaskStackWords> *dhtTask;
 	static DhtSensorHardwareInterface *activeSensors[MaxSpiTempSensors];

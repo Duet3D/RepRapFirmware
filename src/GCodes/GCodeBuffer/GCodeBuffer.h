@@ -42,16 +42,20 @@ public:
 
 	bool Seen(char c) __attribute__((hot));					// Is a character present?
 	float GetFValue() __attribute__((hot));					// Get a float after a key letter
+	float GetDistance();									// Get a distance or coordinate and convert it from inches to mm if necessary
 	int32_t GetIValue() __attribute__((hot));				// Get an integer after a key letter
 	uint32_t GetUIValue();									// Get an unsigned integer value
 	bool GetIPAddress(IPAddress& returnedIp);				// Get an IP address quad after a key letter
 	bool GetMacAddress(uint8_t mac[6]);						// Get a MAC address sextet after a key letter
+	PwmFrequency GetPwmFrequency();							// Get a PWM frequency
+	float GetPwmValue();									// Get a PWM value
 	bool GetUnprecedentedString(const StringRef& str);		// Get a string with no preceding key letter
 	bool GetQuotedString(const StringRef& str);				// Get and copy a quoted string
 	bool GetPossiblyQuotedString(const StringRef& str);		// Get and copy a string which may or may not be quoted
-	const void GetFloatArray(float arr[], size_t& length, bool doPad) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
-	const void GetIntArray(int32_t arr[], size_t& length, bool doPad);			// Get a :-separated list of ints after a key letter
-	const void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
+	bool GetReducedString(const StringRef& str);			// Get and copy a quoted string, removing certain characters
+	void GetFloatArray(float arr[], size_t& length, bool doPad) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
+	void GetIntArray(int32_t arr[], size_t& length, bool doPad);			// Get a :-separated list of ints after a key letter
+	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
 
 	bool TryGetFValue(char c, float& val, bool& seen);
 	bool TryGetIValue(char c, int32_t& val, bool& seen);
@@ -84,7 +88,12 @@ public:
 
 	bool IsDoingFile() const;							// Return true if this source is executing a file
 	bool IsDoingFileMacro() const;						// Return true if this source is executing a file macro
-	FilePosition GetFilePosition(size_t bytesCached) const;				// Get the file position at the start of the current command
+#if HAS_HIGH_SPEED_SD
+	FilePosition GetFilePosition(size_t bytesCached) const;	// Get the file position at the start of the current command
+#elif HAS_LINUX_INTERFACE
+	FilePosition GetFilePosition() const;				// Get the file position at the start of the current command
+#endif
+
 #if HAS_LINUX_INTERFACE
 	void SetPrintFinished();							// Mark the print file as finished
 	bool IsFileFinished() const;						// Return true if this source has finished execution of a file
@@ -128,8 +137,11 @@ public:
 	void PrintCommand(const StringRef& s) const;
 	void AppendFullCommand(const StringRef &s) const;
 
-	uint32_t whenTimerStarted;							// When we started waiting
-	bool timerRunning;									// True if we are waiting
+	bool IsTimerRunning() const { return timerRunning; }
+	uint32_t WhenTimerStarted() const { return whenTimerStarted; }
+	void StartTimer();
+	void StopTimer() { timerRunning = false; }
+	bool DoDwellTime(uint32_t dwellMillis);				// execute a dwell returning true if it has finoshed
 
 private:
 	const char *identity;
@@ -150,6 +162,9 @@ private:
 	StringParser stringParser;
 
 	GCodeMachineState *machineState;					// Machine state for this gcode source
+
+	uint32_t whenTimerStarted;							// When we started waiting
+	bool timerRunning;									// True if we are waiting
 
 #if HAS_LINUX_INTERFACE
 	String<MaxFilenameLength> requestedMacroFile;

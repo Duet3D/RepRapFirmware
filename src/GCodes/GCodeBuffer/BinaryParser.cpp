@@ -75,6 +75,7 @@ bool BinaryParser::Seen(char c)
 	if (bufferLength != 0 && header->numParameters != 0)
 	{
 		const char *parameterStart = reinterpret_cast<const char*>(gb.buffer) + sizeof(CodeHeader);
+		reducedBytesRead = 0;
 		seenParameter = nullptr;
 		seenParameterValue = parameterStart + header->numParameters * sizeof(CodeParameter);
 
@@ -338,18 +339,50 @@ bool BinaryParser::GetPossiblyQuotedString(const StringRef& str)
 	return !str.IsEmpty();
 }
 
+bool BinaryParser::GetReducedString(const StringRef& str)
+{
+	str.Clear();
+	if (seenParameterValue != nullptr && (seenParameter->type == DataType::String || seenParameter->type == DataType::Expression))
+	{
+		while (reducedBytesRead < seenParameter->intValue)
+		{
+			const char c = seenParameterValue[reducedBytesRead++];
+			switch(c)
+			{
+			case '_':
+			case '-':
+			case ' ':
+				break;
 
-const void BinaryParser::GetFloatArray(float arr[], size_t& length, bool doPad)
+			default:
+				if (c < ' ')
+				{
+					seenParameter = nullptr;
+					seenParameterValue = nullptr;
+					return false;
+				}
+				str.cat(tolower(c));
+				break;
+			}
+		}
+	}
+
+	seenParameter = nullptr;
+	seenParameterValue = nullptr;
+	return !str.IsEmpty();
+}
+
+void BinaryParser::GetFloatArray(float arr[], size_t& length, bool doPad)
 {
 	GetArray(arr, length, doPad);
 }
 
-const void BinaryParser::GetIntArray(int32_t arr[], size_t& length, bool doPad)
+void BinaryParser::GetIntArray(int32_t arr[], size_t& length, bool doPad)
 {
 	GetArray(arr, length, doPad);
 }
 
-const void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad)
+void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad)
 {
 	GetArray(arr, length, doPad);
 }
@@ -422,7 +455,7 @@ size_t BinaryParser::AddPadding(size_t bytesRead) const
     return bytesRead + ((padding == 4) ? 0 : padding);
 }
 
-template<typename T> const void BinaryParser::GetArray(T arr[], size_t& length, bool doPad)
+template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool doPad)
 {
 	if (seenParameter == nullptr)
 	{
