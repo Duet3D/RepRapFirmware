@@ -19,6 +19,8 @@ Upgrade notes:
 
 Known issues:
 - When auto delta calibration adjusts the delta radius and/or the diagonal rod length, it makes an incorrect adjustment to the homed height. This will be fixed in a forthcoming update. Meanwhile, run a second auto calibration cycle to correct the homed height.
+- M557 with a P parameter but no XY or R parameters should report an error, but doesn't
+- The P parameter of the G29 S0 command is ignored if there is a deployprobe.g file and/or a retractprobe.g file
 
 Feature improvements/changed behaviour:
 - Added M566 P parameter to control the jerk policy
