@@ -1154,7 +1154,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				reply.printf("%" PRIu32 " points probed, min error %.3f, max error %.3f, mean %.3f, deviation %.3f\n",
 								numPointsProbed, (double)minError, (double)maxError, (double)mean, (double)deviation);
-				error = SaveHeightMap(gb, reply);
+				error = TrySaveHeightMap(DefaultHeightMapFile, reply);
 				reprap.GetMove().AccessHeightMap().ExtrapolateMissing();
 				reprap.GetMove().UseMesh(true);
 				const float absMean = fabsf(mean);
@@ -3550,22 +3550,13 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Save the height map and append the success or error message to 'reply', returning true if an error occurred
-// Called by G29 and M374. Both use the P parameter to provide the filename.
-bool GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
+bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) const
 {
-	String<MaxFilenameLength> heightMapFileName;
-	bool seen = false;
-	gb.TryGetQuotedString('P', heightMapFileName.GetRef(), seen);
-	if (!seen)
-	{
-		heightMapFileName.copy(DefaultHeightMapFile);
-	}
-
-	FileStore * const f = platform.OpenSysFile(heightMapFileName.c_str(), OpenMode::write);
+	FileStore * const f = platform.OpenSysFile(filename, OpenMode::write);
 	bool err;
 	if (f == nullptr)
 	{
-		reply.catf("Failed to create height map file %s", heightMapFileName.c_str());
+		reply.catf("Failed to create height map file %s", filename);
 		err = true;
 	}
 	else
@@ -3574,15 +3565,34 @@ bool GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 		f->Close();
 		if (err)
 		{
-			platform.DeleteSysFile(heightMapFileName.c_str());
-			reply.catf("Failed to save height map to file %s", heightMapFileName.c_str());
+			platform.DeleteSysFile(filename);
+			reply.catf("Failed to save height map to file %s", filename);
 		}
 		else
 		{
-			reply.catf("Height map saved to file %s", heightMapFileName.c_str());
+			reply.catf("Height map saved to file %s", filename);
 		}
 	}
 	return err;
+}
+
+// Save the height map to the file specified by P parameter
+GCodeResult GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
+{
+	if (gb.Seen('P'))
+	{
+		String<MaxFilenameLength> heightMapFileName;
+		if (gb.GetQuotedString(heightMapFileName.GetRef()))
+		{
+			return GetGCodeResultFromError(TrySaveHeightMap(heightMapFileName.c_str(), reply));
+		}
+		else
+		{
+			reply.copy("Missing height map file name");
+			return GCodeResult::error;
+		}
+	}
+	return GetGCodeResultFromError(TrySaveHeightMap(DefaultHeightMapFile, reply));
 }
 
 // Stop using bed compensation

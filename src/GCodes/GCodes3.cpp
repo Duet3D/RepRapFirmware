@@ -41,7 +41,7 @@ GCodeResult GCodes::SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply)
 	bool seenT = false;
 	if (gb.Seen('T'))
 	{
-		unsigned int tp = gb.GetUIValue();
+		const unsigned int tp = gb.GetUIValue();
 		if (tp == 0 || tp >= (unsigned int)ZProbeType::numTypes)
 		{
 			reply.copy("Invalid Z probe type");
@@ -95,27 +95,30 @@ GCodeResult GCodes::SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply)
 		}
 		platform.SetZProbeParameters(probeType, params);
 	}
-	else if (seenT)
-	{
-		// Don't bother printing temperature coefficient and calibration temperature because we will probably remove them soon
-		reply.printf("Threshold %d, trigger height %.2f, offsets X%.1f Y%.1f", params.adcValue, (double)params.triggerHeight, (double)params.xOffset, (double)params.yOffset);
-	}
 	else
 	{
-		const int v0 = platform.GetZProbeReading();
-		int v1, v2;
-		switch (platform.GetZProbeSecondaryValues(v1, v2))
+		if (seenT)
 		{
-		case 1:
-			reply.printf("%d (%d)", v0, v1);
-			break;
-		case 2:
-			reply.printf("%d (%d, %d)", v0, v1, v2);
-			break;
-		default:
-			reply.printf("%d", v0);
-			break;
+			reply.printf("Probe type %u:", (unsigned int)probeType);
 		}
+		else
+		{
+			const int v0 = platform.GetZProbeReading();
+			int v1, v2;
+			switch (platform.GetZProbeSecondaryValues(v1, v2))
+			{
+			case 1:
+				reply.printf("Current reading %d (%d),", v0, v1);
+				break;
+			case 2:
+				reply.printf("Current reading %d (%d, %d),", v0, v1, v2);
+				break;
+			default:
+				reply.printf("Current reading %d,", v0);
+				break;
+			}
+		}
+		reply.catf(" threshold %d, trigger height %.2f, offsets X%.1f Y%.1f", params.adcValue, (double)params.triggerHeight, (double)params.xOffset, (double)params.yOffset);
 	}
 	return GCodeResult::ok;
 }
@@ -335,7 +338,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 	float radius = -1.0;
 	gb.TryGetFValue('R', radius, seenR);
 
-	if (!seenX && !seenY && !seenR && !seenS)
+	if (!seenX && !seenY && !seenR && !seenS && !seenP)
 	{
 		// Just print the existing grid parameters
 		if (defaultGrid.IsValid())
@@ -359,7 +362,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 	if (!seenX && !seenR)
 	{
 		// Must have given just the S or P parameter
-		reply.copy("specify at least radius or X,Y ranges in M577");
+		reply.copy("specify at least radius or X and Y ranges in M577");
 		return GCodeResult::error;
 	}
 

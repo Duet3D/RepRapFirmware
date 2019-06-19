@@ -182,12 +182,20 @@ For 2.03 release:
 - Added jerk policy, P parameter to M566
 - Pulse-type filament monitor now reports mm/pulse to 3 decimal places instead of 2
 
+- For 2.03.01:
+- Bug: delta auto calibration adjusts homed height incorrectly if the delta radius or rod length was changed
+- Bug: G29 P parameter doesn't work if there are nonempty deployprobe.g/retractprobe.g files, https://forum.duet3d.com/topic/10904/g29-p-parameter-ignored/5. Remove P parameter from G29 S0, add G29 S3 (same as M374).
+- Bug: M557 P parameter didn't work
+- G31 to show current parameters, not just probe output value
+- Pulsed filament monitors: don't try to resync on every interrupt when interrupts are arriving very fast because the sensor has high resolution
+
 Outstanding issues:
 - Running out of output buffers and not freeing them up, https://forum.duet3d.com/post/96586
 - Inconsistent Z0 position, https://forum.duet3d.com/user/caveman
 - [defer] When writing resurrect.g after a pause, 
 
 Planned for 3.0:
+- Bug? DWC 1.22.6 doesn't auto show the height map after probing since firmware 2.03, https://forum.duet3d.com/topic/10904/g29-p-parameter-ignored/5
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5
 - Filament monitors: disable if tool is not active/no commanded extrusion, or does it do that already?
 - [yes it already did] In simulation mode, does M109 implicity select a tool? https://forum.duet3d.com/topic/9595/simulation-error

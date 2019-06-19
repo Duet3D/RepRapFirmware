@@ -123,8 +123,16 @@ bool PulsedFilamentMonitor::Interrupt()
 	{
 		++samplesReceived;
 	}
-	lastMeasurementTime = millis();
-	return true;
+
+	// Most pulsed filament monitors have low resolution, but at least one user has a high-resolution one.
+	// So don't automatically try to sync on every interrupt.
+	const uint32_t now = millis();
+	if (now - lastMeasurementTime >= 50)
+	{
+		lastMeasurementTime = millis();
+		return true;
+	}
+	return false;
 }
 
 // Call the following regularly to keep the status up to date
