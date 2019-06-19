@@ -17,6 +17,11 @@ Upgrade notes:
 - nanoDLP users: an empty macro file M650.g must be created in /sys, and file peel-move.g must be renamed to M651.g
 - The M135 command is no longer supported, but AFAIK nobody used it
 
+Known issues:
+- When auto delta calibration adjusts the delta radius and/or the diagonal rod length, it makes an incorrect adjustment to the homed height. This will be fixed in a forthcoming update. Meanwhile, run a second auto calibration cycle to correct the homed height.
+- M557 with a P parameter but no XY or R parameters should report an error, but doesn't
+- The P parameter of the G29 S0 command is ignored if there is a deployprobe.g file and/or a retractprobe.g file
+
 Feature improvements/changed behaviour:
 - Added M566 P parameter to control the jerk policy
 - The M114 response now includes the virtual extruder position (for Octoprint) and the bed compensation amount at the current position
