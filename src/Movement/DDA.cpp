@@ -2049,7 +2049,15 @@ uint32_t DDA::ManageLaserPower() const
 		return 0;
 	}
 
-	const float timeMoving = (float)(afterPrepare.moveStartTime - StepTimer::GetInterruptClocksInterruptsDisabled()) * (1.0/StepTimer::StepClockRate);
+	const uint32_t clocksMoving = StepTimer::GetInterruptClocksInterruptsDisabled() - afterPrepare.moveStartTime;
+	if (clocksMoving >= clocksNeeded)			// this also covers the case of now < startTime
+	{
+		// Something has gone wrong with the timing. Set zero laser power, but try again soon.
+		reprap.GetPlatform().SetLaserPwm(0);
+		return LaserPwmIntervalMillis;
+	}
+
+	const float timeMoving = (float)clocksMoving * (1.0/(float)StepTimer::StepClockRate);
 	const float accelSpeed = startSpeed + acceleration * timeMoving;
 	if (accelSpeed < topSpeed)
 	{
@@ -2059,7 +2067,8 @@ uint32_t DDA::ManageLaserPower() const
 		return LaserPwmIntervalMillis;
 	}
 
-	const float decelSpeed = endSpeed + deceleration * (clocksNeeded - timeMoving);
+	const uint32_t clocksLeft = clocksNeeded - clocksMoving;
+	const float decelSpeed = endSpeed + deceleration * (float)clocksLeft * (1.0/(float)StepTimer::StepClockRate);
 	if (decelSpeed < topSpeed)
 	{
 		// Deceleration phase
@@ -2071,12 +2080,12 @@ uint32_t DDA::ManageLaserPower() const
 	// We must be in the constant speed phase
 	reprap.GetPlatform().SetLaserPwm(laserPwmOrIoBits.laserPwm);
 	const uint32_t decelClocks = ((topSpeed - endSpeed)/deceleration) * StepTimer::StepClockRate;
-	if (timeMoving + decelClocks > clocksNeeded)
+	if (clocksLeft <= decelClocks)
 	{
 		return LaserPwmIntervalMillis;
 	}
-	const uint32_t clocksToDecel = clocksNeeded - (timeMoving + decelClocks);
-	return lrintf(clocksToDecel * StepTimer::StepClocksToMillis) + LaserPwmIntervalMillis;
+	const uint32_t clocksToDecel = clocksLeft - decelClocks;
+	return lrintf((float)clocksToDecel * StepTimer::StepClocksToMillis) + LaserPwmIntervalMillis;
 }
 
 #endif

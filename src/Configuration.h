@@ -329,7 +329,7 @@ constexpr unsigned int MaxStackDepth = 5;				// Maximum depth of stack
 constexpr size_t MaxSpindles = 4;						// Maximum number of configurable spindles
 constexpr float DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full PWM
 constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command for full power
-constexpr uint32_t LaserPwmIntervalMillis = 10;			// Interval (ms) between adjusting the laser PWM during acceleration or deceleration
+constexpr uint32_t LaserPwmIntervalMillis = 5;			// Interval (ms) between adjusting the laser PWM during acceleration or deceleration
 
 // I2C
 // A note on the i2C clock frequency.
