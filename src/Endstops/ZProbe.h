@@ -51,7 +51,7 @@ public:
 	void SetProgramOutput(bool b) const;
 	void SetIREmitter(bool on) const;
 
-	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply, bool printDetails);
+	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef& reply, unsigned int probeNumber);
 	void SetTriggerHeight(float height) { triggerHeight = height; }
 	void SetSaveToConfigOverride() { saveToConfigOverride = true; }

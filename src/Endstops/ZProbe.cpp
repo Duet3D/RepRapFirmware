@@ -210,7 +210,7 @@ void ZProbe::SetProbing(bool isProbing) const
 	}
 }
 
-GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply, bool printDetails)
+GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 {
 	GCodeResult err = GCodeResult::ok;
 	bool seen = false;
@@ -256,15 +256,6 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply, bool prin
 			saveToConfigOverride = true;			// we are loading these parameters from config-override.g, so a subsequent M500 should save them to config-override.g
 		}
 	}
-	else if (printDetails)
-	{
-		// Don't bother printing temperature coefficient and calibration temperature because we will probably remove them soon
-		reply.printf("Offsets X%.1f Y%.1f, threshold %d, trigger height %.2f, ", (double)xOffset, (double)yOffset, adcValue, (double)triggerHeight);
-		if (temperatureCoefficient != 0.0)
-		{
-			reply.catf(" at %.1f" DEGREE_SYMBOL "C, temperature coefficient %.1f/" DEGREE_SYMBOL "C", (double)calibTemperature, (double)temperatureCoefficient);
-		}
-	}
 	else
 	{
 		const int v0 = GetReading();
@@ -272,15 +263,21 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply, bool prin
 		switch (GetSecondaryValues(v1, v2))
 		{
 		case 1:
-			reply.printf("%d (%d)", v0, v1);
+			reply.printf("Current reading %d (%d)", v0, v1);
 			break;
 		case 2:
-			reply.printf("%d (%d, %d)", v0, v1, v2);
+			reply.printf("Current reading %d (%d, %d)", v0, v1, v2);
 			break;
 		default:
-			reply.printf("%d", v0);
+			reply.printf("Current reading %d", v0);
 			break;
 		}
+		reply.catf(", threshold %d, trigger height %.2f", adcValue, (double)triggerHeight);
+		if (temperatureCoefficient != 0.0)
+		{
+			reply.catf(" at %.1f" DEGREE_SYMBOL "C, temperature coefficient %.1f/" DEGREE_SYMBOL "C", (double)calibTemperature, (double)temperatureCoefficient);
+		}
+		reply.catf(", offsets X%.1f Y%.1f", (double)xOffset, (double)yOffset);
 	}
 	return err;
 }
