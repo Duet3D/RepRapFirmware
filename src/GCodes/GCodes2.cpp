@@ -244,6 +244,10 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 				ClearBedMapping();
 				break;
 
+			case 3:		// save height map to names file
+				result = SaveHeightMap(gb, reply);
+				break;
+
 			default:
 				result = GCodeResult::badOrMissingParameter;
 				break;
@@ -2478,7 +2482,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 374: // Save grid and height map to file
-		result = GetGCodeResultFromError(SaveHeightMap(gb, reply));
+		result = SaveHeightMap(gb, reply);
 		break;
 
 	case 375: // Load grid and height map from file and enable compensation

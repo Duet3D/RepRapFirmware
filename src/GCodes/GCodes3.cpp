@@ -249,7 +249,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 	float radius = -1.0;
 	gb.TryGetFValue('R', radius, seenR);
 
-	if (!seenX && !seenY && !seenR && !seenS)
+	if (!seenX && !seenY && !seenR && !seenS && !seenP)
 	{
 		// Just print the existing grid parameters
 		if (defaultGrid.IsValid())
@@ -273,7 +273,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 	if (!seenX && !seenR)
 	{
 		// Must have given just the S or P parameter
-		reply.copy("specify at least radius or X,Y ranges in M577");
+		reply.copy("specify at least radius or X and Y ranges in M577");
 		return GCodeResult::error;
 	}
 

@@ -657,39 +657,44 @@ floatc_t LinearDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, 
 //  Y tilt adjustment
 void LinearDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[])
 {
-	// Update endstop adjustments
-	endstopAdjustments[DELTA_A_AXIS] += (float)v[0];
-	endstopAdjustments[DELTA_B_AXIS] += (float)v[1];
-	endstopAdjustments[DELTA_C_AXIS] += (float)v[2];
-	NormaliseEndstopAdjustments();
-
+	// Update the delta radius
+	const float oldRadius = radius;				// we will need this to correct the endstop adjustments
 	if (numFactors >= 4)
 	{
 		radius += (float)v[3];
+	}
 
-		if (numFactors >= 6)
+	// Update endstop adjustments and rod lengths. If we changed the delta radius or the rod lengths then the endstop adjustments need to take account of that too.
+	for (size_t tower = 0; tower < UsualNumTowers; ++tower)
+	{
+		if (numFactors >= 4)
 		{
-			angleCorrections[DELTA_A_AXIS] += (float)v[4];
-			angleCorrections[DELTA_B_AXIS] += (float)v[5];
-
+			const float oldCarriageHeight = sqrtf(fsquare(diagonals[tower]) - fsquare(oldRadius));
 			if (numFactors == 7 || numFactors == 9)
 			{
-				for (size_t tower = 0; tower < UsualNumTowers; ++tower)
-				{
-					diagonals[tower] += (float)v[6];
-				}
+				diagonals[tower] += (float)v[6];
 			}
+			const float newCarriageHeight = sqrtf(fsquare(diagonals[tower]) - fsquare(radius));
+			endstopAdjustments[tower] += oldCarriageHeight - newCarriageHeight;
+		}
+		endstopAdjustments[tower] += (float)v[tower];
+	}
+	NormaliseEndstopAdjustments();
 
-			if (numFactors == 8)
-			{
-				xTilt += (float)v[6]/printRadius;
-				yTilt += (float)v[7]/printRadius;
-			}
-			else if (numFactors == 9)
-			{
-				xTilt += (float)v[7]/printRadius;
-				yTilt += (float)v[8]/printRadius;
-			}
+	if (numFactors >= 6)
+	{
+		angleCorrections[DELTA_A_AXIS] += (float)v[4];
+		angleCorrections[DELTA_B_AXIS] += (float)v[5];
+
+		if (numFactors == 8)
+		{
+			xTilt += (float)v[6]/printRadius;
+			yTilt += (float)v[7]/printRadius;
+		}
+		else if (numFactors == 9)
+		{
+			xTilt += (float)v[7]/printRadius;
+			yTilt += (float)v[8]/printRadius;
 		}
 	}
 
