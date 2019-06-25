@@ -237,14 +237,24 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 				result = ProbeGrid(gb, reply);
 				break;
 
-#if HAS_HIGH_SPEED_SD
 			case 1:		// load height map file
+#if HAS_HIGH_SPEED_SD
 				result = LoadHeightMap(gb, reply);
-				break;
+#else
+				result = GCodeResult::errorNotSupported;
 #endif
+				break;
 
 			case 2:		// clear height map
 				ClearBedMapping();
+				break;
+
+			case 3:		// save height map to names file
+#if HAS_HIGH_SPEED_SD
+				result = SaveHeightMap(gb, reply);
+#else
+				result = GCodeResult::errorNotSupported;
+#endif
 				break;
 
 			default:
@@ -2510,7 +2520,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 #if HAS_HIGH_SPEED_SD
 	case 374: // Save grid and height map to file
-		result = GetGCodeResultFromError(SaveHeightMap(gb, reply));
+		result = SaveHeightMap(gb, reply);
 		break;
 
 	case 375: // Load grid and height map from file and enable compensation

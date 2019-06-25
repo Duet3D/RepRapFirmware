@@ -426,10 +426,14 @@ bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) con
 GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 {
 	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetUIValue() : currentZProbeNumber;
-	if (probeNumber >= MaxZProbes || zProbes[probeNumber] == nullptr)
+	if (probeNumber >= MaxZProbes)
 	{
 		reply.copy("Invalid Z probe index");
 		return GCodeResult::error;
+	}
+	if (zProbes[probeNumber] == nullptr)
+	{
+		zProbes[probeNumber] = new ZProbe;
 	}
 
 	return zProbes[probeNumber]->HandleM558(gb, reply, probeNumber);
@@ -448,7 +452,7 @@ GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 		return GCodeResult::error;
 	}
 
-	return zProbes[probeNumber]->HandleG31(gb, reply, seenK);
+	return zProbes[probeNumber]->HandleG31(gb, reply);
 }
 
 // End

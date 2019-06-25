@@ -327,7 +327,8 @@ private:
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply);			// Define the probing grid, returning true if error
 #if HAS_HIGH_SPEED_SD
 	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply);			// Load the height map from file
-	bool SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;			// Save the height map to file
+	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const;	// Save the height map to the specified file
+	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;	// Save the height map to the file specified by P parameter
 #endif
 	void ClearBedMapping();														// Stop using bed compensation
 	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply);				// Start probing the grid, returning true if we didn't because of an error

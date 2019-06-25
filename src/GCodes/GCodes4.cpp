@@ -716,7 +716,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				reply.printf("%" PRIu32 " points probed, min error %.3f, max error %.3f, mean %.3f, deviation %.3f\n",
 								numPointsProbed, (double)minError, (double)maxError, (double)mean, (double)deviation);
 #if HAS_HIGH_SPEED_SD
-				error = SaveHeightMap(gb, reply);
+				error = TrySaveHeightMap(DefaultHeightMapFile, reply);
 #endif
 				reprap.GetMove().AccessHeightMap().ExtrapolateMissing();
 				reprap.GetMove().UseMesh(true);

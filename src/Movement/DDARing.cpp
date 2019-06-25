@@ -696,12 +696,13 @@ void DDARing::Diagnostics(MessageType mtype, const char *prefix)
 // Manage the laser power. Return the number of ticks until we should be called again, or 0 to be called at the start of the next move.
 uint32_t DDARing::ManageLaserPower() const
 {
-	SetBasePriority(NvicPriorityStep);
+	SetBasePriority(NvicPriorityStep);							// lock out step interrupts
 	DDA * const cdda = currentDda;								// capture volatile variable
 	if (cdda != nullptr)
 	{
+		const uint32_t ret = cdda->ManageLaserPower();
 		SetBasePriority(0);
-		return cdda->ManageLaserPower();
+		return ret;
 	}
 
 	// If we get here then there is no active laser move
