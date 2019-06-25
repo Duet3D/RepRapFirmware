@@ -16,9 +16,10 @@ public:
 	TelnetResponder(NetworkResponder *n);
 	bool Spin() override;								// do some work, returning true if we did anything significant
 	bool Accept(Socket *s, NetworkProtocol protocol) override;	// ask the responder to accept this connection, returns true if it did
-	void Terminate(NetworkProtocol protocol) override;			// terminate the responder if it is serving the specified protocol
+	void Terminate(NetworkProtocol protocol, NetworkInterface *interface) override;	// terminate the responder if it is serving the specified protocol on the specified interface
 
 	static void InitStatic();
+	static void Disable();
 	static void HandleGCodeReply(const char *reply);
 	static void HandleGCodeReply(OutputBuffer *reply);
 	void Diagnostics(MessageType mtype) const override;

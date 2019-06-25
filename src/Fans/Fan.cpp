@@ -17,8 +17,16 @@ void FanInterrupt(CallbackParameter cb)
 	static_cast<Fan *>(cb.vp)->Interrupt();
 }
 
-Fan::Fan() : fanInterruptCount(0), fanLastResetTime(0), fanInterval(0)
+Fan::Fan()
+	: val(0.0), lastVal(0.0),
+	  minVal(DefaultMinFanPwm),
+	  maxVal(1.0),										// 100% maximum fan speed
+	  lastPwm(-1.0),									// force a refresh
+	  blipTime(DefaultFanBlipTime),
+	  fanInterruptCount(0), fanLastResetTime(0), fanInterval(0), heatersMonitored(0),
+	  isConfigured(false), blipping(false)
 {
+	triggerTemperatures[0] = triggerTemperatures[1] = DefaultHotEndFanTemperature;
 }
 
 bool Fan::AssignPorts(GCodeBuffer& gb, const StringRef& reply)
@@ -66,21 +74,6 @@ bool Fan::AssignPorts(const char *pinNames, const StringRef& reply)
 
 	Refresh();
 	return true;
-}
-
-void Fan::Init()
-{
-	// Fan output initialisation
-	isConfigured = false;
-	val = lastVal = 0.0;
-	minVal = 0.1;				// 10% minimum fan speed
-	maxVal = 1.0;				// 100% maximum fan speed
-	blipTime = 100;				// 100ms fan blip
-	blipping = false;
-	heatersMonitored = 0;
-	triggerTemperatures[0] = triggerTemperatures[1] = HotEndFanTemperature;
-	lastPwm = -1.0;				// force a refresh
-	Refresh();
 }
 
 // Set or report the parameters for this fan

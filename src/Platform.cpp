@@ -417,24 +417,7 @@ void Platform::Init()
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
 		driverState[drive] = DriverStatus::disabled;
-		driveDriverBits[drive] = driveDriverBits[drive + MaxTotalDrivers] = CalcDriverBitmap(drive);
-
-		// Map axes and extruders straight through
-		if (drive < MinAxes)
-		{
-#ifdef PCCB
-			const size_t axis = (drive == 0) ? Z_AXIS
-								: (drive == 1) ? X_AXIS
-									: Y_AXIS;					// on PCCB we map Z X Y to drivers 0 1 2
-			driveDriverBits[axis] = CalcDriverBitmap(drive);	// overwrite the default value set up earlier
-			axisDrivers[axis].numDrivers = 1;
-			axisDrivers[axis].driverNumbers[0] = (uint8_t)drive;
-#else
-			const size_t axis = drive;							// map axes straight through to drives
-			axisDrivers[axis].numDrivers = 1;
-			axisDrivers[axis].driverNumbers[0] = (uint8_t)drive;
-#endif
-		}
+		driveDriverBits[drive] = driveDriverBits[drive + MaxTotalDrivers] = StepPins::CalcDriverBitmap(drive);	// map straight through by default
 
 		if (drive < NumDirectDrivers)
 		{
@@ -450,6 +433,19 @@ void Platform::Init()
 			pinDesc.pPort->PIO_OWER = pinDesc.ulPin;			// enable parallel writes to the step pins
 #endif
 		}
+	}
+
+	// Set up default axis mapping
+	for (size_t axis = 0; axis < MinAxes; ++axis)
+	{
+#ifdef PCCB
+		const size_t drive = (axis + 1) % 3;					// on PCCB we map axes X Y Z to drivers 1 2 0
+#else
+		const size_t drive = axis;								// on most boards we map axes straight through to drives
+#endif
+		driveDriverBits[axis] = StepPins::CalcDriverBitmap(drive);	// overwrite the default value set up earlier
+		axisDrivers[axis].numDrivers = 1;
+		axisDrivers[axis].driverNumbers[0] = (uint8_t)drive;
 	}
 
 	for (uint32_t& entry : slowDriverStepTimingClocks)
@@ -2925,7 +2921,7 @@ void Platform::SetAxisDriversConfig(size_t axis, size_t numValues, const uint32_
 	{
 		const uint8_t driver = min<uint32_t>(driverNumbers[i], 255);
 		axisDrivers[axis].driverNumbers[i] = driver;
-		bitmap |= CalcDriverBitmap(driver);
+		bitmap |= StepPins::CalcDriverBitmap(driver);
 #if HAS_SMART_DRIVERS
 		SmartDrivers::SetAxisNumber(driver, axis);
 #endif
@@ -2940,12 +2936,12 @@ void Platform::SetExtruderDriver(size_t extruder, uint8_t driver)
 #if HAS_SMART_DRIVERS
 	SmartDrivers::SetAxisNumber(driver, extruder + reprap.GetGCodes().GetTotalAxes());
 #endif
-	driveDriverBits[extruder + reprap.GetGCodes().GetTotalAxes()] = CalcDriverBitmap(driver);
+	driveDriverBits[extruder + reprap.GetGCodes().GetTotalAxes()] = StepPins::CalcDriverBitmap(driver);
 }
 
 void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4])
 {
-	const uint32_t bitmap = CalcDriverBitmap(driver);
+	const uint32_t bitmap = StepPins::CalcDriverBitmap(driver);
 	slowDriversBitmap &= ~bitmap;								// start by assuming this drive does not need extended timing
 	if (slowDriversBitmap == 0)
 	{
@@ -2959,7 +2955,7 @@ void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4])
 	{
 		if (microseconds[i] > MinStepPulseTiming)
 		{
-			slowDriversBitmap |= CalcDriverBitmap(driver);		// this drive does need extended timing
+			slowDriversBitmap |= StepPins::CalcDriverBitmap(driver);		// this drive does need extended timing
 			const uint32_t clocks = (uint32_t)(((float)StepTimer::StepClockRate * microseconds[i] * 0.000001) + 0.99);	// convert microseconds to step clocks, rounding up
 			if (clocks > slowDriverStepTimingClocks[i])
 			{
@@ -2972,7 +2968,7 @@ void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4])
 // Get the driver step timing, returning true if we are using slower timing than standard
 bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const
 {
-	const bool isSlowDriver = ((slowDriversBitmap & CalcDriverBitmap(driver)) != 0);
+	const bool isSlowDriver = ((slowDriversBitmap & StepPins::CalcDriverBitmap(driver)) != 0);
 	for (size_t i = 0; i < 4; ++i)
 	{
 		microseconds[i] = (isSlowDriver)
@@ -3037,13 +3033,15 @@ void Platform::InitFans()
 #if ALLOCATE_DEFAULT_PORTS
 	for (size_t i = 0; i < NumTotalFans; ++i)
 	{
-		fans[i].Init();
 		if (i < ARRAY_SIZE(DefaultFanPinNames))
 		{
 			String<1> dummy;
 			(void)fans[i].AssignPorts(DefaultFanPinNames[i], dummy.GetRef());
 		}
-		fans[i].SetPwmFrequency((i < ARRAY_SIZE(DefaultFanPwmFrequencies)) ? DefaultFanPwmFrequencies[i] : DefaultFanPwmFreq);
+		if (i < ARRAY_SIZE(DefaultFanPwmFrequencies))
+		{
+			fans[i].SetPwmFrequency(DefaultFanPwmFrequencies[i]);
+		}
 	}
 
 	// Handle board-specific fan configuration
@@ -3073,11 +3071,6 @@ void Platform::InitFans()
 	// Fan 3 needs to be set explicitly to zero PWM, otherwise it turns on because the MCU output pin isn't set low
 	fans[3].SetPwm(0.0);
 # endif
-#else
-	for (size_t i = 0; i < NumTotalFans; ++i)
-	{
-		fans[i].Init();
-	}
 #endif
 }
 

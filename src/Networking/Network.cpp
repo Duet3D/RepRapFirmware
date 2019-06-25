@@ -116,6 +116,8 @@ void Network::Init()
 #endif
 
 #if SUPPORT_FTP
+	FtpResponder::InitStatic();
+
 	for (size_t i = 0; i < NumFtpResponders; ++i)
 	{
 		responders = new FtpResponder(responders);
@@ -155,7 +157,40 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 {
 	if (interface < NumNetworkInterfaces)
 	{
-		return interfaces[interface]->DisableProtocol(protocol, reply);
+		NetworkInterface * const iface = interfaces[interface];
+		const GCodeResult ret = iface->DisableProtocol(protocol, reply);
+		if (ret == GCodeResult::ok)
+		{
+			for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+			{
+				r->Terminate(protocol, iface);
+			}
+
+			// The following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
+			// However, the only supported hardware with more than one network interface is the early Duet 3 prototype, so we'll leave this be.
+			switch (protocol)
+			{
+			case HttpProtocol:
+				HttpResponder::Disable();			// free up output buffers etc.
+				break;
+
+#if SUPPORT_FTP
+			case FtpProtocol:
+				FtpResponder::Disable();
+				break;
+#endif
+
+#if SUPPORT_TELNET
+			case TelnetProtocol:
+				TelnetResponder::Disable();
+				break;
+#endif
+
+			default:
+				break;
+			}
+		}
+		return ret;
 	}
 	else
 	{
@@ -180,7 +215,26 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 {
 	if (interface < NumNetworkInterfaces)
 	{
-		return interfaces[interface]->EnableInterface(mode, ssid, reply);
+		NetworkInterface * const iface = interfaces[interface];
+		const GCodeResult ret = iface->EnableInterface(mode, ssid, reply);
+		if (ret == GCodeResult::ok && mode < 1)			// if disabling the interface
+		{
+			for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+			{
+				r->Terminate(AnyProtocol, iface);
+			}
+
+			// The following isn't quite right, because we shouldn't free up output buffers if another network interface is still enabled and serving this protocol.
+			// However, the only supported hardware with more than one network interface is the early Duet 3 prototype, so we'll leave this be.
+			HttpResponder::Disable();
+#if SUPPORT_FTP
+			FtpResponder::Disable();
+#endif
+#if SUPPORT_TELNET
+			TelnetResponder::Disable();
+#endif
+		}
+		return ret;
 	}
 	reply.printf("Invalid network interface '%d'\n", interface);
 	return GCodeResult::error;
@@ -288,6 +342,14 @@ void Network::Exit()
 			iface->Exit();
 		}
 	}
+
+	HttpResponder::Disable();
+#if SUPPORT_FTP
+	FtpResponder::Disable();
+#endif
+#if SUPPORT_TELNET
+	TelnetResponder::Disable();
+#endif
 
 	// TODO: close down the network and suspend the network task. Not trivial because currently, the caller may be the network task.
 }

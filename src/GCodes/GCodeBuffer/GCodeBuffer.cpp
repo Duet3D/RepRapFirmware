@@ -13,11 +13,13 @@
 #endif
 #include "BinaryParser.h"
 #include "StringParser.h"
+#include "RepRap.h"
+#include "Platform.h"
 
 // Create a default GCodeBuffer
-GCodeBuffer::GCodeBuffer(const char *id, MessageType stringMt, MessageType binaryMt, bool usesCodeQueue)
-	: identity(id), responseMessageTypeString(stringMt),
-	  responseMessageTypeBinary((MessageType)((uint32_t)binaryMt | (uint32_t)MessageType::BinaryCodeReplyFlag)),
+GCodeBuffer::GCodeBuffer(const char* id, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType stringMt, MessageType binaryMt, bool usesCodeQueue)
+	: identity(id), normalInput(normalIn), fileInput(fileIn), responseMessageTypeString(stringMt),
+	  responseMessageTypeBinary((MessageType)(binaryMt | MessageType::BinaryCodeReplyFlag)),
 	  queueCodes(usesCodeQueue), toolNumberAdjust(0),
 	  isBinaryBuffer(false), binaryParser(*this), stringParser(*this), machineState(new GCodeMachineState())
 #if HAS_LINUX_INTERFACE
@@ -30,7 +32,7 @@ GCodeBuffer::GCodeBuffer(const char *id, MessageType stringMt, MessageType binar
 // Reset it to its state after start-up
 void GCodeBuffer::Reset()
 {
-	while (PopState()) { }
+	while (PopState(false)) { }
 	Init();
 }
 
@@ -440,8 +442,9 @@ float GCodeBuffer::InverseConvertDistance(float distance) const
 	return (machineState->usingInches) ? distance/InchToMm : distance;
 }
 
+
 // Push state returning true if successful (i.e. stack not overflowed)
-bool GCodeBuffer::PushState()
+bool GCodeBuffer::PushState(bool preserveLineNumber)
 {
 	// Check the current stack depth
 	unsigned int depth = 0;
@@ -457,13 +460,14 @@ bool GCodeBuffer::PushState()
 	GCodeMachineState * const ms = GCodeMachineState::Allocate();
 	ms->previous = machineState;
 	ms->feedRate = machineState->feedRate;
-#if HAS_HIGH_SPEED_SD
-	ms->fileState.CopyFrom(machineState->fileState);
-#elif HAS_LINUX_INTERFACE
+#if HAS_LINUX_INTERFACE
 	ms->fileId = machineState->fileId;
 	ms->isFileFinished = machineState->isFileFinished;
+#elif HAS_HIGH_SPEED_SD
+	ms->fileState.CopyFrom(machineState->fileState);
 #endif
 	ms->lockedResources = machineState->lockedResources;
+	ms->lineNumber = (preserveLineNumber) ? machineState->lineNumber : 0;
 	ms->drivesRelative = machineState->drivesRelative;
 	ms->axesRelative = machineState->axesRelative;
 	ms->usingInches = machineState->usingInches;
@@ -477,15 +481,11 @@ bool GCodeBuffer::PushState()
 	ms->messageAcknowledged = false;
 	ms->waitingForAcknowledgement = false;
 	machineState = ms;
-
-#if HAS_LINUX_INTERFACE
-	reportStack = true;
-#endif
 	return true;
 }
 
 // Pop state returning true if successful (i.e. no stack underrun)
-bool GCodeBuffer::PopState()
+bool GCodeBuffer::PopState(bool preserveLineNumber)
 {
 	GCodeMachineState * const ms = machineState;
 	if (ms->previous == nullptr)
@@ -496,6 +496,10 @@ bool GCodeBuffer::PopState()
 	}
 
 	machineState = ms->previous;
+	if (preserveLineNumber)
+	{
+		machineState->lineNumber = ms->lineNumber;
+	}
 	GCodeMachineState::Release(ms);
 
 #if HAS_LINUX_INTERFACE
@@ -504,24 +508,9 @@ bool GCodeBuffer::PopState()
 	return true;
 }
 
+
 // Abort execution of any files or macros being executed, returning true if any files were closed
 // We now avoid popping the state if we were not executing from a file, so that if DWC or PanelDue is used to jog the axes before they are homed, we don't report stack underflow.
-#if HAS_HIGH_SPEED_SD
-void GCodeBuffer::AbortFile(FileGCodeInput* fileInput)
-{
-	if (machineState->DoingFile())
-	{
-		do
-		{
-			if (machineState->DoingFile())
-			{
-				fileInput->Reset(machineState->fileState);
-				machineState->CloseFile();
-			}
-		} while (PopState());							// abandon any macros
-	}
-}
-#elif HAS_LINUX_INTERFACE
 void GCodeBuffer::AbortFile(bool requestAbort)
 {
 	if (machineState->DoingFile())
@@ -530,13 +519,20 @@ void GCodeBuffer::AbortFile(bool requestAbort)
 		{
 			if (machineState->DoingFile())
 			{
+#if HAS_HIGH_SPEED_SD
+				fileInput->Reset(machineState->fileState);
+#endif
 				machineState->CloseFile();
 			}
-		} while (PopState());							// abandon any macros
+		} while (PopState(false));							// abandon any macros
 	}
 
+#if HAS_LINUX_INTERFACE
 	abortFile = requestAbort;
+#endif
 }
+
+#if HAS_LINUX_INTERFACE
 
 bool GCodeBuffer::IsFileFinished() const
 {
@@ -589,6 +585,7 @@ void GCodeBuffer::AcknowledgeStackEvent()
 {
 	reportStack = false;
 }
+
 #endif
 
 // Tell this input source that any message it sent and is waiting on has been acknowledged
@@ -606,22 +603,21 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled)
 	}
 }
 
+// Return true if we can queue gcodes from this source
+bool GCodeBuffer::CanQueueCodes() const
+{
+	return queueCodes || machineState->doingFileMacro;		// return true if we queue commands from this source or we are executing a macro
+}
+
 MessageType GCodeBuffer::GetResponseMessageType() const
 {
 	return isBinaryBuffer ? responseMessageTypeBinary : responseMessageTypeString;
 }
 
-#if HAS_HIGH_SPEED_SD
-FilePosition GCodeBuffer::GetFilePosition(size_t bytesCached) const
-{
-	return isBinaryBuffer ? binaryParser.GetFilePosition() : stringParser.GetFilePosition(bytesCached);
-}
-#else
 FilePosition GCodeBuffer::GetFilePosition() const
 {
-	return isBinaryBuffer ? binaryParser.GetFilePosition() : stringParser.GetFilePosition(0);
+	return isBinaryBuffer ? binaryParser.GetFilePosition() : stringParser.GetFilePosition();
 }
-#endif
 
 bool GCodeBuffer::OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
 {
@@ -674,6 +670,15 @@ void GCodeBuffer::FinishWritingBinary()
 	}
 }
 
+void GCodeBuffer::RestartFrom(FilePosition pos)
+{
+#if HAS_HIGH_SPEED_SD
+	fileInput->Reset(machineState->fileState);		// clear the buffered data
+	machineState->fileState.Seek(pos);				// replay the abandoned instructions when we resume
+#endif
+	Init();											// clear the next move
+}
+
 const char* GCodeBuffer::DataStart() const
 {
 	return isBinaryBuffer ? binaryParser.DataStart() : stringParser.DataStart();
@@ -706,6 +711,12 @@ void GCodeBuffer::AppendFullCommand(const StringRef &s) const
 	{
 		stringParser.AppendFullCommand(s);
 	}
+}
+
+// Report a program error
+void GCodeBuffer::ReportProgramError(const char *str)
+{
+	reprap.GetPlatform().MessageF(AddError(GetResponseMessageType()), "%s\n", str);
 }
 
 // End

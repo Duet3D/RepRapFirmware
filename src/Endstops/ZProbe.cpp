@@ -26,9 +26,11 @@ ZProbe::~ZProbe()
 
 void ZProbe::SetDefaults()
 {
+	adcValue = DefaultZProbeADValue;
 	xOffset= yOffset = 0.0;
 	triggerHeight = DefaultZProbeTriggerHeight;
 	calibTemperature = DefaultZProbeTemperature;
+	temperatureCoefficient = 0.0;
 	diveHeight = DefaultZDive;
 	probeSpeed = DefaultProbingSpeed;
 	travelSpeed = DefaultZProbeTravelSpeed;

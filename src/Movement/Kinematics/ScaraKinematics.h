@@ -31,8 +31,7 @@ public:
 	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const override;
 	bool IsReachable(float x, float y, bool isCoordinated) const override;
-	bool IntermediatePositionsReachable(const float initialCoords[], const float finalCoords[], float margin) const override;
-	bool LimitPosition(float finalCoords[], float * null initialCoords, size_t numAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const override;
+	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
 	size_t NumHomingButtons(size_t numVisibleAxes) const override;
 	const char* HomingButtonNames() const override { return "PDZUVWABC"; }
@@ -76,6 +75,7 @@ private:
 	// Derived parameters
 	float minRadius;
 	float maxRadius;
+	float minRadiusSquared;
 	float proximalArmLengthSquared;
 	float distalArmLengthSquared;
 	float twoPd;

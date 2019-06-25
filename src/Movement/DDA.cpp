@@ -474,18 +474,18 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
 	endSpeed = 0.0;							// until the next move asks us to adjust it
 
-	if (prev->state != provisional || flags.isPrintingMove != prev->flags.isPrintingMove || flags.xyMoving != prev->flags.xyMoving)
-	{
-		// There is no previous move that we can adjust, so this move must start at zero speed.
-		startSpeed = 0.0;
-	}
-	else
+	if (prev->state == provisional && (move.GetJerkPolicy() != 0 || (flags.isPrintingMove == prev->flags.isPrintingMove && flags.xyMoving == prev->flags.xyMoving)))
 	{
 		// Try to meld this move to the previous move to avoid stop/start
 		// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = v^2 - 2as
 		prev->beforePrepare.targetNextSpeed = min<float>(sqrtf(deceleration * totalDistance * 2.0), requestedSpeed);
 		DoLookahead(ring, prev);
 		startSpeed = prev->endSpeed;
+	}
+	else
+	{
+		// There is no previous move that we can adjust, so start at zero speed.
+		startSpeed = 0.0;
 	}
 
 	RecalculateMove(ring);
@@ -1822,10 +1822,10 @@ void DDA::StepDrivers(Platform& p)
 	}
 
 	driversStepping &= p.GetSteppingEnabledDrivers();
-	if ((driversStepping & p.GetSlowDriversBitmap()) == 0)	// if not using any external drivers
+	if ((driversStepping & p.GetSlowDriversBitmap()) == 0)			// if not using any slow drivers
 	{
 		// 3. Step the drivers
-		Platform::StepDriversHigh(driversStepping);					// generate the steps
+		StepPins::StepDriversHigh(driversStepping);					// generate the steps
 	}
 	else
 	{
@@ -1835,12 +1835,12 @@ void DDA::StepDrivers(Platform& p)
 		{
 			now = StepTimer::GetInterruptClocks();
 		}
-		Platform::StepDriversHigh(driversStepping);					// generate the steps
+		StepPins::StepDriversHigh(driversStepping);					// generate the steps
 		lastStepPulseTime = StepTimer::GetInterruptClocks();
 
 		// 3a. Reset all step pins low. Do this now because some external drivers don't like the direction pins being changed before the end of the step pulse.
 		while (StepTimer::GetInterruptClocks() - lastStepPulseTime < p.GetSlowDriverStepHighClocks()) {}
-		Platform::StepDriversLow();									// set all step pins low
+		StepPins::StepDriversLow();									// set all step pins low
 		lastStepLowTime = lastStepPulseTime = StepTimer::GetInterruptClocks();
 	}
 
@@ -1868,7 +1868,7 @@ void DDA::StepDrivers(Platform& p)
 	}
 
 	// 5. Reset all step pins low. We already did this if we are using any external drivers, but doing it again does no harm.
-	Platform::StepDriversLow();										// set all step pins low
+	StepPins::StepDriversLow();										// set all step pins low
 
 	// If there are no more steps to do and the time for the move has nearly expired, flag the move as complete
 	if (activeDMs == nullptr && StepTimer::GetInterruptClocks() - afterPrepare.moveStartTime + WakeupTime >= clocksNeeded)

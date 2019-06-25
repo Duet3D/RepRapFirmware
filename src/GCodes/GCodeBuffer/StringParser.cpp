@@ -18,9 +18,10 @@
 static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML file?
 
 StringParser::StringParser(GCodeBuffer& gcodeBuffer)
-	: gb(gcodeBuffer), fileBeingWritten(nullptr), writingFileSize(0), eofStringCounter(0), toolNumberAdjust(0),
+	: gb(gcodeBuffer), fileBeingWritten(nullptr), writingFileSize(0), eofStringCounter(0), indentToSkipTo(NoIndentSkip),
 	  hasCommandNumber(false), commandLetter('Q'), checksumRequired(false), binaryWriting(false)
 {
+	Init();
 }
 
 void StringParser::Init()
@@ -31,6 +32,7 @@ void StringParser::Init()
 	hadLineNumber = hadChecksum = false;
 	computedChecksum = 0;
 	bufferState = GCodeBufferState::parseNotStarted;
+	commandIndent = 0;
 }
 
 void StringParser::Diagnostics(MessageType mtype)
@@ -81,7 +83,8 @@ inline void StringParser::StoreAndAddToChecksum(char c)
 }
 
 // Add a byte to the code being assembled.  If false is returned, the code is
-// not yet complete.  If true, it is complete and ready to be acted upon.
+// not yet complete.  If true, it is complete and ready to be acted upon and 'indent'
+// is the number of leading white space characters..
 bool StringParser::Put(char c)
 {
 	if (c != 0)
@@ -116,12 +119,13 @@ bool StringParser::Put(char c)
 				hadLineNumber = true;
 				AddToChecksum(c);
 				bufferState = GCodeBufferState::parsingLineNumber;
-				lineNumber = 0;
+				receivedLineNumber = 0;
 				break;
 
 			case ' ':
 			case '\t':
 				AddToChecksum(c);
+				++commandIndent;
 				break;
 
 			default:
@@ -136,7 +140,7 @@ bool StringParser::Put(char c)
 			if (isDigit(c))
 			{
 				AddToChecksum(c);
-				lineNumber = (10 * lineNumber) + (c - '0');
+				receivedLineNumber = (10 * receivedLineNumber) + (c - '0');
 				break;
 			}
 			else
@@ -258,7 +262,7 @@ bool StringParser::LineFinished()
 	{
 		if (hadLineNumber)
 		{
-			SafeSnprintf(gb.buffer, ARRAY_SIZE(gb.buffer), "M998 P%u", lineNumber);	// request resend
+			SafeSnprintf(gb.buffer, ARRAY_SIZE(gb.buffer), "M998 P%u", receivedLineNumber);	// request resend
 		}
 		else
 		{
@@ -273,13 +277,217 @@ bool StringParser::LineFinished()
 		return false;
 	}
 
+	if (hadLineNumber)
+	{
+		gb.machineState->lineNumber = receivedLineNumber;
+	}
+	else
+	{
+		++gb.machineState->lineNumber;
+	}
+
+	if (gb.machineState->DoingFile())
+	{
+		if (indentToSkipTo < commandIndent)
+		{
+			Init();
+			return false;													// continue skipping this block
+		}
+		bool skippedIfFalse = false;
+		if (indentToSkipTo != NoIndentSkip && indentToSkipTo >= commandIndent)
+		{
+			// Finished skipping the nested block
+			if (indentToSkipTo == commandIndent)
+			{
+				skippedIfFalse = (gb.machineState->CurrentBlockState().IsIfFalseBlock());
+				gb.machineState->CurrentBlockState().SetPlainBlock();		// we've ended the loop or if-block
+			}
+			indentToSkipTo = NoIndentSkip;									// no longer skipping
+		}
+		if (ProcessConditionalGCode(skippedIfFalse))
+		{
+			Init();
+			return false;
+		}
+	}
 	commandStart = 0;
 	DecodeCommand();
 	return true;
 }
 
-// Decode this command command and find the start of the next one on the same line.
-// On entry, 'commandStart' has already been set to the address the start of where the command should be.
+// Check for and process a conditional GCode language command returning true if we found one, false if it's a regular line of GCode that we need to process
+// 'expectingElse' is true if we just finished skipping and if-block when the condition was false and there might be an 'else'
+bool StringParser::ProcessConditionalGCode(bool skippedIfFalse)
+{
+	if (commandIndent > gb.machineState->indentLevel)
+	{
+		CreateBlocks();					// indentation has increased so start new block(s)
+	}
+	else if (commandIndent < gb.machineState->indentLevel)
+	{
+		if (EndBlocks())
+		{
+			return true;
+		}
+	}
+
+	// Check for language commands. First count the number of lowercase characters.
+	unsigned int i = 0;
+	while (gb.buffer[i] >= 'a' && gb.buffer[i] <= 'z')
+	{
+		++i;
+		if (i == 6)
+		{
+			break;				// all command words are less than 6 characters long
+		}
+	}
+
+	if (i >= 2 && i < 6 && (gb.buffer[i] == 0 || gb.buffer[i] == ' ' || gb.buffer[i] == '\t'))		// if the command word is properly terminated
+	{
+		const char * const command = &gb.buffer[commandIndent];
+		switch (i)
+		{
+		case 2:
+			if (StringStartsWith(command, "if"))
+			{
+				ProcessIfCommand();
+				return true;
+			}
+			break;
+
+		case 3:
+			if (StringStartsWith(command, "var"))
+			{
+				ProcessVarCommand();
+				return true;
+			}
+			break;
+
+		case 4:
+			if (StringStartsWith(command, "else"))
+			{
+				ProcessElseCommand(skippedIfFalse);
+				return true;
+			}
+			break;
+
+		case 5:
+			if (StringStartsWith(command, "while"))
+			{
+				ProcessWhileCommand();
+				return true;
+			}
+
+			if (StringStartsWith(command, "break"))
+			{
+				ProcessBreakCommand();
+				return true;
+			}
+			break;
+		}
+	}
+
+	return false;
+}
+
+// Create new code blocks
+void StringParser::CreateBlocks()
+{
+	while (gb.machineState->indentLevel < commandIndent)
+	{
+		gb.machineState->CreateBlock();
+	}
+}
+
+// End blocks returning true if nothing more to process on this line
+bool StringParser::EndBlocks()
+{
+	while (gb.machineState->indentLevel > commandIndent)
+	{
+		gb.machineState->EndBlock();
+		if (gb.machineState->CurrentBlockState().IsLoop())
+		{
+			// Go back to the start of the loop and re-evaluate the while-part
+			gb.machineState->lineNumber = gb.machineState->CurrentBlockState().GetLineNumber();
+			gb.RestartFrom(gb.machineState->CurrentBlockState().GetFilePosition());
+			return true;
+		}
+	}
+	return false;
+}
+
+void StringParser::ProcessIfCommand()
+{
+	if (EvaluateCondition("if"))
+	{
+		gb.machineState->CurrentBlockState().SetIfTrueBlock();
+	}
+	else
+	{
+		gb.machineState->CurrentBlockState().SetIfFalseBlock();
+		indentToSkipTo = gb.machineState->indentLevel;					// skip forwards to the end of the block
+	}
+}
+
+void StringParser::ProcessElseCommand(bool skippedIfFalse)
+{
+	if (skippedIfFalse)
+	{
+		gb.machineState->CurrentBlockState().SetPlainBlock();			// execute the else-block, treating it like a plain block
+	}
+	else if (gb.machineState->CurrentBlockState().IsIfTrueBlock())
+	{
+		indentToSkipTo = gb.machineState->indentLevel;					// skip forwards to the end of the if-block
+	}
+	else
+	{
+		gb.ReportProgramError("'else' did not follow 'if");
+		indentToSkipTo = gb.machineState->indentLevel;					// skip forwards to the end of the block
+	}
+}
+
+void StringParser::ProcessWhileCommand()
+{
+	if (EvaluateCondition("while"))
+	{
+		gb.machineState->CurrentBlockState().SetLoopBlock(GetFilePosition(), gb.machineState->lineNumber);
+	}
+	else
+	{
+		indentToSkipTo = gb.machineState->indentLevel;					// skip forwards to the end of the block
+	}
+}
+
+void StringParser::ProcessBreakCommand()
+{
+	do
+	{
+		if (gb.machineState->indentLevel == 0)
+		{
+			gb.ReportProgramError("'break' was not inside a loop");
+			return;
+		}
+		gb.machineState->EndBlock();
+	} while (!gb.machineState->CurrentBlockState().IsLoop());
+	gb.machineState->CurrentBlockState().SetPlainBlock();
+}
+
+void StringParser::ProcessVarCommand()
+{
+	gb.ReportProgramError("'var' not implemented yet");
+}
+
+// Evaluate the condition that should follow 'if' or 'while'
+// If we fail, report an error and return false
+bool StringParser::EvaluateCondition(const char* keyword)
+{
+	reprap.GetPlatform().MessageF(AddError(gb.GetResponseMessageType()), "Failed to evaluate condition after '%s'\n", keyword);
+	return false;
+}
+
+// Decode this command and find the start of the next one on the same line.
+// On entry, 'commandStart' has already been set to the address the start of where the command should be
+// and 'commandIndent' is the number of leading whitespace characters at the start of the current line.
 // On return, the state must be set to 'ready' to indicate that a command is available and we should stop adding characters.
 void StringParser::DecodeCommand()
 {
@@ -417,12 +625,12 @@ void StringParser::SetFinished(bool f)
 }
 
 // Get the file position at the start of the current command
-FilePosition StringParser::GetFilePosition(size_t bytesCached) const
+FilePosition StringParser::GetFilePosition() const
 {
 #if HAS_HIGH_SPEED_SD
-	if (gb.machineState->fileState.IsLive())
+	if (gb.machineState->DoingFile())
 	{
-		return gb.machineState->fileState.GetPosition() - bytesCached - commandLength + commandStart;
+		return gb.machineState->fileState.GetPosition() - gb.fileInput->BytesCached() - commandLength + commandStart;
 	}
 #endif
 	return noFilePosition;
@@ -1087,7 +1295,7 @@ void StringParser::FileEnded()
 float StringParser::ReadFloatValue(const char *p, const char **endptr)
 {
 #if SUPPORT_OBJECT_MODEL
-	if (*p == '[')
+	if (*p == '{')
 	{
 		ExpressionValue val;
 		switch (EvaluateExpression(p, endptr, val))
@@ -1114,7 +1322,7 @@ float StringParser::ReadFloatValue(const char *p, const char **endptr)
 uint32_t StringParser::ReadUIValue(const char *p, const char **endptr)
 {
 #if SUPPORT_OBJECT_MODEL
-	if (*p == '[')
+	if (*p == '{')
 	{
 		ExpressionValue val;
 		switch (EvaluateExpression(p, endptr, val))
@@ -1173,7 +1381,7 @@ uint32_t StringParser::ReadUIValue(const char *p, const char **endptr)
 int32_t StringParser::ReadIValue(const char *p, const char **endptr)
 {
 #if SUPPORT_OBJECT_MODEL
-	if (*p == '[')
+	if (*p == '{')
 	{
 		ExpressionValue val;
 		switch (EvaluateExpression(p, endptr, val))
@@ -1242,11 +1450,11 @@ bool StringParser::GetStringExpression(const StringRef& str)
 	return true;
 }
 
-// Evaluate an expression. the current character is '['.
+// Evaluate an expression. the current character is '{'.
 TypeCode StringParser::EvaluateExpression(const char *p, const char **endptr, ExpressionValue& rslt)
 {
-	++p;						// skip the '['
-	// For now the only form of expression we handle is [variable-name]
+	++p;						// skip the '{'
+	// For now the only form of expression we handle is {variable-name}
 	if (isalpha(*p))			// if it's a variable name
 	{
 		const char * const start = p;
@@ -1259,7 +1467,7 @@ TypeCode StringParser::EvaluateExpression(const char *p, const char **endptr, Ex
 			}
 			else if (*p == ']')
 			{
-				-- numBrackets;
+				--numBrackets;
 			}
 			++p;
 		}
@@ -1272,7 +1480,7 @@ TypeCode StringParser::EvaluateExpression(const char *p, const char **endptr, Ex
 		}
 		//TODO consider supporting standard CNC functions here
 		const TypeCode tc = reprap.GetObjectValue(rslt, varName.c_str());
-		if (tc != NoType && (tc & IsArray) == 0 && *p == ']')
+		if (tc != NoType && (tc & IsArray) == 0 && *p == '}')
 		{
 			if (endptr != nullptr)
 			{

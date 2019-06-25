@@ -31,6 +31,7 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
+#define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
@@ -41,7 +42,6 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_ASYNC_MOVES		1
 #define ALLOCATE_DEFAULT_PORTS	1
 
-#define NO_TRIGGERS		1	// Temporary!!!
 #define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
 
 // The physical capabilities of the machine
@@ -262,5 +262,37 @@ constexpr Pin W5500IntPin = PortAPin(23);									// Interrupt from W5500
 #define STEP_TC_ID			ID_TC0
 #define STEP_TC_IRQN		TC0_IRQn
 #define STEP_TC_HANDLER		TC0_Handler
+
+namespace StepPins
+{
+	// *** These next three functions must use the same bit assignments in the drivers bitmap ***
+	// Each stepper driver must be assigned one bit in a 32-bit word, in such a way that multiple drivers can be stepped efficiently
+	// and more or less simultaneously by doing parallel writes to several bits in one or more output ports.
+	// All our step pins are on port C, so the bitmap is just the map of step bits in port C.
+
+	// Calculate the step bit for a driver. This doesn't need to be fast. It must return 0 if the driver is remote.
+	static inline uint32_t CalcDriverBitmap(size_t driver)
+	{
+		return (driver < NumDirectDrivers)
+				? g_APinDescription[STEP_PINS[driver]].ulPin
+				: 0;
+	}
+
+	// Set the specified step pins high
+	// This needs to be as fast as possible, so we do a parallel write to the port(s).
+	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
+	static inline void StepDriversHigh(uint32_t driverMap)
+	{
+		PIOC->PIO_ODSR = driverMap;				// on Duet Maestro all step pins are on port C
+	}
+
+	// Set all step pins low
+	// This needs to be as fast as possible, so we do a parallel write to the port(s).
+	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
+	static inline void StepDriversLow()
+	{
+		PIOC->PIO_ODSR = 0;						// on Duet Maestro all step pins are on port C
+	}
+}
 
 #endif /* SRC_DUETM_PINS_DUETM_H_ */

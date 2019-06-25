@@ -24,7 +24,7 @@ public:
 	friend class BinaryParser;
 	friend class StringParser;
 
-	GCodeBuffer(const char *id, MessageType stringMt, MessageType binaryMt, bool usesCodeQueue);
+	GCodeBuffer(const char* id, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType stringMt, MessageType binaryMt, bool useCodeQueue);
 	void Reset();											// Reset it to its state after start-up
 	void Init();											// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype);					// Write some debug info
@@ -77,22 +77,13 @@ public:
 	GCodeMachineState& OriginalMachineState() const;
 	float ConvertDistance(float distance) const;
 	float InverseConvertDistance(float distance) const;
-	bool PushState();									// Push state returning true if successful (i.e. stack not overflowed)
-	bool PopState();									// Pop state returning true if successful (i.e. no stack underrun)
+	bool PushState(bool preserveLineNumber);			// Push state returning true if successful (i.e. stack not overflowed)
+	bool PopState(bool preserveLineNumber);				// Pop state returning true if successful (i.e. no stack underrun)
 
-#if HAS_HIGH_SPEED_SD
-	void AbortFile(FileGCodeInput* fileInput);			// Abort execution of any files or macros being executed
-#elif HAS_LINUX_INTERFACE
 	void AbortFile(bool requestAbort = true);
-#endif
-
 	bool IsDoingFile() const;							// Return true if this source is executing a file
 	bool IsDoingFileMacro() const;						// Return true if this source is executing a file macro
-#if HAS_HIGH_SPEED_SD
-	FilePosition GetFilePosition(size_t bytesCached) const;	// Get the file position at the start of the current command
-#elif HAS_LINUX_INTERFACE
 	FilePosition GetFilePosition() const;				// Get the file position at the start of the current command
-#endif
 
 #if HAS_LINUX_INTERFACE
 	void SetPrintFinished();							// Mark the print file as finished
@@ -117,7 +108,7 @@ public:
 	void MessageAcknowledged(bool cancelled);
 
 	const char *GetIdentity() const { return identity; }
-	bool CanQueueCodes() const { return queueCodes; }
+	bool CanQueueCodes() const;
 	MessageType GetResponseMessageType() const;
 
 	int GetToolNumberAdjust() const { return toolNumberAdjust; }
@@ -141,12 +132,22 @@ public:
 	uint32_t WhenTimerStarted() const { return whenTimerStarted; }
 	void StartTimer();
 	void StopTimer() { timerRunning = false; }
-	bool DoDwellTime(uint32_t dwellMillis);				// execute a dwell returning true if it has finoshed
+	bool DoDwellTime(uint32_t dwellMillis);				// Execute a dwell returning true if it has finished
+
+	void RestartFrom(FilePosition pos);
+
+	FileGCodeInput *GetFileInput() const { return fileInput; }	//TEMPORARY!
+	GCodeInput *GetNormalInput() const { return normalInput; }	//TEMPORARY!
 
 private:
-	const char *identity;
+	void ReportProgramError(const char *str);
+
+	const char* const identity;							// Where we are from (web, file, serial line etc)
+	GCodeInput *normalInput;							// Our normal input stream, or nullptr if there isn't one
+	FileGCodeInput *fileInput;							// Our file input stream for when we are reading form a print file or a macro file, may be shared with other GCodeBuffers
+
 	const MessageType responseMessageTypeString;		// The message type we use for responses to string codes coming from this channel
-	const MessageType responseMessageTypeBinary;				// The message type we use for responses to binary codes coming from this channel
+	const MessageType responseMessageTypeBinary;		// The message type we use for responses to binary codes coming from this channel
 	const bool queueCodes;								// Can we queue certain G-codes from this source?
 
 	int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive

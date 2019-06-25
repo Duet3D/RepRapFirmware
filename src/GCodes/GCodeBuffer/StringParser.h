@@ -9,7 +9,7 @@
 #define SRC_GCODES_GCODEBUFFER_STRINGGCODEBUFFER_H
 
 #include "RepRapFirmware.h"
-#include "GCodes/GCodeMachineState.h"
+#include "GCodes/GCodeInput.h"
 #include "MessageType.h"
 #include "ObjectModel/ObjectModel.h"
 
@@ -19,13 +19,13 @@ class StringParser
 {
 public:
 	StringParser(GCodeBuffer& gcodeBuffer);
-	void Init(); 												// Set it up to parse another G-code
-	void Diagnostics(MessageType mtype);						// Write some debug info
-	bool Put(char c) __attribute__((hot));						// Add a character to the end
-	void Put(const char *str, size_t len);						// Add an entire string, overwriting any existing content
-	void Put(const char *str);									// Add a null-terminated string, overwriting any existing content
-	void FileEnded();											// Called when we reach the end of the file we are reading from
-	bool Seen(char c) __attribute__((hot));						// Is a character present?
+	void Init(); 										// Set it up to parse another G-code
+	void Diagnostics(MessageType mtype);				// Write some debug info
+	bool Put(char c) __attribute__((hot));				// Add a character to the end
+	void Put(const char *str, size_t len);				// Add an entire string, overwriting any existing content
+	void Put(const char *str);							// Add a null-terminated string, overwriting any existing content
+	void FileEnded();									// Called when we reach the end of the file we are reading from
+	bool Seen(char c) __attribute__((hot));				// Is a character present?
 
 	char GetCommandLetter() const { return commandLetter; }
 	bool HasCommandNumber() const { return hasCommandNumber; }
@@ -61,7 +61,7 @@ public:
 	void WriteBinaryToFile(char b);												// Write a byte to the file
 	void FinishWritingBinary();
 
-	FilePosition GetFilePosition(size_t bytesCached) const;				// Get the file position at the start of the current command
+	FilePosition GetFilePosition() const;				// Get the file position at the start of the current command
 
 	const char* DataStart() const;						// Get the start of the current command
 	size_t DataLength() const;							// Get the length of the current command
@@ -92,18 +92,28 @@ private:
 	bool LineFinished();								// Deal with receiving end-of-line and return true if we have a command
 	void DecodeCommand();
 	bool InternalGetQuotedString(const StringRef& str)
-		pre (readPointer >= 0; gcodeBuffer[readPointer] == '"'; str.IsEmpty());
+		pre (readPointer >= 0; gb.buffer[readPointer] == '"'; str.IsEmpty());
 	bool InternalGetPossiblyQuotedString(const StringRef& str)
 		pre (readPointer >= 0);
 	float ReadFloatValue(const char *p, const char **endptr);
 	uint32_t ReadUIValue(const char *p, const char **endptr);
 	int32_t ReadIValue(const char *p, const char **endptr);
 
+	bool ProcessConditionalGCode(bool skippedIfFalse);	// Check for and process a conditional GCode language command returning true if we found one
+	void CreateBlocks();								// Create new code blocks
+	bool EndBlocks();									// End blocks returning true if nothing more to process on this line
+	void ProcessIfCommand();
+	void ProcessElseCommand(bool skippedIfFalse);
+	void ProcessWhileCommand();
+	void ProcessBreakCommand();
+	void ProcessVarCommand();
+	bool EvaluateCondition(const char* keyword);
+
 #if SUPPORT_OBJECT_MODEL
 	bool GetStringExpression(const StringRef& str)
-		pre (readPointer >= 0; gcodeBuffer[readPointer] == '['; str.IsEmpty());
+		pre (readPointer >= 0; gb.buffer[readPointer] == '{'; str.IsEmpty());
 	TypeCode EvaluateExpression(const char *p, const char **endptr, ExpressionValue& rslt)
-		pre (readPointer >= 0; gcodeBuffer[readPointer] == '[');
+		pre (readPointer >= 0; gb.buffer[readPointer] == '{');
 #endif
 
 	unsigned int commandStart;							// Index in the buffer of the command letter of this command
@@ -111,24 +121,29 @@ private:
 	unsigned int commandEnd;							// Index in the buffer of one past the last character of this command
 	unsigned int commandLength;							// Number of characters we read to build this command including the final \r or \n
 	unsigned int gcodeLineEnd;							// Number of characters in the entire line of gcode
-	int readPointer;									// Where in the buffer to read next
-	GCodeBufferState bufferState;						// Idle, executing or paused
+	int readPointer;									// Where in the buffer to read next, or -1
 
 	FileStore *fileBeingWritten;						// If we are copying GCodes to a file, which file it is
 	FilePosition writingFileSize;						// Size of the file being written, or zero if not known
-	uint8_t eofStringCounter;							// Check the...
 
-	int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
-	unsigned int lineNumber;
+	unsigned int receivedLineNumber;
 	unsigned int declaredChecksum;
 	int commandNumber;
 	uint32_t crc32;										// crc32 of the binary file
+	uint32_t whenTimerStarted;							// when we started waiting
+
+	GCodeBufferState bufferState;						// Idle, executing or paused
+	uint8_t eofStringCounter;							// Check the EOF
+
+	uint16_t indentToSkipTo;
+	static constexpr uint16_t NoIndentSkip = 0xFFFF;	// must be greater than any real indent
 
 	uint8_t computedChecksum;
 	bool hadLineNumber;
 	bool hadChecksum;
 	bool hasCommandNumber;
 	char commandLetter;
+	uint8_t commandIndent;								// Number of whitespace characters before the line number or the first command starts
 
 	bool checksumRequired;								// True if we only accept commands with a valid checksum
 	int8_t commandFraction;

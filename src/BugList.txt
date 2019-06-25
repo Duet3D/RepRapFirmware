@@ -156,7 +156,7 @@ Done in 2.0 RC3:
 
 - [no fault] Investigate https://forum.duet3d.com/post/94668 (filament load macro using stall detect not working)
 
-For 2.03RC4:
+In 2.03RC4:
 - [done] Print Z shift in Move diagnostics
 - [done] In Move diagnostics, only print bed probe heights if 3/4/5-point bed compensation is in use
 - [done] Bug fix for Z shift if Z probe averaging mode is being used
@@ -170,7 +170,29 @@ For 2.03RC4:
 - [done] Fix 2.03RC3 bug: G10 L20 gave wrong results when a workplace coordinate offset was in use
 - [done] M114 displays bed compensation amount at current position
 
+In 2.03RC5:
+- [done] After running stop.g ensure all moves are finished before setting motors to idle current, https://forum.duet3d.com/post/96452
+- [done] When downloading a .zip file don't set content-encoding to gzip, https://forum.duet3d.com/post/96469
+- [done, test] When disabling HTTP protocol or disabling the network, release any associated resources e.g. output buffers. Similarly for FTP and Telnet.
+- [done, ok] Delta printer: after homing, allows attempts to move Z up beyond endstop switches, https://forum.duet3d.com/topic/10735/delta-printer-max-limits
+- [done, ok] FTP responder: initialise haveCompleteLine (thanks gtjoseph)
+- [done] In SCARA printers/laser cutters (not CNC), if we can't do a coordinated travel move due to unreachable intermediate positions, try an uncoordinated one
+- [done] Duet Maestro build now supports laser cutters
+- [done] SCARA bug: when attempting to move beyond arm limits the cached X and Y are inconsistent with the cached theta and psi
+
+For 2.03 release:
+- Add virtual extruder position to M114 response for Octoprint, https://forum.duet3d.com/topic/10821/returning-virtual-extruder-position-in-m114/3
+- When disabling network or a protocol, set the number of active HTTP and/or Telnet clients to 0
+
+Outstanding issues:
+- Running out of output buffers and not freeing them up, https://forum.duet3d.com/post/96586
+- Inconsistent Z0 position, https://forum.duet3d.com/user/caveman
+- [defer] When writing resurrect.g after a pause, the G92 coordinates are wrong
+
 Planned for 3.0:
+- Bug: G29 P parameter doesn't work if there are nonempty deployprobe.g/retractprobe.g files, https://forum.duet3d.com/topic/10904/g29-p-parameter-ignored/5
+- Bug? DWC 1.22.6 doesn't auto show the height map after probing since firmware 2.03, https://forum.duet3d.com/topic/10904/g29-p-parameter-ignored/5
+- [done] 3.0 bug: Fix Z probe starting height
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5
 - Filament monitors: disable if tool is not active/no commanded extrusion, or does it do that already?
 - [yes it already did] In simulation mode, does M109 implicity select a tool? https://forum.duet3d.com/topic/9595/simulation-error
@@ -188,6 +210,7 @@ Planned for 3.0:
 - Implement power loss M582 trigger action?
 - On heater fault shutdown, do we try to turn off power? https://forum.duet3d.com/topic/9283/controlled-shut-down-of-24-volt-power-supply-by-ssr/4
 - Consider option to cancel objects, see https://forum.duet3d.com/topic/9226/cancel-skip-individual-objects-during-print/8. Also say which object we are printing.
+- Option to display current tool mix ratio on 12864 display, https://forum.duet3d.com/topic/10777/can-show-the-mixing-ratio-on-the-duet-maestro-12864-display
 
 - Laser turns off, https://forum.duet3d.com/topic/9636/laser-turns-of-during-straight-lines/5
 - Test endstop input high/low noise immunity, decide on pullup enable/disable

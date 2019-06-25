@@ -8,25 +8,29 @@
 #define GCODEQUEUE_H
 
 #include "RepRapFirmware.h"
-#include "GCodeBuffer/GCodeBuffer.h"
+#include "GCodeInput.h"
 
 class QueuedCode;
 
 const size_t BufferSizePerQueueItem = SHORT_GCODE_LENGTH;
 
-class GCodeQueue
+class GCodeQueue : public GCodeInput
 {
 public:
 	GCodeQueue();
 
-	static bool ShouldQueueCode(GCodeBuffer &gb);				// Return true if this code should be queued
-	bool QueueCode(GCodeBuffer &gb);							// Queue a G-code and return true if it could be stored
-	bool FillBuffer(GCodeBuffer *gb);							// If there is another move to execute at this time, fill a buffer
+	void Reset() override;										// Clean all the cached data from this input
+	bool FillBuffer(GCodeBuffer *gb) override;					// If there is another move to execute at this time, fill a buffer
+	size_t BytesCached() const override;						// How many bytes have been cached?
+
+	bool QueueCode(GCodeBuffer &gb);							// Queue a G-code
 	void PurgeEntries();										// Remove stored codes when a print is being paused
 	void Clear();												// Clean up all the stored codes
 	bool IsIdle() const;										// Return true if there is nothing to do
 
 	void Diagnostics(MessageType mtype);
+
+	static bool ShouldQueueCode(GCodeBuffer &gb);				// Return true if this code should be queued
 
 private:
 	QueuedCode *freeItems;

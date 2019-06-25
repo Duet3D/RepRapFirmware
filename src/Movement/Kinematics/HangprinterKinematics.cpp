@@ -173,7 +173,7 @@ bool HangprinterKinematics::IsReachable(float x, float y, bool isCoordinated) co
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
-bool HangprinterKinematics::LimitPosition(float finalCoords[], float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
+LimitPositionResult HangprinterKinematics::LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
 	const AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
@@ -205,7 +205,9 @@ bool HangprinterKinematics::LimitPosition(float finalCoords[], float * null init
 			}
 		}
 	}
-	return limited;
+
+	//TODO check intermediate positions, especially uif.when we support an offset radius
+	return (limited) ? LimitPositionResult::adjusted : LimitPositionResult::ok;
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics

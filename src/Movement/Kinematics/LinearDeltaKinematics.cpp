@@ -192,9 +192,9 @@ bool LinearDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) co
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
-bool LinearDeltaKinematics::LimitPosition(float finalCoords[], float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
+LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const
 {
-	const AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
+	constexpr AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
 
 	// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
@@ -211,7 +211,7 @@ bool LinearDeltaKinematics::LimitPosition(float finalCoords[], float * null init
 			limited = true;
 		}
 
-		// Constrain the position to be withint the reachable height
+		// Constrain the position to be within the reachable height
 		if (initialCoords == nullptr)
 		{
 			// Asking to limit a single position
@@ -232,63 +232,112 @@ bool LinearDeltaKinematics::LimitPosition(float finalCoords[], float * null init
 		else if (finalCoords[Z_AXIS] > alwaysReachableHeight || initialCoords[Z_AXIS] > alwaysReachableHeight)
 		{
 			// Asking to limit all positions along a straight line
-			// Determine the maximum reachable height at this position and all intermediate positions
+			// Determine the maximum reachable height at the final position and all intermediate positions
 			const float dx = finalCoords[X_AXIS] - initialCoords[X_AXIS],
 						dy = finalCoords[Y_AXIS] - initialCoords[Y_AXIS];
-			const float P = fsquare(dx) + fsquare(dy);
+			const float P2 = fsquare(dx) + fsquare(dy);							// square of the distance moved in the XY plane
 			float dz = finalCoords[Z_AXIS] - initialCoords[Z_AXIS];
-			float Q = P + fsquare(dz);
-			if (Q != 0.0)			// if there is any XYZ movement
+			float Q2 = P2 + fsquare(dz);										// square of the total distance moved
+			if (Q2 != 0.0)														// if there is any XYZ movement
 			{
+				// If t is the proportion of movement completed from initial to final coordinates, the t-value corresponding to the maximum tower height is:
+				// t = (+/- dz*sqrt(d^2*P2 - (dx*(y0-yt)-dy*(x0-xt))^2)*Q
+			    //      -(x0-xt)*dx*Q2
+			    //      -(y0-yt)*dy*Q2
+				//     )
+				//	   /(P2*Q2)
+				// We want the root that increases with increasing dz, i.e. positive Z movement delays the maximum
 				for (size_t tower = 0; tower < numTowers; ++tower)
 				{
-					bool again;
-					const float tx = towerX[tower] - initialCoords[X_AXIS],
-								ty = towerY[tower] - initialCoords[Y_AXIS];
+					const float tx = initialCoords[X_AXIS] - towerX[tower],
+								ty = initialCoords[Y_AXIS] - towerY[tower];
+					const float discriminant = (D2[tower] * P2) - fsquare((dx * ty) - (dy * tx));
+					bool limitFinalHeight;
+					bool again;													// we may need to iterate
 					do
 					{
 						again = false;
-
-						// Determine the coordinates of the closest point of approach to the tower
-						const float t = (dz * sqrtf(Q * (fsquare(diagonals[tower]) * P - fsquare(dx * ty - dy * tx))) + (dx * tx + dy * ty) * P);
-						if (t > 0.0)
+						if (discriminant < 0.0)
 						{
-							float tempCoords[XYZ_AXES];
-							float PQ = P * Q;
-							if (t < PQ)
+							// There is no maximum carriage height on this tower, so the maximum must occur at the initial or final point.
+							// We assume that the initial point is within range, so check the final point.
+							limitFinalHeight = true;
+						}
+						else
+						{
+							const float tP2Q2 = dz * sqrtf(discriminant * Q2) - ((tx * dx) + (ty * dy)) * Q2;
+							const float P2Q2 = P2 * Q2;
+							if (tP2Q2 >= P2Q2)
 							{
-								tempCoords[X_AXIS] = initialCoords[X_AXIS] + dx * (t/PQ);
-								tempCoords[Y_AXIS] = initialCoords[Y_AXIS] + dy * (t/PQ);
-								tempCoords[Z_AXIS] = initialCoords[Z_AXIS] + dz * (t/PQ);
+								limitFinalHeight = true;						// the maximum is beyond the final position
 							}
 							else
 							{
-								tempCoords[X_AXIS] = finalCoords[X_AXIS];
-								tempCoords[Y_AXIS] = finalCoords[Y_AXIS];
-								tempCoords[Z_AXIS] = finalCoords[Z_AXIS];
-							}
-							const float carriageHeight = Transform(tempCoords, tower);
-							if (carriageHeight > homedCarriageHeights[tower])
-							{
-								float reductionNeeded = carriageHeight - homedCarriageHeights[tower];
-								if (t < PQ)
+								limitFinalHeight = false;
+								if (tP2Q2 > 0.0)
 								{
-									reductionNeeded *= PQ/t;
-								}
-								finalCoords[Z_AXIS] -= reductionNeeded + 0.5;		// over-correct to speed up convergence. 0.5mm is better than 0.1mm and as good as 1mm.
-								limited = true;
+									const float t = tP2Q2/P2Q2;
+									float tempCoords[XYZ_AXES];
+									tempCoords[X_AXIS] = initialCoords[X_AXIS] + t * dx;
+									tempCoords[Y_AXIS] = initialCoords[Y_AXIS] + t * dy;
+									tempCoords[Z_AXIS] = initialCoords[Z_AXIS] + t * dz;
+									const float carriageHeight = Transform(tempCoords, tower);
 
-								// Changing the end point Z coordinate will have moved the closest point of approach, so we need to iterate
-								again = true;
-								dz = finalCoords[Z_AXIS] - initialCoords[Z_AXIS];
-								Q = P + fsquare(dz);
-								if (reprap.Debug(moduleMove))
-								{
-									debugPrintf("Limit tower %u, t=%.2f\n", tower, (double)(t/PQ));
+									if (carriageHeight > homedCarriageHeights[tower])
+									{
+										// We can't do this move as requested
+										const float proposedAdjustment = carriageHeight - homedCarriageHeights[tower] + 0.5;
+										if (dz >= proposedAdjustment)
+										{
+											// There is some chance that if we reduce the requested final Z coordinate, we can do the move
+											finalCoords[Z_AXIS] -= proposedAdjustment;
+											dz -= proposedAdjustment;;
+											limited = true;
+
+											// Update the intermediate variables that have changed
+											again = true;
+											Q2 = P2 + fsquare(dz);
+											if (reprap.Debug(moduleMove))
+											{
+												debugPrintf("Limit tower %u, t=%.2f\n", tower, (double)t);
+											}
+										}
+										else
+										{
+											return (limited) ? LimitPositionResult::adjustedAndIntermediateUnreachable : LimitPositionResult::intermediateUnreachable;
+										}
+									}
 								}
 							}
 						}
 					} while (again);
+
+					if (limitFinalHeight)
+					{
+						const float carriageHeight = Transform(finalCoords, tower);
+						if (carriageHeight > homedCarriageHeights[tower])
+						{
+							const float proposedAdjustment = carriageHeight - homedCarriageHeights[tower];
+							if (dz >= proposedAdjustment)
+							{
+								finalCoords[Z_AXIS] -= proposedAdjustment;
+								limited = true;
+								if (reprap.Debug(moduleMove))
+								{
+									debugPrintf("Limit tower %u\n", tower);
+								}
+								if (tower + 1 < numTowers)
+								{
+									dz -= proposedAdjustment;
+									Q2 = P2 + fsquare(dz);
+								}
+							}
+							else
+							{
+								return (limited) ? LimitPositionResult::adjustedAndIntermediateUnreachable : LimitPositionResult::intermediateUnreachable;
+							}
+						}
+					}
 				}
 			}
 		}
@@ -306,7 +355,7 @@ bool LinearDeltaKinematics::LimitPosition(float finalCoords[], float * null init
 		limited = true;
 	}
 
-	return limited;
+	return (limited) ? LimitPositionResult::adjusted : LimitPositionResult::ok;
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics
@@ -464,7 +513,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			// Adjust the motor endpoints to allow for the change to endstop adjustments
 			reprap.GetMove().AdjustMotorPositions(heightAdjust, UsualNumTowers);
 		}
-		
+
 		// Calculate the expected probe heights using the new parameters
 		{
 			floatc_t expectedResiduals[MaxCalibrationPoints];

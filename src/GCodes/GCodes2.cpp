@@ -877,7 +877,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			// Pronterface keeps sending M27 commands if "Monitor status" is checked, and it specifically expects the following response syntax
 			FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
-			reply.printf("SD printing byte %lu/%lu", fileBeingPrinted.GetPosition() - fileInput->BytesCached(), fileBeingPrinted.Length());
+			reply.printf("SD printing byte %lu/%lu", GetFilePosition(), fileBeingPrinted.Length());
 		}
 		else
 		{
@@ -1612,11 +1612,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 120:
-		Push(gb);
+		Push(gb, true);
 		break;
 
 	case 121:
-		Pop(gb);
+		Pop(gb, true);
 		break;
 
 	case 122:
@@ -2312,7 +2312,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
 
 				// If we need to wait for an acknowledgement, save the state and set waiting
-				if ((sParam == 2 || sParam == 3) && Push(gb))						// stack the machine state including the file position
+				if ((sParam == 2 || sParam == 3) && Push(gb, true))					// stack the machine state including the file position
 				{
 					UnlockMovement(gb);												// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
 					gb.MachineState().CloseFile();									// stop reading from file
@@ -3222,7 +3222,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					platform.SetInstantDv(numTotalAxes + e, eVals[e] * multiplier1);
 				}
 			}
-			else if (!seen)
+
+			if (code == 566 && gb.Seen('P'))
+			{
+				seen = true;
+				reprap.GetMove().SetJerkPolicy(gb.GetUIValue());
+			}
+
+			if (!seen)
 			{
 				const float multiplier2 = (code == 566) ? MinutesToSeconds : 1.0;
 				reply.printf("Maximum jerk rates (mm/%s): ", (code == 566) ? "min" : "sec");
@@ -3236,6 +3243,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					reply.catf("%c%.1f", sep, (double)(platform.GetInstantDv(extruder + numTotalAxes) * multiplier2));
 					sep = ':';
+				}
+				if (code == 566)
+				{
+					reply.catf(", jerk policy: %u", reprap.GetMove().GetJerkPolicy());
 				}
 			}
 		}
@@ -3433,52 +3444,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 577: // Wait until endstop input is triggered
-#ifdef NO_TRIGGERS
-		result = GCodeResult::errorNotSupported;
-#else
-		if (gb.Seen('S'))
-		{
-			// Determine trigger type
-			bool triggerCondition = (gb.GetIValue() > 0);
-
-			// Axis endstops
-			for (size_t axis=0; axis < numTotalAxes; axis++)
-			{
-				if (gb.Seen(axisLetters[axis]))
-				{
-					if (platform.GetEndstops().EndStopInputState(axis) != triggerCondition)
-					{
-						result = GCodeResult::notFinished;
-						break;
-					}
-				}
-			}
-
-			// Extruder drives
-			if (gb.Seen(extrudeLetter))
-			{
-				size_t eDriveCount = MaxExtruders;
-				uint32_t eDrives[MaxExtruders];
-				gb.GetUnsignedArray(eDrives, eDriveCount, false);
-				for (size_t extruder = 0; extruder < eDriveCount; extruder++)
-				{
-					const size_t eDrive = eDrives[extruder];
-					if (eDrive >= MaxExtruders)
-					{
-						reply.printf("Invalid extruder drive '%u'", eDrive);
-						result = GCodeResult::error;
-						break;
-					}
-
-					if (platform.GetEndstops().EndStopInputState(eDrive + E0_AXIS) != triggerCondition)
-					{
-						result = GCodeResult::notFinished;
-						break;
-					}
-				}
-			}
-		}
-#endif
+		result = WaitForPin(gb, reply);
 		break;
 
 #if SUPPORT_INKJET
@@ -3541,8 +3507,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 #endif
 
 	case 581: // Configure external trigger
+		result = ConfigureTrigger(gb, reply, code);
+		break;
+
 	case 582: // Check external trigger
-		result = CheckOrConfigureTrigger(gb, reply, code);
+		result = CheckTrigger(gb, reply, code);
 		break;
 
 	case 584: // Set axis/extruder to stepper driver(s) mapping
@@ -3666,7 +3635,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			if (changed || changedMode)
 			{
-				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false))
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false) != LimitPositionResult::ok)
 				{
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 				}
@@ -3745,7 +3714,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
 						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 					}
-					if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false))
+					if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false) != LimitPositionResult::ok)
 					{
 						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 					}
@@ -3792,7 +3761,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 				}
-				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false))
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, nullptr, numVisibleAxes, axesHomed, false, false) != LimitPositionResult::ok)
 				{
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 				}

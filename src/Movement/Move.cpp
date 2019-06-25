@@ -67,10 +67,16 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
 #endif
 
-Move::Move() : active(false)
+Move::Move()
+	: active(false),
+	  drcEnabled(false),											// disable dynamic ringing cancellation
+	  maxPrintingAcceleration(10000.0), maxTravelAcceleration(10000.0),
+	  drcPeriod(0.025),												// 40Hz
+	  drcMinimumAcceleration(10.0),
+	  jerkPolicy(0)
 {
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
-	kinematics = Kinematics::Create(KinematicsType::cartesian);			// default to Cartesian
+	kinematics = Kinematics::Create(KinematicsType::cartesian);		// default to Cartesian
 	mainDDARing.Init1(DdaRingLength);
 #if SUPPORT_ASYNC_MOVES
 	auxDDARing.Init1(AuxDdaRingLength);
@@ -87,11 +93,6 @@ void Move::Init()
 	auxMoveAvailable = false;
 	auxMoveLocked = false;
 #endif
-
-	maxPrintingAcceleration = maxTravelAcceleration = 10000.0;
-	drcEnabled = false;											// disable dynamic ringing cancellation
-	drcMinimumAcceleration = 10.0;
-	drcPeriod = 50.0;
 
 	// Clear the transforms
 	SetIdentityTransform();
@@ -270,7 +271,7 @@ bool Move::SetKinematics(KinematicsType k)
 {
 	if (kinematics->GetKinematicsType() != k)
 	{
-		Kinematics *nk = Kinematics::Create(k);
+		Kinematics * const nk = Kinematics::Create(k);
 		if (nk == nullptr)
 		{
 			return false;
@@ -1012,21 +1013,25 @@ void Move::LaserTaskRun()
 
 		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
 		{
+# if SUPPORT_LASER
 			// Manage the laser power
 			uint32_t ticks;
 			while ((ticks = mainDDARing.ManageLaserPower()) != 0)
 			{
 				delay(ticks);
 			}
+# endif
 		}
 		else
 		{
+# if SUPPORT_IOBITS
 			// Manage the IOBits
 			uint32_t ticks;
 			while ((ticks = reprap.GetPortControl().UpdatePorts()) != 0)
 			{
 				delay(ticks);
 			}
+# endif
 		}
 	}
 }

@@ -431,15 +431,13 @@ public:
 	uint32_t GetDriversBitmap(size_t axisOrExtruder) const	// get the bitmap of driver step bits for this axis or extruder
 		pre(axisOrExtruder < 2 * MaxTotalDrivers)
 		{ return driveDriverBits[axisOrExtruder]; }
-	static void StepDriversLow();							// set all step pins low
-	static void StepDriversHigh(uint32_t driverMap);		// set the specified step pins high
 	uint32_t GetSlowDriversBitmap() const { return slowDriversBitmap; }
 	uint32_t GetSlowDriverStepHighClocks() const { return slowDriverStepTimingClocks[0]; }
 	uint32_t GetSlowDriverStepLowClocks() const { return slowDriverStepTimingClocks[1]; }
 	uint32_t GetSlowDriverDirSetupClocks() const { return slowDriverStepTimingClocks[2]; }
 	uint32_t GetSlowDriverDirHoldClocks() const { return slowDriverStepTimingClocks[3]; }
 	uint32_t GetSteppingEnabledDrivers() const { return steppingEnabledDriversBitmap; }
-	void DisableSteppingDriver(uint8_t driver) { steppingEnabledDriversBitmap &= ~CalcDriverBitmap(driver); }
+	void DisableSteppingDriver(uint8_t driver) { steppingEnabledDriversBitmap &= ~StepPins::CalcDriverBitmap(driver); }
 	void EnableAllSteppingDrivers() { steppingEnabledDriversBitmap = 0xFFFFFFFF; }
 
 #if SUPPORT_NONLINEAR_EXTRUSION
@@ -660,8 +658,6 @@ private:
 	void UpdateMotorCurrent(size_t driver);
 	void SetDriverDirection(uint8_t driver, bool direction)
 	pre(driver < DRIVES);
-
-	static uint32_t CalcDriverBitmap(size_t driver);	// calculate the step bit(s) for this driver
 
 	volatile DriverStatus driverState[MaxTotalDrivers];
 	bool directions[MaxTotalDrivers];
@@ -1047,113 +1043,5 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	auxGCodeReply = nullptr;
 	return temp;
 }
-
-// *** These next three functions must use the same bit assignments in the drivers bitmap ***
-// Each stepper driver must be assigned one bit in a 32-bit word, in such a way that multiple drivers can be stepped efficiently
-// and more or less simultaneously by doing parallel writes to several bits in one or more output ports.
-// The bitmaps for various controller electronics are organised like this:
-// Duet WiFi:
-//	All step pins are on port D, so the bitmap is just the map of step bits in port D.
-// Duet Maestro, PCCB and Duet 3:
-//	All step pins are on port C, so the bitmap is just the map of step bits in port C.
-// Duet 0.6 and 0.8.5:
-//	Step pins are PA0, PC7,9,11,14,25,29 and PD0,3.
-//	The PC and PD bit numbers don't overlap, so we use their actual positions.
-//	PA0 clashes with PD0, so we use bit 1 to represent PA0.
-// RADDS:
-//  Step pins are PA2,9,12,15 PB16,19 PC3,12 PD6
-//	PC12 clashes with PA12 so we shift PC3,12 left one bit
-// Alligator:
-//  Pins on ports B,C,D are used but the bit numbers are all different, so we use their actual positions
-
-// Calculate the step bit for a driver. This doesn't need to be fast. It must return 0 if the driver is remote.
-/*static*/ inline uint32_t Platform::CalcDriverBitmap(size_t driver)
-{
-	if (driver >= NumDirectDrivers)
-	{
-		return 0;
-	}
-
-#ifndef __LPC17xx__		//LPC doesn't need pinDesc
-	const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
-#endif
-
-#if defined(DUET_NG) || defined(DUET_M) || defined(PCCB) || defined(DUET3_V03) || defined(DUET3_V05) || defined(SAME70XPLD)
-	return pinDesc.ulPin;
-#elif defined(DUET_06_085)
-	return (pinDesc.pPort == PIOA) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
-#elif defined(__RADDS__)
-	return (pinDesc.pPort == PIOC) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
-#elif defined(__ALLIGATOR__)
-	return pinDesc.ulPin;
-# elif defined(__LPC17xx__)
-	return 1u << STEP_PIN_PORT2_POS[driver];
-#else
-# error Unknown board
-#endif
-}
-
-// Set the specified step pins high
-// This needs to be as fast as possible, so we do a parallel write to the port(s).
-// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-/*static*/ inline void Platform::StepDriversHigh(uint32_t driverMap)
-{
-#if defined(DUET_NG)
-	PIOD->PIO_ODSR = driverMap;				// on Duet WiFi all step pins are on port D
-#elif defined(DUET_M) || defined(PCCB) || defined(DUET3_V03) || defined(DUET3_V05) || defined(SAME70XPLD)
-	PIOC->PIO_ODSR = driverMap;				// on Duet Maestro all step pins are on port C
-#elif defined(DUET_06_085)
-	PIOD->PIO_ODSR = driverMap;
-	PIOC->PIO_ODSR = driverMap;
-	PIOA->PIO_ODSR = driverMap >> 1;		// do this last, it means the processor doesn't need to preserve the register containing driverMap
-#elif defined(__RADDS__)
-	PIOA->PIO_ODSR = driverMap;
-	PIOB->PIO_ODSR = driverMap;
-	PIOD->PIO_ODSR = driverMap;
-	PIOC->PIO_ODSR = driverMap >> 1;		// do this last, it means the processor doesn't need to preserve the register containing driverMap
-#elif defined(__ALLIGATOR__)
-	PIOB->PIO_ODSR = driverMap;
-	PIOD->PIO_ODSR = driverMap;
-	PIOC->PIO_ODSR = driverMap;
-#elif defined(__LPC17xx__)
-	//On Azteeg X5 Mini all step pins are on Port 2
-	//On Smoothieboard all step pins are on Port 2
-	//On ReArm all step pins are on Port 2
-	LPC_GPIO2->FIOSET = driverMap;
-#else
-# error Unknown board
-#endif
-}
-
-// Set all step pins low
-// This needs to be as fast as possible, so we do a parallel write to the port(s).
-// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-/*static*/ inline void Platform::StepDriversLow()
-{
-#if defined(DUET_NG)
-	PIOD->PIO_ODSR = 0;						// on Duet WiFi all step pins are on port D
-#elif defined(DUET_M) || defined(PCCB) || defined(DUET3_V03) || defined(DUET3_V05) || defined(SAME70XPLD)
-	PIOC->PIO_ODSR = 0;						// on Duet Maestro, Duet 3 and PCCB all step pins are on port C
-#elif defined(DUET_06_085)
-	PIOD->PIO_ODSR = 0;
-	PIOC->PIO_ODSR = 0;
-	PIOA->PIO_ODSR = 0;
-#elif defined(__RADDS__)
-	PIOD->PIO_ODSR = 0;
-	PIOC->PIO_ODSR = 0;
-	PIOB->PIO_ODSR = 0;
-	PIOA->PIO_ODSR = 0;
-#elif defined(__ALLIGATOR__)
-	PIOD->PIO_ODSR = 0;
-	PIOC->PIO_ODSR = 0;
-	PIOB->PIO_ODSR = 0;
-#elif defined(__LPC17xx__)
-	LPC_GPIO2->FIOCLR = STEP_DRIVER_MASK;
-#else
-# error Unknown board
-#endif
-}
-
-//***************************************************************************************
 
 #endif

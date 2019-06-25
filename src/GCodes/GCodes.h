@@ -29,6 +29,7 @@ Licence: GPL
 #include "Libraries/sha1/sha1.h"
 #include "Platform.h"		// for type EndStopHit
 #include "GCodeInput.h"
+#include "Trigger.h"
 #include "Tools/Filament.h"
 #include "FilamentMonitors/FilamentMonitor.h"
 #include "RestorePoint.h"
@@ -36,28 +37,6 @@ Licence: GPL
 
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
-
-typedef uint32_t TriggerInputsBitmap;					// Bitmap of input pins that a single trigger number responds to
-typedef uint32_t TriggerNumbersBitmap;					// Bitmap of trigger numbers
-static_assert(MaxTriggers <= sizeof(TriggerNumbersBitmap) * CHAR_BIT, "need larger TriggerNumbersBitmap type");
-
-struct Trigger
-{
-	TriggerInputsBitmap rising;
-	TriggerInputsBitmap falling;
-	uint8_t condition;
-
-	void Init()
-	{
-		rising = falling = 0;
-		condition = 0;
-	}
-
-	bool IsUnused() const
-	{
-		return rising == 0 && falling == 0;
-	}
-};
 
 // Bits for T-code P-parameter to specify which macros are supposed to be run
 constexpr uint8_t TFreeBit = 1 << 0;
@@ -290,8 +269,8 @@ private:
 
 	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove);	// Set up the extrusion of a move
 
-	bool Push(GCodeBuffer& gb);													// Push feedrate etc on the stack
-	void Pop(GCodeBuffer& gb);													// Pop feedrate etc
+	bool Push(GCodeBuffer& gb, bool preserveLineNumber);						// Push feedrate etc on the stack
+	void Pop(GCodeBuffer& gb, bool preserveLineNumber);							// Pop feedrate etc
 	void DisableDrives();														// Turn the motors off
 																				// Start saving GCodes in a file
 	bool SendConfigToLine();													// Deal with M503
@@ -330,7 +309,6 @@ private:
 	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply);			// Load the specified filament into a tool
 	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply);		// Unload the current filament from a tool
 	bool ChangeMicrostepping(size_t drive, unsigned int microsteps, bool interp) const; // Change microstepping on the specified drive
-	void ListTriggers(const StringRef& reply, TriggerInputsBitmap mask);		// Append a list of trigger inputs to a message
 	void CheckTriggers();														// Check for and execute triggers
 	void CheckFilament();														// Check for and respond to filament errors
 	void CheckHeaterFault();													// Check for and respond to a heater fault, returning true if we should exit
@@ -353,27 +331,28 @@ private:
 #endif
 	void ClearBedMapping();														// Stop using bed compensation
 	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply);				// Start probing the grid, returning true if we didn't because of an error
-	GCodeResult CheckOrConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, int code);	// Handle M581 and M582
+	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, int code);	// Handle M581
+	GCodeResult CheckTrigger(GCodeBuffer& gb, const StringRef& reply, int code);		// Handle M582
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply);		// Handle M997
 	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply);				// Handle M260
 	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply);			// Handle M261
-
 #if HAS_HIGH_SPEED_SD || HAS_LINUX_INTERFACE
-	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode);		// Handle M37 to change the simulation mode
 	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile);	// Handle M37 to simulate a whole file
+	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode);		// Handle M37 to change the simulation mode
 #endif
+	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply);			// Handle M577
 
 #if HAS_HIGH_SPEED_SD
 	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const; // Write the config-override file
 	bool WriteConfigOverrideHeader(FileStore *f) const;							// Write the config-override header
 #endif
 
-	void CopyConfigFinalValues(GCodeBuffer& gb);							// Copy the feed rate etc. from the daemon to the input channels
+	void CopyConfigFinalValues(GCodeBuffer& gb);								// Copy the feed rate etc. from the daemon to the input channels
 
-	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;					// Decide which device to display a message box on
-	void DoManualProbe(GCodeBuffer& gb);									// Do a manual bed probe
+	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;						// Decide which device to display a message box on
+	void DoManualProbe(GCodeBuffer& gb);										// Do a manual bed probe
 
-	void AppendAxes(const StringRef& reply, AxesBitmap axes) const;			// Append a list of axes to a string
+	void AppendAxes(const StringRef& reply, AxesBitmap axes) const;				// Append a list of axes to a string
 
 	void EndSimulation(GCodeBuffer *gb);								// Restore positions etc. when exiting simulation mode
 	bool IsCodeQueueIdle() const;										// Return true if the code queue is idle
@@ -410,18 +389,9 @@ private:
 
 	Platform& platform;													// The RepRap machine
 
-#if HAS_HIGH_SPEED_SD
-	FileGCodeInput* fileInput;											// ...
-#endif
-#ifdef SERIAL_MAIN_DEVICE
-	StreamGCodeInput* serialInput;										// ...
-#endif
 #if HAS_NETWORKING
 	NetworkGCodeInput* httpInput;										// These cache incoming G-codes...
 	NetworkGCodeInput* telnetInput;										// ...
-#endif
-#ifdef SERIAL_AUX_DEVICE
-	StreamGCodeInput* auxInput;											// ...for the GCodeBuffers below
 #endif
 
 	GCodeBuffer* gcodeSources[NumGCodeBuffers];							// The various sources of gcodes
@@ -563,8 +533,6 @@ private:
 
 	// Triggers
 	Trigger triggers[MaxTriggers];				// Trigger conditions
-	TriggerInputsBitmap lastEndstopStates;		// States of the trigger inputs last time we looked
-	static_assert(MaxTriggers <= 32, "Too many triggers");
 	TriggerNumbersBitmap triggersPending;		// Bitmap of triggers pending but not yet executed
 
 	// Firmware update
