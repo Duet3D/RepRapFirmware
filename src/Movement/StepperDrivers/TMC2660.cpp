@@ -764,18 +764,8 @@ inline void TmcDriverState::StartTransfer()
 	}
 	else
 	{
-		size_t regNum = 0;
-		uint32_t mask = 1;
-		do
-		{
-			if ((registersToUpdate & mask) != 0)
-			{
-				break;
-			}
-			++regNum;
-			mask <<= 1;
-		} while (regNum < NumRegisters - 1);
-		registersToUpdate &= ~mask;
+		const size_t regNum = LowestSetBitNumber(registersToUpdate);
+		registersToUpdate &= ~(1u << regNum);
 		regVal = registers[regNum];
 	}
 

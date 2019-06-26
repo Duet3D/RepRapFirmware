@@ -441,9 +441,9 @@ GCodeResult W5500Interface::EnableInterface(int mode, const StringRef& ssid, con
 {
 	if (!activated)
 	{
-		state = (mode == 0) ? NetworkState::disabled : NetworkState::enabled;
+		state = (mode <= 0) ? NetworkState::disabled : NetworkState::enabled;
 	}
-	else if (mode == 0)
+	else if (mode <= 0)
 	{
 		if (state != NetworkState::disabled)
 		{

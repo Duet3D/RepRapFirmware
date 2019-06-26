@@ -1217,15 +1217,14 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 							reply.cat(", pos unknown");
 						}
 					}
-#endif
-
-#if SUPPORT_TMC22xx || SUPPORT_TMC51xx
+#elif SUPPORT_TMC22xx || SUPPORT_TMC51xx
 					{
 						const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
+						const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
 						const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
 						bool bdummy;
 						const float mmPerSec = (12000000.0 * platform.GetDriverMicrostepping(drive, bdummy))/(256 * tpwmthrs * platform.DriveStepsPerUnit(axis));
-						reply.catf(", tpwmthrs %" PRIu32 " (%.1f mm/sec)", tpwmthrs, (double)mmPerSec);
+						reply.catf(", pos %" PRIu32", tpwmthrs %" PRIu32 " (%.1f mm/sec)", mstepPos, tpwmthrs, (double)mmPerSec);
 					}
 #endif
 
