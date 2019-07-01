@@ -195,6 +195,7 @@ For 2.03 release:
 - Bug with small Z movements at Zmin, https://forum.duet3d.com/topic/11025/strange-behavior
 - Bug: on Duet Maestro, M552 S0 followed by M552 S1 doesn't restart the network, it doesn't get an IP address
 - [can't reproduce] Possible M540 bug on Maestro, https://forum.duet3d.com/topic/11029/firmware-2-03-duet-maestro-v1-m540-issue/4
+- Issues when diagonal rods are not all the same lengths, https://forum.duet3d.com/post/99714
 
 Outstanding issues:
 - Running out of output buffers and not freeing them up, https://forum.duet3d.com/post/96586

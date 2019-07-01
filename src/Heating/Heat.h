@@ -150,7 +150,7 @@ public:
 	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
 
 private:
-	Heat(const Heat&);											// Private copy constructor to prevent copying
+	Heat(const Heat&) = delete;									// Private copy constructor to prevent copying
 
 	TemperatureSensor **GetSensor(size_t heater);				// Get a pointer to the temperature sensor entry
 	TemperatureSensor * const *GetSensor(size_t heater) const;	// Get a pointer to the temperature sensor entry

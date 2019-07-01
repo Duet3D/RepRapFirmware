@@ -89,13 +89,13 @@ int ZProbe::GetReading() const
 		case ZProbeType::analog:				// Simple or intelligent IR sensor
 		case ZProbeType::alternateAnalog:		// Alternate sensor
 		case ZProbeType::digital:				// Switch connected to Z probe input
-			zProbeVal = (int) ((p.GetZProbeOnFilter().GetSum() + p.GetZProbeOffFilter().GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));
+			zProbeVal = (int) ((p.GetZProbeOnFilter().GetSum() + p.GetZProbeOffFilter().GetSum()) / (8 * ZProbeAverageReadings));
 			break;
 
 		case ZProbeType::dumbModulated:		// Dumb modulated IR sensor.
 			// We assume that zProbeOnFilter and zProbeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
-			zProbeVal = (int) (((int32_t)p.GetZProbeOnFilter().GetSum() - (int32_t)p.GetZProbeOffFilter().GetSum()) / (int)(4 * Z_PROBE_AVERAGE_READINGS));
+			zProbeVal = (int) (((int32_t)p.GetZProbeOnFilter().GetSum() - (int32_t)p.GetZProbeOffFilter().GetSum()) / (int)(4 * ZProbeAverageReadings));
 			break;
 
 		case ZProbeType::unfilteredDigital:		// Switch connected to Z probe input, no filtering
@@ -130,7 +130,7 @@ int ZProbe::GetSecondaryValues(int& v1, int& v2)
 		switch (type)
 		{
 		case ZProbeType::dumbModulated:		// modulated IR sensor
-			v1 = (int) (p.GetZProbeOnFilter().GetSum() / (4 * Z_PROBE_AVERAGE_READINGS));	// pass back the reading with IR turned on
+			v1 = (int) (p.GetZProbeOnFilter().GetSum() / (4 * ZProbeAverageReadings));	// pass back the reading with IR turned on
 			return 1;
 		default:
 			break;

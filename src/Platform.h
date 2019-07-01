@@ -81,8 +81,7 @@ const int INKJET_DELAY_MICROSECONDS = 800;				// How long to wait before the nex
 #endif
 
 // Z PROBE
-
-constexpr unsigned int Z_PROBE_AVERAGE_READINGS = 8;			// We average this number of readings with IR on, and the same number with IR off
+constexpr unsigned int ZProbeAverageReadings = 8;		// We average this number of readings with IR on, and the same number with IR off
 
 // HEATERS - The bed is assumed to be the at index 0
 
@@ -247,7 +246,7 @@ private:
 };
 
 typedef AveragingFilter<ThermistorAverageReadings> ThermistorAveragingFilter;
-typedef AveragingFilter<Z_PROBE_AVERAGE_READINGS> ZProbeAveragingFilter;
+typedef AveragingFilter<ZProbeAverageReadings> ZProbeAveragingFilter;
 
 // Enumeration of error condition bits
 enum class ErrorCode : uint32_t

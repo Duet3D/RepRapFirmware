@@ -43,7 +43,7 @@ public:
 private:
 	DhtSensorHardwareInterface(Pin p_pin);
 
-	GCodeResult Configure(TemperatureSensor *ts, unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureType(TemperatureSensor *ts, unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply);
 	TemperatureError GetTemperatureOrHumidity(float& t, bool wantHumidity) const;
 	void TakeReading();
 	TemperatureError ProcessReadings();
