@@ -130,7 +130,7 @@ class OutputStack
 		void Clear() volatile { count = 0; }
 
 		// Push an OutputBuffer chain
-		void Push(OutputBuffer *buffer) volatile;
+		void Push(OutputBuffer *buffer, MessageType type = NoDestinationMessage) volatile;
 
 		// Pop an OutputBuffer chain or return NULL if none is available
 		OutputBuffer *Pop() volatile;
@@ -138,11 +138,17 @@ class OutputStack
 		// Returns the first item from the stack or NULL if none is available
 		OutputBuffer *GetFirstItem() const volatile;
 
+		// Returns the first item's type from the stack or NoDestinationMessage if none is available
+		MessageType GetFirstItemType() const volatile;
+
 		// Set the first item of the stack. If it's NULL, then the first item will be removed
 		void SetFirstItem(OutputBuffer *buffer) volatile;
 
 		// Returns the last item from the stack or NULL if none is available
 		OutputBuffer *GetLastItem() const volatile;
+
+		// Returns the type of the last item from the stack or NoDestinationMessage if none is available
+		MessageType GetLastItemType() const volatile;
 
 		// Get the total length of all queued buffers
 		size_t DataLength() const volatile;
@@ -160,6 +166,7 @@ class OutputStack
 	private:
 		size_t count;
 		OutputBuffer * items[OUTPUT_STACK_DEPTH];
+		MessageType types[OUTPUT_STACK_DEPTH];
 };
 
 #endif /* OUTPUTMEMORY_H_ */

@@ -1,7 +1,7 @@
 // State machine function for GCode class
 
 #include "GCodes.h"
-#include "GCodeBuffer.h"
+#include "GCodeBuffer/GCodeBuffer.h"
 #include "RepRap.h"
 #include "Movement/Move.h"
 #include "Tools/Tool.h"
@@ -40,7 +40,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				}
 			}
 
-			if (platform.Emulating() == Compatibility::nanoDLP && &gb == serialGCode && !DoingFileMacro())
+			if (platform.Emulating() == Compatibility::nanoDLP && &gb == usbGCode && !DoingFileMacro())
 			{
 				reply.copy("Z_move_comp");
 			}
@@ -715,7 +715,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				reply.printf("%" PRIu32 " points probed, min error %.3f, max error %.3f, mean %.3f, deviation %.3f\n",
 								numPointsProbed, (double)minError, (double)maxError, (double)mean, (double)deviation);
+#if HAS_HIGH_SPEED_SD
 				error = TrySaveHeightMap(DefaultHeightMapFile, reply);
+#endif
 				reprap.GetMove().AccessHeightMap().ExtrapolateMissing();
 				reprap.GetMove().UseMesh(true);
 				const float absMean = fabsf(mean);
@@ -1116,13 +1118,16 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
+# if HAS_HIGH_SPEED_SD
 			SaveResumeInfo(true);											// create the resume file so that we can resume after power down
+# endif
 			platform.Message(LoggedGenericMessage, "Print auto-paused due to low voltage\n");
 			gb.SetState(GCodeState::normal);
 		}
 		break;
 #endif
 
+#if HAS_HIGH_SPEED_SD
 	case GCodeState::timingSDwrite:
 		for (uint32_t writtenThisTime = 0; writtenThisTime < 100 * 1024; )
 		{
@@ -1151,6 +1156,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			writtenThisTime += reply.Capacity();
 		}
 		break;
+#endif
 
 	default:				// should not happen
 		platform.Message(ErrorMessage, "Undefined GCodeState\n");

@@ -6,6 +6,7 @@
 // Features definition
 #define HAS_LWIP_NETWORKING		0
 #define HAS_WIFI_NETWORKING		0
+#define HAS_LINUX_INTERFACE		0
 #define HAS_CPU_TEMP_SENSOR		0				// enabling the CPU temperature sensor disables Due pin 13 due to bug in SAM3X
 #define HAS_HIGH_SPEED_SD		0
 #define HAS_VOLTAGE_MONITOR		0

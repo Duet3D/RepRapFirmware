@@ -9,7 +9,7 @@
 #include "Endstop.h"
 #include "ZProbe.h"
 #include "RepRap.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "GCodes/GCodes.h"
 #include "Movement/Move.h"
 

@@ -503,6 +503,10 @@ void PendSV_Handler		( void ) __attribute__ ((noreturn, alias("OtherFault_Handle
 	void vAssertCalled(uint32_t line, const char *file) __attribute((naked, noreturn));
 	void vAssertCalled(uint32_t line, const char *file)
 	{
+#if false
+		debugPrintf("ASSERTION FAILED IN %s on LINE %d\n", file, line);
+		SERIAL_MAIN_DEVICE.flush();
+#endif
 	    __asm volatile
 	    (
 	    	" push {r0, r1, lr}											\n"		/* save parameters and call address */

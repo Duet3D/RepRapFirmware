@@ -10,6 +10,7 @@ const size_t NumFirmwareUpdateModules = 1;
 // Features definition
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		0
+#define HAS_LINUX_INTERFACE		1
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		0
 
@@ -260,6 +261,10 @@ constexpr Pin SamTfrReadyPin = PortAPin(29);				// Output from the SAM to the Wi
 constexpr Pin SamCsPin = PortBPin(2);						// SPI NPCS pin, input from WiFi module
 Spi * const EspSpi = SPI0;
 
+// Duet pin numbers for the Linux interface
+constexpr Pin LinuxTfrReadyPin = PortEPin(2);
+Spi * const LinuxSpi = SPI1;
+
 // Timer allocation
 // Network timer is timer 4 aka TC1 channel1
 #define NETWORK_TC			(TC1)
@@ -281,8 +286,10 @@ constexpr uint8_t DmacChanWiFiTx = 1;
 constexpr uint8_t DmacChanWiFiRx = 2;
 constexpr uint8_t DmacChanTmcTx = 3;
 constexpr uint8_t DmacChanTmcRx = 4;
+constexpr uint8_t DmacChanLinuxTx = 5;
+constexpr uint8_t DmacChanLinuxRx = 6;
 
-constexpr size_t NumDmaChannelsUsed = 5;
+constexpr size_t NumDmaChannelsUsed = 7;
 
 namespace StepPins
 {

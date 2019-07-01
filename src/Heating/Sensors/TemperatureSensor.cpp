@@ -5,7 +5,7 @@
 #include "RtdSensor31865.h"
 #include "CurrentLoopTemperatureSensor.h"
 #include "LinearAnalogSensor.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 #if HAS_CPU_TEMP_SENSOR
 #include "CpuTemperatureSensor.h"

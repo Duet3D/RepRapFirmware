@@ -8,7 +8,7 @@
 #include "Fan.h"
 #include "Platform.h"
 #include "RepRap.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Heating/Heat.h"
 #include "Movement/StepTimer.h"
 

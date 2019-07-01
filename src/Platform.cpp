@@ -65,6 +65,9 @@
 # include "Display/Display.h"
 #endif
 
+#if HAS_LINUX_INTERFACE
+# include "Linux/LinuxInterface.h"
+#endif
 #if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
 # include "Networking/HttpResponder.h"
 # include "Networking/FtpResponder.h"
@@ -763,7 +766,7 @@ void Platform::UpdateFirmware()
 
 	iapFile->Close();
 
-	Message(LcdMessage, "Updating main firmware\n");
+	Message(AuxMessage, "Updating main firmware\n");
 	Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
 
 	// Allow time for the firmware update message to be sent
@@ -848,7 +851,7 @@ void Platform::UpdateFirmware()
 // Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
 void Platform::Beep(int freq, int ms)
 {
-	MessageF(LcdMessage, "{\"beep_freq\":%d,\"beep_length\":%d}\n", freq, ms);
+	MessageF(AuxMessage, "{\"beep_freq\":%d,\"beep_length\":%d}\n", freq, ms);
 }
 
 // Send a short message to the aux channel. There is no flow control on this port, so it can't block for long.
@@ -2311,7 +2314,12 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 		break;
 
 	case (int)DiagnosticTestType::TimeSDWrite:
+#if HAS_HIGH_SPEED_SD
 		return reprap.GetGCodes().StartSDTiming(gb, reply);
+#else
+		reply.copy("No SD card interface available");
+		return GCodeResult::errorNotSupported;
+#endif
 
 	case (int)DiagnosticTestType::PrintObjectSizes:
 		reply.printf(
@@ -3144,11 +3152,11 @@ void Platform::RawMessage(MessageType type, const char *message)
 	}
 
 	// Send the message to the destinations
-	if ((type & ImmediateLcdMessage) != 0)
+	if ((type & ImmediateAuxMessage) != 0)
 	{
 		SendAuxMessage(message);
 	}
-	else if ((type & LcdMessage) != 0)
+	else if ((type & AuxMessage) != 0)
 	{
 		AppendAuxReply(message, message[0] == '{' || (type & RawMessageFlag) != 0);
 	}
@@ -3235,7 +3243,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 
 	// Now send the message to all the destinations
 	size_t numDestinations = 0;
-	if ((type & (LcdMessage | ImmediateLcdMessage)) != 0)
+	if ((type & (AuxMessage | ImmediateAuxMessage)) != 0)
 	{
 		++numDestinations;
 	}
@@ -3251,9 +3259,14 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 	{
 		++numDestinations;
 	}
-
+#if HAS_LINUX_INTERFACE
+	if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
+	{
+		++numDestinations;
+	}
+#endif
 #ifdef SERIAL_AUX2_DEVICE
-	if ((type & AuxMessage) != 0)
+	if ((type & LcdMessage) != 0)
 	{
 		++numDestinations;
 	}
@@ -3267,7 +3280,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 	{
 		buffer->IncreaseReferences(numDestinations - 1);
 
-		if ((type & (LcdMessage | ImmediateLcdMessage)) != 0)
+		if ((type & (AuxMessage | ImmediateAuxMessage)) != 0)
 		{
 			AppendAuxReply(buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
@@ -3283,7 +3296,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 		}
 
 #ifdef SERIAL_AUX2_DEVICE
-		if ((type & AuxMessage) != 0)
+		if ((type & LcdMessage) != 0)
 		{
 			// Send this message to the second UART device
 			MutexLocker lock(aux2Mutex);
@@ -3309,12 +3322,31 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 				usbOutput.Push(buffer);
 			}
 		}
+
+#if HAS_LINUX_INTERFACE
+		if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
+		{
+			reprap.GetLinuxInterface().HandleGCodeReply(type, buffer);
+		}
+#endif
 	}
 }
 
 void Platform::MessageF(MessageType type, const char *fmt, va_list vargs)
 {
 	String<FormatStringLength> formatString;
+#if HAS_LINUX_INTERFACE
+	if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
+	{
+		formatString.vprintf(fmt, vargs);
+		reprap.GetLinuxInterface().HandleGCodeReply(type, formatString.c_str());
+		if ((type & BinaryCodeReplyFlag) != 0)
+		{
+			return;
+		}
+	}
+#endif
+
 	if ((type & ErrorMessageFlag) != 0)
 	{
 		formatString.copy("Error: ");
@@ -3343,6 +3375,17 @@ void Platform::MessageF(MessageType type, const char *fmt, ...)
 
 void Platform::Message(MessageType type, const char *message)
 {
+#if HAS_LINUX_INTERFACE
+	if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
+	{
+		reprap.GetLinuxInterface().HandleGCodeReply(type, message);
+		if ((type & BinaryCodeReplyFlag) != 0)
+		{
+			return;
+		}
+	}
+#endif
+
 	if ((type & (ErrorMessageFlag | WarningMessageFlag)) == 0)
 	{
 		RawMessage(type, message);
@@ -3363,7 +3406,7 @@ void Platform::Message(MessageType type, const char *message)
 // sParam = 3 As for 2 but also display a Cancel button
 void Platform::SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, AxesBitmap controls)
 {
-	if ((mt & (HttpMessage | LcdMessage)) != 0)
+	if ((mt & (HttpMessage | AuxMessage)) != 0)
 	{
 		reprap.SetAlert(message, title, sParam, tParam, controls);		// make the RepRap class cache this message until it's picked up by the HTTP clients and/or PanelDue
 	}

@@ -27,8 +27,8 @@
 
 #if SAME70
 
-constexpr unsigned int DdaRingLength = 40;
-constexpr unsigned int AuxDdaRingLength = 3;
+constexpr unsigned int DdaRingLength = 60;
+constexpr unsigned int AuxDdaRingLength = 5;
 constexpr unsigned int NumDms = (DdaRingLength/2 * 12) + (AuxDdaRingLength * 3);	// allow enough for plenty of CAN expansion
 
 #elif SAM4E || SAM4S
@@ -84,6 +84,7 @@ public:
 	bool UseMesh(bool b);											// Try to enable mesh bed compensation and report the final state
 	bool IsUsingMesh() const { return usingMesh; }					// Return true if we are using mesh compensation
 	unsigned int GetNumProbePoints() const;							// Return the number of currently used probe points
+	unsigned int GetNumProbedProbePoints() const;					// Return the number of actually probed probe points
 	float PushBabyStepping(size_t axis, float amount);				// Try to push some babystepping through the lookahead queue
 
 	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply);			// process M204
@@ -137,6 +138,7 @@ public:
 	const GridDefinition& GetGrid() const { return heightMap.GetGrid(); }			// Get the grid definition
 	bool LoadHeightMapFromFile(FileStore *f, const StringRef& r);					// Load the height map from a file returning true if an error occurred
 	bool SaveHeightMapToFile(FileStore *f) const;									// Save the height map to a file returning true if an error occurred
+	void SaveHeightMapToArray(float *arr) const;									// Save the height map Z coordinates to an array
 
 	const RandomProbePointSet& GetProbePoints() const { return probePoints; }		// Return the probe point set constructed from G30 commands
 

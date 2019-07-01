@@ -16,8 +16,8 @@
 
 #include "RepRap.h"
 #include "Platform.h"
-#include "GCodes/GCodeBuffer.h"
 #include "GCodes/GCodes.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 const char * const Kinematics::HomeAllFileName = "homeall.g";
 

@@ -9,7 +9,7 @@
 
 #include "RepRap.h"
 #include "GCodes.h"
-#include "GCodeBuffer.h"
+#include "GCodeBuffer/GCodeBuffer.h"
 
 bool StandardGCodeInput::FillBuffer(GCodeBuffer *gb)
 {

@@ -97,8 +97,8 @@ public:
 
 	FileGCodeInput() : RegularGCodeInput(), lastFile(nullptr) { }
 
-	void Reset() override;								// This should be called when the associated file is being closed
-	void Reset(const FileData &file);					// Should be called when a specific G-code or macro file is closed or re-opened outside the reading context
+	void Reset() override;								// Clears the buffer. Should be called when the associated file is being closed
+	void Reset(const FileData &file);					// Clears the buffer of a specific file. Should be called when it is closed or re-opened outside the reading context
 
 	GCodeInputReadResult ReadFromFile(FileData &file);	// Read another chunk of G-codes from the file and return true if more data is available
 
@@ -107,7 +107,7 @@ private:
 };
 
 // This class receives its data from the network task
-class NetworkGCodeInput: public RegularGCodeInput
+class NetworkGCodeInput : public RegularGCodeInput
 {
 public:
 	NetworkGCodeInput();
@@ -116,7 +116,7 @@ public:
 	void Put(MessageType mtype, const char *buf);		// Append a null-terminated string to the buffer
 
 private:
-	void Put(MessageType mtype, char c);				// Append a single character
+	void Put(MessageType mtype, char c);				// Append a single character. This does NOT lock the mutex!
 
 	Mutex bufMutex;
 };

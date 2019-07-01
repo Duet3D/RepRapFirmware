@@ -12,6 +12,8 @@
 
 class QueuedCode;
 
+const size_t BufferSizePerQueueItem = SHORT_GCODE_LENGTH;
+
 class GCodeQueue : public GCodeInput
 {
 public:
@@ -40,13 +42,16 @@ class QueuedCode
 public:
 	friend class GCodeQueue;
 
-	QueuedCode(QueuedCode *n) : next(n) { }
+	QueuedCode(QueuedCode *n) : next(n), dataLength(0) { }
 	QueuedCode *Next() const { return next; }
 
 private:
 	QueuedCode *next;
 
-	char code[SHORT_GCODE_LENGTH];
+	bool isBinary;
+	char data[BufferSizePerQueueItem];
+	size_t dataLength;
+
 	uint32_t executeAtMove;
 	int toolNumberAdjust;
 

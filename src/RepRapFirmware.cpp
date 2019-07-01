@@ -192,6 +192,7 @@ const char * const moduleName[] =
 	"FilamentSensors",
 	"WiFi",
 	"Display",
+	"LinuxInterface",
 	"none"
 };
 

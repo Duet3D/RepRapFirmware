@@ -36,7 +36,7 @@
 #include "Move.h"
 #include "StepTimer.h"
 #include "Platform.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Tools/Tool.h"
 #include "Endstops/ZProbe.h"
 
@@ -249,6 +249,12 @@ void Move::Spin()
 unsigned int Move::GetNumProbePoints() const
 {
 	return probePoints.GetNumBedCompensationPoints();
+}
+
+// Return the number of actually probed probe points
+unsigned int Move::GetNumProbedProbePoints() const
+{
+	return probePoints.NumberOfProbePoints();
 }
 
 // Try to push some babystepping through the lookahead queue, returning the amount pushed
@@ -643,6 +649,12 @@ bool Move::SaveHeightMapToFile(FileStore *f) const
 	return heightMap.SaveToFile(f, zShift);
 }
 
+// Save the height map Z coordinates to an array
+void Move::SaveHeightMapToArray(float *arr) const
+{
+	return heightMap.SaveToArray(arr, zShift);
+}
+
 void Move::SetTaperHeight(float h)
 {
 	useTaper = (h > 1.0);
@@ -997,7 +1009,7 @@ void Move::LaserTaskRun()
 	for (;;)
 	{
 		// Sleep until we are woken up by the start of a move
-		ulTaskNotifyTake(pdTRUE, TaskBase::TimeoutUnlimited);
+		TaskBase::Take();
 
 		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
 		{

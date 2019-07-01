@@ -47,7 +47,7 @@ class Tool
 {
 public:
 
-	static Tool *Create(unsigned int toolNumber, const char *name, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, const StringRef& reply);
+	static Tool *Create(unsigned int toolNumber, const char *name, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, const StringRef& reply);
 	static void Delete(Tool *t);
 
 	float GetOffset(size_t axis) const pre(axis < MaxAxes);

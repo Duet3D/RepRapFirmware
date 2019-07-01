@@ -292,7 +292,7 @@ void Scanner::ProcessCommand()
 	else if (StringStartsWith(buffer, "GCODE "))
 	{
 		doingGCodes = true;
-		serialGCode->Put(&buffer[6], bufferPointer - 6);
+		serialGCode->Put(&buffer[6], bufferPointer - 6, false);
 	}
 
 	// Switch to post-processing mode: POSTPROCESS

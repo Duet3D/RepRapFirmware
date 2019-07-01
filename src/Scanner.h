@@ -9,7 +9,7 @@
 #define SRC_SCANNER_H_
 
 #include "RepRapFirmware.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 #if SUPPORT_SCANNER
 

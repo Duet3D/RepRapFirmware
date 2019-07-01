@@ -56,10 +56,18 @@ bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info)
 	return true;
 }
 
+void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info)
+{
+	filenameBeingPrinted.copy(filename);
+	printingFileInfo = info;
+	printingFileParsed = true;
+}
+
 void PrintMonitor::Spin()
 {
+#if HAS_HIGH_SPEED_SD
 	// File information about the file being printed must be available before layer estimations can be made
-	if (filenameBeingPrinted[0] != 0 && !printingFileParsed)
+	if (!filenameBeingPrinted.IsEmpty() && !printingFileParsed)
 	{
 		printingFileParsed = platform.GetMassStorage()->GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
 		if (!printingFileParsed)
@@ -67,6 +75,14 @@ void PrintMonitor::Spin()
 			return;
 		}
 	}
+#elif HAS_LINUX_INTERFACE
+	if (!printingFileParsed)
+	{
+		return;
+	}
+#else
+	return;
+#endif
 
 	// Don't do any updates if the print has been paused
 	if (!gCodes.IsRunning())
@@ -168,8 +184,10 @@ float PrintMonitor::GetWarmUpDuration() const
 // Notifies this class that a file has been set for printing
 void PrintMonitor::StartingPrint(const char* filename)
 {
+#if HAS_HIGH_SPEED_SD
 	MassStorage::CombineName(filenameBeingPrinted.GetRef(), platform.GetGCodeDir(), filename);
 	printingFileParsed = platform.GetMassStorage()->GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
+#endif
 }
 
 // Tell this class that the file set for printing is now actually processed
@@ -186,7 +204,7 @@ void PrintMonitor::FirstLayerComplete()
 {
 	firstLayerFilament = gCodes.GetTotalRawExtrusion();
 	firstLayerDuration = GetPrintDuration() - warmUpDuration;
-	firstLayerProgress = gCodes.FractionOfFilePrinted();
+	firstLayerProgress = FractionOfFilePrinted();
 
 	// Update layer-based estimation time (if the object and layer heights are known)
 	// This won't be very accurate, but at least something can be sent the web interface and to PanelDue
@@ -214,7 +232,7 @@ void PrintMonitor::LayerComplete()
 			filamentUsagePerLayer[numLayerSamples] = extrRawTotal - lastLayerFilament;
 			layerDurations[numLayerSamples] = GetPrintDuration() - lastLayerChangeTime;
 		}
-		fileProgressPerLayer[numLayerSamples] = gCodes.FractionOfFilePrinted();
+		fileProgressPerLayer[numLayerSamples] = FractionOfFilePrinted();
 		numLayerSamples++;
 	}
 	else
@@ -228,7 +246,7 @@ void PrintMonitor::LayerComplete()
 
 		layerDurations[MAX_LAYER_SAMPLES - 1] = GetPrintDuration() - lastLayerChangeTime;
 		filamentUsagePerLayer[MAX_LAYER_SAMPLES - 1] = extrRawTotal - lastLayerFilament;
-		fileProgressPerLayer[MAX_LAYER_SAMPLES - 1] = gCodes.FractionOfFilePrinted();
+		fileProgressPerLayer[MAX_LAYER_SAMPLES - 1] = FractionOfFilePrinted();
 	}
 	lastLayerFilament = extrRawTotal;
 
@@ -270,6 +288,15 @@ void PrintMonitor::StoppedPrint()
 	lastLayerChangeTime = lastLayerFilament = lastLayerZ = 0.0;
 }
 
+float PrintMonitor::FractionOfFilePrinted() const
+{
+	if (!printingFileInfo.isValid || printingFileInfo.fileSize == 0)
+	{
+		return -1.0;
+	}
+	return (float)reprap.GetGCodes().GetFilePosition() / (float)printingFileInfo.fileSize;
+}
+
 // Estimate the print time left in seconds on a preset estimation method
 float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 {
@@ -287,7 +314,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 		case fileBased:
 		{
 			// Can we provide an estimation at all?
-			const float fractionPrinted = gCodes.FractionOfFilePrinted();
+			const float fractionPrinted = FractionOfFilePrinted();
 			if (fractionPrinted < ESTIMATION_MIN_FILE_USAGE || heatingUp)
 			{
 				// No, we haven't printed enough of the file yet. We can't provide an estimation at this moment

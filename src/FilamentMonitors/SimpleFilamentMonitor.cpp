@@ -8,7 +8,7 @@
 #include "SimpleFilamentMonitor.h"
 #include "RepRap.h"
 #include "Platform.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int extruder, unsigned int type)
 	: FilamentMonitor(extruder, type), highWhenNoFilament(type == 2), filamentPresent(false), enabled(false)

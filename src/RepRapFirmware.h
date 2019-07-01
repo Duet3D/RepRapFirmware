@@ -94,8 +94,9 @@ enum Module : uint8_t
 	moduleFilamentSensors = 13,
 	moduleWiFi = 14,
 	moduleDisplay = 15,
-	numModules = 16,				// make this one greater than the last module number
-	noModule = 16
+	moduleLinuxInterface = 16,
+	numModules = 17,				// make this one greater than the last module number
+	noModule = 18
 };
 
 extern const char * const moduleName[];
@@ -130,6 +131,9 @@ class PortControl;
 
 #if SUPPORT_12864_LCD
 class Display;
+#endif
+#if HAS_LINUX_INTERFACE
+class LinuxInterface;
 #endif
 
 // Define floating point type to use for calculations where we would like high precision in matrix calculations
@@ -215,8 +219,8 @@ void ListDrivers(const StringRef& str, DriversBitmap drivers);
 
 // From section 3.12.7 of http://infocenter.arm.com/help/topic/com.arm.doc.dui0553b/DUI0553.pdf:
 // When you write to BASEPRI_MAX, the instruction writes to BASEPRI only if either:
-// • Rn is non-zero and the current BASEPRI value is 0
-// • Rn is non-zero and less than the current BASEPRI value
+// - Rn is non-zero and the current BASEPRI value is 0
+// - Rn is non-zero and less than the current BASEPRI value
 __attribute__( ( always_inline ) ) __STATIC_INLINE void __set_BASEPRI_MAX(uint32_t value)
 {
   __ASM volatile ("MSR basepri_max, %0" : : "r" (value) : "memory");

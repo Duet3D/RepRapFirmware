@@ -9,7 +9,7 @@
 
 #include "GCodes.h"
 
-#include "GCodeBuffer.h"
+#include "GCodeBuffer/GCodeBuffer.h"
 #include "GCodeQueue.h"
 #include "Heating/Heat.h"
 #include "Movement/Move.h"
@@ -88,7 +88,8 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 	}
 
-	reply.printf("Bad command: %s", gb.Buffer());
+	reply.printf("Bad command: ");
+	gb.AppendFullCommand(reply);
 	HandleReply(gb, GCodeResult::error, reply.c_str());
 	return true;
 }
@@ -237,7 +238,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 				break;
 
 			case 1:		// load height map file
+#if HAS_HIGH_SPEED_SD
 				result = LoadHeightMap(gb, reply);
+#else
+				result = GCodeResult::errorNotSupported;
+#endif
 				break;
 
 			case 2:		// clear height map
@@ -245,7 +250,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 				break;
 
 			case 3:		// save height map to names file
+#if HAS_HIGH_SPEED_SD
 				result = SaveHeightMap(gb, reply);
+#else
+				result = GCodeResult::errorNotSupported;
+#endif
 				break;
 
 			default:
@@ -581,6 +590,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+#if HAS_HIGH_SPEED_SD
 	case 20:		// List files on SD card
 		if (!LockFileSystem(gb))		// don't allow more than one at a time to avoid contention on output buffers
 		{
@@ -633,7 +643,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					outBuf->copy("GCode files:\n");
 				}
 
-				bool encapsulateList = ((&gb != serialGCode && &gb != telnetGCode) || !platform.EmulatingMarlin());
+				bool encapsulateList = ((&gb != usbGCode && &gb != telnetGCode) || !platform.EmulatingMarlin());
 				FileInfo fileInfo;
 				if (platform.GetMassStorage()->FindFirst(dir.c_str(), fileInfo))
 				{
@@ -688,7 +698,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 23: // Set file to print
 	case 32: // Select file and start SD print
 		// We now allow a file that is being printed to chain to another file. This is required for the resume-after-power-fail functionality.
-		if (fileGCode->OriginalMachineState().fileState.IsLive() && (&gb) != fileGCode)
+		if (fileGCode->IsDoingFile() && (&gb) != fileGCode)
 		{
 			reply.copy("Cannot set file to print, because a file is already being printed");
 			result = GCodeResult::error;
@@ -706,7 +716,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (QueueFileToPrint(filename.c_str(), reply))
 				{
 					reprap.GetPrintMonitor().StartingPrint(filename.c_str());
-					if (platform.EmulatingMarlin() && (&gb == serialGCode || &gb == telnetGCode))
+					if (platform.EmulatingMarlin() && (&gb == usbGCode || &gb == telnetGCode))
 					{
 						reply.copy("File opened\nFile selected");
 					}
@@ -733,6 +743,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 		break;
+#endif
 
 	case 24: // Print/resume-printing the selected file
 		if (IsPausing() || IsResuming())
@@ -764,6 +775,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					}
 				}
 			}
+#if HAS_HIGH_SPEED_SD
 			else if (!fileToPrint.IsLive())
 			{
 				reply.copy("Cannot print, because no file is selected!");
@@ -771,14 +783,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else
 			{
-#if HAS_VOLTAGE_MONITOR
+# if HAS_VOLTAGE_MONITOR
 				if (!platform.IsPowerOk())
 				{
 					reply.copy("Cannot start a print while power voltage is low");
 					result = GCodeResult::error;
 				}
 				else
-#endif
+# endif
 				{
 					bool fromStart = (fileOffsetToPrint == 0);
 					if (!fromStart)
@@ -792,6 +804,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					StartPrinting(fromStart);
 				}
 			}
+#endif
 		}
 		break;
 
@@ -856,6 +869,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+#if HAS_HIGH_SPEED_SD
 	case 26: // Set SD position
 		// This is used between executing M23 to set up the file to print, and M25 to print it
 		if (gb.Seen('S'))
@@ -923,10 +937,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 		break;
+#endif
 
 		// For case 32, see case 23
 
+#if HAS_HIGH_SPEED_SD || HAS_LINUX_INTERFACE
 	case 36:	// Return file information
+# if HAS_HIGH_SPEED_SD
 		if (!LockFileSystem(gb))									// getting file info takes several calls and isn't reentrant
 		{
 			return false;
@@ -941,9 +958,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			result = (done) ? GCodeResult::ok : GCodeResult::notFinished;
 		}
+# else
+		reprap.GetFileInfoResponse(nullptr, outBuf, true);
+# endif
 		break;
 
 	case 37:	// Simulation mode on/off, or simulate a whole file
+# if HAS_LINUX_INTERFACE
+		if (!gb.IsBinary())
+		{
+			reply.copy("M37 can be only started from the Linux interface");
+			result = GCodeResult::error;
+		}
+		else
+# endif
 		{
 			bool seen = false;
 			String<MaxFilenameLength> simFileName;
@@ -970,7 +998,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 		break;
+#endif
 
+#if HAS_HIGH_SPEED_SD
 	case 38: // Report SHA1 of file
 		if (!LockFileSystem(gb))								// getting file hash takes several calls and isn't reentrant
 		{
@@ -1060,6 +1090,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 		break;
+#endif
 
 	case 42:	// Turn an output pin on or off
 		if (gb.Seen('P'))
@@ -1082,10 +1113,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 80:	// ATX power on
+		atxPowerControlled = true;
 		platform.AtxPowerOn();
 		break;
 
 	case 81:	// ATX power off
+		atxPowerControlled = true;
 		if (!LockMovementAndWaitForStandstill(gb))
 		{
 			return false;
@@ -1348,6 +1381,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				gb.MachineState().newToolNumber = applicableTool->Number();
 				gb.MachineState().toolChangeParam = (simulationMode != 0) ? 0 : DefaultToolChangeParam;
 				gb.SetState(GCodeState::m109ToolChange0);
+				result = GCodeResult::ok;
 			}
 			else
 			{
@@ -1366,6 +1400,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (code == 109 && simulationMode == 0)
 				{
 					gb.SetState(GCodeState::m109WaitForTemperature);
+					result = GCodeResult::ok;
 				}
 			}
 		}
@@ -1553,7 +1588,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					type = UsbMessage;
 					break;
 				case 2:		// UART port
-					type = DirectLcdMessage;
+					type = DirectAuxMessage;
 					break;
 				case 3:		// HTTP
 					type = HttpMessage;
@@ -1575,6 +1610,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					String<GCODE_LENGTH> message;
 					gb.GetQuotedString(message.GetRef());
 					platform.Message(type, message.c_str());
+					if (type != HttpMessage && type != TelnetMessage)
+					{
+						platform.Message(type, "\n");
+					}
 				}
 			}
 		}
@@ -2108,7 +2147,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			else if (seenD)
 			{
-				reply.printf("Extrusion factor override for extruder %" PRIi32 ": %.1f%%", extruder, (double)(extrusionFactors[extruder] * 100.0));
+				reply.printf("Extrusion factor override for extruder %" PRIu32 ": %.1f%%", extruder, (double)(extrusionFactors[extruder] * 100.0));
 			}
 			else
 			{
@@ -2288,7 +2327,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if ((sParam == 2 || sParam == 3) && Push(gb, true))					// stack the machine state including the file position
 				{
 					UnlockMovement(gb);												// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
-					gb.MachineState().fileState.Close();							// stop reading from file
+					gb.MachineState().CloseFile();									// stop reading from file
 					gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
 				}
 
@@ -2481,6 +2520,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+#if HAS_HIGH_SPEED_SD
 	case 374: // Save grid and height map to file
 		result = SaveHeightMap(gb, reply);
 		break;
@@ -2492,6 +2532,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		result = LoadHeightMap(gb, reply);
 		break;
+#endif
 
 	case 376: // Set taper height
 		{
@@ -2699,6 +2740,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+#if HAS_HIGH_SPEED_SD
 	case 470: // mkdir
 		{
 			String<MaxFilenameLength> dirName;
@@ -2740,6 +2782,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 500: // Store parameters in config-override.g
 		result = WriteConfigOverrideFile(gb, reply);
 		break;
+#endif
 
 	case 501: // Load parameters from config-override.g
 		if (!gb.MachineState().runningM502 && !gb.MachineState().runningM501)		// when running M502 we ignore config-override.g
@@ -2767,6 +2810,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+#if HAS_HIGH_SPEED_SD
 	case 503: // List variable settings
 		{
 			if (!LockFileSystem(gb))
@@ -2833,6 +2877,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			reply.printf("Sys file path is %s", path.c_str());
 		}
 		break;
+#endif
 
 	case 540: // Set/report MAC address
 		if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
@@ -3064,6 +3109,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		result = platform.GetEndstops().HandleM558(gb, reply);
 		break;
 
+#if HAS_HIGH_SPEED_SD
 	case 559:
 	case 560: // Binary writing
 		{
@@ -3104,6 +3150,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 		break;
+#endif
 
 	case 561: // Set identity transform and disable height map
 		if (!LockMovementAndWaitForStandstill(gb))
@@ -3231,7 +3278,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					gb.GetFloatArray(eVals, eCount, false);
 					if (eCount != tool->DriveCount())
 					{
-						reply.printf("Setting mix ratios - wrong number of E drives: %s", gb.Buffer());
+						reply.copy("Setting mix ratios - wrong number of E drives: ");
+						gb.AppendFullCommand(reply);
 					}
 					else
 					{
@@ -3384,7 +3432,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					switch (chan)
 					{
 					case 0:
-						serialGCode->SetCommsProperties(val);
+						usbGCode->SetCommsProperties(val);
 						break;
 					case 1:
 						if (auxGCode != nullptr)
@@ -3758,7 +3806,139 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		result = platform.GetEndstops().ProgramZProbe(gb, reply);
 		break;
 
-	case 675:
+	case 673: // Align plane on rotary axis
+		if (numTotalAxes < U_AXIS)
+		{
+			reply.copy("Insufficient axes configured");
+			result = GCodeResult::error;
+		}
+		else if (LockMovementAndWaitForStandstill(gb))
+		{
+			if (reprap.GetMove().GetNumProbedProbePoints() < 2)
+			{
+				reply.copy("Insufficient probe points");
+				result = GCodeResult::error;
+			}
+			else if (!AllAxesAreHomed())
+			{
+				reply.copy("Home the axes first");
+				result = GCodeResult::error;
+			}
+			else
+			{
+				// See which rotary axis needs to be compensated (if any)
+				size_t axisToUse = 0;
+				for (size_t axis = U_AXIS; axis < numVisibleAxes; axis++)
+				{
+					if (gb.Seen(axisLetters[axis]))
+					{
+						axisToUse = axis;
+						break;
+					}
+				}
+
+				// Get the coordinates of the first two G30 points and calculate how far off the axis is
+				float x1, y1, x2, y2;
+				const float z1 = reprap.GetMove().GetProbeCoordinates(0, x1, y1, true);
+				const float z2 = reprap.GetMove().GetProbeCoordinates(1, x2, y2, true);
+				const float a1 = (x1 == x2) ? y1 : x1;
+				const float a2 = (x1 == x2) ? y2 : x2;
+
+				// See what kind of compensation we need to perform
+				SetMoveBufferDefaults();
+				if (axisToUse != 0)
+				{
+					// An axis letter is given, so try to level the given axis
+					const float correctionAngle = atanf((z2 - z1) / (a2 - a1)) * 180.0 / M_PI;
+					const float correctionFactor = gb.Seen('S') ? gb.GetFValue() : 1.0;
+					moveBuffer.coords[axisToUse] += correctionAngle * correctionFactor;
+
+					reply.printf("%c axis is off by %.2f deg", axisLetters[axisToUse], (double)correctionAngle);
+					HandleReply(gb, GCodeResult::notFinished, reply.c_str());
+				}
+				else if (reprap.GetMove().GetNumProbedProbePoints() >= 4)
+				{
+					// At least four G30 points are given. This lets us figure out how far off the centre of the axis is
+					const float z3 = reprap.GetMove().GetProbeCoordinates(2, x1, y1, true);
+					const float z4 = reprap.GetMove().GetProbeCoordinates(3, x2, y2, true);
+					const float a3 = (x1 == x2) ? y1 : x1;
+					const float a4 = (x1 == x2) ? y2 : x2;
+
+					// Calculate intersection points in [XY] and Z directions
+					const float aS = ((a4 - a3) * (a2 * z1 - a1 * z2) - (a2 - a1) * (a4 * z3 - a3 * z4)) /
+							((z4 - z3) * (a2 - a1) - (z2 - z1) * (a4 - a3));
+					const float zS = ((z1 - z2) * (a4 * z3 - a3 * z4) - (z3 - z4) * (a2 * z1 - a1 * z2)) /
+							((z4 - z3) * (a2 - a1) - (z2 - z1) * (a4 - a3));
+					moveBuffer.coords[(x1 == x2) ? Y_AXIS : X_AXIS] += aS;
+					moveBuffer.coords[Z_AXIS] += zS;
+
+					reply.printf("%c is offset by %.2fmm, Z is offset by %.2fmm", (x2 == x1) ? 'Y' : 'X', (double)aS, (double)zS);
+					HandleReply(gb, GCodeResult::notFinished, reply.c_str());
+				}
+				else
+				{
+					reply.copy("No rotary axis letter and/or not enough probe points for rotary axis alignment");
+					result = GCodeResult::error;
+					break;
+				}
+
+				// Get the feedrate (if any) and kick off a new move
+				if (gb.Seen(feedrateLetter))
+				{
+					const float rate = gb.ConvertDistance(gb.GetFValue());
+					gb.MachineState().feedRate = rate * SecondsToMinutes;		// don't apply the speed factor
+				}
+				moveBuffer.feedRate = gb.MachineState().feedRate;
+				moveBuffer.usingStandardFeedrate = true;
+				NewMoveAvailable(1);
+
+				gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
+			}
+		}
+		else
+		{
+			result = GCodeResult::notFinished;
+		}
+		break;
+
+#if false
+	// This code is not finished yet
+	case 674: // Set Z to center point
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			if (reprap.GetMove().GetNumProbedProbePoints() < 2)
+			{
+				reply.copy("Insufficient probe points");
+				result = GCodeResult::error;
+			}
+			else if (!AllAxesAreHomed())
+			{
+				reply.copy("Home the axes first");
+				result = GCodeResult::error;
+			}
+			else
+			{
+				float x, y;
+				const float z1 = reprap.GetMove().GetProbeCoordinates(0, x, y, true);
+				const float z2 = reprap.GetMove().GetProbeCoordinates(1, x, y, true);
+				const float offset = gb.Seen('P') ? gb.GetFValue() : 0.0;
+				currentUserPosition[Z_AXIS] -= (z1 + z2) / 2.0 + offset;
+
+				ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, LowestNBits<AxesBitmap>(numVisibleAxes), false))	// pretend that all axes are homed
+				{
+					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// make sure the limits are reflected in the user position
+				}
+				reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
+				axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(MakeBitmap<AxesBitmap>(Z_AXIS));
+
+				reply.printf("Probe points at %.2f %.2f, setting new Z to %.2f", (double)z1, (double)z2, (double)currentUserPosition[Z_AXIS]);
+			}
+		}
+		break;
+#endif
+
+	case 675: // Find center of cavity
 		result = FindCenterOfCavity(gb, reply);
 		break;
 
@@ -3793,14 +3973,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 751: // Register 3D scanner extension over USB
-		if (&gb == serialGCode)
+		if (&gb == usbGCode)
 		{
 			if (reprap.GetScanner().IsEnabled())
 			{
 				reprap.GetScanner().Register();
-
-				// The Scanner module will attempt to run a macro via this G-code source so we're not done yet
-				result = GCodeResult::notFinished;
 			}
 			else
 			{
@@ -4217,6 +4394,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			macroName.printf("M%d.g", code);
 			if (DoFileMacro(gb, macroName.c_str(), false, 98))
 			{
+				// FIXME Every DoFileMacro call should not result in GCodeResult::ok but in GCodeResult::statenNotFinished
+				// or even something like GCodeResult::waitingForMacro like for this. That will require extra work though
 				break;
 			}
 		}
@@ -4322,31 +4501,44 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 
 	case GCodeResult::warningNotSupported:
 		gb.PrintCommand(reply);
-		reply.cat(" command is not supported");
+		reply.cat(": Command is not supported");
 		rslt = GCodeResult::warning;
 		break;
 
 	case GCodeResult::errorNotSupported:
-		gb.PrintCommand(reply);
-		reply.cat(" command is not supported");
+		if (!gb.IsBinary() && gb.IsDoingFile())
+		{
+			gb.PrintCommand(reply);
+			reply.cat(": ");
+		}
+		reply.cat("Command is not supported");
 		rslt = GCodeResult::error;
 		break;
 
 	case GCodeResult::notSupportedInCurrentMode:
-		gb.PrintCommand(reply);
-		reply.catf(" command is not supported in machine mode %s", GetMachineModeString());
+		if (!gb.IsBinary() && gb.IsDoingFile())
+		{
+			gb.PrintCommand(reply);
+			reply.cat(": ");
+		}
+		reply.catf("Command is not supported in machine mode %s", GetMachineModeString());
 		rslt = GCodeResult::error;
 		break;
 
 	case GCodeResult::badOrMissingParameter:
-		gb.PrintCommand(reply);
-		reply.cat(": bad or missing parameter");
+		if (!gb.IsBinary() && gb.IsDoingFile())
+		{
+			gb.PrintCommand(reply);
+			reply.cat(": ");
+		}
+		reply.cat("Bad or missing parameter");
 		rslt = GCodeResult::error;
 		break;
 
 	case GCodeResult::error:
+		if (!gb.IsBinary() && gb.IsDoingFile())
 		{
-			String<ScratchStringLength> scratchString;
+			String<ShortScratchStringLength> scratchString;
 			gb.PrintCommand(scratchString.GetRef());
 			reply.Prepend(": ");
 			reply.Prepend(scratchString.c_str());
@@ -4357,7 +4549,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		break;
 	}
 
-	if (gb.GetState() == GCodeState::normal)
+	if (gb.MachineState().state == GCodeState::normal)
 	{
 		gb.StopTimer();
 		UnlockAll(gb);

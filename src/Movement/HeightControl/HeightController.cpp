@@ -11,7 +11,7 @@
 
 #include "RepRap.h"
 #include "Platform.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Heating/Heat.h"
 #include "Heating/Sensors/TemperatureSensor.h"
 #include "Movement/Move.h"

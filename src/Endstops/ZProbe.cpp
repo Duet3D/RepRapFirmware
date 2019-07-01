@@ -9,7 +9,7 @@
 #include "RepRap.h"
 #include "Platform.h"
 #include "GCodes/GCodes.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Storage/FileStore.h"
 #include "Heating/Heat.h"
 

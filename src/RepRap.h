@@ -107,6 +107,9 @@ public:
  	const char *GetLatestMessage(uint16_t& sequence) const;
  	const MessageBox& GetMessageBox() const { return mbox; }
 #endif
+#if HAS_LINUX_INTERFACE
+ 	LinuxInterface& GetLinuxInterface() const;
+#endif
 
 	void Tick();
 	bool SpinTimeoutImminent() const;
@@ -167,6 +170,9 @@ private:
 #if SUPPORT_12864_LCD
  	Display *display;
 #endif
+#if HAS_LINUX_INTERFACE
+ 	LinuxInterface *linuxInterface;
+#endif
 
  	Mutex toolListMutex, messageBoxMutex;
 	Tool* toolList;								// the tool list is sorted in order of increasing tool number
@@ -218,6 +224,9 @@ inline PortControl& RepRap::GetPortControl() const { return *portControl; }
 
 #if SUPPORT_12864_LCD
 inline Display& RepRap::GetDisplay() const { return *display; }
+#endif
+#if HAS_LINUX_INTERFACE
+inline LinuxInterface& RepRap::GetLinuxInterface() const { return *linuxInterface; }
 #endif
 
 inline bool RepRap::Debug(Module m) const { return debug & (1 << m); }

@@ -68,6 +68,7 @@ enum class PauseReason
 #endif
 };
 
+// Keep this in sync with PrintStopReason in Linux/MessageFormats.h
 enum class StopPrintReason
 {
 	normalCompletion,
@@ -75,13 +76,20 @@ enum class StopPrintReason
 	abort
 };
 
+// Number of GCodeBuffer instances
+constexpr size_t NumGCodeBuffers = 10;
+
 //****************************************************************************************************
+
+class LinuxInterface;
 
 // The GCode interpreter
 
 class GCodes INHERIT_OBJECT_MODEL
 {
 public:
+	friend class LinuxInterface;
+
 	GCodes(Platform& p);
 	void Spin();														// Called in a tight loop to make this class work
 	void Init();														// Set it up
@@ -89,11 +97,12 @@ public:
 	void Reset();														// Reset some parameter to defaults
 	bool ReadMove(RawMove& m);											// Called by the Move class to get a movement set by the last G Code
 	void ClearMove();
+#if HAS_HIGH_SPEED_SD
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply);	// Open a file of G Codes to run
+#endif
 	void StartPrinting(bool fromStart);									// Start printing the file already selected
 	void GetCurrentCoordinates(const StringRef& s) const;				// Write where we are into a string
 	bool DoingFileMacro() const;										// Or still busy processing a macro file?
-	float FractionOfFilePrinted() const;								// Get fraction of file printed
 	FilePosition GetFilePosition() const;								// Return the current position of the file being printed in bytes
 	void Diagnostics(MessageType mtype);								// Send helpful information out
 
@@ -145,6 +154,8 @@ public:
 	size_t GetVisibleAxes() const { return numVisibleAxes; }
 	size_t GetNumExtruders() const { return numExtruders; }
 
+	const char* GetMachineModeString() const;							// Get the name of the current machine mode
+
 	void FilamentError(size_t extruder, FilamentSensorStatus fstat);
 	void HandleHeaterFault(int heater);									// Respond to a heater fault
 
@@ -176,8 +187,14 @@ public:
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);	// Handle G-Code replies
 	void EmergencyStop();												// Cancel everything
 	bool GetLastPrintingHeight(float& height) const;					// Get the height in user coordinates of the last printing move
+	bool AtxPowerControlled() const { return atxPowerControlled; }
 
+	void AssignGrid(float xRange[2], float yRange[2], float radius, float spacing[2]);	// Assign the heightmap using the given parameters
+	void ActivateHeightmap(bool activate);										// (De-)Activate the height map
+
+#if HAS_HIGH_SPEED_SD
 	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply);	// Start timing SD card file writing
+#endif
 
 #if SUPPORT_WORKPLACE_COORDINATES
 	unsigned int GetWorkplaceCoordinateSystemNumber() const { return currentCoordinateSystem + 1; }
@@ -213,6 +230,7 @@ private:
 	void UnlockMovement(const GCodeBuffer& gb);							// Unlock the movement resource if we own it
 	void UnlockAll(const GCodeBuffer& gb);								// Release all locks
 
+	GCodeBuffer *GetGCodeBuffer(size_t index) const { return gcodeSources[index]; }
 	void StartNextGCode(GCodeBuffer& gb, const StringRef& reply);		// Fetch a new or old GCode and process it
 	void RunStateMachine(GCodeBuffer& gb, const StringRef& reply);		// Execute a step of the state machine
 	void DoFilePrint(GCodeBuffer& gb, const StringRef& reply);			// Get G Codes from a file and print them
@@ -308,9 +326,11 @@ private:
 	void SaveFanSpeeds();														// Save the speeds of all fans
 
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply);			// Define the probing grid, returning true if error
+#if HAS_HIGH_SPEED_SD
 	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply);			// Load the height map from file
 	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const;	// Save the height map to the specified file
 	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;	// Save the height map to the file specified by P parameter
+#endif
 	void ClearBedMapping();														// Stop using bed compensation
 	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply);				// Start probing the grid, returning true if we didn't because of an error
 	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply, int code);	// Handle M581
@@ -318,12 +338,16 @@ private:
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply);		// Handle M997
 	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply);				// Handle M260
 	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply);			// Handle M261
+#if HAS_HIGH_SPEED_SD || HAS_LINUX_INTERFACE
 	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile);	// Handle M37 to simulate a whole file
 	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode);		// Handle M37 to change the simulation mode
+#endif
 	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply);			// Handle M577
 
+#if HAS_HIGH_SPEED_SD
 	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const; // Write the config-override file
 	bool WriteConfigOverrideHeader(FileStore *f) const;							// Write the config-override header
+#endif
 
 	void CopyConfigFinalValues(GCodeBuffer& gb);								// Copy the feed rate etc. from the daemon to the input channels
 
@@ -335,9 +359,9 @@ private:
 	void EndSimulation(GCodeBuffer *gb);								// Restore positions etc. when exiting simulation mode
 	bool IsCodeQueueIdle() const;										// Return true if the code queue is idle
 
+#if HAS_HIGH_SPEED_SD
 	void SaveResumeInfo(bool wasPowerFailure);
-
-	const char* GetMachineModeString() const;							// Get the name of the current machine mode
+#endif
 
 	void NewMoveAvailable(unsigned int sl);								// Flag that a new move is available
 	void NewMoveAvailable();											// Flag that a new move is available
@@ -372,17 +396,18 @@ private:
 	NetworkGCodeInput* telnetInput;										// ...
 #endif
 
-	GCodeBuffer* gcodeSources[9];										// The various sources of gcodes
+	GCodeBuffer* gcodeSources[NumGCodeBuffers];							// The various sources of gcodes
 
 	GCodeBuffer*& httpGCode = gcodeSources[0];
 	GCodeBuffer*& telnetGCode = gcodeSources[1];
 	GCodeBuffer*& fileGCode = gcodeSources[2];
-	GCodeBuffer*& serialGCode = gcodeSources[3];
+	GCodeBuffer*& usbGCode = gcodeSources[3];
 	GCodeBuffer*& auxGCode = gcodeSources[4];							// This one is for the PanelDue on the async serial interface
 	GCodeBuffer*& daemonGCode = gcodeSources[5];						// Used for executing config.g and trigger macro files
 	GCodeBuffer*& queuedGCode = gcodeSources[6];
 	GCodeBuffer*& lcdGCode = gcodeSources[7];							// This one for the 12864 LCD
-	GCodeBuffer*& autoPauseGCode = gcodeSources[8];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
+	GCodeBuffer*& spiGCode = gcodeSources[8];
+	GCodeBuffer*& autoPauseGCode = gcodeSources[9];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
 
 	size_t nextGcodeSource;												// The one to check next
 
@@ -457,8 +482,10 @@ private:
 	float axisOffsets[MaxAxes];					// M206 axis offsets
 #endif
 
+#if HAS_HIGH_SPEED_SD
 	FileData fileToPrint;						// The next file to print
 	FilePosition fileOffsetToPrint;				// The offset to print from
+#endif
 
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
 	bool limitAxes;								// Don't think outside the box
@@ -517,11 +544,13 @@ private:
 	// Code queue
 	GCodeQueue *codeQueue;						// Stores certain codes for deferred execution
 
+#if HAS_HIGH_SPEED_SD
 	// SHA1 hashing
 	FileStore *fileBeingHashed;
 	SHA1Context hash;
 	bool StartHash(const char* filename);
 	GCodeResult AdvanceHash(const StringRef &reply);
+#endif
 
 	// Filament monitoring
 	FilamentSensorStatus lastFilamentError;
@@ -539,6 +568,7 @@ private:
 	// Misc
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
+	bool atxPowerControlled;
 
 	static constexpr uint32_t SdTimingByteIncrement = 8 * 1024;	// how many timing bytes we write at a time
 	static constexpr const char *TimingFileName = "test.tst";	// the name of the file we write

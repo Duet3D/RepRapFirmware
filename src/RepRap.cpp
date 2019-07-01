@@ -27,6 +27,10 @@
 # include "Display/Display.h"
 #endif
 
+#if HAS_LINUX_INTERFACE
+# include "Linux/LinuxInterface.h"
+#endif
+
 #if HAS_HIGH_SPEED_SD
 # include "sam/drivers/hsmci/hsmci.h"
 # include "conf_sd_mmc.h"
@@ -200,6 +204,9 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 #if SUPPORT_12864_LCD
  	display = new Display();
 #endif
+#if HAS_LINUX_INTERFACE
+	linuxInterface = new LinuxInterface();
+#endif
 
 	printMonitor = new PrintMonitor(*platform, *gCodes);
 
@@ -236,6 +243,9 @@ void RepRap::Init()
 #if SUPPORT_12864_LCD
 	display->Init();
 #endif
+#if HAS_LINUX_INTERFACE
+	linuxInterface->Init();
+#endif
 
 	// Set up the timeout of the regular watchdog, and set up the backup watchdog if there is one.
 #if __LPC17xx__
@@ -264,7 +274,7 @@ void RepRap::Init()
 
 	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
-#if !defined(DUET3_V05)					// Duet 3 0.5 has no local SD card
+#if HAS_HIGH_SPEED_SD
 	// Try to mount the first SD card
 	{
 		GCodeResult rslt;
@@ -414,6 +424,12 @@ void RepRap::Spin()
 	display->Spin();
 #endif
 
+#if HAS_LINUX_INTERFACE
+	ticksInSpinState = 0;
+	spinningModule = moduleLinuxInterface;
+	linuxInterface->Spin();
+#endif
+
 	ticksInSpinState = 0;
 	spinningModule = noModule;
 
@@ -506,6 +522,9 @@ void RepRap::Diagnostics(MessageType mtype)
 	FilamentMonitor::Diagnostics(mtype);
 #ifdef DUET_NG
 	DuetExpansion::Diagnostics(mtype);
+#endif
+#if HAS_LINUX_INTERFACE
+	linuxInterface->Diagnostics(mtype);
 #endif
 	justSentDiagnostics = true;
 }
@@ -908,7 +927,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	response->catf("]},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}",
 			(double)move->GetRequestedSpeed(), (double)move->GetTopSpeed());
 
- 	// Current tool number
+	// Current tool number
 	response->catf(",\"currentTool\":%d", GetCurrentToolNumber());
 
 	// Output notifications
@@ -967,7 +986,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	// Parameters
 	{
 		// ATX power
-		response->catf(",\"params\":{\"atxPower\":%d", platform->AtxPower() ? 1 : 0);
+		response->catf(",\"params\":{\"atxPower\":%d", gCodes->AtxPowerControlled() ? (platform->AtxPower() ? 1 : 0) : -1);
 
 		// Cooling fan value
 		response->cat(",\"fanPercent\":");
@@ -1186,7 +1205,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 #endif
 
 	// Spindles
-	if (gCodes->GetMachineType() == MachineType::cnc)
+	if (gCodes->GetMachineType() == MachineType::cnc || type == 2)
 	{
 		int lastConfiguredSpindle = -1;
 		for (size_t spindle = 0; spindle < MaxSpindles; spindle++)
@@ -1284,6 +1303,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			}
 		}
 		response->catf(",\"volumes\":%u,\"mountedVolumes\":%u", NumSdCards, mountedCards);
+
+		// Machine mode
+		const char *machineMode = gCodes->GetMachineModeString();
+		response->cat(",\"mode\":");
+		response->EncodeString(machineMode, strlen(machineMode), false);
 
 		// Machine name
 		response->cat(",\"name\":");
@@ -1438,7 +1462,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 
 		// Fraction of file printed
-		response->catf("],\"fractionPrinted\":%.1f", (double)((printMonitor->IsPrinting()) ? (gCodes->FractionOfFilePrinted() * 100.0) : 0.0));
+		response->catf("],\"fractionPrinted\":%.1f", (double)((printMonitor->IsPrinting()) ? (printMonitor->FractionOfFilePrinted() * 100.0) : 0.0));
 
 		// Byte position of the file being printed
 		response->catf(",\"filePosition\":%lu", gCodes->GetFilePosition());
@@ -1745,7 +1769,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	if (printMonitor->IsPrinting())
 	{
 		// Send the fraction printed
-		response->catf(",\"fraction_printed\":%.4f", (double)max<float>(0.0, gCodes->FractionOfFilePrinted()));
+		response->catf(",\"fraction_printed\":%.4f", (double)max<float>(0.0, printMonitor->FractionOfFilePrinted()));
 	}
 
 	// Short messages are now pushed directly to PanelDue, so don't include them here as well

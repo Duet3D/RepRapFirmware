@@ -10,7 +10,7 @@
 #include "Movement/Move.h"
 #include "RepRap.h"
 #include "Storage/FileStore.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 
 LinearDeltaKinematics::LinearDeltaKinematics() : Kinematics(KinematicsType::linearDelta, -1.0, 0.0, true), numTowers(UsualNumTowers)

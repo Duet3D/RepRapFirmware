@@ -8,7 +8,7 @@
 
 #include "GCodes.h"
 
-#include "GCodeBuffer.h"
+#include "GCodeBuffer/GCodeBuffer.h"
 #include "Heating/Heat.h"
 #include "Movement/Move.h"
 #include "RepRap.h"
@@ -192,9 +192,15 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 // Save all the workplace coordinate offsets to file returning true if successful. Used by M500 and by SaveResumeInfo.
 bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const
 {
+	String<ScratchStringLength> scratchString;
+	scratchString.copy("; Workplace coordinates\n");
+	if (!f->Write(scratchString.c_str()))
+	{
+		return false;
+	}
+
 	for (size_t cs = 0; cs < NumCoordinateSystems; ++cs)
 	{
-		String<ScratchStringLength> scratchString;
 		scratchString.printf("G10 L2 P%u", cs + 1);
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
@@ -350,6 +356,9 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 	return GCodeResult::error;
 }
 
+
+#if HAS_HIGH_SPEED_SD || HAS_LINUX_INTERFACE
+
 // Handle M37 to simulate a whole file
 GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile)
 {
@@ -359,7 +368,9 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		return GCodeResult::error;
 	}
 
+# if HAS_HIGH_SPEED_SD
 	if (QueueFileToPrint(file.c_str(), reply))
+# endif
 	{
 		if (simulationMode == 0)
 		{
@@ -382,7 +393,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 	return GCodeResult::error;
 }
 
-// handle M37 to change the simulation mode
+// Handle M37 to change the simulation mode
 GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode)
 {
 	if (newSimulationMode != simulationMode)
@@ -413,6 +424,8 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 	}
 	return GCodeResult::ok;
 }
+
+#endif
 
 // Handle M577
 GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply)
