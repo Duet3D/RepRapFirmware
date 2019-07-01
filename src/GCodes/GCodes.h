@@ -187,6 +187,7 @@ public:
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply);	// Handle G-Code replies
 	void EmergencyStop();												// Cancel everything
 	bool GetLastPrintingHeight(float& height) const;					// Get the height in user coordinates of the last printing move
+	bool AtxPowerControlled() const { return atxPowerControlled; }
 
 	void AssignGrid(float xRange[2], float yRange[2], float radius, float spacing[2]);	// Assign the heightmap using the given parameters
 	void ActivateHeightmap(bool activate);										// (De-)Activate the height map
@@ -567,6 +568,7 @@ private:
 	// Misc
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
+	bool atxPowerControlled;
 
 	static constexpr uint32_t SdTimingByteIncrement = 8 * 1024;	// how many timing bytes we write at a time
 	static constexpr const char *TimingFileName = "test.tst";	// the name of the file we write

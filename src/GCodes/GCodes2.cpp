@@ -1113,10 +1113,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 80:	// ATX power on
+		atxPowerControlled = true;
 		platform.AtxPowerOn();
 		break;
 
 	case 81:	// ATX power off
+		atxPowerControlled = true;
 		if (!LockMovementAndWaitForStandstill(gb))
 		{
 			return false;

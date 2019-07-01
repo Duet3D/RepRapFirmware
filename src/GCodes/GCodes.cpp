@@ -79,7 +79,7 @@ GCodes::GCodes(Platform& p) :
 #if HAS_VOLTAGE_MONITOR
 	powerFailScript(nullptr),
 #endif
-	isFlashing(false), lastWarningMillis(0), sdTimingFile(nullptr)
+	isFlashing(false), lastWarningMillis(0), atxPowerControlled(false), sdTimingFile(nullptr)
 {
 #if HAS_HIGH_SPEED_SD
 	fileBeingHashed = nullptr;

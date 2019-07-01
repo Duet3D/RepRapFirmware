@@ -986,7 +986,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	// Parameters
 	{
 		// ATX power
-		response->catf(",\"params\":{\"atxPower\":%d", platform->AtxPower() ? 1 : 0);
+		response->catf(",\"params\":{\"atxPower\":%d", gCodes->AtxPowerControlled() ? (platform->AtxPower() ? 1 : 0) : -1);
 
 		// Cooling fan value
 		response->cat(",\"fanPercent\":");
