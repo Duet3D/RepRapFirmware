@@ -384,6 +384,8 @@ void Tool::DefineMix(const float m[])
 	}
 }
 
+#if HAS_MASS_STORAGE
+
 // Write the tool's settings to file returning true if successful
 bool Tool::WriteSettings(FileStore *f, bool isCurrent) const
 {
@@ -421,6 +423,8 @@ bool Tool::WriteSettings(FileStore *f, bool isCurrent) const
 
 	return ok;
 }
+
+#endif
 
 void Tool::SetOffset(size_t axis, float offs, bool byProbing)
 {

@@ -12,10 +12,6 @@
 
 #if SUPPORT_DHT_SENSOR
 
-#ifndef RTOS
-# error DHT sensors are only supported in RTOS builds
-#endif
-
 # include "TemperatureSensor.h"
 # include "RTOSIface/RTOSIface.h"
 

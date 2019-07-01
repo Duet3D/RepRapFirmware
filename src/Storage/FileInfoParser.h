@@ -10,6 +10,9 @@
 
 #include "RepRapFirmware.h"
 #include "GCodes/GCodeFileInfo.h"
+
+#if HAS_MASS_STORAGE
+
 #include "RTOSIface/RTOSIface.h"
 
 const FilePosition GCODE_HEADER_SIZE = 20000uL;		// How many bytes to read from the header - I (DC) have a Kisslicer file with a layer height comment 14Kb from the start
@@ -74,5 +77,7 @@ private:
 	// Alternatively, we could allocate a FileBuffer temporarily.
 	uint32_t buf32[(GCODE_READ_SIZE + GCODE_OVERLAP_SIZE + 3)/4 + 1];	// buffer must be 32-bit aligned for HSMCI. We need the +1 so we can add a null terminator.
 };
+
+#endif
 
 #endif /* SRC_STORAGE_FILEINFOPARSER_H_ */

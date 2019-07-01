@@ -715,7 +715,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				reply.printf("%" PRIu32 " points probed, min error %.3f, max error %.3f, mean %.3f, deviation %.3f\n",
 								numPointsProbed, (double)minError, (double)maxError, (double)mean, (double)deviation);
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 				error = TrySaveHeightMap(DefaultHeightMapFile, reply);
 #endif
 				reprap.GetMove().AccessHeightMap().ExtrapolateMissing();
@@ -1118,7 +1118,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
-# if HAS_HIGH_SPEED_SD
+# if HAS_MASS_STORAGE
 			SaveResumeInfo(true);											// create the resume file so that we can resume after power down
 # endif
 			platform.Message(LoggedGenericMessage, "Print auto-paused due to low voltage\n");
@@ -1127,7 +1127,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		break;
 #endif
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	case GCodeState::timingSDwrite:
 		for (uint32_t writtenThisTime = 0; writtenThisTime < 100 * 1024; )
 		{

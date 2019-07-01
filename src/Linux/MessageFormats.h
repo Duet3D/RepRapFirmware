@@ -85,7 +85,7 @@ enum class DataType : uint8_t
     UIntArray = 4,			// uint32_t[]
     FloatArray = 5,			// float[]
     String = 6,				// char[]
-	Expression = 7			// char[] but containing '{'...'}'
+    Expression = 7			// char[] but containing '['...']'
 };
 
 struct ObjectModelHeader
@@ -127,8 +127,7 @@ enum class FirmwareRequest : uint16_t
 	StackEvent = 6,			// Stack has been changed
 	PrintPaused = 7,		// Print has been paused
 	HeightMap = 8,			// Response to a heightmap request
-	Locked = 9,				// Movement has been locked and machine is in standstill
-	EvaluationResult = 10	// Response to an evaluation request
+	Locked = 9				// Movement has been locked and machine is in standstill
 };
 
 struct ReportStateHeader
@@ -211,16 +210,15 @@ enum class LinuxRequest : uint16_t
     SetHeightMap = 10,							// Set the heightmap coordinates via G29 S1
     LockMovementAndWaitForStandstill = 11,		// Lock movement and wait for standstill
     Unlock = 12,								// Unlock occupied resources
-	EvaluateExpression = 13,					// Evaluate a given string expression
 
-	InvalidRequest = 14
+	InvalidRequest = 12
 };
 
 enum CodeFlags : uint8_t
 {
-	HasMajorCommandNumber = 1,
-	HasMinorCommandNumber = 2,
-	HasFilePosition = 4,
+	NoMajorCommandNumber = 1,
+	NoMinorCommandNumber = 2,
+	FilePositionValid = 4,
 	EnforceAbsolutePosition = 8
 };
 

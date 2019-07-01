@@ -41,6 +41,7 @@ void Filament::Unload()
 
 void Filament::LoadAssignment()
 {
+#if HAS_MASS_STORAGE
 	FileStore *file = reprap.GetPlatform().OpenSysFile(FilamentAssignmentFile, OpenMode::read);
 	if (file == nullptr)
 	{
@@ -74,10 +75,12 @@ void Filament::LoadAssignment()
 	}
 
 	file->Close();
+#endif
 }
 
 /*static*/ void Filament::SaveAssignments()
 {
+#if HAS_MASS_STORAGE
 	FileStore * const file = reprap.GetPlatform().OpenSysFile(FilamentAssignmentFile, OpenMode::write);
 	if (file == nullptr)
 	{
@@ -112,6 +115,7 @@ void Filament::LoadAssignment()
 	}
 
 	file->Close();
+#endif
 }
 
 /*static*/ bool Filament::IsInUse(const char *filamentName)

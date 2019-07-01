@@ -5,8 +5,10 @@
  *      Author: David
  */
 
-#include "RepRapFirmware.h"
 #include "Logger.h"
+
+#if HAS_MASS_STORAGE
+
 #include "OutputMemory.h"
 #include "RepRap.h"
 #include "Platform.h"
@@ -152,5 +154,7 @@ bool Logger::WriteDateTime(time_t time)
 	}
 	return logFile.Write(buf.c_str());
 }
+
+#endif
 
 // End

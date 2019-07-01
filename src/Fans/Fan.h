@@ -42,7 +42,10 @@ public:
 
 	bool Check();											// update the fan PWM returning true if it is a thermostatic fan that is on
 	void Disable();
+
+#if HAS_MASS_STORAGE
 	bool WriteSettings(FileStore *f, size_t fanNum) const;	// save the settings of this fan if it isn't thermostatic
+#endif
 
 	// Tacho interface
 	int32_t GetRPM() const;

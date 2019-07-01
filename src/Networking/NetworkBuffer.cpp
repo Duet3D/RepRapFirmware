@@ -61,6 +61,8 @@ size_t NetworkBuffer::AppendData(const uint8_t *source, size_t length)
 	return length;
 }
 
+#if HAS_MASS_STORAGE
+
 // Read into the buffer from a file returning the number of bytes read
 int NetworkBuffer::ReadFromFile(FileStore *f)
 {
@@ -69,6 +71,8 @@ int NetworkBuffer::ReadFromFile(FileStore *f)
 	readPointer = 0;
 	return ret;
 }
+
+#endif
 
 // Clear this buffer and release any successors
 void NetworkBuffer::Empty()

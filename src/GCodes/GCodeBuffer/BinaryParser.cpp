@@ -110,7 +110,7 @@ char BinaryParser::GetCommandLetter() const
 
 bool BinaryParser::HasCommandNumber() const
 {
-	return (bufferLength != 0 && (header->flags & CodeFlags::HasMajorCommandNumber) != 0);
+	return (bufferLength != 0 && (header->flags & CodeFlags::NoMajorCommandNumber) == 0);
 }
 
 int BinaryParser::GetCommandNumber() const
@@ -120,7 +120,7 @@ int BinaryParser::GetCommandNumber() const
 
 int8_t BinaryParser::GetCommandFraction() const
 {
-	return (bufferLength != 0 && (header->flags & CodeFlags::HasMinorCommandNumber) != 0) ? header->minorCode : -1;
+	return (bufferLength != 0 && (header->flags & CodeFlags::NoMinorCommandNumber) == 0) ? header->minorCode : -1;
 }
 
 float BinaryParser::GetFValue()
@@ -398,7 +398,7 @@ void BinaryParser::SetFinished(bool f)
 
 FilePosition BinaryParser::GetFilePosition() const
 {
-	return ((header->flags & CodeFlags::HasFilePosition) != 0) ? header->filePosition : noFilePosition;
+	return ((header->flags & CodeFlags::FilePositionValid) != 0) ? header->filePosition : noFilePosition;
 }
 
 const char* BinaryParser::DataStart() const
@@ -413,10 +413,10 @@ size_t BinaryParser::DataLength() const
 
 void BinaryParser::PrintCommand(const StringRef& s) const
 {
-	if (bufferLength != 0 && (header->flags & CodeFlags::HasMajorCommandNumber) != 0)
+	if (bufferLength != 0 && (header->flags & CodeFlags::NoMajorCommandNumber) == 0)
 	{
 		s.printf("%c%" PRId32, header->letter, header->majorCode);
-		if ((header->flags & CodeFlags::HasMinorCommandNumber) != 0)
+		if ((header->flags & CodeFlags::NoMinorCommandNumber) == 0)
 		{
 			s.catf(".%" PRId32, header->minorCode);
 		}
@@ -431,10 +431,10 @@ void BinaryParser::AppendFullCommand(const StringRef &s) const
 {
 	if (bufferLength != 0)
 	{
-		if ((header->flags & CodeFlags::HasMajorCommandNumber) != 0)
+		if ((header->flags & CodeFlags::NoMajorCommandNumber) == 0)
 		{
 			s.catf("%c%" PRId32, header->letter, header->majorCode);
-			if ((header->flags & CodeFlags::HasMinorCommandNumber) != 0)
+			if ((header->flags & CodeFlags::NoMinorCommandNumber) == 0)
 			{
 				s.catf(".%" PRId32, header->minorCode);
 			}

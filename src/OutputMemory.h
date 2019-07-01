@@ -65,8 +65,10 @@ class OutputBuffer
 
 		uint32_t GetAge() const;
 
+#if HAS_MASS_STORAGE
 		// Write the buffer to file returning true if successful
 		bool WriteToFile(FileData& f) const;
+#endif
 
 		// Initialise the output buffers manager
 		static void Init();

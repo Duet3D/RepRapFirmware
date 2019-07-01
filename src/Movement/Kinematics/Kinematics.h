@@ -108,9 +108,11 @@ public:
 	// Do nothing if auto calibration is not supported.
 	virtual void SetCalibrationDefaults() { }
 
+#if HAS_MASS_STORAGE
 	// Write the parameters that are set by auto calibration to the config-override.g file, returning true if success
 	// Just return true if auto calibration is not supported.
 	virtual bool WriteCalibrationParameters(FileStore *f) const { return true; }
+#endif
 
 	// Get the bed tilt fraction for the specified axis.
 	// Usually this is only relevant if we are auto calibrating the bed tilt, however you can also specify bed tilt manually if you wanted to.
@@ -167,8 +169,10 @@ public:
 	// This default is good for Cartesian and Core printers, but not deltas or SCARA
 	virtual AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const { return (disallowMovesBeforeHoming) ? axesMoving : 0; }
 
+#if HAS_MASS_STORAGE
 	// Write any calibration data that we need to resume a print after power fail, returning true if successful. Override where necessary.
 	virtual bool WriteResumeSettings(FileStore *f) const { return true; }
+#endif
 
 	// Limit the speed and acceleration of a move to values that the mechanics can handle.
 	// The speeds along individual Cartesian axes have already been limited before this is called.

@@ -81,7 +81,7 @@ GCodes::GCodes(Platform& p) :
 #endif
 	isFlashing(false), lastWarningMillis(0), atxPowerControlled(false), sdTimingFile(nullptr)
 {
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	fileBeingHashed = nullptr;
 	FileGCodeInput * const fileInput = new FileGCodeInput();
 #else
@@ -224,7 +224,7 @@ void GCodes::Reset()
 
 	nextGcodeSource = 0;
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	fileToPrint.Close();
 #endif
 	speedFactor = 100.0;
@@ -327,7 +327,7 @@ bool GCodes::DoingFileMacro() const
 // Unlike other methods returning file positions it never returns noFilePosition
 FilePosition GCodes::GetFilePosition() const
 {
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
 	if (!fileBeingPrinted.IsLive())
 	{
@@ -499,7 +499,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 
 void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 {
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	FileData& fd = gb.MachineState().fileState;
 
 	// Do we have more data to process?
@@ -767,7 +767,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 			pauseRestorePoint.moveCoords[axis] = currentUserPosition[axis];
 		}
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 		// If we skipped any moves, reset the file pointer to the start of the first move we need to replay
 		// The following could be delayed until we resume the print
 		if (pauseRestorePoint.filePos != noFilePosition)
@@ -802,7 +802,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 	SaveFanSpeeds();
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	if (simulationMode == 0)
 	{
 		SaveResumeInfo(false);															// create the resume file so that we can resume after power down
@@ -1102,7 +1102,7 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers)
 
 #endif
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 void GCodes::SaveResumeInfo(bool wasPowerFailure)
 {
 	const char* const printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
@@ -2230,7 +2230,7 @@ void GCodes::EmergencyStop()
 // 0 = running a system macro automatically
 bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning)
 {
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	FileStore * const f = platform.OpenSysFile(fileName, OpenMode::read);
 	if (f == nullptr)
 	{
@@ -2276,7 +2276,7 @@ void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb)
 {
 	if (gb.IsDoingFileMacro())
 	{
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 		FileData &file = gb.MachineState().fileState;
 		gb.GetFileInput()->Reset(file);
 		file.Close();
@@ -2455,7 +2455,7 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 	return GCodeResult::ok;
 }
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 {
 	ClearBedMapping();
@@ -2598,7 +2598,7 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 	s.catf(" Bed comp %.3f", (double)(machineCoordinates[Z_AXIS] - machineZ));
 }
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 // Set up a file to print, but don't print it yet.
 // If successful return true, else write an error message to reply and return false
 bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply)
@@ -2632,7 +2632,7 @@ void GCodes::StartPrinting(bool fromStart)
 	rawExtruderTotal = 0.0;
 	reprap.GetMove().ResetExtruderPositions();
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	fileGCode->GetFileInput()->Reset(fileGCode->OriginalMachineState().fileState);
 #elif HAS_LINUX_INTERFACE
 	fileGCode->OriginalMachineState().SetFileExecuting();
@@ -2645,7 +2645,7 @@ void GCodes::StartPrinting(bool fromStart)
 						(simulationMode == 0) ? "Started printing file %s\n" : "Started simulating printing file %s\n",
 							reprap.GetPrintMonitor().GetPrintingFilename());
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	if (fromStart)
 	{
 		// Get the fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
@@ -3551,11 +3551,13 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 			return GCodeResult::error;
 		}
 
+#if HAS_MASS_STORAGE
 		if (!platform.DirectoryExists(FILAMENTS_DIRECTORY, filamentName.c_str()))
 		{
 			reply.copy("Filament configuration directory not found");
 			return GCodeResult::error;
 		}
+#endif
 
 		if (Filament::IsInUse(filamentName.c_str()))
 		{
@@ -3628,7 +3630,7 @@ void GCodes::StopPrint(StopPrintReason reason)
 	segmentsLeft = 0;
 	isPaused = pausePending = filamentChangePausePending = false;
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
 
 	fileGCode->GetFileInput()->Reset(fileBeingPrinted);
@@ -3664,7 +3666,7 @@ void GCodes::StopPrint(StopPrintReason reason)
 	if (exitSimulationWhenFileComplete)
 	{
 		const float simSeconds = reprap.GetMove().GetSimulationTime() + simulationTime;
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 		if (updateFileWhenSimulationComplete && reason == StopPrintReason::normalCompletion)
 		{
 			platform.GetMassStorage()->RecordSimulationTime(printingFilename, lrintf(simSeconds));
@@ -3720,7 +3722,7 @@ void GCodes::StopPrint(StopPrintReason reason)
 		platform.MessageF(LoggedGenericMessage, "%s printing file %s, print time was %" PRIu32 "h %" PRIu32 "m\n",
 			(reason == StopPrintReason::normalCompletion) ? "Finished" : "Cancelled",
 			printingFilename, printMinutes/60u, printMinutes % 60u);
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 		if (reason == StopPrintReason::normalCompletion && simulationMode == 0)
 		{
 			platform.DeleteSysFile(RESUME_AFTER_POWER_FAIL_G);
@@ -3891,7 +3893,7 @@ float GCodes::GetUserCoordinate(size_t axis) const
 	return (axis < MaxAxes) ? currentUserPosition[axis] - GetWorkplaceOffset(axis) : 0.0;
 }
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 
 // M38 (SHA1 hash of a file) implementation:
 bool GCodes::StartHash(const char* filename)
@@ -3973,7 +3975,7 @@ void GCodes::SetAllAxesNotHomed()
 	zDatumSetByProbing = false;
 }
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 
 // Write the config-override file returning true if an error occurred
 GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const
@@ -4454,7 +4456,7 @@ void GCodes::ActivateHeightmap(bool activate)
 	}
 }
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 
 // Start timing SD card file writing
 GCodeResult GCodes::StartSDTiming(GCodeBuffer& gb, const StringRef& reply)

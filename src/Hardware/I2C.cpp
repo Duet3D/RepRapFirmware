@@ -28,7 +28,7 @@ void I2C::Init()
 #endif
 }
 
-#if defined(I2C_IFACE) && defined(RTOS)
+#if defined(I2C_IFACE)
 
 #include "RTOSIface/RTOSIface.h"
 

@@ -223,11 +223,15 @@ bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 	return true;	// auto calibration not implemented yet
 }
 
+#if HAS_MASS_STORAGE
+
 // Write the parameters that are set by auto calibration to a file, returning true if success
 bool RotaryDeltaKinematics::WriteCalibrationParameters(FileStore *f) const
 {
 	return true;	// auto calibration not implemented yet
 }
+
+#endif
 
 // Return true if the specified XY position is reachable by the print head reference point.
 bool RotaryDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) const
@@ -350,12 +354,16 @@ void RotaryDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 	}
 }
 
+#if HAS_MASS_STORAGE
+
 // Write any calibration data that we need to resume a print after power fail, returning true if successful
 bool RotaryDeltaKinematics::WriteResumeSettings(FileStore *f) const
 {
 //	return !doneAutoCalibration || WriteCalibrationParameters(f);
 	return true;	// auto calibration not implemented yet
 }
+
+#endif
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.
 // The speeds in Cartesian space have already been limited.

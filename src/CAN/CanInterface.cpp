@@ -15,6 +15,7 @@
 #include "Movement/DriveMovement.h"
 
 const unsigned int NumCanBuffers = 40;
+const unsigned int DriversPerCanBoard = 3;	// TEMPORARY until we do this dynamically!
 
 const size_t NumCanBoards = (MaxCanDrivers + DriversPerCanBoard - 1)/DriversPerCanBoard;
 

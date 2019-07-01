@@ -89,6 +89,8 @@ protected:
 
 enum class GCodeInputReadResult : uint8_t { haveData, noData, error };
 
+#if HAS_MASS_STORAGE
+
 // This class is an expansion of the RegularGCodeInput class to buffer G-codes and to rewind file positions when
 // nested G-code files are started. However buffered codes are not explicitly checked for M112.
 class FileGCodeInput : public RegularGCodeInput
@@ -105,6 +107,8 @@ public:
 private:
 	FileStore *lastFile;
 };
+
+#endif
 
 // This class receives its data from the network task
 class NetworkGCodeInput : public RegularGCodeInput

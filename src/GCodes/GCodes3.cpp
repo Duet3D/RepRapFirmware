@@ -189,18 +189,19 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 	return GCodeResult::badOrMissingParameter;
 }
 
+# if HAS_MASS_STORAGE
+
 // Save all the workplace coordinate offsets to file returning true if successful. Used by M500 and by SaveResumeInfo.
 bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const
 {
-	String<ScratchStringLength> scratchString;
-	scratchString.copy("; Workplace coordinates\n");
-	if (!f->Write(scratchString.c_str()))
+	if (!f->Write("; Workplace coordinates\n"))
 	{
 		return false;
 	}
 
 	for (size_t cs = 0; cs < NumCoordinateSystems; ++cs)
 	{
+		String<ScratchStringLength> scratchString;
 		scratchString.printf("G10 L2 P%u", cs + 1);
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
@@ -215,6 +216,7 @@ bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const
 	return true;
 }
 
+#endif
 #endif
 
 // Define the probing grid, called when we see an M557 command
@@ -357,7 +359,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 }
 
 
-#if HAS_HIGH_SPEED_SD || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Handle M37 to simulate a whole file
 GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile)
@@ -368,7 +370,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		return GCodeResult::error;
 	}
 
-# if HAS_HIGH_SPEED_SD
+# if HAS_MASS_STORAGE
 	if (QueueFileToPrint(file.c_str(), reply))
 # endif
 	{

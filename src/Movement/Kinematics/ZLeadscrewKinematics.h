@@ -21,7 +21,9 @@ public:
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) override;
 	bool SupportsAutoCalibration() const override;
 	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) override;
+#if HAS_MASS_STORAGE
 	bool WriteResumeSettings(FileStore *f) const override;
+#endif
 
 private:
 	void AppendCorrections(const floatc_t corrections[], const StringRef& reply) const;

@@ -10,6 +10,8 @@
 class Platform;
 class FileWriteBuffer;
 
+#if HAS_MASS_STORAGE
+
 enum class OpenMode : uint8_t
 {
 	read,			// open an existing file for reading
@@ -90,5 +92,7 @@ inline uint32_t FileStore::GetCRC32() const
 {
 	return crc.Get();
 }
+
+#endif
 
 #endif

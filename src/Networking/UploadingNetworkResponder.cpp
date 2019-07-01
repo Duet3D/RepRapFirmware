@@ -9,7 +9,10 @@
 #include "Socket.h"
 #include "Platform.h"
 
-UploadingNetworkResponder::UploadingNetworkResponder(NetworkResponder *n) : NetworkResponder(n), uploadError(false)
+UploadingNetworkResponder::UploadingNetworkResponder(NetworkResponder *n) : NetworkResponder(n)
+#if HAS_MASS_STORAGE
+	, uploadError(false)
+#endif
 {
 }
 
@@ -20,18 +23,10 @@ void UploadingNetworkResponder::ConnectionLost()
 	NetworkResponder::ConnectionLost();
 }
 
-// Start writing to a new file
-void UploadingNetworkResponder::StartUpload(FileStore *file, const char *fileName)
-{
-	fileBeingUploaded.Set(file);
-	filenameBeingProcessed.copy(fileName);
-	responderState = ResponderState::uploading;
-	uploadError = false;
-}
-
 // If this responder has an upload in progress, cancel it
 void UploadingNetworkResponder::CancelUpload()
 {
+#if HAS_MASS_STORAGE
 	if (fileBeingUploaded.IsLive())
 	{
 		fileBeingUploaded.Close();
@@ -41,6 +36,18 @@ void UploadingNetworkResponder::CancelUpload()
 			filenameBeingProcessed.Clear();
 		}
 	}
+#endif
+}
+
+#if HAS_MASS_STORAGE
+
+// Start writing to a new file
+void UploadingNetworkResponder::StartUpload(FileStore *file, const char *fileName)
+{
+	fileBeingUploaded.Set(file);
+	filenameBeingProcessed.copy(fileName);
+	responderState = ResponderState::uploading;
+	uploadError = false;
 }
 
 // Finish a file upload. Set variable uploadError if anything goes wrong.
@@ -81,5 +88,7 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 		filenameBeingProcessed.Clear();
 	}
 }
+
+#endif
 
 // End

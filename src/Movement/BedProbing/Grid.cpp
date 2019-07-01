@@ -279,6 +279,8 @@ unsigned int HeightMap::GetMinimumSegments(float deltaX, float deltaY) const
 	return max<unsigned int>(xSegments, ySegments);
 }
 
+#if HAS_MASS_STORAGE
+
 // Save the grid to file returning true if an error occurred
 bool HeightMap::SaveToFile(FileStore *f, float zOffset) const
 {
@@ -339,20 +341,6 @@ bool HeightMap::SaveToFile(FileStore *f, float zOffset) const
 	}
 
 	return false;
-}
-
-// Save the grid to a sequential array in the same way as to a regular CSV file
-void HeightMap::SaveToArray(float *arr, float zOffset) const
-{
-	size_t index = 0;
-	for (size_t i = 0; i < def.numY; ++i)
-	{
-		for (size_t j = 0; j < def.numX; ++j)
-		{
-			arr[index] = IsHeightSet(index) ? (gridHeights[index] + zOffset) : NAN;
-			index++;
-		}
-	}
 }
 
 // Load the grid from file, returning true if an error occurred with the error reason appended to the buffer
@@ -440,6 +428,26 @@ bool HeightMap::LoadFromFile(FileStore *f, const StringRef& r)
 	}
 	return true;											// an error occurred
 }
+
+#endif
+
+#if HAS_LINUX_INTERFACE
+
+// Save the grid to a sequential array in the same way as to a regular CSV file
+void HeightMap::SaveToArray(float *arr, float zOffset) const
+{
+	size_t index = 0;
+	for (size_t i = 0; i < def.numY; ++i)
+	{
+		for (size_t j = 0; j < def.numX; ++j)
+		{
+			arr[index] = IsHeightSet(index) ? (gridHeights[index] + zOffset) : NAN;
+			index++;
+		}
+	}
+}
+
+#endif
 
 // Return number of points probed, mean and RMS deviation, min and max error
 unsigned int HeightMap::GetStatistics(float& mean, float& deviation, float& minError, float& maxError) const

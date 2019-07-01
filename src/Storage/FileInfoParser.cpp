@@ -28,6 +28,8 @@ void GCodeFileInfo::Init()
 	}
 }
 
+#if HAS_MASS_STORAGE
+
 FileInfoParser::FileInfoParser()
 	: parseState(notParsing), fileBeingParsed(nullptr), accumulatedParseTime(0), accumulatedReadTime(0), accumulatedSeekTime(0), fileOverlapLength(0)
 {
@@ -851,5 +853,7 @@ bool FileInfoParser::FindSimulatedTime(const char* buf, size_t len)
 	}
 	return false;
 }
+
+#endif
 
 // End

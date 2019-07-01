@@ -238,7 +238,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 				break;
 
 			case 1:		// load height map file
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 				result = LoadHeightMap(gb, reply);
 #else
 				result = GCodeResult::errorNotSupported;
@@ -250,7 +250,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 				break;
 
 			case 3:		// save height map to names file
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 				result = SaveHeightMap(gb, reply);
 #else
 				result = GCodeResult::errorNotSupported;
@@ -590,7 +590,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	case 20:		// List files on SD card
 		if (!LockFileSystem(gb))		// don't allow more than one at a time to avoid contention on output buffers
 		{
@@ -775,7 +775,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					}
 				}
 			}
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 			else if (!fileToPrint.IsLive())
 			{
 				reply.copy("Cannot print, because no file is selected!");
@@ -869,7 +869,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	case 26: // Set SD position
 		// This is used between executing M23 to set up the file to print, and M25 to print it
 		if (gb.Seen('S'))
@@ -941,9 +941,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 		// For case 32, see case 23
 
-#if HAS_HIGH_SPEED_SD || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	case 36:	// Return file information
-# if HAS_HIGH_SPEED_SD
+# if HAS_MASS_STORAGE
 		if (!LockFileSystem(gb))									// getting file info takes several calls and isn't reentrant
 		{
 			return false;
@@ -1000,7 +1000,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 #endif
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	case 38: // Report SHA1 of file
 		if (!LockFileSystem(gb))								// getting file hash takes several calls and isn't reentrant
 		{
@@ -1579,7 +1579,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			MessageType type = GenericMessage;
 			if (gb.Seen('P'))
 			{
-				switch (gb.GetIValue())
+				const int32_t param = gb.GetIValue();
+				switch (param)
 				{
 				case 0:		// Generic (default)
 					// no need to set it twice
@@ -1597,7 +1598,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					type = TelnetMessage;
 					break;
 				default:
-					reply.printf("Invalid message type: %d", type);
+					reply.printf("Invalid message type: %" PRIi32, param);
 					result = GCodeResult::error;
 					break;
 				}
@@ -2520,7 +2521,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	case 374: // Save grid and height map to file
 		result = SaveHeightMap(gb, reply);
 		break;
@@ -2740,7 +2741,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	case 470: // mkdir
 		{
 			String<MaxFilenameLength> dirName;
@@ -2810,7 +2811,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	case 503: // List variable settings
 		{
 			if (!LockFileSystem(gb))
@@ -3109,7 +3110,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		result = platform.GetEndstops().HandleM558(gb, reply);
 		break;
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	case 559:
 	case 560: // Binary writing
 		{
@@ -4304,6 +4305,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 #endif
 
+#if HAS_MASS_STORAGE
 	case 916:
 		if (!platform.SysFileExists(RESUME_AFTER_POWER_FAIL_G))
 		{
@@ -4320,6 +4322,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			DoFileMacro(gb, RESUME_AFTER_POWER_FAIL_G, true);
 		}
 		break;
+#endif
 
 		// For case 917, see 906
 
@@ -4329,9 +4332,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 #endif
 
+#if HAS_MASS_STORAGE
 	case 929: // Start/stop event logging
 		result = platform.ConfigureLogging(gb, reply);
 		break;
+#endif
 
 	case 950:	// configure I/O pins
 		result = platform.ConfigurePort(gb, reply);

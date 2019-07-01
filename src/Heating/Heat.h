@@ -41,11 +41,7 @@ public:
 	enum HeaterStatus { HS_off = 0, HS_standby = 1, HS_active = 2, HS_fault = 3, HS_tuning = 4 };
 
 	Heat(Platform& p);
-#ifdef RTOS
 	void Task();
-#else
-	void Spin();												// Called in a tight loop to keep everything going
-#endif
 	void Init();												// Set everything up
 	void Exit();												// Shut everything down
 	void ResetHeaterModels();									// Reset all active heater models to defaults
@@ -124,7 +120,9 @@ public:
 	void SetM301PidParameters(size_t heater, const M301PidParameters& params)
 	pre(heater < NumTotalHeaters);
 
+#if HAS_MASS_STORAGE
 	bool WriteModelParameters(FileStore *f) const;				// Write heater model parameters to file returning true if no error
+#endif
 
 	int GetHeaterChannel(size_t heater) const;					// Return the channel used by a particular heater, or -1 if not configured
 	bool SetHeaterChannel(size_t heater, int channel);			// Set the channel used by a heater, returning true if bad heater or channel number
@@ -145,7 +143,9 @@ public:
 		return lastStandbyTools[heater];
 	}
 
+#if HAS_MASS_STORAGE
 	bool WriteBedAndChamberTempSettings(FileStore *f) const;	// Save some resume information
+#endif
 
 	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
 
@@ -165,12 +165,7 @@ private:
 	TemperatureSensor *heaterSensors[NumTotalHeaters];				// The sensor used by the real heaters
 	TemperatureSensor *virtualHeaterSensors[MaxVirtualHeaters];	// Sensors for virtual heaters
 
-#ifdef RTOS
 	uint32_t lastWakeTime;
-#else
-	uint32_t lastTime;											// The last time our Spin() was called
-	bool active;												// Are we active?
-#endif
 
 	float extrusionMinTemp;										// Minimum temperature to allow regular extrusion
 	float retractionMinTemp;									// Minimum temperature to allow regular retraction

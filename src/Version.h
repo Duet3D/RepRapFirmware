@@ -10,7 +10,7 @@
 
 
 #ifndef VERSION
-# define MAIN_VERSION	"3.0b5+4-ch"
+# define MAIN_VERSION	"3.0b6"
 # define VERSION MAIN_VERSION
 #endif
 

@@ -54,7 +54,9 @@ public:
 		return (forLoadChange) ? loadChangeParams : setpointChangeParams;
 	}
 
+#if HAS_MASS_STORAGE
 	bool WriteParameters(FileStore *f, size_t heater) const;		// Write the model parameters to file returning true if no error
+#endif
 
 private:
 	void CalcPidConstants();

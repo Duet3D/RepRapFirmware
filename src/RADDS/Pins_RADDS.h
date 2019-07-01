@@ -6,7 +6,6 @@
 // Features definition
 #define HAS_LWIP_NETWORKING		0
 #define HAS_WIFI_NETWORKING		0
-#define HAS_LINUX_INTERFACE		0
 #define HAS_CPU_TEMP_SENSOR		0				// enabling the CPU temperature sensor disables Due pin 13 due to bug in SAM3X
 #define HAS_HIGH_SPEED_SD		0
 #define HAS_VOLTAGE_MONITOR		0
@@ -33,10 +32,8 @@ const size_t NumFirmwareUpdateModules = 1;
 constexpr size_t NumDirectDrivers = 9;
 constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 
-// The number of heaters in the machine
-// 0 is the heated bed even if there isn't one.
-constexpr size_t NumEndstops = 4;					// The number of inputs we have for endstops, filament sensors etc.
-constexpr size_t NumHeaters = 4;
+constexpr size_t NumTotalHeaters = 3;
+constexpr size_t NumDefaultHeaters = 3;				// The number of heaters configured by default
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 4;
 
@@ -80,8 +77,6 @@ constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { 23, 16,  3, 60, 63, 53, 33, 2
 
 constexpr Pin END_STOP_PINS[NumEndstops] = { 28, 30, 32, 39 };
 
-// HEATERS - The bed is assumed to be the at index 0
-
 // Analogue pin numbers
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 4, 0, 1, 2 };
 
@@ -90,7 +85,7 @@ constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 4, 0, 1, 2 };
 // h0, h1 PMW: D13 & D12 are on TIOB0 & B8 which are both TC B channels, so they get PWM
 // h2 bang-bang: D11 is on TIOA8 which is a TC A channel shared with h1, it gets bang-bang control
 
-constexpr Pin HEAT_ON_PINS[NumHeaters] = { 7, 13, 12, 11 };	// bed, h0, h1, h2
+constexpr Pin HEAT_ON_PINS[NumTotalHeaters] = { 7, 13, 12, 11 };	// bed, h0, h1, h2
 
 // Default thermistor betas
 constexpr float BED_R25 = 10000.0;

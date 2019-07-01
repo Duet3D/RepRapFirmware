@@ -26,7 +26,11 @@ public:
 	bool SupportsAutoCalibration() const override { return true; }
 	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) override;
 	void SetCalibrationDefaults() override { Init(); }
+
+#if HAS_MASS_STORAGE
 	bool WriteCalibrationParameters(FileStore *f) const override;
+#endif
+
 	float GetTiltCorrection(size_t axis) const override;
 	bool IsReachable(float x, float y, bool isCoordinated) const override;
 	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated, bool applyM208Limits) const override;
@@ -40,7 +44,11 @@ public:
 	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const override;
 	bool QueryTerminateHomingMove(size_t axis) const override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
+
+#if HAS_MASS_STORAGE
 	bool WriteResumeSettings(FileStore *f) const override;
+#endif
+
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const override;
 	AxesBitmap GetLinearAxes() const override;
 

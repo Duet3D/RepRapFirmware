@@ -13,7 +13,11 @@
 
 NetworkResponder::NetworkResponder(NetworkResponder *n)
 	: next(n), responderState(ResponderState::free), skt(nullptr),
-	  outBuf(nullptr), fileBeingSent(nullptr), fileBuffer(nullptr)
+	  outBuf(nullptr),
+#if HAS_MASS_STORAGE
+	  fileBeingSent(nullptr),
+#endif
+	  fileBuffer(nullptr)
 {
 }
 
@@ -24,7 +28,11 @@ void NetworkResponder::Commit(ResponderState nextState, bool report)
 	responderState = ResponderState::sending;
 	if (report && reprap.Debug(moduleWebserver))
 	{
+#if HAS_MASS_STORAGE
 		debugPrintf("Sending reply, file = %s\n", (fileBeingSent != nullptr) ? "yes" : "no");
+#else
+		debugPrintf("Sending reply");
+#endif
 	}
 }
 
@@ -76,6 +84,8 @@ void NetworkResponder::SendData()
 	}
 
 	// If we get here then there are no output buffers left to send
+
+#if HAS_MASS_STORAGE
 	// If we have a file to send, send it
 	if (fileBeingSent != nullptr && fileBuffer == nullptr)
 	{
@@ -134,6 +144,7 @@ void NetworkResponder::SendData()
 			}
 		}
 	}
+#endif
 
 	// If we get here then there is nothing left to send
 	skt->Send();						// tell the socket there is no more data
@@ -153,11 +164,13 @@ void NetworkResponder::ConnectionLost()
 	OutputBuffer::ReleaseAll(outBuf);
 	outStack.ReleaseAll();
 
+#if HAS_MASS_STORAGE
 	if (fileBeingSent != nullptr)
 	{
 		fileBeingSent->Close();
 		fileBeingSent = nullptr;
 	}
+#endif
 
 	if (fileBuffer != nullptr)
 	{

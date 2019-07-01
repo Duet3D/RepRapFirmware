@@ -37,8 +37,6 @@
 #include "Version.h"
 #include "Movement/StepTimer.h"
 
-#ifdef RTOS
-
 #if __LPC17xx__
 constexpr size_t NetworkStackWords = 470;
 #else
@@ -46,8 +44,6 @@ constexpr size_t NetworkStackWords = 550;
 #endif
 
 static Task<NetworkStackWords> networkTask;
-
-#endif
 
 Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderToPoll(nullptr)
 {
@@ -327,10 +323,7 @@ void Network::Activate()
 		}
 	}
 
-#ifdef RTOS
 	networkTask.Create(NetworkLoop, "NETWORK", nullptr, TaskPriority::SpinPriority);
-#endif
-
 }
 
 void Network::Exit()

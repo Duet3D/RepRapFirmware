@@ -341,6 +341,9 @@ public:
 #endif
 
 	// File functions
+	const char* GetConfigFile() const; 				// Where the configuration is stored (in the system dir).
+
+#if HAS_MASS_STORAGE
 	MassStorage* GetMassStorage() const;
 	FileStore* OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const;
 	bool Delete(const char* folder, const char *filename) const;
@@ -350,16 +353,16 @@ public:
 	const char* GetWebDir() const; 					// Where the html etc files are
 	const char* GetGCodeDir() const; 				// Where the gcodes are
 	const char* GetMacroDir() const;				// Where the user-defined macros are
-	const char* GetConfigFile() const; 				// Where the configuration is stored (in the system dir).
 	const char* GetDefaultFile() const;				// Where the default configuration is stored (in the system dir).
 
-	// Function to work with the system files folder
+	// Functions to work with the system files folder
 	void SetSysDir(const char* dir);				// Set the system files path
 	bool SysFileExists(const char *filename) const;
 	FileStore* OpenSysFile(const char *filename, OpenMode mode) const;
 	bool DeleteSysFile(const char *filename) const;
 	void MakeSysFileName(const StringRef& result, const char *filename) const;
 	void GetSysDir(const StringRef & path) const;
+#endif
 
 	// Message output (see MessageType for further details)
 	void Message(MessageType type, const char *message);
@@ -452,7 +455,9 @@ public:
 	const volatile ZProbeAveragingFilter& GetZProbeOnFilter() const { return zProbeOnFilter; }
 	const volatile ZProbeAveragingFilter& GetZProbeOffFilter() const { return zProbeOffFilter; }
 
+#if HAS_MASS_STORAGE
 	bool WritePlatformParameters(FileStore *f, bool includingG31) const;
+#endif
 
 	// Heat and temperature
 	volatile ThermistorAveragingFilter& GetAdcFilter(size_t channel)
@@ -473,7 +478,10 @@ public:
 	bool IsFanControllable(size_t fan) const;
 	const char *GetFanName(size_t fan) const;
 
+#if HAS_MASS_STORAGE
 	bool WriteFanSettings(FileStore *f) const;				// Save some resume information
+#endif
+
 	int32_t GetFanRPM(size_t fanIndex) const;
 
 	// Flash operations
@@ -525,8 +533,10 @@ public:
 	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf);
 #endif
 
+#if HAS_MASS_STORAGE
 	// Logging support
 	GCodeResult ConfigureLogging(GCodeBuffer& gb, const StringRef& reply);
+#endif
 
 	// Ancillary PWM
 	GCodeResult GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply);
@@ -599,12 +609,8 @@ private:
 		uint32_t bfar;								// bus fault address register
 		uint32_t sp;								// stack pointer
 		uint32_t when;								// value of the RTC when the software reset occurred
-#ifdef RTOS
 		uint32_t taskName;							// first 4 bytes of the task name
 		uint32_t stack[23];							// stack when the exception occurred, with the program counter at the bottom
-#else
-		uint32_t stack[24];							// stack when the exception occurred, with the program counter at the bottom
-#endif
 
 		bool isVacant() const						// return true if this struct can be written without erasing it first
 		{
@@ -627,8 +633,10 @@ private:
 	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
 #endif
 
+#if HAS_MASS_STORAGE
 	// Logging
 	Logger *logger;
+#endif
 
 	// Network
 	IPAddress ipAddress;
@@ -737,7 +745,9 @@ private:
 	float axisMinima[MaxAxes];
 	AxesBitmap axisMinimaProbed, axisMaximaProbed;
 
+#if HAS_MASS_STORAGE
 	static bool WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam);
+#endif
 
 	// Heaters
 	PwmPort heaterPorts[NumTotalHeaters];
@@ -770,8 +780,10 @@ private:
 	Mutex usbMutex;
 
 	// Files
+#if HAS_MASS_STORAGE
 	MassStorage* massStorage;
 	const char *sysDir;
+#endif
 
 	// Data used by the tick interrupt handler
 
@@ -854,6 +866,13 @@ private:
 	bool deliberateError;								// true if we deliberately caused an exception for testing purposes
 };
 
+inline const char* Platform::GetConfigFile() const
+{
+	return CONFIG_FILE;
+}
+
+#if HAS_MASS_STORAGE
+
 // Where the htm etc files are
 inline const char* Platform::GetWebDir() const
 {
@@ -871,15 +890,12 @@ inline const char* Platform::GetMacroDir() const
 	return MACRO_DIR;
 }
 
-inline const char* Platform::GetConfigFile() const
-{
-	return CONFIG_FILE;
-}
-
 inline const char* Platform::GetDefaultFile() const
 {
 	return CONFIG_BACKUP_FILE;
 }
+
+#endif
 
 //*****************************************************************************************************************
 
@@ -1031,10 +1047,14 @@ inline void Platform::SetNozzleDiameter(float diameter)
 	nozzleDiameter = diameter;
 }
 
+#if HAS_MASS_STORAGE
+
 inline MassStorage* Platform::GetMassStorage() const
 {
 	return massStorage;
 }
+
+#endif
 
 inline OutputBuffer *Platform::GetAuxGCodeReply()
 {

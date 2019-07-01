@@ -14,6 +14,8 @@ static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
 // No function should need to take both the file table mutex and the find buffer mutex.
 // No function in here should be called when the caller already owns the shared SPI mutex.
 
+#if HAS_MASS_STORAGE
+
 // Static helper functions - not declared as class members to avoid having to include sd_mmc.h everywhere
 static const char* TranslateCardType(card_type_t ct)
 {
@@ -768,8 +770,6 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity
 	}
 	return InfoResult::ok;
 }
-
-#ifdef RTOS
 
 // Functions called by FatFS to acquire/release mutual exclusion
 extern "C"

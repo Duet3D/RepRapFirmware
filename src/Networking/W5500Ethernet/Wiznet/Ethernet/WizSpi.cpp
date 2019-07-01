@@ -169,7 +169,7 @@ namespace WizSpi
 	void Init()
 	{
 #if USE_PDC
-		spi_pdc = spi_get_pdc_base(SPI);
+		spi_pdc = spi_get_pdc_base(W5500_SPI);
 		// The PDCs are masters 2 and 3 and the SRAM is slave 0. Give the receive PDCs the highest priority.
 		matrix_set_master_burst_type(0, MATRIX_ULBT_8_BEAT_BURST);
 		matrix_set_slave_default_master_type(0, MATRIX_DEFMSTR_LAST_DEFAULT_MASTER);
@@ -192,12 +192,12 @@ namespace WizSpi
 #endif
 
 		// Set up the SPI pins
-		ConfigurePin(APIN_SPI_SCK);
-		ConfigurePin(APIN_SPI_MOSI);
-		ConfigurePin(APIN_SPI_MISO);
-		pinMode(APIN_SPI_SS0, OUTPUT_HIGH);					// use manual SS control
+		ConfigurePin(APIN_W5500_SPI_SCK);
+		ConfigurePin(APIN_W5500_SPI_MOSI);
+		ConfigurePin(APIN_W5500_SPI_MISO);
+		pinMode(APIN_W5500_SPI_SS0, OUTPUT_HIGH);					// use manual SS control
 
-		pmc_enable_periph_clk(ID_SPI);
+		pmc_enable_periph_clk(W5500_SPI_INTERFACE_ID);
 
 #if USE_PDC || USE_DMAC
 		spi_dma_disable();
