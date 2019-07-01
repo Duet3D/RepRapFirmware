@@ -4,7 +4,7 @@
  *  Created on: 26 Aug 2018
  *      Author: David
  *  Purpose:
- *  	Support for TMC5130 and TMC5160 stepper drivers
+ *  	Support for TMC5130, TMC5160 and TMC5161 stepper drivers
  */
 
 #include "TMC51xx.h"
@@ -324,12 +324,14 @@ private:
 
 	static const uint8_t WriteRegNumbers[NumWriteRegisters];	// the register numbers that we write to
 
-	static constexpr unsigned int NumReadRegisters = 2;		// the number of registers that we read from
+	static constexpr unsigned int NumReadRegisters = 4;		// the number of registers that we read from
 	static const uint8_t ReadRegNumbers[NumReadRegisters];	// the register numbers that we read from
 
 	// Read register numbers, in same order as ReadRegNumbers
 	static constexpr unsigned int ReadGStat = 0;
 	static constexpr unsigned int ReadDrvStat = 1;
+	static constexpr unsigned int ReadMsCnt = 2;
+	static constexpr unsigned int ReadPwmScale = 3;
 
 	volatile uint32_t writeRegisters[NumWriteRegisters];	// the values we want the TMC22xx writable registers to have
 	volatile uint32_t readRegisters[NumReadRegisters];		// the last values read from the TMC22xx readable registers
@@ -356,6 +358,8 @@ private:
 	uint8_t regIndexRequested;								// the register we asked to read in the previous transaction, or 0xFF
 	uint8_t previousRegIndexRequested;						// the register we asked to read in the previous transaction, or 0xFF
 	bool enabled;											// true if driver is enabled
+
+	static constexpr uint8_t NoRegIndex = 0xFF;				// this means no register updated, or no register requested
 };
 
 const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
@@ -378,7 +382,9 @@ const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 const uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 {
 	REGNUM_GSTAT,
-	REGNUM_DRV_STATUS
+	REGNUM_DRV_STATUS,
+	REGNUM_MSCNT,
+	REGNUM_PWM_SCALE
 };
 
 uint16_t TmcDriverState::numTimeouts = 0;							// how many times a transfer timed out
@@ -416,7 +422,7 @@ pre(!driversPowered)
 		accumulatedReadRegisters[i] = readRegisters[i] = 0;
 	}
 
-	regIndexBeingUpdated = regIndexRequested = previousRegIndexRequested = 0xFF;
+	regIndexBeingUpdated = regIndexRequested = previousRegIndexRequested = NoRegIndex;
 	numReads = numWrites = 0;
 }
 
@@ -435,7 +441,7 @@ void TmcDriverState::UpdateChopConfRegister()
 
 void TmcDriverState::SetStallDetectThreshold(int sgThreshold)
 {
-	const uint32_t sgVal = ((uint32_t)constrain<int>(sgThreshold, -64, 63)) & 127;
+	const uint32_t sgVal = ((uint32_t)constrain<int>(sgThreshold, -64, 63)) & 127u;
 	writeRegisters[WriteCoolConf] = (writeRegisters[WriteCoolConf] & ~COOLCONF_SGT_MASK) | (sgVal << COOLCONF_SGT_SHIFT);
 	newRegistersToUpdate |= 1u << WriteCoolConf;
 }
@@ -546,6 +552,12 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const
 
 	case SmartDriverRegister::coolStep:
 		return writeRegisters[WriteTcoolthrs];
+
+	case SmartDriverRegister::mstepPos:
+		return readRegisters[ReadMsCnt];
+
+	case SmartDriverRegister::pwmScale:
+		return readRegisters[ReadPwmScale];
 
 	case SmartDriverRegister::hdec:
 	default:
@@ -780,7 +792,7 @@ void TmcDriverState::GetSpiCommand(uint8_t *sendDataBlock)
 	if (registersToUpdate == 0)
 	{
 		// Read a register
-		regIndexBeingUpdated = 0xFF;
+		regIndexBeingUpdated = NoRegIndex;
 		regIndexRequested = (regIndexRequested >= NumReadRegisters - 1) ? 0 : regIndexRequested + 1;
 		sendDataBlock[0] = ReadRegNumbers[regIndexRequested];
 		sendDataBlock[1] = 0;
@@ -790,18 +802,8 @@ void TmcDriverState::GetSpiCommand(uint8_t *sendDataBlock)
 	}
 	else
 	{
-		// Write a register
-		size_t regNum = 0;
-		uint32_t mask = 1;
-		do
-		{
-			if ((registersToUpdate & mask) != 0)
-			{
-				break;
-			}
-			++regNum;
-			mask <<= 1;
-		} while (regNum < NumWriteRegisters - 1);
+		// Pick a register to write
+		const size_t regNum = LowestSetBitNumber(registersToUpdate);
 
 		// Kick off a transfer for that register
 		regIndexBeingUpdated = regNum;
@@ -818,7 +820,7 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock)
 	// If we wrote a register, mark it up to date
 	if (regIndexBeingUpdated < NumWriteRegisters)
 	{
-		registersToUpdate &= ~(1 << regIndexBeingUpdated);
+		registersToUpdate &= ~(1u << regIndexBeingUpdated);
 		++numWrites;
 	}
 
@@ -830,6 +832,19 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock)
 		if (previousRegIndexRequested == ReadDrvStat)
 		{
 			// We treat the DRV_STATUS register separately
+			if ((regVal & TMC_RR_STST) == 0)							// in standstill, SG_RESULT returns the chopper on-time instead
+			{
+				const uint32_t sgResult = regVal & TMC_RR_SGRESULT;
+				if (sgResult < minSgLoadRegister)
+				{
+					minSgLoadRegister = sgResult;
+				}
+				if (sgResult > maxSgLoadRegister)
+				{
+					maxSgLoadRegister = sgResult;
+				}
+			}
+
 			if ((regVal & (TMC_RR_OLA | TMC_RR_OLB)) != 0)
 			{
 				uint32_t interval;
@@ -845,17 +860,24 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock)
 					regVal &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds
 				}
 			}
+
+#if 0
 			// Only add bits to the accumulator if they appear in 2 successive samples. This is to avoid seeing transient S2G, S2VS, STST and open load errors.
-			const uint32_t oldDrvStat = accumulatedReadRegisters[previousRegIndexRequested];
-			readRegisters[previousRegIndexRequested] = regVal;
+			const uint32_t oldDrvStat = readRegisters[ReadDrvStat];
+			readRegisters[ReadDrvStat] = regVal;
 			regVal &= oldDrvStat;
-			accumulatedReadRegisters[previousRegIndexRequested] |= regVal;
+			accumulatedReadRegisters[ReadDrvStat] |= regVal;
 		}
 		else
 		{
 			readRegisters[previousRegIndexRequested] = regVal;
 			accumulatedReadRegisters[previousRegIndexRequested] |= regVal;
 		}
+#else
+		}
+		readRegisters[previousRegIndexRequested] = regVal;
+		accumulatedReadRegisters[previousRegIndexRequested] |= regVal;
+#endif
 	}
 
 	if ((rcvDataBlock[0] & (1u << 2)) != 0)							// check the stall status
@@ -866,12 +888,13 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock)
 	{
 		readRegisters[ReadDrvStat] &= ~TMC_RR_SG;
 	}
-	previousRegIndexRequested = regIndexRequested;
+
+	previousRegIndexRequested = (regIndexBeingUpdated == NoRegIndex) ? regIndexRequested : NoRegIndex;
 }
 
 void TmcDriverState::TransferFailed()
 {
-	regIndexRequested = previousRegIndexRequested = 0xFF;
+	regIndexRequested = previousRegIndexRequested = NoRegIndex;
 }
 
 // State structures for all drivers
