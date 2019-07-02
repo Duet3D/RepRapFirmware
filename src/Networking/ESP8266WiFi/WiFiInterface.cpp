@@ -28,21 +28,11 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 # define USE_DMAC			1		// use general DMA controller
 # define USE_XDMAC			0		// use XDMA controller
 
-# define ESP_SPI			SPI
-# define ESP_SPI_ID			ID_SPI
-# define ESP_SPI_IRQn		SPI_IRQn
-# define ESP_SPI_HANDLER	SPI_Handler
-
 #elif defined(DUET3_V03) || defined(SAME70XPLD)
 
 # define USE_PDC			0		// use peripheral DMA controller
 # define USE_DMAC			0		// use general DMA controller
 # define USE_XDMAC			1		// use XDMA controller
-
-# define ESP_SPI			SPI0
-# define ESP_SPI_ID			ID_SPI0
-# define ESP_SPI_IRQn		SPI0_IRQn
-# define ESP_SPI_HANDLER	SPI0_Handler
 
 #else
 # error Unknown board
@@ -428,7 +418,7 @@ void WiFiInterface::Start()
 	pinMode(EspDataReadyPin, OUTPUT_HIGH);
 
 	// GPIO2 also needs to be high to boot. It's connected to MISO on the SAM, so set the pullup resistor on that pin
-	pinMode(APIN_SPI_MISO, INPUT_PULLUP);
+	pinMode(APIN_ESP_SPI_MISO, INPUT_PULLUP);
 
 	// Set our CS input (ESP GPIO15) low ready for booting the ESP. This also clears the transfer ready latch.
 	pinMode(SamCsPin, OUTPUT_LOW);
@@ -506,7 +496,7 @@ void WiFiInterface::Spin(bool full)
 		{
 			// See if the ESP8266 has kept its pins at their stable values for long enough
 			const uint32_t now = millis();
-			if (digitalRead(SamCsPin) && digitalRead(EspDataReadyPin) && !digitalRead(APIN_SPI_SCK))
+			if (digitalRead(SamCsPin) && digitalRead(EspDataReadyPin) && !digitalRead(APIN_ESP_SPI_SCK))
 			{
 				if (now - lastTickMillis >= WiFiStableMillis)
 				{
@@ -1404,7 +1394,7 @@ static void spi_tx_dma_setup(const void *buf, uint32_t transferLength)
 	DMAC->DMAC_EBCISR;		// clear any pending interrupts
 
 	dmac_channel_set_source_addr(DMAC, CONF_SPI_DMAC_TX_CH, reinterpret_cast<uint32_t>(buf));
-	dmac_channel_set_destination_addr(DMAC, CONF_SPI_DMAC_TX_CH, reinterpret_cast<uint32_t>(& SPI->SPI_TDR));
+	dmac_channel_set_destination_addr(DMAC, CONF_SPI_DMAC_TX_CH, reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_TDR)));
 	dmac_channel_set_descriptor_addr(DMAC, CONF_SPI_DMAC_TX_CH, 0);
 	dmac_channel_set_ctrlA(DMAC, CONF_SPI_DMAC_TX_CH, transferLength | DMAC_CTRLA_SRC_WIDTH_WORD | DMAC_CTRLA_DST_WIDTH_BYTE);
 	dmac_channel_set_ctrlB(DMAC, CONF_SPI_DMAC_TX_CH,
@@ -1422,7 +1412,7 @@ static void spi_tx_dma_setup(const void *buf, uint32_t transferLength)
 
 	xdmac_tx_cfg.mbr_ubc = transferLength;
 	xdmac_tx_cfg.mbr_sa = reinterpret_cast<uint32_t>(buf);
-	xdmac_tx_cfg.mbr_da = reinterpret_cast<uint32_t>(&(SPI0->SPI_TDR));
+	xdmac_tx_cfg.mbr_da = reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_TDR));
 	xdmac_tx_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN |
 			XDMAC_CC_MBSIZE_SINGLE |
 			XDMAC_CC_DSYNC_MEM2PER |
@@ -1456,7 +1446,7 @@ static void spi_rx_dma_setup(const void *buf, uint32_t transferLength)
 #if USE_DMAC
 	DMAC->DMAC_EBCISR;		// clear any pending interrupts
 
-	dmac_channel_set_source_addr(DMAC, CONF_SPI_DMAC_RX_CH, reinterpret_cast<uint32_t>(& SPI->SPI_RDR));
+	dmac_channel_set_source_addr(DMAC, CONF_SPI_DMAC_RX_CH, reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_RDR)));
 	dmac_channel_set_destination_addr(DMAC, CONF_SPI_DMAC_RX_CH, reinterpret_cast<uint32_t>(buf));
 	dmac_channel_set_descriptor_addr(DMAC, CONF_SPI_DMAC_RX_CH, 0);
 	dmac_channel_set_ctrlA(DMAC, CONF_SPI_DMAC_RX_CH, transferLength | DMAC_CTRLA_SRC_WIDTH_BYTE | DMAC_CTRLA_DST_WIDTH_WORD);
@@ -1475,7 +1465,7 @@ static void spi_rx_dma_setup(const void *buf, uint32_t transferLength)
 
 	xdmac_rx_cfg.mbr_ubc = transferLength;
 	xdmac_rx_cfg.mbr_da = reinterpret_cast<uint32_t>(buf);
-	xdmac_rx_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(SPI0->SPI_RDR));
+	xdmac_rx_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_RDR));
 	xdmac_rx_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN |
 			XDMAC_CC_MBSIZE_SINGLE |
 			XDMAC_CC_DSYNC_PER2MEM |
@@ -1521,7 +1511,7 @@ static void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize)
 void WiFiInterface::SetupSpi()
 {
 #if USE_PDC
-	spi_pdc = spi_get_pdc_base(SPI);
+	spi_pdc = spi_get_pdc_base(ESP_SPI);
 	// The PDCs are masters 2 and 3 and the SRAM is slave 0. Give the PDCs the highest priority.
 	matrix_set_master_burst_type(0, MATRIX_ULBT_8_BEAT_BURST);
 	matrix_set_slave_default_master_type(0, MATRIX_DEFMSTR_LAST_DEFAULT_MASTER);
@@ -1549,12 +1539,12 @@ void WiFiInterface::SetupSpi()
 #endif
 
 	// Set up the SPI pins
-	ConfigurePin(g_APinDescription[APIN_SPI_SCK]);
-	ConfigurePin(g_APinDescription[APIN_SPI_MOSI]);
-	ConfigurePin(g_APinDescription[APIN_SPI_MISO]);
-	ConfigurePin(g_APinDescription[APIN_SPI_SS0]);
+	ConfigurePin(g_APinDescription[APIN_ESP_SPI_SCK]);
+	ConfigurePin(g_APinDescription[APIN_ESP_SPI_MOSI]);
+	ConfigurePin(g_APinDescription[APIN_ESP_SPI_MISO]);
+	ConfigurePin(g_APinDescription[APIN_ESP_SPI_SS0]);
 
-	pmc_enable_periph_clk(ESP_SPI_ID);
+	pmc_enable_periph_clk(ESP_SPI_INTERFACE_ID);
 	spi_dma_disable();
 	spi_reset(ESP_SPI);				// this clears the transmit and receive registers and puts the SPI into slave mode
 
@@ -1854,7 +1844,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external)
 	pinMode(EspDataReadyPin, OUTPUT_LOW);
 
 	// GPIO2 also needs to be high to boot up. It's connected to MISO on the SAM, so set the pullup resistor on that pin
-	pinMode(APIN_SPI_MISO, INPUT_PULLUP);
+	pinMode(APIN_ESP_SPI_MISO, INPUT_PULLUP);
 
 	// Set our CS input (ESP GPIO15) low ready for booting the ESP. This also clears the transfer ready latch.
 	pinMode(SamCsPin, OUTPUT_LOW);

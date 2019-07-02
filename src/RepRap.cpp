@@ -2110,18 +2110,22 @@ void RepRap::Beep(unsigned int freq, unsigned int ms)
 	ms = constrain<unsigned int>(ms, 10, 60000);
 
 	// If there is an LCD device present, make it beep
+	bool bleeped = false;
 #if SUPPORT_12864_LCD
 	if (display->IsPresent())
 	{
 		display->Beep(freq, ms);
+		bleeped = true;
 	}
-	else
 #endif
+
 	if (platform->HaveAux())
 	{
 		platform->Beep(freq, ms);
+		bleeped = true;
 	}
-	else
+
+	if (!bleeped)
 	{
 		beepFrequency = freq;
 		beepDuration = ms;

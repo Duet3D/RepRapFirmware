@@ -108,17 +108,17 @@ GCodeResult GCodes::SetPrintZProbe(GCodeBuffer& gb, const StringRef& reply)
 			switch (platform.GetZProbeSecondaryValues(v1, v2))
 			{
 			case 1:
-				reply.printf("Current reading %d (%d),", v0, v1);
+				reply.printf("Current reading %d (%d)", v0, v1);
 				break;
 			case 2:
-				reply.printf("Current reading %d (%d, %d),", v0, v1, v2);
+				reply.printf("Current reading %d (%d, %d)", v0, v1, v2);
 				break;
 			default:
-				reply.printf("Current reading %d,", v0);
+				reply.printf("Current reading %d", v0);
 				break;
 			}
 		}
-		reply.catf(" threshold %d, trigger height %.2f, offsets X%.1f Y%.1f", params.adcValue, (double)params.triggerHeight, (double)params.xOffset, (double)params.yOffset);
+		reply.catf(", threshold %d, trigger height %.2f, offsets X%.1f Y%.1f", params.adcValue, (double)params.triggerHeight, (double)params.xOffset, (double)params.yOffset);
 	}
 	return GCodeResult::ok;
 }

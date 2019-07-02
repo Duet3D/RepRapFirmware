@@ -55,12 +55,12 @@ static inline void spi_tx_dma_disable()
 
 static inline bool spi_dma_check_rx_complete()
 {
-	return (SPI->SPI_SR & SPI_SR_ENDRX) != 0;
+	return (W5500_SPI->SPI_SR & SPI_SR_ENDRX) != 0;
 }
 
 static inline bool spi_dma_check_tx_complete()
 {
-	return (SPI->SPI_SR & SPI_SR_ENDTX) != 0;
+	return (W5500_SPI->SPI_SR & SPI_SR_ENDTX) != 0;
 }
 
 static void spi_tx_dma_setup(const uint8_t *buf, uint32_t length)
@@ -132,7 +132,7 @@ static void spi_tx_dma_setup(const TransactionBuffer *buf, uint32_t maxTransmitL
 	DMAC->DMAC_EBCISR;		// clear any pending interrupts
 
 	dmac_channel_set_source_addr(DMAC, CONF_SPI_DMAC_TX_CH, reinterpret_cast<uint32_t>(buf));
-	dmac_channel_set_destination_addr(DMAC, CONF_SPI_DMAC_TX_CH, reinterpret_cast<uint32_t>(& SPI->SPI_TDR));
+	dmac_channel_set_destination_addr(DMAC, CONF_SPI_DMAC_TX_CH, reinterpret_cast<uint32_t>(&(W5500_SPI->SPI_TDR)));
 	dmac_channel_set_descriptor_addr(DMAC, CONF_SPI_DMAC_TX_CH, 0);
 	dmac_channel_set_ctrlA(DMAC, CONF_SPI_DMAC_TX_CH, maxTransmitLength | DMAC_CTRLA_SRC_WIDTH_WORD | DMAC_CTRLA_DST_WIDTH_BYTE);
 	dmac_channel_set_ctrlB(DMAC, CONF_SPI_DMAC_TX_CH,
@@ -143,7 +143,7 @@ static void spi_rx_dma_setup(const TransactionBuffer *buf)
 {
 	DMAC->DMAC_EBCISR;		// clear any pending interrupts
 
-	dmac_channel_set_source_addr(DMAC, CONF_SPI_DMAC_RX_CH, reinterpret_cast<uint32_t>(& SPI->SPI_RDR));
+	dmac_channel_set_source_addr(DMAC, CONF_SPI_DMAC_RX_CH, reinterpret_cast<uint32_t>(&(W5500_SPI->SPI_RDR)));
 	dmac_channel_set_destination_addr(DMAC, CONF_SPI_DMAC_RX_CH, reinterpret_cast<uint32_t>(buf));
 	dmac_channel_set_descriptor_addr(DMAC, CONF_SPI_DMAC_RX_CH, 0);
 //	dmac_channel_set_ctrlA(DMAC, CONF_SPI_DMAC_RX_CH, TransactionBuffer::MaxTransferBytes | DMAC_CTRLA_SRC_WIDTH_BYTE | DMAC_CTRLA_DST_WIDTH_WORD);
@@ -169,7 +169,7 @@ namespace WizSpi
 	void Init()
 	{
 #if USE_PDC
-		spi_pdc = spi_get_pdc_base(SPI);
+		spi_pdc = spi_get_pdc_base(W5500_SPI);
 		// The PDCs are masters 2 and 3 and the SRAM is slave 0. Give the receive PDCs the highest priority.
 		matrix_set_master_burst_type(0, MATRIX_ULBT_8_BEAT_BURST);
 		matrix_set_slave_default_master_type(0, MATRIX_DEFMSTR_LAST_DEFAULT_MASTER);
@@ -192,19 +192,19 @@ namespace WizSpi
 #endif
 
 		// Set up the SPI pins
-		ConfigurePin(APIN_SPI_SCK);
-		ConfigurePin(APIN_SPI_MOSI);
-		ConfigurePin(APIN_SPI_MISO);
-		pinMode(APIN_SPI_SS0, OUTPUT_HIGH);					// use manual SS control
+		ConfigurePin(APIN_W5500_SPI_SCK);
+		ConfigurePin(APIN_W5500_SPI_MOSI);
+		ConfigurePin(APIN_W5500_SPI_MISO);
+		pinMode(APIN_W5500_SPI_SS0, OUTPUT_HIGH);			// use manual SS control
 
-		pmc_enable_periph_clk(ID_SPI);
+		pmc_enable_periph_clk(W5500_SPI_INTERFACE_ID);
 
 #if USE_PDC || USE_DMAC
 		spi_dma_disable();
 #endif
 
-		spi_reset(SPI);										// this clears the transmit and receive registers and puts the SPI into slave mode
-		SPI->SPI_MR = SPI_MR_MSTR							// master mode
+		spi_reset(W5500_SPI);								// this clears the transmit and receive registers and puts the SPI into slave mode
+		W5500_SPI->SPI_MR = SPI_MR_MSTR						// master mode
 						| SPI_MR_MODFDIS					// disable fault detection
 						| SPI_MR_PCS(SpiPeripheralChannelId); // fixed peripheral select
 
@@ -215,8 +215,8 @@ namespace WizSpi
 						| SPI_CSR_DLYBCT(0)      			// Transfer delay
 						| SPI_CSR_CSAAT						// Keep CS low after transfer in case we are slow in writing the next byte
 						| SPI_CSR_NCPHA;					// Data is captured on the leading edge of the clock (SPI mode 0)
-		SPI->SPI_CSR[SpiPeripheralChannelId] = csr;
-		spi_enable(SPI);
+		W5500_SPI->SPI_CSR[SpiPeripheralChannelId] = csr;
+		spi_enable(W5500_SPI);
 
 #if USE_DMAC
 		// Configure DMA RX channel
@@ -231,8 +231,8 @@ namespace WizSpi
 
 	void Stop()
 	{
-		NVIC_DisableIRQ(SPI_IRQn);
-		spi_disable(SPI);
+		NVIC_DisableIRQ(W5500_SPI_IRQn);
+		spi_disable(W5500_SPI);
 #if USE_PDC || USE_DMA
 		spi_dma_disable();
 #endif
@@ -242,7 +242,7 @@ namespace WizSpi
 	static inline bool waitForTxReady()
 	{
 		uint32_t timeout = SPI_TIMEOUT;
-		while ((SPI->SPI_SR & SPI_SR_TDRE) == 0)
+		while ((W5500_SPI->SPI_SR & SPI_SR_TDRE) == 0)
 		{
 			if (--timeout == 0)
 			{
@@ -256,7 +256,7 @@ namespace WizSpi
 	static inline bool waitForTxEmpty()
 	{
 		uint32_t timeout = SPI_TIMEOUT;
-		while ((SPI->SPI_SR & SPI_SR_TXEMPTY) == 0)
+		while ((W5500_SPI->SPI_SR & SPI_SR_TXEMPTY) == 0)
 		{
 			if (!timeout--)
 			{
@@ -270,7 +270,7 @@ namespace WizSpi
 	static inline bool waitForRxReady()
 	{
 		uint32_t timeout = SPI_TIMEOUT;
-		while ((SPI->SPI_SR & SPI_SR_RDRF) == 0)
+		while ((W5500_SPI->SPI_SR & SPI_SR_RDRF) == 0)
 		{
 			if (--timeout == 0)
 			{
@@ -283,9 +283,9 @@ namespace WizSpi
 	// Set the SS pin low to address the W5500
 	void AssertSS()
 	{
-		spi_set_peripheral_chip_select_value(SPI, spi_get_pcs(SpiPeripheralChannelId));
+		spi_set_peripheral_chip_select_value(W5500_SPI, spi_get_pcs(SpiPeripheralChannelId));
 		digitalWrite(W5500SsPin, LOW);
-		(void)SPI->SPI_RDR;						// clear receive register
+		(void)W5500_SPI->SPI_RDR;						// clear receive register
 	}
 
 	// Set the SS pin high again
@@ -301,18 +301,18 @@ namespace WizSpi
 		uint32_t dout = (addr >> 16) & 0x000000FF;
 		if (!waitForTxReady())
 		{
-			SPI->SPI_TDR = dout;
-			(void)SPI->SPI_RDR;
+			W5500_SPI->SPI_TDR = dout;
+			(void)W5500_SPI->SPI_RDR;
 			dout = (addr >> 8) & 0x000000FF;
 			if (!waitForTxReady())
 			{
-				SPI->SPI_TDR = dout;
-				(void)SPI->SPI_RDR;
+				W5500_SPI->SPI_TDR = dout;
+				(void)W5500_SPI->SPI_RDR;
 				dout = addr & 0x000000FF;
 				if (!waitForTxReady())
 				{
-					SPI->SPI_TDR = dout;
-					(void)SPI->SPI_RDR;
+					W5500_SPI->SPI_TDR = dout;
+					(void)W5500_SPI->SPI_RDR;
 				}
 			}
 		}
@@ -321,17 +321,17 @@ namespace WizSpi
 	// Read a single byte. Called after sending the 3-byte address.
 	uint8_t ReadByte()
 	{
-		(void)SPI->SPI_RDR;
+		(void)W5500_SPI->SPI_RDR;
 		if (!waitForTxEmpty())
 		{
-			while ((SPI->SPI_SR & SPI_SR_RDRF) != 0)
+			while ((W5500_SPI->SPI_SR & SPI_SR_RDRF) != 0)
 			{
-				(void)SPI->SPI_RDR;						// clear previous data
+				(void)W5500_SPI->SPI_RDR;						// clear previous data
 			}
-			SPI->SPI_TDR = 0x000000FF;
+			W5500_SPI->SPI_TDR = 0x000000FF;
 			if (!waitForRxReady())
 			{
-				return (uint8_t)SPI->SPI_RDR;
+				return (uint8_t)W5500_SPI->SPI_RDR;
 			}
 		}
 		return 0;
@@ -343,7 +343,7 @@ namespace WizSpi
 		const uint32_t dOut = b;
 		if (!waitForTxReady())
 		{
-			SPI->SPI_TDR = dOut;
+			W5500_SPI->SPI_TDR = dOut;
 		}
 	}
 
@@ -357,9 +357,9 @@ namespace WizSpi
 				return SPI_ERROR_TIMEOUT;
 			}
 
-			while ((SPI->SPI_SR & SPI_SR_RDRF) != 0)
+			while ((W5500_SPI->SPI_SR & SPI_SR_RDRF) != 0)
 			{
-				(void)SPI->SPI_RDR;						// clear previous data
+				(void)W5500_SPI->SPI_RDR;						// clear previous data
 			}
 
 #if USE_PDC
@@ -377,7 +377,7 @@ namespace WizSpi
 			}
 #else
 			const uint32_t dOut = 0x000000FF;
-			SPI->SPI_TDR = dOut;						// send first byte
+			W5500_SPI->SPI_TDR = dOut;						// send first byte
 			while (--len != 0)
 			{
 				// Wait for receive data available and transmit buffer empty
@@ -389,10 +389,10 @@ namespace WizSpi
 						return SPI_ERROR_TIMEOUT;
 					}
 				}
-				while ((SPI->SPI_SR & (SPI_SR_RDRF | SPI_SR_TDRE)) != (SPI_SR_RDRF | SPI_SR_TDRE));
+				while ((W5500_SPI->SPI_SR & (SPI_SR_RDRF | SPI_SR_TDRE)) != (SPI_SR_RDRF | SPI_SR_TDRE));
 
-				const uint32_t din = SPI->SPI_RDR;		// get data from receive register
-				SPI->SPI_TDR = dOut;					// write to transmit register immediately
+				const uint32_t din = W5500_SPI->SPI_RDR;	// get data from receive register
+				W5500_SPI->SPI_TDR = dOut;					// write to transmit register immediately
 				*rx_data++ = (uint8_t)din;
 			}
 
@@ -401,7 +401,7 @@ namespace WizSpi
 				return SPI_ERROR_TIMEOUT;
 			}
 
-			*rx_data++ = (uint8_t)SPI->SPI_RDR;			// Get last byte from receive register
+			*rx_data++ = (uint8_t)W5500_SPI->SPI_RDR;		// Get last byte from receive register
 #endif
 		}
 		return SPI_OK;
@@ -434,8 +434,8 @@ namespace WizSpi
 					return SPI_ERROR_TIMEOUT;
 				}
 
-				SPI->SPI_TDR = dOut;						// write to transmit register
-				(void)SPI->SPI_RDR;
+				W5500_SPI->SPI_TDR = dOut;						// write to transmit register
+				(void)W5500_SPI->SPI_RDR;
 			}
 #endif
 		}
