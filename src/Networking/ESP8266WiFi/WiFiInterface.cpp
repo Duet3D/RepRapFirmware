@@ -1394,7 +1394,7 @@ static void spi_tx_dma_setup(const void *buf, uint32_t transferLength)
 	DMAC->DMAC_EBCISR;		// clear any pending interrupts
 
 	dmac_channel_set_source_addr(DMAC, CONF_SPI_DMAC_TX_CH, reinterpret_cast<uint32_t>(buf));
-	dmac_channel_set_destination_addr(DMAC, CONF_SPI_DMAC_TX_CH, reinterpret_cast<uint32_t>(& SPI->SPI_TDR));
+	dmac_channel_set_destination_addr(DMAC, CONF_SPI_DMAC_TX_CH, reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_TDR)));
 	dmac_channel_set_descriptor_addr(DMAC, CONF_SPI_DMAC_TX_CH, 0);
 	dmac_channel_set_ctrlA(DMAC, CONF_SPI_DMAC_TX_CH, transferLength | DMAC_CTRLA_SRC_WIDTH_WORD | DMAC_CTRLA_DST_WIDTH_BYTE);
 	dmac_channel_set_ctrlB(DMAC, CONF_SPI_DMAC_TX_CH,
@@ -1446,7 +1446,7 @@ static void spi_rx_dma_setup(const void *buf, uint32_t transferLength)
 #if USE_DMAC
 	DMAC->DMAC_EBCISR;		// clear any pending interrupts
 
-	dmac_channel_set_source_addr(DMAC, CONF_SPI_DMAC_RX_CH, reinterpret_cast<uint32_t>(& SPI->SPI_RDR));
+	dmac_channel_set_source_addr(DMAC, CONF_SPI_DMAC_RX_CH, reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_RDR)));
 	dmac_channel_set_destination_addr(DMAC, CONF_SPI_DMAC_RX_CH, reinterpret_cast<uint32_t>(buf));
 	dmac_channel_set_descriptor_addr(DMAC, CONF_SPI_DMAC_RX_CH, 0);
 	dmac_channel_set_ctrlA(DMAC, CONF_SPI_DMAC_RX_CH, transferLength | DMAC_CTRLA_SRC_WIDTH_BYTE | DMAC_CTRLA_DST_WIDTH_WORD);
