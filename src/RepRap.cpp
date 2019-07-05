@@ -1505,7 +1505,12 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			response->EncodeReply(reply);												// also releases the OutputBuffer chain
 		}
 	}
-	response->cat('}');
+
+	if (response->cat('}') == 0)
+	{
+		OutputBuffer::ReleaseAll(response);
+		return nullptr;
+	}
 
 	return response;
 }

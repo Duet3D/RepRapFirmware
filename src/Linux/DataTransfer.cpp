@@ -260,7 +260,7 @@ PrintStoppedReason DataTransfer::ReadPrintStoppedInfo()
 	return header->reason;
 }
 
-void DataTransfer::ReadMacroCompleteInfo(CodeChannel& channel, bool &error)
+void DataTransfer::ReadMacroCompleteInfo(GCodeChannel& channel, bool &error)
 {
 	const MacroCompleteHeader *header = ReadDataHeader<MacroCompleteHeader>();
 	channel = header->channel;
@@ -294,7 +294,7 @@ void DataTransfer::ReadHeightMap()
 	reprap.GetGCodes().ActivateHeightmap(true);
 }
 
-void DataTransfer::ReadLockUnlockRequest(CodeChannel& channel)
+void DataTransfer::ReadLockUnlockRequest(GCodeChannel& channel)
 {
 	const LockUnlockHeader *header = ReadDataHeader<LockUnlockHeader>();
 	channel = header->channel;
@@ -404,14 +404,18 @@ bool DataTransfer::IsReady()
 			// (2) Exchanged response to transfer header
 			if (rxResponse == TransferResponse::Success && txResponse == TransferResponse::Success)
 			{
-				// Everything OK, perform the next data transfer
 				if (rxHeader.dataLength != 0 || txHeader.dataLength != 0)
 				{
+					// Perform the actual data transfer
 					ExchangeData();
 				}
 				else
 				{
-					ExchangeHeader();
+					// Everything OK
+					rxPointer = txPointer = 0;
+					packetId = 0;
+					state = SpiState::ProcessingData;
+					return true;
 				}
 			}
 			else if (rxResponse == TransferResponse::BadResponse)
@@ -537,19 +541,6 @@ void DataTransfer::StartNextTransfer()
 	ExchangeHeader();
 }
 
-bool DataTransfer::WriteState(uint32_t busyChannels)
-{
-	if (!CanWritePacket(sizeof(ReportStateHeader)))
-	{
-		return false;
-	}
-	(void)WritePacketHeader(FirmwareRequest::ReportState, sizeof(ReportStateHeader));
-
-	ReportStateHeader *state = WriteDataHeader<ReportStateHeader>();
-	state->busyChannels = busyChannels;
-	return true;
-}
-
 bool DataTransfer::WriteObjectModel(uint8_t module, OutputBuffer *data)
 {
 	// Try to write the packet header. This packet type cannot deal with truncated messages
@@ -576,17 +567,38 @@ bool DataTransfer::WriteObjectModel(uint8_t module, OutputBuffer *data)
 	return true;
 }
 
+bool DataTransfer::WriteCodeBufferUpdate(uint16_t bufferSpace)
+{
+	if (!CanWritePacket(sizeof(CodeBufferUpdateHeader)))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::CodeBufferUpdate, sizeof(CodeBufferUpdateHeader));
+
+	// Write header
+	CodeBufferUpdateHeader *header = WriteDataHeader<CodeBufferUpdateHeader>();
+	header->bufferSpace = bufferSpace;
+	header->padding = 0;
+	return true;
+
+}
+
 bool DataTransfer::WriteCodeReply(MessageType type, OutputBuffer *&response)
 {
 	// Try to write the packet header. This packet type can deal with truncated messages
-	if (!CanWritePacket(sizeof(CodeReplyHeader) + min<size_t>(24, response->Length())))
+	const size_t minBytesToWrite = min<size_t>(16, (response == nullptr) ? 0 : response->Length());
+	if (!CanWritePacket(sizeof(CodeReplyHeader) + minBytesToWrite))
 	{
 		// Not enough space left
 		return false;
 	}
+
+	// Write packet header
 	PacketHeader *header = WritePacketHeader(FirmwareRequest::CodeReply);
 
-	// Write header
+	// Write code reply header
 	CodeReplyHeader *replyHeader = WriteDataHeader<CodeReplyHeader>();
 	replyHeader->messageType = type;
 	replyHeader->padding = 0;
@@ -595,9 +607,15 @@ bool DataTransfer::WriteCodeReply(MessageType type, OutputBuffer *&response)
 	size_t bytesWritten = 0;
 	if (response != nullptr)
 	{
+		size_t bytesToCopy;
 		do
 		{
-			size_t bytesToCopy = min<size_t>(LinuxTransferBufferSize - txPointer, response->BytesLeft());
+			bytesToCopy = min<size_t>(FreeTxSpace(), response->BytesLeft());
+			if (bytesToCopy == 0)
+			{
+				break;
+			}
+
 			WriteData(response->UnreadData(), bytesToCopy);
 			bytesWritten += bytesToCopy;
 
@@ -607,22 +625,22 @@ bool DataTransfer::WriteCodeReply(MessageType type, OutputBuffer *&response)
 				response = OutputBuffer::Release(response);
 			}
 		}
-		while (txPointer < LinuxTransferBufferSize && response != nullptr);
+		while (response != nullptr);
 
 		if (response != nullptr)
 		{
-			// There is more data to come...
+			// There is more to come...
 			replyHeader->messageType = (MessageType)(replyHeader->messageType | PushFlag);
 		}
 	}
-	replyHeader->length = bytesWritten;
 
-	// Finish packet and return what is left of the output buffer
+	// Finish the packet
+	replyHeader->length = bytesWritten;
 	header->length = sizeof(CodeReplyHeader) + bytesWritten;
 	return true;
 }
 
-bool DataTransfer::WriteMacroRequest(CodeChannel channel, const char *filename, bool reportMissing)
+bool DataTransfer::WriteMacroRequest(GCodeChannel channel, const char *filename, bool reportMissing, bool fromCode)
 {
 	size_t filenameLength = strlen(filename);
 	if (!CanWritePacket(sizeof(ExecuteMacroHeader) + filenameLength))
@@ -637,15 +655,15 @@ bool DataTransfer::WriteMacroRequest(CodeChannel channel, const char *filename, 
 	ExecuteMacroHeader *header = WriteDataHeader<ExecuteMacroHeader>();
 	header->channel = channel;
 	header->reportMissing = reportMissing;
+	header->fromCode = fromCode;
 	header->length = filenameLength;
-	header->padding = 0;
 
 	// Write filename
 	WriteData(filename, filenameLength);
 	return true;
 }
 
-bool DataTransfer::WriteAbortFileRequest(CodeChannel channel)
+bool DataTransfer::WriteAbortFileRequest(GCodeChannel channel)
 {
 	if (!CanWritePacket(sizeof(AbortFileHeader)))
 	{
@@ -663,7 +681,7 @@ bool DataTransfer::WriteAbortFileRequest(CodeChannel channel)
 	return true;
 }
 
-bool DataTransfer::WriteStackEvent(CodeChannel channel, GCodeMachineState& state)
+bool DataTransfer::WriteStackEvent(GCodeChannel channel, GCodeMachineState& state)
 {
 	if (!CanWritePacket(sizeof(StackEventHeader)))
 	{
@@ -759,7 +777,7 @@ bool DataTransfer::WriteHeightMap()
 	return true;
 }
 
-bool DataTransfer::WriteLocked(CodeChannel channel)
+bool DataTransfer::WriteLocked(GCodeChannel channel)
 {
 	if (!CanWritePacket(sizeof(LockUnlockHeader)))
 	{

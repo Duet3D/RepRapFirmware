@@ -189,7 +189,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			else
 			{
 				gb.SetState(GCodeState::homing2);
-				if (!DoFileMacro(gb, nextHomingFileName.c_str(), false))
+				if (!DoFileMacro(gb, nextHomingFileName.c_str(), false, 28))
 				{
 					reply.printf("Homing file %s not found", nextHomingFileName.c_str());
 					error = true;
@@ -230,7 +230,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				String<ShortScratchStringLength> scratchString;
 				scratchString.printf("tfree%d.g", oldTool->Number());
-				DoFileMacro(gb, scratchString.c_str(), false);
+				DoFileMacro(gb, scratchString.c_str(), false, 0);		// don't pass the T code here because it may be negative
 			}
 		}
 		break;
@@ -249,7 +249,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				String<ShortScratchStringLength> scratchString;
 				scratchString.printf("tpre%d.g", gb.MachineState().newToolNumber);
-				DoFileMacro(gb, scratchString.c_str(), false);
+				DoFileMacro(gb, scratchString.c_str(), false, 0);
 			}
 		}
 		break;
@@ -268,7 +268,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				{
 					String<ShortScratchStringLength> scratchString;
 					scratchString.printf("tpost%d.g", gb.MachineState().newToolNumber);
-					DoFileMacro(gb, scratchString.c_str(), false);
+					DoFileMacro(gb, scratchString.c_str(), false, 0);
 				}
 			}
 		}
@@ -319,7 +319,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
 			{
-				DoFileMacro(gb, PAUSE_G, true);
+				DoFileMacro(gb, PAUSE_G, true, 25);
 			}
 		}
 		break;
@@ -330,9 +330,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
 			{
-				if (!DoFileMacro(gb, FILAMENT_CHANGE_G, false))
+				if (!DoFileMacro(gb, FILAMENT_CHANGE_G, false, 600))
 				{
-					DoFileMacro(gb, PAUSE_G, true);
+					DoFileMacro(gb, PAUSE_G, true, 600);
 				}
 			}
 		}
@@ -499,7 +499,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			gb.AdvanceState();
 			if (platform.GetCurrentZProbeType() == ZProbeType::blTouch)
 			{
-				DoFileMacro(gb, DEPLOYPROBE_G, false);				// bltouch needs to be redeployed prior to each probe point
+				DoFileMacro(gb, DEPLOYPROBE_G, false, 29);				// bltouch needs to be redeployed prior to each probe point
 			}
 		}
 		break;
@@ -539,7 +539,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					gb.SetState(GCodeState::normal);
 					if (zp.GetProbeType() != ZProbeType::none && !probeIsDeployed)
 					{
-						DoFileMacro(gb, RETRACTPROBE_G, false);
+						DoFileMacro(gb, RETRACTPROBE_G, false, 29);
 					}
 					break;
 				}
@@ -581,7 +581,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					gb.SetState(GCodeState::normal);
 					if (zp.GetProbeType() != ZProbeType::none && !probeIsDeployed)
 					{
-						DoFileMacro(gb, RETRACTPROBE_G, false);
+						DoFileMacro(gb, RETRACTPROBE_G, false, 29);
 					}
 					break;
 				}
@@ -593,7 +593,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			gb.AdvanceState();
 			if (platform.GetCurrentZProbeType() == ZProbeType::blTouch)
 			{
-				DoFileMacro(gb, RETRACTPROBE_G, false);			// bltouch needs to be retracted when it triggers
+				DoFileMacro(gb, RETRACTPROBE_G, false, 29);			// bltouch needs to be retracted when it triggers
 			}
 		}
 		break;
@@ -656,7 +656,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				gb.SetState(GCodeState::normal);
 				if (params.GetProbeType() != ZProbeType::none && !probeIsDeployed)
 				{
-					DoFileMacro(gb, RETRACTPROBE_G, false);
+					DoFileMacro(gb, RETRACTPROBE_G, false, 29);
 				}
 			}
 		}
@@ -696,7 +696,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				gb.AdvanceState();
 				if (platform.GetCurrentZProbeType() != ZProbeType::none && !probeIsDeployed)
 				{
-					DoFileMacro(gb, RETRACTPROBE_G, false);
+					DoFileMacro(gb, RETRACTPROBE_G, false, 29);
 				}
 			}
 			else
@@ -777,7 +777,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			gb.AdvanceState();
 			if (platform.GetCurrentZProbeType() == ZProbeType::blTouch)
 			{
-				DoFileMacro(gb, DEPLOYPROBE_G, false);				// bltouch needs to be redeployed prior to each probe point
+				DoFileMacro(gb, DEPLOYPROBE_G, false, 30);			// bltouch needs to be redeployed prior to each probe point
 			}
 		}
 		break;
@@ -822,7 +822,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				gb.SetState(GCodeState::normal);										// no point in doing anything else
 				if (zp.GetProbeType() != ZProbeType::none && !probeIsDeployed)
 				{
-					DoFileMacro(gb, RETRACTPROBE_G, false);
+					DoFileMacro(gb, RETRACTPROBE_G, false, 30);
 				}
 			}
 			else
@@ -887,7 +887,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					gb.SetState(GCodeState::probingAtPoint7);					// special state for reporting the stopped height at the end
 					if (zp.GetProbeType() != ZProbeType::none && !probeIsDeployed)
 					{
-						DoFileMacro(gb, RETRACTPROBE_G, false);					// retract the probe before moving to the new state
+						DoFileMacro(gb, RETRACTPROBE_G, false, 30);					// retract the probe before moving to the new state
 					}
 					break;
 				}
@@ -907,7 +907,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			gb.AdvanceState();
 			if (zp.GetProbeType() == ZProbeType::blTouch)
 			{
-				DoFileMacro(gb, RETRACTPROBE_G, false);							// bltouch needs to be retracted when it triggers
+				DoFileMacro(gb, RETRACTPROBE_G, false, 30);							// bltouch needs to be retracted when it triggers
 			}
 		}
 		break;
@@ -979,7 +979,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			gb.AdvanceState();
 			if (platform.GetCurrentZProbeType() != ZProbeType::none && !probeIsDeployed)
 			{
-				DoFileMacro(gb, RETRACTPROBE_G, false);
+				DoFileMacro(gb, RETRACTPROBE_G, false, 30);
 			}
 		}
 		break;

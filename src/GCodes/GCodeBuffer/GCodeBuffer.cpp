@@ -17,13 +17,11 @@
 #include "Platform.h"
 
 // Create a default GCodeBuffer
-GCodeBuffer::GCodeBuffer(const char* id, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType stringMt, MessageType binaryMt, bool usesCodeQueue)
-	: identity(id), normalInput(normalIn), fileInput(fileIn), responseMessageTypeString(stringMt),
-	  responseMessageTypeBinary((MessageType)(binaryMt | MessageType::BinaryCodeReplyFlag)),
-	  queueCodes(usesCodeQueue), toolNumberAdjust(0),
+GCodeBuffer::GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt)
+	: codeChannel(channel), normalInput(normalIn), fileInput(fileIn), responseMessageType(mt), toolNumberAdjust(0),
 	  isBinaryBuffer(false), binaryParser(*this), stringParser(*this), machineState(new GCodeMachineState())
 #if HAS_LINUX_INTERFACE
-	  , reportMissingMacro(false), abortFile(false), reportStack(false)
+	  , reportMissingMacro(false), isMacroFromCode(false), abortFile(false), reportStack(false)
 #endif
 {
 	Init();
@@ -33,6 +31,7 @@ GCodeBuffer::GCodeBuffer(const char* id, GCodeInput *normalIn, FileGCodeInput *f
 void GCodeBuffer::Reset()
 {
 	while (PopState(false)) { }
+	isBinaryBuffer = false;
 	Init();
 }
 
@@ -551,18 +550,20 @@ void GCodeBuffer::SetPrintFinished()
 	}
 }
 
-void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing)
+void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing, bool fromCode)
 {
 	machineState->SetFileExecuting();
 
 	requestedMacroFile.copy(filename);
 	reportMissingMacro = reportMissing;
+	isMacroFromCode = fromCode;
 	abortFile = false;
 }
 
-const char *GCodeBuffer::GetRequestedMacroFile(bool& reportMissing) const
+const char *GCodeBuffer::GetRequestedMacroFile(bool& reportMissing, bool& fromCode) const
 {
 	reportMissing = reportMissingMacro;
+	fromCode = isMacroFromCode;
 	return requestedMacroFile.IsEmpty() ? nullptr : requestedMacroFile.c_str();
 }
 
@@ -603,15 +604,19 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled)
 	}
 }
 
-// Return true if we can queue gcodes from this source
+// Return true if we can queue gcodes from this source. This is the case if a file is being executed
 bool GCodeBuffer::CanQueueCodes() const
 {
-	return queueCodes || machineState->doingFileMacro;		// return true if we queue commands from this source or we are executing a macro
+	return machineState->DoingFile();
 }
 
 MessageType GCodeBuffer::GetResponseMessageType() const
 {
-	return isBinaryBuffer ? responseMessageTypeBinary : responseMessageTypeString;
+	if (isBinaryBuffer)
+	{
+		return (MessageType)((1 << (size_t)codeChannel) | BinaryCodeReplyFlag);
+	}
+	return responseMessageType;
 }
 
 FilePosition GCodeBuffer::GetFilePosition() const

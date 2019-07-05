@@ -472,23 +472,20 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 // Push an OutputBuffer chain to the stack
 void OutputStack::Push(OutputBuffer *buffer, MessageType type) volatile
 {
-	if (buffer != nullptr)
 	{
-		{
-			TaskCriticalSectionLocker lock;
+		TaskCriticalSectionLocker lock;
 
-			if (count < OUTPUT_STACK_DEPTH)
-			{
-				buffer->whenQueued = millis();
-				items[count] = buffer;
-				types[count] = type;
-				count++;
-				return;
-			}
+		if (count < OUTPUT_STACK_DEPTH)
+		{
+			buffer->whenQueued = millis();
+			items[count] = buffer;
+			types[count] = type;
+			count++;
+			return;
 		}
-		OutputBuffer::ReleaseAll(buffer);
-		reprap.GetPlatform().LogError(ErrorCode::OutputStackOverflow);
 	}
+	OutputBuffer::ReleaseAll(buffer);
+	reprap.GetPlatform().LogError(ErrorCode::OutputStackOverflow);
 }
 
 // Pop an OutputBuffer chain or return nullptr if none is available

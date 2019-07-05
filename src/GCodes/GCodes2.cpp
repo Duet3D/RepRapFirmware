@@ -297,7 +297,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		// which means that no gcode source other than the one that executed G32 is allowed to jog the Z axis.
 		UnlockAll(gb);
 
-		DoFileMacro(gb, BED_EQUATION_G, true);	// Try to execute bed.g
+		DoFileMacro(gb, BED_EQUATION_G, true, 32);	// Try to execute bed.g
 		break;
 
 	case 53:	// Temporarily use machine coordinates
@@ -407,14 +407,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (!wasSimulating)								// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
 			{
 				// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
-				if (wasPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false))
+				if (wasPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false, 0))
 				{
 					break;
 				}
 
 				const bool leaveHeatersOn = (gb.Seen('H') && gb.GetIValue() > 0);
 				gb.SetState((leaveHeatersOn) ? GCodeState::stoppingWithHeatersOn : GCodeState::stoppingWithHeatersOff);
-				(void)DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false);
+				(void)DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false, code);
 			}
 		}
 		break;
@@ -771,7 +771,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					gb.SetState(GCodeState::resuming1);
 					if (AllAxesAreHomed())
 					{
-						DoFileMacro(gb, RESUME_G, true);
+						DoFileMacro(gb, RESUME_G, true, 24);
 					}
 				}
 			}
@@ -1636,7 +1636,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			const int val = (gb.Seen('P')) ? gb.GetIValue() : 0;
 			if (val == 0)
 			{
-				reprap.Diagnostics(gb.GetResponseMessageType());
+				// Set the Push flag to combine multiple messages into a single OutputBuffer chain
+				reprap.Diagnostics((MessageType)(gb.GetResponseMessageType() | PushFlag));
 			}
 			else
 			{
@@ -2563,7 +2564,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (platform.GetCurrentZProbeType() != ZProbeType::none)
 		{
 			probeIsDeployed = true;
-			DoFileMacro(gb, DEPLOYPROBE_G, false);
+			DoFileMacro(gb, DEPLOYPROBE_G, false, 401);
 		}
 		break;
 
@@ -2571,7 +2572,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (platform.GetCurrentZProbeType() != ZProbeType::none)
 		{
 			probeIsDeployed = false;
-			DoFileMacro(gb, RETRACTPROBE_G, false);
+			DoFileMacro(gb, RETRACTPROBE_G, false, 402);
 		}
 		break;
 
@@ -3957,7 +3958,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				String<ScratchStringLength> scratchString;
 				scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, reprap.GetCurrentTool()->GetFilament()->GetName(), CONFIG_FILAMENT_G);
-				DoFileMacro(gb, scratchString.c_str(), false);
+				DoFileMacro(gb, scratchString.c_str(), false, 703);
 			}
 		}
 		else
@@ -4317,7 +4318,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
-			DoFileMacro(gb, RESUME_AFTER_POWER_FAIL_G, true);
+			DoFileMacro(gb, RESUME_AFTER_POWER_FAIL_G, true, 916);
 		}
 		break;
 

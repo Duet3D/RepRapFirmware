@@ -565,7 +565,7 @@ void Scanner::DoFileMacro(const char *filename)
 	if (platform.SysFileExists(filename))
 	{
 		String<MaxFilenameLength + 7> gcode;
-		gcode.printf("M98 P%s\n", filename);
+		gcode.printf("M98 P\"%s\"\n", filename);
 		serialGCode->Put(gcode.c_str());
 	}
 }

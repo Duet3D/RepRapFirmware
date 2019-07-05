@@ -87,12 +87,12 @@ GCodes::GCodes(Platform& p) :
 #else
 	FileGCodeInput * const fileInput = nullptr;
 #endif
-	fileGCode = new GCodeBuffer("file", nullptr, fileInput, GenericMessage, FileMessage, true);
+	fileGCode = new GCodeBuffer(GCodeChannel::file, nullptr, fileInput, GenericMessage);
 
 #if HAS_NETWORKING || HAS_LINUX_INTERFACE
 	httpInput = new NetworkGCodeInput();
-	httpGCode = new GCodeBuffer("http", httpInput, fileInput, HttpMessage, HttpMessage, false);
-	telnetGCode = new GCodeBuffer("telnet", telnetInput, fileInput, TelnetMessage, TelnetMessage, true);
+	httpGCode = new GCodeBuffer(GCodeChannel::http, httpInput, fileInput, HttpMessage);
+	telnetGCode = new GCodeBuffer(GCodeChannel::telnet, telnetInput, fileInput, TelnetMessage);
 	telnetInput = new NetworkGCodeInput();
 #else
 	httpGCode = telnetGCode = nullptr;
@@ -100,40 +100,40 @@ GCodes::GCodes(Platform& p) :
 
 #if defined(SERIAL_MAIN_DEVICE)
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
-	usbGCode = new GCodeBuffer("usb", usbInput, fileInput, UsbMessage, UsbMessage, true);
+	usbGCode = new GCodeBuffer(GCodeChannel::usb, usbInput, fileInput, UsbMessage);
 #elif HAS_LINUX_INTERFACE
-	usbGCode = new GCodeBuffer("usb", nullptr, fileInput, UsbMessage, UsbMessage, true);
+	usbGCode = new GCodeBuffer(GCodeChannel::usb, nullptr, fileInput, UsbMessage);
 #else
 	usbGCode = nullptr;
 #endif
 
 #if defined(SERIAL_AUX_DEVICE)
 	StreamGCodeInput * const auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
-	auxGCode = new GCodeBuffer("aux", auxInput, fileInput, AuxMessage, AuxMessage, false);
+	auxGCode = new GCodeBuffer(GCodeChannel::aux, auxInput, fileInput, AuxMessage);
 #elif HAS_LINUX_INTERFACE
-	auxGCode = new GCodeBuffer("aux", nullptr, fileInput, AuxMessage, AuxMessage, false);
+	auxGCode = new GCodeBuffer(GCodeChannel::aux, nullptr, fileInput, AuxMessage);
 #else
 	auxGCode = nullptr;
 #endif
 
-	daemonGCode = new GCodeBuffer("daemon", nullptr, fileInput, GenericMessage, DaemonMessage, false);
+	daemonGCode = new GCodeBuffer(GCodeChannel::daemon, nullptr, fileInput, GenericMessage);
 
 	codeQueue = new GCodeQueue();
-	queuedGCode = new GCodeBuffer("queue", codeQueue, fileInput, GenericMessage, CodeQueueMessage, false);
+	queuedGCode = new GCodeBuffer(GCodeChannel::queue, codeQueue, fileInput, GenericMessage);
 
 #if SUPPORT_12864_LCD || HAS_LINUX_INTERFACE
-	lcdGCode = new GCodeBuffer("lcd", nullptr, fileInput, LcdMessage, LcdMessage, false);
+	lcdGCode = new GCodeBuffer(GCodeChannel::lcd, nullptr, fileInput, LcdMessage);
 #else
 	lcdGCode = nullptr;
 #endif
 
 #if HAS_LINUX_INTERFACE
-	spiGCode = new GCodeBuffer("spi", nullptr, fileInput, GenericMessage, SpiMessage, false);
+	spiGCode = new GCodeBuffer(GCodeChannel::spi, nullptr, fileInput, GenericMessage);
 #else
 	spiGCode = nullptr;
 #endif
 
-	autoPauseGCode = new GCodeBuffer("autopause", nullptr, fileInput, GenericMessage, AutoPauseMessage, false);
+	autoPauseGCode = new GCodeBuffer(GCodeChannel::autopause, nullptr, fileInput, GenericMessage);
 }
 
 void GCodes::Exit()
@@ -479,13 +479,12 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 	{
 		DoFilePrint(gb, reply);
 	}
-	else if (	gb.GetNormalInput() != nullptr
+	else
 #if SUPPORT_SCANNER
-			 && !(&gb == usbGCode && reprap.GetScanner().IsRegistered())
+		 if (!(&gb == usbGCode && reprap.GetScanner().IsRegistered()))
 #endif
-			)
 	{
-		const bool gotCommand = gb.GetNormalInput()->FillBuffer(&gb);
+		bool gotCommand = (gb.GetNormalInput() != nullptr) ? gb.GetNormalInput()->FillBuffer(&gb) : false;
 #ifdef SERIAL_AUX_DEVICE
 		if (gotCommand && &gb == auxGCode)
 		{
@@ -493,6 +492,12 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 		}
 #else
 		(void)gotCommand;
+#endif
+#if HAS_LINUX_INTERFACE
+		if (!gotCommand)
+		{
+			reprap.GetLinuxInterface().FillBuffer(gb);
+		}
 #endif
 	}
 }
@@ -608,18 +613,22 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 			{
 				UnlockAll(gb);
 				HandleReply(gb, GCodeResult::ok, "");
-				if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
-				{
-					gb.Put("M600");
-					filamentChangePausePending = false;
-				}
-				else if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
-				{
-					gb.Put("M226");
-					pausePending = false;
-				}
 			}
 		}
+	}
+	else if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
+	{
+		gb.Put("M600");
+		filamentChangePausePending = false;
+	}
+	else if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
+	{
+		gb.Put("M226");
+		pausePending = false;
+	}
+	else
+	{
+		reprap.GetLinuxInterface().FillBuffer(gb);
 	}
 #else
 	INTERNAL_ERROR;
@@ -891,7 +900,7 @@ bool GCodes::IsPausing() const
 		return true;
 	}
 
-	return false;
+	return pausePending;
 }
 
 bool GCodes::IsResuming() const
@@ -1096,7 +1105,7 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers)
 	}
 
 	autoPauseGCode->SetState(GCodeState::resuming1); // set up to resume after rehoming
-	DoFileMacro(*autoPauseGCode, REHOME_G, true);	// run the SD card rehome-and-resume script
+	DoFileMacro(*autoPauseGCode, REHOME_G, true); 	// run the SD card rehome-and-resume script
 	return true;
 }
 
@@ -2227,7 +2236,7 @@ void GCodes::EmergencyStop()
 // 501 = running M501
 // 502 = running M502
 // 98 = running a macro explicitly via M98
-// 0 = running a system macro automatically
+// -1 = running a system macro automatically
 bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning)
 {
 #if HAS_HIGH_SPEED_SD
@@ -2255,7 +2264,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 		return true;
 	}
 
-	gb.RequestMacroFile(fileName, reportMissing);
+	gb.RequestMacroFile(fileName, reportMissing, codeRunning >= 0);
 #else
 	return reportMissing;
 #endif
@@ -2384,7 +2393,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 				gb.SetState(GCodeState::probingAtPoint0);
 				if (platform.GetCurrentZProbeType() != ZProbeType::none && platform.GetCurrentZProbeType() != ZProbeType::blTouch && !probeIsDeployed)
 				{
-					DoFileMacro(gb, DEPLOYPROBE_G, false);
+					DoFileMacro(gb, DEPLOYPROBE_G, false, 30);
 				}
 			}
 		}
@@ -2397,7 +2406,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 		gb.SetState(GCodeState::probingAtPoint2a);
 		if (platform.GetCurrentZProbeType() != ZProbeType::none && !probeIsDeployed)
 		{
-			DoFileMacro(gb, DEPLOYPROBE_G, false);
+			DoFileMacro(gb, DEPLOYPROBE_G, false, 30);
 		}
 	}
 	return GCodeResult::ok;
@@ -2450,7 +2459,7 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 
 	if (platform.GetCurrentZProbeType() != ZProbeType::none && platform.GetCurrentZProbeType() != ZProbeType::blTouch && !probeIsDeployed)
 	{
-		DoFileMacro(gb, DEPLOYPROBE_G, false);
+		DoFileMacro(gb, DEPLOYPROBE_G, false, 29);
 	}
 	return GCodeResult::ok;
 }
@@ -2649,7 +2658,7 @@ void GCodes::StartPrinting(bool fromStart)
 	if (fromStart)
 	{
 		// Get the fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
-		DoFileMacro(*fileGCode, START_G, false);
+		DoFileMacro(*fileGCode, START_G, false, 32);
 	}
 #endif
 }
@@ -3024,6 +3033,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 		{
 			type = (MessageType)(type | ErrorMessageFlag | LogMessage);
 		}
+
 		platform.Message(type, reply);
 		return;
 	}
@@ -3568,7 +3578,7 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 
 		String<ScratchStringLength> scratchString;
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName.c_str(), LOAD_FILAMENT_G);
-		DoFileMacro(gb, scratchString.c_str(), true);
+		DoFileMacro(gb, scratchString.c_str(), true, 701);
 	}
 	else if (tool->GetFilament()->IsLoaded())
 	{
@@ -3606,7 +3616,7 @@ GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply)
 	gb.SetState(GCodeState::unloadingFilament);
 	String<ScratchStringLength> scratchString;
 	scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, tool->GetFilament()->GetName(), UNLOAD_FILAMENT_G);
-	DoFileMacro(gb, scratchString.c_str(), true);
+	DoFileMacro(gb, scratchString.c_str(), true, 702);
 	return GCodeResult::ok;
 }
 
@@ -3773,6 +3783,7 @@ void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const
 
 	rp.feedRate = gb.MachineState().feedRate;
 	rp.virtualExtruderPosition = virtualExtruderPosition;
+	rp.filePos = gb.GetFilePosition();
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	rp.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;

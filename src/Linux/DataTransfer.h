@@ -37,20 +37,20 @@ public:
 	uint8_t ReadGetObjectModel();							// Read an object model request
 	void ReadPrintStartedInfo(size_t packetLength, StringRef& filename, GCodeFileInfo &info);	// Read info about the started file print
 	PrintStoppedReason ReadPrintStoppedInfo();				// Read info about why the print has been stopped
-	void ReadMacroCompleteInfo(CodeChannel& channel, bool &error);	// Read info about a completed macro file
+	void ReadMacroCompleteInfo(GCodeChannel& channel, bool &error);	// Read info about a completed macro file
 	void ReadHeightMap();									// Read heightmap parameters
-	void ReadLockUnlockRequest(CodeChannel& channel);		// Read a lock/unlock request
+	void ReadLockUnlockRequest(GCodeChannel& channel);		// Read a lock/unlock request
 
 	void ResendPacket(const PacketHeader *packet);
-	bool WriteState(uint32_t busyChannels);
 	bool WriteObjectModel(uint8_t module, OutputBuffer *data);
+	bool WriteCodeBufferUpdate(uint16_t bufferSpace);
 	bool WriteCodeReply(MessageType type, OutputBuffer *&response);
-	bool WriteMacroRequest(CodeChannel channel, const char *filename, bool reportMissing);
-	bool WriteAbortFileRequest(CodeChannel channel);
-	bool WriteStackEvent(CodeChannel channel, GCodeMachineState& state);
+	bool WriteMacroRequest(GCodeChannel channel, const char *filename, bool reportMissing, bool fromBinaryCode);
+	bool WriteAbortFileRequest(GCodeChannel channel);
+	bool WriteStackEvent(GCodeChannel channel, GCodeMachineState& state);
 	bool WritePrintPaused(FilePosition position, PrintPausedReason reason);
 	bool WriteHeightMap();
-	bool WriteLocked(CodeChannel channel);
+	bool WriteLocked(GCodeChannel channel);
 
 	static void SpiInterrupt();
 
