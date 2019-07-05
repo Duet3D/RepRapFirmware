@@ -343,6 +343,7 @@ AxesBitmap ScaraKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallow
 
 size_t ScaraKinematics::NumHomingButtons(size_t numVisibleAxes) const
 {
+#if HAS_MASS_STORAGE
 	const Platform& platform = reprap.GetPlatform();
 	if (!platform.SysFileExists(HomeProximalFileName))
 	{
@@ -356,6 +357,7 @@ size_t ScaraKinematics::NumHomingButtons(size_t numVisibleAxes) const
 	{
 		return 2;
 	}
+#endif
 	return numVisibleAxes;
 }
 
@@ -369,7 +371,7 @@ AxesBitmap ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap a
 
 	if (ret == 0)
 	{
-	// Change the returned name if it is X or Y
+		// Change the returned name if it is X or Y
 		if (StringEqualsIgnoreCase(filename.c_str(), "homex.g"))
 		{
 			filename.copy(HomeProximalFileName);
@@ -379,11 +381,13 @@ AxesBitmap ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap a
 			filename.copy(HomeDistalFileName);
 		}
 
+#if HAS_MASS_STORAGE
 		// Some SCARA printers cannot have individual axes homed safely. So it the user doesn't provide the homing file for an axis, default to homeall.
 		if (!reprap.GetPlatform().SysFileExists(filename.c_str()))
 		{
 			filename.copy(HomeAllFileName);
 		}
+#endif
 	}
 	return ret;
 }

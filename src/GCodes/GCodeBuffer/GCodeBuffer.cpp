@@ -8,7 +8,7 @@
 //*************************************************************************************
 
 #include "GCodeBuffer.h"
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 # include "GCodes/GCodeInput.h"
 #endif
 #include "BinaryParser.h"
@@ -18,8 +18,12 @@
 
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt)
-	: codeChannel(channel), normalInput(normalIn), fileInput(fileIn), responseMessageType(mt), toolNumberAdjust(0),
-	  isBinaryBuffer(false), binaryParser(*this), stringParser(*this), machineState(new GCodeMachineState())
+	: codeChannel(channel), normalInput(normalIn),
+#if HAS_MASS_STORAGE
+	  fileInput(fileIn),
+#endif
+	  responseMessageType(mt), toolNumberAdjust(0), isBinaryBuffer(false), binaryParser(*this), stringParser(*this),
+	  machineState(new GCodeMachineState())
 #if HAS_LINUX_INTERFACE
 	  , reportMissingMacro(false), isMacroFromCode(false), abortFile(false), reportStack(false)
 #endif
@@ -462,7 +466,7 @@ bool GCodeBuffer::PushState(bool preserveLineNumber)
 #if HAS_LINUX_INTERFACE
 	ms->fileId = machineState->fileId;
 	ms->isFileFinished = machineState->isFileFinished;
-#elif HAS_HIGH_SPEED_SD
+#elif HAS_MASS_STORAGE
 	ms->fileState.CopyFrom(machineState->fileState);
 #endif
 	ms->lockedResources = machineState->lockedResources;
@@ -518,7 +522,7 @@ void GCodeBuffer::AbortFile(bool requestAbort)
 		{
 			if (machineState->DoingFile())
 			{
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 				fileInput->Reset(machineState->fileState);
 #endif
 				machineState->CloseFile();
@@ -624,6 +628,8 @@ FilePosition GCodeBuffer::GetFilePosition() const
 	return isBinaryBuffer ? binaryParser.GetFilePosition() : stringParser.GetFilePosition();
 }
 
+#if HAS_MASS_STORAGE
+
 bool GCodeBuffer::OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
 {
 	if (isBinaryBuffer)
@@ -675,9 +681,11 @@ void GCodeBuffer::FinishWritingBinary()
 	}
 }
 
+#endif
+
 void GCodeBuffer::RestartFrom(FilePosition pos)
 {
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	fileInput->Reset(machineState->fileState);		// clear the buffered data
 	machineState->fileState.Seek(pos);				// replay the abandoned instructions when we resume
 #endif

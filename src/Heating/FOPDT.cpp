@@ -65,6 +65,8 @@ void FopDt::SetM301PidParameters(const M301PidParameters& pp)
 	pidParametersOverridden = true;
 }
 
+#if HAS_MASS_STORAGE
+
 // Write the model parameters to file returning true if no error
 bool FopDt::WriteParameters(FileStore *f, size_t heater) const
 {
@@ -80,6 +82,8 @@ bool FopDt::WriteParameters(FileStore *f, size_t heater) const
 	}
 	return ok;
 }
+
+#endif
 
 /* Re-calculate the PID parameters.
  * For some possible formulas, see "Comparison of some well-known PID tuning formulas", Computers and Chemical Engineering 30 (2006) 1416–1423,

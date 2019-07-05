@@ -18,6 +18,7 @@ bool StandardGCodeInput::FillBuffer(GCodeBuffer *gb)
 	{
 		const char c = ReadByte();
 
+#if HAS_MASS_STORAGE
 		if (gb->IsWritingBinary())
 		{
 			// HTML uploads are handled by the GCodes class
@@ -33,6 +34,13 @@ bool StandardGCodeInput::FillBuffer(GCodeBuffer *gb)
 			// Code is complete or has been written to file, so stop here
 			return true;
 		}
+#else
+		if (gb->Put(c))
+		{
+			// Code is complete, so stop here
+			return true;
+		}
+#endif
 	}
 
 	return false;
@@ -209,6 +217,8 @@ bool NetworkGCodeInput::FillBuffer(GCodeBuffer *gb) /*override*/
 	return lock && RegularGCodeInput::FillBuffer(gb);
 }
 
+#if HAS_MASS_STORAGE
+
 // File-based G-code input source
 
 // Reset this input. Should be called when the associated file is being closed
@@ -272,5 +282,7 @@ GCodeInputReadResult FileGCodeInput::ReadFromFile(FileData &file)
 
 	return (bytesCached > 0) ? GCodeInputReadResult::haveData : GCodeInputReadResult::noData;
 }
+
+#endif
 
 // End

@@ -108,9 +108,11 @@ bool HttpResponder::Spin()
 		(void)SendFileInfo(millis() - startedProcessingRequestAt >= MaxFileInfoGetTime);
 		return true;
 
+#if HAS_MASS_STORAGE
 	case ResponderState::uploading:
 		DoUpload();
 		return true;
+#endif
 
 	case ResponderState::sending:
 		SendData();
@@ -522,6 +524,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		httpInput->Put(HttpMessage, GetKeyValue("gcode"));
 		response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
 	}
+#if HAS_MASS_STORAGE
 	else if (StringEqualsIgnoreCase(request, "upload"))
 	{
 		response->printf("{\"err\":%d}", (uploadError) ? 1 : 0);
@@ -552,22 +555,6 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		const bool flagDirs = flagDirsVal != nullptr && SafeStrtol(flagDirsVal) == 1;
 		response = reprap.GetFilesResponse(dir, startAt, flagDirs);				// this may return nullptr
 	}
-	else if (StringEqualsIgnoreCase(request, "fileinfo"))
-	{
-		const char* const nameVal = GetKeyValue("name");
-		if (nameVal != nullptr)
-		{
-			// Regular rr_fileinfo?name=xxx call
-			filenameBeingProcessed.copy(nameVal);
-		}
-		else
-		{
-			// Simple rr_fileinfo call to get info about the file being printed
-			filenameBeingProcessed.Clear();
-		}
-		responderState = ResponderState::gettingFileInfo;
-		return false;
-	}
 	else if (StringEqualsIgnoreCase(request, "move"))
 	{
 		const char* const oldVal = GetKeyValue("old");
@@ -593,6 +580,34 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			success = GetPlatform().GetMassStorage()->MakeDirectory(dirVal);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
+	}
+#else
+	else if (	StringEqualsIgnoreCase(request, "upload")
+			 || StringEqualsIgnoreCase(request, "delete")
+			 || StringEqualsIgnoreCase(request, "filelist")
+			 || StringEqualsIgnoreCase(request, "files")
+			 || StringEqualsIgnoreCase(request, "move")
+			 || StringEqualsIgnoreCase(request, "mkdir")
+			)
+	{
+		response->copy("{err:1}");
+	}
+#endif
+	else if (StringEqualsIgnoreCase(request, "fileinfo"))
+	{
+		const char* const nameVal = GetKeyValue("name");
+		if (nameVal != nullptr)
+		{
+			// Regular rr_fileinfo?name=xxx call
+			filenameBeingProcessed.copy(nameVal);
+		}
+		else
+		{
+			// Simple rr_fileinfo call to get info about the file being printed
+			filenameBeingProcessed.Clear();
+		}
+		responderState = ResponderState::gettingFileInfo;
+		return false;
 	}
 	else if (StringEqualsIgnoreCase(request, "config"))
 	{
@@ -715,6 +730,7 @@ bool HttpResponder::RemoveAuthentication()
 
 void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 {
+#if HAS_MASS_STORAGE
 	FileStore *fileToSend = nullptr;
 	bool zip = false;
 
@@ -848,6 +864,9 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 	outBuf->catf("Content-Length: %lu\r\n", fileToSend->Length());
 	outBuf->cat("Connection: close\r\n\r\n");
 	Commit();
+#else
+	RejectMessage("file not found", 404);
+#endif
 }
 
 void HttpResponder::SendGCodeReply()
@@ -918,6 +937,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 			return;
 		}
 
+#if HAS_MASS_STORAGE
 		if (StringEqualsIgnoreCase(command, "configfile"))	// rr_configfile [DEPRECATED]
 		{
 			String<MaxFilenameLength> fileName;
@@ -935,6 +955,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 				return;
 			}
 		}
+#endif
 	}
 
 	// Try to process a request for JSON responses
@@ -1137,6 +1158,7 @@ void HttpResponder::ProcessRequest()
 
 		if (CheckAuthenticated() && StringEqualsIgnoreCase(commandWords[0], "POST"))
 		{
+#if HAS_MASS_STORAGE
 			const bool isUploadRequest = (StringEqualsIgnoreCase(commandWords[1], KO_START "upload"))
 									  || (commandWords[1][0] == '/' && StringEqualsIgnoreCase(commandWords[1] + 1, KO_START "upload"));
 			if (isUploadRequest)
@@ -1215,6 +1237,9 @@ void HttpResponder::ProcessRequest()
 				}
 			}
 			RejectMessage("only rr_upload is supported for POST requests");
+#else
+			RejectMessage("POST requests are not supported");
+#endif
 		}
 		else
 		{
@@ -1251,6 +1276,8 @@ void HttpResponder::RejectMessage(const char* response, unsigned int code)
 		responderState = ResponderState::free;
 	}
 }
+
+#if HAS_MASS_STORAGE
 
 // This function overrides the one in class NetworkResponder.
 // It tries to process a chunk of uploaded data and changes the state if finished.
@@ -1301,6 +1328,8 @@ void HttpResponder::DoUpload()
 		SendJsonResponse("upload");
 	}
 }
+
+#endif
 
 // This is called to force termination if we implement the specified protocol
 void HttpResponder::Terminate(NetworkProtocol protocol, NetworkInterface *interface)

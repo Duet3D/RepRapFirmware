@@ -85,7 +85,7 @@ enum class GCodeState : uint8_t
 	loadingFilament,
 	unloadingFilament,
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	timingSDwrite,
 #endif
 
@@ -134,7 +134,7 @@ public:
 
 	GCodeMachineState *previous;
 	float feedRate;
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	FileData fileState;
 #elif HAS_LINUX_INTERFACE
 	uint32_t fileId;							// virtual file ID to deal with stack push/pops when a file is being cancelled or finished in the wrong stack level
@@ -169,7 +169,7 @@ public:
 	static GCodeMachineState *Allocate()
 	post(!result.IsLive(); result.state == GCodeState::normal);
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	bool DoingFile() const { return fileState.IsLive(); }
 #elif HAS_LINUX_INTERFACE
 	bool DoingFile() const { return fileId == 0; }

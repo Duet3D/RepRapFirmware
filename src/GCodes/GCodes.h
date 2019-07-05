@@ -95,7 +95,7 @@ public:
 	void Reset();														// Reset some parameter to defaults
 	bool ReadMove(RawMove& m);											// Called by the Move class to get a movement set by the last G Code
 	void ClearMove();
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply);	// Open a file of G Codes to run
 #endif
 	void StartPrinting(bool fromStart);									// Start printing the file already selected
@@ -190,7 +190,7 @@ public:
 	void AssignGrid(float xRange[2], float yRange[2], float radius, float spacing[2]);	// Assign the heightmap using the given parameters
 	void ActivateHeightmap(bool activate);										// (De-)Activate the height map
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply);	// Start timing SD card file writing
 #endif
 
@@ -278,7 +278,9 @@ private:
 
 #if SUPPORT_WORKPLACE_COORDINATES
 	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute);	// Set workspace coordinates
+# if HAS_MASS_STORAGE
 	bool WriteWorkplaceCoordinates(FileStore *f) const;
+# endif
 #endif
 
 	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply);	// Configure heater protection (M143)
@@ -324,7 +326,7 @@ private:
 	void SaveFanSpeeds();														// Save the speeds of all fans
 
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply);			// Define the probing grid, returning true if error
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply);			// Load the height map from file
 	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const;	// Save the height map to the specified file
 	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;	// Save the height map to the file specified by P parameter
@@ -336,13 +338,13 @@ private:
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply);		// Handle M997
 	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply);				// Handle M260
 	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply);			// Handle M261
-#if HAS_HIGH_SPEED_SD || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile);	// Handle M37 to simulate a whole file
 	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, uint32_t newSimulationMode);		// Handle M37 to change the simulation mode
 #endif
 	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply);			// Handle M577
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const; // Write the config-override file
 	bool WriteConfigOverrideHeader(FileStore *f) const;							// Write the config-override header
 #endif
@@ -357,7 +359,7 @@ private:
 	void EndSimulation(GCodeBuffer *gb);								// Restore positions etc. when exiting simulation mode
 	bool IsCodeQueueIdle() const;										// Return true if the code queue is idle
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	void SaveResumeInfo(bool wasPowerFailure);
 #endif
 
@@ -480,7 +482,7 @@ private:
 	float axisOffsets[MaxAxes];					// M206 axis offsets
 #endif
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	FileData fileToPrint;						// The next file to print
 	FilePosition fileOffsetToPrint;				// The offset to print from
 #endif
@@ -542,7 +544,7 @@ private:
 	// Code queue
 	GCodeQueue *codeQueue;						// Stores certain codes for deferred execution
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	// SHA1 hashing
 	FileStore *fileBeingHashed;
 	SHA1Context hash;

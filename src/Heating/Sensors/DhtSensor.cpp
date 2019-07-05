@@ -59,10 +59,10 @@ TemperatureError DhtSensorHardwareInterface::GetTemperatureOrHumidity(float& t, 
 		return GCodeResult::error;
 	}
 
-	return activeSensors[relativeChannel]->Configure(ts, mCode, heater, gb, reply);
+	return activeSensors[relativeChannel]->ConfigureType(ts, mCode, heater, gb, reply);
 }
 
-GCodeResult DhtSensorHardwareInterface::Configure(TemperatureSensor *ts, unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult DhtSensorHardwareInterface::ConfigureType(TemperatureSensor *ts, unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
 {
 	GCodeResult rslt = GCodeResult::ok;
 	if (mCode == 305)
@@ -196,7 +196,7 @@ void DhtSensorHardwareInterface::TakeReading()
 
 			// End the start signal by setting data line high. the sensor will respond with the start bit in 20 to 40us.
 			// We need only force the data line high long enough to charge the line capacitance, after that the pullup resistor keeps it high.
-			IoPort::WriteDigital(sensorPin, HIGH);		// this will generate an interrupt, but we will ignore it
+			IoPort::WriteDigital(sensorPin, true);		// this will generate an interrupt, but we will ignore it
 			delayMicroseconds(3);
 
 			// Now start reading the data line to get the value from the DHT sensor

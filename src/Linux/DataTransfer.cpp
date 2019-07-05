@@ -22,12 +22,6 @@
 # include "matrix/matrix.h"
 # include "xdmac/xdmac.h"
 
-
-# define LINUX_SPI				SPI1
-# define LINUX_SPI_ID			ID_SPI1
-# define LINUX_SPI_IRQn			SPI1_IRQn
-# define LINUX_SPI_HANDLER		SPI1_Handler
-
 // XDMAC hardware, see datasheet
 const uint32_t LINUX_XDMAC_TX_CH_NUM = 3;
 const uint32_t LINUX_XDMAC_RX_CH_NUM = 4;
@@ -40,18 +34,18 @@ volatile unsigned int spiTxUnderruns = 0, spiRxOverruns = 0;
 void setup_spi(void *inBuffer, const void *outBuffer, size_t bytesToTransfer)
 {
 	// Reset SPI
-	spi_reset(LINUX_SPI);
-	spi_set_slave_mode(LINUX_SPI);
-	spi_disable_mode_fault_detect(LINUX_SPI);
-	spi_set_peripheral_chip_select_value(LINUX_SPI, spi_get_pcs(0));
-	spi_set_clock_polarity(LINUX_SPI, 0, 0);
-	spi_set_clock_phase(LINUX_SPI, 0, 1);
-	spi_set_bits_per_transfer(LINUX_SPI, 0, SPI_CSR_BITS_8_BIT);
+	spi_reset(SBC_SPI);
+	spi_set_slave_mode(SBC_SPI);
+	spi_disable_mode_fault_detect(SBC_SPI);
+	spi_set_peripheral_chip_select_value(SBC_SPI, spi_get_pcs(0));
+	spi_set_clock_polarity(SBC_SPI, 0, 0);
+	spi_set_clock_phase(SBC_SPI, 0, 1);
+	spi_set_bits_per_transfer(SBC_SPI, 0, SPI_CSR_BITS_8_BIT);
 
 	// Initialize channel config for transmitter
 	xdmac_tx_cfg.mbr_ubc = bytesToTransfer;
 	xdmac_tx_cfg.mbr_sa = (uint32_t)outBuffer;
-	xdmac_tx_cfg.mbr_da = (uint32_t)&(LINUX_SPI->SPI_TDR);
+	xdmac_tx_cfg.mbr_da = (uint32_t)&(SBC_SPI->SPI_TDR);
 	xdmac_tx_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN |
 		XDMAC_CC_MBSIZE_SINGLE |
 		XDMAC_CC_DSYNC_MEM2PER |
@@ -75,7 +69,7 @@ void setup_spi(void *inBuffer, const void *outBuffer, size_t bytesToTransfer)
 	// Initialize channel config for receiver
 	xdmac_rx_cfg.mbr_ubc = bytesToTransfer;
 	xdmac_rx_cfg.mbr_da = (uint32_t)inBuffer;
-	xdmac_rx_cfg.mbr_sa = (uint32_t)&(LINUX_SPI->SPI_RDR);
+	xdmac_rx_cfg.mbr_sa = (uint32_t)&(SBC_SPI->SPI_RDR);
 	xdmac_rx_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN |
 		XDMAC_CC_MBSIZE_SINGLE |
 		XDMAC_CC_DSYNC_PER2MEM |
@@ -97,13 +91,13 @@ void setup_spi(void *inBuffer, const void *outBuffer, size_t bytesToTransfer)
 	xdmac_disable_interrupt(XDMAC, DmacChanLinuxRx);
 
 	// Enable SPI and notify the RaspPi we are ready
-	spi_enable(LINUX_SPI);
+	spi_enable(SBC_SPI);
 
 	// Enable end-of-transfer interrupt
-	(void)LINUX_SPI->SPI_SR;						// clear any pending interrupt
-	LINUX_SPI->SPI_IER = SPI_IER_NSSR;				// enable the NSS rising interrupt
-	NVIC_SetPriority(LINUX_SPI_IRQn, NvicPrioritySpi);
-	NVIC_EnableIRQ(LINUX_SPI_IRQn);
+	(void)SBC_SPI->SPI_SR;						// clear any pending interrupt
+	SBC_SPI->SPI_IER = SPI_IER_NSSR;				// enable the NSS rising interrupt
+	NVIC_SetPriority(SBC_SPI_IRQn, NvicPrioritySpi);
+	NVIC_EnableIRQ(SBC_SPI_IRQn);
 
 	// Begin transfer
 	transferReadyHigh = !transferReadyHigh;
@@ -117,13 +111,17 @@ void disable_spi()
 	xdmac_channel_disable(XDMAC, DmacChanLinuxTx);
 
 	// Disable SPI
-	spi_disable(LINUX_SPI);
+	spi_disable(SBC_SPI);
 }
 
-extern "C" void LINUX_SPI_HANDLER(void)
+#ifndef SBC_SPI_HANDLER
+# error SBC_SPI_HANDLER undefined
+#endif
+
+extern "C" void SBC_SPI_HANDLER(void)
 {
-	const uint32_t status = LINUX_SPI->SPI_SR;							// read status and clear interrupt
-	LINUX_SPI->SPI_IDR = SPI_IER_NSSR;									// disable the interrupt
+	const uint32_t status = SBC_SPI->SPI_SR;							// read status and clear interrupt
+	SBC_SPI->SPI_IDR = SPI_IER_NSSR;									// disable the interrupt
 	if ((status & SPI_SR_NSSR) != 0)
 	{
 		// Data has been transferred, disable transfer ready pin and XDMAC channels
@@ -162,14 +160,14 @@ void DataTransfer::Init() {
 	pinMode(LinuxTfrReadyPin, OUTPUT_LOW);
 
 	// Initialize SPI pins
-	ConfigurePin(APIN_SPI1_MOSI);
-	ConfigurePin(APIN_SPI1_MISO);
-	ConfigurePin(APIN_SPI1_SCK);
-	ConfigurePin(APIN_SPI1_SS0);
+	ConfigurePin(APIN_SBC_SPI_MOSI);
+	ConfigurePin(APIN_SBC_SPI_MISO);
+	ConfigurePin(APIN_SBC_SPI_SCK);
+	ConfigurePin(APIN_SBC_SPI_SS0);
 
 	// Initialise SPI
-	spi_enable_clock(LINUX_SPI);
-	spi_disable(LINUX_SPI);
+	spi_enable_clock(SBC_SPI);
+	spi_disable(SBC_SPI);
 	dataReceived = false;
 
 #if false

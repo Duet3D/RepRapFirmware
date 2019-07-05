@@ -55,7 +55,10 @@ public:
 	ZProbe *GetZProbe(size_t num) const;
 	void SetZProbeDefaults();
 	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply);
+
+#if HAS_MASS_STORAGE
 	bool WriteZProbeParameters(FileStore *f, bool includingG31) const;
+#endif
 
 private:
 	// Add an endstop to the active list

@@ -27,6 +27,7 @@ public:
 	static void CombineName(const StringRef& out, const char* directory, const char* fileName);
 	static const char* GetMonthName(const uint8_t month);
 
+#if HAS_MASS_STORAGE
 	FileStore* OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize);
 	bool FindFirst(const char *directory, FileInfo &file_info);
 	bool FindNext(FileInfo &file_info);
@@ -105,6 +106,8 @@ private:
 	DIR findDir;
 	FileWriteBuffer *freeWriteBuffers;
 	FileStore files[MAX_FILES];
+#endif
+
 };
 
 #endif

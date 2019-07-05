@@ -1,7 +1,7 @@
 #ifndef PINS_SAME70_H__
 #define PINS_SAME70_H__
 
-#define FIRMWARE_NAME		"RepRapFirmware for Duet 3"
+#define FIRMWARE_NAME		"RepRapFirmware for Duet 3 v0.5"
 #define DEFAULT_BOARD_TYPE BoardType::Duet3_05
 const size_t NumFirmwareUpdateModules = 1;
 #define IAP_FIRMWARE_FILE	"Duet3Firmware.bin"
@@ -12,6 +12,7 @@ const size_t NumFirmwareUpdateModules = 1;
 #define HAS_WIFI_NETWORKING		0
 #define HAS_LINUX_INTERFACE		1
 #define HAS_CPU_TEMP_SENSOR		1
+#define HAS_MASS_STORAGE		0
 #define HAS_HIGH_SPEED_SD		0
 
 #define SUPPORT_TMC51xx			1
@@ -29,7 +30,7 @@ const size_t NumFirmwareUpdateModules = 1;
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
-#define SUPPORT_FTP				1
+#define SUPPORT_FTP				0					// no point in supporting FTP because we have no mass storage
 #define SUPPORT_TELNET			1
 #define SUPPORT_ASYNC_MOVES		1
 

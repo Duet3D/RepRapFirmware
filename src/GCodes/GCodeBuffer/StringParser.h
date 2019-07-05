@@ -53,6 +53,7 @@ public:
 	void SetFinished(bool f);							// Set the G Code executed (or not)
 	void SetCommsProperties(uint32_t arg) { checksumRequired = (arg & 1); }
 
+#if HAS_MASS_STORAGE
 	bool OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32);	// Open a file to write to
 	bool IsWritingFile() const { return fileBeingWritten != nullptr; }	// Returns true if writing a file
 	void WriteToFile();													// Write the current GCode to file
@@ -60,6 +61,7 @@ public:
 	bool IsWritingBinary() const { return IsWritingFile() && binaryWriting; }	// Returns true if writing binary
 	void WriteBinaryToFile(char b);												// Write a byte to the file
 	void FinishWritingBinary();
+#endif
 
 	FilePosition GetFilePosition() const;				// Get the file position at the start of the current command
 

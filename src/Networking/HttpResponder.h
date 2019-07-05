@@ -86,7 +86,9 @@ private:
 	void RejectMessage(const char* s, unsigned int code = 500);
 	bool SendFileInfo(bool quitEarly);
 
+#if HAS_MASS_STORAGE
 	void DoUpload();
+#endif
 
 	const char* GetKeyValue(const char *key) const;	// return the value of the specified key, or nullptr if not present
 

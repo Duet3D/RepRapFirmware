@@ -18,6 +18,8 @@
 #include "MessageType.h"
 #include "ObjectModel/ObjectModel.h"
 
+class FileGCodeInput;
+
 // Class to hold an individual GCode and provide functions to allow it to be parsed
 class GCodeBuffer
 {
@@ -116,6 +118,7 @@ public:
 	int GetToolNumberAdjust() const { return toolNumberAdjust; }
 	void SetToolNumberAdjust(int arg) { toolNumberAdjust = arg; }
 
+#if HAS_MASS_STORAGE
 	bool OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32);	// open a file to write to
 	bool IsWritingFile() const;							// Returns true if writing a file
 	void WriteToFile();									// Write the current GCode to file
@@ -123,6 +126,7 @@ public:
 	bool IsWritingBinary() const;						// Returns true if writing binary
 	void WriteBinaryToFile(char b);						// Write a byte to the file
 	void FinishWritingBinary();
+#endif
 
 	const char* DataStart() const;						// Get the start of the current command
 	size_t DataLength() const;							// Get the length of the current command
@@ -138,7 +142,9 @@ public:
 
 	void RestartFrom(FilePosition pos);
 
+#if HAS_MASS_STORAGE
 	FileGCodeInput *GetFileInput() const { return fileInput; }	//TEMPORARY!
+#endif
 	GCodeInput *GetNormalInput() const { return normalInput; }	//TEMPORARY!
 
 private:
@@ -146,7 +152,10 @@ private:
 
 	const GCodeChannel codeChannel;						// Channel number of this instance
 	GCodeInput *normalInput;							// Our normal input stream, or nullptr if there isn't one
-	FileGCodeInput *fileInput;							// Our file input stream for when we are reading form a print file or a macro file, may be shared with other GCodeBuffers
+
+#if HAS_MASS_STORAGE
+	FileGCodeInput *fileInput;							// Our file input stream for when we are reading from a print file or a macro file, may be shared with other GCodeBuffers
+#endif
 
 	const MessageType responseMessageType;				// The message type we use for responses to string codes coming from this channel
 
@@ -179,7 +188,7 @@ private:
 
 inline bool GCodeBuffer::IsDoingFile() const
 {
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	return machineState->fileState.IsLive();
 #elif HAS_LINUX_INTERFACE
 	return machineState->fileId != 0;

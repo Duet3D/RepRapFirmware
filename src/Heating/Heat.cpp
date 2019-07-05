@@ -28,9 +28,7 @@ Licence: GPL
 # include "Sensors/DhtSensor.h"
 #endif
 
-#ifdef RTOS
-
-# include "Tasks.h"
+#include "Tasks.h"
 
 constexpr uint32_t HeaterTaskStackWords = 400;			// task stack size in dwords, must be large enough for auto tuning
 static Task<HeaterTaskStackWords> heaterTask;
@@ -40,13 +38,8 @@ extern "C" [[noreturn]] void HeaterTask(void * pvParameters)
 	reprap.GetHeat().Task();
 }
 
-#endif
-
 Heat::Heat(Platform& p)
 	: platform(p),
-#ifndef RTOS
-	  active(false),
-#endif
 	  coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
 	ARRAY_INIT(bedHeaters, DefaultBedHeaters);
@@ -153,12 +146,7 @@ void Heat::Init()
 	retractionMinTemp = HOT_ENOUGH_TO_RETRACT;
 	coldExtrude = false;
 
-#ifdef RTOS
 	heaterTask.Create(HeaterTask, "HEAT", nullptr, TaskPriority::HeatPriority);
-#else
-	lastTime = millis() - HeatSampleIntervalMillis;		// flag the PIDS as due for spinning
-	active = true;
-#endif
 }
 
 void Heat::Exit()
@@ -168,14 +156,8 @@ void Heat::Exit()
 		pid->SwitchOff();
 	}
 
-#ifdef RTOS
 	heaterTask.Suspend();
-#else
-	active = false;
-#endif
 }
-
-#ifdef RTOS
 
 [[noreturn]] void Heat::Task()
 {
@@ -200,39 +182,6 @@ void Heat::Exit()
 		vTaskDelayUntil(&lastWakeTime, HeatSampleIntervalMillis);
 	}
 }
-
-#else
-
-void Heat::Spin()
-{
-	if (active)
-	{
-		// See if it is time to spin the PIDs
-		const uint32_t now = millis();
-		if (now - lastTime >= HeatSampleIntervalMillis)
-		{
-			lastTime = now;
-			for (PID *& p : pids)
-			{
-				p->Spin();
-			}
-
-			// See if we have finished tuning a PID
-			if (heaterBeingTuned != -1 && !pids[heaterBeingTuned]->IsTuning())
-			{
-				lastHeaterTuned = heaterBeingTuned;
-				heaterBeingTuned = -1;
-			}
-		}
-
-#if SUPPORT_DHT_SENSOR
-		// If the DHT temperature sensor is active, it needs to be spinned too
-		DhtSensor::Spin();
-#endif
-	}
-}
-
-#endif
 
 void Heat::Diagnostics(MessageType mtype)
 {
@@ -557,6 +506,8 @@ void Heat::SetM301PidParameters(size_t heater, const M301PidParameters& params)
 	pids[heater]->SetM301PidParameters(params);
 }
 
+#if HAS_MASS_STORAGE
+
 // Write heater model parameters to file returning true if no error
 bool Heat::WriteModelParameters(FileStore *f) const
 {
@@ -571,6 +522,8 @@ bool Heat::WriteModelParameters(FileStore *f) const
 	}
 	return ok;
 }
+
+#endif
 
 // Return the channel used by a particular heater, or -1 if not configured
 int Heat::GetHeaterChannel(size_t heater) const
@@ -734,6 +687,8 @@ void Heat::SuspendHeaters(bool sus)
 	}
 }
 
+#if HAS_MASS_STORAGE
+
 // Save some resume information returning true if successful.
 // We assume that the bed and chamber heaters are either on and active, or off (not on standby).
 bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const
@@ -758,5 +713,7 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const
 	}
 	return (buf.strlen() == 0) || f->Write(buf.c_str());
 }
+
+#endif
 
 // End

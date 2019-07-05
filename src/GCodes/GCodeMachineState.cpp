@@ -48,7 +48,7 @@ void GCodeMachineState::SetFileFinished()
 // Close the currently executing file
 void GCodeMachineState::CloseFile()
 {
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	fileState.Close();
 #elif HAS_LINUX_INTERFACE
 	for (GCodeMachineState *ms = this; ms != nullptr; ms = ms->previous)
@@ -83,7 +83,7 @@ void GCodeMachineState::CloseFile()
 
 /*static*/ void GCodeMachineState::Release(GCodeMachineState *ms)
 {
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	ms->fileState.Close();
 #elif HAS_LINUX_INTERFACE
 	ms->fileId = 0;

@@ -10,6 +10,8 @@
 
 #include "FileStore.h"
 
+#if HAS_MASS_STORAGE
+
 class FileGCodeInput;
 
 // Small class to hold an open file and data relating to it.
@@ -124,5 +126,7 @@ private:
 	// Private copy constructor to prevent us copying these objects
 	FileData(const FileData&);
 };
+
+#endif
 
 #endif

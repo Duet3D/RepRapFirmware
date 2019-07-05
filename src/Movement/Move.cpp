@@ -628,6 +628,8 @@ void Move::SetIdentityTransform()
 	zShift = 0.0;
 }
 
+#if HAS_MASS_STORAGE
+
 // Load the height map from file, returning true if an error occurred with the error reason appended to the buffer
 bool Move::LoadHeightMapFromFile(FileStore *f, const StringRef& r)
 {
@@ -649,11 +651,17 @@ bool Move::SaveHeightMapToFile(FileStore *f) const
 	return heightMap.SaveToFile(f, zShift);
 }
 
+#endif
+
+#if HAS_LINUX_INTERFACE
+
 // Save the height map Z coordinates to an array
 void Move::SaveHeightMapToArray(float *arr) const
 {
 	return heightMap.SaveToArray(arr, zShift);
 }
+
+#endif
 
 void Move::SetTaperHeight(float h)
 {
@@ -897,6 +905,8 @@ void Move::SetIdleTimeout(float timeout)
 	idleTimeout = (uint32_t)lrintf(timeout * 1000.0);
 }
 
+#if HAS_MASS_STORAGE
+
 // Write settings for resuming the print
 // The GCodes module deals with the head position so all we need worry about is the bed compensation
 // We don't handle random probe point bed compensation, and we assume that if a height map is being used it is the default one.
@@ -904,6 +914,8 @@ bool Move::WriteResumeSettings(FileStore *f) const
 {
 	return kinematics->WriteResumeSettings(f) && (!usingMesh || f->Write("G29 S1\n"));
 }
+
+#endif
 
 // Process M204
 GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)

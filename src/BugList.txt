@@ -187,26 +187,29 @@ For 2.03 release:
 - Pulse-type filament monitor now reports mm/pulse to 3 decimal places instead of 2
 
 - For 2.03.01:
-- Bug: delta auto calibration adjusts homed height incorrectly if the delta radius or rod length was changed
-- Bug: G29 P parameter doesn't work if there are nonempty deployprobe.g/retractprobe.g files, https://forum.duet3d.com/topic/10904/g29-p-parameter-ignored/5. Remove P parameter from G29 S0, add G29 S3 (same as M374).
-- Bug: M557 P parameter didn't work
-- G31 to show current parameters, not just probe output value
-- Pulsed filament monitors: don't try to resync on every interrupt when interrupts are arriving very fast because the sensor has high resolution
+- [done] Bug: delta auto calibration adjusts homed height incorrectly if the delta radius or rod length was changed
+- [done] Bug: G29 P parameter doesn't work if there are nonempty deployprobe.g/retractprobe.g files, https://forum.duet3d.com/topic/10904/g29-p-parameter-ignored/5. Remove P parameter from G29 S0, add G29 S3 (same as M374).
+- [done] Bug: M557 P parameter didn't work
+- [done] G31 to show current parameters, not just probe output value
+- [done] Pulsed filament monitors: don't try to resync on every interrupt when interrupts are arriving very fast because the sensor has high resolution
+- resurrect.g missing the tool selection command?
 - Bug with small Z movements at Zmin, https://forum.duet3d.com/topic/11025/strange-behavior
-- Bug: on Duet Maestro, M552 S0 followed by M552 S1 doesn't restart the network, it doesn't get an IP address
-- [can't reproduce] Possible M540 bug on Maestro, https://forum.duet3d.com/topic/11029/firmware-2-03-duet-maestro-v1-m540-issue/4
+- Issues when diagonal rods are not all the same lengths, https://forum.duet3d.com/post/99714
 
 Outstanding issues:
 - Running out of output buffers and not freeing them up, https://forum.duet3d.com/post/96586
 - Inconsistent Z0 position, https://forum.duet3d.com/user/caveman
 - [defer] When writing resurrect.g after a pause, the G92 coordinates are wrong
 
+Duet 3:
+- Bug: code queue ont always used then it should be, https://github.com/chrishamm/DuetSoftwareFramework/issues/1
+
 Planned for 3.0:
+- [done] 3.0 bug: Fix Z probe starting height
 - Bug: in CNC mode, if a move goes out of bounds then the spindle is stopped immediately but moves in the queue continue to execute. Need to go to a spacial state to empty the queue, and then turn the spindle off?
 - Bug: incomplete FTP uploads, https://forum.duet3d.com/topic/10987/ftp-not-uploading-whole-files
 - Bug: G29 P parameter doesn't work if there are nonempty deployprobe.g/retractprobe.g files, https://forum.duet3d.com/topic/10904/g29-p-parameter-ignored/5
 - Bug? DWC 1.22.6 doesn't auto show the height map after probing since firmware 2.03, https://forum.duet3d.com/topic/10904/g29-p-parameter-ignored/5
-- [done] 3.0 bug: Fix Z probe starting height
 - Support M24 in pause.g and filament-change.g
 - Mechanism to restore original spindle speed (+ wait afterwards?) or laser power after a pause
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5

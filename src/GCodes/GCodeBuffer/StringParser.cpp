@@ -627,7 +627,7 @@ void StringParser::SetFinished(bool f)
 // Get the file position at the start of the current command
 FilePosition StringParser::GetFilePosition() const
 {
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	if (gb.machineState->DoingFile())
 	{
 		return gb.machineState->fileState.GetPosition() - gb.fileInput->BytesCached() - commandLength + commandStart;
@@ -1158,6 +1158,8 @@ void StringParser::AppendFullCommand(const StringRef &s) const
 	s.cat(gb.buffer);
 }
 
+#if HAS_MASS_STORAGE
+
 // Open a file to write to
 bool StringParser::OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
 {
@@ -1290,6 +1292,8 @@ void StringParser::FileEnded()
 		}
 	}
 }
+
+#endif
 
 // Functions to read values from lines of GCode, allowing for expressions and variable substitution
 float StringParser::ReadFloatValue(const char *p, const char **endptr)

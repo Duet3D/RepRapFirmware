@@ -60,8 +60,6 @@ private:
 	bool isValid;
 };
 
-class DataTransfer;
-
 // Class to represent the height map
 class HeightMap
 {
@@ -76,12 +74,16 @@ public:
 	void SetGridHeight(size_t xIndex, size_t yIndex, float height);	// Set the height of a grid point
 	void SetGridHeight(size_t index, float height);					// Set the height of a grid point
 
+#if HAS_MASS_STORAGE
 	bool SaveToFile(FileStore *f, float zOffset) const				// Save the grid to file returning true if an error occurred
 	pre(IsValid());
+	bool LoadFromFile(FileStore *f, const StringRef& r);			// Load the grid from file returning true if an error occurred
+#endif
+
+#if HAS_LINUX_INTERFACE
 	void SaveToArray(float *array, float zOffset) const				// Save the grid Z coordinates to an array
 	pre(IsValid());
-
-	bool LoadFromFile(FileStore *f, const StringRef& r);			// Load the grid from file returning true if an error occurred
+#endif
 
 	unsigned int GetMinimumSegments(float deltaX, float deltaY) const;	// Return the minimum number of segments for a move by this X or Y amount
 

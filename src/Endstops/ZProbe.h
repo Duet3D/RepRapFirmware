@@ -55,7 +55,10 @@ public:
 	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef& reply, unsigned int probeNumber);
 	void SetTriggerHeight(float height) { triggerHeight = height; }
 	void SetSaveToConfigOverride() { saveToConfigOverride = true; }
+
+#if HAS_MASS_STORAGE
 	bool WriteParameters(FileStore *f, unsigned int probeNumber) const;
+#endif
 
 	static constexpr unsigned int MaxTapsLimit = 31;	// must be low enough to fit in the maxTaps field
 

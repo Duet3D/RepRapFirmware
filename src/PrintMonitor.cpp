@@ -65,7 +65,7 @@ void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info
 
 void PrintMonitor::Spin()
 {
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	// File information about the file being printed must be available before layer estimations can be made
 	if (!filenameBeingPrinted.IsEmpty() && !printingFileParsed)
 	{
@@ -184,7 +184,7 @@ float PrintMonitor::GetWarmUpDuration() const
 // Notifies this class that a file has been set for printing
 void PrintMonitor::StartingPrint(const char* filename)
 {
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	MassStorage::CombineName(filenameBeingPrinted.GetRef(), platform.GetGCodeDir(), filename);
 	printingFileParsed = platform.GetMassStorage()->GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
 #endif

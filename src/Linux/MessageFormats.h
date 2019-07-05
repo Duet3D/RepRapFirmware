@@ -74,7 +74,7 @@ enum class DataType : uint8_t
     UIntArray = 4,			// uint32_t[]
     FloatArray = 5,			// float[]
     String = 6,				// char[]
-	Expression = 7			// char[] but containing '{'...'}'
+    Expression = 7			// char[] but containing '['...']'
 };
 
 struct ObjectModelHeader

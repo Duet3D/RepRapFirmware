@@ -43,13 +43,12 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 # include "CAN/CanInterface.h"
 #endif
 
-#ifdef RTOS
-# include "FreeRTOS.h"
-# include "task.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
-# if SAME70
-#  include "Hardware/DmacManager.h"
-# endif
+#if SAME70
+# include "Hardware/DmacManager.h"
+#endif
 
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
 static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI, "configMAX_SYSCALL_INTERRUPT_PRIORITY is set too high");
@@ -117,37 +116,6 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
 	}
 }
 
-#else
-
-// Non-RTOS code
-
-// Callback function from the hsmci driver, called while it is waiting for an SD card operation to complete
-// 'stBits' is the set of bits in the HSMCI status register that the caller is interested in.
-// The caller keeps calling this function until at least one of those bits is set.
-extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
-{
-	if (reprap.GetSpinningModule() != moduleNetwork)
-	{
-		reprap.GetNetwork().Spin(false);
-	}
-
-#if SUPPORT_IOBITS
-	if (reprap.GetSpinningModule() != modulePortControl)
-	{
-		reprap.GetPortControl().Spin(false);
-	}
-#endif
-
-#ifdef DUET_NG
-	if (reprap.GetSpinningModule() != moduleDuetExpansion)
-	{
-		DuetExpansion::Spin(false);
-	}
-#endif
-}
-
-#endif
-
 #if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
@@ -178,9 +146,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
 RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
 	activeToolHeaters(0), ticksInSpinState(0),
-#ifdef RTOS
 	heatTaskIdleTicks(0),
-#endif
 	spinningModule(noModule), debug(0), stopped(false),
 	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0),
 	diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false)
@@ -274,7 +240,7 @@ void RepRap::Init()
 
 	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
-#if HAS_HIGH_SPEED_SD
+#if HAS_MASS_STORAGE
 	// Try to mount the first SD card
 	{
 		GCodeResult rslt;
@@ -329,10 +295,8 @@ void RepRap::Init()
 
 #if HAS_HIGH_SPEED_SD
 	hsmci_set_idle_func(hsmciIdle);
-# ifdef RTOS
 	HSMCI->HSMCI_IDR = 0xFFFFFFFF;	// disable all HSMCI interrupts
 	NVIC_EnableIRQ(HSMCI_IRQn);
-# endif
 #endif
 	platform->MessageF(UsbMessage, "%s is up and running.\n", FIRMWARE_NAME);
 
@@ -375,12 +339,6 @@ void RepRap::Spin()
 	spinningModule = modulePlatform;
 	platform->Spin();
 
-#ifndef RTOS
-	ticksInSpinState = 0;
-	spinningModule = moduleNetwork;
-	network->Spin(true);
-#endif
-
 	ticksInSpinState = 0;
 	spinningModule = moduleWebserver;
 
@@ -391,12 +349,6 @@ void RepRap::Spin()
 	ticksInSpinState = 0;
 	spinningModule = moduleMove;
 	move->Spin();
-
-#ifndef RTOS
-	ticksInSpinState = 0;
-	spinningModule = moduleHeat;
-	heat->Spin();
-#endif
 
 #if SUPPORT_ROLAND
 	ticksInSpinState = 0;
@@ -801,13 +753,9 @@ void RepRap::Tick()
 		{
 			platform->Tick();
 			++ticksInSpinState;
-#ifdef RTOS
 			++heatTaskIdleTicks;
 			const bool heatTaskStuck = (heatTaskIdleTicks >= MaxTicksInSpinState);
 			if (heatTaskStuck || ticksInSpinState >= MaxTicksInSpinState)		// if we stall for 20 seconds, save diagnostic data and reset
-#else
-				if (ticksInSpinState >= MaxTicksInSpinState)					// if we stall for 20 seconds, save diagnostic data and reset
-#endif
 			{
 				resetting = true;
 				for (size_t i = 0; i < NumTotalHeaters; i++)
@@ -817,18 +765,11 @@ void RepRap::Tick()
 				platform->DisableAllDrives();
 
 				// We now save the stack when we get stuck in a spin loop
-#ifdef RTOS
 				__asm volatile("mrs r2, psp");
 				register const uint32_t * stackPtr asm ("r2");					// we want the PSP not the MSP
 				platform->SoftwareReset(
 					(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
 					stackPtr + 5);												// discard uninteresting registers, keep LR PC PSR
-#else
-				register const uint32_t * stackPtr asm ("sp");
-				platform->SoftwareReset(
-					(uint16_t)SoftwareResetReason::stuckInSpin,
-					stackPtr + 5);												// discard uninteresting registers, keep LR PC PSR
-#endif
 			}
 		}
 	}
@@ -1293,6 +1234,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\"",
 			FIRMWARE_NAME, move->GetGeometryString(), numVisibleAxes, numTotalAxes, gCodes->GetAxisLetters());
 
+#if HAS_MASS_STORAGE
 		// Total and mounted volumes
 		size_t mountedCards = 0;
 		for (size_t i = 0; i < NumSdCards; i++)
@@ -1303,6 +1245,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			}
 		}
 		response->catf(",\"volumes\":%u,\"mountedVolumes\":%u", NumSdCards, mountedCards);
+#endif
 
 		// Machine mode
 		const char *machineMode = gCodes->GetMachineModeString();
@@ -1844,6 +1787,8 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	return response;
 }
 
+#if HAS_MASS_STORAGE
+
 // Get the list of files in the specified directory in JSON format.
 // If flagDirs is true then we prefix each directory with a * character.
 OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bool flagsDirs)
@@ -2008,6 +1953,8 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 	return response;
 }
 
+#endif
+
 // Get information for the specified file, or the currently printing file (if 'filename' is null or empty), in JSON format
 bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly)
 {
@@ -2015,6 +1962,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 	GCodeFileInfo info;
 	if (specificFile)
 	{
+#if HAS_MASS_STORAGE
 		// Poll file info for a specific file
 		String<MaxFilenameLength> filePath;
 		MassStorage::CombineName(filePath.GetRef(), platform->GetGCodeDir(), filename);
@@ -2023,6 +1971,9 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 			// This may take a few runs...
 			return false;
 		}
+#else
+		return false;
+#endif
 	}
 	else if (!printMonitor->GetPrintingFileInfo(info))
 	{
@@ -2274,6 +2225,8 @@ AxesBitmap RepRap::GetCurrentYAxes() const
 	return (currentTool == nullptr) ? DefaultYAxisMapping : currentTool->GetYAxisMap();
 }
 
+#if HAS_MASS_STORAGE
+
 // Save some resume information, returning true if successful
 // We assume that the tool configuration doesn't change, only the temperatures and the mix
 bool RepRap::WriteToolSettings(FileStore *f) const
@@ -2327,6 +2280,8 @@ bool RepRap::WriteToolParameters(FileStore *f) const
 	}
 	return ok;
 }
+
+#endif
 
 // Helper function for diagnostic tests in Platform.cpp, to cause a deliberate divide-by-zero
 /*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b)

@@ -121,8 +121,12 @@ public:
 	OutputBuffer *GetStatusResponse(uint8_t type, ResponseSource source);
 	OutputBuffer *GetConfigResponse();
 	OutputBuffer *GetLegacyStatusResponse(uint8_t type, int seq);
+
+#if HAS_MASS_STORAGE
 	OutputBuffer *GetFilesResponse(const char* dir, unsigned int startAt, bool flagsDirs);
 	OutputBuffer *GetFilelistResponse(const char* dir, unsigned int startAt);
+#endif
+
 	bool GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly);
 
 	void Beep(unsigned int freq, unsigned int ms);
@@ -130,8 +134,10 @@ public:
 	void SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls);
 	void ClearAlert();
 
+#if HAS_MASS_STORAGE
 	bool WriteToolSettings(FileStore *f) const;				// save some information for the resume file
 	bool WriteToolParameters(FileStore *f) const;			// save some information in config-override.g
+#endif
 
 	void ReportInternalError(const char *file, const char *func, int line) const;	// Report an internal error
 
@@ -139,9 +145,7 @@ public:
 	static float SinfCosf(float angle);						// helper function for diagnostic tests
 	static double SinCos(double angle);						// helper function for diagnostic tests
 
-#ifdef RTOS
 	void KickHeatTaskWatchdog() { heatTaskIdleTicks = 0; }
-#endif
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -183,9 +187,7 @@ private:
 	uint16_t activeToolHeaters;
 
 	uint16_t ticksInSpinState;
-#ifdef RTOS
 	uint16_t heatTaskIdleTicks;
-#endif
 	Module spinningModule;
 	uint32_t fastLoop, slowLoop;
 

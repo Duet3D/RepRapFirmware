@@ -8,6 +8,10 @@
 #ifndef SRC_LOGGER_H_
 #define SRC_LOGGER_H_
 
+#include "RepRapFirmware.h"
+
+#if HAS_MASS_STORAGE
+
 #include <ctime>
 #include "Storage/FileData.h"
 
@@ -35,5 +39,7 @@ private:
 	bool dirty;
 	bool inLogger;
 };
+
+#endif
 
 #endif /* SRC_LOGGER_H_ */

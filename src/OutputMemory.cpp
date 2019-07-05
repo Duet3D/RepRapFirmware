@@ -309,6 +309,8 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src)
 	return bytesWritten;
 }
 
+#if HAS_MASS_STORAGE
+
 // Write all the data to file, but don't release the buffers
 // Returns true if successful
 bool OutputBuffer::WriteToFile(FileData& f) const
@@ -334,6 +336,8 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 	}
 	return true;
 }
+
+#endif
 
 // Initialise the output buffers manager
 /*static*/ void OutputBuffer::Init()

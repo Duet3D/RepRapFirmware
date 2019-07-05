@@ -1,7 +1,7 @@
 #ifndef PINS_SAME70_H__
 #define PINS_SAME70_H__
 
-#define FIRMWARE_NAME		"RepRapFirmware for Duet 3"
+#define FIRMWARE_NAME		"RepRapFirmware for Duet 3 v.03"
 #define DEFAULT_BOARD_TYPE BoardType::Duet3_03
 const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
 #define IAP_FIRMWARE_FILE	"Duet3Firmware.bin"

@@ -291,6 +291,8 @@ AxesBitmap HangprinterKinematics::GetLinearAxes() const
 	return 0;
 }
 
+#if HAS_MASS_STORAGE
+
 // Write the parameters that are set by auto calibration to a file, returning true if success
 bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const
 {
@@ -313,6 +315,8 @@ bool HangprinterKinematics::WriteResumeSettings(FileStore *f) const
 {
 	return !doneAutoCalibration || WriteCalibrationParameters(f);
 }
+
+#endif
 
 // Calculate the Cartesian coordinates from the motor coordinates
 void HangprinterKinematics::InverseTransform(float La, float Lb, float Lc, float machinePos[3]) const

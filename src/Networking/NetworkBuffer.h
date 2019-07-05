@@ -50,8 +50,10 @@ public:
 	// Append some data, returning the amount appended
 	size_t AppendData(const uint8_t *source, size_t length);
 
+#if HAS_MASS_STORAGE
 	// Read into the buffer from a file
 	int ReadFromFile(FileStore *f);
+#endif
 
 	// Clear this buffer and release any successors
 	void Empty();
