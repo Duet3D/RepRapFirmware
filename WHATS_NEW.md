@@ -9,7 +9,7 @@ Compatible files:
 
 Upgrade notes:
 - Restore points (created by G60 and created automatically at the start of a pause or a tool change) now have their coordinates stored independently of any workplace offsets. So if you create a restore point and then change the workplace offsets, when you go back to the restore point it will go back to the same machine position regardless of the change in workplace offsets.
-- Tool changers, IDEX printers and similar using tpre#.g and tpost#.g files: tool offsets are now applied within the tfree#.g and tpost#.g macros.
+- Tool changers, IDEX printers and similar using tfree#.g and tpost#.g files: tool offsets are now applied within the tfree#.g and tpost#.g macros (but not in the tpre#.g file because no tool is selected at that point).
 - DueX2 and DueX5 users: if you have been experiencing high I2C error counts, then in the past this usually led to the machine printing very slowly when the errors started occurring. Changes to the I2C drivers should allow the machine to recover from the error in most cases. However, if it does not recover then the machine will most likely continue to run as normal, except that the states of endstops on the DueX will not be read correctly and commands to change settings of fans on the DueX won't work. So watch out for these different symptoms.
 - Duet Maestro users with a 12864 display may need to make minor changes to their menu files to correct for changes in spacing and automatic insertion of % characters after certain values e.g. fan speed
 - Laser mode: for safety, the G1 S parameter is no longer sticky by default. You can make it sticky by adding parameter S1 to the M452 command.
