@@ -1057,18 +1057,8 @@ void Platform::Spin()
 	}
 
 #if defined(DUET3_V03) || defined(DUET3_V05)
-	// Blink the LED
-	{
-		static uint32_t lastTime = 0;
-		static bool diagState = true;
-		const uint32_t now = millis();
-		if (now - lastTime >= 500)
-		{
-			lastTime = now;
-			diagState = !diagState;
-			digitalWrite(DiagPin, diagState);
-		}
-	}
+	// Blink the LED at about 2Hz. The expansion boards will blink in sync when they have established clock sync with us.
+	digitalWrite(DiagPin, (StepTimer::GetInterruptClocks() & (1u << 19)) != 0);
 #endif
 
 #if HAS_MASS_STORAGE

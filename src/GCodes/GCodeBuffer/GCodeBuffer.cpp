@@ -610,7 +610,7 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled)
 // Return true if we can queue gcodes from this source
 bool GCodeBuffer::CanQueueCodes() const
 {
-	return queueCodes || machineState->doingFileMacro;		// return true if we queue commands from this source or we are executing a macro
+	return queueCodes || IsDoingFile() || IsDoingFileMacro();		// return true if we queue commands from this source or we are executing a macro
 }
 
 MessageType GCodeBuffer::GetResponseMessageType() const

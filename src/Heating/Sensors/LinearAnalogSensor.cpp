@@ -46,7 +46,7 @@ GCodeResult LinearAnalogSensor::Configure(unsigned int mCode, unsigned int heate
 
 void LinearAnalogSensor::Init()
 {
-	reprap.GetPlatform().GetAdcFilter(thermistorInputChannel).Init(PinToAdcChannel(TEMP_SENSE_PINS[thermistorInputChannel]));
+	reprap.GetPlatform().GetAdcFilter(thermistorInputChannel).Init(0);
 }
 
 TemperatureError LinearAnalogSensor::TryGetTemperature(float& t)

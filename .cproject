@@ -444,11 +444,13 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/SAME70/}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/SAME70}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/SAME70_RTOS}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/SAME70}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.link.option.libs.1783235457" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
 									<listOptionValue builtIn="false" value="${CoreName}"/>
 									<listOptionValue builtIn="false" value="FreeRTOS"/>
 									<listOptionValue builtIn="false" value="RRFLibraries"/>
+									<listOptionValue builtIn="false" value="CANlib"/>
 								</option>
 								<option id="gnu.cpp.link.option.flags.2100826215" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -T&quot;${workspace_loc:/${CoreName}/variants/same70/linker_scripts/gcc/flash.ld}&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1623645672" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
@@ -489,7 +491,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM7/r0p1}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/Duet3Expansion/src/CAN}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/src}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.preprocessor.def.315745995" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAME70Q20B__"/>
@@ -895,12 +897,19 @@
 						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.release.609406587" name="Cross GCC" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.release" unusedChildren="">
 							<option id="cdt.managedbuild.option.gnu.cross.path.2145914464.1109021261" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path.2145914464"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.777097108.804317667" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix.777097108"/>
-							<tool id="cdt.managedbuild.tool.gnu.cross.c.compiler.701672638" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler.1236802746"/>
-							<tool id="cdt.managedbuild.tool.gnu.cross.cpp.compiler.357289630" name="Cross G++ Compiler" superClass="cdt.managedbuild.tool.gnu.cross.cpp.compiler.1181079633"/>
+							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.c.compiler.701672638" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler.1236802746">
+								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.247117894" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
+							</tool>
+							<tool id="cdt.managedbuild.tool.gnu.cross.cpp.compiler.357289630" name="Cross G++ Compiler" superClass="cdt.managedbuild.tool.gnu.cross.cpp.compiler.1181079633">
+								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1144432799" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
+							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.1878497127" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker.642836635"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.cpp.linker.1973804910" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker.8484819"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.archiver.268478531" name="Cross GCC Archiver" superClass="cdt.managedbuild.tool.gnu.cross.archiver.1474356143"/>
-							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.829639472" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler.1879769012"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.829639472" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler.1879769012">
+								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.672020704" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
+							</tool>
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
@@ -979,6 +988,7 @@
 								<option id="gnu.cpp.link.option.nostdlibs.1767130579" name="No startup or default libs (-nostdlib)" superClass="gnu.cpp.link.option.nostdlibs" useByScannerDiscovery="false" value="false" valueType="boolean"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.link.option.paths.788743762" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" useByScannerDiscovery="false" valueType="libPaths">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/SAME70/}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/SAME70}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/SAME70}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/SAME70_RTOS}&quot;"/>
 								</option>
@@ -986,6 +996,7 @@
 									<listOptionValue builtIn="false" value="${CoreName}"/>
 									<listOptionValue builtIn="false" value="FreeRTOS"/>
 									<listOptionValue builtIn="false" value="RRFLibraries"/>
+									<listOptionValue builtIn="false" value="CANlib"/>
 								</option>
 								<option id="gnu.cpp.link.option.flags.484260170" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -T&quot;${workspace_loc:/${CoreName}/variants/same70/linker_scripts/gcc/flash.ld}&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1531190586" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
@@ -1026,6 +1037,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM7/r0p1}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/src}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.preprocessor.def.1527120003" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAME70Q20B__"/>
