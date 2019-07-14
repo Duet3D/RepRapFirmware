@@ -41,6 +41,7 @@ typedef uint16_t PwmFrequency;		// type used to represent a PWM frequency. 0 som
 #include "General/SafeVsnprintf.h"
 #include "General/StringRef.h"
 #include "General/StringFunctions.h"
+#include "General/BitMap.h"
 
 // Module numbers and names, used for diagnostics and debug
 // All of these including noModule must be <= 15 because we 'or' the module number into the software reset code
@@ -179,8 +180,8 @@ void ListDrivers(const StringRef& str, DriversBitmap drivers);
 
 // From section 3.12.7 of http://infocenter.arm.com/help/topic/com.arm.doc.dui0553b/DUI0553.pdf:
 // When you write to BASEPRI_MAX, the instruction writes to BASEPRI only if either:
-// • Rn is non-zero and the current BASEPRI value is 0
-// • Rn is non-zero and less than the current BASEPRI value
+// ï¿½ Rn is non-zero and the current BASEPRI value is 0
+// ï¿½ Rn is non-zero and less than the current BASEPRI value
 __attribute__( ( always_inline ) ) __STATIC_INLINE void __set_BASEPRI_MAX(uint32_t value)
 {
   __ASM volatile ("MSR basepri_max, %0" : : "r" (value) : "memory");
@@ -248,54 +249,6 @@ private:
 	uint32_t whenStarted;
 	bool running;
 };
-
-// Helper functions to work on bitmaps of various lengths.
-// The primary purpose of these is to allow us to switch between 16, 32 and 64-bit bitmaps.
-
-// Convert an unsigned integer to a bit in a bitmap
-template<typename BitmapType> inline constexpr BitmapType MakeBitmap(unsigned int n)
-{
-	return (BitmapType)1u << n;
-}
-
-// Make a bitmap with the lowest n bits set
-template<typename BitmapType> inline constexpr BitmapType LowestNBits(unsigned int n)
-{
-	return ((BitmapType)1u << n) - 1;
-}
-
-// Check if a particular bit is set in a bitmap
-template<typename BitmapType> inline constexpr bool IsBitSet(BitmapType b, unsigned int n)
-{
-	return (b & ((BitmapType)1u << n)) != 0;
-}
-
-// Set a bit in a bitmap
-template<typename BitmapType> inline void SetBit(BitmapType &b, unsigned int n)
-{
-	b |= ((BitmapType)1u << n);
-}
-
-// Clear a bit in a bitmap
-template<typename BitmapType> inline void ClearBit(BitmapType &b, unsigned int n)
-{
-	b &= ~((BitmapType)1u << n);
-}
-
-// Convert an array of longs to a bit map with overflow checking
-template<typename BitmapType> BitmapType UnsignedArrayToBitMap(const uint32_t *arr, size_t numEntries)
-{
-	BitmapType res = 0;
-	for (size_t i = 0; i < numEntries; ++i)
-	{
-		const uint32_t f = arr[i];
-		if (f < sizeof(BitmapType) * CHAR_BIT)
-		{
-			SetBit(res, f);
-		}
-	}
-	return res;
-}
 
 // Convert a PWM that is possibly in the old style 0..255 to be in the range 0.0..1.0
 float ConvertOldStylePwm(float v);
