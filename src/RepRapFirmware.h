@@ -40,6 +40,7 @@ typedef uint16_t PwmFrequency;		// type used to represent a PWM frequency. 0 som
 #include "General/SafeStrtod.h"
 #include "General/SafeVsnprintf.h"
 #include "General/StringRef.h"
+#include "General/StringFunctions.h"
 
 // Module numbers and names, used for diagnostics and debug
 // All of these including noModule must be <= 15 because we 'or' the module number into the software reset code
@@ -163,14 +164,6 @@ inline void delay(uint32_t ms)
 }
 
 #endif
-
-bool StringEndsWithIgnoreCase(const char* string, const char* ending);
-bool StringStartsWith(const char* string, const char* starting);
-bool StringStartsWithIgnoreCase(const char* string, const char* starting);
-bool StringEqualsIgnoreCase(const char* s1, const char* s2);
-int StringContains(const char* string, const char* match);
-void SafeStrncpy(char *dst, const char *src, size_t length) pre(length != 0);
-void SafeStrncat(char *dst, const char *src, size_t length) pre(length != 0);
 
 double HideNan(float val);
 

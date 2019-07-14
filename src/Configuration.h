@@ -300,7 +300,7 @@ constexpr float DefaultIdleCurrentFactor = 0.3;			// Proportion of normal motor 
 constexpr float DefaultNonlinearExtrusionLimit = 0.2;	// Maximum additional commanded extrusion to compensate for nonlinearity
 constexpr size_t NumRestorePoints = 6;					// Number of restore points, must be at least 3
 
-constexpr float AxisRoundingError = 0.05;				// Maximum possible error when we round trip a machine position to motor coordinates and back
+constexpr float AxisRoundingError = 0.02;				// Maximum possible error when we round trip a machine position to motor coordinates and back
 
 // Triggers
 constexpr unsigned int MaxTriggers = 16;				// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t

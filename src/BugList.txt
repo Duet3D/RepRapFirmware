@@ -182,15 +182,15 @@ For 2.03 release:
 - Added jerk policy, P parameter to M566
 - Pulse-type filament monitor now reports mm/pulse to 3 decimal places instead of 2
 
-- For 2.03.01:
+- For 2.04:
 - [done] Bug: delta auto calibration adjusts homed height incorrectly if the delta radius or rod length was changed
 - [done] Bug: G29 P parameter doesn't work if there are nonempty deployprobe.g/retractprobe.g files, https://forum.duet3d.com/topic/10904/g29-p-parameter-ignored/5. Remove P parameter from G29 S0, add G29 S3 (same as M374).
 - [done] Bug: M557 P parameter didn't work
 - [done] G31 to show current parameters, not just probe output value
 - [done] Pulsed filament monitors: don't try to resync on every interrupt when interrupts are arriving very fast because the sensor has high resolution
-- resurrect.g missing the tool selection command?
-- Bug with small Z movements at Zmin, https://forum.duet3d.com/topic/11025/strange-behavior
-- Issues when diagonal rods are not all the same lengths, https://forum.duet3d.com/post/99714
+- [done] M118 to append \n if the destination is Telnet
+- [done] Bug with small Z movements at Zmin, https://forum.duet3d.com/topic/11025/strange-behavior
+- [done] Trilateration wrong when diagonal rods are not all the same lengths, https://forum.duet3d.com/post/99714
 
 Outstanding issues:
 - Running out of output buffers and not freeing them up, https://forum.duet3d.com/post/96586

@@ -90,7 +90,7 @@ private:
 	float printRadiusSquared;
 	float homedCarriageHeights[MaxTowers];
 	float Xbc, Xca, Xab, Ybc, Yca, Yab;
-	float coreFa, coreFb, coreFc;
+	float coreKa, coreKb, coreKc;
 	float Q, Q2;
 	float D2[MaxTowers];
 	float alwaysReachableHeight;

@@ -62,13 +62,12 @@ void LinearDeltaKinematics::Recalc()
 	Ybc = towerY[DELTA_C_AXIS] - towerY[DELTA_B_AXIS];
 	Yca = towerY[DELTA_A_AXIS] - towerY[DELTA_C_AXIS];
 	Yab = towerY[DELTA_B_AXIS] - towerY[DELTA_A_AXIS];
-	coreFa = fsquare(towerX[DELTA_A_AXIS]) + fsquare(towerY[DELTA_A_AXIS]);
-	coreFb = fsquare(towerX[DELTA_B_AXIS]) + fsquare(towerY[DELTA_B_AXIS]);
-	coreFc = fsquare(towerX[DELTA_C_AXIS]) + fsquare(towerY[DELTA_C_AXIS]);
-	Q = (Xca * Yab - Xab * Yca) * 2;
+
+	Q = (Xab * towerY[DELTA_C_AXIS] + Xca * towerY[DELTA_B_AXIS] + Xbc * towerY[DELTA_A_AXIS]) * 2;
 	Q2 = fsquare(Q);
 
-	// Calculate the base carriage heights when the printer is homed, i.e. the carriages are at the endstops, and the always-reachable height
+	// Calculate the squares of the diagonals and the base carriage heights when the printer is homed, i.e. the carriages are at the endstops
+	// Also calculate the always-reachable height
 	alwaysReachableHeight = homedHeight;
 	for (size_t axis = 0; axis < numTowers; ++axis)
 	{
@@ -82,6 +81,14 @@ void LinearDeltaKinematics::Recalc()
 			alwaysReachableHeight = heightLimit;
 		}
 	}
+
+	// Calculate coreKa, corrKb and coreKc which are used by the forward transform
+	const float coreFa = fsquare(towerX[DELTA_A_AXIS]) + fsquare(towerY[DELTA_A_AXIS]);
+	const float coreFb = fsquare(towerX[DELTA_B_AXIS]) + fsquare(towerY[DELTA_B_AXIS]);
+	const float coreFc = fsquare(towerX[DELTA_C_AXIS]) + fsquare(towerY[DELTA_C_AXIS]);
+	coreKa = (D2[DELTA_B_AXIS] - D2[DELTA_C_AXIS]) + (coreFc - coreFb);
+	coreKb = (D2[DELTA_C_AXIS] - D2[DELTA_A_AXIS]) + (coreFa - coreFc);
+	coreKc = (D2[DELTA_A_AXIS] - D2[DELTA_B_AXIS]) + (coreFb - coreFa);
 
 	printRadiusSquared = fsquare(printRadius);
 
@@ -126,26 +133,31 @@ float LinearDeltaKinematics::Transform(const float machinePos[], size_t axis) co
 // Calculate the Cartesian coordinates from the motor coordinates
 void LinearDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float machinePos[XYZ_AXES]) const
 {
-	const float Fa = coreFa + fsquare(Ha);
-	const float Fb = coreFb + fsquare(Hb);
-	const float Fc = coreFc + fsquare(Hc);
-
-	// Calculate PQRSU such that x = -(S - Uz)/Q, y = (P - Rz)/Q
-	const float P = (Xbc * Fa) + (Xca * Fb) + (Xab * Fc);
-	const float S = (Ybc * Fa) + (Yca * Fb) + (Yab * Fc);
+	// Calculate RSUT such that x = (Uz + S)/Q, y = -(Rz + T)/Q
 	const float R = ((Xbc * Ha) + (Xca * Hb) + (Xab * Hc)) * 2;
 	const float U = ((Ybc * Ha) + (Yca * Hb) + (Yab * Hc)) * 2;
 
-	const float R2 = fsquare(R), U2 = fsquare(U);
+	// Note, Ka + Kb + Kc = 0 so we could calculate just two of them
+	const float Ka = coreKa + (fsquare(Hc) - fsquare(Hb)),
+				Kb = coreKb + (fsquare(Ha) - fsquare(Hc)),
+				Kc = coreKc + (fsquare(Hb) - fsquare(Ha));
 
-	const float A = U2 + R2 + Q2;
-	const float minusHalfB = S * U + P * R + Ha * Q2 + towerX[DELTA_A_AXIS] * U * Q - towerY[DELTA_A_AXIS] * R * Q;
-	const float C = fsquare(S + towerX[DELTA_A_AXIS] * Q) + fsquare(P - towerY[DELTA_A_AXIS] * Q) + (fsquare(Ha) - D2[DELTA_A_AXIS]) * Q2;
+	const float S = Ka * towerY[DELTA_A_AXIS] + Kb * towerY[DELTA_B_AXIS] + Kc * towerY[DELTA_C_AXIS];
+	const float T = Ka * towerX[DELTA_A_AXIS] + Kb * towerX[DELTA_B_AXIS] + Kc * towerX[DELTA_C_AXIS];
+
+	const float A = fsquare(U) + fsquare(R) + Q2;
+	const float minusHalfB =  Q2 * Ha
+							+ Q * (U * towerX[DELTA_A_AXIS] - R * towerY[DELTA_A_AXIS])
+							- (R * T + U * S);
+	const float C = fsquare(towerX[DELTA_A_AXIS] * Q - S) + fsquare(towerY[DELTA_A_AXIS] * Q + T) + (fsquare(Ha) - D2[DELTA_A_AXIS]) * Q2;
 
 	const float z = (minusHalfB - sqrtf(fsquare(minusHalfB) - A * C)) / A;
-	machinePos[X_AXIS] = (U * z - S) / Q;
-	machinePos[Y_AXIS] = (P - R * z) / Q;
+	machinePos[X_AXIS] = (U * z + S) / Q;
+	machinePos[Y_AXIS] = -(R * z + T) / Q;
 	machinePos[Z_AXIS] = z - ((machinePos[X_AXIS] * xTilt) + (machinePos[Y_AXIS] * yTilt));
+
+//	debugPrintf("Ha=%f Hb=%f Hc=%f Ka=%f Kb=%f Kc=%f\n", (double)Ha, (double)Hb, (double)Hc, (double)Ka, (double)Kb, (double)Kc);
+//	debugPrintf("Q=%f R=%f U=%f S=%f T=%f A=%f B=%f C=%f\n", (double)Q, (double)R, (double)U, (double)S, (double)T, (double)A, (double)minusHalfB, (double)C);
 }
 
 // Convert Cartesian coordinates to motor steps
