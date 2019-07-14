@@ -293,7 +293,7 @@ public:
 	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d);
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
-	void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr) __attribute((noreturn));
+	[[noreturn]] void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr);
 	bool AtxPower() const;
 	void AtxPowerOn();
 	void AtxPowerOff(bool defer);

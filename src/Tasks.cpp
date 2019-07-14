@@ -125,9 +125,9 @@ extern "C" void AppMain()
 	// Add the FreeRTOS internal tasks to the task list
 	idleTask.AddToList();
 
-# if configUSE_TIMERS
+#if configUSE_TIMERS
 	timerTask.AddToList();
-# endif
+#endif
 
 	// Create the startup task
 	mainTask.Create(MainTask, "MAIN", nullptr, TaskPriority::SpinPriority);
@@ -187,7 +187,7 @@ namespace Tasks
 		return neverUsedRam;
 	}
 
-	// Write data about the current task (if RTOS) or the system
+	// Write data about the current task
 	void Diagnostics(MessageType mtype)
 	{
 		Platform& p = reprap.GetPlatform();
@@ -322,14 +322,13 @@ extern "C"
 	// Exception handlers
 	// By default the Usage Fault, Bus Fault and Memory Management fault handlers are not enabled,
 	// so they escalate to a Hard Fault and we don't need to provide separate exception handlers for them.
-	void hardFaultDispatcher(const uint32_t *pulFaultStackAddress) __attribute((noreturn));
-	void hardFaultDispatcher(const uint32_t *pulFaultStackAddress)
+	[[noreturn]] void hardFaultDispatcher(const uint32_t *pulFaultStackAddress)
 	{
 	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pulFaultStackAddress + 5);
 	}
 
 	// The fault handler implementation calls a function called hardFaultDispatcher()
-	void HardFault_Handler() __attribute__((naked, noreturn));
+    void HardFault_Handler() __attribute__((naked, noreturn));
 	void HardFault_Handler()
 	{
 	    __asm volatile
@@ -344,8 +343,7 @@ extern "C"
 	    );
 	}
 
-	void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress) __attribute((noreturn));
-	void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress)
+	[[noreturn]] void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress)
 	{
 	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::wdtFault, pulFaultStackAddress + 5);
 	}
@@ -372,8 +370,7 @@ extern "C"
 	    );
 	}
 
-	void otherFaultDispatcher(const uint32_t *pulFaultStackAddress) __attribute((noreturn));
-	void otherFaultDispatcher(const uint32_t *pulFaultStackAddress)
+	[[noreturn]] void otherFaultDispatcher(const uint32_t *pulFaultStackAddress)
 	{
 	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::otherFault, pulFaultStackAddress + 5);
 	}
@@ -402,29 +399,27 @@ extern "C"
 
 	void DebugMon_Handler   () __attribute__ ((noreturn,alias("OtherFault_Handler")));
 
-// FreeRTOS hooks that we need to provide
-void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName) __attribute((noreturn));
-void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName)
-{
-	reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::stackOverflow, pulFaultStackAddress);
-}
+	// FreeRTOS hooks that we need to provide
+	[[noreturn]] void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName)
+	{
+		reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::stackOverflow, pulFaultStackAddress);
+	}
 
-void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) __attribute((naked, noreturn));
-void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName)
-{
-	// r0 = pxTask, r1 = pxTaskName
-	__asm volatile
-	(
-		" push {r0, r1, lr}											\n"		/* save parameters and call address on the stack */
-		" mov r0, sp												\n"
-		" ldr r2, handler_sovf_address_const                        \n"
-		" bx r2                                                     \n"
-		" handler_sovf_address_const: .word stackOverflowDispatcher \n"
-	);
-}
+	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) __attribute((naked, noreturn));
+	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName)
+	{
+		// r0 = pxTask, r1 = pxTaskName
+		__asm volatile
+		(
+			" push {r0, r1, lr}											\n"		/* save parameters and call address on the stack */
+			" mov r0, sp												\n"
+			" ldr r2, handler_sovf_address_const                        \n"
+			" bx r2                                                     \n"
+			" handler_sovf_address_const: .word stackOverflowDispatcher \n"
+		);
+	}
 
-	void assertCalledDispatcher(const uint32_t *pulFaultStackAddress) __attribute((noreturn));
-	void assertCalledDispatcher(const uint32_t *pulFaultStackAddress)
+	[[noreturn]] void assertCalledDispatcher(const uint32_t *pulFaultStackAddress)
 	{
 	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress);
 	}

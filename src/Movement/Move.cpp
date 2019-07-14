@@ -1004,16 +1004,22 @@ void Move::CreateLaserTask()
 	}
 }
 
-// Wake up the laser task. Call this at the start of a new move from standstill (not from an ISR)
+// Wake up the laser task, if there is one (must check!). Call this at the start of a new move from standstill (not from an ISR)
 void Move::WakeLaserTask()
 {
-	laserTask->Give();
+	if (laserTask != nullptr)
+	{
+		laserTask->Give();
+	}
 }
 
-// Wake up the laser task. Call this at the start of a new move from standstill (not from an ISR)
+// Wake up the laser task if there is one (must check!) from an ISR
 void Move::WakeLaserTaskFromISR()
 {
-	laserTask->GiveFromISR();
+	if (laserTask != nullptr)
+	{
+		laserTask->GiveFromISR();
+	}
 }
 
 void Move::LaserTaskRun()
