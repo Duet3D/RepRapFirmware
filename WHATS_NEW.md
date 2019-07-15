@@ -5,7 +5,7 @@ Version 2.04RC1
 ============
 Compatible files:
 - DuetWiFiServer 1.23
-- DuetWebControl 1.22.6 or 2.0.0-RC7
+- DuetWebControl 1.22.6 or 2.0.0-RC6 or 2.0.0-RC7
 
 Upgrade notes:
 - The P parameter of the G29 S0 (or plain G29) command has been withdrawn. See below under "changed behaviour".
