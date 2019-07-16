@@ -70,7 +70,7 @@ public:
 	void SetDriveCoordinate(int32_t a, size_t drive);						// Force an end point
 	void SetFeedRate(float rate) { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping);
-	bool FetchEndPosition(volatile int32_t ep[MaxTotalDrivers], volatile float endCoords[MaxTotalDrivers]);
+	bool FetchEndPosition(volatile int32_t ep[MaxAxesPlusExtruders], volatile float endCoords[MaxAxesPlusExtruders]);
     void SetPositions(const float move[], size_t numDrives);				// Force the endpoints to be these
     FilePosition GetFilePosition() const { return filePos; }
     float GetRequestedSpeed() const { return requestedSpeed; }
@@ -223,9 +223,9 @@ private:
 
     FilePosition filePos;					// The position in the SD card file after this move was read, or zero if not read from SD card
 
-	int32_t endPoint[MaxTotalDrivers];  	// Machine coordinates of the endpoint
-	float endCoordinates[MaxTotalDrivers];	// The Cartesian coordinates at the end of the move plus extrusion amounts
-	float directionVector[MaxTotalDrivers];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
+	int32_t endPoint[MaxAxesPlusExtruders];  		// Machine coordinates of the endpoint
+	float endCoordinates[MaxAxesPlusExtruders];		// The Cartesian coordinates at the end of the move plus extrusion amounts
+	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;					// How long is the move in hypercuboid space
 	float acceleration;						// The acceleration to use
 	float deceleration;						// The deceleration to use

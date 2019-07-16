@@ -581,20 +581,25 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 			{
 				++drive;
 			}
-			if (drive == numTotalAxes && drive < MaxAxes)
+			if (drive < MaxAxes)
 			{
-				axisLetters[drive] = c;								// assign the drive to this drive letter
-				++numTotalAxes;
-				numVisibleAxes = numTotalAxes;						// assume any new axes are visible unless there is a P parameter
-				float initialCoords[MaxAxes];
-				reprap.GetMove().GetKinematics().GetAssumedInitialPosition(drive + 1, initialCoords);
-				moveBuffer.coords[drive] = initialCoords[drive];	// user has defined a new axis, so set its position
-				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
-			}
-			platform.SetAxisDriversConfig(drive, numValues, drivers);
-			if (numTotalAxes + numExtruders > MaxTotalDrivers)
-			{
-				numExtruders = MaxTotalDrivers - numTotalAxes;		// if we added axes, we may have fewer extruders now
+				if (drive == numTotalAxes)
+				{
+					// We are creating a new axis
+					axisLetters[drive] = c;								// assign the drive to this drive letter
+					platform.CreatingAxis(numTotalAxes);				// shift the extruder parameters up and set default parameters for the new axis
+					++numTotalAxes;
+					numVisibleAxes = numTotalAxes;						// assume any new axes are visible unless there is a P parameter
+					if (numTotalAxes + numExtruders > MaxAxesPlusExtruders)
+					{
+						numExtruders = MaxAxesPlusExtruders - numTotalAxes;	// if we added axes, we may have fewer extruders now
+					}
+					float initialCoords[MaxAxes];
+					reprap.GetMove().GetKinematics().GetAssumedInitialPosition(drive + 1, initialCoords);
+					moveBuffer.coords[drive] = initialCoords[drive];	// user has defined a new axis, so set its position
+					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+				}
+				platform.SetAxisDriversConfig(drive, numValues, drivers);
 			}
 		}
 		++lettersToTry;
@@ -603,7 +608,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen(extrudeLetter))
 	{
 		seen = true;
-		size_t numValues = MaxTotalDrivers - numTotalAxes;
+		size_t numValues = min<size_t>(MaxAxesPlusExtruders - numTotalAxes, MaxExtruders);
 		uint32_t drivers[MaxExtruders];
 		gb.GetUnsignedArray(drivers, numValues, false);
 		numExtruders = numValues;

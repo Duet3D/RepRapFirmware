@@ -376,9 +376,9 @@ void Move::Diagnostics(MessageType mtype)
 }
 
 // Set the current position to be this
-void Move::SetNewPosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation)
+void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation)
 {
-	float newPos[MaxTotalDrivers];
+	float newPos[MaxAxesPlusExtruders];
 	memcpy(newPos, positionNow, sizeof(newPos));			// copy to local storage because Transform modifies it
 	AxisAndBedTransform(newPos, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes(), doBedCompensation);
 	SetLiveCoordinates(newPos);
@@ -815,7 +815,7 @@ void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, AxesBitmap
 int32_t Move::GetAccumulatedExtrusion(size_t extruder, bool& isPrinting)
 {
 	const size_t drive = extruder + reprap.GetGCodes().GetTotalAxes();
-	if (drive < MaxTotalDrivers)
+	if (drive < MaxAxesPlusExtruders)
 	{
 		return mainDDARing.GetAccumulatedExtrusion(extruder, drive, isPrinting);
 	}

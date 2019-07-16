@@ -60,12 +60,12 @@ public:
 	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, AxesBitmap xAxes, AxesBitmap yAxes) const;
 																	// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetEndPoint(size_t drive) const;					 	// Get the current position of a motor
-	void LiveCoordinates(float m[MaxTotalDrivers], AxesBitmap xAxes, AxesBitmap yAxes);	// Gives the last point at the end of the last complete DDA transformed to user coords
+	void LiveCoordinates(float m[MaxAxesPlusExtruders], AxesBitmap xAxes, AxesBitmap yAxes);	// Gives the last point at the end of the last complete DDA transformed to user coords
 	void Interrupt() __attribute__ ((hot));							// The hardware's (i.e. platform's)  interrupt should call this.
 	bool AllMovesAreFinished();										// Is the look-ahead ring empty?  Stops more moves being added as well.
 	void DoLookAhead() __attribute__ ((hot));						// Run the look-ahead procedure
-	void SetNewPosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation); // Set the current position to be this
-	void SetLiveCoordinates(const float coords[MaxTotalDrivers]);	// Force the live coordinates (see above) to be these
+	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation); // Set the current position to be this
+	void SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]);	// Force the live coordinates (see above) to be these
 	void ResetExtruderPositions();									// Resets the extrusion amounts of the live coordinates
 	void SetXYBedProbePoint(size_t index, float x, float y);		// Record the X and Y coordinates of a probe point
 	void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError); // Record the Z coordinate of a probe point
@@ -204,7 +204,7 @@ private:
 	void InverseBedTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;	// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;			// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;	// Go from an axis transformed point back to user coordinates
-	void SetPositions(const float move[MaxTotalDrivers]) { return mainDDARing.SetPositions(move); }	// Force the machine coordinates to be these;
+	void SetPositions(const float move[MaxAxesPlusExtruders]) { return mainDDARing.SetPositions(move); }	// Force the machine coordinates to be these;
 	float GetInterpolatedHeightError(float xCoord, float yCoord) const;							// Get the height error at an XY position
 
 	DDARing mainDDARing;								// The DDA ring used for regular moves
@@ -282,7 +282,7 @@ inline void Move::AdjustMotorPositions(const float adjustment[], size_t numMotor
 
 // Return the current live XYZ and extruder coordinates
 // Interrupts are assumed enabled on entry
-inline void Move::LiveCoordinates(float m[MaxTotalDrivers], AxesBitmap xAxes, AxesBitmap yAxes)
+inline void Move::LiveCoordinates(float m[MaxAxesPlusExtruders], AxesBitmap xAxes, AxesBitmap yAxes)
 {
 	mainDDARing.LiveCoordinates(m);
 	InverseAxisAndBedTransform(m, xAxes, yAxes);
@@ -290,7 +290,7 @@ inline void Move::LiveCoordinates(float m[MaxTotalDrivers], AxesBitmap xAxes, Ax
 
 // These are the actual numbers that we want to be the coordinates, so don't transform them.
 // The caller must make sure that no moves are in progress or pending when calling this
-inline void Move::SetLiveCoordinates(const float coords[MaxTotalDrivers])
+inline void Move::SetLiveCoordinates(const float coords[MaxAxesPlusExtruders])
 {
 	mainDDARing.SetLiveCoordinates(coords);
 }

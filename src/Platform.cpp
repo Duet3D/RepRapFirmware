@@ -383,7 +383,7 @@ void Platform::Init()
 	driveStepsPerUnit[Z_AXIS] = DefaultZDriveStepsPerUnit;
 	instantDvs[Z_AXIS] = DefaultZInstantDv;
 
-	for (size_t drive = E0_AXIS; drive < MaxTotalDrivers; ++drive)
+	for (size_t drive = E0_AXIS; drive < MaxAxesPlusExtruders; ++drive)
 	{
 		maxFeedrates[drive] = DefaultEMaxFeedrate;
 		accelerations[drive] = DefaultEAcceleration;
@@ -421,42 +421,44 @@ void Platform::Init()
 		db = 0;													// clear drives bitmap for all axes
 	}
 
-	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
+	// Set up the local drivers
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
-		enableValues[drive] = 0;								// assume active low enable signal
-		directions[drive] = true;								// drive moves forwards by default
-		motorCurrents[drive] = 0.0;
-		motorCurrentFraction[drive] = 1.0;
-		driverState[drive] = DriverStatus::disabled;
-		driveDriverBits[drive] = driveDriverBits[drive + MaxTotalDrivers] = StepPins::CalcDriverBitmap(drive);	// map straight through by default
-
-		if (drive < NumDirectDrivers)
-		{
-			// Set up the control pins
-			pinMode(STEP_PINS[drive], OUTPUT_LOW);
-			pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
+		directions[driver] = true;								// drive moves forwards by default
+		enableValues[driver] = 0;								// assume active low enable signal
+		motorCurrents[driver] = 0.0;
+		motorCurrentFraction[driver] = 1.0;
+		// Set up the control pins
+		pinMode(STEP_PINS[driver], OUTPUT_LOW);
+		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
 #if !(defined(DUET3_V03) || defined(DUET3_V05))
-			pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);			// this is OK for the TMC2660 CS pins too
+		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
 #endif
 
 #ifndef __LPC17xx__
-			const PinDescription& pinDesc = g_APinDescription[STEP_PINS[drive]];
-			pinDesc.pPort->PIO_OWER = pinDesc.ulPin;			// enable parallel writes to the step pins
+		const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
+		pinDesc.pPort->PIO_OWER = pinDesc.ulPin;				// enable parallel writes to the step pins
 #endif
-		}
+	}
+
+	// Set up the axis+extruder arrays
+	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
+	{
+		driverState[drive] = DriverStatus::disabled;
+		driveDriverBits[drive] = driveDriverBits[drive + MaxAxesPlusExtruders] = StepPins::CalcDriverBitmap(drive);	// map straight through by default
 	}
 
 	// Set up default axis mapping
 	for (size_t axis = 0; axis < MinAxes; ++axis)
 	{
 #ifdef PCCB
-		const size_t drive = (axis + 1) % 3;					// on PCCB we map axes X Y Z to drivers 1 2 0
+		const size_t driver = (axis + 1) % 3;					// on PCCB we map axes X Y Z to drivers 1 2 0
 #else
-		const size_t drive = axis;								// on most boards we map axes straight through to drives
+		const size_t driver = axis;								// on most boards we map axes straight through to drives
 #endif
-		driveDriverBits[axis] = StepPins::CalcDriverBitmap(drive);	// overwrite the default value set up earlier
 		axisDrivers[axis].numDrivers = 1;
-		axisDrivers[axis].driverNumbers[0] = (uint8_t)drive;
+		axisDrivers[axis].driverNumbers[0] = (uint8_t)driver;
+		driveDriverBits[axis] = StepPins::CalcDriverBitmap(driver);	// overwrite the default value set up earlier
 	}
 
 	for (uint32_t& entry : slowDriverStepTimingClocks)
@@ -1317,7 +1319,7 @@ void Platform::Spin()
 				String<ScratchStringLength> scratchString;
 				ListDrivers(scratchString.GetRef(), stalledDriversToLog);
 				stalledDriversToLog = 0;
-				float liveCoordinates[MaxTotalDrivers];
+				float liveCoordinates[MaxAxesPlusExtruders];
 				reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 				MessageF(WarningMessage, "Driver(s)%s stalled at Z height %.2f", scratchString.c_str(), (double)liveCoordinates[Z_AXIS]);
 				reported = true;
@@ -2490,9 +2492,9 @@ void Platform::SetDirection(size_t drive, bool direction)
 	{
 		SetDriverDirection(extruderDrivers[drive - numAxes], direction);
 	}
-	else if (drive >= MaxTotalDrivers && drive < MaxTotalDrivers + NumDirectDrivers)
+	else if (drive >= MaxAxesPlusExtruders && drive < MaxAxesPlusExtruders + NumDirectDrivers)
 	{
-		SetDriverDirection(drive - MaxTotalDrivers, direction);
+		SetDriverDirection(drive - MaxAxesPlusExtruders, direction);
 	}
 	if (isSlowDriver)
 	{
@@ -2894,12 +2896,13 @@ unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
 	{
 		return GetDriverMicrostepping(axisDrivers[drive].driverNumbers[0], interpolation);
 	}
-	else if (drive < NumDirectDrivers)
+	else if (drive < MaxAxesPlusExtruders)
 	{
 		return GetDriverMicrostepping(extruderDrivers[drive - numAxes], interpolation);
 	}
 	else
 	{
+		INTERNAL_ERROR;
 		interpolation = false;
 		return 16;
 	}
@@ -2907,20 +2910,23 @@ unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
 
 void Platform::SetEnableValue(size_t driver, int8_t eVal)
 {
-	enableValues[driver] = eVal;
-	DisableDriver(driver);				// disable the drive, because the enable polarity may have been wrong before
-#if HAS_SMART_DRIVERS
-	if (eVal == -1)
+	if (driver < NumDirectDrivers)
 	{
-		// User has asked to disable status monitoring for this driver, so clear its error bits
-		DriversBitmap mask = ~MakeBitmap<DriversBitmap>(driver);
-		temperatureShutdownDrivers &= mask;
-		temperatureWarningDrivers &= mask;
-		shortToGroundDrivers &= mask;
-		openLoadADrivers &= mask;
-		openLoadBDrivers &= mask;
-	}
+		enableValues[driver] = eVal;
+		DisableDriver(driver);				// disable the drive, because the enable polarity may have been wrong before
+#if HAS_SMART_DRIVERS
+		if (eVal == -1)
+		{
+			// User has asked to disable status monitoring for this driver, so clear its error bits
+			DriversBitmap mask = ~MakeBitmap<DriversBitmap>(driver);
+			temperatureShutdownDrivers &= mask;
+			temperatureWarningDrivers &= mask;
+			shortToGroundDrivers &= mask;
+			openLoadADrivers &= mask;
+			openLoadBDrivers &= mask;
+		}
 #endif
+	}
 }
 
 void Platform::SetAxisDriversConfig(size_t axis, size_t numValues, const uint32_t driverNumbers[])
@@ -3535,6 +3541,27 @@ void Platform::SetPressureAdvance(size_t extruder, float factor)
 	{
 		pressureAdvance[extruder] = factor;
 	}
+}
+
+// This is called when we create a new axis using M584.
+void Platform::CreatingAxis(size_t axis)
+{
+	// Shift the extruder parameters up one place. Only needed if M584 is used to create an axis after extruder parameters have been set up.
+	for (size_t i = MaxAxesPlusExtruders - 1; i > axis; --i)
+	{
+		accelerations[i] = accelerations[i - 1];
+		maxFeedrates[i] = maxFeedrates[i - 1];
+		instantDvs[i] = instantDvs[i - 1];
+		driveStepsPerUnit[i] = driveStepsPerUnit[i - 1];
+		driveDriverBits[i] = driveDriverBits[i - 1];
+	}
+
+	// Set default values for the new axis
+	accelerations[axis] = DefaultXYAcceleration;
+	maxFeedrates[axis] = DefaultXYMaxFeedrate;
+	instantDvs[axis] = DefaultXYInstantDv;
+	driveStepsPerUnit[axis] = DefaultXYDriveStepsPerUnit;
+	// driveDriverBits will be set up by a separate call so no need to set it here
 }
 
 #if SUPPORT_NONLINEAR_EXTRUSION

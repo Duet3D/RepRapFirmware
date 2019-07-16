@@ -1379,7 +1379,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 	}
 
 	// Zero every extruder drive as some drives may not be moved
-	for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; drive++)
+	for (size_t drive = numTotalAxes; drive < MaxAxesPlusExtruders; drive++)
 	{
 		moveBuffer.coords[drive] = 0.0;
 	}
@@ -2071,7 +2071,7 @@ void GCodes::FinaliseMove(GCodeBuffer& gb)
 		segMoveState = SegmentedMoveState::active;
 		gb.SetState(GCodeState::waitingForSegmentedMoveToGo);
 
-		for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; ++drive)
+		for (size_t drive = numTotalAxes; drive < MaxAxesPlusExtruders; ++drive)
 		{
 			moveBuffer.coords[drive] /= totalSegments;							// change the extrusion to extrusion per segment
 		}
@@ -2112,7 +2112,7 @@ bool GCodes::ReadMove(RawMove& m)
 		if (segmentsLeftToStartAt == 1 && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
 		{
 			// Reduce the extrusion by the amount to be skipped
-			for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; ++drive)
+			for (size_t drive = numTotalAxes; drive < MaxAxesPlusExtruders; ++drive)
 			{
 				m.coords[drive] *= (1.0 - firstSegmentFractionToSkip);
 			}
@@ -2172,7 +2172,7 @@ bool GCodes::ReadMove(RawMove& m)
 		if (segmentsLeftToStartAt == segmentsLeft && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
 		{
 			// Reduce the extrusion by the amount to be skipped
-			for (size_t drive = numTotalAxes; drive < MaxTotalDrivers; ++drive)
+			for (size_t drive = numTotalAxes; drive < MaxAxesPlusExtruders; ++drive)
 			{
 				m.coords[drive] *= (1.0 - firstSegmentFractionToSkip);
 			}
@@ -2566,11 +2566,11 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 	s.catf("E:%.3f ", (double)virtualExtruderPosition);
 
 	// Get the live machine coordinates, we'll need them later
-	float liveCoordinates[MaxTotalDrivers];
+	float liveCoordinates[MaxAxesPlusExtruders];
 	reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 
 	// Now the extruder coordinates
-	for (size_t i = numTotalAxes; i < MaxTotalDrivers; i++)
+	for (size_t i = numTotalAxes; i < MaxAxesPlusExtruders; i++)
 	{
 		s.catf("E%u:%.1f ", i - numTotalAxes, (double)liveCoordinates[i]);
 	}
@@ -2937,7 +2937,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 // Does what it says.
 void GCodes::DisableDrives()
 {
-	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
+	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
 		platform.DisableDrive(drive);
 	}
@@ -3751,7 +3751,7 @@ bool GCodes::ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling
 }
 
 // Set the current position, optionally applying bed and axis compensation
-void GCodes::SetMachinePosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation)
+void GCodes::SetMachinePosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation)
 {
 	memcpy(moveBuffer.coords, positionNow, sizeof(moveBuffer.coords[0] * numTotalAxes));
 	reprap.GetMove().SetNewPosition(positionNow, doBedCompensation);

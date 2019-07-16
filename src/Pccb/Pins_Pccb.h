@@ -89,7 +89,8 @@ constexpr size_t MaxGpioPorts = 5;
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, <= DRIVES
 
-constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
+constexpr size_t MaxAxesPlusExtruders = NumDirectDrivers;		// The maximum number of axes+extruders
+constexpr size_t MaxExtruders = MaxAxesPlusExtruders - MinAxes;	// The maximum number of extruders
 constexpr size_t NumDefaultExtruders = 0;			// The number of drivers that we configure as extruders by default
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 

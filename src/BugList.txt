@@ -205,6 +205,8 @@ Duet 3:
 - Bug: code queue ont always used then it should be, https://github.com/chrishamm/DuetSoftwareFramework/issues/1
 
 Planned for 3.0:
+-  M291 not displaying on PanelDue as well as web interface, https://forum.duet3d.com/topic/11240/m291-display-on-lcd-not-always-working-when-web-session-is-open
+- Problem with InitiLeadscrewMove if MaxTotalDrivers > MaxAxesPlusExtruders because directionVector will be too short. Index specialMoveCVoords by leadscrew index, translate to driver in Prepare.
 - [done] 3.0 bug: Fix Z probe starting height
 - Bug: in CNC mode, if a move goes out of bounds then the spindle is stopped immediately but moves in the queue continue to execute. Need to go to a spacial state to empty the queue, and then turn the spindle off?
 - Bug: incomplete FTP uploads, https://forum.duet3d.com/topic/10987/ftp-not-uploading-whole-files
