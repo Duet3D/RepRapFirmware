@@ -250,7 +250,7 @@ private:
 
 	Kinematics *kinematics;								// What kinematics we are using
 
-	float specialMoveCoords[MaxTotalDrivers];			// Amounts by which to move individual motors (leadscrew adjustment move)
+	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
 	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
 
 #if SUPPORT_LASER || SUPPORT_IOBITS

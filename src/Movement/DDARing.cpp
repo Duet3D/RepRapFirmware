@@ -357,10 +357,9 @@ void DDARing::CurrentMoveCompleted()
 {
 	// Save the current motor coordinates, and the machine Cartesian coordinates if known
 	liveCoordinatesValid = currentDda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
-	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	for (size_t drive = numAxes; drive < MaxAxesPlusExtruders; ++drive)
+	for (size_t drive = MaxAxes; drive < MaxAxesPlusExtruders; ++drive)
 	{
-		extrusionAccumulators[drive - numAxes] += currentDda->GetStepsTaken(drive);
+		extrusionAccumulators[drive - MaxAxes] += currentDda->GetStepsTaken(drive);
 	}
 	currentDda = nullptr;
 
@@ -447,7 +446,7 @@ void DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders])
 	else
 	{
 		// Only the extruder coordinates are valid, so we need to convert the motor endpoints to coordinates
-		memcpy(m + numTotalAxes, const_cast<const float *>(liveCoordinates + numTotalAxes), sizeof(m[0]) * (MaxAxesPlusExtruders - numTotalAxes));
+		memcpy(m + MaxAxes, const_cast<const float *>(liveCoordinates + MaxAxes), sizeof(m[0]) * (MaxAxesPlusExtruders - MaxAxes));
 		int32_t tempEndPoints[MaxAxes];
 		memcpy(tempEndPoints, const_cast<const int32_t*>(liveEndPoints), sizeof(tempEndPoints));
 		cpu_irq_enable();

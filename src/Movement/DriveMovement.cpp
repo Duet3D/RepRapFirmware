@@ -192,7 +192,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	// Calculate the requested extrusion amount and a few other things
 	float dv = dda.directionVector[drive];
 	float extrusionRequired = dda.totalDistance * dv;
-	const size_t extruder = drive - reprap.GetGCodes().GetTotalAxes();
+	const size_t extruder = drive - MaxAxes;
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 	// Add the nonlinear extrusion correction to totalExtrusion
@@ -317,8 +317,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 
 void DriveMovement::DebugPrint() const
 {
-	const size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
-	char c = (drive < totalAxes) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + (drive - totalAxes));
+	char c = (drive < MaxAxes) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + (drive - MaxAxes));
 	if (state != DMState::idle)
 	{
 		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32
