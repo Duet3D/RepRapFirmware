@@ -419,7 +419,6 @@ public:
 	float AxisTotalLength(size_t axis) const;
 	float GetPressureAdvance(size_t extruder) const;
 	void SetPressureAdvance(size_t extruder, float factor);
-	void CreatingAxis(size_t axis);
 
 	const AxisDriversConfig& GetAxisDriversConfig(size_t axis) const
 		pre(axis < MaxAxes)
@@ -574,6 +573,8 @@ private:
 	void ResetChannel(size_t chan);					// re-initialise a serial channel
 	float AdcReadingToCpuTemperature(uint32_t reading) const;
 
+	void UpdateZMotorDriverBits();					// set up the driver bits for the individual Z motors
+
 #if HAS_SMART_DRIVERS
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char* text, bool& reported);
 #endif
@@ -678,8 +679,8 @@ private:
 	float accelerations[MaxAxesPlusExtruders];
 	float driveStepsPerUnit[MaxAxesPlusExtruders];
 	float instantDvs[MaxAxesPlusExtruders];
-	uint32_t driveDriverBits[2 * MaxAxesPlusExtruders];	// the bitmap of local driver port bits for each axis or extruder, followed by the raw versions
-
+	uint32_t driveDriverBits[MaxAxesPlusExtruders + MaxDriversPerAxis];
+														// the bitmap of local driver port bits for each axis or extruder, followed by the bitmaps for the individual Z motors
 	AxisDriversConfig axisDrivers[MaxAxes];				// the driver numbers assigned to each axis
 
 	float pressureAdvance[MaxExtruders];

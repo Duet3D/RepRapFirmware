@@ -277,10 +277,16 @@ constexpr size_t ScratchStringLength = 220;							// standard length of a scratc
 constexpr size_t ShortScratchStringLength = 50;
 
 constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
-constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
-constexpr size_t CoreXYU_AXES = 5;									// The number of axes in a CoreXYU machine (there is a hidden V axis)
-constexpr size_t CoreXYUV_AXES = 5;									// The number of axes in a CoreXYUV machine
-constexpr size_t U_AXIS = 3, V_AXIS = 4;							// The indices of the U and V motors in a CoreXYU machine (needed by Platform)
+constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2;				// The indices of the Cartesian axes in drive arrays
+constexpr size_t U_AXIS = 3;										// The assumed index of the U axis when executing M673
+
+constexpr size_t MaxAxesPlusExtruders = MaxAxes + MaxExtruders;
+
+#if SUPPORT_CAN_EXPANSION
+constexpr size_t MaxTotalDrivers = NumDirectDrivers + MaxCanDrivers;
+#else
+constexpr size_t MaxTotalDrivers = NumDirectDrivers;
+#endif
 
 constexpr AxesBitmap DefaultXAxisMapping = MakeBitmap<AxesBitmap>(X_AXIS);	// by default, X is mapped to X
 constexpr AxesBitmap DefaultYAxisMapping = MakeBitmap<AxesBitmap>(Y_AXIS);	// by default, Y is mapped to Y

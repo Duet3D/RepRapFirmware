@@ -232,26 +232,6 @@ void Tool::Print(const StringRef& reply) const
 	reply.catf("; status: %s", (state == ToolState::active) ? "selected" : (state == ToolState::standby) ? "standby" : "off");
 }
 
-float Tool::MaxFeedrate() const
-{
-	if (driveCount <= 0)
-	{
-		reprap.GetPlatform().Message(ErrorMessage, "Attempt to get maximum feedrate for a tool with no drives.\n");
-		return 1.0;
-	}
-	float result = 0.0;
-	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	for (size_t d = 0; d < driveCount; d++)
-	{
-		const float mf = reprap.GetPlatform().MaxFeedrate(drives[d] + numAxes);
-		if (mf > result)
-		{
-			result = mf;
-		}
-	}
-	return result;
-}
-
 // There is a temperature fault on a heater, so disable all tools using that heater.
 // This function must be called for the first entry in the linked list.
 void Tool::FlagTemperatureFault(int8_t heater)

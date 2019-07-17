@@ -374,7 +374,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 			// Sum up the filament usage and the filament needed
 			float totalFilamentNeeded = 0.0;
 			const float extrRawTotal = gCodes.GetTotalRawExtrusion();
-			for (size_t extruder = 0; extruder < MaxAxesPlusExtruders - reprap.GetGCodes().GetTotalAxes(); extruder++)
+			for (size_t extruder = 0; extruder < MaxExtruders; extruder++)
 			{
 				totalFilamentNeeded += printingFileInfo.filamentNeeded[extruder];
 			}
