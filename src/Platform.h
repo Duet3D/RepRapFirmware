@@ -486,6 +486,7 @@ public:
 
 	// Flash operations
 	void UpdateFirmware();
+	void StartIap();
 	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply);
 
 	// AUX device

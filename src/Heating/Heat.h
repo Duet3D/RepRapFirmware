@@ -165,8 +165,6 @@ private:
 	TemperatureSensor *heaterSensors[NumTotalHeaters];				// The sensor used by the real heaters
 	TemperatureSensor *virtualHeaterSensors[MaxVirtualHeaters];	// Sensors for virtual heaters
 
-	uint32_t lastWakeTime;
-
 	float extrusionMinTemp;										// Minimum temperature to allow regular extrusion
 	float retractionMinTemp;									// Minimum temperature to allow regular retraction
 	bool coldExtrude;											// Is cold extrusion allowed?

@@ -21,11 +21,17 @@ const size_t NumCanBoards = (MaxCanDrivers + DriversPerCanBoard - 1)/DriversPerC
 
 static CanMessageBuffer *movementBuffers[NumCanBoards];
 
-// CanMovementMessage is declared in project Duet3Expansion, so we need to implement its members here
-void CanMovementMessage::DebugPrint()
+// The following function is referenced by CanMessageBuffer in the CAN library
+CanAddress GetCanAddress()
 {
-	debugPrintf("Can: %08" PRIx32 " %08" PRIx32 " %" PRIu32 " %" PRIu32 " %" PRIu32 " %.2f %.2f:",
-		timeNow, moveStartTime, accelerationClocks, steadyClocks, decelClocks, (double)initialSpeedFraction, (double)finalSpeedFraction);
+	return 0;				// the main board is always address 0
+}
+
+// CanMovementMessage is declared in project Duet3Expansion, so we need to implement its members here
+void CanMessageMovement::DebugPrint()
+{
+	debugPrintf("Can: %08" PRIx32 " %" PRIu32 " %" PRIu32 " %" PRIu32 " %.2f %.2f:",
+		whenToExecute, accelerationClocks, steadyClocks, decelClocks, (double)initialSpeedFraction, (double)finalSpeedFraction);
 	for (size_t i = 0; i < DriversPerCanBoard; ++i)
 	{
 		debugPrintf(" %" PRIi32, perDrive[i].steps);
@@ -66,43 +72,43 @@ void CanInterface::AddMovement(const DDA& dda, const PrepParams& params, size_t 
 			return;		//TODO error handling
 		}
 
-		buf->expansionBoardId = expansionBoardNumber + 1;
+		auto move = buf->SetupRequestMessage<CanMessageMovement>(expansionBoardNumber + 1);
 
 		// Common parameters
-		buf->msg.accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
-		buf->msg.steadyClocks = lrintf(params.steadyTime * StepTimer::StepClockRate);
-		buf->msg.decelClocks = lrintf(params.decelTime * StepTimer::StepClockRate);
-		buf->msg.initialSpeedFraction = params.initialSpeedFraction;
-		buf->msg.finalSpeedFraction = params.finalSpeedFraction;
-		buf->msg.flags.deltaDrives = 0;							//TODO
-		buf->msg.flags.endStopsToCheck = 0;						//TODO
-		buf->msg.flags.pressureAdvanceDrives = 0;				//TODO
-		buf->msg.flags.stopAllDrivesOnEndstopHit = false;		//TODO
+		move->accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
+		move->steadyClocks = lrintf(params.steadyTime * StepTimer::StepClockRate);
+		move->decelClocks = lrintf(params.decelTime * StepTimer::StepClockRate);
+		move->initialSpeedFraction = params.initialSpeedFraction;
+		move->finalSpeedFraction = params.finalSpeedFraction;
+		move->hdr.u.deltaDrives = 0;							//TODO
+		move->hdr.u.endStopsToCheck = 0;						//TODO
+		move->hdr.u.pressureAdvanceDrives = 0;					//TODO
+		move->hdr.u.stopAllDrivesOnEndstopHit = false;			//TODO
 		// Additional parameters for delta movements
-		buf->msg.initialX = params.initialX;
-		buf->msg.finalX = params.finalX;
-		buf->msg.initialY = params.initialY;
-		buf->msg.finalY = params.finalY;
-		buf->msg.zMovement = params.zMovement;
+		move->initialX = params.initialX;
+		move->finalX = params.finalX;
+		move->initialY = params.initialY;
+		move->finalY = params.finalY;
+		move->zMovement = params.zMovement;
 
 		// Clear out the per-drive fields
 		for (size_t drive = 0; drive < DriversPerCanBoard; ++drive)
 		{
-			buf->msg.perDrive[drive].steps = 0;
+			move->perDrive[drive].steps = 0;
 		}
 	}
 
-	buf->msg.perDrive[canDriver % DriversPerCanBoard].steps = steps;
+	buf->msg.move.perDrive[canDriver % DriversPerCanBoard].steps = steps;
 }
 
-// This is called by DDA::Prepare when all DMs for CAN drives` have been processed
+// This is called by DDA::Prepare when all DMs for CAN drives have been processed
 void CanInterface::FinishMovement(uint32_t moveStartTime)
 {
 	for (CanMessageBuffer*& buf : movementBuffers)
 	{
 		if (buf != nullptr)
 		{
-			buf->msg.moveStartTime = moveStartTime;
+			buf->msg.move.whenToExecute = moveStartTime;
 			CanSender::Send(buf);					// queues the buffer for sending and frees it when done
 			buf = nullptr;
 		}

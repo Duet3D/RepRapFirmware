@@ -161,7 +161,7 @@ void Heat::Exit()
 
 [[noreturn]] void Heat::Task()
 {
-	lastWakeTime = xTaskGetTickCount();
+	uint32_t lastWakeTime = xTaskGetTickCount();
 	for (;;)
 	{
 		for (PID *& p : pids)

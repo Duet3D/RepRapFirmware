@@ -19,7 +19,7 @@
 
 #if HAS_LINUX_INTERFACE
 
-# include "matrix/matrix.h"
+//# include "matrix/matrix.h"
 # include "xdmac/xdmac.h"
 
 // XDMAC hardware, see datasheet

@@ -49,6 +49,8 @@ private:
 	uint16_t rxPointer, txPointer, txLength;
 	bool sendBufferUpdate;
 
+	uint32_t iapWritePointer;
+
 	OutputStack *gcodeReply;
 	void HandleGCodeReply(MessageType type, const char *reply);		// accessed by Platform
 	void HandleGCodeReply(MessageType type, OutputBuffer *buffer);	// accessed by Platform

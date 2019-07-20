@@ -19,17 +19,25 @@ extern "C"
 	#include "pmc/pmc.h"
 }
 
+constexpr uint32_t CanClockIntervalMillis = 20;
+
+#define USE_BIT_RATE_SWITCH		0
+#define USE_EXTENDED_ADDRESSING	0
+
 //#define CAN_DEBUG
 
 Mcan* const MCAN_MODULE = MCAN1;
-const IRQn MCanIRQn = MCAN1_INT0_IRQn;
+constexpr IRQn MCanIRQn = MCAN1_INT0_IRQn;
 
 // CanSender management task
 constexpr size_t CanSenderTaskStackWords = 400;
 static Task<CanSenderTaskStackWords> canSenderTask;
 
-static CanMessageBuffer *pendingBuffers;
-static CanMessageBuffer *lastBuffer;			// only valid when pendingBuffers != nullptr
+constexpr size_t CanClockTaskStackWords = 300;
+static Task<CanSenderTaskStackWords> canClockTask;
+
+static CanMessageBuffer * volatile pendingBuffers;
+static CanMessageBuffer * volatile lastBuffer;			// only valid when pendingBuffers != nullptr
 
 static mcan_module mcan_instance;
 
@@ -188,70 +196,41 @@ static status_code mcan_send_standard_message(uint32_t id_value, const uint8_t *
 #endif
 
 // Send standard CAN message in fd mode,
-static status_code mcan_fd_send_standard_message(uint32_t id_value, const uint8_t *data)
+static status_code mcan_fd_send_ext_message(uint32_t id_value, const uint8_t *data, size_t dataLength)
 {
-	struct mcan_tx_element tx_element;
-
-	mcan_get_tx_buffer_element_defaults(&tx_element);
-	tx_element.T0.reg |= MCAN_TX_ELEMENT_T0_STANDARD_ID(id_value);
-	tx_element.T1.reg = (MCAN_TX_ELEMENT_T1_DLC(MCAN_TX_ELEMENT_T1_DLC_DATA64_Val) | MCAN_TX_ELEMENT_T1_FDF /*| MCAN_TX_ELEMENT_T1_BRS*/);
-	for (uint32_t i = 0; i < CONF_MCAN_ELEMENT_DATA_SIZE; i++)
-	{
-		tx_element.data[i] = *data;
-		data++;
-	}
-
-	status_code rc = mcan_set_tx_buffer_element(&mcan_instance, &tx_element, MCAN_TX_BUFFER_INDEX);
-	if (rc != STATUS_OK)
-	{
-		DEBUG_HERE;
-	}
-	else
-	{
-		rc = mcan_tx_transfer_request(&mcan_instance, 1 << MCAN_TX_BUFFER_INDEX);
-		if (rc != STATUS_OK)
-		{
-			DEBUG_HERE;
-		}
-	}
-	return rc;
-}
-
-#if 0
-// Send extended MCAN message,
-static status_code mcan_fd_send_extended_message(uint32_t id_value, const uint8_t *data)
-{
-	struct mcan_tx_element tx_element;
-	mcan_get_tx_buffer_element_defaults(&tx_element);
-	tx_element.T0.reg |= MCAN_TX_ELEMENT_T0_EXTENDED_ID(id_value) | MCAN_TX_ELEMENT_T0_XTD;
-	tx_element.T1.reg = (MCAN_TX_ELEMENT_T1_EFC | MCAN_TX_ELEMENT_T1_DLC(MCAN_TX_ELEMENT_T1_DLC_DATA64_Val) | MCAN_TX_ELEMENT_T1_FDF | MCAN_TX_ELEMENT_T1_BRS);
-	for (uint32_t i = 0; i < CONF_MCAN_ELEMENT_DATA_SIZE; i++)
-	{
-		tx_element.data[i] = *data;
-		data++;
-	}
-
-	status_code rc = mcan_set_tx_buffer_element(&mcan_instance, &tx_element, MCAN_TX_BUFFER_INDEX);
-	if (rc != STATUS_OK)
-	{
-		DEBUG_HERE;
-	}
-	else
-	{
-		rc = mcan_tx_transfer_request(&mcan_instance, 1 << MCAN_TX_BUFFER_INDEX);
-		if (rc != STATUS_OK)
-		{
-			DEBUG_HERE;
-		}
-	}
-	return rc;
-}
+	const uint32_t dlc = (dataLength <= 8) ? dataLength
+							: (dataLength <= 24) ? ((dataLength + 3) >> 2) + 6
+								: ((dataLength + 15) >> 4) + 11;
+	mcan_tx_element tx_element;
+	tx_element.T0.reg = MCAN_TX_ELEMENT_T0_EXTENDED_ID(id_value) | MCAN_TX_ELEMENT_T0_XTD;
+	tx_element.T1.reg = MCAN_TX_ELEMENT_T1_DLC(dlc)
+						| MCAN_TX_ELEMENT_T1_EFC
+#if USE_BIT_RATE_SWITCH
+						| MCAN_TX_ELEMENT_T1_BRS
 #endif
+						| MCAN_TX_ELEMENT_T1_FDF;
+
+	memcpy(tx_element.data, data, dataLength);
+
+	status_code rc = mcan_set_tx_buffer_element(&mcan_instance, &tx_element, MCAN_TX_BUFFER_INDEX);
+	if (rc != STATUS_OK)
+	{
+		DEBUG_HERE;
+	}
+	else
+	{
+		rc = mcan_tx_transfer_request(&mcan_instance, 1 << MCAN_TX_BUFFER_INDEX);
+		if (rc != STATUS_OK)
+		{
+			DEBUG_HERE;
+		}
+	}
+	return rc;
+}
 
 // Interrupt handler for MCAN, including RX,TX,ERROR and so on processes
 void MCAN1_INT0_Handler(void)
 {
-	//TODO get rid of all these debugPrintf calls
 	const uint32_t status = mcan_read_interrupt_status(&mcan_instance);
 	if (status & MCAN_RX_BUFFER_NEW_MESSAGE)
 	{
@@ -333,7 +312,7 @@ void MCAN1_INT0_Handler(void)
 
 // -------------------- End of code adapted from Atmel quick start example ----------------------------------
 
-static_assert(CONF_MCAN_ELEMENT_DATA_SIZE == sizeof(CanMovementMessage), "Mismatched message sizes");
+static_assert(CONF_MCAN_ELEMENT_DATA_SIZE == sizeof(CanMessage), "Mismatched message sizes");
 
 extern "C" void CanSenderLoop(void *)
 {
@@ -349,10 +328,14 @@ extern "C" void CanSenderLoop(void *)
 				pendingBuffers = buf->next;
 			}
 
-			// Send the message
-			buf->msg.timeNow = StepTimer::GetInterruptClocks();
-			mcan_fd_send_standard_message(buf->expansionBoardId | 0x0300, reinterpret_cast<uint8_t*>(&(buf->msg)));
-#ifdef CAN_DEBUG
+			// Send the message. If it is a time sync message, fill in the sending time first.
+			if (buf->isTimeSyncMessage)
+			{
+				buf->msg.sync.timeSent = StepTimer::GetInterruptClocks();
+			}
+			mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength);
+
+			#ifdef CAN_DEBUG
 			// Display a debug message too
 			debugPrintf("CCCR %08" PRIx32 ", PSR %08" PRIx32 ", ECR %08" PRIx32 ", TXBRP %08" PRIx32 ", TXBTO %08" PRIx32 ", st %08" PRIx32 "\n",
 						MCAN1->MCAN_CCCR, MCAN1->MCAN_PSR, MCAN1->MCAN_ECR, MCAN1->MCAN_TXBRP, MCAN1->MCAN_TXBTO, GetAndClearStatusBits());
@@ -369,6 +352,24 @@ extern "C" void CanSenderLoop(void *)
 	}
 }
 
+extern "C" void CanClockLoop(void *)
+{
+	uint32_t lastWakeTime = xTaskGetTickCount();
+
+	for (;;)
+	{
+		CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+		if (buf != nullptr)
+		{
+			(void)buf->SetupBroadcastMessage<CanMessageTimeSync>(true);
+			// The timeSent field is filled in when the message is actually written to the fifo
+			CanSender::Send(buf);
+		}
+		// Delay until it is time again
+		vTaskDelayUntil(&lastWakeTime, CanClockIntervalMillis);
+	}
+}
+
 void CanSender::Init()
 {
 	pendingBuffers = nullptr;
@@ -380,6 +381,7 @@ void CanSender::Init()
 
 	// Create the task that sends CAN messages
 	canSenderTask.Create(CanSenderLoop, "CanSender", nullptr, TaskPriority::CanSenderPriority);
+	canClockTask.Create(CanClockLoop, "CanClock", nullptr, TaskPriority::CanClockPriority);
 }
 
 // Add a buffer to the end of the send queue
@@ -390,12 +392,13 @@ void CanSender::Send(CanMessageBuffer *buf)
 
 	if (pendingBuffers == nullptr)
 	{
-		pendingBuffers = lastBuffer = buf;
+		pendingBuffers = buf;
 	}
 	else
 	{
 		lastBuffer->next = buf;
 	}
+	lastBuffer = buf;
 	canSenderTask.Give();
 }
 

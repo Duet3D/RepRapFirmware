@@ -204,8 +204,10 @@ enum class LinuxRequest : uint16_t
     SetHeightMap = 9,							// Set the heightmap coordinates via G29 S1
     LockMovementAndWaitForStandstill = 10,		// Lock movement and wait for standstill
 	Unlock = 11,								// Unlock occupied resources
+	WriteIap = 12,								// Write another chunk of the IAP binary
+	StartIap = 13,								// Launch the IAP binary
 
-	InvalidRequest = 12
+	InvalidRequest = 14
 };
 
 enum CodeFlags : uint8_t

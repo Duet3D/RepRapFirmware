@@ -701,6 +701,7 @@ void Platform::UpdateFirmware()
 				MessageF(FirmwareUpdateErrorMessage, "flash write failed, code=%" PRIu32 ", address=0x%08" PRIx32 "\n", rc, flashAddr);
 				return;
 			}
+
 			// Verify written data
 			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
 			{
@@ -780,6 +781,12 @@ void Platform::UpdateFirmware()
 
 	iapFile->Close();
 
+	StartIap();
+#endif
+}
+
+void Platform::StartIap()
+{
 	Message(AuxMessage, "Updating main firmware\n");
 	Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
 
@@ -813,19 +820,21 @@ void Platform::UpdateFirmware()
 	PIOE->PIO_IDR = 0xFFFFFFFF;
 #endif
 
+#if HAS_MASS_STORAGE
 	// Newer versions of iap4e.bin reserve space above the stack for us to pass the firmware filename
 	static const char filename[] = "0:/sys/" IAP_FIRMWARE_FILE;
 	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_FLASH_START);
 	if (topOfStack + sizeof(filename) <=
-#if SAM3XA
+# if SAM3XA
 						IRAM1_ADDR + IRAM1_SIZE
-#else
+# else
 						IRAM_ADDR + IRAM_SIZE
-#endif
+# endif
 	   )
 	{
 		memcpy(reinterpret_cast<char*>(topOfStack), filename, sizeof(filename));
 	}
+#endif
 
 #if defined(DUET_NG) || defined(DUET_M)
 	IoPort::WriteDigital(DiagPin, false);			// turn the DIAG LED off
@@ -858,7 +867,6 @@ void Platform::UpdateFirmware()
 	__asm volatile ("ldr r1, [r3, #4]");
 	__asm volatile ("orr r1, r1, #1");
 	__asm volatile ("bx r1");
-#endif
 }
 
 // Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
@@ -1057,18 +1065,8 @@ void Platform::Spin()
 	}
 
 #if defined(DUET3_V03) || defined(DUET3_V05)
-	// Blink the LED
-	{
-		static uint32_t lastTime = 0;
-		static bool diagState = true;
-		const uint32_t now = millis();
-		if (now - lastTime >= 500)
-		{
-			lastTime = now;
-			diagState = !diagState;
-			digitalWrite(DiagPin, diagState);
-		}
-	}
+	// Blink the LED at about 2Hz. The expansion boards will blink in sync when they have established clock sync with us.
+	digitalWrite(DiagPin, (StepTimer::GetInterruptClocks() & (1u << 19)) != 0);
 #endif
 
 #if HAS_MASS_STORAGE

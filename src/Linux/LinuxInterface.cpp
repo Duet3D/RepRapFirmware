@@ -18,7 +18,8 @@
 #if HAS_LINUX_INTERFACE
 
 LinuxInterface::LinuxInterface() : transfer(new DataTransfer()), wasConnected(false), numDisconnects(0),
-	reportPause(false), rxPointer(0), txPointer(0), txLength(0), sendBufferUpdate(true), gcodeReply(new OutputStack())
+	reportPause(false), rxPointer(0), txPointer(0), txLength(0), sendBufferUpdate(true),
+	iapWritePointer(IAP_FLASH_START), gcodeReply(new OutputStack())
 {
 }
 
@@ -200,6 +201,66 @@ void LinuxInterface::Spin()
 				break;
 			}
 
+			// Write another chunk of the IAP binary to the designated Flash area
+			case LinuxRequest::WriteIap:
+			{
+				if (iapWritePointer == IAP_FLASH_START)
+				{
+					// The EWP command is not supported for non-8KByte sectors in the SAM4 and SAME70 series.
+					// So we have to unlock and erase the complete 64Kb or 128kb sector first. One sector is always enough to contain the IAP.
+					flash_unlock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
+					flash_erase_sector(IAP_FLASH_START);
+				}
+
+				const char *dataToWrite = transfer->ReadData(packet->length);
+				size_t bytesWritten = 0;
+
+				do
+				{
+					size_t bytesToWrite = min<size_t>(IFLASH_PAGE_SIZE, packet->length - bytesWritten), retry = 0;
+					do
+					{
+						// Write one page at a time
+						cpu_irq_disable();
+						const uint32_t rc = flash_write(iapWritePointer, dataToWrite, bytesToWrite, 0);
+						cpu_irq_enable();
+
+						if (rc != FLASH_RC_OK)
+						{
+							reprap.GetPlatform().MessageF(FirmwareUpdateErrorMessage, "flash write failed, code=%" PRIu32 ", address=0x%08" PRIx32 "\n", rc, iapWritePointer);
+							return;
+						}
+
+						// Verify written data
+						if (memcmp(reinterpret_cast<void *>(iapWritePointer), dataToWrite, bytesToWrite) == 0)
+						{
+							break;
+						}
+						reprap.GetPlatform().MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08" PRIx32 "\n", iapWritePointer);
+					} while (retry++ < 3);
+
+					// Stop on error
+					if (retry == 3)
+					{
+						break;
+					}
+
+					// Move on to the next chunk
+					bytesWritten += bytesToWrite;
+					dataToWrite += bytesToWrite;
+					iapWritePointer += bytesToWrite;
+				} while (bytesWritten != packet->length);
+
+				break;
+			}
+
+			// Launch the IAP binary
+			case LinuxRequest::StartIap:
+				// Lock the whole IAP flash area again and start the IAP binary
+				flash_lock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
+				reprap.GetPlatform().StartIap();
+				break;
+
 			// Invalid request
 			default:
 				INTERNAL_ERROR;
@@ -310,6 +371,7 @@ void LinuxInterface::Spin()
 
 			rxPointer = txPointer = txLength = 0;
 			sendBufferUpdate = true;
+			iapWritePointer = IAP_FLASH_START;
 
 			// Don't cache any messages if they cannot be sent
 			gcodeReply->ReleaseAll();
