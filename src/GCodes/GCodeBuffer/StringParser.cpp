@@ -31,41 +31,8 @@ void StringParser::Init()
 	readPointer = -1;
 	hadLineNumber = hadChecksum = false;
 	computedChecksum = 0;
-	bufferState = GCodeBufferState::parseNotStarted;
+	gb.bufferState = GCodeBufferState::parseNotStarted;
 	commandIndent = 0;
-}
-
-void StringParser::Diagnostics(MessageType mtype)
-{
-	String<ScratchStringLength> scratchString;
-	switch (bufferState)
-	{
-	case GCodeBufferState::parseNotStarted:
-		scratchString.printf("%s is idle", gb.GetIdentity());
-		break;
-
-	case GCodeBufferState::ready:
-		scratchString.printf("%s is ready with \"%s\"", gb.GetIdentity(), gb.buffer);
-		break;
-
-	case GCodeBufferState::executing:
-		scratchString.printf("%s is doing \"%s\"", gb.GetIdentity(), gb.buffer);
-		break;
-
-	default:
-		scratchString.printf("%s is assembling a command", gb.GetIdentity());
-	}
-
-	scratchString.cat(" in state(s)");
-	const GCodeMachineState *ms = gb.machineState;
-	do
-	{
-		scratchString.catf(" %d", (int)ms->state);
-		ms = ms->previous;
-	}
-	while (ms != nullptr);
-	scratchString.cat('\n');
-	reprap.GetPlatform().Message(mtype, scratchString.c_str());
 }
 
 inline void StringParser::AddToChecksum(char c)
@@ -97,11 +64,11 @@ bool StringParser::Put(char c)
 		return LineFinished();
 	}
 
-	if (c == 0x7F && bufferState != GCodeBufferState::discarding)
+	if (c == 0x7F && gb.bufferState != GCodeBufferState::discarding)
 	{
 		// The UART receiver stores 0x7F in the buffer if an overrun or framing errors occurs. So discard the command and resync on the next newline.
 		gcodeLineEnd = 0;
-		bufferState = GCodeBufferState::discarding;
+		gb.bufferState = GCodeBufferState::discarding;
 	}
 
 	// Process the incoming character in a state machine
@@ -109,7 +76,7 @@ bool StringParser::Put(char c)
 	do
 	{
 		again = false;
-		switch (bufferState)
+		switch (gb.bufferState)
 		{
 		case GCodeBufferState::parseNotStarted:				// we haven't started parsing yet
 			switch (c)
@@ -118,7 +85,7 @@ bool StringParser::Put(char c)
 			case 'n':
 				hadLineNumber = true;
 				AddToChecksum(c);
-				bufferState = GCodeBufferState::parsingLineNumber;
+				gb.bufferState = GCodeBufferState::parsingLineNumber;
 				receivedLineNumber = 0;
 				break;
 
@@ -129,7 +96,7 @@ bool StringParser::Put(char c)
 				break;
 
 			default:
-				bufferState = GCodeBufferState::parsingGCode;
+				gb.bufferState = GCodeBufferState::parsingGCode;
 				commandStart = 0;
 				again = true;
 				break;
@@ -145,7 +112,7 @@ bool StringParser::Put(char c)
 			}
 			else
 			{
-				bufferState = GCodeBufferState::parsingWhitespace;
+				gb.bufferState = GCodeBufferState::parsingWhitespace;
 				again = true;
 			}
 			break;
@@ -159,7 +126,7 @@ bool StringParser::Put(char c)
 				break;
 
 			default:
-				bufferState = GCodeBufferState::parsingGCode;
+				gb.bufferState = GCodeBufferState::parsingGCode;
 				commandStart = 0;
 				again = true;
 				break;
@@ -172,21 +139,21 @@ bool StringParser::Put(char c)
 			case '*':
 				declaredChecksum = 0;
 				hadChecksum = true;
-				bufferState = GCodeBufferState::parsingChecksum;
+				gb.bufferState = GCodeBufferState::parsingChecksum;
 				break;
 
 			case ';':
-				bufferState = GCodeBufferState::discarding;
+				gb.bufferState = GCodeBufferState::discarding;
 				break;
 
 			case '(':
 				AddToChecksum(c);
-				bufferState = GCodeBufferState::parsingBracketedComment;
+				gb.bufferState = GCodeBufferState::parsingBracketedComment;
 				break;
 
 			case '"':
 				StoreAndAddToChecksum(c);
-				bufferState = GCodeBufferState::parsingQuotedString;
+				gb.bufferState = GCodeBufferState::parsingQuotedString;
 				break;
 
 			default:
@@ -198,7 +165,7 @@ bool StringParser::Put(char c)
 			AddToChecksum(c);
 			if (c == ')')
 			{
-				bufferState = GCodeBufferState::parsingGCode;
+				gb.bufferState = GCodeBufferState::parsingGCode;
 			}
 			break;
 
@@ -206,7 +173,7 @@ bool StringParser::Put(char c)
 			StoreAndAddToChecksum(c);
 			if (c == '"')
 			{
-				bufferState = GCodeBufferState::parsingGCode;
+				gb.bufferState = GCodeBufferState::parsingGCode;
 			}
 			break;
 
@@ -217,7 +184,7 @@ bool StringParser::Put(char c)
 			}
 			else
 			{
-				bufferState = GCodeBufferState::discarding;
+				gb.bufferState = GCodeBufferState::discarding;
 				again = true;
 			}
 			break;
@@ -579,7 +546,7 @@ void StringParser::DecodeCommand()
 		commandEnd = gcodeLineEnd;
 	}
 
-	bufferState = GCodeBufferState::ready;
+	gb.bufferState = GCodeBufferState::ready;
 }
 
 // Add an entire string, overwriting any existing content and adding '\n' at the end if necessary to make it a complete line
@@ -602,25 +569,18 @@ void StringParser::Put(const char *str)
 	Put(str, strlen(str));
 }
 
-void StringParser::SetFinished(bool f)
+void StringParser::SetFinished()
 {
-	if (f)
+	if (commandEnd < gcodeLineEnd)
 	{
-		if (commandEnd < gcodeLineEnd)
-		{
-			// There is another command in the same line of gcode
-			commandStart = commandEnd;
-			DecodeCommand();
-		}
-		else
-		{
-			gb.machineState->g53Active = false;		// G53 does not persist beyond the current line
-			Init();
-		}
+		// There is another command in the same line of gcode
+		commandStart = commandEnd;
+		DecodeCommand();
 	}
 	else
 	{
-		bufferState = GCodeBufferState::executing;
+		gb.machineState->g53Active = false;		// G53 does not persist beyond the current line
+		Init();
 	}
 }
 
@@ -1122,26 +1082,6 @@ bool StringParser::GetMacAddress(uint8_t mac[6])
 	return n == 6;
 }
 
-bool StringParser::IsIdle() const
-{
-	return bufferState != GCodeBufferState::ready && bufferState != GCodeBufferState::executing;
-}
-
-bool StringParser::IsCompletelyIdle() const
-{
-	return gb.GetState() == GCodeState::normal && IsIdle();
-}
-
-bool StringParser::IsReady() const
-{
-	return bufferState == GCodeBufferState::ready;
-}
-
-bool StringParser::IsExecuting() const
-{
-	return bufferState == GCodeBufferState::executing;
-}
-
 // Write the command to a string
 void StringParser::PrintCommand(const StringRef& s) const
 {
@@ -1186,7 +1126,7 @@ void StringParser::WriteToFile()
 			fileBeingWritten->Close();
 			fileBeingWritten = nullptr;
 			SetFinished(true);
-			const char* const r = (reprap.GetPlatform().EmulatingMarlin()) ? "Done saving file." : "";
+			const char* const r = (gb.MachineState().compatibility == Compatibility::marlin) ? "Done saving file." : "";
 			reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 			return;
 		}
@@ -1247,7 +1187,7 @@ void StringParser::FinishWritingBinary()
 	binaryWriting = false;
 	if (crcOk)
 	{
-		const char* const r = (reprap.GetPlatform().EmulatingMarlin()) ? "Done saving file." : "";
+		const char* const r = (gb.MachineState().compatibility == Compatibility::marlin) ? "Done saving file." : "";
 		reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 	}
 	else
@@ -1287,7 +1227,7 @@ void StringParser::FileEnded()
 			fileBeingWritten->Close();
 			fileBeingWritten = nullptr;
 			SetFinished(true);
-			const char* const r = (reprap.GetPlatform().EmulatingMarlin()) ? "Done saving file." : "";
+			const char* const r = (gb.MachineState().compatibility == Compatibility::marlin) ? "Done saving file." : "";
 			reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 		}
 	}

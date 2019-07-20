@@ -17,49 +17,16 @@ BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) : gb(gcodeBuffer)
 
 void BinaryParser::Init()
 {
-	bufferLength = 0;
+	gb.bufferState = GCodeBufferState::parseNotStarted;
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	isIdle = true;
-}
-
-void BinaryParser::Diagnostics(MessageType mtype)
-{
-	String<ScratchStringLength> scratchString;
-	if (IsIdle())
-	{
-		scratchString.printf("%s* is idle", gb.GetIdentity());
-	}
-	else if (IsExecuting())
-	{
-		scratchString.printf("%s* is doing \"", gb.GetIdentity());
-		AppendFullCommand(scratchString.GetRef());
-		scratchString.cat('"');
-	}
-	else
-	{
-		scratchString.printf("%s* is ready with \"", gb.GetIdentity());
-		AppendFullCommand(scratchString.GetRef());
-		scratchString.cat('"');
-	}
-
-	scratchString.cat(" in state(s)");
-	const GCodeMachineState *ms = gb.machineState;
-	do
-	{
-		scratchString.catf(" %d", (int)ms->state);
-		ms = ms->previous;
-	}
-	while (ms != nullptr);
-	scratchString.cat('\n');
-	reprap.GetPlatform().Message(mtype, scratchString.c_str());
 }
 
 void BinaryParser::Put(const char *data, size_t len)
 {
 	memcpy(gb.buffer, data, len);
 	bufferLength = len;
-	isIdle = false;
+	gb.bufferState = GCodeBufferState::ready;
 	gb.machineState->g53Active = (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
 
 	if (reprap.Debug(moduleGcodes))
@@ -386,14 +353,10 @@ void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad)
 	GetArray(arr, length, doPad);
 }
 
-void BinaryParser::SetFinished(bool f)
+void BinaryParser::SetFinished()
 {
-	isIdle = f;
-	if (f)
-	{
-		gb.machineState->g53Active = false;		// G53 does not persist beyond the current line
-		Init();
-	}
+	gb.machineState->g53Active = false;		// G53 does not persist beyond the current command
+	Init();
 }
 
 FilePosition BinaryParser::GetFilePosition() const

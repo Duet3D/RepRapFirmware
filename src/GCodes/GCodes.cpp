@@ -92,7 +92,7 @@ GCodes::GCodes(Platform& p) :
 #if HAS_NETWORKING || HAS_LINUX_INTERFACE
 	httpInput = new NetworkGCodeInput();
 	httpGCode = new GCodeBuffer(GCodeChannel::http, httpInput, fileInput, HttpMessage);
-	telnetGCode = new GCodeBuffer(GCodeChannel::telnet, telnetInput, fileInput, TelnetMessage);
+	telnetGCode = new GCodeBuffer(GCodeChannel::telnet, telnetInput, fileInput, TelnetMessage, Compatibility::marlin);
 	telnetInput = new NetworkGCodeInput();
 #else
 	httpGCode = telnetGCode = nullptr;
@@ -100,9 +100,9 @@ GCodes::GCodes(Platform& p) :
 
 #if defined(SERIAL_MAIN_DEVICE)
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
-	usbGCode = new GCodeBuffer(GCodeChannel::usb, usbInput, fileInput, UsbMessage);
+	usbGCode = new GCodeBuffer(GCodeChannel::usb, usbInput, fileInput, UsbMessage, Compatibility::marlin);
 #elif HAS_LINUX_INTERFACE
-	usbGCode = new GCodeBuffer(GCodeChannel::usb, nullptr, fileInput, UsbMessage);
+	usbGCode = new GCodeBuffer(GCodeChannel::usb, nullptr, fileInput, UsbMessage, Compatbility::marlin);
 #else
 	usbGCode = nullptr;
 #endif
@@ -607,9 +607,21 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 				CopyConfigFinalValues(gb);
 				runningConfigFile = false;
 			}
+
+			bool hadFileError = gb.MachineState().fileError;
 			Pop(gb, false);
 			gb.Init();
-			if (gb.GetState() == GCodeState::normal)
+			if (gb.GetState() == GCodeState::doingUnsupportedCode)
+			{
+				gb.SetState(GCodeState::normal);
+				UnlockAll(gb);
+
+				if (hadFileError)
+				{
+					HandleResult(gb, GCodeResult::warningNotSupported, reply, nullptr);
+				}
+			}
+			else if (gb.GetState() == GCodeState::normal)
 			{
 				UnlockAll(gb);
 				HandleReply(gb, GCodeResult::ok, "");
@@ -1763,7 +1775,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		}
 
 		// If we are emulating Marlin for nanoDLP then we need to set a special end state
-		if (platform.Emulating() == Compatibility::nanoDLP && &gb == usbGCode && !DoingFileMacro())
+		if (gb.MachineState().compatibility == Compatibility::nanoDLP && !DoingFileMacro())
 		{
 			gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
 		}
@@ -3046,12 +3058,11 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 		return;
 	}
 
-	const Compatibility c = (&gb == usbGCode || &gb == telnetGCode) ? platform.Emulating() : Compatibility::me;
 	const MessageType type = gb.GetResponseMessageType();
 	const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
 	const char* emulationType = nullptr;
 
-	switch (c)
+	switch (gb.MachineState().compatibility)
 	{
 	case Compatibility::me:
 	case Compatibility::reprapFirmware:
@@ -3132,12 +3143,11 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply)
 		return;
 	}
 
-	const Compatibility c = (&gb == usbGCode || &gb == telnetGCode) ? platform.Emulating() : Compatibility::me;
 	const MessageType type = gb.GetResponseMessageType();
 	const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
 	const char* emulationType = nullptr;
 
-	switch (c)
+	switch (gb.MachineState().compatibility)
 	{
 	case Compatibility::me:
 	case Compatibility::reprapFirmware:
@@ -3723,11 +3733,16 @@ void GCodes::StopPrint(StopPrintReason reason)
 			}
 		}
 
-		if (platform.EmulatingMarlin())
+		// Pronterface expects a "Done printing" message
+		if (usbGCode->MachineState().compatibility == Compatibility::marlin)
 		{
-			// Pronterface expects a "Done printing" message
 			platform.Message(UsbMessage, "Done printing file\n");
 		}
+		if (telnetGCode->MachineState().compatibility == Compatibility::marlin)
+		{
+			platform.Message(TelnetMessage, "Done printing file\n");
+		}
+
 		const uint32_t printMinutes = lrintf(reprap.GetPrintMonitor().GetPrintDuration()/60.0);
 		platform.MessageF(LoggedGenericMessage, "%s printing file %s, print time was %" PRIu32 "h %" PRIu32 "m\n",
 			(reason == StopPrintReason::normalCompletion) ? "Finished" : "Cancelled",
@@ -4156,7 +4171,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const
 {
 	if (gb.DoDwellTime(1000))
 	{
-		if (platform.EmulatingMarlin() && (&gb == usbGCode || &gb == telnetGCode))
+		if (gb.MachineState().compatibility == Compatibility::marlin)
 		{
 			// In Marlin emulation mode we should return a standard temperature report every second
 			GenerateTemperatureReport(reply);

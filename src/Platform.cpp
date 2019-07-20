@@ -276,8 +276,6 @@ void Platform::Init()
 	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 #endif
 
-	compatibility = Compatibility::marlin;		// default to Marlin because the common host programs expect the "OK" response to commands
-
 	// Initialise the IO port subsystem
 	IoPort::Init();
 
@@ -925,32 +923,6 @@ void Platform::Exit()
 	SERIAL_AUX2_DEVICE.end();
 #endif
 
-}
-
-Compatibility Platform::Emulating() const
-{
-	return (compatibility == Compatibility::reprapFirmware) ? Compatibility::me : compatibility;
-}
-
-bool Platform::EmulatingMarlin() const
-{
-	return compatibility == Compatibility::marlin || compatibility == Compatibility::nanoDLP;
-}
-
-void Platform::SetEmulating(Compatibility c)
-{
-	if (c != Compatibility::me && c != Compatibility::reprapFirmware && c != Compatibility::marlin && c != Compatibility::nanoDLP)
-	{
-		Message(ErrorMessage, "Attempt to emulate unsupported firmware.\n");
-	}
-	else
-	{
-		if (c == Compatibility::reprapFirmware)
-		{
-			c = Compatibility::me;
-		}
-		compatibility = c;
-	}
 }
 
 void Platform::SetIPAddress(IPAddress ip)

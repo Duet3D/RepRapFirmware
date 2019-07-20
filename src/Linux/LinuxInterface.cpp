@@ -154,7 +154,7 @@ void LinuxInterface::Spin()
 				transfer->ReadMacroCompleteInfo(channel, error);
 
 				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-				gb->MachineState().SetFileFinished();
+				gb->MachineState().SetFileFinished(error);
 
 				if (reprap.Debug(moduleLinuxInterface))
 				{
@@ -325,7 +325,7 @@ void LinuxInterface::Spin()
 					{
 						reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (reportMissing: %s fromCode: %s)\n", requestedMacroFile, reportMissing ? "true" : "false", fromCode ? "true" : "false");
 					}
-					gb->RequestMacroFile(nullptr, false, false);
+					gb->RequestMacroFile(nullptr, reportMissing, fromCode);
 				}
 			}
 
@@ -388,7 +388,7 @@ void LinuxInterface::Spin()
 		for (size_t i = 0; i < NumGCodeChannels; i++)
 		{
 			GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((GCodeChannel)i);
-			if (gb->IsBinary() && gb->IsCompletelyIdle() && gb->MachineState().state == GCodeState::normal)
+			if (gb->IsBinary() && gb->IsCompletelyIdle())
 			{
 				gb->Reset();
 			}
@@ -420,35 +420,33 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb)
 		{
 			BufferedCodeHeader *bufHeader = reinterpret_cast<BufferedCodeHeader*>(codeBuffer + readPointer);
 			readPointer += sizeof(BufferedCodeHeader);
+			const CodeHeader *header = reinterpret_cast<const CodeHeader*>(codeBuffer + readPointer);
+			readPointer += bufHeader->length;
 
-			if (bufHeader->isPending)
+			if (bufHeader->isPending && gb.GetChannel() == header->channel)
 			{
-				const CodeHeader *header = reinterpret_cast<const CodeHeader*>(codeBuffer + readPointer);
-				if (gb.GetChannel() == header->channel)
+				gb.Put(reinterpret_cast<const char *>(header), bufHeader->length, true);
+				bufHeader->isPending = false;
+
+				if (updateRxPointer)
 				{
-					gb.Put(codeBuffer + readPointer, bufHeader->length, true);
-					bufHeader->isPending = false;
+					sendBufferUpdate = true;
 
-					if (updateRxPointer)
+					rxPointer = readPointer;
+					if (rxPointer == txLength)
 					{
-						sendBufferUpdate = true;
-						rxPointer = readPointer + bufHeader->length;
-						if (rxPointer == txLength)
-						{
-							rxPointer = txLength = 0;
-						}
-						else if (rxPointer == txPointer && txLength == 0)
-						{
-							rxPointer = txPointer = 0;
-						}
+						rxPointer = txLength = 0;
 					}
-
-					return true;
+					else if (rxPointer == txPointer && txLength == 0)
+					{
+						rxPointer = txPointer = 0;
+					}
 				}
+
+				return true;
 			}
 
 			updateRxPointer = false;
-			readPointer += bufHeader->length;
 			if (readPointer == txLength)
 			{
 				readPointer = 0;

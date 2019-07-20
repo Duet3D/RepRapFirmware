@@ -541,7 +541,6 @@ void RepRap::SetDebug(Module m, bool enable)
 			debug &= ~(1u << m);
 		}
 	}
-	PrintDebug();
 }
 
 void RepRap::ClearDebug()
@@ -549,26 +548,26 @@ void RepRap::ClearDebug()
 	debug = 0;
 }
 
-void RepRap::PrintDebug()
+void RepRap::PrintDebug(MessageType mt)
 {
-	platform->Message(GenericMessage, "Debugging enabled for modules:");
+	platform->Message((MessageType)(mt | PushFlag), "Debugging enabled for modules:");
 	for (size_t i = 0; i < numModules; i++)
 	{
 		if ((debug & (1u << i)) != 0)
 		{
-			platform->MessageF(GenericMessage, " %s(%u)", moduleName[i], i);
+			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", moduleName[i], i);
 		}
 	}
 
-	platform->Message(GenericMessage, "\nDebugging disabled for modules:");
+	platform->Message((MessageType)(mt | PushFlag), "\nDebugging disabled for modules:");
 	for (size_t i = 0; i < numModules; i++)
 	{
 		if ((debug & (1u << i)) == 0)
 		{
-			platform->MessageF(GenericMessage, " %s(%u)", moduleName[i], i);
+			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", moduleName[i], i);
 		}
 	}
-	platform->Message(GenericMessage, "\n");
+	platform->Message(mt, "\n");
 }
 
 // Add a tool.

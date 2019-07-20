@@ -40,7 +40,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				}
 			}
 
-			if (platform.Emulating() == Compatibility::nanoDLP && &gb == usbGCode && !DoingFileMacro())
+			if (gb.MachineState().compatibility == Compatibility::nanoDLP && !DoingFileMacro())
 			{
 				reply.copy("Z_move_comp");
 			}

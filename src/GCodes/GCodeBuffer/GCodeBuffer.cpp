@@ -17,7 +17,7 @@
 #include "Platform.h"
 
 // Create a default GCodeBuffer
-GCodeBuffer::GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt)
+GCodeBuffer::GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility c)
 	: codeChannel(channel), normalInput(normalIn),
 #if HAS_MASS_STORAGE
 	  fileInput(fileIn),
@@ -28,6 +28,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeIn
 	  , reportMissingMacro(false), isMacroFromCode(false), abortFile(false), reportStack(false)
 #endif
 {
+	machineState->compatibility = c;
 	Init();
 }
 
@@ -44,7 +45,6 @@ void GCodeBuffer::Init()
 {
 	binaryParser.Init();
 	stringParser.Init();
-
 	timerRunning = false;
 }
 
@@ -77,14 +77,40 @@ bool GCodeBuffer::DoDwellTime(uint32_t dwellMillis)
 // Write some debug info
 void GCodeBuffer::Diagnostics(MessageType mtype)
 {
-	if (isBinaryBuffer)
+	String<ScratchStringLength> scratchString;
+	scratchString.copy(GetIdentity());
+	scratchString.cat(IsBinary() ? "* " : " ");
+	switch (bufferState)
 	{
-		binaryParser.Diagnostics(mtype);
+	case GCodeBufferState::parseNotStarted:
+		scratchString.cat("is idle");
+		break;
+
+	case GCodeBufferState::ready:
+		scratchString.cat("is ready with \"");
+		AppendFullCommand(scratchString.GetRef());
+		scratchString.cat('"');
+		break;
+
+	case GCodeBufferState::executing:
+		scratchString.printf("is doing \"");
+		AppendFullCommand(scratchString.GetRef());
+		scratchString.cat('"');
+		break;
+
+	default:
+		scratchString.cat("is assembling a command");
 	}
-	else
+
+	scratchString.cat(" in state(s)");
+	const GCodeMachineState *ms = machineState;
+	do
 	{
-		stringParser.Diagnostics(mtype);
-	}
+		scratchString.catf(" %d", (int)ms->state);
+		ms = ms->previous;
+	} while (ms != nullptr);
+	scratchString.cat('\n');
+	reprap.GetPlatform().Message(mtype, scratchString.c_str());
 }
 
 // Add a character to the end
@@ -384,33 +410,40 @@ float GCodeBuffer::GetPwmValue()
 
 bool GCodeBuffer::IsIdle() const
 {
-	return isBinaryBuffer ? binaryParser.IsIdle() : stringParser.IsIdle();
+	return bufferState != GCodeBufferState::ready && bufferState != GCodeBufferState::executing;
 }
 
 bool GCodeBuffer::IsCompletelyIdle() const
 {
-	return isBinaryBuffer ? binaryParser.IsCompletelyIdle() : stringParser.IsCompletelyIdle();
+	return GetState() == GCodeState::normal && IsIdle();
 }
 
 bool GCodeBuffer::IsReady() const
 {
-	return isBinaryBuffer ? binaryParser.IsReady() : stringParser.IsReady();
+	return bufferState == GCodeBufferState::ready;
 }
 
 bool GCodeBuffer::IsExecuting() const
 {
-	return isBinaryBuffer ? binaryParser.IsExecuting() : stringParser.IsExecuting();
+	return bufferState == GCodeBufferState::executing;
 }
 
 void GCodeBuffer::SetFinished(bool f)
 {
-	if (isBinaryBuffer)
+	if (f)
 	{
-		binaryParser.SetFinished(f);
+		if (isBinaryBuffer)
+		{
+			binaryParser.SetFinished();
+		}
+		else
+		{
+			stringParser.SetFinished();
+		}
 	}
 	else
 	{
-		stringParser.SetFinished(f);
+		bufferState = GCodeBufferState::executing;
 	}
 }
 
@@ -549,7 +582,7 @@ void GCodeBuffer::SetPrintFinished()
 	{
 		if (ms->fileId == fileId)
 		{
-			ms->SetFileFinished();
+			ms->SetFileFinished(false);
 		}
 	}
 }

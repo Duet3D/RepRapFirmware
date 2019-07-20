@@ -20,6 +20,21 @@
 
 class FileGCodeInput;
 
+// The processing state of each buffer
+enum class GCodeBufferState : uint8_t
+{
+	parseNotStarted,								// we haven't started parsing yet
+	parsingLineNumber,								// we saw N at the start and we are parsing the line number
+	parsingWhitespace,								// parsing whitespace after the line number
+	parsingGCode,									// parsing GCode words
+	parsingBracketedComment,						// inside a (...) comment
+	parsingQuotedString,							// inside a double-quoted string
+	parsingChecksum,								// parsing the checksum after '*'
+	discarding,										// discarding characters after the checksum or an end-of-line comment
+	ready,											// we have a complete gcode but haven't started executing it
+	executing										// we have a complete gcode and have started executing it
+};
+
 // Class to hold an individual GCode and provide functions to allow it to be parsed
 class GCodeBuffer
 {
@@ -27,7 +42,7 @@ public:
 	friend class BinaryParser;
 	friend class StringParser;
 
-	GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt);
+	GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility c = Compatibility::reprapFirmware);
 	void Reset();											// Reset it to its state after start-up
 	void Init();											// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype);					// Write some debug info
@@ -171,6 +186,7 @@ private:
 	BinaryParser binaryParser;
 	StringParser stringParser;
 
+	GCodeBufferState bufferState;						// Idle, executing or paused
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 
 	uint32_t whenTimerStarted;							// When we started waiting
