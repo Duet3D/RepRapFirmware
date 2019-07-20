@@ -829,7 +829,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 	// Now the machine coordinates and the extruder coordinates
 	{
-		float liveCoordinates[MaxTotalDrivers];
+		float liveCoordinates[MaxAxesPlusExtruders];
 #if SUPPORT_ROLAND
 		if (roland->Active())
 		{
@@ -855,7 +855,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
-			response->catf("%c%.1f", ch, HideNan(liveCoordinates[gCodes->GetTotalAxes() + extruder]));
+			response->catf("%c%.1f", ch, HideNan(liveCoordinates[MaxAxes + extruder]));
 			ch = ',';
 		}
 		if (ch == '[')							// we may have no extruders
@@ -1490,7 +1490,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	// Accelerations
 	response->cat("],\"accelerations\":");
 	ch = '[';
-	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
+	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
 		response->catf("%c%.2f", ch, (double)(platform->Acceleration(drive)));
 		ch = ',';
@@ -1499,7 +1499,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	// Motor currents
 	response->cat("],\"currents\":");
 	ch = '[';
-	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
+	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
 		response->catf("%c%.2f", ch, (double)(platform->GetMotorCurrent(drive, 906)));
 		ch = ',';
@@ -1545,7 +1545,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	// Minimum feedrates
 	response->cat(",\"minFeedrates\":");
 	ch = '[';
-	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
+	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
 		response->catf("%c%.2f", ch, (double)(platform->GetInstantDv(drive)));
 		ch = ',';
@@ -1554,7 +1554,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	// Maximum feedrates
 	response->cat("],\"maxFeedrates\":");
 	ch = '[';
-	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
+	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
 		response->catf("%c%.2f", ch, (double)(platform->MaxFeedrate(drive)));
 		ch = ',';
@@ -1643,7 +1643,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	}
 
 	// Now the machine coordinates
-	float liveCoordinates[MaxTotalDrivers];
+	float liveCoordinates[MaxAxesPlusExtruders];
 	move->LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
 	response->catf("],\"machine\":");		// announce the machine position
 	ch = '[';

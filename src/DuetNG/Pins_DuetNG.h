@@ -46,21 +46,21 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 // The physical capabilities of the machine
 
 constexpr size_t NumDirectDrivers = 12;				// The maximum number of drives supported directly by the electronics
-constexpr size_t MaxTotalDrivers = NumDirectDrivers; // The maximum number of drives including CAN expansion
 constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 
 constexpr size_t NumTotalHeaters = 10;				// The maximum number of heaters in the machine
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 8;
 
+constexpr size_t MaxZProbes = 4;
 constexpr size_t MaxGpioPorts = 10;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
-
-constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
-constexpr size_t NumDefaultExtruders = 2;			// The number of drivers that we configure as extruders by default
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
+
+constexpr size_t MaxExtruders = 8;					// The maximum number of extruders
+constexpr size_t NumDefaultExtruders = 2;			// The number of drivers that we configure as extruders by default
 
 constexpr size_t MaxHeatersPerTool = 8;
 constexpr size_t MaxExtrudersPerTool = 8;
@@ -151,7 +151,6 @@ constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 vo
 constexpr Pin VssaSensePin = PortBPin(7);
 
 // Z probes
-constexpr size_t MaxZProbes = 4;
 constexpr Pin Z_PROBE_PIN = PortCPin(1);									// AFE1_AD4/PC1 Z probe analog input
 constexpr Pin Z_PROBE_MOD_PIN = PortCPin(2);
 constexpr Pin DiagPin = Z_PROBE_MOD_PIN;

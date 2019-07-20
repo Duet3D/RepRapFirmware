@@ -581,20 +581,20 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 			{
 				++drive;
 			}
-			if (drive == numTotalAxes && drive < MaxAxes)
+			if (drive < MaxAxes)
 			{
-				axisLetters[drive] = c;								// assign the drive to this drive letter
-				++numTotalAxes;
-				numVisibleAxes = numTotalAxes;						// assume any new axes are visible unless there is a P parameter
-				float initialCoords[MaxAxes];
-				reprap.GetMove().GetKinematics().GetAssumedInitialPosition(drive + 1, initialCoords);
-				moveBuffer.coords[drive] = initialCoords[drive];	// user has defined a new axis, so set its position
-				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
-			}
-			platform.SetAxisDriversConfig(drive, numValues, drivers);
-			if (numTotalAxes + numExtruders > MaxTotalDrivers)
-			{
-				numExtruders = MaxTotalDrivers - numTotalAxes;		// if we added axes, we may have fewer extruders now
+				if (drive == numTotalAxes)
+				{
+					// We are creating a new axis
+					axisLetters[drive] = c;								// assign the drive to this drive letter
+					++numTotalAxes;
+					numVisibleAxes = numTotalAxes;						// assume any new axes are visible unless there is a P parameter
+					float initialCoords[MaxAxes];
+					reprap.GetMove().GetKinematics().GetAssumedInitialPosition(drive + 1, initialCoords);
+					moveBuffer.coords[drive] = initialCoords[drive];	// user has defined a new axis, so set its position
+					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+				}
+				platform.SetAxisDriversConfig(drive, numValues, drivers);
 			}
 		}
 		++lettersToTry;
@@ -603,7 +603,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen(extrudeLetter))
 	{
 		seen = true;
-		size_t numValues = MaxTotalDrivers - numTotalAxes;
+		size_t numValues = MaxExtruders;
 		uint32_t drivers[MaxExtruders];
 		gb.GetUnsignedArray(drivers, numValues, false);
 		numExtruders = numValues;
@@ -1329,7 +1329,7 @@ void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor)
 {
 	if (segmentsLeft != 0 && !moveBuffer.isFirmwareRetraction)
 	{
-		moveBuffer.coords[extruder + numTotalAxes] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
+		moveBuffer.coords[extruder + MaxAxes] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
 	}
 	extrusionFactors[extruder] = factor;
 }

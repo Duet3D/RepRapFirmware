@@ -27,18 +27,6 @@ CanAddress GetCanAddress()
 	return 0;				// the main board is always address 0
 }
 
-// CanMovementMessage is declared in project Duet3Expansion, so we need to implement its members here
-void CanMessageMovement::DebugPrint()
-{
-	debugPrintf("Can: %08" PRIx32 " %" PRIu32 " %" PRIu32 " %" PRIu32 " %.2f %.2f:",
-		whenToExecute, accelerationClocks, steadyClocks, decelClocks, (double)initialSpeedFraction, (double)finalSpeedFraction);
-	for (size_t i = 0; i < DriversPerCanBoard; ++i)
-	{
-		debugPrintf(" %" PRIi32, perDrive[i].steps);
-	}
-	debugPrintf("\n");
-}
-
 void CanInterface::Init()
 {
 	CanMessageBuffer::Init(NumCanBuffers);
@@ -80,10 +68,10 @@ void CanInterface::AddMovement(const DDA& dda, const PrepParams& params, size_t 
 		move->decelClocks = lrintf(params.decelTime * StepTimer::StepClockRate);
 		move->initialSpeedFraction = params.initialSpeedFraction;
 		move->finalSpeedFraction = params.finalSpeedFraction;
-		move->hdr.u.deltaDrives = 0;							//TODO
-		move->hdr.u.endStopsToCheck = 0;						//TODO
-		move->hdr.u.pressureAdvanceDrives = 0;					//TODO
-		move->hdr.u.stopAllDrivesOnEndstopHit = false;			//TODO
+		move->deltaDrives = 0;								//TODO
+		move->endStopsToCheck = 0;							//TODO
+		move->pressureAdvanceDrives = 0;					//TODO
+		move->stopAllDrivesOnEndstopHit = false;			//TODO
 		// Additional parameters for delta movements
 		move->initialX = params.initialX;
 		move->finalX = params.finalX;

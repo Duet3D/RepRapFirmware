@@ -50,8 +50,8 @@ void DDARing::Init2()
 	// Put the origin on the lookahead ring with default velocity in the previous position to the first one that will be used.
 	// Do this by calling SetLiveCoordinates and SetPositions, so that the motor coordinates will be correct too even on a delta.
 	{
-		float pos[MaxTotalDrivers];
-		for (size_t i = 0; i < MaxTotalDrivers; i++)
+		float pos[MaxAxesPlusExtruders];
+		for (size_t i = 0; i < MaxAxesPlusExtruders; i++)
 		{
 			pos[i] = 0.0;
 			liveEndPoints[i] = 0;								// not actually right for a delta, but better than printing random values in response to M114
@@ -262,7 +262,7 @@ void DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsig
 	// If the number of prepared moves will execute in less than the minimum time, prepare another move.
 	// Try to avoid preparing deceleration-only moves too early
 	while (	  firstUnpreparedMove->GetState() == DDA::provisional
-		   && DriveMovement::NumFree() >= (int)MaxTotalDrivers		// check that we won't run out of DMs
+		   && DriveMovement::NumFree() >= (int)MaxAxesPlusExtruders	// check that we won't run out of DMs
 		   && moveTimeLeft < (int32_t)UsualMinimumPreparedTime		// prepare moves one eighth of a second ahead of when they will be needed
 		   && alreadyPrepared * 2 < numDdasInRing					// but don't prepare more than half the ring
 		   && (firstUnpreparedMove->IsGoodToPrepare() || moveTimeLeft < (int32_t)AbsoluteMinimumPreparedTime)
@@ -357,10 +357,9 @@ void DDARing::CurrentMoveCompleted()
 {
 	// Save the current motor coordinates, and the machine Cartesian coordinates if known
 	liveCoordinatesValid = currentDda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
-	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-	for (size_t drive = numAxes; drive < MaxTotalDrivers; ++drive)
+	for (size_t drive = MaxAxes; drive < MaxAxesPlusExtruders; ++drive)
 	{
-		extrusionAccumulators[drive - numAxes] += currentDda->GetStepsTaken(drive);
+		extrusionAccumulators[drive - MaxAxes] += currentDda->GetStepsTaken(drive);
 	}
 	currentDda = nullptr;
 
@@ -399,13 +398,13 @@ void DDARing::GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMappi
 }
 
 // These are the actual numbers we want in the positions, so don't transform them.
-void DDARing::SetPositions(const float move[MaxTotalDrivers])
+void DDARing::SetPositions(const float move[MaxAxesPlusExtruders])
 {
 	if (   getPointer == addPointer								// by itself this means the ring is empty or full
 		&& addPointer->GetState() == DDA::DDAState::empty
 	   )
 	{
-		addPointer->GetPrevious()->SetPositions(move, MaxTotalDrivers);
+		addPointer->GetPrevious()->SetPositions(move, MaxAxesPlusExtruders);
 	}
 	else
 	{
@@ -432,7 +431,7 @@ void DDARing::AdjustMotorPositions(const float adjustment[], size_t numMotors)
 
 // Return the current live XYZ and extruder coordinates
 // Interrupts are assumed enabled on entry
-void DDARing::LiveCoordinates(float m[MaxTotalDrivers])
+void DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders])
 {
 	// The live coordinates and live endpoints are modified by the ISR, so be careful to get a self-consistent set of them
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();		// do this before we disable interrupts
@@ -441,13 +440,13 @@ void DDARing::LiveCoordinates(float m[MaxTotalDrivers])
 	if (liveCoordinatesValid)
 	{
 		// All coordinates are valid, so copy them across
-		memcpy(m, const_cast<const float *>(liveCoordinates), sizeof(m[0]) * MaxTotalDrivers);
+		memcpy(m, const_cast<const float *>(liveCoordinates), sizeof(m[0]) * MaxAxesPlusExtruders);
 		cpu_irq_enable();
 	}
 	else
 	{
 		// Only the extruder coordinates are valid, so we need to convert the motor endpoints to coordinates
-		memcpy(m + numTotalAxes, const_cast<const float *>(liveCoordinates + numTotalAxes), sizeof(m[0]) * (MaxTotalDrivers - numTotalAxes));
+		memcpy(m + MaxAxes, const_cast<const float *>(liveCoordinates + MaxAxes), sizeof(m[0]) * (MaxAxesPlusExtruders - MaxAxes));
 		int32_t tempEndPoints[MaxAxes];
 		memcpy(tempEndPoints, const_cast<const int32_t*>(liveEndPoints), sizeof(tempEndPoints));
 		cpu_irq_enable();
@@ -467,9 +466,9 @@ void DDARing::LiveCoordinates(float m[MaxTotalDrivers])
 
 // These are the actual numbers that we want to be the coordinates, so don't transform them.
 // The caller must make sure that no moves are in progress or pending when calling this
-void DDARing::SetLiveCoordinates(const float coords[MaxTotalDrivers])
+void DDARing::SetLiveCoordinates(const float coords[MaxAxesPlusExtruders])
 {
-	for (size_t drive = 0; drive < MaxTotalDrivers; drive++)
+	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
 		liveCoordinates[drive] = coords[drive];
 	}
@@ -481,7 +480,7 @@ void DDARing::ResetExtruderPositions()
 {
 	const size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
 	cpu_irq_disable();
-	for (size_t eDrive = totalAxes; eDrive < MaxTotalDrivers; eDrive++)
+	for (size_t eDrive = totalAxes; eDrive < MaxAxesPlusExtruders; eDrive++)
 	{
 		liveCoordinates[eDrive] = 0.0;
 	}

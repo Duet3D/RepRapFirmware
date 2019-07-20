@@ -205,12 +205,16 @@ Duet 3:
 - Bug: code queue ont always used then it should be, https://github.com/chrishamm/DuetSoftwareFramework/issues/1
 
 Planned for 3.0:
+-  M291 not displaying on PanelDue as well as web interface, https://forum.duet3d.com/topic/11240/m291-display-on-lcd-not-always-working-when-web-session-is-open
 - [done] 3.0 bug: Fix Z probe starting height
-- Bug: in CNC mode, if a move goes out of bounds then the spindle is stopped immediately but moves in the queue continue to execute. Need to go to a spacial state to empty the queue, and then turn the spindle off?
+- Test leadscrew adjustment moves
+- Separate sensor config from heaters
+
+- Bug: in CNC mode, if a move goes out of bounds then the spindle is stopped immediately but moves in the queue continue to execute. Need to go to a special state to empty the queue, and then turn the spindle off?
 - Bug: incomplete FTP uploads, https://forum.duet3d.com/topic/10987/ftp-not-uploading-whole-files
-- Bug: G29 P parameter doesn't work if there are nonempty deployprobe.g/retractprobe.g files, https://forum.duet3d.com/topic/10904/g29-p-parameter-ignored/5
 - Bug? DWC 1.22.6 doesn't auto show the height map after probing since firmware 2.03, https://forum.duet3d.com/topic/10904/g29-p-parameter-ignored/5
 - Support M24 in pause.g and filament-change.g
+- M24 in filament-change.g macro doesn't resume the print
 - Mechanism to restore original spindle speed (+ wait afterwards?) or laser power after a pause
 - [on hold] investigate filament file not run on initial tool change, https://forum.duet3d.com/topic/9405/first-t0-in-gcode-does-not-work/5
 - Filament monitors: disable if tool is not active/no commanded extrusion, or does it do that already?
@@ -220,10 +224,10 @@ Planned for 3.0:
 - Check that in all modes, if insufficient axes are homed then the SD job is aborted
 - In CNC or Laser mode, abort job if it goes outside machine limits, https://forum.duet3d.com/topic/9269/yet-another-cnc-improvement-outside-machine-limits/4
 - In simulation mode, if the job was aborted for any reason, report this instead of reporting the simulated print time
-- M143 A3 option to turn off whole machine immediately?
+- M143 A3 option to turn off whole machine immediately on heater fault?
 - Turn off power in emergency stop? https://forum.duet3d.com/topic/9158/ps_on-m81-incorporated-into-the-emergency-stop-functions/5
 - Clear filament sensor alerts after they are acknowledged, https://forum.duet3d.com/topic/9072/filament-out-warning-always-present/8
-- [done? check] Compensate probe trigger height for other heater temperature than bed
+- [done, document, test] Compensate probe trigger height for other heater temperature than bed
 - For PanelDue, send heater data for the first heater in each tool (does PD handle #heaters and #tools separately?) https://forum.duet3d.com/topic/8458/hide-unused-heater-channels-paneldue-5/4 and https://forum.duet3d.com/topic/8933/paneldue-two-tools-same-heater-one-pair-of-temp-buttons/2
 - Implement M410 quick stop
 - Implement power loss M582 trigger action?
@@ -233,24 +237,21 @@ Planned for 3.0:
 
 - Laser turns off, https://forum.duet3d.com/topic/9636/laser-turns-of-during-straight-lines/5
 - Test endstop input high/low noise immunity, decide on pullup enable/disable
-- Test that M500 saves all delta rod lengths correctly
 
-- [async moves part done] Z height based on plasma voltage or force
-- [could be related to visibility issue] Investigate 12864 display heater fault warning, https://forum.duet3d.com/topic/7718/12864-display-current-tool-temperatures/6
+- [mostly done] Z height based on plasma voltage or force
+- [gone away? could be related to visibility issue] Investigate 12864 display heater fault warning, https://forum.duet3d.com/topic/7718/12864-display-current-tool-temperatures/6
 - Slow startup move issue, https://forum.duet3d.com/topic/8284/firmware-2-02-released/7 (adding S2 fixes it)
 - M291 issue, https://forum.duet3d.com/topic/8381/m291-s2-does-not-block-macro-execution/5
 - In laser mode allow M3 instead of S to control laser power? (wait for feedback, not as simple as it looked)
 - [check latest forum response, possibly caused by M208 checks] Investigate @frafa's SCARA issue, https://forum.duet3d.com/post/76024
 - [await reply from Mario] Is there any benefit to setting RNDTF in M569?
-- Danny's G1->G0 request? [added IntermediatePositionsReachable function]
+- [done] Danny's G1->G0 request [added IntermediatePositionsReachable function]
 - Warm up time not always displayed in 2.02
 - Deferred allocation of DMs: don't create DMs for nonlocal drives, pass #steps to CAN interface instead
 - Reports that DueX5 endstops stop working after a while, https://forum.duet3d.com/topic/8284/firmware-2-02-released/9
-- I2C error recovery?
 - Pressure advance issue? https://forum.duet3d.com/topic/8672/extruder-motors-skip-steps-with-pressure-advance-enabled/3
 - Command (M18/M84?) to enable specified motors or axes
 - Don't keep sending "wifi reported error" messages during reconnection attempts, https://forum.duet3d.com/topic/8837/wifi-reported-error
-- M24 in filament-change.g macro doesn't resume the print
 
 3.x planned:
 - Option to calibrate bed tilt but not tower positions, https://forum.duet3d.com/topic/9236/delta-auto-calibration-changes-in-bed-tilt-calculations/2

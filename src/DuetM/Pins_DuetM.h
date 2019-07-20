@@ -46,7 +46,6 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 // The physical capabilities of the machine
 
 constexpr size_t NumDirectDrivers = 7;				// The maximum number of drives supported by the electronics
-constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 constexpr size_t MaxSmartDrivers = 7;				// The maximum number of smart drivers
 
 constexpr size_t NumTotalHeaters = 4;				// The maximum number of heaters in the machine
@@ -54,14 +53,15 @@ constexpr size_t NumDefaultHeaters = 3;				// The number of heaters configured b
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 4;
 
+constexpr size_t MaxZProbes = 2;
 constexpr size_t MaxGpioPorts = 10;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
-
-constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
-constexpr size_t NumDefaultExtruders = 4;			// The number of drivers that we configure as extruders by default
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
+
+constexpr size_t MaxExtruders = 4;					// The maximum number of extruders
+constexpr size_t NumDefaultExtruders = 4;			// The number of drivers that we configure as extruders by default
 
 constexpr size_t MaxHeatersPerTool = 2;
 constexpr size_t MaxExtrudersPerTool = 4;
@@ -132,7 +132,6 @@ constexpr Pin PowerMonitorVinDetectPin = PortCPin(12);						// Vin monitor
 constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 voltage divider
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
-constexpr size_t MaxZProbes = 2;
 constexpr Pin Z_PROBE_PIN = PortCPin(15);									// Z probe analog input
 constexpr Pin Z_PROBE_MOD_PIN = PortCPin(26);
 constexpr Pin DiagPin = Z_PROBE_MOD_PIN;

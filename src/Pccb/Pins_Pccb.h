@@ -77,8 +77,6 @@ constexpr size_t MaxSmartDrivers = 2;				// The maximum number of smart drivers
 
 #endif
 
-constexpr size_t MaxTotalDrivers = NumDirectDrivers;
-
 constexpr size_t NumTotalHeaters = 1;				// The number of heaters in the machine. PCCB has no heaters.
 constexpr size_t NumDefaultHeaters = 0;				// The number of heaters configured by default
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
@@ -88,10 +86,10 @@ constexpr size_t MaxGpioPorts = 5;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, <= DRIVES
-
-constexpr size_t MaxExtruders = NumDirectDrivers - MinAxes;	// The maximum number of extruders
-constexpr size_t NumDefaultExtruders = 0;			// The number of drivers that we configure as extruders by default
 constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
+
+constexpr size_t MaxExtruders = 3;					// The maximum number of extruders
+constexpr size_t NumDefaultExtruders = 0;			// The number of drivers that we configure as extruders by default
 
 constexpr size_t MaxHeatersPerTool = 2;
 constexpr size_t MaxExtrudersPerTool = 1;

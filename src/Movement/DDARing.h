@@ -60,10 +60,10 @@ public:
 
 	int32_t GetEndPoint(size_t drive) const { return liveEndPoints[drive]; } 	// Get the current position of a motor
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const; // Get the current position in untransformed coords
-	void SetPositions(const float move[MaxTotalDrivers]);						// Force the machine coordinates to be these
+	void SetPositions(const float move[MaxAxesPlusExtruders]);					// Force the machine coordinates to be these
 	void AdjustMotorPositions(const float adjustment[], size_t numMotors);		// Perform motor endpoint adjustment
-	void LiveCoordinates(float m[MaxTotalDrivers]);								// Gives the last point at the end of the last complete DDA transformed to user coords
-	void SetLiveCoordinates(const float coords[MaxTotalDrivers]);				// Force the live coordinates (see above) to be these
+	void LiveCoordinates(float m[MaxAxesPlusExtruders]);						// Gives the last point at the end of the last complete DDA transformed to user coords
+	void SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]);			// Force the live coordinates (see above) to be these
 	void ResetExtruderPositions();												// Resets the extrusion amounts of the live coordinates
 
 	bool PauseMoves(RestorePoint& rp);											// Pause the print as soon as we can, returning true if we were able to skip any
@@ -87,9 +87,9 @@ private:
 	DDA* volatile getPointer;
 	DDA* checkPointer;
 
-	volatile float liveCoordinates[MaxTotalDrivers];							// The endpoint that the machine moved to in the last completed move
+	volatile float liveCoordinates[MaxAxesPlusExtruders];						// The endpoint that the machine moved to in the last completed move
 	volatile bool liveCoordinatesValid;											// True if the XYZ live coordinates are reliable (the extruder ones always are)
-	volatile int32_t liveEndPoints[MaxTotalDrivers];							// The XYZ endpoints of the last completed move in motor coordinates
+	volatile int32_t liveEndPoints[MaxAxesPlusExtruders];						// The XYZ endpoints of the last completed move in motor coordinates
 
 	unsigned int numDdasInRing;
 

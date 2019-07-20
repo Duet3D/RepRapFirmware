@@ -41,9 +41,8 @@ const size_t NumFirmwareUpdateModules = 1;
 // The physical capabilities of the machine
 
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
-constexpr size_t MaxSmartDrivers = 6;				// The maximum number of smart drivers
-constexpr size_t MaxCanDrivers = 12;				// we need to set a limit until the DDA/DMs are restructured
-constexpr size_t MaxTotalDrivers = NumDirectDrivers + MaxCanDrivers;
+constexpr size_t MaxSmartDrivers = 6;				// The maximum number of direct smart drivers
+constexpr size_t MaxCanDrivers = 18;
 
 constexpr size_t NumTotalHeaters = 12;
 constexpr size_t NumDefaultHeaters = 0;
@@ -51,15 +50,14 @@ constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater p
 constexpr size_t NumThermistorInputs = 4;
 
 constexpr size_t MaxZProbes = 4;
-
 constexpr size_t MaxGpioPorts = 12;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
-
-constexpr size_t MaxExtruders = MaxTotalDrivers - MinAxes;	// The maximum number of extruders
-constexpr size_t NumDefaultExtruders = 3;			// The number of drivers that we configure as extruders by default
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
+
+constexpr size_t MaxExtruders = 16;					// The maximum number of extruders
+constexpr size_t NumDefaultExtruders = 3;			// The number of drivers that we configure as extruders by default
 
 constexpr size_t MaxHeatersPerTool = 4;
 constexpr size_t MaxExtrudersPerTool = 6;

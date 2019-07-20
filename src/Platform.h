@@ -293,7 +293,7 @@ public:
 	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d);
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
-	void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr) __attribute((noreturn));
+	[[noreturn]] void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr);
 	bool AtxPower() const;
 	void AtxPowerOn();
 	void AtxPowerOff(bool defer);
@@ -574,6 +574,8 @@ private:
 	void ResetChannel(size_t chan);					// re-initialise a serial channel
 	float AdcReadingToCpuTemperature(uint32_t reading) const;
 
+	void UpdateZMotorDriverBits();					// set up the driver bits for the individual Z motors
+
 #if HAS_SMART_DRIVERS
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char* text, bool& reported);
 #endif
@@ -667,27 +669,32 @@ private:
 	void SetDriverDirection(uint8_t driver, bool direction)
 	pre(driver < DRIVES);
 
-	volatile DriverStatus driverState[MaxTotalDrivers];
-	bool directions[MaxTotalDrivers];
-	int8_t enableValues[MaxTotalDrivers];
-	float maxFeedrates[MaxTotalDrivers];
-	float minimumMovementSpeed;
-	float accelerations[MaxTotalDrivers];
-	float driveStepsPerUnit[MaxTotalDrivers];
-	float instantDvs[MaxTotalDrivers];
+	bool directions[NumDirectDrivers];
+	int8_t enableValues[NumDirectDrivers];
+
+	float motorCurrents[MaxTotalDrivers];				// the normal motor current for each stepper driver
+	float motorCurrentFraction[MaxTotalDrivers];		// the percentages of normal motor current that each driver is set to
+
+	volatile DriverStatus driverState[MaxAxesPlusExtruders];
+	float maxFeedrates[MaxAxesPlusExtruders];
+	float accelerations[MaxAxesPlusExtruders];
+	float driveStepsPerUnit[MaxAxesPlusExtruders];
+	float instantDvs[MaxAxesPlusExtruders];
+	uint32_t driveDriverBits[MaxAxesPlusExtruders + MaxDriversPerAxis];
+														// the bitmap of local driver port bits for each axis or extruder, followed by the bitmaps for the individual Z motors
+	AxisDriversConfig axisDrivers[MaxAxes];				// the driver numbers assigned to each axis
+
 	float pressureAdvance[MaxExtruders];
 #if SUPPORT_NONLINEAR_EXTRUSION
 	float nonlinearExtrusionA[MaxExtruders], nonlinearExtrusionB[MaxExtruders], nonlinearExtrusionLimit[MaxExtruders];
 #endif
-	float motorCurrents[MaxTotalDrivers];				// the normal motor current for each stepper driver
-	float motorCurrentFraction[MaxTotalDrivers];		// the percentages of normal motor current that each driver is set to
-	AxisDriversConfig axisDrivers[MaxAxes];				// the driver numbers assigned to each axis
+
 	uint8_t extruderDrivers[MaxExtruders];				// the driver number assigned to each extruder
-	uint32_t driveDriverBits[2 * MaxTotalDrivers];		// the bitmap of driver port bits for each axis or extruder, followed by the raw versions
 	uint32_t slowDriverStepTimingClocks[4];				// minimum step high, step low, dir setup and dir hold timing for slow drivers
 	uint32_t slowDriversBitmap;							// bitmap of driver port bits that need extended step pulse timing
 	uint32_t steppingEnabledDriversBitmap;				// mask of driver bits that we haven't disabled temporarily
 	float idleCurrentFactor;
+	float minimumMovementSpeed;
 
 #if HAS_SMART_DRIVERS
 	size_t numSmartDrivers;								// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers

@@ -376,9 +376,9 @@ void Move::Diagnostics(MessageType mtype)
 }
 
 // Set the current position to be this
-void Move::SetNewPosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation)
+void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation)
 {
-	float newPos[MaxTotalDrivers];
+	float newPos[MaxAxesPlusExtruders];
 	memcpy(newPos, positionNow, sizeof(newPos));			// copy to local storage because Transform modifies it
 	AxisAndBedTransform(newPos, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes(), doBedCompensation);
 	SetLiveCoordinates(newPos);
@@ -390,8 +390,7 @@ void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrive
 {
 	if (CartesianToMotorSteps(coords, ep, true))
 	{
-		const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-		for (size_t drive = numAxes; drive < numDrives; ++drive)
+		for (size_t drive = MaxAxes; drive < numDrives; ++drive)
 		{
 			ep[drive] = MotorMovementToSteps(drive, coords[drive]);
 		}
@@ -814,8 +813,8 @@ void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, AxesBitmap
 // Returns the number of motor steps moves since the last call, and isPrinting is true unless we are currently executing an extruding but non-printing move
 int32_t Move::GetAccumulatedExtrusion(size_t extruder, bool& isPrinting)
 {
-	const size_t drive = extruder + reprap.GetGCodes().GetTotalAxes();
-	if (drive < MaxTotalDrivers)
+	const size_t drive = extruder + MaxAxes;
+	if (drive < MaxAxesPlusExtruders)
 	{
 		return mainDDARing.GetAccumulatedExtrusion(extruder, drive, isPrinting);
 	}
@@ -878,17 +877,10 @@ void Move::Simulate(uint8_t simMode)
 // This is only ever called after bed probing, so we can assume that no such move is already pending.
 void Move::AdjustLeadscrews(const floatc_t corrections[])
 {
-	for (float& smc : specialMoveCoords)
+	const size_t numZdrivers = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS).numDrivers;
+	for (size_t i = 0; i < MaxDriversPerAxis; ++i)
 	{
-		smc = 0.0;
-	}
-	const AxisDriversConfig& config = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS);
-	for (size_t i = 0; i < config.numDrivers; ++i)
-	{
-		if (config.driverNumbers[i] < MaxTotalDrivers)
-		{
-			specialMoveCoords[config.driverNumbers[i]] = corrections[i];
-		}
+		specialMoveCoords[i] = (i < numZdrivers) ? (float)corrections[i] : 0.0;
 	}
 	bedLevellingMoveAvailable = true;
 }
@@ -1004,16 +996,22 @@ void Move::CreateLaserTask()
 	}
 }
 
-// Wake up the laser task. Call this at the start of a new move from standstill (not from an ISR)
+// Wake up the laser task, if there is one (must check!). Call this at the start of a new move from standstill (not from an ISR)
 void Move::WakeLaserTask()
 {
-	laserTask->Give();
+	if (laserTask != nullptr)
+	{
+		laserTask->Give();
+	}
 }
 
-// Wake up the laser task. Call this at the start of a new move from standstill (not from an ISR)
+// Wake up the laser task if there is one (must check!) from an ISR
 void Move::WakeLaserTaskFromISR()
 {
-	laserTask->GiveFromISR();
+	if (laserTask != nullptr)
+	{
+		laserTask->GiveFromISR();
+	}
 }
 
 void Move::LaserTaskRun()

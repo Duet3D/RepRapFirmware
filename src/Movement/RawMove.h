@@ -12,7 +12,7 @@
 
 struct RawMove
 {
-	float coords[MaxTotalDrivers];									// new positions for the axes, amount of movement for the extruders
+	float coords[MaxAxesPlusExtruders];								// new positions for the axes, amount of movement for the extruders
 	float initialCoords[MaxAxes];									// the initial positions of the axes
 	float feedRate;													// feed rate of this move
 	float virtualExtruderPosition;									// the virtual extruder position at the start of this move, for normal moves
@@ -41,7 +41,7 @@ struct RawMove
 
 struct AsyncMove
 {
-	float movements[MaxTotalDrivers];
+	float movements[MaxAxesPlusExtruders];
 	float startSpeed, endSpeed, requestedSpeed;
 	float acceleration, deceleration;
 
