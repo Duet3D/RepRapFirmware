@@ -349,6 +349,10 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				}
 			}
 		}
+		else
+		{
+			directionVector[drive] = 0.0;
+		}
 	}
 
 	// 2. Throw it away if there's no real movement.
