@@ -8,7 +8,7 @@
 #ifndef SRC_HEATING_THERMISTOR_H_
 #define SRC_HEATING_THERMISTOR_H_
 
-#include "TemperatureSensor.h"
+#include "SensorWithPort.h"
 
 // The Steinhart-Hart equation for thermistor resistance is:
 // 1/T = A + B ln(R) + C [ln(R)]^3
@@ -18,12 +18,15 @@
 //
 // The parameters that can be configured in RRF are R25 (the resistance at 25C), Beta, and optionally C.
 
-class Thermistor : public TemperatureSensor
+class Thermistor : public SensorWithPort
 {
 public:
-	Thermistor(unsigned int channel, bool p_isPT1000);						// create an instance with default values
-	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override; // configure the sensor from M305 parameters
+	Thermistor(unsigned int sensorNum, bool p_isPT1000);					// create an instance with default values
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override; // configure the sensor from M305 parameters
 	void Init() override;
+
+	static constexpr const char *TypeNameThermistor = "thermistor";
+	static constexpr const char *TypeNamePT1000 = "pt1000";
 
 protected:
 	TemperatureError TryGetTemperature(float& t) override;
@@ -35,7 +38,7 @@ private:
 	void CalcDerivedParameters();											// calculate shA and shB
 
 	// The following are configurable parameters
-	unsigned int thermistorInputChannel;
+	int adcFilterChannel;
 	float r25, beta, shC, seriesR;											// parameters declared in the M305 command
 	bool isPT1000;															// true if it is a PT1000 sensor, not a thermistor
 

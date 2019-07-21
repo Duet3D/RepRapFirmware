@@ -11,49 +11,54 @@
 #include "RepRap.h"
 #include "Platform.h"
 
-LinearAnalogSensor::LinearAnalogSensor(unsigned int channel)
-	: TemperatureSensor(channel, "Linear analog"), thermistorInputChannel(channel - FirstLinearAnalogChannel), lowTemp(DefaultLowTemp), highTemp(DefaultHighTemp), filtered(true)
+LinearAnalogSensor::LinearAnalogSensor(unsigned int sensorNum)
+	: SensorWithPort(sensorNum, "Linear analog"), lowTemp(DefaultLowTemp), highTemp(DefaultHighTemp), filtered(true), adcFilterChannel(-1)
 {
 	CalcDerivedParameters();
 }
 
-GCodeResult LinearAnalogSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
-	if (mCode == 305)
+	bool seen = false;
+	if (!ConfigurePort(gb, reply, PinAccess::readAnalog, seen))
 	{
-		bool seen = false;
-		gb.TryGetFValue('L', lowTemp, seen);
-		gb.TryGetFValue('H', highTemp, seen);
-		TryConfigureHeaterName(gb, seen);
-		if (gb.Seen('F'))
-		{
-			seen = true;
-			filtered = gb.GetIValue() >= 1;
-		}
+		return GCodeResult::error;
+	}
 
-		if (seen)
-		{
-			CalcDerivedParameters();
-		}
-		else if (!gb.Seen('X'))
-		{
-			CopyBasicHeaterDetails(heater, reply);
-			reply.catf(", %sfiltered, range %.1f to %.1f", (filtered) ? "" : "un", (double)lowTemp, (double)highTemp);
-		}
+	gb.TryGetFValue('L', lowTemp, seen);
+	gb.TryGetFValue('H', highTemp, seen);
+	TryConfigureSensorName(gb, seen);
+	if (gb.Seen('F'))
+	{
+		seen = true;
+		filtered = gb.GetIValue() >= 1;
+	}
+
+	if (seen)
+	{
+		CalcDerivedParameters();
+	}
+	else
+	{
+		CopyBasicDetails(reply);
+		reply.catf(", %sfiltered, range %.1f to %.1f", (filtered) ? "" : "un", (double)lowTemp, (double)highTemp);
 	}
 	return GCodeResult::ok;
 }
 
 void LinearAnalogSensor::Init()
 {
-	reprap.GetPlatform().GetAdcFilter(thermistorInputChannel).Init(0);
+	if (adcFilterChannel >= 0)
+	{
+		reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init(0);
+	}
 }
 
 TemperatureError LinearAnalogSensor::TryGetTemperature(float& t)
 {
-	if (filtered)
+	if (filtered && adcFilterChannel >= 0)
 	{
-		const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(thermistorInputChannel);
+		const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(adcFilterChannel);
 		if (tempFilter.IsValid())
 		{
 			const int32_t averagedTempReading = tempFilter.GetSum()/(ThermistorAverageReadings >> AdcOversampleBits);
@@ -68,13 +73,14 @@ TemperatureError LinearAnalogSensor::TryGetTemperature(float& t)
 	}
 	else
 	{
-		t = (AnalogInReadChannel(PinToAdcChannel(TEMP_SENSE_PINS[thermistorInputChannel])) * linearIncreasePerCount) + lowTemp;
+		t = (port.ReadAnalog() * linearIncreasePerCount) + lowTemp;
 		return TemperatureError::success;
 	}
 }
 
 void LinearAnalogSensor::CalcDerivedParameters()
 {
+	adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
 	linearIncreasePerCount = (highTemp - lowTemp)/((filtered) ? FilteredAdcRange : UnfilteredAdcRange);
 }
 

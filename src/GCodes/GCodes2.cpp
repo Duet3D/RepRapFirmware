@@ -1496,8 +1496,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (gb.Seen('H'))
 			{
 				// Wait for specified heaters to be ready
-				uint32_t heaters[NumTotalHeaters];
-				size_t heaterCount = NumTotalHeaters;
+				uint32_t heaters[MaxHeaters];
+				size_t heaterCount = MaxHeaters;
 				gb.GetUnsignedArray(heaters, heaterCount, false);
 
 				for (size_t i = 0; i < heaterCount; i++)
@@ -1672,7 +1672,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					heater = -1;
 				}
-				else if (heater >= (int)NumTotalHeaters)
+				else if (heater >= (int)MaxHeaters)
 				{
 					reply.printf("Invalid heater number '%d'", heater);
 					result = GCodeResult::error;
@@ -1743,7 +1743,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				else
 				{
 					reply.printf("%c%s heater %d (slot %d) is currently at %.1f" DEGREE_SYMBOL "C",
-						toupper(heaterName[0]), heaterName + 1, currentHeater, index, (double)reprap.GetHeat().GetTemperature(currentHeater));
+						toupper(heaterName[0]), heaterName + 1, currentHeater, index, (double)reprap.GetHeat().GetHeaterTemperature(currentHeater));
 				}
 			}
 		}
@@ -2420,7 +2420,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 										: reprap.GetHeat().IsChamberHeater(heater) ? 50.0
 										: 200.0;
 			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : reprap.GetHeat().GetHeaterModel(heater).GetMaxPwm();
-			if (heater >= NumTotalHeaters)
+			if (heater >= MaxHeaters)
 			{
 				reply.copy("Bad heater number in M303 command");
 			}
@@ -2447,12 +2447,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		SetPidParameters(gb, 0, reply);
 		break;
 
+#if 0
 	case 305: // Set/report specific heater parameters
 		result = SetHeaterParameters(gb, reply);
 		break;
+#endif
 
 	case 307: // Set heater process model parameters
 		result = SetHeaterModel(gb, reply);
+		break;
+
+	case 308:
+		result = reprap.GetHeat().ConfigureSensor(gb, reply);
 		break;
 
 	case 350: // Set/report microstepping
@@ -3165,7 +3171,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (gb.Seen('P'))
 		{
 			const unsigned int heater = gb.GetUIValue();
-			if (heater < NumTotalHeaters)
+			if (heater < MaxHeaters)
 			{
 				reprap.ClearTemperatureFault(heater);
 			}
@@ -3178,7 +3184,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		else
 		{
 			// Clear all heater faults
-			for (unsigned int heater = 0; heater < NumTotalHeaters; ++heater)
+			for (unsigned int heater = 0; heater < MaxHeaters; ++heater)
 			{
 				reprap.ClearTemperatureFault(heater);
 			}
@@ -3320,7 +3326,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (gb.Seen('H'))
 			{
 				const unsigned heater = gb.GetUIValue();
-				if (heater < NumTotalHeaters)
+				if (heater < MaxHeaters)
 				{
 					bool seenValue = false;
 					float maxTempExcursion, maxFaultTime;
@@ -3403,7 +3409,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (gb.Seen('P'))
 		{
 			const unsigned int heater = gb.GetUIValue();
-			if (heater < NumTotalHeaters)
+			if (heater < MaxHeaters)
 			{
 				reply.printf("Average heater %u PWM: %.3f", heater, (double)reprap.GetHeat().GetAveragePWM(heater));
 			}

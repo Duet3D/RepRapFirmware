@@ -947,47 +947,42 @@ bool StringParser::InternalGetPossiblyQuotedString(const StringRef& str)
 bool StringParser::GetReducedString(const StringRef& str)
 {
 	str.Clear();
-	if (readPointer < 0)
+	if (readPointer >= 0)
 	{
-		return false;
-	}
-
-	// Reduced strings must start with a double-quote
-	if (readPointer == 0)
-	{
+		// Reduced strings must start with a double-quote
 		++readPointer;
 		if (gb.buffer[readPointer] != '"')
 		{
 			return false;
 		}
-	}
 
-	++readPointer;
-	for (;;)
-	{
-		const char c = gb.buffer[readPointer++];
-		switch(c)
+		++readPointer;
+		for (;;)
 		{
-		case '"':
-			if (gb.buffer[readPointer++] != '"')
+			const char c = gb.buffer[readPointer++];
+			switch(c)
 			{
-				return true;
-			}
-			str.cat(c);
-			break;
+			case '"':
+				if (gb.buffer[readPointer++] != '"')
+				{
+					return true;
+				}
+				str.cat(c);
+				break;
 
-		case '_':
-		case '-':
-		case ' ':
-			break;
+			case '_':
+			case '-':
+			case ' ':
+				break;
 
-		default:
-			if (c < ' ')
-			{
-				return false;
+			default:
+				if (c < ' ')
+				{
+					return false;
+				}
+				str.cat(tolower(c));
+				break;
 			}
-			str.cat(tolower(c));
-			break;
 		}
 	}
 

@@ -13,9 +13,11 @@
 class RtdSensor31865 : public SpiTemperatureSensor
 {
 public:
-	RtdSensor31865(unsigned int channel);
-	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override;
+	RtdSensor31865(unsigned int sensorNum);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
 	void Init() override;
+
+	static constexpr const char *TypeName = "rtdmax31865";
 
 protected:
 	TemperatureError TryGetTemperature(float& t) override;

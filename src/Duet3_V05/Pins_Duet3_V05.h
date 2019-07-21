@@ -27,7 +27,7 @@ const size_t NumFirmwareUpdateModules = 1;
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_DHT_SENSOR		0 //TEMPorary!					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				0					// no point in supporting FTP because we have no mass storage
@@ -44,10 +44,10 @@ constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives suppor
 constexpr size_t MaxSmartDrivers = 6;				// The maximum number of direct smart drivers
 constexpr size_t MaxCanDrivers = 18;
 
-constexpr size_t NumTotalHeaters = 12;
-constexpr size_t NumDefaultHeaters = 0;
+constexpr size_t MaxHeaters = 12;
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 4;
+constexpr size_t NumTmcDriversSenseChannels = 1;
 
 constexpr size_t MaxZProbes = 4;
 constexpr size_t MaxGpioPorts = 12;
@@ -98,22 +98,11 @@ constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(31), PortCPin(15
 constexpr Pin VssaSensePin = PortCPin(13);
 constexpr Pin VrefSensePin = PortEPin(0);
 
-// Default thermistor parameters
-constexpr float BED_R25 = 100000.0;
-constexpr float BED_BETA = 3988.0;
-constexpr float BED_SHC = 0.0;
-constexpr float EXT_R25 = 100000.0;
-constexpr float EXT_BETA = 4388.0;
-constexpr float EXT_SHC = 0.0;
-
 // Thermistor series resistor value in Ohms
 constexpr float THERMISTOR_SERIES_RS = 2200.0;
 
-// Number of SPI temperature sensors to support
-constexpr size_t MaxSpiTempSensors = 4;
-
 // Digital pins the 31855s have their select lines tied to
-constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { PortDPin(16), PortDPin(15), PortDPin(27), PortCPin(22) };
+constexpr Pin SpiTempSensorCsPins[] = { PortDPin(16), PortDPin(15), PortDPin(27), PortCPin(22) };
 
 // Pin that controls the ATX power on/off
 constexpr Pin ATX_POWER_PIN = PortAPin(10);
@@ -227,12 +216,19 @@ constexpr PinEntry PinTable[] =
 	{ PortDPin(26),	PinCapability::write,	"io7.out" },
 	{ PortEPin(1),	PinCapability::write,	"io8.out" },
 
+	// Thermistor inputs
+	{ PortCPin(31), PinCapability::ainr,	"temp0" },
+	{ PortCPin(15),	PinCapability::ainr,	"temp1" },
+	{ PortCPin(29), PinCapability::ainr,	"temp2" },
+	{ PortCPin(30), PinCapability::ainr,	"temp3" },
+
 	// Misc
 	{ PortDPin(16),	PinCapability::rw,		"spi.cs0" },
 	{ PortDPin(15),	PinCapability::rw,		"spi.cs1" },
 	{ PortDPin(27),	PinCapability::rw,		"spi.cs2" },
 	{ PortCPin(22),	PinCapability::rw,		"spi.cs3" },
-	{ PortEPin(2),	PinCapability::rw,		"rpidataready" }		// RPi data ready, for testing only (remove this for production)
+
+//	{ PortEPin(2),	PinCapability::rw,		"rpidataready" }		// RPi data ready, for testing only (remove this for production)
 };
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);

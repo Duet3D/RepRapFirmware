@@ -22,9 +22,9 @@ const char* TemperatureErrorString(TemperatureError err)
 	case TemperatureError::notReady:		return "sensor not ready";
 	case TemperatureError::busBusy:			return "sensor bus busy";
 	case TemperatureError::badResponse:		return "bad response from sensor";
-	case TemperatureError::unknownChannel:	return "unknown temperature sensor channel";
+	case TemperatureError::unknownPort:		return "unknown temperature port";
 	case TemperatureError::notInitialised:	return "sensor not initialised";
-	case TemperatureError::unknownHeater:	return "unknown heater";
+	case TemperatureError::unknownSensor:	return "unknown sensor";
 	case TemperatureError::overOrUnderVoltage:	return "sensor short to other wiring";
 	case TemperatureError::badVref:			return "bad Vref";
 	case TemperatureError::badVssa:			return "bad Vssa";

@@ -95,7 +95,9 @@ public:
 	Heat& GetHeat() const;
 	GCodes& GetGCodes() const;
 	Network& GetNetwork() const;
+#if SUPPORT_ROLAND
 	Roland& GetRoland() const;
+#endif
 	Scanner& GetScanner() const;
 	PrintMonitor& GetPrintMonitor() const;
 
@@ -163,7 +165,9 @@ private:
 	Move* move;
 	Heat* heat;
 	GCodes* gCodes;
+#if SUPPORT_ROLAND
 	Roland* roland;
+#endif
 	Scanner* scanner;
  	PrintMonitor* printMonitor;
 
@@ -216,7 +220,9 @@ inline Move& RepRap::GetMove() const { return *move; }
 inline Heat& RepRap::GetHeat() const { return *heat; }
 inline GCodes& RepRap::GetGCodes() const { return *gCodes; }
 inline Network& RepRap::GetNetwork() const { return *network; }
+#if SUPPORT_ROLAND
 inline Roland& RepRap::GetRoland() const { return *roland; }
+#endif
 inline Scanner& RepRap::GetScanner() const { return *scanner; }
 inline PrintMonitor& RepRap::GetPrintMonitor() const { return *printMonitor; }
 

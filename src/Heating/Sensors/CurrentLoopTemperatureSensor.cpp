@@ -18,8 +18,8 @@ const uint8_t MCP3204_SpiMode = SPI_MODE_0;
 // Define the minimum interval between readings
 const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in milliseconds
 
-CurrentLoopTemperatureSensor::CurrentLoopTemperatureSensor(unsigned int channel)
-	: SpiTemperatureSensor(channel, "Current Loop", channel - FirstLinearAdcChannel, MCP3204_SpiMode, MCP3204_Frequency),
+CurrentLoopTemperatureSensor::CurrentLoopTemperatureSensor(unsigned int sensorNum)
+	: SpiTemperatureSensor(sensorNum, "Current Loop", MCP3204_SpiMode, MCP3204_Frequency),
 	  tempAt4mA(DefaultTempAt4mA), tempAt20mA(DefaultTempAt20mA), chipChannel(DefaultChipChannel), isDifferential(false)
 {
 	CalcDerivedParameters();
@@ -49,26 +49,28 @@ void CurrentLoopTemperatureSensor::Init()
 }
 
 // Configure this temperature sensor
-GCodeResult CurrentLoopTemperatureSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult CurrentLoopTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
-	if (mCode == 305)
+	bool seen = false;
+	if (!ConfigurePort(gb, reply, seen))
 	{
-		bool seen = false;
-		gb.TryGetFValue('L', tempAt4mA, seen);
-		gb.TryGetFValue('H', tempAt20mA, seen);
-		gb.TryGetUIValue('C', chipChannel, seen);
-		gb.TryGetUIValue('D', isDifferential, seen);
-		TryConfigureHeaterName(gb, seen);
+		return GCodeResult::error;
+	}
 
-		if (seen)
-		{
-			CalcDerivedParameters();
-		}
-		else if (!gb.Seen('X'))
-		{
-			CopyBasicHeaterDetails(heater, reply);
-			reply.catf(", temperature range %.1f to %.1fC", (double)tempAt4mA, (double)tempAt20mA);
-		}
+	gb.TryGetFValue('L', tempAt4mA, seen);
+	gb.TryGetFValue('H', tempAt20mA, seen);
+	gb.TryGetUIValue('C', chipChannel, seen);
+	gb.TryGetUIValue('D', isDifferential, seen);
+	TryConfigureSensorName(gb, seen);
+
+	if (seen)
+	{
+		CalcDerivedParameters();
+	}
+	else
+	{
+		CopyBasicDetails(reply);
+		reply.catf(", temperature range %.1f to %.1fC", (double)tempAt4mA, (double)tempAt20mA);
 	}
 	return GCodeResult::ok;
 }

@@ -77,10 +77,10 @@ constexpr size_t MaxSmartDrivers = 2;				// The maximum number of smart drivers
 
 #endif
 
-constexpr size_t NumTotalHeaters = 1;				// The number of heaters in the machine. PCCB has no heaters.
-constexpr size_t NumDefaultHeaters = 0;				// The number of heaters configured by default
+constexpr size_t MaxHeaters = 1;					// The number of heaters in the machine. PCCB has no heaters.
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 2;
+constexpr size_t NumTmcDriversSenseChannels = 1;
 
 constexpr size_t MaxGpioPorts = 5;
 
@@ -296,10 +296,15 @@ constexpr PinEntry PinTable[] =
 	{ PortCPin(31),	PinCapability::read,	"stop2" },
 #endif
 
+	// Thermistor inputs
+	{ PortAPin(20),	PinCapability::ainr,	"temp0" },
+	{ PortCPin(13),	PinCapability::ainr,	"temp1" },
+
 	// Misc expansion
 	{ PortAPin(18), PinCapability::ainrw,	"exp.pa18" },
 	{ PortAPin(21), PinCapability::ainrw,	"exp.pa21" },
 	{ PortCPin(15), PinCapability::ainrw,	"exp.pc15" },
+	{ PortCPin(27),	PinCapability::rw,		"exp.pc27,spi.cs6,stop3"},
 	{ PortCPin(29),	PinCapability::rwpwm,	"exp.pc29" }
 };
 

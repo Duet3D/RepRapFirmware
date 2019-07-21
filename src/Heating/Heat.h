@@ -40,7 +40,9 @@ public:
 	// Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
 	enum HeaterStatus { HS_off = 0, HS_standby = 1, HS_active = 2, HS_fault = 3, HS_tuning = 4 };
 
-	Heat(Platform& p);
+	Heat();
+
+	// Methods that don't relate to a particuar heater
 	void Task();
 	void Init();												// Set everything up
 	void Exit();												// Shut everything down
@@ -53,117 +55,118 @@ public:
 	void SetExtrusionMinTemp(float t);							// Set minimum extrusion temperature
 	void SetRetractionMinTemp(float t);							// Set minimum retraction temperature
 
-	int8_t GetBedHeater(size_t index) const						// Get a hot bed heater number
+	int GetBedHeater(size_t index) const						// Get a hot bed heater number
 	pre(index < NumBedHeaters);
-	void SetBedHeater(size_t index, int8_t heater)				// Set a hot bed heater number
-	pre(index < NumBedHeaters; -1 <= heater; heater < NumTotalHeaters);
-	bool IsBedHeater(int8_t heater) const;						// Check if this heater is a bed heater
+	void SetBedHeater(size_t index, int heater)					// Set a hot bed heater number
+	pre(index < NumBedHeaters; -1 <= heater; heater < MaxHeaters);
+	bool IsBedHeater(int heater) const;							// Check if this heater is a bed heater
 
-	int8_t GetChamberHeater(size_t index) const					// Get a chamber heater number
+	int GetChamberHeater(size_t index) const					// Get a chamber heater number
 	pre(index < NumChamberHeaters);
-	void SetChamberHeater(size_t index, int8_t heater)			// Set a chamber heater number
-	pre(index < NumChamberHeaters; -1 <= heater; heater < NumTotalHeaters);
-	bool IsChamberHeater(int8_t heater) const;					// Check if this heater is a chamber heater
+	void SetChamberHeater(size_t index, int heater)				// Set a chamber heater number
+	pre(index < NumChamberHeaters; -1 <= heater; heater < MaxHeaters);
+	bool IsChamberHeater(int heater) const;						// Check if this heater is a chamber heater
 
-	void SetActiveTemperature(int8_t heater, float t);
-	float GetActiveTemperature(int8_t heater) const;
-	void SetStandbyTemperature(int8_t heater, float t);
-	float GetStandbyTemperature(int8_t heater) const;
-	float GetHighestTemperatureLimit(int8_t heater) const;
-	float GetLowestTemperatureLimit(int8_t heater) const;
-	void Activate(int8_t heater);								// Turn on a heater
-	void Standby(int8_t heater, const Tool* tool);				// Set a heater to standby
-	float GetTemperature(int8_t heater) const;					// Get the temperature of a heater
-	float GetTargetTemperature(int8_t heater) const;			// Get the target temperature
-	HeaterStatus GetStatus(int8_t heater) const;				// Get the off/standby/active status
-	void SwitchOff(int8_t heater);								// Turn off a specific heater
-	void SwitchOffAll(bool includingChamberAndBed);				// Turn all heaters off
-	void ResetFault(int8_t heater);								// Reset a heater fault - only call this if you know what you are doing
 	bool AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const;	// Is everything at temperature within tolerance?
-	bool HeaterAtSetTemperature(int8_t heater, bool waitWhenCooling, float tolerance) const;
-																// Is a specific heater at temperature within tolerance?
-	void Diagnostics(MessageType mtype);						// Output useful information
 
-	float GetAveragePWM(size_t heater) const					// Return the running average PWM to the heater as a fraction in [0, 1].
-	pre(heater < NumTotalHeaters);
-
-	bool IsBedOrChamberHeater(int8_t heater) const;				// Queried by the Platform class
-
-	uint32_t GetLastSampleTime(size_t heater) const
-	pre(heater < NumTotalHeaters);
-
-	void StartAutoTune(size_t heater, float temperature, float maxPwm, const StringRef& reply) // Auto tune a PID
-	pre(heater < NumTotalHeaters);
-
-	bool IsTuning(size_t heater) const							// Return true if the specified heater is auto tuning
-	pre(heater < NumTotalHeaters);
+	void SwitchOffAll(bool includingChamberAndBed);				// Turn all heaters off
+	void ResetFault(int heater);								// Reset a heater fault for a specific heater or all heaters
 
 	void GetAutoTuneStatus(const StringRef& reply) const;		// Get the status of the current or last auto tune
 
-	const FopDt& GetHeaterModel(size_t heater) const			// Get the process model for the specified heater
-	pre(heater < NumTotalHeaters);
-
-	bool SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted) // Set the heater process model
-	pre(heater < NumTotalHeaters);
-
-	void GetFaultDetectionParameters(size_t heater, float& maxTempExcursion, float& maxFaultTime) const
-	pre(heater < NumTotalHeaters);
-
-	void SetFaultDetectionParameters(size_t heater, float maxTempExcursion, float maxFaultTime)
-	pre(heater < NumTotalHeaters);
-
-	bool IsHeaterEnabled(size_t heater) const					// Is this heater enabled?
-	pre(heater < NumTotalHeaters);
-
-	float GetHighestTemperatureLimit() const;					// Get the highest temperature limit of any heater
-
-	void SetM301PidParameters(size_t heater, const M301PidParameters& params)
-	pre(heater < NumTotalHeaters);
-
-#if HAS_MASS_STORAGE
-	bool WriteModelParameters(FileStore *f) const;				// Write heater model parameters to file returning true if no error
-#endif
-
-	int GetHeaterChannel(size_t heater) const;					// Return the channel used by a particular heater, or -1 if not configured
-	bool SetHeaterChannel(size_t heater, int channel);			// Set the channel used by a heater, returning true if bad heater or channel number
-	GCodeResult ConfigureHeaterSensor(size_t heater, unsigned int mcode, GCodeBuffer& gb, const StringRef& reply);	// Configure the temperature sensor for a channel
-	const char *GetHeaterName(size_t heater) const;				// Get the name of a heater, or nullptr if it hasn't been named
+	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply);	// Create a sensor or change the parameters for an existing sensor
 
 	HeaterProtection& AccessHeaterProtection(size_t index) const;	// Return the protection parameters of the given index
 	void UpdateHeaterProtection();								// Updates the PIDs and HeaterProtection items when a heater is remapped
 
-	bool CheckHeater(size_t heater)								// Check if the heater is able to operate
-	pre(heater < NumTotalHeaters);
+	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
 
-	float GetTemperature(size_t heater, TemperatureError& err); // Result is in degrees Celsius
+	TemperatureSensor *GetSensor(int sn) const;					// Get a pointer to the temperature sensor with the specified number
+	TemperatureSensor *GetSensorAtOrAbove(unsigned int sn) const;	// Get a pointer to the first temperature sensor with the specified or higher number
+
+	float GetSensorTemperature(int sensorNum, TemperatureError& err) const; // Result is in degrees Celsius
+
+	float GetHighestTemperatureLimit() const;					// Get the highest temperature limit of any heater
+
+	void Diagnostics(MessageType mtype);						// Output useful information
+
+	// Methods that relate to a particular heater
+	const char *GetHeaterName(size_t heater) const;				// Get the name of a heater, or nullptr if it hasn't been named
+	float GetAveragePWM(size_t heater) const					// Return the running average PWM to the heater as a fraction in [0, 1].
+	pre(heater < MaxHeaters);
+
+	bool IsBedOrChamberHeater(int heater) const;				// Queried by the Platform class
+
+	uint32_t GetLastSampleTime(size_t heater) const
+	pre(heater < MaxHeaters);
+
+	float GetHeaterTemperature(size_t heater) const;			 // Result is in degrees Celsius
 
 	const Tool* GetLastStandbyTool(int heater) const
-	pre(heater >= 0; heater < NumTotalHeaters)
+	pre(heater >= 0; heater < MaxHeaters)
 	{
 		return lastStandbyTools[heater];
 	}
 
+	bool IsHeaterEnabled(size_t heater) const					// Is this heater enabled?
+	pre(heater < MaxHeaters);
+
+	float GetActiveTemperature(int heater) const;
+	float GetStandbyTemperature(int heater) const;
+	float GetHighestTemperatureLimit(int heater) const;
+	float GetLowestTemperatureLimit(int heater) const;
+	float GetHeaterTemperature(int heater) const;				// Get the current temperature of a heater
+	float GetTargetTemperature(int heater) const;				// Get the target temperature
+	HeaterStatus GetStatus(int heater) const;					// Get the off/standby/active status
+	bool HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance) const;
+
+	GCodeResult ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply);
+	void SetActiveTemperature(int heater, float t);
+	void SetStandbyTemperature(int heater, float t);
+	void Activate(int heater);									// Turn on a heater
+	void Standby(int heater, const Tool* tool);					// Set a heater to standby
+	void SwitchOff(int heater);									// Turn off a specific heater
+																// Is a specific heater at temperature within tolerance?
+	void StartAutoTune(size_t heater, float temperature, float maxPwm, const StringRef& reply) // Auto tune a PID
+	pre(heater < MaxHeaters);
+
+	bool IsTuning(size_t heater) const							// Return true if the specified heater is auto tuning
+	pre(heater < MaxHeaters);
+
+	const FopDt& GetHeaterModel(size_t heater) const			// Get the process model for the specified heater
+	pre(heater < MaxHeaters);
+
+	bool SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted) // Set the heater process model
+	pre(heater < MaxHeaters);
+
+	void GetFaultDetectionParameters(size_t heater, float& maxTempExcursion, float& maxFaultTime) const
+	pre(heater < MaxHeaters);
+
+	void SetFaultDetectionParameters(size_t heater, float maxTempExcursion, float maxFaultTime)
+	pre(heater < MaxHeaters);
+
+	bool CheckHeater(size_t heater)								// Check if the heater is able to operate
+	pre(heater < MaxHeaters);
+
+	void SetM301PidParameters(size_t heater, const M301PidParameters& params)
+	pre(heater < MaxHeaters);
+
 #if HAS_MASS_STORAGE
+	bool WriteModelParameters(FileStore *f) const;				// Write heater model parameters to file returning true if no error
 	bool WriteBedAndChamberTempSettings(FileStore *f) const;	// Save some resume information
 #endif
-
-	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
 
 private:
 	Heat(const Heat&) = delete;									// Private copy constructor to prevent copying
 
-	TemperatureSensor **GetSensor(size_t heater);				// Get a pointer to the temperature sensor entry
-	TemperatureSensor * const *GetSensor(size_t heater) const;	// Get a pointer to the temperature sensor entry
+	void RemoveSensor(unsigned int sensorNum);
+	void InsertSensor(TemperatureSensor *sensor);
 
-	Platform& platform;											// The instance of the RepRap hardware class
+	TemperatureSensor *sensorsRoot;								// The sensor list
+	HeaterProtection *heaterProtections[MaxHeaters + NumExtraHeaterProtections];	// Heater protection instances to guarantee legal heater temperature ranges
 
-	HeaterProtection *heaterProtections[NumTotalHeaters + NumExtraHeaterProtections];	// Heater protection instances to guarantee legal heater temperature ranges
-
-	PID* pids[NumTotalHeaters];										// A PID controller for each heater
-	const Tool* lastStandbyTools[NumTotalHeaters];					// The last tool that caused the corresponding heater to be set to standby
-
-	TemperatureSensor *heaterSensors[NumTotalHeaters];				// The sensor used by the real heaters
-	TemperatureSensor *virtualHeaterSensors[MaxVirtualHeaters];	// Sensors for virtual heaters
+	PID* pids[MaxHeaters];									// A PID controller for each heater
+	const Tool* lastStandbyTools[MaxHeaters];				// The last tool that caused the corresponding heater to be set to standby
 
 	float extrusionMinTemp;										// Minimum temperature to allow regular extrusion
 	float retractionMinTemp;									// Minimum temperature to allow regular retraction
@@ -206,12 +209,12 @@ inline void Heat::SetRetractionMinTemp(float t)
 	retractionMinTemp = t;
 }
 
-inline int8_t Heat::GetBedHeater(size_t index) const
+inline int Heat::GetBedHeater(size_t index) const
 {
 	return bedHeaters[index];
 }
 
-inline int8_t Heat::GetChamberHeater(size_t index) const
+inline int Heat::GetChamberHeater(size_t index) const
 {
 	return chamberHeaters[index];
 }

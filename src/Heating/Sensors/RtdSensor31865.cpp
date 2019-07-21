@@ -35,56 +35,57 @@ const uint8_t Cr0ReadMask = 0b11011101;		// bits 1 and 5 auto clear, so ignore t
 
 const uint16_t DefaultRef = 400;
 
-RtdSensor31865::RtdSensor31865(unsigned int channel)
-	: SpiTemperatureSensor(channel, "PT100 (MAX31865)", channel - FirstRtdChannel, MAX31865_SpiMode, MAX31865_Frequency),
+RtdSensor31865::RtdSensor31865(unsigned int sensorNum)
+	: SpiTemperatureSensor(sensorNum, "PT100 (MAX31865)", MAX31865_SpiMode, MAX31865_Frequency),
 	  rref(DefaultRef), cr0(DefaultCr0)
 {
 }
 
 // Configure this temperature sensor
-GCodeResult RtdSensor31865::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult RtdSensor31865::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
-	if (mCode == 305)
+	bool seen = false;
+	if (!ConfigurePort(gb, reply, seen))
 	{
-		bool seen = false;
-		TryConfigureHeaterName(gb, seen);
-		if (gb.Seen('F'))
+		return GCodeResult::error;
+	}
+	TryConfigureSensorName(gb, seen);
+	if (gb.Seen('F'))
+	{
+		seen = true;
+		if (gb.GetIValue() == 60)
 		{
-			seen = true;
-			if (gb.GetIValue() == 60)
-			{
-				cr0 &= ~0x01;		// set 60Hz rejection
-			}
-			else
-			{
-				cr0 |= 0x01;		// default to 50Hz rejection
-			}
+			cr0 &= ~0x01;		// set 60Hz rejection
 		}
+		else
+		{
+			cr0 |= 0x01;		// default to 50Hz rejection
+		}
+	}
 
-		if (gb.Seen('W'))
+	if (gb.Seen('W'))
+	{
+		seen = true;
+		if (gb.GetUIValue() == 3)
 		{
-			seen = true;
-			if (gb.GetUIValue() == 3) 
-			{
-				cr0 |= 0x10;		// 3 wire configuration
-			} 
-			else 
-			{
-				cr0 &= ~0x10;		// 2 or 4 wire configuration
-			}
+			cr0 |= 0x10;		// 3 wire configuration
 		}
+		else
+		{
+			cr0 &= ~0x10;		// 2 or 4 wire configuration
+		}
+	}
 
-		if (gb.Seen('R'))
-		{
-			seen = true;
-			rref = (uint16_t)gb.GetUIValue();
-		}
+	if (gb.Seen('R'))
+	{
+		seen = true;
+		rref = (uint16_t)gb.GetUIValue();
+	}
 
-		if (!seen && !gb.Seen('X'))
-		{
-			CopyBasicHeaterDetails(heater, reply);
-			reply.catf(", %s wires, reject %dHz, reference resistor %u ohms", (cr0 & 0x10) ? "3" : "2/4", (cr0 & 0x01) ? 50 : 60, (unsigned int)rref);
-		}
+	if (!seen)
+	{
+		CopyBasicDetails(reply);
+		reply.catf(", %s wires, reject %dHz, reference resistor %u ohms", (cr0 & 0x10) ? "3" : "2/4", (cr0 & 0x01) ? 50 : 60, (unsigned int)rref);
 	}
 	return GCodeResult::ok;
 }
@@ -124,11 +125,12 @@ TemperatureError RtdSensor31865::TryInitRtd() const
 
 	if (sts == TemperatureError::success)
 	{
+		delayMicroseconds(1);
 		static const uint8_t readData[2] = { 0x00, 0x00 };	// read register 0
 		sts = DoSpiTransaction(readData, ARRAY_SIZE(readData), rawVal);
 	}
 
-	//debugPrintf("Status %d data %04x\n", (int)sts, rawVal);
+	//debugPrintf("Status %d data %04x\n", (int)sts, (uint16_t)rawVal);
 	if (sts == TemperatureError::success && (rawVal & Cr0ReadMask) != (cr0 & Cr0ReadMask))
 	{
 		sts = TemperatureError::badResponse;

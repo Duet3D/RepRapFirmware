@@ -1266,7 +1266,7 @@ GCodeResult GCodes::SetHeaterModel(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('H'))
 	{
 		const unsigned int heater = gb.GetUIValue();
-		if (heater < NumTotalHeaters)
+		if (heater < MaxHeaters)
 		{
 			const FopDt& model = reprap.GetHeat().GetHeaterModel(heater);
 			bool seen = false;

@@ -39,7 +39,7 @@ void ZProbe::SetDefaults()
 	maxTaps = DefaultZProbeTaps;
 	invertReading = turnHeatersOff = saveToConfigOverride = false;
 	type = ZProbeType::none;
-	heater = -1;
+	sensor = -1;
 	inputPort.Release();
 	modulationPort.Release();
 }
@@ -60,10 +60,11 @@ bool ZProbe::AssignPorts(const char* pinNames, const StringRef& reply)
 
 float ZProbe::GetActualTriggerHeight() const
 {
-	if (heater >= 0)
+	if (sensor >= 0)
 	{
-		const float temperature = reprap.GetHeat().GetTemperature(heater);
-		if (temperature >= -100.0)
+		TemperatureError err;
+		const float temperature = reprap.GetHeat().GetSensorTemperature(sensor, err);
+		if (err == TemperatureError::success)
 		{
 			return ((temperature - calibTemperature) * temperatureCoefficient) + triggerHeight;
 		}
@@ -232,14 +233,15 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('H'))
 	{
 		seen = true;
-		heater = gb.GetIValue();
+		sensor = gb.GetIValue();
 	}
 
 	if (gb.Seen('C'))
 	{
 		seen = true;
-		float currentTemperature = reprap.GetHeat().GetTemperature(heater);
-		if (currentTemperature < -100.0)
+		TemperatureError terr;
+		float currentTemperature = reprap.GetHeat().GetSensorTemperature(sensor, terr);
+		if (terr != TemperatureError::success)
 		{
 			reply.copy("Cannot set a temperature coefficient without a valid heater number");
 			err = GCodeResult::error;

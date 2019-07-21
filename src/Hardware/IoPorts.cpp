@@ -15,8 +15,8 @@
 # include "DuetNG/DueXn.h"
 #endif
 
-// Read a port name parameter and assign some ports.
-// Return the number of ports allocated, or 0 if there was an error.
+// Read a port name parameter and assign some ports. Caller must call gb.Seen() with the appropriate letter and get 'true' returned before calling this.
+// Return the number of ports allocated, or 0 if there was an error with the error message in 'reply'.
 size_t IoPort::AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[])
 {
 	// Get the full port names string
@@ -30,7 +30,8 @@ size_t IoPort::AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy ne
 	return AssignPorts(portNames.c_str(), reply, neededFor, numPorts, ports, access);
 }
 
-// Read a port name parameter and assign one port
+// Read a port name parameter and assign one port. Caller must call gb.Seen() with the appropriate letter and get 'true' returned before calling this.
+// If successful, return true; else return false with the error message in 'reply'.
 bool IoPort::AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, PinAccess access)
 {
 	IoPort* const p = this;
@@ -423,6 +424,11 @@ void IoPort::WriteDigital(bool high) const
 	{
 		WriteDigital(PinTable[logicalPin].pin, (totalInvert) ? !high : high);
 	}
+}
+
+Pin IoPort::GetPin() const
+{
+	return (IsValid()) ? PinTable[logicalPin].pin : NoPin;
 }
 
 bool IoPort::Read() const

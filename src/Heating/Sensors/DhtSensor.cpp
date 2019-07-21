@@ -36,11 +36,11 @@ extern "C" void DhtDataTransition(CallbackParameter cp)
 	static_cast<DhtSensorHardwareInterface*>(cp.vp)->Interrupt();
 }
 
-DhtSensorHardwareInterface::DhtSensorHardwareInterface(Pin p_pin)
-	: sensorPin(p_pin), type(DhtSensorType::none), lastResult(TemperatureError::notInitialised),
+DhtSensorHardwareInterface::DhtSensorHardwareInterface()
+	: type(DhtSensorType::none), lastResult(TemperatureError::notInitialised),
 	  lastTemperature(BadErrorTemperature), lastHumidity(BadErrorTemperature), badTemperatureCount(0)
 {
-	IoPort::SetPinMode(sensorPin, INPUT_PULLUP);
+//	IoPort::SetPinMode(sensorPin, INPUT_PULLUP);
 }
 
 TemperatureError DhtSensorHardwareInterface::GetTemperatureOrHumidity(float& t, bool wantHumidity) const
@@ -49,7 +49,7 @@ TemperatureError DhtSensorHardwareInterface::GetTemperatureOrHumidity(float& t, 
 	return lastResult;
 }
 
-/*static*/ GCodeResult DhtSensorHardwareInterface::Configure(TemperatureSensor *ts, unsigned int relativeChannel, unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
+/*static*/ GCodeResult DhtSensorHardwareInterface::Configure(TemperatureSensor *ts, unsigned int relativeChannel, unsigned int mCode, GCodeBuffer& gb, const StringRef& reply)
 {
 	MutexLocker lock(dhtMutex);
 
@@ -59,62 +59,59 @@ TemperatureError DhtSensorHardwareInterface::GetTemperatureOrHumidity(float& t, 
 		return GCodeResult::error;
 	}
 
-	return activeSensors[relativeChannel]->ConfigureType(ts, mCode, heater, gb, reply);
+	return activeSensors[relativeChannel]->ConfigureType(ts, mCode, gb, reply);
 }
 
-GCodeResult DhtSensorHardwareInterface::ConfigureType(TemperatureSensor *ts, unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult DhtSensorHardwareInterface::ConfigureType(TemperatureSensor *ts, unsigned int mCode, GCodeBuffer& gb, const StringRef& reply)
 {
 	GCodeResult rslt = GCodeResult::ok;
-	if (mCode == 305)
+	bool seen = false;
+	ts->TryConfigureSensorName(gb, seen);
+
+	if (gb.Seen('T'))
 	{
-		bool seen = false;
-		ts->TryConfigureHeaterName(gb, seen);
+		seen = true;
 
-		if (gb.Seen('T'))
+		const int dhtType = gb.GetIValue();
+		switch (dhtType)
 		{
-			seen = true;
-
-			const int dhtType = gb.GetIValue();
-			switch (dhtType)
-			{
-			case 11:
-				type = DhtSensorType::Dht11;
-				break;
-			case 21:
-				type = DhtSensorType::Dht21;
-				break;
-			case 22:
-				type = DhtSensorType::Dht22;
-				break;
-			default:
-				reply.copy("Invalid DHT sensor type");
-				rslt = GCodeResult::error;
-				break;
-			}
+		case 11:
+			type = DhtSensorType::Dht11;
+			break;
+		case 21:
+			type = DhtSensorType::Dht21;
+			break;
+		case 22:
+			type = DhtSensorType::Dht22;
+			break;
+		default:
+			reply.copy("Invalid DHT sensor type");
+			rslt = GCodeResult::error;
+			break;
 		}
+	}
 
-		if (!seen && !gb.Seen('X'))
+	if (!seen)
+	{
+		ts->CopyBasicDetails(reply);
+
+		const char *sensorTypeString;
+		switch (type)
 		{
-			ts->CopyBasicHeaterDetails(heater, reply);
-
-			const char *sensorTypeString;
-			switch (type)
-			{
-			case DhtSensorType::Dht11:
-				sensorTypeString = "DHT11";
-				break;
-			case DhtSensorType::Dht21:
-				sensorTypeString = "DHT21";
-				break;
-			case DhtSensorType::Dht22:
-				sensorTypeString = "DHT22";
-				break;
-			default:
-				sensorTypeString = "unknown";
-				break;
-			}
-			reply.catf(", sensor type %s", sensorTypeString);
+		case DhtSensorType::Dht11:
+			sensorTypeString = "DHT11";
+			break;
+		case DhtSensorType::Dht21:
+			sensorTypeString = "DHT21";
+			break;
+		case DhtSensorType::Dht22:
+			sensorTypeString = "DHT22";
+			break;
+		default:
+			sensorTypeString = "unknown";
+			break;
 		}
+		reply.catf(", sensor type %s", sensorTypeString);
 	}
 	return rslt;
 }
@@ -172,7 +169,7 @@ void DhtSensorHardwareInterface::Interrupt()
 	if (numPulses < ARRAY_SIZE(pulses))
 	{
 		const uint16_t now = StepTimer::GetInterruptClocks16();
-		if (IoPort::ReadPin(sensorPin))
+		if (port.Read())
 		{
 			lastPulseTime = now;
 		}
@@ -188,7 +185,7 @@ void DhtSensorHardwareInterface::TakeReading()
 	if (type != DhtSensorType::none)			// if sensor has been configured
 	{
 		// Send the start bit. This must be at least 18ms for the DHT11, 0.8ms for the DHT21, and 1ms long for the DHT22.
-		IoPort::SetPinMode(sensorPin, OUTPUT_LOW);
+		port.SetMode(PinAccess::write0);
 		delay(20);
 
 		{
@@ -196,16 +193,16 @@ void DhtSensorHardwareInterface::TakeReading()
 
 			// End the start signal by setting data line high. the sensor will respond with the start bit in 20 to 40us.
 			// We need only force the data line high long enough to charge the line capacitance, after that the pullup resistor keeps it high.
-			IoPort::WriteDigital(sensorPin, true);		// this will generate an interrupt, but we will ignore it
+			port.WriteDigital(true);		// this will generate an interrupt, but we will ignore it
 			delayMicroseconds(3);
 
 			// Now start reading the data line to get the value from the DHT sensor
-			IoPort::SetPinMode(sensorPin, INPUT_PULLUP);
+			port.SetMode(PinAccess::readWithPullup);
 
 			// It appears that switching the pin to an output disables the interrupt, so we need to call attachInterrupt here
 			// We are likely to get an immediate interrupt at this point corresponding to the low-to-high transition. We must ignore this.
 			numPulses = ARRAY_SIZE(pulses);		// tell the ISR not to collect data yet
-			attachInterrupt(sensorPin, DhtDataTransition, INTERRUPT_MODE_CHANGE, this);
+			port.AttachInterrupt(DhtDataTransition, INTERRUPT_MODE_CHANGE, this);
 			lastPulseTime = 0;
 			numPulses = 0;						// tell the ISR to collect data
 		}
@@ -215,7 +212,7 @@ void DhtSensorHardwareInterface::TakeReading()
 		// So we just delay for long enough for the data to have been sent. It takes typically 4 to 5ms.
 		delay(MaximumReadTime);
 
-		detachInterrupt(sensorPin);
+		port.DetachInterrupt();
 
 		// Attempt to convert the signal into temp+RH values
 		const TemperatureError rslt = ProcessReadings();
@@ -314,8 +311,8 @@ TemperatureError DhtSensorHardwareInterface::ProcessReadings()
 }
 
 // Class DhtTemperatureSensor members
-DhtTemperatureSensor::DhtTemperatureSensor(unsigned int channel)
-	: TemperatureSensor(channel, "DHT-temperature")
+DhtTemperatureSensor::DhtTemperatureSensor(unsigned int sensorNum)
+	: TemperatureSensor(sensorNum, "DHT-temperature")
 {
 }
 
@@ -324,9 +321,9 @@ void DhtTemperatureSensor::Init()
 	DhtSensorHardwareInterface::Create(GetSensorChannel() - FirstDhtTemperatureChannel);
 }
 
-GCodeResult DhtTemperatureSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
-	return DhtSensorHardwareInterface::Configure(this, GetSensorChannel() - FirstDhtTemperatureChannel, mCode, heater, gb, reply);
+	return DhtSensorHardwareInterface::Configure(this, GetSensorChannel() - FirstDhtTemperatureChannel, mCode, gb, reply);
 }
 
 DhtTemperatureSensor::~DhtTemperatureSensor()
@@ -340,8 +337,8 @@ TemperatureError DhtTemperatureSensor::TryGetTemperature(float& t)
 }
 
 // Class DhtHumiditySensor members
-DhtHumiditySensor::DhtHumiditySensor(unsigned int channel)
-	: TemperatureSensor(channel, "DHT-humidity")
+DhtHumiditySensor::DhtHumiditySensor(unsigned int sensorNum)
+	: TemperatureSensor(sensorNum, "DHT-humidity")
 {
 }
 
@@ -350,9 +347,9 @@ void DhtHumiditySensor::Init()
 	DhtSensorHardwareInterface::Create(GetSensorChannel() - FirstDhtHumidityChannel);
 }
 
-GCodeResult DhtHumiditySensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult DhtHumiditySensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
-	return DhtSensorHardwareInterface::Configure(this, GetSensorChannel() - FirstDhtHumidityChannel, mCode, heater, gb, reply);
+	return DhtSensorHardwareInterface::Configure(this, GetSensorChannel() - FirstDhtHumidityChannel, mCode, gb, reply);
 }
 
 DhtHumiditySensor::~DhtHumiditySensor()

@@ -79,7 +79,10 @@ GCodes::GCodes(Platform& p) :
 #if HAS_VOLTAGE_MONITOR
 	powerFailScript(nullptr),
 #endif
-	isFlashing(false), lastWarningMillis(0), atxPowerControlled(false), sdTimingFile(nullptr)
+	isFlashing(false), lastWarningMillis(0), atxPowerControlled(false)
+#if HAS_MAS_STORAGE
+	, sdTimingFile(nullptr)
+#endif
 {
 #if HAS_MASS_STORAGE
 	fileBeingHashed = nullptr;
@@ -2633,6 +2636,7 @@ void GCodes::StartPrinting(bool fromStart)
 	reprap.GetMove().ResetExtruderPositions();
 
 #if HAS_MASS_STORAGE
+	fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
 	fileGCode->GetFileInput()->Reset(fileGCode->OriginalMachineState().fileState);
 #elif HAS_LINUX_INTERFACE
 	fileGCode->OriginalMachineState().SetFileExecuting();
@@ -2754,7 +2758,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply)
 			settingTemps = true;
 			if (simulationMode == 0)
 			{
-				float standby[NumTotalHeaters];
+				float standby[MaxHeaters];
 				gb.GetFloatArray(standby, hCount, true);
 				for (size_t h = 0; h < hCount; ++h)
 				{
@@ -2767,7 +2771,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply)
 			settingTemps = true;
 			if (simulationMode == 0)
 			{
-				float active[NumTotalHeaters];
+				float active[MaxHeaters];
 				gb.GetFloatArray(active, hCount, true);
 				for (size_t h = 0; h < hCount; ++h)
 				{
@@ -3208,7 +3212,7 @@ GCodeResult GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 	const int index = (gb.Seen('P'))
 						? gb.GetIValue()
 						: (gb.Seen('H')) ? gb.GetIValue() : 1;		// default to extruder 1 if no heater number provided
-	if ((index < 0 || index >= (int)NumTotalHeaters) && (index < (int)FirstExtraHeaterProtection || index >= (int)(FirstExtraHeaterProtection + NumExtraHeaterProtections)))
+	if ((index < 0 || index >= (int)MaxHeaters) && (index < (int)FirstExtraHeaterProtection || index >= (int)(FirstExtraHeaterProtection + NumExtraHeaterProtections)))
 	{
 		reply.printf("Invalid heater protection item '%d'", index);
 		return GCodeResult::error;
@@ -3221,7 +3225,7 @@ GCodeResult GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('P') && gb.Seen('H'))
 	{
 		const int heater = gb.GetIValue();
-		if (heater > (int)NumTotalHeaters)									// allow negative values to disable heater protection
+		if (heater > (int)MaxHeaters)									// allow negative values to disable heater protection
 		{
 			reply.printf("Invalid heater number '%d'", heater);
 			return GCodeResult::error;
@@ -3231,18 +3235,11 @@ GCodeResult GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 		item.SetHeater(heater);
 	}
 
-	// Set heater to supervise
+	// Set sensor that supervises the heater
 	if (gb.Seen('X'))
 	{
-		const int heater = gb.GetIValue();
-		if ((heater < 0 || heater > (int)NumTotalHeaters) && (heater < (int)FirstVirtualHeater || heater >= (int)(FirstVirtualHeater + MaxVirtualHeaters)))
-		{
-			reply.printf("Invalid heater number '%d'", heater);
-			return GCodeResult::error;
-		}
-
+		item.SetSensorNumber(gb.GetIValue());
 		seen = true;
-		item.SetSupervisedHeater(heater);
 	}
 
 	// Set trigger action
@@ -3324,8 +3321,8 @@ GCodeResult GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 				break;
 			}
 
-			reply.printf("Temperature protection item %d is configured for heater %d and supervises heater %d to %s if the temperature %s %.1f" DEGREE_SYMBOL "C",
-					index, item.GetHeater(), item.GetSupervisedHeater(), actionString, triggerString, (double)item.GetTemperatureLimit());
+			reply.printf("Temperature protection item %d is configured for heater %d and uses sensor %d to %s if the temperature %s %.1f" DEGREE_SYMBOL "C",
+					index, item.GetHeater(), item.GetSensorNumber(), actionString, triggerString, (double)item.GetTemperatureLimit());
 		}
 	}
 
@@ -3340,7 +3337,7 @@ void GCodes::SetPidParameters(GCodeBuffer& gb, int heater, const StringRef& repl
 		heater = gb.GetIValue();
 	}
 
-	if (heater >= 0 && heater < (int)NumTotalHeaters)
+	if (heater >= 0 && heater < (int)MaxHeaters)
 	{
 		const FopDt& model = reprap.GetHeat().GetHeaterModel(heater);
 		M301PidParameters pp = model.GetM301PidParameters(false);
@@ -3368,13 +3365,15 @@ void GCodes::SetPidParameters(GCodeBuffer& gb, int heater, const StringRef& repl
 	}
 }
 
+#if 0
+
 // Process M305
 GCodeResult GCodes::SetHeaterParameters(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (gb.Seen('P'))
 	{
 		const int heater = gb.GetIValue();
-		if ((heater >= 0 && heater < (int)NumTotalHeaters) || (heater >= (int)FirstVirtualHeater && heater < (int)(FirstVirtualHeater + MaxVirtualHeaters)))
+		if ((heater >= 0 && heater < (int)MaxHeaters) || (heater >= (int)FirstVirtualHeater && heater < (int)(FirstVirtualHeater + MaxVirtualHeaters)))
 		{
 			Heat& heat = reprap.GetHeat();
 			const int oldChannel = heat.GetHeaterChannel(heater);
@@ -3384,7 +3383,7 @@ GCodeResult GCodes::SetHeaterParameters(GCodeBuffer& gb, const StringRef& reply)
 			if (!seen && oldChannel < 0)
 			{
 				// For backwards compatibility, if no sensor has been configured on this channel then assume the thermistor normally associated with the heater
-				if (heater < (int)NumTotalHeaters && (gb.Seen('R') || gb.Seen('T') || gb.Seen('B')))	// if it has a thermistor and we are trying to configure it
+				if (heater < (int)MaxHeaters && (gb.Seen('R') || gb.Seen('T') || gb.Seen('B')))	// if it has a thermistor and we are trying to configure it
 				{
 					channel = heater;
 				}
@@ -3414,6 +3413,8 @@ GCodeResult GCodes::SetHeaterParameters(GCodeBuffer& gb, const StringRef& reply)
 	}
 	return GCodeResult::ok;
 }
+
+#endif
 
 void GCodes::SetToolHeaters(Tool *tool, float temperature, bool both)
 {
@@ -4083,7 +4084,7 @@ void GCodes::ReportToolTemperatures(const StringRef& reply, const Tool *tool, bo
 		for (size_t i = 0; i < tool->HeaterCount(); ++i)
 		{
 			const int heater = tool->Heater(i);
-			reply.catf("%c%.1f /%.1f", sep, (double)heat.GetTemperature(heater), (double)heat.GetTargetTemperature(heater));
+			reply.catf("%c%.1f /%.1f", sep, (double)heat.GetHeaterTemperature(heater), (double)heat.GetTargetTemperature(heater));
 			sep = ' ';
 		}
 	}
@@ -4117,7 +4118,7 @@ void GCodes::GenerateTemperatureReport(const StringRef& reply) const
 			reply.catf(" B%u:", hn);
 		}
 		const int8_t heater = heat.GetBedHeater(hn);
-		reply.catf("%.1f /%.1f", (double)heat.GetTemperature(heater), (double)heat.GetTargetTemperature(heater));
+		reply.catf("%.1f /%.1f", (double)heat.GetHeaterTemperature(heater), (double)heat.GetTargetTemperature(heater));
 	}
 
 	for (size_t hn = 0; hn < NumChamberHeaters && heat.GetChamberHeater(hn) >= 0; ++hn)
@@ -4135,7 +4136,7 @@ void GCodes::GenerateTemperatureReport(const StringRef& reply) const
 			reply.catf(" C%u:", hn);
 		}
 		const int8_t heater = heat.GetChamberHeater(hn);
-		reply.catf("%.1f /%.1f", (double)heat.GetTemperature(heater), (double)heat.GetTargetTemperature(heater));
+		reply.catf("%.1f /%.1f", (double)heat.GetHeaterTemperature(heater), (double)heat.GetTargetTemperature(heater));
 	}
 }
 
@@ -4248,7 +4249,7 @@ void GCodes::GrabResource(const GCodeBuffer& gb, Resource r)
 
 bool GCodes::LockHeater(const GCodeBuffer& gb, int heater)
 {
-	if (heater >= 0 && heater < (int)NumTotalHeaters)
+	if (heater >= 0 && heater < (int)MaxHeaters)
 	{
 		return LockResource(gb, HeaterResourceBase + heater);
 	}
@@ -4515,7 +4516,7 @@ int GCodes::GetHeaterNumber(unsigned int itemNumber) const
 
 float GCodes::GetItemCurrentTemperature(unsigned int itemNumber) const
 {
-	return reprap.GetHeat().GetTemperature(GetHeaterNumber(itemNumber));
+	return reprap.GetHeat().GetHeaterTemperature(GetHeaterNumber(itemNumber));
 }
 
 float GCodes::GetItemActiveTemperature(unsigned int itemNumber) const

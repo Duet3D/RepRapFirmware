@@ -67,7 +67,8 @@ enum class PinUsedBy : uint8_t
 	laser,
 	gpio,
 	filamentMonitor,
-	temporaryInput
+	temporaryInput,
+	sensor
 };
 
 #include "Configuration.h"

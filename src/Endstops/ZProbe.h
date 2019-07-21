@@ -80,7 +80,7 @@ private:
 			turnHeatersOff : 1,		// true to turn heaters off while probing
 			saveToConfigOverride : 1; // true if the trigger height should be saved to config-override.g
 	ZProbeType type;
-	int8_t heater;					// the heater number used for temperature calibration
+	int sensor;						// the sensor number used for temperature calibration
 };
 
 // If this is a dumb modulated IR probe, set the IR LED on or off. Called from the tick ISR, so inlined for speed.

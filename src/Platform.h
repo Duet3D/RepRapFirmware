@@ -466,8 +466,8 @@ public:
 		return adcFilters[channel];
 	}
 
-	void SetHeater(size_t heater, float power)				// power is a fraction in [0,1]
-	pre(heater < Heaters);
+	int GetAveragingFilterIndex(const IoPort&) const;
+
 	void UpdateConfiguredHeaters();
 
 	// Fans
@@ -696,7 +696,7 @@ private:
 	float minimumMovementSpeed;
 
 #if HAS_SMART_DRIVERS
-	size_t numSmartDrivers;								// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers
+	size_t numSmartDrivers;								// the number of TMC drivers we have, the remaining are simple enable/step/dir drivers
 	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers;
 	DriversBitmap openLoadADrivers, openLoadBDrivers, notOpenLoadADrivers, notOpenLoadBDrivers;
 	MillisTimer openLoadATimer, openLoadBTimer;
@@ -757,7 +757,6 @@ private:
 #endif
 
 	// Heaters
-	PwmPort heaterPorts[NumTotalHeaters];
 	HeatersBitmap configuredHeaters;										// bitmask of all real heaters in use
 
 	// Fans

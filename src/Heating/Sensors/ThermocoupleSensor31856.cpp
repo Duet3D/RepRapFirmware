@@ -53,52 +53,53 @@ const uint8_t Cr1ReadMask = 0b01111111;			// ignore the reserved bits
 //  Openfault=0	assert fault on open circuit condition
 const uint8_t DefaultFaultMask = 0b00111100;
 
-ThermocoupleSensor31856::ThermocoupleSensor31856(unsigned int channel)
-	: SpiTemperatureSensor(channel, "Thermocouple (MAX31856)", channel - FirstMax31856ThermocoupleChannel, MAX31856_SpiMode, MAX31856_Frequency),
+ThermocoupleSensor31856::ThermocoupleSensor31856(unsigned int sensorNum)
+	: SpiTemperatureSensor(sensorNum, "Thermocouple (MAX31856)", MAX31856_SpiMode, MAX31856_Frequency),
 	  cr0(DefaultCr0), thermocoupleType(TypeK)
 {
 }
 
 // Configure this temperature sensor
-GCodeResult ThermocoupleSensor31856::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult ThermocoupleSensor31856::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
-	if (mCode == 305)
+	bool seen = false;
+	if (!ConfigurePort(gb, reply, seen))
 	{
-		bool seen = false;
-		TryConfigureHeaterName(gb, seen);
-		if (gb.Seen('F'))
+		return GCodeResult::error;
+	}
+	TryConfigureSensorName(gb, seen);
+	if (gb.Seen('F'))
+	{
+		seen = true;
+		if (gb.GetIValue() == 60)
 		{
-			seen = true;
-			if (gb.GetIValue() == 60)
-			{
-				cr0 &= ~0x01;		// set 60Hz rejection
-			}
-			else
-			{
-				cr0 |= 0x01;		// default to 50Hz rejection
-			}
+			cr0 &= ~0x01;		// set 60Hz rejection
 		}
+		else
+		{
+			cr0 |= 0x01;		// default to 50Hz rejection
+		}
+	}
 
-		String<2> buf;
-		if (gb.TryGetQuotedString('T', buf.GetRef(), seen))
+	String<2> buf;
+	if (gb.TryGetQuotedString('T', buf.GetRef(), seen))
+	{
+		const char *p;
+		if (buf.strlen() == 1 && (p = strchr(TypeLetters, toupper(buf.c_str()[0]))) != nullptr)
 		{
-			const char *p;
-			if (buf.strlen() == 1 && (p = strchr(TypeLetters, toupper(buf.c_str()[0]))) != nullptr)
-			{
-				thermocoupleType = p - TypeLetters;
-			}
-			else
-			{
-				reply.copy("Bad thermocouple type letter in M305 command");
-				return GCodeResult::error;
-			}
+			thermocoupleType = p - TypeLetters;
 		}
+		else
+		{
+			reply.copy("Bad thermocouple type letter in M305 command");
+			return GCodeResult::error;
+		}
+	}
 
-		if (!seen && !gb.Seen('X'))
-		{
-			CopyBasicHeaterDetails(heater, reply);
-			reply.catf(", thermocouple type %c, reject %dHz", TypeLetters[thermocoupleType], (cr0 & 0x01) ? 50 : 60);
-		}
+	if (!seen)
+	{
+		CopyBasicDetails(reply);
+		reply.catf(", thermocouple type %c, reject %dHz", TypeLetters[thermocoupleType], (cr0 & 0x01) ? 50 : 60);
 	}
 	return GCodeResult::ok;
 }

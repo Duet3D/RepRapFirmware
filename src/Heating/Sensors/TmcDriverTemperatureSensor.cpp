@@ -11,7 +11,8 @@
 
 #if HAS_SMART_DRIVERS
 
-TmcDriverTemperatureSensor::TmcDriverTemperatureSensor(unsigned int channel) : TemperatureSensor(channel, "TMC2660 temperature warnings")
+TmcDriverTemperatureSensor::TmcDriverTemperatureSensor(unsigned int sensorNum, unsigned int chan)
+	: TemperatureSensor(sensorNum, "TMC2660 temperature warnings"), channel(chan)
 {
 }
 
@@ -21,7 +22,7 @@ void TmcDriverTemperatureSensor::Init()
 
 TemperatureError TmcDriverTemperatureSensor::TryGetTemperature(float& t)
 {
-	t = reprap.GetPlatform().GetTmcDriversTemperature(GetSensorChannel() - FirstTmcDriversSenseChannel);
+	t = reprap.GetPlatform().GetTmcDriversTemperature(channel);
 	return TemperatureError::success;
 }
 
