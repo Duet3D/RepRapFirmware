@@ -92,8 +92,8 @@ GCodes::GCodes(Platform& p) :
 #if HAS_NETWORKING || HAS_LINUX_INTERFACE
 	httpInput = new NetworkGCodeInput();
 	httpGCode = new GCodeBuffer(GCodeChannel::http, httpInput, fileInput, HttpMessage);
-	telnetGCode = new GCodeBuffer(GCodeChannel::telnet, telnetInput, fileInput, TelnetMessage, Compatibility::marlin);
 	telnetInput = new NetworkGCodeInput();
+	telnetGCode = new GCodeBuffer(GCodeChannel::telnet, telnetInput, fileInput, TelnetMessage, Compatibility::marlin);
 #else
 	httpGCode = telnetGCode = nullptr;
 #endif
@@ -619,6 +619,22 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 				if (hadFileError)
 				{
 					HandleResult(gb, GCodeResult::warningNotSupported, reply, nullptr);
+				}
+			}
+			else if (gb.GetState() == GCodeState::doingUserMacro)
+			{
+				gb.SetState(GCodeState::normal);
+				UnlockAll(gb);
+
+				// Output a warning message on demand
+				if (hadFileError)
+				{
+					(void)gb.Seen('P');
+					String<MaxFilenameLength + 32> reply;
+					gb.GetPossiblyQuotedString(reply.GetRef());
+					reply.Prepend("Macro file ");
+					reply.cat(" not found");
+					HandleReply(gb, GCodeResult::warning, reply.c_str());
 				}
 			}
 			else if (gb.GetState() == GCodeState::normal)

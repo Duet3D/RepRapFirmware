@@ -1203,6 +1203,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 98: // Call Macro/Subprogram
 		if (gb.Seen('P'))
 		{
+#if HAS_LINUX_INTERFACE
+			gb.SetState(GCodeState::doingUserMacro);
+#endif
 			String<MaxFilenameLength> filename;
 			gb.GetPossiblyQuotedString(filename.GetRef());
 			DoFileMacro(gb, filename.c_str(), true, code);

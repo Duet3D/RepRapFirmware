@@ -423,30 +423,36 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb)
 			const CodeHeader *header = reinterpret_cast<const CodeHeader*>(codeBuffer + readPointer);
 			readPointer += bufHeader->length;
 
-			if (bufHeader->isPending && gb.GetChannel() == header->channel)
+			if (bufHeader->isPending)
 			{
-				gb.Put(reinterpret_cast<const char *>(header), bufHeader->length, true);
-				bufHeader->isPending = false;
-
-				if (updateRxPointer)
+				if (gb.GetChannel() == header->channel)
 				{
-					sendBufferUpdate = true;
+					gb.Put(reinterpret_cast<const char *>(header), bufHeader->length, true);
+					bufHeader->isPending = false;
 
-					rxPointer = readPointer;
-					if (rxPointer == txLength)
+					if (updateRxPointer)
 					{
-						rxPointer = txLength = 0;
+						sendBufferUpdate = true;
+
+						rxPointer = readPointer;
+						if (rxPointer == txLength)
+						{
+							rxPointer = txLength = 0;
+						}
+						else if (rxPointer == txPointer && txLength == 0)
+						{
+							rxPointer = txPointer = 0;
+						}
 					}
-					else if (rxPointer == txPointer && txLength == 0)
-					{
-						rxPointer = txPointer = 0;
-					}
+
+					return true;
 				}
-
-				return true;
+				else
+				{
+					updateRxPointer = false;
+				}
 			}
 
-			updateRxPointer = false;
 			if (readPointer == txLength)
 			{
 				readPointer = 0;
