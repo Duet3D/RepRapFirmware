@@ -92,8 +92,8 @@ GCodes::GCodes(Platform& p) :
 #if HAS_NETWORKING || HAS_LINUX_INTERFACE
 	httpInput = new NetworkGCodeInput();
 	httpGCode = new GCodeBuffer("http", httpInput, fileInput, HttpMessage, HttpMessage, false);
-	telnetGCode = new GCodeBuffer("telnet", telnetInput, fileInput, TelnetMessage, TelnetMessage, true);
 	telnetInput = new NetworkGCodeInput();
+	telnetGCode = new GCodeBuffer("telnet", telnetInput, fileInput, TelnetMessage, TelnetMessage, true);
 #else
 	httpGCode = telnetGCode = nullptr;
 #endif
