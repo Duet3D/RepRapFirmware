@@ -30,14 +30,6 @@ Thermistor::Thermistor(unsigned int sensorNum, bool p_isPT1000)
 	CalcDerivedParameters();
 }
 
-void Thermistor::Init()
-{
-	if (adcFilterChannel >= 0)
-	{
-		reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init((1 << AdcBits) - 1);
-	}
-}
-
 // Configure the temperature sensor
 GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
@@ -81,6 +73,10 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply)
 	if (seen)
 	{
 		adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
+		if (adcFilterChannel >= 0)
+		{
+			reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init((1 << AdcBits) - 1);
+		}
 	}
 	else
 	{

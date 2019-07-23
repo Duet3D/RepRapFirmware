@@ -82,38 +82,38 @@ GCodeResult RtdSensor31865::Configure(GCodeBuffer& gb, const StringRef& reply)
 		rref = (uint16_t)gb.GetUIValue();
 	}
 
-	if (!seen)
+	if (seen)
+	{
+		// Initialise the sensor
+		InitSpi();
+
+		TemperatureError rslt;
+		for (unsigned int i = 0; i < 3; ++i)		// try 3 times
+		{
+			rslt = TryInitRtd();
+			if (rslt == TemperatureError::success)
+			{
+				break;
+			}
+			delay(MinimumReadInterval);
+		}
+
+		lastReadingTime = millis();
+		lastResult = rslt;
+		lastTemperature = 0.0;
+
+		if (rslt != TemperatureError::success)
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to initialise RTD: %s\n", TemperatureErrorString(rslt));
+		}
+
+	}
+	else
 	{
 		CopyBasicDetails(reply);
 		reply.catf(", %s wires, reject %dHz, reference resistor %u ohms", (cr0 & 0x10) ? "3" : "2/4", (cr0 & 0x01) ? 50 : 60, (unsigned int)rref);
 	}
 	return GCodeResult::ok;
-}
-
-// Perform the actual hardware initialization for attaching and using this device on the SPI hardware bus.
-void RtdSensor31865::Init()
-{
-	InitSpi();
-
-	TemperatureError rslt;
-	for (unsigned int i = 0; i < 3; ++i)		// try 3 times
-	{
-		rslt = TryInitRtd();
-		if (rslt == TemperatureError::success)
-		{
-			break;
-		}
-		delay(MinimumReadInterval);
-	}
-
-	lastReadingTime = millis();
-	lastResult = rslt;
-	lastTemperature = 0.0;
-
-	if (rslt != TemperatureError::success)
-	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to initialise RTD: %s\n", TemperatureErrorString(rslt));
-	}
 }
 
 // Try to initialise the RTD

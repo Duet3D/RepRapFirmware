@@ -47,6 +47,10 @@ public:
 
 	static void AppendPinNames(const StringRef& str, size_t numPorts, IoPort * const ports[]);
 
+#if SUPPORT_CAN_EXPANSION
+	static CanAddress RemoveBoardAddress(const StringRef& portName);
+#endif
+
 	// Low level port access
 	static void SetPinMode(Pin p, PinMode mode);
 	static bool ReadPin(Pin p);

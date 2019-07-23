@@ -15,10 +15,6 @@ CpuTemperatureSensor::CpuTemperatureSensor(unsigned int sensorNum) : Temperature
 {
 }
 
-void CpuTemperatureSensor::Init()
-{
-}
-
 TemperatureError CpuTemperatureSensor::TryGetTemperature(float& t)
 {
 	float minT, maxT;

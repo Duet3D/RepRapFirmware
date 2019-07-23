@@ -77,18 +77,17 @@ GCodeResult ThermocoupleSensor31855::Configure(GCodeBuffer& gb, const StringRef&
 
 	TryConfigureSensorName(gb, seen);
 
-	if (!seen)
+	if (seen)
+	{
+		// Initialise the sensor
+		InitSpi();
+		lastReadingTime = millis();
+	}
+	else
 	{
 		CopyBasicDetails(reply);
 	}
 	return GCodeResult::ok;
-}
-
-// Perform the actual hardware initialization for attaching and using this device on the SPI hardware bus.
-void ThermocoupleSensor31855::Init()
-{
-	InitSpi();
-	lastReadingTime = millis();
 }
 
 TemperatureError ThermocoupleSensor31855::TryGetTemperature(float& t)

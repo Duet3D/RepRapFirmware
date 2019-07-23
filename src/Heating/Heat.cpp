@@ -597,21 +597,48 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('S'))
 	{
 		const unsigned sensorNum = gb.GetUIValue();
+
+#if SUPPORT_CAN_EXPANSION
+		// Set boardAddress to the board number that the port is on, or -1 if the port was not given
+		CanAddress boardAddress;
+		String<StringLength20> portName;
+		if (gb.Seen('P'))
+		{
+			if (!gb.GetReducedString(portName.GetRef()))
+			{
+				reply.copy("Missing port name");
+				return GCodeResult::error;
+			}
+			boardAddress = IoPort::RemoveBoardAddress(portName.GetRef());
+		}
+		else
+		{
+			boardAddress = CanId::NoCanAddress;
+		}
+#endif
 		TemperatureSensor *sensor;
 		bool newSensor = gb.Seen('Y');
 		if (newSensor)
 		{
 			RemoveSensor(sensorNum);
 			String<StringLength20> typeName;
-			if (!gb.GetQuotedString(typeName.GetRef()))
+			if (!gb.GetReducedString(typeName.GetRef()))
 			{
 				reply.copy("Missing sensor type name");
 				return GCodeResult::error;
 			}
-			sensor = TemperatureSensor::Create(sensorNum, typeName.c_str());
+#if SUPPORT_CAN_EXPANSION
+			if (boardAddress == CanId::NoCanAddress)
+			{
+				reply.copy("Missing port name");
+				return GCodeResult::error;
+			}
+			sensor = TemperatureSensor::Create(sensorNum, boardAddress, typeName.c_str(), reply);
+#else
+			sensor = TemperatureSensor::Create(sensorNum, typeName.c_str(), reply);
+#endif
 			if (sensor == nullptr)
 			{
-				reply.copy("Bad sensor type name");
 				return GCodeResult::error;
 			}
 		}
@@ -620,16 +647,24 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 			sensor = GetSensor(sensorNum);
 			if (sensor == nullptr)
 			{
-				reply.printf("Sensor number %u not found", sensorNum);
+				reply.printf("Sensor %u does not exist", sensorNum);
 				return GCodeResult::error;
 			}
+#if SUPPORT_CAN_EXPANSION
+			const int existingBoardAddress = sensor->GetBoardAddress();
+			if (boardAddress == CanId::NoCanAddress)
+			{
+				boardAddress = existingBoardAddress;
+			}
+			else if (boardAddress != existingBoardAddress)
+			{
+				reply.copy("Sensor type parameter needed when moving a sensor to a different board");
+				return GCodeResult::error;
+			}
+#endif
 		}
 
 		const GCodeResult rslt = sensor->Configure(gb, reply);
-		if (rslt == GCodeResult::ok)
-		{
-			sensor->Init();
-		}
 		if (newSensor)
 		{
 			if (rslt == GCodeResult::ok)

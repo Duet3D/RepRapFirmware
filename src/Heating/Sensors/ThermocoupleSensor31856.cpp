@@ -82,7 +82,7 @@ GCodeResult ThermocoupleSensor31856::Configure(GCodeBuffer& gb, const StringRef&
 	}
 
 	String<2> buf;
-	if (gb.TryGetQuotedString('T', buf.GetRef(), seen))
+	if (gb.TryGetQuotedString('K', buf.GetRef(), seen))
 	{
 		const char *p;
 		if (buf.strlen() == 1 && (p = strchr(TypeLetters, toupper(buf.c_str()[0]))) != nullptr)
@@ -96,38 +96,38 @@ GCodeResult ThermocoupleSensor31856::Configure(GCodeBuffer& gb, const StringRef&
 		}
 	}
 
-	if (!seen)
+	if (seen)
+	{
+		// Initialise the sensor
+		InitSpi();
+
+		TemperatureError rslt;
+		for (unsigned int i = 0; i < 3; ++i)		// try 3 times
+		{
+			rslt = TryInitThermocouple();
+			if (rslt == TemperatureError::success)
+			{
+				break;
+			}
+			delay(MinimumReadInterval);
+		}
+
+		lastReadingTime = millis();
+		lastResult = rslt;
+		lastTemperature = 0.0;
+
+		if (rslt != TemperatureError::success)
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to initialise thermocouple: %s\n", TemperatureErrorString(rslt));
+		}
+
+	}
+	else
 	{
 		CopyBasicDetails(reply);
 		reply.catf(", thermocouple type %c, reject %dHz", TypeLetters[thermocoupleType], (cr0 & 0x01) ? 50 : 60);
 	}
 	return GCodeResult::ok;
-}
-
-// Perform the actual hardware initialization for attaching and using this device on the SPI hardware bus.
-void ThermocoupleSensor31856::Init()
-{
-	InitSpi();
-
-	TemperatureError rslt;
-	for (unsigned int i = 0; i < 3; ++i)		// try 3 times
-	{
-		rslt = TryInitThermocouple();
-		if (rslt == TemperatureError::success)
-		{
-			break;
-		}
-		delay(MinimumReadInterval);
-	}
-
-	lastReadingTime = millis();
-	lastResult = rslt;
-	lastTemperature = 0.0;
-
-	if (rslt != TemperatureError::success)
-	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to initialise thermocouple: %s\n", TemperatureErrorString(rslt));
-	}
 }
 
 TemperatureError ThermocoupleSensor31856::TryInitThermocouple() const

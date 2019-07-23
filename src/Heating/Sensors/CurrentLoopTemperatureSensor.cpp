@@ -25,29 +25,6 @@ CurrentLoopTemperatureSensor::CurrentLoopTemperatureSensor(unsigned int sensorNu
 	CalcDerivedParameters();
 }
 
-// Initialise the linear ADC
-void CurrentLoopTemperatureSensor::Init()
-{
-	InitSpi();
-
-	for (unsigned int i = 0; i < 3; ++i)		// try 3 times
-	{
-		TryGetLinearAdcTemperature();
-		if (lastResult == TemperatureError::success)
-		{
-			break;
-		}
-		delay(MinimumReadInterval);
-	}
-
-	lastReadingTime = millis();
-
-	if (lastResult != TemperatureError::success)
-	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to initialise daughter board ADC: %s\n", TemperatureErrorString(lastResult));
-	}
-}
-
 // Configure this temperature sensor
 GCodeResult CurrentLoopTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
@@ -66,6 +43,26 @@ GCodeResult CurrentLoopTemperatureSensor::Configure(GCodeBuffer& gb, const Strin
 	if (seen)
 	{
 		CalcDerivedParameters();
+
+		// Initialise the sensor
+		InitSpi();
+
+		for (unsigned int i = 0; i < 3; ++i)		// try 3 times
+		{
+			TryGetLinearAdcTemperature();
+			if (lastResult == TemperatureError::success)
+			{
+				break;
+			}
+			delay(MinimumReadInterval);
+		}
+
+		lastReadingTime = millis();
+
+		if (lastResult != TemperatureError::success)
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to initialise daughter board ADC: %s\n", TemperatureErrorString(lastResult));
+		}
 	}
 	else
 	{

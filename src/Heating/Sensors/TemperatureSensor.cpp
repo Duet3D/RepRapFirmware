@@ -5,6 +5,7 @@
 #include "RtdSensor31865.h"
 #include "CurrentLoopTemperatureSensor.h"
 #include "LinearAnalogSensor.h"
+#include "RemoteSensor.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 #if HAS_CPU_TEMP_SENSOR
@@ -93,9 +94,20 @@ void TemperatureSensor::TryConfigureSensorName(GCodeBuffer& gb, bool& seen)
 }
 
 // Factory method
-TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char *typeName)
+#if SUPPORT_CAN_EXPANSION
+TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, CanAddress boardAddress, const char *typeName, const StringRef& reply)
+#else
+TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char *typeName, const StringRef& reply)
+#endif
 {
-	TemperatureSensor *ts = nullptr;
+	TemperatureSensor *ts;
+#if SUPPORT_CAN_EXPANSION
+	if (boardAddress != 0)
+	{
+		ts = new RemoteSensor(sensorNum, boardAddress);
+	}
+	else
+#endif
 	if (ReducedStringEquals(typeName, Thermistor::TypeNameThermistor))
 	{
 		ts = new Thermistor(sensorNum, false);
@@ -152,7 +164,11 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char 
 	}
 # endif
 #endif
-
+	else
+	{
+		ts = nullptr;
+		reply.printf("Unknown sensor type name \"%s\"", typeName);
+	}
 	return ts;
 }
 

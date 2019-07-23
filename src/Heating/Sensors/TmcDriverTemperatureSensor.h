@@ -16,7 +16,6 @@ class TmcDriverTemperatureSensor : public TemperatureSensor
 {
 public:
 	TmcDriverTemperatureSensor(unsigned int sensorNum, unsigned int chan);
-	void Init() override;
 
 	static constexpr const char *PrimaryTypeName = "drivers";
 #ifdef DUET_NG

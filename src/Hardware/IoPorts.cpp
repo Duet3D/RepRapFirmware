@@ -447,7 +447,29 @@ uint16_t IoPort::ReadAnalog() const
 	return (analogChannel != NO_ADC) ? AnalogInReadChannel((AnalogChannelNumber)analogChannel) : 0;
 }
 
-// Low level pin access methods
+#if SUPPORT_CAN_EXPANSION
+
+// Remove the board address form a port name string and return it
+/*static*/ CanAddress IoPort::RemoveBoardAddress(const StringRef& portName)
+{
+	unsigned int boardAddress = 0;
+	size_t numToSkip = 0;
+	while (isdigit(portName[numToSkip]))
+	{
+		boardAddress = (boardAddress * 10) + (portName[numToSkip] - '0');
+		++numToSkip;
+	}
+	if (numToSkip != 0 && (portName[numToSkip] == ':' || portName[numToSkip] == '.') && boardAddress <= CanId::MaxCanAddress)
+	{
+		portName.Erase(0, numToSkip + 1);			// remove the board address prefix
+		return (CanAddress)boardAddress;
+	}
+	return 0;
+}
+
+#endif
+
+	// Low level pin access methods
 
 /*static*/ void IoPort::SetPinMode(Pin pin, PinMode mode)
 {

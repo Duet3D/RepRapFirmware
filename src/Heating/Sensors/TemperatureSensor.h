@@ -16,13 +16,11 @@ public:
 	// Try to get a temperature reading
 	TemperatureError GetTemperature(float& t);
 
-	// Configure the sensor from M305 parameters.
-	// If we find any parameters, process them and return true. If an error occurs while processing them, set 'error' to true and write an error message to 'reply.
+	// Configure the sensor from M308 parameters.
+	// If we find any parameters, process them, if successful then initialise the sensor and return GCodeResult::ok.
+	// If an error occurs while processing the parameters, return GCodeResult::error and write an error message to 'reply.
 	// if we find no relevant parameters, report the current parameters to 'reply' and return 'false'.
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply);
-
-	// Initialise or re-initialise the temperature sensor
-	virtual void Init() = 0;
 
 	// Return the sensor type
 	const char *GetSensorType() const { return sensorType; }
@@ -32,7 +30,7 @@ public:
 
 	TemperatureError GetLastError() const { return lastError; }
 
-	// Configure then heater name, if it is provided
+	// Configure the sensor name, if it is provided
 	void TryConfigureSensorName(GCodeBuffer& gb, bool& seen);
 
 	// Virtual destructor
@@ -54,8 +52,17 @@ public:
 	// Get the smart drivers channel that this sensor monitors, or -1 if it doesn't
 	virtual int GetSmartDriversChannel() const { return -1; }
 
+#if SUPPORT_CAN_EXPANSION
+	// Get the expansion board address. Overridden for remote sensors.
+	virtual CanAddress GetBoardAddress() const { return 0; }
+#endif
+
 	// Factory method
-	static TemperatureSensor *Create(unsigned int sensorNum, const char *typeName);
+#if SUPPORT_CAN_EXPANSION
+	static TemperatureSensor *Create(unsigned int sensorNum, CanAddress boardAddress, const char *typeName, const StringRef& reply);
+#else
+	static TemperatureSensor *Create(unsigned int sensorNum, const char *typeName, const StringRef& reply);
+#endif
 
 protected:
 	// Try to get a temperature reading

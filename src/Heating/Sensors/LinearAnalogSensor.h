@@ -16,7 +16,6 @@ public:
 	LinearAnalogSensor(unsigned int sensorNum);
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
-	void Init() override;
 
 	static constexpr const char *TypeName = "linearanalog";
 

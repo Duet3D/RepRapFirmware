@@ -25,8 +25,8 @@ GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& repl
 		return GCodeResult::error;
 	}
 
-	gb.TryGetFValue('L', lowTemp, seen);
-	gb.TryGetFValue('H', highTemp, seen);
+	gb.TryGetFValue('B', lowTemp, seen);
+	gb.TryGetFValue('C', highTemp, seen);
 	TryConfigureSensorName(gb, seen);
 	if (gb.Seen('F'))
 	{
@@ -37,6 +37,10 @@ GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& repl
 	if (seen)
 	{
 		CalcDerivedParameters();
+		if (adcFilterChannel >= 0)
+		{
+			reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init(0);
+		}
 	}
 	else
 	{
@@ -44,14 +48,6 @@ GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& repl
 		reply.catf(", %sfiltered, range %.1f to %.1f", (filtered) ? "" : "un", (double)lowTemp, (double)highTemp);
 	}
 	return GCodeResult::ok;
-}
-
-void LinearAnalogSensor::Init()
-{
-	if (adcFilterChannel >= 0)
-	{
-		reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init(0);
-	}
 }
 
 TemperatureError LinearAnalogSensor::TryGetTemperature(float& t)
