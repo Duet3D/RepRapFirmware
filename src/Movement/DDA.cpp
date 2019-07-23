@@ -1239,7 +1239,6 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 #endif
 
 		// Handle all drivers
-		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 		Platform& platform = reprap.GetPlatform();
 		AxesBitmap additionalAxisMotorsToEnable = 0, axisMotorsEnabled = 0;
 		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
@@ -1330,7 +1329,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 				}
 #endif
 			}
-			else if (drive < numTotalAxes)
+			else if (drive < MaxAxes)
 			{
 				// It's a linear drive
 				int32_t delta = endPoint[drive] - prev->endPoint[drive];
@@ -1417,7 +1416,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 							speedChange = 0.0;
 						}
 
-						if (pdm->PrepareExtruder(*this, params, extrusionPending[drive - numTotalAxes], speedChange, flags.usePressureAdvance))
+						if (pdm->PrepareExtruder(*this, params, extrusionPending[drive - MaxAxes], speedChange, flags.usePressureAdvance))
 						{
 							// Check for sensible values, print them if they look dubious
 							if (   reprap.Debug(moduleDda)
@@ -1449,7 +1448,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 					}
 
 #if SUPPORT_CAN_EXPANSION
-					const uint8_t driver = platform.GetExtruderDriver(drive - numTotalAxes);
+					const uint8_t driver = platform.GetExtruderDriver(drive - MaxAxes);
 					if (driver >= NumDirectDrivers)
 					{
 						CanInterface::AddMovement(*this, params, driver - NumDirectDrivers, pdm->GetSteps());

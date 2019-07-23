@@ -478,9 +478,8 @@ void DDARing::SetLiveCoordinates(const float coords[MaxAxesPlusExtruders])
 
 void DDARing::ResetExtruderPositions()
 {
-	const size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
 	cpu_irq_disable();
-	for (size_t eDrive = totalAxes; eDrive < MaxAxesPlusExtruders; eDrive++)
+	for (size_t eDrive = MaxAxes; eDrive < MaxAxesPlusExtruders; eDrive++)
 	{
 		liveCoordinates[eDrive] = 0.0;
 	}
