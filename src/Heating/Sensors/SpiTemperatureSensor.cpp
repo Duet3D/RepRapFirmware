@@ -8,10 +8,10 @@
 #include "SpiTemperatureSensor.h"
 #include "Tasks.h"
 
-SpiTemperatureSensor::SpiTemperatureSensor(unsigned int channel, const char *name, unsigned int relativeChannel, uint8_t spiMode, uint32_t clockFrequency)
-	: TemperatureSensor(channel, name)
+SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *name, uint8_t spiMode, uint32_t clockFrequency)
+	: SensorWithPort(sensorNum, name)
 {
-	device.csPin = SpiTempSensorCsPins[relativeChannel];
+	device.csPin = NoPin;
 	device.csPolarity = false;						// active low chip select
 	device.spiMode = spiMode;
 	device.clockFrequency = clockFrequency;
@@ -20,6 +20,13 @@ SpiTemperatureSensor::SpiTemperatureSensor(unsigned int channel, const char *nam
 #endif
 	lastTemperature = 0.0;
 	lastResult = TemperatureError::notInitialised;
+}
+
+bool SpiTemperatureSensor::ConfigurePort(GCodeBuffer& gb, const StringRef& reply, bool& seen)
+{
+	const bool ret = SensorWithPort::ConfigurePort(gb, reply, PinAccess::write1, seen);
+	device.csPin = port.GetPin();
+	return ret;
 }
 
 void SpiTemperatureSensor::InitSpi()

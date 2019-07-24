@@ -22,6 +22,7 @@ const uint8_t memPattern = 0xA5;
 extern "C" char *sbrk(int i);
 extern char _end;
 
+// MAIN task data
 // The main task currently runs GCodes, so it needs to be large enough to hold the matrices used for auto calibration.
 // The timer and idle tasks currently never do I/O, so they can be much smaller.
 #if defined(LPC_NETWORKING)
@@ -30,15 +31,12 @@ constexpr unsigned int MainTaskStackWords = 1600-424;
 constexpr unsigned int MainTaskStackWords = 1600;
 #endif
 
-constexpr unsigned int IdleTaskStackWords = 60;
-
-static Task<IdleTaskStackWords> idleTask;
 static Task<MainTaskStackWords> mainTask;
+extern "C" [[noreturn]] void MainTask(void * pvParameters);
 
-static Mutex spiMutex;
-static Mutex i2cMutex;
-static Mutex sysDirMutex;
-static Mutex mallocMutex;
+// Idle task data
+constexpr unsigned int IdleTaskStackWords = 60;
+static Task<IdleTaskStackWords> idleTask;
 
 extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize)
 {
@@ -49,6 +47,7 @@ extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffe
 
 #if configUSE_TIMERS
 
+// Timer task data
 constexpr unsigned int TimerTaskStackWords = 60;
 static Task<TimerTaskStackWords> timerTask;
 
@@ -61,7 +60,11 @@ extern "C" void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuf
 
 #endif
 
-extern "C" void MainTask(void * pvParameters);
+// Mutexes
+static Mutex spiMutex;
+static Mutex i2cMutex;
+static Mutex sysDirMutex;
+static Mutex mallocMutex;
 
 // We need to make malloc/free thread safe, else sprintf and related I/O functions are liable to crash.
 // We must use a recursive mutex for it.
@@ -111,7 +114,7 @@ extern "C" void AppMain()
 // Definition of RSTC_MR_KEY_PASSWD is missing in the SAM3X ASF files
 #  define RSTC_MR_KEY_PASSWD (0xA5u << 24)
 # endif
-	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD | RSTC_MR_URSTEN;	// ignore any signal on the NRST pin for now so that the reset reason will show as Software
+	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD | RSTC_MR_URSTEN;
 #endif
 
 #if USE_CACHE

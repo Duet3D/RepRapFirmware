@@ -126,10 +126,12 @@ constexpr int8_t DefaultE0Heater = 1;					// Index of the default first extruder
 
 #endif
 
-constexpr unsigned int FirstVirtualHeater = 100;		// the heater number at which virtual heaters start
-constexpr unsigned int MaxVirtualHeaters = 10;			// the number of virtual heaters supported
-
 constexpr unsigned int FirstExtraHeaterProtection = 100;	// Index of the first extra heater protection item
+
+// Default thermistor parameters
+constexpr float DefaultR25 = 100000.0;
+constexpr float DefaultBeta = 4388.0;
+constexpr float DefaultShc = 0.0;
 
 // These parameters are about right for a typical PCB bed heater that maxes out at 110C
 constexpr float DefaultBedHeaterGain = 90.0;
@@ -145,20 +147,6 @@ constexpr float DefaultMaxTempExcursion = 15.0;			// How much error we tolerate 
 constexpr float MinimumConnectedTemperature = -5.0;		// Temperatures below this we treat as a disconnected thermistor
 
 static_assert(DefaultMaxTempExcursion > TEMPERATURE_CLOSE_ENOUGH, "DefaultMaxTempExcursion is too low");
-
-// Temperature sense channels
-constexpr unsigned int FirstThermistorChannel = 0;				// Temperature sensor channels 0... are thermistors
-constexpr unsigned int FirstLinearAnalogChannel = 50;			// Sensor channels 50.. are linear sensors connected to ADC ports
-constexpr unsigned int FirstMax31855ThermocoupleChannel = 100;	// Temperature sensor channels 100... are MAX31855 thermocouples
-constexpr unsigned int FirstMax31856ThermocoupleChannel = 150;	// Temperature sensor channels 150... are MAX31856 thermocouples
-constexpr unsigned int FirstRtdChannel = 200;					// Temperature sensor channels 200... are RTDs
-constexpr unsigned int FirstLinearAdcChannel = 300;				// Temperature sensor channels 300... use an ADC that provides a linear output over a temperature range
-constexpr unsigned int FirstDhtTemperatureChannel = 400;		// Temperature sensor channel 400 for DHTxx temperature
-constexpr unsigned int FirstDhtHumidityChannel = 450;			// Temperature sensor channel 401 for DHTxx humidity
-constexpr unsigned int FirstPT1000Channel = 500;				// Temperature sensor channels 500... are PT1000 sensors connected to thermistor inputs
-constexpr unsigned int CpuTemperatureSenseChannel = 1000;		// Sensor 1000 is the MCU's own temperature sensor
-constexpr unsigned int FirstTmcDriversSenseChannel = 1001;		// Sensors 1001..1002 are the TMC2660 driver temperature sense
-constexpr unsigned int NumTmcDriversSenseChannels = 2;			// Sensors 1001..1002 are the TMC2660 driver temperature sense
 
 // PWM frequencies
 constexpr PwmFrequency MaxHeaterPwmFrequency = 1000;	// maximum supported heater PWM frequency, to avoid overheating the mosfets

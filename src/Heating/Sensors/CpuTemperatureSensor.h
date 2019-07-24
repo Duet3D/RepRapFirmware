@@ -15,8 +15,9 @@
 class CpuTemperatureSensor : public TemperatureSensor
 {
 public:
-	CpuTemperatureSensor(unsigned int channel);
-	void Init() override;
+	CpuTemperatureSensor(unsigned int sensorNum);
+
+	static constexpr const char *TypeName = "mcutemp";
 
 protected:
 	TemperatureError TryGetTemperature(float& t) override;

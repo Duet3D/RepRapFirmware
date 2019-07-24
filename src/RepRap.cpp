@@ -5,6 +5,7 @@
 #include "FilamentMonitors/FilamentMonitor.h"
 #include "GCodes/GCodes.h"
 #include "Heating/Heat.h"
+#include "Heating/Sensors/TemperatureSensor.h"
 #include "Network.h"
 #include "Platform.h"
 #include "Scanner.h"
@@ -156,7 +157,7 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 	network = new Network(*platform);
 	gCodes = new GCodes(*platform);
 	move = new Move();
-	heat = new Heat(*platform);
+	heat = new Heat();
 
 #if SUPPORT_ROLAND
 	roland = new Roland(*platform);
@@ -340,9 +341,6 @@ void RepRap::Spin()
 	platform->Spin();
 
 	ticksInSpinState = 0;
-	spinningModule = moduleWebserver;
-
-	ticksInSpinState = 0;
 	spinningModule = moduleGcodes;
 	gCodes->Spin();
 
@@ -446,6 +444,9 @@ void RepRap::Timing(MessageType mtype)
 void RepRap::Diagnostics(MessageType mtype)
 {
 	platform->Message(mtype, "=== Diagnostics ===\n");
+
+//	platform->MessageF(mtype, "platform %" PRIx32 ", network %" PRIx32 ", move %" PRIx32 ", heat %" PRIx32 ", gcodes %" PRIx32 ", scanner %"  PRIx32 ", pm %" PRIx32 ", portc %" PRIx32 "\n",
+//						(uint32_t)platform, (uint32_t)network, (uint32_t)move, (uint32_t)heat, (uint32_t)gCodes, (uint32_t)scanner, (uint32_t)printMonitor, (uint32_t)portControl);
 
 	// Print the firmware version and board type
 
@@ -757,10 +758,7 @@ void RepRap::Tick()
 			if (heatTaskStuck || ticksInSpinState >= MaxTicksInSpinState)		// if we stall for 20 seconds, save diagnostic data and reset
 			{
 				resetting = true;
-				for (size_t i = 0; i < NumTotalHeaters; i++)
-				{
-					platform->SetHeater(i, 0.0);
-				}
+				heat->SwitchOffAll(true);
 				platform->DisableAllDrives();
 
 				// We now save the stack when we get stuck in a spin loop
@@ -1012,7 +1010,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		if (bedHeater != -1)
 		{
 			response->catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"standby\":%.1f,\"state\":%d,\"heater\":%d},",
-				(double)heat->GetTemperature(bedHeater), (double)heat->GetActiveTemperature(bedHeater), (double)heat->GetStandbyTemperature(bedHeater),
+				(double)heat->GetHeaterTemperature(bedHeater), (double)heat->GetActiveTemperature(bedHeater), (double)heat->GetStandbyTemperature(bedHeater),
 					heat->GetStatus(bedHeater), bedHeater);
 		}
 
@@ -1021,7 +1019,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		if (chamberHeater != -1)
 		{
 			response->catf("\"chamber\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
-				(double)heat->GetTemperature(chamberHeater), (double)heat->GetActiveTemperature(chamberHeater),
+				(double)heat->GetHeaterTemperature(chamberHeater), (double)heat->GetActiveTemperature(chamberHeater),
 					heat->GetStatus(chamberHeater), chamberHeater);
 		}
 
@@ -1030,7 +1028,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		if (cabinetHeater != -1)
 		{
 			response->catf("\"cabinet\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
-				(double)heat->GetTemperature(cabinetHeater), (double)heat->GetActiveTemperature(cabinetHeater),
+				(double)heat->GetHeaterTemperature(cabinetHeater), (double)heat->GetActiveTemperature(cabinetHeater),
 					heat->GetStatus(cabinetHeater), cabinetHeater);
 		}
 
@@ -1039,9 +1037,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Current temperatures
 		response->cat("\"current\":");
 		ch = '[';
-		for (size_t heater = 0; heater < NumTotalHeaters; heater++)
+		for (size_t heater = 0; heater < MaxHeaters; heater++)
 		{
-			response->catf("%c%.1f", ch, (double)heat->GetTemperature(heater));
+			response->catf("%c%.1f", ch, (double)heat->GetHeaterTemperature(heater));
 			ch = ',';
 		}
 		response->cat((ch == '[') ? "[]" : "]");
@@ -1049,19 +1047,19 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Current states
 		response->cat(",\"state\":");
 		ch = '[';
-		for (size_t heater = 0; heater < NumTotalHeaters; heater++)
+		for (size_t heater = 0; heater < MaxHeaters; heater++)
 		{
 			response->catf("%c%d", ch, heat->GetStatus(heater));
 			ch = ',';
 		}
 		response->cat((ch == '[') ? "[]" : "]");
 
-		// Names
+		// Names of the sensors use to control heaters
 		if (type == 2)
 		{
 			response->cat(",\"names\":");
 			ch = '[';
-			for (size_t heater = 0; heater < NumTotalHeaters; heater++)
+			for (size_t heater = 0; heater < MaxHeaters; heater++)
 			{
 				response->cat(ch);
 				ch = ',';
@@ -1070,7 +1068,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			response->cat((ch == '[') ? "[]" : "]");
 		}
 
-		/* Tool temperatures */
+		// Tool temperatures
 		response->cat(",\"tools\":{\"active\":[");
 		{
 			MutexLocker lock(toolListMutex);
@@ -1109,11 +1107,14 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 
 		// Named extra temperature sensors
+		// TODO don't send the ones that we send in "names"
 		response->cat("]},\"extra\":[");
 		bool first = true;
-		for (size_t heater = FirstVirtualHeater; heater < FirstVirtualHeater + MaxVirtualHeaters; ++heater)
+		unsigned int nextSensorNumber = 0;
+		TemperatureSensor *sensor;
+		while ((sensor = heat->GetSensorAtOrAbove(nextSensorNumber)) != nullptr)
 		{
-			const char * const nm = heat->GetHeaterName(heater);
+			const char * const nm = sensor->GetSensorName();
 			if (nm != nullptr)
 			{
 				if (!first)
@@ -1123,10 +1124,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				first = false;
 				response->cat("{\"name\":");
 				response->EncodeString(nm, false, true);
-				TemperatureError err;
-				const float t = heat->GetTemperature(heater, err);
-				response->catf(",\"temp\":%.1f}", (double)t);
+				float temp;
+				(void)sensor->GetTemperature(temp);
+				response->catf(",\"temp\":%.1f}", (double)temp);
 			}
+			nextSensorNumber = sensor->GetSensorNumber() + 1;
 		}
 
 		response->cat("]}");
@@ -1596,10 +1598,10 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	// Send the heater actual temperatures. If there is no bed heater, send zero for PanelDue.
 	const int8_t bedHeater = (NumBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
 	ch = ',';
-	response->catf("[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetTemperature(bedHeater)));
+	response->catf("[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetHeaterTemperature(bedHeater)));
 	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
-		response->catf("%c%.1f", ch, (double)(heat->GetTemperature(heater)));
+		response->catf("%c%.1f", ch, (double)(heat->GetHeaterTemperature(heater)));
 		ch = ',';
 	}
 	response->cat((ch == '[') ? "[]" : "]");

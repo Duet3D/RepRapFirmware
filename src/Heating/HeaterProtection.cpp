@@ -16,7 +16,8 @@ HeaterProtection::HeaterProtection(size_t index) : next(nullptr)
 {
 	// By default each heater protection element is mapped to its corresponding heater.
 	// All other heater protection elements are unused and can be optionally assigned.
-	heater = supervisedHeater = (index >= NumTotalHeaters) ? -1 : (int8_t)index;
+	heater = (index >= MaxHeaters) ? -1 : (int8_t)index;
+	sensorNumber = -1;
 }
 
 void HeaterProtection::Init(float tempLimit)
@@ -32,17 +33,17 @@ void HeaterProtection::Init(float tempLimit)
 // Check if any action needs to be taken. Returns true if everything is OK
 bool HeaterProtection::Check()
 {
-	if (supervisedHeater >= 0)
+	if (sensorNumber >= 0)
 	{
 		TemperatureError err;
-		const float temperature = reprap.GetHeat().GetTemperature(supervisedHeater, err);
+		const float temperature = reprap.GetHeat().GetSensorTemperature(sensorNumber, err);
 
 		if (err != TemperatureError::success)
 		{
 			badTemperatureCount++;
 			if (badTemperatureCount > MaxBadTemperatureCount)
 			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "Temperature reading error on heater %d\n", supervisedHeater);
+				reprap.GetPlatform().MessageF(ErrorMessage, "Temperature reading error on sensor %d\n", sensorNumber);
 				return false;
 			}
 		}
@@ -62,7 +63,7 @@ bool HeaterProtection::Check()
 	return true;
 }
 
-void HeaterProtection::SetHeater(int8_t newHeater)
+void HeaterProtection::SetHeater(int newHeater)
 {
 	heater = newHeater;
 	reprap.GetHeat().UpdateHeaterProtection();

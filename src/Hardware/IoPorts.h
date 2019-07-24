@@ -31,16 +31,25 @@ public:
 	void SetInvert(bool pInvert);
 	void ToggleInvert(bool pInvert);
 
-	void WriteDigital(bool high) const;
 	bool Read() const;
-	uint16_t ReadAnalog() const;
 	bool AttachInterrupt(StandardCallbackFunction callback, enum InterruptMode mode, CallbackParameter param) const;
 	void DetachInterrupt() const;
+
+	uint16_t ReadAnalog() const;
+	AnalogChannelNumber GetAnalogChannel() const { return analogChannel; }
+
+	void WriteDigital(bool high) const;
+
+	Pin GetPin() const;
 
 	// Initialise static data
 	static void Init();
 
 	static void AppendPinNames(const StringRef& str, size_t numPorts, IoPort * const ports[]);
+
+#if SUPPORT_CAN_EXPANSION
+	static CanAddress RemoveBoardAddress(const StringRef& portName);
+#endif
 
 	// Low level port access
 	static void SetPinMode(Pin p, PinMode mode);
@@ -54,7 +63,7 @@ protected:
 	static const char* TranslatePinAccess(PinAccess access);
 
 	LogicalPin logicalPin;									// the logical pin number
-	int8_t analogChannel;									// the analog channel number if it is an analog input
+	AnalogChannelNumber analogChannel;						// the analog channel number if it is an analog input
 	uint8_t hardwareInvert : 1,								// true if the hardware includes inversion
 			totalInvert : 1,								// true if the value should be inverted when reading/writing the pin
 			isSharedInput : 1;								// true if we are using this pin as a shared input

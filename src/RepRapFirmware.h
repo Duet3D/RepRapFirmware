@@ -31,9 +31,6 @@ Licence: GPL
 #undef value			// needed because we include <optional>
 
 #include "Core.h"
-#include "General/StringRef.h"
-#include "General/StringFunctions.h"
-#include "General/BitMap.h"
 
 // Definitions needed by Pins.h and/or Configuration.h
 // Logical pins used for general output, servos, CCN and laser control
@@ -67,12 +64,20 @@ enum class PinUsedBy : uint8_t
 	laser,
 	gpio,
 	filamentMonitor,
-	temporaryInput
+	temporaryInput,
+	sensor
 };
 
 #include "Configuration.h"
 #include "Pins.h"
 
+#if SUPPORT_CAN_EXPANSION
+# include "CanId.h"		// for type CanAddress
+#endif
+
+#include "General/StringRef.h"
+#include "General/StringFunctions.h"
+#include "General/BitMap.h"
 #include "General/SafeStrtod.h"
 #include "General/SafeVsnprintf.h"
 

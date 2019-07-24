@@ -60,7 +60,7 @@ Tool * Tool::freelist = nullptr;
 	}
 	for (size_t i = 0; i < hCount; ++i)
 	{
-		if (h[i] < 0 || h[i] >= (int)NumTotalHeaters)
+		if (h[i] < 0 || h[i] >= (int)MaxHeaters)
 		{
 			reply.copy("Tool creation: bad heater number");
 			return nullptr;
@@ -282,7 +282,7 @@ bool Tool::AllHeatersAtHighTemperature(bool forExtrusion) const
 {
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		const float temperature = reprap.GetHeat().GetTemperature(heaters[heater]);
+		const float temperature = reprap.GetHeat().GetHeaterTemperature(heaters[heater]);
 		if (temperature < reprap.GetHeat().GetRetractionMinTemp() || (forExtrusion && temperature < reprap.GetHeat().GetExtrusionMinTemp()))
 		{
 			return false;

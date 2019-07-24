@@ -20,80 +20,79 @@
 // The parameters that can be configured in RRF are R25 (the resistance at 25C), Beta, and optionally C.
 
 // Create an instance with default values
-Thermistor::Thermistor(unsigned int channel, bool p_isPT1000)
-	: TemperatureSensor(channel, (p_isPT1000) ? "PT1000" : "Thermistor"), isPT1000(p_isPT1000)
+Thermistor::Thermistor(unsigned int sensorNum, bool p_isPT1000)
+	: SensorWithPort(sensorNum, (p_isPT1000) ? "PT1000" : "Thermistor"), adcFilterChannel(-1),
+	  r25(DefaultR25), beta(DefaultBeta), shC(DefaultShc), seriesR(THERMISTOR_SERIES_RS), isPT1000(p_isPT1000)
 #if !HAS_VREF_MONITOR
 		, adcLowOffset(0), adcHighOffset(0)
 #endif
 {
-	thermistorInputChannel = (isPT1000) ? channel - FirstPT1000Channel : channel - FirstThermistorChannel;
-	seriesR = THERMISTOR_SERIES_RS;
-
-	// The following only apply to thermistors
-	r25 = (channel == 0) ? BED_R25 : EXT_R25;
-	beta = (channel == 0) ? BED_BETA : EXT_BETA;
-	shC = (channel == 0) ? BED_SHC : EXT_SHC;
 	CalcDerivedParameters();
 }
 
-void Thermistor::Init()
-{
-	reprap.GetPlatform().GetAdcFilter(thermistorInputChannel).Init((1 << AdcBits) - 1);
-}
-
 // Configure the temperature sensor
-GCodeResult Thermistor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
 	bool seen = false;
-	if (mCode == 305)
+	if (!ConfigurePort(gb, reply, PinAccess::readAnalog, seen))
 	{
-		gb.TryGetFValue('R', seriesR, seen);
-		if (!isPT1000)
+		return GCodeResult::error;
+	}
+
+	gb.TryGetFValue('R', seriesR, seen);
+	if (!isPT1000)
+	{
+		gb.TryGetFValue('B', beta, seen);
+		if (seen)
 		{
-			gb.TryGetFValue('B', beta, seen);
-			if (seen)
-			{
-				shC = 0.0;						// if user changes B and doesn't define C, assume C=0
-			}
-			gb.TryGetFValue('C', shC, seen);
-			gb.TryGetFValue('T', r25, seen);
-			if (seen)
-			{
-				CalcDerivedParameters();
-			}
+			shC = 0.0;						// if user changes B and doesn't define C, assume C=0
 		}
+		gb.TryGetFValue('C', shC, seen);
+		gb.TryGetFValue('T', r25, seen);
+		if (seen)
+		{
+			CalcDerivedParameters();
+		}
+	}
 
 #if !HAS_VREF_MONITOR
-		if (gb.Seen('L'))
-		{
-			adcLowOffset = (int8_t)constrain<int>(gb.GetIValue(), -120, 120);
-			seen = true;
-		}
-		if (gb.Seen('H'))
-		{
-			adcHighOffset = (int8_t)constrain<int>(gb.GetIValue(), -120, 120);
-			seen = true;
-		}
+	if (gb.Seen('L'))
+	{
+		adcLowOffset = (int8_t)constrain<int>(gb.GetIValue(), -120, 120);
+		seen = true;
+	}
+	if (gb.Seen('H'))
+	{
+		adcHighOffset = (int8_t)constrain<int>(gb.GetIValue(), -120, 120);
+		seen = true;
+	}
 #endif
 
-		TryConfigureHeaterName(gb, seen);
+	TryConfigureSensorName(gb, seen);
 
-		if (!seen && !gb.Seen('X'))
+	if (seen)
+	{
+		adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
+		if (adcFilterChannel >= 0)
 		{
-			CopyBasicHeaterDetails(heater, reply);
-			if (isPT1000)
-			{
-				// For a PT1000 sensor, only the series resistor is configurable
-				reply.catf(", R:%.1f", (double)seriesR);
-			}
-			else
-			{
-				reply.catf(", T:%.1f B:%.1f C:%.2e R:%.1f", (double)r25, (double)beta, (double)shC, (double)seriesR);
-			}
+			reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init((1 << AdcBits) - 1);
+		}
+	}
+	else
+	{
+		CopyBasicDetails(reply);
+		if (isPT1000)
+		{
+			// For a PT1000 sensor, only the series resistor is configurable
+			reply.catf(", R:%.1f", (double)seriesR);
+		}
+		else
+		{
+			reply.catf(", T:%.1f B:%.1f C:%.2e R:%.1f", (double)r25, (double)beta, (double)shC, (double)seriesR);
+		}
 #if !HAS_VREF_MONITOR
-			reply.catf(" L:%d H:%d", adcLowOffset, adcHighOffset);
+		reply.catf(" L:%d H:%d", adcLowOffset, adcHighOffset);
 #endif
-		}
 	}
 
 	return GCodeResult::ok;
@@ -102,13 +101,24 @@ GCodeResult Thermistor::Configure(unsigned int mCode, unsigned int heater, GCode
 // Get the temperature
 TemperatureError Thermistor::TryGetTemperature(float& t)
 {
-	const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(thermistorInputChannel);
+	uint32_t averagedTempReading, tempFilterValid;
+	if (adcFilterChannel >= 0)
+	{
+		const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(adcFilterChannel);
+		averagedTempReading = tempFilter.GetSum()/(ThermistorAverageReadings >> Thermistor::AdcOversampleBits);
+		tempFilterValid = tempFilter.IsValid();
+	}
+	else
+	{
+		averagedTempReading = (uint32_t)port.ReadAnalog() << Thermistor::AdcOversampleBits;
+		tempFilterValid = true;
+	}
 
 #if HAS_VREF_MONITOR
 	// Use the actual VSSA and VREF values read by the ADC
 	const volatile ThermistorAveragingFilter& vrefFilter = reprap.GetPlatform().GetAdcFilter(VrefFilterIndex);
 	const volatile ThermistorAveragingFilter& vssaFilter = reprap.GetPlatform().GetAdcFilter(VssaFilterIndex);
-	if (tempFilter.IsValid() && vrefFilter.IsValid() && vssaFilter.IsValid())
+	if (tempFilterValid && vrefFilter.IsValid() && vssaFilter.IsValid())
 	{
 		const int32_t averagedVssaReading = vssaFilter.GetSum()/(ThermistorAverageReadings >> Thermistor::AdcOversampleBits);
 		const int32_t averagedVrefReading = vrefFilter.GetSum()/(ThermistorAverageReadings >> Thermistor::AdcOversampleBits);
@@ -129,10 +139,9 @@ TemperatureError Thermistor::TryGetTemperature(float& t)
 			return TemperatureError::badVssa;
 		}
 #else
-	if (tempFilter.IsValid())
+	if (tempFilterValid)
 	{
 #endif
-		const int32_t averagedTempReading = tempFilter.GetSum()/(ThermistorAverageReadings >> Thermistor::AdcOversampleBits);
 
 		// Calculate the resistance
 #if HAS_VREF_MONITOR

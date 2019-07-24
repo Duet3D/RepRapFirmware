@@ -32,7 +32,7 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
+#define SUPPORT_DHT_SENSOR		0 //TEMp!					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		1					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_OBJECT_MODEL	1
@@ -48,10 +48,10 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 constexpr size_t NumDirectDrivers = 7;				// The maximum number of drives supported by the electronics
 constexpr size_t MaxSmartDrivers = 7;				// The maximum number of smart drivers
 
-constexpr size_t NumTotalHeaters = 4;				// The maximum number of heaters in the machine
-constexpr size_t NumDefaultHeaters = 3;				// The number of heaters configured by default
+constexpr size_t MaxHeaters = 4;					// The maximum number of heaters in the machine
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 4;
+constexpr size_t NumTmcDriversSenseChannels = 2;
 
 constexpr size_t MaxZProbes = 2;
 constexpr size_t MaxGpioPorts = 10;
@@ -220,14 +220,24 @@ constexpr PinEntry PinTable[] =
 	{ PortAPin(25),	PinCapability::read,	"e0stop" },
 	{ PortCPin(7),	PinCapability::read,	"e1stop" },
 
+	// Thermistor inputs
+	{ PortAPin(20),	PinCapability::ainr,	"bedtemp" },
+	{ PortBPin(0),	PinCapability::ainr,	"e0temp" },
+	{ PortCPin(30), PinCapability::ainr,	"e1temp" },
+	{ PortBPin(1),	PinCapability::ainr,	"ctemp" },
+
+	// SPI CS signals on the daughter board connector
+	{ PortBPin(14),	PinCapability::rw,		"spi.cs1" },
+	{ PortCPin(19),	PinCapability::rw,		"spi.cs2" },
+
 	// Misc
 	{ Z_PROBE_PIN,	PinCapability::ainr,	"zprobe.in" },
 	{ Z_PROBE_MOD_PIN, PinCapability::write, "zprobe.mod,servo" },
 	{ ATX_POWER_PIN, PinCapability::write,	"pson" },
 	{ PortAPin(21), PinCapability::ainrw,	"exp.pa21" },
 	{ PortAPin(22), PinCapability::ainrw,	"exp.pa22" },
-	{ PortAPin(3),	PinCapability::rw,		"exp.pa3" },
-	{ PortAPin(4),	PinCapability::rw,		"exp.pa4" },
+	{ PortAPin(3),	PinCapability::rw,		"exp.pa3,twd0" },
+	{ PortAPin(4),	PinCapability::rw,		"exp.pa4,twck0" },
 };
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
@@ -238,7 +248,6 @@ bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
 // Default pin allocations
 constexpr const char *DefaultEndstopPinNames[] = { "xstop", "ystop", "zstop" };
 constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
-constexpr const char *DefaultHeaterPinNames[] = { "bedheat", "e0heat", "e1heat" };
 constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2" };
 constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
 

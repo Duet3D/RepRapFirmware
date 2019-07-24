@@ -23,6 +23,7 @@ Licence: GPL
 #include "Platform.h"
 #include "RepRap.h"
 #include "Sensors/TemperatureSensor.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 #if SUPPORT_DHT_SENSOR
 # include "Sensors/DhtSensor.h"
@@ -38,9 +39,8 @@ extern "C" [[noreturn]] void HeaterTask(void * pvParameters)
 	reprap.GetHeat().Task();
 }
 
-Heat::Heat(Platform& p)
-	: platform(p),
-	  coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
+Heat::Heat()
+	: sensorsRoot(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
 	ARRAY_INIT(bedHeaters, DefaultBedHeaters);
 	ARRAY_INIT(chamberHeaters, DefaultChamberHeaters);
@@ -52,7 +52,95 @@ Heat::Heat(Platform& p)
 
 	for (size_t heater : ARRAY_INDICES(pids))
 	{
-		pids[heater] = new PID(platform, heater);
+		pids[heater] = new PID(heater);
+	}
+}
+
+// Get a pointer to the temperature sensor entry, or nullptr if the sensor number is bad
+TemperatureSensor *Heat::GetSensor(int sn) const
+{
+	if (sn >= 0)
+	{
+		TaskCriticalSectionLocker lock;		// make sure the linked list doesn't change while we are searching it
+		for (TemperatureSensor *sensor = sensorsRoot; sensor != nullptr; sensor = sensor->GetNext())
+		{
+			if (sensor->GetSensorNumber() == (unsigned int)sn)
+			{
+				return sensor;
+			}
+		}
+	}
+	return nullptr;
+}
+
+// Get a pointer to the first temperature sensor with the specified or higher number
+TemperatureSensor *Heat::GetSensorAtOrAbove(unsigned int sn) const
+{
+	TaskCriticalSectionLocker lock;		// make sure the linked list doesn't change while we are searching it
+
+	for (TemperatureSensor *sensor = sensorsRoot; sensor != nullptr; sensor = sensor->GetNext())
+	{
+		if (sensor->GetSensorNumber() >= sn)
+		{
+			return sensor;
+		}
+	}
+	return nullptr;
+}
+
+// Remove any existing sensor with the specified number
+void Heat::RemoveSensor(unsigned int sensorNum)
+{
+	TaskCriticalSectionLocker lock;		// make sure nothing searches the linked list while we are changing it
+
+	TemperatureSensor *prev = nullptr;
+	for (TemperatureSensor *ts = sensorsRoot; ts != nullptr; ts = ts->GetNext())
+	{
+		const unsigned int sn = ts->GetSensorNumber();
+		if (sn == sensorNum)
+		{
+			if (prev == nullptr)
+			{
+				sensorsRoot = ts->GetNext();
+			}
+			else
+			{
+				prev->SetNext(ts->GetNext());
+			}
+			delete ts;
+			break;
+		}
+		if (sn > sensorNum)
+		{
+			break;
+		}
+		prev = ts;
+	}
+}
+
+void Heat::InsertSensor(TemperatureSensor *sensor)
+{
+	TaskCriticalSectionLocker lock;		// make sure nothing searches the linked list while we are changing it
+
+	TemperatureSensor *prev = nullptr;
+	TemperatureSensor *ts = sensorsRoot;
+	for (;;)
+	{
+		if (ts == nullptr || ts->GetSensorNumber() > sensor->GetSensorNumber())
+		{
+			sensor->SetNext(ts);
+			if (prev == nullptr)
+			{
+				sensorsRoot = sensor;
+			}
+			else
+			{
+				prev->SetNext(sensor);
+			}
+			break;
+		}
+		prev = ts;
+		ts = ts->GetNext();
 	}
 }
 
@@ -85,7 +173,7 @@ void Heat::Init()
 		const float tempLimit = (IsBedOrChamberHeater(index)) ? DefaultBedTemperatureLimit : DefaultExtruderTemperatureLimit;
 		prot->Init(tempLimit);
 
-		if (index < NumTotalHeaters)
+		if (index < MaxHeaters)
 		{
 			pids[index]->SetHeaterProtection(prot);
 		}
@@ -94,7 +182,6 @@ void Heat::Init()
 	// Then set up the real heaters and the corresponding PIDs
 	for (size_t heater : ARRAY_INDICES(pids))
 	{
-		heaterSensors[heater] = nullptr;			// no temperature sensor assigned yet
 #ifdef PCCB
 		// PCCB has no heaters by default, but we pretend that the LED outputs are heaters. So disable the PID controllers.
 		pids[heater]->Init(-1.0, -1.0, -1.0, true, false);
@@ -104,7 +191,7 @@ void Heat::Init()
 			pids[heater]->Init(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, false, false);
 		}
 #if defined(DUET_06_085)
-		else if (heater == NumTotalHeaters - 1)
+		else if (heater == MaxHeaters - 1)
 		{
 			// On the Duet 085, the heater 6 pin is also the fan 1 pin. By default we support fan 1, so disable heater 6.
 			pids[heater]->Init(-1.0, -1.0, -1.0, true, false);
@@ -117,25 +204,6 @@ void Heat::Init()
 #endif
 		lastStandbyTools[heater] = nullptr;
 	}
-
-	// Set up the virtual heaters
-	// Clear the user-defined virtual heaters
-	for (TemperatureSensor* &v : virtualHeaterSensors)
-	{
-		v = nullptr;
-	}
-
-	// Set up default virtual heaters for MCU temperature and TMC driver overheat sensors
-#if HAS_CPU_TEMP_SENSOR
-	virtualHeaterSensors[0] = TemperatureSensor::Create(CpuTemperatureSenseChannel);
-	virtualHeaterSensors[0]->SetHeaterName("MCU");				// name this virtual heater so that it appears in DWC
-#endif
-#if HAS_SMART_DRIVERS
-	virtualHeaterSensors[1] = TemperatureSensor::Create(FirstTmcDriversSenseChannel);
-#ifndef PCCB
-	virtualHeaterSensors[2] = TemperatureSensor::Create(FirstTmcDriversSenseChannel + 1);
-#endif
-#endif
 
 #if SUPPORT_DHT_SENSOR
 	// Initialise static fields of the DHT sensor
@@ -185,6 +253,7 @@ void Heat::Exit()
 
 void Heat::Diagnostics(MessageType mtype)
 {
+	Platform& platform = reprap.GetPlatform();
 	platform.Message(mtype, "=== Heat ===\nBed heaters =");
 	for (int8_t bedHeater : bedHeaters)
 	{
@@ -206,6 +275,18 @@ void Heat::Diagnostics(MessageType mtype)
 	}
 }
 
+// Configure a heater. 'freq' is 0 if no PWM frequency has been given.
+GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply)
+{
+	if (heater < MaxHeaters)
+	{
+		return pids[heater]->ConfigurePortAndSensor(gb, reply);
+	}
+
+	reply.copy("Heater number out of range");
+	return GCodeResult::error;
+}
+
 bool Heat::AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const
 {
 	for (size_t heater : ARRAY_INDICES(pids))
@@ -219,24 +300,24 @@ bool Heat::AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const
 }
 
 //query an individual heater
-bool Heat::HeaterAtSetTemperature(int8_t heater, bool waitWhenCooling, float tolerance) const
+bool Heat::HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance) const
 {
 	// If it hasn't anything to do, it must be right wherever it is...
-	if (heater < 0 || heater >= (int)NumTotalHeaters || pids[heater]->SwitchedOff() || pids[heater]->FaultOccurred())
+	if (heater < 0 || heater >= (int)MaxHeaters || pids[heater]->SwitchedOff() || pids[heater]->FaultOccurred())
 	{
 		return true;
 	}
 
-	const float dt = GetTemperature(heater);
+	const float dt = GetHeaterTemperature(heater);
 	const float target = (pids[heater]->Active()) ? GetActiveTemperature(heater) : GetStandbyTemperature(heater);
 	return (target < TEMPERATURE_LOW_SO_DONT_CARE)
 		|| (fabsf(dt - target) <= tolerance)
 		|| (target < dt && !waitWhenCooling);
 }
 
-Heat::HeaterStatus Heat::GetStatus(int8_t heater) const
+Heat::HeaterStatus Heat::GetStatus(int heater) const
 {
-	if (heater < 0 || heater >= (int)NumTotalHeaters)
+	if (heater < 0 || heater >= (int)MaxHeaters)
 	{
 		return HS_off;
 	}
@@ -248,7 +329,7 @@ Heat::HeaterStatus Heat::GetStatus(int8_t heater) const
 						: HS_standby;
 }
 
-void Heat::SetBedHeater(size_t index, int8_t heater)
+void Heat::SetBedHeater(size_t index, int heater)
 {
 	const int bedHeater = bedHeaters[index];
 	if (bedHeater >= 0)
@@ -258,7 +339,7 @@ void Heat::SetBedHeater(size_t index, int8_t heater)
 	bedHeaters[index] = heater;
 }
 
-bool Heat::IsBedHeater(int8_t heater) const
+bool Heat::IsBedHeater(int heater) const
 {
 	for (int8_t bedHeater : bedHeaters)
 	{
@@ -270,7 +351,7 @@ bool Heat::IsBedHeater(int8_t heater) const
 	return false;
 }
 
-void Heat::SetChamberHeater(size_t index, int8_t heater)
+void Heat::SetChamberHeater(size_t index, int heater)
 {
 	const int chamberHeater = chamberHeaters[index];
 	if (chamberHeater >= 0)
@@ -280,7 +361,7 @@ void Heat::SetChamberHeater(size_t index, int8_t heater)
 	chamberHeaters[index] = heater;
 }
 
-bool Heat::IsChamberHeater(int8_t heater) const
+bool Heat::IsChamberHeater(int heater) const
 {
 	for (int8_t chamberHeater : chamberHeaters)
 	{
@@ -292,40 +373,40 @@ bool Heat::IsChamberHeater(int8_t heater) const
 	return false;
 }
 
-void Heat::SetActiveTemperature(int8_t heater, float t)
+void Heat::SetActiveTemperature(int heater, float t)
 {
-	if (heater >= 0 && heater < (int)NumTotalHeaters)
+	if (heater >= 0 && heater < (int)MaxHeaters)
 	{
 		pids[heater]->SetActiveTemperature(t);
 	}
 }
 
-float Heat::GetActiveTemperature(int8_t heater) const
+float Heat::GetActiveTemperature(int heater) const
 {
-	return (heater >= 0 && heater < (int)NumTotalHeaters) ? pids[heater]->GetActiveTemperature() : ABS_ZERO;
+	return (heater >= 0 && heater < (int)MaxHeaters) ? pids[heater]->GetActiveTemperature() : ABS_ZERO;
 }
 
-void Heat::SetStandbyTemperature(int8_t heater, float t)
+void Heat::SetStandbyTemperature(int heater, float t)
 {
-	if (heater >= 0 && heater < (int)NumTotalHeaters)
+	if (heater >= 0 && heater < (int)MaxHeaters)
 	{
 		pids[heater]->SetStandbyTemperature(t);
 	}
 }
 
-float Heat::GetStandbyTemperature(int8_t heater) const
+float Heat::GetStandbyTemperature(int heater) const
 {
-	return (heater >= 0 && heater < (int)NumTotalHeaters) ? pids[heater]->GetStandbyTemperature() : ABS_ZERO;
+	return (heater >= 0 && heater < (int)MaxHeaters) ? pids[heater]->GetStandbyTemperature() : ABS_ZERO;
 }
 
-float Heat::GetHighestTemperatureLimit(int8_t heater) const
+float Heat::GetHighestTemperatureLimit(int heater) const
 {
 	float limit = BadErrorTemperature;
-	if (heater >= 0 && heater < (int)NumTotalHeaters)
+	if (heater >= 0 && heater < (int)MaxHeaters)
 	{
 		for (const HeaterProtection *prot : heaterProtections)
 		{
-			if (prot->GetSupervisedHeater() == heater && prot->GetTrigger() == HeaterProtectionTrigger::TemperatureExceeded)
+			if (prot->GetHeater() == heater && prot->GetTrigger() == HeaterProtectionTrigger::TemperatureExceeded)
 			{
 				const float t = prot->GetTemperatureLimit();
 				if (limit == BadErrorTemperature || t > limit)
@@ -338,14 +419,14 @@ float Heat::GetHighestTemperatureLimit(int8_t heater) const
 	return limit;
 }
 
-float Heat::GetLowestTemperatureLimit(int8_t heater) const
+float Heat::GetLowestTemperatureLimit(int heater) const
 {
 	float limit = ABS_ZERO;
-	if (heater >= 0 && heater < (int)NumTotalHeaters)
+	if (heater >= 0 && heater < (int)MaxHeaters)
 	{
 		for (const HeaterProtection *prot : heaterProtections)
 		{
-			if (prot->GetSupervisedHeater() == heater && prot->GetTrigger() == HeaterProtectionTrigger::TemperatureTooLow)
+			if (prot->GetHeater() == heater && prot->GetTrigger() == HeaterProtectionTrigger::TemperatureTooLow)
 			{
 				const float t = prot->GetTemperatureLimit();
 				if (limit == ABS_ZERO || t < limit)
@@ -360,28 +441,13 @@ float Heat::GetLowestTemperatureLimit(int8_t heater) const
 
 // Get the current temperature of a real or virtual heater
 // Return ABS_ZERO if the heater doesn't exist. The Z probe class relies on this.
-float Heat::GetTemperature(int8_t heater) const
+float Heat::GetHeaterTemperature(int heater) const
 {
-	if (heater >= 0)
-	{
-		if ((unsigned int)heater < NumTotalHeaters)
-		{
-			return pids[heater]->GetTemperature();
-		}
-		if ((unsigned int)heater >= FirstVirtualHeater && (unsigned int)heater < FirstVirtualHeater + MaxVirtualHeaters)
-		{
-			float temp;
-			if (virtualHeaterSensors[(unsigned int)heater - FirstVirtualHeater]->GetTemperature(temp) == TemperatureError::success)
-			{
-				return temp;
-			}
-		}
-	}
-	return ABS_ZERO;
+	return (heater >= 0 && heater < (int)MaxHeaters) ? pids[heater]->GetTemperature() : ABS_ZERO;
 }
 
 // Get the target temperature of a heater
-float Heat::GetTargetTemperature(int8_t heater) const
+float Heat::GetTargetTemperature(int heater) const
 {
 	const Heat::HeaterStatus hs = GetStatus(heater);
 	return (hs == HS_active) ? GetActiveTemperature(heater)
@@ -389,17 +455,17 @@ float Heat::GetTargetTemperature(int8_t heater) const
 				: 0.0;
 }
 
-void Heat::Activate(int8_t heater)
+void Heat::Activate(int heater)
 {
-	if (heater >= 0 && heater < (int)NumTotalHeaters)
+	if (heater >= 0 && heater < (int)MaxHeaters)
 	{
 		pids[heater]->Activate();
 	}
 }
 
-void Heat::SwitchOff(int8_t heater)
+void Heat::SwitchOff(int heater)
 {
-	if (heater >= 0 && heater < (int)NumTotalHeaters)
+	if (heater >= 0 && heater < (int)MaxHeaters)
 	{
 		pids[heater]->SwitchOff();
 		lastStandbyTools[heater] = nullptr;
@@ -408,7 +474,7 @@ void Heat::SwitchOff(int8_t heater)
 
 void Heat::SwitchOffAll(bool includingChamberAndBed)
 {
-	for (int heater = 0; heater < (int)NumTotalHeaters; ++heater)
+	for (int heater = 0; heater < (int)MaxHeaters; ++heater)
 	{
 		if (includingChamberAndBed || !IsBedOrChamberHeater(heater))
 		{
@@ -417,18 +483,18 @@ void Heat::SwitchOffAll(bool includingChamberAndBed)
 	}
 }
 
-void Heat::Standby(int8_t heater, const Tool *tool)
+void Heat::Standby(int heater, const Tool *tool)
 {
-	if (heater >= 0 && heater < (int)NumTotalHeaters)
+	if (heater >= 0 && heater < (int)MaxHeaters)
 	{
 		pids[heater]->Standby();
 		lastStandbyTools[heater] = tool;
 	}
 }
 
-void Heat::ResetFault(int8_t heater)
+void Heat::ResetFault(int heater)
 {
-	if (heater >= 0 && heater < (int)NumTotalHeaters)
+	if (heater >= 0 && heater < (int)MaxHeaters)
 	{
 		pids[heater]->ResetFault();
 	}
@@ -444,7 +510,7 @@ uint32_t Heat::GetLastSampleTime(size_t heater) const
 	return pids[heater]->GetLastSampleTime();
 }
 
-bool Heat::IsBedOrChamberHeater(int8_t heater) const
+bool Heat::IsBedOrChamberHeater(int heater) const
 {
 	return IsBedHeater(heater) || IsChamberHeater(heater);
 }
@@ -525,79 +591,110 @@ bool Heat::WriteModelParameters(FileStore *f) const
 
 #endif
 
-// Return the channel used by a particular heater, or -1 if not configured
-int Heat::GetHeaterChannel(size_t heater) const
+// Process M308
+GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 {
-	const TemperatureSensor * const * const spp = GetSensor(heater);
-	return (spp != nullptr && *spp != nullptr) ? (*spp)->GetSensorChannel() : -1;
-}
-
-// Set the channel used by a heater, returning true if bad heater or channel number
-bool Heat::SetHeaterChannel(size_t heater, int channel)
-{
-	TemperatureSensor ** const spp = GetSensor(heater);
-	if (spp == nullptr)
+	if (gb.Seen('S'))
 	{
-		return true;		// bad heater number
+		const unsigned sensorNum = gb.GetUIValue();
+
+#if SUPPORT_CAN_EXPANSION
+		// Set boardAddress to the board number that the port is on, or -1 if the port was not given
+		CanAddress boardAddress;
+		String<StringLength20> portName;
+		if (gb.Seen('P'))
+		{
+			if (!gb.GetReducedString(portName.GetRef()))
+			{
+				reply.copy("Missing port name");
+				return GCodeResult::error;
+			}
+			boardAddress = IoPort::RemoveBoardAddress(portName.GetRef());
+		}
+		else
+		{
+			boardAddress = CanId::NoCanAddress;
+		}
+#endif
+		TemperatureSensor *sensor;
+		bool newSensor = gb.Seen('Y');
+		if (newSensor)
+		{
+			RemoveSensor(sensorNum);
+			String<StringLength20> typeName;
+			if (!gb.GetReducedString(typeName.GetRef()))
+			{
+				reply.copy("Missing sensor type name");
+				return GCodeResult::error;
+			}
+#if SUPPORT_CAN_EXPANSION
+			if (boardAddress == CanId::NoCanAddress)
+			{
+				reply.copy("Missing port name");
+				return GCodeResult::error;
+			}
+			sensor = TemperatureSensor::Create(sensorNum, boardAddress, typeName.c_str(), reply);
+#else
+			sensor = TemperatureSensor::Create(sensorNum, typeName.c_str(), reply);
+#endif
+			if (sensor == nullptr)
+			{
+				return GCodeResult::error;
+			}
+		}
+		else
+		{
+			sensor = GetSensor(sensorNum);
+			if (sensor == nullptr)
+			{
+				reply.printf("Sensor %u does not exist", sensorNum);
+				return GCodeResult::error;
+			}
+#if SUPPORT_CAN_EXPANSION
+			const int existingBoardAddress = sensor->GetBoardAddress();
+			if (boardAddress == CanId::NoCanAddress)
+			{
+				boardAddress = existingBoardAddress;
+			}
+			else if (boardAddress != existingBoardAddress)
+			{
+				reply.copy("Sensor type parameter needed when moving a sensor to a different board");
+				return GCodeResult::error;
+			}
+#endif
+		}
+
+		const GCodeResult rslt = sensor->Configure(gb, reply);
+		if (newSensor)
+		{
+			if (rslt == GCodeResult::ok)
+			{
+				InsertSensor(sensor);
+			}
+			else
+			{
+				delete sensor;
+			}
+		}
+		return rslt;
 	}
 
-	TemperatureSensor *sp = TemperatureSensor::Create(channel);
-	if (sp == nullptr)
-	{
-		return true;		// bad channel number
-	}
-
-	delete *spp;			// release the old sensor object, if any
-	*spp = sp;
-	return false;
-}
-
-// Configure the temperature sensor for a channel
-GCodeResult Heat::ConfigureHeaterSensor(unsigned int mcode, size_t heater, GCodeBuffer& gb, const StringRef& reply)
-{
-	TemperatureSensor ** const spp = GetSensor(heater);
-	if (spp == nullptr || *spp == nullptr)
-	{
-		reply.printf("heater %d is not configured", heater);
-		return GCodeResult::error;
-	}
-
-	return (*spp)->Configure(mcode, heater, gb, reply);
-}
-
-// Get a pointer to the temperature sensor entry, or nullptr if the heater number is bad
-TemperatureSensor **Heat::GetSensor(size_t heater)
-{
-	if (heater < NumTotalHeaters)
-	{
-		return &heaterSensors[heater];
-	}
-	if (heater >= FirstVirtualHeater && heater < FirstVirtualHeater + ARRAY_SIZE(virtualHeaterSensors))
-	{
-		return &virtualHeaterSensors[heater - FirstVirtualHeater];
-	}
-	return nullptr;
-}
-
-// Get a pointer to the temperature sensor entry, or nullptr if the heater number is bad (const version of above)
-TemperatureSensor * const *Heat::GetSensor(size_t heater) const
-{
-	if (heater < NumTotalHeaters)
-	{
-		return &heaterSensors[heater];
-	}
-	if (heater >= FirstVirtualHeater && heater < FirstVirtualHeater + ARRAY_SIZE(virtualHeaterSensors))
-	{
-		return &virtualHeaterSensors[heater - FirstVirtualHeater];
-	}
-	return nullptr;
+	reply.copy("Missing sensor number parameter");
+	return GCodeResult::error;
 }
 
 // Get the name of a heater, or nullptr if it hasn't been named
 const char *Heat::GetHeaterName(size_t heater) const
 {
-	const TemperatureSensor * const * const spp = GetSensor(heater);
-	return (spp == nullptr || *spp == nullptr) ? nullptr : (*spp)->GetHeaterName();
+	if (heater < MaxHeaters)
+	{
+		TemperatureSensor *sensor = pids[heater]->GetSensor();
+		if (sensor != nullptr)
+		{
+			return sensor->GetSensorName();
+		}
+	}
+	return nullptr;
 }
 
 // Return the protection parameters of the given index
@@ -605,7 +702,7 @@ HeaterProtection& Heat::AccessHeaterProtection(size_t index) const
 {
 	if (index >= FirstExtraHeaterProtection && index < FirstExtraHeaterProtection + NumExtraHeaterProtections)
 	{
-		return *heaterProtections[index + NumTotalHeaters - FirstExtraHeaterProtection];
+		return *heaterProtections[index + MaxHeaters - FirstExtraHeaterProtection];
 	}
 	return *heaterProtections[index];
 }
@@ -653,29 +750,25 @@ bool Heat::CheckHeater(size_t heater)
 	return !pids[heater]->FaultOccurred() && pids[heater]->CheckProtection();
 }
 
-// Get the temperature of a real or virtual heater
-float Heat::GetTemperature(size_t heater, TemperatureError& err)
+// Get the temperature of a sensor
+float Heat::GetSensorTemperature(int sensorNum, TemperatureError& err) const
 {
-	TemperatureSensor * const * const spp = GetSensor(heater);
-	if (spp == nullptr)
+	TemperatureSensor * const sensor = GetSensor(sensorNum);
+	if (sensor != nullptr)
 	{
-		err = TemperatureError::unknownHeater;
-		return BadErrorTemperature;
+		float temp;
+		err = sensor->GetTemperature(temp);
+		return temp;
 	}
 
-	if (*spp == nullptr)
-	{
-		err = TemperatureError::unknownChannel;
-		return BadErrorTemperature;
-	}
+	err = TemperatureError::unknownSensor;
+	return BadErrorTemperature;
+}
 
-	float t;
-	err = (*spp)->GetTemperature(t);
-	if (err != TemperatureError::success)
-	{
-		t = BadErrorTemperature;
-	}
-	return t;
+// Get the temperature of a heater
+float Heat::GetHeaterTemperature(size_t heater) const
+{
+	return pids[heater]->GetTemperature();
 }
 
 // Suspend the heaters to conserve power or while doing Z probing

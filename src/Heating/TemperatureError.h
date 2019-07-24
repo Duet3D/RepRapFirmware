@@ -24,9 +24,9 @@ enum class TemperatureError : uint8_t
 	notReady,
 	busBusy,
 	badResponse,
-	unknownChannel,
+	unknownPort,
 	notInitialised,
-	unknownHeater,
+	unknownSensor,
 	overOrUnderVoltage,
 	badVref,
 	badVssa

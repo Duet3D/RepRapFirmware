@@ -30,7 +30,7 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define SUPPORT_SCANNER			1					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_DHT_SENSOR		0 //TEMP!					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_OBJECT_MODEL	1
@@ -48,9 +48,10 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 constexpr size_t NumDirectDrivers = 12;				// The maximum number of drives supported directly by the electronics
 constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 
-constexpr size_t NumTotalHeaters = 10;				// The maximum number of heaters in the machine
+constexpr size_t MaxHeaters = 10;					// The maximum number of heaters in the machine
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 8;
+constexpr size_t NumTmcDriversSenseChannels = 2;
 
 constexpr size_t MaxZProbes = 4;
 constexpr size_t MaxGpioPorts = 10;
@@ -238,9 +239,9 @@ constexpr PinEntry PinTable[] =
 	{ PortDPin(10),	PinCapability::read,	"e0stop" },
 	{ PortCPin(16),	PinCapability::read,	"e1stop" },
 	{ PortEPin(0),	PinCapability::rw,		"exp.e2stop,exp.4" },
-	{ PortEPin(1),	PinCapability::rw,		"exp.e3stop,exp.9,duex.cs6" },
-	{ PortEPin(2),	PinCapability::rw,		"exp.e4stop,exp.14,duex.cs7" },
-	{ PortEPin(3),	PinCapability::rw,		"exp.e5stop,exp.19,duex.cs8" },
+	{ PortEPin(1),	PinCapability::rw,		"exp.e3stop,exp.9,spi.cs6,duex.cs6" },
+	{ PortEPin(2),	PinCapability::rw,		"exp.e4stop,exp.14,spi.cs7,duex.cs7" },
+	{ PortEPin(3),	PinCapability::rw,		"exp.e5stop,exp.19,spi.cs8,duex.cs8" },
 	{ PortAPin(17),	PinCapability::rw,		"exp.e6stop,exp.24" },
 	{ 200,			PinCapability::read,	"duex.e2stop" },
 	{ 203,			PinCapability::read,	"duex.e3stop" },
@@ -248,11 +249,27 @@ constexpr PinEntry PinTable[] =
 	{ 201,			PinCapability::read,	"duex.e5stop" },
 	{ 213,			PinCapability::read,	"duex.e6stop" },
 
+	// Thermistor inputs
+	{ PortCPin(13),	PinCapability::ainr,	"bedtemp" },
+	{ PortCPin(15),	PinCapability::ainr,	"e0temp" },
+	{ PortCPin(12),	PinCapability::ainr,	"e1temp" },
+	{ PortCPin(29),	PinCapability::ainr,	"e2temp,duex.e2temp,exp.thermistor3,exp.35" },
+	{ PortCPin(30),	PinCapability::ainr,	"e3temp,duex.e3temp,exp.thermistor4,exp.36" },
+	{ PortCPin(31),	PinCapability::ainr,	"e4temp,duex.e4temp,exp.thermistor5,exp.37" },
+	{ PortCPin(27),	PinCapability::ainr,	"e5temp,duex.e5temp,exp.thermistor6,exp.38" },
+	{ PortAPin(18),	PinCapability::ainr,	"e6temp,duex.e6temp,exp.thermistor7,exp.39" },
+
+	// SPI CS pins
+	{ PortBPin(2),	PinCapability::rw,		"spi.cs1" },
+	{ PortCPin(18),	PinCapability::rw,		"spi.cs2" },
+	{ PortCPin(19),	PinCapability::rw,		"spi.cs3" },
+	{ PortCPin(20),	PinCapability::rw,		"spi.cs4" },
+	{ PortAPin(24),	PinCapability::rw,		"spi.cs5,duex.cs5,exp.50" },
+
 	// Misc
 	{ Z_PROBE_PIN,	PinCapability::ainr,	"zprobe.in" },
 	{ Z_PROBE_MOD_PIN, PinCapability::write, "zprobe.mod" },
 	{ ATX_POWER_PIN, PinCapability::write,	"pson" },
-	{ PortAPin(24),	PinCapability::rw,		"duex.cs5" },
 	{ PortCPin(7),	PinCapability::rw,		"connlcd.encb,connlcd.3" },
 	{ PortAPin(8),	PinCapability::rw,		"connlcd.enca,connlcd.4" },
 	{ PortAPin(7),	PinCapability::rw,		"connsd.encsw,connsd.7" },
@@ -287,7 +304,6 @@ bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
 // Default pin allocations
 constexpr const char *DefaultEndstopPinNames[] = { "xstop", "ystop", "zstop" };
 constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
-constexpr const char *DefaultHeaterPinNames[] = { "bedheat", "e0heat", "e1heat" };
 constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2" };
 constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
 

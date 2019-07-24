@@ -46,11 +46,11 @@ public:
 
 	bool Check();													// Check if any action needs to be taken
 
-	int8_t GetHeater() const { return heater; }
-	void SetHeater(int8_t newHeater);								// Set the heater to control
+	int GetHeater() const { return heater; }
+	void SetHeater(int newHeater);									// Set the heater to control
 
-	int8_t GetSupervisedHeater() const { return supervisedHeater; }	// Get the heater to supervise
-	void SetSupervisedHeater(int8_t heater);						// Set the heater to supervise
+	int GetSensorNumber() const { return sensorNumber; }			// Get the supervisory sensor number
+	void SetSensorNumber(int sn);									// Set the supervisory sensor number
 
 	float GetTemperatureLimit() const { return limit; }				// Get the temperature limit
 	void SetTemperatureLimit(float newLimit);						// Set the temperature limit
@@ -65,16 +65,17 @@ private:
 	HeaterProtection *next;
 
 	float limit;
-	int8_t heater, supervisedHeater;
+	int heater;
+	int sensorNumber;
 	HeaterProtectionAction action;
 	HeaterProtectionTrigger trigger;
 
 	size_t badTemperatureCount;
 };
 
-inline void HeaterProtection::SetSupervisedHeater(int8_t heater)
+inline void HeaterProtection::SetSensorNumber(int sn)
 {
-	supervisedHeater = heater;
+	sensorNumber = sn;
 }
 
 inline void HeaterProtection::SetTemperatureLimit(float newLimit)

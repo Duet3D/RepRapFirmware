@@ -5,6 +5,7 @@
 #include "RtdSensor31865.h"
 #include "CurrentLoopTemperatureSensor.h"
 #include "LinearAnalogSensor.h"
+#include "RemoteSensor.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 #if HAS_CPU_TEMP_SENSOR
@@ -20,12 +21,13 @@
 #endif
 
 // Constructor
-TemperatureSensor::TemperatureSensor(unsigned int chan, const char *t) : sensorChannel(chan), sensorType(t), heaterName(nullptr), lastError(TemperatureError::success) {}
+TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *t)
+	: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr), lastError(TemperatureError::success) {}
 
 // Virtual destructor
 TemperatureSensor::~TemperatureSensor()
 {
-	delete heaterName;
+	delete sensorName;
 }
 
 // Try to get a temperature reading
@@ -40,118 +42,132 @@ TemperatureError TemperatureSensor::GetTemperature(float& t)
 }
 
 // Set the name - normally called only once, so we allow heap memory to be allocated
-void TemperatureSensor::SetHeaterName(const char *newName)
+void TemperatureSensor::SetSensorName(const char *newName)
 {
 	// Change the heater name in a thread-safe manner
-	const char *oldName = heaterName;
-	heaterName = nullptr;
+	const char *oldName = sensorName;
+	sensorName = nullptr;
 	delete oldName;
 
 	if (newName != nullptr && strlen(newName) != 0)
 	{
 		char * const temp = new char[strlen(newName) + 1];
 		strcpy(temp, newName);
-		heaterName = temp;
+		sensorName = temp;
 	}
 }
 
 // Default implementation of Configure, for sensors that have no configurable parameters
-GCodeResult TemperatureSensor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult TemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
 	bool seen = false;
-	if (mCode == 305)
+	TryConfigureSensorName(gb, seen);
+	if (!seen && !gb.Seen('Y'))
 	{
-		TryConfigureHeaterName(gb, seen);
-		if (!seen && !gb.Seen('X'))
-		{
-			// No parameters provided, so report the current configuration
-			CopyBasicHeaterDetails(heater, reply);
-		}
+		// No parameters were provided, so report the current configuration
+		CopyBasicDetails(reply);
 	}
 	return GCodeResult::ok;
 }
 
-void TemperatureSensor::CopyBasicHeaterDetails(unsigned int heater, const StringRef& reply) const
+void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const
 {
-	reply.printf("Heater %u", heater);
-	if (heaterName != nullptr)
+	reply.printf("Sensor %u", sensorNumber);
+	if (sensorName != nullptr)
 	{
-		reply.catf(" (%s)", heaterName);
+		reply.catf(" (%s)", sensorName);
 	}
-	reply.catf(" uses %s sensor channel %u, last error: %s", sensorType, sensorChannel, TemperatureErrorString(lastError));
+	reply.catf(" type %s, last error: %s", sensorType, TemperatureErrorString(lastError));
 }
 
 // Configure then heater name, if it is provided
-void TemperatureSensor::TryConfigureHeaterName(GCodeBuffer& gb, bool& seen)
+void TemperatureSensor::TryConfigureSensorName(GCodeBuffer& gb, bool& seen)
 {
 	String<MaxHeaterNameLength> buf;
 	bool localSeen = false;
-	gb.TryGetQuotedString('S', buf.GetRef(), localSeen);
+	gb.TryGetQuotedString('A', buf.GetRef(), localSeen);
 	if (localSeen)
 	{
-		SetHeaterName(buf.c_str());
+		SetSensorName(buf.c_str());
 		seen = true;
 	}
 }
 
 // Factory method
-TemperatureSensor *TemperatureSensor::Create(unsigned int channel)
+#if SUPPORT_CAN_EXPANSION
+TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, CanAddress boardAddress, const char *typeName, const StringRef& reply)
+#else
+TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char *typeName, const StringRef& reply)
+#endif
 {
-	TemperatureSensor *ts = nullptr;
-	if (channel < NumThermistorInputs)
+	TemperatureSensor *ts;
+#if SUPPORT_CAN_EXPANSION
+	if (boardAddress != 0)
 	{
-		ts = new Thermistor(channel, false);
+		ts = new RemoteSensor(sensorNum, boardAddress);
 	}
-	else if (FirstLinearAnalogChannel <= channel && channel < FirstLinearAnalogChannel + NumThermistorInputs)
+	else
+#endif
+	if (ReducedStringEquals(typeName, Thermistor::TypeNameThermistor))
 	{
-		ts = new LinearAnalogSensor(channel);
+		ts = new Thermistor(sensorNum, false);
 	}
-	else if (FirstPT1000Channel <= channel && channel < FirstPT1000Channel + NumThermistorInputs)
+	else if (ReducedStringEquals(typeName, Thermistor::TypeNamePT1000))
 	{
-		ts = new Thermistor(channel, true);
+		ts = new Thermistor(sensorNum, true);
 	}
-	else if (FirstMax31855ThermocoupleChannel <= channel && channel < FirstMax31855ThermocoupleChannel + MaxSpiTempSensors)
+	else if (ReducedStringEquals(typeName, LinearAnalogSensor::TypeName))
 	{
-		ts = new ThermocoupleSensor31855(channel);
+		ts = new LinearAnalogSensor(sensorNum);
 	}
-	else if (FirstMax31856ThermocoupleChannel <= channel && channel < FirstMax31856ThermocoupleChannel + MaxSpiTempSensors)
+	else if (ReducedStringEquals(typeName, ThermocoupleSensor31855::TypeName))
 	{
-		ts = new ThermocoupleSensor31856(channel);
+		ts = new ThermocoupleSensor31855(sensorNum);
 	}
-	else if (FirstRtdChannel <= channel && channel < FirstRtdChannel + MaxSpiTempSensors)
+	else if (ReducedStringEquals(typeName, ThermocoupleSensor31856::TypeName))
 	{
-		ts = new RtdSensor31865(channel);
+		ts = new ThermocoupleSensor31856(sensorNum);
 	}
-	else if (FirstLinearAdcChannel <= channel && channel < FirstLinearAdcChannel + MaxSpiTempSensors)
+	else if (ReducedStringEquals(typeName, RtdSensor31865::TypeName))
 	{
-		ts = new CurrentLoopTemperatureSensor(channel);
+		ts = new RtdSensor31865(sensorNum);
+	}
+	else if (ReducedStringEquals(typeName, CurrentLoopTemperatureSensor::TypeName))
+	{
+		ts = new CurrentLoopTemperatureSensor(sensorNum);
 	}
 #if SUPPORT_DHT_SENSOR
-	else if (FirstDhtTemperatureChannel <= channel && channel < FirstDhtTemperatureChannel + MaxSpiTempSensors)
+	else if (ReducedStringEquals(typeName, DhtTemperatureSensor::TypeName))
 	{
-		ts = new DhtTemperatureSensor(channel);
+		ts = new DhtTemperatureSensor(sensorNum);
 	}
-	else if (FirstDhtHumidityChannel <= channel && channel < FirstDhtHumidityChannel + MaxSpiTempSensors)
+	else if (ReducedStringEquals(typeName, DhtHumiditySensor::TypeName))
 	{
-		ts = new DhtHumiditySensor(channel);
+		ts = new DhtHumiditySensor(sensorNum);
 	}
 #endif
 #if HAS_CPU_TEMP_SENSOR
-	else if (channel == CpuTemperatureSenseChannel)
+	else if (ReducedStringEquals(typeName, CpuTemperatureSensor::TypeName))
 	{
-		ts = new CpuTemperatureSensor(channel);
+		ts = new CpuTemperatureSensor(sensorNum);
 	}
 #endif
 #if HAS_SMART_DRIVERS
-	else if (channel >= FirstTmcDriversSenseChannel && channel < FirstTmcDriversSenseChannel + NumTmcDriversSenseChannels)
+	else if (ReducedStringEquals(typeName, TmcDriverTemperatureSensor::PrimaryTypeName))
 	{
-		ts = new TmcDriverTemperatureSensor(channel);
+		ts = new TmcDriverTemperatureSensor(sensorNum, 0);
 	}
-#endif
-
-	if (ts != nullptr)
+# ifdef DUET_NG
+	else if (ReducedStringEquals(typeName, TmcDriverTemperatureSensor::DuexTypeName))
 	{
-		ts->Init();
+		ts = new TmcDriverTemperatureSensor(sensorNum, 1);
+	}
+# endif
+#endif
+	else
+	{
+		ts = nullptr;
+		reply.printf("Unknown sensor type name \"%s\"", typeName);
 	}
 	return ts;
 }

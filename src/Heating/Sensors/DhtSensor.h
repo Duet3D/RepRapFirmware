@@ -28,7 +28,7 @@ class DhtSensorHardwareInterface
 {
 public:
 
-	static GCodeResult Configure(TemperatureSensor *ts, unsigned int relativeChannel, unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply);
+	static GCodeResult Configure(TemperatureSensor *ts, unsigned int relativeChannel, unsigned int mCode, GCodeBuffer& gb, const StringRef& reply);
 	void Interrupt();
 
 	static DhtSensorHardwareInterface *Create(unsigned int relativeChannel);
@@ -37,9 +37,9 @@ public:
 	static void SensorTask();
 
 private:
-	DhtSensorHardwareInterface(Pin p_pin);
+	DhtSensorHardwareInterface();
 
-	GCodeResult ConfigureType(TemperatureSensor *ts, unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureType(TemperatureSensor *ts, unsigned int mCode, GCodeBuffer& gb, const StringRef& reply);
 	TemperatureError GetTemperatureOrHumidity(float& t, bool wantHumidity) const;
 	void TakeReading();
 	TemperatureError ProcessReadings();
@@ -49,7 +49,7 @@ private:
 	static Task<DhtTaskStackWords> *dhtTask;
 	static DhtSensorHardwareInterface *activeSensors[MaxSpiTempSensors];
 
-	Pin sensorPin;
+	IoPort port;
 	DhtSensorType type;
 	TemperatureError lastResult;
 	float lastTemperature, lastHumidity;
@@ -64,11 +64,13 @@ private:
 class DhtTemperatureSensor : public TemperatureSensor
 {
 public:
-	DhtTemperatureSensor(unsigned int channel);
+	DhtTemperatureSensor(unsigned int sensorNum);
 	~DhtTemperatureSensor();
 
-	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override;
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
 	void Init() override;
+
+	static constexpr const char *TypeName = "dhttemp";
 
 protected:
 	TemperatureError TryGetTemperature(float& t) override;
@@ -81,8 +83,10 @@ public:
 	DhtHumiditySensor(unsigned int channel);
 	~DhtHumiditySensor();
 
-	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override;
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
 	void Init() override;
+
+	static constexpr const char *TypeName = "dhthumidity";
 
 protected:
 	TemperatureError TryGetTemperature(float& t) override;

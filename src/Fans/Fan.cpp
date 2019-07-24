@@ -11,6 +11,7 @@
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Heating/Heat.h"
 #include "Movement/StepTimer.h"
+#include "Heating/Sensors/TemperatureSensor.h"
 
 void FanInterrupt(CallbackParameter cb)
 {
@@ -23,7 +24,7 @@ Fan::Fan()
 	  maxVal(1.0),										// 100% maximum fan speed
 	  lastPwm(-1.0),									// force a refresh
 	  blipTime(DefaultFanBlipTime),
-	  fanInterruptCount(0), fanLastResetTime(0), fanInterval(0), heatersMonitored(0),
+	  fanInterruptCount(0), fanLastResetTime(0), fanInterval(0), sensorsMonitored(0),
 	  isConfigured(false), blipping(false)
 {
 	triggerTemperatures[0] = triggerTemperatures[1] = DefaultHotEndFanTemperature;
@@ -132,29 +133,32 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 			maxVal = constrain<float>(speed, minVal, 1.0);
 		}
 
-		if (gb.Seen('H'))		// Set thermostatically-controlled heaters
+		if (gb.Seen('H'))		// Set thermostatically-controlled sensors
 		{
 			seen = true;
-			int32_t heaters[NumTotalHeaters + MaxVirtualHeaters];		// signed because we use H-1 to disable thermostatic mode
-			size_t numH = ARRAY_SIZE(heaters);
-			gb.GetIntArray(heaters, numH, false);
+			int32_t sensors[MaxFanSensorNumber + 1];		// signed because we use H-1 to disable thermostatic mode
+			size_t numH = ARRAY_SIZE(sensors);
+			gb.GetIntArray(sensors, numH, false);
 
 			// Note that M106 H-1 disables thermostatic mode. The following code implements that automatically.
-			heatersMonitored = 0;
+			sensorsMonitored = 0;
 			for (size_t h = 0; h < numH; ++h)
 			{
-				const int hnum = heaters[h];
-				if (hnum >= 0 && hnum < (int)NumTotalHeaters)
+				const int hnum = sensors[h];
+				if (hnum >= 0)
 				{
-					SetBit(heatersMonitored, (unsigned int)hnum);
-				}
-				else if (hnum >= (int)FirstVirtualHeater && hnum < (int)(FirstVirtualHeater + MaxVirtualHeaters))
-				{
-					// Heaters 100, 101... are virtual heaters i.e. CPU and driver temperatures
-					SetBit(heatersMonitored, NumTotalHeaters + (unsigned int)hnum - FirstVirtualHeater);
+					if (hnum < (int)MaxFanSensorNumber)
+					{
+						SetBit(sensorsMonitored, (unsigned int)hnum);
+					}
+					else
+					{
+						reply.copy("Sensor number out of range");
+						error = true;
+					}
 				}
 			}
-			if (heatersMonitored != 0)
+			if (sensorsMonitored != 0)
 			{
 				SetPwm(1.0);			// default the fan speed to full for safety
 			}
@@ -190,14 +194,14 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 						(int)(maxVal * 100.0),
 						(double)(blipTime * MillisToSeconds)
 					  );
-			if (heatersMonitored != 0)
+			if (sensorsMonitored != 0)
 			{
-				reply.catf(", temperature: %.1f:%.1fC, heaters:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);
-				for (unsigned int i = 0; i < NumTotalHeaters + MaxVirtualHeaters; ++i)
+				reply.catf(", temperature: %.1f:%.1fC, sensors:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);
+				for (unsigned int i = 0; i <= MaxFanSensorNumber; ++i)
 				{
-					if (IsBitSet(heatersMonitored, i))
+					if (IsBitSet(sensorsMonitored, i))
 					{
-						reply.catf(" %u", (i < NumTotalHeaters) ? i : FirstVirtualHeater + i - NumTotalHeaters);
+						reply.catf(" %u", i);
 					}
 				}
 				reply.catf(", current speed: %d%%:", (int)(lastVal * 100.0));
@@ -227,9 +231,9 @@ void Fan::SetHardwarePwm(float pwmVal)
 	}
 }
 
-void Fan::SetHeatersMonitored(HeatersMonitoredBitmap h)
+void Fan::SetSensorsMonitored(SensorsMonitoredBitmap h)
 {
-	heatersMonitored = h;
+	sensorsMonitored = h;
 	Refresh();
 }
 
@@ -242,7 +246,7 @@ void Fan::Refresh()
 	uint32_t driverChannelsMonitored = 0;
 #endif
 
-	if (heatersMonitored == 0)
+	if (sensorsMonitored == 0)
 	{
 		reqVal = val;
 	}
@@ -250,23 +254,17 @@ void Fan::Refresh()
 	{
 		reqVal = 0.0;
 		const bool bangBangMode = (triggerTemperatures[1] <= triggerTemperatures[0]);
-		for (size_t h = 0; h < NumTotalHeaters + MaxVirtualHeaters; ++h)
+		for (size_t sensorNum = 0; sensorNum <= MaxFanSensorNumber; ++sensorNum)
 		{
-			// Check if this heater is both monitored by this fan and in use
-			if (   IsBitSet(heatersMonitored, h)
-				&& (h < reprap.GetToolHeatersInUse() || (h >= NumTotalHeaters && h < NumTotalHeaters + MaxVirtualHeaters) || reprap.GetHeat().IsBedOrChamberHeater(h))
-			   )
+			// Check if this sensor is both monitored by this fan and in use
+			if (IsBitSet(sensorsMonitored, sensorNum))
 			{
-				// This heater is both monitored and potentially active
-				if (h < NumTotalHeaters && reprap.GetHeat().IsTuning(h))
+				TemperatureSensor * const sensor = reprap.GetHeat().GetSensor(sensorNum);
+				if (sensor != nullptr)
 				{
-					reqVal = 1.0;			// when turning the PID for a monitored heater, turn the fan on
-				}
-				else
-				{
-					const size_t heaterHumber = (h >= NumTotalHeaters) ? (h - NumTotalHeaters) + FirstVirtualHeater : h;
-					TemperatureError err;
-					const float ht = reprap.GetHeat().GetTemperature(heaterHumber, err);
+					//TODO we used to turn the fan on if the associated heater was being tuned
+					float ht;
+					const TemperatureError err = sensor->GetTemperature(ht);
 					if (err != TemperatureError::success || ht < BadLowTemperature || ht >= triggerTemperatures[1])
 					{
 						reqVal = max<float>(reqVal, (bangBangMode) ? max<float>(0.5, val) : 1.0);
@@ -282,10 +280,10 @@ void Fan::Refresh()
 						reqVal = constrain<float>(reqVal, minFanSpeed, maxVal);
 					}
 #if HAS_SMART_DRIVERS
-					const unsigned int channel = reprap.GetHeat().GetHeaterChannel(heaterHumber);
-					if (channel >= FirstTmcDriversSenseChannel && channel < FirstTmcDriversSenseChannel + NumTmcDriversSenseChannels)
+					const int channel = sensor->GetSmartDriversChannel();
+					if (channel >= 0)
 					{
-						driverChannelsMonitored |= 1 << (channel - FirstTmcDriversSenseChannel);
+						driverChannelsMonitored |= 1 << (unsigned int)channel;
 					}
 #endif
 				}
@@ -338,11 +336,11 @@ void Fan::Refresh()
 
 bool Fan::Check()
 {
-	if (heatersMonitored != 0 || blipping)
+	if (sensorsMonitored != 0 || blipping)
 	{
 		Refresh();
 	}
-	return heatersMonitored != 0 && lastVal != 0.0;
+	return sensorsMonitored != 0 && lastVal != 0.0;
 }
 
 void Fan::Disable()
@@ -357,7 +355,7 @@ void Fan::Disable()
 // Save the settings of this fan if it isn't thermostatic
 bool Fan::WriteSettings(FileStore *f, size_t fanNum) const
 {
-	if (heatersMonitored == 0)
+	if (sensorsMonitored == 0)
 	{
 		String<StringLength20> fanCommand;
 		fanCommand.printf("M106 P%u S%.2f\n", fanNum, (double)val);

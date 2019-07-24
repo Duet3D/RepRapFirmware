@@ -13,9 +13,10 @@
 class ThermocoupleSensor31856 : public SpiTemperatureSensor
 {
 public:
-	ThermocoupleSensor31856(unsigned int channel);
-	GCodeResult Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, const StringRef& reply) override;
-	void Init() override;
+	ThermocoupleSensor31856(unsigned int sensorNum);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
+
+	static constexpr const char *TypeName = "thermocouplemax31856";
 
 protected:
 	TemperatureError TryGetTemperature(float& t) override;

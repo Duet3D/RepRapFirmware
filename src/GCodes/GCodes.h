@@ -212,7 +212,7 @@ private:
 	static const Resource MoveResource = 0;								// Movement system, including canned cycle variables
 	static const Resource FileSystemResource = 1;						// Non-sharable parts of the file system
 	static const Resource HeaterResourceBase = 2;
-	static const Resource FanResourceBase = HeaterResourceBase + NumTotalHeaters;
+	static const Resource FanResourceBase = HeaterResourceBase + MaxHeaters;
 	static const size_t NumResources = FanResourceBase + NumTotalFans;
 
 	static_assert(NumResources <= 32, "Too many resources to keep a bitmap of them in class GCodeMachineState");
@@ -285,7 +285,13 @@ private:
 
 	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply);	// Configure heater protection (M143)
 	void SetPidParameters(GCodeBuffer& gb, int heater, const StringRef& reply); // Set the P/I/D parameters for a heater
+
+#if 0
+	GCodeResult SetSensorParameters(GCodeBuffer& gb, const StringRef& reply);	// Set the parameters for a sensor
+#else
 	GCodeResult SetHeaterParameters(GCodeBuffer& gb, const StringRef& reply);	// Set the thermistor and ADC parameters for a heater
+#endif
+
 	GCodeResult SetHeaterModel(GCodeBuffer& gb, const StringRef& reply);		// Set the heater model
 	GCodeResult ManageTool(GCodeBuffer& gb, const StringRef& reply);			// Create a new tool definition
 	void SetToolHeaters(Tool *tool, float temperature, bool both);				// Set all a tool's heaters to the temperature, for M104/M109
@@ -570,12 +576,14 @@ private:
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
 	bool atxPowerControlled;
 
+#if HAS_MASS_STORAGE
 	static constexpr uint32_t SdTimingByteIncrement = 8 * 1024;	// how many timing bytes we write at a time
 	static constexpr const char *TimingFileName = "test.tst";	// the name of the file we write
 	FileStore *sdTimingFile;					// file handle being used for SD card write timing
 	uint32_t timingBytesRequested;				// how many bytes we were asked to write
 	uint32_t timingBytesWritten;				// how many timing bytes we have written so far
 	uint32_t timingStartMillis;
+#endif
 
 	int8_t lastAuxStatusReportType;				// The type of the last status report requested by PanelDue
 	bool isWaiting;								// True if waiting to reach temperature

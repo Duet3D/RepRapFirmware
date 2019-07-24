@@ -11,11 +11,7 @@
 
 #if HAS_CPU_TEMP_SENSOR
 
-CpuTemperatureSensor::CpuTemperatureSensor(unsigned int channel) : TemperatureSensor(channel, "microcontroller embedded temperature sensor")
-{
-}
-
-void CpuTemperatureSensor::Init()
+CpuTemperatureSensor::CpuTemperatureSensor(unsigned int sensorNum) : TemperatureSensor(sensorNum, "microcontroller embedded temperature sensor")
 {
 }
 

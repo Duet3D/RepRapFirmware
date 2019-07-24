@@ -8,13 +8,14 @@
 #ifndef SRC_HEATING_SPITEMPERATURESENSOR_H_
 #define SRC_HEATING_SPITEMPERATURESENSOR_H_
 
-#include "TemperatureSensor.h"
+#include "SensorWithPort.h"
 #include "SharedSpi.h"				// for sspi_device
 
-class SpiTemperatureSensor : public TemperatureSensor
+class SpiTemperatureSensor : public SensorWithPort
 {
 protected:
-	SpiTemperatureSensor(unsigned int channel, const char *name, unsigned int relativeChannel, uint8_t spiMode, uint32_t clockFrequency);
+	SpiTemperatureSensor(unsigned int sensorNum, const char *name, uint8_t spiMode, uint32_t clockFrequency);
+	bool ConfigurePort(GCodeBuffer& gb, const StringRef& reply, bool& seen);
 	void InitSpi();
 	TemperatureError DoSpiTransaction(const uint8_t dataOut[], size_t nbytes, uint32_t& rslt) const
 		pre(nbytes <= 8);

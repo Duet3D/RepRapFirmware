@@ -15,6 +15,8 @@
 #include "RepRapFirmware.h"
 #include "FOPDT.h"
 #include "TemperatureError.h"
+#include "Hardware/IoPorts.h"
+#include "GCodes/GCodeResult.h"
 
 class HeaterProtection;
 
@@ -42,10 +44,12 @@ class PID
 
 public:
 
-	PID(Platform& p, int8_t h);
+	PID(unsigned int h);
 	void Init(float pGain, float pTc, float pTd, bool usePid, bool inverted);	// (Re)Set everything to start
 	void Reset();
 	void Spin();									// Called in a tight loop to keep things running
+
+	GCodeResult ConfigurePortAndSensor(GCodeBuffer& gb, const StringRef& reply);
 	void SetActiveTemperature(float t);
 	float GetActiveTemperature() const;
 	void SetStandbyTemperature(float t);
@@ -88,6 +92,8 @@ public:
 
 	void Suspend(bool sus);							// Suspend the heater to conserve power or while doing Z probing
 
+	TemperatureSensor *GetSensor() const;
+
 private:
 
 	void SwitchOn();								// Turn the heater on and set the mode
@@ -102,7 +108,11 @@ private:
 	void DisplayBuffer(const char *intro);			// Debug helper
 	float GetExpectedHeatingRate() const;			// Get the minimum heating rate we expect
 
-	Platform& platform;								// The instance of the class that is the RepRap hardware
+	PwmPort port;									// The port that drives the heater
+	unsigned int heater;							// The index of our heater
+	int sensorNumber;								// the sensor number used by this heater
+	FopDt model;									// The process model and PID parameters
+
 	HeaterProtection *heaterProtection;				// The first element of assigned heater protection items
 	float activeTemperature;						// The required active temperature
 	float standbyTemperature;						// The required standby temperature
@@ -111,7 +121,6 @@ private:
 	float temperature;								// The current temperature
 	float previousTemperatures[NumPreviousTemperatures]; // The temperatures of the previous NumDerivativeSamples measurements, used for calculating the derivative
 	size_t previousTemperatureIndex;				// Which slot in previousTemperature we fill in next
-	FopDt model;									// The process model and PID parameters
 	float iAccumulator;								// The integral PID component
 	float lastPwm;									// The last PWM value we output, before scaling by kS
 	float averagePWM;								// The running average of the PWM, after scaling.
@@ -120,7 +129,6 @@ private:
 
 	uint16_t heatingFaultCount;						// Count of questionable heating behaviours
 
-	int8_t heater;									// The index of our heater
 	uint8_t previousTemperaturesGood;				// Bitmap indicating which previous temperature were good readings
 	HeaterMode mode;								// Current state of the heater
 	bool active;									// Are we active or standby?

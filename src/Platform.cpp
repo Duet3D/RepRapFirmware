@@ -545,16 +545,6 @@ void Platform::Init()
 	}
 #endif
 
-#if ALLOCATE_DEFAULT_PORTS
-	// Set up the default heater ports
-	for (size_t i = 0; i < ARRAY_SIZE(DefaultHeaterPinNames); ++i)
-	{
-		String<1> dummy;
-		heaterPorts[i].AssignPort(DefaultHeaterPinNames[i], dummy.GetRef(), PinUsedBy::heater, PinAccess::pwm);
-		heaterPorts[i].SetFrequency((IsBitSet(configuredHeaters, i)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq);
-	}
-#endif
-
 	for (size_t thermistor = 0; thermistor < NumThermistorInputs; thermistor++)
 	{
 		// TODO use ports for these?
@@ -1281,8 +1271,10 @@ void Platform::Spin()
 				const DriversBitmap driversMonitored[NumTmcDriversSenseChannels] =
 # ifdef DUET_NG
 					{ LowestNBits<DriversBitmap>(5), LowestNBits<DriversBitmap>(5) << 5 };			// first channel is Duet, second is DueX5
+# elif defined(DUET_M)
+					{ LowestNBits<DriversBitmap>(5), LowestNBits<DriversBitmap>(2) << 5 };			// first channel is Duet, second is daughter board
 # else
-					{ LowestNBits<DriversBitmap>(NumDirectDrivers), LowestNBits<DriversBitmap>(NumDirectDrivers) };		// both channels monitor all drivers
+					{ LowestNBits<DriversBitmap>(NumDirectDrivers) };
 # endif
 				for (unsigned int i = 0; i < NumTmcDriversSenseChannels; ++i)
 				{
@@ -2364,10 +2356,17 @@ void Platform::DriverCoolingFansOnOff(uint32_t driverChannelsMonitored, bool on)
 
 #endif
 
-// Power is a fraction in [0,1]
-void Platform::SetHeater(size_t heater, float power)
+// Get the index of the averaging filter for an analog port
+int Platform::GetAveragingFilterIndex(const IoPort& port) const
 {
-	heaterPorts[heater].WriteAnalog(power);
+	for (size_t i = 0; i < NumAdcFilters; ++i)
+	{
+		if (port.GetAnalogChannel() == filteredAdcChannels[i])
+		{
+			return (int)i;
+		}
+	}
+	return -1;
 }
 
 void Platform::UpdateConfiguredHeaters()
@@ -2395,7 +2394,7 @@ void Platform::UpdateConfiguredHeaters()
 	}
 
 	// Check tool heaters
-	for (size_t heater = 0; heater < NumTotalHeaters; heater++)
+	for (size_t heater = 0; heater < MaxHeaters; heater++)
 	{
 		if (reprap.IsHeaterAssignedToTool(heater))
 		{
@@ -3033,7 +3032,7 @@ void Platform::SetFanValue(size_t fan, float speed)
 // controls. This is the case if no thermostatic control is enabled and if the fan was configured at least once before.
 bool Platform::IsFanControllable(size_t fan) const
 {
-	return fan < NumTotalFans && !fans[fan].HasMonitoredHeaters() && fans[fan].IsConfigured();
+	return fan < NumTotalFans && !fans[fan].HasMonitoredSensors() && fans[fan].IsConfigured();
 }
 
 // Return the fan's name
@@ -3065,29 +3064,7 @@ void Platform::InitFans()
 	}
 
 	// Handle board-specific fan configuration
-# if defined(DUET_06_085)
-	// Fan 1 on the Duet 0.8.5 shares its control pin with heater 6. Set it full on to make sure the heater (if present) is off.
-	fans[1].SetPwm(1.0);												// set it full on
-# elif defined(DUET_NG)
-	// On Duet WiFi/Ethernet we set fan 1 to be thermostatic by default, monitoring all heaters except the default bed and chamber heaters
-	Fan::HeatersMonitoredBitmap bedAndChamberHeaterMask = 0;
-	for (uint8_t bedHeater : DefaultBedHeaters)
-	{
-		if (bedHeater >= 0)
-		{
-			SetBit(bedAndChamberHeaterMask, bedHeater);
-		}
-	}
-	for (uint8_t chamberHeater : DefaultChamberHeaters)
-	{
-		if (chamberHeater >= 0)
-		{
-			SetBit(bedAndChamberHeaterMask, chamberHeater);
-		}
-	}
-	fans[1].SetHeatersMonitored(LowestNBits<Fan::HeatersMonitoredBitmap>(NumTotalHeaters) & ~bedAndChamberHeaterMask);
-	fans[1].SetPwm(1.0);												// set it full on
-# elif defined(PCCB)
+# if defined(PCCB)
 	// Fan 3 needs to be set explicitly to zero PWM, otherwise it turns on because the MCU output pin isn't set low
 	fans[3].SetPwm(0.0);
 # endif
@@ -4226,13 +4203,6 @@ bool Platform::SetDateTime(time_t time)
 // Configure an I/O port
 GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply)
 {
-	PwmFrequency freq = 0;
-	const bool seenFreq = gb.Seen('Q');
-	if (seenFreq)
-	{
-		freq = gb.GetPwmFrequency();
-	}
-
 	if (gb.Seen('F'))
 	{
 		const uint32_t fanNum = gb.GetUIValue();
@@ -4247,56 +4217,25 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply)
 					return GCodeResult::error;
 				}
 			}
-			if (seenFreq)
+			if (gb.Seen('Q'))
 			{
-				fan.SetPwmFrequency(freq);
+				fan.SetPwmFrequency(gb.GetPwmFrequency());
 			}
-			if (!seenPin && !seenFreq)
+			else if (!seenPin)
 			{
 				reply.printf("Fan %" PRIu32, fanNum);
 				fan.AppendPortDetails(reply);
 			}
 		}
+		else
+		{
+			reply.copy("Fan number out of range");
+			return GCodeResult::error;
+		}
 	}
 	else if (gb.Seen('H'))
 	{
-		const uint32_t heater = gb.GetUIValue();
-		if (heater < NumTotalHeaters)
-		{
-			PwmPort& port = heaterPorts[heater];
-			if (seenFreq)
-			{
-				freq = min<PwmFrequency>(freq, MaxHeaterPwmFrequency);
-			}
-			else
-			{
-				freq = (reprap.GetHeat().IsBedOrChamberHeater(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
-			}
-
-			const bool seenPin = gb.Seen('C');
-			if (seenPin)
-			{
-				reprap.GetHeat().SwitchOff(heater);
-				if (!port.AssignPort(gb, reply, PinUsedBy::heater, PinAccess::pwm))
-				{
-					return GCodeResult::error;
-				}
-			}
-			if (seenFreq)
-			{
-				port.SetFrequency(freq);
-			}
-			if (!seenPin && !seenFreq)
-			{
-				reply.printf("Heater %" PRIu32, heater);
-				port.AppendDetails(reply);
-			}
-		}
-		else
-		{
-			reply.copy("Heater number out of range");
-			return GCodeResult::error;
-		}
+		return reprap.GetHeat().ConfigureHeater(gb.GetUIValue(), gb, reply);
 	}
 	else
 	{
@@ -4306,6 +4245,13 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply)
 			const uint32_t gpioNumber = gb.GetUIValue();
 			if (gpioNumber < MaxGpioPorts)
 			{
+				PwmFrequency freq = 0;
+				const bool seenFreq = gb.Seen('Q');
+				if (seenFreq)
+				{
+					freq = gb.GetPwmFrequency();
+				}
+
 				PwmPort& port = gpioPorts[gpioNumber];
 				if (gb.Seen('C'))
 				{
@@ -4428,13 +4374,6 @@ void Platform::Tick()
 			// Because we are in the tick ISR and no other ISR reads the averaging filter, we can cast away 'volatile' here.
 			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(adcFilters[currentFilterNumber]);		// cast away 'volatile'
 			currentFilter.ProcessReading(AnalogInReadChannel(filteredAdcChannels[currentFilterNumber]));
-
-			// Guard against overly long delays between successive calls of PID::Spin().
-			if (IsBitSet(configuredHeaters, currentFilterNumber) && (millis() - reprap.GetHeat().GetLastSampleTime(currentFilterNumber)) > maxPidSpinDelay)
-			{
-				SetHeater(currentFilterNumber, 0.0);
-				LogError(ErrorCode::BadTemp);
-			}
 
 			++currentFilterNumber;
 			if (currentFilterNumber == NumAdcFilters)
