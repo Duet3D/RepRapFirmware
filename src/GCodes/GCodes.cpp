@@ -225,8 +225,6 @@ void GCodes::Reset()
 		auxGCode->SetCommsProperties(1);				// by default, we require a checksum on the aux port
 	}
 
-	nextGcodeSource = 0;
-
 #if HAS_MASS_STORAGE
 	fileToPrint.Close();
 #endif
@@ -404,52 +402,41 @@ void GCodes::Spin()
 	CheckHeaterFault();
 	CheckFilament();
 
-	// Get the GCodeBuffer that we want to process a command from. Give priority to auto-pause.
-	GCodeBuffer *gbp = autoPauseGCode;
-	if (gbp->IsCompletelyIdle() && !(gbp->IsDoingFile()))
-	{
-		do
-		{
-			gbp = gcodeSources[nextGcodeSource];
-			++nextGcodeSource;										// move on to the next gcode source ready for next time
-			if (nextGcodeSource == ARRAY_SIZE(gcodeSources) - 1)	// the last one is autoPauseGCode, so don't do it again
-			{
-				nextGcodeSource = 0;
-			}
-		} while (gbp == nullptr);									// we must have at least one GCode source, so this can't loop indefinitely
-	}
-	GCodeBuffer& gb = *gbp;
-
-	// Set up a buffer for the reply
+	// Perform the next G-code(s)
 	String<GCodeReplyLength> reply;
-
-	if (gb.GetState() == GCodeState::normal)
+	for (GCodeBuffer *gbp : gcodeSources)
 	{
-		if (gb.MachineState().messageAcknowledged)
-		{
-			const bool wasCancelled = gb.MachineState().messageCancelled;
-			gb.PopState(false);										// this could fail if the current macro has already been aborted
+		GCodeBuffer& gb = *gbp;
+		reply.Clear();
 
-			if (wasCancelled)
+		if (gb.GetState() == GCodeState::normal)
+		{
+			if (gb.MachineState().messageAcknowledged)
 			{
-				if (gb.MachineState().previous == nullptr)
+				const bool wasCancelled = gb.MachineState().messageCancelled;
+				gb.PopState(false);                                                             // this could fail if the current macro has already been aborted
+
+				if (wasCancelled)
 				{
-					StopPrint(StopPrintReason::userCancelled);
+					if (gb.MachineState().previous == nullptr)
+					{
+						StopPrint(StopPrintReason::userCancelled);
+					}
+					else
+					{
+						FileMacroCyclesReturn(gb);
+					}
 				}
-				else
-				{
-					FileMacroCyclesReturn(gb);
-				}
+			}
+			else
+			{
+				StartNextGCode(gb, reply.GetRef());
 			}
 		}
 		else
 		{
-			StartNextGCode(gb, reply.GetRef());
+			RunStateMachine(gb, reply.GetRef());                            // execute the state machine
 		}
-	}
-	else
-	{
-		RunStateMachine(gb, reply.GetRef());						// execute the state machine
 	}
 
 	// Check if we need to display a warning
@@ -588,7 +575,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 	{
 		gb.Init();								// mark buffer as empty
 
-		if (&gb == fileGCode && gb.MachineState().previous == nullptr)
+		if (gb.MachineState().previous == nullptr)
 		{
 			// Finished printing SD card file.
 			// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
@@ -623,6 +610,10 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 				{
 					HandleResult(gb, GCodeResult::warningNotSupported, reply, nullptr);
 				}
+				else
+				{
+					HandleReply(gb, GCodeResult::ok, "");
+				}
 			}
 			else if (gb.GetState() == GCodeState::doingUserMacro)
 			{
@@ -638,6 +629,10 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 					reply.Prepend("Macro file ");
 					reply.cat(" not found");
 					HandleReply(gb, GCodeResult::warning, reply.c_str());
+				}
+				else
+				{
+					HandleReply(gb, GCodeResult::ok, "");
 				}
 			}
 			else if (gb.GetState() == GCodeState::normal)

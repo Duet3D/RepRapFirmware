@@ -30,8 +30,7 @@ static_assert(MaxCodeBufferSize >= GCODE_LENGTH, "MaxCodeBufferSize must be at l
 
 constexpr uint32_t SpiTransferTimeout = 500;		// maximum allowed delay between data exchanges during a full transfer (in ms)
 constexpr uint32_t SpiConnectionTimeout = 4000;		// maximum time to wait for the next transfer (in ms)
-constexpr uint16_t SpiCodeBufferSize = 1024;		// number of bytes available for G-code caching
-static_assert(SpiCodeBufferSize <= LinuxTransferBufferSize - 64, "SpiCodeBufferSize must be slightly smaller than LinuxTransferBufferSize");
+constexpr uint16_t SpiCodeBufferSize = 2048;		// number of bytes available for G-code caching
 
 // Shared structures
 struct TransferHeader
@@ -74,7 +73,9 @@ enum class DataType : uint8_t
     UIntArray = 4,			// uint32_t[]
     FloatArray = 5,			// float[]
     String = 6,				// char[]
-    Expression = 7			// char[] but containing '['...']'
+    Expression = 7,			// char[] but containing '['...']
+	DriverId = 8,			// two sequential uint16_t representing board and port of a driver
+	DriverIdArray = 9		// array of driver ids
 };
 
 struct ObjectModelHeader

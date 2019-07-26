@@ -1248,7 +1248,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"volumes\":%u,\"mountedVolumes\":%u", NumSdCards, mountedCards);
 #endif
 
-		// Machine mode
+		// Machine mode,
 		const char *machineMode = gCodes->GetMachineModeString();
 		response->cat(",\"mode\":");
 		response->EncodeString(machineMode, strlen(machineMode), false);

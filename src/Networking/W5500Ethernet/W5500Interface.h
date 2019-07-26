@@ -20,12 +20,9 @@ class TelnetResponder;
 class W5500Socket;
 
 // We have 8 sockets available on the W5500.
-const size_t NumHttpSockets = 4;				// sockets 0-3 are for HTTP
-const SocketNumber FtpSocketNumber = 4;
-const SocketNumber FtpDataSocketNumber = 5;		// TODO can we allocate this dynamically when required, to allow more http sockets most of the time?
-const SocketNumber TelnetSocketNumber = 6;
-const size_t NumW5500TcpSockets = 7;
-const SocketNumber DhcpSocketNumber = 7;		// TODO can we allocate this dynamically when required, to allow more http sockets most of the time?
+const size_t NumW5500TcpSockets = 6;
+const SocketNumber MdnsSocketNumber = 6;
+const SocketNumber DhcpSocketNumber = 7;
 
 class Platform;
 
@@ -77,13 +74,8 @@ private:
 	void Start();
 	void Stop();
 	void InitSockets();
+	void ResetSockets();
 	void TerminateSockets();
-
-	void StartProtocol(NetworkProtocol protocol)
-	pre(protocol < NumProtocols);
-
-	void ShutdownProtocol(NetworkProtocol protocol)
-	pre(protocol < NumProtocols);
 
 	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const
 	pre(protocol < NumProtocols);
@@ -92,6 +84,7 @@ private:
 	uint32_t lastTickMillis;
 
 	W5500Socket *sockets[NumW5500TcpSockets];
+	size_t ftpDataSocket;							// number of the port for FTP DATA connections
 	size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
 
 	Port portNumbers[NumProtocols];					// port number used for each protocol
