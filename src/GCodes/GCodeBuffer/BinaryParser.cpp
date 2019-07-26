@@ -156,16 +156,16 @@ uint32_t BinaryParser::GetUIValue()
 		switch (seenParameter->type)
 		{
 		case DataType::Float:
-			value = seenParameter->floatValue;
+			value = (uint32_t)seenParameter->floatValue;
 			break;
 		case DataType::Int:
-			value = seenParameter->intValue;
+			value = (uint32_t)seenParameter->intValue;
 			break;
 		case DataType::UInt:
 			value = seenParameter->uintValue;
 			break;
 		default:
-			value = 0.0f;
+			value = 0;
 			break;
 		}
 		seenParameter = nullptr;
@@ -175,6 +175,57 @@ uint32_t BinaryParser::GetUIValue()
 
 	INTERNAL_ERROR;
 	return 0;
+}
+
+// Get a driver ID
+DriverId BinaryParser::GetDriverId()
+{
+	DriverId value;
+	if (seenParameter != nullptr)
+	{
+		switch (seenParameter->type)
+		{
+		case DataType::UInt:
+			value.SetFromBinary(seenParameter->uintValue);
+			break;
+
+#if 1
+		// Temporary code to handle DWC before it knows about driver IDs
+		case DataType::Int:
+			if (seenParameter->intValue >= 0)
+			{
+				value.SetLocal((uint32_t)seenParameter->intValue);
+			}
+			else
+			{
+				value.Clear();
+			}
+			break;
+
+		case DataType::Float:
+			// Assume max 10 drivers per board
+			{
+				const uint32_t val = lrintf(10 * seenParameter->floatValue);
+# if SUPPORT_CAN_EXPANSION
+				value.boardAddress = val / 10;
+# endif
+				value.localDriver = val % 10;
+			}
+			break;
+#endif
+
+		default:
+			value.Clear();
+			break;
+		}
+		seenParameter = nullptr;
+		seenParameterValue = nullptr;
+		return value;
+	}
+
+	INTERNAL_ERROR;
+	value.Clear();
+	return value;
 }
 
 bool BinaryParser::GetIPAddress(IPAddress& returnedIp)
@@ -353,6 +404,96 @@ void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad)
 	GetArray(arr, length, doPad);
 }
 
+// Get a :-separated list of drivers after a key letter
+void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length)
+{
+	if (seenParameter == nullptr)
+	{
+		INTERNAL_ERROR;
+		length = 0;
+		return;
+	}
+
+	switch (seenParameter->type)
+	{
+	case DataType::UInt:
+		arr[0].SetFromBinary(seenParameter->uintValue);
+		length = 1;
+		break;
+
+#if 1
+	// Temporary code to handle DWC before it knows about driver IDs
+	case DataType::Int:
+		if (seenParameter->intValue >= 0)
+		{
+			arr[0].SetLocal((uint32_t)seenParameter->intValue);
+		}
+		else
+		{
+			arr[0].Clear();
+		}
+		length = 1;
+		break;
+
+	case DataType::Float:
+		// Assume max 10 drivers per board
+		{
+			const uint32_t val = lrintf(10 * seenParameter->floatValue);
+# if SUPPORT_CAN_EXPANSION
+			arr[0].boardAddress = val / 10;
+# endif
+			arr[0].localDriver = val % 10;
+		}
+		length = 1;
+		break;
+#endif
+
+	case DataType::UIntArray:
+		for (int i = 0; i < seenParameter->intValue; i++)
+		{
+			arr[i].SetFromBinary(reinterpret_cast<const uint32_t*>(seenParameterValue)[i]);
+		}
+		length = seenParameter->intValue;
+		break;
+
+#if 1
+	// Temporary code to handle DWC before it knows about driver IDs
+	case DataType::IntArray:
+		for (int i = 0; i < seenParameter->intValue; i++)
+		{
+			const int32_t val = reinterpret_cast<const int32_t*>(seenParameterValue)[i];
+			if (val >= 0)
+			{
+				arr[i].SetLocal((uint32_t)val);
+			}
+			else
+			{
+				arr[i].Clear();
+			}
+		}
+		length = seenParameter->intValue;
+		break;
+
+	case DataType::FloatArray:
+		// Assume max 10 drivers per board. A driver ID such as 1.20 will be interpreted as 2.1
+		for (int i = 0; i < seenParameter->intValue; i++)
+		{
+			const uint32_t val = lrintf(10 * reinterpret_cast<const float*>(seenParameterValue)[i]);
+# if SUPPORT_CAN_EXPANSION
+			arr[0].boardAddress = val / 10;
+# endif
+			arr[0].localDriver = val % 10;
+		}
+		length = seenParameter->intValue;
+		break;
+#endif
+
+	default:
+		length = 0;
+		return;
+	}
+}
+
 void BinaryParser::SetFinished()
 {
 	gb.machineState->g53Active = false;		// G53 does not persist beyond the current command
@@ -422,6 +563,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 	if (seenParameter == nullptr)
 	{
 		INTERNAL_ERROR;
+		length = 0;
 		return;
 	}
 

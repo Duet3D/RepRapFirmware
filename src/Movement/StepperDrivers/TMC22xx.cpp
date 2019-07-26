@@ -23,9 +23,10 @@
 // so that each one gets an interval while the other one is being polled.
 
 constexpr float MaximumMotorCurrent = 1600.0;
-constexpr uint32_t DefaultMicrosteppingShift = 4;						// x16 microstepping
-constexpr bool DefaultInterpolation = true;								// interpolation enabled
-constexpr uint32_t DefaultTpwmthrsReg = 2000;							// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle
+constexpr float MinimumOpenLoadMotorCurrent = 300;			// minimum current in mA for the open load status to be taken seriously
+constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
+constexpr bool DefaultInterpolation = true;					// interpolation enabled
+constexpr uint32_t DefaultTpwmthrsReg = 2000;				// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle
 
 static size_t numTmc22xxDrivers;
 
@@ -802,6 +803,7 @@ inline void TmcDriverState::TransferDone()
 				if (   (regVal & TMC_RR_STST) != 0
 					|| (interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor)) == 0		// get the full step interval
 					|| interval > maxOpenLoadStepInterval
+					|| motorCurrent < MinimumOpenLoadMotorCurrent
 				   )
 				{
 					regVal &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds

@@ -48,10 +48,10 @@ void CanInterface::StartMovement(const DDA& dda)
 
 // This is called by DDA::Prepare for each active CAN DM in the move
 // If steps == 0 then the drivers just need to be enabled
-void CanInterface::AddMovement(const DDA& dda, const PrepParams& params, size_t canDriver, int32_t steps)
+void CanInterface::AddMovement(const DDA& dda, const PrepParams& params, DriverId canDriver, int32_t steps)
 {
-	const size_t expansionBoardNumber = canDriver/DriversPerCanBoard;
-	CanMessageBuffer*& buf = movementBuffers[expansionBoardNumber];
+	const size_t expansionBoardNumber = canDriver.boardAddress;
+	CanMessageBuffer*& buf = movementBuffers[expansionBoardNumber - 1];
 	if (buf == nullptr)
 	{
 		buf = CanMessageBuffer::Allocate();
@@ -60,7 +60,7 @@ void CanInterface::AddMovement(const DDA& dda, const PrepParams& params, size_t 
 			return;		//TODO error handling
 		}
 
-		auto move = buf->SetupRequestMessage<CanMessageMovement>(expansionBoardNumber + 1);
+		auto move = buf->SetupRequestMessage<CanMessageMovement>(expansionBoardNumber);
 
 		// Common parameters
 		move->accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
@@ -86,7 +86,7 @@ void CanInterface::AddMovement(const DDA& dda, const PrepParams& params, size_t 
 		}
 	}
 
-	buf->msg.move.perDrive[canDriver % DriversPerCanBoard].steps = steps;
+	buf->msg.move.perDrive[canDriver.localDriver].steps = steps;
 }
 
 // This is called by DDA::Prepare when all DMs for CAN drives have been processed

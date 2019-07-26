@@ -275,6 +275,19 @@ void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad)
 	}
 }
 
+// Get a :-separated list of drivers after a key letter
+void GCodeBuffer::GetDriverIdArray(DriverId arr[], size_t& length)
+{
+	if (isBinaryBuffer)
+	{
+		binaryParser.GetDriverIdArray(arr, length);
+	}
+	else
+	{
+		stringParser.GetDriverIdArray(arr, length);
+	}
+}
+
 // If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
 bool GCodeBuffer::TryGetFValue(char c, float& val, bool& seen)
 {
@@ -406,6 +419,12 @@ float GCodeBuffer::GetPwmValue()
 		v = v/255.0;
 	}
 	return constrain<float>(v, 0.0, 1.0);
+}
+
+// Get a driver ID
+DriverId GCodeBuffer::GetDriverId()
+{
+	return isBinaryBuffer ? binaryParser.GetDriverId() : stringParser.GetDriverId();
 }
 
 bool GCodeBuffer::IsIdle() const

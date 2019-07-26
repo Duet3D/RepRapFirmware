@@ -172,7 +172,7 @@ namespace DuetExpansion
 	}
 
 	// Return the name of the expansion board, or nullptr if no expansion board
-	const char* array null GetExpansionBoardName()
+	const char* _ecv_array null GetExpansionBoardName()
 	{
 		switch(dueXnBoardType)
 		{
@@ -188,7 +188,7 @@ namespace DuetExpansion
 	}
 
 	// Return the name of the additional expansion board, or nullptr if no expansion board
-	const char* array null GetAdditionalExpansionBoardName()
+	const char* _ecv_array null GetAdditionalExpansionBoardName()
 	{
 		return (additionalIoExpanderPresent) ? "SX1509B expander" : nullptr;
 	}

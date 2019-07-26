@@ -544,7 +544,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (gb.Seen(axisLetters[axis]))
 				{
 					SetAxisNotHomed(axis);
-					platform.DisableDrive(axis);
+					platform.DisableDrivers(axis);
 					seen = true;
 				}
 			}
@@ -563,7 +563,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						result = GCodeResult::error;
 						break;
 					}
-					platform.DisableDrive(MaxAxes + eDrive[i]);
+					platform.DisableDrivers(MaxAxes + eDrive[i]);
 				}
 			}
 
@@ -2370,98 +2370,69 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 301: // Set/report hot end PID values
-		SetPidParameters(gb, 1, reply);
+		result = reprap.GetHeat().SetPidParameters(1, gb, reply);
 		break;
 
 	case 302: // Allow, deny or report cold extrudes and configure minimum extrusion/retraction temps
-	{
-		bool seen = false;
-		if (gb.Seen('P'))
 		{
-			if (!LockMovementAndWaitForStandstill(gb))
+			bool seen = false;
+			if (gb.Seen('P'))
 			{
-				return false;
+				if (!LockMovementAndWaitForStandstill(gb))
+				{
+					return false;
+				}
+				seen = true;
+				reprap.GetHeat().AllowColdExtrude(gb.GetIValue() > 0);
 			}
-			seen = true;
-			reprap.GetHeat().AllowColdExtrude(gb.GetIValue() > 0);
+			if (gb.Seen('S'))
+			{
+				if (!LockMovementAndWaitForStandstill(gb))
+				{
+					return false;
+				}
+				seen = true;
+				reprap.GetHeat().SetExtrusionMinTemp(gb.GetFValue());
+			}
+			if (gb.Seen('R'))
+			{
+				if (!LockMovementAndWaitForStandstill(gb))
+				{
+					return false;
+				}
+				seen = true;
+				reprap.GetHeat().SetRetractionMinTemp(gb.GetFValue());
+			}
+			if (!seen)
+			{
+				if (reprap.GetHeat().ColdExtrude())
+				{
+					reply.copy("Cold extrusion is allowed (use M302 P0 to forbid it)");
+				}
+				else
+				{
+					reply.printf("Cold extrusion is forbidden (use M302 P1 to allow it), min. extrusion temperature %.1fC, min. retraction temperature %.1fC",
+									(double)reprap.GetHeat().GetExtrusionMinTemp(), (double)reprap.GetHeat().GetRetractionMinTemp());
+				}
+			}
 		}
-		if (gb.Seen('S'))
-		{
-			if (!LockMovementAndWaitForStandstill(gb))
-			{
-				return false;
-			}
-			seen = true;
-			reprap.GetHeat().SetExtrusionMinTemp(gb.GetFValue());
-		}
-		if (gb.Seen('R'))
-		{
-			if (!LockMovementAndWaitForStandstill(gb))
-			{
-				return false;
-			}
-			seen = true;
-			reprap.GetHeat().SetRetractionMinTemp(gb.GetFValue());
-		}
-		if (!seen)
-		{
-			if (reprap.GetHeat().ColdExtrude())
-			{
-				reply.copy("Cold extrusion is allowed (use M302 P0 to forbid it)");
-			}
-			else
-			{
-			reply.printf("Cold extrusion is forbidden (use M302 P1 to allow it), min. extrusion temperature %.1fC, min. retraction temperature %.1fC",
-					(double)reprap.GetHeat().GetExtrusionMinTemp(), (double)reprap.GetHeat().GetRetractionMinTemp());
-			}
-		}
-	}
-	break;
+		break;
 
 	case 303: // Run PID tuning
-		if (gb.Seen('H'))
-		{
-			const unsigned int heater = gb.GetUIValue();
-			const float temperature = (gb.Seen('S')) ? gb.GetFValue()
-										: reprap.GetHeat().IsBedHeater(heater) ? 75.0
-										: reprap.GetHeat().IsChamberHeater(heater) ? 50.0
-										: 200.0;
-			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : reprap.GetHeat().GetHeaterModel(heater).GetMaxPwm();
-			if (heater >= MaxHeaters)
-			{
-				reply.copy("Bad heater number in M303 command");
-			}
-			else if (!reprap.GetHeat().CheckHeater(heater))
-			{
-				reply.copy("Heater is not ready to perform PID auto-tuning");
-			}
-			else if (maxPwm < 0.1 || maxPwm > 1.0)
-			{
-				reply.copy("Invalid PWM in M303 command");
-			}
-			else
-			{
-				reprap.GetHeat().StartAutoTune(heater, temperature, maxPwm, reply);
-			}
-		}
-		else
-		{
-			reprap.GetHeat().GetAutoTuneStatus(reply);
-		}
+		result = reprap.GetHeat().TuneHeater(gb, reply);
 		break;
 
 	case 304: // Set/report heated bed PID values
-		SetPidParameters(gb, 0, reply);
+		result = reprap.GetHeat().SetPidParameters(0, gb, reply);
 		break;
 
-#if 0
 	case 305: // Set/report specific heater parameters
-		result = SetHeaterParameters(gb, reply);
+		reply.copy("M305 has been replaced by M308 and M950 in RepRapFirmware 3");
+		result = GCodeResult::error;
 		break;
-#endif
 
 	case 307: // Set heater process model parameters
-		result = SetHeaterModel(gb, reply);
+		result = reprap.GetHeat().SetOrReportHeaterModel(gb, reply);
 		break;
 
 	case 308:
@@ -3332,24 +3303,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			if (gb.Seen('H'))
 			{
-				const unsigned heater = gb.GetUIValue();
-				if (heater < MaxHeaters)
-				{
-					bool seenValue = false;
-					float maxTempExcursion, maxFaultTime;
-					reprap.GetHeat().GetFaultDetectionParameters(heater, maxTempExcursion, maxFaultTime);
-					gb.TryGetFValue('P', maxFaultTime, seenValue);
-					gb.TryGetFValue('T', maxTempExcursion, seenValue);
-					if (seenValue)
-					{
-						reprap.GetHeat().SetFaultDetectionParameters(heater, maxTempExcursion, maxFaultTime);
-					}
-					else if (!seen)
-					{
-						reply.printf("Heater %u allowed excursion %.1f" DEGREE_SYMBOL "C, fault trigger time %.1f seconds", heater, (double)maxTempExcursion, (double)maxFaultTime);
-					}
-				}
 				seen = true;
+				result = reprap.GetHeat().ConfigureHeaterMonitoring(gb.GetUIValue(), gb, reply);
 			}
 			if (!seen)
 			{

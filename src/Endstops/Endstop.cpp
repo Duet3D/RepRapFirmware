@@ -224,7 +224,11 @@ EndstopHitDetails StallDetectionEndstop::CheckTriggered(bool goingSlow)
 		else if (individualMotors && numDriversLeft > 1)
 		{
 			rslt.SetAction(EndstopHitAction::stopDriver);
-			rslt.driver = LowestSetBitNumber(relevantStalledDrivers);
+#if SUPPORT_CAN_EXPANSION
+			rslt.driver.boardAddress = 0;
+#else
+			rslt.driver.localDriver = LowestSetBitNumber(relevantStalledDrivers);
+#endif
 		}
 		else
 		{
@@ -254,7 +258,7 @@ bool StallDetectionEndstop::Acknowledge(EndstopHitDetails what)
 		return true;
 
 	case EndstopHitAction::stopDriver:
-		ClearBit(driversMonitored, what.driver);
+		ClearBit(driversMonitored, what.driver.localDriver);
 		--numDriversLeft;
 		return false;
 

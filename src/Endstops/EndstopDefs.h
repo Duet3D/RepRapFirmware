@@ -23,21 +23,24 @@ enum class EndstopHitAction : uint8_t
 	stopAll = 4						// stop movement completely
 };
 
-// Struct that fits in a single register, to return info about what endstop has been triggered and what to do about it
+// Struct to return info about what endstop has been triggered and what to do about it
 struct EndstopHitDetails
 {
-	EndstopHitDetails() : action((uint32_t)EndstopHitAction::none), internalUse(0), driver(0), axis(0), setAxisLow(false), setAxisHigh(false) { }
+	EndstopHitDetails() : action((uint32_t)EndstopHitAction::none), internalUse(0), axis(0), setAxisLow(false), setAxisHigh(false)
+	{
+		driver.Clear();
+	}
 
 	void SetAction(EndstopHitAction a) { action = (uint32_t)a; }
 	EndstopHitAction GetAction() const { return (EndstopHitAction)action; }
 
-	uint32_t action : 4,			// an EndstopHitAction
+	uint16_t action : 4,			// an EndstopHitAction
 			 internalUse : 4,		// used to pass data between CheckTriggered() and Acknowledge()
-			 driver : 8,			// which driver to stop if the action is stopDriver, or if it is a stall detection endstop
-			 axis : 8,				// which axis to stop if the action is stopAxis, and which axis to set the position of if setAxisPos is true
+			 axis : 4,				// which axis to stop if the action is stopAxis, and which axis to set the position of if setAxisPos is true
 			 setAxisLow : 1,		// whether or not to set the axis position to its min
 			 setAxisHigh : 1,		// whether or not to set the axis position to its max
 			 isZProbe : 1;			// whether this is a Z probe
+	DriverId driver;
 };
 
 // The values of the following enumeration must tally with the X,Y,... parameters for the M574 command

@@ -572,8 +572,8 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 			// Found an axis letter. Get the drivers to assign to this axis.
 			seen = true;
 			size_t numValues = MaxDriversPerAxis;
-			uint32_t drivers[MaxDriversPerAxis];
-			gb.GetUnsignedArray(drivers, numValues, false);
+			DriverId drivers[MaxDriversPerAxis];
+			gb.GetDriverIdArray(drivers, numValues);
 
 			// Find the drive number allocated to this axis, or allocate a new one if necessary
 			size_t drive = 0;
@@ -604,12 +604,12 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 	{
 		seen = true;
 		size_t numValues = MaxExtruders;
-		uint32_t drivers[MaxExtruders];
-		gb.GetUnsignedArray(drivers, numValues, false);
+		DriverId drivers[MaxExtruders];
+		gb.GetDriverIdArray(drivers, numValues);
 		numExtruders = numValues;
 		for (size_t i = 0; i < numValues; ++i)
 		{
-			platform.SetExtruderDriver(i, (uint8_t)min<uint32_t>(drivers[i], 255));
+			platform.SetExtruderDriver(i, drivers[i]);
 		}
 	}
 
@@ -638,6 +638,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 	else
 	{
 		reply.copy("Driver assignments:");
+		bool printed = false;
 		for (size_t drive = 0; drive < numTotalAxes; ++ drive)
 		{
 			reply.cat(' ');
@@ -645,7 +646,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 			char c = axisLetters[drive];
 			for (size_t i = 0; i < axisConfig.numDrivers; ++i)
 			{
-				reply.catf("%c%u", c, axisConfig.driverNumbers[i]);
+				printed = true;
+				const DriverId id = axisConfig.driverNumbers[i];
+				reply.catf("%c" PRIdriverId, c, DRIVER_ID_PRINT_ARGS(id));
 				c = ':';
 			}
 		}
@@ -655,9 +658,14 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 			char c = extrudeLetter;
 			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 			{
-				reply.catf("%c%u", c, platform.GetExtruderDriver(extruder));
+				const DriverId id = platform.GetExtruderDriver(extruder);
+				reply.catf("%c" PRIdriverId, c, DRIVER_ID_PRINT_ARGS(id));
 				c = ':';
 			}
+		}
+		if (!printed)
+		{
+			reply.cat(" none");
 		}
 		reply.catf(", %u axes visible", numVisibleAxes);
 	}
@@ -1238,7 +1246,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 						const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
 						const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
 						bool bdummy;
-						const float mmPerSec = (12000000.0 * platform.GetDriverMicrostepping(drive, bdummy))/(256 * tpwmthrs * platform.DriveStepsPerUnit(axis));
+						const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * platform.DriveStepsPerUnit(axis));
 						reply.catf(", pos %" PRIu32", tpwmthrs %" PRIu32 " (%.1f mm/sec)", mstepPos, tpwmthrs, (double)mmPerSec);
 					}
 #endif
@@ -1248,76 +1256,12 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 						const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
 						const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
 						bool bdummy;
-						const float mmPerSec = (12000000.0 * platform.GetDriverMicrostepping(drive, bdummy))/(256 * thigh * platform.DriveStepsPerUnit(axis));
+						const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * platform.DriveStepsPerUnit(axis));
 						reply.catf(", thigh %" PRIu32 " (%.1f mm/sec)", thigh, (double)mmPerSec);
 					}
 #endif
 				}
 #endif
-			}
-		}
-	}
-	return GCodeResult::ok;
-}
-
-// Set the heater model (M307)
-GCodeResult GCodes::SetHeaterModel(GCodeBuffer& gb, const StringRef& reply)
-{
-	if (gb.Seen('H'))
-	{
-		const unsigned int heater = gb.GetUIValue();
-		if (heater < MaxHeaters)
-		{
-			const FopDt& model = reprap.GetHeat().GetHeaterModel(heater);
-			bool seen = false;
-			float gain = model.GetGain(),
-				tc = model.GetTimeConstant(),
-				td = model.GetDeadTime(),
-				maxPwm = model.GetMaxPwm(),
-				voltage = model.GetVoltage();
-			int32_t dontUsePid = model.UsePid() ? 0 : 1;
-			int32_t inversionParameter = 0;
-
-			gb.TryGetFValue('A', gain, seen);
-			gb.TryGetFValue('C', tc, seen);
-			gb.TryGetFValue('D', td, seen);
-			gb.TryGetIValue('B', dontUsePid, seen);
-			gb.TryGetFValue('S', maxPwm, seen);
-			gb.TryGetFValue('V', voltage, seen);
-			gb.TryGetIValue('I', inversionParameter, seen);
-
-			if (seen)
-			{
-				const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
-				if (!reprap.GetHeat().SetHeaterModel(heater, gain, tc, td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl))
-				{
-					reply.copy("bad model parameters");
-					return GCodeResult::error;
-				}
-			}
-			else if (!model.IsEnabled())
-			{
-				reply.printf("Heater %u is disabled", heater);
-			}
-			else
-			{
-				const char* const mode = (!model.UsePid()) ? "bang-bang"
-											: (model.ArePidParametersOverridden()) ? "custom PID"
-												: "PID";
-				reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, calibration voltage %.1f, mode %s", heater,
-							 (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode);
-				if (model.IsInverted())
-				{
-					reply.cat(", inverted temperature control");
-				}
-				if (model.UsePid())
-				{
-					// When reporting the PID parameters, we scale them by 255 for compatibility with older firmware and other firmware
-					M301PidParameters params = model.GetM301PidParameters(false);
-					reply.catf("\nComputed PID parameters for setpoint change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
-					params = model.GetM301PidParameters(true);
-					reply.catf("\nComputed PID parameters for load change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
-				}
 			}
 		}
 	}
