@@ -1,12 +1,21 @@
 Duet 3 work list
-- Configure ESP SPI pins and channel from Pins.h
+- [done] Configure ESP SPI pins and channel on 0.3 board from Pins.h
+- [done] Fan/heater output flexible configuration
+- [done] Endstop/Z probe flexible configuration
+- [done, test] Leadscrew adjustment moves not implemented on remote drivers
+- [done] Separate temperature sensors from heaters
+- [done] Remote temperature sensors
+- [part done] Remote heaters
 - Driver on/off voltages to be defined in Pins.h, they depend on the board
 - Enable dotstar support
 - SWdebug stuff for main board
-- fan/heater output flexible configuration
-- endstop/Z probe flexible configuration
-- leadscrew adjustment moves not implemented on remote drivers
-- hiccup delay times will need sending to CAN drivers
+- Hiccup delay times will need sending to CAN drivers
+- Remote fans
+- Remote GPIO and servo ports
+- Driver numbers to be specified using board.driver format in M584 and M569
+- Remote M906 and M913
+- Remote M569
+- Remote M915
 
 Done in 2.03beta1:
 - [done, ok] MBytes/sec -> Mbytes/sec in M122 P104 report

@@ -522,7 +522,7 @@ void RepRap::EmergencyStop()
 	for (int i = 0; i < 2; i++)
 	{
 		move->Exit();
-		platform->DisableAllDrives();
+		platform->EmergencyDisableDrivers();
 	}
 
 	gCodes->EmergencyStop();
@@ -760,7 +760,7 @@ void RepRap::Tick()
 			{
 				resetting = true;
 				heat->SwitchOffAll(true);
-				platform->DisableAllDrives();
+				platform->EmergencyDisableDrivers();
 
 				// We now save the stack when we get stuck in a spin loop
 				__asm volatile("mrs r2, psp");
@@ -1012,7 +1012,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		{
 			response->catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"standby\":%.1f,\"state\":%d,\"heater\":%d},",
 				(double)heat->GetHeaterTemperature(bedHeater), (double)heat->GetActiveTemperature(bedHeater), (double)heat->GetStandbyTemperature(bedHeater),
-					heat->GetStatus(bedHeater), bedHeater);
+					(int)heat->GetStatus(bedHeater), bedHeater);
 		}
 
 		/* Chamber */
@@ -1021,7 +1021,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		{
 			response->catf("\"chamber\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
 				(double)heat->GetHeaterTemperature(chamberHeater), (double)heat->GetActiveTemperature(chamberHeater),
-					heat->GetStatus(chamberHeater), chamberHeater);
+					(int)heat->GetStatus(chamberHeater), chamberHeater);
 		}
 
 		/* Cabinet */
@@ -1030,7 +1030,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		{
 			response->catf("\"cabinet\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
 				(double)heat->GetHeaterTemperature(cabinetHeater), (double)heat->GetActiveTemperature(cabinetHeater),
-					heat->GetStatus(cabinetHeater), cabinetHeater);
+					(int)heat->GetStatus(cabinetHeater), cabinetHeater);
 		}
 
 		/* Heaters */
@@ -1050,7 +1050,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for (size_t heater = 0; heater < MaxHeaters; heater++)
 		{
-			response->catf("%c%d", ch, heat->GetStatus(heater));
+			response->catf("%c%d", ch, (int)heat->GetStatus(heater));
 			ch = ',';
 		}
 		response->cat((ch == '[') ? "[]" : "]");
@@ -1064,7 +1064,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			{
 				response->cat(ch);
 				ch = ',';
-				response->EncodeString(GetHeat().GetHeaterName(heater), true);
+				response->EncodeString(GetHeat().GetHeaterSensorName(heater), true);
 			}
 			response->cat((ch == '[') ? "[]" : "]");
 		}

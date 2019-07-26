@@ -48,6 +48,8 @@ Licence: GPL
 # include "Microstepping.h"
 #endif
 
+#include <functional>
+
 constexpr bool FORWARDS = true;
 constexpr bool BACKWARDS = !FORWARDS;
 
@@ -264,7 +266,7 @@ struct AxisDriversConfig
 	DriversBitmap GetDriversBitmap() const;
 
 	uint8_t numDrivers;								// Number of drivers assigned to each axis
-	uint8_t driverNumbers[MaxDriversPerAxis];		// The driver numbers assigned - only the first numDrivers are meaningful
+	DriverId driverNumbers[MaxDriversPerAxis];		// The driver numbers assigned - only the first numDrivers are meaningful
 };
 
 // The main class that defines the RepRap machine for the benefit of the other classes
@@ -381,11 +383,12 @@ public:
 	bool GetDirectionValue(size_t driver) const;
 	void SetEnableValue(size_t driver, int8_t eVal);
 	bool GetEnableValue(size_t driver) const;
-	void EnableDriver(size_t driver);
-	void DisableDriver(size_t driver);
-	void EnableDrive(size_t axisOrExtruder);
-	void DisableDrive(size_t axisOrExtruder);
-	void DisableAllDrives();
+	void EnableLocalDrivers(size_t axisOrExtruder);
+	void EnableOneLocalDriver(size_t driver, float requiredCurrent);
+	void DisableAllDrivers();
+	void DisableDrivers(size_t axisOrExtruder);
+	void DisableOneLocalDriver(size_t driver);
+	void EmergencyDisableDrivers();
 	void SetDriversIdle();
 	void SetMotorCurrent(size_t axisOrExtruder, float current, int code);
 	float GetMotorCurrent(size_t axisOrExtruder, int code) const;
@@ -393,7 +396,6 @@ public:
 	float GetIdleCurrentFactor() const
 		{ return idleCurrentFactor; }
 	bool SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode);
-	unsigned int GetDriverMicrostepping(size_t drive, bool& interpolate) const;
 	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode);
 	unsigned int GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const;
 	void SetDriverStepTiming(size_t driver, const float microseconds[4]);
@@ -401,7 +403,7 @@ public:
 	float DriveStepsPerUnit(size_t axisOrExtruder) const;
 	const float *GetDriveStepsPerUnit() const
 		{ return driveStepsPerUnit; }
-	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t microstepping);
+	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping);
 	float Acceleration(size_t axisOrExtruder) const;
 	const float* Accelerations() const;
 	void SetAcceleration(size_t axisOrExtruder, float value);
@@ -423,12 +425,12 @@ public:
 	const AxisDriversConfig& GetAxisDriversConfig(size_t axis) const
 		pre(axis < MaxAxes)
 		{ return axisDrivers[axis]; }
-	void SetAxisDriversConfig(size_t axis, size_t numValues, const uint32_t driverNumbers[])
+	void SetAxisDriversConfig(size_t axis, size_t numValues, const DriverId driverNumbers[])
 		pre(axis < MaxAxes);
-	uint8_t GetExtruderDriver(size_t extruder) const
+	DriverId GetExtruderDriver(size_t extruder) const
 		pre(extruder < MaxExtruders)
 		{ return extruderDrivers[extruder]; }
-	void SetExtruderDriver(size_t extruder, uint8_t driver)
+	void SetExtruderDriver(size_t extruder, DriverId driver)
 		pre(extruder < MaxExtruders);
 	uint32_t GetDriversBitmap(size_t axisOrExtruder) const	// get the bitmap of driver step bits for this axis or extruder
 		pre(axisOrExtruder < 2 * MaxTotalDrivers)
@@ -575,6 +577,11 @@ private:
 
 	void UpdateZMotorDriverBits();					// set up the driver bits for the individual Z motors
 
+	GCodeResult ConfigureFan(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureGpioOrServo(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply);
+
+	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> func);
+
 #if HAS_SMART_DRIVERS
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char* text, bool& reported);
 #endif
@@ -663,16 +670,17 @@ private:
 	void InitialiseInterrupts();
 
 	// Drives
-	void SetDriverCurrent(size_t driver, float current, int code);
-	void UpdateMotorCurrent(size_t driver);
+	void UpdateMotorCurrent(size_t driver, float current);
 	void SetDriverDirection(uint8_t driver, bool direction)
 	pre(driver < DRIVES);
 
 	bool directions[NumDirectDrivers];
 	int8_t enableValues[NumDirectDrivers];
 
-	float motorCurrents[MaxTotalDrivers];				// the normal motor current for each stepper driver
-	float motorCurrentFraction[MaxTotalDrivers];		// the percentages of normal motor current that each driver is set to
+	float motorCurrents[MaxAxesPlusExtruders];				// the normal motor current for each stepper driver
+	float motorCurrentFraction[MaxAxesPlusExtruders];		// the percentages of normal motor current that each driver is set to
+	float standstillCurrentFraction[MaxAxesPlusExtruders];	// the percentages of normal motor current that each driver uses when in standstill
+	uint16_t microstepping[MaxAxesPlusExtruders];			// the microstepping used for each axis or extruder, top bit is set if interpolation enabled
 
 	volatile DriverStatus driverState[MaxAxesPlusExtruders];
 	float maxFeedrates[MaxAxesPlusExtruders];
@@ -680,23 +688,23 @@ private:
 	float driveStepsPerUnit[MaxAxesPlusExtruders];
 	float instantDvs[MaxAxesPlusExtruders];
 	uint32_t driveDriverBits[MaxAxesPlusExtruders + MaxDriversPerAxis];
-														// the bitmap of local driver port bits for each axis or extruder, followed by the bitmaps for the individual Z motors
-	AxisDriversConfig axisDrivers[MaxAxes];				// the driver numbers assigned to each axis
+															// the bitmap of local driver port bits for each axis or extruder, followed by the bitmaps for the individual Z motors
+	AxisDriversConfig axisDrivers[MaxAxes];					// the driver numbers assigned to each axis
 
 	float pressureAdvance[MaxExtruders];
 #if SUPPORT_NONLINEAR_EXTRUSION
 	float nonlinearExtrusionA[MaxExtruders], nonlinearExtrusionB[MaxExtruders], nonlinearExtrusionLimit[MaxExtruders];
 #endif
 
-	uint8_t extruderDrivers[MaxExtruders];				// the driver number assigned to each extruder
-	uint32_t slowDriverStepTimingClocks[4];				// minimum step high, step low, dir setup and dir hold timing for slow drivers
-	uint32_t slowDriversBitmap;							// bitmap of driver port bits that need extended step pulse timing
-	uint32_t steppingEnabledDriversBitmap;				// mask of driver bits that we haven't disabled temporarily
+	DriverId extruderDrivers[MaxExtruders];					// the driver number assigned to each extruder
+	uint32_t slowDriverStepTimingClocks[4];					// minimum step high, step low, dir setup and dir hold timing for slow drivers
+	uint32_t slowDriversBitmap;								// bitmap of driver port bits that need extended step pulse timing
+	uint32_t steppingEnabledDriversBitmap;					// mask of driver bits that we haven't disabled temporarily
 	float idleCurrentFactor;
 	float minimumMovementSpeed;
 
 #if HAS_SMART_DRIVERS
-	size_t numSmartDrivers;								// the number of TMC drivers we have, the remaining are simple enable/step/dir drivers
+	size_t numSmartDrivers;									// the number of TMC drivers we have, the remaining are simple enable/step/dir drivers
 	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers;
 	DriversBitmap openLoadADrivers, openLoadBDrivers, notOpenLoadADrivers, notOpenLoadBDrivers;
 	MillisTimer openLoadATimer, openLoadBTimer;

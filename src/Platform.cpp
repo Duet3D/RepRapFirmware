@@ -74,6 +74,10 @@
 # include "Networking/TelnetResponder.h"
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+# include "CAN/CanMessageGenericConstructor.h"
+#endif
+
 #include <climits>
 #include <utility>					// for std::swap
 
@@ -160,7 +164,12 @@ DriversBitmap AxisDriversConfig::GetDriversBitmap() const
 	DriversBitmap rslt = 0;
 	for (size_t i = 0; i < numDrivers; ++i)
 	{
-		SetBit(rslt, driverNumbers[i]);
+#if SUPPORT_CAN_EXPANSION
+		if (driverNumbers[i].IsLocal())
+#endif
+		{
+			SetBit(rslt, driverNumbers[i].localDriver);
+		}
 	}
 	return rslt;
 }
@@ -427,8 +436,7 @@ void Platform::Init()
 	{
 		directions[driver] = true;								// drive moves forwards by default
 		enableValues[driver] = 0;								// assume active low enable signal
-		motorCurrents[driver] = 0.0;
-		motorCurrentFraction[driver] = 1.0;
+
 		// Set up the control pins
 		pinMode(STEP_PINS[driver], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
@@ -446,6 +454,10 @@ void Platform::Init()
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
 		driverState[drive] = DriverStatus::disabled;
+		motorCurrents[drive] = 0.0;
+		motorCurrentFraction[drive] = 1.0;
+		standstillCurrentFraction[drive] = 0.75;
+		microstepping[drive] = 16 | 0x8000;						// x16 with interpolation
 	}
 
 	// Set up default axis mapping
@@ -457,7 +469,7 @@ void Platform::Init()
 		const size_t driver = axis;								// on most boards we map axes straight through to drives
 #endif
 		axisDrivers[axis].numDrivers = 1;
-		axisDrivers[axis].driverNumbers[0] = (uint8_t)driver;
+		axisDrivers[axis].driverNumbers[0].SetLocal(driver);
 		driveDriverBits[axis] = StepPins::CalcDriverBitmap(driver);	// overwrite the default value set up earlier
 	}
 	for (size_t axis = MinAxes; axis < MaxAxes; ++axis)
@@ -475,7 +487,7 @@ void Platform::Init()
 
 	for (size_t extr = 0; extr < MaxExtruders; ++extr)
 	{
-		extruderDrivers[extr] = (uint8_t)(extr + MinAxes);		// set up default extruder drive mapping
+		extruderDrivers[extr].SetLocal(extr + MinAxes);			// set up default extruder drive mapping
 		driveDriverBits[extr + MaxAxes] = StepPins::CalcDriverBitmap(extr + MinAxes);
 		SetPressureAdvance(extr, 0.0);							// no pressure advance
 #if SUPPORT_NONLINEAR_EXTRUSION
@@ -1134,7 +1146,7 @@ void Platform::Spin()
 
 				// The driver often produces a transient open-load error, especially in stealthchop mode, so we require the condition to persist before we report it.
 				// Also, false open load indications persist when in standstill, if the phase has zero current in that position
-				if ((stat & TMC_RR_OLA) != 0 && motorCurrents[nextDriveToPoll] * motorCurrentFraction[nextDriveToPoll] >= MinimumOpenLoadMotorCurrent)
+				if ((stat & TMC_RR_OLA) != 0)
 				{
 					if (!openLoadATimer.IsRunning())
 					{
@@ -1152,7 +1164,7 @@ void Platform::Spin()
 					}
 				}
 
-				if ((stat & TMC_RR_OLB) != 0 && motorCurrents[nextDriveToPoll] * motorCurrentFraction[nextDriveToPoll] >= MinimumOpenLoadMotorCurrent)
+				if ((stat & TMC_RR_OLB) != 0)
 				{
 					if (!openLoadBTimer.IsRunning())
 					{
@@ -1460,8 +1472,8 @@ bool Platform::AnyAxisMotorStalled(size_t drive) const
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
 		{
-			const uint8_t driver = axisDrivers[drive].driverNumbers[i];
-			if (driver < numSmartDrivers && (SmartDrivers::GetLiveStatus(driver) & TMC_RR_SG) != 0)
+			const DriverId driver = axisDrivers[drive].driverNumbers[i];
+			if (driver.IsLocal() && driver.localDriver < numSmartDrivers && (SmartDrivers::GetLiveStatus(driver.localDriver) & TMC_RR_SG) != 0)
 			{
 				return true;
 			}
@@ -1473,8 +1485,8 @@ bool Platform::AnyAxisMotorStalled(size_t drive) const
 // Return true if the motor driving this extruder is stalled
 bool Platform::ExtruderMotorStalled(size_t extruder) const pre(drive < DRIVES)
 {
-	const uint8_t driver = extruderDrivers[extruder];
-	return driver < NumDirectDrivers && (SmartDrivers::GetLiveStatus(driver) & TMC_RR_SG) != 0;
+	const DriverId driver = extruderDrivers[extruder];
+	return driver.IsLocal() && driver.localDriver < numSmartDrivers && (SmartDrivers::GetLiveStatus(driver.localDriver) & TMC_RR_SG) != 0;
 }
 
 #endif
@@ -2476,30 +2488,49 @@ bool Platform::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float 
 
 #endif
 
+// Function to identfy and iterate through all local drivers attached to an axis or extruder
+void Platform::IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> func)
+{
+	if (axisOrExtruder < MaxAxes)
+	{
+		for (size_t i = 0; i < axisDrivers[axisOrExtruder].numDrivers; ++i)
+		{
+			const DriverId id = axisDrivers[axisOrExtruder].driverNumbers[i];
+			if (id.IsLocal())
+			{
+				func(id.localDriver);
+			}
+		}
+	}
+	else if (axisOrExtruder < MaxAxesPlusExtruders)
+	{
+		const DriverId id = extruderDrivers[axisOrExtruder - MaxAxes];
+		if (id.IsLocal())
+		{
+			func(id.localDriver);
+		}
+	}
+}
+
 // This is called from the step ISR as well as other places, so keep it fast
 // If drive >= DRIVES then we are setting an individual motor direction
-void Platform::SetDirection(size_t drive, bool direction)
+void Platform::SetDirection(size_t axisOrExtruder, bool direction)
 {
-	const bool isSlowDriver = (GetDriversBitmap(drive) & GetSlowDriversBitmap()) != 0;
+	const bool isSlowDriver = (GetDriversBitmap(axisOrExtruder) & GetSlowDriversBitmap()) != 0;
 	if (isSlowDriver)
 	{
 		while (StepTimer::GetInterruptClocks() - DDA::lastStepLowTime < GetSlowDriverDirHoldClocks()) { }
 	}
-	if (drive < MaxAxes)
+
+	if (axisOrExtruder < MaxAxesPlusExtruders)
 	{
-		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
-		{
-			SetDriverDirection(axisDrivers[drive].driverNumbers[i], direction);
-		}
+		IterateLocalDrivers(axisOrExtruder, [this, direction](uint8_t driver) { this->SetDriverDirection(driver, direction); });
 	}
-	else if (drive < MaxAxesPlusExtruders)
+	else if (axisOrExtruder < MaxAxesPlusExtruders + NumDirectDrivers)
 	{
-		SetDriverDirection(extruderDrivers[drive - MaxAxes], direction);
+		SetDriverDirection(axisOrExtruder - MaxAxesPlusExtruders, direction);
 	}
-	else if (drive >= MaxAxesPlusExtruders && drive < MaxAxesPlusExtruders + NumDirectDrivers)
-	{
-		SetDriverDirection(drive - MaxAxesPlusExtruders, direction);
-	}
+
 	if (isSlowDriver)
 	{
 		DDA::lastDirChangeTime = StepTimer::GetInterruptClocks();
@@ -2507,7 +2538,7 @@ void Platform::SetDirection(size_t drive, bool direction)
 }
 
 // Enable a driver. Must not be called from an ISR, or with interrupts disabled.
-void Platform::EnableDriver(size_t driver)
+void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent)
 {
 #if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
 	if (driver < numSmartDrivers && !driversPowered)
@@ -2517,33 +2548,29 @@ void Platform::EnableDriver(size_t driver)
 	else
 	{
 #endif
-		if (driver < NumDirectDrivers && driverState[driver] != DriverStatus::enabled)
-		{
-			driverState[driver] = DriverStatus::enabled;
-			UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
+		UpdateMotorCurrent(driver, requiredCurrent);
 
 #if (defined(DUET3_V03) || defined(DUET3_V05)) && HAS_SMART_DRIVERS
-			SmartDrivers::EnableDrive(driver, true);		// all drivers driven directly by the main board are smart
+		SmartDrivers::EnableDrive(driver, true);		// all drivers driven directly by the main board are smart
 #elif HAS_SMART_DRIVERS
-			if (driver < numSmartDrivers)
-			{
-				SmartDrivers::EnableDrive(driver, true);
-			}
-			else
-			{
-				digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
-			}
-#else
-			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
-#endif
+		if (driver < numSmartDrivers)
+		{
+			SmartDrivers::EnableDrive(driver, true);
 		}
+		else
+		{
+			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
+		}
+#else
+		digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
+#endif
 #if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
 	}
 #endif
 }
 
 // Disable a driver
-void Platform::DisableDriver(size_t driver)
+void Platform::DisableOneLocalDriver(size_t driver)
 {
 	if (driver < NumDirectDrivers)
 	{
@@ -2561,137 +2588,119 @@ void Platform::DisableDriver(size_t driver)
 #else
 		digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
 #endif
-		driverState[driver] = DriverStatus::disabled;
 	}
 }
 
-// Enable the drivers for a drive. Must not be called from an ISR, or with interrupts disabled.
-void Platform::EnableDrive(size_t drive)
+// Enable the local drivers for a drive. Must not be called from an ISR, or with interrupts disabled.
+void Platform::EnableLocalDrivers(size_t axisOrExtruder)
 {
-	if (drive < MaxAxes)
+	if (driverState[axisOrExtruder] != DriverStatus::enabled)
 	{
-		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
-		{
-			EnableDriver(axisDrivers[drive].driverNumbers[i]);
-		}
-	}
-	else if (drive < MaxAxesPlusExtruders)
-	{
-		EnableDriver(extruderDrivers[drive - MaxAxes]);
+		driverState[axisOrExtruder] = DriverStatus::enabled;
+		const float requiredCurrent = motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder];
+		IterateLocalDrivers(axisOrExtruder, [this, requiredCurrent](uint8_t driver) { EnableOneLocalDriver(driver, requiredCurrent); });
 	}
 }
 
 // Disable the drivers for a drive
-void Platform::DisableDrive(size_t drive)
+//TODO handle remote drivers
+void Platform::DisableDrivers(size_t axisOrExtruder)
 {
-	if (drive < MaxAxes)
-	{
-		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
-		{
-			DisableDriver(axisDrivers[drive].driverNumbers[i]);
-		}
-	}
-	else if (drive < MaxAxesPlusExtruders)
-	{
-		DisableDriver(extruderDrivers[drive - MaxAxes]);
-	}
+	IterateLocalDrivers(axisOrExtruder, [this](uint8_t driver) { DisableOneLocalDriver(driver); });
+	driverState[axisOrExtruder] = DriverStatus::disabled;
 }
 
-// Disable all drives. Called from emergency stop and the tick ISR.
-void Platform::DisableAllDrives()
+// Disable all drives in an emergency. Called from emergency stop and the tick ISR.
+// This is only called in an emergency, so we don't update the driver status
+void Platform::EmergencyDisableDrivers()
 {
 	for (size_t drive = 0; drive < NumDirectDrivers; drive++)
 	{
 		if (!inInterrupt())		// on the Duet 06/085 we need interrupts running to send the I2C commands to set motor currents
 		{
-			SetDriverCurrent(drive, 0.0, false);
+			UpdateMotorCurrent(drive, 0.0);
 		}
-		DisableDriver(drive);
+		DisableOneLocalDriver(drive);
+	}
+}
+
+void Platform::DisableAllDrivers()
+{
+	for (size_t axisOrextruder = 0; axisOrextruder < MaxAxesPlusExtruders; axisOrextruder++)
+	{
+		DisableDrivers(axisOrextruder);
 	}
 }
 
 // Set drives to idle hold if they are enabled. If a drive is disabled, leave it alone.
 // Must not be called from an ISR, or with interrupts disabled.
+//TODO handle remote drivers
 void Platform::SetDriversIdle()
 {
 	if (idleCurrentFactor == 0)
 	{
-		DisableAllDrives();
+		DisableAllDrivers();
 		reprap.GetGCodes().SetAllAxesNotHomed();
 	}
 	else
 	{
-		for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+		for (size_t axisOrExtruder = 0; axisOrExtruder < MaxAxesPlusExtruders; ++axisOrExtruder)
 		{
-			if (driverState[driver] == DriverStatus::enabled)
+			if (driverState[axisOrExtruder] == DriverStatus::enabled)
 			{
-				driverState[driver] = DriverStatus::idle;
-				UpdateMotorCurrent(driver);
+				driverState[axisOrExtruder] = DriverStatus::idle;
+				const float current = motorCurrents[axisOrExtruder] * idleCurrentFactor;
+				IterateLocalDrivers(axisOrExtruder, [this, current](uint8_t driver) { UpdateMotorCurrent(driver, current); });
 			}
 		}
 	}
 }
 
-// Set the current for a drive. Current is in mA.
-void Platform::SetDriverCurrent(size_t driver, float currentOrPercent, int code)
+// Set the current for all drivers on an axis or extruder. Current is in mA.
+void Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, int code)
 {
-	if (driver < NumDirectDrivers)
+	switch (code)
 	{
-		switch (code)
-		{
-		case 906:
-			motorCurrents[driver] = currentOrPercent;
-			break;
+	case 906:
+		motorCurrents[axisOrExtruder] = currentOrPercent;
+		break;
 
-		case 913:
-			motorCurrentFraction[driver] = 0.01 * currentOrPercent;
-			break;
+	case 913:
+		motorCurrentFraction[axisOrExtruder] = constrain<float>(0.01 * currentOrPercent, 0.0, 1.0);
+		break;
 
 #if HAS_SMART_DRIVERS
-		case 917:
-			SmartDrivers::SetStandstillCurrentPercent(driver, currentOrPercent);
-			break;
+	case 917:
+		standstillCurrentFraction[axisOrExtruder] = constrain<float>(0.01 * currentOrPercent, 0.0, 1.0);
+		break;
 #endif
-		default:
-			break;
-		}
 
-		UpdateMotorCurrent(driver);
+	default:
+		return;
 	}
-}
 
-// Set the current for all drivers on an axis or extruder. Current is in mA.
-void Platform::SetMotorCurrent(size_t drive, float currentOrPercent, int code)
-{
-	if (drive < MaxAxes)
-	{
-		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
-		{
-			SetDriverCurrent(axisDrivers[drive].driverNumbers[i], currentOrPercent, code);
-		}
-
-	}
-	else if (drive < MaxAxesPlusExtruders)
-	{
-		SetDriverCurrent(extruderDrivers[drive - MaxAxes], currentOrPercent, code);
-	}
+	IterateLocalDrivers(axisOrExtruder,
+							[this, axisOrExtruder, code](uint8_t driver)
+							{
+								if (code == 917)
+								{
+#if HAS_SMART_DRIVERS
+									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentFraction[axisOrExtruder]);
+#endif
+								}
+								else
+								{
+									UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
+								}
+							}
+						);
 }
 
 // This must not be called from an ISR, or with interrupts disabled.
-void Platform::UpdateMotorCurrent(size_t driver)
+void Platform::UpdateMotorCurrent(size_t driver, float current)
 {
 	if (driver < NumDirectDrivers)
 	{
-		float current = motorCurrents[driver];
-		if (driverState[driver] == DriverStatus::idle)
-		{
-			current *= idleCurrentFactor;
-		}
-		else
-		{
-			current *= motorCurrentFraction[driver];
-		}
-
 #if HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
 		{
@@ -2763,64 +2772,45 @@ void Platform::UpdateMotorCurrent(size_t driver)
 // Get the configured motor current for an axis or extruder
 float Platform::GetMotorCurrent(size_t drive, int code) const
 {
-	uint8_t driver;
-	if (drive >= MaxAxes && drive < MaxAxesPlusExtruders)
+	switch (code)
 	{
-		driver = extruderDrivers[drive - MaxAxes];
-	}
-	else if (drive < MaxAxes && axisDrivers[drive].numDrivers != 0)
-	{
-		// Currently we don't allow multiple motors on a single axis to have different currents, so we can just return the current for the first one.
-		driver = axisDrivers[drive].driverNumbers[0];
-	}
-	else
-	{
-		return 0.0;
-	}
+	case 906:
+		return motorCurrents[drive];
 
-	if (driver < NumDirectDrivers)
-	{
-		switch (code)
-		{
-		case 906:
-			return motorCurrents[driver];
-
-		case 913:
-			return motorCurrentFraction[driver] * 100.0;
+	case 913:
+		return motorCurrentFraction[drive] * 100.0;
 
 #if HAS_SMART_DRIVERS
-		case 917:
-			return (driver < numSmartDrivers) ? SmartDrivers::GetStandstillCurrentPercent(driver) : 100.0;
+	case 917:
+		return standstillCurrentFraction[drive];
 #endif
-		default:
-			break;
-		}
+	default:
+		return 0.0;
 	}
-	return 0.0;
 }
 
 // Set the motor idle current factor
 void Platform::SetIdleCurrentFactor(float f)
 {
 	idleCurrentFactor = constrain<float>(f, 0.0, 1.0);
-	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+	for (size_t axisOrExtruder = 0; axisOrExtruder < MaxAxesPlusExtruders; ++axisOrExtruder)
 	{
-		if (driverState[driver] == DriverStatus::idle)
+		if (driverState[axisOrExtruder] == DriverStatus::idle)
 		{
-			UpdateMotorCurrent(driver);
+			const float requiredCurrent = motorCurrents[axisOrExtruder] * idleCurrentFactor;
+			IterateLocalDrivers(axisOrExtruder, [this, requiredCurrent](uint8_t driver){ UpdateMotorCurrent(driver, requiredCurrent); });
 		}
 	}
 }
 
-void Platform::SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t microstepping)
+void Platform::SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping)
 {
-	if (microstepping > 0)
+	if (requestedMicrostepping != 0)
 	{
-		bool dummy;
-		const unsigned int currentMicrostepping = GetMicrostepping(axisOrExtruder, dummy);
-		if (currentMicrostepping != microstepping)
+		const uint32_t currentMicrostepping = microstepping[axisOrExtruder] & 0x7FFF;
+		if (currentMicrostepping != requestedMicrostepping)
 		{
-			value = value * (float)currentMicrostepping / (float)microstepping;
+			value = value * (float)currentMicrostepping / (float)requestedMicrostepping;
 		}
 	}
 	driveStepsPerUnit[axisOrExtruder] = max<float>(value, 1.0);	// don't allow zero or negative
@@ -2855,65 +2845,21 @@ bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, in
 }
 
 // Set the microstepping, returning true if successful. All drivers for the same axis must use the same microstepping.
-bool Platform::SetMicrostepping(size_t drive, int microsteps, bool interp)
+//TODO remote
+bool Platform::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool interp)
 {
-	// Check that it is a valid microstepping number
-	if (drive < MaxAxes)
-	{
-		bool ok = true;
-		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
-		{
-			ok = SetDriverMicrostepping(axisDrivers[drive].driverNumbers[i], microsteps, interp) && ok;
-		}
-		return ok;
-	}
-	else if (drive < MaxAxesPlusExtruders)
-	{
-		return SetDriverMicrostepping(extruderDrivers[drive - MaxAxes], microsteps, interp);
-	}
-	return false;
-}
-
-// Get the microstepping for a driver
-unsigned int Platform::GetDriverMicrostepping(size_t driver, bool& interpolation) const
-{
-#if HAS_SMART_DRIVERS
-	if (driver < numSmartDrivers)
-	{
-		return SmartDrivers::GetMicrostepping(driver, interpolation);
-	}
-	// On-board drivers only support x16 microstepping without interpolation
-	interpolation = false;
-	return 16;
-#elif defined(__ALLIGATOR__)
-	interpolation = false;
-	return Microstepping::Read(driver); // no mode, no interpolation for Alligator
-#elif __LPC17xx__
-	interpolation = false;
-	return Microstepping::Read(driver); //get the value we saved
-#else
-	interpolation = false;
-	return 16;
-#endif
+	//TODO check that it is a valid microstep setting
+	microstepping[axisOrExtruder] = (interp) ? microsteps | 0x8000 : microsteps;
+	bool ok = true;
+	IterateLocalDrivers(axisOrExtruder, [this, microsteps, interp, &ok](uint8_t driver){ ok = SetDriverMicrostepping(driver, microsteps, interp) && ok; });
+	return ok;
 }
 
 // Get the microstepping for an axis or extruder
 unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
 {
-	if (drive < reprap.GetGCodes().GetTotalAxes())
-	{
-		return GetDriverMicrostepping(axisDrivers[drive].driverNumbers[0], interpolation);
-	}
-	else if (drive >= MaxAxes && drive < MaxAxesPlusExtruders)
-	{
-		return GetDriverMicrostepping(extruderDrivers[drive - MaxAxes], interpolation);
-	}
-	else
-	{
-		INTERNAL_ERROR;
-		interpolation = false;
-		return 16;
-	}
+	interpolation = (microstepping[drive] & 0x8000) != 0;
+	return microstepping[drive] & 0x7FFF;
 }
 
 void Platform::SetEnableValue(size_t driver, int8_t eVal)
@@ -2921,7 +2867,7 @@ void Platform::SetEnableValue(size_t driver, int8_t eVal)
 	if (driver < NumDirectDrivers)
 	{
 		enableValues[driver] = eVal;
-		DisableDriver(driver);				// disable the drive, because the enable polarity may have been wrong before
+		DisableOneLocalDriver(driver);				// disable the drive, because the enable polarity may have been wrong before
 #if HAS_SMART_DRIVERS
 		if (eVal == -1)
 		{
@@ -2937,18 +2883,22 @@ void Platform::SetEnableValue(size_t driver, int8_t eVal)
 	}
 }
 
-void Platform::SetAxisDriversConfig(size_t axis, size_t numValues, const uint32_t driverNumbers[])
+void Platform::SetAxisDriversConfig(size_t axis, size_t numValues, const DriverId driverNumbers[])
 {
-	axisDrivers[axis].numDrivers = numValues;
+	AxisDriversConfig& cfg = axisDrivers[axis];
+	cfg.numDrivers = numValues;
 	uint32_t bitmap = 0;
 	for (size_t i = 0; i < numValues; ++i)
 	{
-		const uint8_t driver = min<uint32_t>(driverNumbers[i], 255);
-		axisDrivers[axis].driverNumbers[i] = driver;
-		bitmap |= StepPins::CalcDriverBitmap(driver);
+		const DriverId id = driverNumbers[i];
+		cfg.driverNumbers[i] = id;
+		if (id.IsLocal())
+		{
+			bitmap |= StepPins::CalcDriverBitmap(id.localDriver);
 #if HAS_SMART_DRIVERS
-		SmartDrivers::SetAxisNumber(driver, axis);
+			SmartDrivers::SetAxisNumber(id.localDriver, axis);
 #endif
+		}
 	}
 	driveDriverBits[axis] = bitmap;
 
@@ -2964,18 +2914,23 @@ void Platform::UpdateZMotorDriverBits()
 	const AxisDriversConfig& cfg = axisDrivers[Z_AXIS];
 	for (size_t i = 0; i < MaxDriversPerAxis; ++i)
 	{
-		driveDriverBits[MaxAxesPlusExtruders + i] = (i < cfg.numDrivers) ? StepPins::CalcDriverBitmap(cfg.driverNumbers[i]) : 0;
+		driveDriverBits[MaxAxesPlusExtruders + i] = (i < cfg.numDrivers && cfg.driverNumbers[i].IsLocal())
+													? StepPins::CalcDriverBitmap(cfg.driverNumbers[i].localDriver)
+														: 0;
 	}
 }
 
 // Map an extruder to a driver
-void Platform::SetExtruderDriver(size_t extruder, uint8_t driver)
+void Platform::SetExtruderDriver(size_t extruder, DriverId driver)
 {
 	extruderDrivers[extruder] = driver;
+	if (driver.IsLocal())
+	{
 #if HAS_SMART_DRIVERS
-	SmartDrivers::SetAxisNumber(driver, extruder + MaxAxes);
+		SmartDrivers::SetAxisNumber(driver.localDriver, extruder + MaxAxes);
 #endif
-	driveDriverBits[extruder + MaxAxes] = StepPins::CalcDriverBitmap(driver);
+		driveDriverBits[extruder + MaxAxes] = StepPins::CalcDriverBitmap(driver.localDriver);
+	}
 }
 
 void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4])
@@ -4047,10 +4002,10 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 		{
 			for (size_t j = 0; j < axisDrivers[i].numDrivers; ++j)
 			{
-				const uint8_t driver = axisDrivers[i].driverNumbers[j];
-				if (driver < numSmartDrivers)
+				const DriverId driver = axisDrivers[i].driverNumbers[j];
+				if (driver.IsLocal() && driver.localDriver < numSmartDrivers)
 				{
-					SetBit(drivers, driver);
+					SetBit(drivers, driver.localDriver);
 				}
 			}
 		}
@@ -4066,10 +4021,10 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 		{
 			if (extruderNumbers[i] < MaxExtruders)
 			{
-				const uint8_t driver = GetExtruderDriver(extruderNumbers[i]);
-				if (driver < numSmartDrivers)
+				const DriverId driver = GetExtruderDriver(extruderNumbers[i]);
+				if (driver.IsLocal() && driver.localDriver < numSmartDrivers)
 				{
-					SetBit(drivers, driver);
+					SetBit(drivers, driver.localDriver);
 				}
 			}
 		}
@@ -4223,91 +4178,127 @@ bool Platform::SetDateTime(time_t time)
 // Configure an I/O port
 GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply)
 {
-	if (gb.Seen('F'))
+	// Exactly one of FHPS is allowed
+	unsigned int charsPresent = 0;
+	uint32_t deviceNumber = 0;
+	for (char c : (const char[]){'F', 'H', 'P', 'S'})
 	{
-		const uint32_t fanNum = gb.GetUIValue();
-		if (fanNum < NumTotalFans)
+		charsPresent <<= 1;
+		if (gb.Seen(c))
 		{
-			Fan& fan = fans[fanNum];
-			const bool seenPin = gb.Seen('C');
-			if (seenPin)
+			deviceNumber = gb.GetUIValue();
+			charsPresent |= 1;
+		}
+	}
+
+	switch (charsPresent)
+	{
+	case 1:
+		return ConfigureGpioOrServo(deviceNumber, true, gb, reply);
+
+	case 2:
+		return ConfigureGpioOrServo(deviceNumber, false, gb, reply);
+
+	case 4:
+		return reprap.GetHeat().ConfigureHeater(deviceNumber, gb, reply);
+
+	case 8:
+		return ConfigureFan(deviceNumber, gb, reply);
+
+	default:
+		reply.copy("exactly one of FHPS must be given");
+		return GCodeResult::error;
+	}
+}
+
+#if 0//SUPPORT_CAN_EXPANSION
+	if (gb.Seen('C'))
+	{
+		String<StringLength20> portName;
+		if (!gb.GetReducedString(portName.GetRef()))
+		{
+			const CanAddress baddr = IoPort::RemoveBoardAddress(portName.GetRef());
+			//TODO: what if the board number has changed?
+			if (baddr != 0)
 			{
-				if (!fan.AssignPorts(gb, reply))
+				CanMessageGenericConstructor cons(M950Params);
+				if (!cons.PopulateFromCommand(gb, reply))
 				{
 					return GCodeResult::error;
 				}
-			}
-			if (gb.Seen('Q'))
-			{
-				fan.SetPwmFrequency(gb.GetPwmFrequency());
-			}
-			else if (!seenPin)
-			{
-				reply.printf("Fan %" PRIu32, fanNum);
-				fan.AppendPortDetails(reply);
+				return cons.SendAndGetResponse(CanMessageType::m950, baddr, reply);
 			}
 		}
-		else
-		{
-			reply.copy("Fan number out of range");
-			return GCodeResult::error;
-		}
 	}
-	else if (gb.Seen('H'))
-	{
-		return reprap.GetHeat().ConfigureHeater(gb.GetUIValue(), gb, reply);
-	}
-	else
-	{
-		const bool seenServo = gb.Seen('S');
-		if (seenServo || gb.Seen('P'))
-		{
-			const uint32_t gpioNumber = gb.GetUIValue();
-			if (gpioNumber < MaxGpioPorts)
-			{
-				PwmFrequency freq = 0;
-				const bool seenFreq = gb.Seen('Q');
-				if (seenFreq)
-				{
-					freq = gb.GetPwmFrequency();
-				}
+#endif
 
-				PwmPort& port = gpioPorts[gpioNumber];
-				if (gb.Seen('C'))
-				{
-					if (!port.AssignPort(gb, reply, PinUsedBy::gpio, (seenServo) ? PinAccess::servo : PinAccess::pwm))
-					{
-						return GCodeResult::error;
-					}
-					if (!seenFreq)
-					{
-						freq = (seenServo) ? ServoRefreshFrequency : DefaultPinWritePwmFreq;
-					}
-					port.SetFrequency(freq);
-				}
-				else if (seenFreq)
-				{
-					port.SetFrequency(freq);
-				}
-				else
-				{
-					reply.printf("GPIO/servo port %" PRIu32, gpioNumber);
-					port.AppendDetails(reply);
-				}
-			}
-			else
+GCodeResult Platform::ConfigureFan(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply)
+{
+	if (fanNum < NumTotalFans)
+	{
+		Fan& fan = fans[fanNum];
+		const bool seenPin = gb.Seen('C');
+		if (seenPin)
+		{
+			if (!fan.AssignPorts(gb, reply))
 			{
-				reply.copy("GPIO port number out of range");
 				return GCodeResult::error;
 			}
 		}
+		if (gb.Seen('Q'))
+		{
+			fan.SetPwmFrequency(gb.GetPwmFrequency());
+		}
+		else if (!seenPin)
+		{
+			reply.printf("Fan %" PRIu32, fanNum);
+			fan.AppendPortDetails(reply);
+		}
+		return GCodeResult::ok;
+	}
+
+	reply.copy("Fan number out of range");
+	return GCodeResult::error;
+}
+
+GCodeResult Platform::ConfigureGpioOrServo(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply)
+{
+	if (gpioNumber < MaxGpioPorts)
+	{
+		PwmFrequency freq = 0;
+		const bool seenFreq = gb.Seen('Q');
+		if (seenFreq)
+		{
+			freq = gb.GetPwmFrequency();
+		}
+
+		PwmPort& port = gpioPorts[gpioNumber];
+		if (gb.Seen('C'))
+		{
+			if (!port.AssignPort(gb, reply, PinUsedBy::gpio, (isServo) ? PinAccess::servo : PinAccess::pwm))
+			{
+				return GCodeResult::error;
+			}
+			if (!seenFreq)
+			{
+				freq = (isServo) ? ServoRefreshFrequency : DefaultPinWritePwmFreq;
+			}
+			port.SetFrequency(freq);
+		}
+		else if (seenFreq)
+		{
+			port.SetFrequency(freq);
+		}
 		else
 		{
-			reply.copy("Missing F, H, L, R or V parameter");
-			return GCodeResult::error;
+			reply.printf("GPIO/servo port %" PRIu32, gpioNumber);
+			port.AppendDetails(reply);
 		}
+		return GCodeResult::ok;
 	}
-	return GCodeResult::ok;
+
+	reply.copy("GPIO port number out of range");
+	return GCodeResult::error;
 }
 
 // Configure the ancillary PWM

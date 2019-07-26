@@ -28,7 +28,8 @@ Licence: GPL
 #include <climits>		// for CHAR_BIT
 
 #include "ecv.h"
-#undef value			// needed because we include <optional>
+#undef value			// needed because some files include include <optional>
+#undef array			// needed because some files include <functional>
 
 #include "Core.h"
 
@@ -81,6 +82,61 @@ enum class PinUsedBy : uint8_t
 #include "General/SafeStrtod.h"
 #include "General/SafeVsnprintf.h"
 
+// Type of a driver identifier
+struct DriverId
+{
+	uint8_t localDriver;
+
+#if SUPPORT_CAN_EXPANSION
+	CanAddress boardAddress;
+
+	void SetFromBinary(uint32_t val)
+	{
+		localDriver = val & 0x000000FF;
+		const uint32_t brdNum = val >> 16;
+		boardAddress = (brdNum <= CanId::MaxCanAddress) ? (CanAddress)brdNum : CanId::NoCanAddress;
+	}
+
+	void SetLocal(unsigned int driver)
+	{
+		localDriver = (uint8_t)driver;
+		boardAddress = 0;
+	}
+
+	void Clear()
+	{
+		localDriver = 0;
+		boardAddress = CanId::NoCanAddress;
+	}
+
+	bool IsLocal() const { return boardAddress == 0; }
+	bool IsRemote() const { return boardAddress != 0; }
+#else
+	void SetFromBinary(uint32_t val)
+	{
+		localDriver = (uint8_t)val;
+	}
+
+	void SetLocal(unsigned int driver)
+	{
+		localDriver = (uint8_t)driver;
+	}
+
+	void Clear() { localDriver = 0; }
+
+	bool IsLocal() const { return true; }
+	bool IsRemote() const { return false; }
+#endif
+};
+
+#if SUPPORT_CAN_EXPANSION
+# define PRIdriverId				"%u.%u"
+# define DRIVER_ID_PRINT_ARGS(_d)	_d.boardAddress,_d.localDriver
+#else
+# define PRIdriverId				"%u"
+# define DRIVER_ID_PRINT_ARGS(_d)	_d.localDriver
+#endif
+
 // Module numbers and names, used for diagnostics and debug
 // All of these including noModule must be <= 15 because we 'or' the module number into the software reset code
 enum Module : uint8_t
@@ -108,7 +164,7 @@ enum Module : uint8_t
 
 extern const char * const moduleName[];
 
-// Warn of what's to come, so we can use pointers to classes without including the entire header files
+// Warn of what's to come, so we can use pointers and references to classes without including the entire header files
 class Network;
 class Platform;
 class GCodes;
@@ -116,7 +172,6 @@ class Move;
 class DDA;
 class Kinematics;
 class Heat;
-class PID;
 class TemperatureSensor;
 class Tool;
 class Roland;
@@ -139,6 +194,7 @@ class PortControl;
 #if SUPPORT_12864_LCD
 class Display;
 #endif
+
 #if HAS_LINUX_INTERFACE
 class LinuxInterface;
 #endif

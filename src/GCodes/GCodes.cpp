@@ -2941,10 +2941,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 // Does what it says.
 void GCodes::DisableDrives()
 {
-	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
-	{
-		platform.DisableDrive(drive);
-	}
+	platform.DisableAllDrivers();
 	SetAllAxesNotHomed();
 }
 
@@ -3328,93 +3325,6 @@ GCodeResult GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 
 	return GCodeResult::ok;
 }
-
-// Set PID parameters (M301 or M304 command). 'heater' is the default heater number to use.
-void GCodes::SetPidParameters(GCodeBuffer& gb, int heater, const StringRef& reply)
-{
-	if (gb.Seen('H'))
-	{
-		heater = gb.GetIValue();
-	}
-
-	if (heater >= 0 && heater < (int)MaxHeaters)
-	{
-		const FopDt& model = reprap.GetHeat().GetHeaterModel(heater);
-		M301PidParameters pp = model.GetM301PidParameters(false);
-		bool seen = false;
-		gb.TryGetFValue('P', pp.kP, seen);
-		gb.TryGetFValue('I', pp.kI, seen);
-		gb.TryGetFValue('D', pp.kD, seen);
-
-		if (seen)
-		{
-			reprap.GetHeat().SetM301PidParameters(heater, pp);
-		}
-		else if (!model.UsePid())
-		{
-			reply.printf("Heater %d is in bang-bang mode", heater);
-		}
-		else if (model.ArePidParametersOverridden())
-		{
-			reply.printf("Heater %d P:%.1f I:%.3f D:%.1f", heater, (double)pp.kP, (double)pp.kI, (double)pp.kD);
-		}
-		else
-		{
-			reply.printf("Heater %d uses model-derived PID parameters. Use M307 H%d to view them", heater, heater);
-		}
-	}
-}
-
-#if 0
-
-// Process M305
-GCodeResult GCodes::SetHeaterParameters(GCodeBuffer& gb, const StringRef& reply)
-{
-	if (gb.Seen('P'))
-	{
-		const int heater = gb.GetIValue();
-		if ((heater >= 0 && heater < (int)MaxHeaters) || (heater >= (int)FirstVirtualHeater && heater < (int)(FirstVirtualHeater + MaxVirtualHeaters)))
-		{
-			Heat& heat = reprap.GetHeat();
-			const int oldChannel = heat.GetHeaterChannel(heater);
-			bool seen = false;
-			int32_t channel = oldChannel;
-			gb.TryGetIValue('X', channel, seen);
-			if (!seen && oldChannel < 0)
-			{
-				// For backwards compatibility, if no sensor has been configured on this channel then assume the thermistor normally associated with the heater
-				if (heater < (int)MaxHeaters && (gb.Seen('R') || gb.Seen('T') || gb.Seen('B')))	// if it has a thermistor and we are trying to configure it
-				{
-					channel = heater;
-				}
-				else
-				{
-					reply.printf("heater %d is not configured", heater);
-					return GCodeResult::error;
-				}
-			}
-
-			if (channel != oldChannel)
-			{
-				if (heat.SetHeaterChannel(heater, channel))
-				{
-					reply.printf("unable to use sensor channel %" PRIi32 " on heater %d", channel, heater);
-					return GCodeResult::error;
-				}
-			}
-
-			return heat.ConfigureHeaterSensor(305, (unsigned int)heater, gb, reply);
-		}
-		else
-		{
-			reply.printf("heater number %d is out of range", heater);
-			return GCodeResult::error;
-		}
-	}
-	return GCodeResult::ok;
-}
-
-#endif
 
 void GCodes::SetToolHeaters(Tool *tool, float temperature, bool both)
 {

@@ -29,6 +29,7 @@
 #define TMC_TYPE	5160
 
 constexpr float MinimumMotorCurrent = 50.0;
+constexpr float MinimumOpenLoadMotorCurrent = 300;			// minimum current in mA for the open load status to be taken seriously
 constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
 constexpr bool DefaultInterpolation = true;					// interpolation enabled
 constexpr uint32_t DefaultTpwmthrsReg = 2000;				// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle
@@ -855,6 +856,7 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock)
 					|| (interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor)) == 0		// get the full step interval
 #endif
 					|| interval > StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec
+					|| motorCurrent < MinimumOpenLoadMotorCurrent
 				   )
 				{
 					regVal &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds

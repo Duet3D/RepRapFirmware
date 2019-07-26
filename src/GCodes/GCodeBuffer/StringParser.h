@@ -36,6 +36,7 @@ public:
 	float GetDistance();								// Get a distance or coordinate and convert it from inches to mm if necessary
 	int32_t GetIValue() __attribute__((hot));			// Get an integer after a key letter
 	uint32_t GetUIValue();								// Get an unsigned integer value
+	DriverId GetDriverId();								// Get a driver ID
 	bool GetIPAddress(IPAddress& returnedIp);			// Get an IP address quad after a key letter
 	bool GetMacAddress(uint8_t mac[6]);					// Get a MAC address sextet after a key letter
 	bool GetUnprecedentedString(const StringRef& str);	// Get a string with no preceding key letter
@@ -45,6 +46,7 @@ public:
 	void GetFloatArray(float arr[], size_t& length, bool doPad) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
 	void GetIntArray(int32_t arr[], size_t& length, bool doPad);		// Get a :-separated list of ints after a key letter
 	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
+	void GetDriverIdArray(DriverId arr[], size_t& length);	// Get a :-separated list of drivers after a key letter
 
 	bool IsIdle() const;
 	bool IsCompletelyIdle() const;
@@ -100,6 +102,7 @@ private:
 	float ReadFloatValue(const char *p, const char **endptr);
 	uint32_t ReadUIValue(const char *p, const char **endptr);
 	int32_t ReadIValue(const char *p, const char **endptr);
+	DriverId ReadDriverIdValue(const char *p, const char **endptr);
 
 	bool ProcessConditionalGCode(bool skippedIfFalse);	// Check for and process a conditional GCode language command returning true if we found one
 	void CreateBlocks();								// Create new code blocks

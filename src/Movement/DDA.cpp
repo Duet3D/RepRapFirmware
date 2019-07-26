@@ -1240,6 +1240,11 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 
 		// Handle all drivers
 		Platform& platform = reprap.GetPlatform();
+		if (flags.isLeadscrewAdjustmentMove)
+		{
+			platform.EnableLocalDrivers(Z_AXIS);			// ensure all Z motors are enabled
+		}
+
 		AxesBitmap additionalAxisMotorsToEnable = 0, axisMotorsEnabled = 0;
 		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 		{
@@ -1252,10 +1257,16 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 					const int32_t delta = lrintf(directionVector[drive] * totalDistance * reprap.GetPlatform().DriveStepsPerUnit(Z_AXIS));
 					if (delta != 0)
 					{
-						if (drive < NumDirectDrivers)							// if the drive is local
+						const DriverId driver = config.driverNumbers[drive];
+#if SUPPORT_CAN_EXPANSION
+						if (driver.IsRemote())
 						{
-							reprap.GetPlatform().EnableDrive(Z_AXIS);			// ensure all Z motors are enabled
-							DriveMovement* const pdm = DriveMovement::Allocate(drive + MaxAxesPlusExtruders, DMState::moving);
+							CanInterface::AddMovement(*this, params, driver, delta);
+						}
+						else
+#endif
+						{
+							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders, DMState::moving);
 							pdm->totalSteps = labs(delta);
 							pdm->direction = (delta >= 0);
 							if (pdm->PrepareCartesianAxis(*this, params))
@@ -1274,13 +1285,6 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 								completedDMs = pdm;
 							}
 						}
-						else
-						{
-#if SUPPORT_CAN_EXPANSION
-							const size_t driver = config.driverNumbers[drive];
-							CanInterface::AddMovement(*this, params, driver - NumDirectDrivers, delta);
-#endif
-						}
 					}
 				}
 			}
@@ -1290,9 +1294,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 				const int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 				{
-#if !SUPPORT_CAN_EXPANSION
-					reprap.GetPlatform().EnableDrive(drive);
-#endif
+					reprap.GetPlatform().EnableLocalDrivers(drive);
 					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
 					pdm->totalSteps = labs(delta);
 					pdm->direction = (delta >= 0);
@@ -1317,17 +1319,14 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 				const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
 				for (size_t i = 0; i < config.numDrivers; ++i)
 				{
-					const size_t driver = config.driverNumbers[i];
-					if (driver >= NumDirectDrivers)
+					const DriverId driver = config.driverNumbers[i];
+					if (driver.IsRemote())
 					{
-						CanInterface::AddMovement(*this, params, driver - NumDirectDrivers, delta);
-					}
-					else
-					{
-						platform.EnableDriver(driver);
+						CanInterface::AddMovement(*this, params, driver, delta);
 					}
 				}
 #endif
+				SetBit(axisMotorsEnabled, drive);
 			}
 			else if (drive < MaxAxes)
 			{
@@ -1350,9 +1349,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 					}
 					if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 					{
-#if !SUPPORT_CAN_EXPANSION
-						reprap.GetPlatform().EnableDrive(drive);
-#endif
+						platform.EnableLocalDrivers(drive);
 						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
 						pdm->totalSteps = labs(delta);
 						pdm->direction = (delta >= 0);
@@ -1377,14 +1374,10 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 					const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
 					for (size_t i = 0; i < config.numDrivers; ++i)
 					{
-						const size_t driver = config.driverNumbers[i];
-						if (driver >= NumDirectDrivers)
+						const DriverId driver = config.driverNumbers[i];
+						if (driver.IsRemote())
 						{
-							CanInterface::AddMovement(*this, params, driver - NumDirectDrivers, delta);
-						}
-						else
-						{
-							platform.EnableDriver(driver);
+							CanInterface::AddMovement(*this, params, driver, delta);
 						}
 					}
 #endif
@@ -1400,9 +1393,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
 					if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 					{
-#if !SUPPORT_CAN_EXPANSION
-						reprap.GetPlatform().EnableDrive(drive);
-#endif
+						reprap.GetPlatform().EnableLocalDrivers(drive);
 						// If there is any extruder jerk in this move, in theory that means we need to instantly extrude or retract some amount of filament.
 						// Pass the speed change to PrepareExtruder
 						float speedChange;
@@ -1448,14 +1439,10 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 					}
 
 #if SUPPORT_CAN_EXPANSION
-					const uint8_t driver = platform.GetExtruderDriver(drive - MaxAxes);
-					if (driver >= NumDirectDrivers)
+					const DriverId driver = platform.GetExtruderDriver(drive - MaxAxes);
+					if (driver.IsRemote())
 					{
-						CanInterface::AddMovement(*this, params, driver - NumDirectDrivers, pdm->GetSteps());
-					}
-					else
-					{
-						platform.EnableDriver(driver);
+						CanInterface::AddMovement(*this, params, driver, pdm->GetSteps());
 					}
 #endif
 				}
@@ -1469,24 +1456,19 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 			if (IsBitSet(additionalAxisMotorsToEnable, drive))
 			{
 				ClearBit(additionalAxisMotorsToEnable, drive);
+				if (platform.GetDriversBitmap(drive) != 0)		// if any of the connected axis drives is local
+				{
+					reprap.GetPlatform().EnableLocalDrivers(drive);
+				}
 #if SUPPORT_CAN_EXPANSION
 				const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
 				for (size_t i = 0; i < config.numDrivers; ++i)
 				{
-					const size_t driver = config.driverNumbers[i];
-					if (driver >= NumDirectDrivers)
+					const DriverId driver = config.driverNumbers[i];
+					if (driver.IsRemote())
 					{
-						CanInterface::AddMovement(*this, params, driver - NumDirectDrivers, 0);
+						CanInterface::AddMovement(*this, params, driver, 0);
 					}
-					else
-					{
-						platform.EnableDriver(driver);
-					}
-				}
-#else
-				if (platform.GetDriversBitmap(drive) != 0)		// if any of the connected axis drives is local
-				{
-					reprap.GetPlatform().EnableDrive(drive);
 				}
 #endif
 			}
@@ -1664,7 +1646,10 @@ void DDA::CheckEndstops(Platform& platform)
 			break;
 
 		case EndstopHitAction::stopDriver:
-			platform.DisableSteppingDriver(hitDetails.driver);
+			if (hitDetails.driver.IsLocal())		//TODO what to do if it is remote?
+			{
+				platform.DisableSteppingDriver(hitDetails.driver.localDriver);
+			}
 			if (hitDetails.setAxisLow)
 			{
 				reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, false, reprap.GetPlatform().GetDriveStepsPerUnit(), *this);

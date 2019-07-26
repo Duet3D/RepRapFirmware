@@ -15,7 +15,9 @@
 #include "RepRap.h"
 #include "General/IP4String.h"
 
+#if HAS_MASS_STORAGE
 static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML file?
+#endif
 
 StringParser::StringParser(GCodeBuffer& gcodeBuffer)
 	: gb(gcodeBuffer), fileBeingWritten(nullptr), writingFileSize(0), eofStringCounter(0), indentToSkipTo(NoIndentSkip),
@@ -837,6 +839,42 @@ void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool
 	}
 }
 
+// Get a :-separated list of drivers after a key letter
+void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength)
+{
+	if (readPointer >= 0)
+	{
+		size_t length = 0;
+		const char *p = gb.buffer + readPointer + 1;
+		for (;;)
+		{
+			if (length >= returnedLength) // Array limit has been set in here
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode driverID array that is too long: %s\n", gb.buffer);
+				readPointer = -1;
+				returnedLength = 0;
+				return;
+			}
+			const char *q;
+			arr[length] = ReadDriverIdValue(p, &q);
+			length++;
+			if (*q != LIST_SEPARATOR)
+			{
+				break;
+			}
+			p = q + 1;
+		}
+
+		returnedLength = length;
+		readPointer = -1;
+	}
+	else
+	{
+		INTERNAL_ERROR;
+		returnedLength = 0;
+	}
+}
+
 // Get and copy a quoted string returning true if successful
 bool StringParser::GetQuotedString(const StringRef& str)
 {
@@ -1032,6 +1070,22 @@ uint32_t StringParser::GetUIValue()
 
 	INTERNAL_ERROR;
 	return 0;
+}
+
+// Get a driver ID
+DriverId StringParser::GetDriverId()
+{
+	DriverId result;
+	if (readPointer >= 0)
+	{
+		result = ReadDriverIdValue(&gb.buffer[readPointer + 1], nullptr);
+		readPointer = -1;
+		return result;
+	}
+
+	INTERNAL_ERROR;
+	result.SetLocal(0);
+	return result;
 }
 
 // Get an IP address quad after a key letter
@@ -1399,6 +1453,28 @@ int32_t StringParser::ReadIValue(const char *p, const char **endptr)
 #endif
 
 	return SafeStrtol(p, endptr);
+}
+
+DriverId StringParser::ReadDriverIdValue(const char *p, const char **endptr)
+{
+	DriverId result;
+	const uint32_t v1 = ReadUIValue(p, endptr);
+#if SUPPORT_CAN_EXPANSION
+	if (**endptr == '.')
+	{
+		const uint32_t v2 = ReadUIValue(*endptr + 1, endptr);
+		result.localDriver = v2;
+		result.boardAddress = v1;
+	}
+	else
+	{
+		result.localDriver = v1;
+		result.boardAddress = 0;
+	}
+#else
+	result.localDriver = v1;
+#endif
+	return result;
 }
 
 #if SUPPORT_OBJECT_MODEL
