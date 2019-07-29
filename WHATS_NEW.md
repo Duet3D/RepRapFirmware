@@ -40,7 +40,7 @@ Upgrade notes:
 - If you have a CoreXY or other Core architecture printer, and you were using any axis factor parameters in your M667 command in config.g, those parameters are no longer supported. You will need to use M669 matrix parameters instead.
 - nanoDLP users: an empty macro file M650.g must be created in /sys, and file peel-move.g must be renamed to M651.g
 - The M135 command is no longer supported, but AFAIK nobody used it
-- The Duet 06/085 build no longer supports MDNS. It has been disabled because of quality issues with the MDNS library.
+- The Duet 06/085 build no longer supports ".local" network addressing. It has been disabled because of quality issues with the MDNS library.
 
 Known issues:
 - When auto delta calibration adjusts the delta radius and/or the diagonal rod length, it makes an incorrect adjustment to the homed height. This will be fixed in a forthcoming update. Meanwhile, run a second auto calibration cycle to correct the homed height.
