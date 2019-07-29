@@ -91,6 +91,7 @@ protected:
 		lastTuningMode = tuning3
 	};
 
+	virtual void ResetHeater() = 0;
 	virtual HeaterMode GetMode() const = 0;
 	virtual void SwitchOn() = 0;
 	virtual GCodeResult UpdateModel(const StringRef& reply) = 0;

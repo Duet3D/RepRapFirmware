@@ -239,9 +239,6 @@ bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
 // Default pin allocations
 constexpr const char *DefaultEndstopPinNames[] = { "nil" };
 constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
-constexpr const char *DefaultHeaterPinNames[] = { "nil" };
-constexpr const char *DefaultFanPinNames[] = { "nil" };
-constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
 
 // SAME70 Flash locations
 // These are designed to work with 1Mbyte flash processors as well as 2Mbyte

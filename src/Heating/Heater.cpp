@@ -48,7 +48,7 @@ GCodeResult Heater::SetModel(float gain, float tc, float td, float maxPwm, float
 		}
 		else
 		{
-			Reset();
+			ResetHeater();
 		}
 		return GCodeResult::ok;
 	}

@@ -13,6 +13,9 @@ class TemperatureSensor
 public:
 	TemperatureSensor(unsigned int sensorNum, const char *type);
 
+	// Virtual destructor
+	virtual ~TemperatureSensor();
+
 	// Try to get a temperature reading
 	TemperatureError GetTemperature(float& t);
 
@@ -28,13 +31,11 @@ public:
 	// Return the sensor number
 	unsigned int GetSensorNumber() const { return sensorNumber; }
 
+	// Return the code for the most recent error
 	TemperatureError GetLastError() const { return lastError; }
 
 	// Configure the sensor name, if it is provided
 	void TryConfigureSensorName(GCodeBuffer& gb, bool& seen);
-
-	// Virtual destructor
-	virtual ~TemperatureSensor();
 
 	// Set the name - normally called only once
 	void SetSensorName(const char *newName);

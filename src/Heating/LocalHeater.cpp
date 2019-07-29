@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include <Heating/LocalHeater.h>
+#include "LocalHeater.h"
 #include "GCodes/GCodes.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Heat.h"
@@ -42,7 +42,7 @@ float tuningVoltageAccumulator;				// sum of the voltage readings we take during
 
 LocalHeater::LocalHeater(unsigned int heaterNum) : Heater(heaterNum), mode(HeaterMode::off)
 {
-	Reset();
+	ResetHeater();
 	SetHeater(0.0);							// set up the pin even if the heater is not enabled (for PCCB)
 
 	// Time the sensor was last sampled.  During startup, we use the current
@@ -52,7 +52,7 @@ LocalHeater::LocalHeater(unsigned int heaterNum) : Heater(heaterNum), mode(Heate
 
 LocalHeater::LocalHeater(const Heater& h) : Heater(h), mode(HeaterMode::off)
 {
-	Reset();
+	ResetHeater();
 	SetHeater(0.0);							// set up the pin even if the heater is not enabled (for PCCB)
 
 	// Time the sensor was last sampled.  During startup, we use the current
@@ -75,7 +75,7 @@ inline void LocalHeater::SetHeater(float power) const
 	port.WriteAnalog(power);
 }
 
-void LocalHeater::Reset()
+void LocalHeater::ResetHeater()
 {
 	mode = HeaterMode::off;
 	previousTemperaturesGood = 0;

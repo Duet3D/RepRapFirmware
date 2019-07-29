@@ -30,6 +30,7 @@ public:
 	void Suspend(bool sus) override;				// Suspend the heater to conserve power or while doing Z probing
 
 protected:
+	void ResetHeater() override;
 	HeaterMode GetMode() const override;
 	void SwitchOn() override;						// Turn the heater on and set the mode
 	GCodeResult UpdateModel(const StringRef& reply) override;	// Called when the heater model has been changed
