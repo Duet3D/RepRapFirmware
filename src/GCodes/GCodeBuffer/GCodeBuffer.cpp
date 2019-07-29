@@ -25,7 +25,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeIn
 	  responseMessageType(mt), toolNumberAdjust(0), isBinaryBuffer(false), binaryParser(*this), stringParser(*this),
 	  machineState(new GCodeMachineState())
 #if HAS_LINUX_INTERFACE
-	  , reportMissingMacro(false), isMacroFromCode(false), abortFile(false), reportStack(false)
+	  , reportMissingMacro(false), isMacroFromCode(false), abortFile(false), abortAllFiles(false), reportStack(false)
 #endif
 {
 	machineState->compatibility = c;
@@ -566,7 +566,7 @@ bool GCodeBuffer::PopState(bool preserveLineNumber)
 
 // Abort execution of any files or macros being executed, returning true if any files were closed
 // We now avoid popping the state if we were not executing from a file, so that if DWC or PanelDue is used to jog the axes before they are homed, we don't report stack underflow.
-void GCodeBuffer::AbortFile(bool requestAbort)
+void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort)
 {
 	if (machineState->DoingFile())
 	{
@@ -579,11 +579,12 @@ void GCodeBuffer::AbortFile(bool requestAbort)
 #endif
 				machineState->CloseFile();
 			}
-		} while (PopState(false));							// abandon any macros
+		} while (PopState(false) && (!machineState->DoingFile() || abortAll));
 	}
 
 #if HAS_LINUX_INTERFACE
 	abortFile = requestAbort;
+	abortAllFiles = abortAll;
 #endif
 }
 
@@ -613,7 +614,7 @@ void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing, boo
 	requestedMacroFile.copy(filename);
 	reportMissingMacro = reportMissing;
 	isMacroFromCode = fromCode;
-	abortFile = false;
+	abortFile = abortAllFiles = false;
 }
 
 const char *GCodeBuffer::GetRequestedMacroFile(bool& reportMissing, bool& fromCode) const
@@ -628,9 +629,14 @@ bool GCodeBuffer::IsAbortRequested() const
 	return abortFile;
 }
 
+bool GCodeBuffer::IsAbortAllRequested() const
+{
+	return abortAllFiles;
+}
+
 void GCodeBuffer::AcknowledgeAbort()
 {
-	abortFile = false;
+	abortFile = abortAllFiles = false;
 }
 
 bool GCodeBuffer::IsStackEventFlagged() const

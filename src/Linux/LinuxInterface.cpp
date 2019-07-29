@@ -333,7 +333,7 @@ void LinuxInterface::Spin()
 			if (gb->IsAbortRequested())
 			{
 				InvalidateBufferChannel(channel);
-				if (transfer->WriteAbortFileRequest(channel))
+				if (transfer->WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
 				{
 					gb->AcknowledgeAbort();
 				}
@@ -379,7 +379,7 @@ void LinuxInterface::Spin()
 			// Close all open G-code files
 			for (size_t i = 0; i < NumGCodeChannels; i++)
 			{
-				reprap.GetGCodes().GetGCodeBuffer((GCodeChannel)i)->AbortFile(false);
+				reprap.GetGCodes().GetGCodeBuffer((GCodeChannel)i)->AbortFile(true, false);
 			}
 			reprap.GetGCodes().StopPrint(StopPrintReason::abort);
 		}

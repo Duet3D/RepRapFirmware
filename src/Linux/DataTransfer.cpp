@@ -661,7 +661,7 @@ bool DataTransfer::WriteMacroRequest(GCodeChannel channel, const char *filename,
 	return true;
 }
 
-bool DataTransfer::WriteAbortFileRequest(GCodeChannel channel)
+bool DataTransfer::WriteAbortFileRequest(GCodeChannel channel, bool abortAll)
 {
 	if (!CanWritePacket(sizeof(AbortFileHeader)))
 	{
@@ -674,8 +674,8 @@ bool DataTransfer::WriteAbortFileRequest(GCodeChannel channel)
 	// Write header
 	AbortFileHeader *header = WriteDataHeader<AbortFileHeader>();
 	header->channel = channel;
-	header->paddingA = 0;
-	header->paddingB = 0;
+	header->abortAll = abortAll;
+	header->padding = 0;
 	return true;
 }
 

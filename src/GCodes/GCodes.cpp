@@ -2237,7 +2237,7 @@ void GCodes::ClearMove()
 // Cancel any macro or print in progress
 void GCodes::AbortPrint(GCodeBuffer& gb)
 {
-	(void)gb.AbortFile();						// stop executing any files or macros that this GCodeBuffer is running
+	(void)gb.AbortFile(true);					// stop executing any files or macros that this GCodeBuffer is running
 	if (&gb == fileGCode)						// if the current command came from a file being printed
 	{
 		StopPrint(StopPrintReason::abort);
@@ -2317,6 +2317,7 @@ void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb)
 		file.Close();
 #elif HAS_LINUX_INTERFACE
 		gb.MachineState().CloseFile();
+		gb.AbortFile(false);
 #endif
 
 		gb.PopState(true);

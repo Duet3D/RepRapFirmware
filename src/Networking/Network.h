@@ -29,7 +29,7 @@ const size_t NumHttpResponders = 2;		// the number of concurrent HTTP requests w
 const size_t NumFtpResponders = 0;		// the number of concurrent FTP sessions we support
 const size_t NumTelnetResponders = 0;	// the number of concurrent Telnet sessions we support
 #else
-const size_t NumHttpResponders = 4;		// the number of concurrent HTTP requests we can process
+const size_t NumHttpResponders = 6;		// the number of concurrent HTTP requests we can process
 const size_t NumFtpResponders = 1;		// the number of concurrent FTP sessions we support
 const size_t NumTelnetResponders = 2;	// the number of concurrent Telnet sessions we support
 #endif

@@ -100,7 +100,7 @@ public:
 	bool PushState(bool preserveLineNumber);			// Push state returning true if successful (i.e. stack not overflowed)
 	bool PopState(bool preserveLineNumber);				// Pop state returning true if successful (i.e. no stack underrun)
 
-	void AbortFile(bool requestAbort = true);
+	void AbortFile(bool abortAll, bool requestAbort = true);
 	bool IsDoingFile() const;							// Return true if this source is executing a file
 	bool IsDoingFileMacro() const;						// Return true if this source is executing a file macro
 	FilePosition GetFilePosition() const;				// Get the file position at the start of the current command
@@ -114,6 +114,7 @@ public:
 	const char *GetRequestedMacroFile(bool& reportMissing, bool &fromCode) const;		// Return requested macro file or nullptr if none
 
 	bool IsAbortRequested() const;						// Is the cancellation of the current file requested?
+	bool IsAbortAllRequested() const;					// Is the cancellation of all files being executed on this channel requested?
 	void AcknowledgeAbort();							// Indicates that the current macro file is being cancelled
 
 	void ReportStack() { reportStack = true; }			// Flags current stack details to be reported
@@ -200,6 +201,7 @@ private:
 		reportMissingMacro : 1,
 		isMacroFromCode: 1,
 		abortFile : 1,
+		abortAllFiles : 1,
 		reportStack : 1;
 #endif
 };

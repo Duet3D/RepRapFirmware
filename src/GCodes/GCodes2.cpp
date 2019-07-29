@@ -4300,11 +4300,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 #endif
 
-#if HAS_MASS_STORAGE
 	case 929: // Start/stop event logging
+#if HAS_MASS_STORAGE
 		result = platform.ConfigureLogging(gb, reply);
-		break;
+#else
+		result = GCodeResult::warningNotSupported;
 #endif
+		break;
 
 	case 950:	// configure I/O pins
 		result = platform.ConfigurePort(gb, reply);

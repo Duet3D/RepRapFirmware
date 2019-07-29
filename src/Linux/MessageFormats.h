@@ -149,8 +149,8 @@ struct ExecuteMacroHeader
 struct AbortFileHeader
 {
 	GCodeChannel channel;
-	uint8_t paddingA;
-	uint16_t paddingB;
+	bool abortAll;
+	uint16_t padding;
 };
 
 enum StackEventFlags : uint16_t

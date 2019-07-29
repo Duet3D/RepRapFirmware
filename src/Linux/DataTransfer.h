@@ -46,7 +46,7 @@ public:
 	bool WriteCodeBufferUpdate(uint16_t bufferSpace);
 	bool WriteCodeReply(MessageType type, OutputBuffer *&response);
 	bool WriteMacroRequest(GCodeChannel channel, const char *filename, bool reportMissing, bool fromBinaryCode);
-	bool WriteAbortFileRequest(GCodeChannel channel);
+	bool WriteAbortFileRequest(GCodeChannel channel, bool abortAll);
 	bool WriteStackEvent(GCodeChannel channel, GCodeMachineState& state);
 	bool WritePrintPaused(FilePosition position, PrintPausedReason reason);
 	bool WriteHeightMap();
