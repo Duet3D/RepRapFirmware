@@ -13,6 +13,7 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 #define HAS_WIFI_NETWORKING		1
 #define HAS_LINUX_INTERFACE		0
 #define HAS_CPU_TEMP_SENSOR		1
+#define HAS_MASS_STORAGE		1
 #define HAS_HIGH_SPEED_SD		1
 
 #define SUPPORT_TMC51xx			1
@@ -21,7 +22,6 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 #define SUPPORT_CAN_EXPANSION	1
 #define HAS_VOLTAGE_MONITOR		1
 #define HAS_VREF_MONITOR		1
-#define ACTIVE_LOW_HEAT_ON		0
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
@@ -70,9 +70,7 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 
 constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB port
 
-// The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
-
-// DRIVES
+// Drivers
 
 constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin(18), PortCPin(16), PortCPin(28), PortCPin(01), PortCPin(04), PortCPin(9) };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortBPin(05), PortDPin(10), PortAPin(04), PortAPin(22), PortCPin(03), PortDPin(14) };
@@ -97,30 +95,16 @@ constexpr Pin TMC51xxSclkPin = PortAPin(23);
 constexpr size_t NumPwmOutputs = 11;				// number of heater/fan/servo outputs
 constexpr size_t NumInputOutputs = 9;				// number of connectors we have for endstops, filament sensors, Z probes etc.
 
-constexpr size_t NumTachos = 3;
-constexpr Pin TachoPins[NumTachos] = { PortCPin(7), PortDPin(23), PortAPin(1) };
-
 // Thermistor/PT1000 inputs
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortBPin(3), PortCPin(15), PortCPin(0), PortCPin(30) };	// Thermistor/PT1000 pins
 constexpr Pin VssaSensePin = PortAPin(20);
 constexpr Pin VrefSensePin = PortEPin(0);
 
-// Default thermistor parameters
-constexpr float BED_R25 = 100000.0;
-constexpr float BED_BETA = 3988.0;
-constexpr float BED_SHC = 0.0;
-constexpr float EXT_R25 = 100000.0;
-constexpr float EXT_BETA = 4388.0;
-constexpr float EXT_SHC = 0.0;
-
 // Thermistor series resistor value in Ohms
 constexpr float THERMISTOR_SERIES_RS = 2200.0;
 
-// Number of SPI temperature sensors to support
-constexpr size_t MaxSpiTempSensors = 4;
-
 // Digital pins the 31855s have their select lines tied to
-constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { PortDPin(16), PortDPin(15), PortDPin(27), PortCPin(22) };
+constexpr Pin SpiTempSensorCsPins[] = { PortDPin(16), PortDPin(15), PortDPin(27), PortCPin(22) };
 
 // Pin that controls the ATX power on/off
 constexpr Pin ATX_POWER_PIN = PortAPin(10);
@@ -256,8 +240,6 @@ bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
 // Default pin allocations
 constexpr const char *DefaultEndstopPinNames[] = { "nil" };
 constexpr const char *DefaultZProbePinNames = "^io8.in+io8.out";
-constexpr const char *DefaultFanPinNames[] = { "nil" };
-constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
 
 // SAME70 Flash locations
 // These are designed to work with 1Mbyte flash processors as well as 2Mbyte

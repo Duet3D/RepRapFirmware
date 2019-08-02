@@ -406,36 +406,39 @@ void GCodes::Spin()
 	String<GCodeReplyLength> reply;
 	for (GCodeBuffer *gbp : gcodeSources)
 	{
-		GCodeBuffer& gb = *gbp;
-		reply.Clear();
-
-		if (gb.GetState() == GCodeState::normal)
+		if (gbp != nullptr)
 		{
-			if (gb.MachineState().messageAcknowledged)
-			{
-				const bool wasCancelled = gb.MachineState().messageCancelled;
-				gb.PopState(false);                                                             // this could fail if the current macro has already been aborted
+			GCodeBuffer& gb = *gbp;
+			reply.Clear();
 
-				if (wasCancelled)
+			if (gb.GetState() == GCodeState::normal)
+			{
+				if (gb.MachineState().messageAcknowledged)
 				{
-					if (gb.MachineState().previous == nullptr)
+					const bool wasCancelled = gb.MachineState().messageCancelled;
+					gb.PopState(false);                                                             // this could fail if the current macro has already been aborted
+
+					if (wasCancelled)
 					{
-						StopPrint(StopPrintReason::userCancelled);
+						if (gb.MachineState().previous == nullptr)
+						{
+							StopPrint(StopPrintReason::userCancelled);
+						}
+						else
+						{
+							FileMacroCyclesReturn(gb);
+						}
 					}
-					else
-					{
-						FileMacroCyclesReturn(gb);
-					}
+				}
+				else
+				{
+					StartNextGCode(gb, reply.GetRef());
 				}
 			}
 			else
 			{
-				StartNextGCode(gb, reply.GetRef());
+				RunStateMachine(gb, reply.GetRef());                            // execute the state machine
 			}
-		}
-		else
-		{
-			RunStateMachine(gb, reply.GetRef());                            // execute the state machine
 		}
 	}
 
