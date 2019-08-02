@@ -222,6 +222,7 @@ Planned for 3.0:
 - Test leadscrew adjustment moves
 - Separate sensor config from heaters
 
+- Dynamic height map allocation, https://forum.duet3d.com/topic/11449/possible-increase-possible-441-points-for-bed-mesh-compensation
 - Bug: in CNC mode, if a move goes out of bounds then the spindle is stopped immediately but moves in the queue continue to execute. Need to go to a special state to empty the queue, and then turn the spindle off?
 - Bug: incomplete FTP uploads, https://forum.duet3d.com/topic/10987/ftp-not-uploading-whole-files
 - Bug? DWC 1.22.6 doesn't auto show the height map after probing since firmware 2.03, https://forum.duet3d.com/topic/10904/g29-p-parameter-ignored/5

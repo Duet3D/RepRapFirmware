@@ -6,6 +6,7 @@
  */
 
 #include "CanMessageGenericConstructor.h"
+#include "Hardware/IoPorts.h"
 
 #if SUPPORT_CAN_EXPANSION
 
@@ -40,6 +41,7 @@ bool CanMessageGenericConstructor::InsertValue(const void *vp, size_t sz, size_t
 	{
 		memmove(msg.data + pos + sz, msg.data + pos, dataLen - pos);
 		memcpy(msg.data + pos, vp, sz);
+		dataLen += sz;
 		return false;
 	}
 	return true;
@@ -143,6 +145,9 @@ bool CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb, const St
 						reply.printf("expected quoted string after '%c'", d->letter);
 						return false;
 					}
+					// We don't want port names sent to expansion boards to include the board number, so remove the board number.
+					// We also use the reducedString type for sensor names, but they should't start with digits followed by '.'.
+					(void)IoPort::RemoveBoardAddress(str.GetRef());
 					overflowed = StoreValue(str.c_str(), str.strlen() + 1);
 				}
 				break;
@@ -455,7 +460,7 @@ void CanMessageGenericConstructor::AddStringParam(char c, const char *v)
 	err = "wrong parameter letter";
 }
 
-GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, uint16_t dest, const StringRef& reply)
+GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply)
 {
 	CanMessageBuffer * buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -464,7 +469,7 @@ GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgT
 		return GCodeResult::error;
 	}
 
-	CanMessageGeneric *m2 = buf->SetupGenericMessage(msgType, dest, dataLen);
+	CanMessageGeneric *m2 = buf->SetupGenericMessage(msgType, dest, dataLen + sizeof(msg.paramMap));
 	memcpy(m2, &msg, dataLen + sizeof(msg.paramMap));
 	m2->DebugPrint(paramTable);		//DEBUG
 	CanSender::Send(buf);

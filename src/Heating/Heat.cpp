@@ -807,7 +807,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 		const unsigned sensorNum = gb.GetUIValue();
 
 #if SUPPORT_CAN_EXPANSION
-		// Set boardAddress to the board number that the port is on, or -1 if the port was not given
+		// Set boardAddress to the board number that the port is on, or NoCanAddress if the port was not given
 		CanAddress boardAddress;
 		String<StringLength20> portName;
 		if (gb.Seen('P'))

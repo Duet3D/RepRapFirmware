@@ -10,12 +10,12 @@
 
 
 #ifndef VERSION
-# define MAIN_VERSION	"3.0b6"
+# define MAIN_VERSION	"3.0b7"
 # define VERSION MAIN_VERSION
 #endif
 
 #ifndef DATE
-# define DATE "2019-07-29b1"
+# define DATE "2019-08-02b1"
 #endif
 
 #define AUTHORS "reprappro, dc42, chrishamm, t3p3, dnewman, printm3d"

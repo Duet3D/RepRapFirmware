@@ -34,7 +34,7 @@ public:
 
 	const char *GetErrorMessage() const { return err; }
 
-	GCodeResult SendAndGetResponse(CanMessageType msgType, uint16_t dest, const StringRef& reply);
+	GCodeResult SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply);
 
 private:
 	// Append a value to the data, returning true if it wouldn't fit
