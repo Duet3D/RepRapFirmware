@@ -19,6 +19,8 @@ RemoteSensor::RemoteSensor(unsigned int sensorNum, CanAddress pBoardAddress)
 
 GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
+	bool seen = false;
+	TryConfigureSensorName(gb, seen);
 	CanMessageGenericConstructor cons(M308Params);
 	if (!cons.PopulateFromCommand(gb, reply))
 	{

@@ -226,9 +226,7 @@ constexpr PinEntry PinTable[] =
 	{ PortDPin(16),	PinCapability::rw,		"spi.cs0" },
 	{ PortDPin(15),	PinCapability::rw,		"spi.cs1" },
 	{ PortDPin(27),	PinCapability::rw,		"spi.cs2" },
-	{ PortCPin(22),	PinCapability::rw,		"spi.cs3" },
-
-//	{ PortEPin(2),	PinCapability::rw,		"rpidataready" }		// RPi data ready, for testing only (remove this for production)
+	{ PortCPin(22),	PinCapability::rw,		"spi.cs3" }
 };
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
@@ -238,20 +236,13 @@ bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
 
 // Default pin allocations
 constexpr const char *DefaultEndstopPinNames[] = { "nil" };
-constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
+constexpr const char *DefaultZProbePinNames = "^io8.in+io8.out";
 
 // SAME70 Flash locations
 // These are designed to work with 1Mbyte flash processors as well as 2Mbyte
 // We can only erase complete 128kb sectors on the SAME70, so we allow 128Kb for IAP
 constexpr uint32_t IAP_FLASH_START = 0x004E0000;
 constexpr uint32_t IAP_FLASH_END = 0x004FFFFF;
-
-// Duet pin numbers to control the WiFi interface
-constexpr Pin EspResetPin = PortAPin(5);					// Low on this in holds the WiFi module in reset (ESP_RESET)
-constexpr Pin EspDataReadyPin = PortCPin(19);				// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
-constexpr Pin SamTfrReadyPin = PortAPin(29);				// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
-constexpr Pin SamCsPin = PortBPin(2);						// SPI NPCS pin, input from WiFi module
-Spi * const EspSpi = SPI0;
 
 // Duet pin numbers for the Linux interface
 constexpr Pin LinuxTfrReadyPin = PortEPin(2);
