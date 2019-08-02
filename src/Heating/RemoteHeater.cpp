@@ -15,6 +15,10 @@ void RemoteHeater::Spin()
 {
 }
 
+void RemoteHeater::ResetHeater()
+{
+}
+
 GCodeResult RemoteHeater::ConfigurePortAndSensor(GCodeBuffer& gb, const StringRef& reply)
 {
 	CanMessageGenericConstructor cons(M950Params);

@@ -2682,13 +2682,11 @@ void GCodes::StartPrinting(bool fromStart)
 						(simulationMode == 0) ? "Started printing file %s\n" : "Started simulating printing file %s\n",
 							reprap.GetPrintMonitor().GetPrintingFilename());
 
-#if HAS_MASS_STORAGE
 	if (fromStart)
 	{
 		// Get the fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
-		DoFileMacro(*fileGCode, START_G, false, 32);
+		DoFileMacro(*fileGCode, START_G, false);
 	}
-#endif
 }
 
 // Function to handle dwell delays. Returns true for dwell finished, false otherwise.

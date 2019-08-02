@@ -1071,7 +1071,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 {
 	if (gb.Seen('P'))
 	{
-		const size_t drive = gb.GetIValue();
+		const uint8_t drive = gb.GetDriverId().localDriver;
 		if (drive < MaxTotalDrivers)
 		{
 			bool seen = false;

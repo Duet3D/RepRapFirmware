@@ -1,5 +1,5 @@
 /*
- * CanMessageGenericConstructo.cpp
+ * CanMessageGenericConstructor.cpp
  *
  *  Created on: 23 Jul 2019
  *      Author: David
@@ -10,6 +10,7 @@
 #if SUPPORT_CAN_EXPANSION
 
 #include "CanMessageBuffer.h"
+#include "CanSender.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 #define STRINGIZE(_v) #_v
@@ -465,11 +466,12 @@ GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgT
 
 	CanMessageGeneric *m2 = buf->SetupGenericMessage(msgType, dest, dataLen);
 	memcpy(m2, &msg, dataLen + sizeof(msg.paramMap));
-	//TODO
-	m2->DebugPrint(paramTable);
-	CanMessageBuffer::Free(buf);
-	reply.copy("CAN message sending not implemented");
-	return GCodeResult::error;
+	m2->DebugPrint(paramTable);		//DEBUG
+	CanSender::Send(buf);
+
+	//TODO wait for reply
+	reply.copy("CAN message reception not implemented");
+	return GCodeResult::ok;
 }
 
 #endif

@@ -90,7 +90,7 @@ public:
 	void Diagnostics(MessageType mtype);						// Output useful information
 
 	// Methods that relate to a particular heater
-	const char *GetHeaterSensorName(size_t heater) const;				// Get the name of the sensor associated with heater, or nullptr if it hasn't been named
+	const char *GetHeaterSensorName(size_t heater) const;		// Get the name of the sensor associated with heater, or nullptr if it hasn't been named
 	float GetAveragePWM(size_t heater) const					// Return the running average PWM to the heater as a fraction in [0, 1].
 	pre(heater < MaxHeaters);
 
