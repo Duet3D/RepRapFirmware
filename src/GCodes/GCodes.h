@@ -28,6 +28,7 @@ Licence: GPL
 #include "Movement/RawMove.h"
 #include "Libraries/sha1/sha1.h"
 #include "Platform.h"		// for type EndStopHit
+#include "GCodeChannel.h"
 #include "GCodeInput.h"
 #include "Trigger.h"
 #include "Tools/Filament.h"
@@ -75,9 +76,6 @@ enum class StopPrintReason
 	userCancelled,
 	abort
 };
-
-// Number of GCodeBuffer instances
-constexpr size_t NumGCodeBuffers = 10;
 
 //****************************************************************************************************
 
@@ -230,11 +228,11 @@ private:
 	void UnlockMovement(const GCodeBuffer& gb);							// Unlock the movement resource if we own it
 	void UnlockAll(const GCodeBuffer& gb);								// Release all locks
 
-	GCodeBuffer *GetGCodeBuffer(size_t index) const { return gcodeSources[index]; }
+	GCodeBuffer *GetGCodeBuffer(GCodeChannel channel) const { return gcodeSources[(size_t)channel]; }
 	void StartNextGCode(GCodeBuffer& gb, const StringRef& reply);		// Fetch a new or old GCode and process it
 	void RunStateMachine(GCodeBuffer& gb, const StringRef& reply);		// Execute a step of the state machine
 	void DoFilePrint(GCodeBuffer& gb, const StringRef& reply);			// Get G Codes from a file and print them
-	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning = 0);
+	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning = -1);
 																		// Run a GCode macro file, optionally report error if not found
 	void FileMacroCyclesReturn(GCodeBuffer& gb);						// End a macro
 
@@ -402,7 +400,7 @@ private:
 	NetworkGCodeInput* telnetInput;										// ...
 #endif
 
-	GCodeBuffer* gcodeSources[NumGCodeBuffers];							// The various sources of gcodes
+	GCodeBuffer* gcodeSources[NumGCodeChannels];						// The various sources of gcodes
 
 	GCodeBuffer*& httpGCode = gcodeSources[0];
 	GCodeBuffer*& telnetGCode = gcodeSources[1];
@@ -414,8 +412,6 @@ private:
 	GCodeBuffer*& lcdGCode = gcodeSources[7];							// This one for the 12864 LCD
 	GCodeBuffer*& spiGCode = gcodeSources[8];
 	GCodeBuffer*& autoPauseGCode = gcodeSources[9];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
-
-	size_t nextGcodeSource;												// The one to check next
 
 	const GCodeBuffer* resourceOwners[NumResources];					// Which gcode buffer owns each resource
 

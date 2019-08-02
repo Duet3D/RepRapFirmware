@@ -31,8 +31,9 @@ public:
 	void Spin();
 	void Diagnostics(MessageType mtype);
 
-	void SetPauseReason(FilePosition position, PrintPausedReason reason);
-	void ReportPause();
+	bool FillBuffer(GCodeBuffer &gb);			// Try to fill up the G-code buffer with the next available G=code
+
+	void SetPauseReason(FilePosition position, PrintPausedReason reason);	// Notify Linux that the print has been paused
 
 private:
 	DataTransfer *transfer;
@@ -44,19 +45,23 @@ private:
 	PrintPausedReason pauseReason;
 	bool reportPause;
 
+	char codeBuffer[SpiCodeBufferSize];
+	uint16_t rxPointer, txPointer, txLength;
+	bool sendBufferUpdate;
+
+	uint32_t iapWritePointer;
+
 	OutputStack *gcodeReply;
 	void HandleGCodeReply(MessageType type, const char *reply);		// accessed by Platform
 	void HandleGCodeReply(MessageType type, OutputBuffer *buffer);	// accessed by Platform
+
+	void InvalidateBufferChannel(GCodeChannel channel);				// Invalidate every buffered G-code of the corresponding channel from the buffer ring
 };
 
 inline void LinuxInterface::SetPauseReason(FilePosition position, PrintPausedReason reason)
 {
 	pauseFilePosition = position;
 	pauseReason = reason;
-}
-
-inline void LinuxInterface::ReportPause()
-{
 	reportPause = true;
 }
 

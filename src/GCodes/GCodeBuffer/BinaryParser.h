@@ -20,7 +20,6 @@ class BinaryParser
 public:
 	BinaryParser(GCodeBuffer& gcodeBuffer);
 	void Init(); 								// Set it up to parse another G-code
-	void Diagnostics(MessageType mtype);		// Write some debug info
 	void Put(const char *data, size_t len);		// Add an entire string, overwriting any existing content
 	bool Seen(char c) __attribute__((hot));		// Is a character present?
 
@@ -44,11 +43,7 @@ public:
 	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length);	// Get a :-separated list of drivers after a key letter
 
-	bool IsIdle() const { return isIdle; }
-	bool IsCompletelyIdle() const { return isIdle && bufferLength == 0; }
-	bool IsReady() const { return isIdle && bufferLength != 0; }		// Return true if a gcode is ready but hasn't been started yet
-	bool IsExecuting() const { return !isIdle && bufferLength != 0; }	// Return true if a gcode has been started and is not paused
-	void SetFinished(bool f);							// Set the G Code executed (or not)
+	void SetFinished();									// Set the G Code finished
 
 	FilePosition GetFilePosition() const;				// Get the file position at the start of the current command
 
@@ -72,8 +67,6 @@ private:
 	int reducedBytesRead;
 	const CodeParameter *seenParameter;
 	const char *seenParameterValue;
-
-	bool isIdle;
 };
 
 #endif /* SRC_GCODES_GCODEBUFFER_BINARYGCODEBUFFER_H_ */

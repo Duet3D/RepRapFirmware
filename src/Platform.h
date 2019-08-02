@@ -128,18 +128,6 @@ enum class BoardType : uint8_t
 #endif
 };
 
-// Other firmware that we might switch to be compatible with.
-enum class Compatibility : uint8_t
-{
-	me = 0,
-	reprapFirmware = 1,
-	marlin = 2,
-	teacup = 3,
-	sprinter = 4,
-	repetier = 5,
-	nanoDLP = 6
-};
-
 /***************************************************************************************************/
 
 // Enumeration describing the reasons for a software reset.
@@ -286,10 +274,6 @@ public:
 													// it has just been restarted; it can do this by executing an actual restart if you like, but beware the loop of death...
 	void Spin();									// This gets called in the main loop and should do any housekeeping needed
 	void Exit();									// Shut down tidily. Calling Init after calling this should reset to the beginning
-
-	Compatibility Emulating() const;
-	void SetEmulating(Compatibility c);
-	bool EmulatingMarlin() const;
 
 	void Diagnostics(MessageType mtype);
 	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d);
@@ -488,6 +472,7 @@ public:
 
 	// Flash operations
 	void UpdateFirmware();
+	void StartIap();
 	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply);
 
 	// AUX device
@@ -664,7 +649,6 @@ private:
 #endif
 
 	bool active;
-	Compatibility compatibility;
 	uint32_t errorCodeBits;
 
 	void InitialiseInterrupts();

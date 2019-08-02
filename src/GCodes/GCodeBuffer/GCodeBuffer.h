@@ -12,12 +12,28 @@
 #include "StringParser.h"
 
 #include "RepRapFirmware.h"
+#include "GCodes/GCodeChannel.h"
 #include "GCodes/GCodeMachineState.h"
 #include "Linux/MessageFormats.h"
 #include "MessageType.h"
 #include "ObjectModel/ObjectModel.h"
 
 class FileGCodeInput;
+
+// The processing state of each buffer
+enum class GCodeBufferState : uint8_t
+{
+	parseNotStarted,								// we haven't started parsing yet
+	parsingLineNumber,								// we saw N at the start and we are parsing the line number
+	parsingWhitespace,								// parsing whitespace after the line number
+	parsingGCode,									// parsing GCode words
+	parsingBracketedComment,						// inside a (...) comment
+	parsingQuotedString,							// inside a double-quoted string
+	parsingChecksum,								// parsing the checksum after '*'
+	discarding,										// discarding characters after the checksum or an end-of-line comment
+	ready,											// we have a complete gcode but haven't started executing it
+	executing										// we have a complete gcode and have started executing it
+};
 
 // Class to hold an individual GCode and provide functions to allow it to be parsed
 class GCodeBuffer
@@ -26,7 +42,7 @@ public:
 	friend class BinaryParser;
 	friend class StringParser;
 
-	GCodeBuffer(const char* id, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType stringMt, MessageType binaryMt, bool useCodeQueue);
+	GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility c = Compatibility::reprapFirmware);
 	void Reset();											// Reset it to its state after start-up
 	void Init();											// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype);					// Write some debug info
@@ -93,9 +109,9 @@ public:
 	void SetPrintFinished();							// Mark the print file as finished
 	bool IsFileFinished() const;						// Return true if this source has finished execution of a file
 
-	bool IsMacroRequested() const { return !requestedMacroFile.IsEmpty(); }		// Indicate if a macro file is being requested
-	void RequestMacroFile(const char *filename, bool reportMissing);			// Request execution of a file macro
-	const char *GetRequestedMacroFile(bool& reportMissing) const;				// Return requested macro file or nullptr if none
+	bool IsMacroRequested() const { return !requestedMacroFile.IsEmpty(); }					// Indicates if a macro file is being requested
+	void RequestMacroFile(const char *filename, bool reportMissing, bool fromCode);	// Request execution of a file macro
+	const char *GetRequestedMacroFile(bool& reportMissing, bool &fromCode) const;		// Return requested macro file or nullptr if none
 
 	bool IsAbortRequested() const;						// Is the cancellation of the current file requested?
 	void AcknowledgeAbort();							// Indicates that the current macro file is being cancelled
@@ -111,7 +127,8 @@ public:
 	void AdvanceState();
 	void MessageAcknowledged(bool cancelled);
 
-	const char *GetIdentity() const { return identity; }
+	GCodeChannel GetChannel() const { return codeChannel; }
+	const char *GetIdentity() const { return gcodeChannelName[(size_t)codeChannel]; }
 	bool CanQueueCodes() const;
 	MessageType GetResponseMessageType() const;
 
@@ -150,16 +167,14 @@ public:
 private:
 	void ReportProgramError(const char *str);
 
-	const char* const identity;							// Where we are from (web, file, serial line etc)
+	const GCodeChannel codeChannel;						// Channel number of this instance
 	GCodeInput *normalInput;							// Our normal input stream, or nullptr if there isn't one
 
 #if HAS_MASS_STORAGE
 	FileGCodeInput *fileInput;							// Our file input stream for when we are reading from a print file or a macro file, may be shared with other GCodeBuffers
 #endif
 
-	const MessageType responseMessageTypeString;		// The message type we use for responses to string codes coming from this channel
-	const MessageType responseMessageTypeBinary;		// The message type we use for responses to binary codes coming from this channel
-	const bool queueCodes;								// Can we queue certain G-codes from this source?
+	const MessageType responseMessageType;				// The message type we use for responses to string codes coming from this channel
 
 	int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
 
@@ -173,6 +188,7 @@ private:
 	BinaryParser binaryParser;
 	StringParser stringParser;
 
+	GCodeBufferState bufferState;						// Idle, executing or paused
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 
 	uint32_t whenTimerStarted;							// When we started waiting
@@ -182,6 +198,7 @@ private:
 	String<MaxFilenameLength> requestedMacroFile;
 	uint8_t
 		reportMissingMacro : 1,
+		isMacroFromCode: 1,
 		abortFile : 1,
 		reportStack : 1;
 #endif

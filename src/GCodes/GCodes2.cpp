@@ -297,7 +297,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		// which means that no gcode source other than the one that executed G32 is allowed to jog the Z axis.
 		UnlockAll(gb);
 
-		DoFileMacro(gb, BED_EQUATION_G, true);	// Try to execute bed.g
+		DoFileMacro(gb, BED_EQUATION_G, true, 32);	// Try to execute bed.g
 		break;
 
 	case 53:	// Temporarily use machine coordinates
@@ -407,14 +407,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (!wasSimulating)								// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
 			{
 				// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
-				if (wasPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false))
+				if (wasPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false, 0))
 				{
 					break;
 				}
 
 				const bool leaveHeatersOn = (gb.Seen('H') && gb.GetIValue() > 0);
 				gb.SetState((leaveHeatersOn) ? GCodeState::stoppingWithHeatersOn : GCodeState::stoppingWithHeatersOff);
-				(void)DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false);
+				(void)DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false, code);
 			}
 		}
 		break;
@@ -638,12 +638,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				// If we are emulating RepRap then we print "GCode files:\n" at the start, otherwise we don't.
 				// If we are emulating Marlin and the code came via the serial/USB interface, then we don't put quotes around the names and we separate them with newline;
 				// otherwise we put quotes around them and separate them with comma.
-				if (platform.Emulating() == Compatibility::me || platform.Emulating() == Compatibility::reprapFirmware)
+				if (gb.MachineState().compatibility == Compatibility::me || gb.MachineState().compatibility == Compatibility::reprapFirmware)
 				{
 					outBuf->copy("GCode files:\n");
 				}
 
-				bool encapsulateList = ((&gb != usbGCode && &gb != telnetGCode) || !platform.EmulatingMarlin());
+				bool encapsulateList = gb.MachineState().compatibility != Compatibility::marlin;
 				FileInfo fileInfo;
 				if (platform.GetMassStorage()->FindFirst(dir.c_str(), fileInfo))
 				{
@@ -716,7 +716,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (QueueFileToPrint(filename.c_str(), reply))
 				{
 					reprap.GetPrintMonitor().StartingPrint(filename.c_str());
-					if (platform.EmulatingMarlin() && (&gb == usbGCode || &gb == telnetGCode))
+					if (gb.MachineState().compatibility == Compatibility::marlin)
 					{
 						reply.copy("File opened\nFile selected");
 					}
@@ -771,7 +771,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					gb.SetState(GCodeState::resuming1);
 					if (AllAxesAreHomed())
 					{
-						DoFileMacro(gb, RESUME_G, true);
+						DoFileMacro(gb, RESUME_G, true, 24);
 					}
 				}
 			}
@@ -1203,6 +1203,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 98: // Call Macro/Subprogram
 		if (gb.Seen('P'))
 		{
+#if HAS_LINUX_INTERFACE
+			gb.SetState(GCodeState::doingUserMacro);
+#endif
 			String<MaxFilenameLength> filename;
 			gb.GetPossiblyQuotedString(filename.GetRef());
 			DoFileMacro(gb, filename.c_str(), true, code);
@@ -1416,8 +1419,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (gb.Seen('P'))
 			{
 				reprap.SetDebug(static_cast<Module>(gb.GetIValue()), dbv);
+				reprap.PrintDebug(gb.GetResponseMessageType());
+				return true;
 			}
-			else if (dbv)
+			if (dbv)
 			{
 				// Repetier Host sends M111 with various S parameters to enable echo and similar features, which used to turn on all out debugging.
 				// But it's not useful to enable all debugging anyway. So we no longer allow debugging to be enabled without a P parameter.
@@ -1431,7 +1436,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
-			reprap.PrintDebug();
+			reprap.PrintDebug(gb.GetResponseMessageType());
+			return true;
 		}
 		break;
 
@@ -1637,7 +1643,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			const int val = (gb.Seen('P')) ? gb.GetIValue() : 0;
 			if (val == 0)
 			{
-				reprap.Diagnostics(gb.GetResponseMessageType());
+				// Set the Push flag to combine multiple messages into a single OutputBuffer chain
+				reprap.Diagnostics((MessageType)(gb.GetResponseMessageType() | PushFlag));
 			}
 			else
 			{
@@ -2541,7 +2548,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (platform.GetCurrentZProbeType() != ZProbeType::none)
 		{
 			probeIsDeployed = true;
-			DoFileMacro(gb, DEPLOYPROBE_G, false);
+			DoFileMacro(gb, DEPLOYPROBE_G, false, 401);
 		}
 		break;
 
@@ -2549,7 +2556,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (platform.GetCurrentZProbeType() != ZProbeType::none)
 		{
 			probeIsDeployed = false;
-			DoFileMacro(gb, RETRACTPROBE_G, false);
+			DoFileMacro(gb, RETRACTPROBE_G, false, 402);
 		}
 		break;
 
@@ -3019,12 +3026,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 555: // Set/report firmware type to emulate
 		if (gb.Seen('P'))
 		{
-			platform.SetEmulating((Compatibility) gb.GetIValue());
+			gb.MachineState().compatibility = (Compatibility)gb.GetIValue();
 		}
 		else
 		{
 			reply.copy("Emulating ");
-			switch (platform.Emulating())
+			switch (gb.MachineState().compatibility)
 			{
 			case Compatibility::me:
 			case Compatibility::reprapFirmware:
@@ -3052,7 +3059,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				break;
 
 			default:
-				reply.catf("Unknown: (%u)", (unsigned int)platform.Emulating());
+				reply.catf("Unknown: (%u)", (unsigned int)gb.MachineState().compatibility);
 			}
 		}
 		break;
@@ -3919,7 +3926,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				String<ScratchStringLength> scratchString;
 				scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, reprap.GetCurrentTool()->GetFilament()->GetName(), CONFIG_FILAMENT_G);
-				DoFileMacro(gb, scratchString.c_str(), false);
+				DoFileMacro(gb, scratchString.c_str(), false, 703);
 			}
 		}
 		else
@@ -4280,7 +4287,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
-			DoFileMacro(gb, RESUME_AFTER_POWER_FAIL_G, true);
+			DoFileMacro(gb, RESUME_AFTER_POWER_FAIL_G, true, 916);
 		}
 		break;
 #endif
@@ -4356,12 +4363,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		// See if there is a file in /sys named Mxx.g
 		if (code >= 0 && code < 10000)
 		{
+#if HAS_LINUX_INTERFACE
+			gb.SetState(GCodeState::doingUnsupportedCode);
+#endif
+
 			String<StringLength20> macroName;
 			macroName.printf("M%d.g", code);
-			if (DoFileMacro(gb, macroName.c_str(), false, 98))
+			if (DoFileMacro(gb, macroName.c_str(), false, code))
 			{
-				// FIXME Every DoFileMacro call should not result in GCodeResult::ok but in GCodeResult::statenNotFinished
-				// or even something like GCodeResult::waitingForMacro like for this. That will require extra work though
 				break;
 			}
 		}

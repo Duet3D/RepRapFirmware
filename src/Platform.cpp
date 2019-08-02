@@ -285,8 +285,6 @@ void Platform::Init()
 	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 #endif
 
-	compatibility = Compatibility::marlin;		// default to Marlin because the common host programs expect the "OK" response to commands
-
 	// Initialise the IO port subsystem
 	IoPort::Init();
 
@@ -712,6 +710,7 @@ void Platform::UpdateFirmware()
 				MessageF(FirmwareUpdateErrorMessage, "flash write failed, code=%" PRIu32 ", address=0x%08" PRIx32 "\n", rc, flashAddr);
 				return;
 			}
+
 			// Verify written data
 			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
 			{
@@ -791,6 +790,12 @@ void Platform::UpdateFirmware()
 
 	iapFile->Close();
 
+	StartIap();
+#endif
+}
+
+void Platform::StartIap()
+{
 	Message(AuxMessage, "Updating main firmware\n");
 	Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
 
@@ -824,19 +829,21 @@ void Platform::UpdateFirmware()
 	PIOE->PIO_IDR = 0xFFFFFFFF;
 #endif
 
+#if HAS_MASS_STORAGE
 	// Newer versions of iap4e.bin reserve space above the stack for us to pass the firmware filename
 	static const char filename[] = "0:/sys/" IAP_FIRMWARE_FILE;
 	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_FLASH_START);
 	if (topOfStack + sizeof(filename) <=
-#if SAM3XA
+# if SAM3XA
 						IRAM1_ADDR + IRAM1_SIZE
-#else
+# else
 						IRAM_ADDR + IRAM_SIZE
-#endif
+# endif
 	   )
 	{
 		memcpy(reinterpret_cast<char*>(topOfStack), filename, sizeof(filename));
 	}
+#endif
 
 #if defined(DUET_NG) || defined(DUET_M)
 	IoPort::WriteDigital(DiagPin, false);			// turn the DIAG LED off
@@ -869,7 +876,6 @@ void Platform::UpdateFirmware()
 	__asm volatile ("ldr r1, [r3, #4]");
 	__asm volatile ("orr r1, r1, #1");
 	__asm volatile ("bx r1");
-#endif
 }
 
 // Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
@@ -919,32 +925,6 @@ void Platform::Exit()
 	SERIAL_AUX2_DEVICE.end();
 #endif
 
-}
-
-Compatibility Platform::Emulating() const
-{
-	return (compatibility == Compatibility::reprapFirmware) ? Compatibility::me : compatibility;
-}
-
-bool Platform::EmulatingMarlin() const
-{
-	return compatibility == Compatibility::marlin || compatibility == Compatibility::nanoDLP;
-}
-
-void Platform::SetEmulating(Compatibility c)
-{
-	if (c != Compatibility::me && c != Compatibility::reprapFirmware && c != Compatibility::marlin && c != Compatibility::nanoDLP)
-	{
-		Message(ErrorMessage, "Attempt to emulate unsupported firmware.\n");
-	}
-	else
-	{
-		if (c == Compatibility::reprapFirmware)
-		{
-			c = Compatibility::me;
-		}
-		compatibility = c;
-	}
 }
 
 void Platform::SetIPAddress(IPAddress ip)

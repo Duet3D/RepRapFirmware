@@ -18,15 +18,14 @@ static unsigned int LastFileId = 1;
 
 // Create a default initialised GCodeMachineState
 GCodeMachineState::GCodeMachineState()
-	: previous(nullptr), feedRate(DefaultFeedRate * SecondsToMinutes), lockedResources(0), errorMessage(nullptr), lineNumber(0),
-	  drivesRelative(false), axesRelative(false), doingFileMacro(false), runningM501(false), runningM502(false),
-	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
-	  waitingForAcknowledgement(false), messageAcknowledged(false),
-	  indentLevel(0), state(GCodeState::normal)
+	: previous(nullptr), feedRate(DefaultFeedRate * SecondsToMinutes), lockedResources(0), errorMessage(nullptr),
+	  lineNumber(0), drivesRelative(false), axesRelative(false), doingFileMacro(false), runningM501(false),
+	  runningM502(false), volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
+	  waitingForAcknowledgement(false), messageAcknowledged(false), indentLevel(0), state(GCodeState::normal)
 {
 #if HAS_LINUX_INTERFACE
 	fileId = 0;
-	isFileFinished = false;
+	isFileFinished = fileError = false;
 #endif
 }
 
@@ -35,13 +34,14 @@ GCodeMachineState::GCodeMachineState()
 void GCodeMachineState::SetFileExecuting()
 {
 	fileId = LastFileId++;
-	isFileFinished = false;
+	isFileFinished = fileError = false;
 }
 
 // Mark the currently executing file as finished
-void GCodeMachineState::SetFileFinished()
+void GCodeMachineState::SetFileFinished(bool error)
 {
 	isFileFinished = true;
+	fileError = error;
 }
 #endif
 

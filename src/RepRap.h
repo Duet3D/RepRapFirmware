@@ -62,7 +62,7 @@ public:
 	bool Debug(Module module) const;
 	void SetDebug(Module m, bool enable);
 	void ClearDebug();
-	void PrintDebug();
+	void PrintDebug(MessageType mt);
 	Module GetSpinningModule() const;
 
 	const char *GetName() const;

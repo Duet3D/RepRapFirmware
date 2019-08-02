@@ -17,49 +17,16 @@ BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) : gb(gcodeBuffer)
 
 void BinaryParser::Init()
 {
-	bufferLength = 0;
+	gb.bufferState = GCodeBufferState::parseNotStarted;
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	isIdle = true;
-}
-
-void BinaryParser::Diagnostics(MessageType mtype)
-{
-	String<ScratchStringLength> scratchString;
-	if (IsIdle())
-	{
-		scratchString.printf("%s* is idle", gb.GetIdentity());
-	}
-	else if (IsExecuting())
-	{
-		scratchString.printf("%s* is doing \"", gb.GetIdentity());
-		AppendFullCommand(scratchString.GetRef());
-		scratchString.cat('"');
-	}
-	else
-	{
-		scratchString.printf("%s* is ready with \"", gb.GetIdentity());
-		AppendFullCommand(scratchString.GetRef());
-		scratchString.cat('"');
-	}
-
-	scratchString.cat(" in state(s)");
-	const GCodeMachineState *ms = gb.machineState;
-	do
-	{
-		scratchString.catf(" %d", (int)ms->state);
-		ms = ms->previous;
-	}
-	while (ms != nullptr);
-	scratchString.cat('\n');
-	reprap.GetPlatform().Message(mtype, scratchString.c_str());
 }
 
 void BinaryParser::Put(const char *data, size_t len)
 {
 	memcpy(gb.buffer, data, len);
 	bufferLength = len;
-	isIdle = false;
+	gb.bufferState = GCodeBufferState::ready;
 	gb.machineState->g53Active = (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
 
 	if (reprap.Debug(moduleGcodes))
@@ -110,7 +77,7 @@ char BinaryParser::GetCommandLetter() const
 
 bool BinaryParser::HasCommandNumber() const
 {
-	return (bufferLength != 0 && (header->flags & CodeFlags::NoMajorCommandNumber) == 0);
+	return (bufferLength != 0 && (header->flags & CodeFlags::HasMajorCommandNumber) != 0);
 }
 
 int BinaryParser::GetCommandNumber() const
@@ -120,7 +87,7 @@ int BinaryParser::GetCommandNumber() const
 
 int8_t BinaryParser::GetCommandFraction() const
 {
-	return (bufferLength != 0 && (header->flags & CodeFlags::NoMinorCommandNumber) == 0) ? header->minorCode : -1;
+	return (bufferLength != 0 && (header->flags & CodeFlags::HasMinorCommandNumber) != 0) ? header->minorCode : -1;
 }
 
 float BinaryParser::GetFValue()
@@ -218,34 +185,11 @@ DriverId BinaryParser::GetDriverId()
 	{
 		switch (seenParameter->type)
 		{
+		case DataType::Int:
 		case DataType::UInt:
+		case DataType::DriverId:
 			value.SetFromBinary(seenParameter->uintValue);
 			break;
-
-#if 1
-		// Temporary code to handle DWC before it knows about driver IDs
-		case DataType::Int:
-			if (seenParameter->intValue >= 0)
-			{
-				value.SetLocal((uint32_t)seenParameter->intValue);
-			}
-			else
-			{
-				value.Clear();
-			}
-			break;
-
-		case DataType::Float:
-			// Assume max 10 drivers per board
-			{
-				const uint32_t val = lrintf(10 * seenParameter->floatValue);
-# if SUPPORT_CAN_EXPANSION
-				value.boardAddress = val / 10;
-# endif
-				value.localDriver = val % 10;
-			}
-			break;
-#endif
 
 		default:
 			value.Clear();
@@ -449,39 +393,16 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length)
 
 	switch (seenParameter->type)
 	{
+	case DataType::Int:
 	case DataType::UInt:
+	case DataType::DriverId:
 		arr[0].SetFromBinary(seenParameter->uintValue);
 		length = 1;
 		break;
 
-#if 1
-	// Temporary code to handle DWC before it knows about driver IDs
-	case DataType::Int:
-		if (seenParameter->intValue >= 0)
-		{
-			arr[0].SetLocal((uint32_t)seenParameter->intValue);
-		}
-		else
-		{
-			arr[0].Clear();
-		}
-		length = 1;
-		break;
-
-	case DataType::Float:
-		// Assume max 10 drivers per board
-		{
-			const uint32_t val = lrintf(10 * seenParameter->floatValue);
-# if SUPPORT_CAN_EXPANSION
-			arr[0].boardAddress = val / 10;
-# endif
-			arr[0].localDriver = val % 10;
-		}
-		length = 1;
-		break;
-#endif
-
+	case DataType::IntArray:
 	case DataType::UIntArray:
+	case DataType::DriverIdArray:
 		for (int i = 0; i < seenParameter->intValue; i++)
 		{
 			arr[i].SetFromBinary(reinterpret_cast<const uint32_t*>(seenParameterValue)[i]);
@@ -489,57 +410,21 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length)
 		length = seenParameter->intValue;
 		break;
 
-#if 1
-	// Temporary code to handle DWC before it knows about driver IDs
-	case DataType::IntArray:
-		for (int i = 0; i < seenParameter->intValue; i++)
-		{
-			const int32_t val = reinterpret_cast<const int32_t*>(seenParameterValue)[i];
-			if (val >= 0)
-			{
-				arr[i].SetLocal((uint32_t)val);
-			}
-			else
-			{
-				arr[i].Clear();
-			}
-		}
-		length = seenParameter->intValue;
-		break;
-
-	case DataType::FloatArray:
-		// Assume max 10 drivers per board. A driver ID such as 1.20 will be interpreted as 2.1
-		for (int i = 0; i < seenParameter->intValue; i++)
-		{
-			const uint32_t val = lrintf(10 * reinterpret_cast<const float*>(seenParameterValue)[i]);
-# if SUPPORT_CAN_EXPANSION
-			arr[0].boardAddress = val / 10;
-# endif
-			arr[0].localDriver = val % 10;
-		}
-		length = seenParameter->intValue;
-		break;
-#endif
-
 	default:
 		length = 0;
 		return;
 	}
 }
 
-void BinaryParser::SetFinished(bool f)
+void BinaryParser::SetFinished()
 {
-	isIdle = f;
-	if (f)
-	{
-		gb.machineState->g53Active = false;		// G53 does not persist beyond the current line
-		Init();
-	}
+	gb.machineState->g53Active = false;		// G53 does not persist beyond the current command
+	Init();
 }
 
 FilePosition BinaryParser::GetFilePosition() const
 {
-	return ((header->flags & CodeFlags::FilePositionValid) != 0) ? header->filePosition : noFilePosition;
+	return ((header->flags & CodeFlags::HasFilePosition) != 0) ? header->filePosition : noFilePosition;
 }
 
 const char* BinaryParser::DataStart() const
@@ -554,10 +439,10 @@ size_t BinaryParser::DataLength() const
 
 void BinaryParser::PrintCommand(const StringRef& s) const
 {
-	if (bufferLength != 0 && (header->flags & CodeFlags::NoMajorCommandNumber) == 0)
+	if (bufferLength != 0 && (header->flags & CodeFlags::HasMajorCommandNumber) != 0)
 	{
 		s.printf("%c%" PRId32, header->letter, header->majorCode);
-		if ((header->flags & CodeFlags::NoMinorCommandNumber) == 0)
+		if ((header->flags & CodeFlags::HasMinorCommandNumber) != 0)
 		{
 			s.catf(".%" PRId32, header->minorCode);
 		}
@@ -572,10 +457,10 @@ void BinaryParser::AppendFullCommand(const StringRef &s) const
 {
 	if (bufferLength != 0)
 	{
-		if ((header->flags & CodeFlags::NoMajorCommandNumber) == 0)
+		if ((header->flags & CodeFlags::HasMajorCommandNumber) != 0)
 		{
 			s.catf("%c%" PRId32, header->letter, header->majorCode);
-			if ((header->flags & CodeFlags::NoMinorCommandNumber) == 0)
+			if ((header->flags & CodeFlags::HasMinorCommandNumber) != 0)
 			{
 				s.catf(".%" PRId32, header->minorCode);
 			}
@@ -612,6 +497,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 		lastIndex = 0;
 		break;
 	case DataType::UInt:
+	case DataType::DriverId:
 		arr[0] = seenParameter->uintValue;
 		lastIndex = 0;
 		break;
@@ -626,6 +512,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 		}
 		lastIndex = seenParameter->intValue - 1;
 		break;
+	case DataType::DriverIdArray:
 	case DataType::UIntArray:
 		for (int i = 0; i < seenParameter->intValue; i++)
 		{
@@ -722,6 +609,7 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const
 				break;
 			case DataType::String:
 			case DataType::Expression:
+			{
 				char string[param->intValue + 1];
 				memcpy(string, val, param->intValue);
 				string[param->intValue] = 0;
@@ -736,6 +624,23 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const
 				if (quoteStrings)
 				{
 					s.cat('"');
+				}
+				break;
+			}
+			case DataType::DriverId:
+				s.catf("%c%d.%d", param->letter, (int)(param->uintValue >> 16), (int)(param->uintValue & 0xFFFF));
+				break;
+			case DataType::DriverIdArray:
+				s.cat(param->letter);
+				for (int k = 0; k < param->intValue; k++)
+				{
+					if (k != 0)
+					{
+						s.cat(':');
+					}
+					const uint32_t driver = *reinterpret_cast<const uint32_t*>(val);
+					s.catf("%c%d.%d", param->letter, (int)(driver >> 16), (int)(driver & 0xFFFF));
+					val += sizeof(uint32_t);
 				}
 				break;
 			}

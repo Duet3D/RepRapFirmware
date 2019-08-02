@@ -12,7 +12,11 @@
 #include "MessageType.h"
 #include "Storage/FileData.h"
 
+#if HAS_LINUX_INTERFACE
+const size_t OUTPUT_STACK_DEPTH = 64;	// Number of OutputBuffer chains that can be pushed onto one stack instance
+#else
 const size_t OUTPUT_STACK_DEPTH = 4;	// Number of OutputBuffer chains that can be pushed onto one stack instance
+#endif
 
 class OutputStack;
 

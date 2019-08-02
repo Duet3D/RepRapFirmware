@@ -89,9 +89,26 @@ enum class GCodeState : uint8_t
 	timingSDwrite,
 #endif
 
+#if HAS_LINUX_INTERFACE
+	doingUnsupportedCode,
+	doingUserMacro,
+#endif
+
 #if HAS_VOLTAGE_MONITOR
 	powerFailPausing1
 #endif
+};
+
+// Other firmware that we might switch to be compatible with.
+enum class Compatibility : uint8_t
+{
+	me = 0,
+	reprapFirmware = 1,
+	marlin = 2,
+	teacup = 3,
+	sprinter = 4,
+	repetier = 5,
+	nanoDLP = 6
 };
 
 // Class to hold the state of gcode execution for some input source
@@ -144,12 +161,14 @@ public:
 	const char *errorMessage;
 	uint32_t lineNumber;
 
+	Compatibility compatibility;
 	int16_t newToolNumber;
 	uint16_t
 		drivesRelative : 1,
 		axesRelative : 1,
 #if HAS_LINUX_INTERFACE
 		isFileFinished : 1,
+		fileError: 1,
 #endif
 		doingFileMacro : 1,
 		waitWhileCooling : 1,
@@ -175,7 +194,7 @@ public:
 	bool DoingFile() const { return fileId == 0; }
 
 	void SetFileExecuting();
-	void SetFileFinished();
+	void SetFileFinished(bool error);
 #endif
 	void CloseFile();
 	bool UsingMachineCoordinates() const { return g53Active || runningSystemMacro; }
@@ -183,6 +202,7 @@ public:
 	// Copy values that may have been altered by config.g into this state record
 	void CopyStateFrom(const GCodeMachineState& other)
 	{
+		compatibility = other.compatibility;
 		drivesRelative = other.drivesRelative;
 		axesRelative = other.axesRelative;
 		feedRate = other.feedRate;

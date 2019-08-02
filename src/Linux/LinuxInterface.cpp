@@ -5,7 +5,6 @@
  *      Author: Christian
  */
 
-
 #include "LinuxInterface.h"
 #include "DataTransfer.h"
 
@@ -19,7 +18,8 @@
 #if HAS_LINUX_INTERFACE
 
 LinuxInterface::LinuxInterface() : transfer(new DataTransfer()), wasConnected(false), numDisconnects(0),
-	reportPause(false), gcodeReply(new OutputStack())
+	reportPause(false), rxPointer(0), txPointer(0), txLength(0), sendBufferUpdate(true),
+	iapWritePointer(IAP_FLASH_START), gcodeReply(new OutputStack())
 {
 }
 
@@ -55,25 +55,6 @@ void LinuxInterface::Spin()
 
 			switch (request)
 			{
-			// Request the state of the G-Code buffers
-			case LinuxRequest::GetState:
-			{
-				uint32_t busyChannels = 0;
-				for (size_t i = 0; i < NumGCodeBuffers; i++)
-				{
-					const GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(i);
-					if (!gb->IsCompletelyIdle() || gb->MachineState().state != GCodeState::normal || gb->IsFileFinished())
-					{
-						busyChannels |= (1 << i);
-					}
-				}
-
-				// There is no need to request a retransmission here.
-				// If DCS does not update the status, it will automatically request it again next time
-				(void)transfer->WriteState(busyChannels);
-				break;
-			}
-
 			// Perform an emergency stop
 			case LinuxRequest::EmergencyStop:
 				reprap.EmergencyStop();
@@ -87,25 +68,28 @@ void LinuxInterface::Spin()
 			// Perform a G/M/T-code
 			case LinuxRequest::Code:
 			{
-				size_t dataLength = packet->length;
-				const char *data = transfer->ReadData(dataLength);
-				const CodeHeader *header = reinterpret_cast<const CodeHeader*>(data);
-
-				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((size_t)header->channel);
-				if (gb->IsCompletelyIdle())
+				// Check if the code overlaps. If so, restart from the beginning
+				if (txPointer + sizeof(BufferedCodeHeader) + packet->length > SpiCodeBufferSize)
 				{
-					// Fill up the buffer so another code can be started
-					gb->Put(data, dataLength, true);
-				}
-				else
-				{
-					// Still busy processing a file, request the code again
-					if (reprap.Debug(moduleLinuxInterface))
+					if (rxPointer == txPointer)
 					{
-						reprap.GetPlatform().MessageF(DebugMessage, "Received code for busy channel %d\n", (int)header->channel);
+						rxPointer = 0;
 					}
-					transfer->ResendPacket(packet);
+					txLength = txPointer;
+					txPointer = 0;
+					sendBufferUpdate = true;
 				}
+
+				// Store the buffer header
+				BufferedCodeHeader *bufHeader = reinterpret_cast<BufferedCodeHeader*>(codeBuffer + txPointer);
+				bufHeader->isPending = true;
+				bufHeader->length = packet->length;
+				txPointer += sizeof(BufferedCodeHeader);
+
+				// Store the code content
+				size_t dataLength = packet->length;
+				memcpy(codeBuffer + txPointer, transfer->ReadData(packet->length), dataLength);
+				txPointer += dataLength;
 				break;
 			}
 
@@ -114,18 +98,9 @@ void LinuxInterface::Spin()
 			{
 				uint8_t module = transfer->ReadGetObjectModel();
 				OutputBuffer *buffer = reprap.GetStatusResponse(module, ResponseSource::Generic);
-				if (buffer != nullptr)
+				if (buffer != nullptr && !transfer->WriteObjectModel(module, buffer))
 				{
-					if (!transfer->WriteObjectModel(module, buffer))
-					{
-						// Failed to write the whole object model, try again later
-						transfer->ResendPacket(packet);
-						OutputBuffer::ReleaseAll(buffer);
-					}
-				}
-				else
-				{
-					// No output buffer could be allocated, this means RRF is really short on memory
+					// Failed to write the whole object model, try again later
 					transfer->ResendPacket(packet);
 					OutputBuffer::ReleaseAll(buffer);
 				}
@@ -160,7 +135,7 @@ void LinuxInterface::Spin()
 				if (reason == PrintStoppedReason::normalCompletion)
 				{
 					// Just mark the print file as finished
-					GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((size_t)CodeChannel::file);
+					GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::file);
 					gb->SetPrintFinished();
 				}
 				else
@@ -174,12 +149,17 @@ void LinuxInterface::Spin()
 			// Macro file has been finished
 			case LinuxRequest::MacroCompleted:
 			{
-				CodeChannel channel;
+				GCodeChannel channel;
 				bool error;
 				transfer->ReadMacroCompleteInfo(channel, error);
 
-				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((size_t)channel);
-				gb->MachineState().SetFileFinished();
+				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+				gb->MachineState().SetFileFinished(error);
+
+				if (reprap.Debug(moduleLinuxInterface))
+				{
+					reprap.GetPlatform().MessageF(DebugMessage, "Macro completed on channel %d\n", (int)channel);
+				}
 				break;
 			}
 
@@ -201,9 +181,9 @@ void LinuxInterface::Spin()
 			// Lock movement and wait for standstill
 			case LinuxRequest::LockMovementAndWaitForStandstill:
 			{
-				CodeChannel channel;
+				GCodeChannel channel;
 				transfer->ReadLockUnlockRequest(channel);
-				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((size_t)channel);
+				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 				if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(*gb))
 				{
 					transfer->ResendPacket(packet);
@@ -214,12 +194,72 @@ void LinuxInterface::Spin()
 			// Unlock everything
 			case LinuxRequest::Unlock:
 			{
-				CodeChannel channel;
+				GCodeChannel channel;
 				transfer->ReadLockUnlockRequest(channel);
-				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((size_t)channel);
+				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 				reprap.GetGCodes().UnlockAll(*gb);
 				break;
 			}
+
+			// Write another chunk of the IAP binary to the designated Flash area
+			case LinuxRequest::WriteIap:
+			{
+				if (iapWritePointer == IAP_FLASH_START)
+				{
+					// The EWP command is not supported for non-8KByte sectors in the SAM4 and SAME70 series.
+					// So we have to unlock and erase the complete 64Kb or 128kb sector first. One sector is always enough to contain the IAP.
+					flash_unlock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
+					flash_erase_sector(IAP_FLASH_START);
+				}
+
+				const char *dataToWrite = transfer->ReadData(packet->length);
+				size_t bytesWritten = 0;
+
+				do
+				{
+					size_t bytesToWrite = min<size_t>(IFLASH_PAGE_SIZE, packet->length - bytesWritten), retry = 0;
+					do
+					{
+						// Write one page at a time
+						cpu_irq_disable();
+						const uint32_t rc = flash_write(iapWritePointer, dataToWrite, bytesToWrite, 0);
+						cpu_irq_enable();
+
+						if (rc != FLASH_RC_OK)
+						{
+							reprap.GetPlatform().MessageF(FirmwareUpdateErrorMessage, "flash write failed, code=%" PRIu32 ", address=0x%08" PRIx32 "\n", rc, iapWritePointer);
+							return;
+						}
+
+						// Verify written data
+						if (memcmp(reinterpret_cast<void *>(iapWritePointer), dataToWrite, bytesToWrite) == 0)
+						{
+							break;
+						}
+						reprap.GetPlatform().MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08" PRIx32 "\n", iapWritePointer);
+					} while (retry++ < 3);
+
+					// Stop on error
+					if (retry == 3)
+					{
+						break;
+					}
+
+					// Move on to the next chunk
+					bytesWritten += bytesToWrite;
+					dataToWrite += bytesToWrite;
+					iapWritePointer += bytesToWrite;
+				} while (bytesWritten != packet->length);
+
+				break;
+			}
+
+			// Launch the IAP binary
+			case LinuxRequest::StartIap:
+				// Lock the whole IAP flash area again and start the IAP binary
+				flash_lock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
+				reprap.GetPlatform().StartIap();
+				break;
 
 			// Invalid request
 			default:
@@ -228,99 +268,198 @@ void LinuxInterface::Spin()
 			}
 		}
 
-		// Deal with pause events
-		if (reportPause)
+		// Send code replies and generic messages
+		while (!gcodeReply->IsEmpty())
 		{
-			if (transfer->WritePrintPaused(pauseFilePosition, pauseReason))
+			MessageType type = gcodeReply->GetFirstItemType();
+			OutputBuffer *buffer = gcodeReply->GetFirstItem();
+			if (buffer == nullptr)
 			{
-				reportPause = false;
+				// This is an empty response
+				if (!transfer->WriteCodeReply(type, buffer))
+				{
+					break;
+				}
+				(void)gcodeReply->Pop();
+			}
+			else
+			{
+				// This response contains data
+				if (!transfer->WriteCodeReply(type, buffer))
+				{
+					break;
+				}
+				gcodeReply->SetFirstItem(buffer);
 			}
 		}
 
-		// Deal with macro file requests
-		bool reportMissing;
-		for (size_t i = 0; i < NumGCodeBuffers; i++)
+		// Notify DSF about the available buffer space
+		if (sendBufferUpdate || transfer->LinuxHadReset())
 		{
-			GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(i);
-			const CodeChannel channel = (CodeChannel)i;
+			uint16_t bufferSpace = (txLength == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
+			sendBufferUpdate = !transfer->WriteCodeBufferUpdate(bufferSpace);
+		}
+
+		// Send pause notification on demand
+		if (reportPause)
+		{
+			InvalidateBufferChannel(GCodeChannel::file);
+			reportPause = !transfer->WritePrintPaused(pauseFilePosition, pauseReason);
+		}
+
+		// Deal with code channel requests
+		bool reportMissing, fromCode;
+		for (size_t i = 0; i < NumGCodeChannels; i++)
+		{
+			const GCodeChannel channel = (GCodeChannel)i;
+			GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 
 			// Handle macro start requests
-			const char *requestedMacroFile = gb->GetRequestedMacroFile(reportMissing);
+			const char *requestedMacroFile = gb->GetRequestedMacroFile(reportMissing, fromCode);
 			if (requestedMacroFile != nullptr)
 			{
-				if (transfer->WriteMacroRequest(channel, requestedMacroFile, reportMissing))
+				InvalidateBufferChannel(channel);
+				if (transfer->WriteMacroRequest(channel, requestedMacroFile, reportMissing, fromCode))
 				{
-					gb->RequestMacroFile(nullptr, false);
+					if (reprap.Debug(moduleLinuxInterface))
+					{
+						reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (reportMissing: %s fromCode: %s)\n", requestedMacroFile, reportMissing ? "true" : "false", fromCode ? "true" : "false");
+					}
+					gb->RequestMacroFile(nullptr, reportMissing, fromCode);
 				}
 			}
+
 			// Handle file abort requests
-			else if (gb->IsAbortRequested())
+			if (gb->IsAbortRequested())
 			{
+				InvalidateBufferChannel(channel);
 				if (transfer->WriteAbortFileRequest(channel))
 				{
 					gb->AcknowledgeAbort();
 				}
 			}
 
-			// Handle stack changes
+			// Report stack levels when RRF detects a DSF reset
 			if (transfer->LinuxHadReset())
 			{
 				gb->ReportStack();
 			}
 
-			if (gb->IsStackEventFlagged())
+			// Send stack details to DSF. May be replaced by the Object Model at some point
+			if (gb->IsStackEventFlagged() && transfer->WriteStackEvent(channel, gb->MachineState()))
 			{
-				if (transfer->WriteStackEvent(channel, gb->MachineState()))
-				{
-					gb->AcknowledgeStackEvent();
-				}
+				gb->AcknowledgeStackEvent();
 			}
-		}
-
-		// Deal with code replies
-		bool dataSent = true;
-		while (!gcodeReply->IsEmpty() && dataSent)
-		{
-			MessageType type = gcodeReply->GetFirstItemType();
-			OutputBuffer *buffer = gcodeReply->GetFirstItem();
-			dataSent = !transfer->WriteCodeReply(type, buffer);
-			gcodeReply->SetFirstItem(buffer);
 		}
 
 		// Start the next transfer
 		transfer->StartNextTransfer();
+		if (!wasConnected)
+		{
+			reprap.GetPlatform().Message(NetworkInfoMessage, "Connection to Linux established!\n");
+		}
 		wasConnected = true;
 	}
-	else if (wasConnected && !transfer->IsConnected())
+	else if (!transfer->IsConnected())
 	{
-		if (reprap.Debug(moduleLinuxInterface))
+		if (wasConnected)
 		{
-			reprap.GetPlatform().Message(DebugMessage, "Lost connection to Linux\n");
-		}
+			reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to Linux\n");
 
-		wasConnected = false;
-		numDisconnects++;
+			wasConnected = false;
+			numDisconnects++;
 
-		// Don't cache messages if they cannot be sent
-		if (!gcodeReply->IsEmpty())
-		{
+			rxPointer = txPointer = txLength = 0;
+			sendBufferUpdate = true;
+			iapWritePointer = IAP_FLASH_START;
+
+			// Don't cache any messages if they cannot be sent
 			gcodeReply->ReleaseAll();
+
+			// Close all open G-code files
+			for (size_t i = 0; i < NumGCodeChannels; i++)
+			{
+				reprap.GetGCodes().GetGCodeBuffer((GCodeChannel)i)->AbortFile(false);
+			}
+			reprap.GetGCodes().StopPrint(StopPrintReason::abort);
 		}
 
-		// Close all open G-code files
-		for (size_t i = 0; i < NumGCodeBuffers; i++)
+		// Invalidate the G-code buffers holding binary data (if applicable)
+		for (size_t i = 0; i < NumGCodeChannels; i++)
 		{
-			reprap.GetGCodes().GetGCodeBuffer(i)->AbortFile(false);
+			GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((GCodeChannel)i);
+			if (gb->IsBinary() && gb->IsCompletelyIdle())
+			{
+				gb->Reset();
+			}
 		}
-		reprap.GetGCodes().StopPrint(StopPrintReason::abort);
 	}
 }
 
 void LinuxInterface::Diagnostics(MessageType mtype)
 {
 	reprap.GetPlatform().Message(mtype, "=== Linux interface ===\n");
-	reprap.GetPlatform().MessageF(mtype, "Number of disconnects: %" PRIu32 "\n", numDisconnects);
 	transfer->Diagnostics(mtype);
+	reprap.GetPlatform().MessageF(mtype, "Number of disconnects: %" PRIu32 "\n", numDisconnects);
+	reprap.GetPlatform().MessageF(mtype, "Buffer RX/TX: %d/%d-%d\n", (int)rxPointer, (int)txPointer, (int)txLength);
+}
+
+bool LinuxInterface::FillBuffer(GCodeBuffer &gb)
+{
+	if (gb.IsMacroRequested() || gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::file))
+	{
+		// Don't interpret codes that are supposed to be suspended...
+		return false;
+	}
+
+	if (rxPointer != txPointer || txLength != 0)
+	{
+		bool updateRxPointer = true;
+		uint16_t readPointer = rxPointer;
+		do
+		{
+			BufferedCodeHeader *bufHeader = reinterpret_cast<BufferedCodeHeader*>(codeBuffer + readPointer);
+			readPointer += sizeof(BufferedCodeHeader);
+			const CodeHeader *header = reinterpret_cast<const CodeHeader*>(codeBuffer + readPointer);
+			readPointer += bufHeader->length;
+
+			if (bufHeader->isPending)
+			{
+				if (gb.GetChannel() == header->channel)
+				{
+					gb.Put(reinterpret_cast<const char *>(header), bufHeader->length, true);
+					bufHeader->isPending = false;
+
+					if (updateRxPointer)
+					{
+						sendBufferUpdate = true;
+
+						rxPointer = readPointer;
+						if (rxPointer == txLength)
+						{
+							rxPointer = txLength = 0;
+						}
+						else if (rxPointer == txPointer && txLength == 0)
+						{
+							rxPointer = txPointer = 0;
+						}
+					}
+
+					return true;
+				}
+				else
+				{
+					updateRxPointer = false;
+				}
+			}
+
+			if (readPointer == txLength)
+			{
+				readPointer = 0;
+			}
+		} while (readPointer != txPointer);
+	}
+	return false;
 }
 
 void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply)
@@ -331,16 +470,22 @@ void LinuxInterface::HandleGCodeReply(MessageType mt, const char *reply)
 	}
 
 	OutputBuffer *buffer = gcodeReply->GetLastItem();
-	if (buffer == nullptr || buffer->IsReferenced() || gcodeReply->GetLastItemType() != mt)
+	if (buffer != nullptr && mt == gcodeReply->GetLastItemType() && (mt & PushFlag) != 0 && !buffer->IsReferenced())
 	{
-		if (!OutputBuffer::Allocate(buffer))
-		{
-			// No more space available, stop here
-			return;
-		}
+		// Try to save some space by combining segments that have the Push flag set
+		buffer->cat(reply);
+	}
+	else if (reply[0] != 0 && OutputBuffer::Allocate(buffer))
+	{
+		// Attempt to allocate one G-code buffer per non-empty output message
+		buffer->cat(reply);
 		gcodeReply->Push(buffer, mt);
 	}
-	buffer->cat(reply);
+	else
+	{
+		// Store nullptr to indicate an empty response. This way many OutputBuffer references can be saved
+		gcodeReply->Push(nullptr, mt);
+	}
 }
 
 void LinuxInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer)
@@ -352,6 +497,58 @@ void LinuxInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer)
 	}
 
 	gcodeReply->Push(buffer, mt);
+}
+
+void LinuxInterface::InvalidateBufferChannel(GCodeChannel channel)
+{
+	if (rxPointer != txPointer || txLength != 0)
+	{
+		bool updateRxPointer = true;
+		uint16_t readPointer = rxPointer;
+		do
+		{
+			BufferedCodeHeader *bufHeader = reinterpret_cast<BufferedCodeHeader*>(codeBuffer + readPointer);
+			readPointer += sizeof(BufferedCodeHeader);
+
+			if (bufHeader->isPending)
+			{
+				const CodeHeader *header = reinterpret_cast<const CodeHeader*>(codeBuffer + readPointer);
+				if (header->channel == channel)
+				{
+					bufHeader->isPending = false;
+				}
+				else
+				{
+					updateRxPointer = false;
+				}
+			}
+			readPointer += bufHeader->length;
+
+			if (readPointer == txLength)
+			{
+				readPointer = 0;
+			}
+
+			if (updateRxPointer)
+			{
+				sendBufferUpdate = true;
+				rxPointer = readPointer;
+				if (rxPointer == 0)
+				{
+					txLength = 0;
+				}
+				else if (rxPointer == txPointer && txLength == 0)
+				{
+					rxPointer = txPointer = 0;
+					break;
+				}
+			}
+		} while (readPointer != txPointer);
+
+		// TODO It might make sense to reorder out-of-order blocks here to create a larger chunk of free buffer space.
+		// An alternative could be to limit the buffered codes per size per channel in DCS - yet we must avoid segmentation as much as possible
+		// Segmentation could become a problem if a lot of codes from different channels keep coming in and one or more codes cannot be put into GB(s)
+	}
 }
 
 #endif

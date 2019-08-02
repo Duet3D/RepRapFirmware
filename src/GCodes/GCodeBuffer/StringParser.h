@@ -48,11 +48,7 @@ public:
 	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length);	// Get a :-separated list of drivers after a key letter
 
-	bool IsIdle() const;
-	bool IsCompletelyIdle() const;
-	bool IsReady() const;								// Return true if a gcode is ready but hasn't been started yet
-	bool IsExecuting() const;							// Return true if a gcode has been started and is not paused
-	void SetFinished(bool f);							// Set the G Code executed (or not)
+	void SetFinished();									// Set the G Code finished
 	void SetCommsProperties(uint32_t arg) { checksumRequired = (arg & 1); }
 
 #if HAS_MASS_STORAGE
@@ -76,20 +72,6 @@ public:
 private:
 
 	GCodeBuffer& gb;
-
-	enum class GCodeBufferState : uint8_t
-	{
-		parseNotStarted,								// we haven't started parsing yet
-		parsingLineNumber,								// we saw N at the start and we are parsing the line number
-		parsingWhitespace,								// parsing whitespace after the line number
-		parsingGCode,									// parsing GCode words
-		parsingBracketedComment,						// inside a (...) comment
-		parsingQuotedString,							// inside a double-quoted string
-		parsingChecksum,								// parsing the checksum after '*'
-		discarding,										// discarding characters after the checksum or an end-of-line comment
-		ready,											// we have a complete gcode but haven't started executing it
-		executing										// we have a complete gcode and have started executing it
-	};
 
 	void AddToChecksum(char c);
 	void StoreAndAddToChecksum(char c);
@@ -137,7 +119,6 @@ private:
 	uint32_t crc32;										// crc32 of the binary file
 	uint32_t whenTimerStarted;							// when we started waiting
 
-	GCodeBufferState bufferState;						// Idle, executing or paused
 	uint8_t eofStringCounter;							// Check the EOF
 
 	uint16_t indentToSkipTo;
