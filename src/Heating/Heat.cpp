@@ -431,7 +431,7 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 			}
 		}
 #else
-		if (h == nullptr)
+		if (oldHeater == nullptr)
 		{
 			heaters[heater] = new LocalHeater(heater);
 		}

@@ -1072,12 +1072,14 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 	if (gb.Seen('P'))
 	{
 		const DriverId id = gb.GetDriverId();
+#if SUPPORT_CAN_EXPANSION
 		if (id.boardAddress != 0)
 		{
-			reply.copy("M569 not implemented yet for remote drivers");
+			reply.copy("M569 not yet implemented for remote drivers");
 			return GCodeResult::error;
 		}
 		else
+#endif
 		{
 			const uint8_t drive = id.localDriver;
 			if (drive < MaxTotalDrivers)
