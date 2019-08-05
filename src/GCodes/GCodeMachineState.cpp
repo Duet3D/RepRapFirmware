@@ -19,7 +19,7 @@ static unsigned int LastFileId = 1;
 // Create a default initialised GCodeMachineState
 GCodeMachineState::GCodeMachineState()
 	: previous(nullptr), feedRate(DefaultFeedRate * SecondsToMinutes), lockedResources(0), errorMessage(nullptr),
-	  lineNumber(0), drivesRelative(false), axesRelative(false), doingFileMacro(false), runningM501(false),
+	  lineNumber(0), compatibility(Compatibility::reprapFirmware), drivesRelative(false), axesRelative(false), doingFileMacro(false), runningM501(false),
 	  runningM502(false), volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
 	  waitingForAcknowledgement(false), messageAcknowledged(false), indentLevel(0), state(GCodeState::normal)
 {

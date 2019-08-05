@@ -2684,7 +2684,6 @@ void GCodes::StartPrinting(bool fromStart)
 	platform.MessageF(LogMessage,
 						(simulationMode == 0) ? "Started printing file %s\n" : "Started simulating printing file %s\n",
 							reprap.GetPrintMonitor().GetPrintingFilename());
-
 	if (fromStart)
 	{
 		// Get the fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
@@ -3072,7 +3071,10 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 		return;
 	}
 
-	const MessageType type = gb.GetResponseMessageType();
+	const MessageType initialMt = gb.GetResponseMessageType();
+	const MessageType mt = (rslt == GCodeResult::error) ? (MessageType)(initialMt | ErrorMessageFlag | LogMessage)
+							: (rslt == GCodeResult::warning) ? (MessageType)(initialMt | WarningMessageFlag | LogMessage)
+								: initialMt;
 	const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
 	const char* emulationType = nullptr;
 
@@ -3080,12 +3082,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 	{
 	case Compatibility::me:
 	case Compatibility::reprapFirmware:
-		{
-			const MessageType mt = (rslt == GCodeResult::error) ? (MessageType)(type | ErrorMessageFlag | LogMessage)
-									: (rslt == GCodeResult::warning) ? (MessageType)(type | WarningMessageFlag | LogMessage)
-										: type;
-			platform.MessageF(mt, "%s\n", reply);
-		}
+		platform.MessageF(mt, "%s\n", reply);
 		break;
 
 	case Compatibility::nanoDLP:		// nanoDLP is like Marlin except that G0 and G1 commands return "Z_move_comp<LF>" before "ok<LF>"
@@ -3093,23 +3090,23 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 		// We don't need to handle M20 here because we always allocate an output buffer for that one
 		if (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 28)
 		{
-			platform.MessageF(type, "%s\n%s\n", response, reply);
+			platform.MessageF(mt, "%s\n%s\n", response, reply);
 		}
 		else if (gb.GetCommandLetter() == 'M' && (gb.GetCommandNumber() == 105 || gb.GetCommandNumber() == 998))
 		{
-			platform.MessageF(type, "%s %s\n", response, reply);
+			platform.MessageF(mt, "%s %s\n", response, reply);
 		}
 		else if (reply[0] != 0 && !gb.IsDoingFileMacro())
 		{
-			platform.MessageF(type, "%s\n%s\n", reply, response);
+			platform.MessageF(mt, "%s\n%s\n", reply, response);
 		}
 		else if (reply[0] != 0)
 		{
-			platform.MessageF(type, "%s\n", reply);
+			platform.MessageF(mt, "%s\n", reply);
 		}
 		else
 		{
-			platform.MessageF(type, "%s\n", response);
+			platform.MessageF(mt, "%s\n", response);
 		}
 		break;
 
@@ -3128,7 +3125,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 
 	if (emulationType != nullptr)
 	{
-		platform.MessageF(type, "Emulation of %s is not yet supported.\n", emulationType);
+		platform.MessageF(mt, "Emulation of %s is not yet supported.\n", emulationType);
 	}
 }
 

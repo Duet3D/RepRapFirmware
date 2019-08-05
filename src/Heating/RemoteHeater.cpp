@@ -29,6 +29,12 @@ GCodeResult RemoteHeater::ConfigurePortAndSensor(GCodeBuffer& gb, const StringRe
 	return cons.SendAndGetResponse(CanMessageType::m950, boardAddress, reply);
 }
 
+// If it's a local heater, turn it off and release its port. If it is remote, delete the remote heater.
+void RemoteHeater::ReleasePort()
+{
+	//TODO
+}
+
 void RemoteHeater::SwitchOff()
 {
 }

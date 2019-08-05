@@ -28,8 +28,9 @@ public:
 	LocalHeater(unsigned int heaterNum);
 	LocalHeater(const Heater& h);
 
-	void Spin() override;									// Called in a tight loop to keep things running
+	void Spin() override;							// Called in a tight loop to keep things running
 	GCodeResult ConfigurePortAndSensor(GCodeBuffer& gb, const StringRef& reply) override;
+	void ReleasePort() override;					// If it's a local heater, turn it off and release its port. If it is remote, delete the remote heater.
 	void SwitchOff() override;						// Not even standby - all heater power off
 	void ResetFault() override;						// Reset a fault condition - only call this if you know what you are doing
 	float GetTemperature() const override;			// Get the current temperature

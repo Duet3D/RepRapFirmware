@@ -43,8 +43,8 @@ const uint32_t DefaultThigh = 200;
 constexpr float MaximumMotorCurrent = 1600.0;
 constexpr float SenseResistor = 0.11;						// 0.082R external + 0.03 internal
 #elif TMC_TYPE == 5160
-constexpr float MaximumMotorCurrent = 3200.0;				// depends on sense resistor power rating
-constexpr float SenseResistor = 0.051;						// assume same as we use for TMC2660
+constexpr float MaximumMotorCurrent = 6300.0;				// depends on sense resistor power rating
+constexpr float SenseResistor = 0.050;						// assume same as we use for TMC2660
 constexpr float FullScaleCurrent = 325.0/SenseResistor;		// full scale current in mA
 #endif
 

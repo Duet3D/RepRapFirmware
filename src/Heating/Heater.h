@@ -36,8 +36,9 @@ public:
 	virtual void StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) = 0;	// Start an auto tune cycle for this PID
 	virtual void GetAutoTuneStatus(const StringRef& reply) const = 0;	// Get the auto tune status or last result
 	virtual void Suspend(bool sus) = 0;							// Suspend the heater to conserve power or while doing Z probing
-	virtual float GetAccumulator() const = 0;					// get the inertial term accumulator
+	virtual float GetAccumulator() const = 0;					// Get the inertial term accumulator
 	virtual GCodeResult ConfigurePortAndSensor(GCodeBuffer& gb, const StringRef& reply) = 0;
+	virtual void ReleasePort() = 0;								// If it's a local heater, turn it off and release its port. If it is remote, delete the remote heater.
 
 	unsigned int GetHeaterNumber() const { return heaterNumber; }
 	const char *GetSensorName() const;							// Get the name of the sensor for this heater, or nullptr if it hasn't been named

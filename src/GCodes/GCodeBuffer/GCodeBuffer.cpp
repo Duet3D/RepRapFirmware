@@ -523,6 +523,7 @@ bool GCodeBuffer::PushState(bool preserveLineNumber)
 #endif
 	ms->lockedResources = machineState->lockedResources;
 	ms->lineNumber = (preserveLineNumber) ? machineState->lineNumber : 0;
+	ms->compatibility = machineState->compatibility;
 	ms->drivesRelative = machineState->drivesRelative;
 	ms->axesRelative = machineState->axesRelative;
 	ms->usingInches = machineState->usingInches;

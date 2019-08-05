@@ -126,10 +126,25 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(GCodeBuffer& gb, const StringRef
 	}
 	else if (!seenPin && !seenFreq)
 	{
-		reply.printf("Heater %u, sensor %d", GetHeaterNumber(), GetSensorNumber());
+		reply.printf("Heater %u", GetHeaterNumber());
 		port.AppendDetails(reply);
+		if (GetSensorNumber() >= 0)
+		{
+			reply.catf(", sensor %d", GetSensorNumber());
+		}
+		else
+		{
+			reply.cat(", no sensor configured");
+		}
 	}
 	return GCodeResult::ok;
+}
+
+// If it's a local heater, turn it off and release its port. If it is remote, delete the remote heater.
+void LocalHeater::ReleasePort()
+{
+	SwitchOff();
+	port.Release();
 }
 
 // Read and store the temperature of this heater and returns the error code.
@@ -538,7 +553,7 @@ void LocalHeater::GetAutoTuneStatus(const StringRef& reply) const
 
 /* Notes on the auto tune algorithm
  *
- * Most 3D printer firmwares use the ï¿½strï¿½m-Hï¿½gglund relay tuning method (sometimes called Ziegler-Nichols + relay).
+ * Most 3D printer firmwares use the Åström-Hägglund relay tuning method (sometimes called Ziegler-Nichols + relay).
  * This gives results  of variable quality, but they seem to be generally satisfactory.
  *
  * We use Cohen-Coon tuning instead. This models the heating process as a first-order process (i.e. one that with constant heating

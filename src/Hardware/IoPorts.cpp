@@ -58,6 +58,7 @@ size_t IoPort::AssignPorts(const char* pinNames, const StringRef& reply, PinUsed
 			pn.cat(c);
 			++index;
 		}
+		RemoveBoardAddress(pn.GetRef());
 
 		// Try to allocate the port
 		if (!ports[i]->Allocate(pn.c_str(), reply, neededFor, access[i]))
