@@ -610,6 +610,9 @@ void Platform::Init()
 	// Kick everything off
 	InitialiseInterrupts();
 
+#ifdef DUET_NG
+	DuetExpansion::DueXnTaskInit();								// must initialise interrupt priorities before calling this
+#endif
 	active = true;
 }
 

@@ -24,7 +24,8 @@ namespace DuetExpansion
 {
 	ExpansionBoardType DueXnInit();								// Look for a DueXn, initialise it and return which expansion board is attached
 	void AdditionalOutputInit();								// Look for an additional output pin expander
-	const char* _ecv_array null GetExpansionBoardName();				// Return the name of the expansion board, or nullptr if no expansion board
+	void DueXnTaskInit();										// Create the DueXn task and enable the associated interrupt from the DueXn
+	const char* _ecv_array null GetExpansionBoardName();		// Return the name of the expansion board, or nullptr if no expansion board
 	const char* _ecv_array null GetAdditionalExpansionBoardName();	// Return the name of the additional expansion board, or nullptr if no expansion board
 	void SetPinMode(Pin pin, PinMode mode);						// Set the I/O mode of a pin
 	bool DigitalRead(Pin pin);									// Read a pin
