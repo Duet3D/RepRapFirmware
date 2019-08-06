@@ -15,6 +15,14 @@
 // Execute a step of the state machine
 void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 {
+#if HAS_LINUX_INTERFACE
+	// Wait for the G-code replies and abort requests to go before anything else is done in the state machine
+	if (gb.IsAbortRequested() || gb.IsAbortAllRequested())
+	{
+		return;
+	}
+#endif
+
 	// Perform the next operation of the state machine for this gcode source
 	bool error = false;
 
@@ -1155,6 +1163,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			timingBytesWritten += reply.Capacity();
 			writtenThisTime += reply.Capacity();
 		}
+		break;
+#endif
+
+#if HAS_LINUX_INTERFACE
+	case GCodeState::doingUnsupportedCode:
+	case GCodeState::doingUserMacro:
+		// We get here when a macro file has been cancelled via M99 or M292 P1
+		gb.SetState(GCodeState::normal);
 		break;
 #endif
 

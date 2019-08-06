@@ -40,6 +40,7 @@ public:
 	void ReadMacroCompleteInfo(GCodeChannel& channel, bool &error);	// Read info about a completed macro file
 	void ReadHeightMap();									// Read heightmap parameters
 	void ReadLockUnlockRequest(GCodeChannel& channel);		// Read a lock/unlock request
+	void ReadAssignFilament(int& extruder, StringRef& filamentName);	// Read a request to assign the given filament to an extruder drive
 
 	void ResendPacket(const PacketHeader *packet);
 	bool WriteObjectModel(uint8_t module, OutputBuffer *data);

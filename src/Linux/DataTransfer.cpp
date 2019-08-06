@@ -298,6 +298,17 @@ void DataTransfer::ReadLockUnlockRequest(GCodeChannel& channel)
 	channel = header->channel;
 }
 
+void DataTransfer::ReadAssignFilament(int& extruder, StringRef& filamentName)
+{
+	// Read header
+	const AssignFilamentHeader *header = ReadDataHeader<AssignFilamentHeader>();
+	extruder = header->extruder;
+
+	// Read filament name
+	const char *name = ReadData(header->filamentLength + sizeof(PrintStartedHeader));
+	filamentName.copy(name, header->filamentLength);
+}
+
 void DataTransfer::ExchangeHeader()
 {
 	state = SpiState::ExchangingHeader;

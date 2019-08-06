@@ -2319,7 +2319,6 @@ void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb)
 		gb.GetFileInput()->Reset(file);
 		file.Close();
 #elif HAS_LINUX_INTERFACE
-		gb.MachineState().CloseFile();
 		gb.AbortFile(false);
 #endif
 

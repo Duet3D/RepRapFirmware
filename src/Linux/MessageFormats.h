@@ -207,8 +207,9 @@ enum class LinuxRequest : uint16_t
 	Unlock = 11,								// Unlock occupied resources
 	WriteIap = 12,								// Write another chunk of the IAP binary
 	StartIap = 13,								// Launch the IAP binary
+	AssignFilament = 14,						// Assign filament to an extruder
 
-	InvalidRequest = 14
+	InvalidRequest = 15
 };
 
 enum CodeFlags : uint8_t
@@ -297,6 +298,12 @@ struct SetObjectModelHeader
 		uint32_t uintValue;
 		float floatValue;
 	};
+};
+
+struct AssignFilamentHeader
+{
+	int32_t extruder;
+	uint32_t filamentLength;
 };
 
 #endif /* SRC_LINUX_MESSAGEFORMATS_H_ */

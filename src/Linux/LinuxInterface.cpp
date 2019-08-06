@@ -12,6 +12,7 @@
 #include "GCodes/GCodes.h"
 #include "Platform.h"
 #include "PrintMonitor.h"
+#include "Tools/Filament.h"
 #include "RepRap.h"
 #include "RepRapFirmware.h"
 
@@ -261,6 +262,22 @@ void LinuxInterface::Spin()
 				reprap.GetPlatform().StartIap();
 				break;
 
+			// Assign filament
+			case LinuxRequest::AssignFilament:
+			{
+				int extruder;
+				String<FilamentNameLength> filamentName;
+				StringRef filamentRef = filamentName.GetRef();
+				transfer->ReadAssignFilament(extruder, filamentRef);
+
+				Filament *filament = Filament::GetFilamentByExtruder(extruder);
+				if (filament != nullptr)
+				{
+					filament->Load(filamentName.c_str());
+				}
+				break;
+			}
+
 			// Invalid request
 			default:
 				INTERNAL_ERROR;
@@ -379,7 +396,9 @@ void LinuxInterface::Spin()
 			// Close all open G-code files
 			for (size_t i = 0; i < NumGCodeChannels; i++)
 			{
-				reprap.GetGCodes().GetGCodeBuffer((GCodeChannel)i)->AbortFile(true, false);
+				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((GCodeChannel)i);
+				gb->AbortFile(true, false);
+				gb->MessageAcknowledged(true);
 			}
 			reprap.GetGCodes().StopPrint(StopPrintReason::abort);
 		}
