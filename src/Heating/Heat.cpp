@@ -436,7 +436,14 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 			heaters[heater] = new LocalHeater(heater);
 		}
 #endif
-		return heaters[heater]->ConfigurePortAndSensor(gb, reply);
+
+		Heater * const h = heaters[heater];
+		if (IsBedOrChamberHeater(heater) && !h->GetModel().IsEnabled())
+		{
+			String<1> dummy;
+			h->SetModel(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, 1.0, 0.0, false, false, dummy.GetRef());
+		}
+		return h->ConfigurePortAndSensor(gb, reply);
 	}
 
 	reply.copy("Heater number out of range");
@@ -485,12 +492,20 @@ HeaterStatus Heat::GetStatus(int heater) const
 
 void Heat::SetBedHeater(size_t index, int heater)
 {
-	Heater * const h = FindHeater(bedHeaters[index]);
+	Heater *h = FindHeater(bedHeaters[index]);
 	if (h != nullptr)
 	{
 		h->SwitchOff();
 	}
+
 	bedHeaters[index] = heater;
+
+	h = FindHeater(heater);
+	if (h != nullptr && !h->GetModel().IsEnabled())
+	{
+		String<1> dummy;
+		h->SetModel(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, 1.0, 0.0, false, false, dummy.GetRef());
+	}
 }
 
 bool Heat::IsBedHeater(int heater) const
@@ -507,12 +522,20 @@ bool Heat::IsBedHeater(int heater) const
 
 void Heat::SetChamberHeater(size_t index, int heater)
 {
-	Heater * const h = FindHeater(chamberHeaters[index]);
+	Heater *h = FindHeater(chamberHeaters[index]);
 	if (h != nullptr)
 	{
 		h->SwitchOff();
 	}
+
 	chamberHeaters[index] = heater;
+
+	h = FindHeater(heater);
+	if (h != nullptr && !h->GetModel().IsEnabled())
+	{
+		String<1> dummy;
+		h->SetModel(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, 1.0, 0.0, false, false, dummy.GetRef());
+	}
 }
 
 bool Heat::IsChamberHeater(int heater) const
@@ -735,6 +758,17 @@ GCodeResult Heat::ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, cons
 		}
 	}
 	return GCodeResult::ok;
+}
+
+// Apply default heater model for a tool if necessary
+void Heat::VerifyToolHeaterModel(int heater)
+{
+	Heater *h = FindHeater(heater);
+	if (h != nullptr && !h->GetModel().IsEnabled())
+	{
+		String<1> dummy;
+		h->SetModel(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, 1.0, 0.0, true, false, dummy.GetRef());
+	}
 }
 
 // Process M303
