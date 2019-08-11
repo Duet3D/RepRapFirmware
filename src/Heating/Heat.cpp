@@ -395,7 +395,7 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 		Heater *oldHeater = heaters[heater];
 
 #if SUPPORT_CAN_EXPANSION
-		CanAddress boardAddr = CanId::NoCanAddress;
+		CanAddress boardAddr = CanId::NoAddress;
 		if (gb.Seen('C'))
 		{
 			String<StringLength20> portName;
@@ -407,7 +407,7 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 			boardAddr = IoPort::RemoveBoardAddress(portName.GetRef());
 		}
 
-		if (boardAddr == CanId::NoCanAddress)
+		if (boardAddr == CanId::NoAddress)
 		{
 			// No port given, so just configure the existing heater if there is one
 			if (oldHeater == nullptr)
@@ -820,7 +820,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
-			boardAddress = CanId::NoCanAddress;
+			boardAddress = CanId::NoAddress;
 		}
 #endif
 		TemperatureSensor *sensor;
@@ -835,7 +835,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 				return GCodeResult::error;
 			}
 #if SUPPORT_CAN_EXPANSION
-			if (boardAddress == CanId::NoCanAddress)
+			if (boardAddress == CanId::NoAddress)
 			{
 				reply.copy("Missing port name");
 				return GCodeResult::error;
@@ -859,7 +859,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 			}
 #if SUPPORT_CAN_EXPANSION
 			const int existingBoardAddress = sensor->GetBoardAddress();
-			if (boardAddress == CanId::NoCanAddress)
+			if (boardAddress == CanId::NoAddress)
 			{
 				boardAddress = existingBoardAddress;
 			}

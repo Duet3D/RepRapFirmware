@@ -468,12 +468,12 @@ uint16_t IoPort::ReadAnalog() const
 		boardAddress = (boardAddress * 10) + (portName[numToSkip] - '0');
 		++numToSkip;
 	}
-	if (numToSkip != prefix && portName[numToSkip] == '.' && boardAddress <= CanId::MaxCanAddress)
+	if (numToSkip != prefix && portName[numToSkip] == '.' && boardAddress <= CanId::MaxNormalAddress)
 	{
 		portName.Erase(prefix, numToSkip - prefix + 1);			// remove the board address prefix
 		return (CanAddress)boardAddress;
 	}
-	return 0;
+	return CanId::MasterAddress;
 }
 
 #endif

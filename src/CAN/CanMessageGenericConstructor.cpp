@@ -11,7 +11,7 @@
 #if SUPPORT_CAN_EXPANSION
 
 #include "CanMessageBuffer.h"
-#include "CanSender.h"
+#include "CanInterface.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 #define STRINGIZE(_v) #_v
@@ -469,10 +469,10 @@ GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgT
 		return GCodeResult::error;
 	}
 
-	CanMessageGeneric *m2 = buf->SetupGenericMessage(msgType, dest, dataLen + sizeof(msg.paramMap));
+	CanMessageGeneric *m2 = buf->SetupGenericMessage(msgType, CanInterface::GetCanAddress(), dest, dataLen + sizeof(msg.paramMap));
 	memcpy(m2, &msg, dataLen + sizeof(msg.paramMap));
 	m2->DebugPrint(paramTable);		//DEBUG
-	CanSender::Send(buf);
+	CanInterface::Send(buf);
 
 	//TODO wait for reply
 	reply.copy("CAN message reception not implemented");

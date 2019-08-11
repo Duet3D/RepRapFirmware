@@ -192,7 +192,7 @@ void RepRap::Init()
 	SetName(DEFAULT_MACHINE_NAME);		// Network must be initialised before calling this because this calls SetHostName
 	gCodes->Init();						// must be called before Move::Init
 #if SUPPORT_CAN_EXPANSION
-	CanInterface::Init();
+	CanInterface::Init(CanId::MasterAddress);
 #endif
 	move->Init();
 	heat->Init();

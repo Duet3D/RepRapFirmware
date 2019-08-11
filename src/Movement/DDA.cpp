@@ -14,7 +14,7 @@
 #include "Kinematics/LinearDeltaKinematics.h"
 
 #if SUPPORT_CAN_EXPANSION
-# include "CAN/CanInterface.h"
+# include "CAN/CanMotion.h"
 #endif
 
 #ifdef DUET_NG
@@ -1235,7 +1235,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 		activeDMs = completedDMs = nullptr;
 
 #if SUPPORT_CAN_EXPANSION
-		CanInterface::StartMovement(*this);
+		CanMotion::StartMovement(*this);
 #endif
 
 		// Handle all drivers
@@ -1261,7 +1261,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 #if SUPPORT_CAN_EXPANSION
 						if (driver.IsRemote())
 						{
-							CanInterface::AddMovement(*this, params, driver, delta);
+							CanMotion::AddMovement(*this, params, driver, delta);
 						}
 						else
 #endif
@@ -1322,7 +1322,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 					const DriverId driver = config.driverNumbers[i];
 					if (driver.IsRemote())
 					{
-						CanInterface::AddMovement(*this, params, driver, delta);
+						CanMotion::AddMovement(*this, params, driver, delta);
 					}
 				}
 #endif
@@ -1377,7 +1377,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 						const DriverId driver = config.driverNumbers[i];
 						if (driver.IsRemote())
 						{
-							CanInterface::AddMovement(*this, params, driver, delta);
+							CanMotion::AddMovement(*this, params, driver, delta);
 						}
 					}
 #endif
@@ -1442,7 +1442,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 					const DriverId driver = platform.GetExtruderDriver(drive - MaxAxes);
 					if (driver.IsRemote())
 					{
-						CanInterface::AddMovement(*this, params, driver, pdm->GetSteps());
+						CanMotion::AddMovement(*this, params, driver, pdm->GetSteps());
 					}
 #endif
 				}
@@ -1467,7 +1467,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 					const DriverId driver = config.driverNumbers[i];
 					if (driver.IsRemote())
 					{
-						CanInterface::AddMovement(*this, params, driver, 0);
+						CanMotion::AddMovement(*this, params, driver, 0);
 					}
 				}
 #endif
@@ -1480,7 +1480,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 							: StepTimer::GetInterruptClocks() + MovementStartDelayClocks;	// else this move is the first so start it after a short delay
 
 #if SUPPORT_CAN_EXPANSION
-		CanInterface::FinishMovement(afterPrepare.moveStartTime);
+		CanMotion::FinishMovement(afterPrepare.moveStartTime);
 #endif
 		if (reprap.Debug(moduleDda) && reprap.Debug(moduleMove))		// temp show the prepared DDA if debug enabled for both modules
 		{

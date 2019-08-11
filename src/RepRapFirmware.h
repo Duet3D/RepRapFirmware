@@ -94,23 +94,23 @@ struct DriverId
 	{
 		localDriver = val & 0x000000FF;
 		const uint32_t brdNum = val >> 16;
-		boardAddress = (brdNum <= CanId::MaxCanAddress) ? (CanAddress)brdNum : CanId::NoCanAddress;
+		boardAddress = (brdNum <= CanId::MaxNormalAddress) ? (CanAddress)brdNum : CanId::NoAddress;
 	}
 
 	void SetLocal(unsigned int driver)
 	{
 		localDriver = (uint8_t)driver;
-		boardAddress = 0;
+		boardAddress = CanId::MasterAddress;
 	}
 
 	void Clear()
 	{
 		localDriver = 0;
-		boardAddress = CanId::NoCanAddress;
+		boardAddress = CanId::NoAddress;
 	}
 
-	bool IsLocal() const { return boardAddress == 0; }
-	bool IsRemote() const { return boardAddress != 0; }
+	bool IsLocal() const { return boardAddress == CanId::MasterAddress; }
+	bool IsRemote() const { return boardAddress != CanId::MasterAddress; }
 #else
 	void SetFromBinary(uint32_t val)
 	{

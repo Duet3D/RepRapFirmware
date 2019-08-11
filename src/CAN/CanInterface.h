@@ -9,6 +9,9 @@
 #define SRC_CAN_CANINTERFACE_H_
 
 #include "RepRapFirmware.h"
+#include <CanId.h>
+
+class CanMessageBuffer;
 
 #if SUPPORT_CAN_EXPANSION
 
@@ -18,12 +21,9 @@ struct PrepParams;
 
 namespace CanInterface
 {
-	void Init();
-	void StartMovement(const DDA& dda);
-	void AddMovement(const DDA& dda, const PrepParams& params, DriverId canDriver, int32_t steps);
-	void FinishMovement(uint32_t moveStartTime);
-	bool CanPrepareMove();
-	void InsertHiccup(uint32_t numClocks);
+	void Init(CanAddress pBoardAddress);
+	CanAddress GetCanAddress();
+	void Send(CanMessageBuffer *buf);
 }
 
 #endif

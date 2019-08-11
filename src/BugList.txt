@@ -221,6 +221,7 @@ Planned for 3.0:
 - [done] 3.0 bug: Fix Z probe starting height
 - Test leadscrew adjustment moves
 - Separate sensor config from heaters
+- analog threshold in M581, https://forum.duet3d.com/topic/11549/analog-threshold-for-m581-trigger
 
 - Dynamic height map allocation, https://forum.duet3d.com/topic/11449/possible-increase-possible-441-points-for-bed-mesh-compensation
 - Bug: in CNC mode, if a move goes out of bounds then the spindle is stopped immediately but moves in the queue continue to execute. Need to go to a special state to empty the queue, and then turn the spindle off?

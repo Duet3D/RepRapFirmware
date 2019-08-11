@@ -41,7 +41,7 @@
 #include "Endstops/ZProbe.h"
 
 #if SUPPORT_CAN_EXPANSION
-# include "CAN/CanInterface.h"
+# include "CAN/CanMotion.h"
 #endif
 
 #if SUPPORT_OBJECT_MODEL
@@ -783,7 +783,7 @@ void Move::Interrupt()
 #endif
 			nextStepTime = nextStepTime.value() + DDA::HiccupTime;
 #if SUPPORT_CAN_EXPANSION
-			CanInterface::InsertHiccup(DDA::HiccupTime);
+			CanMotion::InsertHiccup(DDA::HiccupTime);
 #endif
 			++numHiccups;
 		}

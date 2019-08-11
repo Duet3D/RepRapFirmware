@@ -10,7 +10,7 @@
 #include "Move.h"
 
 #if SUPPORT_CAN_EXPANSION
-# include "CAN/CanInterface.h"
+# include "CAN/CanMotion.h"
 #endif
 
 constexpr uint32_t UsualMinimumPreparedTime = StepTimer::StepClockRate/10;			// 100ms
@@ -267,7 +267,7 @@ void DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsig
 		   && alreadyPrepared * 2 < numDdasInRing					// but don't prepare more than half the ring
 		   && (firstUnpreparedMove->IsGoodToPrepare() || moveTimeLeft < (int32_t)AbsoluteMinimumPreparedTime)
 #if SUPPORT_CAN_EXPANSION
-		   && CanInterface::CanPrepareMove()
+		   && CanMotion::CanPrepareMove()
 #endif
 		  )
 	{
