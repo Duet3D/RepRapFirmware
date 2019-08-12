@@ -25,6 +25,7 @@ namespace CanInterface
 	CanAddress GetCanAddress();
 	void SendMotion(CanMessageBuffer *buf);
 	void SendRequest(CanMessageBuffer *buf);
+	void SendResponse(CanMessageBuffer *buf);
 }
 
 #endif

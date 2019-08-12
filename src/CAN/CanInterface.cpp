@@ -25,6 +25,11 @@ extern "C"
 
 const unsigned int NumCanBuffers = 40;
 
+constexpr uint32_t MaxMotionSendWait = 20;		// milliseconds
+constexpr uint32_t MaxTimeSyncSendWait = 20;	// milliseconds
+constexpr uint32_t MaxResponseSendWait = 50;	// milliseconds
+constexpr uint32_t MaxRequestSendWait = 50;		// milliseconds
+
 #define USE_BIT_RATE_SWITCH		0
 
 //#define CAN_DEBUG
@@ -61,8 +66,10 @@ static uint32_t GetAndClearStatusBits()
 /* mcan_transfer_message_setting */
 constexpr uint32_t TxBufferIndexEmergency = 0;
 constexpr uint32_t TxBufferIndexTimeSync = 1;
+// We should probably use a FIFO or a queue for the remainder, but for now each has its own message buffer
 constexpr uint32_t TxBufferIndexMotion = 2;
 constexpr uint32_t TxBufferIndexRequest = 3;
+constexpr uint32_t TxBufferIndexResponse = 4;
 
 /* mcan_receive_message_setting */
 constexpr uint32_t RxFifoIndexBroadcast = 0;
@@ -157,16 +164,35 @@ CanAddress CanInterface::GetCanAddress()
 	return CanId::MasterAddress;
 }
 
-// Send extended CAN message in fd mode,
-static status_code mcan_fd_send_ext_message(uint32_t id_value, const uint8_t *data, size_t dataLength, uint32_t whichTxBuffer)
+// Wait for a specified buffer to become free. If it's still not free after the timeout, cancel the pending transmission.
+static void WaitForTxBufferFree(uint32_t whichTxBuffer, uint32_t maxWait)
 {
 	const uint32_t trigMask = (uint32_t)1 << whichTxBuffer;
 	if ((mcan_instance.hw->MCAN_TXBRP & trigMask) != 0)
 	{
-		mcan_instance.hw->MCAN_TXBCR = trigMask;
-		while ((mcan_instance.hw->MCAN_TXBRP & trigMask) != 0) { }
-	}
+		// Wait for the timeout period for the message to be sent
+		const uint32_t startTime = millis();
+		do
+		{
+			delay(1);
+			if ((mcan_instance.hw->MCAN_TXBRP & trigMask) == 0)
+			{
+				return;
+			}
+		} while (millis() - startTime < maxWait);
 
+		// The last message still hasn't been sent, so cancel it
+		mcan_instance.hw->MCAN_TXBCR = trigMask;
+		while ((mcan_instance.hw->MCAN_TXBRP & trigMask) != 0)
+		{
+			delay(1);
+		}
+	}
+}
+
+// Send extended CAN message in fd mode. The Tx buffer must alrrady be free.
+static status_code mcan_fd_send_ext_message_no_wait(uint32_t id_value, const uint8_t *data, size_t dataLength, uint32_t whichTxBuffer)
+{
 	const uint32_t dlc = (dataLength <= 8) ? dataLength
 							: (dataLength <= 24) ? ((dataLength + 3) >> 2) + 6
 								: ((dataLength + 15) >> 4) + 11;
@@ -182,19 +208,18 @@ static status_code mcan_fd_send_ext_message(uint32_t id_value, const uint8_t *da
 	memcpy(tx_element.data, data, dataLength);
 
 	status_code rc = mcan_set_tx_buffer_element(&mcan_instance, &tx_element, whichTxBuffer);
-	if (rc != STATUS_OK)
+	if (rc == STATUS_OK)
 	{
-		DEBUG_HERE;
-	}
-	else
-	{
-		rc = mcan_tx_transfer_request(&mcan_instance, trigMask);
-		if (rc != STATUS_OK)
-		{
-			DEBUG_HERE;
-		}
+		rc = mcan_tx_transfer_request(&mcan_instance, (uint32_t)1 << whichTxBuffer);
 	}
 	return rc;
+}
+
+// Send extended CAN message in fd mode
+static status_code mcan_fd_send_ext_message(uint32_t id_value, const uint8_t *data, size_t dataLength, uint32_t whichTxBuffer, uint32_t maxWait)
+{
+	WaitForTxBufferFree(whichTxBuffer, maxWait);
+	return mcan_fd_send_ext_message_no_wait(id_value, data, dataLength, whichTxBuffer);
 }
 
 // Interrupt handler for MCAN, including RX,TX,ERROR and so on processes
@@ -290,7 +315,7 @@ extern "C" void CanSenderLoop(void *)
 			}
 
 			// Send the message
-			mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexMotion);
+			mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexMotion, MaxMotionSendWait);
 
 #ifdef CAN_DEBUG
 			// Display a debug message too
@@ -319,8 +344,9 @@ extern "C" void CanClockLoop(void *)
 		if (buf != nullptr)
 		{
 			CanMessageTimeSync * const msg = buf->SetupBroadcastMessage<CanMessageTimeSync>(CanId::MasterAddress);
+			WaitForTxBufferFree(TxBufferIndexTimeSync, MaxTimeSyncSendWait);			// make sure we can send immediately
 			msg->timeSent = StepTimer::GetInterruptClocks();
-			mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexTimeSync);
+			mcan_fd_send_ext_message_no_wait(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexTimeSync);
 			CanMessageBuffer::Free(buf);
 		}
 		// Delay until it is time again
@@ -346,10 +372,18 @@ void CanInterface::SendMotion(CanMessageBuffer *buf)
 	canSenderTask.Give();
 }
 
-// Send a request to an expansion board and get the response
+// Send a request to an expansion board
 void CanInterface::SendRequest(CanMessageBuffer *buf)
 {
-	//TODO
+	mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexRequest, MaxRequestSendWait);
+	CanMessageBuffer::Free(buf);
+}
+
+// Send a response to an expansion board
+void CanInterface::SendResponse(CanMessageBuffer *buf)
+{
+	mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexResponse, MaxResponseSendWait);
+	CanMessageBuffer::Free(buf);
 }
 
 // The CanReceiver task
