@@ -397,8 +397,8 @@ namespace TaskPriority
 const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 const uint32_t NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 const uint32_t NvicPriorityWiFiUart = 2;		// UART used to receive debug data from the WiFi module
-const uint32_t NvicPriorityMCan = 2;			// CAN interface
 
+const uint32_t NvicPriorityMCan = 3;			// CAN interface
 const uint32_t NvicPriorityPins = 3;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const uint32_t NvicPriorityStep = 4;			// step interrupt is next highest, it can preempt most other interrupts
 const uint32_t NvicPriorityUSB = 5;				// USB interrupt

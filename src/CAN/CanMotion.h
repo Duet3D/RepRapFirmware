@@ -8,6 +8,10 @@
 #ifndef SRC_CAN_CANMOTION_H_
 #define SRC_CAN_CANMOTION_H_
 
+#include "RepRapFirmware.h"
+
+#if SUPPORT_CAN_EXPANSION
+
 #include <Movement/DDA.h>
 
 namespace CanMotion
@@ -19,5 +23,7 @@ namespace CanMotion
 	bool CanPrepareMove();
 	void InsertHiccup(uint32_t numClocks);
 }
+
+#endif
 
 #endif /* SRC_CAN_CANMOTION_H_ */
