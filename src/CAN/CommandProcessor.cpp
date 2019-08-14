@@ -27,7 +27,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 			if (msg.bootloaderVersion == CanMessageFirmwareUpdateRequest::BootloaderVersion0)		// we only understand bootloader version 0
 			{
 				String<MaxFilenameLength> fname;
-				fname.copy("Duet3ExpansionFirmware_");
+				fname.copy("Duet3Firmware_");
 				fname.catn(msg.boardType, msg.GetBoardTypeLength(buf->dataLength));
 				fname.cat(".bin");
 #if defined(DUET3_V05)
@@ -59,7 +59,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 							lreq = fileLength - fileOffset;
 						}
 
-debugPrintf("Sending %" PRIu32 " bytes at offset %" PRIu32 "\n", lreq, fileOffset);
+//debugPrintf("Sending %" PRIu32 " bytes at offset %" PRIu32 "\n", lreq, fileOffset);
 
 						for (;;)
 						{
