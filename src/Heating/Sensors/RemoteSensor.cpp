@@ -12,8 +12,11 @@
 #include "CAN/CanMessageGenericConstructor.h"
 #include "CanMessageBuffer.h"
 
+constexpr uint32_t RemoteTemperatureTimeoutMillis = 1000;
+
 RemoteSensor::RemoteSensor(unsigned int sensorNum, CanAddress pBoardAddress)
-	: TemperatureSensor(sensorNum, "remote"), boardAddress(pBoardAddress)
+	: TemperatureSensor(sensorNum, "remote"),
+	  lastTemperature(BadErrorTemperature), whenLastReadingReceived(millis()), boardAddress(pBoardAddress), lastError(TemperatureError::notReady)
 {
 }
 
@@ -32,9 +35,21 @@ GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 // Try to get a temperature reading
 TemperatureError RemoteSensor::TryGetTemperature(float& t)
 {
-	//TODO
-	t = BadErrorTemperature;
-	return TemperatureError::notReady;
+	if (millis() - whenLastReadingReceived > RemoteTemperatureTimeoutMillis)
+	{
+		lastTemperature = BadErrorTemperature;
+		lastError = TemperatureError::timeout;
+	}
+
+	t = lastTemperature;
+	return lastError;
+}
+
+void RemoteSensor::UpdateRemoteTemperature(const CanTemperatureReport& report)
+{
+	lastError = (TemperatureError)report.errorCode;
+	lastTemperature = report.temperature;
+	whenLastReadingReceived = millis();
 }
 
 #endif

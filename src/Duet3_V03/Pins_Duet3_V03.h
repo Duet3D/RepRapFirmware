@@ -45,6 +45,9 @@ constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives suppor
 constexpr size_t MaxSmartDrivers = 6;				// The maximum number of direct smart drivers
 constexpr size_t MaxCanDrivers = 18;
 
+constexpr size_t MaxSensorsInSystem = 64;
+typedef uint64_t SensorsBitmap;
+
 constexpr size_t MaxHeaters = 12;
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 4;

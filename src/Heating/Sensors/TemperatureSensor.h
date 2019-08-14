@@ -7,6 +7,7 @@
 #include "GCodes/GCodeResult.h"
 
 class GCodeBuffer;
+struct CanTemperatureReport;
 
 class TemperatureSensor
 {
@@ -56,6 +57,9 @@ public:
 #if SUPPORT_CAN_EXPANSION
 	// Get the expansion board address. Overridden for remote sensors.
 	virtual CanAddress GetBoardAddress() const { return 0; }
+
+	// Update the temperature, if it is a remote sensor. Overridden in class RemoteSensor.
+	virtual void UpdateRemoteTemperature(const CanTemperatureReport& report) { }
 #endif
 
 	// Factory method

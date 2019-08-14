@@ -34,6 +34,7 @@ Licence: GPL
 class TemperatureSensor;
 class HeaterProtection;
 class GCodeBuffer;
+struct CanTemperatureReport;
 
 class Heat
 {
@@ -90,7 +91,7 @@ public:
 	void Diagnostics(MessageType mtype);						// Output useful information
 
 	// Methods that relate to a particular heater
-	const char *GetHeaterSensorName(size_t heater) const;		// Get the name of the sensor associated with heater, or nullptr if it hasn't been named
+	const char *GetHeaterSensorName(size_t heater) const;				// Get the name of the sensor associated with heater, or nullptr if it hasn't been named
 	float GetAveragePWM(size_t heater) const					// Return the running average PWM to the heater as a fraction in [0, 1].
 	pre(heater < MaxHeaters);
 
@@ -128,6 +129,10 @@ public:
 #if HAS_MASS_STORAGE
 	bool WriteModelParameters(FileStore *f) const;				// Write heater model parameters to file returning true if no error
 	bool WriteBedAndChamberTempSettings(FileStore *f) const;	// Save some resume information
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+	void UpdateRemoteSensorTemperature(unsigned int sensor, const CanTemperatureReport& report);
 #endif
 
 private:

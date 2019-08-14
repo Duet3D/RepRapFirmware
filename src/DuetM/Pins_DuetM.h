@@ -48,6 +48,9 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 constexpr size_t NumDirectDrivers = 7;				// The maximum number of drives supported by the electronics
 constexpr size_t MaxSmartDrivers = 7;				// The maximum number of smart drivers
 
+constexpr size_t MaxSensorsInSystem = 32;
+typedef uint32_t SensorsBitmap;
+
 constexpr size_t MaxHeaters = 4;					// The maximum number of heaters in the machine
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 4;

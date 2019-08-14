@@ -31,6 +31,9 @@ const size_t NumFirmwareUpdateModules = 1;
 // The number of drives in the machine, including X, Y, and Z plus extruder drives
 constexpr size_t NumDirectDrivers = 9;
 
+constexpr size_t MaxSensorsInSystem = 32;
+typedef uint32_t SensorsBitmap;
+
 constexpr size_t NumTotalHeaters = 3;
 constexpr size_t NumDefaultHeaters = 3;				// The number of heaters configured by default
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances

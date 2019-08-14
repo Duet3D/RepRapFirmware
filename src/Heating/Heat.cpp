@@ -804,6 +804,11 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('S'))
 	{
 		const unsigned sensorNum = gb.GetUIValue();
+		if (sensorNum >= MaxSensorsInSystem)
+		{
+			reply.copy("Sensor number out of range");
+			return GCodeResult::error;
+		}
 
 #if SUPPORT_CAN_EXPANSION
 		// Set boardAddress to the board number that the port is on, or NoCanAddress if the port was not given
@@ -1006,6 +1011,19 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const
 		}
 	}
 	return (buf.strlen() == 0) || f->Write(buf.c_str());
+}
+
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+
+void Heat::UpdateRemoteSensorTemperature(unsigned int sensor, const CanTemperatureReport& report)
+{
+	TemperatureSensor * const ts = GetSensor(sensor);
+	if (ts != nullptr)
+	{
+		ts->UpdateRemoteTemperature(report);
+	}
 }
 
 #endif

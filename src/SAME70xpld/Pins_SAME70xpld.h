@@ -38,6 +38,9 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 
 constexpr size_t NumDirectDrivers = 5;				// The maximum number of drives supported by the electronics
 
+constexpr size_t MaxSensorsInSystem = 32;
+typedef uint32_t SensorsBitmap;
+
 constexpr size_t NumTotalHeaters = 4;
 constexpr size_t NumDefaultHeaters = 0;
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
