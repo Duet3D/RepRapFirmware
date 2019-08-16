@@ -1,20 +1,19 @@
 #ifndef PINS_SAME70_H__
 #define PINS_SAME70_H__
 
-#define FIRMWARE_NAME		"RepRapFirmware for Duet 3 v.03"
-#define DEFAULT_BOARD_TYPE BoardType::Duet3_03
-const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
+#define FIRMWARE_NAME		"RepRapFirmware for Duet 3 v0.6"
+#define DEFAULT_BOARD_TYPE BoardType::Duet3_06
+const size_t NumFirmwareUpdateModules = 1;
 #define IAP_FIRMWARE_FILE	"Duet3Firmware.bin"
-#define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
 #define IAP_UPDATE_FILE		"iapduet3.bin"
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
-#define HAS_WIFI_NETWORKING		1
-#define HAS_LINUX_INTERFACE		0
+#define HAS_WIFI_NETWORKING		0
+#define HAS_LINUX_INTERFACE		1
 #define HAS_CPU_TEMP_SENSOR		1
-#define HAS_MASS_STORAGE		1
-#define HAS_HIGH_SPEED_SD		1
+#define HAS_MASS_STORAGE		0
+#define HAS_HIGH_SPEED_SD		0
 
 #define SUPPORT_TMC51xx			1
 #define TMC51xx_USES_USART		1
@@ -28,10 +27,10 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR		0 //TEMP!!					// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_DHT_SENSOR		0 //TEMPorary!					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
-#define SUPPORT_FTP				1
+#define SUPPORT_FTP				0					// no point in supporting FTP because we have no mass storage
 #define SUPPORT_TELNET			1
 #define SUPPORT_ASYNC_MOVES		1
 
@@ -44,7 +43,7 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
 constexpr size_t MaxSmartDrivers = 6;				// The maximum number of direct smart drivers
 constexpr size_t MaxCanDrivers = 18;
-constexpr float MaxTmc5160Current = 3200.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
+constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 
 constexpr size_t MaxSensorsInSystem = 64;
 typedef uint64_t SensorsBitmap;
@@ -75,14 +74,13 @@ constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels 
 constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB port
 
 // Drivers
-
 constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin(18), PortCPin(16), PortCPin(28), PortCPin(01), PortCPin(04), PortCPin(9) };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortBPin(05), PortDPin(10), PortAPin(04), PortAPin(22), PortCPin(03), PortDPin(14) };
 constexpr Pin DIAG_PINS[NumDirectDrivers] =			{ PortDPin(19), PortCPin(17), PortDPin(13), PortCPin(02), PortDPin(31), PortCPin(10) };
 
 // Pin assignments etc. using USART1 in SPI mode
 constexpr Pin GlobalTmc51xxEnablePin = PortAPin(9);		// The pin that drives ENN of all TMC drivers
-constexpr Pin GlobalTmc51xxCSPin = PortDPin(17);		// The pin that drives CS of all TMC drivers
+constexpr Pin GlobalTmc51xxCSPin = PortDPin(17);			// The pin that drives CS of all TMC drivers
 Usart * const USART_TMC51xx = USART1;
 constexpr uint32_t  ID_TMC51xx_SPI = ID_USART1;
 constexpr IRQn TMC51xx_SPI_IRQn = USART1_IRQn;
@@ -100,8 +98,8 @@ constexpr size_t NumPwmOutputs = 11;				// number of heater/fan/servo outputs
 constexpr size_t NumInputOutputs = 9;				// number of connectors we have for endstops, filament sensors, Z probes etc.
 
 // Thermistor/PT1000 inputs
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortBPin(3), PortCPin(15), PortCPin(0), PortCPin(30) };	// Thermistor/PT1000 pins
-constexpr Pin VssaSensePin = PortAPin(20);
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(31), PortCPin(15), PortCPin(29), PortCPin(30) };	// Thermistor/PT1000 pins
+constexpr Pin VssaSensePin = PortCPin(13);
 constexpr Pin VrefSensePin = PortEPin(0);
 
 // Thermistor series resistor value in Ohms
@@ -114,8 +112,8 @@ constexpr Pin SpiTempSensorCsPins[] = { PortDPin(16), PortDPin(15), PortDPin(27)
 constexpr Pin ATX_POWER_PIN = PortAPin(10);
 
 // Analogue pin numbers
-constexpr Pin PowerMonitorVinDetectPin = PortCPin(13);
-constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 voltage divider (TBD)
+constexpr Pin PowerMonitorVinDetectPin = PortAPin(20);
+constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;			// we use an 11:1 voltage divider (TBD)
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
 constexpr Pin DiagPin = PortCPin(20);
@@ -124,10 +122,10 @@ constexpr Pin DiagPin = PortCPin(20);
 constexpr size_t NumTotalFans = 12;
 
 // SD cards
-constexpr size_t NumSdCards = 2;
-constexpr Pin SdCardDetectPins[NumSdCards] = { PortAPin(6), NoPin };
-constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[1] = { PortDPin(24) };
+constexpr size_t NumSdCards = 1;								// actually 0 cards, but 0 probably won't work yet
+constexpr Pin SdCardDetectPins[1] = { NoPin };
+constexpr Pin SdWriteProtectPins[1] = { NoPin };
+constexpr Pin SdSpiCSPins[1] = { NoPin };
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 
 // Ethernet
@@ -177,6 +175,7 @@ struct PinEntry
 // Aliases are separate by the , character.
 // If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
 // for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
+//TODO change the table below for the V0.6 board
 constexpr PinEntry PinTable[] =
 {
 	// Output connectors
@@ -189,7 +188,7 @@ constexpr PinEntry PinTable[] =
 	{ PortAPin(8),	PinCapability::wpwm,	"out6" },
 	{ PortCPin(11),	PinCapability::wpwm,	"out7" },
 	{ PortCPin(8),	PinCapability::wpwm,	"out8" },
-	{ PortAPin(0),	PinCapability::wpwm,	"out9" },
+	{ PortAPin(12),	PinCapability::wpwm,	"out9" },
 	{ PortCPin(23),	PinCapability::wpwm,	"out10,servo" },
 	{ PortAPin(10),	PinCapability::write,	"pson" },
 
@@ -206,8 +205,8 @@ constexpr PinEntry PinTable[] =
 	{ PortEPin(5),	PinCapability::read,	"io3.in" },
 	{ PortAPin(17),	PinCapability::read,	"io4.in" },
 	{ PortAPin(19),	PinCapability::read,	"io5.in" },
-	{ PortCPin(31),	PinCapability::read,	"io6.in" },
-	{ PortCPin(0),	PinCapability::read,	"io7.in" },
+	{ PortBPin(3),	PinCapability::read,	"io6.in" },
+	{ PortDPin(25),	PinCapability::read,	"io7.in" },
 	{ PortEPin(3),	PinCapability::read,	"io8.in" },
 
 	// IO connector outputs
@@ -217,23 +216,22 @@ constexpr PinEntry PinTable[] =
 	{ PortCPin(14),	PinCapability::write,	"io2.out" },
 	{ PortAPin(3),	PinCapability::write,	"io3.out" },
 	{ PortAPin(2),	PinCapability::write,	"io4.out" },
-	{ PortEPin(2),	PinCapability::write,	"io5.out" },
-	{ PortAPin(12),	PinCapability::write,	"io6.out" },
-	{ PortCPin(29),	PinCapability::write,	"io7.out" },
+	{ PortAPin(26),	PinCapability::write,	"io5.out" },
+	{ PortAPin(0),	PinCapability::write,	"io6.out" },
+	{ PortDPin(26),	PinCapability::write,	"io7.out" },
 	{ PortEPin(1),	PinCapability::write,	"io8.out" },
 
 	// Thermistor inputs
-	{ PortBPin(3),	PinCapability::ainr,	"temp0" },
+	{ PortCPin(31), PinCapability::ainr,	"temp0" },
 	{ PortCPin(15),	PinCapability::ainr,	"temp1" },
-	{ PortCPin(0),	PinCapability::ainr,	"temp2" },
-	{ PortCPin(30),	PinCapability::ainr,	"temp3" },
+	{ PortCPin(29), PinCapability::ainr,	"temp2" },
+	{ PortCPin(30), PinCapability::ainr,	"temp3" },
 
 	// Misc
 	{ PortDPin(16),	PinCapability::rw,		"spi.cs0" },
 	{ PortDPin(15),	PinCapability::rw,		"spi.cs1" },
 	{ PortDPin(27),	PinCapability::rw,		"spi.cs2" },
-	{ PortCPin(22),	PinCapability::rw,		"spi.cs3" },
-	{ PortDPin(24),	PinCapability::rw,		"spi.cs4" }
+	{ PortCPin(22),	PinCapability::rw,		"spi.cs3" }
 };
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
@@ -251,12 +249,9 @@ constexpr const char *DefaultZProbePinNames = "^io8.in+io8.out";
 constexpr uint32_t IAP_FLASH_START = 0x004E0000;
 constexpr uint32_t IAP_FLASH_END = 0x004FFFFF;
 
-// Duet pin numbers to control the WiFi interface
-constexpr Pin EspResetPin = PortAPin(5);					// Low on this in holds the WiFi module in reset (ESP_RESET)
-constexpr Pin EspDataReadyPin = PortCPin(19);				// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
-constexpr Pin SamTfrReadyPin = PortAPin(29);				// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
-constexpr Pin SamCsPin = PortBPin(2);						// SPI NPCS pin, input from WiFi module
-Spi * const EspSpi = SPI0;
+// Duet pin numbers for the Linux interface
+constexpr Pin LinuxTfrReadyPin = PortEPin(2);
+Spi * const LinuxSpi = SPI1;
 
 // Timer allocation
 // Network timer is timer 4 aka TC1 channel1
@@ -279,8 +274,10 @@ constexpr uint8_t DmacChanWiFiTx = 1;
 constexpr uint8_t DmacChanWiFiRx = 2;
 constexpr uint8_t DmacChanTmcTx = 3;
 constexpr uint8_t DmacChanTmcRx = 4;
+constexpr uint8_t DmacChanLinuxTx = 5;
+constexpr uint8_t DmacChanLinuxRx = 6;
 
-constexpr size_t NumDmaChannelsUsed = 5;
+constexpr size_t NumDmaChannelsUsed = 7;
 
 namespace StepPins
 {

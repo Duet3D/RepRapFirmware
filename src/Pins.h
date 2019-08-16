@@ -19,6 +19,8 @@
 #   define PLATFORM Duet3_V03
 #  elif defined(DUET3_V05)
 #   define PLATFORM Duet3_V05
+#  elif defined(DUET3_V06)
+#   define PLATFORM Duet3_V06
 #  elif defined(SAME70XPLD)
 #   define PLATFORM SAME70xpld
 #  else

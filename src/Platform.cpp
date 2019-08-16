@@ -438,7 +438,7 @@ void Platform::Init()
 		// Set up the control pins
 		pinMode(STEP_PINS[driver], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
-#if !(defined(DUET3_V03) || defined(DUET3_V05))
+#if !(defined(DUET3_V03) || defined(DUET3_V05) || defined(DUET3_V06))
 		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
 #endif
 
@@ -2533,7 +2533,7 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent)
 #endif
 		UpdateMotorCurrent(driver, requiredCurrent);
 
-#if (defined(DUET3_V03) || defined(DUET3_V05)) && HAS_SMART_DRIVERS
+#if (defined(DUET3_V03) || defined(DUET3_V05) || defined(DUET3_V06)) && HAS_SMART_DRIVERS
 		SmartDrivers::EnableDrive(driver, true);		// all drivers driven directly by the main board are smart
 #elif HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
@@ -2557,7 +2557,7 @@ void Platform::DisableOneLocalDriver(size_t driver)
 {
 	if (driver < NumDirectDrivers)
 	{
-#if (defined(DUET3_V03) || defined(DUET3_V05)) && HAS_SMART_DRIVERS
+#if (defined(DUET3_V03) || defined(DUET3_V05) || defined(DUET3_V06)) && HAS_SMART_DRIVERS
 		SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
 #elif HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
@@ -3573,6 +3573,8 @@ void Platform::SetBoardType(BoardType bt)
 		board = BoardType::Duet3_03;
 #elif defined(DUET3_V05)
 		board = BoardType::Duet3_05;
+#elif defined(DUET3_V06)
+		board = BoardType::Duet3_06;
 #elif defined(SAME70XPLD)
 		board = BoardType::SAME70XPLD_0;
 #elif defined(DUET_NG)
@@ -3647,6 +3649,8 @@ const char* Platform::GetElectronicsString() const
 	case BoardType::Duet3_03:				return "Duet 3 prototype v0.3";
 #elif defined(DUET3_V05)
 	case BoardType::Duet3_05:				return "Duet 3 prototype v0.5";
+#elif defined(DUET3_V06)
+	case BoardType::Duet3_06:				return "Duet 3 version v0.6";
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
 #elif defined(DUET_NG)
@@ -3686,6 +3690,8 @@ const char* Platform::GetBoardString() const
 	case BoardType::Duet3_03:				return "duet3proto";
 #elif defined(DUET3_V05)
 	case BoardType::Duet3_05:				return "duet3proto";
+#elif defined(DUET3_V06)
+	case BoardType::Duet3_06:				return "duet3";
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "same70xpld";
 #elif defined(DUET_NG)

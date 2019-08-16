@@ -102,6 +102,8 @@ enum class BoardType : uint8_t
 	Duet3_03 = 1
 #elif defined(DUET3_V05)
 	Duet3_05 = 1
+#elif defined(DUET3_V06)
+	Duet3_06 = 1
 #elif defined(SAME70XPLD)
 	SAME70XPLD_0 = 1
 #elif defined(DUET_NG)

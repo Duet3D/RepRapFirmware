@@ -43,7 +43,7 @@ const uint32_t DefaultThigh = 200;
 constexpr float MaximumMotorCurrent = 1600.0;
 constexpr float SenseResistor = 0.11;						// 0.082R external + 0.03 internal
 #elif TMC_TYPE == 5160
-constexpr float MaximumMotorCurrent = 6300.0;				// depends on sense resistor power rating
+// We now define MaxTmc5160Current in the board configuration file because it varies between boards
 constexpr float SenseResistor = 0.050;						// assume same as we use for TMC2660
 constexpr float FullScaleCurrent = 325.0/SenseResistor;		// full scale current in mA
 #endif
@@ -636,7 +636,7 @@ DriverMode TmcDriverState::GetDriverMode() const
 // Set the motor current
 void TmcDriverState::SetCurrent(float current)
 {
-	motorCurrent = static_cast<uint32_t>(constrain<float>(current, MinimumMotorCurrent, MaximumMotorCurrent));
+	motorCurrent = static_cast<uint32_t>(constrain<float>(current, MinimumMotorCurrent, MaxTmc5160Current));
 	UpdateCurrent();
 }
 
