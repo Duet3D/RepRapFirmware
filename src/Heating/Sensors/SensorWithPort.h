@@ -16,6 +16,9 @@ protected:
 	SensorWithPort(unsigned int sensorNum, const char *type);
 	~SensorWithPort();
 
+	// Mark this sensor for deletion by the Heat task
+	void FlagForDeletion() override;
+
 	// Try to configure the port
 	bool ConfigurePort(GCodeBuffer& gb, const StringRef& reply, PinAccess access, bool& seen);
 

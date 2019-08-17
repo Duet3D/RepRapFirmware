@@ -17,8 +17,8 @@ public:
 	// Virtual destructor
 	virtual ~TemperatureSensor();
 
-	// Mark this sensor as invalid and to be deleted
-	void FlagForDeletion() { sensorNumber = -1; }
+	// Mark this sensor as invalid and to be deleted. Overridden in sensor with ports because the port must be released too.
+	virtual void FlagForDeletion() { sensorNumber = -1; }
 
 	// Try to get a temperature reading
 	TemperatureError GetLatestTemperature(float& t);
