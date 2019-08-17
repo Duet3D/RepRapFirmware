@@ -27,8 +27,7 @@ public:
 	static constexpr const char *TypeNameThermistor = "thermistor";
 	static constexpr const char *TypeNamePT1000 = "pt1000";
 
-protected:
-	TemperatureError TryGetTemperature(float& t) override;
+	void Poll() override;
 
 private:
 	// For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf

@@ -18,8 +18,7 @@ public:
 
 	static constexpr const char *TypeName = "rtdmax31865";
 
-protected:
-	TemperatureError TryGetTemperature(float& t) override;
+	void Poll() override;
 
 private:
 	TemperatureError TryInitRtd() const;

@@ -99,7 +99,7 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Get the temperature
-TemperatureError Thermistor::TryGetTemperature(float& t)
+void Thermistor::Poll()
 {
 	uint32_t averagedTempReading, tempFilterValid;
 	if (adcFilterChannel >= 0)
@@ -130,68 +130,76 @@ TemperatureError Thermistor::TryGetTemperature(float& t)
 
 		if (averagedVrefReading < (4096 << Thermistor::AdcOversampleBits) - maxDrop)
 		{
-			t = BadErrorTemperature;
-			return TemperatureError::badVref;
+			SetResult(TemperatureError::badVref);
 		}
-		if (averagedVssaReading > maxDrop)
+		else if (averagedVssaReading > maxDrop)
 		{
-			t = BadErrorTemperature;
-			return TemperatureError::badVssa;
+			SetResult(TemperatureError::badVssa);
 		}
+		else
+		{
 #else
 	if (tempFilterValid)
 	{
-#endif
-
-		// Calculate the resistance
-#if HAS_VREF_MONITOR
-		const float denom = (float)(averagedVrefReading - averagedTempReading);
-#else
-		const int32_t averagedVrefReading = AdcRange + 2 * adcHighOffset;		// double the offset because we increased AdcOversampleBits from 1 to 2
-		const float denom = (float)(averagedVrefReading - averagedTempReading) - 0.5;
-#endif
-		if (denom <= 0.0)
 		{
-			t = ABS_ZERO;
-			return TemperatureError::openCircuit;
-		}
+#endif
+
+			// Calculate the resistance
+#if HAS_VREF_MONITOR
+			const float denom = (float)(averagedVrefReading - averagedTempReading);
+#else
+			const int32_t averagedVrefReading = AdcRange + 2 * adcHighOffset;		// double the offset because we increased AdcOversampleBits from 1 to 2
+			const float denom = (float)(averagedVrefReading - averagedTempReading) - 0.5;
+#endif
+			if (denom <= 0.0)
+			{
+				SetResult(ABS_ZERO, TemperatureError::openCircuit);
+			}
+			else
+			{
 
 #if HAS_VREF_MONITOR
-		const float resistance = seriesR * (float)(averagedTempReading - averagedVssaReading)/denom;
+				const float resistance = seriesR * (float)(averagedTempReading - averagedVssaReading)/denom;
 #else
-		const int32_t averagedVssaReading = 2 * adcLowOffset;					// double the offset because we increased AdcOversampleBits from 1 to 2
-		float resistance = seriesR * ((float)(averagedTempReading - averagedVssaReading) + 0.5)/denom;
+				const int32_t averagedVssaReading = 2 * adcLowOffset;					// double the offset because we increased AdcOversampleBits from 1 to 2
+				float resistance = seriesR * ((float)(averagedTempReading - averagedVssaReading) + 0.5)/denom;
 # ifdef DUET_NG
-		// The VSSA PTC fuse on the later Duets has a resistance of a few ohms. I measured 1.0 ohms on two revision 1.04 Duet WiFi boards.
-		resistance -= 1.0;														// assume 1.0 ohms and only one PT1000 sensor
+				// The VSSA PTC fuse on the later Duets has a resistance of a few ohms. I measured 1.0 ohms on two revision 1.04 Duet WiFi boards.
+				resistance -= 1.0;														// assume 1.0 ohms and only one PT1000 sensor
 # endif
 #endif
-		if (isPT1000)
-		{
-			// We want 100 * the equivalent PT100 resistance, which is 10 * the actual PT1000 resistance
-			const uint16_t ohmsx100 = (uint16_t)rintf(constrain<float>(resistance * 10, 0.0, 65535.0));
-			return GetPT100Temperature(t, ohmsx100);
+				if (isPT1000)
+				{
+					// We want 100 * the equivalent PT100 resistance, which is 10 * the actual PT1000 resistance
+					const uint16_t ohmsx100 = (uint16_t)rintf(constrain<float>(resistance * 10, 0.0, 65535.0));
+					float t;
+					const TemperatureError sts = GetPT100Temperature(t, ohmsx100);
+					SetResult(t, sts);
+				}
+				else
+				{
+					// Else it's a thermistor
+					const float logResistance = log(resistance);
+					const float recipT = shA + shB * logResistance + shC * logResistance * logResistance * logResistance;
+					const float temp =  (recipT > 0.0) ? (1.0/recipT) + ABS_ZERO : BadErrorTemperature;
+
+					if (temp < MinimumConnectedTemperature)
+					{
+						// thermistor is disconnected
+						SetResult(ABS_ZERO, TemperatureError::openCircuit);
+					}
+					else
+					{
+						SetResult(temp, TemperatureError::success);
+					}
+				}
+			}
 		}
-
-		// Else it's a thermistor
-		const float logResistance = log(resistance);
-		const float recipT = shA + shB * logResistance + shC * logResistance * logResistance * logResistance;
-		const float temp =  (recipT > 0.0) ? (1.0/recipT) + ABS_ZERO : BadErrorTemperature;
-
-		if (temp < MinimumConnectedTemperature)
-		{
-			// thermistor is disconnected
-			t = ABS_ZERO;
-			return TemperatureError::openCircuit;
-		}
-
-		t = temp;
-		return TemperatureError::success;
 	}
-
-	// Filter is not ready yet
-	t = BadErrorTemperature;
-	return TemperatureError::notReady;
+	{
+		// Filter is not ready yet
+		SetResult(TemperatureError::notReady);
+	}
 }
 
 // Calculate shA and shB from the other parameters

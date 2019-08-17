@@ -158,43 +158,35 @@ TemperatureError ThermocoupleSensor31856::TryInitThermocouple() const
 	return sts;
 }
 
-TemperatureError ThermocoupleSensor31856::TryGetTemperature(float& t)
+void ThermocoupleSensor31856::Poll()
 {
-	if (inInterrupt() || millis() - lastReadingTime < MinimumReadInterval)
+	static const uint8_t dataOut[5] = {0x0C, 0x55, 0x55, 0x55, 0x55};	// read registers LTCB0, LTCB1, LTCB2, Fault status
+	uint32_t rawVal;
+	TemperatureError sts = DoSpiTransaction(dataOut, ARRAY_SIZE(dataOut), rawVal);
+
+	if (sts != TemperatureError::success)
 	{
-		t = lastTemperature;
+		SetResult(sts);
 	}
 	else
 	{
-		static const uint8_t dataOut[5] = {0x0C, 0x55, 0x55, 0x55, 0x55};	// read registers LTCB0, LTCB1, LTCB2, Fault status
-		uint32_t rawVal;
-		TemperatureError sts = DoSpiTransaction(dataOut, ARRAY_SIZE(dataOut), rawVal);
-
-		if (sts != TemperatureError::success)
+		lastReadingTime = millis();
+		if ((rawVal & 0x00FF) != 0)
 		{
-			lastResult = sts;
+			// One or more fault bits is set
+			SetResult( (rawVal & 0x02) ? TemperatureError::overOrUnderVoltage
+						: (rawVal & 0x01) ? TemperatureError::openCircuit
+							: TemperatureError::hardwareError
+					 );
+			delayMicroseconds(1);										// MAX31856 requires CS to be high for 400ns minimum
+			TryInitThermocouple();										// clear fault bits and re-initialise
 		}
 		else
 		{
-			lastReadingTime = millis();
-			if ((rawVal & 0x00FF) != 0)
-			{
-				// One or more fault bits is set
-				lastResult = (rawVal & 0x02) ? TemperatureError::overOrUnderVoltage
-							: (rawVal & 0x01) ? TemperatureError::openCircuit
-								: TemperatureError::hardwareError;
-				delayMicroseconds(1);										// MAX31856 requires CS to be high for 400ns minimum
-				TryInitThermocouple();										// clear fault bits and re-initialise
-			}
-			else
-			{
-				const int16_t rawTemp = (int16_t)(rawVal >> 16);			// keep just the most significant 2 bytes and interpret them as signed
-				t = lastTemperature = (float)rawTemp / 16;
-				lastResult = TemperatureError::success;
-			}
+			const int16_t rawTemp = (int16_t)(rawVal >> 16);			// keep just the most significant 2 bytes and interpret them as signed
+			SetResult((float)rawTemp / 16, TemperatureError::success);
 		}
 	}
-	return lastResult;
 }
 
 // End

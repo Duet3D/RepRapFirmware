@@ -139,52 +139,45 @@ TemperatureError RtdSensor31865::TryInitRtd() const
 	return sts;
 }
 
-TemperatureError RtdSensor31865::TryGetTemperature(float& t)
+void RtdSensor31865::Poll()
 {
-	if (inInterrupt() || millis() - lastReadingTime < MinimumReadInterval)
+	static const uint8_t dataOut[4] = {0, 0x55, 0x55, 0x55};			// read registers 0 (control), 1 (MSB) and 2 (LSB)
+	uint32_t rawVal;
+	TemperatureError sts = DoSpiTransaction(dataOut, ARRAY_SIZE(dataOut), rawVal);
+
+	if (sts != TemperatureError::success)
 	{
-		t = lastTemperature;
+		SetResult(sts);
 	}
 	else
 	{
-		static const uint8_t dataOut[4] = {0, 0x55, 0x55, 0x55};			// read registers 0 (control), 1 (MSB) and 2 (LSB)
-		uint32_t rawVal;
-		const TemperatureError sts = DoSpiTransaction(dataOut, ARRAY_SIZE(dataOut), rawVal);
-
-		if (sts != TemperatureError::success)
+		if (   (((rawVal >> 16) & Cr0ReadMask) != (cr0 & Cr0ReadMask))	// if control register not as expected
+			|| (rawVal & 1) != 0										// or fault bit set
+		   )
 		{
-			lastResult = sts;
-		}
-		else
-		{
-			lastReadingTime = millis();
-			if (   (((rawVal >> 16) & Cr0ReadMask) != (cr0 & Cr0ReadMask))	// if control register not as expected
-				|| (rawVal & 1) != 0										// or fault bit set
-			   )
+			static const uint8_t faultDataOut[2] = {0x07, 0x55};
+			if (DoSpiTransaction(faultDataOut, ARRAY_SIZE(faultDataOut), rawVal)== TemperatureError::success)	// read the fault register
 			{
-				static const uint8_t faultDataOut[2] = {0x07, 0x55};
-				if (DoSpiTransaction(faultDataOut, ARRAY_SIZE(faultDataOut), rawVal)== TemperatureError::success)	// read the fault register
-				{
-					lastResult = (rawVal & 0x04) ? TemperatureError::overOrUnderVoltage
-								: (rawVal & 0x18) ? TemperatureError::openCircuit
-									: TemperatureError::hardwareError;
-				}
-				else
-				{
-					lastResult = TemperatureError::hardwareError;
-				}
-				delayMicroseconds(1);										// MAX31865 requires CS to be high for 400ns minimum
-				TryInitRtd();												// clear the fault and hope for better luck next time
+				sts = (rawVal & 0x04) ? TemperatureError::overOrUnderVoltage
+							: (rawVal & 0x18) ? TemperatureError::openCircuit
+								: TemperatureError::hardwareError;
 			}
 			else
 			{
-				const uint16_t ohmsx100 = (uint16_t)((((rawVal >> 1) & 0x7FFF) * rref * 100) >> 15);
-				lastResult = GetPT100Temperature(lastTemperature, ohmsx100);
-				t = lastTemperature;
+				sts = TemperatureError::hardwareError;
 			}
+			SetResult(sts);
+			delayMicroseconds(1);										// MAX31865 requires CS to be high for 400ns minimum
+			TryInitRtd();												// clear the fault and hope for better luck next time
+		}
+		else
+		{
+			const uint16_t ohmsx100 = (uint16_t)((((rawVal >> 1) & 0x7FFF) * rref * 100) >> 15);
+			float t;
+			sts = GetPT100Temperature(t, ohmsx100);
+			SetResult(t, sts);
 		}
 	}
-	return lastResult;
 }
 
 // End

@@ -15,8 +15,7 @@
 constexpr uint32_t RemoteTemperatureTimeoutMillis = 1000;
 
 RemoteSensor::RemoteSensor(unsigned int sensorNum, CanAddress pBoardAddress)
-	: TemperatureSensor(sensorNum, "remote"),
-	  lastTemperature(BadErrorTemperature), whenLastReadingReceived(millis()), boardAddress(pBoardAddress), lastError(TemperatureError::notReady)
+	: TemperatureSensor(sensorNum, "remote"), boardAddress(pBoardAddress)
 {
 }
 
@@ -32,24 +31,9 @@ GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 	return cons.SendAndGetResponse(CanMessageType::m308, boardAddress, reply);
 }
 
-// Try to get a temperature reading
-TemperatureError RemoteSensor::TryGetTemperature(float& t)
-{
-	if (millis() - whenLastReadingReceived > RemoteTemperatureTimeoutMillis)
-	{
-		lastTemperature = BadErrorTemperature;
-		lastError = TemperatureError::timeout;
-	}
-
-	t = lastTemperature;
-	return lastError;
-}
-
 void RemoteSensor::UpdateRemoteTemperature(const CanTemperatureReport& report)
 {
-	lastError = (TemperatureError)report.errorCode;
-	lastTemperature = report.temperature;
-	whenLastReadingReceived = millis();
+	SetResult(report.temperature, (TemperatureError)report.errorCode);
 }
 
 #endif

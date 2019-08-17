@@ -19,8 +19,7 @@ public:
 
 	static constexpr const char *TypeName = "linearanalog";
 
-protected:
-	TemperatureError TryGetTemperature(float& t) override;
+	void Poll() override;
 
 private:
 	void CalcDerivedParameters();

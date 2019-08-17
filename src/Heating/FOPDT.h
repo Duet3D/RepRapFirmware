@@ -28,7 +28,13 @@ struct M301PidParameters
 	float kD;
 };
 
+#if HAS_MASS_STORAGE
 class FileStore;
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+struct CanMessageUpdateHeaterModel;
+#endif
 
 class FopDt
 {
@@ -55,7 +61,12 @@ public:
 	}
 
 #if HAS_MASS_STORAGE
-	bool WriteParameters(FileStore *f, size_t heater) const;		// Write the model parameters to file returning true if no error
+	bool WriteParameters(FileStore *f, size_t heater) const;		// erite the model parameters to file returning true if no error
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+	void SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg);
+	void UpdateFromCanMessage(const CanMessageUpdateHeaterModel& msg);
 #endif
 
 private:

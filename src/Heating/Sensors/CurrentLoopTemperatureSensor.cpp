@@ -47,9 +47,11 @@ GCodeResult CurrentLoopTemperatureSensor::Configure(GCodeBuffer& gb, const Strin
 		// Initialise the sensor
 		InitSpi();
 
+		TemperatureError rslt;
+		float t;
 		for (unsigned int i = 0; i < 3; ++i)		// try 3 times
 		{
-			TryGetLinearAdcTemperature();
+			rslt = TryGetLinearAdcTemperature(t);
 			if (lastResult == TemperatureError::success)
 			{
 				break;
@@ -57,11 +59,11 @@ GCodeResult CurrentLoopTemperatureSensor::Configure(GCodeBuffer& gb, const Strin
 			delay(MinimumReadInterval);
 		}
 
-		lastReadingTime = millis();
+		SetResult(t, rslt);
 
-		if (lastResult != TemperatureError::success)
+		if (rslt != TemperatureError::success)
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to initialise daughter board ADC: %s\n", TemperatureErrorString(lastResult));
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to initialise daughter board ADC: %s\n", TemperatureErrorString(rslt));
 		}
 	}
 	else
@@ -72,15 +74,11 @@ GCodeResult CurrentLoopTemperatureSensor::Configure(GCodeBuffer& gb, const Strin
 	return GCodeResult::ok;
 }
 
-TemperatureError CurrentLoopTemperatureSensor::TryGetTemperature(float& t)
+void CurrentLoopTemperatureSensor::Poll()
 {
-	if (!inInterrupt() && millis() - lastReadingTime >= MinimumReadInterval)
-	{
-		TryGetLinearAdcTemperature();
-	}
-
-	t = lastTemperature;
-	return lastResult;
+	float t;
+	const TemperatureError rslt = TryGetLinearAdcTemperature(t);
+	SetResult(t, rslt);
 }
 
 void CurrentLoopTemperatureSensor::CalcDerivedParameters()
@@ -90,7 +88,7 @@ void CurrentLoopTemperatureSensor::CalcDerivedParameters()
 }
 
 // Try to get a temperature reading from the linear ADC by doing an SPI transaction
-void CurrentLoopTemperatureSensor::TryGetLinearAdcTemperature()
+TemperatureError CurrentLoopTemperatureSensor::TryGetLinearAdcTemperature(float& t)
 {
 	/*
 	 * The MCP3204 waits for a high input input bit before it does anything. Call this clock 1.
@@ -119,22 +117,23 @@ void CurrentLoopTemperatureSensor::TryGetLinearAdcTemperature()
 	const uint8_t channelByte = ((isDifferential) ? 0x80 : 0xC0) | (chipChannel * 0x08);
 	static const uint8_t adcData[] = { channelByte, 0x00, 0x00 };
 	uint32_t rawVal;
-	lastResult = DoSpiTransaction(adcData, 3, rawVal);
+	TemperatureError rslt = DoSpiTransaction(adcData, 3, rawVal);
 	//debugPrintf("ADC data %u\n", rawVal);
 
-	if (lastResult == TemperatureError::success)
+	if (rslt == TemperatureError::success)
 	{
 		const uint32_t adcVal1 = (rawVal >> 5) & ((1 << 13) - 1);
 		const uint32_t adcVal2 = ((rawVal & 1) << 5) | ((rawVal & 2) << 3) | ((rawVal & 4) << 1) | ((rawVal & 8) >> 1) | ((rawVal & 16) >> 3) | ((rawVal & 32) >> 5);
 		if (adcVal1 >= 4096 || adcVal2 != (adcVal1 & ((1 << 6) - 1)))
 		{
-			lastResult = TemperatureError::badResponse;
+			rslt = TemperatureError::badResponse;
 		}
 		else
 		{
-			lastTemperature = minLinearAdcTemp + (linearAdcDegCPerCount * (float)adcVal1);
+			t = minLinearAdcTemp + (linearAdcDegCPerCount * (float)adcVal1);
 		}
 	}
+	return rslt;
 }
 
 // End

@@ -22,7 +22,7 @@
 
 // Constructor
 TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *t)
-	: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr), lastError(TemperatureError::success) {}
+	: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::success) {}
 
 // Virtual destructor
 TemperatureSensor::~TemperatureSensor()
@@ -30,15 +30,16 @@ TemperatureSensor::~TemperatureSensor()
 	delete sensorName;
 }
 
-// Try to get a temperature reading
-TemperatureError TemperatureSensor::GetTemperature(float& t)
+// Return the latest temperature reading
+TemperatureError TemperatureSensor::GetLatestTemperature(float& t)
 {
-	const TemperatureError rslt = TryGetTemperature(t);
-	if (rslt != TemperatureError::success)
+	if (millis() - whenLastRead > TemperatureReadingTimeout)
 	{
-		lastError = rslt;
+		lastTemperature = BadErrorTemperature;
+		lastResult = TemperatureError::timeout;
 	}
-	return rslt;
+	t = lastTemperature;
+	return lastResult;
 }
 
 // Set the name - normally called only once, so we allow heap memory to be allocated
@@ -72,12 +73,12 @@ GCodeResult TemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply
 
 void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const
 {
-	reply.printf("Sensor %u", sensorNumber);
+	reply.printf("Sensor %d", sensorNumber);
 	if (sensorName != nullptr)
 	{
 		reply.catf(" (%s)", sensorName);
 	}
-	reply.catf(" type %s, last error: %s", sensorType, TemperatureErrorString(lastError));
+	reply.catf(" type %s, last error: %s", sensorType, TemperatureErrorString(lastRealError));
 }
 
 // Configure then heater name, if it is provided
@@ -91,6 +92,25 @@ void TemperatureSensor::TryConfigureSensorName(GCodeBuffer& gb, bool& seen)
 		SetSensorName(buf.c_str());
 		seen = true;
 	}
+}
+
+void TemperatureSensor::SetResult(float t, TemperatureError rslt)
+{
+	lastResult = rslt;
+	lastTemperature = t;
+	whenLastRead = millis();
+	if (rslt != TemperatureError::success)
+	{
+		lastRealError = rslt;
+	}
+}
+
+// This version is used for unsuccessful readings only
+void TemperatureSensor::SetResult(TemperatureError rslt)
+{
+	lastResult = lastRealError = rslt;
+	lastTemperature = BadErrorTemperature;
+	whenLastRead = millis();
 }
 
 // Factory method

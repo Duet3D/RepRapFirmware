@@ -16,10 +16,9 @@ TmcDriverTemperatureSensor::TmcDriverTemperatureSensor(unsigned int sensorNum, u
 {
 }
 
-TemperatureError TmcDriverTemperatureSensor::TryGetTemperature(float& t)
+void TmcDriverTemperatureSensor::Poll()
 {
-	t = reprap.GetPlatform().GetTmcDriversTemperature(channel);
-	return TemperatureError::success;
+	SetResult(reprap.GetPlatform().GetTmcDriversTemperature(channel), TemperatureError::success);
 }
 
 #endif

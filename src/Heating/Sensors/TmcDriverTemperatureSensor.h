@@ -25,8 +25,7 @@ public:
 	// Get the smart drivers channel that this sensor monitors, or -1 if it doesn't
 	int GetSmartDriversChannel() const override { return (int) channel; }
 
-protected:
-	TemperatureError TryGetTemperature(float& t) override;
+	void Poll() override;
 
 private:
 	unsigned int channel;

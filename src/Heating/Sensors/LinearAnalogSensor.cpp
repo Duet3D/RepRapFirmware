@@ -50,7 +50,7 @@ GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& repl
 	return GCodeResult::ok;
 }
 
-TemperatureError LinearAnalogSensor::TryGetTemperature(float& t)
+void LinearAnalogSensor::Poll()
 {
 	if (filtered && adcFilterChannel >= 0)
 	{
@@ -58,19 +58,16 @@ TemperatureError LinearAnalogSensor::TryGetTemperature(float& t)
 		if (tempFilter.IsValid())
 		{
 			const int32_t averagedTempReading = tempFilter.GetSum()/(ThermistorAverageReadings >> AdcOversampleBits);
-			t = (averagedTempReading * linearIncreasePerCount) + lowTemp;
-			return TemperatureError::success;
+			SetResult((averagedTempReading * linearIncreasePerCount) + lowTemp, TemperatureError::success);
 		}
 		else
 		{
-			t = BadErrorTemperature;
-			return TemperatureError::notReady;
+			SetResult(TemperatureError::notReady);
 		}
 	}
 	else
 	{
-		t = (port.ReadAnalog() * linearIncreasePerCount) + lowTemp;
-		return TemperatureError::success;
+		SetResult((port.ReadAnalog() * linearIncreasePerCount) + lowTemp, TemperatureError::success);
 	}
 }
 

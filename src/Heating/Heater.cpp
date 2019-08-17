@@ -169,7 +169,7 @@ bool Heater::CheckProtection() const
 
 bool Heater::CheckGood() const
 {
-	return GetMode() == HeaterMode::fault && CheckProtection();
+	return GetMode() != HeaterMode::fault && CheckProtection();
 }
 
 // End

@@ -264,7 +264,7 @@ void Fan::Refresh()
 				{
 					//TODO we used to turn the fan on if the associated heater was being tuned
 					float ht;
-					const TemperatureError err = sensor->GetTemperature(ht);
+					const TemperatureError err = sensor->GetLatestTemperature(ht);
 					if (err != TemperatureError::success || ht < BadLowTemperature || ht >= triggerTemperatures[1])
 					{
 						reqVal = max<float>(reqVal, (bangBangMode) ? max<float>(0.5, val) : 1.0);

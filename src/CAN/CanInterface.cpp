@@ -270,7 +270,6 @@ void MCAN1_INT0_Handler(void)
 		{
 			TaskBase::GiveFromISR(taskWaitingOnFifo1);
 		}
-		canStatus |= (uint32_t)CanStatusBits::receivedExtendedFDMessageInFIFO1;
 	}
 
 	if ((status & MCAN_ACKNOWLEDGE_ERROR))
@@ -373,10 +372,54 @@ void CanInterface::SendMotion(CanMessageBuffer *buf)
 }
 
 // Send a request to an expansion board
-void CanInterface::SendRequest(CanMessageBuffer *buf)
+GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, const StringRef& reply)
 {
+	taskWaitingOnFifo1 = TaskBase::GetCallerTaskHandle();
+	const CanAddress dest = buf->id.Dst();
 	mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexRequest, MaxRequestSendWait);
+	const uint32_t whenStartedWaiting = millis();
+	for (;;)
+	{
+		const uint32_t rxf1s = mcan_instance.hw->MCAN_RXF1S;						// get FIFO 1 status
+		if (((rxf1s & MCAN_RXF1S_F1FL_Msk) >> MCAN_RXF1S_F1FL_Pos) != 0)			// if there are any messages
+		{
+			const uint32_t getIndex = (rxf1s & MCAN_RXF1S_F1GI_Msk) >> MCAN_RXF1S_F1GI_Pos;
+			mcan_rx_element_fifo_1 elem;
+			mcan_get_rx_fifo_1_element(&mcan_instance, &elem, getIndex);			// copy the data (TODO use our own driver, avoid double copying)
+			mcan_instance.hw->MCAN_RXF1A = getIndex;								// acknowledge it, release the FIFO entry
+
+			if (elem.R0.bit.XTD == 1 && elem.R0.bit.RTR != 1)						// if extended address and not a remote frame
+			{
+				// Copy the message and accompanying data to a buffer
+				buf->id.SetReceivedId(elem.R0.bit.ID);
+				static constexpr uint8_t dlc2len[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
+				buf->dataLength = dlc2len[elem.R1.bit.DLC];
+				memcpy(buf->msg.raw, elem.data, buf->dataLength);
+
+				if (buf->id.MsgType() == CanMessageType::standardReply && buf->id.Src() == dest)
+				{
+					//TODO check sequence number
+					reply.copy(buf->msg.standardReply.text, buf->msg.standardReply.GetTextLength(buf->dataLength));
+					const GCodeResult rslt = (GCodeResult)buf->msg.standardReply.resultCode;
+					CanMessageBuffer::Free(buf);
+					return rslt;
+				}
+			}
+		}
+		else
+		{
+			const uint32_t timeWaiting = millis() - whenStartedWaiting;
+			if (timeWaiting >= CanResponseTimeout)
+			{
+				break;
+			}
+			TaskBase::Take(CanResponseTimeout - timeWaiting);
+		}
+	}
+
 	CanMessageBuffer::Free(buf);
+	reply.copy("Timed out waiting for response from CAN-connected device");
+	return GCodeResult::error;
 }
 
 // Send a response to an expansion board

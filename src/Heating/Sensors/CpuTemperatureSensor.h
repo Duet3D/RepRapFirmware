@@ -19,8 +19,7 @@ public:
 
 	static constexpr const char *TypeName = "mcutemp";
 
-protected:
-	TemperatureError TryGetTemperature(float& t) override;
+	void Poll() override;
 };
 
 #endif

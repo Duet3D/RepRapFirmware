@@ -9,6 +9,7 @@
 #define SRC_CAN_CANINTERFACE_H_
 
 #include "RepRapFirmware.h"
+#include "GCodes/GCodeResult.h"
 
 #if SUPPORT_CAN_EXPANSION
 
@@ -21,10 +22,12 @@ struct PrepParams;
 
 namespace CanInterface
 {
+	static constexpr uint32_t CanResponseTimeout = 300;
+
 	void Init();
 	CanAddress GetCanAddress();
 	void SendMotion(CanMessageBuffer *buf);
-	void SendRequest(CanMessageBuffer *buf);
+	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, const StringRef& reply);
 	void SendResponse(CanMessageBuffer *buf);
 }
 

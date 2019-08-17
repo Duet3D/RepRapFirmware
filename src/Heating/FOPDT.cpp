@@ -6,7 +6,14 @@
  */
 
 #include "FOPDT.h"
-#include "Storage/FileStore.h"
+
+#if HAS_MASS_STORAGE
+# include "Storage/FileStore.h"
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+# include <CanMessageFormats.h>
+#endif
 
 // Heater 6 on the Duet 0.8.5 is disabled by default at startup so that we can use fan 2.
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
@@ -128,5 +135,50 @@ void FopDt::CalcPidConstants()
 
 	pidParametersOverridden = false;
 }
+
+#if SUPPORT_CAN_EXPANSION
+
+void FopDt::SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg)
+{
+	msg.heater = heater;
+	msg.gain = gain;
+	msg.timeConstant = timeConstant;
+	msg.deadTime = deadTime;
+	msg.maxPwm = maxPwm;
+	msg.standardVoltage = standardVoltage;
+	msg.enabled = enabled;
+	msg.usePid = usePid;
+	msg.inverted = inverted;
+	msg.pidParametersOverridden = pidParametersOverridden;
+
+	msg.setpointChangeParams.kP = setpointChangeParams.kP;
+	msg.setpointChangeParams.recipTi = setpointChangeParams.recipTi;
+	msg.setpointChangeParams.tD = setpointChangeParams.tD;
+	msg.loadChangeParams.kP = loadChangeParams.kP;
+	msg.loadChangeParams.recipTi = loadChangeParams.recipTi;
+	msg.loadChangeParams.tD = loadChangeParams.tD;
+}
+
+void FopDt::UpdateFromCanMessage(const CanMessageUpdateHeaterModel& msg)
+{
+	gain = msg.gain;
+	timeConstant = msg.timeConstant;
+	deadTime = msg.deadTime;
+	maxPwm = msg.maxPwm;
+	standardVoltage = msg.standardVoltage;
+	enabled = msg.enabled;
+	usePid = msg.usePid;
+	inverted = msg.inverted;
+	pidParametersOverridden = msg.pidParametersOverridden;
+
+	setpointChangeParams.kP = msg.setpointChangeParams.kP;
+	setpointChangeParams.recipTi = msg.setpointChangeParams.recipTi;
+	setpointChangeParams.tD = msg.setpointChangeParams.tD;
+	loadChangeParams.kP = msg.loadChangeParams.kP;
+	loadChangeParams.recipTi = msg.loadChangeParams.recipTi;
+	loadChangeParams.tD = msg.loadChangeParams.tD;
+}
+
+#endif
 
 // End

@@ -90,84 +90,68 @@ GCodeResult ThermocoupleSensor31855::Configure(GCodeBuffer& gb, const StringRef&
 	return GCodeResult::ok;
 }
 
-TemperatureError ThermocoupleSensor31855::TryGetTemperature(float& t)
+void ThermocoupleSensor31855::Poll()
 {
-	if (inInterrupt() || millis() - lastReadingTime < MinimumReadInterval)
+	uint32_t rawVal;
+	TemperatureError sts = DoSpiTransaction(nullptr, 4, rawVal);
+	if (sts != TemperatureError::success)
 	{
-		t = lastTemperature;
+		SetResult(sts);
 	}
 	else
 	{
-		uint32_t rawVal;
-		TemperatureError sts = DoSpiTransaction(nullptr, 4, rawVal);
-		if (sts != TemperatureError::success)
+		if ((rawVal & 0x00020008) != 0)
 		{
-			lastResult = sts;
+			// These two bits should always read 0. Likely the entire read was 0xFF 0xFF which is not uncommon when first powering up
+			lastResult = TemperatureError::ioError;
 		}
-		else
+		else if ((rawVal & 0x00010007) != 0)		// check the fault bits
 		{
-			lastReadingTime = millis();
-
-			if ((rawVal & 0x00020008) != 0)
+			// Check for three more types of bad reads as we set the response code:
+			//   1. A read in which the fault indicator bit (16) is set but the fault reason bits (0:2) are all clear;
+			//   2. A read in which the fault indicator bit (16) is clear, but one or more of the fault reason bits (0:2) are set; and,
+			//   3. A read in which more than one of the fault reason bits (0:1) are set.
+			if ((rawVal & 0x00010000) == 0)
 			{
-				// These two bits should always read 0. Likely the entire read was 0xFF 0xFF which is not uncommon when first powering up
-				lastResult = TemperatureError::ioError;
-			}
-			else if ((rawVal & 0x00010007) != 0)		// check the fault bits
-			{
-				// Check for three more types of bad reads as we set the response code:
-				//   1. A read in which the fault indicator bit (16) is set but the fault reason bits (0:2) are all clear;
-				//   2. A read in which the fault indicator bit (16) is clear, but one or more of the fault reason bits (0:2) are set; and,
-				//   3. A read in which more than one of the fault reason bits (0:1) are set.
-				if ((rawVal & 0x00010000) == 0)
-				{
-					// One or more fault reason bits are set but the fault indicator bit is clear
-					lastResult = TemperatureError::ioError;
-				}
-				else
-				{
-					// At this point we are assured that bit 16 (fault indicator) is set and that at least one of the fault reason bits (0:2) are set.
-					// We now need to ensure that only one fault reason bit is set.
-					uint8_t nbits = 0;
-					if (rawVal & 0x01)
-					{
-						// Open Circuit
-						++nbits;
-						lastResult = TemperatureError::openCircuit;
-					}
-					if (rawVal & 0x02)
-					{
-						// Short to ground;
-						++nbits;
-						lastResult = TemperatureError::shortToGround;
-					}
-					if (rawVal && 0x04)
-					{
-						// Short to Vcc
-						++nbits;
-						lastResult = TemperatureError::shortToVcc;
-					}
-
-					if (nbits != 1)
-					{
-						// Fault indicator was set but a fault reason was not set (nbits == 0) or too many fault reason bits were set (nbits > 1).
-						// Assume that a communication error with the MAX31855 has occurred.
-						lastResult = TemperatureError::ioError;
-					}
-				}
+				// One or more fault reason bits are set but the fault indicator bit is clear
+				SetResult(TemperatureError::ioError);
 			}
 			else
 			{
-				rawVal >>= 18;							// shift the 14-bit temperature data to the bottom of the word
-				rawVal |= (0 - (rawVal & 0x2000));		// sign-extend the sign bit
-
-				// And convert to from units of 1/4C to 1C
-				t = lastTemperature = (float)(0.25 * (float)(int32_t)rawVal);
-				lastResult = TemperatureError::success;
+				// At this point we are assured that bit 16 (fault indicator) is set and that at least one of the fault reason bits (0:2) are set.
+				// We now need to ensure that only one fault reason bit is set.
+				if (rawVal & 0x01)
+				{
+					// Open Circuit
+					SetResult(TemperatureError::openCircuit);
+				}
+				else if (rawVal & 0x02)
+				{
+					// Short to ground;
+					SetResult(TemperatureError::shortToGround);
+				}
+				else if (rawVal && 0x04)
+				{
+					// Short to Vcc
+					SetResult(TemperatureError::shortToVcc);
+				}
+				else
+				{
+					// Fault indicator was set but a fault reason was not set (nbits == 0) or too many fault reason bits were set (nbits > 1).
+					// Assume that a communication error with the MAX31855 has occurred.
+					lastResult = TemperatureError::ioError;
+				}
 			}
 		}
+		else
+		{
+			rawVal >>= 18;							// shift the 14-bit temperature data to the bottom of the word
+			rawVal |= (0 - (rawVal & 0x2000));		// sign-extend the sign bit
+
+			// And convert to from units of 1/4C to 1C
+			SetResult((float)(0.25 * (float)(int32_t)rawVal), TemperatureError::success);
+		}
 	}
-	return lastResult;
 }
 
 // End

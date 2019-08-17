@@ -152,13 +152,13 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 		HandleFirmwareBlockRequest(buf);
 		break;
 
-	case CanMessageType::temperatureReport:
+	case CanMessageType::sensorTemperaturesReport:
 		HandleTemperatureReport(buf);
 		break;
 
 	case CanMessageType::statusReport:
 	default:
-		buf->DebugPrint("Rec: ");
+//		buf->DebugPrint("Rec: ");
 		CanMessageBuffer::Free(buf);
 		break;
 	}

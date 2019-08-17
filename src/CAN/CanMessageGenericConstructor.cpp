@@ -469,14 +469,11 @@ GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgT
 		return GCodeResult::error;
 	}
 
-	CanMessageGeneric *m2 = buf->SetupGenericMessage(msgType, CanInterface::GetCanAddress(), dest, dataLen + sizeof(msg.paramMap));
-	memcpy(m2, &msg, dataLen + sizeof(msg.paramMap));
-	m2->DebugPrint(paramTable);		//DEBUG
-	CanInterface::SendRequest(buf);
-
-	//TODO wait for reply
-	reply.copy("CAN message reception not implemented");
-	return GCodeResult::ok;
+	const size_t actualMessageLength = CanMessageGeneric::GetActualDataLength(dataLen);
+	CanMessageGeneric *m2 = buf->SetupGenericMessage(msgType, CanInterface::GetCanAddress(), dest, actualMessageLength);
+	memcpy(m2, &msg, actualMessageLength);
+//	m2->DebugPrint(paramTable);		//DEBUG
+	return CanInterface::SendRequestAndGetStandardReply(buf, reply);
 }
 
 #endif

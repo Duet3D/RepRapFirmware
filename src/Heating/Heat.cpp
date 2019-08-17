@@ -45,7 +45,7 @@ extern "C" [[noreturn]] void HeaterTask(void * pvParameters)
 }
 
 Heat::Heat()
-	: sensorsRoot(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
+	: sensorsRoot(nullptr), newSensors(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
 	ARRAY_INIT(bedHeaters, DefaultBedHeaters);
 	ARRAY_INIT(chamberHeaters, DefaultChamberHeaters);
@@ -199,7 +199,7 @@ TemperatureSensor *Heat::GetSensor(int sn) const
 		TaskCriticalSectionLocker lock;		// make sure the linked list doesn't change while we are searching it
 		for (TemperatureSensor *sensor = sensorsRoot; sensor != nullptr; sensor = sensor->GetNext())
 		{
-			if (sensor->GetSensorNumber() == (unsigned int)sn)
+			if (sensor->GetSensorNumber() == sn)
 			{
 				return sensor;
 			}
@@ -215,68 +215,12 @@ TemperatureSensor *Heat::GetSensorAtOrAbove(unsigned int sn) const
 
 	for (TemperatureSensor *sensor = sensorsRoot; sensor != nullptr; sensor = sensor->GetNext())
 	{
-		if (sensor->GetSensorNumber() >= sn)
+		if (sensor->GetSensorNumber() >= (int)sn)
 		{
 			return sensor;
 		}
 	}
 	return nullptr;
-}
-
-// Remove any existing sensor with the specified number
-void Heat::RemoveSensor(unsigned int sensorNum)
-{
-	TaskCriticalSectionLocker lock;		// make sure nothing searches the linked list while we are changing it
-
-	TemperatureSensor *prev = nullptr;
-	for (TemperatureSensor *ts = sensorsRoot; ts != nullptr; ts = ts->GetNext())
-	{
-		const unsigned int sn = ts->GetSensorNumber();
-		if (sn == sensorNum)
-		{
-			if (prev == nullptr)
-			{
-				sensorsRoot = ts->GetNext();
-			}
-			else
-			{
-				prev->SetNext(ts->GetNext());
-			}
-			delete ts;
-			break;
-		}
-		if (sn > sensorNum)
-		{
-			break;
-		}
-		prev = ts;
-	}
-}
-
-void Heat::InsertSensor(TemperatureSensor *sensor)
-{
-	TaskCriticalSectionLocker lock;		// make sure nothing searches the linked list while we are changing it
-
-	TemperatureSensor *prev = nullptr;
-	TemperatureSensor *ts = sensorsRoot;
-	for (;;)
-	{
-		if (ts == nullptr || ts->GetSensorNumber() > sensor->GetSensorNumber())
-		{
-			sensor->SetNext(ts);
-			if (prev == nullptr)
-			{
-				sensorsRoot = sensor;
-			}
-			else
-			{
-				prev->SetNext(sensor);
-			}
-			break;
-		}
-		prev = ts;
-		ts = ts->GetNext();
-	}
 }
 
 // Reset all heater models to defaults. Called when running M502.
@@ -341,6 +285,86 @@ void Heat::Exit()
 	uint32_t lastWakeTime = xTaskGetTickCount();
 	for (;;)
 	{
+		// Walk the sensor list and poll all sensors except those flagged for deletion. Don'y mess with the list during this pass because polling may need to acquire mutexes.
+		TemperatureSensor *currentSensor = sensorsRoot;
+		bool sawDeletedSensor = false;
+		while (currentSensor != nullptr)
+		{
+			if (currentSensor->GetSensorNumber() < 0)
+			{
+				sawDeletedSensor = true;
+			}
+			else
+			{
+				currentSensor->Poll();
+			}
+			currentSensor = currentSensor->GetNext();
+		}
+
+		// If we saw any sensors flagged for deletion, delete them, locking out other tasks while we do this
+		if (sawDeletedSensor)
+		{
+			TaskCriticalSectionLocker lock;
+
+			currentSensor = sensorsRoot;
+			TemperatureSensor *lastSensor = nullptr;
+			while (currentSensor != nullptr)
+			{
+				if (currentSensor->GetSensorNumber() < 0)
+				{
+					TemperatureSensor *sensorToDelete = currentSensor;
+					currentSensor = currentSensor->GetNext();
+					if (lastSensor == nullptr)
+					{
+						sensorsRoot = currentSensor;
+					}
+					else
+					{
+						lastSensor->SetNext(currentSensor);
+					}
+					delete sensorToDelete;
+				}
+				else
+				{
+					lastSensor = currentSensor;
+					currentSensor = currentSensor->GetNext();
+				}
+			}
+		}
+
+		// Insert any new sensors. We don't poll them yet because they may only just have finished being initialised so they may not accept another transaction yet.
+		for (;;)
+		{
+			TaskCriticalSectionLocker lock;
+			TemperatureSensor *currentNewSensor = newSensors;
+			if (currentNewSensor == nullptr)
+			{
+				break;
+			}
+			newSensors = currentNewSensor->GetNext();
+			TemperatureSensor *prev = nullptr;
+			TemperatureSensor *ts = sensorsRoot;
+			for (;;)
+			{
+				if (ts == nullptr || ts->GetSensorNumber() > currentNewSensor->GetSensorNumber())
+				{
+					currentNewSensor->SetNext(ts);
+					if (prev == nullptr)
+					{
+						sensorsRoot = currentNewSensor;
+					}
+					else
+					{
+						prev->SetNext(currentNewSensor);
+					}
+					break;
+				}
+				prev = ts;
+				ts = ts->GetNext();
+			}
+		}
+
+		// Spin the heaters
 		for (Heater *h : heaters)
 		{
 			if (h != nullptr)
@@ -832,7 +856,12 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 		bool newSensor = gb.Seen('Y');
 		if (newSensor)
 		{
-			RemoveSensor(sensorNum);
+			TemperatureSensor * const oldSensor = GetSensor(sensorNum);
+			if (oldSensor != nullptr)
+			{
+				oldSensor->FlagForDeletion();
+			}
+
 			String<StringLength20> typeName;
 			if (!gb.GetReducedString(typeName.GetRef()))
 			{
@@ -881,7 +910,10 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 		{
 			if (rslt == GCodeResult::ok)
 			{
-				InsertSensor(sensor);
+				TaskCriticalSectionLocker lock;
+
+				sensor->SetNext(newSensors);
+				newSensors = sensor;
 			}
 			else
 			{
@@ -959,7 +991,7 @@ float Heat::GetSensorTemperature(int sensorNum, TemperatureError& err) const
 	if (sensor != nullptr)
 	{
 		float temp;
-		err = sensor->GetTemperature(temp);
+		err = sensor->GetLatestTemperature(temp);
 		return temp;
 	}
 

@@ -138,12 +138,10 @@ public:
 private:
 	Heat(const Heat&) = delete;									// Private copy constructor to prevent copying
 
-	Heater * FindHeater(int heater) const;
-
-	void RemoveSensor(unsigned int sensorNum);
-	void InsertSensor(TemperatureSensor *sensor);
+	Heater *FindHeater(int heater) const;
 
 	TemperatureSensor *sensorsRoot;								// The sensor list
+	TemperatureSensor *newSensors;								// Sensors recently created
 	HeaterProtection *heaterProtections[MaxHeaters + NumExtraHeaterProtections];	// Heater protection instances to guarantee legal heater temperature ranges
 
 	Heater* heaters[MaxHeaters];								// A local or remote heater

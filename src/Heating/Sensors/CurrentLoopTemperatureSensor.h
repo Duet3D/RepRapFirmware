@@ -18,11 +18,10 @@ public:
 
 	static constexpr const char *TypeName = "currentloop";
 
-protected:
-	TemperatureError TryGetTemperature(float& t) override;
+	void Poll() override;
 
 private:
-	void TryGetLinearAdcTemperature();
+	TemperatureError TryGetLinearAdcTemperature(float& t);
 	void CalcDerivedParameters();
 
 	// Configurable parameters

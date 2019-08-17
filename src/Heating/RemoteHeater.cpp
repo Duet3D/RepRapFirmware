@@ -10,6 +10,9 @@
 #if SUPPORT_CAN_EXPANSION
 
 #include "CAN/CanMessageGenericConstructor.h"
+#include "CAN/CanInterface.h"
+#include <CanMessageformats.h>
+#include <CanMessageBuffer.h>
 
 void RemoteHeater::Spin()
 {
@@ -80,11 +83,18 @@ void RemoteHeater::SwitchOn()
 {
 }
 
-// This is called when the heater model has been updated. Returns true if successful.
+// This is called when the heater model has been updated
 GCodeResult RemoteHeater::UpdateModel(const StringRef& reply)
 {
-	//TODO send UpdateModel message
-	reply.copy("UpdateModel not implemented yet");
+	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
+	if (buf != nullptr)
+	{
+		CanMessageUpdateHeaterModel * const msg = buf->SetupRequestMessage<CanMessageUpdateHeaterModel>(CanInterface::GetCanAddress(), boardAddress);
+		model.SetupCanMessage(GetHeaterNumber(), *msg);
+		return CanInterface::SendRequestAndGetStandardReply(buf, reply);
+	}
+
+	reply.copy("No CAN buffer available");
 	return GCodeResult::error;
 }
 

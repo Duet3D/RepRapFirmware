@@ -104,6 +104,8 @@ protected:
 	float GetTargetTemperature() const { return (active) ? activeTemperature : standbyTemperature; }
 	HeaterProtection *GetHeaterProtections() const { return heaterProtection; }
 
+	FopDt model;
+
 private:
 	bool CheckProtection() const;					// Check heater protection elements and return true if everything is good
 
@@ -115,7 +117,6 @@ private:
 	float maxHeatingFaultTime;						// How long a heater fault is permitted to persist before a heater fault is raised
 	HeaterProtection *heaterProtection;				// The first element of assigned heater protection items
 
-	FopDt model;
 	bool active;									// Are we active or standby?
 };
 
