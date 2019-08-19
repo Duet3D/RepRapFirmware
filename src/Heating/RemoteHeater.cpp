@@ -11,7 +11,7 @@
 
 #include "CAN/CanMessageGenericConstructor.h"
 #include "CAN/CanInterface.h"
-#include <CanMessageformats.h>
+#include <CanMessageFormats.h>
 #include <CanMessageBuffer.h>
 
 void RemoteHeater::Spin()
