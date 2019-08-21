@@ -196,6 +196,7 @@ void Thermistor::Poll()
 			}
 		}
 	}
+	else
 	{
 		// Filter is not ready yet
 		SetResult(TemperatureError::notReady);

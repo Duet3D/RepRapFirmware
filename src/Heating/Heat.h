@@ -126,6 +126,8 @@ public:
 	void Standby(int heater, const Tool* tool);					// Set a heater to standby
 	void SwitchOff(int heater);									// Turn off a specific heater
 
+	bool NewSensorsPending() const { return newSensors != nullptr; }
+
 #if HAS_MASS_STORAGE
 	bool WriteModelParameters(FileStore *f) const;				// Write heater model parameters to file returning true if no error
 	bool WriteBedAndChamberTempSettings(FileStore *f) const;	// Save some resume information
@@ -140,8 +142,8 @@ private:
 
 	Heater *FindHeater(int heater) const;
 
-	TemperatureSensor *sensorsRoot;								// The sensor list
-	TemperatureSensor *newSensors;								// Sensors recently created
+	TemperatureSensor * volatile sensorsRoot;					// The sensor list
+	TemperatureSensor * volatile newSensors;					// Sensors recently created
 	HeaterProtection *heaterProtections[MaxHeaters + NumExtraHeaterProtections];	// Heater protection instances to guarantee legal heater temperature ranges
 
 	Heater* heaters[MaxHeaters];								// A local or remote heater

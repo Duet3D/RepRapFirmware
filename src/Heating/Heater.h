@@ -61,8 +61,8 @@ public:
 	void SetHeaterProtection(HeaterProtection *h);
 
 	const FopDt& GetModel() const { return model; }				// Get the process model
-
 	GCodeResult SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply);	// Set the process model
+	void SetModelDefaults();
 
 	bool IsHeaterEnabled() const								// Is this heater enabled?
 		{ return model.IsEnabled(); }

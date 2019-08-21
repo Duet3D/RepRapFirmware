@@ -199,10 +199,10 @@ public:
 	void CloseFile();
 	bool UsingMachineCoordinates() const { return g53Active || runningSystemMacro; }
 
-	// Copy values that may have been altered by config.g into this state record
+	// Copy values that may have been altered into this state record
+	// Called after running config.g and after running resurrect.g
 	void CopyStateFrom(const GCodeMachineState& other)
 	{
-		compatibility = other.compatibility;
 		drivesRelative = other.drivesRelative;
 		axesRelative = other.axesRelative;
 		feedRate = other.feedRate;

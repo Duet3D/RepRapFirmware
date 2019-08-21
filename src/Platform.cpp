@@ -1976,7 +1976,7 @@ void Platform::Diagnostics(MessageType mtype)
 	}
 
 	// Show the current error codes
-	MessageF(mtype, "Error status: %" PRIu32 "\n", errorCodeBits);
+	MessageF(mtype, "Error status: %" PRIx32 "\n", errorCodeBits);
 
 #if HAS_MASS_STORAGE
 	// Show the number of free entries in the file table
@@ -4189,7 +4189,10 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply)
 		return ConfigureGpioOrServo(deviceNumber, false, gb, reply);
 
 	case 4:
-		return reprap.GetHeat().ConfigureHeater(deviceNumber, gb, reply);
+		{
+			Heat& heat = reprap.GetHeat();
+			return (heat.NewSensorsPending()) ? GCodeResult::notFinished : heat.ConfigureHeater(deviceNumber, gb, reply);
+		}
 
 	case 8:
 		return ConfigureFan(deviceNumber, gb, reply);

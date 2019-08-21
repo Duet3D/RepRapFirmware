@@ -50,7 +50,7 @@ void SensorWithPort::CopyBasicDetails(const StringRef& reply) const
 	}
 	reply.catf(" type %s using pin ", GetSensorType());
 	port.AppendPinName(reply);
-	reply.catf(", last error: %s", TemperatureErrorString(GetLastError()));
+	reply.catf(", reading %.1f, last error: %s", (double)GetStoredReading(), TemperatureErrorString(GetLastError()));
 }
 
 // End

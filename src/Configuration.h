@@ -82,7 +82,7 @@ constexpr float HOT_ENOUGH_TO_RETRACT = 90.0;			// Celsius
 
 constexpr unsigned int MaxBadTemperatureCount = 2000/HeatSampleIntervalMillis;	// Number of bad temperature samples permitted before a heater fault is reported (2 seconds)
 constexpr float BadLowTemperature = -10.0;				// Celsius
-constexpr float DefaultExtruderTemperatureLimit = 290.0; // Celsius - E3D say to tighten the hot end at 285C
+constexpr float DefaultHotEndTemperatureLimit = 290.0;	// Celsius - E3D say to tighten the hot end at 285C
 constexpr float DefaultBedTemperatureLimit = 125.0;		// Celsius
 constexpr float DefaultHotEndFanTemperature = 45.0;			// Temperature at which a thermostatic hot end fan comes on
 constexpr float ThermostatHysteresis = 1.0;				// How much hysteresis we use to prevent noise turning fans on/off too often
@@ -205,8 +205,8 @@ static_assert(MaxCalibrationPoints <= MaxProbePoints, "MaxCalibrationPoints must
 
 // SD card
 constexpr uint32_t SdCardDetectDebounceMillis = 200;	// How long we give the SD card to settle in the socket
-constexpr unsigned int MaxSdCardTries = 3;				// Number of read or write attempts before giving up
-constexpr uint32_t SdCardRetryDelay = 30;				// Number of milliseconds delay between SD transfer retries. Looks like 10ms may be too low.
+constexpr unsigned int MaxSdCardTries = 5;				// Number of read or write attempts before giving up
+constexpr uint32_t SdCardRetryDelay = 30;				// Number of milliseconds delay between SD transfer retries. Looks like 10ms may be too low. We now double for each retry.
 
 // Z probing
 constexpr float DefaultZProbeTriggerHeight = 0.7;		// Millimetres

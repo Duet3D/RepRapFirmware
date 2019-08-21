@@ -213,6 +213,8 @@ Outstanding issues:
 - [defer] When writing resurrect.g after a pause, the G92 coordinates are wrong
 
 - Bug in 2.03, 2.04RC1 and latest 3.0 beta: https://forum.duet3d.com/topic/11343/new-reprapfirmware-3-0-early-beta/30
+- Bug in 2.03 and 2.04RC1: M586 with T0 parameter generates spurious warning, https://forum.duet3d.com/topic/11632/m586-error-tls/4
+- Display Error Status in hex
 
 Duet 3:
 - Bug: code queue not always used when it should be, https://github.com/chrishamm/DuetSoftwareFramework/issues/1
@@ -221,7 +223,7 @@ Duet 3:
 - Different motor currents on Duet main board V0.6 vs older versions
 
 Planned for 3.0:
--  M291 not displaying on PanelDue as well as web interface, https://forum.duet3d.com/topic/11240/m291-display-on-lcd-not-always-working-when-web-session-is-open
+- M291 not displaying on PanelDue as well as web interface, https://forum.duet3d.com/topic/11240/m291-display-on-lcd-not-always-working-when-web-session-is-open
 - [done] 3.0 bug: Fix Z probe starting height
 - Test leadscrew adjustment moves
 - Separate sensor config from heaters

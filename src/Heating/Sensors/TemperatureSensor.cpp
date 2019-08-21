@@ -78,7 +78,7 @@ void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const
 	{
 		reply.catf(" (%s)", sensorName);
 	}
-	reply.catf(" type %s, last error: %s", sensorType, TemperatureErrorString(lastRealError));
+	reply.catf(" type %s, reading %.1f, last error: %s", sensorType, (double)lastTemperature, TemperatureErrorString(lastRealError));
 }
 
 // Configure then heater name, if it is provided

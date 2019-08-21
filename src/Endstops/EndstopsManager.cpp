@@ -30,6 +30,7 @@ void EndstopsManager::Init()
 	activeEndstops = nullptr;
 	String<1> dummy;
 
+#if ALLOCATE_DEFAULT_PORTS
 	// Configure default endstops
 	for (size_t axis = 0; axis < ARRAY_SIZE(DefaultEndstopPinNames); ++axis)
 	{
@@ -37,12 +38,15 @@ void EndstopsManager::Init()
 		sw->Configure(DefaultEndstopPinNames[axis], dummy.GetRef(), EndStopInputType::activeHigh);
 		axisEndstops[axis] = sw;
 	}
+#endif
 
 	// Z PROBE
 	reprap.GetPlatform().InitZProbeFilters();
 
-	ZProbe * const zp = new ZProbe();
+	ZProbe * const zp = new ZProbe();			// we must always have a non-null Z probe #0
+#if ALLOCATE_DEFAULT_PORTS
 	zp->AssignPorts(DefaultZProbePinNames, dummy.GetRef());
+#endif
 	zProbes[0] = zp;
 	currentZProbeNumber = 0;
 

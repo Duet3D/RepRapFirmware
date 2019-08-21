@@ -226,20 +226,11 @@ TemperatureSensor *Heat::GetSensorAtOrAbove(unsigned int sn) const
 // Reset all heater models to defaults. Called when running M502.
 void Heat::ResetHeaterModels()
 {
-	for (size_t heater : ARRAY_INDICES(heaters))
+	for (Heater* h : heaters)
 	{
-		Heater * const h = heaters[heater];
 		if (h != nullptr && h->IsHeaterEnabled())
 		{
-			String<1> dummy;
-			if (IsBedOrChamberHeater(heater))
-			{
-				h->SetModel(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, 1.0, 0.0, false, false, dummy.GetRef());
-			}
-			else
-			{
-				h->SetModel(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, 1.0, 0.0, true, false, dummy.GetRef());
-			}
+			h->SetModelDefaults();
 		}
 	}
 }
@@ -251,7 +242,7 @@ void Heat::Init()
 	{
 		HeaterProtection * const prot = heaterProtections[index];
 
-		const float tempLimit = (IsBedOrChamberHeater(index)) ? DefaultBedTemperatureLimit : DefaultExtruderTemperatureLimit;
+		const float tempLimit = (IsBedOrChamberHeater(index)) ? DefaultBedTemperatureLimit : DefaultHotEndTemperatureLimit;
 		prot->Init(tempLimit);
 	}
 
@@ -285,7 +276,7 @@ void Heat::Exit()
 	uint32_t lastWakeTime = xTaskGetTickCount();
 	for (;;)
 	{
-		// Walk the sensor list and poll all sensors except those flagged for deletion. Don'y mess with the list during this pass because polling may need to acquire mutexes.
+		// Walk the sensor list and poll all sensors except those flagged for deletion. Don't mess with the list during this pass because polling may need to acquire mutexes.
 		TemperatureSensor *currentSensor = sensorsRoot;
 		bool sawDeletedSensor = false;
 		while (currentSensor != nullptr)

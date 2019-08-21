@@ -277,8 +277,8 @@ bool IoPort::SetMode(PinAccess access)
 		{
 			if (access == PinAccess::readAnalog)
 			{
-				IoPort::SetPinMode(PinTable[logicalPin].pin, AIN);				// SAME70 errata says we must disable the pullup resistor before enabling the AFEC channel
-				AnalogInEnableChannel(chan, access == PinAccess::readAnalog);
+				IoPort::SetPinMode(PinTable[logicalPin].pin, AIN);		// SAME70 errata says we must disable the pullup resistor before enabling the AFEC channel
+				AnalogInEnableChannel(chan, true);
 				analogChannel = chan;
 				logicalPinModes[logicalPin] = (int8_t)desiredMode;
 				return true;

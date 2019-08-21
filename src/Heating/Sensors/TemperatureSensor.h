@@ -23,6 +23,9 @@ public:
 	// Try to get a temperature reading
 	TemperatureError GetLatestTemperature(float& t);
 
+	// Get the most recent reading without checking for timeout
+	float GetStoredReading() const { return lastTemperature; }
+
 	// Configure the sensor from M308 parameters.
 	// If we find any parameters, process them, if successful then initialise the sensor and return GCodeResult::ok.
 	// If an error occurs while processing the parameters, return GCodeResult::error and write an error message to 'reply.

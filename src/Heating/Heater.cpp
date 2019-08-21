@@ -172,4 +172,19 @@ bool Heater::CheckGood() const
 	return GetMode() != HeaterMode::fault && CheckProtection();
 }
 
+void Heater::SetModelDefaults()
+{
+	if (reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber()))
+	{
+		model.SetParameters(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, 1.0, DefaultBedTemperatureLimit, 0.0, false, false);
+	}
+	else
+	{
+		model.SetParameters(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, 1.0, DefaultHotEndTemperatureLimit, 0.0, true, false);
+	}
+
+	String<1> dummy;
+	(void)UpdateModel(dummy.GetRef());
+}
+
 // End

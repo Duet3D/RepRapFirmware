@@ -2,7 +2,7 @@
 #define PINS_SAME70_H__
 
 #define FIRMWARE_NAME		"RepRapFirmware for Duet 3 v.03"
-#define DEFAULT_BOARD_TYPE BoardType::Duet3_03
+#define DEFAULT_BOARD_TYPE	BoardType::Duet3_03
 const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
 #define IAP_FIRMWARE_FILE	"Duet3Firmware.bin"
 #define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
@@ -34,6 +34,7 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
 #define SUPPORT_ASYNC_MOVES		1
+#define ALLOCATE_DEFAULT_PORTS	0
 
 #define USE_CACHE				0					// Cache controller disabled for now
 
@@ -51,7 +52,7 @@ typedef uint64_t SensorsBitmap;
 
 constexpr size_t MaxHeaters = 12;
 constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
-constexpr size_t NumThermistorInputs = 4;
+constexpr size_t NumThermistorInputs = 3;			// The TEMP_2 input is unusable, so 3 not 4
 constexpr size_t NumTmcDriversSenseChannels = 1;
 
 constexpr size_t MaxZProbes = 4;
@@ -99,8 +100,8 @@ constexpr Pin TMC51xxSclkPin = PortAPin(23);
 constexpr size_t NumPwmOutputs = 11;				// number of heater/fan/servo outputs
 constexpr size_t NumInputOutputs = 9;				// number of connectors we have for endstops, filament sensors, Z probes etc.
 
-// Thermistor/PT1000 inputs
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortBPin(3), PortCPin(15), PortCPin(0), PortCPin(30) };	// Thermistor/PT1000 pins
+// Thermistor/PT1000 inputs. The TEMP2 pin is left out because we had to reassign it to CAN.
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortBPin(3), PortCPin(15), PortCPin(30) };	// Thermistor/PT1000 pins
 constexpr Pin VssaSensePin = PortAPin(20);
 constexpr Pin VrefSensePin = PortEPin(0);
 
@@ -225,7 +226,7 @@ constexpr PinEntry PinTable[] =
 	// Thermistor inputs
 	{ PortBPin(3),	PinCapability::ainr,	"temp0" },
 	{ PortCPin(15),	PinCapability::ainr,	"temp1" },
-	{ PortCPin(0),	PinCapability::ainr,	"temp2" },
+	// temp2 is unusable because we had to reassign it to CAN
 	{ PortCPin(30),	PinCapability::ainr,	"temp3" },
 
 	// Misc
@@ -240,10 +241,6 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
-
-// Default pin allocations
-constexpr const char *DefaultEndstopPinNames[] = { "nil" };
-constexpr const char *DefaultZProbePinNames = "^io8.in+io8.out";
 
 // SAME70 Flash locations
 // These are designed to work with 1Mbyte flash processors as well as 2Mbyte
