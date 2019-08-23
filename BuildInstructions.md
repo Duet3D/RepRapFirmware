@@ -49,6 +49,8 @@ RepRapFirmware is built from several Github projects. You need to use compatible
 
 14. Build CoreNG first, also build FreeRTOS and RRFLibraries if needed. Then clean and build RepRapFirmware (the clean step is needed to make Eclipse notice that the output library files in the other projects have been built). The Duet WiFi and Duet Ethernet builds of RRF use the SAM4E_RTOS builds of CoreNG and RRFLibraries and the SAM4E build of FreeRTOS. The Duet Maestro uses the SAM4S_RTOS build of CoreNG and RRFLibraries, and the SAM4S build of FreeRTOS. The Duet085 build of RRF (which also runs on the Duet06) uses the SAM3X build of CoreNG and RRFLibraries. The RADDS build of RRF uses the RADDS_RTOS build of CoreNG and the SAM3X_RTOS build of RRFLibraries.
 
+Note: you do not need to build the DuetWiFiSocketServer project, but it does need to be in the workspace because the RepRapFirmware project uses one of its include fies.
+
 **Instructions for building under macOS**
 
 Using Homebrew-Cask makes it very easy to install new software on macOS: https://caskroom.github.io/
@@ -64,3 +66,8 @@ Using Homebrew-Cask makes it very easy to install new software on macOS: https:/
 6. The build depends on the Eclipse workspace variable 'ArmGccPath" being set to the directory where your arm-none-eabi-g++ compiler resides. To set it, go to Windows -> Preferences -> C/C++ -> Build -> Build Variables and click "Add..."
 
 7. Build CoreNG, FreeRTOS and RRFLibraries first, then RepRapFirmware. See the instructions for Windows (above) for the configurations needed.
+
+**Building under Debian Linux**
+
+See this forum post https://forum.duet3d.com/topic/11703/building-reprap-firmware-on-debian-buster
+
