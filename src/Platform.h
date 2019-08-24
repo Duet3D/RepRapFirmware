@@ -504,18 +504,26 @@ public:
 	void GetPowerVoltages(float& minV, float& currV, float& maxV) const;
 	float GetCurrentPowerVoltage() const;
 	bool IsPowerOk() const;
-	bool HasVinPower() const;
 	void DisableAutoSave();
 	void EnableAutoSave(float saveVoltage, float resumeVoltage);
 	bool GetAutoSaveSettings(float& saveVoltage, float&resumeVoltage);
-#else
-	bool HasVinPower() const { return true; }
+#endif
+
+#if HAS_12V_MONITOR
+	// 12V rail voltage
+	void GetV12Voltages(float& minV, float& currV, float& maxV) const;
 #endif
 
 #if HAS_SMART_DRIVERS
 	float GetTmcDriversTemperature(unsigned int board) const;
 	void DriverCoolingFansOnOff(uint32_t driverChannelsMonitored, bool on);
 	unsigned int GetNumSmartDrivers() const { return numSmartDrivers; }
+#endif
+
+#if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
+	bool HasVinPower() const;
+#else
+	bool HasVinPower() const { return true; }
 #endif
 
 #if HAS_STALL_DETECT
@@ -700,7 +708,7 @@ private:
 
 	bool driversPowered;
 
-#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
+#if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 	bool warnDriversNotPowered;
 #endif
 
@@ -832,10 +840,10 @@ private:
 #if HAS_VOLTAGE_MONITOR
 	AnalogChannelNumber vInMonitorAdcChannel;
 	volatile uint16_t currentVin, highestVin, lowestVin;
-	uint16_t lastUnderVoltageValue, lastOverVoltageValue;
+	uint16_t lastVinUnderVoltageValue, lastVinOverVoltageValue;
 	uint16_t autoPauseReading, autoResumeReading;
-	uint32_t numUnderVoltageEvents, previousUnderVoltageEvents;
-	volatile uint32_t numOverVoltageEvents, previousOverVoltageEvents;
+	uint32_t numVinUnderVoltageEvents, previousVinUnderVoltageEvents;
+	volatile uint32_t numVinOverVoltageEvents, previousVinOverVoltageEvents;
 	bool autoSaveEnabled;
 
 	enum class AutoSaveState : uint8_t
@@ -845,6 +853,13 @@ private:
 		autoPaused
 	};
 	AutoSaveState autoSaveState;
+#endif
+
+#if HAS_12V_MONITOR
+	AnalogChannelNumber v12MonitorAdcChannel;
+	volatile uint16_t currentV12, highestV12, lowestV12;
+	uint16_t lastV12UnderVoltageValue;
+	uint32_t numV12UnderVoltageEvents, previousV12UnderVoltageEvents;
 #endif
 
 	uint32_t lastWarningMillis;							// When we last sent a warning message

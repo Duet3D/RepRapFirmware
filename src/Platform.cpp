@@ -84,7 +84,7 @@
 extern uint32_t _estack;			// defined in the linker script
 
 #if !defined(HAS_LWIP_NETWORKING) || !defined(HAS_WIFI_NETWORKING) || !defined(HAS_CPU_TEMP_SENSOR) || !defined(HAS_HIGH_SPEED_SD) \
- || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_VREF_MONITOR) \
+ || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_12V_MONITOR) || !defined(HAS_VREF_MONITOR) \
  || !defined(SUPPORT_NONLINEAR_EXTRUSION) || !defined(SUPPORT_ASYNC_MOVES) || !defined(HAS_MASS_STORAGE)
 # error Missing feature definition
 #endif
@@ -105,6 +105,23 @@ constexpr uint16_t driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);			/
 constexpr uint16_t driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);			// voltages below this flag the drivers as unusable
 constexpr uint16_t driverOverVoltageAdcReading = PowerVoltageToAdcReading(29.0);		// voltages above this cause driver shutdown
 constexpr uint16_t driverNormalVoltageAdcReading = PowerVoltageToAdcReading(27.5);		// voltages at or below this are normal
+
+#endif
+
+#if HAS_12V_MONITOR
+
+inline constexpr float AdcReadingToV12Voltage(uint16_t adcVal)
+{
+	return adcVal * (V12MonitorVoltageRange/4096.0);
+}
+
+inline constexpr uint16_t V12VoltageToAdcReading(float voltage)
+{
+	return (uint16_t)(voltage * (4096.0/V12MonitorVoltageRange));
+}
+
+constexpr uint16_t driverV12OnAdcReading = V12VoltageToAdcReading(10.0);				// minimum voltage at which we initialise the drivers
+constexpr uint16_t driverV12OffAdcReading = V12VoltageToAdcReading(9.5);				// voltages below this flag the drivers as unusable
 
 #endif
 
@@ -330,7 +347,7 @@ void Platform::Init()
 	numSmartDrivers = MaxSmartDrivers;							// for now we assume that expansion drivers are smart too
 #elif defined(PCCB)
 	numSmartDrivers = MaxSmartDrivers;
-#elif defined(DUET3_V03) || defined(DUET3_V05)
+#elif defined(DUET3_V03) || defined(DUET3_V05) || defined(DUET3_V06)
 	numSmartDrivers = MaxSmartDrivers;
 #endif
 
@@ -518,7 +535,7 @@ void Platform::Init()
 	autoSaveState = AutoSaveState::starting;
 #endif
 
-#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
+#if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 	warnDriversNotPowered = false;
 #endif
 
@@ -604,7 +621,17 @@ void Platform::Init()
 	AnalogInEnableChannel(vInMonitorAdcChannel, true);
 	currentVin = highestVin = 0;
 	lowestVin = 9999;
-	numUnderVoltageEvents = previousUnderVoltageEvents = numOverVoltageEvents = previousOverVoltageEvents = 0;
+	numVinUnderVoltageEvents = previousVinUnderVoltageEvents = numVinOverVoltageEvents = previousVinOverVoltageEvents = 0;
+#endif
+
+#if HAS_12V_MONITOR
+	// Power monitoring
+	v12MonitorAdcChannel = PinToAdcChannel(PowerMonitorV12DetectPin);
+	pinMode(PowerMonitorV12DetectPin, AIN);
+	AnalogInEnableChannel(v12MonitorAdcChannel, true);
+	currentV12 = highestV12 = 0;
+	lowestV12 = 9999;
+	numV12UnderVoltageEvents = previousV12UnderVoltageEvents = 0;
 #endif
 
 	// Kick everything off
@@ -1050,7 +1077,7 @@ void Platform::Spin()
 		return;
 	}
 
-#if defined(DUET3_V03) || defined(DUET3_V05)
+#if defined(DUET3_V03) || defined(DUET3_V05) || defined(DUET3_V06)
 	// Blink the LED at about 2Hz. The expansion boards will blink in sync when they have established clock sync with us.
 	digitalWrite(DiagPin, (StepTimer::GetInterruptClocks() & (1u << 19)) != 0);
 #endif
@@ -1085,21 +1112,31 @@ void Platform::Spin()
 	}
 
 	// Check whether the TMC drivers need to be initialised.
-	// The tick ISR also looks for over-voltage events, but it just disables the driver without changing driversPowerd or numOverVoltageEvents
+	// The tick ISR also looks for over-voltage events, but it just disables the driver without changing driversPowerd or numVinOverVoltageEvents
 	if (driversPowered)
 	{
 #if HAS_VOLTAGE_MONITOR
 		if (currentVin < driverPowerOffAdcReading)
 		{
 			driversPowered = false;
-			++numUnderVoltageEvents;
-			lastUnderVoltageValue = currentVin;					// save this because the voltage may have changed by the time we report it
+			++numVinUnderVoltageEvents;
+			lastVinUnderVoltageValue = currentVin;					// save this because the voltage may have changed by the time we report it
 		}
 		else if (currentVin > driverOverVoltageAdcReading)
 		{
 			driversPowered = false;
-			++numOverVoltageEvents;
-			lastOverVoltageValue = currentVin;					// save this because the voltage may have changed by the time we report it
+			++numVinOverVoltageEvents;
+			lastVinOverVoltageValue = currentVin;					// save this because the voltage may have changed by the time we report it
+		}
+		else
+#endif
+
+#if HAS_12V_MONITOR
+		if (currentV12 < driverV12OffAdcReading)
+		{
+			driversPowered = false;
+			++numV12UnderVoltageEvents;
+			lastV12UnderVoltageValue = currentV12;					// save this because the voltage may have changed by the time we report it
 		}
 		else
 #endif
@@ -1219,8 +1256,12 @@ void Platform::Spin()
 #endif		// HAS_SMART_DRIVERS
 		}
 	}
-#if HAS_VOLTAGE_MONITOR
+#if HAS_VOLTAGE_MONITOR && HAS_12V_MONITOR
+	else if (currentVin >= driverPowerOnAdcReading && currentVin <= driverNormalVoltageAdcReading && currentV12 >= driverV12OnAdcReading)
+#elif HAS_VOLTAGE_MONITOR
 	else if (currentVin >= driverPowerOnAdcReading && currentVin <= driverNormalVoltageAdcReading)
+#elif HAS_12V_MONITOR
+	else if (currentV12 >= driverV12OnAdcReading)
 #else
 	else
 #endif
@@ -1321,16 +1362,25 @@ void Platform::Spin()
 #endif
 
 #if HAS_VOLTAGE_MONITOR
-			if (numOverVoltageEvents != previousOverVoltageEvents)
+			if (numVinOverVoltageEvents != previousVinOverVoltageEvents)
 			{
-				MessageF(WarningMessage, "VIN over-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastOverVoltageValue));
-				previousOverVoltageEvents = numOverVoltageEvents;
+				MessageF(WarningMessage, "VIN over-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastVinOverVoltageValue));
+				previousVinOverVoltageEvents = numVinOverVoltageEvents;
 				reported = true;
 			}
-			if (numUnderVoltageEvents != previousUnderVoltageEvents)
+			if (numVinUnderVoltageEvents != previousVinUnderVoltageEvents)
 			{
-				MessageF(WarningMessage, "VIN under-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastUnderVoltageValue));
-				previousUnderVoltageEvents = numUnderVoltageEvents;
+				MessageF(WarningMessage, "VIN under-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastVinUnderVoltageValue));
+				previousVinUnderVoltageEvents = numVinUnderVoltageEvents;
+				reported = true;
+			}
+#endif
+
+#if HAS_12V_MONITOR
+			if (numV12UnderVoltageEvents != previousV12UnderVoltageEvents)
+			{
+				MessageF(WarningMessage, "12V under-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastV12UnderVoltageValue));
+				previousV12UnderVoltageEvents = numV12UnderVoltageEvents;
 				reported = true;
 			}
 #endif
@@ -1353,7 +1403,7 @@ void Platform::Spin()
 			}
 #endif
 
-#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
+#if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 			// Check for attempts to move motors when not powered
 			if (warnDriversNotPowered)
 			{
@@ -1474,6 +1524,15 @@ bool Platform::ExtruderMotorStalled(size_t extruder) const pre(drive < DRIVES)
 
 #endif
 
+#if HAS_COLTAGE_MONITOR || HAS_12V_MONITOR
+
+bool Platform::HasVinPower() const
+{
+	return driversPowered;			// not quite right because drivers are disabled if we get over-voltage too, or if the 12V rail is low, but OK for the status report
+}
+
+#endif
+
 #if HAS_VOLTAGE_MONITOR
 
 void Platform::DisableAutoSave()
@@ -1484,11 +1543,6 @@ void Platform::DisableAutoSave()
 bool Platform::IsPowerOk() const
 {
 	return !autoSaveEnabled || currentVin > autoPauseReading;
-}
-
-bool Platform::HasVinPower() const
-{
-	return driversPowered;			// not quite right because drivers are disabled if we get over-voltage too, but OK for the status report
 }
 
 void Platform::EnableAutoSave(float saveVoltage, float resumeVoltage)
@@ -2005,9 +2059,16 @@ void Platform::Diagnostics(MessageType mtype)
 	// Show the supply voltage
 	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 ", over voltage events: %" PRIu32 ", power good: %s\n",
 		(double)AdcReadingToPowerVoltage(lowestVin), (double)AdcReadingToPowerVoltage(currentVin), (double)AdcReadingToPowerVoltage(highestVin),
-				numUnderVoltageEvents, numOverVoltageEvents,
+				numVinUnderVoltageEvents, numVinOverVoltageEvents,
 				(driversPowered) ? "yes" : "no");
 	lowestVin = highestVin = currentVin;
+#endif
+
+#if HAS_12V_MONITOR
+	// Show the 12V rail voltage
+	MessageF(mtype, "12V rail voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 "\n",
+		(double)AdcReadingToPowerVoltage(lowestV12), (double)AdcReadingToPowerVoltage(currentV12), (double)AdcReadingToPowerVoltage(highestV12), numV12UnderVoltageEvents);
+	lowestV12 = highestV12 = currentV12;
 #endif
 
 #if HAS_SMART_DRIVERS
@@ -2134,24 +2195,58 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 				}
 				if (!seen)
 				{
-					reply.copy("Missing V parameter");
+					reply.copy("Missing V parameter (VIN voltage range)");
 					return GCodeResult::error;
 				}
 
 				const float voltage = AdcReadingToPowerVoltage(currentVin);
 				if (voltage < voltageMinMax[0])
 				{
-					MessageF(AddError(mtype), "Voltage reading %.1f is lower than expected\n", (double)voltage);
+					MessageF(AddError(mtype), "VIN voltage reading %.1f is lower than expected\n", (double)voltage);
 					testFailed = true;
 				}
 				else if (voltage > voltageMinMax[1])
 				{
-					MessageF(AddError(mtype), "Voltage reading %.1f is higher than expected\n", (double)voltage);
+					MessageF(AddError(mtype), "VIN voltage reading %.1f is higher than expected\n", (double)voltage);
 					testFailed = true;
 				}
 				else
 				{
-					Message(mtype, "Voltage reading OK\n");
+					Message(mtype, "VIN voltage reading OK\n");
+				}
+			}
+#endif
+
+#if HAS_12V_MONITOR
+			// Check the 12V rail voltage
+			{
+				float voltageMinMax[2];
+				size_t numVoltages = 2;
+				bool seen = false;
+				if (gb.TryGetFloatArray('W', numVoltages, voltageMinMax, reply, seen, false))
+				{
+					return GCodeResult::error;
+				}
+				if (!seen)
+				{
+					reply.copy("Missing W parameter (12V rail voltage range)");
+					return GCodeResult::error;
+				}
+
+				const float voltage = AdcReadingToPowerVoltage(currentV12);
+				if (voltage < voltageMinMax[0])
+				{
+					MessageF(AddError(mtype), "12V voltage reading %.1f is lower than expected\n", (double)voltage);
+					testFailed = true;
+				}
+				else if (voltage > voltageMinMax[1])
+				{
+					MessageF(AddError(mtype), "12V voltage reading %.1f is higher than expected\n", (double)voltage);
+					testFailed = true;
+				}
+				else
+				{
+					Message(mtype, "12V voltage reading OK\n");
 				}
 			}
 #endif
@@ -2523,7 +2618,7 @@ void Platform::SetDirection(size_t axisOrExtruder, bool direction)
 // Enable a driver. Must not be called from an ISR, or with interrupts disabled.
 void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent)
 {
-#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
+#if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 	if (driver < numSmartDrivers && !driversPowered)
 	{
 		warnDriversNotPowered = true;
@@ -2547,7 +2642,7 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent)
 #else
 		digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
 #endif
-#if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
+#if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 	}
 #endif
 }
@@ -3941,6 +4036,17 @@ float Platform::GetCurrentPowerVoltage() const
 
 #endif
 
+#if HAS_12V_MONITOR
+
+void Platform::GetV12Voltages(float& minV, float& currV, float& maxV) const
+{
+	minV = AdcReadingToPowerVoltage(lowestV12);
+	currV = AdcReadingToPowerVoltage(currentV12);
+	maxV = AdcReadingToPowerVoltage(highestV12);
+}
+
+#endif
+
 #if HAS_SMART_DRIVERS
 
 // TMC driver temperatures
@@ -4343,9 +4449,10 @@ uint32_t Platform::Random()
 
 void Platform::Tick()
 {
-#if HAS_VOLTAGE_MONITOR
+#if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
 	if (tickState != 0)
 	{
+# if HAS_VOLTAGE_MONITOR
 		// Read the power input voltage
 		currentVin = AnalogInReadChannel(vInMonitorAdcChannel);
 		if (currentVin > highestVin)
@@ -4356,9 +4463,29 @@ void Platform::Tick()
 		{
 			lowestVin = currentVin;
 		}
+# endif
 
+# if HAS_12V_MONITOR
+		currentV12 = AnalogInReadChannel(v12MonitorAdcChannel);
+		if (currentV12 > highestV12)
+		{
+			highestV12 = currentV12;
+		}
+		if (currentV12 < lowestV12)
+		{
+			lowestV12 = currentV12;
+		}
+# endif
 # if HAS_SMART_DRIVERS
-		if (driversPowered && currentVin > driverOverVoltageAdcReading)
+		if (driversPowered &&
+#  if HAS_VOLTAGE_MONITOR && HAS_12V_MONITOR
+			 (currentVin > driverOverVoltageAdcReading || currentV12 < driverV12OffAdcReading)
+#  elif HAS_VOLTAGE_MONITOR
+			 currentVin > driverOverVoltageAdcReading
+#  elif HAS_12V_MONITOR
+			 currentV12 < driverV12OffAdcReading
+#  endif
+		   )
 		{
 			SmartDrivers::TurnDriversOff();
 			// We deliberately do not clear driversPowered here or increase the over voltage event count - we let the spin loop handle that
@@ -4366,6 +4493,7 @@ void Platform::Tick()
 # endif
 	}
 #endif
+
 
 	const ZProbe& currentZProbe = GetCurrentZProbe();
 	switch (tickState)

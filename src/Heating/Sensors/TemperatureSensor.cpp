@@ -249,11 +249,13 @@ const size_t NumTempTableEntries = sizeof(tempTable)/sizeof(tempTable[0]);
 
 	if (low == 0)									// if off the bottom of the table
 	{
+		t = BadErrorTemperature;
 		return TemperatureError::shortCircuit;
 	}
 
 	if (low >= NumTempTableEntries)					// if off the top of the table
 	{
+		t = BadErrorTemperature;
 		return TemperatureError::openCircuit;
 	}
 

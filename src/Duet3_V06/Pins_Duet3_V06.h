@@ -10,9 +10,9 @@ const size_t NumFirmwareUpdateModules = 1;
 // Features definition
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		0
-#define HAS_LINUX_INTERFACE		1
+#define HAS_LINUX_INTERFACE		0	//TEMP! until we can enable both mass storage and Linux interface
 #define HAS_CPU_TEMP_SENSOR		1
-#define HAS_MASS_STORAGE		0
+#define HAS_MASS_STORAGE		1
 #define HAS_HIGH_SPEED_SD		0
 
 #define SUPPORT_TMC51xx			1
@@ -20,6 +20,7 @@ const size_t NumFirmwareUpdateModules = 1;
 
 #define SUPPORT_CAN_EXPANSION	1
 #define HAS_VOLTAGE_MONITOR		1
+#define HAS_12V_MONITOR			1
 #define HAS_VREF_MONITOR		1
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
@@ -67,6 +68,8 @@ constexpr size_t NumDefaultExtruders = 3;			// The number of drivers that we con
 constexpr size_t MaxHeatersPerTool = 4;
 constexpr size_t MaxExtrudersPerTool = 6;
 
+constexpr size_t NumTotalFans = 12;
+
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
@@ -77,7 +80,7 @@ constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB po
 // Drivers
 constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin(18), PortCPin(16), PortCPin(28), PortCPin(01), PortCPin(04), PortCPin(9) };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortBPin(05), PortDPin(10), PortAPin(04), PortAPin(22), PortCPin(03), PortDPin(14) };
-constexpr Pin DIAG_PINS[NumDirectDrivers] =			{ PortDPin(19), PortCPin(17), PortDPin(13), PortCPin(02), PortDPin(31), PortCPin(10) };
+constexpr Pin DIAG_PINS[NumDirectDrivers] =			{ PortDPin(29), PortCPin(17), PortDPin(13), PortCPin(02), PortDPin(31), PortCPin(10) };
 
 // Pin assignments etc. using USART1 in SPI mode
 constexpr Pin GlobalTmc51xxEnablePin = PortAPin(9);		// The pin that drives ENN of all TMC drivers
@@ -99,34 +102,33 @@ constexpr size_t NumPwmOutputs = 11;				// number of heater/fan/servo outputs
 constexpr size_t NumInputOutputs = 9;				// number of connectors we have for endstops, filament sensors, Z probes etc.
 
 // Thermistor/PT1000 inputs
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(31), PortCPin(15), PortCPin(29), PortCPin(30) };	// Thermistor/PT1000 pins
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(15), PortCPin(29), PortCPin(30), PortCPin(31) };	// Thermistor/PT1000 pins
 constexpr Pin VssaSensePin = PortCPin(13);
-constexpr Pin VrefSensePin = PortEPin(0);
+constexpr Pin VrefSensePin = PortCPin(0);
 
 // Thermistor series resistor value in Ohms
 constexpr float THERMISTOR_SERIES_RS = 2200.0;
 
 // Digital pins the 31855s have their select lines tied to
-constexpr Pin SpiTempSensorCsPins[] = { PortDPin(16), PortDPin(15), PortDPin(27), PortCPin(22) };
+constexpr Pin SpiTempSensorCsPins[] = { PortCPin(16), PortDPin(15), PortDPin(27), PortCPin(22) };
 
 // Pin that controls the ATX power on/off
 constexpr Pin ATX_POWER_PIN = PortAPin(10);
 
 // Analogue pin numbers
 constexpr Pin PowerMonitorVinDetectPin = PortAPin(20);
-constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;			// we use an 11:1 voltage divider (TBD)
+constexpr Pin PowerMonitorV12DetectPin = PortEPin(4);
+constexpr float PowerMonitorVoltageRange = (60.4 + 4.7)/4.7 * 3.3;	// voltage divider ratio times the reference voltage
+constexpr float V12MonitorVoltageRange = (60.4 + 4.7)/4.7 * 3.3;	// voltage divider ratio times the reference voltage
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
 constexpr Pin DiagPin = PortCPin(20);
 
-// Cooling fans
-constexpr size_t NumTotalFans = 12;
-
 // SD cards
-constexpr size_t NumSdCards = 1;								// actually 0 cards, but 0 probably won't work yet
+constexpr size_t NumSdCards = 1;
 constexpr Pin SdCardDetectPins[1] = { NoPin };
 constexpr Pin SdWriteProtectPins[1] = { NoPin };
-constexpr Pin SdSpiCSPins[1] = { NoPin };
+constexpr Pin SdSpiCSPins[1] = { PortAPin(29) };
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 
 // Ethernet
@@ -190,7 +192,6 @@ constexpr PinEntry PinTable[] =
 	{ PortCPin(11),	PinCapability::wpwm,	"out7" },
 	{ PortCPin(8),	PinCapability::wpwm,	"out8" },
 	{ PortAPin(12),	PinCapability::wpwm,	"out9" },
-	{ PortCPin(23),	PinCapability::wpwm,	"out10,servo" },
 	{ PortAPin(10),	PinCapability::write,	"pson" },
 
 	// Tacho inputs associated with outputs 4-6
@@ -199,39 +200,38 @@ constexpr PinEntry PinTable[] =
 	{ PortAPin(1),	PinCapability::read,	"out6.tach" },
 
 	// IO connector inputs
-	//TODO some have ain capability too
-	{ PortDPin(30),	PinCapability::read,	"io0.in" },
-	{ PortEPin(4),	PinCapability::read,	"io1.in" },
-	{ PortAPin(18),	PinCapability::read,	"io2.in" },
-	{ PortEPin(5),	PinCapability::read,	"io3.in" },
-	{ PortAPin(17),	PinCapability::read,	"io4.in" },
-	{ PortAPin(19),	PinCapability::read,	"io5.in" },
-	{ PortBPin(3),	PinCapability::read,	"io6.in" },
-	{ PortDPin(25),	PinCapability::read,	"io7.in" },
-	{ PortEPin(3),	PinCapability::read,	"io8.in" },
+	{ PortDPin(25),	PinCapability::read,	"io0.in,serial0.rx" },
+	{ PortDPin(15),	PinCapability::read,	"io1.in,serial1.rx" },
+	{ PortDPin(28),	PinCapability::read,	"io2.in,i2c0.clk" },
+	{ PortEPin(5),	PinCapability::ainr,	"io3.in" },
+	{ PortDPin(30),	PinCapability::ainr,	"io4.in" },
+	{ PortAPin(19),	PinCapability::ainr,	"io5.in" },
+	{ PortAPin(18),	PinCapability::ainr,	"io6.in" },
+	{ PortAPin(17),	PinCapability::ainr,	"io7.in" },
+	{ PortEPin(3),	PinCapability::ainr,	"io8.in" },
 
 	// IO connector outputs
 	//TODO some have PWM capability too
-	{ PortBPin(7),	PinCapability::write,	"io0.out" },
-	{ PortBPin(6),	PinCapability::write,	"io1.out" },
-	{ PortCPin(14),	PinCapability::write,	"io2.out" },
-	{ PortAPin(3),	PinCapability::write,	"io3.out" },
-	{ PortAPin(2),	PinCapability::write,	"io4.out" },
-	{ PortAPin(26),	PinCapability::write,	"io5.out" },
-	{ PortAPin(0),	PinCapability::write,	"io6.out" },
-	{ PortDPin(26),	PinCapability::write,	"io7.out" },
-	{ PortEPin(1),	PinCapability::write,	"io8.out" },
+	{ PortDPin(26),	PinCapability::rw,		"io0.out,serial0.tx" },
+	{ PortDPin(16),	PinCapability::rw,		"io1.out,serial1.tx" },
+	{ PortDPin(27),	PinCapability::rw,		"io2.out,i2c0.dat" },
+	{ PortAPin(3),	PinCapability::rw,		"io3.out" },
+	{ PortEPin(0),	PinCapability::rwpwm,	"io4.out" },
+	{ PortDPin(21),	PinCapability::rwpwm,	"io5.out" },
+	{ PortAPin(0),	PinCapability::rwpwm,	"io6.out" },
+	{ PortCPin(23),	PinCapability::rwpwm,	"io7.out" },
+	{ PortEPin(1),	PinCapability::rwpwm,	"io8.out" },
 
 	// Thermistor inputs
-	{ PortCPin(31), PinCapability::ainr,	"temp0" },
-	{ PortCPin(15),	PinCapability::ainr,	"temp1" },
-	{ PortCPin(29), PinCapability::ainr,	"temp2" },
-	{ PortCPin(30), PinCapability::ainr,	"temp3" },
+	{ PortCPin(15), PinCapability::ainr,	"temp0" },
+	{ PortCPin(29),	PinCapability::ainr,	"temp1" },
+	{ PortCPin(30), PinCapability::ainr,	"temp2" },
+	{ PortCPin(31), PinCapability::ainr,	"temp3" },
 
 	// Misc
-	{ PortDPin(16),	PinCapability::rw,		"spi.cs0" },
-	{ PortDPin(15),	PinCapability::rw,		"spi.cs1" },
-	{ PortDPin(27),	PinCapability::rw,		"spi.cs2" },
+	{ PortAPin(5),	PinCapability::rw,		"spi.cs0,serial3.rx" },
+	{ PortAPin(6),	PinCapability::rw,		"spi.cs1,serial3.tx" },
+	{ PortDPin(20),	PinCapability::rw,		"spi.cs2" },
 	{ PortCPin(22),	PinCapability::rw,		"spi.cs3" }
 };
 

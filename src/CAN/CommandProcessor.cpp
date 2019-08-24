@@ -29,7 +29,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 		fname.cat(".bin");
 #if defined(DUET3_V05)
 		// TODO
-#elif defined(DUET3_V03)
+#elif defined(DUET3_V03) || defined(DUET3_V06)
 		// The following code fetches the firmware file from the local SD card
 		FileStore * const f = reprap.GetPlatform().OpenSysFile(fname.c_str(), OpenMode::read);
 		if (f != nullptr)

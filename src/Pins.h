@@ -97,6 +97,10 @@
 #define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx || SUPPORT_TMC51xx)
 #define HAS_STALL_DETECT		(SUPPORT_TMC2660 || SUPPORT_TMC51xx)
 
+#ifndef HAS_12V_MONITOR
+# define HAS_12V_MONITOR		0
+#endif
+
 // HAS_LWIP_NETWORKING refers to Lwip 2 support in the Networking folder, not legacy SAM3XA networking using Lwip 1
 #ifndef HAS_LWIP_NETWORKING
 # define HAS_LWIP_NETWORKING	0

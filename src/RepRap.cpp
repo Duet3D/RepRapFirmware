@@ -1383,6 +1383,15 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			response->catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)minV, (double)currV, (double)maxV);
 		}
 #endif
+
+#if HAS_12V_MONITOR
+		// Power in voltages
+		{
+			float minV, currV, maxV;
+			platform->GetV12Voltages(minV, currV, maxV);
+			response->catf(",\"v12\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)minV, (double)currV, (double)maxV);
+		}
+#endif
 	}
 	else if (type == 3)
 	{

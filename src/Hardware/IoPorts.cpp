@@ -178,7 +178,7 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 
 	const char *const fullPinName = pn;			// the full pin name less the inversion and pullup flags
 
-#if defined(DUET3_V03) || defined(DUET3_V05)
+#if defined(DUET3_V03) || defined(DUET3_V05) || defined(DUET3_V06)
 	uint32_t expansionNumber;
 	if (isdigit(*pn))
 	{

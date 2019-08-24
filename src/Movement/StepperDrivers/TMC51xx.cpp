@@ -345,7 +345,7 @@ private:
 
 	volatile uint32_t newRegistersToUpdate;					// bitmap of register indices whose values need to be sent to the driver chip
 	uint32_t registersToUpdate;								// bitmap of register indices whose values need to be sent to the driver chip
-
+	uint32_t driverBit;										// 1 << the driver number
 	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	uint32_t motorCurrent;									// the configured motor current in mA
@@ -388,17 +388,18 @@ const uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 	REGNUM_PWM_SCALE
 };
 
-uint16_t TmcDriverState::numTimeouts = 0;							// how many times a transfer timed out
+uint16_t TmcDriverState::numTimeouts = 0;								// how many times a transfer timed out
 
 // Initialise the state of the driver and its CS pin
 void TmcDriverState::Init(uint32_t p_axisNumber)
 pre(!driversPowered)
 {
 	axisNumber = p_axisNumber;
+	driverBit = 1ul << p_axisNumber;
 	enabled = false;
 	registersToUpdate = newRegistersToUpdate = 0;
 	motorCurrent = 0;
-	standstillCurrentFraction = (256 * 3)/4;							// default to 75%
+	standstillCurrentFraction = 180;									// default to 70% which is about 180/256
 
 	// Set default values for all registers and flag them to be updated
 	UpdateRegister(WriteGConf, DefaultGConfReg);
@@ -825,6 +826,14 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock)
 		++numWrites;
 	}
 
+	// Get the full step interval, we will need it later
+	const uint32_t interval =
+#if defined(SAME51) || defined(SAMC21)
+								reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
+#else
+								reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
+#endif
+
 	// If we read a register, update our copy
 	if (previousRegIndexRequested < NumReadRegisters)
 	{
@@ -848,18 +857,13 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock)
 
 			if ((regVal & (TMC_RR_OLA | TMC_RR_OLB)) != 0)
 			{
-				uint32_t interval;
 				if (   (regVal & TMC_RR_STST) != 0
-#ifdef SAME51
-					|| (interval = moveInstance->GetStepInterval(axisNumber, microstepShiftFactor)) == 0		// get the full step interval
-#else
-					|| (interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor)) == 0		// get the full step interval
-#endif
+					|| interval == 0
 					|| interval > StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec
 					|| motorCurrent < MinimumOpenLoadMotorCurrent
 				   )
 				{
-					regVal &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds
+					regVal &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill, low speeds, and low current
 				}
 			}
 
@@ -882,13 +886,20 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock)
 #endif
 	}
 
-	if ((rcvDataBlock[0] & (1u << 2)) != 0)							// check the stall status
+// Deal with the stall status
+	if (   (rcvDataBlock[0] & (1u << 2)) != 0							// if the status indicates stalled
+		&& interval != 0
+		&& interval <= maxStallStepInterval								// if the motor speed is high enough to get a reliable stall indication
+	   )
+
 	{
 		readRegisters[ReadDrvStat] |= TMC_RR_SG;
+		EndstopOrZProbe::UpdateStalledDrivers(driverBit, true);
 	}
 	else
 	{
 		readRegisters[ReadDrvStat] &= ~TMC_RR_SG;
+		EndstopOrZProbe::UpdateStalledDrivers(driverBit, false);
 	}
 
 	previousRegIndexRequested = (regIndexBeingUpdated == NoRegIndex) ? regIndexRequested : NoRegIndex;

@@ -113,18 +113,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				if (gb.Seen(axisLetters[axis]))
 				{
 					moveBuffer.SetDefaults(numVisibleAxes);
-					for (size_t axs = 0; axs < numVisibleAxes; ++axs)
-					{
-						moveBuffer.coords[axs] = currentUserPosition[axs];
-					}
-					// Add R to the current position
-					moveBuffer.coords[axis] += rVal;
+					ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
+					moveBuffer.coords[axis] += rVal;					// add R to the current position
 
 					moveBuffer.feedRate = findCenterOfCavityRestorePoint.feedRate;
 					moveBuffer.canPauseAfter = false;
 
 					NewMoveAvailable(1);
-
 					break;
 				}
 			}
@@ -149,17 +144,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				if (gb.Seen(axisLetters[axis]))
 				{
 					moveBuffer.SetDefaults(numVisibleAxes);
-					for (size_t axs = 0; axs < numVisibleAxes; ++axs)
-					{
-						moveBuffer.coords[axs] = findCenterOfCavityRestorePoint.moveCoords[axs];
-					}
+					RestorePosition(findCenterOfCavityRestorePoint, &gb);
 					moveBuffer.coords[axis] += (currentUserPosition[axis] - findCenterOfCavityRestorePoint.moveCoords[axis]) / 2;
-
-					moveBuffer.feedRate = findCenterOfCavityRestorePoint.feedRate;
 
 					NewMoveAvailable(1);
 					gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
-
 					break;
 				}
 			}

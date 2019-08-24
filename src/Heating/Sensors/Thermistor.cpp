@@ -101,7 +101,7 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply)
 // Get the temperature
 void Thermistor::Poll()
 {
-	uint32_t averagedTempReading, tempFilterValid;
+	int32_t averagedTempReading, tempFilterValid;
 	if (adcFilterChannel >= 0)
 	{
 		const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(adcFilterChannel);
@@ -146,21 +146,26 @@ void Thermistor::Poll()
 
 			// Calculate the resistance
 #if HAS_VREF_MONITOR
-			const float denom = (float)(averagedVrefReading - averagedTempReading);
-#else
-			const int32_t averagedVrefReading = AdcRange + 2 * adcHighOffset;		// double the offset because we increased AdcOversampleBits from 1 to 2
-			const float denom = (float)(averagedVrefReading - averagedTempReading) - 0.5;
-#endif
-			if (denom <= 0.0)
+			if (averagedVrefReading <= averagedTempReading)
 			{
-				SetResult(ABS_ZERO, TemperatureError::openCircuit);
+				SetResult((isPT1000) ? BadErrorTemperature : ABS_ZERO, TemperatureError::openCircuit);
+			}
+			else if (averagedTempReading <= averagedVssaReading)
+			{
+				SetResult(BadErrorTemperature, TemperatureError::shortCircuit);
 			}
 			else
 			{
-
-#if HAS_VREF_MONITOR
-				const float resistance = seriesR * (float)(averagedTempReading - averagedVssaReading)/denom;
+				const float resistance = seriesR * (float)(averagedTempReading - averagedVssaReading)/(float)(averagedVrefReading - averagedTempReading);
 #else
+			const int32_t averagedVrefReading = AdcRange + 2 * adcHighOffset;			// double the offset because we increased AdcOversampleBits from 1 to 2
+			if (averagedVrefReading <= averagedTempReading)
+			{
+				SetResult((isPT1000) ? BadErrorTemperature : ABS_ZERO, TemperatureError::openCircuit);
+			}
+			else
+			{
+				const float denom = (float)(averagedVrefReading - averagedTempReading) - 0.5;
 				const int32_t averagedVssaReading = 2 * adcLowOffset;					// double the offset because we increased AdcOversampleBits from 1 to 2
 				float resistance = seriesR * ((float)(averagedTempReading - averagedVssaReading) + 0.5)/denom;
 # ifdef DUET_NG
@@ -171,7 +176,7 @@ void Thermistor::Poll()
 				if (isPT1000)
 				{
 					// We want 100 * the equivalent PT100 resistance, which is 10 * the actual PT1000 resistance
-					const uint16_t ohmsx100 = (uint16_t)rintf(constrain<float>(resistance * 10, 0.0, 65535.0));
+					const uint16_t ohmsx100 = (uint16_t)lrintf(constrain<float>(resistance * 10, 0.0, 65535.0));
 					float t;
 					const TemperatureError sts = GetPT100Temperature(t, ohmsx100);
 					SetResult(t, sts);
@@ -185,7 +190,7 @@ void Thermistor::Poll()
 
 					if (temp < MinimumConnectedTemperature)
 					{
-						// thermistor is disconnected
+						// assume thermistor is disconnected
 						SetResult(ABS_ZERO, TemperatureError::openCircuit);
 					}
 					else
