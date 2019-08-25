@@ -134,9 +134,6 @@ Tool * Tool::freelist = nullptr;
 		t->heaters[heater] = h[heater];
 		t->activeTemperatures[heater] = ABS_ZERO;
 		t->standbyTemperatures[heater] = ABS_ZERO;
-
-		// Set default tool heater model if the heater has not been configured via M307 yet
-		reprap.GetHeat().VerifyToolHeaterModel(h[heater]);
 	}
 
 	if (t->filament != nullptr)
