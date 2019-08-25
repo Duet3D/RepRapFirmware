@@ -91,7 +91,7 @@ constexpr unsigned int ZProbeAverageReadings = 8;		// We average this number of 
 #ifdef SAME70
 // On the SAME70 we read a thermistor on every tick so that we can average a higher number of readings
 // Keep THERMISTOR_AVERAGE_READINGS * NUM_HEATERS * 1ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
-constexpr unsigned int ThermistorAverageReadings = 16; //32;
+constexpr unsigned int ThermistorAverageReadings = 32;
 #else
 // We read a thermistor on alternate ticks
 // Keep THERMISTOR_AVERAGE_READINGS * NUM_HEATERS * 2ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
