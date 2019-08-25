@@ -88,8 +88,15 @@ constexpr unsigned int ZProbeAverageReadings = 8;		// We average this number of 
 // HEATERS - The bed is assumed to be the at index 0
 
 // Define the number of temperature readings we average for each thermistor. This should be a power of 2 and at least 4 ^ AD_OVERSAMPLE_BITS.
+#ifdef SAME70
+// On the SAME70 we read a thermistor on every tick so that we can average a higher number of readings
+// Keep THERMISTOR_AVERAGE_READINGS * NUM_HEATERS * 1ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
+constexpr unsigned int ThermistorAverageReadings = 16; //32;
+#else
+// We read a thermistor on alternate ticks
 // Keep THERMISTOR_AVERAGE_READINGS * NUM_HEATERS * 2ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
 constexpr unsigned int ThermistorAverageReadings = 16;
+#endif
 
 constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in milliseconds between successive temp samples by Pid::Spin() permitted for a temp sensor
 

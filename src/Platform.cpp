@@ -1524,7 +1524,7 @@ bool Platform::ExtruderMotorStalled(size_t extruder) const pre(drive < DRIVES)
 
 #endif
 
-#if HAS_COLTAGE_MONITOR || HAS_12V_MONITOR
+#if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
 
 bool Platform::HasVinPower() const
 {
@@ -4494,6 +4494,21 @@ void Platform::Tick()
 	}
 #endif
 
+#ifdef SAME70
+	// The SAME70 ADC is noisy, so read a thermistor on every tick so that we can average a greater number of readings
+	// Because we are in the tick ISR and no other ISR reads the averaging filter, we can cast away 'volatile' here.
+	if (tickState != 0)
+	{
+		ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(adcFilters[currentFilterNumber]);		// cast away 'volatile'
+		currentFilter.ProcessReading(AnalogInReadChannel(filteredAdcChannels[currentFilterNumber]));
+
+		++currentFilterNumber;
+		if (currentFilterNumber == NumAdcFilters)
+		{
+			currentFilterNumber = 0;
+		}
+	}
+#endif
 
 	const ZProbe& currentZProbe = GetCurrentZProbe();
 	switch (tickState)
@@ -4501,6 +4516,7 @@ void Platform::Tick()
 	case 1:
 	case 3:
 		{
+#ifndef SAME70
 			// We read a filtered ADC channel on alternate ticks
 			// Because we are in the tick ISR and no other ISR reads the averaging filter, we can cast away 'volatile' here.
 			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(adcFilters[currentFilterNumber]);		// cast away 'volatile'
@@ -4511,7 +4527,7 @@ void Platform::Tick()
 			{
 				currentFilterNumber = 0;
 			}
-
+#endif
 			// If we are not using a simple modulated IR sensor, process the Z probe reading on every tick for a faster response.
 			// If we are using a simple modulated IR sensor then we need to allow the reading to settle after turning the IR emitter on or off,
 			// so on alternate ticks we read it and switch the emitter
