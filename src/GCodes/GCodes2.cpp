@@ -1610,17 +1610,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				}
 			}
 
-			if (result != GCodeResult::error)
+			if (result != GCodeResult::error && gb.Seen(('S')))
 			{
-				if (gb.Seen(('S')))
+				String<GCODE_LENGTH> message;
+				gb.GetQuotedString(message.GetRef());
+				if (type != HttpMessage)
 				{
-					String<GCODE_LENGTH> message;
-					gb.GetQuotedString(message.GetRef());
+					platform.Message((MessageType)(type | PushFlag), message.c_str());
+					platform.Message(type, "\n");
+				}
+				else
+				{
 					platform.Message(type, message.c_str());
-					if (type != HttpMessage)
-					{
-						platform.Message(type, "\n");
-					}
 				}
 			}
 		}
@@ -2890,6 +2891,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 550: // Set/report machine name
+#if HAS_LINUX_INTERFACE
+		if (!gb.IsBinary())
+		{
+			result = GCodeResult::errorNotSupported;
+		}
+		else
+#endif
 		{
 			String<MachineNameLength> name;
 			bool seen = false;

@@ -119,6 +119,7 @@ public:
 
 	GCodeResult ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply);
+	void VerifyToolHeaterModel(int heater);						// Apply default heater model for a tool if necessary
 
 	void SetActiveTemperature(int heater, float t);
 	void SetStandbyTemperature(int heater, float t);

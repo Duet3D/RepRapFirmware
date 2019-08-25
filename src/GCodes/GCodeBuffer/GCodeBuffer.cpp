@@ -585,7 +585,7 @@ void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort)
 
 #if HAS_LINUX_INTERFACE
 	abortFile = requestAbort;
-	abortAllFiles = abortAll;
+	abortAllFiles = requestAbort && abortAll;
 #endif
 }
 

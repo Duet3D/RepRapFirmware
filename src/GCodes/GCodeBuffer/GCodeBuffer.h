@@ -120,6 +120,9 @@ public:
 	void ReportStack() { reportStack = true; }			// Flags current stack details to be reported
 	bool IsStackEventFlagged() const;					// Did the stack change?
 	void AcknowledgeStackEvent();						// Indicates that the last stack event has been written
+
+	bool IsInvalidated() const { return invalidated; }	// Indicates if the channel is invalidated
+	void Invalidate(bool i = true) { invalidated = i; }	// Invalidate this channel (or not)
 #endif
 
 	GCodeState GetState() const;
@@ -202,6 +205,7 @@ private:
 		isMacroFromCode: 1,
 		abortFile : 1,
 		abortAllFiles : 1,
+		invalidated : 1,
 		reportStack : 1;
 #endif
 };

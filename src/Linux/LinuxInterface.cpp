@@ -12,6 +12,7 @@
 #include "GCodes/GCodes.h"
 #include "Platform.h"
 #include "PrintMonitor.h"
+#include "Tools/Filament.h"
 #include "RepRap.h"
 #include "RepRapFirmware.h"
 
@@ -261,6 +262,22 @@ void LinuxInterface::Spin()
 				reprap.GetPlatform().StartIap();
 				break;
 
+			// Assign filament
+			case LinuxRequest::AssignFilament:
+			{
+				int extruder;
+				String<FilamentNameLength> filamentName;
+				StringRef filamentRef = filamentName.GetRef();
+				transfer->ReadAssignFilament(extruder, filamentRef);
+
+				Filament *filament = Filament::GetFilamentByExtruder(extruder);
+				if (filament != nullptr)
+				{
+					filament->Load(filamentName.c_str());
+				}
+				break;
+			}
+
 			// Invalid request
 			default:
 				INTERNAL_ERROR;
@@ -300,13 +317,6 @@ void LinuxInterface::Spin()
 			sendBufferUpdate = !transfer->WriteCodeBufferUpdate(bufferSpace);
 		}
 
-		// Send pause notification on demand
-		if (reportPause)
-		{
-			InvalidateBufferChannel(GCodeChannel::file);
-			reportPause = !transfer->WritePrintPaused(pauseFilePosition, pauseReason);
-		}
-
 		// Deal with code channel requests
 		bool reportMissing, fromCode;
 		for (size_t i = 0; i < NumGCodeChannels; i++)
@@ -314,29 +324,30 @@ void LinuxInterface::Spin()
 			const GCodeChannel channel = (GCodeChannel)i;
 			GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 
+			// Invalidate buffered codes if required
+			if (gb->IsInvalidated())
+			{
+				InvalidateBufferChannel(gb->GetChannel());
+				gb->Invalidate(false);
+			}
+
 			// Handle macro start requests
 			const char *requestedMacroFile = gb->GetRequestedMacroFile(reportMissing, fromCode);
-			if (requestedMacroFile != nullptr)
+			if (requestedMacroFile != nullptr && transfer->WriteMacroRequest(channel, requestedMacroFile, reportMissing, fromCode))
 			{
-				InvalidateBufferChannel(channel);
-				if (transfer->WriteMacroRequest(channel, requestedMacroFile, reportMissing, fromCode))
+				if (reprap.Debug(moduleLinuxInterface))
 				{
-					if (reprap.Debug(moduleLinuxInterface))
-					{
-						reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (reportMissing: %s fromCode: %s)\n", requestedMacroFile, reportMissing ? "true" : "false", fromCode ? "true" : "false");
-					}
-					gb->RequestMacroFile(nullptr, reportMissing, fromCode);
+					reprap.GetPlatform().MessageF(DebugMessage, "Requesting macro file '%s' (reportMissing: %s fromCode: %s)\n", requestedMacroFile, reportMissing ? "true" : "false", fromCode ? "true" : "false");
 				}
+				gb->RequestMacroFile(nullptr, reportMissing, fromCode);
+				gb->Invalidate();
 			}
 
 			// Handle file abort requests
-			if (gb->IsAbortRequested())
+			if (gb->IsAbortRequested() && transfer->WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
 			{
-				InvalidateBufferChannel(channel);
-				if (transfer->WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
-				{
-					gb->AcknowledgeAbort();
-				}
+				gb->AcknowledgeAbort();
+				gb->Invalidate();
 			}
 
 			// Report stack levels when RRF detects a DSF reset
@@ -350,6 +361,13 @@ void LinuxInterface::Spin()
 			{
 				gb->AcknowledgeStackEvent();
 			}
+		}
+
+		// Send pause notification on demand
+		if (reportPause && transfer->WritePrintPaused(pauseFilePosition, pauseReason))
+		{
+			reportPause = false;
+			reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::file)->Invalidate();
 		}
 
 		// Start the next transfer
@@ -379,7 +397,9 @@ void LinuxInterface::Spin()
 			// Close all open G-code files
 			for (size_t i = 0; i < NumGCodeChannels; i++)
 			{
-				reprap.GetGCodes().GetGCodeBuffer((GCodeChannel)i)->AbortFile(true, false);
+				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((GCodeChannel)i);
+				gb->AbortFile(true, false);
+				gb->MessageAcknowledged(true);
 			}
 			reprap.GetGCodes().StopPrint(StopPrintReason::abort);
 		}
@@ -406,7 +426,7 @@ void LinuxInterface::Diagnostics(MessageType mtype)
 
 bool LinuxInterface::FillBuffer(GCodeBuffer &gb)
 {
-	if (gb.IsMacroRequested() || gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::file))
+	if (gb.IsInvalidated() || gb.IsMacroRequested() || gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::file))
 	{
 		// Don't interpret codes that are supposed to be suspended...
 		return false;
