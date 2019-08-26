@@ -11,7 +11,12 @@
 
 #ifndef VERSION
 # define MAIN_VERSION	"3.0alpha"
-# define VERSION MAIN_VERSION
+# ifdef USE_CAN0
+#  define VERSION_SUFFIX	" (CAN0)"
+# else
+#  define VERSION_SUFFIX	""
+# endif
+# define VERSION MAIN_VERSION VERSION_SUFFIX
 #endif
 
 #ifndef DATE

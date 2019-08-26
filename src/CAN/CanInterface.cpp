@@ -34,8 +34,19 @@ constexpr uint32_t MaxRequestSendWait = 50;		// milliseconds
 
 //#define CAN_DEBUG
 
+#ifdef USE_CAN0
+
+Mcan* const MCAN_MODULE = MCAN0;
+constexpr IRQn MCanIRQn = MCAN0_INT0_IRQn;
+#define MCAN_INT0_Handler	MCAN0_INT0_Handler
+
+#else
+
 Mcan* const MCAN_MODULE = MCAN1;
 constexpr IRQn MCanIRQn = MCAN1_INT0_IRQn;
+#define MCAN_INT0_Handler	MCAN1_INT0_Handler
+
+#endif
 
 static mcan_module mcan_instance;
 
@@ -146,8 +157,13 @@ void CanInterface::Init()
 	CanMessageBuffer::Init(NumCanBuffers);
 	pendingBuffers = nullptr;
 
+#ifdef USE_CAN0
+	ConfigurePin(APIN_CAN0_TX);
+	ConfigurePin(APIN_CAN0_RX);
+#else
 	ConfigurePin(APIN_CAN1_TX);
 	ConfigurePin(APIN_CAN1_RX);
+#endif
 	pmc_enable_upll_clock();			// configure_mcan sets up PCLK5 to be the UPLL divided by something, so make sure the UPLL is running
 	configure_mcan();
 
@@ -223,7 +239,7 @@ static status_code mcan_fd_send_ext_message(uint32_t id_value, const uint8_t *da
 }
 
 // Interrupt handler for MCAN, including RX,TX,ERROR and so on processes
-void MCAN1_INT0_Handler(void)
+void MCAN_INT0_Handler(void)
 {
 	const uint32_t status = mcan_read_interrupt_status(&mcan_instance);
 
