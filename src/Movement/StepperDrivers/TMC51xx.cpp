@@ -225,7 +225,7 @@ constexpr uint32_t DefaultChopConfReg = (1 << CHOPCONF_TBL_SHIFT) | (3 << CHOPCO
 constexpr uint8_t REGNUM_COOLCONF = 0x6D;
 constexpr uint32_t COOLCONF_SGFILT = 1 << 24;				// set to update stallGuard status every 4 full steps instead of every full step
 constexpr uint32_t COOLCONF_SGT_SHIFT = 16;
-constexpr uint32_t COOLCONF_SGT_MASK = 128 << COOLCONF_SGT_SHIFT;	// stallguard threshold (signed)
+constexpr uint32_t COOLCONF_SGT_MASK = 127 << COOLCONF_SGT_SHIFT;	// stallguard threshold (signed)
 
 constexpr uint32_t DefaultCoolConfReg = 0;
 
@@ -391,11 +391,11 @@ const uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 uint16_t TmcDriverState::numTimeouts = 0;								// how many times a transfer timed out
 
 // Initialise the state of the driver and its CS pin
-void TmcDriverState::Init(uint32_t p_axisNumber)
+void TmcDriverState::Init(uint32_t p_driverNumber)
 pre(!driversPowered)
 {
-	axisNumber = p_axisNumber;
-	driverBit = 1ul << p_axisNumber;
+	axisNumber = p_driverNumber;										// axes are mapped straight through to drivers initially
+	driverBit = 1ul << p_driverNumber;
 	enabled = false;
 	registersToUpdate = newRegistersToUpdate = 0;
 	motorCurrent = 0;
@@ -688,7 +688,7 @@ void TmcDriverState::Enable(bool en)
 // Read the status
 uint32_t TmcDriverState::ReadLiveStatus() const
 {
-	return readRegisters[ReadDrvStat] & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
+	return readRegisters[ReadDrvStat] & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
 }
 
 // Read the status
@@ -697,7 +697,7 @@ uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep)
 	TaskCriticalSectionLocker lock;
 	const uint32_t status = accumulatedReadRegisters[ReadDrvStat];
 	accumulatedReadRegisters[ReadDrvStat] = (status & bitsToKeep) | readRegisters[ReadDrvStat];		// so that the next call to ReadAccumulatedStatus isn't missing some bits
-	return status & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
+	return status & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
 }
 
 // Append the driver status to a string, and reset the min/max load values
@@ -828,8 +828,8 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock)
 
 	// Get the full step interval, we will need it later
 	const uint32_t interval =
-#if defined(SAME51) || defined(SAMC21)
-								reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
+#if SAME51 || SAMC21
+								moveInstance->GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
 #else
 								reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
 #endif
@@ -886,14 +886,14 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock)
 #endif
 	}
 
-// Deal with the stall status
+	// Deal with the stall status
 	if (   (rcvDataBlock[0] & (1u << 2)) != 0							// if the status indicates stalled
 		&& interval != 0
 		&& interval <= maxStallStepInterval								// if the motor speed is high enough to get a reliable stall indication
 	   )
-
 	{
 		readRegisters[ReadDrvStat] |= TMC_RR_SG;
+		accumulatedReadRegisters[ReadDrvStat] |= TMC_RR_SG;
 		EndstopOrZProbe::UpdateStalledDrivers(driverBit, true);
 	}
 	else
@@ -1318,7 +1318,7 @@ namespace SmartDrivers
 		driversState = DriversState::noPower;
 		for (size_t driver = 0; driver < numTmc51xxDrivers; ++driver)
 		{
-			driverStates[driver].Init(driver);						// axes are mapped straight through to drivers initially
+			driverStates[driver].Init(driver);
 		}
 
 #if SAME70

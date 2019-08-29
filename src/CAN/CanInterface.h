@@ -26,9 +26,17 @@ namespace CanInterface
 
 	void Init();
 	CanAddress GetCanAddress();
-	void SendMotion(CanMessageBuffer *buf);
 	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, const StringRef& reply);
 	void SendResponse(CanMessageBuffer *buf);
+
+	// Motor control functions
+	void SendMotion(CanMessageBuffer *buf);
+	void DisableRemoteDriver(DriverId driver);
+	void SetRemoteDriverIdle(DriverId driver);
+	void SetRemoteStandstillCurrentPercent(DriverId driver, float standstillCurrentFraction);
+	void UpdateRemoteDriverCurrent(DriverId driver, float motorCurrent);
+	bool SetRemoteDriverMicrostepping(DriverId driver, int microsteps, bool interp);
+	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply);
 }
 
 #endif

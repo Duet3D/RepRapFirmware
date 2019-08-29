@@ -27,9 +27,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 		fname.copy("Duet3Firmware_");
 		fname.catn(msg.boardType, msg.GetBoardTypeLength(buf->dataLength));
 		fname.cat(".bin");
-#if defined(DUET3_V05)
-		// TODO
-#elif defined(DUET3_V03) || defined(DUET3_V06)
+#if HAS_MASS_STORAGE
 		// The following code fetches the firmware file from the local SD card
 		FileStore * const f = reprap.GetPlatform().OpenSysFile(fname.c_str(), OpenMode::read);
 		if (f != nullptr)
@@ -94,6 +92,8 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 			f->Close();
 		}
 		else
+#else
+		//TODO get the firmware file contents from the SBC
 #endif
 		{
 			CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(CanId::MasterAddress, src);

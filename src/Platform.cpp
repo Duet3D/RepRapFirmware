@@ -76,6 +76,7 @@
 
 #if SUPPORT_CAN_EXPANSION
 # include "CAN/CanMessageGenericConstructor.h"
+# include "CAN/CanInterface.h"
 #endif
 
 #include <climits>
@@ -1496,34 +1497,6 @@ void Platform::ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const 
 
 #endif
 
-#if HAS_STALL_DETECT
-
-// Return true if any motor driving this axis is stalled
-bool Platform::AnyAxisMotorStalled(size_t drive) const
-{
-	if (drive < reprap.GetGCodes().GetTotalAxes())
-	{
-		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
-		{
-			const DriverId driver = axisDrivers[drive].driverNumbers[i];
-			if (driver.IsLocal() && driver.localDriver < numSmartDrivers && (SmartDrivers::GetLiveStatus(driver.localDriver) & TMC_RR_SG) != 0)
-			{
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
-// Return true if the motor driving this extruder is stalled
-bool Platform::ExtruderMotorStalled(size_t extruder) const pre(drive < DRIVES)
-{
-	const DriverId driver = extruderDrivers[extruder];
-	return driver.IsLocal() && driver.localDriver < numSmartDrivers && (SmartDrivers::GetLiveStatus(driver.localDriver) & TMC_RR_SG) != 0;
-}
-
-#endif
-
 #if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
 
 bool Platform::HasVinPower() const
@@ -2566,8 +2539,10 @@ bool Platform::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float 
 
 #endif
 
-// Function to identfy and iterate through all local drivers attached to an axis or extruder
-void Platform::IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> func)
+#if SUPPORT_CAN_EXPANSION
+
+// Function to identify and iterate through all drivers attached to an axis or extruder
+void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc, std::function<void(DriverId)> remoteFunc)
 {
 	if (axisOrExtruder < MaxAxes)
 	{
@@ -2576,7 +2551,11 @@ void Platform::IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uin
 			const DriverId id = axisDrivers[axisOrExtruder].driverNumbers[i];
 			if (id.IsLocal())
 			{
-				func(id.localDriver);
+				localFunc(id.localDriver);
+			}
+			else
+			{
+				remoteFunc(id);
 			}
 		}
 	}
@@ -2585,10 +2564,36 @@ void Platform::IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uin
 		const DriverId id = extruderDrivers[axisOrExtruder - MaxAxes];
 		if (id.IsLocal())
 		{
-			func(id.localDriver);
+			localFunc(id.localDriver);
+		}
+		else
+		{
+			remoteFunc(id);
 		}
 	}
 }
+
+#else
+
+// Function to identify and iterate through all drivers attached to an axis or extruder
+void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc)
+{
+	if (axisOrExtruder < MaxAxes)
+	{
+		for (size_t i = 0; i < axisDrivers[axisOrExtruder].numDrivers; ++i)
+		{
+			const DriverId id = axisDrivers[axisOrExtruder].driverNumbers[i];
+			localFunc(id.localDriver);
+		}
+	}
+	else if (axisOrExtruder < MaxAxesPlusExtruders)
+	{
+		const DriverId id = extruderDrivers[axisOrExtruder - MaxAxes];
+		localFunc(id.localDriver);
+	}
+}
+
+#endif
 
 // This is called from the step ISR as well as other places, so keep it fast
 // If drive >= DRIVES then we are setting an individual motor direction
@@ -2681,10 +2686,14 @@ void Platform::EnableLocalDrivers(size_t axisOrExtruder)
 }
 
 // Disable the drivers for a drive
-//TODO handle remote drivers
 void Platform::DisableDrivers(size_t axisOrExtruder)
 {
-	IterateLocalDrivers(axisOrExtruder, [this](uint8_t driver) { DisableOneLocalDriver(driver); });
+	IterateDrivers(axisOrExtruder,
+					[this](uint8_t driver) { DisableOneLocalDriver(driver); }
+#if SUPPORT_CAN_EXPANSION
+					, [this](DriverId driver) { CanInterface::DisableRemoteDriver(driver); }
+#endif
+				  );
 	driverState[axisOrExtruder] = DriverStatus::disabled;
 }
 
@@ -2704,9 +2713,9 @@ void Platform::EmergencyDisableDrivers()
 
 void Platform::DisableAllDrivers()
 {
-	for (size_t axisOrextruder = 0; axisOrextruder < MaxAxesPlusExtruders; axisOrextruder++)
+	for (size_t axisOrExtruder = 0; axisOrExtruder < MaxAxesPlusExtruders; axisOrExtruder++)
 	{
-		DisableDrivers(axisOrextruder);
+		DisableDrivers(axisOrExtruder);
 	}
 }
 
@@ -2728,7 +2737,12 @@ void Platform::SetDriversIdle()
 			{
 				driverState[axisOrExtruder] = DriverStatus::idle;
 				const float current = motorCurrents[axisOrExtruder] * idleCurrentFactor;
-				IterateLocalDrivers(axisOrExtruder, [this, current](uint8_t driver) { UpdateMotorCurrent(driver, current); });
+				IterateDrivers(axisOrExtruder,
+								[this, current](uint8_t driver) { UpdateMotorCurrent(driver, current); }
+#if SUPPORT_CAN_EXPANSION
+								, [this](DriverId driver) { CanInterface::SetRemoteDriverIdle(driver); }
+#endif
+							  );
 			}
 		}
 	}
@@ -2757,7 +2771,7 @@ void Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, in
 		return;
 	}
 
-	IterateLocalDrivers(axisOrExtruder,
+	IterateDrivers(axisOrExtruder,
 							[this, axisOrExtruder, code](uint8_t driver)
 							{
 								if (code == 917)
@@ -2771,6 +2785,19 @@ void Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, in
 									UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
 								}
 							}
+#if SUPPORT_CAN_EXPANSION
+						  , [this, axisOrExtruder, code](DriverId driver)
+							{
+								if (code == 917)
+								{
+									CanInterface::SetRemoteStandstillCurrentPercent(driver, standstillCurrentFraction[axisOrExtruder]);
+								}
+								else
+								{
+									CanInterface::UpdateRemoteDriverCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
+								}
+							}
+#endif
 						);
 }
 
@@ -2876,7 +2903,12 @@ void Platform::SetIdleCurrentFactor(float f)
 		if (driverState[axisOrExtruder] == DriverStatus::idle)
 		{
 			const float requiredCurrent = motorCurrents[axisOrExtruder] * idleCurrentFactor;
-			IterateLocalDrivers(axisOrExtruder, [this, requiredCurrent](uint8_t driver){ UpdateMotorCurrent(driver, requiredCurrent); });
+			IterateDrivers(axisOrExtruder,
+							[this, requiredCurrent](uint8_t driver){ UpdateMotorCurrent(driver, requiredCurrent); }
+#if SUPPORT_CAN_EXPANSION
+								, [this, requiredCurrent](DriverId driver) { CanInterface::UpdateRemoteDriverCurrent(driver, requiredCurrent); }
+#endif
+						  );
 		}
 	}
 }
@@ -2929,7 +2961,12 @@ bool Platform::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool inte
 	//TODO check that it is a valid microstep setting
 	microstepping[axisOrExtruder] = (interp) ? microsteps | 0x8000 : microsteps;
 	bool ok = true;
-	IterateLocalDrivers(axisOrExtruder, [this, microsteps, interp, &ok](uint8_t driver){ ok = SetDriverMicrostepping(driver, microsteps, interp) && ok; });
+	IterateDrivers(axisOrExtruder,
+					[this, microsteps, interp, &ok](uint8_t driver){ ok = SetDriverMicrostepping(driver, microsteps, interp) && ok; }
+#if SUPPORT_CAN_EXPANSION
+					, [this, microsteps, interp, &ok](DriverId driver){ ok = CanInterface::SetRemoteDriverMicrostepping(driver, microsteps, interp) && ok; }
+#endif
+				  );
 	return ok;
 }
 
@@ -4091,18 +4128,12 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 	}
 
 	// Now look for axes
-	for (size_t i = 0; i < reprap.GetGCodes().GetTotalAxes(); ++i)
+	for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
 	{
-		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[i]))
+		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[axis]))
 		{
-			for (size_t j = 0; j < axisDrivers[i].numDrivers; ++j)
-			{
-				const DriverId driver = axisDrivers[i].driverNumbers[j];
-				if (driver.IsLocal() && driver.localDriver < numSmartDrivers)
-				{
-					SetBit(drivers, driver.localDriver);
-				}
-			}
+			//TODO handle remote drivers too
+			IterateLocalDrivers(axis, [&drivers](uint8_t driver){ SetBit(drivers, driver); });
 		}
 	}
 
@@ -4117,10 +4148,11 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 			if (extruderNumbers[i] < MaxExtruders)
 			{
 				const DriverId driver = GetExtruderDriver(extruderNumbers[i]);
-				if (driver.IsLocal() && driver.localDriver < numSmartDrivers)
+				if (driver.IsLocal())
 				{
 					SetBit(drivers, driver.localDriver);
 				}
+				//TODO handle remote extruder drives too
 			}
 		}
 	}

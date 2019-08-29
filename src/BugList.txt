@@ -231,6 +231,8 @@ Planned for 3.0:
 - filament sensor errors run filamenterror0.g etc. in preference to pause.g
 - ignore M587 etc. commands in config.g
 - option to use Z endstop as emergency backup when probing with bltouch, IR sensor etc.
+- Option to invert PS_ON pin sense
+- Firmware retraction parameters per tool
 
 - Dynamic height map allocation, https://forum.duet3d.com/topic/11449/possible-increase-possible-441-points-for-bed-mesh-compensation
 - Bug: in CNC mode, if a move goes out of bounds then the spindle is stopped immediately but moves in the queue continue to execute. Need to go to a special state to empty the queue, and then turn the spindle off?

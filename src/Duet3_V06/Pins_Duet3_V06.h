@@ -10,10 +10,17 @@ const size_t NumFirmwareUpdateModules = 1;
 // Features definition
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		0
-#define HAS_LINUX_INTERFACE		0	//TEMP! until we can enable both mass storage and Linux interface
 #define HAS_CPU_TEMP_SENSOR		1
+
+#ifdef SD_SUPPORT
+#define HAS_LINUX_INTERFACE		0
 #define HAS_MASS_STORAGE		1
+#define HAS_HIGH_SPEED_SD		1
+#else
+#define HAS_LINUX_INTERFACE		1
+#define HAS_MASS_STORAGE		0
 #define HAS_HIGH_SPEED_SD		0
+#endif
 
 #define SUPPORT_TMC51xx			1
 #define TMC51xx_USES_USART		1

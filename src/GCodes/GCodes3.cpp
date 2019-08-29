@@ -32,6 +32,10 @@
 # include "Movement/StepperDrivers/TMC51xx.h"
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+# include "CAN/CanInterface.h"
+#endif
+
 #include "Wire.h"
 
 // Deal with G60
@@ -1067,7 +1071,7 @@ GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
 }
 
 // Deal with M569
-GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
+GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (gb.Seen('P'))
 	{
@@ -1075,204 +1079,200 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb,const  StringRef& reply)
 #if SUPPORT_CAN_EXPANSION
 		if (id.boardAddress != 0)
 		{
-			reply.copy("M569 not yet implemented for remote drivers");
-			return GCodeResult::error;
+			return CanInterface::ConfigureRemoteDriver(id, gb, reply);
 		}
-		else
 #endif
+		const uint8_t drive = id.localDriver;
+		if (drive < MaxTotalDrivers)
 		{
-			const uint8_t drive = id.localDriver;
-			if (drive < MaxTotalDrivers)
+			bool seen = false;
+			if (gb.Seen('S'))
 			{
-				bool seen = false;
-				if (gb.Seen('S'))
+				if (!LockMovementAndWaitForStandstill(gb))
 				{
-					if (!LockMovementAndWaitForStandstill(gb))
-					{
-						return GCodeResult::notFinished;
-					}
-					seen = true;
-					platform.SetDirectionValue(drive, gb.GetIValue() != 0);
+					return GCodeResult::notFinished;
 				}
-				if (gb.Seen('R'))
+				seen = true;
+				platform.SetDirectionValue(drive, gb.GetIValue() != 0);
+			}
+			if (gb.Seen('R'))
+			{
+				if (!LockMovementAndWaitForStandstill(gb))
 				{
-					if (!LockMovementAndWaitForStandstill(gb))
-					{
-						return GCodeResult::notFinished;
-					}
-					seen = true;
-					platform.SetEnableValue(drive, (int8_t)gb.GetIValue());
+					return GCodeResult::notFinished;
 				}
-				if (gb.Seen('T'))
+				seen = true;
+				platform.SetEnableValue(drive, (int8_t)gb.GetIValue());
+			}
+			if (gb.Seen('T'))
+			{
+				seen = true;
+				float timings[4];
+				size_t numTimings = ARRAY_SIZE(timings);
+				gb.GetFloatArray(timings, numTimings, true);
+				if (numTimings != ARRAY_SIZE(timings))
 				{
-					seen = true;
-					float timings[4];
-					size_t numTimings = ARRAY_SIZE(timings);
-					gb.GetFloatArray(timings, numTimings, true);
-					if (numTimings != ARRAY_SIZE(timings))
-					{
-						reply.copy("bad timing parameter");
-						return GCodeResult::error;
-					}
-					platform.SetDriverStepTiming(drive, timings);
+					reply.copy("bad timing parameter");
+					return GCodeResult::error;
 				}
+				platform.SetDriverStepTiming(drive, timings);
+			}
 
 #if HAS_SMART_DRIVERS
+			{
+				uint32_t val;
+				if (gb.TryGetUIValue('D', val, seen))	// set driver mode
 				{
-					uint32_t val;
-					if (gb.TryGetUIValue('D', val, seen))	// set driver mode
+					if (!SmartDrivers::SetDriverMode(drive, val))
 					{
-						if (!SmartDrivers::SetDriverMode(drive, val))
-						{
-							reply.printf("Driver %u does not support mode '%s'", drive, TranslateDriverMode(val));
-							return GCodeResult::error;
-						}
+						reply.printf("Driver %u does not support mode '%s'", drive, TranslateDriverMode(val));
+						return GCodeResult::error;
 					}
+				}
 
-					if (gb.TryGetUIValue('C', val, seen))		// set chopper control register
+				if (gb.TryGetUIValue('C', val, seen))		// set chopper control register
+				{
+					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::chopperControl, val))
 					{
-						if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::chopperControl, val))
-						{
-							reply.printf("Bad ccr for driver %u", drive);
-							return GCodeResult::error;
-						}
+						reply.printf("Bad ccr for driver %u", drive);
+						return GCodeResult::error;
 					}
+				}
 
-					if (gb.TryGetUIValue('F', val, seen))		// set off time
+				if (gb.TryGetUIValue('F', val, seen))		// set off time
+				{
+					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::toff, val))
 					{
-						if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::toff, val))
-						{
-							reply.printf("Bad off time for driver %u", drive);
-							return GCodeResult::error;
-						}
+						reply.printf("Bad off time for driver %u", drive);
+						return GCodeResult::error;
 					}
+				}
 
-					if (gb.TryGetUIValue('B', val, seen))		// set blanking time
+				if (gb.TryGetUIValue('B', val, seen))		// set blanking time
+				{
+					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tblank, val))
 					{
-						if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tblank, val))
-						{
-							reply.printf("Bad blanking time for driver %u", drive);
-							return GCodeResult::error;
-						}
+						reply.printf("Bad blanking time for driver %u", drive);
+						return GCodeResult::error;
 					}
+				}
 
-					if (gb.TryGetUIValue('V', val, seen))		// set microstep interval for changing from stealthChop to spreadCycle
+				if (gb.TryGetUIValue('V', val, seen))		// set microstep interval for changing from stealthChop to spreadCycle
+				{
+					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tpwmthrs, val))
 					{
-						if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tpwmthrs, val))
-						{
-							reply.printf("Bad mode change microstep interval for driver %u", drive);
-							return GCodeResult::error;
-						}
+						reply.printf("Bad mode change microstep interval for driver %u", drive);
+						return GCodeResult::error;
 					}
+				}
 
 #if SUPPORT_TMC51xx
-					if (gb.TryGetUIValue('H', val, seen))		// set microstep interval for changing from stealthChop to spreadCycle
-					{
-						if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::thigh, val))
-						{
-							reply.printf("Bad high speed microstep interval for driver %u", drive);
-							return GCodeResult::error;
-						}
-					}
-#endif
-				}
-
-				if (gb.Seen('Y'))								// set spread cycle hysteresis
+				if (gb.TryGetUIValue('H', val, seen))		// set microstep interval for changing from stealthChop to spreadCycle
 				{
-					seen = true;
-					uint32_t hvalues[3];
-					size_t numHvalues = 3;
-					gb.GetUnsignedArray(hvalues, numHvalues, false);
-					if (numHvalues == 2 || numHvalues == 3)
+					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::thigh, val))
 					{
-						// There is a constraint on the sum of HSTRT and HEND, so set HSTART then HEND then HSTART again because one may go up and the other down
-						(void)SmartDrivers::SetRegister(drive, SmartDriverRegister::hstart, hvalues[0]);
-						bool ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hend, hvalues[1]);
-						if (ok)
-						{
-							ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hstart, hvalues[0]);
-						}
-						if (ok && numHvalues == 3)
-						{
-							ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hdec, hvalues[2]);
-						}
-						if (!ok)
-						{
-							reply.printf("Bad hysteresis setting for driver %u", drive);
-							return GCodeResult::error;
-						}
-					}
-					else
-					{
-						reply.copy("Expected 2 or 3 H values");
+						reply.printf("Bad high speed microstep interval for driver %u", drive);
 						return GCodeResult::error;
 					}
 				}
 #endif
-				if (!seen)
+			}
+
+			if (gb.Seen('Y'))								// set spread cycle hysteresis
+			{
+				seen = true;
+				uint32_t hvalues[3];
+				size_t numHvalues = 3;
+				gb.GetUnsignedArray(hvalues, numHvalues, false);
+				if (numHvalues == 2 || numHvalues == 3)
 				{
-					reply.printf("Drive %u runs %s, active %s enable, step timing ",
-									drive,
-									(platform.GetDirectionValue(drive)) ? "forwards" : "in reverse",
-									(platform.GetEnableValue(drive)) ? "high" : "low");
-									float timings[4];
-					const bool isSlowDriver = platform.GetDriverStepTiming(drive, timings);
-					if (isSlowDriver)
+					// There is a constraint on the sum of HSTRT and HEND, so set HSTART then HEND then HSTART again because one may go up and the other down
+					(void)SmartDrivers::SetRegister(drive, SmartDriverRegister::hstart, hvalues[0]);
+					bool ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hend, hvalues[1]);
+					if (ok)
 					{
-						reply.catf("%.1f:%.1f:%.1f:%.1fus", (double)timings[0], (double)timings[1], (double)timings[2], (double)timings[3]);
+						ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hstart, hvalues[0]);
 					}
-					else
+					if (ok && numHvalues == 3)
 					{
-						reply.cat("fast");
+						ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hdec, hvalues[2]);
 					}
+					if (!ok)
+					{
+						reply.printf("Bad hysteresis setting for driver %u", drive);
+						return GCodeResult::error;
+					}
+				}
+				else
+				{
+					reply.copy("Expected 2 or 3 H values");
+					return GCodeResult::error;
+				}
+			}
+#endif
+			if (!seen)
+			{
+				reply.printf("Drive %u runs %s, active %s enable, step timing ",
+								drive,
+								(platform.GetDirectionValue(drive)) ? "forwards" : "in reverse",
+								(platform.GetEnableValue(drive)) ? "high" : "low");
+								float timings[4];
+				const bool isSlowDriver = platform.GetDriverStepTiming(drive, timings);
+				if (isSlowDriver)
+				{
+					reply.catf("%.1f:%.1f:%.1f:%.1fus", (double)timings[0], (double)timings[1], (double)timings[2], (double)timings[3]);
+				}
+				else
+				{
+					reply.cat("fast");
+				}
 #if HAS_SMART_DRIVERS
-					if (drive < platform.GetNumSmartDrivers())
-					{
-						reply.catf(", mode %s, ccr 0x%05" PRIx32 ", toff %" PRIu32 ", tblank %" PRIu32 ", hstart/hend/hdec %" PRIu32 "/%" PRIu32 "/%" PRIu32,
-								TranslateDriverMode(SmartDrivers::GetDriverMode(drive)),
-								SmartDrivers::GetRegister(drive, SmartDriverRegister::chopperControl),
-								SmartDrivers::GetRegister(drive, SmartDriverRegister::toff),
-								SmartDrivers::GetRegister(drive, SmartDriverRegister::tblank),
-								SmartDrivers::GetRegister(drive, SmartDriverRegister::hstart),
-								SmartDrivers::GetRegister(drive, SmartDriverRegister::hend),
-								SmartDrivers::GetRegister(drive, SmartDriverRegister::hdec)
-							);
+				if (drive < platform.GetNumSmartDrivers())
+				{
+					reply.catf(", mode %s, ccr 0x%05" PRIx32 ", toff %" PRIu32 ", tblank %" PRIu32 ", hstart/hend/hdec %" PRIu32 "/%" PRIu32 "/%" PRIu32,
+							TranslateDriverMode(SmartDrivers::GetDriverMode(drive)),
+							SmartDrivers::GetRegister(drive, SmartDriverRegister::chopperControl),
+							SmartDrivers::GetRegister(drive, SmartDriverRegister::toff),
+							SmartDrivers::GetRegister(drive, SmartDriverRegister::tblank),
+							SmartDrivers::GetRegister(drive, SmartDriverRegister::hstart),
+							SmartDrivers::GetRegister(drive, SmartDriverRegister::hend),
+							SmartDrivers::GetRegister(drive, SmartDriverRegister::hdec)
+						);
 
 #if SUPPORT_TMC2660
+					{
+						const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
+						if (mstepPos < 1024)
 						{
-							const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
-							if (mstepPos < 1024)
-							{
-								reply.catf(", pos %" PRIu32, mstepPos);
-							}
-							else
-							{
-								reply.cat(", pos unknown");
-							}
+							reply.catf(", pos %" PRIu32, mstepPos);
 						}
+						else
+						{
+							reply.cat(", pos unknown");
+						}
+					}
 #elif SUPPORT_TMC22xx || SUPPORT_TMC51xx
-						{
-							const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
-							const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
-							const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
-							bool bdummy;
-							const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * platform.DriveStepsPerUnit(axis));
-							reply.catf(", pos %" PRIu32", tpwmthrs %" PRIu32 " (%.1f mm/sec)", mstepPos, tpwmthrs, (double)mmPerSec);
-						}
+					{
+						const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
+						const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
+						const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
+						bool bdummy;
+						const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * platform.DriveStepsPerUnit(axis));
+						reply.catf(", pos %" PRIu32", tpwmthrs %" PRIu32 " (%.1f mm/sec)", mstepPos, tpwmthrs, (double)mmPerSec);
+					}
 #endif
 
 #if SUPPORT_TMC51xx
-						{
-							const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
-							const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
-							bool bdummy;
-							const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * platform.DriveStepsPerUnit(axis));
-							reply.catf(", thigh %" PRIu32 " (%.1f mm/sec)", thigh, (double)mmPerSec);
-						}
-#endif
+					{
+						const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
+						const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
+						bool bdummy;
+						const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * platform.DriveStepsPerUnit(axis));
+						reply.catf(", thigh %" PRIu32 " (%.1f mm/sec)", thigh, (double)mmPerSec);
 					}
 #endif
 				}
+#endif
 			}
 		}
 	}

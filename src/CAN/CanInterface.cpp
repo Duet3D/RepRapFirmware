@@ -485,6 +485,39 @@ extern "C" void CanReceiverLoop(void *)
 	}
 }
 
+void CanInterface::DisableRemoteDriver(DriverId driver)
+{
+	//TODO
+}
+
+void CanInterface::SetRemoteDriverIdle(DriverId driver)
+{
+	//TODO
+}
+
+void CanInterface::SetRemoteStandstillCurrentPercent(DriverId driver, float standstillCurrentFraction)
+{
+	//TODO
+}
+
+void CanInterface::UpdateRemoteDriverCurrent(DriverId driver, float motorCurrent)
+{
+	//TODO
+}
+
+bool CanInterface::SetRemoteDriverMicrostepping(DriverId driver, int microsteps, bool interp)
+{
+	//TODO
+	return true;
+}
+
+// Handle M569 for a remote driver
+GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply)
+{
+	reply.copy("M569 not yet implemented for remote drivers");
+	return GCodeResult::error;
+}
+
 #endif
 
 // End

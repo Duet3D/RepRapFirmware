@@ -582,14 +582,16 @@ private:
 	GCodeResult ConfigureFan(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult ConfigureGpioOrServo(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply);
 
-	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> func);
+#if SUPPORT_CAN_EXPANSION
+	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc, std::function<void(DriverId)> remoteFunc);
+	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> func) { IterateDrivers(axisOrExtruder, func, [](DriverId){}); }
+#else
+	void IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc);
+	void IterateLocalDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> func) { IterateDrivers(axisOrExtruder, func); }
+#endif
 
 #if HAS_SMART_DRIVERS
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char* text, bool& reported);
-#endif
-#if HAS_STALL_DETECT
-	bool AnyAxisMotorStalled(size_t drive) const pre(drive < DRIVES);
-	bool ExtruderMotorStalled(size_t extruder) const pre(extruder < MaxExtruders);
 #endif
 
 	// These are the structures used to hold our non-volatile data.
