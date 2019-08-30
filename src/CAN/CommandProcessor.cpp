@@ -14,6 +14,9 @@
 #include "RepRap.h"
 #include "Platform.h"
 #include "Heating/Heat.h"
+#if defined(DUET3_V05)
+# include "Linux/LinuxInterface.h"
+#endif
 
 // Handle a firmware update request and free the buffer
 static void HandleFirmwareBlockRequest(CanMessageBuffer *buf)
@@ -27,15 +30,56 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 		fname.copy("Duet3Firmware_");
 		fname.catn(msg.boardType, msg.GetBoardTypeLength(buf->dataLength));
 		fname.cat(".bin");
+
+		uint32_t fileOffset = msg.fileOffset;
+		uint32_t lreq = msg.lengthRequested;
 #if defined(DUET3_V05)
-		// TODO
+		// Request another chunk of data from the given file
+		while (lreq > 0)
+		{
+			reprap.GetLinuxInterface().RequestFileChunk(fname.c_str(), fileOffset, lreq, RTOSIface::GetCurrentTask());
+			TaskBase::Take();
+
+			int bytesRead;
+			uint32_t fileLength = 0;
+			const char *data = reprap.GetLinuxInterface().GetFileChunk(bytesRead, fileLength);
+			if (bytesRead < 0)
+			{
+				break;
+			}
+
+			size_t bytesSent = 0;
+			for (;;)
+			{
+				CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(CanId::MasterAddress, src);
+				const size_t lengthToSend = min<size_t>(lreq, sizeof(msgp->data));
+				memcpy(msgp->data, data + bytesSent, lengthToSend);
+				bytesSent += lengthToSend;
+				msgp->dataLength = lengthToSend;
+				msgp->err = CanMessageFirmwareUpdateResponse::ErrNone;
+				msgp->fileLength = fileLength;
+				msgp->fileOffset = fileOffset;
+				buf->dataLength = msgp->GetActualDataLength();
+				CanInterface::SendResponse(buf);
+				fileOffset += lengthToSend;
+				lreq -= lengthToSend;
+				if (lreq == 0)
+				{
+					break;
+				}
+				while ((buf = CanMessageBuffer::Allocate()) == nullptr)
+				{
+					delay(1);
+				}
+			}
+		}
+
+		if (lreq > 0)
 #elif defined(DUET3_V03) || defined(DUET3_V06)
 		// The following code fetches the firmware file from the local SD card
 		FileStore * const f = reprap.GetPlatform().OpenSysFile(fname.c_str(), OpenMode::read);
 		if (f != nullptr)
 		{
-			uint32_t fileOffset = msg.fileOffset;
-			uint32_t lreq = msg.lengthRequested;
 			const uint32_t fileLength = f->Length();
 			if (fileOffset >= fileLength)
 			{

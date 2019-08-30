@@ -309,6 +309,20 @@ void DataTransfer::ReadAssignFilament(int& extruder, StringRef& filamentName)
 	filamentName.copy(name, header->filamentLength);
 }
 
+void DataTransfer::ReadFileChunk(char *buffer, int32_t& dataLength, uint32_t& fileLength)
+{
+	// Read header
+	const FileChunk *header = ReadDataHeader<FileChunk>();
+	dataLength = header->dataLength;
+	fileLength = header->fileLength;
+
+	// Read file chunk
+	if (header->dataLength > 0)
+	{
+		memcpy(buffer, ReadData(header->dataLength), header->dataLength);
+	}
+}
+
 void DataTransfer::ExchangeHeader()
 {
 	state = SpiState::ExchangingHeader;
@@ -591,7 +605,6 @@ bool DataTransfer::WriteCodeBufferUpdate(uint16_t bufferSpace)
 	header->bufferSpace = bufferSpace;
 	header->padding = 0;
 	return true;
-
 }
 
 bool DataTransfer::WriteCodeReply(MessageType type, OutputBuffer *&response)
@@ -801,6 +814,27 @@ bool DataTransfer::WriteLocked(GCodeChannel channel)
 	header->channel = channel;
 	header->paddingA = 0;
 	header->paddingB = 0;
+	return true;
+}
+
+bool DataTransfer::WriteFileChunkRequest(const char *filename, uint32_t offset, uint32_t maxLength)
+{
+	const size_t filenameLength = strlen(filename);
+	if (!CanWritePacket(sizeof(FileChunkRequest) + filenameLength))
+	{
+		return false;
+	}
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::RequestFileChunk, sizeof(FileChunkRequest) + filenameLength);
+
+	// Write header
+	FileChunkRequest *header = WriteDataHeader<FileChunkRequest>();
+	header->offset = offset;
+	header->maxLength = maxLength;
+	header->filenameLength = filenameLength;
+
+	// Write data
+	WriteData(filename, filenameLength);
 	return true;
 }
 

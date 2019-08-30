@@ -117,7 +117,8 @@ enum class FirmwareRequest : uint16_t
 	StackEvent = 6,			// Stack has been changed
 	PrintPaused = 7,		// Print has been paused
 	HeightMap = 8,			// Response to a heightmap request
-	Locked = 9				// Movement has been locked and machine is in standstill
+	Locked = 9,				// Movement has been locked and machine is in standstill
+	RequestFileChunk = 10,	// Request another chunk of a file
 };
 
 struct ReportStateHeader
@@ -190,6 +191,13 @@ struct PrintPausedHeader
 	uint16_t paddingB;
 };
 
+struct FileChunkRequest
+{
+	uint32_t offset;
+	uint32_t maxLength;
+	uint32_t filenameLength;
+};
+
 // Linux to RepRapFirmware
 enum class LinuxRequest : uint16_t
 {
@@ -208,8 +216,9 @@ enum class LinuxRequest : uint16_t
 	WriteIap = 12,								// Write another chunk of the IAP binary
 	StartIap = 13,								// Launch the IAP binary
 	AssignFilament = 14,						// Assign filament to an extruder
+	FileChunk = 15,								// Response to a file chunk request
 
-	InvalidRequest = 15
+	InvalidRequest = 16
 };
 
 enum CodeFlags : uint8_t
@@ -304,6 +313,12 @@ struct AssignFilamentHeader
 {
 	int32_t extruder;
 	uint32_t filamentLength;
+};
+
+struct FileChunk
+{
+	int32_t dataLength;
+	uint32_t fileLength;
 };
 
 #endif /* SRC_LINUX_MESSAGEFORMATS_H_ */

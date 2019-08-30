@@ -41,6 +41,7 @@ public:
 	void ReadHeightMap();									// Read heightmap parameters
 	void ReadLockUnlockRequest(GCodeChannel& channel);		// Read a lock/unlock request
 	void ReadAssignFilament(int& extruder, StringRef& filamentName);	// Read a request to assign the given filament to an extruder drive
+	void ReadFileChunk(char *buffer, int32_t& dataLength, uint32_t& fileLength);	// Read another chunk of a file
 
 	void ResendPacket(const PacketHeader *packet);
 	bool WriteObjectModel(uint8_t module, OutputBuffer *data);
@@ -52,6 +53,7 @@ public:
 	bool WritePrintPaused(FilePosition position, PrintPausedReason reason);
 	bool WriteHeightMap();
 	bool WriteLocked(GCodeChannel channel);
+	bool WriteFileChunkRequest(const char *filename, uint32_t offset, uint32_t maxLength);
 
 	static void SpiInterrupt();
 
