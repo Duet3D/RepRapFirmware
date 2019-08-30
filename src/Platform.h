@@ -383,13 +383,13 @@ public:
 	void DisableOneLocalDriver(size_t driver);
 	void EmergencyDisableDrivers();
 	void SetDriversIdle();
-	void SetMotorCurrent(size_t axisOrExtruder, float current, int code);
+	bool SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply);
 	float GetMotorCurrent(size_t axisOrExtruder, int code) const;
 	void SetIdleCurrentFactor(float f);
 	float GetIdleCurrentFactor() const
 		{ return idleCurrentFactor; }
 	bool SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode);
-	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode);
+	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode, const StringRef& reply);
 	unsigned int GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const;
 	void SetDriverStepTiming(size_t driver, const float microseconds[4]);
 	bool GetDriverStepTiming(size_t driver, float microseconds[4]) const;

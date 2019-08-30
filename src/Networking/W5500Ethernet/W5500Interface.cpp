@@ -134,10 +134,6 @@ GCodeResult W5500Interface::ReportProtocols(const StringRef& reply) const
 	reply.Clear();
 	for (size_t i = 0; i < NumProtocols; ++i)
 	{
-		if (i != 0)
-		{
-			reply.cat('\n');
-		}
 		ReportOneProtocol(i, reply);
 	}
 	return GCodeResult::ok;
@@ -147,11 +143,11 @@ void W5500Interface::ReportOneProtocol(NetworkProtocol protocol, const StringRef
 {
 	if (protocolEnabled[protocol])
 	{
-		reply.catf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
+		reply.lcatf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
 	}
 	else
 	{
-		reply.catf("%s is disabled", ProtocolNames[protocol]);
+		reply.lcatf("%s is disabled", ProtocolNames[protocol]);
 	}
 }
 

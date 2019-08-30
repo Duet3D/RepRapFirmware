@@ -53,7 +53,7 @@ bool CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb, const St
 	uint32_t paramBit = 1;
 	for (const ParamDescriptor *d = paramTable; d->letter != 0; ++d)
 	{
-		if (gb.Seen(d->letter))
+		if (d->letter >= 'A' && d->letter <= 'Z' && gb.Seen(d->letter))
 		{
 			bool overflowed;
 			switch (d->type)
@@ -149,6 +149,34 @@ bool CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb, const St
 					// We also use the reducedString type for sensor names, but they should't start with digits followed by '.'.
 					(void)IoPort::RemoveBoardAddress(str.GetRef());
 					overflowed = StoreValue(str.c_str(), str.strlen() + 1);
+				}
+				break;
+
+			case ParamDescriptor::uint32_array:
+			case ParamDescriptor::uint16_array:
+			case ParamDescriptor::uint8_array:
+				{
+					uint32_t arr[59];				// max size is 59 * uint8_t + 1 length byte + parameters present bitmap = 64
+					size_t siz = min<size_t>(ARRAY_SIZE(arr), d->maxArrayLength);
+					gb.GetUnsignedArray(arr, siz, false);
+					overflowed = StoreValue((uint8_t)siz);
+					for (size_t i = 0; i < siz; ++i)
+					{
+						overflowed = overflowed && StoreValue(&arr[i], d->ItemSize());
+					}
+				}
+				break;
+
+			case ParamDescriptor::float_array:
+				{
+					float arr[14];
+					size_t siz = min<size_t>(ARRAY_SIZE(arr), d->maxArrayLength);
+					gb.GetFloatArray(arr, siz, false);
+					overflowed = StoreValue((uint8_t)siz);
+					for (size_t i = 0; i < siz; ++i)
+					{
+						overflowed = overflowed && StoreValue(arr[i]);
+					}
 				}
 				break;
 

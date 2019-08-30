@@ -2454,13 +2454,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					}
 					seen = true;
 					const unsigned int microsteps = gb.GetUIValue();
-					if (ChangeMicrostepping(axis, microsteps, interp))
+					if (ChangeMicrostepping(axis, microsteps, interp, reply))
 					{
 						SetAxisNotHomed(axis);
 					}
 					else
 					{
-						reply.printf("Drive %c does not support %ux microstepping%s", axisLetters[axis], microsteps, ((interp) ? " with interpolation" : ""));
 						result = GCodeResult::error;
 					}
 				}
@@ -2478,9 +2477,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				gb.GetUnsignedArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					if (!ChangeMicrostepping(MaxAxes + e, eVals[e], interp))
+					if (!ChangeMicrostepping(MaxAxes + e, eVals[e], interp, reply))
 					{
-						reply.printf("Drive E%u does not support %ux microstepping%s", e, (unsigned int)eVals[e], ((interp) ? " with interpolation" : ""));
 						result = GCodeResult::error;
 					}
 				}
@@ -4135,7 +4133,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					platform.SetMotorCurrent(axis, gb.GetFValue(), code);
+					if (!platform.SetMotorCurrent(axis, gb.GetFValue(), code, reply))
+					{
+						result = GCodeResult::error;
+					}
 					seen = true;
 				}
 			}
@@ -4148,7 +4149,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				gb.GetFloatArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform.SetMotorCurrent(MaxAxes + e, eVals[e], code);
+					if (!platform.SetMotorCurrent(MaxAxes + e, eVals[e], code, reply))
+					{
+						result = GCodeResult::error;
+					}
 				}
 			}
 

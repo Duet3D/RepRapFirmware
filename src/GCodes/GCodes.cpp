@@ -2977,11 +2977,11 @@ void GCodes::DisableDrives()
 	SetAllAxesNotHomed();
 }
 
-bool GCodes::ChangeMicrostepping(size_t drive, unsigned int microsteps, bool interp) const
+bool GCodes::ChangeMicrostepping(size_t drive, unsigned int microsteps, bool interp, const StringRef& reply) const
 {
 	bool dummy;
 	const unsigned int oldSteps = platform.GetMicrostepping(drive, dummy);
-	const bool success = platform.SetMicrostepping(drive, microsteps, interp);
+	const bool success = platform.SetMicrostepping(drive, microsteps, interp, reply);
 	if (success)
 	{
 		// We changed the microstepping, so adjust the steps/mm to compensate

@@ -8,7 +8,9 @@
 #ifndef SRC_LINUX_DATATRANSFER_H_
 #define SRC_LINUX_DATATRANSFER_H_
 
-#include <cstddef>
+#include "RepRapFirmware.h"
+
+#if HAS_LINUX_INTERFACE
 
 #include "GCodes/GCodeFileInfo.h"
 #include "MessageFormats.h"
@@ -132,5 +134,7 @@ inline size_t DataTransfer::AddPadding(size_t length) const
 	size_t padding = 4 - length % 4;
 	return length + ((padding == 4) ? 0 : padding);
 }
+
+#endif	// HAS_LINUX_INTERFACE
 
 #endif /* SRC_LINUX_DATATRANSFER_H_ */

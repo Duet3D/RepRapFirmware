@@ -111,7 +111,14 @@ struct DriverId
 
 	bool IsLocal() const { return boardAddress == CanId::MasterAddress; }
 	bool IsRemote() const { return boardAddress != CanId::MasterAddress; }
+
+	bool operator<(const DriverId other) const
+	{
+		return boardAddress < other.boardAddress || (boardAddress == other.boardAddress && localDriver < other.localDriver);
+	}
+
 #else
+
 	void SetFromBinary(uint32_t val)
 	{
 		localDriver = (uint8_t)val;
@@ -126,6 +133,7 @@ struct DriverId
 
 	bool IsLocal() const { return true; }
 	bool IsRemote() const { return false; }
+
 #endif
 };
 

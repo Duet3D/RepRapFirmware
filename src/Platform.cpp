@@ -2688,12 +2688,19 @@ void Platform::EnableLocalDrivers(size_t axisOrExtruder)
 // Disable the drivers for a drive
 void Platform::DisableDrivers(size_t axisOrExtruder)
 {
+#if SUPPORT_CAN_EXPANSION
+	CanDriversList canDriversToDisable;
+
+	IterateDrivers(axisOrExtruder,
+					[this](uint8_t driver) { DisableOneLocalDriver(driver); },
+					[&canDriversToDisable](DriverId driver) { canDriversToDisable.AddEntry(driver); }
+				  );
+	CanInterface::DisableRemoteDrivers(canDriversToDisable);
+#else
 	IterateDrivers(axisOrExtruder,
 					[this](uint8_t driver) { DisableOneLocalDriver(driver); }
-#if SUPPORT_CAN_EXPANSION
-					, [this](DriverId driver) { CanInterface::DisableRemoteDriver(driver); }
-#endif
 				  );
+#endif
 	driverState[axisOrExtruder] = DriverStatus::disabled;
 }
 
@@ -2721,7 +2728,6 @@ void Platform::DisableAllDrivers()
 
 // Set drives to idle hold if they are enabled. If a drive is disabled, leave it alone.
 // Must not be called from an ISR, or with interrupts disabled.
-//TODO handle remote drivers
 void Platform::SetDriversIdle()
 {
 	if (idleCurrentFactor == 0)
@@ -2731,6 +2737,9 @@ void Platform::SetDriversIdle()
 	}
 	else
 	{
+#if SUPPORT_CAN_EXPANSION
+		CanDriversList canDriversToSetIdle;
+#endif
 		for (size_t axisOrExtruder = 0; axisOrExtruder < MaxAxesPlusExtruders; ++axisOrExtruder)
 		{
 			if (driverState[axisOrExtruder] == DriverStatus::enabled)
@@ -2740,16 +2749,19 @@ void Platform::SetDriversIdle()
 				IterateDrivers(axisOrExtruder,
 								[this, current](uint8_t driver) { UpdateMotorCurrent(driver, current); }
 #if SUPPORT_CAN_EXPANSION
-								, [this](DriverId driver) { CanInterface::SetRemoteDriverIdle(driver); }
+								, [&canDriversToSetIdle](DriverId driver) { canDriversToSetIdle.AddEntry(driver); }
 #endif
 							  );
 			}
 		}
+#if SUPPORT_CAN_EXPANSION
+		CanInterface::SetRemoteDriversIdle(canDriversToSetIdle);
+#endif
 	}
 }
 
 // Set the current for all drivers on an axis or extruder. Current is in mA.
-void Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, int code)
+bool Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, int code, const StringRef& reply)
 {
 	switch (code)
 	{
@@ -2768,37 +2780,64 @@ void Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, in
 #endif
 
 	default:
-		return;
+		return false;
 	}
+
+#if SUPPORT_CAN_EXPANSION
+	CanDriversData canDriversToUpdate;
 
 	IterateDrivers(axisOrExtruder,
 							[this, axisOrExtruder, code](uint8_t driver)
 							{
 								if (code == 917)
 								{
-#if HAS_SMART_DRIVERS
+# if HAS_SMART_DRIVERS
 									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentFraction[axisOrExtruder]);
-#endif
+# endif
+								}
+								else
+								{
+									UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
+								}
+							},
+							[this, axisOrExtruder, code, &canDriversToUpdate](DriverId driver)
+							{
+								if (code == 917)
+								{
+									canDriversToUpdate.AddEntry(driver, (uint16_t)(standstillCurrentFraction[axisOrExtruder] * 100));
+								}
+								else
+								{
+									canDriversToUpdate.AddEntry(driver, (uint16_t)(motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]));
+								}
+							}
+						);
+	if (code == 917)
+	{
+		return CanInterface::SetRemoteStandstillCurrentPercent(canDriversToUpdate, reply);
+	}
+	else
+	{
+		return CanInterface::SetRemoteDriverCurrents(canDriversToUpdate, reply);
+	}
+#else
+	IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder, code](uint8_t driver)
+							{
+								if (code == 917)
+								{
+# if HAS_SMART_DRIVERS
+									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentFraction[axisOrExtruder]);
+# endif
 								}
 								else
 								{
 									UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
 								}
 							}
-#if SUPPORT_CAN_EXPANSION
-						  , [this, axisOrExtruder, code](DriverId driver)
-							{
-								if (code == 917)
-								{
-									CanInterface::SetRemoteStandstillCurrentPercent(driver, standstillCurrentFraction[axisOrExtruder]);
-								}
-								else
-								{
-									CanInterface::UpdateRemoteDriverCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
-								}
-							}
+	);
+	return true;
 #endif
-						);
 }
 
 // This must not be called from an ISR, or with interrupts disabled.
@@ -2898,6 +2937,9 @@ float Platform::GetMotorCurrent(size_t drive, int code) const
 void Platform::SetIdleCurrentFactor(float f)
 {
 	idleCurrentFactor = constrain<float>(f, 0.0, 1.0);
+#if SUPPORT_CAN_EXPANSION
+	CanDriversData canDriversToUpdate;
+#endif
 	for (size_t axisOrExtruder = 0; axisOrExtruder < MaxAxesPlusExtruders; ++axisOrExtruder)
 	{
 		if (driverState[axisOrExtruder] == DriverStatus::idle)
@@ -2906,11 +2948,15 @@ void Platform::SetIdleCurrentFactor(float f)
 			IterateDrivers(axisOrExtruder,
 							[this, requiredCurrent](uint8_t driver){ UpdateMotorCurrent(driver, requiredCurrent); }
 #if SUPPORT_CAN_EXPANSION
-								, [this, requiredCurrent](DriverId driver) { CanInterface::UpdateRemoteDriverCurrent(driver, requiredCurrent); }
+								, [this, requiredCurrent, &canDriversToUpdate](DriverId driver) { canDriversToUpdate.AddEntry(driver, (uint16_t)requiredCurrent); }
 #endif
 						  );
 		}
 	}
+#if SUPPORT_CAN_EXPANSION
+	String<1> dummy;
+	(void)CanInterface::SetRemoteDriverCurrents(canDriversToUpdate, dummy.GetRef());
+#endif
 }
 
 void Platform::SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping)
@@ -2955,19 +3001,49 @@ bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, in
 }
 
 // Set the microstepping, returning true if successful. All drivers for the same axis must use the same microstepping.
-//TODO remote
-bool Platform::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool interp)
+bool Platform::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool interp, const StringRef& reply)
 {
 	//TODO check that it is a valid microstep setting
 	microstepping[axisOrExtruder] = (interp) ? microsteps | 0x8000 : microsteps;
 	bool ok = true;
-	IterateDrivers(axisOrExtruder,
-					[this, microsteps, interp, &ok](uint8_t driver){ ok = SetDriverMicrostepping(driver, microsteps, interp) && ok; }
 #if SUPPORT_CAN_EXPANSION
-					, [this, microsteps, interp, &ok](DriverId driver){ ok = CanInterface::SetRemoteDriverMicrostepping(driver, microsteps, interp) && ok; }
-#endif
+	CanDriversData canDriversToUpdate;
+	IterateDrivers(axisOrExtruder,
+					[this, microsteps, interp, &ok, reply](uint8_t driver)
+					{
+						if (!SetDriverMicrostepping(driver, microsteps, interp))
+						{
+							reply.lcatf("Driver %u does not support x%u microstepping", driver, microsteps);
+							if (interp)
+							{
+								reply.cat(" with interpolation");
+							}
+							ok = false;
+						}
+					},
+					[microsteps, interp, &canDriversToUpdate](DriverId driver)
+					{
+						canDriversToUpdate.AddEntry(driver, (interp) ? microsteps | 0x8000 : interp);
+					}
+				  );
+	return CanInterface::SetRemoteDriverMicrostepping(canDriversToUpdate, reply) && ok;
+#else
+	IterateDrivers(axisOrExtruder,
+					[this, microsteps, interp, &ok, reply](uint8_t driver)
+					{
+						if (!SetDriverMicrostepping(driver, microsteps, interp))
+						{
+							reply.lcatf("Driver %u does not support x%u microstepping", driver, microsteps);
+							if (interp)
+							{
+								reply.cat(" with interpolation");
+							}
+							ok = false;
+						}
+					}
 				  );
 	return ok;
+#endif
 }
 
 // Get the microstepping for an axis or extruder
@@ -4111,19 +4187,31 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 	// Build a bitmap of all the drivers referenced
 	// First looks for explicit driver numbers
 	DriversBitmap drivers = 0;
+#if SUPPORT_CAN_EXPANSION
+	CanDriversList canDrivers;
+#endif
 	if (gb.Seen('P'))
 	{
-		uint32_t drives[NumDirectDrivers];
+		DriverId drives[NumDirectDrivers];
 		size_t dCount = NumDirectDrivers;
-		gb.GetUnsignedArray(drives, dCount, false);
+		gb.GetDriverIdArray(drives, dCount);
 		for (size_t i = 0; i < dCount; i++)
 		{
-			if (drives[i] >= numSmartDrivers)
+			if (drives[i].IsLocal())
 			{
-				reply.printf("Invalid drive number '%" PRIu32 "'", drives[i]);
-				return GCodeResult::error;
+				if (drives[i].localDriver >= numSmartDrivers)
+				{
+					reply.printf("Invalid local drive number '%u'", drives[i].localDriver);
+					return GCodeResult::error;
+				}
+				SetBit(drivers, drives[i].localDriver);
 			}
-			SetBit(drivers, drives[i]);
+#if SUPPORT_CAN_EXPANSION
+			else
+			{
+				canDrivers.AddEntry(drives[i]);
+			}
+#endif
 		}
 	}
 
@@ -4132,8 +4220,12 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 	{
 		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[axis]))
 		{
-			//TODO handle remote drivers too
-			IterateLocalDrivers(axis, [&drivers](uint8_t driver){ SetBit(drivers, driver); });
+			IterateDrivers(axis,
+							[&drivers](uint8_t driver){ SetBit(drivers, driver); }
+#if SUPPORT_CAN_EXPANSION
+						  , [&canDrivers](DriverId driver){ canDrivers.AddEntry(driver); }
+#endif
+						  );
 		}
 	}
 
@@ -4152,7 +4244,12 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 				{
 					SetBit(drivers, driver.localDriver);
 				}
-				//TODO handle remote extruder drives too
+#if SUPPORT_CAN_EXPANSION
+				else
+				{
+					canDrivers.AddEntry(driver);
+				}
+#endif
 			}
 		}
 	}
@@ -4242,7 +4339,11 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 
 	if (seen)
 	{
+#if SUPPORT_CAN_EXPANSION
+		return CanInterface::SetRemoteDriverStallParameters(canDrivers, gb, reply);
+#else
 		return GCodeResult::ok;
+#endif
 	}
 
 	// Print the stall status

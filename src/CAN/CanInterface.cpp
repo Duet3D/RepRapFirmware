@@ -11,6 +11,7 @@
 
 #include "CanMotion.h"
 #include "CommandProcessor.h"
+#include "CanMessageGenericConstructor.h"
 #include <CanMessageBuffer.h>
 #include "Movement/DDA.h"
 #include "Movement/DriveMovement.h"
@@ -369,6 +370,163 @@ extern "C" void CanClockLoop(void *)
 	}
 }
 
+// Members of template class CanDriversData
+CanDriversData::CanDriversData()
+{
+	numEntries = 0;
+}
+
+// Insert a new entry, keeping the list ordered
+void CanDriversData::AddEntry(DriverId driver, uint16_t val)
+{
+	if (numEntries < ARRAY_SIZE(data))
+	{
+		// We could do a binary search here but the number of CAN drivers supported isn't huge, so linear search instead
+		size_t insertPoint = 0;
+		while (insertPoint < numEntries && data[insertPoint].driver < driver)
+		{
+			++insertPoint;
+		}
+		memmove(data + (insertPoint + 1), data + insertPoint, (numEntries - insertPoint) * sizeof(data[0]));
+		data[insertPoint].driver = driver;
+		data[insertPoint].val = val;
+		++numEntries;
+	}
+}
+
+// Get the details of the drivers on the next board and advance startFrom beyond the entries for this board
+CanAddress CanDriversData::GetNextBoardDriverBitmap(size_t& startFrom, uint16_t& driversBitmap) const
+{
+	driversBitmap = 0;
+	if (startFrom >= numEntries)
+	{
+		return CanId::NoAddress;
+	}
+	const CanAddress boardAddress = data[startFrom].driver.boardAddress;
+	do
+	{
+		SetBit(driversBitmap, data[startFrom].driver.localDriver);
+		++startFrom;
+	} while (startFrom < numEntries && data[startFrom].driver.boardAddress == boardAddress);
+	return boardAddress;
+}
+
+// Members of template class CanDriversList
+CanDriversList::CanDriversList()
+{
+	numEntries = 0;
+}
+
+// Insert a new entry, keeping the list ordered
+void CanDriversList::AddEntry(DriverId driver)
+{
+	if (numEntries < ARRAY_SIZE(drivers))
+	{
+		// We could do a binary search here but the number of CAN drivers supported isn't huge, so linear search instead
+		size_t insertPoint = 0;
+		while (insertPoint < numEntries && drivers[insertPoint] < driver)
+		{
+			++insertPoint;
+		}
+		memmove(drivers + (insertPoint + 1), drivers + insertPoint, (numEntries - insertPoint) * sizeof(drivers[0]));
+		drivers[insertPoint] = driver;
+		++numEntries;
+	}
+}
+
+// Get the details of the drivers on the next board and advance startFrom beyond the entries for this board
+CanAddress CanDriversList::GetNextBoardDriverBitmap(size_t& startFrom, uint16_t& driversBitmap) const
+{
+	driversBitmap = 0;
+	if (startFrom >= numEntries)
+	{
+		return CanId::NoAddress;
+	}
+	const CanAddress boardAddress = drivers[startFrom].boardAddress;
+	do
+	{
+		SetBit(driversBitmap, drivers[startFrom].localDriver);
+		++startFrom;
+	} while (startFrom < numEntries && drivers[startFrom].boardAddress == boardAddress);
+	return boardAddress;
+}
+
+// Members of namespace CanInterface, and associated local functions
+
+static bool SetRemoteDriverValues(const CanDriversData& data, const StringRef& reply, CanMessageType mt)
+{
+	bool ok = true;
+	size_t start = 0;
+	for (;;)
+	{
+		uint16_t driverBits;
+		size_t savedStart = start;
+		const CanAddress boardAddress = data.GetNextBoardDriverBitmap(start, driverBits);
+		if (boardAddress == CanId::NoAddress)
+		{
+			break;
+		}
+		CanMessageBuffer * buf = CanMessageBuffer::Allocate();
+		if (buf == nullptr)
+		{
+			reply.lcat("No CAN buffer available");
+			return false;
+		}
+		CanMessageMultipleDrivesRequest * const msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest>(CanId::MasterAddress, boardAddress, mt);
+		msg->driversToUpdate = driverBits;
+		size_t numDrivers = 0;
+		while (savedStart < start && numDrivers < ARRAY_SIZE(msg->values))
+		{
+			msg->values[numDrivers] = data.GetElement(savedStart);
+			++savedStart;
+			++numDrivers;
+		}
+		buf->dataLength = msg->GetActualDataLength(numDrivers);
+		if (CanInterface::SendRequestAndGetStandardReply(buf, reply) != GCodeResult::ok)
+		{
+			ok = false;
+		}
+	}
+	return ok;
+}
+
+static bool SetRemoteDriverStates(const CanDriversList& drivers, const StringRef& reply, uint16_t state)
+{
+	bool ok = true;
+	size_t start = 0;
+	for (;;)
+	{
+		uint16_t driverBits;
+		size_t savedStart = start;
+		const CanAddress boardAddress = drivers.GetNextBoardDriverBitmap(start, driverBits);
+		if (boardAddress == CanId::NoAddress)
+		{
+			break;
+		}
+		CanMessageBuffer * buf = CanMessageBuffer::Allocate();
+		if (buf == nullptr)
+		{
+			reply.lcat("No CAN buffer available");
+			return false;
+		}
+		CanMessageMultipleDrivesRequest * const msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest>(CanId::MasterAddress, boardAddress, CanMessageType::setDriverStates);
+		msg->driversToUpdate = driverBits;
+		size_t numDrivers = 0;
+		while (savedStart < start && numDrivers < ARRAY_SIZE(msg->values))
+		{
+			msg->values[numDrivers] = state;
+			++savedStart;
+			++numDrivers;
+		}
+		buf->dataLength = msg->GetActualDataLength(numDrivers);
+		if (CanInterface::SendRequestAndGetStandardReply(buf, reply) != GCodeResult::ok)
+		{
+			ok = false;
+		}
+	}
+	return ok;
+}
+
 // Add a buffer to the end of the send queue
 void CanInterface::SendMotion(CanMessageBuffer *buf)
 {
@@ -415,7 +573,7 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 				if (buf->id.MsgType() == CanMessageType::standardReply && buf->id.Src() == dest)
 				{
 					//TODO check sequence number
-					reply.copy(buf->msg.standardReply.text, buf->msg.standardReply.GetTextLength(buf->dataLength));
+					reply.lcatn(buf->msg.standardReply.text, buf->msg.standardReply.GetTextLength(buf->dataLength));
 					const GCodeResult rslt = (GCodeResult)buf->msg.standardReply.resultCode;
 					CanMessageBuffer::Free(buf);
 					return rslt;
@@ -434,7 +592,7 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 	}
 
 	CanMessageBuffer::Free(buf);
-	reply.copy("Timed out waiting for response from CAN-connected device");
+	reply.lcat("Timed out waiting for response from CAN-connected device");
 	return GCodeResult::error;
 }
 
@@ -485,37 +643,69 @@ extern "C" void CanReceiverLoop(void *)
 	}
 }
 
-void CanInterface::DisableRemoteDriver(DriverId driver)
+void CanInterface::DisableRemoteDrivers(const CanDriversList& drivers)
 {
-	//TODO
+	String<1> dummy;
+	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), CanMessageMultipleDrivesRequest::driverDisabled);
 }
 
-void CanInterface::SetRemoteDriverIdle(DriverId driver)
+void CanInterface::SetRemoteDriversIdle(const CanDriversList& drivers)
 {
-	//TODO
+	String<1> dummy;
+	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), CanMessageMultipleDrivesRequest::driverIdle);
 }
 
-void CanInterface::SetRemoteStandstillCurrentPercent(DriverId driver, float standstillCurrentFraction)
+bool CanInterface::SetRemoteStandstillCurrentPercent(const CanDriversData& data, const StringRef& reply)
 {
-	//TODO
+	return SetRemoteDriverValues(data, reply, CanMessageType::setStandstillCurrentFactor);
 }
 
-void CanInterface::UpdateRemoteDriverCurrent(DriverId driver, float motorCurrent)
+bool CanInterface::SetRemoteDriverCurrents(const CanDriversData& data, const StringRef& reply)
 {
-	//TODO
+	return SetRemoteDriverValues(data, reply, CanMessageType::setMotorCurrents);
 }
 
-bool CanInterface::SetRemoteDriverMicrostepping(DriverId driver, int microsteps, bool interp)
+// Set the microstepping on remote drivers, returning true if successful
+bool CanInterface::SetRemoteDriverMicrostepping(const CanDriversData& data, const StringRef& reply)
 {
-	//TODO
-	return true;
+	return SetRemoteDriverValues(data, reply, CanMessageType::setMicrostepping);
 }
 
 // Handle M569 for a remote driver
 GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply)
+pre(driver.IsRemote())
 {
-	reply.copy("M569 not yet implemented for remote drivers");
-	return GCodeResult::error;
+	CanMessageGenericConstructor cons(M950Params);
+	cons.PopulateFromCommand(gb, reply);
+	return cons.SendAndGetResponse(CanMessageType::m569, driver.boardAddress, reply);
+}
+
+// Handle M915 for a collection of remote drivers
+GCodeResult CanInterface::SetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply)
+{
+	size_t start = 0;
+	for (;;)
+	{
+		uint16_t driverBits;
+		const CanAddress boardAddress = drivers.GetNextBoardDriverBitmap(start, driverBits);
+		if (boardAddress == CanId::NoAddress)
+		{
+			break;
+		}
+
+		CanMessageGenericConstructor cons(M915Params);
+		cons.AddUParam('d', driverBits);
+		if (!cons.PopulateFromCommand(gb, reply))
+		{
+			return GCodeResult::error;
+		}
+		const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::m915, boardAddress, reply);
+		if (rslt != GCodeResult::ok)
+		{
+			return rslt;
+		}
+	}
+	return GCodeResult::ok;
 }
 
 #endif
