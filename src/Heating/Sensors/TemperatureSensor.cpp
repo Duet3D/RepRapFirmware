@@ -22,7 +22,8 @@
 
 // Constructor
 TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *t)
-	: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::success) {}
+	: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr),
+	  lastTemperature(0.0), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::success) {}
 
 // Virtual destructor
 TemperatureSensor::~TemperatureSensor()

@@ -1134,7 +1134,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				response->EncodeString(nm, false, true);
 				float temp;
 				(void)sensor->GetLatestTemperature(temp);
-				response->catf(",\"temp\":%.1f}", (double)temp);
+				response->catf(",\"temp\":%.1f}", HideNan(temp));
 			}
 			nextSensorNumber = sensor->GetSensorNumber() + 1;
 		}

@@ -16,22 +16,26 @@
 const unsigned int DriversPerCanBoard = 3;	// TEMPORARY until we do this dynamically!
 
 const size_t NumCanBoards = (MaxCanDrivers + DriversPerCanBoard - 1)/DriversPerCanBoard;
-static CanMessageBuffer *movementBuffers[NumCanBoards] = { 0 };
+static CanMessageBuffer *movementBufferList = nullptr;
 
 void CanMotion::Init()
 {
-	for (size_t i = 0; i < NumCanBoards; ++i)
-	{
-		movementBuffers[i] = nullptr;
-	}
+	movementBufferList = nullptr;
 }
 
 // This is called by DDA::Prepare at the start of preparing a movement
 void CanMotion::StartMovement(const DDA& dda)
 {
-	for (CanMessageBuffer*& mb : movementBuffers)
+	// There shouldn't be any movement buffers in the list, but free any that there may be
+	for (;;)
 	{
-		CanMessageBuffer::Free(mb);
+		CanMessageBuffer *p = movementBufferList;
+		if (p == nullptr)
+		{
+			break;
+		}
+		movementBufferList = p->next;
+		CanMessageBuffer::Free(p);
 	}
 }
 
@@ -39,58 +43,64 @@ void CanMotion::StartMovement(const DDA& dda)
 // If steps == 0 then the drivers just need to be enabled
 void CanMotion::AddMovement(const DDA& dda, const PrepParams& params, DriverId canDriver, int32_t steps)
 {
-	const size_t expansionBoardNumber = canDriver.boardAddress;
-	if (expansionBoardNumber < ARRAY_SIZE(movementBuffers))
+	// Search for the correct movement buffer
+	CanMessageBuffer* buf = movementBufferList;
+	while (buf != nullptr && buf->id.Dst() != canDriver.boardAddress)
 	{
-		CanMessageBuffer*& buf = movementBuffers[expansionBoardNumber - 1];
+		buf = buf->next;
+	}
+
+	if (buf == nullptr)
+	{
+		// Allocate a new movement buffer
+		buf = CanMessageBuffer::Allocate();
 		if (buf == nullptr)
 		{
-			buf = CanMessageBuffer::Allocate();
-			if (buf == nullptr)
-			{
-				return;		//TODO error handling
-			}
-
-			auto move = buf->SetupRequestMessage<CanMessageMovement>(CanId::MasterAddress, expansionBoardNumber);
-
-			// Common parameters
-			move->accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
-			move->steadyClocks = lrintf(params.steadyTime * StepTimer::StepClockRate);
-			move->decelClocks = lrintf(params.decelTime * StepTimer::StepClockRate);
-			move->initialSpeedFraction = params.initialSpeedFraction;
-			move->finalSpeedFraction = params.finalSpeedFraction;
-			move->deltaDrives = 0;								//TODO
-			move->endStopsToCheck = 0;							//TODO
-			move->pressureAdvanceDrives = 0;					//TODO
-			move->stopAllDrivesOnEndstopHit = false;			//TODO
-			// Additional parameters for delta movements
-			move->initialX = params.initialX;
-			move->finalX = params.finalX;
-			move->initialY = params.initialY;
-			move->finalY = params.finalY;
-			move->zMovement = params.zMovement;
-
-			// Clear out the per-drive fields
-			for (size_t drive = 0; drive < DriversPerCanBoard; ++drive)
-			{
-				move->perDrive[drive].steps = 0;
-			}
+			return;		//TODO error handling
 		}
-		buf->msg.move.perDrive[canDriver.localDriver].steps = steps;
+
+		buf->next = movementBufferList;
+		movementBufferList = buf;
+
+		auto move = buf->SetupRequestMessage<CanMessageMovement>(CanId::MasterAddress, canDriver.boardAddress);
+
+		// Common parameters
+		move->accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);
+		move->steadyClocks = lrintf(params.steadyTime * StepTimer::StepClockRate);
+		move->decelClocks = lrintf(params.decelTime * StepTimer::StepClockRate);
+		move->initialSpeedFraction = params.initialSpeedFraction;
+		move->finalSpeedFraction = params.finalSpeedFraction;
+		move->deltaDrives = 0;								//TODO
+		move->endStopsToCheck = 0;							//TODO
+		move->pressureAdvanceDrives = 0;					//TODO
+		move->stopAllDrivesOnEndstopHit = false;			//TODO
+
+		// Additional parameters for delta movements
+		move->initialX = params.initialX;
+		move->finalX = params.finalX;
+		move->initialY = params.initialY;
+		move->finalY = params.finalY;
+		move->zMovement = params.zMovement;
+
+		// Clear out the per-drive fields
+		for (size_t drive = 0; drive < DriversPerCanBoard; ++drive)
+		{
+			move->perDrive[drive].steps = 0;
+		}
 	}
+
+	buf->msg.move.perDrive[canDriver.localDriver].steps = steps;
 }
 
 // This is called by DDA::Prepare when all DMs for CAN drives have been processed
 void CanMotion::FinishMovement(uint32_t moveStartTime)
 {
-	for (CanMessageBuffer*& buf : movementBuffers)
+	CanMessageBuffer *buf;
+	while ((buf = movementBufferList) != nullptr)
 	{
-		if (buf != nullptr)
-		{
-			buf->msg.move.whenToExecute = moveStartTime;
-			CanInterface::SendMotion(buf);				// queues the buffer for sending and frees it when done
-			buf = nullptr;
-		}
+		movementBufferList = buf->next;
+		buf->msg.move.whenToExecute = moveStartTime;
+		CanInterface::SendMotion(buf);				// queues the buffer for sending and frees it when done
 	}
 }
 

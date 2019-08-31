@@ -15,6 +15,10 @@
 # include "DuetNG/DueXn.h"
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+# include <CanId.h>
+#endif
+
 // Read a port name parameter and assign some ports. Caller must call gb.Seen() with the appropriate letter and get 'true' returned before calling this.
 // Return the number of ports allocated, or 0 if there was an error with the error message in 'reply'.
 size_t IoPort::AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[])
@@ -38,6 +42,7 @@ bool IoPort::AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neede
 	return AssignPorts(gb, reply, neededFor, 1, &p, &access) == 1;
 }
 
+// Try to assign ports, returning the number of ports successfully assigned
 size_t IoPort::AssignPorts(const char* pinNames, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[])
 {
 	// Release any existing assignments
@@ -60,8 +65,18 @@ size_t IoPort::AssignPorts(const char* pinNames, const StringRef& reply, PinUsed
 		}
 
 #if SUPPORT_CAN_EXPANSION
-		RemoveBoardAddress(pn.GetRef());
+		const CanAddress boardAddress = RemoveBoardAddress(pn.GetRef());
+		if (boardAddress != 0)
+		{
+			reply.lcat("Remote ports not yet supported by this command");
+			for (size_t j = 0; j < i; ++j)
+			{
+				ports[j]->Release();
+			}
+			return 0;
+		}
 #endif
+
 		// Try to allocate the port
 		if (!ports[i]->Allocate(pn.c_str(), reply, neededFor, access[i]))
 		{

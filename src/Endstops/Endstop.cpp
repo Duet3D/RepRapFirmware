@@ -41,6 +41,7 @@ bool SwitchEndstop::Configure(GCodeBuffer& gb, const StringRef& reply, EndStopIn
 		portAddrs[i] = &ports[i];
 		access[i] = PinAccess::read;
 	}
+	//TODO the port strings may include remote ports
 	numPortsUsed = IoPort::AssignPorts(gb, reply, PinUsedBy::endstop, MaxDriversPerAxis, portAddrs, access);
 	for (IoPort& pp : ports)
 	{
