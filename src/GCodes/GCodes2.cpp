@@ -354,6 +354,12 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		// See if there is a file in /sys named Gxx.g
 		if (code >= 0 && code < 10000)
 		{
+#if HAS_LINUX_INTERFACE
+			if (reprap.UsingLinuxInterface())
+			{
+				gb.SetState(GCodeState::doingUnsupportedCode);
+			}
+#endif
 			String<StringLength20> macroName;
 			macroName.printf("G%d.g", code);
 			if (DoFileMacro(gb, macroName.c_str(), false, 98))
@@ -943,12 +949,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	case 36:	// Return file information
-# if HAS_MASS_STORAGE
-		if (!LockFileSystem(gb))									// getting file info takes several calls and isn't reentrant
+# if HAS_LINUX_INTERFACE
+		if (reprap.UsingLinuxInterface())
 		{
-			return false;
+			reprap.GetFileInfoResponse(nullptr, outBuf, true);
 		}
+		else
+# endif
 		{
+# if HAS_MASS_STORAGE
+			if (!LockFileSystem(gb))									// getting file info takes several calls and isn't reentrant
+			{
+				return false;
+			}
+
 			String<MaxFilenameLength> filename;
 			const bool gotFilename = gb.GetUnprecedentedString(filename.GetRef());
 			const bool done = reprap.GetFileInfoResponse((gotFilename) ? filename.c_str() : nullptr, outBuf, false);
@@ -957,15 +971,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				outBuf->cat('\n');
 			}
 			result = (done) ? GCodeResult::ok : GCodeResult::notFinished;
-		}
-# else
-		reprap.GetFileInfoResponse(nullptr, outBuf, true);
 # endif
+		}
 		break;
 
 	case 37:	// Simulation mode on/off, or simulate a whole file
 # if HAS_LINUX_INTERFACE
-		if (!gb.IsBinary())
+		if (reprap.UsingLinuxInterface() && !gb.IsBinary())
 		{
 			reply.copy("M37 can be only started from the Linux interface");
 			result = GCodeResult::error;
@@ -1204,7 +1216,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (gb.Seen('P'))
 		{
 #if HAS_LINUX_INTERFACE
-			gb.SetState(GCodeState::doingUserMacro);
+			if (reprap.UsingLinuxInterface())
+			{
+				gb.SetState(GCodeState::doingUserMacro);
+			}
 #endif
 			String<MaxFilenameLength> filename;
 			gb.GetPossiblyQuotedString(filename.GetRef());
@@ -2890,7 +2905,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 550: // Set/report machine name
 #if HAS_LINUX_INTERFACE
-		if (!gb.IsBinary())
+		if (reprap.UsingLinuxInterface() && !gb.IsBinary())
 		{
 			result = GCodeResult::errorNotSupported;
 		}
@@ -4378,9 +4393,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (code >= 0 && code < 10000)
 		{
 #if HAS_LINUX_INTERFACE
-			gb.SetState(GCodeState::doingUnsupportedCode);
+			if (reprap.UsingLinuxInterface())
+			{
+				gb.SetState(GCodeState::doingUnsupportedCode);
+			}
 #endif
-
 			String<StringLength20> macroName;
 			macroName.printf("M%d.g", code);
 			if (DoFileMacro(gb, macroName.c_str(), false, code))

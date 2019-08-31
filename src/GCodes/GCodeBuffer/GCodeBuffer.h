@@ -210,17 +210,6 @@ private:
 #endif
 };
 
-inline bool GCodeBuffer::IsDoingFile() const
-{
-#if HAS_MASS_STORAGE
-	return machineState->fileState.IsLive();
-#elif HAS_LINUX_INTERFACE
-	return machineState->fileId != 0;
-#else
-	return false;
-#endif
-}
-
 inline bool GCodeBuffer::IsDoingFileMacro() const
 {
 	return machineState->doingFileMacro;

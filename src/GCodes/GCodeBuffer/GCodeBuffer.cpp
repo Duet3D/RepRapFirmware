@@ -518,7 +518,8 @@ bool GCodeBuffer::PushState(bool preserveLineNumber)
 #if HAS_LINUX_INTERFACE
 	ms->fileId = machineState->fileId;
 	ms->isFileFinished = machineState->isFileFinished;
-#elif HAS_MASS_STORAGE
+#endif
+#if HAS_MASS_STORAGE
 	ms->fileState.CopyFrom(machineState->fileState);
 #endif
 	ms->lockedResources = machineState->lockedResources;
@@ -680,6 +681,22 @@ MessageType GCodeBuffer::GetResponseMessageType() const
 		return (MessageType)((1 << (size_t)codeChannel) | BinaryCodeReplyFlag);
 	}
 	return responseMessageType;
+}
+
+bool GCodeBuffer::IsDoingFile() const
+{
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		return machineState->fileId != 0;
+	}
+#endif
+
+#if HAS_MASS_STORAGE
+	return machineState->fileState.IsLive();
+#else
+	return false;
+#endif
 }
 
 FilePosition GCodeBuffer::GetFilePosition() const

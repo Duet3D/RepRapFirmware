@@ -12,15 +12,9 @@ const size_t NumFirmwareUpdateModules = 1;
 #define HAS_WIFI_NETWORKING		0
 #define HAS_CPU_TEMP_SENSOR		1
 
-#ifdef SD_SUPPORT
-#define HAS_LINUX_INTERFACE		0
+#define HAS_LINUX_INTERFACE		1
 #define HAS_MASS_STORAGE		1
 #define HAS_HIGH_SPEED_SD		1
-#else
-#define HAS_LINUX_INTERFACE		1
-#define HAS_MASS_STORAGE		0
-#define HAS_HIGH_SPEED_SD		0
-#endif
 
 #define SUPPORT_TMC51xx			1
 #define TMC51xx_USES_USART		1
@@ -38,7 +32,7 @@ const size_t NumFirmwareUpdateModules = 1;
 #define SUPPORT_DHT_SENSOR		0 //TEMPorary!					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
-#define SUPPORT_FTP				0					// no point in supporting FTP because we have no mass storage
+#define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
 #define SUPPORT_ASYNC_MOVES		1
 #define ALLOCATE_DEFAULT_PORTS	0

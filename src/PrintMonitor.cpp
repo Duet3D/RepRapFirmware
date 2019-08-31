@@ -65,24 +65,31 @@ void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info
 
 void PrintMonitor::Spin()
 {
-#if HAS_MASS_STORAGE
-	// File information about the file being printed must be available before layer estimations can be made
-	if (!filenameBeingPrinted.IsEmpty() && !printingFileParsed)
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
 	{
-		printingFileParsed = platform.GetMassStorage()->GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
 		if (!printingFileParsed)
 		{
 			return;
 		}
 	}
-#elif HAS_LINUX_INTERFACE
-	if (!printingFileParsed)
-	{
-		return;
-	}
-#else
-	return;
+	else
 #endif
+	{
+#if HAS_MASS_STORAGE
+		// File information about the file being printed must be available before layer estimations can be made
+		if (!filenameBeingPrinted.IsEmpty() && !printingFileParsed)
+		{
+			printingFileParsed = platform.GetMassStorage()->GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
+			if (!printingFileParsed)
+			{
+				return;
+			}
+		}
+#else
+		return;
+#endif
+	}
 
 	// Don't do any updates if the print has been paused
 	if (!gCodes.IsRunning())

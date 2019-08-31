@@ -5,9 +5,10 @@
  *      Author: David
  */
 
-#include <limits>
-
 #include "GCodeMachineState.h"
+#include "RepRap.h"
+
+#include <limits>
 
 GCodeMachineState *GCodeMachineState::freeList = nullptr;
 unsigned int GCodeMachineState::numAllocated = 0;
@@ -30,6 +31,7 @@ GCodeMachineState::GCodeMachineState()
 }
 
 #if HAS_LINUX_INTERFACE
+
 // Set the state to indicate a file is being processed
 void GCodeMachineState::SetFileExecuting()
 {
@@ -43,23 +45,46 @@ void GCodeMachineState::SetFileFinished(bool error)
 	isFileFinished = true;
 	fileError = error;
 }
+
 #endif
+
+bool GCodeMachineState::DoingFile() const
+{
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		return fileId == 0;
+	}
+#endif
+#if HAS_MASS_STORAGE
+	return fileState.IsLive();
+#else
+	return false;
+#endif
+}
 
 // Close the currently executing file
 void GCodeMachineState::CloseFile()
 {
-#if HAS_MASS_STORAGE
-	fileState.Close();
-#elif HAS_LINUX_INTERFACE
-	for (GCodeMachineState *ms = this; ms != nullptr; ms = ms->previous)
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
 	{
-		if (ms->fileId == fileId)
+		for (GCodeMachineState *ms = this; ms != nullptr; ms = ms->previous)
 		{
-			ms->isFileFinished = false;
-			ms->fileId = 0;
+			if (ms->fileId == fileId)
+			{
+				ms->isFileFinished = false;
+				ms->fileId = 0;
+			}
 		}
 	}
+	else
 #endif
+	{
+#if HAS_MAS_STORAGE
+		fileState.Close();
+#endif
+	}
 }
 
 // Allocate a new GCodeMachineState
@@ -83,12 +108,19 @@ void GCodeMachineState::CloseFile()
 
 /*static*/ void GCodeMachineState::Release(GCodeMachineState *ms)
 {
-#if HAS_MASS_STORAGE
-	ms->fileState.Close();
-#elif HAS_LINUX_INTERFACE
-	ms->fileId = 0;
-	ms->isFileFinished = false;
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		ms->fileId = 0;
+		ms->isFileFinished = false;
+	}
+	else
 #endif
+	{
+#if HAS_MASS_STORAGE
+		ms->fileState.Close();
+#endif
+	}
 	ms->previous = freeList;
 	freeList = ms;
 }

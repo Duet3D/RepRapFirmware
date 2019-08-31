@@ -90,27 +90,28 @@ public:
 	void FlagTemperatureFault(int8_t dudHeater);
 	void ClearTemperatureFault(int8_t wasDudHeater);
 
-	Platform& GetPlatform() const;
-	Move& GetMove() const;
-	Heat& GetHeat() const;
-	GCodes& GetGCodes() const;
-	Network& GetNetwork() const;
-#if SUPPORT_ROLAND
-	Roland& GetRoland() const;
-#endif
-	Scanner& GetScanner() const;
-	PrintMonitor& GetPrintMonitor() const;
+	Platform& GetPlatform() const { return *platform; }
+	Move& GetMove() const { return *move; }
+	Heat& GetHeat() const { return *heat; }
+	GCodes& GetGCodes() const { return *gCodes; }
+	Network& GetNetwork() const { return *network; }
+	Scanner& GetScanner() const { return *scanner; }
+	PrintMonitor& GetPrintMonitor() const { return *printMonitor; }
 
+#if SUPPORT_ROLAND
+	Roland& GetRoland() const { return *roland; }
+#endif
 #if SUPPORT_IOBITS
- 	PortControl& GetPortControl() const;
+ 	PortControl& GetPortControl() const { return *portControl; }
 #endif
 #if SUPPORT_12864_LCD
- 	Display& GetDisplay() const;
+ 	Display& GetDisplay() const { return *display; }
  	const char *GetLatestMessage(uint16_t& sequence) const;
  	const MessageBox& GetMessageBox() const { return mbox; }
 #endif
 #if HAS_LINUX_INTERFACE
- 	LinuxInterface& GetLinuxInterface() const;
+ 	bool UsingLinuxInterface() const { return usingLinuxInterface; }
+ 	LinuxInterface& GetLinuxInterface() const  { return *linuxInterface; }
 #endif
 
 	void Tick();
@@ -185,21 +186,16 @@ private:
  	Mutex toolListMutex, messageBoxMutex;
 	Tool* toolList;								// the tool list is sorted in order of increasing tool number
 	Tool* currentTool;
-	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
+	uint32_t lastWarningMillis;					// when we last sent a warning message for things that can happen very often
 
 	uint16_t activeExtruders;
 	uint16_t activeToolHeaters;
 
 	uint16_t ticksInSpinState;
 	uint16_t heatTaskIdleTicks;
-	Module spinningModule;
 	uint32_t fastLoop, slowLoop;
 
 	uint32_t debug;
-	bool stopped;
-	bool active;
-	bool resetting;
-	bool processingConfig;
 
 	String<RepRapPasswordLength> password;
 	String<MachineNameLength> myName;
@@ -208,34 +204,25 @@ private:
 	String<MaxMessageLength> message;
 	uint16_t messageSequence;
 
-	MessageBox mbox;					// message box data
+	MessageBox mbox;							// message box data
 
 	// Deferred diagnostics
 	MessageType diagnosticsDestination;
 	bool justSentDiagnostics;
+
+	// State flags
+	Module spinningModule;
+	bool stopped;
+	bool active;
+	bool resetting;
+	bool processingConfig;
+#if HAS_LINUX_INTERFACE
+ 	bool usingLinuxInterface;
+#endif
 };
 
-inline Platform& RepRap::GetPlatform() const { return *platform; }
-inline Move& RepRap::GetMove() const { return *move; }
-inline Heat& RepRap::GetHeat() const { return *heat; }
-inline GCodes& RepRap::GetGCodes() const { return *gCodes; }
-inline Network& RepRap::GetNetwork() const { return *network; }
-#if SUPPORT_ROLAND
-inline Roland& RepRap::GetRoland() const { return *roland; }
-#endif
-inline Scanner& RepRap::GetScanner() const { return *scanner; }
-inline PrintMonitor& RepRap::GetPrintMonitor() const { return *printMonitor; }
-
-#if SUPPORT_IOBITS
-inline PortControl& RepRap::GetPortControl() const { return *portControl; }
-#endif
-
-#if SUPPORT_12864_LCD
-inline Display& RepRap::GetDisplay() const { return *display; }
-#endif
-#if HAS_LINUX_INTERFACE
-inline LinuxInterface& RepRap::GetLinuxInterface() const { return *linuxInterface; }
-#endif
+// A single instance of the RepRap class contains all the others
+extern RepRap reprap;
 
 inline bool RepRap::Debug(Module m) const { return debug & (1 << m); }
 inline Module RepRap::GetSpinningModule() const { return spinningModule; }

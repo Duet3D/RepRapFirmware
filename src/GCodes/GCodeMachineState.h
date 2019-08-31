@@ -153,7 +153,8 @@ public:
 	float feedRate;
 #if HAS_MASS_STORAGE
 	FileData fileState;
-#elif HAS_LINUX_INTERFACE
+#endif
+#if HAS_LINUX_INTERFACE
 	uint32_t fileId;							// virtual file ID to deal with stack push/pops when a file is being cancelled or finished in the wrong stack level
 #endif
 	ResourceBitmap lockedResources;
@@ -188,15 +189,14 @@ public:
 	static GCodeMachineState *Allocate()
 	post(!result.IsLive(); result.state == GCodeState::normal);
 
-#if HAS_MASS_STORAGE
-	bool DoingFile() const { return fileState.IsLive(); }
-#elif HAS_LINUX_INTERFACE
-	bool DoingFile() const { return fileId == 0; }
+	bool DoingFile() const;
+	void CloseFile();
 
+#if HAS_LINUX_INTERFACE
 	void SetFileExecuting();
 	void SetFileFinished(bool error);
 #endif
-	void CloseFile();
+
 	bool UsingMachineCoordinates() const { return g53Active || runningSystemMacro; }
 
 	// Copy values that may have been altered into this state record

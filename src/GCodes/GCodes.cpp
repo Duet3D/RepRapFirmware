@@ -195,7 +195,10 @@ void GCodes::Init()
 
 #if HAS_LINUX_INTERFACE
 	// config.g cannot be executed when the firmware boots but request it from Linux
-	RunConfigFile(platform.GetConfigFile());
+	if (reprap.UsingLinuxInterface())
+	{
+		RunConfigFile(platform.GetConfigFile());
+	}
 #endif
 
 #if SUPPORT_DOTSTAR_LED
@@ -328,24 +331,32 @@ bool GCodes::DoingFileMacro() const
 // Unlike other methods returning file positions it never returns noFilePosition
 FilePosition GCodes::GetFilePosition() const
 {
-#if HAS_MASS_STORAGE
-	const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
-	if (!fileBeingPrinted.IsLive())
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
 	{
-		return 0;
+		const FilePosition pos = fileGCode->GetFilePosition();
+		return (pos == noFilePosition) ? 0 : pos;
 	}
-
-	const FilePosition pos = (fileGCode->IsDoingFileMacro())
-			? fileBeingPrinted.GetPosition()					// the position before we started executing the macro
-				: fileGCode->GetFilePosition();					// the actual position, allowing for bytes cached but not yet processed
-
-	return (pos == noFilePosition) ? 0 : pos;
-#elif HAS_LINUX_INTERFACE
-    const FilePosition pos = fileGCode->GetFilePosition();
-    return (pos == noFilePosition) ? 0 : pos;
-#else
-    return 0;
+	else
 #endif
+	{
+
+#if HAS_MASS_STORAGE
+		const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
+		if (!fileBeingPrinted.IsLive())
+		{
+			return 0;
+		}
+
+		const FilePosition pos = (fileGCode->IsDoingFileMacro())
+				? fileBeingPrinted.GetPosition()					// the position before we started executing the macro
+					: fileGCode->GetFilePosition();					// the actual position, allowing for bytes cached but not yet processed
+
+		return (pos == noFilePosition) ? 0 : pos;
+#else
+		return 0;
+#endif
+	}
 }
 
 // Start running the config file
@@ -487,7 +498,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 		(void)gotCommand;
 #endif
 #if HAS_LINUX_INTERFACE
-		if (!gotCommand)
+		if (reprap.UsingLinuxInterface() && !gotCommand)
 		{
 			reprap.GetLinuxInterface().FillBuffer(gb);
 		}
@@ -497,171 +508,176 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 
 void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 {
-#if HAS_MASS_STORAGE
-	FileData& fd = gb.MachineState().fileState;
-
-	// Do we have more data to process?
-	switch (gb.GetFileInput()->ReadFromFile(fd))
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
 	{
-	case GCodeInputReadResult::haveData:
-		// Yes - fill up the GCodeBuffer and run the next code
-		if (gb.GetFileInput()->FillBuffer(&gb))
+		if (gb.IsFileFinished())
 		{
-			// We read some data, but we don't necessarily have a command available because we may be executing M28 within a file
+			gb.Init();								// mark buffer as empty
+
+			if (gb.MachineState().previous == nullptr)
+			{
+				// Finished printing SD card file.
+				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
+				// Don't close the file until all moves have been completed, in case the print gets paused.
+				// Also, this keeps the state as 'Printing' until the print really has finished.
+				if (   LockMovementAndWaitForStandstill(gb)					// wait until movement has finished
+					&& IsCodeQueueIdle()									// must also wait until deferred command queue has caught up
+				   )
+				{
+					StopPrint(StopPrintReason::normalCompletion);
+				}
+			}
+			else
+			{
+				// Finished a macro or finished processing config.g
+				gb.MachineState().CloseFile();
+				if (runningConfigFile && gb.MachineState().previous->previous == nullptr)
+				{
+					CopyConfigFinalValues(gb);
+					runningConfigFile = false;
+				}
+
+				bool hadFileError = gb.MachineState().fileError;
+				Pop(gb, false);
+				gb.Init();
+				if (gb.GetState() == GCodeState::doingUnsupportedCode)
+				{
+					gb.SetState(GCodeState::normal);
+					UnlockAll(gb);
+
+					if (hadFileError)
+					{
+						HandleResult(gb, GCodeResult::warningNotSupported, reply, nullptr);
+					}
+					else
+					{
+						HandleReply(gb, GCodeResult::ok, "");
+					}
+				}
+				else if (gb.GetState() == GCodeState::doingUserMacro)
+				{
+					gb.SetState(GCodeState::normal);
+					UnlockAll(gb);
+
+					// Output a warning message on demand
+					if (hadFileError)
+					{
+						(void)gb.Seen('P');
+						String<MaxFilenameLength + 32> reply;
+						gb.GetPossiblyQuotedString(reply.GetRef());
+						reply.Prepend("Macro file ");
+						reply.cat(" not found");
+						HandleReply(gb, GCodeResult::warning, reply.c_str());
+					}
+					else
+					{
+						HandleReply(gb, GCodeResult::ok, "");
+					}
+				}
+				else if (gb.GetState() == GCodeState::normal)
+				{
+					UnlockAll(gb);
+					HandleReply(gb, GCodeResult::ok, "");
+				}
+			}
+		}
+		else if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
+		{
+			gb.Put("M600");
+			filamentChangePausePending = false;
+		}
+		else if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
+		{
+			gb.Put("M226");
+			pausePending = false;
+		}
+		else
+		{
+			reprap.GetLinuxInterface().FillBuffer(gb);
+		}
+	}
+	else
+#endif
+	{
+#if HAS_MASS_STORAGE
+		FileData& fd = gb.MachineState().fileState;
+
+		// Do we have more data to process?
+		switch (gb.GetFileInput()->ReadFromFile(fd))
+		{
+		case GCodeInputReadResult::haveData:
+			// Yes - fill up the GCodeBuffer and run the next code
+			if (gb.GetFileInput()->FillBuffer(&gb))
+			{
+				// We read some data, but we don't necessarily have a command available because we may be executing M28 within a file
+				if (gb.IsReady())
+				{
+					gb.SetFinished(ActOnCode(gb, reply));
+				}
+			}
+			break;
+
+		case GCodeInputReadResult::error:
+			AbortPrint(gb);
+			break;
+
+		case GCodeInputReadResult::noData:
+			// We have reached the end of the file. Check for the last line of gcode not ending in newline.
+			gb.FileEnded();							// append a newline if necessary and deal with any pending file write
 			if (gb.IsReady())
 			{
 				gb.SetFinished(ActOnCode(gb, reply));
+				return;
 			}
-		}
-		break;
 
-	case GCodeInputReadResult::error:
-		AbortPrint(gb);
-		break;
+			gb.Init();								// mark buffer as empty
 
-	case GCodeInputReadResult::noData:
-		// We have reached the end of the file. Check for the last line of gcode not ending in newline.
-		gb.FileEnded();							// append a newline if necessary and deal with any pending file write
-		if (gb.IsReady())
-		{
-			gb.SetFinished(ActOnCode(gb, reply));
-			return;
-		}
-
-		gb.Init();								// mark buffer as empty
-
-		if (gb.MachineState().previous == nullptr)
-		{
-			// Finished printing SD card file.
-			// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
-			// Don't close the file until all moves have been completed, in case the print gets paused.
-			// Also, this keeps the state as 'Printing' until the print really has finished.
-			if (   LockMovementAndWaitForStandstill(gb)					// wait until movement has finished
-				&& IsCodeQueueIdle()									// must also wait until deferred command queue has caught up
-			   )
+			if (gb.MachineState().previous == nullptr)
 			{
-				StopPrint(StopPrintReason::normalCompletion);
-			}
-		}
-		else
-		{
-			// Finished a macro or finished processing config.g
-			gb.GetFileInput()->Reset(fd);
-			fd.Close();
-			if (runningConfigFile && gb.MachineState().previous->previous == nullptr)
-			{
-				CopyConfigFinalValues(gb);
-				runningConfigFile = false;
-			}
-			Pop(gb, false);
-			gb.Init();
-			if (gb.GetState() == GCodeState::normal)
-			{
-				UnlockAll(gb);
-				HandleReply(gb, GCodeResult::ok, "");
-				if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
+				// Finished printing SD card file.
+				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
+				// Don't close the file until all moves have been completed, in case the print gets paused.
+				// Also, this keeps the state as 'Printing' until the print really has finished.
+				if (   LockMovementAndWaitForStandstill(gb)					// wait until movement has finished
+					&& IsCodeQueueIdle()									// must also wait until deferred command queue has caught up
+				   )
 				{
-					gb.Put("M600");
-					filamentChangePausePending = false;
-				}
-				else if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
-				{
-					gb.Put("M226");
-					pausePending = false;
+					StopPrint(StopPrintReason::normalCompletion);
 				}
 			}
-		}
-		break;
-	}
-#elif HAS_LINUX_INTERFACE
-	if (gb.IsFileFinished())
-	{
-		gb.Init();								// mark buffer as empty
-
-		if (gb.MachineState().previous == nullptr)
-		{
-			// Finished printing SD card file.
-			// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
-			// Don't close the file until all moves have been completed, in case the print gets paused.
-			// Also, this keeps the state as 'Printing' until the print really has finished.
-			if (   LockMovementAndWaitForStandstill(gb)					// wait until movement has finished
-				&& IsCodeQueueIdle()									// must also wait until deferred command queue has caught up
-			   )
+			else
 			{
-				StopPrint(StopPrintReason::normalCompletion);
-			}
-		}
-		else
-		{
-			// Finished a macro or finished processing config.g
-			gb.MachineState().CloseFile();
-			if (runningConfigFile && gb.MachineState().previous->previous == nullptr)
-			{
-				CopyConfigFinalValues(gb);
-				runningConfigFile = false;
-			}
-
-			bool hadFileError = gb.MachineState().fileError;
-			Pop(gb, false);
-			gb.Init();
-			if (gb.GetState() == GCodeState::doingUnsupportedCode)
-			{
-				gb.SetState(GCodeState::normal);
-				UnlockAll(gb);
-
-				if (hadFileError)
+				// Finished a macro or finished processing config.g
+				gb.GetFileInput()->Reset(fd);
+				fd.Close();
+				if (runningConfigFile && gb.MachineState().previous->previous == nullptr)
 				{
-					HandleResult(gb, GCodeResult::warningNotSupported, reply, nullptr);
+					CopyConfigFinalValues(gb);
+					runningConfigFile = false;
 				}
-				else
+				Pop(gb, false);
+				gb.Init();
+				if (gb.GetState() == GCodeState::normal)
 				{
+					UnlockAll(gb);
 					HandleReply(gb, GCodeResult::ok, "");
+					if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
+					{
+						gb.Put("M600");
+						filamentChangePausePending = false;
+					}
+					else if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
+					{
+						gb.Put("M226");
+						pausePending = false;
+					}
 				}
 			}
-			else if (gb.GetState() == GCodeState::doingUserMacro)
-			{
-				gb.SetState(GCodeState::normal);
-				UnlockAll(gb);
-
-				// Output a warning message on demand
-				if (hadFileError)
-				{
-					(void)gb.Seen('P');
-					String<MaxFilenameLength + 32> reply;
-					gb.GetPossiblyQuotedString(reply.GetRef());
-					reply.Prepend("Macro file ");
-					reply.cat(" not found");
-					HandleReply(gb, GCodeResult::warning, reply.c_str());
-				}
-				else
-				{
-					HandleReply(gb, GCodeResult::ok, "");
-				}
-			}
-			else if (gb.GetState() == GCodeState::normal)
-			{
-				UnlockAll(gb);
-				HandleReply(gb, GCodeResult::ok, "");
-			}
+			break;
 		}
-	}
-	else if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
-	{
-		gb.Put("M600");
-		filamentChangePausePending = false;
-	}
-	else if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
-	{
-		gb.Put("M226");
-		pausePending = false;
-	}
-	else
-	{
-		reprap.GetLinuxInterface().FillBuffer(gb);
-	}
-#else
-	INTERNAL_ERROR;
 #endif
+	}
 }
 
 // Restore positions etc. when exiting simulation mode
@@ -851,42 +867,45 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 	isPaused = true;
 
 #if HAS_LINUX_INTERFACE
-	// Get the print pause reason that is compatible with the API
-	PrintPausedReason pauseReason = PrintPausedReason::user;
-	switch (reason)
+	if (reprap.UsingLinuxInterface())
 	{
-	case PauseReason::gcode:
-		pauseReason = PrintPausedReason::gcode;
-		break;
-	case PauseReason::filamentChange:
-		pauseReason = PrintPausedReason::filamentChange;
-		break;
-	case PauseReason::trigger:
-		pauseReason = PrintPausedReason::trigger;
-		break;
-	case PauseReason::heaterFault:
-		pauseReason = PrintPausedReason::heaterFault;
-		break;
-	case PauseReason::filament:
-		pauseReason = PrintPausedReason::filament;
-		break;
+		// Get the print pause reason that is compatible with the API
+		PrintPausedReason pauseReason = PrintPausedReason::user;
+		switch (reason)
+		{
+		case PauseReason::gcode:
+			pauseReason = PrintPausedReason::gcode;
+			break;
+		case PauseReason::filamentChange:
+			pauseReason = PrintPausedReason::filamentChange;
+			break;
+		case PauseReason::trigger:
+			pauseReason = PrintPausedReason::trigger;
+			break;
+		case PauseReason::heaterFault:
+			pauseReason = PrintPausedReason::heaterFault;
+			break;
+		case PauseReason::filament:
+			pauseReason = PrintPausedReason::filament;
+			break;
 # if HAS_SMART_DRIVERS
-	case PauseReason::stall:
-		pauseReason = PrintPausedReason::stall;
-		break;
+		case PauseReason::stall:
+			pauseReason = PrintPausedReason::stall;
+			break;
 # endif
 # if HAS_VOLTAGE_MONITOR
-	case PauseReason::lowVoltage:
-		pauseReason = PrintPausedReason::lowVoltage;
-		break;
+		case PauseReason::lowVoltage:
+			pauseReason = PrintPausedReason::lowVoltage;
+			break;
 # endif
-	default:
-		pauseReason = PrintPausedReason::user;
-		break;
-	}
+		default:
+			pauseReason = PrintPausedReason::user;
+			break;
+		}
 
-	// Prepare notification for the Linux side
-	reprap.GetLinuxInterface().SetPauseReason(pauseRestorePoint.filePos, pauseReason);
+		// Prepare notification for the Linux side
+		reprap.GetLinuxInterface().SetPauseReason(pauseRestorePoint.filePos, pauseReason);
+	}
 #endif
 
 	if (msg != nullptr)
@@ -2268,36 +2287,48 @@ void GCodes::EmergencyStop()
 // -1 = running a system macro automatically
 bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning)
 {
-#if HAS_MASS_STORAGE
-	FileStore * const f = platform.OpenSysFile(fileName, OpenMode::read);
-	if (f == nullptr)
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
 	{
+		if (!Push(gb, false))
+		{
+			return true;
+		}
+
+		gb.RequestMacroFile(fileName, reportMissing, codeRunning >= 0);
+	}
+	else
+#endif
+	{
+#if HAS_MASS_STORAGE
+		FileStore * const f = platform.OpenSysFile(fileName, OpenMode::read);
+		if (f == nullptr)
+		{
+			if (reportMissing)
+			{
+				platform.MessageF(WarningMessage, "Macro file %s not found\n", fileName);
+				return true;
+			}
+			return false;
+		}
+
+		if (!Push(gb, false))
+		{
+			f->Close();
+			return true;
+		}
+		gb.MachineState().fileState.Set(f);
+		gb.GetFileInput()->Reset(gb.MachineState().fileState);
+#else
 		if (reportMissing)
 		{
 			platform.MessageF(WarningMessage, "Macro file %s not found\n", fileName);
-			return true;
 		}
-		return false;
-	}
-
-	if (!Push(gb, false))
-	{
-		f->Close();
-		return true;
-	}
-	gb.MachineState().fileState.Set(f);
-	gb.GetFileInput()->Reset(gb.MachineState().fileState);
-#elif HAS_LINUX_INTERFACE
-	if (!Push(gb, false))
-	{
-		return true;
-	}
-
-	gb.RequestMacroFile(fileName, reportMissing, codeRunning >= 0);
-#else
-	return reportMissing;
+		return reportMissing;
 #endif
+	}
 
+#if HAS_LINUX_INTERFACE || HAS_MASS_STORAGE
 	gb.MachineState().doingFileMacro = true;
 	gb.MachineState().runningM501 = (codeRunning == 501);
 	gb.MachineState().runningM502 = (codeRunning == 502);
@@ -2308,19 +2339,27 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	gb.SetState(GCodeState::normal);
 	gb.Init();
 	return true;
+#endif
 }
 
 void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb)
 {
 	if (gb.IsDoingFileMacro())
 	{
-#if HAS_MASS_STORAGE
-		FileData &file = gb.MachineState().fileState;
-		gb.GetFileInput()->Reset(file);
-		file.Close();
-#elif HAS_LINUX_INTERFACE
-		gb.AbortFile(false);
+#if HAS_LINUX_INTERFACE
+		if (reprap.UsingLinuxInterface())
+		{
+			gb.AbortFile(false);
+		}
+		else
 #endif
+		{
+#if HAS_MASS_STORAGE
+			FileData &file = gb.MachineState().fileState;
+			gb.GetFileInput()->Reset(file);
+			file.Close();
+#endif
+		}
 
 		gb.PopState(true);
 		gb.Init();
@@ -2670,12 +2709,19 @@ void GCodes::StartPrinting(bool fromStart)
 	rawExtruderTotal = 0.0;
 	reprap.GetMove().ResetExtruderPositions();
 
-#if HAS_MASS_STORAGE
-	fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
-	fileGCode->GetFileInput()->Reset(fileGCode->OriginalMachineState().fileState);
-#elif HAS_LINUX_INTERFACE
-	fileGCode->OriginalMachineState().SetFileExecuting();
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		fileGCode->OriginalMachineState().SetFileExecuting();
+	}
+	else
 #endif
+	{
+#if HAS_MASS_STORAGE
+		fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
+		fileGCode->GetFileInput()->Reset(fileGCode->OriginalMachineState().fileState);
+#endif
+	}
 
 	lastFilamentError = FilamentSensorStatus::ok;
 	lastPrintingMoveHeight = -1.0;
@@ -3570,19 +3616,26 @@ void GCodes::StopPrint(StopPrintReason reason)
 	segmentsLeft = 0;
 	isPaused = pausePending = filamentChangePausePending = false;
 
-#if HAS_MASS_STORAGE
-	FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
-
-	fileGCode->GetFileInput()->Reset(fileBeingPrinted);
-	fileGCode->Init();
-
-	if (fileBeingPrinted.IsLive())
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
 	{
-		fileBeingPrinted.Close();
+		fileGCode->MachineState().CloseFile();
 	}
-#elif HAS_LINUX_INTERFACE
-	fileGCode->MachineState().CloseFile();
+	else
 #endif
+	{
+#if HAS_MASS_STORAGE
+		FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
+
+		fileGCode->GetFileInput()->Reset(fileBeingPrinted);
+		fileGCode->Init();
+
+		if (fileBeingPrinted.IsLive())
+		{
+			fileBeingPrinted.Close();
+		}
+#endif
+	}
 
 	reprap.GetMove().ResetMoveCounters();
 	codeQueue->Clear();

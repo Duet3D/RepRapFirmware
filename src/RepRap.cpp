@@ -148,9 +148,13 @@ DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
 	activeToolHeaters(0), ticksInSpinState(0),
 	heatTaskIdleTicks(0),
-	spinningModule(noModule), debug(0), stopped(false),
-	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0),
-	diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false)
+	debug(0),
+	beepFrequency(0), beepDuration(0),
+	diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
+	spinningModule(noModule), stopped(false), active(false), resetting(false), processingConfig(true)
+#if HAS_LINUX_INTERFACE
+	, usingLinuxInterface(true)
+#endif
 {
 	OutputBuffer::Init();
 	platform = new Platform();
@@ -257,19 +261,17 @@ void RepRap::Init()
 		{
 			// Run the configuration file
 			const char *configFile = platform->GetConfigFile();
-			platform->Message(UsbMessage, "\nExecuting ");
-			if (platform->SysFileExists(configFile))
-			{
-				platform->MessageF(UsbMessage, "%s...", configFile);
-			}
-			else
+			if (!platform->SysFileExists(configFile))
 			{
 				configFile = platform->GetDefaultFile();
-				platform->MessageF(UsbMessage, "%s (no configuration file found)...", configFile);
 			}
 
+# if HAS_LINUX_INTERFACE
+			usingLinuxInterface = false;
+# endif
 			if (gCodes->RunConfigFile(configFile))
 			{
+				platform->MessageF(UsbMessage, "\nExecuting %s...", configFile);
 				do
 				{
 					// GCodes::Spin will read the macro and ensure IsDaemonBusy returns false when it's done
@@ -279,13 +281,19 @@ void RepRap::Init()
 			}
 			else
 			{
-				platform->Message(UsbMessage, "Error, not found\n");
+# if HAS_LINUX_INTERFACE
+				usingLinuxInterface = true;
+# else
+				platform->Message(UsbMessage, "\nError, no configuration file found\n");
+# endif
 			}
 		}
 		else
 		{
+# if !HAS_LINUX_INTERFACE
 			delay(3000);			// Wait a few seconds so users have a chance to see this
 			platform->MessageF(UsbMessage, "%s\n", reply.c_str());
+# endif
 		}
 	}
 #endif

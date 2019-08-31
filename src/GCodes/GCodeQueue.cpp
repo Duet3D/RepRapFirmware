@@ -214,11 +214,14 @@ void GCodeQueue::Diagnostics(MessageType mtype)
 		do
 		{
 			queueLength++;
-#if !HAS_LINUX_INTERFACE
-			// This may output binary gibberish if this code is stored in binary.
+#if HAS_LINUX_INTERFACE
+			// The following may output binary gibberish if this code is stored in binary.
 			// We could restore this message by using GCodeBuffer::AppendFullCommand but there is probably no need to
-			reprap.GetPlatform().MessageF(mtype, "Queued '%s' for move %" PRIu32 "\n", item->data, item->executeAtMove);
+			if (!reprap.UsingLinuxInterface())
 #endif
+			{
+				reprap.GetPlatform().MessageF(mtype, "Queued '%s' for move %" PRIu32 "\n", item->data, item->executeAtMove);
+			}
 		} while ((item = item->Next()) != nullptr);
 		reprap.GetPlatform().MessageF(mtype, "%d of %d codes have been queued.\n", queueLength, maxQueuedCodes);
 	}
