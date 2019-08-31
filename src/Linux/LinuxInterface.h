@@ -8,6 +8,8 @@
 #ifndef SRC_LINUX_LINUXINTERFACE_H_
 #define SRC_LINUX_LINUXINTERFACE_H_
 
+#include "RTOSIface/RTOSIface.h"
+
 #include "GCodes/GCodeFileInfo.h"
 #include "MessageFormats.h"
 #include "MessageType.h"
@@ -20,6 +22,8 @@ class GCodeBuffer;
 class OutputBuffer;
 class OutputStack;
 
+constexpr size_t MaxFileChunkSize = 448;	// Maximum size of file chunks for reading files from the SBC. Should be a multiple of sizeof(CanMessageFirmwareUpdateResponse::data) for best CAN performance
+
 // G-Code input class for an SPI channel
 class LinuxInterface
 {
@@ -31,9 +35,11 @@ public:
 	void Spin();
 	void Diagnostics(MessageType mtype);
 
-	bool FillBuffer(GCodeBuffer &gb);			// Try to fill up the G-code buffer with the next available G=code
+	bool FillBuffer(GCodeBuffer &gb);		// Try to fill up the G-code buffer with the next available G-code
 
 	void SetPauseReason(FilePosition position, PrintPausedReason reason);	// Notify Linux that the print has been paused
+	void RequestFileChunk(const char *filename, uint32_t offset, uint32_t maxLength, TaskHandle task); 	// Request a file chunk and resume the given task when it has been received
+	const char *GetFileChunk(int &bytesRead, uint32_t fileLength);	// Get another received file chunk and the number of bytes read. If an error occurred, the number of bytes read is -1
 
 private:
 	DataTransfer *transfer;
@@ -50,6 +56,13 @@ private:
 	bool sendBufferUpdate;
 
 	uint32_t iapWritePointer;
+
+	String<FILENAME_MAX> requestedFileName;
+	uint32_t requestedFileOffset, requestedFileLength;
+	TaskHandle requestedFileTask;
+
+	char requestedFileChunk[MaxFileChunkSize];
+	int32_t requestedFileDataLength;
 
 	OutputStack *gcodeReply;
 	void HandleGCodeReply(MessageType type, const char *reply);		// accessed by Platform
