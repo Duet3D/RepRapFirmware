@@ -545,7 +545,7 @@ void CanInterface::SendMotion(CanMessageBuffer *buf)
 	canSenderTask.Give();
 }
 
-// Send a request to an expansion board
+// Send a request to an expansion board and append the response to 'reply'
 GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, const StringRef& reply)
 {
 	taskWaitingOnFifo1 = TaskBase::GetCallerTaskHandle();
@@ -592,7 +592,7 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 	}
 
 	CanMessageBuffer::Free(buf);
-	reply.lcat("Timed out waiting for response from CAN-connected device");
+	reply.lcatf("Timed out waiting for response from CAN device %u", dest);
 	return GCodeResult::error;
 }
 
@@ -706,6 +706,28 @@ GCodeResult CanInterface::SetRemoteDriverStallParameters(const CanDriversList& d
 		}
 	}
 	return GCodeResult::ok;
+}
+
+// Get diagnostics from and expansion board
+GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, CanAddress board, const StringRef& reply)
+{
+	if (board > CanId::MaxNormalAddress)
+	{
+		reply.copy("Invalid board address");
+		return GCodeResult::error;
+	}
+
+	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		reply.copy("No CAN buffer available");
+		return GCodeResult::error;
+	}
+
+	reply.printf("Diagnostics for board %u:", board);
+	auto msg = buf->SetupRequestMessage<CanMessageDiagnostics>(CanId::MasterAddress, board);
+	msg->type = 0;
+	return SendRequestAndGetStandardReply(buf, reply);
 }
 
 #endif

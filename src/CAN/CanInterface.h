@@ -9,10 +9,11 @@
 #define SRC_CAN_CANINTERFACE_H_
 
 #include "RepRapFirmware.h"
-#include "GCodes/GCodeResult.h"
 
 #if SUPPORT_CAN_EXPANSION
 
+#include "GCodes/GCodeResult.h"
+#include "MessageType.h"
 #include <CanId.h>
 
 class CanMessageBuffer;
@@ -62,6 +63,8 @@ namespace CanInterface
 	CanAddress GetCanAddress();
 	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, const StringRef& reply);
 	void SendResponse(CanMessageBuffer *buf);
+
+	GCodeResult RemoteDiagnostics(MessageType mt, CanAddress board, const StringRef& reply);
 
 	// Motor control functions
 	void SendMotion(CanMessageBuffer *buf);

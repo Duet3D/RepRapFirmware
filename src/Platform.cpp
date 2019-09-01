@@ -3123,6 +3123,10 @@ void Platform::SetExtruderDriver(size_t extruder, DriverId driver)
 #endif
 		driveDriverBits[extruder + MaxAxes] = StepPins::CalcDriverBitmap(driver.localDriver);
 	}
+	else
+	{
+		driveDriverBits[extruder + MaxAxes] = 0;
+	}
 }
 
 void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4])

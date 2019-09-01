@@ -193,14 +193,6 @@ void GCodes::Init()
 	reprap.GetScanner().SetGCodeBuffer(usbGCode);
 #endif
 
-#if HAS_LINUX_INTERFACE
-	// config.g cannot be executed when the firmware boots but request it from Linux
-	if (reprap.UsingLinuxInterface())
-	{
-		RunConfigFile(platform.GetConfigFile());
-	}
-#endif
-
 #if SUPPORT_DOTSTAR_LED
 	DotStarLed::Init();
 #endif
@@ -488,7 +480,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 		 if (!(&gb == usbGCode && reprap.GetScanner().IsRegistered()))
 #endif
 	{
-		bool gotCommand = (gb.GetNormalInput() != nullptr) ? gb.GetNormalInput()->FillBuffer(&gb) : false;
+		const bool gotCommand = (gb.GetNormalInput() != nullptr) ? gb.GetNormalInput()->FillBuffer(&gb) : false;
 #ifdef SERIAL_AUX_DEVICE
 		if (gotCommand && &gb == auxGCode)
 		{

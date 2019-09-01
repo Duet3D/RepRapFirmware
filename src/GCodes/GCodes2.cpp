@@ -40,6 +40,10 @@
 # include "Fans/DotStarLed.h"
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+# include "CAN/CanInterface.h"
+#endif
+
 #include <utility>			// for std::swap
 
 // If the code to act on is completed, this returns true, otherwise false.
@@ -1660,7 +1664,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (val == 0)
 			{
 				// Set the Push flag to combine multiple messages into a single OutputBuffer chain
-				reprap.Diagnostics((MessageType)(gb.GetResponseMessageType() | PushFlag));
+				const MessageType mt = (MessageType)(gb.GetResponseMessageType() | PushFlag);
+#if SUPPORT_CAN_EXPANSION
+				if (gb.Seen('B'))
+				{
+					const CanAddress board = gb.GetUIValue();
+					if (board != CanId::MasterAddress)
+					{
+						result = CanInterface::RemoteDiagnostics(mt, board, reply);
+						break;
+					}
+				}
+#endif
+				reprap.Diagnostics(mt);
 			}
 			else
 			{

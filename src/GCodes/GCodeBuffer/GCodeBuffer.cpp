@@ -109,6 +109,10 @@ void GCodeBuffer::Diagnostics(MessageType mtype)
 		scratchString.catf(" %d", (int)ms->state);
 		ms = ms->previous;
 	} while (ms != nullptr);
+	if (IsDoingFileMacro())
+	{
+		scratchString.cat(", running macro");
+	}
 	scratchString.cat('\n');
 	reprap.GetPlatform().Message(mtype, scratchString.c_str());
 }

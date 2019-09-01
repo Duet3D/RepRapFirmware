@@ -267,7 +267,7 @@ void RepRap::Init()
 			}
 
 # if HAS_LINUX_INTERFACE
-			usingLinuxInterface = false;
+			usingLinuxInterface = false;				// try to run config.g from the SD card
 # endif
 			if (gCodes->RunConfigFile(configFile))
 			{
@@ -282,7 +282,7 @@ void RepRap::Init()
 			else
 			{
 # if HAS_LINUX_INTERFACE
-				usingLinuxInterface = true;
+				usingLinuxInterface = true;				// we failed to open config.g or default.g so assume we have a SBC connected
 # else
 				platform->Message(UsbMessage, "\nError, no configuration file found\n");
 # endif
@@ -297,7 +297,15 @@ void RepRap::Init()
 		}
 	}
 #endif
+
 	processingConfig = false;
+
+#if HAS_LINUX_INTERFACE
+	if (usingLinuxInterface)
+	{
+		gCodes->RunConfigFile(platform->GetConfigFile());		// we didn't get config.g from SD card so request it from Linux
+	}
+#endif
 
 	// Enable network (unless it's disabled)
 	network->Activate();			// need to do this here, as the configuration GCodes may set IP address etc.
@@ -307,6 +315,7 @@ void RepRap::Init()
 	HSMCI->HSMCI_IDR = 0xFFFFFFFF;	// disable all HSMCI interrupts
 	NVIC_EnableIRQ(HSMCI_IRQn);
 #endif
+
 	platform->MessageF(UsbMessage, "%s is up and running.\n", FIRMWARE_NAME);
 
 	fastLoop = UINT32_MAX;
