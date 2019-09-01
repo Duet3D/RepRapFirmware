@@ -4,8 +4,8 @@
 #define FIRMWARE_NAME		"RepRapFirmware for Duet 3 v0.6"
 #define DEFAULT_BOARD_TYPE	BoardType::Duet3_06
 const size_t NumFirmwareUpdateModules = 1;
-#define IAP_FIRMWARE_FILE	"Duet3Firmware.bin"
-#define IAP_UPDATE_FILE		"iapduet3.bin"
+#define IAP_FIRMWARE_FILE	"Duet3Firmware_MAIN6HC.bin"
+#define IAP_UPDATE_FILE		"Duet3iap_MAIN6HC.bin"
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1

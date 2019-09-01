@@ -4,9 +4,9 @@
 #define FIRMWARE_NAME		"RepRapFirmware for Duet 3 v.03"
 #define DEFAULT_BOARD_TYPE	BoardType::Duet3_03
 const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
-#define IAP_FIRMWARE_FILE	"Duet3Firmware.bin"
+#define IAP_FIRMWARE_FILE	"Duet3Firmware_MAIN_V03.bin"
 #define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
-#define IAP_UPDATE_FILE		"iapduet3.bin"
+#define IAP_UPDATE_FILE		"Duet3iap_MAIN_V03.bin"
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
