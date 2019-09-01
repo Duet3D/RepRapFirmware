@@ -1398,11 +1398,12 @@ int32_t StringParser::ReadIValue(const char *p, const char **endptr)
 DriverId StringParser::ReadDriverIdValue(const char *p, const char **endptr)
 {
 	DriverId result;
-	const uint32_t v1 = ReadUIValue(p, endptr);
+	const char *endp;
+	const uint32_t v1 = ReadUIValue(p, &endp);
 #if SUPPORT_CAN_EXPANSION
-	if (**endptr == '.')
+	if (*endp == '.')
 	{
-		const uint32_t v2 = ReadUIValue(*endptr + 1, endptr);
+		const uint32_t v2 = ReadUIValue(endp + 1, &endp);
 		result.localDriver = v2;
 		result.boardAddress = v1;
 	}
@@ -1414,6 +1415,10 @@ DriverId StringParser::ReadDriverIdValue(const char *p, const char **endptr)
 #else
 	result.localDriver = v1;
 #endif
+	if (endptr != nullptr)
+	{
+		*endptr = endp;
+	}
 	return result;
 }
 

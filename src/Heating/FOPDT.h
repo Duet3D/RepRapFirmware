@@ -66,7 +66,6 @@ public:
 
 #if SUPPORT_CAN_EXPANSION
 	void SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg);
-	void UpdateFromCanMessage(const CanMessageUpdateHeaterModel& msg);
 #endif
 
 private:

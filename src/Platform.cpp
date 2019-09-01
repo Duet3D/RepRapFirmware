@@ -3024,7 +3024,7 @@ bool Platform::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool inte
 					},
 					[microsteps, interp, &canDriversToUpdate](DriverId driver)
 					{
-						canDriversToUpdate.AddEntry(driver, (interp) ? microsteps | 0x8000 : interp);
+						canDriversToUpdate.AddEntry(driver, (interp) ? microsteps | 0x8000 : microsteps);
 					}
 				  );
 	return CanInterface::SetRemoteDriverMicrostepping(canDriversToUpdate, reply) && ok;

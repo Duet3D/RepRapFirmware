@@ -2639,9 +2639,9 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 	reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 
 	// Now the extruder coordinates
-	for (size_t i = MaxAxes; i < MaxAxesPlusExtruders; i++)
+	for (size_t i = 0; i < numExtruders; i++)
 	{
-		s.catf("E%u:%.1f ", i - MaxAxes, (double)liveCoordinates[i]);
+		s.catf("E%u:%.1f ", i, (double)liveCoordinates[i + MaxAxes]);
 	}
 
 	// Print the axis stepper motor positions as Marlin does, as an aid to debugging.

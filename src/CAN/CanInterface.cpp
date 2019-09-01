@@ -330,6 +330,9 @@ extern "C" void CanSenderLoop(void *)
 				pendingBuffers = buf->next;
 			}
 
+#if 0
+			buf->msg.move.DebugPrint();
+#endif
 			// Send the message
 			mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexMotion, MaxMotionSendWait);
 
@@ -634,6 +637,10 @@ extern "C" void CanReceiverLoop(void *)
 
 					CommandProcessor::ProcessReceivedMessage(buf);
 				}
+				else
+				{
+					CanMessageBuffer::Free(buf);
+				}
 			}
 		}
 		else
@@ -675,7 +682,7 @@ bool CanInterface::SetRemoteDriverMicrostepping(const CanDriversData& data, cons
 GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply)
 pre(driver.IsRemote())
 {
-	CanMessageGenericConstructor cons(M950Params);
+	CanMessageGenericConstructor cons(M569Params);
 	cons.PopulateFromCommand(gb, reply);
 	return cons.SendAndGetResponse(CanMessageType::m569, driver.boardAddress, reply);
 }
@@ -717,7 +724,7 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, CanAddress board, co
 		return GCodeResult::error;
 	}
 
-	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		reply.copy("No CAN buffer available");

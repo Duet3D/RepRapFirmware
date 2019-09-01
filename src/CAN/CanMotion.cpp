@@ -83,7 +83,7 @@ void CanMotion::AddMovement(const DDA& dda, const PrepParams& params, DriverId c
 		move->zMovement = params.zMovement;
 
 		// Clear out the per-drive fields
-		for (size_t drive = 0; drive < DriversPerCanBoard; ++drive)
+		for (size_t drive = 0; drive < ARRAY_SIZE(move->perDrive); ++drive)
 		{
 			move->perDrive[drive].steps = 0;
 		}

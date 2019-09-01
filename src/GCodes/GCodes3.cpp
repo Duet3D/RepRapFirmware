@@ -1077,7 +1077,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply)
 	{
 		const DriverId id = gb.GetDriverId();
 #if SUPPORT_CAN_EXPANSION
-		if (id.boardAddress != 0)
+		if (id.boardAddress != CanId::MasterAddress)
 		{
 			return CanInterface::ConfigureRemoteDriver(id, gb, reply);
 		}
@@ -1167,7 +1167,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply)
 				}
 
 #if SUPPORT_TMC51xx
-				if (gb.TryGetUIValue('H', val, seen))		// set microstep interval for changing from stealthChop to spreadCycle
+				if (gb.TryGetUIValue('H', val, seen))		// set coolStep threshold
 				{
 					if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::thigh, val))
 					{
@@ -1205,7 +1205,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply)
 				}
 				else
 				{
-					reply.copy("Expected 2 or 3 H values");
+					reply.copy("Expected 2 or 3 Y values");
 					return GCodeResult::error;
 				}
 			}
@@ -1216,7 +1216,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply)
 								drive,
 								(platform.GetDirectionValue(drive)) ? "forwards" : "in reverse",
 								(platform.GetEnableValue(drive)) ? "high" : "low");
-								float timings[4];
+				float timings[4];
 				const bool isSlowDriver = platform.GetDriverStepTiming(drive, timings);
 				if (isSlowDriver)
 				{

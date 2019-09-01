@@ -155,7 +155,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 			msgp->fileOffset = 0;
 			buf->dataLength = msgp->GetActualDataLength();
 			CanInterface::SendResponse(buf);
-			reprap.GetPlatform().MessageF(ErrorMessage, "Received firmware update request for unknown file '%s'\n", fname.c_str());
+			reprap.GetPlatform().MessageF(ErrorMessage, "Received firmware update request for missing file '%s'\n", fname.c_str());
 		}
 	}
 	else
@@ -181,7 +181,7 @@ pre(buf->id.MsgType() == CanMessageType::temperatureReport)
 	size_t index = 0;
 	for (unsigned int sensor = 0; sensor < 64 && sensorsReported != 0; ++sensor)
 	{
-		if (((uint32_t)sensorsReported & 1u) != 0)
+		if (((uint8_t)sensorsReported & 1u) != 0)
 		{
 			if (index < ARRAY_SIZE(msg.temperatureReports))
 			{

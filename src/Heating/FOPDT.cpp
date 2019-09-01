@@ -151,32 +151,9 @@ void FopDt::SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& ms
 	msg.inverted = inverted;
 	msg.pidParametersOverridden = pidParametersOverridden;
 
-	msg.setpointChangeParams.kP = setpointChangeParams.kP;
-	msg.setpointChangeParams.recipTi = setpointChangeParams.recipTi;
-	msg.setpointChangeParams.tD = setpointChangeParams.tD;
-	msg.loadChangeParams.kP = loadChangeParams.kP;
-	msg.loadChangeParams.recipTi = loadChangeParams.recipTi;
-	msg.loadChangeParams.tD = loadChangeParams.tD;
-}
-
-void FopDt::UpdateFromCanMessage(const CanMessageUpdateHeaterModel& msg)
-{
-	gain = msg.gain;
-	timeConstant = msg.timeConstant;
-	deadTime = msg.deadTime;
-	maxPwm = msg.maxPwm;
-	standardVoltage = msg.standardVoltage;
-	enabled = msg.enabled;
-	usePid = msg.usePid;
-	inverted = msg.inverted;
-	pidParametersOverridden = msg.pidParametersOverridden;
-
-	setpointChangeParams.kP = msg.setpointChangeParams.kP;
-	setpointChangeParams.recipTi = msg.setpointChangeParams.recipTi;
-	setpointChangeParams.tD = msg.setpointChangeParams.tD;
-	loadChangeParams.kP = msg.loadChangeParams.kP;
-	loadChangeParams.recipTi = msg.loadChangeParams.recipTi;
-	loadChangeParams.tD = msg.loadChangeParams.tD;
+	msg.kP = setpointChangeParams.kP;
+	msg.recipTi = setpointChangeParams.recipTi;
+	msg.tD = setpointChangeParams.tD;
 }
 
 #endif

@@ -93,6 +93,13 @@ bool CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb, const St
 				}
 				break;
 
+			case ParamDescriptor::localDriver:
+				{
+					const DriverId id = gb.GetDriverId();
+					overflowed = StoreValue(id.localDriver);
+				}
+				break;
+
 			case ParamDescriptor::int8:
 				{
 					const int8_t val = (int8_t)gb.GetIValue();

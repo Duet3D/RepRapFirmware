@@ -1390,24 +1390,37 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 				// It's an extruder drive
 				if (directionVector[drive] != 0.0)
 				{
+					//TODO For now we allocate a DM even if the drive is remote so that we can use the code in PreparExtruder, but we ought to factor it out
+					//TODO For remote drivers, I think we may be adjusting the net steps twice for pressure advance, once here in prepareExtruder and once on the expansion board
 					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
+
+					// If there is any extruder jerk in this move, in theory that means we need to instantly extrude or retract some amount of filament.
+					// Pass the speed change to PrepareExtruder
+					float speedChange;
+					if (flags.usePressureAdvance)
+					{
+						const float prevEndSpeed = (prev->flags.usePressureAdvance) ? prev->endSpeed * prev->directionVector[drive] : 0.0;
+						speedChange = (startSpeed * directionVector[drive]) - prevEndSpeed;
+					}
+					else
+					{
+						speedChange = 0.0;
+					}
+
+					const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionPending[drive - MaxAxes], speedChange, flags.usePressureAdvance);
+
+#if SUPPORT_CAN_EXPANSION
+					const DriverId driver = platform.GetExtruderDriver(drive - MaxAxes);
+					if (driver.IsRemote())
+					{
+						CanMotion::AddMovement(*this, params, driver, pdm->GetSteps());
+					}
+#endif
 					if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 					{
 						reprap.GetPlatform().EnableLocalDrivers(drive);
-						// If there is any extruder jerk in this move, in theory that means we need to instantly extrude or retract some amount of filament.
-						// Pass the speed change to PrepareExtruder
-						float speedChange;
-						if (flags.usePressureAdvance)
-						{
-							const float prevEndSpeed = (prev->flags.usePressureAdvance) ? prev->endSpeed * prev->directionVector[drive] : 0.0;
-							speedChange = (startSpeed * directionVector[drive]) - prevEndSpeed;
-						}
-						else
-						{
-							speedChange = 0.0;
-						}
 
-						if (pdm->PrepareExtruder(*this, params, extrusionPending[drive - MaxAxes], speedChange, flags.usePressureAdvance))
+						if (stepsToDo)
 						{
 							// Check for sensible values, print them if they look dubious
 							if (   reprap.Debug(moduleDda)
@@ -1431,20 +1444,6 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 							completedDMs = pdm;
 						}
 					}
-					else
-					{
-						pdm->state = DMState::idle;								// no local drivers involved
-						pdm->nextDM = completedDMs;
-						completedDMs = pdm;
-					}
-
-#if SUPPORT_CAN_EXPANSION
-					const DriverId driver = platform.GetExtruderDriver(drive - MaxAxes);
-					if (driver.IsRemote())
-					{
-						CanMotion::AddMovement(*this, params, driver, pdm->GetSteps());
-					}
-#endif
 				}
 			}
 		}
