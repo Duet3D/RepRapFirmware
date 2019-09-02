@@ -35,6 +35,10 @@
 # endif
 #endif
 
+#if defined(DUET3_V03) || defined(DUET3_V05) || defined(DUET3_V06)
+# define DUET3	1
+#endif
+
 #if !defined(P_INCLUDE_FILE)
 # define P_EXPAND(x) x
 # define P_CONCAT(x,y) P_EXPAND(x)y

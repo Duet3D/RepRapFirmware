@@ -294,7 +294,7 @@ void Platform::Init()
 	auxMutex.Create("Aux");
 	auxDetected = false;
 	auxSeq = 0;
-	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
+	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the port initialisation in CoreNG isn't complete at that point
 #endif
 
 #ifdef SERIAL_AUX2_DEVICE
@@ -349,7 +349,7 @@ void Platform::Init()
 	numSmartDrivers = MaxSmartDrivers;							// for now we assume that expansion drivers are smart too
 #elif defined(PCCB)
 	numSmartDrivers = MaxSmartDrivers;
-#elif defined(DUET3_V03) || defined(DUET3_V05) || defined(DUET3_V06)
+#elif defined(DUET3)
 	numSmartDrivers = MaxSmartDrivers;
 #endif
 
@@ -457,7 +457,7 @@ void Platform::Init()
 		// Set up the control pins
 		pinMode(STEP_PINS[driver], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
-#if !(defined(DUET3_V03) || defined(DUET3_V05) || defined(DUET3_V06))
+#if !defined(DUET3)
 		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
 #endif
 
@@ -1079,7 +1079,7 @@ void Platform::Spin()
 		return;
 	}
 
-#if defined(DUET3_V03) || defined(DUET3_V05) || defined(DUET3_V06)
+#if defined(DUET3)
 	// Blink the LED at about 2Hz. The expansion boards will blink in sync when they have established clock sync with us.
 	digitalWrite(DiagPin, (StepTimer::GetInterruptClocks() & (1u << 19)) != 0);
 #endif
@@ -2634,7 +2634,7 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent)
 #endif
 		UpdateMotorCurrent(driver, requiredCurrent);
 
-#if (defined(DUET3_V03) || defined(DUET3_V05) || defined(DUET3_V06)) && HAS_SMART_DRIVERS
+#if defined(DUET3) && HAS_SMART_DRIVERS
 		SmartDrivers::EnableDrive(driver, true);		// all drivers driven directly by the main board are smart
 #elif HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
@@ -2658,7 +2658,7 @@ void Platform::DisableOneLocalDriver(size_t driver)
 {
 	if (driver < NumDirectDrivers)
 	{
-#if (defined(DUET3_V03) || defined(DUET3_V05) || defined(DUET3_V06)) && HAS_SMART_DRIVERS
+#if defined(DUET3) && HAS_SMART_DRIVERS
 		SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
 #elif HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)

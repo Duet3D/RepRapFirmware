@@ -900,6 +900,17 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 		return GCodeResult::notFinished;
 	}
 
+#ifdef DUET3
+	if (gb.Seen('B'))
+	{
+		const uint32_t boardNumber = gb.GetUIValue();
+		if (boardNumber != CanId::MasterAddress)
+		{
+			return CanInterface::UpdateRemoteFirmware((CanAddress)boardNumber, gb, reply);
+		}
+	}
+#endif
+
 	reprap.GetHeat().SwitchOffAll(true);				// turn all heaters off because the main loop may get suspended
 	DisableDrives();									// all motors off
 

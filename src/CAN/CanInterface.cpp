@@ -716,9 +716,9 @@ GCodeResult CanInterface::SetRemoteDriverStallParameters(const CanDriversList& d
 }
 
 // Get diagnostics from and expansion board
-GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, CanAddress board, const StringRef& reply)
+GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
 {
-	if (board > CanId::MaxNormalAddress)
+	if (boardAddress > CanId::MaxNormalAddress)
 	{
 		reply.copy("Invalid board address");
 		return GCodeResult::error;
@@ -731,9 +731,33 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, CanAddress board, co
 		return GCodeResult::error;
 	}
 
-	reply.printf("Diagnostics for board %u:", board);
-	auto msg = buf->SetupRequestMessage<CanMessageDiagnostics>(CanId::MasterAddress, board);
+	reply.printf("Diagnostics for board %u:", (unsigned int)boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageDiagnostics>(CanId::MasterAddress, (CanAddress)boardAddress);
 	msg->type = 0;
+	return SendRequestAndGetStandardReply(buf, reply);
+}
+
+// Tell an expansion board to update
+GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
+{
+	if (boardAddress > CanId::MaxNormalAddress)
+	{
+		reply.copy("Invalid board address");
+		return GCodeResult::error;
+	}
+
+	// TODO ask the expansion board for its short name and check we have the firmware file for it
+
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		reply.copy("No CAN buffer available");
+		return GCodeResult::error;
+	}
+
+	auto msg = buf->SetupRequestMessage<CanMessageUpdateYourFirmware>(CanId::MasterAddress, (CanAddress)boardAddress);
+	msg->boardId = (uint8_t)boardAddress;
+	msg->invertedBoardId = (uint8_t)~boardAddress;
 	return SendRequestAndGetStandardReply(buf, reply);
 }
 

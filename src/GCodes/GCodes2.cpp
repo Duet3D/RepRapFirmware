@@ -1668,10 +1668,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 #if SUPPORT_CAN_EXPANSION
 				if (gb.Seen('B'))
 				{
-					const CanAddress board = gb.GetUIValue();
+					const uint32_t board = gb.GetUIValue();
 					if (board != CanId::MasterAddress)
 					{
-						result = CanInterface::RemoteDiagnostics(mt, board, reply);
+						result = CanInterface::RemoteDiagnostics(mt, board, gb, reply);
 						break;
 					}
 				}
