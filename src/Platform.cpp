@@ -689,7 +689,7 @@ void Platform::UpdateFirmware()
 	FileStore * const iapFile = OpenFile(DEFAULT_SYS_DIR, IAP_UPDATE_FILE, OpenMode::read);
 	if (iapFile == nullptr)
 	{
-		MessageF(FirmwareUpdateMessage, "IAP not found\n");
+		MessageF(FirmwareUpdateMessage, "IAP file '" IAP_UPDATE_FILE "' not found\n");
 		return;
 	}
 

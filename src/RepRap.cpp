@@ -1548,6 +1548,10 @@ OutputBuffer *RepRap::GetConfigResponse()
 #endif
 	response->cat("\",\"firmwareName\":");
 	response->EncodeString(FIRMWARE_NAME, false);
+#ifdef BOARD_SHORT_NAME
+	response->cat(",\"boardName\":");
+	response->EncodeString(BOARD_SHORT_NAME, false);
+#endif
 	response->cat(",\"firmwareVersion\":");
 	response->EncodeString(VERSION, false);
 

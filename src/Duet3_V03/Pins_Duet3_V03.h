@@ -1,12 +1,14 @@
 #ifndef PINS_SAME70_H__
 #define PINS_SAME70_H__
 
-#define FIRMWARE_NAME		"RepRapFirmware for Duet 3 v.03"
+#define BOARD_SHORT_NAME	"MBP03"
+#define FIRMWARE_NAME		"RepRapFirmware for Duet 3 v0.3"
 #define DEFAULT_BOARD_TYPE	BoardType::Duet3_03
-const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
-#define IAP_FIRMWARE_FILE	"Duet3Firmware_MAIN_V03.bin"
+const size_t NumFirmwareUpdateModules = 4;			// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
+
+#define IAP_FIRMWARE_FILE	"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
 #define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
-#define IAP_UPDATE_FILE		"Duet3iap_MAIN_V03.bin"
+#define IAP_UPDATE_FILE		"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
