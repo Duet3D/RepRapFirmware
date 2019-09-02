@@ -4557,6 +4557,16 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		rslt = GCodeResult::error;
 		break;
 
+	case GCodeResult::remoteInternalError:
+		if (!gb.IsBinary() && gb.IsDoingFile())
+		{
+			gb.PrintCommand(reply);
+			reply.cat(": ");
+		}
+		reply.cat("CAN-connected board reported internal error");
+		rslt = GCodeResult::error;
+		break;
+
 	case GCodeResult::error:
 		if (!gb.IsBinary() && gb.IsDoingFile())
 		{

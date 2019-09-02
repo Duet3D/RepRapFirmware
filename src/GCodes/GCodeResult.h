@@ -20,7 +20,8 @@ enum class GCodeResult : uint8_t
 	warningNotSupported,
 	errorNotSupported,
 	notSupportedInCurrentMode,
-	badOrMissingParameter
+	badOrMissingParameter,
+	remoteInternalError
 };
 
 // Convert a true/false error/no-error indication to a GCodeResult

@@ -17,7 +17,7 @@ public:
 	IoPort();
 	bool SetMode(PinAccess access);
 	void Release();
-	void AppendDetails(const StringRef& str);
+	void AppendDetails(const StringRef& str) const;
 
 	static size_t AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort * const ports[], const PinAccess access[]);
 	bool AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, PinAccess access);
@@ -80,8 +80,7 @@ class PwmPort : public IoPort
 public:
 	PwmPort();
 
-	void AppendDetails(const StringRef& str);
-
+	void AppendDetails(const StringRef& str) const;			// hides the one in IoPort
 	void SetFrequency(PwmFrequency freq) { frequency = freq; }
 	void WriteAnalog(float pwm) const;
 

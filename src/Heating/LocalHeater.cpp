@@ -134,7 +134,7 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(GCodeBuffer& gb, const StringRef
 		}
 		else
 		{
-			reply.cat(", no sensor configured");
+			reply.cat(", no sensor");
 		}
 	}
 	return GCodeResult::ok;
