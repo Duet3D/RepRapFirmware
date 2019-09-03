@@ -20,7 +20,7 @@
 
 LinuxInterface::LinuxInterface() : transfer(new DataTransfer()), wasConnected(false), numDisconnects(0),
 	reportPause(false), rxPointer(0), txPointer(0), txLength(0), sendBufferUpdate(true),
-	iapWritePointer(IAP_FLASH_START), requestedFileTask(nullptr), gcodeReply(new OutputStack())
+	iapWritePointer(IAP_FLASH_START), gcodeReply(new OutputStack())
 {
 }
 
@@ -98,7 +98,9 @@ void LinuxInterface::Spin()
 			case LinuxRequest::GetObjectModel:
 			{
 				uint8_t module = transfer->ReadGetObjectModel();
-				OutputBuffer *buffer = reprap.GetStatusResponse(module, ResponseSource::Generic);
+				OutputBuffer *buffer = (module != 5)
+						? reprap.GetStatusResponse(module, ResponseSource::Generic)
+								: reprap.GetConfigResponse();
 				if (buffer != nullptr && !transfer->WriteObjectModel(module, buffer))
 				{
 					// Failed to write the whole object model, try again later
@@ -280,12 +282,8 @@ void LinuxInterface::Spin()
 
 			// Return a file chunk
 			case LinuxRequest::FileChunk:
-				if (requestedFileTask != nullptr)
-				{
-					transfer->ReadFileChunk(requestedFileChunk, requestedFileDataLength, requestedFileLength);
-					TaskBase::Give(requestedFileTask);
-					requestedFileTask = nullptr;
-				}
+				transfer->ReadFileChunk(requestedFileChunk, requestedFileDataLength, requestedFileLength);
+				requestedFileSemaphore.Give();
 				break;
 
 			// Invalid request
@@ -328,7 +326,8 @@ void LinuxInterface::Spin()
 		}
 
 		// Get another chunk of the file being requested
-		if (!requestedFileName.IsEmpty() && transfer->WriteFileChunkRequest(requestedFileName.c_str(), requestedFileOffset, requestedFileLength))
+		if (!requestedFileName.IsEmpty() && !reprap.GetGCodes().IsFlashing() &&
+			transfer->WriteFileChunkRequest(requestedFileName.c_str(), requestedFileOffset, requestedFileLength))
 		{
 			requestedFileName.Clear();
 		}
@@ -406,6 +405,12 @@ void LinuxInterface::Spin()
 			rxPointer = txPointer = txLength = 0;
 			sendBufferUpdate = true;
 			iapWritePointer = IAP_FLASH_START;
+
+			if (!requestedFileName.IsEmpty())
+			{
+				requestedFileDataLength = -1;
+				requestedFileSemaphore.Give();
+			}
 
 			// Don't cache any messages if they cannot be sent
 			gcodeReply->ReleaseAll();
@@ -498,18 +503,16 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb)
 	return false;
 }
 
-// Request a file chunk from the SBC. If a valid task is given, it is resumed when data has been received.
-void LinuxInterface::RequestFileChunk(const char *filename, uint32_t offset, uint32_t maxLength, TaskHandle task)
+// Read a file chunk from the SBC. When a response has been received, the current thread is woken up again.
+// If an error occurred, the number of bytes read is -1
+const char *LinuxInterface::GetFileChunk(const char *filename, uint32_t offset, uint32_t maxLength, int32_t& dataLength, uint32_t& fileLength)
 {
 	requestedFileName.copy(filename);
-	requestedFileLength = max<uint32_t>(maxLength, MaxFileChunkSize);
+	requestedFileLength = min<uint32_t>(maxLength, MaxFileChunkSize);
 	requestedFileOffset = offset;
-	requestedFileTask = task;
-}
 
-// Get another received file chunk and the number of bytes read. If an error occurred, the number of bytes read is -1
-const char *LinuxInterface::GetFileChunk(int &dataLength, uint32_t fileLength)
-{
+	requestedFileSemaphore.Take();
+
 	dataLength = requestedFileDataLength;
 	fileLength = requestedFileLength;
 	return requestedFileChunk;

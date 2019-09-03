@@ -38,8 +38,7 @@ public:
 	bool FillBuffer(GCodeBuffer &gb);		// Try to fill up the G-code buffer with the next available G-code
 
 	void SetPauseReason(FilePosition position, PrintPausedReason reason);	// Notify Linux that the print has been paused
-	void RequestFileChunk(const char *filename, uint32_t offset, uint32_t maxLength, TaskHandle task); 	// Request a file chunk and resume the given task when it has been received
-	const char *GetFileChunk(int &bytesRead, uint32_t fileLength);	// Get another received file chunk and the number of bytes read. If an error occurred, the number of bytes read is -1
+	const char *GetFileChunk(const char *filename, uint32_t offset, uint32_t maxLength, int32_t& bytesRead, uint32_t &fileLength); 	// Request a file chunk and resume the given task when it has been received
 
 private:
 	DataTransfer *transfer;
@@ -59,8 +58,7 @@ private:
 
 	String<FILENAME_MAX> requestedFileName;
 	uint32_t requestedFileOffset, requestedFileLength;
-	TaskHandle requestedFileTask;
-
+	BinarySemaphore requestedFileSemaphore;
 	char requestedFileChunk[MaxFileChunkSize];
 	int32_t requestedFileDataLength;
 

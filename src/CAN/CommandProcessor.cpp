@@ -41,12 +41,9 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 			// Request another chunk of data from the given file
 			while (lreq > 0)
 			{
-				reprap.GetLinuxInterface().RequestFileChunk(fname.c_str(), fileOffset, lreq, RTOSIface::GetCurrentTask());
-				TaskBase::Take();
-
-				int bytesRead;
-				uint32_t fileLength = 0;
-				const char *data = reprap.GetLinuxInterface().GetFileChunk(bytesRead, fileLength);
+				uint32_t fileLength;
+				int32_t bytesRead;
+				const char *data = reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, lreq, bytesRead, fileLength);
 				if (bytesRead < 0)
 				{
 					break;
@@ -67,7 +64,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 					CanInterface::SendResponse(buf);
 					fileOffset += lengthToSend;
 					lreq -= lengthToSend;
-					if (lreq == 0)
+					if (bytesSent == bytesRead)
 					{
 						break;
 					}
