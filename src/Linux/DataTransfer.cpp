@@ -537,6 +537,13 @@ bool DataTransfer::IsReady()
 	{
 		// The Linux interface is no longer connected...
 		rxHeader.sequenceNumber = 0;
+
+		// The SBC expects a high transfer ready pin level when it establishes a new connection
+		if (!transferReadyHigh)
+		{
+			transferReadyHigh = true;
+			digitalWrite(LinuxTfrReadyPin, true);
+		}
 	}
 	return false;
 }

@@ -1528,7 +1528,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	ch = '[';
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
-		response->catf("%c%.2f", ch, (double)(platform->GetMotorCurrent(drive, 906)));
+		response->catf("%c%d", ch, (int)platform->GetMotorCurrent(drive, 906));
 		ch = ',';
 	}
 
