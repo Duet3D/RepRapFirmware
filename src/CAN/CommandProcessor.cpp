@@ -64,7 +64,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 					CanInterface::SendResponse(buf);
 					fileOffset += lengthToSend;
 					lreq -= lengthToSend;
-					if (bytesSent == bytesRead)
+					if ((int32_t)bytesSent == bytesRead)
 					{
 						break;
 					}

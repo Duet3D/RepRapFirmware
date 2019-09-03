@@ -26,6 +26,7 @@ public:
 	bool PopulateFromCommand(GCodeBuffer& gb, const StringRef& reply);
 
 	// Methods to add parameters
+	void AddU64Param(char c, uint64_t v);
 	void AddUParam(char c, uint32_t v);
 	void AddIParam(char c, int32_t v);
 	void AddFParam(char c, float v);

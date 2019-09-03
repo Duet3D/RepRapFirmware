@@ -11,6 +11,8 @@
 #include "RemoteFan.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
+#include <utility>
+
 FansManager::FansManager()
 {
 	for (Fan*& f : fans)
@@ -90,17 +92,25 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 			std::swap(oldFan, fans[fanNum]);
 			delete oldFan;
 
+			const PwmFrequency freq = (gb.Seen('Q')) ? gb.GetPwmFrequency() : DefaultFanPwmFreq;
+
 #if SUPPORT_CAN_EXPANSION
 			const CanAddress board = IoPort::RemoveBoardAddress(pinName.GetRef());
 			if (board != CanId::MasterAddress)
 			{
-				Fan *newFan = new RemoteFan(fanNum);
-				reply.copy("Remote fans not supported yet");
-				delete newFan;
-				return GCodeResult::error;
+				auto *newFan = new RemoteFan(fanNum, board);
+				const GCodeResult rslt = newFan->ConfigurePort(pinName.c_str(), freq, reply);
+				if (rslt == GCodeResult::ok)
+				{
+					fans[fanNum] = newFan;
+				}
+				else
+				{
+					delete newFan;
+				}
+				return rslt;
 			}
 #endif
-			const PwmFrequency freq = (gb.Seen('Q')) ? gb.GetPwmFrequency() : DefaultFanPwmFreq;
 			fans[fanNum] = CreateLocalFan(fanNum, pinName.c_str(), freq, reply);
 			return (fans[fanNum] == nullptr) ? GCodeResult::error : GCodeResult::ok;
 		}

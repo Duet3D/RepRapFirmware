@@ -9,7 +9,7 @@
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 Fan::Fan(unsigned int fanNum)
-	: number(fanNum),
+	: fanNumber(fanNum),
 	  val(0.0), lastVal(0.0),
 	  minVal(DefaultMinFanPwm),
 	  maxVal(1.0),										// 100% maximum fan speed
@@ -121,8 +121,14 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 		if (seen)
 		{
 			isConfigured = true;
-			UpdateFanConfiguration();
-			Refresh();
+			if (UpdateFanConfiguration(reply))
+			{
+				Refresh();
+			}
+			else
+			{
+				error = true;
+			}
 		}
 		else if (!gb.Seen('R') && !gb.Seen('S'))
 		{

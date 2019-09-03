@@ -12,10 +12,12 @@
 
 #if SUPPORT_CAN_EXPANSION
 
+#include "GCodes/GCodeResult.h"
+
 class RemoteFan : public Fan
 {
 public:
-	RemoteFan(unsigned int fanNum);
+	RemoteFan(unsigned int fanNum, CanAddress boardNum);
 	~RemoteFan();
 
 	bool Check() override;									// update the fan PWM returning true if it is a thermostatic fan that is on
@@ -24,8 +26,10 @@ public:
 	int32_t GetRPM() override;
 	void AppendPortDetails(const StringRef& str) const override;
 
+	GCodeResult ConfigurePort(const char *pinNames, PwmFrequency freq, const StringRef& reply);
+
 protected:
-	void UpdateFanConfiguration() override;
+	bool UpdateFanConfiguration(const StringRef& reply) override;
 	void Refresh() override;
 
 private:
@@ -33,6 +37,8 @@ private:
 
 	int32_t lastRpm;
 	uint32_t whenLastRpmReceived;
+	CanAddress boardNumber;
+	bool thermostaticFanRunning;
 };
 
 #endif

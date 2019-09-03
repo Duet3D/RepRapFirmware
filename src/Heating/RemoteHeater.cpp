@@ -28,12 +28,12 @@ void RemoteHeater::ResetHeater()
 
 GCodeResult RemoteHeater::ConfigurePortAndSensor(GCodeBuffer& gb, const StringRef& reply)
 {
-	CanMessageGenericConstructor cons(M950Params);
+	CanMessageGenericConstructor cons(M950HeaterParams);
 	if (!cons.PopulateFromCommand(gb, reply))
 	{
 		return GCodeResult::error;
 	}
-	return cons.SendAndGetResponse(CanMessageType::m950, boardAddress, reply);
+	return cons.SendAndGetResponse(CanMessageType::m950Heater, boardAddress, reply);
 }
 
 // If it's a local heater, turn it off and release its port. If it is remote, delete the remote heater.

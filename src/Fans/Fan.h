@@ -45,10 +45,10 @@ public:
 #endif
 
 protected:
-	virtual void UpdateFanConfiguration() = 0;
+	virtual bool UpdateFanConfiguration(const StringRef& reply) = 0;
 	virtual void Refresh() = 0;
 
-	unsigned int number;
+	unsigned int fanNumber;
 
 	// Variables that control the fan
 	float val;
@@ -57,9 +57,8 @@ protected:
 	float maxVal;
 	float triggerTemperatures[2];
 	uint32_t blipTime;										// in milliseconds
-
-	// More fan control variables
 	SensorsBitmap sensorsMonitored;
+
 	String<MaxFanNameLength> name;
 	bool isConfigured;
 };

@@ -27,7 +27,7 @@ public:
 	void Interrupt();
 
 protected:
-	void UpdateFanConfiguration() override { }
+	bool UpdateFanConfiguration(const StringRef& reply) override { return true; }
 	void Refresh() override;
 
 private:
