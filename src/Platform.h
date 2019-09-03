@@ -27,7 +27,7 @@ Licence: GPL
 #include "RepRapFirmware.h"
 #include "Hardware/IoPorts.h"
 #include "DueFlashStorage.h"
-#include "Fans/Fan.h"
+#include "Fans/FansManager.h"
 #include "Heating/TemperatureError.h"
 #include "OutputMemory.h"
 #include "Storage/FileStore.h"
@@ -466,18 +466,46 @@ public:
 	void UpdateConfiguredHeaters();
 
 	// Fans
-	bool ConfigureFan(unsigned int mcode, size_t fanNumber, GCodeBuffer& gb, const StringRef& reply, bool& error);
+	bool ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
+	{
+		return fman.ConfigureFan(mcode, fanNum, gb, reply, error);
+	}
 
-	float GetFanValue(size_t fan) const;					// Result is returned in range 0..1
-	void SetFanValue(size_t fan, float speed);				// Accepts values between 0..1
-	bool IsFanControllable(size_t fan) const;
-	const char *GetFanName(size_t fan) const;
+	float GetFanValue(size_t fanNum) const					// Result is returned in range 0..1
+	{
+		return fman.GetFanValue(fanNum);
+	}
+
+	void SetFanValue(size_t fanNum, float speed)			// Accepts values between 0..1
+	{
+		return fman.SetFanValue(fanNum, speed);
+	}
+
+	// Check if the given fan can be controlled manually so that DWC can decide whether or not to show the corresponding fan
+	// controls. This is the case if no thermostatic control is enabled and if the fan was configured at least once before.
+	bool IsFanControllable(size_t fanNum) const
+	{
+		return fman.IsFanControllable(fanNum);
+	}
+
+	const char *GetFanName(size_t fanNum) const
+	{
+		return fman.GetFanName(fanNum);
+	}
+
+	// Get current fan RPM, or -1 if the fan is invalid or doesn't have a tacho pin
+	int32_t GetFanRPM(size_t fanNum) const
+	{
+		return fman.GetFanRPM(fanNum);
+	}
 
 #if HAS_MASS_STORAGE
-	bool WriteFanSettings(FileStore *f) const;				// Save some resume information
+	// Save some resume information
+	bool WriteFanSettings(FileStore *f) const
+	{
+		return fman.WriteFanSettings(f);
+	}
 #endif
-
-	int32_t GetFanRPM(size_t fanIndex) const;
 
 	// Flash operations
 	void UpdateFirmware();
@@ -579,7 +607,6 @@ private:
 
 	void UpdateZMotorDriverBits();					// set up the driver bits for the individual Z motors
 
-	GCodeResult ConfigureFan(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult ConfigureGpioOrServo(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply);
 
 #if SUPPORT_CAN_EXPANSION
@@ -771,9 +798,8 @@ private:
 	HeatersBitmap configuredHeaters;										// bitmask of all real heaters in use
 
 	// Fans
-	Fan fans[NumTotalFans];
+	FansManager fman;
 	uint32_t lastFanCheckTime;
-	void InitFans();
 
   	// Serial/USB
 	uint32_t baudRates[NUM_SERIAL_CHANNELS];

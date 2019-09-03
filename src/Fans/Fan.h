@@ -16,45 +16,39 @@ class GCodeBuffer;
 class Fan
 {
 public:
-	Fan();
+	Fan(unsigned int fanNum);
+
+	virtual bool Check() = 0;								// update the fan PWM returning true if it is a thermostatic fan that is on
+	virtual void SetPwmFrequency(PwmFrequency freq) = 0;
+	virtual bool IsEnabled() const = 0;
+	virtual int32_t GetRPM() = 0;
+	virtual void AppendPortDetails(const StringRef& str) const = 0;
+	virtual ~Fan() { }
 
 	// Set or report the parameters for this fan
-	// If 'mCode' is an M-code used to set parameters for the current kinematics (which should only ever be 106 or 107)
+	// If 'mCode' is an M-code used to set parameters (which should only ever be 106 or 107)
 	// then search for parameters used to configure the fan. If any are found, perform appropriate actions and return true.
 	// If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
 	// If no relevant parameters are found, print the existing ones to 'reply' and return false.
 	bool Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error);
 	bool IsConfigured() const { return isConfigured && IsEnabled(); }
 
-	bool IsEnabled() const { return port.IsValid(); }
 	float GetConfiguredPwm() const { return val; }			// returns the configured PWM. Actual PWM may be different, e.g. due to blipping or for thermostatic fans.
 
-	bool AssignPorts(GCodeBuffer& gb, const StringRef& reply);
-	bool AssignPorts(const char *pinNames, const StringRef& reply);
 	void SetPwm(float speed);
-	void SetPwmFrequency(PwmFrequency freq) { port.SetFrequency(freq); }
 	bool HasMonitoredSensors() const { return sensorsMonitored != 0; }
 	void SetSensorsMonitored(SensorsBitmap h);
 	const char *GetName() const { return name.c_str(); }
-	void AppendPortDetails(const StringRef& str) { port.AppendDetails(str); }
-
-	bool Check();											// update the fan PWM returning true if it is a thermostatic fan that is on
-	void Disable();
 
 #if HAS_MASS_STORAGE
 	bool WriteSettings(FileStore *f, size_t fanNum) const;	// save the settings of this fan if it isn't thermostatic
 #endif
 
-	// Tacho interface
-	int32_t GetRPM() const;
-	void Interrupt();
+protected:
+	virtual void UpdateFanConfiguration() = 0;
+	virtual void Refresh() = 0;
 
-private:
-	void Refresh();
-	void SetHardwarePwm(float pwmVal);
-
-	PwmPort port;											// port used to control the fan
-	IoPort tachoPort;										// port used to read the tacho
+	unsigned int number;
 
 	// Variables that control the fan
 	float val;
@@ -62,21 +56,12 @@ private:
 	float minVal;
 	float maxVal;
 	float triggerTemperatures[2];
-	float lastPwm;
 	uint32_t blipTime;										// in milliseconds
-	uint32_t blipStartTime;
-
-	// Variables used to read the tacho
-	static constexpr uint32_t fanMaxInterruptCount = 32;	// number of fan interrupts that we average over
-	uint32_t fanInterruptCount;								// accessed only in ISR, so no need to declare it volatile
-	volatile uint32_t fanLastResetTime;						// time (in step clocks) at which we last reset the interrupt count, accessed inside and outside ISR
-	volatile uint32_t fanInterval;							// written by ISR, read outside the ISR
 
 	// More fan control variables
 	SensorsBitmap sensorsMonitored;
 	String<MaxFanNameLength> name;
 	bool isConfigured;
-	bool blipping;
 };
 
 #endif /* SRC_FAN_H_ */

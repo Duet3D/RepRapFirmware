@@ -603,7 +603,7 @@ void Platform::Init()
 	}
 
 	// Fans
-	InitFans();
+	fman.Init();
 
 	// Hotend configuration
 	nozzleDiameter = NOZZLE_DIAMETER;
@@ -1293,14 +1293,7 @@ void Platform::Spin()
 	if (now - lastFanCheckTime >= FanCheckInterval)
 	{
 		lastFanCheckTime = now;
-		bool thermostaticFanRunning = false;
-		for (size_t fan = 0; fan < NumTotalFans; ++fan)
-		{
-			if (fans[fan].Check())
-			{
-				thermostaticFanRunning = true;
-			}
-		}
+		bool thermostaticFanRunning = fman.CheckFans();
 
 		if (deferredPowerDown && !thermostaticFanRunning)
 		{
@@ -1538,20 +1531,6 @@ bool Platform::GetAutoSaveSettings(float& saveVoltage, float&resumeVoltage)
 
 #endif
 
-#if HAS_MASS_STORAGE
-
-// Save some resume information
-bool Platform::WriteFanSettings(FileStore *f) const
-{
-	bool ok = true;
-	for (size_t fanNum = 0; ok && fanNum < NumTotalFans; ++fanNum)
-	{
-		ok = fans[fanNum].WriteSettings(f, fanNum);
-	}
-	return ok;
-}
-
-#endif
 #if HAS_CPU_TEMP_SENSOR
 
 float Platform::AdcReadingToCpuTemperature(uint32_t adcVal) const
@@ -3168,80 +3147,6 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const
 	return isSlowDriver;
 }
 
-// Set or report the parameters for the specified fan
-// If 'mCode' is an M-code used to set parameters for the current kinematics (which should only ever be 106 or 107)
-// then search for parameters used to configure the fan. If any are found, perform appropriate actions and return true.
-// If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
-// If no relevant parameters are found, print the existing ones to 'reply' and return false.
-bool Platform::ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
-{
-	if (fanNum >= NumTotalFans)
-	{
-		reply.printf("Fan number %u is invalid, must be between 0 and %u", fanNum, NumTotalFans - 1);
-		error = true;
-		return false;
-	}
-
-	return fans[fanNum].Configure(mcode, fanNum, gb, reply, error);
-}
-
-// Get current cooling fan speed on a scale between 0 and 1
-float Platform::GetFanValue(size_t fan) const
-{
-	return (fan < NumTotalFans) ? fans[fan].GetConfiguredPwm() : -1;
-}
-
-void Platform::SetFanValue(size_t fan, float speed)
-{
-	if (fan < NumTotalFans)
-	{
-		fans[fan].SetPwm(speed);
-	}
-}
-
-// Check if the given fan can be controlled manually so that DWC can decide whether or not to show the corresponding fan
-// controls. This is the case if no thermostatic control is enabled and if the fan was configured at least once before.
-bool Platform::IsFanControllable(size_t fan) const
-{
-	return fan < NumTotalFans && !fans[fan].HasMonitoredSensors() && fans[fan].IsConfigured();
-}
-
-// Return the fan's name
-const char *Platform::GetFanName(size_t fan) const
-{
-	return fan < NumTotalFans ? fans[fan].GetName() : "";
-}
-
-// Get current fan RPM, or -1 if the fan is invalid or doesn't have a tacho pin
-int32_t Platform::GetFanRPM(size_t fanIndex) const
-{
-	return (fanIndex < NumTotalFans) ? fans[fanIndex].GetRPM() : -1;
-}
-
-void Platform::InitFans()
-{
-#if ALLOCATE_DEFAULT_PORTS
-	for (size_t i = 0; i < NumTotalFans; ++i)
-	{
-		if (i < ARRAY_SIZE(DefaultFanPinNames))
-		{
-			String<1> dummy;
-			(void)fans[i].AssignPorts(DefaultFanPinNames[i], dummy.GetRef());
-		}
-		if (i < ARRAY_SIZE(DefaultFanPwmFrequencies))
-		{
-			fans[i].SetPwmFrequency(DefaultFanPwmFrequencies[i]);
-		}
-	}
-
-	// Handle board-specific fan configuration
-# if defined(PCCB)
-	// Fan 3 needs to be set explicitly to zero PWM, otherwise it turns on because the MCU output pin isn't set low
-	fans[3].SetPwm(0.0);
-# endif
-#endif
-}
-
 //-----------------------------------------------------------------------------------------------------
 
 void Platform::AppendAuxReply(const char *msg, bool rawMessage)
@@ -3846,11 +3751,6 @@ void Platform::SetBoardType(BoardType bt)
 	{
 		board = bt;
 	}
-
-	if (active)
-	{
-		InitFans();								// select whether cooling is inverted or not
-	}
 }
 
 // Get a string describing the electronics
@@ -4439,7 +4339,7 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply)
 		}
 
 	case 8:
-		return ConfigureFan(deviceNumber, gb, reply);
+		return fman.ConfigureFanPort(deviceNumber, gb, reply);
 
 	default:
 		reply.copy("exactly one of FHPS must be given");
@@ -4467,35 +4367,6 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply)
 		}
 	}
 #endif
-
-GCodeResult Platform::ConfigureFan(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply)
-{
-	if (fanNum < NumTotalFans)
-	{
-		Fan& fan = fans[fanNum];
-		const bool seenPin = gb.Seen('C');
-		if (seenPin)
-		{
-			if (!fan.AssignPorts(gb, reply))
-			{
-				return GCodeResult::error;
-			}
-		}
-		if (gb.Seen('Q'))
-		{
-			fan.SetPwmFrequency(gb.GetPwmFrequency());
-		}
-		else if (!seenPin)
-		{
-			reply.printf("Fan %" PRIu32, fanNum);
-			fan.AppendPortDetails(reply);
-		}
-		return GCodeResult::ok;
-	}
-
-	reply.copy("Fan number out of range");
-	return GCodeResult::error;
-}
 
 GCodeResult Platform::ConfigureGpioOrServo(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply)
 {
