@@ -37,7 +37,6 @@ public:
 
 	void SetPwm(float speed);
 	bool HasMonitoredSensors() const { return sensorsMonitored != 0; }
-	void SetSensorsMonitored(SensorsBitmap h);
 	const char *GetName() const { return name.c_str(); }
 
 #if HAS_MASS_STORAGE
@@ -45,8 +44,8 @@ public:
 #endif
 
 protected:
-	virtual bool UpdateFanConfiguration(const StringRef& reply) = 0;
 	virtual void Refresh() = 0;
+	virtual bool UpdateFanConfiguration(const StringRef& reply) = 0;
 
 	unsigned int fanNumber;
 

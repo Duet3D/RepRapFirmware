@@ -519,17 +519,25 @@ void CanMessageGenericConstructor::AddStringParam(char c, const char *v)
 			{
 				err = "duplicate parameter";
 			}
-			else if (d->type != ParamDescriptor::string)
-			{
-				err = "sval wrong parameter type";
-			}
-			else if (InsertValue(&v, strlen(v) + 1, pos))
-			{
-				err = "overflow";
-			}
 			else
 			{
-				msg.paramMap |= paramBit;
+				switch (d->type)
+				{
+				case ParamDescriptor::string:
+				case ParamDescriptor::reducedString:			//TODO currently we don't reduce the string, but it should already be reduced
+					if (InsertValue(v, strlen(v) + 1, pos))
+					{
+						err = "overflow";
+					}
+					else
+					{
+						msg.paramMap |= paramBit;
+					}
+					break;
+
+				default:
+					err = "sval wrong parameter type";
+				}
 			}
 			return;
 		}

@@ -27,8 +27,8 @@ public:
 	void Interrupt();
 
 protected:
-	bool UpdateFanConfiguration(const StringRef& reply) override { return true; }
 	void Refresh() override;
+	bool UpdateFanConfiguration(const StringRef& reply) override;
 
 private:
 	void SetHardwarePwm(float pwmVal);

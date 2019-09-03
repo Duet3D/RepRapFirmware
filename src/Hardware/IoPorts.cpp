@@ -21,7 +21,7 @@
 
 // Read a port name parameter and assign some ports. Caller must call gb.Seen() with the appropriate letter and get 'true' returned before calling this.
 // Return the number of ports allocated, or 0 if there was an error with the error message in 'reply'.
-size_t IoPort::AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[])
+/*static*/ size_t IoPort::AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[])
 {
 	// Get the full port names string
 	String<StringLength20> portNames;
@@ -43,7 +43,7 @@ bool IoPort::AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neede
 }
 
 // Try to assign ports, returning the number of ports successfully assigned
-size_t IoPort::AssignPorts(const char* pinNames, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[])
+/*static*/ size_t IoPort::AssignPorts(const char* pinNames, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[])
 {
 	// Release any existing assignments
 	for (size_t i = 0; i < numPorts; ++i)

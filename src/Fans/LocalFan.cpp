@@ -153,6 +153,12 @@ void LocalFan::Refresh()
 	lastVal = reqVal;
 }
 
+bool LocalFan::UpdateFanConfiguration(const StringRef& reply)
+{
+	Refresh();
+	return true;
+}
+
 bool LocalFan::Check()
 {
 	if (sensorsMonitored != 0 || blipping)

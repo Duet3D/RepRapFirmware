@@ -86,9 +86,26 @@ bool RemoteFan::UpdateFanConfiguration(const StringRef& reply)
 	return CanInterface::SendRequestAndGetStandardReply(buf, reply) == GCodeResult::ok;
 }
 
+// Update the hardware PWM
 void RemoteFan::Refresh()
 {
-	// Nothing needed here
+	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		//TODO error handling
+	}
+	else
+	{
+		auto msg = buf->SetupRequestMessage<CanMessageSetFanSpeed>(CanId::MasterAddress, boardNumber);
+		msg->fanNumber = fanNumber;
+		msg->pwm = val;
+		String<1> dummy;
+		const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, dummy.GetRef());
+		if (rslt != GCodeResult::ok)
+		{
+			//TODO error handling
+		}
+	}
 }
 
 GCodeResult RemoteFan::ConfigurePort(const char* pinNames, PwmFrequency freq, const StringRef& reply)

@@ -121,11 +121,7 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 		if (seen)
 		{
 			isConfigured = true;
-			if (UpdateFanConfiguration(reply))
-			{
-				Refresh();
-			}
-			else
+			if (!UpdateFanConfiguration(reply))
 			{
 				error = true;
 			}
@@ -166,12 +162,6 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 void Fan::SetPwm(float speed)
 {
 	val = speed;
-	Refresh();
-}
-
-void Fan::SetSensorsMonitored(SensorsBitmap h)
-{
-	sensorsMonitored = h;
 	Refresh();
 }
 

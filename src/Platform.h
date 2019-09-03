@@ -478,7 +478,7 @@ public:
 
 	void SetFanValue(size_t fanNum, float speed)			// Accepts values between 0..1
 	{
-		return fman.SetFanValue(fanNum, speed);
+		fman.SetFanValue(fanNum, speed);
 	}
 
 	// Check if the given fan can be controlled manually so that DWC can decide whether or not to show the corresponding fan
