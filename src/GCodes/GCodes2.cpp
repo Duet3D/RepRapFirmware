@@ -4568,6 +4568,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		break;
 
 	case GCodeResult::error:
+	case GCodeResult::warning:
 		if (!gb.IsBinary() && gb.IsDoingFile())
 		{
 			String<ShortScratchStringLength> scratchString;

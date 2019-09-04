@@ -1226,7 +1226,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply)
 				reply.printf("Drive %u runs %s, active %s enable, step timing ",
 								drive,
 								(platform.GetDirectionValue(drive)) ? "forwards" : "in reverse",
-								(platform.GetEnableValue(drive)) ? "high" : "low");
+								(platform.GetEnableValue(drive) > 0) ? "high" : "low");
 				float timings[4];
 				const bool isSlowDriver = platform.GetDriverStepTiming(drive, timings);
 				if (isSlowDriver)

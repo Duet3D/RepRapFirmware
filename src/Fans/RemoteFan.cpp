@@ -66,7 +66,7 @@ GCodeResult RemoteFan::ReportPortDetails(const StringRef& str) const
 bool RemoteFan::UpdateFanConfiguration(const StringRef& reply)
 {
 	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
-	if (buf != nullptr)
+	if (buf == nullptr)
 	{
 		reply.copy("No CAN buffer available");
 		return false;

@@ -375,7 +375,7 @@ public:
 	void SetDirectionValue(size_t driver, bool dVal);
 	bool GetDirectionValue(size_t driver) const;
 	void SetEnableValue(size_t driver, int8_t eVal);
-	bool GetEnableValue(size_t driver) const;
+	int8_t GetEnableValue(size_t driver) const;
 	void EnableLocalDrivers(size_t axisOrExtruder);
 	void EnableOneLocalDriver(size_t driver, float requiredCurrent);
 	void DisableAllDrivers();
@@ -1016,7 +1016,7 @@ inline void Platform::SetDriverDirection(uint8_t driver, bool direction)
 	}
 }
 
-inline bool Platform::GetEnableValue(size_t driver) const
+inline int8_t Platform::GetEnableValue(size_t driver) const
 {
 	return enableValues[driver];
 }
