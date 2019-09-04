@@ -26,13 +26,15 @@ class LocalHeater : public Heater
 
 public:
 	LocalHeater(unsigned int heaterNum);
-	LocalHeater(const Heater& h);
+	~LocalHeater();
+
+	GCodeResult ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sensorNumber, const StringRef& reply) override;
+	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) override;
+	GCodeResult ReportDetails(const StringRef& reply) const override;
 
 	void Spin() override;							// Called in a tight loop to keep things running
-	GCodeResult ConfigurePortAndSensor(GCodeBuffer& gb, const StringRef& reply) override;
-	void ReleasePort() override;					// If it's a local heater, turn it off and release its port. If it is remote, delete the remote heater.
 	void SwitchOff() override;						// Not even standby - all heater power off
-	void ResetFault() override;						// Reset a fault condition - only call this if you know what you are doing
+	GCodeResult ResetFault(const StringRef& reply) override;	// Reset a fault condition - only call this if you know what you are doing
 	float GetTemperature() const override;			// Get the current temperature
 	float GetAveragePWM() const override;			// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
 	float GetAccumulator() const override;			// Return the integral accumulator
@@ -40,10 +42,14 @@ public:
 	void GetAutoTuneStatus(const StringRef& reply) const override;	// Get the auto tune status or last result
 	void Suspend(bool sus) override;				// Suspend the heater to conserve power or while doing Z probing
 
+#if SUPPORT_CAN_EXPANSION
+	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) override { }
+#endif
+
 protected:
 	void ResetHeater() override;
 	HeaterMode GetMode() const override { return mode; }
-	void SwitchOn() override;						// Turn the heater on and set the mode
+	GCodeResult SwitchOn(const StringRef& reply) override;	// Turn the heater on and set the mode
 	GCodeResult UpdateModel(const StringRef& reply) override;	// Called when the heater model has been changed
 
 private:

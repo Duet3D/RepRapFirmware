@@ -34,6 +34,7 @@ Licence: GPL
 #if SUPPORT_CAN_EXPANSION
 # include "CanId.h"
 # include "RemoteHeater.h"
+# include "CanMessageFormats.h"
 #endif
 
 constexpr uint32_t HeaterTaskStackWords = 400;			// task stack size in dwords, must be large enough for auto tuning
@@ -44,8 +45,11 @@ extern "C" [[noreturn]] void HeaterTask(void * pvParameters)
 	reprap.GetHeat().Task();
 }
 
+ReadWriteLock Heat::heatersLock;
+ReadWriteLock Heat::sensorsLock;
+
 Heat::Heat()
-	: sensorsRoot(nullptr), newSensors(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
+	: sensorsRoot(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
 	ARRAY_INIT(bedHeaters, DefaultBedHeaters);
 	ARRAY_INIT(chamberHeaters, DefaultChamberHeaters);
@@ -68,9 +72,10 @@ Heat::Heat()
 
 }
 
-Heater *Heat::FindHeater(int heater) const
+ReadLockedPointer<Heater> Heat::FindHeater(int heater) const
 {
-	return (heater < 0 || heater >= (int)MaxHeaters) ? nullptr : heaters[heater];
+	ReadLocker locker(heatersLock);
+	return ReadLockedPointer<Heater>(locker, (heater < 0 || heater >= (int)MaxHeaters) ? nullptr : heaters[heater]);
 }
 
 // Process M307
@@ -79,8 +84,8 @@ GCodeResult Heat::SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply
 	if (gb.Seen('H'))
 	{
 		const unsigned int heater = gb.GetUIValue();
-		Heater * const h = FindHeater(heater);
-		if (h != nullptr)
+		const auto h = FindHeater(heater);
+		if (h.IsNotNull())
 		{
 			const FopDt& model = h->GetModel();
 			bool seen = false;
@@ -151,8 +156,8 @@ GCodeResult Heat::SetPidParameters(unsigned int heater, GCodeBuffer& gb, const S
 		heater = gb.GetUIValue();
 	}
 
-	Heater * const h = FindHeater(heater);
-	if (h != nullptr)
+	const auto h = FindHeater(heater);
+	if (h.IsNotNull())
 	{
 		const FopDt& model = h->GetModel();
 		M301PidParameters pp = model.GetM301PidParameters(false);
@@ -187,45 +192,46 @@ GCodeResult Heat::SetPidParameters(unsigned int heater, GCodeBuffer& gb, const S
 // Is the heater enabled?
 bool Heat::IsHeaterEnabled(size_t heater) const
 {
-	Heater * const h = FindHeater(heater);
-	return h != nullptr && h->IsHeaterEnabled();
+	const auto h = FindHeater(heater);
+	return h.IsNotNull() && h->IsHeaterEnabled();
 }
 
-// Get a pointer to the temperature sensor entry, or nullptr if the sensor number is bad
-TemperatureSensor *Heat::GetSensor(int sn) const
+// Get a pointer to the temperature sensor entry, or nullptr if the heater number is bad
+ReadLockedPointer<TemperatureSensor> Heat::FindSensor(int sn) const
 {
-	if (sn >= 0)
-	{
-		TaskCriticalSectionLocker lock;		// make sure the linked list doesn't change while we are searching it
-		for (TemperatureSensor *sensor = sensorsRoot; sensor != nullptr; sensor = sensor->GetNext())
-		{
-			if (sensor->GetSensorNumber() == sn)
-			{
-				return sensor;
-			}
-		}
-	}
-	return nullptr;
-}
-
-// Get a pointer to the first temperature sensor with the specified or higher number
-TemperatureSensor *Heat::GetSensorAtOrAbove(unsigned int sn) const
-{
-	TaskCriticalSectionLocker lock;		// make sure the linked list doesn't change while we are searching it
+	ReadLocker locker(sensorsLock);
 
 	for (TemperatureSensor *sensor = sensorsRoot; sensor != nullptr; sensor = sensor->GetNext())
 	{
-		if (sensor->GetSensorNumber() >= (int)sn)
+		if ((int)sensor->GetSensorNumber() == sn)
 		{
-			return sensor;
+			return ReadLockedPointer<TemperatureSensor>(locker, sensor);
 		}
 	}
-	return nullptr;
+	return ReadLockedPointer<TemperatureSensor>(locker, nullptr);
 }
+
+// Get a pointer to the first temperature sensor with the specified or higher number
+ReadLockedPointer<TemperatureSensor> Heat::FindSensorAtOrAbove(unsigned int sn) const
+{
+	ReadLocker locker(sensorsLock);
+
+	for (TemperatureSensor *sensor = sensorsRoot; sensor != nullptr; sensor = sensor->GetNext())
+	{
+		if (sensor->GetSensorNumber() >= sn)
+		{
+			return ReadLockedPointer<TemperatureSensor>(locker, sensor);
+		}
+	}
+	return ReadLockedPointer<TemperatureSensor>(locker, nullptr);
+}
+
 
 // Reset all heater models to defaults. Called when running M502.
 void Heat::ResetHeaterModels()
 {
+	ReadLocker lock(heatersLock);
+
 	for (Heater* h : heaters)
 	{
 		if (h != nullptr && h->IsHeaterEnabled())
@@ -260,11 +266,15 @@ void Heat::Init()
 
 void Heat::Exit()
 {
-	for (Heater *h : heaters)
 	{
-		if (h != nullptr)
+		ReadLocker Lock(heatersLock);
+
+		for (Heater *h : heaters)
 		{
-			h->SwitchOff();
+			if (h != nullptr)
+			{
+				h->SwitchOff();
+			}
 		}
 	}
 
@@ -276,99 +286,38 @@ void Heat::Exit()
 	uint32_t lastWakeTime = xTaskGetTickCount();
 	for (;;)
 	{
-		// Walk the sensor list and poll all sensors except those flagged for deletion. Don't mess with the list during this pass because polling may need to acquire mutexes.
-		TemperatureSensor *currentSensor = sensorsRoot;
-		bool sawDeletedSensor = false;
-		while (currentSensor != nullptr)
+		// Walk the sensor list and poll all sensors
 		{
-			if (currentSensor->GetSensorNumber() < 0)
-			{
-				sawDeletedSensor = true;
-			}
-			else
-			{
-				currentSensor->Poll();
-			}
-			currentSensor = currentSensor->GetNext();
-		}
-
-		// If we saw any sensors flagged for deletion, delete them, locking out other tasks while we do this
-		if (sawDeletedSensor)
-		{
-			TaskCriticalSectionLocker lock;
-
-			currentSensor = sensorsRoot;
-			TemperatureSensor *lastSensor = nullptr;
+			ReadLocker lock(sensorsLock);
+			TemperatureSensor *currentSensor = sensorsRoot;
 			while (currentSensor != nullptr)
 			{
-				if (currentSensor->GetSensorNumber() < 0)
-				{
-					TemperatureSensor *sensorToDelete = currentSensor;
-					currentSensor = currentSensor->GetNext();
-					if (lastSensor == nullptr)
-					{
-						sensorsRoot = currentSensor;
-					}
-					else
-					{
-						lastSensor->SetNext(currentSensor);
-					}
-					delete sensorToDelete;
-				}
-				else
-				{
-					lastSensor = currentSensor;
-					currentSensor = currentSensor->GetNext();
-				}
-			}
-		}
-
-		// Insert any new sensors. We don't poll them yet because they may only just have finished being initialised so they may not accept another transaction yet.
-		for (;;)
-		{
-			TaskCriticalSectionLocker lock;
-			TemperatureSensor *currentNewSensor = newSensors;
-			if (currentNewSensor == nullptr)
-			{
-				break;
-			}
-			newSensors = currentNewSensor->GetNext();
-			TemperatureSensor *prev = nullptr;
-			TemperatureSensor *ts = sensorsRoot;
-			for (;;)
-			{
-				if (ts == nullptr || ts->GetSensorNumber() > currentNewSensor->GetSensorNumber())
-				{
-					currentNewSensor->SetNext(ts);
-					if (prev == nullptr)
-					{
-						sensorsRoot = currentNewSensor;
-					}
-					else
-					{
-						prev->SetNext(currentNewSensor);
-					}
-					break;
-				}
-				prev = ts;
-				ts = ts->GetNext();
+				currentSensor->Poll();
+				currentSensor = currentSensor->GetNext();
 			}
 		}
 
 		// Spin the heaters
-		for (Heater *h : heaters)
 		{
-			if (h != nullptr)
+			ReadLocker lock(heatersLock);
+			for (Heater *h : heaters)
 			{
-				h->Spin();
+				if (h != nullptr)
+				{
+					h->Spin();
+				}
 			}
 		}
 
 		// See if we have finished tuning a PID
-		if (heaterBeingTuned != -1 && heaters[heaterBeingTuned]->GetStatus() != HeaterStatus::tuning)
+		if (heaterBeingTuned != -1)
 		{
-			lastHeaterTuned = heaterBeingTuned;
-			heaterBeingTuned = -1;
+			const auto h = FindHeater(heaterBeingTuned);
+			if (h.IsNull() || h->GetStatus() != HeaterStatus::tuning)
+			{
+				lastHeaterTuned = heaterBeingTuned;
+				heaterBeingTuned = -1;
+			}
 		}
 
 		reprap.KickHeatTaskWatchdog();
@@ -395,67 +344,93 @@ void Heat::Diagnostics(MessageType mtype)
 
 	for (size_t heater : ARRAY_INDICES(heaters))
 	{
-		if (heaters[heater] != nullptr && heaters[heater]->GetStatus() == HeaterStatus::active)
+		bool found;
+		float acc;
 		{
-			platform.MessageF(mtype, "Heater %u is on, I-accum = %.1f\n", heater, (double)(heaters[heater]->GetAccumulator()));
+			const auto h = FindHeater(heater);
+			found = h.IsNotNull() && h->GetStatus() == HeaterStatus::active;
+			if (found)
+			{
+				acc = h->GetAccumulator();
+			}
+		}
+		if (found)
+		{
+			platform.MessageF(mtype, "Heater %u is on, I-accum = %.1f\n", heater, (double)acc);
 		}
 	}
 }
 
-// Configure a heater
+// Configure a heater. Invoked by M950.
 GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply)
 {
-	if (heater < MaxHeaters)
+	if (heater >= MaxHeaters)
 	{
-		Heater *oldHeater = heaters[heater];
+		reply.copy("Heater number out of range");
+		return GCodeResult::error;
+	}
 
-#if SUPPORT_CAN_EXPANSION
-		CanAddress boardAddr = CanId::NoAddress;
-		if (gb.Seen('C'))
+	if (gb.Seen('C'))
+	{
+		String<StringLength20> pinName;
+		if (!gb.GetQuotedString(pinName.GetRef()))
 		{
-			String<StringLength20> portName;
-			if (!gb.GetReducedString(portName.GetRef()))
-			{
-				reply.copy("Missing port name");
-				return GCodeResult::error;
-			}
-			boardAddr = IoPort::RemoveBoardAddress(portName.GetRef());
+			reply.copy("Missing pin name");
+			return GCodeResult::error;
 		}
 
-		if (boardAddr == CanId::NoAddress)
+		if (!gb.Seen('T'))
 		{
-			// No port given, so just configure the existing heater if there is one
-			if (oldHeater == nullptr)
-			{
-				reply.printf("Port name needed to create new heater %u", heater);
-				return GCodeResult::error;
-			}
+			reply.copy("Missing sensor number");
+			return GCodeResult::error;
+		}
+		const unsigned int sensorNumber = gb.GetUIValue();
+
+		WriteLocker lock(heatersLock);
+
+		Heater *oldHeater = nullptr;
+		std::swap(oldHeater, heaters[heater]);
+		delete oldHeater;
+
+		const PwmFrequency freq = (gb.Seen('Q')) ? gb.GetPwmFrequency() : DefaultFanPwmFreq;
+
+#if SUPPORT_CAN_EXPANSION
+		const CanAddress board = IoPort::RemoveBoardAddress(pinName.GetRef());
+		Heater *newHeater = (board != CanId::MasterAddress) ? (Heater *)new RemoteHeater(heater, board) : new LocalHeater(heater);
+#else
+		Heater *newHeater = new LocalHeater(heater);
+#endif
+		const GCodeResult rslt = newHeater->ConfigurePortAndSensor(pinName.c_str(), freq, sensorNumber, reply);
+		if (rslt == GCodeResult::ok)
+		{
+			heaters[heater] = newHeater;
 		}
 		else
 		{
-			// A port has been provided, so create a new heater
-			if (oldHeater == nullptr)
-			{
-				heaters[heater] = (boardAddr == 0) ? (Heater *)new LocalHeater(heater) : new RemoteHeater(heater, boardAddr);
-			}
-			else
-			{
-				oldHeater->ReleasePort();
-				heaters[heater] = (boardAddr == 0) ? (Heater *)new LocalHeater(*oldHeater) : new RemoteHeater(*oldHeater, boardAddr);
-				delete oldHeater;
-			}
+			delete newHeater;
 		}
-#else
-		if (oldHeater == nullptr)
-		{
-			heaters[heater] = new LocalHeater(heater);
-		}
-#endif
-		return heaters[heater]->ConfigurePortAndSensor(gb, reply);
+		return rslt;
 	}
 
-	reply.copy("Heater number out of range");
-	return GCodeResult::error;
+	if (gb.Seen('T'))
+	{
+		reply.copy("Can't change sensor number of existing heater");
+		return GCodeResult::error;
+	}
+
+	const auto h = FindHeater(heater);
+	if (h.IsNull())
+	{
+		reply.printf("Heater %u does not exist", (unsigned int)heater);
+		return GCodeResult::error;
+	}
+
+	if (gb.Seen('Q'))
+	{
+		return h->SetPwmFrequency(gb.GetPwmFrequency(), reply);
+	}
+
+	return h->ReportDetails(reply);
 }
 
 bool Heat::AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const
@@ -473,8 +448,8 @@ bool Heat::AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const
 //query an individual heater
 bool Heat::HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance) const
 {
-	Heater * const h = FindHeater(heater);
-	if (h != nullptr)
+	const auto h = FindHeater(heater);
+	if (h.IsNotNull())
 	{
 		const HeaterStatus stat = h->GetStatus();
 		if (stat == HeaterStatus::active || stat == HeaterStatus::standby)
@@ -494,14 +469,14 @@ bool Heat::HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolera
 
 HeaterStatus Heat::GetStatus(int heater) const
 {
-	Heater * const h = FindHeater(heater);
-	return (h == nullptr) ? HeaterStatus::off : heaters[heater]->GetStatus();
+	const auto h = FindHeater(heater);
+	return (h.IsNull()) ? HeaterStatus::off : heaters[heater]->GetStatus();
 }
 
 void Heat::SetBedHeater(size_t index, int heater)
 {
-	Heater * const h = FindHeater(bedHeaters[index]);
-	if (h != nullptr)
+	const auto h = FindHeater(bedHeaters[index]);
+	if (h.IsNotNull())
 	{
 		h->SwitchOff();
 	}
@@ -522,8 +497,8 @@ bool Heat::IsBedHeater(int heater) const
 
 void Heat::SetChamberHeater(size_t index, int heater)
 {
-	Heater * const h = FindHeater(chamberHeaters[index]);
-	if (h != nullptr)
+	const auto h = FindHeater(chamberHeaters[index]);
+	if (h.IsNotNull())
 	{
 		h->SwitchOff();
 	}
@@ -544,8 +519,8 @@ bool Heat::IsChamberHeater(int heater) const
 
 void Heat::SetActiveTemperature(int heater, float t)
 {
-	Heater * const h = FindHeater(heater);
-	if (h != nullptr)
+	const auto h = FindHeater(heater);
+	if (h.IsNotNull())
 	{
 		h->SetActiveTemperature(t);
 	}
@@ -553,14 +528,14 @@ void Heat::SetActiveTemperature(int heater, float t)
 
 float Heat::GetActiveTemperature(int heater) const
 {
-	Heater * const h = FindHeater(heater);
-	return (h == nullptr) ? ABS_ZERO : h->GetActiveTemperature();
+	const auto h = FindHeater(heater);
+	return (h.IsNull()) ? ABS_ZERO : h->GetActiveTemperature();
 }
 
 void Heat::SetStandbyTemperature(int heater, float t)
 {
-	Heater * const h = FindHeater(heater);
-	if (h != nullptr)
+	const auto h = FindHeater(heater);
+	if (h.IsNotNull())
 	{
 		h->SetStandbyTemperature(t);
 	}
@@ -568,8 +543,8 @@ void Heat::SetStandbyTemperature(int heater, float t)
 
 float Heat::GetStandbyTemperature(int heater) const
 {
-	Heater * const h = FindHeater(heater);
-	return (h == nullptr) ? ABS_ZERO : h->GetStandbyTemperature();
+	const auto h = FindHeater(heater);
+	return (h.IsNull()) ? ABS_ZERO : h->GetStandbyTemperature();
 }
 
 float Heat::GetHighestTemperatureLimit(int heater) const
@@ -616,8 +591,8 @@ float Heat::GetLowestTemperatureLimit(int heater) const
 // Return ABS_ZERO if the heater doesn't exist. The Z probe class relies on this.
 float Heat::GetHeaterTemperature(int heater) const
 {
-	Heater * const h = FindHeater(heater);
-	return (h == nullptr) ? ABS_ZERO : h->GetTemperature();
+	const auto h = FindHeater(heater);
+	return (h.IsNull()) ? ABS_ZERO : h->GetTemperature();
 }
 
 // Get the target temperature of a heater
@@ -629,19 +604,21 @@ float Heat::GetTargetTemperature(int heater) const
 				: 0.0;
 }
 
-void Heat::Activate(int heater)
+GCodeResult Heat::Activate(int heater, const StringRef& reply)
 {
-	Heater * const h = FindHeater(heater);
-	if (h != nullptr)
+	const auto h = FindHeater(heater);
+	if (h.IsNotNull())
 	{
-		h->Activate();
+		return h->Activate(reply);
 	}
+	reply.copy("Heater %d not found", heater);
+	return GCodeResult::error;
 }
 
 void Heat::SwitchOff(int heater)
 {
-	Heater * const h = FindHeater(heater);
-	if (h != nullptr)
+	const auto h = FindHeater(heater);
+	if (h.IsNotNull())
 	{
 		h->SwitchOff();
 		lastStandbyTools[heater] = nullptr;
@@ -650,6 +627,8 @@ void Heat::SwitchOff(int heater)
 
 void Heat::SwitchOffAll(bool includingChamberAndBed)
 {
+	ReadLocker lock(heatersLock);
+
 	for (int heater = 0; heater < (int)MaxHeaters; ++heater)
 	{
 		Heater * const h = heaters[heater];
@@ -662,27 +641,29 @@ void Heat::SwitchOffAll(bool includingChamberAndBed)
 
 void Heat::Standby(int heater, const Tool *tool)
 {
-	Heater * const h = FindHeater(heater);
-	if (h != nullptr)
+	const auto h = FindHeater(heater);
+	if (h.IsNotNull())
 	{
 		h->Standby();
 		lastStandbyTools[heater] = tool;
 	}
 }
 
-void Heat::ResetFault(int heater)
+GCodeResult Heat::ResetFault(int heater, const StringRef& reply)
 {
-	Heater * const h = FindHeater(heater);
-	if (h != nullptr)
+	const auto h = FindHeater(heater);
+	if (h.IsNotNull())
 	{
-		h->ResetFault();
+		return h->ResetFault(reply);
 	}
+	reply.copy("Heater %d not found", heater);
+	return GCodeResult::error;
 }
 
 float Heat::GetAveragePWM(size_t heater) const
 {
-	Heater * const h = FindHeater(heater);
-	return (h == nullptr) ? 0.0 : h->GetAveragePWM();
+	const auto h = FindHeater(heater);
+	return (h.IsNull()) ? 0.0 : h->GetAveragePWM();
 }
 
 bool Heat::IsBedOrChamberHeater(int heater) const
@@ -758,8 +739,8 @@ GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('H'))
 	{
 		const unsigned int heater = gb.GetUIValue();
-		Heater * const h = FindHeater(heater);
-		if (h != nullptr)
+		const auto h = FindHeater(heater);
+		if (h.IsNotNull())
 		{
 			const float temperature = (gb.Seen('S')) ? gb.GetFValue()
 										: reprap.GetHeat().IsBedHeater(heater) ? 75.0
@@ -799,9 +780,9 @@ GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply)
 	{
 		// Report the auto tune status
 		const int whichPid = (heaterBeingTuned == -1) ? lastHeaterTuned : heaterBeingTuned;
-		Heater * const h = FindHeater(whichPid);
+		const auto h = FindHeater(whichPid);
 
-		if (h != nullptr)
+		if (h.IsNotNull())
 		{
 			h->GetAutoTuneStatus(reply);
 		}
@@ -843,15 +824,12 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 			boardAddress = CanId::NoAddress;
 		}
 #endif
-		TemperatureSensor *sensor;
 		bool newSensor = gb.Seen('Y');
 		if (newSensor)
 		{
-			TemperatureSensor * const oldSensor = GetSensor(sensorNum);
-			if (oldSensor != nullptr)
-			{
-				oldSensor->FlagForDeletion();
-			}
+			WriteLocker lock(sensorsLock);
+
+			DeleteSensor(sensorNum);
 
 			String<StringLength20> typeName;
 			if (!gb.GetReducedString(typeName.GetRef()))
@@ -859,59 +837,54 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 				reply.copy("Missing sensor type name");
 				return GCodeResult::error;
 			}
+
 #if SUPPORT_CAN_EXPANSION
 			if (boardAddress == CanId::NoAddress)
 			{
 				reply.copy("Missing port name");
 				return GCodeResult::error;
 			}
-			sensor = TemperatureSensor::Create(sensorNum, boardAddress, typeName.c_str(), reply);
+			TemperatureSensor * const newSensor = TemperatureSensor::Create(sensorNum, boardAddress, typeName.c_str(), reply);
 #else
-			sensor = TemperatureSensor::Create(sensorNum, typeName.c_str(), reply);
+			TemperatureSensor * const newSensor = TemperatureSensor::Create(sensorNum, typeName.c_str(), reply);
 #endif
-			if (sensor == nullptr)
+			if (newSensor == nullptr)
 			{
 				return GCodeResult::error;
 			}
-		}
-		else
-		{
-			sensor = GetSensor(sensorNum);
-			if (sensor == nullptr)
-			{
-				reply.printf("Sensor %u does not exist", sensorNum);
-				return GCodeResult::error;
-			}
-#if SUPPORT_CAN_EXPANSION
-			const int existingBoardAddress = sensor->GetBoardAddress();
-			if (boardAddress == CanId::NoAddress)
-			{
-				boardAddress = existingBoardAddress;
-			}
-			else if (boardAddress != existingBoardAddress)
-			{
-				reply.copy("Sensor type parameter needed when moving a sensor to a different board");
-				return GCodeResult::error;
-			}
-#endif
-		}
 
-		const GCodeResult rslt = sensor->Configure(gb, reply);
-		if (newSensor)
-		{
+			const GCodeResult rslt = newSensor->Configure(gb, reply);
 			if (rslt == GCodeResult::ok)
 			{
-				TaskCriticalSectionLocker lock;
-
-				sensor->SetNext(newSensors);
-				newSensors = sensor;
+				InsertSensor(newSensor);
 			}
 			else
 			{
-				delete sensor;
+				delete newSensor;
 			}
+			return rslt;
 		}
-		return rslt;
+
+		const auto sensor = FindSensor(sensorNum);
+		if (sensor.IsNull())
+		{
+			reply.printf("Sensor %u does not exist", sensorNum);
+			return GCodeResult::error;
+		}
+
+#if SUPPORT_CAN_EXPANSION
+		const CanAddress existingBoardAddress = sensor->GetBoardAddress();
+		if (boardAddress == CanId::NoAddress)
+		{
+			boardAddress = existingBoardAddress;
+		}
+		else if (boardAddress != existingBoardAddress)
+		{
+			reply.copy("Sensor type parameter needed when moving a sensor to a different board");
+			return GCodeResult::error;
+		}
+#endif
+		return sensor->Configure(gb, reply);
 	}
 
 	reply.copy("Missing sensor number parameter");
@@ -921,8 +894,8 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 // Get the name of a heater, or nullptr if it hasn't been named
 const char *Heat::GetHeaterSensorName(size_t heater) const
 {
-	Heater * const h = FindHeater(heater);
-	return (h != nullptr) ? h->GetSensorName() : nullptr;
+	const auto h = FindHeater(heater);
+	return (h.IsNotNull()) ? h->GetSensorName() : nullptr;
 }
 
 // Return the protection parameters of the given index
@@ -978,8 +951,8 @@ void Heat::UpdateHeaterProtection()
 // Get the temperature of a sensor
 float Heat::GetSensorTemperature(int sensorNum, TemperatureError& err) const
 {
-	TemperatureSensor * const sensor = GetSensor(sensorNum);
-	if (sensor != nullptr)
+	const auto sensor = FindSensor(sensorNum);
+	if (sensor.IsNotNull())
 	{
 		float temp;
 		err = sensor->GetLatestTemperature(temp);
@@ -993,8 +966,8 @@ float Heat::GetSensorTemperature(int sensorNum, TemperatureError& err) const
 // Get the temperature of a heater
 float Heat::GetHeaterTemperature(size_t heater) const
 {
-	Heater * const h = FindHeater(heater);
-	return (h == nullptr) ? ABS_ZERO : h->GetTemperature();
+	const auto h = FindHeater(heater);
+	return (h.IsNull()) ? ABS_ZERO : h->GetTemperature();
 }
 
 // Suspend the heaters to conserve power or while doing Z probing
@@ -1009,6 +982,60 @@ void Heat::SuspendHeaters(bool sus)
 	}
 }
 
+// Delete a sensor, if there is one. Must write-lock the sensors lock before calling this.
+void Heat::DeleteSensor(unsigned int sn)
+{
+	TemperatureSensor *currentSensor = sensorsRoot;
+	TemperatureSensor *lastSensor = nullptr;
+
+	while (currentSensor != nullptr)
+	{
+		if (currentSensor->GetSensorNumber() == sn)
+		{
+			TemperatureSensor *sensorToDelete = currentSensor;
+			currentSensor = currentSensor->GetNext();
+			if (lastSensor == nullptr)
+			{
+				sensorsRoot = currentSensor;
+			}
+			else
+			{
+				lastSensor->SetNext(currentSensor);
+			}
+			delete sensorToDelete;
+			break;
+		}
+
+		lastSensor = currentSensor;
+		currentSensor = currentSensor->GetNext();
+	}
+}
+
+// Insert a sensor. Must write-lock the sensors lock before calling this.
+void Heat::InsertSensor(TemperatureSensor *newSensor)
+{
+	TemperatureSensor *prev = nullptr;
+	TemperatureSensor *ts = sensorsRoot;
+	for (;;)
+	{
+		if (ts == nullptr || ts->GetSensorNumber() > newSensor->GetSensorNumber())
+		{
+			newSensor->SetNext(ts);
+			if (prev == nullptr)
+			{
+				sensorsRoot = newSensor;
+			}
+			else
+			{
+				prev->SetNext(newSensor);
+			}
+			break;
+		}
+		prev = ts;
+		ts = ts->GetNext();
+	}
+}
+
 #if HAS_MASS_STORAGE
 
 // Save some resume information returning true if successful.
@@ -1019,16 +1046,16 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const
 	const StringRef buf = bufSpace.GetRef();
 	for (size_t index : ARRAY_INDICES(bedHeaters))
 	{
-		Heater * const h = FindHeater(bedHeaters[index]);
-		if (h != nullptr && h->GetStatus() == HeaterStatus::active)
+		const auto h = FindHeater(bedHeaters[index]);
+		if (h.IsNotNull() && h->GetStatus() == HeaterStatus::active)
 		{
 			buf.printf("M140 P%u S%.1f\n", index, (double)h->GetActiveTemperature());
 		}
 	}
 	for (size_t index : ARRAY_INDICES(chamberHeaters))
 	{
-		Heater * const h = FindHeater(chamberHeaters[index]);
-		if (h != nullptr && h->GetStatus() == HeaterStatus::active)
+		const auto h = FindHeater(chamberHeaters[index]);
+		if (h.IsNotNull() && h->GetStatus() == HeaterStatus::active)
 		{
 			buf.printf("M141 P%u S%.1f\n", index, (double)h->GetActiveTemperature());
 		}
@@ -1040,12 +1067,47 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const
 
 #if SUPPORT_CAN_EXPANSION
 
-void Heat::UpdateRemoteSensorTemperature(unsigned int sensor, const CanTemperatureReport& report)
+void Heat::ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemperatures& msg)
 {
-	TemperatureSensor * const ts = GetSensor(sensor);
-	if (ts != nullptr)
+	uint64_t sensorsReported = msg.whichSensors;
+	size_t index = 0;
+	for (unsigned int sensor = 0; sensor < 64 && sensorsReported != 0; ++sensor)
 	{
-		ts->UpdateRemoteTemperature(report);
+		if (((uint8_t)sensorsReported & 1u) != 0)
+		{
+			if (index < ARRAY_SIZE(msg.temperatureReports))
+			{
+				const auto ts = FindSensor(sensor);
+				if (ts.IsNotNull())
+				{
+					ts->UpdateRemoteTemperature(src, msg.temperatureReports[index]);
+				}
+			}
+			++index;
+		}
+		sensorsReported >>= 1;
+	}
+}
+
+void Heat::ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersStatus& msg)
+{
+	uint64_t heatersReported = msg.whichHeaters;
+	size_t index = 0;
+	for (unsigned int heaterNum = 0; heaterNum < 64 && heatersReported != 0; ++heaterNum)
+	{
+		if (((uint8_t)heatersReported & 1u) != 0)
+		{
+			if (index < ARRAY_SIZE(msg.reports))
+			{
+				const auto h = FindHeater(heaterNum);
+				if (h.IsNotNull())
+				{
+					h->UpdateRemoteStatus(src, msg.reports[index]);
+				}
+			}
+			++index;
+		}
+		heatersReported >>= 1;
 	}
 }
 

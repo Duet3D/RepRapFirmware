@@ -297,7 +297,8 @@ void Tool::Activate()
 	{
 		reprap.GetHeat().SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
 		reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
-		reprap.GetHeat().Activate(heaters[heater]);
+		String<1> dummy;
+		(void)reprap.GetHeat().Activate(heaters[heater], dummy.GetRef());
 	}
 	state = ToolState::active;
 }

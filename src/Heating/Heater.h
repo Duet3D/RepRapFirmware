@@ -17,10 +17,11 @@
 #endif
 
 class HeaterProtection;
+struct CanHeaterReport;
 
 // Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
 // Status 'running' is not returned to the web interface, we return active or standby instead.
-enum class HeaterStatus { off = 0, standby = 1, active = 2, fault = 3, tuning = 4, running = 5 };
+enum class HeaterStatus { off = 0, standby = 1, active = 2, fault = 3, tuning = 4 };
 
 class Heater
 {
@@ -28,26 +29,33 @@ public:
 	Heater(unsigned int num);
 	virtual ~Heater();
 
+	// Configuration methods
+	virtual GCodeResult ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sensorNumber, const StringRef& reply) = 0;
+	virtual GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) = 0;
+	virtual GCodeResult ReportDetails(const StringRef& reply) const = 0;
+
 	virtual float GetTemperature() const = 0;					// Get the current temperature
 	virtual float GetAveragePWM() const = 0;					// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
-	virtual void ResetFault() = 0;								// Reset a fault condition - only call this if you know what you are doing
+	virtual GCodeResult ResetFault(const StringRef& reply) = 0;	// Reset a fault condition - only call this if you know what you are doing
 	virtual void SwitchOff() = 0;
 	virtual void Spin() = 0;
 	virtual void StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) = 0;	// Start an auto tune cycle for this PID
 	virtual void GetAutoTuneStatus(const StringRef& reply) const = 0;	// Get the auto tune status or last result
 	virtual void Suspend(bool sus) = 0;							// Suspend the heater to conserve power or while doing Z probing
 	virtual float GetAccumulator() const = 0;					// Get the inertial term accumulator
-	virtual GCodeResult ConfigurePortAndSensor(GCodeBuffer& gb, const StringRef& reply) = 0;
-	virtual void ReleasePort() = 0;								// If it's a local heater, turn it off and release its port. If it is remote, delete the remote heater.
+	virtual HeaterStatus GetStatus() const;						// Get the status of the heater
+
+#if SUPPORT_CAN_EXPANSION
+	virtual void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) = 0;
+#endif
 
 	unsigned int GetHeaterNumber() const { return heaterNumber; }
 	const char *GetSensorName() const;							// Get the name of the sensor for this heater, or nullptr if it hasn't been named
-	HeaterStatus GetStatus() const;								// Get the status of the heater
 	void SetActiveTemperature(float t);
 	float GetActiveTemperature() const { return activeTemperature; }
 	void SetStandbyTemperature(float t);
 	float GetStandbyTemperature() const { return standbyTemperature; }
-	void Activate();											// Switch from idle to active
+	GCodeResult Activate(const StringRef& reply);				// Switch from idle to active
 	void Standby();												// Switch from active to idle
 
 	void GetFaultDetectionParameters(float& pMaxTempExcursion, float& pMaxFaultTime) const
@@ -70,7 +78,6 @@ public:
 	void SetM301PidParameters(const M301PidParameters& params)
 		{ model.SetM301PidParameters(params); }
 
-	TemperatureSensor *GetSensor() const;
 	bool CheckGood() const;
 
 protected:
@@ -94,7 +101,7 @@ protected:
 
 	virtual void ResetHeater() = 0;
 	virtual HeaterMode GetMode() const = 0;
-	virtual void SwitchOn() = 0;
+	virtual GCodeResult SwitchOn(const StringRef& reply) = 0;
 	virtual GCodeResult UpdateModel(const StringRef& reply) = 0;
 
 	int GetSensorNumber() const { return sensorNumber; }

@@ -69,22 +69,19 @@ HeaterStatus Heater::GetStatus() const
 
 const char* Heater::GetSensorName() const
 {
-	const TemperatureSensor * const sensor = GetSensor();
-	return (sensor != nullptr) ? sensor->GetSensorName() : nullptr;
+	const auto sensor = reprap.GetHeat().FindSensor(sensorNumber);
+	return (sensor.IsNotNull()) ? sensor->GetSensorName() : nullptr;
 }
 
-TemperatureSensor *Heater::GetSensor() const
-{
-	return reprap.GetHeat().GetSensor(sensorNumber);
-}
-
-void Heater::Activate()
+GCodeResult Heater::Activate(const StringRef& reply)
 {
 	if (GetMode() != HeaterMode::fault)
 	{
 		active = true;
-		SwitchOn();
+		return SwitchOn(reply);
 	}
+	reply.printf("Can't activate heater %u while in fault state", heaterNumber);
+	return GCodeResult::error;
 }
 
 void Heater::Standby()
@@ -92,7 +89,8 @@ void Heater::Standby()
 	if (GetMode() != HeaterMode::fault)
 	{
 		active = false;
-		SwitchOn();
+		String<1> dummy;
+		(void)SwitchOn(dummy.GetRef());
 	}
 }
 
@@ -111,7 +109,8 @@ void Heater::SetActiveTemperature(float t)
 		activeTemperature = t;
 		if (GetMode() > HeaterMode::suspended && active)
 		{
-			SwitchOn();
+			String<1> dummy;
+			(void)SwitchOn(dummy.GetRef());
 		}
 	}
 }
@@ -131,7 +130,8 @@ void Heater::SetStandbyTemperature(float t)
 		standbyTemperature = t;
 		if (GetMode() > HeaterMode::suspended && !active)
 		{
-			SwitchOn();
+			String<1> dummy;
+			(void)SwitchOn(dummy.GetRef());
 		}
 	}
 }

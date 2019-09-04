@@ -25,6 +25,7 @@ Licence: GPL
 #include "ObjectModel/ObjectModel.h"
 #include "MessageType.h"
 #include "RTOSIface/RTOSIface.h"
+#include "GCodes/GCodeResult.h"
 
 enum class ResponseSource
 {
@@ -88,7 +89,7 @@ public:
 	unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions);
 	void PrintTool(int toolNumber, const StringRef& reply) const;
 	void FlagTemperatureFault(int8_t dudHeater);
-	void ClearTemperatureFault(int8_t wasDudHeater);
+	GCodeResult ClearTemperatureFault(int8_t wasDudHeater, const StringRef& reply);
 
 	Platform& GetPlatform() const { return *platform; }
 	Move& GetMove() const { return *move; }

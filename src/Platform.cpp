@@ -4333,10 +4333,7 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply)
 		return ConfigureGpioOrServo(deviceNumber, false, gb, reply);
 
 	case 4:
-		{
-			Heat& heat = reprap.GetHeat();
-			return (heat.NewSensorsPending()) ? GCodeResult::notFinished : heat.ConfigureHeater(deviceNumber, gb, reply);
-		}
+		return reprap.GetHeat().ConfigureHeater(deviceNumber, gb, reply);
 
 	case 8:
 		return fman.ConfigureFanPort(deviceNumber, gb, reply);

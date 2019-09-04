@@ -31,9 +31,12 @@ GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 	return cons.SendAndGetResponse(CanMessageType::m308, boardAddress, reply);
 }
 
-void RemoteSensor::UpdateRemoteTemperature(const CanTemperatureReport& report)
+void RemoteSensor::UpdateRemoteTemperature(CanAddress src, const CanTemperatureReport& report)
 {
-	SetResult(report.temperature, (TemperatureError)report.errorCode);
+	if (src == boardAddress)
+	{
+		SetResult(report.temperature, (TemperatureError)report.errorCode);
+	}
 }
 
 #endif

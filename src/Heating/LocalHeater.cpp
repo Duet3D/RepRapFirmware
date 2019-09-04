@@ -50,14 +50,10 @@ LocalHeater::LocalHeater(unsigned int heaterNum) : Heater(heaterNum), mode(Heate
 	lastSampleTime = millis();
 }
 
-LocalHeater::LocalHeater(const Heater& h) : Heater(h), mode(HeaterMode::off)
+LocalHeater::~LocalHeater()
 {
-	ResetHeater();
-	SetHeater(0.0);							// set up the pin even if the heater is not enabled (for PCCB)
-
-	// Time the sensor was last sampled.  During startup, we use the current
-	// time as the initial value so as to not trigger an immediate warning from the Tick ISR.
-	lastSampleTime = millis();
+	SwitchOff();
+	port.Release();
 }
 
 float LocalHeater::GetTemperature() const
@@ -89,62 +85,42 @@ void LocalHeater::ResetHeater()
 }
 
 // Configure the heater port and the sensor number
-GCodeResult LocalHeater::ConfigurePortAndSensor(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sensorNumber, const StringRef& reply)
 {
-	const bool seenFreq = gb.Seen('Q');
-	const PwmFrequency freq = (seenFreq) ? min<PwmFrequency>(gb.GetPwmFrequency(), MaxHeaterPwmFrequency)
-								: (reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber()))
-								  ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
-	const bool seenPin = gb.Seen('C');
-	if (seenPin)
+	if (!port.AssignPort(portName, reply, PinUsedBy::heater, PinAccess::pwm))
 	{
-		SwitchOff();
-		if (!port.AssignPort(gb, reply, PinUsedBy::heater, PinAccess::pwm))
-		{
-			return GCodeResult::error;
-		}
-	}
-	if (seenPin || seenFreq)
-	{
-		port.SetFrequency(freq);
+		return GCodeResult::error;
 	}
 
-	const bool seenSensor = gb.Seen('T');
-	if (seenSensor)
+	port.SetFrequency(freq);
+	SetSensorNumber(sensorNumber);
+	if (reprap.GetHeat().FindSensor(sensorNumber).IsNull())
 	{
-		const int sn = gb.GetIValue();
-		SwitchOff();
-		if (sn < 0 || reprap.GetHeat().GetSensor(sn) != nullptr)
-		{
-			SetSensorNumber(sn);
-		}
-		else
-		{
-			SetSensorNumber(-1);
-			reply.printf("Sensor number %d has not been defined", sn);
-		}
-	}
-	else if (!seenPin && !seenFreq)
-	{
-		reply.printf("Heater %u", GetHeaterNumber());
-		port.AppendDetails(reply);
-		if (GetSensorNumber() >= 0)
-		{
-			reply.catf(", sensor %d", GetSensorNumber());
-		}
-		else
-		{
-			reply.cat(", no sensor");
-		}
+		reply.printf("Sensor number %u has not been defined", sensorNumber);
+		return GCodeResult::warning;
 	}
 	return GCodeResult::ok;
 }
 
-// If it's a local heater, turn it off and release its port. If it is remote, delete the remote heater.
-void LocalHeater::ReleasePort()
+GCodeResult LocalHeater::SetPwmFrequency(PwmFrequency freq, const StringRef& reply)
 {
-	SwitchOff();
-	port.Release();
+	port.SetFrequency(freq);
+	return GCodeResult::ok;
+}
+
+GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const
+{
+	reply.printf("Heater %u", GetHeaterNumber());
+	port.AppendDetails(reply);
+	if (GetSensorNumber() >= 0)
+	{
+		reply.catf(", sensor %d", GetSensorNumber());
+	}
+	else
+	{
+		reply.cat(", no sensor");
+	}
+	return GCodeResult::ok;
 }
 
 // Read and store the temperature of this heater and returns the error code.
@@ -156,7 +132,7 @@ TemperatureError LocalHeater::ReadTemperature()
 }
 
 // This must be called whenever the heater is turned on, and any time the heater is active and the target temperature is changed
-void LocalHeater::SwitchOn()
+GCodeResult LocalHeater::SwitchOn(const StringRef& reply)
 {
 	if (!GetModel().IsEnabled())
 	{
@@ -165,32 +141,29 @@ void LocalHeater::SwitchOn()
 
 	if (mode == HeaterMode::fault)
 	{
-		if (reprap.Debug(Module::moduleHeat))
-		{
-			reprap.GetPlatform().MessageF(WarningMessage, "Heater %u not switched on due to temperature fault\n", GetHeaterNumber());
-		}
+		reply.printf("Heater %u not switched on due to temperature fault\n", GetHeaterNumber());
+		return GCodeResult::warning;
 	}
-	else
+
+	//debugPrintf("Heater %d on, temp %.1f\n", heater, temperature);
+	const float target = GetTargetTemperature();
+	const HeaterMode oldMode = mode;
+	mode = (temperature + TEMPERATURE_CLOSE_ENOUGH < target) ? HeaterMode::heating
+			: (temperature > target + TEMPERATURE_CLOSE_ENOUGH) ? HeaterMode::cooling
+				: HeaterMode::stable;
+	if (mode != oldMode)
 	{
-		//debugPrintf("Heater %d on, temp %.1f\n", heater, temperature);
-		const float target = GetTargetTemperature();
-		const HeaterMode oldMode = mode;
-		mode = (temperature + TEMPERATURE_CLOSE_ENOUGH < target) ? HeaterMode::heating
-				: (temperature > target + TEMPERATURE_CLOSE_ENOUGH) ? HeaterMode::cooling
-					: HeaterMode::stable;
-		if (mode != oldMode)
+		heatingFaultCount = 0;
+		if (mode == HeaterMode::heating)
 		{
-			heatingFaultCount = 0;
-			if (mode == HeaterMode::heating)
-			{
-				timeSetHeating = millis();
-			}
-			if (reprap.Debug(Module::moduleHeat) && oldMode == HeaterMode::off)
-			{
-				reprap.GetPlatform().MessageF(GenericMessage, "Heater %u switched on\n", GetHeaterNumber());
-			}
+			timeSetHeating = millis();
+		}
+		if (reprap.Debug(Module::moduleHeat) && oldMode == HeaterMode::off)
+		{
+			reprap.GetPlatform().MessageF(GenericMessage, "Heater %u switched on\n", GetHeaterNumber());
 		}
 	}
+	return GCodeResult::ok;
 }
 
 // Switch off the specified heater. If in tuning mode, delete the array used to store tuning temperature readings.
@@ -473,7 +446,7 @@ void LocalHeater::Spin()
 	}
 }
 
-void LocalHeater::ResetFault()
+GCodeResult LocalHeater::ResetFault(const StringRef& reply)
 {
 	badTemperatureCount = 0;
 	if (mode == HeaterMode::fault)
@@ -481,6 +454,7 @@ void LocalHeater::ResetFault()
 		mode = HeaterMode::off;
 		SwitchOff();
 	}
+	return GCodeResult::ok;
 }
 
 float LocalHeater::GetAveragePWM() const
@@ -921,7 +895,8 @@ void LocalHeater::Suspend(bool sus)
 	}
 	else if (mode == HeaterMode::suspended)
 	{
-		SwitchOn();
+		String<1> dummy;
+		(void)SwitchOn(dummy.GetRef());
 	}
 }
 

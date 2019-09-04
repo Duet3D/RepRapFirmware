@@ -17,9 +17,6 @@ public:
 	// Virtual destructor
 	virtual ~TemperatureSensor();
 
-	// Mark this sensor as invalid and to be deleted. Overridden in sensor with ports because the port must be released too.
-	virtual void FlagForDeletion() { sensorNumber = -1; }
-
 	// Try to get a temperature reading
 	TemperatureError GetLatestTemperature(float& t);
 
@@ -36,7 +33,7 @@ public:
 	const char *GetSensorType() const { return sensorType; }
 
 	// Return the sensor number
-	int GetSensorNumber() const { return sensorNumber; }
+	unsigned int GetSensorNumber() const { return sensorNumber; }
 
 	// Return the code for the most recent error
 	TemperatureError GetLastError() const { return lastRealError; }
@@ -65,7 +62,7 @@ public:
 	virtual CanAddress GetBoardAddress() const { return 0; }
 
 	// Update the temperature, if it is a remote sensor. Overridden in class RemoteSensor.
-	virtual void UpdateRemoteTemperature(const CanTemperatureReport& report) { }
+	virtual void UpdateRemoteTemperature(CanAddress src, const CanTemperatureReport& report) { }
 #endif
 
 	// Factory method
@@ -88,7 +85,7 @@ private:
 	static constexpr uint32_t TemperatureReadingTimeout = 2000;			// any reading older than this number of milliseconds is considered unreliable
 
 	TemperatureSensor *next;
-	int sensorNumber;					// the number of this sensor. A value of -1 means it is flagged for deletion.
+	unsigned int sensorNumber;											// the number of this sensor
 	const char * const sensorType;
 	const char *sensorName;
 	float lastTemperature;

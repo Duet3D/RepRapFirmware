@@ -1754,11 +1754,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					else
 					{
 						heat.SetActiveTemperature(currentHeater, temperature);
-						heat.Activate(currentHeater);
+						result = heat.Activate(currentHeater, reply);
 					}
 				}
 			}
 
+			// Standby temperature
 			if (gb.Seen('R'))
 			{
 				seen = true;
@@ -1807,7 +1808,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (gb.Seen('S') && gb.GetIValue() == 1)
 				{
-					reprap.GetHeat().Activate(bedHeater);
+					result = reprap.GetHeat().Activate(bedHeater, reply);
 				}
 				else
 				{
@@ -1864,7 +1865,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				}
 
 				reprap.GetHeat().SetActiveTemperature(heater, temperature);
-				reprap.GetHeat().Activate(heater);
+				result = reprap.GetHeat().Activate(heater, reply);
 				if (cancelWait || reprap.GetHeat().HeaterAtSetTemperature(heater, waitWhenCooling, TEMPERATURE_CLOSE_ENOUGH))
 				{
 					cancelWait = isWaiting = false;
@@ -3188,7 +3189,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			const unsigned int heater = gb.GetUIValue();
 			if (heater < MaxHeaters)
 			{
-				reprap.ClearTemperatureFault(heater);
+				result = reprap.ClearTemperatureFault(heater, reply);
 			}
 			else
 			{
@@ -3201,7 +3202,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			// Clear all heater faults
 			for (unsigned int heater = 0; heater < MaxHeaters; ++heater)
 			{
-				reprap.ClearTemperatureFault(heater);
+				result = max<GCodeResult>(result, reprap.ClearTemperatureFault(heater, reply));
 			}
 		}
 		heaterFaultState = HeaterFaultState::noFault;

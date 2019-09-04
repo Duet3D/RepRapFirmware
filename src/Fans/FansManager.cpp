@@ -77,8 +77,6 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 {
 	if (fanNum < NumTotalFans)
 	{
-		WriteLocker lock(fansLock);
-
 		const bool seenPin = gb.Seen('C');
 		if (seenPin)
 		{
@@ -88,6 +86,9 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 				reply.copy("Missing pin name");
 				return GCodeResult::error;
 			}
+
+			WriteLocker lock(fansLock);
+
 			Fan *oldFan = nullptr;
 			std::swap(oldFan, fans[fanNum]);
 			delete oldFan;
@@ -115,7 +116,8 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 			return (fans[fanNum] == nullptr) ? GCodeResult::error : GCodeResult::ok;
 		}
 
-		if (fans[fanNum] == nullptr)
+		const auto fan = FindFan(fanNum);
+		if (fan.IsNull())
 		{
 			reply.printf("Fan %u does not exist", (unsigned int)fanNum);
 			return GCodeResult::error;
@@ -123,10 +125,10 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 
 		if (gb.Seen('Q'))
 		{
-			return fans[fanNum]->SetPwmFrequency(gb.GetPwmFrequency(), reply);
+			return fan->SetPwmFrequency(gb.GetPwmFrequency(), reply);
 		}
 
-		return fans[fanNum]->ReportPortDetails(reply);
+		return fan->ReportPortDetails(reply);
 	}
 
 	reply.copy("Fan number out of range");

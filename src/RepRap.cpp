@@ -1128,9 +1128,13 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->cat("]},\"extra\":[");
 		bool first = true;
 		unsigned int nextSensorNumber = 0;
-		TemperatureSensor *sensor;
-		while ((sensor = heat->GetSensorAtOrAbove(nextSensorNumber)) != nullptr)
+		for (;;)
 		{
+			const auto sensor = heat->FindSensorAtOrAbove(nextSensorNumber);
+			if (sensor.IsNull())
+			{
+				break;
+			}
 			const char * const nm = sensor->GetSensorName();
 			if (nm != nullptr)
 			{
@@ -2234,14 +2238,15 @@ void RepRap::FlagTemperatureFault(int8_t dudHeater)
 	}
 }
 
-void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
+GCodeResult RepRap::ClearTemperatureFault(int8_t wasDudHeater, const StringRef& reply)
 {
-	heat->ResetFault(wasDudHeater);
+	const GCodeResult rslt = heat->ResetFault(wasDudHeater, reply);
 	MutexLocker lock(toolListMutex);
 	if (toolList != nullptr)
 	{
 		toolList->ClearTemperatureFault(wasDudHeater);
 	}
+	return rslt;
 }
 
 // Get the current axes used as X axes

@@ -57,7 +57,6 @@ int32_t RemoteFan::GetRPM()
 
 GCodeResult RemoteFan::ReportPortDetails(const StringRef& str) const
 {
-	str.Clear();				// caller has already written "Fan n" to the string but we don't want that
 	CanMessageGenericConstructor cons(M950FanParams);
 	cons.AddUParam('F', fanNumber);
 	return cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, str);

@@ -169,28 +169,6 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 	}
 }
 
-// Handle a temperature report and free the buffer
-static void HandleTemperatureReport(CanMessageBuffer *buf)
-pre(buf->id.MsgType() == CanMessageType::temperatureReport)
-{
-	const CanMessageSensorTemperatures& msg = buf->msg.sensorTemperaturesBroadcast;
-	uint64_t sensorsReported = msg.whichSensors;
-	size_t index = 0;
-	for (unsigned int sensor = 0; sensor < 64 && sensorsReported != 0; ++sensor)
-	{
-		if (((uint8_t)sensorsReported & 1u) != 0)
-		{
-			if (index < ARRAY_SIZE(msg.temperatureReports))
-			{
-				reprap.GetHeat().UpdateRemoteSensorTemperature(sensor, msg.temperatureReports[index]);
-			}
-			++index;
-		}
-		sensorsReported >>= 1;
-	}
-	CanMessageBuffer::Free(buf);
-}
-
 // Process a received broadcast or request message amd free the message buffer
 void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 {
@@ -202,7 +180,13 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 		break;
 
 	case CanMessageType::sensorTemperaturesReport:
-		HandleTemperatureReport(buf);
+		reprap.GetHeat().ProcessRemoteSensorsReport(buf->id.Src(), buf->msg.sensorTemperaturesBroadcast);
+		CanMessageBuffer::Free(buf);
+		break;
+
+	case CanMessageType::heatersStatusReport:
+		reprap.GetHeat().ProcessRemoteHeatersReport(buf->id.Src(), buf->msg.heatersStatusBroadcast);
+		CanMessageBuffer::Free(buf);
 		break;
 
 	case CanMessageType::statusReport:

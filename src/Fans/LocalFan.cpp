@@ -86,8 +86,8 @@ void LocalFan::InternalRefresh()
 			// Check if this sensor is both monitored by this fan and in use
 			if (IsBitSet(sensorsMonitored, sensorNum))
 			{
-				TemperatureSensor * const sensor = reprap.GetHeat().GetSensor(sensorNum);
-				if (sensor != nullptr)
+				const auto sensor = reprap.GetHeat().FindSensor(sensorNum);
+				if (sensor.IsNotNull())
 				{
 					//TODO we used to turn the fan on if the associated heater was being tuned
 					float ht;

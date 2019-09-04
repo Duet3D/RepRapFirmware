@@ -30,11 +30,13 @@ Licence: GPL
 #include "TemperatureError.h"
 #include "MessageType.h"
 #include "GCodes/GCodeResult.h"
+#include <RTOSIface/RTOSIface.h>
 
 class TemperatureSensor;
 class HeaterProtection;
 class GCodeBuffer;
-struct CanTemperatureReport;
+class CanMessageSensorTemperatures;
+class CanMessageHeatersStatus;
 
 class Heat
 {
@@ -69,8 +71,7 @@ public:
 	bool AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const;	// Is everything at temperature within tolerance?
 
 	void SwitchOffAll(bool includingChamberAndBed);				// Turn all heaters off
-	void ResetFault(int heater);								// Reset a heater fault for a specific heater or all heaters
-
+	GCodeResult ResetFault(int heater, const StringRef& reply);	// Reset a heater fault for a specific heater or all heaters
 	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply);	// Create a sensor or change the parameters for an existing sensor
@@ -81,8 +82,8 @@ public:
 
 	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
 
-	TemperatureSensor *GetSensor(int sn) const;					// Get a pointer to the temperature sensor with the specified number
-	TemperatureSensor *GetSensorAtOrAbove(unsigned int sn) const;	// Get a pointer to the first temperature sensor with the specified or higher number
+	ReadLockedPointer<TemperatureSensor> FindSensor(int sn) const;	// Get a pointer to the temperature sensor entry
+	ReadLockedPointer<TemperatureSensor> FindSensorAtOrAbove(unsigned int sn) const;	// Get a pointer to the first temperature sensor with the specified or higher number
 
 	float GetSensorTemperature(int sensorNum, TemperatureError& err) const; // Result is in degrees Celsius
 
@@ -91,7 +92,7 @@ public:
 	void Diagnostics(MessageType mtype);						// Output useful information
 
 	// Methods that relate to a particular heater
-	const char *GetHeaterSensorName(size_t heater) const;				// Get the name of the sensor associated with heater, or nullptr if it hasn't been named
+	const char *GetHeaterSensorName(size_t heater) const;		// Get the name of the sensor associated with heater, or nullptr if it hasn't been named
 	float GetAveragePWM(size_t heater) const					// Return the running average PWM to the heater as a fraction in [0, 1].
 	pre(heater < MaxHeaters);
 
@@ -105,7 +106,7 @@ public:
 		return lastStandbyTools[heater];
 	}
 
-	bool IsHeaterEnabled(size_t heater) const					// Is this heater enabled?
+	bool IsHeaterEnabled(size_t heater)	const;					// Is this heater enabled?
 	pre(heater < MaxHeaters);
 
 	float GetActiveTemperature(int heater) const;
@@ -122,11 +123,9 @@ public:
 
 	void SetActiveTemperature(int heater, float t);
 	void SetStandbyTemperature(int heater, float t);
-	void Activate(int heater);									// Turn on a heater
+	GCodeResult Activate(int heater, const StringRef& reply);	// Turn on a heater
 	void Standby(int heater, const Tool* tool);					// Set a heater to standby
 	void SwitchOff(int heater);									// Turn off a specific heater
-
-	bool NewSensorsPending() const { return newSensors != nullptr; }
 
 #if HAS_MASS_STORAGE
 	bool WriteModelParameters(FileStore *f) const;				// Write heater model parameters to file returning true if no error
@@ -134,16 +133,21 @@ public:
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void UpdateRemoteSensorTemperature(unsigned int sensor, const CanTemperatureReport& report);
+	void ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemperatures& msg);
+	void ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersStatus& msg);
 #endif
 
 private:
 	Heat(const Heat&) = delete;									// Private copy constructor to prevent copying
 
-	Heater *FindHeater(int heater) const;
+	ReadLockedPointer<Heater> FindHeater(int heater) const;
+	void DeleteSensor(unsigned int sn);
+	void InsertSensor(TemperatureSensor *newSensor);
+
+	static ReadWriteLock heatersLock;
+	static ReadWriteLock sensorsLock;
 
 	TemperatureSensor * volatile sensorsRoot;					// The sensor list
-	TemperatureSensor * volatile newSensors;					// Sensors recently created
 	HeaterProtection *heaterProtections[MaxHeaters + NumExtraHeaterProtections];	// Heater protection instances to guarantee legal heater temperature ranges
 
 	Heater* heaters[MaxHeaters];								// A local or remote heater
