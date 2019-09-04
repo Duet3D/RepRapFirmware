@@ -34,14 +34,22 @@ LocalFan::~LocalFan()
 	tachoPort.Release();
 }
 
-void LocalFan::AppendPortDetails(const StringRef& str) const
+GCodeResult LocalFan::ReportPortDetails(const StringRef& str) const
 {
+	str.printf("Fan %u", fanNumber);
 	port.AppendDetails(str);
 	if (tachoPort.IsValid())
 	{
 		str.cat(" tacho");
 		tachoPort.AppendDetails(str);
 	}
+	return GCodeResult::ok;
+}
+
+GCodeResult LocalFan::SetPwmFrequency(PwmFrequency freq, const StringRef& reply)
+{
+	port.SetFrequency(freq);
+	return GCodeResult::ok;
 }
 
 // Set the hardware PWM
@@ -58,7 +66,7 @@ void LocalFan::SetHardwarePwm(float pwmVal)
 
 // Refresh the fan PWM
 // If you want make sure that the PWM is definitely updated, set lastPWM negative before calling this
-void LocalFan::Refresh()
+void LocalFan::InternalRefresh()
 {
 	float reqVal;
 #if HAS_SMART_DRIVERS
@@ -153,9 +161,15 @@ void LocalFan::Refresh()
 	lastVal = reqVal;
 }
 
+GCodeResult LocalFan::Refresh(const StringRef& reply)
+{
+	InternalRefresh();
+	return GCodeResult::ok;
+}
+
 bool LocalFan::UpdateFanConfiguration(const StringRef& reply)
 {
-	Refresh();
+	InternalRefresh();
 	return true;
 }
 
@@ -163,7 +177,7 @@ bool LocalFan::Check()
 {
 	if (sensorsMonitored != 0 || blipping)
 	{
-		Refresh();
+		InternalRefresh();
 	}
 	return sensorsMonitored != 0 && lastVal != 0.0;
 }
@@ -187,7 +201,7 @@ bool LocalFan::AssignPorts(const char *pinNames, const StringRef& reply)
 		tachoPort.AttachInterrupt(FanInterrupt, INTERRUPT_MODE_FALLING, this);
 	}
 
-	Refresh();
+	InternalRefresh();
 	return true;
 }
 

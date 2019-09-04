@@ -22,15 +22,15 @@ public:
 
 	bool Check() override;									// update the fan PWM returning true if it is a thermostatic fan that is on
 	bool IsEnabled() const override;
-	void SetPwmFrequency(PwmFrequency freq) override;
+	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) override;
 	int32_t GetRPM() override;
-	void AppendPortDetails(const StringRef& str) const override;
+	GCodeResult ReportPortDetails(const StringRef& str) const override;
 
 	GCodeResult ConfigurePort(const char *pinNames, PwmFrequency freq, const StringRef& reply);
 
 protected:
 	bool UpdateFanConfiguration(const StringRef& reply) override;
-	void Refresh() override;
+	GCodeResult Refresh(const StringRef& reply) override;
 
 private:
 	static constexpr uint32_t RpmReadingTimeout = 2000;		// any reading older than this number of milliseconds is considered unreliable

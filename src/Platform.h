@@ -476,6 +476,12 @@ public:
 		return fman.GetFanValue(fanNum);
 	}
 
+	GCodeResult SetFanValue(size_t fanNum, float speed, const StringRef& reply)			// Accepts values between 0..1
+	{
+		return fman.SetFanValue(fanNum, speed, reply);
+	}
+
+	// Simpler version of SetFanValue when there is nowhere obvious to report an error
 	void SetFanValue(size_t fanNum, float speed)			// Accepts values between 0..1
 	{
 		fman.SetFanValue(fanNum, speed);

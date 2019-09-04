@@ -25,6 +25,7 @@ public:
 	GCodeResult ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply);
 	bool ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error);
 	float GetFanValue(size_t fanNum) const;
+	GCodeResult SetFanValue(size_t fanNum, float speed, const StringRef& reply);
 	void SetFanValue(size_t fanNum, float speed);
 	bool IsFanControllable(size_t fanNum) const;
 	const char *GetFanName(size_t fanNum) const;

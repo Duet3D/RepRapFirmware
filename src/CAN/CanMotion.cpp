@@ -62,7 +62,8 @@ void CanMotion::AddMovement(const DDA& dda, const PrepParams& params, DriverId c
 		buf->next = movementBufferList;
 		movementBufferList = buf;
 
-		auto move = buf->SetupRequestMessage<CanMessageMovement>(CanId::MasterAddress, canDriver.boardAddress);
+		const CanRequestId rid = CanInterface::AllocateRequestId(canDriver.boardAddress);
+		auto move = buf->SetupRequestMessage<CanMessageMovement>(rid, CanId::MasterAddress, canDriver.boardAddress);
 
 		// Common parameters
 		move->accelerationClocks = lrintf(params.accelTime * StepTimer::StepClockRate);

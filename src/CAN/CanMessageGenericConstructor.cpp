@@ -285,6 +285,7 @@ void CanMessageGenericConstructor::AddUParam(char c, uint32_t v)
 					break;
 
 				case ParamDescriptor::uint16:
+				case ParamDescriptor::pwmFreq:
 					if (v >= (1u << 16))
 					{
 						err = "uval too large";
@@ -572,11 +573,12 @@ GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgT
 		return GCodeResult::error;
 	}
 
+	const CanRequestId rid = CanInterface::AllocateRequestId(dest);
 	const size_t actualMessageLength = CanMessageGeneric::GetActualDataLength(dataLen);
-	CanMessageGeneric *m2 = buf->SetupGenericMessage(msgType, CanInterface::GetCanAddress(), dest, actualMessageLength);
+	CanMessageGeneric *m2 = buf->SetupGenericRequestMessage(rid, CanInterface::GetCanAddress(), dest, msgType, actualMessageLength);
 	memcpy(m2, &msg, actualMessageLength);
-//	m2->DebugPrint(paramTable);		//DEBUG
-	return CanInterface::SendRequestAndGetStandardReply(buf, reply);
+	m2->requestId = rid;
+	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 }
 
 #endif

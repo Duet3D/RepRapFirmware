@@ -52,7 +52,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 				size_t bytesSent = 0;
 				for (;;)
 				{
-					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(CanId::MasterAddress, src);
+					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
 					const size_t lengthToSend = min<size_t>(lreq, sizeof(msgp->data));
 					memcpy(msgp->data, data + bytesSent, lengthToSend);
 					bytesSent += lengthToSend;
@@ -86,7 +86,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 				const uint32_t fileLength = f->Length();
 				if (fileOffset >= fileLength)
 				{
-					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(CanId::MasterAddress, src);
+					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
 					msgp->dataLength = 0;
 					msgp->err = CanMessageFirmwareUpdateResponse::ErrBadOffset;
 					msgp->fileLength = fileLength;
@@ -107,7 +107,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 
 					for (;;)
 					{
-						CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(CanId::MasterAddress, src);
+						CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
 						const size_t lengthToSend = min<size_t>(lreq, sizeof(msgp->data));
 						if (f->Read(msgp->data, lengthToSend) != (int)lengthToSend)
 						{
@@ -145,7 +145,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 
 		if (lreq != 0)			// if we didn't complete the request
 		{
-			CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(CanId::MasterAddress, src);
+			CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
 			msgp->dataLength = 0;
 			msgp->err = CanMessageFirmwareUpdateResponse::ErrNoFile;
 			msgp->fileLength = 0;
@@ -158,7 +158,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 	else
 	{
 		const uint32_t bootloaderVersion = msg.bootloaderVersion;
-		CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(CanId::MasterAddress, src);
+		CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
 		msgp->dataLength = 0;
 		msgp->err = CanMessageFirmwareUpdateResponse::ErrOther;
 		msgp->fileLength = 0;

@@ -18,20 +18,21 @@ public:
 
 	bool Check() override;								// update the fan PWM returning true if it is a thermostatic fan that is on
 	bool IsEnabled() const override { return port.IsValid(); }
-	void SetPwmFrequency(PwmFrequency freq) override { port.SetFrequency(freq); }
+	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) override;
 	int32_t GetRPM() override;
-	void AppendPortDetails(const StringRef& str) const override;
+	GCodeResult ReportPortDetails(const StringRef& str) const override;
 
 	bool AssignPorts(const char *pinNames, const StringRef& reply);
 
 	void Interrupt();
 
 protected:
-	void Refresh() override;
+	GCodeResult Refresh(const StringRef& reply) override;
 	bool UpdateFanConfiguration(const StringRef& reply) override;
 
 private:
 	void SetHardwarePwm(float pwmVal);
+	void InternalRefresh();
 
 	PwmPort port;											// port used to control the fan
 	IoPort tachoPort;										// port used to read the tacho

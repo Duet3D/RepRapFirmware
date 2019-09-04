@@ -181,6 +181,17 @@ CanAddress CanInterface::GetCanAddress()
 	return CanId::MasterAddress;
 }
 
+// Allocate a CAN request ID
+CanRequestId CanInterface::AllocateRequestId(CanAddress destination)
+{
+	// We probably want to have special request IDs to tell the destination to resync. But for now just increment the ID. Reserve the top bit for future use.
+	static uint16_t rid = 0;
+
+	CanRequestId rslt = rid & 0x07FF;
+	++rid;
+	return rslt;
+}
+
 // Wait for a specified buffer to become free. If it's still not free after the timeout, cancel the pending transmission.
 static void WaitForTxBufferFree(uint32_t whichTxBuffer, uint32_t maxWait)
 {
@@ -475,7 +486,8 @@ static bool SetRemoteDriverValues(const CanDriversData& data, const StringRef& r
 			reply.lcat("No CAN buffer available");
 			return false;
 		}
-		CanMessageMultipleDrivesRequest * const msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest>(CanId::MasterAddress, boardAddress, mt);
+		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
+		CanMessageMultipleDrivesRequest * const msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest>(rid, CanId::MasterAddress, boardAddress, mt);
 		msg->driversToUpdate = driverBits;
 		size_t numDrivers = 0;
 		while (savedStart < start && numDrivers < ARRAY_SIZE(msg->values))
@@ -485,7 +497,7 @@ static bool SetRemoteDriverValues(const CanDriversData& data, const StringRef& r
 			++numDrivers;
 		}
 		buf->dataLength = msg->GetActualDataLength(numDrivers);
-		if (CanInterface::SendRequestAndGetStandardReply(buf, reply) != GCodeResult::ok)
+		if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply) != GCodeResult::ok)
 		{
 			ok = false;
 		}
@@ -512,7 +524,8 @@ static bool SetRemoteDriverStates(const CanDriversList& drivers, const StringRef
 			reply.lcat("No CAN buffer available");
 			return false;
 		}
-		CanMessageMultipleDrivesRequest * const msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest>(CanId::MasterAddress, boardAddress, CanMessageType::setDriverStates);
+		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
+		CanMessageMultipleDrivesRequest * const msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest>(rid, CanId::MasterAddress, boardAddress, CanMessageType::setDriverStates);
 		msg->driversToUpdate = driverBits;
 		size_t numDrivers = 0;
 		while (savedStart < start && numDrivers < ARRAY_SIZE(msg->values))
@@ -522,7 +535,7 @@ static bool SetRemoteDriverStates(const CanDriversList& drivers, const StringRef
 			++numDrivers;
 		}
 		buf->dataLength = msg->GetActualDataLength(numDrivers);
-		if (CanInterface::SendRequestAndGetStandardReply(buf, reply) != GCodeResult::ok)
+		if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply) != GCodeResult::ok)
 		{
 			ok = false;
 		}
@@ -549,7 +562,7 @@ void CanInterface::SendMotion(CanMessageBuffer *buf)
 }
 
 // Send a request to an expansion board and append the response to 'reply'
-GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, const StringRef& reply)
+GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply)
 {
 	taskWaitingOnFifo1 = TaskBase::GetCallerTaskHandle();
 	const CanAddress dest = buf->id.Dst();
@@ -573,14 +586,17 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 				buf->dataLength = dlc2len[elem.R1.bit.DLC];
 				memcpy(buf->msg.raw, elem.data, buf->dataLength);
 
-				if (buf->id.MsgType() == CanMessageType::standardReply && buf->id.Src() == dest)
+				if (   buf->id.MsgType() == CanMessageType::standardReply
+					&& buf->id.Src() == dest
+					&& (buf->msg.standardReply.requestId == rid || buf->msg.standardReply.requestId == CanRequestIdAcceptAlways)
+				   )
 				{
-					//TODO check sequence number
 					reply.lcatn(buf->msg.standardReply.text, buf->msg.standardReply.GetTextLength(buf->dataLength));
 					const GCodeResult rslt = (GCodeResult)buf->msg.standardReply.resultCode;
 					CanMessageBuffer::Free(buf);
 					return rslt;
 				}
+//				debugPrintf("Discarded msg src=%u RID=%u exp %u\n", buf->id.Src(), buf->msg.standardReply.requestId, rid);
 			}
 		}
 		else
@@ -732,9 +748,10 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 	}
 
 	reply.printf("Diagnostics for board %u:", (unsigned int)boardAddress);
-	auto msg = buf->SetupRequestMessage<CanMessageDiagnostics>(CanId::MasterAddress, (CanAddress)boardAddress);
+	const CanRequestId rid = AllocateRequestId(boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageDiagnostics>(rid, CanId::MasterAddress, (CanAddress)boardAddress);
 	msg->type = 0;
-	return SendRequestAndGetStandardReply(buf, reply);
+	return SendRequestAndGetStandardReply(buf, rid, reply);
 }
 
 // Tell an expansion board to update
@@ -755,10 +772,11 @@ GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffe
 		return GCodeResult::error;
 	}
 
-	auto msg = buf->SetupRequestMessage<CanMessageUpdateYourFirmware>(CanId::MasterAddress, (CanAddress)boardAddress);
+	const CanRequestId rid = AllocateRequestId(boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageUpdateYourFirmware>(rid, CanId::MasterAddress, (CanAddress)boardAddress);
 	msg->boardId = (uint8_t)boardAddress;
 	msg->invertedBoardId = (uint8_t)~boardAddress;
-	return SendRequestAndGetStandardReply(buf, reply);
+	return SendRequestAndGetStandardReply(buf, rid, reply);
 }
 
 #endif

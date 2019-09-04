@@ -38,7 +38,7 @@ LocalFan *FansManager::CreateLocalFan(uint32_t fanNum, const char *pinNames, Pwm
 		delete newFan;
 		return nullptr;
 	}
-	newFan->SetPwmFrequency(freq);
+	(void)newFan->SetPwmFrequency(freq, reply);
 	return newFan;
 }
 
@@ -114,21 +114,19 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 			fans[fanNum] = CreateLocalFan(fanNum, pinName.c_str(), freq, reply);
 			return (fans[fanNum] == nullptr) ? GCodeResult::error : GCodeResult::ok;
 		}
-		else if (fans[fanNum] == nullptr)
+
+		if (fans[fanNum] == nullptr)
 		{
 			reply.printf("Fan %u does not exist", (unsigned int)fanNum);
 			return GCodeResult::error;
 		}
-		else if (gb.Seen('Q'))
+
+		if (gb.Seen('Q'))
 		{
-			fans[fanNum]->SetPwmFrequency(gb.GetPwmFrequency());
+			return fans[fanNum]->SetPwmFrequency(gb.GetPwmFrequency(), reply);
 		}
-		else
-		{
-			reply.printf("Fan %" PRIu32, fanNum);
-			fans[fanNum]->AppendPortDetails(reply);
-		}
-		return GCodeResult::ok;
+
+		return fans[fanNum]->ReportPortDetails(reply);
 	}
 
 	reply.copy("Fan number out of range");
@@ -159,13 +157,21 @@ float FansManager::GetFanValue(size_t fanNum) const
 	return (fan.IsNull()) ? -1 : fan->GetConfiguredPwm();
 }
 
-void FansManager::SetFanValue(size_t fanNum, float speed)
+GCodeResult FansManager::SetFanValue(size_t fanNum, float speed, const StringRef& reply)
 {
 	auto fan = FindFan(fanNum);
 	if (fan.IsNotNull())
 	{
-		fan->SetPwm(speed);
+		return fan->SetPwm(speed, reply);
 	}
+	reply.copy("Fan %u not found", fanNum);
+	return GCodeResult::error;
+}
+
+void FansManager::SetFanValue(size_t fanNum, float speed)
+{
+	String<1> dummy;
+	(void)SetFanValue(fanNum, speed, dummy.GetRef());
 }
 
 // Check if the given fan can be controlled manually so that DWC can decide whether or not to show the corresponding fan

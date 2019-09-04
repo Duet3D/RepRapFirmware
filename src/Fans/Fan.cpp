@@ -103,7 +103,7 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 			}
 			if (sensorsMonitored != 0)
 			{
-				SetPwm(1.0);			// default the fan speed to full for safety
+				val = 1.0;					// default the fan speed to full for safety
 			}
 		}
 
@@ -112,15 +112,16 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 			seen = true;
 		}
 
-		// We only act on the 'S' parameter here if we have processed other parameters
-		if (seen && gb.Seen('S'))		// Set new fan value - process this after processing 'H' or it may not be acted on
-		{
-			SetPwm(gb.GetPwmValue());
-		}
-
 		if (seen)
 		{
 			isConfigured = true;
+
+			// We only act on the 'S' parameter here if we have processed other parameters
+			if (seen && gb.Seen('S'))		// Set new fan value - process this after processing 'H' or it may not be acted on
+			{
+				val = gb.GetPwmValue();
+			}
+
 			if (!UpdateFanConfiguration(reply))
 			{
 				error = true;
@@ -159,10 +160,10 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 }
 
 // Set the PWM. 'speed' is in the interval 0.0..1.0.
-void Fan::SetPwm(float speed)
+GCodeResult Fan::SetPwm(float speed, const StringRef& reply)
 {
 	val = speed;
-	Refresh();
+	return Refresh(reply);
 }
 
 #if HAS_MASS_STORAGE

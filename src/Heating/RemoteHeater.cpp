@@ -106,9 +106,10 @@ GCodeResult RemoteHeater::UpdateModel(const StringRef& reply)
 	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
 	if (buf != nullptr)
 	{
-		CanMessageUpdateHeaterModel * const msg = buf->SetupRequestMessage<CanMessageUpdateHeaterModel>(CanInterface::GetCanAddress(), boardAddress);
+		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
+		CanMessageUpdateHeaterModel * const msg = buf->SetupRequestMessage<CanMessageUpdateHeaterModel>(rid, CanInterface::GetCanAddress(), boardAddress);
 		model.SetupCanMessage(GetHeaterNumber(), *msg);
-		return CanInterface::SendRequestAndGetStandardReply(buf, reply);
+		return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 	}
 
 	reply.copy("No CAN buffer available");

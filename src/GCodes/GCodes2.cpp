@@ -1282,7 +1282,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				const float f = gb.GetPwmValue();
 				if (seenFanNum)
 				{
-					platform.SetFanValue(fanNum, f);
+					result = platform.SetFanValue(fanNum, f, reply);
 					if (IsMappedFan(fanNum))
 					{
 						lastDefaultFanSpeed = f;
@@ -1302,7 +1302,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				// Restore fan speed to value when print was paused
 				if (seenFanNum)
 				{
-					platform.SetFanValue(fanNum, pausedFanSpeeds[fanNum]);
+					result = platform.SetFanValue(fanNum, pausedFanSpeeds[fanNum], reply);
 				}
 				else
 				{

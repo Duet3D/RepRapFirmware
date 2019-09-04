@@ -10,6 +10,7 @@
 
 #include "RepRapFirmware.h"
 #include "Hardware/IoPorts.h"
+#include "GCodes/GCodeResult.h"
 
 class GCodeBuffer;
 
@@ -19,10 +20,10 @@ public:
 	Fan(unsigned int fanNum);
 
 	virtual bool Check() = 0;								// update the fan PWM returning true if it is a thermostatic fan that is on
-	virtual void SetPwmFrequency(PwmFrequency freq) = 0;
+	virtual GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) = 0;
 	virtual bool IsEnabled() const = 0;
 	virtual int32_t GetRPM() = 0;
-	virtual void AppendPortDetails(const StringRef& str) const = 0;
+	virtual GCodeResult ReportPortDetails(const StringRef& str) const = 0;
 	virtual ~Fan() { }
 
 	// Set or report the parameters for this fan
@@ -35,7 +36,7 @@ public:
 
 	float GetConfiguredPwm() const { return val; }			// returns the configured PWM. Actual PWM may be different, e.g. due to blipping or for thermostatic fans.
 
-	void SetPwm(float speed);
+	GCodeResult SetPwm(float speed, const StringRef& reply);
 	bool HasMonitoredSensors() const { return sensorsMonitored != 0; }
 	const char *GetName() const { return name.c_str(); }
 
@@ -44,7 +45,7 @@ public:
 #endif
 
 protected:
-	virtual void Refresh() = 0;
+	virtual GCodeResult Refresh(const StringRef& reply) = 0;
 	virtual bool UpdateFanConfiguration(const StringRef& reply) = 0;
 
 	unsigned int fanNumber;

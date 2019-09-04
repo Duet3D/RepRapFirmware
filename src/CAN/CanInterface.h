@@ -61,7 +61,8 @@ namespace CanInterface
 
 	void Init();
 	CanAddress GetCanAddress();
-	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, const StringRef& reply);
+	CanRequestId AllocateRequestId(CanAddress destination);
+	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply);
 	void SendResponse(CanMessageBuffer *buf);
 
 	GCodeResult RemoteDiagnostics(MessageType mt, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply);
