@@ -61,10 +61,11 @@ HeaterStatus Heater::GetStatus() const
 {
 	const HeaterMode mode = GetMode();
 	return (mode == HeaterMode::fault) ? HeaterStatus::fault
-			: (mode == HeaterMode::off) ? HeaterStatus::off
-				: (mode >= HeaterMode::tuning0) ? HeaterStatus::tuning
-					: (active) ? HeaterStatus::active
-						: HeaterStatus::standby;
+			: (mode == HeaterMode::offline) ? HeaterStatus::offline
+				: (mode == HeaterMode::off) ? HeaterStatus::off
+					: (mode >= HeaterMode::tuning0) ? HeaterStatus::tuning
+						: (active) ? HeaterStatus::active
+							: HeaterStatus::standby;
 }
 
 const char* Heater::GetSensorName() const

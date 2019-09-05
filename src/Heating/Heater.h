@@ -20,8 +20,7 @@ class HeaterProtection;
 struct CanHeaterReport;
 
 // Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
-// Status 'running' is not returned to the web interface, we return active or standby instead.
-enum class HeaterStatus { off = 0, standby = 1, active = 2, fault = 3, tuning = 4 };
+enum class HeaterStatus { off = 0, standby = 1, active = 2, fault = 3, tuning = 4, offline = 5 };
 
 class Heater
 {
@@ -43,12 +42,12 @@ public:
 	virtual void GetAutoTuneStatus(const StringRef& reply) const = 0;	// Get the auto tune status or last result
 	virtual void Suspend(bool sus) = 0;							// Suspend the heater to conserve power or while doing Z probing
 	virtual float GetAccumulator() const = 0;					// Get the inertial term accumulator
-	virtual HeaterStatus GetStatus() const;						// Get the status of the heater
 
 #if SUPPORT_CAN_EXPANSION
 	virtual void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) = 0;
 #endif
 
+	HeaterStatus GetStatus() const;								// Get the status of the heater
 	unsigned int GetHeaterNumber() const { return heaterNumber; }
 	const char *GetSensorName() const;							// Get the name of the sensor for this heater, or nullptr if it hasn't been named
 	void SetActiveTemperature(float t);
@@ -86,6 +85,7 @@ protected:
 		// The order of these is important because we test "mode > HeatingMode::suspended" to determine whether the heater is active
 		// and "mode >= HeatingMode::off" to determine whether the heater is either active or suspended
 		fault,
+		offline,
 		off,
 		suspended,
 		heating,

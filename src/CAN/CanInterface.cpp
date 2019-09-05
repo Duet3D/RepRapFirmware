@@ -78,10 +78,11 @@ static uint32_t GetAndClearStatusBits()
 /* mcan_transfer_message_setting */
 constexpr uint32_t TxBufferIndexEmergency = 0;
 constexpr uint32_t TxBufferIndexTimeSync = 1;
-// We should probably use a FIFO or a queue for the remainder, but for now each has its own message buffer
 constexpr uint32_t TxBufferIndexMotion = 2;
+// We should probably use a FIFO or a queue for the remainder, but for now each has its own message buffer
 constexpr uint32_t TxBufferIndexRequest = 3;
 constexpr uint32_t TxBufferIndexResponse = 4;
+constexpr uint32_t TxBufferBroadcast = 5;
 
 /* mcan_receive_message_setting */
 constexpr uint32_t RxFifoIndexBroadcast = 0;
@@ -174,11 +175,6 @@ void CanInterface::Init()
 	canClockTask.Create(CanClockLoop, "CanClock", nullptr, TaskPriority::CanClockPriority);
 	canSenderTask.Create(CanSenderLoop, "CanSender", nullptr, TaskPriority::CanSenderPriority);
 	canReceiverTask.Create(CanReceiverLoop, "CanReceiver", nullptr, TaskPriority::CanReceiverPriority);
-}
-
-CanAddress CanInterface::GetCanAddress()
-{
-	return CanId::MasterAddress;
 }
 
 // Allocate a CAN request ID
@@ -619,6 +615,13 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 void CanInterface::SendResponse(CanMessageBuffer *buf)
 {
 	mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexResponse, MaxResponseSendWait);
+	CanMessageBuffer::Free(buf);
+}
+
+// Send a broadcast message
+void CanInterface::SendBroadcast(CanMessageBuffer *buf)
+{
+	mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferBroadcast, MaxResponseSendWait);
 	CanMessageBuffer::Free(buf);
 }
 

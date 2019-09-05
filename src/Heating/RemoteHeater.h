@@ -31,7 +31,6 @@ public:
 	void StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) override;	// Start an auto tune cycle for this PID
 	void GetAutoTuneStatus(const StringRef& reply) const override;	// Get the auto tune status or last result
 	void Suspend(bool sus) override;				// Suspend the heater to conserve power or while doing Z probing
-	HeaterStatus GetStatus() const override;
 	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) override;
 
 protected:
@@ -44,7 +43,7 @@ private:
 	static constexpr uint32_t RemoteStatusTimeout = 2000;
 
 	CanAddress boardAddress;
-	enum HeaterStatus lastStatus;
+	enum HeaterMode lastMode;
 	uint8_t averagePwm;
 	float lastTemperature;
 	uint32_t whenLastStatusReceived;

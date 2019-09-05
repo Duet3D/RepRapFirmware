@@ -18,7 +18,7 @@
 #include <CanMessageBuffer.h>
 
 RemoteHeater::RemoteHeater(unsigned int num, CanAddress board)
-	: Heater(num), boardAddress(board), lastStatus(HeaterStatus::off), averagePwm(0), lastTemperature(0.0), whenLastStatusReceived(0)
+	: Heater(num), boardAddress(board), lastMode(HeaterMode::offline), averagePwm(0), lastTemperature(0.0), whenLastStatusReceived(0)
 {
 }
 
@@ -70,18 +70,23 @@ GCodeResult RemoteHeater::ReportDetails(const StringRef& reply) const
 void RemoteHeater::SwitchOff()
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
-	if (buf != nullptr)
+	if (buf == nullptr)
+	{
+		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to switch off remote heater %u: no CAN buffer available\n", GetHeaterNumber());
+	}
+	else
 	{
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 		auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanId::MasterAddress, boardAddress);
 		msg->heaterNumber = GetHeaterNumber();
 		msg->setPoint = GetTargetTemperature();
 		msg->command = CanMessageSetHeaterTemperature::commandOff;
-		String<1> dummy;
-		(void) CanInterface::SendRequestAndGetStandardReply(buf, rid, dummy.GetRef());
+		String<100> reply;
+		if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef()) != GCodeResult::ok)
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to switch off remote heater %u: %s\n", GetHeaterNumber(), reply.c_str());
+		}
 	}
-
-	reprap.GetPlatform().MessageF(ErrorMessage, "Failed to switch of remote heater %u\n", GetHeaterNumber());
 }
 
 GCodeResult RemoteHeater::ResetFault(const StringRef& reply)
@@ -120,30 +125,7 @@ float RemoteHeater::GetAveragePWM() const
 // Return the integral accumulator
 float RemoteHeater::GetAccumulator() const
 {
-	//TODO
-	return 0.0;		// not yet supported
-}
-
-HeaterStatus RemoteHeater::GetStatus() const
-{
-	const HeaterStatus baseStatus = Heater::GetStatus();
-	if (millis() - whenLastStatusReceived < RemoteStatusTimeout)
-	{
-		switch (lastStatus)
-		{
-		case HeaterStatus::active:
-			return (baseStatus == HeaterStatus::standby) ? baseStatus : lastStatus;
-		case HeaterStatus::off:
-		case HeaterStatus::fault:
-		case HeaterStatus::standby:
-		case HeaterStatus::tuning:
-			return lastStatus;
-		default:
-			break;
-		}
-	}
-
-	return baseStatus;
+	return 0.0;		// not supported
 }
 
 void RemoteHeater::StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply)
@@ -173,8 +155,7 @@ void RemoteHeater::Suspend(bool sus)
 
 Heater::HeaterMode RemoteHeater::GetMode() const
 {
-	//TODO
-	return HeaterMode::off;
+	return (millis() - whenLastStatusReceived < RemoteStatusTimeout) ? lastMode : HeaterMode::offline;
 }
 
 // This isn't just called to turn the heater on, it is called when the temperature needs to be updated
@@ -212,7 +193,7 @@ GCodeResult RemoteHeater::UpdateModel(const StringRef& reply)
 		return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 	}
 
-	reply.copy("No CAN buffer available");
+	reply.copy("No CAN buffer");
 	return GCodeResult::error;
 }
 
@@ -220,7 +201,7 @@ void RemoteHeater::UpdateRemoteStatus(CanAddress src, const CanHeaterReport& rep
 {
 	if (src == boardAddress)
 	{
-		lastStatus = (HeaterStatus)report.state;
+		lastMode = (HeaterMode)report.mode;
 		averagePwm = report.averagePwm;
 		lastTemperature = report.temperature;
 		whenLastStatusReceived = millis();

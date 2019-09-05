@@ -169,31 +169,39 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 	}
 }
 
-// Process a received broadcast or request message amd free the message buffer
+// Process a received broadcast or request message and free the message buffer
 void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 {
-	// In the following switch, each case must release the message buffer, either directly or by re-using it to send a response
-	switch (buf->id.MsgType())
+	if (buf->id.Src() == CanId::MasterAddress)
 	{
-	case CanMessageType::FirmwareBlockRequest:
-		HandleFirmwareBlockRequest(buf);
-		break;
-
-	case CanMessageType::sensorTemperaturesReport:
-		reprap.GetHeat().ProcessRemoteSensorsReport(buf->id.Src(), buf->msg.sensorTemperaturesBroadcast);
+		// I don't think we should receive our own broadcasts, but in case we do...
 		CanMessageBuffer::Free(buf);
-		break;
+	}
+	else
+	{
+		// In the following switch, each case must release the message buffer, either directly or by re-using it to send a response
+		switch (buf->id.MsgType())
+		{
+		case CanMessageType::FirmwareBlockRequest:
+			HandleFirmwareBlockRequest(buf);
+			break;
 
-	case CanMessageType::heatersStatusReport:
-		reprap.GetHeat().ProcessRemoteHeatersReport(buf->id.Src(), buf->msg.heatersStatusBroadcast);
-		CanMessageBuffer::Free(buf);
-		break;
+		case CanMessageType::sensorTemperaturesReport:
+			reprap.GetHeat().ProcessRemoteSensorsReport(buf->id.Src(), buf->msg.sensorTemperaturesBroadcast);
+			CanMessageBuffer::Free(buf);
+			break;
 
-	case CanMessageType::statusReport:
-	default:
-//		buf->DebugPrint("Rec: ");
-		CanMessageBuffer::Free(buf);
-		break;
+		case CanMessageType::heatersStatusReport:
+			reprap.GetHeat().ProcessRemoteHeatersReport(buf->id.Src(), buf->msg.heatersStatusBroadcast);
+			CanMessageBuffer::Free(buf);
+			break;
+
+		case CanMessageType::statusReport:
+		default:
+//			buf->DebugPrint("Rec: ");
+			CanMessageBuffer::Free(buf);
+			break;
+		}
 	}
 }
 

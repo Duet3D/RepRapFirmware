@@ -59,10 +59,10 @@ public:
 
 #if SUPPORT_CAN_EXPANSION
 	// Get the expansion board address. Overridden for remote sensors.
-	virtual CanAddress GetBoardAddress() const { return 0; }
+	virtual CanAddress GetBoardAddress() const;
 
 	// Update the temperature, if it is a remote sensor. Overridden in class RemoteSensor.
-	virtual void UpdateRemoteTemperature(CanAddress src, const CanTemperatureReport& report) { }
+	virtual void UpdateRemoteTemperature(CanAddress src, const CanTemperatureReport& report);
 #endif
 
 	// Factory method

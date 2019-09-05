@@ -32,9 +32,11 @@ Licence: GPL
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-# include "CanId.h"
 # include "RemoteHeater.h"
-# include "CanMessageFormats.h"
+# include <CanId.h>
+# include <CanMessageFormats.h>
+# include <CanMessageBuffer.h>
+# include "CAN/CanInterface.h"
 #endif
 
 constexpr uint32_t HeaterTaskStackWords = 400;			// task stack size in dwords, must be large enough for auto tuning
@@ -321,6 +323,46 @@ void Heat::Exit()
 		}
 
 		reprap.KickHeatTaskWatchdog();
+
+#if SUPPORT_CAN_EXPANSION
+		// Broadcast our sensor temperatures
+		CanMessageBuffer * buf = CanMessageBuffer::Allocate();
+		if (buf != nullptr)
+		{
+			CanMessageSensorTemperatures * const msg = buf->SetupBroadcastMessage<CanMessageSensorTemperatures>(CanInterface::GetCanAddress());
+			msg->whichSensors = 0;
+			unsigned int sensorsFound = 0;
+			unsigned int currentSensorNumber = 0;
+			for (;;)
+			{
+				const auto sensor = FindSensorAtOrAbove(currentSensorNumber);
+				if (sensor.IsNull())
+				{
+					break;
+				}
+				const unsigned int sn = sensor->GetSensorNumber();
+				if (sensor->GetBoardAddress() == CanInterface::GetCanAddress())
+				{
+					msg->whichSensors |= (uint64_t)1u << sn;
+					float temperature;
+					msg->temperatureReports[sensorsFound].errorCode = (uint8_t)sensor->GetLatestTemperature(temperature);
+					msg->temperatureReports[sensorsFound].temperature = temperature;
+					++sensorsFound;
+				}
+				currentSensorNumber = (unsigned int)sn + 1u;
+			}
+			if (sensorsFound == 0)
+			{
+				// Don't send an empty report
+				CanMessageBuffer::Free(buf);
+			}
+			else
+			{
+				buf->dataLength = msg->GetActualDataLength(sensorsFound);
+				CanInterface::SendBroadcast(buf);
+			}
+		}
+#endif
 
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, HeatSampleIntervalMillis);
@@ -651,13 +693,9 @@ void Heat::Standby(int heater, const Tool *tool)
 
 GCodeResult Heat::ResetFault(int heater, const StringRef& reply)
 {
+	// This gets called for all heater numbers when clearing all temperature faults, so don't report an error if the heater was not found
 	const auto h = FindHeater(heater);
-	if (h.IsNotNull())
-	{
-		return h->ResetFault(reply);
-	}
-	reply.copy("Heater %d not found", heater);
-	return GCodeResult::error;
+	return (h.IsNotNull()) ? h->ResetFault(reply) : GCodeResult::ok;
 }
 
 float Heat::GetAveragePWM(size_t heater) const

@@ -60,10 +60,11 @@ namespace CanInterface
 	static constexpr uint32_t CanResponseTimeout = 300;
 
 	void Init();
-	CanAddress GetCanAddress();
+	inline CanAddress GetCanAddress() { return CanId::MasterAddress; }
 	CanRequestId AllocateRequestId(CanAddress destination);
 	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply);
 	void SendResponse(CanMessageBuffer *buf);
+	void SendBroadcast(CanMessageBuffer *buf);
 
 	GCodeResult RemoteDiagnostics(MessageType mt, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply);

@@ -9,15 +9,19 @@
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 #if HAS_CPU_TEMP_SENSOR
-#include "CpuTemperatureSensor.h"
+# include "CpuTemperatureSensor.h"
 #endif
 
 #if SUPPORT_DHT_SENSOR
-#include "DhtSensor.h"
+# include "DhtSensor.h"
 #endif
 
 #if HAS_SMART_DRIVERS
-#include "TmcDriverTemperatureSensor.h"
+# include "TmcDriverTemperatureSensor.h"
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+# include "CAN/CanInterface.h"
 #endif
 
 // Constructor
@@ -113,6 +117,22 @@ void TemperatureSensor::SetResult(TemperatureError rslt)
 	lastTemperature = BadErrorTemperature;
 	whenLastRead = millis();
 }
+
+#if SUPPORT_CAN_EXPANSION
+
+// Get the expansion board address. Overridden for remote sensors.
+CanAddress TemperatureSensor::GetBoardAddress() const
+{
+	return CanInterface::GetCanAddress();
+}
+
+// Update the temperature, if it is a remote sensor. Overridden in class RemoteSensor.
+void TemperatureSensor::UpdateRemoteTemperature(CanAddress src, const CanTemperatureReport& report)
+{
+	// Nothing to do here. This function is overridden in class RemoteSensor.
+}
+
+#endif
 
 // Factory method
 #if SUPPORT_CAN_EXPANSION
