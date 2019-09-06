@@ -1444,6 +1444,12 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 							completedDMs = pdm;
 						}
 					}
+					else
+					{
+						pdm->state = DMState::idle;
+						pdm->nextDM = completedDMs;
+						completedDMs = pdm;
+					}
 				}
 			}
 		}

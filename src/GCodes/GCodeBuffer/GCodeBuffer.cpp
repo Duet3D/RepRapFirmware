@@ -93,7 +93,7 @@ void GCodeBuffer::Diagnostics(MessageType mtype)
 		break;
 
 	case GCodeBufferState::executing:
-		scratchString.printf("is doing \"");
+		scratchString.cat("is doing \"");
 		AppendFullCommand(scratchString.GetRef());
 		scratchString.cat('"');
 		break;

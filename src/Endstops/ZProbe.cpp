@@ -13,15 +13,9 @@
 #include "Storage/FileStore.h"
 #include "Heating/Heat.h"
 
-ZProbe::ZProbe() : EndstopOrZProbe()
+ZProbe::ZProbe(unsigned int num, ZProbeType p_type) : EndstopOrZProbe(), number(num), type(p_type)
 {
 	SetDefaults();
-}
-
-ZProbe::~ZProbe()
-{
-	inputPort.Release();
-	modulationPort.Release();
 }
 
 void ZProbe::SetDefaults()
@@ -40,22 +34,6 @@ void ZProbe::SetDefaults()
 	invertReading = turnHeatersOff = saveToConfigOverride = false;
 	type = ZProbeType::none;
 	sensor = -1;
-	inputPort.Release();
-	modulationPort.Release();
-}
-
-bool ZProbe::AssignPorts(GCodeBuffer& gb, const StringRef& reply)
-{
-	IoPort* const ports[] = { &inputPort, &modulationPort };
-	const PinAccess access[] = { PinAccess::read, PinAccess::write0 };
-	return IoPort::AssignPorts(gb, reply, PinUsedBy::zprobe, 2, ports, access);
-}
-
-bool ZProbe::AssignPorts(const char* pinNames, const StringRef& reply)
-{
-	IoPort* const ports[] = { &inputPort, &modulationPort };
-	const PinAccess access[] = { PinAccess::read, PinAccess::write0 };
-	return IoPort::AssignPorts(pinNames, reply, PinUsedBy::zprobe, 2, ports, access);
 }
 
 float ZProbe::GetActualTriggerHeight() const
@@ -184,37 +162,6 @@ bool ZProbe::Acknowledge(EndstopHitDetails what)
 	return what.GetAction() == EndstopHitAction::stopAll;
 }
 
-// This is called by the tick ISR to get the raw Z probe reading to feed to the filter
-uint16_t ZProbe::GetRawReading() const
-{
-	switch (type)
-	{
-	case ZProbeType::analog:
-	case ZProbeType::dumbModulated:
-	case ZProbeType::alternateAnalog:
-		return min<uint16_t>(inputPort.ReadAnalog(), 4000);
-
-	case ZProbeType::digital:
-	case ZProbeType::unfilteredDigital:
-	case ZProbeType::blTouch:
-		return (inputPort.Read()) ? 4000 : 0;
-
-	case ZProbeType::zMotorStall:
-	default:
-		return 4000;
-	}
-}
-
-void ZProbe::SetProbing(bool isProbing) const
-{
-	// For Z probe types other than 1/2/3 and bltouch we set the modulation pin high at the start of a probing move and low at the end
-	// Don't do this for bltouch because on the Maestro, the MOD pin is normally used as the servo control output
-	if (type > ZProbeType::alternateAnalog && type != ZProbeType::blTouch)
-	{
-		modulationPort.WriteDigital(isProbing);
-	}
-}
-
 GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 {
 	GCodeResult err = GCodeResult::ok;
@@ -288,70 +235,9 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 	return err;
 }
 
-GCodeResult ZProbe::HandleM558(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber)
+GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool dontReport)
 {
-	bool seen = false;
-
-	// We must get and set the Z probe type first before setting the dive height etc. because different probe types need different port settings
-	if (gb.Seen('P'))
-	{
-		seen = true;
-		const uint32_t requestedType = gb.GetUIValue();
-		if (   requestedType >= (uint32_t)ZProbeType::numTypes
-			|| requestedType == (uint32_t)ZProbeType::endstopSwitch_obsolete
-			|| requestedType == (uint32_t)ZProbeType::e1Switch_obsolete
-			|| requestedType == (uint32_t)ZProbeType::zSwitch_obsolete
-		   )
-		{
-			reply.copy("Invalid Z probe type");
-			type = ZProbeType::none;
-			return GCodeResult::error;
-		}
-
-		type = (ZProbeType)requestedType;
-		if (!gb.DoDwellTime(100))							// delay a little to allow the averaging filters to accumulate data from the new source
-		{
-			return GCodeResult::notFinished;
-		}
-	}
-
-	// Determine the required pin access
-	PinAccess access[2];
-	switch (type)
-	{
-	case ZProbeType::analog:
-	case ZProbeType::dumbModulated:
-		access[0] = PinAccess::readAnalog;
-		access[1] = PinAccess::write1;
-		break;
-
-	case ZProbeType::alternateAnalog:
-		access[0] = PinAccess::readAnalog;
-		access[1] = PinAccess::write0;
-		break;
-
-	default:
-		access[0] = PinAccess::readWithPullup;
-		access[1] = PinAccess::write0;
-		break;
-	}
-
-	// Do the input channel next so that 'seen' will be true only if the type and/or the channel has been specified
-	if (gb.Seen('C'))										// input channel
-	{
-		seen = true;
-		IoPort* const ports[] = { &inputPort, &modulationPort };
-
-		if (!IoPort::AssignPorts(gb, reply, PinUsedBy::zprobe, 2, ports, access))
-		{
-			return GCodeResult::error;
-		}
-	}
-	else if (seen)											// if we had a P parameter then the type may have changed
-	{
-		(void)inputPort.SetMode(access[0]);
-		(void)modulationPort.SetMode(access[1]);
-	}
+	bool seen = dontReport;
 
 	gb.TryGetFValue('H', diveHeight, seen);					// dive height
 	if (gb.Seen('F'))										// feed rate i.e. probing speed
@@ -387,21 +273,162 @@ GCodeResult ZProbe::HandleM558(GCodeBuffer& gb, const StringRef &reply, unsigned
 		seen = true;
 	}
 
-	if (!seen)
+	if (seen)
 	{
-		reply.printf("Z Probe %u: type %u, input pin ", probeNumber, (unsigned int)type);
-		inputPort.AppendPinName(reply);
-		reply.cat(", output pin ");
-		modulationPort.AppendPinName(reply);
-		reply.catf(", invert %s, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
-						(invertReading) ? "yes" : "no", (double)diveHeight,
-						(int)(probeSpeed * MinutesToSeconds), (int)(travelSpeed * MinutesToSeconds),
-						(double)recoveryTime,
-						(turnHeatersOff) ? "suspended" : "normal",
-						maxTaps, (double)tolerance);
+		return GCodeResult::ok;
 	}
 
+	reply.printf("Z Probe %u: type %u", number, (unsigned int)type);
+	const GCodeResult rslt = AppendPinNames(reply);
+	reply.catf(", invert %s, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
+					(invertReading) ? "yes" : "no", (double)diveHeight,
+					(int)(probeSpeed * MinutesToSeconds), (int)(travelSpeed * MinutesToSeconds),
+					(double)recoveryTime,
+					(turnHeatersOff) ? "suspended" : "normal",
+					maxTaps, (double)tolerance);
+	return rslt;
+}
+
+// Members of class LocalZProbe
+LocalZProbe::~LocalZProbe()
+{
+	inputPort.Release();
+	modulationPort.Release();
+}
+
+GCodeResult LocalZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool dontReport)
+{
+	bool seen = false;
+
+	// We must get and set the Z probe type first before setting the dive height etc. because different probe types need different port settings
+	if (gb.Seen('P'))
+	{
+		seen = true;
+		type = (ZProbeType)gb.GetUIValue();
+	}
+
+	// Determine the required pin access
+	PinAccess access[2];
+	switch (type)
+	{
+	case ZProbeType::analog:
+	case ZProbeType::dumbModulated:
+		access[0] = PinAccess::readAnalog;
+		access[1] = PinAccess::write1;
+		break;
+
+	case ZProbeType::alternateAnalog:
+		access[0] = PinAccess::readAnalog;
+		access[1] = PinAccess::write0;
+		break;
+
+	default:
+		access[0] = PinAccess::readWithPullup;
+		access[1] = PinAccess::write0;
+		break;
+	}
+
+	if (gb.Seen('C'))										// input channel
+	{
+		seen = true;
+		IoPort* const ports[] = { &inputPort, &modulationPort };
+
+		if (!IoPort::AssignPorts(gb, reply, PinUsedBy::zprobe, 2, ports, access))
+		{
+			return GCodeResult::error;
+		}
+	}
+	else if (seen)											// the type may have changed, so set the correct pin modes
+	{
+		(void)inputPort.SetMode(access[0]);
+		(void)modulationPort.SetMode(access[1]);
+	}
+
+	return ZProbe::Configure(gb, reply, seen || dontReport);
+}
+
+bool LocalZProbe::AssignPorts(const char* pinNames, const StringRef& reply)
+{
+	IoPort* const ports[] = { &inputPort, &modulationPort };
+	const PinAccess access[] = { PinAccess::read, PinAccess::write0 };
+	return IoPort::AssignPorts(pinNames, reply, PinUsedBy::zprobe, 2, ports, access);
+}
+
+// This is called by the tick ISR to get the raw Z probe reading to feed to the filter
+uint16_t LocalZProbe::GetRawReading() const
+{
+	switch (type)
+	{
+	case ZProbeType::analog:
+	case ZProbeType::dumbModulated:
+	case ZProbeType::alternateAnalog:
+		return min<uint16_t>(inputPort.ReadAnalog(), 4000);
+
+	case ZProbeType::digital:
+	case ZProbeType::unfilteredDigital:
+	case ZProbeType::blTouch:
+		return (inputPort.Read()) ? 4000 : 0;
+
+	default:
+		return 4000;
+	}
+}
+
+void LocalZProbe::SetProbing(bool isProbing) const
+{
+	// For Z probe types other than 1/2/3 and bltouch we set the modulation pin high at the start of a probing move and low at the end
+	// Don't do this for bltouch because on the Maestro, the MOD pin is normally used as the servo control output
+	if (type > ZProbeType::alternateAnalog && type != ZProbeType::blTouch)
+	{
+		modulationPort.WriteDigital(isProbing);
+	}
+}
+
+GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) const
+{
+	if (type != ZProbeType::zMotorStall)
+	{
+		str.cat(", input pin ");
+		inputPort.AppendPinName(str);
+		str.cat(", output pin ");
+		modulationPort.AppendPinName(str);
+	}
 	return GCodeResult::ok;
 }
+
+#if SUPPORT_CAN_EXPANSION
+
+// Members of class RemoteZProbe
+RemoteZProbe::~RemoteZProbe()
+{
+	//TODO destroy remote Z probe
+}
+
+GCodeResult RemoteZProbe::AppendPinNames(const StringRef& str) const
+{
+	//TODO
+	str.cat(", [remote pin names here]");
+	return GCodeResult::ok;
+}
+
+void RemoteZProbe::SetProgramOutput(bool b) const
+{
+	//TODO write data to remote mod port
+}
+
+void RemoteZProbe::SetProbing(bool isProbing) const
+{
+	//TODO tell remote we are starting probing
+}
+
+GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool dontReport)
+{
+	//TODO get the port and create the Z probe. Then configure the rest
+	//return ZProbe::Configure(gb, reply, seen || dontReport);
+	reply.copy("Configuring remote Z probes is not supported yet");
+	return GCodeResult::error;
+}
+
+#endif
 
 // End

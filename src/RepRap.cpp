@@ -1280,7 +1280,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		/* Probe */
 		{
-			const ZProbe zp = platform->GetCurrentZProbe();
+			const ZProbe& zp = platform->GetCurrentZProbe();
 
 			// Trigger threshold, trigger height, type
 			response->catf(",\"probe\":{\"threshold\":%d,\"height\":%.2f,\"type\":%u}",

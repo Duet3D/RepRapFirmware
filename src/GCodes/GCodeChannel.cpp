@@ -5,7 +5,7 @@
  *      Author: Christian
  */
 
-extern "C" const char * const gcodeChannelName[] =
+extern const char * const gcodeChannelName[] =
 {
 	"http",
 	"telnet",
@@ -18,3 +18,5 @@ extern "C" const char * const gcodeChannelName[] =
 	"spi",
 	"autopause"
 };
+
+// End

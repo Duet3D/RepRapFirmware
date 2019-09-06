@@ -13,6 +13,8 @@
 #include "GCodes/GCodes.h"
 #include "Movement/Move.h"
 
+ReadWriteLock EndstopsManager::endstopsLock;					// used to lock both endstops and Z probes
+
 EndstopsManager::EndstopsManager() : activeEndstops(nullptr), isHomingMove(false)
 {
 	for (Endstop *& es : axisEndstops)
@@ -28,10 +30,10 @@ EndstopsManager::EndstopsManager() : activeEndstops(nullptr), isHomingMove(false
 void EndstopsManager::Init()
 {
 	activeEndstops = nullptr;
-	String<1> dummy;
 
 #if ALLOCATE_DEFAULT_PORTS
 	// Configure default endstops
+	String<1> dummy;
 	for (size_t axis = 0; axis < ARRAY_SIZE(DefaultEndstopPinNames); ++axis)
 	{
 		SwitchEndstop * const sw = new SwitchEndstop(axis, EndStopPosition::lowEndStop);
@@ -43,13 +45,15 @@ void EndstopsManager::Init()
 	// Z PROBE
 	reprap.GetPlatform().InitZProbeFilters();
 
-	ZProbe * const zp = new ZProbe();			// we must always have a non-null Z probe #0
 #if ALLOCATE_DEFAULT_PORTS
+	LocalZProbe * const zp = new LocalZProbe(0);
 	zp->AssignPorts(DefaultZProbePinNames, dummy.GetRef());
-#endif
 	zProbes[0] = zp;
-	currentZProbeNumber = 0;
+#else
+	zProbes[0] = new DummyZProbe(0);			// we must always have a non-null Z probe #0
+#endif
 
+	currentZProbeNumber = 0;
 }
 
 // Add an endstop to the active list
@@ -349,21 +353,6 @@ const char *EndstopsManager::TranslateEndStopResult(EndStopHit es, bool atHighEn
 	}
 }
 
-// Allocate ports to the specified Z probe returning true if successful
-bool EndstopsManager::AssignZProbePorts(GCodeBuffer& gb, const StringRef& reply, size_t probeNumber)
-{
-	if (probeNumber < MaxZProbes)
-	{
-		if (zProbes[probeNumber] == nullptr)
-		{
-			zProbes[probeNumber] = new ZProbe();
-		}
-		return zProbes[probeNumber]->AssignPorts(gb, reply);
-	}
-	reply.copy("Z probe number out of range");
-	return false;
-}
-
 ZProbe *EndstopsManager::GetZProbe(size_t num) const
 {
 	return (num < ARRAY_SIZE(zProbes)) ? zProbes[num] : nullptr;
@@ -439,12 +428,94 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 		reply.copy("Invalid Z probe index");
 		return GCodeResult::error;
 	}
-	if (zProbes[probeNumber] == nullptr)
+
+	// Check what sort of Z probe we need and where it is, so see whether we need to delete any existing one and create a new one.
+	// If there is no probe, we need a new one; and if it is not a motor stall one then a port number must be given.
+	// If we are switching between motor stall and any other type, we need a new one. A port must be specified unless it is motor stall.
+	// If it not a motor stall probe and a port number is given, we need a new one in case it is on a different board.
+	// If it is a motor stall endstop, there should not be a port specified, but we can ignore the port if it is present
+	uint32_t probeType = 0;
+	bool seenType;
+	gb.TryGetUIValue('P', probeType, seenType);
+	if (   seenType
+		&& (   probeType >= (uint32_t)ZProbeType::numTypes
+			|| probeType == (uint32_t)ZProbeType::e1Switch_obsolete
+			|| probeType == (uint32_t)ZProbeType::endstopSwitch_obsolete
+			|| probeType == (uint32_t)ZProbeType::zSwitch_obsolete
+		   )
+	   )
 	{
-		zProbes[probeNumber] = new ZProbe;
+		reply.printf("Invalid Z probe type %" PRIu32, probeType);
+		return GCodeResult::error;
 	}
 
-	return zProbes[probeNumber]->HandleM558(gb, reply, probeNumber);
+	WriteLocker lock(endstopsLock);
+
+	ZProbe * const existingProbe = zProbes[probeNumber];
+	const bool seenPort = gb.Seen('C');
+
+	const bool needNewProbe =  (existingProbe == nullptr)
+							|| (probeType != (uint32_t)existingProbe->GetProbeType()
+								&& (   probeType == (uint32_t)ZProbeType::zMotorStall
+									|| probeType == (uint32_t)ZProbeType::none
+									|| existingProbe->GetProbeType() == ZProbeType::zMotorStall
+									|| existingProbe->GetProbeType() == ZProbeType::none
+								   )
+								)
+							|| (seenPort && probeType != (uint32_t)ZProbeType::zMotorStall && probeType != (uint32_t)ZProbeType::none);
+
+	if (needNewProbe)
+	{
+		if (!seenType)
+		{
+			reply.copy("Missing Z probe type number");
+			return GCodeResult::error;
+		}
+
+		ZProbe *newProbe;
+		switch ((ZProbeType)probeType)
+		{
+		case ZProbeType::none:
+			newProbe = new DummyZProbe(probeNumber);
+			break;
+
+		case ZProbeType::zMotorStall:
+			newProbe = new MotorStallZProbe(probeNumber);
+			break;
+
+		default:
+			if (!seenPort)
+			{
+				reply.copy("Missing Z probe pin name(s)");
+				return GCodeResult::error;
+			}
+			{
+#if SUPPORT_CAN_EXPANSION
+				String<StringLength20> pinNames;
+				gb.Seen('C');
+				gb.GetQuotedString(pinNames.GetRef());
+				const CanAddress boardAddress = IoPort::RemoveBoardAddress(pinNames.GetRef());
+				if (boardAddress != CanId::MasterAddress)
+				{
+					newProbe = new RemoteZProbe(probeNumber, boardAddress);
+				}
+				else
+#endif
+				{
+					newProbe = new LocalZProbe(probeNumber);
+				}
+			}
+			break;
+		}
+
+		const GCodeResult rslt = newProbe->Configure(gb, reply);
+		std::swap(zProbes[probeNumber], newProbe);
+		delete newProbe;
+		return rslt;
+	}
+
+	// If we get get then there is an existing probe and we just need to change its configuration
+	return zProbes[probeNumber]->Configure(gb, reply);
 }
 
 // Set or print the Z probe. Called by G31.

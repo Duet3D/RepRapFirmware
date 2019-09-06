@@ -12,6 +12,7 @@
 #include "EndstopDefs.h"
 #include "ZProbeProgrammer.h"
 #include "GCodes/GCodeResult.h"
+#include <RTOSIface/RTOSIface.h>
 
 // Endstop manager class
 class EndstopsManager
@@ -50,7 +51,6 @@ public:
 	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef &reply);		// M558
 	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply);			// G31
 
-	bool AssignZProbePorts(GCodeBuffer& gb, const StringRef& reply, size_t probeNumber);
 	ZProbe& GetCurrentZProbe() const { return *zProbes[currentZProbeNumber]; }
 	ZProbe *GetZProbe(size_t num) const;
 	void SetZProbeDefaults();
@@ -66,6 +66,11 @@ private:
 
 	// Translate end stop result to text
 	static const char *TranslateEndStopResult(EndStopHit es, bool atHighEnd);
+
+	ReadLockedPointer<ZProbe> FindZProbe(size_t index) const;
+	ReadLockedPointer<Endstop> FindEndstop(size_t axis) const;
+
+	static ReadWriteLock endstopsLock;					// used to lock both endstops and Z probes
 
 	EndstopOrZProbe * volatile activeEndstops;			// linked list of endstops and Z probes that are active for the current move
 	size_t currentZProbeNumber;							// which Z probe we are using
