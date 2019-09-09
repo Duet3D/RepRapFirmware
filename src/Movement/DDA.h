@@ -178,6 +178,10 @@ private:
 	float NormaliseXYZ();											// Make the direction vector unit-normal in XYZ
 	void AdjustAcceleration();										// Adjust the acceleration and deceleration to reduce ringing
 
+#if SUPPORT_CAN_EXPANSION
+	int32_t PrepareRemoteExtruder(size_t drive, float& extrusionPending, float speedChange) const;
+#endif
+
 	static void DoLookahead(DDARing& ring, DDA *laDDA) __attribute__ ((hot));	// Try to smooth out moves in the queue
     static float Normalise(float v[], size_t dim1, size_t dim2);  	// Normalise a vector of dim1 dimensions to unit length in the first dim1 dimensions
     static void Absolute(float v[], size_t dimensions);				// Put a vector in the positive hyperquadrant

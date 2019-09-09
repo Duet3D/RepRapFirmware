@@ -1261,7 +1261,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 #if SUPPORT_CAN_EXPANSION
 						if (driver.IsRemote())
 						{
-							CanMotion::AddMovement(*this, params, driver, delta);
+							CanMotion::AddMovement(*this, params, driver, delta, false);
 						}
 						else
 #endif
@@ -1322,7 +1322,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 					const DriverId driver = config.driverNumbers[i];
 					if (driver.IsRemote())
 					{
-						CanMotion::AddMovement(*this, params, driver, delta);
+						CanMotion::AddMovement(*this, params, driver, delta, false);
 					}
 				}
 #endif
@@ -1377,7 +1377,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 						const DriverId driver = config.driverNumbers[i];
 						if (driver.IsRemote())
 						{
-							CanMotion::AddMovement(*this, params, driver, delta);
+							CanMotion::AddMovement(*this, params, driver, delta, false);
 						}
 					}
 #endif
@@ -1385,15 +1385,11 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 					additionalAxisMotorsToEnable |= reprap.GetMove().GetKinematics().GetConnectedAxes(drive);
 				}
 			}
-			else if (drive >= MaxAxes)
+			else
 			{
 				// It's an extruder drive
 				if (directionVector[drive] != 0.0)
 				{
-					//TODO For now we allocate a DM even if the drive is remote so that we can use the code in PreparExtruder, but we ought to factor it out
-					//TODO For remote drivers, I think we may be adjusting the net steps twice for pressure advance, once here in prepareExtruder and once on the expansion board
-					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
-
 					// If there is any extruder jerk in this move, in theory that means we need to instantly extrude or retract some amount of filament.
 					// Pass the speed change to PrepareExtruder
 					float speedChange;
@@ -1407,17 +1403,21 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 						speedChange = 0.0;
 					}
 
-					const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionPending[drive - MaxAxes], speedChange, flags.usePressureAdvance);
-
 #if SUPPORT_CAN_EXPANSION
 					const DriverId driver = platform.GetExtruderDriver(drive - MaxAxes);
 					if (driver.IsRemote())
 					{
-						CanMotion::AddMovement(*this, params, driver, pdm->GetSteps());
+						const int32_t rawSteps = PrepareRemoteExtruder(drive, extrusionPending[drive - MaxAxes], speedChange);
+						if (rawSteps != 0)
+						{
+							CanMotion::AddMovement(*this, params, driver, rawSteps, flags.usePressureAdvance);
+						}
 					}
-#endif
-					if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
+					else
 					{
+#endif
+						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
+						const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionPending[drive - MaxAxes], speedChange, flags.usePressureAdvance);
 						reprap.GetPlatform().EnableLocalDrivers(drive);
 
 						if (stepsToDo)
@@ -1444,12 +1444,6 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 							completedDMs = pdm;
 						}
 					}
-					else
-					{
-						pdm->state = DMState::idle;
-						pdm->nextDM = completedDMs;
-						completedDMs = pdm;
-					}
 				}
 			}
 		}
@@ -1472,7 +1466,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 					const DriverId driver = config.driverNumbers[i];
 					if (driver.IsRemote())
 					{
-						CanMotion::AddMovement(*this, params, driver, 0);
+						CanMotion::AddMovement(*this, params, driver, 0, false);
 					}
 				}
 #endif
@@ -1481,7 +1475,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 
 		const DDAState st = prev->state;
 		afterPrepare.moveStartTime = (st == DDAState::executing || st == DDAState::frozen)
-						? prev->afterPrepare.moveStartTime + prev->clocksNeeded							// this move will follow the previous one, so calculate the start time assuming no more hiccups
+						? prev->afterPrepare.moveStartTime + prev->clocksNeeded				// this move will follow the previous one, so calculate the start time assuming no more hiccups
 							: StepTimer::GetInterruptClocks() + MovementStartDelayClocks;	// else this move is the first so start it after a short delay
 
 #if SUPPORT_CAN_EXPANSION
@@ -2031,6 +2025,56 @@ void DDA::LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration)
 	}
 }
 
+#if SUPPORT_CAN_EXPANSION
+
+// Prepare a remote extruder, returning the number of steps we are going to do before allowing for pressure advance.
+// This replicates some of the functionality that DriveMovement::PrepareExtruder does for local extruder drives.
+int32_t DDA::PrepareRemoteExtruder(size_t drive, float& extrusionPending, float speedChange) const
+{
+	// Calculate the requested extrusion amount and a few other things
+	float extrusionRequired = totalDistance * directionVector[drive];
+
+#if SUPPORT_NONLINEAR_EXTRUSION
+	// Add the nonlinear extrusion correction to totalExtrusion
+	if (flags.isPrintingMove)
+	{
+		float a, b, limit;
+		if (reprap.GetPlatform().GetExtrusionCoefficients(drive - MaxAxes, a, b, limit))
+		{
+			const float averageExtrusionSpeed = (extrusionRequired * StepTimer::StepClockRate)/clocksNeeded;
+			const float factor = 1.0 + min<float>((averageExtrusionSpeed * a) + (averageExtrusionSpeed * averageExtrusionSpeed * b), limit);
+			extrusionRequired *= factor;
+		}
+	}
+#endif
+
+	// Add on any fractional extrusion pending from the previous move
+	extrusionRequired += extrusionPending;
+	const float rawStepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
+	const int32_t originalSteps = lrintf(extrusionRequired * rawStepsPerMm);
+	int32_t netSteps;
+
+	if (flags.usePressureAdvance && extrusionRequired >= 0.0)
+	{
+		// Calculate the pressure advance parameters
+		const float compensationTime = reprap.GetPlatform().GetPressureAdvance(drive - MaxAxes);
+
+		// Calculate the net total extrusion to allow for compensation. It may be negative.
+		const float dv = extrusionRequired/totalDistance;
+		extrusionRequired += (endSpeed - startSpeed) * compensationTime * dv;
+		netSteps = lrintf(extrusionRequired * rawStepsPerMm);
+	}
+	else
+	{
+		netSteps = originalSteps;
+	}
+
+	extrusionPending = extrusionRequired - (float)netSteps/rawStepsPerMm;
+	return originalSteps;
+}
+
+#endif
+
 #if SUPPORT_LASER
 
 // Manage the laser power. Return the number of ticks until we should be called again, or 0 to be called at the start of the next move.
@@ -2082,4 +2126,5 @@ uint32_t DDA::ManageLaserPower() const
 }
 
 #endif
+
 // End

@@ -38,6 +38,7 @@ protected:
 	HeaterMode GetMode() const override;
 	GCodeResult SwitchOn(const StringRef& reply) override;		// Turn the heater on and set the mode
 	GCodeResult UpdateModel(const StringRef& reply) override;	// Called when the heater model has been changed
+	GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) override;
 
 private:
 	static constexpr uint32_t RemoteStatusTimeout = 2000;

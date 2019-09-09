@@ -506,7 +506,7 @@ void Platform::Init()
 	{
 		extruderDrivers[extr].SetLocal(extr + MinAxes);			// set up default extruder drive mapping
 		driveDriverBits[extr + MaxAxes] = StepPins::CalcDriverBitmap(extr + MinAxes);
-		SetPressureAdvance(extr, 0.0);							// no pressure advance
+		pressureAdvance[extr] = 0.0;
 #if SUPPORT_NONLINEAR_EXTRUSION
 		nonlinearExtrusionA[extr] = nonlinearExtrusionB[extr] = 0.0;
 		nonlinearExtrusionLimit[extr] = DefaultNonlinearExtrusionLimit;
@@ -3592,12 +3592,73 @@ void Platform::AtxPowerOff(bool defer)
 	}
 }
 
-void Platform::SetPressureAdvance(size_t extruder, float factor)
+GCodeResult Platform::SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply)
 {
-	if (extruder < MaxExtruders)
+	GCodeResult rslt = GCodeResult::ok;
+
+#if SUPPORT_CAN_EXPANSION
+	CanDriversData canDriversToUpdate;
+#endif
+
+	if (gb.Seen('D'))
 	{
-		pressureAdvance[extruder] = factor;
+		uint32_t eDrive[MaxExtruders];
+		size_t eCount = MaxExtruders;
+		gb.GetUnsignedArray(eDrive, eCount, false);
+		for (size_t i = 0; i < eCount; i++)
+		{
+			const uint32_t extruder = eDrive[i];
+			if (extruder >= reprap.GetGCodes().GetNumExtruders())
+			{
+				reply.printf("Invalid extruder number '%" PRIu32 "'", extruder);
+				rslt = GCodeResult::error;
+				break;
+			}
+			pressureAdvance[extruder] = advance;
+#if SUPPORT_CAN_EXPANSION
+			if (extruderDrivers[extruder].IsRemote())
+			{
+				canDriversToUpdate.AddEntry(extruderDrivers[extruder], (uint16_t)(advance * 1000.0));
+			}
+#endif
+		}
 	}
+	else
+	{
+		const Tool * const ct = reprap.GetCurrentTool();
+		if (ct == nullptr)
+		{
+			reply.copy("No tool selected");
+			rslt = GCodeResult::error;
+		}
+		else
+		{
+#if SUPPORT_CAN_EXPANSION
+			ct->IterateExtruders([this, advance, &canDriversToUpdate](unsigned int extruder)
+									{
+										pressureAdvance[extruder] = advance;
+										if (extruderDrivers[extruder].IsRemote())
+										{
+											canDriversToUpdate.AddEntry(extruderDrivers[extruder], (uint16_t)(advance * 1000.0));
+										}
+									}
+								);
+#else
+			ct->IterateExtruders([this, advance](unsigned int extruder)
+									{
+										pressureAdvance[extruder] = advance;
+									}
+								);
+#endif
+		}
+	}
+
+#if SUPPORT_CAN_EXPANSION
+	const bool remoteOk = CanInterface::SetRemotePressureAdvance(canDriversToUpdate, reply);
+	return (remoteOk) ? rslt : GCodeResult::error;
+#else
+	return rslt;
+#endif
 }
 
 #if SUPPORT_NONLINEAR_EXTRUSION

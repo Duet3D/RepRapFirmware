@@ -51,6 +51,7 @@ protected:
 	HeaterMode GetMode() const override { return mode; }
 	GCodeResult SwitchOn(const StringRef& reply) override;	// Turn the heater on and set the mode
 	GCodeResult UpdateModel(const StringRef& reply) override;	// Called when the heater model has been changed
+	GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) override { return GCodeResult::ok; }
 
 private:
 	void SetHeater(float power) const;				// Power is a fraction in [0,1]

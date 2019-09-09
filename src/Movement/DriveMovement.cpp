@@ -211,7 +211,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	// Add on any fractional extrusion pending from the previous move
 	extrusionRequired += extrusionPending;
 	dv = extrusionRequired/dda.totalDistance;
-	direction = (dv >= 0.0);
+	direction = (extrusionRequired >= 0.0);
 
 	const float rawStepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
 	const float effectiveStepsPerMm = fabsf(dv) * rawStepsPerMm;
@@ -249,7 +249,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 		mp.cart.accelStopStep = (uint32_t)(params.accelDistance * effectiveStepsPerMm) + 1;
 	}
 
-	int32_t netSteps = (int32_t)(extrusionRequired * rawStepsPerMm);
+	int32_t netSteps = lrintf(extrusionRequired * rawStepsPerMm);
 	extrusionPending = extrusionRequired - (float)netSteps/rawStepsPerMm;
 
 	if (!direction)

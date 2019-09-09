@@ -413,7 +413,7 @@ public:
 	void SetAxisMinimum(size_t axis, float value, bool byProbing);
 	float AxisTotalLength(size_t axis) const;
 	float GetPressureAdvance(size_t extruder) const;
-	void SetPressureAdvance(size_t extruder, float factor);
+	GCodeResult SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply);
 
 	const AxisDriversConfig& GetAxisDriversConfig(size_t axis) const
 		pre(axis < MaxAxes)

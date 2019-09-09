@@ -197,6 +197,23 @@ GCodeResult RemoteHeater::UpdateModel(const StringRef& reply)
 	return GCodeResult::error;
 }
 
+GCodeResult RemoteHeater::UpdateFaultDetectionParameters(const StringRef& reply)
+{
+	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
+	if (buf != nullptr)
+	{
+		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
+		CanMessageSetHeaterFaultDetectionParameters * const msg = buf->SetupRequestMessage<CanMessageSetHeaterFaultDetectionParameters>(rid, CanInterface::GetCanAddress(), boardAddress);
+		msg->heater = GetHeaterNumber();
+		msg->maxFaultTime = GetMaxHeatingFaultTime();
+		msg->maxTempExcursion = GetMaxTemperatureExcursion();
+		return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
+	}
+
+	reply.copy("No CAN buffer");
+	return GCodeResult::error;
+}
+
 void RemoteHeater::UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report)
 {
 	if (src == boardAddress)

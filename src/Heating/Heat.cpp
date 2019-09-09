@@ -752,22 +752,24 @@ bool Heat::WriteModelParameters(FileStore *f) const
 // Process M570
 GCodeResult Heat::ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply)
 {
-	if (heater < MaxHeaters && heaters[heater] != nullptr)
+	const auto h = FindHeater(heater);
+	if (h.IsNull())
 	{
-		bool seenValue = false;
-		float maxTempExcursion, maxFaultTime;
-		heaters[heater]->GetFaultDetectionParameters(maxTempExcursion, maxFaultTime);
-		gb.TryGetFValue('P', maxFaultTime, seenValue);
-		gb.TryGetFValue('T', maxTempExcursion, seenValue);
-		if (seenValue)
-		{
-			heaters[heater]->SetFaultDetectionParameters(maxTempExcursion, maxFaultTime);
-		}
-		else
-		{
-			reply.printf("Heater %u allowed excursion %.1f" DEGREE_SYMBOL "C, fault trigger time %.1f seconds", heater, (double)maxTempExcursion, (double)maxFaultTime);
-		}
+		reply.printf("Heater %u not found", heater);
+		return GCodeResult::error;
 	}
+
+	bool seenValue = false;
+	float maxTempExcursion, maxFaultTime;
+	h->GetFaultDetectionParameters(maxTempExcursion, maxFaultTime);
+	gb.TryGetFValue('P', maxFaultTime, seenValue);
+	gb.TryGetFValue('T', maxTempExcursion, seenValue);
+	if (seenValue)
+	{
+		return h->SetFaultDetectionParameters(maxTempExcursion, maxFaultTime, reply);
+	}
+
+	reply.printf("Heater %u allowed excursion %.1f" DEGREE_SYMBOL "C, fault trigger time %.1f seconds", heater, (double)maxTempExcursion, (double)maxFaultTime);
 	return GCodeResult::ok;
 }
 
@@ -949,6 +951,8 @@ HeaterProtection& Heat::AccessHeaterProtection(size_t index) const
 // Updates the PIDs and HeaterProtection items after a heater change
 void Heat::UpdateHeaterProtection()
 {
+	ReadLocker lock(heatersLock);
+
 	// Reassign the first mapped heater protection item of each PID where applicable
 	// and rebuild the linked list of heater protection elements per heater
 	for (size_t heater : ARRAY_INDICES(heaters))

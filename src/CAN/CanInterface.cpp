@@ -476,7 +476,7 @@ static bool SetRemoteDriverValues(const CanDriversData& data, const StringRef& r
 		{
 			break;
 		}
-		CanMessageBuffer * buf = CanMessageBuffer::Allocate();
+		CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 		if (buf == nullptr)
 		{
 			reply.lcat("No CAN buffer available");
@@ -514,7 +514,7 @@ static bool SetRemoteDriverStates(const CanDriversList& drivers, const StringRef
 		{
 			break;
 		}
-		CanMessageBuffer * buf = CanMessageBuffer::Allocate();
+		CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 		if (buf == nullptr)
 		{
 			reply.lcat("No CAN buffer available");
@@ -697,6 +697,12 @@ bool CanInterface::SetRemoteDriverMicrostepping(const CanDriversData& data, cons
 	return SetRemoteDriverValues(data, reply, CanMessageType::setMicrostepping);
 }
 
+// Set the pressure advance on remote drivers, returning true if successful
+bool CanInterface::SetRemotePressureAdvance(const CanDriversData& data, const StringRef& reply)
+{
+	return SetRemoteDriverValues(data, reply, CanMessageType::setPressureAdvance);
+}
+
 // Handle M569 for a remote driver
 GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply)
 pre(driver.IsRemote())
@@ -734,8 +740,7 @@ GCodeResult CanInterface::SetRemoteDriverStallParameters(const CanDriversList& d
 	return GCodeResult::ok;
 }
 
-// Get diagnostics from and expansion board
-GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
+static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
 {
 	if (boardAddress > CanId::MaxNormalAddress)
 	{
@@ -750,11 +755,31 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 		return GCodeResult::error;
 	}
 
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageReturnInfo>(rid, CanId::MasterAddress, (CanAddress)boardAddress);
+	msg->type = infoType;
+	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
+}
+
+// Get diagnostics from and expansion board
+GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
+{
 	reply.printf("Diagnostics for board %u:", (unsigned int)boardAddress);
-	const CanRequestId rid = AllocateRequestId(boardAddress);
-	auto msg = buf->SetupRequestMessage<CanMessageDiagnostics>(rid, CanId::MasterAddress, (CanAddress)boardAddress);
-	msg->type = 0;
-	return SendRequestAndGetStandardReply(buf, rid, reply);
+	GCodeResult rslt = GetRemoteInfo(CanMessageReturnInfo::typeFirmwareVersion, boardAddress, gb, reply);
+	if (rslt == GCodeResult::ok)
+	{
+		rslt = GetRemoteInfo(CanMessageReturnInfo::typeMemory, boardAddress, gb, reply);
+	}
+	if (rslt == GCodeResult::ok)
+	{
+		rslt = GetRemoteInfo(CanMessageReturnInfo::typePressureAdvance, boardAddress, gb, reply);
+	}
+	return rslt;
+}
+
+GCodeResult CanInterface::GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
+{
+	return GetRemoteInfo(CanMessageReturnInfo::typeFirmwareVersion, boardAddress, gb, reply);
 }
 
 // Tell an expansion board to update

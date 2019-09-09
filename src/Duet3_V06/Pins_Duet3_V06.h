@@ -129,9 +129,9 @@ constexpr Pin DiagPin = PortCPin(20);
 
 // SD cards
 constexpr size_t NumSdCards = 1;
-constexpr Pin SdCardDetectPins[1] = { NoPin };
+constexpr Pin SdCardDetectPins[1] = { PortAPin(29) };
 constexpr Pin SdWriteProtectPins[1] = { NoPin };
-constexpr Pin SdSpiCSPins[1] = { PortAPin(29) };
+constexpr Pin SdSpiCSPins[1] = { NoPin };
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 
 // Ethernet

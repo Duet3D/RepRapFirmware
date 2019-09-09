@@ -1475,6 +1475,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
+#if SUPPORT_CAN_EXPANSION
+			if (gb.Seen('B'))
+			{
+				const uint32_t board = gb.GetUIValue();
+				if (board != CanId::MasterAddress)
+				{
+					result = CanInterface::GetRemoteFirmwareDetails(board, gb, reply);
+					break;
+				}
+			}
+#endif
 			reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s", FIRMWARE_NAME, VERSION, platform.GetElectronicsString());
 #ifdef DUET_NG
 			const char* const expansionName = DuetExpansion::GetExpansionBoardName();
@@ -3358,40 +3369,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 572: // Set/report pressure advance
 		if (gb.Seen('S'))
 		{
+			const float advance = gb.GetFValue();
 			if (!LockMovementAndWaitForStandstill(gb))
 			{
 				return false;
 			}
-			const float advance = gb.GetFValue();
-			if (gb.Seen('D'))
-			{
-				uint32_t eDrive[MaxExtruders];
-				size_t eCount = MaxExtruders;
-				gb.GetUnsignedArray(eDrive, eCount, false);
-				for (size_t i = 0; i < eCount; i++)
-				{
-					if (eDrive[i] >= numExtruders)
-					{
-						reply.printf("Invalid extruder number '%" PRIu32 "'", eDrive[i]);
-						result = GCodeResult::error;
-						break;
-					}
-					platform.SetPressureAdvance(eDrive[i], advance);
-				}
-			}
-			else
-			{
-				const Tool * const ct = reprap.GetCurrentTool();
-				if (ct == nullptr)
-				{
-					reply.copy("No tool selected");
-					result = GCodeResult::error;
-				}
-				else
-				{
-					ct->IterateExtruders([advance](unsigned int extruder) { reprap.GetPlatform().SetPressureAdvance(extruder, advance); });
-				}
-			}
+			result = platform.SetPressureAdvance(advance, gb, reply);
 		}
 		else
 		{

@@ -60,8 +60,7 @@ public:
 	void GetFaultDetectionParameters(float& pMaxTempExcursion, float& pMaxFaultTime) const
 		{ pMaxTempExcursion = maxTempExcursion; pMaxFaultTime = maxHeatingFaultTime; }
 
-	void SetFaultDetectionParameters(float pMaxTempExcursion, float pMaxFaultTime)
-		{ maxTempExcursion = pMaxTempExcursion; maxHeatingFaultTime = pMaxFaultTime; }
+	GCodeResult SetFaultDetectionParameters(float pMaxTempExcursion, float pMaxFaultTime, const StringRef& reply);
 
 	float GetHighestTemperatureLimit() const;					// Get the highest temperature limit
 	float GetLowestTemperatureLimit() const;					// Get the lowest temperature limit
@@ -103,6 +102,7 @@ protected:
 	virtual HeaterMode GetMode() const = 0;
 	virtual GCodeResult SwitchOn(const StringRef& reply) = 0;
 	virtual GCodeResult UpdateModel(const StringRef& reply) = 0;
+	virtual GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) = 0;
 
 	int GetSensorNumber() const { return sensorNumber; }
 	void SetSensorNumber(int sn) { sensorNumber = sn; }

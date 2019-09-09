@@ -66,6 +66,7 @@ namespace CanInterface
 	void SendResponse(CanMessageBuffer *buf);
 	void SendBroadcast(CanMessageBuffer *buf);
 
+	GCodeResult GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult RemoteDiagnostics(MessageType mt, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply);
 
@@ -76,6 +77,7 @@ namespace CanInterface
 	bool SetRemoteStandstillCurrentPercent(const CanDriversData& data, const StringRef& reply);
 	bool SetRemoteDriverCurrents(const CanDriversData& data, const StringRef& reply);
 	bool SetRemoteDriverMicrostepping(const CanDriversData& data, const StringRef& reply);
+	bool SetRemotePressureAdvance(const CanDriversData& data, const StringRef& reply);
 	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult SetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply);
 }

@@ -57,6 +57,13 @@ GCodeResult Heater::SetModel(float gain, float tc, float td, float maxPwm, float
 	return GCodeResult::error;
 }
 
+GCodeResult Heater::SetFaultDetectionParameters(float pMaxTempExcursion, float pMaxFaultTime, const StringRef& reply)
+{
+	maxTempExcursion = pMaxTempExcursion;
+	maxHeatingFaultTime = pMaxFaultTime;
+	return UpdateFaultDetectionParameters(reply);
+}
+
 HeaterStatus Heater::GetStatus() const
 {
 	const HeaterMode mode = GetMode();
