@@ -1414,8 +1414,8 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 						}
 					}
 					else
-					{
 #endif
+					{
 						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
 						const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionPending[drive - MaxAxes], speedChange, flags.usePressureAdvance);
 						reprap.GetPlatform().EnableLocalDrivers(drive);
