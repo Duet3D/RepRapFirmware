@@ -95,12 +95,12 @@ extern uint32_t _estack;			// defined in the linker script
 
 inline constexpr float AdcReadingToPowerVoltage(uint16_t adcVal)
 {
-	return adcVal * (PowerMonitorVoltageRange/4096.0);
+	return adcVal * (PowerMonitorVoltageRange/(1u << AdcBits));
 }
 
 inline constexpr uint16_t PowerVoltageToAdcReading(float voltage)
 {
-	return (uint16_t)(voltage * (4096.0/PowerMonitorVoltageRange));
+	return (uint16_t)(voltage * ((1u << AdcBits)/PowerMonitorVoltageRange));
 }
 
 constexpr uint16_t driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);			// minimum voltage at which we initialise the drivers
@@ -114,12 +114,12 @@ constexpr uint16_t driverNormalVoltageAdcReading = PowerVoltageToAdcReading(27.5
 
 inline constexpr float AdcReadingToV12Voltage(uint16_t adcVal)
 {
-	return adcVal * (V12MonitorVoltageRange/4096.0);
+	return adcVal * (V12MonitorVoltageRange/(1u << AdcBits));
 }
 
 inline constexpr uint16_t V12VoltageToAdcReading(float voltage)
 {
-	return (uint16_t)(voltage * (4096.0/V12MonitorVoltageRange));
+	return (uint16_t)(voltage * ((1u << AdcBits)/V12MonitorVoltageRange));
 }
 
 constexpr uint16_t driverV12OnAdcReading = V12VoltageToAdcReading(10.0);				// minimum voltage at which we initialise the drivers
@@ -443,9 +443,16 @@ void Platform::Init()
 # endif
 #endif
 
-	for (uint32_t& db : driveDriverBits)
+	// Clear out the axis and extruder driver bitmaps
+	for (size_t i = 0; i < MaxAxesPlusExtruders; ++i)
 	{
-		db = 0;													// clear drives bitmap for all axes
+		driveDriverBits[i] = 0;
+	}
+
+	// Set up the bitmaps for direct driver access
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+	{
+		driveDriverBits[driver + MaxAxesPlusExtruders] = StepPins::CalcDriverBitmap(driver);
 	}
 
 	// Set up the local drivers
@@ -513,7 +520,6 @@ void Platform::Init()
 #endif
 	}
 
-	UpdateZMotorDriverBits();
 	driversPowered = false;
 
 #if HAS_SMART_DRIVERS
@@ -1382,7 +1388,7 @@ void Platform::Spin()
 
 			// Check for a VSSA fault
 #if HAS_VREF_MONITOR
-			constexpr uint32_t MaxVssaFilterSum = (15 * 4096 * ThermistorAverageReadings * 4)/2200;		// VSSA fuse should have <= 15 ohms resistance
+			constexpr uint32_t MaxVssaFilterSum = (15 * (1u << AdcBits) * ThermistorAverageReadings * 4)/2200;		// VSSA fuse should have <= 15 ohms resistance
 			if (adcFilters[VssaFilterIndex].GetSum() > MaxVssaFilterSum)
 			{
 				Message(ErrorMessage, "VSSA fault, check thermistor wiring\n");
@@ -1535,7 +1541,7 @@ bool Platform::GetAutoSaveSettings(float& saveVoltage, float&resumeVoltage)
 
 float Platform::AdcReadingToCpuTemperature(uint32_t adcVal) const
 {
-	const float voltage = (float)adcVal * (3.3/(float)(4096 * ThermistorAverageReadings));
+	const float voltage = (float)adcVal * (3.3/(float)((1u << AdcBits) * ThermistorAverageReadings));
 #if SAM4E || SAM4S
 	return (voltage - 1.44) * (1000.0/4.7) + 27.0 + mcuTemperatureAdjust;			// accuracy at 27C is +/-13C
 #elif SAM3XA
@@ -2053,6 +2059,12 @@ void Platform::Diagnostics(MessageType mtype)
 #endif
 
 	reprap.Timing(mtype);
+
+#if 1
+	// Debugging temperature readings
+	MessageF(mtype, "Vssa %" PRIu32 " Vref %" PRIu32 " Temp0 %" PRIu32 "\n",
+			adcFilters[VssaFilterIndex].GetSum()/16, adcFilters[VrefFilterIndex].GetSum()/16, adcFilters[0].GetSum()/16);
+#endif
 
 #ifdef MOVE_DEBUG
 	MessageF(mtype, "Interrupts scheduled %u, done %u, last %u, next %u sched at %u, now %u\n",
@@ -3072,23 +3084,6 @@ void Platform::SetAxisDriversConfig(size_t axis, size_t numValues, const DriverI
 		}
 	}
 	driveDriverBits[axis] = bitmap;
-
-	if (axis == Z_AXIS)
-	{
-		UpdateZMotorDriverBits();
-	}
-}
-
-// Set up the driver bits for the individual Z motors
-void Platform::UpdateZMotorDriverBits()
-{
-	const AxisDriversConfig& cfg = axisDrivers[Z_AXIS];
-	for (size_t i = 0; i < MaxDriversPerAxis; ++i)
-	{
-		driveDriverBits[MaxAxesPlusExtruders + i] = (i < cfg.numDrivers && cfg.driverNumbers[i].IsLocal())
-													? StepPins::CalcDriverBitmap(cfg.driverNumbers[i].localDriver)
-														: 0;
-	}
 }
 
 // Map an extruder to a driver
@@ -4516,6 +4511,8 @@ uint32_t Platform::Random()
 
 void Platform::Tick()
 {
+	AnalogInFinaliseConversion();
+
 #if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
 	if (tickState != 0)
 	{
@@ -4543,6 +4540,7 @@ void Platform::Tick()
 			lowestV12 = currentV12;
 		}
 # endif
+
 # if HAS_SMART_DRIVERS
 		if (driversPowered &&
 #  if HAS_VOLTAGE_MONITOR && HAS_12V_MONITOR
@@ -4625,7 +4623,11 @@ void Platform::Tick()
 		break;
 	}
 
+#if SAME70
+	AnalogInStartConversion(0x0FFF | (1u << filteredAdcChannels[currentFilterNumber]));
+#else
 	AnalogInStartConversion();
+#endif
 }
 
 // Pragma pop_options is not supported on this platform

@@ -852,7 +852,7 @@ void LocalHeater::CalculateModel()
 										0.0,
 #endif
 										true, false, dummy.GetRef());
-	if (rslt == GCodeResult::ok)
+	if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
 	{
 		reprap.GetPlatform().MessageF(LoggedGenericMessage,
 				"Auto tune heater %u completed in %" PRIu32 " sec\n"

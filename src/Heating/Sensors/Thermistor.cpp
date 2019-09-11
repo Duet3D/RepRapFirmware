@@ -101,7 +101,8 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply)
 // Get the temperature
 void Thermistor::Poll()
 {
-	int32_t averagedTempReading, tempFilterValid;
+	int32_t averagedTempReading;
+	bool tempFilterValid;
 	if (adcFilterChannel >= 0)
 	{
 		const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(adcFilterChannel);
@@ -126,9 +127,9 @@ void Thermistor::Poll()
 		// VREF is the measured voltage at VREF less the drop of a 15 ohm resistor. Assume that the maximum load is four 2K2 resistors and one 4K7 resistor to ground = 492 ohms.
 		// VSSA is the voltage measured across the VSSA fuse. We assume the same maximum load and the same 15 ohms maximum resistance for the fuse.
 		// Assume a maximum ADC reading offset of 100.
-		constexpr int32_t maxDrop = ((4096 << Thermistor::AdcOversampleBits) * 15)/492 + (100 << Thermistor::AdcOversampleBits);
+		constexpr int32_t maxDrop = (AdcRange * 15)/492 + (100 << Thermistor::AdcOversampleBits);
 
-		if (averagedVrefReading < (4096 << Thermistor::AdcOversampleBits) - maxDrop)
+		if (averagedVrefReading < AdcRange - maxDrop)
 		{
 			SetResult(TemperatureError::badVref);
 		}

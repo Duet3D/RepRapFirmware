@@ -510,10 +510,10 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 		directionVector[drive] = 0.0;
 	}
 
-	for (size_t drive = 0; drive < MaxDriversPerAxis; ++drive)
+	for (size_t driver = 0; driver < MaxDriversPerAxis; ++driver)
 	{
-		directionVector[drive] = adjustments[drive];			// for leadscrew adjustment moves, store the adjustment needed in directionVector
-		const int32_t delta = lrintf(adjustments[drive] * reprap.GetPlatform().DriveStepsPerUnit(Z_AXIS));
+		directionVector[driver] = adjustments[driver];			// for leadscrew adjustment moves, store the adjustment needed in directionVector
+		const int32_t delta = lrintf(adjustments[driver] * reprap.GetPlatform().DriveStepsPerUnit(Z_AXIS));
 		if (delta != 0)
 		{
 			realMove = true;
@@ -1255,16 +1255,16 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 				if (drive < config.numDrivers)
 				{
 					const int32_t delta = lrintf(directionVector[drive] * totalDistance * reprap.GetPlatform().DriveStepsPerUnit(Z_AXIS));
-					if (delta != 0)
-					{
-						const DriverId driver = config.driverNumbers[drive];
+					const DriverId driver = config.driverNumbers[drive];
 #if SUPPORT_CAN_EXPANSION
-						if (driver.IsRemote())
-						{
-							CanMotion::AddMovement(*this, params, driver, delta, false);
-						}
-						else
+					if (driver.IsRemote())
+					{
+						CanMotion::AddMovement(*this, params, driver, delta, false);
+					}
+					else
 #endif
+					{
+						if (delta != 0)
 						{
 							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders, DMState::moving);
 							pdm->totalSteps = labs(delta);
@@ -1750,7 +1750,7 @@ pre(state == frozen)
 			{
 				DriveMovement* const dm = *dmpp;
 				const size_t drive = dm->drive;
-				if (drive >= MaxAxes && drive < NumDirectDrivers)
+				if (drive >= MaxAxes && drive < MaxAxesPlusExtruders)
 				{
 					if ((prohibitedMovements & (1 << (drive - MaxAxes))) != 0)
 					{

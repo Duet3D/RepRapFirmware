@@ -91,7 +91,7 @@ constexpr unsigned int ZProbeAverageReadings = 8;		// We average this number of 
 #ifdef SAME70
 // On the SAME70 we read a thermistor on every tick so that we can average a higher number of readings
 // Keep THERMISTOR_AVERAGE_READINGS * NUM_HEATERS * 1ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
-constexpr unsigned int ThermistorAverageReadings = 32;
+constexpr unsigned int ThermistorAverageReadings = 16;
 #else
 // We read a thermistor on alternate ticks
 // Keep THERMISTOR_AVERAGE_READINGS * NUM_HEATERS * 2ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
@@ -233,6 +233,14 @@ public:
 	bool IsValid() const volatile
 	{
 		return isValid;
+	}
+
+	// Get the latest reading
+	uint16_t GetLatestReading() const volatile
+	{
+		size_t indexOfLastReading = index;			// capture volatile variable
+		indexOfLastReading =  (indexOfLastReading == 0) ? numAveraged - 1 : indexOfLastReading - 1;
+		return readings[indexOfLastReading];
 	}
 
 private:
@@ -426,7 +434,7 @@ public:
 	void SetExtruderDriver(size_t extruder, DriverId driver)
 		pre(extruder < MaxExtruders);
 	uint32_t GetDriversBitmap(size_t axisOrExtruder) const	// get the bitmap of driver step bits for this axis or extruder
-		pre(axisOrExtruder < 2 * MaxTotalDrivers)
+		pre(axisOrExtruder < MaxAxesPlusExtruders + NumLocalDrivers)
 		{ return driveDriverBits[axisOrExtruder]; }
 	uint32_t GetSlowDriversBitmap() const { return slowDriversBitmap; }
 	uint32_t GetSlowDriverStepHighClocks() const { return slowDriverStepTimingClocks[0]; }
@@ -611,8 +619,6 @@ private:
 	void ResetChannel(size_t chan);					// re-initialise a serial channel
 	float AdcReadingToCpuTemperature(uint32_t reading) const;
 
-	void UpdateZMotorDriverBits();					// set up the driver bits for the individual Z motors
-
 	GCodeResult ConfigureGpioOrServo(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply);
 
 #if SUPPORT_CAN_EXPANSION
@@ -723,7 +729,7 @@ private:
 	float accelerations[MaxAxesPlusExtruders];
 	float driveStepsPerUnit[MaxAxesPlusExtruders];
 	float instantDvs[MaxAxesPlusExtruders];
-	uint32_t driveDriverBits[MaxAxesPlusExtruders + MaxDriversPerAxis];
+	uint32_t driveDriverBits[MaxAxesPlusExtruders + NumDirectDrivers];
 															// the bitmap of local driver port bits for each axis or extruder, followed by the bitmaps for the individual Z motors
 	AxisDriversConfig axisDrivers[MaxAxes];					// the driver numbers assigned to each axis
 
