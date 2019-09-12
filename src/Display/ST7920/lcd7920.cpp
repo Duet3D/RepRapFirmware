@@ -46,7 +46,7 @@ Lcd7920::Lcd7920(Pin csPin, const LcdFont * const fnts[], size_t nFonts)
 	device.csPolarity = true;						// active high chip select
 	device.spiMode = 0;
 	device.clockFrequency = LcdSpiClockFrequency;
-#if __LPC17xx__
+#ifdef __LPC17xx__
     device.sspChannel = LcdSpiChannel;
 #endif
 }

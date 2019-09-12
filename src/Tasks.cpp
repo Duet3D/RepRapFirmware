@@ -153,7 +153,7 @@ extern "C" void MainTask(void *pvParameters)
 
 extern "C" uint32_t _estack;		// this is defined in the linker script
 
-#if __LPC17xx__
+#ifdef __LPC17xx__
 	// These are defined in Linker Scripts for LPC
 	extern "C" unsigned int __AHB0_block_start;
 	extern "C" unsigned int __AHB0_dyn_start;
@@ -351,7 +351,7 @@ extern "C"
 	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::wdtFault, pulFaultStackAddress + 5);
 	}
 
-#if __LPC17xx__
+#ifdef __LPC17xx__
     void WDT_IRQHandler() __attribute__((naked, noreturn));
     void WDT_IRQHandler(void)
     {
@@ -444,7 +444,7 @@ extern "C"
 	    );
 	}
 
-#if __LPC17xx__
+#ifdef __LPC17xx__
 	void applicationMallocFailedCalledDispatcher(const uint32_t *pulFaultStackAddress)
 	{
 		reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress);

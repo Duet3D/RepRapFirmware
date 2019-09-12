@@ -37,7 +37,7 @@
 #include "Version.h"
 #include "Movement/StepTimer.h"
 
-#if __LPC17xx__
+#ifdef __LPC17xx__
 constexpr size_t NetworkStackWords = 470;
 #else
 constexpr size_t NetworkStackWords = 550;

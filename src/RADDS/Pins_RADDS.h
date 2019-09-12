@@ -26,6 +26,8 @@ const size_t NumFirmwareUpdateModules = 1;
 #define SUPPORT_IOBITS		0					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR	0					// set nonzero to support DHT temperature/humidity sensors
 
+#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
+
 // The physical capabilities of the machine
 
 // The number of drives in the machine, including X, Y, and Z plus extruder drives
@@ -34,11 +36,11 @@ constexpr size_t NumDirectDrivers = 9;
 constexpr size_t MaxSensorsInSystem = 32;
 typedef uint32_t SensorsBitmap;
 
-constexpr size_t NumTotalHeaters = 3;
-constexpr size_t NumDefaultHeaters = 3;				// The number of heaters configured by default
+constexpr size_t MaxHeaters = 3;
 constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 4;
 
+constexpr size_t MaxZProbes = 2;
 constexpr size_t MaxGpioPorts = 10;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
@@ -67,9 +69,14 @@ constexpr Pin ENABLE_PINS[NumDirectDrivers] =    { 26, 22, 15, 62, 65, 49, 37, 3
 constexpr Pin STEP_PINS[NumDirectDrivers] =      { 24, 17,  2, 61, 64, 51, 35, 29, 67 };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { 23, 16,  3, 60, 63, 53, 33, 27, 66 };
 
+// Analogue pin numbers
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 4, 0, 1, 2 };
+
+#if 0	// the following are no longer used, left here for reference until PinTable is defined
+
 // Endstops
 // E Stops not currently used
-// Note: RepRapFirmware only as a single endstop per axis
+// Note: RepRapFirmware only has a single endstop per axis
 //       gcode defines if it is a max ("high end") or min ("low end")
 //       endstop.  gcode also sets if it is active HIGH or LOW
 //
@@ -82,15 +89,48 @@ constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { 23, 16,  3, 60, 63, 53, 33, 2
 
 constexpr Pin END_STOP_PINS[NumEndstops] = { 28, 30, 32, 39 };
 
-// Analogue pin numbers
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { 4, 0, 1, 2 };
-
 // Heater outputs
 // Bed PMW: D7 has hardware PWM so bed has PWM
 // h0, h1 PMW: D13 & D12 are on TIOB0 & B8 which are both TC B channels, so they get PWM
 // h2 bang-bang: D11 is on TIOA8 which is a TC A channel shared with h1, it gets bang-bang control
 
 constexpr Pin HEAT_ON_PINS[NumTotalHeaters] = { 7, 13, 12, 11 };	// bed, h0, h1, h2
+
+// Use a PWM capable pin
+constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { 9, 8 }; // Fan 0, Fan 1
+
+// Firmware will attach a FALLING interrupt to this pin
+// see FanInterrupt() in Platform.cpp
+//
+// D25 -- Unused GPIO on AUX1
+constexpr Pin TachoPins[NumTachos] = { 25 };
+
+// Definition of which pins we allow to be controlled using M42
+// Spare pins on the Arduino Due are
+//
+//  D5 / TIOA6  / C.25
+//  D6 / PWML7  / C.24
+// ### Removed: now E0_AXIS endstop D39 / PWMH2  / C.7
+// D58 / AD3    / A.6
+// D59 / AD2    / A.4
+// ### Removed: now E6_DIR ExtV3 D66 / DAC0   / B.15
+// ### Removed: now E6_STP ExtV3 D67 / DAC1   / B.16
+// ### Removed: now E6_EN ExtV3 D68 / CANRX0 / A.1
+// ### Removed: now MSi(=3.3V) ExtV3 D69 / CANTX0 / A.0
+// D70 / SDA1   / A.17
+// D71 / SCL1   / A.18
+// D72 / RX LED / C.30
+// D73 / TX LED / A.21
+
+// M42 and M208 commands now use logical pin numbers, not firmware pin numbers.
+// This is the mapping from logical pins 60+ to firmware pin numbers
+constexpr Pin SpecialPinMap[] =
+{
+	5, 6, 58, 59,
+	70, 71, 72, 73
+};
+
+#endif
 
 // Default thermistor betas
 constexpr float BED_R25 = 10000.0;
@@ -120,16 +160,8 @@ constexpr Pin Z_PROBE_PIN = A5;  // RADDS "ADC" pin
 constexpr Pin Z_PROBE_MOD_PIN = 34;
 constexpr Pin DiagPin = NoPin;
 
-// Use a PWM capable pin
-constexpr size_t NUM_FANS = 2;
-constexpr Pin COOLING_FAN_PINS[NUM_FANS] = { 9, 8 }; // Fan 0, Fan 1
-
-// Firmware will attach a FALLING interrupt to this pin
-// see FanInterrupt() in Platform.cpp
-//
-// D25 -- Unused GPIO on AUX1
-constexpr size_t NumTachos = 1;
-constexpr Pin TachoPins[NumTachos] = { 25 };
+// Cooling fans
+constexpr size_t NumTotalFans = 12;
 
 // SD cards
 constexpr size_t NumSdCards = 2;
@@ -137,33 +169,68 @@ constexpr Pin SdCardDetectPins[NumSdCards] = { 14, 14 };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[2] = { 87, 77 };
 
-// Definition of which pins we allow to be controlled using M42
-// Spare pins on the Arduino Due are
-//
-//  D5 / TIOA6  / C.25
-//  D6 / PWML7  / C.24
-// ### Removed: now E0_AXIS endstop D39 / PWMH2  / C.7
-// D58 / AD3    / A.6
-// D59 / AD2    / A.4
-// ### Removed: now E6_DIR ExtV3 D66 / DAC0   / B.15
-// ### Removed: now E6_STP ExtV3 D67 / DAC1   / B.16
-// ### Removed: now E6_EN ExtV3 D68 / CANRX0 / A.1
-// ### Removed: now MSi(=3.3V) ExtV3 D69 / CANTX0 / A.0
-// D70 / SDA1   / A.17
-// D71 / SCL1   / A.18
-// D72 / RX LED / C.30
-// D73 / TX LED / A.21
-
-// M42 and M208 commands now use logical pin numbers, not firmware pin numbers.
-// This is the mapping from logical pins 60+ to firmware pin numbers
-constexpr Pin SpecialPinMap[] =
+// Enum to represent allowed types of pin access
+// We don't have a separate bit for servo, because Duet PWM-capable ports can be used for servos if they are on the Duet main board
+enum class PinCapability: uint8_t
 {
-	5, 6, 58, 59,
-	70, 71, 72, 73
+	// Individual capabilities
+	read = 1,
+	ain = 2,
+	write = 4,
+	pwm = 8,
+
+	// Combinations
+	ainr = 1|2,
+	rw = 1|4,
+	wpwm = 4|8,
+	rwpwm = 1|4|8,
+	ainrw = 1|2|4,
+	ainrwpwm = 1|2|4|8
 };
 
-// This next definition defines the highest one.
-constexpr int HighestLogicalPin = 60 + ARRAY_SIZE(SpecialPinMap) - 1;		// highest logical pin number on this electronics
+constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
+{
+	return (PinCapability)((uint8_t)a | (uint8_t)b);
+}
+
+// Struct to represent a pin that can be assigned to various functions
+// This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
+struct PinEntry
+{
+	bool CanDo(PinAccess access) const;
+	Pin GetPin() const { return pin; }
+	PinCapability GetCapability() const { return cap; }
+	const char* GetNames() const { return names; }
+
+	Pin pin;
+	PinCapability cap;
+	const char *names;
+};
+
+// List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
+// The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
+// Aliases are separate by the , character.
+// If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
+// for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
+constexpr PinEntry PinTable[] =
+{
+	// Endstops
+	{ 28,	PinCapability::read,	"xmin" },
+	{ 30,	PinCapability::read,	"ymin" },
+	{ 32,	PinCapability::read,	"zmin" },
+	// Lots more pins need to be defined here...
+};
+
+constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
+
+// Default pin allocations
+constexpr const char *DefaultEndstopPinNames[] = { "xmin", "ymin", "zmin" };
+constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
+constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1" };
+constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
+
+// Function to look up a pin name pass back the corresponding index into the pin table
+bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
 
 // SAM3X Flash locations (may be expanded in the future)
 constexpr uint32_t IAP_FLASH_START = 0x000F0000;

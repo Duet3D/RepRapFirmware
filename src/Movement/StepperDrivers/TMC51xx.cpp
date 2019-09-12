@@ -37,6 +37,10 @@ static inline const Move& GetMoveInstance() { return reprap.GetMove(); }
 //#define TMC_TYPE	5130
 #define TMC_TYPE	5160
 
+#ifndef TMC51xx_USES_SERCOM
+# define TMC51xx_USES_SERCOM	0
+#endif
+
 constexpr float MinimumMotorCurrent = 50.0;
 constexpr float MinimumOpenLoadMotorCurrent = 300;			// minimum current in mA for the open load status to be taken seriously
 constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping

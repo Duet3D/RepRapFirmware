@@ -47,7 +47,7 @@ namespace StepTimer
 	// Get the interrupt clock count when we only care about the lowest 16 bits. More efficient than calling GetInterruptClocks on platforms with 16-bit timers.
 	static inline uint16_t GetInterruptClocks16()
 	{
-#if __LPC17xx__
+#ifdef __LPC17xx__
         return (uint16_t)STEP_TC->TC;
 #else
         return (uint16_t)STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;

@@ -33,6 +33,14 @@ Licence: GPL
 
 #include "Core.h"
 
+#ifndef SAMC21
+# define SAMC21	(defined(__SAMC21G18A__) && __SAMC21G18A__)
+#endif
+
+#ifndef SAME51
+# define SAME51	(defined(__SAME51N19A__) && __SAME51N19A__)
+#endif
+
 // Definitions needed by Pins.h and/or Configuration.h
 // Logical pins used for general output, servos, CCN and laser control
 typedef uint16_t LogicalPin;				// type used to represent logical pin numbers
@@ -421,7 +429,7 @@ const uint32_t NvicPrioritySpi = 6;				// SPI is used for network transfers on D
 // We have 16 priority levels
 // Use priority 4 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 
-# if SAM4E || __LPC17xx__
+# if SAM4E || defined(__LPC17xx__)
 const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 # endif
 

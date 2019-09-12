@@ -34,7 +34,7 @@ namespace StepTimer
 		// 1.067us resolution on the Duet WiFi (120MHz clock)
 		// 0.853us resolution on the SAM E70 (150MHz peripheral clock)
 
-#if __LPC17xx__
+#ifdef __LPC17xx__
 		//LPC has 32bit timers
 		//Using the same 128 divisor (as also specified in DDA)
 		//LPC Timers default to /4 -->  (SystemCoreClock/4)
@@ -92,7 +92,7 @@ namespace StepTimer
 	// Get the interrupt clock count. Despite the name, on these processors we don't need to disable interrupts before calling this.
 	uint32_t GetInterruptClocksInterruptsDisabled()
 	{
-#if __LPC17xx__
+#ifdef __LPC17xx__
         return STEP_TC->TC;
 #else
         return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
@@ -248,7 +248,7 @@ void STEP_TC_HANDLER()
 			SoftTimer::Interrupt();
 		}
 	}
-#elif __LPC17xx__
+#elif defined(__LPC17xx__)
 	uint32_t regval = STEP_TC->IR;
 	//find which Match Register triggered the interrupt
 	if (regval & (1 << SBIT_MRI0_IFM)) //Interrupt flag for match channel 0.

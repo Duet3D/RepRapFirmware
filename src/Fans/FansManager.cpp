@@ -212,7 +212,8 @@ void FansManager::Init()
 	// Fan 3 needs to be set explicitly to zero PWM, otherwise it turns on because the MCU output pin isn't set low
 	if (fans[3] != nullptr)
 	{
-		fans[3]->SetPwm(0.0);
+		String<1> dummy;
+		(void)fans[3]->SetPwm(0.0, dummy.GetRef());
 	}
 # endif
 #endif

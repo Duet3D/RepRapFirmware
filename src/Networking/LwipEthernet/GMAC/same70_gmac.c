@@ -553,7 +553,7 @@ bool ethernetif_input(struct netif *netif)
 	switch (htons(ethhdr->type)) {
 		case ETHTYPE_IP:
 		case ETHTYPE_ARP:
-#if PPPOE_SUPPORT
+#if defined(PPPOE_SUPPORT) && PPPOE_SUPPORT
 		case ETHTYPE_PPPOEDISC:
 		case ETHTYPE_PPPOE:
 #endif /* PPPOE_SUPPORT */
@@ -600,7 +600,7 @@ err_t ethernetif_init(struct netif *netif)
 	 * The last argument should be replaced with your link speed, in units
 	 * of bits per second.
 	 */
-#if LWIP_SNMP
+#if defined(LWIP_SNMP) && LWIP_SNMP
 	NETIF_INIT_SNMP(netif, snmp_ifType_ethernet_csmacd, NET_LINK_SPEED);
 #endif /* LWIP_SNMP */
 

@@ -219,7 +219,7 @@ void RepRap::Init()
 #endif
 
 	// Set up the timeout of the regular watchdog, and set up the backup watchdog if there is one.
-#if __LPC17xx__
+#ifdef __LPC17xx__
 	wdt_init(1); // set wdt to 1 second. reset the processor on a watchdog fault
 #else
 	{
