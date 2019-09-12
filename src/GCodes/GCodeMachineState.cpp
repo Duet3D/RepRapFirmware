@@ -81,7 +81,7 @@ void GCodeMachineState::CloseFile()
 	else
 #endif
 	{
-#if HAS_MAS_STORAGE
+#if HAS_MASS_STORAGE
 		fileState.Close();
 #endif
 	}

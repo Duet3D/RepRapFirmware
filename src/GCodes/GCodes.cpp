@@ -80,7 +80,7 @@ GCodes::GCodes(Platform& p) :
 	powerFailScript(nullptr),
 #endif
 	isFlashing(false), lastWarningMillis(0), atxPowerControlled(false)
-#if HAS_MAS_STORAGE
+#if HAS_MASS_STORAGE
 	, sdTimingFile(nullptr)
 #endif
 {
@@ -2487,9 +2487,9 @@ MessageType GCodes::GetMessageBoxDevice(GCodeBuffer& gb) const
 // Do a manual bed probe. On entry the state variable is the state we want to return to when the user has finished adjusting the height.
 void GCodes::DoManualProbe(GCodeBuffer& gb)
 {
-	if (Push(gb, true))												// stack the machine state including the file position
+	if (Push(gb, true))													// stack the machine state including the file position and set the state to GCodeState::normal
 	{
-		gb.MachineState().CloseFile();									// stop reading from file
+		gb.MachineState().CloseFile();									// stop reading from file if we were
 		gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
 		const MessageType mt = GetMessageBoxDevice(gb);
 		platform.SendAlert(mt, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", 2, 0.0, MakeBitmap<AxesBitmap>(Z_AXIS));

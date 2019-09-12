@@ -42,17 +42,16 @@ void EndstopsManager::Init()
 	}
 #endif
 
-	// Z PROBE
+	// Z probes
 	reprap.GetPlatform().InitZProbeFilters();
 
 #if ALLOCATE_DEFAULT_PORTS
 	LocalZProbe * const zp = new LocalZProbe(0);
 	zp->AssignPorts(DefaultZProbePinNames, dummy.GetRef());
 	zProbes[0] = zp;
-#else
-	zProbes[0] = new DummyZProbe(0);			// we must always have a non-null Z probe #0
 #endif
 
+	defaultZProbe = new DummyZProbe(0);			// we must always have a non-null current Z probe so we use this one if none is defined
 	currentZProbeNumber = 0;
 }
 
@@ -353,6 +352,12 @@ const char *EndstopsManager::TranslateEndStopResult(EndStopHit es, bool atHighEn
 	}
 }
 
+ZProbe& EndstopsManager::GetCurrentZProbe() const
+{
+	ZProbe * const zp = zProbes[currentZProbeNumber];
+	return (zp == nullptr) ? *defaultZProbe : *zp;
+}
+
 ZProbe *EndstopsManager::GetZProbe(size_t num) const
 {
 	return (num < ARRAY_SIZE(zProbes)) ? zProbes[num] : nullptr;
@@ -434,8 +439,8 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 	// If we are switching between motor stall and any other type, we need a new one. A port must be specified unless it is motor stall.
 	// If it not a motor stall probe and a port number is given, we need a new one in case it is on a different board.
 	// If it is a motor stall endstop, there should not be a port specified, but we can ignore the port if it is present
-	uint32_t probeType = 0;
-	bool seenType;
+	uint32_t probeType = (uint32_t)ZProbeType::none;
+	bool seenType = false;
 	gb.TryGetUIValue('P', probeType, seenType);
 	if (   seenType
 		&& (   probeType >= (uint32_t)ZProbeType::numTypes
@@ -452,17 +457,23 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 	WriteLocker lock(endstopsLock);
 
 	ZProbe * const existingProbe = zProbes[probeNumber];
-	const bool seenPort = gb.Seen('C');
+	if (existingProbe == nullptr && !seenType)
+	{
+		reply.printf("Z probe %u not found", probeNumber);
+		return GCodeResult::error;
+	}
 
+	const bool seenPort = gb.Seen('C');
 	const bool needNewProbe =  (existingProbe == nullptr)
-							|| (probeType != (uint32_t)existingProbe->GetProbeType()
+							|| (   seenType
+								&& probeType != (uint32_t)existingProbe->GetProbeType()
 								&& (   probeType == (uint32_t)ZProbeType::zMotorStall
 									|| probeType == (uint32_t)ZProbeType::none
 									|| existingProbe->GetProbeType() == ZProbeType::zMotorStall
 									|| existingProbe->GetProbeType() == ZProbeType::none
 								   )
 								)
-							|| (seenPort && probeType != (uint32_t)ZProbeType::zMotorStall && probeType != (uint32_t)ZProbeType::none);
+							|| (seenPort && existingProbe->GetProbeType() != ZProbeType::zMotorStall && existingProbe->GetProbeType() != ZProbeType::none);
 
 	if (needNewProbe)
 	{
@@ -471,6 +482,9 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 			reply.copy("Missing Z probe type number");
 			return GCodeResult::error;
 		}
+
+		zProbes[probeNumber] = nullptr;
+		delete existingProbe;					// delete the old probe first, the new one might use the same ports
 
 		ZProbe *newProbe;
 		switch ((ZProbeType)probeType)
@@ -508,14 +522,16 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 			break;
 		}
 
-		const GCodeResult rslt = newProbe->Configure(gb, reply);
-		std::swap(zProbes[probeNumber], newProbe);
-		delete newProbe;
+		const GCodeResult rslt = newProbe->Configure(gb, reply, true);
+		if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
+		{
+			zProbes[probeNumber] = newProbe;
+		}
 		return rslt;
 	}
 
 	// If we get get then there is an existing probe and we just need to change its configuration
-	return zProbes[probeNumber]->Configure(gb, reply);
+	return zProbes[probeNumber]->Configure(gb, reply, seenType);
 }
 
 // Set or print the Z probe. Called by G31.

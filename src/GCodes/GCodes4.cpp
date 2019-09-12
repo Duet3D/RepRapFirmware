@@ -926,7 +926,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			// See whether we need to do any more taps
-			const ZProbe& params = platform.GetEndstops().GetCurrentZProbe();
+			const ZProbe& params = platform.GetCurrentZProbe();
 			bool acceptReading = false;
 			if (params.GetMaxTaps() < 2)
 			{

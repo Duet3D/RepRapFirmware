@@ -291,7 +291,7 @@ bool Move::IsRawMotorMove(uint8_t moveType) const
 // Return true if the specified point is accessible to the Z probe
 bool Move::IsAccessibleProbePoint(float x, float y) const
 {
-	const ZProbe& params = reprap.GetPlatform().GetEndstops().GetCurrentZProbe();
+	const ZProbe& params = reprap.GetPlatform().GetCurrentZProbe();
 	return kinematics->IsReachable(x - params.GetXOffset(), y - params.GetYOffset(), false);
 }
 
@@ -856,7 +856,7 @@ float Move::GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePo
 	y = probePoints.GetYCoord(count);
 	if (wantNozzlePosition)
 	{
-		const ZProbe& rp = reprap.GetPlatform().GetEndstops().GetCurrentZProbe();
+		const ZProbe& rp = reprap.GetPlatform().GetCurrentZProbe();
 		x -= rp.GetXOffset();
 		y -= rp.GetYOffset();
 	}

@@ -51,7 +51,7 @@ public:
 	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef &reply);		// M558
 	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply);			// G31
 
-	ZProbe& GetCurrentZProbe() const { return *zProbes[currentZProbeNumber]; }
+	ZProbe& GetCurrentZProbe() const;
 	ZProbe *GetZProbe(size_t num) const;
 	void SetZProbeDefaults();
 	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply);
@@ -77,6 +77,7 @@ private:
 
 	Endstop *axisEndstops[MaxAxes];						// the endstops assigned to each axis (each one may have several switches), each may be null
 	ZProbe *zProbes[MaxZProbes];						// the Z probes used. The first one is always non-null.
+	ZProbe *defaultZProbe;
 
 	ZProbeProgrammer zProbeProg;
 

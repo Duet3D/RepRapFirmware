@@ -386,7 +386,7 @@ void LocalZProbe::SetProbing(bool isProbing) const
 
 GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) const
 {
-	if (type != ZProbeType::zMotorStall)
+	if (type != ZProbeType::zMotorStall && type != ZProbeType::none)
 	{
 		str.cat(", input pin ");
 		inputPort.AppendPinName(str);
