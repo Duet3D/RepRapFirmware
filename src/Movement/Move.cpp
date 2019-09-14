@@ -326,7 +326,7 @@ void Move::Diagnostics(MessageType mtype)
 #endif
 
 	// Show the current probe position heights and type of bed compensation in use
-	String<StringLength40> bedCompString;
+	String<StringLength50> bedCompString;
 	if (usingMesh)
 	{
 		bedCompString.copy("mesh");

@@ -8,6 +8,8 @@
 #include "EndstopsManager.h"
 #include "Endstop.h"
 #include "ZProbe.h"
+#include "LocalZProbe.h"
+#include "RemoteZProbe.h"
 #include "RepRap.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "GCodes/GCodes.h"
@@ -375,6 +377,14 @@ void EndstopsManager::SetZProbeDefaults()
 // Program the Z probe
 GCodeResult EndstopsManager::ProgramZProbe(GCodeBuffer& gb, const StringRef& reply)
 {
+	const uint32_t probeNumber = (gb.Seen('K')) ? gb.GetUIValue() : currentZProbeNumber;
+	if (probeNumber >= MaxZProbes || zProbes[probeNumber] == nullptr)
+	{
+		reply.copy("Invalid Z probe index");
+		return GCodeResult::error;
+	}
+
+	ZProbe * const zProbe = zProbes[probeNumber];
 	if (gb.Seen('S'))
 	{
 		uint32_t zProbeProgram[MaxZProbeProgramBytes];
@@ -390,8 +400,7 @@ GCodeResult EndstopsManager::ProgramZProbe(GCodeBuffer& gb, const StringRef& rep
 					return GCodeResult::error;
 				}
 			}
-			zProbeProg.SendProgram(zProbeProgram, len);
-			return GCodeResult::ok;
+			return zProbe->SendProgram(zProbeProgram, len, reply);
 		}
 	}
 	reply.copy("No program bytes provided");
@@ -475,6 +484,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 								)
 							|| (seenPort && existingProbe->GetProbeType() != ZProbeType::zMotorStall && existingProbe->GetProbeType() != ZProbeType::none);
 
+	bool seen = seenType || seenPort;
 	if (needNewProbe)
 	{
 		if (!seenType)
@@ -511,7 +521,14 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 				const CanAddress boardAddress = IoPort::RemoveBoardAddress(pinNames.GetRef());
 				if (boardAddress != CanId::MasterAddress)
 				{
-					newProbe = new RemoteZProbe(probeNumber, boardAddress);
+					RemoteZProbe *newRemoteProbe = new RemoteZProbe(probeNumber, boardAddress);
+					const GCodeResult rslt = newRemoteProbe->Create(pinNames.GetRef(), reply);
+					if (rslt != GCodeResult::ok)
+					{
+						delete newRemoteProbe;
+						return rslt;
+					}
+					newProbe = newRemoteProbe;
 				}
 				else
 #endif
@@ -522,7 +539,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 			break;
 		}
 
-		const GCodeResult rslt = newProbe->Configure(gb, reply, true);
+		const GCodeResult rslt = newProbe->Configure(gb, reply, seen);
 		if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
 		{
 			zProbes[probeNumber] = newProbe;
@@ -531,7 +548,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 	}
 
 	// If we get get then there is an existing probe and we just need to change its configuration
-	return zProbes[probeNumber]->Configure(gb, reply, seenType);
+	return zProbes[probeNumber]->Configure(gb, reply, seen);
 }
 
 // Set or print the Z probe. Called by G31.

@@ -30,8 +30,8 @@ void ZProbe::SetDefaults()
 	travelSpeed = DefaultZProbeTravelSpeed;
 	recoveryTime = 0.0;
 	tolerance = DefaultZProbeTolerance;
-	maxTaps = DefaultZProbeTaps;
-	invertReading = turnHeatersOff = saveToConfigOverride = false;
+	misc.parts.maxTaps = DefaultZProbeTaps;
+	misc.parts.invertReading = misc.parts.turnHeatersOff = misc.parts.saveToConfigOverride = false;
 	type = ZProbeType::none;
 	sensor = -1;
 }
@@ -102,7 +102,7 @@ int ZProbe::GetReading() const
 		}
 	}
 
-	return (invertReading) ? 1000 - zProbeVal : zProbeVal;
+	return (misc.parts.invertReading) ? 1000 - zProbeVal : zProbeVal;
 }
 
 int ZProbe::GetSecondaryValues(int& v1, int& v2)
@@ -206,7 +206,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 		}
 		if (gb.MachineState().runningM501)
 		{
-			saveToConfigOverride = true;			// we are loading these parameters from config-override.g, so a subsequent M500 should save them to config-override.g
+			misc.parts.saveToConfigOverride = true;		// we are loading these parameters from config-override.g, so a subsequent M500 should save them to config-override.g
 		}
 	}
 	else
@@ -235,10 +235,8 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 	return err;
 }
 
-GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool dontReport)
+GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& seen)
 {
-	bool seen = dontReport;
-
 	gb.TryGetFValue('H', diveHeight, seen);					// dive height
 	if (gb.Seen('F'))										// feed rate i.e. probing speed
 	{
@@ -254,13 +252,13 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool dont
 
 	if (gb.Seen('I'))
 	{
-		invertReading = (gb.GetIValue() != 0);
+		misc.parts.invertReading = (gb.GetIValue() != 0);
 		seen = true;
 	}
 
 	if (gb.Seen('B'))
 	{
-		turnHeatersOff = (gb.GetIValue() == 1);
+		misc.parts.turnHeatersOff = (gb.GetIValue() == 1);
 		seen = true;
 	}
 
@@ -269,7 +267,7 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool dont
 
 	if (gb.Seen('A'))
 	{
-		maxTaps = min<uint32_t>(gb.GetUIValue(), ZProbe::MaxTapsLimit);
+		misc.parts.maxTaps = min<uint32_t>(gb.GetUIValue(), ZProbe::MaxTapsLimit);
 		seen = true;
 	}
 
@@ -281,154 +279,19 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool dont
 	reply.printf("Z Probe %u: type %u", number, (unsigned int)type);
 	const GCodeResult rslt = AppendPinNames(reply);
 	reply.catf(", invert %s, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
-					(invertReading) ? "yes" : "no", (double)diveHeight,
+					(misc.parts.invertReading) ? "yes" : "no", (double)diveHeight,
 					(int)(probeSpeed * MinutesToSeconds), (int)(travelSpeed * MinutesToSeconds),
 					(double)recoveryTime,
-					(turnHeatersOff) ? "suspended" : "normal",
-					maxTaps, (double)tolerance);
+					(misc.parts.turnHeatersOff) ? "suspended" : "normal",
+						misc.parts.maxTaps, (double)tolerance);
 	return rslt;
 }
 
-// Members of class LocalZProbe
-LocalZProbe::~LocalZProbe()
+// Default implementation of SendProgram, overridden in some classes
+GCodeResult ZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply)
 {
-	inputPort.Release();
-	modulationPort.Release();
-}
-
-GCodeResult LocalZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool dontReport)
-{
-	bool seen = false;
-
-	// We must get and set the Z probe type first before setting the dive height etc. because different probe types need different port settings
-	if (gb.Seen('P'))
-	{
-		seen = true;
-		type = (ZProbeType)gb.GetUIValue();
-	}
-
-	// Determine the required pin access
-	PinAccess access[2];
-	switch (type)
-	{
-	case ZProbeType::analog:
-	case ZProbeType::dumbModulated:
-		access[0] = PinAccess::readAnalog;
-		access[1] = PinAccess::write1;
-		break;
-
-	case ZProbeType::alternateAnalog:
-		access[0] = PinAccess::readAnalog;
-		access[1] = PinAccess::write0;
-		break;
-
-	default:
-		access[0] = PinAccess::readWithPullup;
-		access[1] = PinAccess::write0;
-		break;
-	}
-
-	if (gb.Seen('C'))										// input channel
-	{
-		seen = true;
-		IoPort* const ports[] = { &inputPort, &modulationPort };
-
-		if (!IoPort::AssignPorts(gb, reply, PinUsedBy::zprobe, 2, ports, access))
-		{
-			return GCodeResult::error;
-		}
-	}
-	else if (seen)											// the type may have changed, so set the correct pin modes
-	{
-		(void)inputPort.SetMode(access[0]);
-		(void)modulationPort.SetMode(access[1]);
-	}
-
-	return ZProbe::Configure(gb, reply, seen || dontReport);
-}
-
-bool LocalZProbe::AssignPorts(const char* pinNames, const StringRef& reply)
-{
-	IoPort* const ports[] = { &inputPort, &modulationPort };
-	const PinAccess access[] = { PinAccess::read, PinAccess::write0 };
-	return IoPort::AssignPorts(pinNames, reply, PinUsedBy::zprobe, 2, ports, access);
-}
-
-// This is called by the tick ISR to get the raw Z probe reading to feed to the filter
-uint16_t LocalZProbe::GetRawReading() const
-{
-	switch (type)
-	{
-	case ZProbeType::analog:
-	case ZProbeType::dumbModulated:
-	case ZProbeType::alternateAnalog:
-		return min<uint16_t>(inputPort.ReadAnalog(), 4000);
-
-	case ZProbeType::digital:
-	case ZProbeType::unfilteredDigital:
-	case ZProbeType::blTouch:
-		return (inputPort.Read()) ? 4000 : 0;
-
-	default:
-		return 4000;
-	}
-}
-
-void LocalZProbe::SetProbing(bool isProbing) const
-{
-	// For Z probe types other than 1/2/3 and bltouch we set the modulation pin high at the start of a probing move and low at the end
-	// Don't do this for bltouch because on the Maestro, the MOD pin is normally used as the servo control output
-	if (type > ZProbeType::alternateAnalog && type != ZProbeType::blTouch)
-	{
-		modulationPort.WriteDigital(isProbing);
-	}
-}
-
-GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) const
-{
-	if (type != ZProbeType::zMotorStall && type != ZProbeType::none)
-	{
-		str.cat(", input pin ");
-		inputPort.AppendPinName(str);
-		str.cat(", output pin ");
-		modulationPort.AppendPinName(str);
-	}
-	return GCodeResult::ok;
-}
-
-#if SUPPORT_CAN_EXPANSION
-
-// Members of class RemoteZProbe
-RemoteZProbe::~RemoteZProbe()
-{
-	//TODO destroy remote Z probe
-}
-
-GCodeResult RemoteZProbe::AppendPinNames(const StringRef& str) const
-{
-	//TODO
-	str.cat(", [remote pin names here]");
-	return GCodeResult::ok;
-}
-
-void RemoteZProbe::SetProgramOutput(bool b) const
-{
-	//TODO write data to remote mod port
-}
-
-void RemoteZProbe::SetProbing(bool isProbing) const
-{
-	//TODO tell remote we are starting probing
-}
-
-GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool dontReport)
-{
-	//TODO get the port and create the Z probe. Then configure the rest
-	//return ZProbe::Configure(gb, reply, seen || dontReport);
-	reply.copy("Configuring remote Z probes is not supported yet");
+	reply.copy("This configuration of Z probe does not support programming");
 	return GCodeResult::error;
 }
-
-#endif
 
 // End

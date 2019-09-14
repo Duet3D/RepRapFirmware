@@ -80,7 +80,7 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 		const bool seenPin = gb.Seen('C');
 		if (seenPin)
 		{
-			String<StringLength20> pinName;
+			String<StringLength50> pinName;
 			if (!gb.GetQuotedString(pinName.GetRef()))
 			{
 				reply.copy("Missing pin name");

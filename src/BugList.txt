@@ -223,6 +223,7 @@ Duet 3:
 - Different motor currents on Duet main board V0.6 vs older versions
 
 Planned for 3.0:
+- Two Z height issues, https://forum.duet3d.com/post/108569
 - M291 not displaying on PanelDue as well as web interface, https://forum.duet3d.com/topic/11240/m291-display-on-lcd-not-always-working-when-web-session-is-open
 - [done] 3.0 bug: Fix Z probe starting height
 - Test leadscrew adjustment moves

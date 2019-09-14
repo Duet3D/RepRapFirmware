@@ -24,7 +24,7 @@
 /*static*/ size_t IoPort::AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[])
 {
 	// Get the full port names string
-	String<StringLength20> portNames;
+	String<StringLength50> portNames;
 	if (!gb.GetReducedString(portNames.GetRef()))
 	{
 		reply.copy("Missing port name string");
@@ -56,7 +56,7 @@ bool IoPort::AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neede
 	for (size_t i = 0; i < numPorts; ++i)
 	{
 		// Get the next port name
-		String<StringLength20> pn;
+		String<StringLength50> pn;
 		char c;
 		while ((c = pinNames[index]) != 0 && c != '+')
 		{
