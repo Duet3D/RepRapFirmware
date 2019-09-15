@@ -6,10 +6,16 @@
  */
 
 #include "EndstopsManager.h"
+
 #include "Endstop.h"
+#include "LocalSwitchEndstop.h"
+#include "StallDetectionEndstop.h"
+#include "ZProbeEndstop.h"
+
 #include "ZProbe.h"
 #include "LocalZProbe.h"
 #include "RemoteZProbe.h"
+
 #include "RepRap.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "GCodes/GCodes.h"
@@ -38,7 +44,7 @@ void EndstopsManager::Init()
 	String<1> dummy;
 	for (size_t axis = 0; axis < ARRAY_SIZE(DefaultEndstopPinNames); ++axis)
 	{
-		SwitchEndstop * const sw = new SwitchEndstop(axis, EndStopPosition::lowEndStop);
+		LocalSwitchEndstop * const sw = new LocalSwitchEndstop(axis, EndStopPosition::lowEndStop);
 		sw->Configure(DefaultEndstopPinNames[axis], dummy.GetRef(), EndStopInputType::activeHigh);
 		axisEndstops[axis] = sw;
 	}
@@ -188,27 +194,17 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 		char sep = ':';
 		for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
 		{
-			const char c = reprap.GetGCodes().GetAxisLetters()[axis];
+			reply.catf("%c %c: ", sep, reprap.GetGCodes().GetAxisLetters()[axis]);
+			sep = ',';
 			if (axisEndstops[axis] == nullptr)
 			{
-				reply.catf("%c %c: none", sep, c);
+				reply.cat("none");
 			}
 			else
 			{
-				EndStopInputType inputType = axisEndstops[axis]->GetEndstopType();
-				reply.catf("%c %c: %s %s",
-							sep, c,
-							(axisEndstops[axis]->GetAtHighEnd()) ? "high end" : "low end",
-							(inputType == EndStopInputType::activeHigh) ? "active high switch"
-								: (inputType == EndStopInputType::activeLow) ? "active low switch"
-									: (inputType == EndStopInputType::zProbeAsEndstop) ? "Z probe"
-										: (inputType == EndStopInputType::motorStallAny) ? "motor stall (any motor)"
-											: (inputType == EndStopInputType::motorStallIndividual) ? "motor stall (individual motors)"
-											 : "unknown type"
-						 );
-				axisEndstops[axis]->AppendPinNames(reply);
+				reply.cat((axisEndstops[axis]->GetAtHighEnd()) ? "high end " : "low end ");
+				axisEndstops[axis]->AppendDetails(reply);
 			}
-			sep = ',';
 		}
 		return GCodeResult::ok;
 	}
@@ -239,7 +235,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 
 		delete axisEndstops[lastAxisSeen];
 		axisEndstops[lastAxisSeen] = nullptr;
-		SwitchEndstop * const sw = new SwitchEndstop(lastAxisSeen, lastPosSeen);
+		LocalSwitchEndstop * const sw = new LocalSwitchEndstop(lastAxisSeen, lastPosSeen);
 		const bool ok = sw->Configure(gb, reply, inputType);
 		axisEndstops[lastAxisSeen] = sw;
 		if (!ok)
@@ -295,7 +291,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 						}
 						else
 						{
-							((SwitchEndstop *)axisEndstops[axis])->Reconfigure(pos, inputType);
+							((LocalSwitchEndstop *)axisEndstops[axis])->Reconfigure(pos, inputType);
 						}
 						break;
 

@@ -57,7 +57,7 @@ class Endstop : public EndstopOrZProbe
 public:
 	virtual EndStopInputType GetEndstopType() const = 0;
 	virtual void Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) = 0;
-	virtual void AppendPinNames(const StringRef& str) { }
+	virtual void AppendDetails(const StringRef& str) = 0;
 
 	unsigned int GetAxis() const { return axis; }
 	bool GetAtHighEnd() const { return atHighEnd; }
@@ -70,78 +70,6 @@ protected:
 private:
 	uint8_t axis;										// which axis this endstop is on
 	bool atHighEnd;										// whether this endstop is at the max (true) or the min (false)
-};
-
-// Switch-type endstop
-class SwitchEndstop final : public Endstop
-{
-public:
-	void* operator new(size_t sz) { return Allocate<SwitchEndstop>(); }
-	void operator delete(void* p) { Release<SwitchEndstop>(p); }
-	~SwitchEndstop() override;
-
-	SwitchEndstop(uint8_t axis, EndStopPosition pos);
-
-	bool Configure(GCodeBuffer& gb, const StringRef& reply, EndStopInputType inputType);
-	bool Configure(const char *pinNames, const StringRef& reply, EndStopInputType inputType);
-	void Reconfigure(EndStopPosition pos, EndStopInputType inputType);
-
-	EndStopInputType GetEndstopType() const override;
-	EndStopHit Stopped() const override;
-	void Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) override;
-	EndstopHitDetails CheckTriggered(bool goingSlow) override;
-	bool Acknowledge(EndstopHitDetails what) override;
-	void AppendPinNames(const StringRef& str) override;
-
-private:
-	typedef uint16_t PortsBitmap;
-
-	IoPort ports[MaxDriversPerAxis];
-	size_t numPortsUsed;
-	PortsBitmap portsLeftToTrigger;
-	size_t numPortsLeftToTrigger;
-	bool stopAll;
-};
-
-// Motor stall detection endstop
-class StallDetectionEndstop final : public Endstop
-{
-public:
-	void* operator new(size_t sz) { return Allocate<StallDetectionEndstop>(); }
-	void operator delete(void* p) { Release<StallDetectionEndstop>(p); }
-
-	StallDetectionEndstop(uint8_t axis, EndStopPosition pos, bool p_individualMotors);
-
-	EndStopInputType GetEndstopType() const override { return (individualMotors) ? EndStopInputType::motorStallIndividual : EndStopInputType::motorStallAny; }
-	EndStopHit Stopped() const override;
-	void Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) override;
-	EndstopHitDetails CheckTriggered(bool goingSlow) override;
-	bool Acknowledge(EndstopHitDetails what) override;
-
-private:
-	DriversBitmap driversMonitored;
-	unsigned int numDriversLeft;
-	bool individualMotors;
-	bool stopAll;
-};
-
-class ZProbeEndstop final : public Endstop
-{
-public:
-	void* operator new(size_t sz) { return Allocate<ZProbeEndstop>(); }
-	void operator delete(void* p) { Release<ZProbeEndstop>(p); }
-
-	ZProbeEndstop(uint8_t axis, EndStopPosition pos);
-
-	EndStopInputType GetEndstopType() const override { return EndStopInputType::zProbeAsEndstop; }
-	EndStopHit Stopped() const override;
-	void Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) override;
-	EndstopHitDetails CheckTriggered(bool goingSlow) override;
-	bool Acknowledge(EndstopHitDetails what) override;
-
-private:
-	size_t zProbeNumber;					// which Z probe to use, always 0 for now
-	bool stopAll;
 };
 
 #endif /* SRC_ENDSTOPS_ENDSTOP_H_ */
