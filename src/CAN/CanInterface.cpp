@@ -18,6 +18,10 @@
 #include "Movement/StepTimer.h"
 #include <RTOSIface/RTOSIface.h>
 
+#if HAS_LINUX_INTERFACE
+# include "Linux/LinuxInterface.h"
+#endif
+
 extern "C"
 {
 	#include "mcan/mcan.h"
@@ -558,12 +562,13 @@ void CanInterface::SendMotion(CanMessageBuffer *buf)
 }
 
 // Send a request to an expansion board and append the response to 'reply'
-GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply)
+GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra)
 {
 	taskWaitingOnFifo1 = TaskBase::GetCallerTaskHandle();
 	const CanAddress dest = buf->id.Dst();
 	mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexRequest, MaxRequestSendWait);
 	const uint32_t whenStartedWaiting = millis();
+	unsigned int fragmentsReceived = 0;
 	for (;;)
 	{
 		const uint32_t rxf1s = mcan_instance.hw->MCAN_RXF1S;						// get FIFO 1 status
@@ -585,12 +590,28 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 				if (   buf->id.MsgType() == CanMessageType::standardReply
 					&& buf->id.Src() == dest
 					&& (buf->msg.standardReply.requestId == rid || buf->msg.standardReply.requestId == CanRequestIdAcceptAlways)
+					&& buf->msg.standardReply.fragmentNumber == fragmentsReceived
 				   )
 				{
-					reply.lcatn(buf->msg.standardReply.text, buf->msg.standardReply.GetTextLength(buf->dataLength));
-					const GCodeResult rslt = (GCodeResult)buf->msg.standardReply.resultCode;
-					CanMessageBuffer::Free(buf);
-					return rslt;
+					if (fragmentsReceived == 0)
+					{
+						reply.lcatn(buf->msg.standardReply.text, buf->msg.standardReply.GetTextLength(buf->dataLength));
+						if (extra != nullptr)
+						{
+							*extra = buf->msg.standardReply.extra;
+						}
+					}
+					else
+					{
+						reply.catn(buf->msg.standardReply.text, buf->msg.standardReply.GetTextLength(buf->dataLength));
+					}
+					if (!buf->msg.standardReply.moreFollows)
+					{
+						const GCodeResult rslt = (GCodeResult)buf->msg.standardReply.resultCode;
+						CanMessageBuffer::Free(buf);
+						return rslt;
+					}
+					++fragmentsReceived;
 				}
 //				debugPrintf("Discarded msg src=%u RID=%u exp %u\n", buf->id.Src(), buf->msg.standardReply.requestId, rid);
 			}
@@ -765,16 +786,7 @@ static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, GCodeB
 GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
 {
 	reply.printf("Diagnostics for board %u:", (unsigned int)boardAddress);
-	GCodeResult rslt = GetRemoteInfo(CanMessageReturnInfo::typeFirmwareVersion, boardAddress, gb, reply);
-	if (rslt == GCodeResult::ok)
-	{
-		rslt = GetRemoteInfo(CanMessageReturnInfo::typeMemory, boardAddress, gb, reply);
-	}
-	if (rslt == GCodeResult::ok)
-	{
-		rslt = GetRemoteInfo(CanMessageReturnInfo::typePressureAdvance, boardAddress, gb, reply);
-	}
-	return rslt;
+	return GetRemoteInfo(CanMessageReturnInfo::typeDiagnostics, boardAddress, gb, reply);
 }
 
 GCodeResult CanInterface::GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
@@ -791,20 +803,65 @@ GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffe
 		return GCodeResult::error;
 	}
 
-	// TODO ask the expansion board for its short name and check we have the firmware file for it
-
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
-	if (buf == nullptr)
+	// Ask the board for its type and check we have the firmware file for it
+	CanMessageBuffer * const buf1 = CanMessageBuffer::Allocate();
+	if (buf1 == nullptr)
 	{
 		reply.copy("No CAN buffer available");
 		return GCodeResult::error;
 	}
 
-	const CanRequestId rid = AllocateRequestId(boardAddress);
-	auto msg = buf->SetupRequestMessage<CanMessageUpdateYourFirmware>(rid, CanId::MasterAddress, (CanAddress)boardAddress);
-	msg->boardId = (uint8_t)boardAddress;
-	msg->invertedBoardId = (uint8_t)~boardAddress;
-	return SendRequestAndGetStandardReply(buf, rid, reply);
+	CanRequestId rid1 = AllocateRequestId(boardAddress);
+	auto msg1 = buf1->SetupRequestMessage<CanMessageReturnInfo>(rid1, CanId::MasterAddress, (CanAddress)boardAddress);
+	msg1->type = CanMessageReturnInfo::typeBoardName;
+	const GCodeResult rslt = SendRequestAndGetStandardReply(buf1, rid1, reply);
+	if (rslt != GCodeResult::ok)
+	{
+		return rslt;
+	}
+	String<StringLength50> firmwareFilename;
+	firmwareFilename.copy("Duet3Firmware_");
+	firmwareFilename.cat(reply.c_str());
+	reply.Clear();
+	firmwareFilename.cat(".bin");
+
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		// Check that the file exists by asking for 4 bytes of it
+		uint32_t fileLength;
+		int32_t bytesRead;
+		(void)reprap.GetLinuxInterface().GetFileChunk(firmwareFilename.c_str(), 0, 4, bytesRead, fileLength);
+		if (bytesRead != 4 || fileLength < 32 * 1024)
+		{
+			reply.printf("Firmware file %s not found", firmwareFilename.c_str());
+			return GCodeResult::error;
+		}
+	}
+	else
+#endif
+#if HAS_MASS_STORAGE
+	{
+		if (!reprap.GetPlatform().SysFileExists(firmwareFilename.c_str()))
+		{
+			reply.printf("Firmware file %s not found", firmwareFilename.c_str());
+			return GCodeResult::error;
+		}
+	}
+#endif
+
+	CanMessageBuffer * const buf2 = CanMessageBuffer::Allocate();
+	if (buf2 == nullptr)
+	{
+		reply.copy("No CAN buffer available");
+		return GCodeResult::error;
+	}
+
+	const CanRequestId rid2 = AllocateRequestId(boardAddress);
+	auto msg2 = buf2->SetupRequestMessage<CanMessageUpdateYourFirmware>(rid2, CanId::MasterAddress, (CanAddress)boardAddress);
+	msg2->boardId = (uint8_t)boardAddress;
+	msg2->invertedBoardId = (uint8_t)~boardAddress;
+	return SendRequestAndGetStandardReply(buf2, rid2, reply);
 }
 
 #endif

@@ -169,6 +169,27 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 	}
 }
 
+// Handle an input state change message and free the buffer
+static void HandleInputStateChanged(CanMessageBuffer *buf)
+{
+	const CanAddress src = buf->id.Src();
+	auto msg = buf->msg.inputChanged;
+	const RemoteInputHandle handle(msg.handle);
+	const bool state = (msg.state != 0);
+	switch (handle.type)
+	{
+	case RemoteInputHandle::typeEndstop:
+		reprap.GetPlatform().GetEndstops().HandleRemoteInputChange(src, handle.major, handle.minor, state, buf);
+		break;
+
+	case RemoteInputHandle::typeTrigger:
+		//TODO see if any triggers are waiting for this state change
+	default:
+		CanMessageBuffer::Free(buf);
+		break;
+	}
+}
+
 // Process a received broadcast or request message and free the message buffer
 void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 {
@@ -183,7 +204,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 		switch (buf->id.MsgType())
 		{
 		case CanMessageType::FirmwareBlockRequest:
-			HandleFirmwareBlockRequest(buf);
+			HandleFirmwareBlockRequest(buf);		// this one reuses or frees the buffer
 			break;
 
 		case CanMessageType::sensorTemperaturesReport:
@@ -194,6 +215,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 		case CanMessageType::heatersStatusReport:
 			reprap.GetHeat().ProcessRemoteHeatersReport(buf->id.Src(), buf->msg.heatersStatusBroadcast);
 			CanMessageBuffer::Free(buf);
+			break;
+
+		case CanMessageType::inputStateChanged:
+			HandleInputStateChanged(buf);			// this one reuses or frees the buffer
 			break;
 
 		case CanMessageType::statusReport:

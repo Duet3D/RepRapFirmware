@@ -62,7 +62,7 @@ namespace CanInterface
 	void Init();
 	inline CanAddress GetCanAddress() { return CanId::MasterAddress; }
 	CanRequestId AllocateRequestId(CanAddress destination);
-	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply);
+	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra = nullptr);
 	void SendResponse(CanMessageBuffer *buf);
 	void SendBroadcast(CanMessageBuffer *buf);
 

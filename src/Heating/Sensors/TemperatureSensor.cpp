@@ -127,7 +127,7 @@ CanAddress TemperatureSensor::GetBoardAddress() const
 }
 
 // Update the temperature, if it is a remote sensor. Overridden in class RemoteSensor.
-void TemperatureSensor::UpdateRemoteTemperature(CanAddress src, const CanTemperatureReport& report)
+void TemperatureSensor::UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report)
 {
 	// Nothing to do here. This function is overridden in class RemoteSensor.
 }

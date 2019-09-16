@@ -14,6 +14,7 @@
 #include <General/FreelistManager.h>
 
 class AxisDriversConfig;
+class CanMessageBuffer;
 
 // This is the base class for all types of endstops and for ZProbe.
 class EndstopOrZProbe
@@ -58,6 +59,11 @@ public:
 	virtual EndStopInputType GetEndstopType() const = 0;
 	virtual void Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) = 0;
 	virtual void AppendDetails(const StringRef& str) = 0;
+
+#if SUPPORT_CAN_EXPANSION
+	// Process a remote endstop input change that relates to this endstop. Return true if the buffer has been freed.
+	virtual bool HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state, CanMessageBuffer *buf) { return false; }
+#endif
 
 	unsigned int GetAxis() const { return axis; }
 	bool GetAtHighEnd() const { return atHighEnd; }

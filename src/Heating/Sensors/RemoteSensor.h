@@ -19,7 +19,7 @@ public:
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
 	CanAddress GetBoardAddress() const override { return boardAddress; }
-	void UpdateRemoteTemperature(CanAddress src, const CanTemperatureReport& report) override;
+	void UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report) override;
 
 	// Try to get a temperature reading
 	void Poll() override { }				// nothing to do here because reception of CAN messages update the reading

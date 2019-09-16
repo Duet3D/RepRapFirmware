@@ -13,6 +13,11 @@
 #include "GCodes/GCodeResult.h"
 #include <RTOSIface/RTOSIface.h>
 
+#if SUPPORT_CAN_EXPANSION
+# include "CanId.h"
+class CanMessageBuffer;
+#endif
+
 // Endstop manager class
 class EndstopsManager
 {
@@ -54,6 +59,10 @@ public:
 	ZProbe *GetZProbe(size_t num) const;
 	void SetZProbeDefaults();
 	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply);
+
+#if SUPPORT_CAN_EXPANSION
+	void HandleRemoteInputChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state, CanMessageBuffer *buf);
+#endif
 
 #if HAS_MASS_STORAGE
 	bool WriteZProbeParameters(FileStore *f, bool includingG31) const;

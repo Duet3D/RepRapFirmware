@@ -10,6 +10,14 @@
 #include "RepRap.h"
 #include "Platform.h"
 #include "Movement/Kinematics/Kinematics.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
+
+#if SUPPORT_CAN_EXPANSION
+# include "CanId.h"
+# include "CanMessageBuffer.h"
+# include "CanMessageFormats.h"
+# include "CAN/CanInterface.h"
+#endif
 
 // Switch endstop
 LocalSwitchEndstop::LocalSwitchEndstop(uint8_t axis, EndStopPosition pos) : Endstop(axis, pos), numPortsUsed(0)
@@ -19,45 +27,121 @@ LocalSwitchEndstop::LocalSwitchEndstop(uint8_t axis, EndStopPosition pos) : Ends
 
 LocalSwitchEndstop::~LocalSwitchEndstop()
 {
-	for (size_t i = 0; i < ARRAY_SIZE(ports); ++i)
+	ReleasePorts();
+}
+
+// Release any local and remote ports we have allocated and set numPortsUsed to zero
+void LocalSwitchEndstop::ReleasePorts()
+{
+	while (numPortsUsed != 0)
 	{
-		ports[i].Release();
+		--numPortsUsed;
+#if SUPPORT_CAN_EXPANSION
+		const CanAddress bn = boardNumbers[numPortsUsed];
+		if (bn != CanId::MasterAddress)
+		{
+			CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+			if (buf == nullptr)
+			{
+				reprap.GetPlatform().Message(ErrorMessage, "No CAN buffer");
+			}
+			else
+			{
+				const CanRequestId rid = CanInterface::AllocateRequestId(bn);
+				auto msg = buf->SetupRequestMessage<CanMessageChangeInputMonitor>(rid, CanId::MasterAddress, bn);
+				msg->handle.Set(RemoteInputHandle::typeEndstop, GetAxis(), numPortsUsed);
+				msg->action = CanMessageChangeInputMonitor::actionDelete;
+				String<StringLength50> reply;
+				if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef()) != GCodeResult::ok)
+				{
+					reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
+				}
+			}
+		}
+#endif
+		ports[numPortsUsed].Release();
 	}
 }
 
-bool LocalSwitchEndstop::Configure(GCodeBuffer& gb, const StringRef& reply, EndStopInputType inputType)
+GCodeResult LocalSwitchEndstop::Configure(GCodeBuffer& gb, const StringRef& reply, EndStopInputType inputType)
 {
-	IoPort *portAddrs[MaxDriversPerAxis];
-	PinAccess access[MaxDriversPerAxis];
-	for (size_t i = 0; i < MaxDriversPerAxis; ++i)
+	String<StringLength50> portNames;
+	if (!gb.GetReducedString(portNames.GetRef()))
 	{
-		portAddrs[i] = &ports[i];
-		access[i] = PinAccess::read;
+		reply.copy("Missing port name string");
+		return GCodeResult::error;
 	}
-	//TODO the port strings may include remote ports
-	numPortsUsed = IoPort::AssignPorts(gb, reply, PinUsedBy::endstop, MaxDriversPerAxis, portAddrs, access);
-	for (IoPort& pp : ports)
-	{
-		pp.ToggleInvert(inputType == EndStopInputType::activeLow);
-	}
-	return numPortsUsed != 0;
+
+	return Configure(portNames.c_str(), reply, inputType);
 }
 
-bool LocalSwitchEndstop::Configure(const char *pinNames, const StringRef& reply, EndStopInputType inputType)
+GCodeResult LocalSwitchEndstop::Configure(const char *pinNames, const StringRef& reply, EndStopInputType inputType)
 {
-	IoPort *portAddrs[MaxDriversPerAxis];
-	PinAccess access[MaxDriversPerAxis];
-	for (size_t i = 0; i < MaxDriversPerAxis; ++i)
+	ReleasePorts();
+
+	// Parse the string into individual port names
+	size_t index = 0;
+	while (numPortsUsed < MaxDriversPerAxis)
 	{
-		portAddrs[i] = &ports[i];
-		access[i] = PinAccess::read;
+		// Get the next port name
+		String<StringLength50> pn;
+		char c;
+		while ((c = pinNames[index]) != 0 && c != '+')
+		{
+			pn.cat(c);
+			++index;
+		}
+
+#if SUPPORT_CAN_EXPANSION
+		const CanAddress boardAddress = IoPort::RemoveBoardAddress(pn.GetRef());
+		boardNumbers[numPortsUsed] = boardAddress;
+		if (boardAddress != CanId::MasterAddress)
+		{
+			CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+			if (buf == nullptr)
+			{
+				reprap.GetPlatform().Message(ErrorMessage, "No CAN buffer");
+				ReleasePorts();
+				return GCodeResult::error;
+			}
+			else
+			{
+				const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
+				auto msg = buf->SetupRequestMessage<CanMessageCreateInputMonitor>(rid, CanId::MasterAddress, boardAddress);
+				msg->handle.Set(RemoteInputHandle::typeEndstop, GetAxis(), numPortsUsed);
+				msg->minInterval = MinimumSwitchReportInterval;
+				SafeStrncpy(msg->pinName, pn.c_str(), ARRAY_SIZE(msg->pinName));
+				buf->dataLength = msg->GetActualDataLength();
+
+				uint8_t currentState;
+				const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, &currentState);
+				if (rslt != GCodeResult::ok)
+				{
+					ReleasePorts();
+					return rslt;
+				}
+				states[numPortsUsed] = (currentState != 0);
+			}
+		}
+		else
+#endif
+		{
+			// Try to allocate the port
+			if (!ports[numPortsUsed].AssignPort(pn.c_str(), reply, PinUsedBy::endstop, PinAccess::read))
+			{
+				ReleasePorts();
+				return GCodeResult::error;
+			}
+		}
+
+		++numPortsUsed;
+		if (c != '+')
+		{
+			break;
+		}
+		++index;					// skip the "+"
 	}
-	numPortsUsed = IoPort::AssignPorts(pinNames, reply, PinUsedBy::endstop, MaxDriversPerAxis, portAddrs, access);
-	for (IoPort& pp : ports)
-	{
-		pp.ToggleInvert(inputType == EndStopInputType::activeLow);
-	}
-	return numPortsUsed != 0;
+	return GCodeResult::ok;
 }
 
 void LocalSwitchEndstop::Reconfigure(EndStopPosition pos, EndStopInputType inputType)
@@ -171,6 +255,28 @@ void LocalSwitchEndstop::AppendDetails(const StringRef& str)
 		ports[i].AppendPinName(str);
 	}
 }
+
+#if SUPPORT_CAN_EXPANSION
+
+// Process a remote endstop input change that relates to this endstop. Return true if the buffer has been freed.
+bool LocalSwitchEndstop::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state, CanMessageBuffer *buf)
+{
+	if (handleMinor >= numPortsUsed || boardNumbers[handleMinor] == CanId::MasterAddress)
+	{
+		return false;
+	}
+
+	states[handleMinor] = state;
+	if (!state)
+	{
+		return false;
+	}
+
+	//TODO if the endstop is active in the current move, stop relevant axes
+	return false;
+}
+
+#endif
 
 // End
 

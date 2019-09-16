@@ -21,6 +21,10 @@
 #include "GCodes/GCodes.h"
 #include "Movement/Move.h"
 
+#if SUPPORT_CAN_EXPANSION
+# include "CanMessageBuffer.h"
+#endif
+
 ReadWriteLock EndstopsManager::endstopsLock;					// used to lock both endstops and Z probes
 
 EndstopsManager::EndstopsManager() : activeEndstops(nullptr), isHomingMove(false)
@@ -236,11 +240,11 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 		delete axisEndstops[lastAxisSeen];
 		axisEndstops[lastAxisSeen] = nullptr;
 		LocalSwitchEndstop * const sw = new LocalSwitchEndstop(lastAxisSeen, lastPosSeen);
-		const bool ok = sw->Configure(gb, reply, inputType);
+		GCodeResult rslt = sw->Configure(gb, reply, inputType);
 		axisEndstops[lastAxisSeen] = sw;
-		if (!ok)
+		if (rslt != GCodeResult::ok && rslt != GCodeResult::warning)
 		{
-			return GCodeResult::error;
+			return rslt;
 		}
 	}
 	else
@@ -562,5 +566,24 @@ GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 
 	return zProbes[probeNumber]->HandleG31(gb, reply);
 }
+
+#if SUPPORT_CAN_EXPANSION
+
+// Handle signalling of a remote switch change, when the handle indicates that it is being used as an endstop.
+// We must re-use or free the buffer.
+void EndstopsManager::HandleRemoteInputChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state, CanMessageBuffer* buf)
+{
+	if (handleMajor < ARRAY_SIZE(axisEndstops))
+	{
+		Endstop * const es = axisEndstops[handleMajor];
+		if (es != nullptr && es->HandleRemoteInputChange(src, handleMinor, state, buf))
+		{
+			return;					// buffer has been re-used
+		}
+	}
+	CanMessageBuffer::Free(buf);
+}
+
+#endif
 
 // End
