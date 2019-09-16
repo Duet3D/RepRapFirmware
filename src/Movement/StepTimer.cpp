@@ -51,11 +51,22 @@ namespace StepTimer
 #else
 		pmc_set_writeprotect(false);
 		pmc_enable_periph_clk(STEP_TC_ID);
+
+# if SAME70
+		// Step clock runs at 48MHz/64 for compatibility with the Tool board
+		constexpr uint32_t divisor = (64ull * VARIANT_MCK)/(48000000u);
+		static_assert(divisor <= 256 && divisor >= 100);
+		pmc_disable_pck(PMC_PCK_6);
+		pmc_switch_pck_to_mck(PMC_PCK_6, PMC_PCK_PRES(divisor - 1));
+		pmc_enable_pck(PMC_PCK_6);
+		tc_init(STEP_TC, STEP_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK1 | TC_CMR_EEVT_XC0);	// must set TC_CMR_EEVT nonzero to get RB compare interrupts
+# else
 		tc_init(STEP_TC, STEP_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK4 | TC_CMR_EEVT_XC0);	// must set TC_CMR_EEVT nonzero to get RB compare interrupts
+# endif
 		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = ~(uint32_t)0;	// interrupts disabled for now
-#if SAM4S || SAME70													// if 16-bit TCs
+# if SAM4S || SAME70												// if 16-bit TCs
 		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_COVFS;	// enable the overflow interrupt so that we can use it to extend the count to 32-bits
-#endif
+# endif
 		tc_start(STEP_TC, STEP_TC_CHAN);
 		tc_get_status(STEP_TC, STEP_TC_CHAN);						// clear any pending interrupt
 		NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);			// set priority for this IRQ

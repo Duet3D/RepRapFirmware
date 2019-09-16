@@ -499,7 +499,6 @@ void Platform::Init()
 	for (size_t axis = MinAxes; axis < MaxAxes; ++axis)
 	{
 		axisDrivers[axis].numDrivers = 0;
-		driveDriverBits[axis] = 0;
 	}
 
 	for (uint32_t& entry : slowDriverStepTimingClocks)

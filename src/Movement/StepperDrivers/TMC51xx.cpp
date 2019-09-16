@@ -37,7 +37,7 @@ static inline const Move& GetMoveInstance() { return reprap.GetMove(); }
 //#define TMC_TYPE	5130
 #define TMC_TYPE	5160
 
-#ifndef TMC51xx_USES_SERCOM
+#if !(SAME51 || SAMC21)
 # define TMC51xx_USES_SERCOM	0
 #endif
 
@@ -1223,7 +1223,7 @@ namespace SmartDrivers
 		pinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
 		pinMode(GlobalTmc51xxCSPin, OUTPUT_HIGH);
 
-#ifndef SAME51
+#if !SAME51
 		// The pins are already set up for SPI in the pins table
 		ConfigurePin(TMC51xxMosiPin);
 		ConfigurePin(TMC51xxMisoPin);
