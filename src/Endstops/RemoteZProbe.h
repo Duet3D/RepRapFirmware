@@ -18,7 +18,7 @@ public:
 	void* operator new(size_t sz) { return Allocate<RemoteZProbe>(); }
 	void operator delete(void* p) { Release<RemoteZProbe>(p); }
 
-	RemoteZProbe(unsigned int num, CanAddress bn) : ZProbe(num, ZProbeType::none), boardAddress(bn) { }
+	RemoteZProbe(unsigned int num, CanAddress bn, ZProbeType p_type) : ZProbe(num, p_type), boardAddress(bn) { }
 	~RemoteZProbe() override;
 	void SetIREmitter(bool on) const override { }
 	uint16_t GetRawReading() const override { return 0; }

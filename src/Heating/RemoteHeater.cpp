@@ -81,7 +81,7 @@ void RemoteHeater::SwitchOff()
 		msg->heaterNumber = GetHeaterNumber();
 		msg->setPoint = GetTargetTemperature();
 		msg->command = CanMessageSetHeaterTemperature::commandOff;
-		String<100> reply;
+		String<StringLength50> reply;
 		if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef()) != GCodeResult::ok)
 		{
 			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to switch off remote heater %u: %s\n", GetHeaterNumber(), reply.c_str());

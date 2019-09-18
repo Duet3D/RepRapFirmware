@@ -43,7 +43,7 @@ void LocalSwitchEndstop::ReleasePorts()
 			CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 			if (buf == nullptr)
 			{
-				reprap.GetPlatform().Message(ErrorMessage, "No CAN buffer");
+				reprap.GetPlatform().Message(ErrorMessage, "No CAN buffer\n");
 			}
 			else
 			{
@@ -54,6 +54,7 @@ void LocalSwitchEndstop::ReleasePorts()
 				String<StringLength50> reply;
 				if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef()) != GCodeResult::ok)
 				{
+					reply.cat('\n');
 					reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
 				}
 			}
@@ -100,7 +101,7 @@ GCodeResult LocalSwitchEndstop::Configure(const char *pinNames, const StringRef&
 			CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 			if (buf == nullptr)
 			{
-				reprap.GetPlatform().Message(ErrorMessage, "No CAN buffer");
+				reprap.GetPlatform().Message(ErrorMessage, "No CAN buffer\n");
 				ReleasePorts();
 				return GCodeResult::error;
 			}
@@ -109,6 +110,7 @@ GCodeResult LocalSwitchEndstop::Configure(const char *pinNames, const StringRef&
 				const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 				auto msg = buf->SetupRequestMessage<CanMessageCreateInputMonitor>(rid, CanId::MasterAddress, boardAddress);
 				msg->handle.Set(RemoteInputHandle::typeEndstop, GetAxis(), numPortsUsed);
+				msg->threshold = 0;
 				msg->minInterval = MinimumSwitchReportInterval;
 				SafeStrncpy(msg->pinName, pn.c_str(), ARRAY_SIZE(msg->pinName));
 				buf->dataLength = msg->GetActualDataLength();

@@ -10,18 +10,17 @@
 
 #include "RepRapFirmware.h"
 
-
 // Class to implement a software timer
 class SoftTimer
 {
 public:
-	typedef bool (*Callback)(void*, uint32_t&);
+	typedef bool (*Callback)(CallbackParameter, uint32_t&);
 	typedef uint32_t Ticks;
 
 	SoftTimer();
 
 	// Schedule a callback at a particular tick count, returning true if it was not scheduled because it is already due or imminent
-	bool ScheduleCallback(Ticks when, Callback cb, void* param);
+	bool ScheduleCallback(Ticks when, Callback cb, CallbackParameter param);
 
 	// Cancel any scheduled callbacks
 	void CancelCallback();
@@ -39,7 +38,7 @@ private:
 	SoftTimer *next;
 	Ticks whenDue;
 	Callback callback;
-	void *cbParam;
+	CallbackParameter cbParam;
 
 	static SoftTimer * volatile pendingList;			// list of pending callbacks, soonest first
 };

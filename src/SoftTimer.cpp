@@ -16,7 +16,7 @@ SoftTimer::SoftTimer() : next(nullptr), callback(nullptr)
 
 // Schedule a callback at a particular tick count, returning true if it was not scheduled because it is already due or imminent.
 // There must be no callback already scheduled for this timer, else the linked list will get messed up. If in doubt, call CancelCallback before calling this.
-bool SoftTimer::ScheduleCallback(Ticks when, Callback cb, void *param)
+bool SoftTimer::ScheduleCallback(Ticks when, Callback cb, CallbackParameter param)
 {
 	whenDue = when;
 	callback = cb;

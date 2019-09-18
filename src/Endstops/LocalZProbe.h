@@ -34,7 +34,7 @@ private:
 	IoPort modulationPort;			// the modulation port we are using
 
 	// Variable for programming Smart Effector and other programmable Z probes
-	static bool TimerInterrupt(void *param, uint32_t& when);
+	static bool TimerInterrupt(CallbackParameter param, uint32_t& when);
 	bool Interrupt(uint32_t& when);
 
 	SoftTimer timer;

@@ -176,10 +176,10 @@ static void HandleInputStateChanged(CanMessageBuffer *buf)
 	auto msg = buf->msg.inputChanged;
 	const RemoteInputHandle handle(msg.handle);
 	const bool state = (msg.state != 0);
-	switch (handle.type)
+	switch (handle.u.parts.type)
 	{
 	case RemoteInputHandle::typeEndstop:
-		reprap.GetPlatform().GetEndstops().HandleRemoteInputChange(src, handle.major, handle.minor, state, buf);
+		reprap.GetPlatform().GetEndstops().HandleRemoteInputChange(src, handle.u.parts.major, handle.u.parts.minor, state, buf);
 		break;
 
 	case RemoteInputHandle::typeTrigger:

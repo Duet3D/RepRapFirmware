@@ -415,7 +415,7 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 	if (gb.Seen('C'))
 	{
 		String<StringLength50> pinName;
-		if (!gb.GetQuotedString(pinName.GetRef()))
+		if (!gb.GetReducedString(pinName.GetRef()))
 		{
 			reply.copy("Missing pin name");
 			return GCodeResult::error;
