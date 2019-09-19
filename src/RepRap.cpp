@@ -493,6 +493,9 @@ void RepRap::Diagnostics(MessageType mtype)
 #ifdef DUET_NG
 	DuetExpansion::Diagnostics(mtype);
 #endif
+#if SUPPORT_CAN_EXPANSION
+	CanInterface::Diagnostics(mtype);
+#endif
 #if HAS_LINUX_INTERFACE
 	linuxInterface->Diagnostics(mtype);
 #endif

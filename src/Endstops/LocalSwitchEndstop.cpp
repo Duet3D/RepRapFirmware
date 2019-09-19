@@ -51,7 +51,7 @@ void LocalSwitchEndstop::ReleasePorts()
 				auto msg = buf->SetupRequestMessage<CanMessageChangeInputMonitor>(rid, CanId::MasterAddress, bn);
 				msg->handle.Set(RemoteInputHandle::typeEndstop, GetAxis(), numPortsUsed);
 				msg->action = CanMessageChangeInputMonitor::actionDelete;
-				String<StringLength50> reply;
+				String<StringLength100> reply;
 				if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef()) != GCodeResult::ok)
 				{
 					reply.cat('\n');

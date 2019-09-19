@@ -24,11 +24,11 @@ RemoteZProbe::~RemoteZProbe()
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 		auto msg = buf->SetupRequestMessage<CanMessageDestroyZProbe>(rid, CanId::MasterAddress, boardAddress);
 		msg->number = number;
-		String<StringLength50> reply;
+		String<StringLength100> reply;
 		if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef()) != GCodeResult::ok)
 		{
 			reply.cat('\n');
-			reprap.GetPlatform().MessageF(ErrorMessage, reply.c_str());
+			reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
 		}
 	}
 }
@@ -71,7 +71,7 @@ void RemoteZProbe::SetProbing(bool isProbing) const
 		auto msg = buf->SetupRequestMessage<CanMessageSetProbing>(rid, CanId::MasterAddress, boardAddress);
 		msg->number = number;
 		msg->isProbing = (isProbing) ? 1 : 0;
-		String<StringLength50> reply;
+		String<StringLength100> reply;
 		if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef()) != GCodeResult::ok)
 		{
 			reply.cat('\n');

@@ -237,7 +237,8 @@ constexpr size_t MaxVariableNameLength = 100;
 #endif
 
 constexpr size_t StringLength20 = 20;
-constexpr size_t StringLength50 = 50;
+constexpr size_t StringLength50 = 50;					// Used for pin names
+constexpr size_t StringLength100 = 100;					// Used for error messages
 constexpr size_t StringLength500 = 500;					// Used when writing the height map
 
 constexpr size_t MaxHeaterNameLength = StringLength20;	// Maximum number of characters in a heater name
