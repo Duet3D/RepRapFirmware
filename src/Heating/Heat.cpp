@@ -415,7 +415,7 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 	if (gb.Seen('C'))
 	{
 		String<StringLength50> pinName;
-		if (!gb.GetQuotedString(pinName.GetRef()))
+		if (!gb.GetReducedString(pinName.GetRef()))
 		{
 			reply.copy("Missing pin name");
 			return GCodeResult::error;
@@ -1003,6 +1003,17 @@ float Heat::GetSensorTemperature(int sensorNum, TemperatureError& err) const
 
 	err = TemperatureError::unknownSensor;
 	return BadErrorTemperature;
+}
+
+// Return the highest used heater number. Used by RepRap.cpp to shorten responses by omitting unused trailing heater numbers. If no heaters are configured, return 0.
+size_t Heat::GetHighestUsedHeaterNumber() const
+{
+	size_t highestHeater = ARRAY_SIZE(heaters);
+	do
+	{
+		--highestHeater;
+	} while (heaters[highestHeater] == nullptr && highestHeater != 0);
+	return highestHeater;
 }
 
 // Get the temperature of a heater

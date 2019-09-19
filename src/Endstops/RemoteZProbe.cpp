@@ -24,9 +24,10 @@ RemoteZProbe::~RemoteZProbe()
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 		auto msg = buf->SetupRequestMessage<CanMessageDestroyZProbe>(rid, CanId::MasterAddress, boardAddress);
 		msg->number = number;
-		String<StringLength50> reply;
+		String<StringLength100> reply;
 		if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef()) != GCodeResult::ok)
 		{
+			reply.cat('\n');
 			reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
 		}
 	}
@@ -62,16 +63,18 @@ void RemoteZProbe::SetProbing(bool isProbing) const
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "No CAN buffer");
+		reprap.GetPlatform().Message(ErrorMessage, "No CAN buffer\n");
 	}
 	else
 	{
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 		auto msg = buf->SetupRequestMessage<CanMessageSetProbing>(rid, CanId::MasterAddress, boardAddress);
 		msg->number = number;
-		String<StringLength50> reply;
+		msg->isProbing = (isProbing) ? 1 : 0;
+		String<StringLength100> reply;
 		if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef()) != GCodeResult::ok)
 		{
+			reply.cat('\n');
 			reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
 		}
 	}
@@ -116,12 +119,8 @@ GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, boo
 
 			msg->number = number;
 			msg->type = (uint8_t)type;
-			msg->triggerHeight = triggerHeight;
-			msg->calibTemperature = calibTemperature;
-			msg->temperatureCoefficient = temperatureCoefficient;
 			msg->adcValue = adcValue;
-			msg->misc = misc.all;
-			msg->sensor = sensor;
+			msg->invertReading = misc.parts.invertReading;
 
 			rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 		}

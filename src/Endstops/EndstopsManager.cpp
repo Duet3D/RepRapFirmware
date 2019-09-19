@@ -517,11 +517,11 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 #if SUPPORT_CAN_EXPANSION
 				String<StringLength20> pinNames;
 				gb.Seen('C');
-				gb.GetQuotedString(pinNames.GetRef());
+				gb.GetReducedString(pinNames.GetRef());
 				const CanAddress boardAddress = IoPort::RemoveBoardAddress(pinNames.GetRef());
 				if (boardAddress != CanId::MasterAddress)
 				{
-					RemoteZProbe *newRemoteProbe = new RemoteZProbe(probeNumber, boardAddress);
+					RemoteZProbe *newRemoteProbe = new RemoteZProbe(probeNumber, boardAddress, (ZProbeType)probeType);
 					const GCodeResult rslt = newRemoteProbe->Create(pinNames.GetRef(), reply);
 					if (rslt != GCodeResult::ok)
 					{

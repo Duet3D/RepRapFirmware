@@ -111,6 +111,10 @@ static CanMessageBuffer * volatile lastBuffer;			// only valid when pendingBuffe
 static TaskHandle taskWaitingOnFifo0 = nullptr;
 static TaskHandle taskWaitingOnFifo1 = nullptr;
 
+static uint32_t messagesSent = 0;
+static uint32_t longestWaitTime = 0;
+static uint16_t longestWaitMessageType = 0;
+
 // MCAN module initialization.
 static void configure_mcan()
 {
@@ -247,6 +251,7 @@ static status_code mcan_fd_send_ext_message_no_wait(uint32_t id_value, const uin
 static status_code mcan_fd_send_ext_message(uint32_t id_value, const uint8_t *data, size_t dataLength, uint32_t whichTxBuffer, uint32_t maxWait)
 {
 	WaitForTxBufferFree(whichTxBuffer, maxWait);
+	++messagesSent;
 	return mcan_fd_send_ext_message_no_wait(id_value, data, dataLength, whichTxBuffer);
 }
 
@@ -569,6 +574,7 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 	mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexRequest, MaxRequestSendWait);
 	const uint32_t whenStartedWaiting = millis();
 	unsigned int fragmentsReceived = 0;
+	const CanMessageType msgType = buf->id.MsgType();								// save for possible error message
 	for (;;)
 	{
 		const uint32_t rxf1s = mcan_instance.hw->MCAN_RXF1S;						// get FIFO 1 status
@@ -581,7 +587,7 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 
 			if (elem.R0.bit.XTD == 1 && elem.R0.bit.RTR != 1)						// if extended address and not a remote frame
 			{
-				// Copy the message and accompanying data to a buffer
+				// Copy the message and accompanying data to our buffer
 				buf->id.SetReceivedId(elem.R0.bit.ID);
 				static constexpr uint8_t dlc2len[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
 				buf->dataLength = dlc2len[elem.R1.bit.DLC];
@@ -600,6 +606,12 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 						{
 							*extra = buf->msg.standardReply.extra;
 						}
+						uint32_t waitedFor = millis() - whenStartedWaiting;
+						if (waitedFor > longestWaitTime)
+						{
+							longestWaitTime = waitedFor;
+							longestWaitMessageType = (uint16_t)msgType;
+						}
 					}
 					else
 					{
@@ -613,7 +625,11 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 					}
 					++fragmentsReceived;
 				}
+				else
+				{
 //				debugPrintf("Discarded msg src=%u RID=%u exp %u\n", buf->id.Src(), buf->msg.standardReply.requestId, rid);
+					reply.lcatf("Discarded msg src=%u typ=%u RID=%u exp %u", buf->id.Src(), (unsigned int)buf->id.MsgType(), (unsigned int)buf->msg.standardReply.requestId, rid);
+				}
 			}
 		}
 		else
@@ -627,8 +643,9 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 		}
 	}
 
+	taskWaitingOnFifo1 = nullptr;
 	CanMessageBuffer::Free(buf);
-	reply.lcatf("Timed out waiting for response from CAN device %u", dest);
+	reply.lcatf("Response timeout: CAN addr %u, req type %u, RID=%u", dest, (unsigned int)msgType, (unsigned int)rid);
 	return GCodeResult::error;
 }
 
@@ -785,8 +802,32 @@ static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, GCodeB
 // Get diagnostics from and expansion board
 GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
 {
-	reply.printf("Diagnostics for board %u:", (unsigned int)boardAddress);
-	return GetRemoteInfo(CanMessageReturnInfo::typeDiagnostics, boardAddress, gb, reply);
+	Platform& p = reprap.GetPlatform();
+	GCodeResult res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart0, boardAddress, gb, reply);
+	if (res == GCodeResult::ok)
+	{
+		p.MessageF(mt, "Diagnostics for board %u:\n", (unsigned int)boardAddress);
+		reply.cat('\n');
+		p.Message(mt, reply.c_str());
+		reply.Clear();
+
+		res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart1, boardAddress, gb, reply);
+		if (res == GCodeResult::ok)
+		{
+			reply.cat('\n');
+			p.Message(mt, reply.c_str());
+			reply.Clear();
+
+			res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart2, boardAddress, gb, reply);
+			if (res == GCodeResult::ok)
+			{
+				reply.cat('\n');
+				p.Message(mt, reply.c_str());
+				reply.Clear();
+			}
+		}
+	}
+	return res;
 }
 
 GCodeResult CanInterface::GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
@@ -862,6 +903,15 @@ GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffe
 	msg2->boardId = (uint8_t)boardAddress;
 	msg2->invertedBoardId = (uint8_t)~boardAddress;
 	return SendRequestAndGetStandardReply(buf2, rid2, reply);
+}
+
+void CanInterface::Diagnostics(MessageType mtype)
+{
+	reprap.GetPlatform().MessageF(mtype, "=== CAN ===\nMessages sent %" PRIu32 ", longest wait %" PRIu32 "ms for type %u\n",
+									messagesSent, longestWaitTime, longestWaitMessageType);
+	messagesSent = 0;
+	longestWaitTime = 0;
+	longestWaitMessageType = 0;
 }
 
 #endif

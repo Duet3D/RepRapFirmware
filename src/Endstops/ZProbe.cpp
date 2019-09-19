@@ -13,9 +13,10 @@
 #include "Storage/FileStore.h"
 #include "Heating/Heat.h"
 
-ZProbe::ZProbe(unsigned int num, ZProbeType p_type) : EndstopOrZProbe(), number(num), type(p_type)
+ZProbe::ZProbe(unsigned int num, ZProbeType p_type) : EndstopOrZProbe(), number(num)
 {
 	SetDefaults();
+	type = p_type;
 }
 
 void ZProbe::SetDefaults()
@@ -93,12 +94,12 @@ int ZProbe::GetReading() const
 				zProbeVal = ((zDrivers & GetStalledDrivers()) != 0) ? 1000 : 0;
 			}
 #else
-			zProbeVal = 1000;
+			return 1000;
 #endif
 			break;
 
 		default:
-			zProbeVal = 1000;
+			return 1000;
 		}
 	}
 

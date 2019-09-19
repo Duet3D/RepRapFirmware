@@ -57,6 +57,17 @@ bool FansManager::CheckFans()
 	return thermostaticFanRunning;
 }
 
+// Return the highest used fan number. Used by RepRap.cpp to shorten responses by omitting unused trailing fan numbers. If no fans are configured, return 0.
+size_t FansManager::GetHighestUsedFanNumber() const
+{
+	size_t highestFan = ARRAY_SIZE(fans);
+	do
+	{
+		--highestFan;
+	} while (fans[highestFan] == nullptr && highestFan != 0);
+	return highestFan;
+}
+
 #if HAS_MASS_STORAGE
 
 bool FansManager::WriteFanSettings(FileStore *f) const
@@ -81,7 +92,7 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 		if (seenPin)
 		{
 			String<StringLength50> pinName;
-			if (!gb.GetQuotedString(pinName.GetRef()))
+			if (!gb.GetReducedString(pinName.GetRef()))
 			{
 				reply.copy("Missing pin name");
 				return GCodeResult::error;

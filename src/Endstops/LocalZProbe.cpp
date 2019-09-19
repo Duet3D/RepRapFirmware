@@ -116,9 +116,9 @@ GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) const
 
 // programming functions
 
-/*static*/ bool LocalZProbe::TimerInterrupt(void *param, uint32_t& when)
+/*static*/ bool LocalZProbe::TimerInterrupt(CallbackParameter param, uint32_t& when)
 {
-	return static_cast<LocalZProbe*>(param)->Interrupt(when);
+	return static_cast<LocalZProbe*>(param.vp)->Interrupt(when);
 }
 
 // Kick off sending some program bytes

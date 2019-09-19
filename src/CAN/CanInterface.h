@@ -57,7 +57,7 @@ private:
 
 namespace CanInterface
 {
-	static constexpr uint32_t CanResponseTimeout = 300;
+	static constexpr uint32_t CanResponseTimeout = 1000;
 
 	void Init();
 	inline CanAddress GetCanAddress() { return CanId::MasterAddress; }
@@ -80,6 +80,8 @@ namespace CanInterface
 	bool SetRemotePressureAdvance(const CanDriversData& data, const StringRef& reply);
 	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult SetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply);
+
+	void Diagnostics(MessageType mtype);
 }
 
 #endif

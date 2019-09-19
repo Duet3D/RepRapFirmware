@@ -22,6 +22,7 @@ public:
 	FansManager();
 	void Init();
 	bool CheckFans();
+	size_t GetHighestUsedFanNumber() const;
 	GCodeResult ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply);
 	bool ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error);
 	float GetFanValue(size_t fanNum) const;
