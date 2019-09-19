@@ -1005,6 +1005,17 @@ float Heat::GetSensorTemperature(int sensorNum, TemperatureError& err) const
 	return BadErrorTemperature;
 }
 
+// Return the highest used heater number. Used by RepRap.cpp to shorten responses by omitting unused trailing heater numbers. If no heaters are configured, return 0.
+size_t Heat::GetHighestUsedHeaterNumber() const
+{
+	size_t highestHeater = ARRAY_SIZE(heaters);
+	do
+	{
+		--highestHeater;
+	} while (heaters[highestHeater] == nullptr && highestHeater != 0);
+	return highestHeater;
+}
+
 // Get the temperature of a heater
 float Heat::GetHeaterTemperature(size_t heater) const
 {

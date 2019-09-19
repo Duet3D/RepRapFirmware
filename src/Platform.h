@@ -513,6 +513,11 @@ public:
 		return fman.GetFanRPM(fanNum);
 	}
 
+	size_t GetHighestUsedFanNumber() const
+	{
+		return fman.GetHighestUsedFanNumber();
+	}
+
 #if HAS_MASS_STORAGE
 	// Save some resume information
 	bool WriteFanSettings(FileStore *f) const

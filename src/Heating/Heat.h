@@ -88,6 +88,7 @@ public:
 	float GetSensorTemperature(int sensorNum, TemperatureError& err) const; // Result is in degrees Celsius
 
 	float GetHighestTemperatureLimit() const;					// Get the highest temperature limit of any heater
+	size_t GetHighestUsedHeaterNumber() const;
 
 	void Diagnostics(MessageType mtype);						// Output useful information
 

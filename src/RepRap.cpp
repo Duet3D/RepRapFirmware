@@ -941,15 +941,16 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 	}
 
+	// ATX power
+	response->catf(",\"params\":{\"atxPower\":%d", gCodes->AtxPowerControlled() ? (platform->AtxPower() ? 1 : 0) : -1);
+
 	// Parameters
 	{
-		// ATX power
-		response->catf(",\"params\":{\"atxPower\":%d", gCodes->AtxPowerControlled() ? (platform->AtxPower() ? 1 : 0) : -1);
-
-		// Cooling fan value
+		// Cooling fan values
+		const size_t highestFan = platform->GetHighestUsedFanNumber();
 		response->cat(",\"fanPercent\":");
 		ch = '[';
-		for (size_t i = 0; i < NumTotalFans; i++)
+		for (size_t i = 0; i <= highestFan; i++)
 		{
 			response->catf("%c%d", ch, (int)lrintf(platform->GetFanValue(i) * 100.0));
 			ch = ',';
@@ -961,7 +962,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		{
 			response->cat(",\"fanNames\":");
 			ch = '[';
-			for (size_t fan = 0; fan < NumTotalFans; fan++)
+			for (size_t fan = 0; fan <= highestFan; fan++)
 			{
 				response->cat(ch);
 				ch = ',';
@@ -982,16 +983,14 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 		response->cat((ch == '[') ? "[]" : "]");
 		response->catf(",\"babystep\":%.3f}", (double)gCodes->GetTotalBabyStepOffset(Z_AXIS));
-	}
 
-	// G-code reply sequence for webserver (sequence number for AUX is handled later)
-	if (source == ResponseSource::HTTP)
-	{
-		response->catf(",\"seq\":%" PRIu32, network->GetHttpReplySeq());
-	}
+		// G-code reply sequence for webserver (sequence number for AUX is handled later)
+		if (source == ResponseSource::HTTP)
+		{
+			response->catf(",\"seq\":%" PRIu32, network->GetHttpReplySeq());
+		}
 
-	/* Sensors */
-	{
+		// Sensors
 		response->cat(",\"sensors\":{");
 
 		// Probe
@@ -1013,7 +1012,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Send fan RPM value(s)
 		response->cat(",\"fanRPM\":");
 		char ch = '[';
-		for (size_t i = 0; i < NumTotalFans; ++i)
+		for (size_t i = 0; i <= highestFan; ++i)
 		{
 			response->catf("%c%" PRIi32, ch, platform->GetFanRPM(i));
 			ch = ',';
@@ -1057,35 +1056,38 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		// Current temperatures
 		response->cat("\"current\":");
 		ch = '[';
-		for (size_t heater = 0; heater < MaxHeaters; heater++)
 		{
-			response->catf("%c%.1f", ch, (double)heat->GetHeaterTemperature(heater));
-			ch = ',';
-		}
-		response->cat((ch == '[') ? "[]" : "]");
-
-		// Current states
-		response->cat(",\"state\":");
-		ch = '[';
-		for (size_t heater = 0; heater < MaxHeaters; heater++)
-		{
-			response->catf("%c%d", ch, (int)heat->GetStatus(heater));
-			ch = ',';
-		}
-		response->cat((ch == '[') ? "[]" : "]");
-
-		// Names of the sensors use to control heaters
-		if (type == 2)
-		{
-			response->cat(",\"names\":");
-			ch = '[';
-			for (size_t heater = 0; heater < MaxHeaters; heater++)
+			const size_t highestHeater = heat->GetHighestUsedHeaterNumber();
+			for (size_t heater = 0; heater <= highestHeater; heater++)
 			{
-				response->cat(ch);
+				response->catf("%c%.1f", ch, (double)heat->GetHeaterTemperature(heater));
 				ch = ',';
-				response->EncodeString(GetHeat().GetHeaterSensorName(heater), true);
 			}
 			response->cat((ch == '[') ? "[]" : "]");
+
+			// Current states
+			response->cat(",\"state\":");
+			ch = '[';
+			for (size_t heater = 0; heater <= highestHeater; heater++)
+			{
+				response->catf("%c%d", ch, (int)heat->GetStatus(heater));
+				ch = ',';
+			}
+			response->cat((ch == '[') ? "[]" : "]");
+
+			// Names of the sensors use to control heaters
+			if (type == 2)
+			{
+				response->cat(",\"names\":");
+				ch = '[';
+				for (size_t heater = 0; heater <= highestHeater; heater++)
+				{
+					response->cat(ch);
+					ch = ',';
+					response->EncodeString(GetHeat().GetHeaterSensorName(heater), true);
+				}
+				response->cat((ch == '[') ? "[]" : "]");
+			}
 		}
 
 		// Tool temperatures
