@@ -786,7 +786,7 @@ void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 		case mounting:
 			{
 				const size_t card = (isdigit(currentDirectory[0]) && currentDirectory[1] == ':') ? currentDirectory[0] - '0' : 0;
-				String<StringLength40> reply;
+				String<StringLength50> reply;
 				switch(m_oMS->Mount(card, reply.GetRef(), false))
 				{
 				case GCodeResult::notFinished:

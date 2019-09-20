@@ -172,22 +172,26 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 // Handle an input state change message and free the buffer
 static void HandleInputStateChanged(CanMessageBuffer *buf)
 {
+	// Copy the state changes locally so that we can re-use the buffer to send any urgent messages to stop movement
+	CanMessageInputChanged copyMsg = buf->msg.inputChanged;
 	const CanAddress src = buf->id.Src();
-	auto msg = buf->msg.inputChanged;
-	const RemoteInputHandle handle(msg.handle);
-	const bool state = (msg.state != 0);
-	switch (handle.u.parts.type)
+	for (unsigned int i = 0; i < copyMsg.numHandles; ++i)
 	{
-	case RemoteInputHandle::typeEndstop:
-		reprap.GetPlatform().GetEndstops().HandleRemoteInputChange(src, handle.u.parts.major, handle.u.parts.minor, state, buf);
-		break;
+		const RemoteInputHandle handle(copyMsg.handles[i]);
+		const bool state = (copyMsg.states & (1 << i)) != 0;
+		switch (handle.u.parts.type)
+		{
+		case RemoteInputHandle::typeEndstop:
+			reprap.GetPlatform().GetEndstops().HandleRemoteInputChange(src, handle.u.parts.major, handle.u.parts.minor, state, buf);
+			break;
 
-	case RemoteInputHandle::typeTrigger:
-		//TODO see if any triggers are waiting for this state change
-	default:
-		CanMessageBuffer::Free(buf);
-		break;
+		case RemoteInputHandle::typeTrigger:
+			//TODO see if any triggers are waiting for this state change
+		default:
+			break;
+		}
 	}
+	CanMessageBuffer::Free(buf);
 }
 
 // Process a received broadcast or request message and free the message buffer
@@ -203,6 +207,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 		// In the following switch, each case must release the message buffer, either directly or by re-using it to send a response
 		switch (buf->id.MsgType())
 		{
+		case CanMessageType::inputStateChanged:
+			//TODO we should preferably handle this one using a separate high-priority queue or buffer
+			HandleInputStateChanged(buf);			// this one reuses or frees the buffer
+			break;
+
 		case CanMessageType::FirmwareBlockRequest:
 			HandleFirmwareBlockRequest(buf);		// this one reuses or frees the buffer
 			break;
@@ -215,10 +224,6 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 		case CanMessageType::heatersStatusReport:
 			reprap.GetHeat().ProcessRemoteHeatersReport(buf->id.Src(), buf->msg.heatersStatusBroadcast);
 			CanMessageBuffer::Free(buf);
-			break;
-
-		case CanMessageType::inputStateChanged:
-			HandleInputStateChanged(buf);			// this one reuses or frees the buffer
 			break;
 
 		case CanMessageType::statusReport:

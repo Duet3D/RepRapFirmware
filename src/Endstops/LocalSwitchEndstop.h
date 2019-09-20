@@ -43,6 +43,15 @@ private:
 
 	void ReleasePorts();
 
+	inline bool IsTriggered(size_t index) const
+	{
+#if SUPPORT_CAN_EXPANSION
+		return (boardNumbers[index] == CanId::MasterAddress) ? ports[index].Read() : states[index] != activeLow;
+#else
+		return ports[index].Read();
+#endif
+	}
+
 #if SUPPORT_CAN_EXPANSION
 	static constexpr uint16_t MinimumSwitchReportInterval = 30;
 #endif
@@ -51,6 +60,7 @@ private:
 #if SUPPORT_CAN_EXPANSION
 	CanAddress boardNumbers[MaxDriversPerAxis];
 	bool states[MaxDriversPerAxis];
+	bool activeLow;
 #endif
 	size_t numPortsUsed;
 	PortsBitmap portsLeftToTrigger;
