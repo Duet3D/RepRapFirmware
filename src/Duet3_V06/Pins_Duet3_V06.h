@@ -103,9 +103,6 @@ constexpr Pin TMC51xxMosiPin = PortBPin(4);
 constexpr Pin TMC51xxMisoPin = PortAPin(21);
 constexpr Pin TMC51xxSclkPin = PortAPin(23);
 
-constexpr size_t NumPwmOutputs = 11;				// number of heater/fan/servo outputs
-constexpr size_t NumInputOutputs = 9;				// number of connectors we have for endstops, filament sensors, Z probes etc.
-
 // Thermistor/PT1000 inputs
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(15), PortCPin(29), PortCPin(30), PortCPin(31) };	// Thermistor/PT1000 pins
 constexpr Pin VssaSensePin = PortCPin(13);

@@ -46,6 +46,8 @@ const size_t NumFirmwareUpdateModules = 1;
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
 constexpr size_t MaxSmartDrivers = 6;				// The maximum number of direct smart drivers
 constexpr size_t MaxCanDrivers = 18;
+constexpr size_t MaxCanBoards = 18;
+
 constexpr float MaxTmc5160Current = 3200.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 
 constexpr size_t MaxSensorsInSystem = 64;
@@ -83,7 +85,7 @@ constexpr Pin DIAG_PINS[NumDirectDrivers] =			{ PortDPin(19), PortCPin(17), Port
 
 // Pin assignments etc. using USART1 in SPI mode
 constexpr Pin GlobalTmc51xxEnablePin = PortAPin(9);		// The pin that drives ENN of all TMC drivers
-constexpr Pin GlobalTmc51xxCSPin = PortDPin(17);			// The pin that drives CS of all TMC drivers
+constexpr Pin GlobalTmc51xxCSPin = PortDPin(17);		// The pin that drives CS of all TMC drivers
 Usart * const USART_TMC51xx = USART1;
 constexpr uint32_t  ID_TMC51xx_SPI = ID_USART1;
 constexpr IRQn TMC51xx_SPI_IRQn = USART1_IRQn;
@@ -97,8 +99,6 @@ constexpr Pin TMC51xxMosiPin = PortBPin(4);
 constexpr Pin TMC51xxMisoPin = PortAPin(21);
 constexpr Pin TMC51xxSclkPin = PortAPin(23);
 
-constexpr size_t NumPwmOutputs = 11;				// number of heater/fan/servo outputs
-constexpr size_t NumInputOutputs = 9;				// number of connectors we have for endstops, filament sensors, Z probes etc.
 
 // Thermistor/PT1000 inputs
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(31), PortCPin(15), PortCPin(29), PortCPin(30) };	// Thermistor/PT1000 pins
