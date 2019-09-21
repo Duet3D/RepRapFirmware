@@ -13,14 +13,22 @@
 #include <CanMessageFormats.h>
 #include "CanInterface.h"
 
-const unsigned int DriversPerCanBoard = 3;	// TEMPORARY until we do this dynamically!
-
-const size_t NumCanBoards = (MaxCanDrivers + DriversPerCanBoard - 1)/DriversPerCanBoard;
 static CanMessageBuffer *movementBufferList = nullptr;
+static CanMessageBuffer *urgentMessageBuffer = nullptr;
+
+static volatile uint32_t hiccupToInsert = 0;
+static CanDriversList driversToStop[2];
+static size_t driversToStopIndexBeingFilled = 0;
+static size_t indexOfNextDriverToStop = 0;
+static volatile bool stopAllFlag = false;
+static bool broadcastedStopAll = false;
+static LargeBitmap<CanId::MaxNormalAddress + 1> boardsActiveInLastMove;
 
 void CanMotion::Init()
 {
 	movementBufferList = nullptr;
+	urgentMessageBuffer = CanMessageBuffer::Allocate();
+	boardsActiveInLastMove.ClearAll();
 }
 
 // This is called by DDA::Prepare at the start of preparing a movement
@@ -100,9 +108,11 @@ void CanMotion::AddMovement(const DDA& dda, const PrepParams& params, DriverId c
 // This is called by DDA::Prepare when all DMs for CAN drives have been processed
 void CanMotion::FinishMovement(uint32_t moveStartTime)
 {
+	boardsActiveInLastMove.ClearAll();
 	CanMessageBuffer *buf;
 	while ((buf = movementBufferList) != nullptr)
 	{
+		boardsActiveInLastMove.SetBit(buf->id.Dst());
 		movementBufferList = buf->next;
 		buf->msg.move.whenToExecute = moveStartTime;
 		CanInterface::SendMotion(buf);				// queues the buffer for sending and frees it when done
@@ -111,12 +121,95 @@ void CanMotion::FinishMovement(uint32_t moveStartTime)
 
 bool CanMotion::CanPrepareMove()
 {
-	return CanMessageBuffer::FreeBuffers() >= NumCanBoards;
+	return CanMessageBuffer::FreeBuffers() >= MaxCanBoards;
 }
+
+// This is called by the CanSender task to check if we have any urgent messages to send
+CanMessageBuffer *CanMotion::GetUrgentMessage()
+{
+	if (stopAllFlag)
+	{
+		// Send a broadcast Stop All message first, followed by individual ones
+		if (!broadcastedStopAll)
+		{
+			auto msg = urgentMessageBuffer->SetupBroadcastMessage<CanMessageStopMovement>(CanInterface::GetCanAddress());
+			msg->whichDrives = 0xFFFF;
+			broadcastedStopAll = true;
+			return urgentMessageBuffer;
+		}
+		const unsigned int nextBoard = boardsActiveInLastMove.FindLowestSetBit();
+		if (nextBoard < boardsActiveInLastMove.NumBits())
+		{
+			boardsActiveInLastMove.ClearBit(nextBoard);
+			auto msg = urgentMessageBuffer->SetupRequestMessage<CanMessageStopMovement>(0, CanInterface::GetCanAddress(), nextBoard);
+			msg->whichDrives = 0xFFFF;
+			return urgentMessageBuffer;
+		}
+		driversToStop[driversToStopIndexBeingFilled].Clear();
+		driversToStop[driversToStopIndexBeingFilled ^ 1].Clear();
+		stopAllFlag = false;
+		broadcastedStopAll = false;
+		indexOfNextDriverToStop = 0;
+		return nullptr;
+	}
+
+	if (driversToStop[driversToStopIndexBeingFilled ^ 1].GetNumEntries() == 0 && driversToStop[driversToStopIndexBeingFilled ^ 1].GetNumEntries() != 0)
+	{
+		driversToStopIndexBeingFilled  = driversToStopIndexBeingFilled ^ 1;
+	}
+
+	if (driversToStop[driversToStopIndexBeingFilled ^ 1].GetNumEntries() != 0)
+	{
+		uint16_t drivers;
+		const CanAddress board = driversToStop[driversToStopIndexBeingFilled ^ 1].GetNextBoardDriverBitmap(indexOfNextDriverToStop, drivers);
+		if (board != CanId::NoAddress)
+		{
+			auto msg = urgentMessageBuffer->SetupRequestMessage<CanMessageStopMovement>(0, CanInterface::GetCanAddress(), board);
+			msg->whichDrives = drivers;
+			return urgentMessageBuffer;
+		}
+		driversToStop[driversToStopIndexBeingFilled ^ 1].Clear();
+		indexOfNextDriverToStop = 0;
+	}
+
+	return nullptr;
+}
+
+// The next 4 functions may be called from the step ISR, so they can't send CAN messages directly
 
 void CanMotion::InsertHiccup(uint32_t numClocks)
 {
-	//TODO
+	hiccupToInsert += numClocks;
+	CanInterface::WakeCanSender();
+}
+
+void CanMotion::StopDriver(DriverId driver)
+{
+	driversToStop[driversToStopIndexBeingFilled].AddEntry(driver);
+	CanInterface::WakeCanSender();
+}
+
+void CanMotion::StopAxis(size_t axis)
+{
+	if (!stopAllFlag)
+	{
+		const AxisDriversConfig& cfg = reprap.GetPlatform().GetAxisDriversConfig(axis);
+		for (size_t i = 0; i < cfg.numDrivers; ++i)
+		{
+			const DriverId driver = cfg.driverNumbers[i];
+			if (driver.IsRemote())
+			{
+				driversToStop[driversToStopIndexBeingFilled].AddEntry(driver);
+			}
+		}
+	CanInterface::WakeCanSender();
+	}
+}
+
+void CanMotion::StopAll()
+{
+	stopAllFlag = true;
+	CanInterface::WakeCanSender();
 }
 
 #endif

@@ -80,6 +80,10 @@ GCodeResult LocalSwitchEndstop::Configure(const char *pinNames, const StringRef&
 {
 	ReleasePorts();
 
+#if SUPPORT_CAN_EXPANSION
+	activeLow = (inputType == EndStopInputType::activeLow);
+#endif
+
 	// Parse the string into individual port names
 	size_t index = 0;
 	while (numPortsUsed < MaxDriversPerAxis)
@@ -149,6 +153,11 @@ GCodeResult LocalSwitchEndstop::Configure(const char *pinNames, const StringRef&
 void LocalSwitchEndstop::Reconfigure(EndStopPosition pos, EndStopInputType inputType)
 {
 	SetAtHighEnd(pos == EndStopPosition::highEndStop);
+
+#if SUPPORT_CAN_EXPANSION
+	activeLow = (inputType == EndStopInputType::activeLow);
+#endif
+
 	for (IoPort& pp : ports)
 	{
 		pp.SetInvert(inputType == EndStopInputType::activeLow);
@@ -157,7 +166,11 @@ void LocalSwitchEndstop::Reconfigure(EndStopPosition pos, EndStopInputType input
 
 EndStopInputType LocalSwitchEndstop::GetEndstopType() const
 {
+#if SUPPORT_CAN_EXPANSION
+	return (activeLow)? EndStopInputType::activeLow : EndStopInputType::activeHigh;
+#else
 	return (ports[0].GetInvert()) ? EndStopInputType::activeLow : EndStopInputType::activeHigh;
+#endif
 }
 
 // Test whether we are at or near the stop
@@ -165,7 +178,7 @@ EndStopHit LocalSwitchEndstop::Stopped() const
 {
 	for (size_t i = 0; i < numPortsUsed; ++i)
 	{
-		if (ports[i].Read())
+		if (IsTriggered(i))
 		{
 			return EndStopHit::atStop;
 		}
@@ -186,42 +199,45 @@ void LocalSwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& a
 EndstopHitDetails LocalSwitchEndstop::CheckTriggered(bool goingSlow)
 {
 	EndstopHitDetails rslt;				// initialised by default constructor
-	for (size_t i = 0; i < numPortsUsed; ++i)
+	if (portsLeftToTrigger != 0)
 	{
-		if (IsBitSet(portsLeftToTrigger, i) && ports[i].Read())
+		for (size_t i = 0; i < numPortsUsed; ++i)
 		{
-			rslt.axis = GetAxis();
-			if (stopAll)
+			if (IsBitSet(portsLeftToTrigger, i) && IsTriggered(i))
 			{
-				rslt.SetAction(EndstopHitAction::stopAll);
-				if (GetAtHighEnd())
+				rslt.axis = GetAxis();
+				if (stopAll)
 				{
-					rslt.setAxisHigh = true;
+					rslt.SetAction(EndstopHitAction::stopAll);
+					if (GetAtHighEnd())
+					{
+						rslt.setAxisHigh = true;
+					}
+					else
+					{
+						rslt.setAxisLow = true;
+					}
+				}
+				else if (numPortsLeftToTrigger == 1)
+				{
+					rslt.SetAction(EndstopHitAction::stopAxis);
+					if (GetAtHighEnd())
+					{
+						rslt.setAxisHigh = true;
+					}
+					else
+					{
+						rslt.setAxisLow = true;
+					}
 				}
 				else
 				{
-					rslt.setAxisLow = true;
+					rslt.SetAction(EndstopHitAction::stopDriver);
+					rslt.internalUse = i;			// remember which port it is, for the call to Acknowledge
+					rslt.driver = reprap.GetPlatform().GetAxisDriversConfig(GetAxis()).driverNumbers[i];
 				}
+				break;
 			}
-			else if (numPortsLeftToTrigger == 1)
-			{
-				rslt.SetAction(EndstopHitAction::stopAxis);
-				if (GetAtHighEnd())
-				{
-					rslt.setAxisHigh = true;
-				}
-				else
-				{
-					rslt.setAxisLow = true;
-				}
-			}
-			else
-			{
-				rslt.SetAction(EndstopHitAction::stopDriver);
-				rslt.internalUse = i;			// remember which port it is, for the call to Acknowledge
-				rslt.driver = reprap.GetPlatform().GetAxisDriversConfig(GetAxis()).driverNumbers[i];
-			}
-			break;
 		}
 	}
 
@@ -250,32 +266,39 @@ bool LocalSwitchEndstop::Acknowledge(EndstopHitDetails what)
 
 void LocalSwitchEndstop::AppendDetails(const StringRef& str)
 {
-	str.catf("%s on pin(s)", (ports[0].GetInvert()) ? "active low switch" :  "active high switch");
+	str.catf("%s on pin(s)",
+#if SUPPORT_CAN_EXPANSION
+				(activeLow)
+#else
+				(ports[0].GetInvert())
+#endif
+				? "active low switch" : "active high switch");
+
 	for (size_t i = 0; i < numPortsUsed; ++i)
 	{
 		str.cat(' ');
-		ports[i].AppendPinName(str);
+#if SUPPORT_CAN_EXPANSION
+		if (boardNumbers[i] != CanId::MasterAddress)
+		{
+			str.catf("%u.some_pin", boardNumbers[i]);
+		}
+		else
+#endif
+		{
+			ports[i].AppendPinName(str);
+		}
 	}
 }
 
 #if SUPPORT_CAN_EXPANSION
 
 // Process a remote endstop input change that relates to this endstop. Return true if the buffer has been freed.
-bool LocalSwitchEndstop::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state, CanMessageBuffer *buf)
+void LocalSwitchEndstop::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state)
 {
-	if (handleMinor >= numPortsUsed || boardNumbers[handleMinor] == CanId::MasterAddress)
+	if (handleMinor < numPortsUsed && boardNumbers[handleMinor] != CanId::MasterAddress)
 	{
-		return false;
+		states[handleMinor] = state;
 	}
-
-	states[handleMinor] = state;
-	if (!state)
-	{
-		return false;
-	}
-
-	//TODO if the endstop is active in the current move, stop relevant axes
-	return false;
 }
 
 #endif

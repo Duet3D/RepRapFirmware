@@ -42,7 +42,7 @@ public:
 	DDA(DDA* n);
 
 	bool InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
-	bool InitLeadscrewMove(DDARing& ring, float feedrate, const float amounts[MaxTotalDrivers]);		// Set up a leadscrew motor move
+	bool InitLeadscrewMove(DDARing& ring, float feedrate, const float amounts[MaxDriversPerAxis]);		// Set up a leadscrew motor move
 #if SUPPORT_ASYNC_MOVES
 	bool InitAsyncMove(DDARing& ring, const AsyncMove& nextMove);			// Set up an async move
 #endif
@@ -112,6 +112,8 @@ public:
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const;	// Get the current full step interval for this axis or extruder
 #endif
 
+	void CheckEndstops(Platform& platform);
+
 	void DebugPrint(const char *tag) const;									// print the DDA only
 	void DebugPrintAll(const char *tag) const;								// print the DDA and active DMs
 
@@ -174,7 +176,6 @@ private:
 	bool IsDecelerationMove() const;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const;								// return true if this move is or have been might have been intended to be an acceleration-only move
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const;
-	void CheckEndstops(Platform& platform);
 	float NormaliseXYZ();											// Make the direction vector unit-normal in XYZ
 	void AdjustAcceleration();										// Adjust the acceleration and deceleration to reduce ringing
 
@@ -190,10 +191,10 @@ private:
     static float VectorBoxIntersection(const float v[], 			// Compute the length that a vector would have to have to...
     		const float box[], size_t dimensions);					// ...just touch the surface of a hyperbox.
 
-    DDA *next;								// The next one in the ring
-	DDA *prev;								// The previous one in the ring
+    DDA *next;										// The next one in the ring
+	DDA *prev;										// The previous one in the ring
 
-	volatile DDAState state;				// What state this DDA is in
+	volatile DDAState state;						// What state this DDA is in
 
 	union
 	{

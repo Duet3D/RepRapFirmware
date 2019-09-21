@@ -45,7 +45,8 @@ private:
 class CanDriversList
 {
 public:
-	CanDriversList();
+	CanDriversList() : numEntries(0) { }
+	void Clear() { numEntries = 0; }
 	void AddEntry(DriverId id);
 	size_t GetNumEntries() const { return numEntries; }
 	CanAddress GetNextBoardDriverBitmap(size_t& startFrom, uint16_t& driversBitmap) const;
@@ -80,6 +81,7 @@ namespace CanInterface
 	bool SetRemotePressureAdvance(const CanDriversData& data, const StringRef& reply);
 	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult SetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply);
+	void WakeCanSender();
 
 	void Diagnostics(MessageType mtype);
 }

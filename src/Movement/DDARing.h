@@ -24,7 +24,7 @@ public:
 	void RecycleDDAs();
 	bool CanAddMove() const;
 	bool AddStandardMove(const RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
-	bool AddSpecialMove(float feedRate, const float coords[]);
+	bool AddSpecialMove(float feedRate, const float coords[MaxDriversPerAxis]);
 #if SUPPORT_ASYNC_MOVES
 	bool AddAsyncMove(const AsyncMove& nextMove);
 #endif
@@ -35,6 +35,8 @@ public:
 	float PushBabyStepping(size_t axis, float amount);							// Try to push some babystepping through the lookahead queue, returning the amount pushed
 
 	void Interrupt(Platform& p);												// Check endstops, generate step pulses
+	void OnMoveCompleted(DDA *cdda, Platform& p);								// called when the state has been set to 'completed'
+
 	void InsertHiccup(uint32_t delayClocks);									// Insert a brief pause to avoid processor overload
 	std::optional<uint32_t> GetNextInterruptTime() const;						// Return the time that the next step is due
 	void CurrentMoveCompleted() __attribute__ ((hot));							// Signal that the current move has just been completed
@@ -53,7 +55,7 @@ public:
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const;
 #endif
 
-	const DDA *GetCurrentDDA() const { return currentDda; }						// Return the DDA of the currently-executing move, or nullptr
+	DDA *GetCurrentDDA() const { return currentDda; }							// Return the DDA of the currently-executing move, or nullptr
 
 	float GetTopSpeed() const;
 	float GetRequestedSpeed() const;

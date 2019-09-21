@@ -1152,8 +1152,15 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers)
 #endif
 
 #if HAS_MASS_STORAGE
+
 void GCodes::SaveResumeInfo(bool wasPowerFailure)
 {
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		return;			// we can't yet save to the Pi
+	}
+#endif
 	const char* const printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
 	if (printingFilename != nullptr)
 	{
@@ -1335,6 +1342,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 		}
 	}
 }
+
 #endif
 
 void GCodes::Diagnostics(MessageType mtype)
@@ -3713,7 +3721,12 @@ void GCodes::StopPrint(StopPrintReason reason)
 			(reason == StopPrintReason::normalCompletion) ? "Finished" : "Cancelled",
 			printingFilename, printMinutes/60u, printMinutes % 60u);
 #if HAS_MASS_STORAGE
-		if (reason == StopPrintReason::normalCompletion && simulationMode == 0)
+		if (   reason == StopPrintReason::normalCompletion
+			&& simulationMode == 0
+# if HAS_LINUX_INTERFACE
+			&& !reprap.UsingLinuxInterface()
+# endif
+		   )
 		{
 			platform.DeleteSysFile(RESUME_AFTER_POWER_FAIL_G);
 		}

@@ -31,6 +31,7 @@ extern "C"
 const unsigned int NumCanBuffers = 40;
 
 constexpr uint32_t MaxMotionSendWait = 20;		// milliseconds
+constexpr uint32_t MaxUrgentSendWait = 20;		// milliseconds
 constexpr uint32_t MaxTimeSyncSendWait = 20;	// milliseconds
 constexpr uint32_t MaxResponseSendWait = 50;	// milliseconds
 constexpr uint32_t MaxRequestSendWait = 50;		// milliseconds
@@ -80,7 +81,7 @@ static uint32_t GetAndClearStatusBits()
 #endif
 
 /* mcan_transfer_message_setting */
-constexpr uint32_t TxBufferIndexEmergency = 0;
+constexpr uint32_t TxBufferIndexUrgent = 0;
 constexpr uint32_t TxBufferIndexTimeSync = 1;
 constexpr uint32_t TxBufferIndexMotion = 2;
 // We should probably use a FIFO or a queue for the remainder, but for now each has its own message buffer
@@ -337,34 +338,48 @@ extern "C" void CanSenderLoop(void *)
 	for (;;)
 	{
 		TaskBase::Take(Mutex::TimeoutUnlimited);
-		while (pendingBuffers != nullptr)
+		for (;;)
 		{
-			CanMessageBuffer *buf;
+			CanMessageBuffer * const urgentMessage = CanMotion::GetUrgentMessage();
+			if (urgentMessage != nullptr)
 			{
-				TaskCriticalSectionLocker lock;
-				buf = pendingBuffers;
-				pendingBuffers = buf->next;
+				mcan_fd_send_ext_message(urgentMessage->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(urgentMessage->msg)), urgentMessage->dataLength,
+											TxBufferIndexUrgent, MaxUrgentSendWait);
 			}
+			else if (pendingBuffers != nullptr)
+			{
+				CanMessageBuffer *buf;
+				{
+					TaskCriticalSectionLocker lock;
+					buf = pendingBuffers;
+					pendingBuffers = buf->next;
+				}
 
 #if 0
-			buf->msg.move.DebugPrint();
+				buf->msg.move.DebugPrint();
 #endif
-			// Send the message
-			mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexMotion, MaxMotionSendWait);
+				// Send the message
+				mcan_fd_send_ext_message(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength,
+											TxBufferIndexMotion, MaxMotionSendWait);
 
 #ifdef CAN_DEBUG
-			// Display a debug message too
-			debugPrintf("CCCR %08" PRIx32 ", PSR %08" PRIx32 ", ECR %08" PRIx32 ", TXBRP %08" PRIx32 ", TXBTO %08" PRIx32 ", st %08" PRIx32 "\n",
-						MCAN1->MCAN_CCCR, MCAN1->MCAN_PSR, MCAN1->MCAN_ECR, MCAN1->MCAN_TXBRP, MCAN1->MCAN_TXBTO, GetAndClearStatusBits());
-			buf->msg.DebugPrint();
-			delay(50);
-			debugPrintf("CCCR %08" PRIx32 ", PSR %08" PRIx32 ", ECR %08" PRIx32 ", TXBRP %08" PRIx32 ", TXBTO %08" PRIx32 ", st %08" PRIx32 "\n",
-						MCAN1->MCAN_CCCR, MCAN1->MCAN_PSR, MCAN1->MCAN_ECR, MCAN1->MCAN_TXBRP, MCAN1->MCAN_TXBTO, GetAndClearStatusBits());
+				// Display a debug message too
+				debugPrintf("CCCR %08" PRIx32 ", PSR %08" PRIx32 ", ECR %08" PRIx32 ", TXBRP %08" PRIx32 ", TXBTO %08" PRIx32 ", st %08" PRIx32 "\n",
+							MCAN1->MCAN_CCCR, MCAN1->MCAN_PSR, MCAN1->MCAN_ECR, MCAN1->MCAN_TXBRP, MCAN1->MCAN_TXBTO, GetAndClearStatusBits());
+				buf->msg.DebugPrint();
+				delay(50);
+				debugPrintf("CCCR %08" PRIx32 ", PSR %08" PRIx32 ", ECR %08" PRIx32 ", TXBRP %08" PRIx32 ", TXBTO %08" PRIx32 ", st %08" PRIx32 "\n",
+							MCAN1->MCAN_CCCR, MCAN1->MCAN_PSR, MCAN1->MCAN_ECR, MCAN1->MCAN_TXBRP, MCAN1->MCAN_TXBTO, GetAndClearStatusBits());
 #else
-			delay(2);		// until we have the transmit fifo working, we need to delay to allow the message to be sent
+				delay(2);		// until we have the transmit fifo working, we need to delay to allow the message to be sent
 #endif
-			// Free the message buffer.
-			CanMessageBuffer::Free(buf);
+				// Free the message buffer.
+				CanMessageBuffer::Free(buf);
+			}
+			else
+			{
+				break;
+			}
 		}
 	}
 }
@@ -428,12 +443,6 @@ CanAddress CanDriversData::GetNextBoardDriverBitmap(size_t& startFrom, uint16_t&
 		++startFrom;
 	} while (startFrom < numEntries && data[startFrom].driver.boardAddress == boardAddress);
 	return boardAddress;
-}
-
-// Members of template class CanDriversList
-CanDriversList::CanDriversList()
-{
-	numEntries = 0;
 }
 
 // Insert a new entry, keeping the list ordered
@@ -903,6 +912,18 @@ GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffe
 	msg2->boardId = (uint8_t)boardAddress;
 	msg2->invertedBoardId = (uint8_t)~boardAddress;
 	return SendRequestAndGetStandardReply(buf2, rid2, reply);
+}
+
+void CanInterface::WakeCanSender()
+{
+	if (__get_BASEPRI() != 0)
+	{
+		canSenderTask.GiveFromISR();
+	}
+	else
+	{
+		canSenderTask.Give();
+	}
 }
 
 void CanInterface::Diagnostics(MessageType mtype)

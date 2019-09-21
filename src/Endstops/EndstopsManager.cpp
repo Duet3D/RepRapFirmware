@@ -196,6 +196,8 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 	{
 		reply.copy("Endstop configuration");
 		char sep = ':';
+		ReadLocker lock(endstopsLock);
+
 		for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
 		{
 			reply.catf("%c %c: ", sep, reprap.GetGCodes().GetAxisLetters()[axis]);
@@ -237,71 +239,70 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 			return GCodeResult::error;
 		}
 
+		WriteLocker lock(endstopsLock);
+
 		delete axisEndstops[lastAxisSeen];
 		axisEndstops[lastAxisSeen] = nullptr;
 		LocalSwitchEndstop * const sw = new LocalSwitchEndstop(lastAxisSeen, lastPosSeen);
-		GCodeResult rslt = sw->Configure(gb, reply, inputType);
+		const GCodeResult rslt = sw->Configure(gb, reply, inputType);
 		axisEndstops[lastAxisSeen] = sw;
-		if (rslt != GCodeResult::ok && rslt != GCodeResult::warning)
-		{
-			return rslt;
-		}
+		return rslt;
 	}
-	else
+
+	// No P parameter, so there may be multiple axes
+	for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
 	{
-		// No P parameter, so there may be multiple axes
-		for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
+		const char c = reprap.GetGCodes().GetAxisLetters()[axis];
+		if (gb.Seen(c))
 		{
-			const char c = reprap.GetGCodes().GetAxisLetters()[axis];
-			if (gb.Seen(c))
+			const EndStopPosition pos = (EndStopPosition)gb.GetUIValue();		// we range-checked this earlier
+			WriteLocker lock(endstopsLock);
+
+			if (pos == EndStopPosition::noEndStop)
 			{
-				const EndStopPosition pos = (EndStopPosition)gb.GetUIValue();		// we range-checked this earlier
-				if (pos == EndStopPosition::noEndStop)
+				delete axisEndstops[axis];
+				axisEndstops[axis] = nullptr;
+			}
+			else
+			{
+				switch (inputType)
 				{
+				case EndStopInputType::motorStallAny:
+					// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
 					delete axisEndstops[axis];
-					axisEndstops[axis] = nullptr;
-				}
-				else
-				{
-					switch (inputType)
+					axisEndstops[axis] = new StallDetectionEndstop(axis, pos, false);
+					break;
+
+				case EndStopInputType::motorStallIndividual:
+					// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
+					delete axisEndstops[axis];
+					axisEndstops[axis] = new StallDetectionEndstop(axis, pos, true);
+					break;
+
+				case EndStopInputType::zProbeAsEndstop:
+					// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
+					delete axisEndstops[axis];
+					axisEndstops[axis] = new ZProbeEndstop(axis, pos);
+					break;
+
+				case EndStopInputType::activeHigh:
+				case EndStopInputType::activeLow:
+					if (   axisEndstops[axis] == nullptr
+						|| (axisEndstops[axis]->GetEndstopType() != EndStopInputType::activeHigh && axisEndstops[axis]->GetEndstopType() != EndStopInputType::activeLow)
+					   )
 					{
-					case EndStopInputType::motorStallAny:
-						// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
-						delete axisEndstops[axis];
-						axisEndstops[axis] = new StallDetectionEndstop(axis, pos, false);
-						break;
-
-					case EndStopInputType::motorStallIndividual:
-						// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
-						delete axisEndstops[axis];
-						axisEndstops[axis] = new StallDetectionEndstop(axis, pos, true);
-						break;
-
-					case EndStopInputType::zProbeAsEndstop:
-						// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
-						delete axisEndstops[axis];
-						axisEndstops[axis] = new ZProbeEndstop(axis, pos);
-						break;
-
-					case EndStopInputType::activeHigh:
-					case EndStopInputType::activeLow:
-						if (   axisEndstops[axis] == nullptr
-							|| (axisEndstops[axis]->GetEndstopType() != EndStopInputType::activeHigh && axisEndstops[axis]->GetEndstopType() != EndStopInputType::activeLow)
-						   )
-						{
-							// Asking for a switch endstop but we don't already have one, so we don't know what pin number(s) it should use
-							reply.printf("Pin name needed for switch-type endstop on %c axis", c);
-							return GCodeResult::error;
-						}
-						else
-						{
-							((LocalSwitchEndstop *)axisEndstops[axis])->Reconfigure(pos, inputType);
-						}
-						break;
-
-					default:
-						break;
+						// Asking for a switch endstop but we don't already have one, so we don't know what pin number(s) it should use
+						reply.printf("Pin name needed for switch-type endstop on %c axis", c);
+						return GCodeResult::error;
 					}
+					else
+					{
+						((LocalSwitchEndstop *)axisEndstops[axis])->Reconfigure(pos, inputType);
+					}
+					break;
+
+				default:
+					break;
 				}
 			}
 		}
@@ -571,17 +572,36 @@ GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 
 // Handle signalling of a remote switch change, when the handle indicates that it is being used as an endstop.
 // We must re-use or free the buffer.
-void EndstopsManager::HandleRemoteInputChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state, CanMessageBuffer* buf)
+void EndstopsManager::HandleRemoteInputChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state)
 {
 	if (handleMajor < ARRAY_SIZE(axisEndstops))
 	{
 		Endstop * const es = axisEndstops[handleMajor];
-		if (es != nullptr && es->HandleRemoteInputChange(src, handleMinor, state, buf))
+		if (es != nullptr)
 		{
-			return;					// buffer has been re-used
+			es->HandleRemoteInputChange(src, handleMinor, state);
 		}
 	}
-	CanMessageBuffer::Free(buf);
+}
+
+// This is called when we update endstop states because of a message from a remote board.
+// In time we may use it to help implement interrupt-driven local endstops too, but for now those are checked in the step ISR by a direct call to DDA::CheckEndstops().
+void EndstopsManager::OnEndstopStatesChanged()
+{
+	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
+
+	DDA * const currentDda = reprap.GetMove().GetMainDDARing().GetCurrentDDA();
+	if (currentDda != nullptr)
+	{
+		Platform& p = reprap.GetPlatform();
+		currentDda->CheckEndstops(p);
+		if (currentDda->GetState() == DDA::completed)
+		{
+			reprap.GetMove().GetMainDDARing().OnMoveCompleted(currentDda, p);
+		}
+	}
+
+	RestoreBasePriority(oldPrio);								// allow step interrupts again
 }
 
 #endif

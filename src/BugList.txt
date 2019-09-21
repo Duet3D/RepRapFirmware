@@ -295,6 +295,7 @@ Planned for 3.0:
 - Some features from the list below
 
 Future:
+- G5 Bezier curves
 - https://forum.duet3d.com/topic/9507/unretract-after-tool-change/13
 - Option to skip some parts of a build, https://forum.duet3d.com/topic/9226/cancel-skip-individual-objects-during-print
 - New DuetWiFiServer using RTOS and a later Expressiv SDK version

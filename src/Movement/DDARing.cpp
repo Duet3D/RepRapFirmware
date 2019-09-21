@@ -151,7 +151,7 @@ bool DDARing::AddStandardMove(const RawMove &nextMove, bool doMotorMapping)
 }
 
 // Add a leadscrew levelling motor move
-bool DDARing::AddSpecialMove(float feedRate, const float coords[])
+bool DDARing::AddSpecialMove(float feedRate, const float coords[MaxDriversPerAxis])
 {
 	if (addPointer->InitLeadscrewMove(*this, feedRate, coords))
 	{
@@ -329,13 +329,19 @@ void DDARing::Interrupt(Platform& p)
 		cdda->StepDrivers(p);						// check endstops if necessary and step the drivers
 		if (cdda->GetState() == DDA::completed)
 		{
-			// The following finish time is wrong if we aborted the move because of endstop or Z probe checks.
-			// However, following a move that checks endstops or the Z probe, we always wait for the move to complete before we schedule another, so this doesn't matter.
-			const uint32_t finishTime = cdda->GetMoveFinishTime();	// calculate when this move should finish
-			CurrentMoveCompleted();					// tell the DDA ring that the current move is complete
-			TryStartNextMove(p, finishTime);		// schedule the next move
+			OnMoveCompleted(cdda, p);
 		}
 	}
+}
+
+// This is called when the state has been set to 'completed'. Step interrupts must be disabled or locked out when calling this.
+void DDARing::OnMoveCompleted(DDA *cdda, Platform& p)
+{
+	// The following finish time is wrong if we aborted the move because of endstop or Z probe checks.
+	// However, following a move that checks endstops or the Z probe, we always wait for the move to complete before we schedule another, so this doesn't matter.
+	const uint32_t finishTime = cdda->GetMoveFinishTime();	// calculate when this move should finish
+	CurrentMoveCompleted();					// tell the DDA ring that the current move is complete
+	TryStartNextMove(p, finishTime);		// schedule the next move
 }
 
 // Insert a brief pause to avoid processor overload
