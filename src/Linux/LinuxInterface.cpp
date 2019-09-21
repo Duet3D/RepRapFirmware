@@ -171,6 +171,7 @@ void LinuxInterface::Spin()
 			{
 				if (!transfer->WriteHeightMap())
 				{
+					// Failed to write the whole heightmap, try again later
 					transfer->ResendPacket(packet);
 				}
 				break;
@@ -187,7 +188,11 @@ void LinuxInterface::Spin()
 				GCodeChannel channel;
 				transfer->ReadLockUnlockRequest(channel);
 				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-				if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(*gb))
+				if (reprap.GetGCodes().LockMovementAndWaitForStandstill(*gb))
+				{
+					transfer->WriteLocked(channel);
+				}
+				else
 				{
 					transfer->ResendPacket(packet);
 				}

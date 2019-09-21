@@ -53,7 +53,7 @@ bool GCodeMachineState::DoingFile() const
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
 	{
-		return fileId == 0;
+		return fileId != 0;
 	}
 #endif
 #if HAS_MASS_STORAGE
