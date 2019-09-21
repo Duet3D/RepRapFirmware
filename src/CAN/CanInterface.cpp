@@ -920,14 +920,7 @@ GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffe
 
 void CanInterface::WakeCanSender()
 {
-	if (__get_BASEPRI() != 0)
-	{
-		canSenderTask.GiveFromISR();
-	}
-	else
-	{
-		canSenderTask.Give();
-	}
+	canSenderTask.GiveFromISR();
 }
 
 void CanInterface::Diagnostics(MessageType mtype)
