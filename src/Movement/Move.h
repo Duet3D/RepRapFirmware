@@ -148,8 +148,7 @@ public:
 
 	const RandomProbePointSet& GetProbePoints() const { return probePoints; }		// Return the probe point set constructed from G30 commands
 
-	const DDA *GetCurrentDDA() const { return mainDDARing.GetCurrentDDA(); }		// Return the DDA of the currently-executing move
-
+	DDARing& GetMainDDARing() { return mainDDARing; }
 	float GetTopSpeed() const { return mainDDARing.GetTopSpeed(); }
 	float GetRequestedSpeed() const { return mainDDARing.GetRequestedSpeed(); }
 

@@ -31,7 +31,7 @@ public:
 
 #if SUPPORT_CAN_EXPANSION
 	// Process a remote endstop input change that relates to this endstop. Return true if the buffer has been freed.
-	bool HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state, CanMessageBuffer *buf) override;
+	void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state) override;
 #endif
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, EndStopInputType inputType);

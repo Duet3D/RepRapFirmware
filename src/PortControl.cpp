@@ -40,7 +40,7 @@ uint32_t PortControl::UpdatePorts()
 	}
 
 	SetBasePriority(NvicPriorityStep);
-	const DDA * cdda = reprap.GetMove().GetCurrentDDA();
+	const DDA * cdda = reprap.GetMove().GetMainDDARing().GetCurrentDDA();
 	if (cdda == nullptr)
 	{
 		// Movement has stopped, so turn all ports off

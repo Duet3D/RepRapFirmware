@@ -572,17 +572,36 @@ GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 
 // Handle signalling of a remote switch change, when the handle indicates that it is being used as an endstop.
 // We must re-use or free the buffer.
-void EndstopsManager::HandleRemoteInputChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state, CanMessageBuffer* buf)
+void EndstopsManager::HandleRemoteInputChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state)
 {
 	if (handleMajor < ARRAY_SIZE(axisEndstops))
 	{
 		Endstop * const es = axisEndstops[handleMajor];
-		if (es != nullptr && es->HandleRemoteInputChange(src, handleMinor, state, buf))
+		if (es != nullptr)
 		{
-			return;					// buffer has been re-used
+			es->HandleRemoteInputChange(src, handleMinor, state);
 		}
 	}
-	CanMessageBuffer::Free(buf);
+}
+
+// This is called when we update endstop states because of a message from a remote board.
+// In time we may use it to help implement interrupt-driven local endstops too, but for now those are checked in the step ISR by a direct call to DDA::CheckEndstops().
+void EndstopsManager::OnEndstopStatesChanged()
+{
+	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
+
+	DDA * const currentDda = reprap.GetMove().GetMainDDARing().GetCurrentDDA();
+	if (currentDda != nullptr)
+	{
+		Platform& p = reprap.GetPlatform();
+		currentDda->CheckEndstops(p);
+		if (currentDda->GetState() == DDA::completed)
+		{
+			reprap.GetMove().GetMainDDARing().OnMoveCompleted(currentDda, p);
+		}
+	}
+
+	RestoreBasePriority(oldPrio);								// allow step interrupts again
 }
 
 #endif

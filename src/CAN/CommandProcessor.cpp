@@ -169,20 +169,19 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 	}
 }
 
-// Handle an input state change message and free the buffer
-static void HandleInputStateChanged(CanMessageBuffer *buf)
+// Handle an input state change message
+static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddress src)
 {
-	// Copy the state changes locally so that we can re-use the buffer to send any urgent messages to stop movement
-	CanMessageInputChanged copyMsg = buf->msg.inputChanged;
-	const CanAddress src = buf->id.Src();
-	for (unsigned int i = 0; i < copyMsg.numHandles; ++i)
+	bool endstopStatesChanged = false;
+	for (unsigned int i = 0; i < msg.numHandles; ++i)
 	{
-		const RemoteInputHandle handle(copyMsg.handles[i]);
-		const bool state = (copyMsg.states & (1 << i)) != 0;
+		const RemoteInputHandle handle(msg.handles[i]);
+		const bool state = (msg.states & (1 << i)) != 0;
 		switch (handle.u.parts.type)
 		{
 		case RemoteInputHandle::typeEndstop:
-			reprap.GetPlatform().GetEndstops().HandleRemoteInputChange(src, handle.u.parts.major, handle.u.parts.minor, state, buf);
+			reprap.GetPlatform().GetEndstops().HandleRemoteInputChange(src, handle.u.parts.major, handle.u.parts.minor, state);
+			endstopStatesChanged = true;
 			break;
 
 		case RemoteInputHandle::typeTrigger:
@@ -191,7 +190,11 @@ static void HandleInputStateChanged(CanMessageBuffer *buf)
 			break;
 		}
 	}
-	CanMessageBuffer::Free(buf);
+
+	if (endstopStatesChanged)
+	{
+		reprap.GetPlatform().GetEndstops().OnEndstopStatesChanged();
+	}
 }
 
 // Process a received broadcast or request message and free the message buffer
@@ -209,7 +212,8 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 		{
 		case CanMessageType::inputStateChanged:
 			//TODO we should preferably handle this one using a separate high-priority queue or buffer
-			HandleInputStateChanged(buf);			// this one reuses or frees the buffer
+			HandleInputStateChanged(buf->msg.inputChanged, buf->id.Src());
+			CanMessageBuffer::Free(buf);
 			break;
 
 		case CanMessageType::FirmwareBlockRequest:

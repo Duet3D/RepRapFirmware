@@ -61,8 +61,8 @@ public:
 	virtual void AppendDetails(const StringRef& str) = 0;
 
 #if SUPPORT_CAN_EXPANSION
-	// Process a remote endstop input change that relates to this endstop. Return true if the buffer has been freed.
-	virtual bool HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state, CanMessageBuffer *buf) { return false; }
+	// Process a remote endstop input change that relates to this endstop
+	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state) { }
 #endif
 
 	unsigned int GetAxis() const { return axis; }
