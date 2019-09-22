@@ -900,6 +900,10 @@ GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffe
 			return GCodeResult::error;
 		}
 	}
+#else
+	{
+		// nothing
+	}
 #endif
 
 	CanMessageBuffer * const buf2 = CanMessageBuffer::Allocate();
@@ -918,14 +922,7 @@ GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffe
 
 void CanInterface::WakeCanSender()
 {
-	if (__get_BASEPRI() != 0)
-	{
-		canSenderTask.GiveFromISR();
-	}
-	else
-	{
-		canSenderTask.Give();
-	}
+	canSenderTask.GiveFromISR();
 }
 
 void CanInterface::Diagnostics(MessageType mtype)
