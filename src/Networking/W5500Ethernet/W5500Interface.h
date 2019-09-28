@@ -17,10 +17,12 @@ class NetworkResponder;
 class HttpResponder;
 class FtpResponder;
 class TelnetResponder;
+class MdnsResponder;
 class W5500Socket;
 
 // We have 8 sockets available on the W5500.
 const size_t NumW5500TcpSockets = 6;
+
 const SocketNumber MdnsSocketNumber = 6;
 const SocketNumber DhcpSocketNumber = 7;
 
@@ -40,6 +42,7 @@ public:
 
 	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) override;			// enable or disable the network
 	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) override;
+	bool IsProtocolEnabled(NetworkProtocol protocol);
 	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) override;
 	GCodeResult ReportProtocols(const StringRef& reply) const override;
 
@@ -48,7 +51,7 @@ public:
 	bool InNetworkStack() const override { return false; }
 	bool IsWiFiInterface() const override { return false; }
 
-	void UpdateHostname(const char *name) override { }
+	void UpdateHostname(const char *name) override;
 	IPAddress GetIPAddress() const override { return ipAddress; }
 	void SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) override;
 	void SetMacAddress(const uint8_t mac[]) override;
@@ -86,6 +89,9 @@ private:
 	W5500Socket *sockets[NumW5500TcpSockets];
 	size_t ftpDataSocket;							// number of the port for FTP DATA connections
 	size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
+
+	W5500Socket *mdnsSocket;
+	MdnsResponder *mdnsResponder;
 
 	Port portNumbers[NumProtocols];					// port number used for each protocol
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled

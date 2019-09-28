@@ -15,6 +15,7 @@
 #include "HttpResponder.h"
 #include "FtpResponder.h"
 #include "TelnetResponder.h"
+#include "MdnsResponder.h"
 #include "General/IP4String.h"
 
 W5500Interface::W5500Interface(Platform& p)
@@ -25,6 +26,9 @@ W5500Interface::W5500Interface(Platform& p)
 	{
 		skt = new W5500Socket(this);
 	}
+
+	mdnsSocket = new W5500Socket(this);
+	mdnsResponder = new MdnsResponder(mdnsSocket);
 
 	for (size_t i = 0; i < NumProtocols; ++i)
 	{
@@ -93,12 +97,10 @@ GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, i
 			if (state == NetworkState::active)
 			{
 				ResetSockets();
-#if 0	// mdns not implemented yet
 				if (state == NetworkState::active)
 				{
-					DoMdnsAnnounce();
+					mdnsResponder->Announce();
 				}
-#endif
 			}
 		}
 		ReportOneProtocol(protocol, reply);
@@ -107,6 +109,11 @@ GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, i
 
 	reply.copy("Invalid protocol parameter");
 	return GCodeResult::error;
+}
+
+bool W5500Interface::IsProtocolEnabled(NetworkProtocol protocol)
+{
+	return (protocol < NumProtocols) ? protocolEnabled[protocol] : false;
 }
 
 GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply)
@@ -293,9 +300,6 @@ void W5500Interface::Spin(bool full)
 				{
 //					debugPrintf("IP address obtained, network running\n");
 					getSIPR(ipAddress);
-					// Send mDNS announcement so that some routers can perform hostname mapping
-					// if this board is connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
-					//mdns_announce();
 					state = NetworkState::connected;
 				}
 			}
@@ -314,6 +318,7 @@ void W5500Interface::Spin(bool full)
 		{
 			InitSockets();
 			platform.MessageF(NetworkInfoMessage, "Network running, IP address = %s\n", IP4String(ipAddress).c_str());
+			mdnsResponder->Announce();
 			state = NetworkState::active;
 		}
 		break;
@@ -339,11 +344,19 @@ void W5500Interface::Spin(bool full)
 					{
 //						debugPrintf("IP address changed\n");
 						getSIPR(ipAddress);
+						mdnsResponder->Announce();
 					}
 				}
 
 				// Poll the next TCP socket
 				sockets[nextSocketToPoll]->Poll(full);
+
+				// Keep mDNS alive
+				mdnsSocket->Poll(full);
+				if (full)
+				{
+					mdnsResponder->Spin();
+				}
 
 				// Move on to the next TCP socket for next time
 				++nextSocketToPoll;
@@ -408,6 +421,11 @@ int W5500Interface::EnableState() const
 	return (state == NetworkState::disabled) ? 0 : 1;
 }
 
+void W5500Interface::UpdateHostname(const char *name) /*override*/
+{
+	mdnsResponder->Announce();
+}
+
 void W5500Interface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway)
 {
 	ipAddress = p_ipAddress;
@@ -430,6 +448,8 @@ void W5500Interface::InitSockets()
 {
 	ResetSockets();
 	nextSocketToPoll = 0;
+
+	mdnsSocket->Init(MdnsSocketNumber, MdnsPort, MdnsProtocol);
 }
 
 void W5500Interface::ResetSockets()
@@ -475,6 +495,8 @@ void W5500Interface::TerminateSockets()
 	{
 		sockets[skt]->Terminate();
 	}
+
+	mdnsSocket->TerminateAndDisable();
 }
 
 // End

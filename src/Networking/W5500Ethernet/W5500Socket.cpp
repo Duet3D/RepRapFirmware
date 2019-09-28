@@ -7,6 +7,7 @@
 
 #include "W5500Socket.h"
 #include "Network.h"
+#include "NetworkDefs.h"
 #include "NetworkInterface.h"
 #include "Wiznet/Ethernet/socketlib.h"
 #include "NetworkBuffer.h"
@@ -36,6 +37,7 @@ void W5500Socket::TerminateAndDisable()
 	MutexLocker lock(interface->interfaceMutex);
 
 	Terminate();
+	close(socketNum);
 	state = SocketState::disabled;
 }
 
@@ -52,10 +54,26 @@ void W5500Socket::ReInit()
 	persistConnection = true;
 	isTerminated = false;
 	isSending = false;
-	state = SocketState::inactive;
 
 	// Re-initialise the socket on the W5500
-	socket(socketNum, Sn_MR_TCP, localPort, 0x00);
+	if (protocol != MdnsProtocol)
+	{
+		state = SocketState::inactive;
+
+		socket(socketNum, Sn_MR_TCP, localPort, 0x00);
+	}
+	else
+	{
+		state = SocketState::listening;
+
+		uint8_t har[6];
+		memcpy(har, MdnsMacAddress, sizeof(har));
+		setSn_DHAR(socketNum, har);							// NB: Using a constexpr value directly does not work here!
+		setSn_DIPR(socketNum, (IPAddress)MdnsIPAddress);
+		setSn_DPORT(socketNum, MdnsPort);
+
+		socket(socketNum, Sn_MR_UDP, MdnsPort, SF_MULTI_ENABLE);
+	}
 }
 
 // Close a connection when the last packet has been sent
@@ -65,7 +83,10 @@ void W5500Socket::Close()
 
 	if (state != SocketState::disabled && state != SocketState::inactive)
 	{
-		ExecCommand(socketNum, Sn_CR_DISCON);
+		if (protocol != MdnsProtocol)
+		{
+			ExecCommand(socketNum, Sn_CR_DISCON);
+		}
 		state = SocketState::closing;
 		DiscardReceivedData();
 		if (protocol == FtpDataProtocol)
@@ -93,12 +114,13 @@ void W5500Socket::Terminate()
 bool W5500Socket::CanRead() const
 {
 	return (state == SocketState::connected)
+		|| (state == SocketState::listening && protocol == MdnsProtocol)
 		|| (state == SocketState::clientDisconnecting && receivedData != nullptr && receivedData->TotalRemaining() != 0);
 }
 
 bool W5500Socket::CanSend() const
 {
-	return state == SocketState::connected;
+	return state == SocketState::connected || (state == SocketState::listening && protocol == MdnsProtocol);
 }
 
 // Read 1 character from the receive buffers, returning true if successful
@@ -155,13 +177,16 @@ void W5500Socket::Poll(bool full)
 
 		switch(getSn_SR(socketNum))
 		{
-		case SOCK_INIT:
-			// Socket has been initialised but is not listening yet
+		case SOCK_INIT:					// Socket has been initialised but is not listening yet
 			if (localPort != 0)			// localPort for the FTP data socket is 0 until we have decided what port number to use
 			{
 				ExecCommand(socketNum, Sn_CR_LISTEN);
 				state = SocketState::listening;
 			}
+			break;
+
+		case SOCK_UDP:					// Socket is ready to receive UDP data
+			ReceiveData();
 			break;
 
 		case SOCK_LISTEN:				// Socket is listening but no client has connected to it yet
@@ -272,7 +297,8 @@ size_t W5500Socket::Send(const uint8_t *data, size_t length)
 {
 	MutexLocker lock(interface->interfaceMutex);
 
-	if (CanSend() && length != 0 && getSn_SR(socketNum) == SOCK_ESTABLISHED)
+	const uint8_t status = getSn_SR(socketNum);
+	if (CanSend() && length != 0 && (status == SOCK_ESTABLISHED || status == SOCK_UDP))
 	{
 		// Check for previous send complete
 		if (isSending)									// are we already sending?
@@ -331,7 +357,7 @@ void W5500Socket::Send()
 	if (CanSend() && sendOutstanding)
 	{
 		setSn_TX_WR(socketNum, wizTxBufferPtr);
-		ExecCommand(socketNum, Sn_CR_SEND);
+		ExecCommand(socketNum, (protocol != MdnsProtocol) ? Sn_CR_SEND : Sn_CR_SEND_MAC);
 		isSending = true;
 		sendOutstanding = false;
 	}
