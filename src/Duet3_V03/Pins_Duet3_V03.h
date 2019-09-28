@@ -23,6 +23,7 @@ const size_t NumFirmwareUpdateModules = 4;			// 3 modules, plus one for manual u
 
 #define SUPPORT_CAN_EXPANSION	1
 #define HAS_VOLTAGE_MONITOR		1
+#define ENFORCE_MAX_VIN			0
 #define HAS_VREF_MONITOR		1
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
@@ -47,6 +48,8 @@ const size_t NumFirmwareUpdateModules = 4;			// 3 modules, plus one for manual u
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
 constexpr size_t MaxSmartDrivers = 6;				// The maximum number of direct smart drivers
 constexpr size_t MaxCanDrivers = 18;
+constexpr size_t MaxCanBoards = 18;
+
 constexpr float MaxTmc5160Current = 3200.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 
 constexpr size_t MaxSensorsInSystem = 64;

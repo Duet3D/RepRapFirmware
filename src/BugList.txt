@@ -395,5 +395,4 @@ Investigations:
 [no fault] https://www.duet3d.com/forum/thread.php?pid=30851#p30851 (split axis motor goes the wrong way)
 [done BUT still wrong in lwip 2] inconsistend oversize vs. len
 p->ref == 1 in WiFi
-
-PCCB_X5
+File transfer/write error if you upload while printing, https://forum.duet3d.com/post/109751

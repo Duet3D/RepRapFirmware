@@ -24,6 +24,7 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_TMC22xx			1
 #define TMC22xx_HAS_MUX			1
 #define HAS_VOLTAGE_MONITOR		1
+#define ENFORCE_MAX_VIN			0
 #define HAS_VREF_MONITOR		1
 #define ACTIVE_LOW_HEAT_ON		1
 

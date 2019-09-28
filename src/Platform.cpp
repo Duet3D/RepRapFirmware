@@ -4540,13 +4540,13 @@ void Platform::Tick()
 		}
 # endif
 
-# if HAS_SMART_DRIVERS
+# if HAS_SMART_DRIVERS && (ENFORCE_MAX_VIN || ENFORCE_MIN_V12)
 		if (driversPowered &&
-#  if HAS_VOLTAGE_MONITOR && HAS_12V_MONITOR
+#  if ENFORCE_MAX_VIN && ENFORCE_MIN_V12
 			 (currentVin > driverOverVoltageAdcReading || currentV12 < driverV12OffAdcReading)
-#  elif HAS_VOLTAGE_MONITOR
+#  elif ENFORCE_MAX_VIN
 			 currentVin > driverOverVoltageAdcReading
-#  elif HAS_12V_MONITOR
+#  elif ENFORCE_MIN_V12
 			 currentV12 < driverV12OffAdcReading
 #  endif
 		   )
@@ -4558,7 +4558,7 @@ void Platform::Tick()
 	}
 #endif
 
-#ifdef SAME70
+#if SAME70
 	// The SAME70 ADC is noisy, so read a thermistor on every tick so that we can average a greater number of readings
 	// Because we are in the tick ISR and no other ISR reads the averaging filter, we can cast away 'volatile' here.
 	if (tickState != 0)
@@ -4580,7 +4580,7 @@ void Platform::Tick()
 	case 1:
 	case 3:
 		{
-#ifndef SAME70
+#if !SAME70
 			// We read a filtered ADC channel on alternate ticks
 			// Because we are in the tick ISR and no other ISR reads the averaging filter, we can cast away 'volatile' here.
 			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(adcFilters[currentFilterNumber]);		// cast away 'volatile'
@@ -4623,6 +4623,9 @@ void Platform::Tick()
 	}
 
 #if SAME70
+	// On Duet 3, AFEC1 is used only for thermistors and associated Vref/Vssa monitoring. AFEC0 is used for everything else.
+	// To reduce noise, we use x16 hardware averaging on AFEXC0 and x256 on AFEC1. This is hard coded in file AnalogIn.cpp in project CoreNG.
+	// There is enough time to convert all AFEC0 channels in one tick, but only one AFEC1 channel because of the higher averaging.
 	AnalogInStartConversion(0x0FFF | (1u << filteredAdcChannels[currentFilterNumber]));
 #else
 	AnalogInStartConversion();
