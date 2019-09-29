@@ -145,6 +145,7 @@ void LinuxInterface::Spin()
 				{
 					// Stop the print with the given reason
 					reprap.GetGCodes().StopPrint((StopPrintReason)reason);
+					InvalidateBufferChannel(GCodeChannel::file);
 				}
 				break;
 			}

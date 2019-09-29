@@ -900,7 +900,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 		return GCodeResult::notFinished;
 	}
 
-#ifdef DUET3
+#if SUPPORT_CAN_EXPANSION
 	if (gb.Seen('B'))
 	{
 		const uint32_t boardNumber = gb.GetUIValue();
