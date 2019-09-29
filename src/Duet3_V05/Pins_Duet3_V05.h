@@ -22,6 +22,7 @@ const size_t NumFirmwareUpdateModules = 1;
 
 #define SUPPORT_CAN_EXPANSION	1
 #define HAS_VOLTAGE_MONITOR		1
+#define ENFORCE_MAX_VIN			0
 #define HAS_VREF_MONITOR		1
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
@@ -29,7 +30,7 @@ const size_t NumFirmwareUpdateModules = 1;
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR		0 //TEMPorary!					// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_DHT_SENSOR		0 	//Temporary!					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				0					// no point in supporting FTP because we have no mass storage
@@ -45,7 +46,6 @@ const size_t NumFirmwareUpdateModules = 1;
 
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
 constexpr size_t MaxSmartDrivers = 6;				// The maximum number of direct smart drivers
-constexpr size_t MaxCanBoards = 18;
 constexpr size_t MaxCanDrivers = 18;
 constexpr size_t MaxCanBoards = 18;
 

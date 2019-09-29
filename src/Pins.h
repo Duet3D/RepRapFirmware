@@ -103,6 +103,11 @@
 
 #ifndef HAS_12V_MONITOR
 # define HAS_12V_MONITOR		0
+# define ENFORCE_MIN_V12		0
+#endif
+
+#if !HAS_VOLTAGE_MONITOR
+# define ENFORCE_MAX_VIN		0
 #endif
 
 // HAS_LWIP_NETWORKING refers to Lwip 2 support in the Networking folder, not legacy SAM3XA networking using Lwip 1

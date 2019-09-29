@@ -888,9 +888,7 @@ GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffe
 			return GCodeResult::error;
 		}
 	}
-# if HAS_MASS_STORAGE
 	else
-# endif
 #endif
 #if HAS_MASS_STORAGE
 	{

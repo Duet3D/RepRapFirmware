@@ -43,6 +43,7 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #endif
 
 #define HAS_VOLTAGE_MONITOR		1
+#define ENFORCE_MAX_VIN			1
 #define HAS_VREF_MONITOR		1
 #define ACTIVE_LOW_HEAT_ON		0					// although we have no heaters, this matters because we treat the LEDs as heaters
 
