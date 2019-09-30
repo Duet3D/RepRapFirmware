@@ -560,20 +560,15 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					for (size_t axs = 0; axs < numVisibleAxes; ++axs)
-					{
-						moveBuffer.coords[axs] = currentUserPosition[axs];
-					}
-					// Add R to the current position
-					moveBuffer.coords[axis] += rVal;
+					moveBuffer.SetDefaults(numVisibleAxes);
+					ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
+					moveBuffer.coords[axis] += rVal;					// add R to the current position
 
-					SetMoveBufferDefaults();
 					moveBuffer.feedRate = findCenterOfCavityRestorePoint.feedRate;
 					moveBuffer.canPauseAfter = false;
 					moveBuffer.hasExtrusion = false;
 
 					NewMoveAvailable(1);
-
 					break;
 				}
 			}
@@ -597,19 +592,18 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					for (size_t axs = 0; axs < numVisibleAxes; ++axs)
-					{
-						moveBuffer.coords[axs] = findCenterOfCavityRestorePoint.moveCoords[axs];
-					}
-					moveBuffer.coords[axis] += (currentUserPosition[axis] - findCenterOfCavityRestorePoint.moveCoords[axis]) / 2;
+					// Get the current position of the axis to calculate center-point below
+					float currentCoords[MaxTotalDrivers];
+					ToolOffsetTransform(currentUserPosition, currentCoords);
 
-					SetMoveBufferDefaults();
-					moveBuffer.feedRate = findCenterOfCavityRestorePoint.feedRate;
+					moveBuffer.SetDefaults(numVisibleAxes);
+					RestorePosition(findCenterOfCavityRestorePoint, &gb);
+					ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
+					moveBuffer.coords[axis] += (currentCoords[axis] - moveBuffer.coords[axis]) / 2;
 					moveBuffer.hasExtrusion = false;
 
-					gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
 					NewMoveAvailable(1);
-
+					gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
 					break;
 				}
 			}
