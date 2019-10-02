@@ -151,9 +151,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
+					// Get the current position of the axis to calculate center-point below
+					float currentCoords[MaxAxesPlusExtruders]
+					ToolOffsetTransform(currentUserPosition, currentCoords);
+
 					moveBuffer.SetDefaults(numVisibleAxes);
 					RestorePosition(findCenterOfCavityRestorePoint, &gb);
-					moveBuffer.coords[axis] += (currentUserPosition[axis] - findCenterOfCavityRestorePoint.moveCoords[axis]) / 2;
+					ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
+					moveBuffer.coords[axis] += (currentCoords[axis] - moveBuffer.coords[axis]) / 2;
 
 					NewMoveAvailable(1);
 					gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
