@@ -386,14 +386,21 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	flags.hadLookaheadUnderrun = false;
 	flags.isLeadscrewAdjustmentMove = false;
 	flags.goingSlow = false;
-	flags.controlLaser = true;
+	flags.controlLaser = nextMove.isCoordinated && nextMove.checkEndstops == 0;
 
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a raw motor move
 	flags.endCoordinatesValid = !nextMove.checkEndstops && doMotorMapping;
 	flags.continuousRotationShortcut = (nextMove.moveType == 0);
 
-#if SUPPORT_IOBITS
-	laserPwmOrIoBits = nextMove.laserPwmOrIoBits;
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	if (flags.controlLaser)
+	{
+		laserPwmOrIoBits = nextMove.laserPwmOrIoBits;
+	}
+	else
+	{
+		laserPwmOrIoBits.Clear();
+	}
 #endif
 
 	// If it's a Z probing move, limit the Z acceleration to better handle nozzle-contact probes

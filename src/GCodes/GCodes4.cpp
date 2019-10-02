@@ -152,7 +152,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				if (gb.Seen(axisLetters[axis]))
 				{
 					// Get the current position of the axis to calculate center-point below
-					float currentCoords[MaxAxesPlusExtruders]
+					float currentCoords[MaxAxesPlusExtruders];
 					ToolOffsetTransform(currentUserPosition, currentCoords);
 
 					moveBuffer.SetDefaults(numVisibleAxes);
