@@ -2278,7 +2278,7 @@ void Platform::Diagnostics(MessageType mtype)
 	}
 
 	// Show the current error codes
-	MessageF(mtype, "Error status: %" PRIu32 "\n", errorCodeBits);
+	MessageF(mtype, "Error status: %" PRIx32 "\n", errorCodeBits);
 
 	// Show the number of free entries in the file table
 	MessageF(mtype, "Free file entries: %u\n", massStorage->GetNumFreeFiles());

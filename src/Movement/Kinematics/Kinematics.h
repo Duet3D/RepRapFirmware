@@ -30,8 +30,9 @@ enum class KinematicsType : uint8_t
 	polar,
 	coreXYUV,
 	reserved,			// reserved for @sga, see https://forum.duet3d.com/topic/5775/aditional-carterian-z-axis-on-delta-printer
-	rotaryDelta,		// not yet implemented
+	rotaryDelta,
 	markForged,
+	collinearTriperon,	// reserved for @oliof, see https://forum.duet3d.com/topic/11646/kinematics-type-number-allocation-for-colinear-tripteron
 
 	unknown				// this one must be last!
 };

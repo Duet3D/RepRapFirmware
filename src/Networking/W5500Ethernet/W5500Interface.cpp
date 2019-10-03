@@ -15,16 +15,20 @@
 #include "HttpResponder.h"
 #include "FtpResponder.h"
 #include "TelnetResponder.h"
+#include "MdnsResponder.h"
 #include "General/IP4String.h"
 
 W5500Interface::W5500Interface(Platform& p)
-	: platform(p), lastTickMillis(0), state(NetworkState::disabled), activated(false)
+	: platform(p), lastTickMillis(0), ftpDataSocket(0), state(NetworkState::disabled), activated(false)
 {
 	// Create the sockets
 	for (W5500Socket*& skt : sockets)
 	{
 		skt = new W5500Socket(this);
 	}
+
+	mdnsSocket = new W5500Socket(this);
+	mdnsResponder = new MdnsResponder(mdnsSocket);
 
 	for (size_t i = 0; i < NumProtocols; ++i)
 	{
@@ -83,8 +87,8 @@ GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, i
 		if (portToUse != portNumbers[protocol] && state == NetworkState::active)
 		{
 			// We need to shut down and restart the protocol if it is active because the port number has changed
-			ShutdownProtocol(protocol);
 			protocolEnabled[protocol] = false;
+			ResetSockets();
 		}
 		portNumbers[protocol] = portToUse;
 		if (!protocolEnabled[protocol])
@@ -92,13 +96,11 @@ GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, i
 			protocolEnabled[protocol] = true;
 			if (state == NetworkState::active)
 			{
-				StartProtocol(protocol);
-#if 0	// mdns not implemented yet
+				ResetSockets();
 				if (state == NetworkState::active)
 				{
-					DoMdnsAnnounce();
+					mdnsResponder->Announce();
 				}
-#endif
 			}
 		}
 		ReportOneProtocol(protocol, reply);
@@ -109,6 +111,11 @@ GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, i
 	return GCodeResult::error;
 }
 
+bool W5500Interface::IsProtocolEnabled(NetworkProtocol protocol)
+{
+	return (protocol < NumProtocols) ? protocolEnabled[protocol] : false;
+}
+
 GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply)
 {
 	if (protocol < NumProtocols)
@@ -117,7 +124,7 @@ GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const Stri
 
 		if (state == NetworkState::active)
 		{
-			ShutdownProtocol(protocol);
+			ResetSockets();
 		}
 		protocolEnabled[protocol] = false;
 		ReportOneProtocol(protocol, reply);
@@ -128,69 +135,12 @@ GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const Stri
 	return GCodeResult::error;
 }
 
-void W5500Interface::StartProtocol(NetworkProtocol protocol)
-{
-	MutexLocker lock(interfaceMutex);
-
-	switch(protocol)
-	{
-	case HttpProtocol:
-		for (SocketNumber skt = 0; skt < NumHttpSockets; ++skt)
-		{
-			sockets[skt]->Init(skt, portNumbers[protocol], protocol);
-		}
-		break;
-
-	case FtpProtocol:
-		sockets[FtpSocketNumber]->Init(FtpSocketNumber, portNumbers[protocol], protocol);
-		break;
-
-	case TelnetProtocol:
-		sockets[TelnetSocketNumber]->Init(TelnetSocketNumber, portNumbers[protocol], protocol);
-		break;
-
-	default:
-		break;
-	}
-}
-
-void W5500Interface::ShutdownProtocol(NetworkProtocol protocol)
-{
-	MutexLocker lock(interfaceMutex);
-
-	switch(protocol)
-	{
-	case HttpProtocol:
-		for (SocketNumber skt = 0; skt < NumHttpSockets; ++skt)
-		{
-			sockets[skt]->TerminateAndDisable();
-		}
-		break;
-
-	case FtpProtocol:
-		sockets[FtpSocketNumber]->TerminateAndDisable();
-		sockets[FtpDataSocketNumber]->TerminateAndDisable();
-		break;
-
-	case TelnetProtocol:
-		sockets[TelnetSocketNumber]->TerminateAndDisable();
-		break;
-
-	default:
-		break;
-	}
-}
-
 // Report the protocols and ports in use
 GCodeResult W5500Interface::ReportProtocols(const StringRef& reply) const
 {
 	reply.Clear();
 	for (size_t i = 0; i < NumProtocols; ++i)
 	{
-		if (i != 0)
-		{
-			reply.cat('\n');
-		}
 		ReportOneProtocol(i, reply);
 	}
 	return GCodeResult::ok;
@@ -200,11 +150,11 @@ void W5500Interface::ReportOneProtocol(NetworkProtocol protocol, const StringRef
 {
 	if (protocolEnabled[protocol])
 	{
-		reply.catf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
+		reply.lcatf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
 	}
 	else
 	{
-		reply.catf("%s is disabled", ProtocolNames[protocol]);
+		reply.lcatf("%s is disabled", ProtocolNames[protocol]);
 	}
 }
 
@@ -350,9 +300,6 @@ void W5500Interface::Spin(bool full)
 				{
 //					debugPrintf("IP address obtained, network running\n");
 					getSIPR(ipAddress);
-					// Send mDNS announcement so that some routers can perform hostname mapping
-					// if this board is connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
-					//mdns_announce();
 					state = NetworkState::connected;
 				}
 			}
@@ -371,6 +318,7 @@ void W5500Interface::Spin(bool full)
 		{
 			InitSockets();
 			platform.MessageF(NetworkInfoMessage, "Network running, IP address = %s\n", IP4String(ipAddress).c_str());
+			mdnsResponder->Announce();
 			state = NetworkState::active;
 		}
 		break;
@@ -396,11 +344,19 @@ void W5500Interface::Spin(bool full)
 					{
 //						debugPrintf("IP address changed\n");
 						getSIPR(ipAddress);
+						mdnsResponder->Announce();
 					}
 				}
 
 				// Poll the next TCP socket
 				sockets[nextSocketToPoll]->Poll(full);
+
+				// Keep mDNS alive
+				mdnsSocket->Poll(full);
+				if (full)
+				{
+					mdnsResponder->Spin();
+				}
 
 				// Move on to the next TCP socket for next time
 				++nextSocketToPoll;
@@ -465,6 +421,11 @@ int W5500Interface::EnableState() const
 	return (state == NetworkState::disabled) ? 0 : 1;
 }
 
+void W5500Interface::UpdateHostname(const char *name) /*override*/
+{
+	mdnsResponder->Announce();
+}
+
 void W5500Interface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway)
 {
 	ipAddress = p_ipAddress;
@@ -474,25 +435,58 @@ void W5500Interface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IP
 
 void W5500Interface::OpenDataPort(Port port)
 {
-	sockets[FtpDataSocketNumber]->Init(FtpDataSocketNumber, port, FtpDataProtocol);
+	sockets[ftpDataSocket]->Init(ftpDataSocket, port, FtpDataProtocol);
 }
 
 // Close FTP data port and purge associated resources
 void W5500Interface::TerminateDataPort()
 {
-	sockets[FtpDataSocketNumber]->Terminate();
+	sockets[ftpDataSocket]->Terminate();
 }
 
 void W5500Interface::InitSockets()
 {
-	for (size_t i = 0; i < NumProtocols; ++i)
+	ResetSockets();
+	nextSocketToPoll = 0;
+
+	mdnsSocket->Init(MdnsSocketNumber, MdnsPort, MdnsProtocol);
+}
+
+void W5500Interface::ResetSockets()
+{
+	// See how many sockets are available
+	size_t numFtpSockets = protocolEnabled[FtpProtocol] ? 2 : 0;
+	size_t numTelnetSockets = protocolEnabled[TelnetProtocol] ? 1 : 0;
+	size_t numHttpSockets = protocolEnabled[HttpProtocol] ? NumW5500TcpSockets - numFtpSockets - numTelnetSockets : 0;
+
+	// Terminate every connection and reinitialize them if applicable
+	for (SocketNumber skt = 0; skt < NumW5500TcpSockets; ++skt)
 	{
-		if (protocolEnabled[i])
+		sockets[skt]->TerminateAndDisable();
+		if (skt < numHttpSockets)
 		{
-			StartProtocol(i);
+			// HTTP
+			sockets[skt]->Init(skt, portNumbers[HttpProtocol], HttpProtocol);
+		}
+		else if (skt < numHttpSockets + numFtpSockets)
+		{
+			if (skt == numHttpSockets)
+			{
+				// FTP
+				sockets[skt]->Init(skt, portNumbers[FtpProtocol], FtpProtocol);
+			}
+			else
+			{
+				// FTP DATA is initialised during runtime
+				ftpDataSocket = skt;
+			}
+		}
+		else if (skt < numHttpSockets + numFtpSockets + numTelnetSockets)
+		{
+			// Telnet
+			sockets[skt]->Init(skt, portNumbers[TelnetProtocol], TelnetProtocol);
 		}
 	}
-	nextSocketToPoll = 0;
 }
 
 void W5500Interface::TerminateSockets()
@@ -501,6 +495,8 @@ void W5500Interface::TerminateSockets()
 	{
 		sockets[skt]->Terminate();
 	}
+
+	mdnsSocket->TerminateAndDisable();
 }
 
 // End

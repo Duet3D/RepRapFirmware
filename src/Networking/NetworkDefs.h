@@ -25,8 +25,8 @@ constexpr IPAddress DefaultIpAddress;		// will be initialised to 0 by constructo
 const IPAddress DefaultNetMask((const uint8_t[]){ 255, 255, 255, 0 });
 constexpr IPAddress DefaultGateway;			// will be initialised to 0 by constructor
 
-constexpr size_t NumProtocols = 3;					// number of network protocols we support, not counting FtpDataProtocol or AnyProtocol
-constexpr NetworkProtocol HttpProtocol = 0, FtpProtocol = 1, TelnetProtocol = 2, FtpDataProtocol = 3, AnyProtocol = 255;
+constexpr size_t NumProtocols = 3;					// number of network protocols we support, not counting FtpDataProtocol, MdnsProtocol or AnyProtocol
+constexpr NetworkProtocol HttpProtocol = 0, FtpProtocol = 1, TelnetProtocol = 2, FtpDataProtocol = 3, MdnsProtocol = 4, AnyProtocol = 255;
 
 constexpr size_t NumTcpPorts = NumProtocols + 1;
 constexpr Port DefaultHttpPort = 80;
@@ -35,6 +35,10 @@ constexpr Port DefaultTelnetPort = 23;
 
 constexpr Port DefaultPortNumbers[NumProtocols] = { DefaultHttpPort, DefaultFtpPort, DefaultTelnetPort };
 constexpr const char * ProtocolNames[NumProtocols] = { "HTTP", "FTP", "TELNET" };
+
+constexpr uint8_t MdnsMacAddress[6] = { 0x01, 0x00, 0x5E, 0x00, 0x00, 0xFB };
+constexpr uint8_t MdnsIPAddress[4] = { 224, 0, 0, 251 };
+constexpr Port MdnsPort = 5353;
 
 #if defined(__LPC17xx__)
 const size_t NetworkBufferCount = 2;				// number of MSS sized buffers

@@ -70,6 +70,7 @@ void GCodes::RawMove::SetDefaults(size_t firstDriveToZero)
 	isCoordinated = false;
 	usingStandardFeedrate = false;
 	usePressureAdvance = false;
+	hasExtrusion = false;
 	endStopsToCheck = 0;
 	filePos = noFilePosition;
 	xAxes = DefaultXAxisMapping;
@@ -560,7 +561,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					moveBuffer.SetDefaults(numVisibleAxes);
+					SetMoveBufferDefaults();
 					ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
 					moveBuffer.coords[axis] += rVal;					// add R to the current position
 
@@ -569,6 +570,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					moveBuffer.hasExtrusion = false;
 
 					NewMoveAvailable(1);
+
 					break;
 				}
 			}
@@ -596,11 +598,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					float currentCoords[MaxTotalDrivers];
 					ToolOffsetTransform(currentUserPosition, currentCoords);
 
-					moveBuffer.SetDefaults(numVisibleAxes);
+					SetMoveBufferDefaults();
 					RestorePosition(findCenterOfCavityRestorePoint, &gb);
 					ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
 					moveBuffer.coords[axis] += (currentCoords[axis] - moveBuffer.coords[axis]) / 2;
-					moveBuffer.hasExtrusion = false;
 
 					NewMoveAvailable(1);
 					gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
@@ -2216,6 +2217,16 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 			}
 			if (ok)
 			{
+				// The resurrect-prologue file may undo some retraction, so make sure we have the correct tool selected, but don't run tool change files
+				const Tool * const ct = reprap.GetCurrentTool();
+				if (ct != nullptr)
+				{
+					buf.printf("T%d P0\n", ct->Number());
+					ok = f->Write(buf.c_str());
+				}
+			}
+			if (ok)
+			{
 				buf.printf("M98 P\"%s\"\n", RESUME_PROLOGUE_G);				// call the prologue
 				ok = f->Write(buf.c_str());
 			}
@@ -2628,13 +2639,13 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 # if SUPPORT_LASER
 	else if (machineType == MachineType::laser)
 	{
-		if (!moveBuffer.isCoordinated || moveBuffer.moveType != 0)
-		{
-			moveBuffer.laserPwmOrIoBits.laserPwm = 0;
-		}
-		else if (gb.Seen('S'))
+		if (gb.Seen('S'))
 		{
 			moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
+		}
+		else if (moveBuffer.moveType != 0)
+		{
+			moveBuffer.laserPwmOrIoBits.laserPwm = 0;
 		}
 		else if (laserPowerSticky)
 		{
