@@ -2546,6 +2546,14 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 #if HAS_MASS_STORAGE
 GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 {
+// If we have a Linux interface and we're using it, the Linux components will take care of file I/O.
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		return GCodeResult::ok;
+	}
+#endif
+
 	ClearBedMapping();
 
 	String<MaxFilenameLength> heightMapFileName;
@@ -2586,6 +2594,14 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 // Save the height map and append the success or error message to 'reply', returning true if an error occurred
 bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) const
 {
+// If we have a Linux interface and we're using it, the Linux components will take care of file I/O.
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		return false;
+	}
+#endif
+
 	FileStore * const f = platform.OpenSysFile(filename, OpenMode::write);
 	bool err;
 	if (f == nullptr)
@@ -2613,6 +2629,14 @@ bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) cons
 // Save the height map to the file specified by P parameter
 GCodeResult GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 {
+// If we have a Linux interface and we're using it, the Linux components will take care of file I/O.
+#if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		return GCodeResult::ok;
+	}
+#endif
+
 	if (gb.Seen('P'))
 	{
 		String<MaxFilenameLength> heightMapFileName;
