@@ -646,7 +646,6 @@ private:
 #endif
 
 	static constexpr const float MinServoPulseWidth = 544.0, MaxServoPulseWidth = 2400.0;
-	static constexpr uint16_t ServoRefreshFrequency = 50;
 };
 
 // Flag that a new move is available for consumption by the Move subsystem

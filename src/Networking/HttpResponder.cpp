@@ -552,22 +552,6 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		const bool flagDirs = flagDirsVal != nullptr && SafeStrtol(flagDirsVal) == 1;
 		response = reprap.GetFilesResponse(dir, startAt, flagDirs);				// this may return nullptr
 	}
-	else if (StringEqualsIgnoreCase(request, "fileinfo"))
-	{
-		const char* const nameVal = GetKeyValue("name");
-		if (nameVal != nullptr)
-		{
-			// Regular rr_fileinfo?name=xxx call
-			filenameBeingProcessed.copy(nameVal);
-		}
-		else
-		{
-			// Simple rr_fileinfo call to get info about the file being printed
-			filenameBeingProcessed.Clear();
-		}
-		responderState = ResponderState::gettingFileInfo;
-		return false;
-	}
 	else if (StringEqualsIgnoreCase(request, "move"))
 	{
 		const char* const oldVal = GetKeyValue("old");
@@ -593,6 +577,22 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			success = GetPlatform().GetMassStorage()->MakeDirectory(dirVal);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
+	}
+	else if (StringEqualsIgnoreCase(request, "fileinfo"))
+	{
+		const char* const nameVal = GetKeyValue("name");
+		if (nameVal != nullptr)
+		{
+			// Regular rr_fileinfo?name=xxx call
+			filenameBeingProcessed.copy(nameVal);
+		}
+		else
+		{
+			// Simple rr_fileinfo call to get info about the file being printed
+			filenameBeingProcessed.Clear();
+		}
+		responderState = ResponderState::gettingFileInfo;
+		return false;
 	}
 	else if (StringEqualsIgnoreCase(request, "config"))
 	{
@@ -1193,6 +1193,14 @@ void HttpResponder::ProcessRequest()
 						fileLastModified = 0;
 					}
 
+					// Try to get the expected CRC
+					const char* const expectedCrc = GetKeyValue("crc32");
+					postFileGotCrc = (expectedCrc != nullptr);
+					if (postFileGotCrc)
+					{
+						postFileExpectedCrc = SafeStrtoul(expectedCrc, nullptr, 16);
+					}
+
 					if (reprap.Debug(moduleWebserver))
 					{
 						GetPlatform().MessageF(UsbMessage, "Start uploading file %s length %lu\n", filename, postFileLength);
@@ -1297,7 +1305,7 @@ void HttpResponder::DoUpload()
 			}
 		}
 
-		FinishUpload(postFileLength, fileLastModified);
+		FinishUpload(postFileLength, fileLastModified, postFileGotCrc, postFileExpectedCrc);
 		SendJsonResponse("upload");
 	}
 }

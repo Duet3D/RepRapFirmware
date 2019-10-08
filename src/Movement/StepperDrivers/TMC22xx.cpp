@@ -23,9 +23,10 @@
 // so that each one gets an interval while the other one is being polled.
 
 constexpr float MaximumMotorCurrent = 1600.0;
-constexpr uint32_t DefaultMicrosteppingShift = 4;						// x16 microstepping
-constexpr bool DefaultInterpolation = true;								// interpolation enabled
-constexpr uint32_t DefaultTpwmthrsReg = 2000;							// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle
+constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA for the open load status to be taken seriously
+constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
+constexpr bool DefaultInterpolation = true;					// interpolation enabled
+constexpr uint32_t DefaultTpwmthrsReg = 2000;				// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle
 
 static size_t numTmc22xxDrivers;
 
@@ -301,12 +302,14 @@ private:
 	static constexpr unsigned int WritePwmConf = 4;			// read register select, sense voltage high/low sensitivity
 	static constexpr unsigned int WriteTpwmthrs = 5;		// upper step rate limit for stealthchop
 
-	static constexpr unsigned int NumReadRegisters = 2;		// the number of registers that we read from
+	static constexpr unsigned int NumReadRegisters = 4;		// the number of registers that we read from
 	static const uint8_t ReadRegNumbers[NumReadRegisters];	// the register numbers that we read from
 
 	// Read register numbers, in same order as ReadRegNumbers
 	static constexpr unsigned int ReadGStat = 0;
 	static constexpr unsigned int ReadDrvStat = 1;
+	static constexpr unsigned int ReadMsCnt = 2;
+	static constexpr unsigned int ReadPwmScale = 3;
 
 	volatile uint32_t writeRegisters[NumWriteRegisters];	// the values we want the TMC22xx writable registers to have
 	volatile uint32_t readRegisters[NumReadRegisters];		// the last values read from the TMC22xx readable registers
@@ -387,13 +390,17 @@ const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 const uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 {
 	REGNUM_GSTAT,
-	REGNUM_DRV_STATUS
+	REGNUM_DRV_STATUS,
+	REGNUM_MSCNT,
+	REGNUM_PWM_SCALE
 };
 
 const uint8_t TmcDriverState::ReadRegCRCs[NumReadRegisters] =
 {
 	CRCAddByte(InitialSendCRC, ReadRegNumbers[0]),
-	CRCAddByte(InitialSendCRC, ReadRegNumbers[1])
+	CRCAddByte(InitialSendCRC, ReadRegNumbers[1]),
+	CRCAddByte(InitialSendCRC, ReadRegNumbers[2]),
+	CRCAddByte(InitialSendCRC, ReadRegNumbers[3])
 };
 
 // State structures for all drivers
@@ -621,6 +628,12 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const
 	case SmartDriverRegister::tpwmthrs:
 		return writeRegisters[WriteTpwmthrs] & 0x000FFFFF;
 
+	case SmartDriverRegister::mstepPos:
+		return readRegisters[ReadMsCnt];
+
+	case SmartDriverRegister::pwmScale:
+		return readRegisters[ReadPwmScale];
+
 	case SmartDriverRegister::hdec:
 	case SmartDriverRegister::coolStep:
 	default:
@@ -790,6 +803,7 @@ inline void TmcDriverState::TransferDone()
 				if (   (regVal & TMC_RR_STST) != 0
 					|| (interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor)) == 0		// get the full step interval
 					|| interval > maxOpenLoadStepInterval
+					|| motorCurrent < MinimumOpenLoadMotorCurrent
 				   )
 				{
 					regVal &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds
@@ -878,22 +892,12 @@ inline void TmcDriverState::StartTransfer()
 	}
 	else
 	{
-		// Write a register
-		size_t regNum = 0;
-		uint32_t mask = 1;
-		do
-		{
-			if ((registersToUpdate & mask) != 0)
-			{
-				break;
-			}
-			++regNum;
-			mask <<= 1;
-		} while (regNum < NumWriteRegisters - 1);
+		// Pick a register to write
+		const size_t regNum = LowestSetBitNumber(registersToUpdate);
 
 		// Kick off a transfer for that register
 		const irqflags_t flags = cpu_irq_save();		// avoid race condition
-		registerBeingUpdated = mask;
+		registerBeingUpdated = 1u << regNum;
 		uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX;	// reset transmitter and receiver
 		SetupDMASend(WriteRegNumbers[regNum], writeRegisters[regNum], writeRegCRCs[regNum]);	// set up the PDC
 		uart->UART_IER = UART_IER_ENDRX;				// enable end-of-transfer interrupt

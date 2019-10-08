@@ -71,6 +71,12 @@ public:
 		return f->Write(s, len);
 	}
 
+	// This returns the CRC32 of data written to a newly-created file. It does not calculate the CRC of an existing file.
+	uint32_t GetCrc32() const
+	{
+		return f->GetCRC32();
+	}
+
 	bool Flush()
 	{
 		return f->Flush();

@@ -24,40 +24,22 @@
 #if SAME70
 
 constexpr unsigned int DdaRingLength = 40;
-constexpr unsigned int AuxDdaRingLength = 3;
-constexpr unsigned int NumDms = (DdaRingLength/2 * 12) + (AuxDdaRingLength * 3);	// allow enough for plenty of CAN expansion
+constexpr unsigned int NumDms = DdaRingLength/2 * 12;								// allow enough for plenty of CAN expansion
 
 #elif SAM4E || SAM4S
 
 constexpr unsigned int DdaRingLength = 40;
-constexpr unsigned int AuxDdaRingLength = 3;
-const unsigned int NumDms = (DdaRingLength/2 * 8) + (AuxDdaRingLength * 3);			// suitable for e.g. a delta + 5 input hot end
+const unsigned int NumDms = DdaRingLength/2 * 8;									// suitable for e.g. a delta + 5 input hot end
 
 #else
 
 // We are more memory-constrained on the SAM3X
 const unsigned int DdaRingLength = 20;
-const unsigned int NumDms = 20 * 5;									// suitable for e.g. a delta + 2-input hot end
+const unsigned int NumDms = 20 * 5;													// suitable for e.g. a delta + 2-input hot end
 
 #endif
 
-constexpr uint32_t MovementStartDelayClocks = StepTimer::StepClockRate/100;		// 10ms delay between preparing the first move and starting it
-
-enum EndstopHitAction
-{
-	noStop = 0,
-	stopDriver = 1,
-	stopAxis = 2,
-	stopAll = 3
-};
-
-struct EndstopAction
-{
-	uint16_t driver : 4,			// which driver to stop if the action is stopDriver
-			 axis : 4,				// which axis to stop if the action is stopAxis, and which axis to set the position of if setAxisPos is true
-			 action : 2,			// the EndstopHitAction for this endstop
-			 setAxisPos : 1;		// whether or not to set the axis position to its min or max
-};
+constexpr uint32_t MovementStartDelayClocks = StepTimer::StepClockRate/100;			// 10ms delay between preparing the first move and starting it
 
 // This is the master movement class.  It controls all movement in the machine.
 class Move INHERIT_OBJECT_MODEL
@@ -230,12 +212,7 @@ private:
 	Kinematics *kinematics;								// What kinematics we are using
 
 	float specialMoveCoords[MaxTotalDrivers];			// Amounts by which to move individual motors (leadscrew adjustment move)
-	bool bedLevellingMoveAvailable;							// True if a leadscrew adjustment move is pending
-
-	EndstopAction endstopActions[NumEndstops];
-#if HAS_STALL_DETECT
-	EndstopAction stallActions[NumDirectDrivers];
-#endif
+	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
 };
 
 //******************************************************************************************************

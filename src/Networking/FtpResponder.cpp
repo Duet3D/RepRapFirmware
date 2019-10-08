@@ -374,7 +374,7 @@ void FtpResponder::DoUpload()
 		dataSocket = nullptr;
 		responderState = ResponderState::pasvTransferComplete;
 
-		FinishUpload(0, 0);
+		FinishUpload(0, 0, false, 0);
 	}
 }
 

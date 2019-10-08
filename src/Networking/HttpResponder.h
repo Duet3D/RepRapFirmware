@@ -109,6 +109,11 @@ private:
 	uint32_t startedProcessingRequestAt;			// when we started processing the current HTTP request
 	// rr_fileinfo also uses fileBeingProcessed in the networkResponder class
 
+	uint32_t postFileLength;
+	uint32_t postFileExpectedCrc;
+	time_t fileLastModified;
+	bool postFileGotCrc;
+
 	// Keeping track of HTTP sessions
 	static HttpSession sessions[MaxHttpSessions];
 	static unsigned int numSessions;

@@ -4998,7 +4998,7 @@ GCodeResult GCodes::AdvanceHash(const StringRef &reply)
 			SHA1Result(&hash);
 			for(size_t i = 0; i < 5; i++)
 			{
-				reply.catf("%" PRIx32, hash.Message_Digest[i]);
+				reply.catf("%08" PRIx32, hash.Message_Digest[i]);
 			}
 
 			// Clean up again

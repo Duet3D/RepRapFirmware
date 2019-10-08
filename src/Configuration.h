@@ -52,8 +52,6 @@ constexpr float DefaultMinFeedrate = 0.5;				// The minimum movement speed (extr
 constexpr float DefaultAxisMinimum = 0.0;
 constexpr float DefaultAxisMaximum = 200.0;
 
-constexpr float MinimumOpenLoadMotorCurrent = 300;		// minimum current in mA for the open load status to be taken seriously
-
 // Timeouts
 constexpr uint32_t FanCheckInterval = 500;				// Milliseconds
 constexpr uint32_t OpenLoadTimeout = 500;				// Milliseconds
@@ -84,14 +82,12 @@ constexpr float HOT_ENOUGH_TO_RETRACT = 90.0;			// Celsius
 
 constexpr unsigned int MaxBadTemperatureCount = 2000/HeatSampleIntervalMillis;	// Number of bad temperature samples permitted before a heater fault is reported (2 seconds)
 constexpr float BadLowTemperature = -10.0;				// Celsius
-constexpr float DefaultExtruderTemperatureLimit = 290.0; // Celsius - E3D say to tighten the hot end at 285C
+constexpr float DefaultHotEndTemperatureLimit = 290.0;	// Celsius - E3D say to tighten the hot end at 285C
 constexpr float DefaultBedTemperatureLimit = 125.0;		// Celsius
-constexpr float HotEndFanTemperature = 45.0;			// Temperature at which a thermostatic hot end fan comes on
+constexpr float DefaultHotEndFanTemperature = 45.0;		// Temperature at which a thermostatic hot end fan comes on
 constexpr float ThermostatHysteresis = 1.0;				// How much hysteresis we use to prevent noise turning fans on/off too often
 constexpr float BadErrorTemperature = 2000.0;			// Must exceed any reasonable temperature limit including DEFAULT_TEMPERATURE_LIMIT
 constexpr uint32_t DefaultHeaterFaultTimeout = 10 * 60 * 1000;	// How long we wait (in milliseconds) for user intervention after a heater fault before shutting down
-
-constexpr PwmFrequency MaxHeaterPwmFrequency = 1000;	// maximum supported heater PWM frequency, to avoid overheating the mosfets
 
 // Heating model default parameters. For the chamber heater, we use the same values as for the bed heater.
 // These parameters are about right for an E3Dv6 hot end with 30W heater.
@@ -162,10 +158,13 @@ constexpr unsigned int FirstTmcDriversSenseChannel = 1001; // Sensors 1001..1002
 constexpr unsigned int NumTmcDriversSenseChannels = 2;	// Sensors 1001..1002 are the TMC2660 driver temperature sense
 
 // PWM frequencies
-constexpr unsigned int SlowHeaterPwmFreq = 10;			// slow PWM frequency for bed and chamber heaters, compatible with DC/AC SSRs
-constexpr unsigned int NormalHeaterPwmFreq = 250;		// normal PWM frequency used for hot ends
+constexpr PwmFrequency SlowHeaterPwmFreq = 10;			// slow PWM frequency for bed and chamber heaters, compatible with DC/AC SSRs
+constexpr PwmFrequency NormalHeaterPwmFreq = 250;		// normal PWM frequency used for hot ends
+constexpr PwmFrequency MaxHeaterPwmFrequency = 1000;	// maximum supported heater PWM frequency, to avoid overheating the mosfets
+
 constexpr PwmFrequency DefaultFanPwmFreq = 250;			// increase to 25kHz using M106 command to meet Intel 4-wire PWM fan specification
-constexpr unsigned int DefaultPinWritePwmFreq = 500;	// default PWM frequency for M42 pin writes and extrusion ancillary PWM
+constexpr PwmFrequency DefaultPinWritePwmFreq = 500;	// default PWM frequency for M42 pin writes and extrusion ancillary PWM
+constexpr PwmFrequency ServoRefreshFrequency = 50;
 
 // Default Z probe values
 
@@ -207,8 +206,8 @@ static_assert(MaxCalibrationPoints <= MaxProbePoints, "MaxCalibrationPoints must
 
 // SD card
 constexpr uint32_t SdCardDetectDebounceMillis = 200;	// How long we give the SD card to settle in the socket
-constexpr unsigned int MaxSdCardTries = 3;				// Number of read or write attempts before giving up
-constexpr uint32_t SdCardRetryDelay = 30;				// Number of milliseconds delay between SD transfer retries. Looks like 10ms may be too low.
+constexpr unsigned int MaxSdCardTries = 5;				// Number of read or write attempts before giving up
+constexpr uint32_t SdCardRetryDelay = 20;				// Number of milliseconds delay between SD transfer retries. We now double for each retry.
 
 // Z probing
 constexpr float DefaultZDive = 5.0;						// Millimetres

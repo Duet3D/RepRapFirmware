@@ -434,7 +434,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					const Pwm_t laserPwm = ConvertLaserPwm(gb.GetFValue());
 					platform.SetLaserPwm(laserPwm);
+#if SUPPORT_LASER
 					moveBuffer.laserPwmOrIoBits.laserPwm = laserPwm;
+#endif
 				}
 				break;
 
@@ -508,7 +510,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 		case MachineType::laser:
 			platform.SetLaserPwm(0);
+#if SUPPORT_LASER
 			moveBuffer.laserPwmOrIoBits.Clear();
+#endif
 			break;
 
 		default:

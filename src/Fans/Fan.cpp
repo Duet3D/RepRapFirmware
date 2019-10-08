@@ -24,7 +24,7 @@ void Fan::Init(Pin p_pin, LogicalPin lp, bool hwInverted, PwmFrequency p_freq)
 	hardwareInverted = hwInverted;
 	inverted = blipping = false;
 	heatersMonitored = 0;
-	triggerTemperatures[0] = triggerTemperatures[1] = HotEndFanTemperature;
+	triggerTemperatures[0] = triggerTemperatures[1] = DefaultHotEndFanTemperature;
 	lastPwm = -1.0;				// force a refresh
 	Refresh();
 }

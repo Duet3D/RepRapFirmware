@@ -89,7 +89,7 @@ void Heat::Init()
 	{
 		HeaterProtection * const prot = heaterProtections[index];
 
-		const float tempLimit = (IsBedOrChamberHeater(index)) ? DefaultBedTemperatureLimit : DefaultExtruderTemperatureLimit;
+		const float tempLimit = (IsBedOrChamberHeater(index)) ? DefaultBedTemperatureLimit : DefaultHotEndTemperatureLimit;
 		prot->Init(tempLimit);
 
 		if (index < NumHeaters)

@@ -31,7 +31,6 @@ const size_t NumFirmwareUpdateModules = 1;
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
-#define SUPPORT_ASYNC_MOVES		1
 
 #define USE_CACHE				0					// Cache controller disabled for now
 

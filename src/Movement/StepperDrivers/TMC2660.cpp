@@ -23,12 +23,13 @@
 
 #include "sam/drivers/usart/usart.h"
 
-const float MaximumMotorCurrent = 2400.0;
-const uint32_t DefaultMicrosteppingShift = 4;				// x16 microstepping
-const bool DefaultInterpolation = true;						// interpolation enabled
-const int DefaultStallDetectThreshold = 1;
-const bool DefaultStallDetectFiltered = false;
-const unsigned int DefaultMinimumStepsPerSecond = 200;		// for stall detection: 1 rev per second assuming 1.8deg/step, as per the TMC2660 datasheet
+constexpr float MaximumMotorCurrent = 2400.0;
+constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA for the open load status to be taken seriously
+constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
+constexpr bool DefaultInterpolation = true;					// interpolation enabled
+constexpr int DefaultStallDetectThreshold = 1;
+constexpr bool DefaultStallDetectFiltered = false;
+constexpr unsigned int DefaultMinimumStepsPerSecond = 200;	// for stall detection: 1 rev per second assuming 1.8deg/step, as per the TMC2660 datasheet
 
 static size_t numTmc2660Drivers;
 
@@ -112,12 +113,13 @@ const uint32_t TMC_DRVCTRL_DEDGE = 1 << 8;
 const uint32_t TMC_DRVCTRL_INTPOL = 1 << 9;
 
 // stallGuard2 control register
-const uint32_t TMC_SGCSCONF_CS_MASK = 31;
-#define TMC_SGCSCONF_CS(n) ((((uint32_t)n) & 31) << 0)
-const uint32_t TMC_SGCSCONF_SGT_MASK = 127 << 8;
-const uint32_t TMC_SGCSCONF_SGT_SHIFT = 8;
-#define TMC_SGCSCONF_SGT(n) ((((uint32_t)n) & 127) << 8)
-const uint32_t TMC_SGCSCONF_SGT_SFILT = 1 << 16;
+constexpr uint32_t TMC_SGCSCONF_CS_SHIFT = 0;
+constexpr uint32_t TMC_SGCSCONF_CS_MASK = 31 << TMC_SGCSCONF_CS_SHIFT;
+#define TMC_SGCSCONF_CS(n) ((((uint32_t)n) & 31) << TMC_SGCSCONF_CS_SHIFT)
+constexpr uint32_t TMC_SGCSCONF_SGT_SHIFT = 8;
+constexpr uint32_t TMC_SGCSCONF_SGT_MASK = 127 << TMC_SGCSCONF_SGT_SHIFT;
+#define TMC_SGCSCONF_SGT(n) ((((uint32_t)n) & 127) << TMC_SGCSCONF_SGT_SHIFT)
+constexpr uint32_t TMC_SGCSCONF_SGT_SFILT = 1 << 16;
 
 // coolStep control register
 const uint32_t TMC_SMARTEN_SEMIN_MASK = 15;
@@ -178,10 +180,21 @@ const uint32_t defaultSmartEnReg =
 //----------------------------------------------------------------------------------------------------------------------------------
 // Private types and methods
 
+// Convert a required motor current to the CS bits in the SGCSCONF register
+static inline constexpr uint32_t CurrentToCsBits(float current)
+{
+	// The current sense resistor on the production Duet WiFi is 0.051 ohms.
+	// This gives us a range of 101mA to 3.236A in 101mA steps in the high sensitivity range (VSENSE = 1)
+	const uint32_t iCurrent = static_cast<uint32_t>(constrain<float>(current, 100.0, MaximumMotorCurrent));
+	return (32 * iCurrent - 1600)/3236 << TMC_SGCSCONF_CS_SHIFT;	// formula checked by simulation on a spreadsheet
+}
+
+constexpr uint32_t MinimumOpenLoadCsBits = CurrentToCsBits(MinimumOpenLoadMotorCurrent);
+
 class TmcDriverState
 {
 public:
-	void Init(uint32_t p_axisNumber, uint32_t p_pin);
+	void Init(uint32_t driverNumber, uint32_t p_pin);
 	void SetAxisNumber(size_t p_axisNumber);
 	void WriteAll();
 
@@ -379,10 +392,10 @@ static TmcDriverState * volatile currentDriver = nullptr;	// volatile because th
 }
 
 // Initialise the state of the driver and its CS pin
-void TmcDriverState::Init(uint32_t p_axisNumber, uint32_t p_pin)
+void TmcDriverState::Init(uint32_t driverNumber, uint32_t p_pin)
 pre(!driversPowered)
 {
-	axisNumber = p_axisNumber;
+	axisNumber = driverNumber;												// assume straight through mapping at initialisation
 	pin = p_pin;
 	pinMode(pin, OUTPUT_HIGH);
 	enabled = false;
@@ -554,10 +567,7 @@ bool TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate)
 // Set the motor current
 void TmcDriverState::SetCurrent(float current)
 {
-	// The current sense resistor on the production Duet WiFi is 0.051 ohms.
-	// This gives us a range of 101mA to 3.236A in 101mA steps in the high sensitivity range (VSENSE = 1)
-	const uint32_t iCurrent = static_cast<uint32_t>(constrain<float>(current, 100.0, MaximumMotorCurrent));
-	const uint32_t csBits = (32 * iCurrent - 1600)/3236;		// formula checked by simulation on a spreadsheet
+	const uint32_t csBits = CurrentToCsBits(current);
 	registers[StallGuardConfig] = (registers[StallGuardConfig] & ~TMC_SGCSCONF_CS_MASK) | TMC_SGCSCONF_CS(csBits);
 	registersToUpdate |= 1u << StallGuardConfig;
 }
@@ -730,7 +740,11 @@ inline void TmcDriverState::TransferDone()
 		{
 			mstepPosition = (status >> TMC_RR_MSTEP_SHIFT) & 1023;
 		}
-		if ((status & TMC_RR_STST) != 0 || interval == 0 || interval > StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec)
+		if (   (status & TMC_RR_STST) != 0
+			|| interval == 0
+			|| interval > StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec
+			|| (registers[StallGuardConfig] & TMC_SGCSCONF_CS_MASK) < MinimumOpenLoadCsBits
+		   )
 		{
 			status &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds
 		}
@@ -758,18 +772,8 @@ inline void TmcDriverState::StartTransfer()
 	}
 	else
 	{
-		size_t regNum = 0;
-		uint32_t mask = 1;
-		do
-		{
-			if ((registersToUpdate & mask) != 0)
-			{
-				break;
-			}
-			++regNum;
-			mask <<= 1;
-		} while (regNum < NumRegisters - 1);
-		registersToUpdate &= ~mask;
+		const size_t regNum = LowestSetBitNumber(registersToUpdate);
+		registersToUpdate &= ~(1u << regNum);
 		regVal = registers[regNum];
 	}
 
