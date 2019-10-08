@@ -5,7 +5,7 @@ Version 2.04RC3
 ===============
 Compatible files:
 - DuetWiFiServer 1.23
-- DuetWebControl 2.0.1 (recommended) or 1.22.6
+- DuetWebControl 2.0.2 (recommended) or 1.22.6
 
 Upgrade notes:
 - If using this release to control a laser cutter/engraver, see the notes below on changed handling of the G1 S parameter
