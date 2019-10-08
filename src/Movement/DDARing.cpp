@@ -275,17 +275,17 @@ void DDARing::TryStartNextMove(Platform& p, uint32_t startTime)
 	}
 	else
 	{
-		if (st == DDA::provisional)
-		{
-			++numPrepareUnderruns;					// there are more moves available, but they are not prepared yet. Signal an underrun.
-		}
-		p.ExtrudeOff();								// turn off ancillary PWM
 #if SUPPORT_LASER
 		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
 		{
 			p.SetLaserPwm(0);						// turn off the laser
 		}
 #endif
+		p.ExtrudeOff();								// turn off ancillary PWM
+		if (st == DDA::provisional)
+		{
+			++numPrepareUnderruns;					// there are more moves available, but they are not prepared yet. Signal an underrun.
+		}
 	}
 }
 
