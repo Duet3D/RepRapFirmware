@@ -34,11 +34,14 @@ void W5500Socket::Init(SocketNumber skt, Port serverPort, NetworkProtocol p)
 
 void W5500Socket::TerminateAndDisable()
 {
-	MutexLocker lock(interface->interfaceMutex);
+	if (state != SocketState::disabled)		// we must not call close() if the socket has never been initialised, because socketNum won't have been initialised
+	{
+		MutexLocker lock(interface->interfaceMutex);
 
-	Terminate();
-	close(socketNum);
-	state = SocketState::disabled;
+		Terminate();
+		close(socketNum);
+		state = SocketState::disabled;
+	}
 }
 
 void W5500Socket::ReInit()

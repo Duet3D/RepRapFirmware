@@ -452,6 +452,7 @@ void W5500Interface::InitSockets()
 	mdnsSocket->Init(MdnsSocketNumber, MdnsPort, MdnsProtocol);
 }
 
+// Note, the following is called to initialise the sockets as well as to reset them. Therefore it must work with sockets that have never been initialised.
 void W5500Interface::ResetSockets()
 {
 	// See how many sockets are available
