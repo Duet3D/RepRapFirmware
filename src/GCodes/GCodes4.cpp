@@ -718,7 +718,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				reply.printf("%" PRIu32 " points probed, min error %.3f, max error %.3f, mean %.3f, deviation %.3f\n",
 								numPointsProbed, (double)minError, (double)maxError, (double)mean, (double)deviation);
 #if HAS_MASS_STORAGE
-				error = TrySaveHeightMap(DefaultHeightMapFile, reply);
+# if HAS_LINUX_INTERFACE
+				if (!reprap.UsingLinuxInterface())
+				{
+# endif
+					error = TrySaveHeightMap(DefaultHeightMapFile, reply);
+# if HAS_LINUX_INTERFACE
+				}
+# endif
 #endif
 				reprap.GetMove().AccessHeightMap().ExtrapolateMissing();
 				reprap.GetMove().UseMesh(true);

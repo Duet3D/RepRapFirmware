@@ -2544,8 +2544,18 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 }
 
 #if HAS_MASS_STORAGE
+
 GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 {
+#if HAS_LINUX_INTERFACE
+	// If we have a Linux interface and we're using it, the Linux components will take care of file I/O and this should not be called.
+	if (reprap.UsingLinuxInterface())
+	{
+		reply.copy("Cannot use height map on local SD card when SBC interface is used");
+		return GCodeResult::error;
+	}
+#endif
+
 	ClearBedMapping();
 
 	String<MaxFilenameLength> heightMapFileName;
@@ -2586,6 +2596,15 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 // Save the height map and append the success or error message to 'reply', returning true if an error occurred
 bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) const
 {
+#if HAS_LINUX_INTERFACE
+	// If we have a Linux interface and we're using it, the Linux components will take care of file I/O.
+	if (reprap.UsingLinuxInterface())
+	{
+		reply.copy("Cannot use height map on local SD card when SBC interface is used");
+		return true;
+	}
+#endif
+
 	FileStore * const f = platform.OpenSysFile(filename, OpenMode::write);
 	bool err;
 	if (f == nullptr)
@@ -2613,6 +2632,7 @@ bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) cons
 // Save the height map to the file specified by P parameter
 GCodeResult GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 {
+	// No need to check if we're using the Linux interface here, because TrySaveHeightMap does that
 	if (gb.Seen('P'))
 	{
 		String<MaxFilenameLength> heightMapFileName;
@@ -2628,6 +2648,7 @@ GCodeResult GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 	}
 	return GetGCodeResultFromError(TrySaveHeightMap(DefaultHeightMapFile, reply));
 }
+
 #endif
 
 // Stop using bed compensation
