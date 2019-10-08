@@ -43,8 +43,8 @@ Licence: GPL
 
 // Definitions needed by Pins.h and/or Configuration.h
 // Logical pins used for general output, servos, CCN and laser control
-typedef uint16_t LogicalPin;				// type used to represent logical pin numbers
-constexpr LogicalPin NoLogicalPin = 0xFFFF;
+typedef uint8_t LogicalPin;				// type used to represent logical pin numbers
+constexpr LogicalPin NoLogicalPin = 0xFF;
 constexpr const char *NoPinName = "nil";
 
 typedef uint16_t PwmFrequency;				// type used to represent a PWM frequency. 0 sometimes means "default".
@@ -79,6 +79,8 @@ enum class PinUsedBy : uint8_t
 
 #include "Configuration.h"
 #include "Pins.h"
+
+static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logical pin numbers");
 
 #if SUPPORT_CAN_EXPANSION
 # include "CanId.h"		// for type CanAddress
@@ -354,13 +356,13 @@ constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
 constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2;				// The indices of the Cartesian axes in drive arrays
 constexpr size_t U_AXIS = 3;										// The assumed index of the U axis when executing M673
 
-constexpr size_t MaxAxesPlusExtruders = MaxAxes + MaxExtruders;
-
 #if SUPPORT_CAN_EXPANSION
 constexpr size_t MaxTotalDrivers = NumDirectDrivers + MaxCanDrivers;
 #else
 constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 #endif
+
+constexpr size_t MaxAxesPlusExtruders = min<size_t>(MaxAxes + MaxExtruders, MaxTotalDrivers);
 
 constexpr AxesBitmap DefaultXAxisMapping = MakeBitmap<AxesBitmap>(X_AXIS);	// by default, X is mapped to X
 constexpr AxesBitmap DefaultYAxisMapping = MakeBitmap<AxesBitmap>(Y_AXIS);	// by default, Y is mapped to Y

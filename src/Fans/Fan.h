@@ -12,6 +12,10 @@
 #include "Hardware/IoPorts.h"
 #include "GCodes/GCodeResult.h"
 
+#if SUPPORT_CAN_EXPANSION
+# include "CanId.h"
+#endif
+
 class GCodeBuffer;
 
 class Fan
@@ -19,12 +23,15 @@ class Fan
 public:
 	Fan(unsigned int fanNum);
 
+	virtual ~Fan() { }
 	virtual bool Check() = 0;								// update the fan PWM returning true if it is a thermostatic fan that is on
 	virtual GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) = 0;
 	virtual bool IsEnabled() const = 0;
 	virtual int32_t GetRPM() = 0;
 	virtual GCodeResult ReportPortDetails(const StringRef& str) const = 0;
-	virtual ~Fan() { }
+#if SUPPORT_CAN_EXPANSION
+	virtual void UpdateRpmFromRemote(CanAddress src, int32_t rpm) = 0;
+#endif
 
 	// Set or report the parameters for this fan
 	// If 'mCode' is an M-code used to set parameters (which should only ever be 106 or 107)
@@ -43,7 +50,6 @@ public:
 #if HAS_MASS_STORAGE
 	bool WriteSettings(FileStore *f, size_t fanNum) const;	// save the settings of this fan if it isn't thermostatic
 #endif
-
 protected:
 	virtual GCodeResult Refresh(const StringRef& reply) = 0;
 	virtual bool UpdateFanConfiguration(const StringRef& reply) = 0;

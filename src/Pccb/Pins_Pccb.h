@@ -178,7 +178,8 @@ constexpr float EXT_BETA = 4388.0;
 constexpr float EXT_SHC = 0.0;
 
 // Thermistor series resistor value in Ohms
-constexpr float THERMISTOR_SERIES_RS = 2200.0;
+constexpr float DefaultThermistorSeriesR = 2200.0;
+constexpr float MinVrefLoadR = DefaultThermistorSeriesR / 2;		// there are 2 temperature sensing channels
 
 // Number of SPI temperature sensors to support
 constexpr size_t MaxSpiTempSensors = 1;		//TODO which SPI channels does PCCB route to the DueX?
@@ -201,12 +202,14 @@ constexpr Pin DiagPin = NoPin;
 // Cooling fans
 constexpr size_t NumTotalFans = 7;
 
-// DotStar LED control (USART0 is SharedSPI,
+// DotStar LED control (USART0 is SharedSPI so we use USART1)
+#define DOTSTAR_USES_USART	1
+
 Usart * const DotStarUsart = USART1;
-constexpr uint32_t DotStarUsartId = ID_USART1;
 constexpr Pin DotStarMosiPin = PortAPin(22);
 constexpr Pin DotStarSclkPin = PortAPin(23);
-constexpr IRQn DotStarUsartIRQn = USART1_IRQn;
+constexpr uint32_t DotStarClockId = ID_USART1;
+constexpr IRQn DotStarIRQn = USART1_IRQn;
 const uint32_t DotStarSpiClockFrequency = 100000;		// try sending at 100kHz
 
 // SD cards

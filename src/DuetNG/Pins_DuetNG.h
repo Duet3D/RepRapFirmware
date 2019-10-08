@@ -134,7 +134,8 @@ constexpr float EXT_BETA = 4388.0;
 constexpr float EXT_SHC = 0.0;
 
 // Thermistor series resistor value in Ohms
-constexpr float THERMISTOR_SERIES_RS = 4700.0;
+constexpr float DefaultThermistorSeriesR = 4700.0;
+constexpr float MinVrefLoadR = DefaultThermistorSeriesR / 8;		// there are 8 temperature sensing channels
 
 // Number of SPI temperature sensors to support
 

@@ -111,7 +111,8 @@ constexpr Pin VssaSensePin = PortAPin(20);
 constexpr Pin VrefSensePin = PortEPin(0);
 
 // Thermistor series resistor value in Ohms
-constexpr float THERMISTOR_SERIES_RS = 2200.0;
+constexpr float DefaultThermistorSeriesR = 2200.0;
+constexpr float MinVrefLoadR = DefaultThermistorSeriesR / 4;		// there are 4 temperature sensing channels
 
 // Digital pins the 31855s have their select lines tied to
 constexpr Pin SpiTempSensorCsPins[] = { PortDPin(16), PortDPin(15), PortDPin(27), PortCPin(22) };

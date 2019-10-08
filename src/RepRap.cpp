@@ -162,6 +162,8 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 	gCodes = new GCodes(*platform);
 	move = new Move();
 	heat = new Heat();
+	printMonitor = new PrintMonitor(*platform, *gCodes);
+	fansManager = new FansManager;
 
 #if SUPPORT_ROLAND
 	roland = new Roland(*platform);
@@ -178,8 +180,6 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 #if HAS_LINUX_INTERFACE
 	linuxInterface = new LinuxInterface();
 #endif
-
-	printMonitor = new PrintMonitor(*platform, *gCodes);
 
 	SetPassword(DEFAULT_PASSWORD);
 	message.Clear();
@@ -200,6 +200,10 @@ void RepRap::Init()
 #endif
 	move->Init();
 	heat->Init();
+	fansManager->Init();
+	printMonitor->Init();
+	FilamentMonitor::InitStatic();
+
 #if SUPPORT_ROLAND
 	roland->Init();
 #endif
@@ -209,8 +213,6 @@ void RepRap::Init()
 #if SUPPORT_IOBITS
 	portControl->Init();
 #endif
-	printMonitor->Init();
-	FilamentMonitor::InitStatic();
 #if SUPPORT_12864_LCD
 	display->Init();
 #endif
@@ -947,12 +949,12 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	// Parameters
 	{
 		// Cooling fan values
-		const size_t highestFan = platform->GetHighestUsedFanNumber();
+		const size_t highestFan = fansManager->GetHighestUsedFanNumber();
 		response->cat(",\"fanPercent\":");
 		ch = '[';
 		for (size_t i = 0; i <= highestFan; i++)
 		{
-			response->catf("%c%d", ch, (int)lrintf(platform->GetFanValue(i) * 100.0));
+			response->catf("%c%d", ch, (int)lrintf(fansManager->GetFanValue(i) * 100.0));
 			ch = ',';
 		}
 		response->cat((ch == '[') ? "[]" : "]");
@@ -967,7 +969,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				response->cat(ch);
 				ch = ',';
 
-				const char *fanName = GetPlatform().GetFanName(fan);
+				const char *fanName = fansManager->GetFanName(fan);
 				response->EncodeString(fanName, true);
 			}
 			response->cat((ch == '[') ? "[]" : "]");
@@ -1014,7 +1016,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		char ch = '[';
 		for (size_t i = 0; i <= highestFan; ++i)
 		{
-			response->catf("%c%" PRIi32, ch, platform->GetFanRPM(i));
+			response->catf("%c%" PRIi32, ch, fansManager->GetFanRPM(i));
 			ch = ',';
 		}
 		response->cat("]}");		// end fan RPMs and sensors
@@ -1235,7 +1237,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		FansBitmap controllableFans = 0;
 		for (size_t fan = 0; fan < NumTotalFans; fan++)
 		{
-			if (platform->IsFanControllable(fan))
+			if (fansManager->IsFanControllable(fan))
 			{
 				SetBit(controllableFans, fan);
 			}
@@ -1730,7 +1732,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->catf(",\"fanPercent\":[%.1f", (double)(gCodes->GetMappedFanSpeed() * 100.0));
 	for (size_t i = 0; i < NumTotalFans; ++i)
 	{
-		response->catf(",%.1f", (double)(platform->GetFanValue(i) * 100.0));
+		response->catf(",%.1f", (double)(fansManager->GetFanValue(i) * 100.0));
 	}
 	response->cat(']');
 
@@ -1739,7 +1741,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	ch = '[';
 	for (size_t i = 0; i < NumTotalFans; ++i)
 	{
-		response->catf("%c%" PRIi32, ch, platform->GetFanRPM(i));
+		response->catf("%c%" PRIi32, ch, fansManager->GetFanRPM(i));
 		ch = ',';
 	}
 	response->cat(']');

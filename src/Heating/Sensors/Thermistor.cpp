@@ -22,7 +22,7 @@
 // Create an instance with default values
 Thermistor::Thermistor(unsigned int sensorNum, bool p_isPT1000)
 	: SensorWithPort(sensorNum, (p_isPT1000) ? "PT1000" : "Thermistor"), adcFilterChannel(-1),
-	  r25(DefaultR25), beta(DefaultBeta), shC(DefaultShc), seriesR(THERMISTOR_SERIES_RS), isPT1000(p_isPT1000)
+	  r25(DefaultR25), beta(DefaultBeta), shC(DefaultShc), seriesR(DefaultThermistorSeriesR), isPT1000(p_isPT1000)
 #if !HAS_VREF_MONITOR
 		, adcLowOffset(0), adcHighOffset(0)
 #endif
@@ -42,10 +42,12 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply)
 	gb.TryGetFValue('R', seriesR, seen);
 	if (!isPT1000)
 	{
-		gb.TryGetFValue('B', beta, seen);
-		if (seen)
+		bool seenB = false;
+		gb.TryGetFValue('B', beta, seenB);
+		if (seenB)
 		{
 			shC = 0.0;						// if user changes B and doesn't define C, assume C=0
+			seen = true;
 		}
 		gb.TryGetFValue('C', shC, seen);
 		gb.TryGetFValue('T', r25, seen);
@@ -75,7 +77,7 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply)
 		adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
 		if (adcFilterChannel >= 0)
 		{
-			reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init((1 << AdcBits) - 1);
+			reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init((1u << AdcBits) - 1);
 		}
 	}
 	else
@@ -106,7 +108,7 @@ void Thermistor::Poll()
 	if (adcFilterChannel >= 0)
 	{
 		const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(adcFilterChannel);
-		averagedTempReading = tempFilter.GetSum()/(ThermistorAverageReadings >> Thermistor::AdcOversampleBits);
+		averagedTempReading = tempFilter.GetSum()/(tempFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
 		tempFilterValid = tempFilter.IsValid();
 	}
 	else
@@ -121,15 +123,15 @@ void Thermistor::Poll()
 	const volatile ThermistorAveragingFilter& vssaFilter = reprap.GetPlatform().GetAdcFilter(VssaFilterIndex);
 	if (tempFilterValid && vrefFilter.IsValid() && vssaFilter.IsValid())
 	{
-		const int32_t averagedVssaReading = vssaFilter.GetSum()/(ThermistorAverageReadings >> Thermistor::AdcOversampleBits);
-		const int32_t averagedVrefReading = vrefFilter.GetSum()/(ThermistorAverageReadings >> Thermistor::AdcOversampleBits);
+		const int32_t averagedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
+		const int32_t averagedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
 
-		// VREF is the measured voltage at VREF less the drop of a 15 ohm resistor. Assume that the maximum load is four 2K2 resistors and one 4K7 resistor to ground = 492 ohms.
-		// VSSA is the voltage measured across the VSSA fuse. We assume the same maximum load and the same 15 ohms maximum resistance for the fuse.
+		// VREF is the measured voltage at VREF less the drop of a 15 ohm resistor.
+		// VSSA is the voltage measured across the VSSA fuse. We assume the same 15 ohms maximum resistance for the fuse.
 		// Assume a maximum ADC reading offset of 100.
-		constexpr int32_t maxDrop = (AdcRange * 15)/492 + (100 << Thermistor::AdcOversampleBits);
+		constexpr int32_t maxDrop = ((AdcRange << Thermistor::AdcOversampleBits) * 15)/MinVrefLoadR + (100 << Thermistor::AdcOversampleBits);
 
-		if (averagedVrefReading < AdcRange - maxDrop)
+		if (averagedVrefReading < (AdcRange << Thermistor::AdcOversampleBits) - maxDrop)
 		{
 			SetResult(TemperatureError::badVref);
 		}
@@ -191,7 +193,7 @@ void Thermistor::Poll()
 
 					if (temp < MinimumConnectedTemperature)
 					{
-						// assume thermistor is disconnected
+						// Assume thermistor is disconnected
 						SetResult(ABS_ZERO, TemperatureError::openCircuit);
 					}
 					else

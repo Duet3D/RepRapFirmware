@@ -10,8 +10,13 @@
 #if SUPPORT_DOTSTAR_LED
 
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "sam/drivers/pdc/pdc.h"
-#include "sam/drivers/usart/usart.h"
+
+#if DOTSTAR_USES_USART
+# include "sam/drivers/pdc/pdc.h"
+# include "sam/drivers/usart/usart.h"
+#else
+# include "Hardware/DmacManager.h"
+#endif
 
 namespace DotStarLed
 {
@@ -25,14 +30,15 @@ namespace DotStarLed
 
 	void Init()
 	{
-		// Set up the USART pins for SPI mode
+		// Set up the USART or QSPI pins for SPI mode
 		// The pins are already set up for SPI in the pins table
 		ConfigurePin(DotStarMosiPin);
 		ConfigurePin(DotStarSclkPin);
 
 		// Enable the clock to the USART
-		pmc_enable_periph_clk(DotStarUsartId);
+		pmc_enable_periph_clk(DotStarClockId);
 
+#if DOTSTAR_USES_USART
 		// Set the USART in SPI mode, with the clock high when inactive, data changing on the falling edge of the clock
 		DotStarUsart->US_IDR = ~0u;
 		DotStarUsart->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;
@@ -42,8 +48,17 @@ namespace DotStarLed
 						| US_MR_CHMODE_NORMAL
 						| US_MR_CPOL
 						| US_MR_CLKO;
-		DotStarUsart->US_BRGR = VARIANT_MCK/DotStarSpiClockFrequency;		// set SPI clock frequency
+		DotStarUsart->US_BRGR = SystemPeripheralClock()/DotStarSpiClockFrequency;		// set SPI clock frequency
 		DotStarUsart->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
+#else
+		// DotStar on Duet 3 uses the QSPI peripheral
+		QSPI->QSPI_CR = QSPI_CR_SWRST;
+
+		QSPI->QSPI_MR = 0;					// SPI mode, 8 bits per transfer
+		QSPI->QSPI_SCR = QSPI_SCR_CPOL | QSPI_SCR_CPHA | QSPI_SCR_SCBR(SystemPeripheralClock()/DotStarSpiClockFrequency - 1);
+
+		QSPI->QSPI_CR = QSPI_CR_QSPIEN;
+#endif
 
 		// Initialise variables
 		numRemaining = totalSent = 0;
@@ -55,7 +70,11 @@ namespace DotStarLed
 	{
 		if (busy)											// if we sent something
 		{
+#if DOTSTAR_USES_USART
 			if ((DotStarUsart->US_CSR & US_CSR_ENDTX) == 0)	// if we are still sending
+#else
+			if ((xdmac_channel_get_interrupt_status(XDMAC, DmacChanDotStarTx) & XDMAC_CIS_BIS) == 0)	// if the last transfer hasn't finished yet
+#endif
 			{
 				return GCodeResult::notFinished;
 			}
@@ -125,6 +144,9 @@ namespace DotStarLed
 		}
 
 		// DMA the data
+
+#if DOTSTAR_USES_USART
+
 		DotStarUsart->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_TXDIS;			// reset transmitter and receiver, disable transmitter
 		Pdc * const usartPdc = usart_get_pdc_base(DotStarUsart);
 		usartPdc->PERIPH_PTCR = PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS;		// disable the PDC
@@ -133,6 +155,25 @@ namespace DotStarLed
 		usartPdc->PERIPH_PTCR = PERIPH_PTCR_TXTEN;								// enable the PDC to send data
 
 		DotStarUsart->US_CR = US_CR_TXEN;										// enable transmitter
+#else
+		xdmac_channel_disable(XDMAC, DmacChanDotStarTx);
+		xdmac_channel_config_t p_cfg = {0, 0, 0, 0, 0, 0, 0, 0};
+		p_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN
+						| XDMAC_CC_MBSIZE_SINGLE
+						| XDMAC_CC_DSYNC_MEM2PER
+						| XDMAC_CC_CSIZE_CHK_1
+						| XDMAC_CC_DWIDTH_BYTE
+						| XDMAC_CC_SIF_AHB_IF0
+						| XDMAC_CC_DIF_AHB_IF1
+						| XDMAC_CC_SAM_INCREMENTED_AM
+						| XDMAC_CC_DAM_FIXED_AM
+						| XDMAC_CC_PERID((uint32_t)DmaTrigSource::qspitx);
+		p_cfg.mbr_ubc = 4 * (p - chunkBuffer);
+		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(chunkBuffer);
+		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&(QSPI->QSPI_TDR));
+		xdmac_configure_transfer(XDMAC, DmacChanDotStarTx, &p_cfg);
+		xdmac_channel_enable(XDMAC, DmacChanDotStarTx);
+#endif
 
 		busy = true;
 		return (numRemaining == 0) ? GCodeResult::ok : GCodeResult::notFinished;

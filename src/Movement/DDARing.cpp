@@ -230,6 +230,10 @@ void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove)
 					{
 						Move::WakeLaserTask();
 					}
+					else
+					{
+						p.SetLaserPwm(0);
+					}
 #endif
 				}
 			}

@@ -346,7 +346,7 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 			case 3:		// fan %
 				currentValue.f = ((itemNumber == 99)
 								? reprap.GetGCodes().GetMappedFanSpeed()
-								: reprap.GetPlatform().GetFanValue(itemNumber)
+								: reprap.GetFansManager().GetFanValue(itemNumber)
 							   ) * 100.0;
 				currentFormat = PrintFormat::asPercent;
 				break;
@@ -544,7 +544,7 @@ bool ValueMenuItem::Adjust_SelectHelper()
 			}
 			else
 			{
-				reprap.GetPlatform().SetFanValue(itemNumber, currentValue.f * 0.01);
+				reprap.GetFansManager().SetFanValue(itemNumber, currentValue.f * 0.01);
 			}
 			break;
 

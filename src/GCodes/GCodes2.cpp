@@ -430,46 +430,57 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 3: // Spin spindle clockwise
-		if (gb.Seen('S'))
 		{
-			switch (machineType)
+			const uint32_t slot = gb.Seen('P') ? gb.GetUIValue() : 0;
+			if (slot >= MaxSpindles && machineType == MachineType::cnc)
 			{
-			case MachineType::cnc:
+				reply.copy("Invalid spindle index");
+				result = GCodeResult::error;
+			}
+			else if (gb.Seen('S'))
+			{
+				switch (machineType)
 				{
-					const float rpm = gb.GetFValue();
-					const uint32_t slot = gb.Seen('P') ? gb.GetUIValue() : 0;
-					if (slot >= MaxSpindles)
+				case MachineType::cnc:
+					platform.AccessSpindle(slot).SetRpm(gb.GetFValue());
+					break;
+
+				case MachineType::laser:
 					{
-						reply.copy("Invalid spindle index");
-						result = GCodeResult::error;
+						const Pwm_t laserPwm = ConvertLaserPwm(gb.GetFValue());
+						platform.SetLaserPwm(laserPwm);
+#if SUPPORT_LASER
+						moveBuffer.laserPwmOrIoBits.laserPwm = laserPwm;
+#endif
+					}
+					break;
+
+				default:
+#if SUPPORT_ROLAND
+					if (reprap.GetRoland()->Active())
+					{
+						result = reprap.GetRoland()->ProcessSpindle(gb.GetFValue());
 					}
 					else
+#endif
 					{
-						platform.AccessSpindle(slot).SetRpm(rpm);
+						result = GCodeResult::notSupportedInCurrentMode;
 					}
+					break;
 				}
-				break;
-
-			case MachineType::laser:
+			}
+			else if (machineType == MachineType::cnc && gb.Seen('R'))
+			{
+				const unsigned int rpNumber = gb.GetUIValue();
+				if (rpNumber >= NumRestorePoints)
 				{
-					const Pwm_t laserPwm = ConvertLaserPwm(gb.GetFValue());
-					platform.SetLaserPwm(laserPwm);
-					moveBuffer.laserPwmOrIoBits.laserPwm = laserPwm;
-				}
-				break;
-
-			default:
-#if SUPPORT_ROLAND
-				if (reprap.GetRoland()->Active())
-				{
-					result = reprap.GetRoland()->ProcessSpindle(gb.GetFValue());
+					reply.copy("Invalid restore point number");
+					result = GCodeResult::error;
 				}
 				else
-#endif
 				{
-					result = GCodeResult::notSupportedInCurrentMode;
+					platform.AccessSpindle(slot).SetRpm(numberedRestorePoints[rpNumber].spindleSpeeds[slot]);
 				}
-				break;
 			}
 		}
 		break;
@@ -528,7 +539,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 		case MachineType::laser:
 			platform.SetLaserPwm(0);
+#if SUPPORT_LASER
 			moveBuffer.laserPwmOrIoBits.Clear();
+#endif
 			break;
 
 		default:
@@ -1272,7 +1285,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (seenFanNum)
 			{
 				bool error = false;
-				processed = platform.ConfigureFan(code, fanNum, gb, reply, error);
+				processed = reprap.GetFansManager().ConfigureFan(code, fanNum, gb, reply, error);
 				result = GetGCodeResultFromError(error);
 			}
 			else
@@ -1287,7 +1300,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				const float f = gb.GetPwmValue();
 				if (seenFanNum)
 				{
-					result = platform.SetFanValue(fanNum, f, reply);
+					result = reprap.GetFansManager().SetFanValue(fanNum, f, reply);
 					if (IsMappedFan(fanNum))
 					{
 						lastDefaultFanSpeed = f;
@@ -1307,7 +1320,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				// Restore fan speed to value when print was paused
 				if (seenFanNum)
 				{
-					result = platform.SetFanValue(fanNum, pausedFanSpeeds[fanNum], reply);
+					result = reprap.GetFansManager().SetFanValue(fanNum, pausedFanSpeeds[fanNum], reply);
 				}
 				else
 				{

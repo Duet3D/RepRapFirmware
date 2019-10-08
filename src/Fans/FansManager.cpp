@@ -11,6 +11,10 @@
 #include "RemoteFan.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
+#if SUPPORT_CAN_EXPANSION
+# include <CanMessageFormats.h>
+#endif
+
 #include <utility>
 
 FansManager::FansManager()
@@ -229,5 +233,26 @@ void FansManager::Init()
 # endif
 #endif
 }
+
+#if SUPPORT_CAN_EXPANSION
+
+void FansManager::ProcessRemoteFanRpms(CanAddress src, const CanMessageFanRpms& msg)
+{
+	size_t numFansProcessed = 0;
+	uint64_t whichFans = msg.whichFans;
+	while (whichFans != 0)
+	{
+		const unsigned int fanNum = LowestSetBit(whichFans);
+		auto fan = FindFan(fanNum);
+		if (fan.IsNotNull())
+		{
+			fan->UpdateRpmFromRemote(src, msg.fanRpms[numFansProcessed]);
+		}
+		++numFansProcessed;
+		whichFans &= ~((uint64_t)1 << fanNum);
+	}
+}
+
+#endif
 
 // End

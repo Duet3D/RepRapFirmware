@@ -1280,7 +1280,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 			{
 				buf.printf("M106 S%.2f\n", (double)lastDefaultFanSpeed);
 				ok = f->Write(buf.c_str())									// set the speed of the print fan after we have selected the tool
-					&& platform.WriteFanSettings(f);						// set the speeds of all non-thermostatic fans after setting the default fan speed
+					&& reprap.GetFansManager().WriteFanSettings(f);			// set the speeds of all non-thermostatic fans after setting the default fan speed
 			}
 			if (ok)
 			{
@@ -3054,7 +3054,7 @@ void GCodes::SetMappedFanSpeed(float f)
 	const Tool * const ct = reprap.GetCurrentTool();
 	if (ct == nullptr)
 	{
-		platform.SetFanValue(0, f);
+		reprap.GetFansManager().SetFanValue(0, f);
 	}
 	else
 	{
@@ -3063,7 +3063,7 @@ void GCodes::SetMappedFanSpeed(float f)
 		{
 			if (IsBitSet(fanMap, i))
 			{
-				platform.SetFanValue(i, f);
+				reprap.GetFansManager().SetFanValue(i, f);
 			}
 		}
 	}
@@ -3082,7 +3082,7 @@ void GCodes::SaveFanSpeeds()
 {
 	for (size_t i = 0; i < NumTotalFans; ++i)
 	{
-		pausedFanSpeeds[i] = platform.GetFanValue(i);
+		pausedFanSpeeds[i] = reprap.GetFansManager().GetFanValue(i);
 	}
 	pausedDefaultFanSpeed = lastDefaultFanSpeed;
 }
@@ -3791,12 +3791,20 @@ void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const
 	rp.virtualExtruderPosition = virtualExtruderPosition;
 	rp.filePos = gb.GetFilePosition();
 
+	if (machineType == MachineType::cnc)
+	{
+		for (unsigned int i = 0; i < MaxSpindles; ++i)
+		{
+			rp.spindleSpeeds[i] = platform.AccessSpindle(i).GetRpm();
+		}
+	}
+
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	rp.laserPwmOrIoBits = moveBuffer.laserPwmOrIoBits;
 #endif
 }
 
-// Restore user position from a restore point
+// Restore user position from a restore point. Also restore the laser power, but not the spindle speed (the user must do that explicitly).
 void GCodes::RestorePosition(const RestorePoint& rp, GCodeBuffer *gb)
 {
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
@@ -3940,9 +3948,9 @@ GCodeResult GCodes::AdvanceHash(const StringRef &reply)
 		{
 			// Calculate and report the final result
 			SHA1Result(&hash);
-			for(size_t i = 0; i < 5; i++)
+			for (size_t i = 0; i < 5; i++)
 			{
-				reply.catf("%" PRIx32, hash.Message_Digest[i]);
+				reply.catf("%08" PRIx32, hash.Message_Digest[i]);
 			}
 
 			// Clean up again
@@ -4477,8 +4485,9 @@ void GCodes::ActivateHeightmap(bool activate)
 GCodeResult GCodes::StartSDTiming(GCodeBuffer& gb, const StringRef& reply)
 {
 	const float bytesReq = (gb.Seen('S')) ? gb.GetFValue() : 10.0;
+	const bool useCrc = (gb.Seen('C') && gb.GetUIValue() != 0);
 	timingBytesRequested = (uint32_t)(bytesReq * (float)(1024 * 1024));
-	FileStore * const f = platform.OpenFile(platform.GetGCodeDir(), TimingFileName, OpenMode::write, timingBytesRequested);
+	FileStore * const f = platform.OpenFile(platform.GetGCodeDir(), TimingFileName, (useCrc) ? OpenMode::writeWithCrc : OpenMode::write, timingBytesRequested);
 	if (f == nullptr)
 	{
 		reply.copy("Failed to create file");

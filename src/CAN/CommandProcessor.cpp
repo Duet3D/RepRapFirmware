@@ -230,6 +230,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 			CanMessageBuffer::Free(buf);
 			break;
 
+		case CanMessageType::fanRpmReport:
+			reprap.GetFansManager().ProcessRemoteFanRpms(buf->id.Src(), buf->msg.fanRpms);
+			CanMessageBuffer::Free(buf);
+			break;
+
 		case CanMessageType::statusReport:
 		default:
 //			buf->DebugPrint("Rec: ");

@@ -141,7 +141,7 @@ constexpr float EXT_BETA = 4066.0;
 constexpr float EXT_SHC = 0.0;
 
 // Thermistor series resistor value in Ohms
-constexpr float THERMISTOR_SERIES_RS = 4700.0;
+constexpr float DefaultThermistorSeriesR = 4700.0;
 
 constexpr size_t MaxSpiTempSensors = 2;
 

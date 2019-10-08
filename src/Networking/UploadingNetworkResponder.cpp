@@ -51,7 +51,7 @@ void UploadingNetworkResponder::StartUpload(FileStore *file, const char *fileNam
 }
 
 // Finish a file upload. Set variable uploadError if anything goes wrong.
-void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified)
+void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified, bool gotCrc, uint32_t expectedCrc)
 {
 	// Flush remaining data for FSO
 	if (!fileBeingUploaded.Flush())
@@ -65,6 +65,11 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 	{
 		uploadError = true;
 		GetPlatform().MessageF(ErrorMessage, "Uploaded file size is different (%lu vs. expected %lu bytes)\n", fileBeingUploaded.Length(), fileLength);
+	}
+	else if (gotCrc && expectedCrc != fileBeingUploaded.GetCrc32())
+	{
+		uploadError = true;
+		GetPlatform().MessageF(ErrorMessage, "Uploaded file CRC is different (%08" PRIx32 " vs. expected %08" PRIx32 ")\n", fileBeingUploaded.GetCrc32(), expectedCrc);
 	}
 
 	// Close the file

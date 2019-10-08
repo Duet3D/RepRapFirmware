@@ -388,7 +388,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		{
 			for (size_t i = 0; i < NumTotalFans; ++i)
 			{
-				platform.SetFanValue(i, pausedFanSpeeds[i]);
+				reprap.GetFansManager().SetFanValue(i, pausedFanSpeeds[i]);
 			}
 			virtualExtruderPosition = pauseRestorePoint.virtualExtruderPosition;	// reset the extruder position in case we are receiving absolute extruder moves
 			moveBuffer.virtualExtruderPosition = pauseRestorePoint.virtualExtruderPosition;
@@ -788,7 +788,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			// Head has finished moving to the correct XY position
-			lastProbedTime = millis();			// start the probe recovery timer
+			lastProbedTime = millis();								// start the probe recovery timer
 			if (platform.GetCurrentZProbe().GetTurnHeatersOff())
 			{
 				reprap.GetHeat().SuspendHeaters(true);

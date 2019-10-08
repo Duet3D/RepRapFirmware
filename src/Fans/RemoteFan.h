@@ -25,6 +25,7 @@ public:
 	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) override;
 	int32_t GetRPM() override;
 	GCodeResult ReportPortDetails(const StringRef& str) const override;
+	void UpdateRpmFromRemote(CanAddress src, int32_t rpm) override;
 
 	GCodeResult ConfigurePort(const char *pinNames, PwmFrequency freq, const StringRef& reply);
 

@@ -24,14 +24,22 @@ const size_t NumNetworkInterfaces = 1;
 #endif
 
 #if defined(__LPC17xx__)
-// Only 2 http responders as we are tight on memory .
+// Only 2 http responders as we are tight on memory.
 const size_t NumHttpResponders = 2;		// the number of concurrent HTTP requests we can process
 const size_t NumFtpResponders = 0;		// the number of concurrent FTP sessions we support
 const size_t NumTelnetResponders = 0;	// the number of concurrent Telnet sessions we support
 #else
+
+# if SAME70
 const size_t NumHttpResponders = 6;		// the number of concurrent HTTP requests we can process
-const size_t NumFtpResponders = 1;		// the number of concurrent FTP sessions we support
 const size_t NumTelnetResponders = 2;	// the number of concurrent Telnet sessions we support
+# else
+// Limit the number of HTTP responders to 4 because they take around 2K of memory each
+const size_t NumHttpResponders = 4;		// the number of concurrent HTTP requests we can process
+const size_t NumTelnetResponders = 1;	// the number of concurrent Telnet sessions we support
+# endif
+
+const size_t NumFtpResponders = 1;		// the number of concurrent FTP sessions we support
 #endif
 
 // Forward declarations

@@ -26,6 +26,7 @@ Licence: GPL
 #include "MessageType.h"
 #include "RTOSIface/RTOSIface.h"
 #include "GCodes/GCodeResult.h"
+#include "Fans/FansManager.h"
 
 enum class ResponseSource
 {
@@ -98,6 +99,7 @@ public:
 	Network& GetNetwork() const { return *network; }
 	Scanner& GetScanner() const { return *scanner; }
 	PrintMonitor& GetPrintMonitor() const { return *printMonitor; }
+	FansManager& GetFansManager() const { return *fansManager; }
 
 #if SUPPORT_ROLAND
 	Roland& GetRoland() const { return *roland; }
@@ -167,11 +169,9 @@ private:
 	Move* move;
 	Heat* heat;
 	GCodes* gCodes;
-#if SUPPORT_ROLAND
-	Roland* roland;
-#endif
 	Scanner* scanner;
  	PrintMonitor* printMonitor;
+ 	FansManager* fansManager;
 
 #if SUPPORT_IOBITS
  	PortControl *portControl;
@@ -180,8 +180,13 @@ private:
 #if SUPPORT_12864_LCD
  	Display *display;
 #endif
+
 #if HAS_LINUX_INTERFACE
  	LinuxInterface *linuxInterface;
+#endif
+
+#if SUPPORT_ROLAND
+	Roland* roland;
 #endif
 
  	Mutex toolListMutex, messageBoxMutex;

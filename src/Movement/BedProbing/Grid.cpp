@@ -245,10 +245,7 @@ void HeightMap::SetGrid(const GridDefinition& gd)
 
 void HeightMap::ClearGridHeights()
 {
-	for (size_t i = 0; i < ARRAY_SIZE(gridHeightSet); ++i)
-	{
-		gridHeightSet[i] = 0;
-	}
+	gridHeightSet.ClearAll();
 }
 
 // Set the height of a grid point
@@ -262,7 +259,7 @@ void HeightMap::SetGridHeight(size_t index, float height)
 	if (index < MaxGridProbePoints)
 	{
 		gridHeights[index] = height;
-		gridHeightSet[index/32] |= 1u << (index & 31u);
+		gridHeightSet.SetBit(index);
 	}
 }
 
@@ -323,7 +320,7 @@ bool HeightMap::SaveToFile(FileStore *f, float zOffset) const
 			{
 				buf.cat(',');
 			}
-			if (IsHeightSet(index))
+			if (gridHeightSet.IsBitSet(index))
 			{
 				buf.catf("%7.3f", (double)(gridHeights[index] + zOffset));
 			}
@@ -441,7 +438,7 @@ void HeightMap::SaveToArray(float *arr, float zOffset) const
 	{
 		for (size_t j = 0; j < def.numX; ++j)
 		{
-			arr[index] = IsHeightSet(index) ? (gridHeights[index] + zOffset) : NAN;
+			arr[index] = gridHeightSet.IsBitSet(index) ? (gridHeights[index] + zOffset) : std::numeric_limits<float>::quiet_NaN();
 			index++;
 		}
 	}
@@ -458,7 +455,7 @@ unsigned int HeightMap::GetStatistics(float& mean, float& deviation, float& minE
 	unsigned int numProbed = 0;
 	for (uint32_t i = 0; i < def.NumPoints(); ++i)
 	{
-		if (IsHeightSet(i))
+		if (gridHeightSet.IsBitSet(i))
 		{
 			++numProbed;
 			const float fHeightError = gridHeights[i];
@@ -551,7 +548,7 @@ void HeightMap::ExtrapolateMissing()
 		for (uint32_t iX = 0; iX < def.numX; iX++)
 		{
 			const uint32_t index = GetMapIndex(iX, iY);
-			if (IsHeightSet(index))
+			if (gridHeightSet.IsBitSet(index))
 			{
 				const float fX = (def.xSpacing * iX) + def.xMin;
 				const float fY = (def.ySpacing * iY) + def.yMin;
@@ -575,7 +572,7 @@ void HeightMap::ExtrapolateMissing()
 		for (uint32_t iX = 0; iX < def.numX; iX++)
 		{
 			const uint32_t index = GetMapIndex(iX, iY);
-			if (IsHeightSet(index))
+			if (gridHeightSet.IsBitSet(index))
 			{
 				const float fX = (def.xSpacing * iX) + def.xMin;
 				const float fY = (def.ySpacing * iY) + def.yMin;
@@ -618,7 +615,7 @@ void HeightMap::ExtrapolateMissing()
 		for (uint32_t iX = 0; iX < def.numX; iX++)
 		{
 			const uint32_t index = GetMapIndex(iX, iY);
-			if (!IsHeightSet(index))
+			if (!gridHeightSet.IsBitSet(index))
 			{
 				const float fX = (def.xSpacing * iX) + def.xMin;
 				const float fY = (def.ySpacing * iY) + def.yMin;

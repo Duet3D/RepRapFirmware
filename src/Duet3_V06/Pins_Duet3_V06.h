@@ -22,6 +22,7 @@ const size_t NumFirmwareUpdateModules = 1;
 #define TMC51xx_USES_USART		1
 
 #define SUPPORT_CAN_EXPANSION	1
+#define SUPPORT_DOTSTAR_LED		1
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			0
 #define HAS_12V_MONITOR			1
@@ -111,7 +112,8 @@ constexpr Pin VssaSensePin = PortCPin(13);
 constexpr Pin VrefSensePin = PortCPin(0);
 
 // Thermistor series resistor value in Ohms
-constexpr float THERMISTOR_SERIES_RS = 2200.0;
+constexpr float DefaultThermistorSeriesR = 2200.0;
+constexpr float MinVrefLoadR = DefaultThermistorSeriesR / 4;		// there are 4 temperature sensing channels
 
 // Digital pins the SPI temperature sensors have their select lines tied to
 constexpr Pin SpiTempSensorCsPins[] = { PortAPin(5), PortAPin(6), PortDPin(20), PortCPin(22) };
@@ -134,6 +136,15 @@ constexpr Pin SdCardDetectPins[1] = { PortAPin(29) };
 constexpr Pin SdWriteProtectPins[1] = { NoPin };
 constexpr Pin SdSpiCSPins[1] = { NoPin };
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
+
+// DotStar LED control
+#define DOTSTAR_USES_USART	0
+
+constexpr Pin DotStarMosiPin = PortAPin(13);
+constexpr Pin DotStarSclkPin = PortAPin(14);
+constexpr uint32_t DotStarClockId = ID_QSPI;
+constexpr IRQn DotStarIRQn = QSPI_IRQn;
+const uint32_t DotStarSpiClockFrequency = 100000;		// try sending at 100kHz
 
 // Ethernet
 constexpr Pin PhyInterruptPin = PortCPin(6);
@@ -271,14 +282,15 @@ Spi * const LinuxSpi = SPI1;
 
 // DMA channel allocation
 constexpr uint8_t DmacChanHsmci = 0;			// this is hard coded in the ASF HSMCI driver
-constexpr uint8_t DmacChanWiFiTx = 1;
-constexpr uint8_t DmacChanWiFiRx = 2;
+constexpr uint8_t DmacChanWiFiTx = 1;			// only on v0.3 board
+constexpr uint8_t DmacChanWiFiRx = 2;			// only on v0.3 board
 constexpr uint8_t DmacChanTmcTx = 3;
 constexpr uint8_t DmacChanTmcRx = 4;
 constexpr uint8_t DmacChanLinuxTx = 5;
 constexpr uint8_t DmacChanLinuxRx = 6;
+constexpr uint8_t DmacChanDotStarTx = 7;
 
-constexpr size_t NumDmaChannelsUsed = 7;
+constexpr size_t NumDmaChannelsUsed = 8;
 
 namespace StepPins
 {

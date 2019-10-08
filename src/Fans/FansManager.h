@@ -13,6 +13,11 @@
 #include "GCodes/GCodeResult.h"
 #include <RTOSIface/RTOSIface.h>
 
+#if SUPPORT_CAN_EXPANSION
+# include <CanId.h>
+struct CanMessageFanRpms;
+#endif
+
 class GCodeBuffer;
 class LocalFan;
 
@@ -31,7 +36,9 @@ public:
 	bool IsFanControllable(size_t fanNum) const;
 	const char *GetFanName(size_t fanNum) const;
 	int32_t GetFanRPM(size_t fanNum) const;
-
+#if SUPPORT_CAN_EXPANSION
+	void ProcessRemoteFanRpms(CanAddress src, const CanMessageFanRpms& msg);
+#endif
 #if HAS_MASS_STORAGE
 	bool WriteFanSettings(FileStore *f) const;
 #endif

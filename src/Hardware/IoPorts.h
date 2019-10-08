@@ -36,7 +36,7 @@ public:
 	void DetachInterrupt() const;
 
 	uint16_t ReadAnalog() const;
-	AnalogChannelNumber GetAnalogChannel() const { return analogChannel; }
+	AnalogChannelNumber GetAnalogChannel() const { return PinToAdcChannel(PinTable[logicalPin].pin); }
 
 	void WriteDigital(bool high) const;
 
@@ -63,7 +63,6 @@ protected:
 	static const char* TranslatePinAccess(PinAccess access);
 
 	LogicalPin logicalPin;									// the logical pin number
-	AnalogChannelNumber analogChannel;						// the analog channel number if it is an analog input
 	uint8_t hardwareInvert : 1,								// true if the hardware includes inversion
 			totalInvert : 1,								// true if the value should be inverted when reading/writing the pin
 			isSharedInput : 1;								// true if we are using this pin as a shared input
@@ -72,7 +71,7 @@ protected:
 	static int8_t logicalPinModes[NumNamedPins];			// what mode each logical pin is set to - would ideally be class PinMode not int8_t
 };
 
-static_assert(sizeof(IoPort) == 4, "Unexpected size for class IoPort");		// try to keep these small because triggers have arrays of them
+static_assert(sizeof(IoPort) == 2, "Unexpected size for class IoPort");		// try to keep these small because triggers have arrays of them
 
 // Class to represent a PWM output port
 class PwmPort : public IoPort

@@ -1185,8 +1185,16 @@ void HttpResponder::ProcessRequest()
 						return;
 					}
 
+					// Try to get the expected CRC
+					const char* const expectedCrc = GetKeyValue("crc32");
+					postFileGotCrc = (expectedCrc != nullptr);
+					if (postFileGotCrc)
+					{
+						postFileExpectedCrc = SafeStrtoul(expectedCrc, nullptr, 16);
+					}
+
 					// Start a new file upload
-					FileStore *file = GetPlatform().OpenFile(FS_PREFIX, filename, OpenMode::write, postFileLength);
+					FileStore * const file = GetPlatform().OpenFile(FS_PREFIX, filename, (postFileGotCrc) ? OpenMode::writeWithCrc : OpenMode::write, postFileLength);
 					if (file == nullptr)
 					{
 						RejectMessage("could not create file");
@@ -1224,7 +1232,7 @@ void HttpResponder::ProcessRequest()
 					// Keep track of the connection that is now uploading
 					const IPAddress remoteIP = GetRemoteIP();
 					const uint16_t remotePort = skt->GetRemotePort();
-					for(size_t i = 0; i < numSessions; i++)
+					for (size_t i = 0; i < numSessions; i++)
 					{
 						if (sessions[i].ip == remoteIP)
 						{
@@ -1324,7 +1332,7 @@ void HttpResponder::DoUpload()
 			}
 		}
 
-		FinishUpload(postFileLength, fileLastModified);
+		FinishUpload(postFileLength, fileLastModified, postFileGotCrc, postFileExpectedCrc);
 		SendJsonResponse("upload");
 	}
 }

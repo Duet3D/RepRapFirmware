@@ -46,6 +46,15 @@ GCodeResult RemoteFan::SetPwmFrequency(PwmFrequency freq, const StringRef& reply
 	return cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, reply);
 }
 
+void RemoteFan::UpdateRpmFromRemote(CanAddress src, int32_t rpm)
+{
+	if (src == boardNumber)
+	{
+		lastRpm = rpm;
+		whenLastRpmReceived = millis();
+	}
+}
+
 int32_t RemoteFan::GetRPM()
 {
 	if (millis() - whenLastRpmReceived > RpmReadingTimeout)

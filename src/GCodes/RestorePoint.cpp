@@ -23,10 +23,16 @@ void RestorePoint::Init()
 	virtualExtruderPosition = 0.0;
 	filePos = noFilePosition;
 	proportionDone = 0.0;
+	toolNumber = -1;
+
+	for (size_t i = 0; i < MaxSpindles; ++i)
+	{
+		spindleSpeeds[i] = 0.0;
+	}
+
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();
 #endif
-	toolNumber = -1;
 }
 
 // End

@@ -1152,7 +1152,7 @@ void StringParser::AppendFullCommand(const StringRef &s) const
 // Open a file to write to
 bool StringParser::OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
 {
-	fileBeingWritten = reprap.GetPlatform().OpenFile(directory, fileName, OpenMode::write);
+	fileBeingWritten = reprap.GetPlatform().OpenFile(directory, fileName, OpenMode::writeWithCrc);
 	eofStringCounter = 0;
 	writingFileSize = size;
 	if (fileBeingWritten == nullptr)

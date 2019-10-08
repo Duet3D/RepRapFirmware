@@ -139,7 +139,7 @@ bool MdnsResponder::CheckHostname(const uint8_t *ptr, size_t maxLength, size_t *
 	{
 		if (nameLength == strlen(hostname))
 		{
-			for (int i = 0; i < nameLength; i++)
+			for (unsigned int i = 0; i < nameLength; i++)
 			{
 				if (tolower(hostname[i]) != tolower(*ptr++))
 				{

@@ -22,6 +22,7 @@ struct RestorePoint
 	float proportionDone;					// How much of this move we have already done (zero unless we interrupted a move)
 	FilePosition filePos;					// The file position that this move was read from
 	int toolNumber;							// The tool number that was active
+	float spindleSpeeds[MaxSpindles];		// The spindle RPMs that were set, negative if anticlockwise direction
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;		// The output port bits setting for this move, or the laser power
