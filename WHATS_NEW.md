@@ -1,8 +1,30 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.04RC3
+===============
+Compatible files:
+- DuetWiFiServer 1.23
+- DuetWebControl 2.0.1 (recommended) or 1.22.6
+
+Upgrade notes:
+- If using this release to control a laser cutter/engraver, see the notes below on changed handling of the G1 S parameter
+
+Feature improvements/changed behaviour:
+- mDNS is now supported on the Duet Ethernet and Duet Maestro
+- In Laser mode, if sticky laser power mode is selected, the power set by the S parameter in a G1 command is remembered across G0 moves to the next G1 move
+- CRC checking of uploaded file data is now supported (requires DWC 2.0.1)
+- When an error occurs reading or writing SD card data, the number of retries is increased to 5 and the delay between retries increases with each retry
+- Increased minimum motor current for open load warnings from 300 to 500mA
+- When writing the resurrect.g file, select the active tool before calling resurrect-prologue.g. This is to allow extrusion to be done in resurrect-prologue.g.
+
+Bug fixes:
+- M675 did not take workplace coordinate offsets into account
+- Duet WiFi/Ethernet + DueX configurations did not start up if noise was present on the DueX endstop or GPIO inputs
+- The SHA1 has reported by M38 sometimes had one or more zero digits missing
+
 Version 2.04RC1
-============
+===============
 Compatible files:
 - DuetWiFiServer 1.23
 - DuetWebControl 1.22.6 or 2.0.0-RC6 or 2.0.0-RC7
