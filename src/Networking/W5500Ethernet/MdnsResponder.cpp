@@ -241,15 +241,15 @@ void MdnsResponder::SendARecord(uint16_t transaction) const
 	bytesWritten += sizeof(uint16_t);
 
 	// Write A record and start with the hostname
-	const char *hostname = reprap.GetNetwork().GetHostname();
-	size_t hostnameLength = strlen(hostname);
+	const char * const hostname = reprap.GetNetwork().GetHostname();
+	const size_t hostnameLength = strlen(hostname);
 	buffer[bytesWritten++] = hostnameLength;
-	strncpy(reinterpret_cast<char *>(buffer + bytesWritten), hostname, ARRAY_SIZE(buffer) - bytesWritten);
+	SafeStrncpy(reinterpret_cast<char *>(buffer + bytesWritten), hostname, ARRAY_SIZE(buffer) - bytesWritten);
 	bytesWritten += hostnameLength;
 
 	// Write domain
 	buffer[bytesWritten++] = 5;
-	strncpy(reinterpret_cast<char *>(buffer + bytesWritten), "local", ARRAY_SIZE(buffer) - bytesWritten);
+	SafeStrncpy(reinterpret_cast<char *>(buffer + bytesWritten), "local", ARRAY_SIZE(buffer) - bytesWritten);
 	bytesWritten += 5;
 
 	// Write terminating zero

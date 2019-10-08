@@ -94,7 +94,7 @@ constexpr uint32_t RxFifoIndexBroadcast = 0;
 constexpr uint32_t RxFifoIndexRequest = 0;
 constexpr uint32_t RxFifoIndexResponse = 1;
 
-constexpr uint32_t CanClockIntervalMillis = 10000; //20;
+constexpr uint32_t CanClockIntervalMillis = 200;
 
 // CanSender management task
 constexpr size_t CanSenderTaskStackWords = 400;

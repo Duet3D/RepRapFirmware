@@ -10,7 +10,7 @@
 
 
 #ifndef VERSION
-# define MAIN_VERSION	"3.0beta10+2"
+# define MAIN_VERSION	"3.0beta11"
 # ifdef USE_CAN0
 #  define VERSION_SUFFIX	" (CAN0)"
 # else
