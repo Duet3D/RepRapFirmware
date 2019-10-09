@@ -11,6 +11,11 @@ RepRapFirmware is built from several Github projects. You need to use compatible
 - RRFLibraries: dev
 - DuetWiFiSocketServer: dev
 
+
+**Additional Tools**
+Building RepRapFirmware lately requires a tool called `crc32appender` to be in the user's PATH as it will be called at the end of the compilating process.
+It can be found as Golang source code in Tools/crc32appender together with pre-compiled binaries for Windows, Linux and MacOS x86-64.
+
 **Instructions for building under Windows**
 
 1. Download and install the gcc cross-compiler from https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads:
