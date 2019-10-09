@@ -71,6 +71,8 @@ enum class CanStatusBits : uint32_t
 	busOff = 0x40000
 };
 
+static bool doingFirmwareUpdate = false;
+
 #ifdef CAN_DEBUG
 static uint32_t GetAndClearStatusBits()
 {
@@ -875,32 +877,19 @@ GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffe
 	reply.Clear();
 	firmwareFilename.cat(".bin");
 
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
-	{
-		// Check that the file exists by asking for 4 bytes of it
-		uint32_t fileLength;
-		int32_t bytesRead;
-		(void)reprap.GetLinuxInterface().GetFileChunk(firmwareFilename.c_str(), 0, 4, bytesRead, fileLength);
-		if (bytesRead != 4 || fileLength < 32 * 1024)
-		{
-			reply.printf("Firmware file %s not found", firmwareFilename.c_str());
-			return GCodeResult::error;
-		}
-	}
-	else
-#endif
+	// Do not ask Linux for a file here because that would create a deadlock.
+	// If blocking calls to Linux are supposed to be made from the Spin loop, the Linux interface,
+	// or at least the code doing SPI data transfers, has to be moved to a separate task first
 #if HAS_MASS_STORAGE
+	// It's fine to check if the file exists on the local SD though
+	if (
+# if HAS_LINUX_INTERFACE
+			!reprap.UsingLinuxInterface() &&
+# endif
+			!reprap.GetPlatform().SysFileExists(firmwareFilename.c_str()))
 	{
-		if (!reprap.GetPlatform().SysFileExists(firmwareFilename.c_str()))
-		{
-			reply.printf("Firmware file %s not found", firmwareFilename.c_str());
-			return GCodeResult::error;
-		}
-	}
-#else
-	{
-		// nothing
+		reply.printf("Firmware file %s not found", firmwareFilename.c_str());
+		return GCodeResult::error;
 	}
 #endif
 
@@ -916,6 +905,21 @@ GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffe
 	msg2->boardId = (uint8_t)boardAddress;
 	msg2->invertedBoardId = (uint8_t)~boardAddress;
 	return SendRequestAndGetStandardReply(buf2, rid2, reply);
+}
+
+bool CanInterface::IsFlashing()
+{
+	return doingFirmwareUpdate;
+}
+
+void CanInterface::UpdateStarting()
+{
+	doingFirmwareUpdate = true;
+}
+
+void CanInterface::UpdateFinished()
+{
+	doingFirmwareUpdate = false;
 }
 
 void CanInterface::WakeCanSender()

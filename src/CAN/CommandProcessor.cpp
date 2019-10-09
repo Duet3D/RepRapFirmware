@@ -19,6 +19,7 @@
 # include "Linux/LinuxInterface.h"
 #endif
 
+
 // Handle a firmware update request and free the buffer
 static void HandleFirmwareBlockRequest(CanMessageBuffer *buf)
 pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
@@ -32,47 +33,103 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 		fname.catn(msg.boardType, msg.GetBoardTypeLength(buf->dataLength));
 		fname.cat(".bin");
 
-		uint32_t fileOffset = msg.fileOffset;
+		uint32_t fileOffset = msg.fileOffset, fileLength = 0;
+		if (fileOffset == 0)
+		{
+			CanInterface::UpdateStarting();
+		}
+
 		uint32_t lreq = msg.lengthRequested;
 
 #if HAS_LINUX_INTERFACE
 		if (reprap.UsingLinuxInterface())
 		{
-			// Request another chunk of data from the given file
-			while (lreq > 0)
+			// Fetch the firmware file from the SBC
+			int32_t bytesRead;
+			const char *data = reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, lreq, bytesRead, fileLength);
+			if (bytesRead > 0)
 			{
-				uint32_t fileLength;
-				int32_t bytesRead;
-				const char *data = reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, lreq, bytesRead, fileLength);
-				if (bytesRead < 0)
-				{
-					break;
-				}
-
-				size_t bytesSent = 0;
-				for (;;)
+				if (fileOffset >= fileLength)
 				{
 					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
-					const size_t lengthToSend = min<size_t>(lreq, sizeof(msgp->data));
-					memcpy(msgp->data, data + bytesSent, lengthToSend);
-					bytesSent += lengthToSend;
-					msgp->dataLength = lengthToSend;
-					msgp->err = CanMessageFirmwareUpdateResponse::ErrNone;
+					msgp->dataLength = 0;
+					msgp->err = CanMessageFirmwareUpdateResponse::ErrBadOffset;
 					msgp->fileLength = fileLength;
-					msgp->fileOffset = fileOffset;
+					msgp->fileOffset = 0;
 					buf->dataLength = msgp->GetActualDataLength();
 					CanInterface::SendResponse(buf);
-					fileOffset += lengthToSend;
-					lreq -= lengthToSend;
-					if ((int32_t)bytesSent == bytesRead)
+
+					reprap.GetPlatform().MessageF(ErrorMessage, "Received firmware update request with bad file offset, actual %" PRIu32 " max %" PRIu32 "\n", fileOffset, fileLength);
+				}
+				else
+				{
+					if (fileLength - fileOffset < lreq)
 					{
-						break;
+						lreq = fileLength - fileOffset;
 					}
-					while ((buf = CanMessageBuffer::Allocate()) == nullptr)
+
+//debugPrintf("Sending %" PRIu32 " bytes at offset %" PRIu32 "\n", lreq, fileOffset);
+
+					size_t bytesSent = 0;
+					for (;;)
 					{
-						delay(1);
+						CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
+						const size_t lengthToSend = min<size_t>(bytesRead - bytesSent, sizeof(msgp->data));
+						memcpy(msgp->data, data + bytesSent, lengthToSend);
+						msgp->dataLength = lengthToSend;
+						msgp->err = CanMessageFirmwareUpdateResponse::ErrNone;
+						msgp->fileLength = fileLength;
+						msgp->fileOffset = fileOffset;
+						buf->dataLength = msgp->GetActualDataLength();
+						CanInterface::SendResponse(buf);
+
+						bytesSent += lengthToSend;
+						fileOffset += lengthToSend;
+						lreq -= lengthToSend;
+						if (lreq == 0)
+						{
+							break;
+						}
+
+						while ((buf = CanMessageBuffer::Allocate()) == nullptr)
+						{
+							delay(1);
+						}
+
+						if (bytesSent == (size_t)bytesRead)
+						{
+							data = reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, lreq, bytesRead, fileLength);
+							if (bytesRead < 0)
+							{
+								CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
+								msgp->dataLength = 0;
+								msgp->err = CanMessageFirmwareUpdateResponse::ErrOther;
+								msgp->fileLength = fileLength;
+								msgp->fileOffset = 0;
+								buf->dataLength = msgp->GetActualDataLength();
+								CanInterface::SendResponse(buf);
+
+								reprap.GetPlatform().MessageF(ErrorMessage, "Error reading firmware update file '%s'\n", fname.c_str());
+								CanInterface::UpdateFinished();
+								return;
+							}
+							bytesSent = 0;
+						}
 					}
 				}
+			}
+			else
+			{
+				CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
+				msgp->dataLength = 0;
+				msgp->err = CanMessageFirmwareUpdateResponse::ErrNoFile;
+				msgp->fileLength = fileLength;
+				msgp->fileOffset = 0;
+				buf->dataLength = msgp->GetActualDataLength();
+				CanInterface::SendResponse(buf);
+				reprap.GetPlatform().MessageF(ErrorMessage, "Firmware file %s not found", fname.c_str());
+				CanInterface::UpdateFinished();
+				return;
 			}
 		}
 		else
@@ -83,7 +140,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 			FileStore * const f = reprap.GetPlatform().OpenSysFile(fname.c_str(), OpenMode::read);
 			if (f != nullptr)
 			{
-				const uint32_t fileLength = f->Length();
+				fileLength = f->Length();
 				if (fileOffset >= fileLength)
 				{
 					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanId::MasterAddress, src);
@@ -93,6 +150,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 					msgp->fileOffset = 0;
 					buf->dataLength = msgp->GetActualDataLength();
 					CanInterface::SendResponse(buf);
+
 					reprap.GetPlatform().MessageF(ErrorMessage, "Received firmware update request with bad file offset, actual %" PRIu32 " max %" PRIu32 "\n", fileOffset, fileLength);
 				}
 				else
@@ -117,8 +175,10 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 							msgp->fileOffset = 0;
 							buf->dataLength = msgp->GetActualDataLength();
 							CanInterface::SendResponse(buf);
+
 							reprap.GetPlatform().MessageF(ErrorMessage, "Error reading firmware update file '%s'\n", fname.c_str());
-							break;
+							CanInterface::UpdateFinished();
+							return;
 						}
 						msgp->dataLength = lengthToSend;
 						msgp->err = CanMessageFirmwareUpdateResponse::ErrNone;
@@ -126,6 +186,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 						msgp->fileOffset = fileOffset;
 						buf->dataLength = msgp->GetActualDataLength();
 						CanInterface::SendResponse(buf);
+						debugPrintf(".");
 						fileOffset += lengthToSend;
 						lreq -= lengthToSend;
 						if (lreq == 0)
@@ -152,7 +213,13 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 			msgp->fileOffset = 0;
 			buf->dataLength = msgp->GetActualDataLength();
 			CanInterface::SendResponse(buf);
+
 			reprap.GetPlatform().MessageF(ErrorMessage, "Received firmware update request for missing file '%s'\n", fname.c_str());
+			CanInterface::UpdateFinished();
+		}
+		else if (fileOffset == fileLength)
+		{
+			CanInterface::UpdateFinished();
 		}
 	}
 	else

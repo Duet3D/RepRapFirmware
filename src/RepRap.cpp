@@ -2149,7 +2149,11 @@ void RepRap::ClearAlert()
 char RepRap::GetStatusCharacter() const
 {
 	return    (processingConfig)										? 'C'	// Reading the configuration file
+#if HAS_LINUX_INTERFACE && SUPPORT_CAN_EXPANSION
+			: (gCodes->IsFlashing() || CanInterface::IsFlashing())		? 'F'	// Flashing a new firmware binary
+#else
 			: (gCodes->IsFlashing())									? 'F'	// Flashing a new firmware binary
+#endif
 			: (IsStopped()) 											? 'H'	// Halted
 #if HAS_VOLTAGE_MONITOR
 			: (!platform->HasVinPower() && !gCodes->IsSimulating())		? 'O'	// Off i.e. powered down

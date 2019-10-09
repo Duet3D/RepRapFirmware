@@ -69,7 +69,11 @@ namespace CanInterface
 
 	GCodeResult GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult RemoteDiagnostics(MessageType mt, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply);
+
 	GCodeResult UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply);
+	bool IsFlashing();
+	void UpdateStarting();
+	void UpdateFinished();
 
 	// Motor control functions
 	void SendMotion(CanMessageBuffer *buf);
