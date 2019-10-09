@@ -129,9 +129,9 @@ void Thermistor::Poll()
 		// VREF is the measured voltage at VREF less the drop of a 15 ohm resistor.
 		// VSSA is the voltage measured across the VSSA fuse. We assume the same 15 ohms maximum resistance for the fuse.
 		// Assume a maximum ADC reading offset of 100.
-		constexpr int32_t maxDrop = ((AdcRange << Thermistor::AdcOversampleBits) * 15)/MinVrefLoadR + (100 << Thermistor::AdcOversampleBits);
+		constexpr int32_t maxDrop = (OversampledAdcRange * 15)/MinVrefLoadR + (100 << Thermistor::AdcOversampleBits);
 
-		if (averagedVrefReading < (AdcRange << Thermistor::AdcOversampleBits) - maxDrop)
+		if (averagedVrefReading < OversampledAdcRange - maxDrop)
 		{
 			SetResult(TemperatureError::badVref);
 		}
@@ -161,7 +161,7 @@ void Thermistor::Poll()
 			{
 				const float resistance = seriesR * (float)(averagedTempReading - averagedVssaReading)/(float)(averagedVrefReading - averagedTempReading);
 #else
-			const int32_t averagedVrefReading = AdcRange + 2 * adcHighOffset;			// double the offset because we increased AdcOversampleBits from 1 to 2
+			const int32_t averagedVrefReading = OversampledAdcRange + 2 * adcHighOffset;	// double the offset because we increased AdcOversampleBits from 1 to 2
 			if (averagedVrefReading <= averagedTempReading)
 			{
 				SetResult((isPT1000) ? BadErrorTemperature : ABS_ZERO, TemperatureError::openCircuit);

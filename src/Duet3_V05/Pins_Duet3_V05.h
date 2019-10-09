@@ -108,9 +108,9 @@ constexpr Pin VrefSensePin = PortEPin(0);
 
 // Thermistor series resistor value in Ohms
 constexpr float DefaultThermistorSeriesR = 2200.0;
-constexpr float MinVrefLoadR = DefaultThermistorSeriesR / 4;		// there are 4 temperature sensing channels
-
-// Digital pins the 31855s have their select lines tied to
+constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / 4) * 4700.0/((DefaultThermistorSeriesR / 4) + 4700.0);
+																			// there are 4 temperature sensing channels and a 4K7 load resistor
+// Digital pins the SPI temperature sensors have their select lines tied to
 constexpr Pin SpiTempSensorCsPins[] = { PortDPin(16), PortDPin(15), PortDPin(27), PortCPin(22) };
 
 // Pin that controls the ATX power on/off
@@ -118,7 +118,7 @@ constexpr Pin ATX_POWER_PIN = PortAPin(10);
 
 // Analogue pin numbers
 constexpr Pin PowerMonitorVinDetectPin = PortAPin(20);
-constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;			// we use an 11:1 voltage divider (TBD)
+constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// we use an 11:1 voltage divider (TBD)
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
 constexpr Pin DiagPin = PortCPin(20);

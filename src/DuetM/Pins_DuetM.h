@@ -121,13 +121,13 @@ constexpr float EXT_SHC = 0.0;
 
 // Thermistor series resistor value in Ohms
 constexpr float DefaultThermistorSeriesR = 2200.0;
-constexpr float MinVrefLoadR = DefaultThermistorSeriesR / 4;		// there are 4 temperature sensing channels
-
+constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / 4) * 4700.0/((DefaultThermistorSeriesR / 4) + 4700.0);
+																			// there are 4 temperature sensing channels and a 4K7 load resistor
 // Number of SPI temperature sensors to support
 constexpr size_t MaxSpiTempSensors = 2;
 
 // Digital pins the 31855s have their select lines tied to
-constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { PortBPin(14), PortCPin(19) };			// SPI0_CS1, SPI0_CS2
+constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { PortBPin(14), PortCPin(19) };		// SPI0_CS1, SPI0_CS2
 
 // Pin that controls the ATX power on/off
 constexpr Pin ATX_POWER_PIN = PortAPin(0);

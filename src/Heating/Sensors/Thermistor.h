@@ -47,7 +47,7 @@ private:
 	// The following are derived from the configurable parameters
 	float shA, shB;															// derived parameters
 
-	static constexpr int32_t AdcRange = 1u << (AdcBits + AdcOversampleBits);	// The readings we pass in should be in range 0..(AdcRange - 1)
+	static constexpr int32_t OversampledAdcRange = 1u << (AdcBits + AdcOversampleBits);	// The readings we pass in should be in range 0..(AdcRange - 1)
 };
 
 #endif /* SRC_HEATING_THERMISTOR_H_ */
