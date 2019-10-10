@@ -1211,6 +1211,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 	}
 
+	if (gCodes->GetMachineType() == MachineType::laser)
+	{
+		response->catf(",\"laser\":%.1f", (double)(platform->GetLaserPwm() * 100.0));
+	}
+
 	/* Extended Status Response */
 	if (type == 2)
 	{

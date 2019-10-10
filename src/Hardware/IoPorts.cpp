@@ -183,6 +183,10 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 				access = PinAccess::readWithPullup;
 			}
 		}
+		else if (*pn == '*')
+		{
+			alternateConfig = true;
+		}
 		else
 		{
 			break;
@@ -473,7 +477,7 @@ uint16_t IoPort::ReadAnalog() const
 /*static*/ CanAddress IoPort::RemoveBoardAddress(const StringRef& portName)
 {
 	size_t prefix = 0;
-	while (portName[prefix] == '!' || portName[prefix] == '^')
+	while (portName[prefix] == '!' || portName[prefix] == '^' || portName[prefix] == '*')
 	{
 		++prefix;
 	}

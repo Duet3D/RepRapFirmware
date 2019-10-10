@@ -547,6 +547,7 @@ public:
 	Spindle& AccessSpindle(size_t slot) { return spindles[slot]; }
 
 	void SetLaserPwm(Pwm_t pwm);
+	float GetLaserPwm() const;							// return laser PWM in 0..1
 	bool AssignLaserPin(GCodeBuffer& gb, const StringRef& reply);
 	void SetLaserPwmFrequency(PwmFrequency freq);
 
@@ -873,6 +874,7 @@ private:
 	float extrusionAncilliaryPwmValue;
 	PwmPort extrusionAncilliaryPwmPort;
 	PwmPort laserPort;
+	float lastLaserPwm;
 
 	// Power on/off
 	bool deferredPowerDown;

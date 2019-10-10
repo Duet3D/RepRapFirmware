@@ -211,7 +211,7 @@ Platform::Platform() :
 	sysDir(nullptr),
 #endif
 	tickState(0), debugCode(0),
-	lastWarningMillis(0), deliberateError(false)
+	lastWarningMillis(0), lastLaserPwm(0.0), deferredPowerDown(false), deliberateError(false)
 {
 #if HAS_MASS_STORAGE
 	massStorage = new MassStorage(this);
@@ -231,7 +231,6 @@ void Platform::Init()
 
 	// Deal with power first (we assume this doesn't depend on identifying the board type)
 	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
-	deferredPowerDown = false;
 
 	SetBoardType(BoardType::Auto);
 
@@ -4003,12 +4002,24 @@ void Platform::GetSysDir(const StringRef & path) const
 
 void Platform::SetLaserPwm(Pwm_t pwm)
 {
-	laserPort.WriteAnalog((float)pwm/65535);			// we don't currently have an function that accepts an integer PWM fraction
+	lastLaserPwm = (float)pwm/65535;
+	laserPort.WriteAnalog(lastLaserPwm);			// we don't currently have an function that accepts an integer PWM fraction
+}
+
+// Return laser PWM in 0..1
+float Platform::GetLaserPwm() const
+{
+	return lastLaserPwm;
 }
 
 bool Platform::AssignLaserPin(GCodeBuffer& gb, const StringRef& reply)
 {
-	return laserPort.AssignPort(gb, reply, PinUsedBy::laser, PinAccess::pwm);
+	const bool ok = laserPort.AssignPort(gb, reply, PinUsedBy::laser, PinAccess::pwm);
+	if (ok)
+	{
+		SetLaserPwm(0);
+	}
+	return ok;
 }
 
 void Platform::SetLaserPwmFrequency(PwmFrequency freq)

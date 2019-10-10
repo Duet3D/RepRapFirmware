@@ -65,7 +65,8 @@ protected:
 	LogicalPin logicalPin;									// the logical pin number
 	uint8_t hardwareInvert : 1,								// true if the hardware includes inversion
 			totalInvert : 1,								// true if the value should be inverted when reading/writing the pin
-			isSharedInput : 1;								// true if we are using this pin as a shared input
+			isSharedInput : 1,								// true if we are using this pin as a shared input
+			alternateConfig : 1;							// true if we are using the alternate configuration of this pin, e.g. SDADC instyead of ADC
 
 	static PinUsedBy portUsedBy[NumNamedPins];				// the list of what each logical port is used by
 	static int8_t logicalPinModes[NumNamedPins];			// what mode each logical pin is set to - would ideally be class PinMode not int8_t
