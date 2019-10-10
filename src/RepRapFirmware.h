@@ -362,7 +362,7 @@ constexpr size_t MaxTotalDrivers = NumDirectDrivers + MaxCanDrivers;
 constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 #endif
 
-constexpr size_t MaxAxesPlusExtruders = min<size_t>(MaxAxes + MaxExtruders, MaxTotalDrivers);
+constexpr size_t MaxAxesPlusExtruders = MaxAxes + MaxExtruders;
 
 constexpr AxesBitmap DefaultXAxisMapping = MakeBitmap<AxesBitmap>(X_AXIS);	// by default, X is mapped to X
 constexpr AxesBitmap DefaultYAxisMapping = MakeBitmap<AxesBitmap>(Y_AXIS);	// by default, Y is mapped to Y
