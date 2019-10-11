@@ -44,6 +44,7 @@ public:
 	bool GetSaveToConfigOverride() const { return misc.parts.saveToConfigOverride; }
 	int GetAdcValue() const { return adcValue; }
 	unsigned int GetMaxTaps() const { return misc.parts.maxTaps; }
+	void SetProbingAway(const bool probingAway) { misc.parts.probingAway = probingAway; }
 
 	int GetReading() const;
 	int GetSecondaryValues(int& v1, int& v2);
@@ -67,10 +68,11 @@ protected:
 	{
 		struct
 		{
-			uint16_t maxTaps : 5,		// maximum probes at each point
-				invertReading : 1,		// true if we need to invert the reading
-				turnHeatersOff : 1,		// true to turn heaters off while probing
-				saveToConfigOverride : 1; // true if the trigger height should be saved to config-override.g
+			uint16_t maxTaps : 5,			// maximum probes at each point
+				invertReading : 1,			// true if we need to invert the reading
+				probingAway : 1,			// true if we are probing away, i.e. until contact lost
+				turnHeatersOff : 1,			// true to turn heaters off while probing
+				saveToConfigOverride : 1;	// true if the trigger height should be saved to config-override.g
 		} parts;
 		uint16_t all;
 	} misc;

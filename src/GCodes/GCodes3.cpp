@@ -6,6 +6,7 @@
  *  This file contains functions that are called form file GCodes2.cpp to execute various G and M codes.
  */
 
+#include <Movement/StraightProbeSettings.h>
 #include "GCodes.h"
 
 #include "GCodeBuffer/GCodeBuffer.h"
@@ -674,6 +675,105 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 		reply.catf(", %u axes visible", numVisibleAxes);
 	}
 
+	return GCodeResult::ok;
+}
+// Handle G38.[2-5]
+GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply)
+{
+	const int8_t fraction = gb.GetCommandFraction();
+	if (fraction < 2 || fraction > 5) {
+		return GCodeResult::warningNotSupported;
+	}
+	/*
+	 * It is an error if:
+	 * # the current point is the same as the programmed point.
+	 * # no axis word is used
+	 * # the feed rate is zero
+	 * # the probe is already in the target state
+	 */
+
+	StraightProbeSettings& sps = reprap.GetMove().GetStraightProbeSettings();
+	sps.Reset();
+
+
+	switch (fraction)
+	{
+	case 2:
+		sps.SetStraightProbeType(StraightProbeType::towardsWorkpieceErrorOnFailure);
+		break;
+
+	case 3:
+		sps.SetStraightProbeType(StraightProbeType::towardsWorkpiece);
+		break;
+
+	case 4:
+		sps.SetStraightProbeType(StraightProbeType::awayFromWorkpieceErrorOnFailure);
+		break;
+
+	case 5:
+		sps.SetStraightProbeType(StraightProbeType::awayFromWorkpiece);
+		break;
+	}
+
+	// Get the target coordinates and check if we would move at all
+	float target[MaxAxes];
+	ToolOffsetTransform(currentUserPosition, target);
+	bool seen = false;
+	bool doesMove = false;
+	for (size_t axis = 0; axis < MaxAxes; axis++)
+	{
+		if (gb.Seen(axisLetters[axis]))
+		{
+			seen = true;
+			const float axisTarget = gb.GetFValue();
+			if (axisTarget != target[axis])
+			{
+				doesMove = true;
+			}
+			target[axis] = axisTarget;
+			sps.AddMovingAxis(axis);
+		}
+	}
+
+	// No axis letters seen
+	if (!seen)
+	{
+		// Signal error for G38.2 and G38.4
+		if (sps.GetType() == StraightProbeType::towardsWorkpieceErrorOnFailure || sps.GetType() == StraightProbeType::awayFromWorkpieceErrorOnFailure)
+		{
+			reply.copy("No axis specified.");
+			return GCodeResult::badOrMissingParameter;
+		}
+		return GCodeResult::ok;
+	}
+
+	// At least one axis seen but it would not result in movement
+	else if (!doesMove)
+	{
+		// Signal error for G38.2 and G38.4
+		if (sps.GetType() == StraightProbeType::towardsWorkpieceErrorOnFailure || sps.GetType() == StraightProbeType::awayFromWorkpieceErrorOnFailure)
+		{
+			reply.copy("Target equals current position.");
+			return GCodeResult::badOrMissingParameter;
+		}
+		return GCodeResult::ok;
+	}
+	sps.SetTarget(target);
+
+	// See whether we are using a user-defined Z probe or just current one
+	size_t probeToUse = platform.GetEndstops().GetCurrentZProbeNumber();
+	if (gb.Seen('P'))
+	{
+		probeToUse = gb.GetUIValue();
+		if (platform.GetEndstops().GetZProbe(probeToUse) == nullptr)
+		{
+			reply.copy("Invalid probe number");
+			return GCodeResult::error;
+		}
+	}
+	sps.SetZProbeToUse(probeToUse);
+
+	gb.SetState(GCodeState::straightProbe0);
 	return GCodeResult::ok;
 }
 

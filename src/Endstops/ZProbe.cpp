@@ -136,7 +136,21 @@ EndStopHit ZProbe::Stopped() const
 EndstopHitDetails ZProbe::CheckTriggered(bool goingSlow)
 {
 	EndstopHitDetails rslt;
-	switch (Stopped())
+	EndStopHit e = Stopped();
+
+	// Note: This might need to be moved into Stopped() to not having to duplicate it to ZProbeEndstop
+	if (misc.parts.probingAway) {
+		switch (e) {
+		case EndStopHit::atStop:
+			e = EndStopHit::noStop;
+			break;
+		default:
+			e = EndStopHit::atStop;
+			break;
+		}
+	}
+
+	switch (e)
 	{
 	case EndStopHit::atStop:
 		rslt.SetAction(EndstopHitAction::stopAll);

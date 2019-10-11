@@ -2507,16 +2507,21 @@ MessageType GCodes::GetMessageBoxDevice(GCodeBuffer& gb) const
 	return mt;
 }
 
-// Do a manual bed probe. On entry the state variable is the state we want to return to when the user has finished adjusting the height.
-void GCodes::DoManualProbe(GCodeBuffer& gb)
+void GCodes::DoManualProbe(GCodeBuffer& gb, const char *message, const char *title, const AxesBitmap axes)
 {
 	if (Push(gb, true))													// stack the machine state including the file position and set the state to GCodeState::normal
 	{
 		gb.MachineState().CloseFile();									// stop reading from file if we were
 		gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
 		const MessageType mt = GetMessageBoxDevice(gb);
-		platform.SendAlert(mt, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", 2, 0.0, MakeBitmap<AxesBitmap>(Z_AXIS));
+		platform.SendAlert(mt, message, title, 2, 0.0, axes);
 	}
+}
+
+// Do a manual bed probe. On entry the state variable is the state we want to return to when the user has finished adjusting the height.
+void GCodes::DoManualBedProbe(GCodeBuffer& gb)
+{
+	DoManualProbe(gb, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", MakeBitmap<AxesBitmap>(Z_AXIS));
 }
 
 // Start probing the grid, returning true if we didn't because of an error.

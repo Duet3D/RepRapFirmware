@@ -354,7 +354,8 @@ constexpr size_t ShortScratchStringLength = 50;
 
 constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
 constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2;				// The indices of the Cartesian axes in drive arrays
-constexpr size_t U_AXIS = 3;										// The assumed index of the U axis when executing M673
+constexpr size_t U_AXIS = 3, V_AXIS = 4, W_AXIS = 5;				// The assumed index of the U axis when executing M673
+constexpr size_t A_AXIS = 6, B_AXIS = 7, C_AXIS = 8;
 
 #if SUPPORT_CAN_EXPANSION
 constexpr size_t MaxTotalDrivers = NumDirectDrivers + MaxCanDrivers;
