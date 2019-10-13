@@ -26,6 +26,7 @@ Licence: GPL
  */
 
 #include "RepRapFirmware.h"
+#include "RepRap.h"
 #include "Heater.h"
 #include "TemperatureError.h"
 #include "MessageType.h"
@@ -38,7 +39,7 @@ class GCodeBuffer;
 class CanMessageSensorTemperatures;
 class CanMessageHeatersStatus;
 
-class Heat
+class Heat INHERIT_OBJECT_MODEL
 {
 public:
 	Heat();
@@ -137,6 +138,9 @@ public:
 	void ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemperatures& msg);
 	void ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersStatus& msg);
 #endif
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	Heat(const Heat&) = delete;									// Private copy constructor to prevent copying

@@ -131,6 +131,7 @@ const ObjectModelTableEntry RepRap::objectModelTable[] =
 	// These entries are temporary pending design of the object model
 	//TODO design the object model
 	{ "gcodes", OBJECT_MODEL_FUNC(&(self->GetGCodes())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },
+	{ "heat", OBJECT_MODEL_FUNC(&(self->GetHeat())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },
 	{ "meshProbe", OBJECT_MODEL_FUNC(&(self->GetMove().GetGrid())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },
 	{ "move", OBJECT_MODEL_FUNC(&(self->GetMove())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },
 	{ "network", OBJECT_MODEL_FUNC(&(self->GetNetwork())), TYPE_OF(ObjectModel), ObjectModelTableEntry::none },

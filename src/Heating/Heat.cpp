@@ -47,6 +47,36 @@ extern "C" [[noreturn]] void HeaterTask(void * pvParameters)
 	reprap.GetHeat().Task();
 }
 
+#if SUPPORT_OBJECT_MODEL
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+#if 0	// need to extend object model functions to handle read-locked pointers before we can use this
+static const ObjectModelArrayDescriptor heatersArrayDescriptor =
+{
+	[] (ObjectModel *self) -> size_t { return MaxHeaters; },
+	[] (ObjectModel *self, size_t n) -> void* { return (void *)(((Heat*)self)->FindHeater(n)); }
+};
+#endif
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(Heat, _ret)
+
+const ObjectModelTableEntry Heat::objectModelTable[] =
+{
+	// These entries must be in alphabetical order
+	{ "ColdExtrudeTemperature", OBJECT_MODEL_FUNC(&(self->extrusionMinTemp)), TYPE_OF(float), ObjectModelTableEntry::none},
+	{ "ColdRetractTemperature", OBJECT_MODEL_FUNC(&(self->retractionMinTemp)), TYPE_OF(float), ObjectModelTableEntry::none},
+#if 0
+	{ "Heaters", OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), TYPE_OF(ObjectModel) | IsArray, ObjectModelTableEntry::none }
+#endif
+};
+
+DEFINE_GET_OBJECT_MODEL_TABLE(Heat)
+
+#endif
+
 ReadWriteLock Heat::heatersLock;
 ReadWriteLock Heat::sensorsLock;
 

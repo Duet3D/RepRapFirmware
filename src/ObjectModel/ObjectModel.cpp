@@ -93,6 +93,10 @@ void ObjectModelTableEntry::ReportItemAsJson(OutputBuffer *buf, const char *filt
 	switch (type)
 	{
 	case TYPE_OF(ObjectModel):
+		if (*filter == '.')
+		{
+			++filter;
+		}
 		((ObjectModel*)nParam)->ReportAsJson(buf, filter, flags);
 		break;
 
@@ -189,18 +193,41 @@ bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectModel *self, c
 
 	if ((type & IsArray) != 0)
 	{
-		// TODO match array indices
-		buf->cat('[');
+		const bool isEmptyBrackets = (*filter == '[' && *(filter + 1) == ']');
 		const ObjectModelArrayDescriptor *arr = (const ObjectModelArrayDescriptor*)param(self);
-		for (size_t i = 0; i < arr->GetNumElements(self); ++i)
+		if (*filter == 0 || isEmptyBrackets)
 		{
-			if (i != 0)
+			// Report entire array
+			if (isEmptyBrackets)
 			{
-				buf->cat(',');
+				filter += 2;
 			}
-			ReportItemAsJson(buf, filter, flags, arr->GetElement(self, i), type & ~IsArray);
+			buf->cat('[');
+			const ObjectModelArrayDescriptor *arr = (const ObjectModelArrayDescriptor*)param(self);
+			for (size_t i = 0; i < arr->GetNumElements(self); ++i)
+			{
+				if (i != 0)
+				{
+					buf->cat(',');
+				}
+				ReportItemAsJson(buf, filter, flags, arr->GetElement(self, i), type & ~IsArray);
+			}
+			buf->cat(']');
 		}
-		buf->cat(']');
+		else if (*filter == '[')
+		{
+			++filter;
+			const char *endptr;
+			const unsigned long val = SafeStrtoul(filter, &endptr);
+			if (endptr == filter || *endptr != ']' || val >= arr->GetNumElements(self))
+			{
+				buf->cat("[]");						// avoid returning badly-formed JSON
+				return false;						// invalid syntax, or index out of range
+			}
+			buf->cat('[');
+			ReportItemAsJson(buf, endptr + 1, flags, arr->GetElement(self, val), type & ~IsArray);
+			buf->cat(']');
+		}
 	}
 	else
 	{
