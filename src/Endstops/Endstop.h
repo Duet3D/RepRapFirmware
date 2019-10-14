@@ -26,7 +26,6 @@ public:
 	virtual EndStopHit Stopped() const = 0;
 	virtual EndstopHitDetails CheckTriggered(bool goingSlow) = 0;
 	virtual bool Acknowledge(EndstopHitDetails what) = 0;
-	virtual bool GetInvertOnce() const { return false; }
 
 	EndstopOrZProbe *GetNext() const { return next; }
 	void SetNext(EndstopOrZProbe *e) { next = e; }

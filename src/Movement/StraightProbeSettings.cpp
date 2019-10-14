@@ -21,7 +21,8 @@ const ObjectModelTableEntry StraightProbeSettings::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
 	{ "movingAxes", OBJECT_MODEL_FUNC(&(self->movingAxes)), TYPE_OF(uint32_t), ObjectModelTableEntry::none },
-	//{ "target", OBJECT_MODEL_FUNC(&(self->target)), TYPE_OF(float*), ObjectModelTableEntry::none },
+	{ "probeToUse", OBJECT_MODEL_FUNC(&(self->probeToUse)), TYPE_OF(uint32_t), ObjectModelTableEntry::none },
+	//{ "target", OBJECT_MODEL_FUNC(&(self->target)), TYPE_OF(const float *), ObjectModelTableEntry::none },
 	{ "type", OBJECT_MODEL_FUNC(&(self->type)), TYPE_OF(uint32_t), ObjectModelTableEntry::none }
 };
 
