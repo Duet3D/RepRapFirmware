@@ -739,7 +739,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply)
 	if (!seen)
 	{
 		// Signal error for G38.2 and G38.4
-		if (sps.GetType() == StraightProbeType::towardsWorkpieceErrorOnFailure || sps.GetType() == StraightProbeType::awayFromWorkpieceErrorOnFailure)
+		if (sps.SignalError())
 		{
 			reply.copy("No axis specified.");
 			return GCodeResult::badOrMissingParameter;
@@ -751,7 +751,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply)
 	else if (!doesMove)
 	{
 		// Signal error for G38.2 and G38.4
-		if (sps.GetType() == StraightProbeType::towardsWorkpieceErrorOnFailure || sps.GetType() == StraightProbeType::awayFromWorkpieceErrorOnFailure)
+		if (sps.SignalError())
 		{
 			reply.copy("Target equals current position.");
 			return GCodeResult::badOrMissingParameter;

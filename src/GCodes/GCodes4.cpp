@@ -1083,29 +1083,24 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		{
 			// The probe recovery time has elapsed, so we can start the probing  move
 			const StraightProbeSettings& sps = reprap.GetMove().GetStraightProbeSettings();
-			const StraightProbeType type = sps.GetType();
-			const bool probingAway = (type == StraightProbeType::awayFromWorkpiece || type == StraightProbeType::awayFromWorkpieceErrorOnFailure);
+			const bool probingAway = sps.ProbingAway();
 			const ZProbe& zp = *(platform.GetEndstops().GetZProbe(sps.GetZProbeToUse()));
 			if (zp.GetProbeType() == ZProbeType::none)
 			{
 				// No Z probe, so we are doing manual 'probing'
 				UnlockAll(gb);															// release the movement lock to allow manual Z moves
 				gb.AdvanceState();														// resume at the next state when the user has finished
-				if (probingAway)
-				{
-					DoManualProbe(gb, "Adjust position until the reference point just looses contact to the target, then press OK", "Manual Straight Probe", sps.GetMovingAxes());
-				}
-				else
-				{
-					DoManualProbe(gb, "Adjust position until the reference point just touches the target, then press OK", "Manual Straight Probe", sps.GetMovingAxes());
-				}
+
+				String<MaxMessageLength> message;
+				message.printf("Adjust postion until the reference point just %s the target, then press OK", probingAway ? "looses contact to" : "touches");
+				DoManualProbe(gb, message.c_str(), "Manual Straight Probe", sps.GetMovingAxes());
 			}
 			else if ((!probingAway && zp.Stopped() == EndStopHit::atStop)
 					|| (probingAway && zp.Stopped() != EndStopHit::atStop))		// check for probe already in target state at start
 			{
 				// Z probe is already in target state at the start of the move, so abandon the probe and signal an error if the type demands so
 				reprap.GetHeat().SuspendHeaters(false);
-				if (type == StraightProbeType::towardsWorkpieceErrorOnFailure || type == StraightProbeType::awayFromWorkpieceErrorOnFailure)
+				if (sps.SignalError())
 				{
 					platform.MessageF(ErrorMessage, "Probe %s triggered at start of probing move\n", probingAway ? "not" : "already");
 					error = true;
@@ -1139,13 +1134,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			// Probing move has stopped
 			reprap.GetHeat().SuspendHeaters(false);
 			const StraightProbeSettings& sps = reprap.GetMove().GetStraightProbeSettings();
-			const StraightProbeType type = sps.GetType();
-			const bool probingAway = (type == StraightProbeType::awayFromWorkpiece || type == StraightProbeType::awayFromWorkpieceErrorOnFailure);
+			const bool probingAway = sps.ProbingAway();
 			const ZProbe& zp = *(platform.GetEndstops().GetZProbe(sps.GetZProbeToUse()));
 			if (zp.GetProbeType() != ZProbeType::none)
 			{
 				zp.SetProbing(false);
-				if (!zProbeTriggered && (type == StraightProbeType::towardsWorkpieceErrorOnFailure || type == StraightProbeType::awayFromWorkpieceErrorOnFailure))
+				if (!zProbeTriggered && sps.SignalError())
 				{
 					platform.MessageF(ErrorMessage, "Z probe %s during probing move\n", probingAway ? "did not loose contact" : "was not triggered");
 					error = true;

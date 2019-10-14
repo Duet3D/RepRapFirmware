@@ -39,6 +39,9 @@ public:
 	const size_t GetZProbeToUse() const { return probeToUse; }
 	void SetZProbeToUse(size_t probeNumber) { probeToUse = probeNumber; }
 
+	const bool ProbingAway() const;
+	const bool SignalError() const;
+
 protected:
 	DECLARE_OBJECT_MODEL
 
@@ -52,6 +55,14 @@ private:
 inline void StraightProbeSettings::AddMovingAxis(const size_t axis)
 {
 	SetBit(movingAxes, axis);
+}
+
+inline const bool StraightProbeSettings::ProbingAway() const {
+	return type == StraightProbeType::awayFromWorkpieceErrorOnFailure || type == StraightProbeType::awayFromWorkpiece;
+}
+
+inline const bool StraightProbeSettings::SignalError() const {
+	return type == StraightProbeType::awayFromWorkpieceErrorOnFailure || type == StraightProbeType::towardsWorkpieceErrorOnFailure;
 }
 
 #endif /* SRC_MOVEMENT_STRAIGHTPROBESETTINGS_H_ */
