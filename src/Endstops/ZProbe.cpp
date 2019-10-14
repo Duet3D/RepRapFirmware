@@ -32,7 +32,7 @@ void ZProbe::SetDefaults()
 	recoveryTime = 0.0;
 	tolerance = DefaultZProbeTolerance;
 	misc.parts.maxTaps = DefaultZProbeTaps;
-	misc.parts.invertReading = misc.parts.turnHeatersOff = misc.parts.saveToConfigOverride = false;
+	misc.parts.invertReading = misc.parts.turnHeatersOff = misc.parts.saveToConfigOverride = misc.parts.probingAway = false;
 	type = ZProbeType::none;
 	sensor = -1;
 }

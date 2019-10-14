@@ -30,15 +30,13 @@ DEFINE_GET_OBJECT_MODEL_TABLE(StraightProbeSettings)
 
 #endif
 
-StraightProbeSettings::StraightProbeSettings() : movingAxes((AxesBitmap) 0), type(StraightProbeType::unset) {
-	for (size_t axis = 0; axis < MaxAxes; ++axis)
-	{
-		target[axis] = 0;
-	}
+StraightProbeSettings::StraightProbeSettings() {
+	Reset();
 }
 
 void StraightProbeSettings::Reset() {
 	movingAxes = (AxesBitmap) 0;
+	type = StraightProbeType::unset;
 	for (size_t axis = 0; axis < MaxAxes; ++axis)
 	{
 		target[axis] = 0;
