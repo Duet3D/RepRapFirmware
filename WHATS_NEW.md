@@ -1,6 +1,28 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.04RC4
+===============
+Compatible files:
+- DuetWiFiServer 1.23
+- DuetWebControl 2.0.2 (recommended) or 1.22.6
+
+Upgrade notes:
+- If you are using a simple microswitch as a filament monitor, you may need to add a pullup resistor (see below)
+- See upgrade notes for 2.03
+
+Feature improvements/changed behaviour:
+- File uploads are now done to temporary files that are renamed when the upload succeeds; so that if an upload fails, an original file with the same name is not lost
+- HTTP reply buffers now time out 8 seconds after they are allocated. This may resolve the out-of-buffer issues that some users experience.
+- In the resurrect.g file, the current tool is now selected (without running tool change files) before resurrect-prologue is called, so that resurrect-prologue can do extrusion commands after first doing M116 to wait for temperatures. After running resurrect-prologue.g the tool is deselected (without running tfree#.g), then reselected this time running tpre#.g and tpost#.g.
+- Pullup resistors are no longer enabled on endstop inputs used to connect filament monitors when they are configured using M591. This is to increase noise immunity when running Duet3D or other active filament monitors. If you are using a simple microswitch connected between STP and GND of an endstop input, you may need to add an external pullup resistor between STP and +3.3V.
+- The new status information provided by Duet3D magnetic filament monitors with version 3 firmware are now supported
+
+Bug fixes:
+- Fixed glitches on some I/O lines (introduced in 2.04RC3) that affected BLTouch control
+- Fixed G30 commands when the M208 minimum Z position is much less than zero
+- Attempts to use file paths that are too long to store internally are now handled better
+
 Version 2.04RC3
 ===============
 Compatible files:
