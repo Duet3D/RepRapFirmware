@@ -720,11 +720,9 @@ void FtpResponder::ProcessLine()
 			filenameBeingProcessed.Clear();
 
 			const char * const filename = GetParameter("STOR");
-			FileStore * const file = GetPlatform().OpenFile(currentDirectory.c_str(), filename, OpenMode::write);
+			FileStore * const file = StartUpload(currentDirectory.c_str(), filename, OpenMode::write);
 			if (file != nullptr)
 			{
-				StartUpload(file, filename);
-
 				outBuf->copy("150 OK to send data.\r\n");
 				Commit(ResponderState::uploading);
 			}

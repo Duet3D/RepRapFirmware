@@ -5,6 +5,7 @@
  *      Author: David
  */
 
+#include <string.h>
 #include "UploadingNetworkResponder.h"
 #include "Socket.h"
 #include "Platform.h"
@@ -42,12 +43,23 @@ void UploadingNetworkResponder::CancelUpload()
 #if HAS_MASS_STORAGE
 
 // Start writing to a new file
-void UploadingNetworkResponder::StartUpload(FileStore *file, const char *fileName)
+FileStore * UploadingNetworkResponder::StartUpload(const char* folder, const char *fileName, const OpenMode mode, const uint32_t preAllocSize)
 {
+	MassStorage::CombineName(filenameBeingProcessed.GetRef(), folder, fileName);
+	if (filenameBeingProcessed.cat(UPLOAD_EXTENSION)) {
+		filenameBeingProcessed.Clear();
+		return nullptr;
+	}
+	FileStore * file = GetPlatform().OpenFile(folder, filenameBeingProcessed.c_str(), mode, preAllocSize);
+	if (file == nullptr)
+	{
+		filenameBeingProcessed.Clear();
+		return file;
+	}
 	fileBeingUploaded.Set(file);
-	filenameBeingProcessed.copy(fileName);
 	responderState = ResponderState::uploading;
 	uploadError = false;
+	return file;
 }
 
 // Finish a file upload. Set variable uploadError if anything goes wrong.
@@ -81,14 +93,26 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 	// Delete the file again if an error has occurred
 	if (!filenameBeingProcessed.IsEmpty())
 	{
+		const char *uploadFilename = filenameBeingProcessed.c_str();
 		if (uploadError)
 		{
-			GetPlatform().GetMassStorage()->Delete(filenameBeingProcessed.c_str());
+			GetPlatform().GetMassStorage()->Delete(uploadFilename);
 		}
-		else if (fileLastModified != 0)
-		{
-			// Update the file timestamp if it was specified
-			(void)GetPlatform().GetMassStorage()->SetLastModifiedTime(filenameBeingProcessed.c_str(), fileLastModified);
+		else {
+			String<MaxFilenameLength> origFilename;
+			origFilename.catn(uploadFilename, filenameBeingProcessed.GetRef().strlen() - strlen(UPLOAD_EXTENSION));
+
+			// Delete possibly existing files with that name (i.e. prepare "overwrite")
+			GetPlatform().GetMassStorage()->Delete(origFilename.c_str());
+
+			// Rename the uploaded file to it's original name
+			GetPlatform().GetMassStorage()->Rename(uploadFilename, origFilename.c_str());
+
+			if (fileLastModified != 0)
+			{
+				// Update the file timestamp if it was specified
+				(void)GetPlatform().GetMassStorage()->SetLastModifiedTime(origFilename.c_str(), fileLastModified);
+			}
 		}
 		filenameBeingProcessed.Clear();
 	}
