@@ -1194,14 +1194,13 @@ void HttpResponder::ProcessRequest()
 					}
 
 					// Start a new file upload
-					FileStore * const file = GetPlatform().OpenFile(FS_PREFIX, filename, (postFileGotCrc) ? OpenMode::writeWithCrc : OpenMode::write, postFileLength);
+					FileStore * const file = StartUpload(FS_PREFIX, filename, (postFileGotCrc) ? OpenMode::writeWithCrc : OpenMode::write, postFileLength);
 					if (file == nullptr)
 					{
 						RejectMessage("could not create file");
 						return;
 
 					}
-					StartUpload(file, filename);
 
 					// Try to get the last modified file date and time
 					const char* const lastModifiedString = GetKeyValue("time");
