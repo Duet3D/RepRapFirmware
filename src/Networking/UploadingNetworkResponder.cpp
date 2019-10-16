@@ -45,7 +45,7 @@ void UploadingNetworkResponder::CancelUpload()
 // Start writing to a new file
 FileStore * UploadingNetworkResponder::StartUpload(const char* folder, const char *fileName, const OpenMode mode, const uint32_t preAllocSize)
 {
-	if (MassStorage::CombineName(filenameBeingProcessed.GetRef(), folder, fileName))
+	if (!MassStorage::CombineName(filenameBeingProcessed.GetRef(), folder, fileName))
 	{
 		filenameBeingProcessed.Clear();
 		return nullptr;

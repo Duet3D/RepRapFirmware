@@ -144,7 +144,7 @@ void MassStorage::CloseAllFiles()
 	}
 }
 
-/*static*/ void MassStorage::CombineName(const StringRef& outbuf, const char* directory, const char* fileName)
+/*static*/ bool MassStorage::CombineName(const StringRef& outbuf, const char* directory, const char* fileName)
 {
 	bool hadError = false;
 	if (directory != nullptr && directory[0] != 0 && fileName[0] != '/' && (strlen(fileName) < 2 || !isdigit(fileName[0]) || fileName[1] != ':'))
@@ -176,6 +176,7 @@ void MassStorage::CloseAllFiles()
 									 );
 		outbuf.copy("?????");
 	}
+	return !hadError;
 }
 
 // Open a directory to read a file list. Returns true if it contains any files, false otherwise.
