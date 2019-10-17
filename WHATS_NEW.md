@@ -17,6 +17,7 @@ Feature improvements/changed behaviour:
 - In the resurrect.g file, the current tool is now selected (without running tool change files) before resurrect-prologue is called, so that resurrect-prologue can do extrusion commands after first doing M116 to wait for temperatures. After running resurrect-prologue.g the tool is deselected (without running tfree#.g), then reselected this time running tpre#.g and tpost#.g.
 - Pullup resistors are no longer enabled on endstop inputs used to connect filament monitors when they are configured using M591. This is to increase noise immunity when running Duet3D or other active filament monitors. If you are using a simple microswitch connected between STP and GND of an endstop input, you may need to add an external pullup resistor between STP and +3.3V.
 - The new status information provided by Duet3D magnetic filament monitors with version 3 firmware are now supported
+- Estimated print time and filament usage comments written by KISSLicer 2 alpha are recognised
 
 Bug fixes:
 - Fixed glitches on some I/O lines (introduced in 2.04RC3) that affected BLTouch control
