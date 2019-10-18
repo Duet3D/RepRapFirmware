@@ -72,7 +72,7 @@ public:
 	Filament *GetFilament() const { return filament; }
 	Tool *Next() const { return next; }
 	ToolState GetState() const { return state; }
-	bool WriteSettings(FileStore *f, bool isCurrent) const;			// write the tool's settings to file
+	bool WriteSettings(FileStore *f) const;							// write the tool's settings to file
 
 	float GetToolHeaterActiveTemperature(size_t heaterNumber) const;
 	float GetToolHeaterStandbyTemperature(size_t heaterNumber) const;

@@ -1259,7 +1259,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				SetMoveBufferDefaults();
 				moveBuffer.endStopsToCheck = ZProbeActive;
 				moveBuffer.coords[Z_AXIS] = (IsAxisHomed(Z_AXIS))
-											? -platform.GetZProbeDiveHeight()			// Z axis has been homed, so no point in going very far
+											? platform.AxisMinimum(Z_AXIS) - platform.GetZProbeDiveHeight() + platform.GetZProbeStopHeight()	// Z axis has been homed, so no point in going very far
 											: -1.1 * platform.AxisTotalLength(Z_AXIS);	// Z axis not homed yet, so treat this as a homing move
 				moveBuffer.feedRate = platform.GetCurrentZProbeParameters().probeSpeed;
 				NewMoveAvailable(1);
@@ -2185,8 +2185,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 		}
 		else
 		{
-			String<FormatStringLength> bufferSpace;
-			const StringRef buf = bufferSpace.GetRef();
+			String<FormatStringLength> buf;
 
 			// Write the header comment
 			buf.printf("; File \"%s\" resume print after %s", printingFilename, (wasPowerFailure) ? "power failure" : "print paused");
@@ -2217,13 +2216,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 			}
 			if (ok)
 			{
-				// The resurrect-prologue file may undo some retraction, so make sure we have the correct tool selected, but don't run tool change files
-				const Tool * const ct = reprap.GetCurrentTool();
-				if (ct != nullptr)
-				{
-					buf.printf("T%d P0\n", ct->Number());
-					ok = f->Write(buf.c_str());
-				}
+				ok = reprap.WriteToolSettings(f);							// set tool temperatures, tool mix ratios etc. and select the current tool without running tool change files
 			}
 			if (ok)
 			{
@@ -2232,13 +2225,21 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 			}
 			if (ok)
 			{
-				buf.copy("M116\nM290");
+				buf.copy("M116\nM290");										// wait for temperatures and start writing baby stepping offsets
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
 					buf.catf(" %c%.3f", axisLetters[axis], (double)GetTotalBabyStepOffset(axis));
 				}
 				buf.cat(" R0\n");
 				ok = f->Write(buf.c_str());									// write baby stepping offsets
+			}
+
+			// Now that we have homed, we can run the tool change files for the current tool
+			const Tool * const ct = reprap.GetCurrentTool();
+			if (ok && ct != nullptr)
+			{
+				buf.printf("T-1 P0\nT%u P6\n", ct->Number());				// deselect the current tool without running tfree, and select it running tpre and tpost
+				ok = f->Write(buf.c_str());									// write tool selection
 			}
 
 #if SUPPORT_WORKPLACE_COORDINATES
@@ -2285,10 +2286,6 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 				}
 				buf.cat('\n');
 				ok = f->Write(buf.c_str());									// write volumetric extrusion factors
-			}
-			if (ok)
-			{
-				ok = reprap.WriteToolSettings(f);							// set tool temperatures, tool mix ratios etc.
 			}
 			if (ok)
 			{

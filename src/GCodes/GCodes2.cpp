@@ -2899,7 +2899,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			String<MaxFilenameLength> path;
 			gb.GetQuotedString(path.GetRef());
-			platform.SetSysDir(path.c_str());
+			result = platform.SetSysDir(path.c_str(), reply);
 		}
 		else
 		{
