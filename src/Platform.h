@@ -383,11 +383,11 @@ public:
 	const char* GetDefaultFile() const;				// Where the default configuration is stored (in the system dir).
 
 	// Function to work with the system files folder
-	void SetSysDir(const char* dir);				// Set the system files path
+	GCodeResult SetSysDir(const char* dir, const StringRef& reply);				// Set the system files path
 	bool SysFileExists(const char *filename) const;
 	FileStore* OpenSysFile(const char *filename, OpenMode mode) const;
 	bool DeleteSysFile(const char *filename) const;
-	void MakeSysFileName(const StringRef& result, const char *filename) const;
+	bool MakeSysFileName(const StringRef& result, const char *filename) const;
 	void GetSysDir(const StringRef & path) const;
 
 	// Message output (see MessageType for further details)

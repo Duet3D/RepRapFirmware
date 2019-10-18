@@ -34,6 +34,8 @@ void RotatingMagnetFilamentMonitor::Init()
 	lastMeasurementTime = 0;
 	lastErrorCode = 0;
 	version = 1;
+	magnitude = 0;
+	agc = 0;
 	backwards = false;
 	sensorError = false;
 	InitReceiveBuffer();
@@ -93,8 +95,7 @@ bool RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& 
 	}
 	else
 	{
-		reply.printf("Duet3D rotating magnet filament monitor v%u%s on input %u, %s, sensitivity %.2fmm/rev, allow %ld%% to %ld%%, check every %.1fmm, ",
-						version,
+		reply.printf("Duet3D magnetic filament monitor%s on input %u, %s, sensitivity %.2fmm/rev, allow %ld%% to %ld%%, check every %.1fmm, ",
 						(switchOpenMask != 0) ? " with switch" : "",
 						GetEndstopNumber(),
 						(comparisonEnabled) ? "enabled" : "disabled",
@@ -107,18 +108,22 @@ bool RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& 
 		{
 			reply.cat("no data received");
 		}
-		else if (sensorError)
-		{
-			reply.cat("error");
-			if (lastErrorCode != 0)
-			{
-				reply.catf(" %u", lastErrorCode);
-			}
-		}
 		else
 		{
-			reply.catf("current pos %.1f, ", (double)GetCurrentPosition());
-			if (magneticMonitorState != MagneticMonitorState::calibrating && totalExtrusionCommanded > 10.0)
+			reply.catf("version %u, ", version);
+			if (version >= 3)
+			{
+				reply.catf("mag %u agc %u, ", magnitude, agc);
+			}
+			if (sensorError)
+			{
+				reply.cat("error");
+				if (lastErrorCode != 0)
+				{
+					reply.catf(" %u", lastErrorCode);
+				}
+			}
+			else if (magneticMonitorState != MagneticMonitorState::calibrating && totalExtrusionCommanded > 10.0)
 			{
 				const float measuredMmPerRev = totalExtrusionCommanded/totalMovementMeasured;
 				reply.catf("measured sensitivity %.2fmm/rev, min %ld%% max %ld%% over %.1fmm\n",
@@ -168,6 +173,13 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData()
 			//  Data word:			P00S 10pp pppppppp		S = switch open, ppppppppppp = 10-bit filament position
 			//  Error word:			P010 0000 0000eeee		eeee = error code
 			//	Version word:		P110 0000 vvvvvvvv		vvvvvvvv = sensor/firmware version, at least 2
+			//
+			// Version 3 firmware:
+			//  Data word:			P00S 10pp pppppppp		S = switch open, ppppppppppp = 10-bit filament position
+			//  Error word:			P010 0000 0000eeee		eeee = error code
+			//	Version word:		P110 0000 vvvvvvvv		vvvvvvvv = sensor/firmware version, at least 2
+			//  Magnitude word		P110 0010 mmmmmmmm		mmmmmmmm = highest 8 bits of magnitude (cf. brightness of laser sensor)
+			//  AGC word			P110 0011 aaaaaaaa		aaaaaaaa = AGC setting (cf. shutter of laser sensor)
 			if (version == 1)
 			{
 				if ((data8 & 1) == 0 && (val & 0x7F00) == 0x6000 && (val & 0x00FF) >= 2)
@@ -207,13 +219,26 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData()
 
 				case TypeMagnetV2MessageTypeError:
 					lastErrorCode = val & 0x00FF;
-					sensorError = true;
+					sensorError = (lastErrorCode != 0);
 					break;
 
 				case TypeMagnetV2MessageTypeInfo:
-					if ((val & TypeMagnetV2InfoTypeMask) == TypeMagnetV2InfoTypeVersion)
+					switch (val & TypeMagnetV2InfoTypeMask)
 					{
+					case TypeMagnetV2InfoTypeVersion:
 						version = val & 0x00FF;
+						break;
+
+					case TypeMagnetV3InfoTypeMagnitude:
+						magnitude = val & 0x00FF;
+						break;
+
+					case TypeMagnetV3InfoTypeAgc:
+						agc = val & 0x00FF;
+						break;
+
+					default:
+						break;
 					}
 					break;
 
@@ -407,29 +432,18 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear()
 // Print diagnostic info for this sensor
 void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder)
 {
-	const char* const statusText = (!dataReceived) ? "no data received"
-									: (sensorError) ? "error"
-										: ((sensorValue & switchOpenMask) != 0) ? "no filament"
-											: "ok";
-	reprap.GetPlatform().MessageF(mtype, "Extruder %u: pos %.2f, %s, ", extruder, (double)GetCurrentPosition(), statusText);
-	if (magneticMonitorState != MagneticMonitorState::calibrating && totalExtrusionCommanded > 10.0)
+	String<FormatStringLength> buf;
+	buf.printf("Extruder %u: ", extruder);
+	if (dataReceived)
 	{
-		const float measuredMmPerRev = totalExtrusionCommanded/totalMovementMeasured;
-		reprap.GetPlatform().MessageF(mtype, "measured sens %.2fmm/rev min %ld%% max %ld%% over %.1fmm",
-			(double)measuredMmPerRev,
-			lrintf(100 * minMovementRatio * measuredMmPerRev),
-			lrintf(100 * maxMovementRatio * measuredMmPerRev),
-			(double)totalExtrusionCommanded);
+		buf.catf("pos %.2f, errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32 "\n",
+					(double)GetCurrentPosition(), framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
 	}
 	else
 	{
-		reprap.GetPlatform().Message(mtype, "no calibration data");
+		buf.cat("no data received\n");
 	}
-	if (dataReceived)
-	{
-		reprap.GetPlatform().MessageF(mtype, ", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32  " ovdue %" PRIu32 "\n",
-			framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
-	}
+	reprap.GetPlatform().Message(mtype, buf.c_str());
 }
 
 // End

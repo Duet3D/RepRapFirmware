@@ -602,9 +602,8 @@ void FtpResponder::ProcessLine()
 		{
 			const char *filename = GetParameter("MKD");
 			String<MaxFilenameLength> location;
-			MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename);
-
-			if (GetPlatform().GetMassStorage()->MakeDirectory(location.c_str()))
+			if (MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename)
+				&& GetPlatform().GetMassStorage()->MakeDirectory(location.c_str()))
 			{
 				outBuf->printf("257 \"%s\" created\r\n", location.c_str());
 			}
@@ -618,9 +617,8 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "RNFR"))
 		{
 			const char *filename = GetParameter("RNFR");
-			MassStorage::CombineName(filenameBeingProcessed.GetRef(), currentDirectory.c_str(), filename);
-
-			if (GetPlatform().GetMassStorage()->FileExists(filenameBeingProcessed.c_str()))
+			if (MassStorage::CombineName(filenameBeingProcessed.GetRef(), currentDirectory.c_str(), filename)
+				&& GetPlatform().GetMassStorage()->FileExists(filenameBeingProcessed.c_str()))
 			{
 				haveFileToMove = true;
 				outBuf->copy("350 Ready to RNTO.\r\n");
@@ -635,9 +633,9 @@ void FtpResponder::ProcessLine()
 		{
 			const char *filename = GetParameter("RNTO");
 			String<MaxFilenameLength> location;
-			MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename);
-
-			if (haveFileToMove && GetPlatform().GetMassStorage()->Rename(filenameBeingProcessed.c_str(), location.c_str()))
+			if (haveFileToMove
+				&& MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename)
+				&& GetPlatform().GetMassStorage()->Rename(filenameBeingProcessed.c_str(), location.c_str()))
 			{
 				outBuf->copy("250 Rename successful.\r\n");
 			}
@@ -720,11 +718,9 @@ void FtpResponder::ProcessLine()
 			filenameBeingProcessed.Clear();
 
 			const char * const filename = GetParameter("STOR");
-			FileStore * const file = GetPlatform().OpenFile(currentDirectory.c_str(), filename, OpenMode::write);
+			FileStore * const file = StartUpload(currentDirectory.c_str(), filename, OpenMode::write);
 			if (file != nullptr)
 			{
-				StartUpload(file, filename);
-
 				outBuf->copy("150 OK to send data.\r\n");
 				Commit(ResponderState::uploading);
 			}

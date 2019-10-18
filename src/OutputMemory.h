@@ -138,8 +138,11 @@ class OutputStack
 		// Returns the first item from the stack or NULL if none is available
 		OutputBuffer *GetFirstItem() const volatile;
 
-		// Set the first item of the stack. If it's NULL, then the first item will be removed
-		void SetFirstItem(OutputBuffer *buffer) volatile;
+		// Release the first item at the top of the stack
+		void ReleaseFirstItem() volatile;
+
+		// Apply a timeout to the first item at the top of the stack
+		bool ApplyTimeout(uint32_t ticks) volatile;
 
 		// Returns the last item from the stack or NULL if none is available
 		OutputBuffer *GetLastItem() const volatile;

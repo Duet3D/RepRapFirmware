@@ -18,7 +18,7 @@ protected:
 	void ConnectionLost() override;
 	virtual void CancelUpload();
 
-	void StartUpload(FileStore *file, const char *fileName);
+	FileStore * StartUpload(const char* folder, const char *fileName, const OpenMode mode, const uint32_t preAllocSize = 0);
 	void FinishUpload(uint32_t fileLength, time_t fileLastModified, bool gotCrc, uint32_t expectedCrc);
 
 	// File uploads

@@ -515,18 +515,41 @@ OutputBuffer *OutputStack::GetFirstItem() const volatile
 	return (count == 0) ? nullptr : items[0];
 }
 
-// Update the first item of the stack
-void OutputStack::SetFirstItem(OutputBuffer *buffer) volatile
+// Release the first item at the top of the stack
+void OutputStack::ReleaseFirstItem() volatile
 {
-	if (buffer == nullptr)
+	if (count != 0)
 	{
-		(void)Pop();
+		OutputBuffer * const buf = items[0];					// capture volatile variable
+		if (buf != nullptr)
+		{
+			items[0] = OutputBuffer::Release(buf);
+		}
+		if (items[0] == nullptr)
+		{
+			(void)Pop();
+		}
 	}
-	else
+}
+
+// Release the first item on the top of the stack if it is too old. Return true if the item was timed out.
+bool OutputStack::ApplyTimeout(uint32_t ticks) volatile
+{
+	bool ret = false;
+	if (count != 0)
 	{
-		items[0] = buffer;
-		buffer->whenQueued = millis();
+		OutputBuffer * const buf = items[0];					// capture volatile variable
+		if (buf != nullptr && millis() - buf->whenQueued >= ticks)
+		{
+			items[0] = OutputBuffer::Release(buf);
+			ret = true;
+		}
+		if (items[0] == nullptr)
+		{
+			(void)Pop();
+		}
 	}
+	return ret;
 }
 
 // Returns the last item from the stack or nullptr if none is available

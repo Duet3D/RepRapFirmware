@@ -14,6 +14,7 @@ enum class OpenMode : uint8_t
 {
 	read,			// open an existing file for reading
 	write,			// write a file, replacing any existing file of the same name
+	writeWithCrc,	// as write but calculate the CRC as we go
 	append			// append to an existing file, or create a new file if it is not found
 };
 
@@ -75,6 +76,7 @@ private:
 	FileWriteBuffer *writeBuffer;
 	volatile unsigned int openCount;
 	volatile bool closeRequested;
+	bool calcCrc;
 	FileUseMode usageMode;
 
 	CRC32 crc;

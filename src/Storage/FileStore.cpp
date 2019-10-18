@@ -56,7 +56,7 @@ bool FileStore::IsOpenOn(const FATFS *fs) const
 // This is protected - only Platform can access it.
 bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 {
-	const bool writing = (mode == OpenMode::write || mode == OpenMode::append);
+	const bool writing = (mode == OpenMode::write || mode == OpenMode::writeWithCrc || mode == OpenMode::append);
 	writeBuffer = nullptr;
 
 	if (writing)
@@ -90,14 +90,14 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 		// We only do this if the mode is write, not append, because we don't want to use up a large buffer to append messages to the log file,
 		// especially as we need to flush messages to SD card regularly.
 		// Currently, append mode is used for the log file and for appending simulated print times to GCodes files (which required read access too).
-		if (mode == OpenMode::write)
+		if (mode == OpenMode::write || mode == OpenMode::writeWithCrc)
 		{
 			writeBuffer = reprap.GetPlatform().GetMassStorage()->AllocateWriteBuffer();
 		}
 	}
 
 	const FRESULT openReturn = f_open(&file, filePath,
-										(mode == OpenMode::write) ?  FA_CREATE_ALWAYS | FA_WRITE
+										(mode == OpenMode::write || mode == OpenMode::writeWithCrc) ?  FA_CREATE_ALWAYS | FA_WRITE
 											: (mode == OpenMode::append) ? FA_READ | FA_WRITE | FA_OPEN_ALWAYS
 												: FA_OPEN_EXISTING | FA_READ);
 	if (openReturn != FR_OK)
@@ -118,6 +118,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 	}
 
 	crc.Reset();
+	calcCrc = (mode == OpenMode::writeWithCrc);
 	usageMode = (writing) ? FileUseMode::readWrite : FileUseMode::readOnly;
 	openCount = 1;
 	if (mode == OpenMode::write && preAllocSize != 0)
@@ -355,7 +356,10 @@ int FileStore::ReadLine(char* buf, size_t nBytes)
 FRESULT FileStore::Store(const char *s, size_t len, size_t *bytesWritten)
 {
 	uint32_t time = StepTimer::GetInterruptClocks();
-	crc.Update(s, len);
+	if (calcCrc)
+	{
+		crc.Update(s, len);
+	}
 	const FRESULT writeStatus = f_write(&file, s, len, bytesWritten);
 	time = StepTimer::GetInterruptClocks() - time;
 	if (time > longestWriteTime)

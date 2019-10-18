@@ -58,6 +58,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 			reply.copy("unsuitable endstop number");
 			return true;
 		}
+		setPullup(pin, false);				// disable the pullup resistor to provide greater noise immunity when using a Duet3D laser of magnetic filament monitor
 	}
 	else if (seen)
 	{

@@ -30,6 +30,9 @@ const uint32_t MaxFileParseInterval = 4000;			// Maximum interval between repeat
 // Struct to hold Gcode file information
 struct GCodeFileInfo
 {
+	GCodeFileInfo() { Init(); }
+	void Init();
+
 	FilePosition fileSize;
 	time_t lastModifiedTime;
 	float layerHeight;
@@ -42,8 +45,6 @@ struct GCodeFileInfo
 	bool isValid;
 	bool incomplete;
 	String<50> generatedBy;
-
-	void Init();
 };
 
 enum FileParseState

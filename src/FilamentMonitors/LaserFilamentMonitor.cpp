@@ -104,22 +104,26 @@ bool LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bo
 		{
 			reply.cat("no data received");
 		}
-		else if (sensorError)
-		{
-			reply.cat("error");
-			if (lastErrorCode != 0)
-			{
-				reply.catf(" %u", lastErrorCode);
-			}
-		}
 		else
 		{
-			reply.catf("current pos %.1f, brightness %u, shutter %u, ", (double)GetCurrentPosition(), brightness, shutter);
+			reply.catf("version %u, ", version);
 			if (imageQuality != 0)
 			{
 				reply.catf("quality %u, ", imageQuality);
 			}
-			if (laserMonitorState != LaserMonitorState::calibrating && totalExtrusionCommanded > 10.0)
+			if (version >= 2)
+			{
+				reply.catf("brightness %u, shutter %u, ", brightness, shutter);
+			}
+			if (sensorError)
+			{
+				reply.cat("error");
+				if (lastErrorCode != 0)
+				{
+					reply.catf(" %u", lastErrorCode);
+				}
+			}
+			else if (laserMonitorState != LaserMonitorState::calibrating && totalExtrusionCommanded > 10.0)
 			{
 				reply.catf("measured min %ld%% avg %ld%% max %ld%% over %.1fmm",
 					lrintf(100 * minMovementRatio),
@@ -392,32 +396,18 @@ FilamentSensorStatus LaserFilamentMonitor::Clear()
 // Print diagnostic info for this sensor
 void LaserFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder)
 {
-	const char* const statusText = (!dataReceived) ? "no data received"
-									: (sensorError) ? "error"
-										: ((sensorValue & switchOpenMask) != 0) ? "no filament"
-											: "ok";
-	reprap.GetPlatform().MessageF(mtype, "Extruder %u: pos %.2f, %s, ", extruder, (double)GetCurrentPosition(), statusText);
-	if (laserMonitorState != LaserMonitorState::calibrating && totalExtrusionCommanded > 10.0)
-	{
-		reprap.GetPlatform().MessageF(mtype, "measured min %ld%% avg %ld%% max %ld%% over %.1fmm",
-			lrintf(100 * minMovementRatio),
-			lrintf((100 * totalMovementMeasured)/totalExtrusionCommanded),
-			lrintf(100 * maxMovementRatio),
-			(double)totalExtrusionCommanded);
-	}
-	else
-	{
-		reprap.GetPlatform().Message(mtype, "no calibration data");
-	}
+	String<FormatStringLength> buf;
+	buf.printf("Extruder %u: ", extruder);
 	if (dataReceived)
 	{
-		reprap.GetPlatform().MessageF(mtype, ", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32  " ovdue %" PRIu32 "\n",
-			framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
+		buf.catf("pos %.2f, errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32 "\n",
+					(double)GetCurrentPosition(), framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
 	}
 	else
 	{
-		reprap.GetPlatform().Message(mtype, "\n");
+		buf.cat("no data received\n");
 	}
+	reprap.GetPlatform().Message(mtype, buf.c_str());
 }
 
 // End

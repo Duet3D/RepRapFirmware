@@ -2030,8 +2030,11 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 	{
 		// Poll file info for a specific file
 		String<MaxFilenameLength> filePath;
-		MassStorage::CombineName(filePath.GetRef(), platform->GetGCodeDir(), filename);
-		if (!platform->GetMassStorage()->GetFileInfo(filePath.c_str(), info, quitEarly))
+		if (!MassStorage::CombineName(filePath.GetRef(), platform->GetGCodeDir(), filename))
+		{
+			info.isValid = false;
+		}
+		else if (!platform->GetMassStorage()->GetFileInfo(filePath.c_str(), info, quitEarly))
 		{
 			// This may take a few runs...
 			return false;
@@ -2298,14 +2301,14 @@ bool RepRap::WriteToolSettings(FileStore *f) const
 	{
 		if (t != currentTool)
 		{
-			ok = t->WriteSettings(f, false);
+			ok = t->WriteSettings(f);
 		}
 	}
 
-	// Finally write the setting of the active tool and the commands to select it
-	if (ok && currentTool != nullptr)
+	// Finally write the settings of the active tool and the commands to select it. If no current tool, just deselect all tools.
+	if (ok)
 	{
-		ok = currentTool->WriteSettings(f, true);
+		ok = (currentTool == nullptr) ? f->Write("T-1 P0\n") : currentTool->WriteSettings(f);
 	}
 	return ok;
 }
