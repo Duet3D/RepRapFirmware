@@ -30,7 +30,7 @@ const size_t NumFirmwareUpdateModules = 1;
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR		0 	//Temporary!					// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				0					// no point in supporting FTP because we have no mass storage
@@ -112,6 +112,7 @@ constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / 4) * 4700.0/((Default
 																			// there are 4 temperature sensing channels and a 4K7 load resistor
 // Digital pins the SPI temperature sensors have their select lines tied to
 constexpr Pin SpiTempSensorCsPins[] = { PortDPin(16), PortDPin(15), PortDPin(27), PortCPin(22) };
+constexpr size_t MaxSpiTempSensors = ARRAY_SIZE(SpiTempSensorCsPins);
 
 // Pin that controls the ATX power on/off
 constexpr Pin ATX_POWER_PIN = PortAPin(10);

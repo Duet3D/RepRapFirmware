@@ -36,9 +36,10 @@ extern "C" void DhtDataTransition(CallbackParameter cp)
 	static_cast<DhtSensorHardwareInterface*>(cp.vp)->Interrupt();
 }
 
-DhtSensorHardwareInterface::DhtSensorHardwareInterface()
-	: type(DhtSensorType::none), lastResult(TemperatureError::notInitialised),
-	  lastTemperature(BadErrorTemperature), lastHumidity(BadErrorTemperature), badTemperatureCount(0)
+DhtSensorHardwareInterface::DhtSensorHardwareInterface(IoPort& port, DhtSensorType type)
+	: port(port), type(type), lastResult(TemperatureError::notInitialised),
+	  lastTemperature(BadErrorTemperature), lastHumidity(BadErrorTemperature),
+	  badTemperatureCount(0)
 {
 //	IoPort::SetPinMode(sensorPin, INPUT_PULLUP);
 }
@@ -49,75 +50,8 @@ TemperatureError DhtSensorHardwareInterface::GetTemperatureOrHumidity(float& t, 
 	return lastResult;
 }
 
-/*static*/ GCodeResult DhtSensorHardwareInterface::Configure(TemperatureSensor *ts, unsigned int relativeChannel, unsigned int mCode, GCodeBuffer& gb, const StringRef& reply)
-{
-	MutexLocker lock(dhtMutex);
-
-	if (relativeChannel >= MaxSpiTempSensors || activeSensors[relativeChannel] == nullptr)
-	{
-		reply.copy("invalid channel");
-		return GCodeResult::error;
-	}
-
-	return activeSensors[relativeChannel]->ConfigureType(ts, mCode, gb, reply);
-}
-
-GCodeResult DhtSensorHardwareInterface::ConfigureType(TemperatureSensor *ts, unsigned int mCode, GCodeBuffer& gb, const StringRef& reply)
-{
-	GCodeResult rslt = GCodeResult::ok;
-	bool seen = false;
-	ts->TryConfigureSensorName(gb, seen);
-
-	if (gb.Seen('T'))
-	{
-		seen = true;
-
-		const int dhtType = gb.GetIValue();
-		switch (dhtType)
-		{
-		case 11:
-			type = DhtSensorType::Dht11;
-			break;
-		case 21:
-			type = DhtSensorType::Dht21;
-			break;
-		case 22:
-			type = DhtSensorType::Dht22;
-			break;
-		default:
-			reply.copy("Invalid DHT sensor type");
-			rslt = GCodeResult::error;
-			break;
-		}
-	}
-
-	if (!seen)
-	{
-		ts->CopyBasicDetails(reply);
-
-		const char *sensorTypeString;
-		switch (type)
-		{
-		case DhtSensorType::Dht11:
-			sensorTypeString = "DHT11";
-			break;
-		case DhtSensorType::Dht21:
-			sensorTypeString = "DHT21";
-			break;
-		case DhtSensorType::Dht22:
-			sensorTypeString = "DHT22";
-			break;
-		default:
-			sensorTypeString = "unknown";
-			break;
-		}
-		reply.catf(", sensor type %s", sensorTypeString);
-	}
-	return rslt;
-}
-
 // Create a hardware interface object for the specified channel if there isn't already
-DhtSensorHardwareInterface *DhtSensorHardwareInterface::Create(unsigned int relativeChannel)
+/* static */ DhtSensorHardwareInterface *DhtSensorHardwareInterface::GetOrCreate(unsigned int relativeChannel, IoPort& port, DhtSensorType type)
 {
 	if (relativeChannel >= MaxSpiTempSensors)
 	{
@@ -128,7 +62,7 @@ DhtSensorHardwareInterface *DhtSensorHardwareInterface::Create(unsigned int rela
 
 	if (activeSensors[relativeChannel] == nullptr)
 	{
-		activeSensors[relativeChannel] = new DhtSensorHardwareInterface(SpiTempSensorCsPins[relativeChannel]);
+		activeSensors[relativeChannel] = new DhtSensorHardwareInterface(port, type);
 	}
 
 	if (dhtTask == nullptr)
@@ -140,28 +74,23 @@ DhtSensorHardwareInterface *DhtSensorHardwareInterface::Create(unsigned int rela
 	return activeSensors[relativeChannel];
 }
 
+/* static */ void DhtSensorHardwareInterface::Remove(DhtSensorHardwareInterface* dht)
+{
+
+	MutexLocker lock(dhtMutex);
+	for (size_t i = 0; i < MaxSpiTempSensors; ++i)
+	{
+		if (activeSensors[i] == dht)
+		{
+			activeSensors[i] = nullptr;
+			delete dht;
+		}
+	}
+}
+
 /*static*/ void DhtSensorHardwareInterface::InitStatic()
 {
 	dhtMutex.Create("DHT");
-}
-
-/*static*/ TemperatureError DhtSensorHardwareInterface::GetTemperatureOrHumidity(unsigned int relativeChannel, float& t, bool wantHumidity)
-{
-	if (relativeChannel >= MaxSpiTempSensors)
-	{
-		t = BadErrorTemperature;
-		return TemperatureError::unknownChannel;
-	}
-
-	MutexLocker lock(dhtMutex);
-
-	if (activeSensors[relativeChannel] == nullptr)
-	{
-		t = BadErrorTemperature;
-		return TemperatureError::notInitialised;
-	}
-
-	return activeSensors[relativeChannel]->GetTemperatureOrHumidity(t, wantHumidity);
 }
 
 void DhtSensorHardwareInterface::Interrupt()
@@ -215,7 +144,7 @@ void DhtSensorHardwareInterface::TakeReading()
 		port.DetachInterrupt();
 
 		// Attempt to convert the signal into temp+RH values
-		const TemperatureError rslt = ProcessReadings();
+		const auto rslt = ProcessReadings();
 		if (rslt == TemperatureError::success)
 		{
 			lastResult = rslt;
@@ -312,55 +241,133 @@ TemperatureError DhtSensorHardwareInterface::ProcessReadings()
 
 // Class DhtTemperatureSensor members
 DhtTemperatureSensor::DhtTemperatureSensor(unsigned int sensorNum)
-	: TemperatureSensor(sensorNum, "DHT-temperature")
+	: SensorWithPort(sensorNum, "DHT-temperature"), type(DhtSensorType::none)
 {
-}
-
-void DhtTemperatureSensor::Init()
-{
-	DhtSensorHardwareInterface::Create(GetSensorChannel() - FirstDhtTemperatureChannel);
-}
-
-GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
-{
-	return DhtSensorHardwareInterface::Configure(this, GetSensorChannel() - FirstDhtTemperatureChannel, mCode, gb, reply);
 }
 
 DhtTemperatureSensor::~DhtTemperatureSensor()
 {
-	// We don't delete the hardware interface object because the humidity channel may still be using it
+	DhtSensorHardwareInterface::Remove(dht);
 }
 
-TemperatureError DhtTemperatureSensor::TryGetTemperature(float& t)
+GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
-	return DhtSensorHardwareInterface::GetTemperatureOrHumidity(GetSensorChannel() - FirstDhtTemperatureChannel, t, false);
+	bool seen = false;
+	if (!ConfigurePort(gb, reply, PinAccess::write0, seen))
+	{
+		return GCodeResult::error;
+	}
+	unsigned int relativeChannel = 0;
+	// Check if the port we have just seen is actually a SPI CS pin
+	if (seen)
+	{
+		bool isSpiCSPin = false;
+		const Pin usedPin = port.GetPin();
+		for (; relativeChannel < MaxSpiTempSensors; ++relativeChannel)
+		{
+			if (SpiTempSensorCsPins[relativeChannel] == usedPin)
+			{
+				isSpiCSPin = true;
+				break;
+			}
+		}
+		if (!isSpiCSPin)
+		{
+			port.Release();
+			reply.copy("DHT sensors can only use SPI CS pins");
+			return GCodeResult::error;
+		}
+	}
+
+	TryConfigureSensorName(gb, seen);
+	if (gb.Seen('T'))
+	{
+		seen = true;
+
+		const int dhtType = gb.GetIValue();
+		switch (dhtType)
+		{
+		case 11:
+			type = DhtSensorType::Dht11;
+			break;
+		case 21:
+			type = DhtSensorType::Dht21;
+			break;
+		case 22:
+			type = DhtSensorType::Dht22;
+			break;
+		default:
+			reply.copy("Invalid DHT sensor type");
+			return GCodeResult::error;
+			break;
+		}
+	}
+
+	if (seen)
+	{
+		dht = DhtSensorHardwareInterface::GetOrCreate(relativeChannel, port, type);
+		dht->SetType(type);
+	}
+	else
+	{
+		CopyBasicDetails(reply);
+
+		const char *sensorTypeString;
+		switch (type)
+		{
+		case DhtSensorType::Dht11:
+			sensorTypeString = "DHT11";
+			break;
+		case DhtSensorType::Dht21:
+			sensorTypeString = "DHT21";
+			break;
+		case DhtSensorType::Dht22:
+			sensorTypeString = "DHT22";
+			break;
+		default:
+			sensorTypeString = "unknown";
+			break;
+		}
+		reply.catf(", sensor type %s", sensorTypeString);
+	}
+
+	return GCodeResult::ok;
 }
+
+TemperatureError DhtTemperatureSensor::GetLatestTemperature(float &t, uint8_t outputNumber)
+{
+	if (outputNumber > 1)
+	{
+		t = BadErrorTemperature;
+		return TemperatureError::invalidOutputNumber;
+	}
+	return dht->GetTemperatureOrHumidity(t, outputNumber == 1);
+}
+
+void DhtTemperatureSensor::Poll() {
+	float t;
+	const auto err = GetLatestTemperature(t, 0);
+	if (err == TemperatureError::success)
+	{
+		SetResult(t, err);
+	}
+	else
+	{
+		SetResult(err);
+	}
+}
+
 
 // Class DhtHumiditySensor members
 DhtHumiditySensor::DhtHumiditySensor(unsigned int sensorNum)
-	: TemperatureSensor(sensorNum, "DHT-humidity")
+	: AdditionalOutputSensor(sensorNum, "DHT-humidity", false)
 {
-}
-
-void DhtHumiditySensor::Init()
-{
-	DhtSensorHardwareInterface::Create(GetSensorChannel() - FirstDhtHumidityChannel);
-}
-
-GCodeResult DhtHumiditySensor::Configure(GCodeBuffer& gb, const StringRef& reply)
-{
-	return DhtSensorHardwareInterface::Configure(this, GetSensorChannel() - FirstDhtHumidityChannel, mCode, gb, reply);
 }
 
 DhtHumiditySensor::~DhtHumiditySensor()
 {
-	// We don't delete the hardware interface object because the temperature channel may still be using it
 }
 
-TemperatureError DhtHumiditySensor::TryGetTemperature(float& t)
-{
-	return DhtSensorHardwareInterface::GetTemperatureOrHumidity(GetSensorChannel() - FirstDhtHumidityChannel, t, true);
-}
 
 #endif
 

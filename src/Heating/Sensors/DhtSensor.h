@@ -12,6 +12,8 @@
 
 #if SUPPORT_DHT_SENSOR
 
+# include "AdditionalOutputSensor.h"
+# include "SensorWithPort.h"
 # include "TemperatureSensor.h"
 # include "RTOSIface/RTOSIface.h"
 
@@ -27,20 +29,22 @@ enum class DhtSensorType
 class DhtSensorHardwareInterface
 {
 public:
+	DhtSensorHardwareInterface(IoPort& port, DhtSensorType type);
 
-	static GCodeResult Configure(TemperatureSensor *ts, unsigned int relativeChannel, unsigned int mCode, GCodeBuffer& gb, const StringRef& reply);
+	void SetType(DhtSensorType t) { type = t; }
+
 	void Interrupt();
+	TemperatureError GetTemperatureOrHumidity(float& t, bool wantHumidity) const;
 
-	static DhtSensorHardwareInterface *Create(unsigned int relativeChannel);
-	static TemperatureError GetTemperatureOrHumidity(unsigned int relativeChannel, float& t, bool wantHumidity);
+	static DhtSensorHardwareInterface* GetOrCreate(unsigned int relativeChannel, IoPort& port, DhtSensorType type);
+	static void Remove(DhtSensorHardwareInterface* dht);
 	static void InitStatic();
 	static void SensorTask();
 
 private:
-	DhtSensorHardwareInterface();
+	DhtSensorHardwareInterface(unsigned int sensorNum);
 
-	GCodeResult ConfigureType(TemperatureSensor *ts, unsigned int mCode, GCodeBuffer& gb, const StringRef& reply);
-	TemperatureError GetTemperatureOrHumidity(float& t, bool wantHumidity) const;
+	GCodeResult ConfigureType(TemperatureSensor *ts, GCodeBuffer& gb, const StringRef& reply);
 	void TakeReading();
 	TemperatureError ProcessReadings();
 
@@ -49,7 +53,7 @@ private:
 	static Task<DhtTaskStackWords> *dhtTask;
 	static DhtSensorHardwareInterface *activeSensors[MaxSpiTempSensors];
 
-	IoPort port;
+	IoPort& port;
 	DhtSensorType type;
 	TemperatureError lastResult;
 	float lastTemperature, lastHumidity;
@@ -61,35 +65,32 @@ private:
 };
 
 // This class represents a DHT temperature sensor
-class DhtTemperatureSensor : public TemperatureSensor
+class DhtTemperatureSensor : public SensorWithPort
 {
 public:
 	DhtTemperatureSensor(unsigned int sensorNum);
 	~DhtTemperatureSensor();
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
-	void Init() override;
+	TemperatureError GetLatestTemperature(float& t, uint8_t outputNumber = 0) override;
+	const uint8_t GetNumAdditionalOutputs() const override { return 1; }
+	void Poll() override;
 
 	static constexpr const char *TypeName = "dhttemp";
 
-protected:
-	TemperatureError TryGetTemperature(float& t) override;
+private:
+	DhtSensorHardwareInterface* dht;
+	DhtSensorType type;
 };
 
 // This class represents a DHT humidity sensor
-class DhtHumiditySensor : public TemperatureSensor
+class DhtHumiditySensor : public AdditionalOutputSensor
 {
 public:
-	DhtHumiditySensor(unsigned int channel);
+	DhtHumiditySensor(unsigned int sensorNum);
 	~DhtHumiditySensor();
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
-	void Init() override;
-
 	static constexpr const char *TypeName = "dhthumidity";
-
-protected:
-	TemperatureError TryGetTemperature(float& t) override;
 };
 
 #endif

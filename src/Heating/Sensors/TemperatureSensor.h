@@ -18,7 +18,10 @@ public:
 	virtual ~TemperatureSensor();
 
 	// Try to get a temperature reading
-	TemperatureError GetLatestTemperature(float& t);
+	virtual TemperatureError GetLatestTemperature(float& t, uint8_t outputNumber = 0);
+
+	// How many additional outputs does this sensor have
+	virtual const uint8_t GetNumAdditionalOutputs() const { return 0; }
 
 	// Get the most recent reading without checking for timeout
 	float GetStoredReading() const { return lastTemperature; }

@@ -36,7 +36,7 @@ TemperatureSensor::~TemperatureSensor()
 }
 
 // Return the latest temperature reading
-TemperatureError TemperatureSensor::GetLatestTemperature(float& t)
+TemperatureError TemperatureSensor::GetLatestTemperature(float& t, uint8_t outputNumber)
 {
 	if (millis() - whenLastRead > TemperatureReadingTimeout)
 	{
