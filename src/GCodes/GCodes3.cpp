@@ -742,7 +742,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply)
 		if (sps.SignalError())
 		{
 			reply.copy("No axis specified.");
-			return GCodeResult::badOrMissingParameter;
+			return GCodeResult::error;
 		}
 		return GCodeResult::ok;
 	}
@@ -754,7 +754,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply)
 		if (sps.SignalError())
 		{
 			reply.copy("Target equals current position.");
-			return GCodeResult::badOrMissingParameter;
+			return GCodeResult::error;
 		}
 		return GCodeResult::ok;
 	}
