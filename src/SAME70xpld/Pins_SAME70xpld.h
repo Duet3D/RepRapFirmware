@@ -23,7 +23,7 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_DHT_SENSOR		0					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				1
@@ -41,9 +41,8 @@ constexpr size_t NumDirectDrivers = 5;				// The maximum number of drives suppor
 constexpr size_t MaxSensorsInSystem = 32;
 typedef uint32_t SensorsBitmap;
 
-constexpr size_t NumTotalHeaters = 4;
-constexpr size_t NumDefaultHeaters = 0;
-constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
+constexpr size_t MaxHeaters = 6;
+constexpr size_t NumExtraHeaterProtections = 6;		// The number of extra heater protection instances
 constexpr size_t NumThermistorInputs = 4;
 
 constexpr size_t MaxZProbes = 4;
@@ -89,7 +88,7 @@ constexpr float EXT_BETA = 4388.0;
 constexpr float EXT_SHC = 0.0;
 
 // Thermistor series resistor value in Ohms
-constexpr float THERMISTOR_SERIES_RS = 2200.0;
+constexpr float DefaultThermistorSeriesR = 4700.0;
 
 // Number of SPI temperature sensors to support
 
@@ -148,7 +147,6 @@ constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
 // This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
 struct PinEntry
 {
-	bool CanDo(PinAccess access) const;
 	Pin GetPin() const { return pin; }
 	PinCapability GetCapability() const { return cap; }
 	const char* GetNames() const { return names; }
@@ -165,7 +163,9 @@ struct PinEntry
 // for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
 constexpr PinEntry PinTable[] =
 {
-	//TODO
+	// Sample pin table entry
+	{ PortAPin(0),	PinCapability::rw,	"pa0" },
+	// Lots more pins need to be defined here...
 };
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);

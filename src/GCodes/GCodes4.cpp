@@ -843,7 +843,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				moveBuffer.checkEndstops = true;
 				moveBuffer.reduceAcceleration = true;
 				moveBuffer.coords[Z_AXIS] = (IsAxisHomed(Z_AXIS))
-											? -zp.GetDiveHeight() + zp.GetActualTriggerHeight()	// Z axis has been homed, so no point in going very far
+											? platform.AxisMinimum(Z_AXIS) - zp.GetDiveHeight() + zp.GetActualTriggerHeight()	// Z axis has been homed, so no point in going very far
 											: -1.1 * platform.AxisTotalLength(Z_AXIS);	// Z axis not homed yet, so treat this as a homing move
 				moveBuffer.feedRate = zp.GetProbingSpeed();
 				NewMoveAvailable(1);

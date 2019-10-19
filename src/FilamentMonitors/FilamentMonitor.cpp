@@ -38,7 +38,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 	if (gb.Seen('C'))
 	{
 		seen = true;
-		if (!port.AssignPort(gb, reply, PinUsedBy::filamentMonitor, PinAccess::readWithPullup))
+		if (!port.AssignPort(gb, reply, PinUsedBy::filamentMonitor, PinAccess::read))
 		{
 			return true;
 		}

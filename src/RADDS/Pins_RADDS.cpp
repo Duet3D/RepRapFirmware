@@ -59,31 +59,4 @@ bool LookupPinName(const char*pn, LogicalPin& lpin, bool& hardwareInverted)
 	return false;
 }
 
-// Return true if the pin can be used for the specified function
-bool PinEntry::CanDo(PinAccess access) const
-{
-	switch (access)
-	{
-	case PinAccess::read:
-	case PinAccess::readWithPullup:
-		return ((uint8_t)cap & (uint8_t)PinCapability::read) != 0;
-
-	case PinAccess::readAnalog:
-		return ((uint8_t)cap & (uint8_t)PinCapability::ain) != 0;
-
-	case PinAccess::write0:
-	case PinAccess::write1:
-		return ((uint8_t)cap & (uint8_t)PinCapability::write) != 0;
-
-	case PinAccess::pwm:
-		return ((uint8_t)cap & (uint8_t)PinCapability::pwm) != 0;
-
-	case PinAccess::servo:
-		return pin < 200 && ((uint8_t)cap & (uint8_t)PinCapability::pwm) != 0;
-
-	default:
-		return false;
-	}
-}
-
 // End

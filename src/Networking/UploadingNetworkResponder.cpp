@@ -5,7 +5,6 @@
  *      Author: David
  */
 
-#include <string.h>
 #include "UploadingNetworkResponder.h"
 #include "Socket.h"
 #include "Platform.h"

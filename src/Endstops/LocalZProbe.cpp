@@ -41,7 +41,7 @@ GCodeResult LocalZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool
 		break;
 
 	default:
-		access[0] = PinAccess::readWithPullup;
+		access[0] = PinAccess::read;
 		access[1] = PinAccess::write0;
 		break;
 	}
@@ -75,20 +75,21 @@ bool LocalZProbe::AssignPorts(const char* pinNames, const StringRef& reply)
 // This is called by the tick ISR to get the raw Z probe reading to feed to the filter
 uint16_t LocalZProbe::GetRawReading() const
 {
+	constexpr uint16_t MaxReading = 1000 << (AdcBits - 10);
 	switch (type)
 	{
 	case ZProbeType::analog:
 	case ZProbeType::dumbModulated:
 	case ZProbeType::alternateAnalog:
-		return min<uint16_t>(inputPort.ReadAnalog(), 4000);
+		return min<uint16_t>(inputPort.ReadAnalog(), MaxReading);
 
 	case ZProbeType::digital:
 	case ZProbeType::unfilteredDigital:
 	case ZProbeType::blTouch:
-		return (inputPort.Read()) ? 4000 : 0;
+		return (inputPort.Read()) ? MaxReading : 0;
 
 	default:
-		return 4000;
+		return MaxReading;
 	}
 }
 

@@ -107,7 +107,7 @@ bool IoPort::AssignPort(const char* pinName, const StringRef& reply, PinUsedBy n
 	switch (access)
 	{
 	case PinAccess::read:			return "digital read";
-	case PinAccess::readWithPullup:	return "digital read (pullup resistor enabled)";
+	case PinAccess::readWithPullup_InternalUseOnly:	return "digital read (pullup resistor enabled)";
 	case PinAccess::readAnalog:		return "analog read";
 	case PinAccess::write0:			return "write (initially low)";
 	case PinAccess::write1:			return "write (initially high)";
@@ -180,7 +180,7 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 		{
 			if (access == PinAccess::read)
 			{
-				access = PinAccess::readWithPullup;
+				access = PinAccess::readWithPullup_InternalUseOnly;
 			}
 		}
 		else if (*pn == '*')
@@ -284,7 +284,7 @@ bool IoPort::SetMode(PinAccess access)
 	case PinAccess::readAnalog:
 		desiredMode = AIN;
 		break;
-	case PinAccess::readWithPullup:
+	case PinAccess::readWithPullup_InternalUseOnly:
 		desiredMode = INPUT_PULLUP;
 		break;
 	case PinAccess::read:
