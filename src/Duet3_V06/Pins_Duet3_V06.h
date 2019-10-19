@@ -222,7 +222,7 @@ constexpr PinEntry PinTable[] =
 	{ PortAPin(19),	PinCapability::ainr,	"io5.in" },
 	{ PortAPin(18),	PinCapability::ainr,	"io6.in" },
 	{ PortAPin(17),	PinCapability::ainr,	"io7.in" },
-	{ PortEPin(3),	PinCapability::ainr,	"io8.in" },
+	{ PortEPin(3),	PinCapability::read,	"io8.in" },		// analog in not usable because it is on the wrong ADC
 
 	// IO connector outputs
 	//TODO some have PWM capability too

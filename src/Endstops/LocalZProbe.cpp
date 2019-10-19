@@ -8,6 +8,8 @@
 #include "LocalZProbe.h"
 
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include "RepRap.h"
+#include "Platform.h"
 
 // Members of class LocalZProbe
 LocalZProbe::~LocalZProbe()
@@ -62,26 +64,24 @@ GCodeResult LocalZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool
 		(void)modulationPort.SetMode(access[1]);
 	}
 
-	return ZProbe::Configure(gb, reply, seen);
-}
+	if (seen)
+	{
+		reprap.GetPlatform().InitZProbeFilters();
+	}
 
-bool LocalZProbe::AssignPorts(const char* pinNames, const StringRef& reply)
-{
-	IoPort* const ports[] = { &inputPort, &modulationPort };
-	const PinAccess access[] = { PinAccess::read, PinAccess::write0 };
-	return IoPort::AssignPorts(pinNames, reply, PinUsedBy::zprobe, 2, ports, access);
+	return ZProbe::Configure(gb, reply, seen);
 }
 
 // This is called by the tick ISR to get the raw Z probe reading to feed to the filter
 uint16_t LocalZProbe::GetRawReading() const
 {
-	constexpr uint16_t MaxReading = 1000 << (AdcBits - 10);
+	constexpr uint16_t MaxReading = 1000;
 	switch (type)
 	{
 	case ZProbeType::analog:
 	case ZProbeType::dumbModulated:
 	case ZProbeType::alternateAnalog:
-		return min<uint16_t>(inputPort.ReadAnalog(), MaxReading);
+		return min<uint16_t>(inputPort.ReadAnalog() >> (AdcBits - 10), MaxReading);
 
 	case ZProbeType::digital:
 	case ZProbeType::unfilteredDigital:
