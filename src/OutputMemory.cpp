@@ -525,6 +525,8 @@ MessageType OutputStack::GetFirstItemType() const volatile
 	return (count == 0) ? MessageType::NoDestinationMessage : types[0];
 }
 
+#if HAS_LINUX_INTERFACE
+
 // Update the first item of the stack
 void OutputStack::SetFirstItem(OutputBuffer *buffer) volatile
 {
@@ -541,6 +543,8 @@ void OutputStack::SetFirstItem(OutputBuffer *buffer) volatile
 		}
 	}
 }
+
+#endif
 
 // Release the first item at the top of the stack
 void OutputStack::ReleaseFirstItem() volatile

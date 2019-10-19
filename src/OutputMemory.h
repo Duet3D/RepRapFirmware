@@ -73,7 +73,6 @@ class OutputBuffer
 		// Write the buffer to file returning true if successful
 		bool WriteToFile(FileData& f) const;
 #endif
-
 		// Initialise the output buffers manager
 		static void Init();
 
