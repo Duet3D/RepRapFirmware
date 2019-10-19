@@ -1,8 +1,11 @@
 /*
- * StraightProbe.h
+ * StraightProbeSettings.h
  *
  *  Created on: 4 Oct 2019
  *      Author: manuel
+ *
+ *  This class holds information for G38 Straight Probe that otherwise would no longer be available
+ *  since the GCodeBuffer can be overwritten when probe is deployed.
  */
 
 #ifndef SRC_MOVEMENT_STRAIGHTPROBESETTINGS_H_

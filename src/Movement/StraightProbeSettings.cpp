@@ -1,5 +1,5 @@
 /*
- * StraightProbe.cpp
+ * StraightProbeSettings.cpp
  *
  *  Created on: 4 Oct 2019
  *      Author: manuel
