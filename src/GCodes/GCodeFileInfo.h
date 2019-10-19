@@ -13,6 +13,9 @@
 // Struct to hold Gcode file information
 struct GCodeFileInfo
 {
+	GCodeFileInfo() { Init(); }
+	void Init();
+
 	FilePosition fileSize;
 	time_t lastModifiedTime;
 	float layerHeight;
@@ -25,8 +28,6 @@ struct GCodeFileInfo
 	bool isValid;
 	bool incomplete;
 	String<50> generatedBy;
-
-	void Init();
 };
 
 #endif /* SRC_GCODES_GCODEFILEINFO_H_ */

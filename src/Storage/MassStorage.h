@@ -24,7 +24,7 @@ struct FileInfo
 class MassStorage
 {
 public:
-	static bool CombineName(const StringRef& out, const char* directory, const char* fileName);
+	static bool CombineName(const StringRef& out, const char* directory, const char* fileName);		// returns false if error i.e. filename too long
 	static const char* GetMonthName(const uint8_t month);
 
 #if HAS_MASS_STORAGE
