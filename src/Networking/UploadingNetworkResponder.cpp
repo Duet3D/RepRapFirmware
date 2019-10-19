@@ -99,7 +99,6 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 		{
 			String<MaxFilenameLength> origFilename;
 			origFilename.catn(uploadFilename, filenameBeingProcessed.GetRef().strlen() - strlen(UPLOAD_EXTENSION));
-			(void)GetPlatform().GetMassStorage()->SetLastModifiedTime(filenameBeingProcessed.c_str(), fileLastModified);
 			// Delete possibly existing files with that name (i.e. prepare "overwrite")
 			GetPlatform().GetMassStorage()->Delete(origFilename.c_str());
 

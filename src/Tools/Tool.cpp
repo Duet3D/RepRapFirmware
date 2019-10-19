@@ -384,7 +384,7 @@ void Tool::DefineMix(const float m[])
 	}
 }
 
-// Write the tool's settings to file returning true if successful. the settings written kleave the tool selected unless it is off.
+// Write the tool's settings to file returning true if successful. The settings written leave the tool selected unless it is off.
 bool Tool::WriteSettings(FileStore *f) const
 {
 	String<StringLength40> buf;
