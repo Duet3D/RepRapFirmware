@@ -77,6 +77,7 @@ public:
 
 	// Try to get a temperature reading
 	virtual void Poll() = 0;
+	virtual bool PollInTask() { return false; };
 
 protected:
 	void SetResult(float t, TemperatureError rslt);

@@ -75,6 +75,9 @@ constexpr uint32_t SERIAL_MAIN_TIMEOUT = 1000;			// timeout in ms for sending da
 constexpr uint32_t HeatSampleIntervalMillis = 250;		// interval between taking temperature samples
 constexpr float HeatPwmAverageTime = 5.0;				// Seconds
 
+constexpr uint8_t SensorsTaskTotalDelay = 250;			// Interval between runs of sensors task
+constexpr uint8_t SensorsTaskPerSensorDelay = 25;		// Interval delayed for each sensor in sensors task if there is at least one sensor
+
 constexpr float TEMPERATURE_CLOSE_ENOUGH = 1.0;			// Celsius
 constexpr float TEMPERATURE_LOW_SO_DONT_CARE = 40.0;	// Celsius
 constexpr float HOT_ENOUGH_TO_EXTRUDE = 160.0;			// Celsius

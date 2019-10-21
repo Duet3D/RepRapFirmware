@@ -83,6 +83,7 @@ public:
 
 	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
 
+	void SensorsTask();
 	ReadLockedPointer<TemperatureSensor> FindSensor(int sn) const;	// Get a pointer to the temperature sensor entry
 	ReadLockedPointer<TemperatureSensor> FindSensorAtOrAbove(unsigned int sn) const;	// Get a pointer to the first temperature sensor with the specified or higher number
 

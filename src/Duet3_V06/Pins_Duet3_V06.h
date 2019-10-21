@@ -117,7 +117,6 @@ constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / 4) * 4700.0/((Default
 																			// there are 4 temperature sensing channels and a 4K7 load resistor
 // Digital pins the SPI temperature sensors have their select lines tied to
 constexpr Pin SpiTempSensorCsPins[] = { PortAPin(5), PortAPin(6), PortDPin(20), PortCPin(22) };
-constexpr size_t MaxSpiTempSensors = ARRAY_SIZE(SpiTempSensorCsPins);
 
 // Pin that controls the ATX power on/off
 constexpr Pin ATX_POWER_PIN = PortAPin(10);

@@ -6,94 +6,92 @@
  */
 
 #include "DhtSensor.h"
-#include "RepRap.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Movement/StepTimer.h"
-#include "Hardware/IoPorts.h"
 
 #if SUPPORT_DHT_SENSOR
 
-constexpr uint32_t MinimumReadInterval = 2000;		// ms
-constexpr uint32_t MaximumReadTime = 20;			// ms
-constexpr uint32_t MinimumOneBitLength = 50;		// microseconds
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include "Movement/StepTimer.h"
+
+constexpr uint16_t MinimumReadInterval = 2000;		// ms
+constexpr uint8_t  MaximumReadTime = 20;			// ms
+constexpr uint8_t  MinimumOneBitLength = 50;		// microseconds
 constexpr uint32_t MinimumOneBitStepClocks = (StepTimer::StepClockRate * MinimumOneBitLength)/1000000;
-
-# include "Tasks.h"
-
-// Static data members of class DhtSensorHardwareInterface
-Mutex DhtSensorHardwareInterface::dhtMutex;
-Task<DhtSensorHardwareInterface::DhtTaskStackWords> *DhtSensorHardwareInterface::dhtTask = nullptr;
-DhtSensorHardwareInterface *DhtSensorHardwareInterface::activeSensors[MaxSpiTempSensors] = { 0 };
-
-extern "C" [[noreturn]] void DhtTaskStart(void * pvParameters)
-{
-	DhtSensorHardwareInterface::SensorTask();
-}
 
 // Pulse ISR
 extern "C" void DhtDataTransition(CallbackParameter cp)
 {
-	static_cast<DhtSensorHardwareInterface*>(cp.vp)->Interrupt();
+	static_cast<DhtTemperatureSensor*>(cp.vp)->Interrupt();
 }
 
-DhtSensorHardwareInterface::DhtSensorHardwareInterface(IoPort& port, DhtSensorType type)
-	: port(port), type(type), lastResult(TemperatureError::notInitialised),
-	  lastTemperature(BadErrorTemperature), lastHumidity(BadErrorTemperature),
-	  badTemperatureCount(0)
+// Class DhtTemperatureSensor members
+DhtTemperatureSensor::DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType type)
+	: SensorWithPort(sensorNum, "DHT-temperature"), type(type), lastReadTime(0)
 {
-//	IoPort::SetPinMode(sensorPin, INPUT_PULLUP);
 }
 
-TemperatureError DhtSensorHardwareInterface::GetTemperatureOrHumidity(float& t, bool wantHumidity) const
+DhtTemperatureSensor::~DhtTemperatureSensor()
 {
-	t = (wantHumidity) ? lastHumidity : lastTemperature;
-	return lastResult;
 }
 
-// Create a hardware interface object for the specified channel if there isn't already
-/* static */ DhtSensorHardwareInterface *DhtSensorHardwareInterface::GetOrCreate(unsigned int relativeChannel, IoPort& port, DhtSensorType type)
+GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
-	if (relativeChannel >= MaxSpiTempSensors)
+	bool seen = false;
+	if (!ConfigurePort(gb, reply, PinAccess::write0, seen))
 	{
-		return nullptr;
+		return GCodeResult::error;
 	}
 
-	MutexLocker lock(dhtMutex);
+	TryConfigureSensorName(gb, seen);
 
-	if (activeSensors[relativeChannel] == nullptr)
+	// It's a new sensor
+	if (gb.Seen('Y'))
 	{
-		activeSensors[relativeChannel] = new DhtSensorHardwareInterface(port, type);
+		seen = true;
+		TakeReading();
 	}
 
-	if (dhtTask == nullptr)
+	if (!seen)
 	{
-		dhtTask = new Task<DhtTaskStackWords>;
-		dhtTask->Create(DhtTaskStart, "DHTSENSOR", nullptr, TaskPriority::DhtPriority);
-	}
+		CopyBasicDetails(reply);
 
-	return activeSensors[relativeChannel];
-}
-
-/* static */ void DhtSensorHardwareInterface::Remove(DhtSensorHardwareInterface* dht)
-{
-
-	MutexLocker lock(dhtMutex);
-	for (size_t i = 0; i < MaxSpiTempSensors; ++i)
-	{
-		if (activeSensors[i] == dht)
+		const char *sensorTypeString;
+		switch (type)
 		{
-			activeSensors[i] = nullptr;
-			delete dht;
+		case DhtSensorType::Dht11:
+			sensorTypeString = "DHT11";
+			break;
+		case DhtSensorType::Dht21:
+			sensorTypeString = "DHT21";
+			break;
+		case DhtSensorType::Dht22:
+			sensorTypeString = "DHT22";
+			break;
+		default:
+			sensorTypeString = "unknown";
+			break;
 		}
+		reply.catf(", sensor type %s", sensorTypeString);
 	}
+
+	return GCodeResult::ok;
 }
 
-/*static*/ void DhtSensorHardwareInterface::InitStatic()
+TemperatureError DhtTemperatureSensor::GetLatestTemperature(float &t, uint8_t outputNumber)
 {
-	dhtMutex.Create("DHT");
+	if (outputNumber > 1)
+	{
+		t = BadErrorTemperature;
+		return TemperatureError::invalidOutputNumber;
+	}
+	const auto result = TemperatureSensor::GetLatestTemperature(t);
+	if (outputNumber == 1)
+	{
+		t = lastHumidity;
+	}
+	return result;
 }
 
-void DhtSensorHardwareInterface::Interrupt()
+void DhtTemperatureSensor::Interrupt()
 {
 	if (numPulses < ARRAY_SIZE(pulses))
 	{
@@ -109,84 +107,77 @@ void DhtSensorHardwareInterface::Interrupt()
 	}
 }
 
-void DhtSensorHardwareInterface::TakeReading()
+void DhtTemperatureSensor::Poll()
 {
-	if (type != DhtSensorType::none)			// if sensor has been configured
-	{
-		// Send the start bit. This must be at least 18ms for the DHT11, 0.8ms for the DHT21, and 1ms long for the DHT22.
-		port.SetMode(PinAccess::write0);
-		delay(20);
-
-		{
-			TaskCriticalSectionLocker lock;		// make sure the Heat task doesn't interrupt the sequence
-
-			// End the start signal by setting data line high. the sensor will respond with the start bit in 20 to 40us.
-			// We need only force the data line high long enough to charge the line capacitance, after that the pullup resistor keeps it high.
-			port.WriteDigital(true);		// this will generate an interrupt, but we will ignore it
-			delayMicroseconds(3);
-
-			// Now start reading the data line to get the value from the DHT sensor
-			port.SetMode(PinAccess::readWithPullup);
-
-			// It appears that switching the pin to an output disables the interrupt, so we need to call attachInterrupt here
-			// We are likely to get an immediate interrupt at this point corresponding to the low-to-high transition. We must ignore this.
-			numPulses = ARRAY_SIZE(pulses);		// tell the ISR not to collect data yet
-			port.AttachInterrupt(DhtDataTransition, INTERRUPT_MODE_CHANGE, this);
-			lastPulseTime = 0;
-			numPulses = 0;						// tell the ISR to collect data
-		}
-
-		// Wait for the incoming signal to be read by the ISR (1 start bit + 40 data bits), or until timeout.
-		// We don't have the ISR wake the process up, because that would require the priority of the pin change interrupt to be reduced.
-		// So we just delay for long enough for the data to have been sent. It takes typically 4 to 5ms.
-		delay(MaximumReadTime);
-
-		port.DetachInterrupt();
-
-		// Attempt to convert the signal into temp+RH values
-		const auto rslt = ProcessReadings();
-		if (rslt == TemperatureError::success)
-		{
-			lastResult = rslt;
-			badTemperatureCount = 0;
-		}
-		else if (badTemperatureCount < MaxBadTemperatureCount)
-		{
-			badTemperatureCount++;
-		}
-		else
-		{
-			lastResult = rslt;
-			lastTemperature = BadErrorTemperature;
-			lastHumidity = BadErrorTemperature;
-		}
-	}
+	SetResult(GetStoredReading(), TemperatureError::success);
 }
 
-// Code executed by the DHT sensor task.
-// This is run at the same priority as the Heat task, so it must not sit in any spin loops.
-/*static*/ [[noreturn]] void DhtSensorHardwareInterface::SensorTask()
+bool DhtTemperatureSensor::PollInTask()
 {
-	for (;;)
+	const auto now = millis();
+	if ((now - lastReadTime) >= MinimumReadInterval)
 	{
-		for (DhtSensorHardwareInterface *&sensor : activeSensors)
-		{
-			{
-				MutexLocker lock(dhtMutex);
-
-				if (sensor != nullptr)
-				{
-					sensor->TakeReading();
-				}
-			}
-			delay(MinimumReadInterval/MaxSpiTempSensors);
-		}
+		TakeReading();
+		return true;
 	}
+	return false;
+}
+
+void DhtTemperatureSensor::TakeReading()
+{
+	// Send the start bit. This must be at least 18ms for the DHT11, 0.8ms for the DHT21, and 1ms long for the DHT22.
+	port.SetMode(PinAccess::write0);
+	delay(20);
+
+	{
+		TaskCriticalSectionLocker lock;		// make sure the Heat task doesn't interrupt the sequence
+
+		// End the start signal by setting data line high. the sensor will respond with the start bit in 20 to 40us.
+		// We need only force the data line high long enough to charge the line capacitance, after that the pullup resistor keeps it high.
+		port.WriteDigital(true);		// this will generate an interrupt, but we will ignore it
+		delayMicroseconds(3);
+
+		// Now start reading the data line to get the value from the DHT sensor
+		port.SetMode(PinAccess::readWithPullup);
+
+		// It appears that switching the pin to an output disables the interrupt, so we need to call attachInterrupt here
+		// We are likely to get an immediate interrupt at this point corresponding to the low-to-high transition. We must ignore this.
+		numPulses = ARRAY_SIZE(pulses);		// tell the ISR not to collect data yet
+		port.AttachInterrupt(DhtDataTransition, INTERRUPT_MODE_CHANGE, this);
+		lastPulseTime = 0;
+		numPulses = 0;						// tell the ISR to collect data
+	}
+
+	// Wait for the incoming signal to be read by the ISR (1 start bit + 40 data bits), or until timeout.
+	// We don't have the ISR wake the process up, because that would require the priority of the pin change interrupt to be reduced.
+	// So we just delay for long enough for the data to have been sent. It takes typically 4 to 5ms.
+	delay(MaximumReadTime);
+
+	port.DetachInterrupt();
+
+	// Attempt to convert the signal into temp+RH values
+	float t;
+	const auto rslt = ProcessReadings(t, lastHumidity);
+	if (rslt == TemperatureError::success)
+	{
+		SetResult(t, rslt);
+		badTemperatureCount = 0;
+	}
+	else if (badTemperatureCount < MaxBadTemperatureCount)
+	{
+		badTemperatureCount++;
+	}
+	else
+	{
+		SetResult(rslt);
+		lastHumidity = BadErrorTemperature;
+	}
+	lastReadTime = millis();
 }
 
 // Process a reading. If success then update the temperature and humidity and return TemperatureError::success.
 // Else return the TemperatureError code but do not update the readings.
-TemperatureError DhtSensorHardwareInterface::ProcessReadings()
+TemperatureError DhtTemperatureSensor::ProcessReadings(float& t, float& h)
 {
 	// Check enough bits received and check start bit
 	if (numPulses != ARRAY_SIZE(pulses) || pulses[0] < MinimumOneBitStepClocks)
@@ -220,140 +211,22 @@ TemperatureError DhtSensorHardwareInterface::ProcessReadings()
 	switch (type)
 	{
 	case DhtSensorType::Dht11:
-		lastHumidity = data[0];
-		lastTemperature = data[2];
+		h = data[0];
+		t = data[2];
 		return TemperatureError::success;
 
 	case DhtSensorType::Dht21:
 	case DhtSensorType::Dht22:
-		lastHumidity = ((data[0] * 256) + data[1]) * 0.1;
-		lastTemperature = (((data[2] & 0x7F) * 256) + data[3]) * 0.1;
+		h = ((data[0] * 256) + data[1]) * 0.1;
+		t = (((data[2] & 0x7F) * 256) + data[3]) * 0.1;
 		if (data[2] & 0x80)
 		{
-			lastTemperature *= -1.0;
+			t *= -1.0;
 		}
 		return TemperatureError::success;
 
 	default:
 		return TemperatureError::notInitialised;
-	}
-}
-
-// Class DhtTemperatureSensor members
-DhtTemperatureSensor::DhtTemperatureSensor(unsigned int sensorNum)
-	: SensorWithPort(sensorNum, "DHT-temperature"), type(DhtSensorType::none)
-{
-}
-
-DhtTemperatureSensor::~DhtTemperatureSensor()
-{
-	DhtSensorHardwareInterface::Remove(dht);
-}
-
-GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
-{
-	bool seen = false;
-	if (!ConfigurePort(gb, reply, PinAccess::write0, seen))
-	{
-		return GCodeResult::error;
-	}
-	unsigned int relativeChannel = 0;
-	// Check if the port we have just seen is actually a SPI CS pin
-	if (seen)
-	{
-		bool isSpiCSPin = false;
-		const Pin usedPin = port.GetPin();
-		for (; relativeChannel < MaxSpiTempSensors; ++relativeChannel)
-		{
-			if (SpiTempSensorCsPins[relativeChannel] == usedPin)
-			{
-				isSpiCSPin = true;
-				break;
-			}
-		}
-		if (!isSpiCSPin)
-		{
-			port.Release();
-			reply.copy("DHT sensors can only use SPI CS pins");
-			return GCodeResult::error;
-		}
-	}
-
-	TryConfigureSensorName(gb, seen);
-	if (gb.Seen('T'))
-	{
-		seen = true;
-
-		const int dhtType = gb.GetIValue();
-		switch (dhtType)
-		{
-		case 11:
-			type = DhtSensorType::Dht11;
-			break;
-		case 21:
-			type = DhtSensorType::Dht21;
-			break;
-		case 22:
-			type = DhtSensorType::Dht22;
-			break;
-		default:
-			reply.copy("Invalid DHT sensor type");
-			return GCodeResult::error;
-			break;
-		}
-	}
-
-	if (seen)
-	{
-		dht = DhtSensorHardwareInterface::GetOrCreate(relativeChannel, port, type);
-		dht->SetType(type);
-	}
-	else
-	{
-		CopyBasicDetails(reply);
-
-		const char *sensorTypeString;
-		switch (type)
-		{
-		case DhtSensorType::Dht11:
-			sensorTypeString = "DHT11";
-			break;
-		case DhtSensorType::Dht21:
-			sensorTypeString = "DHT21";
-			break;
-		case DhtSensorType::Dht22:
-			sensorTypeString = "DHT22";
-			break;
-		default:
-			sensorTypeString = "unknown";
-			break;
-		}
-		reply.catf(", sensor type %s", sensorTypeString);
-	}
-
-	return GCodeResult::ok;
-}
-
-TemperatureError DhtTemperatureSensor::GetLatestTemperature(float &t, uint8_t outputNumber)
-{
-	if (outputNumber > 1)
-	{
-		t = BadErrorTemperature;
-		return TemperatureError::invalidOutputNumber;
-	}
-	return dht->GetTemperatureOrHumidity(t, outputNumber == 1);
-}
-
-void DhtTemperatureSensor::Poll() {
-	float t;
-	const auto err = GetLatestTemperature(t, 0);
-	if (err == TemperatureError::success)
-	{
-		SetResult(t, err);
-	}
-	else
-	{
-		SetResult(err);
 	}
 }
 
