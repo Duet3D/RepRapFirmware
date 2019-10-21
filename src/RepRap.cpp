@@ -2301,7 +2301,20 @@ bool RepRap::WriteToolSettings(FileStore *f) const
 	// Finally write the settings of the active tool and the commands to select it. If no current tool, just deselect all tools.
 	if (ok)
 	{
-		ok = (currentTool == nullptr) ? f->Write("T-1 P0\n") : currentTool->WriteSettings(f);
+		if (currentTool == nullptr)
+		{
+			ok = f->Write("T-1 P0\n");
+		}
+		else
+		{
+			ok = currentTool->WriteSettings(f);
+			if (ok)
+			{
+				String<StringLength20> buf;
+				buf.printf("T%u P0\n", currentTool->Number());
+				ok = f->Write(buf.c_str());
+			}
+		}
 	}
 	return ok;
 }

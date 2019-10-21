@@ -1827,7 +1827,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 143: // Configure heater protection
-		result = SetHeaterProtection(gb, reply);
+		result = reprap.GetHeat().SetHeaterProtection(gb, reply);
 		break;
 
 	case 144: // Set bed to standby, or to active if S1 parameter given

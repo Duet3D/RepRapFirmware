@@ -62,15 +62,15 @@ public:
 	void SetTrigger(HeaterProtectionTrigger newTrigger);			// Set the condition for a temperature event
 
 private:
-	HeaterProtection *next;
+	HeaterProtection *next;											// link to next HeaterProtection item for the same heater
 
-	float limit;
-	int heater;
-	int sensorNumber;
-	HeaterProtectionAction action;
-	HeaterProtectionTrigger trigger;
+	float limit;													// temperature limit
+	int heater;														// number of the heater we are protecting
+	int sensorNumber;												// the sensor that we use to monitor the heater
+	HeaterProtectionAction action;									// what action we take of we detect a fault
+	HeaterProtectionTrigger trigger;								// what is treated a fault
 
-	size_t badTemperatureCount;
+	size_t badTemperatureCount;										// how many consecutive sensor reading faults we have had
 };
 
 inline void HeaterProtection::SetSensorNumber(int sn)
