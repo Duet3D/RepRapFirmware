@@ -91,12 +91,13 @@ void EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming)
 }
 
 // Set up the active endstops for Z probing
-void EndstopsManager::EnableZProbe(size_t probeNumber)
+void EndstopsManager::EnableZProbe(size_t probeNumber, bool probingAway)
 {
 	activeEndstops = nullptr;
 	isHomingMove = false;
 	if (probeNumber < MaxZProbes && zProbes[probeNumber] != nullptr)
 	{
+		zProbes[probeNumber]->SetProbingAway(probingAway);
 		AddToActive(*zProbes[probeNumber]);
 	}
 }

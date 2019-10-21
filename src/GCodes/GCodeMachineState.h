@@ -80,6 +80,12 @@ enum class GCodeState : uint8_t
 	probingAtPoint6,
 	probingAtPoint7,
 
+	// These next 4 must be contiguous
+	straightProbe0,
+	straightProbe1,
+	straightProbe2,
+	straightProbe3,
+
 	doingFirmwareRetraction,
 	doingFirmwareUnRetraction,
 	loadingFilament,

@@ -532,7 +532,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					UnlockAll(gb);															// release the movement lock to allow manual Z moves
 					gb.AdvanceState();														// resume at next state when user has finished adjusting the height
 					doingManualBedProbe = true;												// suspend the Z movement limit
-					DoManualProbe(gb);
+					DoManualBedProbe(gb);
 				}
 				else if (platform.GetCurrentZProbe().Stopped() == EndStopHit::atStop)
 				{
@@ -817,7 +817,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				UnlockAll(gb);															// release the movement lock to allow manual Z moves
 				gb.AdvanceState();														// resume at the next state when the user has finished
 				doingManualBedProbe = true;												// suspend the Z movement limit
-				DoManualProbe(gb);
+				DoManualBedProbe(gb);
 			}
 			else if (platform.GetCurrentZProbe().Stopped() == EndStopHit::atStop)		// check for probe already triggered at start
 			{
@@ -1047,6 +1047,111 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			reply.printf("Stopped at height %.3f mm", (double)g30zStoppedHeight);
 		}
 		gb.SetState(GCodeState::normal);
+		break;
+
+
+	case GCodeState::straightProbe0:		// ready to deploy the probe
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			const StraightProbeSettings& sps = reprap.GetMove().GetStraightProbeSettings();
+			const ZProbe& zp = *(platform.GetEndstops().GetZProbe(sps.GetZProbeToUse()));
+			gb.AdvanceState();
+			if (zp.GetProbeType() != ZProbeType::none && !probeIsDeployed)
+			{
+				DoFileMacro(gb, DEPLOYPROBE_G, false, 38);
+			}
+		}
+		break;
+
+	case GCodeState::straightProbe1:
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			const StraightProbeSettings& sps = reprap.GetMove().GetStraightProbeSettings();
+			const ZProbe& zp = *(platform.GetEndstops().GetZProbe(sps.GetZProbeToUse()));
+			lastProbedTime = millis();			// start the probe recovery timer
+			if (zp.GetTurnHeatersOff())
+			{
+				reprap.GetHeat().SuspendHeaters(true);
+			}
+			gb.AdvanceState();
+		}
+		break;
+
+	case GCodeState::straightProbe2:
+		// Executing G38. The probe has been deployed and the recovery timer has been started.
+		if (millis() - lastProbedTime >= (uint32_t)(platform.GetCurrentZProbe().GetRecoveryTime() * SecondsToMillis))
+		{
+			// The probe recovery time has elapsed, so we can start the probing  move
+			const StraightProbeSettings& sps = reprap.GetMove().GetStraightProbeSettings();
+			const bool probingAway = sps.ProbingAway();
+			const ZProbe& zp = *(platform.GetEndstops().GetZProbe(sps.GetZProbeToUse()));
+			if (zp.GetProbeType() == ZProbeType::none)
+			{
+				// No Z probe, so we are doing manual 'probing'
+				UnlockAll(gb);															// release the movement lock to allow manual Z moves
+				gb.AdvanceState();														// resume at the next state when the user has finished
+
+				String<MaxMessageLength> message;
+				message.printf("Adjust postion until the reference point just %s the target, then press OK", probingAway ? "looses contact to" : "touches");
+				DoManualProbe(gb, message.c_str(), "Manual Straight Probe", sps.GetMovingAxes());
+			}
+			else if ((!probingAway && zp.Stopped() == EndStopHit::atStop)
+					|| (probingAway && zp.Stopped() != EndStopHit::atStop))		// check for probe already in target state at start
+			{
+				// Z probe is already in target state at the start of the move, so abandon the probe and signal an error if the type demands so
+				reprap.GetHeat().SuspendHeaters(false);
+				if (sps.SignalError())
+				{
+					platform.MessageF(ErrorMessage, "Probe %s triggered at start of probing move\n", probingAway ? "not" : "already");
+					error = true;
+				}
+				gb.SetState(GCodeState::normal);										// no point in doing anything else
+				if (zp.GetProbeType() != ZProbeType::none && !probeIsDeployed)
+				{
+					DoFileMacro(gb, RETRACTPROBE_G, false, 38);
+				}
+			}
+			else
+			{
+				zProbeTriggered = false;
+				SetMoveBufferDefaults();
+				zp.SetProbing(true);
+				platform.GetEndstops().EnableZProbe(sps.GetZProbeToUse(), probingAway);
+				moveBuffer.checkEndstops = true;
+				moveBuffer.reduceAcceleration = true;
+				sps.SetCoordsToTarget(moveBuffer.coords);
+				moveBuffer.feedRate = zp.GetProbingSpeed();
+				NewMoveAvailable(1);
+				gb.AdvanceState();
+			}
+		}
+		break;
+
+	case GCodeState::straightProbe3:
+		// Executing G38. The probe wasn't in target state at the start of the move, and the probing move has been commanded.
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			// Probing move has stopped
+			reprap.GetHeat().SuspendHeaters(false);
+			const StraightProbeSettings& sps = reprap.GetMove().GetStraightProbeSettings();
+			const bool probingAway = sps.ProbingAway();
+			const ZProbe& zp = *(platform.GetEndstops().GetZProbe(sps.GetZProbeToUse()));
+			if (zp.GetProbeType() != ZProbeType::none)
+			{
+				zp.SetProbing(false);
+				if (!zProbeTriggered && sps.SignalError())
+				{
+					platform.MessageF(ErrorMessage, "Z probe %s during probing move\n", probingAway ? "did not loose contact" : "was not triggered");
+					error = true;
+				}
+			}
+
+			gb.SetState(GCodeState::normal);
+			if (zp.GetProbeType() != ZProbeType::none && !probeIsDeployed)
+			{
+				DoFileMacro(gb, RETRACTPROBE_G, false, 38);					// retract the probe before moving to the new state
+			}
+		}
 		break;
 
 	// Firmware retraction/un-retraction states

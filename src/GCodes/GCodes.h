@@ -259,6 +259,7 @@ private:
 	void SetBedEquationWithProbe(int sParam, const StringRef& reply);			// Probes a series of points and sets the bed equation
 	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply);	// Deal with a G10
 	GCodeResult SetPositions(GCodeBuffer& gb);									// Deal with a G92
+	GCodeResult StraightProbe(GCodeBuffer& gb, const StringRef& reply);			// Deal with a G38.x
 	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply);		// Deal with a M584
 	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply);				// Deal with a M585
 	GCodeResult FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, const bool towardsMin = true);	// Deal with a M675
@@ -350,7 +351,8 @@ private:
 	void CopyConfigFinalValues(GCodeBuffer& gb);								// Copy the feed rate etc. from the daemon to the input channels
 
 	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;						// Decide which device to display a message box on
-	void DoManualProbe(GCodeBuffer& gb);										// Do a manual bed probe
+	void DoManualProbe(GCodeBuffer&, const char *message, const char *title, const AxesBitmap); 			// Do manual probe in arbitrary direction
+	void DoManualBedProbe(GCodeBuffer& gb);										// Do a manual bed probe
 
 	void AppendAxes(const StringRef& reply, AxesBitmap axes) const;				// Append a list of axes to a string
 

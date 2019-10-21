@@ -8,6 +8,7 @@
 #ifndef MOVE_H_
 #define MOVE_H_
 
+#include <Movement/StraightProbeSettings.h>
 #include "RepRapFirmware.h"
 #include "MessageType.h"
 #include "DDARing.h"
@@ -147,6 +148,7 @@ public:
 #endif
 
 	const RandomProbePointSet& GetProbePoints() const { return probePoints; }		// Return the probe point set constructed from G30 commands
+	StraightProbeSettings& GetStraightProbeSettings() { return straightProbeSettings; }		    // Return the settings for G38 straight probe
 
 	DDARing& GetMainDDARing() { return mainDDARing; }
 	float GetTopSpeed() const { return mainDDARing.GetTopSpeed(); }
@@ -251,6 +253,8 @@ private:
 
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
 	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
+
+	StraightProbeSettings straightProbeSettings;		// G38 straight probe settings
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	static constexpr size_t LaserTaskStackWords = 100;	// stack size in dwords for the laser and IOBits task

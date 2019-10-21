@@ -32,7 +32,7 @@ void ZProbe::SetDefaults()
 	recoveryTime = 0.0;
 	tolerance = DefaultZProbeTolerance;
 	misc.parts.maxTaps = DefaultZProbeTaps;
-	misc.parts.invertReading = misc.parts.turnHeatersOff = misc.parts.saveToConfigOverride = false;
+	misc.parts.invertReading = misc.parts.turnHeatersOff = misc.parts.saveToConfigOverride = misc.parts.probingAway = false;
 	type = ZProbeType::none;
 	sensor = -1;
 }
@@ -136,7 +136,21 @@ EndStopHit ZProbe::Stopped() const
 EndstopHitDetails ZProbe::CheckTriggered(bool goingSlow)
 {
 	EndstopHitDetails rslt;
-	switch (Stopped())
+	EndStopHit e = Stopped();
+
+	// Note: This might need to be moved into Stopped() to not having to duplicate it to ZProbeEndstop
+	if (misc.parts.probingAway) {
+		switch (e) {
+		case EndStopHit::atStop:
+			e = EndStopHit::noStop;
+			break;
+		default:
+			e = EndStopHit::atStop;
+			break;
+		}
+	}
+
+	switch (e)
 	{
 	case EndStopHit::atStop:
 		rslt.SetAction(EndstopHitAction::stopAll);

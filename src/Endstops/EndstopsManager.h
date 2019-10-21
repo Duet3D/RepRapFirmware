@@ -30,10 +30,10 @@ public:
 	void EnableAxisEndstops(AxesBitmap axes, bool forHoming);
 
 	// Set up the active endstops for Z probing
-	void EnableZProbe(size_t probeNumber);
+	void EnableZProbe(size_t probeNumber, bool probingAway = false);
 
 	// Set up the active endstops for Z probing with the current probe
-	void EnableCurrentZProbe() { EnableZProbe(currentZProbeNumber); }
+	void EnableCurrentZProbe(bool probingAway = false) { EnableZProbe(currentZProbeNumber, probingAway); }
 
 	// Enable extruder endstops
 	void EnableExtruderEndstop(size_t extruder);
@@ -56,6 +56,7 @@ public:
 	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply);			// G31
 
 	ZProbe& GetCurrentZProbe() const;
+	const size_t GetCurrentZProbeNumber() const { return currentZProbeNumber; }
 	ZProbe *GetZProbe(size_t num) const;
 	void SetZProbeDefaults();
 	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply);

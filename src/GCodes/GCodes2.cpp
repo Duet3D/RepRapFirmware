@@ -304,6 +304,14 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		DoFileMacro(gb, BED_EQUATION_G, true, 32);	// Try to execute bed.g
 		break;
 
+	case 38: // Straight probe - move until either the probe is triggered or the commanded move ends
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return false;
+		}
+		result = StraightProbe(gb, reply);
+		break;
+
 	case 53:	// Temporarily use machine coordinates
 		gb.MachineState().g53Active = true;
 		break;
