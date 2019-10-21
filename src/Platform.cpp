@@ -3487,7 +3487,7 @@ void Platform::Message(MessageType type, const char *message)
 // sParam = 3 As for 2 but also display a Cancel button
 void Platform::SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, AxesBitmap controls)
 {
-	if ((mt & (HttpMessage | AuxMessage)) != 0)
+	if ((mt & (HttpMessage | AuxMessage | BinaryCodeReplyFlag)) != 0)
 	{
 		reprap.SetAlert(message, title, sParam, tParam, controls);		// make the RepRap class cache this message until it's picked up by the HTTP clients and/or PanelDue
 	}
