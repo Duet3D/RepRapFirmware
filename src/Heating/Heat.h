@@ -78,8 +78,8 @@ public:
 	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply);	// Create a sensor or change the parameters for an existing sensor
 	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply); // Set the P/I/D parameters for a heater
 
-	HeaterProtection& AccessHeaterProtection(size_t index) const;	// Return the protection parameters of the given index
-	void UpdateHeaterProtection();								// Updates the PIDs and HeaterProtection items when a heater is remapped
+	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply);	// Configure heater protection (M143)
+	void UpdateHeaterProtection(int heaterNumber);				// Updates the PIDs and HeaterProtection items when a heater is remapped
 
 	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
 
