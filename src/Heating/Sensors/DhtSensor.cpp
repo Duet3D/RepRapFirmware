@@ -138,7 +138,7 @@ void DhtTemperatureSensor::TakeReading()
 		delayMicroseconds(3);
 
 		// Now start reading the data line to get the value from the DHT sensor
-		port.SetMode(PinAccess::readWithPullup);
+		port.SetMode(PinAccess::readWithPullup_InternalUseOnly);
 
 		// It appears that switching the pin to an output disables the interrupt, so we need to call attachInterrupt here
 		// We are likely to get an immediate interrupt at this point corresponding to the low-to-high transition. We must ignore this.
