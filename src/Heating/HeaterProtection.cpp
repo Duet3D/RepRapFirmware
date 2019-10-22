@@ -66,7 +66,6 @@ bool HeaterProtection::Check()
 void HeaterProtection::SetHeater(int newHeater)
 {
 	heater = newHeater;
-	reprap.GetHeat().UpdateHeaterProtection();
 }
 
 // End

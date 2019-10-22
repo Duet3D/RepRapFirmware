@@ -931,22 +931,12 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 		}
 
 #if SUPPORT_CAN_EXPANSION
-		// Set boardAddress to the board number that the port is on, or NoCanAddress if the port was not given
+		// Set boardAddress to the board number that the port is on, or MasterAddress if the port was not given
 		CanAddress boardAddress;
 		String<StringLength20> portName;
-		if (gb.Seen('P'))
-		{
-			if (!gb.GetReducedString(portName.GetRef()))
-			{
-				reply.copy("Missing port name");
-				return GCodeResult::error;
-			}
-			boardAddress = IoPort::RemoveBoardAddress(portName.GetRef());
-		}
-		else
-		{
-			boardAddress = CanId::NoAddress;
-		}
+		boardAddress = (gb.Seen('P') && gb.GetReducedString(portName.GetRef()))
+						 ? IoPort::RemoveBoardAddress(portName.GetRef())
+							: CanId::MasterAddress;
 #endif
 		bool newSensor = gb.Seen('Y');
 		if (newSensor)
@@ -963,11 +953,6 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 			}
 
 #if SUPPORT_CAN_EXPANSION
-			if (boardAddress == CanId::NoAddress)
-			{
-				reply.copy("Missing port name");
-				return GCodeResult::error;
-			}
 			TemperatureSensor * const newSensor = TemperatureSensor::Create(sensorNum, boardAddress, typeName.c_str(), reply);
 #else
 			TemperatureSensor * const newSensor = TemperatureSensor::Create(sensorNum, typeName.c_str(), reply);
@@ -1022,31 +1007,144 @@ const char *Heat::GetHeaterSensorName(size_t heater) const
 	return (h.IsNotNull()) ? h->GetSensorName() : nullptr;
 }
 
-// Return the protection parameters of the given index
-HeaterProtection& Heat::AccessHeaterProtection(size_t index) const
+// Configure heater protection (M143). Returns true if an error occurred
+GCodeResult Heat::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 {
-	if (index >= FirstExtraHeaterProtection && index < FirstExtraHeaterProtection + NumExtraHeaterProtections)
+	WriteLocker lock(heatersLock);
+
+	bool seen = false;
+	int32_t heaterNumber = 1;			// default to extruder 1 if no heater number provided
+	gb.TryGetIValue('H', heaterNumber, seen);
+	const int index = (gb.Seen('P')) ? gb.GetIValue() : heaterNumber;
+
+	if (   index < 0
+		|| (index >= (int)MaxHeaters && index < (int)FirstExtraHeaterProtection)
+		|| index >= (int)(FirstExtraHeaterProtection + NumExtraHeaterProtections)
+	   )
 	{
-		return *heaterProtections[index + MaxHeaters - FirstExtraHeaterProtection];
+		reply.printf("Invalid heater protection item '%d'", index);
+		return GCodeResult::error;
 	}
-	return *heaterProtections[index];
+
+	HeaterProtection &item = (index >= (int)FirstExtraHeaterProtection)
+								? *heaterProtections[index - FirstExtraHeaterProtection + MaxHeaters]
+									: *heaterProtections[index];
+	// Set heater to control
+	if (seen && heaterNumber != item.GetHeater())
+	{
+		const int oldHeaterNumber = item.GetHeater();
+		item.SetHeater(heaterNumber);
+		UpdateHeaterProtection(oldHeaterNumber);
+		UpdateHeaterProtection(heaterNumber);
+	}
+
+	// Set sensor that supervises the heater
+	if (gb.Seen('X'))
+	{
+		item.SetSensorNumber(gb.GetIValue());
+		seen = true;
+	}
+
+	// Set trigger action
+	if (gb.Seen('A'))
+	{
+		const int action = gb.GetIValue();
+		if (action < 0 || action > (int)MaxHeaterProtectionAction)
+		{
+			reply.printf("Invalid heater protection action '%d'", action);
+		}
+
+		seen = true;
+		item.SetAction(static_cast<HeaterProtectionAction>(action));
+	}
+
+	// Set trigger condition
+	if (gb.Seen('C'))
+	{
+		const int trigger = gb.GetIValue();
+		if (trigger < 0 || trigger > (int)MaxHeaterProtectionTrigger)
+		{
+			reply.printf("Invalid heater protection trigger '%d'", trigger);
+		}
+
+		seen = true;
+		item.SetTrigger(static_cast<HeaterProtectionTrigger>(trigger));
+	}
+
+	// Set temperature limit
+	if (gb.Seen('S'))
+	{
+		const float limit = gb.GetFValue();
+		if (limit <= BadLowTemperature || limit >= BadErrorTemperature)
+		{
+			reply.copy("Invalid temperature limit");
+			return GCodeResult::error;
+		}
+
+		seen = true;
+		item.SetTemperatureLimit(limit);
+	}
+
+	// Report current parameters
+	if (!seen)
+	{
+		if (item.GetHeater() < 0)
+		{
+			reply.printf("Temperature protection item %d is not configured", index);
+		}
+		else
+		{
+			const char *actionString, *triggerString;
+			switch (item.GetAction())
+			{
+			case HeaterProtectionAction::GenerateFault:
+				actionString = "generate a heater fault";
+				break;
+			case HeaterProtectionAction::PermanentSwitchOff:
+				actionString = "permanently switch off";
+				break;
+			case HeaterProtectionAction::TemporarySwitchOff:
+				actionString = "temporarily switch off";
+				break;
+			default:
+				actionString = "(undefined)";
+				break;
+			}
+
+			switch (item.GetTrigger())
+			{
+			case HeaterProtectionTrigger::TemperatureExceeded:
+				triggerString = "exceeds";
+				break;
+			case HeaterProtectionTrigger::TemperatureTooLow:
+				triggerString = "falls below";
+				break;
+			default:
+				triggerString = "(undefined)";
+				break;
+			}
+
+			reply.printf("Temperature protection item %d is configured for heater %d and uses sensor %d to %s if the temperature %s %.1f" DEGREE_SYMBOL "C",
+					index, item.GetHeater(), item.GetSensorNumber(), actionString, triggerString, (double)item.GetTemperatureLimit());
+		}
+	}
+
+	return GCodeResult::ok;
 }
 
-// Updates the PIDs and HeaterProtection items after a heater change
-void Heat::UpdateHeaterProtection()
+// Updates the PIDs and HeaterProtection items after a heater change. Caller must already have a write lock on the heaters.
+void Heat::UpdateHeaterProtection(int heaterNumber)
 {
-	ReadLocker lock(heatersLock);
-
-	// Reassign the first mapped heater protection item of each PID where applicable
-	// and rebuild the linked list of heater protection elements per heater
-	for (size_t heater : ARRAY_INDICES(heaters))
+	auto h = FindHeater(heaterNumber);
+	if (h.IsNotNull())
 	{
 		// Rebuild linked lists
+		h->SetHeaterProtection(nullptr);
 		HeaterProtection *firstProtectionItem = nullptr;
 		HeaterProtection *lastElementInList = nullptr;
 		for (HeaterProtection *prot : heaterProtections)
 		{
-			if (prot->GetHeater() == (int)heater)
+			if (prot->GetHeater() == heaterNumber)
 			{
 				if (firstProtectionItem == nullptr)
 				{
@@ -1066,11 +1164,7 @@ void Heat::UpdateHeaterProtection()
 			}
 		}
 
-		// Update reference to the first item so that we can achieve better performance
-		if (heaters[heater] != nullptr)
-		{
-			heaters[heater]->SetHeaterProtection(firstProtectionItem);
-		}
+		h->SetHeaterProtection(firstProtectionItem);
 	}
 }
 

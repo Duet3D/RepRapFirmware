@@ -165,7 +165,6 @@ constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
 // This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
 struct PinEntry
 {
-	bool CanDo(PinAccess access) const;
 	Pin GetPin() const { return pin; }
 	PinCapability GetCapability() const { return cap; }
 	const char* GetNames() const { return names; }
@@ -202,16 +201,15 @@ constexpr PinEntry PinTable[] =
 	{ PortAPin(1),	PinCapability::read,	"out6.tach" },
 
 	// IO connector inputs
-	//TODO some have ain capability too
-	{ PortDPin(30),	PinCapability::read,	"io0.in" },
-	{ PortEPin(4),	PinCapability::read,	"io1.in" },
-	{ PortAPin(18),	PinCapability::read,	"io2.in" },
-	{ PortEPin(5),	PinCapability::read,	"io3.in" },
-	{ PortAPin(17),	PinCapability::read,	"io4.in" },
-	{ PortAPin(19),	PinCapability::read,	"io5.in" },
-	{ PortBPin(3),	PinCapability::read,	"io6.in" },
-	{ PortDPin(25),	PinCapability::read,	"io7.in" },
-	{ PortEPin(3),	PinCapability::read,	"io8.in" },
+	{ PortDPin(30),	PinCapability::ainr,	"io0.in" },
+	{ PortEPin(4),	PinCapability::ainr,	"io1.in" },
+	{ PortAPin(18),	PinCapability::ainr,	"io2.in" },
+	{ PortEPin(5),	PinCapability::ainr,	"io3.in" },
+	{ PortAPin(17),	PinCapability::ainr,	"io4.in" },
+	{ PortAPin(19),	PinCapability::ainr,	"io5.in" },
+	{ PortBPin(3),	PinCapability::ainr,	"io6.in" },
+	{ PortDPin(25),	PinCapability::read,	"io7.in" },		// no ADC
+	{ PortEPin(3),	PinCapability::read,	"io8.in" },		// wrong ADC
 
 	// IO connector outputs
 	//TODO some have PWM capability too
@@ -223,7 +221,7 @@ constexpr PinEntry PinTable[] =
 	{ PortAPin(26),	PinCapability::write,	"io5.out" },
 	{ PortAPin(0),	PinCapability::write,	"io6.out" },
 	{ PortDPin(26),	PinCapability::write,	"io7.out" },
-	{ PortEPin(1),	PinCapability::write,	"io8.out" },
+	{ PortEPin(1),	PinCapability::wpwm,	"io8.out" },
 
 	// Thermistor inputs
 	{ PortCPin(31), PinCapability::ainr,	"temp0" },

@@ -304,6 +304,14 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 		DoFileMacro(gb, BED_EQUATION_G, true, 32);	// Try to execute bed.g
 		break;
 
+	case 38: // Straight probe - move until either the probe is triggered or the commanded move ends
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return false;
+		}
+		result = StraightProbe(gb, reply);
+		break;
+
 	case 53:	// Temporarily use machine coordinates
 		gb.MachineState().g53Active = true;
 		break;
@@ -1819,7 +1827,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 143: // Configure heater protection
-		result = SetHeaterProtection(gb, reply);
+		result = reprap.GetHeat().SetHeaterProtection(gb, reply);
 		break;
 
 	case 144: // Set bed to standby, or to active if S1 parameter given
@@ -2913,7 +2921,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			String<MaxFilenameLength> path;
 			gb.GetQuotedString(path.GetRef());
-			platform.SetSysDir(path.c_str());
+			result = platform.SetSysDir(path.c_str(), reply);
 		}
 		else
 		{

@@ -144,6 +144,7 @@ void MassStorage::CloseAllFiles()
 	}
 }
 
+// Construct a full path name from a path and a filename. Returns false if error i.e. filename too long
 /*static*/ bool MassStorage::CombineName(const StringRef& outbuf, const char* directory, const char* fileName)
 {
 	bool hadError = false;
@@ -320,7 +321,10 @@ bool MassStorage::Delete(const char* filePath)
 bool MassStorage::MakeDirectory(const char *parentDir, const char *dirName)
 {
 	String<MaxFilenameLength> location;
-	CombineName(location.GetRef(), parentDir, dirName);
+	if (!CombineName(location.GetRef(), parentDir, dirName))
+	{
+		return false;
+	}
 	if (f_mkdir(location.c_str()) != FR_OK)
 	{
 		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create directory %s\n", location.c_str());

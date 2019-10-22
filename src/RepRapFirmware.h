@@ -53,7 +53,7 @@ typedef uint16_t PwmFrequency;				// type used to represent a PWM frequency. 0 s
 enum class PinAccess : int
 {
 	read,
-	readWithPullup,
+	readWithPullup_InternalUseOnly,
 	readAnalog,
 	write0,
 	write1,

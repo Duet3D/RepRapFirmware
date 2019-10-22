@@ -178,7 +178,6 @@ constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
 // This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
 struct PinEntry
 {
-	bool CanDo(PinAccess access) const;
 	Pin GetPin() const { return pin; }
 	PinCapability GetCapability() const { return cap; }
 	const char* GetNames() const { return names; }
@@ -223,7 +222,7 @@ constexpr PinEntry PinTable[] =
 	{ PortAPin(19),	PinCapability::ainr,	"io5.in" },
 	{ PortAPin(18),	PinCapability::ainr,	"io6.in" },
 	{ PortAPin(17),	PinCapability::ainr,	"io7.in" },
-	{ PortEPin(3),	PinCapability::ainr,	"io8.in" },
+	{ PortEPin(3),	PinCapability::read,	"io8.in" },		// analog in not usable because it is on the wrong ADC
 
 	// IO connector outputs
 	//TODO some have PWM capability too

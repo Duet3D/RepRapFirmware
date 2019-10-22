@@ -115,7 +115,7 @@ extern "C" void AppMain()
 			for (unsigned int i = 0; ; ++i)
 			{
 				digitalWrite(DiagPin, (i & 1) == 0 && (i & 15) < 6);		// turn LED on if count is 0, 2, 4 or 16, 18, 20 etc. otherwise turn it off
-				for (unsigned int j = 0; j < 1500; ++j)
+				for (unsigned int j = 0; j < 5000; ++j)
 				{
 					delayMicroseconds(100);									// delayMicroseconds only works with low values of delay so do 100us at a time
 				}

@@ -32,7 +32,7 @@ void ZProbe::SetDefaults()
 	recoveryTime = 0.0;
 	tolerance = DefaultZProbeTolerance;
 	misc.parts.maxTaps = DefaultZProbeTaps;
-	misc.parts.invertReading = misc.parts.turnHeatersOff = misc.parts.saveToConfigOverride = false;
+	misc.parts.invertReading = misc.parts.turnHeatersOff = misc.parts.saveToConfigOverride = misc.parts.probingAway = false;
 	type = ZProbeType::none;
 	sensor = -1;
 }
@@ -73,13 +73,13 @@ int ZProbe::GetReading() const
 		case ZProbeType::analog:				// Simple or intelligent IR sensor
 		case ZProbeType::alternateAnalog:		// Alternate sensor
 		case ZProbeType::digital:				// Switch connected to Z probe input
-			zProbeVal = (int) ((p.GetZProbeOnFilter().GetSum() + p.GetZProbeOffFilter().GetSum()) / (8 * ZProbeAverageReadings));
+			zProbeVal = (int) ((p.GetZProbeOnFilter().GetSum() + p.GetZProbeOffFilter().GetSum()) / (2 * ZProbeAverageReadings));
 			break;
 
 		case ZProbeType::dumbModulated:		// Dumb modulated IR sensor.
 			// We assume that zProbeOnFilter and zProbeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
-			zProbeVal = (int) (((int32_t)p.GetZProbeOnFilter().GetSum() - (int32_t)p.GetZProbeOffFilter().GetSum()) / (int)(4 * ZProbeAverageReadings));
+			zProbeVal = (int) (((int32_t)p.GetZProbeOnFilter().GetSum() - (int32_t)p.GetZProbeOffFilter().GetSum())/ZProbeAverageReadings);
 			break;
 
 		case ZProbeType::unfilteredDigital:		// Switch connected to Z probe input, no filtering
@@ -114,7 +114,7 @@ int ZProbe::GetSecondaryValues(int& v1, int& v2)
 		switch (type)
 		{
 		case ZProbeType::dumbModulated:		// modulated IR sensor
-			v1 = (int) (p.GetZProbeOnFilter().GetSum() / (4 * ZProbeAverageReadings));	// pass back the reading with IR turned on
+			v1 = (int) (p.GetZProbeOnFilter().GetSum() / ZProbeAverageReadings);	// pass back the reading with IR turned on
 			return 1;
 		default:
 			break;
@@ -136,7 +136,21 @@ EndStopHit ZProbe::Stopped() const
 EndstopHitDetails ZProbe::CheckTriggered(bool goingSlow)
 {
 	EndstopHitDetails rslt;
-	switch (Stopped())
+	EndStopHit e = Stopped();
+
+	// Note: This might need to be moved into Stopped() to not having to duplicate it to ZProbeEndstop
+	if (misc.parts.probingAway) {
+		switch (e) {
+		case EndStopHit::atStop:
+			e = EndStopHit::noStop;
+			break;
+		default:
+			e = EndStopHit::atStop;
+			break;
+		}
+	}
+
+	switch (e)
 	{
 	case EndStopHit::atStop:
 		rslt.SetAction(EndstopHitAction::stopAll);

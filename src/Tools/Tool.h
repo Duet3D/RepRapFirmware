@@ -71,7 +71,7 @@ public:
 	ToolState GetState() const { return state; }
 
 #if HAS_MASS_STORAGE
-	bool WriteSettings(FileStore *f, bool isCurrent) const;			// write the tool's settings to file
+	bool WriteSettings(FileStore *f) const;							// write the tool's settings to file
 #endif
 
 	float GetToolHeaterActiveTemperature(size_t heaterNumber) const;

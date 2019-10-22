@@ -5,7 +5,6 @@
  *      Author: David
  */
 
-#include <string.h>
 #include "UploadingNetworkResponder.h"
 #include "Socket.h"
 #include "Platform.h"
@@ -103,7 +102,8 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 		{
 			GetPlatform().GetMassStorage()->Delete(uploadFilename);
 		}
-		else {
+		else
+		{
 			String<MaxFilenameLength> origFilename;
 			origFilename.catn(uploadFilename, filenameBeingProcessed.GetRef().strlen() - strlen(UPLOAD_EXTENSION));
 

@@ -185,10 +185,10 @@ bool LocalFan::Check()
 bool LocalFan::AssignPorts(const char *pinNames, const StringRef& reply)
 {
 	IoPort* const ports[] = { &port, &tachoPort };
-	const PinAccess access1[] = { PinAccess::pwm, PinAccess::readWithPullup };
+	const PinAccess access1[] = { PinAccess::pwm, PinAccess::read};
 	if (IoPort::AssignPorts(pinNames, reply, PinUsedBy::fan, 2, ports, access1) == 0)
 	{
-		const PinAccess access2[] = { PinAccess::write0, PinAccess::readWithPullup };
+		const PinAccess access2[] = { PinAccess::write0, PinAccess::read};
 		if (IoPort::AssignPorts(pinNames, reply, PinUsedBy::fan, 2, ports, access2) == 0)
 		{
 			return false;

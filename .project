@@ -3,6 +3,10 @@
 	<name>RepRapFirmware</name>
 	<comment></comment>
 	<projects>
+		<project>CoreNG</project>
+		<project>FreeRTOS</project>
+		<project>RRFLibraries</project>
+		<project>CANlib</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

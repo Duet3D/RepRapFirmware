@@ -1171,8 +1171,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 		}
 		else
 		{
-			String<FormatStringLength> bufferSpace;
-			const StringRef buf = bufferSpace.GetRef();
+			String<FormatStringLength> buf;
 
 			// Write the header comment
 			buf.printf("; File \"%s\" resume print after %s", printingFilename, (wasPowerFailure) ? "power failure" : "print paused");
@@ -1203,13 +1202,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 			}
 			if (ok)
 			{
-				// The resurrect-prologue file may undo some retraction, so make sure we have the correct tool selected, but don't run tool change files
-				const Tool * const ct = reprap.GetCurrentTool();
-				if (ct != nullptr)
-				{
-					buf.printf("T%d P0\n", ct->Number());
-					ok = f->Write(buf.c_str());
-				}
+				ok = reprap.WriteToolSettings(f);							// set tool temperatures, tool mix ratios etc. and select the current tool without running tool change files
 			}
 			if (ok)
 			{
@@ -1218,13 +1211,21 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 			}
 			if (ok)
 			{
-				buf.copy("M116\nM290");
+				buf.copy("M116\nM290");										// wait for temperatures and start writing baby stepping offsets
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
 					buf.catf(" %c%.3f", axisLetters[axis], (double)GetTotalBabyStepOffset(axis));
 				}
 				buf.cat(" R0\n");
 				ok = f->Write(buf.c_str());									// write baby stepping offsets
+			}
+
+			// Now that we have homed, we can run the tool change files for the current tool
+			const Tool * const ct = reprap.GetCurrentTool();
+			if (ok && ct != nullptr)
+			{
+				buf.printf("T-1 P0\nT%u P6\n", ct->Number());				// deselect the current tool without running tfree, and select it running tpre and tpost
+				ok = f->Write(buf.c_str());									// write tool selection
 			}
 
 #if SUPPORT_WORKPLACE_COORDINATES
@@ -1271,10 +1272,6 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 				}
 				buf.cat('\n');
 				ok = f->Write(buf.c_str());									// write volumetric extrusion factors
-			}
-			if (ok)
-			{
-				ok = reprap.WriteToolSettings(f);							// set tool temperatures, tool mix ratios etc.
 			}
 			if (ok)
 			{
@@ -2507,16 +2504,21 @@ MessageType GCodes::GetMessageBoxDevice(GCodeBuffer& gb) const
 	return mt;
 }
 
-// Do a manual bed probe. On entry the state variable is the state we want to return to when the user has finished adjusting the height.
-void GCodes::DoManualProbe(GCodeBuffer& gb)
+void GCodes::DoManualProbe(GCodeBuffer& gb, const char *message, const char *title, const AxesBitmap axes)
 {
 	if (Push(gb, true))													// stack the machine state including the file position and set the state to GCodeState::normal
 	{
 		gb.MachineState().CloseFile();									// stop reading from file if we were
 		gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
 		const MessageType mt = GetMessageBoxDevice(gb);
-		platform.SendAlert(mt, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", 2, 0.0, MakeBitmap<AxesBitmap>(Z_AXIS));
+		platform.SendAlert(mt, message, title, 2, 0.0, axes);
 	}
+}
+
+// Do a manual bed probe. On entry the state variable is the state we want to return to when the user has finished adjusting the height.
+void GCodes::DoManualBedProbe(GCodeBuffer& gb)
+{
+	DoManualProbe(gb, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", MakeBitmap<AxesBitmap>(Z_AXIS));
 }
 
 // Start probing the grid, returning true if we didn't because of an error.
@@ -3312,129 +3314,6 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply)
 	{
 		platform.MessageF(type, "Emulation of %s is not yet supported.\n", emulationType);	// don't send this one to the web as well, it concerns only the USB interface
 	}
-}
-
-// Configure heater protection (M143). Returns true if an error occurred
-GCodeResult GCodes::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
-{
-	const int index = (gb.Seen('P'))
-						? gb.GetIValue()
-						: (gb.Seen('H')) ? gb.GetIValue() : 1;		// default to extruder 1 if no heater number provided
-	if ((index < 0 || index >= (int)MaxHeaters) && (index < (int)FirstExtraHeaterProtection || index >= (int)(FirstExtraHeaterProtection + NumExtraHeaterProtections)))
-	{
-		reply.printf("Invalid heater protection item '%d'", index);
-		return GCodeResult::error;
-	}
-
-	HeaterProtection &item = reprap.GetHeat().AccessHeaterProtection(index);
-
-	// Set heater to control
-	bool seen = false;
-	if (gb.Seen('P') && gb.Seen('H'))
-	{
-		const int heater = gb.GetIValue();
-		if (heater > (int)MaxHeaters)									// allow negative values to disable heater protection
-		{
-			reply.printf("Invalid heater number '%d'", heater);
-			return GCodeResult::error;
-		}
-
-		seen = true;
-		item.SetHeater(heater);
-	}
-
-	// Set sensor that supervises the heater
-	if (gb.Seen('X'))
-	{
-		item.SetSensorNumber(gb.GetIValue());
-		seen = true;
-	}
-
-	// Set trigger action
-	if (gb.Seen('A'))
-	{
-		const int action = gb.GetIValue();
-		if (action < 0 || action > (int)MaxHeaterProtectionAction)
-		{
-			reply.printf("Invalid heater protection action '%d'", action);
-		}
-
-		seen = true;
-		item.SetAction(static_cast<HeaterProtectionAction>(action));
-	}
-
-	// Set trigger condition
-	if (gb.Seen('C'))
-	{
-		const int trigger = gb.GetIValue();
-		if (trigger < 0 || trigger > (int)MaxHeaterProtectionTrigger)
-		{
-			reply.printf("Invalid heater protection trigger '%d'", trigger);
-		}
-
-		seen = true;
-		item.SetTrigger(static_cast<HeaterProtectionTrigger>(trigger));
-	}
-
-	// Set temperature limit
-	if (gb.Seen('S'))
-	{
-		const float limit = gb.GetFValue();
-		if (limit <= BadLowTemperature || limit >= BadErrorTemperature)
-		{
-			reply.copy("Invalid temperature limit");
-			return GCodeResult::error;
-		}
-
-		seen = true;
-		item.SetTemperatureLimit(limit);
-	}
-
-	// Report current parameters
-	if (!seen)
-	{
-		if (item.GetHeater() < 0)
-		{
-			reply.printf("Temperature protection item %d is not configured", index);
-		}
-		else
-		{
-			const char *actionString, *triggerString;
-			switch (item.GetAction())
-			{
-			case HeaterProtectionAction::GenerateFault:
-				actionString = "generate a heater fault";
-				break;
-			case HeaterProtectionAction::PermanentSwitchOff:
-				actionString = "permanently switch off";
-				break;
-			case HeaterProtectionAction::TemporarySwitchOff:
-				actionString = "temporarily switch off";
-				break;
-			default:
-				actionString = "(undefined)";
-				break;
-			}
-
-			switch (item.GetTrigger())
-			{
-			case HeaterProtectionTrigger::TemperatureExceeded:
-				triggerString = "exceeds";
-				break;
-			case HeaterProtectionTrigger::TemperatureTooLow:
-				triggerString = "falls below";
-				break;
-			default:
-				triggerString = "(undefined)";
-				break;
-			}
-
-			reply.printf("Temperature protection item %d is configured for heater %d and uses sensor %d to %s if the temperature %s %.1f" DEGREE_SYMBOL "C",
-					index, item.GetHeater(), item.GetSensorNumber(), actionString, triggerString, (double)item.GetTemperatureLimit());
-		}
-	}
-
-	return GCodeResult::ok;
 }
 
 void GCodes::SetToolHeaters(Tool *tool, float temperature, bool both)

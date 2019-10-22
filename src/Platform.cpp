@@ -1007,8 +1007,7 @@ bool Platform::FlushAuxMessages()
 
 		if (auxOutputBuffer->BytesLeft() == 0)
 		{
-			auxOutputBuffer = OutputBuffer::Release(auxOutputBuffer);
-			auxOutput.SetFirstItem(auxOutputBuffer);
+			auxOutput.ReleaseFirstItem();
 		}
 	}
 	return auxOutput.GetFirstItem() != nullptr;
@@ -1030,7 +1029,7 @@ bool Platform::FlushMessages()
 		OutputBuffer *aux2OutputBuffer = aux2Output.GetFirstItem();
 		if (aux2OutputBuffer != nullptr)
 		{
-			size_t bytesToWrite = min<size_t>(SERIAL_AUX2_DEVICE.canWrite(), aux2OutputBuffer->BytesLeft());
+			const size_t bytesToWrite = min<size_t>(SERIAL_AUX2_DEVICE.canWrite(), aux2OutputBuffer->BytesLeft());
 			if (bytesToWrite > 0)
 			{
 				SERIAL_AUX2_DEVICE.write(aux2OutputBuffer->Read(bytesToWrite), bytesToWrite);
@@ -1038,8 +1037,7 @@ bool Platform::FlushMessages()
 
 			if (aux2OutputBuffer->BytesLeft() == 0)
 			{
-				aux2OutputBuffer = OutputBuffer::Release(aux2OutputBuffer);
-				aux2Output.SetFirstItem(aux2OutputBuffer);
+				aux2Output.ReleaseFirstItem();
 			}
 		}
 		aux2HasMore = (aux2Output.GetFirstItem() != nullptr);
@@ -1047,7 +1045,8 @@ bool Platform::FlushMessages()
 #endif
 
 	// Write non-blocking data to the USB line
-	bool usbHasMore;
+	bool usbHasMore = !usbOutput.IsEmpty();				// test first to see if we can avoid getting the mutex
+	if (usbHasMore)
 	{
 		MutexLocker lock(usbMutex);
 		OutputBuffer *usbOutputBuffer = usbOutput.GetFirstItem();
@@ -1062,20 +1061,23 @@ bool Platform::FlushMessages()
 			else
 			{
 				// Write as much data as we can...
-				size_t bytesToWrite = min<size_t>(SERIAL_MAIN_DEVICE.canWrite(), usbOutputBuffer->BytesLeft());
+				const size_t bytesToWrite = min<size_t>(SERIAL_MAIN_DEVICE.canWrite(), usbOutputBuffer->BytesLeft());
 				if (bytesToWrite > 0)
 				{
 					SERIAL_MAIN_DEVICE.write(usbOutputBuffer->Read(bytesToWrite), bytesToWrite);
 				}
 
-				if (usbOutputBuffer->BytesLeft() == 0 || usbOutputBuffer->GetAge() > SERIAL_MAIN_TIMEOUT)
+				if (usbOutputBuffer->BytesLeft() == 0)
 				{
-					usbOutputBuffer = OutputBuffer::Release(usbOutputBuffer);
-					usbOutput.SetFirstItem(usbOutputBuffer);
+					usbOutput.ReleaseFirstItem();
+				}
+				else
+				{
+					usbOutput.ApplyTimeout(SERIAL_MAIN_TIMEOUT);
 				}
 			}
 		}
-		usbHasMore = (usbOutput.GetFirstItem() != nullptr);
+		usbHasMore = !usbOutput.IsEmpty();
 	}
 
 	return auxHasMore
@@ -3485,7 +3487,7 @@ void Platform::Message(MessageType type, const char *message)
 // sParam = 3 As for 2 but also display a Cancel button
 void Platform::SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, AxesBitmap controls)
 {
-	if ((mt & (HttpMessage | AuxMessage)) != 0)
+	if ((mt & (HttpMessage | AuxMessage | BinaryCodeReplyFlag)) != 0)
 	{
 		reprap.SetAlert(message, title, sParam, tParam, controls);		// make the RepRap class cache this message until it's picked up by the HTTP clients and/or PanelDue
 	}
@@ -3918,41 +3920,39 @@ const char* Platform::InternalGetSysDir() const
 FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize) const
 {
 	String<MaxFilenameLength> location;
-	MassStorage::CombineName(location.GetRef(), folder, fileName);
-	return massStorage->OpenFile(location.c_str(), mode, preAllocSize);
+	return (MassStorage::CombineName(location.GetRef(), folder, fileName))
+			? massStorage->OpenFile(location.c_str(), mode, preAllocSize)
+				: nullptr;
 }
 
 bool Platform::Delete(const char* folder, const char *filename) const
 {
 	String<MaxFilenameLength> location;
-	MassStorage::CombineName(location.GetRef(), folder, filename);
-	return massStorage->Delete(location.c_str());
+	return MassStorage::CombineName(location.GetRef(), folder, filename) && massStorage->Delete(location.c_str());
 }
 
 bool Platform::FileExists(const char* folder, const char *filename) const
 {
 	String<MaxFilenameLength> location;
-	MassStorage::CombineName(location.GetRef(), folder, filename);
-	return massStorage->FileExists(location.c_str());
+	return MassStorage::CombineName(location.GetRef(), folder, filename) && massStorage->FileExists(location.c_str());
 }
 
 bool Platform::DirectoryExists(const char *folder, const char *dir) const
 {
 	String<MaxFilenameLength> location;
-	MassStorage::CombineName(location.GetRef(), folder, dir);
-	return massStorage->DirectoryExists(location.c_str());
+	return MassStorage::CombineName(location.GetRef(), folder, dir) && massStorage->DirectoryExists(location.c_str());
 }
 
 // Set the system files path
-void Platform::SetSysDir(const char* dir)
+GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply)
 {
 	String<MaxFilenameLength> newSysDir;
 	MutexLocker lock(Tasks::GetSysDirMutex());
 
-	massStorage->CombineName(newSysDir.GetRef(), InternalGetSysDir(), dir);
-	if (!newSysDir.EndsWith('/'))
+	if (!MassStorage::CombineName(newSysDir.GetRef(), InternalGetSysDir(), dir) || (!newSysDir.EndsWith('/') && newSysDir.cat('/')))
 	{
-		newSysDir.cat('/');
+		reply.copy("Path name too long");
+		return GCodeResult::error;
 	}
 
 	const size_t len = newSysDir.strlen() + 1;
@@ -3961,33 +3961,33 @@ void Platform::SetSysDir(const char* dir)
 	const char *nsd2 = nsd;
 	std::swap(sysDir, nsd2);
 	delete nsd2;
+	return GCodeResult::ok;
 }
 
 bool Platform::SysFileExists(const char *filename) const
 {
 	String<MaxFilenameLength> location;
-	MakeSysFileName(location.GetRef(), filename);
-	return massStorage->FileExists(location.c_str());
+	return MakeSysFileName(location.GetRef(), filename) && massStorage->FileExists(location.c_str());
 }
 
 FileStore* Platform::OpenSysFile(const char *filename, OpenMode mode) const
 {
 	String<MaxFilenameLength> location;
-	MakeSysFileName(location.GetRef(), filename);
-	return massStorage->OpenFile(location.c_str(), mode, 0);
+	return (MakeSysFileName(location.GetRef(), filename))
+			? massStorage->OpenFile(location.c_str(), mode, 0)
+				: nullptr;
 }
 
 bool Platform::DeleteSysFile(const char *filename) const
 {
 	String<MaxFilenameLength> location;
-	MakeSysFileName(location.GetRef(), filename);
-	return massStorage->Delete(location.c_str());
+	return MakeSysFileName(location.GetRef(), filename) && massStorage->Delete(location.c_str());
 }
 
-void Platform::MakeSysFileName(const StringRef& result, const char *filename) const
+bool Platform::MakeSysFileName(const StringRef& result, const char *filename) const
 {
 	MutexLocker lock(Tasks::GetSysDirMutex());
-	MassStorage::CombineName(result, InternalGetSysDir(), filename);
+	return MassStorage::CombineName(result, InternalGetSysDir(), filename);
 }
 
 void Platform::GetSysDir(const StringRef & path) const
@@ -4644,7 +4644,7 @@ void Platform::Tick()
 
 #if SAME70
 	// On Duet 3, AFEC1 is used only for thermistors and associated Vref/Vssa monitoring. AFEC0 is used for everything else.
-	// To reduce noise, we use x16 hardware averaging on AFEXC0 and x256 on AFEC1. This is hard coded in file AnalogIn.cpp in project CoreNG.
+	// To reduce noise, we use x16 hardware averaging on AFEC0 and x256 on AFEC1. This is hard coded in file AnalogIn.cpp in project CoreNG.
 	// There is enough time to convert all AFEC0 channels in one tick, but only one AFEC1 channel because of the higher averaging.
 	AnalogInStartConversion(0x0FFF | (1u << filteredAdcChannels[currentFilterNumber]));
 #else

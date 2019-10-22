@@ -197,7 +197,6 @@ constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
 // This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
 struct PinEntry
 {
-	bool CanDo(PinAccess access) const;
 	Pin GetPin() const { return pin; }
 	PinCapability GetCapability() const { return cap; }
 	const char* GetNames() const { return names; }

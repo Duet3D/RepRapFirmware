@@ -73,7 +73,6 @@ class OutputBuffer
 		// Write the buffer to file returning true if successful
 		bool WriteToFile(FileData& f) const;
 #endif
-
 		// Initialise the output buffers manager
 		static void Init();
 
@@ -147,8 +146,15 @@ class OutputStack
 		// Returns the first item's type from the stack or NoDestinationMessage if none is available
 		MessageType GetFirstItemType() const volatile;
 
+#if HAS_LINUX_INTERFACE
 		// Set the first item of the stack. If it's NULL, then the first item will be removed
 		void SetFirstItem(OutputBuffer *buffer) volatile;
+#endif
+		// Release the first item at the top of the stack
+		void ReleaseFirstItem() volatile;
+
+		// Apply a timeout to the first item at the top of the stack
+		bool ApplyTimeout(uint32_t ticks) volatile;
 
 		// Returns the last item from the stack or NULL if none is available
 		OutputBuffer *GetLastItem() const volatile;
