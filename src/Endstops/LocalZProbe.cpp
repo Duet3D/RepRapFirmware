@@ -72,6 +72,17 @@ GCodeResult LocalZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool
 	return ZProbe::Configure(gb, reply, seen);
 }
 
+#if ALLOCATE_DEFAULT_PORTS
+
+bool LocalZProbe::AssignPorts(const char* pinNames, const StringRef& reply)
+{
+	IoPort* const ports[] = { &inputPort, &modulationPort };
+	const PinAccess access[] = { PinAccess::read, PinAccess::write0 };
+	return IoPort::AssignPorts(pinNames, reply, PinUsedBy::zprobe, 2, ports, access);
+}
+
+#endif
+
 // This is called by the tick ISR to get the raw Z probe reading to feed to the filter
 uint16_t LocalZProbe::GetRawReading() const
 {
