@@ -76,7 +76,6 @@ constexpr uint32_t HeatSampleIntervalMillis = 250;		// interval between taking t
 constexpr float HeatPwmAverageTime = 5.0;				// Seconds
 
 constexpr uint8_t SensorsTaskTotalDelay = 250;			// Interval between runs of sensors task
-constexpr uint8_t SensorsTaskPerSensorDelay = 25;		// Interval delayed for each sensor in sensors task if there is at least one sensor
 
 constexpr float TEMPERATURE_CLOSE_ENOUGH = 1.0;			// Celsius
 constexpr float TEMPERATURE_LOW_SO_DONT_CARE = 40.0;	// Celsius

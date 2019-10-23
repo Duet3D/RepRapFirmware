@@ -77,7 +77,7 @@ public:
 
 	// Try to get a temperature reading
 	virtual void Poll() = 0;
-	virtual bool PollInTask() { return false; };
+	virtual bool PollInTask() { return false; };		// Classes implementing this method need to also call Heat::EnsureSensorsTask() after succesful configuration
 
 protected:
 	void SetResult(float t, TemperatureError rslt);

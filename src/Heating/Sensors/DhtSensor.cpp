@@ -9,6 +9,8 @@
 
 #if SUPPORT_DHT_SENSOR
 
+#include "RepRap.h"
+#include "Heating/Heat.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Movement/StepTimer.h"
 
@@ -48,6 +50,7 @@ GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& re
 	{
 		seen = true;
 		TakeReading();
+		reprap.GetHeat().EnsureSensorsTask();
 	}
 
 	if (!seen)

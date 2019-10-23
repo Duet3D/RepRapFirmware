@@ -45,7 +45,7 @@ public:
 	Heat();
 
 	// Methods that don't relate to a particular heater
-	void Task();
+	void HeaterTask();
 	void Init();												// Set everything up
 	void Exit();												// Shut everything down
 	void ResetHeaterModels();									// Reset all active heater models to defaults
@@ -84,6 +84,8 @@ public:
 	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
 
 	void SensorsTask();
+	static void EnsureSensorsTask();
+
 	ReadLockedPointer<TemperatureSensor> FindSensor(int sn) const;	// Get a pointer to the temperature sensor entry
 	ReadLockedPointer<TemperatureSensor> FindSensorAtOrAbove(unsigned int sn) const;	// Get a pointer to the first temperature sensor with the specified or higher number
 
@@ -153,6 +155,9 @@ private:
 	static ReadWriteLock heatersLock;
 	static ReadWriteLock sensorsLock;
 
+	static Mutex sensorsTaskMutex;
+
+	uint8_t volatile sensorCount;
 	TemperatureSensor * volatile sensorsRoot;					// The sensor list
 	HeaterProtection *heaterProtections[MaxHeaters + NumExtraHeaterProtections];	// Heater protection instances to guarantee legal heater temperature ranges
 

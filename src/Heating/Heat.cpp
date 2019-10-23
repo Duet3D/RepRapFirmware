@@ -42,13 +42,13 @@ Licence: GPL
 constexpr uint32_t HeaterTaskStackWords = 400;			// task stack size in dwords, must be large enough for auto tuning
 static Task<HeaterTaskStackWords> heaterTask;
 
-extern "C" [[noreturn]] void HeaterTask(void * pvParameters)
+extern "C" [[noreturn]] void HeaterTaskStart(void * pvParameters)
 {
-	reprap.GetHeat().Task();
+	reprap.GetHeat().HeaterTask();
 }
 
 static constexpr uint16_t SensorsTaskStackWords = 100;		// task stack size in dwords. 80 was not enough. Use 300 if debugging is enabled.
-static Task<SensorsTaskStackWords> sensorsTask;
+static Task<SensorsTaskStackWords> *sensorsTask = nullptr;
 
 extern "C" [[noreturn]] void SensorsTaskStart(void * pvParameters)
 {
@@ -87,9 +87,10 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Heat)
 
 ReadWriteLock Heat::heatersLock;
 ReadWriteLock Heat::sensorsLock;
+Mutex Heat::sensorsTaskMutex;
 
 Heat::Heat()
-	: sensorsRoot(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
+	: sensorCount(0), sensorsRoot(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
 	ARRAY_INIT(bedHeaters, DefaultBedHeaters);
 	ARRAY_INIT(chamberHeaters, DefaultChamberHeaters);
@@ -109,7 +110,6 @@ Heat::Heat()
 	{
 		t = nullptr;
 	}
-
 }
 
 ReadLockedPointer<Heater> Heat::FindHeater(int heater) const
@@ -296,8 +296,8 @@ void Heat::Init()
 	retractionMinTemp = HOT_ENOUGH_TO_RETRACT;
 	coldExtrude = false;
 
-	heaterTask.Create(HeaterTask, "HEAT", nullptr, TaskPriority::HeatPriority);
-	sensorsTask.Create(SensorsTaskStart, "SENSORS", nullptr, TaskPriority::SensorsPriority);
+	heaterTask.Create(HeaterTaskStart, "HEAT", nullptr, TaskPriority::HeatPriority);
+	sensorsTaskMutex.Create("sensorsTask");
 }
 
 void Heat::Exit()
@@ -317,7 +317,7 @@ void Heat::Exit()
 	heaterTask.Suspend();
 }
 
-[[noreturn]] void Heat::Task()
+[[noreturn]] void Heat::HeaterTask()
 {
 	uint32_t lastWakeTime = xTaskGetTickCount();
 	for (;;)
@@ -404,6 +404,17 @@ void Heat::Exit()
 }
 
 
+/* static */ void Heat::EnsureSensorsTask()
+{
+	MutexLocker lock(sensorsTaskMutex);
+
+	if (sensorsTask == nullptr)
+	{
+		sensorsTask = new Task<SensorsTaskStackWords>;
+		sensorsTask->Create(SensorsTaskStart, "SENSORS", nullptr, TaskPriority::SensorsPriority);
+	}
+}
+
 // Code executed by the SensorsTask.
 // This is run at the same priority as the Heat task, so it must not sit in any spin loops.
 /*static*/ [[noreturn]] void Heat::SensorsTask()
@@ -411,7 +422,7 @@ void Heat::Exit()
 	auto lastWakeTime = xTaskGetTickCount();
 	for (;;)
 	{
-		auto sensorNumber = 0;
+		unsigned int sensorNumber = 0;
 		uint8_t sensorCountSinceLastDelay = 0;
 		uint8_t totalWaitTime = 0;
 		// Walk the sensor list one by one and poll each sensor
@@ -440,8 +451,10 @@ void Heat::Exit()
 
 			if (wait)
 			{
-				vTaskDelayUntil(&lastWakeTime, (SensorsTaskPerSensorDelay*sensorCountSinceLastDelay));
-				totalWaitTime += SensorsTaskPerSensorDelay;
+				// Coming here sensorCount cannot be 0 since we got at least one sensor returning true
+				const uint8_t delay = ((SensorsTaskTotalDelay/sensorCount)*sensorCountSinceLastDelay);
+				vTaskDelayUntil(&lastWakeTime, delay);
+				totalWaitTime += delay;
 			}
 		}
 
@@ -1234,6 +1247,7 @@ void Heat::DeleteSensor(unsigned int sn)
 				lastSensor->SetNext(currentSensor);
 			}
 			delete sensorToDelete;
+			--sensorCount;
 			break;
 		}
 
@@ -1260,6 +1274,7 @@ void Heat::InsertSensor(TemperatureSensor *newSensor)
 			{
 				prev->SetNext(newSensor);
 			}
+			++sensorCount;
 			break;
 		}
 		prev = ts;

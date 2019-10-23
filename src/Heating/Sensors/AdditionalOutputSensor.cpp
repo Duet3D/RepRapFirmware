@@ -26,59 +26,65 @@ GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& 
 	{
 		seen = true;
 		String<StringLength20> pParam;
-		StringRef ref = pParam.GetRef();
-		if (!gb.GetQuotedString(ref))
+		if (!gb.GetQuotedString(pParam.GetRef()))
 		{
 			reply.copy("Missing parent sensor and output number");
 			return GCodeResult::error;
 		}
 
-		size_t pos = 0;
-		if (ref[pos] != 'S' && ref[pos] != 's')
+		const char *pn = pParam.c_str();
+		if (*pn != 'S' && *pn != 's')
 		{
 			reply.copy("Parent sensor needs to start with S");
 			return GCodeResult::error;
 		}
 		// Advance beyond the leading S
-		++pos;
+		++pn;
 
-		if (!isDigit(ref[pos]))
+		if (!isDigit(*pn))
 		{
 			reply.copy("Parent sensor number expected following S");
 			return GCodeResult::error;
 		}
 
 		// Parse parent sensor number
-		while (isdigit(ref[pos]))
+		parentSensor = SafeStrtoul(pn, &pn);
+		if (*pn != '.')
 		{
-			parentSensor = (parentSensor * 10) + (ref[pos] - '0');
-			++pos;
-		}
-
-		if (parentSensor > MaxSensorsInSystem)
-		{
-			reply.catf("Parent sensor must be a lower than %d", MaxSensorsInSystem);
+			reply.copy("Missing additional output number of parent");
 			return GCodeResult::error;
 		}
 
-		if (enforcePollOrder && parentSensor > GetSensorNumber())
+		// We use this block to have the ReadLockPointer below go out of scope as early as possible
 		{
-			reply.copy("Parent sensor must be a lower sensor number than this one");
-			return GCodeResult::error;
+			const auto parent = reprap.GetHeat().FindSensor(parentSensor);
+			if (parent.IsNull())
+			{
+				reply.printf("Parent sensor %d does not exist", parentSensor);
+				return GCodeResult::error;
+			}
+
+			if (enforcePollOrder && parentSensor > GetSensorNumber())
+			{
+				reply.copy("Parent sensor must be a lower sensor number than this one");
+				return GCodeResult::error;
+			}
+
+			// Advance beyond the dot
+			++pn;
+
+			// Parse output number
+			outputNumber = SafeStrtoul(pn, &pn);
+
+			if (outputNumber > parent->GetNumAdditionalOutputs())
+			{
+				reply.printf("Parent sensor only has %d addtional outputs", parent->GetNumAdditionalOutputs());
+				return GCodeResult::error;
+			}
 		}
 
-		// Advance beyond the dot
-		++pos;
-
-		// Parse output number
-		while (isdigit(ref[pos]))
-		{
-			outputNumber = (outputNumber * 10) + (ref[pos] - '0');
-			++pos;
-		}
-
-		// When getting here Heat holds a write lock on the sensors so unfortunately we can
-		// neither check for the existence of the parent nor if it has the requested output while configuring
+		// Initialize with a value already
+		Poll();
 	}
 
 	TryConfigureSensorName(gb, seen);
