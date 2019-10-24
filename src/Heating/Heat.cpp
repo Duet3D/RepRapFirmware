@@ -428,7 +428,7 @@ void Heat::Exit()
 		// Walk the sensor list one by one and poll each sensor
 		for (;;)
 		{
-			bool wait = false;
+			uint8_t delay = 0;
 
 			// We need this block to have the ReadLockPointer below go out of scope as early as possible
 			{
@@ -444,15 +444,13 @@ void Heat::Exit()
 
 				if (sensor->PollInTask())
 				{
-					// Wait a bit
-					wait = true;
+					// Coming here sensorCount cannot be 0 since we got at least one sensor returning true
+					delay = ((SensorsTaskTotalDelay/sensorCount)*sensorCountSinceLastDelay);
 				}
 			}
 
-			if (wait)
+			if (delay > 0)
 			{
-				// Coming here sensorCount cannot be 0 since we got at least one sensor returning true
-				const uint8_t delay = ((SensorsTaskTotalDelay/sensorCount)*sensorCountSinceLastDelay);
 				vTaskDelayUntil(&lastWakeTime, delay);
 				totalWaitTime += delay;
 			}
