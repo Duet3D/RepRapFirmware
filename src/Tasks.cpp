@@ -14,9 +14,14 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include <TaskPriorities.h>
 
 #if USE_CACHE
 # include "cmcc/cmcc.h"
+#endif
+
+#if SAME70
+# include <mpu_armv7.h>
 #endif
 
 const uint8_t memPattern = 0xA5;
@@ -88,16 +93,8 @@ extern "C" void __malloc_unlock (struct _reent *_r)
 }
 
 // Application entry point
-extern "C" void AppMain()
+extern "C" [[noreturn]] void AppMain()
 {
-	// Fill the free memory with a pattern so that we can check for stack usage and memory corruption
-	char* heapend = sbrk(0);
-	register const char * stack_ptr asm ("sp");
-	while (heapend + 16 < stack_ptr)
-	{
-		*heapend++ = memPattern;
-	}
-
 	pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
 
 	// Check the integrity of the firmware by checking the firmware CRC
@@ -123,9 +120,78 @@ extern "C" void AppMain()
 		}
 	}
 
+	// Fill the free memory with a pattern so that we can check for stack usage and memory corruption
+	char* heapend = sbrk(0);
+	register const char * stack_ptr asm ("sp");
+	while (heapend + 16 < stack_ptr)
+	{
+		*heapend++ = memPattern;
+	}
+
 	// Trap integer divide-by-zero.
 	// We could also trap unaligned memory access, if we change the gcc options to not generate code that uses unaligned memory access.
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
+
+#if 0 //SAME70
+	// Set up the MPU so that we can have a non-cacheable RAM region, and so that we can trap accesses to non-existent memory
+	// Where regions overlap, the region with the highest region number takes priority
+	constexpr ARM_MPU_Region_t regionTable[] =
+	{
+		// Flash memory: read-only, execute allowed, cacheable
+		{
+			ARM_MPU_RBAR(0, IFLASH_ADDR),
+			ARM_MPU_RASR_EX(0u, ARM_MPU_AP_RO, ARM_MPU_ACCESS_NORMAL(ARM_MPU_CACHEP_WB_WRA, ARM_MPU_CACHEP_WB_WRA, 1u), 0u, ARM_MPU_REGION_SIZE_1MB)
+		},
+		// First 256kb RAM, read-write, cacheable, execute disabled. Parts of this are is overridden later.
+		{
+			ARM_MPU_RBAR(1, IRAM_ADDR),
+			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_NORMAL(ARM_MPU_CACHEP_WB_WRA, ARM_MPU_CACHEP_WB_WRA, 1u), 0u, ARM_MPU_REGION_SIZE_256KB)
+		},
+		// Final 128kb RAM, read-write, cacheable, execute disabled
+		{
+			ARM_MPU_RBAR(3, IRAM_ADDR + 0x00040000),
+			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_NORMAL(ARM_MPU_CACHEP_WB_WRA, ARM_MPU_CACHEP_WB_WRA, 1u), 0u, ARM_MPU_REGION_SIZE_128KB)
+		},
+		// Non-cachable RAM. This must be before normal RAM because it includes CAN buffers which must be within first 64kb.
+		// Read write, execute disabled, non-cacheable
+		{
+			ARM_MPU_RBAR(4, IRAM_ADDR),
+			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_ORDERED, 0, ARM_MPU_REGION_SIZE_64KB)
+		},
+		// RAMFUNC memory. Read-only (the code has already been written to it), execution allowed. The initialised data memory follows, so it must be RW.
+		// 256 bytes is enough at present (check the linker memory map if adding more RAMFUNCs).
+		{
+			ARM_MPU_RBAR(5, IRAM_ADDR + 0x00010000),
+			ARM_MPU_RASR_EX(0u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_NORMAL(ARM_MPU_CACHEP_WB_WRA, ARM_MPU_CACHEP_WB_WRA, 1u), 0u, ARM_MPU_REGION_SIZE_256B)
+		},
+		// Peripherals
+		{
+			ARM_MPU_RBAR(6, 0x40000000),
+			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_DEVICE(1u), 0u, ARM_MPU_REGION_SIZE_512MB),
+		},
+		// USBHS
+		{
+			ARM_MPU_RBAR(7, 0xA0100000),
+			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_DEVICE(1u), 0u, ARM_MPU_REGION_SIZE_1MB),
+		}
+	};
+
+	// Ensure MPU is disabled
+	ARM_MPU_Disable();
+
+	// Clear all regions
+	const uint32_t numRegions = (MPU->TYPE & MPU_TYPE_DREGION_Msk) >> MPU_TYPE_DREGION_Pos;
+	for (unsigned int region = 0; region < numRegions; ++region)
+	{
+		ARM_MPU_ClrRegion(region);
+	}
+
+	// Load regions from our table
+	ARM_MPU_Load(regionTable, ARRAY_SIZE(regionTable));
+
+	// Enable the MPU, disabling the default map but allowing exception handlers to use it
+	ARM_MPU_Enable(0x01);
+#endif
 
 #ifdef __LPC17xx__
 	// Setup LEDs, start off
@@ -163,6 +229,7 @@ extern "C" void AppMain()
 	// Create the startup task
 	mainTask.Create(MainTask, "MAIN", nullptr, TaskPriority::SpinPriority);
 	vTaskStartScheduler();			// doesn't return
+	for (;;) { }					// kep gcc happy
 }
 
 extern "C" [[noreturn]] void MainTask(void *pvParameters)

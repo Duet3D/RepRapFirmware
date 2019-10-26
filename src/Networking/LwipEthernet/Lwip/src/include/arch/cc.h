@@ -96,7 +96,7 @@ typedef uintptr_t          mem_ptr_t;
     to let sys.h use binary semaphores instead of mutexes - as before in 1.3.2
     Refer CHANGELOG
 */
-#define  LWIP_COMPAT_MUTEX  1
+#define  LWIP_COMPAT_MUTEX  0
 
 /* Make lwip/arch.h define the codes which are used throughout */
 #define LWIP_PROVIDE_ERRNO

@@ -25,7 +25,7 @@ Licence: GPL
 #include "RepRap.h"
 #include "Sensors/TemperatureSensor.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Tasks.h"
+#include <TaskPriorities.h>
 
 #if SUPPORT_DHT_SENSOR
 # include "Sensors/DhtSensor.h"

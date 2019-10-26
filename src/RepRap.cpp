@@ -1266,8 +1266,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"endstops\":%" PRIu32, endstops);
 
 		// Firmware name, machine geometry and number of axes
-		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\"",
-			FIRMWARE_NAME, move->GetGeometryString(), numVisibleAxes, numTotalAxes, gCodes->GetAxisLetters());
+		response->catf(",\"firmwareName\":\"%s\",\"firmwareVersion\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\"",
+			FIRMWARE_NAME, VERSION, move->GetGeometryString(), numVisibleAxes, numTotalAxes, gCodes->GetAxisLetters());
 
 #if HAS_MASS_STORAGE
 		// Total and mounted volumes

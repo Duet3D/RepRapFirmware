@@ -39,6 +39,7 @@
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Tools/Tool.h"
 #include "Endstops/ZProbe.h"
+#include <TaskPriorities.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include "CAN/CanMotion.h"

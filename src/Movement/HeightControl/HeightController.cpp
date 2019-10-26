@@ -15,6 +15,7 @@
 #include "Heating/Heat.h"
 #include "Heating/Sensors/TemperatureSensor.h"
 #include "Movement/Move.h"
+#include <TaskPriorities.h>
 
 HeightController::HeightController()
 	: heightControllerTask(nullptr), sensorNumber(-1),

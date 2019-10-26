@@ -265,12 +265,17 @@ constexpr Pin LinuxTfrReadyPin = PortEPin(2);
 Spi * const LinuxSpi = SPI1;
 
 // Timer allocation
+
+#if !LWIP_GMAC_TASK
+
 // Network timer is timer 4 aka TC1 channel1
 #define NETWORK_TC			(TC1)
 #define NETWORK_TC_CHAN		(1)
 #define NETWORK_TC_IRQN		TC4_IRQn
 #define NETWORK_TC_HANDLER	TC4_Handler
 #define NETWORK_TC_ID		ID_TC4
+
+#endif
 
 // Step timer is timer 2 aka TC0 channel 2
 #define STEP_TC				(TC0)

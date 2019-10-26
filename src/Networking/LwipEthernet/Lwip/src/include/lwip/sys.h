@@ -267,8 +267,6 @@ err_t sys_mbox_trypost(sys_mbox_t *mbox, void *msg);
  *         The returned time has to be accurate to prevent timer jitter!
  */
 u32_t sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout);
-/* Allow port to override with a macro, e.g. special timeout for sys_arch_mbox_fetch() */
-#ifndef sys_arch_mbox_tryfetch
 /**
  * @ingroup sys_mbox
  * Wait for a new message to arrive in the mbox
@@ -278,32 +276,27 @@ u32_t sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout);
  *         or SYS_MBOX_EMPTY if the mailbox is empty
  */
 u32_t sys_arch_mbox_tryfetch(sys_mbox_t *mbox, void **msg);
-#endif
-/**
- * For now, we map straight to sys_arch implementation.
- */
+
 #define sys_mbox_tryfetch(mbox, msg) sys_arch_mbox_tryfetch(mbox, msg)
+#define sys_mbox_fetch(mbox, msg) sys_arch_mbox_fetch(mbox, msg, 0)
+
 /**
  * @ingroup sys_mbox
  * Delete an mbox
  * @param mbox mbox to delete
  */
 void sys_mbox_free(sys_mbox_t *mbox);
-#define sys_mbox_fetch(mbox, msg) sys_arch_mbox_fetch(mbox, msg, 0)
-#ifndef sys_mbox_valid
 /**
  * @ingroup sys_mbox
  * Check if an mbox is valid/allocated: return 1 for valid, 0 for invalid
  */
 int sys_mbox_valid(sys_mbox_t *mbox);
-#endif
-#ifndef sys_mbox_set_invalid
 /**
  * @ingroup sys_mbox
  * Set an mbox invalid so that sys_mbox_valid returns 0
  */
 void sys_mbox_set_invalid(sys_mbox_t *mbox);
-#endif
+
 #ifndef sys_mbox_valid_val
 /**
  * Same as sys_mbox_valid() but taking a value, not a pointer

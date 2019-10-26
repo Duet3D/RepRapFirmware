@@ -41,6 +41,12 @@ Licence: GPL
 # define SAME51	(defined(__SAME51N19A__) && __SAME51N19A__)
 #endif
 
+#if SAME70
+# define __nocache		__attribute__((section(".ram_nocache")))
+#else
+# define __nocache		// nothing
+#endif
+
 // Definitions needed by Pins.h and/or Configuration.h
 // Logical pins used for general output, servos, CCN and laser control
 typedef uint8_t LogicalPin;				// type used to represent logical pin numbers
@@ -275,15 +281,6 @@ void ListDrivers(const StringRef& str, DriversBitmap drivers);
 
 // Functions to change the base priority, to shut out interrupts up to a priority level
 
-// From section 3.12.7 of http://infocenter.arm.com/help/topic/com.arm.doc.dui0553b/DUI0553.pdf:
-// When you write to BASEPRI_MAX, the instruction writes to BASEPRI only if either:
-// - Rn is non-zero and the current BASEPRI value is 0
-// - Rn is non-zero and less than the current BASEPRI value
-__attribute__( ( always_inline ) ) __STATIC_INLINE void __set_BASEPRI_MAX(uint32_t value)
-{
-  __ASM volatile ("MSR basepri_max, %0" : : "r" (value) : "memory");
-}
-
 // Get the base priority and shut out interrupts lower than or equal to a specified priority
 inline uint32_t ChangeBasePriority(uint32_t prio)
 {
@@ -383,22 +380,6 @@ constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 // Type of an offset in a file
 typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;
-
-// Task priorities
-namespace TaskPriority
-{
-	static constexpr int SpinPriority = 1;							// priority for tasks that rarely block
-	static constexpr int HeatPriority = 2;
-	static constexpr int DhtPriority = 2;
-	static constexpr int TmcPriority = 2;
-	static constexpr int AinPriority = 2;
-	static constexpr int HeightFollowingPriority = 2;
-	static constexpr int DueXPriority = 3;
-	static constexpr int LaserPriority = 3;
-	static constexpr int CanSenderPriority = 3;
-	static constexpr int CanReceiverPriority = 3;
-	static constexpr int CanClockPriority = 3;
-}
 
 //-------------------------------------------------------------------------------------------------
 // Interrupt priorities - must be chosen with care! 0 is the highest priority, 15 is the lowest.

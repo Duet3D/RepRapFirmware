@@ -56,7 +56,11 @@
  * use lwIP facilities.
  * Uses Raw API only.
  */
-#define NO_SYS                		1
+#ifndef LWIP_GMAC_TASK
+# error LWIP_GMAC_TASK must be defined in compiler settings
+#endif
+
+#define NO_SYS                		(!LWIP_GMAC_TASK)
 
 /**
  * LWIP_NETIF_STATUS_CALLBACK==1: Support a callback function whenever an interface
@@ -271,17 +275,19 @@ extern uint32_t trueRandom(void);
    ------------------------------------
 */
 
+#define FreeRtosIdlePriority	0
+
 /** The stack sizes allocated to the netif stack: (256 * 4) = 1048 bytes. */
 #define netifINTERFACE_TASK_STACK_SIZE    256
 
 /** The priority of the netif stack. */
-#define netifINTERFACE_TASK_PRIORITY      (tskIDLE_PRIORITY + 4)
+#define netifINTERFACE_TASK_PRIORITY      (FreeRtosIdlePriority + 4)		//TODO adjust
 
 /** The stack sizes allocated to the TCPIP stack: (256 * 4) = 1048 bytes. */
 #define TCPIP_THREAD_STACKSIZE            256
 
 /** The priority of the TCPIP stack. */
-#define TCPIP_THREAD_PRIO                 (tskIDLE_PRIORITY + 5)
+#define TCPIP_THREAD_PRIO                 (FreeRtosIdlePriority + 5)		//TODO adjust
 
 /** The mailbox size for the tcpip thread messages */
 #define TCPIP_MBOX_SIZE                   16
