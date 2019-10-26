@@ -87,7 +87,6 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Heat)
 
 ReadWriteLock Heat::heatersLock;
 ReadWriteLock Heat::sensorsLock;
-Mutex Heat::sensorsTaskMutex;
 
 Heat::Heat()
 	: sensorCount(0), sensorsRoot(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
@@ -297,7 +296,6 @@ void Heat::Init()
 	coldExtrude = false;
 
 	heaterTask.Create(HeaterTaskStart, "HEAT", nullptr, TaskPriority::HeatPriority);
-	sensorsTaskMutex.Create("sensorsTask");
 }
 
 void Heat::Exit()
@@ -406,7 +404,7 @@ void Heat::Exit()
 
 /* static */ void Heat::EnsureSensorsTask()
 {
-	MutexLocker lock(sensorsTaskMutex);
+	TaskCriticalSectionLocker lock; // make sure we don't create the task more than once
 
 	if (sensorsTask == nullptr)
 	{

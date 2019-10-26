@@ -155,8 +155,6 @@ private:
 	static ReadWriteLock heatersLock;
 	static ReadWriteLock sensorsLock;
 
-	static Mutex sensorsTaskMutex;
-
 	uint8_t volatile sensorCount;
 	TemperatureSensor * volatile sensorsRoot;					// The sensor list
 	HeaterProtection *heaterProtections[MaxHeaters + NumExtraHeaterProtections];	// Heater protection instances to guarantee legal heater temperature ranges
