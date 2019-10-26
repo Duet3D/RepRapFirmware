@@ -76,7 +76,7 @@ err_to_errno(err_t err)
 
 #ifdef LWIP_DEBUG
 
-static const char *err_strerr[] = {
+static const char * const err_strerr[] = {
            "Ok.",                    /* ERR_OK          0  */
            "Out of memory error.",   /* ERR_MEM        -1  */
            "Buffer error.",          /* ERR_BUF        -2  */

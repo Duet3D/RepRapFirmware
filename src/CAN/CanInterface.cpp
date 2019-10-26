@@ -17,6 +17,7 @@
 #include "Movement/DriveMovement.h"
 #include "Movement/StepTimer.h"
 #include <RTOSIface/RTOSIface.h>
+#include <TaskPriorities.h>
 
 #if HAS_LINUX_INTERFACE
 # include "Linux/LinuxInterface.h"

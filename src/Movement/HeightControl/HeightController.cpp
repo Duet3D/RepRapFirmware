@@ -15,6 +15,7 @@
 #include "Heating/Heat.h"
 #include "Heating/Sensors/TemperatureSensor.h"
 #include "Movement/Move.h"
+#include <TaskPriorities.h>
 
 HeightController::HeightController()
 	: heightControllerTask(nullptr), sensorNumber(-1),
@@ -65,6 +66,9 @@ GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply)
 	if (seen || seenZ)
 	{
 		CalcDerivedValues();
+
+		TaskCriticalSectionLocker lock;			// make sure we don't create the task more than once
+
 		if (heightControllerTask == nullptr && sensorNumber >= 0)
 		{
 			state = PidState::stopped;

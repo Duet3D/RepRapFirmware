@@ -214,8 +214,10 @@ bool ethernet_link_established(void)
  */
 void ethernet_task(void)
 {
+#if !LWIP_GMAC_TASK
 	/* Run polling tasks */
 	while (ethernetif_input(&gs_net_if)) { }
+#endif
 
 	/* Run periodic tasks */
 	ethernet_timers_update();

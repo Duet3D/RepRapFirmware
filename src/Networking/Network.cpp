@@ -28,14 +28,15 @@
 #include "RTOSPlusTCPEthernet/RTOSPlusTCPEthernetInterface.h"
 #endif
 
-#include "Platform.h"
-#include "RepRap.h"
+#include <Platform.h>
+#include <RepRap.h>
 #include "HttpResponder.h"
 #include "FtpResponder.h"
 #include "TelnetResponder.h"
-#include "General/IP4String.h"
-#include "Version.h"
-#include "Movement/StepTimer.h"
+#include <General/IP4String.h>
+#include <Version.h>
+#include <Movement/StepTimer.h>
+#include <TaskPriorities.h>
 
 #ifdef __LPC17xx__
 constexpr size_t NetworkStackWords = 470;
