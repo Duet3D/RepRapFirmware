@@ -66,6 +66,9 @@ GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply)
 	if (seen || seenZ)
 	{
 		CalcDerivedValues();
+
+		TaskCriticalSectionLocker lock;			// make sure we don't create the task more than once
+
 		if (heightControllerTask == nullptr && sensorNumber >= 0)
 		{
 			state = PidState::stopped;
