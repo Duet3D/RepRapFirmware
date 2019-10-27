@@ -33,7 +33,7 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR		0 //TEMp!					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
+#define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		1					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_OBJECT_MODEL	1
@@ -123,11 +123,8 @@ constexpr float EXT_SHC = 0.0;
 constexpr float DefaultThermistorSeriesR = 2200.0;
 constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / 4) * 4700.0/((DefaultThermistorSeriesR / 4) + 4700.0);
 																			// there are 4 temperature sensing channels and a 4K7 load resistor
-// Number of SPI temperature sensors to support
-constexpr size_t MaxSpiTempSensors = 2;
-
 // Digital pins the 31855s have their select lines tied to
-constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { PortBPin(14), PortCPin(19) };		// SPI0_CS1, SPI0_CS2
+constexpr Pin SpiTempSensorCsPins[] = { PortBPin(14), PortCPin(19) };		// SPI0_CS1, SPI0_CS2
 
 // Pin that controls the ATX power on/off
 constexpr Pin ATX_POWER_PIN = PortAPin(0);

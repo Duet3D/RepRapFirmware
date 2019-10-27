@@ -36,7 +36,7 @@ TemperatureSensor::~TemperatureSensor()
 }
 
 // Return the latest temperature reading
-TemperatureError TemperatureSensor::GetLatestTemperature(float& t)
+TemperatureError TemperatureSensor::GetLatestTemperature(float& t, uint8_t outputNumber)
 {
 	if (millis() - whenLastRead > TemperatureReadingTimeout)
 	{
@@ -178,9 +178,17 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char 
 		ts = new CurrentLoopTemperatureSensor(sensorNum);
 	}
 #if SUPPORT_DHT_SENSOR
-	else if (ReducedStringEquals(typeName, DhtTemperatureSensor::TypeName))
+	else if (ReducedStringEquals(typeName, DhtTemperatureSensor::TypeNameDht11))
 	{
-		ts = new DhtTemperatureSensor(sensorNum);
+		ts = new DhtTemperatureSensor(sensorNum, DhtSensorType::Dht11);
+	}
+	else if (ReducedStringEquals(typeName, DhtTemperatureSensor::TypeNameDht21))
+	{
+		ts = new DhtTemperatureSensor(sensorNum, DhtSensorType::Dht21);
+	}
+	else if (ReducedStringEquals(typeName, DhtTemperatureSensor::TypeNameDht22))
+	{
+		ts = new DhtTemperatureSensor(sensorNum, DhtSensorType::Dht22);
 	}
 	else if (ReducedStringEquals(typeName, DhtHumiditySensor::TypeName))
 	{

@@ -42,9 +42,17 @@ Licence: GPL
 constexpr uint32_t HeaterTaskStackWords = 400;			// task stack size in dwords, must be large enough for auto tuning
 static Task<HeaterTaskStackWords> heaterTask;
 
-extern "C" [[noreturn]] void HeaterTask(void * pvParameters)
+extern "C" [[noreturn]] void HeaterTaskStart(void * pvParameters)
 {
-	reprap.GetHeat().Task();
+	reprap.GetHeat().HeaterTask();
+}
+
+static constexpr uint16_t SensorsTaskStackWords = 100;		// task stack size in dwords. 80 was not enough. Use 300 if debugging is enabled.
+static Task<SensorsTaskStackWords> *sensorsTask = nullptr;
+
+extern "C" [[noreturn]] void SensorsTaskStart(void * pvParameters)
+{
+	reprap.GetHeat().SensorsTask();
 }
 
 #if SUPPORT_OBJECT_MODEL
@@ -81,7 +89,7 @@ ReadWriteLock Heat::heatersLock;
 ReadWriteLock Heat::sensorsLock;
 
 Heat::Heat()
-	: sensorsRoot(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
+	: sensorCount(0), sensorsRoot(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
 	ARRAY_INIT(bedHeaters, DefaultBedHeaters);
 	ARRAY_INIT(chamberHeaters, DefaultChamberHeaters);
@@ -101,7 +109,6 @@ Heat::Heat()
 	{
 		t = nullptr;
 	}
-
 }
 
 ReadLockedPointer<Heater> Heat::FindHeater(int heater) const
@@ -284,16 +291,11 @@ void Heat::Init()
 		prot->Init(tempLimit);
 	}
 
-#if SUPPORT_DHT_SENSOR
-	// Initialise static fields of the DHT sensor
-	DhtSensorHardwareInterface::InitStatic();
-#endif
-
 	extrusionMinTemp = HOT_ENOUGH_TO_EXTRUDE;
 	retractionMinTemp = HOT_ENOUGH_TO_RETRACT;
 	coldExtrude = false;
 
-	heaterTask.Create(HeaterTask, "HEAT", nullptr, TaskPriority::HeatPriority);
+	heaterTask.Create(HeaterTaskStart, "HEAT", nullptr, TaskPriority::HeatPriority);
 }
 
 void Heat::Exit()
@@ -313,7 +315,7 @@ void Heat::Exit()
 	heaterTask.Suspend();
 }
 
-[[noreturn]] void Heat::Task()
+[[noreturn]] void Heat::HeaterTask()
 {
 	uint32_t lastWakeTime = xTaskGetTickCount();
 	for (;;)
@@ -396,6 +398,67 @@ void Heat::Exit()
 
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, HeatSampleIntervalMillis);
+	}
+}
+
+
+/* static */ void Heat::EnsureSensorsTask()
+{
+	TaskCriticalSectionLocker lock; // make sure we don't create the task more than once
+
+	if (sensorsTask == nullptr)
+	{
+		sensorsTask = new Task<SensorsTaskStackWords>;
+		sensorsTask->Create(SensorsTaskStart, "SENSORS", nullptr, TaskPriority::SensorsPriority);
+	}
+}
+
+// Code executed by the SensorsTask.
+// This is run at the same priority as the Heat task, so it must not sit in any spin loops.
+/*static*/ [[noreturn]] void Heat::SensorsTask()
+{
+	auto lastWakeTime = xTaskGetTickCount();
+	for (;;)
+	{
+		unsigned int sensorNumber = 0;
+		uint8_t sensorCountSinceLastDelay = 0;
+		uint8_t totalWaitTime = 0;
+		// Walk the sensor list one by one and poll each sensor
+		for (;;)
+		{
+			uint8_t delay = 0;
+
+			// We need this block to have the ReadLockPointer below go out of scope as early as possible
+			{
+				const auto sensor = FindSensorAtOrAbove(sensorNumber);
+
+				// End of the list reached - start over after short delay
+				if (sensor.IsNull())
+				{
+					break;
+				}
+				++sensorCountSinceLastDelay;
+				sensorNumber = sensor->GetSensorNumber() + 1;
+
+				if (sensor->PollInTask())
+				{
+					// Coming here sensorCount cannot be 0 since we got at least one sensor returning true
+					delay = ((SensorsTaskTotalDelay/sensorCount)*sensorCountSinceLastDelay);
+				}
+			}
+
+			if (delay > 0)
+			{
+				vTaskDelayUntil(&lastWakeTime, delay);
+				totalWaitTime += delay;
+			}
+		}
+
+		// Delay until it is time again
+		if (totalWaitTime < SensorsTaskTotalDelay)
+		{
+			vTaskDelayUntil(&lastWakeTime, (SensorsTaskTotalDelay-totalWaitTime));
+		}
 	}
 }
 
@@ -1180,6 +1243,7 @@ void Heat::DeleteSensor(unsigned int sn)
 				lastSensor->SetNext(currentSensor);
 			}
 			delete sensorToDelete;
+			--sensorCount;
 			break;
 		}
 
@@ -1206,6 +1270,7 @@ void Heat::InsertSensor(TemperatureSensor *newSensor)
 			{
 				prev->SetNext(newSensor);
 			}
+			++sensorCount;
 			break;
 		}
 		prev = ts;

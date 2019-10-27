@@ -14,7 +14,7 @@ namespace TaskPriority
 	static constexpr int IdlePriority = 0;
 	static constexpr int SpinPriority = 1;							// priority for tasks that rarely block
 	static constexpr int HeatPriority = 2;
-	static constexpr int DhtPriority = 2;
+	static constexpr int SensorsPriority = 2;
 	static constexpr int TmcPriority = 2;
 	static constexpr int AinPriority = 2;
 	static constexpr int HeightFollowingPriority = 2;

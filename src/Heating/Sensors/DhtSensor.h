@@ -12,84 +12,60 @@
 
 #if SUPPORT_DHT_SENSOR
 
-# include "TemperatureSensor.h"
+# include "AdditionalOutputSensor.h"
+# include "SensorWithPort.h"
 # include "RTOSIface/RTOSIface.h"
 
 enum class DhtSensorType
 {
-	none,
 	Dht11,
 	Dht21,
 	Dht22
 };
 
-// This class represents a DHT sensor attached to a particular SPI CS pin
-class DhtSensorHardwareInterface
-{
-public:
-
-	static GCodeResult Configure(TemperatureSensor *ts, unsigned int relativeChannel, unsigned int mCode, GCodeBuffer& gb, const StringRef& reply);
-	void Interrupt();
-
-	static DhtSensorHardwareInterface *Create(unsigned int relativeChannel);
-	static TemperatureError GetTemperatureOrHumidity(unsigned int relativeChannel, float& t, bool wantHumidity);
-	static void InitStatic();
-	static void SensorTask();
-
-private:
-	DhtSensorHardwareInterface();
-
-	GCodeResult ConfigureType(TemperatureSensor *ts, unsigned int mCode, GCodeBuffer& gb, const StringRef& reply);
-	TemperatureError GetTemperatureOrHumidity(float& t, bool wantHumidity) const;
-	void TakeReading();
-	TemperatureError ProcessReadings();
-
-	static constexpr unsigned int DhtTaskStackWords = 100;		// task stack size in dwords. 80 was not enough. Use 300 if debugging is enabled.
-	static Mutex dhtMutex;
-	static Task<DhtTaskStackWords> *dhtTask;
-	static DhtSensorHardwareInterface *activeSensors[MaxSpiTempSensors];
-
-	IoPort port;
-	DhtSensorType type;
-	TemperatureError lastResult;
-	float lastTemperature, lastHumidity;
-	size_t badTemperatureCount;
-
-	volatile uint16_t lastPulseTime;
-	volatile size_t numPulses;
-	uint16_t pulses[41];			// 1 start bit + 40 data bits
-};
 
 // This class represents a DHT temperature sensor
-class DhtTemperatureSensor : public TemperatureSensor
+class DhtTemperatureSensor : public SensorWithPort
 {
 public:
-	DhtTemperatureSensor(unsigned int sensorNum);
+	DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType type);
 	~DhtTemperatureSensor();
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
-	void Init() override;
+	TemperatureError GetLatestTemperature(float& t, uint8_t outputNumber = 0) override;
+	const uint8_t GetNumAdditionalOutputs() const override { return 1; }
 
-	static constexpr const char *TypeName = "dhttemp";
+	void Poll() override;
+	bool PollInTask() override;
 
-protected:
-	TemperatureError TryGetTemperature(float& t) override;
+	void Interrupt();
+	void TakeReading();
+	TemperatureError ProcessReadings(float& t, float& h);
+
+	static constexpr const char *TypeNameDht11 = "dht11";
+	static constexpr const char *TypeNameDht21 = "dht21";
+	static constexpr const char *TypeNameDht22 = "dht22";
+
+private:
+	DhtSensorType type;
+
+	float lastHumidity;
+	uint8_t badTemperatureCount;
+
+	uint32_t lastReadTime;
+	volatile uint16_t lastPulseTime;
+	volatile uint8_t numPulses;
+	uint16_t pulses[41];			// 1 start bit + 40 data bits
 };
 
 // This class represents a DHT humidity sensor
-class DhtHumiditySensor : public TemperatureSensor
+class DhtHumiditySensor : public AdditionalOutputSensor
 {
 public:
-	DhtHumiditySensor(unsigned int channel);
+	DhtHumiditySensor(unsigned int sensorNum);
 	~DhtHumiditySensor();
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
-	void Init() override;
-
 	static constexpr const char *TypeName = "dhthumidity";
-
-protected:
-	TemperatureError TryGetTemperature(float& t) override;
 };
 
 #endif
