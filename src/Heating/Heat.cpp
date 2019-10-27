@@ -940,12 +940,12 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 		}
 
 #if SUPPORT_CAN_EXPANSION
-		// Set boardAddress to the board number that the port is on, or MasterAddress if the port was not given
+		// Set boardAddress to the board number that the port is on, or NoAddress if the port was not given
 		CanAddress boardAddress;
 		String<StringLength20> portName;
 		boardAddress = (gb.Seen('P') && gb.GetReducedString(portName.GetRef()))
 						 ? IoPort::RemoveBoardAddress(portName.GetRef())
-							: CanId::MasterAddress;
+							: CanId::NoAddress;
 #endif
 		bool newSensor = gb.Seen('Y');
 		if (newSensor)
@@ -962,6 +962,10 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 			}
 
 #if SUPPORT_CAN_EXPANSION
+			if (boardAddress == CanId::NoAddress)
+			{
+				boardAddress = CanId::MasterAddress;		// no port name was given, so default to master
+			}
 			TemperatureSensor * const newSensor = TemperatureSensor::Create(sensorNum, boardAddress, typeName.c_str(), reply);
 #else
 			TemperatureSensor * const newSensor = TemperatureSensor::Create(sensorNum, typeName.c_str(), reply);

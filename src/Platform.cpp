@@ -109,8 +109,11 @@ inline constexpr uint16_t PowerVoltageToAdcReading(float voltage)
 
 constexpr uint16_t driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);			// minimum voltage at which we initialise the drivers
 constexpr uint16_t driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);			// voltages below this flag the drivers as unusable
+
+# if ENFORCE_MAX_VIN
 constexpr uint16_t driverOverVoltageAdcReading = PowerVoltageToAdcReading(29.0);		// voltages above this cause driver shutdown
 constexpr uint16_t driverNormalVoltageAdcReading = PowerVoltageToAdcReading(27.5);		// voltages at or below this are normal
+# endif
 
 #endif
 
@@ -1143,12 +1146,14 @@ void Platform::Spin()
 			++numVinUnderVoltageEvents;
 			lastVinUnderVoltageValue = currentVin;					// save this because the voltage may have changed by the time we report it
 		}
+# if ENFORCE_MAX_VIN
 		else if (currentVin > driverOverVoltageAdcReading)
 		{
 			driversPowered = false;
 			++numVinOverVoltageEvents;
 			lastVinOverVoltageValue = currentVin;					// save this because the voltage may have changed by the time we report it
 		}
+# endif
 		else
 #endif
 
@@ -1278,9 +1283,17 @@ void Platform::Spin()
 		}
 	}
 #if HAS_VOLTAGE_MONITOR && HAS_12V_MONITOR
-	else if (currentVin >= driverPowerOnAdcReading && currentVin <= driverNormalVoltageAdcReading && currentV12 >= driverV12OnAdcReading)
+	else if (currentVin >= driverPowerOnAdcReading && currentV12 >= driverV12OnAdcReading
+# if ENFORCE_MAX_VIN
+		 	 && currentVin <= driverNormalVoltageAdcReading
+# endif
+			)
 #elif HAS_VOLTAGE_MONITOR
-	else if (currentVin >= driverPowerOnAdcReading && currentVin <= driverNormalVoltageAdcReading)
+	else if (currentVin >= driverPowerOnAdcReading
+# if ENFORCE_MAX_VIN
+		 	 && currentVin <= driverNormalVoltageAdcReading
+# endif
+			)
 #elif HAS_12V_MONITOR
 	else if (currentV12 >= driverV12OnAdcReading)
 #else
