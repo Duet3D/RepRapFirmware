@@ -3925,14 +3925,38 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 		ok = reprap.GetHeat().WriteModelParameters(f);
 	}
 
+	// M500 can have a Pnn:nn parameter to enable extra data being saved
+	// P10 will enable saving of tool offsets even if they have not been determined via M585
+	bool p10 = false;
+
+	// P31 will include G31 Z probe value
+	bool p31 = false;
+	if (gb.Seen('P'))
+	{
+		uint32_t pVals[2];
+		size_t pCount = 2;
+		gb.GetUnsignedArray(pVals, pCount, false);
+		for (size_t i = 0; i < pCount; i++)
+		{
+			switch (pVals[i])
+			{
+				case 10:
+					p10 = true;
+					break;
+				case 31:
+					p31 = true;
+					break;
+			}
+		}
+	}
 	if (ok)
 	{
-		ok = platform.WritePlatformParameters(f, gb.Seen('P') && gb.GetIValue() == 31);
+		ok = platform.WritePlatformParameters(f, p31);
 	}
 
 	if (ok)
 	{
-		ok = reprap.WriteToolParameters(f);
+		ok = reprap.WriteToolParameters(f, p10);
 	}
 
 #if SUPPORT_WORKPLACE_COORDINATES
