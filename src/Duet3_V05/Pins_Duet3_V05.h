@@ -1,13 +1,13 @@
 #ifndef PINS_SAME70_H__
 #define PINS_SAME70_H__
 
-#define BOARD_SHORT_NAME	"MBP05"
-#define FIRMWARE_NAME		"RepRapFirmware for Duet 3 MBP05"
-#define DEFAULT_BOARD_TYPE	BoardType::Duet3_05
+#define BOARD_SHORT_NAME		"MBP05"
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 prototype v0.5"
+#define DEFAULT_BOARD_TYPE		BoardType::Duet3
 const size_t NumFirmwareUpdateModules = 1;
 
-#define IAP_FIRMWARE_FILE	"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
-#define IAP_UPDATE_FILE		"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
+#define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
+#define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
