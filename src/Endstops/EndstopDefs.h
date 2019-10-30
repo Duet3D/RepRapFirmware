@@ -26,7 +26,7 @@ enum class EndstopHitAction : uint8_t
 // Struct to return info about what endstop has been triggered and what to do about it
 struct EndstopHitDetails
 {
-	EndstopHitDetails() : action((uint32_t)EndstopHitAction::none), internalUse(0), axis(0), setAxisLow(false), setAxisHigh(false)
+	EndstopHitDetails() : action((uint32_t)EndstopHitAction::none), internalUse(0), axis(0), setAxisLow(false), setAxisHigh(false), isZProbe(false)
 	{
 		driver.Clear();
 	}

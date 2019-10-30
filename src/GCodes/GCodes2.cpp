@@ -3426,6 +3426,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 574: // Set endstop configuration
+		// We may be about to delete endstops, so make sure we are not executing a move that uses them
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return false;
+		}
 		result = platform.GetEndstops().HandleM574(gb, reply);
 		break;
 

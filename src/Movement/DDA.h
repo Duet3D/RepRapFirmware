@@ -60,6 +60,7 @@ public:
 	bool CanPauseAfter() const { return flags.canPauseAfter; }
 	bool IsPrintingMove() const { return flags.isPrintingMove; }			// Return true if this involves both XY movement and extrusion
 	bool UsingStandardFeedrate() const { return flags.usingStandardFeedrate; }
+	bool IsCheckingEndstops() const { return flags.checkEndstops; }
 
 	DDAState GetState() const { return state; }
 	DDA* GetNext() const { return next; }

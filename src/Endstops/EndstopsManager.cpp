@@ -592,7 +592,7 @@ void EndstopsManager::OnEndstopStatesChanged()
 	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
 
 	DDA * const currentDda = reprap.GetMove().GetMainDDARing().GetCurrentDDA();
-	if (currentDda != nullptr)
+	if (currentDda != nullptr && currentDda->IsCheckingEndstops())
 	{
 		Platform& p = reprap.GetPlatform();
 		currentDda->CheckEndstops(p);
