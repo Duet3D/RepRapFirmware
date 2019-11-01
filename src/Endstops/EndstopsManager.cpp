@@ -335,7 +335,10 @@ void EndstopsManager::GetM119report(const StringRef& reply)
 	reply.copy("Endstops - ");
 	for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
 	{
-		reply.catf("%c: %s, ", reprap.GetGCodes().GetAxisLetters()[axis], TranslateEndStopResult(Stopped(axis), axisEndstops[axis]->GetAtHighEnd()));
+		const char * const status = (axisEndstops == nullptr)
+										? "no endstop"
+											: TranslateEndStopResult(axisEndstops[axis]->Stopped(), axisEndstops[axis]->GetAtHighEnd());
+		reply.catf("%c: %s, ", reprap.GetGCodes().GetAxisLetters()[axis], status);
 	}
 	reply.catf("Z probe: %s", TranslateEndStopResult(GetCurrentZProbe().Stopped(), false));
 }

@@ -36,12 +36,13 @@ private:
 	void CalcDerivedParameters();											// calculate shA and shB
 
 	// The following are configurable parameters
-	int adcFilterChannel;
 	float r25, beta, shC, seriesR;											// parameters declared in the M305 command
+	int8_t adcFilterChannel;
 	bool isPT1000;															// true if it is a PT1000 sensor, not a thermistor
 
-#if !HAS_VREF_MONITOR
-	int8_t adcLowOffset, adcHighOffset;										// ADC low and high end offsets
+// Duet 3 VRef calibration doesn't work well on the MB6HC v0.6 or v1.0 so provide calibration adjustment
+#if !HAS_VREF_MONITOR || defined(DUET3)
+	int16_t adcLowOffset, adcHighOffset;
 #endif
 
 	// The following are derived from the configurable parameters

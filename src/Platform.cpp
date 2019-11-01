@@ -2090,8 +2090,9 @@ void Platform::Diagnostics(MessageType mtype)
 
 #if 0
 	// Debugging temperature readings
-	MessageF(mtype, "Vssa %" PRIu32 " Vref %" PRIu32 " Temp0 %" PRIu32 "\n",
-			adcFilters[VssaFilterIndex].GetSum()/16, adcFilters[VrefFilterIndex].GetSum()/16, adcFilters[0].GetSum()/16);
+	const uint32_t div = ThermistorAveragingFilter::NumAveraged() >> 2;		// 2 oversample bits
+	MessageF(mtype, "Vssa %" PRIu32 " Vref %" PRIu32 " Temp0 %" PRIu32 " Temp1 %" PRIu32 "\n",
+			adcFilters[VssaFilterIndex].GetSum()/div, adcFilters[VrefFilterIndex].GetSum()/div, adcFilters[0].GetSum()/div, adcFilters[1].GetSum()/div);
 #endif
 
 #ifdef MOVE_DEBUG
