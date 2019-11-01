@@ -481,6 +481,11 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 	// Mount the file systems
 	const char path[3] = { (char)('0' + card), ':', 0 };
 	const FRESULT mounted = f_mount(&inf.fileSystem, path, 1);
+	if (mounted == FR_NO_FILESYSTEM)
+	{
+		reply.printf("Cannot mount SD card %u: no FAT filesystem found on card (EXFAT is not supported)", card);
+		return GCodeResult::error;
+	}
 	if (mounted != FR_OK)
 	{
 		reply.printf("Cannot mount SD card %u: code %d", card, mounted);

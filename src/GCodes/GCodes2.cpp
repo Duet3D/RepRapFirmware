@@ -1448,11 +1448,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 115: // Print firmware version or set hardware type
+#if defined(DUET_NG) || defined(DUET_06_085)
 		if (gb.Seen('P'))
 		{
-			platform.SetBoardType((BoardType)gb.GetIValue());
+			if (runningConfigFile)
+			{
+				platform.SetBoardType((BoardType)gb.GetIValue());
+			}
+			else
+			{
+				reply.copy("Board type can only be set within config.g");
+				result = GCodeResult::error;
+			}
 		}
 		else
+#endif
 		{
 			reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s", FIRMWARE_NAME, VERSION, platform.GetElectronicsString());
 #ifdef DUET_NG

@@ -382,7 +382,7 @@ public:
 	const char* GetConfigFile() const; 				// Where the configuration is stored (in the system dir).
 	const char* GetDefaultFile() const;				// Where the default configuration is stored (in the system dir).
 
-	// Function to work with the system files folder
+	// Functions to work with the system files folder
 	GCodeResult SetSysDir(const char* dir, const StringRef& reply);				// Set the system files path
 	bool SysFileExists(const char *filename) const;
 	FileStore* OpenSysFile(const char *filename, OpenMode mode) const;

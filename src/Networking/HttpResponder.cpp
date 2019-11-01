@@ -1155,6 +1155,14 @@ void HttpResponder::ProcessRequest()
 						return;
 					}
 
+					// Try to get the expected CRC
+					const char* const expectedCrc = GetKeyValue("crc32");
+					postFileGotCrc = (expectedCrc != nullptr);
+					if (postFileGotCrc)
+					{
+						postFileExpectedCrc = SafeStrtoul(expectedCrc, nullptr, 16);
+					}
+
 					// Start a new file upload
 					FileStore * const file = StartUpload(FS_PREFIX, filename, (postFileGotCrc) ? OpenMode::writeWithCrc : OpenMode::write, postFileLength);
 					if (file == nullptr)
@@ -1181,14 +1189,6 @@ void HttpResponder::ProcessRequest()
 					else
 					{
 						fileLastModified = 0;
-					}
-
-					// Try to get the expected CRC
-					const char* const expectedCrc = GetKeyValue("crc32");
-					postFileGotCrc = (expectedCrc != nullptr);
-					if (postFileGotCrc)
-					{
-						postFileExpectedCrc = SafeStrtoul(expectedCrc, nullptr, 16);
 					}
 
 					if (reprap.Debug(moduleWebserver))

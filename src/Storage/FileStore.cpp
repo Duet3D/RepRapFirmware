@@ -121,7 +121,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 	calcCrc = (mode == OpenMode::writeWithCrc);
 	usageMode = (writing) ? FileUseMode::readWrite : FileUseMode::readOnly;
 	openCount = 1;
-	if (mode == OpenMode::write && preAllocSize != 0)
+	if (preAllocSize != 0 && (mode == OpenMode::write || mode == OpenMode::writeWithCrc))
 	{
 		const FRESULT expandReturn = f_expand(&file, preAllocSize, 1);		// try to pre-allocate contiguous space - it doesn't matter if it fails
 		if (reprap.Debug(moduleStorage))
