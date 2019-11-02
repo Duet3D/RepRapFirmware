@@ -232,9 +232,9 @@ constexpr PinEntry PinTable[] =
 	{ PortAPin(3),	PinCapability::rw,		"io3.out" },
 	{ PortEPin(0),	PinCapability::rwpwm,	"io4.out" },
 	{ PortDPin(21),	PinCapability::rwpwm,	"io5.out" },
-	{ PortAPin(0),	PinCapability::rwpwm,	"io6.out" },
+	{ PortAPin(0),	PinCapability::rw,		"io6.out" },
 	{ PortCPin(23),	PinCapability::rwpwm,	"io7.out" },
-	{ PortEPin(1),	PinCapability::rwpwm,	"io8.out" },
+	{ PortEPin(1),	PinCapability::rw,		"io8.out" },	// this pin could be PWM capable but shares the TC with io7.out, so the PWM frequencies are not independent
 
 	// Thermistor inputs
 	{ PortCPin(15), PinCapability::ainr,	"temp0" },
