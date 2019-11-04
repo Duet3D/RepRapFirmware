@@ -761,15 +761,13 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply)
 	sps.SetTarget(target);
 
 	// See whether we are using a user-defined Z probe or just current one
-	size_t probeToUse = platform.GetEndstops().GetCurrentZProbeNumber();
-	if (gb.Seen('P'))
+	const size_t probeToUse = gb.Seen('P') ? gb.GetUIValue() : platform.GetEndstops().GetCurrentZProbeNumber();
+
+	// Check if this probe exists to not run into a nullptr dereference later
+	if (platform.GetEndstops().GetZProbe(probeToUse) == nullptr)
 	{
-		probeToUse = gb.GetUIValue();
-		if (platform.GetEndstops().GetZProbe(probeToUse) == nullptr)
-		{
-			reply.copy("Invalid probe number");
-			return GCodeResult::error;
-		}
+		reply.catf("Invalid probe number: %d", probeToUse);
+		return GCodeResult::error;
 	}
 	sps.SetZProbeToUse(probeToUse);
 

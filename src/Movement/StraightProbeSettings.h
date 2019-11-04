@@ -40,7 +40,7 @@ public:
 	void AddMovingAxis(const size_t);
 
 	const size_t GetZProbeToUse() const { return probeToUse; }
-	void SetZProbeToUse(size_t probeNumber) { probeToUse = probeNumber; }
+	void SetZProbeToUse(const size_t probeNumber) { probeToUse = probeNumber; }
 
 	const bool ProbingAway() const;
 	const bool SignalError() const;
