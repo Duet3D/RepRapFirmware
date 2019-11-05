@@ -186,7 +186,6 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 						msgp->fileOffset = fileOffset;
 						buf->dataLength = msgp->GetActualDataLength();
 						CanInterface::SendResponse(buf);
-						debugPrintf(".");
 						fileOffset += lengthToSend;
 						lreq -= lengthToSend;
 						if (lreq == 0)

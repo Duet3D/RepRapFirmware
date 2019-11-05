@@ -1,14 +1,14 @@
 #ifndef PINS_SAME70_H__
 #define PINS_SAME70_H__
 
-#define BOARD_SHORT_NAME	"MBP03"
-#define FIRMWARE_NAME		"RepRapFirmware for Duet 3 v0.3"
-#define DEFAULT_BOARD_TYPE	BoardType::Duet3_03
+#define BOARD_SHORT_NAME		"MBP03"
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 v0.3"
+#define DEFAULT_BOARD_TYPE		BoardType::Duet3
 const size_t NumFirmwareUpdateModules = 4;			// 3 modules, plus one for manual upload to WiFi module (module 2 not used)
 
-#define IAP_FIRMWARE_FILE	"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
-#define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
-#define IAP_UPDATE_FILE		"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
+#define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
+#define WIFI_FIRMWARE_FILE		"DuetWiFiServer.bin"
+#define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
@@ -31,7 +31,7 @@ const size_t NumFirmwareUpdateModules = 4;			// 3 modules, plus one for manual u
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR		0 //TEMP!!					// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				1

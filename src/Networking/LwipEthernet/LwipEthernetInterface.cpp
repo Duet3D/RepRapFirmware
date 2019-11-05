@@ -49,7 +49,10 @@ static LwipEthernetInterface *ethernetInterface;
 extern "C"
 {
 static volatile bool lwipLocked = false;
+
+#if !LWIP_GMAC_TASK
 static volatile bool resetCallback = false;
+#endif
 
 // Lock functions for LwIP (LwIP isn't thread-safe when working with the raw API)
 bool LockLWIP()
@@ -70,6 +73,8 @@ void UnlockLWIP()
 
 // Callback functions for the GMAC driver and for LwIP
 
+#if !LWIP_GMAC_TASK
+
 // Called from ISR
 static void ethernet_rx_callback(uint32_t ul_status)
 {
@@ -87,15 +92,20 @@ static void ethernet_rx_callback(uint32_t ul_status)
 	}
 }
 
+#endif
+
 // Task function to keep the GMAC and LwIP running
 void DoEthernetTask()
 {
 	ethernet_task();
+
+#if !LWIP_GMAC_TASK
 	if (resetCallback)
 	{
 		resetCallback = false;
 		ethernet_set_rx_callback(&ethernet_rx_callback);
 	}
+#endif
 }
 
 // Callback functions for LWIP (may be called from ISR)
@@ -385,7 +395,9 @@ void LwipEthernetInterface::Start()
 		initialised = true;
 	}
 
+#if !LWIP_GMAC_TASK
 	resetCallback = true;			// reset EMAC RX callback on next Spin call
+#endif
 	state = NetworkState::establishingLink;
 }
 
@@ -395,7 +407,9 @@ void LwipEthernetInterface::Stop()
 	if (state != NetworkState::disabled)
 	{
 		netif_set_down(&gs_net_if);
+#if !LWIP_GMAC_TASK
 		resetCallback = false;
+#endif
 		ethernet_set_rx_callback(nullptr);
 
 #if defined(DUET3)
@@ -520,11 +534,13 @@ void LwipEthernetInterface::Spin(bool full)
 
 void LwipEthernetInterface::Interrupt()
 {
+#if !LWIP_GMAC_TASK
 	if (initialised && LockLWIP())
 	{
 		ethernet_timers_update();
 		UnlockLWIP();
 	}
+#endif
 }
 
 void LwipEthernetInterface::Diagnostics(MessageType mtype)

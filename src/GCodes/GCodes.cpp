@@ -1510,7 +1510,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 							rawExtruderTotalByDrive[extruder] += extrusionAmount;
 						}
 
-						moveBuffer.coords[extruder + MaxAxes] = extrusionAmount * extrusionFactors[extruder];
+						moveBuffer.coords[ExtruderToLogicalDrive(extruder)] = extrusionAmount * extrusionFactors[extruder];
 						if (moveBuffer.moveType == 1)
 						{
 							platform.GetEndstops().EnableExtruderEndstop(extruder);
@@ -1545,7 +1545,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 								rawExtruderTotalByDrive[extruder] += extrusionAmount;
 								rawExtruderTotal += extrusionAmount;
 							}
-							moveBuffer.coords[extruder + MaxAxes] = extrusionAmount * extrusionFactors[extruder] * volumetricExtrusionFactors[extruder];
+							moveBuffer.coords[ExtruderToLogicalDrive(extruder)] = extrusionAmount * extrusionFactors[extruder] * volumetricExtrusionFactors[extruder];
 							if (moveBuffer.moveType == 1)
 							{
 								platform.GetEndstops().EnableExtruderEndstop(extruder);
@@ -2181,9 +2181,9 @@ bool GCodes::ReadMove(RawMove& m)
 		if (segmentsLeftToStartAt == 1 && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
 		{
 			// Reduce the extrusion by the amount to be skipped
-			for (size_t drive = MaxAxes; drive < MaxAxesPlusExtruders; ++drive)
+			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 			{
-				m.coords[drive] *= (1.0 - firstSegmentFractionToSkip);
+				m.coords[ExtruderToLogicalDrive(extruder)] *= (1.0 - firstSegmentFractionToSkip);
 			}
 		}
 		m.proportionLeft = 0.0;
@@ -2241,9 +2241,9 @@ bool GCodes::ReadMove(RawMove& m)
 		if (segmentsLeftToStartAt == segmentsLeft && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
 		{
 			// Reduce the extrusion by the amount to be skipped
-			for (size_t drive = MaxAxes; drive < MaxAxesPlusExtruders; ++drive)
+			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 			{
-				m.coords[drive] *= (1.0 - firstSegmentFractionToSkip);
+				m.coords[ExtruderToLogicalDrive(extruder)] *= (1.0 - firstSegmentFractionToSkip);
 			}
 		}
 		--segmentsLeft;
@@ -2687,7 +2687,7 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const
 	// Now the extruder coordinates
 	for (size_t i = 0; i < numExtruders; i++)
 	{
-		s.catf("E%u:%.1f ", i, (double)liveCoordinates[i + MaxAxes]);
+		s.catf("E%u:%.1f ", i, (double)liveCoordinates[ExtruderToLogicalDrive(i)]);
 	}
 
 	// Print the axis stepper motor positions as Marlin does, as an aid to debugging.
@@ -3368,7 +3368,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 			{
 				for (size_t i = 0; i < tool->DriveCount(); ++i)
 				{
-					moveBuffer.coords[MaxAxes + tool->Drive(i)] = -retractLength;
+					moveBuffer.coords[ExtruderToLogicalDrive(tool->Drive(i))] = -retractLength;
 				}
 				moveBuffer.feedRate = retractSpeed;
 				moveBuffer.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
@@ -3397,7 +3397,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 			{
 				for (size_t i = 0; i < tool->DriveCount(); ++i)
 				{
-					moveBuffer.coords[MaxAxes + tool->Drive(i)] = retractLength + retractExtra;
+					moveBuffer.coords[ExtruderToLogicalDrive(tool->Drive(i))] = retractLength + retractExtra;
 				}
 				moveBuffer.feedRate = unRetractSpeed;
 				moveBuffer.canPauseAfter = true;
@@ -3817,7 +3817,7 @@ float GCodes::GetCurrentToolOffset(size_t axis) const
 // Get the current user coordinate and remove the workplace offset
 float GCodes::GetUserCoordinate(size_t axis) const
 {
-	return (axis < MaxAxes) ? currentUserPosition[axis] - GetWorkplaceOffset(axis) : 0.0;
+	return (axis < numTotalAxes) ? currentUserPosition[axis] - GetWorkplaceOffset(axis) : 0.0;
 }
 
 #if HAS_MASS_STORAGE
@@ -3925,14 +3925,38 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 		ok = reprap.GetHeat().WriteModelParameters(f);
 	}
 
+	// M500 can have a Pnn:nn parameter to enable extra data being saved
+	// P10 will enable saving of tool offsets even if they have not been determined via M585
+	bool p10 = false;
+
+	// P31 will include G31 Z probe value
+	bool p31 = false;
+	if (gb.Seen('P'))
+	{
+		uint32_t pVals[2];
+		size_t pCount = 2;
+		gb.GetUnsignedArray(pVals, pCount, false);
+		for (size_t i = 0; i < pCount; i++)
+		{
+			switch (pVals[i])
+			{
+				case 10:
+					p10 = true;
+					break;
+				case 31:
+					p31 = true;
+					break;
+			}
+		}
+	}
 	if (ok)
 	{
-		ok = platform.WritePlatformParameters(f, gb.Seen('P') && gb.GetIValue() == 31);
+		ok = platform.WritePlatformParameters(f, p31);
 	}
 
 	if (ok)
 	{
-		ok = reprap.WriteToolParameters(f);
+		ok = reprap.WriteToolParameters(f, p10);
 	}
 
 #if SUPPORT_WORKPLACE_COORDINATES

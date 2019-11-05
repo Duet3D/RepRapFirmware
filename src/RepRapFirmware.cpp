@@ -194,6 +194,8 @@ const char * const moduleName[] =
 	"none"
 };
 
+static_assert(ARRAY_SIZE(moduleName) == Module::numModules + 1);
+
 // class MillisTimer members
 
 // Start or restart the timer

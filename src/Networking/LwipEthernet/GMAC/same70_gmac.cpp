@@ -41,13 +41,13 @@
  *
  */
 
-#include "ethernet_phy.h"
 #include "same70_gmac.h"
-#include "pmc.h"
-#include "sysclk.h"
+#include "pmc/pmc.h"
 #include "conf_eth.h"
-#include <string.h>
+#include <cstring>
 
+extern "C" {
+#include "ethernet_phy.h"
 #include "lwip/def.h"
 #include "lwip/mem.h"
 #include "lwip/opt.h"
@@ -56,7 +56,20 @@
 #include "lwip/stats.h"
 #include "lwip/sys.h"
 #include "netif/etharp.h"
+}
 
+#define __nocache	__attribute__((section(".ram_nocache")))
+
+#if LWIP_GMAC_TASK
+
+// We can't #include RepRapFirmware.h here because that leads to a duplicate definition of ERR_TIMEOUT
+#include <RTOSIface/RTOSIface.h>
+#include <TaskPriorities.h>
+
+constexpr size_t EthernetTaskStackWords = 200;
+static Task<EthernetTaskStackWords> ethernetTask;
+
+#endif
 
 /** Network interface identifier. */
 #define IFNAME0               'e'
@@ -68,11 +81,10 @@
 /** Network link speed. */
 #define NET_LINK_SPEED        100000000
 
-#if (NO_SYS == 0)
+#if LWIP_GMAC_TASK
 /* Interrupt priorities. (lowest value = highest priority) */
 /* ISRs using FreeRTOS *FromISR APIs must have priorities below or equal to */
 /* configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY. */
-#define INT_PRIORITY_GMAC     12
 
 /** The GMAC interrupts to enable */
 #define GMAC_INT_GROUP (GMAC_ISR_RCOMP | GMAC_ISR_ROVR | GMAC_ISR_HRESP | GMAC_ISR_TCOMP | GMAC_ISR_TUR | GMAC_ISR_TFC)
@@ -126,18 +138,12 @@ struct gmac_device {
 
 	/** Reference to lwIP netif structure. */
 	struct netif *netif;
-
-#if NO_SYS == 0
-	/** RX task notification semaphore. */
-	sys_sem_t rx_sem;
-#endif
 };
 
 /**
  * GMAC driver instance.
  */
-COMPILER_ALIGNED(8)
-static struct gmac_device gs_gmac_dev;
+__nocache __aligned(8) static struct gmac_device gs_gmac_dev;
 
 /**
  * MAC address to use.
@@ -167,7 +173,17 @@ static gmac_dev_tx_cb_t gmac_rx_cb = NULL;
  */
 void GMAC_Handler(void)
 {
-#if 1
+#if LWIP_GMAC_TASK
+	/* Get interrupt status. */
+	const uint32_t ul_isr = gmac_get_interrupt_status(GMAC);
+
+	/* RX interrupts. */
+	if (ul_isr & GMAC_INT_GROUP)
+	{
+		ethernetTask.GiveFromISR();
+	}
+#else
+# if 1
 	volatile uint32_t ul_isr;
 
 	/* Get interrupt status. */
@@ -178,21 +194,9 @@ void GMAC_Handler(void)
 	{
 		gmac_rx_cb(ul_isr);
 	}
-#elif NO_SYS == 1
+# else
     NVIC_DisableIRQ(GMAC_IRQn);
-#else
-	volatile uint32_t ul_isr;
-	portBASE_TYPE xGMACTaskWoken = pdFALSE;
-
-	/* Get interrupt status. */
-	ul_isr = gmac_get_interrupt_status(GMAC);
-
-	/* RX interrupts. */
-	if (ul_isr & GMAC_INT_GROUP) {
-		xSemaphoreGiveFromISR(gs_gmac_dev.rx_sem, &xGMACTaskWoken);
-	}
-
-	portEND_SWITCHING_ISR(xGMACTaskWoken);
+# endif
 #endif
 }
 
@@ -340,7 +344,7 @@ static void gmac_low_level_init(struct netif *netif)
 #endif
 
 	/* Init MAC PHY driver. */
-	if (ethernet_phy_init(GMAC, BOARD_GMAC_PHY_ADDR, sysclk_get_cpu_hz()) != GMAC_OK) {
+	if (ethernet_phy_init(GMAC, BOARD_GMAC_PHY_ADDR, SystemCoreClock) != GMAC_OK) {
 		LWIP_DEBUGF(NETIF_DEBUG, ("gmac_low_level_init: PHY init ERROR!\n"));
 		return;
 	}
@@ -376,7 +380,7 @@ static void gmac_low_level_init(struct netif *netif)
  */
 static err_t gmac_low_level_output(struct netif *netif, struct pbuf *p)
 {
-	struct gmac_device *ps_gmac_dev = netif->state;
+	struct gmac_device *ps_gmac_dev = static_cast<gmac_device *>(netif->state);
 	struct pbuf *q = NULL;
 	uint8_t *buffer = 0;
 
@@ -397,6 +401,9 @@ static err_t gmac_low_level_output(struct netif *netif, struct pbuf *p)
 
 		gmac_enable_transmit(GMAC, true);
 	}
+
+	//TODO check buffer is free!!!
+	//TODO what if message is too long?
 
 	buffer = (uint8_t*)ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx].addr;
 
@@ -437,7 +444,7 @@ static err_t gmac_low_level_output(struct netif *netif, struct pbuf *p)
  */
 static struct pbuf *gmac_low_level_input(struct netif *netif)
 {
-	struct gmac_device *ps_gmac_dev = netif->state;
+	struct gmac_device *ps_gmac_dev = static_cast<gmac_device *>(netif->state);
 	struct pbuf *p = 0;
 	uint32_t length = 0;
 	uint32_t ul_index = 0;
@@ -497,14 +504,14 @@ static struct pbuf *gmac_low_level_input(struct netif *netif)
 		ps_gmac_dev->us_rx_idx = (ps_gmac_dev->us_rx_idx + 1) % GMAC_RX_BUFFERS;
 
 #if LWIP_STATS
-	lwip_rx_count += length;
+		lwip_rx_count += length;
 #endif
 	}
 
 	return p;
 }
 
-#if NO_SYS == 0
+#if LWIP_GMAC_TASK
 /**
  * \brief GMAC task function. This function waits for the notification
  * semaphore from the interrupt, processes the incoming packet and then
@@ -512,16 +519,16 @@ static struct pbuf *gmac_low_level_input(struct netif *netif)
  *
  * \param pvParameters A pointer to the gmac_device instance.
  */
-static void gmac_task(void *pvParameters)
+extern "C" void gmac_task(void *pvParameters)
 {
-	struct gmac_device *ps_gmac_dev = pvParameters;
+	gmac_device * const ps_gmac_dev = static_cast<gmac_device*>(pvParameters);
 
 	while (1) {
-		/* Wait for the RX notification semaphore. */
-		sys_arch_sem_wait(&ps_gmac_dev->rx_sem, 0);
+		/* Process the incoming packets */
+		while (ethernetif_input(ps_gmac_dev->netif)) { }
 
-		/* Process the incoming packet. */
-		ethernetif_input(ps_gmac_dev->netif);
+		/* Wait for the RX notification from the ISR */
+		TaskBase::Take();
 	}
 }
 #endif
@@ -548,7 +555,7 @@ bool ethernetif_input(struct netif *netif)
 	}
 
 	/* Points to packet payload, which starts with an Ethernet header. */
-	ethhdr = p->payload;
+	ethhdr = static_cast<struct eth_hdr*>(p->payload);
 
 	switch (htons(ethhdr->type)) {
 		case ETHTYPE_IP:
@@ -618,23 +625,8 @@ err_t ethernetif_init(struct netif *netif)
 	/* Initialize the hardware */
 	gmac_low_level_init(netif);
 
-#if NO_SYS == 0
-	err_t err;
-	sys_thread_t id;
-
-	/* Incoming packet notification semaphore. */
-	err = sys_sem_new(&gs_gmac_dev.rx_sem, 0);
-	LWIP_ASSERT("ethernetif_init: GMAC RX semaphore allocation ERROR!\n",
-			(err == ERR_OK));
-	if (err == ERR_MEM)
-		return ERR_MEM;
-
-	id = sys_thread_new("GMAC", gmac_task, &gs_gmac_dev,
-			netifINTERFACE_TASK_STACK_SIZE, netifINTERFACE_TASK_PRIORITY);
-	LWIP_ASSERT("ethernetif_init: GMAC Task allocation ERROR!\n",
-			(id != 0));
-	if (id == 0)
-		return ERR_MEM;
+#if LWIP_GMAC_TASK
+	ethernetTask.Create(gmac_task, "ETHERNET", &gs_gmac_dev, TaskPriority::EthernetPriority);
 #endif
 
 	return ERR_OK;
@@ -783,9 +775,10 @@ void ethernetif_set_mac_address(const uint8_t macAddress[])
 	}
 }
 
+extern "C" u32_t millis();
+
 u32_t sys_now(void)
 {
-	extern u32_t millis();
 	return millis();
 }
 

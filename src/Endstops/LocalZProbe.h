@@ -26,6 +26,10 @@ public:
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) override;
 	GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) override;
 
+#if ALLOCATE_DEFAULT_PORTS
+	bool AssignPorts(const char *pinNames, const StringRef& reply);
+#endif
+
 private:
 	IoPort inputPort;
 	IoPort modulationPort;			// the modulation port we are using

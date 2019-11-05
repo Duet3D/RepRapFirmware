@@ -41,6 +41,12 @@ Licence: GPL
 # define SAME51	(defined(__SAME51N19A__) && __SAME51N19A__)
 #endif
 
+#if SAME70
+# define __nocache		__attribute__((section(".ram_nocache")))
+#else
+# define __nocache		// nothing
+#endif
+
 // Definitions needed by Pins.h and/or Configuration.h
 // Logical pins used for general output, servos, CCN and laser control
 typedef uint8_t LogicalPin;				// type used to represent logical pin numbers
@@ -156,7 +162,7 @@ struct DriverId
 #endif
 
 // Module numbers and names, used for diagnostics and debug
-// All of these including noModule must be <= 15 because we 'or' the module number into the software reset code
+// All of these including noModule must be <= 31 because we 'or' the module number into the software reset code
 enum Module : uint8_t
 {
 	modulePlatform = 0,
@@ -176,7 +182,7 @@ enum Module : uint8_t
 	moduleWiFi = 14,
 	moduleDisplay = 15,
 	moduleLinuxInterface = 16,
-	numModules = 17,				// make this one greater than the last module number
+	numModules = 17,				// make this one greater than the last real module number
 	noModule = 18
 };
 
@@ -275,15 +281,6 @@ void ListDrivers(const StringRef& str, DriversBitmap drivers);
 
 // Functions to change the base priority, to shut out interrupts up to a priority level
 
-// From section 3.12.7 of http://infocenter.arm.com/help/topic/com.arm.doc.dui0553b/DUI0553.pdf:
-// When you write to BASEPRI_MAX, the instruction writes to BASEPRI only if either:
-// - Rn is non-zero and the current BASEPRI value is 0
-// - Rn is non-zero and less than the current BASEPRI value
-__attribute__( ( always_inline ) ) __STATIC_INLINE void __set_BASEPRI_MAX(uint32_t value)
-{
-  __ASM volatile ("MSR basepri_max, %0" : : "r" (value) : "memory");
-}
-
 // Get the base priority and shut out interrupts lower than or equal to a specified priority
 inline uint32_t ChangeBasePriority(uint32_t prio)
 {
@@ -356,13 +353,20 @@ constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
 constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2;				// The indices of the Cartesian axes in drive arrays
 constexpr size_t U_AXIS = 3;										// The assumed index of the U axis when executing M673
 
+static_assert(MaxAxesPlusExtruders <= MaxAxes + MaxExtruders);
+static_assert(MaxAxesPlusExtruders >= MinAxes + NumDefaultExtruders);
+
 #if SUPPORT_CAN_EXPANSION
 constexpr size_t MaxTotalDrivers = NumDirectDrivers + MaxCanDrivers;
 #else
 constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 #endif
 
-constexpr size_t MaxAxesPlusExtruders = MaxAxes + MaxExtruders;
+// Convert between extruder drive numbers and logical drive numbers.
+// In order to save memory when MaxAxesPlusExtruders < MaxAxes + MaxExtruders, the logical drive number of an axis is the same as the axis number,
+// but the logical drive number of an extruder is MaxAxesPlusExtruders - 1 - extruder_number.
+inline size_t ExtruderToLogicalDrive(size_t extruder) { return MaxAxesPlusExtruders - 1 - extruder; }
+inline size_t LogicalDriveToExtruder(size_t drive) { return MaxAxesPlusExtruders - 1 - drive; }
 
 constexpr AxesBitmap DefaultXAxisMapping = MakeBitmap<AxesBitmap>(X_AXIS);	// by default, X is mapped to X
 constexpr AxesBitmap DefaultYAxisMapping = MakeBitmap<AxesBitmap>(Y_AXIS);	// by default, Y is mapped to Y
@@ -383,22 +387,6 @@ constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 // Type of an offset in a file
 typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;
-
-// Task priorities
-namespace TaskPriority
-{
-	static constexpr int SpinPriority = 1;							// priority for tasks that rarely block
-	static constexpr int HeatPriority = 2;
-	static constexpr int DhtPriority = 2;
-	static constexpr int TmcPriority = 2;
-	static constexpr int AinPriority = 2;
-	static constexpr int HeightFollowingPriority = 2;
-	static constexpr int DueXPriority = 3;
-	static constexpr int LaserPriority = 3;
-	static constexpr int CanSenderPriority = 3;
-	static constexpr int CanReceiverPriority = 3;
-	static constexpr int CanClockPriority = 3;
-}
 
 //-------------------------------------------------------------------------------------------------
 // Interrupt priorities - must be chosen with care! 0 is the highest priority, 15 is the lowest.

@@ -1,13 +1,13 @@
 #ifndef PINS_SAME70_H__
 #define PINS_SAME70_H__
 
-#define BOARD_SHORT_NAME	"MBP05"
-#define FIRMWARE_NAME		"RepRapFirmware for Duet 3 v0.5"
-#define DEFAULT_BOARD_TYPE	BoardType::Duet3_05
+#define BOARD_SHORT_NAME		"MBP05"
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 prototype v0.5"
+#define DEFAULT_BOARD_TYPE		BoardType::Duet3
 const size_t NumFirmwareUpdateModules = 1;
 
-#define IAP_FIRMWARE_FILE	"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
-#define IAP_UPDATE_FILE		"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
+#define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
+#define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
@@ -30,7 +30,7 @@ const size_t NumFirmwareUpdateModules = 1;
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR		0 	//Temporary!					// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				0					// no point in supporting FTP because we have no mass storage
@@ -252,12 +252,17 @@ constexpr Pin LinuxTfrReadyPin = PortEPin(2);
 Spi * const LinuxSpi = SPI1;
 
 // Timer allocation
+
+#if !LWIP_GMAC_TASK
+
 // Network timer is timer 4 aka TC1 channel1
 #define NETWORK_TC			(TC1)
 #define NETWORK_TC_CHAN		(1)
 #define NETWORK_TC_IRQN		TC4_IRQn
 #define NETWORK_TC_HANDLER	TC4_Handler
 #define NETWORK_TC_ID		ID_TC4
+
+#endif
 
 // Step timer is timer 2 aka TC0 channel 2
 #define STEP_TC				(TC0)

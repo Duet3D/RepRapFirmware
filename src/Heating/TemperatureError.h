@@ -22,6 +22,7 @@ enum class TemperatureError : uint8_t
 	ioError,
 	hardwareError,
 	notReady,
+	invalidOutputNumber,
 	busBusy,
 	badResponse,
 	unknownPort,

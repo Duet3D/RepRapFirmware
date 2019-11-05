@@ -568,7 +568,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	bool seen = false;
-	const char *lettersToTry = "XYZUVWABC";
+	const char *lettersToTry = "XYZUVWABCD";
 	char c;
 	while ((c = *lettersToTry) != 0)
 	{
@@ -593,6 +593,10 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 					// We are creating a new axis
 					axisLetters[drive] = c;								// assign the drive to this drive letter
 					++numTotalAxes;
+					if (numTotalAxes + numExtruders > MaxAxesPlusExtruders)
+					{
+						--numExtruders;
+					}
 					numVisibleAxes = numTotalAxes;						// assume any new axes are visible unless there is a P parameter
 					float initialCoords[MaxAxes];
 					reprap.GetMove().GetKinematics().GetAssumedInitialPosition(drive + 1, initialCoords);
@@ -720,7 +724,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply)
 	ToolOffsetTransform(currentUserPosition, target);
 	bool seen = false;
 	bool doesMove = false;
-	for (size_t axis = 0; axis < MaxAxes; axis++)
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
@@ -761,15 +765,13 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply)
 	sps.SetTarget(target);
 
 	// See whether we are using a user-defined Z probe or just current one
-	size_t probeToUse = platform.GetEndstops().GetCurrentZProbeNumber();
-	if (gb.Seen('P'))
+	const size_t probeToUse = gb.Seen('P') ? gb.GetUIValue() : platform.GetEndstops().GetCurrentZProbeNumber();
+
+	// Check if this probe exists to not run into a nullptr dereference later
+	if (platform.GetEndstops().GetZProbe(probeToUse) == nullptr)
 	{
-		probeToUse = gb.GetUIValue();
-		if (platform.GetEndstops().GetZProbe(probeToUse) == nullptr)
-		{
-			reply.copy("Invalid probe number");
-			return GCodeResult::error;
-		}
+		reply.catf("Invalid probe number: %d", probeToUse);
+		return GCodeResult::error;
 	}
 	sps.SetZProbeToUse(probeToUse);
 
@@ -1395,7 +1397,7 @@ void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor)
 {
 	if (segmentsLeft != 0 && !moveBuffer.isFirmwareRetraction)
 	{
-		moveBuffer.coords[extruder + MaxAxes] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
+		moveBuffer.coords[ExtruderToLogicalDrive(extruder)] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
 	}
 	extrusionFactors[extruder] = factor;
 }

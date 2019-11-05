@@ -84,7 +84,7 @@ int ZProbe::GetReading() const
 
 		case ZProbeType::unfilteredDigital:		// Switch connected to Z probe input, no filtering
 		case ZProbeType::blTouch:				// blTouch is now unfiltered too
-			zProbeVal = GetRawReading()/4;
+			zProbeVal = GetRawReading();
 			break;
 
 		case ZProbeType::zMotorStall:

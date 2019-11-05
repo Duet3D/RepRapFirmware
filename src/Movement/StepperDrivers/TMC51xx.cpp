@@ -12,6 +12,7 @@
 #if SUPPORT_TMC51xx
 
 #include <RTOSIface/RTOSIface.h>
+#include <TaskPriorities.h>
 #include <Movement/Move.h>
 #include <Hardware/DmacManager.h>
 #include <Endstops/Endstop.h>
@@ -911,8 +912,9 @@ static TmcDriverState driverStates[MaxSmartDrivers];
 // TMC51xx management task
 static Task<TmcTaskStackWords> tmcTask;
 
-static uint8_t sendData[5 * MaxSmartDrivers];
-static uint8_t rcvData[5 * MaxSmartDrivers];
+// Declare the DMA buffers with the __nocache attribute
+static __nocache uint8_t sendData[5 * MaxSmartDrivers];
+static __nocache uint8_t rcvData[5 * MaxSmartDrivers];
 
 // Set up the PDC or DMAC to send a register and receive the status, but don't enable it yet
 static void SetupDMA()

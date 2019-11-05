@@ -31,7 +31,7 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define SUPPORT_SCANNER			1					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR		0 //TEMP!					// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_OBJECT_MODEL	1
@@ -65,7 +65,9 @@ constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t MaxExtruders = 6;					// The maximum number of extruders
-constexpr size_t NumDefaultExtruders = 2;			// The number of drivers that we configure as extruders by default
+constexpr size_t NumDefaultExtruders = 1;			// The number of drivers that we configure as extruders by default
+
+constexpr size_t MaxAxesPlusExtruders = 12;
 
 constexpr size_t MaxHeatersPerTool = 8;
 constexpr size_t MaxExtrudersPerTool = 8;
@@ -137,12 +139,8 @@ constexpr float EXT_SHC = 0.0;
 constexpr float DefaultThermistorSeriesR = 4700.0;
 constexpr float MinVrefLoadR = DefaultThermistorSeriesR / 8;		// there are 8 temperature sensing channels
 
-// Number of SPI temperature sensors to support
-
-constexpr size_t MaxSpiTempSensors = 8;
-
 // Digital pins the 31855s have their select lines tied to
-constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] =
+constexpr Pin SpiTempSensorCsPins[] =
 	{ PortBPin(2), PortCPin(18), PortCPin(19), PortCPin(20), PortAPin(24), PortEPin(1), PortEPin(2), PortEPin(3) };	// SPI0_CS1, SPI0_CS2, CS3, CS4, CS5, CS6, CS7, CS8
 
 // Pin that controls the ATX power on/off

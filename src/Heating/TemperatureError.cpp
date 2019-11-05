@@ -20,6 +20,7 @@ const char* TemperatureErrorString(TemperatureError err)
 	case TemperatureError::ioError:			return "sensor I/O error";
 	case TemperatureError::hardwareError:	return "sensor hardware error";
 	case TemperatureError::notReady:		return "sensor not ready";
+	case TemperatureError::invalidOutputNumber:	return "invalid additional sensor output";
 	case TemperatureError::busBusy:			return "sensor bus busy";
 	case TemperatureError::badResponse:		return "bad response from sensor";
 	case TemperatureError::unknownPort:		return "unknown temperature port";

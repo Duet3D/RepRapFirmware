@@ -292,10 +292,10 @@ void LocalSwitchEndstop::AppendDetails(const StringRef& str)
 
 #if SUPPORT_CAN_EXPANSION
 
-// Process a remote endstop input change that relates to this endstop. Return true if the buffer has been freed.
+// Process a remote endstop input change that relates to this endstop
 void LocalSwitchEndstop::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state)
 {
-	if (handleMinor < numPortsUsed && boardNumbers[handleMinor] != CanId::MasterAddress)
+	if (handleMinor < numPortsUsed && boardNumbers[handleMinor] == src)
 	{
 		states[handleMinor] = state;
 	}

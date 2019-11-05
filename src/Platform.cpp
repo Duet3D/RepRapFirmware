@@ -91,6 +91,31 @@ extern uint32_t _estack;			// defined in the linker script
 # error Missing feature definition
 #endif
 
+#if HAS_LWIP_NETWORKING && !defined(LWIP_GMAC_TASK)
+# error LWIP_GMAC_TASK must be defined in compiler settings
+#endif
+
+// The following must be kelp in line with enum class SoftwareResetReason
+const char *const SoftwareResetReasonText[] =
+{
+	"User",
+	"Erase",
+	"NMI",
+	"Hard fault",
+	"Stuck in spin loop",
+	"Watchdog timeout",
+	"Usage fault",
+	"Other fault",
+	"Stack overflow",
+	"Assertion failed",
+	"Heat task stuck",
+	"Unknown",
+	"Unknown",
+	"Unknown",
+	"Unknown",
+	"Unknown"
+};
+
 #if HAS_VOLTAGE_MONITOR
 
 inline constexpr float AdcReadingToPowerVoltage(uint16_t adcVal)
@@ -105,8 +130,11 @@ inline constexpr uint16_t PowerVoltageToAdcReading(float voltage)
 
 constexpr uint16_t driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);			// minimum voltage at which we initialise the drivers
 constexpr uint16_t driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);			// voltages below this flag the drivers as unusable
+
+# if ENFORCE_MAX_VIN
 constexpr uint16_t driverOverVoltageAdcReading = PowerVoltageToAdcReading(29.0);		// voltages above this cause driver shutdown
 constexpr uint16_t driverNormalVoltageAdcReading = PowerVoltageToAdcReading(27.5);		// voltages at or below this are normal
+# endif
 
 #endif
 
@@ -481,6 +509,7 @@ void Platform::Init()
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
 		driverState[drive] = DriverStatus::disabled;
+		driveDriverBits[drive] = 0;
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
 		standstillCurrentFraction[drive] = 0.75;
@@ -504,23 +533,24 @@ void Platform::Init()
 		axisDrivers[axis].numDrivers = 0;
 	}
 
-	for (uint32_t& entry : slowDriverStepTimingClocks)
-	{
-		entry = 0;												// reset all to zero as we have no known slow drivers yet
-	}
-	slowDriversBitmap = 0;										// assume no drivers need extended step pulse timing
-	EnableAllSteppingDrivers();									// no drivers disabled
-
+	// Set up extruders
 	for (size_t extr = 0; extr < MaxExtruders; ++extr)
 	{
 		extruderDrivers[extr].SetLocal(extr + MinAxes);			// set up default extruder drive mapping
-		driveDriverBits[extr + MaxAxes] = StepPins::CalcDriverBitmap(extr + MinAxes);
+		driveDriverBits[ExtruderToLogicalDrive(extr)] = StepPins::CalcDriverBitmap(extr + MinAxes);
 		pressureAdvance[extr] = 0.0;
 #if SUPPORT_NONLINEAR_EXTRUSION
 		nonlinearExtrusionA[extr] = nonlinearExtrusionB[extr] = 0.0;
 		nonlinearExtrusionLimit[extr] = DefaultNonlinearExtrusionLimit;
 #endif
 	}
+
+	for (uint32_t& entry : slowDriverStepTimingClocks)
+	{
+		entry = 0;												// reset all to zero as we have no known slow drivers yet
+	}
+	slowDriversBitmap = 0;										// assume no drivers need extended step pulse timing
+	EnableAllSteppingDrivers();									// no drivers disabled
 
 	driversPowered = false;
 
@@ -1139,12 +1169,14 @@ void Platform::Spin()
 			++numVinUnderVoltageEvents;
 			lastVinUnderVoltageValue = currentVin;					// save this because the voltage may have changed by the time we report it
 		}
+# if ENFORCE_MAX_VIN
 		else if (currentVin > driverOverVoltageAdcReading)
 		{
 			driversPowered = false;
 			++numVinOverVoltageEvents;
 			lastVinOverVoltageValue = currentVin;					// save this because the voltage may have changed by the time we report it
 		}
+# endif
 		else
 #endif
 
@@ -1274,9 +1306,17 @@ void Platform::Spin()
 		}
 	}
 #if HAS_VOLTAGE_MONITOR && HAS_12V_MONITOR
-	else if (currentVin >= driverPowerOnAdcReading && currentVin <= driverNormalVoltageAdcReading && currentV12 >= driverV12OnAdcReading)
+	else if (currentVin >= driverPowerOnAdcReading && currentV12 >= driverV12OnAdcReading
+# if ENFORCE_MAX_VIN
+		 	 && currentVin <= driverNormalVoltageAdcReading
+# endif
+			)
 #elif HAS_VOLTAGE_MONITOR
-	else if (currentVin >= driverPowerOnAdcReading && currentVin <= driverNormalVoltageAdcReading)
+	else if (currentVin >= driverPowerOnAdcReading
+# if ENFORCE_MAX_VIN
+		 	 && currentVin <= driverNormalVoltageAdcReading
+# endif
+			)
 #elif HAS_12V_MONITOR
 	else if (currentV12 >= driverV12OnAdcReading)
 #else
@@ -1683,7 +1723,7 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 //*****************************************************************************************************************
 // Interrupts
 
-#if HAS_LWIP_NETWORKING
+#if HAS_LWIP_NETWORKING && !LWIP_GMAC_TASK
 
 void NETWORK_TC_HANDLER()
 {
@@ -1731,16 +1771,17 @@ void Platform::InitialiseInterrupts()
 	StepTimer::Init();										// initialise the step pulse timer
 
 #if HAS_LWIP_NETWORKING
+# if !LWIP_GMAC_TASK
 	pmc_enable_periph_clk(NETWORK_TC_ID);
-# if SAME70
+#  if SAME70
 	// Timer interrupt to keep the networking timers running (called at 18Hz, which is almost as low as we can get because the timer is 16-bit)
 	tc_init(NETWORK_TC, NETWORK_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
 	const uint32_t rc = (SystemPeripheralClock()/128)/18;				// 128 because we selected TIMER_CLOCK4 above (16-bit counter)
-# else
+#  else
 	// Timer interrupt to keep the networking timers running (called at 16Hz)
 	tc_init(NETWORK_TC, NETWORK_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK2);
 	const uint32_t rc = (VARIANT_MCK/8)/16;					// 8 because we selected TIMER_CLOCK2 above (32-bit counter)
-# endif
+#  endif
 	tc_write_ra(NETWORK_TC, NETWORK_TC_CHAN, rc/2);			// 50% high, 50% low
 	tc_write_rc(NETWORK_TC, NETWORK_TC_CHAN, rc);
 	tc_start(NETWORK_TC, NETWORK_TC_CHAN);
@@ -1748,6 +1789,7 @@ void Platform::InitialiseInterrupts()
 	NETWORK_TC->TC_CHANNEL[NETWORK_TC_CHAN].TC_IDR = ~TC_IER_CPCS;
 	NVIC_SetPriority(NETWORK_TC_IRQN, NvicPriorityNetworkTick);
 	NVIC_EnableIRQ(NETWORK_TC_IRQN);
+# endif
 
 	// Set up the Ethernet interface priority here to because we have access to the priority definitions
 # if SAME70
@@ -1947,17 +1989,7 @@ void Platform::Diagnostics(MessageType mtype)
 
 		if (slot >= 0 && srdBuf[slot].magic == SoftwareResetData::magicValue)
 		{
-			const uint32_t reason = srdBuf[slot].resetReason & 0xF0;
-			const char* const reasonText = (reason == (uint32_t)SoftwareResetReason::user) ? "User"
-											: (reason == (uint32_t)SoftwareResetReason::NMI) ? "NMI"
-												: (reason == (uint32_t)SoftwareResetReason::hardFault) ? "Hard fault"
-													: (reason == (uint32_t)SoftwareResetReason::stuckInSpin) ? "Stuck in spin loop"
-														: (reason == (uint32_t)SoftwareResetReason::wdtFault) ? "Watchdog timeout"
-															: (reason == (uint32_t)SoftwareResetReason::otherFault) ? "Other fault"
-																: (reason == (uint32_t)SoftwareResetReason::stackOverflow) ? "Stack overflow"
-																	: (reason == (uint32_t)SoftwareResetReason::assertCalled) ? "Assertion failed"
-																		: (reason == (uint32_t)SoftwareResetReason::heaterWatchdog) ? "Heat task stuck"
-																			: "Unknown";
+			const char* const reasonText = SoftwareResetReasonText[(srdBuf[slot].resetReason >> 5) & 0x0F];
 			String<ScratchStringLength> scratchString;
 			if (srdBuf[slot].when != 0)
 			{
@@ -2071,8 +2103,9 @@ void Platform::Diagnostics(MessageType mtype)
 
 #if 0
 	// Debugging temperature readings
-	MessageF(mtype, "Vssa %" PRIu32 " Vref %" PRIu32 " Temp0 %" PRIu32 "\n",
-			adcFilters[VssaFilterIndex].GetSum()/16, adcFilters[VrefFilterIndex].GetSum()/16, adcFilters[0].GetSum()/16);
+	const uint32_t div = ThermistorAveragingFilter::NumAveraged() >> 2;		// 2 oversample bits
+	MessageF(mtype, "Vssa %" PRIu32 " Vref %" PRIu32 " Temp0 %" PRIu32 " Temp1 %" PRIu32 "\n",
+			adcFilters[VssaFilterIndex].GetSum()/div, adcFilters[VrefFilterIndex].GetSum()/div, adcFilters[0].GetSum()/div, adcFilters[1].GetSum()/div);
 #endif
 
 #ifdef MOVE_DEBUG
@@ -2562,7 +2595,7 @@ void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)
 	}
 	else if (axisOrExtruder < MaxAxesPlusExtruders)
 	{
-		const DriverId id = extruderDrivers[axisOrExtruder - MaxAxes];
+		const DriverId id = extruderDrivers[LogicalDriveToExtruder(axisOrExtruder)];
 		if (id.IsLocal())
 		{
 			localFunc(id.localDriver);
@@ -2589,7 +2622,7 @@ void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)
 	}
 	else if (axisOrExtruder < MaxAxesPlusExtruders)
 	{
-		const DriverId id = extruderDrivers[axisOrExtruder - MaxAxes];
+		const DriverId id = extruderDrivers[LogicalDriveToExtruder(axisOrExtruder)];
 		localFunc(id.localDriver);
 	}
 }
@@ -3102,13 +3135,13 @@ void Platform::SetExtruderDriver(size_t extruder, DriverId driver)
 	if (driver.IsLocal())
 	{
 #if HAS_SMART_DRIVERS
-		SmartDrivers::SetAxisNumber(driver.localDriver, extruder + MaxAxes);
+		SmartDrivers::SetAxisNumber(driver.localDriver, ExtruderToLogicalDrive(extruder));
 #endif
-		driveDriverBits[extruder + MaxAxes] = StepPins::CalcDriverBitmap(driver.localDriver);
+		driveDriverBits[ExtruderToLogicalDrive(extruder)] = StepPins::CalcDriverBitmap(driver.localDriver);
 	}
 	else
 	{
-		driveDriverBits[extruder + MaxAxes] = 0;
+		driveDriverBits[ExtruderToLogicalDrive(extruder)] = 0;
 	}
 }
 
@@ -3752,12 +3785,8 @@ void Platform::SetBoardType(BoardType bt)
 {
 	if (bt == BoardType::Auto)
 	{
-#if defined(DUET3_V03)
-		board = BoardType::Duet3_03;
-#elif defined(DUET3_V05)
-		board = BoardType::Duet3_05;
-#elif defined(DUET3_V06)
-		board = BoardType::Duet3_06;
+#if defined(DUET3)
+		board = BoardType::Duet3;
 #elif defined(SAME70XPLD)
 		board = BoardType::SAME70XPLD_0;
 #elif defined(DUET_NG)
@@ -3823,12 +3852,8 @@ const char* Platform::GetElectronicsString() const
 {
 	switch (board)
 	{
-#if defined(DUET3_V03)
-	case BoardType::Duet3_03:				return "Duet 3 prototype v0.3";
-#elif defined(DUET3_V05)
-	case BoardType::Duet3_05:				return "Duet 3 prototype v0.5";
-#elif defined(DUET3_V06)
-	case BoardType::Duet3_06:				return "Duet 3 version v0.6";
+#if defined(DUET3)
+	case BoardType::Duet3:					return "Duet 3 " BOARD_SHORT_NAME;
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
 #elif defined(DUET_NG)
@@ -3864,12 +3889,15 @@ const char* Platform::GetBoardString() const
 {
 	switch (board)
 	{
-#if defined(DUET3_V03)
-	case BoardType::Duet3_03:				return "duet3proto";
-#elif defined(DUET3_V05)
-	case BoardType::Duet3_05:				return "duet3proto";
-#elif defined(DUET3_V06)
-	case BoardType::Duet3_06:				return "duet3";
+#if defined(DUET3)
+	case BoardType::Duet3:
+# if defined(DUET3_V03)
+											return "duet3proto3";
+# elif defined(DUET3_V05)
+											return "duet3proto5";
+# elif defined(DUET3_V06)
+											return "duet3mb6hc";
+# endif
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "same70xpld";
 #elif defined(DUET_NG)
@@ -4148,9 +4176,15 @@ float Platform::GetTmcDriversTemperature(unsigned int board) const
 #ifdef PCCB_10
 	const uint16_t mask = (board == 0)
 							? ((1u << 2) - 1)						// drivers 0, 1 are on-board
-								: ((1u << 5) - 1) << 2;				// drivers 2-7 or on the DueX5
-#else
+								: ((1u << 5) - 1) << 2;				// drivers 2-7 are on the DueX5
+#elif defined(DUET_NG)
 	const uint16_t mask = ((1u << 5) - 1) << (5 * board);			// there are 5 drivers on each board
+#elif defined(DUET_M)
+	const uint16_t mask = (board == 0)
+							? ((1u << 5) - 1)						// drivers 0-4 are on the main board
+								: ((1u << 2) - 1) << 5;				// drivers 5-6 are on the daughter board
+#elif defined(DUET3)
+	const uint16_t mask = ((1u << 6) - 1);							// there are 6 drivers, only one board
 #endif
 	return ((temperatureShutdownDrivers & mask) != 0) ? 150.0
 			: ((temperatureWarningDrivers & mask) != 0) ? 100.0
@@ -4454,7 +4488,22 @@ GCodeResult Platform::ConfigureGpioOrServo(uint32_t gpioNumber, bool isServo, GC
 		PwmPort& port = gpioPorts[gpioNumber];
 		if (gb.Seen('C'))
 		{
-			if (!port.AssignPort(gb, reply, PinUsedBy::gpio, (isServo) ? PinAccess::servo : PinAccess::pwm))
+			String<StringLength50> pinName;
+			if (!gb.GetReducedString(pinName.GetRef()))
+			{
+				reply.copy("Missing pin name");
+				return GCodeResult::error;
+			}
+
+#if SUPPORT_CAN_EXPANSION
+			const CanAddress board = IoPort::RemoveBoardAddress(pinName.GetRef());
+			if (board != CanId::MasterAddress)
+			{
+				reply.printf("Remote GPIO/Servo ports not supported yet");
+				return GCodeResult::error;
+			}
+#endif
+			if (!port.AssignPort(pinName.c_str(), reply, PinUsedBy::gpio, (isServo) ? PinAccess::servo : PinAccess::pwm))
 			{
 				return GCodeResult::error;
 			}

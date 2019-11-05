@@ -105,12 +105,8 @@ constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in millisec
 enum class BoardType : uint8_t
 {
 	Auto = 0,
-#if defined(DUET3_V03)
-	Duet3_03 = 1
-#elif defined(DUET3_V05)
-	Duet3_05 = 1
-#elif defined(DUET3_V06)
-	Duet3_06 = 1
+#if defined(DUET3)
+	Duet3 = 1
 #elif defined(SAME70XPLD)
 	SAME70XPLD_0 = 1
 #elif defined(DUET_NG)
@@ -126,8 +122,6 @@ enum class BoardType : uint8_t
 	Duet_085 = 3
 #elif defined(__RADDS__)
 	RADDS_15 = 1
-#elif defined(__ALLIGATOR__)
-	Alligator_2 = 1
 #elif defined(PCCB_10)
 	PCCB_v10 = 1
 #elif defined(PCCB_08) || defined(PCCB_08_X5)
@@ -140,27 +134,32 @@ enum class BoardType : uint8_t
 /***************************************************************************************************/
 
 // Enumeration describing the reasons for a software reset.
-// The spin state gets or'ed into this, so keep the lower 4 bits unused.
+// The spin state gets or'ed into this, so keep the lower 5 bits unused.
+// IMPORTANT! When changing this, also update table SoftwareResetReasonText
 enum class SoftwareResetReason : uint16_t
 {
-	user = 0,						// M999 command
-	erase = 0x10,					// special M999 command to erase firmware and reset
-	NMI = 0x20,
-	hardFault = 0x30,				// most exceptions get escalated to a hard fault
-	stuckInSpin = 0x40,				// we got stuck in a Spin() function in the Main task for too long
-	wdtFault = 0x50,				// secondary watchdog
-	usageFault = 0x60,
-	otherFault = 0x70,
-	stackOverflow = 0x80,			// FreeRTOS detected stack overflow
-	assertCalled = 0x90,			// FreeRTOS assertion failure
-	heaterWatchdog = 0xA0,			// the Heat task didn't kick the watchdog often enough
+	user = 0u,						// M999 command
+	erase = 1u << 5,				// special M999 command to erase firmware and reset
+	NMI = 2u << 5,
+	hardFault = 3u << 5,			// most exceptions get escalated to a hard fault
+	stuckInSpin = 4u << 5,			// we got stuck in a Spin() function in the Main task for too long
+	wdtFault = 5u << 5,				// secondary watchdog
+	usageFault = 6u << 5,
+	otherFault = 7u << 5,
+	stackOverflow = 8u << 5,		// FreeRTOS detected stack overflow
+	assertCalled = 9u << 5,			// FreeRTOS assertion failure
+	heaterWatchdog = 10 << 5,		// the Heat task didn't kick the watchdog often enough
 
 	// Bits that are or'ed in
+	unusedBit = 0x0200,				// spare bit
+	unused2 = 0x0400,				// spare bit
 	inAuxOutput = 0x0800,			// this bit is or'ed in if we were in aux output at the time
 	inLwipSpin = 0x2000,			// we got stuck in a call to LWIP for too long
 	inUsbOutput = 0x4000,			// this bit is or'ed in if we were in USB output at the time
 	deliberate = 0x8000				// this but it or'ed in if we deliberately caused a fault
 };
+
+extern const char *const SoftwareResetReasonText[];
 
 // Enumeration to describe various tests we do in response to the M122 command
 enum class DiagnosticTestType : int

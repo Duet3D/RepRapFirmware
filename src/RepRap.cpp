@@ -875,7 +875,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
-			response->catf("%c%.1f", ch, HideNan(liveCoordinates[MaxAxes + extruder]));
+			response->catf("%c%.1f", ch, HideNan(liveCoordinates[ExtruderToLogicalDrive(extruder)]));
 			ch = ',';
 		}
 		if (ch == '[')							// we may have no extruders
@@ -1266,8 +1266,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"endstops\":%" PRIu32, endstops);
 
 		// Firmware name, machine geometry and number of axes
-		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\"",
-			FIRMWARE_NAME, move->GetGeometryString(), numVisibleAxes, numTotalAxes, gCodes->GetAxisLetters());
+		response->catf(",\"firmwareName\":\"%s\",\"firmwareVersion\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\"",
+			FIRMWARE_NAME, VERSION, move->GetGeometryString(), numVisibleAxes, numTotalAxes, gCodes->GetAxisLetters());
 
 #if HAS_MASS_STORAGE
 		// Total and mounted volumes
@@ -2320,14 +2320,14 @@ bool RepRap::WriteToolSettings(FileStore *f) const
 }
 
 // Save some information in config-override.g
-bool RepRap::WriteToolParameters(FileStore *f) const
+bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const
 {
 	bool ok = true, written = false;
 	MutexLocker lock(toolListMutex);
 	for (const Tool *t = toolList; ok && t != nullptr; t = t->Next())
 	{
 		const AxesBitmap axesProbed = t->GetAxisOffsetsProbed();
-		if (axesProbed != 0)
+		if (axesProbed != 0 || forceWriteOffsets)
 		{
 			String<ScratchStringLength> scratchString;
 			if (!written)
@@ -2338,7 +2338,7 @@ bool RepRap::WriteToolParameters(FileStore *f) const
 			scratchString.catf("G10 P%d", t->Number());
 			for (size_t axis = 0; axis < MaxAxes; ++axis)
 			{
-				if (IsBitSet(axesProbed, axis))
+				if (forceWriteOffsets || IsBitSet(axesProbed, axis))
 				{
 					scratchString.catf(" %c%.2f", gCodes->GetAxisLetters()[axis], (double)(t->GetOffset(axis)));
 				}

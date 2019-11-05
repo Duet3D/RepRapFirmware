@@ -11,6 +11,7 @@
 #include "RepRap.h"
 #include "Wire.h"
 #include "Hardware/I2C.h"
+#include <TaskPriorities.h>
 
 namespace DuetExpansion
 {

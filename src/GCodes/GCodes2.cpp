@@ -599,7 +599,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						result = GCodeResult::error;
 						break;
 					}
-					platform.DisableDrivers(MaxAxes + eDrive[i]);
+					platform.DisableDrivers(ExtruderToLogicalDrive(eDrive[i]));
 				}
 			}
 
@@ -1215,7 +1215,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				// The user may not have as many extruders as we allow for, so just set the ones for which a value is provided
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform.SetDriveStepsPerUnit(MaxAxes + e, eVals[e], ustepMultiplier);
+					platform.SetDriveStepsPerUnit(ExtruderToLogicalDrive(e), eVals[e], ustepMultiplier);
 				}
 			}
 
@@ -1235,7 +1235,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				char sep = ' ';
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					reply.catf("%c%.3f", sep, (double)platform.DriveStepsPerUnit(extruder + MaxAxes));
+					reply.catf("%c%.3f", sep, (double)platform.DriveStepsPerUnit(ExtruderToLogicalDrive(extruder)));
 					sep = ':';
 				}
 			}
@@ -1495,11 +1495,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 115: // Print firmware version or set hardware type
+#if defined(DUET_NG) || defined(DUET_06_85)
 		if (gb.Seen('P'))
 		{
-			platform.SetBoardType((BoardType)gb.GetIValue());
+			if (runningConfigFile)
+			{
+				platform.SetBoardType((BoardType)gb.GetIValue());
+			}
+			else
+			{
+				reply.copy("Board type can only be set within config.g");
+				result = GCodeResult::error;
+			}
 		}
 		else
+#endif
 		{
 #if SUPPORT_CAN_EXPANSION
 			if (gb.Seen('B'))
@@ -1971,7 +1981,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				gb.GetFloatArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform.SetAcceleration(MaxAxes + e, gb.ConvertDistance(eVals[e]));
+					platform.SetAcceleration(ExtruderToLogicalDrive(e), gb.ConvertDistance(eVals[e]));
 				}
 			}
 
@@ -1986,7 +1996,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				char sep = ' ';
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					reply.catf("%c%.1f", sep, (double)platform.Acceleration(extruder + MaxAxes));
+					reply.catf("%c%.1f", sep, (double)platform.Acceleration(ExtruderToLogicalDrive(extruder)));
 					sep = ':';
 				}
 			}
@@ -2021,7 +2031,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				gb.GetFloatArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform.SetMaxFeedrate(MaxAxes + e, gb.ConvertDistance(eVals[e]) * SecondsToMinutes);
+					platform.SetMaxFeedrate(ExtruderToLogicalDrive(e), gb.ConvertDistance(eVals[e]) * SecondsToMinutes);
 				}
 			}
 
@@ -2036,7 +2046,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				char sep = ' ';
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					reply.catf("%c%.1f", sep, (double)platform.MaxFeedrate(extruder + MaxAxes));
+					reply.catf("%c%.1f", sep, (double)platform.MaxFeedrate(ExtruderToLogicalDrive(extruder)));
 					sep = ':';
 				}
 				reply.catf(", min. speed %.2f", (double)platform.MinMovementSpeed());
@@ -2546,7 +2556,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				gb.GetUnsignedArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					if (!ChangeMicrostepping(MaxAxes + e, eVals[e], interp, reply))
+					if (!ChangeMicrostepping(ExtruderToLogicalDrive(e), eVals[e], interp, reply))
 					{
 						result = GCodeResult::error;
 					}
@@ -2566,7 +2576,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
 					bool actualInterp;
-					const unsigned int microsteps = platform.GetMicrostepping(extruder + MaxAxes, actualInterp);
+					const unsigned int microsteps = platform.GetMicrostepping(ExtruderToLogicalDrive(extruder), actualInterp);
 					reply.catf(":%u%s", microsteps, (actualInterp) ? "(on)" : "");
 				}
 			}
@@ -3291,7 +3301,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				gb.GetFloatArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform.SetInstantDv(MaxAxes + e, eVals[e] * multiplier1);
+					platform.SetInstantDv(ExtruderToLogicalDrive(e), eVals[e] * multiplier1);
 				}
 			}
 
@@ -3313,7 +3323,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				char sep = ' ';
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					reply.catf("%c%.1f", sep, (double)(platform.GetInstantDv(extruder + MaxAxes) * multiplier2));
+					reply.catf("%c%.1f", sep, (double)(platform.GetInstantDv(ExtruderToLogicalDrive(extruder)) * multiplier2));
 					sep = ':';
 				}
 				if (code == 566)
@@ -3426,6 +3436,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		break;
 
 	case 574: // Set endstop configuration
+		// We may be about to delete endstops, so make sure we are not executing a move that uses them
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return false;
+		}
 		result = platform.GetEndstops().HandleM574(gb, reply);
 		break;
 
@@ -4190,7 +4205,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				gb.GetFloatArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					if (!platform.SetMotorCurrent(MaxAxes + e, eVals[e], code, reply))
+					if (!platform.SetMotorCurrent(ExtruderToLogicalDrive(e), eVals[e], code, reply))
 					{
 						result = GCodeResult::error;
 					}
@@ -4218,7 +4233,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				reply.cat("E");
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					reply.catf(":%d", (int)platform.GetMotorCurrent(extruder + MaxAxes, code));
+					reply.catf(":%d", (int)platform.GetMotorCurrent(ExtruderToLogicalDrive(extruder), code));
 				}
 				if (code == 906)
 				{
@@ -4396,20 +4411,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 		reprap.EmergencyStop();			// this disables heaters and drives - Duet WiFi pre-production boards need drives disabled here
 		{
-			bool doErase;
+			uint16_t reason = (uint16_t)SoftwareResetReason::user;
 			if (gb.Seen('P'))
 			{
-				String<8> eraseString;
-				gb.GetPossiblyQuotedString(eraseString.GetRef());
-				doErase = StringStartsWith(eraseString.c_str(), "ERASE");
+				String<StringLength20> eraseString;
+				gb.GetQuotedString(eraseString.GetRef());
+				if (strcmp(eraseString.c_str(), "ERASE") == 0)
+				{
+					reason = (uint16_t)SoftwareResetReason::erase;
+				}
 			}
-			else
-			{
-				doErase = false;
-			}
-			const uint16_t reason = (doErase)
-									? (uint16_t)SoftwareResetReason::erase
-									: (uint16_t)SoftwareResetReason::user;
 			platform.SoftwareReset(reason);			// doesn't return
 		}
 		break;

@@ -39,6 +39,7 @@
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Tools/Tool.h"
 #include "Endstops/ZProbe.h"
+#include <TaskPriorities.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include "CAN/CanMotion.h"
@@ -390,7 +391,7 @@ void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrive
 {
 	if (CartesianToMotorSteps(coords, ep, true))
 	{
-		for (size_t drive = MaxAxes; drive < numDrives; ++drive)
+		for (size_t drive = reprap.GetGCodes().GetTotalAxes(); drive < numDrives; ++drive)
 		{
 			ep[drive] = MotorMovementToSteps(drive, coords[drive]);
 		}
@@ -813,10 +814,9 @@ void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, AxesBitmap
 // Returns the number of motor steps moves since the last call, and isPrinting is true unless we are currently executing an extruding but non-printing move
 int32_t Move::GetAccumulatedExtrusion(size_t extruder, bool& isPrinting)
 {
-	const size_t drive = extruder + MaxAxes;
-	if (drive < MaxAxesPlusExtruders)
+	if (extruder < reprap.GetGCodes().GetNumExtruders())
 	{
-		return mainDDARing.GetAccumulatedExtrusion(extruder, drive, isPrinting);
+		return mainDDARing.GetAccumulatedExtrusion(extruder, ExtruderToLogicalDrive(extruder), isPrinting);
 	}
 
 	isPrinting = false;
