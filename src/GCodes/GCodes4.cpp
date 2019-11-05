@@ -1186,7 +1186,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				SetMoveBufferDefaults();
 				for (size_t i = 0; i < tool->DriveCount(); ++i)
 				{
-					moveBuffer.coords[MaxAxes + tool->Drive(i)] = retractLength + retractExtra;
+					moveBuffer.coords[ExtruderToLogicalDrive(tool->Drive(i))] = retractLength + retractExtra;
 				}
 				moveBuffer.feedRate = unRetractSpeed;
 				moveBuffer.isFirmwareRetraction = true;

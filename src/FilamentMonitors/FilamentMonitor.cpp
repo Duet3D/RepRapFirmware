@@ -199,7 +199,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 			}
 			if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
 			{
-				const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(extruder + MaxAxes);
+				const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(ExtruderToLogicalDrive(extruder));
 				const FilamentSensorStatus fstat = fs.Check(isPrinting, fromIsr, isrMillis, extrusionCommanded);
 				if (fstat != FilamentSensorStatus::ok)
 				{

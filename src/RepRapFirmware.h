@@ -162,7 +162,7 @@ struct DriverId
 #endif
 
 // Module numbers and names, used for diagnostics and debug
-// All of these including noModule must be <= 15 because we 'or' the module number into the software reset code
+// All of these including noModule must be <= 31 because we 'or' the module number into the software reset code
 enum Module : uint8_t
 {
 	modulePlatform = 0,
@@ -182,7 +182,7 @@ enum Module : uint8_t
 	moduleWiFi = 14,
 	moduleDisplay = 15,
 	moduleLinuxInterface = 16,
-	numModules = 17,				// make this one greater than the last module number
+	numModules = 17,				// make this one greater than the last real module number
 	noModule = 18
 };
 
@@ -353,13 +353,20 @@ constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
 constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2;				// The indices of the Cartesian axes in drive arrays
 constexpr size_t U_AXIS = 3;										// The assumed index of the U axis when executing M673
 
+static_assert(MaxAxesPlusExtruders <= MaxAxes + MaxExtruders);
+static_assert(MaxAxesPlusExtruders >= MinAxes + NumDefaultExtruders);
+
 #if SUPPORT_CAN_EXPANSION
 constexpr size_t MaxTotalDrivers = NumDirectDrivers + MaxCanDrivers;
 #else
 constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 #endif
 
-constexpr size_t MaxAxesPlusExtruders = MaxAxes + MaxExtruders;
+// Convert between extruder drive numbers and logical drive numbers.
+// In order to save memory when MaxAxesPlusExtruders < MaxAxes + MaxExtruders, the logical drive number of an axis is the same as the axis number,
+// but the logical drive number of an extruder is MaxAxesPlusExtruders - 1 - extruder_number.
+inline size_t ExtruderToLogicalDrive(size_t extruder) { return MaxAxesPlusExtruders - 1 - extruder; }
+inline size_t LogicalDriveToExtruder(size_t drive) { return MaxAxesPlusExtruders - 1 - drive; }
 
 constexpr AxesBitmap DefaultXAxisMapping = MakeBitmap<AxesBitmap>(X_AXIS);	// by default, X is mapped to X
 constexpr AxesBitmap DefaultYAxisMapping = MakeBitmap<AxesBitmap>(Y_AXIS);	// by default, Y is mapped to Y

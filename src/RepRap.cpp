@@ -875,7 +875,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
-			response->catf("%c%.1f", ch, HideNan(liveCoordinates[MaxAxes + extruder]));
+			response->catf("%c%.1f", ch, HideNan(liveCoordinates[ExtruderToLogicalDrive(extruder)]));
 			ch = ',';
 		}
 		if (ch == '[')							// we may have no extruders

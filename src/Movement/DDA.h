@@ -267,7 +267,12 @@ private:
 			int32_t extraAccelerationClocks;	// the additional number of clocks needed because we started the move at less than topSpeed. Negative after ReduceHomingSpeed has been called.
 
 			// These are used only in delta calculations
-		    int32_t cKc;						// The Z movement fraction multiplied by Kc and converted to integer
+			int32_t cKc;						// The Z movement fraction multiplied by Kc and converted to integer
+
+#if SUPPORT_CAN_EXPANSION
+			uint32_t drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
+			static_assert(MaxAxesPlusExtruders <= sizeof(drivesMoving) * CHAR_BIT);
+#endif
 		} afterPrepare;
 	};
 
@@ -277,8 +282,8 @@ private:
 	void LogProbePosition();
 #endif
 
-    DriveMovement* activeDMs;					// list of associated DMs that need steps, in step time order
-    DriveMovement* completedDMs;				// list of associated DMs that don't need any more steps
+	DriveMovement* activeDMs;					// list of associated DMs that need steps, in step time order
+	DriveMovement* completedDMs;				// list of associated DMs that don't need any more steps
 };
 
 // Find the DriveMovement record for a given drive even if it is completed, or return nullptr if there isn't one

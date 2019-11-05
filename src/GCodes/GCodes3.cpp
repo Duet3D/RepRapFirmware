@@ -568,7 +568,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	bool seen = false;
-	const char *lettersToTry = "XYZUVWABC";
+	const char *lettersToTry = "XYZUVWABCD";
 	char c;
 	while ((c = *lettersToTry) != 0)
 	{
@@ -593,6 +593,10 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 					// We are creating a new axis
 					axisLetters[drive] = c;								// assign the drive to this drive letter
 					++numTotalAxes;
+					if (numTotalAxes + numExtruders > MaxAxesPlusExtruders)
+					{
+						--numExtruders;
+					}
 					numVisibleAxes = numTotalAxes;						// assume any new axes are visible unless there is a P parameter
 					float initialCoords[MaxAxes];
 					reprap.GetMove().GetKinematics().GetAssumedInitialPosition(drive + 1, initialCoords);
@@ -720,7 +724,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply)
 	ToolOffsetTransform(currentUserPosition, target);
 	bool seen = false;
 	bool doesMove = false;
-	for (size_t axis = 0; axis < MaxAxes; axis++)
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
@@ -1393,7 +1397,7 @@ void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor)
 {
 	if (segmentsLeft != 0 && !moveBuffer.isFirmwareRetraction)
 	{
-		moveBuffer.coords[extruder + MaxAxes] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
+		moveBuffer.coords[ExtruderToLogicalDrive(extruder)] *= factor/extrusionFactors[extruder];	// last move not gone, so update it
 	}
 	extrusionFactors[extruder] = factor;
 }

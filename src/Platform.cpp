@@ -95,6 +95,27 @@ extern uint32_t _estack;			// defined in the linker script
 # error LWIP_GMAC_TASK must be defined in compiler settings
 #endif
 
+// The following must be kelp in line with enum class SoftwareResetReason
+const char *const SoftwareResetReasonText[] =
+{
+	"User",
+	"Erase",
+	"NMI",
+	"Hard fault",
+	"Stuck in spin loop",
+	"Watchdog timeout",
+	"Usage fault",
+	"Other fault",
+	"Stack overflow",
+	"Assertion failed",
+	"Heat task stuck",
+	"Unknown",
+	"Unknown",
+	"Unknown",
+	"Unknown",
+	"Unknown"
+};
+
 #if HAS_VOLTAGE_MONITOR
 
 inline constexpr float AdcReadingToPowerVoltage(uint16_t adcVal)
@@ -488,6 +509,7 @@ void Platform::Init()
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
 		driverState[drive] = DriverStatus::disabled;
+		driveDriverBits[drive] = 0;
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
 		standstillCurrentFraction[drive] = 0.75;
@@ -511,23 +533,24 @@ void Platform::Init()
 		axisDrivers[axis].numDrivers = 0;
 	}
 
-	for (uint32_t& entry : slowDriverStepTimingClocks)
-	{
-		entry = 0;												// reset all to zero as we have no known slow drivers yet
-	}
-	slowDriversBitmap = 0;										// assume no drivers need extended step pulse timing
-	EnableAllSteppingDrivers();									// no drivers disabled
-
+	// Set up extruders
 	for (size_t extr = 0; extr < MaxExtruders; ++extr)
 	{
 		extruderDrivers[extr].SetLocal(extr + MinAxes);			// set up default extruder drive mapping
-		driveDriverBits[extr + MaxAxes] = StepPins::CalcDriverBitmap(extr + MinAxes);
+		driveDriverBits[ExtruderToLogicalDrive(extr)] = StepPins::CalcDriverBitmap(extr + MinAxes);
 		pressureAdvance[extr] = 0.0;
 #if SUPPORT_NONLINEAR_EXTRUSION
 		nonlinearExtrusionA[extr] = nonlinearExtrusionB[extr] = 0.0;
 		nonlinearExtrusionLimit[extr] = DefaultNonlinearExtrusionLimit;
 #endif
 	}
+
+	for (uint32_t& entry : slowDriverStepTimingClocks)
+	{
+		entry = 0;												// reset all to zero as we have no known slow drivers yet
+	}
+	slowDriversBitmap = 0;										// assume no drivers need extended step pulse timing
+	EnableAllSteppingDrivers();									// no drivers disabled
 
 	driversPowered = false;
 
@@ -1966,17 +1989,7 @@ void Platform::Diagnostics(MessageType mtype)
 
 		if (slot >= 0 && srdBuf[slot].magic == SoftwareResetData::magicValue)
 		{
-			const uint32_t reason = srdBuf[slot].resetReason & 0xF0;
-			const char* const reasonText = (reason == (uint32_t)SoftwareResetReason::user) ? "User"
-											: (reason == (uint32_t)SoftwareResetReason::NMI) ? "NMI"
-												: (reason == (uint32_t)SoftwareResetReason::hardFault) ? "Hard fault"
-													: (reason == (uint32_t)SoftwareResetReason::stuckInSpin) ? "Stuck in spin loop"
-														: (reason == (uint32_t)SoftwareResetReason::wdtFault) ? "Watchdog timeout"
-															: (reason == (uint32_t)SoftwareResetReason::otherFault) ? "Other fault"
-																: (reason == (uint32_t)SoftwareResetReason::stackOverflow) ? "Stack overflow"
-																	: (reason == (uint32_t)SoftwareResetReason::assertCalled) ? "Assertion failed"
-																		: (reason == (uint32_t)SoftwareResetReason::heaterWatchdog) ? "Heat task stuck"
-																			: "Unknown";
+			const char* const reasonText = SoftwareResetReasonText[(srdBuf[slot].resetReason >> 5) & 0x0F];
 			String<ScratchStringLength> scratchString;
 			if (srdBuf[slot].when != 0)
 			{
@@ -2582,7 +2595,7 @@ void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)
 	}
 	else if (axisOrExtruder < MaxAxesPlusExtruders)
 	{
-		const DriverId id = extruderDrivers[axisOrExtruder - MaxAxes];
+		const DriverId id = extruderDrivers[LogicalDriveToExtruder(axisOrExtruder)];
 		if (id.IsLocal())
 		{
 			localFunc(id.localDriver);
@@ -2609,7 +2622,7 @@ void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)
 	}
 	else if (axisOrExtruder < MaxAxesPlusExtruders)
 	{
-		const DriverId id = extruderDrivers[axisOrExtruder - MaxAxes];
+		const DriverId id = extruderDrivers[LogicalDriveToExtruder(axisOrExtruder)];
 		localFunc(id.localDriver);
 	}
 }
@@ -3122,13 +3135,13 @@ void Platform::SetExtruderDriver(size_t extruder, DriverId driver)
 	if (driver.IsLocal())
 	{
 #if HAS_SMART_DRIVERS
-		SmartDrivers::SetAxisNumber(driver.localDriver, extruder + MaxAxes);
+		SmartDrivers::SetAxisNumber(driver.localDriver, ExtruderToLogicalDrive(extruder));
 #endif
-		driveDriverBits[extruder + MaxAxes] = StepPins::CalcDriverBitmap(driver.localDriver);
+		driveDriverBits[ExtruderToLogicalDrive(extruder)] = StepPins::CalcDriverBitmap(driver.localDriver);
 	}
 	else
 	{
-		driveDriverBits[extruder + MaxAxes] = 0;
+		driveDriverBits[ExtruderToLogicalDrive(extruder)] = 0;
 	}
 }
 
@@ -4475,7 +4488,22 @@ GCodeResult Platform::ConfigureGpioOrServo(uint32_t gpioNumber, bool isServo, GC
 		PwmPort& port = gpioPorts[gpioNumber];
 		if (gb.Seen('C'))
 		{
-			if (!port.AssignPort(gb, reply, PinUsedBy::gpio, (isServo) ? PinAccess::servo : PinAccess::pwm))
+			String<StringLength50> pinName;
+			if (!gb.GetReducedString(pinName.GetRef()))
+			{
+				reply.copy("Missing pin name");
+				return GCodeResult::error;
+			}
+
+#if SUPPORT_CAN_EXPANSION
+			const CanAddress board = IoPort::RemoveBoardAddress(pinName.GetRef());
+			if (board != CanId::MasterAddress)
+			{
+				reply.printf("Remote GPIO/Servo ports not supported yet");
+				return GCodeResult::error;
+			}
+#endif
+			if (!port.AssignPort(pinName.c_str(), reply, PinUsedBy::gpio, (isServo) ? PinAccess::servo : PinAccess::pwm))
 			{
 				return GCodeResult::error;
 			}
