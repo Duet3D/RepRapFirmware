@@ -109,7 +109,7 @@ const char *const SoftwareResetReasonText[] =
 	"Stack overflow",
 	"Assertion failed",
 	"Heat task stuck",
-	"Unknown",
+	"Memory protection fault",
 	"Unknown",
 	"Unknown",
 	"Unknown",
@@ -743,8 +743,13 @@ void Platform::UpdateFirmware()
 	// The machine will be unresponsive for a few seconds, don't risk damaging the heaters...
 	reprap.EmergencyStop();
 
-	// Step 0 - disable the cache because it seems to interfere with flash memory access
+	// Step 0 - disable the cache because it interferes with flash memory access
 	DisableCache();
+
+#if USE_MPU
+	//TODO consider setting flash memory to strongly-ordered instead
+	ARM_MPU_Disable();
+#endif
 
 	// Step 1 - Write update binary to Flash and overwrite the remaining space with zeros
 	// On the SAM3X, leave the last 1KB of Flash memory untouched, so we can reuse the NvData after this update
@@ -906,7 +911,7 @@ void Platform::StartIap()
 
 #if HAS_MASS_STORAGE
 	// Newer versions of iap4e.bin reserve space above the stack for us to pass the firmware filename
-	static const char filename[] = "0:/sys/" IAP_FIRMWARE_FILE;
+	static const char filename[] = DEFAULT_SYS_DIR IAP_FIRMWARE_FILE;
 	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_FLASH_START);
 	if (topOfStack + sizeof(filename) <=
 # if SAM3XA
@@ -1616,6 +1621,11 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 
 	DisableCache();								// disable the cache, it seems to upset flash memory access
 
+#if USE_MPU
+	//TODO set the flash memory to strongly-ordered or device instead
+	ARM_MPU_Disable();							// disable the MPU
+#endif
+
 	if (reason == (uint16_t)SoftwareResetReason::erase)
 	{
 		EraseAndReset();
@@ -2006,7 +2016,7 @@ void Platform::Diagnostics(MessageType mtype)
 			MessageF(mtype, "Last software reset %s, reason: %s%s, spinning module %s, available RAM %" PRIu32 " bytes (slot %d)\n",
 								scratchString.c_str(),
 								(srdBuf[slot].resetReason & (uint32_t)SoftwareResetReason::deliberate) ? "deliberate " : "",
-								reasonText, moduleName[srdBuf[slot].resetReason & 0x0F], srdBuf[slot].neverUsedRam, slot);
+								reasonText, moduleName[srdBuf[slot].resetReason & 0x1F], srdBuf[slot].neverUsedRam, slot);
 			// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
 			MessageF(mtype,
 					"Software reset code 0x%04x HFSR 0x%08" PRIx32 " CFSR 0x%08" PRIx32 " ICSR 0x%08" PRIx32 " BFAR 0x%08" PRIx32 " SP 0x%08" PRIx32 " Task 0x%08" PRIx32 "\n",

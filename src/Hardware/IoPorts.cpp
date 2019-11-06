@@ -435,7 +435,7 @@ void IoPort::AppendPinName(const StringRef& str) const
 		{
 			if (i == 0)
 			{
-				str.cat("nil");
+				str.cat(NoPinName);
 			}
 			break;
 		}

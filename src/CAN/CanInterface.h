@@ -15,6 +15,7 @@
 #include "GCodes/GCodeResult.h"
 #include "MessageType.h"
 #include <CanId.h>
+#include <CanMessageFormats.h>
 
 class CanMessageBuffer;
 class DDA;
@@ -86,6 +87,11 @@ namespace CanInterface
 	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult SetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply);
 	void WakeCanSender();
+
+	// Remote handle functions
+	GCodeResult CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *pinName, uint16_t threshold, uint16_t minInterval, uint8_t& currentState, const StringRef& reply);
+	GCodeResult DeleteHandle(CanAddress boardAddress, RemoteInputHandle h, const StringRef& reply);
+	GCodeResult GetHandlePinName(CanAddress boardAddress, RemoteInputHandle h, const StringRef& reply);
 
 	void Diagnostics(MessageType mtype);
 }

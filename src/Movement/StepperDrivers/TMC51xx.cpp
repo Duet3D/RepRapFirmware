@@ -794,6 +794,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const
 				threshold, ((filtered) ? "on" : "off"), StepTimer::StepClockRate/maxStallStepInterval, writeRegisters[WriteCoolConf] & 0xFFFF);
 }
 
+// In the following, only byte accesses to sendDataBlock are allowed, because accesses to non-cacheable memory must be aligned
 void TmcDriverState::GetSpiCommand(uint8_t *sendDataBlock)
 {
 	// Find which register to send. The common case is when no registers need to be updated.
@@ -912,7 +913,7 @@ static TmcDriverState driverStates[MaxSmartDrivers];
 // TMC51xx management task
 static Task<TmcTaskStackWords> tmcTask;
 
-// Declare the DMA buffers with the __nocache attribute
+// Declare the DMA buffers with the __nocache attribute. Access to these must be aligned.
 static __nocache uint8_t sendData[5 * MaxSmartDrivers];
 static __nocache uint8_t rcvData[5 * MaxSmartDrivers];
 

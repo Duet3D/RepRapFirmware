@@ -149,6 +149,7 @@ enum class SoftwareResetReason : uint16_t
 	stackOverflow = 8u << 5,		// FreeRTOS detected stack overflow
 	assertCalled = 9u << 5,			// FreeRTOS assertion failure
 	heaterWatchdog = 10 << 5,		// the Heat task didn't kick the watchdog often enough
+	memFault = 11 << 5,
 
 	// Bits that are or'ed in
 	unusedBit = 0x0200,				// spare bit

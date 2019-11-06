@@ -8,7 +8,7 @@
 #include "EndstopsManager.h"
 
 #include "Endstop.h"
-#include "LocalSwitchEndstop.h"
+#include "SwitchEndstop.h"
 #include "StallDetectionEndstop.h"
 #include "ZProbeEndstop.h"
 
@@ -48,7 +48,7 @@ void EndstopsManager::Init()
 	String<1> dummy;
 	for (size_t axis = 0; axis < ARRAY_SIZE(DefaultEndstopPinNames); ++axis)
 	{
-		LocalSwitchEndstop * const sw = new LocalSwitchEndstop(axis, EndStopPosition::lowEndStop);
+		SwitchEndstop * const sw = new SwitchEndstop(axis, EndStopPosition::lowEndStop);
 		sw->Configure(DefaultEndstopPinNames[axis], dummy.GetRef(), EndStopInputType::activeHigh);
 		axisEndstops[axis] = sw;
 	}
@@ -244,7 +244,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 
 		delete axisEndstops[lastAxisSeen];
 		axisEndstops[lastAxisSeen] = nullptr;
-		LocalSwitchEndstop * const sw = new LocalSwitchEndstop(lastAxisSeen, lastPosSeen);
+		SwitchEndstop * const sw = new SwitchEndstop(lastAxisSeen, lastPosSeen);
 		const GCodeResult rslt = sw->Configure(gb, reply, inputType);
 		axisEndstops[lastAxisSeen] = sw;
 		return rslt;
@@ -298,7 +298,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 					}
 					else
 					{
-						((LocalSwitchEndstop *)axisEndstops[axis])->Reconfigure(pos, inputType);
+						((SwitchEndstop *)axisEndstops[axis])->Reconfigure(pos, inputType);
 					}
 					break;
 

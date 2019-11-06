@@ -346,8 +346,7 @@ extern "C" void CanSenderLoop(void *)
 			CanMessageBuffer * const urgentMessage = CanMotion::GetUrgentMessage();
 			if (urgentMessage != nullptr)
 			{
-				mcan_fd_send_ext_message(urgentMessage->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(urgentMessage->msg)), urgentMessage->dataLength,
-											TxBufferIndexUrgent, MaxUrgentSendWait);
+				mcan_fd_send_ext_message(urgentMessage->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(urgentMessage->msg)), urgentMessage->dataLength, TxBufferIndexUrgent, MaxUrgentSendWait);
 			}
 			else if (pendingBuffers != nullptr)
 			{
@@ -459,9 +458,18 @@ void CanDriversList::AddEntry(DriverId driver)
 		{
 			++insertPoint;
 		}
-		memmove(drivers + (insertPoint + 1), drivers + insertPoint, (numEntries - insertPoint) * sizeof(drivers[0]));
-		drivers[insertPoint] = driver;
-		++numEntries;
+
+		if (insertPoint == numEntries)
+		{
+			drivers[numEntries] = driver;
+			++numEntries;
+		}
+		else if (drivers[insertPoint] != driver)
+		{
+			memmove(drivers + (insertPoint + 1), drivers + insertPoint, (numEntries - insertPoint) * sizeof(drivers[0]));
+			drivers[insertPoint] = driver;
+			++numEntries;
+		}
 	}
 }
 
@@ -887,7 +895,7 @@ GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffe
 # if HAS_LINUX_INTERFACE
 			!reprap.UsingLinuxInterface() &&
 # endif
-			!reprap.GetPlatform().SysFileExists(firmwareFilename.c_str()))
+			!reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, firmwareFilename.c_str()))
 	{
 		reply.printf("Firmware file %s not found", firmwareFilename.c_str());
 		return GCodeResult::error;
@@ -926,6 +934,59 @@ void CanInterface::UpdateFinished()
 void CanInterface::WakeCanSender()
 {
 	canSenderTask.GiveFromISR();
+}
+
+// Remote handle functions
+GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *pinName, uint16_t threshold, uint16_t minInterval, uint8_t& currentState, const StringRef& reply)
+{
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		reply.copy("No CAN buffer");
+		return GCodeResult::error;
+	}
+
+	const CanRequestId rid = AllocateRequestId(boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageCreateInputMonitor>(rid, CanId::MasterAddress, boardAddress);
+	msg->handle = h;
+	msg->threshold = threshold;
+	msg->minInterval = minInterval;
+	SafeStrncpy(msg->pinName, pinName, ARRAY_SIZE(msg->pinName));
+	buf->dataLength = msg->GetActualDataLength();
+
+	return SendRequestAndGetStandardReply(buf, rid, reply, &currentState);
+}
+
+GCodeResult CanInterface::DeleteHandle(CanAddress boardAddress, RemoteInputHandle h, const StringRef &reply)
+{
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		reply.copy("No CAN buffer");
+		return GCodeResult::error;
+	}
+
+	const CanRequestId rid = AllocateRequestId(boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageChangeInputMonitor>(rid, CanId::MasterAddress, boardAddress);
+	msg->handle = h;
+	msg->action = CanMessageChangeInputMonitor::actionDelete;
+	return SendRequestAndGetStandardReply(buf, rid, reply);
+}
+
+GCodeResult CanInterface::GetHandlePinName(CanAddress boardAddress, RemoteInputHandle h, const StringRef &reply)
+{
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		reply.copy("No CAN buffer");
+		return GCodeResult::error;
+	}
+
+	const CanRequestId rid = AllocateRequestId(boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageChangeInputMonitor>(rid, CanId::MasterAddress, boardAddress);
+	msg->handle = h;
+	msg->action = CanMessageChangeInputMonitor::actionReturnPinName;
+	return SendRequestAndGetStandardReply(buf, rid, reply);
 }
 
 void CanInterface::Diagnostics(MessageType mtype)

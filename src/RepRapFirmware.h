@@ -104,6 +104,7 @@ struct DriverId
 	uint8_t localDriver;
 
 #if SUPPORT_CAN_EXPANSION
+
 	CanAddress boardAddress;
 
 	void SetFromBinary(uint32_t val)
@@ -131,6 +132,16 @@ struct DriverId
 	bool operator<(const DriverId other) const
 	{
 		return boardAddress < other.boardAddress || (boardAddress == other.boardAddress && localDriver < other.localDriver);
+	}
+
+	bool operator==(const DriverId other) const
+	{
+		return boardAddress == other.boardAddress && localDriver == other.localDriver;
+	}
+
+	bool operator!=(const DriverId other) const
+	{
+		return boardAddress != other.boardAddress || localDriver != other.localDriver;
 	}
 
 #else

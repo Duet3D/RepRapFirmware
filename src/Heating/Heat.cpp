@@ -514,6 +514,16 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 			return GCodeResult::error;
 		}
 
+		if (StringEqualsIgnoreCase(pinName.c_str(), NoPinName))
+		{
+			// Settin the pin name to "nil" deletes the heater
+			WriteLocker lock(heatersLock);
+			Heater *oldHeater = nullptr;
+			std::swap(oldHeater, heaters[heater]);
+			delete oldHeater;
+			return GCodeResult::ok;
+		}
+
 		if (!gb.Seen('T'))
 		{
 			reply.copy("Missing sensor number");

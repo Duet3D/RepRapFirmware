@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include "LocalSwitchEndstop.h"
+#include <Endstops/SwitchEndstop.h>
 
 #include "RepRap.h"
 #include "Platform.h"
@@ -20,18 +20,18 @@
 #endif
 
 // Switch endstop
-LocalSwitchEndstop::LocalSwitchEndstop(uint8_t axis, EndStopPosition pos) : Endstop(axis, pos), numPortsUsed(0)
+SwitchEndstop::SwitchEndstop(uint8_t axis, EndStopPosition pos) : Endstop(axis, pos), numPortsUsed(0)
 {
 	// ports will be initialised automatically by the IoPort default constructor
 }
 
-LocalSwitchEndstop::~LocalSwitchEndstop()
+SwitchEndstop::~SwitchEndstop()
 {
 	ReleasePorts();
 }
 
 // Release any local and remote ports we have allocated and set numPortsUsed to zero
-void LocalSwitchEndstop::ReleasePorts()
+void SwitchEndstop::ReleasePorts()
 {
 	while (numPortsUsed != 0)
 	{
@@ -40,23 +40,12 @@ void LocalSwitchEndstop::ReleasePorts()
 		const CanAddress bn = boardNumbers[numPortsUsed];
 		if (bn != CanId::MasterAddress)
 		{
-			CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
-			if (buf == nullptr)
+			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), numPortsUsed);
+			String<StringLength100> reply;
+			if (CanInterface::DeleteHandle(bn, h, reply.GetRef()) != GCodeResult::ok)
 			{
-				reprap.GetPlatform().Message(ErrorMessage, "No CAN buffer\n");
-			}
-			else
-			{
-				const CanRequestId rid = CanInterface::AllocateRequestId(bn);
-				auto msg = buf->SetupRequestMessage<CanMessageChangeInputMonitor>(rid, CanId::MasterAddress, bn);
-				msg->handle.Set(RemoteInputHandle::typeEndstop, GetAxis(), numPortsUsed);
-				msg->action = CanMessageChangeInputMonitor::actionDelete;
-				String<StringLength100> reply;
-				if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef()) != GCodeResult::ok)
-				{
-					reply.cat('\n');
-					reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
-				}
+				reply.cat('\n');
+				reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
 			}
 		}
 #endif
@@ -64,7 +53,7 @@ void LocalSwitchEndstop::ReleasePorts()
 	}
 }
 
-GCodeResult LocalSwitchEndstop::Configure(GCodeBuffer& gb, const StringRef& reply, EndStopInputType inputType)
+GCodeResult SwitchEndstop::Configure(GCodeBuffer& gb, const StringRef& reply, EndStopInputType inputType)
 {
 	String<StringLength50> portNames;
 	if (!gb.GetReducedString(portNames.GetRef()))
@@ -76,7 +65,7 @@ GCodeResult LocalSwitchEndstop::Configure(GCodeBuffer& gb, const StringRef& repl
 	return Configure(portNames.c_str(), reply, inputType);
 }
 
-GCodeResult LocalSwitchEndstop::Configure(const char *pinNames, const StringRef& reply, EndStopInputType inputType)
+GCodeResult SwitchEndstop::Configure(const char *pinNames, const StringRef& reply, EndStopInputType inputType)
 {
 	ReleasePorts();
 
@@ -102,32 +91,15 @@ GCodeResult LocalSwitchEndstop::Configure(const char *pinNames, const StringRef&
 		boardNumbers[numPortsUsed] = boardAddress;
 		if (boardAddress != CanId::MasterAddress)
 		{
-			CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
-			if (buf == nullptr)
+			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), numPortsUsed);
+			uint8_t currentState;
+			const GCodeResult rslt = CanInterface::CreateHandle(boardAddress, h, pn.c_str(), 0, MinimumSwitchReportInterval, currentState, reply);
+			if (rslt != GCodeResult::ok)
 			{
-				reprap.GetPlatform().Message(ErrorMessage, "No CAN buffer\n");
 				ReleasePorts();
-				return GCodeResult::error;
+				return rslt;
 			}
-			else
-			{
-				const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
-				auto msg = buf->SetupRequestMessage<CanMessageCreateInputMonitor>(rid, CanId::MasterAddress, boardAddress);
-				msg->handle.Set(RemoteInputHandle::typeEndstop, GetAxis(), numPortsUsed);
-				msg->threshold = 0;
-				msg->minInterval = MinimumSwitchReportInterval;
-				SafeStrncpy(msg->pinName, pn.c_str(), ARRAY_SIZE(msg->pinName));
-				buf->dataLength = msg->GetActualDataLength();
-
-				uint8_t currentState;
-				const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, &currentState);
-				if (rslt != GCodeResult::ok)
-				{
-					ReleasePorts();
-					return rslt;
-				}
-				states[numPortsUsed] = (currentState != 0);
-			}
+			states[numPortsUsed] = (currentState != 0);
 		}
 		else
 #endif
@@ -150,7 +122,7 @@ GCodeResult LocalSwitchEndstop::Configure(const char *pinNames, const StringRef&
 	return GCodeResult::ok;
 }
 
-void LocalSwitchEndstop::Reconfigure(EndStopPosition pos, EndStopInputType inputType)
+void SwitchEndstop::Reconfigure(EndStopPosition pos, EndStopInputType inputType)
 {
 	SetAtHighEnd(pos == EndStopPosition::highEndStop);
 
@@ -164,7 +136,7 @@ void LocalSwitchEndstop::Reconfigure(EndStopPosition pos, EndStopInputType input
 	}
 }
 
-EndStopInputType LocalSwitchEndstop::GetEndstopType() const
+EndStopInputType SwitchEndstop::GetEndstopType() const
 {
 #if SUPPORT_CAN_EXPANSION
 	return (activeLow)? EndStopInputType::activeLow : EndStopInputType::activeHigh;
@@ -174,7 +146,7 @@ EndStopInputType LocalSwitchEndstop::GetEndstopType() const
 }
 
 // Test whether we are at or near the stop
-EndStopHit LocalSwitchEndstop::Stopped() const
+EndStopHit SwitchEndstop::Stopped() const
 {
 	for (size_t i = 0; i < numPortsUsed; ++i)
 	{
@@ -187,7 +159,7 @@ EndStopHit LocalSwitchEndstop::Stopped() const
 }
 
 // This is called to prime axis endstops
-void LocalSwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers)
+void SwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers)
 {
 	// Decide whether we stop just the driver, just the axis, or everything
 	stopAll = ((kin.GetConnectedAxes(GetAxis()) & ~MakeBitmap<AxesBitmap>(GetAxis())) != 0);
@@ -195,8 +167,9 @@ void LocalSwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& a
 	portsLeftToTrigger = LowestNBits<PortsBitmap>(numPortsUsed);
 }
 
-// Check whether the endstop is triggered and return the action that should be performed. Called from the step ISR.
-EndstopHitDetails LocalSwitchEndstop::CheckTriggered(bool goingSlow)
+// Check whether the endstop is triggered and return the action that should be performed. Don't update the state until Acknowledge is called.
+// Called from the step ISR.
+EndstopHitDetails SwitchEndstop::CheckTriggered(bool goingSlow)
 {
 	EndstopHitDetails rslt;				// initialised by default constructor
 	if (portsLeftToTrigger != 0)
@@ -246,7 +219,7 @@ EndstopHitDetails LocalSwitchEndstop::CheckTriggered(bool goingSlow)
 
 // This is called by the ISR to acknowledge that it is acting on the return from calling CheckTriggered. Called from the step ISR.
 // Return true if we have finished with this endstop or probe in this move.
-bool LocalSwitchEndstop::Acknowledge(EndstopHitDetails what)
+bool SwitchEndstop::Acknowledge(EndstopHitDetails what)
 {
 	switch (what.GetAction())
 	{
@@ -264,7 +237,7 @@ bool LocalSwitchEndstop::Acknowledge(EndstopHitDetails what)
 	}
 }
 
-void LocalSwitchEndstop::AppendDetails(const StringRef& str)
+void SwitchEndstop::AppendDetails(const StringRef& str)
 {
 	str.catf("%s on pin(s)",
 #if SUPPORT_CAN_EXPANSION
@@ -280,7 +253,18 @@ void LocalSwitchEndstop::AppendDetails(const StringRef& str)
 #if SUPPORT_CAN_EXPANSION
 		if (boardNumbers[i] != CanId::MasterAddress)
 		{
-			str.catf("%u.some_pin", boardNumbers[i]);
+			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), i);
+			String<StringLength100> reply;
+			if (CanInterface::GetHandlePinName(boardNumbers[i], h, reply.GetRef()) == GCodeResult::ok)
+			{
+				str.cat(reply.c_str());
+			}
+			else
+			{
+				reply.cat('\n');
+				reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
+				str.catf("%u.???", boardNumbers[i]);
+			}
 		}
 		else
 #endif
@@ -293,7 +277,7 @@ void LocalSwitchEndstop::AppendDetails(const StringRef& str)
 #if SUPPORT_CAN_EXPANSION
 
 // Process a remote endstop input change that relates to this endstop
-void LocalSwitchEndstop::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state)
+void SwitchEndstop::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state)
 {
 	if (handleMinor < numPortsUsed && boardNumbers[handleMinor] == src)
 	{
