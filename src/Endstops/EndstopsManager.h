@@ -26,17 +26,17 @@ public:
 
 	void Init();
 
-	// Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command
-	void EnableAxisEndstops(AxesBitmap axes, bool forHoming);
+	// Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command returning true if successful
+	bool EnableAxisEndstops(AxesBitmap axes, bool forHoming) __attribute__ ((warn_unused_result));
 
-	// Set up the active endstops for Z probing
-	void EnableZProbe(size_t probeNumber, bool probingAway = false);
+	// Set up the active endstops for Z probing returning true if successful
+	bool EnableZProbe(size_t probeNumber, bool probingAway = false) __attribute__ ((warn_unused_result));
 
 	// Set up the active endstops for Z probing with the current probe
-	void EnableCurrentZProbe(bool probingAway = false) { EnableZProbe(currentZProbeNumber, probingAway); }
+	bool EnableCurrentZProbe(bool probingAway = false) __attribute__ ((warn_unused_result)) { return EnableZProbe(currentZProbeNumber, probingAway); }
 
 	// Enable extruder endstops
-	void EnableExtruderEndstop(size_t extruder);
+	bool EnableExtruderEndstop(size_t extruder);
 
 	// Get the first endstop that has triggered and remove it from the active list if appropriate
 	EndstopHitDetails CheckEndstops(bool goingSlow);

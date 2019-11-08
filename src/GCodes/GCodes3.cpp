@@ -838,14 +838,16 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			}
 			moveBuffer.feedRate = gb.MachineState().feedRate;
 
-			if (useProbe)
+			const bool probeOk = (useProbe)
+									? platform.GetEndstops().EnableZProbe(probeNumberToUse)
+										: platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis), false);
+			if (!probeOk)
 			{
-				platform.GetEndstops().EnableZProbe(probeNumberToUse);
+				reply.copy("Failed to prime endstop or probe");
+				AbortPrint(gb);
+				return GCodeResult::error;
 			}
-			else
-			{
-				platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis), false);
-			}
+
 			moveBuffer.checkEndstops = true;
 
 			// Kick off new movement
@@ -908,14 +910,16 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, 
 			}
 			moveBuffer.feedRate = gb.MachineState().feedRate;
 
-			if (useProbe)
+			const bool probeOk = (useProbe)
+									? platform.GetEndstops().EnableZProbe(probeNumberToUse)
+										: platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis), false);
+			if (!probeOk)
 			{
-				platform.GetEndstops().EnableZProbe(probeNumberToUse);
+				reply.copy("Failed to prime endstop or probe");
+				AbortPrint(gb);
+				return GCodeResult::error;
 			}
-			else
-			{
-				platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis), false);
-			}
+
 			moveBuffer.checkEndstops = true;
 
 			// Kick off new movement

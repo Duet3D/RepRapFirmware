@@ -95,6 +95,8 @@ constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper driv
 constexpr size_t MaxExtruders = 3;					// The maximum number of extruders
 constexpr size_t NumDefaultExtruders = 0;			// The number of drivers that we configure as extruders by default
 
+constexpr size_t MaxAxesPlusExtruders = NumDirectDrivers;
+
 constexpr size_t MaxHeatersPerTool = 2;
 constexpr size_t MaxExtrudersPerTool = 1;
 

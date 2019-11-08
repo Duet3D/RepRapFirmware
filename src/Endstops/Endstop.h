@@ -57,7 +57,7 @@ class Endstop : public EndstopOrZProbe
 {
 public:
 	virtual EndStopInputType GetEndstopType() const = 0;
-	virtual void Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) = 0;
+	virtual bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) = 0;
 	virtual void AppendDetails(const StringRef& str) = 0;
 
 #if SUPPORT_CAN_EXPANSION

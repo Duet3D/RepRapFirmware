@@ -14,6 +14,7 @@
 #include "ObjectModel/ObjectModel.h"
 
 class GCodeBuffer;
+class IPAddress;
 
 class StringParser
 {

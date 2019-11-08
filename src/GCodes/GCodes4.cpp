@@ -537,7 +537,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				else if (platform.GetCurrentZProbe().Stopped() == EndStopHit::atStop)
 				{
 					reprap.GetHeat().SuspendHeaters(false);
-					platform.Message(ErrorMessage, "Z probe already triggered before probing move started");
+					platform.Message(ErrorMessage, "Z probe already triggered before probing move started\n");
 					gb.SetState(GCodeState::normal);
 					if (zp.GetProbeType() != ZProbeType::none && !probeIsDeployed)
 					{
@@ -549,8 +549,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				{
 					zProbeTriggered = false;
 					SetMoveBufferDefaults();
+					if (!platform.GetEndstops().EnableCurrentZProbe())
+					{
+						error = true;
+						reply.copy("Failed to enable Z probe");
+						gb.SetState(GCodeState::normal);
+						break;
+					}
 					platform.GetCurrentZProbe().SetProbing(true);
-					platform.GetEndstops().EnableCurrentZProbe();
 					moveBuffer.checkEndstops = true;
 					moveBuffer.reduceAcceleration = true;
 					moveBuffer.coords[Z_AXIS] = -zp.GetDiveHeight() + zp.GetActualTriggerHeight();
@@ -838,8 +844,15 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				zProbeTriggered = false;
 				SetMoveBufferDefaults();
+				if (!platform.GetEndstops().EnableCurrentZProbe())
+				{
+					error = true;
+					reply.copy("Failed to enable Z probe");
+					gb.SetState(GCodeState::normal);
+					break;
+				}
+
 				platform.GetCurrentZProbe().SetProbing(true);
-				platform.GetEndstops().EnableCurrentZProbe();
 				moveBuffer.checkEndstops = true;
 				moveBuffer.reduceAcceleration = true;
 				moveBuffer.coords[Z_AXIS] = (IsAxisHomed(Z_AXIS))
@@ -1092,7 +1105,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				gb.AdvanceState();														// resume at the next state when the user has finished
 
 				String<MaxMessageLength> message;
-				message.printf("Adjust postion until the reference point just %s the target, then press OK", probingAway ? "looses contact to" : "touches");
+				message.printf("Adjust position until the reference point just %s the target, then press OK", probingAway ? "loses contact with" : "touches");
 				DoManualProbe(gb, message.c_str(), "Manual Straight Probe", sps.GetMovingAxes());
 			}
 			else if ((!probingAway && zp.Stopped() == EndStopHit::atStop)
@@ -1115,8 +1128,15 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				zProbeTriggered = false;
 				SetMoveBufferDefaults();
+				if (!platform.GetEndstops().EnableZProbe(sps.GetZProbeToUse(), probingAway))
+				{
+					error = true;
+					reply.copy("Failed to enable Z probe");
+					gb.SetState(GCodeState::normal);
+					break;
+				}
+
 				zp.SetProbing(true);
-				platform.GetEndstops().EnableZProbe(sps.GetZProbeToUse(), probingAway);
 				moveBuffer.checkEndstops = true;
 				moveBuffer.reduceAcceleration = true;
 				sps.SetCoordsToTarget(moveBuffer.coords);

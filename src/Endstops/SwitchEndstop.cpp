@@ -92,14 +92,12 @@ GCodeResult SwitchEndstop::Configure(const char *pinNames, const StringRef& repl
 		if (boardAddress != CanId::MasterAddress)
 		{
 			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), numPortsUsed);
-			uint8_t currentState;
-			const GCodeResult rslt = CanInterface::CreateHandle(boardAddress, h, pn.c_str(), 0, MinimumSwitchReportInterval, currentState, reply);
+			const GCodeResult rslt = CanInterface::CreateHandle(boardAddress, h, pn.c_str(), 0, MinimumSwitchReportInterval, states[numPortsUsed], reply);
 			if (rslt != GCodeResult::ok)
 			{
 				ReleasePorts();
 				return rslt;
 			}
-			states[numPortsUsed] = (currentState != 0);
 		}
 		else
 #endif
@@ -159,12 +157,32 @@ EndStopHit SwitchEndstop::Stopped() const
 }
 
 // This is called to prime axis endstops
-void SwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers)
+bool SwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers)
 {
 	// Decide whether we stop just the driver, just the axis, or everything
 	stopAll = ((kin.GetConnectedAxes(GetAxis()) & ~MakeBitmap<AxesBitmap>(GetAxis())) != 0);
 	numPortsLeftToTrigger = (numPortsUsed != axisDrivers.numDrivers) ? 1 : numPortsUsed;
 	portsLeftToTrigger = LowestNBits<PortsBitmap>(numPortsUsed);
+
+#if SUPPORT_CAN_EXPANSION
+	// For each remote switch, check that the expansion board knows about it, and make sure we have an up-to-date state
+	for (size_t i = 0; i < numPortsUsed; ++i)
+	{
+		if (boardNumbers[i] != 0)
+		{
+			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), i);
+			String<StringLength100> reply;
+			if (CanInterface::EnableHandle(boardNumbers[i], h, states[i], reply.GetRef()) != GCodeResult::ok)
+			{
+				reply.cat('\n');
+				reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
+				return false;
+			}
+		}
+	}
+#endif
+
+	return true;
 }
 
 // Check whether the endstop is triggered and return the action that should be performed. Don't update the state until Acknowledge is called.
@@ -255,7 +273,7 @@ void SwitchEndstop::AppendDetails(const StringRef& str)
 		{
 			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), i);
 			String<StringLength100> reply;
-			if (CanInterface::GetHandlePinName(boardNumbers[i], h, reply.GetRef()) == GCodeResult::ok)
+			if (CanInterface::GetHandlePinName(boardNumbers[i], h, states[i], reply.GetRef()) == GCodeResult::ok)
 			{
 				str.cat(reply.c_str());
 			}

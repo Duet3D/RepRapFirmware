@@ -41,6 +41,7 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define ALLOCATE_DEFAULT_PORTS	1
 
 #define USE_CACHE				1					// set nonzero to enable the cache
+#define USE_MPU					0					// set nonzero to enable the memory protection unit
 
 #define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
 

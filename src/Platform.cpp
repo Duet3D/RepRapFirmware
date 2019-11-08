@@ -2336,9 +2336,12 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 	case (int)DiagnosticTestType::BusFault:
 		// Read from the "Undefined (Abort)" area
 #if SAME70
-		// FIXME: The SAME70 provides an MPU, maybe we should configure it as well?
-		// I guess this can wait until we have the RTOS working though.
-		Message(WarningMessage, "There is no abort area on the SAME70");
+# if USE_MPU
+		deliberateError = true;
+		(void)*(reinterpret_cast<const volatile char*>(0x30000000));
+# else
+		Message(WarningMessage, "There is no abort area on the SAME70 with MPU disabled");
+# endif
 #elif SAM4E || SAM4S
 		deliberateError = true;
 		(void)*(reinterpret_cast<const volatile char*>(0x20800000));

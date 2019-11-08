@@ -937,7 +937,7 @@ void CanInterface::WakeCanSender()
 }
 
 // Remote handle functions
-GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *pinName, uint16_t threshold, uint16_t minInterval, uint8_t& currentState, const StringRef& reply)
+GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *pinName, uint16_t threshold, uint16_t minInterval, bool& currentState, const StringRef& reply)
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -954,39 +954,50 @@ GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandl
 	SafeStrncpy(msg->pinName, pinName, ARRAY_SIZE(msg->pinName));
 	buf->dataLength = msg->GetActualDataLength();
 
-	return SendRequestAndGetStandardReply(buf, rid, reply, &currentState);
+	uint8_t extra;
+	const GCodeResult rslt = SendRequestAndGetStandardReply(buf, rid, reply, &extra);
+	if (rslt == GCodeResult::ok)
+	{
+		currentState = (extra != 0);
+	}
+	return rslt;
+}
+
+static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle h, uint8_t action, bool* currentState, const StringRef &reply)
+{
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		reply.copy("No CAN buffer");
+		return GCodeResult::error;
+	}
+
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageChangeInputMonitor>(rid, CanId::MasterAddress, boardAddress);
+	msg->handle = h;
+	msg->action = action;
+	uint8_t extra;
+	const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, &extra);
+	if (rslt == GCodeResult::ok && currentState != nullptr)
+	{
+		*currentState = (extra != 0);
+	}
+	return rslt;
 }
 
 GCodeResult CanInterface::DeleteHandle(CanAddress boardAddress, RemoteInputHandle h, const StringRef &reply)
 {
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
-	if (buf == nullptr)
-	{
-		reply.copy("No CAN buffer");
-		return GCodeResult::error;
-	}
-
-	const CanRequestId rid = AllocateRequestId(boardAddress);
-	auto msg = buf->SetupRequestMessage<CanMessageChangeInputMonitor>(rid, CanId::MasterAddress, boardAddress);
-	msg->handle = h;
-	msg->action = CanMessageChangeInputMonitor::actionDelete;
-	return SendRequestAndGetStandardReply(buf, rid, reply);
+	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitor::actionDelete, nullptr, reply);
 }
 
-GCodeResult CanInterface::GetHandlePinName(CanAddress boardAddress, RemoteInputHandle h, const StringRef &reply)
+GCodeResult CanInterface::GetHandlePinName(CanAddress boardAddress, RemoteInputHandle h, bool& currentState, const StringRef &reply)
 {
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
-	if (buf == nullptr)
-	{
-		reply.copy("No CAN buffer");
-		return GCodeResult::error;
-	}
+	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitor::actionReturnPinName, &currentState, reply);
+}
 
-	const CanRequestId rid = AllocateRequestId(boardAddress);
-	auto msg = buf->SetupRequestMessage<CanMessageChangeInputMonitor>(rid, CanId::MasterAddress, boardAddress);
-	msg->handle = h;
-	msg->action = CanMessageChangeInputMonitor::actionReturnPinName;
-	return SendRequestAndGetStandardReply(buf, rid, reply);
+GCodeResult CanInterface::EnableHandle(CanAddress boardAddress, RemoteInputHandle h, bool &currentState, const StringRef &reply)
+{
+	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitor::actionDoMonitor, &currentState, reply);
 }
 
 void CanInterface::Diagnostics(MessageType mtype)

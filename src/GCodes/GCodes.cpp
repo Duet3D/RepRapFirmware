@@ -1569,7 +1569,7 @@ bool GCodes::CheckEnoughAxesHomed(AxesBitmap axesMoved)
 	return (reprap.GetMove().GetKinematics().MustBeHomedAxes(axesMoved, noMovesBeforeHoming) & ~axesHomed) != 0;
 }
 
-// Execute a straight move returning true if an error was written to 'reply'
+// Execute a straight move returning an error message if the command was rejected, else nullptr
 // We have already acquired the movement lock and waited for the previous move to be taken.
 const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 {
@@ -1735,13 +1735,19 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		break;
 
 	case 1:
-		platform.GetEndstops().EnableAxisEndstops(axesMentioned & LowestNBits<AxesBitmap>(numTotalAxes), true);
+		if (!platform.GetEndstops().EnableAxisEndstops(axesMentioned & LowestNBits<AxesBitmap>(numTotalAxes), true))
+		{
+			return "Failed to enable endstops";
+		}
 		moveBuffer.checkEndstops = true;
 		break;
 
 	case 3:
 		axesToSenseLength = axesMentioned & LowestNBits<AxesBitmap>(numTotalAxes);
-		platform.GetEndstops().EnableAxisEndstops(axesMentioned & LowestNBits<AxesBitmap>(numTotalAxes), false);
+		if (!platform.GetEndstops().EnableAxisEndstops(axesMentioned & LowestNBits<AxesBitmap>(numTotalAxes), false))
+		{
+			return "Failed to enable endstops";
+		}
 		moveBuffer.checkEndstops = true;
 		break;
 

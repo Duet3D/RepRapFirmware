@@ -89,9 +89,10 @@ namespace CanInterface
 	void WakeCanSender();
 
 	// Remote handle functions
-	GCodeResult CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *pinName, uint16_t threshold, uint16_t minInterval, uint8_t& currentState, const StringRef& reply);
+	GCodeResult CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *pinName, uint16_t threshold, uint16_t minInterval, bool& currentState, const StringRef& reply);
 	GCodeResult DeleteHandle(CanAddress boardAddress, RemoteInputHandle h, const StringRef& reply);
-	GCodeResult GetHandlePinName(CanAddress boardAddress, RemoteInputHandle h, const StringRef& reply);
+	GCodeResult GetHandlePinName(CanAddress boardAddress, RemoteInputHandle h, bool& currentState, const StringRef& reply);
+	GCodeResult EnableHandle(CanAddress boardAddress, RemoteInputHandle h, bool& currentState, const StringRef& reply);
 
 	void Diagnostics(MessageType mtype);
 }

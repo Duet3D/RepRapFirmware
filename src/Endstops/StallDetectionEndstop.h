@@ -21,7 +21,7 @@ public:
 
 	EndStopInputType GetEndstopType() const override { return (individualMotors) ? EndStopInputType::motorStallIndividual : EndStopInputType::motorStallAny; }
 	EndStopHit Stopped() const override;
-	void Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) override;
+	bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) override;
 	EndstopHitDetails CheckTriggered(bool goingSlow) override;
 	bool Acknowledge(EndstopHitDetails what) override;
 	void AppendDetails(const StringRef& str) override;

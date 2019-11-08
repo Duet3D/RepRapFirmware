@@ -1254,7 +1254,9 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 		}
 
 		AxesBitmap additionalAxisMotorsToEnable = 0, axisMotorsEnabled = 0;
+#if SUPPORT_CAN_EXPANSION
 		afterPrepare.drivesMoving = 0;
+#endif
 		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 		{
 			if (flags.isLeadscrewAdjustmentMove)
