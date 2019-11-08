@@ -39,6 +39,7 @@ const size_t NumFirmwareUpdateModules = 1;
 #define ALLOCATE_DEFAULT_PORTS	0
 
 #define USE_CACHE				0					// Cache controller disabled for now
+#define USE_MPU					1
 
 #define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
 
@@ -68,6 +69,8 @@ constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper driv
 
 constexpr size_t MaxExtruders = 16;					// The maximum number of extruders
 constexpr size_t NumDefaultExtruders = 3;			// The number of drivers that we configure as extruders by default
+
+constexpr size_t MaxAxesPlusExtruders = 20;			// May be <= MaxAxes + MaxExtruders
 
 constexpr size_t MaxHeatersPerTool = 4;
 constexpr size_t MaxExtrudersPerTool = 6;
