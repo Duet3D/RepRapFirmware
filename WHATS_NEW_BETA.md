@@ -15,6 +15,7 @@ Bug fixes:
 Known issues:
 - Duet 3 all revisions: file uploading via the local Ethernet port is unreliable (this is the case in previous firmware versions too). To guard against this, always enable CRC checking in DWC 2.0.4.
 - Extruder stall detection (G1 H1 E moves) is not implemented
+- Resurrecting a print causes excessive extrusion at the start if the print was sliced using absolute extrusion. Workaround: slice prints using relative extrusion.
 
 RepRapFirmware 3.0beta12
 ========================
