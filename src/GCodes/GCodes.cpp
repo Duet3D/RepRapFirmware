@@ -2741,11 +2741,13 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply)
 // Start printing the file already selected
 void GCodes::StartPrinting(bool fromStart)
 {
-	fileGCode->SetToolNumberAdjust(0);								// clear tool number adjustment
-	fileGCode->MachineState().volumetricExtrusion = false;			// default to non-volumetric extrusion
+	if (fromStart)													// if not resurrecting a print
+	{
+		fileGCode->MachineState().volumetricExtrusion = false;		// default to non-volumetric extrusion
+		virtualExtruderPosition = 0.0;
+	}
 
-	// Reset all extruder positions when starting a new print
-	virtualExtruderPosition = 0.0;
+	fileGCode->SetToolNumberAdjust(0);								// clear tool number adjustment
 	for (size_t extruder = 0; extruder < MaxExtruders; extruder++)
 	{
 		rawExtruderTotalByDrive[extruder] = 0.0;
