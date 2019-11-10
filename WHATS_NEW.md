@@ -12,6 +12,9 @@ Upgrade notes:
 - If you are using a simple microswitch as a filament monitor, you may need to add a pullup resistor (see below)
 - The P parameter of the G29 S0 (or plain G29) command has been withdrawn. See below under "changed behaviour".
 
+Known issues:
+- (present in older releases too) Resurrecting a print causes excessive extrusion at the start if the print was sliced using absolute extrusion. Workaround: slice prints using relative extrusion. If you need to resurrect a print that has been sliced using absolute extrusion, then edit the resurrect.g file to move the G92 E command later in the file, after the M23 and M26 commands.
+
 Feature improvements/changed behaviour:
 - File uploads are now done to temporary files that are renamed when the upload succeeds; so that if an upload fails, an original file with the same name is not lost (thanks wilriker)
 - HTTP reply buffers now time out 8 seconds after they are allocated. This may resolve the out-of-buffer issues that some users experience.
