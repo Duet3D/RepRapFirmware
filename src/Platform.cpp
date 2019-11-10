@@ -1622,6 +1622,8 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 	DisableCache();								// disable the cache, it seems to upset flash memory access
 
 #if USE_MPU
+	const uint16_t originalReason = reason;
+
 	//TODO set the flash memory to strongly-ordered or device instead
 	ARM_MPU_Disable();							// disable the MPU
 #endif
@@ -1698,7 +1700,18 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		srdBuf[slot].hfsr = SCB->HFSR;
 		srdBuf[slot].cfsr = SCB->CFSR;
 		srdBuf[slot].icsr = SCB->ICSR;
+#if USE_MPU
+		if (originalReason == (uint16_t)SoftwareResetReason::memFault)
+		{
+			srdBuf[slot].bfar = SCB->MMFAR;				// on a memory fault we store the MMFAR instead of the BFAR
+		}
+		else
+		{
+			srdBuf[slot].bfar = SCB->BFAR;
+		}
+#else
 		srdBuf[slot].bfar = SCB->BFAR;
+#endif
 		// Get the task name if we can. There may be no task executing, so we must allow for this.
 		const TaskHandle_t currentTask = xTaskGetCurrentTaskHandle();
 		srdBuf[slot].taskName = (currentTask == nullptr) ? 0 : *reinterpret_cast<const uint32_t*>(pcTaskGetName(currentTask));
