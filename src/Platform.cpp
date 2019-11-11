@@ -1932,7 +1932,7 @@ int debugLine = 0;
 // Return diagnostic information
 void Platform::Diagnostics(MessageType mtype)
 {
-#if USE_CACHE
+#if USE_CACHE && SAM4E
 	// Get the cache statistics before we start messing around with the cache
 	const uint32_t cacheCount = cmcc_get_monitor_cnt(CMCC);
 #endif
@@ -2118,7 +2118,7 @@ void Platform::Diagnostics(MessageType mtype)
 		Message(mtype, "not set\n");
 	}
 
-#if USE_CACHE
+#if USE_CACHE && SAM4E
 	MessageF(mtype, "Cache data hit count %" PRIu32 "\n", cacheCount);
 #endif
 
@@ -2372,73 +2372,84 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 		DDA::PrintMoves();
 		break;
 
-	case (int)DiagnosticTestType::TimeSquareRoot:		// Show the square root calculation time. The displayed value is subject to interrupts.
+	case (int)DiagnosticTestType::TimeSquareRoot:		// Show the square root calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
-			uint32_t tim1 = 0;
 			bool ok1 = true;
+			uint32_t tim1 = 0;
 			for (uint32_t i = 0; i < 100; ++i)
 			{
 				const uint32_t num1 = 0x7265ac3d + i;
+				const uint64_t sq = (uint64_t)num1 * num1;
+				cpu_irq_disable();
 				const uint32_t now1 = StepTimer::GetInterruptClocks();
-				const uint32_t num1a = isqrt64((uint64_t)num1 * num1);
+				const uint32_t num1a = isqrt64(sq);
 				tim1 += StepTimer::GetInterruptClocks() - now1;
+				cpu_irq_enable();
 				if (num1a != num1)
 				{
 					ok1 = false;
 				}
 			}
 
-			uint32_t tim2 = 0;
 			bool ok2 = true;
+			uint32_t tim2 = 0;
 			for (uint32_t i = 0; i < 100; ++i)
 			{
 				const uint32_t num2 = 0x0000a4c5 + i;
+				const uint64_t sq = (uint64_t)num2 * num2;
+				cpu_irq_disable();
 				const uint32_t now2 = StepTimer::GetInterruptClocks();
-				const uint32_t num2a = isqrt64((uint64_t)num2 * num2);
+				const uint32_t num2a = isqrt64(sq);
 				tim2 += StepTimer::GetInterruptClocks() - now2;
+				cpu_irq_enable();
 				if (num2a != num2)
 				{
 					ok2 = false;
 				}
 			}
+
 			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s",
 					(double)(tim1 * 10000)/StepTimer::StepClockRate, (ok1) ? "ok" : "ERROR",
 							(double)(tim2 * 10000)/StepTimer::StepClockRate, (ok2) ? "ok" : "ERROR");
 		}
 		break;
 
-	case (int)DiagnosticTestType::TimeSinCos:		// Show the sin/cosine calculation time. The displayed value is subject to interrupts.
+	case (int)DiagnosticTestType::TimeSinCos:		// Show the sin/cosine calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
+			bool ok = true;
 			uint32_t tim1 = 0;
-			bool ok1 = true;
 			for (unsigned int i = 0; i < 100; ++i)
 			{
 				const float angle = 0.01 * i;
+				cpu_irq_disable();
 				const uint32_t now1 = StepTimer::GetInterruptClocks();
 				const float f1 = RepRap::SinfCosf(angle);
 				tim1 += StepTimer::GetInterruptClocks() - now1;
+				cpu_irq_enable();
 				if (f1 >= 1.5)
 				{
-					ok1 = false;		// need to use f1 to prevent the calculations being omitted
+					ok = false;		// need to use f1 to prevent the calculations being omitted
 				}
 			}
 
 			uint32_t tim2 = 0;
-			bool ok2 = true;
 			for (unsigned int i = 0; i < 100; ++i)
 			{
 				const double angle = (double)0.01 * i;
+				cpu_irq_disable();
 				const uint32_t now2 = StepTimer::GetInterruptClocks();
 				const double d1 = RepRap::SinCos(angle);
 				tim2 += StepTimer::GetInterruptClocks() - now2;
+				cpu_irq_enable();
 				if (d1 >= (double)1.5)
 				{
-					ok1 = false;		// need to use f1 to prevent the calculations being omitted
+					ok = false;		// need to use f1 to prevent the calculations being omitted
 				}
 			}
-			reply.printf("Sine + cosine: float %.2fus %s, double %.2fus %s",
-				(double)(tim1 * 10000)/StepTimer::StepClockRate, (ok1) ? "ok" : "ERROR",
-					(double)(tim2 * 10000)/StepTimer::StepClockRate, (ok2) ? "ok" : "ERROR");
+			if (ok)			// should always be true
+			{
+				reply.printf("Sine + cosine: float %.2fus, double %.2fus", (double)(tim1 * 10000)/StepTimer::StepClockRate, (double)(tim2 * 10000)/StepTimer::StepClockRate);
+			}
 		}
 		break;
 

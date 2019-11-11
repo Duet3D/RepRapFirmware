@@ -17,7 +17,28 @@
 #include <TaskPriorities.h>
 
 #if USE_CACHE
-# include "cmcc/cmcc.h"
+
+# if SAM4E
+#  include "cmcc/cmcc.h"
+# endif
+
+# if SAME70
+#  include <core_cm7.h>
+
+void EnableCache()
+{
+	SCB_EnableICache();
+	SCB_EnableDCache();
+}
+
+void DisableCache()
+{
+	SCB_DisableICache();
+	SCB_DisableDCache();
+}
+
+# endif
+
 #endif
 
 #if SAME70 && USE_MPU
@@ -245,10 +266,12 @@ extern "C" [[noreturn]] void AppMain()
 #endif
 
 #if USE_CACHE
-	// Enable the cache
+# if SAM4E
+	// Initialise the cache controller
 	cmcc_config g_cmcc_cfg;
 	cmcc_get_config_defaults(&g_cmcc_cfg);
 	cmcc_init(CMCC, &g_cmcc_cfg);
+#endif
 	EnableCache();
 #endif
 

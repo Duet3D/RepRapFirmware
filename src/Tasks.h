@@ -14,7 +14,8 @@
 
 #if USE_CACHE
 
-#include "sam/drivers/cmcc/cmcc.h"
+# if SAM4E
+#  include "sam/drivers/cmcc/cmcc.h"
 
 inline void EnableCache()
 {
@@ -26,6 +27,13 @@ inline void DisableCache()
 {
 	cmcc_disable(CMCC);
 }
+
+# elif SAME70
+
+void EnableCache();
+void DisableCache();
+
+# endif
 
 #else
 

@@ -41,9 +41,9 @@ const size_t NumFirmwareUpdateModules = 1;
 #define SUPPORT_TELNET			1
 #define SUPPORT_ASYNC_MOVES		1
 #define ALLOCATE_DEFAULT_PORTS	0
-#define USE_MPU					1
 
-#define USE_CACHE				0					// Cache controller disabled for now
+#define USE_MPU					1					// Needed if USE_CACHE is set, so that we can have non-cacheable memory regions
+#define USE_CACHE				1
 
 #define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
 
