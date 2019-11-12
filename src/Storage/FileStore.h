@@ -62,13 +62,16 @@ public:
 	bool Invalidate(const FATFS *fs, bool doClose);	// Invalidate the file if it uses the specified FATFS object
 	bool IsOpenOn(const FATFS *fs) const;			// Return true if the file is open on the specified file system
 	uint32_t GetCRC32() const;
+	bool IsSameFile(const FIL& otherFile) const;	// Return true if the passed file is the same as ours
+	bool IsCloseRequested() const { return closeRequested; }
+	bool IsFree() const { return usageMode == FileUseMode::free; }
 
 #if 0	// not currently used
 	bool SetClusterMap(uint32_t[]);					// Provide a cluster map for fast seeking
 #endif
+
 	static float GetAndClearLongestWriteTime();		// Return the longest time it took to write a block to a file, in milliseconds
 	static unsigned int GetAndClearMaxRetryCount();	// Return the highest SD card retry count that resulted in a successful transfer
-	friend class MassStorage;
 
 private:
 	void Init();

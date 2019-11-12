@@ -32,7 +32,7 @@ void UploadingNetworkResponder::CancelUpload()
 		fileBeingUploaded.Close();
 		if (!filenameBeingProcessed.IsEmpty())
 		{
-			GetPlatform().GetMassStorage()->Delete(filenameBeingProcessed.c_str());
+			MassStorage::Delete(filenameBeingProcessed.c_str());
 			filenameBeingProcessed.Clear();
 		}
 	}
@@ -100,7 +100,7 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 		const char *uploadFilename = filenameBeingProcessed.c_str();
 		if (uploadError)
 		{
-			GetPlatform().GetMassStorage()->Delete(uploadFilename);
+			MassStorage::Delete(uploadFilename);
 		}
 		else
 		{
@@ -108,15 +108,15 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 			origFilename.catn(uploadFilename, filenameBeingProcessed.GetRef().strlen() - strlen(UPLOAD_EXTENSION));
 
 			// Delete possibly existing files with that name (i.e. prepare "overwrite")
-			GetPlatform().GetMassStorage()->Delete(origFilename.c_str());
+			MassStorage::Delete(origFilename.c_str());
 
 			// Rename the uploaded file to it's original name
-			GetPlatform().GetMassStorage()->Rename(uploadFilename, origFilename.c_str());
+			MassStorage::Rename(uploadFilename, origFilename.c_str());
 
 			if (fileLastModified != 0)
 			{
 				// Update the file timestamp if it was specified
-				(void)GetPlatform().GetMassStorage()->SetLastModifiedTime(origFilename.c_str(), fileLastModified);
+				(void)MassStorage::SetLastModifiedTime(origFilename.c_str(), fileLastModified);
 			}
 		}
 		filenameBeingProcessed.Clear();

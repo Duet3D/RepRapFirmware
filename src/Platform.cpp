@@ -241,9 +241,6 @@ Platform::Platform() :
 	tickState(0), debugCode(0),
 	lastWarningMillis(0), lastLaserPwm(0.0), deferredPowerDown(false), deliberateError(false)
 {
-#if HAS_MASS_STORAGE
-	massStorage = new MassStorage(this);
-#endif
 }
 
 //*******************************************************************************************************************
@@ -345,7 +342,7 @@ void Platform::Init()
 	}
 
 #if HAS_MASS_STORAGE
-	massStorage->Init();
+	MassStorage::Init();
 #endif
 
 	// Ethernet networking defaults
@@ -984,7 +981,7 @@ void Platform::Exit()
 {
 	StopLogging();
 #if HAS_MASS_STORAGE
-	massStorage->CloseAllFiles();
+	MassStorage::CloseAllFiles();
 #endif
 
 	// Release the aux output stack (should release the others too!)
@@ -1135,7 +1132,7 @@ void Platform::Spin()
 #endif
 
 #if HAS_MASS_STORAGE
-	massStorage->Spin();
+	MassStorage::Spin();
 #endif
 
 	// Try to flush messages to serial ports
@@ -2057,13 +2054,13 @@ void Platform::Diagnostics(MessageType mtype)
 
 #if HAS_MASS_STORAGE
 	// Show the number of free entries in the file table
-	MessageF(mtype, "Free file entries: %u\n", massStorage->GetNumFreeFiles());
+	MessageF(mtype, "Free file entries: %u\n", MassStorage::GetNumFreeFiles());
 
 # if HAS_HIGH_SPEED_SD
 	// Show the HSMCI CD pin and speed
-	MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n", (massStorage->IsCardDetected(0) ? "detected" : "not detected"), (double)((float)hsmci_get_speed() * 0.000001));
+	MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n", (MassStorage::IsCardDetected(0) ? "detected" : "not detected"), (double)((float)hsmci_get_speed() * 0.000001));
 # else
-	MessageF(mtype, "SD card 0 %s\n", (massStorage->IsCardDetected(0) ? "detected" : "not detected"));
+	MessageF(mtype, "SD card 0 %s\n", (MassStorage::IsCardDetected(0) ? "detected" : "not detected"));
 # endif
 
 	// Show the longest SD card write time
@@ -2161,7 +2158,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 
 #if HAS_MASS_STORAGE
 			// Check the SD card detect and speed
-			if (!massStorage->IsCardDetected(0))
+			if (!MassStorage::IsCardDetected(0))
 			{
 				Message(AddError(mtype), "SD card 0 not detected\n");
 				testFailed = true;
@@ -3986,26 +3983,26 @@ FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode
 {
 	String<MaxFilenameLength> location;
 	return (MassStorage::CombineName(location.GetRef(), folder, fileName))
-			? massStorage->OpenFile(location.c_str(), mode, preAllocSize)
+			? MassStorage::OpenFile(location.c_str(), mode, preAllocSize)
 				: nullptr;
 }
 
 bool Platform::Delete(const char* folder, const char *filename) const
 {
 	String<MaxFilenameLength> location;
-	return MassStorage::CombineName(location.GetRef(), folder, filename) && massStorage->Delete(location.c_str());
+	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str());
 }
 
 bool Platform::FileExists(const char* folder, const char *filename) const
 {
 	String<MaxFilenameLength> location;
-	return MassStorage::CombineName(location.GetRef(), folder, filename) && massStorage->FileExists(location.c_str());
+	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::FileExists(location.c_str());
 }
 
 bool Platform::DirectoryExists(const char *folder, const char *dir) const
 {
 	String<MaxFilenameLength> location;
-	return MassStorage::CombineName(location.GetRef(), folder, dir) && massStorage->DirectoryExists(location.c_str());
+	return MassStorage::CombineName(location.GetRef(), folder, dir) && MassStorage::DirectoryExists(location.c_str());
 }
 
 // Set the system files path
@@ -4032,21 +4029,21 @@ GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply)
 bool Platform::SysFileExists(const char *filename) const
 {
 	String<MaxFilenameLength> location;
-	return MakeSysFileName(location.GetRef(), filename) && massStorage->FileExists(location.c_str());
+	return MakeSysFileName(location.GetRef(), filename) && MassStorage::FileExists(location.c_str());
 }
 
 FileStore* Platform::OpenSysFile(const char *filename, OpenMode mode) const
 {
 	String<MaxFilenameLength> location;
 	return (MakeSysFileName(location.GetRef(), filename))
-			? massStorage->OpenFile(location.c_str(), mode, 0)
+			? MassStorage::OpenFile(location.c_str(), mode, 0)
 				: nullptr;
 }
 
 bool Platform::DeleteSysFile(const char *filename) const
 {
 	String<MaxFilenameLength> location;
-	return MakeSysFileName(location.GetRef(), filename) && massStorage->Delete(location.c_str());
+	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.c_str());
 }
 
 bool Platform::MakeSysFileName(const StringRef& result, const char *filename) const

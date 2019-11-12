@@ -74,13 +74,20 @@ private:
 	uint32_t lastTransferTime;
 	uint16_t lastTransferNumber;
 	unsigned int failedTransfers;
-	TransferHeader rxHeader, txHeader;
-	uint32_t rxResponse, txResponse;
 
 	// Transfer buffers
-	uint32_t rxBuffer32[LinuxTransferBufferSize / 4], txBuffer32[LinuxTransferBufferSize / 4];
-	char * const rxBuffer = reinterpret_cast<char *>(rxBuffer32);
-	char * const txBuffer = reinterpret_cast<char *>(txBuffer32);
+	// These must be in non-cached memory because we DMA to/from them, see http://ww1.microchip.com/downloads/en/DeviceDoc/Managing-Cache-Coherency-on-Cortex-M7-Based-MCUs-DS90003195A.pdf
+	// This in turn means that we must declare them static, so we can only have one DataTransfer instance
+	static __nocache TransferHeader rxHeader;
+	static __nocache TransferHeader txHeader;
+	static __nocache uint32_t rxResponse;
+	static __nocache uint32_t txResponse;
+	static __nocache uint32_t rxBuffer32[LinuxTransferBufferSize / 4];
+	static __nocache uint32_t txBuffer32[LinuxTransferBufferSize / 4];
+
+	static inline char * rxBuffer() { return reinterpret_cast<char *>(rxBuffer32); }
+	static inline char * txBuffer() { return reinterpret_cast<char *>(txBuffer32); }
+
 	size_t rxPointer, txPointer;
 
 	// Packet properties

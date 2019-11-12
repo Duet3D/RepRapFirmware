@@ -62,13 +62,13 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 	{
 		// See if we can access the file
 		// Webserver may call rr_fileinfo for a directory, check this case here
-		if (reprap.GetPlatform().GetMassStorage()->DirectoryExists(filePath))
+		if (MassStorage::DirectoryExists(filePath))
 		{
 			info.isValid = false;
 			return true;
 		}
 
-		fileBeingParsed = reprap.GetPlatform().GetMassStorage()->OpenFile(filePath, OpenMode::read, 0);
+		fileBeingParsed = MassStorage::OpenFile(filePath, OpenMode::read, 0);
 		if (fileBeingParsed == nullptr)
 		{
 			// Something went wrong - we cannot open it
@@ -83,7 +83,7 @@ bool FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool
 		// Set up the info struct
 		parsedFileInfo.Init();
 		parsedFileInfo.fileSize = fileBeingParsed->Length();
-		parsedFileInfo.lastModifiedTime = reprap.GetPlatform().GetMassStorage()->GetLastModifiedTime(filePath);
+		parsedFileInfo.lastModifiedTime = MassStorage::GetLastModifiedTime(filePath);
 		parsedFileInfo.isValid = true;
 
 		// Record some debug values here

@@ -562,12 +562,11 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		bool success = false;
 		if (oldVal != nullptr && newVal != nullptr)
 		{
-			MassStorage * const ms = GetPlatform().GetMassStorage();
-			if (StringEqualsIgnoreCase(GetKeyValue("deleteexisting"), "yes") && ms->FileExists(oldVal) && ms->FileExists(newVal))
+			if (StringEqualsIgnoreCase(GetKeyValue("deleteexisting"), "yes") && MassStorage::FileExists(oldVal) && MassStorage::FileExists(newVal))
 			{
-				ms->Delete(newVal);
+				MassStorage::Delete(newVal);
 			}
-			success = ms->Rename(oldVal, newVal);
+			success = MassStorage::Rename(oldVal, newVal);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
@@ -577,7 +576,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		bool success = false;
 		if (dirVal != nullptr)
 		{
-			success = GetPlatform().GetMassStorage()->MakeDirectory(dirVal);
+			success = MassStorage::MakeDirectory(dirVal);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}

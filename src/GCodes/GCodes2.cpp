@@ -681,7 +681,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 				bool encapsulateList = gb.MachineState().compatibility != Compatibility::marlin;
 				FileInfo fileInfo;
-				if (platform.GetMassStorage()->FindFirst(dir.c_str(), fileInfo))
+				if (MassStorage::FindFirst(dir.c_str(), fileInfo))
 				{
 					// iterate through all entries and append each file name
 					do {
@@ -693,7 +693,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						{
 							outBuf->catf("%s\n", fileInfo.fileName.c_str());
 						}
-					} while (platform.GetMassStorage()->FindNext(fileInfo));
+					} while (MassStorage::FindNext(fileInfo));
 
 					if (encapsulateList)
 					{
@@ -716,7 +716,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		{
 			const size_t card = (gb.Seen('P')) ? gb.GetIValue() : 0;
-			result = platform.GetMassStorage()->Mount(card, reply, true);
+			result = MassStorage::Mount(card, reply, true);
 		}
 		break;
 
@@ -727,7 +727,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		{
 			const size_t card = (gb.Seen('P')) ? gb.GetIValue() : 0;
-			result = platform.GetMassStorage()->Unmount(card, reply);
+			result = MassStorage::Unmount(card, reply);
 		}
 		break;
 
@@ -1088,7 +1088,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			uint64_t capacity, freeSpace;
 			uint32_t speed;
 			uint32_t clSize;
-			const MassStorage::InfoResult res = platform.GetMassStorage()->GetCardInfo(slot, capacity, freeSpace, speed, clSize);
+			const MassStorage::InfoResult res = MassStorage::GetCardInfo(slot, capacity, freeSpace, speed, clSize);
 			if (format == 2)
 			{
 				reply.printf("{\"SDinfo\":{\"slot\":%" PRIu32 ",\"present\":", slot);
@@ -2813,7 +2813,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				result = GCodeResult::error;
 				break;
 			}
-			platform.GetMassStorage()->MakeDirectory(dirName.c_str());
+			MassStorage::MakeDirectory(dirName.c_str());
 		}
 		break;
 
@@ -2833,12 +2833,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				result = GCodeResult::error;
 				break;
 			}
-			MassStorage * const ms = platform.GetMassStorage();
-			if (gb.Seen('D') && gb.GetUIValue() == 1 && ms->FileExists(oldVal.c_str()) && ms->FileExists(newVal.c_str()))
+			if (gb.Seen('D') && gb.GetUIValue() == 1 && MassStorage::FileExists(oldVal.c_str()) && MassStorage::FileExists(newVal.c_str()))
 			{
-				ms->Delete(newVal.c_str());
+				MassStorage::Delete(newVal.c_str());
 			}
-			ms->Rename(oldVal.c_str(), newVal.c_str());
+			MassStorage::Rename(oldVal.c_str(), newVal.c_str());
 		}
 		break;
 

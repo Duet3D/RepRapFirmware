@@ -81,8 +81,8 @@ bool MenuItem::IsVisible() const
 	case 5:		return !reprap.GetPrintMonitor().IsPrinting();
 	case 6:		return reprap.GetGCodes().IsPaused() || reprap.GetGCodes().IsPausing();
 	case 7:		return reprap.GetGCodes().IsReallyPrinting() || reprap.GetGCodes().IsResuming();
-	case 10:	return reprap.GetPlatform().GetMassStorage()->IsDriveMounted(0);
-	case 11:	return !reprap.GetPlatform().GetMassStorage()->IsDriveMounted(0);
+	case 10:	return MassStorage::IsDriveMounted(0);
+	case 11:	return !MassStorage::IsDriveMounted(0);
 	case 20:	return reprap.GetCurrentOrDefaultTool()->HasTemperatureFault();
 	case 28:	return reprap.GetHeat().GetStatus(reprap.GetHeat().GetBedHeater(0)) == HeaterStatus::fault;
 	}
@@ -693,7 +693,7 @@ bool ValueMenuItem::Adjust(int clicks)
 
 FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *cmd, const char *dir, const char *acFile, unsigned int nf)
 	: MenuItem(r, c, w, LeftAlign, fn, vis), numDisplayLines(nf), command(cmd), initialDirectory(dir), m_acFile(acFile),
-        m_uListingFirstVisibleIndex(0), m_uListingSelectedIndex(0), m_oMS(reprap.GetPlatform().GetMassStorage())
+        m_uListingFirstVisibleIndex(0), m_uListingSelectedIndex(0)
 {
 	// There's no guarantee that initialDirectory has a trailing '/'
 	currentDirectory.copy(initialDirectory);
@@ -719,7 +719,7 @@ void FilesMenuItem::EnterDirectory()
 
 	m_uHardItemsInDirectory = 0;
 	FileInfo oFileInfo;
-	if (m_oMS->FindFirst(currentDirectory.c_str(), oFileInfo))
+	if (MassStorage::FindFirst(currentDirectory.c_str(), oFileInfo))
 	{
 		do
 		{
@@ -728,7 +728,7 @@ void FilesMenuItem::EnterDirectory()
 				++m_uHardItemsInDirectory;
 			}
 		}
-		while (m_oMS->FindNext(oFileInfo));
+		while (MassStorage::FindNext(oFileInfo));
 	}
 
 	itemChanged = true;							// force a redraw
@@ -772,7 +772,7 @@ void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 		switch (sdCardState)
 		{
 		case notStarted:
-			if (m_oMS->CheckDriveMounted(currentDirectory.c_str()))
+			if (MassStorage::CheckDriveMounted(currentDirectory.c_str()))
 			{
 				sdCardState = mounted;
 				EnterDirectory();
@@ -787,7 +787,7 @@ void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 			{
 				const size_t card = (isdigit(currentDirectory[0]) && currentDirectory[1] == ':') ? currentDirectory[0] - '0' : 0;
 				String<StringLength50> reply;
-				switch(m_oMS->Mount(card, reply.GetRef(), false))
+				switch(MassStorage::Mount(card, reply.GetRef(), false))
 				{
 				case GCodeResult::notFinished:
 					return;
@@ -859,7 +859,7 @@ void FilesMenuItem::ListFiles(Lcd7920& lcd, PixelNumber rightMargin, bool highli
 
 	// Seek to the first file that is in view
 	FileInfo oFileInfo;
-	bool gotFileInfo = m_oMS->FindFirst(currentDirectory.c_str(), oFileInfo);
+	bool gotFileInfo = MassStorage::FindFirst(currentDirectory.c_str(), oFileInfo);
 	while (gotFileInfo)
 	{
 		if (oFileInfo.fileName[0] != '.')
@@ -870,7 +870,7 @@ void FilesMenuItem::ListFiles(Lcd7920& lcd, PixelNumber rightMargin, bool highli
 			}
 			--dirEntriesToSkip;
 		}
-		gotFileInfo =  m_oMS->FindNext(oFileInfo);
+		gotFileInfo =  MassStorage::FindNext(oFileInfo);
 	}
 
 	// We always iterate the entire viewport so that old listing lines that may not be overwritten are cleared
@@ -907,11 +907,11 @@ void FilesMenuItem::ListFiles(Lcd7920& lcd, PixelNumber rightMargin, bool highli
 
 		do
 		{
-			gotFileInfo = m_oMS->FindNext(oFileInfo);
+			gotFileInfo = MassStorage::FindNext(oFileInfo);
 		} while (gotFileInfo && oFileInfo.fileName[0] == '.');
 	}
 
-	m_oMS->AbandonFindNext();				// release the mutex, there may be more files that we don't have room to display
+	MassStorage::AbandonFindNext();				// release the mutex, there may be more files that we don't have room to display
 
 	itemChanged = false;
 	drawn = true;
@@ -1013,7 +1013,7 @@ bool FilesMenuItem::Select(const StringRef& cmd)
 
 		// Seek to the selected file
 		FileInfo oFileInfo;
-		bool gotFileInfo = m_oMS->FindFirst(currentDirectory.c_str(), oFileInfo);
+		bool gotFileInfo = MassStorage::FindFirst(currentDirectory.c_str(), oFileInfo);
 		while (gotFileInfo)
 		{
 			if (oFileInfo.fileName[0] != '.')
@@ -1024,9 +1024,9 @@ bool FilesMenuItem::Select(const StringRef& cmd)
 				}
 				--dirEntriesToSkip;
 			}
-			gotFileInfo = m_oMS->FindNext(oFileInfo);
+			gotFileInfo = MassStorage::FindNext(oFileInfo);
 		}
-		m_oMS->AbandonFindNext();
+		MassStorage::AbandonFindNext();
 
 		if (gotFileInfo)	// handles empty directory (no action)
 		{

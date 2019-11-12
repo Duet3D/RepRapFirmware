@@ -244,7 +244,7 @@ void RepRap::Init()
 	}
 #endif
 
-	active = true;						// must do this before we start the network or call Spin(), else the watchdog may time out
+	active = true;										// must do this before we start the network or call Spin(), else the watchdog may time out
 
 	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
@@ -255,8 +255,8 @@ void RepRap::Init()
 		String<100> reply;
 		do
 		{
-			platform->GetMassStorage()->Spin();			// Spin() doesn't get called regularly until after this function completes, and we need it to update the card detect status
-			rslt = platform->GetMassStorage()->Mount(0, reply.GetRef(), false);
+			MassStorage::Spin();						// Spin() doesn't get called regularly until after this function completes, and we need it to update the card detect status
+			rslt = MassStorage::Mount(0, reply.GetRef(), false);
 		}
 		while (rslt == GCodeResult::notFinished);
 
@@ -1274,7 +1274,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		size_t mountedCards = 0;
 		for (size_t i = 0; i < NumSdCards; i++)
 		{
-			if (platform->GetMassStorage()->IsDriveMounted(i))
+			if (MassStorage::IsDriveMounted(i))
 			{
 				mountedCards |= (1 << i);
 			}
@@ -1854,11 +1854,11 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 	unsigned int err;
 	unsigned int nextFile = 0;
 
-	if (!platform->GetMassStorage()->CheckDriveMounted(dir))
+	if (!MassStorage::CheckDriveMounted(dir))
 	{
 		err = 1;
 	}
-	else if (!platform->GetMassStorage()->DirectoryExists(dir))
+	else if (!MassStorage::DirectoryExists(dir))
 	{
 		err = 2;
 	}
@@ -1867,7 +1867,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 		err = 0;
 		FileInfo fileInfo;
 		unsigned int filesFound = 0;
-		bool gotFile = platform->GetMassStorage()->FindFirst(dir, fileInfo);
+		bool gotFile = MassStorage::FindFirst(dir, fileInfo);
 
 		size_t bytesLeft = OutputBuffer::GetBytesLeft(response);	// don't write more bytes than we can
 
@@ -1881,7 +1881,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 					if (bytesLeft < fileInfo.fileName.strlen() * 2 + 20)
 					{
 						// No more space available - stop here
-						platform->GetMassStorage()->AbandonFindNext();
+						MassStorage::AbandonFindNext();
 						nextFile = filesFound;
 						break;
 					}
@@ -1896,7 +1896,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 				}
 				++filesFound;
 			}
-			gotFile = platform->GetMassStorage()->FindNext(fileInfo);
+			gotFile = MassStorage::FindNext(fileInfo);
 		}
 	}
 
@@ -1927,11 +1927,11 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 	unsigned int err;
 	unsigned int nextFile = 0;
 
-	if (!platform->GetMassStorage()->CheckDriveMounted(dir))
+	if (!MassStorage::CheckDriveMounted(dir))
 	{
 		err = 1;
 	}
-	else if (!platform->GetMassStorage()->DirectoryExists(dir))
+	else if (!MassStorage::DirectoryExists(dir))
 	{
 		err = 2;
 	}
@@ -1940,7 +1940,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 		err = 0;
 		FileInfo fileInfo;
 		unsigned int filesFound = 0;
-		bool gotFile = platform->GetMassStorage()->FindFirst(dir, fileInfo);
+		bool gotFile = MassStorage::FindFirst(dir, fileInfo);
 		size_t bytesLeft = OutputBuffer::GetBytesLeft(response);	// don't write more bytes than we can
 
 		while (gotFile)
@@ -1953,7 +1953,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 					if (bytesLeft < fileInfo.fileName.strlen() * 2 + 50)
 					{
 						// No more space available - stop here
-						platform->GetMassStorage()->AbandonFindNext();
+						MassStorage::AbandonFindNext();
 						nextFile = filesFound;
 						break;
 					}
@@ -1984,7 +1984,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 				}
 				++filesFound;
 			}
-			gotFile = platform->GetMassStorage()->FindNext(fileInfo);
+			gotFile = MassStorage::FindNext(fileInfo);
 		}
 	}
 
@@ -2017,7 +2017,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 		{
 			info.isValid = false;
 		}
-		else if (!platform->GetMassStorage()->GetFileInfo(filePath.c_str(), info, quitEarly))
+		else if (!MassStorage::GetFileInfo(filePath.c_str(), info, quitEarly))
 		{
 			// This may take a few runs...
 			return false;

@@ -16,7 +16,89 @@ static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
 
 #if HAS_MASS_STORAGE
 
-// Static helper functions - not declared as class members to avoid having to include sd_mmc.h everywhere
+// Private data and methods
+
+enum class CardDetectState : uint8_t
+{
+	notPresent = 0,
+	inserting,
+	present,
+	removing
+};
+
+struct SdCardInfo
+{
+	FATFS fileSystem;
+	uint32_t cdChangedTime;
+	uint32_t mountStartTime;
+	Mutex volMutex;
+	Pin cdPin;
+	bool mounting;
+	bool isMounted;
+	CardDetectState cardState;
+};
+
+static SdCardInfo info[NumSdCards];
+
+static Mutex fsMutex, dirMutex;
+
+static FileInfoParser infoParser;
+static DIR findDir;
+static FileWriteBuffer *freeWriteBuffers;
+static FileStore files[MAX_FILES];
+
+// Static helper functions
+FileWriteBuffer *MassStorage::AllocateWriteBuffer()
+{
+	MutexLocker lock(fsMutex);
+	if (freeWriteBuffers == nullptr)
+	{
+		return nullptr;
+	}
+
+	FileWriteBuffer * const buffer = freeWriteBuffers;
+	freeWriteBuffers = buffer->Next();
+	buffer->SetNext(nullptr);
+	return buffer;
+}
+
+void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer)
+{
+	MutexLocker lock(fsMutex);
+	buffer->SetNext(freeWriteBuffers);
+	freeWriteBuffers = buffer;
+}
+
+// Unmount a file system returning the number of open files were invalidated
+static unsigned int InternalUnmount(size_t card, bool doClose)
+{
+	SdCardInfo& inf = info[card];
+	MutexLocker lock1(fsMutex);
+	MutexLocker lock2(inf.volMutex);
+	const unsigned int invalidated = MassStorage::InvalidateFiles(&inf.fileSystem, doClose);
+	const char path[3] = { (char)('0' + card), ':', 0 };
+	f_mount(nullptr, path, 0);
+	memset(&inf.fileSystem, 0, sizeof(inf.fileSystem));
+	sd_mmc_unmount(card);
+	inf.isMounted = false;
+	return invalidated;
+}
+
+static time_t ConvertTimeStamp(uint16_t fdate, uint16_t ftime)
+{
+	struct tm timeInfo;
+	memset(&timeInfo, 0, sizeof(timeInfo));
+	timeInfo.tm_year = (fdate >> 9) + 80;
+	const uint16_t month = (fdate >> 5) & 0x0F;
+	timeInfo.tm_mon = (month == 0) ? month : month - 1;		// month is 1..12 in FAT but 0..11 in struct tm
+	timeInfo.tm_mday = max<int>(fdate & 0x1F, 1);
+	timeInfo.tm_hour = (ftime >> 11) & 0x1F;
+	timeInfo.tm_min = (ftime >> 5) & 0x3F;
+	timeInfo.tm_sec = ftime & 0x1F;
+	timeInfo.tm_isdst = 0;
+	return mktime(&timeInfo);
+}
+
 static const char* TranslateCardType(card_type_t ct)
 {
 	switch (ct)
@@ -60,11 +142,6 @@ static const char* TranslateCardError(sd_mmc_err_t err)
 	}
 }
 
-// Mass Storage class
-MassStorage::MassStorage(Platform* p) : freeWriteBuffers(nullptr)
-{
-}
-
 void MassStorage::Init()
 {
 	static const char * const VolMutexNames[] = { "SD0", "SD1" };
@@ -74,6 +151,7 @@ void MassStorage::Init()
 	fsMutex.Create("FileSystem");
 	dirMutex.Create("DirSearch");
 
+	freeWriteBuffers = nullptr;
 	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
 	{
 		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers);
@@ -94,34 +172,13 @@ void MassStorage::Init()
 	// We no longer mount the SD card here because it may take a long time if it fails
 }
 
-FileWriteBuffer *MassStorage::AllocateWriteBuffer()
-{
-	MutexLocker lock(fsMutex);
-	if (freeWriteBuffers == nullptr)
-	{
-		return nullptr;
-	}
-
-	FileWriteBuffer * const buffer = freeWriteBuffers;
-	freeWriteBuffers = buffer->Next();
-	buffer->SetNext(nullptr);
-	return buffer;
-}
-
-void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer)
-{
-	MutexLocker lock(fsMutex);
-	buffer->SetNext(freeWriteBuffers);
-	freeWriteBuffers = buffer;
-}
-
 FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 {
 	{
 		MutexLocker lock(fsMutex);
 		for (size_t i = 0; i < MAX_FILES; i++)
 		{
-			if (files[i].usageMode == FileUseMode::free)
+			if (files[i].IsFree())
 			{
 				return (files[i].Open(filePath, mode, preAllocSize)) ? &files[i]: nullptr;
 			}
@@ -137,7 +194,7 @@ void MassStorage::CloseAllFiles()
 	MutexLocker lock(fsMutex);
 	for (FileStore& f : files)
 	{
-		while (f.usageMode != FileUseMode::free)
+		while (!f.IsFree())
 		{
 			f.Close();
 		}
@@ -284,7 +341,7 @@ bool MassStorage::Delete(const char* filePath)
 		{
 			for (const FileStore& fil : files)
 			{
-				if (fil.file.obj.fs == file.obj.fs && fil.file.dir_sect == file.dir_sect && fil.file.dir_ptr == file.dir_ptr )
+				if (fil.IsSameFile(file))
 				{
 					isOpen = true;
 					break;
@@ -362,7 +419,7 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename)
 }
 
 // Check if the specified file exists
-bool MassStorage::FileExists(const char *filePath) const
+bool MassStorage::FileExists(const char *filePath)
 {
 	FILINFO fil;
 	return (f_stat(filePath, &fil) == FR_OK);
@@ -370,7 +427,7 @@ bool MassStorage::FileExists(const char *filePath) const
 
 // Check if the specified directory exists
 // Warning: if 'path' has a trailing '/' or '\\' character, it will be removed!
-bool MassStorage::DirectoryExists(const StringRef& path) const
+bool MassStorage::DirectoryExists(const StringRef& path)
 {
 	// Remove any trailing '/' from the directory name, it sometimes (but not always) confuses f_opendir
 	const size_t len = path.strlen();
@@ -389,7 +446,7 @@ bool MassStorage::DirectoryExists(const StringRef& path) const
 }
 
 // Check if the specified directory exists
-bool MassStorage::DirectoryExists(const char *path) const
+bool MassStorage::DirectoryExists(const char *path)
 {
 	// Remove any trailing '/' from the directory name, it sometimes (but not always) confuses f_opendir
 	String<MaxFilenameLength> loc;
@@ -398,7 +455,7 @@ bool MassStorage::DirectoryExists(const char *path) const
 }
 
 // Return the last modified time of a file, or zero if failure
-time_t MassStorage::GetLastModifiedTime(const char *filePath) const
+time_t MassStorage::GetLastModifiedTime(const char *filePath)
 {
 	FILINFO fil;
 	if (f_stat(filePath, &fil) == FR_OK)
@@ -544,7 +601,7 @@ bool MassStorage::CheckDriveMounted(const char* path)
 }
 
 // Return true if any files are open on the file system
-bool MassStorage::AnyFileOpen(const FATFS *fs) const
+bool MassStorage::AnyFileOpen(const FATFS *fs)
 {
 	MutexLocker lock(fsMutex);
 	for (const FileStore & fil : files)
@@ -572,48 +629,18 @@ unsigned int MassStorage::InvalidateFiles(const FATFS *fs, bool doClose)
 	return invalidated;
 }
 
-/*static*/ time_t MassStorage::ConvertTimeStamp(uint16_t fdate, uint16_t ftime)
-{
-	struct tm timeInfo;
-	memset(&timeInfo, 0, sizeof(timeInfo));
-	timeInfo.tm_year = (fdate >> 9) + 80;
-	const uint16_t month = (fdate >> 5) & 0x0F;
-	timeInfo.tm_mon = (month == 0) ? month : month - 1;		// month is 1..12 in FAT but 0..11 in struct tm
-	timeInfo.tm_mday = max<int>(fdate & 0x1F, 1);
-	timeInfo.tm_hour = (ftime >> 11) & 0x1F;
-	timeInfo.tm_min = (ftime >> 5) & 0x3F;
-	timeInfo.tm_sec = ftime & 0x1F;
-	timeInfo.tm_isdst = 0;
-	return mktime(&timeInfo);
-}
-
-bool MassStorage::IsCardDetected(size_t card) const
+bool MassStorage::IsCardDetected(size_t card)
 {
 	return info[card].cardState == CardDetectState::present;
 }
 
-// Unmount a file system returning the number of open files were invalidated
-unsigned int MassStorage::InternalUnmount(size_t card, bool doClose)
-{
-	SdCardInfo& inf = info[card];
-	MutexLocker lock1(fsMutex);
-	MutexLocker lock2(inf.volMutex);
-	const unsigned int invalidated = InvalidateFiles(&inf.fileSystem, doClose);
-	const char path[3] = { (char)('0' + card), ':', 0 };
-	f_mount(nullptr, path, 0);
-	memset(&inf.fileSystem, 0, sizeof(inf.fileSystem));
-	sd_mmc_unmount(card);
-	inf.isMounted = false;
-	return invalidated;
-}
-
-unsigned int MassStorage::GetNumFreeFiles() const
+unsigned int MassStorage::GetNumFreeFiles()
 {
 	unsigned int numFreeFiles = 0;
 	MutexLocker lock(fsMutex);
 	for (const FileStore & fil : files)
 	{
-		if (fil.usageMode == FileUseMode::free)
+		if (fil.IsFree())
 		{
 			++numFreeFiles;
 		}
@@ -685,7 +712,7 @@ void MassStorage::Spin()
 		MutexLocker lock(fsMutex);
 		for (FileStore & fil : files)
 		{
-			if (fil.closeRequested)
+			if (fil.IsCloseRequested())
 			{
 				// We could not close this file in an ISR, so do it here
 				fil.Close();
@@ -781,13 +808,28 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity
 	return InfoResult::ok;
 }
 
+bool MassStorage::IsDriveMounted(size_t drive)
+{
+	return drive < NumSdCards && info[drive].isMounted;
+}
+
+const Mutex& MassStorage::GetVolumeMutex(size_t vol)
+{
+	return info[vol].volMutex;
+}
+
+bool MassStorage::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly)
+{
+	return infoParser.GetFileInfo(filePath, info, quitEarly);
+}
+
 // Functions called by FatFS to acquire/release mutual exclusion
 extern "C"
 {
 	// Create a sync object. We already created it, we just need to copy the handle.
 	int ff_cre_syncobj (BYTE vol, FF_SYNC_t* psy)
 	{
-		*psy = &reprap.GetPlatform().GetMassStorage()->GetVolumeMutex(vol);
+		*psy = &MassStorage::GetVolumeMutex(vol);
 		return 1;
 	}
 

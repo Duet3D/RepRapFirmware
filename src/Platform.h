@@ -349,7 +349,6 @@ public:
 	const char* GetConfigFile() const; 				// Where the configuration is stored (in the system dir).
 
 #if HAS_MASS_STORAGE
-	MassStorage* GetMassStorage() const;
 	FileStore* OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const;
 	bool Delete(const char* folder, const char *filename) const;
 	bool FileExists(const char* folder, const char *filename) const;
@@ -790,7 +789,6 @@ private:
 
 	// Files
 #if HAS_MASS_STORAGE
-	MassStorage* massStorage;
 	const char *sysDir;
 #endif
 
@@ -1063,15 +1061,6 @@ inline void Platform::SetNozzleDiameter(float diameter)
 {
 	nozzleDiameter = diameter;
 }
-
-#if HAS_MASS_STORAGE
-
-inline MassStorage* Platform::GetMassStorage() const
-{
-	return massStorage;
-}
-
-#endif
 
 inline OutputBuffer *Platform::GetAuxGCodeReply()
 {

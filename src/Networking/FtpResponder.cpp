@@ -603,7 +603,7 @@ void FtpResponder::ProcessLine()
 			const char *filename = GetParameter("MKD");
 			String<MaxFilenameLength> location;
 			if (MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename)
-				&& GetPlatform().GetMassStorage()->MakeDirectory(location.c_str()))
+				&& MassStorage::MakeDirectory(location.c_str()))
 			{
 				outBuf->printf("257 \"%s\" created\r\n", location.c_str());
 			}
@@ -618,7 +618,7 @@ void FtpResponder::ProcessLine()
 		{
 			const char *filename = GetParameter("RNFR");
 			if (MassStorage::CombineName(filenameBeingProcessed.GetRef(), currentDirectory.c_str(), filename)
-				&& GetPlatform().GetMassStorage()->FileExists(filenameBeingProcessed.c_str()))
+				&& MassStorage::FileExists(filenameBeingProcessed.c_str()))
 			{
 				haveFileToMove = true;
 				outBuf->copy("350 Ready to RNTO.\r\n");
@@ -635,7 +635,7 @@ void FtpResponder::ProcessLine()
 			String<MaxFilenameLength> location;
 			if (haveFileToMove
 				&& MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename)
-				&& GetPlatform().GetMassStorage()->Rename(filenameBeingProcessed.c_str(), location.c_str()))
+				&& MassStorage::Rename(filenameBeingProcessed.c_str(), location.c_str()))
 			{
 				outBuf->copy("250 Rename successful.\r\n");
 			}
@@ -677,9 +677,8 @@ void FtpResponder::ProcessLine()
 			Commit(ResponderState::sendingPasvData);
 
 			// build directory listing, dataBuf is sent later in the Spin loop
-			MassStorage * const massStorage = GetPlatform().GetMassStorage();
 			FileInfo fileInfo;
-			if (massStorage->FindFirst(currentDirectory.c_str(), fileInfo))
+			if (MassStorage::FindFirst(currentDirectory.c_str(), fileInfo))
 			{
 				do {
 					// Example for a typical UNIX-like file list:
@@ -687,9 +686,9 @@ void FtpResponder::ProcessLine()
 					const char dirChar = (fileInfo.isDirectory) ? 'd' : '-';
 					const struct tm * const timeInfo = gmtime(&fileInfo.lastModified);
 					dataBuf->catf("%crw-rw-rw- 1 ftp ftp %13lu %s %02d %04d %s\r\n",
-							dirChar, fileInfo.size, massStorage->GetMonthName(timeInfo->tm_mon + 1),
+							dirChar, fileInfo.size, MassStorage::GetMonthName(timeInfo->tm_mon + 1),
 							timeInfo->tm_mday, timeInfo->tm_year + 1900, fileInfo.fileName.c_str());
-				} while (massStorage->FindNext(fileInfo));
+				} while (MassStorage::FindNext(fileInfo));
 			}
 		}
 		// switch transfer mode (sends response, but doesn't have any effects)
@@ -864,7 +863,7 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 		}
 
 		// Verify the final path and change it if possible
-		if (GetPlatform().GetMassStorage()->DirectoryExists(combinedPath.GetRef()))
+		if (MassStorage::DirectoryExists(combinedPath.GetRef()))
 		{
 			currentDirectory.copy(combinedPath.c_str());
 			outBuf->copy("250 Directory successfully changed.\r\n");

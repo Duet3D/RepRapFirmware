@@ -80,7 +80,7 @@ void PrintMonitor::Spin()
 		// File information about the file being printed must be available before layer estimations can be made
 		if (!filenameBeingPrinted.IsEmpty() && !printingFileParsed)
 		{
-			printingFileParsed = platform.GetMassStorage()->GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
+			printingFileParsed = MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
 			if (!printingFileParsed)
 			{
 				return;
@@ -193,7 +193,7 @@ void PrintMonitor::StartingPrint(const char* filename)
 {
 #if HAS_MASS_STORAGE
 	MassStorage::CombineName(filenameBeingPrinted.GetRef(), platform.GetGCodeDir(), filename);
-	printingFileParsed = platform.GetMassStorage()->GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
+	printingFileParsed = MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false);
 #endif
 }
 

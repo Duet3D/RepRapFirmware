@@ -142,9 +142,19 @@ extern "C" void SBC_SPI_HANDLER(void)
 
 /*-----------------------------------------------------------------------------------*/
 
+// Static data. Note, the startup code we use doesn't make any provision for initialising non-cached memory, other than to zero. So don't specify initial value here
+__nocache TransferHeader DataTransfer::rxHeader;
+__nocache TransferHeader DataTransfer::txHeader;
+__nocache uint32_t DataTransfer::rxResponse;
+__nocache uint32_t DataTransfer::txResponse;
+__nocache uint32_t DataTransfer::rxBuffer32[LinuxTransferBufferSize / 4];
+__nocache uint32_t DataTransfer::txBuffer32[LinuxTransferBufferSize / 4];
+
 DataTransfer::DataTransfer() : state(SpiState::ExchangingData), lastTransferTime(0), lastTransferNumber(0), failedTransfers(0),
-	rxResponse(TransferResponse::Success), txResponse(TransferResponse::Success), rxPointer(0), txPointer(0), packetId(0)
+	rxPointer(0), txPointer(0), packetId(0)
 {
+	rxResponse = TransferResponse::Success;
+	txResponse = TransferResponse::Success;
 	// Prepare RX header
 	rxHeader.sequenceNumber = 0;
 
@@ -199,21 +209,21 @@ const PacketHeader *DataTransfer::ReadPacket()
 		return nullptr;
 	}
 
-	const PacketHeader *header = reinterpret_cast<const PacketHeader*>(rxBuffer + rxPointer);
+	const PacketHeader *header = reinterpret_cast<const PacketHeader*>(rxBuffer() + rxPointer);
 	rxPointer += sizeof(PacketHeader);
 	return header;
 }
 
 const char *DataTransfer::ReadData(size_t dataLength)
 {
-	const char *data = rxBuffer + rxPointer;
+	const char *data = rxBuffer() + rxPointer;
 	rxPointer += AddPadding(dataLength);
 	return data;
 }
 
 template<typename T> const T *DataTransfer::ReadDataHeader()
 {
-	const T *header = reinterpret_cast<const T*>(rxBuffer + rxPointer);
+	const T *header = reinterpret_cast<const T*>(rxBuffer() + rxPointer);
 	rxPointer += sizeof(T);
 	return header;
 }
@@ -341,7 +351,7 @@ void DataTransfer::ExchangeData()
 {
 	size_t bytesToExchange = max<size_t>(rxHeader.dataLength, txHeader.dataLength);
 	state = SpiState::ExchangingData;
-	setup_spi(rxBuffer, txBuffer, bytesToExchange);
+	setup_spi(rxBuffer(), txBuffer(), bytesToExchange);
 }
 
 void DataTransfer::ResetTransfer(bool ownRequest)
@@ -472,7 +482,7 @@ bool DataTransfer::IsReady()
 				break;
 			}
 
-			const uint16_t checksum = CRC16(rxBuffer, rxHeader.dataLength);
+			const uint16_t checksum = CRC16(rxBuffer(), rxHeader.dataLength);
 			if (rxHeader.checksumData != checksum)
 			{
 				if (reprap.Debug(moduleLinuxInterface))
@@ -565,7 +575,7 @@ void DataTransfer::StartNextTransfer()
 	txHeader.numPackets = packetId;
 	txHeader.sequenceNumber++;
 	txHeader.dataLength = txPointer;
-	txHeader.checksumData = CRC16(txBuffer, txPointer);
+	txHeader.checksumData = CRC16(txBuffer(), txPointer);
 	txHeader.checksumHeader = CRC16(reinterpret_cast<const char *>(&txHeader), sizeof(TransferHeader) - sizeof(uint16_t));
 
 	// Begin SPI transfer
@@ -800,7 +810,7 @@ bool DataTransfer::WriteHeightMap()
 	// Write Z points
 	if (numPoints != 0)
 	{
-		float *zPoints = reinterpret_cast<float*>(txBuffer + txPointer);
+		float *zPoints = reinterpret_cast<float*>(txBuffer() + txPointer);
 		reprap.GetMove().SaveHeightMapToArray(zPoints);
 		txPointer += numPoints * sizeof(float);
 	}
@@ -852,7 +862,7 @@ PacketHeader *DataTransfer::WritePacketHeader(FirmwareRequest request, size_t da
 	txPointer = AddPadding(txPointer);
 
 	// Write the next packet data
-	PacketHeader *header = reinterpret_cast<PacketHeader*>(txBuffer + txPointer);
+	PacketHeader *header = reinterpret_cast<PacketHeader*>(txBuffer() + txPointer);
 	header->request = static_cast<uint16_t>(request);
 	header->id = packetId++;
 	header->length = dataLength;
@@ -864,13 +874,13 @@ PacketHeader *DataTransfer::WritePacketHeader(FirmwareRequest request, size_t da
 void DataTransfer::WriteData(const char *data, size_t length)
 {
 	// Strings can be concatenated here, don't add any padding yet
-	memcpy(txBuffer + txPointer, data, length);
+	memcpy(txBuffer() + txPointer, data, length);
 	txPointer += length;
 }
 
 template<typename T> T *DataTransfer::WriteDataHeader()
 {
-	T *header = reinterpret_cast<T*>(txBuffer + txPointer);
+	T *header = reinterpret_cast<T*>(txBuffer() + txPointer);
 	txPointer += sizeof(T);
 	return header;
 }

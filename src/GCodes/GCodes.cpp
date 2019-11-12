@@ -3585,7 +3585,7 @@ void GCodes::StopPrint(StopPrintReason reason)
 #if HAS_MASS_STORAGE
 		if (updateFileWhenSimulationComplete && reason == StopPrintReason::normalCompletion)
 		{
-			platform.GetMassStorage()->RecordSimulationTime(printingFilename, lrintf(simSeconds));
+			MassStorage::RecordSimulationTime(printingFilename, lrintf(simSeconds));
 		}
 #endif
 
