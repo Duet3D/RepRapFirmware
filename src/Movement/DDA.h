@@ -13,8 +13,6 @@
 #include "StepTimer.h"
 #include "GCodes/GCodes.h"			// for class RawMove
 
-#include <optional>
-
 #ifdef DUET_NG
 # define DDA_LOG_PROBE_CHANGES	0
 #else
@@ -49,7 +47,7 @@ public:
 
 	void Start(Platform& p, uint32_t tim) __attribute__ ((hot));			// Start executing the DDA, i.e. move the move.
 	void StepDrivers(Platform& p) __attribute__ ((hot));					// Take one step of the DDA, called by timed interrupt.
-	std::optional<uint32_t> GetNextInterruptTime() const;					// Return the time that the next interrupt is needed
+	bool ScheduleNextStepInterrupt(StepTimer& timer) const;					// Schedule the next interrupt, returning true if we can't because it is already due
 
 	void SetNext(DDA *n) { next = n; }
 	void SetPrevious(DDA *p) { prev = p; }
@@ -125,29 +123,29 @@ public:
 	// Therefore, where the step interval falls below 60us, we don't calculate on every step.
 	// Note: the above measurements were taken some time ago, before some firmware optimisations.
 #if SAME70
-	// The system clock of the SAME70 is running at 150MHz. Use the same defaults as for the SAM4E for now.
+	// Use the same defaults as for the SAM4E for now.
 	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
 	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
-	static constexpr uint32_t HiccupTime = 10;											// how long we hiccup for
+	static constexpr uint32_t HiccupTime = 20;											// how long we hiccup for
 #elif SAM4E || SAM4S
 	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
 	static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
-	static constexpr uint32_t HiccupTime = 10;											// how long we hiccup for
+	static constexpr uint32_t HiccupTime = 20;											// how long we hiccup for
 #elif defined(__LPC17xx__)
     static constexpr uint32_t MinCalcIntervalDelta = (40 * StepTimer::StepClockRate)/1000000;		// the smallest sensible interval between calculations (40us) in step timer clocks
     static constexpr uint32_t MinCalcIntervalCartesian = (40 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
     static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
-	static constexpr uint32_t HiccupTime = 10;											// how long we hiccup for
-#else
+	static constexpr uint32_t HiccupTime = 20;											// how long we hiccup for
+#else	// SAM3X
 	static constexpr uint32_t MinCalcIntervalDelta = (60 * StepTimer::StepClockRate)/1000000; 		// the smallest sensible interval between calculations (60us) in step timer clocks
 	static constexpr uint32_t MinCalcIntervalCartesian = (60 * StepTimer::StepClockRate)/1000000;	// same as delta for now, but could be lower
-	static constexpr uint32_t MinInterruptInterval = 4;									// about 6us minimum interval between interrupts, in step clocks
-	static constexpr uint32_t HiccupTime = 8;											// how long we hiccup for
+	static constexpr uint32_t MinInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
+	static constexpr uint32_t HiccupTime = 20;											// how long we hiccup for
 #endif
 	static constexpr uint32_t MaxStepInterruptTime = 10 * MinInterruptInterval;			// the maximum time we spend looping in the ISR , in step clocks
-	static constexpr uint32_t WakeupTime = StepTimer::StepClockRate/10000;				// stop resting 100us before the move is due to end
+	static constexpr uint32_t WakeupTime = (100 * StepTimer::StepClockRate)/1000000;	// stop resting 100us before the move is due to end
 
 	static void PrintMoves();										// print saved moves for debugging
 
@@ -324,6 +322,19 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 {
 	endPoint[drive] = a;
 	flags.endCoordinatesValid = false;
+}
+
+// Schedule the next interrupt, returning true if we can't because it is already due
+// Base priority must be >= NvicPriorityStep when calling this
+inline bool DDA::ScheduleNextStepInterrupt(StepTimer& timer) const
+{
+	if (state == executing)
+	{
+		const uint32_t whenDue = ((activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime)
+								+ afterPrepare.moveStartTime;
+		return timer.ScheduleCallbackFromIsr(whenDue);
+	}
+	return false;
 }
 
 #if HAS_SMART_DRIVERS

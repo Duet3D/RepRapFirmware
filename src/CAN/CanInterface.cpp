@@ -397,7 +397,7 @@ extern "C" void CanClockLoop(void *)
 		{
 			CanMessageTimeSync * const msg = buf->SetupBroadcastMessage<CanMessageTimeSync>(CanId::MasterAddress);
 			WaitForTxBufferFree(TxBufferIndexTimeSync, MaxTimeSyncSendWait);			// make sure we can send immediately
-			msg->timeSent = StepTimer::GetInterruptClocks();
+			msg->timeSent = StepTimer::GetTimerTicks();
 			mcan_fd_send_ext_message_no_wait(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexTimeSync);
 			CanMessageBuffer::Free(buf);
 		}

@@ -368,7 +368,7 @@ bool Network::IsWiFiInterface(unsigned int interface) const
 // Main spin loop. If 'full' is true then we are being called from the main spin loop. If false then we are being called during HSMCI idle time.
 void Network::Spin(bool full)
 {
-	const uint32_t lastTime = StepTimer::GetInterruptClocks();
+	const uint32_t lastTime = StepTimer::GetTimerTicks();
 
 	// Keep the network modules running
 	for (NetworkInterface *iface : interfaces)
@@ -396,7 +396,7 @@ void Network::Spin(bool full)
 	HttpResponder::CheckSessions();		// time out any sessions that have gone away
 
 	// Keep track of the loop time
-	const uint32_t dt = StepTimer::GetInterruptClocks() - lastTime;
+	const uint32_t dt = StepTimer::GetTimerTicks() - lastTime;
 	if (dt < fastLoop)
 	{
 		fastLoop = dt;

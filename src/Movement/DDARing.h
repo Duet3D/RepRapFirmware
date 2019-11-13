@@ -37,8 +37,7 @@ public:
 	void Interrupt(Platform& p);												// Check endstops, generate step pulses
 	void OnMoveCompleted(DDA *cdda, Platform& p);								// called when the state has been set to 'completed'
 
-	void InsertHiccup(uint32_t delayClocks);									// Insert a brief pause to avoid processor overload
-	std::optional<uint32_t> GetNextInterruptTime() const;						// Return the time that the next step is due
+	bool ScheduleNextStepInterrupt();											// Schedule the next step interrupt, returning true if we failed because it is due immediately
 	void CurrentMoveCompleted() __attribute__ ((hot));							// Signal that the current move has just been completed
 	void TryStartNextMove(Platform& p, uint32_t startTime) __attribute__ ((hot));	// Try to start another move, returning true if Step() needs to be called immediately
 	uint32_t ExtruderPrintingSince() const { return extrudersPrintingSince; }	// When we started doing normal moves after the most recent extruder-only move
@@ -57,6 +56,7 @@ public:
 
 	DDA *GetCurrentDDA() const { return currentDda; }							// Return the DDA of the currently-executing move, or nullptr
 
+	uint32_t GetClearNumHiccups();
 	float GetTopSpeed() const;
 	float GetRequestedSpeed() const;
 
@@ -84,10 +84,14 @@ private:
 	bool StartNextMove(Platform& p, uint32_t startTime) __attribute__ ((hot));	// Start the next move, returning true if laser or IObits need to be controlled
 	void PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode);
 
+	static bool TimerCallback(CallbackParameter p, StepTimer::Ticks& when);
+
 	DDA* volatile currentDda;
 	DDA* addPointer;
 	DDA* volatile getPointer;
 	DDA* checkPointer;
+
+	StepTimer timer;															// Timer object to control getting step interrupts
 
 	volatile float liveCoordinates[MaxAxesPlusExtruders];						// The endpoint that the machine moved to in the last completed move
 	volatile bool liveCoordinatesValid;											// True if the XYZ live coordinates are reliable (the extruder ones always are)
@@ -97,6 +101,7 @@ private:
 
 	uint32_t scheduledMoves;													// Move counters for the code queue
 	volatile uint32_t completedMoves;											// This one is modified by an ISR, hence volatile
+	volatile int32_t numHiccups;												// Modified in the ISR
 
 	unsigned int numLookaheadUnderruns;											// How many times we have run out of moves to adjust during lookahead
 	unsigned int numPrepareUnderruns;											// How many times we wanted a new move but there were only un-prepared moves in the queue
@@ -142,11 +147,19 @@ inline uint32_t DDARing::GetStepInterval(size_t axis, uint32_t microstepShift) c
 }
 #endif
 
-// Return the time that the next step is due
-inline std::optional<uint32_t> DDARing::GetNextInterruptTime() const
+// Schedule the next step interrupt for this DDA ring
+// Base priority must be >= NvicPriorityStep when calling this
+inline bool DDARing::ScheduleNextStepInterrupt()
 {
 	DDA * const cdda = currentDda;				// capture volatile variable
-	return (cdda != nullptr) ? cdda->GetNextInterruptTime() : std::optional<uint32_t>();
+	return (cdda != nullptr) && cdda->ScheduleNextStepInterrupt(timer);
+}
+
+inline uint32_t DDARing::GetClearNumHiccups()
+{
+	const uint32_t ret = numHiccups;
+	numHiccups = 0;
+	return ret;
 }
 
 #endif /* SRC_MOVEMENT_DDARING_H_ */

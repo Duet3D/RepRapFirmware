@@ -21,14 +21,14 @@ Duet3DFilamentMonitor::Duet3DFilamentMonitor(unsigned int extruder, unsigned int
 void Duet3DFilamentMonitor::InitReceiveBuffer()
 {
 	edgeCaptureReadPointer = edgeCaptureWritePointer = 1;
-	edgeCaptures[0] = StepTimer::GetInterruptClocks();				// pretend we just had a high-to-low transition
+	edgeCaptures[0] = StepTimer::GetTimerTicks();				// pretend we just had a high-to-low transition
 	state = RxdState::waitingForStartBit;
 }
 
 // ISR for when the pin state changes. It should return true if the ISR wants the commanded extrusion to be fetched.
 bool Duet3DFilamentMonitor::Interrupt()
 {
-	uint32_t now = StepTimer::GetInterruptClocks();
+	uint32_t now = StepTimer::GetTimerTicks();
 	bool wantReading = false;
 	const size_t writePointer = edgeCaptureWritePointer;			// capture volatile variable
 	if ((writePointer + 1) % EdgeCaptureBufferSize != edgeCaptureReadPointer)	// if buffer is not full
@@ -81,7 +81,7 @@ Duet3DFilamentMonitor::PollResult Duet3DFilamentMonitor::PollReceiveBuffer(uint1
 	{
 		again = false;
 		const size_t writePointer = edgeCaptureWritePointer;				// capture volatile variable
-		const uint32_t now = StepTimer::GetInterruptClocks();
+		const uint32_t now = StepTimer::GetTimerTicks();
 		switch (state)
 		{
 		case RxdState::waitingForStartBit:

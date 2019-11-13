@@ -62,7 +62,6 @@ public:
 																	// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetEndPoint(size_t drive) const;					 	// Get the current position of a motor
 	void LiveCoordinates(float m[MaxAxesPlusExtruders], AxesBitmap xAxes, AxesBitmap yAxes);	// Gives the last point at the end of the last complete DDA transformed to user coords
-	void Interrupt() __attribute__ ((hot));							// The hardware's (i.e. platform's)  interrupt should call this.
 	bool AllMovesAreFinished();										// Is the look-ahead ring empty?  Stops more moves being added as well.
 	void DoLookAhead() __attribute__ ((hot));						// Run the look-ahead procedure
 	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation); // Set the current position to be this
@@ -231,7 +230,6 @@ private:
 	unsigned int jerkPolicy;							// When we allow jerk
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
-	uint32_t numHiccups;								// How many times we delayed an interrupt to avoid using too much CPU time in interrupts
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes
 	float& tanXY = tangents[0];

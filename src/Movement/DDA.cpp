@@ -158,7 +158,7 @@ int32_t DDA::GetTimeLeft() const
 pre(state == executing || state == frozen || state == completed)
 {
 	return (state == completed) ? 0
-			: (state == executing) ? (int32_t)(afterPrepare.moveStartTime + clocksNeeded - StepTimer::GetInterruptClocks())
+			: (state == executing) ? (int32_t)(afterPrepare.moveStartTime + clocksNeeded - StepTimer::GetTimerTicks())
 			: (int32_t)clocksNeeded;
 }
 
@@ -1494,7 +1494,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[])
 		const DDAState st = prev->state;
 		afterPrepare.moveStartTime = (st == DDAState::executing || st == DDAState::frozen)
 						? prev->afterPrepare.moveStartTime + prev->clocksNeeded				// this move will follow the previous one, so calculate the start time assuming no more hiccups
-							: StepTimer::GetInterruptClocks() + MovementStartDelayClocks;	// else this move is the first so start it after a short delay
+							: StepTimer::GetTimerTicks() + MovementStartDelayClocks;	// else this move is the first so start it after a short delay
 
 #if SUPPORT_CAN_EXPANSION
 		CanMotion::FinishMovement(afterPrepare.moveStartTime);
@@ -1839,7 +1839,7 @@ void DDA::StepDrivers(Platform& p)
 
 	uint32_t driversStepping = 0;
 	DriveMovement* dm = activeDMs;
-	uint32_t now = StepTimer::GetInterruptClocks();
+	uint32_t now = StepTimer::GetTimerTicks();
 	const uint32_t elapsedTime = (now - afterPrepare.moveStartTime) + MinInterruptInterval;
 	while (dm != nullptr && elapsedTime >= dm->nextStepTime)		// if the next step is due
 	{
@@ -1859,15 +1859,15 @@ void DDA::StepDrivers(Platform& p)
 		uint32_t lastStepPulseTime = lastStepLowTime;
 		while (now - lastStepPulseTime < p.GetSlowDriverStepLowClocks() || now - lastDirChangeTime < p.GetSlowDriverDirSetupClocks())
 		{
-			now = StepTimer::GetInterruptClocks();
+			now = StepTimer::GetTimerTicks();
 		}
 		StepPins::StepDriversHigh(driversStepping);					// generate the steps
-		lastStepPulseTime = StepTimer::GetInterruptClocks();
+		lastStepPulseTime = StepTimer::GetTimerTicks();
 
 		// 3a. Reset all step pins low. Do this now because some external drivers don't like the direction pins being changed before the end of the step pulse.
-		while (StepTimer::GetInterruptClocks() - lastStepPulseTime < p.GetSlowDriverStepHighClocks()) {}
+		while (StepTimer::GetTimerTicks() - lastStepPulseTime < p.GetSlowDriverStepHighClocks()) {}
 		StepPins::StepDriversLow();									// set all step pins low
-		lastStepLowTime = lastStepPulseTime = StepTimer::GetInterruptClocks();
+		lastStepLowTime = lastStepPulseTime = StepTimer::GetTimerTicks();
 	}
 
 	// 4. Remove those drives from the list, calculate the next step times, update the direction pins where necessary,
@@ -1897,18 +1897,10 @@ void DDA::StepDrivers(Platform& p)
 	StepPins::StepDriversLow();										// set all step pins low
 
 	// If there are no more steps to do and the time for the move has nearly expired, flag the move as complete
-	if (activeDMs == nullptr && StepTimer::GetInterruptClocks() - afterPrepare.moveStartTime + WakeupTime >= clocksNeeded)
+	if (activeDMs == nullptr && StepTimer::GetTimerTicks() - afterPrepare.moveStartTime + WakeupTime >= clocksNeeded)
 	{
 		state = completed;
 	}
-}
-
-// Return the time that the next interrupt is needed. It may be earlier than the current time.
-std::optional<uint32_t> DDA::GetNextInterruptTime() const
-{
-	return (state == executing)
-			? std::optional<uint32_t>(((activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime) + afterPrepare.moveStartTime)
-				: std::optional<uint32_t>();
 }
 
 // Stop a drive and re-calculate the corresponding endpoint.
@@ -2003,7 +1995,7 @@ void DDA::ReduceHomingSpeed()
 		topSpeed *= (1.0/ProbingSpeedReductionFactor);
 
 		// Adjust extraAccelerationClocks so that step timing will be correct in the steady speed phase at the new speed
-		const uint32_t clocksSoFar = StepTimer::GetInterruptClocks() -afterPrepare. moveStartTime;
+		const uint32_t clocksSoFar = StepTimer::GetTimerTicks() -afterPrepare. moveStartTime;
 		afterPrepare.extraAccelerationClocks = (afterPrepare.extraAccelerationClocks * (int32_t)ProbingSpeedReductionFactor) - ((int32_t)clocksSoFar * (int32_t)(ProbingSpeedReductionFactor - 1));
 
 		// We also need to adjust the total clocks needed, to prevent step errors being recorded
@@ -2136,7 +2128,7 @@ uint32_t DDA::ManageLaserPower() const
 		return 0;
 	}
 
-	const uint32_t clocksMoving = StepTimer::GetInterruptClocksInterruptsDisabled() - afterPrepare.moveStartTime;
+	const uint32_t clocksMoving = StepTimer::GetTimerTicks() - afterPrepare.moveStartTime;
 	if (clocksMoving >= clocksNeeded)			// this also covers the case of now < startTime
 	{
 		// Something has gone wrong with the timing. Set zero laser power, but try again soon.

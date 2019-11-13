@@ -110,7 +110,6 @@ void Move::Init()
 
 	simulationMode = 0;
 	longestGcodeWaitInterval = 0;
-	numHiccups = 0;
 	bedLevellingMoveAvailable = false;
 
 	active = true;
@@ -118,7 +117,7 @@ void Move::Init()
 
 void Move::Exit()
 {
-	StepTimer::DisableStepInterrupt();
+	StepTimer::DisableTimerInterrupt();
 	mainDDARing.Exit();
 	active = false;												// don't accept any more moves
 }
@@ -315,9 +314,16 @@ bool Move::LowPowerOrStallPause(RestorePoint& rp)
 void Move::Diagnostics(MessageType mtype)
 {
 	Platform& p = reprap.GetPlatform();
-	p.MessageF(mtype, "=== Move ===\nHiccups: %" PRIu32 ", FreeDm: %d, MinFreeDm: %d, MaxWait: %" PRIu32 "ms\n",
-						numHiccups, DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval);
-	numHiccups = 0;
+	p.MessageF(mtype, "=== Move ===\nHiccups: %" PRIu32
+#if SUPPORT_ASYNC_MOVES
+						"(%" PRIu32 ")"
+#endif
+						", FreeDm: %d, MinFreeDm: %d, MaxWait: %" PRIu32 "ms\n",
+						mainDDARing.GetClearNumHiccups(),
+#if SUPPORT_ASYNC_MOVES
+						auxDDARing.GetClearNumHiccups(),
+#endif
+						DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval);
 	longestGcodeWaitInterval = 0;
 	DriveMovement::ResetMinFree();
 
@@ -742,57 +748,6 @@ bool Move::FinishedBedProbing(int sParam, const StringRef& reply)
 	// This allows us to use different numbers of probe point on different occasions.
 	probePoints.ClearProbeHeights();
 	return error;
-}
-
-// This is the function that is called by the timer interrupt to step the motors.
-// This may occasionally get called prematurely.
-void Move::Interrupt()
-{
-	const uint32_t isrStartTime = StepTimer::GetInterruptClocksInterruptsDisabled();
-	Platform& p = reprap.GetPlatform();
-	bool repeat;
-	do
-	{
-		mainDDARing.Interrupt(p);
-		std::optional<uint32_t> nextStepTime = mainDDARing.GetNextInterruptTime();
-
-#if SUPPORT_ASYNC_MOVES
-		auxDDARing.Interrupt(p);
-		std::optional<uint32_t> nextAuxStepTime = auxDDARing.GetNextInterruptTime();
-		if (nextAuxStepTime.has_value() && (!nextStepTime.has_value() || (int32_t)(nextStepTime.value() - nextAuxStepTime.value()) > 0))
-		{
-			nextStepTime = nextAuxStepTime;
-		}
-		else if (!nextStepTime.has_value())
-		{
-			break;
-		}
-#else
-		if (!nextStepTime.has_value())
-		{
-			break;
-		}
-#endif
-		// Check whether we have been in this ISR for too long already and need to take a break
-		const uint16_t clocksTaken = StepTimer::GetInterruptClocks16() - (uint16_t)isrStartTime;
-		if (clocksTaken >= DDA::MaxStepInterruptTime && (nextStepTime.value() - isrStartTime) < (clocksTaken + DDA::MinInterruptInterval))
-		{
-			// Force a break by updating the move start time
-			mainDDARing.InsertHiccup(DDA::HiccupTime);
-#if SUPPORT_ASYNC_MOVES
-			auxDDARing.InsertHiccup(DDA::HiccupTime);
-#endif
-			nextStepTime = nextStepTime.value() + DDA::HiccupTime;
-#if SUPPORT_CAN_EXPANSION
-			CanMotion::InsertHiccup(DDA::HiccupTime);
-#endif
-			++numHiccups;
-		}
-
-		// 8. Schedule next interrupt, or if it would be too soon, generate more steps immediately
-		// If we have already spent too much time in the ISR, delay the interrupt
-		repeat = StepTimer::ScheduleStepInterrupt(nextStepTime.value());
-	} while (repeat);
 }
 
 /*static*/ float Move::MotorStepsToMovement(size_t drive, int32_t endpoint)

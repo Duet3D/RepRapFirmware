@@ -269,7 +269,9 @@ constexpr Pin W5500IntPin = PortAPin(23);									// Interrupt from W5500
 // TC0 channel 2 is currently unused
 #define STEP_TC				(TC0)
 #define STEP_TC_CHAN		(0)
+#define STEP_TC_CHAN_UPPER	(2)
 #define STEP_TC_ID			ID_TC0
+#define STEP_TC_ID_UPPER	ID_TC2
 #define STEP_TC_IRQN		TC0_IRQn
 #define STEP_TC_HANDLER		TC0_Handler
 

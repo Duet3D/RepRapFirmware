@@ -280,12 +280,14 @@ Spi * const LinuxSpi = SPI1;
 
 #endif
 
-// Step timer is timer 2 aka TC0 channel 2
+// Step timer is timer 0 aka TC0 channel 0. Also used as the CAN timestamp counter.
 #define STEP_TC				(TC0)
-#define STEP_TC_CHAN		(2)
-#define STEP_TC_IRQN		TC2_IRQn
-#define STEP_TC_HANDLER		TC2_Handler
-#define STEP_TC_ID			ID_TC2
+#define STEP_TC_CHAN		(0)					// channel for lower 16 bits
+#define STEP_TC_CHAN_UPPER	(2)					// channel for upper 16 bits
+#define STEP_TC_IRQN		TC0_IRQn
+#define STEP_TC_HANDLER		TC0_Handler
+#define STEP_TC_ID			ID_TC0
+#define STEP_TC_ID_UPPER	ID_TC2
 
 // DMA channel allocation
 constexpr uint8_t DmacChanHsmci = 0;			// this is hard coded in the ASF HSMCI driver

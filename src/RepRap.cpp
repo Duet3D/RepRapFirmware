@@ -354,7 +354,7 @@ void RepRap::Spin()
 		return;
 	}
 
-	const uint32_t lastTime = StepTimer::GetInterruptClocks();
+	const uint32_t lastTime = StepTimer::GetTimerTicks();
 
 	ticksInSpinState = 0;
 	spinningModule = modulePlatform;
@@ -433,7 +433,7 @@ void RepRap::Spin()
 	}
 	else
 	{
-		const uint32_t now = StepTimer::GetInterruptClocks();
+		const uint32_t now = StepTimer::GetTimerTicks();
 		const uint32_t dt = now - lastTime;
 #if 0 //DEBUG
 		if (dt > 1000000)

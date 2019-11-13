@@ -358,13 +358,13 @@ int FileStore::ReadLine(char* buf, size_t nBytes)
 
 FRESULT FileStore::Store(const char *s, size_t len, size_t *bytesWritten)
 {
-	uint32_t time = StepTimer::GetInterruptClocks();
+	uint32_t time = StepTimer::GetTimerTicks();
 	if (calcCrc)
 	{
 		crc.Update(s, len);
 	}
 	const FRESULT writeStatus = f_write(&file, s, len, bytesWritten);
-	time = StepTimer::GetInterruptClocks() - time;
+	time = StepTimer::GetTimerTicks() - time;
 	if (time > longestWriteTime)
 	{
 		longestWriteTime = time;

@@ -213,7 +213,7 @@ int32_t LocalFan::GetRPM()
 	// When the fan stops, we get no interrupts and fanInterval stops getting updated. We must recognise this and return zero.
 	return (!tachoPort.IsValid())
 			? -1																			// we return -1 if there is no tacho configured
-			: (fanInterval != 0 && StepTimer::GetInterruptClocks() - fanLastResetTime < 3 * StepTimer::StepClockRate)	// if we have a reading and it is less than 3 seconds old
+			: (fanInterval != 0 && StepTimer::GetTimerTicks() - fanLastResetTime < 3 * StepTimer::StepClockRate)	// if we have a reading and it is less than 3 seconds old
 			  ? (StepTimer::StepClockRate * fanMaxInterruptCount * (60/2))/fanInterval		// then calculate RPM assuming 2 interrupts per rev
 			  : 0;																			// else assume fan is off or tacho not connected
 }
@@ -223,7 +223,7 @@ void LocalFan::Interrupt()
 	++fanInterruptCount;
 	if (fanInterruptCount == fanMaxInterruptCount)
 	{
-		const uint32_t now = StepTimer::GetInterruptClocks();
+		const uint32_t now = StepTimer::GetTimerTicks();
 		fanInterval = now - fanLastResetTime;
 		fanLastResetTime = now;
 		fanInterruptCount = 0;
