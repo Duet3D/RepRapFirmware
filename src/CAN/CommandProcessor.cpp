@@ -36,7 +36,8 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 		uint32_t fileOffset = msg.fileOffset, fileLength = 0;
 		if (fileOffset == 0)
 		{
-			CanInterface::UpdateStarting();
+// DC disabled this because it is buggy
+//			CanInterface::UpdateStarting();
 		}
 
 		uint32_t lreq = msg.lengthRequested;

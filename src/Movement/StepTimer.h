@@ -16,12 +16,12 @@ class StepTimer
 public:
 	// The callback function returns true if it wants another callback, after setting the requested time via the second parameter
 	typedef uint32_t Ticks;
-	typedef bool (*Callback)(CallbackParameter, Ticks&);
+	typedef bool (*TimerCallbackFunction)(CallbackParameter, Ticks&);
 
 	StepTimer();
 
 	// Set up the callback function and parameter
-	void SetCallback(Callback cb, CallbackParameter param);
+	void SetCallback(TimerCallbackFunction cb, CallbackParameter param);
 
 	// Schedule a callback at a particular tick count, returning true if it was not scheduled because it is already due or imminent
 	bool ScheduleCallback(Ticks when);
@@ -68,7 +68,7 @@ private:
 
 	StepTimer *next;
 	Ticks whenDue;
-	Callback callback;
+	TimerCallbackFunction callback;
 	CallbackParameter cbParam;
 	volatile bool active;
 

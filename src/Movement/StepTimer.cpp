@@ -13,6 +13,8 @@
 # include "sam/drivers/tc/tc.h"
 #endif
 
+StepTimer * volatile StepTimer::pendingList = nullptr;
+
 void StepTimer::Init()
 {
 	// Timer interrupt for stepper motors
@@ -121,7 +123,7 @@ bool StepTimer::ScheduleTimerInterrupt(uint32_t tim)
 	// We need to disable all interrupts, because once we read the current step clock we have only 6us to set up the interrupt, or we will miss it
 	const irqflags_t flags = cpu_irq_save();
 	const int32_t diff = (int32_t)(tim - GetTimerTicks());			// see how long we have to go
-	if (diff < (int32_t)DDA::MinInterruptInterval)					// if less than about 6us or already passed
+	if (diff < (int32_t)MinInterruptInterval)						// if less than about 6us or already passed
 	{
 		cpu_irq_restore(flags);
 		return true;												// tell the caller to simulate an interrupt instead
@@ -211,21 +213,19 @@ void STEP_TC_HANDLER()
 		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;		// disable the interrupt
 #endif
 
-# ifdef TIMER_DEBUG
-		++numSoftTimerInterruptsExecuted;
-# endif
+#ifdef TIMER_DEBUG
+		++numTimerInterruptsExecuted;
+#endif
 		StepTimer::Interrupt();
 	}
 }
-
-StepTimer * volatile StepTimer::pendingList = nullptr;
 
 StepTimer::StepTimer() : next(nullptr), callback(nullptr), active(false)
 {
 }
 
 // Set up the callback function and parameter
-void StepTimer::SetCallback(Callback cb, CallbackParameter param)
+void StepTimer::SetCallback(TimerCallbackFunction cb, CallbackParameter param)
 {
 	callback = cb;
 	cbParam = param;

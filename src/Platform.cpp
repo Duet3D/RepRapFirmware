@@ -82,8 +82,6 @@
 #include <climits>
 #include <utility>					// for std::swap
 
-extern uint32_t _estack;			// defined in the linker script
-
 #if !defined(HAS_LWIP_NETWORKING) || !defined(HAS_WIFI_NETWORKING) || !defined(HAS_CPU_TEMP_SENSOR) || !defined(HAS_HIGH_SPEED_SD) \
  || !defined(HAS_SMART_DRIVERS) || !defined(HAS_STALL_DETECT) || !defined(HAS_VOLTAGE_MONITOR) || !defined(HAS_12V_MONITOR) || !defined(HAS_VREF_MONITOR) \
  || !defined(SUPPORT_NONLINEAR_EXTRUSION) || !defined(SUPPORT_ASYNC_MOVES) || !defined(HAS_MASS_STORAGE)
@@ -93,27 +91,6 @@ extern uint32_t _estack;			// defined in the linker script
 #if HAS_LWIP_NETWORKING && !defined(LWIP_GMAC_TASK)
 # error LWIP_GMAC_TASK must be defined in compiler settings
 #endif
-
-// The following must be kelp in line with enum class SoftwareResetReason
-const char *const SoftwareResetReasonText[] =
-{
-	"User",
-	"Erase",
-	"NMI",
-	"Hard fault",
-	"Stuck in spin loop",
-	"Watchdog timeout",
-	"Usage fault",
-	"Other fault",
-	"Stack overflow",
-	"Assertion failed",
-	"Heat task stuck",
-	"Memory protection fault",
-	"Unknown",
-	"Unknown",
-	"Unknown",
-	"Unknown"
-};
 
 #if HAS_VOLTAGE_MONITOR
 
@@ -212,8 +189,6 @@ DriversBitmap AxisDriversConfig::GetDriversBitmap() const
 
 //*************************************************************************************************
 // Platform class
-
-uint8_t Platform::softwareResetDebugInfo = 0;			// extra info for debugging
 
 Platform::Platform() :
 #if HAS_MASS_STORAGE
@@ -1609,8 +1584,6 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 	DisableCache();								// disable the cache, it seems to upset flash memory access
 
 #if USE_MPU
-	const uint16_t originalReason = reason;
-
 	//TODO set the flash memory to strongly-ordered or device instead
 	ARM_MPU_Disable();							// disable the MPU
 #endif
@@ -1646,7 +1619,6 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 #endif
 		}
 		reason |= (uint8_t)reprap.GetSpinningModule();
-		reason |= (softwareResetDebugInfo & 0x07) << 5;
 		if (deliberateError)
 		{
 			reason |= (uint16_t)SoftwareResetReason::deliberate;
@@ -1680,38 +1652,8 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 			memset(srdBuf, 0xFF, sizeof(srdBuf));
 			slot = 0;
 		}
-		srdBuf[slot].magic = SoftwareResetData::magicValue;
-		srdBuf[slot].resetReason = reason;
-		srdBuf[slot].when = (uint32_t)realTime;			// some compilers/libraries use 64-bit time_t
-		srdBuf[slot].neverUsedRam = Tasks::GetNeverUsedRam();
-		srdBuf[slot].hfsr = SCB->HFSR;
-		srdBuf[slot].cfsr = SCB->CFSR;
-		srdBuf[slot].icsr = SCB->ICSR;
-#if USE_MPU
-		if (originalReason == (uint16_t)SoftwareResetReason::memFault)
-		{
-			srdBuf[slot].bfar = SCB->MMFAR;				// on a memory fault we store the MMFAR instead of the BFAR
-		}
-		else
-		{
-			srdBuf[slot].bfar = SCB->BFAR;
-		}
-#else
-		srdBuf[slot].bfar = SCB->BFAR;
-#endif
-		// Get the task name if we can. There may be no task executing, so we must allow for this.
-		const TaskHandle_t currentTask = xTaskGetCurrentTaskHandle();
-		srdBuf[slot].taskName = (currentTask == nullptr) ? 0 : *reinterpret_cast<const uint32_t*>(pcTaskGetName(currentTask));
 
-		if (stk != nullptr)
-		{
-			srdBuf[slot].sp = reinterpret_cast<uint32_t>(stk);
-			for (uint32_t& stval : srdBuf[slot].stack)
-			{
-				stval = (stk < &_estack) ? *stk : 0xFFFFFFFF;
-				++stk;
-			}
-		}
+		srdBuf[slot].Populate(reason, (uint32_t)realTime, stk);
 
 		// Save diagnostics data to Flash
 #if SAM4E || SAM4S || SAME70
@@ -1999,7 +1941,7 @@ void Platform::Diagnostics(MessageType mtype)
 
 		if (slot >= 0 && srdBuf[slot].magic == SoftwareResetData::magicValue)
 		{
-			const char* const reasonText = SoftwareResetReasonText[(srdBuf[slot].resetReason >> 5) & 0x0F];
+			const char* const reasonText = SoftwareResetData::ReasonText[(srdBuf[slot].resetReason >> 5) & 0x0F];
 			String<ScratchStringLength> scratchString;
 			if (srdBuf[slot].when != 0)
 			{

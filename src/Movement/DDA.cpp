@@ -1840,7 +1840,7 @@ void DDA::StepDrivers(Platform& p)
 	uint32_t driversStepping = 0;
 	DriveMovement* dm = activeDMs;
 	uint32_t now = StepTimer::GetTimerTicks();
-	const uint32_t elapsedTime = (now - afterPrepare.moveStartTime) + MinInterruptInterval;
+	const uint32_t elapsedTime = (now - afterPrepare.moveStartTime) + StepTimer::MinInterruptInterval;
 	while (dm != nullptr && elapsedTime >= dm->nextStepTime)		// if the next step is due
 	{
 		driversStepping |= p.GetDriversBitmap(dm->drive);
@@ -1867,7 +1867,7 @@ void DDA::StepDrivers(Platform& p)
 		// 3a. Reset all step pins low. Do this now because some external drivers don't like the direction pins being changed before the end of the step pulse.
 		while (StepTimer::GetTimerTicks() - lastStepPulseTime < p.GetSlowDriverStepHighClocks()) {}
 		StepPins::StepDriversLow();									// set all step pins low
-		lastStepLowTime = lastStepPulseTime = StepTimer::GetTimerTicks();
+		lastStepLowTime = StepTimer::GetTimerTicks();
 	}
 
 	// 4. Remove those drives from the list, calculate the next step times, update the direction pins where necessary,
@@ -1896,7 +1896,7 @@ void DDA::StepDrivers(Platform& p)
 	// 5. Reset all step pins low. We already did this if we are using any external drivers, but doing it again does no harm.
 	StepPins::StepDriversLow();										// set all step pins low
 
-	// If there are no more steps to do and the time for the move has nearly expired, flag the move as complete
+	// 6. If there are no more steps to do and the time for the move has nearly expired, flag the move as complete
 	if (activeDMs == nullptr && StepTimer::GetTimerTicks() - afterPrepare.moveStartTime + WakeupTime >= clocksNeeded)
 	{
 		state = completed;

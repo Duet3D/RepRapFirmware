@@ -306,7 +306,7 @@ void DDARing::TryStartNextMove(Platform& p, uint32_t startTime)
 			Move::WakeLaserTaskFromISR();
 		}
 #else
-		StartNextMove(p, startTime);
+		(void)StartNextMove(p, startTime);
 #endif
 	}
 	else
@@ -348,7 +348,7 @@ void DDARing::Interrupt(Platform& p)
 		}
 
 		// The next step is due immediately. Check whether we have been in this ISR for too long already and need to take a break
-		const uint16_t clocksTaken = StepTimer::GetTimerTicks16() - (uint16_t)isrStartTime;
+		const uint16_t clocksTaken = StepTimer::GetTimerTicks16() - isrStartTime;
 		if (clocksTaken >= DDA::MaxStepInterruptTime)
 		{
 			// Force a break by updating the move start time
@@ -366,12 +366,12 @@ void DDARing::Interrupt(Platform& p)
 			CanMotion::InsertHiccup(DDA::HiccupTime);
 #endif
 			++numHiccups;
-		}
 
-		// Reschedule the next step interrupt. This time it should succeed.
-		if (!ScheduleNextStepInterrupt())
-		{
-			return;
+			// Reschedule the next step interrupt. This time it should succeed.
+			if (!ScheduleNextStepInterrupt())
+			{
+				return;
+			}
 		}
 	}
 }

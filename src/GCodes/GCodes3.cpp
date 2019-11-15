@@ -568,7 +568,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	bool seen = false;
-	const char *lettersToTry = "XYZUVWABCD";
+	const char *lettersToTry = AllowedAxisLetters;
 	char c;
 	while ((c = *lettersToTry) != 0)
 	{

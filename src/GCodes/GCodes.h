@@ -582,6 +582,8 @@ private:
 	bool m501SeenInConfigFile;					// true if M501 was executed form config.g
 	char filamentToLoad[FilamentNameLength];	// Name of the filament being loaded
 
+	static constexpr const char *AllowedAxisLetters = "XYZUVWABCD";
+
 	// Standard macro filenames
 	static constexpr const char* BED_EQUATION_G = "bed.g";
 	static constexpr const char* PAUSE_G = "pause.g";

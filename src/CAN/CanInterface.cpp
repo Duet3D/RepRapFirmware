@@ -798,7 +798,7 @@ GCodeResult CanInterface::SetRemoteDriverStallParameters(const CanDriversList& d
 	return GCodeResult::ok;
 }
 
-static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
+static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply, uint8_t *extra = nullptr)
 {
 	if (boardAddress > CanId::MaxNormalAddress)
 	{
@@ -816,37 +816,35 @@ static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, GCodeB
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 	auto msg = buf->SetupRequestMessage<CanMessageReturnInfo>(rid, CanId::MasterAddress, (CanAddress)boardAddress);
 	msg->type = infoType;
-	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
+	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, extra);
 }
 
-// Get diagnostics from and expansion board
+// Get diagnostics from an expansion board
 GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
 {
 	Platform& p = reprap.GetPlatform();
-	GCodeResult res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart0, boardAddress, gb, reply);
-	if (res == GCodeResult::ok)
+
+	// Older expansion board firmware provides parts 0,1,2
+	// Newer expansion board firmware always provides at least part0, and the 'extra' field says what the last part number is
+	uint8_t currentPart = 0;
+	uint8_t lastPart;
+	GCodeResult res;
+	do
 	{
-		p.MessageF(mt, "Diagnostics for board %u:\n", (unsigned int)boardAddress);
+		res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart0 + currentPart, boardAddress, gb, reply, &lastPart);
+		if (res != GCodeResult::ok)
+		{
+			return res;
+		}
+		if (currentPart == 0)
+		{
+			p.MessageF(mt, "Diagnostics for board %u:\n", (unsigned int)boardAddress);
+		}
 		reply.cat('\n');
 		p.Message(mt, reply.c_str());
 		reply.Clear();
-
-		res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart1, boardAddress, gb, reply);
-		if (res == GCodeResult::ok)
-		{
-			reply.cat('\n');
-			p.Message(mt, reply.c_str());
-			reply.Clear();
-
-			res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart2, boardAddress, gb, reply);
-			if (res == GCodeResult::ok)
-			{
-				reply.cat('\n');
-				p.Message(mt, reply.c_str());
-				reply.Clear();
-			}
-		}
-	}
+		++currentPart;
+	} while (currentPart <= ((lastPart == 0) ? 2 : lastPart));
 	return res;
 }
 

@@ -36,10 +36,10 @@ public:
 
 	void Interrupt(Platform& p);												// Check endstops, generate step pulses
 	void OnMoveCompleted(DDA *cdda, Platform& p);								// called when the state has been set to 'completed'
-
 	bool ScheduleNextStepInterrupt();											// Schedule the next step interrupt, returning true if we failed because it is due immediately
 	void CurrentMoveCompleted() __attribute__ ((hot));							// Signal that the current move has just been completed
-	void TryStartNextMove(Platform& p, uint32_t startTime) __attribute__ ((hot));	// Try to start another move, returning true if Step() needs to be called immediately
+	void TryStartNextMove(Platform& p, uint32_t startTime) __attribute__ ((hot));	// Try to start another move
+
 	uint32_t ExtruderPrintingSince() const { return extrudersPrintingSince; }	// When we started doing normal moves after the most recent extruder-only move
 	int32_t GetAccumulatedExtrusion(size_t extruder, size_t drive, bool& isPrinting);
 
