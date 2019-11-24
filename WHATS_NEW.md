@@ -1,8 +1,24 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 2.05 (in preparation)
+============
+Compatible files:
+- DuetWiFiServer 1.23
+- DuetWebControl 2.0.4 (recommended) or 1.22.6
+
+Upgrade notes: none
+
+Changed behaviour:
+- Current position is no longer shown for pulse-type filament monitors, because it was meaningless and nearly always zero
+- Calibration data for pulse-type filament monitors is no longer displayed by M122 (same as for laser and magnetic filament monitors). Use M591 to report the calibration data.
+
+Bug fixes:
+- If a print that was sliced using absolute extrusion mode was resurrected, unwanted extrusion occurred just before the print was resumed
+- Bed compensation did not take account of the XY offset of the printing nozzle from the head reference point
+
 Version 2.04
-===============
+============
 Compatible files:
 - DuetWiFiServer 1.23
 - DuetWebControl 2.0.4 (recommended) or 1.22.6
