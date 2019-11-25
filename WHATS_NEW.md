@@ -16,6 +16,7 @@ Changed behaviour:
 Bug fixes:
 - If a print that was sliced using absolute extrusion mode was resurrected, unwanted extrusion occurred just before the print was resumed
 - Bed compensation did not take account of the XY offset of the printing nozzle from the head reference point
+- When using SCARA kinematics the calculation of the minimum achoievable radius was incorrect. Depending on the B parameter of the M667 command, this could result in spurious "Intermediate position unreachable" errors, or non-extruding G1 moves being turned into G0 moves.
 
 Version 2.04
 ============
