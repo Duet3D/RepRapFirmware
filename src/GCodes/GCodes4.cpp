@@ -386,7 +386,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 	case GCodeState::resuming3:
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			for (size_t i = 0; i < NumTotalFans; ++i)
+			for (size_t i = 0; i < MaxFans; ++i)
 			{
 				reprap.GetFansManager().SetFanValue(i, pausedFanSpeeds[i]);
 			}
@@ -919,7 +919,15 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 					// Reset the Z axis origin according to the height error so that we can move back up to the dive height
 					moveBuffer.coords[Z_AXIS] = zp.GetActualTriggerHeight();
 					reprap.GetMove().SetNewPosition(moveBuffer.coords, false);
-					reprap.GetMove().SetZeroHeightError(moveBuffer.coords);
+
+					// Find the coordinates of the Z probe to pass to SetZeroHeightError
+					float tempCoords[MaxAxes];
+					memcpy(tempCoords, moveBuffer.coords, sizeof(tempCoords));
+					tempCoords[X_AXIS] += zp.GetXOffset();
+					tempCoords[Y_AXIS] += zp.GetYOffset();
+					reprap.GetMove().SetZeroHeightError(tempCoords);
+					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+
 					g30zHeightErrorSum = g30zHeightError = 0;					// there is no longer any height error from this probe
 					SetAxisIsHomed(Z_AXIS);										// this is only correct if the Z axis is Cartesian-like, but other architectures must be homed before probing anyway
 					zDatumSetByProbing = true;
@@ -995,7 +1003,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				// Setting the Z height with G30
 				moveBuffer.coords[Z_AXIS] -= g30zHeightError;
 				reprap.GetMove().SetNewPosition(moveBuffer.coords, false);
-				reprap.GetMove().SetZeroHeightError(moveBuffer.coords);
+
+				// Find the coordinates of the Z probe to pass to SetZeroHeightError
+				float tempCoords[MaxAxes];
+				memcpy(tempCoords, moveBuffer.coords, sizeof(tempCoords));
+				tempCoords[X_AXIS] += params.GetXOffset();
+				tempCoords[Y_AXIS] += params.GetYOffset();
+				reprap.GetMove().SetZeroHeightError(tempCoords);
 				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 			}
 			gb.AdvanceState();
@@ -1179,10 +1193,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		// We just did the retraction part of a firmware retraction, now we need to do the Z hop
 		if (segmentsLeft == 0)
 		{
-			const AxesBitmap xAxes = reprap.GetCurrentXAxes();
-			const AxesBitmap yAxes = reprap.GetCurrentYAxes();
-			reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, xAxes, yAxes);
 			SetMoveBufferDefaults();
+			moveBuffer.tool = reprap.GetCurrentTool();
+			reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, moveBuffer.tool);
 			moveBuffer.coords[Z_AXIS] += retractHop;
 			moveBuffer.feedRate = platform.MaxFeedrate(Z_AXIS);
 			moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition() : noFilePosition;
@@ -1200,15 +1213,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			const Tool * const tool = reprap.GetCurrentTool();
 			if (tool != nullptr)
 			{
-				const uint32_t xAxes = reprap.GetCurrentXAxes();
-				const uint32_t yAxes = reprap.GetCurrentYAxes();
-				reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, xAxes, yAxes);
 				SetMoveBufferDefaults();
+				reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, tool);
 				for (size_t i = 0; i < tool->DriveCount(); ++i)
 				{
 					moveBuffer.coords[ExtruderToLogicalDrive(tool->Drive(i))] = retractLength + retractExtra;
 				}
 				moveBuffer.feedRate = unRetractSpeed;
+				moveBuffer.tool = tool;
 				moveBuffer.isFirmwareRetraction = true;
 				moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition() : noFilePosition;
 				moveBuffer.canPauseAfter = true;

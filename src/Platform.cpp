@@ -36,6 +36,7 @@
 #include "Logger.h"
 #include "Tasks.h"
 #include "Hardware/DmacManager.h"
+#include "Hardware/Cache.h"
 #include "Math/Isqrt.h"
 #include "Hardware/I2C.h"
 
@@ -241,11 +242,11 @@ void Platform::Init()
 #if SAM4E || SAM4S || SAME70
 	memset(uniqueId, 0, sizeof(uniqueId));
 
-	DisableCache();
+	Cache::Disable();
 	cpu_irq_disable();
 	const uint32_t rc = flash_read_unique_id(uniqueId, 4);
 	cpu_irq_enable();
-	EnableCache();
+	Cache::Enable();
 
 	if (rc == 0)
 	{
@@ -705,7 +706,7 @@ void Platform::UpdateFirmware()
 	reprap.EmergencyStop();
 
 	// Step 0 - disable the cache because it interferes with flash memory access
-	DisableCache();
+	Cache::Disable();
 
 #if USE_MPU
 	//TODO consider setting flash memory to strongly-ordered instead
@@ -1372,7 +1373,7 @@ void Platform::Spin()
 				ListDrivers(scratchString.GetRef(), stalledDriversToLog);
 				stalledDriversToLog = 0;
 				float liveCoordinates[MaxAxesPlusExtruders];
-				reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
+				reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentTool());
 				MessageF(WarningMessage, "Driver(s)%s stalled at Z height %.2f", scratchString.c_str(), (double)liveCoordinates[Z_AXIS]);
 				reported = true;
 			}
@@ -1581,7 +1582,7 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 	rswdt_restart(RSWDT);						// kick the secondary watchdog
 #endif
 
-	DisableCache();								// disable the cache, it seems to upset flash memory access
+	Cache::Disable();
 
 #if USE_MPU
 	//TODO set the flash memory to strongly-ordered or device instead
@@ -1863,7 +1864,7 @@ void Platform::Diagnostics(MessageType mtype)
 {
 #if USE_CACHE && SAM4E
 	// Get the cache statistics before we start messing around with the cache
-	const uint32_t cacheCount = cmcc_get_monitor_cnt(CMCC);
+	const uint32_t cacheCount = Cache::GetHitCount();
 #endif
 
 	Message(mtype, "=== Platform ===\n");
@@ -1919,9 +1920,9 @@ void Platform::Diagnostics(MessageType mtype)
 		// Work around bug in ASF flash library: flash_read_user_signature calls a RAMFUNC without disabling interrupts first.
 		// This caused a crash (watchdog timeout) sometimes if we run M122 while a print is in progress
 		const irqflags_t flags = cpu_irq_save();
-		DisableCache();
+		Cache::Disable();
 		const uint32_t rc = flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t));
-		EnableCache();
+		Cache::Enable();
 		cpu_irq_restore(flags);
 
 		if (rc == FLASH_RC_OK)

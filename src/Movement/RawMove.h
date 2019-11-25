@@ -18,8 +18,7 @@ struct RawMove
 	float virtualExtruderPosition;									// the virtual extruder position at the start of this move, for normal moves
 	FilePosition filePos;											// offset in the file being printed at the start of reading this move
 	float proportionLeft;											// what proportion of the entire move remains after this segment
-	AxesBitmap xAxes;												// axes that X is mapped to
-	AxesBitmap yAxes;												// axes that Y is mapped to
+	const Tool *tool;												// which tool (if any) is being used
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
 #endif

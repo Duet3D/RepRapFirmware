@@ -9,63 +9,12 @@
 #include "RepRap.h"
 #include "Platform.h"
 #include "Storage/CRC32.h"
-
-#include <malloc.h>
+#include "Hardware/Cache.h"
+#include <TaskPriorities.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include <TaskPriorities.h>
-
-#if USE_CACHE
-
-# if SAM4E
-#  include "cmcc/cmcc.h"
-# endif
-
-# if SAME70
-#  include <core_cm7.h>
-
-void EnableCache()
-{
-	SCB_EnableICache();
-	SCB_EnableDCache();
-}
-
-void DisableCache()
-{
-	SCB_DisableICache();
-	SCB_DisableDCache();
-}
-
-# endif
-
-#endif
-
-#if SAME70 && USE_MPU
-# include <mpu_armv7.h>
-
-// Macro ARM_MPU_RASR_EX is incorrectly defined in CMSIS 5.4.0, see https://github.com/ARM-software/CMSIS_5/releases. Redefine it here.
-
-# undef ARM_MPU_RASR_EX
-
-/**
-* MPU Region Attribute and Size Register Value
-*
-* \param DisableExec       Instruction access disable bit, 1= disable instruction fetches.
-* \param AccessPermission  Data access permissions, allows you to configure read/write access for User and Privileged mode.
-* \param AccessAttributes  Memory access attribution, see \ref ARM_MPU_ACCESS_.
-* \param SubRegionDisable  Sub-region disable field.
-* \param Size              Region size of the region to be configured, for example 4K, 8K.
-*/
-# define ARM_MPU_RASR_EX(DisableExec, AccessPermission, AccessAttributes, SubRegionDisable, Size)    \
-  ((((DisableExec)      << MPU_RASR_XN_Pos)   & MPU_RASR_XN_Msk)                                  | \
-   (((AccessPermission) << MPU_RASR_AP_Pos)   & MPU_RASR_AP_Msk)                                  | \
-   (((AccessAttributes) & (MPU_RASR_TEX_Msk | MPU_RASR_S_Msk | MPU_RASR_C_Msk | MPU_RASR_B_Msk))) | \
-   (((SubRegionDisable) << MPU_RASR_SRD_Pos)  & MPU_RASR_SRD_Msk)                                 | \
-   (((Size)             << MPU_RASR_SIZE_Pos) & MPU_RASR_SIZE_Msk)                                | \
-   (((MPU_RASR_ENABLE_Msk))))
-
-#endif
+#include <malloc.h>
 
 const uint8_t memPattern = 0xA5;
 
@@ -155,9 +104,9 @@ extern "C" [[noreturn]] void AppMain()
 			for (unsigned int i = 0; ; ++i)
 			{
 				digitalWrite(DiagPin, (i & 1) == 0 && (i & 15) < 6);		// turn LED on if count is 0, 2, 4 or 16, 18, 20 etc. otherwise turn it off
-				for (unsigned int j = 0; j < 5000; ++j)
+				for (unsigned int j = 0; j < 500; ++j)
 				{
-					delayMicroseconds(100);									// delayMicroseconds only works with low values of delay so do 100us at a time
+					delayMicroseconds(1000);								// delayMicroseconds only works with low values of delay so do 1ms at a time
 				}
 			}
 		}
@@ -176,74 +125,6 @@ extern "C" [[noreturn]] void AppMain()
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
 
 #if SAME70 && USE_MPU
-	// Set up the MPU so that we can have a non-cacheable RAM region, and so that we can trap accesses to non-existent memory
-	// Where regions overlap, the region with the highest region number takes priority
-	constexpr ARM_MPU_Region_t regionTable[] =
-	{
-		// Flash memory: read-only, execute allowed, cacheable
-		{
-			ARM_MPU_RBAR(0, IFLASH_ADDR),
-			ARM_MPU_RASR_EX(0u, ARM_MPU_AP_RO, ARM_MPU_ACCESS_NORMAL(ARM_MPU_CACHEP_WB_WRA, ARM_MPU_CACHEP_WB_WRA, 1u), 0u, ARM_MPU_REGION_SIZE_1MB)
-		},
-		// First 256kb RAM, read-write, cacheable, execute disabled. Parts of this are overridden later.
-		{
-			ARM_MPU_RBAR(1, IRAM_ADDR),
-			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_NORMAL(ARM_MPU_CACHEP_WB_WRA, ARM_MPU_CACHEP_WB_WRA, 1u), 0u, ARM_MPU_REGION_SIZE_256KB)
-		},
-		// Final 128kb RAM, read-write, cacheable, execute disabled
-		{
-			ARM_MPU_RBAR(2, IRAM_ADDR + 0x00040000),
-			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_NORMAL(ARM_MPU_CACHEP_WB_WRA, ARM_MPU_CACHEP_WB_WRA, 1u), 0u, ARM_MPU_REGION_SIZE_128KB)
-		},
-		// Non-cachable RAM. This must be before normal RAM because it includes CAN buffers which must be within first 64kb.
-		// Read write, execute disabled, non-cacheable
-		{
-			ARM_MPU_RBAR(3, IRAM_ADDR),
-			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_ORDERED, 0, ARM_MPU_REGION_SIZE_64KB)
-		},
-		// RAMFUNC memory. Read-only (the code has already been written to it), execution allowed. The initialised data memory follows, so it must be RW.
-		// 256 bytes is enough at present (check the linker memory map if adding more RAMFUNCs).
-		{
-			ARM_MPU_RBAR(4, IRAM_ADDR + 0x00010000),
-			ARM_MPU_RASR_EX(0u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_NORMAL(ARM_MPU_CACHEP_WB_WRA, ARM_MPU_CACHEP_WB_WRA, 1u), 0u, ARM_MPU_REGION_SIZE_256B)
-		},
-		// Peripherals
-		{
-			ARM_MPU_RBAR(5, 0x40000000),
-			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_DEVICE(1u), 0u, ARM_MPU_REGION_SIZE_16MB)
-		},
-		// USBHS
-		{
-			ARM_MPU_RBAR(6, 0xA0100000),
-			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_DEVICE(1u), 0u, ARM_MPU_REGION_SIZE_1MB)
-		},
-		// ROM
-		{
-			ARM_MPU_RBAR(7, IROM_ADDR),
-			ARM_MPU_RASR_EX(0u, ARM_MPU_AP_RO, ARM_MPU_ACCESS_NORMAL(ARM_MPU_CACHEP_WB_WRA, ARM_MPU_CACHEP_WB_WRA, 1u), 0u, ARM_MPU_REGION_SIZE_4MB)
-		},
-		// ARM Private Peripheral Bus
-		{
-			ARM_MPU_RBAR(8, 0xE0000000),
-			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_ORDERED, 0u, ARM_MPU_REGION_SIZE_1MB)
-		}
-	};
-
-	// Ensure MPU is disabled
-	ARM_MPU_Disable();
-
-	// Clear all regions
-	const uint32_t numRegions = (MPU->TYPE & MPU_TYPE_DREGION_Msk) >> MPU_TYPE_DREGION_Pos;
-	for (unsigned int region = 0; region < numRegions; ++region)
-	{
-		ARM_MPU_ClrRegion(region);
-	}
-
-	// Load regions from our table
-	ARM_MPU_Load(regionTable, ARRAY_SIZE(regionTable));
-
-	// Enable the MPU, disabling the default map but allowing exception handlers to use it
-	ARM_MPU_Enable(0x01);
 #endif
 
 #ifdef __LPC17xx__
@@ -263,21 +144,12 @@ extern "C" [[noreturn]] void AppMain()
 	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD | RSTC_MR_URSTEN;
 #endif
 
-#if USE_CACHE
-# if SAM4E
-	// Initialise the cache controller
-	cmcc_config g_cmcc_cfg;
-	cmcc_get_config_defaults(&g_cmcc_cfg);
-	cmcc_init(CMCC, &g_cmcc_cfg);
-#endif
-	EnableCache();
-#endif
+	Cache::Init();
+	Cache::Enable();
 
 #if SAM4S
 	efc_enable_cloe(EFC0);			// enable code loop optimisation
-#endif
-
-#if SAM4E || SAME70
+#elif SAM4E || SAME70
 	efc_enable_cloe(EFC);			// enable code loop optimisation
 #endif
 

@@ -213,7 +213,7 @@ private:
 	static const Resource FileSystemResource = 1;						// Non-sharable parts of the file system
 	static const Resource HeaterResourceBase = 2;
 	static const Resource FanResourceBase = HeaterResourceBase + MaxHeaters;
-	static const size_t NumResources = FanResourceBase + NumTotalFans;
+	static const size_t NumResources = FanResourceBase + MaxFans;
 
 	static_assert(NumResources <= 32, "Too many resources to keep a bitmap of them in class GCodeMachineState");
 
@@ -490,7 +490,7 @@ private:
 	AxesBitmap toBeHomed;						// Bitmap of axes still to be homed
 	AxesBitmap axesHomed;						// Bitmap of which axes have been homed
 
-	float pausedFanSpeeds[NumTotalFans];			// Fan speeds when the print was paused or a tool change started
+	float pausedFanSpeeds[MaxFans];			// Fan speeds when the print was paused or a tool change started
 	float lastDefaultFanSpeed;					// Last speed given in a M106 command with on fan number
 	float pausedDefaultFanSpeed;				// The speed of the default print cooling fan when the print was paused or a tool change started
 	float speedFactor;							// speed factor as a percentage (normally 100.0)

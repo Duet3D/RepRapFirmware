@@ -78,7 +78,7 @@ bool FansManager::WriteFanSettings(FileStore *f) const
 {
 	ReadLocker lock(fansLock);
 	bool ok = true;
-	for (size_t fanNum = 0; ok && fanNum < NumTotalFans; ++fanNum)
+	for (size_t fanNum = 0; ok && fanNum < MaxFans; ++fanNum)
 	{
 		ok = fans[fanNum] == nullptr || fans[fanNum]->WriteSettings(f, fanNum);
 	}
@@ -90,7 +90,7 @@ bool FansManager::WriteFanSettings(FileStore *f) const
 // This is called by M950 to create a fan or change its PWM frequency
 GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply)
 {
-	if (fanNum < NumTotalFans)
+	if (fanNum < MaxFans)
 	{
 		const bool seenPin = gb.Seen('C');
 		if (seenPin)

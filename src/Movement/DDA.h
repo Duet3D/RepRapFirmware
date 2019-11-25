@@ -75,9 +75,8 @@ public:
     float GetRequestedSpeed() const { return requestedSpeed; }
     float GetTopSpeed() const { return topSpeed; }
     float GetVirtualExtruderPosition() const { return virtualExtruderPosition; }
-	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount);					// Try to push babystepping earlier in the move queue
-	uint32_t GetXAxes() const { return xAxes; }
-	uint32_t GetYAxes() const { return yAxes; }
+	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount);	// Try to push babystepping earlier in the move queue
+	const Tool *GetTool() const { return tool; }
 	float GetTotalDistance() const { return totalDistance; }
 	void LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration);	// Limit the speed an acceleration of this move
 
@@ -215,29 +214,28 @@ private:
 	} flags;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
-	LaserPwmOrIoBits laserPwmOrIoBits;		// laser PWM required or port state required during this move (here because it is currently 16 bits)
+	LaserPwmOrIoBits laserPwmOrIoBits;				// laser PWM required or port state required during this move (here because it is currently 16 bits)
 #endif
 
-    AxesBitmap xAxes;						// Which axes are behaving as X axes
-    AxesBitmap yAxes;						// Which axes are behaving as Y axes
+	const Tool *tool;								// which tool (if any) is active
 
-    FilePosition filePos;					// The position in the SD card file after this move was read, or zero if not read from SD card
+    FilePosition filePos;							// The position in the SD card file after this move was read, or zero if not read from SD card
 
 	int32_t endPoint[MaxAxesPlusExtruders];  		// Machine coordinates of the endpoint
 	float endCoordinates[MaxAxesPlusExtruders];		// The Cartesian coordinates at the end of the move plus extrusion amounts
 	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
-    float totalDistance;					// How long is the move in hypercuboid space
-	float acceleration;						// The acceleration to use
-	float deceleration;						// The deceleration to use
-    float requestedSpeed;					// The speed that the user asked for
-    float virtualExtruderPosition;			// the virtual extruder position at the end of this move, used for pause/resume
+    float totalDistance;							// How long is the move in hypercuboid space
+	float acceleration;								// The acceleration to use
+	float deceleration;								// The deceleration to use
+    float requestedSpeed;							// The speed that the user asked for
+    float virtualExtruderPosition;					// the virtual extruder position at the end of this move, used for pause/resume
 
     // These vary depending on how we connect the move with its predecessor and successor, but remain constant while the move is being executed
 	float startSpeed;
 	float endSpeed;
 	float topSpeed;
 
-	float proportionLeft;					// what proportion of the extrusion in the G1 or G0 move of which this is a part remains to be done after this segment is complete
+	float proportionLeft;							// what proportion of the extrusion in the G1 or G0 move of which this is a part remains to be done after this segment is complete
 	uint32_t clocksNeeded;
 
 	union
@@ -247,8 +245,8 @@ private:
 		{
 			float accelDistance;
 			float decelDistance;
-			float targetNextSpeed;				// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
-			float maxAcceleration;				// the maximum allowed acceleration for this move according to the limits set by M201
+			float targetNextSpeed;					// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
+			float maxAcceleration;					// the maximum allowed acceleration for this move according to the limits set by M201
 		} beforePrepare;
 
 		// Values that are not set or accessed before Prepare is called

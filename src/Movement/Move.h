@@ -58,10 +58,10 @@ public:
 	void Exit();													// Shut down
 
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const; // Get the current position in untransformed coords
-	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, AxesBitmap xAxes, AxesBitmap yAxes) const;
+	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool *tool) const;
 																	// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetEndPoint(size_t drive) const;					 	// Get the current position of a motor
-	void LiveCoordinates(float m[MaxAxesPlusExtruders], AxesBitmap xAxes, AxesBitmap yAxes);	// Gives the last point at the end of the last complete DDA transformed to user coords
+	void LiveCoordinates(float m[MaxAxesPlusExtruders], const Tool *tool);	// Gives the last point at the end of the last complete DDA transformed to user coords
 	bool AllMovesAreFinished();										// Is the look-ahead ring empty?  Stops more moves being added as well.
 	void DoLookAhead() __attribute__ ((hot));						// Run the look-ahead procedure
 	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation); // Set the current position to be this
@@ -74,11 +74,11 @@ public:
 	void SetAxisCompensation(unsigned int axis, float tangent);		// Set an axis-pair compensation angle
 	float AxisCompensation(unsigned int axis) const;				// The tangent value
 	void SetIdentityTransform();									// Cancel the bed equation; does not reset axis angle compensation
-	void AxisAndBedTransform(float move[], AxesBitmap xAxes, AxesBitmap yAxes, bool useBedCompensation) const;
+	void AxisAndBedTransform(float move[], const Tool *tool, bool useBedCompensation) const;
 																	// Take a position and apply the bed and the axis-angle compensations
-	void InverseAxisAndBedTransform(float move[], AxesBitmap xAxes, AxesBitmap yAxes) const;
+	void InverseAxisAndBedTransform(float move[], const Tool *tool) const;
 																	// Go from a transformed point back to user coordinates
-	void SetZeroHeightError(const float coords[MaxAxes]);			// Set zero height error at these coordinates
+	void SetZeroHeightError(const float coords[MaxAxes]);			// Set zero height error at these bed coordinates
 	float GetTaperHeight() const { return (useTaper) ? taperHeight : 0.0; }
 	void SetTaperHeight(float h);
 	bool UseMesh(bool b);											// Try to enable mesh bed compensation and report the final state
@@ -200,12 +200,12 @@ private:
 		timing			// no moves being executed or in queue, motors are at full current
 	};
 
-	void BedTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;			// Take a position and apply the bed compensations
-	void InverseBedTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;	// Go from a bed-transformed point back to user coordinates
-	void AxisTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;			// Take a position and apply the axis-angle compensations
-	void InverseAxisTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;	// Go from an axis transformed point back to user coordinates
+	void BedTransform(float move[MaxAxes], const Tool *tool) const;			// Take a position and apply the bed compensations
+	void InverseBedTransform(float move[MaxAxes],const  Tool *tool) const;	// Go from a bed-transformed point back to user coordinates
+	void AxisTransform(float move[MaxAxes], const Tool *tool) const;		// Take a position and apply the axis-angle compensations
+	void InverseAxisTransform(float move[MaxAxes], const Tool *tool) const;	// Go from an axis transformed point back to user coordinates
 	void SetPositions(const float move[MaxAxesPlusExtruders]) { return mainDDARing.SetPositions(move); }	// Force the machine coordinates to be these;
-	float GetInterpolatedHeightError(float xCoord, float yCoord) const;							// Get the height error at an XY position
+	float GetInterpolatedHeightError(float xCoord, float yCoord) const;		// Get the height error at an XY position on the bed
 
 	DDARing mainDDARing;								// The DDA ring used for regular moves
 
@@ -283,10 +283,10 @@ inline void Move::AdjustMotorPositions(const float adjustment[], size_t numMotor
 
 // Return the current live XYZ and extruder coordinates
 // Interrupts are assumed enabled on entry
-inline void Move::LiveCoordinates(float m[MaxAxesPlusExtruders], AxesBitmap xAxes, AxesBitmap yAxes)
+inline void Move::LiveCoordinates(float m[MaxAxesPlusExtruders], const Tool *tool)
 {
 	mainDDARing.LiveCoordinates(m);
-	InverseAxisAndBedTransform(m, xAxes, yAxes);
+	InverseAxisAndBedTransform(m, tool);
 }
 
 // These are the actual numbers that we want to be the coordinates, so don't transform them.

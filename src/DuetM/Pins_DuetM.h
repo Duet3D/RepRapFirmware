@@ -72,6 +72,8 @@ constexpr size_t MaxAxesPlusExtruders = 7;
 constexpr size_t MaxHeatersPerTool = 2;
 constexpr size_t MaxExtrudersPerTool = 4;
 
+constexpr size_t MaxFans = 6;
+
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
@@ -139,9 +141,6 @@ constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 vo
 constexpr Pin Z_PROBE_PIN = PortCPin(15);									// Z probe analog input
 constexpr Pin Z_PROBE_MOD_PIN = PortCPin(26);
 constexpr Pin DiagPin = Z_PROBE_MOD_PIN;
-
-// Cooling fans
-constexpr size_t NumTotalFans = 4;
 
 // SD cards
 constexpr size_t NumSdCards = 2;

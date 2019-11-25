@@ -607,7 +607,7 @@ bool DDARing::PauseMoves(RestorePoint& rp)
 		rp.moveCoords[axis] = prevDda->GetEndCoordinate(axis, false);
 	}
 
-	reprap.GetMove().InverseAxisAndBedTransform(rp.moveCoords, prevDda->GetXAxes(), prevDda->GetYAxes());	// we assume that xAxes hasn't changed between the moves
+	reprap.GetMove().InverseAxisAndBedTransform(rp.moveCoords, prevDda->GetTool());
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	rp.laserPwmOrIoBits = dda->GetLaserPwmOrIoBits();
@@ -710,7 +710,7 @@ bool DDARing::LowPowerOrStallPause(RestorePoint& rp)
 		rp.moveCoords[axis] = prevDda->GetEndCoordinate(axis, false);
 	}
 
-	reprap.GetMove().InverseAxisAndBedTransform(rp.moveCoords, prevDda->GetXAxes(), prevDda->GetYAxes());	// we assume that xAxes and yAxes have't changed between the moves
+	reprap.GetMove().InverseAxisAndBedTransform(rp.moveCoords, prevDda->GetTool());
 
 	// Free the DDAs for the moves we are going to skip
 	for (dda = addPointer; dda != savedDdaRingAddPointer; dda = dda->GetNext())

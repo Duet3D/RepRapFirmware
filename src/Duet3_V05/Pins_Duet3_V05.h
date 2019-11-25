@@ -75,6 +75,8 @@ constexpr size_t MaxAxesPlusExtruders = 20;			// May be <= MaxAxes + MaxExtruder
 constexpr size_t MaxHeatersPerTool = 4;
 constexpr size_t MaxExtrudersPerTool = 6;
 
+constexpr size_t MaxFans = 16;
+
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
@@ -103,7 +105,6 @@ constexpr Pin TMC51xxMosiPin = PortBPin(4);
 constexpr Pin TMC51xxMisoPin = PortAPin(21);
 constexpr Pin TMC51xxSclkPin = PortAPin(23);
 
-
 // Thermistor/PT1000 inputs
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(31), PortCPin(15), PortCPin(29), PortCPin(30) };	// Thermistor/PT1000 pins
 constexpr Pin VssaSensePin = PortCPin(13);
@@ -125,9 +126,6 @@ constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// we use an 11:1 vo
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
 constexpr Pin DiagPin = PortCPin(20);
-
-// Cooling fans
-constexpr size_t NumTotalFans = 12;
 
 // SD cards
 constexpr size_t NumSdCards = 1;								// actually 0 cards, but 0 probably won't work yet

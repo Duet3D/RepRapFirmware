@@ -12,6 +12,7 @@
 #include "StepTimer.h"
 #include "Endstops/EndstopsManager.h"
 #include "Kinematics/LinearDeltaKinematics.h"
+#include "Tools/Tool.h"
 
 #if SUPPORT_CAN_EXPANSION
 # include "CAN/CanMotion.h"
@@ -296,7 +297,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				endPoint[drive] = Move::MotorMovementToSteps(drive, nextMove.coords[drive]);
 			}
 
-			int32_t delta = endPoint[drive] - positionNow[drive];
+			const int32_t delta = endPoint[drive] - positionNow[drive];
 			if (doMotorMapping)
 			{
 				if (drive >= numVisibleAxes)
@@ -307,7 +308,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				{
 					const float positionDelta = endCoordinates[drive] - prev->GetEndCoordinate(drive, false);
 					directionVector[drive] = positionDelta;
-					if (positionDelta != 0.0 && (IsBitSet(nextMove.yAxes, drive) || IsBitSet(nextMove.xAxes, drive)))
+					if (positionDelta != 0.0 && (IsBitSet(Tool::GetXAxes(nextMove.tool), drive) || IsBitSet(Tool::GetYAxes(nextMove.tool), drive)))
 					{
 						flags.xyMoving = true;
 					}
@@ -370,8 +371,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	}
 
 	// 3. Store some values
-	xAxes = nextMove.xAxes;
-	yAxes = nextMove.yAxes;
+	tool = nextMove.tool;
 	flags.checkEndstops = nextMove.checkEndstops;
 	flags.reduceAcceleration = nextMove.reduceAcceleration;
 	filePos = nextMove.filePos;
@@ -548,8 +548,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	flags.goingSlow = false;
 	flags.continuousRotationShortcut = false;
 	virtualExtruderPosition = prev->virtualExtruderPosition;
-	xAxes = prev->xAxes;
-	yAxes = prev->yAxes;
+	tool = nullptr;
 	filePos = prev->filePos;
 	flags.endCoordinatesValid = prev->flags.endCoordinatesValid;
 	acceleration = deceleration = reprap.GetPlatform().Accelerations()[Z_AXIS];
@@ -631,8 +630,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove)
 	flags.goingSlow = false;
 	flags.continuousRotationShortcut = false;
 	virtualExtruderPosition = 0;
-	xAxes = DefaultXAxisMapping;
-	yAxes = DefaultYAxisMapping;
+	tool = nullptr;
 	filePos = noFilePosition;
 	flags.endCoordinatesValid = false;
 
@@ -1562,6 +1560,8 @@ float DDA::NormaliseXYZ()
 	// First calculate the magnitude of the vector. If there is more than one X or Y axis, take an average of their movements (they should be equal).
 	float xMagSquared = 0.0, yMagSquared = 0.0;
 	unsigned int numXaxes = 0, numYaxes = 0;
+	const AxesBitmap xAxes = Tool::GetXAxes(tool);
+	const AxesBitmap yAxes = Tool::GetYAxes(tool);
 	for (size_t d = 0; d < MaxAxes; ++d)
 	{
 		if (IsBitSet(xAxes, d))

@@ -79,7 +79,7 @@ constexpr size_t MaxAxesPlusExtruders = 20;			// May be <= MaxAxes + MaxExtruder
 constexpr size_t MaxHeatersPerTool = 4;
 constexpr size_t MaxExtrudersPerTool = 6;
 
-constexpr size_t NumTotalFans = 12;
+constexpr size_t MaxFans = 16;
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB

@@ -30,7 +30,6 @@ private:
 	void Init();
 	void Reset();
 	void Poll();
-	float GetCurrentPosition() const;
 	FilamentSensorStatus CheckFilament(float amountCommanded, float amountMeasured, bool overdue);
 
 	// Configuration parameters

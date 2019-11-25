@@ -858,7 +858,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		else
 #endif
 		{
-			move->LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
+			move->LiveCoordinates(liveCoordinates, currentTool);
 		}
 
 		// Machine coordinates
@@ -1241,7 +1241,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		// Controllable Fans
 		FansBitmap controllableFans = 0;
-		for (size_t fan = 0; fan < NumTotalFans; fan++)
+		for (size_t fan = 0; fan < MaxFans; fan++)
 		{
 			if (fansManager->IsFanControllable(fan))
 			{
@@ -1344,7 +1344,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				bool first = true;
 				for (size_t xi = 0; xi < MaxAxes; ++xi)
 				{
-					if ((tool->GetXAxisMap() & (1u << xi)) != 0)
+					if (IsBitSet(tool->GetXAxisMap(), xi))
 					{
 						if (first)
 						{
@@ -1361,7 +1361,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				first = true;
 				for (size_t yi = 0; yi < MaxAxes; ++yi)
 				{
-					if ((tool->GetYAxisMap() & (1u << yi)) != 0)
+					if (IsBitSet(tool->GetYAxisMap(), yi))
 					{
 						if (first)
 						{
@@ -1692,7 +1692,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 	// Now the machine coordinates
 	float liveCoordinates[MaxAxesPlusExtruders];
-	move->LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
+	move->LiveCoordinates(liveCoordinates, currentTool);
 	response->catf("],\"machine\":");		// announce the machine position
 	ch = '[';
 	for (size_t drive = 0; drive < numVisibleAxes; drive++)
@@ -1736,7 +1736,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	// Send the fan settings, for PanelDue firmware 1.13 and later
 	// Currently, PanelDue assumes that the first value is the print cooling fan speed and only uses that one, so send the mapped fan speed first
 	response->catf(",\"fanPercent\":[%.1f", (double)(gCodes->GetMappedFanSpeed() * 100.0));
-	for (size_t i = 0; i < NumTotalFans; ++i)
+	for (size_t i = 0; i < MaxFans; ++i)
 	{
 		response->catf(",%.1f", (double)(fansManager->GetFanValue(i) * 100.0));
 	}
@@ -1745,7 +1745,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	// Send fan RPM value(s)
 	response->cat(",\"fanRPM\":");
 	ch = '[';
-	for (size_t i = 0; i < NumTotalFans; ++i)
+	for (size_t i = 0; i < MaxFans; ++i)
 	{
 		response->catf("%c%" PRIi32, ch, fansManager->GetFanRPM(i));
 		ch = ',';
@@ -2048,7 +2048,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 		}
 
 		response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,",
-			(double)info.objectHeight, (double)info.firstLayerHeight, (double)info.layerHeight);
+					HideNan(info.objectHeight), HideNan(info.firstLayerHeight), HideNan(info.layerHeight));
 		if (info.printTime != 0)
 		{
 			response->catf("\"printTime\":%" PRIu32 ",", info.printTime);
@@ -2068,7 +2068,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 		{
 			for (size_t i = 0; i < info.numFilaments; ++i)
 			{
-				response->catf("%c%.1f", ch, (double)info.filamentNeeded[i]);
+				response->catf("%c%.1f", ch, HideNan(info.filamentNeeded[i]));
 				ch = ',';
 			}
 		}
@@ -2267,18 +2267,6 @@ GCodeResult RepRap::ClearTemperatureFault(int8_t wasDudHeater, const StringRef& 
 		toolList->ClearTemperatureFault(wasDudHeater);
 	}
 	return rslt;
-}
-
-// Get the current axes used as X axes
-AxesBitmap RepRap::GetCurrentXAxes() const
-{
-	return (currentTool == nullptr) ? DefaultXAxisMapping : currentTool->GetXAxisMap();
-}
-
-// Get the current axes used as X axes
-AxesBitmap RepRap::GetCurrentYAxes() const
-{
-	return (currentTool == nullptr) ? DefaultYAxisMapping : currentTool->GetYAxisMap();
 }
 
 #if HAS_MASS_STORAGE

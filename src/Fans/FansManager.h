@@ -48,7 +48,7 @@ private:
 	LocalFan *CreateLocalFan(uint32_t fanNum, const char *pinNames, PwmFrequency freq, const StringRef& reply);
 
 	mutable ReadWriteLock fansLock;
-	Fan *fans[NumTotalFans];
+	Fan *fans[MaxFans];
 };
 
 #endif /* SRC_FANS_FANSMANAGER_H_ */
