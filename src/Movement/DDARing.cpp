@@ -620,6 +620,8 @@ bool DDARing::PauseMoves(RestorePoint& rp)
 
 	dda = addPointer;
 	rp.proportionDone = dda->GetProportionDone(false);	// get the proportion of the current multi-segment move that has been completed
+	rp.initialUserX = dda->GetInitialUserX();
+	rp.initialUserY = dda->GetInitialUserY();
 	if (dda->UsingStandardFeedrate())
 	{
 		rp.feedRate = dda->GetRequestedSpeed();
@@ -695,6 +697,8 @@ bool DDARing::LowPowerOrStallPause(RestorePoint& rp)
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
 	rp.proportionDone = dda->GetProportionDone(abortedMove);	// store how much of the complete multi-segment move's extrusion has been done
+	rp.initialUserX = dda->GetInitialUserX();
+	rp.initialUserY = dda->GetInitialUserY();
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	rp.laserPwmOrIoBits = dda->GetLaserPwmOrIoBits();

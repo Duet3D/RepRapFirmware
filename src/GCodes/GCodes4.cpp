@@ -394,6 +394,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			moveBuffer.virtualExtruderPosition = pauseRestorePoint.virtualExtruderPosition;
 			fileGCode->MachineState().feedRate = pauseRestorePoint.feedRate;
 			moveFractionToSkip = pauseRestorePoint.proportionDone;
+			restartInitialUserX = pauseRestorePoint.initialUserX;
+			restartInitialUserY = pauseRestorePoint.initialUserY;
 			isPaused = false;
 			reply.copy("Printing resumed");
 			platform.Message(LogMessage, "Printing resumed\n");

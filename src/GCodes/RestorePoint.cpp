@@ -23,6 +23,7 @@ void RestorePoint::Init()
 	virtualExtruderPosition = 0.0;
 	filePos = noFilePosition;
 	proportionDone = 0.0;
+	initialUserX = initialUserY = 0.0;
 	toolNumber = -1;
 
 	for (size_t i = 0; i < MaxSpindles; ++i)

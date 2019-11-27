@@ -376,7 +376,9 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	flags.reduceAcceleration = nextMove.reduceAcceleration;
 	filePos = nextMove.filePos;
 	virtualExtruderPosition = nextMove.virtualExtruderPosition;
-	proportionLeft = nextMove.proportionLeft;
+	proportionDone = nextMove.proportionDone;
+	initialUserX = nextMove.initialUserX;
+	initialUserY = nextMove.initialUserY;
 
 	flags.canPauseAfter = nextMove.canPauseAfter;
 	flags.usingStandardFeedrate = nextMove.usingStandardFeedrate;
@@ -1949,19 +1951,18 @@ void DDA::MoveAborted()
 	state = completed;
 }
 
-// Return the proportion of extrusion for the complete multi-segment move that has already been done.
+// Return the proportion of the complete multi-segment move that has already been done.
 // The move was either not started or was aborted.
 float DDA::GetProportionDone(bool moveWasAborted) const
 {
 	// Get the proportion of extrusion already done at the start of this segment
-	float proportionDone = (filePos != noFilePosition && filePos == prev->filePos)
-									? 1.0 - prev->proportionLeft
+	float proportionDoneSoFar = (filePos != noFilePosition && filePos == prev->filePos)
+									? prev->proportionDone
 										: 0.0;
 	if (moveWasAborted)
 	{
 		// The move was aborted, so subtract how much was done
-		const float proportionDoneAtEnd = 1.0 - proportionLeft;
-		if (proportionDoneAtEnd > proportionDone)
+		if (proportionDone > proportionDoneSoFar)
 		{
 			int32_t taken = 0, left = 0;
 			for (size_t drive = MaxAxes; drive < NumDirectDrivers; ++drive)
@@ -1976,11 +1977,11 @@ float DDA::GetProportionDone(bool moveWasAborted) const
 			const int32_t total = taken + left;
 			if (total > 0)										// if the move has net extrusion
 			{
-				proportionDone += (((proportionDoneAtEnd - proportionDone) * taken) + (total/2)) / total;
+				proportionDoneSoFar += (((proportionDone - proportionDoneSoFar) * taken) + (total/2)) / total;
 			}
 		}
 	}
-	return proportionDone;
+	return proportionDoneSoFar;
 }
 
 // Reduce the speed of this move to the indicated speed.

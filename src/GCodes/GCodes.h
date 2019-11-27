@@ -436,9 +436,12 @@ private:
 	unsigned int totalSegments;					// The total number of segments left in the complete move
 
 	unsigned int segmentsLeftToStartAt;
-	float moveFractionToStartAt;				// how much of the next move was printed before the power failure
 	float moveFractionToSkip;
 	float firstSegmentFractionToSkip;
+
+	float restartMoveFractionDone;				// how much of the next move was printed before the pause or power failure (from M26)
+	float restartInitialUserX;					// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
+	float restartInitialUserY;					// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
 
 	float arcCentre[MaxAxes];
 	float arcRadius;
