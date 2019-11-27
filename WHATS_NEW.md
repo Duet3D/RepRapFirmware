@@ -18,6 +18,7 @@ Bug fixes:
 - Bed compensation did not take account of the XY offset of the printing nozzle from the head reference point
 - When using SCARA kinematics the calculation of the minimum achoievable radius was incorrect. Depending on the B parameter of the M667 command, this could result in spurious "Intermediate position unreachable" errors, or non-extruding G1 moves being turned into G0 moves.
 - A badly-formed GCode file that returned the layer height or object height as nan or inf caused DWC to disconnect because of a JSON parse failure
+- M579 scale factors were not applied correctly to G2 and G3 arc moves
 
 Version 2.04
 ============
