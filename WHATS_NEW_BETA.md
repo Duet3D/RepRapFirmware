@@ -10,6 +10,8 @@ Feature changes since beta 12:
 - Switch-type endstops connected to expansion boards are supported
 - Current position is no longer shown for pulse-type filament monitors, because it was meaningless and nearly always zero
 - Calibration data for pulse-type filament monitors is no longer displayed by M122 (same as for laser and magnetic filament monitors). Use M591 to report the calibration data.
+- Max bed heaters increased to 9 on Duet 3, 2 on Duet Meastro (still 4 on Duet WiFi/Ethernet)
+- Max chamber heaters increased to 4 on Duet 3 and on Duet WiFi/Ethernet
 
 Bug fixes:
 - Stall detection endstops should now work when multiple axes are homed simultaneously
