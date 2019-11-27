@@ -8,9 +8,18 @@ Recommended compatible firmware:
 
 Feature changes since beta 12:
 - Switch-type endstops connected to expansion boards are supported
+- Current position is no longer shown for pulse-type filament monitors, because it was meaningless and nearly always zero
+- Calibration data for pulse-type filament monitors is no longer displayed by M122 (same as for laser and magnetic filament monitors). Use M591 to report the calibration data.
+- Max bed heaters increased to 9 on Duet 3, 2 on Duet Meastro (still 4 on Duet WiFi/Ethernet)
+- Max chamber heaters increased to 4 on Duet 3 and on Duet WiFi/Ethernet
 
 Bug fixes:
 - Stall detection endstops should now work when multiple axes are homed simultaneously
+- If a print that was sliced using absolute extrusion mode was resurrected, unwanted extrusion occurred just before the print was resumed
+- Bed compensation did not take account of the XY offset of the printing nozzle from the head reference point
+- When using SCARA kinematics the calculation of the minimum achoievable radius was incorrect. Depending on the B parameter of the M667 command, this could result in spurious "Intermediate position unreachable" errors, or non-extruding G1 moves being turned into G0 moves.
+- A badly-formed GCode file that returned the layer height or object height as nan or inf caused DWC to disconnect because of a JSON parse failure
+- M579 scale factors were not applied correctly to G2 and G3 arc moves
 
 Known issues:
 - Duet 3 all revisions: file uploading via the local Ethernet port is unreliable (this is the case in previous firmware versions too). To guard against this, always enable CRC checking in DWC 2.0.4.
