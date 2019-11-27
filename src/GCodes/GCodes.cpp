@@ -3660,17 +3660,6 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply)
 	FileStore * const f = platform.OpenFile(platform.GetGCodeDir(), fileName, OpenMode::read);
 	if (f != nullptr)
 	{
-		fileGCode->SetToolNumberAdjust(0);								// clear tool number adjustment
-		fileGCode->MachineState().volumetricExtrusion = false;			// default to non-volumetric extrusion
-
-		// Reset all extruder positions when starting a new print
-		virtualExtruderPosition = 0.0;
-		for (size_t extruder = 0; extruder < MaxExtruders; extruder++)
-		{
-			rawExtruderTotalByDrive[extruder] = 0.0;
-		}
-		rawExtruderTotal = 0.0;
-		reprap.GetMove().ResetExtruderPositions();
 
 		fileToPrint.Set(f);
 		fileOffsetToPrint = 0;
@@ -3685,8 +3674,25 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply)
 // Start printing the file already selected
 void GCodes::StartPrinting(bool fromStart)
 {
+	if (fromStart)
+	{
+		fileGCode->MachineState().volumetricExtrusion = false;			// default to non-volumetric extrusion
+		virtualExtruderPosition = 0.0;
+	}
+
+	fileGCode->SetToolNumberAdjust(0);								// clear tool number adjustment
+
+	// Reset all extruder positions when starting a new print
+	for (size_t extruder = 0; extruder < MaxExtruders; extruder++)
+	{
+		rawExtruderTotalByDrive[extruder] = 0.0;
+	}
+	rawExtruderTotal = 0.0;
+	reprap.GetMove().ResetExtruderPositions();
+
 	fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
 	fileInput->Reset(fileGCode->OriginalMachineState().fileState);
+
 	lastFilamentError = FilamentSensorStatus::ok;
 	lastPrintingMoveHeight = -1.0;
 	reprap.GetPrintMonitor().StartedPrint();
@@ -3973,6 +3979,11 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 
 	if (seen)
 	{
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+
 		// Add or delete tool, so start by deleting the old one with this number, if any
 		reprap.DeleteTool(reprap.GetTool(toolNumber));
 

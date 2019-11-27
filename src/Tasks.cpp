@@ -8,15 +8,13 @@
 #include "Tasks.h"
 #include "RepRap.h"
 #include "Platform.h"
+#include "Hardware/Cache.h"
+
 #include <malloc.h>
 
 #ifdef RTOS
 # include "FreeRTOS.h"
 # include "task.h"
-#endif
-
-#if USE_CACHE
-# include "cmcc/cmcc.h"
 #endif
 
 const uint8_t memPattern = 0xA5;
@@ -120,13 +118,8 @@ extern "C" void AppMain()
 	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD | RSTC_MR_URSTEN;	// ignore any signal on the NRST pin for now so that the reset reason will show as Software
 #endif
 
-#if USE_CACHE
-	// Enable the cache
-	cmcc_config g_cmcc_cfg;
-	cmcc_get_config_defaults(&g_cmcc_cfg);
-	cmcc_init(CMCC, &g_cmcc_cfg);
-	EnableCache();
-#endif
+	Cache::Init();
+	Cache::Enable();
 
 #ifdef RTOS
 	// Add the FreeRTOS internal tasks to the task list

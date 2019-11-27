@@ -95,7 +95,6 @@ bool PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 		}
 		else
 		{
-			reply.catf("current position %.1f, ", (double)GetCurrentPosition());
 			if (calibrationStarted && fabsf(totalMovementMeasured) > 1.0 && totalExtrusionCommanded > 20.0)
 			{
 				const float measuredMmPerPulse = totalExtrusionCommanded/totalMovementMeasured;
@@ -158,12 +157,6 @@ void PulsedFilamentMonitor::Poll()
 
 		haveInterruptData = false;
 	}
-}
-
-// Return the current wheel angle
-float PulsedFilamentMonitor::GetCurrentPosition() const
-{
-	return (float)sensorValue;
 }
 
 // Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
@@ -281,20 +274,7 @@ void PulsedFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder
 {
 	Poll();
 	const char* const statusText = (samplesReceived < 2) ? "no data received" : "ok";
-	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: position %.2f, %s, ", extruder, (double)GetCurrentPosition(), statusText);
-	if (calibrationStarted && fabsf(totalMovementMeasured) > 1.0 && totalExtrusionCommanded > 20.0)
-	{
-		const float measuredMmPerRev = totalExtrusionCommanded/totalMovementMeasured;
-		const float normalRatio = 1.0/measuredMmPerRev;
-		const int measuredPosTolerance = lrintf(100.0 * (((normalRatio > 0.0) ? maxMovementRatio : minMovementRatio) - normalRatio)/normalRatio);
-		const int measuredNegTolerance = lrintf(100.0 * (normalRatio - ((normalRatio > 0.0) ? minMovementRatio : maxMovementRatio))/normalRatio);
-		reprap.GetPlatform().MessageF(mtype,"measured sensitivity %.3fmm/pulse +%d%% -%d%%\n",
-										(double)measuredMmPerRev, measuredPosTolerance, measuredNegTolerance);
-	}
-	else
-	{
-		reprap.GetPlatform().Message(mtype, "no calibration data\n");
-	}
+	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: %s\n", extruder, statusText);
 }
 
 // End

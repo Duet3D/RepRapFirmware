@@ -11,6 +11,8 @@
 
 #if SUPPORT_TMC51xx
 
+#error This file has not been kept up to date since Duet 3 development moved to RRF3. In particular, it does not allow for interactons between DMA and cache.
+
 #include "RTOSIface/RTOSIface.h"
 #include "Movement/Move.h"
 

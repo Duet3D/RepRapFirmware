@@ -13,6 +13,7 @@
 #include "RepRap.h"
 #include "Movement/Move.h"
 #include "Movement/StepTimer.h"
+#include "Hardware/Cache.h"
 
 # if SAME70
 #  include "sam/drivers/xdmac/xdmac.h"
@@ -380,6 +381,8 @@ static TmcDriverState * volatile currentDriver = nullptr;	// volatile because th
 
 	// SPI sends data MSB first, but the firmware uses little-endian mode, so we need to reverse the byte order
 	spiDataOut = cpu_to_be32(outVal << 8);
+	Cache::FlushBeforeDMASend(&spiDataOut, sizeof(spiDataOut));
+	Cache::FlushBeforeDMAReceive(&spiDataIn, sizeof(spiDataIn));
 
 	spiPdc->PERIPH_TPR = reinterpret_cast<uint32_t>(&spiDataOut);
 	spiPdc->PERIPH_TCR = 3;
@@ -718,6 +721,7 @@ inline void TmcDriverState::TransferDone()
 	fastDigitalWriteHigh(pin);									// set the CS pin high for the driver we just polled
 	if (driversPowered)											// if the power is still good, update the status
 	{
+		Cache::InvalidateAfterDMAReceive(&spiDataIn, sizeof(spiDataIn));
 		uint32_t status = be32_to_cpu(spiDataIn) >> 12;			// get the status
 		const uint32_t interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
 		if (interval == 0 || interval > maxStallStepInterval)	// if the motor speed is too low to get reliable stall indication

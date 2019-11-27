@@ -13,6 +13,8 @@
 #include "RepRap.h"
 #include "Movement/Move.h"
 #include "Movement/StepTimer.h"
+#include "Hardware/Cache.h"
+
 #include "sam/drivers/pdc/pdc.h"
 #include "sam/drivers/uart/uart.h"
 
@@ -420,6 +422,9 @@ inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal, uint8_
 	sendData[6] = (uint8_t)regVal;
 	sendData[7] = crc;
 
+	Cache::FlushBeforeDMASend(sendData, sizeof(sendData));
+	Cache::FlushBeforeDMAReceive(receiveData, sizeof(receiveData));
+
 	pdc->PERIPH_TPR = reinterpret_cast<uint32_t>(sendData);
 	pdc->PERIPH_TCR = 12;											// number of bytes to send: 8 bytes send request + 4 bytes read IFCOUNT request
 
@@ -438,6 +443,9 @@ inline void TmcDriverState::SetupDMAReceive(uint8_t regNum, uint8_t crc)
 
 	sendData[2] = regNum;
 	sendData[3] = crc;
+
+	Cache::FlushBeforeDMASend(sendData, sizeof(sendData));
+	Cache::FlushBeforeDMAReceive(receiveData, sizeof(receiveData));
 
 	pdc->PERIPH_TPR = reinterpret_cast<uint32_t>(sendData);
 	pdc->PERIPH_TCR = 4;											// send a 4 byte read data request
@@ -777,6 +785,7 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply)
 // This is called by the ISR when the SPI transfer has completed
 inline void TmcDriverState::TransferDone()
 {
+	Cache::InvalidateAfterDMAReceive(receiveData, sizeof(receiveData));
 	if (sendData[2] & 0x80)								// if we were writing a register
 	{
 		const uint8_t currentIfCount = receiveData[18];

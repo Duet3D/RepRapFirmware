@@ -289,6 +289,8 @@ LimitPositionResult ScaraKinematics::LimitPosition(float finalCoords[], const fl
 	if (isCoordinated && initialCoords != nullptr)
 	{
 		// Calculate how far along the line the closest point of approach to the distal axis is
+		// From maxima, t = -(y0(y1-y0)+x0(x1-x0))/L^2, d^2=((x0y1-x1y0)^2)/L^2
+		// where t is how far from along the line from x0y0 to x1y1 the closest point of approach is (0..1), d is the closest approach distance, and L^2= (x1-x0)^2+(y1-y0)^2
 		const float xdiff = finalCoords[0] - initialCoords[0];
 		const float ydiff = finalCoords[1] - initialCoords[1];
 		const float sumOfSquares = fsquare(xdiff) + fsquare(ydiff);
@@ -473,7 +475,7 @@ void ScaraKinematics::Recalc()
 	twoPd = proximalArmLength * distalArmLength * 2;
 
 	minRadius = max<float>(sqrtf(proximalArmLengthSquared + distalArmLengthSquared
-							- twoPd * max<float>(cosf(psiLimits[0] * DegreesToRadians), cosf(psiLimits[1] * DegreesToRadians))) * 1.005,
+							+ twoPd * min<float>(cosf(psiLimits[0] * DegreesToRadians), cosf(psiLimits[1] * DegreesToRadians))) * 1.005,
 							requestedMinRadius);
 	minRadiusSquared = fsquare(minRadius);
 

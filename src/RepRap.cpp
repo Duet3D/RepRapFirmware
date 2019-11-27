@@ -2062,7 +2062,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 		}
 
 		response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,",
-			(double)info.objectHeight, (double)info.firstLayerHeight, (double)info.layerHeight);
+					HideNan(info.objectHeight), HideNan(info.firstLayerHeight), HideNan(info.layerHeight));
 		if (info.printTime != 0)
 		{
 			response->catf("\"printTime\":%" PRIu32 ",", info.printTime);
@@ -2082,7 +2082,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 		{
 			for (size_t i = 0; i < info.numFilaments; ++i)
 			{
-				response->catf("%c%.1f", ch, (double)info.filamentNeeded[i]);
+				response->catf("%c%.1f", ch, HideNan(info.filamentNeeded[i]));
 				ch = ',';
 			}
 		}
