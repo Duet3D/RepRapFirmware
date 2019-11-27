@@ -39,7 +39,7 @@ static inline const Move& GetMoveInstance() { return reprap.GetMove(); }
 #define DEBUG_DRIVER_TIMEOUT	0
 
 constexpr float MinimumMotorCurrent = 50.0;
-constexpr float MinimumOpenLoadMotorCurrent = 300;			// minimum current in mA for the open load status to be taken seriously
+constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA for the open load status to be taken seriously
 constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
 constexpr bool DefaultInterpolation = true;					// interpolation enabled
 constexpr uint32_t DefaultTpwmthrsReg = 2000;				// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle

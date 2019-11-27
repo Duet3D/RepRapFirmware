@@ -26,7 +26,7 @@
 #include "sam/drivers/usart/usart.h"
 
 constexpr float MaximumMotorCurrent = 2400.0;
-constexpr float MinimumOpenLoadMotorCurrent = 300;			// minimum current in mA for the open load status to be taken seriously
+constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA for the open load status to be taken seriously
 constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
 constexpr bool DefaultInterpolation = true;					// interpolation enabled
 constexpr int DefaultStallDetectThreshold = 1;
