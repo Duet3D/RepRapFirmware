@@ -4096,7 +4096,7 @@ void GCodes::GenerateTemperatureReport(const StringRef& reply) const
 		ReportToolTemperatures(reply, tool, true);
 	}
 
-	for (size_t hn = 0; hn < NumBedHeaters && heat.GetBedHeater(hn) >= 0; ++hn)
+	for (size_t hn = 0; hn < MaxBedHeaters && heat.GetBedHeater(hn) >= 0; ++hn)
 	{
 		if (hn == 0)
 		{
@@ -4114,7 +4114,7 @@ void GCodes::GenerateTemperatureReport(const StringRef& reply) const
 		reply.catf("%.1f /%.1f", (double)heat.GetHeaterTemperature(heater), (double)heat.GetTargetTemperature(heater));
 	}
 
-	for (size_t hn = 0; hn < NumChamberHeaters && heat.GetChamberHeater(hn) >= 0; ++hn)
+	for (size_t hn = 0; hn < MaxChamberHeaters && heat.GetChamberHeater(hn) >= 0; ++hn)
 	{
 		if (hn == 0)
 		{
@@ -4503,9 +4503,9 @@ int GCodes::GetHeaterNumber(unsigned int itemNumber) const
 	}
 	if (itemNumber < 90)
 	{
-		return (itemNumber < 80 + NumBedHeaters) ? reprap.GetHeat().GetBedHeater(itemNumber - 80) : -1;
+		return (itemNumber < 80 + MaxBedHeaters) ? reprap.GetHeat().GetBedHeater(itemNumber - 80) : -1;
 	}
-	return (itemNumber < 90 + NumChamberHeaters) ? reprap.GetHeat().GetChamberHeater(itemNumber - 90) : -1;
+	return (itemNumber < 90 + MaxChamberHeaters) ? reprap.GetHeat().GetChamberHeater(itemNumber - 90) : -1;
 }
 
 float GCodes::GetItemCurrentTemperature(unsigned int itemNumber) const

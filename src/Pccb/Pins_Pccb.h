@@ -82,7 +82,13 @@ constexpr size_t MaxSensorsInSystem = 32;
 typedef uint32_t SensorsBitmap;
 
 constexpr size_t MaxHeaters = 1;					// The number of heaters in the machine. PCCB has no heaters.
-constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
+constexpr size_t MaxExtraHeaterProtections = 4;		// The number of extra heater protection instances
+
+constexpr size_t MaxBedHeaters = 1;
+constexpr size_t MaxChamberHeaters = 1;
+constexpr int8_t DefaultBedHeater = -1;
+constexpr int8_t DefaultE0Heater = 0;				// Index of the default first extruder heater, used only for the legacy status response
+
 constexpr size_t NumThermistorInputs = 2;
 constexpr size_t NumTmcDriversSenseChannels = 1;
 
@@ -99,6 +105,8 @@ constexpr size_t MaxAxesPlusExtruders = NumDirectDrivers;
 
 constexpr size_t MaxHeatersPerTool = 2;
 constexpr size_t MaxExtrudersPerTool = 1;
+
+constexpr size_t MaxFans = 7;
 
 constexpr size_t NUM_SERIAL_CHANNELS = 1;			// The number of serial IO channels (USB only)
 #define SERIAL_MAIN_DEVICE SerialUSB
@@ -200,9 +208,6 @@ constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 vo
 constexpr size_t MaxZProbes = 1;
 
 constexpr Pin DiagPin = NoPin;
-
-// Cooling fans
-constexpr size_t NumTotalFans = 7;
 
 // DotStar LED control (USART0 is SharedSPI so we use USART1)
 #define DOTSTAR_USES_USART	1
@@ -340,12 +345,14 @@ constexpr uint32_t IAP_FLASH_START = 0x00470000;
 constexpr uint32_t IAP_FLASH_END = 0x0047FFFF;								// we allow a full 64K on the SAM4
 
 // Timer allocation
-// TC0 channel 0 is used for step pulse generation and software timers
+// TC0 channel 0 is used for step pulse generation and software timers (lower 16 bits)
 // TC0 channel 1 is currently unused
-// TC0 channel 2 is currently unused
+// TC0 channel 2 is used for step pulse generation and software timers (upper 16 bits)
 #define STEP_TC				(TC0)
 #define STEP_TC_CHAN		(0)
+#define STEP_TC_CHAN_UPPER	(2)
 #define STEP_TC_ID			ID_TC0
+#define STEP_TC_ID_UPPER	ID_TC2
 #define STEP_TC_IRQN		TC0_IRQn
 #define STEP_TC_HANDLER		TC0_Handler
 

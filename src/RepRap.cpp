@@ -1028,7 +1028,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->cat(",\"temps\":{");
 
 		/* Bed */
-		const int8_t bedHeater = (NumBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
+		const int8_t bedHeater = (MaxBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
 		if (bedHeater != -1)
 		{
 			response->catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"standby\":%.1f,\"state\":%d,\"heater\":%d},",
@@ -1037,7 +1037,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 
 		/* Chamber */
-		const int8_t chamberHeater = (NumChamberHeaters > 0) ? heat->GetChamberHeater(0) : -1;
+		const int8_t chamberHeater = (MaxChamberHeaters > 0) ? heat->GetChamberHeater(0) : -1;
 		if (chamberHeater != -1)
 		{
 			response->catf("\"chamber\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
@@ -1046,7 +1046,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 
 		/* Cabinet */
-		const int8_t cabinetHeater = (NumChamberHeaters > 1) ? heat->GetChamberHeater(1) : -1;
+		const int8_t cabinetHeater = (MaxChamberHeaters > 1) ? heat->GetChamberHeater(1) : -1;
 		if (cabinetHeater != -1)
 		{
 			response->catf("\"cabinet\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
@@ -1643,7 +1643,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->printf("{\"status\":\"%c\",\"heaters\":", ch);
 
 	// Send the heater actual temperatures. If there is no bed heater, send zero for PanelDue.
-	const int8_t bedHeater = (NumBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
+	const int8_t bedHeater = (MaxBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
 	ch = ',';
 	response->catf("[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetHeaterTemperature(bedHeater)));
 	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)

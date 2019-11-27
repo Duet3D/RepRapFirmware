@@ -1586,14 +1586,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (gb.Seen('C'))
 			{
 				// Wait for specified chamber(s) to be ready
-				uint32_t chamberIndices[NumChamberHeaters];
-				size_t chamberCount = NumChamberHeaters;
+				uint32_t chamberIndices[MaxChamberHeaters];
+				size_t chamberCount = MaxChamberHeaters;
 				gb.GetUnsignedArray(chamberIndices, chamberCount, false);
 
 				if (chamberCount == 0)
 				{
 					// If no values are specified, wait for all chamber heaters
-					for (size_t i = 0; i < NumChamberHeaters; i++)
+					for (size_t i = 0; i < MaxChamberHeaters; i++)
 					{
 						const int8_t heater = reprap.GetHeat().GetChamberHeater(i);
 						if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance))
@@ -1609,7 +1609,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					// Otherwise wait only for the specified chamber heaters
 					for (size_t i = 0; i < chamberCount; i++)
 					{
-						if (chamberIndices[i] >= 0 && chamberIndices[i] < NumChamberHeaters)
+						if (chamberIndices[i] >= 0 && chamberIndices[i] < MaxChamberHeaters)
 						{
 							const int8_t heater = reprap.GetHeat().GetChamberHeater(chamberIndices[i]);
 							if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance))
@@ -1741,7 +1741,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 			// Check if the heater index is passed
 			int index = gb.Seen('P') ? gb.GetIValue() : 0;
-			if (index < 0 || index >= (int)((code == 140) ? NumBedHeaters : NumChamberHeaters))
+			if (index < 0 || index >= (int)((code == 140) ? MaxBedHeaters : MaxChamberHeaters))
 			{
 				reply.printf("Invalid heater index '%d'", index);
 				result = GCodeResult::error;
@@ -1842,7 +1842,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 144: // Set bed to standby, or to active if S1 parameter given
 		{
 			const unsigned int index = gb.Seen('P') ? gb.GetUIValue() : 0;
-			if (index >= NumBedHeaters)
+			if (index >= MaxBedHeaters)
 			{
 				reply.printf("Invalid bed heater index '%u'", index);
 				result = GCodeResult::error;
@@ -1883,7 +1883,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			// Check if the heater index is passed
 			const uint32_t index = gb.Seen('P') ? gb.GetUIValue() : 0;
-			if (index >= ((code == 190) ? NumBedHeaters : NumChamberHeaters))
+			if (index >= ((code == 190) ? MaxBedHeaters : MaxChamberHeaters))
 			{
 				reply.printf("Invalid heater index '%" PRIu32 "'", index);
 				result = GCodeResult::error;

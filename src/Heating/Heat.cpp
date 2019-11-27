@@ -91,8 +91,15 @@ ReadWriteLock Heat::sensorsLock;
 Heat::Heat()
 	: sensorCount(0), sensorsRoot(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
-	ARRAY_INIT(bedHeaters, DefaultBedHeaters);
-	ARRAY_INIT(chamberHeaters, DefaultChamberHeaters);
+	for (int8_t& h : bedHeaters)
+	{
+		h = -1;
+	}
+	bedHeaters[0] = DefaultBedHeater;
+	for (int8_t& h : chamberHeaters)
+	{
+		h = -1;
+	}
 
 	for (size_t index : ARRAY_INDICES(heaterProtections))
 	{
@@ -1042,7 +1049,7 @@ GCodeResult Heat::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 
 	if (   index < 0
 		|| (index >= (int)MaxHeaters && index < (int)FirstExtraHeaterProtection)
-		|| index >= (int)(FirstExtraHeaterProtection + NumExtraHeaterProtections)
+		|| index >= (int)(FirstExtraHeaterProtection + MaxExtraHeaterProtections)
 	   )
 	{
 		reply.printf("Invalid heater protection item '%d'", index);

@@ -60,7 +60,13 @@ constexpr size_t MaxSensorsInSystem = 64;
 typedef uint64_t SensorsBitmap;
 
 constexpr size_t MaxHeaters = 12;
-constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
+constexpr size_t MaxExtraHeaterProtections = 8;		// The number of extra heater protection instances
+
+constexpr size_t MaxBedHeaters = 9;
+constexpr size_t MaxChamberHeaters = 4;
+constexpr int8_t DefaultBedHeater = 0;
+constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder heater, used only for the legacy status response
+
 constexpr size_t NumThermistorInputs = 4;
 constexpr size_t NumTmcDriversSenseChannels = 1;
 

@@ -317,7 +317,8 @@ void Platform::Init()
 
 	// Do hardware dependent initialisation
 
-#if defined(DUET_NG)
+#if HAS_SMART_DRIVERS
+# if defined(DUET_NG)
 	// Test for presence of a DueX2 or DueX5 expansion board and work out how many TMC2660 drivers we have
 	expansionBoard = DuetExpansion::DueXnInit();
 
@@ -338,12 +339,13 @@ void Platform::Init()
 
 	DuetExpansion::AdditionalOutputInit();
 
-#elif defined(DUET_M)
+# elif defined(DUET_M)
 	numSmartDrivers = MaxSmartDrivers;							// for now we assume that expansion drivers are smart too
-#elif defined(PCCB)
+# elif defined(PCCB)
 	numSmartDrivers = MaxSmartDrivers;
-#elif defined(DUET3)
+# elif defined(DUET3)
 	numSmartDrivers = MaxSmartDrivers;
+# endif
 #endif
 
 #if defined(DUET_06_085)
@@ -543,21 +545,11 @@ void Platform::Init()
 
 	extrusionAncilliaryPwmValue = 0.0;
 
-	// Initialise the configured heaters to just the default bed and chamber heaters
+	// Initialise the configured heaters to just the default bed heater (there are no default chamber heaters)
 	configuredHeaters = 0;
-	for (int8_t bedHeater : DefaultBedHeaters)
+	if (DefaultBedHeater >= 0)
 	{
-		if (bedHeater >= 0)
-		{
-			SetBit(configuredHeaters, bedHeater);
-		}
-	}
-	for (int8_t chamberHeater : DefaultChamberHeaters)
-	{
-		if (chamberHeater >= 0)
-		{
-			SetBit(configuredHeaters, chamberHeater);
-		}
+		SetBit(configuredHeaters, DefaultBedHeater);
 	}
 
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
@@ -2453,7 +2445,7 @@ void Platform::UpdateConfiguredHeaters()
 	configuredHeaters = 0;
 
 	// Check bed heaters
-	for (size_t i = 0; i < NumBedHeaters; i++)
+	for (size_t i = 0; i < MaxBedHeaters; i++)
 	{
 		const int8_t bedHeater = reprap.GetHeat().GetBedHeater(i);
 		if (bedHeater >= 0)
@@ -2463,7 +2455,7 @@ void Platform::UpdateConfiguredHeaters()
 	}
 
 	// Check chamber heaters
-	for (size_t i = 0; i < NumChamberHeaters; i++)
+	for (size_t i = 0; i < MaxChamberHeaters; i++)
 	{
 		const int8_t chamberHeater = reprap.GetHeat().GetChamberHeater(i);
 		if (chamberHeater >= 0)
@@ -4135,18 +4127,22 @@ void Platform::GetV12Voltages(float& minV, float& currV, float& maxV) const
 // TMC driver temperatures
 float Platform::GetTmcDriversTemperature(unsigned int board) const
 {
-#ifdef PCCB_10
-	const uint16_t mask = (board == 0)
-							? ((1u << 2) - 1)						// drivers 0, 1 are on-board
-								: ((1u << 5) - 1) << 2;				// drivers 2-7 are on the DueX5
+#if defined(DUET3)
+	const uint16_t mask = LowestNBits<uint16_t>(6);					// there are 6 drivers, only one board
 #elif defined(DUET_NG)
-	const uint16_t mask = ((1u << 5) - 1) << (5 * board);			// there are 5 drivers on each board
+	const uint16_t mask = LowestNBits<uint16_t>(5) << (5 * board);	// there are 5 drivers on each board
 #elif defined(DUET_M)
 	const uint16_t mask = (board == 0)
-							? ((1u << 5) - 1)						// drivers 0-4 are on the main board
-								: ((1u << 2) - 1) << 5;				// drivers 5-6 are on the daughter board
-#elif defined(DUET3)
-	const uint16_t mask = ((1u << 6) - 1);							// there are 6 drivers, only one board
+							? LowestNBits<uint16_t>(5)				// drivers 0-4 are on the main board
+								: LowestNBits<uint16_t>(2) << 5;	// drivers 5-6 are on the daughter board
+#elif defined(PCCB_10)
+	const uint16_t mask = (board == 0)
+							? LowestNBits<uint16_t>(2)				// drivers 0,1 are on-board
+								: LowestNBits<uint16_t>(5) << 2;	// drivers 2-7 are on the DueX5
+#elif defined(PCCB_08_X5)
+	const uint16_t mask = LowestNBits<uint16_t>(5);					// all drivers (0-4) are on the DueX, no further expansion supported
+#elif defined(PCCB_08)
+	const uint16_t mask = LowestNBits<uint16_t>(2);					// drivers 0, 1 are on-board, no expansion supported
 #endif
 	return ((temperatureShutdownDrivers & mask) != 0) ? 150.0
 			: ((temperatureWarningDrivers & mask) != 0) ? 100.0

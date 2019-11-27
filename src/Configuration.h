@@ -97,35 +97,6 @@ constexpr float DefaultHotEndHeaterGain = 340.0;
 constexpr float DefaultHotEndHeaterTimeConstant = 140.0;
 constexpr float DefaultHotEndHeaterDeadTime = 5.5;
 
-#ifdef PCCB
-
-constexpr size_t NumBedHeaters = 1;
-constexpr size_t NumChamberHeaters = 1;
-constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { -1 };
-constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1 };
-
-constexpr int8_t DefaultE0Heater = 0;					// Index of the default first extruder heater, used only for the legacy status response
-
-#elif SAM4E || SAME70
-
-constexpr size_t NumBedHeaters = 4;
-constexpr size_t NumChamberHeaters = 2;
-constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { 0, -1, -1, -1 };
-constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1, -1 };
-
-constexpr int8_t DefaultE0Heater = 1;					// Index of the default first extruder heater, used only for the legacy status response
-
-#else
-
-constexpr size_t NumBedHeaters = 1;
-constexpr size_t NumChamberHeaters = 2;
-constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { 0 };
-constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1, -1 };
-
-constexpr int8_t DefaultE0Heater = 1;					// Index of the default first extruder heater, used only for the legacy status response
-
-#endif
-
 constexpr unsigned int FirstExtraHeaterProtection = 100;	// Index of the first extra heater protection item
 
 // Default thermistor parameters

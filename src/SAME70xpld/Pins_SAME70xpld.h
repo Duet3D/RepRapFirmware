@@ -42,14 +42,20 @@ constexpr size_t MaxSensorsInSystem = 32;
 typedef uint32_t SensorsBitmap;
 
 constexpr size_t MaxHeaters = 6;
-constexpr size_t NumExtraHeaterProtections = 6;		// The number of extra heater protection instances
+constexpr size_t MaxExtraHeaterProtections = 6;		// The number of extra heater protection instances
+
+constexpr size_t MaxBedHeaters = 4;
+constexpr size_t MaxChamberHeaters = 4;
+constexpr int8_t DefaultBedHeater = 0;
+constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder heater, used only for the legacy status response
+
 constexpr size_t NumThermistorInputs = 4;
 
 constexpr size_t MaxZProbes = 4;
 constexpr size_t MaxGpioPorts = 12;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
-constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
+constexpr size_t MaxAxes = 5;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= MaxAxesPlusExtruders
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t MaxExtruders = 5;					// The maximum number of extruders
@@ -59,6 +65,8 @@ constexpr size_t MaxAxesPlusExtruders = NumDirectDrivers;
 
 constexpr size_t MaxHeatersPerTool = 4;
 constexpr size_t MaxExtrudersPerTool = 6;
+
+constexpr size_t MaxFans = 12;
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
@@ -110,9 +118,6 @@ constexpr Pin VrefSensePin = NoPin;
 
 // Diagnostic LED pin
 constexpr Pin DiagPin = NoPin;												// TBD
-
-// Cooling fans
-constexpr size_t NumTotalFans = 12;
 
 // SD cards
 constexpr size_t NumSdCards = 2;
@@ -195,17 +200,19 @@ constexpr Pin SamTfrReadyPin = PortCPin(31);				// Output from the SAM to the Wi
 constexpr Pin SamCsPin = PortBPin(2);						// SPI NPCS pin, input from WiFi module
 
 // Timer allocation
-#define NETWORK_TC			(TC0)
-#define NETWORK_TC_CHAN		(0)
-#define NETWORK_TC_IRQN		TC0_IRQn
-#define NETWORK_TC_HANDLER	TC0_Handler
-#define NETWORK_TC_ID		ID_TC0
+#define NETWORK_TC			(TC1)
+#define NETWORK_TC_CHAN		(1)
+#define NETWORK_TC_IRQN		TC1_IRQn
+#define NETWORK_TC_HANDLER	TC1_Handler
+#define NETWORK_TC_ID		ID_TC1
 
 #define STEP_TC				(TC0)
-#define STEP_TC_CHAN		(1)
-#define STEP_TC_IRQN		TC1_IRQn
-#define STEP_TC_HANDLER		TC1_Handler
-#define STEP_TC_ID			ID_TC1
+#define STEP_TC_CHAN		(0)					// channel for lower 16 bits
+#define STEP_TC_CHAN_UPPER	(2)					// channel for upper 16 bits
+#define STEP_TC_IRQN		TC0_IRQn
+#define STEP_TC_HANDLER		TC0_Handler
+#define STEP_TC_ID			ID_TC0
+#define STEP_TC_ID_UPPER	ID_TC2
 
 // DMA channel allocation
 constexpr uint8_t DmacChanHsmci = 0;			// this is hard coded in the ASF HSMCI driver

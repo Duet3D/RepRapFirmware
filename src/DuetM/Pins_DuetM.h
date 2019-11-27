@@ -53,7 +53,13 @@ constexpr size_t MaxSensorsInSystem = 32;
 typedef uint32_t SensorsBitmap;
 
 constexpr size_t MaxHeaters = 4;					// The maximum number of heaters in the machine
-constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
+constexpr size_t MaxExtraHeaterProtections = 4;		// The number of extra heater protection instances
+
+constexpr size_t MaxBedHeaters = 2;
+constexpr size_t MaxChamberHeaters = 2;
+constexpr int8_t DefaultBedHeater = 0;
+constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder heater, used only for the legacy status response
+
 constexpr size_t NumThermistorInputs = 4;
 constexpr size_t NumTmcDriversSenseChannels = 2;
 
@@ -263,9 +269,9 @@ constexpr Pin W5500SsPin = PortAPin(11);									// SPI NPCS pin to W5500
 constexpr Pin W5500IntPin = PortAPin(23);									// Interrupt from W5500
 
 // Timer allocation
-// TC0 channel 0 is used for step pulse generation and software timers
+// TC0 channel 0 is used for step pulse generation and software timers (lower 16 bits)
 // TC0 channel 1 is used for LCD beep
-// TC0 channel 2 is currently unused
+// TC0 channel 2 is used for step pulse generation and software timers (upper 16 bits)
 #define STEP_TC				(TC0)
 #define STEP_TC_CHAN		(0)
 #define STEP_TC_CHAN_UPPER	(2)

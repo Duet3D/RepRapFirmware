@@ -46,8 +46,8 @@ inline void Cache::Flush(const volatile void *start, size_t length) { }
 inline void Cache::Init() {}
 inline void Cache::Enable() {}
 inline void Cache::Disable() {}
-inline void Cache::Flush(const void *start, size_t length) {}
-inline void Cache::Invalidate(const void *start, size_t length) {}
+inline void Cache::Flush(const volatile void *start, size_t length) {}
+inline void Cache::Invalidate(const volatile void *start, size_t length) {}
 
 #endif
 
