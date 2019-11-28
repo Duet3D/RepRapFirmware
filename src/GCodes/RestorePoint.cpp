@@ -23,6 +23,7 @@ void RestorePoint::Init()
 	virtualExtruderPosition = 0.0;
 	filePos = noFilePosition;
 	proportionDone = 0.0;
+	initialUserX = initialUserY = 0.0;
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();
 #endif

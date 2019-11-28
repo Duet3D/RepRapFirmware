@@ -847,7 +847,10 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			SavePosition(toolChangeRestorePoint, gb);
 
 			// Prepare another move similar to G1 .. S3
+			moveBuffer.SetDefaults(numVisibleAxes);
 			moveBuffer.moveType = 3;
+			moveBuffer.canPauseAfter = false;
+
 			if (endStopToUse < 0)
 			{
 				moveBuffer.endStopsToCheck = 0;
@@ -864,11 +867,6 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 					moveBuffer.endStopsToCheck |= ActiveLowEndstop;
 				}
 			}
-			moveBuffer.xAxes = DefaultXAxisMapping;
-			moveBuffer.yAxes = DefaultYAxisMapping;
-			moveBuffer.usePressureAdvance = false;
-			moveBuffer.filePos = noFilePosition;
-			moveBuffer.canPauseAfter = false;
 
 			// Decide which way and how far to go
 			if (gb.Seen('R'))

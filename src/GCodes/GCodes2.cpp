@@ -795,7 +795,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						// We need to copy the absolute/relative and volumetric extrusion flags over
 						fileGCode->OriginalMachineState().CopyStateFrom(gb.MachineState());
 						fileToPrint.Seek(fileOffsetToPrint);
-						moveFractionToSkip = moveFractionToStartAt;
+						moveFractionToSkip = restartMoveFractionDone;
 					}
 					StartPrinting(fromStart);
 				}
@@ -869,10 +869,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (gb.Seen('S'))
 		{
 			fileOffsetToPrint = (FilePosition)gb.GetUIValue();
-			if (gb.Seen('P'))
-			{
-				moveFractionToStartAt = constrain<float>(gb.GetFValue(), 0.0, 1.0);
-			}
+			restartMoveFractionDone = (gb.Seen('P')) ? constrain<float>(gb.GetFValue(), 0.0, 1.0) : 0.0;
+			restartInitialUserX = (gb.Seen('X')) ? gb.GetFValue() : 0.0;
+			restartInitialUserY = (gb.Seen('Y')) ? gb.GetFValue() : 0.0;
 		}
 		break;
 

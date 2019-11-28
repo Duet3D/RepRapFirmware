@@ -158,6 +158,21 @@ Tool * Tool::freelist = nullptr;
 	}
 }
 
+/*static*/ AxesBitmap Tool::GetXAxes(const Tool *tool)
+{
+	return (tool == nullptr) ? DefaultXAxisMapping : tool->xMapping;
+}
+
+/*static*/ AxesBitmap Tool::GetYAxes(const Tool *tool)
+{
+	return (tool == nullptr) ? DefaultYAxisMapping : tool->yMapping;
+}
+
+/*static*/ float Tool::GetOffset(const Tool *tool, size_t axis)
+{
+	return (tool == nullptr) ? 0.0 : tool->offset[axis];
+}
+
 void Tool::Print(const StringRef& reply) const
 {
 	reply.printf("Tool %u - ", myNumber);

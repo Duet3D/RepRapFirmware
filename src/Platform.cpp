@@ -1621,7 +1621,7 @@ void Platform::Spin()
 				ListDrivers(scratchString.GetRef(), stalledDriversToLog);
 				stalledDriversToLog = 0;
 				float liveCoordinates[MaxTotalDrivers];
-				reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
+				reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentTool());
 				MessageF(WarningMessage, "Driver(s)%s stalled at Z height %.2f", scratchString.c_str(), (double)liveCoordinates[Z_AXIS]);
 				reported = true;
 			}

@@ -883,7 +883,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		else
 #endif
 		{
-			move->LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
+			move->LiveCoordinates(liveCoordinates, currentTool);
 		}
 
 		// Machine coordinates
@@ -1703,7 +1703,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 	// Now the machine coordinates
 	float liveCoordinates[MaxTotalDrivers];
-	move->LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
+	move->LiveCoordinates(liveCoordinates, currentTool);
 	response->catf("],\"machine\":");		// announce the machine position
 	ch = '[';
 	for (size_t drive = 0; drive < numVisibleAxes; drive++)

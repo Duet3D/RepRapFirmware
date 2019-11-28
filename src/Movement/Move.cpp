@@ -171,7 +171,7 @@ void Move::Spin()
 				{
 					if (nextMove.moveType == 0)
 					{
-						AxisAndBedTransform(nextMove.coords, nextMove.xAxes, nextMove.yAxes, true);
+						AxisAndBedTransform(nextMove.coords, nextMove.tool, true);
 					}
 
 					if (mainDDARing.AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
@@ -236,7 +236,7 @@ bool Move::SetKinematics(KinematicsType k)
 {
 	if (kinematics->GetKinematicsType() != k)
 	{
-		Kinematics *nk = Kinematics::Create(k);
+		Kinematics * const nk = Kinematics::Create(k);
 		if (nk == nullptr)
 		{
 			return false;
@@ -340,7 +340,7 @@ void Move::SetNewPosition(const float positionNow[MaxTotalDrivers], bool doBedCo
 {
 	float newPos[MaxTotalDrivers];
 	memcpy(newPos, positionNow, sizeof(newPos));			// copy to local storage because Transform modifies it
-	AxisAndBedTransform(newPos, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes(), doBedCompensation);
+	AxisAndBedTransform(newPos, reprap.GetCurrentTool(), doBedCompensation);
 	SetLiveCoordinates(newPos);
 	SetPositions(newPos);
 }
@@ -350,8 +350,7 @@ void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrive
 {
 	if (CartesianToMotorSteps(coords, ep, true))
 	{
-		const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-		for (size_t drive = numAxes; drive < numDrives; ++drive)
+		for (size_t drive = reprap.GetGCodes().GetTotalAxes(); drive < numDrives; ++drive)
 		{
 			ep[drive] = MotorMovementToSteps(drive, coords[drive]);
 		}
@@ -412,100 +411,99 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 	return b;
 }
 
-void Move::AxisAndBedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes, bool useBedCompensation) const
+void Move::AxisAndBedTransform(float xyzPoint[MaxAxes], const Tool *tool, bool useBedCompensation) const
 {
-	AxisTransform(xyzPoint, xAxes, yAxes);
+	AxisTransform(xyzPoint, tool);
 	if (useBedCompensation)
 	{
-		BedTransform(xyzPoint, xAxes, yAxes);
+		BedTransform(xyzPoint, tool);
 	}
 }
 
-void Move::InverseAxisAndBedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const
+void Move::InverseAxisAndBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 {
-	InverseBedTransform(xyzPoint, xAxes, yAxes);
-	InverseAxisTransform(xyzPoint, xAxes, yAxes);
+	InverseBedTransform(xyzPoint, tool);
+	InverseAxisTransform(xyzPoint, tool);
 }
 
 // Do the Axis transform BEFORE the bed transform
-void Move::AxisTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const
+void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 {
 	// Identify the lowest Y axis
-	const size_t NumVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
-	for (size_t yAxis = Y_AXIS; yAxis < NumVisibleAxes; ++yAxis)
+	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
+	const AxesBitmap yAxes = Tool::GetYAxes(tool);
+	const size_t lowestYAxis = LowestSetBit(yAxes);
+	if (lowestYAxis < numVisibleAxes)
 	{
-		if (IsBitSet(yAxes, yAxis))
+		// Found a Y axis. Use this one when correcting the X coordinate.
+		const AxesBitmap xAxes = Tool::GetXAxes(tool);
+		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			// Found a Y axis. Use this one when correcting the X coordinate.
-			for (size_t axis = 0; axis < NumVisibleAxes; ++axis)
+			if (IsBitSet(xAxes, axis))
 			{
-				if (IsBitSet(xAxes, axis))
-				{
-					xyzPoint[axis] += tanXY*xyzPoint[yAxis] + tanXZ*xyzPoint[Z_AXIS];
-				}
-				if (IsBitSet(yAxes, axis))
-				{
-					xyzPoint[axis] += tanYZ*xyzPoint[Z_AXIS];
-				}
+				xyzPoint[axis] += tanXY*xyzPoint[lowestYAxis] + tanXZ*xyzPoint[Z_AXIS];
 			}
-			break;
+			if (IsBitSet(yAxes, axis))
+			{
+				xyzPoint[axis] += tanYZ*xyzPoint[Z_AXIS];
+			}
 		}
 	}
 }
 
-// Get the height error at an XY position
+// Get the height error at a bed XY position
 float Move::GetInterpolatedHeightError(float xCoord, float yCoord) const
 {
 	return (usingMesh) ? heightMap.GetInterpolatedHeightError(xCoord, yCoord) : probePoints.GetInterpolatedHeightError(xCoord, yCoord);
 }
 
 // Invert the Axis transform AFTER the bed transform
-void Move::InverseAxisTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const
+void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 {
 	// Identify the lowest Y axis
-	const size_t NumVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
-	for (size_t yAxis = Y_AXIS; yAxis < NumVisibleAxes; ++yAxis)
+	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
+	const AxesBitmap yAxes = Tool::GetYAxes(tool);
+	const size_t lowestYAxis = LowestSetBit(yAxes);
+	if (lowestYAxis < numVisibleAxes)
 	{
-		if (IsBitSet(yAxes, yAxis))
+		// Found a Y axis. Use this one when correcting the X coordinate.
+		const AxesBitmap xAxes = Tool::GetXAxes(tool);
+		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			// Found a Y axis. Use this one when correcting the X coordinate.
-			for (size_t axis = 0; axis < NumVisibleAxes; ++axis)
+			if (IsBitSet(yAxes, axis))
 			{
-				if (IsBitSet(yAxes, axis))
-				{
-					xyzPoint[axis] -= tanYZ*xyzPoint[Z_AXIS];
-				}
-				if (IsBitSet(xAxes, axis))
-				{
-					xyzPoint[axis] -= (tanXY*xyzPoint[yAxis] + tanXZ*xyzPoint[Z_AXIS]);
-				}
+				xyzPoint[axis] -= tanYZ*xyzPoint[Z_AXIS];
 			}
-			break;
+			if (IsBitSet(xAxes, axis))
+			{
+				xyzPoint[axis] -= (tanXY*xyzPoint[lowestYAxis] + tanXZ*xyzPoint[Z_AXIS]);
+			}
 		}
 	}
 }
 
 // Do the bed transform AFTER the axis transform
-void Move::BedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const
+void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 {
 	if (!useTaper || xyzPoint[Z_AXIS] < taperHeight)
 	{
 		float zCorrection = 0.0;
 		const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
+		const AxesBitmap xAxes = Tool::GetXAxes(tool);
+		const AxesBitmap yAxes = Tool::GetYAxes(tool);
 		unsigned int numCorrections = 0;
 
 		// Transform the Z coordinate based on the average correction for each axis used as an X axis.
-		// We are assuming that the tool Y offsets are small enough to be ignored.
 		for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
 		{
 			if (IsBitSet(xAxes, xAxis))
 			{
-				const float xCoord = xyzPoint[xAxis];
+				const float xCoord = xyzPoint[xAxis] + Tool::GetOffset(tool, xAxis);
 				for (uint32_t yAxis = 0; yAxis < numAxes; ++yAxis)
 				{
 					if (IsBitSet(yAxes, yAxis))
 					{
-						const float yCoord = xyzPoint[yAxis];
+						const float yCoord = xyzPoint[yAxis] + Tool::GetOffset(tool, yAxis);
 						zCorrection += GetInterpolatedHeightError(xCoord, yCoord);
 						++numCorrections;
 					}
@@ -524,24 +522,25 @@ void Move::BedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yA
 }
 
 // Invert the bed transform BEFORE the axis transform
-void Move::InverseBedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const
+void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 {
 	float zCorrection = 0.0;
 	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
+	const AxesBitmap xAxes = Tool::GetXAxes(tool);
+	const AxesBitmap yAxes = Tool::GetYAxes(tool);
 	unsigned int numCorrections = 0;
 
-	// Transform the Z coordinate based on the average correction for each axis used as an X axis.
-	// We are assuming that the tool Y offsets are small enough to be ignored.
+	// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
 	for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
 	{
 		if (IsBitSet(xAxes, xAxis))
 		{
-			const float xCoord = xyzPoint[xAxis];
+			const float xCoord = xyzPoint[xAxis] + Tool::GetOffset(tool, xAxis);
 			for (uint32_t yAxis = 0; yAxis < numAxes; ++yAxis)
 			{
 				if (IsBitSet(yAxes, yAxis))
 				{
-					const float yCoord = xyzPoint[yAxis];
+					const float yCoord = xyzPoint[yAxis]+ Tool::GetOffset(tool, yAxis);
 					zCorrection += GetInterpolatedHeightError(xCoord, yCoord);
 					++numCorrections;
 				}
@@ -570,12 +569,12 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBi
 	}
 }
 
-// Normalise the bed transform to have zero height error at these coordinates
+// Normalise the bed transform to have zero height error at these bed coordinates
 void Move::SetZeroHeightError(const float coords[MaxAxes])
 {
 	float tempCoords[MaxAxes];
 	memcpy(tempCoords, coords, sizeof(tempCoords));
-	AxisTransform(tempCoords, DefaultXAxisMapping, DefaultYAxisMapping);
+	AxisTransform(tempCoords, nullptr);
 	zShift = -GetInterpolatedHeightError(tempCoords[X_AXIS], tempCoords[Y_AXIS]);
 }
 
@@ -731,12 +730,12 @@ void Move::Interrupt()
 }
 
 // Return the transformed machine coordinates
-void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, AxesBitmap xAxes, AxesBitmap yAxes) const
+void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool *tool) const
 {
 	GetCurrentMachinePosition(m, IsRawMotorMove(moveType));
 	if (moveType == 0)
 	{
-		InverseAxisAndBedTransform(m, xAxes, yAxes);
+		InverseAxisAndBedTransform(m, tool);
 	}
 }
 

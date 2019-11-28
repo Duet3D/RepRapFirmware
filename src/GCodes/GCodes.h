@@ -121,9 +121,9 @@ public:
 			float acceleration;											// the requested acceleration, for async moves
 		};
 		FilePosition filePos;											// offset in the file being printed at the start of reading this move
-		float proportionLeft;											// what proportion of the entire move remains after this segment
-		AxesBitmap xAxes;												// axes that X is mapped to
-		AxesBitmap yAxes;												// axes that Y is mapped to
+		float proportionDone;											// what proportion of the entire move has been done when this segment is complete
+		float initialUserX, initialUserY;								// if this is a segment of an arc move, the user X and Y coordinates at the start
+		const Tool *tool;												// which tool (if any) is being used
 		EndstopsBitmap endStopsToCheck;									// endstops to check
 #if SUPPORT_LASER || SUPPORT_IOBITS
 		LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
@@ -482,9 +482,12 @@ private:
 	unsigned int totalSegments;					// The total number of segments left in the complete move
 
 	unsigned int segmentsLeftToStartAt;
-	float moveFractionToStartAt;				// how much of the next move was printed before the power failure
 	float moveFractionToSkip;
 	float firstSegmentFractionToSkip;
+
+	float restartMoveFractionDone;				// how much of the next move was printed before the pause or power failure (from M26)
+	float restartInitialUserX;					// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
+	float restartInitialUserY;					// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
 
 	float arcCentre[MaxAxes];
 	float arcRadius;

@@ -51,6 +51,9 @@ public:
 
 	static Tool *Create(unsigned int toolNumber, const char *name, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, const StringRef& reply);
 	static void Delete(Tool *t);
+	static AxesBitmap GetXAxes(const Tool *tool);
+	static AxesBitmap GetYAxes(const Tool *tool);
+	static float GetOffset(const Tool *tool, size_t axis) pre(axis < MaxAxes);
 
 	float GetOffset(size_t axis) const pre(axis < MaxAxes);
 	void SetOffset(size_t axis, float offs, bool byProbing) pre(axis < MaxAxes);

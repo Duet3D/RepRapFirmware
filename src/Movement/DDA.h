@@ -75,8 +75,7 @@ public:
     float GetVirtualExtruderPosition() const { return virtualExtruderPosition; }
 	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount);					// Try to push babystepping earlier in the move queue
 	bool IsHomingAxes() const { return (endStopsToCheck & HomeAxes) != 0; }
-	uint32_t GetXAxes() const { return xAxes; }
-	uint32_t GetYAxes() const { return yAxes; }
+	const Tool *GetTool() const { return tool; }
 	float GetTotalDistance() const { return totalDistance; }
 	void LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration);	// Limit the speed an acceleration of this move
 
@@ -84,6 +83,8 @@ public:
 	int32_t GetStepsTaken(size_t drive) const;
 
 	float GetProportionDone(bool moveWasAborted) const;						// Return the proportion of extrusion for the complete multi-segment move already done
+	float GetInitialUserX() const { return initialUserX; }
+	float GetInitialUserY() const { return initialUserY; }
 
 	void MoveAborted();
 
@@ -207,8 +208,7 @@ private:
 #endif
 
 	EndstopsBitmap endStopsToCheck;			// Which endstops we are checking on this move
-    AxesBitmap xAxes;						// Which axes are behaving as X axes
-    AxesBitmap yAxes;						// Which axes are behaving as Y axes
+	const Tool *tool;								// which tool (if any) is active
 
     FilePosition filePos;					// The position in the SD card file after this move was read, or zero if not read from SD card
 
@@ -226,7 +226,8 @@ private:
 	float endSpeed;
 	float topSpeed;
 
-	float proportionLeft;					// what proportion of the extrusion in the G1 or G0 move of which this is a part remains to be done after this segment is complete
+	float proportionDone;							// what proportion of the extrusion in the G1 or G0 move of which this is a part has been done after this segment is complete
+	float initialUserX, initialUserY;				// if this is a segment of an arc move, the user X and Y coordinates at the start
 	uint32_t clocksNeeded;
 
 	union
