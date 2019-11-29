@@ -1809,6 +1809,7 @@ void GCodes::CheckFilament()
 		filamentErrorString.printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentMonitor::GetErrorMessage(lastFilamentError));
 		DoPause(*autoPauseGCode, PauseReason::filament, filamentErrorString.c_str());
 		lastFilamentError = FilamentSensorStatus::ok;
+		filamentErrorString.cat('\n');
 		platform.Message(LogMessage, filamentErrorString.c_str());
 	}
 }
@@ -2151,6 +2152,7 @@ bool GCodes::PauseOnStall(DriversBitmap stalledDrivers)
 	stallErrorString.printf("Stall detected on driver(s)");
 	ListDrivers(stallErrorString.GetRef(), stalledDrivers);
 	DoPause(*autoPauseGCode, PauseReason::stall, stallErrorString.c_str());
+	stallErrorString.cat('\n');
 	platform.Message(LogMessage, stallErrorString.c_str());
 	return true;
 }
@@ -4103,9 +4105,9 @@ void GCodes::SaveFanSpeeds()
 // Note that 'reply' may be empty. If it isn't, then we need to append newline when sending it.
 void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 {
-	// Don't report "ok" responses if a (macro) file is being processed
+	// Don't report empty responses if a file or macro is being processed, or if the GCode was queued
 	// Also check that this response was triggered by a gcode
-	if ((gb.MachineState().doingFileMacro || &gb == fileGCode) && reply[0] == 0)
+	if (reply[0] == 0 && (gb.MachineState().doingFileMacro || &gb == fileGCode || &gb == queuedGCode || &gb == daemonGCode || &gb == autoPauseGCode))
 	{
 		return;
 	}
@@ -4119,6 +4121,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 	{
 	case Compatibility::me:
 	case Compatibility::reprapFirmware:
+		if (reply[0] != 0)
 		{
 			const MessageType mt = (rslt == GCodeResult::error) ? (MessageType)(type | ErrorMessageFlag | LogMessage)
 									: (rslt == GCodeResult::warning) ? (MessageType)(type | WarningMessageFlag | LogMessage)

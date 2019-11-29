@@ -88,7 +88,7 @@ void Scanner::Spin()
 	}
 
 	// Check if the scanner device is still present
-	if (!SERIAL_MAIN_DEVICE)
+	if (!SERIAL_MAIN_DEVICE.IsConnected())
 	{
 		// Scanner has been detached - report a warning if we were scanning or uploading
 		if (state == ScannerState::ScanningPre || state == ScannerState::Scanning || state == ScannerState::ScanningPost ||

@@ -368,6 +368,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 			buf->references = 1;					// assume it's only used once by default
 			buf->isReferenced = false;
 			buf->hadOverflow = false;
+			buf->whenQueued = millis();				// use the time of allocation as the default when-used time
 
 			return true;
 		}
@@ -469,8 +470,8 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 //*************************************************************************************************
 // OutputStack class implementation
 
-// Push an OutputBuffer chain to the stack
-void OutputStack::Push(OutputBuffer *buffer) volatile
+// Push an OutputBuffer chain. Return true if successful, else release the buffer and return false.
+bool OutputStack::Push(OutputBuffer *buffer) volatile
 {
 	if (buffer != nullptr)
 	{
@@ -481,12 +482,13 @@ void OutputStack::Push(OutputBuffer *buffer) volatile
 			{
 				buffer->whenQueued = millis();
 				items[count++] = buffer;
-				return;
+				return true;
 			}
 		}
 		OutputBuffer::ReleaseAll(buffer);
 		reprap.GetPlatform().LogError(ErrorCode::OutputStackOverflow);
 	}
+	return false;
 }
 
 // Pop an OutputBuffer chain or return nullptr if none is available
@@ -532,21 +534,22 @@ void OutputStack::ReleaseFirstItem() volatile
 	}
 }
 
-// Release the first item on the top of the stack if it is too old. Return true if the item was timed out.
+// Release the first item on the top of the stack if it is too old. Return true if the item was timed out or was null.
 bool OutputStack::ApplyTimeout(uint32_t ticks) volatile
 {
 	bool ret = false;
 	if (count != 0)
 	{
-		OutputBuffer * const buf = items[0];					// capture volatile variable
-		if (buf != nullptr && millis() - buf->whenQueued >= ticks)
+		OutputBuffer * buf = items[0];							// capture volatile variable
+		while (buf != nullptr && millis() - buf->whenQueued >= ticks)
 		{
-			items[0] = OutputBuffer::Release(buf);
+			items[0] = buf = OutputBuffer::Release(buf);
 			ret = true;
 		}
 		if (items[0] == nullptr)
 		{
 			(void)Pop();
+			ret = true;
 		}
 	}
 	return ret;
