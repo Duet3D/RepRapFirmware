@@ -1,8 +1,8 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 2.05 (in preparation)
-============
+Version 2.05RC1
+===============
 Compatible files:
 - DuetWiFiServer 1.23
 - DuetWebControl 2.0.4 (recommended) or 1.22.6
@@ -19,6 +19,8 @@ Bug fixes:
 - When using SCARA kinematics the calculation of the minimum achoievable radius was incorrect. Depending on the B parameter of the M667 command, this could result in spurious "Intermediate position unreachable" errors, or non-extruding G1 moves being turned into G0 moves.
 - A badly-formed GCode file that returned the layer height or object height as nan or inf caused DWC to disconnect because of a JSON parse failure
 - M579 scale factors were not applied correctly to G2 and G3 arc moves
+- Spurious newlines were sometimes sent to USB and other output channels when commands such as M106 were deferred to execute in step with movement commands, or when commands were executed in response to triggers
+- Messages sent to USB and Telnet output channels did not always time out when the channel became unavailable for writing
 
 Version 2.04
 ============
