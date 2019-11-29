@@ -1400,7 +1400,11 @@ void HttpResponder::Diagnostics(MessageType mt) const
 				// No more space available, stop here
 				return;
 			}
-			gcodeReply.Push(buffer);
+			if (!gcodeReply.Push(buffer))
+			{
+				// Can't push, so buffer was discarded. Don't append to it.
+				return;
+			}
 		}
 
 		buffer->cat(reply);

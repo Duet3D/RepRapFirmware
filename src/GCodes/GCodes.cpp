@@ -739,6 +739,7 @@ void GCodes::CheckFilament()
 		filamentErrorString.printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentMonitor::GetErrorMessage(lastFilamentError));
 		DoPause(*autoPauseGCode, PauseReason::filament, filamentErrorString.c_str());
 		lastFilamentError = FilamentSensorStatus::ok;
+		filamentErrorString.cat('\n');
 		platform.Message(LogMessage, filamentErrorString.c_str());
 	}
 }
@@ -1131,6 +1132,7 @@ bool GCodes::PauseOnStall(DriversBitmap stalledDrivers)
 	stallErrorString.printf("Stall detected on driver(s)");
 	ListDrivers(stallErrorString.GetRef(), stalledDrivers);
 	DoPause(*autoPauseGCode, PauseReason::stall, stallErrorString.c_str());
+	stallErrorString.cat('\n');
 	platform.Message(LogMessage, stallErrorString.c_str());
 	return true;
 }
@@ -3190,9 +3192,9 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 	}
 #endif
 
-	// Don't report "ok" responses if a (macro) file is being processed
+	// Don't report empty responses if a file or macro is being processed, or if the GCode was queued
 	// Also check that this response was triggered by a gcode
-	if ((gb.MachineState().doingFileMacro || &gb == fileGCode) && reply[0] == 0)
+	if (reply[0] == 0 && (gb.MachineState().doingFileMacro || &gb == fileGCode || &gb == queuedGCode || &gb == daemonGCode || &gb == autoPauseGCode))
 	{
 		return;
 	}
@@ -3201,38 +3203,43 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 	const MessageType mt = (rslt == GCodeResult::error) ? (MessageType)(initialMt | ErrorMessageFlag | LogMessage)
 							: (rslt == GCodeResult::warning) ? (MessageType)(initialMt | WarningMessageFlag | LogMessage)
 								: initialMt;
-	const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
 	const char* emulationType = nullptr;
 
 	switch (gb.MachineState().compatibility)
 	{
 	case Compatibility::me:
 	case Compatibility::reprapFirmware:
-		platform.MessageF(mt, "%s\n", reply);
+		if (reply[0] != 0)
+		{
+			platform.MessageF(mt, "%s\n", reply);
+		}
 		break;
 
 	case Compatibility::nanoDLP:		// nanoDLP is like Marlin except that G0 and G1 commands return "Z_move_comp<LF>" before "ok<LF>"
 	case Compatibility::marlin:
-		// We don't need to handle M20 here because we always allocate an output buffer for that one
-		if (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 28)
 		{
-			platform.MessageF(mt, "%s\n%s\n", response, reply);
-		}
-		else if (gb.GetCommandLetter() == 'M' && (gb.GetCommandNumber() == 105 || gb.GetCommandNumber() == 998))
-		{
-			platform.MessageF(mt, "%s %s\n", response, reply);
-		}
-		else if (reply[0] != 0 && !gb.IsDoingFileMacro())
-		{
-			platform.MessageF(mt, "%s\n%s\n", reply, response);
-		}
-		else if (reply[0] != 0)
-		{
-			platform.MessageF(mt, "%s\n", reply);
-		}
-		else
-		{
-			platform.MessageF(mt, "%s\n", response);
+			const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
+			// We don't need to handle M20 here because we always allocate an output buffer for that one
+			if (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 28)
+			{
+				platform.MessageF(mt, "%s\n%s\n", response, reply);
+			}
+			else if (gb.GetCommandLetter() == 'M' && (gb.GetCommandNumber() == 105 || gb.GetCommandNumber() == 998))
+			{
+				platform.MessageF(mt, "%s %s\n", response, reply);
+			}
+			else if (reply[0] != 0 && !gb.IsDoingFileMacro())
+			{
+				platform.MessageF(mt, "%s\n%s\n", reply, response);
+			}
+			else if (reply[0] != 0)
+			{
+				platform.MessageF(mt, "%s\n", reply);
+			}
+			else
+			{
+				platform.MessageF(mt, "%s\n", response);
+			}
 		}
 		break;
 

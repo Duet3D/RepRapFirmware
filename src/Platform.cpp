@@ -141,6 +141,9 @@ unsigned int numSoftTimerInterruptsExecuted = 0;
 uint32_t lastSoftTimerInterruptScheduledAt = 0;
 #endif
 
+// Global variable for debugging in tricky situations e.g. within ISRs
+int debugLine = 0;
+
 // Global functions
 
 // Urgent initialisation function
@@ -1043,7 +1046,7 @@ bool Platform::FlushMessages()
 		{
 			(void) usbOutput.Pop();
 		}
-		else if (!SERIAL_MAIN_DEVICE)
+		else if (!SERIAL_MAIN_DEVICE.IsConnected())
 		{
 			// If the USB port is not opened, free the data left for writing
 			OutputBuffer::ReleaseAll(usbOutputBuffer);
@@ -1064,7 +1067,7 @@ bool Platform::FlushMessages()
 			}
 			else
 			{
-				usbOutput.ApplyTimeout(SERIAL_MAIN_TIMEOUT);
+				 usbOutput.ApplyTimeout(SERIAL_MAIN_TIMEOUT);
 			}
 		}
 		usbHasMore = !usbOutput.IsEmpty();
@@ -1847,9 +1850,6 @@ void Platform::PrintUniqueId(MessageType mtype)
 }
 
 #endif
-
-// Global variable for debugging in tricky situations e.g. within ISRs
-int debugLine = 0;
 
 // Return diagnostic information
 void Platform::Diagnostics(MessageType mtype)
@@ -3262,7 +3262,7 @@ void Platform::RawMessage(MessageType type, const char *message)
 		MutexLocker lock(usbMutex);
 		const char *p = message;
 		size_t len = strlen(p);
-		while (SERIAL_MAIN_DEVICE && len != 0 && !reprap.SpinTimeoutImminent())
+		while (SERIAL_MAIN_DEVICE.IsConnected() && len != 0 && !reprap.SpinTimeoutImminent())
 		{
 			const size_t written = SERIAL_MAIN_DEVICE.write(p, len);
 			len -= written;
@@ -3282,16 +3282,19 @@ void Platform::RawMessage(MessageType type, const char *message)
 			OutputBuffer *usbOutputBuffer = usbOutput.GetLastItem();
 			if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
 			{
-				if (!OutputBuffer::Allocate(usbOutputBuffer))
+				if (OutputBuffer::Allocate(usbOutputBuffer))
 				{
-					// Should never happen
-					return;
+					if (usbOutput.Push(usbOutputBuffer))
+					{
+						usbOutputBuffer->cat(message);
+					}
+					// else the message buffer has been released, so discard the message
 				}
-				usbOutput.Push(usbOutputBuffer);
 			}
-
-			// Append the message string
-			usbOutputBuffer->cat(message);
+			else
+			{
+				usbOutputBuffer->cat(message);		// append the message
+			}
 		}
 	}
 }
@@ -3375,7 +3378,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 		if ((type & (UsbMessage | BlockingUsbMessage)) != 0)
 		{
 			MutexLocker lock(usbMutex);
-			if (   !SERIAL_MAIN_DEVICE
+			if (   !SERIAL_MAIN_DEVICE.IsConnected()
 #if SUPPORT_SCANNER
 				|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
 #endif
