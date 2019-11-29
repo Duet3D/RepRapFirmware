@@ -36,11 +36,13 @@
 #include "Move.h"
 #include "StepTimer.h"
 #include "Platform.h"
-#include "GCodes/GCodeBuffer.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "Tools/Tool.h"
+#include "Endstops/ZProbe.h"
+#include <TaskPriorities.h>
 
 #if SUPPORT_CAN_EXPANSION
-# include "CAN/CanInterface.h"
+# include "CAN/CanMotion.h"
 #endif
 
 #if SUPPORT_OBJECT_MODEL
@@ -77,12 +79,21 @@ Move::Move()
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
 	kinematics = Kinematics::Create(KinematicsType::cartesian);		// default to Cartesian
 	mainDDARing.Init1(DdaRingLength);
+#if SUPPORT_ASYNC_MOVES
+	auxDDARing.Init1(AuxDdaRingLength);
+#endif
 	DriveMovement::InitialAllocate(NumDms);
 }
 
 void Move::Init()
 {
 	mainDDARing.Init2();
+
+#if SUPPORT_ASYNC_MOVES
+	auxDDARing.Init2();
+	auxMoveAvailable = false;
+	auxMoveLocked = false;
+#endif
 
 	// Clear the transforms
 	SetIdentityTransform();
@@ -99,7 +110,6 @@ void Move::Init()
 
 	simulationMode = 0;
 	longestGcodeWaitInterval = 0;
-	numHiccups = 0;
 	bedLevellingMoveAvailable = false;
 
 	active = true;
@@ -107,7 +117,7 @@ void Move::Init()
 
 void Move::Exit()
 {
-	StepTimer::DisableStepInterrupt();
+	StepTimer::DisableTimerInterrupt();
 	mainDDARing.Exit();
 	active = false;												// don't accept any more moves
 }
@@ -116,7 +126,7 @@ void Move::Spin()
 {
 	if (!active)
 	{
-		GCodes::RawMove nextMove;
+		RawMove nextMove;
 		(void) reprap.GetGCodes().ReadMove(nextMove);			// throw away any move that GCodes tries to pass us
 		return;
 	}
@@ -128,6 +138,9 @@ void Move::Spin()
 
 	// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
 	mainDDARing.RecycleDDAs();
+#if SUPPORT_ASYNC_MOVES
+	auxDDARing.RecycleDDAs();
+#endif
 
 	// See if we can add another move to the ring
 	bool canAddMove = (
@@ -164,7 +177,7 @@ void Move::Spin()
 		else
 		{
 			// If there's a G Code move available, add it to the DDA ring for processing.
-			GCodes::RawMove nextMove;
+			RawMove nextMove;
 			if (reprap.GetGCodes().ReadMove(nextMove))		// if we have a new move
 			{
 				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
@@ -196,8 +209,24 @@ void Move::Spin()
 
 	mainDDARing.Spin(simulationMode, idleCount > 10);	// let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount.
 
+#if SUPPORT_ASYNC_MOVES
+	if (auxMoveAvailable && auxDDARing.CanAddMove())
+	{
+		if (auxDDARing.AddAsyncMove(auxMove))
+		{
+			moveState = MoveState::collecting;
+		}
+		auxMoveAvailable = false;
+	}
+	auxDDARing.Spin(simulationMode, true);				// let the DDA ring process moves
+#endif
+
 	// Reduce motor current to standby if the rings have been idle for long enough
-	if (mainDDARing.IsIdle())
+	if (   mainDDARing.IsIdle()
+#if SUPPORT_ASYNC_MOVES
+		&& auxDDARing.IsIdle()
+#endif
+	   )
 	{
 		if (moveState == MoveState::executing && !reprap.GetGCodes().IsPaused())
 		{
@@ -220,6 +249,12 @@ void Move::Spin()
 unsigned int Move::GetNumProbePoints() const
 {
 	return probePoints.GetNumBedCompensationPoints();
+}
+
+// Return the number of actually probed probe points
+unsigned int Move::GetNumProbedProbePoints() const
+{
+	return probePoints.NumberOfProbePoints();
 }
 
 // Try to push some babystepping through the lookahead queue, returning the amount pushed
@@ -256,8 +291,8 @@ bool Move::IsRawMotorMove(uint8_t moveType) const
 // Return true if the specified point is accessible to the Z probe
 bool Move::IsAccessibleProbePoint(float x, float y) const
 {
-	const ZProbe& params = reprap.GetPlatform().GetCurrentZProbeParameters();
-	return kinematics->IsReachable(x - params.xOffset, y - params.yOffset, false);
+	const ZProbe& params = reprap.GetPlatform().GetCurrentZProbe();
+	return kinematics->IsReachable(x - params.GetXOffset(), y - params.GetYOffset(), false);
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
@@ -279,9 +314,16 @@ bool Move::LowPowerOrStallPause(RestorePoint& rp)
 void Move::Diagnostics(MessageType mtype)
 {
 	Platform& p = reprap.GetPlatform();
-	p.MessageF(mtype, "=== Move ===\nHiccups: %" PRIu32 ", FreeDm: %d, MinFreeDm: %d, MaxWait: %" PRIu32 "ms\n",
-						numHiccups, DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval);
-	numHiccups = 0;
+	p.MessageF(mtype, "=== Move ===\nHiccups: %" PRIu32
+#if SUPPORT_ASYNC_MOVES
+						"(%" PRIu32 ")"
+#endif
+						", FreeDm: %d, MinFreeDm: %d, MaxWait: %" PRIu32 "ms\n",
+						mainDDARing.GetClearNumHiccups(),
+#if SUPPORT_ASYNC_MOVES
+						auxDDARing.GetClearNumHiccups(),
+#endif
+						DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval);
 	longestGcodeWaitInterval = 0;
 	DriveMovement::ResetMinFree();
 
@@ -291,7 +333,7 @@ void Move::Diagnostics(MessageType mtype)
 #endif
 
 	// Show the current probe position heights and type of bed compensation in use
-	String<StringLength40> bedCompString;
+	String<StringLength50> bedCompString;
 	if (usingMesh)
 	{
 		bedCompString.copy("mesh");
@@ -332,13 +374,18 @@ void Move::Diagnostics(MessageType mtype)
 	p.Message(mtype, "\n");
 #endif
 
+#if SUPPORT_ASYNC_MOVES
+	mainDDARing.Diagnostics(mtype, "Main");
+	auxDDARing.Diagnostics(mtype, "Aux");
+#else
 	mainDDARing.Diagnostics(mtype, "");
+#endif
 }
 
 // Set the current position to be this
-void Move::SetNewPosition(const float positionNow[MaxTotalDrivers], bool doBedCompensation)
+void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation)
 {
-	float newPos[MaxTotalDrivers];
+	float newPos[MaxAxesPlusExtruders];
 	memcpy(newPos, positionNow, sizeof(newPos));			// copy to local storage because Transform modifies it
 	AxisAndBedTransform(newPos, reprap.GetCurrentTool(), doBedCompensation);
 	SetLiveCoordinates(newPos);
@@ -431,12 +478,12 @@ void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 {
 	// Identify the lowest Y axis
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
+	const AxesBitmap xAxes = Tool::GetXAxes(tool);
 	const AxesBitmap yAxes = Tool::GetYAxes(tool);
 	const size_t lowestYAxis = LowestSetBit(yAxes);
 	if (lowestYAxis < numVisibleAxes)
 	{
 		// Found a Y axis. Use this one when correcting the X coordinate.
-		const AxesBitmap xAxes = Tool::GetXAxes(tool);
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
 			if (IsBitSet(xAxes, axis))
@@ -462,12 +509,12 @@ void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 {
 	// Identify the lowest Y axis
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
+	const AxesBitmap xAxes = Tool::GetXAxes(tool);
 	const AxesBitmap yAxes = Tool::GetYAxes(tool);
 	const size_t lowestYAxis = LowestSetBit(yAxes);
 	if (lowestYAxis < numVisibleAxes)
 	{
 		// Found a Y axis. Use this one when correcting the X coordinate.
-		const AxesBitmap xAxes = Tool::GetXAxes(tool);
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
 			if (IsBitSet(yAxes, axis))
@@ -493,7 +540,7 @@ void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 		const AxesBitmap yAxes = Tool::GetYAxes(tool);
 		unsigned int numCorrections = 0;
 
-		// Transform the Z coordinate based on the average correction for each axis used as an X axis.
+		// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
 		for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
 		{
 			if (IsBitSet(xAxes, xAxis))
@@ -540,7 +587,7 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 			{
 				if (IsBitSet(yAxes, yAxis))
 				{
-					const float yCoord = xyzPoint[yAxis]+ Tool::GetOffset(tool, yAxis);
+					const float yCoord = xyzPoint[yAxis] + Tool::GetOffset(tool, yAxis);
 					zCorrection += GetInterpolatedHeightError(xCoord, yCoord);
 					++numCorrections;
 				}
@@ -587,6 +634,8 @@ void Move::SetIdentityTransform()
 	zShift = 0.0;
 }
 
+#if HAS_MASS_STORAGE
+
 // Load the height map from file, returning true if an error occurred with the error reason appended to the buffer
 bool Move::LoadHeightMapFromFile(FileStore *f, const StringRef& r)
 {
@@ -607,6 +656,18 @@ bool Move::SaveHeightMapToFile(FileStore *f) const
 {
 	return heightMap.SaveToFile(f, zShift);
 }
+
+#endif
+
+#if HAS_LINUX_INTERFACE
+
+// Save the height map Z coordinates to an array
+void Move::SaveHeightMapToArray(float *arr) const
+{
+	return heightMap.SaveToArray(arr, zShift);
+}
+
+#endif
 
 void Move::SetTaperHeight(float h)
 {
@@ -689,41 +750,6 @@ bool Move::FinishedBedProbing(int sParam, const StringRef& reply)
 	return error;
 }
 
-// This is the function that is called by the timer interrupt to step the motors.
-// This may occasionally get called prematurely.
-void Move::Interrupt()
-{
-	const uint32_t isrStartTime = StepTimer::GetInterruptClocksInterruptsDisabled();
-	Platform& p = reprap.GetPlatform();
-	bool repeat;
-	do
-	{
-		mainDDARing.Interrupt(p);
-		std::optional<uint32_t> nextStepTime = mainDDARing.GetNextInterruptTime();
-		if (!nextStepTime.has_value())
-		{
-			break;
-		}
-
-		// Check whether we have been in this ISR for too long already and need to take a break
-		const uint16_t clocksTaken = StepTimer::GetInterruptClocks16() - (uint16_t)isrStartTime;
-		if (clocksTaken >= DDA::MaxStepInterruptTime && (nextStepTime.value() - isrStartTime) < (clocksTaken + DDA::MinInterruptInterval))
-		{
-			// Force a break by updating the move start time
-			mainDDARing.InsertHiccup(DDA::HiccupTime);
-			nextStepTime = nextStepTime.value() + DDA::HiccupTime;
-#if SUPPORT_CAN_EXPANSION
-			CanInterface::InsertHiccup(DDA::HiccupTime);
-#endif
-			++numHiccups;
-		}
-
-		// 8. Schedule next interrupt, or if it would be too soon, generate more steps immediately
-		// If we have already spent too much time in the ISR, delay the interrupt
-		repeat = StepTimer::ScheduleStepInterrupt(nextStepTime.value());
-	} while (repeat);
-}
-
 /*static*/ float Move::MotorStepsToMovement(size_t drive, int32_t endpoint)
 {
 	return ((float)(endpoint))/reprap.GetPlatform().DriveStepsPerUnit(drive);
@@ -743,10 +769,9 @@ void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool
 // Returns the number of motor steps moves since the last call, and isPrinting is true unless we are currently executing an extruding but non-printing move
 int32_t Move::GetAccumulatedExtrusion(size_t extruder, bool& isPrinting)
 {
-	const size_t drive = extruder + reprap.GetGCodes().GetTotalAxes();
-	if (drive < MaxTotalDrivers)
+	if (extruder < reprap.GetGCodes().GetNumExtruders())
 	{
-		return mainDDARing.GetAccumulatedExtrusion(extruder, drive, isPrinting);
+		return mainDDARing.GetAccumulatedExtrusion(extruder, ExtruderToLogicalDrive(extruder), isPrinting);
 	}
 
 	isPrinting = false;
@@ -786,9 +811,9 @@ float Move::GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePo
 	y = probePoints.GetYCoord(count);
 	if (wantNozzlePosition)
 	{
-		const ZProbe& rp = reprap.GetPlatform().GetCurrentZProbeParameters();
-		x -= rp.xOffset;
-		y -= rp.yOffset;
+		const ZProbe& rp = reprap.GetPlatform().GetCurrentZProbe();
+		x -= rp.GetXOffset();
+		y -= rp.GetYOffset();
 	}
 	return probePoints.GetZHeight(count);
 }
@@ -807,17 +832,10 @@ void Move::Simulate(uint8_t simMode)
 // This is only ever called after bed probing, so we can assume that no such move is already pending.
 void Move::AdjustLeadscrews(const floatc_t corrections[])
 {
-	for (float& smc : specialMoveCoords)
+	const size_t numZdrivers = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS).numDrivers;
+	for (size_t i = 0; i < MaxDriversPerAxis; ++i)
 	{
-		smc = 0.0;
-	}
-	const AxisDriversConfig& config = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS);
-	for (size_t i = 0; i < config.numDrivers; ++i)
-	{
-		if (config.driverNumbers[i] < MaxTotalDrivers)
-		{
-			specialMoveCoords[config.driverNumbers[i]] = corrections[i];
-		}
+		specialMoveCoords[i] = (i < numZdrivers) ? (float)corrections[i] : 0.0;
 	}
 	bedLevellingMoveAvailable = true;
 }
@@ -834,6 +852,8 @@ void Move::SetIdleTimeout(float timeout)
 	idleTimeout = (uint32_t)lrintf(timeout * 1000.0);
 }
 
+#if HAS_MASS_STORAGE
+
 // Write settings for resuming the print
 // The GCodes module deals with the head position so all we need worry about is the bed compensation
 // We don't handle random probe point bed compensation, and we assume that if a height map is being used it is the default one.
@@ -841,6 +861,8 @@ bool Move::WriteResumeSettings(FileStore *f) const
 {
 	return kinematics->WriteResumeSettings(f) && (!usingMesh || f->Write("G29 S1\n"));
 }
+
+#endif
 
 // Process M204
 GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)
@@ -906,5 +928,125 @@ GCodeResult Move::ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef&
 	}
 	return GCodeResult::ok;
 }
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+
+// Laser and IOBits support
+
+Task<Move::LaserTaskStackWords> *Move::laserTask = nullptr;		// the task used to manage laser power or IOBits
+
+extern "C" void LaserTaskStart(void * pvParameters)
+{
+	reprap.GetMove().LaserTaskRun();
+}
+
+// This is called when laser mode is selected or IOBits is enabled
+void Move::CreateLaserTask()
+{
+	TaskCriticalSectionLocker lock;
+	if (laserTask == nullptr)
+	{
+		laserTask = new Task<LaserTaskStackWords>;
+		laserTask->Create(LaserTaskStart, "LASER", nullptr, TaskPriority::LaserPriority);
+	}
+}
+
+// Wake up the laser task, if there is one (must check!). Call this at the start of a new move from standstill (not from an ISR)
+void Move::WakeLaserTask()
+{
+	if (laserTask != nullptr)
+	{
+		laserTask->Give();
+	}
+}
+
+// Wake up the laser task if there is one (must check!) from an ISR
+void Move::WakeLaserTaskFromISR()
+{
+	if (laserTask != nullptr)
+	{
+		laserTask->GiveFromISR();
+	}
+}
+
+void Move::LaserTaskRun()
+{
+	for (;;)
+	{
+		// Sleep until we are woken up by the start of a move
+		TaskBase::Take();
+
+		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
+		{
+# if SUPPORT_LASER
+			// Manage the laser power
+			uint32_t ticks;
+			while ((ticks = mainDDARing.ManageLaserPower()) != 0)
+			{
+				delay(ticks);
+			}
+# endif
+		}
+		else
+		{
+# if SUPPORT_IOBITS
+			// Manage the IOBits
+			uint32_t ticks;
+			while ((ticks = reprap.GetPortControl().UpdatePorts()) != 0)
+			{
+				delay(ticks);
+			}
+# endif
+		}
+	}
+}
+
+#endif
+
+#if SUPPORT_ASYNC_MOVES
+
+// Get and lock the aux move buffer. If successful, return a pointer to the buffer.
+// The caller must not attempt to lock the aux buffer more than once, and must call ReleaseAuxMove to release the buffer.
+AsyncMove *Move::LockAuxMove()
+{
+	InterruptCriticalSectionLocker lock;
+	if (!auxMoveLocked && !auxMoveAvailable)
+	{
+		auxMoveLocked = true;
+		return &auxMove;
+	}
+	return nullptr;
+}
+
+// Release the aux move buffer and optionally signal that it contains a move
+// The caller must have locked the buffer before calling this. If it calls with hasNewMove true, it must have populated the move buffer with the move details
+void Move::ReleaseAuxMove(bool hasNewMove)
+{
+	auxMoveAvailable = hasNewMove;
+	auxMoveLocked = false;
+}
+
+// Configure height following
+GCodeResult Move::ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply)
+{
+	if (heightController == nullptr)
+	{
+		heightController = new HeightController;
+	}
+	return heightController->Configure(gb, reply);
+}
+
+// Start/stop height following
+GCodeResult Move::StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply)
+{
+	if (heightController == nullptr)
+	{
+		reply.copy("Height following has not been configured");
+		return GCodeResult::error;
+	}
+	return heightController->StartHeightFollowing(gb, reply);
+}
+
+#endif
 
 // End
