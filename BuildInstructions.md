@@ -7,7 +7,7 @@ RepRapFirmware is built from several Github projects. You need to use compatible
 
 - RepRapFirmware: dev
 - CoreNG: dev
-- FreeRTOS: main
+- FreeRTOS: master
 - RRFLibraries: dev
 - DuetWiFiSocketServer: dev
 
