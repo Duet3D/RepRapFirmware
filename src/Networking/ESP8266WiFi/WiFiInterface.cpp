@@ -469,13 +469,12 @@ void WiFiInterface::Stop()
 	}
 }
 
-void WiFiInterface::Spin(bool full)
+void WiFiInterface::Spin()
 {
 	// Main state machine.
 	switch (state)
 	{
 	case NetworkState::starting1:
-		if (full)
 		{
 			// The ESP toggles CS before it has finished starting up, so don't look at the CS signal too soon
 			const uint32_t now = millis();
@@ -488,7 +487,6 @@ void WiFiInterface::Spin(bool full)
 		break;
 
 	case NetworkState::starting2:
-		if (full)
 		{
 			// See if the ESP8266 has kept its pins at their stable values for long enough
 			const uint32_t now = millis();
@@ -533,93 +531,90 @@ void WiFiInterface::Spin(bool full)
 		break;
 
 	case NetworkState::disabled:
-		if (full && uploader != nullptr)
+		if (uploader != nullptr)
 		{
 			uploader->Spin();
 		}
 		break;
 
 	case NetworkState::active:
-		if (full)
+		if (espStatusChanged && digitalRead(EspDataReadyPin))
 		{
-			if (espStatusChanged && digitalRead(EspDataReadyPin))
+			if (reprap.Debug(moduleNetwork))
 			{
-				if (reprap.Debug(moduleNetwork))
-				{
-					debugPrintf("ESP reported status change\n");
-				}
-				GetNewStatus();
+				debugPrintf("ESP reported status change\n");
 			}
-			else if (   currentMode != requestedMode
-					 && currentMode != WiFiState::connecting
-					 && currentMode != WiFiState::reconnecting
-					 && currentMode != WiFiState::autoReconnecting
-					)
+			GetNewStatus();
+		}
+		else if (   currentMode != requestedMode
+				 && currentMode != WiFiState::connecting
+				 && currentMode != WiFiState::reconnecting
+				 && currentMode != WiFiState::autoReconnecting
+				)
+		{
+			// Tell the wifi module to change mode
+			int32_t rslt = ResponseUnknownError;
+			if (currentMode != WiFiState::idle)
 			{
-				// Tell the wifi module to change mode
-				int32_t rslt = ResponseUnknownError;
-				if (currentMode != WiFiState::idle)
-				{
-					// We must set WiFi module back to idle before changing to the new state
-					rslt = SendCommand(NetworkCommand::networkStop, 0, 0, nullptr, 0, nullptr, 0);
-				}
-				else if (requestedMode == WiFiState::connected)
-				{
-					rslt = SendCommand(NetworkCommand::networkStartClient, 0, 0, requestedSsid, SsidLength, nullptr, 0);
-				}
-				else if (requestedMode == WiFiState::runningAsAccessPoint)
-				{
-					rslt = SendCommand(NetworkCommand::networkStartAccessPoint, 0, 0, nullptr, 0, nullptr, 0);
-				}
-
-				if (rslt >= 0)
-				{
-					state = NetworkState::changingMode;
-				}
-				else
-				{
-					Stop();
-					platform.MessageF(NetworkInfoMessage, "Failed to change WiFi mode (code %" PRIi32 ")\n", rslt);
-				}
+				// We must set WiFi module back to idle before changing to the new state
+				rslt = SendCommand(NetworkCommand::networkStop, 0, 0, nullptr, 0, nullptr, 0);
 			}
-			else if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
+			else if (requestedMode == WiFiState::connected)
 			{
-				// Find the next socket to poll
-				const size_t startingSocket = currentSocket;
-				do
-				{
-					if (sockets[currentSocket]->NeedsPolling())
-					{
-						break;
-					}
-					++currentSocket;
-					if (currentSocket == NumWiFiTcpSockets)
-					{
-						currentSocket = 0;
-					}
-				} while (currentSocket != startingSocket);
+				rslt = SendCommand(NetworkCommand::networkStartClient, 0, 0, requestedSsid, SsidLength, nullptr, 0);
+			}
+			else if (requestedMode == WiFiState::runningAsAccessPoint)
+			{
+				rslt = SendCommand(NetworkCommand::networkStartAccessPoint, 0, 0, nullptr, 0, nullptr, 0);
+			}
 
-				// Either the current socket needs polling, or no sockets do but we must still poll one of them to get notified of any new connections
-				sockets[currentSocket]->Poll(full);
+			if (rslt >= 0)
+			{
+				state = NetworkState::changingMode;
+			}
+			else
+			{
+				Stop();
+				platform.MessageF(NetworkInfoMessage, "Failed to change WiFi mode (code %" PRIi32 ")\n", rslt);
+			}
+		}
+		else if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
+		{
+			// Find the next socket to poll
+			const size_t startingSocket = currentSocket;
+			do
+			{
+				if (sockets[currentSocket]->NeedsPolling())
+				{
+					break;
+				}
 				++currentSocket;
 				if (currentSocket == NumWiFiTcpSockets)
 				{
 					currentSocket = 0;
 				}
+			} while (currentSocket != startingSocket);
 
-				// Check if the data port needs to be closed
-				if (closeDataPort)
+			// Either the current socket needs polling, or no sockets do but we must still poll one of them to get notified of any new connections
+			sockets[currentSocket]->Poll();
+			++currentSocket;
+			if (currentSocket == NumWiFiTcpSockets)
+			{
+				currentSocket = 0;
+			}
+
+			// Check if the data port needs to be closed
+			if (closeDataPort)
+			{
+				for (WiFiSocket *s : sockets)
 				{
-					for (WiFiSocket *s : sockets)
+					if (s->GetProtocol() == FtpDataProtocol)
 					{
-						if (s->GetProtocol() == FtpDataProtocol)
+						if (!s->IsClosing())
 						{
-							if (!s->IsClosing())
-							{
-								TerminateDataPort();
-							}
-							break;
+							TerminateDataPort();
 						}
+						break;
 					}
 				}
 			}
@@ -628,7 +623,7 @@ void WiFiInterface::Spin(bool full)
 
 	case NetworkState::changingMode:
 		// Here when we have asked the ESP to change mode. Don't leave this state until we have a new status report from the ESP.
-		if (full && espStatusChanged && digitalRead(EspDataReadyPin))
+		if (espStatusChanged && digitalRead(EspDataReadyPin))
 		{
 			GetNewStatus();
 			switch (currentMode)
@@ -695,19 +690,16 @@ void WiFiInterface::Spin(bool full)
 		}
 	}
 
-	if (full)
+	// Check for debug info received from the WiFi module
+	if (debugPrintPending)
 	{
-		// Check for debug info received from the WiFi module
-		if (debugPrintPending)
+		if (reprap.Debug(moduleWiFi))
 		{
-			if (reprap.Debug(moduleWiFi))
-			{
-				debugMessageBuffer[debugMessageChars] = 0;
-				debugPrintf("WiFi: %s\n", debugMessageBuffer);
-			}
-			debugMessageChars = 0;
-			debugPrintPending = false;
+			debugMessageBuffer[debugMessageChars] = 0;
+			debugPrintf("WiFi: %s\n", debugMessageBuffer);
 		}
+		debugMessageChars = 0;
+		debugPrintPending = false;
 	}
 }
 

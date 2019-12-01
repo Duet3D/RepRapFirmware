@@ -172,7 +172,7 @@ void W5500Socket::Taken(size_t len)
 }
 
 // Poll a socket to see if it needs to be serviced
-void W5500Socket::Poll(bool full)
+void W5500Socket::Poll()
 {
 	if (state != SocketState::disabled)
 	{
@@ -205,7 +205,7 @@ void W5500Socket::Poll(bool full)
 				whenConnected = millis();
 			}
 
-			if (full && state == SocketState::listening)		// if it is a new connection
+			if (state == SocketState::listening)		// if it is a new connection
 			{
 				if (reprap.GetNetwork().FindResponder(this, protocol))
 				{

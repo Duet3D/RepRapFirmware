@@ -12,6 +12,9 @@
 #include "Networking/NetworkBuffer.h"
 #include "RepRap.h"
 
+#if LWIP_GMAC_TASK
+extern Mutex lwipMutex;
+#endif
 
 //***************************************************************************************************
 
@@ -63,8 +66,10 @@ static err_t conn_sent(void *arg, tcp_pcb *pcb, u16_t len)
 	return ERR_OK;
 }
 
+#if !LWIP_GMAC_TASK
 extern bool LockLWIP();
 extern void UnlockLWIP();
+#endif
 
 }
 
@@ -203,6 +208,9 @@ void LwipSocket::Close()
 {
 	if (state != SocketState::disabled && state != SocketState::listening)
 	{
+#if LWIP_GMAC_TASK
+		MutexLocker lock(lwipMutex);
+#endif
 		DiscardReceivedData();
 		state = SocketState::closing;
 		whenClosed = millis();
@@ -219,6 +227,9 @@ void LwipSocket::Terminate()
 {
 	if (state != SocketState::disabled)
 	{
+#if LWIP_GMAC_TASK
+		MutexLocker lock(lwipMutex);
+#endif
 		if (connectionPcb != nullptr)
 		{
 			tcp_err(connectionPcb, nullptr);
@@ -251,11 +262,14 @@ bool LwipSocket::ReadChar(char& c)
 {
 	if (receivedData != nullptr)
 	{
-		const char *data = (char *)receivedData->payload;
+		const char * const data = (const char *)receivedData->payload;
 		c = data[readIndex++];
 
 		if (readIndex >= receivedData->len)
 		{
+#if LWIP_GMAC_TASK
+			MutexLocker lock(lwipMutex);
+#endif
 			// We've processed one more pbuf
 			if (connectionPcb != nullptr)
 			{
@@ -282,7 +296,7 @@ bool LwipSocket::ReadBuffer(const uint8_t *&buffer, size_t &len)
 {
 	if (receivedData != nullptr)
 	{
-		const uint8_t *data = (const uint8_t *)receivedData->payload;
+		const uint8_t * const data = (const uint8_t *)receivedData->payload;
 		buffer = &data[readIndex];
 		len = receivedData->len - readIndex;
 		return true;
@@ -299,6 +313,9 @@ void LwipSocket::Taken(size_t len)
 		readIndex += len;
 		if (readIndex >= receivedData->len)
 		{
+#if LWIP_GMAC_TASK
+			MutexLocker lock(lwipMutex);
+#endif
 			// Notify LwIP
 			if (connectionPcb != nullptr)
 			{
@@ -316,7 +333,7 @@ void LwipSocket::Taken(size_t len)
 }
 
 // Poll a socket to see if it needs to be serviced
-void LwipSocket::Poll(bool full)
+void LwipSocket::Poll()
 {
 	switch (state)
 	{
@@ -327,27 +344,24 @@ void LwipSocket::Poll(bool full)
 	case SocketState::connected:
 		// A connection has been established, but no responder has been found yet
 		// See if we can assign this socket
-		if (full)
+		if (responderFound)
 		{
-			if (responderFound)
+			// Are we still waiting for data to be written?
+			if (whenWritten != 0 && millis() - whenWritten >= MaxWriteTime)
 			{
-				// Are we still waiting for data to be written?
-				if (whenWritten != 0 && millis() - whenWritten >= MaxWriteTime)
-				{
-					Terminate();
-				}
+				Terminate();
 			}
-			else
+		}
+		else
+		{
+			// Try to find a responder to deal with this connection
+			if (reprap.GetNetwork().FindResponder(this, protocol))
 			{
-				// Try to find a responder to deal with this connection
-				if (reprap.GetNetwork().FindResponder(this, protocol))
-				{
-					responderFound = true;
-				}
-				else if (millis() - whenConnected >= FindResponderTimeout)
-				{
-					Terminate();
-				}
+				responderFound = true;
+			}
+			else if (millis() - whenConnected >= FindResponderTimeout)
+			{
+				Terminate();
 			}
 		}
 		break;
@@ -356,28 +370,25 @@ void LwipSocket::Poll(bool full)
 	case SocketState::closing:
 		// The connection is being closed, but we may be waiting for sent data to be ACKed
 		// or for the received data to be processed by a NetworkResponder
-		if (full)
+		if (unAcked == 0 || millis() - whenClosed > MaxAckTime)
 		{
-			if (unAcked == 0 || millis() - whenClosed > MaxAckTime)
+			if (connectionPcb != nullptr)
 			{
-				if (connectionPcb != nullptr)
+				tcp_err(connectionPcb, nullptr);
+				tcp_recv(connectionPcb, nullptr);
+				tcp_sent(connectionPcb, nullptr);
+				if (unAcked == 0)
 				{
-					tcp_err(connectionPcb, nullptr);
-					tcp_recv(connectionPcb, nullptr);
-					tcp_sent(connectionPcb, nullptr);
-					if (unAcked == 0)
-					{
-						tcp_close(connectionPcb);
-					}
-					else
-					{
-						tcp_abort(connectionPcb);
-					}
-					connectionPcb = nullptr;
+					tcp_close(connectionPcb);
 				}
-
-				state = (localPort == 0) ? SocketState::disabled : SocketState::listening;
+				else
+				{
+					tcp_abort(connectionPcb);
+				}
+				connectionPcb = nullptr;
 			}
+
+			state = (localPort == 0) ? SocketState::disabled : SocketState::listening;
 		}
 		break;
 
@@ -401,13 +412,19 @@ void LwipSocket::DiscardReceivedData()
 // Send the data, returning the length buffered
 size_t LwipSocket::Send(const uint8_t *data, size_t length)
 {
+#if LWIP_GMAC_TASK
+	MutexLocker lock(lwipMutex);
+#else
 	// This is always called outside the EthernetInterface::Spin method. Wait for pending ISRs to finish
 	while (!LockLWIP()) { }
+#endif
 
 	if (!CanSend())
 	{
 		// Don't bother if we cannot send anything at all+
+#if !LWIP_GMAC_TASK
 		UnlockLWIP();
+#endif
 		return 0;
 	}
 
@@ -429,7 +446,9 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length)
 			if (ERR_IS_FATAL(err))
 			{
 				Terminate();
+#if !LWIP_GMAC_TASK
 				UnlockLWIP();
+#endif
 				return 0;
 			}
 			else if (err == ERR_MEM)
@@ -438,7 +457,9 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length)
 				{
 					// The buffers are full - try again later
 					tcp_output(connectionPcb);
+#if !LWIP_GMAC_TASK
 					UnlockLWIP();
+#endif
 					return 0;
 				}
 				bytesToSend /= 2;
@@ -450,7 +471,9 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length)
 		if (ERR_IS_FATAL(tcp_output(connectionPcb)))
 		{
 			Terminate();
+#if !LWIP_GMAC_TASK
 			UnlockLWIP();
+#endif
 			return 0;
 		}
 
@@ -458,11 +481,15 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length)
 		whenWritten = millis();
 		unAcked += bytesToSend;
 
+#if !LWIP_GMAC_TASK
 		UnlockLWIP();
+#endif
 		return bytesToSend;
 	}
 
+#if !LWIP_GMAC_TASK
 	UnlockLWIP();
+#endif
 	return 0;
 }
 

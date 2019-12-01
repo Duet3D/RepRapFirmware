@@ -1352,7 +1352,7 @@
 									<listOptionValue builtIn="false" value="__SAME70Q20B__"/>
 									<listOptionValue builtIn="false" value="RTOS"/>
 									<listOptionValue builtIn="false" value="DUET3_V06"/>
-									<listOptionValue builtIn="false" value="LWIP_GMAC_TASK=0"/>
+									<listOptionValue builtIn="false" value="LWIP_GMAC_TASK=1"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1738681846" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.1952106689" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
@@ -1419,7 +1419,7 @@
 									<listOptionValue builtIn="false" value="__SAME70Q20B__"/>
 									<listOptionValue builtIn="false" value="RTOS"/>
 									<listOptionValue builtIn="false" value="DUET3_V06"/>
-									<listOptionValue builtIn="false" value="LWIP_GMAC_TASK=0"/>
+									<listOptionValue builtIn="false" value="LWIP_GMAC_TASK=1"/>
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1240779290" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
@@ -1532,6 +1532,8 @@
 									<listOptionValue builtIn="false" value="__SAME70Q20B__"/>
 									<listOptionValue builtIn="false" value="RTOS"/>
 									<listOptionValue builtIn="false" value="DUET3_V06"/>
+									<listOptionValue builtIn="false" value="LWIP_GMAC_TASK=1"/>
+									<listOptionValue builtIn="false" value="DEBUG"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1475182191" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.879019933" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
@@ -1599,6 +1601,8 @@
 									<listOptionValue builtIn="false" value="RTOS"/>
 									<listOptionValue builtIn="false" value="DUET3_V06"/>
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
+									<listOptionValue builtIn="false" value="LWIP_GMAC_TASK=1"/>
+									<listOptionValue builtIn="false" value="DEBUG"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1952551090" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.832664520" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>

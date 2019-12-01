@@ -34,7 +34,7 @@ public:
 	// Inherited members of the Socket class
 	void Init(SocketNumber s, Port serverPort, NetworkProtocol p);
 	void TerminateAndDisable() override;
-	void Poll(bool full) override;
+	void Poll() override;
 	void Close() override;
 	bool IsClosing() const { return (state == SocketState::closing); }
 	void Terminate() override;

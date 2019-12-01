@@ -53,17 +53,39 @@ CRC32::CRC32()
 	Reset();
 }
 
-inline void CRC32::Update(char c)
+void CRC32::Update(char c)
 {
 	crc = (CRC_32_TAB[(crc ^ c) & 0xFF] ^ (crc >> 8));
 }
 
-void CRC32::Update(const char *c, size_t len)
+void CRC32::Update(const char *s, size_t len)
 {
-	for (size_t i = 0; i < len; ++i)
+	// The speed of this function affects the speed of file uploads, so make it as fast as possible. Sadly the SAME70 doesn't do hardware CRC calculation.
+	// Work on a local copy of the crc to avoid storing it all the time
+	uint32_t locCrc = crc;
+	const char * const end = s + len;
+
+	// Process any bytes at the start until we reach a dword boundary
+	while ((reinterpret_cast<uint32_t>(s) & 3) != 0 &&  s != end)
 	{
-		Update(c[i]);
+		locCrc = (CRC_32_TAB[(locCrc ^ *s++) & 0xFF] ^ (locCrc >> 8));
 	}
+
+	const char * const endAligned = s + ((end - s) & ~3);
+	while (s != endAligned)
+	{
+		uint32_t data = *reinterpret_cast<const uint32_t*>(s);
+		s += 4;
+		locCrc = (CRC_32_TAB[(locCrc ^ data) & 0xFF] ^ (locCrc >> 8));
+		locCrc = (CRC_32_TAB[(locCrc ^ (data >> 8)) & 0xFF] ^ (locCrc >> 8));
+		locCrc = (CRC_32_TAB[(locCrc ^ (data >> 16)) & 0xFF] ^ (locCrc >> 8));
+		locCrc = (CRC_32_TAB[(locCrc ^ (data >> 24)) & 0xFF] ^ (locCrc >> 8));
+	}
+	while (s != end)
+	{
+		locCrc = (CRC_32_TAB[(locCrc ^ *s++) & 0xFF] ^ (locCrc >> 8));
+	}
+	crc = locCrc;
 }
 
 void CRC32::Reset()

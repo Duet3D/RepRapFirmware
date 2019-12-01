@@ -58,7 +58,7 @@ public:
 	void Init();
 	void Activate();
 	void Exit();
-	void Spin(bool full);
+	void Spin();
 	void Interrupt();
 	void Diagnostics(MessageType mtype);
 	bool InNetworkStack() const;

@@ -42,7 +42,7 @@ public:
 	void Init() override;
 	void Activate() override;
 	void Exit() override;
-	void Spin(bool full) override;
+	void Spin() override;
 	void Diagnostics(MessageType mtype) override;
 	void Start();
 	void Stop();

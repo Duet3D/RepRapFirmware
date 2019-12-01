@@ -30,7 +30,7 @@ public:
 	Port GetRemotePort() const { return remotePort; }
 	NetworkProtocol GetProtocol() const { return protocol; }
 
-	virtual void Poll(bool full) = 0;
+	virtual void Poll() = 0;
 	virtual void Close() = 0;
 	virtual void Terminate() = 0;
 	virtual void TerminateAndDisable() = 0;

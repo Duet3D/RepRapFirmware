@@ -197,23 +197,20 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 	const char *const fullPinName = pn;			// the full pin name less the inversion and pullup flags
 
 #if defined(DUET3)
-	uint32_t expansionNumber;
 	if (isdigit(*pn))
 	{
-		expansionNumber = SafeStrtoul(pn, &pn);
+		const uint32_t expansionNumber = SafeStrtoul(pn, &pn);
 		if (*pn != '.')
 		{
 			reply.printf("Bad pin name '%s'", fullPinName);
 			return false;
 		}
+		if (expansionNumber != 0)
+		{
+			reply.printf("Pin '%s': only main board pins allowed here", fullPinName);
+			return false;
+		}
 	}
-	else
-	{
-		expansionNumber = 0;
-	}
-
-	//TODO use expansionNumber as part of the logical pin number
-	(void)expansionNumber;
 #endif
 
 	LogicalPin lp;

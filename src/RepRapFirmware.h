@@ -194,10 +194,10 @@ enum Module : uint8_t
 	moduleDisplay = 15,
 	moduleLinuxInterface = 16,
 	numModules = 17,				// make this one greater than the last real module number
-	noModule = 18
+	noModule = numModules
 };
 
-extern const char * const moduleName[];
+const char *GetModuleName(uint8_t module);
 
 // Warn of what's to come, so we can use pointers and references to classes without including the entire header files
 class Network;

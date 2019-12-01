@@ -21,7 +21,7 @@ public:
 	WiFiSocket(NetworkInterface *iface);
 	void Init(SocketNumber n);
 	int State() const { return (int)state; }				// used only for reporting debug info, hence the 'int' return
-	void Poll(bool full);
+	void Poll();
 	void Close();
 	bool IsClosing() const { return (state == SocketState::closing); }
 	void Terminate();

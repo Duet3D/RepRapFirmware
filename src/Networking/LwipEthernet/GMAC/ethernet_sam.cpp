@@ -59,8 +59,6 @@ extern "C" {
 #include "lwip/stats.h"
 #include "lwip/sys.h"
 #include "lwip/tcp.h"
-#include "lwip/tcp.h"
-#include "lwip/tcpip.h"
 #include "netif/etharp.h"
 
 /* Global variable containing MAC Config (hw addr, IP, GW, ...) */
@@ -223,6 +221,7 @@ void ethernet_task(void)
 	ethernet_timers_update();
 }
 
+#if !LWIP_GMAC_TASK
 /*
  * \brief Sets the EMAC RX callback. It will be called when a new packet
  * can be processed and should be called with a NULL parameter inside
@@ -234,6 +233,7 @@ void ethernet_set_rx_callback(gmac_dev_tx_cb_t callback)
 {
 	ethernetif_set_rx_callback(callback);
 }
+#endif
 
 /*
  * \brief Returns the current IP address

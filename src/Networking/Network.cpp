@@ -307,7 +307,7 @@ extern "C" [[noreturn]]void NetworkLoop(void *)
 {
 	for (;;)
 	{
-		reprap.GetNetwork().Spin(true);
+		reprap.GetNetwork().Spin();
 		RTOSIface::Yield();
 	}
 }
@@ -366,32 +366,29 @@ bool Network::IsWiFiInterface(unsigned int interface) const
 }
 
 // Main spin loop. If 'full' is true then we are being called from the main spin loop. If false then we are being called during HSMCI idle time.
-void Network::Spin(bool full)
+void Network::Spin()
 {
 	const uint32_t lastTime = StepTimer::GetTimerTicks();
 
 	// Keep the network modules running
 	for (NetworkInterface *iface : interfaces)
 	{
-		iface->Spin(full);
+		iface->Spin();
 	}
 
 	// Poll the responders
-	if (full)
+	NetworkResponder *nr = nextResponderToPoll;
+	bool doneSomething = false;
+	do
 	{
-		NetworkResponder *nr = nextResponderToPoll;
-		bool doneSomething = false;
-		do
+		if (nr == nullptr)
 		{
-			if (nr == nullptr)
-			{
-				nr = responders;		// 'responders' can't be null at this point
-			}
-			doneSomething = nr->Spin();
-			nr = nr->GetNext();
-		} while (!doneSomething && nr != nextResponderToPoll);
-		nextResponderToPoll = nr;
-	}
+			nr = responders;		// 'responders' can't be null at this point
+		}
+		doneSomething = nr->Spin();
+		nr = nr->GetNext();
+	} while (!doneSomething && nr != nextResponderToPoll);
+	nextResponderToPoll = nr;
 
 	HttpResponder::CheckSessions();		// time out any sessions that have gone away
 

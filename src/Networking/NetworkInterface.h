@@ -17,7 +17,7 @@ public:
 	virtual void Init() = 0;
 	virtual void Activate() = 0;
 	virtual void Exit() = 0;
-	virtual void Spin(bool full) = 0;
+	virtual void Spin() = 0;
 	virtual void Interrupt() { };
 	virtual void Diagnostics(MessageType mtype) = 0;
 

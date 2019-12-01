@@ -172,7 +172,7 @@ Licence: GPL
 
 RepRap reprap;
 
-const char * const moduleName[] =
+static const char * const moduleName[] =
 {
 	"Platform",
 	"Network",
@@ -195,6 +195,11 @@ const char * const moduleName[] =
 };
 
 static_assert(ARRAY_SIZE(moduleName) == Module::numModules + 1);
+
+const char *GetModuleName(uint8_t module)
+{
+	return (module < ARRAY_SIZE(moduleName)) ? moduleName[module] : "unknown";
+}
 
 // class MillisTimer members
 

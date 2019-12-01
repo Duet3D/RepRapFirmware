@@ -46,86 +46,91 @@ const unsigned int MdnsTtl = 10 * 60;			// same value as on the Duet 0.6/0.8.5
 
 static LwipEthernetInterface *ethernetInterface;
 
+#if LWIP_GMAC_TASK
+
+# include <RTOSIface/RTOSIface.h>
+Mutex lwipMutex;
+
+#endif
+
 extern "C"
 {
-static volatile bool lwipLocked = false;
 
 #if !LWIP_GMAC_TASK
-static volatile bool resetCallback = false;
-#endif
 
-// Lock functions for LwIP (LwIP isn't thread-safe when working with the raw API)
-bool LockLWIP()
-{
-	if (lwipLocked)
+	static volatile bool lwipLocked = false;
+	static volatile bool resetCallback = false;
+
+	// Lock functions for LwIP (LwIP isn't thread-safe when working with the raw API)
+	bool LockLWIP()
 	{
-		return false;
+		if (lwipLocked)
+		{
+			return false;
+		}
+
+		lwipLocked = true;
+		return true;
 	}
 
-	lwipLocked = true;
-	return true;
-}
+	void UnlockLWIP()
+	{
+		lwipLocked = false;
+	}
 
-void UnlockLWIP()
-{
-	lwipLocked = false;
-}
+	// Callback functions for the GMAC driver and for LwIP
 
-// Callback functions for the GMAC driver and for LwIP
+	// Called from ISR
+	static void ethernet_rx_callback(uint32_t ul_status)
+	{
+		// Because the LWIP stack can become corrupted if we work with it in parallel,
+		// we may have to wait for the next Spin() call to read the next packet.
+		if (LockLWIP())
+		{
+			ethernet_task();
+			UnlockLWIP();
+		}
+		else
+		{
+			ethernet_set_rx_callback(nullptr);
+			resetCallback = true;
+		}
+	}
 
-#if !LWIP_GMAC_TASK
+	#endif
 
-// Called from ISR
-static void ethernet_rx_callback(uint32_t ul_status)
-{
-	// Because the LWIP stack can become corrupted if we work with it in parallel,
-	// we may have to wait for the next Spin() call to read the next packet.
-	if (LockLWIP())
+	// Task function to keep the GMAC and LwIP running
+	void DoEthernetTask()
 	{
 		ethernet_task();
-		UnlockLWIP();
-	}
-	else
-	{
-		ethernet_set_rx_callback(nullptr);
-		resetCallback = true;
-	}
-}
-
-#endif
-
-// Task function to keep the GMAC and LwIP running
-void DoEthernetTask()
-{
-	ethernet_task();
 
 #if !LWIP_GMAC_TASK
-	if (resetCallback)
-	{
-		resetCallback = false;
-		ethernet_set_rx_callback(&ethernet_rx_callback);
-	}
+		if (resetCallback)
+		{
+			resetCallback = false;
+			ethernet_set_rx_callback(&ethernet_rx_callback);
+		}
 #endif
-}
-
-// Callback functions for LWIP (may be called from ISR)
-
-static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
-{
-	LWIP_UNUSED_ARG(arg);
-	LWIP_UNUSED_ARG(err);
-
-	if (ethernetInterface->ConnectionEstablished(pcb))
-	{
-		// A socket has accepted this connection and will deal with it
-		return ERR_OK;
 	}
 
-	tcp_abort(pcb);
-	return ERR_ABRT;
-}
+	// Callback functions for LWIP (may be called from ISR)
 
-}
+	static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
+	{
+		LWIP_UNUSED_ARG(arg);
+		LWIP_UNUSED_ARG(err);
+
+		if (ethernetInterface->ConnectionEstablished(pcb))
+		{
+			// A socket has accepted this connection and will deal with it
+			return ERR_OK;
+		}
+
+		tcp_abort(pcb);
+		return ERR_ABRT;
+	}
+
+}	// end extern "C"
 
 /*-----------------------------------------------------------------------------------*/
 
@@ -172,8 +177,12 @@ DEFINE_GET_OBJECT_MODEL_TABLE(LwipEthernetInterface)
 
 void LwipEthernetInterface::Init()
 {
-	interfaceMutex.Create("Lwip");
+	interfaceMutex.Create("LwipIface");
 	//TODO we don't yet use this mutex anywhere!
+
+#if LWIP_GMAC_TASK
+	lwipMutex.Create("LwipCore");
+#endif
 
 	// Clear the PCBs
 	for (size_t i = 0; i < NumTcpPorts; ++i)
@@ -368,7 +377,7 @@ GCodeResult LwipEthernetInterface::GetNetworkState(const StringRef& reply)
 void LwipEthernetInterface::Start()
 {
 #if defined(DUET3)
-		digitalWrite(PhyResetPin, true);			// being the Ethernet Phy out of reset
+	digitalWrite(PhyResetPin, true);			// bring the Ethernet Phy out of reset
 #endif
 
 	if (initialised)
@@ -409,8 +418,8 @@ void LwipEthernetInterface::Stop()
 		netif_set_down(&gs_net_if);
 #if !LWIP_GMAC_TASK
 		resetCallback = false;
-#endif
 		ethernet_set_rx_callback(nullptr);
+#endif
 
 #if defined(DUET3)
 	pinMode(PhyResetPin, OUTPUT_LOW);		// hold the Ethernet Phy chip in reset
@@ -420,10 +429,14 @@ void LwipEthernetInterface::Stop()
 }
 
 // Main spin loop. If 'full' is true then we are being called from the main spin loop. If false then we are being called during HSMCI idle time.
-void LwipEthernetInterface::Spin(bool full)
+void LwipEthernetInterface::Spin()
 {
+#if LWIP_GMAC_TASK
+	MutexLocker lock(lwipMutex);
+#else
 	if (LockLWIP())							// basically we can't do anything if we can't interact with LWIP
 	{
+#endif
 		switch(state)
 		{
 		case NetworkState::enabled:
@@ -456,28 +469,25 @@ void LwipEthernetInterface::Spin(bool full)
 			break;
 
 		case NetworkState::obtainingIP:
-			if (full)
+			if (ethernet_link_established())
 			{
-				if (ethernet_link_established())
-				{
-					// Check for incoming packets
-					DoEthernetTask();
+				// Check for incoming packets
+				DoEthernetTask();
 
-					// Have we obtained an IP address yet?
-					ethernet_get_ipaddress(ipAddress, netmask, gateway);
-					if (!ipAddress.IsNull())
-					{
-						// Notify the mDNS responder about this
-						state = NetworkState::connected;
-//						debugPrintf("IP address obtained, network running\n");
-					}
-				}
-				else
+				// Have we obtained an IP address yet?
+				ethernet_get_ipaddress(ipAddress, netmask, gateway);
+				if (!ipAddress.IsNull())
 				{
-//					debugPrintf("Lost phy link\n");
-					TerminateSockets();
-					state = NetworkState::establishingLink;
+					// Notify the mDNS responder about this
+					state = NetworkState::connected;
+//						debugPrintf("IP address obtained, network running\n");
 				}
+			}
+			else
+			{
+//					debugPrintf("Lost phy link\n");
+				TerminateSockets();
+				state = NetworkState::establishingLink;
 			}
 			break;
 
@@ -487,14 +497,11 @@ void LwipEthernetInterface::Spin(bool full)
 				dhcp_stop(&gs_net_if);
 			}
 
-			if (full)
-			{
-				InitSockets();
-				RebuildMdnsServices();
-				ethernet_get_ipaddress(ipAddress, netmask, gateway);
-				platform.MessageF(NetworkInfoMessage, "Ethernet running, IP address = %s\n", IP4String(ipAddress).c_str());
-				state = NetworkState::active;
-			}
+			InitSockets();
+			RebuildMdnsServices();
+			ethernet_get_ipaddress(ipAddress, netmask, gateway);
+			platform.MessageF(NetworkInfoMessage, "Ethernet running, IP address = %s\n", IP4String(ipAddress).c_str());
+			state = NetworkState::active;
 			break;
 
 		case NetworkState::active:
@@ -505,7 +512,7 @@ void LwipEthernetInterface::Spin(bool full)
 				DoEthernetTask();
 
 				// Poll the next TCP socket
-				sockets[nextSocketToPoll]->Poll(full);
+				sockets[nextSocketToPoll]->Poll();
 
 				// Move on to the next TCP socket for next time
 				++nextSocketToPoll;
@@ -520,7 +527,7 @@ void LwipEthernetInterface::Spin(bool full)
 					TerminateDataPort();
 				}
 			}
-			else if (full)
+			else
 			{
 //				debugPrintf("Lost phy link\n");
 				TerminateSockets();
@@ -528,8 +535,10 @@ void LwipEthernetInterface::Spin(bool full)
 			}
 			break;
 		}
+#if !LWIP_GMAC_TASK
 		UnlockLWIP();
 	}
+#endif
 }
 
 void LwipEthernetInterface::Interrupt()
@@ -547,6 +556,7 @@ void LwipEthernetInterface::Diagnostics(MessageType mtype)
 {
 	platform.Message(mtype, "- Ethernet -\n");
 	platform.MessageF(mtype, "State: %d\n", (int)state);
+	platform.MessageF(mtype, "Error counts: %u %u %u %u %u\n", rxErrorCount, rxBuffersNotFullyPopulatedCount, txErrorCount, txBufferNotFreeCount, txBufferTooShortCount);
 	platform.Message(mtype, "Socket states:");
 	for (LwipSocket *s : sockets)
 	{
@@ -594,7 +604,11 @@ int LwipEthernetInterface::EnableState() const
 
 bool LwipEthernetInterface::InNetworkStack() const
 {
+#if LWIP_GMAC_TASK
+	return false;
+#else
 	return lwipLocked;
+#endif
 }
 
 bool LwipEthernetInterface::ConnectionEstablished(tcp_pcb *pcb)

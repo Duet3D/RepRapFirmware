@@ -8,7 +8,6 @@
 #include "Tasks.h"
 #include "RepRap.h"
 #include "Platform.h"
-#include "Storage/CRC32.h"
 #include "Hardware/Cache.h"
 #include <TaskPriorities.h>
 
@@ -89,6 +88,7 @@ extern "C" [[noreturn]] void AppMain()
 {
 	pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
 
+#ifndef DEBUG	// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
 	// Check the integrity of the firmware by checking the firmware CRC
 	{
 #ifdef IFLASH_ADDR
@@ -111,6 +111,7 @@ extern "C" [[noreturn]] void AppMain()
 			}
 		}
 	}
+#endif
 
 	// Fill the free memory with a pattern so that we can check for stack usage and memory corruption
 	char* heapend = sbrk(0);

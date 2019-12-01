@@ -114,7 +114,7 @@ void WiFiSocket::Taken(size_t len)
 }
 
 // Poll a socket to see if it needs to be serviced
-void WiFiSocket::Poll(bool full)
+void WiFiSocket::Poll()
 {
 	// Get the socket status
 	Receiver<ConnStatusResponse> resp;
@@ -161,7 +161,7 @@ void WiFiSocket::Poll(bool full)
 		// no break
 
 	case ConnState::connected:
-		if (full && state != SocketState::connected)
+		if (state != SocketState::connected)
 		{
 			// It's a new connection
 			if (reprap.Debug(moduleNetwork))

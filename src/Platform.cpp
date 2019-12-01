@@ -564,10 +564,10 @@ void Platform::Init()
 
 	// If MISO from a MAX31856 board breaks after initialising the MAX31856 then if MISO floats low and reads as all zeros, this looks like a temperature of 0C and no error.
 	// Enable the pullup resistor, with luck this will make it float high instead.
-#if defined(APIN_USART_SSPI_MISO)
-	pinMode(APIN_USART_SSPI_MISO, INPUT_PULLUP);
-#elif defined(APIN_SHARED_SPI_MISO)
+#if SAM3XA
 	pinMode(APIN_SHARED_SPI_MISO, INPUT_PULLUP);
+#else
+	pinMode(APIN_USART_SSPI_MISO, INPUT_PULLUP);
 #endif
 
 #ifdef PCCB
@@ -1951,7 +1951,8 @@ void Platform::Diagnostics(MessageType mtype)
 			MessageF(mtype, "Last software reset %s, reason: %s%s, spinning module %s, available RAM %" PRIu32 " bytes (slot %d)\n",
 								scratchString.c_str(),
 								(srdBuf[slot].resetReason & (uint32_t)SoftwareResetReason::deliberate) ? "deliberate " : "",
-								reasonText, moduleName[srdBuf[slot].resetReason & 0x1F], srdBuf[slot].neverUsedRam, slot);
+								reasonText,
+								GetModuleName(srdBuf[slot].resetReason & 0x1F), srdBuf[slot].neverUsedRam, slot);
 			// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
 			MessageF(mtype,
 					"Software reset code 0x%04x HFSR 0x%08" PRIx32 " CFSR 0x%08" PRIx32 " ICSR 0x%08" PRIx32 " BFAR 0x%08" PRIx32 " SP 0x%08" PRIx32 " Task 0x%08" PRIx32 "\n",

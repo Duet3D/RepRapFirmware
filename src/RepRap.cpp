@@ -579,7 +579,7 @@ void RepRap::PrintDebug(MessageType mt)
 	{
 		if ((debug & (1u << i)) != 0)
 		{
-			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", moduleName[i], i);
+			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", GetModuleName(i), i);
 		}
 	}
 
@@ -588,7 +588,7 @@ void RepRap::PrintDebug(MessageType mt)
 	{
 		if ((debug & (1u << i)) == 0)
 		{
-			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", moduleName[i], i);
+			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", GetModuleName(i), i);
 		}
 	}
 	platform->Message(mt, "\n");

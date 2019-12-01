@@ -19,7 +19,7 @@ public:
 	W5500Socket(NetworkInterface *iface);
 	void Init(SocketNumber s, Port serverPort, NetworkProtocol p);
 
-	void Poll(bool full) override;
+	void Poll() override;
 	void Close() override;
 	void Terminate() override;
 	void TerminateAndDisable() override;

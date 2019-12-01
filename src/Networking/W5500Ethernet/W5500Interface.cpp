@@ -247,8 +247,8 @@ void W5500Interface::Stop()
 	}
 }
 
-// Main spin loop. If 'full' is true then we are being called from the main spin loop. If false then we are being called during HSMCI idle time.
-void W5500Interface::Spin(bool full)
+// Main spin loop
+void W5500Interface::Spin()
 {
 	switch(state)
 	{
@@ -262,7 +262,7 @@ void W5500Interface::Spin(bool full)
 		{
 			MutexLocker lock(interfaceMutex);
 
-			if (full && wizphy_getphylink() == PHY_LINK_ON)
+			if (wizphy_getphylink() == PHY_LINK_ON)
 			{
 				usingDhcp = ipAddress.IsNull();
 				if (usingDhcp)
@@ -283,7 +283,6 @@ void W5500Interface::Spin(bool full)
 		break;
 
 	case NetworkState::obtainingIP:
-		if (full)
 		{
 			MutexLocker lock(interfaceMutex);
 
@@ -314,13 +313,10 @@ void W5500Interface::Spin(bool full)
 		break;
 
 	case NetworkState::connected:
-		if (full)
-		{
-			InitSockets();
-			platform.MessageF(NetworkInfoMessage, "Network running, IP address = %s\n", IP4String(ipAddress).c_str());
-			mdnsResponder->Announce();
-			state = NetworkState::active;
-		}
+		InitSockets();
+		platform.MessageF(NetworkInfoMessage, "Network running, IP address = %s\n", IP4String(ipAddress).c_str());
+		mdnsResponder->Announce();
+		state = NetworkState::active;
 		break;
 
 	case NetworkState::active:
@@ -331,7 +327,7 @@ void W5500Interface::Spin(bool full)
 			if (wizphy_getphylink() == PHY_LINK_ON)
 			{
 				// Maintain DHCP
-				if (full && usingDhcp)
+				if (usingDhcp)
 				{
 					const uint32_t now = millis();
 					if (now - lastTickMillis >= 1000)
@@ -349,14 +345,11 @@ void W5500Interface::Spin(bool full)
 				}
 
 				// Poll the next TCP socket
-				sockets[nextSocketToPoll]->Poll(full);
+				sockets[nextSocketToPoll]->Poll();
 
 				// Keep mDNS alive
-				mdnsSocket->Poll(full);
-				if (full)
-				{
-					mdnsResponder->Spin();
-				}
+				mdnsSocket->Poll();
+				mdnsResponder->Spin();
 
 				// Move on to the next TCP socket for next time
 				++nextSocketToPoll;
@@ -365,7 +358,7 @@ void W5500Interface::Spin(bool full)
 					nextSocketToPoll = 0;
 				}
 			}
-			else if (full)
+			else
 			{
 //				debugPrintf("Lost phy link\n");
 				if (usingDhcp)

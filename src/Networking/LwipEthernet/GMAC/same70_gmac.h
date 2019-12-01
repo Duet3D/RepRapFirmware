@@ -67,8 +67,10 @@ bool ethernetif_establish_link(void);					// attempts to establish link and retu
 
 bool ethernetif_link_established(void);					// asks the PHY if the link is still up
 
+#if !LWIP_GMAC_TASK
 typedef void (*gmac_dev_tx_cb_t) (uint32_t ul_status);	// copied from gmac_raw.h
 void ethernetif_set_rx_callback(gmac_dev_tx_cb_t callback);
+#endif
 
 void ethernetif_set_mac_address(const uint8_t macAddress[]);
 
@@ -77,5 +79,12 @@ void ethernetif_set_mac_address(const uint8_t macAddress[]);
 #ifdef __cplusplus
 }
 #endif
+
+// Error counters
+extern unsigned int rxErrorCount;
+extern unsigned int rxBuffersNotFullyPopulatedCount;
+extern unsigned int txErrorCount;
+extern unsigned int txBufferNotFreeCount;
+extern unsigned int txBufferTooShortCount;
 
 #endif /* ETHERNETIF_H_INCLUDED */
