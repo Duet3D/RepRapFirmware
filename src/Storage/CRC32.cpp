@@ -171,6 +171,11 @@ void CRC32::Update(char c)
 	crc = (CRC_32_TAB[(crc ^ c) & 0xFF] ^ (crc >> 8));
 }
 
+// A note on CRC algorithms on ARM:
+// Original algorithm (1 byte per loop iteration, 1K table): 7 instructions, 11 clocks (11 clocks/byte)
+// Algorithm currently used on non-SAME70 processors (4 bytes per loop iteration, 1K table): 19 instructions, 26 clocks (6.5 clocks/byte)
+// Slicing-by-4 using 1 dword per loop iteration: 15 instructions, 18 clocks (4.5 clocks/byte)
+// Slicing-by-4 using 1 quadword per loop iteration: 28 instructions, 30 clocks (3.75 clocks/byte)
 void CRC32::Update(const char *s, size_t len)
 {
 	// The speed of this function affects the speed of file uploads, so make it as fast as possible. Sadly the SAME70 doesn't do hardware CRC calculation.

@@ -3209,10 +3209,8 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 	{
 	case Compatibility::me:
 	case Compatibility::reprapFirmware:
-		if (reply[0] != 0)
-		{
-			platform.MessageF(mt, "%s\n", reply);
-		}
+		// DWC 2 expects a reply from every command even if it is just a newline, so don't suppress empty responses
+		platform.MessageF(mt, "%s\n", reply);
 		break;
 
 	case Compatibility::nanoDLP:		// nanoDLP is like Marlin except that G0 and G1 commands return "Z_move_comp<LF>" before "ok<LF>"
