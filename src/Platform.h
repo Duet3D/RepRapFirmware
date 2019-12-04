@@ -135,7 +135,7 @@ enum class BoardType : uint8_t
 /***************************************************************************************************/
 
 // Enumeration to describe various tests we do in response to the M122 command
-enum class DiagnosticTestType : int
+enum class DiagnosticTestType : unsigned int
 {
 	PrintTestReport = 1,			// run some tests and report the processor ID
 
@@ -267,7 +267,7 @@ public:
 	void Exit();									// Shut down tidily. Calling Init after calling this should reset to the beginning
 
 	void Diagnostics(MessageType mtype);
-	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d);
+	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, unsigned int d);
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
 	[[noreturn]] void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr);

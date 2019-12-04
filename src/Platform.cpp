@@ -1116,7 +1116,7 @@ void Platform::Spin()
 #endif
 
 	// Diagnostics test
-	if (debugCode == (int)DiagnosticTestType::TestSpinLockup)
+	if (debugCode == (unsigned int)DiagnosticTestType::TestSpinLockup)
 	{
 		for (;;) {}
 	}
@@ -2066,13 +2066,13 @@ void Platform::Diagnostics(MessageType mtype)
 #endif
 }
 
-GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, int d)
+GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, unsigned int d)
 {
 	static const uint32_t dummy[2] = { 0, 0 };
 
 	switch (d)
 	{
-	case (int)DiagnosticTestType::PrintTestReport:
+	case (unsigned int)DiagnosticTestType::PrintTestReport:
 		{
 			const MessageType mtype = gb.GetResponseMessageType();
 			bool testFailed = false;
@@ -2236,35 +2236,35 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 		}
 		break;
 
-	case (int)DiagnosticTestType::TestWatchdog:
+	case (unsigned int)DiagnosticTestType::TestWatchdog:
 		deliberateError = true;
-		SysTick->CTRL &= ~(SysTick_CTRL_TICKINT_Msk);	// disable the system tick interrupt so that we get a watchdog timeout reset
+		SysTick->CTRL &= ~(SysTick_CTRL_TICKINT_Msk);			// disable the system tick interrupt so that we get a watchdog timeout reset
 		break;
 
-	case (int)DiagnosticTestType::TestSpinLockup:
+	case (unsigned int)DiagnosticTestType::TestSpinLockup:
 		deliberateError = true;
-		debugCode = d;									// tell the Spin function to loop
+		debugCode = d;											// tell the Spin function to loop
 		break;
 
-	case (int)DiagnosticTestType::TestSerialBlock:		// write an arbitrary message via debugPrintf()
+	case (unsigned int)DiagnosticTestType::TestSerialBlock:		// write an arbitrary message via debugPrintf()
 		deliberateError = true;
 		debugPrintf("Diagnostic Test\n");
 		break;
 
-	case (int)DiagnosticTestType::DivideByZero:			// do an integer divide by zero to test exception handling
+	case (unsigned int)DiagnosticTestType::DivideByZero:		// do an integer divide by zero to test exception handling
 		deliberateError = true;
-		(void)RepRap::DoDivide(1, 0);					// call function in another module so it can't be optimised away
+		(void)RepRap::DoDivide(1, 0);							// call function in another module so it can't be optimised away
 		break;
 
-	case (int)DiagnosticTestType::UnalignedMemoryAccess: // do an unaligned memory access to test exception handling
+	case (unsigned int)DiagnosticTestType::UnalignedMemoryAccess: // do an unaligned memory access to test exception handling
 		deliberateError = true;
-		SCB->CCR |= SCB_CCR_UNALIGN_TRP_Msk;			// by default, unaligned memory accesses are allowed, so change that
-		__DSB();										// make sure that instruction completes
-		__DMB();										// don't allow prefetch
+		SCB->CCR |= SCB_CCR_UNALIGN_TRP_Msk;					// by default, unaligned memory accesses are allowed, so change that
+		__DSB();												// make sure that instruction completes
+		__DMB();												// don't allow prefetch
 		(void)*(reinterpret_cast<const volatile char*>(dummy) + 1);
 		break;
 
-	case (int)DiagnosticTestType::BusFault:
+	case (unsigned int)DiagnosticTestType::BusFault:
 		// Read from the "Undefined (Abort)" area
 #if SAME70
 # if USE_MPU
@@ -2286,11 +2286,11 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 #endif
 		break;
 
-	case (int)DiagnosticTestType::PrintMoves:
+	case (unsigned int)DiagnosticTestType::PrintMoves:
 		DDA::PrintMoves();
 		break;
 
-	case (int)DiagnosticTestType::TimeSquareRoot:		// Show the square root calculation time. Caution: may disable interrupt for several tens of microseconds.
+	case (unsigned int)DiagnosticTestType::TimeSquareRoot:		// Show the square root calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
 			bool ok1 = true;
 			uint32_t tim1 = 0;
@@ -2332,7 +2332,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 		}
 		break;
 
-	case (int)DiagnosticTestType::TimeSinCos:		// Show the sin/cosine calculation time. Caution: may disable interrupt for several tens of microseconds.
+	case (unsigned int)DiagnosticTestType::TimeSinCos:			// Show the sin/cosine calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
 			bool ok = true;
 			uint32_t tim1 = 0;
@@ -2371,7 +2371,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 		}
 		break;
 
-	case (int)DiagnosticTestType::TimeSDWrite:
+	case (unsigned int)DiagnosticTestType::TimeSDWrite:
 #if HAS_MASS_STORAGE
 		return reprap.GetGCodes().StartSDTiming(gb, reply);
 #else
@@ -2379,7 +2379,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 		return GCodeResult::errorNotSupported;
 #endif
 
-	case (int)DiagnosticTestType::PrintObjectSizes:
+	case (unsigned int)DiagnosticTestType::PrintObjectSizes:
 		reply.printf(
 				"DDA %u, DM %u, Tool %u, GCodeBuffer %u, heater %u"
 #if HAS_NETWORKING && !HAS_LEGACY_NETWORKING
@@ -2393,7 +2393,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, in
 		break;
 
 #ifdef DUET_NG
-	case (int)DiagnosticTestType::PrintExpanderStatus:
+	case (unsigned int)DiagnosticTestType::PrintExpanderStatus:
 		reply.printf("Expander status %04X\n", DuetExpansion::DiagnosticRead());
 		break;
 #endif

@@ -175,7 +175,7 @@ void CRC32::Update(char c)
 // Original algorithm (1 byte per loop iteration, 1K table): 7 instructions, 11 clocks (11 clocks/byte)
 // Algorithm currently used on non-SAME70 processors (4 bytes per loop iteration, 1K table): 19 instructions, 26 clocks (6.5 clocks/byte)
 // Slicing-by-4 using 1 dword per loop iteration: 15 instructions, 18 clocks (4.5 clocks/byte)
-// Slicing-by-4 using 1 quadword per loop iteration: 28 instructions, 30 clocks (3.75 clocks/byte)
+// Slicing-by-4 using 1 quadword per loop iteration: 28 instructions, 31 clocks (3.875 clocks/byte)
 void CRC32::Update(const char *s, size_t len)
 {
 	// The speed of this function affects the speed of file uploads, so make it as fast as possible. Sadly the SAME70 doesn't do hardware CRC calculation.
@@ -183,13 +183,13 @@ void CRC32::Update(const char *s, size_t len)
 	uint32_t locCrc = crc;
 	const char * const end = s + len;
 
-#if SAME70
-	// Process any bytes at the start until we reach a quadword boundary
-	while ((reinterpret_cast<uint32_t>(s) & 7) != 0 && s != end)
+	// Process any bytes at the start until we reach a dword boundary
+	while ((reinterpret_cast<uint32_t>(s) & 3) != 0 && s != end)
 	{
 		locCrc = (CRC_32_TAB[(locCrc ^ *s++) & 0xFF] ^ (locCrc >> 8));
 	}
 
+#if SAME70
 	const char * const endAligned = s + ((end - s) & ~7);
 	while (s != endAligned)
 	{
@@ -200,19 +200,7 @@ void CRC32::Update(const char *s, size_t len)
 	    locCrc = CRC_32_TAB[(data1 >> 24) & 0xFF] ^ CRC_32_TAB1[(data1 >> 16) & 0xFF] ^ CRC_32_TAB2[(data1 >> 8) & 0xFF] ^ CRC_32_TAB3[data1 & 0xFF];
 		s += 8;
 	}
-
-	// Process up to 7 bytes at the end
-	while (s != end)
-	{
-		locCrc = (CRC_32_TAB[(locCrc ^ *s++) & 0xFF] ^ (locCrc >> 8));
-	}
 #else
-	// Process any bytes at the start until we reach a dword boundary
-	while ((reinterpret_cast<uint32_t>(s) & 3) != 0 && s != end)
-	{
-		locCrc = (CRC_32_TAB[(locCrc ^ *s++) & 0xFF] ^ (locCrc >> 8));
-	}
-
 	const char * const endAligned = s + ((end - s) & ~3);
 	while (s != endAligned)
 	{
@@ -223,13 +211,13 @@ void CRC32::Update(const char *s, size_t len)
 		locCrc = (CRC_32_TAB[(locCrc ^ (data >> 16)) & 0xFF] ^ (locCrc >> 8));
 		locCrc = (CRC_32_TAB[(locCrc ^ (data >> 24)) & 0xFF] ^ (locCrc >> 8));
 	}
+#endif
 
-	// Process up to 3 bytes at the end
+	// Process up to 7 (SAME70) or 3 (others) bytes at the end
 	while (s != end)
 	{
 		locCrc = (CRC_32_TAB[(locCrc ^ *s++) & 0xFF] ^ (locCrc >> 8));
 	}
-#endif
 
 	crc = locCrc;
 }

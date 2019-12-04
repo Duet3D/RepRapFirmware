@@ -69,7 +69,8 @@ namespace CanInterface
 	void SendBroadcast(CanMessageBuffer *buf);
 
 	GCodeResult GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply);
-	GCodeResult RemoteDiagnostics(MessageType mt, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult RemoteDiagnostics(MessageType mt, uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult RemoteM408(uint32_t boardAddress, unsigned int form, unsigned int type, GCodeBuffer& gb, const StringRef& reply);
 
 	GCodeResult UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply);
 	bool IsFlashing();
