@@ -355,14 +355,14 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 
 	if (seenX != seenY)
 	{
-		reply.copy("specify both or neither of X and Y in M577");
+		reply.copy("specify both or neither of X and Y in M557");
 		return GCodeResult::error;
 	}
 
 	if (!seenX && !seenR)
 	{
 		// Must have given just the S or P parameter
-		reply.copy("specify at least radius or X and Y ranges in M577");
+		reply.copy("specify at least radius or X and Y ranges in M557");
 		return GCodeResult::error;
 	}
 
