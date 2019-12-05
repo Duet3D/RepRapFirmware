@@ -1011,6 +1011,23 @@ void CanInterface::Diagnostics(MessageType mtype)
 	longestWaitMessageType = 0;
 }
 
+GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const StringRef &reply)
+{
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		reply.copy("No CAN buffer");
+		return GCodeResult::error;
+	}
+
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageWriteGpio>(rid, CanId::MasterAddress, boardAddress);
+	msg->portNumber = portNumber;
+	msg->pwm = pwm;
+	msg->isServo = isServo;
+	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, nullptr);
+}
+
 #endif
 
 // End

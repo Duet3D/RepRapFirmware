@@ -283,7 +283,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 			CanMessageBuffer::Free(buf);
 			break;
 
-		case CanMessageType::FirmwareBlockRequest:
+		case CanMessageType::firmwareBlockRequest:
 			HandleFirmwareBlockRequest(buf);		// this one reuses or frees the buffer
 			break;
 

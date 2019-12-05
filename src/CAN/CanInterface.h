@@ -61,17 +61,21 @@ namespace CanInterface
 {
 	static constexpr uint32_t CanResponseTimeout = 1000;
 
+	// Low level functions
 	void Init();
 	inline CanAddress GetCanAddress() { return CanId::MasterAddress; }
 	CanRequestId AllocateRequestId(CanAddress destination);
 	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra = nullptr);
 	void SendResponse(CanMessageBuffer *buf);
 	void SendBroadcast(CanMessageBuffer *buf);
+	void Diagnostics(MessageType mtype);
 
+	// Info functions
 	GCodeResult GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult RemoteDiagnostics(MessageType mt, uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply);
 	GCodeResult RemoteM408(uint32_t boardAddress, unsigned int form, unsigned int type, GCodeBuffer& gb, const StringRef& reply);
 
+	// Firmware update functions
 	GCodeResult UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply);
 	bool IsFlashing();
 	void UpdateStarting();
@@ -95,7 +99,8 @@ namespace CanInterface
 	GCodeResult GetHandlePinName(CanAddress boardAddress, RemoteInputHandle h, bool& currentState, const StringRef& reply);
 	GCodeResult EnableHandle(CanAddress boardAddress, RemoteInputHandle h, bool& currentState, const StringRef& reply);
 
-	void Diagnostics(MessageType mtype);
+	// Misc functions
+	GCodeResult WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const StringRef& reply);
 }
 
 #endif

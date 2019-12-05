@@ -1142,7 +1142,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (gb.Seen('S'))
 				{
 					const float val = gb.GetPwmValue();
-					platform.GetGpioPort(gpioPortNumber).WriteAnalog(val);
+					const GpOutputPort& gpPort = platform.GetGpioPort(gpioPortNumber);
+#if SUPPORT_CAN_EXPANSION
+					if (gpPort.boardAddress != CanId::MasterAddress)
+					{
+						result = CanInterface::WriteGpio(gpPort.boardAddress, gpioPortNumber, val, false, reply);
+						break;
+					}
+#endif
+					gpPort.port.WriteAnalog(val);
 				}
 			}
 			else
@@ -2263,21 +2271,28 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					if (angleOrWidth < 0.0)
 					{
 						// Disable the servo by setting the pulse width to zero
-						platform.GetGpioPort(gpioPortNumber).WriteAnalog(0.0);
+						angleOrWidth = 0.0;
 					}
-					else
+					else if (angleOrWidth < MinServoPulseWidth)
 					{
-						if (angleOrWidth < MinServoPulseWidth)
-						{
-							// User gave an angle so convert it to a pulse width in microseconds
-							angleOrWidth = (min<float>(angleOrWidth, 180.0) * ((MaxServoPulseWidth - MinServoPulseWidth) / 180.0)) + MinServoPulseWidth;
-						}
-						else if (angleOrWidth > MaxServoPulseWidth)
-						{
-							angleOrWidth = MaxServoPulseWidth;
-						}
-						platform.GetGpioPort(gpioPortNumber).WriteAnalog(angleOrWidth * (ServoRefreshFrequency/1e6));
+						// User gave an angle so convert it to a pulse width in microseconds
+						angleOrWidth = (min<float>(angleOrWidth, 180.0) * ((MaxServoPulseWidth - MinServoPulseWidth) / 180.0)) + MinServoPulseWidth;
 					}
+					else if (angleOrWidth > MaxServoPulseWidth)
+					{
+						angleOrWidth = MaxServoPulseWidth;
+					}
+
+					const GpOutputPort& gpPort = platform.GetGpioPort(gpioPortNumber);
+					const float pwm = angleOrWidth * (ServoRefreshFrequency/1e6);
+#if SUPPORT_CAN_EXPANSION
+					if (gpPort.boardAddress != CanId::MasterAddress)
+					{
+						result = CanInterface::WriteGpio(gpPort.boardAddress, gpioPortNumber, pwm, true, reply);
+						break;
+					}
+#endif
+					gpPort.port.WriteAnalog(pwm);
 				}
 				// We don't currently allow the servo position to be read back
 			}

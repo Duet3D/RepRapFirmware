@@ -71,7 +71,7 @@ constexpr size_t NumThermistorInputs = 4;
 constexpr size_t NumTmcDriversSenseChannels = 1;
 
 constexpr size_t MaxZProbes = 4;
-constexpr size_t MaxGpioPorts = 12;
+constexpr size_t MaxGpioPorts = 16;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 10;						// The maximum number of movement axes in the machine
@@ -234,7 +234,6 @@ constexpr PinEntry PinTable[] =
 	{ PortEPin(3),	PinCapability::read,	"io8.in" },		// analog in not usable because it is on the wrong ADC
 
 	// IO connector outputs
-	//TODO some have PWM capability too
 	{ PortDPin(26),	PinCapability::rw,		"io0.out,serial0.tx" },
 	{ PortDPin(16),	PinCapability::rw,		"io1.out,serial1.tx" },
 	{ PortDPin(27),	PinCapability::rw,		"io2.out,i2c0.dat" },

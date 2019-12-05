@@ -248,6 +248,16 @@ struct AxisDriversConfig
 	DriverId driverNumbers[MaxDriversPerAxis];		// The driver numbers assigned - only the first numDrivers are meaningful
 };
 
+struct GpOutputPort
+{
+	PwmPort port;									// will be initialised by PwmPort default constructor
+#if SUPPORT_CAN_EXPANSION
+	CanAddress boardAddress;
+
+	GpOutputPort() { boardAddress = CanId::MasterAddress; }
+#endif
+};
+
 // The main class that defines the RepRap machine for the benefit of the other classes
 class Platform
 {
@@ -524,7 +534,7 @@ public:
 
 	// Misc
 	GCodeResult ConfigurePort(GCodeBuffer& gb, const StringRef& reply);
-	const PwmPort& GetGpioPort(size_t gpioPortNumber) const pre(gpioPortNumber > MaxGpioPorts) { return gpioPorts[gpioPortNumber]; }
+	const GpOutputPort& GetGpioPort(size_t gpioPortNumber) const pre(gpioPortNumber < MaxGpioPorts) { return gpioPorts[gpioPortNumber]; }
 
 #if SAM4E || SAM4S || SAME70
 	uint32_t Random();
@@ -657,7 +667,7 @@ private:
 	volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off
 
 	// GPIO pins
-	PwmPort gpioPorts[MaxGpioPorts];
+	GpOutputPort gpioPorts[MaxGpioPorts];
 
 	// Thermistors and temperature monitoring
 	volatile ThermistorAveragingFilter adcFilters[NumAdcFilters];	// ADC reading averaging filters
