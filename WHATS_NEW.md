@@ -1,13 +1,33 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 2.05RC1
+Version 2.05RC2
 ===============
 Compatible files:
 - DuetWiFiServer 1.23
 - DuetWebControl 2.0.4 (recommended) or 1.22.6
 
-Upgrade notes: none
+Upgrade notes from version 2.04 or 2.05RC1:
+- If using this relesse to control a laser cutter or laser engraver, see "Changed behaviour" below.
+
+Changed behaviour:
+- In laser mode (M453), M3 never turns on the laser immediately. Instead it sets the default laser power for following G1/G2/G3 commands. Likewise, M5 does not immediately turn off the laser, it sets the default laser power for following G1/G2/G3 commands. If a subsequent G1 command has a S parameter, the value of that parameter becomes the default laser power for that command and subsequent G1/G2/G3 commands.
+
+Bug fixes:
+- 2.05RC1 was not compatible with Duet Web Control 2.0.x. This has been fixed.
+- In laser mode, M3 and M5 commands used in a job gave unpredictable results
+
+Version 2.05RC1
+===============
+Compatible files:
+- DuetWiFiServer 1.23
+- DuetWebControl 1.22.6
+
+Known issue:
+- This release is not compatible with Duet Web Control 2.0.x. Please either use Duet Web Control 1.22.6 or wait for firmware release 2.05RC2.
+
+Upgrade notes:
+- See the known issue above.
 
 Changed behaviour:
 - Current position is no longer shown for pulse-type filament monitors, because it was meaningless and nearly always zero
