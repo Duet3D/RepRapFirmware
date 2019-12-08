@@ -41,16 +41,19 @@ GCodeQueue::GCodeQueue() : freeItems(nullptr), queuedItems(nullptr)
 		case 'G':
 			{
 				const int code = gb.GetCommandNumber();
-				return code == 10 && gb.Seen('P');			// Set active/standby temperatures
+				return code == 10 && gb.Seen('P') && !gb.Seen('L') && (gb.Seen('R') || gb.Seen('S'));			// set active/standby temperatures
 			}
 
 		case 'M':
 			{
 				switch (gb.GetCommandNumber())
 				{
-				case 3:		// spindle control
+				case 3:		// spindle or laser control
+				case 5:		// spindle or laser control
+					// On laser devices we use these codes to set the default laser power for the next G1 command
+					return reprap.GetGCodes().GetMachineType() != MachineType::laser;
+
 				case 4:		// spindle control
-				case 5:		// spindle control
 				case 42:	// set IO pin
 				case 106:	// fan control
 				case 107:	// fan off
