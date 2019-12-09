@@ -1059,7 +1059,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 			return GCodeResult::error;
 		}
 #endif
-		if ((firmwareUpdateModuleMap & 1) != 0 && !platform.CheckFirmwareUpdatePrerequisites(reply))
+		if ((firmwareUpdateModuleMap & 1) != 0 && !reprap.CheckFirmwareUpdatePrerequisites(reply))
 		{
 			firmwareUpdateModuleMap = 0;
 			return GCodeResult::error;

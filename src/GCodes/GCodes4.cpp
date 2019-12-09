@@ -439,7 +439,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		{
 			// Update main firmware
 			firmwareUpdateModuleMap = 0;
-			platform.UpdateFirmware();
+			reprap.UpdateFirmware();
 			// The above call does not return unless an error occurred
 		}
 		isFlashing = false;

@@ -360,6 +360,7 @@ void LwipEthernetInterface::Activate()
 void LwipEthernetInterface::Exit()
 {
 	Stop();
+	ethernet_terminate();
 }
 
 // Get the network state into the reply buffer, returning true if there is some sort of error

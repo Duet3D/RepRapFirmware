@@ -28,6 +28,7 @@ namespace SmartDrivers
 {
 	void Init(const Pin[NumDirectDrivers], size_t numTmcDrivers)
 		pre(numTmcDrivers <= NumDirectDrivers);
+	void Exit();
 	void Spin(bool powered);
 	void TurnDriversOff();
 

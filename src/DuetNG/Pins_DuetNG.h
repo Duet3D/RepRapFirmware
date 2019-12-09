@@ -4,11 +4,22 @@
 // Pins definition file for Duet 2 WiFi/Ethernet
 // This file is normally #included by #including RepRapFirmware.h, which includes this file
 
-#define FIRMWARE_NAME		"RepRapFirmware for Duet 2 WiFi/Ethernet"
-#define DEFAULT_BOARD_TYPE	 BoardType::DuetWiFi_10
-#define IAP_FIRMWARE_FILE	"Duet2CombinedFirmware.bin"
-#define IAP_UPDATE_FILE		"iap4e.bin"				// using the same IAP file for both Duet WiFi and Duet Ethernet
-#define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 2 WiFi/Ethernet"
+#define DEFAULT_BOARD_TYPE	 	BoardType::DuetWiFi_10
+#define IAP_FIRMWARE_FILE		"Duet2CombinedFirmware.bin"
+
+#define IAP_IN_RAM				1
+
+#if IAP_IN_RAM
+constexpr uint32_t IAP_IMAGE_START = 0x20010000;	// IAP is loaded into the second 64kb of RAM
+# define IAP_UPDATE_FILE		"Duet2CombinedIAP.bin"	// using the same IAP file for both Duet WiFi and Duet Ethernet
+#else
+constexpr uint32_t IAP_IMAGE_START = 0x00470000;
+constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;		// we allow a full 64K on the SAM4
+# define IAP_UPDATE_FILE		"iap4e.bin"			// using the same IAP file for both Duet WiFi and Duet Ethernet
+#endif
+
+#define WIFI_FIRMWARE_FILE		"DuetWiFiServer.bin"
 
 constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 is now unused)
 
@@ -314,10 +325,6 @@ constexpr const char *DefaultEndstopPinNames[] = { "xstop", "ystop", "zstop" };
 constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
 constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2" };
 constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
-
-// SAM4E Flash locations (may be expanded in the future)
-constexpr uint32_t IAP_FLASH_START = 0x00470000;
-constexpr uint32_t IAP_FLASH_END = 0x0047FFFF;		// we allow a full 64K on the SAM4
 
 // Duet pin numbers to control the WiFi interface on the Duet WiFi
 constexpr Pin EspResetPin = PortEPin(4);			// Low on this in holds the WiFi module in reset (ESP_RESET)

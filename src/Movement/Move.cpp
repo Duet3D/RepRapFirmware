@@ -119,6 +119,10 @@ void Move::Exit()
 {
 	StepTimer::DisableTimerInterrupt();
 	mainDDARing.Exit();
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	delete laserTask;
+	laserTask = nullptr;
+#endif
 	active = false;												// don't accept any more moves
 }
 

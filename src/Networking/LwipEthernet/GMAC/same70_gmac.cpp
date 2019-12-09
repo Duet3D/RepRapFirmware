@@ -683,8 +683,6 @@ err_t ethernetif_init(struct netif *netif)
 	return ERR_OK;
 }
 
-#if 1	// chrishamm
-
 void ethernetif_hardware_init(void)
 {
 	/* Enable GMAC clock. */
@@ -828,6 +826,15 @@ void ethernetif_set_mac_address(const uint8_t macAddress[])
 	}
 }
 
+// This is called when we shut down
+void ethernetif_terminate()
+{
+	NVIC_DisableIRQ(GMAC_IRQn);
+#if LWIP_GMAC_TASK
+	ethernetTask.TerminateAndUnlink();
+#endif
+}
+
 extern "C" u32_t millis();
 
 extern "C" u32_t sys_now(void)
@@ -835,4 +842,4 @@ extern "C" u32_t sys_now(void)
 	return millis();
 }
 
-#endif
+// End

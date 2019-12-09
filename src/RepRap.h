@@ -146,6 +146,11 @@ public:
 	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const;			// save some information in config-override.g
 #endif
 
+	// Firmware update operations
+	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply);
+	void UpdateFirmware();
+	void StartIap();
+
 	void ReportInternalError(const char *file, const char *func, int line) const;	// Report an internal error
 
 	static uint32_t DoDivide(uint32_t a, uint32_t b);		// helper function for diagnostic tests
@@ -221,7 +226,6 @@ private:
 	Module spinningModule;
 	bool stopped;
 	bool active;
-	bool resetting;
 	bool processingConfig;
 #if HAS_LINUX_INTERFACE
  	bool usingLinuxInterface;
@@ -239,7 +243,9 @@ inline uint16_t RepRap::GetExtrudersInUse() const { return activeExtruders; }
 inline uint16_t RepRap::GetToolHeatersInUse() const { return activeToolHeaters; }
 inline bool RepRap::IsStopped() const { return stopped; }
 
+#define STRINGIZE(s)	#s
 #define INTERNAL_ERROR do { reprap.ReportInternalError((__FILE__), (__func__), (__LINE__)); } while(0)
+#define INTERNAL_ERROR_MESSAGE "Internal error at " __FILE__ "(" STRINGIZE(__LINE__) ")"
 
 #endif
 

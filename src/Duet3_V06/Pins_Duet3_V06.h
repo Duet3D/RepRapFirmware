@@ -7,7 +7,22 @@
 const size_t NumFirmwareUpdateModules = 1;
 
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
-#define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
+
+#define IAP_IN_RAM				0
+
+#if IAP_IN_RAM
+# define IAP_UPDATE_FILE			"Duet3iap_sd_ram_" BOARD_SHORT_NAME ".bin"
+constexpr uint32_t IAP_IMAGE_START = 0x20450000;		// last 64kb of RAM
+#else
+# define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
+
+// SAME70 Flash locations
+// These are designed to work with 1Mbyte flash processors as well as 2Mbyte
+// We can only erase complete 128kb sectors on the SAME70, so we allow 128Kb for IAP
+constexpr uint32_t IAP_IMAGE_START = 0x004E0000;
+constexpr uint32_t IAP_IMAGE_END = 0x004FFFFF;
+#endif
+
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
@@ -261,12 +276,6 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
-
-// SAME70 Flash locations
-// These are designed to work with 1Mbyte flash processors as well as 2Mbyte
-// We can only erase complete 128kb sectors on the SAME70, so we allow 128Kb for IAP
-constexpr uint32_t IAP_FLASH_START = 0x004E0000;
-constexpr uint32_t IAP_FLASH_END = 0x004FFFFF;
 
 // Duet pin numbers for the Linux interface
 constexpr Pin LinuxTfrReadyPin = PortEPin(2);

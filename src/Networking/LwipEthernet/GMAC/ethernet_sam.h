@@ -54,6 +54,9 @@
 // Perform low-level initialisation of the network interface
 void init_ethernet(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay);
 
+// Terminate Ethernet and stop any interrupts, tasks etc. Used when shutting down the whole system.
+inline void ethernet_terminate() { ethernetif_terminate(); }
+
 // Configure the ethernet interface
 void ethernet_configure_interface(const uint8_t macAddress[], const char *hostname);
 

@@ -1322,6 +1322,15 @@ void SmartDrivers::Init()
 	tmcTask.Create(TmcLoop, "TMC", nullptr, TaskPriority::TmcPriority);
 }
 
+// Shut down the drivers and stop any related interrupts. Don't call Spin() again after calling this as it may re-enable them.
+void SmartDrivers::Exit()
+{
+	digitalWrite(GlobalTmc51xxEnablePin, HIGH);
+	NVIC_DisableIRQ(TMC51xx_SPI_IRQn);
+	tmcTask.TerminateAndUnlink();
+	driversState = DriversState::noPower;
+}
+
 void SmartDrivers::SetAxisNumber(size_t driver, uint32_t axisNumber)
 {
 	if (driver < numTmc51xxDrivers)

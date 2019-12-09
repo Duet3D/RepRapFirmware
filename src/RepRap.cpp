@@ -14,6 +14,7 @@
 #include "Tools/Filament.h"
 #include "Endstops/ZProbe.h"
 #include "Tasks.h"
+#include "Hardware/Cache.h"
 #include "Version.h"
 
 #ifdef DUET_NG
@@ -152,7 +153,7 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 	debug(0),
 	beepFrequency(0), beepDuration(0),
 	diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
-	spinningModule(noModule), stopped(false), active(false), resetting(false), processingConfig(true)
+	spinningModule(noModule), stopped(false), active(false), processingConfig(true)
 #if HAS_LINUX_INTERFACE
 	, usingLinuxInterface(true)
 #endif
@@ -508,7 +509,7 @@ void RepRap::Diagnostics(MessageType mtype)
 // Turn off the heaters, disable the motors, and deactivate the Heat and Move classes. Leave everything else working.
 void RepRap::EmergencyStop()
 {
-	stopped = true;
+	stopped = true;				// a useful side effect of setting this is that it prevents Platform::Tick being called, which is needed when loading IAP into RAM
 
 	// Do not turn off ATX power here. If the nozzles are still hot, don't risk melting any surrounding parts by turning fans off.
 	//platform->SetAtxPower(false);
@@ -530,23 +531,8 @@ void RepRap::EmergencyStop()
 		break;
 	}
 
-	// Deselect all tools (is this necessary?)
-	{
-		MutexLocker lock(toolListMutex);
-		for (Tool* tool = toolList; tool != nullptr; tool = tool->Next())
-		{
-			tool->Standby();
-		}
-	}
-
 	heat->Exit();		// this also turns off all heaters
-
-	// We do this twice, to avoid an interrupt switching a drive back on. move->Exit() should prevent interrupts doing this.
-	for (int i = 0; i < 2; i++)
-	{
-		move->Exit();
-		platform->EmergencyDisableDrivers();
-	}
+	move->Exit();
 
 	gCodes->EmergencyStop();
 	platform->StopLogging();
@@ -772,7 +758,7 @@ void RepRap::Tick()
 		rswdt_restart(RSWDT);						// kick the secondary watchdog
 #endif
 
-		if (!resetting)
+		if (!stopped)
 		{
 			platform->Tick();
 			++ticksInSpinState;
@@ -780,7 +766,7 @@ void RepRap::Tick()
 			const bool heatTaskStuck = (heatTaskIdleTicks >= MaxTicksInSpinState);
 			if (heatTaskStuck || ticksInSpinState >= MaxTicksInSpinState)		// if we stall for 20 seconds, save diagnostic data and reset
 			{
-				resetting = true;
+				stopped = true;
 				heat->SwitchOffAll(true);
 				platform->EmergencyDisableDrivers();
 
@@ -2339,6 +2325,294 @@ bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) con
 }
 
 #endif
+
+// Firmware update operations
+
+// Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
+bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply)
+{
+#if HAS_MASS_STORAGE
+	FileStore * const firmwareFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_FIRMWARE_FILE, OpenMode::read);
+	if (firmwareFile == nullptr)
+	{
+		reply.printf("Firmware binary \"%s\" not found", IAP_FIRMWARE_FILE);
+		return false;
+	}
+
+	// Check that the binary looks sensible. The first word is the initial stack pointer, which should be the top of RAM.
+	uint32_t firstDword;
+	bool ok = firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
+	firmwareFile->Close();
+	if (!ok || firstDword !=
+#if SAM3XA
+						IRAM1_ADDR + IRAM1_SIZE
+#else
+						IRAM_ADDR + IRAM_SIZE
+#endif
+			)
+	{
+		reply.printf("Firmware binary \"%s\" is not valid for this electronics", IAP_FIRMWARE_FILE);
+		return false;
+	}
+
+	if (!platform->FileExists(DEFAULT_SYS_DIR, IAP_UPDATE_FILE))
+	{
+		reply.printf("In-application programming binary \"%s\" not found", IAP_UPDATE_FILE);
+		return false;
+	}
+#endif
+
+	return true;
+}
+
+// Update the firmware. Prerequisites should be checked before calling this.
+void RepRap::UpdateFirmware()
+{
+#if HAS_MASS_STORAGE
+	FileStore * const iapFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_UPDATE_FILE, OpenMode::read);
+	if (iapFile == nullptr)
+	{
+		platform->MessageF(FirmwareUpdateMessage, "IAP file '" IAP_UPDATE_FILE "' not found\n");
+		return;
+	}
+
+#if SUPPORT_12864_LCD
+	display->UpdatingFirmware();			// put the firmware update message on the display
+#endif
+
+#if IAP_IN_RAM
+	// Send this message before we start using RAM that may contain message buffers
+	platform->Message(AuxMessage, "Updating main firmware\n");
+	platform->Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
+
+	// Allow time for the firmware update message to be sent
+	const uint32_t now = millis();
+	while (platform->FlushMessages() && millis() - now < 2000) { }
+#endif
+
+	// The machine will be unresponsive for a few seconds, don't risk damaging the heaters.
+	// This also shuts down tasks and interrupts that might make use of the RAM that we are about to load the IAP binary into.
+	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it access Z probe object in RAM used by IAP
+	network->Exit();						// kill the network task to stop it overwriting RAM that we use to hold the IAP
+
+	// Step 0 - disable the cache because it interferes with flash memory access
+	Cache::Disable();
+
+#if USE_MPU
+	//TODO consider setting flash memory to strongly-ordered instead
+	ARM_MPU_Disable();
+#endif
+
+#if IAP_IN_RAM
+	// Use RAM-based IAP
+	iapFile->Read(reinterpret_cast<char *>(IAP_IMAGE_START), iapFile->Length());
+#else
+	// Step 1 - Write update binary to Flash and overwrite the remaining space with zeros
+	// On the SAM3X, leave the last 1KB of Flash memory untouched, so we can reuse the NvData after this update
+
+# if !defined(IFLASH_PAGE_SIZE) && defined(IFLASH0_PAGE_SIZE)
+#  define IFLASH_PAGE_SIZE	IFLASH0_PAGE_SIZE
+# endif
+
+	// Use a 32-bit aligned buffer. This gives us the option of calling the EFC functions directly in future.
+	uint32_t data32[IFLASH_PAGE_SIZE/4];
+	char* const data = reinterpret_cast<char *>(data32);
+
+# if SAM4E || SAM4S || SAME70
+	// The EWP command is not supported for non-8KByte sectors in the SAM4 and SAME70 series.
+	// So we have to unlock and erase the complete 64Kb or 128kb sector first. One sector is always enough to contain the IAP.
+	flash_unlock(IAP_IMAGE_START, IAP_IMAGE_END, nullptr, nullptr);
+	flash_erase_sector(IAP_IMAGE_START);
+
+	for (uint32_t flashAddr = IAP_IMAGE_START; flashAddr < IAP_IMAGE_END; flashAddr += IFLASH_PAGE_SIZE)
+	{
+		const int bytesRead = iapFile->Read(data, IFLASH_PAGE_SIZE);
+
+		if (bytesRead > 0)
+		{
+			// Do we have to fill up the remaining buffer with zeros?
+			if (bytesRead != IFLASH_PAGE_SIZE)
+			{
+				memset(data + bytesRead, 0, sizeof(data[0]) * (IFLASH_PAGE_SIZE - bytesRead));
+			}
+
+			// Write one page at a time
+			cpu_irq_disable();
+			const uint32_t rc = flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 0);
+			cpu_irq_enable();
+
+			if (rc != FLASH_RC_OK)
+			{
+				platform->MessageF(FirmwareUpdateErrorMessage, "flash write failed, code=%" PRIu32 ", address=0x%08" PRIx32 "\n", rc, flashAddr);
+				return;
+			}
+
+			// Verify written data
+			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
+			{
+				platform->MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08" PRIx32 "\n", flashAddr);
+				return;
+			}
+		}
+		else
+		{
+			// Fill up the remaining space with zeros
+			memset(data, 0, sizeof(data[0]) * sizeof(data));
+			cpu_irq_disable();
+			flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 0);
+			cpu_irq_enable();
+		}
+	}
+
+	// Re-lock the whole area
+	flash_lock(IAP_IMAGE_START, IAP_IMAGE_END, nullptr, nullptr);
+
+# else	// SAM3X code
+
+	for (uint32_t flashAddr = IAP_FLASH_START; flashAddr < IAP_FLASH_END; flashAddr += IFLASH_PAGE_SIZE)
+	{
+		const int bytesRead = iapFile->Read(data, IFLASH_PAGE_SIZE);
+
+		if (bytesRead > 0)
+		{
+			// Do we have to fill up the remaining buffer with zeros?
+			if (bytesRead != IFLASH_PAGE_SIZE)
+			{
+				memset(data + bytesRead, 0, sizeof(data[0]) * (IFLASH_PAGE_SIZE - bytesRead));
+			}
+
+			// Write one page at a time
+			cpu_irq_disable();
+
+			const char* op = "unlock";
+			uint32_t rc = flash_unlock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+
+			if (rc == FLASH_RC_OK)
+			{
+				op = "write";
+				rc = flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 1);
+			}
+			if (rc == FLASH_RC_OK)
+			{
+				op = "lock";
+				rc = flash_lock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+			}
+			cpu_irq_enable();
+
+			if (rc != FLASH_RC_OK)
+			{
+				MessageF(FirmwareUpdateErrorMessage, "flash %s failed, code=%" PRIu32 ", address=0x%08" PRIx32 "\n", op, rc, flashAddr);
+				return;
+			}
+			// Verify written data
+			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
+			{
+				MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08" PRIx32 "\n", flashAddr);
+				return;
+			}
+		}
+		else
+		{
+			// Fill up the remaining space
+			memset(data, 0, sizeof(data[0]) * sizeof(data));
+			cpu_irq_disable();
+			flash_unlock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+			flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 1);
+			flash_lock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+			cpu_irq_enable();
+		}
+	}
+# endif
+#endif
+
+	iapFile->Close();
+
+	StartIap();
+#endif
+}
+
+void RepRap::StartIap()
+{
+#if !IAP_IN_RAM
+	platform->Message(AuxMessage, "Updating main firmware\n");
+	platform->Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
+
+	// Allow time for the firmware update message to be sent
+	const uint32_t now = millis();
+	while (platform->FlushMessages() && millis() - now < 2000) { }
+#endif
+
+	// Disable all interrupts, then reallocate the vector table and program entry point to the new IAP binary
+	// This does essentially what the Atmel AT02333 paper suggests (see 3.2.2 ff)
+
+	// Disable all IRQs
+	SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk;	// disable the system tick exception
+	cpu_irq_disable();
+	for (size_t i = 0; i < 8; i++)
+	{
+		NVIC->ICER[i] = 0xFFFFFFFF;					// Disable IRQs
+		NVIC->ICPR[i] = 0xFFFFFFFF;					// Clear pending IRQs
+	}
+
+	// Disable all PIO IRQs, because the core assumes they are all disabled when setting them up
+	PIOA->PIO_IDR = 0xFFFFFFFF;
+	PIOB->PIO_IDR = 0xFFFFFFFF;
+	PIOC->PIO_IDR = 0xFFFFFFFF;
+#ifdef PIOD
+	PIOD->PIO_IDR = 0xFFFFFFFF;
+#endif
+#ifdef ID_PIOE
+	PIOE->PIO_IDR = 0xFFFFFFFF;
+#endif
+
+#if HAS_MASS_STORAGE
+	// Newer versions of iap4e.bin reserve space above the stack for us to pass the firmware filename
+	static const char filename[] = DEFAULT_SYS_DIR IAP_FIRMWARE_FILE;
+	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
+	if (topOfStack + sizeof(filename) <=
+# if SAM3XA
+						IRAM1_ADDR + IRAM1_SIZE
+# else
+						IRAM_ADDR + IRAM_SIZE
+# endif
+	   )
+	{
+		memcpy(reinterpret_cast<char*>(topOfStack), filename, sizeof(filename));
+	}
+#endif
+
+#if defined(DUET_NG) || defined(DUET_M)
+	IoPort::WriteDigital(DiagPin, false);			// turn the DIAG LED off
+#endif
+
+	wdt_restart(WDT);								// kick the watchdog one last time
+
+#if SAM4E || SAME70
+	rswdt_restart(RSWDT);							// kick the secondary watchdog
+#endif
+
+	// Modify vector table location
+	__DSB();
+	__ISB();
+	SCB->VTOR = ((uint32_t)IAP_IMAGE_START & SCB_VTOR_TBLOFF_Msk);
+	__DSB();
+	__ISB();
+
+	cpu_irq_enable();
+
+	__asm volatile ("mov r3, %0" : : "r" (IAP_IMAGE_START) : "r3");
+
+	// We are using separate process and handler stacks. Put the process stack 1K bytes below the handler stack.
+	__asm volatile ("ldr r1, [r3]");
+	__asm volatile ("msr msp, r1");
+	__asm volatile ("sub r1, #1024");
+	__asm volatile ("mov sp, r1");
+
+	__asm volatile ("isb");
+	__asm volatile ("ldr r1, [r3, #4]");
+	__asm volatile ("orr r1, r1, #1");
+	__asm volatile ("bx r1");
+}
 
 // Helper function for diagnostic tests in Platform.cpp, to cause a deliberate divide-by-zero
 /*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b)

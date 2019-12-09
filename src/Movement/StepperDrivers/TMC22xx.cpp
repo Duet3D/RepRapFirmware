@@ -1033,6 +1033,21 @@ namespace SmartDrivers
 		}
 	}
 
+	// Shut down the drivers and stop any related interrupts. Don't call Spin() again after calling this as it may re-enable them.
+	void Exit()
+	{
+		pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+#if TMC22xx_HAS_MUX
+		NVIC_DisableIRQ(TMC22xx_UART_IRQn);
+#else
+		for (size_t drive = 0; drive < numTmc22xxDrivers; ++drive)
+		{
+			NVIC_DisableIRQ(TMC22xxUartIRQns[drive]);
+		}
+#endif
+		driversState = DriversState::noPower;
+	}
+
 	void SetAxisNumber(size_t drive, uint32_t axisNumber)
 	{
 		if (drive < numTmc22xxDrivers)

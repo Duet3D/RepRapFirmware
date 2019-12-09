@@ -12,7 +12,21 @@
 #define DEFAULT_BOARD_TYPE BoardType::DuetM_10
 constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define IAP_FIRMWARE_FILE	"DuetMaestroFirmware.bin"
-#define IAP_UPDATE_FILE		"iap4s.bin"
+
+#define IAP_IN_RAM				1
+
+#if IAP_IN_RAM
+
+# define IAP_UPDATE_FILE		"DuetMaestroIAP.bin"
+constexpr uint32_t IAP_IMAGE_START = 0x20010000;
+
+#else
+
+# define IAP_UPDATE_FILE		"iap4s.bin"
+constexpr uint32_t IAP_IMAGE_START = 0x00470000;
+constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;								// we allow a full 64K on the SAM4
+
+#endif
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0
@@ -258,10 +272,6 @@ constexpr const char *DefaultEndstopPinNames[] = { "xstop", "ystop", "zstop" };
 constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
 constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2" };
 constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
-
-// SAM4S Flash locations (may be expanded in the future)
-constexpr uint32_t IAP_FLASH_START = 0x00470000;
-constexpr uint32_t IAP_FLASH_END = 0x0047FFFF;								// we allow a full 64K on the SAM4
 
 // Duet pin numbers to control the W5500 interface
 constexpr Pin W5500ResetPin = PortCPin(13);									// Low on this in holds the W5500 in reset

@@ -345,7 +345,11 @@ void Network::Exit()
 	TelnetResponder::Disable();
 #endif
 
-	// TODO: close down the network and suspend the network task. Not trivial because currently, the caller may be the network task.
+	if (TaskBase::GetCallerTaskHandle() != networkTask.GetHandle())
+	{
+		// Terminate the network task. Not trivial because currently, the caller may be the network task.
+		networkTask.TerminateAndUnlink();
+	}
 }
 
 // Get the network state into the reply buffer, returning true if there is some sort of error

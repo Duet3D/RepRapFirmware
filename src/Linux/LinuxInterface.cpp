@@ -20,7 +20,7 @@
 
 LinuxInterface::LinuxInterface() : transfer(new DataTransfer()), wasConnected(false), numDisconnects(0),
 	reportPause(false), rxPointer(0), txPointer(0), txLength(0), sendBufferUpdate(true),
-	iapWritePointer(IAP_FLASH_START), gcodeReply(new OutputStack())
+	iapWritePointer(IAP_IMAGE_START), gcodeReply(new OutputStack())
 {
 }
 
@@ -213,17 +213,22 @@ void LinuxInterface::Spin()
 			// Write another chunk of the IAP binary to the designated Flash area
 			case LinuxRequest::WriteIap:
 			{
-				if (iapWritePointer == IAP_FLASH_START)
+#if !IAP_IN_RAM
+				if (iapWritePointer == IAP_IMAGE_START)
 				{
 					// The EWP command is not supported for non-8KByte sectors in the SAM4 and SAME70 series.
 					// So we have to unlock and erase the complete 64Kb or 128kb sector first. One sector is always enough to contain the IAP.
-					flash_unlock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
-					flash_erase_sector(IAP_FLASH_START);
+					flash_unlock(IAP_IMAGE_START, IAP_IMAGE_END, nullptr, nullptr);
+					flash_erase_sector(IAP_IMAGE_START);
 				}
-
+#endif
 				const char *dataToWrite = transfer->ReadData(packet->length);
-				size_t bytesWritten = 0;
 
+#if IAP_IN_RAM
+				memcpy(reinterpret_cast<char *>(iapWritePointer), dataToWrite, packet->length);
+				iapWritePointer += packet->length;
+#else
+				size_t bytesWritten = 0;
 				do
 				{
 					size_t bytesToWrite = min<size_t>(IFLASH_PAGE_SIZE, packet->length - bytesWritten), retry = 0;
@@ -259,15 +264,17 @@ void LinuxInterface::Spin()
 					dataToWrite += bytesToWrite;
 					iapWritePointer += bytesToWrite;
 				} while (bytesWritten != packet->length);
-
+#endif
 				break;
 			}
 
 			// Launch the IAP binary
 			case LinuxRequest::StartIap:
+#if !IAP_IN_RAM
 				// Lock the whole IAP flash area again and start the IAP binary
-				flash_lock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
-				reprap.GetPlatform().StartIap();
+				flash_lock(IAP_IMAGE_START, IAP_IMAGE_END, nullptr, nullptr);
+#endif
+				reprap.StartIap();
 				break;
 
 			// Assign filament
@@ -410,7 +417,7 @@ void LinuxInterface::Spin()
 
 			rxPointer = txPointer = txLength = 0;
 			sendBufferUpdate = true;
-			iapWritePointer = IAP_FLASH_START;
+			iapWritePointer = IAP_IMAGE_START;
 
 			if (!requestedFileName.IsEmpty())
 			{

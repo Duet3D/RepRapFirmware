@@ -575,7 +575,7 @@ void Platform::Init()
 	for (size_t i = 0; i < ARRAY_SIZE(DefaultGpioPinNames); ++i)
 	{
 		String<1> dummy;
-		gpioPorts[i].AssignPort(DefaultGpioPinNames[i], dummy.GetRef(), PinUsedBy::gpio, PinAccess::pwm);
+		gpioPorts[i].port.AssignPort(DefaultGpioPinNames[i], dummy.GetRef(), PinUsedBy::gpio, PinAccess::pwm);
 	}
 #endif
 
@@ -645,276 +645,6 @@ void Platform::Init()
 	active = true;
 }
 
-// Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
-bool Platform::CheckFirmwareUpdatePrerequisites(const StringRef& reply)
-{
-#if HAS_MASS_STORAGE
-	FileStore * const firmwareFile = OpenFile(DEFAULT_SYS_DIR, IAP_FIRMWARE_FILE, OpenMode::read);
-	if (firmwareFile == nullptr)
-	{
-		reply.printf("Firmware binary \"%s\" not found", IAP_FIRMWARE_FILE);
-		return false;
-	}
-
-	// Check that the binary looks sensible. The first word is the initial stack pointer, which should be the top of RAM.
-	uint32_t firstDword;
-	bool ok = firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
-	firmwareFile->Close();
-	if (!ok || firstDword !=
-#if SAM3XA
-						IRAM1_ADDR + IRAM1_SIZE
-#else
-						IRAM_ADDR + IRAM_SIZE
-#endif
-			)
-	{
-		reply.printf("Firmware binary \"%s\" is not valid for this electronics", IAP_FIRMWARE_FILE);
-		return false;
-	}
-
-	if (!FileExists(DEFAULT_SYS_DIR, IAP_UPDATE_FILE))
-	{
-		reply.printf("In-application programming binary \"%s\" not found", IAP_UPDATE_FILE);
-		return false;
-	}
-#endif
-
-	return true;
-}
-
-// Update the firmware. Prerequisites should be checked before calling this.
-void Platform::UpdateFirmware()
-{
-#if HAS_MASS_STORAGE
-	FileStore * const iapFile = OpenFile(DEFAULT_SYS_DIR, IAP_UPDATE_FILE, OpenMode::read);
-	if (iapFile == nullptr)
-	{
-		MessageF(FirmwareUpdateMessage, "IAP file '" IAP_UPDATE_FILE "' not found\n");
-		return;
-	}
-
-#if SUPPORT_12864_LCD
-	reprap.GetDisplay().UpdatingFirmware();			// put the firmware update message on the display
-#endif
-
-	// The machine will be unresponsive for a few seconds, don't risk damaging the heaters...
-	reprap.EmergencyStop();
-
-	// Step 0 - disable the cache because it interferes with flash memory access
-	Cache::Disable();
-
-#if USE_MPU
-	//TODO consider setting flash memory to strongly-ordered instead
-	ARM_MPU_Disable();
-#endif
-
-	// Step 1 - Write update binary to Flash and overwrite the remaining space with zeros
-	// On the SAM3X, leave the last 1KB of Flash memory untouched, so we can reuse the NvData after this update
-
-#if !defined(IFLASH_PAGE_SIZE) && defined(IFLASH0_PAGE_SIZE)
-# define IFLASH_PAGE_SIZE	IFLASH0_PAGE_SIZE
-#endif
-
-	// Use a 32-bit aligned buffer. This gives us the option of calling the EFC functions directly in future.
-	uint32_t data32[IFLASH_PAGE_SIZE/4];
-	char* const data = reinterpret_cast<char *>(data32);
-
-#if SAM4E || SAM4S || SAME70
-	// The EWP command is not supported for non-8KByte sectors in the SAM4 and SAME70 series.
-	// So we have to unlock and erase the complete 64Kb or 128kb sector first. One sector is always enough to contain the IAP.
-	flash_unlock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
-	flash_erase_sector(IAP_FLASH_START);
-
-	for (uint32_t flashAddr = IAP_FLASH_START; flashAddr < IAP_FLASH_END; flashAddr += IFLASH_PAGE_SIZE)
-	{
-		const int bytesRead = iapFile->Read(data, IFLASH_PAGE_SIZE);
-
-		if (bytesRead > 0)
-		{
-			// Do we have to fill up the remaining buffer with zeros?
-			if (bytesRead != IFLASH_PAGE_SIZE)
-			{
-				memset(data + bytesRead, 0, sizeof(data[0]) * (IFLASH_PAGE_SIZE - bytesRead));
-			}
-
-			// Write one page at a time
-			cpu_irq_disable();
-			const uint32_t rc = flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 0);
-			cpu_irq_enable();
-
-			if (rc != FLASH_RC_OK)
-			{
-				MessageF(FirmwareUpdateErrorMessage, "flash write failed, code=%" PRIu32 ", address=0x%08" PRIx32 "\n", rc, flashAddr);
-				return;
-			}
-
-			// Verify written data
-			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
-			{
-				MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08" PRIx32 "\n", flashAddr);
-				return;
-			}
-		}
-		else
-		{
-			// Fill up the remaining space with zeros
-			memset(data, 0, sizeof(data[0]) * sizeof(data));
-			cpu_irq_disable();
-			flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 0);
-			cpu_irq_enable();
-		}
-	}
-
-	// Re-lock the whole area
-	flash_lock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
-
-#else	// SAM3X code
-
-	for (uint32_t flashAddr = IAP_FLASH_START; flashAddr < IAP_FLASH_END; flashAddr += IFLASH_PAGE_SIZE)
-	{
-		const int bytesRead = iapFile->Read(data, IFLASH_PAGE_SIZE);
-
-		if (bytesRead > 0)
-		{
-			// Do we have to fill up the remaining buffer with zeros?
-			if (bytesRead != IFLASH_PAGE_SIZE)
-			{
-				memset(data + bytesRead, 0, sizeof(data[0]) * (IFLASH_PAGE_SIZE - bytesRead));
-			}
-
-			// Write one page at a time
-			cpu_irq_disable();
-
-			const char* op = "unlock";
-			uint32_t rc = flash_unlock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
-
-			if (rc == FLASH_RC_OK)
-			{
-				op = "write";
-				rc = flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 1);
-			}
-			if (rc == FLASH_RC_OK)
-			{
-				op = "lock";
-				rc = flash_lock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
-			}
-			cpu_irq_enable();
-
-			if (rc != FLASH_RC_OK)
-			{
-				MessageF(FirmwareUpdateErrorMessage, "flash %s failed, code=%" PRIu32 ", address=0x%08" PRIx32 "\n", op, rc, flashAddr);
-				return;
-			}
-			// Verify written data
-			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
-			{
-				MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08" PRIx32 "\n", flashAddr);
-				return;
-			}
-		}
-		else
-		{
-			// Fill up the remaining space
-			memset(data, 0, sizeof(data[0]) * sizeof(data));
-			cpu_irq_disable();
-			flash_unlock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
-			flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 1);
-			flash_lock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
-			cpu_irq_enable();
-		}
-	}
-#endif
-
-	iapFile->Close();
-
-	StartIap();
-#endif
-}
-
-void Platform::StartIap()
-{
-	Message(AuxMessage, "Updating main firmware\n");
-	Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
-
-	// Allow time for the firmware update message to be sent
-	const uint32_t now = millis();
-	while (FlushMessages() && millis() - now < 2000) { }
-
-	// Step 2 - Let the firmware do whatever is necessary before we exit this program
-	reprap.Exit();
-
-	// Step 3 - Reallocate the vector table and program entry point to the new IAP binary
-	// This does essentially what the Atmel AT02333 paper suggests (see 3.2.2 ff)
-
-	// Disable all IRQs
-	SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk;	// disable the system tick exception
-	cpu_irq_disable();
-	for (size_t i = 0; i < 8; i++)
-	{
-		NVIC->ICER[i] = 0xFFFFFFFF;					// Disable IRQs
-		NVIC->ICPR[i] = 0xFFFFFFFF;					// Clear pending IRQs
-	}
-
-	// Disable all PIO IRQs, because the core assumes they are all disabled when setting them up
-	PIOA->PIO_IDR = 0xFFFFFFFF;
-	PIOB->PIO_IDR = 0xFFFFFFFF;
-	PIOC->PIO_IDR = 0xFFFFFFFF;
-#ifdef PIOD
-	PIOD->PIO_IDR = 0xFFFFFFFF;
-#endif
-#ifdef ID_PIOE
-	PIOE->PIO_IDR = 0xFFFFFFFF;
-#endif
-
-#if HAS_MASS_STORAGE
-	// Newer versions of iap4e.bin reserve space above the stack for us to pass the firmware filename
-	static const char filename[] = DEFAULT_SYS_DIR IAP_FIRMWARE_FILE;
-	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_FLASH_START);
-	if (topOfStack + sizeof(filename) <=
-# if SAM3XA
-						IRAM1_ADDR + IRAM1_SIZE
-# else
-						IRAM_ADDR + IRAM_SIZE
-# endif
-	   )
-	{
-		memcpy(reinterpret_cast<char*>(topOfStack), filename, sizeof(filename));
-	}
-#endif
-
-#if defined(DUET_NG) || defined(DUET_M)
-	IoPort::WriteDigital(DiagPin, false);			// turn the DIAG LED off
-#endif
-
-	wdt_restart(WDT);								// kick the watchdog one last time
-
-#if SAM4E || SAME70
-	rswdt_restart(RSWDT);							// kick the secondary watchdog
-#endif
-
-	// Modify vector table location
-	__DSB();
-	__ISB();
-	SCB->VTOR = ((uint32_t)IAP_FLASH_START & SCB_VTOR_TBLOFF_Msk);
-	__DSB();
-	__ISB();
-
-	cpu_irq_enable();
-
-	__asm volatile ("mov r3, %0" : : "r" (IAP_FLASH_START) : "r3");
-
-	// We are using separate process and handler stacks. Put the process stack 1K bytes below the handler stack.
-	__asm volatile ("ldr r1, [r3]");
-	__asm volatile ("msr msp, r1");
-	__asm volatile ("sub r1, #1024");
-	__asm volatile ("mov sp, r1");
-
-	__asm volatile ("isb");
-	__asm volatile ("ldr r1, [r3, #4]");
-	__asm volatile ("orr r1, r1, #1");
-	__asm volatile ("bx r1");
-}
-
 // Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
 void Platform::Beep(int freq, int ms)
 {
@@ -942,6 +672,9 @@ void Platform::Exit()
 	StopLogging();
 #if HAS_MASS_STORAGE
 	MassStorage::CloseAllFiles();
+#endif
+#if HAS_SMART_DRIVERS
+	SmartDrivers::Exit();
 #endif
 
 	// Release the aux output stack (should release the others too!)
@@ -2390,6 +2123,14 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, un
 				, sizeof(HttpResponder), sizeof(FtpResponder), sizeof(TelnetResponder)
 #endif
 			);
+		break;
+
+	case (unsigned int)DiagnosticTestType::PrintObjectAddresses:
+		reply.printf
+				("Platform %08" PRIx32 "-%08" PRIx32 "\nGCodes %08" PRIx32 "-%08" PRIx32,
+					reinterpret_cast<uint32_t>(this), reinterpret_cast<uint32_t>(this) + sizeof(Platform) - 1,
+					reinterpret_cast<uint32_t>(&reprap.GetGCodes()), reinterpret_cast<uint32_t>(&reprap.GetGCodes()) + sizeof(GCodes) - 1
+				);
 		break;
 
 #ifdef DUET_NG

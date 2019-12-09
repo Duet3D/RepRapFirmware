@@ -54,12 +54,14 @@ extern "C" {
 #include "lwip/netif.h"
 #include "netif/etharp.h"
 
+#ifdef __cplusplus
+}
+
 err_t ethernetif_init(struct netif *netif);				// called by LwIP to initialise the interface
 
+void ethernetif_terminate();							// called when we shut down
+
 bool ethernetif_input(struct netif *netif);				// checks for a new packet and returns true if one was processed
-
-
-#if 1	// chrishamm
 
 void ethernetif_hardware_init(void);					// initialises the low-level hardware interface
 
@@ -74,10 +76,6 @@ void ethernetif_set_rx_callback(gmac_dev_tx_cb_t callback);
 
 void ethernetif_set_mac_address(const uint8_t macAddress[]);
 
-#endif
-
-#ifdef __cplusplus
-}
 #endif
 
 // Error counters

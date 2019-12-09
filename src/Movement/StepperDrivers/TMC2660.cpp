@@ -929,6 +929,14 @@ namespace SmartDrivers
 #endif
 	}
 
+	// Shut down the drivers and stop any related interrupts. Don't call Spin() again after calling this as it may re-enable them.
+	void Exit()
+	{
+		digitalWrite(GlobalTmc2660EnablePin, HIGH);
+		NVIC_DisableIRQ(TMC2660_SPI_IRQn);
+		driversPowered = false;
+	}
+
 	void SetAxisNumber(size_t driver, uint32_t axisNumber)
 	{
 		if (driver < numTmc2660Drivers)
