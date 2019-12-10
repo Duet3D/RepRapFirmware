@@ -1738,7 +1738,7 @@ void WiFiInterface::GetNewStatus()
 }
 
 // SPI interrupt handlers, called when NSS goes high
-void ESP_SPI_HANDLER(void)
+void ESP_SPI_HANDLER(void) noexcept
 {
 	wifiInterface->SpiInterrupt();
 }

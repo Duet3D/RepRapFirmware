@@ -16,7 +16,7 @@ class LinearDeltaKinematics;
 #define ROUND_TO_NEAREST	(0)			// 1 for round to nearest (as used in 1.20beta10), 0 for round down (as used prior to 1.20beta10)
 
 // Rounding functions, to improve code clarity. Also allows a quick switch between round-to-nearest and round down in the movement code.
-inline uint32_t roundU32(float f)
+inline uint32_t roundU32(float f) noexcept
 {
 #if ROUND_TO_NEAREST
 	return (uint32_t)lrintf(f);
@@ -25,7 +25,7 @@ inline uint32_t roundU32(float f)
 #endif
 }
 
-inline uint32_t roundU32(double d)
+inline uint32_t roundU32(double d) noexcept
 {
 #if ROUND_TO_NEAREST
 	return lrint(d);
@@ -34,7 +34,7 @@ inline uint32_t roundU32(double d)
 #endif
 }
 
-inline int32_t roundS32(float f)
+inline int32_t roundS32(float f) noexcept
 {
 #if ROUND_TO_NEAREST
 	return lrintf(f);
@@ -43,7 +43,7 @@ inline int32_t roundS32(float f)
 #endif
 }
 
-inline int32_t roundS32(double d)
+inline int32_t roundS32(double d) noexcept
 {
 #if ROUND_TO_NEAREST
 	return lrint(d);
@@ -52,7 +52,7 @@ inline int32_t roundS32(double d)
 #endif
 }
 
-inline uint64_t roundU64(float f)
+inline uint64_t roundU64(float f) noexcept
 {
 #if ROUND_TO_NEAREST
 	return (uint64_t)llrintf(f);
@@ -61,7 +61,7 @@ inline uint64_t roundU64(float f)
 #endif
 }
 
-inline uint64_t roundU64(double d)
+inline uint64_t roundU64(double d) noexcept
 {
 #if ROUND_TO_NEAREST
 	return (uint64_t)llrint(d);
@@ -70,7 +70,7 @@ inline uint64_t roundU64(double d)
 #endif
 }
 
-inline int64_t roundS64(float f)
+inline int64_t roundS64(float f) noexcept
 {
 #if ROUND_TO_NEAREST
 	return llrintf(f);
@@ -79,7 +79,7 @@ inline int64_t roundS64(float f)
 #endif
 }
 
-inline int64_t roundS64(double d)
+inline int64_t roundS64(double d) noexcept
 {
 #if ROUND_TO_NEAREST
 	return llrint(d);
@@ -132,36 +132,36 @@ class DriveMovement
 public:
 	friend class DDA;
 
-	DriveMovement(DriveMovement *next);
+	DriveMovement(DriveMovement *next) noexcept;
 
-	bool CalcNextStepTimeCartesian(const DDA &dda, bool live) __attribute__ ((hot));
-	bool CalcNextStepTimeDelta(const DDA &dda, bool live) __attribute__ ((hot));
-	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) __attribute__ ((hot));
-	bool PrepareDeltaAxis(const DDA& dda, const PrepParams& params) __attribute__ ((hot));
-	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation) __attribute__ ((hot));
-	void ReduceSpeed(uint32_t inverseSpeedFactor);
-	void DebugPrint() const;
-	int32_t GetNetStepsLeft() const;
-	int32_t GetNetStepsTaken() const;
+	bool CalcNextStepTimeCartesian(const DDA &dda, bool live) noexcept __attribute__ ((hot));
+	bool CalcNextStepTimeDelta(const DDA &dda, bool live) noexcept __attribute__ ((hot));
+	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept __attribute__ ((hot));
+	bool PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept __attribute__ ((hot));
+	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation) noexcept __attribute__ ((hot));
+	void ReduceSpeed(uint32_t inverseSpeedFactor) noexcept;
+	void DebugPrint() const noexcept;
+	int32_t GetNetStepsLeft() const noexcept;
+	int32_t GetNetStepsTaken() const noexcept;
 
 #if HAS_SMART_DRIVERS
-	uint32_t GetStepInterval(uint32_t microstepShift) const;	// Get the current full step interval for this axis or extruder
+	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	int32_t GetSteps() const { return (direction) ? totalSteps : -totalSteps; }
+	int32_t GetSteps() const noexcept { return (direction) ? totalSteps : -totalSteps; }
 #endif
 
-	static void InitialAllocate(unsigned int num);
-	static int NumFree() { return numFree; }
-	static int MinFree() { return minFree; }
-	static void ResetMinFree() { minFree = numFree; }
-	static DriveMovement *Allocate(size_t drive, DMState st);
-	static void Release(DriveMovement *item);
+	static void InitialAllocate(unsigned int num) noexcept;
+	static int NumFree() noexcept { return numFree; }
+	static int MinFree() noexcept { return minFree; }
+	static void ResetMinFree() noexcept { minFree = numFree; }
+	static DriveMovement *Allocate(size_t drive, DMState st) noexcept;
+	static void Release(DriveMovement *item) noexcept;
 
 private:
-	bool CalcNextStepTimeCartesianFull(const DDA &dda, bool live) __attribute__ ((hot));
-	bool CalcNextStepTimeDeltaFull(const DDA &dda, bool live) __attribute__ ((hot));
+	bool CalcNextStepTimeCartesianFull(const DDA &dda, bool live) noexcept __attribute__ ((hot));
+	bool CalcNextStepTimeDeltaFull(const DDA &dda, bool live) noexcept __attribute__ ((hot));
 
 	static DriveMovement *freeList;
 	static int numFree;
@@ -234,7 +234,7 @@ private:
 // Return true if there are more steps to do. When finished, leave nextStep == totalSteps + 1.
 // This is also used for extruders on delta machines.
 // We inline this part to speed things up when we are doing double/quad/octal stepping.
-inline bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, bool live)
+inline bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, bool live) noexcept
 {
 	++nextStep;
 	if (nextStep <= totalSteps)
@@ -257,7 +257,7 @@ inline bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, bool live)
 // Calculate the time since the start of the move when the next step for the specified DriveMovement is due
 // Return true if there are more steps to do. When finished, leave nextStep == totalSteps + 1.
 // We inline this part to speed things up when we are doing double/quad/octal stepping.
-inline bool DriveMovement::CalcNextStepTimeDelta(const DDA &dda, bool live)
+inline bool DriveMovement::CalcNextStepTimeDelta(const DDA &dda, bool live) noexcept
 {
 	++nextStep;
 	if (nextStep <= totalSteps)
@@ -282,7 +282,7 @@ inline bool DriveMovement::CalcNextStepTimeDelta(const DDA &dda, bool live)
 
 // Return the number of net steps left for the move in the forwards direction.
 // We have already taken nextSteps - 1 steps, unless nextStep is zero.
-inline int32_t DriveMovement::GetNetStepsLeft() const
+inline int32_t DriveMovement::GetNetStepsLeft() const noexcept
 {
 	int32_t netStepsLeft;
 	if (reverseStartStep > totalSteps)		// if no reverse phase
@@ -303,7 +303,7 @@ inline int32_t DriveMovement::GetNetStepsLeft() const
 
 // Return the number of net steps already taken for the move in the forwards direction.
 // We have already taken nextSteps - 1 steps, unless nextStep is zero.
-inline int32_t DriveMovement::GetNetStepsTaken() const
+inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 {
 	int32_t netStepsTaken;
 	if (nextStep < reverseStartStep || reverseStartStep > totalSteps)				// if no reverse phase, or not started it yet
@@ -318,7 +318,7 @@ inline int32_t DriveMovement::GetNetStepsTaken() const
 }
 
 // This is inlined because it is only called from one place
-inline void DriveMovement::Release(DriveMovement *item)
+inline void DriveMovement::Release(DriveMovement *item) noexcept
 {
 	item->nextDM = freeList;
 	freeList = item;
@@ -328,7 +328,7 @@ inline void DriveMovement::Release(DriveMovement *item)
 #if HAS_SMART_DRIVERS
 
 // Get the current full step interval for this axis or extruder
-inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const
+inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const noexcept
 {
 	return (nextStep < totalSteps && nextStep > (1u << microstepShift))		// if at least 1 full step done
 		? stepInterval << microstepShift									// return the interval between steps converted to full steps

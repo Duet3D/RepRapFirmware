@@ -68,7 +68,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
 #endif
 
-Move::Move()
+Move::Move() noexcept
 	: active(false),
 	  drcEnabled(false),											// disable dynamic ringing cancellation
 	  maxPrintingAcceleration(10000.0), maxTravelAcceleration(10000.0),
@@ -85,7 +85,7 @@ Move::Move()
 	DriveMovement::InitialAllocate(NumDms);
 }
 
-void Move::Init()
+void Move::Init() noexcept
 {
 	mainDDARing.Init2();
 
@@ -115,7 +115,7 @@ void Move::Init()
 	active = true;
 }
 
-void Move::Exit()
+void Move::Exit() noexcept
 {
 	StepTimer::DisableTimerInterrupt();
 	mainDDARing.Exit();
@@ -126,7 +126,7 @@ void Move::Exit()
 	active = false;												// don't accept any more moves
 }
 
-void Move::Spin()
+void Move::Spin() noexcept
 {
 	if (!active)
 	{
@@ -250,19 +250,19 @@ void Move::Spin()
 }
 
 // Return the number of currently used probe points
-unsigned int Move::GetNumProbePoints() const
+unsigned int Move::GetNumProbePoints() const noexcept
 {
 	return probePoints.GetNumBedCompensationPoints();
 }
 
 // Return the number of actually probed probe points
-unsigned int Move::GetNumProbedProbePoints() const
+unsigned int Move::GetNumProbedProbePoints() const noexcept
 {
 	return probePoints.NumberOfProbePoints();
 }
 
 // Try to push some babystepping through the lookahead queue, returning the amount pushed
-float Move::PushBabyStepping(size_t axis, float amount)
+float Move::PushBabyStepping(size_t axis, float amount) noexcept
 {
 	return mainDDARing.PushBabyStepping(axis, amount);
 }
@@ -271,7 +271,7 @@ float Move::PushBabyStepping(size_t axis, float amount)
 // If it is already correct leave its parameters alone.
 // This violates our rule on no dynamic memory allocation after the initialisation phase,
 // however this function is normally called only when M665, M667 and M669 commands in config.g are processed.
-bool Move::SetKinematics(KinematicsType k)
+bool Move::SetKinematics(KinematicsType k) noexcept
 {
 	if (kinematics->GetKinematicsType() != k)
 	{
@@ -287,20 +287,20 @@ bool Move::SetKinematics(KinematicsType k)
 }
 
 // Return true if this is a raw motor move
-bool Move::IsRawMotorMove(uint8_t moveType) const
+bool Move::IsRawMotorMove(uint8_t moveType) const noexcept
 {
 	return moveType == 2 || ((moveType == 1 || moveType == 3) && kinematics->GetHomingMode() != HomingMode::homeCartesianAxes);
 }
 
 // Return true if the specified point is accessible to the Z probe
-bool Move::IsAccessibleProbePoint(float x, float y) const
+bool Move::IsAccessibleProbePoint(float x, float y) const noexcept
 {
 	const ZProbe& params = reprap.GetPlatform().GetCurrentZProbe();
 	return kinematics->IsReachable(x - params.GetXOffset(), y - params.GetYOffset(), false);
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
-bool Move::PausePrint(RestorePoint& rp)
+bool Move::PausePrint(RestorePoint& rp) noexcept
 {
 	return mainDDARing.PauseMoves(rp);
 }
@@ -308,14 +308,14 @@ bool Move::PausePrint(RestorePoint& rp)
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 
 // Pause the print immediately, returning true if we were able to skip or abort any moves and setting up to the move we aborted
-bool Move::LowPowerOrStallPause(RestorePoint& rp)
+bool Move::LowPowerOrStallPause(RestorePoint& rp) noexcept
 {
 	return mainDDARing.LowPowerOrStallPause(rp);
 }
 
 #endif
 
-void Move::Diagnostics(MessageType mtype)
+void Move::Diagnostics(MessageType mtype) noexcept
 {
 	Platform& p = reprap.GetPlatform();
 	p.MessageF(mtype, "=== Move ===\nHiccups: %" PRIu32
@@ -387,7 +387,7 @@ void Move::Diagnostics(MessageType mtype)
 }
 
 // Set the current position to be this
-void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation)
+void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation) noexcept
 {
 	float newPos[MaxAxesPlusExtruders];
 	memcpy(newPos, positionNow, sizeof(newPos));			// copy to local storage because Transform modifies it
@@ -397,7 +397,7 @@ void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool do
 }
 
 // This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered and DDA::SetPositions
-void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const
+void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const noexcept
 {
 	if (CartesianToMotorSteps(coords, ep, true))
 	{
@@ -409,14 +409,14 @@ void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrive
 }
 
 // Convert distance to steps for a particular drive
-int32_t Move::MotorMovementToSteps(size_t drive, float coord)
+int32_t Move::MotorMovementToSteps(size_t drive, float coord) noexcept
 {
 	return lrintf(coord * reprap.GetPlatform().DriveStepsPerUnit(drive));
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
 // This is computationally expensive on a delta or SCARA machine, so only call it when necessary, and never from the step ISR.
-void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
+void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
 	kinematics->MotorStepsToCartesian(motorPos, reprap.GetPlatform().GetDriveStepsPerUnit(), numVisibleAxes, numTotalAxes, machinePos);
 	if (reprap.Debug(moduleMove) && !inInterrupt())
@@ -429,7 +429,7 @@ void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes
 // Convert Cartesian coordinates to motor steps, axes only, returning true if successful.
 // Used to perform movement and G92 commands.
 // This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered, DDA::SetPositions and Move::EndPointToMachine
-bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const
+bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const noexcept
 {
 	const bool b = kinematics->CartesianToMotorSteps(machinePos, reprap.GetPlatform().GetDriveStepsPerUnit(),
 														reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), motorPos, isCoordinated);
@@ -462,7 +462,7 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 	return b;
 }
 
-void Move::AxisAndBedTransform(float xyzPoint[MaxAxes], const Tool *tool, bool useBedCompensation) const
+void Move::AxisAndBedTransform(float xyzPoint[MaxAxes], const Tool *tool, bool useBedCompensation) const noexcept
 {
 	AxisTransform(xyzPoint, tool);
 	if (useBedCompensation)
@@ -471,14 +471,14 @@ void Move::AxisAndBedTransform(float xyzPoint[MaxAxes], const Tool *tool, bool u
 	}
 }
 
-void Move::InverseAxisAndBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const
+void Move::InverseAxisAndBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
 {
 	InverseBedTransform(xyzPoint, tool);
 	InverseAxisTransform(xyzPoint, tool);
 }
 
 // Do the Axis transform BEFORE the bed transform
-void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
+void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
 {
 	// Identify the lowest Y axis
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
@@ -503,13 +503,13 @@ void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 }
 
 // Get the height error at a bed XY position
-float Move::GetInterpolatedHeightError(float xCoord, float yCoord) const
+float Move::GetInterpolatedHeightError(float xCoord, float yCoord) const noexcept
 {
 	return (usingMesh) ? heightMap.GetInterpolatedHeightError(xCoord, yCoord) : probePoints.GetInterpolatedHeightError(xCoord, yCoord);
 }
 
 // Invert the Axis transform AFTER the bed transform
-void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
+void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
 {
 	// Identify the lowest Y axis
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
@@ -534,7 +534,7 @@ void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 }
 
 // Do the bed transform AFTER the axis transform
-void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const
+void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
 {
 	if (!useTaper || xyzPoint[Z_AXIS] < taperHeight)
 	{
@@ -573,7 +573,7 @@ void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 }
 
 // Invert the bed transform BEFORE the axis transform
-void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const
+void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
 {
 	float zCorrection = 0.0;
 	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
@@ -621,7 +621,7 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 }
 
 // Normalise the bed transform to have zero height error at these bed coordinates
-void Move::SetZeroHeightError(const float coords[MaxAxes])
+void Move::SetZeroHeightError(const float coords[MaxAxes]) noexcept
 {
 	float tempCoords[MaxAxes];
 	memcpy(tempCoords, coords, sizeof(tempCoords));
@@ -629,7 +629,7 @@ void Move::SetZeroHeightError(const float coords[MaxAxes])
 	zShift = -GetInterpolatedHeightError(tempCoords[X_AXIS], tempCoords[Y_AXIS]);
 }
 
-void Move::SetIdentityTransform()
+void Move::SetIdentityTransform() noexcept
 {
 	probePoints.SetIdentity();
 	heightMap.ClearGridHeights();
@@ -641,7 +641,7 @@ void Move::SetIdentityTransform()
 #if HAS_MASS_STORAGE
 
 // Load the height map from file, returning true if an error occurred with the error reason appended to the buffer
-bool Move::LoadHeightMapFromFile(FileStore *f, const StringRef& r)
+bool Move::LoadHeightMapFromFile(FileStore *f, const StringRef& r) noexcept
 {
 	const bool ret = heightMap.LoadFromFile(f, r);
 	if (ret)
@@ -656,7 +656,7 @@ bool Move::LoadHeightMapFromFile(FileStore *f, const StringRef& r)
 }
 
 // Save the height map to a file returning true if an error occurred
-bool Move::SaveHeightMapToFile(FileStore *f) const
+bool Move::SaveHeightMapToFile(FileStore *f) const noexcept
 {
 	return heightMap.SaveToFile(f, zShift);
 }
@@ -666,14 +666,14 @@ bool Move::SaveHeightMapToFile(FileStore *f) const
 #if HAS_LINUX_INTERFACE
 
 // Save the height map Z coordinates to an array
-void Move::SaveHeightMapToArray(float *arr) const
+void Move::SaveHeightMapToArray(float *arr) const noexcept
 {
 	return heightMap.SaveToArray(arr, zShift);
 }
 
 #endif
 
-void Move::SetTaperHeight(float h)
+void Move::SetTaperHeight(float h) noexcept
 {
 	useTaper = (h > 1.0);
 	if (useTaper)
@@ -684,18 +684,18 @@ void Move::SetTaperHeight(float h)
 }
 
 // Enable mesh bed compensation
-bool Move::UseMesh(bool b)
+bool Move::UseMesh(bool b) noexcept
 {
 	usingMesh = heightMap.UseHeightMap(b);
 	return usingMesh;
 }
 
-float Move::AxisCompensation(unsigned int axis) const
+float Move::AxisCompensation(unsigned int axis) const noexcept
 {
 	return (axis < ARRAY_SIZE(tangents)) ? tangents[axis] : 0.0;
 }
 
-void Move::SetAxisCompensation(unsigned int axis, float tangent)
+void Move::SetAxisCompensation(unsigned int axis, float tangent) noexcept
 {
 	if (axis < ARRAY_SIZE(tangents))
 	{
@@ -706,7 +706,7 @@ void Move::SetAxisCompensation(unsigned int axis, float tangent)
 // Calibrate or set the bed equation after probing, returning true if an error occurred
 // sParam is the value of the S parameter in the G30 command that provoked this call.
 // Caller already owns the GCode movement lock.
-bool Move::FinishedBedProbing(int sParam, const StringRef& reply)
+bool Move::FinishedBedProbing(int sParam, const StringRef& reply) noexcept
 {
 	bool error = false;
 	const size_t numPoints = probePoints.NumberOfProbePoints();
@@ -754,13 +754,13 @@ bool Move::FinishedBedProbing(int sParam, const StringRef& reply)
 	return error;
 }
 
-/*static*/ float Move::MotorStepsToMovement(size_t drive, int32_t endpoint)
+/*static*/ float Move::MotorStepsToMovement(size_t drive, int32_t endpoint) noexcept
 {
 	return ((float)(endpoint))/reprap.GetPlatform().DriveStepsPerUnit(drive);
 }
 
 // Return the transformed machine coordinates
-void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool *tool) const
+void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool *tool) const noexcept
 {
 	GetCurrentMachinePosition(m, IsRawMotorMove(moveType));
 	if (moveType == 0)
@@ -771,7 +771,7 @@ void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool
 
 // Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
 // Returns the number of motor steps moves since the last call, and isPrinting is true unless we are currently executing an extruding but non-printing move
-int32_t Move::GetAccumulatedExtrusion(size_t extruder, bool& isPrinting)
+int32_t Move::GetAccumulatedExtrusion(size_t extruder, bool& isPrinting) noexcept
 {
 	if (extruder < reprap.GetGCodes().GetNumExtruders())
 	{
@@ -782,7 +782,7 @@ int32_t Move::GetAccumulatedExtrusion(size_t extruder, bool& isPrinting)
 	return 0;
 }
 
-void Move::SetXYBedProbePoint(size_t index, float x, float y)
+void Move::SetXYBedProbePoint(size_t index, float x, float y) noexcept
 {
 	if (index >= MaxProbePoints)
 	{
@@ -794,7 +794,7 @@ void Move::SetXYBedProbePoint(size_t index, float x, float y)
 	}
 }
 
-void Move::SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError)
+void Move::SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError) noexcept
 {
 	if (index >= MaxProbePoints)
 	{
@@ -809,7 +809,7 @@ void Move::SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wa
 // This returns the (X, Y) points to probe the bed at probe point count.  When probing, it returns false.
 // If called after probing has ended it returns true, and the Z coordinate probed is also returned.
 // If 'wantNozzlePosition is true then we return the nozzle position when the point is probed, else we return the probe point itself
-float Move::GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePosition) const
+float Move::GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePosition) const noexcept
 {
 	x = probePoints.GetXCoord(count);
 	y = probePoints.GetYCoord(count);
@@ -823,7 +823,7 @@ float Move::GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePo
 }
 
 // Enter or leave simulation mode
-void Move::Simulate(uint8_t simMode)
+void Move::Simulate(uint8_t simMode) noexcept
 {
 	simulationMode = simMode;
 	if (simMode != 0)
@@ -834,7 +834,7 @@ void Move::Simulate(uint8_t simMode)
 
 // Adjust the leadscrews
 // This is only ever called after bed probing, so we can assume that no such move is already pending.
-void Move::AdjustLeadscrews(const floatc_t corrections[])
+void Move::AdjustLeadscrews(const floatc_t corrections[]) noexcept
 {
 	const size_t numZdrivers = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS).numDrivers;
 	for (size_t i = 0; i < MaxDriversPerAxis; ++i)
@@ -845,13 +845,13 @@ void Move::AdjustLeadscrews(const floatc_t corrections[])
 }
 
 // Return the idle timeout in seconds
-float Move::IdleTimeout() const
+float Move::IdleTimeout() const noexcept
 {
 	return (float)idleTimeout * 0.001;
 }
 
 // Set the idle timeout in seconds
-void Move::SetIdleTimeout(float timeout)
+void Move::SetIdleTimeout(float timeout) noexcept
 {
 	idleTimeout = (uint32_t)lrintf(timeout * 1000.0);
 }
@@ -861,7 +861,7 @@ void Move::SetIdleTimeout(float timeout)
 // Write settings for resuming the print
 // The GCodes module deals with the head position so all we need worry about is the bed compensation
 // We don't handle random probe point bed compensation, and we assume that if a height map is being used it is the default one.
-bool Move::WriteResumeSettings(FileStore *f) const
+bool Move::WriteResumeSettings(FileStore *f) const noexcept
 {
 	return kinematics->WriteResumeSettings(f) && (!usingMesh || f->Write("G29 S1\n"));
 }
@@ -869,7 +869,7 @@ bool Move::WriteResumeSettings(FileStore *f) const
 #endif
 
 // Process M204
-GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)
+GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) noexcept
 {
 	bool seen = false;
 	if (gb.Seen('S'))
@@ -896,7 +896,7 @@ GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply)
 }
 
 // Process M593
-GCodeResult Move::ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Move::ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	bool seen = false;
 	if (gb.Seen('F'))
@@ -939,13 +939,13 @@ GCodeResult Move::ConfigureDynamicAcceleration(GCodeBuffer& gb, const StringRef&
 
 Task<Move::LaserTaskStackWords> *Move::laserTask = nullptr;		// the task used to manage laser power or IOBits
 
-extern "C" void LaserTaskStart(void * pvParameters)
+extern "C" void LaserTaskStart(void * pvParameters) noexcept
 {
 	reprap.GetMove().LaserTaskRun();
 }
 
 // This is called when laser mode is selected or IOBits is enabled
-void Move::CreateLaserTask()
+void Move::CreateLaserTask() noexcept
 {
 	TaskCriticalSectionLocker lock;
 	if (laserTask == nullptr)
@@ -956,7 +956,7 @@ void Move::CreateLaserTask()
 }
 
 // Wake up the laser task, if there is one (must check!). Call this at the start of a new move from standstill (not from an ISR)
-void Move::WakeLaserTask()
+void Move::WakeLaserTask() noexcept
 {
 	if (laserTask != nullptr)
 	{
@@ -965,7 +965,7 @@ void Move::WakeLaserTask()
 }
 
 // Wake up the laser task if there is one (must check!) from an ISR
-void Move::WakeLaserTaskFromISR()
+void Move::WakeLaserTaskFromISR() noexcept
 {
 	if (laserTask != nullptr)
 	{
@@ -973,7 +973,7 @@ void Move::WakeLaserTaskFromISR()
 	}
 }
 
-void Move::LaserTaskRun()
+void Move::LaserTaskRun() noexcept
 {
 	for (;;)
 	{
@@ -1011,7 +1011,7 @@ void Move::LaserTaskRun()
 
 // Get and lock the aux move buffer. If successful, return a pointer to the buffer.
 // The caller must not attempt to lock the aux buffer more than once, and must call ReleaseAuxMove to release the buffer.
-AsyncMove *Move::LockAuxMove()
+AsyncMove *Move::LockAuxMove() noexcept
 {
 	InterruptCriticalSectionLocker lock;
 	if (!auxMoveLocked && !auxMoveAvailable)
@@ -1024,14 +1024,14 @@ AsyncMove *Move::LockAuxMove()
 
 // Release the aux move buffer and optionally signal that it contains a move
 // The caller must have locked the buffer before calling this. If it calls with hasNewMove true, it must have populated the move buffer with the move details
-void Move::ReleaseAuxMove(bool hasNewMove)
+void Move::ReleaseAuxMove(bool hasNewMove) noexcept
 {
 	auxMoveAvailable = hasNewMove;
 	auxMoveLocked = false;
 }
 
 // Configure height following
-GCodeResult Move::ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Move::ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	if (heightController == nullptr)
 	{
@@ -1041,7 +1041,7 @@ GCodeResult Move::ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& rep
 }
 
 // Start/stop height following
-GCodeResult Move::StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Move::StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	if (heightController == nullptr)
 	{

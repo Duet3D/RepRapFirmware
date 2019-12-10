@@ -229,7 +229,7 @@ constexpr PinEntry PinTable[] =
 	{ PortAPin(8),	PinCapability::wpwm,	"out6" },
 	{ PortCPin(11),	PinCapability::wpwm,	"out7" },
 	{ PortCPin(8),	PinCapability::wpwm,	"out8" },
-	{ PortAPin(12),	PinCapability::wpwm,	"out9" },
+	{ PortAPin(12),	PinCapability::wpwm,	"out9,laser,vfd" },
 	{ PortAPin(10),	PinCapability::write,	"pson" },
 
 	// Tacho inputs associated with outputs 4-6

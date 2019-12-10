@@ -47,125 +47,125 @@ struct MessageBox
 	uint32_t timer, timeout;
 	AxesBitmap controls;
 
-	MessageBox() : active(false), seq(0) { }
+	MessageBox() noexcept : active(false), seq(0) { }
 };
 
 class RepRap INHERIT_OBJECT_MODEL
 {
 public:
-	RepRap();
-	void EmergencyStop();
-	void Init();
-	void Spin();
-	void Exit();
-	void Diagnostics(MessageType mtype);
-	void DeferredDiagnostics(MessageType mtype) { diagnosticsDestination = mtype; }
-	void Timing(MessageType mtype);
+	RepRap() noexcept;
+	void EmergencyStop() noexcept;
+	void Init() noexcept;
+	void Spin() noexcept;
+	void Exit() noexcept;
+	void Diagnostics(MessageType mtype) noexcept;
+	void DeferredDiagnostics(MessageType mtype) noexcept { diagnosticsDestination = mtype; }
+	void Timing(MessageType mtype) noexcept;
 
-	bool Debug(Module module) const;
-	void SetDebug(Module m, bool enable);
-	void ClearDebug();
-	void PrintDebug(MessageType mt);
-	Module GetSpinningModule() const;
+	bool Debug(Module module) const noexcept;
+	void SetDebug(Module m, bool enable) noexcept;
+	void ClearDebug() noexcept;
+	void PrintDebug(MessageType mt) noexcept;
+	Module GetSpinningModule() const noexcept;
 
-	const char *GetName() const;
-	void SetName(const char* nm);
-	bool NoPasswordSet() const;
-	bool CheckPassword(const char* pw) const;
-	void SetPassword(const char* pw);
+	const char *GetName() const noexcept;
+	void SetName(const char* nm) noexcept;
+	bool NoPasswordSet() const noexcept;
+	bool CheckPassword(const char* pw) const noexcept;
+	void SetPassword(const char* pw) noexcept;
 
-	void AddTool(Tool* t);
-	void DeleteTool(Tool* t);
-	void SelectTool(int toolNumber, bool simulating);
-	void StandbyTool(int toolNumber, bool simulating);
-	Tool* GetCurrentTool() const;
-	int GetCurrentToolNumber() const;
-	Tool* GetTool(int toolNumber) const;
-	Tool* GetCurrentOrDefaultTool() const;
-	const Tool* GetFirstTool() const { return toolList; }						// Return the lowest-numbered tool
-	AxesBitmap GetCurrentXAxes() const { return Tool::GetXAxes(currentTool); }	// Get the current axes used as X axes
-	AxesBitmap GetCurrentYAxes() const { return Tool::GetYAxes(currentTool); }	// Get the current axes used as Y axes
-	bool IsHeaterAssignedToTool(int8_t heater) const;
-	unsigned int GetNumberOfContiguousTools() const;
+	void AddTool(Tool* t) noexcept;
+	void DeleteTool(Tool* t) noexcept;
+	void SelectTool(int toolNumber, bool simulating) noexcept;
+	void StandbyTool(int toolNumber, bool simulating) noexcept;
+	Tool* GetCurrentTool() const noexcept;
+	int GetCurrentToolNumber() const noexcept;
+	Tool* GetTool(int toolNumber) const noexcept;
+	Tool* GetCurrentOrDefaultTool() const noexcept;
+	const Tool* GetFirstTool() const noexcept { return toolList; }						// Return the lowest-numbered tool
+	AxesBitmap GetCurrentXAxes() const noexcept { return Tool::GetXAxes(currentTool); }	// Get the current axes used as X axes
+	AxesBitmap GetCurrentYAxes() const noexcept { return Tool::GetYAxes(currentTool); }	// Get the current axes used as Y axes
+	bool IsHeaterAssignedToTool(int8_t heater) const noexcept;
+	unsigned int GetNumberOfContiguousTools() const noexcept;
 
-	unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions);
-	void PrintTool(int toolNumber, const StringRef& reply) const;
-	void FlagTemperatureFault(int8_t dudHeater);
-	GCodeResult ClearTemperatureFault(int8_t wasDudHeater, const StringRef& reply);
+	unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions) noexcept;
+	void PrintTool(int toolNumber, const StringRef& reply) const noexcept;
+	void FlagTemperatureFault(int8_t dudHeater) noexcept;
+	GCodeResult ClearTemperatureFault(int8_t wasDudHeater, const StringRef& reply) noexcept;
 
-	Platform& GetPlatform() const { return *platform; }
-	Move& GetMove() const { return *move; }
-	Heat& GetHeat() const { return *heat; }
-	GCodes& GetGCodes() const { return *gCodes; }
-	Network& GetNetwork() const { return *network; }
-	Scanner& GetScanner() const { return *scanner; }
-	PrintMonitor& GetPrintMonitor() const { return *printMonitor; }
-	FansManager& GetFansManager() const { return *fansManager; }
+	Platform& GetPlatform() const noexcept { return *platform; }
+	Move& GetMove() const noexcept { return *move; }
+	Heat& GetHeat() const noexcept { return *heat; }
+	GCodes& GetGCodes() const noexcept { return *gCodes; }
+	Network& GetNetwork() const noexcept { return *network; }
+	Scanner& GetScanner() const noexcept { return *scanner; }
+	PrintMonitor& GetPrintMonitor() const noexcept { return *printMonitor; }
+	FansManager& GetFansManager() const noexcept { return *fansManager; }
 
 #if SUPPORT_ROLAND
-	Roland& GetRoland() const { return *roland; }
+	Roland& GetRoland() const noexcept { return *roland; }
 #endif
 #if SUPPORT_IOBITS
- 	PortControl& GetPortControl() const { return *portControl; }
+ 	PortControl& GetPortControl() const noexcept { return *portControl; }
 #endif
 #if SUPPORT_12864_LCD
- 	Display& GetDisplay() const { return *display; }
- 	const char *GetLatestMessage(uint16_t& sequence) const;
- 	const MessageBox& GetMessageBox() const { return mbox; }
+ 	Display& GetDisplay() const noexcept { return *display; }
+ 	const char *GetLatestMessage(uint16_t& sequence) const noexcept;
+ 	const MessageBox& GetMessageBox() const noexcept { return mbox; }
 #endif
 #if HAS_LINUX_INTERFACE
- 	bool UsingLinuxInterface() const { return usingLinuxInterface; }
- 	LinuxInterface& GetLinuxInterface() const  { return *linuxInterface; }
+ 	bool UsingLinuxInterface() const noexcept { return usingLinuxInterface; }
+ 	LinuxInterface& GetLinuxInterface() const noexcept { return *linuxInterface; }
 #endif
 
-	void Tick();
-	bool SpinTimeoutImminent() const;
-	bool IsStopped() const;
+	void Tick() noexcept;
+	bool SpinTimeoutImminent() const noexcept;
+	bool IsStopped() const noexcept;
 
-	uint16_t GetExtrudersInUse() const;
-	uint16_t GetToolHeatersInUse() const;
+	uint16_t GetExtrudersInUse() const noexcept;
+	uint16_t GetToolHeatersInUse() const noexcept;
 
-	OutputBuffer *GetStatusResponse(uint8_t type, ResponseSource source);
-	OutputBuffer *GetConfigResponse();
-	OutputBuffer *GetLegacyStatusResponse(uint8_t type, int seq);
+	OutputBuffer *GetStatusResponse(uint8_t type, ResponseSource source) noexcept;
+	OutputBuffer *GetConfigResponse() noexcept;
+	OutputBuffer *GetLegacyStatusResponse(uint8_t type, int seq) noexcept;
 
 #if HAS_MASS_STORAGE
-	OutputBuffer *GetFilesResponse(const char* dir, unsigned int startAt, bool flagsDirs);
-	OutputBuffer *GetFilelistResponse(const char* dir, unsigned int startAt);
+	OutputBuffer *GetFilesResponse(const char* dir, unsigned int startAt, bool flagsDirs) noexcept;
+	OutputBuffer *GetFilelistResponse(const char* dir, unsigned int startAt) noexcept;
 #endif
 
-	bool GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly);
+	bool GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept;
 
-	void Beep(unsigned int freq, unsigned int ms);
-	void SetMessage(const char *msg);
-	void SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls);
-	void ClearAlert();
+	void Beep(unsigned int freq, unsigned int ms) noexcept;
+	void SetMessage(const char *msg) noexcept;
+	void SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls) noexcept;
+	void ClearAlert() noexcept;
 
 #if HAS_MASS_STORAGE
-	bool WriteToolSettings(FileStore *f) const;				// save some information for the resume file
-	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const;			// save some information in config-override.g
+	bool WriteToolSettings(FileStore *f) const noexcept;				// save some information for the resume file
+	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const noexcept;			// save some information in config-override.g
 #endif
 
 	// Firmware update operations
-	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply);
-	void UpdateFirmware();
-	void StartIap();
+	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept;
+	void UpdateFirmware() noexcept;
+	void StartIap() noexcept;
 
-	void ReportInternalError(const char *file, const char *func, int line) const;	// Report an internal error
+	void ReportInternalError(const char *file, const char *func, int line) const noexcept;	// Report an internal error
 
-	static uint32_t DoDivide(uint32_t a, uint32_t b);		// helper function for diagnostic tests
-	static float SinfCosf(float angle);						// helper function for diagnostic tests
-	static double SinCos(double angle);						// helper function for diagnostic tests
+	static uint32_t DoDivide(uint32_t a, uint32_t b) noexcept;		// helper function for diagnostic tests
+	static float SinfCosf(float angle) noexcept;						// helper function for diagnostic tests
+	static double SinCos(double angle) noexcept;						// helper function for diagnostic tests
 
-	void KickHeatTaskWatchdog() { heatTaskIdleTicks = 0; }
+	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
 
 protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0);
+	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
 
-	char GetStatusCharacter() const;
+	char GetStatusCharacter() const noexcept;
 
 	static constexpr uint32_t MaxTicksInSpinState = 20000;	// timeout before we reset the processor
 	static constexpr uint32_t HighTicksInSpinState = 16000;	// how long before we warn that timeout is approaching
@@ -235,13 +235,13 @@ private:
 // A single instance of the RepRap class contains all the others
 extern RepRap reprap;
 
-inline bool RepRap::Debug(Module m) const { return debug & (1 << m); }
-inline Module RepRap::GetSpinningModule() const { return spinningModule; }
+inline bool RepRap::Debug(Module m) const noexcept { return debug & (1 << m); }
+inline Module RepRap::GetSpinningModule() const noexcept { return spinningModule; }
 
-inline Tool* RepRap::GetCurrentTool() const { return currentTool; }
-inline uint16_t RepRap::GetExtrudersInUse() const { return activeExtruders; }
-inline uint16_t RepRap::GetToolHeatersInUse() const { return activeToolHeaters; }
-inline bool RepRap::IsStopped() const { return stopped; }
+inline Tool* RepRap::GetCurrentTool() const noexcept { return currentTool; }
+inline uint16_t RepRap::GetExtrudersInUse() const noexcept { return activeExtruders; }
+inline uint16_t RepRap::GetToolHeatersInUse() const noexcept { return activeToolHeaters; }
+inline bool RepRap::IsStopped() const noexcept { return stopped; }
 
 #define STRINGIZE(s)	#s
 #define INTERNAL_ERROR do { reprap.ReportInternalError((__FILE__), (__func__), (__LINE__)); } while(0)

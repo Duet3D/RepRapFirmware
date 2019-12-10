@@ -825,9 +825,9 @@ inline void TmcDriverState::StartTransfer()
 # error TMC handler name not defined
 #endif
 
-extern "C" void TMC2660_SPI_Handler(void) __attribute__ ((hot));
+extern "C" void TMC2660_SPI_Handler(void) noexcept __attribute__ ((hot));
 
-void TMC2660_SPI_Handler(void)
+void TMC2660_SPI_Handler(void) noexcept
 {
 	TmcDriverState *driver = currentDriver;				// capture volatile variable
 	if (driver != nullptr)

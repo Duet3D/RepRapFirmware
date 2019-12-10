@@ -34,7 +34,7 @@ void I2C::Init()
 
 static TaskHandle_t twiTask = nullptr;				// the task that is waiting for a TWI command to complete
 
-extern "C" void WIRE_ISR_HANDLER()
+extern "C" void WIRE_ISR_HANDLER() noexcept
 {
 	WIRE_INTERFACE->TWI_IDR = 0xFFFFFFFF;
 	if (twiTask != nullptr)

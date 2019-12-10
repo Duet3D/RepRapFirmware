@@ -176,7 +176,7 @@ extern "C" void UrgentInit()
 #endif
 }
 
-DriversBitmap AxisDriversConfig::GetDriversBitmap() const
+DriversBitmap AxisDriversConfig::GetDriversBitmap() const noexcept
 {
 	DriversBitmap rslt = 0;
 	for (size_t i = 0; i < numDrivers; ++i)
@@ -194,7 +194,7 @@ DriversBitmap AxisDriversConfig::GetDriversBitmap() const
 //*************************************************************************************************
 // Platform class
 
-Platform::Platform() :
+Platform::Platform() noexcept :
 #if HAS_MASS_STORAGE
 	logger(nullptr),
 #endif
@@ -214,7 +214,7 @@ Platform::Platform() :
 //*******************************************************************************************************************
 
 // Initialise the Platform. Note: this is the first module to be initialised, so don't call other modules from here!
-void Platform::Init()
+void Platform::Init() noexcept
 {
 	pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
 
@@ -646,13 +646,13 @@ void Platform::Init()
 }
 
 // Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
-void Platform::Beep(int freq, int ms)
+void Platform::Beep(int freq, int ms) noexcept
 {
 	MessageF(AuxMessage, "{\"beep_freq\":%d,\"beep_length\":%d}\n", freq, ms);
 }
 
 // Send a short message to the aux channel. There is no flow control on this port, so it can't block for long.
-void Platform::SendAuxMessage(const char* msg)
+void Platform::SendAuxMessage(const char* msg) noexcept
 {
 #ifdef SERIAL_AUX_DEVICE
 	OutputBuffer *buf;
@@ -667,7 +667,7 @@ void Platform::SendAuxMessage(const char* msg)
 #endif
 }
 
-void Platform::Exit()
+void Platform::Exit() noexcept
 {
 	StopLogging();
 #if HAS_MASS_STORAGE
@@ -697,26 +697,26 @@ void Platform::Exit()
 
 }
 
-void Platform::SetIPAddress(IPAddress ip)
+void Platform::SetIPAddress(IPAddress ip) noexcept
 {
 	ipAddress = ip;
 	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, gateWay, netMask);
 }
 
-void Platform::SetGateWay(IPAddress gw)
+void Platform::SetGateWay(IPAddress gw) noexcept
 {
 	gateWay = gw;
 	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, gateWay, netMask);
 }
 
-void Platform::SetNetMask(IPAddress nm)
+void Platform::SetNetMask(IPAddress nm) noexcept
 {
 	netMask = nm;
 	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, gateWay, netMask);
 }
 
 // Flush messages to aux, returning true if there is more to send
-bool Platform::FlushAuxMessages()
+bool Platform::FlushAuxMessages() noexcept
 {
 #ifdef SERIAL_AUX_DEVICE
 	// Write non-blocking data to the AUX line
@@ -742,7 +742,7 @@ bool Platform::FlushAuxMessages()
 }
 
 // Flush messages to USB and aux, returning true if there is more to send
-bool Platform::FlushMessages()
+bool Platform::FlushMessages() noexcept
 {
 	const bool auxHasMore = FlushAuxMessages();
 
@@ -813,7 +813,7 @@ bool Platform::FlushMessages()
 		|| usbHasMore;
 }
 
-void Platform::Spin()
+void Platform::Spin() noexcept
 {
 	if (!active)
 	{
@@ -1219,7 +1219,7 @@ void Platform::Spin()
 
 // Report driver status conditions that require attention.
 // Sets 'reported' if we reported anything, else leaves 'reported' alone.
-void Platform::ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char* text, bool& reported)
+void Platform::ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char* text, bool& reported) noexcept
 {
 	if (whichDrivers != 0)
 	{
@@ -1244,7 +1244,7 @@ void Platform::ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const 
 
 #if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
 
-bool Platform::HasVinPower() const
+bool Platform::HasVinPower() const noexcept
 {
 	return driversPowered;			// not quite right because drivers are disabled if we get over-voltage too, or if the 12V rail is low, but OK for the status report
 }
@@ -1253,24 +1253,24 @@ bool Platform::HasVinPower() const
 
 #if HAS_VOLTAGE_MONITOR
 
-void Platform::DisableAutoSave()
+void Platform::DisableAutoSave() noexcept
 {
 	autoSaveEnabled = false;
 }
 
-bool Platform::IsPowerOk() const
+bool Platform::IsPowerOk() const noexcept
 {
 	return !autoSaveEnabled || currentVin > autoPauseReading;
 }
 
-void Platform::EnableAutoSave(float saveVoltage, float resumeVoltage)
+void Platform::EnableAutoSave(float saveVoltage, float resumeVoltage) noexcept
 {
 	autoPauseReading = PowerVoltageToAdcReading(saveVoltage);
 	autoResumeReading = PowerVoltageToAdcReading(resumeVoltage);
 	autoSaveEnabled = true;
 }
 
-bool Platform::GetAutoSaveSettings(float& saveVoltage, float&resumeVoltage)
+bool Platform::GetAutoSaveSettings(float& saveVoltage, float&resumeVoltage) noexcept
 {
 	if (autoSaveEnabled)
 	{
@@ -1284,7 +1284,7 @@ bool Platform::GetAutoSaveSettings(float& saveVoltage, float&resumeVoltage)
 
 #if HAS_CPU_TEMP_SENSOR
 
-float Platform::AdcReadingToCpuTemperature(uint32_t adcVal) const
+float Platform::AdcReadingToCpuTemperature(uint32_t adcVal) const noexcept
 {
 	const float voltage = (float)adcVal * (3.3/(float)((1u << AdcBits) * ThermistorAverageReadings));
 #if SAM4E || SAM4S
@@ -1301,7 +1301,7 @@ float Platform::AdcReadingToCpuTemperature(uint32_t adcVal) const
 #endif
 
 // Perform a software reset. 'stk' points to the program counter on the stack if the cause is an exception, otherwise it is nullptr.
-void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
+void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 {
 	cpu_irq_disable();							// disable interrupts before we call any flash functions. We don't enable them again.
 	wdt_restart(WDT);							// kick the watchdog
@@ -1406,7 +1406,7 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 
 #if HAS_LWIP_NETWORKING && !LWIP_GMAC_TASK
 
-void NETWORK_TC_HANDLER()
+void NETWORK_TC_HANDLER() noexcept
 {
 	tc_get_status(NETWORK_TC, NETWORK_TC_CHAN);
 	reprap.GetNetwork().Interrupt();
@@ -1414,7 +1414,7 @@ void NETWORK_TC_HANDLER()
 
 #endif
 
-void Platform::InitialiseInterrupts()
+void Platform::InitialiseInterrupts() noexcept
 {
 #if SAM4E || SAME70 || defined(__LPC17xx__)
 	NVIC_SetPriority(WDT_IRQn, NvicPriorityWatchdog);			// set priority for watchdog interrupts
@@ -1529,7 +1529,7 @@ void Platform::InitialiseInterrupts()
 #if SAM4E || SAM4S || SAME70
 
 // Print the unique processor ID
-void Platform::PrintUniqueId(MessageType mtype)
+void Platform::PrintUniqueId(MessageType mtype) noexcept
 {
 	// Print the unique ID and checksum as 30 base5 alphanumeric digits
 	char digits[30 + 5 + 1];			// 30 characters, 5 separators, 1 null terminator
@@ -1585,7 +1585,7 @@ void Platform::PrintUniqueId(MessageType mtype)
 #endif
 
 // Return diagnostic information
-void Platform::Diagnostics(MessageType mtype)
+void Platform::Diagnostics(MessageType mtype) noexcept
 {
 #if USE_CACHE && SAM4E
 	// Get the cache statistics before we start messing around with the cache
@@ -1799,7 +1799,7 @@ void Platform::Diagnostics(MessageType mtype)
 #endif
 }
 
-GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, unsigned int d)
+GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, unsigned int d) noexcept
 {
 	static const uint32_t dummy[2] = { 0, 0 };
 
@@ -2149,7 +2149,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, un
 #if HAS_SMART_DRIVERS
 
 // This is called when a fan that monitors driver temperatures is turned on when it was off
-void Platform::DriverCoolingFansOnOff(uint32_t driverChannelsMonitored, bool on)
+void Platform::DriverCoolingFansOnOff(uint32_t driverChannelsMonitored, bool on) noexcept
 {
 	for (unsigned int i = 0; i < NumTmcDriversSenseChannels; ++i)
 	{
@@ -2170,7 +2170,7 @@ void Platform::DriverCoolingFansOnOff(uint32_t driverChannelsMonitored, bool on)
 #endif
 
 // Get the index of the averaging filter for an analog port
-int Platform::GetAveragingFilterIndex(const IoPort& port) const
+int Platform::GetAveragingFilterIndex(const IoPort& port) const noexcept
 {
 	for (size_t i = 0; i < NumAdcFilters; ++i)
 	{
@@ -2182,7 +2182,7 @@ int Platform::GetAveragingFilterIndex(const IoPort& port) const
 	return -1;
 }
 
-void Platform::UpdateConfiguredHeaters()
+void Platform::UpdateConfiguredHeaters() noexcept
 {
 	configuredHeaters = 0;
 
@@ -2219,7 +2219,7 @@ void Platform::UpdateConfiguredHeaters()
 #if HAS_MASS_STORAGE
 
 // Write the platform parameters to file
-bool Platform::WritePlatformParameters(FileStore *f, bool includingG31) const
+bool Platform::WritePlatformParameters(FileStore *f, bool includingG31) const noexcept
 {
 	bool ok;
 	if (axisMinimaProbed != 0 || axisMaximaProbed != 0)
@@ -2247,7 +2247,7 @@ bool Platform::WritePlatformParameters(FileStore *f, bool includingG31) const
 	return ok;
 }
 
-bool Platform::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam)
+bool Platform::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam) noexcept
 {
 	if (axesProbed == 0)
 	{
@@ -2272,7 +2272,7 @@ bool Platform::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float 
 #if SUPPORT_CAN_EXPANSION
 
 // Function to identify and iterate through all drivers attached to an axis or extruder
-void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc, std::function<void(DriverId)> remoteFunc)
+void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc, std::function<void(DriverId)> remoteFunc) noexcept
 {
 	if (axisOrExtruder < MaxAxes)
 	{
@@ -2306,7 +2306,7 @@ void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)
 #else
 
 // Function to identify and iterate through all drivers attached to an axis or extruder
-void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc)
+void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)> localFunc) noexcept
 {
 	if (axisOrExtruder < MaxAxes)
 	{
@@ -2327,7 +2327,7 @@ void Platform::IterateDrivers(size_t axisOrExtruder, std::function<void(uint8_t)
 
 // This is called from the step ISR as well as other places, so keep it fast
 // If drive >= DRIVES then we are setting an individual motor direction
-void Platform::SetDirection(size_t axisOrExtruder, bool direction)
+void Platform::SetDirection(size_t axisOrExtruder, bool direction) noexcept
 {
 	const bool isSlowDriver = (GetDriversBitmap(axisOrExtruder) & GetSlowDriversBitmap()) != 0;
 	if (isSlowDriver)
@@ -2351,7 +2351,7 @@ void Platform::SetDirection(size_t axisOrExtruder, bool direction)
 }
 
 // Enable a driver. Must not be called from an ISR, or with interrupts disabled.
-void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent)
+void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexcept
 {
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 	if (driver < numSmartDrivers && !driversPowered)
@@ -2383,7 +2383,7 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent)
 }
 
 // Disable a driver
-void Platform::DisableOneLocalDriver(size_t driver)
+void Platform::DisableOneLocalDriver(size_t driver) noexcept
 {
 	if (driver < NumDirectDrivers)
 	{
@@ -2405,7 +2405,7 @@ void Platform::DisableOneLocalDriver(size_t driver)
 }
 
 // Enable the local drivers for a drive. Must not be called from an ISR, or with interrupts disabled.
-void Platform::EnableLocalDrivers(size_t axisOrExtruder)
+void Platform::EnableLocalDrivers(size_t axisOrExtruder) noexcept
 {
 	if (driverState[axisOrExtruder] != DriverStatus::enabled)
 	{
@@ -2416,7 +2416,7 @@ void Platform::EnableLocalDrivers(size_t axisOrExtruder)
 }
 
 // Disable the drivers for a drive
-void Platform::DisableDrivers(size_t axisOrExtruder)
+void Platform::DisableDrivers(size_t axisOrExtruder) noexcept
 {
 #if SUPPORT_CAN_EXPANSION
 	CanDriversList canDriversToDisable;
@@ -2436,7 +2436,7 @@ void Platform::DisableDrivers(size_t axisOrExtruder)
 
 // Disable all drives in an emergency. Called from emergency stop and the tick ISR.
 // This is only called in an emergency, so we don't update the driver status
-void Platform::EmergencyDisableDrivers()
+void Platform::EmergencyDisableDrivers() noexcept
 {
 	for (size_t drive = 0; drive < NumDirectDrivers; drive++)
 	{
@@ -2448,7 +2448,7 @@ void Platform::EmergencyDisableDrivers()
 	}
 }
 
-void Platform::DisableAllDrivers()
+void Platform::DisableAllDrivers() noexcept
 {
 	for (size_t axisOrExtruder = 0; axisOrExtruder < MaxAxesPlusExtruders; axisOrExtruder++)
 	{
@@ -2458,7 +2458,7 @@ void Platform::DisableAllDrivers()
 
 // Set drives to idle hold if they are enabled. If a drive is disabled, leave it alone.
 // Must not be called from an ISR, or with interrupts disabled.
-void Platform::SetDriversIdle()
+void Platform::SetDriversIdle() noexcept
 {
 	if (idleCurrentFactor == 0)
 	{
@@ -2491,7 +2491,7 @@ void Platform::SetDriversIdle()
 }
 
 // Set the current for all drivers on an axis or extruder. Current is in mA.
-bool Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, int code, const StringRef& reply)
+bool Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, int code, const StringRef& reply) noexcept
 {
 	switch (code)
 	{
@@ -2571,7 +2571,7 @@ bool Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, in
 }
 
 // This must not be called from an ISR, or with interrupts disabled.
-void Platform::UpdateMotorCurrent(size_t driver, float current)
+void Platform::UpdateMotorCurrent(size_t driver, float current) noexcept
 {
 	if (driver < NumDirectDrivers)
 	{
@@ -2644,7 +2644,7 @@ void Platform::UpdateMotorCurrent(size_t driver, float current)
 }
 
 // Get the configured motor current for an axis or extruder
-float Platform::GetMotorCurrent(size_t drive, int code) const
+float Platform::GetMotorCurrent(size_t drive, int code) const noexcept
 {
 	switch (code)
 	{
@@ -2664,7 +2664,7 @@ float Platform::GetMotorCurrent(size_t drive, int code) const
 }
 
 // Set the motor idle current factor
-void Platform::SetIdleCurrentFactor(float f)
+void Platform::SetIdleCurrentFactor(float f) noexcept
 {
 	idleCurrentFactor = constrain<float>(f, 0.0, 1.0);
 #if SUPPORT_CAN_EXPANSION
@@ -2689,7 +2689,7 @@ void Platform::SetIdleCurrentFactor(float f)
 #endif
 }
 
-void Platform::SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping)
+void Platform::SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept
 {
 	if (requestedMicrostepping != 0)
 	{
@@ -2703,7 +2703,7 @@ void Platform::SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t
 }
 
 // Set the microstepping for a driver, returning true if successful
-bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode)
+bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, int mode) noexcept
 {
 	if (driver < NumDirectDrivers)
 	{
@@ -2731,7 +2731,7 @@ bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, in
 }
 
 // Set the microstepping, returning true if successful. All drivers for the same axis must use the same microstepping.
-bool Platform::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool interp, const StringRef& reply)
+bool Platform::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool interp, const StringRef& reply) noexcept
 {
 	//TODO check that it is a valid microstep setting
 	microstepping[axisOrExtruder] = (interp) ? microsteps | 0x8000 : microsteps;
@@ -2777,13 +2777,13 @@ bool Platform::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool inte
 }
 
 // Get the microstepping for an axis or extruder
-unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
+unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const noexcept
 {
 	interpolation = (microstepping[drive] & 0x8000) != 0;
 	return microstepping[drive] & 0x7FFF;
 }
 
-void Platform::SetEnableValue(size_t driver, int8_t eVal)
+void Platform::SetEnableValue(size_t driver, int8_t eVal) noexcept
 {
 	if (driver < NumDirectDrivers)
 	{
@@ -2804,7 +2804,7 @@ void Platform::SetEnableValue(size_t driver, int8_t eVal)
 	}
 }
 
-void Platform::SetAxisDriversConfig(size_t axis, size_t numValues, const DriverId driverNumbers[])
+void Platform::SetAxisDriversConfig(size_t axis, size_t numValues, const DriverId driverNumbers[]) noexcept
 {
 	AxisDriversConfig& cfg = axisDrivers[axis];
 	cfg.numDrivers = numValues;
@@ -2825,7 +2825,7 @@ void Platform::SetAxisDriversConfig(size_t axis, size_t numValues, const DriverI
 }
 
 // Map an extruder to a driver
-void Platform::SetExtruderDriver(size_t extruder, DriverId driver)
+void Platform::SetExtruderDriver(size_t extruder, DriverId driver) noexcept
 {
 	extruderDrivers[extruder] = driver;
 	if (driver.IsLocal())
@@ -2841,7 +2841,7 @@ void Platform::SetExtruderDriver(size_t extruder, DriverId driver)
 	}
 }
 
-void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4])
+void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4]) noexcept
 {
 	const uint32_t bitmap = StepPins::CalcDriverBitmap(driver);
 	slowDriversBitmap &= ~bitmap;								// start by assuming this drive does not need extended timing
@@ -2868,7 +2868,7 @@ void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4])
 }
 
 // Get the driver step timing, returning true if we are using slower timing than standard
-bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const
+bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const noexcept
 {
 	const bool isSlowDriver = ((slowDriversBitmap & StepPins::CalcDriverBitmap(driver)) != 0);
 	for (size_t i = 0; i < 4; ++i)
@@ -2882,7 +2882,7 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const
 
 //-----------------------------------------------------------------------------------------------------
 
-void Platform::AppendAuxReply(const char *msg, bool rawMessage)
+void Platform::AppendAuxReply(const char *msg, bool rawMessage) noexcept
 {
 #ifdef SERIAL_AUX_DEVICE
 	// Discard this response if either no aux device is attached or if the response is empty
@@ -2912,7 +2912,7 @@ void Platform::AppendAuxReply(const char *msg, bool rawMessage)
 #endif
 }
 
-void Platform::AppendAuxReply(OutputBuffer *reply, bool rawMessage)
+void Platform::AppendAuxReply(OutputBuffer *reply, bool rawMessage) noexcept
 {
 #ifdef SERIAL_AUX_DEVICE
 	// Discard this response if either no aux device is attached or if the response is empty
@@ -2949,7 +2949,7 @@ void Platform::AppendAuxReply(OutputBuffer *reply, bool rawMessage)
 }
 
 // Send the specified message to the specified destinations. The Error and Warning flags have already been handled.
-void Platform::RawMessage(MessageType type, const char *message)
+void Platform::RawMessage(MessageType type, const char *message) noexcept
 {
 #if HAS_MASS_STORAGE
 	// Deal with logging
@@ -3044,7 +3044,7 @@ void Platform::RawMessage(MessageType type, const char *message)
 // Note: this overload of Platform::Message does not process the special action flags in the MessageType.
 // Also it treats calls to send a blocking USB message the same as ordinary USB messages,
 // and calls to send an immediate LCD message the same as ordinary LCD messages
-void Platform::Message(const MessageType type, OutputBuffer *buffer)
+void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 {
 #if HAS_MASS_STORAGE
 	// First deal with logging because it doesn't hang on to the buffer
@@ -3145,7 +3145,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 	}
 }
 
-void Platform::MessageF(MessageType type, const char *fmt, va_list vargs)
+void Platform::MessageF(MessageType type, const char *fmt, va_list vargs) noexcept
 {
 	String<FormatStringLength> formatString;
 #if HAS_LINUX_INTERFACE
@@ -3178,7 +3178,7 @@ void Platform::MessageF(MessageType type, const char *fmt, va_list vargs)
 	RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
 }
 
-void Platform::MessageF(MessageType type, const char *fmt, ...)
+void Platform::MessageF(MessageType type, const char *fmt, ...) noexcept
 {
 	va_list vargs;
 	va_start(vargs, fmt);
@@ -3186,7 +3186,7 @@ void Platform::MessageF(MessageType type, const char *fmt, ...)
 	va_end(vargs);
 }
 
-void Platform::Message(MessageType type, const char *message)
+void Platform::Message(MessageType type, const char *message) noexcept
 {
 #if HAS_LINUX_INTERFACE
 	if ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)
@@ -3217,7 +3217,7 @@ void Platform::Message(MessageType type, const char *message)
 // sParam = 1 As for 0 but display a Close button as well
 // sParam = 2 Display the message box with an OK button, wait for acknowledgement (waiting is set up by the caller)
 // sParam = 3 As for 2 but also display a Cancel button
-void Platform::SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, AxesBitmap controls)
+void Platform::SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, AxesBitmap controls) noexcept
 {
 	if ((mt & (HttpMessage | AuxMessage | BinaryCodeReplyFlag)) != 0)
 	{
@@ -3290,7 +3290,7 @@ GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply)
 #endif
 
 // This is called from EmergencyStop. It closes the log file and stops logging.
-void Platform::StopLogging()
+void Platform::StopLogging() noexcept
 {
 #if HAS_MASS_STORAGE
 	if (logger != nullptr)
@@ -3300,18 +3300,18 @@ void Platform::StopLogging()
 #endif
 }
 
-bool Platform::AtxPower() const
+bool Platform::AtxPower() const noexcept
 {
 	return IoPort::ReadPin(ATX_POWER_PIN);
 }
 
-void Platform::AtxPowerOn()
+void Platform::AtxPowerOn() noexcept
 {
 	deferredPowerDown = false;
 	IoPort::WriteDigital(ATX_POWER_PIN, true);
 }
 
-void Platform::AtxPowerOff(bool defer)
+void Platform::AtxPowerOff(bool defer) noexcept
 {
 	deferredPowerDown = defer;
 	if (!defer)
@@ -3328,7 +3328,7 @@ void Platform::AtxPowerOff(bool defer)
 	}
 }
 
-GCodeResult Platform::SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Platform::SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	GCodeResult rslt = GCodeResult::ok;
 
@@ -3399,7 +3399,7 @@ GCodeResult Platform::SetPressureAdvance(float advance, GCodeBuffer& gb, const S
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 
-bool Platform::GetExtrusionCoefficients(size_t extruder, float& a, float& b, float& limit) const
+bool Platform::GetExtrusionCoefficients(size_t extruder, float& a, float& b, float& limit) const noexcept
 {
 	if (extruder < MaxExtruders)
 	{
@@ -3411,7 +3411,7 @@ bool Platform::GetExtrusionCoefficients(size_t extruder, float& a, float& b, flo
 	return false;
 }
 
-void Platform::SetNonlinearExtrusion(size_t extruder, float a, float b, float limit)
+void Platform::SetNonlinearExtrusion(size_t extruder, float a, float b, float limit) noexcept
 {
 	if (extruder < MaxExtruders && nonlinearExtrusionLimit[extruder] > 0.0)
 	{
@@ -3423,7 +3423,7 @@ void Platform::SetNonlinearExtrusion(size_t extruder, float a, float b, float li
 
 #endif
 
-void Platform::SetBaudRate(size_t chan, uint32_t br)
+void Platform::SetBaudRate(size_t chan, uint32_t br) noexcept
 {
 	if (chan < NUM_SERIAL_CHANNELS)
 	{
@@ -3432,12 +3432,12 @@ void Platform::SetBaudRate(size_t chan, uint32_t br)
 	}
 }
 
-uint32_t Platform::GetBaudRate(size_t chan) const
+uint32_t Platform::GetBaudRate(size_t chan) const noexcept
 {
 	return (chan < NUM_SERIAL_CHANNELS) ? baudRates[chan] : 0;
 }
 
-void Platform::SetCommsProperties(size_t chan, uint32_t cp)
+void Platform::SetCommsProperties(size_t chan, uint32_t cp) noexcept
 {
 	if (chan < NUM_SERIAL_CHANNELS)
 	{
@@ -3446,13 +3446,13 @@ void Platform::SetCommsProperties(size_t chan, uint32_t cp)
 	}
 }
 
-uint32_t Platform::GetCommsProperties(size_t chan) const
+uint32_t Platform::GetCommsProperties(size_t chan) const noexcept
 {
 	return (chan < NUM_SERIAL_CHANNELS) ? commsParams[chan] : 0;
 }
 
 // Re-initialise a serial channel.
-void Platform::ResetChannel(size_t chan)
+void Platform::ResetChannel(size_t chan) noexcept
 {
 	switch(chan)
 	{
@@ -3480,7 +3480,7 @@ void Platform::ResetChannel(size_t chan)
 	}
 }
 
-void Platform::SetBoardType(BoardType bt)
+void Platform::SetBoardType(BoardType bt) noexcept
 {
 	if (bt == BoardType::Auto)
 	{
@@ -3547,7 +3547,7 @@ void Platform::SetBoardType(BoardType bt)
 }
 
 // Get a string describing the electronics
-const char* Platform::GetElectronicsString() const
+const char* Platform::GetElectronicsString() const noexcept
 {
 	switch (board)
 	{
@@ -3584,7 +3584,7 @@ const char* Platform::GetElectronicsString() const
 }
 
 // Get the board string
-const char* Platform::GetBoardString() const
+const char* Platform::GetBoardString() const noexcept
 {
 	switch (board)
 	{
@@ -3629,7 +3629,7 @@ const char* Platform::GetBoardString() const
 
 #ifdef DUET_NG
 // Return true if this is a Duet WiFi, false if it is a Duet Ethernet
-bool Platform::IsDuetWiFi() const
+bool Platform::IsDuetWiFi() const noexcept
 {
 	return board == BoardType::DuetWiFi_10 || board == BoardType::DuetWiFi_102;
 }
@@ -3638,13 +3638,13 @@ bool Platform::IsDuetWiFi() const
 #if HAS_MASS_STORAGE
 
 // Where the system files are. Not thread safe!
-const char* Platform::InternalGetSysDir() const
+const char* Platform::InternalGetSysDir() const noexcept
 {
 	return (sysDir != nullptr) ? sysDir : DEFAULT_SYS_DIR;
 }
 
 // Open a file
-FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize) const
+FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return (MassStorage::CombineName(location.GetRef(), folder, fileName))
@@ -3652,26 +3652,26 @@ FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode
 				: nullptr;
 }
 
-bool Platform::Delete(const char* folder, const char *filename) const
+bool Platform::Delete(const char* folder, const char *filename) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str());
 }
 
-bool Platform::FileExists(const char* folder, const char *filename) const
+bool Platform::FileExists(const char* folder, const char *filename) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::FileExists(location.c_str());
 }
 
-bool Platform::DirectoryExists(const char *folder, const char *dir) const
+bool Platform::DirectoryExists(const char *folder, const char *dir) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return MassStorage::CombineName(location.GetRef(), folder, dir) && MassStorage::DirectoryExists(location.c_str());
 }
 
 // Set the system files path
-GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply)
+GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply) noexcept
 {
 	String<MaxFilenameLength> newSysDir;
 	MutexLocker lock(Tasks::GetSysDirMutex());
@@ -3691,13 +3691,13 @@ GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply)
 	return GCodeResult::ok;
 }
 
-bool Platform::SysFileExists(const char *filename) const
+bool Platform::SysFileExists(const char *filename) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return MakeSysFileName(location.GetRef(), filename) && MassStorage::FileExists(location.c_str());
 }
 
-FileStore* Platform::OpenSysFile(const char *filename, OpenMode mode) const
+FileStore* Platform::OpenSysFile(const char *filename, OpenMode mode) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return (MakeSysFileName(location.GetRef(), filename))
@@ -3705,19 +3705,19 @@ FileStore* Platform::OpenSysFile(const char *filename, OpenMode mode) const
 				: nullptr;
 }
 
-bool Platform::DeleteSysFile(const char *filename) const
+bool Platform::DeleteSysFile(const char *filename) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.c_str());
 }
 
-bool Platform::MakeSysFileName(const StringRef& result, const char *filename) const
+bool Platform::MakeSysFileName(const StringRef& result, const char *filename) const noexcept
 {
 	MutexLocker lock(Tasks::GetSysDirMutex());
 	return MassStorage::CombineName(result, InternalGetSysDir(), filename);
 }
 
-void Platform::GetSysDir(const StringRef & path) const
+void Platform::GetSysDir(const StringRef & path) const noexcept
 {
 	MutexLocker lock(Tasks::GetSysDirMutex());
 	path.copy(InternalGetSysDir());
@@ -3727,14 +3727,14 @@ void Platform::GetSysDir(const StringRef & path) const
 
 // CNC and laser support
 
-void Platform::SetLaserPwm(Pwm_t pwm)
+void Platform::SetLaserPwm(Pwm_t pwm) noexcept
 {
 	lastLaserPwm = (float)pwm/65535;
 	laserPort.WriteAnalog(lastLaserPwm);			// we don't currently have an function that accepts an integer PWM fraction
 }
 
 // Return laser PWM in 0..1
-float Platform::GetLaserPwm() const
+float Platform::GetLaserPwm() const noexcept
 {
 	return lastLaserPwm;
 }
@@ -3749,13 +3749,13 @@ bool Platform::AssignLaserPin(GCodeBuffer& gb, const StringRef& reply)
 	return ok;
 }
 
-void Platform::SetLaserPwmFrequency(PwmFrequency freq)
+void Platform::SetLaserPwmFrequency(PwmFrequency freq) noexcept
 {
 	laserPort.SetFrequency(freq);
 }
 
 // Axis limits
-void Platform::SetAxisMaximum(size_t axis, float value, bool byProbing)
+void Platform::SetAxisMaximum(size_t axis, float value, bool byProbing) noexcept
 {
 	axisMaxima[axis] = value;
 	if (byProbing)
@@ -3764,7 +3764,7 @@ void Platform::SetAxisMaximum(size_t axis, float value, bool byProbing)
 	}
 }
 
-void Platform::SetAxisMinimum(size_t axis, float value, bool byProbing)
+void Platform::SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept
 {
 	axisMinima[axis] = value;
 	if (byProbing)
@@ -3773,12 +3773,12 @@ void Platform::SetAxisMinimum(size_t axis, float value, bool byProbing)
 	}
 }
 
-ZProbeType Platform::GetCurrentZProbeType() const
+ZProbeType Platform::GetCurrentZProbeType() const noexcept
 {
 	return endstops.GetCurrentZProbe().GetProbeType();
 }
 
-void Platform::InitZProbeFilters()
+void Platform::InitZProbeFilters() noexcept
 {
 	zProbeOnFilter.Init(0);
 	zProbeOffFilter.Init(0);
@@ -3789,7 +3789,7 @@ void Platform::InitZProbeFilters()
 // Fire the inkjet (if any) in the given pattern
 // If there is no inkjet, false is returned; if there is one this returns true
 // So you can test for inkjet presence with if(platform->Inkjet(0))
-bool Platform::Inkjet(int bitPattern)
+bool Platform::Inkjet(int bitPattern) noexcept
 {
 	if (inkjetBits < 0)
 		return false;
@@ -3831,7 +3831,7 @@ bool Platform::Inkjet(int bitPattern)
 
 #if HAS_CPU_TEMP_SENSOR
 // CPU temperature
-void Platform::GetMcuTemperatures(float& minT, float& currT, float& maxT) const
+void Platform::GetMcuTemperatures(float& minT, float& currT, float& maxT) const noexcept
 {
 	minT = AdcReadingToCpuTemperature(lowestMcuTemperature);
 	currT = AdcReadingToCpuTemperature(adcFilters[CpuTempFilterIndex].GetSum());
@@ -3842,14 +3842,14 @@ void Platform::GetMcuTemperatures(float& minT, float& currT, float& maxT) const
 #if HAS_VOLTAGE_MONITOR
 
 // Power in voltage
-void Platform::GetPowerVoltages(float& minV, float& currV, float& maxV) const
+void Platform::GetPowerVoltages(float& minV, float& currV, float& maxV) const noexcept
 {
 	minV = AdcReadingToPowerVoltage(lowestVin);
 	currV = AdcReadingToPowerVoltage(currentVin);
 	maxV = AdcReadingToPowerVoltage(highestVin);
 }
 
-float Platform::GetCurrentPowerVoltage() const
+float Platform::GetCurrentPowerVoltage() const noexcept
 {
 	return AdcReadingToPowerVoltage(currentVin);
 }
@@ -3858,7 +3858,7 @@ float Platform::GetCurrentPowerVoltage() const
 
 #if HAS_12V_MONITOR
 
-void Platform::GetV12Voltages(float& minV, float& currV, float& maxV) const
+void Platform::GetV12Voltages(float& minV, float& currV, float& maxV) const noexcept
 {
 	minV = AdcReadingToPowerVoltage(lowestV12);
 	currV = AdcReadingToPowerVoltage(currentV12);
@@ -3870,7 +3870,7 @@ void Platform::GetV12Voltages(float& minV, float& currV, float& maxV) const
 #if HAS_SMART_DRIVERS
 
 // TMC driver temperatures
-float Platform::GetTmcDriversTemperature(unsigned int board) const
+float Platform::GetTmcDriversTemperature(unsigned int board) const noexcept
 {
 #if defined(DUET3)
 	const uint16_t mask = LowestNBits<uint16_t>(6);					// there are 6 drivers, only one board
@@ -4104,7 +4104,7 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 
 // Real-time clock
 
-bool Platform::SetDateTime(time_t time)
+bool Platform::SetDateTime(time_t time) noexcept
 {
 	struct tm brokenDateTime;
 	const bool ok = (gmtime_r(&time, &brokenDateTime) != nullptr);
@@ -4281,7 +4281,7 @@ GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply
 #if SAM4E || SAM4S || SAME70
 
 // Get a pseudo-random number
-uint32_t Platform::Random()
+uint32_t Platform::Random() noexcept
 {
 	const uint32_t clocks = StepTimer::GetTimerTicks();
 	return clocks ^ uniqueId[0] ^ uniqueId[1] ^ uniqueId[2] ^ uniqueId[3];
@@ -4298,7 +4298,7 @@ uint32_t Platform::Random()
 // 3b. If the last ADC reading was a thermistor reading, check for an over-temperature situation and turn off the heater if necessary.
 //     We do this here because the usual polling loop sometimes gets stuck trying to send data to the USB port.
 
-void Platform::Tick()
+void Platform::Tick() noexcept
 {
 	AnalogInFinaliseConversion();
 

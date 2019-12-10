@@ -58,7 +58,7 @@ static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI,
 static TaskHandle_t hsmciTask = nullptr;		// the task that is waiting for a HSMCI command to complete
 
 // HSMCI interrupt handler
-extern "C" void HSMCI_Handler()
+extern "C" void HSMCI_Handler() noexcept
 {
 	HSMCI->HSMCI_IDR = 0xFFFFFFFF;										// disable all HSMCI interrupts
 #if SAME70
@@ -76,7 +76,7 @@ extern "C" void HSMCI_Handler()
 #if SAME70
 
 // HSMCI DMA complete callback
-void HsmciDmaCallback(CallbackParameter cp)
+void HsmciDmaCallback(CallbackParameter cp) noexcept
 {
 	HSMCI->HSMCI_IDR = 0xFFFFFFFF;										// disable all HSMCI interrupts
 	XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CID = 0xFFFFFFFF;			// disable all DMA interrupts for this channel
@@ -94,7 +94,7 @@ void HsmciDmaCallback(CallbackParameter cp)
 // Callback function from the hsmci driver, called while it is waiting for an SD card operation to complete
 // 'stBits' is the set of bits in the HSMCI status register that the caller is interested in.
 // The caller keeps calling this function until at least one of those bits is set.
-extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
+extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 {
 	if (   (HSMCI->HSMCI_SR & stBits) == 0
 #if SAME70
@@ -147,7 +147,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
+RepRap::RepRap() noexcept : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
 	activeToolHeaters(0), ticksInSpinState(0),
 	heatTaskIdleTicks(0),
 	debug(0),
@@ -188,7 +188,7 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 	messageSequence = 0;
 }
 
-void RepRap::Init()
+void RepRap::Init() noexcept
 {
 	toolListMutex.Create("ToolList");
 	messageBoxMutex.Create("MessageBox");
@@ -326,7 +326,7 @@ void RepRap::Init()
 	slowLoop = 0;
 }
 
-void RepRap::Exit()
+void RepRap::Exit() noexcept
 {
 #if HAS_HIGH_SPEED_SD
 	hsmci_set_idle_func(nullptr);
@@ -348,7 +348,7 @@ void RepRap::Exit()
 	platform->Exit();
 }
 
-void RepRap::Spin()
+void RepRap::Spin() noexcept
 {
 	if (!active)
 	{
@@ -455,14 +455,14 @@ void RepRap::Spin()
 	RTOSIface::Yield();
 }
 
-void RepRap::Timing(MessageType mtype)
+void RepRap::Timing(MessageType mtype) noexcept
 {
 	platform->MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepTimer::StepClocksToMillis), (double)(fastLoop * StepTimer::StepClocksToMillis));
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
 }
 
-void RepRap::Diagnostics(MessageType mtype)
+void RepRap::Diagnostics(MessageType mtype) noexcept
 {
 	platform->Message(mtype, "=== Diagnostics ===\n");
 
@@ -507,7 +507,7 @@ void RepRap::Diagnostics(MessageType mtype)
 }
 
 // Turn off the heaters, disable the motors, and deactivate the Heat and Move classes. Leave everything else working.
-void RepRap::EmergencyStop()
+void RepRap::EmergencyStop() noexcept
 {
 	stopped = true;				// a useful side effect of setting this is that it prevents Platform::Tick being called, which is needed when loading IAP into RAM
 
@@ -538,7 +538,7 @@ void RepRap::EmergencyStop()
 	platform->StopLogging();
 }
 
-void RepRap::SetDebug(Module m, bool enable)
+void RepRap::SetDebug(Module m, bool enable) noexcept
 {
 	if (m < numModules)
 	{
@@ -553,12 +553,12 @@ void RepRap::SetDebug(Module m, bool enable)
 	}
 }
 
-void RepRap::ClearDebug()
+void RepRap::ClearDebug() noexcept
 {
 	debug = 0;
 }
 
-void RepRap::PrintDebug(MessageType mt)
+void RepRap::PrintDebug(MessageType mt) noexcept
 {
 	platform->Message((MessageType)(mt | PushFlag), "Debugging enabled for modules:");
 	for (size_t i = 0; i < numModules; i++)
@@ -583,7 +583,7 @@ void RepRap::PrintDebug(MessageType mt)
 // Add a tool.
 // Prior to calling this, delete any existing tool with the same number
 // The tool list is maintained in tool number order.
-void RepRap::AddTool(Tool* tool)
+void RepRap::AddTool(Tool* tool) noexcept
 {
 	MutexLocker lock(toolListMutex);
 	Tool** t = &toolList;
@@ -597,7 +597,7 @@ void RepRap::AddTool(Tool* tool)
 	platform->UpdateConfiguredHeaters();
 }
 
-void RepRap::DeleteTool(Tool* tool)
+void RepRap::DeleteTool(Tool* tool) noexcept
 {
 	// Must have a valid tool...
 	if (tool == nullptr)
@@ -641,7 +641,7 @@ void RepRap::DeleteTool(Tool* tool)
 }
 
 // Select the specified tool, putting the existing current tool into standby
-void RepRap::SelectTool(int toolNumber, bool simulating)
+void RepRap::SelectTool(int toolNumber, bool simulating) noexcept
 {
 	Tool* const newTool = GetTool(toolNumber);
 	if (!simulating)
@@ -658,7 +658,7 @@ void RepRap::SelectTool(int toolNumber, bool simulating)
 	currentTool = newTool;
 }
 
-void RepRap::PrintTool(int toolNumber, const StringRef& reply) const
+void RepRap::PrintTool(int toolNumber, const StringRef& reply) const noexcept
 {
 	const Tool* const tool = GetTool(toolNumber);
 	if (tool != nullptr)
@@ -671,7 +671,7 @@ void RepRap::PrintTool(int toolNumber, const StringRef& reply) const
 	}
 }
 
-void RepRap::StandbyTool(int toolNumber, bool simulating)
+void RepRap::StandbyTool(int toolNumber, bool simulating) noexcept
 {
 	Tool* const tool = GetTool(toolNumber);
 	if (tool != nullptr)
@@ -691,7 +691,7 @@ void RepRap::StandbyTool(int toolNumber, bool simulating)
 	}
 }
 
-Tool* RepRap::GetTool(int toolNumber) const
+Tool* RepRap::GetTool(int toolNumber) const noexcept
 {
 	MutexLocker lock(toolListMutex);
 	Tool* tool = toolList;
@@ -707,20 +707,20 @@ Tool* RepRap::GetTool(int toolNumber) const
 }
 
 // Return the current tool number, or -1 if no tool selected
-int RepRap::GetCurrentToolNumber() const
+int RepRap::GetCurrentToolNumber() const noexcept
 {
 	return (currentTool == nullptr) ? -1 : currentTool->Number();
 }
 
 // Get the current tool, or failing that the default tool. May return nullptr if we can't
 // Called when a M104 or M109 command doesn't specify a tool number.
-Tool* RepRap::GetCurrentOrDefaultTool() const
+Tool* RepRap::GetCurrentOrDefaultTool() const noexcept
 {
 	// If a tool is already selected, use that one, else use the lowest-numbered tool which is the one at the start of the tool list
 	return (currentTool != nullptr) ? currentTool : toolList;
 }
 
-bool RepRap::IsHeaterAssignedToTool(int8_t heater) const
+bool RepRap::IsHeaterAssignedToTool(int8_t heater) const noexcept
 {
 	MutexLocker lock(toolListMutex);
 	for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
@@ -738,7 +738,7 @@ bool RepRap::IsHeaterAssignedToTool(int8_t heater) const
 	return false;
 }
 
-unsigned int RepRap::GetNumberOfContiguousTools() const
+unsigned int RepRap::GetNumberOfContiguousTools() const noexcept
 {
 	unsigned int numTools = 0;
 	while (GetTool(numTools) != nullptr)
@@ -748,7 +748,7 @@ unsigned int RepRap::GetNumberOfContiguousTools() const
 	return numTools;
 }
 
-void RepRap::Tick()
+void RepRap::Tick() noexcept
 {
 	// Kicking the watchdog before it has been initialised may trigger it!
 	if (active)
@@ -782,7 +782,7 @@ void RepRap::Tick()
 }
 
 // Return true if we are close to timeout
-bool RepRap::SpinTimeoutImminent() const
+bool RepRap::SpinTimeoutImminent() const noexcept
 {
 	return ticksInSpinState >= HighTicksInSpinState;
 }
@@ -791,7 +791,7 @@ bool RepRap::SpinTimeoutImminent() const
 // Type 1 is the ordinary JSON status response.
 // Type 2 is the same except that static parameters are also included.
 // Type 3 is the same but instead of static parameters we report print estimation values.
-OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
+OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noexcept
 {
 	// Need something to write to...
 	OutputBuffer *response;
@@ -1488,7 +1488,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	return response;
 }
 
-OutputBuffer *RepRap::GetConfigResponse()
+OutputBuffer *RepRap::GetConfigResponse() noexcept
 {
 	// We need some resources to return a valid config response...
 	OutputBuffer *response;
@@ -1606,7 +1606,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 // Type 2 is the M105 S2 response, which is like the new-style status response but some fields are omitted.
 // Type 3 is the M105 S3 response, which is like the M105 S2 response except that static values are also included.
 // 'seq' is the response sequence number, if it is not -1 and we have a different sequence number then we send the gcode response
-OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
+OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) noexcept
 {
 	// Need something to write to...
 	OutputBuffer *response;
@@ -1825,7 +1825,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 // Get the list of files in the specified directory in JSON format.
 // If flagDirs is true then we prefix each directory with a * character.
-OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bool flagsDirs)
+OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bool flagsDirs) noexcept
 {
 	// Need something to write to...
 	OutputBuffer *response;
@@ -1898,7 +1898,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 }
 
 // Get a JSON-style filelist including file types and sizes
-OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
+OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt) noexcept
 {
 	// Need something to write to...
 	OutputBuffer *response;
@@ -1990,7 +1990,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 #endif
 
 // Get information for the specified file, or the currently printing file (if 'filename' is null or empty), in JSON format
-bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly)
+bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept
 {
 	const bool specificFile = (filename != nullptr && filename[0] != 0);
 	GCodeFileInfo info;
@@ -2078,7 +2078,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 }
 
 // Send a beep. We send it to both PanelDue and the web interface.
-void RepRap::Beep(unsigned int freq, unsigned int ms)
+void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 {
 	// Limit the frequency and duration to sensible values
 	freq = constrain<unsigned int>(freq, 50, 10000);
@@ -2108,7 +2108,7 @@ void RepRap::Beep(unsigned int freq, unsigned int ms)
 }
 
 // Send a short message. We send it to both PanelDue and the web interface.
-void RepRap::SetMessage(const char *msg)
+void RepRap::SetMessage(const char *msg) noexcept
 {
 	message.copy(msg);
 	++messageSequence;
@@ -2120,7 +2120,7 @@ void RepRap::SetMessage(const char *msg)
 }
 
 // Display a message box on the web interface
-void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls)
+void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls) noexcept
 {
 	MutexLocker lock(messageBoxMutex);
 	mbox.message.copy(msg);
@@ -2134,14 +2134,14 @@ void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeou
 }
 
 // Clear pending message box
-void RepRap::ClearAlert()
+void RepRap::ClearAlert() noexcept
 {
 	MutexLocker lock(messageBoxMutex);
 	mbox.active = false;
 }
 
 // Get the status character for the new-style status response
-char RepRap::GetStatusCharacter() const
+char RepRap::GetStatusCharacter() const noexcept
 {
 	return    (processingConfig)										? 'C'	// Reading the configuration file
 #if HAS_LINUX_INTERFACE && SUPPORT_CAN_EXPANSION
@@ -2163,29 +2163,29 @@ char RepRap::GetStatusCharacter() const
 			:															  'I';	// Idle
 }
 
-bool RepRap::NoPasswordSet() const
+bool RepRap::NoPasswordSet() const noexcept
 {
 	return (password[0] == 0 || CheckPassword(DEFAULT_PASSWORD));
 }
 
-bool RepRap::CheckPassword(const char *pw) const
+bool RepRap::CheckPassword(const char *pw) const noexcept
 {
 	String<RepRapPasswordLength> copiedPassword;
 	copiedPassword.CopyAndPad(pw);
 	return password.ConstantTimeEquals(copiedPassword);
 }
 
-void RepRap::SetPassword(const char* pw)
+void RepRap::SetPassword(const char* pw) noexcept
 {
 	password.CopyAndPad(pw);
 }
 
-const char *RepRap::GetName() const
+const char *RepRap::GetName() const noexcept
 {
 	return myName.c_str();
 }
 
-void RepRap::SetName(const char* nm)
+void RepRap::SetName(const char* nm) noexcept
 {
 	// Users sometimes put a tab character between the machine name and the comment, so allow for this
 	myName.copy(nm);
@@ -2197,7 +2197,7 @@ void RepRap::SetName(const char* nm)
 // Given that we want to extrude/retract the specified extruder drives, check if they are allowed.
 // For each disallowed one, log an error to report later and return a bit in the bitmap.
 // This may be called by an ISR!
-unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions)
+unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions) noexcept
 {
 	if (GetHeat().ColdExtrude())
 	{
@@ -2235,7 +2235,7 @@ unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, uns
 	return result;
 }
 
-void RepRap::FlagTemperatureFault(int8_t dudHeater)
+void RepRap::FlagTemperatureFault(int8_t dudHeater) noexcept
 {
 	MutexLocker lock(toolListMutex);
 	if (toolList != nullptr)
@@ -2244,7 +2244,7 @@ void RepRap::FlagTemperatureFault(int8_t dudHeater)
 	}
 }
 
-GCodeResult RepRap::ClearTemperatureFault(int8_t wasDudHeater, const StringRef& reply)
+GCodeResult RepRap::ClearTemperatureFault(int8_t wasDudHeater, const StringRef& reply) noexcept
 {
 	const GCodeResult rslt = heat->ResetFault(wasDudHeater, reply);
 	MutexLocker lock(toolListMutex);
@@ -2259,7 +2259,7 @@ GCodeResult RepRap::ClearTemperatureFault(int8_t wasDudHeater, const StringRef& 
 
 // Save some resume information, returning true if successful
 // We assume that the tool configuration doesn't change, only the temperatures and the mix
-bool RepRap::WriteToolSettings(FileStore *f) const
+bool RepRap::WriteToolSettings(FileStore *f) const noexcept
 {
 	// First write the settings of all tools except the current one and the command to select them if they are on standby
 	bool ok = true;
@@ -2294,7 +2294,7 @@ bool RepRap::WriteToolSettings(FileStore *f) const
 }
 
 // Save some information in config-override.g
-bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const
+bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const noexcept
 {
 	bool ok = true, written = false;
 	MutexLocker lock(toolListMutex);
@@ -2329,7 +2329,7 @@ bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) con
 // Firmware update operations
 
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
-bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply)
+bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
 {
 #if HAS_MASS_STORAGE
 	FileStore * const firmwareFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_FIRMWARE_FILE, OpenMode::read);
@@ -2366,7 +2366,7 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply)
 }
 
 // Update the firmware. Prerequisites should be checked before calling this.
-void RepRap::UpdateFirmware()
+void RepRap::UpdateFirmware() noexcept
 {
 #if HAS_MASS_STORAGE
 	FileStore * const iapFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_UPDATE_FILE, OpenMode::read);
@@ -2531,7 +2531,7 @@ void RepRap::UpdateFirmware()
 #endif
 }
 
-void RepRap::StartIap()
+void RepRap::StartIap() noexcept
 {
 #if !IAP_IN_RAM
 	platform->Message(AuxMessage, "Updating main firmware\n");
@@ -2615,25 +2615,25 @@ void RepRap::StartIap()
 }
 
 // Helper function for diagnostic tests in Platform.cpp, to cause a deliberate divide-by-zero
-/*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b)
+/*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b) noexcept
 {
 	return a/b;
 }
 
 // Helper function for diagnostic tests in Platform.cpp, to calculate sine and cosine
-/*static*/ float RepRap::SinfCosf(float angle)
+/*static*/ float RepRap::SinfCosf(float angle) noexcept
 {
 	return sinf(angle) + cosf(angle);
 }
 
 // Helper function for diagnostic tests in Platform.cpp, to calculate sine and cosine
-/*static*/ double RepRap::SinCos(double angle)
+/*static*/ double RepRap::SinCos(double angle) noexcept
 {
 	return sin(angle) + cos(angle);
 }
 
 // Report an internal error
-void RepRap::ReportInternalError(const char *file, const char *func, int line) const
+void RepRap::ReportInternalError(const char *file, const char *func, int line) const noexcept
 {
 	platform->MessageF(ErrorMessage, "Internal Error in %s at %s(%d)\n", func, file, line);
 }

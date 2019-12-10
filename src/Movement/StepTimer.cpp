@@ -15,7 +15,7 @@
 
 StepTimer * volatile StepTimer::pendingList = nullptr;
 
-void StepTimer::Init()
+void StepTimer::Init() noexcept
 {
 	// Timer interrupt for stepper motors
 	// The clock rate we use is a compromise. Too fast and the 64-bit square roots take a long time to execute. Too slow and we lose resolution.
@@ -118,7 +118,7 @@ void StepTimer::Init()
 
 // Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
 // On entry, interrupts must be disabled or the base priority must be <= step interrupt priority.
-bool StepTimer::ScheduleTimerInterrupt(uint32_t tim)
+bool StepTimer::ScheduleTimerInterrupt(uint32_t tim) noexcept
 {
 	// We need to disable all interrupts, because once we read the current step clock we have only 6us to set up the interrupt, or we will miss it
 	const irqflags_t flags = cpu_irq_save();
@@ -146,7 +146,7 @@ bool StepTimer::ScheduleTimerInterrupt(uint32_t tim)
 }
 
 // Make sure we get no timer interrupts
-void StepTimer::DisableTimerInterrupt()
+void StepTimer::DisableTimerInterrupt() noexcept
 {
 #ifdef __LPC17xx__
 	STEP_TC->MCR  &= ~(1<<SBIT_MR1I);								 // disable Int on MR1
@@ -156,7 +156,7 @@ void StepTimer::DisableTimerInterrupt()
 }
 
 // The guts of the ISR
-/*static*/ void StepTimer::Interrupt()
+/*static*/ void StepTimer::Interrupt() noexcept
 {
 	for (;;)
 	{
@@ -192,9 +192,9 @@ void StepTimer::DisableTimerInterrupt()
 }
 
 // Step pulse timer interrupt
-extern "C" void STEP_TC_HANDLER() __attribute__ ((hot));
+extern "C" void STEP_TC_HANDLER() noexcept __attribute__ ((hot));
 
-void STEP_TC_HANDLER()
+void STEP_TC_HANDLER() noexcept
 {
 #if defined(__LPC17xx__)
 	uint32_t regval = STEP_TC->IR;
@@ -220,19 +220,19 @@ void STEP_TC_HANDLER()
 	}
 }
 
-StepTimer::StepTimer() : next(nullptr), callback(nullptr), active(false)
+StepTimer::StepTimer() noexcept : next(nullptr), callback(nullptr), active(false)
 {
 }
 
 // Set up the callback function and parameter
-void StepTimer::SetCallback(TimerCallbackFunction cb, CallbackParameter param)
+void StepTimer::SetCallback(TimerCallbackFunction cb, CallbackParameter param) noexcept
 {
 	callback = cb;
 	cbParam = param;
 }
 
 // Schedule a callback at a particular tick count, returning true if it was not scheduled because it is already due or imminent.
-bool StepTimer::ScheduleCallbackFromIsr(Ticks when)
+bool StepTimer::ScheduleCallbackFromIsr(Ticks when) noexcept
 {
 	if (active)
 	{
@@ -265,7 +265,7 @@ bool StepTimer::ScheduleCallbackFromIsr(Ticks when)
 	return false;
 }
 
-bool StepTimer::ScheduleCallback(Ticks when)
+bool StepTimer::ScheduleCallback(Ticks when) noexcept
 {
 	const uint32_t baseprio = ChangeBasePriority(NvicPriorityStep);
 	const bool rslt = ScheduleCallbackFromIsr(when);
@@ -274,7 +274,7 @@ bool StepTimer::ScheduleCallback(Ticks when)
 }
 
 // Cancel any scheduled callback for this timer. Harmless if there is no callback scheduled.
-void StepTimer::CancelCallbackFromIsr()
+void StepTimer::CancelCallbackFromIsr() noexcept
 {
 	for (StepTimer** ppst = const_cast<StepTimer**>(&pendingList); *ppst != nullptr; ppst = &((*ppst)->next))
 	{
@@ -287,7 +287,7 @@ void StepTimer::CancelCallbackFromIsr()
 	}
 }
 
-void StepTimer::CancelCallback()
+void StepTimer::CancelCallback() noexcept
 {
 	const uint32_t baseprio = ChangeBasePriority(NvicPriorityStep);
 	CancelCallbackFromIsr();

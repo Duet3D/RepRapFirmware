@@ -14,11 +14,11 @@
 
 namespace Tasks
 {
-	void Diagnostics(MessageType mtype);
-	uint32_t GetNeverUsedRam();
-	const Mutex *GetSpiMutex();
-	const Mutex *GetI2CMutex();
-	const Mutex *GetSysDirMutex();
+	void Diagnostics(MessageType mtype) noexcept;
+	uint32_t GetNeverUsedRam() noexcept;
+	const Mutex *GetSpiMutex() noexcept;
+	const Mutex *GetI2CMutex() noexcept;
+	const Mutex *GetSysDirMutex() noexcept;
 }
 
 #endif /* SRC_TASKS_H_ */
