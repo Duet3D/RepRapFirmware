@@ -453,15 +453,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					platform.AccessSpindle(slot).SetRpm(gb.GetFValue());
 					break;
 
-				case MachineType::laser:
-					{
-						const Pwm_t laserPwm = ConvertLaserPwm(gb.GetFValue());
-						platform.SetLaserPwm(laserPwm);
 #if SUPPORT_LASER
-						moveBuffer.laserPwmOrIoBits.laserPwm = laserPwm;
-#endif
-					}
+				case MachineType::laser:
+					moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
 					break;
+#endif
 
 				default:
 #if SUPPORT_ROLAND
@@ -545,12 +541,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			break;
 
-		case MachineType::laser:
-			platform.SetLaserPwm(0);
 #if SUPPORT_LASER
+		case MachineType::laser:
 			moveBuffer.laserPwmOrIoBits.Clear();
-#endif
 			break;
+#endif
 
 		default:
 #if SUPPORT_ROLAND
