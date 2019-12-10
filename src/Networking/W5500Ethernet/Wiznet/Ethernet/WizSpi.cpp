@@ -33,37 +33,37 @@ const unsigned int SpiPeripheralChannelId = 0;			// we use NPCS0 as the slave se
 #if USE_PDC
 static Pdc *spi_pdc;
 
-static inline void spi_rx_dma_enable()
+static inline void spi_rx_dma_enable() noexcept
 {
 	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_RXTEN | PERIPH_PTCR_TXTEN);	// we have to transmit in order to receive
 }
 
-static inline void spi_tx_dma_enable()
+static inline void spi_tx_dma_enable() noexcept
 {
 	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN);
 }
 
-static inline void spi_rx_dma_disable()
+static inline void spi_rx_dma_disable() noexcept
 {
 	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);	// we have to transmit in order to receive
 }
 
-static inline void spi_tx_dma_disable()
+static inline void spi_tx_dma_disable() noexcept
 {
 	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS);
 }
 
-static inline bool spi_dma_check_rx_complete()
+static inline bool spi_dma_check_rx_complete() noexcept
 {
 	return (W5500_SPI->SPI_SR & SPI_SR_ENDRX) != 0;
 }
 
-static inline bool spi_dma_check_tx_complete()
+static inline bool spi_dma_check_tx_complete() noexcept
 {
 	return (W5500_SPI->SPI_SR & SPI_SR_ENDTX) != 0;
 }
 
-static void spi_tx_dma_setup(const uint8_t *buf, uint32_t length)
+static void spi_tx_dma_setup(const uint8_t *buf, uint32_t length) noexcept
 {
 	pdc_packet_t pdc_spi_packet;
 	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(buf);
@@ -71,7 +71,7 @@ static void spi_tx_dma_setup(const uint8_t *buf, uint32_t length)
 	pdc_tx_init(spi_pdc, &pdc_spi_packet, nullptr);
 }
 
-static void spi_rx_dma_setup(uint8_t *buf, uint32_t length)
+static void spi_rx_dma_setup(uint8_t *buf, uint32_t length) noexcept
 {
 	pdc_packet_t pdc_spi_packet;
 	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(buf);
@@ -92,27 +92,27 @@ const uint32_t CONF_SPI_DMAC_RX_CH = 2;
 const uint32_t DMA_HW_ID_SPI_TX = 1;
 const uint32_t DMA_HW_ID_SPI_RX = 2;
 
-static inline void spi_rx_dma_enable()
+static inline void spi_rx_dma_enable() noexcept
 {
 	dmac_channel_enable(DMAC, CONF_SPI_DMAC_RX_CH);
 }
 
-static inline void spi_tx_dma_enable()
+static inline void spi_tx_dma_enable() noexcept
 {
 	dmac_channel_enable(DMAC, CONF_SPI_DMAC_TX_CH);
 }
 
-static inline void spi_rx_dma_disable()
+static inline void spi_rx_dma_disable() noexcept
 {
 	dmac_channel_disable(DMAC, CONF_SPI_DMAC_RX_CH);
 }
 
-static inline void spi_tx_dma_disable()
+static inline void spi_tx_dma_disable() noexcept
 {
 	dmac_channel_disable(DMAC, CONF_SPI_DMAC_TX_CH);
 }
 
-static bool spi_dma_check_rx_complete()
+static bool spi_dma_check_rx_complete() noexcept
 {
 	uint32_t status = DMAC->DMAC_CHSR;
 	if (   ((status & (DMAC_CHSR_ENA0 << CONF_SPI_DMAC_RX_CH)) == 0)	// controller is not enabled, perhaps because it finished a full buffer transfer
@@ -127,7 +127,7 @@ static bool spi_dma_check_rx_complete()
 	return false;
 }
 
-static void spi_tx_dma_setup(const TransactionBuffer *buf, uint32_t maxTransmitLength)
+static void spi_tx_dma_setup(const TransactionBuffer *buf, uint32_t maxTransmitLength) noexcept
 {
 	DMAC->DMAC_EBCISR;		// clear any pending interrupts
 
@@ -139,7 +139,7 @@ static void spi_tx_dma_setup(const TransactionBuffer *buf, uint32_t maxTransmitL
 		DMAC_CTRLB_SRC_DSCR | DMAC_CTRLB_DST_DSCR | DMAC_CTRLB_FC_MEM2PER_DMA_FC | DMAC_CTRLB_SRC_INCR_INCREMENTING | DMAC_CTRLB_DST_INCR_FIXED);
 }
 
-static void spi_rx_dma_setup(const TransactionBuffer *buf)
+static void spi_rx_dma_setup(const TransactionBuffer *buf) noexcept
 {
 	DMAC->DMAC_EBCISR;		// clear any pending interrupts
 
@@ -155,7 +155,7 @@ static void spi_rx_dma_setup(const TransactionBuffer *buf)
 
 #if USE_PDC || USE_DMAC
 
-static inline void spi_dma_disable()
+static inline void spi_dma_disable() noexcept
 {
 	spi_tx_dma_disable();
 	spi_rx_dma_disable();
@@ -166,7 +166,7 @@ static inline void spi_dma_disable()
 namespace WizSpi
 {
 	// Initialise the SPI interface
-	void Init()
+	void Init() noexcept
 	{
 #if USE_PDC
 		spi_pdc = spi_get_pdc_base(W5500_SPI);
@@ -229,7 +229,7 @@ namespace WizSpi
 #endif
 	}
 
-	void Stop()
+	void Stop() noexcept
 	{
 		NVIC_DisableIRQ(W5500_SPI_IRQn);
 		spi_disable(W5500_SPI);
@@ -239,7 +239,7 @@ namespace WizSpi
 	}
 
 	// Wait for transmit buffer empty, returning true if timed out
-	static inline bool waitForTxReady()
+	static inline bool waitForTxReady() noexcept
 	{
 		uint32_t timeout = SPI_TIMEOUT;
 		while ((W5500_SPI->SPI_SR & SPI_SR_TDRE) == 0)
@@ -253,7 +253,7 @@ namespace WizSpi
 	}
 
 	// Wait for transmitter empty, returning true if timed out
-	static inline bool waitForTxEmpty()
+	static inline bool waitForTxEmpty() noexcept
 	{
 		uint32_t timeout = SPI_TIMEOUT;
 		while ((W5500_SPI->SPI_SR & SPI_SR_TXEMPTY) == 0)
@@ -267,7 +267,7 @@ namespace WizSpi
 	}
 
 	// Wait for receive data available, returning true if timed out
-	static inline bool waitForRxReady()
+	static inline bool waitForRxReady() noexcept
 	{
 		uint32_t timeout = SPI_TIMEOUT;
 		while ((W5500_SPI->SPI_SR & SPI_SR_RDRF) == 0)
@@ -281,7 +281,7 @@ namespace WizSpi
 	}
 
 	// Set the SS pin low to address the W5500
-	void AssertSS()
+	void AssertSS() noexcept
 	{
 		spi_set_peripheral_chip_select_value(W5500_SPI, spi_get_pcs(SpiPeripheralChannelId));
 		digitalWrite(W5500SsPin, LOW);
@@ -289,14 +289,14 @@ namespace WizSpi
 	}
 
 	// Set the SS pin high again
-	void ReleaseSS()
+	void ReleaseSS() noexcept
 	{
 		waitForTxEmpty();
 		digitalWrite(W5500SsPin, HIGH);
 	}
 
 	// Send the 3-byte address and control bits. On return there may be data still being received.
-	void SendAddress(uint32_t addr)
+	void SendAddress(uint32_t addr) noexcept
 	{
 		uint32_t dout = (addr >> 16) & 0x000000FF;
 		if (!waitForTxReady())
@@ -319,7 +319,7 @@ namespace WizSpi
 	}
 
 	// Read a single byte. Called after sending the 3-byte address.
-	uint8_t ReadByte()
+	uint8_t ReadByte() noexcept
 	{
 		(void)W5500_SPI->SPI_RDR;
 		if (!waitForTxEmpty())
@@ -338,7 +338,7 @@ namespace WizSpi
 	}
 
 	// Write a single byte. Called after sending the address.
-	void WriteByte(uint8_t b)
+	void WriteByte(uint8_t b) noexcept
 	{
 		const uint32_t dOut = b;
 		if (!waitForTxReady())
@@ -348,7 +348,7 @@ namespace WizSpi
 	}
 
 	// Read some data
-	spi_status_t ReadBurst(uint8_t* rx_data, size_t len)
+	spi_status_t ReadBurst(uint8_t* rx_data, size_t len) noexcept
 	{
 		if (len != 0)
 		{
@@ -408,7 +408,7 @@ namespace WizSpi
 	}
 
 	// Send some data
-	spi_status_t SendBurst(const uint8_t* tx_data, size_t len)
+	spi_status_t SendBurst(const uint8_t* tx_data, size_t len) noexcept
 	{
 		if (len != 0)
 		{

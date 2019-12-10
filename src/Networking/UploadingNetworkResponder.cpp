@@ -9,7 +9,7 @@
 #include "Socket.h"
 #include "Platform.h"
 
-UploadingNetworkResponder::UploadingNetworkResponder(NetworkResponder *n) : NetworkResponder(n)
+UploadingNetworkResponder::UploadingNetworkResponder(NetworkResponder *n) noexcept : NetworkResponder(n)
 #if HAS_MASS_STORAGE
 	, uploadError(false)
 #endif
@@ -17,14 +17,14 @@ UploadingNetworkResponder::UploadingNetworkResponder(NetworkResponder *n) : Netw
 }
 
 // This is called when we lose a connection or when we are asked to terminate. Overridden in some derived classes.
-void UploadingNetworkResponder::ConnectionLost()
+void UploadingNetworkResponder::ConnectionLost() noexcept
 {
 	CancelUpload();
 	NetworkResponder::ConnectionLost();
 }
 
 // If this responder has an upload in progress, cancel it
-void UploadingNetworkResponder::CancelUpload()
+void UploadingNetworkResponder::CancelUpload() noexcept
 {
 #if HAS_MASS_STORAGE
 	if (fileBeingUploaded.IsLive())
@@ -42,7 +42,7 @@ void UploadingNetworkResponder::CancelUpload()
 #if HAS_MASS_STORAGE
 
 // Start writing to a new file
-FileStore * UploadingNetworkResponder::StartUpload(const char* folder, const char *fileName, const OpenMode mode, const uint32_t preAllocSize)
+FileStore * UploadingNetworkResponder::StartUpload(const char* folder, const char *fileName, const OpenMode mode, const uint32_t preAllocSize) noexcept
 {
 	if (!MassStorage::CombineName(filenameBeingProcessed.GetRef(), folder, fileName))
 	{
@@ -67,7 +67,7 @@ FileStore * UploadingNetworkResponder::StartUpload(const char* folder, const cha
 }
 
 // Finish a file upload. Set variable uploadError if anything goes wrong.
-void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified, bool gotCrc, uint32_t expectedCrc)
+void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified, bool gotCrc, uint32_t expectedCrc) noexcept
 {
 	// Flush remaining data for FSO
 	if (!fileBeingUploaded.Flush())

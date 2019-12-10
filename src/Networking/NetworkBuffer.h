@@ -22,56 +22,56 @@ public:
 	friend class W5500Socket;
 
 	// Release this buffer and return the next one in the chain
-	NetworkBuffer *Release();
+	NetworkBuffer *Release() noexcept;
 
 	// Read 1 character, returning true of successful, false if no data left
-	bool ReadChar(char& b);
+	bool ReadChar(char& b) noexcept;
 
-	const uint8_t* UnreadData() const { return Data() + readPointer; }
+	const uint8_t* UnreadData() const noexcept { return Data() + readPointer; }
 
 	// Return the amount of data available, not including continuation buffers
-	size_t Remaining() const { return dataLength - readPointer; }
+	size_t Remaining() const noexcept { return dataLength - readPointer; }
 
 	// Return the amount of data available, including continuation buffers
-	size_t TotalRemaining() const;
+	size_t TotalRemaining() const noexcept;
 
 	// Return true if there no data left to read
-	bool IsEmpty() const { return readPointer == dataLength; }
+	bool IsEmpty() const noexcept { return readPointer == dataLength; }
 
 	// Mark some data as taken
-	void Taken(size_t amount) { readPointer += amount; }
+	void Taken(size_t amount) noexcept { readPointer += amount; }
 
 	// Return the length available for writing
-	size_t SpaceLeft() const { return bufferSize - dataLength; }
+	size_t SpaceLeft() const noexcept { return bufferSize - dataLength; }
 
 	// Return a pointer to the space available for writing
-	uint8_t* UnwrittenData() { return Data() + dataLength; }
+	uint8_t* UnwrittenData() noexcept { return Data() + dataLength; }
 
 	// Append some data, returning the amount appended
-	size_t AppendData(const uint8_t *source, size_t length);
+	size_t AppendData(const uint8_t *source, size_t length) noexcept;
 
 #if HAS_MASS_STORAGE
 	// Read into the buffer from a file
-	int ReadFromFile(FileStore *f);
+	int ReadFromFile(FileStore *f) noexcept;
 #endif
 
 	// Clear this buffer and release any successors
-	void Empty();
+	void Empty() noexcept;
 
 	// Append a buffer to a list
-	static void AppendToList(NetworkBuffer **list, NetworkBuffer *b);
+	static void AppendToList(NetworkBuffer **list, NetworkBuffer *b) noexcept;
 
 	// Find the last buffer in a list
-	static NetworkBuffer *FindLast(NetworkBuffer *list);
+	static NetworkBuffer *FindLast(NetworkBuffer *list) noexcept;
 
 	// Allocate a buffer
-	static NetworkBuffer *Allocate();
+	static NetworkBuffer *Allocate() noexcept;
 
 	// Alocate buffers and put them in the freelist
-	static void AllocateBuffers(unsigned int number);
+	static void AllocateBuffers(unsigned int number) noexcept;
 
 	// Count how many buffers there are in a chain
-	static unsigned int Count(NetworkBuffer*& ptr);
+	static unsigned int Count(NetworkBuffer*& ptr) noexcept;
 
 	static const size_t bufferSize =
 #ifdef USE_3K_BUFFERS
@@ -81,9 +81,9 @@ public:
 #endif
 
 private:
-	NetworkBuffer(NetworkBuffer *n);
-	uint8_t *Data() { return reinterpret_cast<uint8_t*>(data32); }
-	const uint8_t *Data() const { return reinterpret_cast<const uint8_t*>(data32); }
+	NetworkBuffer(NetworkBuffer *n) noexcept;
+	uint8_t *Data() noexcept { return reinterpret_cast<uint8_t*>(data32); }
+	const uint8_t *Data() const noexcept { return reinterpret_cast<const uint8_t*>(data32); }
 
 	NetworkBuffer *next;
 	size_t dataLength;

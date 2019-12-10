@@ -81,7 +81,7 @@ static volatile bool transferPending = false;
 static WiFiInterface *wifiInterface;
 
 #if 0
-static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength)
+static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength) noexcept
 {
 	const size_t MaxDataToPrint = 20;
 	const uint8_t * const data = reinterpret_cast<const uint8_t *>(buf);
@@ -106,17 +106,17 @@ static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength)
 }
 #endif
 
-static void EspTransferRequestIsr(CallbackParameter)
+static void EspTransferRequestIsr(CallbackParameter) noexcept
 {
 	wifiInterface->EspRequestsTransfer();
 }
 
-static inline void EnableEspInterrupt()
+static inline void EnableEspInterrupt() noexcept
 {
 	attachInterrupt(EspDataReadyPin, EspTransferRequestIsr, INTERRUPT_MODE_RISING, nullptr);
 }
 
-static inline void DisableEspInterrupt()
+static inline void DisableEspInterrupt() noexcept
 {
 	detachInterrupt(EspDataReadyPin);
 }
@@ -124,7 +124,7 @@ static inline void DisableEspInterrupt()
 /*-----------------------------------------------------------------------------------*/
 // WiFi interface class
 
-WiFiInterface::WiFiInterface(Platform& p) : platform(p), uploader(nullptr), ftpDataPort(0), closeDataPort(false),
+WiFiInterface::WiFiInterface(Platform& p) noexcept : platform(p), uploader(nullptr), ftpDataPort(0), closeDataPort(false),
 		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
 		espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0), serialRunning(false), debugMessageChars(0)
 {
@@ -168,7 +168,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(WiFiInterface)
 
 #endif
 
-void WiFiInterface::Init()
+void WiFiInterface::Init() noexcept
 {
 	interfaceMutex.Create("WiFi");
 
@@ -187,7 +187,7 @@ void WiFiInterface::Init()
 	currentSocket = 0;
 }
 
-GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply)
+GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept
 {
 	if (secure != 0 && secure != -1)
 	{
@@ -222,7 +222,7 @@ GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, in
 	return GCodeResult::error;
 }
 
-GCodeResult WiFiInterface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply)
+GCodeResult WiFiInterface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept
 {
 	if (protocol < NumProtocols)
 	{
@@ -241,7 +241,7 @@ GCodeResult WiFiInterface::DisableProtocol(NetworkProtocol protocol, const Strin
 	return GCodeResult::error;
 }
 
-void WiFiInterface::StartProtocol(NetworkProtocol protocol)
+void WiFiInterface::StartProtocol(NetworkProtocol protocol) noexcept
 {
 	MutexLocker lock(interfaceMutex);
 
@@ -264,7 +264,7 @@ void WiFiInterface::StartProtocol(NetworkProtocol protocol)
 	}
 }
 
-void WiFiInterface::ShutdownProtocol(NetworkProtocol protocol)
+void WiFiInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
 {
 	MutexLocker lock(interfaceMutex);
 
@@ -296,7 +296,7 @@ void WiFiInterface::ShutdownProtocol(NetworkProtocol protocol)
 }
 
 // Report the protocols and ports in use
-GCodeResult WiFiInterface::ReportProtocols(const StringRef& reply) const
+GCodeResult WiFiInterface::ReportProtocols(const StringRef& reply) const noexcept
 {
 	reply.Clear();
 	for (size_t i = 0; i < NumProtocols; ++i)
@@ -306,7 +306,7 @@ GCodeResult WiFiInterface::ReportProtocols(const StringRef& reply) const
 	return GCodeResult::ok;
 }
 
-void WiFiInterface::ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const
+void WiFiInterface::ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
 {
 	if (protocolEnabled[protocol])
 	{
@@ -318,7 +318,7 @@ void WiFiInterface::ReportOneProtocol(NetworkProtocol protocol, const StringRef&
 	}
 }
 
-NetworkProtocol WiFiInterface::GetProtocolByLocalPort(Port port) const
+NetworkProtocol WiFiInterface::GetProtocolByLocalPort(Port port) const noexcept
 {
 	if (port == ftpDataPort)
 	{
@@ -338,7 +338,7 @@ NetworkProtocol WiFiInterface::GetProtocolByLocalPort(Port port) const
 
 // This is called at the end of config.g processing.
 // Start the network if it was enabled
-void WiFiInterface::Activate()
+void WiFiInterface::Activate() noexcept
 {
 	if (!activated)
 	{
@@ -354,13 +354,13 @@ void WiFiInterface::Activate()
 	}
 }
 
-void WiFiInterface::Exit()
+void WiFiInterface::Exit() noexcept
 {
 	Stop();
 }
 
 // Get the network state into the reply buffer, returning true if there is some sort of error
-GCodeResult WiFiInterface::GetNetworkState(const StringRef& reply)
+GCodeResult WiFiInterface::GetNetworkState(const StringRef& reply) noexcept
 {
 	switch (state)
 	{
@@ -396,7 +396,7 @@ GCodeResult WiFiInterface::GetNetworkState(const StringRef& reply)
 // 0		1		0		Firmware download from UART
 // 1		1		0		Normal boot from flash memory
 // 0		0		1		SD card boot (not used on Duet)
-void WiFiInterface::Start()
+void WiFiInterface::Start() noexcept
 {
 	// The ESP8266 is held in a reset state by a pulldown resistor until we enable it.
 	// Make sure the ESP8266 is in the reset state
@@ -448,7 +448,7 @@ void WiFiInterface::Start()
 }
 
 // Stop the ESP
-void WiFiInterface::Stop()
+void WiFiInterface::Stop() noexcept
 {
 	if (state != NetworkState::disabled)
 	{
@@ -469,7 +469,7 @@ void WiFiInterface::Stop()
 	}
 }
 
-void WiFiInterface::Spin()
+void WiFiInterface::Spin() noexcept
 {
 	// Main state machine.
 	switch (state)
@@ -704,7 +704,7 @@ void WiFiInterface::Spin()
 }
 
 // Translate a ESP8266 reset reason to text
-const char* WiFiInterface::TranslateEspResetReason(uint32_t reason)
+const char* WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
 {
 	// Mapping from known ESP reset codes to reasons
 	static const char * const resetReasonTexts[] =
@@ -723,7 +723,7 @@ const char* WiFiInterface::TranslateEspResetReason(uint32_t reason)
 			: "Unknown";
 }
 
-const char* WiFiInterface::TranslateNetworkState() const
+const char* WiFiInterface::TranslateNetworkState() const noexcept
 {
 	switch (state)
 	{
@@ -736,7 +736,7 @@ const char* WiFiInterface::TranslateNetworkState() const
 	}
 }
 
-void WiFiInterface::Diagnostics(MessageType mtype)
+void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 {
 	platform.Message(mtype, "- WiFi -\n");
 	platform.MessageF(mtype, "Network state is %s\n", TranslateNetworkState());
@@ -797,7 +797,7 @@ void WiFiInterface::Diagnostics(MessageType mtype)
 }
 
 // Enable or disable the network
-GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply)
+GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept
 {
 	// Translate enable mode to desired WiFi mode
 	const WiFiState modeRequested = (mode == 0) ? WiFiState::idle
@@ -851,7 +851,7 @@ GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, cons
 	return GCodeResult::ok;
 }
 
-int WiFiInterface::EnableState() const
+int WiFiInterface::EnableState() const noexcept
 {
 	return (requestedMode == WiFiState::idle) ? 0
 			: (requestedMode == WiFiState::connected) ? 1
@@ -861,7 +861,7 @@ int WiFiInterface::EnableState() const
 
 // Translate the wifi state to text.
 // The 'connected' and 'runningAsAccessPoint' states include a space at the end because the caller is expected to append the access point name.
-/*static*/ const char* WiFiInterface::TranslateWiFiState(WiFiState w)
+/*static*/ const char* WiFiInterface::TranslateWiFiState(WiFiState w) noexcept
 {
 	switch (w)
 	{
@@ -876,13 +876,13 @@ int WiFiInterface::EnableState() const
 	}
 }
 
-void WiFiInterface::EspRequestsTransfer()
+void WiFiInterface::EspRequestsTransfer() noexcept
 {
 	espStatusChanged = true;
 	DisableEspInterrupt();				// don't allow more interrupts until we have acknowledged this one
 }
 
-void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress p_gateway)
+void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress p_gateway) noexcept
 {
 	ipAddress = p_ip;
 	netmask = p_netmask;
@@ -1113,7 +1113,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 }
 
 // Set the DHCP hostname
-void WiFiInterface::UpdateHostname(const char *hostname)
+void WiFiInterface::UpdateHostname(const char *hostname) noexcept
 {
 	// Update the hostname if possible
 	if (state == NetworkState::active)
@@ -1125,7 +1125,7 @@ void WiFiInterface::UpdateHostname(const char *hostname)
 	}
 }
 
-void WiFiInterface::SetMacAddress(const uint8_t mac[])
+void WiFiInterface::SetMacAddress(const uint8_t mac[]) noexcept
 {
 	for (size_t i = 0; i < 6; i++)
 	{
@@ -1134,7 +1134,7 @@ void WiFiInterface::SetMacAddress(const uint8_t mac[])
 	// TODO actually update the mac address on the wifi module. For now we don't support this.
 }
 
-void WiFiInterface::InitSockets()
+void WiFiInterface::InitSockets() noexcept
 {
 	for (size_t i = 0; i < NumProtocols; ++i)
 	{
@@ -1146,7 +1146,7 @@ void WiFiInterface::InitSockets()
 	currentSocket = 0;
 }
 
-void WiFiInterface::TerminateSockets()
+void WiFiInterface::TerminateSockets() noexcept
 {
 	for (SocketNumber skt = 0; skt < NumWiFiTcpSockets; ++skt)
 	{
@@ -1154,7 +1154,7 @@ void WiFiInterface::TerminateSockets()
 	}
 }
 
-void WiFiInterface::TerminateSockets(Port port)
+void WiFiInterface::TerminateSockets(Port port) noexcept
 {
 	for (WiFiSocket *socket : sockets)
 	{
@@ -1166,7 +1166,7 @@ void WiFiInterface::TerminateSockets(Port port)
 }
 
 // This is called to tell the network which sockets are active
-void WiFiInterface::UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClosedSockets)
+void WiFiInterface::UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClosedSockets) noexcept
 {
 	for (size_t i = 0; i < NumWiFiTcpSockets; ++i)
 	{
@@ -1178,7 +1178,7 @@ void WiFiInterface::UpdateSocketStatus(uint16_t connectedSockets, uint16_t other
 }
 
 // Open the FTP data port
-void WiFiInterface::OpenDataPort(Port port)
+void WiFiInterface::OpenDataPort(Port port) noexcept
 {
 	for (WiFiSocket *s : sockets)
 	{
@@ -1195,7 +1195,7 @@ void WiFiInterface::OpenDataPort(Port port)
 }
 
 // Close FTP data port and purge associated resources
-void WiFiInterface::TerminateDataPort()
+void WiFiInterface::TerminateDataPort() noexcept
 {
 	WiFiSocket *ftpDataSocket = nullptr;
 	for (WiFiSocket *s : sockets)
@@ -1496,7 +1496,7 @@ static void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize)
 }
 
 // Set up the SPI system
-void WiFiInterface::SetupSpi()
+void WiFiInterface::SetupSpi() noexcept
 {
 #if USE_PDC
 	spi_pdc = spi_get_pdc_base(ESP_SPI);
@@ -1554,7 +1554,7 @@ void WiFiInterface::SetupSpi()
 }
 
 // Send a command to the ESP and get the result
-int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength)
+int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept
 {
 	if (state == NetworkState::disabled)
 	{
@@ -1677,7 +1677,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	return response;
 }
 
-void WiFiInterface::SendListenCommand(Port port, NetworkProtocol protocol, unsigned int maxConnections)
+void WiFiInterface::SendListenCommand(Port port, NetworkProtocol protocol, unsigned int maxConnections) noexcept
 {
 	ListenOrConnectData lcb;
 	lcb.port = port;
@@ -1688,13 +1688,13 @@ void WiFiInterface::SendListenCommand(Port port, NetworkProtocol protocol, unsig
 }
 
 // Stop listening on a port
-void WiFiInterface::StopListening(Port port)
+void WiFiInterface::StopListening(Port port) noexcept
 {
 	SendListenCommand(port, AnyProtocol, 0);
 }
 
 // This is called when ESP is signalling to us that an error occurred or there was a state change
-void WiFiInterface::GetNewStatus()
+void WiFiInterface::GetNewStatus() noexcept
 {
 	struct MessageResponse
 	{
@@ -1717,7 +1717,7 @@ void WiFiInterface::GetNewStatus()
 	}
 }
 
-/*static*/ const char* WiFiInterface::TranslateWiFiResponse(int32_t response)
+/*static*/ const char* WiFiInterface::TranslateWiFiResponse(int32_t response) noexcept
 {
 	switch (response)
 	{
@@ -1743,7 +1743,7 @@ void ESP_SPI_HANDLER(void) noexcept
 	wifiInterface->SpiInterrupt();
 }
 
-void WiFiInterface::SpiInterrupt()
+void WiFiInterface::SpiInterrupt() noexcept
 {
 	const uint32_t status = ESP_SPI->SPI_SR;							// read status and clear interrupt
 	ESP_SPI->SPI_IDR = SPI_IER_NSSR;									// disable the interrupt
@@ -1778,7 +1778,7 @@ void WiFiInterface::SpiInterrupt()
 }
 
 // Start the ESP
-void WiFiInterface::StartWiFi()
+void WiFiInterface::StartWiFi() noexcept
 {
 	digitalWrite(EspResetPin, HIGH);
 	ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to UART1
@@ -1789,7 +1789,7 @@ void WiFiInterface::StartWiFi()
 }
 
 // Reset the ESP8266 and leave held in reset
-void WiFiInterface::ResetWiFi()
+void WiFiInterface::ResetWiFi() noexcept
 {
 	pinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
 	pinMode(APIN_Serial1_TXD, INPUT_PULLUP);						// just enable pullups on TxD and RxD pins for now to avoid floating pins
@@ -1809,7 +1809,7 @@ void WiFiInterface::ResetWiFi()
 // 0		1		0		Firmware download from UART
 // 1		1		0		Normal boot from flash memory
 // 0		0		1		SD card boot (not used in on Duet)
-void WiFiInterface::ResetWiFiForUpload(bool external)
+void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 {
 	if (serialRunning)
 	{

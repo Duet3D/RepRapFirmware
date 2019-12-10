@@ -32,12 +32,12 @@ const char* const ErrorPagePart2 =
 	"</p>\n"
 	"</body>\n";
 
-HttpResponder::HttpResponder(NetworkResponder *n) : UploadingNetworkResponder(n)
+HttpResponder::HttpResponder(NetworkResponder *n) noexcept : UploadingNetworkResponder(n)
 {
 }
 
 // Ask the responder to accept this connection, returns true if it did
-bool HttpResponder::Accept(Socket *s, NetworkProtocol protocol)
+bool HttpResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
 {
 	if (responderState == ResponderState::free && protocol == HttpProtocol)
 	{
@@ -63,7 +63,7 @@ bool HttpResponder::Accept(Socket *s, NetworkProtocol protocol)
 }
 
 // Do some work, returning true if we did anything significant
-bool HttpResponder::Spin()
+bool HttpResponder::Spin() noexcept
 {
 	switch (responderState)
 	{
@@ -142,7 +142,7 @@ bool HttpResponder::Spin()
 //  of them in numHeaders.
 // If one of our arrays is about to overflow, or the message is not in a format we expect, then we call RejectMessage with an
 // appropriate error code and string.
-bool HttpResponder::CharFromClient(char c)
+bool HttpResponder::CharFromClient(char c) noexcept
 {
 	switch (parseState)
 	{
@@ -447,7 +447,7 @@ bool HttpResponder::CharFromClient(char c)
 // 'value' is null-terminated, but we also pass its length in case it contains embedded nulls, which matters when uploading files.
 // Return true if we generated a json response to send, false if we didn't and changed the state instead.
 // This may also return true with response == nullptr if we tried to generate a response but ran out of buffers.
-bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response, bool& keepOpen)
+bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response, bool& keepOpen) noexcept
 {
 	keepOpen = false;	// assume we don't want to persist the connection
 	if (StringEqualsIgnoreCase(request, "connect") && GetKeyValue("password") != nullptr)
@@ -622,7 +622,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	return true;
 }
 
-const char* HttpResponder::GetKeyValue(const char *key) const
+const char* HttpResponder::GetKeyValue(const char *key) const noexcept
 {
 	for (size_t i = 0; i < numQualKeys; ++i)
 	{
@@ -636,7 +636,7 @@ const char* HttpResponder::GetKeyValue(const char *key) const
 
 // Called to process a FileInfo request, which may take several calls
 // Return true if complete
-bool HttpResponder::SendFileInfo(bool quitEarly)
+bool HttpResponder::SendFileInfo(bool quitEarly) noexcept
 {
 	OutputBuffer *jsonResponse = nullptr;
 	bool gotFileInfo = reprap.GetFileInfoResponse(filenameBeingProcessed.c_str(), jsonResponse, quitEarly);
@@ -669,7 +669,7 @@ bool HttpResponder::SendFileInfo(bool quitEarly)
 }
 
 // Authenticate current IP and return true on success
-bool HttpResponder::Authenticate()
+bool HttpResponder::Authenticate() noexcept
 {
 	if (CheckAuthenticated())
 	{
@@ -688,7 +688,7 @@ bool HttpResponder::Authenticate()
 }
 
 // Check and update the authentication
-bool HttpResponder::CheckAuthenticated()
+bool HttpResponder::CheckAuthenticated() noexcept
 {
 	const IPAddress remoteIP = GetRemoteIP();
 	for (size_t i = 0; i < numSessions; i++)
@@ -702,7 +702,7 @@ bool HttpResponder::CheckAuthenticated()
 	return false;
 }
 
-bool HttpResponder::RemoveAuthentication()
+bool HttpResponder::RemoveAuthentication() noexcept
 {
 	const IPAddress remoteIP = skt->GetRemoteIP();
 	for (size_t i = numSessions; i != 0; )
@@ -727,7 +727,7 @@ bool HttpResponder::RemoveAuthentication()
 	return false;
 }
 
-void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
+void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile) noexcept
 {
 #if HAS_MASS_STORAGE
 	FileStore *fileToSend = nullptr;
@@ -868,7 +868,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 #endif
 }
 
-void HttpResponder::SendGCodeReply()
+void HttpResponder::SendGCodeReply() noexcept
 {
 	{
 		// Do we need to keep the G-Code reply for other clients?
@@ -919,7 +919,7 @@ void HttpResponder::SendGCodeReply()
 }
 
 // Send a JSON response to the current command. outBuf is non-null on entry.
-void HttpResponder::SendJsonResponse(const char* command)
+void HttpResponder::SendJsonResponse(const char* command) noexcept
 {
 	// Try to authorise the user automatically to retain compatibility with the old web interface
 	if (!CheckAuthenticated() && reprap.NoPasswordSet())
@@ -1071,7 +1071,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 }
 
 // Process the message received. We have reached the end of the headers.
-void HttpResponder::ProcessMessage()
+void HttpResponder::ProcessMessage() noexcept
 {
 	if (reprap.Debug(moduleWebserver))
 	{
@@ -1095,7 +1095,7 @@ void HttpResponder::ProcessMessage()
 }
 
 // Process the message received. We have reached the end of the headers.
-void HttpResponder::ProcessRequest()
+void HttpResponder::ProcessRequest() noexcept
 {
 	if (numCommandWords < 2)
 	{
@@ -1251,7 +1251,7 @@ void HttpResponder::ProcessRequest()
 }
 
 // Reject the current message
-void HttpResponder::RejectMessage(const char* response, unsigned int code)
+void HttpResponder::RejectMessage(const char* response, unsigned int code) noexcept
 {
 	if (reprap.Debug(moduleWebserver))
 	{
@@ -1278,7 +1278,7 @@ void HttpResponder::RejectMessage(const char* response, unsigned int code)
 
 // This function overrides the one in class NetworkResponder.
 // It tries to process a chunk of uploaded data and changes the state if finished.
-void HttpResponder::DoUpload()
+void HttpResponder::DoUpload() noexcept
 {
 	const uint8_t *buffer;
 	size_t len;
@@ -1329,7 +1329,7 @@ void HttpResponder::DoUpload()
 #endif
 
 // This is called to force termination if we implement the specified protocol
-void HttpResponder::Terminate(NetworkProtocol protocol, NetworkInterface *interface)
+void HttpResponder::Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept
 {
 	if (responderState != ResponderState::free && (protocol == HttpProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{
@@ -1338,7 +1338,7 @@ void HttpResponder::Terminate(NetworkProtocol protocol, NetworkInterface *interf
 }
 
 // This overrides the version in class NetworkResponder
-void HttpResponder::CancelUpload()
+void HttpResponder::CancelUpload() noexcept
 {
 	if (skt != nullptr)
 	{
@@ -1356,7 +1356,7 @@ void HttpResponder::CancelUpload()
 }
 
 // This overrides the version in class NetworkResponder
-void HttpResponder::SendData()
+void HttpResponder::SendData() noexcept
 {
 	NetworkResponder::SendData();
 	if (responderState == ResponderState::reading)
@@ -1365,18 +1365,18 @@ void HttpResponder::SendData()
 	}
 }
 
-void HttpResponder::Diagnostics(MessageType mt) const
+void HttpResponder::Diagnostics(MessageType mt) const noexcept
 {
 	GetPlatform().MessageF(mt, " HTTP(%d)", (int)responderState);
 }
 
-/*static*/ void HttpResponder::InitStatic()
+/*static*/ void HttpResponder::InitStatic() noexcept
 {
 	gcodeReplyMutex.Create("HttpGCodeReply");
 }
 
 // This is called when we are shutting down the network or just this protocol. It may be called even if this protocol isn't enabled.
-/*static*/ void HttpResponder::Disable()
+/*static*/ void HttpResponder::Disable() noexcept
 {
 	MutexLocker lock(gcodeReplyMutex);
 
@@ -1386,7 +1386,7 @@ void HttpResponder::Diagnostics(MessageType mt) const
 }
 
 // This is called from the GCodes task to store a response, which is picked up by the Network task
-/*static*/ void HttpResponder::HandleGCodeReply(const char *reply)
+/*static*/ void HttpResponder::HandleGCodeReply(const char *reply) noexcept
 {
 	if (numSessions > 0)
 	{
@@ -1413,7 +1413,7 @@ void HttpResponder::Diagnostics(MessageType mt) const
 	}
 }
 
-/*static*/ void HttpResponder::HandleGCodeReply(OutputBuffer *reply)
+/*static*/ void HttpResponder::HandleGCodeReply(OutputBuffer *reply) noexcept
 {
 	if (reply != nullptr)
 	{
@@ -1437,7 +1437,7 @@ void HttpResponder::Diagnostics(MessageType mt) const
 
 
 // Check for timed out sessions and old reply buffers
-/*static*/ void HttpResponder::CheckSessions()
+/*static*/ void HttpResponder::CheckSessions() noexcept
 {
 	unsigned int clientsTimedOut = 0;
 	const uint32_t now = millis();
@@ -1494,7 +1494,7 @@ void HttpResponder::Diagnostics(MessageType mt) const
 	}
 }
 
-/*static*/ void HttpResponder::CommonDiagnostics(MessageType mtype)
+/*static*/ void HttpResponder::CommonDiagnostics(MessageType mtype) noexcept
 {
 	GetPlatform().MessageF(mtype, "HTTP sessions: %u of %u\n", numSessions, MaxHttpSessions);
 }

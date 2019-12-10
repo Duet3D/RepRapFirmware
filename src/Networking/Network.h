@@ -53,56 +53,56 @@ class WifiFirmwareUploader;
 class Network INHERIT_OBJECT_MODEL
 {
 public:
-	Network(Platform& p);
+	Network(Platform& p) noexcept;
 
-	void Init();
-	void Activate();
-	void Exit();
-	void Spin();
-	void Interrupt();
-	void Diagnostics(MessageType mtype);
-	bool InNetworkStack() const;
-	bool IsWiFiInterface(unsigned int interface) const;
+	void Init() noexcept;
+	void Activate() noexcept;
+	void Exit() noexcept;
+	void Spin() noexcept;
+	void Interrupt() noexcept;
+	void Diagnostics(MessageType mtype) noexcept;
+	bool InNetworkStack() const noexcept;
+	bool IsWiFiInterface(unsigned int interface) const noexcept;
 
-	GCodeResult EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply);
-	GCodeResult EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, int secure, const StringRef& reply);
-	GCodeResult DisableProtocol(unsigned int interface, NetworkProtocol protocol, const StringRef& reply);
-	GCodeResult ReportProtocols(unsigned int interface, const StringRef& reply) const;
+	GCodeResult EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply) noexcept;
+	GCodeResult EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept;
+	GCodeResult DisableProtocol(unsigned int interface, NetworkProtocol protocol, const StringRef& reply) noexcept;
+	GCodeResult ReportProtocols(unsigned int interface, const StringRef& reply) const noexcept;
 
 	// WiFi interfaces
 	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& longReply);
-	WifiFirmwareUploader *GetWifiUploader() const;
-	void ResetWiFiForUpload(bool external);
-	const char* GetWiFiServerVersion() const;
+	WifiFirmwareUploader *GetWifiUploader() const noexcept;
+	void ResetWiFiForUpload(bool external) noexcept;
+	const char* GetWiFiServerVersion() const noexcept;
 
 	// Global settings
-	GCodeResult GetNetworkState(unsigned int interface, const StringRef& reply);
-	int EnableState(unsigned int interface) const;
+	GCodeResult GetNetworkState(unsigned int interface, const StringRef& reply) noexcept;
+	int EnableState(unsigned int interface) const noexcept;
 
-	void SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway);
-	IPAddress GetIPAddress(unsigned int interface) const;
-	const char *GetHostname() const { return hostname; }
-	void SetHostname(const char *name);
-	void SetMacAddress(unsigned int interface, const uint8_t mac[]);
-	const uint8_t *GetMacAddress(unsigned int interface) const;
+	void SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept;
+	IPAddress GetIPAddress(unsigned int interface) const noexcept;
+	const char *GetHostname() const noexcept { return hostname; }
+	void SetHostname(const char *name) noexcept;
+	void SetMacAddress(unsigned int interface, const uint8_t mac[]) noexcept;
+	const uint8_t *GetMacAddress(unsigned int interface) const noexcept;
 
-	bool FindResponder(Socket *skt, NetworkProtocol protocol);
+	bool FindResponder(Socket *skt, NetworkProtocol protocol) noexcept;
 
-	void HandleHttpGCodeReply(const char *msg);
-	void HandleTelnetGCodeReply(const char *msg);
-	void HandleHttpGCodeReply(OutputBuffer *buf);
-	void HandleTelnetGCodeReply(OutputBuffer *buf);
-	uint32_t GetHttpReplySeq();
+	void HandleHttpGCodeReply(const char *msg) noexcept;
+	void HandleTelnetGCodeReply(const char *msg) noexcept;
+	void HandleHttpGCodeReply(OutputBuffer *buf) noexcept;
+	void HandleTelnetGCodeReply(OutputBuffer *buf) noexcept;
+	uint32_t GetHttpReplySeq() noexcept;
 
 #if SUPPORT_OBJECT_MODEL
-	NetworkInterface *GetInterface(size_t n) const { return interfaces[n]; }
+	NetworkInterface *GetInterface(size_t n) const noexcept { return interfaces[n]; }
 #endif
 
 protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	WiFiInterface *FindWiFiInterface() const;
+	WiFiInterface *FindWiFiInterface() const noexcept;
 
 	Platform& platform;
 

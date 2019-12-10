@@ -14,34 +14,34 @@
 class NetworkInterface INHERIT_OBJECT_MODEL
 {
 public:
-	virtual void Init() = 0;
-	virtual void Activate() = 0;
-	virtual void Exit() = 0;
-	virtual void Spin() = 0;
-	virtual void Interrupt() { };
-	virtual void Diagnostics(MessageType mtype) = 0;
+	virtual void Init() noexcept = 0;
+	virtual void Activate() noexcept = 0;
+	virtual void Exit() noexcept = 0;
+	virtual void Spin() noexcept = 0;
+	virtual void Interrupt() noexcept { };
+	virtual void Diagnostics(MessageType mtype) noexcept = 0;
 
-	virtual GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) = 0;
-	virtual GCodeResult GetNetworkState(const StringRef& reply) = 0;
-	virtual int EnableState() const = 0;
-	virtual bool InNetworkStack() const = 0;
-	virtual bool IsWiFiInterface() const = 0;
+	virtual GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept = 0;
+	virtual GCodeResult GetNetworkState(const StringRef& reply) noexcept = 0;
+	virtual int EnableState() const noexcept = 0;
+	virtual bool InNetworkStack() const noexcept = 0;
+	virtual bool IsWiFiInterface() const noexcept = 0;
 
-	virtual GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) = 0;
-	virtual bool IsProtocolEnabled(NetworkProtocol protocol) { return protocolEnabled[protocol]; }
-	virtual Port GetProtocolPort(NetworkProtocol protocol) { return portNumbers[protocol]; }
-	virtual GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) = 0;
-	virtual GCodeResult ReportProtocols(const StringRef& reply) const = 0;
+	virtual GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept = 0;
+	virtual bool IsProtocolEnabled(NetworkProtocol protocol) noexcept { return protocolEnabled[protocol]; }
+	virtual Port GetProtocolPort(NetworkProtocol protocol) noexcept { return portNumbers[protocol]; }
+	virtual GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept = 0;
+	virtual GCodeResult ReportProtocols(const StringRef& reply) const noexcept = 0;
 
-	virtual IPAddress GetIPAddress() const = 0;
-	virtual void SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) = 0;
-	virtual void SetMacAddress(const uint8_t mac[]) = 0;
-	virtual const uint8_t *GetMacAddress() const = 0;
+	virtual IPAddress GetIPAddress() const noexcept = 0;
+	virtual void SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept = 0;
+	virtual void SetMacAddress(const uint8_t mac[]) noexcept = 0;
+	virtual const uint8_t *GetMacAddress() const noexcept = 0;
 
-	virtual void UpdateHostname(const char *hostname) = 0;
+	virtual void UpdateHostname(const char *hostname) noexcept = 0;
 
-	virtual void OpenDataPort(Port port) = 0;
-	virtual void TerminateDataPort() = 0;
+	virtual void OpenDataPort(Port port) noexcept = 0;
+	virtual void TerminateDataPort() noexcept = 0;
 
 	Mutex interfaceMutex;							// mutex to protect against multiple tasks using the same interface concurrently. Public so that sockets can lock it.
 

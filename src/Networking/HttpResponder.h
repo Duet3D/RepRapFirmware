@@ -13,23 +13,23 @@
 class HttpResponder : public UploadingNetworkResponder
 {
 public:
-	HttpResponder(NetworkResponder *n);
-	bool Spin() override;								// do some work, returning true if we did anything significant
-	bool Accept(Socket *s, NetworkProtocol protocol) override;	// ask the responder to accept this connection, returns true if it did
-	void Terminate(NetworkProtocol protocol, NetworkInterface *interface) override;	// terminate the responder if it is serving the specified protocol on the specified interface
-	void Diagnostics(MessageType mtype) const override;
+	HttpResponder(NetworkResponder *n) noexcept;
+	bool Spin() noexcept override;								// do some work, returning true if we did anything significant
+	bool Accept(Socket *s, NetworkProtocol protocol) noexcept override;	// ask the responder to accept this connection, returns true if it did
+	void Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept override;	// terminate the responder if it is serving the specified protocol on the specified interface
+	void Diagnostics(MessageType mtype) const noexcept override;
 
-	static void InitStatic();
-	static void Disable();
-	static void HandleGCodeReply(const char *reply);
-	static void HandleGCodeReply(OutputBuffer *reply);
-	static uint32_t GetReplySeq() { return seq; }
-	static void CheckSessions();
-	static void CommonDiagnostics(MessageType mtype);
+	static void InitStatic() noexcept;
+	static void Disable() noexcept;
+	static void HandleGCodeReply(const char *reply) noexcept;
+	static void HandleGCodeReply(OutputBuffer *reply) noexcept;
+	static uint32_t GetReplySeq() noexcept { return seq; }
+	static void CheckSessions() noexcept;
+	static void CommonDiagnostics(MessageType mtype) noexcept;
 
 protected:
-	void CancelUpload() override;
-	void SendData() override;
+	void CancelUpload() noexcept override;
+	void SendData() noexcept override;
 
 private:
 	static const size_t MaxHttpSessions = 8;			// maximum number of simultaneous HTTP sessions
@@ -72,25 +72,25 @@ private:
 		uint16_t postPort;
 	};
 
-	bool Authenticate();
-	bool CheckAuthenticated();
-	bool RemoveAuthentication();
+	bool Authenticate() noexcept;
+	bool CheckAuthenticated() noexcept;
+	bool RemoveAuthentication() noexcept;
 
-	bool CharFromClient(char c);
-	void SendFile(const char* nameOfFileToSend, bool isWebFile);
-	void SendGCodeReply();
-	void SendJsonResponse(const char* command);
-	bool GetJsonResponse(const char* request, OutputBuffer *&response, bool& keepOpen);
-	void ProcessMessage();
-	void ProcessRequest();
-	void RejectMessage(const char* s, unsigned int code = 500);
-	bool SendFileInfo(bool quitEarly);
+	bool CharFromClient(char c) noexcept;
+	void SendFile(const char* nameOfFileToSend, bool isWebFile) noexcept;
+	void SendGCodeReply() noexcept;
+	void SendJsonResponse(const char* command) noexcept;
+	bool GetJsonResponse(const char* request, OutputBuffer *&response, bool& keepOpen) noexcept;
+	void ProcessMessage() noexcept;
+	void ProcessRequest() noexcept;
+	void RejectMessage(const char* s, unsigned int code = 500) noexcept;
+	bool SendFileInfo(bool quitEarly) noexcept;
 
 #if HAS_MASS_STORAGE
-	void DoUpload();
+	void DoUpload() noexcept;
 #endif
 
-	const char* GetKeyValue(const char *key) const;	// return the value of the specified key, or nullptr if not present
+	const char* GetKeyValue(const char *key) const noexcept;	// return the value of the specified key, or nullptr if not present
 
 	HttpParseState parseState;
 

@@ -24,7 +24,7 @@ namespace FirmwareUpdater
 
 	// Check that the prerequisites are satisfied.
 	// Return true if yes, else print a message and return false.
-	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, const StringRef& reply)
+	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, const StringRef& reply) noexcept
 	{
 #if HAS_WIFI_NETWORKING
 		if ((moduleMap & (1 << WifiExternalFirmwareModule)) != 0 && (moduleMap & (1 << WifiFirmwareModule)) != 0)
@@ -41,7 +41,7 @@ namespace FirmwareUpdater
 		return true;
 	}
 
-	bool IsReady()
+	bool IsReady() noexcept
 	{
 #if HAS_WIFI_NETWORKING
 		WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
@@ -51,7 +51,7 @@ namespace FirmwareUpdater
 #endif
 	}
 
-	void UpdateModule(unsigned int module)
+	void UpdateModule(unsigned int module) noexcept
 	{
 #if HAS_WIFI_NETWORKING
 # ifdef DUET_NG

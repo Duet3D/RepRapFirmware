@@ -14,13 +14,13 @@
 #include "NetworkInterface.h"
 #include "Platform.h"
 
-FtpResponder::FtpResponder(NetworkResponder *n)
+FtpResponder::FtpResponder(NetworkResponder *n) noexcept
 	: UploadingNetworkResponder(n), dataSocket(nullptr), passivePort(0), passivePortOpenTime(0), dataBuf(nullptr), haveFileToMove(false)
 {
 }
 
 // Ask the responder to accept this connection, returns true if it did
-bool FtpResponder::Accept(Socket *s, NetworkProtocol protocol)
+bool FtpResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
 {
 	if (responderState == ResponderState::free && protocol == FtpProtocol)
 	{
@@ -55,7 +55,7 @@ bool FtpResponder::Accept(Socket *s, NetworkProtocol protocol)
 }
 
 // This is called to force termination if we implement the specified protocol
-void FtpResponder::Terminate(NetworkProtocol protocol, NetworkInterface *interface)
+void FtpResponder::Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept
 {
 	if (responderState != ResponderState::free && (protocol == FtpProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{
@@ -64,7 +64,7 @@ void FtpResponder::Terminate(NetworkProtocol protocol, NetworkInterface *interfa
 }
 
 // Do some work, returning true if we did anything significant
-bool FtpResponder::Spin()
+bool FtpResponder::Spin() noexcept
 {
 	switch (responderState)
 	{
@@ -148,13 +148,13 @@ bool FtpResponder::Spin()
 	}
 }
 
-void FtpResponder::Diagnostics(MessageType mt) const
+void FtpResponder::Diagnostics(MessageType mt) const noexcept
 {
 	GetPlatform().MessageF(mt, " FTP(%d)", (int)responderState);
 }
 
 // This must be called only for the main FTP port
-void FtpResponder::ConnectionLost()
+void FtpResponder::ConnectionLost() noexcept
 {
 	CloseDataPort();
 	NetworkResponder::ConnectionLost();
@@ -162,7 +162,7 @@ void FtpResponder::ConnectionLost()
 
 // Send our data over the main FTP port.
 // We send outBuf first and then outStack. fileBeingSent is reserved for the data port.
-void FtpResponder::SendData()
+void FtpResponder::SendData() noexcept
 {
 	// Send our output buffer and output stack
 	for(;;)
@@ -221,7 +221,7 @@ void FtpResponder::SendData()
 
 // Send our data over the passive FTP data port.
 // We send dataBuf first and then fileBeingSent.
-void FtpResponder::SendPassiveData()
+void FtpResponder::SendPassiveData() noexcept
 {
 	// Send our output buffers
 	while (dataBuf != nullptr)
@@ -344,7 +344,7 @@ void FtpResponder::SendPassiveData()
 }
 
 // Write some more upload data
-void FtpResponder::DoUpload()
+void FtpResponder::DoUpload() noexcept
 {
 	// Write incoming data to the file
 	const uint8_t *buffer;
@@ -380,7 +380,7 @@ void FtpResponder::DoUpload()
 
 // Try to read some data from the main FTP port and return true
 // if anything significant could be done
-bool FtpResponder::ReadData()
+bool FtpResponder::ReadData() noexcept
 {
 	bool readSomething = false;
 	char c;
@@ -405,7 +405,7 @@ bool FtpResponder::ReadData()
 }
 
 // Keep track of incoming characters
-void FtpResponder::CharFromClient(char c)
+void FtpResponder::CharFromClient(char c) noexcept
 {
 	switch (c)
 	{
@@ -436,7 +436,7 @@ void FtpResponder::CharFromClient(char c)
 }
 
 // Process the next FTP command
-void FtpResponder::ProcessLine()
+void FtpResponder::ProcessLine() noexcept
 {
 	if (reprap.Debug(moduleWebserver))
 	{
@@ -795,7 +795,7 @@ void FtpResponder::ProcessLine()
 	}
 }
 
-const char *FtpResponder::GetParameter(const char *after) const
+const char *FtpResponder::GetParameter(const char *after) const noexcept
 {
 	const size_t commandLength = strlen(after);
 	if (commandLength >= ftpMessageLength)
@@ -811,7 +811,7 @@ const char *FtpResponder::GetParameter(const char *after) const
 	return result;
 }
 
-void FtpResponder::ChangeDirectory(const char *newDirectory)
+void FtpResponder::ChangeDirectory(const char *newDirectory) noexcept
 {
 	String<MaxFilenameLength> combinedPath;
 	if (newDirectory[0] != 0)
@@ -882,7 +882,7 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 	}
 }
 
-void FtpResponder::CloseDataPort()
+void FtpResponder::CloseDataPort() noexcept
 {
 	if (reprap.Debug(moduleWebserver))
 	{
@@ -908,13 +908,13 @@ void FtpResponder::CloseDataPort()
 	}
 }
 
-/*static*/ void FtpResponder::InitStatic()
+/*static*/ void FtpResponder::InitStatic() noexcept
 {
 	// Nothing needed here
 }
 
 // This is called when we are shutting down the network or just this protocol. It may be called even if this protocol isn't enabled.
-/*static*/ void FtpResponder::Disable()
+/*static*/ void FtpResponder::Disable() noexcept
 {
 	// Nothing needed here
 }

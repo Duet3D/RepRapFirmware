@@ -23,16 +23,16 @@ constexpr size_t MinMdnsHeaderLength = DnsHeaderLength + 8;	// + extra space for
 
 constexpr uint16_t MdnsTtl = 120;		// in seconds
 
-MdnsResponder::MdnsResponder(W5500Socket *sock) : socket(sock), lastAnnouncement(0)
+MdnsResponder::MdnsResponder(W5500Socket *sock) noexcept : socket(sock), lastAnnouncement(0)
 {
 }
 
-void MdnsResponder::UpdateServiceRecords()
+void MdnsResponder::UpdateServiceRecords() noexcept
 {
 	// TODO
 }
 
-void MdnsResponder::Spin()
+void MdnsResponder::Spin() noexcept
 {
 	// Announce this host in regular intervals...
 	if (millis() - lastAnnouncement > MdnsTtl * 1000)
@@ -54,7 +54,7 @@ void MdnsResponder::Spin()
 	}
 }
 
-void MdnsResponder::ProcessPacket(const uint8_t *packet, size_t length) const
+void MdnsResponder::ProcessPacket(const uint8_t *packet, size_t length) const noexcept
 {
 	size_t bytesProcessed = 0;
 
@@ -127,7 +127,7 @@ void MdnsResponder::ProcessPacket(const uint8_t *packet, size_t length) const
 	}
 }
 
-bool MdnsResponder::CheckHostname(const uint8_t *ptr, size_t maxLength, size_t *bytesProcessed) const
+bool MdnsResponder::CheckHostname(const uint8_t *ptr, size_t maxLength, size_t *bytesProcessed) const noexcept
 {
 	const uint8_t *originalPtr = ptr;
 	const char *hostname = reprap.GetNetwork().GetHostname();
@@ -219,7 +219,7 @@ bool MdnsResponder::CheckHostname(const uint8_t *ptr, size_t maxLength, size_t *
 	return nameMatches;
 }
 
-void MdnsResponder::SendARecord(uint16_t transaction) const
+void MdnsResponder::SendARecord(uint16_t transaction) const noexcept
 {
 	uint8_t buffer[256];
 	size_t bytesWritten = 0;
@@ -278,7 +278,7 @@ void MdnsResponder::SendARecord(uint16_t transaction) const
 	socket->Send();
 }
 
-void MdnsResponder::Announce()
+void MdnsResponder::Announce() noexcept
 {
 	if (!socket->CanSend())
 	{
@@ -288,3 +288,5 @@ void MdnsResponder::Announce()
 	SendARecord(0);
 	lastAnnouncement = millis();
 }
+
+// End
