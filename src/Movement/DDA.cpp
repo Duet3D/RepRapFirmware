@@ -2072,7 +2072,7 @@ void DDA::LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration) noexc
 
 // Prepare a remote extruder, returning the number of steps we are going to do before allowing for pressure advance.
 // This replicates some of the functionality that DriveMovement::PrepareExtruder does for local extruder drives.
-int32_t DDA::PrepareRemoteExtruder(size_t drive, float& extrusionPending, float speedChange) const
+int32_t DDA::PrepareRemoteExtruder(size_t drive, float& extrusionPending, float speedChange) const noexcept
 {
 	// Calculate the requested extrusion amount and a few other things
 	float extrusionRequired = totalDistance * directionVector[drive];

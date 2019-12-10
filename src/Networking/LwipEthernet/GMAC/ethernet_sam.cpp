@@ -89,14 +89,14 @@ static timers_info_t gs_timers_table[] = {
 #endif
 };
 
-extern uint32_t millis();
+extern uint32_t millis() noexcept;
 
 }		// end extern "C"
 
 /**
  * \brief Process timing functions.
  */
-void ethernet_timers_update(void)
+void ethernet_timers_update(void) noexcept
 {
 	static uint32_t ul_last_time;
 	uint32_t ul_cur_time, ul_time_diff, ul_idx_timer;
@@ -127,7 +127,7 @@ void ethernet_timers_update(void)
 //************************************************************************************************************
 
 // This sets the static IP configuration on-the-fly
-void ethernet_set_configuration(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay)
+void ethernet_set_configuration(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay) noexcept
 {
 	ip4_addr_t x_ip_addr, x_net_mask, x_gateway;
 	x_ip_addr.addr = ipAddress.GetV4LittleEndian();
@@ -143,7 +143,7 @@ void ethernet_set_configuration(IPAddress ipAddress, IPAddress netMask, IPAddres
 /** \brief Initialize the Ethernet subsystem.
  *
  */
-void init_ethernet(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay)
+void init_ethernet(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay) noexcept
 {
 	ip4_addr_t x_ip_addr, x_net_mask, x_gateway;
 	x_ip_addr.addr = ipAddress.GetV4LittleEndian();
@@ -169,7 +169,7 @@ void init_ethernet(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay)
 /** \brief Configure the Ethernet subsystem. Should be called after init_ethernet()
  *
  */
-void ethernet_configure_interface(const uint8_t macAddress[], const char *hostname)
+void ethernet_configure_interface(const uint8_t macAddress[], const char *hostname) noexcept
 {
 	ethernetif_set_mac_address(macAddress);
 
@@ -181,7 +181,7 @@ void ethernet_configure_interface(const uint8_t macAddress[], const char *hostna
 /* \brief Perform ethernet auto-negotiation and establish link. Returns true when ready
  *
  */
-bool ethernet_establish_link(void)
+bool ethernet_establish_link() noexcept
 {
 	if (ethernetif_establish_link())
 	{
@@ -194,7 +194,7 @@ bool ethernet_establish_link(void)
 /* \brief Is the link still up? Also updates the interface status if the link has gone down
  *
  */
-bool ethernet_link_established(void)
+bool ethernet_link_established() noexcept
 {
 	if (!ethernetif_link_established())
 	{
@@ -210,7 +210,7 @@ bool ethernet_link_established(void)
  *
  *  \return Returns true if data has been processed.
  */
-void ethernet_task(void)
+void ethernet_task() noexcept
 {
 #if !LWIP_GMAC_TASK
 	/* Run polling tasks */
@@ -229,7 +229,7 @@ void ethernet_task(void)
  *
  * \param callback The callback to be called when a new packet is ready
  */
-void ethernet_set_rx_callback(gmac_dev_tx_cb_t callback)
+void ethernet_set_rx_callback(gmac_dev_tx_cb_t callback) noexcept
 {
 	ethernetif_set_rx_callback(callback);
 }
@@ -238,7 +238,7 @@ void ethernet_set_rx_callback(gmac_dev_tx_cb_t callback)
 /*
  * \brief Returns the current IP address
  */
-void ethernet_get_ipaddress(IPAddress& ipAddress, IPAddress& netMask, IPAddress& gateWay)
+void ethernet_get_ipaddress(IPAddress& ipAddress, IPAddress& netMask, IPAddress& gateWay) noexcept
 {
 	ipAddress.SetV4LittleEndian(gs_net_if.ip_addr.addr);
 	netMask.SetV4LittleEndian(gs_net_if.netmask.addr);

@@ -134,7 +134,7 @@ extern "C"
 
 /*-----------------------------------------------------------------------------------*/
 
-LwipEthernetInterface::LwipEthernetInterface(Platform& p) : platform(p), closeDataPort(false), state(NetworkState::disabled),
+LwipEthernetInterface::LwipEthernetInterface(Platform& p) noexcept : platform(p), closeDataPort(false), state(NetworkState::disabled),
 		activated(false), initialised(false), usingDhcp(false)
 {
 	ethernetInterface = this;
@@ -175,7 +175,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(LwipEthernetInterface)
 
 #endif
 
-void LwipEthernetInterface::Init()
+void LwipEthernetInterface::Init() noexcept
 {
 	interfaceMutex.Create("LwipIface");
 	//TODO we don't yet use this mutex anywhere!
@@ -193,7 +193,7 @@ void LwipEthernetInterface::Init()
 	memcpy(macAddress, platform.GetDefaultMacAddress(), sizeof(macAddress));
 }
 
-GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply)
+GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept
 {
 	if (secure != 0 && secure != -1)
 	{
@@ -229,7 +229,7 @@ GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int 
 	return GCodeResult::error;
 }
 
-GCodeResult LwipEthernetInterface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply)
+GCodeResult LwipEthernetInterface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept
 {
 	if (protocol < NumProtocols)
 	{
@@ -246,7 +246,7 @@ GCodeResult LwipEthernetInterface::DisableProtocol(NetworkProtocol protocol, con
 	return GCodeResult::error;
 }
 
-void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol)
+void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 {
 	if (listeningPcbs[protocol] == nullptr)
 	{
@@ -278,7 +278,7 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol)
 	}
 }
 
-void LwipEthernetInterface::ShutdownProtocol(NetworkProtocol protocol)
+void LwipEthernetInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
 {
 #if 0	// chrishamm: Also see Network::Stop
 	for (NetworkResponder* r = responders; r != nullptr; r = r->GetNext())
@@ -317,7 +317,7 @@ void LwipEthernetInterface::ShutdownProtocol(NetworkProtocol protocol)
 }
 
 // Report the protocols and ports in use
-GCodeResult LwipEthernetInterface::ReportProtocols(const StringRef& reply) const
+GCodeResult LwipEthernetInterface::ReportProtocols(const StringRef& reply) const noexcept
 {
 	reply.Clear();
 	for (size_t i = 0; i < NumProtocols; ++i)
@@ -327,7 +327,7 @@ GCodeResult LwipEthernetInterface::ReportProtocols(const StringRef& reply) const
 	return GCodeResult::ok;
 }
 
-void LwipEthernetInterface::ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const
+void LwipEthernetInterface::ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
 {
 	if (protocolEnabled[protocol])
 	{
@@ -341,7 +341,7 @@ void LwipEthernetInterface::ReportOneProtocol(NetworkProtocol protocol, const St
 
 // This is called at the end of config.g processing.
 // Start the network if it was enabled
-void LwipEthernetInterface::Activate()
+void LwipEthernetInterface::Activate() noexcept
 {
 	if (!activated)
 	{
@@ -357,14 +357,14 @@ void LwipEthernetInterface::Activate()
 	}
 }
 
-void LwipEthernetInterface::Exit()
+void LwipEthernetInterface::Exit() noexcept
 {
 	Stop();
 	ethernet_terminate();
 }
 
 // Get the network state into the reply buffer, returning true if there is some sort of error
-GCodeResult LwipEthernetInterface::GetNetworkState(const StringRef& reply)
+GCodeResult LwipEthernetInterface::GetNetworkState(const StringRef& reply) noexcept
 {
 	ethernet_get_ipaddress(ipAddress, netmask, gateway);
 	const int enableState = EnableState();
@@ -375,7 +375,7 @@ GCodeResult LwipEthernetInterface::GetNetworkState(const StringRef& reply)
 }
 
 // Start up the network
-void LwipEthernetInterface::Start()
+void LwipEthernetInterface::Start() noexcept
 {
 #if defined(DUET3)
 	digitalWrite(PhyResetPin, true);			// bring the Ethernet Phy out of reset
@@ -412,7 +412,7 @@ void LwipEthernetInterface::Start()
 }
 
 // Stop the network
-void LwipEthernetInterface::Stop()
+void LwipEthernetInterface::Stop() noexcept
 {
 	if (state != NetworkState::disabled)
 	{
@@ -430,7 +430,7 @@ void LwipEthernetInterface::Stop()
 }
 
 // Main spin loop. If 'full' is true then we are being called from the main spin loop. If false then we are being called during HSMCI idle time.
-void LwipEthernetInterface::Spin()
+void LwipEthernetInterface::Spin() noexcept
 {
 #if LWIP_GMAC_TASK
 	MutexLocker lock(lwipMutex);
@@ -542,7 +542,7 @@ void LwipEthernetInterface::Spin()
 #endif
 }
 
-void LwipEthernetInterface::Interrupt()
+void LwipEthernetInterface::Interrupt() noexcept
 {
 #if !LWIP_GMAC_TASK
 	if (initialised && LockLWIP())
@@ -553,7 +553,7 @@ void LwipEthernetInterface::Interrupt()
 #endif
 }
 
-void LwipEthernetInterface::Diagnostics(MessageType mtype)
+void LwipEthernetInterface::Diagnostics(MessageType mtype) noexcept
 {
 	platform.Message(mtype, "- Ethernet -\n");
 	platform.MessageF(mtype, "State: %d\n", (int)state);
@@ -575,7 +575,7 @@ void LwipEthernetInterface::Diagnostics(MessageType mtype)
 }
 
 // Enable or disable the network. For Ethernet the ssid parameter is not used.
-GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply)
+GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept
 {
 	if (!activated)
 	{
@@ -598,12 +598,12 @@ GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ss
 	return GCodeResult::ok;
 }
 
-int LwipEthernetInterface::EnableState() const
+int LwipEthernetInterface::EnableState() const noexcept
 {
 	return (state == NetworkState::disabled) ? 0 : 1;
 }
 
-bool LwipEthernetInterface::InNetworkStack() const
+bool LwipEthernetInterface::InNetworkStack() const noexcept
 {
 #if LWIP_GMAC_TASK
 	return false;
@@ -612,7 +612,7 @@ bool LwipEthernetInterface::InNetworkStack() const
 #endif
 }
 
-bool LwipEthernetInterface::ConnectionEstablished(tcp_pcb *pcb)
+bool LwipEthernetInterface::ConnectionEstablished(tcp_pcb *pcb) noexcept
 {
 	for (LwipSocket *s : sockets)
 	{
@@ -627,12 +627,12 @@ bool LwipEthernetInterface::ConnectionEstablished(tcp_pcb *pcb)
 	return false;
 }
 
-IPAddress LwipEthernetInterface::GetIPAddress() const
+IPAddress LwipEthernetInterface::GetIPAddress() const noexcept
 {
 	return ipAddress;
 }
 
-void LwipEthernetInterface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway)
+void LwipEthernetInterface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept
 {
 	if (state == NetworkState::obtainingIP || state == NetworkState::active)
 	{
@@ -668,7 +668,7 @@ void LwipEthernetInterface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netm
 	}
 }
 
-void LwipEthernetInterface::UpdateHostname(const char *hostname)
+void LwipEthernetInterface::UpdateHostname(const char *hostname) noexcept
 {
 	if (initialised)
 	{
@@ -677,12 +677,12 @@ void LwipEthernetInterface::UpdateHostname(const char *hostname)
 	}
 }
 
-void LwipEthernetInterface::SetMacAddress(const uint8_t mac[])
+void LwipEthernetInterface::SetMacAddress(const uint8_t mac[]) noexcept
 {
 	memcpy(macAddress, mac, sizeof(macAddress));
 }
 
-void LwipEthernetInterface::OpenDataPort(Port port)
+void LwipEthernetInterface::OpenDataPort(Port port) noexcept
 {
 	if (listeningPcbs[NumProtocols] != nullptr)
 	{
@@ -699,7 +699,7 @@ void LwipEthernetInterface::OpenDataPort(Port port)
 }
 
 // Close FTP data port and purge associated resources
-void LwipEthernetInterface::TerminateDataPort()
+void LwipEthernetInterface::TerminateDataPort() noexcept
 {
 	if (closeDataPort || !sockets[FtpDataSocketNumber]->IsClosing())
 	{
@@ -720,7 +720,7 @@ void LwipEthernetInterface::TerminateDataPort()
 	}
 }
 
-void LwipEthernetInterface::InitSockets()
+void LwipEthernetInterface::InitSockets() noexcept
 {
 	for (size_t i = 0; i < NumProtocols; ++i)
 	{
@@ -732,7 +732,7 @@ void LwipEthernetInterface::InitSockets()
 	nextSocketToPoll = 0;
 }
 
-void LwipEthernetInterface::TerminateSockets()
+void LwipEthernetInterface::TerminateSockets() noexcept
 {
 	for (LwipSocket *socket : sockets)
 	{
@@ -748,7 +748,7 @@ void GetServiceTxtEntries(struct mdns_service *service, void *txt_userdata)
 	}
 }
 
-void LwipEthernetInterface::RebuildMdnsServices()
+void LwipEthernetInterface::RebuildMdnsServices() noexcept
 {
 	mdns_resp_remove_netif(&gs_net_if);
 	mdns_resp_add_netif(&gs_net_if, reprap.GetNetwork().GetHostname(), MdnsTtl);

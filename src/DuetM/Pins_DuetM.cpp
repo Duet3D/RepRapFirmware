@@ -11,7 +11,7 @@
 
 // Function to look up a pin name pass back the corresponding index into the pin table
 // On this platform, the mapping from pin names to pins is fixed, so this is a simple lookup
-bool LookupPinName(const char*pn, LogicalPin& lpin, bool& hardwareInverted)
+bool LookupPinName(const char*pn, LogicalPin& lpin, bool& hardwareInverted) noexcept
 {
 	if (StringEqualsIgnoreCase(pn, NoPinName))
 	{

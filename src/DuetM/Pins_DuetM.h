@@ -200,7 +200,7 @@ enum class PinCapability: uint8_t
 	ainrwpwm = 1|2|4|8
 };
 
-constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
+constexpr inline PinCapability operator|(PinCapability a, PinCapability b) noexcept
 {
 	return (PinCapability)((uint8_t)a | (uint8_t)b);
 }
@@ -209,9 +209,9 @@ constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
 // This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
 struct PinEntry
 {
-	Pin GetPin() const { return pin; }
-	PinCapability GetCapability() const { return cap; }
-	const char* GetNames() const { return names; }
+	Pin GetPin() const noexcept { return pin; }
+	PinCapability GetCapability() const noexcept { return cap; }
+	const char* GetNames() const noexcept { return names; }
 
 	Pin pin;
 	PinCapability cap;
@@ -265,7 +265,7 @@ constexpr PinEntry PinTable[] =
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 
 // Function to look up a pin name pass back the corresponding index into the pin table
-bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
+bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
 // Default pin allocations
 constexpr const char *DefaultEndstopPinNames[] = { "xstop", "ystop", "zstop" };
@@ -298,7 +298,7 @@ namespace StepPins
 	// All our step pins are on port C, so the bitmap is just the map of step bits in port C.
 
 	// Calculate the step bit for a driver. This doesn't need to be fast. It must return 0 if the driver is remote.
-	static inline uint32_t CalcDriverBitmap(size_t driver)
+	static inline uint32_t CalcDriverBitmap(size_t driver) noexcept
 	{
 		return (driver < NumDirectDrivers)
 				? g_APinDescription[STEP_PINS[driver]].ulPin
@@ -308,7 +308,7 @@ namespace StepPins
 	// Set the specified step pins high
 	// This needs to be as fast as possible, so we do a parallel write to the port(s).
 	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline void StepDriversHigh(uint32_t driverMap)
+	static inline void StepDriversHigh(uint32_t driverMap) noexcept
 	{
 		PIOC->PIO_ODSR = driverMap;				// on Duet Maestro all step pins are on port C
 	}
@@ -316,7 +316,7 @@ namespace StepPins
 	// Set all step pins low
 	// This needs to be as fast as possible, so we do a parallel write to the port(s).
 	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline void StepDriversLow()
+	static inline void StepDriversLow() noexcept
 	{
 		PIOC->PIO_ODSR = 0;						// on Duet Maestro all step pins are on port C
 	}

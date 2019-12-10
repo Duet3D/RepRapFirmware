@@ -118,7 +118,7 @@ void disable_spi()
 # error SBC_SPI_HANDLER undefined
 #endif
 
-extern "C" void SBC_SPI_HANDLER(void)
+extern "C" void SBC_SPI_HANDLER() noexcept
 {
 	const uint32_t status = SBC_SPI->SPI_SR;							// read status and clear interrupt
 	SBC_SPI->SPI_IDR = SPI_IER_NSSR;									// disable the interrupt

@@ -2640,7 +2640,7 @@ void RepRap::ReportInternalError(const char *file, const char *func, int line) c
 
 #if SUPPORT_12864_LCD
 
-const char *RepRap::GetLatestMessage(uint16_t& sequence) const
+const char *RepRap::GetLatestMessage(uint16_t& sequence) const noexcept
 {
 	sequence = messageSequence;
 	return message.c_str();

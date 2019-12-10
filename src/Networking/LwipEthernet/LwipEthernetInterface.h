@@ -28,36 +28,36 @@ struct tcp_pcb;
 class LwipEthernetInterface : public NetworkInterface
 {
 public:
-	LwipEthernetInterface(Platform& p);
+	LwipEthernetInterface(Platform& p) noexcept;
 
-	void Init() override;
-	void Activate() override;
-	void Exit() override;
-	void Spin() override;
-	void Interrupt() override;
-	void Diagnostics(MessageType mtype) override;
+	void Init() noexcept override;
+	void Activate() noexcept override;
+	void Exit() noexcept override;
+	void Spin() noexcept override;
+	void Interrupt() noexcept override;
+	void Diagnostics(MessageType mtype) noexcept override;
 
-	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) override;			// enable or disable the network
-	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) override;
-	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) override;
-	GCodeResult ReportProtocols(const StringRef& reply) const override;
+	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
+	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept override;
+	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept override;
+	GCodeResult ReportProtocols(const StringRef& reply) const noexcept override;
 
-	GCodeResult GetNetworkState(const StringRef& reply) override;
-	int EnableState() const override;
-	bool InNetworkStack() const override;
-	bool IsWiFiInterface() const override { return false; }
+	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
+	int EnableState() const noexcept override;
+	bool InNetworkStack() const noexcept override;
+	bool IsWiFiInterface() const noexcept override { return false; }
 
-	void UpdateHostname(const char *hostname) override;
-	IPAddress GetIPAddress() const override;
-	void SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) override;
-	void SetMacAddress(const uint8_t mac[]) override;
-	const uint8_t *GetMacAddress() const override { return macAddress; }
+	void UpdateHostname(const char *hostname) noexcept override;
+	IPAddress GetIPAddress() const noexcept override;
+	void SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept override;
+	void SetMacAddress(const uint8_t mac[]) noexcept override;
+	const uint8_t *GetMacAddress() const noexcept override { return macAddress; }
 
 	// LwIP interfaces
-	bool ConnectionEstablished(tcp_pcb *pcb);
+	bool ConnectionEstablished(tcp_pcb *pcb) noexcept;
 
-	void OpenDataPort(Port port) override;
-	void TerminateDataPort() override;
+	void OpenDataPort(Port port) noexcept override;
+	void TerminateDataPort() noexcept override;
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -73,20 +73,20 @@ private:
 		active						// network running
 	};
 
-	void Start();
-	void Stop();
-	void InitSockets();
-	void TerminateSockets();
+	void Start() noexcept;
+	void Stop() noexcept;
+	void InitSockets() noexcept;
+	void TerminateSockets() noexcept;
 
-	void RebuildMdnsServices();
+	void RebuildMdnsServices() noexcept;
 
-	void StartProtocol(NetworkProtocol protocol)
+	void StartProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumProtocols);
 
-	void ShutdownProtocol(NetworkProtocol protocol)
+	void ShutdownProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumProtocols);
 
-	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const
+	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
 	pre(protocol < NumProtocols);
 
 	Platform& platform;

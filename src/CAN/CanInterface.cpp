@@ -260,7 +260,7 @@ static status_code mcan_fd_send_ext_message(uint32_t id_value, const uint8_t *da
 }
 
 // Interrupt handler for MCAN, including RX,TX,ERROR and so on processes
-void MCAN_INT0_Handler(void)
+extern "C" void MCAN_INT0_Handler() noexcept
 {
 	const uint32_t status = mcan_read_interrupt_status(&mcan_instance);
 

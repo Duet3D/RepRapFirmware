@@ -20,7 +20,7 @@ static const char * const DriverModeStrings[] =
 
 static_assert(ARRAY_SIZE(DriverModeStrings) == (unsigned int)DriverMode::unknown + 1, "bad driver mode string table");
 
-const char* TranslateDriverMode(unsigned int mode)
+const char* TranslateDriverMode(unsigned int mode) noexcept
 {
 	const unsigned int imode = min<unsigned int>(mode, (unsigned int)DriverMode::unknown);
 	return DriverModeStrings[imode];

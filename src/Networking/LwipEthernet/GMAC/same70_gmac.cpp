@@ -176,7 +176,7 @@ static gmac_dev_tx_cb_t gmac_rx_cb = nullptr;
 /**
  * \brief GMAC interrupt handler.
  */
-void GMAC_Handler(void)
+extern "C" void GMAC_Handler() noexcept
 {
 #if LWIP_GMAC_TASK
 	/* Get interrupt status. */
@@ -214,7 +214,7 @@ void GMAC_Handler(void)
  * \param p_gmac_dev Pointer to driver data structure.
  * \param startAt The index to start populating from
  */
-static void gmac_rx_populate_queue(struct gmac_device *p_gmac_dev, uint32_t startAt)
+static void gmac_rx_populate_queue(struct gmac_device *p_gmac_dev, uint32_t startAt) noexcept
 {
 	uint32_t ul_index = startAt;
 
@@ -278,7 +278,7 @@ static void gmac_rx_populate_queue(struct gmac_device *p_gmac_dev, uint32_t star
  *
  * \param ps_gmac_dev Pointer to driver data structure.
  */
-static void gmac_rx_init(struct gmac_device *ps_gmac_dev)
+static void gmac_rx_init(struct gmac_device *ps_gmac_dev) noexcept
 {
 	uint32_t ul_index = 0;
 
@@ -308,7 +308,7 @@ static void gmac_rx_init(struct gmac_device *ps_gmac_dev)
  *
  * \param ps_gmac_dev Pointer to driver data structure.
  */
-static void gmac_tx_init(struct gmac_device *ps_gmac_dev)
+static void gmac_tx_init(struct gmac_device *ps_gmac_dev) noexcept
 {
 	uint32_t ul_index;
 
@@ -334,7 +334,7 @@ static void gmac_tx_init(struct gmac_device *ps_gmac_dev)
  *
  * \param netif the lwIP network interface structure for this ethernetif.
  */
-static void gmac_low_level_init(struct netif *netif)
+static void gmac_low_level_init(struct netif *netif) noexcept
 {
 #if 0			// chrishamm
 	volatile uint32_t ul_delay;
@@ -402,7 +402,7 @@ static void gmac_low_level_init(struct netif *netif)
  * \return ERR_OK if the packet could be sent.
  * an err_t value if the packet couldn't be sent.
  */
-static err_t gmac_low_level_output(netif *p_netif, struct pbuf *p)
+static err_t gmac_low_level_output(netif *p_netif, struct pbuf *p) noexcept
 {
 	gmac_device *const ps_gmac_dev = static_cast<gmac_device *>(p_netif->state);
 
@@ -482,7 +482,7 @@ static err_t gmac_low_level_output(netif *p_netif, struct pbuf *p)
  * \return a pbuf filled with the received packet (including MAC header).
  * 0 on memory error.
  */
-static pbuf *gmac_low_level_input(struct netif *netif)
+static pbuf *gmac_low_level_input(struct netif *netif) noexcept
 {
 	gmac_device *ps_gmac_dev = static_cast<gmac_device *>(netif->state);
 
@@ -565,7 +565,7 @@ static pbuf *gmac_low_level_input(struct netif *netif)
  *
  * \param pvParameters A pointer to the gmac_device instance.
  */
-extern "C" [[noreturn]] void gmac_task(void *pvParameters)
+extern "C" [[noreturn]] void gmac_task(void *pvParameters) noexcept
 {
 	gmac_device * const ps_gmac_dev = static_cast<gmac_device*>(pvParameters);
 	netif * const p_netif = ps_gmac_dev->netif;
@@ -593,7 +593,7 @@ extern "C" [[noreturn]] void gmac_task(void *pvParameters)
  *
  * \param netif the lwIP network interface structure for this ethernetif.
  */
-bool ethernetif_input(struct netif *netif)
+bool ethernetif_input(struct netif *netif) noexcept
 {
 	struct eth_hdr *ethhdr;
 	struct pbuf *p;
@@ -642,7 +642,7 @@ bool ethernetif_input(struct netif *netif)
  * ERR_MEM if private data couldn't be allocated.
  * any other err_t on error.
  */
-err_t ethernetif_init(struct netif *netif)
+err_t ethernetif_init(struct netif *netif) noexcept
 {
 	LWIP_ASSERT("netif != NULL", (netif != NULL));
 
@@ -683,7 +683,7 @@ err_t ethernetif_init(struct netif *netif)
 	return ERR_OK;
 }
 
-void ethernetif_hardware_init(void)
+void ethernetif_hardware_init() noexcept
 {
 	/* Enable GMAC clock. */
 	pmc_enable_periph_clk(ID_GMAC);
@@ -767,7 +767,7 @@ void ethernetif_hardware_init(void)
 	NVIC_EnableIRQ(GMAC_IRQn);
 }
 
-bool ethernetif_establish_link(void)
+bool ethernetif_establish_link() noexcept
 {
 	/* Auto Negotiate, work in RMII mode. */
 	uint8_t result = ethernet_phy_auto_negotiate(GMAC, BOARD_GMAC_PHY_ADDR);
@@ -790,7 +790,7 @@ bool ethernetif_establish_link(void)
 }
 
 // Ask the PHY if the link is still up
-bool ethernetif_link_established(void)
+bool ethernetif_link_established() noexcept
 {
 	gmac_enable_management(GMAC, true);
 
@@ -810,13 +810,13 @@ bool ethernetif_link_established(void)
 }
 
 #if !LWIP_GMAC_TASK
-void ethernetif_set_rx_callback(gmac_dev_tx_cb_t callback)
+void ethernetif_set_rx_callback(gmac_dev_tx_cb_t callback) noexcept
 {
 	gmac_rx_cb = callback;
 }
 #endif
 
-void ethernetif_set_mac_address(const uint8_t macAddress[])
+void ethernetif_set_mac_address(const uint8_t macAddress[]) noexcept
 {
 	// This function must be called once before low_level_init(), because that is where the
 	// MAC address of the netif is assigned
@@ -827,7 +827,7 @@ void ethernetif_set_mac_address(const uint8_t macAddress[])
 }
 
 // This is called when we shut down
-void ethernetif_terminate()
+void ethernetif_terminate() noexcept
 {
 	NVIC_DisableIRQ(GMAC_IRQn);
 #if LWIP_GMAC_TASK
@@ -835,9 +835,9 @@ void ethernetif_terminate()
 #endif
 }
 
-extern "C" u32_t millis();
+extern "C" u32_t millis() noexcept;
 
-extern "C" u32_t sys_now(void)
+extern "C" u32_t sys_now() noexcept
 {
 	return millis();
 }

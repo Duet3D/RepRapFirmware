@@ -209,7 +209,7 @@ constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
 // Byte 7 8-bit CRC
 
 // Add 1 bit to a CRC
-static inline constexpr uint8_t CRCAddBit(uint8_t crc, uint8_t currentByte, uint8_t bit)
+static inline constexpr uint8_t CRCAddBit(uint8_t crc, uint8_t currentByte, uint8_t bit) noexcept
 {
 	return (((crc ^ (currentByte << (7 - bit))) & 0x80) != 0)
 			? (crc << 1) ^ 0x07
@@ -217,7 +217,7 @@ static inline constexpr uint8_t CRCAddBit(uint8_t crc, uint8_t currentByte, uint
 }
 
 // Add a byte to a CRC
-static inline constexpr uint8_t CRCAddByte(uint8_t crc, uint8_t currentByte)
+static inline constexpr uint8_t CRCAddByte(uint8_t crc, uint8_t currentByte) noexcept
 {
 	crc = CRCAddBit(crc, currentByte, 0);
 	crc = CRCAddBit(crc, currentByte, 1);
@@ -242,55 +242,55 @@ static constexpr uint8_t ReadIfcountCRC = CRCAddByte(InitialSendCRC, REGNUM_IFCO
 class TmcDriverState
 {
 public:
-	void Init(uint32_t p_driverNumber, Pin p_pin);
-	void SetAxisNumber(size_t p_axisNumber);
-	uint32_t GetAxisNumber() const { return axisNumber; }
-	void WriteAll();
-	bool SetMicrostepping(uint32_t shift, bool interpolate);
-	unsigned int GetMicrostepping(bool& interpolation) const;		// Get microstepping
-	bool SetDriverMode(unsigned int mode);
-	DriverMode GetDriverMode() const;
-	void SetCurrent(float current);
-	void Enable(bool en);
-	void AppendDriverStatus(const StringRef& reply);
-	uint8_t GetDriverNumber() const { return driverNumber; }
-	bool UpdatePending() const { return registersToUpdate != 0; }
-	bool UsesGlobalEnable() const { return enablePin == NoPin; }
+	void Init(uint32_t p_driverNumber, Pin p_pin) noexcept;
+	void SetAxisNumber(size_t p_axisNumber) noexcept;
+	uint32_t GetAxisNumber() const noexcept { return axisNumber; }
+	void WriteAll() noexcept;
+	bool SetMicrostepping(uint32_t shift, bool interpolate) noexcept;
+	unsigned int GetMicrostepping(bool& interpolation) const noexcept;
+	bool SetDriverMode(unsigned int mode) noexcept;
+	DriverMode GetDriverMode() const noexcept;
+	void SetCurrent(float current) noexcept;
+	void Enable(bool en) noexcept;
+	void AppendDriverStatus(const StringRef& reply) noexcept;
+	uint8_t GetDriverNumber() const noexcept { return driverNumber; }
+	bool UpdatePending() const noexcept { return registersToUpdate != 0; }
+	bool UsesGlobalEnable() const noexcept { return enablePin == NoPin; }
 
-	bool SetRegister(SmartDriverRegister reg, uint32_t regVal);
-	uint32_t GetRegister(SmartDriverRegister reg) const;
+	bool SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept;
+	uint32_t GetRegister(SmartDriverRegister reg) const noexcept;
 
-	float GetStandstillCurrentPercent() const;
-	void SetStandstillCurrentPercent(float percent);
+	float GetStandstillCurrentPercent() const noexcept;
+	void SetStandstillCurrentPercent(float percent) noexcept;
 
-	void TransferDone() __attribute__ ((hot));				// called by the ISR when the SPI transfer has completed
-	void StartTransfer() __attribute__ ((hot));				// called to start a transfer
-	void TransferTimedOut() { ++numTimeouts; }
-	void AbortTransfer();
+	void TransferDone() noexcept __attribute__ ((hot));		// called by the ISR when the SPI transfer has completed
+	void StartTransfer() noexcept __attribute__ ((hot));	// called to start a transfer
+	void TransferTimedOut() noexcept { ++numTimeouts; }
+	void AbortTransfer() noexcept;
 
-	uint32_t ReadLiveStatus() const;
-	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep);
+	uint32_t ReadLiveStatus() const noexcept;
+	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept;
 
 	// Variables used by the ISR
 	static TmcDriverState * volatile currentDriver;			// volatile because the ISR changes it
 	static uint32_t transferStartedTime;
 
-	void UartTmcHandler();									// core of the ISR for this driver
+	void UartTmcHandler() noexcept;							// core of the ISR for this driver
 
 private:
-	bool SetChopConf(uint32_t newVal);
-	void UpdateRegister(size_t regIndex, uint32_t regVal);
-	void UpdateChopConfRegister();							// calculate the chopper control register and flag it for sending
-	void UpdateCurrent();
-	void UpdateMaxOpenLoadStepInterval();
+	bool SetChopConf(uint32_t newVal) noexcept;
+	void UpdateRegister(size_t regIndex, uint32_t regVal) noexcept;
+	void UpdateChopConfRegister() noexcept;					// calculate the chopper control register and flag it for sending
+	void UpdateCurrent() noexcept;
+	void UpdateMaxOpenLoadStepInterval() noexcept;
 
 #if TMC22xx_HAS_MUX
-	void SetUartMux();
-	static void SetupDMASend(uint8_t regnum, uint32_t outVal, uint8_t crc) __attribute__ ((hot));	// set up the PDC to send a register
-	static void SetupDMAReceive(uint8_t regnum, uint8_t crc) __attribute__ ((hot));					// set up the PDC to receive a register
+	void SetUartMux() noexcept;
+	static void SetupDMASend(uint8_t regnum, uint32_t outVal, uint8_t crc) noexcept __attribute__ ((hot));	// set up the PDC to send a register
+	static void SetupDMAReceive(uint8_t regnum, uint8_t crc) noexcept __attribute__ ((hot));					// set up the PDC to receive a register
 #else
-	void SetupDMASend(uint8_t regnum, uint32_t outVal, uint8_t crc) __attribute__ ((hot));			// set up the PDC to send a register
-	void SetupDMAReceive(uint8_t regnum, uint8_t crc) __attribute__ ((hot));						// set up the PDC to receive a register
+	void SetupDMASend(uint8_t regnum, uint32_t outVal, uint8_t crc) noexcept __attribute__ ((hot));			// set up the PDC to send a register
+	void SetupDMAReceive(uint8_t regnum, uint8_t crc) noexcept __attribute__ ((hot));						// set up the PDC to receive a register
 #endif
 
 	static constexpr unsigned int NumWriteRegisters = 6;	// the number of registers that we write to
@@ -409,7 +409,7 @@ const uint8_t TmcDriverState::ReadRegCRCs[NumReadRegisters] =
 static TmcDriverState driverStates[MaxSmartDrivers];
 
 // Set up the PDC to send a register
-inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal, uint8_t crc)
+inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal, uint8_t crc) noexcept
 {
 	// Faster code, not using the ASF
 	Pdc * const pdc = uart_get_pdc_base(uart);
@@ -435,7 +435,7 @@ inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal, uint8_
 }
 
 // Set up the PDC to send a register and receive the status
-inline void TmcDriverState::SetupDMAReceive(uint8_t regNum, uint8_t crc)
+inline void TmcDriverState::SetupDMAReceive(uint8_t regNum, uint8_t crc) noexcept
 {
 	// Faster code, not using the ASF
 	Pdc * const pdc = uart_get_pdc_base(uart);
@@ -457,7 +457,7 @@ inline void TmcDriverState::SetupDMAReceive(uint8_t regNum, uint8_t crc)
 }
 
 // Update the maximum step pulse interval at wich we consider open load detection to be reliable
-void TmcDriverState::UpdateMaxOpenLoadStepInterval()
+void TmcDriverState::UpdateMaxOpenLoadStepInterval() noexcept
 {
 	const uint32_t defaultMaxInterval = StepTimer::StepClockRate/MinimumOpenLoadFullStepsPerSec;
 	if ((writeRegisters[WriteGConf] & GCONF_SPREAD_CYCLE) != 0)
@@ -478,7 +478,7 @@ void TmcDriverState::UpdateMaxOpenLoadStepInterval()
 }
 
 // Set a register value and flag it for updating
-void TmcDriverState::UpdateRegister(size_t regIndex, uint32_t regVal)
+void TmcDriverState::UpdateRegister(size_t regIndex, uint32_t regVal) noexcept
 {
 	registersToUpdate &= ~(1u << regIndex);								// make sure it is not updated while we are changing it
 	uint8_t crc = InitialSendCRC;
@@ -499,13 +499,13 @@ void TmcDriverState::UpdateRegister(size_t regIndex, uint32_t regVal)
 }
 
 // Calculate the chopper control register and flag it for sending
-void TmcDriverState::UpdateChopConfRegister()
+void TmcDriverState::UpdateChopConfRegister() noexcept
 {
 	UpdateRegister(WriteChopConf, (enabled) ? configuredChopConfReg : configuredChopConfReg & ~CHOPCONF_TOFF_MASK);
 }
 
 // Initialise the state of the driver and its CS pin
-void TmcDriverState::Init(uint32_t p_driverNumber, Pin p_pin)
+void TmcDriverState::Init(uint32_t p_driverNumber, Pin p_pin) noexcept
 pre(!driversPowered)
 {
 	driverNumber = p_driverNumber;
@@ -542,30 +542,30 @@ pre(!driversPowered)
 	readErrors = writeErrors = numReads = numTimeouts = 0;
 }
 
-inline void TmcDriverState::SetAxisNumber(size_t p_axisNumber)
+inline void TmcDriverState::SetAxisNumber(size_t p_axisNumber) noexcept
 {
 	axisNumber = p_axisNumber;
 }
 
 // Write all registers. This is called when the drivers are known to be powered up.
-inline void TmcDriverState::WriteAll()
+inline void TmcDriverState::WriteAll() noexcept
 {
 	registersToUpdate = (1u << NumWriteRegisters) - 1;
 }
 
-float TmcDriverState::GetStandstillCurrentPercent() const
+float TmcDriverState::GetStandstillCurrentPercent() const noexcept
 {
 	return (float)(standstillCurrentFraction * 100)/256;
 }
 
-void TmcDriverState::SetStandstillCurrentPercent(float percent)
+void TmcDriverState::SetStandstillCurrentPercent(float percent) noexcept
 {
 	standstillCurrentFraction = (uint8_t)constrain<long>(lrintf((percent * 256)/100), 0, 255);
 	UpdateCurrent();
 }
 
 // Set the microstepping and microstep interpolation. The desired microstepping is (1 << shift).
-bool TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate)
+bool TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate) noexcept
 {
 	microstepShiftFactor = shift;
 	configuredChopConfReg = (configuredChopConfReg & ~(CHOPCONF_MRES_MASK | CHOPCONF_INTPOL)) | ((8 - shift) << CHOPCONF_MRES_SHIFT);
@@ -578,13 +578,13 @@ bool TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate)
 }
 
 // Get microstepping or chopper control register
-unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const
+unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const noexcept
 {
 	interpolation = (writeRegisters[WriteChopConf] & CHOPCONF_INTPOL) != 0;
 	return 1u << microstepShiftFactor;
 }
 
-bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal)
+bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept
 {
 	switch(reg)
 	{
@@ -614,7 +614,7 @@ bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal)
 	}
 }
 
-uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const
+uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 {
 	switch(reg)
 	{
@@ -650,7 +650,7 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const
 }
 
 // Set the chopper control register to the settings provided by the user. We allow only the lowest 17 bits to be set.
-bool TmcDriverState::SetChopConf(uint32_t newVal)
+bool TmcDriverState::SetChopConf(uint32_t newVal) noexcept
 {
 	const uint32_t offTime = (newVal & CHOPCONF_TOFF_MASK) >> CHOPCONF_TOFF_SHIFT;
 	if (offTime == 0 || (offTime == 1 && (newVal & CHOPCONF_TBL_MASK) < (2 << CHOPCONF_TBL_SHIFT)))
@@ -670,7 +670,7 @@ bool TmcDriverState::SetChopConf(uint32_t newVal)
 }
 
 // Set the driver mode
-bool TmcDriverState::SetDriverMode(unsigned int mode)
+bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 {
 	switch (mode)
 	{
@@ -688,19 +688,19 @@ bool TmcDriverState::SetDriverMode(unsigned int mode)
 }
 
 // Get the driver mode
-DriverMode TmcDriverState::GetDriverMode() const
+DriverMode TmcDriverState::GetDriverMode() const noexcept
 {
 	return ((writeRegisters[WriteGConf] & GCONF_SPREAD_CYCLE) != 0) ? DriverMode::spreadCycle : DriverMode::stealthChop;
 }
 
 // Set the motor current
-void TmcDriverState::SetCurrent(float current)
+void TmcDriverState::SetCurrent(float current) noexcept
 {
 	motorCurrent = static_cast<uint32_t>(constrain<float>(current, 50.0, MaximumMotorCurrent));
 	UpdateCurrent();
 }
 
-void TmcDriverState::UpdateCurrent()
+void TmcDriverState::UpdateCurrent() noexcept
 {
 	// The current sense resistor on the Duet M is 0.082 ohms, to which we must add 0.03 ohms internal resistance.
 	// Full scale peak motor current in the high sensitivity range is give by I = 0.18/(R+0.03) = 0.18/0.105 ~= 1.6A
@@ -713,7 +713,7 @@ void TmcDriverState::UpdateCurrent()
 }
 
 // Enable or disable the driver
-void TmcDriverState::Enable(bool en)
+void TmcDriverState::Enable(bool en) noexcept
 {
 	if (enabled != en)
 	{
@@ -727,14 +727,14 @@ void TmcDriverState::Enable(bool en)
 }
 
 // Read the status
-uint32_t TmcDriverState::ReadLiveStatus() const
+uint32_t TmcDriverState::ReadLiveStatus() const noexcept
 {
 	const uint32_t ret = readRegisters[ReadDrvStat] & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST | TMC_RR_TEMPBITS);
 	return (enabled) ? ret : ret & ~(TMC_RR_OLA | TMC_RR_OLB);
 }
 
 // Read the status
-uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep)
+uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
 {
 	const uint32_t mask = (enabled) ? 0xFFFFFFFF : ~(TMC_RR_OLA | TMC_RR_OLB);
 	bitsToKeep &= mask;
@@ -746,7 +746,7 @@ uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep)
 }
 
 // Append the driver status to a string, and reset the min/max load values
-void TmcDriverState::AppendDriverStatus(const StringRef& reply)
+void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 {
 	const uint32_t lastReadStatus = readRegisters[ReadDrvStat];
 	if (lastReadStatus & TMC_RR_OT)
@@ -783,7 +783,7 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply)
 }
 
 // This is called by the ISR when the SPI transfer has completed
-inline void TmcDriverState::TransferDone()
+inline void TmcDriverState::TransferDone() noexcept
 {
 	Cache::InvalidateAfterDMAReceive(receiveData, sizeof(receiveData));
 	if (sendData[2] & 0x80)								// if we were writing a register
@@ -836,7 +836,7 @@ inline void TmcDriverState::TransferDone()
 }
 
 // This is called to abandon the current transfer, if any
-void TmcDriverState::AbortTransfer()
+void TmcDriverState::AbortTransfer() noexcept
 {
 	uart->UART_IDR = UART_IDR_ENDRX;				// disable end-of-receive interrupt
 	uart_get_pdc_base(uart)->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);	// disable the PDC
@@ -846,7 +846,7 @@ void TmcDriverState::AbortTransfer()
 #if TMC22xx_HAS_MUX
 
 // Set up the UART multiplexer to address the selected driver
-inline void TmcDriverState::SetUartMux()
+inline void TmcDriverState::SetUartMux() noexcept
 {
 	if ((driverNumber & 0x01) != 0)
 	{
@@ -877,7 +877,7 @@ inline void TmcDriverState::SetUartMux()
 #endif
 
 // This is called from the ISR or elsewhere to start a new SPI transfer. Inlined for ISR speed.
-inline void TmcDriverState::StartTransfer()
+inline void TmcDriverState::StartTransfer() noexcept
 {
 	currentDriver = this;
 
@@ -918,7 +918,7 @@ inline void TmcDriverState::StartTransfer()
 
 // ISR(s) for the UART(s)
 
-inline void TmcDriverState::UartTmcHandler()
+inline void TmcDriverState::UartTmcHandler() noexcept
 {
 	uart->UART_IDR = UART_IDR_ENDRX;					// disable the PDC interrupt
 	TransferDone();										// tidy up after the transfer we just completed
@@ -946,9 +946,9 @@ inline void TmcDriverState::UartTmcHandler()
 #endif
 
 // ISR for the single UART
-extern "C" void TMC22xx_UART_Handler() __attribute__ ((hot));
+extern "C" void TMC22xx_UART_Handler() noexcept __attribute__ ((hot));
 
-void TMC22xx_UART_Handler()
+void TMC22xx_UART_Handler() noexcept
 {
 	UART_TMC22xx->UART_IDR = UART_IDR_ENDRX;			// disable the interrupt
 	TmcDriverState *driver = TmcDriverState::currentDriver;	// capture volatile variable
@@ -961,14 +961,14 @@ void TMC22xx_UART_Handler()
 #else
 
 // ISRs for the individual UARTs
-extern "C" void UART_TMC_DRV0_Handler() __attribute__ ((hot));
-void UART_TMC_DRV0_Handler()
+extern "C" void UART_TMC_DRV0_Handler() noexcept __attribute__ ((hot));
+void UART_TMC_DRV0_Handler() noexcept
 {
 	driverStates[0].UartTmcHandler();
 }
 
-extern "C" void UART_TMC_DRV1_Handler() __attribute__ ((hot));
-void UART_TMC_DRV1_Handler()
+extern "C" void UART_TMC_DRV1_Handler() noexcept __attribute__ ((hot));
+void UART_TMC_DRV1_Handler() noexcept
 {
 	driverStates[1].UartTmcHandler();
 }
@@ -981,7 +981,7 @@ namespace SmartDrivers
 {
 	// Initialise the driver interface and the drivers, leaving each drive disabled.
 	// It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
-	void Init(const Pin driverSelectPins[NumDirectDrivers], size_t numTmcDrivers)
+	void Init(const Pin driverSelectPins[NumDirectDrivers], size_t numTmcDrivers) noexcept
 	{
 		numTmc22xxDrivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
 
@@ -1034,7 +1034,7 @@ namespace SmartDrivers
 	}
 
 	// Shut down the drivers and stop any related interrupts. Don't call Spin() again after calling this as it may re-enable them.
-	void Exit()
+	void Exit() noexcept
 	{
 		pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 #if TMC22xx_HAS_MUX
@@ -1048,7 +1048,7 @@ namespace SmartDrivers
 		driversState = DriversState::noPower;
 	}
 
-	void SetAxisNumber(size_t drive, uint32_t axisNumber)
+	void SetAxisNumber(size_t drive, uint32_t axisNumber) noexcept
 	{
 		if (drive < numTmc22xxDrivers)
 		{
@@ -1056,12 +1056,12 @@ namespace SmartDrivers
 		}
 	}
 
-	uint32_t GetAxisNumber(size_t drive)
+	uint32_t GetAxisNumber(size_t drive) noexcept
 	{
 		return (drive < numTmc22xxDrivers) ? driverStates[drive].GetAxisNumber() : 0;
 	}
 
-	void SetCurrent(size_t drive, float current)
+	void SetCurrent(size_t drive, float current) noexcept
 	{
 		if (drive < numTmc22xxDrivers)
 		{
@@ -1069,7 +1069,7 @@ namespace SmartDrivers
 		}
 	}
 
-	void EnableDrive(size_t drive, bool en)
+	void EnableDrive(size_t drive, bool en) noexcept
 	{
 		if (drive < numTmc22xxDrivers)
 		{
@@ -1077,18 +1077,18 @@ namespace SmartDrivers
 		}
 	}
 
-	uint32_t GetLiveStatus(size_t drive)
+	uint32_t GetLiveStatus(size_t drive) noexcept
 	{
 		return (drive < numTmc22xxDrivers) ? driverStates[drive].ReadLiveStatus() : 0;
 	}
 
-	uint32_t GetAccumulatedStatus(size_t drive, uint32_t bitsToKeep)
+	uint32_t GetAccumulatedStatus(size_t drive, uint32_t bitsToKeep) noexcept
 	{
 		return (drive < numTmc22xxDrivers) ? driverStates[drive].ReadAccumulatedStatus(bitsToKeep) : 0;
 	}
 
 	// Set microstepping or chopper control register
-	bool SetMicrostepping(size_t drive, unsigned int microsteps, bool interpolate)
+	bool SetMicrostepping(size_t drive, unsigned int microsteps, bool interpolate) noexcept
 	{
 		if (drive < numTmc22xxDrivers && microsteps > 0)
 		{
@@ -1110,24 +1110,24 @@ namespace SmartDrivers
 	}
 
 	// Get microstepping or chopper control register
-	unsigned int GetMicrostepping(size_t drive, bool& interpolation)
+	unsigned int GetMicrostepping(size_t drive, bool& interpolation) noexcept
 	{
 		return (drive < numTmc22xxDrivers) ? driverStates[drive].GetMicrostepping(interpolation) : 1;
 	}
 
-	bool SetDriverMode(size_t driver, unsigned int mode)
+	bool SetDriverMode(size_t driver, unsigned int mode) noexcept
 	{
 		return driver < numTmc22xxDrivers && driverStates[driver].SetDriverMode(mode);
 	}
 
-	DriverMode GetDriverMode(size_t driver)
+	DriverMode GetDriverMode(size_t driver) noexcept
 	{
 		return (driver < numTmc22xxDrivers) ? driverStates[driver].GetDriverMode() : DriverMode::unknown;
 	}
 
 	// Flag that the the drivers have been powered up or down and handle any timeouts
 	// Before the first call to this function with 'powered' true, you must call Init()
-	void Spin(bool powered)
+	void Spin(bool powered) noexcept
 	{
 		if (driversState == DriversState::noPower)
 		{
@@ -1204,13 +1204,13 @@ namespace SmartDrivers
 	}
 
 	// This is called from the tick ISR, possibly while Spin (with powered either true or false) is being executed
-	void TurnDriversOff()
+	void TurnDriversOff() noexcept
 	{
 		// When using TMC2660 drivers, this is called when an over-voltage event occurs, so that we can try to protect the drivers by disabling them.
 		// We don't use it with TMC22xx drivers.
 	}
 
-	void AppendDriverStatus(size_t drive, const StringRef& reply)
+	void AppendDriverStatus(size_t drive, const StringRef& reply) noexcept
 	{
 		if (drive < numTmc22xxDrivers)
 		{
@@ -1218,12 +1218,12 @@ namespace SmartDrivers
 		}
 	}
 
-	float GetStandstillCurrentPercent(size_t drive)
+	float GetStandstillCurrentPercent(size_t drive) noexcept
 	{
 		return (drive < numTmc22xxDrivers) ? driverStates[drive].GetStandstillCurrentPercent() : 0.0;
 	}
 
-	void SetStandstillCurrentPercent(size_t drive, float percent)
+	void SetStandstillCurrentPercent(size_t drive, float percent) noexcept
 	{
 		if (drive < numTmc22xxDrivers)
 		{
@@ -1231,12 +1231,12 @@ namespace SmartDrivers
 		}
 	}
 
-	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal)
+	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal) noexcept
 	{
 		return (driver < numTmc22xxDrivers) && driverStates[driver].SetRegister(reg, regVal);
 	}
 
-	uint32_t GetRegister(size_t driver, SmartDriverRegister reg)
+	uint32_t GetRegister(size_t driver, SmartDriverRegister reg) noexcept
 	{
 		return (driver < numTmc22xxDrivers) ? driverStates[driver].GetRegister(reg) : 0;
 	}

@@ -99,7 +99,7 @@ void StepTimer::Init() noexcept
 #if SAM4S || SAME70
 
 // Get the interrupt clock count. The TCs on the SAM4S and SAME70 are only 16 bits wide, so we maintain the upper 16 bits in a chained counter.
-/*static*/ uint32_t StepTimer::GetTimerTicks()
+/*static*/ uint32_t StepTimer::GetTimerTicks() noexcept
 {
 	uint16_t highWord = STEP_TC->TC_CHANNEL[STEP_TC_CHAN_UPPER].TC_CV;		// get the timer high word
 	do

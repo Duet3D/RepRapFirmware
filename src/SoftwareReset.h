@@ -38,7 +38,7 @@ enum class SoftwareResetReason : uint16_t
 	unusedBit = 0x0200,				// spare bit
 	unused2 = 0x0400,				// spare bit
 	inAuxOutput = 0x0800,			// this bit is or'ed in if we were in aux output at the time
-	inLwipSpin = 0x2000,			// we got stuck in a call to LWIP for too long
+	unused_was_inLwipSpin = 0x2000,	// no longer used
 	inUsbOutput = 0x4000,			// this bit is or'ed in if we were in USB output at the time
 	deliberate = 0x8000				// this but it or'ed in if we deliberately caused a fault
 };

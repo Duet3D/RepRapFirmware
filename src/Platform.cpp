@@ -1329,12 +1329,6 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 			{
 				reason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
 			}
-#if HAS_LWIP_NETWORKING
-			if (reprap.GetNetwork().InNetworkStack())
-			{
-				reason |= (uint16_t)SoftwareResetReason::inLwipSpin;
-			}
-#endif
 
 #ifdef SERIAL_AUX_DEVICE
 			if (SERIAL_AUX_DEVICE.canWrite() == 0

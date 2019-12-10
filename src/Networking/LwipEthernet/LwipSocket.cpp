@@ -77,13 +77,13 @@ extern void UnlockLWIP();
 
 // LwipSocket class
 
-LwipSocket::LwipSocket(NetworkInterface *iface) : Socket(iface), connectionPcb(nullptr),
+LwipSocket::LwipSocket(NetworkInterface *iface) noexcept : Socket(iface), connectionPcb(nullptr),
 		receivedData(nullptr), state(SocketState::disabled)
 {
 	ReInit();
 }
 
-bool LwipSocket::AcceptConnection(tcp_pcb *pcb)
+bool LwipSocket::AcceptConnection(tcp_pcb *pcb) noexcept
 {
 	if (state == SocketState::listening && pcb->local_port == localPort)
 	{
@@ -104,7 +104,7 @@ bool LwipSocket::AcceptConnection(tcp_pcb *pcb)
 	return false;
 }
 
-void LwipSocket::DataReceived(pbuf *data)
+void LwipSocket::DataReceived(pbuf *data) noexcept
 {
 	if (state != SocketState::closing)
 	{
@@ -125,7 +125,7 @@ void LwipSocket::DataReceived(pbuf *data)
 	}
 }
 
-void LwipSocket::DataSent(size_t numBytes)
+void LwipSocket::DataSent(size_t numBytes) noexcept
 {
 	if (numBytes <= unAcked)
 	{
@@ -144,7 +144,7 @@ void LwipSocket::DataSent(size_t numBytes)
 	}
 }
 
-void LwipSocket::ConnectionClosedGracefully()
+void LwipSocket::ConnectionClosedGracefully() noexcept
 {
 	if (connectionPcb != nullptr)
 	{
@@ -166,7 +166,7 @@ void LwipSocket::ConnectionClosedGracefully()
 	}
 }
 
-void LwipSocket::ConnectionError(err_t err)
+void LwipSocket::ConnectionError(err_t err) noexcept
 {
 	DiscardReceivedData();
 	connectionPcb = nullptr;
@@ -179,7 +179,7 @@ void LwipSocket::ConnectionError(err_t err)
 }
 
 // Initialise a TCP socket
-void LwipSocket::Init(SocketNumber skt, Port serverPort, NetworkProtocol p)
+void LwipSocket::Init(SocketNumber skt, Port serverPort, NetworkProtocol p) noexcept
 {
 	UNUSED(skt);
 	localPort = serverPort;
@@ -189,13 +189,13 @@ void LwipSocket::Init(SocketNumber skt, Port serverPort, NetworkProtocol p)
 	ReInit();
 }
 
-void LwipSocket::TerminateAndDisable()
+void LwipSocket::TerminateAndDisable() noexcept
 {
 	Terminate();
 	state = SocketState::disabled;
 }
 
-void LwipSocket::ReInit()
+void LwipSocket::ReInit() noexcept
 {
 	DiscardReceivedData();
 	whenConnected = whenWritten = whenClosed = 0;
@@ -204,7 +204,7 @@ void LwipSocket::ReInit()
 }
 
 // Close a connection when the last packet has been sent
-void LwipSocket::Close()
+void LwipSocket::Close() noexcept
 {
 	if (state != SocketState::disabled && state != SocketState::listening)
 	{
@@ -223,7 +223,7 @@ void LwipSocket::Close()
 }
 
 // Terminate a connection immediately
-void LwipSocket::Terminate()
+void LwipSocket::Terminate() noexcept
 {
 	if (state != SocketState::disabled)
 	{
@@ -246,19 +246,19 @@ void LwipSocket::Terminate()
 }
 
 // Return true if there is or may soon be more data to read
-bool LwipSocket::CanRead() const
+bool LwipSocket::CanRead() const noexcept
 {
 	return (state == SocketState::connected)
 		|| (state == SocketState::clientDisconnecting && receivedData != nullptr);
 }
 
-bool LwipSocket::CanSend() const
+bool LwipSocket::CanSend() const noexcept
 {
 	return (state == SocketState::connected);
 }
 
 // Read 1 character from the receive buffers, returning true if successful
-bool LwipSocket::ReadChar(char& c)
+bool LwipSocket::ReadChar(char& c) noexcept
 {
 	if (receivedData != nullptr)
 	{
@@ -292,7 +292,7 @@ bool LwipSocket::ReadChar(char& c)
 }
 
 // Return a pointer to data in a buffer and a length available
-bool LwipSocket::ReadBuffer(const uint8_t *&buffer, size_t &len)
+bool LwipSocket::ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept
 {
 	if (receivedData != nullptr)
 	{
@@ -306,7 +306,7 @@ bool LwipSocket::ReadBuffer(const uint8_t *&buffer, size_t &len)
 }
 
 // Flag some data as taken from the receive buffers. We never take data from more than one buffer at a time.
-void LwipSocket::Taken(size_t len)
+void LwipSocket::Taken(size_t len) noexcept
 {
 	if (receivedData != nullptr)
 	{
@@ -333,7 +333,7 @@ void LwipSocket::Taken(size_t len)
 }
 
 // Poll a socket to see if it needs to be serviced
-void LwipSocket::Poll()
+void LwipSocket::Poll() noexcept
 {
 	switch (state)
 	{
@@ -399,7 +399,7 @@ void LwipSocket::Poll()
 }
 
 // Discard any received data for this transaction
-void LwipSocket::DiscardReceivedData()
+void LwipSocket::DiscardReceivedData() noexcept
 {
 	if (receivedData != nullptr)
 	{
@@ -410,7 +410,7 @@ void LwipSocket::DiscardReceivedData()
 }
 
 // Send the data, returning the length buffered
-size_t LwipSocket::Send(const uint8_t *data, size_t length)
+size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 {
 #if LWIP_GMAC_TASK
 	MutexLocker lock(lwipMutex);
