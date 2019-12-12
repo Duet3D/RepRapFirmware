@@ -27,7 +27,7 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define IAP_IN_RAM				1
 
 #if IAP_IN_RAM
-# define IAP_UPDATE_FILE		"DuetMaestroIAP.bin"
+# define IAP_UPDATE_FILE		"PccbIAP.bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20010000;
 #else
 # define IAP_UPDATE_FILE		"iap4s.bin"
@@ -88,8 +88,7 @@ constexpr size_t MaxSmartDrivers = 2;				// The maximum number of smart drivers
 
 #endif
 
-constexpr size_t MaxSensorsInSystem = 32;
-typedef uint32_t SensorsBitmap;
+constexpr size_t MaxSensors = 32;
 
 constexpr size_t MaxHeaters = 1;					// The number of heaters in the machine. PCCB has no heaters.
 constexpr size_t MaxExtraHeaterProtections = 4;		// The number of extra heater protection instances
