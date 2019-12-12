@@ -1,5 +1,5 @@
-RepRapFirmware 3.0beta13 (in preparation)
-========================
+RepRapFirmware 3.0RC1
+=====================
 
 Recommended compatible firmware:
 - Duet Web Control 2.0.4
@@ -13,19 +13,21 @@ Feature changes since beta 12:
 - Max bed heaters increased to 9 on Duet 3, 2 on Duet Meastro (still 4 on Duet WiFi/Ethernet)
 - Max chamber heaters increased to 4 on Duet 3 and on Duet WiFi/Ethernet
 - CRC calculation has been speeded up, which improves the speed of file uploads in standalone mode when CRC checking is enabled in DWC
+- G1 H1 E moves (stopping on motor stall) are now implemented
+- rr_config and M408 S5 responses now include field "sysdir" which is the system files folder set using M505
+- M950 P, M950 S, M42 and M280 are implemented on expansion boards
+- B parameter added to M408 to query expansion boards (for expansion board ATE)
+- M122 P parameter is passed to the expansion board if the B parameter is present and selects an expansion board (for ATE)
 
 Bug fixes:
 - Duet 3 only: Files uploaded in standalone modes were frequently corruption during uploading, resulting in CRC mismatches reported
 - The M574 S0 parameter was teated the same as S2 (i.e. triggered when input high) except on endstop inputs connected to Duet 3 expansion boards
 - If a print that was sliced using absolute extrusion mode was resurrected, unwanted extrusion occurred just before the print was resumed
 - Bed compensation did not take account of the XY offset of the printing nozzle from the head reference point
-- When using SCARA kinematics the calculation of the minimum achoievable radius was incorrect. Depending on the B parameter of the M667 command, this could result in spurious "Intermediate position unreachable" errors, or non-extruding G1 moves being turned into G0 moves.
+- When using SCARA kinematics the calculation of the minimum achievable radius was incorrect. Depending on the B parameter of the M667 command, this could result in spurious "Intermediate position unreachable" errors, or non-extruding G1 moves being turned into G0 moves.
 - A badly-formed GCode file that returned the layer height or object height as nan or inf caused DWC to disconnect because of a JSON parse failure
 - M579 scale factors were not applied correctly to G2 and G3 arc moves
-- [TO TEST] Stall detection endstops should now work when multiple axes are homed simultaneously
-
-Known issues:
-- Extruder stall detection (G1 H1 E moves) is not implemented
+- M119 crashed if an axis had no endstop
 
 RepRapFirmware 3.0beta12
 ========================
