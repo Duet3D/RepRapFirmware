@@ -243,10 +243,24 @@ typedef float floatc_t;						// type of matrix element used for calibration
 #endif
 
 typedef uint16_t AxesBitmap;				// Type of a bitmap representing a set of axes
-typedef uint32_t DriversBitmap;				// Type of a bitmap representing a set of driver numbers
+typedef uint32_t ExtrudersBitmap;			// Type of a bitmap representing a set of extruder drive numbers
+typedef uint32_t DriversBitmap;				// Type of a bitmap representing a set of local driver numbers
 typedef uint32_t FansBitmap;				// Type of a bitmap representing a set of fan numbers
 typedef uint32_t HeatersBitmap;				// Type of a bitmap representing a set of heater numbers
 typedef uint16_t Pwm_t;						// Type of a PWM value when we don't want to use floats
+
+#if SUPPORT_CAN_EXPANSION
+typedef uint64_t SensorsBitmap;
+#else
+typedef uint32_t SensorsBitmap;
+#endif
+
+static_assert(MaxAxes <= sizeof(AxesBitmap) * CHAR_BIT);
+static_assert(MaxExtruders <= sizeof(ExtrudersBitmap) * CHAR_BIT);
+static_assert(MaxFans <= sizeof(FansBitmap) * CHAR_BIT);
+static_assert(MaxHeaters <= sizeof(HeatersBitmap) * CHAR_BIT);
+static_assert(NumDirectDrivers <= sizeof(DriversBitmap) * CHAR_BIT);
+static_assert(MaxSensors <= sizeof(SensorsBitmap) * CHAR_BIT);
 
 #if SUPPORT_IOBITS
 typedef uint16_t IoBits_t;					// Type of the port control bitmap (G1 P parameter)
@@ -363,6 +377,7 @@ constexpr size_t ShortScratchStringLength = 50;
 constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
 constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2;				// The indices of the Cartesian axes in drive arrays
 constexpr size_t U_AXIS = 3;										// The assumed index of the U axis when executing M673
+constexpr size_t NO_AXIS = 0x0F;									// A value to represent no axis, must fit in 4 bits (see Endstops) and not be a valid axis number
 
 static_assert(MaxAxesPlusExtruders <= MaxAxes + MaxExtruders);
 static_assert(MaxAxesPlusExtruders >= MinAxes + NumDefaultExtruders);

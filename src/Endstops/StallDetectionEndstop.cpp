@@ -16,6 +16,11 @@ StallDetectionEndstop::StallDetectionEndstop(uint8_t axis, EndStopPosition pos, 
 {
 }
 
+StallDetectionEndstop::StallDetectionEndstop()
+	: Endstop(NO_AXIS, EndStopPosition::noEndStop), driversMonitored(0), individualMotors(false), stopAll(true)
+{
+}
+
 // Test whether we are at or near the stop
 EndStopHit StallDetectionEndstop::Stopped() const
 {
@@ -46,7 +51,11 @@ EndstopHitDetails StallDetectionEndstop::CheckTriggered(bool goingSlow)
 	if (relevantStalledDrivers != 0)
 	{
 		rslt.axis = GetAxis();
-		if (stopAll)
+		if (rslt.axis == NO_AXIS)
+		{
+			rslt.SetAction(EndstopHitAction::stopAll);
+		}
+		else if (stopAll)
 		{
 			rslt.SetAction(EndstopHitAction::stopAll);
 			if (GetAtHighEnd())
@@ -107,6 +116,12 @@ bool StallDetectionEndstop::Acknowledge(EndstopHitDetails what)
 void StallDetectionEndstop::AppendDetails(const StringRef& str)
 {
 	str.cat((individualMotors) ? "motor stall (individual motors)" : "motor stall (any motor)");
+}
+
+void StallDetectionEndstop::SetDrivers(DriversBitmap extruderDrivers)
+{
+	driversMonitored = extruderDrivers;
+	stopAll = true;
 }
 
 // End

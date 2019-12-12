@@ -950,7 +950,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('S'))
 	{
 		const unsigned sensorNum = gb.GetUIValue();
-		if (sensorNum >= MaxSensorsInSystem)
+		if (sensorNum >= MaxSensors)
 		{
 			reply.copy("Sensor number out of range");
 			return GCodeResult::error;

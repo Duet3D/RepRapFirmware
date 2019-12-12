@@ -1433,6 +1433,8 @@ void GCodes::Pop(GCodeBuffer& gb, bool preserveLineNumber)
 // Returns true if this gcode is valid so far, false if it should be discarded
 bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove)
 {
+	bool ok = true;
+
 	// Deal with feed rate
 	if (moveBuffer.isCoordinated || machineType == MachineType::fff)
 	{
@@ -1459,6 +1461,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 	}
 	moveBuffer.hasExtrusion = false;
 	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;	// save this before we update it
+	ExtrudersBitmap extrudersMoving = 0;
 
 	// Check if we are extruding
 	if (gb.Seen(extrudeLetter))							// DC 2018-08-07: at E3D's request, extrusion is now recognised even on uncoordinated moves
@@ -1521,10 +1524,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 						}
 
 						moveBuffer.coords[ExtruderToLogicalDrive(extruder)] = extrusionAmount * extrusionFactors[extruder];
-						if (moveBuffer.moveType == 1)
-						{
-							platform.GetEndstops().EnableExtruderEndstop(extruder);
-						}
+						SetBit(extrudersMoving, extruder);
 					}
 				}
 				if (!isPrintingMove && moveBuffer.usingStandardFeedrate)
@@ -1556,21 +1556,29 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 								rawExtruderTotal += extrusionAmount;
 							}
 							moveBuffer.coords[ExtruderToLogicalDrive(extruder)] = extrusionAmount * extrusionFactors[extruder] * volumetricExtrusionFactors[extruder];
-							if (moveBuffer.moveType == 1)
-							{
-								platform.GetEndstops().EnableExtruderEndstop(extruder);
-							}
+							SetBit(extrudersMoving, extruder);
 						}
 					}
 				}
 				else
 				{
 					platform.Message(ErrorMessage, "Multiple E parameters in G1 commands are not supported in absolute extrusion mode\n");
+					ok = false;
 				}
 			}
 		}
 	}
-	return true;
+
+	if (moveBuffer.moveType == 1)
+	{
+		if (!platform.GetEndstops().EnableExtruderEndstops(extrudersMoving))
+		{
+			platform.Message(ErrorMessage, "Failed to enable extruder endstops");
+			ok = false;
+		}
+	}
+
+	return ok;
 }
 
 // Check that enough axes have been homed, returning true if insufficient axes homed
@@ -1775,7 +1783,7 @@ const char* GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated)
 		break;
 	}
 
-	LoadExtrusionAndFeedrateFromGCode(gb, axesMentioned != 0);
+	LoadExtrusionAndFeedrateFromGCode(gb, axesMentioned != 0);		// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
 
 	// Set up the move. We must assign segmentsLeft last, so that when Move runs as a separate task the move won't be picked up by the Move process before it is complete.
 	// Note that if this is an extruder-only move, we don't do axis movements to allow for tool offset changes, we defer those until an axis moves.

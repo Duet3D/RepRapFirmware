@@ -81,39 +81,38 @@ void LocalFan::InternalRefresh()
 	{
 		reqVal = 0.0;
 		const bool bangBangMode = (triggerTemperatures[1] <= triggerTemperatures[0]);
-		for (size_t sensorNum = 0; sensorNum < MaxSensorsInSystem; ++sensorNum)
+		SensorsBitmap copySensorsMonitored = sensorsMonitored;
+		while (copySensorsMonitored != 0)
 		{
-			// Check if this sensor is both monitored by this fan and in use
-			if (IsBitSet(sensorsMonitored, sensorNum))
+			unsigned int sensorNum = LowestSetBit(copySensorsMonitored);
+			ClearBit(copySensorsMonitored, sensorNum);
+			const auto sensor = reprap.GetHeat().FindSensor(sensorNum);
+			if (sensor.IsNotNull())
 			{
-				const auto sensor = reprap.GetHeat().FindSensor(sensorNum);
-				if (sensor.IsNotNull())
+				//TODO we used to turn the fan on if the associated heater was being tuned
+				float ht;
+				const TemperatureError err = sensor->GetLatestTemperature(ht);
+				if (err != TemperatureError::success || ht < BadLowTemperature || ht >= triggerTemperatures[1])
 				{
-					//TODO we used to turn the fan on if the associated heater was being tuned
-					float ht;
-					const TemperatureError err = sensor->GetLatestTemperature(ht);
-					if (err != TemperatureError::success || ht < BadLowTemperature || ht >= triggerTemperatures[1])
-					{
-						reqVal = max<float>(reqVal, (bangBangMode) ? max<float>(0.5, val) : 1.0);
-					}
-					else if (!bangBangMode && ht > triggerTemperatures[0])
-					{
-						// We already know that ht < triggerTemperatures[1], therefore unless we have NaNs it is safe to divide by (triggerTemperatures[1] - triggerTemperatures[0])
-						reqVal = max<float>(reqVal, (ht - triggerTemperatures[0])/(triggerTemperatures[1] - triggerTemperatures[0]));
-					}
-					else if (lastVal != 0.0 && ht + ThermostatHysteresis > triggerTemperatures[0])		// if the fan is on, add a hysteresis before turning it off
-					{
-						const float minFanSpeed = (bangBangMode) ? max<float>(0.5, val) : minVal;
-						reqVal = constrain<float>(reqVal, minFanSpeed, maxVal);
-					}
-#if HAS_SMART_DRIVERS
-					const int channel = sensor->GetSmartDriversChannel();
-					if (channel >= 0)
-					{
-						driverChannelsMonitored |= 1 << (unsigned int)channel;
-					}
-#endif
+					reqVal = max<float>(reqVal, (bangBangMode) ? max<float>(0.5, val) : 1.0);
 				}
+				else if (!bangBangMode && ht > triggerTemperatures[0])
+				{
+					// We already know that ht < triggerTemperatures[1], therefore unless we have NaNs it is safe to divide by (triggerTemperatures[1] - triggerTemperatures[0])
+					reqVal = max<float>(reqVal, (ht - triggerTemperatures[0])/(triggerTemperatures[1] - triggerTemperatures[0]));
+				}
+				else if (lastVal != 0.0 && ht + ThermostatHysteresis > triggerTemperatures[0])		// if the fan is on, add a hysteresis before turning it off
+				{
+					const float minFanSpeed = (bangBangMode) ? max<float>(0.5, val) : minVal;
+					reqVal = constrain<float>(reqVal, minFanSpeed, maxVal);
+				}
+#if HAS_SMART_DRIVERS
+				const int channel = sensor->GetSmartDriversChannel();
+				if (channel >= 0)
+				{
+					driverChannelsMonitored |= 1 << (unsigned int)channel;
+				}
+#endif
 			}
 		}
 	}

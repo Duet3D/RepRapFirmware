@@ -138,9 +138,6 @@ bool StepTimer::ScheduleTimerInterrupt(uint32_t tim) noexcept
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPBS;			// enable the interrupt
 #endif
 
-#ifdef SOFT_TIMER_DEBUG
-	lastSoftTimerInterruptScheduledAt = GetTimerTicksInterruptsDisabled();
-#endif
 	cpu_irq_restore(flags);
 	return false;
 }

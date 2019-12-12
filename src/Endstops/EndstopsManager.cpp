@@ -27,7 +27,7 @@
 
 ReadWriteLock EndstopsManager::endstopsLock;					// used to lock both endstops and Z probes
 
-EndstopsManager::EndstopsManager() : activeEndstops(nullptr), isHomingMove(false)
+EndstopsManager::EndstopsManager() : activeEndstops(nullptr), extrudersEndstop(nullptr), isHomingMove(false)
 {
 	for (Endstop *& es : axisEndstops)
 	{
@@ -78,21 +78,20 @@ void EndstopsManager::AddToActive(EndstopOrZProbe& e)
 bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming)
 {
 	activeEndstops = nullptr;
-	isHomingMove = forHoming;
+	isHomingMove = forHoming && axes != 0;
 	const Kinematics& kin = reprap.GetMove().GetKinematics();
-	for (size_t axis = 0; axis < reprap.GetGCodes().GetVisibleAxes(); ++axis)
+	while (axes != 0)
 	{
-		if (IsBitSet(axes, axis))
+		const unsigned int axis = LowestSetBit(axes);
+		ClearBit(axes, axis);
+		if (axisEndstops[axis] != nullptr && axisEndstops[axis]->Prime(kin, reprap.GetPlatform().GetAxisDriversConfig(axis)))
 		{
-			if (axisEndstops[axis] != nullptr && axisEndstops[axis]->Prime(kin, reprap.GetPlatform().GetAxisDriversConfig(axis)))
-			{
-				AddToActive(*axisEndstops[axis]);
-			}
-			else
-			{
-				activeEndstops = nullptr;
-				return false;
-			}
+			AddToActive(*axisEndstops[axis]);
+		}
+		else
+		{
+			activeEndstops = nullptr;
+			return false;
 		}
 	}
 	return true;
@@ -111,19 +110,44 @@ bool EndstopsManager::EnableZProbe(size_t probeNumber, bool probingAway)
 	return true;
 }
 
-// Enable extruder endstops
-bool EndstopsManager::EnableExtruderEndstop(size_t extruder)
+// Enable extruder endstops. This adds to any existing axis endstops, so you must call EnableAxisEndstops before calling this.
+bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders)
 {
-#ifdef NO_EXTRUDER_ENDSTOPS
-	// not supported for now
-	return false;
+	if (extruders != 0)
+	{
+		if (extrudersEndstop == nullptr)
+		{
+			extrudersEndstop = new StallDetectionEndstop;
+		}
+		DriversBitmap drivers = 0;
+		while (extruders != 0)
+		{
+			const unsigned int extruder = LowestSetBit(extruders);
+			ClearBit(extruders, extruder);
+			const DriverId driver = reprap.GetPlatform().GetExtruderDriver(extruder);
+#if SUPPORT_CAN_EXPANSION
+			if (driver.IsLocal())
+			{
+				SetBit(drivers, driver.localDriver);
+			}
+			else
+			{
+				//TODO remote stall detect endstop
+				return false;
+			}
 #else
-	qq;		//TODO
+			SetBit(drivers, driver.localDriver);
 #endif
+		}
+
+		extrudersEndstop->SetDrivers(drivers);
+		AddToActive(*extrudersEndstop);
+	}
+	return true;
 }
 
 // Check the endstops.
-// If an endstop has triggered, remove it from the active list, return its action, and return a pointer to it via 'es'.
+// If an endstop has triggered, remove it from the active list and return its details
 EndstopHitDetails EndstopsManager::CheckEndstops(bool goingSlow)
 {
 	EndstopHitDetails ret;									// the default constructor will clear all fields
@@ -345,7 +369,7 @@ void EndstopsManager::GetM119report(const StringRef& reply)
 	reply.copy("Endstops - ");
 	for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
 	{
-		const char * const status = (axisEndstops == nullptr)
+		const char * const status = (axisEndstops[axis] == nullptr)
 										? "no endstop"
 											: TranslateEndStopResult(axisEndstops[axis]->Stopped(), axisEndstops[axis]->GetAtHighEnd());
 		reply.catf("%c: %s, ", reprap.GetGCodes().GetAxisLetters()[axis], status);
@@ -371,7 +395,7 @@ const char *EndstopsManager::TranslateEndStopResult(EndStopHit es, bool atHighEn
 
 ZProbe& EndstopsManager::GetCurrentZProbe() const
 {
-	ZProbe * const zp = zProbes[currentZProbeNumber];
+	ZProbe * const zp = (currentZProbeNumber < MaxZProbes) ? zProbes[currentZProbeNumber] : nullptr;
 	return (zp == nullptr) ? *defaultZProbe : *zp;
 }
 

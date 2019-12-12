@@ -56,15 +56,12 @@ constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;								// we allow a full 64K on 
 #define SUPPORT_ASYNC_MOVES		1
 #define ALLOCATE_DEFAULT_PORTS	1
 
-#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
-
 // The physical capabilities of the machine
 
 constexpr size_t NumDirectDrivers = 7;				// The maximum number of drives supported by the electronics
 constexpr size_t MaxSmartDrivers = 7;				// The maximum number of smart drivers
 
-constexpr size_t MaxSensorsInSystem = 32;
-typedef uint32_t SensorsBitmap;
+constexpr size_t MaxSensors = 32;
 
 constexpr size_t MaxHeaters = 4;					// The maximum number of heaters in the machine
 constexpr size_t MaxExtraHeaterProtections = 4;		// The number of extra heater protection instances

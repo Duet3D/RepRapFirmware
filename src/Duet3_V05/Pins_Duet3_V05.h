@@ -7,7 +7,21 @@
 const size_t NumFirmwareUpdateModules = 1;
 
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
-#define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
+
+#define IAP_IN_RAM				1
+
+#if IAP_IN_RAM
+# define IAP_UPDATE_FILE			"Duet3_SDiap_" BOARD_SHORT_NAME ".bin"
+constexpr uint32_t IAP_IMAGE_START = 0x20450000;		// last 64kb of RAM
+#else
+# define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
+
+// SAME70 Flash locations
+// These are designed to work with 1Mbyte flash processors as well as 2Mbyte
+// We can only erase complete 128kb sectors on the SAME70, so we allow 128Kb for IAP
+constexpr uint32_t IAP_IMAGE_START = 0x004E0000;
+constexpr uint32_t IAP_IMAGE_END = 0x004FFFFF;
+#endif
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
@@ -41,8 +55,6 @@ const size_t NumFirmwareUpdateModules = 1;
 #define USE_CACHE				0					// Cache controller disabled for now
 #define USE_MPU					1
 
-#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
-
 // The physical capabilities of the machine
 
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
@@ -52,8 +64,7 @@ constexpr size_t MaxCanBoards = 18;
 
 constexpr float MaxTmc5160Current = 3200.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 
-constexpr size_t MaxSensorsInSystem = 64;
-typedef uint64_t SensorsBitmap;
+constexpr size_t MaxSensors = 64;
 
 constexpr size_t MaxHeaters = 12;
 constexpr size_t MaxExtraHeaterProtections = 8;		// The number of extra heater protection instances
@@ -247,12 +258,6 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
-
-// SAME70 Flash locations
-// These are designed to work with 1Mbyte flash processors as well as 2Mbyte
-// We can only erase complete 128kb sectors on the SAME70, so we allow 128Kb for IAP
-constexpr uint32_t IAP_FLASH_START = 0x004E0000;
-constexpr uint32_t IAP_FLASH_END = 0x004FFFFF;
 
 // Duet pin numbers for the Linux interface
 constexpr Pin LinuxTfrReadyPin = PortEPin(2);

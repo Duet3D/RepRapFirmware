@@ -54,15 +54,12 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define USE_CACHE				1					// set nonzero to enable the cache
 #define USE_MPU					0					// set nonzero to enable the memory protection unit
 
-#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
-
 // The physical capabilities of the machine
 
 constexpr size_t NumDirectDrivers = 12;				// The maximum number of drives supported directly by the electronics
 constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 
-constexpr size_t MaxSensorsInSystem = 32;
-typedef uint32_t SensorsBitmap;
+constexpr size_t MaxSensors = 32;
 
 constexpr size_t MaxHeaters = 10;					// The maximum number of heaters in the machine
 constexpr size_t MaxExtraHeaterProtections = 8;		// The number of extra heater protection instances

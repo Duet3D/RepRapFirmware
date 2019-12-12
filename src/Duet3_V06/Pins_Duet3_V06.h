@@ -8,10 +8,10 @@ const size_t NumFirmwareUpdateModules = 1;
 
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
 
-#define IAP_IN_RAM				0
+#define IAP_IN_RAM				1
 
 #if IAP_IN_RAM
-# define IAP_UPDATE_FILE			"Duet3iap_sd_ram_" BOARD_SHORT_NAME ".bin"
+# define IAP_UPDATE_FILE			"Duet3_SDiap_" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20450000;		// last 64kb of RAM
 #else
 # define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
@@ -22,7 +22,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20450000;		// last 64kb of RAM
 constexpr uint32_t IAP_IMAGE_START = 0x004E0000;
 constexpr uint32_t IAP_IMAGE_END = 0x004FFFFF;
 #endif
-
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
@@ -60,8 +59,6 @@ constexpr uint32_t IAP_IMAGE_END = 0x004FFFFF;
 #define USE_MPU					1					// Needed if USE_CACHE is set, so that we can have non-cacheable memory regions
 #define USE_CACHE				1
 
-#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
-
 // The physical capabilities of the machine
 
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
@@ -71,8 +68,7 @@ constexpr size_t MaxCanBoards = 18;
 
 constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 
-constexpr size_t MaxSensorsInSystem = 64;
-typedef uint64_t SensorsBitmap;
+constexpr size_t MaxSensors = 64;
 
 constexpr size_t MaxHeaters = 12;
 constexpr size_t MaxExtraHeaterProtections = 8;		// The number of extra heater protection instances

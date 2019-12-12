@@ -79,7 +79,7 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 		if (gb.Seen('H'))		// Set thermostatically-controlled sensors
 		{
 			seen = true;
-			int32_t sensors[MaxSensorsInSystem];		// signed because we use H-1 to disable thermostatic mode
+			int32_t sensors[MaxSensors];			// signed because we use H-1 to disable thermostatic mode
 			size_t numH = ARRAY_SIZE(sensors);
 			gb.GetIntArray(sensors, numH, false);
 
@@ -90,7 +90,7 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 				const int hnum = sensors[h];
 				if (hnum >= 0)
 				{
-					if (hnum < (int)MaxSensorsInSystem)
+					if (hnum < (int)MaxSensors)
 					{
 						SetBit(sensorsMonitored, (unsigned int)hnum);
 					}
@@ -144,7 +144,7 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 			if (sensorsMonitored != 0)
 			{
 				reply.catf(", temperature: %.1f:%.1fC, sensors:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);
-				for (unsigned int i = 0; i < MaxSensorsInSystem; ++i)
+				for (unsigned int i = 0; i < MaxSensors; ++i)
 				{
 					if (IsBitSet(sensorsMonitored, i))
 					{

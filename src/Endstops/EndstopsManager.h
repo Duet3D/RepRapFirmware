@@ -18,6 +18,8 @@
 class CanMessageBuffer;
 #endif
 
+class StallDetectionEndstop;
+
 // Endstop manager class
 class EndstopsManager
 {
@@ -36,7 +38,7 @@ public:
 	bool EnableCurrentZProbe(bool probingAway = false) __attribute__ ((warn_unused_result)) { return EnableZProbe(currentZProbeNumber, probingAway); }
 
 	// Enable extruder endstops
-	bool EnableExtruderEndstop(size_t extruder);
+	bool EnableExtruderEndstops(ExtrudersBitmap extruders);
 
 	// Get the first endstop that has triggered and remove it from the active list if appropriate
 	EndstopHitDetails CheckEndstops(bool goingSlow);
@@ -87,6 +89,7 @@ private:
 	size_t currentZProbeNumber;							// which Z probe we are using
 
 	Endstop *axisEndstops[MaxAxes];						// the endstops assigned to each axis (each one may have several switches), each may be null
+	StallDetectionEndstop *extrudersEndstop;				// the endstop used for extruder stall detection, one will do for all extruders
 	ZProbe *zProbes[MaxZProbes];						// the Z probes used. The first one is always non-null.
 	ZProbe *defaultZProbe;
 

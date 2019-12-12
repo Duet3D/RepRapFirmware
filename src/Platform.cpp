@@ -134,13 +134,6 @@ constexpr uint16_t driverV12OffAdcReading = V12VoltageToAdcReading(9.5);				// v
 
 const float MinStepPulseTiming = 0.2;				// we assume that we always generate step high and low times at least this wide without special action
 
-//#define SOFT_TIMER_DEBUG
-
-#ifdef SOFT_TIMER_DEBUG
-unsigned int numSoftTimerInterruptsExecuted = 0;
-uint32_t lastSoftTimerInterruptScheduledAt = 0;
-#endif
-
 // Global variable for debugging in tricky situations e.g. within ISRs
 int debugLine = 0;
 
