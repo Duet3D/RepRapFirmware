@@ -25,6 +25,7 @@ Bug fixes:
 - M579 scale factors were not applied correctly to G2 and G3 arc moves
 - Spurious newlines were sometimes sent to USB and other output channels when commands such as M106 were deferred to execute in step with movement commands, or when commands were executed in response to triggers
 - Messages sent to USB and Telnet output channels did not always time out when the channel became unavailable for writing
+- Added check for W5500 reporting received data too big to fit in a single buffer
 
 Version 2.04
 ============
