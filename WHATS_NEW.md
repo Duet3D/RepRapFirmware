@@ -1,42 +1,26 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 2.05RC2
-===============
+Version 2.05
+============
 Compatible files:
 - DuetWiFiServer 1.23
 - DuetWebControl 2.0.4 (recommended) or 1.22.6
 
-Upgrade notes from version 2.04 or 2.05RC1:
-- If using this relesse to control a laser cutter or laser engraver, see "Changed behaviour" below.
+Upgrade notes from version 2.04:
+- If using this release to control a laser cutter or laser engraver, see "Changed behaviour" below.
 
 Changed behaviour:
 - In laser mode (M453), M3 never turns on the laser immediately. Instead it sets the default laser power for following G1/G2/G3 commands. Likewise, M5 does not immediately turn off the laser, it sets the default laser power for following G1/G2/G3 commands. If a subsequent G1 command has a S parameter, the value of that parameter becomes the default laser power for that command and subsequent G1/G2/G3 commands.
-
-Bug fixes:
-- 2.05RC1 was not compatible with Duet Web Control 2.0.x. This has been fixed.
-- In laser mode, M3 and M5 commands used in a job gave unpredictable results
-
-Version 2.05RC1
-===============
-Compatible files:
-- DuetWiFiServer 1.23
-- DuetWebControl 1.22.6
-
-Known issue:
-- This release is not compatible with Duet Web Control 2.0.x. Please either use Duet Web Control 1.22.6 or wait for firmware release 2.05RC2.
-
-Upgrade notes:
-- See the known issue above.
-
-Changed behaviour:
 - Current position is no longer shown for pulse-type filament monitors, because it was meaningless and nearly always zero
 - Calibration data for pulse-type filament monitors is no longer displayed by M122 (same as for laser and magnetic filament monitors). Use M591 to report the calibration data.
+- The rr_config HTTP response and M408 S5 response now include new field "sysdir" which gives the system files directory set by M505. This will allow future versions of Duet Web Control to fetch the height map from the correct folder after running G29.
 
 Bug fixes:
+- In laser mode, M3 and M5 commands used in a job gave unpredictable results
 - If a print that was sliced using absolute extrusion mode was resurrected, unwanted extrusion occurred just before the print was resumed
 - Bed compensation did not take account of the XY offset of the printing nozzle from the head reference point
-- When using SCARA kinematics the calculation of the minimum achoievable radius was incorrect. Depending on the B parameter of the M667 command, this could result in spurious "Intermediate position unreachable" errors, or non-extruding G1 moves being turned into G0 moves.
+- When using SCARA kinematics the calculation of the minimum achievable radius was incorrect. Depending on the B parameter of the M667 command, this could result in spurious "Intermediate position unreachable" errors, or non-extruding G1 moves being turned into G0 moves.
 - A badly-formed GCode file that returned the layer height or object height as nan or inf caused DWC to disconnect because of a JSON parse failure
 - M579 scale factors were not applied correctly to G2 and G3 arc moves
 - Spurious newlines were sometimes sent to USB and other output channels when commands such as M106 were deferred to execute in step with movement commands, or when commands were executed in response to triggers
