@@ -46,7 +46,7 @@ private:
 	inline bool IsTriggered(size_t index) const
 	{
 #if SUPPORT_CAN_EXPANSION
-		return (boardNumbers[index] == CanId::MasterAddress) ? ports[index].Read() != activeLow : states[index] != activeLow;
+		return (boardNumbers[index] == CanId::MasterAddress) ? ports[index].Read() : states[index] != activeLow;
 #else
 		return ports[index].Read();
 #endif

@@ -108,6 +108,7 @@ GCodeResult SwitchEndstop::Configure(const char *pinNames, const StringRef& repl
 				ReleasePorts();
 				return GCodeResult::error;
 			}
+			ports[numPortsUsed].SetInvert(inputType == EndStopInputType::activeLow);
 		}
 
 		++numPortsUsed;
