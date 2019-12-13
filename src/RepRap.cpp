@@ -1597,6 +1597,14 @@ OutputBuffer *RepRap::GetConfigResponse()
 
 	response->catf(",\"firmwareDate\":\"%s\"", DATE);
 
+	// System files folder
+	{
+		String<MaxFilenameLength> sysdir;
+		platform->GetSysDir(sysdir.GetRef());
+		response->catf(", \"sysdir\":");
+		response->EncodeString(sysdir, false);
+	}
+
 	// Motor idle parameters
 	response->catf(",\"idleCurrentFactor\":%.1f", (double)(platform->GetIdleCurrentFactor() * 100.0));
 	response->catf(",\"idleTimeout\":%.1f", (double)(move->IdleTimeout()));

@@ -247,11 +247,11 @@ void W5500Socket::Poll(bool full)
 	}
 }
 
-// Try to receive more incoming data from the socket. The mutex is alrady owned.
+// Try to receive more incoming data from the socket. The mutex is already owned.
 void W5500Socket::ReceiveData()
 {
 	const uint16_t len = getSn_RX_RSR(socketNum);
-	if (len != 0)
+	if (len != 0 && len <= NetworkBuffer::bufferSize)
 	{
 //		debugPrintf("%u available\n", len);
 		NetworkBuffer * const lastBuffer = NetworkBuffer::FindLast(receivedData);
