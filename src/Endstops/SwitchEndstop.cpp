@@ -53,7 +53,7 @@ void SwitchEndstop::ReleasePorts()
 	}
 }
 
-GCodeResult SwitchEndstop::Configure(GCodeBuffer& gb, const StringRef& reply, EndStopInputType inputType)
+GCodeResult SwitchEndstop::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
 	String<StringLength50> portNames;
 	if (!gb.GetReducedString(portNames.GetRef()))
@@ -62,16 +62,12 @@ GCodeResult SwitchEndstop::Configure(GCodeBuffer& gb, const StringRef& reply, En
 		return GCodeResult::error;
 	}
 
-	return Configure(portNames.c_str(), reply, inputType);
+	return Configure(portNames.c_str(), reply);
 }
 
-GCodeResult SwitchEndstop::Configure(const char *pinNames, const StringRef& reply, EndStopInputType inputType)
+GCodeResult SwitchEndstop::Configure(const char *pinNames, const StringRef& reply)
 {
 	ReleasePorts();
-
-#if SUPPORT_CAN_EXPANSION
-	activeLow = (inputType == EndStopInputType::activeLow);
-#endif
 
 	// Parse the string into individual port names
 	size_t index = 0;
@@ -108,7 +104,6 @@ GCodeResult SwitchEndstop::Configure(const char *pinNames, const StringRef& repl
 				ReleasePorts();
 				return GCodeResult::error;
 			}
-			ports[numPortsUsed].SetInvert(inputType == EndStopInputType::activeLow);
 		}
 
 		++numPortsUsed;
@@ -121,27 +116,9 @@ GCodeResult SwitchEndstop::Configure(const char *pinNames, const StringRef& repl
 	return GCodeResult::ok;
 }
 
-void SwitchEndstop::Reconfigure(EndStopPosition pos, EndStopInputType inputType)
+EndStopType SwitchEndstop::GetEndstopType() const
 {
-	SetAtHighEnd(pos == EndStopPosition::highEndStop);
-
-#if SUPPORT_CAN_EXPANSION
-	activeLow = (inputType == EndStopInputType::activeLow);
-#endif
-
-	for (IoPort& pp : ports)
-	{
-		pp.SetInvert(inputType == EndStopInputType::activeLow);
-	}
-}
-
-EndStopInputType SwitchEndstop::GetEndstopType() const
-{
-#if SUPPORT_CAN_EXPANSION
-	return (activeLow)? EndStopInputType::activeLow : EndStopInputType::activeHigh;
-#else
-	return (ports[0].GetInvert()) ? EndStopInputType::activeLow : EndStopInputType::activeHigh;
-#endif
+	return EndStopType::inputPin;
 }
 
 // Test whether we are at or near the stop
@@ -258,13 +235,7 @@ bool SwitchEndstop::Acknowledge(EndstopHitDetails what)
 
 void SwitchEndstop::AppendDetails(const StringRef& str)
 {
-	str.catf("%s on pin(s)",
-#if SUPPORT_CAN_EXPANSION
-				(activeLow)
-#else
-				(ports[0].GetInvert())
-#endif
-				? "active low switch" : "active high switch");
+	str.catf((numPortsUsed == 1) ? "switch connected to pin" : "switches connected to pins");
 
 	for (size_t i = 0; i < numPortsUsed; ++i)
 	{
@@ -282,7 +253,7 @@ void SwitchEndstop::AppendDetails(const StringRef& str)
 			{
 				reply.cat('\n');
 				reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
-				str.catf("%u.???", boardNumbers[i]);
+				str.catf("%u.unknown", boardNumbers[i]);
 			}
 		}
 		else

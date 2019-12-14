@@ -56,7 +56,7 @@ inline void EndstopOrZProbe::UpdateStalledDrivers(uint32_t driverMask, bool isSt
 class Endstop : public EndstopOrZProbe
 {
 public:
-	virtual EndStopInputType GetEndstopType() const = 0;
+	virtual EndStopType GetEndstopType() const = 0;
 	virtual bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) = 0;
 	virtual void AppendDetails(const StringRef& str) = 0;
 

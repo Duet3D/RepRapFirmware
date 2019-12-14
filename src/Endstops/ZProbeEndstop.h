@@ -18,7 +18,7 @@ public:
 
 	ZProbeEndstop(uint8_t axis, EndStopPosition pos);
 
-	EndStopInputType GetEndstopType() const override { return EndStopInputType::zProbeAsEndstop; }
+	EndStopType GetEndstopType() const override { return EndStopType::zProbeAsEndstop; }
 	EndStopHit Stopped() const override;
 	bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) override;
 	EndstopHitDetails CheckTriggered(bool goingSlow) override;

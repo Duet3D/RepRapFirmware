@@ -941,7 +941,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		ch = '[';
 		for (size_t i = 0; i <= highestFan; i++)
 		{
-			response->catf("%c%d", ch, (int)lrintf(fansManager->GetFanValue(i) * 100.0));
+			const float fanValue = fansManager->GetFanValue(i);
+			response->catf("%c%d", ch, (fanValue < 0.0) ? -1 : (int)lrintf(fanValue * 100.0));
 			ch = ',';
 		}
 		response->cat((ch == '[') ? "[]" : "]");
@@ -1734,7 +1735,8 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) noexcept
 	response->catf(",\"fanPercent\":[%.1f", (double)(gCodes->GetMappedFanSpeed() * 100.0));
 	for (size_t i = 0; i < MaxFans; ++i)
 	{
-		response->catf(",%.1f", (double)(fansManager->GetFanValue(i) * 100.0));
+		const float fanValue = fansManager->GetFanValue(i);
+		response->catf(",%d", (fanValue < 0.0) ? -1 : (int)lrintf(fanValue * 100.0));
 	}
 	response->cat(']');
 

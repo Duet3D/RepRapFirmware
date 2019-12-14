@@ -44,7 +44,7 @@ public:
 	EndstopHitDetails CheckEndstops(bool goingSlow);
 
 	// Configure the endstops in response to M574
-	GCodeResult HandleM574(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf);
 
 	EndStopPosition GetEndStopPosition(size_t axis) const pre(axis < MaxAxes);
 	bool HomingZWithProbe() const;

@@ -20,6 +20,7 @@
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 #include "GCodes/GCodes.h"
 #include "Movement/Move.h"
+#include <OutputMemory.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include "CanMessageBuffer.h"
@@ -49,7 +50,7 @@ void EndstopsManager::Init()
 	for (size_t axis = 0; axis < ARRAY_SIZE(DefaultEndstopPinNames); ++axis)
 	{
 		SwitchEndstop * const sw = new SwitchEndstop(axis, EndStopPosition::lowEndStop);
-		sw->Configure(DefaultEndstopPinNames[axis], dummy.GetRef(), EndStopInputType::activeHigh);
+		sw->Configure(DefaultEndstopPinNames[axis], dummy.GetRef());
 		axisEndstops[axis] = sw;
 	}
 #endif
@@ -206,7 +207,7 @@ EndstopHitDetails EndstopsManager::CheckEndstops(bool goingSlow)
 }
 
 // Configure the endstops in response to M574
-GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf)
 {
 	// First count how many axes we are configuring, and lock movement if necessary
 	unsigned int axesSeen = 0;
@@ -229,22 +230,29 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 
 	if (axesSeen == 0)
 	{
-		reply.copy("Endstop configuration");
-		char sep = ':';
+		// Report current configuration
+		// The response can get very long, so allocate an output buffer
+		if (outbuf == nullptr && !OutputBuffer::Allocate(outbuf))
+		{
+			return GCodeResult::notFinished;
+		}
+
+		outbuf->copy("Endstop configuration:");
 		ReadLocker lock(endstopsLock);
 
 		for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
 		{
-			reply.catf("%c %c: ", sep, reprap.GetGCodes().GetAxisLetters()[axis]);
-			sep = ',';
+			outbuf->catf("\n%c: ", reprap.GetGCodes().GetAxisLetters()[axis]);
 			if (axisEndstops[axis] == nullptr)
 			{
-				reply.cat("none");
+				outbuf->cat("none");
 			}
 			else
 			{
-				reply.cat((axisEndstops[axis]->GetAtHighEnd()) ? "high end " : "low end ");
+				outbuf->cat((axisEndstops[axis]->GetAtHighEnd()) ? "high end " : "low end ");
+				reply.Clear();
 				axisEndstops[axis]->AppendDetails(reply);
+				outbuf->cat(reply.c_str());
 			}
 		}
 		return GCodeResult::ok;
@@ -258,17 +266,22 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 
 	activeEndstops = nullptr;			// we may be about to remove endstops, so make sure they are not in the active list
 
-	const EndStopInputType inputType = (gb.Seen('S')) ? (EndStopInputType)gb.GetUIValue() : EndStopInputType::activeHigh;
-	if (inputType >= EndStopInputType::numInputTypes)
+	const EndStopType inputType = (gb.Seen('S')) ? (EndStopType)gb.GetUIValue() : EndStopType::inputPin;
+	if (inputType >= EndStopType::numInputTypes)
 	{
 		reply.copy("invalid input type");
+		return GCodeResult::error;
+	}
+	if (inputType == EndStopType::unused_wasActiveLow)
+	{
+		reply.copy("endstop type 0 is no longer supported. Use type 1 and invert the input pin instead.");
 		return GCodeResult::error;
 	}
 
 	if (gb.Seen('P'))					// we use P not C, because C may be an axis
 	{
 		// Setting the port number(s), so there must be just one axis and we must be using switch-type endstops
-		if (axesSeen > 1 || (inputType != EndStopInputType::activeLow && inputType != EndStopInputType::activeHigh))
+		if (axesSeen > 1 || inputType != EndStopType::inputPin)
 		{
 			reply.copy("Invalid use of P parameter");
 			return GCodeResult::error;
@@ -279,7 +292,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 		delete axisEndstops[lastAxisSeen];
 		axisEndstops[lastAxisSeen] = nullptr;
 		SwitchEndstop * const sw = new SwitchEndstop(lastAxisSeen, lastPosSeen);
-		const GCodeResult rslt = sw->Configure(gb, reply, inputType);
+		const GCodeResult rslt = sw->Configure(gb, reply);
 		axisEndstops[lastAxisSeen] = sw;
 		return rslt;
 	}
@@ -302,28 +315,27 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 			{
 				switch (inputType)
 				{
-				case EndStopInputType::motorStallAny:
+				case EndStopType::motorStallAny:
 					// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
 					delete axisEndstops[axis];
 					axisEndstops[axis] = new StallDetectionEndstop(axis, pos, false);
 					break;
 
-				case EndStopInputType::motorStallIndividual:
+				case EndStopType::motorStallIndividual:
 					// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
 					delete axisEndstops[axis];
 					axisEndstops[axis] = new StallDetectionEndstop(axis, pos, true);
 					break;
 
-				case EndStopInputType::zProbeAsEndstop:
+				case EndStopType::zProbeAsEndstop:
 					// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
 					delete axisEndstops[axis];
 					axisEndstops[axis] = new ZProbeEndstop(axis, pos);
 					break;
 
-				case EndStopInputType::activeHigh:
-				case EndStopInputType::activeLow:
+				case EndStopType::inputPin:
 					if (   axisEndstops[axis] == nullptr
-						|| (axisEndstops[axis]->GetEndstopType() != EndStopInputType::activeHigh && axisEndstops[axis]->GetEndstopType() != EndStopInputType::activeLow)
+						|| axisEndstops[axis]->GetEndstopType() != EndStopType::inputPin
 					   )
 					{
 						// Asking for a switch endstop but we don't already have one, so we don't know what pin number(s) it should use
@@ -332,7 +344,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply)
 					}
 					else
 					{
-						((SwitchEndstop *)axisEndstops[axis])->Reconfigure(pos, inputType);
+						// Nothing to do because there are no parameters we can change except the port number
 					}
 					break;
 
@@ -356,7 +368,7 @@ EndStopPosition EndstopsManager::GetEndStopPosition(size_t axis) const pre(axis 
 // Return true if we are using a bed probe to home Z
 bool EndstopsManager::HomingZWithProbe() const
 {
-	return axisEndstops[Z_AXIS] == nullptr || axisEndstops[Z_AXIS]->GetEndstopType() == EndStopInputType::zProbeAsEndstop;
+	return axisEndstops[Z_AXIS] == nullptr || axisEndstops[Z_AXIS]->GetEndstopType() == EndStopType::zProbeAsEndstop;
 }
 
 EndStopHit EndstopsManager::Stopped(size_t axis) const

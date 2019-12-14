@@ -3454,7 +3454,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			return false;
 		}
-		result = platform.GetEndstops().HandleM574(gb, reply);
+		result = platform.GetEndstops().HandleM574(gb, reply, outBuf);
 		break;
 
 	case 575: // Set communications parameters
