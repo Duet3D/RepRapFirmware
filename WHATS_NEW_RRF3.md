@@ -6,6 +6,9 @@ Recommended compatible firmware:
 - DuetWiFiServer 1.23
 - DuetSoftwareFramework 1.1.0.5
 
+Upgrade notes:
+- Endstop type S0 (active low switch) is no longer supported in M574 commands. Instead, use type S1 and invert the input by prefixing the pin name with '!'.
+
 Feature changes since beta 12:
 - Duet 3 only: Switch-type endstops connected to expansion boards are supported (needs recent expansion board firmware too)
 - Current position is no longer shown for pulse-type filament monitors, because it was meaningless and nearly always zero
@@ -21,7 +24,6 @@ Feature changes since beta 12:
 
 Bug fixes:
 - Duet 3 only: Files uploaded in standalone modes were frequently corruption during uploading, resulting in CRC mismatches reported
-- The M574 S0 parameter was teated the same as S2 (i.e. triggered when input high) except on endstop inputs connected to Duet 3 expansion boards
 - If a print that was sliced using absolute extrusion mode was resurrected, unwanted extrusion occurred just before the print was resumed
 - Bed compensation did not take account of the XY offset of the printing nozzle from the head reference point
 - When using SCARA kinematics the calculation of the minimum achievable radius was incorrect. Depending on the B parameter of the M667 command, this could result in spurious "Intermediate position unreachable" errors, or non-extruding G1 moves being turned into G0 moves.
