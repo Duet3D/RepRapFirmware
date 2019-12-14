@@ -1455,7 +1455,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingM
 	}
 
 	// Zero every extruder drive as some drives may not be moved
-	for (size_t drive = MaxAxes; drive < MaxAxesPlusExtruders; drive++)
+	for (size_t drive = numTotalAxes; drive < MaxAxesPlusExtruders; drive++)
 	{
 		moveBuffer.coords[drive] = 0.0;
 	}
@@ -2184,9 +2184,9 @@ void GCodes::FinaliseMove(GCodeBuffer& gb)
 		segMoveState = SegmentedMoveState::active;
 		gb.SetState(GCodeState::waitingForSegmentedMoveToGo);
 
-		for (size_t drive = MaxAxes; drive < MaxAxesPlusExtruders; ++drive)
+		for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 		{
-			moveBuffer.coords[drive] /= totalSegments;							// change the extrusion to extrusion per segment
+			moveBuffer.coords[ExtruderToLogicalDrive(extruder)] /= totalSegments;	// change the extrusion to extrusion per segment
 		}
 
 		if (moveFractionToSkip != 0.0)
