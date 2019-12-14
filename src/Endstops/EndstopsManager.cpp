@@ -344,7 +344,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 					}
 					else
 					{
-						// Nothing to do because there are no parameters we can change except the port number
+						axisEndstops[axis]->SetAtHighEnd(pos == EndStopPosition::highEndStop);
 					}
 					break;
 
