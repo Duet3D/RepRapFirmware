@@ -39,37 +39,37 @@ struct CanMessageUpdateHeaterModel;
 class FopDt
 {
 public:
-	FopDt();
+	FopDt() noexcept;
 
-	bool SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted);
+	bool SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted) noexcept;
 
-	float GetGain() const { return gain; }
-	float GetTimeConstant() const { return timeConstant; }
-	float GetDeadTime() const { return deadTime; }
-	float GetMaxPwm() const { return maxPwm; }
-	float GetVoltage() const { return standardVoltage; }
-	bool UsePid() const { return usePid; }
-	bool IsInverted() const { return inverted; }
-	bool IsEnabled() const { return enabled; }
-	bool ArePidParametersOverridden() const { return pidParametersOverridden; }
-	M301PidParameters GetM301PidParameters(bool forLoadChange) const;
-	void SetM301PidParameters(const M301PidParameters& params);
+	float GetGain() const noexcept { return gain; }
+	float GetTimeConstant() const noexcept { return timeConstant; }
+	float GetDeadTime() const noexcept { return deadTime; }
+	float GetMaxPwm() const noexcept { return maxPwm; }
+	float GetVoltage() const noexcept { return standardVoltage; }
+	bool UsePid() const noexcept { return usePid; }
+	bool IsInverted() const noexcept { return inverted; }
+	bool IsEnabled() const noexcept { return enabled; }
+	bool ArePidParametersOverridden() const noexcept { return pidParametersOverridden; }
+	M301PidParameters GetM301PidParameters(bool forLoadChange) const noexcept;
+	void SetM301PidParameters(const M301PidParameters& params) noexcept;
 
-	const PidParameters& GetPidParameters(bool forLoadChange) const
+	const PidParameters& GetPidParameters(bool forLoadChange) const noexcept
 	{
 		return (forLoadChange) ? loadChangeParams : setpointChangeParams;
 	}
 
 #if HAS_MASS_STORAGE
-	bool WriteParameters(FileStore *f, size_t heater) const;		// erite the model parameters to file returning true if no error
+	bool WriteParameters(FileStore *f, size_t heater) const noexcept;		// erite the model parameters to file returning true if no error
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg);
+	void SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg) noexcept;
 #endif
 
 private:
-	void CalcPidConstants();
+	void CalcPidConstants() noexcept;
 
 	float gain;
 	float timeConstant;

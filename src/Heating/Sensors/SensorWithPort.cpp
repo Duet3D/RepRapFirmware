@@ -8,12 +8,12 @@
 #include "SensorWithPort.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
-SensorWithPort::SensorWithPort(unsigned int sensorNum, const char *type)
+SensorWithPort::SensorWithPort(unsigned int sensorNum, const char *type) noexcept
 	: TemperatureSensor(sensorNum, type)
 {
 }
 
-SensorWithPort::~SensorWithPort()
+SensorWithPort::~SensorWithPort() noexcept
 {
 	port.Release();
 }
@@ -35,7 +35,7 @@ bool SensorWithPort::ConfigurePort(GCodeBuffer& gb, const StringRef& reply, PinA
 }
 
 // Copy the basic details to the reply buffer. This hides the version in the base class.
-void SensorWithPort::CopyBasicDetails(const StringRef& reply) const
+void SensorWithPort::CopyBasicDetails(const StringRef& reply) const noexcept
 {
 	reply.printf("Sensor %u", GetSensorNumber());
 	if (GetSensorName() != nullptr)

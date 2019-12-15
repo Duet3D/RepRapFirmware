@@ -15,14 +15,14 @@
 class RemoteSensor : public TemperatureSensor
 {
 public:
-	RemoteSensor(unsigned int sensorNum, CanAddress pBoardAddress);
+	RemoteSensor(unsigned int sensorNum, CanAddress pBoardAddress) noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
-	CanAddress GetBoardAddress() const override { return boardAddress; }
-	void UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report) override;
+	CanAddress GetBoardAddress() const noexcept override { return boardAddress; }
+	void UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report) noexcept override;
 
 	// Try to get a temperature reading
-	void Poll() override { }				// nothing to do here because reception of CAN messages update the reading
+	void Poll() noexcept override { }				// nothing to do here because reception of CAN messages update the reading
 
 private:
 	CanAddress boardAddress;

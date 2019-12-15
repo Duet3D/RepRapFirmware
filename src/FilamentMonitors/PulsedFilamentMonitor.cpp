@@ -16,7 +16,7 @@
 // is more likely to cause errors. This constant sets the delay required after a retract or reprime move before we accept the measurement.
 const int32_t SyncDelayMillis = 10;
 
-PulsedFilamentMonitor::PulsedFilamentMonitor(unsigned int extruder, unsigned int type)
+PulsedFilamentMonitor::PulsedFilamentMonitor(unsigned int extruder, unsigned int type) noexcept
 	: FilamentMonitor(extruder, type),
 	  mmPerPulse(DefaultMmPerPulse),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
@@ -25,7 +25,7 @@ PulsedFilamentMonitor::PulsedFilamentMonitor(unsigned int extruder, unsigned int
 	Init();
 }
 
-void PulsedFilamentMonitor::Init()
+void PulsedFilamentMonitor::Init() noexcept
 {
 	sensorValue = 0;
 	calibrationStarted = false;
@@ -34,7 +34,7 @@ void PulsedFilamentMonitor::Init()
 	Reset();
 }
 
-void PulsedFilamentMonitor::Reset()
+void PulsedFilamentMonitor::Reset() noexcept
 {
 	extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
 	comparisonStarted = false;
@@ -116,7 +116,7 @@ bool PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 }
 
 // ISR for when the pin state changes. It should return true if the ISR wants the commanded extrusion to be fetched.
-bool PulsedFilamentMonitor::Interrupt()
+bool PulsedFilamentMonitor::Interrupt() noexcept
 {
 	++sensorValue;
 	if (samplesReceived < 100)
@@ -136,7 +136,7 @@ bool PulsedFilamentMonitor::Interrupt()
 }
 
 // Call the following regularly to keep the status up to date
-void PulsedFilamentMonitor::Poll()
+void PulsedFilamentMonitor::Poll() noexcept
 {
 	cpu_irq_disable();
 	const uint32_t locSensorVal = sensorValue;
@@ -164,7 +164,7 @@ void PulsedFilamentMonitor::Poll()
 // 'filamentConsumed' is the net amount of extrusion since the last call to this function.
 // 'isPrinting' is true unless a non-printing extruder move was in progress
 // 'fromIsr' is true if this measurement was taken at the end of the ISR because the ISR returned true
-FilamentSensorStatus PulsedFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed)
+FilamentSensorStatus PulsedFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) noexcept
 {
 	// 1. Update the extrusion commanded
 	extrusionCommandedSinceLastSync += filamentConsumed;
@@ -199,7 +199,7 @@ FilamentSensorStatus PulsedFilamentMonitor::Check(bool isPrinting, bool fromIsr,
 }
 
 // Compare the amount commanded with the amount of extrusion measured, and set up for the next comparison
-FilamentSensorStatus PulsedFilamentMonitor::CheckFilament(float amountCommanded, float amountMeasured, bool overdue)
+FilamentSensorStatus PulsedFilamentMonitor::CheckFilament(float amountCommanded, float amountMeasured, bool overdue) noexcept
 {
 	if (reprap.Debug(moduleFilamentSensors))
 	{
@@ -263,7 +263,7 @@ FilamentSensorStatus PulsedFilamentMonitor::CheckFilament(float amountCommanded,
 }
 
 // Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
-FilamentSensorStatus PulsedFilamentMonitor::Clear()
+FilamentSensorStatus PulsedFilamentMonitor::Clear() noexcept
 {
 	Poll();								// to keep the diagnostics up to date
 	Reset();
@@ -271,7 +271,7 @@ FilamentSensorStatus PulsedFilamentMonitor::Clear()
 }
 
 // Print diagnostic info for this sensor
-void PulsedFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder)
+void PulsedFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder) noexcept
 {
 	Poll();
 	const char* const statusText = (samplesReceived < 2) ? "no data received" : "ok";

@@ -12,19 +12,19 @@
 #include "HeaterProtection.h"
 #include "Sensors/TemperatureSensor.h"
 
-Heater::Heater(unsigned int num)
+Heater::Heater(unsigned int num) noexcept
 	: heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
 	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime),
 	  heaterProtection(nullptr), active(false)
 {
 }
 
-Heater::~Heater()
+Heater::~Heater() noexcept
 {
 }
 
 // Set the process model returning true if successful
-GCodeResult Heater::SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply)
+GCodeResult Heater::SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
 {
 	const float temperatureLimit = GetHighestTemperatureLimit();
 	const bool rslt = model.SetParameters(gain, tc, td, maxPwm, temperatureLimit, voltage, usePid, inverted);
@@ -57,14 +57,14 @@ GCodeResult Heater::SetModel(float gain, float tc, float td, float maxPwm, float
 	return GCodeResult::error;
 }
 
-GCodeResult Heater::SetFaultDetectionParameters(float pMaxTempExcursion, float pMaxFaultTime, const StringRef& reply)
+GCodeResult Heater::SetFaultDetectionParameters(float pMaxTempExcursion, float pMaxFaultTime, const StringRef& reply) noexcept
 {
 	maxTempExcursion = pMaxTempExcursion;
 	maxHeatingFaultTime = pMaxFaultTime;
 	return UpdateFaultDetectionParameters(reply);
 }
 
-HeaterStatus Heater::GetStatus() const
+HeaterStatus Heater::GetStatus() const noexcept
 {
 	const HeaterMode mode = GetMode();
 	return (mode == HeaterMode::fault) ? HeaterStatus::fault
@@ -75,13 +75,13 @@ HeaterStatus Heater::GetStatus() const
 							: HeaterStatus::standby;
 }
 
-const char* Heater::GetSensorName() const
+const char* Heater::GetSensorName() const noexcept
 {
 	const auto sensor = reprap.GetHeat().FindSensor(sensorNumber);
 	return (sensor.IsNotNull()) ? sensor->GetSensorName() : nullptr;
 }
 
-GCodeResult Heater::Activate(const StringRef& reply)
+GCodeResult Heater::Activate(const StringRef& reply) noexcept
 {
 	if (GetMode() != HeaterMode::fault)
 	{
@@ -92,7 +92,7 @@ GCodeResult Heater::Activate(const StringRef& reply)
 	return GCodeResult::error;
 }
 
-void Heater::Standby()
+void Heater::Standby() noexcept
 {
 	if (GetMode() != HeaterMode::fault)
 	{
@@ -102,7 +102,7 @@ void Heater::Standby()
 	}
 }
 
-void Heater::SetActiveTemperature(float t)
+void Heater::SetActiveTemperature(float t) noexcept
 {
 	if (t > GetHighestTemperatureLimit())
 	{
@@ -123,7 +123,7 @@ void Heater::SetActiveTemperature(float t)
 	}
 }
 
-void Heater::SetStandbyTemperature(float t)
+void Heater::SetStandbyTemperature(float t) noexcept
 {
 	if (t > GetHighestTemperatureLimit())
 	{
@@ -145,24 +145,24 @@ void Heater::SetStandbyTemperature(float t)
 }
 
 // Get the highest temperature limit
-float Heater::GetHighestTemperatureLimit() const
+float Heater::GetHighestTemperatureLimit() const noexcept
 {
 	return reprap.GetHeat().GetHighestTemperatureLimit(GetHeaterNumber());
 }
 
 // Get the lowest temperature limit
-float Heater::GetLowestTemperatureLimit() const
+float Heater::GetLowestTemperatureLimit() const noexcept
 {
 	return reprap.GetHeat().GetLowestTemperatureLimit(GetHeaterNumber());
 }
 
-void Heater::SetHeaterProtection(HeaterProtection *h)
+void Heater::SetHeaterProtection(HeaterProtection *h) noexcept
 {
 	heaterProtection = h;
 }
 
 // Check heater protection elements and return true if everything is good
-bool Heater::CheckProtection() const
+bool Heater::CheckProtection() const noexcept
 {
 	for (HeaterProtection *prot = heaterProtection; prot != nullptr; prot = prot->Next())
 	{
@@ -175,12 +175,12 @@ bool Heater::CheckProtection() const
 	return true;
 }
 
-bool Heater::CheckGood() const
+bool Heater::CheckGood() const noexcept
 {
 	return GetMode() != HeaterMode::fault && CheckProtection();
 }
 
-void Heater::SetModelDefaults()
+void Heater::SetModelDefaults() noexcept
 {
 	if (reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber()))
 	{

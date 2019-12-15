@@ -25,45 +25,45 @@ class LocalHeater : public Heater
 	static const size_t NumPreviousTemperatures = 4; // How many samples we average the temperature derivative over
 
 public:
-	LocalHeater(unsigned int heaterNum);
-	~LocalHeater();
+	LocalHeater(unsigned int heaterNum) noexcept;
+	~LocalHeater() noexcept;
 
 	GCodeResult ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sensorNumber, const StringRef& reply) override;
-	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) override;
-	GCodeResult ReportDetails(const StringRef& reply) const override;
+	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept override;
+	GCodeResult ReportDetails(const StringRef& reply) const noexcept override;
 
-	void Spin() override;							// Called in a tight loop to keep things running
-	void SwitchOff() override;						// Not even standby - all heater power off
-	GCodeResult ResetFault(const StringRef& reply) override;	// Reset a fault condition - only call this if you know what you are doing
-	float GetTemperature() const override;			// Get the current temperature
-	float GetAveragePWM() const override;			// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
-	float GetAccumulator() const override;			// Return the integral accumulator
-	void StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) override;	// Start an auto tune cycle for this PID
-	void GetAutoTuneStatus(const StringRef& reply) const override;	// Get the auto tune status or last result
-	void Suspend(bool sus) override;				// Suspend the heater to conserve power or while doing Z probing
+	void Spin() noexcept override;							// Called in a tight loop to keep things running
+	void SwitchOff() noexcept override;						// Not even standby - all heater power off
+	GCodeResult ResetFault(const StringRef& reply) noexcept override;	// Reset a fault condition - only call this if you know what you are doing
+	float GetTemperature() const noexcept override;			// Get the current temperature
+	float GetAveragePWM() const noexcept override;			// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
+	float GetAccumulator() const noexcept override;			// Return the integral accumulator
+	void StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) noexcept override;	// Start an auto tune cycle for this PID
+	void GetAutoTuneStatus(const StringRef& reply) const noexcept override;	// Get the auto tune status or last result
+	void Suspend(bool sus) noexcept override;				// Suspend the heater to conserve power or while doing Z probing
 
 #if SUPPORT_CAN_EXPANSION
-	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) override { }
+	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept override { }
 #endif
 
 protected:
-	void ResetHeater() override;
-	HeaterMode GetMode() const override { return mode; }
-	GCodeResult SwitchOn(const StringRef& reply) override;	// Turn the heater on and set the mode
-	GCodeResult UpdateModel(const StringRef& reply) override;	// Called when the heater model has been changed
-	GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) override { return GCodeResult::ok; }
+	void ResetHeater() noexcept override;
+	HeaterMode GetMode() const noexcept override { return mode; }
+	GCodeResult SwitchOn(const StringRef& reply) noexcept override;	// Turn the heater on and set the mode
+	GCodeResult UpdateModel(const StringRef& reply) noexcept override;	// Called when the heater model has been changed
+	GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) noexcept override { return GCodeResult::ok; }
 
 private:
-	void SetHeater(float power) const;				// Power is a fraction in [0,1]
-	TemperatureError ReadTemperature();				// Read and store the temperature of this heater
-	void DoTuningStep();							// Called on each temperature sample when auto tuning
-	static bool ReadingsStable(size_t numReadings, float maxDiff)
+	void SetHeater(float power) const noexcept;				// Power is a fraction in [0,1]
+	TemperatureError ReadTemperature() noexcept;				// Read and store the temperature of this heater
+	void DoTuningStep() noexcept;							// Called on each temperature sample when auto tuning
+	static bool ReadingsStable(size_t numReadings, float maxDiff) noexcept
 		pre(numReadings >= 2; numReadings <= MaxTuningTempReadings);
-	static int GetPeakTempIndex();					// Auto tune helper function
-	static int IdentifyPeak(size_t numToAverage);	// Auto tune helper function
-	void CalculateModel();							// Calculate G, td and tc from the accumulated readings
-	void DisplayBuffer(const char *intro);			// Debug helper
-	float GetExpectedHeatingRate() const;			// Get the minimum heating rate we expect
+	static int GetPeakTempIndex() noexcept;					// Auto tune helper function
+	static int IdentifyPeak(size_t numToAverage) noexcept;	// Auto tune helper function
+	void CalculateModel() noexcept;							// Calculate G, td and tc from the accumulated readings
+	void DisplayBuffer(const char *intro) noexcept;			// Debug helper
+	float GetExpectedHeatingRate() const noexcept;			// Get the minimum heating rate we expect
 
 	PwmPort port;									// The port that drives the heater
 	float temperature;								// The current temperature

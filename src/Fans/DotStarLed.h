@@ -15,7 +15,7 @@ class GCodeBuffer;
 
 namespace DotStarLed
 {
-	void Init();
+	void Init() noexcept;
 	GCodeResult SetColours(GCodeBuffer& gb, const StringRef& reply);
 };
 

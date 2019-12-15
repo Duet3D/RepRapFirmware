@@ -25,18 +25,18 @@
 #endif
 
 // Constructor
-TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *t)
+TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *t) noexcept
 	: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr),
 	  lastTemperature(0.0), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::success) {}
 
 // Virtual destructor
-TemperatureSensor::~TemperatureSensor()
+TemperatureSensor::~TemperatureSensor() noexcept
 {
 	delete sensorName;
 }
 
 // Return the latest temperature reading
-TemperatureError TemperatureSensor::GetLatestTemperature(float& t, uint8_t outputNumber)
+TemperatureError TemperatureSensor::GetLatestTemperature(float& t, uint8_t outputNumber) noexcept
 {
 	if (millis() - whenLastRead > TemperatureReadingTimeout)
 	{
@@ -48,7 +48,7 @@ TemperatureError TemperatureSensor::GetLatestTemperature(float& t, uint8_t outpu
 }
 
 // Set the name - normally called only once, so we allow heap memory to be allocated
-void TemperatureSensor::SetSensorName(const char *newName)
+void TemperatureSensor::SetSensorName(const char *newName) noexcept
 {
 	// Change the heater name in a thread-safe manner
 	const char *oldName = sensorName;
@@ -76,7 +76,7 @@ GCodeResult TemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply
 	return GCodeResult::ok;
 }
 
-void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const
+void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 {
 	reply.printf("Sensor %d", sensorNumber);
 	if (sensorName != nullptr)
@@ -99,7 +99,7 @@ void TemperatureSensor::TryConfigureSensorName(GCodeBuffer& gb, bool& seen)
 	}
 }
 
-void TemperatureSensor::SetResult(float t, TemperatureError rslt)
+void TemperatureSensor::SetResult(float t, TemperatureError rslt) noexcept
 {
 	lastResult = rslt;
 	lastTemperature = t;
@@ -111,7 +111,7 @@ void TemperatureSensor::SetResult(float t, TemperatureError rslt)
 }
 
 // This version is used for unsuccessful readings only
-void TemperatureSensor::SetResult(TemperatureError rslt)
+void TemperatureSensor::SetResult(TemperatureError rslt) noexcept
 {
 	lastResult = lastRealError = rslt;
 	lastTemperature = BadErrorTemperature;
@@ -121,13 +121,13 @@ void TemperatureSensor::SetResult(TemperatureError rslt)
 #if SUPPORT_CAN_EXPANSION
 
 // Get the expansion board address. Overridden for remote sensors.
-CanAddress TemperatureSensor::GetBoardAddress() const
+CanAddress TemperatureSensor::GetBoardAddress() const noexcept
 {
 	return CanInterface::GetCanAddress();
 }
 
 // Update the temperature, if it is a remote sensor. Overridden in class RemoteSensor.
-void TemperatureSensor::UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report)
+void TemperatureSensor::UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report) noexcept
 {
 	// Nothing to do here. This function is overridden in class RemoteSensor.
 }
@@ -136,9 +136,9 @@ void TemperatureSensor::UpdateRemoteTemperature(CanAddress src, const CanSensorR
 
 // Factory method
 #if SUPPORT_CAN_EXPANSION
-TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, CanAddress boardAddress, const char *typeName, const StringRef& reply)
+TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, CanAddress boardAddress, const char *typeName, const StringRef& reply) noexcept
 #else
-TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char *typeName, const StringRef& reply)
+TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char *typeName, const StringRef& reply) noexcept
 #endif
 {
 	TemperatureSensor *ts;
@@ -251,7 +251,7 @@ static const uint16_t tempTable[] =
 
 const size_t NumTempTableEntries = sizeof(tempTable)/sizeof(tempTable[0]);
 
-/*static*/ TemperatureError TemperatureSensor::GetPT100Temperature(float& t, uint16_t ohmsx100)
+/*static*/ TemperatureError TemperatureSensor::GetPT100Temperature(float& t, uint16_t ohmsx100) noexcept
 {
 
 	// Formally-verified binary search routine, adapted from one of the eCv examples

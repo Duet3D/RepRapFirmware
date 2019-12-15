@@ -53,7 +53,7 @@ const uint8_t Cr1ReadMask = 0b01111111;			// ignore the reserved bits
 //  Openfault=0	assert fault on open circuit condition
 const uint8_t DefaultFaultMask = 0b00111100;
 
-ThermocoupleSensor31856::ThermocoupleSensor31856(unsigned int sensorNum)
+ThermocoupleSensor31856::ThermocoupleSensor31856(unsigned int sensorNum) noexcept
 	: SpiTemperatureSensor(sensorNum, "Thermocouple (MAX31856)", MAX31856_SpiMode, MAX31856_Frequency),
 	  cr0(DefaultCr0), thermocoupleType(TypeK)
 {
@@ -130,7 +130,7 @@ GCodeResult ThermocoupleSensor31856::Configure(GCodeBuffer& gb, const StringRef&
 	return GCodeResult::ok;
 }
 
-TemperatureError ThermocoupleSensor31856::TryInitThermocouple() const
+TemperatureError ThermocoupleSensor31856::TryInitThermocouple() const noexcept
 {
 	const uint8_t modeData[4] = { 0x80, cr0, (uint8_t)(DefaultCr1 | thermocoupleType), DefaultFaultMask };		// write registers 0, 1, 2
 	uint32_t rawVal;
@@ -158,7 +158,7 @@ TemperatureError ThermocoupleSensor31856::TryInitThermocouple() const
 	return sts;
 }
 
-void ThermocoupleSensor31856::Poll()
+void ThermocoupleSensor31856::Poll() noexcept
 {
 	static const uint8_t dataOut[5] = {0x0C, 0x55, 0x55, 0x55, 0x55};	// read registers LTCB0, LTCB1, LTCB2, Fault status
 	uint32_t rawVal;

@@ -15,7 +15,7 @@
 class TmcDriverTemperatureSensor : public TemperatureSensor
 {
 public:
-	TmcDriverTemperatureSensor(unsigned int sensorNum, unsigned int chan);
+	TmcDriverTemperatureSensor(unsigned int sensorNum, unsigned int chan) noexcept;
 
 	static constexpr const char *PrimaryTypeName = "drivers";
 #ifdef DUET_NG
@@ -23,9 +23,9 @@ public:
 #endif
 
 	// Get the smart drivers channel that this sensor monitors, or -1 if it doesn't
-	int GetSmartDriversChannel() const override { return (int) channel; }
+	int GetSmartDriversChannel() const noexcept override { return (int) channel; }
 
-	void Poll() override;
+	void Poll() noexcept override;
 
 private:
 	unsigned int channel;

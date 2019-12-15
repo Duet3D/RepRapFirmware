@@ -16,7 +16,7 @@
 // is more likely to cause errors. This constant sets the delay required after a retract or reprime move before we accept the measurement.
 const int32_t SyncDelayMillis = 10;
 
-LaserFilamentMonitor::LaserFilamentMonitor(unsigned int extruder, unsigned int type)
+LaserFilamentMonitor::LaserFilamentMonitor(unsigned int extruder, unsigned int type) noexcept
 	: Duet3DFilamentMonitor(extruder, type),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
 	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false), checkNonPrintingMoves(false)
@@ -25,7 +25,7 @@ LaserFilamentMonitor::LaserFilamentMonitor(unsigned int extruder, unsigned int t
 	Init();
 }
 
-void LaserFilamentMonitor::Init()
+void LaserFilamentMonitor::Init() noexcept
 {
 	dataReceived = false;
 	sensorValue = 0;
@@ -39,7 +39,7 @@ void LaserFilamentMonitor::Init()
 	Reset();
 }
 
-void LaserFilamentMonitor::Reset()
+void LaserFilamentMonitor::Reset() noexcept
 {
 	extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
 	laserMonitorState = LaserMonitorState::idle;
@@ -141,7 +141,7 @@ bool LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bo
 }
 
 // Return the current position
-float LaserFilamentMonitor::GetCurrentPosition() const
+float LaserFilamentMonitor::GetCurrentPosition() const noexcept
 {
 	const uint16_t positionRange = (sensorValue & TypeLaserLargeDataRangeBitMask) ? TypeLaserLargeRange : TypeLaserDefaultRange;
 	int32_t pos = (int32_t)(sensorValue & (positionRange - 1));
@@ -153,7 +153,7 @@ float LaserFilamentMonitor::GetCurrentPosition() const
 }
 
 // Deal with any received data
-void LaserFilamentMonitor::HandleIncomingData()
+void LaserFilamentMonitor::HandleIncomingData() noexcept
 {
 	uint16_t val;
 	PollResult res;
@@ -257,7 +257,7 @@ void LaserFilamentMonitor::HandleIncomingData()
 // 'filamentConsumed' is the net amount of extrusion commanded since the last call to this function.
 // 'hadNonPrintingMove' is true if filamentConsumed includes extruder movement from non-printing moves.
 // 'fromIsr' is true if this measurement was taken at the end of the ISR because a potential start bit was seen
-FilamentSensorStatus LaserFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed)
+FilamentSensorStatus LaserFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) noexcept
 {
 	// 1. Update the extrusion commanded and whether we have had an extruding but non-printing move
 	extrusionCommandedSinceLastSync += filamentConsumed;
@@ -303,7 +303,7 @@ FilamentSensorStatus LaserFilamentMonitor::Check(bool isPrinting, bool fromIsr, 
 }
 
 // Compare the amount commanded with the amount of extrusion measured, and set up for the next comparison
-FilamentSensorStatus LaserFilamentMonitor::CheckFilament(float amountCommanded, float amountMeasured, bool overdue)
+FilamentSensorStatus LaserFilamentMonitor::CheckFilament(float amountCommanded, float amountMeasured, bool overdue) noexcept
 {
 	if (reprap.Debug(moduleFilamentSensors))
 	{
@@ -382,7 +382,7 @@ FilamentSensorStatus LaserFilamentMonitor::CheckFilament(float amountCommanded, 
 }
 
 // Clear the measurement state. Called when we are not printing a file. Return the present/not present status if available.
-FilamentSensorStatus LaserFilamentMonitor::Clear()
+FilamentSensorStatus LaserFilamentMonitor::Clear() noexcept
 {
 	Reset();											// call this first so that haveStartBitData and synced are false when we call HandleIncomingData
 	HandleIncomingData();								// to keep the diagnostics up to date
@@ -393,7 +393,7 @@ FilamentSensorStatus LaserFilamentMonitor::Clear()
 }
 
 // Print diagnostic info for this sensor
-void LaserFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder)
+void LaserFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder) noexcept
 {
 	String<FormatStringLength> buf;
 	buf.printf("Extruder %u: ", extruder);

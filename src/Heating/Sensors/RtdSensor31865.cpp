@@ -35,7 +35,7 @@ const uint8_t Cr0ReadMask = 0b11011101;		// bits 1 and 5 auto clear, so ignore t
 
 const uint16_t DefaultRef = 400;
 
-RtdSensor31865::RtdSensor31865(unsigned int sensorNum)
+RtdSensor31865::RtdSensor31865(unsigned int sensorNum) noexcept
 	: SpiTemperatureSensor(sensorNum, "PT100 (MAX31865)", MAX31865_SpiMode, MAX31865_Frequency),
 	  rref(DefaultRef), cr0(DefaultCr0)
 {
@@ -117,7 +117,7 @@ GCodeResult RtdSensor31865::Configure(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Try to initialise the RTD
-TemperatureError RtdSensor31865::TryInitRtd() const
+TemperatureError RtdSensor31865::TryInitRtd() const noexcept
 {
 	const uint8_t modeData[2] = { 0x80, cr0 };			// write register 0
 	uint32_t rawVal;
@@ -139,7 +139,7 @@ TemperatureError RtdSensor31865::TryInitRtd() const
 	return sts;
 }
 
-void RtdSensor31865::Poll()
+void RtdSensor31865::Poll() noexcept
 {
 	static const uint8_t dataOut[4] = {0, 0x55, 0x55, 0x55};			// read registers 0 (control), 1 (MSB) and 2 (LSB)
 	uint32_t rawVal;

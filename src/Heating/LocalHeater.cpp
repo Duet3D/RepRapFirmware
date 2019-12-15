@@ -40,7 +40,7 @@ float tuningVoltageAccumulator;				// sum of the voltage readings we take during
 
 // Member functions and constructors
 
-LocalHeater::LocalHeater(unsigned int heaterNum) : Heater(heaterNum), mode(HeaterMode::off)
+LocalHeater::LocalHeater(unsigned int heaterNum) noexcept : Heater(heaterNum), mode(HeaterMode::off)
 {
 	ResetHeater();
 	SetHeater(0.0);							// set up the pin even if the heater is not enabled (for PCCB)
@@ -50,28 +50,28 @@ LocalHeater::LocalHeater(unsigned int heaterNum) : Heater(heaterNum), mode(Heate
 	lastSampleTime = millis();
 }
 
-LocalHeater::~LocalHeater()
+LocalHeater::~LocalHeater() noexcept
 {
 	SwitchOff();
 	port.Release();
 }
 
-float LocalHeater::GetTemperature() const
+float LocalHeater::GetTemperature() const noexcept
 {
 	return temperature;
 }
 
-float LocalHeater::GetAccumulator() const
+float LocalHeater::GetAccumulator() const noexcept
 {
 	return iAccumulator;
 }
 
-inline void LocalHeater::SetHeater(float power) const
+inline void LocalHeater::SetHeater(float power) const noexcept
 {
 	port.WriteAnalog(power);
 }
 
-void LocalHeater::ResetHeater()
+void LocalHeater::ResetHeater() noexcept
 {
 	mode = HeaterMode::off;
 	previousTemperaturesGood = 0;
@@ -102,13 +102,13 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 	return GCodeResult::ok;
 }
 
-GCodeResult LocalHeater::SetPwmFrequency(PwmFrequency freq, const StringRef& reply)
+GCodeResult LocalHeater::SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept
 {
 	port.SetFrequency(freq);
 	return GCodeResult::ok;
 }
 
-GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const
+GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const noexcept
 {
 	reply.printf("Heater %u", GetHeaterNumber());
 	port.AppendDetails(reply);
@@ -124,7 +124,7 @@ GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const
 }
 
 // Read and store the temperature of this heater and returns the error code.
-TemperatureError LocalHeater::ReadTemperature()
+TemperatureError LocalHeater::ReadTemperature() noexcept
 {
 	TemperatureError err;
 	temperature = reprap.GetHeat().GetSensorTemperature(GetSensorNumber(), err);		// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
@@ -132,7 +132,7 @@ TemperatureError LocalHeater::ReadTemperature()
 }
 
 // This must be called whenever the heater is turned on, and any time the heater is active and the target temperature is changed
-GCodeResult LocalHeater::SwitchOn(const StringRef& reply)
+GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 {
 	if (!GetModel().IsEnabled())
 	{
@@ -167,7 +167,7 @@ GCodeResult LocalHeater::SwitchOn(const StringRef& reply)
 }
 
 // Switch off the specified heater. If in tuning mode, delete the array used to store tuning temperature readings.
-void LocalHeater::SwitchOff()
+void LocalHeater::SwitchOff() noexcept
 {
 	lastPwm = 0.0;
 	if (GetModel().IsEnabled())
@@ -190,13 +190,13 @@ void LocalHeater::SwitchOff()
 }
 
 // This is called when the heater model has been updated. Returns true if successful.
-GCodeResult LocalHeater::UpdateModel(const StringRef& reply)
+GCodeResult LocalHeater::UpdateModel(const StringRef& reply) noexcept
 {
 	return GCodeResult::ok;
 }
 
 // This is the main heater control loop function
-void LocalHeater::Spin()
+void LocalHeater::Spin() noexcept
 {
 	// Read the temperature even if the heater is suspended or the model is not enabled
 	const TemperatureError err = ReadTemperature();
@@ -446,7 +446,7 @@ void LocalHeater::Spin()
 	}
 }
 
-GCodeResult LocalHeater::ResetFault(const StringRef& reply)
+GCodeResult LocalHeater::ResetFault(const StringRef& reply) noexcept
 {
 	badTemperatureCount = 0;
 	if (mode == HeaterMode::fault)
@@ -457,13 +457,13 @@ GCodeResult LocalHeater::ResetFault(const StringRef& reply)
 	return GCodeResult::ok;
 }
 
-float LocalHeater::GetAveragePWM() const
+float LocalHeater::GetAveragePWM() const noexcept
 {
 	return averagePWM * HeatSampleIntervalMillis/(HeatPwmAverageTime * SecondsToMillis);
 }
 
 // Get a conservative estimate of the expected heating rate at the current temperature and average PWM. The result may be negative.
-float LocalHeater::GetExpectedHeatingRate() const
+float LocalHeater::GetExpectedHeatingRate() const noexcept
 {
 	// In the following we allow for the gain being only 75% of what we think it should be, to avoid false alarms
 	const float maxTemperatureRise = 0.75 * GetModel().GetGain() * GetAveragePWM();		// this is the highest temperature above ambient we expect the heater can reach at this PWM
@@ -474,7 +474,7 @@ float LocalHeater::GetExpectedHeatingRate() const
 }
 
 // Auto tune this PID
-void LocalHeater::StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply)
+void LocalHeater::StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) noexcept
 {
 	// Starting an auto tune
 	if (!GetModel().IsEnabled())
@@ -512,7 +512,7 @@ void LocalHeater::StartAutoTune(float targetTemp, float maxPwm, const StringRef&
 }
 
 // Get the auto tune status or last result
-void LocalHeater::GetAutoTuneStatus(const StringRef& reply) const
+void LocalHeater::GetAutoTuneStatus(const StringRef& reply) const noexcept
 {
 	if (mode >= HeaterMode::tuning0)
 	{
@@ -578,7 +578,7 @@ void LocalHeater::GetAutoTuneStatus(const StringRef& reply) const
 
 // This is called on each temperature sample when auto tuning
 // It must set lastPWM to the required PWM, unless it is the same as last time.
-void LocalHeater::DoTuningStep()
+void LocalHeater::DoTuningStep() noexcept
 {
 	// See if another sample is due
 	if (tuningReadingsTaken == 0)
@@ -738,7 +738,7 @@ void LocalHeater::DoTuningStep()
 }
 
 // Return true if the last 'numReadings' readings are stable
-/*static*/ bool LocalHeater::ReadingsStable(size_t numReadings, float maxDiff)
+/*static*/ bool LocalHeater::ReadingsStable(size_t numReadings, float maxDiff) noexcept
 {
 	if (tuningTempReadings == nullptr || tuningReadingsTaken < numReadings)
 	{
@@ -760,7 +760,7 @@ void LocalHeater::DoTuningStep()
 // Calculate which reading gave us the peak temperature.
 // Return -1 if peak not identified yet, 0 if we are never going to find a peak, else the index of the peak
 // If the readings show a continuous decrease then we return 1, because zero dead time would lead to infinities
-/*static*/ int LocalHeater::GetPeakTempIndex()
+/*static*/ int LocalHeater::GetPeakTempIndex() noexcept
 {
 	// Check we have enough readings to look for the peak
 	if (tuningReadingsTaken < 15)
@@ -794,7 +794,7 @@ void LocalHeater::DoTuningStep()
 // See if there is exactly one peak in the readings.
 // Return -1 if more than one peak, else the index of the peak. The so-called peak may be right at the end, in which case it isn't really a peak.
 // With a well-insulated bed heater the temperature may not start dropping appreciably within the 120 second time limit allowed.
-/*static*/ int LocalHeater::IdentifyPeak(size_t numToAverage)
+/*static*/ int LocalHeater::IdentifyPeak(size_t numToAverage) noexcept
 {
 	int firstPeakIndex = -1, lastSameIndex = -1;
 	float peakTempTimesN = -999.0;
@@ -826,7 +826,7 @@ void LocalHeater::DoTuningStep()
 }
 
 // Calculate the heater model from the accumulated heater parameters
-void LocalHeater::CalculateModel()
+void LocalHeater::CalculateModel() noexcept
 {
 	if (reprap.Debug(moduleHeat))
 	{
@@ -866,7 +866,7 @@ void LocalHeater::CalculateModel()
 	}
 }
 
-void LocalHeater::DisplayBuffer(const char *intro)
+void LocalHeater::DisplayBuffer(const char *intro) noexcept
 {
 	OutputBuffer *buf;
 	if (OutputBuffer::Allocate(buf))
@@ -882,7 +882,7 @@ void LocalHeater::DisplayBuffer(const char *intro)
 }
 
 // Suspend the heater, or resume it
-void LocalHeater::Suspend(bool sus)
+void LocalHeater::Suspend(bool sus) noexcept
 {
 	if (sus)
 	{

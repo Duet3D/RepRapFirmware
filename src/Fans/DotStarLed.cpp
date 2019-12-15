@@ -28,7 +28,7 @@ namespace DotStarLed
 	static bool busy = false;
 	static uint32_t chunkBuffer[MaxChunkSize];
 
-	void Init()
+	void Init() noexcept
 	{
 		// Set up the USART or QSPI pins for SPI mode
 		// The pins are already set up for SPI in the pins table

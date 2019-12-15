@@ -13,13 +13,13 @@
 class PulsedFilamentMonitor : public FilamentMonitor
 {
 public:
-	PulsedFilamentMonitor(unsigned int extruder, unsigned int type);
+	PulsedFilamentMonitor(unsigned int extruder, unsigned int type) noexcept;
 
 	bool Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) override;
-	FilamentSensorStatus Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) override;
-	FilamentSensorStatus Clear() override;
-	void Diagnostics(MessageType mtype, unsigned int extruder) override;
-	bool Interrupt() override;
+	FilamentSensorStatus Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) noexcept override;
+	FilamentSensorStatus Clear() noexcept override;
+	void Diagnostics(MessageType mtype, unsigned int extruder) noexcept override;
+	bool Interrupt() noexcept override;
 
 private:
 	static constexpr float DefaultMmPerPulse = 1.0;
@@ -27,10 +27,10 @@ private:
 	static constexpr float DefaultMaxMovementAllowed = 1.6;
 	static constexpr float DefaultMinimumExtrusionCheckLength = 5.0;
 
-	void Init();
-	void Reset();
-	void Poll();
-	FilamentSensorStatus CheckFilament(float amountCommanded, float amountMeasured, bool overdue);
+	void Init() noexcept;
+	void Reset() noexcept;
+	void Poll() noexcept;
+	FilamentSensorStatus CheckFilament(float amountCommanded, float amountMeasured, bool overdue) noexcept;
 
 	// Configuration parameters
 	float mmPerPulse;

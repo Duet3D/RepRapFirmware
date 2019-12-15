@@ -12,7 +12,7 @@
 #include "Heat.h"
 
 
-HeaterProtection::HeaterProtection(size_t index) : next(nullptr)
+HeaterProtection::HeaterProtection(size_t index) noexcept : next(nullptr)
 {
 	// By default each heater protection element is mapped to its corresponding heater.
 	// All other heater protection elements are unused and can be optionally assigned.
@@ -20,7 +20,7 @@ HeaterProtection::HeaterProtection(size_t index) : next(nullptr)
 	sensorNumber = -1;
 }
 
-void HeaterProtection::Init(float tempLimit)
+void HeaterProtection::Init(float tempLimit) noexcept
 {
 	next = nullptr;
 	limit = tempLimit;
@@ -31,7 +31,7 @@ void HeaterProtection::Init(float tempLimit)
 }
 
 // Check if any action needs to be taken. Returns true if everything is OK
-bool HeaterProtection::Check()
+bool HeaterProtection::Check() noexcept
 {
 	if (sensorNumber >= 0)
 	{
@@ -63,7 +63,7 @@ bool HeaterProtection::Check()
 	return true;
 }
 
-void HeaterProtection::SetHeater(int newHeater)
+void HeaterProtection::SetHeater(int newHeater) noexcept
 {
 	heater = newHeater;
 }
