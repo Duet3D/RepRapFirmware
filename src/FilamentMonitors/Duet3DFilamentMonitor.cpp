@@ -12,13 +12,13 @@
 #include "RepRap.h"
 
 // Constructors
-Duet3DFilamentMonitor::Duet3DFilamentMonitor(unsigned int extruder, unsigned int type)
+Duet3DFilamentMonitor::Duet3DFilamentMonitor(unsigned int extruder, unsigned int type) noexcept
 	: FilamentMonitor(extruder, type), overrunErrorCount(0), polarityErrorCount(0)
 {
 	InitReceiveBuffer();
 }
 
-void Duet3DFilamentMonitor::InitReceiveBuffer()
+void Duet3DFilamentMonitor::InitReceiveBuffer() noexcept
 {
 	edgeCaptureReadPointer = edgeCaptureWritePointer = 1;
 	edgeCaptures[0] = StepTimer::GetTimerTicks();				// pretend we just had a high-to-low transition
@@ -26,7 +26,7 @@ void Duet3DFilamentMonitor::InitReceiveBuffer()
 }
 
 // ISR for when the pin state changes. It should return true if the ISR wants the commanded extrusion to be fetched.
-bool Duet3DFilamentMonitor::Interrupt()
+bool Duet3DFilamentMonitor::Interrupt() noexcept
 {
 	uint32_t now = StepTimer::GetTimerTicks();
 	bool wantReading = false;
@@ -66,7 +66,7 @@ bool Duet3DFilamentMonitor::Interrupt()
 }
 
 // Call the following regularly to keep the status up to date
-Duet3DFilamentMonitor::PollResult Duet3DFilamentMonitor::PollReceiveBuffer(uint16_t& measurement)
+Duet3DFilamentMonitor::PollResult Duet3DFilamentMonitor::PollReceiveBuffer(uint16_t& measurement) noexcept
 {
 	// For the Duet3D sensors we need to decode the received data from the transition times recorded in the edgeCaptures array
 	static constexpr uint32_t BitsPerSecond = 1000;							// the nominal bit rate that the data is transmitted at
@@ -212,13 +212,13 @@ Duet3DFilamentMonitor::PollResult Duet3DFilamentMonitor::PollReceiveBuffer(uint1
 }
 
 // Return true if we are on the process of receiving data form the filament monitor
-bool Duet3DFilamentMonitor::IsReceiving() const
+bool Duet3DFilamentMonitor::IsReceiving() const noexcept
 {
 	return state == RxdState::waitingForEndOfStartBit || state == RxdState::waitingForNibble;
 }
 
 // Return true if we are waiting for a start bit
-bool Duet3DFilamentMonitor::IsWaitingForStartBit() const
+bool Duet3DFilamentMonitor::IsWaitingForStartBit() const noexcept
 {
 	return state == RxdState::waitingForStartBit;
 }

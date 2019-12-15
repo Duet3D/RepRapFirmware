@@ -15,11 +15,11 @@
 class CpuTemperatureSensor : public TemperatureSensor
 {
 public:
-	CpuTemperatureSensor(unsigned int sensorNum);
+	CpuTemperatureSensor(unsigned int sensorNum) noexcept;
 
 	static constexpr const char *TypeName = "mcutemp";
 
-	void Poll() override;
+	void Poll() noexcept override;
 };
 
 #endif

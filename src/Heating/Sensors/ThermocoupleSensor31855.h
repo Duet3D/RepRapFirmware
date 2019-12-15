@@ -13,12 +13,12 @@
 class ThermocoupleSensor31855 : public SpiTemperatureSensor
 {
 public:
-	ThermocoupleSensor31855(unsigned int sensorNum);
+	ThermocoupleSensor31855(unsigned int sensorNum) noexcept;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
 
 	static constexpr const char *TypeName = "thermocouplemax31855";
 
-	void Poll() override;
+	void Poll() noexcept override;
 };
 
 #endif /* SRC_HEATING_THERMOCOUPLESENSOR31855_H_ */

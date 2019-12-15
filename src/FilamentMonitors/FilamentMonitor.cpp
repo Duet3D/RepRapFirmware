@@ -21,12 +21,12 @@ Mutex FilamentMonitor::filamentSensorsMutex;
 FilamentMonitor *FilamentMonitor::filamentSensors[MaxExtruders] = { 0 };
 
 // Default destructor
-FilamentMonitor::~FilamentMonitor()
+FilamentMonitor::~FilamentMonitor() noexcept
 {
 }
 
 // Call this to disable the interrupt before deleting or re-configuring a filament monitor
-void FilamentMonitor::Disable()
+void FilamentMonitor::Disable() noexcept
 {
 	port.Release();
 }
@@ -60,7 +60,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 }
 
 // Static initialisation
-/*static*/ void FilamentMonitor::InitStatic()
+/*static*/ void FilamentMonitor::InitStatic() noexcept
 {
 	filamentSensorsMutex.Create("FilamentSensors");
 }
@@ -113,7 +113,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 }
 
 // Factory function
-/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int type)
+/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int type) noexcept
 {
 	switch (type)
 	{
@@ -140,7 +140,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 }
 
 // Return an error message corresponding to a status code
-/*static*/ const char *FilamentMonitor::GetErrorMessage(FilamentSensorStatus f)
+/*static*/ const char *FilamentMonitor::GetErrorMessage(FilamentSensorStatus f) noexcept
 {
 	switch(f)
 	{
@@ -154,7 +154,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 }
 
 // ISR
-/*static*/ void FilamentMonitor::InterruptEntry(CallbackParameter param)
+/*static*/ void FilamentMonitor::InterruptEntry(CallbackParameter param) noexcept
 {
 	FilamentMonitor * const fm = static_cast<FilamentMonitor*>(param.vp);
 	if (fm->Interrupt())
@@ -165,7 +165,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 	}
 }
 
-/*static*/ void FilamentMonitor::Spin()
+/*static*/ void FilamentMonitor::Spin() noexcept
 {
 	MutexLocker lock(filamentSensorsMutex);
 
@@ -222,7 +222,7 @@ bool FilamentMonitor::ConfigurePin(GCodeBuffer& gb, const StringRef& reply, Inte
 }
 
 // Send diagnostics info
-/*static*/ void FilamentMonitor::Diagnostics(MessageType mtype)
+/*static*/ void FilamentMonitor::Diagnostics(MessageType mtype) noexcept
 {
 	bool first = true;
 	for (size_t i = 0; i < MaxExtruders; ++i)

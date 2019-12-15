@@ -13,13 +13,13 @@
 #include "CAN/CanInterface.h"
 #include "CAN/CanMessageGenericConstructor.h"
 
-RemoteFan::RemoteFan(unsigned int fanNum, CanAddress boardNum)
+RemoteFan::RemoteFan(unsigned int fanNum, CanAddress boardNum) noexcept
 	: Fan(fanNum),
 	  lastRpm(-1), whenLastRpmReceived(0), boardNumber(boardNum), thermostaticFanRunning(false)
 {
 }
 
-RemoteFan::~RemoteFan()
+RemoteFan::~RemoteFan() noexcept
 {
 	CanMessageGenericConstructor cons(M950FanParams);
 	cons.AddUParam('F', fanNumber);
@@ -28,17 +28,17 @@ RemoteFan::~RemoteFan()
 	(void)cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, dummy.GetRef());
 }
 
-bool RemoteFan::Check()
+bool RemoteFan::Check() noexcept
 {
 	return thermostaticFanRunning;
 }
 
-bool RemoteFan::IsEnabled() const
+bool RemoteFan::IsEnabled() const noexcept
 {
 	return true;
 }
 
-GCodeResult RemoteFan::SetPwmFrequency(PwmFrequency freq, const StringRef& reply)
+GCodeResult RemoteFan::SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept
 {
 	CanMessageGenericConstructor cons(M950FanParams);
 	cons.AddUParam('F', fanNumber);
@@ -46,7 +46,7 @@ GCodeResult RemoteFan::SetPwmFrequency(PwmFrequency freq, const StringRef& reply
 	return cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, reply);
 }
 
-void RemoteFan::UpdateRpmFromRemote(CanAddress src, int32_t rpm)
+void RemoteFan::UpdateRpmFromRemote(CanAddress src, int32_t rpm) noexcept
 {
 	if (src == boardNumber)
 	{
@@ -55,7 +55,7 @@ void RemoteFan::UpdateRpmFromRemote(CanAddress src, int32_t rpm)
 	}
 }
 
-int32_t RemoteFan::GetRPM()
+int32_t RemoteFan::GetRPM() noexcept
 {
 	if (millis() - whenLastRpmReceived > RpmReadingTimeout)
 	{
@@ -64,14 +64,14 @@ int32_t RemoteFan::GetRPM()
 	return lastRpm;
 }
 
-GCodeResult RemoteFan::ReportPortDetails(const StringRef& str) const
+GCodeResult RemoteFan::ReportPortDetails(const StringRef& str) const noexcept
 {
 	CanMessageGenericConstructor cons(M950FanParams);
 	cons.AddUParam('F', fanNumber);
 	return cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, str);
 }
 
-bool RemoteFan::UpdateFanConfiguration(const StringRef& reply)
+bool RemoteFan::UpdateFanConfiguration(const StringRef& reply) noexcept
 {
 	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -95,7 +95,7 @@ bool RemoteFan::UpdateFanConfiguration(const StringRef& reply)
 }
 
 // Update the hardware PWM
-GCodeResult RemoteFan::Refresh(const StringRef& reply)
+GCodeResult RemoteFan::Refresh(const StringRef& reply) noexcept
 {
 	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -111,7 +111,7 @@ GCodeResult RemoteFan::Refresh(const StringRef& reply)
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 }
 
-GCodeResult RemoteFan::ConfigurePort(const char* pinNames, PwmFrequency freq, const StringRef& reply)
+GCodeResult RemoteFan::ConfigurePort(const char* pinNames, PwmFrequency freq, const StringRef& reply) noexcept
 {
 	CanMessageGenericConstructor cons(M950FanParams);
 	cons.AddUParam('F', fanNumber);

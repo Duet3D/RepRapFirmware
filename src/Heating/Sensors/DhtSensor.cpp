@@ -20,18 +20,18 @@ constexpr uint8_t  MinimumOneBitLength = 50;		// microseconds
 constexpr uint32_t MinimumOneBitStepClocks = (StepTimer::StepClockRate * MinimumOneBitLength)/1000000;
 
 // Pulse ISR
-extern "C" void DhtDataTransition(CallbackParameter cp)
+extern "C" void DhtDataTransition(CallbackParameter cp) noexcept
 {
 	static_cast<DhtTemperatureSensor*>(cp.vp)->Interrupt();
 }
 
 // Class DhtTemperatureSensor members
-DhtTemperatureSensor::DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType type)
+DhtTemperatureSensor::DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType type) noexcept
 	: SensorWithPort(sensorNum, "DHT-temperature"), type(type), lastReadTime(0)
 {
 }
 
-DhtTemperatureSensor::~DhtTemperatureSensor()
+DhtTemperatureSensor::~DhtTemperatureSensor() noexcept
 {
 }
 
@@ -79,7 +79,7 @@ GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& re
 	return GCodeResult::ok;
 }
 
-TemperatureError DhtTemperatureSensor::GetLatestTemperature(float &t, uint8_t outputNumber)
+TemperatureError DhtTemperatureSensor::GetLatestTemperature(float &t, uint8_t outputNumber) noexcept
 {
 	if (outputNumber > 1)
 	{
@@ -94,7 +94,7 @@ TemperatureError DhtTemperatureSensor::GetLatestTemperature(float &t, uint8_t ou
 	return result;
 }
 
-void DhtTemperatureSensor::Interrupt()
+void DhtTemperatureSensor::Interrupt() noexcept
 {
 	if (numPulses < ARRAY_SIZE(pulses))
 	{
@@ -110,12 +110,12 @@ void DhtTemperatureSensor::Interrupt()
 	}
 }
 
-void DhtTemperatureSensor::Poll()
+void DhtTemperatureSensor::Poll() noexcept
 {
 	SetResult(GetStoredReading(), TemperatureError::success);
 }
 
-bool DhtTemperatureSensor::PollInTask()
+bool DhtTemperatureSensor::PollInTask() noexcept
 {
 	const auto now = millis();
 	if ((now - lastReadTime) >= MinimumReadInterval)
@@ -126,7 +126,7 @@ bool DhtTemperatureSensor::PollInTask()
 	return false;
 }
 
-void DhtTemperatureSensor::TakeReading()
+void DhtTemperatureSensor::TakeReading() noexcept
 {
 	// Send the start bit. This must be at least 18ms for the DHT11, 0.8ms for the DHT21, and 1ms long for the DHT22.
 	port.SetMode(PinAccess::write0);
@@ -180,7 +180,7 @@ void DhtTemperatureSensor::TakeReading()
 
 // Process a reading. If success then update the temperature and humidity and return TemperatureError::success.
 // Else return the TemperatureError code but do not update the readings.
-TemperatureError DhtTemperatureSensor::ProcessReadings(float& t, float& h)
+TemperatureError DhtTemperatureSensor::ProcessReadings(float& t, float& h) noexcept
 {
 	// Check enough bits received and check start bit
 	if (numPulses != ARRAY_SIZE(pulses) || pulses[0] < MinimumOneBitStepClocks)
@@ -235,12 +235,12 @@ TemperatureError DhtTemperatureSensor::ProcessReadings(float& t, float& h)
 
 
 // Class DhtHumiditySensor members
-DhtHumiditySensor::DhtHumiditySensor(unsigned int sensorNum)
+DhtHumiditySensor::DhtHumiditySensor(unsigned int sensorNum) noexcept
 	: AdditionalOutputSensor(sensorNum, "DHT-humidity", false)
 {
 }
 
-DhtHumiditySensor::~DhtHumiditySensor()
+DhtHumiditySensor::~DhtHumiditySensor() noexcept
 {
 }
 

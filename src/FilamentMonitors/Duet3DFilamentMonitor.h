@@ -15,12 +15,12 @@
 class Duet3DFilamentMonitor : public FilamentMonitor
 {
 public:
-	Duet3DFilamentMonitor(unsigned int extruder, unsigned int type);
+	Duet3DFilamentMonitor(unsigned int extruder, unsigned int type) noexcept;
 
-	bool Interrupt() override;
+	bool Interrupt() noexcept override;
 
 protected:
-	void InitReceiveBuffer();
+	void InitReceiveBuffer() noexcept;
 
 	enum class PollResult : uint8_t
 	{
@@ -28,9 +28,9 @@ protected:
 		complete,
 		error
 	};
-	PollResult PollReceiveBuffer(uint16_t& measurement);
-	bool IsReceiving() const;
-	bool IsWaitingForStartBit() const;
+	PollResult PollReceiveBuffer(uint16_t& measurement) noexcept;
+	bool IsReceiving() const noexcept;
+	bool IsWaitingForStartBit() const noexcept;
 
 protected:
 	uint32_t overrunErrorCount;

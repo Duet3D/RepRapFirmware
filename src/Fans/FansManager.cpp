@@ -17,7 +17,7 @@
 
 #include <utility>
 
-FansManager::FansManager()
+FansManager::FansManager() noexcept
 {
 	for (Fan*& f : fans)
 	{
@@ -27,14 +27,14 @@ FansManager::FansManager()
 
 // Retrieve the pointer to a fan, or nullptr if it doesn't exist.
 // Lock the fan system before calling this, so that the fan can't be deleted while we are accessing it.
-ReadLockedPointer<Fan> FansManager::FindFan(size_t fanNum) const
+ReadLockedPointer<Fan> FansManager::FindFan(size_t fanNum) const noexcept
 {
 	ReadLocker locker(fansLock);
 	return ReadLockedPointer<Fan>(locker, (fanNum < ARRAY_SIZE(fans)) ? fans[fanNum] : nullptr);
 }
 
 // Create and return a local fan. if it fails, return nullptr with the error message in 'reply'.
-LocalFan *FansManager::CreateLocalFan(uint32_t fanNum, const char *pinNames, PwmFrequency freq, const StringRef& reply)
+LocalFan *FansManager::CreateLocalFan(uint32_t fanNum, const char *pinNames, PwmFrequency freq, const StringRef& reply) noexcept
 {
 	LocalFan *newFan = new LocalFan(fanNum);
 	if (!newFan->AssignPorts(pinNames, reply))
@@ -47,7 +47,7 @@ LocalFan *FansManager::CreateLocalFan(uint32_t fanNum, const char *pinNames, Pwm
 }
 
 // Check and if necessary update all fans. Return true if a thermostatic fan is running.
-bool FansManager::CheckFans()
+bool FansManager::CheckFans() noexcept
 {
 	ReadLocker lock(fansLock);
 	bool thermostaticFanRunning = false;
@@ -62,7 +62,7 @@ bool FansManager::CheckFans()
 }
 
 // Return the highest used fan number. Used by RepRap.cpp to shorten responses by omitting unused trailing fan numbers. If no fans are configured, return 0.
-size_t FansManager::GetHighestUsedFanNumber() const
+size_t FansManager::GetHighestUsedFanNumber() const noexcept
 {
 	size_t highestFan = ARRAY_SIZE(fans);
 	do
@@ -74,7 +74,7 @@ size_t FansManager::GetHighestUsedFanNumber() const
 
 #if HAS_MASS_STORAGE
 
-bool FansManager::WriteFanSettings(FileStore *f) const
+bool FansManager::WriteFanSettings(FileStore *f) const noexcept
 {
 	ReadLocker lock(fansLock);
 	bool ok = true;
@@ -88,7 +88,7 @@ bool FansManager::WriteFanSettings(FileStore *f) const
 #endif
 
 // This is called by M950 to create a fan or change its PWM frequency
-GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	if (fanNum < MaxFans)
 	{
@@ -155,7 +155,7 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 // then search for parameters used to configure the fan. If any are found, perform appropriate actions and return true.
 // If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
 // If no relevant parameters are found, print the existing ones to 'reply' and return false.
-bool FansManager::ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
+bool FansManager::ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error) noexcept
 {
 	auto fan = FindFan(fanNum);
 	if (fan.IsNull())
@@ -168,13 +168,13 @@ bool FansManager::ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& g
 	return fan->Configure(mcode, fanNum, gb, reply, error);
 }
 
-float FansManager::GetFanValue(size_t fanNum) const
+float FansManager::GetFanValue(size_t fanNum) const noexcept
 {
 	auto fan = FindFan(fanNum);
 	return (fan.IsNull()) ? -1 : fan->GetConfiguredPwm();
 }
 
-GCodeResult FansManager::SetFanValue(size_t fanNum, float speed, const StringRef& reply)
+GCodeResult FansManager::SetFanValue(size_t fanNum, float speed, const StringRef& reply) noexcept
 {
 	auto fan = FindFan(fanNum);
 	if (fan.IsNotNull())
@@ -185,7 +185,7 @@ GCodeResult FansManager::SetFanValue(size_t fanNum, float speed, const StringRef
 	return GCodeResult::error;
 }
 
-void FansManager::SetFanValue(size_t fanNum, float speed)
+void FansManager::SetFanValue(size_t fanNum, float speed) noexcept
 {
 	String<1> dummy;
 	(void)SetFanValue(fanNum, speed, dummy.GetRef());
@@ -193,28 +193,28 @@ void FansManager::SetFanValue(size_t fanNum, float speed)
 
 // Check if the given fan can be controlled manually so that DWC can decide whether or not to show the corresponding fan
 // controls. This is the case if no thermostatic control is enabled and if the fan was configured at least once before.
-bool FansManager::IsFanControllable(size_t fanNum) const
+bool FansManager::IsFanControllable(size_t fanNum) const noexcept
 {
 	auto fan = FindFan(fanNum);
 	return fan.IsNotNull() && !fan->HasMonitoredSensors() && fan->IsConfigured();
 }
 
 // Return the fan's name
-const char *FansManager::GetFanName(size_t fanNum) const
+const char *FansManager::GetFanName(size_t fanNum) const noexcept
 {
 	auto fan = FindFan(fanNum);
 	return (fan.IsNull()) ? "" : fan->GetName();
 }
 
 // Get current fan RPM, or -1 if the fan is invalid or doesn't have a tacho pin
-int32_t FansManager::GetFanRPM(size_t fanNum) const
+int32_t FansManager::GetFanRPM(size_t fanNum) const noexcept
 {
 	auto fan = FindFan(fanNum);
 	return (fan.IsNull()) ? -1 : fan->GetRPM();
 }
 
 // Initialise fans. Call this only once, and only during initialisation.
-void FansManager::Init()
+void FansManager::Init() noexcept
 {
 #if ALLOCATE_DEFAULT_PORTS
 	for (size_t i = 0; i < ARRAY_SIZE(DefaultFanPinNames); ++i)
@@ -236,7 +236,7 @@ void FansManager::Init()
 
 #if SUPPORT_CAN_EXPANSION
 
-void FansManager::ProcessRemoteFanRpms(CanAddress src, const CanMessageFanRpms& msg)
+void FansManager::ProcessRemoteFanRpms(CanAddress src, const CanMessageFanRpms& msg) noexcept
 {
 	size_t numFansProcessed = 0;
 	uint64_t whichFans = msg.whichFans;

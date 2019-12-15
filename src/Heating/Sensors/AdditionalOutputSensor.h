@@ -13,10 +13,10 @@
 class AdditionalOutputSensor : public TemperatureSensor
 {
 public:
-	AdditionalOutputSensor(unsigned int sensorNum, const char *type, bool enforcePollOrder);
-	virtual ~AdditionalOutputSensor();
+	AdditionalOutputSensor(unsigned int sensorNum, const char *type, bool enforcePollOrder) noexcept;
+	virtual ~AdditionalOutputSensor() noexcept;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
-	void Poll() override;
+	void Poll() noexcept override;
 
 protected:
 	uint8_t parentSensor;

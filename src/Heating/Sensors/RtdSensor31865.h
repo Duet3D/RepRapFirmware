@@ -13,15 +13,15 @@
 class RtdSensor31865 : public SpiTemperatureSensor
 {
 public:
-	RtdSensor31865(unsigned int sensorNum);
+	RtdSensor31865(unsigned int sensorNum) noexcept;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
 
 	static constexpr const char *TypeName = "rtdmax31865";
 
-	void Poll() override;
+	void Poll() noexcept override;
 
 private:
-	TemperatureError TryInitRtd() const;
+	TemperatureError TryInitRtd() const noexcept;
 
 	uint16_t rref;				// reference resistor in ohms
 	uint8_t cr0;

@@ -8,7 +8,7 @@
 #include "SpiTemperatureSensor.h"
 #include "Tasks.h"
 
-SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *name, uint8_t spiMode, uint32_t clockFrequency)
+SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *name, uint8_t spiMode, uint32_t clockFrequency) noexcept
 	: SensorWithPort(sensorNum, name)
 {
 	device.csPin = NoPin;
@@ -29,14 +29,14 @@ bool SpiTemperatureSensor::ConfigurePort(GCodeBuffer& gb, const StringRef& reply
 	return ret;
 }
 
-void SpiTemperatureSensor::InitSpi()
+void SpiTemperatureSensor::InitSpi() noexcept
 {
 	sspi_master_init(&device, 8);
 	lastReadingTime = millis();
 }
 
 // Send and receive 1 to 8 bytes of data and return the result as a single 32-bit word
-TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[], size_t nbytes, uint32_t& rslt) const
+TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[], size_t nbytes, uint32_t& rslt) const noexcept
 {
 	uint8_t rawBytes[8];
 	spi_status_t sts;

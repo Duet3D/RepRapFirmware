@@ -13,16 +13,16 @@
 class LinearAnalogSensor : public SensorWithPort
 {
 public:
-	LinearAnalogSensor(unsigned int sensorNum);
+	LinearAnalogSensor(unsigned int sensorNum) noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
 
 	static constexpr const char *TypeName = "linearanalog";
 
-	void Poll() override;
+	void Poll() noexcept override;
 
 private:
-	void CalcDerivedParameters();
+	void CalcDerivedParameters() noexcept;
 
 	// Configurable parameters
 	float lowTemp, highTemp;

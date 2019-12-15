@@ -42,7 +42,7 @@ Licence: GPL
 constexpr uint32_t HeaterTaskStackWords = 400;			// task stack size in dwords, must be large enough for auto tuning
 static Task<HeaterTaskStackWords> heaterTask;
 
-extern "C" [[noreturn]] void HeaterTaskStart(void * pvParameters)
+extern "C" [[noreturn]] void HeaterTaskStart(void * pvParameters) noexcept
 {
 	reprap.GetHeat().HeaterTask();
 }
@@ -50,7 +50,7 @@ extern "C" [[noreturn]] void HeaterTaskStart(void * pvParameters)
 static constexpr uint16_t SensorsTaskStackWords = 100;		// task stack size in dwords. 80 was not enough. Use 300 if debugging is enabled.
 static Task<SensorsTaskStackWords> *sensorsTask = nullptr;
 
-extern "C" [[noreturn]] void SensorsTaskStart(void * pvParameters)
+extern "C" [[noreturn]] void SensorsTaskStart(void * pvParameters) noexcept
 {
 	reprap.GetHeat().SensorsTask();
 }
@@ -88,7 +88,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Heat)
 ReadWriteLock Heat::heatersLock;
 ReadWriteLock Heat::sensorsLock;
 
-Heat::Heat()
+Heat::Heat() noexcept
 	: sensorCount(0), sensorsRoot(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
 	for (int8_t& h : bedHeaters)
@@ -118,14 +118,14 @@ Heat::Heat()
 	}
 }
 
-ReadLockedPointer<Heater> Heat::FindHeater(int heater) const
+ReadLockedPointer<Heater> Heat::FindHeater(int heater) const noexcept
 {
 	ReadLocker locker(heatersLock);
 	return ReadLockedPointer<Heater>(locker, (heater < 0 || heater >= (int)MaxHeaters) ? nullptr : heaters[heater]);
 }
 
 // Process M307
-GCodeResult Heat::SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	if (gb.Seen('H'))
 	{
@@ -195,7 +195,7 @@ GCodeResult Heat::SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply
 }
 
 // Process M301 or M304. 'heater' is the default heater number to use.
-GCodeResult Heat::SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	if (gb.Seen('H'))
 	{
@@ -236,14 +236,14 @@ GCodeResult Heat::SetPidParameters(unsigned int heater, GCodeBuffer& gb, const S
 }
 
 // Is the heater enabled?
-bool Heat::IsHeaterEnabled(size_t heater) const
+bool Heat::IsHeaterEnabled(size_t heater) const noexcept
 {
 	const auto h = FindHeater(heater);
 	return h.IsNotNull() && h->IsHeaterEnabled();
 }
 
 // Get a pointer to the temperature sensor entry, or nullptr if the heater number is bad
-ReadLockedPointer<TemperatureSensor> Heat::FindSensor(int sn) const
+ReadLockedPointer<TemperatureSensor> Heat::FindSensor(int sn) const noexcept
 {
 	ReadLocker locker(sensorsLock);
 
@@ -258,7 +258,7 @@ ReadLockedPointer<TemperatureSensor> Heat::FindSensor(int sn) const
 }
 
 // Get a pointer to the first temperature sensor with the specified or higher number
-ReadLockedPointer<TemperatureSensor> Heat::FindSensorAtOrAbove(unsigned int sn) const
+ReadLockedPointer<TemperatureSensor> Heat::FindSensorAtOrAbove(unsigned int sn) const noexcept
 {
 	ReadLocker locker(sensorsLock);
 
@@ -274,7 +274,7 @@ ReadLockedPointer<TemperatureSensor> Heat::FindSensorAtOrAbove(unsigned int sn) 
 
 
 // Reset all heater models to defaults. Called when running M502.
-void Heat::ResetHeaterModels()
+void Heat::ResetHeaterModels() noexcept
 {
 	ReadLocker lock(heatersLock);
 
@@ -287,7 +287,7 @@ void Heat::ResetHeaterModels()
 	}
 }
 
-void Heat::Init()
+void Heat::Init() noexcept
 {
 	// Initialise the heater protection items first
 	for (size_t index : ARRAY_INDICES(heaterProtections))
@@ -305,7 +305,7 @@ void Heat::Init()
 	heaterTask.Create(HeaterTaskStart, "HEAT", nullptr, TaskPriority::HeatPriority);
 }
 
-void Heat::Exit()
+void Heat::Exit() noexcept
 {
 	{
 		ReadLocker Lock(heatersLock);
@@ -322,7 +322,7 @@ void Heat::Exit()
 	heaterTask.Suspend();
 }
 
-[[noreturn]] void Heat::HeaterTask()
+[[noreturn]] void Heat::HeaterTask() noexcept
 {
 	uint32_t lastWakeTime = xTaskGetTickCount();
 	for (;;)
@@ -409,7 +409,7 @@ void Heat::Exit()
 }
 
 
-/* static */ void Heat::EnsureSensorsTask()
+/* static */ void Heat::EnsureSensorsTask() noexcept
 {
 	TaskCriticalSectionLocker lock; // make sure we don't create the task more than once
 
@@ -422,7 +422,7 @@ void Heat::Exit()
 
 // Code executed by the SensorsTask.
 // This is run at the same priority as the Heat task, so it must not sit in any spin loops.
-/*static*/ [[noreturn]] void Heat::SensorsTask()
+/*static*/ [[noreturn]] void Heat::SensorsTask() noexcept
 {
 	auto lastWakeTime = xTaskGetTickCount();
 	for (;;)
@@ -469,7 +469,7 @@ void Heat::Exit()
 	}
 }
 
-void Heat::Diagnostics(MessageType mtype)
+void Heat::Diagnostics(MessageType mtype) noexcept
 {
 	Platform& platform = reprap.GetPlatform();
 	platform.Message(mtype, "=== Heat ===\nBed heaters =");
@@ -504,7 +504,7 @@ void Heat::Diagnostics(MessageType mtype)
 }
 
 // Configure a heater. Invoked by M950.
-GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	if (heater >= MaxHeaters)
 	{
@@ -585,7 +585,7 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 	return h->ReportDetails(reply);
 }
 
-bool Heat::AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const
+bool Heat::AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const noexcept
 {
 	for (size_t heater : ARRAY_INDICES(heaters))
 	{
@@ -598,7 +598,7 @@ bool Heat::AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const
 }
 
 //query an individual heater
-bool Heat::HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance) const
+bool Heat::HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance) const noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
@@ -619,13 +619,13 @@ bool Heat::HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolera
 	return true;
 }
 
-HeaterStatus Heat::GetStatus(int heater) const
+HeaterStatus Heat::GetStatus(int heater) const noexcept
 {
 	const auto h = FindHeater(heater);
 	return (h.IsNull()) ? HeaterStatus::off : heaters[heater]->GetStatus();
 }
 
-void Heat::SetBedHeater(size_t index, int heater)
+void Heat::SetBedHeater(size_t index, int heater) noexcept
 {
 	const auto h = FindHeater(bedHeaters[index]);
 	if (h.IsNotNull())
@@ -635,7 +635,7 @@ void Heat::SetBedHeater(size_t index, int heater)
 	bedHeaters[index] = heater;
 }
 
-bool Heat::IsBedHeater(int heater) const
+bool Heat::IsBedHeater(int heater) const noexcept
 {
 	for (int8_t bedHeater : bedHeaters)
 	{
@@ -647,7 +647,7 @@ bool Heat::IsBedHeater(int heater) const
 	return false;
 }
 
-void Heat::SetChamberHeater(size_t index, int heater)
+void Heat::SetChamberHeater(size_t index, int heater) noexcept
 {
 	const auto h = FindHeater(chamberHeaters[index]);
 	if (h.IsNotNull())
@@ -657,7 +657,7 @@ void Heat::SetChamberHeater(size_t index, int heater)
 	chamberHeaters[index] = heater;
 }
 
-bool Heat::IsChamberHeater(int heater) const
+bool Heat::IsChamberHeater(int heater) const noexcept
 {
 	for (int8_t chamberHeater : chamberHeaters)
 	{
@@ -669,7 +669,7 @@ bool Heat::IsChamberHeater(int heater) const
 	return false;
 }
 
-void Heat::SetActiveTemperature(int heater, float t)
+void Heat::SetActiveTemperature(int heater, float t) noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
@@ -678,13 +678,13 @@ void Heat::SetActiveTemperature(int heater, float t)
 	}
 }
 
-float Heat::GetActiveTemperature(int heater) const
+float Heat::GetActiveTemperature(int heater) const noexcept
 {
 	const auto h = FindHeater(heater);
 	return (h.IsNull()) ? ABS_ZERO : h->GetActiveTemperature();
 }
 
-void Heat::SetStandbyTemperature(int heater, float t)
+void Heat::SetStandbyTemperature(int heater, float t) noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
@@ -693,13 +693,13 @@ void Heat::SetStandbyTemperature(int heater, float t)
 	}
 }
 
-float Heat::GetStandbyTemperature(int heater) const
+float Heat::GetStandbyTemperature(int heater) const noexcept
 {
 	const auto h = FindHeater(heater);
 	return (h.IsNull()) ? ABS_ZERO : h->GetStandbyTemperature();
 }
 
-float Heat::GetHighestTemperatureLimit(int heater) const
+float Heat::GetHighestTemperatureLimit(int heater) const noexcept
 {
 	float limit = BadErrorTemperature;
 	if (heater >= 0 && heater < (int)MaxHeaters)
@@ -719,7 +719,7 @@ float Heat::GetHighestTemperatureLimit(int heater) const
 	return limit;
 }
 
-float Heat::GetLowestTemperatureLimit(int heater) const
+float Heat::GetLowestTemperatureLimit(int heater) const noexcept
 {
 	float limit = ABS_ZERO;
 	if (heater >= 0 && heater < (int)MaxHeaters)
@@ -741,14 +741,14 @@ float Heat::GetLowestTemperatureLimit(int heater) const
 
 // Get the current temperature of a real or virtual heater
 // Return ABS_ZERO if the heater doesn't exist. The Z probe class relies on this.
-float Heat::GetHeaterTemperature(int heater) const
+float Heat::GetHeaterTemperature(int heater) const noexcept
 {
 	const auto h = FindHeater(heater);
 	return (h.IsNull()) ? ABS_ZERO : h->GetTemperature();
 }
 
 // Get the target temperature of a heater
-float Heat::GetTargetTemperature(int heater) const
+float Heat::GetTargetTemperature(int heater) const noexcept
 {
 	const HeaterStatus hs = GetStatus(heater);
 	return (hs == HeaterStatus::active) ? GetActiveTemperature(heater)
@@ -756,7 +756,7 @@ float Heat::GetTargetTemperature(int heater) const
 				: 0.0;
 }
 
-GCodeResult Heat::Activate(int heater, const StringRef& reply)
+GCodeResult Heat::Activate(int heater, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
@@ -767,7 +767,7 @@ GCodeResult Heat::Activate(int heater, const StringRef& reply)
 	return GCodeResult::error;
 }
 
-void Heat::SwitchOff(int heater)
+void Heat::SwitchOff(int heater) noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
@@ -777,7 +777,7 @@ void Heat::SwitchOff(int heater)
 	}
 }
 
-void Heat::SwitchOffAll(bool includingChamberAndBed)
+void Heat::SwitchOffAll(bool includingChamberAndBed) noexcept
 {
 	ReadLocker lock(heatersLock);
 
@@ -791,7 +791,7 @@ void Heat::SwitchOffAll(bool includingChamberAndBed)
 	}
 }
 
-void Heat::Standby(int heater, const Tool *tool)
+void Heat::Standby(int heater, const Tool *tool) noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
@@ -801,26 +801,26 @@ void Heat::Standby(int heater, const Tool *tool)
 	}
 }
 
-GCodeResult Heat::ResetFault(int heater, const StringRef& reply)
+GCodeResult Heat::ResetFault(int heater, const StringRef& reply) noexcept
 {
 	// This gets called for all heater numbers when clearing all temperature faults, so don't report an error if the heater was not found
 	const auto h = FindHeater(heater);
 	return (h.IsNotNull()) ? h->ResetFault(reply) : GCodeResult::ok;
 }
 
-float Heat::GetAveragePWM(size_t heater) const
+float Heat::GetAveragePWM(size_t heater) const noexcept
 {
 	const auto h = FindHeater(heater);
 	return (h.IsNull()) ? 0.0 : h->GetAveragePWM();
 }
 
-bool Heat::IsBedOrChamberHeater(int heater) const
+bool Heat::IsBedOrChamberHeater(int heater) const noexcept
 {
 	return IsBedHeater(heater) || IsChamberHeater(heater);
 }
 
 // Get the highest temperature limit of any heater
-float Heat::GetHighestTemperatureLimit() const
+float Heat::GetHighestTemperatureLimit() const noexcept
 {
 	float limit = ABS_ZERO;
 	for (HeaterProtection *prot : heaterProtections)
@@ -840,7 +840,7 @@ float Heat::GetHighestTemperatureLimit() const
 #if HAS_MASS_STORAGE
 
 // Write heater model parameters to file returning true if no error
-bool Heat::WriteModelParameters(FileStore *f) const
+bool Heat::WriteModelParameters(FileStore *f) const noexcept
 {
 	bool ok = f->Write("; Heater model parameters\n");
 	for (size_t h : ARRAY_INDICES(heaters))
@@ -860,7 +860,7 @@ bool Heat::WriteModelParameters(FileStore *f) const
 #endif
 
 // Process M570
-GCodeResult Heat::ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNull())
@@ -884,7 +884,7 @@ GCodeResult Heat::ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, cons
 }
 
 // Process M303
-GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	if (gb.Seen('H'))
 	{
@@ -945,7 +945,7 @@ GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Process M308
-GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	if (gb.Seen('S'))
 	{
@@ -1031,14 +1031,14 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Get the name of a heater, or nullptr if it hasn't been named
-const char *Heat::GetHeaterSensorName(size_t heater) const
+const char *Heat::GetHeaterSensorName(size_t heater) const noexcept
 {
 	const auto h = FindHeater(heater);
 	return (h.IsNotNull()) ? h->GetSensorName() : nullptr;
 }
 
 // Configure heater protection (M143). Returns true if an error occurred
-GCodeResult Heat::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult Heat::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 	WriteLocker lock(heatersLock);
 
@@ -1163,7 +1163,7 @@ GCodeResult Heat::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Updates the PIDs and HeaterProtection items after a heater change. Caller must already have a write lock on the heaters.
-void Heat::UpdateHeaterProtection(int heaterNumber)
+void Heat::UpdateHeaterProtection(int heaterNumber) noexcept
 {
 	auto h = FindHeater(heaterNumber);
 	if (h.IsNotNull())
@@ -1199,7 +1199,7 @@ void Heat::UpdateHeaterProtection(int heaterNumber)
 }
 
 // Get the temperature of a sensor
-float Heat::GetSensorTemperature(int sensorNum, TemperatureError& err) const
+float Heat::GetSensorTemperature(int sensorNum, TemperatureError& err) const noexcept
 {
 	const auto sensor = FindSensor(sensorNum);
 	if (sensor.IsNotNull())
@@ -1214,7 +1214,7 @@ float Heat::GetSensorTemperature(int sensorNum, TemperatureError& err) const
 }
 
 // Return the highest used heater number. Used by RepRap.cpp to shorten responses by omitting unused trailing heater numbers. If no heaters are configured, return 0.
-size_t Heat::GetHighestUsedHeaterNumber() const
+size_t Heat::GetHighestUsedHeaterNumber() const noexcept
 {
 	size_t highestHeater = ARRAY_SIZE(heaters);
 	do
@@ -1225,14 +1225,14 @@ size_t Heat::GetHighestUsedHeaterNumber() const
 }
 
 // Get the temperature of a heater
-float Heat::GetHeaterTemperature(size_t heater) const
+float Heat::GetHeaterTemperature(size_t heater) const noexcept
 {
 	const auto h = FindHeater(heater);
 	return (h.IsNull()) ? ABS_ZERO : h->GetTemperature();
 }
 
 // Suspend the heaters to conserve power or while doing Z probing
-void Heat::SuspendHeaters(bool sus)
+void Heat::SuspendHeaters(bool sus) noexcept
 {
 	for (Heater *h : heaters)
 	{
@@ -1244,7 +1244,7 @@ void Heat::SuspendHeaters(bool sus)
 }
 
 // Delete a sensor, if there is one. Must write-lock the sensors lock before calling this.
-void Heat::DeleteSensor(unsigned int sn)
+void Heat::DeleteSensor(unsigned int sn) noexcept
 {
 	TemperatureSensor *currentSensor = sensorsRoot;
 	TemperatureSensor *lastSensor = nullptr;
@@ -1274,7 +1274,7 @@ void Heat::DeleteSensor(unsigned int sn)
 }
 
 // Insert a sensor. Must write-lock the sensors lock before calling this.
-void Heat::InsertSensor(TemperatureSensor *newSensor)
+void Heat::InsertSensor(TemperatureSensor *newSensor) noexcept
 {
 	TemperatureSensor *prev = nullptr;
 	TemperatureSensor *ts = sensorsRoot;
@@ -1303,7 +1303,7 @@ void Heat::InsertSensor(TemperatureSensor *newSensor)
 
 // Save some resume information returning true if successful.
 // We assume that the bed and chamber heaters are either on and active, or off (not on standby).
-bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const
+bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const noexcept
 {
 	String<100> bufSpace;
 	const StringRef buf = bufSpace.GetRef();
@@ -1330,7 +1330,7 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const
 
 #if SUPPORT_CAN_EXPANSION
 
-void Heat::ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemperatures& msg)
+void Heat::ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemperatures& msg) noexcept
 {
 	uint64_t sensorsReported = msg.whichSensors;
 	size_t index = 0;
@@ -1352,7 +1352,7 @@ void Heat::ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemp
 	}
 }
 
-void Heat::ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersStatus& msg)
+void Heat::ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersStatus& msg) noexcept
 {
 	uint64_t heatersReported = msg.whichHeaters;
 	size_t index = 0;

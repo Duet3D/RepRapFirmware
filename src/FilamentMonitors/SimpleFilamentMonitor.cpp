@@ -10,7 +10,7 @@
 #include "Platform.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
-SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int extruder, unsigned int type)
+SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int extruder, unsigned int type) noexcept
 	: FilamentMonitor(extruder, type), highWhenNoFilament(type == 2), filamentPresent(false), enabled(false)
 {
 }
@@ -47,7 +47,7 @@ bool SimpleFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, b
 }
 
 // ISR for when the pin state changes
-bool SimpleFilamentMonitor::Interrupt()
+bool SimpleFilamentMonitor::Interrupt() noexcept
 {
 	// Nothing needed here
 	GetPort().DetachInterrupt();
@@ -55,7 +55,7 @@ bool SimpleFilamentMonitor::Interrupt()
 }
 
 // Call the following regularly to keep the status up to date
-void SimpleFilamentMonitor::Poll()
+void SimpleFilamentMonitor::Poll() noexcept
 {
 	const bool b = GetPort().Read();
 	filamentPresent = (highWhenNoFilament) ? !b : b;
@@ -63,21 +63,21 @@ void SimpleFilamentMonitor::Poll()
 
 // Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 // 'filamentConsumed' is the net amount of extrusion since the last call to this function.
-FilamentSensorStatus SimpleFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed)
+FilamentSensorStatus SimpleFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) noexcept
 {
 	Poll();
 	return (!enabled || filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;
 }
 
 // Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
-FilamentSensorStatus SimpleFilamentMonitor::Clear()
+FilamentSensorStatus SimpleFilamentMonitor::Clear() noexcept
 {
 	Poll();
 	return (!enabled || filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;
 }
 
 // Print diagnostic info for this sensor
-void SimpleFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder)
+void SimpleFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder) noexcept
 {
 	Poll();
 	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: %s\n", extruder, (filamentPresent) ? "ok" : "no filament");

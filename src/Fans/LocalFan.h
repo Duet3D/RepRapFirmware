@@ -13,29 +13,29 @@
 class LocalFan : public Fan
 {
 public:
-	LocalFan(unsigned int fanNum);
-	~LocalFan();
+	LocalFan(unsigned int fanNum) noexcept;
+	~LocalFan() noexcept;
 
-	bool Check() override;								// update the fan PWM returning true if it is a thermostatic fan that is on
-	bool IsEnabled() const override { return port.IsValid(); }
-	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) override;
-	int32_t GetRPM() override;
-	GCodeResult ReportPortDetails(const StringRef& str) const override;
+	bool Check() noexcept override;								// update the fan PWM returning true if it is a thermostatic fan that is on
+	bool IsEnabled() const noexcept override { return port.IsValid(); }
+	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept override;
+	int32_t GetRPM() noexcept override;
+	GCodeResult ReportPortDetails(const StringRef& str) const noexcept override;
 #if SUPPORT_CAN_EXPANSION
-	void UpdateRpmFromRemote(CanAddress src, int32_t rpm) override { }
+	void UpdateRpmFromRemote(CanAddress src, int32_t rpm) noexcept override { }
 #endif
 
-	bool AssignPorts(const char *pinNames, const StringRef& reply);
+	bool AssignPorts(const char *pinNames, const StringRef& reply) noexcept;
 
-	void Interrupt();
+	void Interrupt() noexcept;
 
 protected:
-	GCodeResult Refresh(const StringRef& reply) override;
-	bool UpdateFanConfiguration(const StringRef& reply) override;
+	GCodeResult Refresh(const StringRef& reply) noexcept override;
+	bool UpdateFanConfiguration(const StringRef& reply) noexcept override;
 
 private:
-	void SetHardwarePwm(float pwmVal);
-	void InternalRefresh();
+	void SetHardwarePwm(float pwmVal) noexcept;
+	void InternalRefresh() noexcept;
 
 	PwmPort port;											// port used to control the fan
 	IoPort tachoPort;										// port used to read the tacho

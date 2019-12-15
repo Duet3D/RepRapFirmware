@@ -11,11 +11,11 @@
 
 #if HAS_CPU_TEMP_SENSOR
 
-CpuTemperatureSensor::CpuTemperatureSensor(unsigned int sensorNum) : TemperatureSensor(sensorNum, "microcontroller embedded temperature sensor")
+CpuTemperatureSensor::CpuTemperatureSensor(unsigned int sensorNum) noexcept : TemperatureSensor(sensorNum, "microcontroller embedded temperature sensor")
 {
 }
 
-void CpuTemperatureSensor::Poll()
+void CpuTemperatureSensor::Poll() noexcept
 {
 	float minT, currentT, maxT;
 	reprap.GetPlatform().GetMcuTemperatures(minT, currentT, maxT);

@@ -31,55 +31,55 @@ public:
 
 	// Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 	// 'filamentConsumed' is the net amount of extrusion since the last call to this function.
-	virtual FilamentSensorStatus Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) = 0;
+	virtual FilamentSensorStatus Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) noexcept = 0;
 
 	// Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
-	virtual FilamentSensorStatus Clear() = 0;
+	virtual FilamentSensorStatus Clear() noexcept = 0;
 
 	// Print diagnostic info for this sensor
-	virtual void Diagnostics(MessageType mtype, unsigned int extruder) = 0;
+	virtual void Diagnostics(MessageType mtype, unsigned int extruder) noexcept = 0;
 
 	// ISR for when the pin state changes. It should return true if the ISR wants the commanded extrusion to be fetched.
-	virtual bool Interrupt() = 0;
+	virtual bool Interrupt() noexcept = 0;
 
 	// Call this to disable the interrupt before deleting a filament monitor
-	virtual void Disable();
+	virtual void Disable() noexcept;
 
 	// Override the virtual destructor if your derived class allocates any dynamic memory
-	virtual ~FilamentMonitor();
+	virtual ~FilamentMonitor() noexcept;
 
 	// Return the type of this sensor
-	unsigned int GetType() const { return type; }
+	unsigned int GetType() const noexcept { return type; }
 
 	// Static initialisation
-	static void InitStatic();
+	static void InitStatic() noexcept;
 
 	// Return an error message corresponding to a status code
-	static const char *GetErrorMessage(FilamentSensorStatus f);
+	static const char *GetErrorMessage(FilamentSensorStatus f) noexcept;
 
 	// Poll the filament sensors
-	static void Spin();
+	static void Spin() noexcept;
 
 	// Handle M591
 	static GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, unsigned int extruder)
 	pre(extruder < MaxExtruders);
 
 	// Send diagnostics info
-	static void Diagnostics(MessageType mtype);
+	static void Diagnostics(MessageType mtype) noexcept;
 
 protected:
-	FilamentMonitor(unsigned int extruder, unsigned int t) : extruderNumber(extruder), type(t) { }
+	FilamentMonitor(unsigned int extruder, unsigned int t) noexcept : extruderNumber(extruder), type(t) { }
 
 	bool ConfigurePin(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen);
 
-	const IoPort& GetPort() const { return port; }
-	bool HaveIsrStepsCommanded() const { return haveIsrStepsCommanded; }
+	const IoPort& GetPort() const noexcept { return port; }
+	bool HaveIsrStepsCommanded() const noexcept { return haveIsrStepsCommanded; }
 
 private:
 	// Create a filament sensor returning null if not a valid sensor type
-	static FilamentMonitor *Create(unsigned int extruder, unsigned int type);
+	static FilamentMonitor *Create(unsigned int extruder, unsigned int type) noexcept;
 
-	static void InterruptEntry(CallbackParameter param);
+	static void InterruptEntry(CallbackParameter param) noexcept;
 
 	static Mutex filamentSensorsMutex;
 	static FilamentMonitor *filamentSensors[MaxExtruders];

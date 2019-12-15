@@ -17,12 +17,12 @@
 #include <CanMessageFormats.h>
 #include <CanMessageBuffer.h>
 
-RemoteHeater::RemoteHeater(unsigned int num, CanAddress board)
+RemoteHeater::RemoteHeater(unsigned int num, CanAddress board) noexcept
 	: Heater(num), boardAddress(board), lastMode(HeaterMode::offline), averagePwm(0), lastTemperature(0.0), whenLastStatusReceived(0)
 {
 }
 
-RemoteHeater::~RemoteHeater()
+RemoteHeater::~RemoteHeater() noexcept
 {
 	CanMessageGenericConstructor cons(M950HeaterParams);
 	cons.AddUParam('H', GetHeaterNumber());
@@ -31,12 +31,12 @@ RemoteHeater::~RemoteHeater()
 	(void)cons.SendAndGetResponse(CanMessageType::m950Heater, boardAddress, dummy.GetRef());
 }
 
-void RemoteHeater::Spin()
+void RemoteHeater::Spin() noexcept
 {
 	// Nothing needed here unless we want to copy the sensor temperature across. For now we don't store the temperature locally.
 }
 
-void RemoteHeater::ResetHeater()
+void RemoteHeater::ResetHeater() noexcept
 {
 	//TODO
 }
@@ -60,14 +60,14 @@ GCodeResult RemoteHeater::SetPwmFrequency(PwmFrequency freq, const StringRef& re
 	return cons.SendAndGetResponse(CanMessageType::m950Heater, boardAddress, reply);
 }
 
-GCodeResult RemoteHeater::ReportDetails(const StringRef& reply) const
+GCodeResult RemoteHeater::ReportDetails(const StringRef& reply) const noexcept
 {
 	CanMessageGenericConstructor cons(M950HeaterParams);
 	cons.AddUParam('H', GetHeaterNumber());
 	return cons.SendAndGetResponse(CanMessageType::m950Heater, boardAddress, reply);
 }
 
-void RemoteHeater::SwitchOff()
+void RemoteHeater::SwitchOff() noexcept
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -89,7 +89,7 @@ void RemoteHeater::SwitchOff()
 	}
 }
 
-GCodeResult RemoteHeater::ResetFault(const StringRef& reply)
+GCodeResult RemoteHeater::ResetFault(const StringRef& reply) noexcept
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -106,7 +106,7 @@ GCodeResult RemoteHeater::ResetFault(const StringRef& reply)
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 }
 
-float RemoteHeater::GetTemperature() const
+float RemoteHeater::GetTemperature() const noexcept
 {
 	if (millis() - whenLastStatusReceived < RemoteStatusTimeout)
 	{
@@ -117,28 +117,28 @@ float RemoteHeater::GetTemperature() const
 	return reprap.GetHeat().GetSensorTemperature(GetSensorNumber(), err);
 }
 
-float RemoteHeater::GetAveragePWM() const
+float RemoteHeater::GetAveragePWM() const noexcept
 {
 	return (millis() - whenLastStatusReceived < RemoteStatusTimeout) ? (float)averagePwm / 255.0 : 0;
 }
 
 // Return the integral accumulator
-float RemoteHeater::GetAccumulator() const
+float RemoteHeater::GetAccumulator() const noexcept
 {
 	return 0.0;		// not supported
 }
 
-void RemoteHeater::StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply)
+void RemoteHeater::StartAutoTune(float targetTemp, float maxPwm, const StringRef& reply) noexcept
 {
 	//TODO
 }
 
-void RemoteHeater::GetAutoTuneStatus(const StringRef& reply) const
+void RemoteHeater::GetAutoTuneStatus(const StringRef& reply) const noexcept
 {
 	//TODO
 }
 
-void RemoteHeater::Suspend(bool sus)
+void RemoteHeater::Suspend(bool sus) noexcept
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf != nullptr)
@@ -153,13 +153,13 @@ void RemoteHeater::Suspend(bool sus)
 	}
 }
 
-Heater::HeaterMode RemoteHeater::GetMode() const
+Heater::HeaterMode RemoteHeater::GetMode() const noexcept
 {
 	return (millis() - whenLastStatusReceived < RemoteStatusTimeout) ? lastMode : HeaterMode::offline;
 }
 
 // This isn't just called to turn the heater on, it is called when the temperature needs to be updated
-GCodeResult RemoteHeater::SwitchOn(const StringRef& reply)
+GCodeResult RemoteHeater::SwitchOn(const StringRef& reply) noexcept
 {
 	if (!GetModel().IsEnabled())
 	{
@@ -182,7 +182,7 @@ GCodeResult RemoteHeater::SwitchOn(const StringRef& reply)
 }
 
 // This is called when the heater model has been updated
-GCodeResult RemoteHeater::UpdateModel(const StringRef& reply)
+GCodeResult RemoteHeater::UpdateModel(const StringRef& reply) noexcept
 {
 	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
 	if (buf != nullptr)
@@ -197,7 +197,7 @@ GCodeResult RemoteHeater::UpdateModel(const StringRef& reply)
 	return GCodeResult::error;
 }
 
-GCodeResult RemoteHeater::UpdateFaultDetectionParameters(const StringRef& reply)
+GCodeResult RemoteHeater::UpdateFaultDetectionParameters(const StringRef& reply) noexcept
 {
 	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
 	if (buf != nullptr)
@@ -214,7 +214,7 @@ GCodeResult RemoteHeater::UpdateFaultDetectionParameters(const StringRef& reply)
 	return GCodeResult::error;
 }
 
-void RemoteHeater::UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report)
+void RemoteHeater::UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept
 {
 	if (src == boardAddress)
 	{

@@ -11,12 +11,12 @@
 
 #if HAS_SMART_DRIVERS
 
-TmcDriverTemperatureSensor::TmcDriverTemperatureSensor(unsigned int sensorNum, unsigned int chan)
+TmcDriverTemperatureSensor::TmcDriverTemperatureSensor(unsigned int sensorNum, unsigned int chan) noexcept
 	: TemperatureSensor(sensorNum, "TMC2660 temperature warnings"), channel(chan)
 {
 }
 
-void TmcDriverTemperatureSensor::Poll()
+void TmcDriverTemperatureSensor::Poll() noexcept
 {
 	SetResult(reprap.GetPlatform().GetTmcDriversTemperature(channel), TemperatureError::success);
 }

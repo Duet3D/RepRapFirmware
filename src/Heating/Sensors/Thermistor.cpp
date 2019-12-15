@@ -20,7 +20,7 @@
 // The parameters that can be configured in RRF are R25 (the resistance at 25C), Beta, and optionally C.
 
 // Create an instance with default values
-Thermistor::Thermistor(unsigned int sensorNum, bool p_isPT1000)
+Thermistor::Thermistor(unsigned int sensorNum, bool p_isPT1000) noexcept
 	: SensorWithPort(sensorNum, (p_isPT1000) ? "PT1000" : "Thermistor"),
 	  r25(DefaultR25), beta(DefaultBeta), shC(DefaultShc), seriesR(DefaultThermistorSeriesR), adcFilterChannel(-1), isPT1000(p_isPT1000)
 #if !HAS_VREF_MONITOR || defined(DUET3)
@@ -102,7 +102,7 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Get the temperature
-void Thermistor::Poll()
+void Thermistor::Poll() noexcept
 {
 	int32_t averagedTempReading;
 	bool tempFilterValid;
@@ -222,7 +222,7 @@ void Thermistor::Poll()
 }
 
 // Calculate shA and shB from the other parameters
-void Thermistor::CalcDerivedParameters()
+void Thermistor::CalcDerivedParameters() noexcept
 {
 	shB = 1.0/beta;
 	const float lnR25 = logf(r25);
