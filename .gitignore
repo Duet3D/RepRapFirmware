@@ -10,6 +10,9 @@
 /Duet2_RTOS/
 /Duet3_V03/
 /Duet3_V05/
+/Duet3_V06/
+/Duet3_V06_CAN0/
+/Duet3_V06_Debug/
 /DuetM_RTOS/
 /PCCB_10/
 /PCCB_08/
@@ -17,5 +20,3 @@
 /RADDS_RTOS/
 /SAME70XPLD/
 .settings/language.settings.xml
-/PCCB/
-/PCCB_X5/
