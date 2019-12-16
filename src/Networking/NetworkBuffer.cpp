@@ -10,12 +10,12 @@
 
 NetworkBuffer *NetworkBuffer::freelist = nullptr;
 
-NetworkBuffer::NetworkBuffer(NetworkBuffer *n) : next(n), dataLength(0), readPointer(0)
+NetworkBuffer::NetworkBuffer(NetworkBuffer *n) noexcept : next(n), dataLength(0), readPointer(0)
 {
 }
 
 // Release this buffer and return the next one in the chain
-NetworkBuffer *NetworkBuffer::Release()
+NetworkBuffer *NetworkBuffer::Release() noexcept
 {
 	NetworkBuffer *ret = next;
 	next = freelist;
@@ -24,7 +24,7 @@ NetworkBuffer *NetworkBuffer::Release()
 }
 
 // Read 1 character, returning true if successful, false if no data left
-bool NetworkBuffer::ReadChar(char& b)
+bool NetworkBuffer::ReadChar(char& b) noexcept
 {
 	if (readPointer < dataLength)
 	{
@@ -37,7 +37,7 @@ bool NetworkBuffer::ReadChar(char& b)
 }
 
 // Return the amount of data available, including continuation buffers
-size_t NetworkBuffer::TotalRemaining() const
+size_t NetworkBuffer::TotalRemaining() const noexcept
 {
 	const NetworkBuffer *b = this;
 	size_t ret = 0;
@@ -50,7 +50,7 @@ size_t NetworkBuffer::TotalRemaining() const
 }
 
 // Append some data, returning the amount appended
-size_t NetworkBuffer::AppendData(const uint8_t *source, size_t length)
+size_t NetworkBuffer::AppendData(const uint8_t *source, size_t length) noexcept
 {
 	if (length > SpaceLeft())
 	{
@@ -64,7 +64,7 @@ size_t NetworkBuffer::AppendData(const uint8_t *source, size_t length)
 #if HAS_MASS_STORAGE
 
 // Read into the buffer from a file returning the number of bytes read
-int NetworkBuffer::ReadFromFile(FileStore *f)
+int NetworkBuffer::ReadFromFile(FileStore *f) noexcept
 {
 	const int ret = f->Read(reinterpret_cast<char*>(data32), bufferSize);
 	dataLength = (ret > 0) ? (size_t)ret : 0;
@@ -75,7 +75,7 @@ int NetworkBuffer::ReadFromFile(FileStore *f)
 #endif
 
 // Clear this buffer and release any successors
-void NetworkBuffer::Empty()
+void NetworkBuffer::Empty() noexcept
 {
 	readPointer = dataLength = 0;
 	while (next != nullptr)
@@ -84,7 +84,7 @@ void NetworkBuffer::Empty()
 	}
 }
 
-/*static*/ void NetworkBuffer::AppendToList(NetworkBuffer **list, NetworkBuffer *b)
+/*static*/ void NetworkBuffer::AppendToList(NetworkBuffer **list, NetworkBuffer *b) noexcept
 {
 	b->next = nullptr;
 	while (*list != nullptr)
@@ -95,7 +95,7 @@ void NetworkBuffer::Empty()
 }
 
 // Find the last buffer in a list
-/*static*/ NetworkBuffer *NetworkBuffer::FindLast(NetworkBuffer *list)
+/*static*/ NetworkBuffer *NetworkBuffer::FindLast(NetworkBuffer *list) noexcept
 {
 	if (list != nullptr)
 	{
@@ -107,7 +107,7 @@ void NetworkBuffer::Empty()
 	return list;
 }
 
-/*static*/ NetworkBuffer *NetworkBuffer::Allocate()
+/*static*/ NetworkBuffer *NetworkBuffer::Allocate() noexcept
 {
 	NetworkBuffer *ret = freelist;
 	if (ret != nullptr)
@@ -119,7 +119,7 @@ void NetworkBuffer::Empty()
 	return ret;
 }
 
-/*static*/ void NetworkBuffer::AllocateBuffers(unsigned int number)
+/*static*/ void NetworkBuffer::AllocateBuffers(unsigned int number) noexcept
 {
 	while (number != 0)
 	{
@@ -129,7 +129,7 @@ void NetworkBuffer::Empty()
 }
 
 // Count how many buffers there are in a chain
-/*static*/ unsigned int NetworkBuffer::Count(NetworkBuffer*& ptr)
+/*static*/ unsigned int NetworkBuffer::Count(NetworkBuffer*& ptr) noexcept
 {
 	unsigned int ret = 0;
 	for (NetworkBuffer *n = ptr; n != nullptr; n = n->next)

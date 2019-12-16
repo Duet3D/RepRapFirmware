@@ -39,7 +39,7 @@ bool FileStore::Invalidate(const FATFS *fs, bool doClose)
 			file.obj.fs = nullptr;
 			if (writeBuffer != nullptr)
 			{
-				reprap.GetPlatform().GetMassStorage()->ReleaseWriteBuffer(writeBuffer);
+				MassStorage::ReleaseWriteBuffer(writeBuffer);
 				writeBuffer = nullptr;
 			}
 		}
@@ -79,7 +79,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 			if (filePathCopy[i] == '/')
 			{
 				filePathCopy[i] = 0;
-				if (!reprap.GetPlatform().GetMassStorage()->DirectoryExists(filePathCopy.GetRef()) && !reprap.GetPlatform().GetMassStorage()->MakeDirectory(filePathCopy.c_str()))
+				if (!MassStorage::DirectoryExists(filePathCopy.GetRef()) && !MassStorage::MakeDirectory(filePathCopy.c_str()))
 				{
 					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create folder %s while trying to open file %s\n", filePathCopy.c_str(), filePath);
 					return false;
@@ -95,7 +95,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 		// Currently, append mode is used for the log file and for appending simulated print times to GCodes files (which required read access too).
 		if (mode == OpenMode::write || mode == OpenMode::writeWithCrc)
 		{
-			writeBuffer = reprap.GetPlatform().GetMassStorage()->AllocateWriteBuffer();
+			writeBuffer = MassStorage::AllocateWriteBuffer();
 		}
 	}
 
@@ -107,7 +107,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 	{
 		if (writeBuffer != nullptr)
 		{
-			reprap.GetPlatform().GetMassStorage()->ReleaseWriteBuffer(writeBuffer);
+			MassStorage::ReleaseWriteBuffer(writeBuffer);
 			writeBuffer = nullptr;
 		}
 
@@ -221,7 +221,7 @@ bool FileStore::ForceClose()
 
 	if (writeBuffer != nullptr)
 	{
-		reprap.GetPlatform().GetMassStorage()->ReleaseWriteBuffer(writeBuffer);
+		MassStorage::ReleaseWriteBuffer(writeBuffer);
 		writeBuffer = nullptr;
 	}
 
@@ -358,13 +358,13 @@ int FileStore::ReadLine(char* buf, size_t nBytes)
 
 FRESULT FileStore::Store(const char *s, size_t len, size_t *bytesWritten)
 {
-	uint32_t time = StepTimer::GetInterruptClocks();
+	uint32_t time = StepTimer::GetTimerTicks();
 	if (calcCrc)
 	{
 		crc.Update(s, len);
 	}
 	const FRESULT writeStatus = f_write(&file, s, len, bytesWritten);
-	time = StepTimer::GetInterruptClocks() - time;
+	time = StepTimer::GetTimerTicks() - time;
 	if (time > longestWriteTime)
 	{
 		longestWriteTime = time;
@@ -507,6 +507,12 @@ float FileStore::GetAndClearLongestWriteTime()
 unsigned int FileStore::GetAndClearMaxRetryCount()
 {
 	return DiskioGetAndClearMaxRetryCount();
+}
+
+// Return true if the passed file is the same as ours
+bool FileStore::IsSameFile(const FIL& otherFile) const
+{
+	return file.obj.fs == otherFile.obj.fs && file.dir_sect == otherFile.dir_sect && file.dir_ptr == otherFile.dir_ptr;
 }
 
 #if 0	// not currently used

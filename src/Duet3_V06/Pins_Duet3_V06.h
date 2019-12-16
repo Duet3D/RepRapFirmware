@@ -7,7 +7,21 @@
 const size_t NumFirmwareUpdateModules = 1;
 
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
-#define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
+
+#define IAP_IN_RAM				1
+
+#if IAP_IN_RAM
+# define IAP_UPDATE_FILE			"Duet3_SDiap_" BOARD_SHORT_NAME ".bin"
+constexpr uint32_t IAP_IMAGE_START = 0x20450000;		// last 64kb of RAM
+#else
+# define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
+
+// SAME70 Flash locations
+// These are designed to work with 1Mbyte flash processors as well as 2Mbyte
+// We can only erase complete 128kb sectors on the SAME70, so we allow 128Kb for IAP
+constexpr uint32_t IAP_IMAGE_START = 0x004E0000;
+constexpr uint32_t IAP_IMAGE_END = 0x004FFFFF;
+#endif
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
@@ -42,9 +56,8 @@ const size_t NumFirmwareUpdateModules = 1;
 #define SUPPORT_ASYNC_MOVES		1
 #define ALLOCATE_DEFAULT_PORTS	0
 
-#define USE_CACHE				0					// Cache controller disabled for now
-
-#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
+#define USE_MPU					1					// Needed if USE_CACHE is set, so that we can have non-cacheable memory regions
+#define USE_CACHE				1
 
 // The physical capabilities of the machine
 
@@ -55,16 +68,21 @@ constexpr size_t MaxCanBoards = 18;
 
 constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 
-constexpr size_t MaxSensorsInSystem = 64;
-typedef uint64_t SensorsBitmap;
+constexpr size_t MaxSensors = 64;
 
 constexpr size_t MaxHeaters = 12;
-constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
+constexpr size_t MaxExtraHeaterProtections = 8;		// The number of extra heater protection instances
+
+constexpr size_t MaxBedHeaters = 9;
+constexpr size_t MaxChamberHeaters = 4;
+constexpr int8_t DefaultBedHeater = 0;
+constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder heater, used only for the legacy status response
+
 constexpr size_t NumThermistorInputs = 4;
 constexpr size_t NumTmcDriversSenseChannels = 1;
 
 constexpr size_t MaxZProbes = 4;
-constexpr size_t MaxGpioPorts = 12;
+constexpr size_t MaxGpioPorts = 16;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 10;						// The maximum number of movement axes in the machine
@@ -78,7 +96,7 @@ constexpr size_t MaxAxesPlusExtruders = 20;			// May be <= MaxAxes + MaxExtruder
 constexpr size_t MaxHeatersPerTool = 4;
 constexpr size_t MaxExtrudersPerTool = 6;
 
-constexpr size_t NumTotalFans = 12;
+constexpr size_t MaxFans = 16;
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
@@ -171,7 +189,7 @@ enum class PinCapability: uint8_t
 	ainrwpwm = 1|2|4|8
 };
 
-constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
+constexpr inline PinCapability operator|(PinCapability a, PinCapability b) noexcept
 {
 	return (PinCapability)((uint8_t)a | (uint8_t)b);
 }
@@ -180,9 +198,9 @@ constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
 // This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
 struct PinEntry
 {
-	Pin GetPin() const { return pin; }
-	PinCapability GetCapability() const { return cap; }
-	const char* GetNames() const { return names; }
+	Pin GetPin() const noexcept { return pin; }
+	PinCapability GetCapability() const noexcept { return cap; }
+	const char* GetNames() const noexcept { return names; }
 
 	Pin pin;
 	PinCapability cap;
@@ -207,7 +225,7 @@ constexpr PinEntry PinTable[] =
 	{ PortAPin(8),	PinCapability::wpwm,	"out6" },
 	{ PortCPin(11),	PinCapability::wpwm,	"out7" },
 	{ PortCPin(8),	PinCapability::wpwm,	"out8" },
-	{ PortAPin(12),	PinCapability::wpwm,	"out9" },
+	{ PortAPin(12),	PinCapability::wpwm,	"out9,laser,vfd" },
 	{ PortAPin(10),	PinCapability::write,	"pson" },
 
 	// Tacho inputs associated with outputs 4-6
@@ -227,7 +245,6 @@ constexpr PinEntry PinTable[] =
 	{ PortEPin(3),	PinCapability::read,	"io8.in" },		// analog in not usable because it is on the wrong ADC
 
 	// IO connector outputs
-	//TODO some have PWM capability too
 	{ PortDPin(26),	PinCapability::rw,		"io0.out,serial0.tx" },
 	{ PortDPin(16),	PinCapability::rw,		"io1.out,serial1.tx" },
 	{ PortDPin(27),	PinCapability::rw,		"io2.out,i2c0.dat" },
@@ -254,13 +271,7 @@ constexpr PinEntry PinTable[] =
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 
 // Function to look up a pin name pass back the corresponding index into the pin table
-bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
-
-// SAME70 Flash locations
-// These are designed to work with 1Mbyte flash processors as well as 2Mbyte
-// We can only erase complete 128kb sectors on the SAME70, so we allow 128Kb for IAP
-constexpr uint32_t IAP_FLASH_START = 0x004E0000;
-constexpr uint32_t IAP_FLASH_END = 0x004FFFFF;
+bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
 // Duet pin numbers for the Linux interface
 constexpr Pin LinuxTfrReadyPin = PortEPin(2);
@@ -279,12 +290,14 @@ Spi * const LinuxSpi = SPI1;
 
 #endif
 
-// Step timer is timer 2 aka TC0 channel 2
+// Step timer is timer 0 aka TC0 channel 0. Also used as the CAN timestamp counter.
 #define STEP_TC				(TC0)
-#define STEP_TC_CHAN		(2)
-#define STEP_TC_IRQN		TC2_IRQn
-#define STEP_TC_HANDLER		TC2_Handler
-#define STEP_TC_ID			ID_TC2
+#define STEP_TC_CHAN		(0)					// channel for lower 16 bits
+#define STEP_TC_CHAN_UPPER	(2)					// channel for upper 16 bits
+#define STEP_TC_IRQN		TC0_IRQn
+#define STEP_TC_HANDLER		TC0_Handler
+#define STEP_TC_ID			ID_TC0
+#define STEP_TC_ID_UPPER	ID_TC2
 
 // DMA channel allocation
 constexpr uint8_t DmacChanHsmci = 0;			// this is hard coded in the ASF HSMCI driver
@@ -306,7 +319,7 @@ namespace StepPins
 	// All our step pins are on port C, so the bitmap is just the map of step bits in port C.
 
 	// Calculate the step bit for a driver. This doesn't need to be fast. It must return 0 if the driver is remote.
-	static inline uint32_t CalcDriverBitmap(size_t driver)
+	static inline uint32_t CalcDriverBitmap(size_t driver) noexcept
 	{
 		return (driver < NumDirectDrivers)
 				? g_APinDescription[STEP_PINS[driver]].ulPin
@@ -316,7 +329,7 @@ namespace StepPins
 	// Set the specified step pins high
 	// This needs to be as fast as possible, so we do a parallel write to the port(s).
 	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline void StepDriversHigh(uint32_t driverMap)
+	static inline void StepDriversHigh(uint32_t driverMap) noexcept
 	{
 		PIOC->PIO_ODSR = driverMap;				// on Duet 3 all step pins are on port C
 	}
@@ -324,7 +337,7 @@ namespace StepPins
 	// Set all step pins low
 	// This needs to be as fast as possible, so we do a parallel write to the port(s).
 	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline void StepDriversLow()
+	static inline void StepDriversLow() noexcept
 	{
 		PIOC->PIO_ODSR = 0;						// on Duet 3 all step pins are on port C
 	}

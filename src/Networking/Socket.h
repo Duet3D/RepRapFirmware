@@ -22,25 +22,25 @@ class NetworkInterface;
 class Socket
 {
 public:
-	Socket(NetworkInterface *iface) : interface(iface), localPort(0), remotePort(0), remoteIPAddress(), state(SocketState::disabled) { }
-	NetworkInterface *GetInterface() const { return interface; }
+	Socket(NetworkInterface *iface) noexcept : interface(iface), localPort(0), remotePort(0), remoteIPAddress(), state(SocketState::disabled) { }
+	NetworkInterface *GetInterface() const noexcept { return interface; }
 
-	Port GetLocalPort() const { return localPort; }
-	IPAddress GetRemoteIP() const { return remoteIPAddress; }
-	Port GetRemotePort() const { return remotePort; }
-	NetworkProtocol GetProtocol() const { return protocol; }
+	Port GetLocalPort() const noexcept { return localPort; }
+	IPAddress GetRemoteIP() const noexcept { return remoteIPAddress; }
+	Port GetRemotePort() const noexcept { return remotePort; }
+	NetworkProtocol GetProtocol() const noexcept { return protocol; }
 
-	virtual void Poll(bool full) = 0;
-	virtual void Close() = 0;
-	virtual void Terminate() = 0;
-	virtual void TerminateAndDisable() = 0;
-	virtual bool ReadChar(char& c) = 0;
-	virtual bool ReadBuffer(const uint8_t *&buffer, size_t &len) = 0;
-	virtual void Taken(size_t len) = 0;
-	virtual bool CanRead() const = 0;
-	virtual bool CanSend() const = 0;
-	virtual size_t Send(const uint8_t *data, size_t length) = 0;
-	virtual void Send() = 0;
+	virtual void Poll() noexcept = 0;
+	virtual void Close() noexcept = 0;
+	virtual void Terminate() noexcept = 0;
+	virtual void TerminateAndDisable() noexcept = 0;
+	virtual bool ReadChar(char& c) noexcept = 0;
+	virtual bool ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept = 0;
+	virtual void Taken(size_t len) noexcept = 0;
+	virtual bool CanRead() const noexcept = 0;
+	virtual bool CanSend() const noexcept = 0;
+	virtual size_t Send(const uint8_t *data, size_t length) noexcept = 0;
+	virtual void Send() noexcept = 0;
 
 protected:
 	enum class SocketState : uint8_t

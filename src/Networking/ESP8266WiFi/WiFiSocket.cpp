@@ -13,11 +13,11 @@
 const unsigned int MaxBuffersPerSocket = 4;
 
 
-WiFiSocket::WiFiSocket(NetworkInterface *iface) : Socket(iface), receivedData(nullptr), state(SocketState::inactive), needsPolling(false)
+WiFiSocket::WiFiSocket(NetworkInterface *iface) noexcept : Socket(iface), receivedData(nullptr), state(SocketState::inactive), needsPolling(false)
 {
 }
 
-void WiFiSocket::Init(SocketNumber n)
+void WiFiSocket::Init(SocketNumber n) noexcept
 {
 	socketNum = n;
 	state = SocketState::inactive;
@@ -25,7 +25,7 @@ void WiFiSocket::Init(SocketNumber n)
 }
 
 // Close a connection when the last packet has been sent
-void WiFiSocket::Close()
+void WiFiSocket::Close() noexcept
 {
 	if (state == SocketState::connected || state == SocketState::clientDisconnecting)
 	{
@@ -46,7 +46,7 @@ void WiFiSocket::Close()
 
 // Terminate a connection immediately
 // We can call this after any sort of error on a socket as long as it is in use.
-void WiFiSocket::Terminate()
+void WiFiSocket::Terminate() noexcept
 {
 	if (state != SocketState::inactive)
 	{
@@ -58,20 +58,20 @@ void WiFiSocket::Terminate()
 }
 
 // Return true if there is or may soon be more data to read
-bool WiFiSocket::CanRead() const
+bool WiFiSocket::CanRead() const noexcept
 {
 	return (state == SocketState::connected)
 		|| (state == SocketState::clientDisconnecting && receivedData != nullptr && receivedData->TotalRemaining() != 0);
 }
 
 // Return true if we can send data to this socket
-bool WiFiSocket::CanSend() const
+bool WiFiSocket::CanSend() const noexcept
 {
 	return state == SocketState::connected;
 }
 
 // Read 1 character from the receive buffers, returning true if successful
-bool WiFiSocket::ReadChar(char& c)
+bool WiFiSocket::ReadChar(char& c) noexcept
 {
 	if (receivedData != nullptr)
 	{
@@ -88,7 +88,7 @@ bool WiFiSocket::ReadChar(char& c)
 }
 
 // Return a pointer to data in a buffer and a length available, and mark the data as taken
-bool WiFiSocket::ReadBuffer(const uint8_t *&buffer, size_t &len)
+bool WiFiSocket::ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept
 {
 	if (receivedData != nullptr)
 	{
@@ -101,7 +101,7 @@ bool WiFiSocket::ReadBuffer(const uint8_t *&buffer, size_t &len)
 }
 
 // Flag some data as taken from the receive buffers. We never take data from more than one buffer at a time.
-void WiFiSocket::Taken(size_t len)
+void WiFiSocket::Taken(size_t len) noexcept
 {
 	if (receivedData != nullptr)
 	{
@@ -114,7 +114,7 @@ void WiFiSocket::Taken(size_t len)
 }
 
 // Poll a socket to see if it needs to be serviced
-void WiFiSocket::Poll(bool full)
+void WiFiSocket::Poll() noexcept
 {
 	// Get the socket status
 	Receiver<ConnStatusResponse> resp;
@@ -161,7 +161,7 @@ void WiFiSocket::Poll(bool full)
 		// no break
 
 	case ConnState::connected:
-		if (full && state != SocketState::connected)
+		if (state != SocketState::connected)
 		{
 			// It's a new connection
 			if (reprap.Debug(moduleNetwork))
@@ -235,13 +235,13 @@ void WiFiSocket::Poll(bool full)
 	needsPolling = false;
 }
 
-WiFiInterface *WiFiSocket::GetInterface() const
+WiFiInterface *WiFiSocket::GetInterface() const noexcept
 {
 	return static_cast<WiFiInterface *>(interface);
 }
 
 // Try to receive more incoming data from the socket.
-void WiFiSocket::ReceiveData(uint16_t bytesAvailable)
+void WiFiSocket::ReceiveData(uint16_t bytesAvailable) noexcept
 {
 	if (bytesAvailable != 0)
 	{
@@ -289,7 +289,7 @@ void WiFiSocket::ReceiveData(uint16_t bytesAvailable)
 }
 
 // Discard any received data for this transaction
-void WiFiSocket::DiscardReceivedData()
+void WiFiSocket::DiscardReceivedData() noexcept
 {
 	while (receivedData != nullptr)
 	{
@@ -298,7 +298,7 @@ void WiFiSocket::DiscardReceivedData()
 }
 
 // Send the data, returning the length buffered
-size_t WiFiSocket::Send(const uint8_t *data, size_t length)
+size_t WiFiSocket::Send(const uint8_t *data, size_t length) noexcept
 {
 	if (state == SocketState::connected && txBufferSpace != 0)
 	{
@@ -319,7 +319,7 @@ size_t WiFiSocket::Send(const uint8_t *data, size_t length)
 }
 
 // Tell the interface to send the outstanding data
-void WiFiSocket::Send()
+void WiFiSocket::Send() noexcept
 {
 	if (state == SocketState::connected)
 	{
@@ -336,7 +336,7 @@ void WiFiSocket::Send()
 }
 
 // Return true if we need to poll this socket
-bool WiFiSocket::NeedsPolling() const
+bool WiFiSocket::NeedsPolling() const noexcept
 {
 	return state != SocketState::inactive || needsPolling;
 }

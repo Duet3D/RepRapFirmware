@@ -36,7 +36,8 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 		uint32_t fileOffset = msg.fileOffset, fileLength = 0;
 		if (fileOffset == 0)
 		{
-			CanInterface::UpdateStarting();
+// DC disabled this because it is buggy
+//			CanInterface::UpdateStarting();
 		}
 
 		uint32_t lreq = msg.lengthRequested;
@@ -137,7 +138,7 @@ pre(buf->id.MsgType() == CanMessageType::FirmwareBlockRequest)
 		{
 #if HAS_MASS_STORAGE
 			// Fetch the firmware file from the local SD card
-			FileStore * const f = reprap.GetPlatform().OpenSysFile(fname.c_str(), OpenMode::read);
+			FileStore * const f = reprap.GetPlatform().OpenFile(DEFAULT_SYS_DIR, fname.c_str(), OpenMode::read);
 			if (f != nullptr)
 			{
 				fileLength = f->Length();
@@ -282,7 +283,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
 			CanMessageBuffer::Free(buf);
 			break;
 
-		case CanMessageType::FirmwareBlockRequest:
+		case CanMessageType::firmwareBlockRequest:
 			HandleFirmwareBlockRequest(buf);		// this one reuses or frees the buffer
 			break;
 

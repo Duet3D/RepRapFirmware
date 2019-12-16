@@ -667,7 +667,7 @@ void Menu::EncoderAction(int action)
 // Refresh is called every Spin() of the Display under most circumstances; an appropriate place to check if timeout action needs to be taken
 void Menu::Refresh()
 {
-	if (!reprap.GetPlatform().GetMassStorage()->IsDriveMounted(0))
+	if (!MassStorage::IsDriveMounted(0))
 	{
 		if (!displayingFixedMenu)
 		{

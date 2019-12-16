@@ -24,30 +24,30 @@
 //!
 //! Copyright (c)  2013, WIZnet Co., LTD.
 //! All rights reserved.
-//! 
-//! Redistribution and use in source and binary forms, with or without 
-//! modification, are permitted provided that the following conditions 
-//! are met: 
-//! 
-//!     * Redistributions of source code must retain the above copyright 
-//! notice, this list of conditions and the following disclaimer. 
+//!
+//! Redistribution and use in source and binary forms, with or without
+//! modification, are permitted provided that the following conditions
+//! are met:
+//!
+//!     * Redistributions of source code must retain the above copyright
+//! notice, this list of conditions and the following disclaimer.
 //!     * Redistributions in binary form must reproduce the above copyright
 //! notice, this list of conditions and the following disclaimer in the
-//! documentation and/or other materials provided with the distribution. 
-//!     * Neither the name of the <ORGANIZATION> nor the names of its 
-//! contributors may be used to endorse or promote products derived 
-//! from this software without specific prior written permission. 
-//! 
+//! documentation and/or other materials provided with the distribution.
+//!     * Neither the name of the <ORGANIZATION> nor the names of its
+//! contributors may be used to endorse or promote products derived
+//! from this software without specific prior written permission.
+//!
 //! THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-//! AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+//! AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 //! IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-//! ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE 
-//! LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-//! CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+//! ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+//! LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+//! CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
 //! SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-//! INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-//! CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-//! ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
+//! INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+//! CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+//! ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 //! THE POSSIBILITY OF SUCH DAMAGE.
 //
 //*****************************************************************************
@@ -62,7 +62,7 @@
 
 ////////////////////////////////////////////////////
 
-uint8_t WIZCHIP_READ(uint32_t AddrSel)
+uint8_t WIZCHIP_READ(uint32_t AddrSel) noexcept
 {
 	WizSpi::AssertSS();
 	WizSpi::SendAddress(AddrSel | (_W5500_SPI_READ_ | _W5500_SPI_VDM_OP_));
@@ -71,15 +71,15 @@ uint8_t WIZCHIP_READ(uint32_t AddrSel)
 	return ret;
 }
 
-void WIZCHIP_WRITE(uint32_t AddrSel, uint8_t wb )
+void WIZCHIP_WRITE(uint32_t AddrSel, uint8_t wb) noexcept
 {
 	WizSpi::AssertSS();
 	WizSpi::SendAddress(AddrSel | (_W5500_SPI_WRITE_ | _W5500_SPI_VDM_OP_));
 	WizSpi::WriteByte(wb);
 	WizSpi::ReleaseSS();
 }
-         
-void WIZCHIP_READ_BUF (uint32_t AddrSel, uint8_t* pBuf, uint16_t len)
+
+void WIZCHIP_READ_BUF (uint32_t AddrSel, uint8_t* pBuf, uint16_t len) noexcept
 {
 	WizSpi::AssertSS();
 	WizSpi::SendAddress(AddrSel | (_W5500_SPI_READ_ | _W5500_SPI_VDM_OP_));
@@ -87,7 +87,7 @@ void WIZCHIP_READ_BUF (uint32_t AddrSel, uint8_t* pBuf, uint16_t len)
 	WizSpi::ReleaseSS();
 }
 
-void WIZCHIP_WRITE_BUF(uint32_t AddrSel, const uint8_t* pBuf, uint16_t len)
+void WIZCHIP_WRITE_BUF(uint32_t AddrSel, const uint8_t* pBuf, uint16_t len) noexcept
 {
 	WizSpi::AssertSS();
 	WizSpi::SendAddress(AddrSel | (_W5500_SPI_WRITE_ | _W5500_SPI_VDM_OP_));
@@ -96,7 +96,7 @@ void WIZCHIP_WRITE_BUF(uint32_t AddrSel, const uint8_t* pBuf, uint16_t len)
 }
 
 // Read into an IPAddress
-void WIZCHIP_READ_IP(uint32_t AddrSel, IPAddress& ip)
+void WIZCHIP_READ_IP(uint32_t AddrSel, IPAddress& ip) noexcept
 {
 	uint8_t ipBuf[4];
 	WIZCHIP_READ_BUF(AddrSel, ipBuf, 4);
@@ -104,14 +104,14 @@ void WIZCHIP_READ_IP(uint32_t AddrSel, IPAddress& ip)
 }
 
 // Write to an IPAddress
-void WIZCHIP_WRITE_IP(uint32_t AddrSel, const IPAddress& ip)
+void WIZCHIP_WRITE_IP(uint32_t AddrSel, const IPAddress& ip) noexcept
 {
 	uint8_t ipBuf[4];
 	ip.UnpackV4(ipBuf);
 	WIZCHIP_WRITE_BUF(AddrSel, ipBuf, 4);
 }
 
-uint16_t getSn_TX_FSR(uint8_t sn)
+uint16_t getSn_TX_FSR(uint8_t sn) noexcept
 {
 	uint16_t val = 0, val1 = 0;
 	do
@@ -127,7 +127,7 @@ uint16_t getSn_TX_FSR(uint8_t sn)
 	return val;
 }
 
-uint16_t getSn_RX_RSR(uint8_t sn)
+uint16_t getSn_RX_RSR(uint8_t sn) noexcept
 {
 	uint16_t val = 0, val1 = 0;
 	do
@@ -143,7 +143,7 @@ uint16_t getSn_RX_RSR(uint8_t sn)
 	return val;
 }
 
-void wiz_send_data(uint8_t sn, const uint8_t *wizdata, uint16_t len)
+void wiz_send_data(uint8_t sn, const uint8_t *wizdata, uint16_t len) noexcept
 {
 	if (len != 0)
 	{
@@ -159,7 +159,7 @@ void wiz_send_data(uint8_t sn, const uint8_t *wizdata, uint16_t len)
 // Function wiz_send_data doesn't work properly when we send TCP/IP data in multiple chunks,
 // because the getSn_TX_WR call doesn't read back the incremented value after we wrote to it.
 // So use this instead.
-void wiz_send_data_at(uint8_t sn, const uint8_t *wizdata, uint16_t len, uint16_t ptr)
+void wiz_send_data_at(uint8_t sn, const uint8_t *wizdata, uint16_t len, uint16_t ptr) noexcept
 {
 	if (len != 0)
 	{
@@ -168,7 +168,7 @@ void wiz_send_data_at(uint8_t sn, const uint8_t *wizdata, uint16_t len, uint16_t
 	}
 }
 
-void wiz_recv_data(uint8_t sn, uint8_t *wizdata, uint16_t len)
+void wiz_recv_data(uint8_t sn, uint8_t *wizdata, uint16_t len) noexcept
 {
 	if (len != 0)
 	{
@@ -182,7 +182,7 @@ void wiz_recv_data(uint8_t sn, uint8_t *wizdata, uint16_t len)
 
 // Function wiz_recv_data only works if we read the entire received data.
 // This function should get round that, but the caller will have to track the received buffer pointer.
-void wiz_recv_data_at(uint8_t sn, uint8_t *wizdata, uint16_t len, uint16_t ptr)
+void wiz_recv_data_at(uint8_t sn, uint8_t *wizdata, uint16_t len, uint16_t ptr) noexcept
 {
 	if (len != 0)
 	{
@@ -191,7 +191,7 @@ void wiz_recv_data_at(uint8_t sn, uint8_t *wizdata, uint16_t len, uint16_t ptr)
 	}
 }
 
-void wiz_recv_ignore(uint8_t sn, uint16_t len)
+void wiz_recv_ignore(uint8_t sn, uint16_t len) noexcept
 {
 	uint16_t ptr = getSn_RX_RD(sn);
 	ptr += len;

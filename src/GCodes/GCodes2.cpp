@@ -453,15 +453,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					platform.AccessSpindle(slot).SetRpm(gb.GetFValue());
 					break;
 
-				case MachineType::laser:
-					{
-						const Pwm_t laserPwm = ConvertLaserPwm(gb.GetFValue());
-						platform.SetLaserPwm(laserPwm);
 #if SUPPORT_LASER
-						moveBuffer.laserPwmOrIoBits.laserPwm = laserPwm;
-#endif
-					}
+				case MachineType::laser:
+					moveBuffer.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
 					break;
+#endif
 
 				default:
 #if SUPPORT_ROLAND
@@ -545,12 +541,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			}
 			break;
 
-		case MachineType::laser:
-			platform.SetLaserPwm(0);
 #if SUPPORT_LASER
+		case MachineType::laser:
 			moveBuffer.laserPwmOrIoBits.Clear();
-#endif
 			break;
+#endif
 
 		default:
 #if SUPPORT_ROLAND
@@ -681,7 +676,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 				bool encapsulateList = gb.MachineState().compatibility != Compatibility::marlin;
 				FileInfo fileInfo;
-				if (platform.GetMassStorage()->FindFirst(dir.c_str(), fileInfo))
+				if (MassStorage::FindFirst(dir.c_str(), fileInfo))
 				{
 					// iterate through all entries and append each file name
 					do {
@@ -693,7 +688,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						{
 							outBuf->catf("%s\n", fileInfo.fileName.c_str());
 						}
-					} while (platform.GetMassStorage()->FindNext(fileInfo));
+					} while (MassStorage::FindNext(fileInfo));
 
 					if (encapsulateList)
 					{
@@ -716,7 +711,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		{
 			const size_t card = (gb.Seen('P')) ? gb.GetIValue() : 0;
-			result = platform.GetMassStorage()->Mount(card, reply, true);
+			result = MassStorage::Mount(card, reply, true);
 		}
 		break;
 
@@ -727,7 +722,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		{
 			const size_t card = (gb.Seen('P')) ? gb.GetIValue() : 0;
-			result = platform.GetMassStorage()->Unmount(card, reply);
+			result = MassStorage::Unmount(card, reply);
 		}
 		break;
 
@@ -831,11 +826,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					bool fromStart = (fileOffsetToPrint == 0);
 					if (!fromStart)
 					{
-						// We executed M23 to set the file offset, which normally means that we are executing resurrect.g.
+						// We executed M26 to set the file offset, which normally means that we are executing resurrect.g.
 						// We need to copy the absolute/relative and volumetric extrusion flags over
 						fileGCode->OriginalMachineState().CopyStateFrom(gb.MachineState());
 						fileToPrint.Seek(fileOffsetToPrint);
-						moveFractionToSkip = moveFractionToStartAt;
+						moveFractionToSkip = restartMoveFractionDone;
 					}
 					StartPrinting(fromStart);
 				}
@@ -911,10 +906,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		if (gb.Seen('S'))
 		{
 			fileOffsetToPrint = (FilePosition)gb.GetUIValue();
-			if (gb.Seen('P'))
-			{
-				moveFractionToStartAt = constrain<float>(gb.GetFValue(), 0.0, 1.0);
-			}
+			restartMoveFractionDone = (gb.Seen('P')) ? constrain<float>(gb.GetFValue(), 0.0, 1.0) : 0.0;
+			restartInitialUserX = (gb.Seen('X')) ? gb.GetFValue() : 0.0;
+			restartInitialUserY = (gb.Seen('Y')) ? gb.GetFValue() : 0.0;
 		}
 		break;
 
@@ -1088,7 +1082,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			uint64_t capacity, freeSpace;
 			uint32_t speed;
 			uint32_t clSize;
-			const MassStorage::InfoResult res = platform.GetMassStorage()->GetCardInfo(slot, capacity, freeSpace, speed, clSize);
+			const MassStorage::InfoResult res = MassStorage::GetCardInfo(slot, capacity, freeSpace, speed, clSize);
 			if (format == 2)
 			{
 				reply.printf("{\"SDinfo\":{\"slot\":%" PRIu32 ",\"present\":", slot);
@@ -1143,7 +1137,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				if (gb.Seen('S'))
 				{
 					const float val = gb.GetPwmValue();
-					platform.GetGpioPort(gpioPortNumber).WriteAnalog(val);
+					const GpOutputPort& gpPort = platform.GetGpioPort(gpioPortNumber);
+#if SUPPORT_CAN_EXPANSION
+					if (gpPort.boardAddress != CanId::MasterAddress)
+					{
+						result = CanInterface::WriteGpio(gpPort.boardAddress, gpioPortNumber, val, false, reply);
+						break;
+					}
+#endif
+					gpPort.port.WriteAnalog(val);
 				}
 			}
 			else
@@ -1587,14 +1589,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (gb.Seen('C'))
 			{
 				// Wait for specified chamber(s) to be ready
-				uint32_t chamberIndices[NumChamberHeaters];
-				size_t chamberCount = NumChamberHeaters;
+				uint32_t chamberIndices[MaxChamberHeaters];
+				size_t chamberCount = MaxChamberHeaters;
 				gb.GetUnsignedArray(chamberIndices, chamberCount, false);
 
 				if (chamberCount == 0)
 				{
 					// If no values are specified, wait for all chamber heaters
-					for (size_t i = 0; i < NumChamberHeaters; i++)
+					for (size_t i = 0; i < MaxChamberHeaters; i++)
 					{
 						const int8_t heater = reprap.GetHeat().GetChamberHeater(i);
 						if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance))
@@ -1610,7 +1612,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					// Otherwise wait only for the specified chamber heaters
 					for (size_t i = 0; i < chamberCount; i++)
 					{
-						if (chamberIndices[i] >= 0 && chamberIndices[i] < NumChamberHeaters)
+						if (chamberIndices[i] >= 0 && chamberIndices[i] < MaxChamberHeaters)
 						{
 							const int8_t heater = reprap.GetHeat().GetChamberHeater(chamberIndices[i]);
 							if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance))
@@ -1707,27 +1709,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 122:
 		{
-			const int val = (gb.Seen('P')) ? gb.GetIValue() : 0;
-			if (val == 0)
+			const unsigned int type = (gb.Seen('P')) ? gb.GetIValue() : 0;
+			const MessageType mt = (MessageType)(gb.GetResponseMessageType() | PushFlag);
+#if SUPPORT_CAN_EXPANSION
+			const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : 0;
+			if (board != CanId::MasterAddress)
+			{
+				result = CanInterface::RemoteDiagnostics(mt, board, type, gb, reply);
+				break;
+			}
+#endif
+			if (type == 0)
 			{
 				// Set the Push flag to combine multiple messages into a single OutputBuffer chain
-				const MessageType mt = (MessageType)(gb.GetResponseMessageType() | PushFlag);
-#if SUPPORT_CAN_EXPANSION
-				if (gb.Seen('B'))
-				{
-					const uint32_t board = gb.GetUIValue();
-					if (board != CanId::MasterAddress)
-					{
-						result = CanInterface::RemoteDiagnostics(mt, board, gb, reply);
-						break;
-					}
-				}
-#endif
 				reprap.Diagnostics(mt);
 			}
 			else
 			{
-				result = platform.DiagnosticTest(gb, reply, val);
+				result = platform.DiagnosticTest(gb, reply, type);
 			}
 		}
 		break;
@@ -1742,7 +1741,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 			// Check if the heater index is passed
 			int index = gb.Seen('P') ? gb.GetIValue() : 0;
-			if (index < 0 || index >= (int)((code == 140) ? NumBedHeaters : NumChamberHeaters))
+			if (index < 0 || index >= (int)((code == 140) ? MaxBedHeaters : MaxChamberHeaters))
 			{
 				reply.printf("Invalid heater index '%d'", index);
 				result = GCodeResult::error;
@@ -1843,7 +1842,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 144: // Set bed to standby, or to active if S1 parameter given
 		{
 			const unsigned int index = gb.Seen('P') ? gb.GetUIValue() : 0;
-			if (index >= NumBedHeaters)
+			if (index >= MaxBedHeaters)
 			{
 				reply.printf("Invalid bed heater index '%u'", index);
 				result = GCodeResult::error;
@@ -1884,7 +1883,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			// Check if the heater index is passed
 			const uint32_t index = gb.Seen('P') ? gb.GetUIValue() : 0;
-			if (index >= ((code == 190) ? NumBedHeaters : NumChamberHeaters))
+			if (index >= ((code == 190) ? MaxBedHeaters : MaxChamberHeaters))
 			{
 				reply.printf("Invalid heater index '%" PRIu32 "'", index);
 				result = GCodeResult::error;
@@ -2267,21 +2266,28 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					if (angleOrWidth < 0.0)
 					{
 						// Disable the servo by setting the pulse width to zero
-						platform.GetGpioPort(gpioPortNumber).WriteAnalog(0.0);
+						angleOrWidth = 0.0;
 					}
-					else
+					else if (angleOrWidth < MinServoPulseWidth)
 					{
-						if (angleOrWidth < MinServoPulseWidth)
-						{
-							// User gave an angle so convert it to a pulse width in microseconds
-							angleOrWidth = (min<float>(angleOrWidth, 180.0) * ((MaxServoPulseWidth - MinServoPulseWidth) / 180.0)) + MinServoPulseWidth;
-						}
-						else if (angleOrWidth > MaxServoPulseWidth)
-						{
-							angleOrWidth = MaxServoPulseWidth;
-						}
-						platform.GetGpioPort(gpioPortNumber).WriteAnalog(angleOrWidth * (ServoRefreshFrequency/1e6));
+						// User gave an angle so convert it to a pulse width in microseconds
+						angleOrWidth = (min<float>(angleOrWidth, 180.0) * ((MaxServoPulseWidth - MinServoPulseWidth) / 180.0)) + MinServoPulseWidth;
 					}
+					else if (angleOrWidth > MaxServoPulseWidth)
+					{
+						angleOrWidth = MaxServoPulseWidth;
+					}
+
+					const GpOutputPort& gpPort = platform.GetGpioPort(gpioPortNumber);
+					const float pwm = angleOrWidth * (ServoRefreshFrequency/1e6);
+#if SUPPORT_CAN_EXPANSION
+					if (gpPort.boardAddress != CanId::MasterAddress)
+					{
+						result = CanInterface::WriteGpio(gpPort.boardAddress, gpioPortNumber, pwm, true, reply);
+						break;
+					}
+#endif
+					gpPort.port.WriteAnalog(pwm);
 				}
 				// We don't currently allow the servo position to be read back
 			}
@@ -2662,12 +2668,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 	case 408: // Get status in JSON format
 		{
-			const int form = gb.Seen('P') ? gb.GetIValue() : 0;
+			const unsigned int form = (gb.Seen('P')) ? gb.GetUIValue() : 0;
+			const unsigned int type = gb.Seen('S') ? gb.GetUIValue() : 0;
+#if SUPPORT_CAN_EXPANSION
+			const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : 0;
+			if (board != 0)
+			{
+				result = CanInterface::RemoteM408(board, form, type, gb, reply);
+				break;
+			}
+#endif
 			switch (form)
 			{
 			case 0:
 				{
-					const int type = gb.Seen('S') ? gb.GetIValue() : 0;
 					const int seq = gb.Seen('R') ? gb.GetIValue() : -1;
 					if (&gb == auxGCode && (type == 0 || type == 2))
 					{
@@ -2813,7 +2827,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				result = GCodeResult::error;
 				break;
 			}
-			platform.GetMassStorage()->MakeDirectory(dirName.c_str());
+			MassStorage::MakeDirectory(dirName.c_str());
 		}
 		break;
 
@@ -2833,12 +2847,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				result = GCodeResult::error;
 				break;
 			}
-			MassStorage * const ms = platform.GetMassStorage();
-			if (gb.Seen('D') && gb.GetUIValue() == 1 && ms->FileExists(oldVal.c_str()) && ms->FileExists(newVal.c_str()))
+			if (gb.Seen('D') && gb.GetUIValue() == 1 && MassStorage::FileExists(oldVal.c_str()) && MassStorage::FileExists(newVal.c_str()))
 			{
-				ms->Delete(newVal.c_str());
+				MassStorage::Delete(newVal.c_str());
 			}
-			ms->Rename(oldVal.c_str(), newVal.c_str());
+			MassStorage::Rename(oldVal.c_str(), newVal.c_str());
 		}
 		break;
 
@@ -3441,7 +3454,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			return false;
 		}
-		result = platform.GetEndstops().HandleM574(gb, reply);
+		result = platform.GetEndstops().HandleM574(gb, reply, outBuf);
 		break;
 
 	case 575: // Set communications parameters

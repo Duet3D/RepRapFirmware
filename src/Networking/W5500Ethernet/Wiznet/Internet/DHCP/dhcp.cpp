@@ -10,7 +10,7 @@
 //!       <2012/12/20> V1.1.0
 //!         1. Optimize code
 //!         2. Add reg_dhcp_cbfunc()
-//!         3. Add DHCP_stop() 
+//!         3. Add DHCP_stop()
 //!         4. Integrate check_DHCP_state() & DHCP_run() to DHCP_run()
 //!         5. Don't care system endian
 //!         6. Add comments
@@ -21,30 +21,30 @@
 //!
 //! Copyright (c)  2013, WIZnet Co., LTD.
 //! All rights reserved.
-//! 
-//! Redistribution and use in source and binary forms, with or without 
-//! modification, are permitted provided that the following conditions 
-//! are met: 
-//! 
-//!     * Redistributions of source code must retain the above copyright 
-//! notice, this list of conditions and the following disclaimer. 
+//!
+//! Redistribution and use in source and binary forms, with or without
+//! modification, are permitted provided that the following conditions
+//! are met:
+//!
+//!     * Redistributions of source code must retain the above copyright
+//! notice, this list of conditions and the following disclaimer.
 //!     * Redistributions in binary form must reproduce the above copyright
 //! notice, this list of conditions and the following disclaimer in the
-//! documentation and/or other materials provided with the distribution. 
-//!     * Neither the name of the <ORGANIZATION> nor the names of its 
-//! contributors may be used to endorse or promote products derived 
-//! from this software without specific prior written permission. 
-//! 
+//! documentation and/or other materials provided with the distribution.
+//!     * Neither the name of the <ORGANIZATION> nor the names of its
+//! contributors may be used to endorse or promote products derived
+//! from this software without specific prior written permission.
+//!
 //! THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-//! AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+//! AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 //! IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-//! ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE 
-//! LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-//! CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+//! ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+//! LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+//! CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
 //! SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-//! INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-//! CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-//! ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
+//! INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+//! CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+//! ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 //! THE POSSIBILITY OF SUCH DAMAGE.
 //
 //*****************************************************************************
@@ -62,7 +62,7 @@ extern "C" void debugPrintf(const char *fmt, ...);
 # define DEBUG_PRINTF(...) debugPrintf(__VA_ARGS__)
 #else
 # define DEBUG_PRINTF(_fmt, ...)
-#endif   
+#endif
 
 /* DHCP state machine. */
 enum class DhcpState : uint8_t
@@ -78,7 +78,7 @@ enum class DhcpState : uint8_t
 	delaying
 };
 
-#define DHCP_FLAGSBROADCAST      0x8000   ///< The broadcast value of flags in @ref RIP_MSG 
+#define DHCP_FLAGSBROADCAST      0x8000   ///< The broadcast value of flags in @ref RIP_MSG
 #define DHCP_FLAGSUNICAST        0x0000   ///< The unicast   value of flags in @ref RIP_MSG
 
 /* DHCP message OP code */
@@ -108,7 +108,7 @@ enum class DhcpState : uint8_t
 #define OPT_SIZE                 312               /// Max OPT size of @ref RIP_MSG
 #define RIP_MSG_SIZE             (236+OPT_SIZE)    /// Max size of @ref RIP_MSG
 
-/* 
+/*
  * @brief DHCP option and value (cf. RFC1533)
  */
 enum
@@ -180,7 +180,7 @@ enum
 
 /*
  * @brief DHCP message format
- */ 
+ */
 typedef struct {
 	uint8_t  op;            ///< @ref DHCP_BOOTREQUEST or @ref DHCP_BOOTREPLY
 	uint8_t  htype;         ///< @ref DHCP_HTYPE10MB or @ref DHCP_HTYPE100MB
@@ -191,7 +191,7 @@ typedef struct {
 	uint16_t flags;         ///< @ref DHCP_FLAGSBROADCAST or @ref DHCP_FLAGSUNICAST
 	uint8_t  ciaddr[4];     ///< @ref Request IP to DHCP sever
 	uint8_t  yiaddr[4];     ///< @ref Offered IP from DHCP server
-	uint8_t  siaddr[4];     ///< No use 
+	uint8_t  siaddr[4];     ///< No use
 	uint8_t  giaddr[4];     ///< No use
 	uint8_t  chaddr[16];    ///< DHCP client 6bytes MAC address. Others is filled to zero
 	uint8_t  sname[64];     ///< No use
@@ -229,49 +229,49 @@ char HOST_NAME[16] = DCHP_HOST_NAME;
 uint8_t DHCP_CHADDR[6];								// DHCP Client MAC address.
 
 /* The default callback function */
-void default_ip_assign(void);
-void default_ip_update(void);
-void default_ip_conflict(void);
+void default_ip_assign() noexcept;
+void default_ip_update() noexcept;
+void default_ip_conflict() noexcept;
 
 /* Callback handler */
-void (*dhcp_ip_assign)(void)   = default_ip_assign;     /* handler to be called when the IP address from DHCP server is first assigned */
-void (*dhcp_ip_update)(void)   = default_ip_update;     /* handler to be called when the IP address from DHCP server is updated */
-void (*dhcp_ip_conflict)(void) = default_ip_conflict;   /* handler to be called when the IP address from DHCP server is conflict */
+void (*dhcp_ip_assign)() noexcept   = default_ip_assign;     /* handler to be called when the IP address from DHCP server is first assigned */
+void (*dhcp_ip_update)() noexcept   = default_ip_update;     /* handler to be called when the IP address from DHCP server is updated */
+void (*dhcp_ip_conflict)() noexcept = default_ip_conflict;   /* handler to be called when the IP address from DHCP server is conflict */
 
-void reg_dhcp_cbfunc(void(*ip_assign)(void), void(*ip_update)(void), void(*ip_conflict)(void));
+void reg_dhcp_cbfunc(void(*ip_assign)() noexcept, void(*ip_update)() noexcept, void(*ip_conflict)() noexcept) noexcept;
 
 
 /* send DISCOVER message to DHCP server */
-void     send_DHCP_DISCOVER(void);
+void     send_DHCP_DISCOVER() noexcept;
 
 /* send REQEUST message to DHCP server */
-void     send_DHCP_REQUEST(void);
+void     send_DHCP_REQUEST() noexcept;
 
 /* send DECLINE message to DHCP server */
-void     send_DHCP_DECLINE(void);
+void     send_DHCP_DECLINE() noexcept;
 
 /* IP conflict check by sending ARP-request to leased IP and wait ARP-response. */
-void   check_DHCP_leasedIP(void);
+void   check_DHCP_leasedIP() noexcept;
 
 /* check the timeout in DHCP process */
-DhcpRunResult check_DHCP_timeout(void);
+DhcpRunResult check_DHCP_timeout() noexcept;
 
 /* Initialize to timeout process.  */
-void     reset_DHCP_timeout(void);
+void     reset_DHCP_timeout() noexcept;
 
 /* Parse message as OFFER and ACK and NACK from DHCP server.*/
-int8_t   parseDHCPMSG(void);
+int8_t   parseDHCPMSG() noexcept;
 
 /* The default handler of ip assign first */
-void default_ip_assign(void)
+void default_ip_assign() noexcept
 {
 	setSIPR(DHCP_allocated_ip);
 	setSUBR(DHCP_allocated_sn);
 	setGAR (DHCP_allocated_gw);
 }
 
-/* The default handler of ip chaged */
-void default_ip_update(void)
+/* The default handler of ip chamged */
+void default_ip_update() noexcept
 {
 	/* WIZchip Software Reset */
 	setMR(MR_RST);
@@ -280,8 +280,8 @@ void default_ip_update(void)
 	setSHAR(DHCP_CHADDR);
 }
 
-/* The default handler of ip chaged */
-void default_ip_conflict(void)
+/* The default handler of ip chamged */
+void default_ip_conflict() noexcept
 {
 	// WIZchip Software Reset
 	setMR(MR_RST);
@@ -290,7 +290,7 @@ void default_ip_conflict(void)
 }
 
 /* register the call back func. */
-void reg_dhcp_cbfunc(void(*ip_assign)(void), void(*ip_update)(void), void(*ip_conflict)(void))
+void reg_dhcp_cbfunc(void(*ip_assign)() noexcept, void(*ip_update)() noexcept, void(*ip_conflict)() noexcept) noexcept
 {
 	dhcp_ip_assign   = default_ip_assign;
 	dhcp_ip_update   = default_ip_update;
@@ -301,7 +301,7 @@ void reg_dhcp_cbfunc(void(*ip_assign)(void), void(*ip_update)(void), void(*ip_co
 }
 
 /* make the common DHCP message */
-void makeDHCPMSG(void)
+void makeDHCPMSG() noexcept
 {
 	uint8_t  bk_mac[6];
 	getSHAR(bk_mac);
@@ -313,9 +313,9 @@ void makeDHCPMSG(void)
 	*(ptmp+0)         = (uint8_t)((DHCP_XID & 0xFF000000) >> 24);
 	*(ptmp+1)         = (uint8_t)((DHCP_XID & 0x00FF0000) >> 16);
 	*(ptmp+2)         = (uint8_t)((DHCP_XID & 0x0000FF00) >>  8);
-	*(ptmp+3)         = (uint8_t)((DHCP_XID & 0x000000FF) >>  0);   
+	*(ptmp+3)         = (uint8_t)((DHCP_XID & 0x000000FF) >>  0);
 	pDHCPMSG->secs    = DHCP_SECS;
-	ptmp              = (uint8_t*)(&pDHCPMSG->flags);	
+	ptmp              = (uint8_t*)(&pDHCPMSG->flags);
 	*(ptmp+0)         = (uint8_t)((DHCP_FLAGSBROADCAST & 0xFF00) >> 8);
 	*(ptmp+1)         = (uint8_t)((DHCP_FLAGSBROADCAST & 0x00FF) >> 0);
 
@@ -367,17 +367,17 @@ void makeDHCPMSG(void)
 }
 
 /* SEND DHCP DISCOVER */
-void send_DHCP_DISCOVER(void)
+void send_DHCP_DISCOVER() noexcept
 {
 	makeDHCPMSG();
 
 	size_t k = 4;     // because MAGIC_COOKIE already made by makeDHCPMSG()
-   
+
 	// Option Request Param
 	pDHCPMSG->OPT[k++] = dhcpMessageType;
 	pDHCPMSG->OPT[k++] = 0x01;
 	pDHCPMSG->OPT[k++] = DHCP_DISCOVER;
-	
+
 	// Client identifier
 	pDHCPMSG->OPT[k++] = dhcpClientIdentifier;
 	pDHCPMSG->OPT[k++] = 0x07;
@@ -388,7 +388,7 @@ void send_DHCP_DISCOVER(void)
 	pDHCPMSG->OPT[k++] = DHCP_CHADDR[3];
 	pDHCPMSG->OPT[k++] = DHCP_CHADDR[4];
 	pDHCPMSG->OPT[k++] = DHCP_CHADDR[5];
-	
+
 	// host name
 	pDHCPMSG->OPT[k++] = hostName;
 	pDHCPMSG->OPT[k++] = 0;          // fill zero length of hostname
@@ -424,9 +424,9 @@ void send_DHCP_DISCOVER(void)
 }
 
 /* SEND DHCP REQUEST */
-void send_DHCP_REQUEST(void)
+void send_DHCP_REQUEST() noexcept
 {
-	
+
 	makeDHCPMSG();
 
 	IPAddress ip;
@@ -470,7 +470,7 @@ void send_DHCP_REQUEST(void)
 		pDHCPMSG->OPT[k++] = DHCP_allocated_ip.GetQuad(1);
 		pDHCPMSG->OPT[k++] = DHCP_allocated_ip.GetQuad(2);
 		pDHCPMSG->OPT[k++] = DHCP_allocated_ip.GetQuad(3);
-	
+
 		pDHCPMSG->OPT[k++] = dhcpServerIdentifier;
 		pDHCPMSG->OPT[k++] = 0x04;
 		pDHCPMSG->OPT[k++] = DHCP_SIP.GetQuad(0);
@@ -506,17 +506,17 @@ void send_DHCP_REQUEST(void)
 	}
 
 	DEBUG_PRINTF("> Send DHCP_REQUEST\n");
-	
+
 	(void)sendto(DHCP_SOCKET, (uint8_t *)pDHCPMSG, RIP_MSG_SIZE, ip, DHCP_SERVER_PORT);
 }
 
 /* SEND DHCP DHCPDECLINE */
-void send_DHCP_DECLINE(void)
+void send_DHCP_DECLINE() noexcept
 {
 	makeDHCPMSG();
 
 	size_t k = 4;      // beacaue MAGIC_COOKIE already made by makeDHCPMSG()
-   
+
 	*((uint8_t*)(&pDHCPMSG->flags))   = ((DHCP_FLAGSUNICAST & 0xFF00)>> 8);
 	*((uint8_t*)(&pDHCPMSG->flags)+1) = (DHCP_FLAGSUNICAST & 0x00FF);
 
@@ -566,7 +566,7 @@ void send_DHCP_DECLINE(void)
 }
 
 /* PARSE REPLY pDHCPMSG */
-int8_t parseDHCPMSG(void)
+int8_t parseDHCPMSG() noexcept
 {
 	uint8_t type = DHCP_NOTYPE;
 	uint16_t len;
@@ -669,7 +669,7 @@ int8_t parseDHCPMSG(void)
 	return	type;
 }
 
-DhcpRunResult DHCP_run(void)
+DhcpRunResult DHCP_run() noexcept
 {
 	if (dhcp_state == DhcpState::stop)
 	{
@@ -830,16 +830,16 @@ DhcpRunResult DHCP_run(void)
 	return ret;
 }
 
-void DHCP_stop(void)
+void DHCP_stop() noexcept
 {
 	close(DHCP_SOCKET);
 	dhcp_state = DhcpState::stop;
 }
 
-DhcpRunResult check_DHCP_timeout(void)
+DhcpRunResult check_DHCP_timeout() noexcept
 {
 	DhcpRunResult ret = DhcpRunResult::DHCP_RUNNING;
-	
+
 	if (dhcp_retry_count < MAX_DHCP_RETRY)
 	{
 		if (dhcp_tick_next < dhcp_tick_1s)
@@ -894,7 +894,7 @@ DhcpRunResult check_DHCP_timeout(void)
 	return ret;
 }
 
-void check_DHCP_leasedIP(void)
+void check_DHCP_leasedIP() noexcept
 {
 	//WIZchip RCR value changed for ARP Timeout count control
 	const uint8_t tmp = getRCR();
@@ -906,9 +906,9 @@ void check_DHCP_leasedIP(void)
 
 	// RCR value restore
 	setRCR(tmp);
-}	
+}
 
-void DHCP_init(uint8_t s, uint32_t seed, const char *hname)
+void DHCP_init(uint8_t s, uint32_t seed, const char *hname) noexcept
 {
 	strncpy(HOST_NAME, hname, sizeof(HOST_NAME));
 	HOST_NAME[sizeof(HOST_NAME) - 1] = 0;
@@ -945,39 +945,39 @@ void DHCP_init(uint8_t s, uint32_t seed, const char *hname)
 }
 
 /* Rset the DHCP timeout count and retry count. */
-void reset_DHCP_timeout(void)
+void reset_DHCP_timeout() noexcept
 {
 	dhcp_tick_1s = 0;
 	dhcp_tick_next = DHCP_WAIT_TIME;
 	dhcp_retry_count = 0;
 }
 
-void DHCP_time_handler(void)
+void DHCP_time_handler() noexcept
 {
 	dhcp_tick_1s++;
 }
 
-IPAddress getIPfromDHCP()
+IPAddress getIPfromDHCP() noexcept
 {
 	return DHCP_allocated_ip;
 }
 
-IPAddress getGWfromDHCP()
+IPAddress getGWfromDHCP() noexcept
 {
 	return DHCP_allocated_gw;
 }
 
-IPAddress getSNfromDHCP()
+IPAddress getSNfromDHCP() noexcept
 {
 	return DHCP_allocated_sn;
 }
 
-IPAddress getDNSfromDHCP()
+IPAddress getDNSfromDHCP() noexcept
 {
 	return DHCP_allocated_dns;
 }
 
-uint32_t getDHCPLeasetime(void)
+uint32_t getDHCPLeasetime() noexcept
 {
 	return dhcp_lease_time;
 }

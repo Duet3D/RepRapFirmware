@@ -21,30 +21,30 @@ struct pbuf;
 class LwipSocket : public Socket
 {
 public:
-	LwipSocket(NetworkInterface *iface);
-	int GetState() const { return (int)state; }		// for debugging
+	LwipSocket(NetworkInterface *iface) noexcept;
+	int GetState() const noexcept { return (int)state; }		// for debugging
 
 	// LwIP interfaces
-	bool AcceptConnection(tcp_pcb *pcb);
-	void DataReceived(pbuf *data);
-	void DataSent(size_t numBytes);
-	void ConnectionClosedGracefully();
-	void ConnectionError(err_t err);
+	bool AcceptConnection(tcp_pcb *pcb) noexcept;
+	void DataReceived(pbuf *data) noexcept;
+	void DataSent(size_t numBytes) noexcept;
+	void ConnectionClosedGracefully() noexcept;
+	void ConnectionError(err_t err) noexcept;
 
 	// Inherited members of the Socket class
-	void Init(SocketNumber s, Port serverPort, NetworkProtocol p);
-	void TerminateAndDisable() override;
-	void Poll(bool full) override;
-	void Close() override;
-	bool IsClosing() const { return (state == SocketState::closing); }
-	void Terminate() override;
-	bool ReadChar(char& c) override;
-	bool ReadBuffer(const uint8_t *&buffer, size_t &len) override;
-	void Taken(size_t len) override;
-	bool CanRead() const override;
-	bool CanSend() const override;
-	size_t Send(const uint8_t *data, size_t length) override;
-	void Send() override { }
+	void Init(SocketNumber s, Port serverPort, NetworkProtocol p) noexcept;
+	void TerminateAndDisable() noexcept override;
+	void Poll() noexcept override;
+	void Close() noexcept override;
+	bool IsClosing() const noexcept { return (state == SocketState::closing); }
+	void Terminate() noexcept override;
+	bool ReadChar(char& c) noexcept override;
+	bool ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept override;
+	void Taken(size_t len) noexcept override;
+	bool CanRead() const noexcept override;
+	bool CanSend() const noexcept override;
+	size_t Send(const uint8_t *data, size_t length) noexcept override;
+	void Send() noexcept override { }
 
 private:
 	enum class SocketState : uint8_t
@@ -58,8 +58,8 @@ private:
 		aborted
 	};
 
-	void ReInit();
-	void DiscardReceivedData();
+	void ReInit() noexcept;
+	void DiscardReceivedData() noexcept;
 
 	uint32_t whenConnected;
 	uint32_t whenWritten;

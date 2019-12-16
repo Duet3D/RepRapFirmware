@@ -157,7 +157,7 @@ private:
 
 	uint8_t volatile sensorCount;
 	TemperatureSensor * volatile sensorsRoot;					// The sensor list
-	HeaterProtection *heaterProtections[MaxHeaters + NumExtraHeaterProtections];	// Heater protection instances to guarantee legal heater temperature ranges
+	HeaterProtection *heaterProtections[MaxHeaters + MaxExtraHeaterProtections];	// Heater protection instances to guarantee legal heater temperature ranges
 
 	Heater* heaters[MaxHeaters];								// A local or remote heater
 	const Tool* lastStandbyTools[MaxHeaters];					// The last tool that caused the corresponding heater to be set to standby
@@ -165,8 +165,8 @@ private:
 	float extrusionMinTemp;										// Minimum temperature to allow regular extrusion
 	float retractionMinTemp;									// Minimum temperature to allow regular retraction
 	bool coldExtrude;											// Is cold extrusion allowed?
-	int8_t bedHeaters[NumBedHeaters];							// Indices of the hot bed heaters to use or -1 if none is available
-	int8_t chamberHeaters[NumChamberHeaters];					// Indices of the chamber heaters to use or -1 if none is available
+	int8_t bedHeaters[MaxBedHeaters];							// Indices of the hot bed heaters to use or -1 if none is available
+	int8_t chamberHeaters[MaxChamberHeaters];					// Indices of the chamber heaters to use or -1 if none is available
 	int8_t heaterBeingTuned;									// which PID is currently being tuned
 	int8_t lastHeaterTuned;										// which PID we last finished tuning
 };

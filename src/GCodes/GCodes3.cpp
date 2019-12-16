@@ -279,14 +279,14 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply)
 
 	if (seenX != seenY)
 	{
-		reply.copy("specify both or neither of X and Y in M577");
+		reply.copy("specify both or neither of X and Y in M557");
 		return GCodeResult::error;
 	}
 
 	if (!seenX && !seenR)
 	{
 		// Must have given just the S or P parameter
-		reply.copy("specify at least radius or X and Y ranges in M577");
+		reply.copy("specify at least radius or X and Y ranges in M557");
 		return GCodeResult::error;
 	}
 
@@ -568,7 +568,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	bool seen = false;
-	const char *lettersToTry = "XYZUVWABCD";
+	const char *lettersToTry = AllowedAxisLetters;
 	char c;
 	while ((c = *lettersToTry) != 0)
 	{
@@ -838,14 +838,16 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply)
 			}
 			moveBuffer.feedRate = gb.MachineState().feedRate;
 
-			if (useProbe)
+			const bool probeOk = (useProbe)
+									? platform.GetEndstops().EnableZProbe(probeNumberToUse)
+										: platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis), false);
+			if (!probeOk)
 			{
-				platform.GetEndstops().EnableZProbe(probeNumberToUse);
+				reply.copy("Failed to prime endstop or probe");
+				AbortPrint(gb);
+				return GCodeResult::error;
 			}
-			else
-			{
-				platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis), false);
-			}
+
 			moveBuffer.checkEndstops = true;
 
 			// Kick off new movement
@@ -908,14 +910,16 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, 
 			}
 			moveBuffer.feedRate = gb.MachineState().feedRate;
 
-			if (useProbe)
+			const bool probeOk = (useProbe)
+									? platform.GetEndstops().EnableZProbe(probeNumberToUse)
+										: platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis), false);
+			if (!probeOk)
 			{
-				platform.GetEndstops().EnableZProbe(probeNumberToUse);
+				reply.copy("Failed to prime endstop or probe");
+				AbortPrint(gb);
+				return GCodeResult::error;
 			}
-			else
-			{
-				platform.GetEndstops().EnableAxisEndstops(MakeBitmap<AxesBitmap>(axis), false);
-			}
+
 			moveBuffer.checkEndstops = true;
 
 			// Kick off new movement
@@ -1055,7 +1059,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 			return GCodeResult::error;
 		}
 #endif
-		if ((firmwareUpdateModuleMap & 1) != 0 && !platform.CheckFirmwareUpdatePrerequisites(reply))
+		if ((firmwareUpdateModuleMap & 1) != 0 && !reprap.CheckFirmwareUpdatePrerequisites(reply))
 		{
 			firmwareUpdateModuleMap = 0;
 			return GCodeResult::error;

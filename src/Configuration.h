@@ -69,7 +69,7 @@ static_assert(FanCheckInterval < MinimumWarningInterval, "FanCheckInterval too l
 constexpr unsigned int MAIN_BAUD_RATE = 115200;			// Default communication speed of the USB if needed
 constexpr unsigned int AUX_BAUD_RATE = 57600;			// Ditto - for auxiliary UART device
 constexpr unsigned int AUX2_BAUD_RATE = 115200;			// Ditto - for second auxiliary UART device
-constexpr uint32_t SERIAL_MAIN_TIMEOUT = 1000;			// timeout in ms for sending data to the main serial/USB port
+constexpr uint32_t SERIAL_MAIN_TIMEOUT = 2000;			// timeout in ms for sending data to the main serial/USB port
 
 // Heater values
 constexpr uint32_t HeatSampleIntervalMillis = 250;		// interval between taking temperature samples
@@ -96,35 +96,6 @@ constexpr uint32_t DefaultHeaterFaultTimeout = 10 * 60 * 1000;	// How long we wa
 constexpr float DefaultHotEndHeaterGain = 340.0;
 constexpr float DefaultHotEndHeaterTimeConstant = 140.0;
 constexpr float DefaultHotEndHeaterDeadTime = 5.5;
-
-#ifdef PCCB
-
-constexpr size_t NumBedHeaters = 1;
-constexpr size_t NumChamberHeaters = 1;
-constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { -1 };
-constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1 };
-
-constexpr int8_t DefaultE0Heater = 0;					// Index of the default first extruder heater, used only for the legacy status response
-
-#elif SAM4E || SAME70
-
-constexpr size_t NumBedHeaters = 4;
-constexpr size_t NumChamberHeaters = 2;
-constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { 0, -1, -1, -1 };
-constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1, -1 };
-
-constexpr int8_t DefaultE0Heater = 1;					// Index of the default first extruder heater, used only for the legacy status response
-
-#else
-
-constexpr size_t NumBedHeaters = 1;
-constexpr size_t NumChamberHeaters = 2;
-constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { 0 };
-constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1, -1 };
-
-constexpr int8_t DefaultE0Heater = 1;					// Index of the default first extruder heater, used only for the legacy status response
-
-#endif
 
 constexpr unsigned int FirstExtraHeaterProtection = 100;	// Index of the first extra heater protection item
 

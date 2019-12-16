@@ -18,8 +18,7 @@ void RawMove::SetDefaults(size_t firstDriveToZero)
 	reduceAcceleration = false;
 	hasExtrusion = false;
 	filePos = noFilePosition;
-	xAxes = DefaultXAxisMapping;
-	yAxes = DefaultYAxisMapping;
+	tool = nullptr;
 	for (size_t drive = firstDriveToZero; drive < MaxAxesPlusExtruders; ++drive)
 	{
 		coords[drive] = 0.0;			// clear extrusion

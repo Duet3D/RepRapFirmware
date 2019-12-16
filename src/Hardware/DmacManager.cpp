@@ -17,7 +17,7 @@ namespace DmacManager
 	static StandardCallbackFunction callbackFunctions[NumDmaChannelsUsed] = { 0 };
 	static CallbackParameter callbackParameters[NumDmaChannelsUsed];
 
-	void Init()
+	void Init() noexcept
 	{
 		pmc_enable_periph_clk(ID_XDMAC);
 		for (unsigned int i = 0; i < NumDmaChannelsUsed; ++i)
@@ -27,7 +27,7 @@ namespace DmacManager
 		NVIC_EnableIRQ(XDMAC_IRQn);
 	}
 
-	void SetInterruptCallback(const uint8_t channel, StandardCallbackFunction fn, CallbackParameter param)
+	void SetInterruptCallback(const uint8_t channel, StandardCallbackFunction fn, CallbackParameter param) noexcept
 	{
 		if (channel < NumDmaChannelsUsed)
 		{
@@ -38,7 +38,7 @@ namespace DmacManager
 }
 
 // DMAC interrupt service routine
-extern "C" void XDMAC_Handler()
+extern "C" void XDMAC_Handler() noexcept
 {
 	uint32_t pendingChannels = XDMAC->XDMAC_GIS;
 	for (size_t i = 0; i < NumDmaChannelsUsed; ++i)

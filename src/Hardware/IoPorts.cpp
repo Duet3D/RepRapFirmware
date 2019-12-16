@@ -102,7 +102,7 @@ bool IoPort::AssignPort(const char* pinName, const StringRef& reply, PinUsedBy n
 	return AssignPorts(pinName, reply, neededFor, 1, &p, &access) == 1;
 }
 
-/*static*/ const char* IoPort::TranslatePinAccess(PinAccess access)
+/*static*/ const char* IoPort::TranslatePinAccess(PinAccess access) noexcept
 {
 	switch (access)
 	{
@@ -122,7 +122,7 @@ bool IoPort::AssignPort(const char* pinName, const StringRef& reply, PinUsedBy n
 PinUsedBy IoPort::portUsedBy[NumNamedPins];
 int8_t IoPort::logicalPinModes[NumNamedPins];	// what mode each logical pin is set to - would ideally be class PinMode not int8_t
 
-/*static*/ void IoPort::Init()
+/*static*/ void IoPort::Init() noexcept
 {
 	for (PinUsedBy& p : portUsedBy)
 	{
@@ -134,11 +134,11 @@ int8_t IoPort::logicalPinModes[NumNamedPins];	// what mode each logical pin is s
 	}
 }
 
-IoPort::IoPort() : logicalPin(NoLogicalPin), hardwareInvert(false), totalInvert(false), isSharedInput(false)
+IoPort::IoPort() noexcept : logicalPin(NoLogicalPin), hardwareInvert(false), totalInvert(false), isSharedInput(false)
 {
 }
 
-void IoPort::Release()
+void IoPort::Release() noexcept
 {
 	if (IsValid() && !isSharedInput)
 	{
@@ -151,12 +151,12 @@ void IoPort::Release()
 }
 
 // Attach an interrupt to the pin. Nor permitted if we allocated the pin in shared input mode.
-bool IoPort::AttachInterrupt(StandardCallbackFunction callback, enum InterruptMode mode, CallbackParameter param) const
+bool IoPort::AttachInterrupt(StandardCallbackFunction callback, enum InterruptMode mode, CallbackParameter param) const noexcept
 {
 	return IsValid() && !isSharedInput && attachInterrupt(PinTable[logicalPin].pin, callback, mode, param);
 }
 
-void IoPort::DetachInterrupt() const
+void IoPort::DetachInterrupt() const noexcept
 {
 	if (IsValid() && !isSharedInput)
 	{
@@ -197,23 +197,20 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 	const char *const fullPinName = pn;			// the full pin name less the inversion and pullup flags
 
 #if defined(DUET3)
-	uint32_t expansionNumber;
 	if (isdigit(*pn))
 	{
-		expansionNumber = SafeStrtoul(pn, &pn);
+		const uint32_t expansionNumber = SafeStrtoul(pn, &pn);
 		if (*pn != '.')
 		{
 			reply.printf("Bad pin name '%s'", fullPinName);
 			return false;
 		}
+		if (expansionNumber != 0)
+		{
+			reply.printf("Pin '%s': only main board pins allowed here", fullPinName);
+			return false;
+		}
 	}
-	else
-	{
-		expansionNumber = 0;
-	}
-
-	//TODO use expansionNumber as part of the logical pin number
-	(void)expansionNumber;
 #endif
 
 	LogicalPin lp;
@@ -260,7 +257,7 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 }
 
 // Set the specified pin mode returning true if successful
-bool IoPort::SetMode(PinAccess access)
+bool IoPort::SetMode(PinAccess access) noexcept
 {
 	if (!IsValid())
 	{
@@ -320,17 +317,17 @@ bool IoPort::SetMode(PinAccess access)
 	return true;
 }
 
-bool IoPort::GetInvert() const
+bool IoPort::GetInvert() const noexcept
 {
 	return (hardwareInvert) ? !totalInvert : totalInvert;
 }
 
-void IoPort::SetInvert(bool pInvert)
+void IoPort::SetInvert(bool pInvert) noexcept
 {
 	totalInvert = (hardwareInvert) ? !pInvert : pInvert;
 }
 
-void IoPort::ToggleInvert(bool pInvert)
+void IoPort::ToggleInvert(bool pInvert) noexcept
 {
 	if (pInvert)
 	{
@@ -338,7 +335,7 @@ void IoPort::ToggleInvert(bool pInvert)
 	}
 }
 
-void IoPort::AppendDetails(const StringRef& str) const
+void IoPort::AppendDetails(const StringRef& str) const noexcept
 {
 	if (IsValid())
 	{
@@ -360,7 +357,7 @@ void IoPort::AppendDetails(const StringRef& str) const
 }
 
 // Append the names of the pin to a string, picking only those that have the correct hardware invert status
-void IoPort::AppendPinName(const StringRef& str) const
+void IoPort::AppendPinName(const StringRef& str) const noexcept
 {
 	if (IsValid())
 	{
@@ -419,7 +416,7 @@ void IoPort::AppendPinName(const StringRef& str) const
 	}
 }
 
-/*static*/ void IoPort::AppendPinNames(const StringRef& str, size_t numPorts, IoPort * const ports[])
+/*static*/ void IoPort::AppendPinNames(const StringRef& str, size_t numPorts, IoPort * const ports[]) noexcept
 {
 	for (size_t i = 0; i < numPorts; ++i)
 	{
@@ -435,14 +432,14 @@ void IoPort::AppendPinName(const StringRef& str) const
 		{
 			if (i == 0)
 			{
-				str.cat("nil");
+				str.cat(NoPinName);
 			}
 			break;
 		}
 	}
 }
 
-void IoPort::WriteDigital(bool high) const
+void IoPort::WriteDigital(bool high) const noexcept
 {
 	if (IsValid())
 	{
@@ -450,12 +447,12 @@ void IoPort::WriteDigital(bool high) const
 	}
 }
 
-Pin IoPort::GetPin() const
+Pin IoPort::GetPin() const noexcept
 {
 	return (IsValid()) ? PinTable[logicalPin].pin : NoPin;
 }
 
-bool IoPort::Read() const
+bool IoPort::Read() const noexcept
 {
 	if (IsValid())
 	{
@@ -466,7 +463,7 @@ bool IoPort::Read() const
 }
 
 // Note, for speed when this is called from the ISR we do not apply 'invert' to the analog reading
-uint16_t IoPort::ReadAnalog() const
+uint16_t IoPort::ReadAnalog() const noexcept
 {
 	return AnalogInReadChannel(GetAnalogChannel());
 }
@@ -474,7 +471,7 @@ uint16_t IoPort::ReadAnalog() const
 #if SUPPORT_CAN_EXPANSION
 
 // Remove the board address form a port name string and return it
-/*static*/ CanAddress IoPort::RemoveBoardAddress(const StringRef& portName)
+/*static*/ CanAddress IoPort::RemoveBoardAddress(const StringRef& portName) noexcept
 {
 	size_t prefix = 0;
 	while (portName[prefix] == '!' || portName[prefix] == '^' || portName[prefix] == '*')
@@ -501,7 +498,7 @@ uint16_t IoPort::ReadAnalog() const
 
 	// Low level pin access methods
 
-/*static*/ void IoPort::SetPinMode(Pin pin, PinMode mode)
+/*static*/ void IoPort::SetPinMode(Pin pin, PinMode mode) noexcept
 {
 #ifdef DUET_NG
 	if (pin >= DueXnExpansionStart)
@@ -518,7 +515,7 @@ uint16_t IoPort::ReadAnalog() const
 #endif
 }
 
-/*static*/ bool IoPort::ReadPin(Pin pin)
+/*static*/ bool IoPort::ReadPin(Pin pin) noexcept
 {
 #ifdef DUET_NG
 	if (pin >= DueXnExpansionStart)
@@ -534,7 +531,7 @@ uint16_t IoPort::ReadAnalog() const
 #endif
 }
 
-/*static*/ void IoPort::WriteDigital(Pin pin, bool high)
+/*static*/ void IoPort::WriteDigital(Pin pin, bool high) noexcept
 {
 #ifdef DUET_NG
 	if (pin >= DueXnExpansionStart)
@@ -550,7 +547,7 @@ uint16_t IoPort::ReadAnalog() const
 #endif
 }
 
-/*static*/ void IoPort::WriteAnalog(Pin pin, float pwm, uint16_t freq)
+/*static*/ void IoPort::WriteAnalog(Pin pin, float pwm, uint16_t freq) noexcept
 {
 #ifdef DUET_NG
 	if (pin >= DueXnExpansionStart)
@@ -567,12 +564,12 @@ uint16_t IoPort::ReadAnalog() const
 }
 
 // Members of class PwmPort
-PwmPort::PwmPort()
+PwmPort::PwmPort() noexcept
 {
 	frequency = DefaultPinWritePwmFreq;
 }
 
-void PwmPort::AppendDetails(const StringRef& str) const
+void PwmPort::AppendDetails(const StringRef& str) const noexcept
 {
 	IoPort::AppendDetails(str);
 	if (IsValid())
@@ -581,7 +578,7 @@ void PwmPort::AppendDetails(const StringRef& str) const
 	}
 }
 
-void PwmPort::WriteAnalog(float pwm) const
+void PwmPort::WriteAnalog(float pwm) const noexcept
 {
 	if (IsValid())
 	{

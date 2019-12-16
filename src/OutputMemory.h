@@ -134,8 +134,8 @@ class OutputStack
 		// Clear the reference list
 		void Clear() volatile { count = 0; }
 
-		// Push an OutputBuffer chain
-		void Push(OutputBuffer *buffer, MessageType type = NoDestinationMessage) volatile;
+		// Push an OutputBuffer chain. Return true if successful, else release the buffer and return false.
+		bool Push(OutputBuffer *buffer, MessageType type = NoDestinationMessage) volatile;
 
 		// Pop an OutputBuffer chain or return NULL if none is available
 		OutputBuffer *Pop() volatile;

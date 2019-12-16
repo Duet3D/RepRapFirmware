@@ -91,8 +91,15 @@ ReadWriteLock Heat::sensorsLock;
 Heat::Heat()
 	: sensorCount(0), sensorsRoot(nullptr), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
-	ARRAY_INIT(bedHeaters, DefaultBedHeaters);
-	ARRAY_INIT(chamberHeaters, DefaultChamberHeaters);
+	for (int8_t& h : bedHeaters)
+	{
+		h = -1;
+	}
+	bedHeaters[0] = DefaultBedHeater;
+	for (int8_t& h : chamberHeaters)
+	{
+		h = -1;
+	}
 
 	for (size_t index : ARRAY_INDICES(heaterProtections))
 	{
@@ -514,6 +521,16 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 			return GCodeResult::error;
 		}
 
+		if (StringEqualsIgnoreCase(pinName.c_str(), NoPinName))
+		{
+			// Settin the pin name to "nil" deletes the heater
+			WriteLocker lock(heatersLock);
+			Heater *oldHeater = nullptr;
+			std::swap(oldHeater, heaters[heater]);
+			delete oldHeater;
+			return GCodeResult::ok;
+		}
+
 		if (!gb.Seen('T'))
 		{
 			reply.copy("Missing sensor number");
@@ -933,7 +950,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('S'))
 	{
 		const unsigned sensorNum = gb.GetUIValue();
-		if (sensorNum >= MaxSensorsInSystem)
+		if (sensorNum >= MaxSensors)
 		{
 			reply.copy("Sensor number out of range");
 			return GCodeResult::error;
@@ -1032,7 +1049,7 @@ GCodeResult Heat::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 
 	if (   index < 0
 		|| (index >= (int)MaxHeaters && index < (int)FirstExtraHeaterProtection)
-		|| index >= (int)(FirstExtraHeaterProtection + NumExtraHeaterProtections)
+		|| index >= (int)(FirstExtraHeaterProtection + MaxExtraHeaterProtections)
 	   )
 	{
 		reply.printf("Invalid heater protection item '%d'", index);

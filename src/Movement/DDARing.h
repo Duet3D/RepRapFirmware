@@ -15,79 +15,83 @@
 class DDARing
 {
 public:
-	DDARing();
+	DDARing() noexcept;
 
-	void Init1(unsigned int numDdas);
-	void Init2();
-	void Exit();
+	void Init1(unsigned int numDdas) noexcept;
+	void Init2() noexcept;
+	void Exit() noexcept;
 
-	void RecycleDDAs();
-	bool CanAddMove() const;
-	bool AddStandardMove(const RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
-	bool AddSpecialMove(float feedRate, const float coords[MaxDriversPerAxis]);
+	void RecycleDDAs() noexcept;
+	bool CanAddMove() const noexcept;
+	bool AddStandardMove(const RawMove &nextMove, bool doMotorMapping) noexcept __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
+	bool AddSpecialMove(float feedRate, const float coords[MaxDriversPerAxis]) noexcept;
 #if SUPPORT_ASYNC_MOVES
-	bool AddAsyncMove(const AsyncMove& nextMove);
+	bool AddAsyncMove(const AsyncMove& nextMove) noexcept;
 #endif
 
-	void Spin(uint8_t simulationMode, bool shouldStartMove);					// Try to process moves in the ring, returning true if the ring is idle
-	bool IsIdle() const;														// Return true if this DDA ring is idle
+	void Spin(uint8_t simulationMode, bool shouldStartMove) noexcept;					// Try to process moves in the ring, returning true if the ring is idle
+	bool IsIdle() const noexcept;														// Return true if this DDA ring is idle
 
-	float PushBabyStepping(size_t axis, float amount);							// Try to push some babystepping through the lookahead queue, returning the amount pushed
+	float PushBabyStepping(size_t axis, float amount) noexcept;							// Try to push some babystepping through the lookahead queue, returning the amount pushed
 
-	void Interrupt(Platform& p);												// Check endstops, generate step pulses
-	void OnMoveCompleted(DDA *cdda, Platform& p);								// called when the state has been set to 'completed'
+	void Interrupt(Platform& p) noexcept;												// Check endstops, generate step pulses
+	void OnMoveCompleted(DDA *cdda, Platform& p) noexcept;								// called when the state has been set to 'completed'
+	bool ScheduleNextStepInterrupt() noexcept;											// Schedule the next step interrupt, returning true if we failed because it is due immediately
+	void CurrentMoveCompleted() noexcept __attribute__ ((hot));							// Signal that the current move has just been completed
+	void TryStartNextMove(Platform& p, uint32_t startTime) noexcept __attribute__ ((hot));	// Try to start another move
 
-	void InsertHiccup(uint32_t delayClocks);									// Insert a brief pause to avoid processor overload
-	std::optional<uint32_t> GetNextInterruptTime() const;						// Return the time that the next step is due
-	void CurrentMoveCompleted() __attribute__ ((hot));							// Signal that the current move has just been completed
-	void TryStartNextMove(Platform& p, uint32_t startTime) __attribute__ ((hot));	// Try to start another move, returning true if Step() needs to be called immediately
-	uint32_t ExtruderPrintingSince() const { return extrudersPrintingSince; }	// When we started doing normal moves after the most recent extruder-only move
-	int32_t GetAccumulatedExtrusion(size_t extruder, size_t drive, bool& isPrinting);
+	uint32_t ExtruderPrintingSince() const noexcept { return extrudersPrintingSince; }	// When we started doing normal moves after the most recent extruder-only move
+	int32_t GetAccumulatedExtrusion(size_t extruder, size_t drive, bool& isPrinting) noexcept;
 
-	uint32_t GetScheduledMoves() const { return scheduledMoves; }				// How many moves have been scheduled?
-	uint32_t GetCompletedMoves() const { return completedMoves; }				// How many moves have been completed?
-	void ResetMoveCounters() { scheduledMoves = completedMoves = 0; }
+	uint32_t GetScheduledMoves() const noexcept { return scheduledMoves; }				// How many moves have been scheduled?
+	uint32_t GetCompletedMoves() const noexcept { return completedMoves; }				// How many moves have been completed?
+	void ResetMoveCounters() noexcept { scheduledMoves = completedMoves = 0; }
 
-	float GetSimulationTime() const { return simulationTime; }
-	void ResetSimulationTime() { simulationTime = 0.0; }
+	float GetSimulationTime() const noexcept { return simulationTime; }
+	void ResetSimulationTime() noexcept { simulationTime = 0.0; }
 
 #if HAS_SMART_DRIVERS
-	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const;
+	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept;
 #endif
 
-	DDA *GetCurrentDDA() const { return currentDda; }							// Return the DDA of the currently-executing move, or nullptr
+	DDA *GetCurrentDDA() const noexcept { return currentDda; }							// Return the DDA of the currently-executing move, or nullptr
 
-	float GetTopSpeed() const;
-	float GetRequestedSpeed() const;
+	uint32_t GetClearNumHiccups() noexcept;
+	float GetTopSpeed() const noexcept;
+	float GetRequestedSpeed() const noexcept;
 
-	int32_t GetEndPoint(size_t drive) const { return liveEndPoints[drive]; } 	// Get the current position of a motor
-	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const; // Get the current position in untransformed coords
-	void SetPositions(const float move[MaxAxesPlusExtruders]);					// Force the machine coordinates to be these
-	void AdjustMotorPositions(const float adjustment[], size_t numMotors);		// Perform motor endpoint adjustment
-	void LiveCoordinates(float m[MaxAxesPlusExtruders]);						// Gives the last point at the end of the last complete DDA transformed to user coords
-	void SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]);			// Force the live coordinates (see above) to be these
-	void ResetExtruderPositions();												// Resets the extrusion amounts of the live coordinates
+	int32_t GetEndPoint(size_t drive) const noexcept { return liveEndPoints[drive]; } 	// Get the current position of a motor
+	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
+	void SetPositions(const float move[MaxAxesPlusExtruders]) noexcept;					// Force the machine coordinates to be these
+	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;		// Perform motor endpoint adjustment
+	void LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept;						// Gives the last point at the end of the last complete DDA transformed to user coords
+	void SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) noexcept;			// Force the live coordinates (see above) to be these
+	void ResetExtruderPositions() noexcept;												// Resets the extrusion amounts of the live coordinates
 
-	bool PauseMoves(RestorePoint& rp);											// Pause the print as soon as we can, returning true if we were able to skip any
+	bool PauseMoves(RestorePoint& rp) noexcept;											// Pause the print as soon as we can, returning true if we were able to skip any
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
-	bool LowPowerOrStallPause(RestorePoint& rp);								// Pause the print immediately, returning true if we were able to
+	bool LowPowerOrStallPause(RestorePoint& rp) noexcept;								// Pause the print immediately, returning true if we were able to
 #endif
 
 #if SUPPORT_LASER
-	uint32_t ManageLaserPower() const;											// Manage the laser power
+	uint32_t ManageLaserPower() const noexcept;											// Manage the laser power
 #endif
 
-	void RecordLookaheadError() { ++numLookaheadErrors; }						// Record a lookahead error
-	void Diagnostics(MessageType mtype, const char *prefix);
+	void RecordLookaheadError() noexcept { ++numLookaheadErrors; }						// Record a lookahead error
+	void Diagnostics(MessageType mtype, const char *prefix) noexcept;
 
 private:
-	bool StartNextMove(Platform& p, uint32_t startTime) __attribute__ ((hot));	// Start the next move, returning true if laser or IObits need to be controlled
-	void PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode);
+	bool StartNextMove(Platform& p, uint32_t startTime) noexcept __attribute__ ((hot));	// Start the next move, returning true if laser or IObits need to be controlled
+	void PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, uint8_t simulationMode) noexcept;
+
+	static bool TimerCallback(CallbackParameter p, StepTimer::Ticks& when) noexcept;
 
 	DDA* volatile currentDda;
 	DDA* addPointer;
 	DDA* volatile getPointer;
 	DDA* checkPointer;
+
+	StepTimer timer;															// Timer object to control getting step interrupts
 
 	volatile float liveCoordinates[MaxAxesPlusExtruders];						// The endpoint that the machine moved to in the last completed move
 	volatile bool liveCoordinatesValid;											// True if the XYZ live coordinates are reliable (the extruder ones always are)
@@ -97,6 +101,7 @@ private:
 
 	uint32_t scheduledMoves;													// Move counters for the code queue
 	volatile uint32_t completedMoves;											// This one is modified by an ISR, hence volatile
+	volatile int32_t numHiccups;												// Modified in the ISR
 
 	unsigned int numLookaheadUnderruns;											// How many times we have run out of moves to adjust during lookahead
 	unsigned int numPrepareUnderruns;											// How many times we wanted a new move but there were only un-prepared moves in the queue
@@ -112,7 +117,7 @@ private:
 
 // Start the next move. Return true if laser or IO bits need to be active
 // Must be called with base priority greater than or equal to the step interrupt, to avoid a race with the step ISR.
-inline bool DDARing::StartNextMove(Platform& p, uint32_t startTime)
+inline bool DDARing::StartNextMove(Platform& p, uint32_t startTime) noexcept
 pre(ddaRingGetPointer->GetState() == DDA::frozen)
 {
 	DDA * const cdda = getPointer;			// capture volatile variable
@@ -135,18 +140,26 @@ pre(ddaRingGetPointer->GetState() == DDA::frozen)
 }
 
 #if HAS_SMART_DRIVERS
-inline uint32_t DDARing::GetStepInterval(size_t axis, uint32_t microstepShift) const
+inline uint32_t DDARing::GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept
 {
 	const DDA * const cdda = currentDda;		// capture volatile variable
 	return (cdda != nullptr) ? cdda->GetStepInterval(axis, microstepShift) : 0;
 }
 #endif
 
-// Return the time that the next step is due
-inline std::optional<uint32_t> DDARing::GetNextInterruptTime() const
+// Schedule the next step interrupt for this DDA ring
+// Base priority must be >= NvicPriorityStep when calling this
+inline bool DDARing::ScheduleNextStepInterrupt() noexcept
 {
 	DDA * const cdda = currentDda;				// capture volatile variable
-	return (cdda != nullptr) ? cdda->GetNextInterruptTime() : std::optional<uint32_t>();
+	return (cdda != nullptr) && cdda->ScheduleNextStepInterrupt(timer);
+}
+
+inline uint32_t DDARing::GetClearNumHiccups() noexcept
+{
+	const uint32_t ret = numHiccups;
+	numHiccups = 0;
+	return ret;
 }
 
 #endif /* SRC_MOVEMENT_DDARING_H_ */

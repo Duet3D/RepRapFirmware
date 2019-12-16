@@ -52,31 +52,35 @@
 #include "lwip/netif.h"
 
 // Perform low-level initialisation of the network interface
-void init_ethernet(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay);
+void init_ethernet(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay) noexcept;
+
+// Terminate Ethernet and stop any interrupts, tasks etc. Used when shutting down the whole system.
+inline void ethernet_terminate() noexcept { ethernetif_terminate(); }
 
 // Configure the ethernet interface
-void ethernet_configure_interface(const uint8_t macAddress[], const char *hostname);
+void ethernet_configure_interface(const uint8_t macAddress[], const char *hostname) noexcept;
 
 // Perform ethernet auto-negotiation and establish link. Returns true when ready
-bool ethernet_establish_link(void);
+bool ethernet_establish_link() noexcept;
 
 // Is the link still up? Also updates the interface status if the link has gone down
-bool ethernet_link_established(void);
+bool ethernet_link_established() noexcept;
 
 // Update IPv4 configuration on demand
-void ethernet_set_configuration(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay);
+void ethernet_set_configuration(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay) noexcept;
 
 // Must be called periodically to keep the LwIP timers running
-void ethernet_timers_update(void);
+void ethernet_timers_update() noexcept;
 
 // Reads all stored network packets and processes them
-void ethernet_task(void);
+void ethernet_task() noexcept;
 
+#if !LWIP_GMAC_TASK
 // Set the RX callback for incoming network packets
-void ethernet_set_rx_callback(gmac_dev_tx_cb_t callback);
+void ethernet_set_rx_callback(gmac_dev_tx_cb_t callback) noexcept;
+#endif
 
 // Returns the network interface's current IPv4 address
-void ethernet_get_ipaddress(IPAddress& ipAddress, IPAddress& netMask, IPAddress& gateWay);
-
+void ethernet_get_ipaddress(IPAddress& ipAddress, IPAddress& netMask, IPAddress& gateWay) noexcept;
 
 #endif /* ETHERNET_SAM_H_INCLUDED */

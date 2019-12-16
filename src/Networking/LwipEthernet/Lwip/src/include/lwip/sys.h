@@ -40,7 +40,10 @@
 #include <Lwip/src/include/lwip/opt.h>
 
 #ifdef __cplusplus
+# define NOEXCEPT	noexcept
 extern "C" {
+#else
+# define NOEXCEPT
 #endif
 
 #if NO_SYS
@@ -340,7 +343,7 @@ u32_t sys_jiffies(void);
  * Returns the current time in milliseconds,
  * may be the same as sys_jiffies or at least based on it.
  */
-u32_t sys_now(void);
+u32_t sys_now(void) NOEXCEPT;
 
 /* Critical Region Protection */
 /* These functions must be implemented in the sys_arch.c file.

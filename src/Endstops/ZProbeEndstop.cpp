@@ -25,10 +25,16 @@ EndStopHit ZProbeEndstop::Stopped() const
 }
 
 // This is called to prime axis endstops
-void ZProbeEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers)
+bool ZProbeEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers)
 {
 	// Decide whether we stop just the driver, just the axis, or everything
 	stopAll = (kin.GetConnectedAxes(GetAxis()) & ~MakeBitmap<AxesBitmap>(GetAxis())) != 0;
+
+#if SUPPORT_CAN_EXPANSION
+	//TODO if the Z probe is remote, check that the expansoin board knows about it
+#endif
+
+	return true;
 }
 
 // Check whether the endstop is triggered and return the action that should be performed. Called from the step ISR.

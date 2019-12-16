@@ -74,8 +74,8 @@ static_assert((uint32_t)DmaTrigSource::numPeripheralIds == 52, "Error in periphe
 
 namespace DmacManager
 {
-	void Init();
-	void SetInterruptCallback(const uint8_t channel, StandardCallbackFunction fn, CallbackParameter param);
+	void Init() noexcept;
+	void SetInterruptCallback(const uint8_t channel, StandardCallbackFunction fn, CallbackParameter param) noexcept;
 }
 
 #endif

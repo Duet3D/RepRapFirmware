@@ -260,7 +260,7 @@ static status_code mcan_fd_send_ext_message(uint32_t id_value, const uint8_t *da
 }
 
 // Interrupt handler for MCAN, including RX,TX,ERROR and so on processes
-void MCAN_INT0_Handler(void)
+extern "C" void MCAN_INT0_Handler() noexcept
 {
 	const uint32_t status = mcan_read_interrupt_status(&mcan_instance);
 
@@ -346,8 +346,7 @@ extern "C" void CanSenderLoop(void *)
 			CanMessageBuffer * const urgentMessage = CanMotion::GetUrgentMessage();
 			if (urgentMessage != nullptr)
 			{
-				mcan_fd_send_ext_message(urgentMessage->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(urgentMessage->msg)), urgentMessage->dataLength,
-											TxBufferIndexUrgent, MaxUrgentSendWait);
+				mcan_fd_send_ext_message(urgentMessage->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(urgentMessage->msg)), urgentMessage->dataLength, TxBufferIndexUrgent, MaxUrgentSendWait);
 			}
 			else if (pendingBuffers != nullptr)
 			{
@@ -398,7 +397,7 @@ extern "C" void CanClockLoop(void *)
 		{
 			CanMessageTimeSync * const msg = buf->SetupBroadcastMessage<CanMessageTimeSync>(CanId::MasterAddress);
 			WaitForTxBufferFree(TxBufferIndexTimeSync, MaxTimeSyncSendWait);			// make sure we can send immediately
-			msg->timeSent = StepTimer::GetInterruptClocks();
+			msg->timeSent = StepTimer::GetTimerTicks();
 			mcan_fd_send_ext_message_no_wait(buf->id.GetWholeId(), reinterpret_cast<uint8_t*>(&(buf->msg)), buf->dataLength, TxBufferIndexTimeSync);
 			CanMessageBuffer::Free(buf);
 		}
@@ -459,9 +458,18 @@ void CanDriversList::AddEntry(DriverId driver)
 		{
 			++insertPoint;
 		}
-		memmove(drivers + (insertPoint + 1), drivers + insertPoint, (numEntries - insertPoint) * sizeof(drivers[0]));
-		drivers[insertPoint] = driver;
-		++numEntries;
+
+		if (insertPoint == numEntries)
+		{
+			drivers[numEntries] = driver;
+			++numEntries;
+		}
+		else if (drivers[insertPoint] != driver)
+		{
+			memmove(drivers + (insertPoint + 1), drivers + insertPoint, (numEntries - insertPoint) * sizeof(drivers[0]));
+			drivers[insertPoint] = driver;
+			++numEntries;
+		}
 	}
 }
 
@@ -790,7 +798,7 @@ GCodeResult CanInterface::SetRemoteDriverStallParameters(const CanDriversList& d
 	return GCodeResult::ok;
 }
 
-static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
+static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_t param, GCodeBuffer& gb, const StringRef& reply, uint8_t *extra = nullptr)
 {
 	if (boardAddress > CanId::MaxNormalAddress)
 	{
@@ -808,43 +816,45 @@ static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, GCodeB
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
 	auto msg = buf->SetupRequestMessage<CanMessageReturnInfo>(rid, CanId::MasterAddress, (CanAddress)boardAddress);
 	msg->type = infoType;
-	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
+	msg->param = param;
+	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, extra);
 }
 
-// Get diagnostics from and expansion board
-GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
+// Get diagnostics from an expansion board
+GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply)
 {
 	Platform& p = reprap.GetPlatform();
-	GCodeResult res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart0, boardAddress, gb, reply);
-	if (res == GCodeResult::ok)
+
+	uint8_t currentPart = 0;
+	uint8_t lastPart;
+	GCodeResult res;
+	do
 	{
-		p.MessageF(mt, "Diagnostics for board %u:\n", (unsigned int)boardAddress);
+		res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart0 + currentPart, boardAddress, type, gb, reply, &lastPart);
+		if (res != GCodeResult::ok)
+		{
+			return res;
+		}
+		if (type == 0 && currentPart == 0)
+		{
+			p.MessageF(mt, "Diagnostics for board %u:\n", (unsigned int)boardAddress);
+		}
 		reply.cat('\n');
 		p.Message(mt, reply.c_str());
 		reply.Clear();
-
-		res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart1, boardAddress, gb, reply);
-		if (res == GCodeResult::ok)
-		{
-			reply.cat('\n');
-			p.Message(mt, reply.c_str());
-			reply.Clear();
-
-			res = GetRemoteInfo(CanMessageReturnInfo::typeDiagnosticsPart2, boardAddress, gb, reply);
-			if (res == GCodeResult::ok)
-			{
-				reply.cat('\n');
-				p.Message(mt, reply.c_str());
-				reply.Clear();
-			}
-		}
-	}
+		++currentPart;
+	} while (currentPart <= lastPart);
 	return res;
+}
+
+GCodeResult CanInterface::RemoteM408(uint32_t boardAddress, unsigned int form, unsigned int type, GCodeBuffer& gb, const StringRef& reply)
+{
+	return GetRemoteInfo(CanMessageReturnInfo::typeM408, boardAddress, type, gb, reply, nullptr);
 }
 
 GCodeResult CanInterface::GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
 {
-	return GetRemoteInfo(CanMessageReturnInfo::typeFirmwareVersion, boardAddress, gb, reply);
+	return GetRemoteInfo(CanMessageReturnInfo::typeFirmwareVersion, boardAddress, 0, gb, reply);
 }
 
 // Tell an expansion board to update
@@ -887,7 +897,7 @@ GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffe
 # if HAS_LINUX_INTERFACE
 			!reprap.UsingLinuxInterface() &&
 # endif
-			!reprap.GetPlatform().SysFileExists(firmwareFilename.c_str()))
+			!reprap.GetPlatform().FileExists(DEFAULT_SYS_DIR, firmwareFilename.c_str()))
 	{
 		reply.printf("Firmware file %s not found", firmwareFilename.c_str());
 		return GCodeResult::error;
@@ -928,6 +938,70 @@ void CanInterface::WakeCanSender()
 	canSenderTask.GiveFromISR();
 }
 
+// Remote handle functions
+GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *pinName, uint16_t threshold, uint16_t minInterval, bool& currentState, const StringRef& reply)
+{
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		reply.copy("No CAN buffer");
+		return GCodeResult::error;
+	}
+
+	const CanRequestId rid = AllocateRequestId(boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageCreateInputMonitor>(rid, CanId::MasterAddress, boardAddress);
+	msg->handle = h;
+	msg->threshold = threshold;
+	msg->minInterval = minInterval;
+	SafeStrncpy(msg->pinName, pinName, ARRAY_SIZE(msg->pinName));
+	buf->dataLength = msg->GetActualDataLength();
+
+	uint8_t extra;
+	const GCodeResult rslt = SendRequestAndGetStandardReply(buf, rid, reply, &extra);
+	if (rslt == GCodeResult::ok)
+	{
+		currentState = (extra != 0);
+	}
+	return rslt;
+}
+
+static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle h, uint8_t action, bool* currentState, const StringRef &reply)
+{
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		reply.copy("No CAN buffer");
+		return GCodeResult::error;
+	}
+
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageChangeInputMonitor>(rid, CanId::MasterAddress, boardAddress);
+	msg->handle = h;
+	msg->action = action;
+	uint8_t extra;
+	const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, &extra);
+	if (rslt == GCodeResult::ok && currentState != nullptr)
+	{
+		*currentState = (extra != 0);
+	}
+	return rslt;
+}
+
+GCodeResult CanInterface::DeleteHandle(CanAddress boardAddress, RemoteInputHandle h, const StringRef &reply)
+{
+	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitor::actionDelete, nullptr, reply);
+}
+
+GCodeResult CanInterface::GetHandlePinName(CanAddress boardAddress, RemoteInputHandle h, bool& currentState, const StringRef &reply)
+{
+	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitor::actionReturnPinName, &currentState, reply);
+}
+
+GCodeResult CanInterface::EnableHandle(CanAddress boardAddress, RemoteInputHandle h, bool &currentState, const StringRef &reply)
+{
+	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitor::actionDoMonitor, &currentState, reply);
+}
+
 void CanInterface::Diagnostics(MessageType mtype)
 {
 	reprap.GetPlatform().MessageF(mtype, "=== CAN ===\nMessages sent %" PRIu32 ", longest wait %" PRIu32 "ms for type %u\n",
@@ -935,6 +1009,23 @@ void CanInterface::Diagnostics(MessageType mtype)
 	messagesSent = 0;
 	longestWaitTime = 0;
 	longestWaitMessageType = 0;
+}
+
+GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const StringRef &reply)
+{
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		reply.copy("No CAN buffer");
+		return GCodeResult::error;
+	}
+
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageWriteGpio>(rid, CanId::MasterAddress, boardAddress);
+	msg->portNumber = portNumber;
+	msg->pwm = pwm;
+	msg->isServo = isServo;
+	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, nullptr);
 }
 
 #endif

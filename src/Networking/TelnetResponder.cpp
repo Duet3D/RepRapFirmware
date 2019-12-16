@@ -14,12 +14,12 @@
 #include "GCodes/GCodes.h"
 #include "Platform.h"
 
-TelnetResponder::TelnetResponder(NetworkResponder *n) : NetworkResponder(n)
+TelnetResponder::TelnetResponder(NetworkResponder *n) noexcept : NetworkResponder(n)
 {
 }
 
 // Ask the responder to accept this connection, returns true if it did
-bool TelnetResponder::Accept(Socket *s, NetworkProtocol protocol)
+bool TelnetResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
 {
 	if (responderState == ResponderState::free && protocol == TelnetProtocol)
 	{
@@ -42,7 +42,7 @@ bool TelnetResponder::Accept(Socket *s, NetworkProtocol protocol)
 }
 
 // This is called to force termination if we implement the specified protocol
-void TelnetResponder::Terminate(NetworkProtocol protocol, NetworkInterface *interface)
+void TelnetResponder::Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept
 {
 	if (responderState != ResponderState::free && (protocol == TelnetProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{
@@ -50,7 +50,7 @@ void TelnetResponder::Terminate(NetworkProtocol protocol, NetworkInterface *inte
 	}
 }
 
-void TelnetResponder::ConnectionLost()
+void TelnetResponder::ConnectionLost() noexcept
 {
 	if ((responderState == ResponderState::reading) || (responderState == ResponderState::sending))
 	{
@@ -71,7 +71,7 @@ void TelnetResponder::ConnectionLost()
 	NetworkResponder::ConnectionLost();
 }
 
-bool TelnetResponder::SendGCodeReply()
+bool TelnetResponder::SendGCodeReply() noexcept
 {
 	MutexLocker lock(gcodeReplyMutex);
 
@@ -110,7 +110,7 @@ bool TelnetResponder::SendGCodeReply()
 }
 
 // Do some work, returning true if we did anything significant
-bool TelnetResponder::Spin()
+bool TelnetResponder::Spin() noexcept
 {
 	switch (responderState)
 	{
@@ -226,7 +226,7 @@ bool TelnetResponder::Spin()
 }
 
 // Process a character from the client, returning true if we have a complete line
-void TelnetResponder::CharFromClient(char c)
+void TelnetResponder::CharFromClient(char c) noexcept
 {
 	switch (c)
 	{
@@ -267,7 +267,7 @@ void TelnetResponder::CharFromClient(char c)
 // Usually we should not try to send any data here, because that would purge the packet's
 // payload and mess with TCP streaming mode if Pronterface is used. However, under special
 // circumstances this must happen.
-void TelnetResponder::ProcessLine()
+void TelnetResponder::ProcessLine() noexcept
 {
 	// Special commands for Telnet
 	if (StringEqualsIgnoreCase(clientMessage, "exit") || StringEqualsIgnoreCase(clientMessage, "quit"))
@@ -292,13 +292,13 @@ void TelnetResponder::ProcessLine()
 	}
 }
 
-/*static*/ void TelnetResponder::InitStatic()
+/*static*/ void TelnetResponder::InitStatic() noexcept
 {
 	gcodeReplyMutex.Create("TelnetGCodeReply");
 }
 
 // This is called when we are shutting down the network or just this protocol. It may be called even if this protocol isn't enabled.
-/*static*/ void TelnetResponder::Disable()
+/*static*/ void TelnetResponder::Disable() noexcept
 {
 	MutexLocker lock(gcodeReplyMutex);
 
@@ -307,7 +307,7 @@ void TelnetResponder::ProcessLine()
 	OutputBuffer::ReleaseAll(gcodeReply);
 }
 
-/*static*/ void TelnetResponder::HandleGCodeReply(const char *reply)
+/*static*/ void TelnetResponder::HandleGCodeReply(const char *reply) noexcept
 {
 	if (reply != nullptr && numSessions > 0)
 	{
@@ -341,7 +341,7 @@ void TelnetResponder::ProcessLine()
 	}
 }
 
-/*static*/ void TelnetResponder::HandleGCodeReply(OutputBuffer *reply)
+/*static*/ void TelnetResponder::HandleGCodeReply(OutputBuffer *reply) noexcept
 {
 	if (reply != nullptr && numSessions > 0)
 	{
@@ -384,7 +384,7 @@ void TelnetResponder::ProcessLine()
 	}
 }
 
-void TelnetResponder::Diagnostics(MessageType mt) const
+void TelnetResponder::Diagnostics(MessageType mt) const noexcept
 {
 	GetPlatform().MessageF(mt, " Telnet(%d)", (int)responderState);
 }

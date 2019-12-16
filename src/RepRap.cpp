@@ -14,6 +14,7 @@
 #include "Tools/Filament.h"
 #include "Endstops/ZProbe.h"
 #include "Tasks.h"
+#include "Hardware/Cache.h"
 #include "Version.h"
 
 #ifdef DUET_NG
@@ -57,7 +58,7 @@ static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI,
 static TaskHandle_t hsmciTask = nullptr;		// the task that is waiting for a HSMCI command to complete
 
 // HSMCI interrupt handler
-extern "C" void HSMCI_Handler()
+extern "C" void HSMCI_Handler() noexcept
 {
 	HSMCI->HSMCI_IDR = 0xFFFFFFFF;										// disable all HSMCI interrupts
 #if SAME70
@@ -75,7 +76,7 @@ extern "C" void HSMCI_Handler()
 #if SAME70
 
 // HSMCI DMA complete callback
-void HsmciDmaCallback(CallbackParameter cp)
+void HsmciDmaCallback(CallbackParameter cp) noexcept
 {
 	HSMCI->HSMCI_IDR = 0xFFFFFFFF;										// disable all HSMCI interrupts
 	XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CID = 0xFFFFFFFF;			// disable all DMA interrupts for this channel
@@ -93,7 +94,7 @@ void HsmciDmaCallback(CallbackParameter cp)
 // Callback function from the hsmci driver, called while it is waiting for an SD card operation to complete
 // 'stBits' is the set of bits in the HSMCI status register that the caller is interested in.
 // The caller keeps calling this function until at least one of those bits is set.
-extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits)
+extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 {
 	if (   (HSMCI->HSMCI_SR & stBits) == 0
 #if SAME70
@@ -146,13 +147,13 @@ DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
+RepRap::RepRap() noexcept : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
 	activeToolHeaters(0), ticksInSpinState(0),
 	heatTaskIdleTicks(0),
 	debug(0),
 	beepFrequency(0), beepDuration(0),
 	diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
-	spinningModule(noModule), stopped(false), active(false), resetting(false), processingConfig(true)
+	spinningModule(noModule), stopped(false), active(false), processingConfig(true)
 #if HAS_LINUX_INTERFACE
 	, usingLinuxInterface(true)
 #endif
@@ -187,7 +188,7 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 	messageSequence = 0;
 }
 
-void RepRap::Init()
+void RepRap::Init() noexcept
 {
 	toolListMutex.Create("ToolList");
 	messageBoxMutex.Create("MessageBox");
@@ -244,7 +245,7 @@ void RepRap::Init()
 	}
 #endif
 
-	active = true;						// must do this before we start the network or call Spin(), else the watchdog may time out
+	active = true;										// must do this before we start the network or call Spin(), else the watchdog may time out
 
 	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
@@ -255,8 +256,8 @@ void RepRap::Init()
 		String<100> reply;
 		do
 		{
-			platform->GetMassStorage()->Spin();			// Spin() doesn't get called regularly until after this function completes, and we need it to update the card detect status
-			rslt = platform->GetMassStorage()->Mount(0, reply.GetRef(), false);
+			MassStorage::Spin();						// Spin() doesn't get called regularly until after this function completes, and we need it to update the card detect status
+			rslt = MassStorage::Mount(0, reply.GetRef(), false);
 		}
 		while (rslt == GCodeResult::notFinished);
 
@@ -325,7 +326,7 @@ void RepRap::Init()
 	slowLoop = 0;
 }
 
-void RepRap::Exit()
+void RepRap::Exit() noexcept
 {
 #if HAS_HIGH_SPEED_SD
 	hsmci_set_idle_func(nullptr);
@@ -347,14 +348,14 @@ void RepRap::Exit()
 	platform->Exit();
 }
 
-void RepRap::Spin()
+void RepRap::Spin() noexcept
 {
 	if (!active)
 	{
 		return;
 	}
 
-	const uint32_t lastTime = StepTimer::GetInterruptClocks();
+	const uint32_t lastTime = StepTimer::GetTimerTicks();
 
 	ticksInSpinState = 0;
 	spinningModule = modulePlatform;
@@ -433,7 +434,7 @@ void RepRap::Spin()
 	}
 	else
 	{
-		const uint32_t now = StepTimer::GetInterruptClocks();
+		const uint32_t now = StepTimer::GetTimerTicks();
 		const uint32_t dt = now - lastTime;
 #if 0 //DEBUG
 		if (dt > 1000000)
@@ -454,14 +455,14 @@ void RepRap::Spin()
 	RTOSIface::Yield();
 }
 
-void RepRap::Timing(MessageType mtype)
+void RepRap::Timing(MessageType mtype) noexcept
 {
 	platform->MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepTimer::StepClocksToMillis), (double)(fastLoop * StepTimer::StepClocksToMillis));
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
 }
 
-void RepRap::Diagnostics(MessageType mtype)
+void RepRap::Diagnostics(MessageType mtype) noexcept
 {
 	platform->Message(mtype, "=== Diagnostics ===\n");
 
@@ -506,9 +507,9 @@ void RepRap::Diagnostics(MessageType mtype)
 }
 
 // Turn off the heaters, disable the motors, and deactivate the Heat and Move classes. Leave everything else working.
-void RepRap::EmergencyStop()
+void RepRap::EmergencyStop() noexcept
 {
-	stopped = true;
+	stopped = true;				// a useful side effect of setting this is that it prevents Platform::Tick being called, which is needed when loading IAP into RAM
 
 	// Do not turn off ATX power here. If the nozzles are still hot, don't risk melting any surrounding parts by turning fans off.
 	//platform->SetAtxPower(false);
@@ -530,29 +531,14 @@ void RepRap::EmergencyStop()
 		break;
 	}
 
-	// Deselect all tools (is this necessary?)
-	{
-		MutexLocker lock(toolListMutex);
-		for (Tool* tool = toolList; tool != nullptr; tool = tool->Next())
-		{
-			tool->Standby();
-		}
-	}
-
 	heat->Exit();		// this also turns off all heaters
-
-	// We do this twice, to avoid an interrupt switching a drive back on. move->Exit() should prevent interrupts doing this.
-	for (int i = 0; i < 2; i++)
-	{
-		move->Exit();
-		platform->EmergencyDisableDrivers();
-	}
+	move->Exit();
 
 	gCodes->EmergencyStop();
 	platform->StopLogging();
 }
 
-void RepRap::SetDebug(Module m, bool enable)
+void RepRap::SetDebug(Module m, bool enable) noexcept
 {
 	if (m < numModules)
 	{
@@ -567,19 +553,19 @@ void RepRap::SetDebug(Module m, bool enable)
 	}
 }
 
-void RepRap::ClearDebug()
+void RepRap::ClearDebug() noexcept
 {
 	debug = 0;
 }
 
-void RepRap::PrintDebug(MessageType mt)
+void RepRap::PrintDebug(MessageType mt) noexcept
 {
 	platform->Message((MessageType)(mt | PushFlag), "Debugging enabled for modules:");
 	for (size_t i = 0; i < numModules; i++)
 	{
 		if ((debug & (1u << i)) != 0)
 		{
-			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", moduleName[i], i);
+			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", GetModuleName(i), i);
 		}
 	}
 
@@ -588,7 +574,7 @@ void RepRap::PrintDebug(MessageType mt)
 	{
 		if ((debug & (1u << i)) == 0)
 		{
-			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", moduleName[i], i);
+			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", GetModuleName(i), i);
 		}
 	}
 	platform->Message(mt, "\n");
@@ -597,7 +583,7 @@ void RepRap::PrintDebug(MessageType mt)
 // Add a tool.
 // Prior to calling this, delete any existing tool with the same number
 // The tool list is maintained in tool number order.
-void RepRap::AddTool(Tool* tool)
+void RepRap::AddTool(Tool* tool) noexcept
 {
 	MutexLocker lock(toolListMutex);
 	Tool** t = &toolList;
@@ -611,7 +597,7 @@ void RepRap::AddTool(Tool* tool)
 	platform->UpdateConfiguredHeaters();
 }
 
-void RepRap::DeleteTool(Tool* tool)
+void RepRap::DeleteTool(Tool* tool) noexcept
 {
 	// Must have a valid tool...
 	if (tool == nullptr)
@@ -655,7 +641,7 @@ void RepRap::DeleteTool(Tool* tool)
 }
 
 // Select the specified tool, putting the existing current tool into standby
-void RepRap::SelectTool(int toolNumber, bool simulating)
+void RepRap::SelectTool(int toolNumber, bool simulating) noexcept
 {
 	Tool* const newTool = GetTool(toolNumber);
 	if (!simulating)
@@ -672,7 +658,7 @@ void RepRap::SelectTool(int toolNumber, bool simulating)
 	currentTool = newTool;
 }
 
-void RepRap::PrintTool(int toolNumber, const StringRef& reply) const
+void RepRap::PrintTool(int toolNumber, const StringRef& reply) const noexcept
 {
 	const Tool* const tool = GetTool(toolNumber);
 	if (tool != nullptr)
@@ -685,7 +671,7 @@ void RepRap::PrintTool(int toolNumber, const StringRef& reply) const
 	}
 }
 
-void RepRap::StandbyTool(int toolNumber, bool simulating)
+void RepRap::StandbyTool(int toolNumber, bool simulating) noexcept
 {
 	Tool* const tool = GetTool(toolNumber);
 	if (tool != nullptr)
@@ -705,7 +691,7 @@ void RepRap::StandbyTool(int toolNumber, bool simulating)
 	}
 }
 
-Tool* RepRap::GetTool(int toolNumber) const
+Tool* RepRap::GetTool(int toolNumber) const noexcept
 {
 	MutexLocker lock(toolListMutex);
 	Tool* tool = toolList;
@@ -721,20 +707,20 @@ Tool* RepRap::GetTool(int toolNumber) const
 }
 
 // Return the current tool number, or -1 if no tool selected
-int RepRap::GetCurrentToolNumber() const
+int RepRap::GetCurrentToolNumber() const noexcept
 {
 	return (currentTool == nullptr) ? -1 : currentTool->Number();
 }
 
 // Get the current tool, or failing that the default tool. May return nullptr if we can't
 // Called when a M104 or M109 command doesn't specify a tool number.
-Tool* RepRap::GetCurrentOrDefaultTool() const
+Tool* RepRap::GetCurrentOrDefaultTool() const noexcept
 {
 	// If a tool is already selected, use that one, else use the lowest-numbered tool which is the one at the start of the tool list
 	return (currentTool != nullptr) ? currentTool : toolList;
 }
 
-bool RepRap::IsHeaterAssignedToTool(int8_t heater) const
+bool RepRap::IsHeaterAssignedToTool(int8_t heater) const noexcept
 {
 	MutexLocker lock(toolListMutex);
 	for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
@@ -752,7 +738,7 @@ bool RepRap::IsHeaterAssignedToTool(int8_t heater) const
 	return false;
 }
 
-unsigned int RepRap::GetNumberOfContiguousTools() const
+unsigned int RepRap::GetNumberOfContiguousTools() const noexcept
 {
 	unsigned int numTools = 0;
 	while (GetTool(numTools) != nullptr)
@@ -762,7 +748,7 @@ unsigned int RepRap::GetNumberOfContiguousTools() const
 	return numTools;
 }
 
-void RepRap::Tick()
+void RepRap::Tick() noexcept
 {
 	// Kicking the watchdog before it has been initialised may trigger it!
 	if (active)
@@ -772,7 +758,7 @@ void RepRap::Tick()
 		rswdt_restart(RSWDT);						// kick the secondary watchdog
 #endif
 
-		if (!resetting)
+		if (!stopped)
 		{
 			platform->Tick();
 			++ticksInSpinState;
@@ -780,7 +766,7 @@ void RepRap::Tick()
 			const bool heatTaskStuck = (heatTaskIdleTicks >= MaxTicksInSpinState);
 			if (heatTaskStuck || ticksInSpinState >= MaxTicksInSpinState)		// if we stall for 20 seconds, save diagnostic data and reset
 			{
-				resetting = true;
+				stopped = true;
 				heat->SwitchOffAll(true);
 				platform->EmergencyDisableDrivers();
 
@@ -796,7 +782,7 @@ void RepRap::Tick()
 }
 
 // Return true if we are close to timeout
-bool RepRap::SpinTimeoutImminent() const
+bool RepRap::SpinTimeoutImminent() const noexcept
 {
 	return ticksInSpinState >= HighTicksInSpinState;
 }
@@ -805,7 +791,7 @@ bool RepRap::SpinTimeoutImminent() const
 // Type 1 is the ordinary JSON status response.
 // Type 2 is the same except that static parameters are also included.
 // Type 3 is the same but instead of static parameters we report print estimation values.
-OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
+OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noexcept
 {
 	// Need something to write to...
 	OutputBuffer *response;
@@ -858,7 +844,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		else
 #endif
 		{
-			move->LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
+			move->LiveCoordinates(liveCoordinates, currentTool);
 		}
 
 		// Machine coordinates
@@ -955,7 +941,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for (size_t i = 0; i <= highestFan; i++)
 		{
-			response->catf("%c%d", ch, (int)lrintf(fansManager->GetFanValue(i) * 100.0));
+			const float fanValue = fansManager->GetFanValue(i);
+			response->catf("%c%d", ch, (fanValue < 0.0) ? -1 : (int)lrintf(fanValue * 100.0));
 			ch = ',';
 		}
 		response->cat((ch == '[') ? "[]" : "]");
@@ -1028,7 +1015,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->cat(",\"temps\":{");
 
 		/* Bed */
-		const int8_t bedHeater = (NumBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
+		const int8_t bedHeater = (MaxBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
 		if (bedHeater != -1)
 		{
 			response->catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"standby\":%.1f,\"state\":%d,\"heater\":%d},",
@@ -1037,7 +1024,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 
 		/* Chamber */
-		const int8_t chamberHeater = (NumChamberHeaters > 0) ? heat->GetChamberHeater(0) : -1;
+		const int8_t chamberHeater = (MaxChamberHeaters > 0) ? heat->GetChamberHeater(0) : -1;
 		if (chamberHeater != -1)
 		{
 			response->catf("\"chamber\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
@@ -1046,7 +1033,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 
 		/* Cabinet */
-		const int8_t cabinetHeater = (NumChamberHeaters > 1) ? heat->GetChamberHeater(1) : -1;
+		const int8_t cabinetHeater = (MaxChamberHeaters > 1) ? heat->GetChamberHeater(1) : -1;
 		if (cabinetHeater != -1)
 		{
 			response->catf("\"cabinet\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
@@ -1241,7 +1228,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		// Controllable Fans
 		FansBitmap controllableFans = 0;
-		for (size_t fan = 0; fan < NumTotalFans; fan++)
+		for (size_t fan = 0; fan < MaxFans; fan++)
 		{
 			if (fansManager->IsFanControllable(fan))
 			{
@@ -1274,7 +1261,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		size_t mountedCards = 0;
 		for (size_t i = 0; i < NumSdCards; i++)
 		{
-			if (platform->GetMassStorage()->IsDriveMounted(i))
+			if (MassStorage::IsDriveMounted(i))
 			{
 				mountedCards |= (1 << i);
 			}
@@ -1344,7 +1331,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				bool first = true;
 				for (size_t xi = 0; xi < MaxAxes; ++xi)
 				{
-					if ((tool->GetXAxisMap() & (1u << xi)) != 0)
+					if (IsBitSet(tool->GetXAxisMap(), xi))
 					{
 						if (first)
 						{
@@ -1361,7 +1348,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				first = true;
 				for (size_t yi = 0; yi < MaxAxes; ++yi)
 				{
-					if ((tool->GetYAxisMap() & (1u << yi)) != 0)
+					if (IsBitSet(tool->GetYAxisMap(), yi))
 					{
 						if (first)
 						{
@@ -1502,7 +1489,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	return response;
 }
 
-OutputBuffer *RepRap::GetConfigResponse()
+OutputBuffer *RepRap::GetConfigResponse() noexcept
 {
 	// We need some resources to return a valid config response...
 	OutputBuffer *response;
@@ -1586,6 +1573,16 @@ OutputBuffer *RepRap::GetConfigResponse()
 
 	response->catf(",\"firmwareDate\":\"%s\"", DATE);
 
+#if HAS_MASS_STORAGE
+	// System files folder
+	{
+		String<MaxFilenameLength> sysdir;
+		platform->GetSysDir(sysdir.GetRef());
+		response->catf(", \"sysdir\":");
+		response->EncodeString(sysdir, false);
+	}
+#endif
+
 	// Motor idle parameters
 	response->catf(",\"idleCurrentFactor\":%.1f", (double)(platform->GetIdleCurrentFactor() * 100.0));
 	response->catf(",\"idleTimeout\":%.1f", (double)(move->IdleTimeout()));
@@ -1620,7 +1617,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 // Type 2 is the M105 S2 response, which is like the new-style status response but some fields are omitted.
 // Type 3 is the M105 S3 response, which is like the M105 S2 response except that static values are also included.
 // 'seq' is the response sequence number, if it is not -1 and we have a different sequence number then we send the gcode response
-OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
+OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) noexcept
 {
 	// Need something to write to...
 	OutputBuffer *response;
@@ -1643,7 +1640,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->printf("{\"status\":\"%c\",\"heaters\":", ch);
 
 	// Send the heater actual temperatures. If there is no bed heater, send zero for PanelDue.
-	const int8_t bedHeater = (NumBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
+	const int8_t bedHeater = (MaxBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
 	ch = ',';
 	response->catf("[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetHeaterTemperature(bedHeater)));
 	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
@@ -1692,7 +1689,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 	// Now the machine coordinates
 	float liveCoordinates[MaxAxesPlusExtruders];
-	move->LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
+	move->LiveCoordinates(liveCoordinates, currentTool);
 	response->catf("],\"machine\":");		// announce the machine position
 	ch = '[';
 	for (size_t drive = 0; drive < numVisibleAxes; drive++)
@@ -1736,16 +1733,17 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	// Send the fan settings, for PanelDue firmware 1.13 and later
 	// Currently, PanelDue assumes that the first value is the print cooling fan speed and only uses that one, so send the mapped fan speed first
 	response->catf(",\"fanPercent\":[%.1f", (double)(gCodes->GetMappedFanSpeed() * 100.0));
-	for (size_t i = 0; i < NumTotalFans; ++i)
+	for (size_t i = 0; i < MaxFans; ++i)
 	{
-		response->catf(",%.1f", (double)(fansManager->GetFanValue(i) * 100.0));
+		const float fanValue = fansManager->GetFanValue(i);
+		response->catf(",%d", (fanValue < 0.0) ? -1 : (int)lrintf(fanValue * 100.0));
 	}
 	response->cat(']');
 
 	// Send fan RPM value(s)
 	response->cat(",\"fanRPM\":");
 	ch = '[';
-	for (size_t i = 0; i < NumTotalFans; ++i)
+	for (size_t i = 0; i < MaxFans; ++i)
 	{
 		response->catf("%c%" PRIi32, ch, fansManager->GetFanRPM(i));
 		ch = ',';
@@ -1839,7 +1837,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 // Get the list of files in the specified directory in JSON format.
 // If flagDirs is true then we prefix each directory with a * character.
-OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bool flagsDirs)
+OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bool flagsDirs) noexcept
 {
 	// Need something to write to...
 	OutputBuffer *response;
@@ -1854,11 +1852,11 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 	unsigned int err;
 	unsigned int nextFile = 0;
 
-	if (!platform->GetMassStorage()->CheckDriveMounted(dir))
+	if (!MassStorage::CheckDriveMounted(dir))
 	{
 		err = 1;
 	}
-	else if (!platform->GetMassStorage()->DirectoryExists(dir))
+	else if (!MassStorage::DirectoryExists(dir))
 	{
 		err = 2;
 	}
@@ -1867,7 +1865,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 		err = 0;
 		FileInfo fileInfo;
 		unsigned int filesFound = 0;
-		bool gotFile = platform->GetMassStorage()->FindFirst(dir, fileInfo);
+		bool gotFile = MassStorage::FindFirst(dir, fileInfo);
 
 		size_t bytesLeft = OutputBuffer::GetBytesLeft(response);	// don't write more bytes than we can
 
@@ -1881,7 +1879,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 					if (bytesLeft < fileInfo.fileName.strlen() * 2 + 20)
 					{
 						// No more space available - stop here
-						platform->GetMassStorage()->AbandonFindNext();
+						MassStorage::AbandonFindNext();
 						nextFile = filesFound;
 						break;
 					}
@@ -1896,7 +1894,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 				}
 				++filesFound;
 			}
-			gotFile = platform->GetMassStorage()->FindNext(fileInfo);
+			gotFile = MassStorage::FindNext(fileInfo);
 		}
 	}
 
@@ -1912,7 +1910,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 }
 
 // Get a JSON-style filelist including file types and sizes
-OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
+OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt) noexcept
 {
 	// Need something to write to...
 	OutputBuffer *response;
@@ -1927,11 +1925,11 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 	unsigned int err;
 	unsigned int nextFile = 0;
 
-	if (!platform->GetMassStorage()->CheckDriveMounted(dir))
+	if (!MassStorage::CheckDriveMounted(dir))
 	{
 		err = 1;
 	}
-	else if (!platform->GetMassStorage()->DirectoryExists(dir))
+	else if (!MassStorage::DirectoryExists(dir))
 	{
 		err = 2;
 	}
@@ -1940,7 +1938,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 		err = 0;
 		FileInfo fileInfo;
 		unsigned int filesFound = 0;
-		bool gotFile = platform->GetMassStorage()->FindFirst(dir, fileInfo);
+		bool gotFile = MassStorage::FindFirst(dir, fileInfo);
 		size_t bytesLeft = OutputBuffer::GetBytesLeft(response);	// don't write more bytes than we can
 
 		while (gotFile)
@@ -1953,7 +1951,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 					if (bytesLeft < fileInfo.fileName.strlen() * 2 + 50)
 					{
 						// No more space available - stop here
-						platform->GetMassStorage()->AbandonFindNext();
+						MassStorage::AbandonFindNext();
 						nextFile = filesFound;
 						break;
 					}
@@ -1984,7 +1982,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 				}
 				++filesFound;
 			}
-			gotFile = platform->GetMassStorage()->FindNext(fileInfo);
+			gotFile = MassStorage::FindNext(fileInfo);
 		}
 	}
 
@@ -2004,7 +2002,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 #endif
 
 // Get information for the specified file, or the currently printing file (if 'filename' is null or empty), in JSON format
-bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly)
+bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept
 {
 	const bool specificFile = (filename != nullptr && filename[0] != 0);
 	GCodeFileInfo info;
@@ -2017,7 +2015,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 		{
 			info.isValid = false;
 		}
-		else if (!platform->GetMassStorage()->GetFileInfo(filePath.c_str(), info, quitEarly))
+		else if (!MassStorage::GetFileInfo(filePath.c_str(), info, quitEarly))
 		{
 			// This may take a few runs...
 			return false;
@@ -2048,7 +2046,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 		}
 
 		response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,",
-			(double)info.objectHeight, (double)info.firstLayerHeight, (double)info.layerHeight);
+					HideNan(info.objectHeight), HideNan(info.firstLayerHeight), HideNan(info.layerHeight));
 		if (info.printTime != 0)
 		{
 			response->catf("\"printTime\":%" PRIu32 ",", info.printTime);
@@ -2068,7 +2066,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 		{
 			for (size_t i = 0; i < info.numFilaments; ++i)
 			{
-				response->catf("%c%.1f", ch, (double)info.filamentNeeded[i]);
+				response->catf("%c%.1f", ch, HideNan(info.filamentNeeded[i]));
 				ch = ',';
 			}
 		}
@@ -2092,7 +2090,7 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 }
 
 // Send a beep. We send it to both PanelDue and the web interface.
-void RepRap::Beep(unsigned int freq, unsigned int ms)
+void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 {
 	// Limit the frequency and duration to sensible values
 	freq = constrain<unsigned int>(freq, 50, 10000);
@@ -2122,7 +2120,7 @@ void RepRap::Beep(unsigned int freq, unsigned int ms)
 }
 
 // Send a short message. We send it to both PanelDue and the web interface.
-void RepRap::SetMessage(const char *msg)
+void RepRap::SetMessage(const char *msg) noexcept
 {
 	message.copy(msg);
 	++messageSequence;
@@ -2134,7 +2132,7 @@ void RepRap::SetMessage(const char *msg)
 }
 
 // Display a message box on the web interface
-void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls)
+void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls) noexcept
 {
 	MutexLocker lock(messageBoxMutex);
 	mbox.message.copy(msg);
@@ -2148,14 +2146,14 @@ void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeou
 }
 
 // Clear pending message box
-void RepRap::ClearAlert()
+void RepRap::ClearAlert() noexcept
 {
 	MutexLocker lock(messageBoxMutex);
 	mbox.active = false;
 }
 
 // Get the status character for the new-style status response
-char RepRap::GetStatusCharacter() const
+char RepRap::GetStatusCharacter() const noexcept
 {
 	return    (processingConfig)										? 'C'	// Reading the configuration file
 #if HAS_LINUX_INTERFACE && SUPPORT_CAN_EXPANSION
@@ -2177,29 +2175,29 @@ char RepRap::GetStatusCharacter() const
 			:															  'I';	// Idle
 }
 
-bool RepRap::NoPasswordSet() const
+bool RepRap::NoPasswordSet() const noexcept
 {
 	return (password[0] == 0 || CheckPassword(DEFAULT_PASSWORD));
 }
 
-bool RepRap::CheckPassword(const char *pw) const
+bool RepRap::CheckPassword(const char *pw) const noexcept
 {
 	String<RepRapPasswordLength> copiedPassword;
 	copiedPassword.CopyAndPad(pw);
 	return password.ConstantTimeEquals(copiedPassword);
 }
 
-void RepRap::SetPassword(const char* pw)
+void RepRap::SetPassword(const char* pw) noexcept
 {
 	password.CopyAndPad(pw);
 }
 
-const char *RepRap::GetName() const
+const char *RepRap::GetName() const noexcept
 {
 	return myName.c_str();
 }
 
-void RepRap::SetName(const char* nm)
+void RepRap::SetName(const char* nm) noexcept
 {
 	// Users sometimes put a tab character between the machine name and the comment, so allow for this
 	myName.copy(nm);
@@ -2211,7 +2209,7 @@ void RepRap::SetName(const char* nm)
 // Given that we want to extrude/retract the specified extruder drives, check if they are allowed.
 // For each disallowed one, log an error to report later and return a bit in the bitmap.
 // This may be called by an ISR!
-unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions)
+unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions) noexcept
 {
 	if (GetHeat().ColdExtrude())
 	{
@@ -2249,7 +2247,7 @@ unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, uns
 	return result;
 }
 
-void RepRap::FlagTemperatureFault(int8_t dudHeater)
+void RepRap::FlagTemperatureFault(int8_t dudHeater) noexcept
 {
 	MutexLocker lock(toolListMutex);
 	if (toolList != nullptr)
@@ -2258,7 +2256,7 @@ void RepRap::FlagTemperatureFault(int8_t dudHeater)
 	}
 }
 
-GCodeResult RepRap::ClearTemperatureFault(int8_t wasDudHeater, const StringRef& reply)
+GCodeResult RepRap::ClearTemperatureFault(int8_t wasDudHeater, const StringRef& reply) noexcept
 {
 	const GCodeResult rslt = heat->ResetFault(wasDudHeater, reply);
 	MutexLocker lock(toolListMutex);
@@ -2269,23 +2267,11 @@ GCodeResult RepRap::ClearTemperatureFault(int8_t wasDudHeater, const StringRef& 
 	return rslt;
 }
 
-// Get the current axes used as X axes
-AxesBitmap RepRap::GetCurrentXAxes() const
-{
-	return (currentTool == nullptr) ? DefaultXAxisMapping : currentTool->GetXAxisMap();
-}
-
-// Get the current axes used as X axes
-AxesBitmap RepRap::GetCurrentYAxes() const
-{
-	return (currentTool == nullptr) ? DefaultYAxisMapping : currentTool->GetYAxisMap();
-}
-
 #if HAS_MASS_STORAGE
 
 // Save some resume information, returning true if successful
 // We assume that the tool configuration doesn't change, only the temperatures and the mix
-bool RepRap::WriteToolSettings(FileStore *f) const
+bool RepRap::WriteToolSettings(FileStore *f) const noexcept
 {
 	// First write the settings of all tools except the current one and the command to select them if they are on standby
 	bool ok = true;
@@ -2320,7 +2306,7 @@ bool RepRap::WriteToolSettings(FileStore *f) const
 }
 
 // Save some information in config-override.g
-bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const
+bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const noexcept
 {
 	bool ok = true, written = false;
 	MutexLocker lock(toolListMutex);
@@ -2352,33 +2338,321 @@ bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) con
 
 #endif
 
+// Firmware update operations
+
+// Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
+bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
+{
+#if HAS_MASS_STORAGE
+	FileStore * const firmwareFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_FIRMWARE_FILE, OpenMode::read);
+	if (firmwareFile == nullptr)
+	{
+		reply.printf("Firmware binary \"%s\" not found", IAP_FIRMWARE_FILE);
+		return false;
+	}
+
+	// Check that the binary looks sensible. The first word is the initial stack pointer, which should be the top of RAM.
+	uint32_t firstDword;
+	bool ok = firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
+	firmwareFile->Close();
+	if (!ok || firstDword !=
+#if SAM3XA
+						IRAM1_ADDR + IRAM1_SIZE
+#else
+						IRAM_ADDR + IRAM_SIZE
+#endif
+			)
+	{
+		reply.printf("Firmware binary \"%s\" is not valid for this electronics", IAP_FIRMWARE_FILE);
+		return false;
+	}
+
+	if (!platform->FileExists(DEFAULT_SYS_DIR, IAP_UPDATE_FILE))
+	{
+		reply.printf("In-application programming binary \"%s\" not found", IAP_UPDATE_FILE);
+		return false;
+	}
+#endif
+
+	return true;
+}
+
+// Update the firmware. Prerequisites should be checked before calling this.
+void RepRap::UpdateFirmware() noexcept
+{
+#if HAS_MASS_STORAGE
+	FileStore * const iapFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_UPDATE_FILE, OpenMode::read);
+	if (iapFile == nullptr)
+	{
+		platform->MessageF(FirmwareUpdateMessage, "IAP file '" IAP_UPDATE_FILE "' not found\n");
+		return;
+	}
+
+#if SUPPORT_12864_LCD
+	display->UpdatingFirmware();			// put the firmware update message on the display
+#endif
+
+#if IAP_IN_RAM
+	// Send this message before we start using RAM that may contain message buffers
+	platform->Message(AuxMessage, "Updating main firmware\n");
+	platform->Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
+
+	// Allow time for the firmware update message to be sent
+	const uint32_t now = millis();
+	while (platform->FlushMessages() && millis() - now < 2000) { }
+#endif
+
+	// The machine will be unresponsive for a few seconds, don't risk damaging the heaters.
+	// This also shuts down tasks and interrupts that might make use of the RAM that we are about to load the IAP binary into.
+	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it access Z probe object in RAM used by IAP
+	network->Exit();						// kill the network task to stop it overwriting RAM that we use to hold the IAP
+
+	// Step 0 - disable the cache because it interferes with flash memory access
+	Cache::Disable();
+
+#if USE_MPU
+	//TODO consider setting flash memory to strongly-ordered instead
+	ARM_MPU_Disable();
+#endif
+
+#if IAP_IN_RAM
+	// Use RAM-based IAP
+	iapFile->Read(reinterpret_cast<char *>(IAP_IMAGE_START), iapFile->Length());
+#else
+	// Step 1 - Write update binary to Flash and overwrite the remaining space with zeros
+	// On the SAM3X, leave the last 1KB of Flash memory untouched, so we can reuse the NvData after this update
+
+# if !defined(IFLASH_PAGE_SIZE) && defined(IFLASH0_PAGE_SIZE)
+#  define IFLASH_PAGE_SIZE	IFLASH0_PAGE_SIZE
+# endif
+
+	// Use a 32-bit aligned buffer. This gives us the option of calling the EFC functions directly in future.
+	uint32_t data32[IFLASH_PAGE_SIZE/4];
+	char* const data = reinterpret_cast<char *>(data32);
+
+# if SAM4E || SAM4S || SAME70
+	// The EWP command is not supported for non-8KByte sectors in the SAM4 and SAME70 series.
+	// So we have to unlock and erase the complete 64Kb or 128kb sector first. One sector is always enough to contain the IAP.
+	flash_unlock(IAP_IMAGE_START, IAP_IMAGE_END, nullptr, nullptr);
+	flash_erase_sector(IAP_IMAGE_START);
+
+	for (uint32_t flashAddr = IAP_IMAGE_START; flashAddr < IAP_IMAGE_END; flashAddr += IFLASH_PAGE_SIZE)
+	{
+		const int bytesRead = iapFile->Read(data, IFLASH_PAGE_SIZE);
+
+		if (bytesRead > 0)
+		{
+			// Do we have to fill up the remaining buffer with zeros?
+			if (bytesRead != IFLASH_PAGE_SIZE)
+			{
+				memset(data + bytesRead, 0, sizeof(data[0]) * (IFLASH_PAGE_SIZE - bytesRead));
+			}
+
+			// Write one page at a time
+			cpu_irq_disable();
+			const uint32_t rc = flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 0);
+			cpu_irq_enable();
+
+			if (rc != FLASH_RC_OK)
+			{
+				platform->MessageF(FirmwareUpdateErrorMessage, "flash write failed, code=%" PRIu32 ", address=0x%08" PRIx32 "\n", rc, flashAddr);
+				return;
+			}
+
+			// Verify written data
+			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
+			{
+				platform->MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08" PRIx32 "\n", flashAddr);
+				return;
+			}
+		}
+		else
+		{
+			// Fill up the remaining space with zeros
+			memset(data, 0, sizeof(data[0]) * sizeof(data));
+			cpu_irq_disable();
+			flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 0);
+			cpu_irq_enable();
+		}
+	}
+
+	// Re-lock the whole area
+	flash_lock(IAP_IMAGE_START, IAP_IMAGE_END, nullptr, nullptr);
+
+# else	// SAM3X code
+
+	for (uint32_t flashAddr = IAP_FLASH_START; flashAddr < IAP_FLASH_END; flashAddr += IFLASH_PAGE_SIZE)
+	{
+		const int bytesRead = iapFile->Read(data, IFLASH_PAGE_SIZE);
+
+		if (bytesRead > 0)
+		{
+			// Do we have to fill up the remaining buffer with zeros?
+			if (bytesRead != IFLASH_PAGE_SIZE)
+			{
+				memset(data + bytesRead, 0, sizeof(data[0]) * (IFLASH_PAGE_SIZE - bytesRead));
+			}
+
+			// Write one page at a time
+			cpu_irq_disable();
+
+			const char* op = "unlock";
+			uint32_t rc = flash_unlock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+
+			if (rc == FLASH_RC_OK)
+			{
+				op = "write";
+				rc = flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 1);
+			}
+			if (rc == FLASH_RC_OK)
+			{
+				op = "lock";
+				rc = flash_lock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+			}
+			cpu_irq_enable();
+
+			if (rc != FLASH_RC_OK)
+			{
+				MessageF(FirmwareUpdateErrorMessage, "flash %s failed, code=%" PRIu32 ", address=0x%08" PRIx32 "\n", op, rc, flashAddr);
+				return;
+			}
+			// Verify written data
+			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
+			{
+				MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08" PRIx32 "\n", flashAddr);
+				return;
+			}
+		}
+		else
+		{
+			// Fill up the remaining space
+			memset(data, 0, sizeof(data[0]) * sizeof(data));
+			cpu_irq_disable();
+			flash_unlock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+			flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 1);
+			flash_lock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+			cpu_irq_enable();
+		}
+	}
+# endif
+#endif
+
+	iapFile->Close();
+
+	StartIap();
+#endif
+}
+
+void RepRap::StartIap() noexcept
+{
+#if !IAP_IN_RAM
+	platform->Message(AuxMessage, "Updating main firmware\n");
+	platform->Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
+
+	// Allow time for the firmware update message to be sent
+	const uint32_t now = millis();
+	while (platform->FlushMessages() && millis() - now < 2000) { }
+#endif
+
+	// Disable all interrupts, then reallocate the vector table and program entry point to the new IAP binary
+	// This does essentially what the Atmel AT02333 paper suggests (see 3.2.2 ff)
+
+	// Disable all IRQs
+	SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk;	// disable the system tick exception
+	cpu_irq_disable();
+	for (size_t i = 0; i < 8; i++)
+	{
+		NVIC->ICER[i] = 0xFFFFFFFF;					// Disable IRQs
+		NVIC->ICPR[i] = 0xFFFFFFFF;					// Clear pending IRQs
+	}
+
+	// Disable all PIO IRQs, because the core assumes they are all disabled when setting them up
+	PIOA->PIO_IDR = 0xFFFFFFFF;
+	PIOB->PIO_IDR = 0xFFFFFFFF;
+	PIOC->PIO_IDR = 0xFFFFFFFF;
+#ifdef PIOD
+	PIOD->PIO_IDR = 0xFFFFFFFF;
+#endif
+#ifdef ID_PIOE
+	PIOE->PIO_IDR = 0xFFFFFFFF;
+#endif
+
+#if HAS_MASS_STORAGE
+	// Newer versions of iap4e.bin reserve space above the stack for us to pass the firmware filename
+	static const char filename[] = DEFAULT_SYS_DIR IAP_FIRMWARE_FILE;
+	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
+	if (topOfStack + sizeof(filename) <=
+# if SAM3XA
+						IRAM1_ADDR + IRAM1_SIZE
+# else
+						IRAM_ADDR + IRAM_SIZE
+# endif
+	   )
+	{
+		memcpy(reinterpret_cast<char*>(topOfStack), filename, sizeof(filename));
+	}
+#endif
+
+#if defined(DUET_NG) || defined(DUET_M)
+	IoPort::WriteDigital(DiagPin, false);			// turn the DIAG LED off
+#endif
+
+	wdt_restart(WDT);								// kick the watchdog one last time
+
+#if SAM4E || SAME70
+	rswdt_restart(RSWDT);							// kick the secondary watchdog
+#endif
+
+	// Modify vector table location
+	__DSB();
+	__ISB();
+	SCB->VTOR = ((uint32_t)IAP_IMAGE_START & SCB_VTOR_TBLOFF_Msk);
+	__DSB();
+	__ISB();
+
+	cpu_irq_enable();
+
+	__asm volatile ("mov r3, %0" : : "r" (IAP_IMAGE_START) : "r3");
+
+	// We are using separate process and handler stacks. Put the process stack 1K bytes below the handler stack.
+	__asm volatile ("ldr r1, [r3]");
+	__asm volatile ("msr msp, r1");
+	__asm volatile ("sub r1, #1024");
+	__asm volatile ("mov sp, r1");
+
+	__asm volatile ("isb");
+	__asm volatile ("ldr r1, [r3, #4]");
+	__asm volatile ("orr r1, r1, #1");
+	__asm volatile ("bx r1");
+}
+
 // Helper function for diagnostic tests in Platform.cpp, to cause a deliberate divide-by-zero
-/*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b)
+/*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b) noexcept
 {
 	return a/b;
 }
 
 // Helper function for diagnostic tests in Platform.cpp, to calculate sine and cosine
-/*static*/ float RepRap::SinfCosf(float angle)
+/*static*/ float RepRap::SinfCosf(float angle) noexcept
 {
 	return sinf(angle) + cosf(angle);
 }
 
 // Helper function for diagnostic tests in Platform.cpp, to calculate sine and cosine
-/*static*/ double RepRap::SinCos(double angle)
+/*static*/ double RepRap::SinCos(double angle) noexcept
 {
 	return sin(angle) + cos(angle);
 }
 
 // Report an internal error
-void RepRap::ReportInternalError(const char *file, const char *func, int line) const
+void RepRap::ReportInternalError(const char *file, const char *func, int line) const noexcept
 {
 	platform->MessageF(ErrorMessage, "Internal Error in %s at %s(%d)\n", func, file, line);
 }
 
 #if SUPPORT_12864_LCD
 
-const char *RepRap::GetLatestMessage(uint16_t& sequence) const
+const char *RepRap::GetLatestMessage(uint16_t& sequence) const noexcept
 {
 	sequence = messageSequence;
 	return message.c_str();

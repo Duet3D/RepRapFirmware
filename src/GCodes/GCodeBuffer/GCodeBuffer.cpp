@@ -613,11 +613,18 @@ void GCodeBuffer::SetPrintFinished()
 	}
 }
 
+// Note: filename is sometimes null when calling this from LinuxInterface
 void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing, bool fromCode)
 {
 	machineState->SetFileExecuting();
-
-	requestedMacroFile.copy(filename);
+	if (filename == nullptr)
+	{
+		requestedMacroFile.Clear();
+	}
+	else
+	{
+		requestedMacroFile.copy(filename);
+	}
 	reportMissingMacro = reportMissing;
 	isMacroFromCode = fromCode;
 	abortFile = abortAllFiles = false;

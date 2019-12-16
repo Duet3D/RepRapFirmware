@@ -224,8 +224,6 @@ private:
 	unsigned int m_uListingFirstVisibleIndex;
 	unsigned int m_uListingSelectedIndex;
 
-	MassStorage *const m_oMS;
-
 	enum CardState : uint8_t { notStarted, mounting, mounted, error } sdCardState;
 	uint8_t initialDirectoryNesting;
 };

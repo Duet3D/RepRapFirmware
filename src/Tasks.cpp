@@ -8,21 +8,12 @@
 #include "Tasks.h"
 #include "RepRap.h"
 #include "Platform.h"
-#include "Storage/CRC32.h"
-
-#include <malloc.h>
+#include "Hardware/Cache.h"
+#include <TaskPriorities.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include <TaskPriorities.h>
-
-#if USE_CACHE
-# include "cmcc/cmcc.h"
-#endif
-
-#if SAME70
-# include <mpu_armv7.h>
-#endif
+#include <malloc.h>
 
 const uint8_t memPattern = 0xA5;
 
@@ -41,13 +32,13 @@ constexpr unsigned int MainTaskStackWords = 1600;
 #endif
 
 static Task<MainTaskStackWords> mainTask;
-extern "C" [[noreturn]] void MainTask(void * pvParameters);
+extern "C" [[noreturn]] void MainTask(void * pvParameters) noexcept;
 
 // Idle task data
 constexpr unsigned int IdleTaskStackWords = 60;
 static Task<IdleTaskStackWords> idleTask;
 
-extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize)
+extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize) noexcept
 {
 	*ppxIdleTaskTCBBuffer = idleTask.GetTaskMemory();
 	*ppxIdleTaskStackBuffer = idleTask.GetStackBase();
@@ -60,7 +51,7 @@ extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffe
 constexpr unsigned int TimerTaskStackWords = 60;
 static Task<TimerTaskStackWords> timerTask;
 
-extern "C" void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackType_t **ppxTimerTaskStackBuffer, uint32_t *pulTimerTaskStackSize)
+extern "C" void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackType_t **ppxTimerTaskStackBuffer, uint32_t *pulTimerTaskStackSize) noexcept
 {
     *ppxTimerTaskTCBBuffer = timerTask.GetTaskMemory();
     *ppxTimerTaskStackBuffer = timerTask.GetStackBase();
@@ -76,7 +67,7 @@ static Mutex sysDirMutex;
 static Mutex mallocMutex;
 
 // We need to make malloc/free thread safe. We must use a recursive mutex for it.
-extern "C" void __malloc_lock (struct _reent *_r)
+extern "C" void __malloc_lock (struct _reent *_r) noexcept
 {
 	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)		// don't take mutex if scheduler not started or suspended
 	{
@@ -84,7 +75,7 @@ extern "C" void __malloc_lock (struct _reent *_r)
 	}
 }
 
-extern "C" void __malloc_unlock (struct _reent *_r)
+extern "C" void __malloc_unlock (struct _reent *_r) noexcept
 {
 	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)		// don't release mutex if scheduler not started or suspended
 	{
@@ -93,10 +84,11 @@ extern "C" void __malloc_unlock (struct _reent *_r)
 }
 
 // Application entry point
-extern "C" [[noreturn]] void AppMain()
+extern "C" [[noreturn]] void AppMain() noexcept
 {
 	pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
 
+#ifndef DEBUG	// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
 	// Check the integrity of the firmware by checking the firmware CRC
 	{
 #ifdef IFLASH_ADDR
@@ -112,13 +104,14 @@ extern "C" [[noreturn]] void AppMain()
 			for (unsigned int i = 0; ; ++i)
 			{
 				digitalWrite(DiagPin, (i & 1) == 0 && (i & 15) < 6);		// turn LED on if count is 0, 2, 4 or 16, 18, 20 etc. otherwise turn it off
-				for (unsigned int j = 0; j < 5000; ++j)
+				for (unsigned int j = 0; j < 500; ++j)
 				{
-					delayMicroseconds(100);									// delayMicroseconds only works with low values of delay so do 100us at a time
+					delayMicroseconds(1000);								// delayMicroseconds only works with low values of delay so do 1ms at a time
 				}
 			}
 		}
 	}
+#endif
 
 	// Fill the free memory with a pattern so that we can check for stack usage and memory corruption
 	char* heapend = sbrk(0);
@@ -132,65 +125,7 @@ extern "C" [[noreturn]] void AppMain()
 	// We could also trap unaligned memory access, if we change the gcc options to not generate code that uses unaligned memory access.
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
 
-#if 0 //SAME70
-	// Set up the MPU so that we can have a non-cacheable RAM region, and so that we can trap accesses to non-existent memory
-	// Where regions overlap, the region with the highest region number takes priority
-	constexpr ARM_MPU_Region_t regionTable[] =
-	{
-		// Flash memory: read-only, execute allowed, cacheable
-		{
-			ARM_MPU_RBAR(0, IFLASH_ADDR),
-			ARM_MPU_RASR_EX(0u, ARM_MPU_AP_RO, ARM_MPU_ACCESS_NORMAL(ARM_MPU_CACHEP_WB_WRA, ARM_MPU_CACHEP_WB_WRA, 1u), 0u, ARM_MPU_REGION_SIZE_1MB)
-		},
-		// First 256kb RAM, read-write, cacheable, execute disabled. Parts of this are is overridden later.
-		{
-			ARM_MPU_RBAR(1, IRAM_ADDR),
-			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_NORMAL(ARM_MPU_CACHEP_WB_WRA, ARM_MPU_CACHEP_WB_WRA, 1u), 0u, ARM_MPU_REGION_SIZE_256KB)
-		},
-		// Final 128kb RAM, read-write, cacheable, execute disabled
-		{
-			ARM_MPU_RBAR(3, IRAM_ADDR + 0x00040000),
-			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_NORMAL(ARM_MPU_CACHEP_WB_WRA, ARM_MPU_CACHEP_WB_WRA, 1u), 0u, ARM_MPU_REGION_SIZE_128KB)
-		},
-		// Non-cachable RAM. This must be before normal RAM because it includes CAN buffers which must be within first 64kb.
-		// Read write, execute disabled, non-cacheable
-		{
-			ARM_MPU_RBAR(4, IRAM_ADDR),
-			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_ORDERED, 0, ARM_MPU_REGION_SIZE_64KB)
-		},
-		// RAMFUNC memory. Read-only (the code has already been written to it), execution allowed. The initialised data memory follows, so it must be RW.
-		// 256 bytes is enough at present (check the linker memory map if adding more RAMFUNCs).
-		{
-			ARM_MPU_RBAR(5, IRAM_ADDR + 0x00010000),
-			ARM_MPU_RASR_EX(0u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_NORMAL(ARM_MPU_CACHEP_WB_WRA, ARM_MPU_CACHEP_WB_WRA, 1u), 0u, ARM_MPU_REGION_SIZE_256B)
-		},
-		// Peripherals
-		{
-			ARM_MPU_RBAR(6, 0x40000000),
-			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_DEVICE(1u), 0u, ARM_MPU_REGION_SIZE_512MB),
-		},
-		// USBHS
-		{
-			ARM_MPU_RBAR(7, 0xA0100000),
-			ARM_MPU_RASR_EX(1u, ARM_MPU_AP_FULL, ARM_MPU_ACCESS_DEVICE(1u), 0u, ARM_MPU_REGION_SIZE_1MB),
-		}
-	};
-
-	// Ensure MPU is disabled
-	ARM_MPU_Disable();
-
-	// Clear all regions
-	const uint32_t numRegions = (MPU->TYPE & MPU_TYPE_DREGION_Msk) >> MPU_TYPE_DREGION_Pos;
-	for (unsigned int region = 0; region < numRegions; ++region)
-	{
-		ARM_MPU_ClrRegion(region);
-	}
-
-	// Load regions from our table
-	ARM_MPU_Load(regionTable, ARRAY_SIZE(regionTable));
-
-	// Enable the MPU, disabling the default map but allowing exception handlers to use it
-	ARM_MPU_Enable(0x01);
+#if SAME70 && USE_MPU
 #endif
 
 #ifdef __LPC17xx__
@@ -201,9 +136,8 @@ extern "C" [[noreturn]] void AppMain()
 	pinMode(LED3, OUTPUT_LOW);
 	pinMode(LED4, OUTPUT_LOW);
 #else
-	// When doing a software reset, we disable the NRST input (User reset) to prevent the negative-going pulse that gets generated on it
-	// being held in the capacitor and changing the reset reason from Software to User. So enable it again here. We hope that the reset signal
-	// will have gone away by now.
+	// When doing a software reset, we disable the NRST input (User reset) to prevent the negative-going pulse that gets generated on it being held
+	// in the capacitor and changing the reset reason from Software to User. So enable it again here. We hope that the reset signal will have gone away by now.
 # ifndef RSTC_MR_KEY_PASSWD
 // Definition of RSTC_MR_KEY_PASSWD is missing in the SAM3X ASF files
 #  define RSTC_MR_KEY_PASSWD (0xA5u << 24)
@@ -211,16 +145,16 @@ extern "C" [[noreturn]] void AppMain()
 	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD | RSTC_MR_URSTEN;
 #endif
 
-#if USE_CACHE
-	// Enable the cache
-	cmcc_config g_cmcc_cfg;
-	cmcc_get_config_defaults(&g_cmcc_cfg);
-	cmcc_init(CMCC, &g_cmcc_cfg);
-	EnableCache();
+	Cache::Init();
+	Cache::Enable();
+
+#if SAM4S
+	efc_enable_cloe(EFC0);			// enable code loop optimisation
+#elif SAM4E || SAME70
+	efc_enable_cloe(EFC);			// enable code loop optimisation
 #endif
 
-	// Add the FreeRTOS internal tasks to the task list
-	idleTask.AddToList();
+	idleTask.AddToList();			// add the FreeRTOS internal tasks to the task list
 
 #if configUSE_TIMERS
 	timerTask.AddToList();
@@ -229,10 +163,10 @@ extern "C" [[noreturn]] void AppMain()
 	// Create the startup task
 	mainTask.Create(MainTask, "MAIN", nullptr, TaskPriority::SpinPriority);
 	vTaskStartScheduler();			// doesn't return
-	for (;;) { }					// kep gcc happy
+	for (;;) { }					// keep gcc happy
 }
 
-extern "C" [[noreturn]] void MainTask(void *pvParameters)
+extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 {
 	mallocMutex.Create("Malloc");
 	spiMutex.Create("SPI");
@@ -262,7 +196,7 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters)
 
 namespace Tasks
 {
-	static void GetHandlerStackUsage(uint32_t* maxStack, uint32_t* neverUsed)
+	static void GetHandlerStackUsage(uint32_t* maxStack, uint32_t* neverUsed) noexcept
 	{
 		const char * const ramend = (const char *)&_estack;
 		const char * const heapend = sbrk(0);
@@ -275,7 +209,7 @@ namespace Tasks
 		if (neverUsed != nullptr) { *neverUsed = stack_lwm - heapend; }
 	}
 
-	uint32_t GetNeverUsedRam()
+	uint32_t GetNeverUsedRam() noexcept
 	{
 		uint32_t neverUsedRam;
 
@@ -284,7 +218,7 @@ namespace Tasks
 	}
 
 	// Write data about the current task
-	void Diagnostics(MessageType mtype)
+	void Diagnostics(MessageType mtype) noexcept
 	{
 		Platform& p = reprap.GetPlatform();
 		p.Message(mtype, "=== RTOS ===\n");
@@ -379,17 +313,17 @@ namespace Tasks
 		p.MessageF(mtype, "\n");
 	}
 
-	const Mutex *GetSpiMutex()
+	const Mutex *GetSpiMutex() noexcept
 	{
 		return &spiMutex;
 	}
 
-	const Mutex *GetI2CMutex()
+	const Mutex *GetI2CMutex() noexcept
 	{
 		return &i2cMutex;
 	}
 
-	const Mutex *GetSysDirMutex()
+	const Mutex *GetSysDirMutex() noexcept
 	{
 		return &sysDirMutex;
 	}
@@ -399,7 +333,7 @@ namespace Tasks
 extern "C"
 {
 	// This intercepts the 1ms system tick
-	void vApplicationTickHook()
+	void vApplicationTickHook() noexcept
 	{
 		CoreSysTick();
 		reprap.Tick();
@@ -418,14 +352,14 @@ extern "C"
 	// Exception handlers
 	// By default the Usage Fault, Bus Fault and Memory Management fault handlers are not enabled,
 	// so they escalate to a Hard Fault and we don't need to provide separate exception handlers for them.
-	[[noreturn]] void hardFaultDispatcher(const uint32_t *pulFaultStackAddress)
+	[[noreturn]] void hardFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 	{
 	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pulFaultStackAddress + 5);
 	}
 
 	// The fault handler implementation calls a function called hardFaultDispatcher()
-    void HardFault_Handler() __attribute__((naked, noreturn));
-	void HardFault_Handler()
+    void HardFault_Handler() noexcept __attribute__((naked, noreturn));
+	void HardFault_Handler() noexcept
 	{
 	    __asm volatile
 	    (
@@ -439,19 +373,44 @@ extern "C"
 	    );
 	}
 
-	[[noreturn]] void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress)
+#if USE_MPU
+
+	[[noreturn]] void memManageDispatcher(const uint32_t *pulFaultStackAddress) noexcept
+	{
+	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::memFault, pulFaultStackAddress + 5);
+	}
+
+	// The fault handler implementation calls a function called hardFaultDispatcher()
+    void MemManage_Handler() noexcept __attribute__((naked, noreturn));
+	void MemManage_Handler() noexcept
+	{
+	    __asm volatile
+	    (
+	        " tst lr, #4                                                \n"		/* test bit 2 of the EXC_RETURN in LR to determine which stack was in use */
+	        " ite eq                                                    \n"		/* load the appropriate stack pointer into R0 */
+	        " mrseq r0, msp                                             \n"
+	        " mrsne r0, psp                                             \n"
+	        " ldr r2, handler_mf_address_const                          \n"
+	        " bx r2                                                     \n"
+	        " handler_mf_address_const: .word memManageDispatcher       \n"
+	    );
+	}
+
+#endif
+
+	[[noreturn]] void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 	{
 	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::wdtFault, pulFaultStackAddress + 5);
 	}
 
 #ifdef __LPC17xx__
-    void WDT_IRQHandler() __attribute__((naked, noreturn));
-    void WDT_IRQHandler(void)
+    void WDT_IRQHandler() noexcept __attribute__((naked, noreturn));
+    void WDT_IRQHandler() noexcept
     {
     	LPC_WDT->WDMOD &=~((uint32_t)(1<<2)); //SD::clear timout flag before resetting to prevent the Smoothie bootloader going into DFU mode
 #else
-    void WDT_Handler() __attribute__((naked, noreturn));
-	void WDT_Handler()
+    void WDT_Handler() noexcept __attribute__((naked, noreturn));
+	void WDT_Handler() noexcept
 	{
 #endif
 	    __asm volatile
@@ -466,15 +425,15 @@ extern "C"
 	    );
 	}
 
-	[[noreturn]] void otherFaultDispatcher(const uint32_t *pulFaultStackAddress)
+	[[noreturn]] void otherFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 	{
 	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::otherFault, pulFaultStackAddress + 5);
 	}
 
 	// 2017-05-25: A user is getting 'otherFault' reports, so now we do a stack dump for those too.
 	// The fault handler implementation calls a function called otherFaultDispatcher()
-	void OtherFault_Handler() __attribute__((naked, noreturn));
-	void OtherFault_Handler()
+	void OtherFault_Handler() noexcept __attribute__((naked, noreturn));
+	void OtherFault_Handler() noexcept
 	{
 	    __asm volatile
 	    (
@@ -490,19 +449,19 @@ extern "C"
 
 	// We could set up the following fault handlers to retrieve the program counter in the same way as for a Hard Fault,
 	// however these exceptions are unlikely to occur, so for now we just report the exception type.
-	void NMI_Handler        () { reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::NMI); }
-	void UsageFault_Handler () { reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::usageFault); }
+	void NMI_Handler        () noexcept { reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::NMI); }
+	void UsageFault_Handler () noexcept { reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::usageFault); }
 
-	void DebugMon_Handler   () __attribute__ ((noreturn,alias("OtherFault_Handler")));
+	void DebugMon_Handler   () noexcept __attribute__ ((noreturn,alias("OtherFault_Handler")));
 
 	// FreeRTOS hooks that we need to provide
-	[[noreturn]] void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName)
+	[[noreturn]] void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName) noexcept
 	{
 		reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::stackOverflow, pulFaultStackAddress);
 	}
 
-	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) __attribute((naked, noreturn));
-	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName)
+	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) noexcept __attribute((naked, noreturn));
+	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) noexcept
 	{
 		// r0 = pxTask, r1 = pxTaskName
 		__asm volatile
@@ -515,13 +474,13 @@ extern "C"
 		);
 	}
 
-	[[noreturn]] void assertCalledDispatcher(const uint32_t *pulFaultStackAddress)
+	[[noreturn]] void assertCalledDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 	{
 	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress);
 	}
 
-	void vAssertCalled(uint32_t line, const char *file) __attribute((naked, noreturn));
-	void vAssertCalled(uint32_t line, const char *file)
+	void vAssertCalled(uint32_t line, const char *file) noexcept __attribute((naked, noreturn));
+	void vAssertCalled(uint32_t line, const char *file) noexcept
 	{
 #if false
 		debugPrintf("ASSERTION FAILED IN %s on LINE %d\n", file, line);
@@ -538,13 +497,13 @@ extern "C"
 	}
 
 #ifdef __LPC17xx__
-	void applicationMallocFailedCalledDispatcher(const uint32_t *pulFaultStackAddress)
+	void applicationMallocFailedCalledDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 	{
 		reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress);
 	}
 
-	void vApplicationMallocFailedHook( void ) __attribute((naked));
-	void vApplicationMallocFailedHook( void )
+	void vApplicationMallocFailedHook() noexcept __attribute((naked));
+	void vApplicationMallocFailedHook() noexcept
 	{
 		 __asm volatile
 		(
@@ -562,7 +521,7 @@ extern "C"
 namespace std
 {
 	// We need to define this function in order to use lambda functions with captures
-	void __throw_bad_function_call() { vAssertCalled(__LINE__, __FILE__); }
+	void __throw_bad_function_call() noexcept { vAssertCalled(__LINE__, __FILE__); }
 }
 
 // End

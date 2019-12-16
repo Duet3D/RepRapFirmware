@@ -10,58 +10,92 @@
 
 #include "RepRapFirmware.h"
 
-namespace StepTimer
+// Class to implement a software timer with a few microseconds resolution
+class StepTimer
 {
+public:
+	// The callback function returns true if it wants another callback, after setting the requested time via the second parameter
+	typedef uint32_t Ticks;
+	typedef bool (*TimerCallbackFunction)(CallbackParameter, Ticks&);
+
+	StepTimer() noexcept;
+
+	// Set up the callback function and parameter
+	void SetCallback(TimerCallbackFunction cb, CallbackParameter param) noexcept;
+
+	// Schedule a callback at a particular tick count, returning true if it was not scheduled because it is already due or imminent
+	bool ScheduleCallback(Ticks when) noexcept;
+
+	// As ScheduleCallback but base priority >= NvicPriorityStep when called
+	bool ScheduleCallbackFromIsr(Ticks when) noexcept;
+
+	// Cancel any scheduled callbacks
+	void CancelCallback() noexcept;
+
+	// As CancelCallback but base priority >= NvicPriorityStep when called
+	void CancelCallbackFromIsr() noexcept;
+
+	// Initialise the timer system
+	static void Init() noexcept;
+
+	// Disable the timer interrupt. Called when we shut down the system.
+	static void DisableTimerInterrupt() noexcept;
+
+	// Get the current tick count
+	static Ticks GetTimerTicks() noexcept __attribute__ ((hot));
+
+	// Get the current tick count when we only need a 16-bit value. Faster than GetTimerTicks() on the SAM4S and SAME70.
+	static uint16_t GetTimerTicks16() noexcept;
+
+	// Get the tick rate (can also access it directly as StepClockRate)
+	static uint32_t GetTickRate() noexcept { return StepClockRate; }
+
+	// ISR called from StepTimer. May sometimes get called prematurely.
+	static void Interrupt() noexcept;
+
 #if SAME70
-	constexpr uint32_t StepClockRate = 48000000/64;						// 750kHz
+	static constexpr uint32_t StepClockRate = 48000000/64;						// 750kHz
 #else
-	constexpr uint32_t StepClockRate = VARIANT_MCK/128;					// just under 1MHz
-#endif
-	constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
-	constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
-	constexpr uint32_t MinInterruptInterval = 6;						// 12 clocks is about 6us
-
-	void Init();
-
-	// Function GetInterruptClocksInterruptsDisabled() is quite long for SAM4S and SAME70 processors, so it is moved to StepTimer.cpp and no longer inlined
-	// On other processors we have had trouble with the compiler moving instructions around too much when it is inlined, so we don't inline it any more.
-	uint32_t GetInterruptClocksInterruptsDisabled() __attribute__ ((hot));	// Get the interrupt clock count, when we know already that interrupts are disabled or base priority >= step interrupt priority
-
-#if SAM4S || SAME70		// if the TCs are 16-bit
-
-	// Get the interrupt clock count
-	static inline uint32_t GetInterruptClocks()
-	{
-		const uint32_t baseprio = ChangeBasePriority(NvicPriorityStep);	// ensure step interrupts are disabled
-		const uint32_t rslt = GetInterruptClocksInterruptsDisabled();
-		RestoreBasePriority(baseprio);									// restore interrupt enable state
-		return rslt;
-	}
-
-#else					// TCs are 32-bit
-
-	// Get the interrupt clock count
-	static inline uint32_t GetInterruptClocks()
-	{
-		return GetInterruptClocksInterruptsDisabled();					// no need to disable interrupts on these processors
-	}
-
+	static constexpr uint32_t StepClockRate = VARIANT_MCK/128;					// just under 1MHz
 #endif
 
-	// Get the interrupt clock count when we only care about the lowest 16 bits. More efficient than calling GetInterruptClocks on platforms with 16-bit timers.
-	static inline uint16_t GetInterruptClocks16()
-	{
+	static constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
+	static constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
+	static constexpr uint32_t MinInterruptInterval = 6;							// about 6us
+
+private:
+	static bool ScheduleTimerInterrupt(uint32_t tim) noexcept;					// Schedule an interrupt at the specified clock count, or return true if it has passed already
+
+	StepTimer *next;
+	Ticks whenDue;
+	TimerCallbackFunction callback;
+	CallbackParameter cbParam;
+	volatile bool active;
+
+	static StepTimer * volatile pendingList;			// list of pending callbacks, soonest first
+};
+
+// Function GetTimerTicks() is quite long for SAM4S and SAME70 processors, so it is moved to StepTimer.cpp and no longer inlined
+#if !(SAM4S || SAME70)
+
+inline StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
+{
+# ifdef __LPC17xx__
+	return STEP_TC->TC;
+# else
+	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
+# endif
+}
+
+#endif
+
+inline uint16_t StepTimer::GetTimerTicks16() noexcept
+{
 #ifdef __LPC17xx__
-        return (uint16_t)STEP_TC->TC;
+	return (uint16_t)STEP_TC->TC;
 #else
-        return (uint16_t)STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
+	return (uint16_t)STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
 #endif
-	}
-
-	bool ScheduleStepInterrupt(uint32_t tim) __attribute__ ((hot));		// Schedule an interrupt at the specified clock count, or return true if it has passed already
-	void DisableStepInterrupt();										// Make sure we get no step interrupts
-	bool ScheduleSoftTimerInterrupt(uint32_t tim);						// Schedule an interrupt at the specified clock count, or return true if it has passed already
-	void DisableSoftTimerInterrupt();									// Make sure we get no software timer interrupts
 }
 
 #endif /* SRC_MOVEMENT_STEPTIMER_H_ */

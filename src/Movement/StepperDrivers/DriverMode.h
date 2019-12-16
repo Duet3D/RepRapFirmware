@@ -17,9 +17,9 @@ enum class DriverMode : unsigned int
 	unknown					// must be last!
 };
 
-const char* TranslateDriverMode(unsigned int mode);
+const char* TranslateDriverMode(unsigned int mode) noexcept;
 
-inline const char* TranslateDriverMode(DriverMode mode)
+inline const char* TranslateDriverMode(DriverMode mode) noexcept
 {
 	return TranslateDriverMode((unsigned int)mode);
 }

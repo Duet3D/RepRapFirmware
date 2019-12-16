@@ -3,39 +3,29 @@
  *
  * \brief GMAC (Gigabit MAC) driver for lwIP.
  *
- * Copyright (c) 2015-2016 Atmel Corporation. All rights reserved.
+ * Copyright (c) 2015-2018 Microchip Technology Inc. and its subsidiaries.
  *
  * \asf_license_start
  *
  * \page License
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ * Subject to your compliance with these terms, you may use Microchip
+ * software and any derivatives exclusively with Microchip products.
+ * It is your responsibility to comply with third party license terms applicable
+ * to your use of third party software (including open source software) that
+ * may accompany Microchip software.
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. The name of Atmel may not be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * 4. This software may only be redistributed and used in connection with an
- *    Atmel microcontroller product.
- *
- * THIS SOFTWARE IS PROVIDED BY ATMEL "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT ARE
- * EXPRESSLY AND SPECIFICALLY DISCLAIMED. IN NO EVENT SHALL ATMEL BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
- * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS SUPPLIED BY MICROCHIP "AS IS". NO WARRANTIES,
+ * WHETHER EXPRESS, IMPLIED OR STATUTORY, APPLY TO THIS SOFTWARE,
+ * INCLUDING ANY IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY,
+ * AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT WILL MICROCHIP BE
+ * LIABLE FOR ANY INDIRECT, SPECIAL, PUNITIVE, INCIDENTAL OR CONSEQUENTIAL
+ * LOSS, DAMAGE, COST OR EXPENSE OF ANY KIND WHATSOEVER RELATED TO THE
+ * SOFTWARE, HOWEVER CAUSED, EVEN IF MICROCHIP HAS BEEN ADVISED OF THE
+ * POSSIBILITY OR THE DAMAGES ARE FORESEEABLE.  TO THE FULLEST EXTENT
+ * ALLOWED BY LAW, MICROCHIP'S TOTAL LIABILITY ON ALL CLAIMS IN ANY WAY
+ * RELATED TO THIS SOFTWARE WILL NOT EXCEED THE AMOUNT OF FEES, IF ANY,
+ * THAT YOU HAVE PAID DIRECTLY TO MICROCHIP FOR THIS SOFTWARE.
  *
  * \asf_license_stop
  *
@@ -48,17 +38,19 @@
 
 extern "C" {
 #include "ethernet_phy.h"
+#include "lwip/opt.h"
+#include "lwip/sys.h"
 #include "lwip/def.h"
 #include "lwip/mem.h"
-#include "lwip/opt.h"
 #include "lwip/pbuf.h"
-#include "lwip/snmp.h"
 #include "lwip/stats.h"
-#include "lwip/sys.h"
+#include "lwip/snmp.h"
 #include "netif/etharp.h"
 }
 
 #define __nocache	__attribute__((section(".ram_nocache")))
+
+extern void delay(uint32_t ms);
 
 #if LWIP_GMAC_TASK
 
@@ -66,10 +58,19 @@ extern "C" {
 #include <RTOSIface/RTOSIface.h>
 #include <TaskPriorities.h>
 
-constexpr size_t EthernetTaskStackWords = 200;
+extern Mutex lwipMutex;
+
+constexpr size_t EthernetTaskStackWords = 250;
 static Task<EthernetTaskStackWords> ethernetTask;
 
 #endif
+
+// Error counters
+unsigned int rxErrorCount;
+unsigned int rxBuffersNotFullyPopulatedCount;
+unsigned int txErrorCount;
+unsigned int txBufferNotFreeCount;
+unsigned int txBufferTooShortCount;
 
 /** Network interface identifier. */
 #define IFNAME0               'e'
@@ -123,9 +124,9 @@ struct gmac_device {
 	 * of the address shall be set to 0.
 	 */
 	/** Pointer to Rx descriptor list (must be 8-byte aligned). */
-	gmac_rx_descriptor_t rx_desc[GMAC_RX_BUFFERS];
+	volatile gmac_rx_descriptor_t rx_desc[GMAC_RX_BUFFERS];
 	/** Pointer to Tx descriptor list (must be 8-byte aligned). */
-	gmac_tx_descriptor_t tx_desc[GMAC_TX_BUFFERS];
+	volatile gmac_tx_descriptor_t tx_desc[GMAC_TX_BUFFERS];
 	/** RX pbuf pointer list. */
 	struct pbuf *rx_pbuf[GMAC_RX_BUFFERS];
 	/** TX buffers. */
@@ -158,6 +159,8 @@ static uint8_t gs_uc_mac_address[] =
 	ETHERNET_CONF_ETHADDR5
 };
 
+static bool rxPbufsFullyPopulated = false;
+
 #if LWIP_STATS
 /** Used to compute lwIP bandwidth. */
 uint32_t lwip_tx_count = 0;
@@ -166,12 +169,14 @@ uint32_t lwip_tx_rate = 0;
 uint32_t lwip_rx_rate = 0;
 #endif
 
-static gmac_dev_tx_cb_t gmac_rx_cb = NULL;
+#if !LWIP_GMAC_TASK
+static gmac_dev_tx_cb_t gmac_rx_cb = nullptr;
+#endif
 
 /**
  * \brief GMAC interrupt handler.
  */
-void GMAC_Handler(void)
+extern "C" void GMAC_Handler() noexcept
 {
 #if LWIP_GMAC_TASK
 	/* Get interrupt status. */
@@ -190,7 +195,7 @@ void GMAC_Handler(void)
 	ul_isr = gmac_get_interrupt_status(GMAC);
 
 	/* RX interrupts. */
-	if ((ul_isr & GMAC_INT_GROUP) != 0 && gmac_rx_cb != NULL)
+	if ((ul_isr & GMAC_INT_GROUP) != 0 && gmac_rx_cb != nullptr)
 	{
 		gmac_rx_cb(ul_isr);
 	}
@@ -207,21 +212,25 @@ void GMAC_Handler(void)
  * (since the lsb are used as status bits by GMAC).
  *
  * \param p_gmac_dev Pointer to driver data structure.
+ * \param startAt The index to start populating from
  */
-static void gmac_rx_populate_queue(struct gmac_device *p_gmac_dev)
+static void gmac_rx_populate_queue(struct gmac_device *p_gmac_dev, uint32_t startAt) noexcept
 {
-	uint32_t ul_index = 0;
-	struct pbuf *p = 0;
+	uint32_t ul_index = startAt;
 
 	/* Set up the RX descriptors. */
-	for (ul_index = 0; ul_index < GMAC_RX_BUFFERS; ul_index++) {
-		if (p_gmac_dev->rx_pbuf[ul_index] == 0) {
-
+	do
+	{
+		if (p_gmac_dev->rx_pbuf[ul_index] == nullptr)
+		{
 			/* Allocate a new pbuf with the maximum size. */
-			p = pbuf_alloc(PBUF_RAW, (u16_t) GMAC_FRAME_LENTGH_MAX, PBUF_POOL);
-			if (p == NULL) {
+			pbuf * const p = pbuf_alloc(PBUF_RAW, (u16_t) GMAC_FRAME_LENTGH_MAX, PBUF_POOL);
+			if (p == nullptr)
+			{
 				LWIP_DEBUGF(NETIF_DEBUG, ("gmac_rx_populate_queue: pbuf allocation failure\n"));
-				break;
+				rxPbufsFullyPopulated = false;
+				++rxBuffersNotFullyPopulatedCount;
+				return;
 			}
 
 			/* Make sure lwIP is well configured so one pbuf can contain the maximum packet size. */
@@ -231,22 +240,35 @@ static void gmac_rx_populate_queue(struct gmac_device *p_gmac_dev)
 			LWIP_ASSERT("gmac_rx_populate_queue: unaligned p->payload buffer address",
 					(((uint32_t)p->payload & 0xFFFFFFFC) == (uint32_t)p->payload));
 
-			if (ul_index == GMAC_RX_BUFFERS - 1)
-				p_gmac_dev->rx_desc[ul_index].addr.val = (u32_t) p->payload | GMAC_RXD_WRAP;
-			else
-				p_gmac_dev->rx_desc[ul_index].addr.val = (u32_t) p->payload;
-
+			// dc42 do this first to avoid a race condition with DMA, because writing addr.val transfers ownership back to the GMAC, so it should be the last thing we do
 			/* Reset status value. */
 			p_gmac_dev->rx_desc[ul_index].status.val = 0;
 
 			/* Save pbuf pointer to be sent to lwIP upper layer. */
 			p_gmac_dev->rx_pbuf[ul_index] = p;
 
+			if (ul_index == GMAC_RX_BUFFERS - 1)
+			{
+				p_gmac_dev->rx_desc[ul_index].addr.val = (u32_t) p->payload | GMAC_RXD_WRAP;
+			}
+			else
+			{
+				p_gmac_dev->rx_desc[ul_index].addr.val = (u32_t) p->payload;
+			}
+
 			LWIP_DEBUGF(NETIF_DEBUG,
 					("gmac_rx_populate_queue: new pbuf allocated: %p [idx=%u]\n",
 					p, ul_index));
 		}
-	}
+
+		++ul_index;
+		if (ul_index == GMAC_RX_BUFFERS)
+		{
+			ul_index = 0;
+		}
+	} while (ul_index != startAt);
+
+	rxPbufsFullyPopulated = true;
 }
 
 /**
@@ -256,7 +278,7 @@ static void gmac_rx_populate_queue(struct gmac_device *p_gmac_dev)
  *
  * \param ps_gmac_dev Pointer to driver data structure.
  */
-static void gmac_rx_init(struct gmac_device *ps_gmac_dev)
+static void gmac_rx_init(struct gmac_device *ps_gmac_dev) noexcept
 {
 	uint32_t ul_index = 0;
 
@@ -264,15 +286,16 @@ static void gmac_rx_init(struct gmac_device *ps_gmac_dev)
 	ps_gmac_dev->us_rx_idx = 0;
 
 	/* Set up the RX descriptors. */
-	for (ul_index = 0; ul_index < GMAC_RX_BUFFERS; ul_index++) {
-		ps_gmac_dev->rx_pbuf[ul_index] = 0;
-		ps_gmac_dev->rx_desc[ul_index].addr.val = 0;
+	for (ul_index = 0; ul_index < GMAC_RX_BUFFERS; ul_index++)
+	{
+		ps_gmac_dev->rx_pbuf[ul_index] = nullptr;
+		ps_gmac_dev->rx_desc[ul_index].addr.val = GMAC_RXD_OWNERSHIP;		// mark it as not free for hardware to use, until we have allocated the pbuf
 		ps_gmac_dev->rx_desc[ul_index].status.val = 0;
 	}
 	ps_gmac_dev->rx_desc[ul_index - 1].addr.val |= GMAC_RXD_WRAP;
 
 	/* Build RX buffer and descriptors. */
-	gmac_rx_populate_queue(ps_gmac_dev);
+	gmac_rx_populate_queue(ps_gmac_dev, 0);
 
 	/* Set receive buffer queue base address pointer. */
 	gmac_set_rx_queue(GMAC, (uint32_t) &ps_gmac_dev->rx_desc[0]);
@@ -285,7 +308,7 @@ static void gmac_rx_init(struct gmac_device *ps_gmac_dev)
  *
  * \param ps_gmac_dev Pointer to driver data structure.
  */
-static void gmac_tx_init(struct gmac_device *ps_gmac_dev)
+static void gmac_tx_init(struct gmac_device *ps_gmac_dev) noexcept
 {
 	uint32_t ul_index;
 
@@ -293,8 +316,9 @@ static void gmac_tx_init(struct gmac_device *ps_gmac_dev)
 	ps_gmac_dev->us_tx_idx = 0;
 
 	/* Set up the TX descriptors. */
-	for (ul_index = 0; ul_index < GMAC_TX_BUFFERS; ul_index++) {
-		ps_gmac_dev->tx_desc[ul_index].addr = (uint32_t)&ps_gmac_dev->tx_buf[ul_index][0];
+	for (ul_index = 0; ul_index < GMAC_TX_BUFFERS; ul_index++)
+	{
+		ps_gmac_dev->tx_desc[ul_index].addr = reinterpret_cast<uint32_t>(&ps_gmac_dev->tx_buf[ul_index][0]);
 		ps_gmac_dev->tx_desc[ul_index].status.val = GMAC_TXD_USED | GMAC_TXD_LAST;
 	}
 	ps_gmac_dev->tx_desc[ul_index - 1].status.val |= GMAC_TXD_WRAP;
@@ -310,7 +334,7 @@ static void gmac_tx_init(struct gmac_device *ps_gmac_dev)
  *
  * \param netif the lwIP network interface structure for this ethernetif.
  */
-static void gmac_low_level_init(struct netif *netif)
+static void gmac_low_level_init(struct netif *netif) noexcept
 {
 #if 0			// chrishamm
 	volatile uint32_t ul_delay;
@@ -378,14 +402,14 @@ static void gmac_low_level_init(struct netif *netif)
  * \return ERR_OK if the packet could be sent.
  * an err_t value if the packet couldn't be sent.
  */
-static err_t gmac_low_level_output(struct netif *netif, struct pbuf *p)
+static err_t gmac_low_level_output(netif *p_netif, struct pbuf *p) noexcept
 {
-	struct gmac_device *ps_gmac_dev = static_cast<gmac_device *>(netif->state);
-	struct pbuf *q = NULL;
-	uint8_t *buffer = 0;
+	gmac_device *const ps_gmac_dev = static_cast<gmac_device *>(p_netif->state);
 
 	/* Handle GMAC underrun or AHB errors. */
-	if (gmac_get_tx_status(GMAC) & GMAC_TX_ERRORS) {
+	if (gmac_get_tx_status(GMAC) & GMAC_TX_ERRORS)
+	{
+		++txErrorCount;
 		LWIP_DEBUGF(NETIF_DEBUG, ("gmac_low_level_output: GMAC ERROR, reinit TX...\n"));
 
 		gmac_enable_transmit(GMAC, false);
@@ -402,20 +426,36 @@ static err_t gmac_low_level_output(struct netif *netif, struct pbuf *p)
 		gmac_enable_transmit(GMAC, true);
 	}
 
-	//TODO check buffer is free!!!
-	//TODO what if message is too long?
-
-	buffer = (uint8_t*)ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx].addr;
-
-	/* Copy pbuf chain into TX buffer. */
-	for (q = p; q != NULL; q = q->next) {
-		memcpy(buffer, q->payload, q->len);
-		buffer += q->len;
+	while ((ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx].status.val & GMAC_TXD_USED) == 0)
+	{
+		++txBufferNotFreeCount;
+		delay(1);
 	}
 
-	/* Set len and mark the buffer to be sent by GMAC. */
-	ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx].status.bm.b_len = p->tot_len;
-	ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx].status.bm.b_used = 0;
+	// Copy pbuf chain into TX buffer
+	{
+		uint8_t *buffer = reinterpret_cast<uint8_t*>(ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx].addr);
+		size_t totalLength = 0;
+		for (const pbuf *q = p; q != NULL; q = q->next)
+		{
+			totalLength += q->len;
+			if (totalLength > GMAC_TX_UNITSIZE)
+			{
+				++txBufferTooShortCount;
+				return ERR_BUF;
+			}
+			memcpy(buffer, q->payload, q->len);
+			buffer += q->len;
+		}
+	}
+
+	// Set length and mark the buffer to be sent by GMAC
+	uint32_t txStat = p->tot_len | GMAC_TXD_LAST;
+	if (ps_gmac_dev->us_tx_idx == GMAC_TX_BUFFERS - 1)
+	{
+		txStat |= GMAC_TXD_WRAP;
+	}
+	ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx].status.val = txStat;
 
 	LWIP_DEBUGF(NETIF_DEBUG,
 			("gmac_low_level_output: DMA buffer sent, size=%d [idx=%u]\n",
@@ -442,50 +482,56 @@ static err_t gmac_low_level_output(struct netif *netif, struct pbuf *p)
  * \return a pbuf filled with the received packet (including MAC header).
  * 0 on memory error.
  */
-static struct pbuf *gmac_low_level_input(struct netif *netif)
+static pbuf *gmac_low_level_input(struct netif *netif) noexcept
 {
-	struct gmac_device *ps_gmac_dev = static_cast<gmac_device *>(netif->state);
-	struct pbuf *p = 0;
-	uint32_t length = 0;
-	uint32_t ul_index = 0;
-	gmac_rx_descriptor_t *p_rx = &ps_gmac_dev->rx_desc[ps_gmac_dev->us_rx_idx];
+	gmac_device *ps_gmac_dev = static_cast<gmac_device *>(netif->state);
 
-	/* Handle GMAC overrun or AHB errors. */
-	if (gmac_get_rx_status(GMAC) & GMAC_RX_ERRORS) {
-
+	if (gmac_get_rx_status(GMAC) & GMAC_RX_ERRORS)
+	{
+		// Handle GMAC overrun or AHB errors
+		++rxErrorCount;
 		gmac_enable_receive(GMAC, false);
 
 		LINK_STATS_INC(link.err);
 		LINK_STATS_INC(link.drop);
 
 		/* Free all RX pbufs. */
-		for (ul_index = 0; ul_index < GMAC_RX_BUFFERS; ul_index++) {
-			if (ps_gmac_dev->rx_pbuf[ul_index] != 0) {
+		for (uint32_t ul_index = 0; ul_index < GMAC_RX_BUFFERS; ul_index++)
+		{
+			if (ps_gmac_dev->rx_pbuf[ul_index] != 0)
+			{
 				pbuf_free(ps_gmac_dev->rx_pbuf[ul_index]);
-				ps_gmac_dev->rx_pbuf[ul_index] = 0;
+				ps_gmac_dev->rx_pbuf[ul_index] = nullptr;
 			}
 		}
 
-		/* Reinit TX descriptors. */
+		/* Reinit RX descriptors. */
 		gmac_rx_init(ps_gmac_dev);
 
 		/* Clear error status. */
 		gmac_clear_rx_status(GMAC, GMAC_RX_ERRORS);
 
 		gmac_enable_receive(GMAC, true);
+		return nullptr;
 	}
 
-	/* Check that a packet has been received and processed by GMAC. */
-	if ((p_rx->addr.val & GMAC_RXD_OWNERSHIP) == GMAC_RXD_OWNERSHIP) {
+	volatile gmac_rx_descriptor_t * const p_rx = &ps_gmac_dev->rx_desc[ps_gmac_dev->us_rx_idx];
+	pbuf * const p = ((p_rx->addr.val & GMAC_RXD_OWNERSHIP) == GMAC_RXD_OWNERSHIP)
+						? ps_gmac_dev->rx_pbuf[ps_gmac_dev->us_rx_idx]
+							: nullptr;
+
+	/* Check if a packet has been received and processed by GMAC. */
+	if (p != nullptr)
+	{
 		/* Packet is a SOF since packet size is set to maximum. */
-		length = p_rx->status.val & GMAC_RXD_LEN_MASK;
+		const uint32_t length = p_rx->status.val & GMAC_RXD_LEN_MASK;
 
 		/* Fetch pre-allocated pbuf. */
-		p = ps_gmac_dev->rx_pbuf[ps_gmac_dev->us_rx_idx];
 		p->len = length;
 
-		/* Remove this pbuf from its desriptor. */
-		ps_gmac_dev->rx_pbuf[ps_gmac_dev->us_rx_idx] = 0;
+		/* Remove this pbuf from its descriptor. */
+		ps_gmac_dev->rx_pbuf[ps_gmac_dev->us_rx_idx] = nullptr;
+		rxPbufsFullyPopulated = false;
 
 		LWIP_DEBUGF(NETIF_DEBUG,
 				("gmac_low_level_input: DMA buffer %p received, size=%u [idx=%u]\n",
@@ -495,17 +541,17 @@ static struct pbuf *gmac_low_level_input(struct netif *netif)
 		p->tot_len = length;
 		LINK_STATS_INC(link.recv);
 
-		/* Fill empty descriptors with new pbufs. */
-		gmac_rx_populate_queue(ps_gmac_dev);
-
-		/* Mark the descriptor ready for transfer. */
-		p_rx->addr.val &= ~(GMAC_RXD_OWNERSHIP);
-
 		ps_gmac_dev->us_rx_idx = (ps_gmac_dev->us_rx_idx + 1) % GMAC_RX_BUFFERS;
 
 #if LWIP_STATS
 		lwip_rx_count += length;
 #endif
+	}
+
+	/* Fill empty descriptors with new pbufs. */
+	if (!rxPbufsFullyPopulated)
+	{
+		gmac_rx_populate_queue(ps_gmac_dev, ps_gmac_dev->us_rx_idx);
 	}
 
 	return p;
@@ -519,16 +565,21 @@ static struct pbuf *gmac_low_level_input(struct netif *netif)
  *
  * \param pvParameters A pointer to the gmac_device instance.
  */
-extern "C" void gmac_task(void *pvParameters)
+extern "C" [[noreturn]] void gmac_task(void *pvParameters) noexcept
 {
 	gmac_device * const ps_gmac_dev = static_cast<gmac_device*>(pvParameters);
+	netif * const p_netif = ps_gmac_dev->netif;
 
-	while (1) {
-		/* Process the incoming packets */
-		while (ethernetif_input(ps_gmac_dev->netif)) { }
+	while (1)
+	{
+		// Process the incoming packets
+		{
+			MutexLocker lock(lwipMutex);
+			while (ethernetif_input(p_netif)) { }
+		}
 
-		/* Wait for the RX notification from the ISR */
-		TaskBase::Take();
+		// Wait for the RX notification from the ISR
+		TaskBase::Take((rxPbufsFullyPopulated) ? 1000 : 20);
 	}
 }
 #endif
@@ -542,14 +593,14 @@ extern "C" void gmac_task(void *pvParameters)
  *
  * \param netif the lwIP network interface structure for this ethernetif.
  */
-bool ethernetif_input(struct netif *netif)
+bool ethernetif_input(struct netif *netif) noexcept
 {
 	struct eth_hdr *ethhdr;
 	struct pbuf *p;
 
 	/* Move received packet into a new pbuf. */
 	p = gmac_low_level_input(netif);
-	if (p == NULL)
+	if (p == nullptr)
 	{
 		return false;
 	}
@@ -591,7 +642,7 @@ bool ethernetif_input(struct netif *netif)
  * ERR_MEM if private data couldn't be allocated.
  * any other err_t on error.
  */
-err_t ethernetif_init(struct netif *netif)
+err_t ethernetif_init(struct netif *netif) noexcept
 {
 	LWIP_ASSERT("netif != NULL", (netif != NULL));
 
@@ -632,9 +683,7 @@ err_t ethernetif_init(struct netif *netif)
 	return ERR_OK;
 }
 
-#if 1	// chrishamm
-
-void ethernetif_hardware_init(void)
+void ethernetif_hardware_init() noexcept
 {
 	/* Enable GMAC clock. */
 	pmc_enable_periph_clk(ID_GMAC);
@@ -718,7 +767,7 @@ void ethernetif_hardware_init(void)
 	NVIC_EnableIRQ(GMAC_IRQn);
 }
 
-bool ethernetif_establish_link(void)
+bool ethernetif_establish_link() noexcept
 {
 	/* Auto Negotiate, work in RMII mode. */
 	uint8_t result = ethernet_phy_auto_negotiate(GMAC, BOARD_GMAC_PHY_ADDR);
@@ -741,7 +790,7 @@ bool ethernetif_establish_link(void)
 }
 
 // Ask the PHY if the link is still up
-bool ethernetif_link_established(void)
+bool ethernetif_link_established() noexcept
 {
 	gmac_enable_management(GMAC, true);
 
@@ -760,12 +809,14 @@ bool ethernetif_link_established(void)
 	return true;
 }
 
-void ethernetif_set_rx_callback(gmac_dev_tx_cb_t callback)
+#if !LWIP_GMAC_TASK
+void ethernetif_set_rx_callback(gmac_dev_tx_cb_t callback) noexcept
 {
 	gmac_rx_cb = callback;
 }
+#endif
 
-void ethernetif_set_mac_address(const uint8_t macAddress[])
+void ethernetif_set_mac_address(const uint8_t macAddress[]) noexcept
 {
 	// This function must be called once before low_level_init(), because that is where the
 	// MAC address of the netif is assigned
@@ -775,11 +826,20 @@ void ethernetif_set_mac_address(const uint8_t macAddress[])
 	}
 }
 
-extern "C" u32_t millis();
+// This is called when we shut down
+void ethernetif_terminate() noexcept
+{
+	NVIC_DisableIRQ(GMAC_IRQn);
+#if LWIP_GMAC_TASK
+	ethernetTask.TerminateAndUnlink();
+#endif
+}
 
-u32_t sys_now(void)
+extern "C" u32_t millis() noexcept;
+
+extern "C" u32_t sys_now() noexcept
 {
 	return millis();
 }
 
-#endif
+// End

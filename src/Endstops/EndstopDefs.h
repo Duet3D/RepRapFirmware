@@ -26,7 +26,7 @@ enum class EndstopHitAction : uint8_t
 // Struct to return info about what endstop has been triggered and what to do about it
 struct EndstopHitDetails
 {
-	EndstopHitDetails() : action((uint32_t)EndstopHitAction::none), internalUse(0), axis(0), setAxisLow(false), setAxisHigh(false), isZProbe(false)
+	EndstopHitDetails() : action((uint32_t)EndstopHitAction::none), internalUse(0), axis(NO_AXIS), setAxisLow(false), setAxisHigh(false), isZProbe(false)
 	{
 		driver.Clear();
 	}
@@ -53,10 +53,10 @@ enum class EndStopPosition : unsigned int
 };
 
 // Type of an endstop input - values must tally with the M574 command S parameter
-enum class EndStopInputType : unsigned int
+enum class EndStopType : unsigned int
 {
-	activeLow = 0,
-	activeHigh = 1,
+	unused_wasActiveLow = 0,
+	inputPin = 1,
 	zProbeAsEndstop = 2,
 	motorStallAny = 3,
 	motorStallIndividual = 4,

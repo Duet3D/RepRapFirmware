@@ -372,6 +372,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 			buf->references = 1;					// assume it's only used once by default
 			buf->isReferenced = false;
 			buf->hadOverflow = false;
+			buf->whenQueued = millis();				// use the time of allocation as the default when-used time
 
 			return true;
 		}
@@ -473,23 +474,27 @@ bool OutputBuffer::WriteToFile(FileData& f) const
 //*************************************************************************************************
 // OutputStack class implementation
 
-// Push an OutputBuffer chain to the stack
-void OutputStack::Push(OutputBuffer *buffer, MessageType type) volatile
+// Push an OutputBuffer chain. Return true if successful, else release the buffer and return false.
+bool OutputStack::Push(OutputBuffer *buffer, MessageType type) volatile
 {
 	{
 		TaskCriticalSectionLocker lock;
 
 		if (count < OUTPUT_STACK_DEPTH)
 		{
-			buffer->whenQueued = millis();
+			if (buffer != nullptr)
+			{
+				buffer->whenQueued = millis();
+			}
 			items[count] = buffer;
 			types[count] = type;
 			count++;
-			return;
+			return true;
 		}
 	}
 	OutputBuffer::ReleaseAll(buffer);
 	reprap.GetPlatform().LogError(ErrorCode::OutputStackOverflow);
+	return false;
 }
 
 // Pop an OutputBuffer chain or return nullptr if none is available
@@ -563,21 +568,22 @@ void OutputStack::ReleaseFirstItem() volatile
 	}
 }
 
-// Release the first item on the top of the stack if it is too old. Return true if the item was timed out.
+// Release the first item on the top of the stack if it is too old. Return true if the item was timed out or was null.
 bool OutputStack::ApplyTimeout(uint32_t ticks) volatile
 {
 	bool ret = false;
 	if (count != 0)
 	{
-		OutputBuffer * const buf = items[0];					// capture volatile variable
-		if (buf != nullptr && millis() - buf->whenQueued >= ticks)
+		OutputBuffer * buf = items[0];							// capture volatile variable
+		while (buf != nullptr && millis() - buf->whenQueued >= ticks)
 		{
-			items[0] = OutputBuffer::Release(buf);
+			items[0] = buf = OutputBuffer::Release(buf);
 			ret = true;
 		}
 		if (items[0] == nullptr)
 		{
 			(void)Pop();
+			ret = true;
 		}
 	}
 	return ret;
@@ -603,7 +609,10 @@ size_t OutputStack::DataLength() const volatile
 	TaskCriticalSectionLocker lock;
 	for (size_t i = 0; i < count; i++)
 	{
-		totalLength += items[i]->Length();
+		if (items[i] != nullptr)
+		{
+			totalLength += items[i]->Length();
+		}
 	}
 
 	return totalLength;
@@ -613,7 +622,7 @@ size_t OutputStack::DataLength() const volatile
 // all OutputBuffers that can't be added are automatically released
 void OutputStack::Append(volatile OutputStack& stack) volatile
 {
-	for(size_t i = 0; i < stack.count; i++)
+	for (size_t i = 0; i < stack.count; i++)
 	{
 		if (count < OUTPUT_STACK_DEPTH)
 		{
@@ -633,16 +642,19 @@ void OutputStack::Append(volatile OutputStack& stack) volatile
 void OutputStack::IncreaseReferences(size_t num) volatile
 {
 	TaskCriticalSectionLocker lock;
-	for(size_t i = 0; i < count; i++)
+	for (size_t i = 0; i < count; i++)
 	{
-		items[i]->IncreaseReferences(num);
+		if (items[i] != nullptr)
+		{
+			items[i]->IncreaseReferences(num);
+		}
 	}
 }
 
 // Release all buffers and clean up
 void OutputStack::ReleaseAll() volatile
 {
-	for(size_t i = 0; i < count; i++)
+	for (size_t i = 0; i < count; i++)
 	{
 		OutputBuffer::ReleaseAll(items[i]);
 	}

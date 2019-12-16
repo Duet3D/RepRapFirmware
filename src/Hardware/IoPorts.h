@@ -14,10 +14,10 @@
 class IoPort
 {
 public:
-	IoPort();
-	bool SetMode(PinAccess access);
-	void Release();
-	void AppendDetails(const StringRef& str) const;
+	IoPort() noexcept;
+	bool SetMode(PinAccess access) noexcept;
+	void Release() noexcept;
+	void AppendDetails(const StringRef& str) const noexcept;
 
 	static size_t AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort * const ports[], const PinAccess access[]);
 	bool AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, PinAccess access);
@@ -25,42 +25,42 @@ public:
 	static size_t AssignPorts(const char *pinNames, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort * const ports[], const PinAccess access[]);
 	bool AssignPort(const char *pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access);
 
-	void AppendPinName(const StringRef& str) const;
-	bool IsValid() const { return logicalPin < NumNamedPins; }
-	bool GetInvert() const;
-	void SetInvert(bool pInvert);
-	void ToggleInvert(bool pInvert);
+	void AppendPinName(const StringRef& str) const noexcept;
+	bool IsValid() const noexcept { return logicalPin < NumNamedPins; }
+	bool GetInvert() const noexcept;
+	void SetInvert(bool pInvert) noexcept;
+	void ToggleInvert(bool pInvert) noexcept;
 
-	bool Read() const;
-	bool AttachInterrupt(StandardCallbackFunction callback, enum InterruptMode mode, CallbackParameter param) const;
-	void DetachInterrupt() const;
+	bool Read() const noexcept;
+	bool AttachInterrupt(StandardCallbackFunction callback, enum InterruptMode mode, CallbackParameter param) const noexcept;
+	void DetachInterrupt() const noexcept;
 
-	uint16_t ReadAnalog() const;
-	AnalogChannelNumber GetAnalogChannel() const { return PinToAdcChannel(PinTable[logicalPin].pin); }
+	uint16_t ReadAnalog() const noexcept;
+	AnalogChannelNumber GetAnalogChannel() const noexcept { return PinToAdcChannel(PinTable[logicalPin].pin); }
 
-	void WriteDigital(bool high) const;
+	void WriteDigital(bool high) const noexcept;
 
-	Pin GetPin() const;
+	Pin GetPin() const noexcept;
 
 	// Initialise static data
-	static void Init();
+	static void Init() noexcept;
 
-	static void AppendPinNames(const StringRef& str, size_t numPorts, IoPort * const ports[]);
+	static void AppendPinNames(const StringRef& str, size_t numPorts, IoPort * const ports[]) noexcept;
 
 #if SUPPORT_CAN_EXPANSION
-	static CanAddress RemoveBoardAddress(const StringRef& portName);
+	static CanAddress RemoveBoardAddress(const StringRef& portName) noexcept;
 #endif
 
 	// Low level port access
-	static void SetPinMode(Pin p, PinMode mode);
-	static bool ReadPin(Pin p);
-	static void WriteDigital(Pin p, bool high);
-	static void WriteAnalog(Pin p, float pwm, uint16_t frequency);
+	static void SetPinMode(Pin p, PinMode mode) noexcept;
+	static bool ReadPin(Pin p) noexcept;
+	static void WriteDigital(Pin p, bool high) noexcept;
+	static void WriteAnalog(Pin p, float pwm, uint16_t frequency) noexcept;
 
 protected:
 	bool Allocate(const char *pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access);
 
-	static const char* TranslatePinAccess(PinAccess access);
+	static const char* TranslatePinAccess(PinAccess access) noexcept;
 
 	LogicalPin logicalPin;									// the logical pin number
 	uint8_t hardwareInvert : 1,								// true if the hardware includes inversion
@@ -78,11 +78,11 @@ static_assert(sizeof(IoPort) == 2, "Unexpected size for class IoPort");		// try 
 class PwmPort : public IoPort
 {
 public:
-	PwmPort();
+	PwmPort() noexcept;
 
-	void AppendDetails(const StringRef& str) const;			// hides the one in IoPort
-	void SetFrequency(PwmFrequency freq) { frequency = freq; }
-	void WriteAnalog(float pwm) const;
+	void AppendDetails(const StringRef& str) const noexcept;			// hides the one in IoPort
+	void SetFrequency(PwmFrequency freq) noexcept { frequency = freq; }
+	void WriteAnalog(float pwm) const noexcept;
 
 private:
 	PwmFrequency frequency;

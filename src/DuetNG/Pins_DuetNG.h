@@ -4,11 +4,22 @@
 // Pins definition file for Duet 2 WiFi/Ethernet
 // This file is normally #included by #including RepRapFirmware.h, which includes this file
 
-#define FIRMWARE_NAME		"RepRapFirmware for Duet 2 WiFi/Ethernet"
-#define DEFAULT_BOARD_TYPE	 BoardType::DuetWiFi_10
-#define IAP_FIRMWARE_FILE	"Duet2CombinedFirmware.bin"
-#define IAP_UPDATE_FILE		"iap4e.bin"				// using the same IAP file for both Duet WiFi and Duet Ethernet
-#define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 2 WiFi/Ethernet"
+#define DEFAULT_BOARD_TYPE	 	BoardType::DuetWiFi_10
+#define IAP_FIRMWARE_FILE		"Duet2CombinedFirmware.bin"
+
+#define IAP_IN_RAM				1
+
+#if IAP_IN_RAM
+constexpr uint32_t IAP_IMAGE_START = 0x20010000;	// IAP is loaded into the second 64kb of RAM
+# define IAP_UPDATE_FILE		"Duet2CombinedIAP.bin"	// using the same IAP file for both Duet WiFi and Duet Ethernet
+#else
+constexpr uint32_t IAP_IMAGE_START = 0x00470000;
+constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;		// we allow a full 64K on the SAM4
+# define IAP_UPDATE_FILE		"iap4e.bin"			// using the same IAP file for both Duet WiFi and Duet Ethernet
+#endif
+
+#define WIFI_FIRMWARE_FILE		"DuetWiFiServer.bin"
 
 constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module (module 2 is now unused)
 
@@ -41,19 +52,23 @@ constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manua
 #define ALLOCATE_DEFAULT_PORTS	1
 
 #define USE_CACHE				1					// set nonzero to enable the cache
-
-#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
+#define USE_MPU					0					// set nonzero to enable the memory protection unit
 
 // The physical capabilities of the machine
 
 constexpr size_t NumDirectDrivers = 12;				// The maximum number of drives supported directly by the electronics
 constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 
-constexpr size_t MaxSensorsInSystem = 32;
-typedef uint32_t SensorsBitmap;
+constexpr size_t MaxSensors = 32;
 
 constexpr size_t MaxHeaters = 10;					// The maximum number of heaters in the machine
-constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
+constexpr size_t MaxExtraHeaterProtections = 8;		// The number of extra heater protection instances
+
+constexpr size_t MaxBedHeaters = 4;
+constexpr size_t MaxChamberHeaters = 4;
+constexpr int8_t DefaultBedHeater = 0;
+constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder heater, used only for the legacy status response
+
 constexpr size_t NumThermistorInputs = 8;
 constexpr size_t NumTmcDriversSenseChannels = 2;
 
@@ -71,6 +86,8 @@ constexpr size_t MaxAxesPlusExtruders = 12;
 
 constexpr size_t MaxHeatersPerTool = 8;
 constexpr size_t MaxExtrudersPerTool = 8;
+
+constexpr size_t MaxFans = 12;
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
@@ -159,9 +176,6 @@ constexpr Pin Z_PROBE_PIN = PortCPin(1);									// AFE1_AD4/PC1 Z probe analog 
 constexpr Pin Z_PROBE_MOD_PIN = PortCPin(2);
 constexpr Pin DiagPin = Z_PROBE_MOD_PIN;
 
-// Cooling fans
-constexpr size_t NumTotalFans = 12;
-
 // SD cards
 constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = { PortCPin(21), NoPin };
@@ -188,7 +202,7 @@ enum class PinCapability: uint8_t
 	ainrwpwm = 1|2|4|8
 };
 
-constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
+constexpr inline PinCapability operator|(PinCapability a, PinCapability b) noexcept
 {
 	return (PinCapability)((uint8_t)a | (uint8_t)b);
 }
@@ -197,9 +211,9 @@ constexpr inline PinCapability operator|(PinCapability a, PinCapability b)
 // This can be varied to suit the hardware. It is a struct not a class so that it can be direct initialised in read-only memory.
 struct PinEntry
 {
-	Pin GetPin() const { return pin; }
-	PinCapability GetCapability() const { return cap; }
-	const char* GetNames() const { return names; }
+	Pin GetPin() const noexcept { return pin; }
+	PinCapability GetCapability() const noexcept { return cap; }
+	const char* GetNames() const noexcept { return names; }
 
 	Pin pin;
 	PinCapability cap;
@@ -301,17 +315,13 @@ constexpr PinEntry PinTable[] =
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 
 // Function to look up a pin name pass back the corresponding index into the pin table
-bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
+bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
 // Default pin allocations
 constexpr const char *DefaultEndstopPinNames[] = { "xstop", "ystop", "zstop" };
 constexpr const char *DefaultZProbePinNames = "^zprobe.in+zprobe.mod";
 constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2" };
 constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
-
-// SAM4E Flash locations (may be expanded in the future)
-constexpr uint32_t IAP_FLASH_START = 0x00470000;
-constexpr uint32_t IAP_FLASH_END = 0x0047FFFF;		// we allow a full 64K on the SAM4
 
 // Duet pin numbers to control the WiFi interface on the Duet WiFi
 constexpr Pin EspResetPin = PortEPin(4);			// Low on this in holds the WiFi module in reset (ESP_RESET)
@@ -344,7 +354,7 @@ namespace StepPins
 	// All our step pins are on port D, so the bitmap is just the map of step bits in port D.
 
 	// Calculate the step bit for a driver. This doesn't need to be fast. It must return 0 if the driver is remote.
-	static inline uint32_t CalcDriverBitmap(size_t driver)
+	static inline uint32_t CalcDriverBitmap(size_t driver) noexcept
 	{
 		return (driver < NumDirectDrivers)
 				? g_APinDescription[STEP_PINS[driver]].ulPin
@@ -354,7 +364,7 @@ namespace StepPins
 	// Set the specified step pins high
 	// This needs to be as fast as possible, so we do a parallel write to the port(s).
 	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline void StepDriversHigh(uint32_t driverMap)
+	static inline void StepDriversHigh(uint32_t driverMap) noexcept
 	{
 		PIOD->PIO_ODSR = driverMap;				// on Duet WiFi/Ethernet all step pins are on port D
 	}
@@ -362,7 +372,7 @@ namespace StepPins
 	// Set all step pins low
 	// This needs to be as fast as possible, so we do a parallel write to the port(s).
 	// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
-	static inline void StepDriversLow()
+	static inline void StepDriversLow() noexcept
 	{
 		PIOD->PIO_ODSR = 0;						// on Duet WiFi/Ethernet all step pins are on port D
 	}

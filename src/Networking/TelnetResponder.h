@@ -13,23 +13,23 @@
 class TelnetResponder : public NetworkResponder
 {
 public:
-	TelnetResponder(NetworkResponder *n);
-	bool Spin() override;								// do some work, returning true if we did anything significant
-	bool Accept(Socket *s, NetworkProtocol protocol) override;	// ask the responder to accept this connection, returns true if it did
-	void Terminate(NetworkProtocol protocol, NetworkInterface *interface) override;	// terminate the responder if it is serving the specified protocol on the specified interface
+	TelnetResponder(NetworkResponder *n) noexcept;
+	bool Spin() noexcept override;								// do some work, returning true if we did anything significant
+	bool Accept(Socket *s, NetworkProtocol protocol) noexcept override;	// ask the responder to accept this connection, returns true if it did
+	void Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept override;	// terminate the responder if it is serving the specified protocol on the specified interface
 
-	static void InitStatic();
-	static void Disable();
-	static void HandleGCodeReply(const char *reply);
-	static void HandleGCodeReply(OutputBuffer *reply);
-	void Diagnostics(MessageType mtype) const override;
+	static void InitStatic() noexcept;
+	static void Disable() noexcept;
+	static void HandleGCodeReply(const char *reply) noexcept;
+	static void HandleGCodeReply(OutputBuffer *reply) noexcept;
+	void Diagnostics(MessageType mtype) const noexcept override;
 
 private:
-	void CharFromClient(char c);
-	void ProcessLine();
-	void ConnectionLost() override;
+	void CharFromClient(char c) noexcept;
+	void ProcessLine() noexcept;
+	void ConnectionLost() noexcept override;
 
-	bool SendGCodeReply();
+	bool SendGCodeReply() noexcept;
 
 	bool haveCompleteLine;
 	char clientMessage[GCODE_LENGTH];

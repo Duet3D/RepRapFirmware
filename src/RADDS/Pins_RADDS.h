@@ -37,7 +37,13 @@ constexpr size_t MaxSensorsInSystem = 32;
 typedef uint32_t SensorsBitmap;
 
 constexpr size_t MaxHeaters = 3;
-constexpr size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
+constexpr size_t MaxExtraHeaterProtections = 4;		// The number of extra heater protection instances
+
+constexpr size_t MaxBedHeaters = 1;
+constexpr size_t MaxChamberHeaters = 2;
+constexpr int8_t DefaultBedHeater = 0;
+constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder heater, used only for the legacy status response
+
 constexpr size_t NumThermistorInputs = 4;
 
 constexpr size_t MaxZProbes = 2;
@@ -50,8 +56,12 @@ constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper driv
 constexpr size_t MaxExtruders = 5;					// The maximum number of extruders
 constexpr size_t NumDefaultExtruders = 2;			// The number of drivers that we configure as extruders by default
 
+constexpr size_t MaxAxesPlusExtruders = 9;
+
 constexpr size_t MaxHeatersPerTool = 2;
 constexpr size_t MaxExtrudersPerTool = 5;
+
+constexpr size_t MaxFans = 12;
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;
 // Use TX0/RX0 for the auxiliary serial line
@@ -63,9 +73,9 @@ constexpr Pin UsbVBusPin = NoPin;					// Pin used to monitor VBUS on USB port. N
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 // DRIVES
-//			                                    X   Y   Z  E1  E2  E3  E4  E5  E6
+//			                                    	X   Y   Z  E1  E2  E3  E4  E5  E6
 constexpr Pin ENABLE_PINS[NumDirectDrivers] =    { 26, 22, 15, 62, 65, 49, 37, 31, 68 };
-//			                                   A15 A12 A09 A02 B19 C12 C03 D06 B16
+//			                                   	   A15 A12 A09 A02 B19 C12 C03 D06 B16
 constexpr Pin STEP_PINS[NumDirectDrivers] =      { 24, 17,  2, 61, 64, 51, 35, 29, 67 };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { 23, 16,  3, 60, 63, 53, 33, 27, 66 };
 
@@ -159,9 +169,6 @@ constexpr Pin Z_PROBE_PIN = A5;  // RADDS "ADC" pin
 // D34 -- unused X-max on RADDS
 constexpr Pin Z_PROBE_MOD_PIN = 34;
 constexpr Pin DiagPin = NoPin;
-
-// Cooling fans
-constexpr size_t NumTotalFans = 12;
 
 // SD cards
 constexpr size_t NumSdCards = 2;

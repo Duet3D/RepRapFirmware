@@ -98,7 +98,7 @@ void DhtTemperatureSensor::Interrupt()
 {
 	if (numPulses < ARRAY_SIZE(pulses))
 	{
-		const uint16_t now = StepTimer::GetInterruptClocks16();
+		const uint16_t now = StepTimer::GetTimerTicks16();
 		if (port.Read())
 		{
 			lastPulseTime = now;

@@ -14,18 +14,18 @@
 
 namespace I2C
 {
-	void Init();
+	void Init() noexcept;
 
 #ifdef I2C_IFACE
 
 #ifdef RTOS
 
-	uint32_t statusWaitFunc(Twi *twi, uint32_t bitsToWaitFor);
+	uint32_t statusWaitFunc(Twi *twi, uint32_t bitsToWaitFor) noexcept;
 
 	// Transfer data to/from an I2C peripheral.
 	// If the caller needs to do multiple I2C transactions without being interrupted, it should own the i2C mutex before calling this.
 	// Otherwise the caller need nort own the mutex because it will be acquired here.
-	inline size_t Transfer(uint16_t address, uint8_t *buffer, size_t numToWrite, size_t numToRead)
+	inline size_t Transfer(uint16_t address, uint8_t *buffer, size_t numToWrite, size_t numToRead) noexcept
 	{
 		MutexLocker Lock(Tasks::GetI2CMutex());
 		return I2C_IFACE.Transfer(address, buffer, numToWrite, numToRead, statusWaitFunc);
@@ -34,7 +34,7 @@ namespace I2C
 #else
 
 	// Transfer data to/from an I2C peripheral
-	inline size_t Transfer(uint16_t address, uint8_t *buffer, size_t numToWrite, size_t numToRead)
+	inline size_t Transfer(uint16_t address, uint8_t *buffer, size_t numToWrite, size_t numToRead) noexcept
 	{
 		return I2C_IFACE.Transfer(address, buffer, numToWrite, numToRead);
 	}

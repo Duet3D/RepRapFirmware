@@ -19,7 +19,7 @@ DriveMovement *DriveMovement::freeList = nullptr;
 int DriveMovement::numFree = 0;
 int DriveMovement::minFree = 0;
 
-void DriveMovement::InitialAllocate(unsigned int num)
+void DriveMovement::InitialAllocate(unsigned int num) noexcept
 {
 	while (num != 0)
 	{
@@ -30,7 +30,7 @@ void DriveMovement::InitialAllocate(unsigned int num)
 	ResetMinFree();
 }
 
-DriveMovement *DriveMovement::Allocate(size_t drive, DMState st)
+DriveMovement *DriveMovement::Allocate(size_t drive, DMState st) noexcept
 {
 	DriveMovement * const dm = freeList;
 	if (dm != nullptr)
@@ -49,14 +49,14 @@ DriveMovement *DriveMovement::Allocate(size_t drive, DMState st)
 }
 
 // Constructors
-DriveMovement::DriveMovement(DriveMovement *next) : nextDM(next)
+DriveMovement::DriveMovement(DriveMovement *next) noexcept : nextDM(next)
 {
 }
 
 // Non static members
 
 // Prepare this DM for a Cartesian axis move, returning true if there are steps to do
-bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params)
+bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept
 {
 	const float stepsPerMm = (float)totalSteps/dda.totalDistance;
 	mp.cart.twoCsquaredTimesMmPerStepDivA = roundU64((double)(StepTimer::StepClockRateSquared * 2)/((double)stepsPerMm * (double)dda.acceleration));
@@ -96,7 +96,7 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 }
 
 // Prepare this DM for a Delta axis move, returning true if there are steps to do
-bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
+bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept
 {
 	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
 	const float A = params.initialX - params.dparams->GetTowerX(drive);
@@ -187,7 +187,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 }
 
 // Prepare this DM for an extruder move, returning true if there are steps to do
-bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation)
+bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, float& extrusionPending, float speedChange, bool doCompensation) noexcept
 {
 	// Calculate the requested extrusion amount and a few other things
 	float dv = dda.directionVector[drive];
@@ -315,7 +315,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	return CalcNextStepTimeCartesian(dda, false);
 }
 
-void DriveMovement::DebugPrint() const
+void DriveMovement::DebugPrint() const noexcept
 {
 	char c = (drive < MaxAxes) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + LogicalDriveToExtruder(drive));
 	if (state != DMState::idle)
@@ -351,7 +351,7 @@ void DriveMovement::DebugPrint() const
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // Return true if there are more steps to do.
 // This is also used for extruders on delta machines.
-bool DriveMovement::CalcNextStepTimeCartesianFull(const DDA &dda, bool live)
+bool DriveMovement::CalcNextStepTimeCartesianFull(const DDA &dda, bool live) noexcept
 pre(nextStep < totalSteps; stepsTillRecalc == 0)
 {
 	// Work out how many steps to calculate at a time.
@@ -454,7 +454,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 
 // Calculate the time since the start of the move when the next step for the specified DriveMovement is due
 // Return true if there are more steps to do
-bool DriveMovement::CalcNextStepTimeDeltaFull(const DDA &dda, bool live)
+bool DriveMovement::CalcNextStepTimeDeltaFull(const DDA &dda, bool live) noexcept
 pre(nextStep < totalSteps; stepsTillRecalc == 0)
 {
 	// Work out how many steps to calculate at a time.
@@ -575,7 +575,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 }
 
 // Reduce the speed of this movement. Called to reduce the homing speed when we detect we are near the endstop for a drive.
-void DriveMovement::ReduceSpeed(uint32_t inverseSpeedFactor)
+void DriveMovement::ReduceSpeed(uint32_t inverseSpeedFactor) noexcept
 {
 	if (isDelta)
 	{

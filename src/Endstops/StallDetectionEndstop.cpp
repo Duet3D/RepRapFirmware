@@ -16,6 +16,11 @@ StallDetectionEndstop::StallDetectionEndstop(uint8_t axis, EndStopPosition pos, 
 {
 }
 
+StallDetectionEndstop::StallDetectionEndstop()
+	: Endstop(NO_AXIS, EndStopPosition::noEndStop), driversMonitored(0), individualMotors(false), stopAll(true)
+{
+}
+
 // Test whether we are at or near the stop
 EndStopHit StallDetectionEndstop::Stopped() const
 {
@@ -23,13 +28,18 @@ EndStopHit StallDetectionEndstop::Stopped() const
 }
 
 // This is called to prime axis endstops
-void StallDetectionEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers)
+bool StallDetectionEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers)
 {
-	// Find which drivers are relevant, Decide whether we stop just the driver, just the axis, or everything
-	// Decide whether we stop just the driver, just the axis, or everything
+	// Find which drivers are relevant, and decide whether we stop just the driver, just the axis, or everything
 	stopAll = (kin.GetConnectedAxes(GetAxis()) & ~MakeBitmap<AxesBitmap>(GetAxis())) != 0;
 	numDriversLeft = axisDrivers.numDrivers;
 	driversMonitored = axisDrivers.GetDriversBitmap();
+
+#if SUPPORT_CAN_EXPANSION
+	//TODO if there any remote stall endstops, check they are set up to report
+#endif
+
+	return true;
 }
 
 // Check whether the endstop is triggered and return the action that should be performed. Called from the step ISR.
@@ -37,11 +47,15 @@ void StallDetectionEndstop::Prime(const Kinematics& kin, const AxisDriversConfig
 EndstopHitDetails StallDetectionEndstop::CheckTriggered(bool goingSlow)
 {
 	EndstopHitDetails rslt;				// initialised by default constructor
-	DriversBitmap relevantStalledDrivers = driversMonitored && GetStalledDrivers();
+	const DriversBitmap relevantStalledDrivers = driversMonitored & GetStalledDrivers();
 	if (relevantStalledDrivers != 0)
 	{
 		rslt.axis = GetAxis();
-		if (stopAll)
+		if (rslt.axis == NO_AXIS)
+		{
+			rslt.SetAction(EndstopHitAction::stopAll);
+		}
+		else if (stopAll)
 		{
 			rslt.SetAction(EndstopHitAction::stopAll);
 			if (GetAtHighEnd())
@@ -102,6 +116,12 @@ bool StallDetectionEndstop::Acknowledge(EndstopHitDetails what)
 void StallDetectionEndstop::AppendDetails(const StringRef& str)
 {
 	str.cat((individualMotors) ? "motor stall (individual motors)" : "motor stall (any motor)");
+}
+
+void StallDetectionEndstop::SetDrivers(DriversBitmap extruderDrivers)
+{
+	driversMonitored = extruderDrivers;
+	stopAll = true;
 }
 
 // End

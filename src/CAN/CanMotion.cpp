@@ -21,7 +21,7 @@ static CanDriversList driversToStop[2];
 static size_t driversToStopIndexBeingFilled = 0;
 static size_t indexOfNextDriverToStop = 0;
 static volatile bool stopAllFlag = false;
-static bool broadcastedStopAll = false;
+static bool doingStopAll = false;
 static LargeBitmap<CanId::MaxNormalAddress + 1> boardsActiveInLastMove;
 
 void CanMotion::Init()
@@ -130,13 +130,18 @@ CanMessageBuffer *CanMotion::GetUrgentMessage()
 	if (stopAllFlag)
 	{
 		// Send a broadcast Stop All message first, followed by individual ones
-		if (!broadcastedStopAll)
-		{
-			auto msg = urgentMessageBuffer->SetupBroadcastMessage<CanMessageStopMovement>(CanInterface::GetCanAddress());
-			msg->whichDrives = 0xFFFF;
-			broadcastedStopAll = true;
-			return urgentMessageBuffer;
-		}
+		driversToStop[driversToStopIndexBeingFilled].Clear();
+		driversToStop[driversToStopIndexBeingFilled ^ 1].Clear();
+		auto msg = urgentMessageBuffer->SetupBroadcastMessage<CanMessageStopMovement>(CanInterface::GetCanAddress());
+		msg->whichDrives = 0xFFFF;
+		doingStopAll = true;
+		stopAllFlag = false;
+		indexOfNextDriverToStop = 0;
+		return urgentMessageBuffer;
+	}
+
+	if (doingStopAll)
+	{
 		const unsigned int nextBoard = boardsActiveInLastMove.FindLowestSetBit();
 		if (nextBoard < boardsActiveInLastMove.NumBits())
 		{
@@ -145,15 +150,10 @@ CanMessageBuffer *CanMotion::GetUrgentMessage()
 			msg->whichDrives = 0xFFFF;
 			return urgentMessageBuffer;
 		}
-		driversToStop[driversToStopIndexBeingFilled].Clear();
-		driversToStop[driversToStopIndexBeingFilled ^ 1].Clear();
-		stopAllFlag = false;
-		broadcastedStopAll = false;
-		indexOfNextDriverToStop = 0;
-		return nullptr;
+		doingStopAll = false;
 	}
 
-	if (driversToStop[driversToStopIndexBeingFilled ^ 1].GetNumEntries() == 0 && driversToStop[driversToStopIndexBeingFilled ^ 1].GetNumEntries() != 0)
+	if (driversToStop[driversToStopIndexBeingFilled ^ 1].GetNumEntries() == 0 && driversToStop[driversToStopIndexBeingFilled].GetNumEntries() != 0)
 	{
 		driversToStopIndexBeingFilled  = driversToStopIndexBeingFilled ^ 1;
 	}
@@ -202,7 +202,7 @@ void CanMotion::StopAxis(size_t axis)
 				driversToStop[driversToStopIndexBeingFilled].AddEntry(driver);
 			}
 		}
-	CanInterface::WakeCanSender();
+		CanInterface::WakeCanSender();
 	}
 }
 

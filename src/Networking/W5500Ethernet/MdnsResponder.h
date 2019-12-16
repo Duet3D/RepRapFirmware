@@ -21,19 +21,19 @@ class W5500Socket;
 
 class MdnsResponder {
 public:
-	MdnsResponder(W5500Socket *sock);
+	MdnsResponder(W5500Socket *sock) noexcept;
 
-	void UpdateServiceRecords();
-	void Spin();
-	void Announce();
+	void UpdateServiceRecords() noexcept;
+	void Spin() noexcept;
+	void Announce() noexcept;
 
 private:
 	W5500Socket *socket;
 	uint32_t lastAnnouncement;
 
-	void ProcessPacket(const uint8_t *data, size_t length) const;
-	bool CheckHostname(const uint8_t *ptr, size_t maxLength, size_t *bytesProcessed) const;
-	void SendARecord(uint16_t transaction) const;
+	void ProcessPacket(const uint8_t *data, size_t length) const noexcept;
+	bool CheckHostname(const uint8_t *ptr, size_t maxLength, size_t *bytesProcessed) const noexcept;
+	void SendARecord(uint16_t transaction) const noexcept;
 };
 
 #endif /* SRC_NETWORKING_W5500ETHERNET_MDNSRESPONDER_H_ */

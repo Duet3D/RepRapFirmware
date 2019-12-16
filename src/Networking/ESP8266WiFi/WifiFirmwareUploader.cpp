@@ -67,17 +67,17 @@ const char * const resultMessages[] =
 // 230400b always manages to connect.
 static const uint32_t uploadBaudRates[] = { 230400, 115200, 74880, 9600 };
 
-WifiFirmwareUploader::WifiFirmwareUploader(UARTClass& port, WiFiInterface& iface)
+WifiFirmwareUploader::WifiFirmwareUploader(UARTClass& port, WiFiInterface& iface) noexcept
 	: uploadPort(port), interface(iface), uploadFile(nullptr), state(UploadState::idle)
 {
 }
 
-bool WifiFirmwareUploader::IsReady() const
+bool WifiFirmwareUploader::IsReady() const noexcept
 {
 	return state == UploadState::idle;
 }
 
-void WifiFirmwareUploader::MessageF(const char *fmt, ...)
+void WifiFirmwareUploader::MessageF(const char *fmt, ...) noexcept
 {
 	va_list vargs;
 	va_start(vargs, fmt);
@@ -85,7 +85,7 @@ void WifiFirmwareUploader::MessageF(const char *fmt, ...)
 	va_end(vargs);
 }
 
-void WifiFirmwareUploader::flushInput()
+void WifiFirmwareUploader::flushInput() noexcept
 {
 	while (uploadPort.available() != 0)
 	{
@@ -94,7 +94,7 @@ void WifiFirmwareUploader::flushInput()
 }
 
 // Extract 1-4 bytes of a value in little-endian order from a buffer beginning at a specified offset
-uint32_t WifiFirmwareUploader::getData(unsigned byteCnt, const uint8_t *buf, int ofst)
+uint32_t WifiFirmwareUploader::getData(unsigned byteCnt, const uint8_t *buf, int ofst) noexcept
 {
 	uint32_t val = 0;
 
@@ -113,7 +113,7 @@ uint32_t WifiFirmwareUploader::getData(unsigned byteCnt, const uint8_t *buf, int
 }
 
 // Put 1-4 bytes of a value in little-endian order into a buffer beginning at a specified offset.
-void WifiFirmwareUploader::putData(uint32_t val, unsigned byteCnt, uint8_t *buf, int ofst)
+void WifiFirmwareUploader::putData(uint32_t val, unsigned byteCnt, uint8_t *buf, int ofst) noexcept
 {
 	if (buf && byteCnt)
 	{
@@ -137,7 +137,7 @@ void WifiFirmwareUploader::putData(uint32_t val, unsigned byteCnt, uint8_t *buf,
 //   -1 - the value 0xc0 was encountered (shouldn't happen)
 //   -2 - a SLIP escape byte was found but the following byte wasn't available
 //   -3 - a SLIP escape byte was followed by an invalid byte
-int WifiFirmwareUploader::ReadByte(uint8_t& data, bool slipDecode)
+int WifiFirmwareUploader::ReadByte(uint8_t& data, bool slipDecode) noexcept
 {
 	if (uploadPort.available() == 0)
 	{
@@ -188,19 +188,19 @@ int WifiFirmwareUploader::ReadByte(uint8_t& data, bool slipDecode)
 
 // When we write a sync packet, there must be no gaps between most of the characters.
 // So use this function, which does a block write to the UART buffer in the latest CoreNG.
-void WifiFirmwareUploader::writePacketRaw(const uint8_t *buf, size_t len)
+void WifiFirmwareUploader::writePacketRaw(const uint8_t *buf, size_t len) noexcept
 {
 	uploadPort.write(buf, len);
 }
 
 // Write a byte to the serial port optionally SLIP encoding. Return the number of bytes actually written.
-inline void WifiFirmwareUploader::WriteByteRaw(uint8_t b)
+inline void WifiFirmwareUploader::WriteByteRaw(uint8_t b) noexcept
 {
 	uploadPort.write(b);
 }
 
 // Write a byte to the serial port optionally SLIP encoding. Return the number of bytes actually written.
-inline void WifiFirmwareUploader::WriteByteSlip(uint8_t b)
+inline void WifiFirmwareUploader::WriteByteSlip(uint8_t b) noexcept
 {
 	if (b == 0xC0)
 	{
@@ -225,7 +225,7 @@ inline void WifiFirmwareUploader::WriteByteSlip(uint8_t b)
 //
 // If an error occurs, return a negative value.  Otherwise, return the number
 // of bytes in the response (or zero if the response was not the standard "two bytes of zero").
-WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t op, uint32_t *valp, size_t& bodyLen, uint32_t msTimeout)
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t op, uint32_t *valp, size_t& bodyLen, uint32_t msTimeout) noexcept
 {
 	enum class PacketState
 	{
@@ -360,7 +360,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 }
 
 // Send a block of data performing SLIP encoding of the content.
-inline void WifiFirmwareUploader::writePacket(const uint8_t *data, size_t len)
+inline void WifiFirmwareUploader::writePacket(const uint8_t *data, size_t len) noexcept
 {
 	while (len != 0)
 	{
@@ -372,7 +372,7 @@ inline void WifiFirmwareUploader::writePacket(const uint8_t *data, size_t len)
 // Send a packet to the serial port while performing SLIP framing. The packet data comprises a header and an optional data block.
 // A SLIP packet begins and ends with 0xc0.  The data encapsulated has the bytes
 // 0xc0 and 0xdb replaced by the two-byte sequences {0xdb, 0xdc} and {0xdb, 0xdd} respectively.
-void WifiFirmwareUploader::writePacket(const uint8_t *hdr, size_t hdrLen, const uint8_t *data, size_t dataLen)
+void WifiFirmwareUploader::writePacket(const uint8_t *hdr, size_t hdrLen, const uint8_t *data, size_t dataLen) noexcept
 {
 	WriteByteRaw(0xc0);				// send the packet start character
 	writePacket(hdr, hdrLen);		// send the header
@@ -382,7 +382,7 @@ void WifiFirmwareUploader::writePacket(const uint8_t *hdr, size_t hdrLen, const 
 
 // Send a packet to the serial port while performing SLIP framing. The packet data comprises a header and an optional data block.
 // This is like writePacket except that it does a fast block write for both the header and the main data with no SLIP encoding. Used to send sync commands.
-void WifiFirmwareUploader::writePacketRaw(const uint8_t *hdr, size_t hdrLen, const uint8_t *data, size_t dataLen)
+void WifiFirmwareUploader::writePacketRaw(const uint8_t *hdr, size_t hdrLen, const uint8_t *data, size_t dataLen) noexcept
 {
 	WriteByteRaw(0xc0);				// send the packet start character
 	writePacketRaw(hdr, hdrLen);	// send the header
@@ -392,7 +392,7 @@ void WifiFirmwareUploader::writePacketRaw(const uint8_t *hdr, size_t hdrLen, con
 
 // Send a command to the attached device together with the supplied data, if any.
 // The data is supplied via a list of one or more segments.
-void WifiFirmwareUploader::sendCommand(uint8_t op, uint32_t checkVal, const uint8_t *data, size_t dataLen)
+void WifiFirmwareUploader::sendCommand(uint8_t op, uint32_t checkVal, const uint8_t *data, size_t dataLen) noexcept
 {
 	// populate the header
 	uint8_t hdr[8];
@@ -414,7 +414,7 @@ void WifiFirmwareUploader::sendCommand(uint8_t op, uint32_t checkVal, const uint
 }
 
 // Send a command to the attached device together with the supplied data, if any, and get the response
-WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::doCommand(uint8_t op, const uint8_t *data, size_t dataLen, uint32_t checkVal, uint32_t *valp, uint32_t msTimeout)
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::doCommand(uint8_t op, const uint8_t *data, size_t dataLen, uint32_t checkVal, uint32_t *valp, uint32_t msTimeout) noexcept
 {
 	sendCommand(op, checkVal, data, dataLen);
 	size_t bodyLen;
@@ -429,7 +429,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::doCommand(uint8_t op
 
 // Send a synchronising packet to the serial port in an attempt to induce
 // the ESP8266 to auto-baud lock on the baud rate.
-WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeout)
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeout) noexcept
 {
 	uint8_t buf[36];
 
@@ -468,7 +468,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeou
 }
 
 // Send a command to the device to begin the Flash process.
-WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t addr, uint32_t size)
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t addr, uint32_t size) noexcept
 {
 	// determine the number of blocks represented by the size
 	const uint32_t blkCnt = (size + EspFlashBlockSize - 1) / EspFlashBlockSize;
@@ -488,7 +488,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t 
 }
 
 // Send a command to the device to terminate the Flash process
-WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashFinish(bool reboot)
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashFinish(bool reboot) noexcept
 {
 	uint8_t buf[4];
 	putData(reboot ? 0 : 1, 4, buf, 0);
@@ -496,7 +496,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashFinish(bool reb
 }
 
 // Compute the checksum of a block of data
-uint16_t WifiFirmwareUploader::checksum(const uint8_t *data, uint16_t dataLen, uint16_t cksum)
+uint16_t WifiFirmwareUploader::checksum(const uint8_t *data, uint16_t dataLen, uint16_t cksum) noexcept
 {
 	if (data != NULL)
 	{
@@ -508,7 +508,7 @@ uint16_t WifiFirmwareUploader::checksum(const uint8_t *data, uint16_t dataLen, u
 	return(cksum);
 }
 
-WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint16_t flashParmVal, uint16_t flashParmMask)
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint16_t flashParmVal, uint16_t flashParmMask) noexcept
 {
 	const uint32_t blkSize = EspFlashBlockSize;
 
@@ -562,7 +562,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 	return stat;
 }
 
-WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::DoErase(uint32_t address, uint32_t size)
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::DoErase(uint32_t address, uint32_t size) noexcept
 {
 	const uint32_t sectorsPerBlock = 16;
 	const uint32_t sectorSize = 4096;
@@ -582,7 +582,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::DoErase(uint32_t add
 	return flashBegin(uploadAddress, eraseSize);
 }
 
-void WifiFirmwareUploader::Spin()
+void WifiFirmwareUploader::Spin() noexcept
 {
 	switch (state)
 	{
@@ -735,7 +735,7 @@ void WifiFirmwareUploader::Spin()
 }
 
 // Try to upload the given file at the given address
-void WifiFirmwareUploader::SendUpdateFile(const char *file, const char *dir, uint32_t address)
+void WifiFirmwareUploader::SendUpdateFile(const char *file, const char *dir, uint32_t address) noexcept
 {
 	Platform& platform = reprap.GetPlatform();
 	uploadFile = platform.OpenFile(dir, file, OpenMode::read);

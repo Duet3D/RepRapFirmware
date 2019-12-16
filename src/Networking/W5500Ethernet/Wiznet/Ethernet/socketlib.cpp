@@ -2,7 +2,7 @@
 //
 //! \file socket.c
 //! \brief SOCKET APIs Implements file.
-//! \details SOCKET APIs like as Berkeley Socket APIs. 
+//! \details SOCKET APIs like as Berkeley Socket APIs.
 //! \version 1.0.3
 //! \date 2013/10/21
 //! \par  Revision history
@@ -13,7 +13,7 @@
 //!       <2014/05/01> V1.0.3. Refer to M20140501
 //!         1. Implicit type casting -> Explicit type casting.
 //!         2. replace 0x01 with PACK_REMAINED in recvfrom()
-//!         3. Validation a destination ip in connect() & sendto(): 
+//!         3. Validation a destination ip in connect() & sendto():
 //!            It occurs a fatal error on converting unint32 address if uint8* addr parameter is not aligned by 4byte address.
 //!            Copy 4 byte addr value into temporary uint32 variable and then compares it.
 //!       <2013/12/20> V1.0.2 Refer to M20131220
@@ -26,30 +26,30 @@
 //!
 //! Copyright (c)  2013, WIZnet Co., LTD.
 //! All rights reserved.
-//! 
-//! Redistribution and use in source and binary forms, with or without 
-//! modification, are permitted provided that the following conditions 
-//! are met: 
-//! 
-//!     * Redistributions of source code must retain the above copyright 
-//! notice, this list of conditions and the following disclaimer. 
+//!
+//! Redistribution and use in source and binary forms, with or without
+//! modification, are permitted provided that the following conditions
+//! are met:
+//!
+//!     * Redistributions of source code must retain the above copyright
+//! notice, this list of conditions and the following disclaimer.
 //!     * Redistributions in binary form must reproduce the above copyright
 //! notice, this list of conditions and the following disclaimer in the
-//! documentation and/or other materials provided with the distribution. 
-//!     * Neither the name of the <ORGANIZATION> nor the names of its 
-//! contributors may be used to endorse or promote products derived 
-//! from this software without specific prior written permission. 
-//! 
+//! documentation and/or other materials provided with the distribution.
+//!     * Neither the name of the <ORGANIZATION> nor the names of its
+//! contributors may be used to endorse or promote products derived
+//! from this software without specific prior written permission.
+//!
 //! THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-//! AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+//! AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 //! IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-//! ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE 
-//! LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-//! CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+//! ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+//! LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+//! CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
 //! SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-//! INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-//! CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-//! ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
+//! INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+//! CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+//! ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 //! THE POSSIBILITY OF SUCH DAMAGE.
 //
 //*****************************************************************************
@@ -90,18 +90,18 @@ uint8_t sock_pack_info[_WIZCHIP_SOCK_NUM_] = {0,};
       if(len == 0) return SOCKERR_DATALEN;   \
    }while(0);              \
 
-bool IsSending(uint8_t sn)
+bool IsSending(uint8_t sn) noexcept
 {
 	return (sock_is_sending & (1u << sn)) != 0;
 }
 
-void ExecCommand(uint8_t sn, uint8_t cmd)
+void ExecCommand(uint8_t sn, uint8_t cmd) noexcept
 {
 	setSn_CR(sn, cmd);
 	while(getSn_CR(sn) != 0) { }
 }
 
-int8_t socket(uint8_t sn, uint8_t protocol, uint16_t port, uint8_t flag)
+int8_t socket(uint8_t sn, uint8_t protocol, uint16_t port, uint8_t flag) noexcept
 {
 	switch(protocol)
 	{
@@ -174,15 +174,15 @@ int8_t socket(uint8_t sn, uint8_t protocol, uint16_t port, uint8_t flag)
 
 	// release the previous sock_io_mode
 	sock_io_mode &= ~(1 <<sn);
-	sock_io_mode |= ((flag & SF_IO_NONBLOCK) << sn);   
+	sock_io_mode |= ((flag & SF_IO_NONBLOCK) << sn);
 	sock_is_sending &= ~(1<<sn);
 	sock_remained_size[sn] = 0;
 	sock_pack_info[sn] = PACK_COMPLETED;
 	while(getSn_SR(sn) == SOCK_CLOSED) { }
 	return (int8_t)sn;
-}	   
+}
 
-int8_t close(uint8_t sn)
+int8_t close(uint8_t sn) noexcept
 {
 	ExecCommand(sn, Sn_CR_CLOSE);
 
@@ -197,7 +197,7 @@ int8_t close(uint8_t sn)
 	return SOCK_OK;
 }
 
-int8_t listen(uint8_t sn)
+int8_t listen(uint8_t sn) noexcept
 {
 	CHECK_SOCKMODE(Sn_MR_TCP);
 	CHECK_SOCKINIT();
@@ -210,7 +210,7 @@ int8_t listen(uint8_t sn)
 	return SOCK_OK;
 }
 
-int8_t connect(uint8_t sn, IPAddress addr, uint16_t port)
+int8_t connect(uint8_t sn, IPAddress addr, uint16_t port) noexcept
 {
 	CHECK_SOCKMODE(Sn_MR_TCP);
 	CHECK_SOCKINIT();
@@ -218,7 +218,7 @@ int8_t connect(uint8_t sn, IPAddress addr, uint16_t port)
 	{
 		return SOCKERR_IPINVALID;
 	}
-	
+
 	if (port == 0)
 	{
 		return SOCKERR_PORTZERO;
@@ -247,12 +247,12 @@ int8_t connect(uint8_t sn, IPAddress addr, uint16_t port)
 	return SOCK_OK;
 }
 
-void disconnectNoWait(uint8_t sn)
+void disconnectNoWait(uint8_t sn) noexcept
 {
 	ExecCommand(sn, Sn_CR_DISCON);
 }
 
-int32_t sendto(uint8_t sn, const uint8_t * buf, uint16_t len, IPAddress destIp, uint16_t port)
+int32_t sendto(uint8_t sn, const uint8_t * buf, uint16_t len, IPAddress destIp, uint16_t port) noexcept
 {
 	switch(getSn_MR(sn) & 0x0F)
 	{
@@ -302,7 +302,7 @@ int32_t sendto(uint8_t sn, const uint8_t * buf, uint16_t len, IPAddress destIp, 
 	return (int32_t)len;
 }
 
-int32_t CheckSendComplete(uint8_t sn)
+int32_t CheckSendComplete(uint8_t sn) noexcept
 {
 	const uint8_t tmp = getSn_IR(sn);
 	if (tmp & Sn_IR_SENDOK)
@@ -321,7 +321,7 @@ int32_t CheckSendComplete(uint8_t sn)
 	return SOCK_BUSY;
 }
 
-int32_t recvfrom(uint8_t sn, uint8_t * buf, uint16_t len, uint8_t * addr, uint16_t *port)
+int32_t recvfrom(uint8_t sn, uint8_t * buf, uint16_t len, uint8_t * addr, uint16_t *port) noexcept
 {
 	const uint8_t mr = getSn_MR(sn);
 	switch(mr & 0x0F)
@@ -438,7 +438,7 @@ int32_t recvfrom(uint8_t sn, uint8_t * buf, uint16_t len, uint8_t * addr, uint16
 }
 
 
-int8_t  ctlsocket(uint8_t sn, ctlsock_type cstype, void* arg)
+int8_t  ctlsocket(uint8_t sn, ctlsock_type cstype, void* arg) noexcept
 {
 	switch(cstype)
 	{
@@ -494,7 +494,7 @@ int8_t  ctlsocket(uint8_t sn, ctlsock_type cstype, void* arg)
 	return SOCK_OK;
 }
 
-int8_t  setsockopt(uint8_t sn, sockopt_type sotype, void* arg)
+int8_t  setsockopt(uint8_t sn, sockopt_type sotype, void* arg) noexcept
 {
 	switch(sotype)
 	{
@@ -542,7 +542,7 @@ int8_t  setsockopt(uint8_t sn, sockopt_type sotype, void* arg)
 	return SOCK_OK;
 }
 
-int8_t getsockopt(uint8_t sn, sockopt_type sotype, void* arg)
+int8_t getsockopt(uint8_t sn, sockopt_type sotype, void* arg) noexcept
 {
    switch(sotype)
    {
@@ -555,7 +555,7 @@ int8_t getsockopt(uint8_t sn, sockopt_type sotype, void* arg)
       case SO_TOS:
          *(uint8_t*) arg = getSn_TOS(sn);
          break;
-      case SO_MSS:   
+      case SO_MSS:
          *(uint8_t*) arg = getSn_MSSR(sn);
          break;
       case SO_DESTIP:
@@ -565,7 +565,7 @@ int8_t getsockopt(uint8_t sn, sockopt_type sotype, void* arg)
       		 ip.UnpackV4((uint8_t*)arg);
    	     }
          break;
-      case SO_DESTPORT:  
+      case SO_DESTPORT:
          *(uint16_t*) arg = getSn_DPORT(sn);
          break;
       case SO_KEEPALIVEAUTO:

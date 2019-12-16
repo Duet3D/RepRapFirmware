@@ -11,7 +11,7 @@
 
 // NetworkResponder members
 
-NetworkResponder::NetworkResponder(NetworkResponder *n)
+NetworkResponder::NetworkResponder(NetworkResponder *n) noexcept
 	: next(n), responderState(ResponderState::free), skt(nullptr),
 	  outBuf(nullptr),
 #if HAS_MASS_STORAGE
@@ -22,7 +22,7 @@ NetworkResponder::NetworkResponder(NetworkResponder *n)
 }
 
 // Send the contents of the output buffers
-void NetworkResponder::Commit(ResponderState nextState, bool report)
+void NetworkResponder::Commit(ResponderState nextState, bool report) noexcept
 {
 	stateAfterSending = nextState;
 	responderState = ResponderState::sending;
@@ -38,7 +38,7 @@ void NetworkResponder::Commit(ResponderState nextState, bool report)
 
 // Send our data.
 // We send outBuf first, then outStack, and finally fileBeingSent.
-void NetworkResponder::SendData()
+void NetworkResponder::SendData() noexcept
 {
 	// Send our output buffer and output stack
 	for(;;)
@@ -159,7 +159,7 @@ void NetworkResponder::SendData()
 }
 
 // This is called when we lose a connection or when we are asked to terminate. Overridden in some derived classes.
-void NetworkResponder::ConnectionLost()
+void NetworkResponder::ConnectionLost() noexcept
 {
 	OutputBuffer::ReleaseAll(outBuf);
 	outStack.ReleaseAll();
@@ -187,12 +187,12 @@ void NetworkResponder::ConnectionLost()
 	responderState = ResponderState::free;
 }
 
-IPAddress NetworkResponder::GetRemoteIP() const
+IPAddress NetworkResponder::GetRemoteIP() const noexcept
 {
 	return (skt == nullptr) ? IPAddress() : skt->GetRemoteIP();
 }
 
-void NetworkResponder::ReportOutputBufferExhaustion(const char *sourceFile, int line)
+void NetworkResponder::ReportOutputBufferExhaustion(const char *sourceFile, int line) noexcept
 {
 	if (reprap.Debug(moduleWebserver))
 	{

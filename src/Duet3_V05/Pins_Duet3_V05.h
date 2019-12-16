@@ -7,7 +7,21 @@
 const size_t NumFirmwareUpdateModules = 1;
 
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
-#define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
+
+#define IAP_IN_RAM				1
+
+#if IAP_IN_RAM
+# define IAP_UPDATE_FILE			"Duet3_SDiap_" BOARD_SHORT_NAME ".bin"
+constexpr uint32_t IAP_IMAGE_START = 0x20450000;		// last 64kb of RAM
+#else
+# define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
+
+// SAME70 Flash locations
+// These are designed to work with 1Mbyte flash processors as well as 2Mbyte
+// We can only erase complete 128kb sectors on the SAME70, so we allow 128Kb for IAP
+constexpr uint32_t IAP_IMAGE_START = 0x004E0000;
+constexpr uint32_t IAP_IMAGE_END = 0x004FFFFF;
+#endif
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
@@ -39,8 +53,7 @@ const size_t NumFirmwareUpdateModules = 1;
 #define ALLOCATE_DEFAULT_PORTS	0
 
 #define USE_CACHE				0					// Cache controller disabled for now
-
-#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
+#define USE_MPU					1
 
 // The physical capabilities of the machine
 
@@ -51,11 +64,16 @@ constexpr size_t MaxCanBoards = 18;
 
 constexpr float MaxTmc5160Current = 3200.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 
-constexpr size_t MaxSensorsInSystem = 64;
-typedef uint64_t SensorsBitmap;
+constexpr size_t MaxSensors = 64;
 
 constexpr size_t MaxHeaters = 12;
-constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
+constexpr size_t MaxExtraHeaterProtections = 8;		// The number of extra heater protection instances
+
+constexpr size_t MaxBedHeaters = 9;
+constexpr size_t MaxChamberHeaters = 4;
+constexpr int8_t DefaultBedHeater = 0;
+constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder heater, used only for the legacy status response
+
 constexpr size_t NumThermistorInputs = 4;
 constexpr size_t NumTmcDriversSenseChannels = 1;
 
@@ -69,8 +87,12 @@ constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper driv
 constexpr size_t MaxExtruders = 16;					// The maximum number of extruders
 constexpr size_t NumDefaultExtruders = 3;			// The number of drivers that we configure as extruders by default
 
+constexpr size_t MaxAxesPlusExtruders = 20;			// May be <= MaxAxes + MaxExtruders
+
 constexpr size_t MaxHeatersPerTool = 4;
 constexpr size_t MaxExtrudersPerTool = 6;
+
+constexpr size_t MaxFans = 16;
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
@@ -100,7 +122,6 @@ constexpr Pin TMC51xxMosiPin = PortBPin(4);
 constexpr Pin TMC51xxMisoPin = PortAPin(21);
 constexpr Pin TMC51xxSclkPin = PortAPin(23);
 
-
 // Thermistor/PT1000 inputs
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(31), PortCPin(15), PortCPin(29), PortCPin(30) };	// Thermistor/PT1000 pins
 constexpr Pin VssaSensePin = PortCPin(13);
@@ -122,9 +143,6 @@ constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// we use an 11:1 vo
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
 constexpr Pin DiagPin = PortCPin(20);
-
-// Cooling fans
-constexpr size_t NumTotalFans = 12;
 
 // SD cards
 constexpr size_t NumSdCards = 1;								// actually 0 cards, but 0 probably won't work yet
@@ -241,12 +259,6 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
 
-// SAME70 Flash locations
-// These are designed to work with 1Mbyte flash processors as well as 2Mbyte
-// We can only erase complete 128kb sectors on the SAME70, so we allow 128Kb for IAP
-constexpr uint32_t IAP_FLASH_START = 0x004E0000;
-constexpr uint32_t IAP_FLASH_END = 0x004FFFFF;
-
 // Duet pin numbers for the Linux interface
 constexpr Pin LinuxTfrReadyPin = PortEPin(2);
 Spi * const LinuxSpi = SPI1;
@@ -264,12 +276,14 @@ Spi * const LinuxSpi = SPI1;
 
 #endif
 
-// Step timer is timer 2 aka TC0 channel 2
+// Step timer is timer 0 aka TC0 channel 0. Also used as the CAN timestamp counter.
 #define STEP_TC				(TC0)
-#define STEP_TC_CHAN		(2)
-#define STEP_TC_IRQN		TC2_IRQn
-#define STEP_TC_HANDLER		TC2_Handler
-#define STEP_TC_ID			ID_TC2
+#define STEP_TC_CHAN		(0)					// channel for lower 16 bits
+#define STEP_TC_CHAN_UPPER	(2)					// channel for upper 16 bits
+#define STEP_TC_IRQN		TC0_IRQn
+#define STEP_TC_HANDLER		TC0_Handler
+#define STEP_TC_ID			ID_TC0
+#define STEP_TC_ID_UPPER	ID_TC2
 
 // DMA channel allocation
 constexpr uint8_t DmacChanHsmci = 0;			// this is hard coded in the ASF HSMCI driver

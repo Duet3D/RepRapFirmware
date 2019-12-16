@@ -9,9 +9,11 @@
 #define SRC_OBJECTMODEL_OBJECTMODEL_H_
 
 #include "RepRapFirmware.h"
-#include <General/IPAddress.h>
 
 #if SUPPORT_OBJECT_MODEL
+
+#include <General/IPAddress.h>
+#include <RTOSIface/RTOSIface.h>
 
 typedef uint32_t ObjectModelFilterFlags;
 typedef uint8_t TypeCode;

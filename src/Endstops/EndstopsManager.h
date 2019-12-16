@@ -18,6 +18,8 @@
 class CanMessageBuffer;
 #endif
 
+class StallDetectionEndstop;
+
 // Endstop manager class
 class EndstopsManager
 {
@@ -26,23 +28,23 @@ public:
 
 	void Init();
 
-	// Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command
-	void EnableAxisEndstops(AxesBitmap axes, bool forHoming);
+	// Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command returning true if successful
+	bool EnableAxisEndstops(AxesBitmap axes, bool forHoming) __attribute__ ((warn_unused_result));
 
-	// Set up the active endstops for Z probing
-	void EnableZProbe(size_t probeNumber, bool probingAway = false);
+	// Set up the active endstops for Z probing returning true if successful
+	bool EnableZProbe(size_t probeNumber, bool probingAway = false) __attribute__ ((warn_unused_result));
 
 	// Set up the active endstops for Z probing with the current probe
-	void EnableCurrentZProbe(bool probingAway = false) { EnableZProbe(currentZProbeNumber, probingAway); }
+	bool EnableCurrentZProbe(bool probingAway = false) __attribute__ ((warn_unused_result)) { return EnableZProbe(currentZProbeNumber, probingAway); }
 
 	// Enable extruder endstops
-	void EnableExtruderEndstop(size_t extruder);
+	bool EnableExtruderEndstops(ExtrudersBitmap extruders);
 
 	// Get the first endstop that has triggered and remove it from the active list if appropriate
 	EndstopHitDetails CheckEndstops(bool goingSlow);
 
 	// Configure the endstops in response to M574
-	GCodeResult HandleM574(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf);
 
 	EndStopPosition GetEndStopPosition(size_t axis) const pre(axis < MaxAxes);
 	bool HomingZWithProbe() const;
@@ -87,6 +89,7 @@ private:
 	size_t currentZProbeNumber;							// which Z probe we are using
 
 	Endstop *axisEndstops[MaxAxes];						// the endstops assigned to each axis (each one may have several switches), each may be null
+	StallDetectionEndstop *extrudersEndstop;				// the endstop used for extruder stall detection, one will do for all extruders
 	ZProbe *zProbes[MaxZProbes];						// the Z probes used. The first one is always non-null.
 	ZProbe *defaultZProbe;
 

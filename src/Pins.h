@@ -78,6 +78,10 @@
 # define USE_CACHE				0
 #endif
 
+#ifndef USE_MPU
+# define USE_MPU				0
+#endif
+
 #ifndef SUPPORT_TMC2660
 # define SUPPORT_TMC2660		0
 #endif

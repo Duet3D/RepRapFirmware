@@ -15,10 +15,10 @@ class WiFiInterface;
 class WifiFirmwareUploader
 {
 public:
-	WifiFirmwareUploader(UARTClass& port, WiFiInterface &iface);
-	bool IsReady() const;
-	void SendUpdateFile(const char *file, const char *dir, uint32_t address);
-	void Spin();
+	WifiFirmwareUploader(UARTClass& port, WiFiInterface &iface) noexcept;
+	bool IsReady() const noexcept;
+	void SendUpdateFile(const char *file, const char *dir, uint32_t address) noexcept;
+	void Spin() noexcept;
 
 	static const uint32_t FirmwareAddress = 0x00000000;
 	static const uint32_t WebFilesAddress = 0x00100000;
@@ -63,26 +63,26 @@ private:
 		done
 	};
 
-	void MessageF(const char *fmt, ...);
-	uint32_t getData(unsigned byteCnt, const uint8_t *buf, int ofst);
-	void putData(uint32_t val, unsigned byteCnt, uint8_t *buf, int ofst);
-	int ReadByte(uint8_t& data, bool slipDecode);
-	void WriteByteRaw(uint8_t b);
-	void WriteByteSlip(uint8_t b);
-	void flushInput();
-	EspUploadResult readPacket(uint8_t op, uint32_t *valp, size_t& bodyLen, uint32_t msTimeout);
-	void writePacket(const uint8_t *data, size_t len);
-	void writePacketRaw(const uint8_t *buf, size_t len);
-	void writePacket(const uint8_t *hdr, size_t hdrLen, const uint8_t *data, size_t dataLen);
-	void writePacketRaw(const uint8_t *hdr, size_t hdrLen, const uint8_t *data, size_t dataLen);
-	void sendCommand(uint8_t op, uint32_t checkVal, const uint8_t *data, size_t dataLen);
-	EspUploadResult doCommand(uint8_t op, const uint8_t *data, size_t dataLen, uint32_t checkVal, uint32_t *valp, uint32_t msTimeout);
-	EspUploadResult Sync(uint16_t timeout);
-	EspUploadResult flashBegin(uint32_t addr, uint32_t size);
-	EspUploadResult flashFinish(bool reboot);
-	static uint16_t checksum(const uint8_t *data, uint16_t dataLen, uint16_t cksum);
-	EspUploadResult flashWriteBlock(uint16_t flashParmVal, uint16_t flashParmMask);
-	EspUploadResult DoErase(uint32_t address, uint32_t size);
+	void MessageF(const char *fmt, ...) noexcept;
+	uint32_t getData(unsigned byteCnt, const uint8_t *buf, int ofst) noexcept;
+	void putData(uint32_t val, unsigned byteCnt, uint8_t *buf, int ofst) noexcept;
+	int ReadByte(uint8_t& data, bool slipDecode) noexcept;
+	void WriteByteRaw(uint8_t b) noexcept;
+	void WriteByteSlip(uint8_t b) noexcept;
+	void flushInput() noexcept;
+	EspUploadResult readPacket(uint8_t op, uint32_t *valp, size_t& bodyLen, uint32_t msTimeout) noexcept;
+	void writePacket(const uint8_t *data, size_t len) noexcept;
+	void writePacketRaw(const uint8_t *buf, size_t len) noexcept;
+	void writePacket(const uint8_t *hdr, size_t hdrLen, const uint8_t *data, size_t dataLen) noexcept;
+	void writePacketRaw(const uint8_t *hdr, size_t hdrLen, const uint8_t *data, size_t dataLen) noexcept;
+	void sendCommand(uint8_t op, uint32_t checkVal, const uint8_t *data, size_t dataLen) noexcept;
+	EspUploadResult doCommand(uint8_t op, const uint8_t *data, size_t dataLen, uint32_t checkVal, uint32_t *valp, uint32_t msTimeout) noexcept;
+	EspUploadResult Sync(uint16_t timeout) noexcept;
+	EspUploadResult flashBegin(uint32_t addr, uint32_t size) noexcept;
+	EspUploadResult flashFinish(bool reboot) noexcept;
+	static uint16_t checksum(const uint8_t *data, uint16_t dataLen, uint16_t cksum) noexcept;
+	EspUploadResult flashWriteBlock(uint16_t flashParmVal, uint16_t flashParmMask) noexcept;
+	EspUploadResult DoErase(uint32_t address, uint32_t size) noexcept;
 
 	UARTClass& uploadPort;
 	WiFiInterface& interface;

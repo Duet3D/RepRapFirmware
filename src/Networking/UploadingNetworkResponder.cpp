@@ -9,7 +9,7 @@
 #include "Socket.h"
 #include "Platform.h"
 
-UploadingNetworkResponder::UploadingNetworkResponder(NetworkResponder *n) : NetworkResponder(n)
+UploadingNetworkResponder::UploadingNetworkResponder(NetworkResponder *n) noexcept : NetworkResponder(n)
 #if HAS_MASS_STORAGE
 	, uploadError(false)
 #endif
@@ -17,14 +17,14 @@ UploadingNetworkResponder::UploadingNetworkResponder(NetworkResponder *n) : Netw
 }
 
 // This is called when we lose a connection or when we are asked to terminate. Overridden in some derived classes.
-void UploadingNetworkResponder::ConnectionLost()
+void UploadingNetworkResponder::ConnectionLost() noexcept
 {
 	CancelUpload();
 	NetworkResponder::ConnectionLost();
 }
 
 // If this responder has an upload in progress, cancel it
-void UploadingNetworkResponder::CancelUpload()
+void UploadingNetworkResponder::CancelUpload() noexcept
 {
 #if HAS_MASS_STORAGE
 	if (fileBeingUploaded.IsLive())
@@ -32,7 +32,7 @@ void UploadingNetworkResponder::CancelUpload()
 		fileBeingUploaded.Close();
 		if (!filenameBeingProcessed.IsEmpty())
 		{
-			GetPlatform().GetMassStorage()->Delete(filenameBeingProcessed.c_str());
+			MassStorage::Delete(filenameBeingProcessed.c_str());
 			filenameBeingProcessed.Clear();
 		}
 	}
@@ -42,7 +42,7 @@ void UploadingNetworkResponder::CancelUpload()
 #if HAS_MASS_STORAGE
 
 // Start writing to a new file
-FileStore * UploadingNetworkResponder::StartUpload(const char* folder, const char *fileName, const OpenMode mode, const uint32_t preAllocSize)
+FileStore * UploadingNetworkResponder::StartUpload(const char* folder, const char *fileName, const OpenMode mode, const uint32_t preAllocSize) noexcept
 {
 	if (!MassStorage::CombineName(filenameBeingProcessed.GetRef(), folder, fileName))
 	{
@@ -67,7 +67,7 @@ FileStore * UploadingNetworkResponder::StartUpload(const char* folder, const cha
 }
 
 // Finish a file upload. Set variable uploadError if anything goes wrong.
-void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified, bool gotCrc, uint32_t expectedCrc)
+void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified, bool gotCrc, uint32_t expectedCrc) noexcept
 {
 	// Flush remaining data for FSO
 	if (!fileBeingUploaded.Flush())
@@ -100,7 +100,7 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 		const char *uploadFilename = filenameBeingProcessed.c_str();
 		if (uploadError)
 		{
-			GetPlatform().GetMassStorage()->Delete(uploadFilename);
+			MassStorage::Delete(uploadFilename);
 		}
 		else
 		{
@@ -108,15 +108,15 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 			origFilename.catn(uploadFilename, filenameBeingProcessed.GetRef().strlen() - strlen(UPLOAD_EXTENSION));
 
 			// Delete possibly existing files with that name (i.e. prepare "overwrite")
-			GetPlatform().GetMassStorage()->Delete(origFilename.c_str());
+			MassStorage::Delete(origFilename.c_str());
 
 			// Rename the uploaded file to it's original name
-			GetPlatform().GetMassStorage()->Rename(uploadFilename, origFilename.c_str());
+			MassStorage::Rename(uploadFilename, origFilename.c_str());
 
 			if (fileLastModified != 0)
 			{
 				// Update the file timestamp if it was specified
-				(void)GetPlatform().GetMassStorage()->SetLastModifiedTime(origFilename.c_str(), fileLastModified);
+				(void)MassStorage::SetLastModifiedTime(origFilename.c_str(), fileLastModified);
 			}
 		}
 		filenameBeingProcessed.Clear();

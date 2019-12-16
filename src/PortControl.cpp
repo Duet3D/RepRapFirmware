@@ -50,7 +50,7 @@ uint32_t PortControl::UpdatePorts()
 	}
 
 	// Find the DDA whose IO port bits we should set now
-	const uint32_t now = StepTimer::GetInterruptClocks() + advanceClocks;
+	const uint32_t now = StepTimer::GetTimerTicks() + advanceClocks;
 	uint32_t moveEndTime = cdda->GetMoveStartTime();
 	DDA::DDAState st = cdda->GetState();
 	do

@@ -13,7 +13,7 @@ static bool i2cInitialised = false;
 #endif
 
 // Initialise the I2C interface, if not already done
-void I2C::Init()
+void I2C::Init() noexcept
 {
 #if defined(I2C_IFACE)
 	if (!i2cInitialised)
@@ -34,7 +34,7 @@ void I2C::Init()
 
 static TaskHandle_t twiTask = nullptr;				// the task that is waiting for a TWI command to complete
 
-extern "C" void WIRE_ISR_HANDLER()
+extern "C" void WIRE_ISR_HANDLER() noexcept
 {
 	WIRE_INTERFACE->TWI_IDR = 0xFFFFFFFF;
 	if (twiTask != nullptr)
@@ -46,7 +46,7 @@ extern "C" void WIRE_ISR_HANDLER()
 	}
 }
 
-uint32_t I2C::statusWaitFunc(Twi *twi, uint32_t bitsToWaitFor)
+uint32_t I2C::statusWaitFunc(Twi *twi, uint32_t bitsToWaitFor) noexcept
 {
 	uint32_t sr = twi->TWI_SR;
 	if ((sr & bitsToWaitFor) == 0)

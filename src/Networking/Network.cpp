@@ -46,7 +46,7 @@ constexpr size_t NetworkStackWords = 550;
 
 static Task<NetworkStackWords> networkTask;
 
-Network::Network(Platform& p) : platform(p), responders(nullptr), nextResponderToPoll(nullptr)
+Network::Network(Platform& p) noexcept : platform(p), responders(nullptr), nextResponderToPoll(nullptr)
 {
 #if defined(DUET3_V03)
 	interfaces[0] = new LwipEthernetInterface(p);
@@ -89,7 +89,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Network)
 #endif
 
 // Note that Platform::Init() must be called before this to that Platform::IsDuetWiFi() returns the correct value
-void Network::Init()
+void Network::Init() noexcept
 {
 	httpMutex.Create("HTTP");
 #if SUPPORT_TELNET
@@ -139,7 +139,7 @@ void Network::Init()
 	slowLoop = 0;
 }
 
-GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, int secure, const StringRef& reply)
+GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept
 {
 	if (interface < NumNetworkInterfaces)
 	{
@@ -150,7 +150,7 @@ GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol prot
 	return GCodeResult::error;
 }
 
-GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol protocol, const StringRef& reply)
+GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol protocol, const StringRef& reply) noexcept
 {
 	if (interface < NumNetworkInterfaces)
 	{
@@ -197,7 +197,7 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 }
 
 // Report the protocols and ports in use
-GCodeResult Network::ReportProtocols(unsigned int interface, const StringRef& reply) const
+GCodeResult Network::ReportProtocols(unsigned int interface, const StringRef& reply) const noexcept
 {
 	if (interface < NumNetworkInterfaces)
 	{
@@ -208,7 +208,7 @@ GCodeResult Network::ReportProtocols(unsigned int interface, const StringRef& re
 	return GCodeResult::error;
 }
 
-GCodeResult Network::EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply)
+GCodeResult Network::EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply) noexcept
 {
 	if (interface < NumNetworkInterfaces)
 	{
@@ -237,7 +237,7 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 	return GCodeResult::error;
 }
 
-WiFiInterface *Network::FindWiFiInterface() const
+WiFiInterface *Network::FindWiFiInterface() const noexcept
 {
 #if HAS_WIFI_NETWORKING
 	for (NetworkInterface *iface : interfaces)
@@ -266,7 +266,7 @@ GCodeResult Network::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef&
 	return GCodeResult::error;
 }
 
-const char* Network::GetWiFiServerVersion() const
+const char* Network::GetWiFiServerVersion() const noexcept
 {
 #if HAS_WIFI_NETWORKING
 	WiFiInterface * const wifiInterface = FindWiFiInterface();
@@ -279,7 +279,7 @@ const char* Network::GetWiFiServerVersion() const
 	return "no WiFi interface";
 }
 
-WifiFirmwareUploader *Network::GetWifiUploader() const
+WifiFirmwareUploader *Network::GetWifiUploader() const noexcept
 {
 #if HAS_WIFI_NETWORKING
 	WiFiInterface * const wifiInterface = FindWiFiInterface();
@@ -292,7 +292,7 @@ WifiFirmwareUploader *Network::GetWifiUploader() const
 	return nullptr;
 }
 
-void Network::ResetWiFiForUpload(bool external)
+void Network::ResetWiFiForUpload(bool external) noexcept
 {
 #if HAS_WIFI_NETWORKING
 	WiFiInterface * const wifiInterface = FindWiFiInterface();
@@ -303,18 +303,18 @@ void Network::ResetWiFiForUpload(bool external)
 #endif
 }
 
-extern "C" [[noreturn]]void NetworkLoop(void *)
+extern "C" [[noreturn]]void NetworkLoop(void *) noexcept
 {
 	for (;;)
 	{
-		reprap.GetNetwork().Spin(true);
+		reprap.GetNetwork().Spin();
 		RTOSIface::Yield();
 	}
 }
 
 // This is called at the end of config.g processing.
 // Start the network if it was enabled
-void Network::Activate()
+void Network::Activate() noexcept
 {
 	for (NetworkInterface *iface : interfaces)
 	{
@@ -327,7 +327,7 @@ void Network::Activate()
 	networkTask.Create(NetworkLoop, "NETWORK", nullptr, TaskPriority::SpinPriority);
 }
 
-void Network::Exit()
+void Network::Exit() noexcept
 {
 	for (NetworkInterface *iface : interfaces)
 	{
@@ -345,11 +345,15 @@ void Network::Exit()
 	TelnetResponder::Disable();
 #endif
 
-	// TODO: close down the network and suspend the network task. Not trivial because currently, the caller may be the network task.
+	if (TaskBase::GetCallerTaskHandle() != networkTask.GetHandle())
+	{
+		// Terminate the network task. Not trivial because currently, the caller may be the network task.
+		networkTask.TerminateAndUnlink();
+	}
 }
 
 // Get the network state into the reply buffer, returning true if there is some sort of error
-GCodeResult Network::GetNetworkState(unsigned int interface, const StringRef& reply)
+GCodeResult Network::GetNetworkState(unsigned int interface, const StringRef& reply) noexcept
 {
 	if (interface < NumNetworkInterfaces)
 	{
@@ -360,43 +364,40 @@ GCodeResult Network::GetNetworkState(unsigned int interface, const StringRef& re
 	return GCodeResult::error;
 }
 
-bool Network::IsWiFiInterface(unsigned int interface) const
+bool Network::IsWiFiInterface(unsigned int interface) const noexcept
 {
 	return interface < NumNetworkInterfaces && interfaces[interface]->IsWiFiInterface();
 }
 
 // Main spin loop. If 'full' is true then we are being called from the main spin loop. If false then we are being called during HSMCI idle time.
-void Network::Spin(bool full)
+void Network::Spin() noexcept
 {
-	const uint32_t lastTime = StepTimer::GetInterruptClocks();
+	const uint32_t lastTime = StepTimer::GetTimerTicks();
 
 	// Keep the network modules running
 	for (NetworkInterface *iface : interfaces)
 	{
-		iface->Spin(full);
+		iface->Spin();
 	}
 
 	// Poll the responders
-	if (full)
+	NetworkResponder *nr = nextResponderToPoll;
+	bool doneSomething = false;
+	do
 	{
-		NetworkResponder *nr = nextResponderToPoll;
-		bool doneSomething = false;
-		do
+		if (nr == nullptr)
 		{
-			if (nr == nullptr)
-			{
-				nr = responders;		// 'responders' can't be null at this point
-			}
-			doneSomething = nr->Spin();
-			nr = nr->GetNext();
-		} while (!doneSomething && nr != nextResponderToPoll);
-		nextResponderToPoll = nr;
-	}
+			nr = responders;		// 'responders' can't be null at this point
+		}
+		doneSomething = nr->Spin();
+		nr = nr->GetNext();
+	} while (!doneSomething && nr != nextResponderToPoll);
+	nextResponderToPoll = nr;
 
 	HttpResponder::CheckSessions();		// time out any sessions that have gone away
 
 	// Keep track of the loop time
-	const uint32_t dt = StepTimer::GetInterruptClocks() - lastTime;
+	const uint32_t dt = StepTimer::GetTimerTicks() - lastTime;
 	if (dt < fastLoop)
 	{
 		fastLoop = dt;
@@ -408,7 +409,7 @@ void Network::Spin(bool full)
 }
 
 // Process the network timer interrupt
-void Network::Interrupt()
+void Network::Interrupt() noexcept
 {
 	for (NetworkInterface *iface : interfaces)
 	{
@@ -416,7 +417,7 @@ void Network::Interrupt()
 	}
 }
 
-void Network::Diagnostics(MessageType mtype)
+void Network::Diagnostics(MessageType mtype) noexcept
 {
 	platform.Message(mtype, "=== Network ===\n");
 
@@ -439,7 +440,7 @@ void Network::Diagnostics(MessageType mtype)
 	}
 }
 
-bool Network::InNetworkStack() const
+bool Network::InNetworkStack() const noexcept
 {
 	for (NetworkInterface *iface : interfaces)
 	{
@@ -451,7 +452,7 @@ bool Network::InNetworkStack() const
 	return false;
 }
 
-int Network::EnableState(unsigned int interface) const
+int Network::EnableState(unsigned int interface) const noexcept
 {
 	if (interface < NumNetworkInterfaces)
 	{
@@ -460,7 +461,7 @@ int Network::EnableState(unsigned int interface) const
 	return -1;
 }
 
-void Network::SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway)
+void Network::SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept
 {
 	for (NetworkInterface *iface : interfaces)
 	{
@@ -471,12 +472,12 @@ void Network::SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, I
 	}
 }
 
-IPAddress Network::GetIPAddress(unsigned int interface) const
+IPAddress Network::GetIPAddress(unsigned int interface) const noexcept
 {
 	return (interface < NumNetworkInterfaces) ? interfaces[interface]->GetIPAddress() : IPAddress();
 }
 
-void Network::SetHostname(const char *name)
+void Network::SetHostname(const char *name) noexcept
 {
 	size_t i = 0;
 	while (*name && i < ARRAY_UPB(hostname))
@@ -509,7 +510,7 @@ void Network::SetHostname(const char *name)
 }
 
 // Net the MAC address. Pass -1 as the interface number to set the default MAC address for interfaces that don't have one.
-void Network::SetMacAddress(unsigned int interface, const uint8_t mac[])
+void Network::SetMacAddress(unsigned int interface, const uint8_t mac[]) noexcept
 {
 	if (interface < NumNetworkInterfaces)
 	{
@@ -517,7 +518,7 @@ void Network::SetMacAddress(unsigned int interface, const uint8_t mac[])
 	}
 }
 
-const uint8_t *Network::GetMacAddress(unsigned int interface) const
+const uint8_t *Network::GetMacAddress(unsigned int interface) const noexcept
 {
 	if (interface >= NumNetworkInterfaces)
 	{
@@ -527,7 +528,7 @@ const uint8_t *Network::GetMacAddress(unsigned int interface) const
 }
 
 // Find a responder to process a new connection
-bool Network::FindResponder(Socket *skt, NetworkProtocol protocol)
+bool Network::FindResponder(Socket *skt, NetworkProtocol protocol) noexcept
 {
 	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
 	{
@@ -539,13 +540,13 @@ bool Network::FindResponder(Socket *skt, NetworkProtocol protocol)
 	return false;
 }
 
-void Network::HandleHttpGCodeReply(const char *msg)
+void Network::HandleHttpGCodeReply(const char *msg) noexcept
 {
 	MutexLocker lock(httpMutex);
 	HttpResponder::HandleGCodeReply(msg);
 }
 
-void Network::HandleTelnetGCodeReply(const char *msg)
+void Network::HandleTelnetGCodeReply(const char *msg) noexcept
 {
 #if SUPPORT_TELNET
 	MutexLocker lock(telnetMutex);
@@ -553,13 +554,13 @@ void Network::HandleTelnetGCodeReply(const char *msg)
 #endif
 }
 
-void Network::HandleHttpGCodeReply(OutputBuffer *buf)
+void Network::HandleHttpGCodeReply(OutputBuffer *buf) noexcept
 {
 	MutexLocker lock(httpMutex);
 	HttpResponder::HandleGCodeReply(buf);
 }
 
-void Network::HandleTelnetGCodeReply(OutputBuffer *buf)
+void Network::HandleTelnetGCodeReply(OutputBuffer *buf) noexcept
 {
 #if SUPPORT_TELNET
 	MutexLocker lock(telnetMutex);
@@ -569,7 +570,7 @@ void Network::HandleTelnetGCodeReply(OutputBuffer *buf)
 #endif
 }
 
-uint32_t Network::GetHttpReplySeq()
+uint32_t Network::GetHttpReplySeq() noexcept
 {
 	return HttpResponder::GetReplySeq();
 }

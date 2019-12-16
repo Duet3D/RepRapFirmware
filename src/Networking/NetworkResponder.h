@@ -24,11 +24,11 @@ class Socket;
 class NetworkResponder
 {
 public:
-	NetworkResponder *GetNext() const { return next; }
-	virtual bool Spin() = 0;							// do some work, returning true if we did anything significant
-	virtual bool Accept(Socket *s, NetworkProtocol protocol) = 0;	// ask the responder to accept this connection, returns true if it did
-	virtual void Terminate(NetworkProtocol protocol, NetworkInterface *interface) = 0;	// terminate the responder if it is serving the specified protocol on the specified interface
-	virtual void Diagnostics(MessageType mtype) const = 0;
+	NetworkResponder *GetNext() const noexcept { return next; }
+	virtual bool Spin() noexcept = 0;							// do some work, returning true if we did anything significant
+	virtual bool Accept(Socket *s, NetworkProtocol protocol) noexcept = 0;	// ask the responder to accept this connection, returns true if it did
+	virtual void Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept = 0;	// terminate the responder if it is serving the specified protocol on the specified interface
+	virtual void Diagnostics(MessageType mtype) const noexcept = 0;
 
 protected:
 	// State machine control. Not all derived classes use all states.
@@ -54,17 +54,17 @@ protected:
 		authenticating
 	};
 
-	NetworkResponder(NetworkResponder *n);
+	NetworkResponder(NetworkResponder *n) noexcept;
 
-	void Commit(ResponderState nextState = ResponderState::free, bool report = true);
-	virtual void SendData();
-	virtual void ConnectionLost();
+	void Commit(ResponderState nextState = ResponderState::free, bool report = true) noexcept;
+	virtual void SendData() noexcept;
+	virtual void ConnectionLost() noexcept;
 
-	IPAddress GetRemoteIP() const;
-	void ReportOutputBufferExhaustion(const char *sourceFile, int line);
+	IPAddress GetRemoteIP() const noexcept;
+	void ReportOutputBufferExhaustion(const char *sourceFile, int line) noexcept;
 
-	static Platform& GetPlatform() { return reprap.GetPlatform(); }
-	static Network& GetNetwork() { return reprap.GetNetwork(); }
+	static Platform& GetPlatform() noexcept { return reprap.GetPlatform(); }
+	static Network& GetNetwork() noexcept { return reprap.GetNetwork(); }
 
 	// General state
 	NetworkResponder *next;								// next responder in the list

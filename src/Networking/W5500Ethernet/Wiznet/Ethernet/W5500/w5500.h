@@ -15,30 +15,30 @@
 //!
 //! Copyright (c)  2013, WIZnet Co., LTD.
 //! All rights reserved.
-//! 
-//! Redistribution and use in source and binary forms, with or without 
-//! modification, are permitted provided that the following conditions 
-//! are met: 
-//! 
-//!     * Redistributions of source code must retain the above copyright 
-//! notice, this list of conditions and the following disclaimer. 
+//!
+//! Redistribution and use in source and binary forms, with or without
+//! modification, are permitted provided that the following conditions
+//! are met:
+//!
+//!     * Redistributions of source code must retain the above copyright
+//! notice, this list of conditions and the following disclaimer.
 //!     * Redistributions in binary form must reproduce the above copyright
 //! notice, this list of conditions and the following disclaimer in the
-//! documentation and/or other materials provided with the distribution. 
-//!     * Neither the name of the <ORGANIZATION> nor the names of its 
-//! contributors may be used to endorse or promote products derived 
-//! from this software without specific prior written permission. 
-//! 
+//! documentation and/or other materials provided with the distribution.
+//!     * Neither the name of the <ORGANIZATION> nor the names of its
+//! contributors may be used to endorse or promote products derived
+//! from this software without specific prior written permission.
+//!
 //! THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-//! AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+//! AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 //! IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-//! ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE 
-//! LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-//! CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+//! ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+//! LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+//! CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
 //! SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-//! INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-//! CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-//! ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
+//! INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+//! CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+//! ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 //! THE POSSIBILITY OF SUCH DAMAGE.
 //
 //*****************************************************************************
@@ -95,8 +95,8 @@ extern spi_status_t SpiSendBurst(const uint8_t* pBuf, size_t len);
  * - @ref WIZCHIP_register : @ref Common_register_group and @ref Socket_register_group
  * - @ref WIZCHIP_IO_Functions : @ref Basic_IO_function, @ref Common_register_access_function and @ref Socket_register_access_function
  */
- 
- 
+
+
 /**
  * @defgroup WIZCHIP_register WIZCHIP register
  * @ingroup W5500
@@ -167,9 +167,9 @@ extern spi_status_t SpiSendBurst(const uint8_t* pBuf, size_t len);
  * @sa UIPR, UPORTR : ICMP message.
  * @sa PHYCFGR, VERSIONR : etc.
  */
- 
-  
- 
+
+
+
 /**
  * @defgroup Socket_register_group Socket register
  * @ingroup WIZCHIP_register
@@ -182,9 +182,9 @@ extern spi_status_t SpiSendBurst(const uint8_t* pBuf, size_t len);
  * @sa Sn_MSSR, Sn_TOS, Sn_TTL, Sn_KPALVTR, Sn_FRAG : Internet protocol.
  * @sa Sn_RXBUF_SIZE, Sn_TXBUF_SIZE, Sn_TX_FSR, Sn_TX_RD, Sn_TX_WR, Sn_RX_RSR, Sn_RX_RD, Sn_RX_WR : Data communication
  */
- 
- 
- 
+
+
+
  /**
  * @defgroup Basic_IO_function Basic I/O function
  * @ingroup WIZCHIP_IO_Functions
@@ -202,7 +202,7 @@ extern spi_status_t SpiSendBurst(const uint8_t* pBuf, size_t len);
  * @ingroup WIZCHIP_IO_Functions
  * @brief These are functions to access <b>socket registers</b>.
  */
- 
+
 //------------------------------- defgroup end --------------------------------------------
 //----------------------------- W5500 Common Registers IOMAP -----------------------------
 /**
@@ -305,7 +305,7 @@ const uint32_t MR = _W5500_IO_BASE_ + (0x0000 << 8) + (WIZCHIP_CREG_BLOCK << 3);
  * @brief Socket Interrupt Mask Register(R/W)
  * @details Each bit of @ref SIMR corresponds to each bit of @ref SIR.
  * When a bit of @ref SIMR is and the corresponding bit of @ref SIR is  Interrupt will be issued.
- * In other words, if a bit of @ref SIMR is  an interrupt will be not issued even if the corresponding bit of @ref SIR is 
+ * In other words, if a bit of @ref SIMR is  an interrupt will be not issued even if the corresponding bit of @ref SIR is
  */
  const uint32_t SIMR = _W5500_IO_BASE_ + (0x0018 << 8) + (WIZCHIP_CREG_BLOCK << 3);
 
@@ -437,7 +437,7 @@ const uint32_t MR = _W5500_IO_BASE_ + (0x0000 << 8) + (WIZCHIP_CREG_BLOCK << 3);
  *  - @ref Sn_MR_CLOSE	: Unused socket
  *  @note MACRAW mode should be only used in Socket 0.
  */
- static inline uint32_t Sn_MR(uint8_t N)
+ static inline uint32_t Sn_MR(uint8_t N) noexcept
  {
 	 return _W5500_IO_BASE_ + (0x0000 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
  }
@@ -459,7 +459,7 @@ const uint32_t MR = _W5500_IO_BASE_ + (0x0000 << 8) + (WIZCHIP_CREG_BLOCK << 3);
  * - @ref Sn_CR_SEND_KEEP 	: Send keep alive message.
  * - @ref Sn_CR_RECV		: Update RX buffer pointer and receive data.
  */
- static inline uint32_t Sn_CR(uint8_t N)
+ static inline uint32_t Sn_CR(uint8_t N) noexcept
  {
 	 return _W5500_IO_BASE_ + (0x0001 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
  }
@@ -480,7 +480,7 @@ const uint32_t MR = _W5500_IO_BASE_ + (0x0000 << 8) + (WIZCHIP_CREG_BLOCK << 3);
  * - \ref Sn_IR_DISCON : <b>DISCON Interrupt</b>
  * - \ref Sn_IR_CON : <b>CON Interrupt</b>
  */
- static inline uint32_t Sn_IR(uint8_t N)
+ static inline uint32_t Sn_IR(uint8_t N) noexcept
  {
 	 return _W5500_IO_BASE_ + (0x0002 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
  }
@@ -506,7 +506,7 @@ const uint32_t MR = _W5500_IO_BASE_ + (0x0000 << 8) + (WIZCHIP_CREG_BLOCK << 3);
  * - @ref SOCK_TIME_WAIT	: Closing state
  * - @ref SOCK_LAST_ACK 	: Closing state
  */
- static inline uint32_t Sn_SR(uint8_t N)
+ static inline uint32_t Sn_SR(uint8_t N) noexcept
  {
 	 return _W5500_IO_BASE_ + (0x0003 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
  }
@@ -517,7 +517,7 @@ const uint32_t MR = _W5500_IO_BASE_ + (0x0000 << 8) + (WIZCHIP_CREG_BLOCK << 3);
  * @details @ref Sn_PORT configures the source port number of Socket n.
  * It is valid when Socket n is used in TCP/UDP mode. It should be set before OPEN command is ordered.
  */
- static inline uint32_t Sn_PORT(uint8_t N)
+ static inline uint32_t Sn_PORT(uint8_t N) noexcept
  {
 	 return _W5500_IO_BASE_ + (0x0004 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
  }
@@ -528,7 +528,7 @@ const uint32_t MR = _W5500_IO_BASE_ + (0x0000 << 8) + (WIZCHIP_CREG_BLOCK << 3);
  * @details @ref Sn_DHAR configures the destination hardware address of Socket n when using SEND_MAC command in UDP mode or
  * it indicates that it is acquired in ARP-process by CONNECT/SEND command.
  */
- static inline uint32_t Sn_DHAR(uint8_t N)
+ static inline uint32_t Sn_DHAR(uint8_t N) noexcept
  {
 	 return _W5500_IO_BASE_ + (0x0006 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
  }
@@ -541,7 +541,7 @@ const uint32_t MR = _W5500_IO_BASE_ + (0x0000 << 8) + (WIZCHIP_CREG_BLOCK << 3);
  * In TCP server mode, it indicates an IP address of TCP clientafter successfully establishing connection.
  * In UDP mode, it configures an IP address of peer to be received the UDP packet by SEND or SEND_MAC command.
  */
- static inline uint32_t  Sn_DIPR(uint8_t N)
+ static inline uint32_t  Sn_DIPR(uint8_t N) noexcept
  {
 	 return _W5500_IO_BASE_ + (0x000C << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
  }
@@ -554,7 +554,7 @@ const uint32_t MR = _W5500_IO_BASE_ + (0x0000 << 8) + (WIZCHIP_CREG_BLOCK << 3);
  * In TCP Servermode, it indicates the port number of TCP client after successfully establishing connection.
  * In UDP mode, it configures the port number of peer to be transmitted the UDP packet by SEND/SEND_MAC command.
  */
- static inline uint32_t  Sn_DPORT(uint8_t N)
+ static inline uint32_t  Sn_DPORT(uint8_t N) noexcept
  {
 	 return _W5500_IO_BASE_ + (0x0010 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
  }
@@ -564,7 +564,7 @@ const uint32_t MR = _W5500_IO_BASE_ + (0x0000 << 8) + (WIZCHIP_CREG_BLOCK << 3);
  * @brief Maximum Segment Size(Sn_MSSR0) register address(R/W)
  * @details @ref Sn_MSSR configures or indicates the MTU(Maximum Transfer Unit) of Socket n.
  */
- static inline uint32_t  Sn_MSSR(uint8_t N)
+ static inline uint32_t  Sn_MSSR(uint8_t N) noexcept
  {
 	 return _W5500_IO_BASE_ + (0x0012 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
  }
@@ -577,7 +577,7 @@ const uint32_t MR = _W5500_IO_BASE_ + (0x0000 << 8) + (WIZCHIP_CREG_BLOCK << 3);
  * @details @ref Sn_TOS configures the TOS(Type Of Service field in IP Header) of Socket n.
  * It is set before OPEN command.
  */
-static inline uint32_t  Sn_TOS(uint8_t N)
+static inline uint32_t  Sn_TOS(uint8_t N) noexcept
 {
 	return _W5500_IO_BASE_ + (0x0015 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
 }
@@ -588,13 +588,13 @@ static inline uint32_t  Sn_TOS(uint8_t N)
  * @details @ref Sn_TTL configures the TTL(Time To Live field in IP header) of Socket n.
  * It is set before OPEN command.
  */
-static inline uint32_t  Sn_TTL(uint8_t N)
+static inline uint32_t  Sn_TTL(uint8_t N) noexcept
 {
 	return _W5500_IO_BASE_ + (0x0016 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
 }
 
 // Reserved			         (_W5500_IO_BASE_ + (0x0017 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3))
-// Reserved			         (_W5500_IO_BASE_ + (0x0018 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3)) 
+// Reserved			         (_W5500_IO_BASE_ + (0x0018 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3))
 // Reserved			         (_W5500_IO_BASE_ + (0x0019 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3))
 // Reserved			         (_W5500_IO_BASE_ + (0x001A << 8) + (WIZCHIP_SREG_BLOCK(N) << 3))
 // Reserved			         (_W5500_IO_BASE_ + (0x001B << 8) + (WIZCHIP_SREG_BLOCK(N) << 3))
@@ -611,7 +611,7 @@ static inline uint32_t  Sn_TTL(uint8_t N)
  * user can re-configure its size using @ref Sn_RXBUF_SIZE. The total sum of @ref Sn_RXBUF_SIZE can not be exceed 16Kbytes.
  * When exceeded, the data reception error is occurred.
  */
-static inline uint32_t  Sn_RXBUF_SIZE(uint8_t N)
+static inline uint32_t  Sn_RXBUF_SIZE(uint8_t N) noexcept
 {
 	 return _W5500_IO_BASE_ + (0x001E << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
 }
@@ -625,7 +625,7 @@ static inline uint32_t  Sn_RXBUF_SIZE(uint8_t N)
  * user can be re-configure its size using @ref Sn_TXBUF_SIZE. The total sum of @ref Sn_TXBUF_SIZE can not be exceed 16Kbytes.
  * When exceeded, the data transmission error is occurred.
  */
-static inline uint32_t  Sn_TXBUF_SIZE(uint8_t N)
+static inline uint32_t  Sn_TXBUF_SIZE(uint8_t N) noexcept
 {
 	 return _W5500_IO_BASE_ + (0x001F << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
 }
@@ -639,7 +639,7 @@ static inline uint32_t  Sn_TXBUF_SIZE(uint8_t N)
  * transmit the data with SEND/SEND_MAC command after saving the data in Socket n TX buffer. But, if data is bigger than its checked size,
  * transmit the data after dividing into the checked size and saving in the Socket n TX buffer.
  */
-static inline uint32_t  Sn_TX_FSR(uint8_t N)
+static inline uint32_t  Sn_TX_FSR(uint8_t N) noexcept
 {
 	 return _W5500_IO_BASE_ + (0x0020 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
 }
@@ -654,7 +654,7 @@ static inline uint32_t  Sn_TX_FSR(uint8_t N)
  * If its increment value exceeds the maximum value 0xFFFF, (greater than 0x10000 and the carry bit occurs),
  * then the carry bit is ignored and will automatically update with the lower 16bits value.
  */
-static inline uint32_t  Sn_TX_RD(uint8_t N)
+static inline uint32_t  Sn_TX_RD(uint8_t N) noexcept
 {
 	 return _W5500_IO_BASE_ + (0x0022 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
 }
@@ -671,7 +671,7 @@ static inline uint32_t  Sn_TX_RD(uint8_t N)
  * then the carry bit is ignored and will automatically update with the lower 16bits value.\n
  * 4. Transmit the saved data in Socket n TX Buffer by using SEND/SEND command
  */
-static inline uint32_t  Sn_TX_WR(uint8_t N)
+static inline uint32_t  Sn_TX_WR(uint8_t N) noexcept
 {
 	 return _W5500_IO_BASE_ + (0x0024 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
 }
@@ -683,7 +683,7 @@ static inline uint32_t  Sn_TX_WR(uint8_t N)
  * @ref Sn_RX_RSR does not exceed the @ref Sn_RXBUF_SIZE and is calculated as the difference between
  * Socket n RX Write Pointer (@ref Sn_RX_WR)and Socket n RX Read Pointer (@ref Sn_RX_RD)
  */
-static inline uint32_t  Sn_RX_RSR(uint8_t N)
+static inline uint32_t  Sn_RX_RSR(uint8_t N) noexcept
 {
 	 return _W5500_IO_BASE_ + (0x0026 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
 }
@@ -699,7 +699,7 @@ static inline uint32_t  Sn_RX_RSR(uint8_t N)
  * update with the lower 16bits value ignored the carry bit.\n
  * 4. Order RECV command is for notifying the updated @ref Sn_RX_RD to W5500.
  */
-static inline uint32_t  Sn_RX_RD(uint8_t N)
+static inline uint32_t  Sn_RX_RD(uint8_t N) noexcept
 {
 	 return _W5500_IO_BASE_ + (0x0028 << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
 }
@@ -711,7 +711,7 @@ static inline uint32_t  Sn_RX_RD(uint8_t N)
  * If the increased value exceeds the maximum value 0xFFFF, (greater than 0x10000 and the carry bit occurs),
  * then the carry bit is ignored and will automatically update with the lower 16bits value.
  */
-static inline uint32_t Sn_RX_WR(uint8_t N)
+static inline uint32_t Sn_RX_WR(uint8_t N) noexcept
 {
 	 return _W5500_IO_BASE_ + (0x002A << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
 }
@@ -720,11 +720,11 @@ static inline uint32_t Sn_RX_WR(uint8_t N)
  * @ingroup Socket_register_group
  * @brief socket interrupt mask register(R)
  * @details @ref Sn_IMR masks the interrupt of Socket n.
- * Each bit corresponds to each bit of @ref Sn_IR. When a Socket n Interrupt is occurred and the corresponding bit of @ref Sn_IMR is 
- * the corresponding bit of @ref Sn_IR becomes  When both the corresponding bit of @ref Sn_IMR and @ref Sn_IR are and the n-th bit of @ref IR is 
+ * Each bit corresponds to each bit of @ref Sn_IR. When a Socket n Interrupt is occurred and the corresponding bit of @ref Sn_IMR is
+ * the corresponding bit of @ref Sn_IR becomes  When both the corresponding bit of @ref Sn_IMR and @ref Sn_IR are and the n-th bit of @ref IR is
  * Host is interrupted by asserted INTn PIN to low.
  */
-static inline uint32_t Sn_IMR(uint8_t N)
+static inline uint32_t Sn_IMR(uint8_t N) noexcept
 {
 	 return _W5500_IO_BASE_ + (0x002C << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
 }
@@ -734,7 +734,7 @@ static inline uint32_t Sn_IMR(uint8_t N)
  * @brief Fragment field value in IP header register(R/W)
  * @details @ref Sn_FRAG configures the FRAG(Fragment field in IP header).
  */
- static inline uint32_t Sn_FRAG(uint8_t N)
+ static inline uint32_t Sn_FRAG(uint8_t N) noexcept
  {
 	 return _W5500_IO_BASE_ + (0x002D << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
  }
@@ -750,7 +750,7 @@ static inline uint32_t Sn_IMR(uint8_t N)
  * and KA packet can be transmitted by SEND_KEEP command by the host (Manual-keep-alive-process).
  * Manual-keep-alive-process is ignored in case of '@ref Sn_KPALVTR > 0'.
  */
-static inline uint32_t Sn_KPALVTR(uint8_t N)
+static inline uint32_t Sn_KPALVTR(uint8_t N) noexcept
 {
 	return _W5500_IO_BASE_ + (0x002F << 8) + (WIZCHIP_SREG_BLOCK(N) << 3);
 }
@@ -790,7 +790,7 @@ const uint8_t MR_PB = 0x10;
  * @brief Enable PPPoE
  * @details 0 : DisablePPPoE mode\n
  * 1 : EnablePPPoE mode\n
- * If you use ADSL, this bit should be 
+ * If you use ADSL, this bit should be
  */
 const uint8_t MR_PPPOE = 0x08;
 
@@ -811,7 +811,7 @@ const uint8_t IR_CONFLICT = 0x80;
 
 /**
  * @brief Get the destination unreachable message in UDP sending.
- * @details When receiving the ICMP (Destination port unreachable) packet, this bit is set as 
+ * @details When receiving the ICMP (Destination port unreachable) packet, this bit is set as
  * When this bit is  Destination Information such as IP address and Port number may be checked with the corresponding @ref UIPR & @ref UPORTR.
  */
 const uint8_t IR_UNREACH = 0x40;
@@ -910,7 +910,7 @@ const uint8_t Sn_MR_ND = 0x20;
  * @brief Unicast Block in UDP Multicasting
  * @details 0 : disable Unicast Blocking\n
  * 1 : enable Unicast Blocking\n
- * This bit blocks receiving the unicast packet during UDP mode(P[3:0] = 010 and MULTI = 
+ * This bit blocks receiving the unicast packet during UDP mode(P[3:0] = 010 and MULTI =
  */
 const uint8_t Sn_MR_UCASTB = 0x10;
 
@@ -958,7 +958,7 @@ const uint8_t Sn_MR_MFEN = Sn_MR_MULTI;
  * @brief Multicast Blocking in @ref Sn_MR_MACRAW mode
  * @details 0 : using IGMP version 2\n
  * 1 : using IGMP version 1\n
- * This bit is applied only during UDP mode(P[3:0] = 010 and MULTI = 
+ * This bit is applied only during UDP mode(P[3:0] = 010 and MULTI =
  * It configures the version for IGMP messages (Join/Leave/Report).
  */
 const uint8_t Sn_MR_MMB = Sn_MR_ND;
@@ -1013,7 +1013,7 @@ const uint8_t Sn_CR_OPEN = 0x01;
  * In this mode, Socket n operates as a TCP serverand waits for  connection-request (SYN packet) from any TCP client
  * The @ref Sn_SR changes the state from \ref SOCK_INIT to \ref SOCKET_LISTEN.
  * When a TCP clientconnection request is successfully established,
- * the @ref Sn_SR changes from SOCK_LISTEN to SOCK_ESTABLISHED and the @ref Sn_IR(0) becomes 
+ * the @ref Sn_SR changes from SOCK_LISTEN to SOCK_ESTABLISHED and the @ref Sn_IR(0) becomes
  * But when a TCP clientconnection request is failed, @ref Sn_IR(3) becomes and the status of @ref Sn_SR changes to SOCK_CLOSED.
  */
 const uint8_t Sn_CR_LISTEN = 0x02;
@@ -1224,7 +1224,7 @@ const uint8_t SOCK_MACRAW = 0x42;
 //#define SOCK_PPPOE                   0x5F
 
 /* IP PROTOCOL */
-#define IPPROTO_IP                   0        //< Dummy for IP 
+#define IPPROTO_IP                   0        //< Dummy for IP
 #define IPPROTO_ICMP                 1        //< Control message protocol
 #define IPPROTO_IGMP                 2        //< Internet group management protocol
 #define IPPROTO_GGP                  3        //< Gateway^2 (deprecated)
@@ -1247,7 +1247,7 @@ const uint8_t SOCK_MACRAW = 0x42;
  * \sa WIZCHIP_READ(), WIZCHIP_WRITE(), WIZCHIP_READ_BUF(), WIZCHIP_WRITE_BUF()
  * \sa WIZCHIP_CRITICAL_EXIT()
  */
-static inline void WIZCHIP_CRITICAL_ENTER() {}
+static inline void WIZCHIP_CRITICAL_ENTER() noexcept {}
 
 /**
  * @brief Exit a critical section
@@ -1260,7 +1260,7 @@ static inline void WIZCHIP_CRITICAL_ENTER() {}
  * @sa WIZCHIP_READ(), WIZCHIP_WRITE(), WIZCHIP_READ_BUF(), WIZCHIP_WRITE_BUF()
  * @sa WIZCHIP_CRITICAL_ENTER()
  */
-static inline void WIZCHIP_CRITICAL_EXIT() { }
+static inline void WIZCHIP_CRITICAL_EXIT() noexcept { }
 
 
 ////////////////////////
@@ -1273,7 +1273,7 @@ static inline void WIZCHIP_CRITICAL_EXIT() { }
  * @param AddrSel Register address
  * @return The value of register
  */
-uint8_t  WIZCHIP_READ (uint32_t AddrSel);
+uint8_t  WIZCHIP_READ (uint32_t AddrSel) noexcept;
 
 /**
  * @ingroup Basic_IO_function
@@ -1282,7 +1282,7 @@ uint8_t  WIZCHIP_READ (uint32_t AddrSel);
  * @param wb Write data
  * @return void
  */
-void     WIZCHIP_WRITE(uint32_t AddrSel, uint8_t wb );
+void     WIZCHIP_WRITE(uint32_t AddrSel, uint8_t wb ) noexcept;
 
 /**
  * @ingroup Basic_IO_function
@@ -1291,7 +1291,7 @@ void     WIZCHIP_WRITE(uint32_t AddrSel, uint8_t wb );
  * @param pBuf Pointer buffer to read data
  * @param len Data length
  */
-void     WIZCHIP_READ_BUF (uint32_t AddrSel, uint8_t* pBuf, uint16_t len);
+void     WIZCHIP_READ_BUF (uint32_t AddrSel, uint8_t* pBuf, uint16_t len) noexcept;
 
 /**
  * @ingroup Basic_IO_function
@@ -1300,13 +1300,13 @@ void     WIZCHIP_READ_BUF (uint32_t AddrSel, uint8_t* pBuf, uint16_t len);
  * @param pBuf Pointer buffer to write data
  * @param len Data length
  */
-void     WIZCHIP_WRITE_BUF(uint32_t AddrSel, const uint8_t* pBuf, uint16_t len);
+void     WIZCHIP_WRITE_BUF(uint32_t AddrSel, const uint8_t* pBuf, uint16_t len) noexcept;
 
 // Read into an IPAddress
-void WIZCHIP_READ_IP(uint32_t AddrSel, IPAddress& ip);
+void WIZCHIP_READ_IP(uint32_t AddrSel, IPAddress& ip) noexcept;
 
 // Write to an IPAddress
-void WIZCHIP_WRITE_IP(uint32_t AddrSel, const IPAddress& ip);
+void WIZCHIP_WRITE_IP(uint32_t AddrSel, const IPAddress& ip) noexcept;
 
 /////////////////////////////////
 // Common Register I/O function //
@@ -1317,7 +1317,7 @@ void WIZCHIP_WRITE_IP(uint32_t AddrSel, const IPAddress& ip);
  * @param (uint8_t)mr The value to be set.
  * @sa getMR()
  */
-static inline void setMR(uint8_t mr)
+static inline void setMR(uint8_t mr) noexcept
 {
 	WIZCHIP_WRITE(MR, mr);
 }
@@ -1328,7 +1328,7 @@ static inline void setMR(uint8_t mr)
  * @return uint8_t. The value of Mode register.
  * @sa setMR()
  */
-static inline uint8_t getMR()
+static inline uint8_t getMR() noexcept
 {
 	return WIZCHIP_READ(MR);
 }
@@ -1340,7 +1340,7 @@ static inline uint8_t getMR()
  * @param (uint8_t*)gar Pointer variable to set gateway IP address. It should be allocated 4 bytes.
  * @sa getGAR()
  */
-static inline void setGAR(const IPAddress& gar)
+static inline void setGAR(const IPAddress& gar) noexcept
 {
 	WIZCHIP_WRITE_IP(GAR, gar);
 }
@@ -1351,7 +1351,7 @@ static inline void setGAR(const IPAddress& gar)
  * @param (uint8_t*)gar Pointer variable to get gateway IP address. It should be allocated 4 bytes.
  * @sa setGAR()
  */
-static inline void getGAR(IPAddress& gar)
+static inline void getGAR(IPAddress& gar) noexcept
 {
 	WIZCHIP_READ_IP(GAR, gar);
 }
@@ -1362,7 +1362,7 @@ static inline void getGAR(IPAddress& gar)
  * @param (uint8_t*)subr Pointer variable to set subnet mask address. It should be allocated 4 bytes.
  * @sa getSUBR()
  */
-static inline void setSUBR(const IPAddress& subr)
+static inline void setSUBR(const IPAddress& subr) noexcept
 {
 	WIZCHIP_WRITE_IP(SUBR, subr);
 }
@@ -1373,7 +1373,7 @@ static inline void setSUBR(const IPAddress& subr)
  * @param (uint8_t*)subr Pointer variable to get subnet mask address. It should be allocated 4 bytes.
  * @sa setSUBR()
  */
-static inline void getSUBR(IPAddress& subr)
+static inline void getSUBR(IPAddress& subr) noexcept
 {
 	WIZCHIP_READ_IP(SUBR, subr);
 }
@@ -1384,7 +1384,7 @@ static inline void getSUBR(IPAddress& subr)
  * @param (uint8_t*)shar Pointer variable to set local MAC address. It should be allocated 6 bytes.
  * @sa getSHAR()
  */
-static inline void setSHAR(const uint8_t *shar)
+static inline void setSHAR(const uint8_t *shar) noexcept
 {
 	WIZCHIP_WRITE_BUF(SHAR, shar, 6);
 }
@@ -1395,7 +1395,7 @@ static inline void setSHAR(const uint8_t *shar)
  * @param (uint8_t*)shar Pointer variable to get local MAC address. It should be allocated 6 bytes.
  * @sa setSHAR()
  */
-static inline void getSHAR(uint8_t *shar)
+static inline void getSHAR(uint8_t *shar) noexcept
 {
 	WIZCHIP_READ_BUF(SHAR, shar, 6);
 }
@@ -1406,7 +1406,7 @@ static inline void getSHAR(uint8_t *shar)
  * @param (uint8_t*)sipr Pointer variable to set local IP address. It should be allocated 4 bytes.
  * @sa getSIPR()
  */
-static inline void setSIPR(const IPAddress& sipr)
+static inline void setSIPR(const IPAddress& sipr) noexcept
 {
 	WIZCHIP_WRITE_IP(SIPR, sipr);
 }
@@ -1417,7 +1417,7 @@ static inline void setSIPR(const IPAddress& sipr)
  * @param (uint8_t*)sipr Pointer variable to get local IP address. It should be allocated 4 bytes.
  * @sa setSIPR()
  */
-static inline void getSIPR(IPAddress& sipr)
+static inline void getSIPR(IPAddress& sipr) noexcept
 {
 	WIZCHIP_READ_IP(SIPR, sipr);
 }
@@ -1428,7 +1428,7 @@ static inline void getSIPR(IPAddress& sipr)
  * @param (uint16_t)intlevel Value to set @ref INTLEVEL register.
  * @sa getINTLEVEL()
  */
-static inline void  setINTLEVEL(uint16_t intlevel)
+static inline void  setINTLEVEL(uint16_t intlevel) noexcept
 {
 	WIZCHIP_WRITE(INTLEVEL, (uint8_t)(intlevel >> 8));
 	WIZCHIP_WRITE(WIZCHIP_OFFSET_INC(INTLEVEL,1), (uint8_t) intlevel);
@@ -1440,7 +1440,7 @@ static inline void  setINTLEVEL(uint16_t intlevel)
  * @return uint16_t. Value of @ref INTLEVEL register.
  * @sa setINTLEVEL()
  */
-static inline uint16_t getINTLEVEL()
+static inline uint16_t getINTLEVEL() noexcept
 {
 	const uint8_t msb = WIZCHIP_READ(INTLEVEL);
 	return ((uint16_t)msb << 8) | WIZCHIP_READ(WIZCHIP_OFFSET_INC(INTLEVEL, 1));
@@ -1452,7 +1452,7 @@ static inline uint16_t getINTLEVEL()
  * @param (uint8_t)ir Value to set @ref IR register.
  * @sa getIR()
  */
-static inline void setIR(uint8_t ir)
+static inline void setIR(uint8_t ir) noexcept
 {
 	WIZCHIP_WRITE(IR, (ir & 0xF0));
 }
@@ -1463,7 +1463,7 @@ static inline void setIR(uint8_t ir)
  * @return uint8_t. Value of @ref IR register.
  * @sa setIR()
  */
-static inline uint8_t getIR()
+static inline uint8_t getIR() noexcept
 {
 	return WIZCHIP_READ(IR) & 0xF0;
 }
@@ -1474,7 +1474,7 @@ static inline uint8_t getIR()
  * @param (uint8_t)imr Value to set @ref _IMR_ register.
  * @sa getIMR()
  */
-static inline void setIMR(uint8_t imr)
+static inline void setIMR(uint8_t imr) noexcept
 {
 	WIZCHIP_WRITE(_IMR_, imr);
 }
@@ -1485,7 +1485,7 @@ static inline void setIMR(uint8_t imr)
  * @return uint8_t. Value of @ref _IMR_ register.
  * @sa setIMR()
  */
-static inline uint8_t getIMR()
+static inline uint8_t getIMR() noexcept
 {
 	return WIZCHIP_READ(_IMR_);
 }
@@ -1496,7 +1496,7 @@ static inline uint8_t getIMR()
  * @param (uint8_t)sir Value to set @ref SIR register.
  * @sa getSIR()
  */
-static inline void setSIR(uint8_t sir)
+static inline void setSIR(uint8_t sir) noexcept
 {
 	WIZCHIP_WRITE(SIR, sir);
 }
@@ -1507,7 +1507,7 @@ static inline void setSIR(uint8_t sir)
  * @return uint8_t. Value of @ref SIR register.
  * @sa setSIR()
  */
-static inline uint8_t getSIR()
+static inline uint8_t getSIR() noexcept
 {
 	return WIZCHIP_READ(SIR);
 }
@@ -1518,7 +1518,7 @@ static inline uint8_t getSIR()
  * @param (uint8_t)simr Value to set @ref SIMR register.
  * @sa getSIMR()
  */
-static inline void setSIMR(uint8_t simr)
+static inline void setSIMR(uint8_t simr) noexcept
 {
 	WIZCHIP_WRITE(SIMR, simr);
 }
@@ -1529,7 +1529,7 @@ static inline void setSIMR(uint8_t simr)
  * @return uint8_t. Value of @ref SIMR register.
  * @sa setSIMR()
  */
-static inline uint8_t getSIMR()
+static inline uint8_t getSIMR() noexcept
 {
 	return WIZCHIP_READ(SIMR);
 }
@@ -1540,7 +1540,7 @@ static inline uint8_t getSIMR()
  * @param (uint16_t)rtr Value to set @ref _RTR_ register.
  * @sa getRTR()
  */
-static inline void setRTR(uint16_t rtr)
+static inline void setRTR(uint16_t rtr) noexcept
 {
 	WIZCHIP_WRITE(_RTR_, (uint8_t)(rtr >> 8));
 	WIZCHIP_WRITE(WIZCHIP_OFFSET_INC(_RTR_,1), (uint8_t) rtr);
@@ -1552,7 +1552,7 @@ static inline void setRTR(uint16_t rtr)
  * @return uint16_t. Value of @ref _RTR_ register.
  * @sa setRTR()
  */
-static inline uint16_t getRTR()
+static inline uint16_t getRTR() noexcept
 {
 	const uint8_t msb = WIZCHIP_READ(_RTR_);
 	return ((uint16_t)msb << 8) + WIZCHIP_READ(WIZCHIP_OFFSET_INC(_RTR_, 1));
@@ -1565,7 +1565,7 @@ static inline uint16_t getRTR()
  * @param (uint8_t)rcr Value to set @ref _RCR_ register.
  * @sa getRCR()
  */
-static inline void setRCR(uint8_t rcr)
+static inline void setRCR(uint8_t rcr) noexcept
 {
 	WIZCHIP_WRITE(_RCR_, rcr);
 }
@@ -1576,7 +1576,7 @@ static inline void setRCR(uint8_t rcr)
  * @return uint8_t. Value of @ref _RCR_ register.
  * @sa setRCR()
  */
-static inline uint8_t getRCR()
+static inline uint8_t getRCR() noexcept
 {
 	return WIZCHIP_READ(_RCR_);
 }
@@ -1589,7 +1589,7 @@ static inline uint8_t getRCR()
  * @param (uint8_t)ptimer Value to set @ref PTIMER register.
  * @sa getPTIMER()
  */
-static inline void setPTIMER(uint8_t ptimer)
+static inline void setPTIMER(uint8_t ptimer) noexcept
 {
 	WIZCHIP_WRITE(PTIMER, ptimer);
 }
@@ -1600,7 +1600,7 @@ static inline void setPTIMER(uint8_t ptimer)
  * @return uint8_t. Value of @ref PTIMER register.
  * @sa setPTIMER()
  */
-static inline uint8_t getPTIMER()
+static inline uint8_t getPTIMER() noexcept
 {
 	return WIZCHIP_READ(PTIMER);
 }
@@ -1611,7 +1611,7 @@ static inline uint8_t getPTIMER()
  * @param (uint8_t)pmagic Value to set @ref PMAGIC register.
  * @sa getPMAGIC()
  */
-static inline void setPMAGIC(uint8_t pmagic)
+static inline void setPMAGIC(uint8_t pmagic) noexcept
 {
 	WIZCHIP_WRITE(PMAGIC, pmagic);
 }
@@ -1622,7 +1622,7 @@ static inline void setPMAGIC(uint8_t pmagic)
  * @return uint8_t. Value of @ref PMAGIC register.
  * @sa setPMAGIC()
  */
-static inline uint8_t getPMAGIC()
+static inline uint8_t getPMAGIC() noexcept
 {
 	return WIZCHIP_READ(PMAGIC);
 }
@@ -1633,7 +1633,7 @@ static inline uint8_t getPMAGIC()
  * @param (uint8_t*)phar Pointer variable to set PPP destination MAC register address. It should be allocated 6 bytes.
  * @sa getPHAR()
  */
-static inline void setPHAR(const uint8_t *phar)
+static inline void setPHAR(const uint8_t *phar) noexcept
 {
 	WIZCHIP_WRITE_BUF(PHAR, phar, 6);
 }
@@ -1644,7 +1644,7 @@ static inline void setPHAR(const uint8_t *phar)
  * @param (uint8_t*)phar Pointer variable to PPP destination MAC register address. It should be allocated 6 bytes.
  * @sa setPHAR()
  */
-static inline void getPHAR(uint8_t *phar)
+static inline void getPHAR(uint8_t *phar) noexcept
 {
 	WIZCHIP_READ_BUF(PHAR, phar, 6);
 }
@@ -1655,7 +1655,7 @@ static inline void getPHAR(uint8_t *phar)
  * @param (uint16_t)psid Value to set @ref PSID register.
  * @sa getPSID()
  */
-static inline void setPSID(uint16_t psid)
+static inline void setPSID(uint16_t psid) noexcept
 {
 	WIZCHIP_WRITE(PSID, (uint8_t)(psid >> 8));
 	WIZCHIP_WRITE(WIZCHIP_OFFSET_INC(PSID,1), (uint8_t) psid);
@@ -1667,7 +1667,7 @@ static inline void setPSID(uint16_t psid)
  * @return uint16_t. Value of @ref PSID register.
  * @sa setPSID()
  */
-static inline uint16_t getPSID()
+static inline uint16_t getPSID() noexcept
 {
 	const uint8_t msb = WIZCHIP_READ(PSID);
 	return ((uint16_t)msb << 8) | WIZCHIP_READ(WIZCHIP_OFFSET_INC(PSID,1));
@@ -1679,7 +1679,7 @@ static inline uint16_t getPSID()
  * @param (uint16_t)pmru Value to set @ref PMRU register.
  * @sa getPMRU()
  */
-static inline void setPMRU(uint16_t pmru)
+static inline void setPMRU(uint16_t pmru) noexcept
 {
 	WIZCHIP_WRITE(PMRU, (uint8_t)(pmru>>8));
 	WIZCHIP_WRITE(WIZCHIP_OFFSET_INC(PMRU,1), (uint8_t) pmru);
@@ -1691,7 +1691,7 @@ static inline void setPMRU(uint16_t pmru)
  * @return uint16_t. Value of @ref PMRU register.
  * @sa setPMRU()
  */
-static inline uint16_t getPMRU()
+static inline uint16_t getPMRU() noexcept
 {
 	const uint8_t msb = WIZCHIP_READ(PMRU);
 	return ((uint16_t)msb << 8) + WIZCHIP_READ(WIZCHIP_OFFSET_INC(PMRU, 1));
@@ -1702,7 +1702,7 @@ static inline uint16_t getPMRU()
  * @brief Get unreachable IP address
  * @param (uint8_t*)uipr Pointer variable to get unreachable IP address. It should be allocated 4 bytes.
  */
-static inline void getUIPR(uint8_t *uipr)
+static inline void getUIPR(uint8_t *uipr) noexcept
 {
 	WIZCHIP_READ_BUF(UIPR, uipr, 4);
 }
@@ -1712,7 +1712,7 @@ static inline void getUIPR(uint8_t *uipr)
  * @brief Get @ref UPORTR register
  * @return uint16_t. Value of @ref UPORTR register.
  */
-static inline uint16_t getUPORTR()
+static inline uint16_t getUPORTR() noexcept
 {
 	const uint8_t msb = WIZCHIP_READ(UPORTR);
 	return ((uint16_t)msb << 8) + WIZCHIP_READ(WIZCHIP_OFFSET_INC(UPORTR, 1));
@@ -1724,7 +1724,7 @@ static inline uint16_t getUPORTR()
  * @param (uint8_t)phycfgr Value to set @ref PHYCFGR register.
  * @sa getPHYCFGR()
  */
-static inline void setPHYCFGR(uint8_t phycfgr)
+static inline void setPHYCFGR(uint8_t phycfgr) noexcept
 {
 	WIZCHIP_WRITE(PHYCFGR, phycfgr);
 }
@@ -1735,7 +1735,7 @@ static inline void setPHYCFGR(uint8_t phycfgr)
  * @return uint8_t. Value of @ref PHYCFGR register.
  * @sa setPHYCFGR()
  */
-static inline uint8_t getPHYCFGR()
+static inline uint8_t getPHYCFGR() noexcept
 {
 	return WIZCHIP_READ(PHYCFGR);
 }
@@ -1745,7 +1745,7 @@ static inline uint8_t getPHYCFGR()
  * @brief Get @ref VERSIONR register
  * @return uint8_t. Value of @ref VERSIONR register.
  */
-static inline uint8_t getVERSIONR()
+static inline uint8_t getVERSIONR() noexcept
 {
 	return WIZCHIP_READ(VERSIONR);
 }
@@ -1762,7 +1762,7 @@ static inline uint8_t getVERSIONR()
  * @param (uint8_t)mr Value to set @ref Sn_MR
  * @sa getSn_MR()
  */
-static inline void setSn_MR(uint8_t sn, uint8_t mr)
+static inline void setSn_MR(uint8_t sn, uint8_t mr) noexcept
 {
 	WIZCHIP_WRITE(Sn_MR(sn), mr);
 }
@@ -1774,7 +1774,7 @@ static inline void setSn_MR(uint8_t sn, uint8_t mr)
  * @return uint8_t. Value of @ref Sn_MR.
  * @sa setSn_MR()
  */
-static inline uint8_t getSn_MR(uint8_t sn)
+static inline uint8_t getSn_MR(uint8_t sn) noexcept
 {
 	return WIZCHIP_READ(Sn_MR(sn));
 }
@@ -1786,7 +1786,7 @@ static inline uint8_t getSn_MR(uint8_t sn)
  * @param (uint8_t)cr Value to set @ref Sn_CR
  * @sa getSn_CR()
  */
-static inline void setSn_CR(uint8_t sn, uint8_t cr)
+static inline void setSn_CR(uint8_t sn, uint8_t cr) noexcept
 {
 	WIZCHIP_WRITE(Sn_CR(sn), cr);
 }
@@ -1798,7 +1798,7 @@ static inline void setSn_CR(uint8_t sn, uint8_t cr)
  * @return uint8_t. Value of @ref Sn_CR.
  * @sa setSn_CR()
  */
-static inline uint8_t getSn_CR(uint8_t sn)
+static inline uint8_t getSn_CR(uint8_t sn) noexcept
 {
 	return WIZCHIP_READ(Sn_CR(sn));
 }
@@ -1810,7 +1810,7 @@ static inline uint8_t getSn_CR(uint8_t sn)
  * @param (uint8_t)ir Value to set @ref Sn_IR
  * @sa getSn_IR()
  */
-static inline void setSn_IR(uint8_t sn, uint8_t ir)
+static inline void setSn_IR(uint8_t sn, uint8_t ir) noexcept
 {
 	WIZCHIP_WRITE(Sn_IR(sn), (ir & 0x1F));
 }
@@ -1822,7 +1822,7 @@ static inline void setSn_IR(uint8_t sn, uint8_t ir)
  * @return uint8_t. Value of @ref Sn_IR.
  * @sa setSn_IR()
  */
-static inline uint8_t getSn_IR(uint8_t sn)
+static inline uint8_t getSn_IR(uint8_t sn) noexcept
 {
 	return WIZCHIP_READ(Sn_IR(sn)) & 0x1F;
 }
@@ -1834,7 +1834,7 @@ static inline uint8_t getSn_IR(uint8_t sn)
  * @param (uint8_t)imr Value to set @ref Sn_IMR
  * @sa getSn_IMR()
  */
-static inline void setSn_IMR(uint8_t sn, uint8_t imr)
+static inline void setSn_IMR(uint8_t sn, uint8_t imr) noexcept
 {
 	WIZCHIP_WRITE(Sn_IMR(sn), (imr & 0x1F));
 }
@@ -1846,7 +1846,7 @@ static inline void setSn_IMR(uint8_t sn, uint8_t imr)
  * @return uint8_t. Value of @ref Sn_IMR.
  * @sa setSn_IMR()
  */
-static inline uint8_t getSn_IMR(uint8_t sn)
+static inline uint8_t getSn_IMR(uint8_t sn) noexcept
 {
 	 return WIZCHIP_READ(Sn_IMR(sn)) & 0x1F;
 }
@@ -1857,7 +1857,7 @@ static inline uint8_t getSn_IMR(uint8_t sn)
  * @param (uint8_t)sn Socket number. It should be <b>0 ~ 7</b>.
  * @return uint8_t. Value of @ref Sn_SR.
  */
-static inline uint8_t getSn_SR(uint8_t sn)
+static inline uint8_t getSn_SR(uint8_t sn) noexcept
 {
 	return WIZCHIP_READ(Sn_SR(sn));
 }
@@ -1869,7 +1869,7 @@ static inline uint8_t getSn_SR(uint8_t sn)
  * @param (uint16_t)port Value to set @ref Sn_PORT.
  * @sa getSn_PORT()
  */
-static inline void setSn_PORT(uint8_t sn, uint16_t port)
+static inline void setSn_PORT(uint8_t sn, uint16_t port) noexcept
 {
 	WIZCHIP_WRITE(Sn_PORT(sn), (uint8_t)(port >> 8));
 	WIZCHIP_WRITE(WIZCHIP_OFFSET_INC(Sn_PORT(sn), 1), (uint8_t) port);
@@ -1882,7 +1882,7 @@ static inline void setSn_PORT(uint8_t sn, uint16_t port)
  * @return uint16_t. Value of @ref Sn_PORT.
  * @sa setSn_PORT()
  */
-static inline uint16_t getSn_PORT(uint8_t sn)
+static inline uint16_t getSn_PORT(uint8_t sn) noexcept
 {
 	const uint8_t msb = WIZCHIP_READ(Sn_PORT(sn));
 	return ((uint16_t)msb << 8) + WIZCHIP_READ(WIZCHIP_OFFSET_INC(Sn_PORT(sn), 1));
@@ -1895,7 +1895,7 @@ static inline uint16_t getSn_PORT(uint8_t sn)
  * @param (uint8_t*)dhar Pointer variable to set socket n destination hardware address. It should be allocated 6 bytes.
  * @sa getSn_DHAR()
  */
-static inline void setSn_DHAR(uint8_t sn, const uint8_t *dhar)
+static inline void setSn_DHAR(uint8_t sn, const uint8_t *dhar) noexcept
 {
 	WIZCHIP_WRITE_BUF(Sn_DHAR(sn), dhar, 6);
 }
@@ -1907,7 +1907,7 @@ static inline void setSn_DHAR(uint8_t sn, const uint8_t *dhar)
  * @param (uint8_t*)dhar Pointer variable to get socket n destination hardware address. It should be allocated 6 bytes.
  * @sa setSn_DHAR()
  */
-static inline void getSn_DHAR(uint8_t sn, uint8_t *dhar)
+static inline void getSn_DHAR(uint8_t sn, uint8_t *dhar) noexcept
 {
 	WIZCHIP_READ_BUF(Sn_DHAR(sn), dhar, 6);
 }
@@ -1919,7 +1919,7 @@ static inline void getSn_DHAR(uint8_t sn, uint8_t *dhar)
  * @param (uint8_t*)dipr Pointer variable to set socket n destination IP address. It should be allocated 4 bytes.
  * @sa getSn_DIPR()
  */
-static inline void setSn_DIPR(uint8_t sn, const IPAddress& dipr)
+static inline void setSn_DIPR(uint8_t sn, const IPAddress& dipr) noexcept
 {
 	WIZCHIP_WRITE_IP(Sn_DIPR(sn), dipr);
 }
@@ -1931,7 +1931,7 @@ static inline void setSn_DIPR(uint8_t sn, const IPAddress& dipr)
  * @param (uint8_t*)dipr Pointer variable to get socket n destination IP address. It should be allocated 4 bytes.
  * @sa setSn_DIPR()
  */
-static inline void getSn_DIPR(uint8_t sn, IPAddress& dipr)
+static inline void getSn_DIPR(uint8_t sn, IPAddress& dipr) noexcept
 {
 	WIZCHIP_READ_IP(Sn_DIPR(sn), dipr);
 }
@@ -1943,7 +1943,7 @@ static inline void getSn_DIPR(uint8_t sn, IPAddress& dipr)
  * @param (uint16_t)dport Value to set @ref Sn_DPORT
  * @sa getSn_DPORT()
  */
-static inline void setSn_DPORT(uint8_t sn, uint16_t dport)
+static inline void setSn_DPORT(uint8_t sn, uint16_t dport) noexcept
 {
 	WIZCHIP_WRITE(Sn_DPORT(sn), (uint8_t) (dport >> 8));
 	WIZCHIP_WRITE(WIZCHIP_OFFSET_INC(Sn_DPORT(sn), 1), (uint8_t)  dport);
@@ -1956,7 +1956,7 @@ static inline void setSn_DPORT(uint8_t sn, uint16_t dport)
  * @return uint16_t. Value of @ref Sn_DPORT.
  * @sa setSn_DPORT()
  */
-static inline uint16_t getSn_DPORT(uint8_t sn)
+static inline uint16_t getSn_DPORT(uint8_t sn) noexcept
 {
 	const uint8_t msb = WIZCHIP_READ(Sn_DPORT(sn));
 	return ((uint16_t)msb << 8) + WIZCHIP_READ(WIZCHIP_OFFSET_INC(Sn_DPORT(sn),1));
@@ -1969,7 +1969,7 @@ static inline uint16_t getSn_DPORT(uint8_t sn)
  * @param (uint16_t)mss Value to set @ref Sn_MSSR
  * @sa setSn_MSSR()
  */
-static inline void setSn_MSSR(uint8_t sn, uint16_t mss)
+static inline void setSn_MSSR(uint8_t sn, uint16_t mss) noexcept
 {
 	WIZCHIP_WRITE(Sn_MSSR(sn), (uint8_t)(mss >> 8));
 	WIZCHIP_WRITE(WIZCHIP_OFFSET_INC(Sn_MSSR(sn), 1), (uint8_t) mss);
@@ -1982,7 +1982,7 @@ static inline void setSn_MSSR(uint8_t sn, uint16_t mss)
  * @return uint16_t. Value of @ref Sn_MSSR.
  * @sa setSn_MSSR()
  */
-static inline uint16_t getSn_MSSR(uint8_t sn)
+static inline uint16_t getSn_MSSR(uint8_t sn) noexcept
 {
 	const uint8_t msb = WIZCHIP_READ(Sn_MSSR(sn));
 	return ((uint16_t)msb << 8) + WIZCHIP_READ(WIZCHIP_OFFSET_INC(Sn_MSSR(sn), 1));
@@ -1995,7 +1995,7 @@ static inline uint16_t getSn_MSSR(uint8_t sn)
  * @param (uint8_t)tos Value to set @ref Sn_TOS
  * @sa getSn_TOS()
  */
-static inline void setSn_TOS(uint8_t sn, uint8_t tos)
+static inline void setSn_TOS(uint8_t sn, uint8_t tos) noexcept
 {
 	WIZCHIP_WRITE(Sn_TOS(sn), tos);
 }
@@ -2007,7 +2007,7 @@ static inline void setSn_TOS(uint8_t sn, uint8_t tos)
  * @return uint8_t. Value of Sn_TOS.
  * @sa setSn_TOS()
  */
-static inline uint8_t getSn_TOS(uint8_t sn)
+static inline uint8_t getSn_TOS(uint8_t sn) noexcept
 {
 	return WIZCHIP_READ(Sn_TOS(sn));
 }
@@ -2019,7 +2019,7 @@ static inline uint8_t getSn_TOS(uint8_t sn)
  * @param (uint8_t)ttl Value to set @ref Sn_TTL
  * @sa getSn_TTL()
  */
-static inline void setSn_TTL(uint8_t sn, uint8_t ttl)
+static inline void setSn_TTL(uint8_t sn, uint8_t ttl) noexcept
 {
 	WIZCHIP_WRITE(Sn_TTL(sn), ttl);
 }
@@ -2032,7 +2032,7 @@ static inline void setSn_TTL(uint8_t sn, uint8_t ttl)
  * @return uint8_t. Value of @ref Sn_TTL.
  * @sa setSn_TTL()
  */
-static inline uint8_t getSn_TTL(uint8_t sn)
+static inline uint8_t getSn_TTL(uint8_t sn) noexcept
 {
 	return WIZCHIP_READ(Sn_TTL(sn));
 }
@@ -2045,7 +2045,7 @@ static inline uint8_t getSn_TTL(uint8_t sn)
  * @param (uint8_t)rxbufsize Value to set @ref Sn_RXBUF_SIZE
  * @sa getSn_RXBUF_SIZE()
  */
-static inline void setSn_RXBUF_SIZE(uint8_t sn, uint8_t rxbufsize)
+static inline void setSn_RXBUF_SIZE(uint8_t sn, uint8_t rxbufsize) noexcept
 {
 	WIZCHIP_WRITE(Sn_RXBUF_SIZE(sn),rxbufsize);
 }
@@ -2058,7 +2058,7 @@ static inline void setSn_RXBUF_SIZE(uint8_t sn, uint8_t rxbufsize)
  * @return uint8_t. Value of @ref Sn_RXBUF_SIZE.
  * @sa setSn_RXBUF_SIZE()
  */
-static inline uint8_t getSn_RXBUF_SIZE(uint8_t sn)
+static inline uint8_t getSn_RXBUF_SIZE(uint8_t sn) noexcept
 {
 	return WIZCHIP_READ(Sn_RXBUF_SIZE(sn));
 }
@@ -2070,7 +2070,7 @@ static inline uint8_t getSn_RXBUF_SIZE(uint8_t sn)
  * @param (uint8_t)txbufsize Value to set @ref Sn_TXBUF_SIZE
  * @sa getSn_TXBUF_SIZE()
  */
-static inline void setSn_TXBUF_SIZE(uint8_t sn, uint8_t txbufsize)
+static inline void setSn_TXBUF_SIZE(uint8_t sn, uint8_t txbufsize) noexcept
 {
 	WIZCHIP_WRITE(Sn_TXBUF_SIZE(sn), txbufsize);
 }
@@ -2082,7 +2082,7 @@ static inline void setSn_TXBUF_SIZE(uint8_t sn, uint8_t txbufsize)
  * @return uint8_t. Value of @ref Sn_TXBUF_SIZE.
  * @sa setSn_TXBUF_SIZE()
  */
-static inline uint8_t getSn_TXBUF_SIZE(uint8_t sn)
+static inline uint8_t getSn_TXBUF_SIZE(uint8_t sn) noexcept
 {
 	return WIZCHIP_READ(Sn_TXBUF_SIZE(sn));
 }
@@ -2093,7 +2093,7 @@ static inline uint8_t getSn_TXBUF_SIZE(uint8_t sn)
  * @param (uint8_t)sn Socket number. It should be <b>0 ~ 7</b>.
  * @return uint16_t. Value of @ref Sn_TX_FSR.
  */
-uint16_t getSn_TX_FSR(uint8_t sn);
+uint16_t getSn_TX_FSR(uint8_t sn) noexcept;
 
 /**
  * @ingroup Socket_register_access_function
@@ -2101,7 +2101,7 @@ uint16_t getSn_TX_FSR(uint8_t sn);
  * @param (uint8_t)sn Socket number. It should be <b>0 ~ 7</b>.
  * @return uint16_t. Value of @ref Sn_TX_RD.
  */
-static inline uint16_t getSn_TX_RD(uint8_t sn)
+static inline uint16_t getSn_TX_RD(uint8_t sn) noexcept
 {
 	const uint8_t msb = WIZCHIP_READ(Sn_TX_RD(sn));
 	return ((uint16_t)msb << 8) + WIZCHIP_READ(WIZCHIP_OFFSET_INC(Sn_TX_RD(sn),1));
@@ -2114,7 +2114,7 @@ static inline uint16_t getSn_TX_RD(uint8_t sn)
  * @param (uint16_t)txwr Value to set @ref Sn_TX_WR
  * @sa GetSn_TX_WR()
  */
-static inline void setSn_TX_WR(uint8_t sn, uint16_t txwr)
+static inline void setSn_TX_WR(uint8_t sn, uint16_t txwr) noexcept
 {
 	WIZCHIP_WRITE(Sn_TX_WR(sn), (uint8_t)(txwr >> 8));
 	WIZCHIP_WRITE(WIZCHIP_OFFSET_INC(Sn_TX_WR(sn), 1), (uint8_t) txwr);
@@ -2127,7 +2127,7 @@ static inline void setSn_TX_WR(uint8_t sn, uint16_t txwr)
  * @return uint16_t. Value of @ref Sn_TX_WR.
  * @sa setSn_TX_WR()
  */
-static inline uint16_t getSn_TX_WR(uint8_t sn)
+static inline uint16_t getSn_TX_WR(uint8_t sn) noexcept
 {
 	const uint8_t msb = WIZCHIP_READ(Sn_TX_WR(sn));
 	return ((uint16_t)msb << 8) + WIZCHIP_READ(WIZCHIP_OFFSET_INC(Sn_TX_WR(sn),1));
@@ -2140,7 +2140,7 @@ static inline uint16_t getSn_TX_WR(uint8_t sn)
  * @param (uint8_t)sn Socket number. It should be <b>0 ~ 7</b>.
  * @return uint16_t. Value of @ref Sn_RX_RSR.
  */
-uint16_t getSn_RX_RSR(uint8_t sn);
+uint16_t getSn_RX_RSR(uint8_t sn) noexcept;
 
 
 /**
@@ -2150,7 +2150,7 @@ uint16_t getSn_RX_RSR(uint8_t sn);
  * @param (uint16_t)rxrd Value to set @ref Sn_RX_RD
  * @sa getSn_RX_RD()
  */
-static inline void setSn_RX_RD(uint8_t sn, uint16_t rxrd)
+static inline void setSn_RX_RD(uint8_t sn, uint16_t rxrd) noexcept
 {
 	WIZCHIP_WRITE(Sn_RX_RD(sn), (uint8_t)(rxrd >> 8));
 	WIZCHIP_WRITE(WIZCHIP_OFFSET_INC(Sn_RX_RD(sn),1), (uint8_t) rxrd);
@@ -2163,7 +2163,7 @@ static inline void setSn_RX_RD(uint8_t sn, uint16_t rxrd)
  * @return uint16_t. Value of @ref Sn_RX_RD.
  * @sa setSn_RX_RD()
  */
-static inline uint16_t getSn_RX_RD(uint8_t sn)
+static inline uint16_t getSn_RX_RD(uint8_t sn) noexcept
 {
 	const uint8_t msb = WIZCHIP_READ(Sn_RX_RD(sn));
 	return ((uint16_t)msb << 8) + WIZCHIP_READ(WIZCHIP_OFFSET_INC(Sn_RX_RD(sn), 1));
@@ -2175,7 +2175,7 @@ static inline uint16_t getSn_RX_RD(uint8_t sn)
  * @param (uint8_t)sn Socket number. It should be <b>0 ~ 7</b>.
  * @return uint16_t. Value of @ref Sn_RX_WR.
  */
-static inline uint16_t getSn_RX_WR(uint8_t sn)
+static inline uint16_t getSn_RX_WR(uint8_t sn) noexcept
 {
 	const uint8_t msb = WIZCHIP_READ(Sn_RX_WR(sn));
 	return ((uint16_t)msb << 8) | WIZCHIP_READ(WIZCHIP_OFFSET_INC(Sn_RX_WR(sn), 1));
@@ -2188,7 +2188,7 @@ static inline uint16_t getSn_RX_WR(uint8_t sn)
  * @param (uint16_t)frag Value to set @ref Sn_FRAG
  * @sa getSn_FRAD()
  */
-static inline void setSn_FRAG(uint8_t sn, uint16_t frag)
+static inline void setSn_FRAG(uint8_t sn, uint16_t frag) noexcept
 {
 	WIZCHIP_WRITE(Sn_FRAG(sn),  (uint8_t)(frag >> 8));
 	WIZCHIP_WRITE(WIZCHIP_OFFSET_INC(Sn_FRAG(sn),1), (uint8_t) frag);
@@ -2201,7 +2201,7 @@ static inline void setSn_FRAG(uint8_t sn, uint16_t frag)
  * @return uint16_t. Value of @ref Sn_FRAG.
  * @sa setSn_FRAG()
  */
-static inline uint16_t getSn_FRAG(uint8_t sn)
+static inline uint16_t getSn_FRAG(uint8_t sn) noexcept
 {
     const uint8_t msb = WIZCHIP_READ(Sn_FRAG(sn));
     return ((uint16_t)msb << 8) | WIZCHIP_READ(WIZCHIP_OFFSET_INC(Sn_FRAG(sn),1));
@@ -2214,7 +2214,7 @@ static inline uint16_t getSn_FRAG(uint8_t sn)
  * @param (uint8_t)kpalvt Value to set @ref Sn_KPALVTR
  * @sa getSn_KPALVTR()
  */
-static inline void setSn_KPALVTR(uint8_t sn, uint8_t kpalvt)
+static inline void setSn_KPALVTR(uint8_t sn, uint8_t kpalvt) noexcept
 {
 	WIZCHIP_WRITE(Sn_KPALVTR(sn), kpalvt);
 }
@@ -2226,7 +2226,7 @@ static inline void setSn_KPALVTR(uint8_t sn, uint8_t kpalvt)
  * @return uint8_t. Value of @ref Sn_KPALVTR.
  * @sa setSn_KPALVTR()
  */
-static inline uint8_t getSn_KPALVTR(uint8_t sn)
+static inline uint8_t getSn_KPALVTR(uint8_t sn) noexcept
 {
 	return WIZCHIP_READ(Sn_KPALVTR(sn));
 }
@@ -2236,24 +2236,24 @@ static inline uint8_t getSn_KPALVTR(uint8_t sn)
 /////////////////////////////////////
 // Sn_TXBUF & Sn_RXBUF IO function //
 /////////////////////////////////////
-/**  
+/**
  * @brief Socket_register_access_function
  * @brief Gets the max buffer size of socket sn passed as parameter.
  * @param (uint8_t)sn Socket number. It should be <b>0 ~ 7</b>.
  * @return uint16_t. Value of Socket n RX max buffer size.
  */
-static inline uint16_t getSn_RxMAX(uint8_t sn)
+static inline uint16_t getSn_RxMAX(uint8_t sn) noexcept
 {
 	return ((uint16_t)getSn_RXBUF_SIZE(sn)) << 10;
 }
 
-/**  
+/**
  * @brief Socket_register_access_function
  * @brief Gets the max buffer size of socket sn passed as parameters.
  * @param (uint8_t)sn Socket number. It should be <b>0 ~ 7</b>.
  * @return uint16_t. Value of Socket n TX max buffer size.
  */
-static inline uint16_t getSn_TxMAX(uint8_t sn)
+static inline uint16_t getSn_TxMAX(uint8_t sn) noexcept
 {
 	return ((uint16_t)getSn_TXBUF_SIZE(sn)) << 10;
 }
@@ -2272,10 +2272,10 @@ static inline uint16_t getSn_TxMAX(uint8_t sn)
  * @param len Data length
  * @sa wiz_recv_data()
  */
-void wiz_send_data(uint8_t sn, const uint8_t *wizdata, uint16_t len);
+void wiz_send_data(uint8_t sn, const uint8_t *wizdata, uint16_t len) noexcept;
 
 // Alternative to wiz_send_data to work around an apparent bug
-void wiz_send_data_at(uint8_t sn, const uint8_t *wizdata, uint16_t len, uint16_t ptr);
+void wiz_send_data_at(uint8_t sn, const uint8_t *wizdata, uint16_t len, uint16_t ptr) noexcept;
 
 /**
  * @ingroup Basic_IO_function
@@ -2291,10 +2291,10 @@ void wiz_send_data_at(uint8_t sn, const uint8_t *wizdata, uint16_t len, uint16_t
  * @param len Data length
  * @sa wiz_send_data()
  */
-void wiz_recv_data(uint8_t sn, uint8_t *wizdata, uint16_t len);
+void wiz_recv_data(uint8_t sn, uint8_t *wizdata, uint16_t len) noexcept;
 
 // Alternative to wiz_recv_data to work around an apparent bug
-void wiz_recv_data_at(uint8_t sn, uint8_t *wizdata, uint16_t len, uint16_t ptr);
+void wiz_recv_data_at(uint8_t sn, uint8_t *wizdata, uint16_t len, uint16_t ptr) noexcept;
 
 /**
  * @ingroup Basic_IO_function
@@ -2303,6 +2303,6 @@ void wiz_recv_data_at(uint8_t sn, uint8_t *wizdata, uint16_t len, uint16_t ptr);
  * @param (uint8_t)sn Socket number. It should be <b>0 ~ 7</b>.
  * @param len Data length
  */
-void wiz_recv_ignore(uint8_t sn, uint16_t len);
+void wiz_recv_ignore(uint8_t sn, uint16_t len) noexcept;
 
 #endif   // _W5500_H_

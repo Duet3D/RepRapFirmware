@@ -23,9 +23,9 @@ class WifiFirmwareUploader;
 template<class T> class Receiver
 {
 public:
-	void *DmaPointer() { return &object; }
-	size_t Size() const { return sizeof(T); }
-	T& Value() { return object; }
+	void *DmaPointer() noexcept { return &object; }
+	size_t Size() const noexcept { return sizeof(T); }
+	T& Value() noexcept { return object; }
 private:
 	T object;
 	uint32_t padding;
@@ -37,47 +37,47 @@ class WiFiInterface : public NetworkInterface
 public:
 	friend class WiFiSocket;
 
-	WiFiInterface(Platform& p);
+	WiFiInterface(Platform& p) noexcept;
 
-	void Init() override;
-	void Activate() override;
-	void Exit() override;
-	void Spin(bool full) override;
-	void Diagnostics(MessageType mtype) override;
-	void Start();
-	void Stop();
+	void Init() noexcept override;
+	void Activate() noexcept override;
+	void Exit() noexcept override;
+	void Spin() noexcept override;
+	void Diagnostics(MessageType mtype) noexcept override;
+	void Start() noexcept;
+	void Stop() noexcept;
 
-	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) override;			// enable or disable the network
-	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) override;
-	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) override;
-	GCodeResult ReportProtocols(const StringRef& reply) const override;
+	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
+	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept override;
+	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept override;
+	GCodeResult ReportProtocols(const StringRef& reply) const noexcept override;
 
-	GCodeResult GetNetworkState(const StringRef& reply) override;
-	int EnableState() const override;
-	bool InNetworkStack() const override { return false; }
-	bool IsWiFiInterface() const override { return true; }
+	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
+	int EnableState() const noexcept override;
+	bool InNetworkStack() const noexcept override { return false; }
+	bool IsWiFiInterface() const noexcept override { return true; }
 
-	void UpdateHostname(const char *hostname) override;
-	IPAddress GetIPAddress() const override { return ipAddress; }
-	void SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress p_gateway) override;
-	void SetMacAddress(const uint8_t mac[]) override;
-	const uint8_t *GetMacAddress() const override { return macAddress; }
+	void UpdateHostname(const char *hostname) noexcept override;
+	IPAddress GetIPAddress() const noexcept override { return ipAddress; }
+	void SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress p_gateway) noexcept override;
+	void SetMacAddress(const uint8_t mac[]) noexcept override;
+	const uint8_t *GetMacAddress() const noexcept override { return macAddress; }
 
-	void OpenDataPort(Port port) override;
-	void TerminateDataPort() override;
+	void OpenDataPort(Port port) noexcept override;
+	void TerminateDataPort() noexcept override;
 
 	// The remaining functions are specific to the WiFi version
 	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply);
-	WifiFirmwareUploader *GetWifiUploader() const { return uploader; }
-	void StartWiFi();
-	void ResetWiFi();
-	void ResetWiFiForUpload(bool external);
-	const char *GetWiFiServerVersion() const { return wiFiServerVersion; }
-	const char* TranslateNetworkState() const;
-	static const char* TranslateWiFiState(WiFiState w);
-	void SpiInterrupt();
-	void EspRequestsTransfer();
-	void UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClosedSockets);
+	WifiFirmwareUploader *GetWifiUploader() const noexcept { return uploader; }
+	void StartWiFi() noexcept;
+	void ResetWiFi() noexcept;
+	void ResetWiFiForUpload(bool external) noexcept;
+	const char *GetWiFiServerVersion() const noexcept { return wiFiServerVersion; }
+	const char* TranslateNetworkState() const noexcept;
+	static const char* TranslateWiFiState(WiFiState w) noexcept;
+	void SpiInterrupt() noexcept;
+	void EspRequestsTransfer() noexcept;
+	void UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClosedSockets) noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -92,36 +92,36 @@ private:
 		changingMode,				// running and in the process of switching between modes
 	};
 
-	void InitSockets();
-	void TerminateSockets();
-	void TerminateSockets(Port port);
-	void StopListening(Port port);
+	void InitSockets() noexcept;
+	void TerminateSockets() noexcept;
+	void TerminateSockets(Port port) noexcept;
+	void StopListening(Port port) noexcept;
 
-	void StartProtocol(NetworkProtocol protocol)
+	void StartProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumProtocols);
 
-	void ShutdownProtocol(NetworkProtocol protocol)
+	void ShutdownProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumProtocols);
 
-	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const
+	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
 	pre(protocol < NumProtocols);
 
-	NetworkProtocol GetProtocolByLocalPort(Port port) const;
+	NetworkProtocol GetProtocolByLocalPort(Port port) const noexcept;
 
-	void SetupSpi();
+	void SetupSpi() noexcept;
 
-	int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength);
+	int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept;
 
-	template<class T> int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, const void *dataOut, size_t dataOutLength, Receiver<T>& recvr)
+	template<class T> int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, const void *dataOut, size_t dataOutLength, Receiver<T>& recvr) noexcept
 	{
 		return SendCommand(cmd, socket, flags, dataOut, dataOutLength, recvr.DmaPointer(), recvr.Size());
 	}
 
-	void SendListenCommand(Port port, NetworkProtocol protocol, unsigned int maxConnections);
-	void GetNewStatus();
-	static const char* TranslateWiFiResponse(int32_t response);
+	void SendListenCommand(Port port, NetworkProtocol protocol, unsigned int maxConnections) noexcept;
+	void GetNewStatus() noexcept;
+	static const char* TranslateWiFiResponse(int32_t response) noexcept;
 
-	static const char* TranslateEspResetReason(uint32_t reason);
+	static const char* TranslateEspResetReason(uint32_t reason) noexcept;
 
 	Platform& platform;
 	uint32_t lastTickMillis;
