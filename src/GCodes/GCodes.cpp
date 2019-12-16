@@ -566,6 +566,12 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 						HandleReply(gb, GCodeResult::ok, "");
 					}
 				}
+				else if (gb.GetState() == GCodeState::loadingFilament && hadFileError)
+				{
+					// Don't perform final filament assignment if the load macro could not be processed
+					gb.SetState(GCodeState::normal);
+					HandleReply(gb, GCodeResult::ok, "");
+				}
 				else if (gb.GetState() == GCodeState::normal)
 				{
 					UnlockAll(gb);
@@ -3504,14 +3510,6 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 			reply.copy("Unload the current filament before you attempt to load another one");
 			return GCodeResult::error;
 		}
-
-#if HAS_MASS_STORAGE
-		if (!platform.DirectoryExists(FILAMENTS_DIRECTORY, filamentName.c_str()))
-		{
-			reply.copy("Filament configuration directory not found");
-			return GCodeResult::error;
-		}
-#endif
 
 		if (Filament::IsInUse(filamentName.c_str()))
 		{

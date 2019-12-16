@@ -294,7 +294,14 @@ void LinuxInterface::Spin()
 				Filament *filament = Filament::GetFilamentByExtruder(extruder);
 				if (filament != nullptr)
 				{
-					filament->Load(filamentName.c_str());
+					if (filamentName.IsEmpty())
+					{
+						filament->Unload();
+					}
+					else
+					{
+						filament->Load(filamentName.c_str());
+					}
 				}
 				break;
 			}

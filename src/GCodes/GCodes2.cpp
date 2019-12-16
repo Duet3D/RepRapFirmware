@@ -3997,10 +3997,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 	case 703: // Configure Filament
 		if (reprap.GetCurrentTool() != nullptr)
 		{
-			if (reprap.GetCurrentTool()->GetFilament() != nullptr)
+			const Filament *filament = reprap.GetCurrentTool()->GetFilament();
+			if (filament != nullptr && filament->IsLoaded())
 			{
 				String<ScratchStringLength> scratchString;
-				scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, reprap.GetCurrentTool()->GetFilament()->GetName(), CONFIG_FILAMENT_G);
+				scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filament->GetName(), CONFIG_FILAMENT_G);
 				DoFileMacro(gb, scratchString.c_str(), false, 703);
 			}
 		}

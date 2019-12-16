@@ -42,6 +42,14 @@ void Filament::Unload() noexcept
 void Filament::LoadAssignment() noexcept
 {
 #if HAS_MASS_STORAGE
+# if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		// Filament configuration is saved on the SBC
+		return;
+	}
+# endif
+
 	FileStore *file = reprap.GetPlatform().OpenSysFile(FilamentAssignmentFile, OpenMode::read);
 	if (file == nullptr)
 	{
@@ -81,6 +89,14 @@ void Filament::LoadAssignment() noexcept
 /*static*/ void Filament::SaveAssignments() noexcept
 {
 #if HAS_MASS_STORAGE
+# if HAS_LINUX_INTERFACE
+	if (reprap.UsingLinuxInterface())
+	{
+		// Filament configuration is saved on the SBC
+		return;
+	}
+# endif
+
 	FileStore * const file = reprap.GetPlatform().OpenSysFile(FilamentAssignmentFile, OpenMode::write);
 	if (file == nullptr)
 	{
