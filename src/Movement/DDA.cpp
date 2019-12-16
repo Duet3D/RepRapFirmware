@@ -1641,7 +1641,10 @@ float DDA::NormaliseXYZ() noexcept
 // Either this move is currently executing (DDARing.currentDDA == this) and the state is 'executing', or we have almost finished preparing it and the state is 'provisional'.
 void DDA::CheckEndstops(Platform& platform) noexcept
 {
+#if SUPPORT_CAN_EXPANSION
 	const bool fromPrepare = (state == DDAState::provisional);		// determine this before anything sets the state to 'completed'
+#endif
+
 	for (;;)
 	{
 		const EndstopHitDetails hitDetails = platform.GetEndstops().CheckEndstops(flags.goingSlow);

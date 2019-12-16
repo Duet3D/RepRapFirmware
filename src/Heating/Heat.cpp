@@ -95,7 +95,7 @@ Heat::Heat() noexcept
 	{
 		h = -1;
 	}
-#if !DUET3
+#if !defined(DUET3)
 	bedHeaters[0] = DefaultBedHeater;
 #endif
 
