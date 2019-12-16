@@ -5,12 +5,22 @@ Recommended compatible firmware:
 - Duet Web Control 2.0.4
 - DuetWiFiServer 1.23
 - DuetSoftwareFramework 1.1.0.5
+- Duet3Firmware_EXP3HC 3.0RC1
+- Duet3Firmware_Tool1LC 3.0RC1
+
+Known issues:
+- An endstop switch connected to a Duet 3 main board may only be used to home an axis if at least one motor controlling that axis is driven by the main board
+- Various Duet 3 expansion board features are not fully implemented. See the RRF3 Limitations document on the wiki.
+- After installing new expansion or tool board firmware or resetting an expansion or tool board, you must reset the main board or at least run config.g using M98. Otherwise the expansion/tool board configuration will not match the settings expected by the main board.
 
 Upgrade notes:
 - Endstop type S0 (active low switch) is no longer supported in M574 commands. Instead, use type S1 and invert the input by prefixing the pin name with '!'.
+- If you are using Duet 3 expansion or tool boards, you must upgrade those to 3.0RC1 too
+- Duet 3+SBC users must use DSF 1.1.0.5 or a conpatible later version with this version of RRF
+- You should also upload the new IAP file for your system. You will need it when upgrading firmware in future. These files are called Duet2CombinedIAP.bin, DuetMaestroIAP.bin, Duet3_SBCiap_MB6HC.bin (for Duet 3+SBC) and Duet3_SDiap.bin (for Duet 3 standalone systems). You can leave the old IAP files on your system, they have different names and you will need them if you downgrade to earlier firmware.
 
 Feature changes since beta 12:
-- Duet 3 only: Switch-type endstops connected to expansion boards are supported (needs recent expansion board firmware too)
+- Duet 3 only: Switch-type endstops connected to expansion boards are supported
 - Current position is no longer shown for pulse-type filament monitors, because it was meaningless and nearly always zero
 - Calibration data for pulse-type filament monitors is no longer displayed by M122 (same as for laser and magnetic filament monitors). Use M591 to report the calibration data.
 - Max bed heaters increased to 9 on Duet 3, 2 on Duet Meastro (still 4 on Duet WiFi/Ethernet)
@@ -30,6 +40,10 @@ Bug fixes:
 - A badly-formed GCode file that returned the layer height or object height as nan or inf caused DWC to disconnect because of a JSON parse failure
 - M579 scale factors were not applied correctly to G2 and G3 arc moves
 - M119 crashed if an axis had no endstop
+- Filament handling didn't work on Duet 3+SBC
+- If a homing move involved only motors connected to Duet 3 expansion boards and the corresponding endstop was already triggered, the homing move started anyway and didn't stop
+- Stall detect homing works properly
+- If an attempt to create a switch-type endstop using M574 failed because the specified pin wasn't available, this resulted in a partically-configured switch endstop
 
 RepRapFirmware 3.0beta12
 ========================
