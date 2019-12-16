@@ -15,6 +15,7 @@
 #include "Tools/Filament.h"
 #include "RepRap.h"
 #include "RepRapFirmware.h"
+#include <Hardware/Cache.h>
 
 #if HAS_LINUX_INTERFACE
 
@@ -268,6 +269,13 @@ void LinuxInterface::Spin()
 
 			// Launch the IAP binary
 			case LinuxRequest::StartIap:
+				reprap.EmergencyStop();			// turn off heaters etc.
+				Cache::Disable();				// this also flushes the data cache
+#if USE_MPU
+				//TODO consider setting flash memory to strongly-ordered instead
+				ARM_MPU_Disable();
+#endif
+
 #if !IAP_IN_RAM
 				// Lock the whole IAP flash area again and start the IAP binary
 				flash_lock(IAP_IMAGE_START, IAP_IMAGE_END, nullptr, nullptr);
