@@ -14,12 +14,12 @@
 #include "Heating/Heat.h"
 #include "Heating/Sensors/TemperatureSensor.h"
 
-void FanInterrupt(CallbackParameter cb)
+void FanInterrupt(CallbackParameter cb) noexcept
 {
 	static_cast<LocalFan *>(cb.vp)->Interrupt();
 }
 
-LocalFan::LocalFan(unsigned int fanNum)
+LocalFan::LocalFan(unsigned int fanNum) noexcept
 	: Fan(fanNum),
 	  lastPwm(-1.0),									// force a refresh
 	  fanInterruptCount(0), fanLastResetTime(0), fanInterval(0),
@@ -27,14 +27,14 @@ LocalFan::LocalFan(unsigned int fanNum)
 {
 }
 
-LocalFan::~LocalFan()
+LocalFan::~LocalFan() noexcept
 {
 	port.WriteAnalog(0.0);
 	port.Release();
 	tachoPort.Release();
 }
 
-GCodeResult LocalFan::ReportPortDetails(const StringRef& str) const
+GCodeResult LocalFan::ReportPortDetails(const StringRef& str) const noexcept
 {
 	str.printf("Fan %u", fanNumber);
 	port.AppendDetails(str);
@@ -46,7 +46,7 @@ GCodeResult LocalFan::ReportPortDetails(const StringRef& str) const
 	return GCodeResult::ok;
 }
 
-GCodeResult LocalFan::SetPwmFrequency(PwmFrequency freq, const StringRef& reply)
+GCodeResult LocalFan::SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept
 {
 	port.SetFrequency(freq);
 	return GCodeResult::ok;
@@ -54,7 +54,7 @@ GCodeResult LocalFan::SetPwmFrequency(PwmFrequency freq, const StringRef& reply)
 
 // Set the hardware PWM
 // If you want make sure that the PWM is definitely updated, set lastPWM negative before calling this
-void LocalFan::SetHardwarePwm(float pwmVal)
+void LocalFan::SetHardwarePwm(float pwmVal) noexcept
 {
 	// Only set the PWM if it has changed, to avoid a lot of I2C traffic when we have a DueX5 connected
 	if (pwmVal != lastPwm)
@@ -66,7 +66,7 @@ void LocalFan::SetHardwarePwm(float pwmVal)
 
 // Refresh the fan PWM
 // If you want make sure that the PWM is definitely updated, set lastPWM negative before calling this
-void LocalFan::InternalRefresh()
+void LocalFan::InternalRefresh() noexcept
 {
 	float reqVal;
 #if HAS_SMART_DRIVERS
@@ -160,19 +160,19 @@ void LocalFan::InternalRefresh()
 	lastVal = reqVal;
 }
 
-GCodeResult LocalFan::Refresh(const StringRef& reply)
+GCodeResult LocalFan::Refresh(const StringRef& reply) noexcept
 {
 	InternalRefresh();
 	return GCodeResult::ok;
 }
 
-bool LocalFan::UpdateFanConfiguration(const StringRef& reply)
+bool LocalFan::UpdateFanConfiguration(const StringRef& reply) noexcept
 {
 	InternalRefresh();
 	return true;
 }
 
-bool LocalFan::Check()
+bool LocalFan::Check() noexcept
 {
 	if (sensorsMonitored != 0 || blipping)
 	{
@@ -181,7 +181,7 @@ bool LocalFan::Check()
 	return sensorsMonitored != 0 && lastVal != 0.0;
 }
 
-bool LocalFan::AssignPorts(const char *pinNames, const StringRef& reply)
+bool LocalFan::AssignPorts(const char *pinNames, const StringRef& reply) noexcept
 {
 	IoPort* const ports[] = { &port, &tachoPort };
 	const PinAccess access1[] = { PinAccess::pwm, PinAccess::read};
@@ -205,7 +205,7 @@ bool LocalFan::AssignPorts(const char *pinNames, const StringRef& reply)
 }
 
 // Tacho support
-int32_t LocalFan::GetRPM()
+int32_t LocalFan::GetRPM() noexcept
 {
 	// The ISR sets fanInterval to the number of step interrupt clocks it took to get fanMaxInterruptCount interrupts.
 	// We get 2 tacho pulses per revolution, hence 2 interrupts per revolution.
@@ -217,7 +217,7 @@ int32_t LocalFan::GetRPM()
 			  : 0;																			// else assume fan is off or tacho not connected
 }
 
-void LocalFan::Interrupt()
+void LocalFan::Interrupt() noexcept
 {
 	++fanInterruptCount;
 	if (fanInterruptCount == fanMaxInterruptCount)

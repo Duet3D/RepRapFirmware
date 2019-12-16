@@ -33,6 +33,6 @@ enum class TemperatureError : uint8_t
 	badVssa
 };
 
-const char* TemperatureErrorString(TemperatureError err);
+const char* TemperatureErrorString(TemperatureError err) noexcept;
 
 #endif /* TEMPERATUREERROR_H_ */

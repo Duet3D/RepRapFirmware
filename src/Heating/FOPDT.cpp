@@ -17,14 +17,14 @@
 
 // Heater 6 on the Duet 0.8.5 is disabled by default at startup so that we can use fan 2.
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
-FopDt::FopDt()
+FopDt::FopDt() noexcept
 	: gain(DefaultHotEndHeaterGain), timeConstant(DefaultHotEndHeaterTimeConstant), deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0), standardVoltage(0.0),
 	  enabled(false), usePid(true), inverted(false), pidParametersOverridden(false)
 {
 }
 
 // Check the model parameters are sensible, if they are then save them and return true.
-bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted)
+bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted) noexcept
 {
 	if (pg == -1.0 && ptc == -1.0 && pdt == -1.0)
 	{
@@ -52,7 +52,7 @@ bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float t
 }
 
 // Get the PID parameters as reported by M301
-M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const
+M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const noexcept
 {
 	M301PidParameters rslt;
 	const PidParameters& pp = GetPidParameters(forLoadChange);
@@ -64,7 +64,7 @@ M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const
 }
 
 // Override the PID parameters. We set both sets to the same parameters.
-void FopDt::SetM301PidParameters(const M301PidParameters& pp)
+void FopDt::SetM301PidParameters(const M301PidParameters& pp) noexcept
 {
 	loadChangeParams.kP = setpointChangeParams.kP = pp.kP * (1.0/255.0);
 	loadChangeParams.recipTi = setpointChangeParams.recipTi = pp.kI/pp.kP;
@@ -75,7 +75,7 @@ void FopDt::SetM301PidParameters(const M301PidParameters& pp)
 #if HAS_MASS_STORAGE
 
 // Write the model parameters to file returning true if no error
-bool FopDt::WriteParameters(FileStore *f, size_t heater) const
+bool FopDt::WriteParameters(FileStore *f, size_t heater) const noexcept
 {
 	String<ScratchStringLength> scratchString;
 	scratchString.printf("M307 H%u A%.1f C%.1f D%.1f S%.2f V%.1f B%d\n",
@@ -122,7 +122,7 @@ bool FopDt::WriteParameters(FileStore *f, size_t heater) const
  * ones tend to have massive overshoot when the setpoint is changed, and even in the steady state some of them have marginal stability.
  */
 
-void FopDt::CalcPidConstants()
+void FopDt::CalcPidConstants() noexcept
 {
 	const float timeFrac = deadTime/timeConstant;
 	loadChangeParams.kP = 0.7/(gain * timeFrac);
@@ -138,7 +138,7 @@ void FopDt::CalcPidConstants()
 
 #if SUPPORT_CAN_EXPANSION
 
-void FopDt::SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg)
+void FopDt::SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModel& msg) noexcept
 {
 	msg.heater = heater;
 	msg.gain = gain;

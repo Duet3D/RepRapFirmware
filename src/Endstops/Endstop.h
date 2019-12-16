@@ -67,11 +67,11 @@ public:
 
 	unsigned int GetAxis() const { return axis; }
 	bool GetAtHighEnd() const { return atHighEnd; }
+	void SetAtHighEnd(bool b) { atHighEnd = b; }
 
 protected:
 	Endstop(uint8_t axis, EndStopPosition pos);
 
-	void SetAtHighEnd(bool b) { atHighEnd = b; }
 
 private:
 	uint8_t axis;										// which axis this endstop is on

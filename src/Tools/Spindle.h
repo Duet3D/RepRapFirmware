@@ -19,22 +19,22 @@ private:
 	int toolNumber;
 
 public:
-	Spindle() : currentRpm(0.0), configuredRpm(0.0), maxRpm(DefaultMaxSpindleRpm), toolNumber(-1) { }
+	Spindle() noexcept : currentRpm(0.0), configuredRpm(0.0), maxRpm(DefaultMaxSpindleRpm), toolNumber(-1) { }
 
-	bool AllocatePins(GCodeBuffer& gb, const StringRef& reply);			// Allocate the pins returning true if successful
+	bool AllocatePins(GCodeBuffer& gb, const StringRef& reply) noexcept;			// Allocate the pins returning true if successful
 
-	void SetFrequency(PwmFrequency freq);
+	void SetFrequency(PwmFrequency freq) noexcept;
 
-	int GetToolNumber() const { return toolNumber; }
-	void SetToolNumber(int tool) { toolNumber = tool; }
+	int GetToolNumber() const noexcept { return toolNumber; }
+	void SetToolNumber(int tool) noexcept { toolNumber = tool; }
 
-	void SetMaxRpm(float max) { maxRpm = max; }
+	void SetMaxRpm(float max) noexcept { maxRpm = max; }
 
-	float GetCurrentRpm() const { return currentRpm; }
-	float GetRpm() const { return configuredRpm; }
-	void SetRpm(float rpm);
+	float GetCurrentRpm() const noexcept { return currentRpm; }
+	float GetRpm() const noexcept { return configuredRpm; }
+	void SetRpm(float rpm) noexcept;
 
-	void TurnOff();
+	void TurnOff() noexcept;
 };
 
 #endif

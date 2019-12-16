@@ -34,7 +34,7 @@
 Tool * Tool::freelist = nullptr;
 
 // Create a new tool and return a pointer to it. If an error occurs, put an error message in 'reply' and return nullptr.
-/*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *name, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, const StringRef& reply)
+/*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *name, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, const StringRef& reply) noexcept
 {
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
@@ -144,7 +144,7 @@ Tool * Tool::freelist = nullptr;
 	return t;
 }
 
-/*static*/ void Tool::Delete(Tool *t)
+/*static*/ void Tool::Delete(Tool *t) noexcept
 {
 	if (t != nullptr)
 	{
@@ -158,22 +158,22 @@ Tool * Tool::freelist = nullptr;
 	}
 }
 
-/*static*/ AxesBitmap Tool::GetXAxes(const Tool *tool)
+/*static*/ AxesBitmap Tool::GetXAxes(const Tool *tool) noexcept
 {
 	return (tool == nullptr) ? DefaultXAxisMapping : tool->xMapping;
 }
 
-/*static*/ AxesBitmap Tool::GetYAxes(const Tool *tool)
+/*static*/ AxesBitmap Tool::GetYAxes(const Tool *tool) noexcept
 {
 	return (tool == nullptr) ? DefaultYAxisMapping : tool->yMapping;
 }
 
-/*static*/ float Tool::GetOffset(const Tool *tool, size_t axis)
+/*static*/ float Tool::GetOffset(const Tool *tool, size_t axis) noexcept
 {
 	return (tool == nullptr) ? 0.0 : tool->offset[axis];
 }
 
-void Tool::Print(const StringRef& reply) const
+void Tool::Print(const StringRef& reply) const noexcept
 {
 	reply.printf("Tool %u - ", myNumber);
 	if (name != nullptr)
@@ -249,7 +249,7 @@ void Tool::Print(const StringRef& reply) const
 
 // There is a temperature fault on a heater, so disable all tools using that heater.
 // This function must be called for the first entry in the linked list.
-void Tool::FlagTemperatureFault(int8_t heater)
+void Tool::FlagTemperatureFault(int8_t heater) noexcept
 {
 	Tool* n = this;
 	while (n != nullptr)
@@ -259,7 +259,7 @@ void Tool::FlagTemperatureFault(int8_t heater)
 	}
 }
 
-void Tool::ClearTemperatureFault(int8_t heater)
+void Tool::ClearTemperatureFault(int8_t heater) noexcept
 {
 	Tool* n = this;
 	while (n != nullptr)
@@ -269,7 +269,7 @@ void Tool::ClearTemperatureFault(int8_t heater)
 	}
 }
 
-void Tool::SetTemperatureFault(int8_t dudHeater)
+void Tool::SetTemperatureFault(int8_t dudHeater) noexcept
 {
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
@@ -281,7 +281,7 @@ void Tool::SetTemperatureFault(int8_t dudHeater)
 	}
 }
 
-void Tool::ResetTemperatureFault(int8_t wasDudHeater)
+void Tool::ResetTemperatureFault(int8_t wasDudHeater) noexcept
 {
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
@@ -293,7 +293,7 @@ void Tool::ResetTemperatureFault(int8_t wasDudHeater)
 	}
 }
 
-bool Tool::AllHeatersAtHighTemperature(bool forExtrusion) const
+bool Tool::AllHeatersAtHighTemperature(bool forExtrusion) const noexcept
 {
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
@@ -306,7 +306,7 @@ bool Tool::AllHeatersAtHighTemperature(bool forExtrusion) const
 	return true;
 }
 
-void Tool::Activate()
+void Tool::Activate() noexcept
 {
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
@@ -318,7 +318,7 @@ void Tool::Activate()
 	state = ToolState::active;
 }
 
-void Tool::Standby()
+void Tool::Standby() noexcept
 {
 	const Tool * const currentTool = reprap.GetCurrentTool();
 	for (size_t heater = 0; heater < heaterCount; heater++)
@@ -334,7 +334,7 @@ void Tool::Standby()
 }
 
 // May be called from ISR
-bool Tool::ToolCanDrive(bool extrude)
+bool Tool::ToolCanDrive(bool extrude) noexcept
 {
 	if (!heaterFault && AllHeatersAtHighTemperature(extrude))
 	{
@@ -346,7 +346,7 @@ bool Tool::ToolCanDrive(bool extrude)
 }
 
 // Update the number of active drives and extruders in use to reflect what this tool uses
-void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHeaters) const
+void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHeaters) const noexcept
 {
 	for (size_t drive = 0; drive < driveCount; drive++)
 	{
@@ -365,14 +365,14 @@ void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHea
 	}
 }
 
-bool Tool::DisplayColdExtrudeWarning()
+bool Tool::DisplayColdExtrudeWarning() noexcept
 {
 	bool result = displayColdExtrudeWarning;
 	displayColdExtrudeWarning = false;
 	return result;
 }
 
-void Tool::DefineMix(const float m[])
+void Tool::DefineMix(const float m[]) noexcept
 {
 	for(size_t drive = 0; drive < driveCount; drive++)
 	{
@@ -383,7 +383,7 @@ void Tool::DefineMix(const float m[])
 #if HAS_MASS_STORAGE
 
 // Write the tool's settings to file returning true if successful. The settings written leave the tool selected unless it is off.
-bool Tool::WriteSettings(FileStore *f) const
+bool Tool::WriteSettings(FileStore *f) const noexcept
 {
 	String<StringLength50> buf;
 	bool ok = true;
@@ -419,7 +419,7 @@ bool Tool::WriteSettings(FileStore *f) const
 
 #endif
 
-void Tool::SetOffset(size_t axis, float offs, bool byProbing)
+void Tool::SetOffset(size_t axis, float offs, bool byProbing) noexcept
 {
 	offset[axis] = offs;
 	if (byProbing)
@@ -428,17 +428,17 @@ void Tool::SetOffset(size_t axis, float offs, bool byProbing)
 	}
 }
 
-float Tool::GetToolHeaterActiveTemperature(size_t heaterNumber) const
+float Tool::GetToolHeaterActiveTemperature(size_t heaterNumber) const noexcept
 {
 	return (heaterNumber < heaterCount) ? activeTemperatures[heaterNumber] : 0.0;
 }
 
-float Tool::GetToolHeaterStandbyTemperature(size_t heaterNumber) const
+float Tool::GetToolHeaterStandbyTemperature(size_t heaterNumber) const noexcept
 {
 	return (heaterNumber < heaterCount) ? standbyTemperatures[heaterNumber] : 0.0;
 }
 
-void Tool::SetToolHeaterActiveTemperature(size_t heaterNumber, float temp)
+void Tool::SetToolHeaterActiveTemperature(size_t heaterNumber, float temp) noexcept
 {
 	if (heaterNumber < heaterCount)
 	{
@@ -468,7 +468,7 @@ void Tool::SetToolHeaterActiveTemperature(size_t heaterNumber, float temp)
 	}
 }
 
-void Tool::SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp)
+void Tool::SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp) noexcept
 {
 	if (heaterNumber < heaterCount)
 	{
@@ -499,7 +499,7 @@ void Tool::SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp)
 	}
 }
 
-void Tool::IterateExtruders(std::function<void(unsigned int)> f) const
+void Tool::IterateExtruders(std::function<void(unsigned int)> f) const noexcept
 {
 	for (size_t i = 0; i < driveCount; ++i)
 	{
@@ -507,7 +507,7 @@ void Tool::IterateExtruders(std::function<void(unsigned int)> f) const
 	}
 }
 
-void Tool::IterateHeaters(std::function<void(int)> f) const
+void Tool::IterateHeaters(std::function<void(int)> f) const noexcept
 {
 	for (size_t i = 0; i < heaterCount; ++i)
 	{
@@ -516,7 +516,7 @@ void Tool::IterateHeaters(std::function<void(int)> f) const
 }
 
 // Return true if this tool uses the specified heater
-bool Tool::UsesHeater(int8_t heater) const
+bool Tool::UsesHeater(int8_t heater) const noexcept
 {
 	for (size_t i = 0; i < heaterCount; ++i)
 	{

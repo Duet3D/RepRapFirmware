@@ -21,19 +21,19 @@
 class Thermistor : public SensorWithPort
 {
 public:
-	Thermistor(unsigned int sensorNum, bool p_isPT1000);					// create an instance with default values
+	Thermistor(unsigned int sensorNum, bool p_isPT1000) noexcept;					// create an instance with default values
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override; // configure the sensor from M305 parameters
 
 	static constexpr const char *TypeNameThermistor = "thermistor";
 	static constexpr const char *TypeNamePT1000 = "pt1000";
 
-	void Poll() override;
+	void Poll() noexcept override;
 
 private:
 	// For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
 	static constexpr unsigned int AdcOversampleBits = 2;					// we use 2-bit oversampling
 
-	void CalcDerivedParameters();											// calculate shA and shB
+	void CalcDerivedParameters() noexcept;											// calculate shA and shB
 
 	// The following are configurable parameters
 	float r25, beta, shC, seriesR;											// parameters declared in the M305 command

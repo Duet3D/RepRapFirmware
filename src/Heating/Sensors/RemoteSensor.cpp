@@ -14,7 +14,7 @@
 
 constexpr uint32_t RemoteTemperatureTimeoutMillis = 1000;
 
-RemoteSensor::RemoteSensor(unsigned int sensorNum, CanAddress pBoardAddress)
+RemoteSensor::RemoteSensor(unsigned int sensorNum, CanAddress pBoardAddress) noexcept
 	: TemperatureSensor(sensorNum, "remote"), boardAddress(pBoardAddress)
 {
 }
@@ -31,7 +31,7 @@ GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 	return cons.SendAndGetResponse(CanMessageType::m308, boardAddress, reply);
 }
 
-void RemoteSensor::UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report)
+void RemoteSensor::UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report) noexcept
 {
 	if (src == boardAddress)
 	{

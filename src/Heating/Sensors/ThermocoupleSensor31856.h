@@ -13,15 +13,15 @@
 class ThermocoupleSensor31856 : public SpiTemperatureSensor
 {
 public:
-	ThermocoupleSensor31856(unsigned int sensorNum);
+	ThermocoupleSensor31856(unsigned int sensorNum) noexcept;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) override;
 
 	static constexpr const char *TypeName = "thermocouplemax31856";
 
-	void Poll() override;
+	void Poll() noexcept override;
 
 private:
-	TemperatureError TryInitThermocouple() const;
+	TemperatureError TryInitThermocouple() const noexcept;
 
 	uint8_t cr0;
 	uint8_t thermocoupleType;

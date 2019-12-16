@@ -42,104 +42,104 @@ class CanMessageHeatersStatus;
 class Heat INHERIT_OBJECT_MODEL
 {
 public:
-	Heat();
+	Heat() noexcept;
 
 	// Methods that don't relate to a particular heater
-	void HeaterTask();
-	void Init();												// Set everything up
-	void Exit();												// Shut everything down
-	void ResetHeaterModels();									// Reset all active heater models to defaults
+	void HeaterTask() noexcept;
+	void Init() noexcept;												// Set everything up
+	void Exit() noexcept;												// Shut everything down
+	void ResetHeaterModels() noexcept;									// Reset all active heater models to defaults
 
-	bool ColdExtrude() const;									// Is cold extrusion allowed?
-	void AllowColdExtrude(bool b);								// Allow or deny cold extrusion
-	float GetExtrusionMinTemp() const;							// Get minimum extrusion temperature
-	float GetRetractionMinTemp() const;							// Get minimum retraction temperature
-	void SetExtrusionMinTemp(float t);							// Set minimum extrusion temperature
-	void SetRetractionMinTemp(float t);							// Set minimum retraction temperature
+	bool ColdExtrude() const noexcept;									// Is cold extrusion allowed?
+	void AllowColdExtrude(bool b) noexcept;								// Allow or deny cold extrusion
+	float GetExtrusionMinTemp() const noexcept;							// Get minimum extrusion temperature
+	float GetRetractionMinTemp() const noexcept;							// Get minimum retraction temperature
+	void SetExtrusionMinTemp(float t) noexcept;							// Set minimum extrusion temperature
+	void SetRetractionMinTemp(float t) noexcept;							// Set minimum retraction temperature
 
-	int GetBedHeater(size_t index) const						// Get a hot bed heater number
+	int GetBedHeater(size_t index) const noexcept						// Get a hot bed heater number
 	pre(index < NumBedHeaters);
-	void SetBedHeater(size_t index, int heater)					// Set a hot bed heater number
+	void SetBedHeater(size_t index, int heater)	 noexcept				// Set a hot bed heater number
 	pre(index < NumBedHeaters; -1 <= heater; heater < MaxHeaters);
-	bool IsBedHeater(int heater) const;							// Check if this heater is a bed heater
+	bool IsBedHeater(int heater) const noexcept;							// Check if this heater is a bed heater
 
-	int GetChamberHeater(size_t index) const					// Get a chamber heater number
+	int GetChamberHeater(size_t index) const noexcept					// Get a chamber heater number
 	pre(index < NumChamberHeaters);
-	void SetChamberHeater(size_t index, int heater)				// Set a chamber heater number
+	void SetChamberHeater(size_t index, int heater)	 noexcept			// Set a chamber heater number
 	pre(index < NumChamberHeaters; -1 <= heater; heater < MaxHeaters);
-	bool IsChamberHeater(int heater) const;						// Check if this heater is a chamber heater
+	bool IsChamberHeater(int heater) const noexcept;						// Check if this heater is a chamber heater
 
-	bool AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const;	// Is everything at temperature within tolerance?
+	bool AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const noexcept;	// Is everything at temperature within tolerance?
 
-	void SwitchOffAll(bool includingChamberAndBed);				// Turn all heaters off
-	GCodeResult ResetFault(int heater, const StringRef& reply);	// Reset a heater fault for a specific heater or all heaters
-	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply);
-	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply);
-	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply);	// Create a sensor or change the parameters for an existing sensor
-	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply); // Set the P/I/D parameters for a heater
+	void SwitchOffAll(bool includingChamberAndBed) noexcept;				// Turn all heaters off
+	GCodeResult ResetFault(int heater, const StringRef& reply) noexcept;	// Reset a heater fault for a specific heater or all heaters
+	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply) noexcept;
+	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply) noexcept;
+	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Create a sensor or change the parameters for an existing sensor
+	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) noexcept; // Set the P/I/D parameters for a heater
 
-	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply);	// Configure heater protection (M143)
-	void UpdateHeaterProtection(int heaterNumber);				// Updates the PIDs and HeaterProtection items when a heater is remapped
+	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply) noexcept;	// Configure heater protection (M143)
+	void UpdateHeaterProtection(int heaterNumber) noexcept;				// Updates the PIDs and HeaterProtection items when a heater is remapped
 
-	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
+	void SuspendHeaters(bool sus) noexcept;								// Suspend the heaters to conserve power
 
-	void SensorsTask();
-	static void EnsureSensorsTask();
+	void SensorsTask() noexcept;
+	static void EnsureSensorsTask() noexcept;
 
-	ReadLockedPointer<TemperatureSensor> FindSensor(int sn) const;	// Get a pointer to the temperature sensor entry
-	ReadLockedPointer<TemperatureSensor> FindSensorAtOrAbove(unsigned int sn) const;	// Get a pointer to the first temperature sensor with the specified or higher number
+	ReadLockedPointer<TemperatureSensor> FindSensor(int sn) const noexcept;	// Get a pointer to the temperature sensor entry
+	ReadLockedPointer<TemperatureSensor> FindSensorAtOrAbove(unsigned int sn) const noexcept;	// Get a pointer to the first temperature sensor with the specified or higher number
 
-	float GetSensorTemperature(int sensorNum, TemperatureError& err) const; // Result is in degrees Celsius
+	float GetSensorTemperature(int sensorNum, TemperatureError& err) const noexcept; // Result is in degrees Celsius
 
-	float GetHighestTemperatureLimit() const;					// Get the highest temperature limit of any heater
-	size_t GetHighestUsedHeaterNumber() const;
+	float GetHighestTemperatureLimit() const noexcept;					// Get the highest temperature limit of any heater
+	size_t GetHighestUsedHeaterNumber() const noexcept;
 
-	void Diagnostics(MessageType mtype);						// Output useful information
+	void Diagnostics(MessageType mtype) noexcept;						// Output useful information
 
 	// Methods that relate to a particular heater
-	const char *GetHeaterSensorName(size_t heater) const;		// Get the name of the sensor associated with heater, or nullptr if it hasn't been named
-	float GetAveragePWM(size_t heater) const					// Return the running average PWM to the heater as a fraction in [0, 1].
+	const char *GetHeaterSensorName(size_t heater) const noexcept;		// Get the name of the sensor associated with heater, or nullptr if it hasn't been named
+	float GetAveragePWM(size_t heater) const noexcept					// Return the running average PWM to the heater as a fraction in [0, 1].
 	pre(heater < MaxHeaters);
 
-	bool IsBedOrChamberHeater(int heater) const;				// Queried by the Platform class
+	bool IsBedOrChamberHeater(int heater) const noexcept;				// Queried by the Platform class
 
-	float GetHeaterTemperature(size_t heater) const;			 // Result is in degrees Celsius
+	float GetHeaterTemperature(size_t heater) const noexcept;			 // Result is in degrees Celsius
 
-	const Tool* GetLastStandbyTool(int heater) const
+	const Tool* GetLastStandbyTool(int heater) const noexcept
 	pre(heater >= 0; heater < MaxHeaters)
 	{
 		return lastStandbyTools[heater];
 	}
 
-	bool IsHeaterEnabled(size_t heater)	const;					// Is this heater enabled?
+	bool IsHeaterEnabled(size_t heater)	const noexcept;					// Is this heater enabled?
 	pre(heater < MaxHeaters);
 
-	float GetActiveTemperature(int heater) const;
-	float GetStandbyTemperature(int heater) const;
-	float GetHighestTemperatureLimit(int heater) const;
-	float GetLowestTemperatureLimit(int heater) const;
-	float GetHeaterTemperature(int heater) const;				// Get the current temperature of a heater
-	float GetTargetTemperature(int heater) const;				// Get the target temperature
-	HeaterStatus GetStatus(int heater) const;					// Get the off/standby/active status
-	bool HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance) const;
+	float GetActiveTemperature(int heater) const noexcept;
+	float GetStandbyTemperature(int heater) const noexcept;
+	float GetHighestTemperatureLimit(int heater) const noexcept;
+	float GetLowestTemperatureLimit(int heater) const noexcept;
+	float GetHeaterTemperature(int heater) const noexcept;				// Get the current temperature of a heater
+	float GetTargetTemperature(int heater) const noexcept;				// Get the target temperature
+	HeaterStatus GetStatus(int heater) const noexcept;					// Get the off/standby/active status
+	bool HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance) const noexcept;
 
-	GCodeResult ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply);
-	GCodeResult ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply) noexcept;
+	GCodeResult ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply) noexcept;
 
-	void SetActiveTemperature(int heater, float t);
-	void SetStandbyTemperature(int heater, float t);
-	GCodeResult Activate(int heater, const StringRef& reply);	// Turn on a heater
-	void Standby(int heater, const Tool* tool);					// Set a heater to standby
-	void SwitchOff(int heater);									// Turn off a specific heater
+	void SetActiveTemperature(int heater, float t) noexcept;
+	void SetStandbyTemperature(int heater, float t) noexcept;
+	GCodeResult Activate(int heater, const StringRef& reply) noexcept;	// Turn on a heater
+	void Standby(int heater, const Tool* tool) noexcept;					// Set a heater to standby
+	void SwitchOff(int heater) noexcept;									// Turn off a specific heater
 
 #if HAS_MASS_STORAGE
-	bool WriteModelParameters(FileStore *f) const;				// Write heater model parameters to file returning true if no error
-	bool WriteBedAndChamberTempSettings(FileStore *f) const;	// Save some resume information
+	bool WriteModelParameters(FileStore *f) const noexcept;				// Write heater model parameters to file returning true if no error
+	bool WriteBedAndChamberTempSettings(FileStore *f) const noexcept;	// Save some resume information
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemperatures& msg);
-	void ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersStatus& msg);
+	void ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemperatures& msg) noexcept;
+	void ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersStatus& msg) noexcept;
 #endif
 
 protected:
@@ -148,9 +148,9 @@ protected:
 private:
 	Heat(const Heat&) = delete;									// Private copy constructor to prevent copying
 
-	ReadLockedPointer<Heater> FindHeater(int heater) const;
-	void DeleteSensor(unsigned int sn);
-	void InsertSensor(TemperatureSensor *newSensor);
+	ReadLockedPointer<Heater> FindHeater(int heater) const noexcept;
+	void DeleteSensor(unsigned int sn) noexcept;
+	void InsertSensor(TemperatureSensor *newSensor) noexcept;
 
 	static ReadWriteLock heatersLock;
 	static ReadWriteLock sensorsLock;
@@ -173,42 +173,42 @@ private:
 
 //***********************************************************************************************************
 
-inline bool Heat::ColdExtrude() const
+inline bool Heat::ColdExtrude() const noexcept
 {
 	return coldExtrude;
 }
 
-inline void Heat::AllowColdExtrude(bool b)
+inline void Heat::AllowColdExtrude(bool b) noexcept
 {
 	coldExtrude = b;
 }
 
-inline float Heat::GetExtrusionMinTemp() const
+inline float Heat::GetExtrusionMinTemp() const noexcept
 {
 	return extrusionMinTemp;
 }
 
-inline float Heat::GetRetractionMinTemp() const
+inline float Heat::GetRetractionMinTemp() const noexcept
 {
 	return retractionMinTemp;
 }
 
-inline void Heat::SetExtrusionMinTemp(float t)
+inline void Heat::SetExtrusionMinTemp(float t) noexcept
 {
 	extrusionMinTemp = t;
 }
 
-inline void Heat::SetRetractionMinTemp(float t)
+inline void Heat::SetRetractionMinTemp(float t) noexcept
 {
 	retractionMinTemp = t;
 }
 
-inline int Heat::GetBedHeater(size_t index) const
+inline int Heat::GetBedHeater(size_t index) const noexcept
 {
 	return bedHeaters[index];
 }
 
-inline int Heat::GetChamberHeater(size_t index) const
+inline int Heat::GetChamberHeater(size_t index) const noexcept
 {
 	return chamberHeaters[index];
 }

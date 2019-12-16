@@ -152,6 +152,7 @@ void Cache::Disable() noexcept
 	if (enabled)
 	{
 #if SAME70
+		SCB_CleanDCache();
 		SCB_DisableICache();
 		SCB_DisableDCache();
 #elif SAM4E

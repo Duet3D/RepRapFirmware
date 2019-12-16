@@ -23,7 +23,10 @@
 #define FF_DEFINED	86604	/* Revision ID */
 
 #ifdef __cplusplus
+# define NOEXCEPT	noexcept
 extern "C" {
+#else
+# define NOEXCEPT
 #endif
 
 #include "ffconf.h"		/* FatFs configuration options */
@@ -348,7 +351,7 @@ static inline FSIZE_t f_size(const FIL *fp)
 
 /* RTC function */
 #if !FF_FS_READONLY && !FF_FS_NORTC
-DWORD get_fattime (void);
+DWORD get_fattime (void) NOEXCEPT;
 #endif
 
 /* LFN support functions */

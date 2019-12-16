@@ -11,12 +11,13 @@
 #include "Heating/Heat.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
-AdditionalOutputSensor::AdditionalOutputSensor(unsigned int sensorNum, const char *type, bool enforcePollOrder)
+AdditionalOutputSensor::AdditionalOutputSensor(unsigned int sensorNum, const char *type, bool enforcePollOrder) noexcept
 	: TemperatureSensor(sensorNum, type), parentSensor(0), outputNumber(0), enforcePollOrder(enforcePollOrder)
 {
 }
 
-AdditionalOutputSensor::~AdditionalOutputSensor() {
+AdditionalOutputSensor::~AdditionalOutputSensor() noexcept
+{
 }
 
 GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
@@ -97,7 +98,7 @@ GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& 
 	return GCodeResult::ok;
 }
 
-void AdditionalOutputSensor::Poll()
+void AdditionalOutputSensor::Poll() noexcept
 {
 	float t;
 	const auto parent = reprap.GetHeat().FindSensor(parentSensor);

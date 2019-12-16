@@ -112,7 +112,7 @@ void CanMotion::FinishMovement(uint32_t moveStartTime)
 	CanMessageBuffer *buf;
 	while ((buf = movementBufferList) != nullptr)
 	{
-		boardsActiveInLastMove.SetBit(buf->id.Dst());
+		boardsActiveInLastMove.SetBit(buf->id.Dst());	//TODO should we set this if there were no steps for drives on the board, just drives to be enabled?
 		movementBufferList = buf->next;
 		buf->msg.move.whenToExecute = moveStartTime;
 		CanInterface::SendMotion(buf);				// queues the buffer for sending and frees it when done
@@ -183,17 +183,45 @@ void CanMotion::InsertHiccup(uint32_t numClocks)
 	CanInterface::WakeCanSender();
 }
 
-void CanMotion::StopDriver(DriverId driver)
+void CanMotion::StopDriver(bool isBeingPrepared, DriverId driver)
 {
-	driversToStop[driversToStopIndexBeingFilled].AddEntry(driver);
-	CanInterface::WakeCanSender();
+	if (isBeingPrepared)
+	{
+		// Search for the correct movement buffer
+		CanMessageBuffer* buf = movementBufferList;
+		while (buf != nullptr && buf->id.Dst() != driver.boardAddress)
+		{
+			buf = buf->next;
+		}
+
+		if (buf != nullptr)
+		{
+			buf->msg.move.perDrive[driver.localDriver].steps = 0;
+		}
+	}
+	else
+	{
+		driversToStop[driversToStopIndexBeingFilled].AddEntry(driver);
+		CanInterface::WakeCanSender();
+	}
 }
 
-void CanMotion::StopAxis(size_t axis)
+void CanMotion::StopAxis(bool isBeingPrepared, size_t axis)
 {
-	if (!stopAllFlag)
+	const AxisDriversConfig& cfg = reprap.GetPlatform().GetAxisDriversConfig(axis);
+	if (isBeingPrepared)
 	{
-		const AxisDriversConfig& cfg = reprap.GetPlatform().GetAxisDriversConfig(axis);
+		for (size_t i = 0; i < cfg.numDrivers; ++i)
+		{
+			const DriverId driver = cfg.driverNumbers[i];
+			if (driver.IsRemote())
+			{
+				StopDriver(true, driver);
+			}
+		}
+	}
+	else if (!stopAllFlag)
+	{
 		for (size_t i = 0; i < cfg.numDrivers; ++i)
 		{
 			const DriverId driver = cfg.driverNumbers[i];
@@ -206,10 +234,25 @@ void CanMotion::StopAxis(size_t axis)
 	}
 }
 
-void CanMotion::StopAll()
+void CanMotion::StopAll(bool isBeingPrepared)
 {
-	stopAllFlag = true;
-	CanInterface::WakeCanSender();
+	if (isBeingPrepared)
+	{
+		// We still send the messages so that the drives get enabled, but we set the steps to zero
+		for (CanMessageBuffer *buf = movementBufferList; buf != nullptr; buf = buf->next)
+		{
+			buf->msg.move.accelerationClocks = buf->msg.move.decelClocks = buf->msg.move.steadyClocks = 0;
+			for (size_t drive = 0; drive < ARRAY_SIZE(buf->msg.move.perDrive); ++drive)
+			{
+				buf->msg.move.perDrive[drive].steps = 0;
+			}
+		}
+	}
+	else
+	{
+		stopAllFlag = true;
+		CanInterface::WakeCanSender();
+	}
 }
 
 #endif

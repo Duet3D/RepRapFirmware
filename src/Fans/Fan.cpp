@@ -8,7 +8,7 @@
 #include "Fan.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
-Fan::Fan(unsigned int fanNum)
+Fan::Fan(unsigned int fanNum) noexcept
 	: fanNumber(fanNum),
 	  val(0.0), lastVal(0.0),
 	  minVal(DefaultMinFanPwm),
@@ -28,7 +28,7 @@ Fan::Fan(unsigned int fanNum)
 // Exceptions:
 // 1. Only process the S parameter if other values were processed.
 // 2. Don't process the R parameter, but if it is present don't print the existing configuration.
-bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
+bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error) noexcept
 {
 	bool seen = false;
 	if (mcode == 106)
@@ -160,7 +160,7 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 }
 
 // Set the PWM. 'speed' is in the interval 0.0..1.0.
-GCodeResult Fan::SetPwm(float speed, const StringRef& reply)
+GCodeResult Fan::SetPwm(float speed, const StringRef& reply) noexcept
 {
 	val = speed;
 	return Refresh(reply);
@@ -169,7 +169,7 @@ GCodeResult Fan::SetPwm(float speed, const StringRef& reply)
 #if HAS_MASS_STORAGE
 
 // Save the settings of this fan if it isn't thermostatic
-bool Fan::WriteSettings(FileStore *f, size_t fanNum) const
+bool Fan::WriteSettings(FileStore *f, size_t fanNum) const noexcept
 {
 	if (sensorsMonitored == 0)
 	{

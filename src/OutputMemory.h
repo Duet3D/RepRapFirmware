@@ -26,78 +26,78 @@ class OutputBuffer
 	public:
 		friend class OutputStack;
 
-		OutputBuffer(OutputBuffer *n) : next(n) { }
+		OutputBuffer(OutputBuffer *n) noexcept : next(n) { }
 
-		void Append(OutputBuffer *other);
-		OutputBuffer *Next() const { return next; }
-		bool IsReferenced() const { return isReferenced; }
-		bool HadOverflow() const { return hadOverflow; }
-		void IncreaseReferences(size_t refs);
+		void Append(OutputBuffer *other) noexcept;
+		OutputBuffer *Next() const noexcept { return next; }
+		bool IsReferenced() const noexcept { return isReferenced; }
+		bool HadOverflow() const noexcept { return hadOverflow; }
+		void IncreaseReferences(size_t refs) noexcept;
 
-		const char *Data() const { return data; }
-		const char *UnreadData() const { return data + bytesRead; }
-		size_t DataLength() const { return dataLength; }	// How many bytes have been written to this instance?
-		size_t Length() const;								// How many bytes have been written to the whole chain?
+		const char *Data() const noexcept { return data; }
+		const char *UnreadData() const noexcept { return data + bytesRead; }
+		size_t DataLength() const noexcept { return dataLength; }	// How many bytes have been written to this instance?
+		size_t Length() const noexcept;								// How many bytes have been written to the whole chain?
 
-		char& operator[](size_t index);
-		char operator[](size_t index) const;
-		const char *Read(size_t len);
-		void Taken(size_t len) { bytesRead += len; }
-		size_t BytesLeft() const { return dataLength - bytesRead; }	// How many bytes have not been sent yet?
+		char& operator[](size_t index) noexcept;
+		char operator[](size_t index) const noexcept;
+		const char *Read(size_t len) noexcept;
+		void Taken(size_t len) noexcept { bytesRead += len; }
+		size_t BytesLeft() const noexcept { return dataLength - bytesRead; }	// How many bytes have not been sent yet?
 
-		size_t printf(const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
-		size_t vprintf(const char *fmt, va_list vargs);
-		size_t catf(const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
+		size_t printf(const char *fmt, ...) noexcept __attribute__ ((format (printf, 2, 3)));
+		size_t vprintf(const char *fmt, va_list vargs) noexcept;
+		size_t catf(const char *fmt, ...) noexcept __attribute__ ((format (printf, 2, 3)));
 
-		size_t copy(const char c);
-		size_t copy(const char *src);
-		size_t copy(const char *src, size_t len);
+		size_t copy(const char c) noexcept;
+		size_t copy(const char *src) noexcept;
+		size_t copy(const char *src, size_t len) noexcept;
 
-		size_t cat(const char c);
-		size_t cat(const char *src);
-		size_t cat(const char *src, size_t len);
-		size_t cat(StringRef &str);
+		size_t cat(const char c) noexcept;
+		size_t cat(const char *src) noexcept;
+		size_t cat(const char *src, size_t len) noexcept;
+		size_t cat(StringRef &str) noexcept;
 
-		size_t EncodeString(const char *src, bool allowControlChars, bool prependAsterisk = false);
+		size_t EncodeString(const char *src, bool allowControlChars, bool prependAsterisk = false) noexcept;
 
-		template<size_t Len> size_t EncodeString(const String<Len>& str, bool allowControlChars, bool prependAsterisk = false)
+		template<size_t Len> size_t EncodeString(const String<Len>& str, bool allowControlChars, bool prependAsterisk = false) noexcept
 		{
 			return EncodeString(str.c_str(), allowControlChars, prependAsterisk);
 		}
 
-		size_t EncodeReply(OutputBuffer *src);
+		size_t EncodeReply(OutputBuffer *src) noexcept;
 
-		uint32_t GetAge() const;
+		uint32_t GetAge() const noexcept;
 
 #if HAS_MASS_STORAGE
 		// Write the buffer to file returning true if successful
-		bool WriteToFile(FileData& f) const;
+		bool WriteToFile(FileData& f) const noexcept;
 #endif
 		// Initialise the output buffers manager
-		static void Init();
+		static void Init() noexcept;
 
 		// Allocate an unused OutputBuffer instance. Returns true on success or false if no instance could be allocated.
-		static bool Allocate(OutputBuffer *&buf);
+		static bool Allocate(OutputBuffer *&buf) noexcept;
 
 		// Get the number of bytes left for allocation. If writingBuffer is not NULL, this returns the number of free bytes for
 		// continuous writes, i.e. for writes that need to allocate an extra OutputBuffer instance to finish the message.
-		static size_t GetBytesLeft(const OutputBuffer *writingBuffer);
+		static size_t GetBytesLeft(const OutputBuffer *writingBuffer) noexcept;
 
 		// Truncate an OutputBuffer instance to free up more memory. Returns the number of released bytes.
-		static size_t Truncate(OutputBuffer *buffer, size_t bytesNeeded);
+		static size_t Truncate(OutputBuffer *buffer, size_t bytesNeeded) noexcept;
 
 		// Release one OutputBuffer instance. Returns the next item from the chain or nullptr if this was the last instance.
-		static OutputBuffer *Release(OutputBuffer *buf);
+		static OutputBuffer *Release(OutputBuffer *buf) noexcept;
 
 		// Release all OutputBuffer objects in a chain
-		static void ReleaseAll(OutputBuffer * volatile &buf);
+		static void ReleaseAll(OutputBuffer * volatile &buf) noexcept;
 
-		static void Diagnostics(MessageType mtype);
+		static void Diagnostics(MessageType mtype) noexcept;
 
 		static unsigned int GetFreeBuffers() { return OUTPUT_BUFFER_COUNT - usedOutputBuffers; }
 
 	private:
-		size_t EncodeChar(char c);
+		size_t EncodeChar(char c) noexcept;
 
 		OutputBuffer *next;
 		OutputBuffer *last;
@@ -116,7 +116,7 @@ class OutputBuffer
 		static volatile size_t maxUsedOutputBuffers;
 };
 
-inline uint32_t OutputBuffer::GetAge() const
+inline uint32_t OutputBuffer::GetAge() const noexcept
 {
 	return millis() - whenQueued;
 }
@@ -126,54 +126,54 @@ inline uint32_t OutputBuffer::GetAge() const
 class OutputStack
 {
 	public:
-		OutputStack() : count(0) { }
+		OutputStack() noexcept : count(0) { }
 
 		// Is there anything on this stack?
-		bool IsEmpty() const volatile { return count == 0; }
+		bool IsEmpty() const volatile noexcept { return count == 0; }
 
 		// Clear the reference list
-		void Clear() volatile { count = 0; }
+		void Clear() volatile noexcept { count = 0; }
 
 		// Push an OutputBuffer chain. Return true if successful, else release the buffer and return false.
-		bool Push(OutputBuffer *buffer, MessageType type = NoDestinationMessage) volatile;
+		bool Push(OutputBuffer *buffer, MessageType type = NoDestinationMessage) volatile noexcept;
 
 		// Pop an OutputBuffer chain or return NULL if none is available
-		OutputBuffer *Pop() volatile;
+		OutputBuffer *Pop() volatile noexcept;
 
 		// Returns the first item from the stack or NULL if none is available
-		OutputBuffer *GetFirstItem() const volatile;
+		OutputBuffer *GetFirstItem() const volatile noexcept;
 
 		// Returns the first item's type from the stack or NoDestinationMessage if none is available
-		MessageType GetFirstItemType() const volatile;
+		MessageType GetFirstItemType() const volatile noexcept;
 
 #if HAS_LINUX_INTERFACE
 		// Set the first item of the stack. If it's NULL, then the first item will be removed
-		void SetFirstItem(OutputBuffer *buffer) volatile;
+		void SetFirstItem(OutputBuffer *buffer) volatile noexcept;
 #endif
 		// Release the first item at the top of the stack
-		void ReleaseFirstItem() volatile;
+		void ReleaseFirstItem() volatile noexcept;
 
 		// Apply a timeout to the first item at the top of the stack
-		bool ApplyTimeout(uint32_t ticks) volatile;
+		bool ApplyTimeout(uint32_t ticks) volatile noexcept;
 
 		// Returns the last item from the stack or NULL if none is available
-		OutputBuffer *GetLastItem() const volatile;
+		OutputBuffer *GetLastItem() const volatile noexcept;
 
 		// Returns the type of the last item from the stack or NoDestinationMessage if none is available
-		MessageType GetLastItemType() const volatile;
+		MessageType GetLastItemType() const volatile noexcept;
 
 		// Get the total length of all queued buffers
-		size_t DataLength() const volatile;
+		size_t DataLength() const volatile noexcept;
 
 		// Append another OutputStack to this instance. If no more space is available,
 		// all OutputBuffers that can't be added are automatically released
-		void Append(volatile OutputStack& stack) volatile;
+		void Append(volatile OutputStack& stack) volatile noexcept;
 
 		// Increase the number of references for each OutputBuffer on the stack
-		void IncreaseReferences(size_t num) volatile;
+		void IncreaseReferences(size_t num) volatile noexcept;
 
 		// Release all buffers and clean up
-		void ReleaseAll() volatile;
+		void ReleaseAll() volatile noexcept;
 
 	private:
 		size_t count;

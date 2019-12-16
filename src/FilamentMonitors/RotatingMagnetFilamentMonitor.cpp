@@ -16,7 +16,7 @@
 // is more likely to cause errors. This constant sets the delay required after a retract or reprime move before we accept the measurement.
 const int32_t SyncDelayMillis = 10;
 
-RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int extruder, unsigned int type)
+RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int extruder, unsigned int type) noexcept
 	: Duet3DFilamentMonitor(extruder, type),
 	  mmPerRev(DefaultMmPerRev),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
@@ -26,7 +26,7 @@ RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int extrud
 	Init();
 }
 
-void RotatingMagnetFilamentMonitor::Init()
+void RotatingMagnetFilamentMonitor::Init() noexcept
 {
 	dataReceived = false;
 	sensorValue = 0;
@@ -42,7 +42,7 @@ void RotatingMagnetFilamentMonitor::Init()
 	Reset();
 }
 
-void RotatingMagnetFilamentMonitor::Reset()
+void RotatingMagnetFilamentMonitor::Reset() noexcept
 {
 	extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
 	magneticMonitorState = MagneticMonitorState::idle;
@@ -143,13 +143,13 @@ bool RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& 
 }
 
 // Return the current wheel angle
-float RotatingMagnetFilamentMonitor::GetCurrentPosition() const
+float RotatingMagnetFilamentMonitor::GetCurrentPosition() const noexcept
 {
 	return (sensorValue & TypeMagnetAngleMask) * (360.0/1024.0);
 }
 
 // Deal with any received data
-void RotatingMagnetFilamentMonitor::HandleIncomingData()
+void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 {
 	uint16_t val;
 	PollResult res;
@@ -289,7 +289,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData()
 // 'filamentConsumed' is the net amount of extrusion commanded since the last call to this function.
 // 'hadNonPrintingMove' is true if filamentConsumed includes extruder movement from non-printing moves.
 // 'fromIsr' is true if this measurement was taken at the end of the ISR because a potential start bit was seen
-FilamentSensorStatus RotatingMagnetFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed)
+FilamentSensorStatus RotatingMagnetFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) noexcept
 {
 	// 1. Update the extrusion commanded and whether we have had an extruding but non-printing move
 	extrusionCommandedSinceLastSync += filamentConsumed;
@@ -335,7 +335,7 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::Check(bool isPrinting, bool 
 }
 
 // Compare the amount commanded with the amount of extrusion measured, and set up for the next comparison
-FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCommanded, float amountMeasured, bool overdue)
+FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCommanded, float amountMeasured, bool overdue) noexcept
 {
 	if (reprap.Debug(moduleFilamentSensors))
 	{
@@ -419,7 +419,7 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCo
 }
 
 // Clear the measurement state. Called when we are not printing a file. Return the present/not present status if available.
-FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear()
+FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear() noexcept
 {
 	Reset();											// call this first so that haveStartBitData and synced are false when we call HandleIncomingData
 	HandleIncomingData();								// to keep the diagnostics up to date
@@ -430,7 +430,7 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear()
 }
 
 // Print diagnostic info for this sensor
-void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder)
+void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder) noexcept
 {
 	String<FormatStringLength> buf;
 	buf.printf("Extruder %u: ", extruder);

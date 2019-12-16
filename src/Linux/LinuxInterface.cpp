@@ -15,6 +15,7 @@
 #include "Tools/Filament.h"
 #include "RepRap.h"
 #include "RepRapFirmware.h"
+#include <Hardware/Cache.h>
 
 #if HAS_LINUX_INTERFACE
 
@@ -212,8 +213,12 @@ void LinuxInterface::Spin()
 
 			// Write another chunk of the IAP binary to the designated Flash area
 			case LinuxRequest::WriteIap:
+#if IAP_IN_RAM
+				memcpy(reinterpret_cast<char *>(iapWritePointer), transfer->ReadData(packet->length), packet->length);
+				iapWritePointer += packet->length;
+				break;
+#else
 			{
-#if !IAP_IN_RAM
 				if (iapWritePointer == IAP_IMAGE_START)
 				{
 					// The EWP command is not supported for non-8KByte sectors in the SAM4 and SAME70 series.
@@ -221,13 +226,7 @@ void LinuxInterface::Spin()
 					flash_unlock(IAP_IMAGE_START, IAP_IMAGE_END, nullptr, nullptr);
 					flash_erase_sector(IAP_IMAGE_START);
 				}
-#endif
 				const char *dataToWrite = transfer->ReadData(packet->length);
-
-#if IAP_IN_RAM
-				memcpy(reinterpret_cast<char *>(iapWritePointer), dataToWrite, packet->length);
-				iapWritePointer += packet->length;
-#else
 				size_t bytesWritten = 0;
 				do
 				{
@@ -264,12 +263,19 @@ void LinuxInterface::Spin()
 					dataToWrite += bytesToWrite;
 					iapWritePointer += bytesToWrite;
 				} while (bytesWritten != packet->length);
-#endif
 				break;
 			}
+#endif
 
 			// Launch the IAP binary
 			case LinuxRequest::StartIap:
+				reprap.EmergencyStop();			// turn off heaters etc.
+				Cache::Disable();				// this also flushes the data cache
+#if USE_MPU
+				//TODO consider setting flash memory to strongly-ordered instead
+				ARM_MPU_Disable();
+#endif
+
 #if !IAP_IN_RAM
 				// Lock the whole IAP flash area again and start the IAP binary
 				flash_lock(IAP_IMAGE_START, IAP_IMAGE_END, nullptr, nullptr);

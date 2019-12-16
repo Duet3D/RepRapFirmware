@@ -7,7 +7,7 @@
 
 #include "TemperatureError.h"
 
-const char* TemperatureErrorString(TemperatureError err)
+const char* TemperatureErrorString(TemperatureError err) noexcept
 {
 	switch(err)
 	{

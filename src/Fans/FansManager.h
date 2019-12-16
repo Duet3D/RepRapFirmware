@@ -24,28 +24,28 @@ class LocalFan;
 class FansManager
 {
 public:
-	FansManager();
-	void Init();
-	bool CheckFans();
-	size_t GetHighestUsedFanNumber() const;
-	GCodeResult ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply);
-	bool ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error);
-	float GetFanValue(size_t fanNum) const;
-	GCodeResult SetFanValue(size_t fanNum, float speed, const StringRef& reply);
-	void SetFanValue(size_t fanNum, float speed);
-	bool IsFanControllable(size_t fanNum) const;
-	const char *GetFanName(size_t fanNum) const;
-	int32_t GetFanRPM(size_t fanNum) const;
+	FansManager() noexcept;
+	void Init() noexcept;
+	bool CheckFans() noexcept;
+	size_t GetHighestUsedFanNumber() const noexcept;
+	GCodeResult ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply) noexcept;
+	bool ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error) noexcept;
+	float GetFanValue(size_t fanNum) const noexcept;
+	GCodeResult SetFanValue(size_t fanNum, float speed, const StringRef& reply) noexcept;
+	void SetFanValue(size_t fanNum, float speed) noexcept;
+	bool IsFanControllable(size_t fanNum) const noexcept;
+	const char *GetFanName(size_t fanNum) const noexcept;
+	int32_t GetFanRPM(size_t fanNum) const noexcept;
 #if SUPPORT_CAN_EXPANSION
-	void ProcessRemoteFanRpms(CanAddress src, const CanMessageFanRpms& msg);
+	void ProcessRemoteFanRpms(CanAddress src, const CanMessageFanRpms& msg) noexcept;
 #endif
 #if HAS_MASS_STORAGE
-	bool WriteFanSettings(FileStore *f) const;
+	bool WriteFanSettings(FileStore *f) const noexcept;
 #endif
 
 private:
-	ReadLockedPointer<Fan> FindFan(size_t fanNum) const;
-	LocalFan *CreateLocalFan(uint32_t fanNum, const char *pinNames, PwmFrequency freq, const StringRef& reply);
+	ReadLockedPointer<Fan> FindFan(size_t fanNum) const noexcept;
+	LocalFan *CreateLocalFan(uint32_t fanNum, const char *pinNames, PwmFrequency freq, const StringRef& reply) noexcept;
 
 	mutable ReadWriteLock fansLock;
 	Fan *fans[MaxFans];

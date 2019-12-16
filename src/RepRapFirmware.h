@@ -107,59 +107,59 @@ struct DriverId
 
 	CanAddress boardAddress;
 
-	void SetFromBinary(uint32_t val)
+	void SetFromBinary(uint32_t val) noexcept
 	{
 		localDriver = val & 0x000000FF;
 		const uint32_t brdNum = val >> 16;
 		boardAddress = (brdNum <= CanId::MaxNormalAddress) ? (CanAddress)brdNum : CanId::NoAddress;
 	}
 
-	void SetLocal(unsigned int driver)
+	void SetLocal(unsigned int driver) noexcept
 	{
 		localDriver = (uint8_t)driver;
 		boardAddress = CanId::MasterAddress;
 	}
 
-	void Clear()
+	void Clear() noexcept
 	{
 		localDriver = 0;
 		boardAddress = CanId::NoAddress;
 	}
 
-	bool IsLocal() const { return boardAddress == CanId::MasterAddress; }
-	bool IsRemote() const { return boardAddress != CanId::MasterAddress; }
+	bool IsLocal() const noexcept { return boardAddress == CanId::MasterAddress; }
+	bool IsRemote() const noexcept { return boardAddress != CanId::MasterAddress; }
 
-	bool operator<(const DriverId other) const
+	bool operator<(const DriverId other) const noexcept
 	{
 		return boardAddress < other.boardAddress || (boardAddress == other.boardAddress && localDriver < other.localDriver);
 	}
 
-	bool operator==(const DriverId other) const
+	bool operator==(const DriverId other) const noexcept
 	{
 		return boardAddress == other.boardAddress && localDriver == other.localDriver;
 	}
 
-	bool operator!=(const DriverId other) const
+	bool operator!=(const DriverId other) const noexcept
 	{
 		return boardAddress != other.boardAddress || localDriver != other.localDriver;
 	}
 
 #else
 
-	void SetFromBinary(uint32_t val)
+	void SetFromBinary(uint32_t val) noexcept
 	{
 		localDriver = (uint8_t)val;
 	}
 
-	void SetLocal(unsigned int driver)
+	void SetLocal(unsigned int driver) noexcept
 	{
 		localDriver = (uint8_t)driver;
 	}
 
-	void Clear() { localDriver = 0; }
+	void Clear() noexcept { localDriver = 0; }
 
-	bool IsLocal() const { return true; }
-	bool IsRemote() const { return false; }
+	bool IsLocal() const noexcept { return true; }
+	bool IsRemote() const noexcept { return false; }
 
 #endif
 };
@@ -197,7 +197,7 @@ enum Module : uint8_t
 	noModule = numModules
 };
 
-const char *GetModuleName(uint8_t module);
+const char *GetModuleName(uint8_t module) noexcept;
 
 // Warn of what's to come, so we can use pointers and references to classes without including the entire header files
 class Network;
@@ -288,15 +288,15 @@ union LaserPwmOrIoBits
 #endif
 
 // Debugging support
-extern "C" void debugPrintf(const char* fmt, ...) __attribute__ ((format (printf, 1, 2)));
+extern "C" void debugPrintf(const char* fmt, ...) noexcept __attribute__ ((format (printf, 1, 2)));
 #define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
 
 // Functions and globals not part of any class
-void delay(uint32_t ms);
+void delay(uint32_t ms) noexcept;
 
-double HideNan(float val);
+double HideNan(float val) noexcept;
 
-void ListDrivers(const StringRef& str, DriversBitmap drivers);
+void ListDrivers(const StringRef& str, DriversBitmap drivers) noexcept;
 
 // Macro to assign an array from an initialiser list
 #define ARRAY_INIT(_dest, _init) static_assert(sizeof(_dest) == sizeof(_init), "Incompatible array types"); memcpy(_dest, _init, sizeof(_init));
@@ -307,7 +307,7 @@ void ListDrivers(const StringRef& str, DriversBitmap drivers);
 // Functions to change the base priority, to shut out interrupts up to a priority level
 
 // Get the base priority and shut out interrupts lower than or equal to a specified priority
-inline uint32_t ChangeBasePriority(uint32_t prio)
+inline uint32_t ChangeBasePriority(uint32_t prio) noexcept
 {
 	const uint32_t oldPrio = __get_BASEPRI();
 	__set_BASEPRI_MAX(prio << (8 - __NVIC_PRIO_BITS));
@@ -315,13 +315,13 @@ inline uint32_t ChangeBasePriority(uint32_t prio)
 }
 
 // Restore the base priority following a call to ChangeBasePriority
-inline void RestoreBasePriority(uint32_t prio)
+inline void RestoreBasePriority(uint32_t prio) noexcept
 {
 	__set_BASEPRI(prio);
 }
 
 // Set the base priority when we are not interested in the existing value i.e. definitely in non-interrupt code
-inline void SetBasePriority(uint32_t prio)
+inline void SetBasePriority(uint32_t prio) noexcept
 {
 	__set_BASEPRI(prio << (8 - __NVIC_PRIO_BITS));
 }
@@ -330,10 +330,10 @@ inline void SetBasePriority(uint32_t prio)
 template<class T> class SimpleRangeIterator
 {
 public:
-	SimpleRangeIterator(T value_) : val(value_) {}
-    bool operator != (SimpleRangeIterator<T> const& other) const { return val != other.val;     }
-    T const& operator*() const { return val; }
-    SimpleRangeIterator& operator++() { ++val; return *this; }
+	SimpleRangeIterator(T value_) noexcept : val(value_) {}
+    bool operator != (SimpleRangeIterator<T> const& other) const noexcept { return val != other.val;     }
+    T const& operator*() const noexcept { return val; }
+    SimpleRangeIterator& operator++() noexcept { ++val; return *this; }
 
 private:
     T val;
@@ -342,9 +342,9 @@ private:
 template<class T> class SimpleRange
 {
 public:
-	SimpleRange(T limit) : _end(limit) {}
-	SimpleRangeIterator<T> begin() const { return SimpleRangeIterator<T>(0); }
-	SimpleRangeIterator<T> end() const { return SimpleRangeIterator<T>(_end); 	}
+	SimpleRange(T limit) noexcept : _end(limit) {}
+	SimpleRangeIterator<T> begin() const noexcept { return SimpleRangeIterator<T>(0); }
+	SimpleRangeIterator<T> end() const noexcept { return SimpleRangeIterator<T>(_end); 	}
 
 private:
 	const T _end;
@@ -357,12 +357,12 @@ private:
 class MillisTimer
 {
 public:
-	MillisTimer() { running = false; }
-	void Start();
-	void Stop() { running = false; }
-	bool Check(uint32_t timeoutMillis) const;
-	bool CheckAndStop(uint32_t timeoutMillis);
-	bool IsRunning() const { return running; }
+	MillisTimer() noexcept { running = false; }
+	void Start() noexcept;
+	void Stop() noexcept { running = false; }
+	bool Check(uint32_t timeoutMillis) const noexcept;
+	bool CheckAndStop(uint32_t timeoutMillis) noexcept;
+	bool IsRunning() const noexcept { return running; }
 
 private:
 	uint32_t whenStarted;
@@ -391,8 +391,8 @@ constexpr size_t MaxTotalDrivers = NumDirectDrivers;
 // Convert between extruder drive numbers and logical drive numbers.
 // In order to save memory when MaxAxesPlusExtruders < MaxAxes + MaxExtruders, the logical drive number of an axis is the same as the axis number,
 // but the logical drive number of an extruder is MaxAxesPlusExtruders - 1 - extruder_number.
-inline size_t ExtruderToLogicalDrive(size_t extruder) { return MaxAxesPlusExtruders - 1 - extruder; }
-inline size_t LogicalDriveToExtruder(size_t drive) { return MaxAxesPlusExtruders - 1 - drive; }
+inline size_t ExtruderToLogicalDrive(size_t extruder) noexcept { return MaxAxesPlusExtruders - 1 - extruder; }
+inline size_t LogicalDriveToExtruder(size_t drive) noexcept { return MaxAxesPlusExtruders - 1 - drive; }
 
 constexpr AxesBitmap DefaultXAxisMapping = MakeBitmap<AxesBitmap>(X_AXIS);	// by default, X is mapped to X
 constexpr AxesBitmap DefaultYAxisMapping = MakeBitmap<AxesBitmap>(Y_AXIS);	// by default, Y is mapped to Y

@@ -293,7 +293,14 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 		axisEndstops[lastAxisSeen] = nullptr;
 		SwitchEndstop * const sw = new SwitchEndstop(lastAxisSeen, lastPosSeen);
 		const GCodeResult rslt = sw->Configure(gb, reply);
-		axisEndstops[lastAxisSeen] = sw;
+		if (rslt == GCodeResult::ok)
+		{
+			axisEndstops[lastAxisSeen] = sw;
+		}
+		else
+		{
+			delete sw;
+		}
 		return rslt;
 	}
 
@@ -344,7 +351,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 					}
 					else
 					{
-						// Nothing to do because there are no parameters we can change except the port number
+						axisEndstops[axis]->SetAtHighEnd(pos == EndStopPosition::highEndStop);
 					}
 					break;
 
