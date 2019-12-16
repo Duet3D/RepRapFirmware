@@ -63,7 +63,7 @@
  *
  * \return Current time.
  */
-extern "C" uint32_t get_fattime()
+extern "C" uint32_t get_fattime() noexcept
 {
 	const Platform& platform = reprap.GetPlatform();
 	if (!platform.IsDateTimeSet())

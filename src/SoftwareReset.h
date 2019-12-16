@@ -67,8 +67,8 @@ struct SoftwareResetData
 	uint32_t taskName;							// first 4 bytes of the task name
 	uint32_t stack[23];							// stack when the exception occurred, with the program counter at the bottom
 
-	bool isVacant() const;						// return true if this struct can be written without erasing it first
-	void Populate(uint16_t reason, uint32_t time, const uint32_t *stk);
+	bool isVacant() const noexcept;				// return true if this struct can be written without erasing it first
+	void Populate(uint16_t reason, uint32_t time, const uint32_t *stk) noexcept;
 
 	static const uint16_t versionValue = 8;		// increment this whenever this struct changes
 	static const uint16_t magicValue = 0x7D00 | versionValue;	// value we use to recognise that all the flash data has been written

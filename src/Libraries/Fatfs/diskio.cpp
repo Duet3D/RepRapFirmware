@@ -55,7 +55,7 @@
 
 static unsigned int highestSdRetriesDone = 0;
 
-unsigned int DiskioGetAndClearMaxRetryCount()
+unsigned int DiskioGetAndClearMaxRetryCount() noexcept
 {
 	const unsigned int ret = highestSdRetriesDone;
 	highestSdRetriesDone = 0;
@@ -95,7 +95,7 @@ unsigned int DiskioGetAndClearMaxRetryCount()
  * \return 0 or disk status in combination of DSTATUS bits
  *         (STA_NOINIT, STA_PROTECT).
  */
-DSTATUS disk_initialize(BYTE drv)
+DSTATUS disk_initialize(BYTE drv) noexcept
 {
 #if LUN_USB
 	/* USB disk with multiple LUNs */
@@ -141,7 +141,7 @@ DSTATUS disk_initialize(BYTE drv)
  * \return 0 or disk status in combination of DSTATUS bits
  *         (STA_NOINIT, STA_NODISK, STA_PROTECT).
  */
-DSTATUS disk_status(BYTE drv)
+DSTATUS disk_status(BYTE drv) noexcept
 {
 	MutexLocker lock((drv >= SD_MMC_HSMCI_MEM_CNT) ? Tasks::GetSpiMutex() : nullptr);
 
@@ -165,7 +165,7 @@ DSTATUS disk_status(BYTE drv)
  *
  * \return RES_OK for success, otherwise DRESULT error code.
  */
-DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
+DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count) noexcept
 {
 	if (reprap.Debug(moduleStorage))
 	{
@@ -233,7 +233,7 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
  * \return RES_OK for success, otherwise DRESULT error code.
  */
 #if _READONLY == 0
-DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count)
+DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count) noexcept
 {
 	if (reprap.Debug(moduleStorage))
 	{
@@ -313,7 +313,7 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count)
  *
  * \return RES_OK for success, otherwise DRESULT error code.
  */
-DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
+DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff) noexcept
 {
 	DRESULT res = RES_PARERR;
 
