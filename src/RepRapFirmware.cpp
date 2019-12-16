@@ -196,7 +196,7 @@ static const char * const moduleName[] =
 
 static_assert(ARRAY_SIZE(moduleName) == Module::numModules + 1);
 
-const char *GetModuleName(uint8_t module)
+const char *GetModuleName(uint8_t module) noexcept
 {
 	return (module < ARRAY_SIZE(moduleName)) ? moduleName[module] : "unknown";
 }
@@ -204,20 +204,20 @@ const char *GetModuleName(uint8_t module)
 // class MillisTimer members
 
 // Start or restart the timer
-void MillisTimer::Start()
+void MillisTimer::Start() noexcept
 {
 	whenStarted = millis();
 	running = true;
 }
 
 // Check whether the timer is running and a timeout has expired, but don't stop it
-bool MillisTimer::Check(uint32_t timeoutMillis) const
+bool MillisTimer::Check(uint32_t timeoutMillis) const noexcept
 {
 	return running && millis() - whenStarted >= timeoutMillis;
 }
 
 // Check whether a timeout has expired and stop the timer if it has, else leave it running if it was running
-bool MillisTimer::CheckAndStop(uint32_t timeoutMillis)
+bool MillisTimer::CheckAndStop(uint32_t timeoutMillis) noexcept
 {
 	const bool ret = Check(timeoutMillis);
 	if (ret)
@@ -232,7 +232,7 @@ bool MillisTimer::CheckAndStop(uint32_t timeoutMillis)
 // Utilities and storage not part of any class
 
 // For debug use
-void debugPrintf(const char* fmt, ...)
+void debugPrintf(const char* fmt, ...) noexcept
 {
 	// Calls to debugPrintf() from with ISRs are unsafe, both because of timing issues and because the call to Platform::MessageF tries to acquire a mutex.
 	// So ignore the call if we are coming from within an ISR.
@@ -245,19 +245,19 @@ void debugPrintf(const char* fmt, ...)
 	}
 }
 
-void delay(uint32_t ms)
+void delay(uint32_t ms) noexcept
 {
 	vTaskDelay(ms);
 }
 
 // Convert a float to double for passing to printf etc. If it is a NaN or infinity, convert it to 9999.9 to avoid getting JSON parse errors.
-double HideNan(float val)
+double HideNan(float val) noexcept
 {
 	return (double)((std::isnan(val) || std::isinf(val)) ? 9999.9 : val);
 }
 
 // Append a list of driver numbers to a string, with a space before each one
-void ListDrivers(const StringRef& str, DriversBitmap drivers)
+void ListDrivers(const StringRef& str, DriversBitmap drivers) noexcept
 {
 	for (unsigned int d = 0; drivers != 0; ++d)
 	{

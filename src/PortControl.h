@@ -18,14 +18,14 @@ class GCodeBuffer;
 class PortControl
 {
 public:
-	PortControl();
-	void Init();
-	void Exit();
-	uint32_t UpdatePorts();
+	PortControl() noexcept;
+	void Init() noexcept;
+	void Exit() noexcept;
+	uint32_t UpdatePorts() noexcept;
 	bool Configure(GCodeBuffer& gb, const StringRef& reply);
 
 private:
-	void UpdatePorts(IoBits_t newPortState);
+	void UpdatePorts(IoBits_t newPortState) noexcept;
 
 	static const size_t MaxPorts = 16;		// the port bitmap is currently a 16-bit word
 

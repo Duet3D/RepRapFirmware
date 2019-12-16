@@ -13,11 +13,11 @@
 
 #if SUPPORT_IOBITS
 
-PortControl::PortControl()
+PortControl::PortControl() noexcept
 {
 }
 
-void PortControl::Init()
+void PortControl::Init() noexcept
 {
 	numConfiguredPorts = 0;
 	advanceMillis = 0;
@@ -25,14 +25,14 @@ void PortControl::Init()
 	currentPortState = 0;
 }
 
-void PortControl::Exit()
+void PortControl::Exit() noexcept
 {
 	UpdatePorts(0);
 	numConfiguredPorts = 0;
 }
 
 // Update the IO bits. Return the number of milliseconds before we need to be called again, or 0 to be called when movement restarts.
-uint32_t PortControl::UpdatePorts()
+uint32_t PortControl::UpdatePorts() noexcept
 {
 	if (numConfiguredPorts == 0)
 	{
@@ -118,7 +118,7 @@ bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
 	return false;
 }
 
-void PortControl::UpdatePorts(IoBits_t newPortState)
+void PortControl::UpdatePorts(IoBits_t newPortState) noexcept
 {
 	if (newPortState != currentPortState)
 	{
