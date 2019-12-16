@@ -204,8 +204,18 @@ void DDARing::Spin(uint8_t simulationMode, bool shouldStartMove) noexcept
 		// No DDA is executing, so start executing a new one if possible
 		if (shouldStartMove || !CanAddMove())
 		{
-			PrepareMoves(getPointer, 0, 0, simulationMode);
-			DDA * const dda = getPointer;							// capture volatile variable
+			DDA * dda = getPointer;									// capture volatile variable
+			if (dda->GetState() == DDA::provisional)
+			{
+				PrepareMoves(dda, 0, 0, simulationMode);
+				while (dda->GetState() == DDA::completed)
+				{
+					// We prepared the move but found there was nothing to do because endstops are already triggered
+					getPointer = dda = dda->GetNext();
+					completedMoves++;
+				}
+			}
+
 			if (dda->GetState() == DDA::frozen)
 			{
 				if (simulationMode != 0)

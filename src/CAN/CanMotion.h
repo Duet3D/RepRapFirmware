@@ -25,9 +25,9 @@ namespace CanMotion
 
 	// The next 4 functions may be called from the step ISR, so they can't send CAN messages directly
 	void InsertHiccup(uint32_t numClocks);
-	void StopDriver(DriverId driver);
-	void StopAxis(size_t axis);
-	void StopAll();
+	void StopDriver(bool isBeingPrepared, DriverId driver);
+	void StopAxis(bool isBeingPrepared, size_t axis);
+	void StopAll(bool isBeingPrepared);
 }
 
 #endif

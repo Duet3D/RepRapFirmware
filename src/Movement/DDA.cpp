@@ -1268,7 +1268,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 				const AxisDriversConfig& config = platform.GetAxisDriversConfig(Z_AXIS);
 				if (drive < config.numDrivers)
 				{
-					const int32_t delta = lrintf(directionVector[drive] * totalDistance * reprap.GetPlatform().DriveStepsPerUnit(Z_AXIS));
+					const int32_t delta = lrintf(directionVector[drive] * totalDistance * platform.DriveStepsPerUnit(Z_AXIS));
 					const DriverId driver = config.driverNumbers[drive];
 #if SUPPORT_CAN_EXPANSION
 					if (driver.IsRemote())
@@ -1308,7 +1308,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 				const int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
 				{
-					reprap.GetPlatform().EnableLocalDrivers(drive);
+					platform.EnableLocalDrivers(drive);
 					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
 					pdm->totalSteps = labs(delta);
 					pdm->direction = (delta >= 0);
@@ -1352,7 +1352,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					if (flags.continuousRotationShortcut && reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
 					{
 						// This is a continuous rotation axis, so we may have adjusted the move to cross the 180 degrees position
-						const int32_t stepsPerRotation = lrintf(360.0 * reprap.GetPlatform().DriveStepsPerUnit(drive));
+						const int32_t stepsPerRotation = lrintf(360.0 * platform.DriveStepsPerUnit(drive));
 						if (delta > stepsPerRotation/2)
 						{
 							delta -= stepsPerRotation;
@@ -1436,7 +1436,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 					{
 						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::moving);
 						const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionPending[extruder], speedChange, flags.usePressureAdvance);
-						reprap.GetPlatform().EnableLocalDrivers(drive);
+						platform.EnableLocalDrivers(drive);
 
 						if (stepsToDo)
 						{
@@ -1475,7 +1475,7 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 				ClearBit(additionalAxisMotorsToEnable, drive);
 				if (platform.GetDriversBitmap(drive) != 0)		// if any of the connected axis drives is local
 				{
-					reprap.GetPlatform().EnableLocalDrivers(drive);
+					platform.EnableLocalDrivers(drive);
 				}
 #if SUPPORT_CAN_EXPANSION
 				const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
@@ -1493,8 +1493,17 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 
 		const DDAState st = prev->state;
 		afterPrepare.moveStartTime = (st == DDAState::executing || st == DDAState::frozen)
-						? prev->afterPrepare.moveStartTime + prev->clocksNeeded				// this move will follow the previous one, so calculate the start time assuming no more hiccups
+						? prev->afterPrepare.moveStartTime + prev->clocksNeeded			// this move will follow the previous one, so calculate the start time assuming no more hiccups
 							: StepTimer::GetTimerTicks() + MovementStartDelayClocks;	// else this move is the first so start it after a short delay
+
+		if (flags.checkEndstops)
+		{
+			// Before we send movement commands to remote drives, if any endstop switches we are monitoring are already set, make sure we don't start the motors concerned.
+			// This is especially important when using CAN-connected motors or endstops, because we rely on receiving "endstop changed" messages.
+			// Moves that check endstops are always run as isolated moves, so there can be no move in progress and the endstops must already be primed.
+			platform.EnableAllSteppingDrivers();
+			CheckEndstops(platform);									// this may modify pending CAN moves, and may set status 'completed'
+		}
 
 #if SUPPORT_CAN_EXPANSION
 		CanMotion::FinishMovement(afterPrepare.moveStartTime);
@@ -1520,7 +1529,10 @@ void DDA::Prepare(uint8_t simMode, float extrusionPending[]) noexcept
 #endif
 	}
 
-	state = frozen;					// must do this last so that the ISR doesn't start executing it before we have finished setting it up
+	if (state != completed)
+	{
+		state = frozen;					// must do this last so that the ISR doesn't start executing it before we have finished setting it up
+	}
 }
 
 // Take a unit positive-hyperquadrant vector, and return the factor needed to obtain
@@ -1625,8 +1637,11 @@ float DDA::NormaliseXYZ() noexcept
 	}
 }
 
+// Check the endstops, given that we know that this move checks endstops.
+// Either this move is currently executing (DDARing.currentDDA == this) and the state is 'executing', or we have almost finished preparing it and the state is 'provisional'.
 void DDA::CheckEndstops(Platform& platform) noexcept
 {
+	const bool fromPrepare = (state == DDAState::provisional);		// determine this before anything sets the state to 'completed'
 	for (;;)
 	{
 		const EndstopHitDetails hitDetails = platform.GetEndstops().CheckEndstops(flags.goingSlow);
@@ -1635,7 +1650,7 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 		case EndstopHitAction::stopAll:
 			MoveAborted();											// set the state to completed and recalculate the endpoints
 #if SUPPORT_CAN_EXPANSION
-			CanMotion::StopAll();
+			CanMotion::StopAll(fromPrepare);
 #endif
 			if (hitDetails.isZProbe)
 			{
@@ -1658,11 +1673,11 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 #if SUPPORT_CAN_EXPANSION
 			if (state == completed)									// if the call to StopDrive flagged the move as completed
 			{
-				CanMotion::StopAll();
+				CanMotion::StopAll(fromPrepare);
 			}
 			else
 			{
-				CanMotion::StopAxis(hitDetails.axis);
+				CanMotion::StopAxis(fromPrepare, hitDetails.axis);
 			}
 #endif
 			if (hitDetails.setAxisLow)
@@ -1681,7 +1696,7 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 #if SUPPORT_CAN_EXPANSION
 			if (hitDetails.driver.IsRemote())
 			{
-				CanMotion::StopDriver(hitDetails.driver);
+				CanMotion::StopDriver(fromPrepare, hitDetails.driver);
 			}
 			else
 #endif
@@ -1761,9 +1776,12 @@ pre(state == frozen)
 
 	if (activeDMs != nullptr)
 	{
-		p.EnableAllSteppingDrivers();							// make sure that all drivers are enabled
+		if (!flags.checkEndstops)
+		{
+			p.EnableAllSteppingDrivers();							// make sure that all drivers are enabled
+		}
 		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
-		unsigned int extrusions = 0, retractions = 0;			// bitmaps of extruding and retracting drives
+		unsigned int extrusions = 0, retractions = 0;				// bitmaps of extruding and retracting drives
 		for (const DriveMovement* pdm = activeDMs; pdm != nullptr; pdm = pdm->nextDM)
 		{
 			const size_t drive = pdm->drive;

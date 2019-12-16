@@ -95,7 +95,10 @@ Heat::Heat() noexcept
 	{
 		h = -1;
 	}
+#if !DUET3
 	bedHeaters[0] = DefaultBedHeater;
+#endif
+
 	for (int8_t& h : chamberHeaters)
 	{
 		h = -1;
