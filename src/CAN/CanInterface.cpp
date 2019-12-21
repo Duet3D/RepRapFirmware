@@ -800,7 +800,7 @@ GCodeResult CanInterface::SetRemoteDriverStallParameters(const CanDriversList& d
 
 static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_t param, GCodeBuffer& gb, const StringRef& reply, uint8_t *extra = nullptr)
 {
-	if (boardAddress > CanId::MaxNormalAddress)
+	if (boardAddress > CanId::MaxCanAddress)
 	{
 		reply.copy("Invalid board address");
 		return GCodeResult::error;
@@ -860,7 +860,7 @@ GCodeResult CanInterface::GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeB
 // Tell an expansion board to update
 GCodeResult CanInterface::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply)
 {
-	if (boardAddress > CanId::MaxNormalAddress)
+	if (boardAddress > CanId::MaxCanAddress)
 	{
 		reply.copy("Invalid board address");
 		return GCodeResult::error;

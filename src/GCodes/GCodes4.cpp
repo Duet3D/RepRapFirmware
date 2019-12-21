@@ -245,6 +245,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			if (oldTool != nullptr)
 			{
 				reprap.StandbyTool(oldTool->Number(), simulationMode != 0);
+				UpdateCurrentUserPosition();			// the tool offset may have changed, so get the current position
 			}
 			gb.AdvanceState();
 			if (reprap.GetTool(gb.MachineState().newToolNumber) != nullptr && AllAxesAreHomed() && (gb.MachineState().toolChangeParam & TPreBit) != 0)
@@ -261,7 +262,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tpre.g to finish executing
 		{
 			reprap.SelectTool(gb.MachineState().newToolNumber, simulationMode != 0);
-			UpdateCurrentUserPosition();					// get the actual position of the new tool
+			UpdateCurrentUserPosition();				// get the actual position of the new tool
 
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
