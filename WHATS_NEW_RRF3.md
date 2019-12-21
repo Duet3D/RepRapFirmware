@@ -16,7 +16,7 @@ Known issues:
 Upgrade notes:
 - Endstop type S0 (active low switch) is no longer supported in M574 commands. Instead, use type S1 and invert the input by prefixing the pin name with '!'.
 - If you are using Duet 3 expansion or tool boards, you must upgrade those to 3.0RC1 too
-- Duet 3+SBC users must use DSF 1.1.0.5 or a conpatible later version with this version of RRF
+- Duet 3+SBC users must use DSF 1.1.0.5 or a compatible later version with this version of RRF
 - You should also upload the new IAP file for your system. You will need it when upgrading firmware in future. These files are called Duet2CombinedIAP.bin, DuetMaestroIAP.bin, Duet3_SBCiap_MB6HC.bin (for Duet 3+SBC) and Duet3_SDiap.bin (for Duet 3 standalone systems). You can leave the old IAP files on your system, they have different names and you will need them if you downgrade to earlier firmware.
 
 Feature changes since beta 12:
