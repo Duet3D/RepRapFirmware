@@ -18,6 +18,7 @@ Upgrade notes:
 - If you are using Duet 3 expansion or tool boards, you must upgrade those to 3.0RC1 too
 - Duet 3+SBC users must use DSF 1.1.0.5 or a compatible later version with this version of RRF
 - You should also upload the new IAP file for your system. You will need it when upgrading firmware in future. These files are called Duet2CombinedIAP.bin, DuetMaestroIAP.bin, Duet3_SBCiap_MB6HC.bin (for Duet 3+SBC) and Duet3_SDiap.bin (for Duet 3 standalone systems). You can leave the old IAP files on your system, they have different names and you will need them if you downgrade to earlier firmware.
+- Duet 3 users: there is no longer a defualt bed heater. To use Heater 0 as the bed heater, put M140 H0 in config.g (later in config.g than your M950 H0 command).
 
 Feature changes since beta 12:
 - Duet 3 only: Switch-type endstops connected to expansion boards are supported
