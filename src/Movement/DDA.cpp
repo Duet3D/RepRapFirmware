@@ -1641,9 +1641,7 @@ float DDA::NormaliseXYZ() noexcept
 // Either this move is currently executing (DDARing.currentDDA == this) and the state is 'executing', or we have almost finished preparing it and the state is 'provisional'.
 void DDA::CheckEndstops(Platform& platform) noexcept
 {
-#if SUPPORT_CAN_EXPANSION
 	const bool fromPrepare = (state == DDAState::provisional);		// determine this before anything sets the state to 'completed'
-#endif
 
 	for (;;)
 	{
@@ -1719,7 +1717,10 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 			break;
 
 		case EndstopHitAction::reduceSpeed:
-			ReduceHomingSpeed();									// must be just close
+			if (!fromPrepare)										// don't mess with finish times etc. if the move hasn't started yet
+			{
+				ReduceHomingSpeed();								// must be just close
+			}
 			return;													// there can't be a higher priority endstop
 
 		default:
@@ -2017,7 +2018,7 @@ void DDA::ReduceHomingSpeed() noexcept
 		topSpeed *= (1.0/ProbingSpeedReductionFactor);
 
 		// Adjust extraAccelerationClocks so that step timing will be correct in the steady speed phase at the new speed
-		const uint32_t clocksSoFar = StepTimer::GetTimerTicks() -afterPrepare. moveStartTime;
+		const uint32_t clocksSoFar = StepTimer::GetTimerTicks() - afterPrepare. moveStartTime;
 		afterPrepare.extraAccelerationClocks = (afterPrepare.extraAccelerationClocks * (int32_t)ProbingSpeedReductionFactor) - ((int32_t)clocksSoFar * (int32_t)(ProbingSpeedReductionFactor - 1));
 
 		// We also need to adjust the total clocks needed, to prevent step errors being recorded

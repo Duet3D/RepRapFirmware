@@ -314,6 +314,7 @@ private:
 
 	void DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)			// Pause the print
 		pre(resourceOwners[movementResource] = &gb);
+	void CheckForDeferredPause(GCodeBuffer& gb);								// Check if a pause is pending, action it if so
 
 #if HAS_VOLTAGE_MONITOR || HAS_SMART_DRIVERS
 	bool DoEmergencyPause();													// Do an emergency pause following loss of power or a motor stall
@@ -354,18 +355,18 @@ private:
 
 	void AppendAxes(const StringRef& reply, AxesBitmap axes) const;				// Append a list of axes to a string
 
-	void EndSimulation(GCodeBuffer *gb);								// Restore positions etc. when exiting simulation mode
-	bool IsCodeQueueIdle() const;										// Return true if the code queue is idle
+	void EndSimulation(GCodeBuffer *gb);										// Restore positions etc. when exiting simulation mode
+	bool IsCodeQueueIdle() const;												// Return true if the code queue is idle
 
 #if HAS_MASS_STORAGE
 	void SaveResumeInfo(bool wasPowerFailure);
 #endif
 
-	void NewMoveAvailable(unsigned int sl);								// Flag that a new move is available
-	void NewMoveAvailable();											// Flag that a new move is available
+	void NewMoveAvailable(unsigned int sl);										// Flag that a new move is available
+	void NewMoveAvailable();													// Flag that a new move is available
 
-	void SetMoveBufferDefaults();										// Set up default values in the move buffer
-	void ChangeExtrusionFactor(unsigned int extruder, float factor);	// Change a live extrusion factor
+	void SetMoveBufferDefaults();												// Set up default values in the move buffer
+	void ChangeExtrusionFactor(unsigned int extruder, float factor);			// Change a live extrusion factor
 
 #if SUPPORT_12864_LCD
 	int GetHeaterNumber(unsigned int itemNumber) const;

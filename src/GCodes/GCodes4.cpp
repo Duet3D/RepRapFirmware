@@ -1334,6 +1334,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		}
 		gb.MachineState().errorMessage = nullptr;
 		HandleReply(gb, (error) ? GCodeResult::error : GCodeResult::ok, reply.c_str());
+		CheckForDeferredPause(gb);
 	}
 }
 

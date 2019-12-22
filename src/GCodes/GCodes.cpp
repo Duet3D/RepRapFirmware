@@ -659,16 +659,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 				{
 					UnlockAll(gb);
 					HandleReply(gb, GCodeResult::ok, "");
-					if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
-					{
-						gb.Put("M600");
-						filamentChangePausePending = false;
-					}
-					else if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
-					{
-						gb.Put("M226");
-						pausePending = false;
-					}
+					CheckForDeferredPause(gb);
 				}
 			}
 			break;
@@ -910,6 +901,24 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 	if (msg != nullptr)
 	{
 		platform.SendAlert(GenericMessage, msg, "Printing paused", 1, 0.0, 0);
+	}
+}
+
+// Check if a pause is pending, action it if so
+void GCodes::CheckForDeferredPause(GCodeBuffer& gb)
+{
+	if (&gb == fileGCode && !gb.IsDoingFileMacro())
+	{
+		if (filamentChangePausePending)
+		{
+			gb.Put("M600");
+			filamentChangePausePending = false;
+		}
+		else if (pausePending)
+		{
+			gb.Put("M226");
+			pausePending = false;
+		}
 	}
 }
 
@@ -2396,7 +2405,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	gb.MachineState().runningM502 = (codeRunning == 502);
 	if (codeRunning != 98)
 	{
-		gb.MachineState().runningSystemMacro = true; // running a system macro e.g. homing or tool change, so don't use workplace coordinates
+		gb.MachineState().runningSystemMacro = true; 	// running a system macro e.g. homing or tool change, so don't use workplace coordinates
 	}
 	gb.SetState(GCodeState::normal);
 	gb.Init();
