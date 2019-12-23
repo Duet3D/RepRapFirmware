@@ -50,7 +50,7 @@ void LinuxInterface::Spin()
 
 			if (packet->request >= (uint16_t)LinuxRequest::InvalidRequest)
 			{
-				INTERNAL_ERROR;
+				REPORT_INTERNAL_ERROR;
 				return;
 			}
 			const LinuxRequest request = (LinuxRequest)packet->request;
@@ -314,7 +314,7 @@ void LinuxInterface::Spin()
 
 			// Invalid request
 			default:
-				INTERNAL_ERROR;
+				REPORT_INTERNAL_ERROR;
 				break;
 			}
 		}

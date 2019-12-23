@@ -3254,11 +3254,7 @@ GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply)
 			StringRef filename(buf, ARRAY_SIZE(buf));
 			if (gb.Seen('P'))
 			{
-				if (!gb.GetQuotedString(filename))
-				{
-					reply.copy("Missing filename in M929 command");
-					return GCodeResult::error;
-				}
+				gb.GetQuotedString(filename);
 			}
 			else
 			{
@@ -4158,11 +4154,7 @@ GCodeResult Platform::ConfigureGpioOrServo(uint32_t gpioNumber, bool isServo, GC
 		if (gb.Seen('C'))
 		{
 			String<StringLength50> pinName;
-			if (!gb.GetReducedString(pinName.GetRef()))
-			{
-				reply.copy("Missing pin name");
-				return GCodeResult::error;
-			}
+			gb.GetReducedString(pinName.GetRef());
 
 			// Remove any existing assignment
 #if SUPPORT_CAN_EXPANSION

@@ -10,31 +10,42 @@
 #define HAS_HIGH_SPEED_SD		0
 #define HAS_VOLTAGE_MONITOR		0
 #define HAS_VREF_MONITOR		0
-#define ACTIVE_LOW_HEAT_ON		0
 
 const size_t NumFirmwareUpdateModules = 1;
-#define IAP_UPDATE_FILE "iapradds.bin"
 #define IAP_FIRMWARE_FILE "RepRapFirmware-RADDS.bin"
+
+#define IAP_IN_RAM				0
+
+#if IAP_IN_RAM
+
+# define IAP_UPDATE_FILE "RaddsIAP.bin"
+constexpr uint32_t IAP_IMAGE_START = 0x20008000u;
+
+#else
+
+# define IAP_UPDATE_FILE "iapradds.bin"
+constexpr uint32_t IAP_IMAGE_START = 0x000F0000;
+constexpr uint32_t IAP_IMAGE_END = 0x000FFBFF;		// don't touch the last 1KB, it's used for NvData
+
+#endif
 
 // Default board type
 #define DEFAULT_BOARD_TYPE BoardType::RADDS_15
 #define ELECTRONICS "RADDS"
 
-#define SUPPORT_INKJET		0					// set nonzero to support inkjet control
-#define SUPPORT_ROLAND		0					// set nonzero to support Roland mill
-#define SUPPORT_SCANNER		0					// set nonzero to support FreeLSS scanners
-#define SUPPORT_IOBITS		0					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR	0					// set nonzero to support DHT temperature/humidity sensors
-
-#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
+#define SUPPORT_INKJET			0				// set nonzero to support inkjet control
+#define SUPPORT_ROLAND			0				// set nonzero to support Roland mill
+#define SUPPORT_SCANNER			0				// set nonzero to support FreeLSS scanners
+#define SUPPORT_IOBITS			0				// set to support P parameter in G0/G1 commands
+#define SUPPORT_DHT_SENSOR		0				// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_OBJECT_MODEL	1
 
 // The physical capabilities of the machine
 
 // The number of drives in the machine, including X, Y, and Z plus extruder drives
 constexpr size_t NumDirectDrivers = 9;
 
-constexpr size_t MaxSensorsInSystem = 32;
-typedef uint32_t SensorsBitmap;
+constexpr size_t MaxSensors = 32;
 
 constexpr size_t MaxHeaters = 3;
 constexpr size_t MaxExtraHeaterProtections = 4;		// The number of extra heater protection instances
@@ -237,10 +248,6 @@ constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
 
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
-
-// SAM3X Flash locations (may be expanded in the future)
-constexpr uint32_t IAP_FLASH_START = 0x000F0000;
-constexpr uint32_t IAP_FLASH_END = 0x000FFBFF;		// don't touch the last 1KB, it's used for NvData
 
 // Timer allocation
 #define NETWORK_TC			(TC1)

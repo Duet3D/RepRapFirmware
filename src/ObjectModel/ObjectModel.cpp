@@ -10,6 +10,7 @@
 #if SUPPORT_OBJECT_MODEL
 
 #include "OutputMemory.h"
+#include <GCodes/GCodeBuffer/StringParser.h>
 #include <cstring>
 #include <General/SafeStrtod.h>
 
@@ -256,33 +257,35 @@ int ObjectModelTableEntry::IdCompare(const char *id) const
 }
 
 // Get the value of an object when we don't know what its type is
-TypeCode ObjectModel::GetObjectValue(ExpressionValue& val, const char *idString)
+ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, const char *idString)
 {
+	ExpressionValue val;
+
 	const ObjectModelTableEntry *e = FindObjectModelTableEntry(idString);
 	if (e == nullptr)
 	{
-		return NoType;
+		throw sp.ConstructParseException("unknown variable %s", idString);
 	}
 
 	idString = GetNextElement(idString);
 	void * param = e->param(this);
-	TypeCode tc = e->type;
-	if ((tc & IsArray) != 0)
+	val.type = e->type;
+	if ((val.type & IsArray) != 0)
 	{
 		if (*idString != '[')
 		{
-			return NoType;						// no array index is provided, and we don't currently allow an entire array to be returned
+			throw sp.ConstructParseException("can't use whole array");
 		}
 		const char *endptr;
-		const unsigned long val = SafeStrtoul(idString + 1, &endptr);
+		const unsigned long index = SafeStrtoul(idString + 1, &endptr);
 		if (endptr == idString + 1 || *endptr != ']')
 		{
-			return NoType;						// invalid syntax
+			throw sp.ConstructParseException("expected ']'");
 		}
 		const ObjectModelArrayDescriptor *arr = (const ObjectModelArrayDescriptor*)param;
-		if (val >= arr->GetNumElements(this))
+		if (index >= arr->GetNumElements(this))
 		{
-			return NoType;						// array index out of range
+			throw sp.ConstructParseException("array index out of bounds");
 		}
 
 		idString = endptr + 1;					// skip past the ']'
@@ -290,14 +293,14 @@ TypeCode ObjectModel::GetObjectValue(ExpressionValue& val, const char *idString)
 		{
 			++idString;							// skip any '.' after it because it could be an array of objects
 		}
-		tc &= ~IsArray;							// clear the array flag
-		param = arr->GetElement(this, val);		// fetch the pointer to the array element
+		val.type &= ~IsArray;					// clear the array flag
+		param = arr->GetElement(this, index);	// fetch the pointer to the array element
 	}
 
-	switch (tc)
+	switch (val.type)
 	{
 	case TYPE_OF(ObjectModel):
-		return ((ObjectModel*)param)->GetObjectValue(val, idString);
+		return ((ObjectModel*)param)->GetObjectValue(sp, idString);
 
 	case TYPE_OF(float):
 	case TYPE_OF(Float2):
@@ -328,9 +331,9 @@ TypeCode ObjectModel::GetObjectValue(ExpressionValue& val, const char *idString)
 		break;
 
 	default:
-		return NoType;
+		throw sp.ConstructParseException("unknown type");
 	}
-	return tc;
+	return val;
 }
 
 // Template specialisations

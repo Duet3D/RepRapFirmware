@@ -23,15 +23,20 @@ constexpr TypeCode NoType = 0;							// code for an invalid or unknown type
 // Forward declarations
 class ObjectModelTableEntry;
 class ObjectModel;
+class StringParser;
 
-union ExpressionValue
+struct ExpressionValue
 {
-	bool bVal;
-	float fVal;
-	int32_t iVal;
-	uint32_t uVal;
-	const char *sVal;
-	const ObjectModel *omVal;
+	TypeCode type;
+	union
+	{
+		bool bVal;
+		float fVal;
+		int32_t iVal;
+		uint32_t uVal;
+		const char *sVal;
+		const ObjectModel *omVal;
+	};
 };
 
 // Dummy types, used to define type codes
@@ -58,7 +63,7 @@ public:
 	TypeCode GetObjectType(const char *idString);
 
 	// Get the value of an object when we don't know what its type is
-	TypeCode GetObjectValue(ExpressionValue& val, const char *idString);
+	ExpressionValue GetObjectValue(const StringParser& sp, const char *idString);
 
 	// Specialisation of above for float, allowing conversion from integer to float
 	bool GetObjectValue(float& val, const char *idString);

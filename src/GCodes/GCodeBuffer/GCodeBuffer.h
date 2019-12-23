@@ -59,32 +59,34 @@ public:
 	int8_t GetCommandFraction() const;
 
 	bool Seen(char c) __attribute__((hot));					// Is a character present?
-	float GetFValue() __attribute__((hot));					// Get a float after a key letter
-	float GetDistance();									// Get a distance or coordinate and convert it from inches to mm if necessary
-	int32_t GetIValue() __attribute__((hot));				// Get an integer after a key letter
-	uint32_t GetUIValue();									// Get an unsigned integer value
-	bool GetIPAddress(IPAddress& returnedIp);				// Get an IP address quad after a key letter
-	bool GetMacAddress(uint8_t mac[6]);						// Get a MAC address sextet after a key letter
-	PwmFrequency GetPwmFrequency();							// Get a PWM frequency
-	float GetPwmValue();									// Get a PWM value
-	DriverId GetDriverId();									// Get a driver ID
-	bool GetUnprecedentedString(const StringRef& str);		// Get a string with no preceding key letter
-	bool GetQuotedString(const StringRef& str);				// Get and copy a quoted string
-	bool GetPossiblyQuotedString(const StringRef& str);		// Get and copy a string which may or may not be quoted
-	bool GetReducedString(const StringRef& str);			// Get and copy a quoted string, removing certain characters
-	void GetFloatArray(float arr[], size_t& length, bool doPad) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
-	void GetIntArray(int32_t arr[], size_t& length, bool doPad);		// Get a :-separated list of ints after a key letter
-	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
-	void GetDriverIdArray(DriverId arr[], size_t& length);	// Get a :-separated list of drivers after a key letter
+	void MustSee(char c);									// Test for character present, throw error if not
 
-	bool TryGetFValue(char c, float& val, bool& seen);
-	bool TryGetIValue(char c, int32_t& val, bool& seen);
-	bool TryGetUIValue(char c, uint32_t& val, bool& seen);
-	bool TryGetBValue(char c, bool& val, bool& seen);
-	bool TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad = false);
-	bool TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad = false);
-	bool TryGetQuotedString(char c, const StringRef& str, bool& seen);
-	bool TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen);
+	float GetFValue() THROWS_PARSE_ERROR __attribute__((hot));					// Get a float after a key letter
+	float GetDistance() THROWS_PARSE_ERROR;										// Get a distance or coordinate and convert it from inches to mm if necessary
+	int32_t GetIValue() THROWS_PARSE_ERROR __attribute__((hot));				// Get an integer after a key letter
+	uint32_t GetUIValue() THROWS_PARSE_ERROR;									// Get an unsigned integer value
+	void GetIPAddress(IPAddress& returnedIp) THROWS_PARSE_ERROR;				// Get an IP address quad after a key letter
+	void GetMacAddress(uint8_t mac[6]) THROWS_PARSE_ERROR;						// Get a MAC address sextet after a key letter
+	PwmFrequency GetPwmFrequency() THROWS_PARSE_ERROR;							// Get a PWM frequency
+	float GetPwmValue() THROWS_PARSE_ERROR;										// Get a PWM value
+	DriverId GetDriverId() THROWS_PARSE_ERROR;									// Get a driver ID
+	void GetUnprecedentedString(const StringRef& str, bool allowEmpty = false) THROWS_PARSE_ERROR;	// Get a string with no preceding key letter
+	void GetQuotedString(const StringRef& str) THROWS_PARSE_ERROR;				// Get and copy a quoted string
+	void GetPossiblyQuotedString(const StringRef& str) THROWS_PARSE_ERROR;		// Get and copy a string which may or may not be quoted
+	void GetReducedString(const StringRef& str) THROWS_PARSE_ERROR;				// Get and copy a quoted string, removing certain characters
+	void GetFloatArray(float arr[], size_t& length, bool doPad) THROWS_PARSE_ERROR __attribute__((hot)); // Get a colon-separated list of floats after a key letter
+	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS_PARSE_ERROR;		// Get a :-separated list of ints after a key letter
+	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS_PARSE_ERROR;	// Get a :-separated list of unsigned ints after a key letter
+	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS_PARSE_ERROR;	// Get a :-separated list of drivers after a key letter
+
+	bool TryGetFValue(char c, float& val, bool& seen) THROWS_PARSE_ERROR;
+	bool TryGetIValue(char c, int32_t& val, bool& seen) THROWS_PARSE_ERROR;
+	bool TryGetUIValue(char c, uint32_t& val, bool& seen) THROWS_PARSE_ERROR;
+	bool TryGetBValue(char c, bool& val, bool& seen) THROWS_PARSE_ERROR;
+	bool TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad = false) THROWS_PARSE_ERROR;
+	bool TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad = false) THROWS_PARSE_ERROR;
+	bool TryGetQuotedString(char c, const StringRef& str, bool& seen) THROWS_PARSE_ERROR;
+	bool TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen) THROWS_PARSE_ERROR;
 
 	bool IsIdle() const;
 	bool IsCompletelyIdle() const;
@@ -169,8 +171,6 @@ public:
 	GCodeInput *GetNormalInput() const { return normalInput; }	//TEMPORARY!
 
 private:
-	void ReportProgramError(const char *str);
-
 	const GCodeChannel codeChannel;						// Channel number of this instance
 	GCodeInput *normalInput;							// Our normal input stream, or nullptr if there isn't one
 

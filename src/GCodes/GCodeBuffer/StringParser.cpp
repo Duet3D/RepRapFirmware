@@ -19,14 +19,14 @@
 static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML file?
 #endif
 
-StringParser::StringParser(GCodeBuffer& gcodeBuffer)
+StringParser::StringParser(GCodeBuffer& gcodeBuffer) noexcept
 	: gb(gcodeBuffer), fileBeingWritten(nullptr), writingFileSize(0), eofStringCounter(0), indentToSkipTo(NoIndentSkip),
 	  hasCommandNumber(false), commandLetter('Q'), checksumRequired(false), binaryWriting(false)
 {
 	Init();
 }
 
-void StringParser::Init()
+void StringParser::Init() noexcept
 {
 	gcodeLineEnd = 0;
 	commandLength = 0;
@@ -37,7 +37,7 @@ void StringParser::Init()
 	commandIndent = 0;
 }
 
-inline void StringParser::AddToChecksum(char c)
+inline void StringParser::AddToChecksum(char c) noexcept
 {
 	computedChecksum ^= (uint8_t)c;
 }
@@ -410,8 +410,7 @@ void StringParser::ProcessElseCommand(bool skippedIfFalse)
 	}
 	else
 	{
-		gb.ReportProgramError("'else' did not follow 'if");
-		indentToSkipTo = gb.machineState->indentLevel;					// skip forwards to the end of the block
+		throw ConstructParseException("'else' did not follow 'if");
 	}
 }
 
@@ -433,7 +432,7 @@ void StringParser::ProcessBreakCommand()
 	{
 		if (gb.machineState->indentLevel == 0)
 		{
-			gb.ReportProgramError("'break' was not inside a loop");
+			throw ConstructParseException("'break' was not inside a loop");
 			return;
 		}
 		gb.machineState->EndBlock();
@@ -443,15 +442,13 @@ void StringParser::ProcessBreakCommand()
 
 void StringParser::ProcessVarCommand()
 {
-	gb.ReportProgramError("'var' not implemented yet");
+	throw ConstructParseException("'var' not implemented yet");
 }
 
 // Evaluate the condition that should follow 'if' or 'while'
-// If we fail, report an error and return false
 bool StringParser::EvaluateCondition(const char* keyword)
 {
-	reprap.GetPlatform().MessageF(AddError(gb.GetResponseMessageType()), "Failed to evaluate condition after '%s'\n", keyword);
-	return false;
+	throw ConstructParseException("Failed to evaluate condition after '%s'", keyword);
 }
 
 // Decode this command and find the start of the next one on the same line.
@@ -587,7 +584,7 @@ void StringParser::SetFinished()
 }
 
 // Get the file position at the start of the current command
-FilePosition StringParser::GetFilePosition() const
+FilePosition StringParser::GetFilePosition() const noexcept
 {
 #if HAS_MASS_STORAGE
 	if (gb.machineState->DoingFile())
@@ -598,19 +595,19 @@ FilePosition StringParser::GetFilePosition() const
 	return noFilePosition;
 }
 
-const char* StringParser::DataStart() const
+const char* StringParser::DataStart() const noexcept
 {
 	return gb.buffer + commandStart;
 }
 
-size_t StringParser::DataLength() const
+size_t StringParser::DataLength() const noexcept
 {
 	return commandEnd - commandStart;
 }
 
 // Is 'c' in the G Code string? 'c' must be uppercase.
-// Leave the pointer there for a subsequent read.
-bool StringParser::Seen(char c)
+// Leave the pointer one after it for a subsequent read.
+bool StringParser::Seen(char c) noexcept
 {
 	bool inQuotes = false;
 	unsigned int inBrackets = 0;
@@ -625,13 +622,14 @@ bool StringParser::Seen(char c)
 		{
 			if (inBrackets == 0 && toupper(b) == c && (c != 'E' || (unsigned int)readPointer == parameterStart || !isdigit(gb.buffer[readPointer - 1])))
 			{
+				++readPointer;
 				return true;
 			}
-			if (b == '[')
+			if (b == '{')
 			{
 				++inBrackets;
 			}
-			else if (b == ']' && inBrackets != 0)
+			else if (b == '}' && inBrackets != 0)
 			{
 				--inBrackets;
 			}
@@ -644,42 +642,35 @@ bool StringParser::Seen(char c)
 // Get a float after a G Code letter found by a call to Seen()
 float StringParser::GetFValue()
 {
-	if (readPointer >= 0)
+	if (readPointer > 0)
 	{
-		const float result = ReadFloatValue(&gb.buffer[readPointer + 1], nullptr);
+		const float result = ReadFloatValue();
 		readPointer = -1;
 		return result;
 	}
 
-	INTERNAL_ERROR;
-	return 0.0;
+	THROW_INTERNAL_ERROR;
 }
 
 // Get a colon-separated list of floats after a key letter
 // If doPad is true then we allow just one element to be given, in which case we fill all elements with that value
 void StringParser::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
 {
-	if (readPointer >= 0)
+	if (readPointer > 0)
 	{
 		size_t length = 0;
-		const char *p = gb.buffer + readPointer + 1;
 		for (;;)
 		{
 			if (length >= returnedLength)		// array limit has been set in here
 			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode float array that is too long: %s\n", gb.buffer);
-				readPointer = -1;
-				returnedLength = 0;
-				return;
+				throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
 			}
-			const char *q;
-			arr[length] = ReadFloatValue(p, &q);
-			length++;
-			if (*q != LIST_SEPARATOR)
+			arr[length++] = ReadFloatValue();
+			if (gb.buffer[readPointer] != LIST_SEPARATOR)
 			{
 				break;
 			}
-			p = q + 1;
+			++readPointer;
 		}
 
 		// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
@@ -699,35 +690,29 @@ void StringParser::GetFloatArray(float arr[], size_t& returnedLength, bool doPad
 	}
 	else
 	{
-		INTERNAL_ERROR;
-		returnedLength = 0;
+		THROW_INTERNAL_ERROR;
 	}
 }
 
 // Get a :-separated list of ints after a key letter
 void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad)
 {
-	if (readPointer >= 0)
+	if (readPointer > 0)
 	{
 		size_t length = 0;
-		const char *p = gb.buffer + readPointer + 1;
 		for (;;)
 		{
 			if (length >= returnedLength) // Array limit has been set in here
 			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode int array that is too long: %s\n", gb.buffer);
-				readPointer = -1;
-				returnedLength = 0;
-				return;
+				throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
 			}
-			const char *q;
-			arr[length] = ReadIValue(p, &q);
+			arr[length] = ReadIValue();
 			length++;
-			if (*q != LIST_SEPARATOR)
+			if (gb.buffer[readPointer] != LIST_SEPARATOR)
 			{
 				break;
 			}
-			p = q + 1;
+			++readPointer;
 		}
 
 		// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
@@ -746,35 +731,29 @@ void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad
 	}
 	else
 	{
-		INTERNAL_ERROR;
-		returnedLength = 0;
+		THROW_INTERNAL_ERROR;
 	}
 }
 
 // Get a :-separated list of unsigned ints after a key letter
 void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool doPad)
 {
-	if (readPointer >= 0)
+	if (readPointer > 0)
 	{
 		size_t length = 0;
-		const char *p = gb.buffer + readPointer + 1;
 		for (;;)
 		{
 			if (length >= returnedLength) // Array limit has been set in here
 			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode unsigned array that is too long: %s\n", gb.buffer);
-				readPointer = -1;
-				returnedLength = 0;
-				return;
+				throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
 			}
-			const char *q;
-			arr[length] = ReadUIValue(p, &q);
+			arr[length] = ReadUIValue();
 			length++;
-			if (*q != LIST_SEPARATOR)
+			if (gb.buffer[readPointer] != LIST_SEPARATOR)
 			{
 				break;
 			}
-			p = q + 1;
+			++readPointer;
 		}
 
 		// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
@@ -794,35 +773,29 @@ void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool
 	}
 	else
 	{
-		INTERNAL_ERROR;
-		returnedLength = 0;
+		THROW_INTERNAL_ERROR;
 	}
 }
 
 // Get a :-separated list of drivers after a key letter
 void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength)
 {
-	if (readPointer >= 0)
+	if (readPointer > 0)
 	{
 		size_t length = 0;
-		const char *p = gb.buffer + readPointer + 1;
 		for (;;)
 		{
 			if (length >= returnedLength) // Array limit has been set in here
 			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode driverID array that is too long: %s\n", gb.buffer);
-				readPointer = -1;
-				returnedLength = 0;
-				return;
+				throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
 			}
-			const char *q;
-			arr[length] = ReadDriverIdValue(p, &q);
+			arr[length] = ReadDriverIdValue();
 			length++;
-			if (*q != LIST_SEPARATOR)
+			if (gb.buffer[readPointer] != LIST_SEPARATOR)
 			{
 				break;
 			}
-			p = q + 1;
+			++readPointer;
 		}
 
 		returnedLength = length;
@@ -830,39 +803,36 @@ void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength)
 	}
 	else
 	{
-		INTERNAL_ERROR;
-		returnedLength = 0;
+		THROW_INTERNAL_ERROR;
 	}
 }
 
 // Get and copy a quoted string returning true if successful
-bool StringParser::GetQuotedString(const StringRef& str)
+void StringParser::GetQuotedString(const StringRef& str)
 {
 	str.Clear();
-	if (readPointer >= 0)
+	if (readPointer > 0)
 	{
-		++readPointer;				// skip the character that introduced the string
 		switch (gb.buffer[readPointer])
 		{
 		case '"':
-			return InternalGetQuotedString(str);
+			InternalGetQuotedString(str);
+			return;
 
-#if SUPPORT_OBJECT_MODEL
-		case '[':
-			return GetStringExpression(str);
-#endif
+		case '{':
+			GetStringExpression(str);
+			return;
 
 		default:
-			return false;
+			throw ConstructParseException("expected string expression");
 		}
 	}
 
-	INTERNAL_ERROR;
-	return false;
+	THROW_INTERNAL_ERROR;
 }
 
 // Given that the current character is double-quote, fetch the quoted string
-bool StringParser::InternalGetQuotedString(const StringRef& str)
+void StringParser::InternalGetQuotedString(const StringRef& str)
 {
 	str.Clear();
 	++readPointer;
@@ -871,13 +841,13 @@ bool StringParser::InternalGetQuotedString(const StringRef& str)
 		char c = gb.buffer[readPointer++];
 		if (c < ' ')
 		{
-			return false;
+			throw ConstructParseException("control character in string");
 		}
 		if (c == '"')
 		{
 			if (gb.buffer[readPointer++] != '"')
 			{
-				return true;
+				return;
 			}
 		}
 		else if (c == '\'')
@@ -895,38 +865,32 @@ bool StringParser::InternalGetQuotedString(const StringRef& str)
 		}
 		str.cat(c);
 	}
-	return false;
 }
 
 // Get and copy a string which may or may not be quoted. If it is not quoted, it ends at the first space or control character.
-// Return true if successful.
-bool StringParser::GetPossiblyQuotedString(const StringRef& str)
+void StringParser::GetPossiblyQuotedString(const StringRef& str)
 {
-	if (readPointer >= 0)
+	if (readPointer > 0)
 	{
-		++readPointer;
-		return InternalGetPossiblyQuotedString(str);
+		InternalGetPossiblyQuotedString(str, false);
 	}
 
-	INTERNAL_ERROR;
-	return false;
+	THROW_INTERNAL_ERROR;
 }
 
 // Get and copy a string which may or may not be quoted, starting at readPointer. Return true if successful.
-bool StringParser::InternalGetPossiblyQuotedString(const StringRef& str)
+void StringParser::InternalGetPossiblyQuotedString(const StringRef& str, bool allowEmpty)
 {
 	str.Clear();
 	if (gb.buffer[readPointer] == '"')
 	{
-		return InternalGetQuotedString(str);
+		InternalGetQuotedString(str);
 	}
 
-#if SUPPORT_OBJECT_MODEL
-	if (gb.buffer[readPointer] == '[')
+	if (gb.buffer[readPointer] == '{')
 	{
-		return GetStringExpression(str);
+		GetStringExpression(str);
 	}
-#endif
 
 	commandEnd = gcodeLineEnd;				// the string is the remainder of the line of gcode
 	for (;;)
@@ -939,19 +903,21 @@ bool StringParser::InternalGetPossiblyQuotedString(const StringRef& str)
 		str.cat(c);
 	}
 	str.StripTrailingSpaces();
-	return !str.IsEmpty();
+	if (!allowEmpty && str.IsEmpty())
+	{
+		throw ConstructParseException("non-empty string expected");
+	}
 }
 
-bool StringParser::GetReducedString(const StringRef& str)
+void StringParser::GetReducedString(const StringRef& str)
 {
 	str.Clear();
-	if (readPointer >= 0)
+	if (readPointer > 0)
 	{
 		// Reduced strings must start with a double-quote
-		++readPointer;
 		if (gb.buffer[readPointer] != '"')
 		{
-			return false;
+			throw ConstructParseException("string expected");
 		}
 
 		++readPointer;
@@ -963,7 +929,7 @@ bool StringParser::GetReducedString(const StringRef& str)
 			case '"':
 				if (gb.buffer[readPointer++] != '"')
 				{
-					return true;
+					return;
 				}
 				str.cat(c);
 				break;
@@ -976,7 +942,7 @@ bool StringParser::GetReducedString(const StringRef& str)
 			default:
 				if (c < ' ')
 				{
-					return false;
+					throw ConstructParseException("control characer in string");
 				}
 				str.cat(tolower(c));
 				break;
@@ -984,8 +950,7 @@ bool StringParser::GetReducedString(const StringRef& str)
 		}
 	}
 
-	INTERNAL_ERROR;
-	return false;
+	THROW_INTERNAL_ERROR;
 }
 
 // This returns a string comprising the rest of the line, excluding any comment
@@ -993,7 +958,7 @@ bool StringParser::GetReducedString(const StringRef& str)
 // command that sets the name of a file to be printed.  In
 // preference use GetString() which requires the string to have
 // been preceded by a tag letter.
-bool StringParser::GetUnprecedentedString(const StringRef& str)
+void StringParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty)
 {
 	readPointer = parameterStart;
 	char c;
@@ -1001,63 +966,58 @@ bool StringParser::GetUnprecedentedString(const StringRef& str)
 	{
 		++readPointer;	// skip leading spaces
 	}
-	return InternalGetPossiblyQuotedString(str);
+	InternalGetPossiblyQuotedString(str, allowEmpty);
 }
 
 // Get an int32 after a G Code letter
 int32_t StringParser::GetIValue()
 {
-	if (readPointer >= 0)
+	if (readPointer > 0)
 	{
-		const int32_t result = ReadIValue(&gb.buffer[readPointer + 1], nullptr);
+		const int32_t result = ReadIValue();
 		readPointer = -1;
 		return result;
 	}
 
-	INTERNAL_ERROR;
-	return 0;
+	THROW_INTERNAL_ERROR;
 }
 
 // Get an uint32 after a G Code letter
 uint32_t StringParser::GetUIValue()
 {
-	if (readPointer >= 0)
+	if (readPointer > 0)
 	{
-		const uint32_t result = ReadUIValue(&gb.buffer[readPointer + 1], nullptr);
+		const uint32_t result = ReadUIValue();
 		readPointer = -1;
 		return result;
 	}
 
-	INTERNAL_ERROR;
-	return 0;
+	THROW_INTERNAL_ERROR;
 }
 
 // Get a driver ID
 DriverId StringParser::GetDriverId()
 {
 	DriverId result;
-	if (readPointer >= 0)
+	if (readPointer > 0)
 	{
-		result = ReadDriverIdValue(&gb.buffer[readPointer + 1], nullptr);
+		result = ReadDriverIdValue();
 		readPointer = -1;
 		return result;
 	}
 
-	INTERNAL_ERROR;
-	result.SetLocal(0);
-	return result;
+	THROW_INTERNAL_ERROR;
 }
 
 // Get an IP address quad after a key letter
-bool StringParser::GetIPAddress(IPAddress& returnedIp)
+void StringParser::GetIPAddress(IPAddress& returnedIp)
 {
-	if (readPointer < 0)
+	if (readPointer <= 0)
 	{
-		INTERNAL_ERROR;
-		return false;
+		THROW_INTERNAL_ERROR;
 	}
 
-	const char* p = &gb.buffer[readPointer + 1];
+	const char* p = gb.buffer + readPointer;
 	uint8_t ip[4];
 	unsigned int n = 0;
 	for (;;)
@@ -1067,7 +1027,7 @@ bool StringParser::GetIPAddress(IPAddress& returnedIp)
 		if (pp == p || v > 255)
 		{
 			readPointer = -1;
-			return false;
+			throw ConstructParseException("invalid IP address");
 		}
 		ip[n] = (uint8_t)v;
 		++n;
@@ -1079,30 +1039,27 @@ bool StringParser::GetIPAddress(IPAddress& returnedIp)
 		if (n == 4)
 		{
 			readPointer = -1;
-			return false;
+			throw ConstructParseException("invalid IP address");
 		}
 		++p;
 	}
 	readPointer = -1;
-	if (n == 4)
+	if (n != 4)
 	{
-		returnedIp.SetV4(ip);
-		return true;
+		throw ConstructParseException("invalid IP address");
 	}
-	returnedIp.SetNull();
-	return false;
+	returnedIp.SetV4(ip);
 }
 
 // Get a MAX address sextet after a key letter
-bool StringParser::GetMacAddress(uint8_t mac[6])
+void StringParser::GetMacAddress(uint8_t mac[6])
 {
-	if (readPointer < 0)
+	if (readPointer <= 0)
 	{
-		INTERNAL_ERROR;
-		return false;
+		THROW_INTERNAL_ERROR;
 	}
 
-	const char* p = gb.buffer + readPointer + 1;
+	const char* p = gb.buffer + readPointer;
 	unsigned int n = 0;
 	for (;;)
 	{
@@ -1111,7 +1068,7 @@ bool StringParser::GetMacAddress(uint8_t mac[6])
 		if (pp == p || v > 255)
 		{
 			readPointer = -1;
-			return false;
+			throw ConstructParseException("invalid MAC address");
 		}
 		mac[n] = (uint8_t)v;
 		++n;
@@ -1123,16 +1080,19 @@ bool StringParser::GetMacAddress(uint8_t mac[6])
 		if (n == 6)
 		{
 			readPointer = -1;
-			return false;
+			throw ConstructParseException("invalid MAC address");
 		}
 		++p;
 	}
 	readPointer = -1;
-	return n == 6;
+	if (n != 6)
+	{
+		throw ConstructParseException("invalid MAC address");
+	}
 }
 
 // Write the command to a string
-void StringParser::PrintCommand(const StringRef& s) const
+void StringParser::PrintCommand(const StringRef& s) const noexcept
 {
 	s.printf("%c%d", commandLetter, commandNumber);
 	if (commandFraction >= 0)
@@ -1142,7 +1102,7 @@ void StringParser::PrintCommand(const StringRef& s) const
 }
 
 // Append the full command content to a string
-void StringParser::AppendFullCommand(const StringRef &s) const
+void StringParser::AppendFullCommand(const StringRef &s) const noexcept
 {
 	s.cat(gb.buffer);
 }
@@ -1285,13 +1245,14 @@ void StringParser::FileEnded()
 #endif
 
 // Functions to read values from lines of GCode, allowing for expressions and variable substitution
-float StringParser::ReadFloatValue(const char *p, const char **endptr)
+float StringParser::ReadFloatValue()
 {
-#if SUPPORT_OBJECT_MODEL
-	if (*p == '{')
+	++readPointer;
+	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionValue val;
-		switch (EvaluateExpression(p, endptr, val))
+		++readPointer;
+		const ExpressionValue val = EvaluateExpression();
+		switch (val.type)
 		{
 		case TYPE_OF(float):
 			return val.fVal;
@@ -1303,22 +1264,19 @@ float StringParser::ReadFloatValue(const char *p, const char **endptr)
 			return (float)val.uVal;
 
 		default:
-			//TODO report error
-			return 1.0;
+			throw ConstructParseException("expected float value");
 		}
 	}
-#endif
 
-	return SafeStrtof(p, endptr);
+	return SafeStrtof(gb.buffer + readPointer, nullptr);
 }
 
-uint32_t StringParser::ReadUIValue(const char *p, const char **endptr)
+uint32_t StringParser::ReadUIValue()
 {
-#if SUPPORT_OBJECT_MODEL
-	if (*p == '{')
+	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionValue val;
-		switch (EvaluateExpression(p, endptr, val))
+		const ExpressionValue val = EvaluateExpression();
+		switch (val.type)
 		{
 		case TYPE_OF(uint32_t):
 			return val.uVal;
@@ -1328,37 +1286,34 @@ uint32_t StringParser::ReadUIValue(const char *p, const char **endptr)
 			{
 				return (uint32_t)val.iVal;
 			}
-			//TODO report error
-			return 0;
+			throw ConstructParseException("value must be non-negative");
 
 		default:
-			//TODO report error
-			return 0;
+			throw ConstructParseException("expected non-negative integer value");
 		}
 	}
-#endif
 
 	int base = 10;
 	size_t skipTrailingQuote = 0;
 
 	// Allow "0xNNNN" or "xNNNN" where NNNN are hex digits
-	if (*p == '"')
+	if (gb.buffer[readPointer] == '"')
 	{
-		++p;
+		++readPointer;
 		skipTrailingQuote = 1;
-		switch (*p)
+		switch (gb.buffer[readPointer])
 		{
 		case 'x':
 		case 'X':
 			base = 16;
-			++p;
+			++readPointer;
 			break;
 
 		case '0':
-			if (*(p + 1) == 'x' || *(p + 1) == 'X')
+			if (gb.buffer[readPointer + 1] == 'x' || gb.buffer[readPointer + 1] == 'X')
 			{
 				base = 16;
-				p += 2;
+				readPointer += 2;
 			}
 			break;
 
@@ -1366,18 +1321,19 @@ uint32_t StringParser::ReadUIValue(const char *p, const char **endptr)
 			break;
 		}
 	}
-	const uint32_t result = SafeStrtoul(p, endptr, base);
-	endptr += skipTrailingQuote;
+
+	const char *endptr;
+	const uint32_t result = SafeStrtoul(gb.buffer + readPointer, &endptr, base);
+	readPointer = endptr - gb.buffer + skipTrailingQuote;
 	return result;
 }
 
-int32_t StringParser::ReadIValue(const char *p, const char **endptr)
+int32_t StringParser::ReadIValue()
 {
-#if SUPPORT_OBJECT_MODEL
-	if (*p == '{')
+	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionValue val;
-		switch (EvaluateExpression(p, endptr, val))
+		ExpressionValue val = EvaluateExpression();
+		switch (val.type)
 		{
 		case TYPE_OF(int32_t):
 			return val.iVal;
@@ -1386,24 +1342,25 @@ int32_t StringParser::ReadIValue(const char *p, const char **endptr)
 			return (int32_t)val.uVal;
 
 		default:
-			//TODO report error
-			return 0;
+			throw ConstructParseException("expected integer value");
 		}
 	}
-#endif
 
-	return SafeStrtol(p, endptr);
+	const char *endptr;
+	const int32_t val = SafeStrtol(gb.buffer + readPointer, &endptr);
+	readPointer = endptr - gb.buffer;
+	return val;
 }
 
-DriverId StringParser::ReadDriverIdValue(const char *p, const char **endptr)
+DriverId StringParser::ReadDriverIdValue()
 {
 	DriverId result;
-	const char *endp;
-	const uint32_t v1 = ReadUIValue(p, &endp);
+	const uint32_t v1 = ReadUIValue();
 #if SUPPORT_CAN_EXPANSION
-	if (*endp == '.')
+	if (gb.buffer[readPointer] == '.')
 	{
-		const uint32_t v2 = ReadUIValue(endp + 1, &endp);
+		++readPointer;
+		const uint32_t v2 = ReadUIValue();
 		result.localDriver = v2;
 		result.boardAddress = v1;
 	}
@@ -1415,20 +1372,14 @@ DriverId StringParser::ReadDriverIdValue(const char *p, const char **endptr)
 #else
 	result.localDriver = v1;
 #endif
-	if (endptr != nullptr)
-	{
-		*endptr = endp;
-	}
 	return result;
 }
 
-#if SUPPORT_OBJECT_MODEL
-
-// Get a string expression. The current character is '['.
-bool StringParser::GetStringExpression(const StringRef& str)
+// Get a string expression. The current character is '{'.
+void StringParser::GetStringExpression(const StringRef& str)
 {
-	ExpressionValue val;
-	switch (EvaluateExpression(gb.buffer + readPointer, nullptr, val))
+	const ExpressionValue val = EvaluateExpression();
+	switch (val.type)
 	{
 	case TYPE_OF(const char*):
 		str.copy(val.sVal);
@@ -1463,55 +1414,161 @@ bool StringParser::GetStringExpression(const StringRef& str)
 		break;
 
 	default:
-		//TODO report error
-		return false;
+		throw ConstructParseException("string value expected");
 	}
-
-	return true;
 }
 
 // Evaluate an expression. the current character is '{'.
-TypeCode StringParser::EvaluateExpression(const char *p, const char **endptr, ExpressionValue& rslt)
+ExpressionValue StringParser::EvaluateExpression()
 {
-	++p;						// skip the '{'
+	++readPointer;						// skip the '{'
 	// For now the only form of expression we handle is {variable-name}
-	if (isalpha(*p))			// if it's a variable name
+	if (isalpha(gb.buffer[readPointer]))			// if it's a variable name
 	{
-		const char * const start = p;
+		unsigned int start = readPointer;
 		unsigned int numBrackets = 0;
-		while (isalpha(*p) || isdigit(*p) || *p == '_' || *p == '.' || *p == '[' || (*p == ']' && numBrackets != 0))
+		char c;
+		while (isalpha((c = gb.buffer[readPointer])) || isdigit(c) || c == '_' || c == '.' || c == '(' || (c == ')' && numBrackets != 0))
 		{
-			if (*p == '[')
+			if (c == '(')
 			{
 				++numBrackets;
 			}
-			else if (*p == ']')
+			else if (c == ')')
 			{
 				--numBrackets;
 			}
-			++p;
+			++readPointer;
 		}
 		String<MaxVariableNameLength> varName;
-		if (varName.copy(start, p - start))
+		if (varName.copy(gb.buffer + start, readPointer - start))
 		{
-			// variable name is too long
-			//TODO error handling
-			return NoType;
+			throw ConstructParseException("variable name too long");;
 		}
 		//TODO consider supporting standard CNC functions here
-		const TypeCode tc = reprap.GetObjectValue(rslt, varName.c_str());
-		if (tc != NoType && (tc & IsArray) == 0 && *p == '}')
+		const ExpressionValue val = reprap.GetObjectValue(*this, varName.c_str());
+		if (c != '}')
 		{
-			if (endptr != nullptr)
-			{
-				*endptr = p + 1;
-			}
-			return tc;
+			throw ConstructParseException("expected '}'");
 		}
+		++readPointer;
+		return val;
 	}
-	return NoType;
+
+	throw ConstructParseException("expected variable name");
 }
 
-#endif
+// Parse a number. the initial character of the string is a decimal digit.
+ExpressionValue StringParser::ParseNumber()
+{
+	// 2. Read digits before decimal point, E or e
+	unsigned long valueBeforePoint = 0;
+	char c;
+	while (isdigit((c = gb.buffer[readPointer])))
+	{
+		const unsigned int digit = c - '0';
+		if (valueBeforePoint > ULONG_MAX/10 || (valueBeforePoint *= 10, valueBeforePoint > ULONG_MAX - digit))
+		{
+			throw ConstructParseException("too many digits");
+		}
+		valueBeforePoint += digit;
+		++readPointer;
+	}
+
+	// 3. Check for decimal point before E or e
+	unsigned long valueAfterPoint = 0;
+	long digitsAfterPoint = 0;
+	bool isFloat = (c == '.');
+	if (isFloat)
+	{
+		++readPointer;
+
+		// 3b. Read the digits (if any) after the decimal point
+		while (isdigit((c = gb.buffer[readPointer])))
+		{
+			const unsigned int digit = c - '0';
+			if (valueAfterPoint > ULONG_MAX/10 || (valueAfterPoint *= 10, valueAfterPoint > ULONG_MAX - digit))
+			{
+				throw ConstructParseException("too many decimal digits");
+			}
+			valueAfterPoint += digit;
+			++digitsAfterPoint;
+			++readPointer;
+		}
+	}
+
+	// 5. Check for exponent part
+	long exponent = 0;
+	if (toupper(c) == 'E')
+	{
+		isFloat = true;
+		++readPointer;
+		c = gb.buffer[readPointer];
+
+		// 5a. Check for signed exponent
+		const bool expNegative = (c == '-');
+		if (expNegative || c == '+')
+		{
+			++readPointer;
+		}
+
+		// 5b. Read exponent digits
+		while (isdigit((c = gb.buffer[readPointer])))
+		{
+			exponent = (10 * exponent) + (c - '0');	// could overflow, but anyone using such large numbers is being very silly
+			++readPointer;
+		}
+
+		if (expNegative)
+		{
+			exponent = -exponent;
+		}
+	}
+
+	// 6. Compute the composite value
+	ExpressionValue retvalue;
+
+	if (isFloat)
+	{
+		retvalue.type = TypeOf<float>();
+		if (valueAfterPoint != 0)
+		{
+			if (valueBeforePoint == 0)
+			{
+				retvalue.fVal = (float)((double)valueAfterPoint * pow(10, exponent - digitsAfterPoint));
+			}
+			else
+			{
+				retvalue.fVal = (float)(((double)valueAfterPoint/pow(10, digitsAfterPoint) + valueBeforePoint) * pow(10, exponent));
+			}
+		}
+		else
+		{
+			retvalue.fVal = (float)(valueBeforePoint * pow(10, exponent));
+		}
+	}
+	else
+	{
+		retvalue.type = TypeOf<uint32_t>();
+		retvalue.uVal = valueBeforePoint;
+	}
+
+	return retvalue;
+}
+
+ParseException StringParser::ConstructParseException(const char *str) const
+{
+	return ParseException(readPointer, str);
+}
+
+ParseException StringParser::ConstructParseException(const char *str, const char *param) const
+{
+	return ParseException(readPointer, str, param);
+}
+
+ParseException StringParser::ConstructParseException(const char *str, uint32_t param) const
+{
+	return ParseException(readPointer, str, param);
+}
 
 // End

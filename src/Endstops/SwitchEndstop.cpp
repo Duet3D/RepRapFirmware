@@ -56,12 +56,7 @@ void SwitchEndstop::ReleasePorts()
 GCodeResult SwitchEndstop::Configure(GCodeBuffer& gb, const StringRef& reply)
 {
 	String<StringLength50> portNames;
-	if (!gb.GetReducedString(portNames.GetRef()))
-	{
-		reply.copy("Missing port name string");
-		return GCodeResult::error;
-	}
-
+	gb.GetReducedString(portNames.GetRef());
 	return Configure(portNames.c_str(), reply);
 }
 

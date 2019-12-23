@@ -115,8 +115,7 @@ float BinaryParser::GetFValue()
 		return value;
 	}
 
-	INTERNAL_ERROR;
-	return 0.0f;
+	THROW_INTERNAL_ERROR;
 }
 
 int32_t BinaryParser::GetIValue()
@@ -144,8 +143,7 @@ int32_t BinaryParser::GetIValue()
 		return value;
 	}
 
-	INTERNAL_ERROR;
-	return 0;
+	THROW_INTERNAL_ERROR;
 }
 
 uint32_t BinaryParser::GetUIValue()
@@ -173,8 +171,7 @@ uint32_t BinaryParser::GetUIValue()
 		return value;
 	}
 
-	INTERNAL_ERROR;
-	return 0;
+	THROW_INTERNAL_ERROR;
 }
 
 // Get a driver ID
@@ -200,24 +197,19 @@ DriverId BinaryParser::GetDriverId()
 		return value;
 	}
 
-	INTERNAL_ERROR;
-	value.Clear();
-	return value;
+	THROW_INTERNAL_ERROR;
 }
 
-bool BinaryParser::GetIPAddress(IPAddress& returnedIp)
+void BinaryParser::GetIPAddress(IPAddress& returnedIp)
 {
 	if (seenParameter == nullptr)
 	{
-		INTERNAL_ERROR;
-		return false;
+		THROW_INTERNAL_ERROR;
 	}
 
 	if (seenParameter->type != DataType::String)
 	{
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return false;
+		throw ConstructParseException("IP address string expected");
 	}
 
 	const char* p = seenParameterValue;
@@ -229,9 +221,7 @@ bool BinaryParser::GetIPAddress(IPAddress& returnedIp)
 		const unsigned long v = SafeStrtoul(p, &pp);
 		if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
 		{
-			seenParameter = nullptr;
-			seenParameterValue = nullptr;
-			return false;
+			throw ConstructParseException("invalid IP address");
 		}
 		ip[n] = (uint8_t)v;
 		++n;
@@ -242,36 +232,30 @@ bool BinaryParser::GetIPAddress(IPAddress& returnedIp)
 		}
 		if (n == 4)
 		{
-			seenParameter = nullptr;
-			seenParameterValue = nullptr;
-			return false;
+			throw ConstructParseException("invalid IP address");
 		}
 		++p;
 	}
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	if (n == 4)
+	if (n != 4)
 	{
-		returnedIp.SetV4(ip);
-		return true;
+		throw ConstructParseException("invalid IP address");
 	}
-	returnedIp.SetNull();
-	return false;
+
+	returnedIp.SetV4(ip);
 }
 
-bool BinaryParser::GetMacAddress(uint8_t mac[6])
+void BinaryParser::GetMacAddress(uint8_t mac[6])
 {
 	if (seenParameter == nullptr)
 	{
-		INTERNAL_ERROR;
-		return false;
+		THROW_INTERNAL_ERROR;
 	}
 
 	if (seenParameter->type != DataType::String)
 	{
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return false;
+		throw ConstructParseException("MAC address string expected");
 	}
 
 	const char* p = seenParameterValue;
@@ -282,9 +266,7 @@ bool BinaryParser::GetMacAddress(uint8_t mac[6])
 		const unsigned long v = SafeStrtoul(p, &pp, 16);
 		if (pp == p || pp > seenParameterValue + seenParameter->intValue || v > 255)
 		{
-			seenParameter = nullptr;
-			seenParameterValue = nullptr;
-			return false;
+			throw ConstructParseException("invalid MAC address");
 		}
 		mac[n] = (uint8_t)v;
 		++n;
@@ -295,30 +277,36 @@ bool BinaryParser::GetMacAddress(uint8_t mac[6])
 		}
 		if (n == 6)
 		{
-			seenParameter = nullptr;
-			seenParameterValue = nullptr;
-			return false;
+			throw ConstructParseException("invalid MAC address");
 		}
 		++p;
 	}
+
+	if (n != 6)
+	{
+		throw ConstructParseException("invalid MAC address");
+	}
+
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	return n == 6;
 }
 
-bool BinaryParser::GetUnprecedentedString(const StringRef& str)
+void BinaryParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty)
 {
 	str.Clear();
 	WriteParameters(str, false);
-	return !str.IsEmpty();
+	if (!allowEmpty && str.IsEmpty())
+	{
+		throw ConstructParseException("non-empty string expected");
+	}
 }
 
-bool BinaryParser::GetQuotedString(const StringRef& str)
+void BinaryParser::GetQuotedString(const StringRef& str)
 {
-	return GetPossiblyQuotedString(str);
+	GetPossiblyQuotedString(str);
 }
 
-bool BinaryParser::GetPossiblyQuotedString(const StringRef& str)
+void BinaryParser::GetPossiblyQuotedString(const StringRef& str)
 {
 	if (seenParameter != nullptr && (seenParameter->type == DataType::String || seenParameter->type == DataType::Expression))
 	{
@@ -330,10 +318,13 @@ bool BinaryParser::GetPossiblyQuotedString(const StringRef& str)
 	}
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	return !str.IsEmpty();
+	if (str.IsEmpty())
+	{
+		throw ConstructParseException("non-empty string expected");
+	}
 }
 
-bool BinaryParser::GetReducedString(const StringRef& str)
+void BinaryParser::GetReducedString(const StringRef& str)
 {
 	str.Clear();
 	if (seenParameterValue != nullptr && (seenParameter->type == DataType::String || seenParameter->type == DataType::Expression))
@@ -353,7 +344,7 @@ bool BinaryParser::GetReducedString(const StringRef& str)
 				{
 					seenParameter = nullptr;
 					seenParameterValue = nullptr;
-					return false;
+					throw ConstructParseException("control character in string");
 				}
 				str.cat(tolower(c));
 				break;
@@ -363,7 +354,10 @@ bool BinaryParser::GetReducedString(const StringRef& str)
 
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	return !str.IsEmpty();
+	if (str.IsEmpty())
+	{
+		throw ConstructParseException("non-empty string expected");
+	}
 }
 
 void BinaryParser::GetFloatArray(float arr[], size_t& length, bool doPad)
@@ -386,9 +380,7 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length)
 {
 	if (seenParameter == nullptr)
 	{
-		INTERNAL_ERROR;
-		length = 0;
-		return;
+		THROW_INTERNAL_ERROR;
 	}
 
 	switch (seenParameter->type)
@@ -484,9 +476,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 {
 	if (seenParameter == nullptr)
 	{
-		INTERNAL_ERROR;
-		length = 0;
-		return;
+		THROW_INTERNAL_ERROR;
 	}
 
 	int lastIndex = -1;
@@ -648,3 +638,19 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const
 	}
 }
 
+ParseException BinaryParser::ConstructParseException(const char *str) const
+{
+	return ParseException(-1, str);
+}
+
+ParseException BinaryParser::ConstructParseException(const char *str, const char *param) const
+{
+	return ParseException(-1, str, param);
+}
+
+ParseException BinaryParser::ConstructParseException(const char *str, uint32_t param) const
+{
+	return ParseException(-1, str, param);
+}
+
+// End

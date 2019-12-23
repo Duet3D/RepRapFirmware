@@ -107,9 +107,10 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 			}
 		}
 
-		if (gb.Seen('C') && gb.GetQuotedString(name.GetRef()))
+		if (gb.Seen('C'))
 		{
 			seen = true;
+			gb.GetQuotedString(name.GetRef());
 		}
 
 		if (seen)

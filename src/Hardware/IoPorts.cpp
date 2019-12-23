@@ -25,12 +25,7 @@
 {
 	// Get the full port names string
 	String<StringLength50> portNames;
-	if (!gb.GetReducedString(portNames.GetRef()))
-	{
-		reply.copy("Missing port name string");
-		return 0;
-	}
-
+	gb.GetReducedString(portNames.GetRef());
 	return AssignPorts(portNames.c_str(), reply, neededFor, numPorts, ports, access);
 }
 

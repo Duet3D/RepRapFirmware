@@ -140,7 +140,7 @@ void FileStore::Duplicate()
 	switch (usageMode)
 	{
 	case FileUseMode::free:
-		INTERNAL_ERROR;
+		REPORT_INTERNAL_ERROR;
 		break;
 
 	case FileUseMode::readOnly:
@@ -166,7 +166,7 @@ bool FileStore::Close()
 	case FileUseMode::free:
 		if (!inInterrupt())
 		{
-			INTERNAL_ERROR;
+			REPORT_INTERNAL_ERROR;
 		}
 		return false;
 
@@ -237,7 +237,7 @@ bool FileStore::Seek(FilePosition pos)
 	switch (usageMode)
 	{
 	case FileUseMode::free:
-		INTERNAL_ERROR;
+		REPORT_INTERNAL_ERROR;
 		return false;
 
 	case FileUseMode::readOnly:
@@ -272,7 +272,7 @@ FilePosition FileStore::Length() const
 	switch (usageMode)
 	{
 	case FileUseMode::free:
-		INTERNAL_ERROR;
+		REPORT_INTERNAL_ERROR;
 		return 0;
 
 	case FileUseMode::readOnly:
@@ -299,7 +299,7 @@ int FileStore::Read(char* extBuf, size_t nBytes)
 	switch (usageMode)
 	{
 	case FileUseMode::free:
-		INTERNAL_ERROR;
+		REPORT_INTERNAL_ERROR;
 		return -1;
 
 	case FileUseMode::readOnly:
@@ -387,7 +387,7 @@ bool FileStore::Write(const char *s, size_t len)
 	switch (usageMode)
 	{
 	case FileUseMode::free:
-		INTERNAL_ERROR;
+		REPORT_INTERNAL_ERROR;
 		return false;
 
 	case FileUseMode::readOnly:
@@ -441,7 +441,7 @@ bool FileStore::Flush()
 	switch (usageMode)
 	{
 	case FileUseMode::free:
-		INTERNAL_ERROR;
+		REPORT_INTERNAL_ERROR;
 		return false;
 
 	case FileUseMode::readOnly:
@@ -479,7 +479,7 @@ bool FileStore::Truncate()
 	{
 	case FileUseMode::free:
 	case FileUseMode::readOnly:
-		INTERNAL_ERROR;
+		REPORT_INTERNAL_ERROR;
 		return false;
 
 	case FileUseMode::readWrite:

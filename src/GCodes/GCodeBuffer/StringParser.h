@@ -12,6 +12,7 @@
 #include "GCodes/GCodeInput.h"
 #include "MessageType.h"
 #include "ObjectModel/ObjectModel.h"
+#include "ParseException.h"
 
 class GCodeBuffer;
 class IPAddress;
@@ -19,35 +20,35 @@ class IPAddress;
 class StringParser
 {
 public:
-	StringParser(GCodeBuffer& gcodeBuffer);
-	void Init(); 										// Set it up to parse another G-code
-	void Diagnostics(MessageType mtype);				// Write some debug info
+	StringParser(GCodeBuffer& gcodeBuffer) noexcept;
+	void Init() noexcept; 								// Set it up to parse another G-code
+	void Diagnostics(MessageType mtype) noexcept;		// Write some debug info
 	bool Put(char c) __attribute__((hot));				// Add a character to the end
 	void Put(const char *str, size_t len);				// Add an entire string, overwriting any existing content
 	void Put(const char *str);							// Add a null-terminated string, overwriting any existing content
 	void FileEnded();									// Called when we reach the end of the file we are reading from
-	bool Seen(char c) __attribute__((hot));				// Is a character present?
+	bool Seen(char c) noexcept __attribute__((hot));	// Is a character present?
 
-	char GetCommandLetter() const { return commandLetter; }
-	bool HasCommandNumber() const { return hasCommandNumber; }
-	int GetCommandNumber() const { return commandNumber; }
-	int8_t GetCommandFraction() const { return commandFraction; }
+	char GetCommandLetter() const noexcept { return commandLetter; }
+	bool HasCommandNumber() const noexcept { return hasCommandNumber; }
+	int GetCommandNumber() const noexcept { return commandNumber; }
+	int8_t GetCommandFraction() const noexcept { return commandFraction; }
 
-	float GetFValue() __attribute__((hot));				// Get a float after a key letter
-	float GetDistance();								// Get a distance or coordinate and convert it from inches to mm if necessary
-	int32_t GetIValue() __attribute__((hot));			// Get an integer after a key letter
-	uint32_t GetUIValue();								// Get an unsigned integer value
-	DriverId GetDriverId();								// Get a driver ID
-	bool GetIPAddress(IPAddress& returnedIp);			// Get an IP address quad after a key letter
-	bool GetMacAddress(uint8_t mac[6]);					// Get a MAC address sextet after a key letter
-	bool GetUnprecedentedString(const StringRef& str);	// Get a string with no preceding key letter
-	bool GetQuotedString(const StringRef& str);			// Get and copy a quoted string
-	bool GetPossiblyQuotedString(const StringRef& str);	// Get and copy a string which may or may not be quoted
-	bool GetReducedString(const StringRef& str);		// Get and copy a quoted string, removing certain characters
-	void GetFloatArray(float arr[], size_t& length, bool doPad) __attribute__((hot)); // Get a colon-separated list of floats after a key letter
-	void GetIntArray(int32_t arr[], size_t& length, bool doPad);		// Get a :-separated list of ints after a key letter
-	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad);	// Get a :-separated list of unsigned ints after a key letter
-	void GetDriverIdArray(DriverId arr[], size_t& length);	// Get a :-separated list of drivers after a key letter
+	float GetFValue() THROWS_PARSE_ERROR __attribute__((hot));				// Get a float after a key letter
+	float GetDistance() THROWS_PARSE_ERROR;									// Get a distance or coordinate and convert it from inches to mm if necessary
+	int32_t GetIValue() THROWS_PARSE_ERROR __attribute__((hot));			// Get an integer after a key letter
+	uint32_t GetUIValue() THROWS_PARSE_ERROR;								// Get an unsigned integer value
+	DriverId GetDriverId() THROWS_PARSE_ERROR;								// Get a driver ID
+	void GetIPAddress(IPAddress& returnedIp) THROWS_PARSE_ERROR;			// Get an IP address quad after a key letter
+	void GetMacAddress(uint8_t mac[6]) THROWS_PARSE_ERROR;					// Get a MAC address sextet after a key letter
+	void GetUnprecedentedString(const StringRef& str, bool allowEmpty) THROWS_PARSE_ERROR;	// Get a string with no preceding key letter
+	void GetQuotedString(const StringRef& str) THROWS_PARSE_ERROR;			// Get and copy a quoted string
+	void GetPossiblyQuotedString(const StringRef& str) THROWS_PARSE_ERROR;	// Get and copy a string which may or may not be quoted
+	void GetReducedString(const StringRef& str) THROWS_PARSE_ERROR;			// Get and copy a quoted string, removing certain characters
+	void GetFloatArray(float arr[], size_t& length, bool doPad) THROWS_PARSE_ERROR __attribute__((hot)); // Get a colon-separated list of floats after a key letter
+	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS_PARSE_ERROR;		// Get a :-separated list of ints after a key letter
+	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS_PARSE_ERROR;	// Get a :-separated list of unsigned ints after a key letter
+	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS_PARSE_ERROR;	// Get a :-separated list of drivers after a key letter
 
 	void SetFinished();									// Set the G Code finished
 	void SetCommsProperties(uint32_t arg) { checksumRequired = (arg & 1); }
@@ -62,30 +63,33 @@ public:
 	void FinishWritingBinary();
 #endif
 
-	FilePosition GetFilePosition() const;				// Get the file position at the start of the current command
+	FilePosition GetFilePosition() const noexcept;				// Get the file position at the start of the current command
 
-	const char* DataStart() const;						// Get the start of the current command
-	size_t DataLength() const;							// Get the length of the current command
+	const char* DataStart() const noexcept;						// Get the start of the current command
+	size_t DataLength() const noexcept;							// Get the length of the current command
 
-	void PrintCommand(const StringRef& s) const;
-	void AppendFullCommand(const StringRef &s) const;
+	void PrintCommand(const StringRef& s) const noexcept;
+	void AppendFullCommand(const StringRef &s) const noexcept;
+
+	ParseException ConstructParseException(const char *str) const;
+	ParseException ConstructParseException(const char *str, const char *param) const;
+	ParseException ConstructParseException(const char *str, uint32_t param) const;
 
 private:
-
 	GCodeBuffer& gb;
 
-	void AddToChecksum(char c);
+	void AddToChecksum(char c) noexcept;
 	void StoreAndAddToChecksum(char c);
 	bool LineFinished();								// Deal with receiving end-of-line and return true if we have a command
 	void DecodeCommand();
-	bool InternalGetQuotedString(const StringRef& str)
+	void InternalGetQuotedString(const StringRef& str) THROWS_PARSE_ERROR
 		pre (readPointer >= 0; gb.buffer[readPointer] == '"'; str.IsEmpty());
-	bool InternalGetPossiblyQuotedString(const StringRef& str)
+	void InternalGetPossiblyQuotedString(const StringRef& str, bool allowEmpty) THROWS_PARSE_ERROR
 		pre (readPointer >= 0);
-	float ReadFloatValue(const char *p, const char **endptr);
-	uint32_t ReadUIValue(const char *p, const char **endptr);
-	int32_t ReadIValue(const char *p, const char **endptr);
-	DriverId ReadDriverIdValue(const char *p, const char **endptr);
+	float ReadFloatValue() THROWS_PARSE_ERROR;
+	uint32_t ReadUIValue() THROWS_PARSE_ERROR;
+	int32_t ReadIValue() THROWS_PARSE_ERROR;
+	DriverId ReadDriverIdValue() THROWS_PARSE_ERROR;
 
 	bool ProcessConditionalGCode(bool skippedIfFalse);	// Check for and process a conditional GCode language command returning true if we found one
 	void CreateBlocks();								// Create new code blocks
@@ -95,14 +99,14 @@ private:
 	void ProcessWhileCommand();
 	void ProcessBreakCommand();
 	void ProcessVarCommand();
-	bool EvaluateCondition(const char* keyword);
+	bool EvaluateCondition(const char* keyword) THROWS_PARSE_ERROR;
 
-#if SUPPORT_OBJECT_MODEL
-	bool GetStringExpression(const StringRef& str)
+	void GetStringExpression(const StringRef& str) THROWS_PARSE_ERROR
 		pre (readPointer >= 0; gb.buffer[readPointer] == '{'; str.IsEmpty());
-	TypeCode EvaluateExpression(const char *p, const char **endptr, ExpressionValue& rslt)
+	ExpressionValue EvaluateExpression() THROWS_PARSE_ERROR
 		pre (readPointer >= 0; gb.buffer[readPointer] == '{');
-#endif
+	ExpressionValue ParseNumber() THROWS_PARSE_ERROR
+		pre(isdigit(*s));
 
 	unsigned int commandStart;							// Index in the buffer of the command letter of this command
 	unsigned int parameterStart;

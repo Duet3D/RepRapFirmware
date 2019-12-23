@@ -89,7 +89,7 @@ enum class PinUsedBy : uint8_t
 static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logical pin numbers");
 
 #if SUPPORT_CAN_EXPANSION
-# include "CanId.h"		// for type CanAddress
+# include "CanId.h"				// for type CanAddress
 #endif
 
 #include "General/StringRef.h"
@@ -97,6 +97,9 @@ static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logica
 #include "General/BitMap.h"
 #include "General/SafeStrtod.h"
 #include "General/SafeVsnprintf.h"
+
+#define THROWS_PARSE_ERROR		// we tag this on to function declarations to indicate that they may throw parse errors, which must be caught
+#define THROW_INTERNAL_ERROR	throw ConstructParseException("internal error at file " __FILE__ "(%d)", __LINE__)
 
 // Type of a driver identifier
 struct DriverId

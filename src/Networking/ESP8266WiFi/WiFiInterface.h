@@ -67,7 +67,7 @@ public:
 	void TerminateDataPort() noexcept override;
 
 	// The remaining functions are specific to the WiFi version
-	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply);
+	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply) THROWS_PARSE_ERROR;
 	WifiFirmwareUploader *GetWifiUploader() const noexcept { return uploader; }
 	void StartWiFi() noexcept;
 	void ResetWiFi() noexcept;

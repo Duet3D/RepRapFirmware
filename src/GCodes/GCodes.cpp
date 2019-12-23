@@ -2692,15 +2692,8 @@ GCodeResult GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 	if (gb.Seen('P'))
 	{
 		String<MaxFilenameLength> heightMapFileName;
-		if (gb.GetQuotedString(heightMapFileName.GetRef()))
-		{
-			return GetGCodeResultFromError(TrySaveHeightMap(heightMapFileName.c_str(), reply));
-		}
-		else
-		{
-			reply.copy("Missing height map file name");
-			return GCodeResult::error;
-		}
+		gb.GetQuotedString(heightMapFileName.GetRef());
+		return GetGCodeResultFromError(TrySaveHeightMap(heightMapFileName.c_str(), reply));
 	}
 	return GetGCodeResultFromError(TrySaveHeightMap(DefaultHeightMapFile, reply));
 }
@@ -2991,11 +2984,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	String<ToolNameLength> name;
 	if (gb.Seen('S'))
 	{
-		if (!gb.GetQuotedString(name.GetRef()))
-		{
-			reply.copy("Invalid tool name");
-			return GCodeResult::error;
-		}
+		gb.GetQuotedString(name.GetRef());
 		seen = true;
 	}
 
@@ -3487,11 +3476,7 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('S'))
 	{
 		String<FilamentNameLength> filamentName;
-		if (!gb.GetQuotedString(filamentName.GetRef()) || filamentName.IsEmpty())
-		{
-			reply.copy("Invalid filament name");
-			return GCodeResult::error;
-		}
+		gb.GetQuotedString(filamentName.GetRef());
 
 		if (StringContains(filamentName.c_str(), ",") >= 0)
 		{

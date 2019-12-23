@@ -518,11 +518,7 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 	if (gb.Seen('C'))
 	{
 		String<StringLength50> pinName;
-		if (!gb.GetReducedString(pinName.GetRef()))
-		{
-			reply.copy("Missing pin name");
-			return GCodeResult::error;
-		}
+		gb.GetReducedString(pinName.GetRef());
 
 		if (StringEqualsIgnoreCase(pinName.c_str(), NoPinName))
 		{
@@ -963,9 +959,15 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) noexc
 		// Set boardAddress to the board number that the port is on, or NoAddress if the port was not given
 		CanAddress boardAddress;
 		String<StringLength20> portName;
-		boardAddress = (gb.Seen('P') && gb.GetReducedString(portName.GetRef()))
-						 ? IoPort::RemoveBoardAddress(portName.GetRef())
-							: CanId::NoAddress;
+		if (gb.Seen('P'))
+		{
+			gb.GetReducedString(portName.GetRef());
+			boardAddress = IoPort::RemoveBoardAddress(portName.GetRef());
+		}
+		else
+		{
+			boardAddress = CanId::NoAddress;
+		}
 #endif
 		bool newSensor = gb.Seen('Y');
 		if (newSensor)
@@ -975,11 +977,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) noexc
 			DeleteSensor(sensorNum);
 
 			String<StringLength20> typeName;
-			if (!gb.GetReducedString(typeName.GetRef()))
-			{
-				reply.copy("Missing sensor type name");
-				return GCodeResult::error;
-			}
+			gb.GetReducedString(typeName.GetRef());
 
 #if SUPPORT_CAN_EXPANSION
 			if (boardAddress == CanId::NoAddress)

@@ -55,7 +55,6 @@ constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;		// we allow a full 64K on the SA
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			1
 #define HAS_VREF_MONITOR		1
-#define ACTIVE_LOW_HEAT_ON		0					// although we have no heaters, this matters because we treat the LEDs as heaters
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
@@ -63,6 +62,7 @@ constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;		// we allow a full 64K on the SA
 #define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		0					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
+#define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_DOTSTAR_LED		1					// set nonzero to support DotStar LED strips
 #define ALLOCATE_DEFAULT_PORTS	1

@@ -533,7 +533,7 @@ bool DataTransfer::IsReady()
 		default:
 			// Should never get here. If we do, this probably means that StartNextTransfer has not been called
 			ExchangeHeader();
-			INTERNAL_ERROR;
+			REPORT_INTERNAL_ERROR;
 			break;
 		}
 	}

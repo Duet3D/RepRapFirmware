@@ -117,11 +117,7 @@ bool CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb, const St
 			case ParamDescriptor::char_p:
 				{
 					String<StringLength20> str;
-					if (!gb.GetQuotedString(str.GetRef()))
-					{
-						reply.printf("expected quoted string after '%c'", d->letter);
-						return false;
-					}
+					gb.GetQuotedString(str.GetRef());
 					if (str.strlen() != 1)
 					{
 						reply.printf("expected single-character quoted string after '%c'", d->letter);
@@ -135,11 +131,7 @@ bool CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb, const St
 			case ParamDescriptor::string:
 				{
 					String<StringLength20> str;
-					if (!gb.GetQuotedString(str.GetRef()))
-					{
-						reply.printf("expected quoted string after '%c'", d->letter);
-						return false;
-					}
+					gb.GetQuotedString(str.GetRef());
 					overflowed = StoreValue(str.c_str(), str.strlen() + 1);
 				}
 				break;
@@ -147,11 +139,7 @@ bool CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb, const St
 			case ParamDescriptor::reducedString:
 				{
 					String<StringLength20> str;
-					if (!gb.GetReducedString(str.GetRef()))
-					{
-						reply.printf("expected quoted string after '%c'", d->letter);
-						return false;
-					}
+					gb.GetReducedString(str.GetRef());
 					// We don't want port names sent to expansion boards to include the board number, so remove the board number.
 					// We also use the reducedString type for sensor names, but they should't start with digits followed by '.'.
 					(void)IoPort::RemoveBoardAddress(str.GetRef());

@@ -13,6 +13,7 @@
 #endif
 #include "BinaryParser.h"
 #include "StringParser.h"
+#include "ParseException.h"
 #include "RepRap.h"
 #include "Platform.h"
 
@@ -181,6 +182,15 @@ bool GCodeBuffer::Seen(char c)
 	return isBinaryBuffer ? binaryParser.Seen(c) : stringParser.Seen(c);
 }
 
+// Test for character present, throw error if not
+void GCodeBuffer::MustSee(char c)
+{
+	if (!Seen(c))
+	{
+		throw ParseException(-1, "missing parameter '%c'", (uint32_t)c);
+	}
+}
+
 // Get a float after a key letter
 float GCodeBuffer::GetFValue()
 {
@@ -206,38 +216,80 @@ uint32_t GCodeBuffer::GetUIValue()
 }
 
 // Get an IP address quad after a key letter
-bool GCodeBuffer::GetIPAddress(IPAddress& returnedIp)
+void GCodeBuffer::GetIPAddress(IPAddress& returnedIp)
 {
-	return isBinaryBuffer ? binaryParser.GetIPAddress(returnedIp) : stringParser.GetIPAddress(returnedIp);
+	if (isBinaryBuffer)
+	{
+		binaryParser.GetIPAddress(returnedIp);
+	}
+	else
+	{
+		stringParser.GetIPAddress(returnedIp);
+	}
 }
 
 // Get a MAC address sextet after a key letter
-bool GCodeBuffer::GetMacAddress(uint8_t mac[6])
+void GCodeBuffer::GetMacAddress(uint8_t mac[6])
 {
-	return isBinaryBuffer ? binaryParser.GetMacAddress(mac) : stringParser.GetMacAddress(mac);
+	if (isBinaryBuffer)
+	{
+		binaryParser.GetMacAddress(mac);
+	}
+	else
+	{
+		stringParser.GetMacAddress(mac);
+	}
 }
 
 // Get a string with no preceding key letter
-bool GCodeBuffer::GetUnprecedentedString(const StringRef& str)
+void GCodeBuffer::GetUnprecedentedString(const StringRef& str, bool allowEmpty)
 {
-	return isBinaryBuffer ? binaryParser.GetUnprecedentedString(str) : stringParser.GetUnprecedentedString(str);
+	if (isBinaryBuffer)
+	{
+		binaryParser.GetUnprecedentedString(str, allowEmpty);
+	}
+	else
+	{
+		stringParser.GetUnprecedentedString(str, allowEmpty);
+	}
 }
 
 // Get and copy a quoted string
-bool GCodeBuffer::GetQuotedString(const StringRef& str)
+void GCodeBuffer::GetQuotedString(const StringRef& str)
 {
-	return isBinaryBuffer ? binaryParser.GetQuotedString(str) : stringParser.GetQuotedString(str);
+	if (isBinaryBuffer)
+	{
+		binaryParser.GetQuotedString(str);
+	}
+	else
+	{
+		stringParser.GetQuotedString(str);
+	}
 }
 
 // Get and copy a string which may or may not be quoted
-bool GCodeBuffer::GetPossiblyQuotedString(const StringRef& str)
+void GCodeBuffer::GetPossiblyQuotedString(const StringRef& str)
 {
-	return isBinaryBuffer ? binaryParser.GetPossiblyQuotedString(str) : stringParser.GetPossiblyQuotedString(str);
+	if (isBinaryBuffer)
+	{
+		binaryParser.GetPossiblyQuotedString(str);
+	}
+	else
+	{
+		stringParser.GetPossiblyQuotedString(str);
+	}
 }
 
-bool GCodeBuffer::GetReducedString(const StringRef& str)
+void GCodeBuffer::GetReducedString(const StringRef& str)
 {
-	return isBinaryBuffer ? binaryParser.GetReducedString(str) : stringParser.GetReducedString(str);
+	if (isBinaryBuffer)
+	{
+		binaryParser.GetReducedString(str);
+	}
+	else
+	{
+		stringParser.GetReducedString(str);
+	}
 }
 
 // Get a colon-separated list of floats after a key letter
@@ -388,9 +440,10 @@ bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], const S
 // If we found it then set 'seen' true and return true, else leave 'seen' alone and return false
 bool GCodeBuffer::TryGetQuotedString(char c, const StringRef& str, bool& seen)
 {
-	if (Seen(c) && GetQuotedString(str))
+	if (Seen(c))
 	{
 		seen = true;
+		GetQuotedString(str);
 		return true;
 	}
 	return false;
@@ -400,9 +453,10 @@ bool GCodeBuffer::TryGetQuotedString(char c, const StringRef& str, bool& seen)
 // If we found it then set 'seen' true and return true, else leave 'seen' alone and return false
 bool GCodeBuffer::TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen)
 {
-	if (Seen(c) && GetPossiblyQuotedString(str))
+	if (Seen(c))
 	{
 		seen = true;
+		GetPossiblyQuotedString(str);
 		return true;
 	}
 	return false;
@@ -811,12 +865,6 @@ void GCodeBuffer::AppendFullCommand(const StringRef &s) const
 	{
 		stringParser.AppendFullCommand(s);
 	}
-}
-
-// Report a program error
-void GCodeBuffer::ReportProgramError(const char *str)
-{
-	reprap.GetPlatform().MessageF(AddError(GetResponseMessageType()), "%s\n", str);
 }
 
 // End

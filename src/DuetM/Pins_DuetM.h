@@ -40,7 +40,6 @@ constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;								// we allow a full 64K on 
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			0
 #define HAS_VREF_MONITOR		1
-#define ACTIVE_LOW_HEAT_ON		1
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill

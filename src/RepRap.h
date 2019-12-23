@@ -243,9 +243,7 @@ inline uint16_t RepRap::GetExtrudersInUse() const noexcept { return activeExtrud
 inline uint16_t RepRap::GetToolHeatersInUse() const noexcept { return activeToolHeaters; }
 inline bool RepRap::IsStopped() const noexcept { return stopped; }
 
-#define STRINGIZE(s)	#s
-#define INTERNAL_ERROR do { reprap.ReportInternalError((__FILE__), (__func__), (__LINE__)); } while(0)
-#define INTERNAL_ERROR_MESSAGE "Internal error at " __FILE__ "(" STRINGIZE(__LINE__) ")"
+#define REPORT_INTERNAL_ERROR do { reprap.ReportInternalError((__FILE__), (__func__), (__LINE__)); } while(0)
 
 #endif
 

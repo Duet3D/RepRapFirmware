@@ -27,11 +27,7 @@ GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& 
 	{
 		seen = true;
 		String<StringLength20> pParam;
-		if (!gb.GetQuotedString(pParam.GetRef()))
-		{
-			reply.copy("Missing parent sensor and output number");
-			return GCodeResult::error;
-		}
+		gb.GetQuotedString(pParam.GetRef());
 
 		const char *pn = pParam.c_str();
 		if (*pn != 'S' && *pn != 's')
