@@ -377,11 +377,11 @@ extern "C"
 
 	[[noreturn]] void memManageDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 	{
-	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::memFault, pulFaultStackAddress + 5);
+	    reprap.SoftwareReset((uint16_t)SoftwareResetReason::memFault, pulFaultStackAddress + 5);
 	}
 
-	// The fault handler implementation calls a function called hardFaultDispatcher()
-    void MemManage_Handler() noexcept __attribute__((naked, noreturn));
+	// The fault handler implementation calls a function called memManageDispatcher()
+	[[noreturn]] void MemManage_Handler() noexcept __attribute__((naked));
 	void MemManage_Handler() noexcept
 	{
 	    __asm volatile
@@ -404,12 +404,12 @@ extern "C"
 	}
 
 #ifdef __LPC17xx__
-    void WDT_IRQHandler() noexcept __attribute__((naked, noreturn));
+	[[noreturn]] void WDT_IRQHandler() noexcept __attribute__((naked));
     void WDT_IRQHandler() noexcept
     {
     	LPC_WDT->WDMOD &=~((uint32_t)(1<<2)); //SD::clear timout flag before resetting to prevent the Smoothie bootloader going into DFU mode
 #else
-    void WDT_Handler() noexcept __attribute__((naked, noreturn));
+    [[noreturn]] void WDT_Handler() noexcept __attribute__((naked));
 	void WDT_Handler() noexcept
 	{
 #endif
@@ -432,7 +432,7 @@ extern "C"
 
 	// 2017-05-25: A user is getting 'otherFault' reports, so now we do a stack dump for those too.
 	// The fault handler implementation calls a function called otherFaultDispatcher()
-	void OtherFault_Handler() noexcept __attribute__((naked, noreturn));
+	[[noreturn]] void OtherFault_Handler() noexcept __attribute__((naked));
 	void OtherFault_Handler() noexcept
 	{
 	    __asm volatile
@@ -449,10 +449,10 @@ extern "C"
 
 	// We could set up the following fault handlers to retrieve the program counter in the same way as for a Hard Fault,
 	// however these exceptions are unlikely to occur, so for now we just report the exception type.
-	void NMI_Handler        () noexcept { reprap.SoftwareReset((uint16_t)SoftwareResetReason::NMI); }
-	void UsageFault_Handler () noexcept { reprap.SoftwareReset((uint16_t)SoftwareResetReason::usageFault); }
+	[[noreturn]] void NMI_Handler        () noexcept { reprap.SoftwareReset((uint16_t)SoftwareResetReason::NMI); }
+	[[noreturn]] void UsageFault_Handler () noexcept { reprap.SoftwareReset((uint16_t)SoftwareResetReason::usageFault); }
 
-	void DebugMon_Handler   () noexcept __attribute__ ((noreturn,alias("OtherFault_Handler")));
+	[[noreturn]] void DebugMon_Handler   () noexcept __attribute__ ((alias("OtherFault_Handler")));
 
 	// FreeRTOS hooks that we need to provide
 	[[noreturn]] void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName) noexcept
@@ -460,7 +460,7 @@ extern "C"
 		reprap.SoftwareReset((uint16_t)SoftwareResetReason::stackOverflow, pulFaultStackAddress);
 	}
 
-	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) noexcept __attribute((naked, noreturn));
+	[[noreturn]] void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) noexcept __attribute((naked));
 	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) noexcept
 	{
 		// r0 = pxTask, r1 = pxTaskName
@@ -479,7 +479,7 @@ extern "C"
 	    reprap.SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress);
 	}
 
-	void vAssertCalled(uint32_t line, const char *file) noexcept __attribute((naked, noreturn));
+	[[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute((naked));
 	void vAssertCalled(uint32_t line, const char *file) noexcept
 	{
 #if false
@@ -497,12 +497,12 @@ extern "C"
 	}
 
 #ifdef __LPC17xx__
-	void applicationMallocFailedCalledDispatcher(const uint32_t *pulFaultStackAddress) noexcept
+	[[noreturn]] void applicationMallocFailedCalledDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 	{
 		reprap.SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress);
 	}
 
-	void vApplicationMallocFailedHook() noexcept __attribute((naked));
+	[[noreturn]] void vApplicationMallocFailedHook() noexcept __attribute((naked));
 	void vApplicationMallocFailedHook() noexcept
 	{
 		 __asm volatile

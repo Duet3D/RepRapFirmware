@@ -798,7 +798,7 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity
 	if (fr == FR_OK)
 	{
 		clSize = fs->csize * 512;
-		freeSpace = (fr == FR_OK) ? (uint64_t)freeClusters * clSize : 0;
+		freeSpace = (uint64_t)freeClusters * clSize;
 	}
 	else
 	{

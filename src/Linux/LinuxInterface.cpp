@@ -64,7 +64,7 @@ void LinuxInterface::Spin()
 
 			// Reset the controller
 			case LinuxRequest::Reset:
-				reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::user);
+				reprap.SoftwareReset((uint16_t)SoftwareResetReason::user);
 				return;
 
 			// Perform a G/M/T-code
