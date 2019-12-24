@@ -642,193 +642,185 @@ bool StringParser::Seen(char c) noexcept
 // Get a float after a G Code letter found by a call to Seen()
 float StringParser::GetFValue()
 {
-	if (readPointer > 0)
+	if (readPointer <= 0)
 	{
-		const float result = ReadFloatValue();
-		readPointer = -1;
-		return result;
+		THROW_INTERNAL_ERROR;
 	}
 
-	THROW_INTERNAL_ERROR;
+	const float result = ReadFloatValue();
+	readPointer = -1;
+	return result;
 }
 
 // Get a colon-separated list of floats after a key letter
 // If doPad is true then we allow just one element to be given, in which case we fill all elements with that value
 void StringParser::GetFloatArray(float arr[], size_t& returnedLength, bool doPad)
 {
-	if (readPointer > 0)
-	{
-		size_t length = 0;
-		for (;;)
-		{
-			if (length >= returnedLength)		// array limit has been set in here
-			{
-				throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
-			}
-			arr[length++] = ReadFloatValue();
-			if (gb.buffer[readPointer] != LIST_SEPARATOR)
-			{
-				break;
-			}
-			++readPointer;
-		}
-
-		// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
-		if (doPad && length == 1 && returnedLength > 1)
-		{
-			for (size_t i = 1; i < returnedLength; i++)
-			{
-				arr[i] = arr[0];
-			}
-		}
-		else
-		{
-			returnedLength = length;
-		}
-
-		readPointer = -1;
-	}
-	else
+	if (readPointer <= 0)
 	{
 		THROW_INTERNAL_ERROR;
 	}
+
+	size_t length = 0;
+	for (;;)
+	{
+		if (length >= returnedLength)		// array limit has been set in here
+		{
+			throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
+		}
+		arr[length++] = ReadFloatValue();
+		if (gb.buffer[readPointer] != LIST_SEPARATOR)
+		{
+			break;
+		}
+		++readPointer;
+	}
+
+	// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
+	if (doPad && length == 1 && returnedLength > 1)
+	{
+		for (size_t i = 1; i < returnedLength; i++)
+		{
+			arr[i] = arr[0];
+		}
+	}
+	else
+	{
+		returnedLength = length;
+	}
+
+	readPointer = -1;
 }
 
 // Get a :-separated list of ints after a key letter
 void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength, bool doPad)
 {
-	if (readPointer > 0)
-	{
-		size_t length = 0;
-		for (;;)
-		{
-			if (length >= returnedLength) // Array limit has been set in here
-			{
-				throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
-			}
-			arr[length] = ReadIValue();
-			length++;
-			if (gb.buffer[readPointer] != LIST_SEPARATOR)
-			{
-				break;
-			}
-			++readPointer;
-		}
-
-		// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
-		if (doPad && length == 1 && returnedLength > 1)
-		{
-			for (size_t i = 1; i < returnedLength; i++)
-			{
-				arr[i] = arr[0];
-			}
-		}
-		else
-		{
-			returnedLength = length;
-		}
-		readPointer = -1;
-	}
-	else
+	if (readPointer <= 0)
 	{
 		THROW_INTERNAL_ERROR;
 	}
+
+	size_t length = 0;
+	for (;;)
+	{
+		if (length >= returnedLength) // Array limit has been set in here
+		{
+			throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
+		}
+		arr[length] = ReadIValue();
+		length++;
+		if (gb.buffer[readPointer] != LIST_SEPARATOR)
+		{
+			break;
+		}
+		++readPointer;
+	}
+
+	// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
+	if (doPad && length == 1 && returnedLength > 1)
+	{
+		for (size_t i = 1; i < returnedLength; i++)
+		{
+			arr[i] = arr[0];
+		}
+	}
+	else
+	{
+		returnedLength = length;
+	}
+	readPointer = -1;
 }
 
 // Get a :-separated list of unsigned ints after a key letter
 void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength, bool doPad)
 {
-	if (readPointer > 0)
-	{
-		size_t length = 0;
-		for (;;)
-		{
-			if (length >= returnedLength) // Array limit has been set in here
-			{
-				throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
-			}
-			arr[length] = ReadUIValue();
-			length++;
-			if (gb.buffer[readPointer] != LIST_SEPARATOR)
-			{
-				break;
-			}
-			++readPointer;
-		}
-
-		// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
-		if (doPad && length == 1 && returnedLength > 1)
-		{
-			for (size_t i = 1; i < returnedLength; i++)
-			{
-				arr[i] = arr[0];
-			}
-		}
-		else
-		{
-			returnedLength = length;
-		}
-
-		readPointer = -1;
-	}
-	else
+	if (readPointer <= 0)
 	{
 		THROW_INTERNAL_ERROR;
 	}
+
+	size_t length = 0;
+	for (;;)
+	{
+		if (length >= returnedLength) // Array limit has been set in here
+		{
+			throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
+		}
+		arr[length] = ReadUIValue();
+		length++;
+		if (gb.buffer[readPointer] != LIST_SEPARATOR)
+		{
+			break;
+		}
+		++readPointer;
+	}
+
+	// Special case if there is one entry and returnedLength requests several. Fill the array with the first entry.
+	if (doPad && length == 1 && returnedLength > 1)
+	{
+		for (size_t i = 1; i < returnedLength; i++)
+		{
+			arr[i] = arr[0];
+		}
+	}
+	else
+	{
+		returnedLength = length;
+	}
+
+	readPointer = -1;
 }
 
 // Get a :-separated list of drivers after a key letter
 void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength)
 {
-	if (readPointer > 0)
-	{
-		size_t length = 0;
-		for (;;)
-		{
-			if (length >= returnedLength) // Array limit has been set in here
-			{
-				throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
-			}
-			arr[length] = ReadDriverIdValue();
-			length++;
-			if (gb.buffer[readPointer] != LIST_SEPARATOR)
-			{
-				break;
-			}
-			++readPointer;
-		}
-
-		returnedLength = length;
-		readPointer = -1;
-	}
-	else
+	if (readPointer <= 0)
 	{
 		THROW_INTERNAL_ERROR;
 	}
+
+	size_t length = 0;
+	for (;;)
+	{
+		if (length >= returnedLength) // Array limit has been set in here
+		{
+			throw ConstructParseException("array too long, max length = %u", (uint32_t)returnedLength);
+		}
+		arr[length] = ReadDriverIdValue();
+		length++;
+		if (gb.buffer[readPointer] != LIST_SEPARATOR)
+		{
+			break;
+		}
+		++readPointer;
+	}
+
+	returnedLength = length;
+	readPointer = -1;
 }
 
 // Get and copy a quoted string returning true if successful
 void StringParser::GetQuotedString(const StringRef& str)
 {
-	str.Clear();
-	if (readPointer > 0)
+	if (readPointer <= 0)
 	{
-		switch (gb.buffer[readPointer])
-		{
-		case '"':
-			InternalGetQuotedString(str);
-			return;
-
-		case '{':
-			GetStringExpression(str);
-			return;
-
-		default:
-			throw ConstructParseException("expected string expression");
-		}
+		THROW_INTERNAL_ERROR;
 	}
 
-	THROW_INTERNAL_ERROR;
+	str.Clear();
+	switch (gb.buffer[readPointer])
+	{
+	case '"':
+		InternalGetQuotedString(str);
+		return;
+
+	case '{':
+		GetStringExpression(str);
+		return;
+
+	default:
+		throw ConstructParseException("expected string expression");
+	}
 }
 
 // Given that the current character is double-quote, fetch the quoted string
@@ -870,12 +862,12 @@ void StringParser::InternalGetQuotedString(const StringRef& str)
 // Get and copy a string which may or may not be quoted. If it is not quoted, it ends at the first space or control character.
 void StringParser::GetPossiblyQuotedString(const StringRef& str)
 {
-	if (readPointer > 0)
+	if (readPointer <= 0)
 	{
-		InternalGetPossiblyQuotedString(str, false);
+		THROW_INTERNAL_ERROR;
 	}
 
-	THROW_INTERNAL_ERROR;
+	InternalGetPossiblyQuotedString(str, false);
 }
 
 // Get and copy a string which may or may not be quoted, starting at readPointer. Return true if successful.
@@ -911,46 +903,46 @@ void StringParser::InternalGetPossiblyQuotedString(const StringRef& str, bool al
 
 void StringParser::GetReducedString(const StringRef& str)
 {
-	str.Clear();
-	if (readPointer > 0)
+	if (readPointer <= 0)
 	{
-		// Reduced strings must start with a double-quote
-		if (gb.buffer[readPointer] != '"')
-		{
-			throw ConstructParseException("string expected");
-		}
-
-		++readPointer;
-		for (;;)
-		{
-			const char c = gb.buffer[readPointer++];
-			switch(c)
-			{
-			case '"':
-				if (gb.buffer[readPointer++] != '"')
-				{
-					return;
-				}
-				str.cat(c);
-				break;
-
-			case '_':
-			case '-':
-			case ' ':
-				break;
-
-			default:
-				if (c < ' ')
-				{
-					throw ConstructParseException("control characer in string");
-				}
-				str.cat(tolower(c));
-				break;
-			}
-		}
+		THROW_INTERNAL_ERROR;
 	}
 
-	THROW_INTERNAL_ERROR;
+	// Reduced strings must start with a double-quote
+	if (gb.buffer[readPointer] != '"')
+	{
+		throw ConstructParseException("string expected");
+	}
+
+	++readPointer;
+	str.Clear();
+	for (;;)
+	{
+		const char c = gb.buffer[readPointer++];
+		switch(c)
+		{
+		case '"':
+			if (gb.buffer[readPointer++] != '"')
+			{
+				return;
+			}
+			str.cat(c);
+			break;
+
+		case '_':
+		case '-':
+		case ' ':
+			break;
+
+		default:
+			if (c < ' ')
+			{
+				throw ConstructParseException("control characer in string");
+			}
+			str.cat(tolower(c));
+			break;
+		}
+	}
 }
 
 // This returns a string comprising the rest of the line, excluding any comment
@@ -972,41 +964,40 @@ void StringParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty)
 // Get an int32 after a G Code letter
 int32_t StringParser::GetIValue()
 {
-	if (readPointer > 0)
+	if (readPointer <= 0)
 	{
-		const int32_t result = ReadIValue();
-		readPointer = -1;
-		return result;
+		THROW_INTERNAL_ERROR;
 	}
 
-	THROW_INTERNAL_ERROR;
+	const int32_t result = ReadIValue();
+	readPointer = -1;
+	return result;
 }
 
 // Get an uint32 after a G Code letter
 uint32_t StringParser::GetUIValue()
 {
-	if (readPointer > 0)
+	if (readPointer <= 0)
 	{
-		const uint32_t result = ReadUIValue();
-		readPointer = -1;
-		return result;
+		THROW_INTERNAL_ERROR;
 	}
 
-	THROW_INTERNAL_ERROR;
+	const uint32_t result = ReadUIValue();
+	readPointer = -1;
+	return result;
 }
 
 // Get a driver ID
 DriverId StringParser::GetDriverId()
 {
-	DriverId result;
-	if (readPointer > 0)
+	if (readPointer <= 0)
 	{
-		result = ReadDriverIdValue();
-		readPointer = -1;
-		return result;
+		THROW_INTERNAL_ERROR;
 	}
 
-	THROW_INTERNAL_ERROR;
+	DriverId result = ReadDriverIdValue();
+	readPointer = -1;
+	return result;
 }
 
 // Get an IP address quad after a key letter
@@ -1247,7 +1238,6 @@ void StringParser::FileEnded()
 // Functions to read values from lines of GCode, allowing for expressions and variable substitution
 float StringParser::ReadFloatValue()
 {
-	++readPointer;
 	if (gb.buffer[readPointer] == '{')
 	{
 		++readPointer;
@@ -1268,7 +1258,10 @@ float StringParser::ReadFloatValue()
 		}
 	}
 
-	return SafeStrtof(gb.buffer + readPointer, nullptr);
+	const char *endptr;
+	const float rslt = SafeStrtof(gb.buffer + readPointer, &endptr);
+	readPointer = endptr - gb.buffer;
+	return rslt;
 }
 
 uint32_t StringParser::ReadUIValue()
@@ -1323,9 +1316,9 @@ uint32_t StringParser::ReadUIValue()
 	}
 
 	const char *endptr;
-	const uint32_t result = SafeStrtoul(gb.buffer + readPointer, &endptr, base);
+	const uint32_t rslt = SafeStrtoul(gb.buffer + readPointer, &endptr, base);
 	readPointer = endptr - gb.buffer + skipTrailingQuote;
-	return result;
+	return rslt;
 }
 
 int32_t StringParser::ReadIValue()
@@ -1347,9 +1340,9 @@ int32_t StringParser::ReadIValue()
 	}
 
 	const char *endptr;
-	const int32_t val = SafeStrtol(gb.buffer + readPointer, &endptr);
+	const int32_t rslt = SafeStrtol(gb.buffer + readPointer, &endptr);
 	readPointer = endptr - gb.buffer;
-	return val;
+	return rslt;
 }
 
 DriverId StringParser::ReadDriverIdValue()

@@ -128,7 +128,7 @@ ReadLockedPointer<Heater> Heat::FindHeater(int heater) const noexcept
 }
 
 // Process M307
-GCodeResult Heat::SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult Heat::SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (gb.Seen('H'))
 	{
@@ -198,7 +198,7 @@ GCodeResult Heat::SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply
 }
 
 // Process M301 or M304. 'heater' is the default heater number to use.
-GCodeResult Heat::SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult Heat::SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply)
 {
 	if (gb.Seen('H'))
 	{
@@ -507,7 +507,7 @@ void Heat::Diagnostics(MessageType mtype) noexcept
 }
 
 // Configure a heater. Invoked by M950.
-GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply)
 {
 	if (heater >= MaxHeaters)
 	{
@@ -859,7 +859,7 @@ bool Heat::WriteModelParameters(FileStore *f) const noexcept
 #endif
 
 // Process M570
-GCodeResult Heat::ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult Heat::ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply)
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNull())
@@ -883,7 +883,7 @@ GCodeResult Heat::ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, cons
 }
 
 // Process M303
-GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (gb.Seen('H'))
 	{
@@ -944,7 +944,7 @@ GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply) noexcept
 }
 
 // Process M308
-GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 {
 	if (gb.Seen('S'))
 	{
@@ -1039,7 +1039,7 @@ const char *Heat::GetHeaterSensorName(size_t heater) const noexcept
 }
 
 // Configure heater protection (M143). Returns true if an error occurred
-GCodeResult Heat::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult Heat::SetHeaterProtection(GCodeBuffer& gb, const StringRef& reply)
 {
 	WriteLocker lock(heatersLock);
 

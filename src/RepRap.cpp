@@ -538,6 +538,101 @@ void RepRap::EmergencyStop() noexcept
 	platform->StopLogging();
 }
 
+// Perform a software reset. 'stk' points to the program counter on the stack if the cause is an exception, otherwise it is nullptr.
+void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
+{
+	cpu_irq_disable();							// disable interrupts before we call any flash functions. We don't enable them again.
+	wdt_restart(WDT);							// kick the watchdog
+
+#if SAM4E || SAME70
+	rswdt_restart(RSWDT);						// kick the secondary watchdog
+#endif
+
+	Cache::Disable();
+
+#if USE_MPU
+	//TODO set the flash memory to strongly-ordered or device instead
+	ARM_MPU_Disable();							// disable the MPU
+#endif
+
+	if (reason == (uint16_t)SoftwareResetReason::erase)
+	{
+		EraseAndReset();
+ 	}
+	else
+	{
+		if (reason != (uint16_t)SoftwareResetReason::user)
+		{
+			if (SERIAL_MAIN_DEVICE.canWrite() == 0)
+			{
+				reason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
+			}
+
+#ifdef SERIAL_AUX_DEVICE
+			if (SERIAL_AUX_DEVICE.canWrite() == 0
+# ifdef SERIAL_AUX2_DEVICE
+				|| SERIAL_AUX2_DEVICE.canWrite() == 0
+# endif
+			   )
+			{
+				reason |= (uint16_t)SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
+			}
+#endif
+		}
+		reason |= (uint8_t)reprap.GetSpinningModule();
+		if (platform->WasDeliberateError())
+		{
+			reason |= (uint16_t)SoftwareResetReason::deliberate;
+		}
+
+		// Record the reason for the software reset
+		// First find a free slot (wear levelling)
+		size_t slot = SoftwareResetData::numberOfSlots;
+		SoftwareResetData srdBuf[SoftwareResetData::numberOfSlots];
+
+#if SAM4E || SAM4S || SAME70
+		if (flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t)) == FLASH_RC_OK)
+#elif SAM3XA
+		DueFlashStorage::read(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
+#else
+# error
+#endif
+		{
+			while (slot != 0 && srdBuf[slot - 1].isVacant())
+			{
+				--slot;
+			}
+		}
+
+		if (slot == SoftwareResetData::numberOfSlots)
+		{
+			// No free slots, so erase the area
+#if SAM4E || SAM4S || SAME70
+			flash_erase_user_signature();
+#endif
+			memset(srdBuf, 0xFF, sizeof(srdBuf));
+			slot = 0;
+		}
+
+		srdBuf[slot].Populate(reason, (uint32_t)platform->GetDateTime(), stk);
+
+		// Save diagnostics data to Flash
+#if SAM4E || SAM4S || SAME70
+		flash_write_user_signature(srdBuf, sizeof(srdBuf)/sizeof(uint32_t));
+#else
+		DueFlashStorage::write(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
+#endif
+	}
+
+#ifndef RSTC_MR_KEY_PASSWD
+// Definition of RSTC_MR_KEY_PASSWD is missing in the SAM3X ASF files
+# define RSTC_MR_KEY_PASSWD (0xA5u << 24)
+#endif
+	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD;			// ignore any signal on the NRST pin for now so that the reset reason will show as Software
+	Reset();
+	for(;;) {}
+}
+
 void RepRap::SetDebug(Module m, bool enable) noexcept
 {
 	if (m < numModules)
@@ -773,7 +868,7 @@ void RepRap::Tick() noexcept
 				// We now save the stack when we get stuck in a spin loop
 				__asm volatile("mrs r2, psp");
 				register const uint32_t * stackPtr asm ("r2");					// we want the PSP not the MSP
-				platform->SoftwareReset(
+				SoftwareReset(
 					(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
 					stackPtr + 5);												// discard uninteresting registers, keep LR PC PSR
 			}

@@ -28,6 +28,7 @@ Licence: GPL
 #include "GCodes/GCodeResult.h"
 #include "Fans/FansManager.h"
 #include "Tools/Tool.h"
+#include "SoftwareReset.h"
 
 enum class ResponseSource
 {
@@ -152,6 +153,7 @@ public:
 	void StartIap() noexcept;
 
 	void ReportInternalError(const char *file, const char *func, int line) const noexcept;	// Report an internal error
+	[[noreturn]] void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr) noexcept;
 
 	static uint32_t DoDivide(uint32_t a, uint32_t b) noexcept;		// helper function for diagnostic tests
 	static float SinfCosf(float angle) noexcept;						// helper function for diagnostic tests

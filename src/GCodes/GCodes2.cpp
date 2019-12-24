@@ -51,27 +51,27 @@
 // It is called repeatedly for a given code until it returns true for that code.
 bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
 {
-	// Can we queue this code?
-	if (gb.CanQueueCodes() && codeQueue->ShouldQueueCode(gb))
-	{
-		// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
-		// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
-		if (segmentsLeft != 0)
-		{
-			return false;
-		}
-
-		if (codeQueue->QueueCode(gb))
-		{
-			HandleReply(gb, GCodeResult::ok, "");
-			return true;
-		}
-
-		return false;		// we should queue this code but we can't, so wait until we can either execute it or queue it
-	}
-
 	try
 	{
+		// Can we queue this code?
+		if (gb.CanQueueCodes() && codeQueue->ShouldQueueCode(gb))
+		{
+			// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
+			// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
+			if (segmentsLeft != 0)
+			{
+				return false;
+			}
+
+			if (codeQueue->QueueCode(gb))
+			{
+				HandleReply(gb, GCodeResult::ok, "");
+				return true;
+			}
+
+			return false;		// we should queue this code but we can't, so wait until we can either execute it or queue it
+		}
+
 		switch (gb.GetCommandLetter())
 		{
 		case 'G':
@@ -2985,7 +2985,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			if (!gb.MachineState().runningM502)			// when running M502 we don't execute network-related commands
 			{
 				bool seen = false;
-				const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
+				const unsigned int interface = (gb.Seen('I')) ? gb.GetUIValue() : 0;
 
 				String<SsidBufferLength> ssid;
 				if (reprap.GetNetwork().IsWiFiInterface(interface))
@@ -2995,8 +2995,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						const int enableValue = gb.GetIValue();
 						seen = true;
 
-						gb.MustSee('P');
-						gb.GetQuotedString(ssid.GetRef());
+						if (gb.Seen('P'))
+						{
+							gb.GetQuotedString(ssid.GetRef());
+						}
 						result = reprap.GetNetwork().EnableInterface(interface, enableValue, ssid.GetRef(), reply);
 					}
 				}
@@ -4361,7 +4363,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						reason = (uint16_t)SoftwareResetReason::erase;
 					}
 				}
-				platform.SoftwareReset(reason);			// doesn't return
+				reprap.SoftwareReset(reason);			// doesn't return
 			}
 			break;
 

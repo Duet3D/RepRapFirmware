@@ -177,7 +177,7 @@ int8_t GCodeBuffer::GetCommandFraction() const
 
 
 // Is a character present?
-bool GCodeBuffer::Seen(char c)
+bool GCodeBuffer::Seen(char c) noexcept
 {
 	return isBinaryBuffer ? binaryParser.Seen(c) : stringParser.Seen(c);
 }

@@ -73,12 +73,12 @@ public:
 
 	void SwitchOffAll(bool includingChamberAndBed) noexcept;				// Turn all heaters off
 	GCodeResult ResetFault(int heater, const StringRef& reply) noexcept;	// Reset a heater fault for a specific heater or all heaters
-	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply) noexcept;
-	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply) noexcept;
-	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Create a sensor or change the parameters for an existing sensor
-	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) noexcept; // Set the P/I/D parameters for a heater
+	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply);	// Create a sensor or change the parameters for an existing sensor
+	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply); // Set the P/I/D parameters for a heater
 
-	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply) noexcept;	// Configure heater protection (M143)
+	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply);	// Configure heater protection (M143)
 	void UpdateHeaterProtection(int heaterNumber) noexcept;				// Updates the PIDs and HeaterProtection items when a heater is remapped
 
 	void SuspendHeaters(bool sus) noexcept;								// Suspend the heaters to conserve power
@@ -123,8 +123,8 @@ public:
 	HeaterStatus GetStatus(int heater) const noexcept;					// Get the off/standby/active status
 	bool HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance) const noexcept;
 
-	GCodeResult ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply) noexcept;
-	GCodeResult ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply) noexcept;
+	GCodeResult ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply);
 
 	void SetActiveTemperature(int heater, float t) noexcept;
 	void SetStandbyTemperature(int heater, float t) noexcept;

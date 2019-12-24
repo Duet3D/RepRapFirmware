@@ -38,7 +38,7 @@ public:
 	// then search for parameters used to configure the fan. If any are found, perform appropriate actions and return true.
 	// If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
 	// If no relevant parameters are found, print the existing ones to 'reply' and return false.
-	bool Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error) noexcept;
+	bool Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error);
 	bool IsConfigured() const noexcept { return isConfigured && IsEnabled(); }
 
 	float GetConfiguredPwm() const noexcept { return val; }			// returns the configured PWM. Actual PWM may be different, e.g. due to blipping or for thermostatic fans.

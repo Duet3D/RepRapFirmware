@@ -25,7 +25,6 @@ Licence: GPL
 #define PLATFORM_H
 
 #include "RepRapFirmware.h"
-#include "SoftwareReset.h"
 #include "Hardware/IoPorts.h"
 #include "DueFlashStorage.h"
 #include "Fans/FansManager.h"
@@ -278,10 +277,10 @@ public:
 	void Exit() noexcept;									// Shut down tidily. Calling Init after calling this should reset to the beginning
 
 	void Diagnostics(MessageType mtype) noexcept;
-	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, unsigned int d) noexcept;
+	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, unsigned int d);
+	bool WasDeliberateError() const noexcept { return deliberateError; }
 	void LogError(ErrorCode e) noexcept { errorCodeBits |= (uint32_t)e; }
 
-	[[noreturn]] void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr) noexcept;
 	bool AtxPower() const noexcept;
 	void AtxPowerOn() noexcept;
 	void AtxPowerOff(bool defer) noexcept;
@@ -405,7 +404,7 @@ public:
 	void SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept;
 	float AxisTotalLength(size_t axis) const noexcept;
 	float GetPressureAdvance(size_t extruder) const noexcept;
-	GCodeResult SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply) noexcept;
+	GCodeResult SetPressureAdvance(float advance, GCodeBuffer& gb, const StringRef& reply);
 
 	const AxisDriversConfig& GetAxisDriversConfig(size_t axis) const noexcept
 		pre(axis < MaxAxes)

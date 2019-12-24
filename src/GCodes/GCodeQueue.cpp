@@ -14,7 +14,7 @@
 
 // GCodeQueue class
 
-GCodeQueue::GCodeQueue() : freeItems(nullptr), queuedItems(nullptr)
+GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 {
 	for (size_t i = 0; i < maxQueuedCodes; i++)
 	{
@@ -93,7 +93,7 @@ GCodeQueue::GCodeQueue() : freeItems(nullptr), queuedItems(nullptr)
 // Try to queue the command in the passed GCodeBuffer.
 // If successful, return true to indicate it has been queued.
 // If the queue is full or the command is too long to be queued, return false.
-bool GCodeQueue::QueueCode(GCodeBuffer &gb)
+bool GCodeQueue::QueueCode(GCodeBuffer &gb) noexcept
 {
 	// Can we queue this code somewhere?
 	if (freeItems == nullptr || gb.DataLength() > BufferSizePerQueueItem)
@@ -126,7 +126,7 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb)
 	return true;
 }
 
-bool GCodeQueue::FillBuffer(GCodeBuffer *gb)
+bool GCodeQueue::FillBuffer(GCodeBuffer *gb) noexcept
 {
 	// Can this buffer be filled?
 	if (queuedItems == nullptr || queuedItems->executeAtMove > reprap.GetMove().GetCompletedMoves())
@@ -147,25 +147,25 @@ bool GCodeQueue::FillBuffer(GCodeBuffer *gb)
 }
 
 // These inherited virtual functions need to be defined but are not called
-void GCodeQueue::Reset()
+void GCodeQueue::Reset() noexcept
 {
 	Clear();
 }
 
-size_t GCodeQueue::BytesCached() const
+size_t GCodeQueue::BytesCached() const noexcept
 {
 	return 0;
 }
 
 // Return true if there is nothing to do
-bool GCodeQueue::IsIdle() const
+bool GCodeQueue::IsIdle() const noexcept
 {
 	return queuedItems == nullptr || queuedItems->executeAtMove > reprap.GetMove().GetCompletedMoves();
 }
 
 // Because some moves may end before the print is actually paused, we need a method to
 // remove all the entries that will not be executed after the print has finally paused
-void GCodeQueue::PurgeEntries()
+void GCodeQueue::PurgeEntries() noexcept
 {
 	QueuedCode *item = queuedItems, *lastItem = nullptr;
 	while (item != nullptr)
@@ -196,7 +196,7 @@ void GCodeQueue::PurgeEntries()
 	}
 }
 
-void GCodeQueue::Clear()
+void GCodeQueue::Clear() noexcept
 {
 	while (queuedItems != nullptr)
 	{
@@ -207,7 +207,7 @@ void GCodeQueue::Clear()
 	}
 }
 
-void GCodeQueue::Diagnostics(MessageType mtype)
+void GCodeQueue::Diagnostics(MessageType mtype) noexcept
 {
 	reprap.GetPlatform().MessageF(mtype, "Code queue is %s\n", (queuedItems == nullptr) ? "empty." : "not empty:");
 	if (queuedItems != nullptr)
@@ -232,7 +232,7 @@ void GCodeQueue::Diagnostics(MessageType mtype)
 
 // QueuedCode class
 
-void QueuedCode::AssignFrom(GCodeBuffer &gb)
+void QueuedCode::AssignFrom(GCodeBuffer &gb) noexcept
 {
 	toolNumberAdjust = gb.GetToolNumberAdjust();
 
@@ -241,7 +241,7 @@ void QueuedCode::AssignFrom(GCodeBuffer &gb)
 	dataLength = gb.DataLength();
 }
 
-void QueuedCode::AssignTo(GCodeBuffer *gb)
+void QueuedCode::AssignTo(GCodeBuffer *gb) noexcept
 {
 	gb->SetToolNumberAdjust(toolNumberAdjust);
 	gb->Put(data, dataLength, isBinary);

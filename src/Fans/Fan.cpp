@@ -28,7 +28,7 @@ Fan::Fan(unsigned int fanNum) noexcept
 // Exceptions:
 // 1. Only process the S parameter if other values were processed.
 // 2. Don't process the R parameter, but if it is present don't print the existing configuration.
-bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error) noexcept
+bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
 	bool seen = false;
 	if (mcode == 106)

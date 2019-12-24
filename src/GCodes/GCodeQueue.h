@@ -17,20 +17,20 @@ const size_t BufferSizePerQueueItem = SHORT_GCODE_LENGTH;
 class GCodeQueue : public GCodeInput
 {
 public:
-	GCodeQueue();
+	GCodeQueue() noexcept;
 
-	void Reset() override;										// Clean all the cached data from this input
-	bool FillBuffer(GCodeBuffer *gb) override;					// If there is another move to execute at this time, fill a buffer
-	size_t BytesCached() const override;						// How many bytes have been cached?
+	void Reset() noexcept override;										// Clean all the cached data from this input
+	bool FillBuffer(GCodeBuffer *gb) noexcept override;					// If there is another move to execute at this time, fill a buffer
+	size_t BytesCached() const noexcept override;						// How many bytes have been cached?
 
-	bool QueueCode(GCodeBuffer &gb);							// Queue a G-code
-	void PurgeEntries();										// Remove stored codes when a print is being paused
-	void Clear();												// Clean up all the stored codes
-	bool IsIdle() const;										// Return true if there is nothing to do
+	bool QueueCode(GCodeBuffer &gb) noexcept;							// Queue a G-code
+	void PurgeEntries() noexcept;										// Remove stored codes when a print is being paused
+	void Clear() noexcept;												// Clean up all the stored codes
+	bool IsIdle() const noexcept;										// Return true if there is nothing to do
 
-	void Diagnostics(MessageType mtype);
+	void Diagnostics(MessageType mtype) noexcept;
 
-	static bool ShouldQueueCode(GCodeBuffer &gb);				// Return true if this code should be queued
+	static bool ShouldQueueCode(GCodeBuffer &gb) THROWS_PARSE_ERROR;	// Return true if this code should be queued
 
 private:
 	QueuedCode *freeItems;
@@ -42,8 +42,8 @@ class QueuedCode
 public:
 	friend class GCodeQueue;
 
-	QueuedCode(QueuedCode *n) : next(n), dataLength(0) { }
-	QueuedCode *Next() const { return next; }
+	QueuedCode(QueuedCode *n) noexcept : next(n), dataLength(0) { }
+	QueuedCode *Next() const noexcept { return next; }
 
 private:
 	QueuedCode *next;
@@ -55,8 +55,8 @@ private:
 	uint32_t executeAtMove;
 	int toolNumberAdjust;
 
-	void AssignFrom(GCodeBuffer &gb);
-	void AssignTo(GCodeBuffer *gb);
+	void AssignFrom(GCodeBuffer &gb) noexcept;
+	void AssignTo(GCodeBuffer *gb) noexcept;
 };
 
 #endif

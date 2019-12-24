@@ -88,7 +88,7 @@ bool FansManager::WriteFanSettings(FileStore *f) const noexcept
 #endif
 
 // This is called by M950 to create a fan or change its PWM frequency
-GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, const StringRef& reply)
 {
 	if (fanNum < MaxFans)
 	{
@@ -151,7 +151,7 @@ GCodeResult FansManager::ConfigureFanPort(uint32_t fanNum, GCodeBuffer& gb, cons
 // then search for parameters used to configure the fan. If any are found, perform appropriate actions and return true.
 // If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
 // If no relevant parameters are found, print the existing ones to 'reply' and return false.
-bool FansManager::ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error) noexcept
+bool FansManager::ConfigureFan(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const StringRef& reply, bool& error)
 {
 	auto fan = FindFan(fanNum);
 	if (fan.IsNull())

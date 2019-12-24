@@ -58,8 +58,8 @@ public:
 	int GetCommandNumber() const;
 	int8_t GetCommandFraction() const;
 
-	bool Seen(char c) __attribute__((hot));					// Is a character present?
-	void MustSee(char c);									// Test for character present, throw error if not
+	bool Seen(char c) noexcept __attribute__((hot));							// Is a character present?
+	void MustSee(char c) THROWS_PARSE_ERROR;									// Test for character present, throw error if not
 
 	float GetFValue() THROWS_PARSE_ERROR __attribute__((hot));					// Get a float after a key letter
 	float GetDistance() THROWS_PARSE_ERROR;										// Get a distance or coordinate and convert it from inches to mm if necessary

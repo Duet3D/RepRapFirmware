@@ -354,7 +354,7 @@ extern "C"
 	// so they escalate to a Hard Fault and we don't need to provide separate exception handlers for them.
 	[[noreturn]] void hardFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 	{
-	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pulFaultStackAddress + 5);
+	    reprap.SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pulFaultStackAddress + 5);
 	}
 
 	// The fault handler implementation calls a function called hardFaultDispatcher()
@@ -400,7 +400,7 @@ extern "C"
 
 	[[noreturn]] void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 	{
-	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::wdtFault, pulFaultStackAddress + 5);
+	    reprap.SoftwareReset((uint16_t)SoftwareResetReason::wdtFault, pulFaultStackAddress + 5);
 	}
 
 #ifdef __LPC17xx__
@@ -427,7 +427,7 @@ extern "C"
 
 	[[noreturn]] void otherFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 	{
-	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::otherFault, pulFaultStackAddress + 5);
+	    reprap.SoftwareReset((uint16_t)SoftwareResetReason::otherFault, pulFaultStackAddress + 5);
 	}
 
 	// 2017-05-25: A user is getting 'otherFault' reports, so now we do a stack dump for those too.
@@ -449,15 +449,15 @@ extern "C"
 
 	// We could set up the following fault handlers to retrieve the program counter in the same way as for a Hard Fault,
 	// however these exceptions are unlikely to occur, so for now we just report the exception type.
-	void NMI_Handler        () noexcept { reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::NMI); }
-	void UsageFault_Handler () noexcept { reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::usageFault); }
+	void NMI_Handler        () noexcept { reprap.SoftwareReset((uint16_t)SoftwareResetReason::NMI); }
+	void UsageFault_Handler () noexcept { reprap.SoftwareReset((uint16_t)SoftwareResetReason::usageFault); }
 
 	void DebugMon_Handler   () noexcept __attribute__ ((noreturn,alias("OtherFault_Handler")));
 
 	// FreeRTOS hooks that we need to provide
 	[[noreturn]] void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName) noexcept
 	{
-		reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::stackOverflow, pulFaultStackAddress);
+		reprap.SoftwareReset((uint16_t)SoftwareResetReason::stackOverflow, pulFaultStackAddress);
 	}
 
 	void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) noexcept __attribute((naked, noreturn));
@@ -476,7 +476,7 @@ extern "C"
 
 	[[noreturn]] void assertCalledDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 	{
-	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress);
+	    reprap.SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress);
 	}
 
 	void vAssertCalled(uint32_t line, const char *file) noexcept __attribute((naked, noreturn));
@@ -499,7 +499,7 @@ extern "C"
 #ifdef __LPC17xx__
 	void applicationMallocFailedCalledDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 	{
-		reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress);
+		reprap.SoftwareReset((uint16_t)SoftwareResetReason::assertCalled, pulFaultStackAddress);
 	}
 
 	void vApplicationMallocFailedHook() noexcept __attribute((naked));
@@ -521,7 +521,37 @@ extern "C"
 namespace std
 {
 	// We need to define this function in order to use lambda functions with captures
-	void __throw_bad_function_call() noexcept { vAssertCalled(__LINE__, __FILE__); }
+	[[noreturn]] void __throw_bad_function_call() noexcept { vAssertCalled(__LINE__, __FILE__); }
 }
+
+// The default terminate handler pulls in sprintf and lots of other functions, which makes the binary too large. So we replace it.
+[[noreturn]] void Terminate() noexcept
+{
+	register const uint32_t * stack_ptr asm ("sp");
+	reprap.SoftwareReset((uint16_t)SoftwareResetReason::terminateCalled, stack_ptr);
+}
+
+namespace __cxxabiv1
+{
+	std::terminate_handler __terminate_handler = Terminate;
+}
+
+extern "C" [[noreturn]] void __cxa_pure_virtual() noexcept
+{
+	register const uint32_t * stack_ptr asm ("sp");
+	reprap.SoftwareReset((uint16_t)SoftwareResetReason::pureVirtual, stack_ptr);
+}
+
+extern "C" [[noreturn]] void __cxa_deleted_virtual() noexcept
+{
+	register const uint32_t * stack_ptr asm ("sp");
+	reprap.SoftwareReset((uint16_t)SoftwareResetReason::deletedVirtual, stack_ptr);
+}
+
+// We don't need the time zone functionality. Declaring these saves 8Kb.
+extern "C" void __tzset() noexcept { }
+extern "C" void __tz_lock() noexcept { }
+extern "C" void __tz_unlock() noexcept { }
+extern "C" void _tzset_unlocked() noexcept { }
 
 // End

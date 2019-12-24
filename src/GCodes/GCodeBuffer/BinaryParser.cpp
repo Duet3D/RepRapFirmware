@@ -92,112 +92,112 @@ int8_t BinaryParser::GetCommandFraction() const
 
 float BinaryParser::GetFValue()
 {
-	if (seenParameter != nullptr)
+	if (seenParameter == nullptr)
 	{
-		float value;
-		switch (seenParameter->type)
-		{
-		case DataType::Float:
-			value = seenParameter->floatValue;
-			break;
-		case DataType::Int:
-			value = seenParameter->intValue;
-			break;
-		case DataType::UInt:
-			value = seenParameter->uintValue;
-			break;
-		default:
-			value = 0.0f;
-			break;
-		}
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return value;
+		THROW_INTERNAL_ERROR;
 	}
 
-	THROW_INTERNAL_ERROR;
+	float value;
+	switch (seenParameter->type)
+	{
+	case DataType::Float:
+		value = seenParameter->floatValue;
+		break;
+	case DataType::Int:
+		value = seenParameter->intValue;
+		break;
+	case DataType::UInt:
+		value = seenParameter->uintValue;
+		break;
+	default:
+		value = 0.0f;
+		break;
+	}
+	seenParameter = nullptr;
+	seenParameterValue = nullptr;
+	return value;
 }
 
 int32_t BinaryParser::GetIValue()
 {
-	if (seenParameter != nullptr)
+	if (seenParameter == nullptr)
 	{
-		int32_t value;
-		switch (seenParameter->type)
-		{
-		case DataType::Float:
-			value = seenParameter->floatValue;
-			break;
-		case DataType::Int:
-			value = seenParameter->intValue;
-			break;
-		case DataType::UInt:
-			value = seenParameter->uintValue;
-			break;
-		default:
-			value = 0.0f;
-			break;
-		}
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return value;
+		THROW_INTERNAL_ERROR;
 	}
 
-	THROW_INTERNAL_ERROR;
+	int32_t value;
+	switch (seenParameter->type)
+	{
+	case DataType::Float:
+		value = seenParameter->floatValue;
+		break;
+	case DataType::Int:
+		value = seenParameter->intValue;
+		break;
+	case DataType::UInt:
+		value = seenParameter->uintValue;
+		break;
+	default:
+		value = 0.0f;
+		break;
+	}
+	seenParameter = nullptr;
+	seenParameterValue = nullptr;
+	return value;
 }
 
 uint32_t BinaryParser::GetUIValue()
 {
-	if (seenParameter != nullptr)
+	if (seenParameter == nullptr)
 	{
-		uint32_t value;
-		switch (seenParameter->type)
-		{
-		case DataType::Float:
-			value = (uint32_t)seenParameter->floatValue;
-			break;
-		case DataType::Int:
-			value = (uint32_t)seenParameter->intValue;
-			break;
-		case DataType::UInt:
-			value = seenParameter->uintValue;
-			break;
-		default:
-			value = 0;
-			break;
-		}
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return value;
+		THROW_INTERNAL_ERROR;
 	}
 
-	THROW_INTERNAL_ERROR;
+	uint32_t value;
+	switch (seenParameter->type)
+	{
+	case DataType::Float:
+		value = (uint32_t)seenParameter->floatValue;
+		break;
+	case DataType::Int:
+		value = (uint32_t)seenParameter->intValue;
+		break;
+	case DataType::UInt:
+		value = seenParameter->uintValue;
+		break;
+	default:
+		value = 0;
+		break;
+	}
+	seenParameter = nullptr;
+	seenParameterValue = nullptr;
+	return value;
 }
 
 // Get a driver ID
 DriverId BinaryParser::GetDriverId()
 {
-	DriverId value;
-	if (seenParameter != nullptr)
+	if (seenParameter == nullptr)
 	{
-		switch (seenParameter->type)
-		{
-		case DataType::Int:
-		case DataType::UInt:
-		case DataType::DriverId:
-			value.SetFromBinary(seenParameter->uintValue);
-			break;
-
-		default:
-			value.Clear();
-			break;
-		}
-		seenParameter = nullptr;
-		seenParameterValue = nullptr;
-		return value;
+		THROW_INTERNAL_ERROR;
 	}
 
-	THROW_INTERNAL_ERROR;
+	DriverId value;
+	switch (seenParameter->type)
+	{
+	case DataType::Int:
+	case DataType::UInt:
+	case DataType::DriverId:
+		value.SetFromBinary(seenParameter->uintValue);
+		break;
+
+	default:
+		value.Clear();
+		break;
+	}
+	seenParameter = nullptr;
+	seenParameterValue = nullptr;
+	return value;
 }
 
 void BinaryParser::GetIPAddress(IPAddress& returnedIp)
