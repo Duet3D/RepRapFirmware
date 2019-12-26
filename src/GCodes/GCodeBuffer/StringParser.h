@@ -10,6 +10,7 @@
 
 #include "RepRapFirmware.h"
 #include "GCodes/GCodeInput.h"
+#include "GCodes/GCodeMachineState.h"
 #include "MessageType.h"
 #include "ObjectModel/ObjectModel.h"
 #include "ParseException.h"
@@ -90,28 +91,45 @@ private:
 	uint32_t ReadUIValue() THROWS_PARSE_ERROR;
 	int32_t ReadIValue() THROWS_PARSE_ERROR;
 	DriverId ReadDriverIdValue() THROWS_PARSE_ERROR;
-
-	bool ProcessConditionalGCode(bool skippedIfFalse);	// Check for and process a conditional GCode language command returning true if we found one
-	void CreateBlocks();								// Create new code blocks
-	bool EndBlocks();									// End blocks returning true if nothing more to process on this line
-	void ProcessIfCommand();
-	void ProcessElseCommand(bool skippedIfFalse);
-	void ProcessWhileCommand();
-	void ProcessBreakCommand();
-	void ProcessVarCommand();
-	bool EvaluateCondition(const char* keyword) THROWS_PARSE_ERROR;
-
 	void GetStringExpression(const StringRef& str) THROWS_PARSE_ERROR
 		pre (readPointer >= 0; gb.buffer[readPointer] == '{'; str.IsEmpty());
-	ExpressionValue EvaluateExpression() THROWS_PARSE_ERROR
+
+	bool ProcessConditionalGCode(BlockType previousBlockType) THROWS_PARSE_ERROR;
+														// Check for and process a conditional GCode language command returning true if we found one
+	void CreateBlocks();								// Create new code blocks
+	bool EndBlocks();									// End blocks returning true if nothing more to process on this line
+	void ProcessIfCommand() THROWS_PARSE_ERROR;
+	void ProcessElseCommand(BlockType previousBlockType);
+	void ProcessElifCommand(BlockType previousBlockType) THROWS_PARSE_ERROR;
+	void ProcessWhileCommand() THROWS_PARSE_ERROR;
+	void ProcessBreakCommand();
+	void ProcessVarCommand() THROWS_PARSE_ERROR;
+	void ProcessSetCommand() THROWS_PARSE_ERROR;
+	void ProcessAbortCommand();
+
+	bool EvaluateCondition() THROWS_PARSE_ERROR;
+
+	ExpressionValue ParseBracketedExpression(char closingBracket) THROWS_PARSE_ERROR
 		pre (readPointer >= 0; gb.buffer[readPointer] == '{');
+	ExpressionValue ParseExpression(uint8_t priority) THROWS_PARSE_ERROR
+		pre (readPointer >= 0);
 	ExpressionValue ParseNumber() THROWS_PARSE_ERROR
-		pre(isdigit(*s));
+		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
+	ExpressionValue ParseIdentifier() THROWS_PARSE_ERROR
+		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
+
+	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2) THROWS_PARSE_ERROR;
+	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2) THROWS_PARSE_ERROR;
+	void ConvertToFloat(ExpressionValue& val) THROWS_PARSE_ERROR;
+	void ConvertToBool(ExpressionValue& val) THROWS_PARSE_ERROR;
+
+	void SkipWhiteSpace();
 
 	unsigned int commandStart;							// Index in the buffer of the command letter of this command
 	unsigned int parameterStart;
 	unsigned int commandEnd;							// Index in the buffer of one past the last character of this command
 	unsigned int commandLength;							// Number of characters we read to build this command including the final \r or \n
+	unsigned int braceCount;							// how many nested { } we are inside
 	unsigned int gcodeLineEnd;							// Number of characters in the entire line of gcode
 	int readPointer;									// Where in the buffer to read next, or -1
 

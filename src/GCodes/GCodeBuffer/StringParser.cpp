@@ -81,6 +81,7 @@ bool StringParser::Put(char c)
 		switch (gb.bufferState)
 		{
 		case GCodeBufferState::parseNotStarted:				// we haven't started parsing yet
+			braceCount = 0;
 			switch (c)
 			{
 			case 'N':
@@ -139,9 +140,16 @@ bool StringParser::Put(char c)
 			switch (c)
 			{
 			case '*':
-				declaredChecksum = 0;
-				hadChecksum = true;
-				gb.bufferState = GCodeBufferState::parsingChecksum;
+				if (braceCount != 0)
+				{
+					declaredChecksum = 0;
+					hadChecksum = true;
+					gb.bufferState = GCodeBufferState::parsingChecksum;
+				}
+				else
+				{
+					StoreAndAddToChecksum(c);
+				}
 				break;
 
 			case ';':
@@ -149,13 +157,33 @@ bool StringParser::Put(char c)
 				break;
 
 			case '(':
-				AddToChecksum(c);
-				gb.bufferState = GCodeBufferState::parsingBracketedComment;
+				if (braceCount == 0)
+				{
+					AddToChecksum(c);
+					gb.bufferState = GCodeBufferState::parsingBracketedComment;
+				}
+				else
+				{
+					StoreAndAddToChecksum(c);
+				}
 				break;
 
 			case '"':
 				StoreAndAddToChecksum(c);
 				gb.bufferState = GCodeBufferState::parsingQuotedString;
+				break;
+
+			case '{':
+				++braceCount;
+				StoreAndAddToChecksum(c);
+				break;
+
+			case '}':
+				if (braceCount != 0)
+				{
+					--braceCount;
+				}
+				StoreAndAddToChecksum(c);
 				break;
 
 			default:
@@ -262,18 +290,18 @@ bool StringParser::LineFinished()
 			Init();
 			return false;													// continue skipping this block
 		}
-		bool skippedIfFalse = false;
+		BlockType previousBlockType = BlockType::plain;
 		if (indentToSkipTo != NoIndentSkip && indentToSkipTo >= commandIndent)
 		{
 			// Finished skipping the nested block
 			if (indentToSkipTo == commandIndent)
 			{
-				skippedIfFalse = (gb.machineState->CurrentBlockState().IsIfFalseBlock());
+				previousBlockType = gb.machineState->CurrentBlockState().GetType();
 				gb.machineState->CurrentBlockState().SetPlainBlock();		// we've ended the loop or if-block
 			}
 			indentToSkipTo = NoIndentSkip;									// no longer skipping
 		}
-		if (ProcessConditionalGCode(skippedIfFalse))
+		if (ProcessConditionalGCode(previousBlockType))
 		{
 			Init();
 			return false;
@@ -285,8 +313,8 @@ bool StringParser::LineFinished()
 }
 
 // Check for and process a conditional GCode language command returning true if we found one, false if it's a regular line of GCode that we need to process
-// 'expectingElse' is true if we just finished skipping and if-block when the condition was false and there might be an 'else'
-bool StringParser::ProcessConditionalGCode(bool skippedIfFalse)
+// 'skippedIfFalse' is true if we just finished skipping an if-block when the condition was false and there might be an 'else'
+bool StringParser::ProcessConditionalGCode(BlockType previousBlockType)
 {
 	if (commandIndent > gb.machineState->indentLevel)
 	{
@@ -311,7 +339,7 @@ bool StringParser::ProcessConditionalGCode(bool skippedIfFalse)
 		}
 	}
 
-	if (i >= 2 && i < 6 && (gb.buffer[i] == 0 || gb.buffer[i] == ' ' || gb.buffer[i] == '\t'))		// if the command word is properly terminated
+	if (i >= 2 && i < 6 && (gb.buffer[i] == 0 || gb.buffer[i] == ' ' || gb.buffer[i] == '\t' || gb.buffer[i] == '{'))		// if the command word is properly terminated
 	{
 		const char * const command = &gb.buffer[commandIndent];
 		switch (i)
@@ -330,12 +358,22 @@ bool StringParser::ProcessConditionalGCode(bool skippedIfFalse)
 				ProcessVarCommand();
 				return true;
 			}
+			if (StringStartsWith(command, "set"))
+			{
+				ProcessSetCommand();
+				return true;
+			}
 			break;
 
 		case 4:
 			if (StringStartsWith(command, "else"))
 			{
-				ProcessElseCommand(skippedIfFalse);
+				ProcessElseCommand(previousBlockType);
+				return true;
+			}
+			if (StringStartsWith(command, "elif"))
+			{
+				ProcessElifCommand(previousBlockType);
 				return true;
 			}
 			break;
@@ -346,10 +384,14 @@ bool StringParser::ProcessConditionalGCode(bool skippedIfFalse)
 				ProcessWhileCommand();
 				return true;
 			}
-
 			if (StringStartsWith(command, "break"))
 			{
 				ProcessBreakCommand();
+				return true;
+			}
+			if (StringStartsWith(command, "abort"))
+			{
+				ProcessAbortCommand();
 				return true;
 			}
 			break;
@@ -374,7 +416,7 @@ bool StringParser::EndBlocks()
 	while (gb.machineState->indentLevel > commandIndent)
 	{
 		gb.machineState->EndBlock();
-		if (gb.machineState->CurrentBlockState().IsLoop())
+		if (gb.machineState->CurrentBlockState().GetType() == BlockType::loop)
 		{
 			// Go back to the start of the loop and re-evaluate the while-part
 			gb.machineState->lineNumber = gb.machineState->CurrentBlockState().GetLineNumber();
@@ -387,24 +429,24 @@ bool StringParser::EndBlocks()
 
 void StringParser::ProcessIfCommand()
 {
-	if (EvaluateCondition("if"))
+	if (EvaluateCondition())
 	{
 		gb.machineState->CurrentBlockState().SetIfTrueBlock();
 	}
 	else
 	{
-		gb.machineState->CurrentBlockState().SetIfFalseBlock();
+		gb.machineState->CurrentBlockState().SetIfFalseNoneTrueBlock();
 		indentToSkipTo = gb.machineState->indentLevel;					// skip forwards to the end of the block
 	}
 }
 
-void StringParser::ProcessElseCommand(bool skippedIfFalse)
+void StringParser::ProcessElseCommand(BlockType previousBlockType)
 {
-	if (skippedIfFalse)
+	if (previousBlockType == BlockType::ifFalseNoneTrue)
 	{
 		gb.machineState->CurrentBlockState().SetPlainBlock();			// execute the else-block, treating it like a plain block
 	}
-	else if (gb.machineState->CurrentBlockState().IsIfTrueBlock())
+	else if (gb.machineState->CurrentBlockState().GetType() == BlockType::ifTrue || gb.machineState->CurrentBlockState().GetType() == BlockType::ifFalseHadTrue)
 	{
 		indentToSkipTo = gb.machineState->indentLevel;					// skip forwards to the end of the if-block
 	}
@@ -414,9 +456,33 @@ void StringParser::ProcessElseCommand(bool skippedIfFalse)
 	}
 }
 
+void StringParser::ProcessElifCommand(BlockType previousBlockType)
+{
+	if (previousBlockType == BlockType::ifFalseNoneTrue)
+	{
+		if (EvaluateCondition())
+		{
+			gb.machineState->CurrentBlockState().SetIfTrueBlock();
+		}
+		else
+		{
+			indentToSkipTo = gb.machineState->indentLevel;				// skip forwards to the end of the if-block
+		}
+	}
+	else if (gb.machineState->CurrentBlockState().GetType() == BlockType::ifTrue || gb.machineState->CurrentBlockState().GetType() == BlockType::ifFalseHadTrue)
+	{
+		indentToSkipTo = gb.machineState->indentLevel;					// skip forwards to the end of the if-block
+		gb.machineState->CurrentBlockState().SetIfFalseHadTrueBlock();
+	}
+	else
+	{
+		throw ConstructParseException("'elif' did not follow 'if");
+	}
+}
+
 void StringParser::ProcessWhileCommand()
 {
-	if (EvaluateCondition("while"))
+	if (EvaluateCondition())
 	{
 		gb.machineState->CurrentBlockState().SetLoopBlock(GetFilePosition(), gb.machineState->lineNumber);
 	}
@@ -433,10 +499,9 @@ void StringParser::ProcessBreakCommand()
 		if (gb.machineState->indentLevel == 0)
 		{
 			throw ConstructParseException("'break' was not inside a loop");
-			return;
 		}
 		gb.machineState->EndBlock();
-	} while (!gb.machineState->CurrentBlockState().IsLoop());
+	} while (gb.machineState->CurrentBlockState().GetType() != BlockType::loop);
 	gb.machineState->CurrentBlockState().SetPlainBlock();
 }
 
@@ -445,10 +510,27 @@ void StringParser::ProcessVarCommand()
 	throw ConstructParseException("'var' not implemented yet");
 }
 
-// Evaluate the condition that should follow 'if' or 'while'
-bool StringParser::EvaluateCondition(const char* keyword)
+void StringParser::ProcessSetCommand()
 {
-	throw ConstructParseException("Failed to evaluate condition after '%s'", keyword);
+	throw ConstructParseException("'set' not implemented yet");
+}
+
+void StringParser::ProcessAbortCommand()
+{
+	throw ConstructParseException("'abort' not implemented yet");
+}
+
+// Evaluate the condition that should follow 'if' or 'while'
+bool StringParser::EvaluateCondition()
+{
+	ExpressionValue val = ParseExpression(0);
+	SkipWhiteSpace();
+	if (gb.buffer[readPointer] != 0)
+	{
+		throw ConstructParseException("unexpected characters following condition");
+	}
+	ConvertToBool(val);
+	return val.bVal;
 }
 
 // Decode this command and find the start of the next one on the same line.
@@ -1241,7 +1323,7 @@ float StringParser::ReadFloatValue()
 	if (gb.buffer[readPointer] == '{')
 	{
 		++readPointer;
-		const ExpressionValue val = EvaluateExpression();
+		const ExpressionValue val = ParseBracketedExpression('}');
 		switch (val.type)
 		{
 		case TYPE_OF(float):
@@ -1268,7 +1350,7 @@ uint32_t StringParser::ReadUIValue()
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		const ExpressionValue val = EvaluateExpression();
+		const ExpressionValue val = ParseBracketedExpression('}');
 		switch (val.type)
 		{
 		case TYPE_OF(uint32_t):
@@ -1325,7 +1407,7 @@ int32_t StringParser::ReadIValue()
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionValue val = EvaluateExpression();
+		ExpressionValue val = ParseBracketedExpression('}');
 		switch (val.type)
 		{
 		case TYPE_OF(int32_t):
@@ -1371,7 +1453,7 @@ DriverId StringParser::ReadDriverIdValue()
 // Get a string expression. The current character is '{'.
 void StringParser::GetStringExpression(const StringRef& str)
 {
-	const ExpressionValue val = EvaluateExpression();
+	const ExpressionValue val = ParseBracketedExpression('}');
 	switch (val.type)
 	{
 	case TYPE_OF(const char*):
@@ -1411,44 +1493,349 @@ void StringParser::GetStringExpression(const StringRef& str)
 	}
 }
 
-// Evaluate an expression. the current character is '{'.
-ExpressionValue StringParser::EvaluateExpression()
+// Evaluate a bracketed expression
+ExpressionValue StringParser::ParseBracketedExpression(char closingBracket)
 {
-	++readPointer;						// skip the '{'
-	// For now the only form of expression we handle is {variable-name}
-	if (isalpha(gb.buffer[readPointer]))			// if it's a variable name
+	++readPointer;						// skip the '{' or '('
+	auto rslt = ParseExpression(0);
+	if (gb.buffer[readPointer] == closingBracket)
 	{
-		unsigned int start = readPointer;
-		unsigned int numBrackets = 0;
-		char c;
-		while (isalpha((c = gb.buffer[readPointer])) || isdigit(c) || c == '_' || c == '.' || c == '(' || (c == ')' && numBrackets != 0))
-		{
-			if (c == '(')
-			{
-				++numBrackets;
-			}
-			else if (c == ')')
-			{
-				--numBrackets;
-			}
-			++readPointer;
-		}
-		String<MaxVariableNameLength> varName;
-		if (varName.copy(gb.buffer + start, readPointer - start))
-		{
-			throw ConstructParseException("variable name too long");;
-		}
-		//TODO consider supporting standard CNC functions here
-		const ExpressionValue val = reprap.GetObjectValue(*this, varName.c_str());
-		if (c != '}')
-		{
-			throw ConstructParseException("expected '}'");
-		}
 		++readPointer;
-		return val;
+		return rslt;
 	}
 
-	throw ConstructParseException("expected variable name");
+	throw ConstructParseException("expected closing bracket");
+}
+
+// Evaluate an expression, stopping before any binary operators with priority 'priority' or lower
+ExpressionValue StringParser::ParseExpression(uint8_t priority)
+{
+	// Lists of binary operators and their priorities
+	static constexpr const char *operators = "&|=<>+-*/";					// for multi-character operators <= and >= this is the first character
+	static constexpr uint8_t priorities[] = { 1, 1, 2, 2, 2, 3, 3, 4, 4 };
+	constexpr uint8_t UnaryPriority = 5;									// must be higher than any binary operator priority
+	static_assert(ARRAY_SIZE(priorities) == strlen(operators));
+
+	// Start by parsing a unary expression
+	SkipWhiteSpace();
+	const char c = gb.buffer[readPointer];
+	ExpressionValue val;
+	switch (c)
+	{
+	case '"':
+		throw ConstructParseException("string literals are not supported within expressions");
+
+	case '-':
+		++readPointer;
+		val = ParseExpression(UnaryPriority);
+		switch (val.type)
+		{
+		case TYPE_OF(int32_t):
+			val.iVal = -val.iVal;		//TODO overflow check
+			break;
+
+		case TYPE_OF(float):
+			val.fVal = -val.fVal;
+			break;
+
+		default:
+			throw ConstructParseException("expected numeric value after '-'");
+		}
+		break;
+
+	case '+':
+		++readPointer;
+		val = ParseExpression(UnaryPriority);
+		switch (val.type)
+		{
+		case TYPE_OF(uint32_t):
+			// Convert enumeration to integer
+			val.iVal = (int32_t)val.uVal;
+			val.type = TYPE_OF(int32_t);
+			break;
+
+		case TYPE_OF(int32_t):
+		case TYPE_OF(float):
+			break;
+
+		default:
+			throw ConstructParseException("expected numeric or enumeration value after '+'");
+		}
+		break;
+
+	case '{':
+		++readPointer;
+		val = ParseBracketedExpression('}');
+		break;
+
+	case '(':
+		++readPointer;
+		val = ParseBracketedExpression(')');
+		break;
+
+	case '!':
+		++readPointer;
+		val = ParseExpression(UnaryPriority);
+		ConvertToBool(val);
+		val.bVal = !val.bVal;
+		break;
+
+	default:
+		if (isdigit(c))						// looks like a number
+		{
+			val = ParseNumber();
+		}
+		else if (isalpha(c))				// looks like a variable name
+		{
+			val = ParseIdentifier();
+		}
+		else
+		{
+			throw ConstructParseException("expected an expression");
+		}
+		break;
+	}
+
+	// See if it is followed by a binary operator
+	do
+	{
+		SkipWhiteSpace();
+		char opChar = gb.buffer[readPointer];
+		const char * const p = strchr(operators, opChar);
+		if (p == nullptr)
+		{
+			return val;
+		}
+		const size_t index = p - operators;
+		const uint8_t opPrio = priorities[index];
+		if (opPrio <= priority)
+		{
+			return val;
+		}
+
+		++readPointer;			// skip the [first] operator character
+
+		// Handle >= and <=
+		const bool invert = ((opChar == '>' || opChar == '<') && gb.buffer[readPointer] == '=');
+		if (invert)
+		{
+			++readPointer;
+			opChar ^= ('>' ^ '<');			// change < to > or vice versa
+		}
+
+		// Allow == && || as alternatives to = & |
+		if ((opChar == '=' || opChar == '&' || opChar == '|') && gb.buffer[readPointer] == opChar)
+		{
+			++readPointer;
+		}
+
+		SkipWhiteSpace();
+
+		ExpressionValue val2 = ParseExpression(opPrio);		// get the next operand
+		switch(opChar)
+		{
+		case '+':
+			BalanceNumericTypes(val, val2);
+			if (val.type == TYPE_OF(float))
+			{
+				val.fVal += val2.fVal;
+			}
+			else
+			{
+				val.iVal += val2.iVal;
+			}
+			break;
+
+		case '-':
+			BalanceNumericTypes(val, val2);
+			if (val.type == TYPE_OF(float))
+			{
+				val.fVal -= val2.fVal;
+			}
+			else
+			{
+				val.iVal -= val2.iVal;
+			}
+			break;
+
+		case '*':
+			BalanceNumericTypes(val, val2);
+			if (val.type == TYPE_OF(float))
+			{
+				val.fVal *= val2.fVal;
+			}
+			else
+			{
+				val.iVal *= val2.iVal;
+			}
+			break;
+
+		case '/':
+			ConvertToFloat(val);
+			ConvertToFloat(val2);
+			val.fVal /= val2.fVal;
+			break;
+
+		case '>':
+			BalanceTypes(val, val2);
+			switch (val.type)
+			{
+			case TYPE_OF(int32_t):
+				val.bVal = (val.iVal > val2.iVal);
+				break;
+
+			case TYPE_OF(float_t):
+				val.fVal = (val.fVal > val2.fVal);
+				break;
+
+			case TYPE_OF(bool):
+				val.bVal = (val.bVal && !val2.bVal);
+				break;
+
+			default:
+				throw ConstructParseException("expected numeric or Boolean operands to comparison operator");
+			}
+			val.type = TYPE_OF(bool);
+			if (invert)
+			{
+				val.bVal = !val.bVal;
+			}
+			break;
+
+		case '<':
+			BalanceTypes(val, val2);
+			switch (val.type)
+			{
+			case TYPE_OF(int32_t):
+				val.bVal = (val.iVal < val2.iVal);
+				break;
+
+			case TYPE_OF(float_t):
+				val.fVal = (val.fVal < val2.fVal);
+				break;
+
+			case TYPE_OF(bool):
+				val.bVal = (!val.bVal && val2.bVal);
+				break;
+
+			default:
+				throw ConstructParseException("expected numeric or Boolean operands to comparison operator");
+			}
+			val.type = TYPE_OF(bool);
+			if (invert)
+			{
+				val.bVal = !val.bVal;
+			}
+			break;
+
+		case '=':
+			BalanceTypes(val, val2);
+			switch (val.type)
+			{
+			case TYPE_OF(int32_t):
+				val.bVal = (val.iVal == val2.iVal);
+				break;
+
+			case TYPE_OF(uint32_t):
+				val.bVal = (val.uVal == val2.uVal);
+				break;
+
+			case TYPE_OF(float_t):
+				val.fVal = (val.fVal == val2.fVal);
+				break;
+
+			case TYPE_OF(bool):
+				val.bVal = (val.bVal == val2.bVal);
+				break;
+
+			case TYPE_OF(const char*):
+				val.bVal = (strcmp(val.sVal, val2.sVal) == 0);
+				break;
+
+			default:
+				throw ConstructParseException("unexpected oerand type to equality operator");
+			}
+			val.type = TYPE_OF(bool);
+			break;
+
+		case '&':
+			ConvertToBool(val);
+			ConvertToBool(val2);
+			val.bVal = val.bVal && val2.bVal;
+			break;
+
+		case '|':
+			ConvertToBool(val);
+			ConvertToBool(val2);
+			val.bVal = val.bVal || val2.bVal;
+			break;
+		}
+	} while (true);
+}
+
+void StringParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2)
+{
+	if (val1.type == TYPE_OF(float))
+	{
+		ConvertToFloat(val2);
+	}
+	else if (val2.type == TYPE_OF(float))
+	{
+		ConvertToFloat(val1);
+	}
+	else if (val1.type != TYPE_OF(int32_t) || val2.type != TYPE_OF(int32_t))
+	{
+		throw ConstructParseException("expected numeric operands");
+	}
+}
+
+void StringParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2)
+{
+	if (val1.type == TYPE_OF(float))
+	{
+		ConvertToFloat(val2);
+	}
+	else if (val2.type == TYPE_OF(float))
+	{
+		ConvertToFloat(val1);
+	}
+	else if (val1.type != val2.type)
+	{
+		throw ConstructParseException("cannot convert operands to same type");
+	}
+}
+
+void StringParser::ConvertToFloat(ExpressionValue& val)
+{
+	switch (val.type)
+	{
+	case TYPE_OF(int32_t):
+		val.fVal = (float)val.iVal;
+		val.type = TYPE_OF(float);
+		break;
+
+	case TYPE_OF(float):
+		break;
+
+	default:
+		throw ConstructParseException("expected numeric operand");
+	}
+}
+
+void StringParser::ConvertToBool(ExpressionValue& val)
+{
+	if (val.type != TYPE_OF(bool))
+	{
+		throw ConstructParseException("expected Boolean operand");
+	}
+}
+
+void StringParser::SkipWhiteSpace()
+{
+	while (gb.buffer[readPointer] == ' ' || gb.buffer[readPointer] == '\t')
+	{
+		++readPointer;
+	}
 }
 
 // Parse a number. the initial character of the string is a decimal digit.
@@ -1547,6 +1934,39 @@ ExpressionValue StringParser::ParseNumber()
 	}
 
 	return retvalue;
+}
+
+ExpressionValue StringParser::ParseIdentifier()
+{
+	unsigned int start = readPointer;
+	unsigned int numBrackets = 0;
+	char c;
+	while (isalpha((c = gb.buffer[readPointer])) || isdigit(c) || c == '_' || c == '.' || c == '(' || (c == ')' && numBrackets != 0))
+	{
+		if (c == '(')
+		{
+			++numBrackets;
+		}
+		else if (c == ')')
+		{
+			--numBrackets;
+		}
+		++readPointer;
+	}
+	String<MaxVariableNameLength> varName;
+	if (varName.copy(gb.buffer + start, readPointer - start))
+	{
+		throw ConstructParseException("variable name too long");;
+	}
+
+	//TODO consider supporting standard CNC functions here, also 'true', 'false', 'pi'
+	const ExpressionValue val = reprap.GetObjectValue(*this, varName.c_str());
+	if (c != '}')
+	{
+		throw ConstructParseException("expected '}'");
+	}
+	++readPointer;
+	return val;
 }
 
 ParseException StringParser::ConstructParseException(const char *str) const

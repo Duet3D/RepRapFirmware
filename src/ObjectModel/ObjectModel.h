@@ -33,7 +33,7 @@ struct ExpressionValue
 		bool bVal;
 		float fVal;
 		int32_t iVal;
-		uint32_t uVal;
+		uint32_t uVal;				// used for enumerations, bitmaps and IP addresses (not for integers, we always use int32_t for those)
 		const char *sVal;
 		const ObjectModel *omVal;
 	};

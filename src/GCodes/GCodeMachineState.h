@@ -117,40 +117,36 @@ enum class Compatibility : uint8_t
 	nanoDLP = 6
 };
 
+// Type of the block we are in when processing conditional GCode
+enum class BlockType : uint8_t { plain, ifTrue, ifFalseNoneTrue, ifFalseHadTrue, loop };
+
 // Class to hold the state of gcode execution for some input source
 class GCodeMachineState
 {
 public:
 	typedef uint32_t ResourceBitmap;
 
-	// Class to record the state of blocks whe3n using conditional GCode
+	// Class to record the state of blocks when using conditional GCode
 	class BlockState
 	{
 	public:
-		BlockState() : blockType(PlainBlock) {}
+		BlockState() : blockType((uint32_t)BlockType::plain) {}
 
-		bool IsLoop() const { return blockType == LoopBlock; }
-		bool IsIfTrueBlock() const { return blockType == IfTrueBlock; }
-		bool IsIfFalseBlock() const { return blockType == IfFalseBlock; }
-		bool IsPlainBlock() const { return blockType == PlainBlock; }
+		BlockType GetType() const { return (BlockType) blockType; }
 
 		uint32_t GetLineNumber() const { return lineNumber; }
 		FilePosition GetFilePosition() const { return fpos; }
 
 		void SetLoopBlock(FilePosition filePos, uint32_t lineNum) { fpos = filePos; lineNumber = lineNum; }
-		void SetPlainBlock() { blockType = PlainBlock; }
-		void SetIfTrueBlock() { blockType = IfTrueBlock; }
-		void SetIfFalseBlock() { blockType = IfFalseBlock; }
+		void SetPlainBlock() { blockType = (uint32_t)BlockType::plain; }
+		void SetIfTrueBlock() { blockType = (uint32_t)BlockType::ifTrue; }
+		void SetIfFalseNoneTrueBlock() { blockType = (uint32_t)BlockType::ifFalseNoneTrue; }
+		void SetIfFalseHadTrueBlock() { blockType = (uint32_t)BlockType::ifFalseHadTrue; }
 
 	private:
 		FilePosition fpos;											// the file offset at which the current block started
-		uint32_t lineNumber : 30,									// the line number at which the current block started
-				 blockType : 2;										// the type of this block
-
-		static constexpr uint8_t PlainBlock = 0;
-		static constexpr uint8_t IfTrueBlock = 1;
-		static constexpr uint8_t IfFalseBlock = 2;
-		static constexpr uint8_t LoopBlock = 3;
+		uint32_t lineNumber : 29,									// the line number at which the current block started
+				 blockType : 3;										// the type of this block
 	};
 
 	GCodeMachineState();
