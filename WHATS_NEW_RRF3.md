@@ -4,9 +4,9 @@ RepRapFirmware 3.0RC2 (in preparation)
 Recommended compatible firmware:
 - Duet Web Control 2.0.4
 - DuetWiFiServer 1.23
-- DuetSoftwareFramework 1.2
-- Duet3Firmware_EXP3HC 3.0RC1
-- Duet3Firmware_Tool1LC 3.0RC1
+- DuetSoftwareFramework 1.2.0.1
+- Duet3Firmware_EXP3HC 3.0RC2
+- Duet3Firmware_Tool1LC 3.0RC2
 
 Known issues:
 - As for RRF 3.0RC1
@@ -16,12 +16,17 @@ Upgrade notes:
 
 Feature changes:
 - Increased maximum number of triggers on Duet 3 from 16 to 32
+- Increased maximum number of heaters on Duet 3 to 16
+- Increased maximum number of extra heater protections on Duet 3 to 16
+- Increased maximum number of fans on Duet 3 to 16
 
 Bug fixes:
-- Fix for M584 sent via SPI when the first parameter is an array
+- Fix for M584 sent via SPI to Duet 3 when the first parameter is an array
 - Fix for analog Z probing when Z probe reports "near" from the start of the move
 - Fix for M25 while tool changing is is progress
-- In G31 response display trigger height to 3 decimal places instead of 2
+- Use of M950 to configure heater numbers greater than 5 on expansion boards caused sensors to disappear
+- The response to M308 with just a S parameter didn't include the sensor name or last reading if the sensor was connected to a Duet 3 expansion board
+- The G31 response now displays trigger height to 3 decimal places instead of 2
 
 RepRapFirmware 3.0RC1
 =====================
