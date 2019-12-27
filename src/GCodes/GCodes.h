@@ -202,24 +202,21 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	GCodes(const GCodes&);												// private copy constructor to prevent copying
+	GCodes(const GCodes&) = delete;
 
 	enum class HeaterFaultState : uint8_t { noFault, pausePending, timing, stopping, stopped };
 
 	// Resources that can be locked.
 	// To avoid deadlock, if you need multiple resources then you must lock them in increasing numerical order.
-	typedef unsigned int Resource;
+	typedef uint32_t Resource;
 	static const Resource MoveResource = 0;								// Movement system, including canned cycle variables
 	static const Resource FileSystemResource = 1;						// Non-sharable parts of the file system
 	static const Resource HeaterResourceBase = 2;
-	static const Resource FanResourceBase = HeaterResourceBase + MaxHeaters;
-	static const size_t NumResources = FanResourceBase + MaxFans;
+	static const size_t NumResources = HeaterResourceBase + 1;
 
-	static_assert(NumResources <= 32, "Too many resources to keep a bitmap of them in class GCodeMachineState");
+	static_assert(NumResources <= sizeof(Resource) * CHAR_BIT, "Too many resources to keep a bitmap of them in class GCodeMachineState");
 
 	bool LockResource(const GCodeBuffer& gb, Resource r);				// Lock the resource, returning true if success
-	bool LockHeater(const GCodeBuffer& gb, int heater);
-	bool LockFan(const GCodeBuffer& gb, int fan);
 	bool LockFileSystem(const GCodeBuffer& gb);							// Lock the unshareable parts of the file system
 	bool LockMovement(const GCodeBuffer& gb);							// Lock movement
 	void GrabResource(const GCodeBuffer& gb, Resource r);				// Grab a resource even if it is already owned

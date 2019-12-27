@@ -57,6 +57,8 @@ constexpr uint32_t IAP_IMAGE_END = 0x004FFFFF;
 
 // The physical capabilities of the machine
 
+#include <Duet3Limits.h>							// this file is in the CANlib project because both main and expansion boards need it
+
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
 constexpr size_t MaxSmartDrivers = 6;				// The maximum number of direct smart drivers
 constexpr size_t MaxCanDrivers = 18;
@@ -64,24 +66,15 @@ constexpr size_t MaxCanBoards = 18;
 
 constexpr float MaxTmc5160Current = 3200.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 
-constexpr size_t MaxSensors = 64;
-
-constexpr size_t MaxHeaters = 12;
-constexpr size_t MaxExtraHeaterProtections = 8;		// The number of extra heater protection instances
-
 constexpr size_t MaxBedHeaters = 9;
 constexpr size_t MaxChamberHeaters = 4;
-constexpr int8_t DefaultBedHeater = 0;
 constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder heater, used only for the legacy status response
 
 constexpr size_t NumThermistorInputs = 4;
 constexpr size_t NumTmcDriversSenseChannels = 1;
 
-constexpr size_t MaxZProbes = 4;
-constexpr size_t MaxGpioPorts = 12;
-
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
-constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
+constexpr size_t MaxAxes = 10;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
 constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t MaxExtruders = 16;					// The maximum number of extruders
@@ -91,8 +84,6 @@ constexpr size_t MaxAxesPlusExtruders = 20;			// May be <= MaxAxes + MaxExtruder
 
 constexpr size_t MaxHeatersPerTool = 4;
 constexpr size_t MaxExtrudersPerTool = 6;
-
-constexpr size_t MaxFans = 16;
 
 constexpr unsigned int MaxTriggers = 32;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 

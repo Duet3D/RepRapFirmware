@@ -28,7 +28,19 @@ GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 	{
 		return GCodeResult::error;
 	}
-	return cons.SendAndGetResponse(CanMessageType::m308, boardAddress, reply);
+	const GCodeResult ret = cons.SendAndGetResponse(CanMessageType::m308, boardAddress, reply);
+	if ((ret == GCodeResult::ok || ret == GCodeResult::warning) && StringStartsWith(reply.c_str(), "type "))
+	{
+		// It's just a query for the sensor parameters, so prefix the sensor number and name
+		String<StringLength50> temp;
+		temp.printf("Sensor %u ", GetSensorNumber());
+		if (GetSensorName() != nullptr)
+		{
+			temp.catf("(%s) ", GetSensorName());
+		}
+		reply.Insert(0, temp.c_str());
+	}
+	return ret;
 }
 
 void RemoteSensor::UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report) noexcept

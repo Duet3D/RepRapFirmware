@@ -1214,7 +1214,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		if (segmentsLeft == 0)
 		{
 			const Tool * const tool = reprap.GetCurrentTool();
-			if (tool != nullptr)
+			if (tool != nullptr && tool->DriveCount() != 0)
 			{
 				SetMoveBufferDefaults();
 				reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, tool);
@@ -1222,7 +1222,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 				{
 					moveBuffer.coords[ExtruderToLogicalDrive(tool->Drive(i))] = retractLength + retractExtra;
 				}
-				moveBuffer.feedRate = unRetractSpeed;
+				moveBuffer.feedRate = unRetractSpeed * tool->DriveCount();
 				moveBuffer.tool = tool;
 				moveBuffer.isFirmwareRetraction = true;
 				moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition() : noFilePosition;

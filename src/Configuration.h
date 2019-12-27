@@ -188,7 +188,11 @@ constexpr float DefaultZDive = 5.0;						// Millimetres
 constexpr float DefaultProbingSpeed = 2.0;				// Default Z probing speed mm/sec
 constexpr float DefaultZProbeTravelSpeed = 100.0;		// Default speed for travel to probe points
 constexpr float ZProbeMaxAcceleration = 250.0;			// Maximum Z acceleration to use at the start of a probing move
+
+#if !SAME70												// Using SAME70 as a proxy for Duet 3
 constexpr size_t MaxZProbeProgramBytes = 8;				// Maximum number of bytes in a Z probe program
+#endif
+
 constexpr uint32_t ProbingSpeedReductionFactor = 3;		// The factor by which we reduce the Z probing speed when we get a 'near' indication
 constexpr float DefaultZProbeTolerance = 0.03;			// How close the Z probe trigger height from consecutive taps must be
 constexpr uint8_t DefaultZProbeTaps = 1;				// The maximum number of times we probe each point
