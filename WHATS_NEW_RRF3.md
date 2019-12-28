@@ -1,10 +1,10 @@
-RepRapFirmware 3.0RC2 (in preparation)
+RepRapFirmware 3.0RC2
 =====================
 
 Recommended compatible firmware:
 - Duet Web Control 2.0.4
 - DuetWiFiServer 1.23
-- DuetSoftwareFramework 1.2.0.1
+- DuetSoftwareFramework 1.2.1.0
 - Duet3Firmware_EXP3HC 3.0RC2
 - Duet3Firmware_Tool1LC 3.0RC2
 
