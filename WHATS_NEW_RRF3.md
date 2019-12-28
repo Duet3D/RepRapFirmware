@@ -1,4 +1,4 @@
-RepRapFirmware 3.0RC2 (in preparation)
+RepRapFirmware 3.0RC2
 =====================
 
 Recommended compatible firmware:
