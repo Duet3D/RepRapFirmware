@@ -24,6 +24,7 @@ Bug fixes:
 - Fix for M584 sent via SPI to Duet 3 when the first parameter is an array
 - Fix for analog Z probing when Z probe reports "near" from the start of the move
 - Fix for M25 while tool changing is is progress
+- Fix for unexpected diagonal moves during tool changes
 - Use of M950 to configure heater numbers greater than 5 on expansion boards caused sensors to disappear
 - The response to M308 with just a S parameter didn't include the sensor name or last reading if the sensor was connected to a Duet 3 expansion board
 - The G31 response now displays trigger height to 3 decimal places instead of 2
