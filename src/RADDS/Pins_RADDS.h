@@ -2,6 +2,23 @@
 #define PINS_DUET_H__
 
 #define FIRMWARE_NAME "RepRapFirmware for RADDS"
+#define IAP_FIRMWARE_FILE "RepRapFirmware-RADDS.bin"
+
+#define IAP_IN_RAM				0
+
+#if IAP_IN_RAM
+
+// TODO
+
+#else
+
+constexpr uint32_t IAP_IMAGE_START = 0x000F0000;
+constexpr uint32_t IAP_IMAGE_END = 0x000FFBFF;		// don't touch the last 1KB, it's used for NvData
+# define IAP_UPDATE_FILE "iapradds.bin"
+
+#endif
+
+const size_t NumFirmwareUpdateModules = 1;
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0
@@ -11,10 +28,6 @@
 #define HAS_VOLTAGE_MONITOR		0
 #define HAS_VREF_MONITOR		0
 #define ACTIVE_LOW_HEAT_ON		0
-
-const size_t NumFirmwareUpdateModules = 1;
-#define IAP_UPDATE_FILE "iapradds.bin"
-#define IAP_FIRMWARE_FILE "RepRapFirmware-RADDS.bin"
 
 // Default board type
 #define DEFAULT_BOARD_TYPE BoardType::RADDS_15
@@ -33,8 +46,7 @@ const size_t NumFirmwareUpdateModules = 1;
 // The number of drives in the machine, including X, Y, and Z plus extruder drives
 constexpr size_t NumDirectDrivers = 9;
 
-constexpr size_t MaxSensorsInSystem = 32;
-typedef uint32_t SensorsBitmap;
+constexpr size_t MaxSensors = 32;
 
 constexpr size_t MaxHeaters = 3;
 constexpr size_t MaxExtraHeaterProtections = 4;		// The number of extra heater protection instances
@@ -62,6 +74,8 @@ constexpr size_t MaxHeatersPerTool = 2;
 constexpr size_t MaxExtrudersPerTool = 5;
 
 constexpr size_t MaxFans = 12;
+
+constexpr unsigned int MaxTriggers = 16;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;
 // Use TX0/RX0 for the auxiliary serial line
@@ -237,10 +251,6 @@ constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
 
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted);
-
-// SAM3X Flash locations (may be expanded in the future)
-constexpr uint32_t IAP_FLASH_START = 0x000F0000;
-constexpr uint32_t IAP_FLASH_END = 0x000FFBFF;		// don't touch the last 1KB, it's used for NvData
 
 // Timer allocation
 #define NETWORK_TC			(TC1)

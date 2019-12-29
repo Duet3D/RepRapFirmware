@@ -590,7 +590,11 @@ void StringParser::SetFinished()
 FilePosition StringParser::GetFilePosition() const
 {
 #if HAS_MASS_STORAGE
-	if (gb.machineState->DoingFile())
+	if (gb.machineState->DoingFile()
+# if HAS_LINUX_INTERFACE
+		&& !reprap.UsingLinuxInterface()
+# endif
+	   )
 	{
 		return gb.machineState->fileState.GetPosition() - gb.fileInput->BytesCached() - commandLength + commandStart;
 	}
