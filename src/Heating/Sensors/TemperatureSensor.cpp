@@ -78,7 +78,7 @@ GCodeResult TemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply
 
 void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 {
-	reply.printf("Sensor %d", sensorNumber);
+	reply.printf("Sensor %u", sensorNumber);
 	if (sensorName != nullptr)
 	{
 		reply.catf(" (%s)", sensorName);

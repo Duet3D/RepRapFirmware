@@ -135,21 +135,13 @@ EndStopHit ZProbe::Stopped() const
 // Check whether the probe is triggered and return the action that should be performed. Called from the step ISR.
 EndstopHitDetails ZProbe::CheckTriggered(bool goingSlow)
 {
-	EndstopHitDetails rslt;
 	EndStopHit e = Stopped();
-
-	// Note: This might need to be moved into Stopped() to not having to duplicate it to ZProbeEndstop
-	if (misc.parts.probingAway) {
-		switch (e) {
-		case EndStopHit::atStop:
-			e = EndStopHit::noStop;
-			break;
-		default:
-			e = EndStopHit::atStop;
-			break;
-		}
+	if (misc.parts.probingAway)
+	{
+		e = (e == EndStopHit::atStop) ? EndStopHit::noStop : EndStopHit::atStop;
 	}
 
+	EndstopHitDetails rslt;			// initialised by default constructor
 	switch (e)
 	{
 	case EndStopHit::atStop:
@@ -240,7 +232,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 			reply.printf("Current reading %d", v0);
 			break;
 		}
-		reply.catf(", threshold %d, trigger height %.2f", adcValue, (double)triggerHeight);
+		reply.catf(", threshold %d, trigger height %.3f", adcValue, (double)triggerHeight);
 		if (temperatureCoefficient != 0.0)
 		{
 			reply.catf(" at %.1f" DEGREE_SYMBOL "C, temperature coefficient %.1f/" DEGREE_SYMBOL "C", (double)calibTemperature, (double)temperatureCoefficient);

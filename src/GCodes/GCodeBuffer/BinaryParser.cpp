@@ -57,7 +57,8 @@ bool BinaryParser::Seen(char c)
 
 			if (param->type == DataType::IntArray ||
 				param->type == DataType::UIntArray ||
-				param->type == DataType::FloatArray)
+				param->type == DataType::FloatArray ||
+				param->type == DataType::DriverIdArray)
 			{
 				seenParameterValue += param->intValue * sizeof(uint32_t);
 			}

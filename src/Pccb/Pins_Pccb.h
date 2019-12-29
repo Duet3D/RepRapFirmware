@@ -117,6 +117,8 @@ constexpr size_t MaxExtrudersPerTool = 1;
 
 constexpr size_t MaxFans = 7;
 
+constexpr unsigned int MaxTriggers = 16;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
+
 constexpr size_t NUM_SERIAL_CHANNELS = 1;			// The number of serial IO channels (USB only)
 #define SERIAL_MAIN_DEVICE SerialUSB
 

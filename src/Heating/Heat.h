@@ -53,35 +53,35 @@ public:
 	bool ColdExtrude() const noexcept;									// Is cold extrusion allowed?
 	void AllowColdExtrude(bool b) noexcept;								// Allow or deny cold extrusion
 	float GetExtrusionMinTemp() const noexcept;							// Get minimum extrusion temperature
-	float GetRetractionMinTemp() const noexcept;							// Get minimum retraction temperature
+	float GetRetractionMinTemp() const noexcept;						// Get minimum retraction temperature
 	void SetExtrusionMinTemp(float t) noexcept;							// Set minimum extrusion temperature
-	void SetRetractionMinTemp(float t) noexcept;							// Set minimum retraction temperature
+	void SetRetractionMinTemp(float t) noexcept;						// Set minimum retraction temperature
 
 	int GetBedHeater(size_t index) const noexcept						// Get a hot bed heater number
 	pre(index < NumBedHeaters);
 	void SetBedHeater(size_t index, int heater)	 noexcept				// Set a hot bed heater number
 	pre(index < NumBedHeaters; -1 <= heater; heater < MaxHeaters);
-	bool IsBedHeater(int heater) const noexcept;							// Check if this heater is a bed heater
+	bool IsBedHeater(int heater) const noexcept;						// Check if this heater is a bed heater
 
 	int GetChamberHeater(size_t index) const noexcept					// Get a chamber heater number
 	pre(index < NumChamberHeaters);
 	void SetChamberHeater(size_t index, int heater)	 noexcept			// Set a chamber heater number
 	pre(index < NumChamberHeaters; -1 <= heater; heater < MaxHeaters);
-	bool IsChamberHeater(int heater) const noexcept;						// Check if this heater is a chamber heater
+	bool IsChamberHeater(int heater) const noexcept;					// Check if this heater is a chamber heater
 
 	bool AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const noexcept;	// Is everything at temperature within tolerance?
 
-	void SwitchOffAll(bool includingChamberAndBed) noexcept;				// Turn all heaters off
+	void SwitchOffAll(bool includingChamberAndBed) noexcept;			// Turn all heaters off
+	void SuspendHeaters(bool sus) noexcept;								// Suspend the heaters to conserve power or while probing
 	GCodeResult ResetFault(int heater, const StringRef& reply) noexcept;	// Reset a heater fault for a specific heater or all heaters
-	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply);
-	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply);
-	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply);	// Create a sensor or change the parameters for an existing sensor
-	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply); // Set the P/I/D parameters for a heater
 
-	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply);	// Configure heater protection (M143)
+	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR;
+	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR;
+	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR;		// Create a sensor or change the parameters for an existing sensor
+	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR; // Set the P/I/D parameters for a heater
+	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply) THROWS_PARSE_ERROR;	// Configure heater protection (M143)
+
 	void UpdateHeaterProtection(int heaterNumber) noexcept;				// Updates the PIDs and HeaterProtection items when a heater is remapped
-
-	void SuspendHeaters(bool sus) noexcept;								// Suspend the heaters to conserve power
 
 	void SensorsTask() noexcept;
 	static void EnsureSensorsTask() noexcept;
@@ -103,7 +103,7 @@ public:
 
 	bool IsBedOrChamberHeater(int heater) const noexcept;				// Queried by the Platform class
 
-	float GetHeaterTemperature(size_t heater) const noexcept;			 // Result is in degrees Celsius
+	float GetHeaterTemperature(size_t heater) const noexcept;			// Result is in degrees Celsius
 
 	const Tool* GetLastStandbyTool(int heater) const noexcept
 	pre(heater >= 0; heater < MaxHeaters)
@@ -129,8 +129,8 @@ public:
 	void SetActiveTemperature(int heater, float t) noexcept;
 	void SetStandbyTemperature(int heater, float t) noexcept;
 	GCodeResult Activate(int heater, const StringRef& reply) noexcept;	// Turn on a heater
-	void Standby(int heater, const Tool* tool) noexcept;					// Set a heater to standby
-	void SwitchOff(int heater) noexcept;									// Turn off a specific heater
+	void Standby(int heater, const Tool* tool) noexcept;				// Set a heater to standby
+	void SwitchOff(int heater) noexcept;								// Turn off a specific heater
 
 #if HAS_MASS_STORAGE
 	bool WriteModelParameters(FileStore *f) const noexcept;				// Write heater model parameters to file returning true if no error
