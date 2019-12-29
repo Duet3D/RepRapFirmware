@@ -43,8 +43,8 @@ public:
 	void GetIPAddress(IPAddress& returnedIp) THROWS_PARSE_ERROR;			// Get an IP address quad after a key letter
 	void GetMacAddress(uint8_t mac[6]) THROWS_PARSE_ERROR;					// Get a MAC address sextet after a key letter
 	void GetUnprecedentedString(const StringRef& str, bool allowEmpty) THROWS_PARSE_ERROR;	// Get a string with no preceding key letter
-	void GetQuotedString(const StringRef& str) THROWS_PARSE_ERROR;			// Get and copy a quoted string
-	void GetPossiblyQuotedString(const StringRef& str) THROWS_PARSE_ERROR;	// Get and copy a string which may or may not be quoted
+	void GetQuotedString(const StringRef& str, bool allowEmpty = false) THROWS_PARSE_ERROR;	// Get and copy a quoted string
+	void GetPossiblyQuotedString(const StringRef& str, bool allowEmpty = false) THROWS_PARSE_ERROR;	// Get and copy a string which may or may not be quoted
 	void GetReducedString(const StringRef& str) THROWS_PARSE_ERROR;			// Get and copy a quoted string, removing certain characters
 	void GetFloatArray(float arr[], size_t& length, bool doPad) THROWS_PARSE_ERROR __attribute__((hot)); // Get a colon-separated list of floats after a key letter
 	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS_PARSE_ERROR;		// Get a :-separated list of ints after a key letter
@@ -85,7 +85,7 @@ private:
 	void DecodeCommand();
 	void InternalGetQuotedString(const StringRef& str) THROWS_PARSE_ERROR
 		pre (readPointer >= 0; gb.buffer[readPointer] == '"'; str.IsEmpty());
-	void InternalGetPossiblyQuotedString(const StringRef& str, bool allowEmpty) THROWS_PARSE_ERROR
+	void InternalGetPossiblyQuotedString(const StringRef& str) THROWS_PARSE_ERROR
 		pre (readPointer >= 0);
 	float ReadFloatValue() THROWS_PARSE_ERROR;
 	uint32_t ReadUIValue() THROWS_PARSE_ERROR;

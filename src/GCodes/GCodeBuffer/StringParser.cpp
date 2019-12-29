@@ -886,7 +886,7 @@ void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength)
 }
 
 // Get and copy a quoted string returning true if successful
-void StringParser::GetQuotedString(const StringRef& str)
+void StringParser::GetQuotedString(const StringRef& str, bool allowEmpty)
 {
 	if (readPointer <= 0)
 	{
@@ -898,14 +898,19 @@ void StringParser::GetQuotedString(const StringRef& str)
 	{
 	case '"':
 		InternalGetQuotedString(str);
-		return;
+		break;
 
 	case '{':
 		GetStringExpression(str);
-		return;
+		break;
 
 	default:
 		throw ConstructParseException("expected string expression");
+	}
+
+	if (!allowEmpty && str.IsEmpty())
+	{
+		throw ConstructParseException("non-empty string expected");
 	}
 }
 
@@ -937,7 +942,7 @@ void StringParser::InternalGetQuotedString(const StringRef& str)
 			}
 			else if (gb.buffer[readPointer] == c)
 			{
-				// Two single quotes are used to represent one
+				// Two backslashes are used to represent one
 				++readPointer;
 			}
 		}
@@ -946,44 +951,45 @@ void StringParser::InternalGetQuotedString(const StringRef& str)
 }
 
 // Get and copy a string which may or may not be quoted. If it is not quoted, it ends at the first space or control character.
-void StringParser::GetPossiblyQuotedString(const StringRef& str)
+void StringParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty)
 {
 	if (readPointer <= 0)
 	{
 		THROW_INTERNAL_ERROR;
 	}
 
-	InternalGetPossiblyQuotedString(str, false);
+	InternalGetPossiblyQuotedString(str);
+	if (!allowEmpty && str.IsEmpty())
+	{
+		throw ConstructParseException("non-empty string expected");
+	}
 }
 
 // Get and copy a string which may or may not be quoted, starting at readPointer. Return true if successful.
-void StringParser::InternalGetPossiblyQuotedString(const StringRef& str, bool allowEmpty)
+void StringParser::InternalGetPossiblyQuotedString(const StringRef& str)
 {
 	str.Clear();
 	if (gb.buffer[readPointer] == '"')
 	{
 		InternalGetQuotedString(str);
 	}
-
-	if (gb.buffer[readPointer] == '{')
+	else if (gb.buffer[readPointer] == '{')
 	{
 		GetStringExpression(str);
 	}
-
-	commandEnd = gcodeLineEnd;				// the string is the remainder of the line of gcode
-	for (;;)
+	else
 	{
-		const char c = gb.buffer[readPointer++];
-		if (c < ' ')
+		commandEnd = gcodeLineEnd;				// the string is the remainder of the line of gcode
+		for (;;)
 		{
-			break;
+			const char c = gb.buffer[readPointer++];
+			if (c < ' ')
+			{
+				break;
+			}
+			str.cat(c);
 		}
-		str.cat(c);
-	}
-	str.StripTrailingSpaces();
-	if (!allowEmpty && str.IsEmpty())
-	{
-		throw ConstructParseException("non-empty string expected");
+		str.StripTrailingSpaces();
 	}
 }
 
@@ -1010,6 +1016,10 @@ void StringParser::GetReducedString(const StringRef& str)
 		case '"':
 			if (gb.buffer[readPointer++] != '"')
 			{
+				if (str.IsEmpty())
+				{
+					throw ConstructParseException("non-empty string expected");
+				}
 				return;
 			}
 			str.cat(c);
@@ -1023,7 +1033,7 @@ void StringParser::GetReducedString(const StringRef& str)
 		default:
 			if (c < ' ')
 			{
-				throw ConstructParseException("control characer in string");
+				throw ConstructParseException("control character in string");
 			}
 			str.cat(tolower(c));
 			break;
@@ -1044,7 +1054,12 @@ void StringParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty)
 	{
 		++readPointer;	// skip leading spaces
 	}
-	InternalGetPossiblyQuotedString(str, allowEmpty);
+
+	InternalGetPossiblyQuotedString(str);
+	if (!allowEmpty && str.IsEmpty())
+	{
+		throw ConstructParseException("non-empty string expected");
+	}
 }
 
 // Get an int32 after a G Code letter
