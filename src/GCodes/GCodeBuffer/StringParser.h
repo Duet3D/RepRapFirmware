@@ -122,6 +122,7 @@ private:
 	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2) THROWS_PARSE_ERROR;
 	void ConvertToFloat(ExpressionValue& val) THROWS_PARSE_ERROR;
 	void ConvertToBool(ExpressionValue& val) THROWS_PARSE_ERROR;
+	void EnsureNumeric(ExpressionValue& val) THROWS_PARSE_ERROR;
 
 	void SkipWhiteSpace();
 

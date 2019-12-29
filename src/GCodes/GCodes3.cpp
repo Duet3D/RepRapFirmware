@@ -898,17 +898,9 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, 
 			moveBuffer.coords[axis] = towardsMin ? platform.AxisMinimum(axis) : platform.AxisMaximum(axis);
 
 			// Deal with feed rate
-			if (gb.Seen(feedrateLetter))
-			{
-				const float rate = gb.GetDistance();
-				gb.MachineState().feedRate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
-			}
-			else
-			{
-				reply.copy("No feed rate provided.");
-				return GCodeResult::badOrMissingParameter;
-			}
-			moveBuffer.feedRate = gb.MachineState().feedRate;
+			gb.MustSee(feedrateLetter);
+			const float rate = gb.GetDistance();
+			moveBuffer.feedRate = gb.MachineState().feedRate = rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
 
 			const bool probeOk = (useProbe)
 									? platform.GetEndstops().EnableZProbe(probeNumberToUse)

@@ -4358,7 +4358,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				{
 					String<StringLength20> eraseString;
 					gb.GetQuotedString(eraseString.GetRef());
-					if (strcmp(eraseString.c_str(), "ERASE") == 0)
+					if (eraseString.Equals("ERASE"))
 					{
 						reason = (uint16_t)SoftwareResetReason::erase;
 					}

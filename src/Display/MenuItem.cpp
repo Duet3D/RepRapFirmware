@@ -1056,7 +1056,7 @@ bool FilesMenuItem::Select(const StringRef& cmd)
 
 				// TODO: do this on the way in and it might be less work...
 				//   On the other hand, this only occurs when an item is selected so it's O(1) vs. O(n)
-				nReplacementIndex = StringContains(cmd.c_str(), "menu");
+				nReplacementIndex = cmd.Contains("menu");
 				if (nReplacementIndex != -1)
 				{
 					cmd.Truncate(nReplacementIndex);

@@ -20,6 +20,31 @@ typedef uint8_t TypeCode;
 constexpr TypeCode IsArray = 128;						// this is or'ed in to a type code to indicate an array
 constexpr TypeCode NoType = 0;							// code for an invalid or unknown type
 
+// Dummy types, used to define type codes
+class Bitmap32;
+class Enum32;
+class Float2;			// float printed to 2 decimal places instead of 1
+class Float3;			// float printed to 3 decimal places instead of 1
+class ObjectModel;		// forward declaration
+
+// Function template used to get constexpr type IDs
+// Each type must return a unique type code in the range 1 to 127
+template<class T> constexpr TypeCode TypeOf();
+
+template<> constexpr TypeCode TypeOf<bool> () { return 1; }
+template<> constexpr TypeCode TypeOf<uint32_t> () { return 2; }
+template<> constexpr TypeCode TypeOf<int32_t>() { return 3; }
+template<> constexpr TypeCode TypeOf<float>() { return 4; }
+template<> constexpr TypeCode TypeOf<Float2>() { return 5; }
+template<> constexpr TypeCode TypeOf<Float3>() { return 6; }
+template<> constexpr TypeCode TypeOf<Bitmap32>() { return 7; }
+template<> constexpr TypeCode TypeOf<Enum32>() { return 8; }
+template<> constexpr TypeCode TypeOf<ObjectModel>() { return 9; }
+template<> constexpr TypeCode TypeOf<const char *>() { return 10; }
+template<> constexpr TypeCode TypeOf<IPAddress>() { return 11; }
+
+#define TYPE_OF(_t) (TypeOf<_t>())
+
 // Forward declarations
 class ObjectModelTableEntry;
 class ObjectModel;
@@ -37,13 +62,12 @@ struct ExpressionValue
 		const char *sVal;
 		const ObjectModel *omVal;
 	};
-};
 
-// Dummy types, used to define type codes
-class Bitmap32;
-class Enum32;
-class Float2;			// float printed to 2 decimal places instead of 1
-class Float3;			// float printed to 3 decimal places instead of 1
+	constexpr ExpressionValue(bool b) : type(TYPE_OF(bool)), bVal(b) { }
+	constexpr ExpressionValue(float f) : type(TYPE_OF(float)), fVal(f) { }
+	constexpr ExpressionValue(int32_t i) : type(TYPE_OF(int32_t)), iVal(i) { }
+	ExpressionValue() : type(NoType) { }
+};
 
 class ObjectModel
 {
@@ -88,24 +112,6 @@ private:
 	uint32_t *GetShortEnumObjectPointer(const char *idString);
 	uint32_t *GetBitmapObjectPointer(const char *idString);
 };
-
-// Function template used to get constexpr type IDs
-// Each type must return a unique type code in the range 1 to 127
-template<class T> constexpr TypeCode TypeOf();
-
-template<> constexpr TypeCode TypeOf<bool> () { return 1; }
-template<> constexpr TypeCode TypeOf<uint32_t> () { return 2; }
-template<> constexpr TypeCode TypeOf<int32_t>() { return 3; }
-template<> constexpr TypeCode TypeOf<float>() { return 4; }
-template<> constexpr TypeCode TypeOf<Float2>() { return 5; }
-template<> constexpr TypeCode TypeOf<Float3>() { return 6; }
-template<> constexpr TypeCode TypeOf<Bitmap32>() { return 7; }
-template<> constexpr TypeCode TypeOf<Enum32>() { return 8; }
-template<> constexpr TypeCode TypeOf<ObjectModel>() { return 9; }
-template<> constexpr TypeCode TypeOf<const char *>() { return 10; }
-template<> constexpr TypeCode TypeOf<IPAddress>() { return 11; }
-
-#define TYPE_OF(_t) (TypeOf<_t>())
 
 // Entry to describe an array
 class ObjectModelArrayDescriptor

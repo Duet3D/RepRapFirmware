@@ -1809,6 +1809,24 @@ void StringParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2)
 	}
 }
 
+void StringParser::EnsureNumeric(ExpressionValue& val)
+{
+	switch (val.type)
+	{
+	case TYPE_OF(uint32_t):
+		val.type = TYPE_OF(int32_t);
+		val.iVal = val.uVal;
+		break;
+
+	case TYPE_OF(int32_t):
+	case TYPE_OF(float):
+		break;
+
+	default:
+		throw ConstructParseException("expected numeric operand");
+	}
+}
+
 void StringParser::ConvertToFloat(ExpressionValue& val)
 {
 	switch (val.type)
@@ -1943,18 +1961,9 @@ ExpressionValue StringParser::ParseNumber()
 ExpressionValue StringParser::ParseIdentifier()
 {
 	unsigned int start = readPointer;
-	unsigned int numBrackets = 0;
 	char c;
-	while (isalpha((c = gb.buffer[readPointer])) || isdigit(c) || c == '_' || c == '.' || c == '(' || (c == ')' && numBrackets != 0))
+	while (isalpha((c = gb.buffer[readPointer])) || isdigit(c) || c == '_' || c == '.')
 	{
-		if (c == '(')
-		{
-			++numBrackets;
-		}
-		else if (c == ')')
-		{
-			--numBrackets;
-		}
 		++readPointer;
 	}
 	String<MaxVariableNameLength> varName;
@@ -1963,14 +1972,158 @@ ExpressionValue StringParser::ParseIdentifier()
 		throw ConstructParseException("variable name too long");;
 	}
 
-	//TODO consider supporting standard CNC functions here, also 'true', 'false', 'pi'
-	const ExpressionValue val = reprap.GetObjectValue(*this, varName.c_str());
-	if (c != '}')
+	// Check for the names of constants
+	if (varName.Equals("true"))
 	{
-		throw ConstructParseException("expected '}'");
+		return ExpressionValue(true);
 	}
-	++readPointer;
-	return val;
+
+	if (varName.Equals("false"))
+	{
+		return ExpressionValue(false);
+	}
+
+	if (varName.Equals("pi"))
+	{
+		return ExpressionValue(Pi);
+	}
+
+	// Check whether it is a function call
+	SkipWhiteSpace();
+	if (gb.buffer[readPointer] == '(')
+	{
+		// It's a function call
+		ExpressionValue rslt = ParseExpression(0);
+		if (varName.Equals("abs"))
+		{
+			switch (rslt.type)
+			{
+			case TYPE_OF(int32_t):
+				rslt.iVal = labs(rslt.iVal);
+				break;
+
+			case TYPE_OF(float):
+				rslt.fVal = fabsf(rslt.fVal);
+				break;
+
+			default:
+				throw ConstructParseException("expected numeric operand");
+			}
+		}
+		else if (varName.Equals("sin"))
+		{
+			ConvertToFloat(rslt);
+			rslt.fVal = sinf(rslt.fVal);
+		}
+		else if (varName.Equals("cos"))
+		{
+			ConvertToFloat(rslt);
+			rslt.fVal = cosf(rslt.fVal);
+		}
+		else if (varName.Equals("tan"))
+		{
+			ConvertToFloat(rslt);
+			rslt.fVal = tanf(rslt.fVal);
+		}
+		else if (varName.Equals("asin"))
+		{
+			ConvertToFloat(rslt);
+			rslt.fVal = asinf(rslt.fVal);
+		}
+		else if (varName.Equals("acos"))
+		{
+			ConvertToFloat(rslt);
+			rslt.fVal = acosf(rslt.fVal);
+		}
+		else if (varName.Equals("atan"))
+		{
+			ConvertToFloat(rslt);
+			rslt.fVal = atanf(rslt.fVal);
+		}
+		else if (varName.Equals("atan2"))
+		{
+			ConvertToFloat(rslt);
+			SkipWhiteSpace();
+			if (gb.buffer[readPointer] != ',')
+			{
+				throw ConstructParseException("expected ','");
+			}
+			++readPointer;
+			SkipWhiteSpace();
+			ExpressionValue nextOperand = ParseExpression(0);
+			ConvertToFloat(nextOperand);
+			rslt.fVal = atan2f(rslt.fVal, nextOperand.fVal);
+		}
+		else if (varName.Equals("sqrt"))
+		{
+			ConvertToFloat(rslt);
+			rslt.fVal = sqrtf(rslt.fVal);
+		}
+		else if (varName.Equals("isnan"))
+		{
+			ConvertToFloat(rslt);
+			rslt.type = TYPE_OF(bool);
+			rslt.bVal = (isnan(rslt.fVal) != 0);
+		}
+		else if (varName.Equals("max"))
+		{
+			for (;;)
+			{
+				SkipWhiteSpace();
+				if (gb.buffer[readPointer] != ',')
+				{
+					break;
+				}
+				++readPointer;
+				SkipWhiteSpace();
+				ExpressionValue nextOperand = ParseExpression(0);
+				BalanceNumericTypes(rslt, nextOperand);
+				if (rslt.type == TYPE_OF(float))
+				{
+					rslt.fVal = max<float>(rslt.fVal, nextOperand.fVal);
+				}
+				else
+				{
+					rslt.iVal = max<int32_t>(rslt.iVal, nextOperand.iVal);
+				}
+			}
+		}
+		else if (varName.Equals("min"))
+		{
+			for (;;)
+			{
+				SkipWhiteSpace();
+				if (gb.buffer[readPointer] != ',')
+				{
+					break;
+				}
+				++readPointer;
+				SkipWhiteSpace();
+				ExpressionValue nextOperand = ParseExpression(0);
+				BalanceNumericTypes(rslt, nextOperand);
+				if (rslt.type == TYPE_OF(float))
+				{
+					rslt.fVal = min<float>(rslt.fVal, nextOperand.fVal);
+				}
+				else
+				{
+					rslt.iVal = min<int32_t>(rslt.iVal, nextOperand.iVal);
+				}
+			}
+		}
+		else
+		{
+			throw ConstructParseException("unknown function");
+		}
+		SkipWhiteSpace();
+		if (gb.buffer[readPointer] != ')')
+		{
+			throw ConstructParseException("expected ')'");
+		}
+		return rslt;
+	}
+
+	return reprap.GetObjectValue(*this, varName.c_str());
 }
 
 ParseException StringParser::ConstructParseException(const char *str) const

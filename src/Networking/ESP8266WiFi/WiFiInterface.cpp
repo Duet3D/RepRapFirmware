@@ -973,8 +973,8 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 		return GCodeResult::error;
 
 	case 588:	// Forget WiFi network
-		if (gb.Seen('S'))
 		{
+			gb.MustSee('S');
 			String<SsidLength> ssidText;
 			gb.GetQuotedString(ssidText.GetRef());
 			if (strcmp(ssidText.c_str(), "*") == 0)
@@ -1000,9 +1000,6 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 			reply.copy("Failed to remove SSID from remembered list");
 			return GCodeResult::error;
 		}
-
-		reply.copy("Bad or missing parameter");
-		return GCodeResult::error;
 
 	case 589:	// Configure access point
 		if (gb.Seen('S'))

@@ -3487,13 +3487,13 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 		String<FilamentNameLength> filamentName;
 		gb.GetQuotedString(filamentName.GetRef());
 
-		if (StringContains(filamentName.c_str(), ",") >= 0)
+		if (filamentName.Contains(',') >= 0)
 		{
 			reply.copy("Filament names must not contain commas");
 			return GCodeResult::error;
 		}
 
-		if (StringEqualsIgnoreCase(filamentName.c_str(), tool->GetFilament()->GetName()))
+		if (filamentName.EqualsIgnoreCase(tool->GetFilament()->GetName()))
 		{
 			// Filament already loaded - nothing to do
 			return GCodeResult::ok;

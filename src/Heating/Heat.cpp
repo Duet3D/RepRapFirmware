@@ -130,71 +130,67 @@ ReadLockedPointer<Heater> Heat::FindHeater(int heater) const noexcept
 // Process M307
 GCodeResult Heat::SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply)
 {
-	if (gb.Seen('H'))
+	gb.MustSee('H');
+	const unsigned int heater = gb.GetUIValue();
+	const auto h = FindHeater(heater);
+	if (h.IsNotNull())
 	{
-		const unsigned int heater = gb.GetUIValue();
-		const auto h = FindHeater(heater);
-		if (h.IsNotNull())
+		const FopDt& model = h->GetModel();
+		bool seen = false;
+		float gain = model.GetGain(),
+			tc = model.GetTimeConstant(),
+			td = model.GetDeadTime(),
+			maxPwm = model.GetMaxPwm(),
+			voltage = model.GetVoltage();
+		int32_t dontUsePid = model.UsePid() ? 0 : 1;
+		int32_t inversionParameter = 0;
+
+		gb.TryGetFValue('A', gain, seen);
+		gb.TryGetFValue('C', tc, seen);
+		gb.TryGetFValue('D', td, seen);
+		gb.TryGetIValue('B', dontUsePid, seen);
+		gb.TryGetFValue('S', maxPwm, seen);
+		gb.TryGetFValue('V', voltage, seen);
+		gb.TryGetIValue('I', inversionParameter, seen);
+
+		if (seen)
 		{
-			const FopDt& model = h->GetModel();
-			bool seen = false;
-			float gain = model.GetGain(),
-				tc = model.GetTimeConstant(),
-				td = model.GetDeadTime(),
-				maxPwm = model.GetMaxPwm(),
-				voltage = model.GetVoltage();
-			int32_t dontUsePid = model.UsePid() ? 0 : 1;
-			int32_t inversionParameter = 0;
-
-			gb.TryGetFValue('A', gain, seen);
-			gb.TryGetFValue('C', tc, seen);
-			gb.TryGetFValue('D', td, seen);
-			gb.TryGetIValue('B', dontUsePid, seen);
-			gb.TryGetFValue('S', maxPwm, seen);
-			gb.TryGetFValue('V', voltage, seen);
-			gb.TryGetIValue('I', inversionParameter, seen);
-
-			if (seen)
+			const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
+			const GCodeResult rslt = h->SetModel(gain, tc, td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl, reply);
+			if (rslt != GCodeResult::ok)
 			{
-				const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
-				const GCodeResult rslt = h->SetModel(gain, tc, td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl, reply);
-				if (rslt != GCodeResult::ok)
-				{
-					return rslt;
-				}
+				return rslt;
 			}
-			else if (!model.IsEnabled())
-			{
-				reply.printf("Heater %u is disabled", heater);
-			}
-			else
-			{
-				const char* const mode = (!model.UsePid()) ? "bang-bang"
-											: (model.ArePidParametersOverridden()) ? "custom PID"
-												: "PID";
-				reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, calibration voltage %.1f, mode %s", heater,
-							 (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode);
-				if (model.IsInverted())
-				{
-					reply.cat(", inverted temperature control");
-				}
-				if (model.UsePid())
-				{
-					// When reporting the PID parameters, we scale them by 255 for compatibility with older firmware and other firmware
-					M301PidParameters params = model.GetM301PidParameters(false);
-					reply.catf("\nComputed PID parameters for setpoint change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
-					params = model.GetM301PidParameters(true);
-					reply.catf("\nComputed PID parameters for load change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
-				}
-			}
-			return GCodeResult::ok;
 		}
-
-		reply.printf("Heater %u not found", heater);
-		return GCodeResult::error;
+		else if (!model.IsEnabled())
+		{
+			reply.printf("Heater %u is disabled", heater);
+		}
+		else
+		{
+			const char* const mode = (!model.UsePid()) ? "bang-bang"
+										: (model.ArePidParametersOverridden()) ? "custom PID"
+											: "PID";
+			reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, calibration voltage %.1f, mode %s", heater,
+						 (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode);
+			if (model.IsInverted())
+			{
+				reply.cat(", inverted temperature control");
+			}
+			if (model.UsePid())
+			{
+				// When reporting the PID parameters, we scale them by 255 for compatibility with older firmware and other firmware
+				M301PidParameters params = model.GetM301PidParameters(false);
+				reply.catf("\nComputed PID parameters for setpoint change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
+				params = model.GetM301PidParameters(true);
+				reply.catf("\nComputed PID parameters for load change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
+			}
+		}
+		return GCodeResult::ok;
 	}
 
-	return GCodeResult::badOrMissingParameter;
+	reply.printf("Heater %u not found", heater);
+	return GCodeResult::error;
 }
 
 // Process M301 or M304. 'heater' is the default heater number to use.

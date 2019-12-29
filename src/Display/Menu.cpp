@@ -540,13 +540,12 @@ void Menu::EncoderActionEnterItemHelper()
 		if (highlightedItem->Select(command.GetRef()))
 		{
 			char *pcCurrentCommand = command.GetRef().Pointer();
-			int nNextCommandIndex = StringContains(pcCurrentCommand, "|");
-			while (-1 != nNextCommandIndex)
+			char *pcNextCommand;
+			while ((pcNextCommand = strchr(pcCurrentCommand, '|')) != nullptr)
 			{
-				*(pcCurrentCommand + nNextCommandIndex) = '\0';
+				*pcNextCommand = '\0';
 				EncoderAction_ExecuteHelper(pcCurrentCommand);
-				pcCurrentCommand += nNextCommandIndex + 1;
-				nNextCommandIndex = StringContains(pcCurrentCommand, "|");
+				pcCurrentCommand = pcNextCommand + 1;
 			}
 			EncoderAction_ExecuteHelper(pcCurrentCommand);
 		}
