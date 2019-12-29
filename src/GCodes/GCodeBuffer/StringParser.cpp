@@ -140,7 +140,7 @@ bool StringParser::Put(char c)
 			switch (c)
 			{
 			case '*':
-				if (braceCount != 0)
+				if (braceCount == 0)
 				{
 					declaredChecksum = 0;
 					hadChecksum = true;
