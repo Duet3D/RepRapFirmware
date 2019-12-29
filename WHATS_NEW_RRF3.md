@@ -28,6 +28,7 @@ Bug fixes:
 - Use of M950 to configure heater numbers greater than 5 on expansion boards caused sensors to disappear
 - The response to M308 with just a S parameter didn't include the sensor name or last reading if the sensor was connected to a Duet 3 expansion board
 - The G31 response now displays trigger height to 3 decimal places instead of 2
+- When printing from file on a Duet 3 with attached Raspberry Pi, under some conditions an attempt to retrieve the file position caused RRF to crash
 
 RepRapFirmware 3.0RC1
 =====================
