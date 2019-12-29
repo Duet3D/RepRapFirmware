@@ -543,10 +543,13 @@ void Platform::Init() noexcept
 
 	// Initialise the configured heaters to just the default bed heater (there are no default chamber heaters)
 	configuredHeaters = 0;
+
+#ifndef DUET3
 	if (DefaultBedHeater >= 0)
 	{
 		SetBit(configuredHeaters, DefaultBedHeater);
 	}
+#endif
 
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
 	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.

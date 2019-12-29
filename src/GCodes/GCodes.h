@@ -202,24 +202,21 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	GCodes(const GCodes&);												// private copy constructor to prevent copying
+	GCodes(const GCodes&) = delete;
 
 	enum class HeaterFaultState : uint8_t { noFault, pausePending, timing, stopping, stopped };
 
 	// Resources that can be locked.
 	// To avoid deadlock, if you need multiple resources then you must lock them in increasing numerical order.
-	typedef unsigned int Resource;
+	typedef uint32_t Resource;
 	static const Resource MoveResource = 0;								// Movement system, including canned cycle variables
 	static const Resource FileSystemResource = 1;						// Non-sharable parts of the file system
 	static const Resource HeaterResourceBase = 2;
-	static const Resource FanResourceBase = HeaterResourceBase + MaxHeaters;
-	static const size_t NumResources = FanResourceBase + MaxFans;
+	static const size_t NumResources = HeaterResourceBase + 1;
 
-	static_assert(NumResources <= 32, "Too many resources to keep a bitmap of them in class GCodeMachineState");
+	static_assert(NumResources <= sizeof(Resource) * CHAR_BIT, "Too many resources to keep a bitmap of them in class GCodeMachineState");
 
 	bool LockResource(const GCodeBuffer& gb, Resource r);				// Lock the resource, returning true if success
-	bool LockHeater(const GCodeBuffer& gb, int heater);
-	bool LockFan(const GCodeBuffer& gb, int fan);
 	bool LockFileSystem(const GCodeBuffer& gb);							// Lock the unshareable parts of the file system
 	bool LockMovement(const GCodeBuffer& gb);							// Lock movement
 	void GrabResource(const GCodeBuffer& gb, Resource r);				// Grab a resource even if it is already owned
@@ -314,6 +311,7 @@ private:
 
 	void DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)			// Pause the print
 		pre(resourceOwners[movementResource] = &gb);
+	void CheckForDeferredPause(GCodeBuffer& gb);								// Check if a pause is pending, action it if so
 
 #if HAS_VOLTAGE_MONITOR || HAS_SMART_DRIVERS
 	bool DoEmergencyPause();													// Do an emergency pause following loss of power or a motor stall
@@ -354,18 +352,18 @@ private:
 
 	void AppendAxes(const StringRef& reply, AxesBitmap axes) const;				// Append a list of axes to a string
 
-	void EndSimulation(GCodeBuffer *gb);								// Restore positions etc. when exiting simulation mode
-	bool IsCodeQueueIdle() const;										// Return true if the code queue is idle
+	void EndSimulation(GCodeBuffer *gb);										// Restore positions etc. when exiting simulation mode
+	bool IsCodeQueueIdle() const;												// Return true if the code queue is idle
 
 #if HAS_MASS_STORAGE
 	void SaveResumeInfo(bool wasPowerFailure);
 #endif
 
-	void NewMoveAvailable(unsigned int sl);								// Flag that a new move is available
-	void NewMoveAvailable();											// Flag that a new move is available
+	void NewMoveAvailable(unsigned int sl);										// Flag that a new move is available
+	void NewMoveAvailable();													// Flag that a new move is available
 
-	void SetMoveBufferDefaults();										// Set up default values in the move buffer
-	void ChangeExtrusionFactor(unsigned int extruder, float factor);	// Change a live extrusion factor
+	void SetMoveBufferDefaults();												// Set up default values in the move buffer
+	void ChangeExtrusionFactor(unsigned int extruder, float factor);			// Change a live extrusion factor
 
 #if SUPPORT_12864_LCD
 	int GetHeaterNumber(unsigned int itemNumber) const;

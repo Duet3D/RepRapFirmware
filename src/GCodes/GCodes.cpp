@@ -659,16 +659,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 				{
 					UnlockAll(gb);
 					HandleReply(gb, GCodeResult::ok, "");
-					if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
-					{
-						gb.Put("M600");
-						filamentChangePausePending = false;
-					}
-					else if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
-					{
-						gb.Put("M226");
-						pausePending = false;
-					}
+					CheckForDeferredPause(gb);
 				}
 			}
 			break;
@@ -910,6 +901,24 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 	if (msg != nullptr)
 	{
 		platform.SendAlert(GenericMessage, msg, "Printing paused", 1, 0.0, 0);
+	}
+}
+
+// Check if a pause is pending, action it if so
+void GCodes::CheckForDeferredPause(GCodeBuffer& gb)
+{
+	if (&gb == fileGCode && !gb.IsDoingFileMacro())
+	{
+		if (filamentChangePausePending)
+		{
+			gb.Put("M600");
+			filamentChangePausePending = false;
+		}
+		else if (pausePending)
+		{
+			gb.Put("M226");
+			pausePending = false;
+		}
 	}
 }
 
@@ -2396,7 +2405,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	gb.MachineState().runningM502 = (codeRunning == 502);
 	if (codeRunning != 98)
 	{
-		gb.MachineState().runningSystemMacro = true; // running a system macro e.g. homing or tool change, so don't use workplace coordinates
+		gb.MachineState().runningSystemMacro = true; 	// running a system macro e.g. homing or tool change, so don't use workplace coordinates
 	}
 	gb.SetState(GCodeState::normal);
 	gb.Init();
@@ -3412,13 +3421,13 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 		{
 			// Set up the retract move
 			const Tool * const tool = reprap.GetCurrentTool();
-			if (tool != nullptr)
+			if (tool != nullptr && tool->DriveCount() != 0)
 			{
 				for (size_t i = 0; i < tool->DriveCount(); ++i)
 				{
 					moveBuffer.coords[ExtruderToLogicalDrive(tool->Drive(i))] = -retractLength;
 				}
-				moveBuffer.feedRate = retractSpeed;
+				moveBuffer.feedRate = retractSpeed * tool->DriveCount();
 				moveBuffer.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
 				NewMoveAvailable(1);
 			}
@@ -3441,13 +3450,13 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 		{
 			// No retract hop, so just un-retract
 			const Tool * const tool = reprap.GetCurrentTool();
-			if (tool != nullptr)
+			if (tool != nullptr && tool->DriveCount() != 0)
 			{
 				for (size_t i = 0; i < tool->DriveCount(); ++i)
 				{
 					moveBuffer.coords[ExtruderToLogicalDrive(tool->Drive(i))] = retractLength + retractExtra;
 				}
-				moveBuffer.feedRate = unRetractSpeed;
+				moveBuffer.feedRate = unRetractSpeed * tool->DriveCount();
 				moveBuffer.canPauseAfter = true;
 				NewMoveAvailable(1);
 			}
@@ -4234,24 +4243,6 @@ void GCodes::GrabResource(const GCodeBuffer& gb, Resource r)
 		}
 		resourceOwners[r] = &gb;
 	}
-}
-
-bool GCodes::LockHeater(const GCodeBuffer& gb, int heater)
-{
-	if (heater >= 0 && heater < (int)MaxHeaters)
-	{
-		return LockResource(gb, HeaterResourceBase + heater);
-	}
-	return true;
-}
-
-bool GCodes::LockFan(const GCodeBuffer& gb, int fan)
-{
-	if (fan >= 0 && fan < (int)MaxFans)
-	{
-		return LockResource(gb, FanResourceBase + fan);
-	}
-	return true;
 }
 
 // Lock the unshareable parts of the file system

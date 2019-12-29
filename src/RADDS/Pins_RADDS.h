@@ -2,6 +2,23 @@
 #define PINS_DUET_H__
 
 #define FIRMWARE_NAME "RepRapFirmware for RADDS"
+#define IAP_FIRMWARE_FILE "RepRapFirmware-RADDS.bin"
+
+#define IAP_IN_RAM				0
+
+#if IAP_IN_RAM
+
+// TODO
+
+#else
+
+constexpr uint32_t IAP_IMAGE_START = 0x000F0000;
+constexpr uint32_t IAP_IMAGE_END = 0x000FFBFF;		// don't touch the last 1KB, it's used for NvData
+# define IAP_UPDATE_FILE "iapradds.bin"
+
+#endif
+
+const size_t NumFirmwareUpdateModules = 1;
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0
@@ -73,6 +90,8 @@ constexpr size_t MaxHeatersPerTool = 2;
 constexpr size_t MaxExtrudersPerTool = 5;
 
 constexpr size_t MaxFans = 12;
+
+constexpr unsigned int MaxTriggers = 16;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 
 constexpr size_t NUM_SERIAL_CHANNELS = 2;
 // Use TX0/RX0 for the auxiliary serial line

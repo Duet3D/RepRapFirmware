@@ -1,3 +1,35 @@
+RepRapFirmware 3.0RC2
+=====================
+
+Recommended compatible firmware:
+- Duet Web Control 2.0.4
+- DuetWiFiServer 1.23
+- DuetSoftwareFramework 1.2.1.0
+- Duet3Firmware_EXP3HC 3.0RC2
+- Duet3Firmware_Tool1LC 3.0RC2
+
+Known issues:
+- As for RRF 3.0RC1
+
+Upgrade notes:
+- As for RRF 3.0RC1
+
+Feature changes:
+- Increased maximum number of triggers on Duet 3 from 16 to 32
+- Increased maximum number of heaters on Duet 3 to 16
+- Increased maximum number of extra heater protections on Duet 3 to 16
+- Increased maximum number of fans on Duet 3 to 16
+
+Bug fixes:
+- Fix for M584 sent via SPI to Duet 3 when the first parameter is an array
+- Fix for analog Z probing when Z probe reports "near" from the start of the move
+- Fix for M25 while tool changing is is progress
+- Fix for unexpected diagonal moves during tool changes
+- Use of M950 to configure heater numbers greater than 5 on expansion boards caused sensors to disappear
+- The response to M308 with just a S parameter didn't include the sensor name or last reading if the sensor was connected to a Duet 3 expansion board
+- The G31 response now displays trigger height to 3 decimal places instead of 2
+- When printing from file on a Duet 3 with attached Raspberry Pi, under some conditions an attempt to retrieve the file position caused RRF to crash
+
 RepRapFirmware 3.0RC1
 =====================
 
@@ -18,6 +50,7 @@ Upgrade notes:
 - If you are using Duet 3 expansion or tool boards, you must upgrade those to 3.0RC1 too
 - Duet 3+SBC users must use DSF 1.1.0.5 or a compatible later version with this version of RRF
 - You should also upload the new IAP file for your system. You will need it when upgrading firmware in future. These files are called Duet2CombinedIAP.bin, DuetMaestroIAP.bin, Duet3_SBCiap_MB6HC.bin (for Duet 3+SBC) and Duet3_SDiap.bin (for Duet 3 standalone systems). You can leave the old IAP files on your system, they have different names and you will need them if you downgrade to earlier firmware.
+- Duet 3 users: there is no longer a defualt bed heater. To use Heater 0 as the bed heater, put M140 H0 in config.g (later in config.g than your M950 H0 command).
 
 Feature changes since beta 12:
 - Duet 3 only: Switch-type endstops connected to expansion boards are supported
