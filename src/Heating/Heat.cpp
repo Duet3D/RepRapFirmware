@@ -520,9 +520,12 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 		String<StringLength50> pinName;
 		gb.GetReducedString(pinName.GetRef());
 
+#if SUPPORT_CAN_EXPANSION
+		const CanAddress board = IoPort::RemoveBoardAddress(pinName.GetRef());
+#endif
 		if (StringEqualsIgnoreCase(pinName.c_str(), NoPinName))
 		{
-			// Settin the pin name to "nil" deletes the heater
+			// Setting the pin name to "nil" deletes the heater
 			WriteLocker lock(heatersLock);
 			Heater *oldHeater = nullptr;
 			std::swap(oldHeater, heaters[heater]);
@@ -546,13 +549,12 @@ GCodeResult Heat::ConfigureHeater(size_t heater, GCodeBuffer& gb, const StringRe
 		const PwmFrequency freq = (gb.Seen('Q')) ? gb.GetPwmFrequency() : DefaultFanPwmFreq;
 
 #if SUPPORT_CAN_EXPANSION
-		const CanAddress board = IoPort::RemoveBoardAddress(pinName.GetRef());
-		Heater *newHeater = (board != CanId::MasterAddress) ? (Heater *)new RemoteHeater(heater, board) : new LocalHeater(heater);
+		Heater * const newHeater = (board != CanId::MasterAddress) ? (Heater *)new RemoteHeater(heater, board) : new LocalHeater(heater);
 #else
-		Heater *newHeater = new LocalHeater(heater);
+		Heater * const newHeater = new LocalHeater(heater);
 #endif
 		const GCodeResult rslt = newHeater->ConfigurePortAndSensor(pinName.c_str(), freq, sensorNumber, reply);
-		if (rslt == GCodeResult::ok)
+		if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
 		{
 			heaters[heater] = newHeater;
 		}
@@ -968,9 +970,9 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 		boardAddress = CanId::NoAddress;
 	}
 #endif
-	bool newSensor = gb.Seen('Y');
-	if (newSensor)
+	if (gb.Seen('Y'))
 	{
+		// Creating a new sensor
 		WriteLocker lock(sensorsLock);
 
 		DeleteSensor(sensorNum);
@@ -1004,6 +1006,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply)
 		return rslt;
 	}
 
+	// Modifying or reporting on an existing sensor
 	const auto sensor = FindSensor(sensorNum);
 	if (sensor.IsNull())
 	{
