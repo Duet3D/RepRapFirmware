@@ -283,33 +283,45 @@ bool StringParser::LineFinished()
 		++gb.machineState->lineNumber;
 	}
 
-	if (gb.machineState->DoingFile())
-	{
-		if (indentToSkipTo < commandIndent)
-		{
-			Init();
-			return false;													// continue skipping this block
-		}
-		BlockType previousBlockType = BlockType::plain;
-		if (indentToSkipTo != NoIndentSkip && indentToSkipTo >= commandIndent)
-		{
-			// Finished skipping the nested block
-			if (indentToSkipTo == commandIndent)
-			{
-				previousBlockType = gb.machineState->CurrentBlockState().GetType();
-				gb.machineState->CurrentBlockState().SetPlainBlock();		// we've ended the loop or if-block
-			}
-			indentToSkipTo = NoIndentSkip;									// no longer skipping
-		}
-		if (ProcessConditionalGCode(previousBlockType))
-		{
-			Init();
-			return false;
-		}
-	}
 	commandStart = 0;
-	DecodeCommand();
 	return true;
+}
+
+// Check whether the current command is a meta command, or we are skipping commands in a block
+// Return true if the current line no longer needs to be processed
+bool StringParser::CheckMetaCommand()
+{
+	if (indentToSkipTo < commandIndent)
+	{
+		Init();
+		return true;													// continue skipping this block
+	}
+	BlockType previousBlockType = BlockType::plain;
+	if (indentToSkipTo != NoIndentSkip && indentToSkipTo >= commandIndent)
+	{
+		// Finished skipping the nested block
+		if (indentToSkipTo == commandIndent)
+		{
+			previousBlockType = gb.machineState->CurrentBlockState().GetType();
+			gb.machineState->CurrentBlockState().SetPlainBlock();		// we've ended the loop or if-block
+		}
+		indentToSkipTo = NoIndentSkip;									// no longer skipping
+	}
+	bool b;
+	try
+	{
+		b = ProcessConditionalGCode(previousBlockType);
+	}
+	catch (const ParseException&)
+	{
+		Init();
+		throw;
+	}
+	if (b)
+	{
+		Init();
+	}
+	return b;
 }
 
 // Check for and process a conditional GCode language command returning true if we found one, false if it's a regular line of GCode that we need to process
@@ -341,6 +353,7 @@ bool StringParser::ProcessConditionalGCode(BlockType previousBlockType)
 
 	if (i >= 2 && i < 6 && (gb.buffer[i] == 0 || gb.buffer[i] == ' ' || gb.buffer[i] == '\t' || gb.buffer[i] == '{'))		// if the command word is properly terminated
 	{
+		readPointer = commandIndent + i;
 		const char * const command = &gb.buffer[commandIndent];
 		switch (i)
 		{
@@ -398,6 +411,7 @@ bool StringParser::ProcessConditionalGCode(BlockType previousBlockType)
 		}
 	}
 
+	readPointer = -1;
 	return false;
 }
 
@@ -610,6 +624,7 @@ void StringParser::DecodeCommand()
 				 || ((cl == 'I' || cl == 'J') && commandNumber >= 2)
 				)
 			 && reprap.GetGCodes().GetMachineType() == MachineType::cnc
+			 && !isalpha(gb.buffer[commandStart + 1])			// make sure it isn't an if-command or other meta command
 			)
 	{
 		// Fanuc-style GCode, repeat the existing G0/G1/G2/G3 command with the new parameters
@@ -631,23 +646,25 @@ void StringParser::DecodeCommand()
 }
 
 // Add an entire string, overwriting any existing content and adding '\n' at the end if necessary to make it a complete line
-void StringParser::Put(const char *str, size_t len)
+void StringParser::PutAndDecode(const char *str, size_t len)
 {
 	Init();
 	for (size_t i = 0; i < len; i++)
 	{
 		if (Put(str[i]))	// if the line is complete
 		{
+			DecodeCommand();
 			return;
 		}
 	}
 
 	(void)Put('\n');		// because there wasn't one at the end of the string
+	DecodeCommand();
 }
 
-void StringParser::Put(const char *str)
+void StringParser::PutAndDecode(const char *str)
 {
-	Put(str, strlen(str));
+	PutAndDecode(str, strlen(str));
 }
 
 void StringParser::SetFinished()
@@ -1217,16 +1234,17 @@ bool StringParser::OpenFileToWrite(const char* directory, const char* fileName, 
 	return true;
 }
 
-// Write the current GCode to file
+// Write the current line of GCode to file
 void StringParser::WriteToFile()
 {
+	DecodeCommand();
 	if (GetCommandLetter() == 'M')
 	{
 		if (GetCommandNumber() == 29)						// end of file?
 		{
 			fileBeingWritten->Close();
 			fileBeingWritten = nullptr;
-			SetFinished();
+			Init();
 			const char* const r = (gb.MachineState().compatibility == Compatibility::marlin) ? "Done saving file." : "";
 			reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 			return;
@@ -1236,7 +1254,7 @@ void StringParser::WriteToFile()
 	{
 		if (Seen('P'))
 		{
-			SetFinished();
+			Init();
 			String<ShortScratchStringLength> scratchString;
 			scratchString.printf("%" PRIi32 "\n", GetIValue());
 			reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, scratchString.c_str());
@@ -1246,7 +1264,7 @@ void StringParser::WriteToFile()
 
 	fileBeingWritten->Write(gb.buffer);
 	fileBeingWritten->Write('\n');
-	SetFinished();
+	Init();
 }
 
 void StringParser::WriteBinaryToFile(char b)
@@ -1297,41 +1315,48 @@ void StringParser::FinishWritingBinary()
 	}
 }
 
-// This is called when we reach the end of the file we are reading from
-void StringParser::FileEnded()
+// This is called when we reach the end of the file we are reading from. Return true if there is a line waiting to be processed.
+bool StringParser::FileEnded()
 {
 	if (IsWritingBinary())
 	{
 		// We are in the middle of writing a binary file but the input stream has ended
 		FinishWritingBinary();
+		Init();
+		return false;
 	}
-	else
-	{
-		if (gcodeLineEnd != 0)				// if there is something in the buffer
-		{
-			Put('\n');						// append a newline in case the file didn't end with one
-		}
-		if (IsWritingFile())
-		{
-			bool gotM29 = false;
-			if (gb.IsReady())				// if we have a complete command
-			{
-				gotM29 = (GetCommandLetter() == 'M' && GetCommandNumber() == 29);
-				if (!gotM29)				// if it wasn't M29, write it to file
-				{
-					fileBeingWritten->Write(gb.buffer);
-					fileBeingWritten->Write('\n');
-				}
-			}
 
-			// Close the file whether or not we saw M29
-			fileBeingWritten->Close();
-			fileBeingWritten = nullptr;
-			SetFinished();
-			const char* const r = (gb.MachineState().compatibility == Compatibility::marlin) ? "Done saving file." : "";
-			reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
-		}
+	bool commandCompleted = false;
+	if (gcodeLineEnd != 0)				// if there is something in the buffer
+	{
+		Put('\n');						// append a newline in case the file didn't end with one
+		commandCompleted = true;
 	}
+
+	if (IsWritingFile())
+	{
+		bool gotM29 = false;
+		if (gb.IsReady())				// if we have a complete command
+		{
+			DecodeCommand();
+			gotM29 = (GetCommandLetter() == 'M' && GetCommandNumber() == 29);
+			if (!gotM29)				// if it wasn't M29, write it to file
+			{
+				fileBeingWritten->Write(gb.buffer);
+				fileBeingWritten->Write('\n');
+			}
+		}
+
+		// Close the file whether or not we saw M29
+		fileBeingWritten->Close();
+		fileBeingWritten = nullptr;
+		SetFinished();
+		const char* const r = (gb.MachineState().compatibility == Compatibility::marlin) ? "Done saving file." : "";
+		reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
+		return false;
+	}
+
+	return commandCompleted;
 }
 
 #endif

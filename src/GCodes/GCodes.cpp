@@ -480,16 +480,18 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 #endif
 	{
 		const bool gotCommand = (gb.GetNormalInput() != nullptr) ? gb.GetNormalInput()->FillBuffer(&gb) : false;
-#ifdef SERIAL_AUX_DEVICE
-		if (gotCommand && &gb == auxGCode)
+		if (gotCommand)
 		{
-			platform.SetAuxDetected();			// by default we assume no PanelDue is attached, so flag when we receive a command from it
-		}
-#else
-		(void)gotCommand;
+			gb.DecodeCommand();
+#ifdef SERIAL_AUX_DEVICE
+			if (&gb == auxGCode)
+			{
+				platform.SetAuxDetected();			// by default we assume no PanelDue is attached, so flag when we receive a command from it
+			}
 #endif
+		}
 #if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface() && !gotCommand)
+		else if (reprap.UsingLinuxInterface())
 		{
 			reprap.GetLinuxInterface().FillBuffer(gb);
 		}
@@ -529,7 +531,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 					runningConfigFile = false;
 				}
 
-				bool hadFileError = gb.MachineState().fileError;
+				const bool hadFileError = gb.MachineState().fileError;
 				Pop(gb, false);
 				gb.Init();
 				if (gb.GetState() == GCodeState::doingUnsupportedCode)
@@ -581,12 +583,12 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else if (filamentChangePausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
 		{
-			gb.Put("M600");
+			gb.PutAndDecode("M600");
 			filamentChangePausePending = false;
 		}
 		else if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
 		{
-			gb.Put("M226");
+			gb.PutAndDecode("M226");
 			pausePending = false;
 		}
 		else
@@ -604,13 +606,28 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 		switch (gb.GetFileInput()->ReadFromFile(fd))
 		{
 		case GCodeInputReadResult::haveData:
-			// Yes - fill up the GCodeBuffer and run the next code
 			if (gb.GetFileInput()->FillBuffer(&gb))
 			{
-				// We read some data, but we don't necessarily have a command available because we may be executing M28 within a file
-				if (gb.IsReady())
+				bool done;
+				try
 				{
-					gb.SetFinished(ActOnCode(gb, reply));
+					done = gb.CheckMetaCommand();
+				}
+				catch (ParseException& e)
+				{
+					e.GetMessage(reply);
+					HandleReply(gb, GCodeResult::error, reply.c_str());
+					AbortPrint(gb);
+					done = true;
+				}
+
+				if (!done)
+				{
+					gb.DecodeCommand();
+					if (gb.IsReady())
+					{
+						gb.SetFinished(ActOnCode(gb, reply));
+					}
 				}
 			}
 			break;
@@ -624,8 +641,25 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 			gb.FileEnded();							// append a newline if necessary and deal with any pending file write
 			if (gb.IsReady())
 			{
-				gb.SetFinished(ActOnCode(gb, reply));
-				return;
+				bool done;
+				try
+				{
+					done = gb.CheckMetaCommand();
+				}
+				catch (ParseException& e)
+				{
+					e.GetMessage(reply);
+					HandleReply(gb, GCodeResult::error, reply.c_str());
+					AbortPrint(gb);
+					done = true;
+				}
+
+				if (!done)
+				{
+					gb.DecodeCommand();
+					gb.SetFinished(ActOnCode(gb, reply));
+				}
+				break;
 			}
 
 			gb.Init();								// mark buffer as empty
@@ -911,12 +945,12 @@ void GCodes::CheckForDeferredPause(GCodeBuffer& gb)
 	{
 		if (filamentChangePausePending)
 		{
-			gb.Put("M600");
+			gb.PutAndDecode("M600");
 			filamentChangePausePending = false;
 		}
 		else if (pausePending)
 		{
-			gb.Put("M226");
+			gb.PutAndDecode("M226");
 			pausePending = false;
 		}
 	}
@@ -1097,7 +1131,7 @@ bool GCodes::LowVoltagePause()
 		// Run the auto-pause script
 		if (powerFailScript != nullptr)
 		{
-			autoPauseGCode->Put(powerFailScript);
+			autoPauseGCode->PutAndDecode(powerFailScript);
 		}
 		autoPauseGCode->SetState(GCodeState::powerFailPausing1);
 		isPowerFailPaused = true;

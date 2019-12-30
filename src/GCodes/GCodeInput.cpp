@@ -11,6 +11,7 @@
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
 
+// Read some input bytes into the GCode buffer. Return true if there is a line of GCode waiting to be processed.
 bool StandardGCodeInput::FillBuffer(GCodeBuffer *gb)
 {
 	const size_t bytesToPass = min<size_t>(BytesCached(), GCODE_LENGTH);
@@ -30,9 +31,10 @@ bool StandardGCodeInput::FillBuffer(GCodeBuffer *gb)
 			{
 				gb->WriteToFile();
 			}
-
-			// Code is complete or has been written to file, so stop here
-			return true;
+			else
+			{
+				return true;
+			}
 		}
 #else
 		if (gb->Put(c))

@@ -22,19 +22,22 @@ class StringParser
 {
 public:
 	StringParser(GCodeBuffer& gcodeBuffer) noexcept;
-	void Init() noexcept; 								// Set it up to parse another G-code
-	void Diagnostics(MessageType mtype) noexcept;		// Write some debug info
-	bool Put(char c) __attribute__((hot));				// Add a character to the end
-	void Put(const char *str, size_t len);				// Add an entire string, overwriting any existing content
-	void Put(const char *str);							// Add a null-terminated string, overwriting any existing content
-	void FileEnded();									// Called when we reach the end of the file we are reading from
-	bool Seen(char c) noexcept __attribute__((hot));	// Is a character present?
+	void Init() noexcept; 													// Set it up to parse another G-code
+	void Diagnostics(MessageType mtype) noexcept;							// Write some debug info
+	bool Put(char c) __attribute__((hot));									// Add a character to the end
+	void DecodeCommand();													// Decode the next command in the line
+	void PutAndDecode(const char *str, size_t len);							// Add an entire string, overwriting any existing content
+	void PutAndDecode(const char *str);										// Add a null-terminated string, overwriting any existing content
+	bool FileEnded();														// Called when we reach the end of the file we are reading from
+	bool CheckMetaCommand() THROWS_PARSE_ERROR;								// Check whether the current command is a meta command, or we are skipping block
 
+	// The following may be called after calling DecodeCommand
 	char GetCommandLetter() const noexcept { return commandLetter; }
 	bool HasCommandNumber() const noexcept { return hasCommandNumber; }
 	int GetCommandNumber() const noexcept { return commandNumber; }
 	int8_t GetCommandFraction() const noexcept { return commandFraction; }
 
+	bool Seen(char c) noexcept __attribute__((hot));						// Is a character present?
 	float GetFValue() THROWS_PARSE_ERROR __attribute__((hot));				// Get a float after a key letter
 	float GetDistance() THROWS_PARSE_ERROR;									// Get a distance or coordinate and convert it from inches to mm if necessary
 	int32_t GetIValue() THROWS_PARSE_ERROR __attribute__((hot));			// Get an integer after a key letter
@@ -81,8 +84,7 @@ private:
 
 	void AddToChecksum(char c) noexcept;
 	void StoreAndAddToChecksum(char c);
-	bool LineFinished();								// Deal with receiving end-of-line and return true if we have a command
-	void DecodeCommand();
+	bool LineFinished() THROWS_PARSE_ERROR;						// Deal with receiving end-of-line and return true if we have a command
 	void InternalGetQuotedString(const StringRef& str) THROWS_PARSE_ERROR
 		pre (readPointer >= 0; gb.buffer[readPointer] == '"'; str.IsEmpty());
 	void InternalGetPossiblyQuotedString(const StringRef& str) THROWS_PARSE_ERROR

@@ -244,7 +244,7 @@ void QueuedCode::AssignFrom(GCodeBuffer &gb) noexcept
 void QueuedCode::AssignTo(GCodeBuffer *gb) noexcept
 {
 	gb->SetToolNumberAdjust(toolNumberAdjust);
-	gb->Put(data, dataLength, isBinary);
+	gb->PutAndDecode(data, dataLength, isBinary);
 }
 
 // End

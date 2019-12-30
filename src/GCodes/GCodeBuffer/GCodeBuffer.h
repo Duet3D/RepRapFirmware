@@ -43,15 +43,17 @@ public:
 	friend class StringParser;
 
 	GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility c = Compatibility::reprapFirmware);
-	void Reset();											// Reset it to its state after start-up
-	void Init();											// Set it up to parse another G-code
-	void Diagnostics(MessageType mtype);					// Write some debug info
+	void Reset();																// Reset it to its state after start-up
+	void Init();																// Set it up to parse another G-code
+	void Diagnostics(MessageType mtype);										// Write some debug info
 
-	bool IsBinary() const { return isBinaryBuffer; }		// Return true if the code is in binary format
-	bool Put(char c) __attribute__((hot));					// Add a character to the end
-	void Put(const char *data, size_t len, bool isBinary);	// Add an entire G-Code, overwriting any existing content
-	void Put(const char *str);								// Add a null-terminated string, overwriting any existing content
-	void FileEnded();										// Called when we reach the end of the file we are reading from
+	bool IsBinary() const { return isBinaryBuffer; }							// Return true if the code is in binary format
+	bool Put(char c) __attribute__((hot));										// Add a character to the end
+	void PutAndDecode(const char *data, size_t len, bool isBinary);				// Add an entire G-Code, overwriting any existing content
+	void PutAndDecode(const char *str);											// Add a null-terminated string, overwriting any existing content
+	bool FileEnded();															// Called when we reach the end of the file we are reading from
+	void DecodeCommand();														// Decode the command in the buffer when it is complete
+	bool CheckMetaCommand() THROWS_PARSE_ERROR;									// Check whether the current command is a meta command, or we are skipping a block
 
 	char GetCommandLetter() const;
 	bool HasCommandNumber() const;

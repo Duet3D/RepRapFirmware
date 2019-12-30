@@ -125,8 +125,23 @@ bool GCodeBuffer::Put(char c)
 	return stringParser.Put(c);
 }
 
+// Decode the command in the buffer when it is complete
+void GCodeBuffer::DecodeCommand()
+{
+	if (!isBinaryBuffer)
+	{
+		stringParser.DecodeCommand();
+	}
+}
+
+// Check whether the current command is a meta command, or we are skipping a block. Return true if we are and the current line no longer needs to be processed.
+bool GCodeBuffer::CheckMetaCommand()
+{
+	return !isBinaryBuffer && machineState->DoingFile() && stringParser.CheckMetaCommand();
+}
+
 // Add an entire G-Code, overwriting any existing content
-void GCodeBuffer::Put(const char *str, size_t len, bool isBinary)
+void GCodeBuffer::PutAndDecode(const char *str, size_t len, bool isBinary)
 {
 	isBinaryBuffer = isBinary;
 	if (isBinary)
@@ -135,24 +150,21 @@ void GCodeBuffer::Put(const char *str, size_t len, bool isBinary)
 	}
 	else
 	{
-		stringParser.Put(str, len);
+		stringParser.PutAndDecode(str, len);
 	}
 }
 
 // Add a null-terminated string, overwriting any existing content
-void GCodeBuffer::Put(const char *str)
+void GCodeBuffer::PutAndDecode(const char *str)
 {
 	isBinaryBuffer = false;
-	stringParser.Put(str);
+	stringParser.PutAndDecode(str);
 }
 
-// Called when we reach the end of the file we are reading from
-void GCodeBuffer::FileEnded()
+// Called when we reach the end of the file we are reading from. Return true if there is a line waiting to be processed.
+bool GCodeBuffer::FileEnded()
 {
-	if (!isBinaryBuffer)
-	{
-		stringParser.FileEnded();
-	}
+	return (!isBinaryBuffer) && stringParser.FileEnded();
 }
 
 char GCodeBuffer::GetCommandLetter() const

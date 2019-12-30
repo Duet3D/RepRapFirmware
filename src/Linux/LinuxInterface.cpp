@@ -494,7 +494,7 @@ bool LinuxInterface::FillBuffer(GCodeBuffer &gb)
 			{
 				if (gb.GetChannel() == header->channel)
 				{
-					gb.Put(reinterpret_cast<const char *>(header), bufHeader->length, true);
+					gb.PutAndDecode(reinterpret_cast<const char *>(header), bufHeader->length, true);
 					bufHeader->isPending = false;
 
 					if (updateRxPointer)
