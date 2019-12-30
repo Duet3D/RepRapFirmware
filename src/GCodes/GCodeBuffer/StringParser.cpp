@@ -1929,7 +1929,7 @@ ExpressionValue StringParser::ParseNumber()
 		while (isdigit((c = gb.buffer[readPointer])))
 		{
 			const unsigned int digit = c - '0';
-			if (valueAfterPoint > ULONG_MAX/10 || (valueAfterPoint *= 10, valueAfterPoint > ULONG_MAX - digit))
+			if (valueAfterPoint > LONG_MAX/10 || (valueAfterPoint *= 10, valueAfterPoint > LONG_MAX - digit))
 			{
 				throw ConstructParseException("too many decimal digits");
 			}
@@ -1972,7 +1972,7 @@ ExpressionValue StringParser::ParseNumber()
 
 	if (isFloat)
 	{
-		retvalue.type = TypeOf<float>();
+		retvalue.type = TYPE_OF(float);
 		if (valueAfterPoint != 0)
 		{
 			if (valueBeforePoint == 0)
@@ -1991,8 +1991,8 @@ ExpressionValue StringParser::ParseNumber()
 	}
 	else
 	{
-		retvalue.type = TypeOf<uint32_t>();
-		retvalue.uVal = valueBeforePoint;
+		retvalue.type = TYPE_OF(int32_t);
+		retvalue.iVal = (int32_t)valueBeforePoint;
 	}
 
 	return retvalue;
