@@ -19,15 +19,15 @@ class IPAddress;
 class BinaryParser
 {
 public:
-	BinaryParser(GCodeBuffer& gcodeBuffer);
-	void Init(); 								// Set it up to parse another G-code
-	void Put(const char *data, size_t len);		// Add an entire string, overwriting any existing content
-	bool Seen(char c) __attribute__((hot));		// Is a character present?
+	BinaryParser(GCodeBuffer& gcodeBuffer) noexcept;
+	void Init() noexcept; 											// Set it up to parse another G-code
+	void Put(const char *data, size_t len) noexcept;				// Add an entire string, overwriting any existing content
+	bool Seen(char c) noexcept __attribute__((hot));				// Is a character present?
 
-	char GetCommandLetter() const;
-	bool HasCommandNumber() const;
-	int GetCommandNumber() const;
-	int8_t GetCommandFraction() const;
+	char GetCommandLetter() const noexcept;
+	bool HasCommandNumber() const noexcept;
+	int GetCommandNumber() const noexcept;
+	int8_t GetCommandFraction() const noexcept;
 
 	float GetFValue() THROWS_PARSE_ERROR __attribute__((hot));				// Get a float after a key letter
 	int32_t GetIValue() THROWS_PARSE_ERROR __attribute__((hot));			// Get an integer after a key letter
@@ -44,26 +44,26 @@ public:
 	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS_PARSE_ERROR;	// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS_PARSE_ERROR;	// Get a :-separated list of drivers after a key letter
 
-	void SetFinished();									// Set the G Code finished
+	void SetFinished() noexcept;									// Set the G Code finished
 
-	FilePosition GetFilePosition() const;				// Get the file position at the start of the current command
+	FilePosition GetFilePosition() const noexcept;					// Get the file position at the start of the current command
 
-	const char* DataStart() const;						// Get the start of the current command
-	size_t DataLength() const;							// Get the length of the current command
+	const char* DataStart() const noexcept;							// Get the start of the current command
+	size_t DataLength() const noexcept;								// Get the length of the current command
 
-	void PrintCommand(const StringRef& s) const;
-	void AppendFullCommand(const StringRef &s) const;
+	void PrintCommand(const StringRef& s) const noexcept;
+	void AppendFullCommand(const StringRef &s) const noexcept;
 
 private:
 	GCodeBuffer& gb;
 
-	ParseException ConstructParseException(const char *str) const;
-	ParseException ConstructParseException(const char *str, const char *param) const;
-	ParseException ConstructParseException(const char *str, uint32_t param) const;
+	ParseException ConstructParseException(const char *str) const noexcept;
+	ParseException ConstructParseException(const char *str, const char *param) const noexcept;
+	ParseException ConstructParseException(const char *str, uint32_t param) const noexcept;
 
-	size_t AddPadding(size_t bytesRead) const;
-	template<typename T> void GetArray(T arr[], size_t& length, bool doPad) __attribute__((hot));
-	void WriteParameters(const StringRef& s, bool quoteStrings) const;
+	size_t AddPadding(size_t bytesRead) const noexcept;
+	template<typename T> void GetArray(T arr[], size_t& length, bool doPad) THROWS_PARSE_ERROR __attribute__((hot));
+	void WriteParameters(const StringRef& s, bool quoteStrings) const noexcept;
 
 	size_t bufferLength;
 	const CodeHeader *header;
@@ -71,6 +71,8 @@ private:
 	int reducedBytesRead;
 	const CodeParameter *seenParameter;
 	const char *seenParameterValue;
+
+	static constexpr int lineNumber = -1;							// ideally the Linux interface would pass us the line number, but for now use this
 };
 
 #endif /* SRC_GCODES_GCODEBUFFER_BINARYGCODEBUFFER_H_ */

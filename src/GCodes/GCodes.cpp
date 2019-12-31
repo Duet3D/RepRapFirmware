@@ -615,10 +615,11 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 				}
 				catch (ParseException& e)
 				{
-					e.GetMessage(reply);
+					e.GetMessage(reply, gb);
 					HandleReply(gb, GCodeResult::error, reply.c_str());
+					gb.Init();
 					AbortPrint(gb);
-					done = true;
+					break;
 				}
 
 				if (!done)
@@ -638,8 +639,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 
 		case GCodeInputReadResult::noData:
 			// We have reached the end of the file. Check for the last line of gcode not ending in newline.
-			gb.FileEnded();							// append a newline if necessary and deal with any pending file write
-			if (gb.IsReady())
+			if (gb.FileEnded())							// append a newline if necessary and deal with any pending file write
 			{
 				bool done;
 				try
@@ -648,20 +648,22 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 				}
 				catch (ParseException& e)
 				{
-					e.GetMessage(reply);
+					e.GetMessage(reply, gb);
 					HandleReply(gb, GCodeResult::error, reply.c_str());
 					AbortPrint(gb);
-					done = true;
+					break;
 				}
 
 				if (!done)
 				{
 					gb.DecodeCommand();
-					gb.SetFinished(ActOnCode(gb, reply));
+					if (gb.IsReady())
+					{
+						gb.SetFinished(ActOnCode(gb, reply));
+					}
+					break;
 				}
-				break;
 			}
-
 			gb.Init();								// mark buffer as empty
 
 			if (gb.MachineState().previous == nullptr)

@@ -42,23 +42,23 @@ public:
 	friend class BinaryParser;
 	friend class StringParser;
 
-	GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility c = Compatibility::reprapFirmware);
-	void Reset();																// Reset it to its state after start-up
-	void Init();																// Set it up to parse another G-code
-	void Diagnostics(MessageType mtype);										// Write some debug info
+	GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility c = Compatibility::reprapFirmware) noexcept;
+	void Reset() noexcept;														// Reset it to its state after start-up
+	void Init() noexcept;														// Set it up to parse another G-code
+	void Diagnostics(MessageType mtype) noexcept;								// Write some debug info
 
-	bool IsBinary() const { return isBinaryBuffer; }							// Return true if the code is in binary format
-	bool Put(char c) __attribute__((hot));										// Add a character to the end
-	void PutAndDecode(const char *data, size_t len, bool isBinary);				// Add an entire G-Code, overwriting any existing content
-	void PutAndDecode(const char *str);											// Add a null-terminated string, overwriting any existing content
-	bool FileEnded();															// Called when we reach the end of the file we are reading from
-	void DecodeCommand();														// Decode the command in the buffer when it is complete
+	bool IsBinary() const noexcept { return isBinaryBuffer; }					// Return true if the code is in binary format
+	bool Put(char c) noexcept __attribute__((hot));								// Add a character to the end
+	void PutAndDecode(const char *data, size_t len, bool isBinary) noexcept;	// Add an entire G-Code, overwriting any existing content
+	void PutAndDecode(const char *str) noexcept;								// Add a null-terminated string, overwriting any existing content
+	bool FileEnded() noexcept;													// Called when we reach the end of the file we are reading from
+	void DecodeCommand() noexcept;												// Decode the command in the buffer when it is complete
 	bool CheckMetaCommand() THROWS_PARSE_ERROR;									// Check whether the current command is a meta command, or we are skipping a block
 
-	char GetCommandLetter() const;
-	bool HasCommandNumber() const;
-	int GetCommandNumber() const;
-	int8_t GetCommandFraction() const;
+	char GetCommandLetter() const noexcept;
+	bool HasCommandNumber() const noexcept;
+	int GetCommandNumber() const noexcept;
+	int8_t GetCommandFraction() const noexcept;
 
 	bool Seen(char c) noexcept __attribute__((hot));							// Is a character present?
 	void MustSee(char c) THROWS_PARSE_ERROR;									// Test for character present, throw error if not
@@ -90,87 +90,88 @@ public:
 	bool TryGetQuotedString(char c, const StringRef& str, bool& seen) THROWS_PARSE_ERROR;
 	bool TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen) THROWS_PARSE_ERROR;
 
-	bool IsIdle() const;
-	bool IsCompletelyIdle() const;
-	bool IsReady() const;								// Return true if a gcode is ready but hasn't been started yet
-	bool IsExecuting() const;							// Return true if a gcode has been started and is not paused
-	void SetFinished(bool f);							// Set the G Code executed (or not)
-	void SetCommsProperties(uint32_t arg);
+	bool IsIdle() const noexcept;
+	bool IsCompletelyIdle() const noexcept;
+	bool IsReady() const noexcept;								// Return true if a gcode is ready but hasn't been started yet
+	bool IsExecuting() const noexcept;							// Return true if a gcode has been started and is not paused
+	void SetFinished(bool f) noexcept;							// Set the G Code executed (or not)
+	void SetCommsProperties(uint32_t arg) noexcept;
 
-	GCodeMachineState& MachineState() const { return *machineState; }
-	GCodeMachineState& OriginalMachineState() const;
-	float ConvertDistance(float distance) const;
-	float InverseConvertDistance(float distance) const;
-	bool PushState(bool preserveLineNumber);			// Push state returning true if successful (i.e. stack not overflowed)
-	bool PopState(bool preserveLineNumber);				// Pop state returning true if successful (i.e. no stack underrun)
+	GCodeMachineState& MachineState() const noexcept { return *machineState; }
+	GCodeMachineState& OriginalMachineState() const noexcept;
+	float ConvertDistance(float distance) const noexcept;
+	float InverseConvertDistance(float distance) const noexcept;
+	bool PushState(bool preserveLineNumber) noexcept;			// Push state returning true if successful (i.e. stack not overflowed)
+	bool PopState(bool preserveLineNumber) noexcept;				// Pop state returning true if successful (i.e. no stack underrun)
 
-	void AbortFile(bool abortAll, bool requestAbort = true);
-	bool IsDoingFile() const;							// Return true if this source is executing a file
-	bool IsDoingFileMacro() const;						// Return true if this source is executing a file macro
-	FilePosition GetFilePosition() const;				// Get the file position at the start of the current command
+	void AbortFile(bool abortAll, bool requestAbort = true) noexcept;
+	bool IsDoingFile() const noexcept;							// Return true if this source is executing a file
+	bool IsDoingFileMacro() const noexcept;						// Return true if this source is executing a file macro
+	FilePosition GetFilePosition() const noexcept;				// Get the file position at the start of the current command
 
 #if HAS_LINUX_INTERFACE
-	void SetPrintFinished();							// Mark the print file as finished
-	bool IsFileFinished() const;						// Return true if this source has finished execution of a file
+	void SetPrintFinished() noexcept;							// Mark the print file as finished
+	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
 
-	bool IsMacroRequested() const { return !requestedMacroFile.IsEmpty(); }					// Indicates if a macro file is being requested
-	void RequestMacroFile(const char *filename, bool reportMissing, bool fromCode);	// Request execution of a file macro
-	const char *GetRequestedMacroFile(bool& reportMissing, bool &fromCode) const;		// Return requested macro file or nullptr if none
+	bool IsMacroRequested() const noexcept { return !requestedMacroFile.IsEmpty(); }					// Indicates if a macro file is being requested
+	void RequestMacroFile(const char *filename, bool reportMissing, bool fromCode) noexcept;	// Request execution of a file macro
+	const char *GetRequestedMacroFile(bool& reportMissing, bool &fromCode) const noexcept;		// Return requested macro file or nullptr if none
 
-	bool IsAbortRequested() const;						// Is the cancellation of the current file requested?
-	bool IsAbortAllRequested() const;					// Is the cancellation of all files being executed on this channel requested?
-	void AcknowledgeAbort();							// Indicates that the current macro file is being cancelled
+	bool IsAbortRequested() const noexcept;						// Is the cancellation of the current file requested?
+	bool IsAbortAllRequested() const noexcept;					// Is the cancellation of all files being executed on this channel requested?
+	void AcknowledgeAbort() noexcept;							// Indicates that the current macro file is being cancelled
 
-	void ReportStack() { reportStack = true; }			// Flags current stack details to be reported
-	bool IsStackEventFlagged() const;					// Did the stack change?
-	void AcknowledgeStackEvent();						// Indicates that the last stack event has been written
+	void ReportStack() noexcept { reportStack = true; }			// Flags current stack details to be reported
+	bool IsStackEventFlagged() const noexcept;					// Did the stack change?
+	void AcknowledgeStackEvent() noexcept;						// Indicates that the last stack event has been written
 
-	bool IsInvalidated() const { return invalidated; }	// Indicates if the channel is invalidated
-	void Invalidate(bool i = true) { invalidated = i; }	// Invalidate this channel (or not)
+	bool IsInvalidated() const noexcept { return invalidated; }	// Indicates if the channel is invalidated
+	void Invalidate(bool i = true) noexcept { invalidated = i; }	// Invalidate this channel (or not)
 #endif
 
-	GCodeState GetState() const;
-	void SetState(GCodeState newState);
-	void SetState(GCodeState newState, const char *err);
-	void AdvanceState();
-	void MessageAcknowledged(bool cancelled);
+	GCodeState GetState() const noexcept;
+	void SetState(GCodeState newState) noexcept;
+	void SetState(GCodeState newState, const char *err) noexcept;
+	void AdvanceState() noexcept;
+	void MessageAcknowledged(bool cancelled) noexcept;
 
-	GCodeChannel GetChannel() const { return codeChannel; }
-	const char *GetIdentity() const { return gcodeChannelName[(size_t)codeChannel]; }
-	bool CanQueueCodes() const;
-	MessageType GetResponseMessageType() const;
+	GCodeChannel GetChannel() const noexcept { return codeChannel; }
+	const char *GetIdentity() const noexcept { return gcodeChannelName[(size_t)codeChannel]; }
+	bool CanQueueCodes() const noexcept;
+	MessageType GetResponseMessageType() const noexcept;
 
-	int GetToolNumberAdjust() const { return toolNumberAdjust; }
-	void SetToolNumberAdjust(int arg) { toolNumberAdjust = arg; }
+	int GetToolNumberAdjust() const noexcept { return toolNumberAdjust; }
+	void SetToolNumberAdjust(int arg) noexcept { toolNumberAdjust = arg; }
 
 #if HAS_MASS_STORAGE
-	bool OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32);	// open a file to write to
-	bool IsWritingFile() const;							// Returns true if writing a file
-	void WriteToFile();									// Write the current GCode to file
+	bool OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept;
+																// open a file to write to
+	bool IsWritingFile() const noexcept;						// Returns true if writing a file
+	void WriteToFile() noexcept;								// Write the current GCode to file
 
-	bool IsWritingBinary() const;						// Returns true if writing binary
-	void WriteBinaryToFile(char b);						// Write a byte to the file
-	void FinishWritingBinary();
+	bool IsWritingBinary() const noexcept;						// Returns true if writing binary
+	void WriteBinaryToFile(char b) noexcept;					// Write a byte to the file
+	void FinishWritingBinary() noexcept;
 #endif
 
-	const char* DataStart() const;						// Get the start of the current command
-	size_t DataLength() const;							// Get the length of the current command
+	const char* DataStart() const noexcept;						// Get the start of the current command
+	size_t DataLength() const noexcept;							// Get the length of the current command
 
-	void PrintCommand(const StringRef& s) const;
-	void AppendFullCommand(const StringRef &s) const;
+	void PrintCommand(const StringRef& s) const noexcept;
+	void AppendFullCommand(const StringRef &s) const noexcept;
 
-	bool IsTimerRunning() const { return timerRunning; }
-	uint32_t WhenTimerStarted() const { return whenTimerStarted; }
-	void StartTimer();
-	void StopTimer() { timerRunning = false; }
-	bool DoDwellTime(uint32_t dwellMillis);				// Execute a dwell returning true if it has finished
+	bool IsTimerRunning() const noexcept { return timerRunning; }
+	uint32_t WhenTimerStarted() const noexcept { return whenTimerStarted; }
+	void StartTimer() noexcept;
+	void StopTimer() noexcept { timerRunning = false; }
+	bool DoDwellTime(uint32_t dwellMillis) noexcept;			// Execute a dwell returning true if it has finished
 
-	void RestartFrom(FilePosition pos);
+	void RestartFrom(FilePosition pos) noexcept;
 
 #if HAS_MASS_STORAGE
-	FileGCodeInput *GetFileInput() const { return fileInput; }	//TEMPORARY!
+	FileGCodeInput *GetFileInput() const noexcept { return fileInput; }	//TEMPORARY!
 #endif
-	GCodeInput *GetNormalInput() const { return normalInput; }	//TEMPORARY!
+	GCodeInput *GetNormalInput() const noexcept { return normalInput; }	//TEMPORARY!
 
 private:
 	const GCodeChannel codeChannel;						// Channel number of this instance
@@ -212,28 +213,28 @@ private:
 #endif
 };
 
-inline bool GCodeBuffer::IsDoingFileMacro() const
+inline bool GCodeBuffer::IsDoingFileMacro() const noexcept
 {
 	return machineState->doingFileMacro;
 }
 
-inline GCodeState GCodeBuffer::GetState() const
+inline GCodeState GCodeBuffer::GetState() const noexcept
 {
 	return machineState->state;
 }
 
-inline void GCodeBuffer::SetState(GCodeState newState)
+inline void GCodeBuffer::SetState(GCodeState newState) noexcept
 {
 	machineState->state = newState;
 }
 
-inline void GCodeBuffer::SetState(GCodeState newState, const char *err)
+inline void GCodeBuffer::SetState(GCodeState newState, const char *err) noexcept
 {
 	machineState->state = newState;
 	machineState->errorMessage = err;
 }
 
-inline void GCodeBuffer::AdvanceState()
+inline void GCodeBuffer::AdvanceState() noexcept
 {
 	machineState->state = static_cast<GCodeState>(static_cast<uint8_t>(machineState->state) + 1);
 }

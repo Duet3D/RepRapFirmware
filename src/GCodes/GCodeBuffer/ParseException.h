@@ -11,30 +11,32 @@
 #include <cstdint>
 
 class StringRef;
+class GCodeBuffer;
 
 class ParseException
 {
 public:
-	ParseException(int col, const char *msg) : column(col), message(msg)  { }
+	ParseException(int lin, int col, const char *msg) : line(lin), column(col), message(msg)  { }
 
-	ParseException(int col, const char *msg, const char *sparam) : column(col), message(msg)
+	ParseException(int lin, int col, const char *msg, const char *sparam) : line(lin), column(col), message(msg)
 	{
 		param.s = sparam;
 	}
 
-	ParseException(int col, const char *msg, uint32_t uparam) : column(col), message(msg)
+	ParseException(int lin, int col, const char *msg, uint32_t uparam) : line(lin), column(col), message(msg)
 	{
 		param.u = uparam;
 	}
 
-	ParseException(unsigned int col, const char *msg, int32_t iparam) : column(col), message(msg)
+	ParseException(int lin, int col, const char *msg, int32_t iparam) : line(lin), column(col), message(msg)
 	{
 		param.i = iparam;
 	}
 
-	void GetMessage(const StringRef& reply) const;
+	void GetMessage(const StringRef& reply, const GCodeBuffer& gb) const;
 
 private:
+	int line;
 	int column;
 	const char *message;
 	union

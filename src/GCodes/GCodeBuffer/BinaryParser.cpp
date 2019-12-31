@@ -10,19 +10,19 @@
 #include "Platform.h"
 #include "RepRap.h"
 
-BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) : gb(gcodeBuffer)
+BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer)
 {
 	header = reinterpret_cast<const CodeHeader *>(gcodeBuffer.buffer);
 }
 
-void BinaryParser::Init()
+void BinaryParser::Init() noexcept
 {
 	gb.bufferState = GCodeBufferState::parseNotStarted;
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
 }
 
-void BinaryParser::Put(const char *data, size_t len)
+void BinaryParser::Put(const char *data, size_t len) noexcept
 {
 	memcpy(gb.buffer, data, len);
 	bufferLength = len;
@@ -37,7 +37,7 @@ void BinaryParser::Put(const char *data, size_t len)
 	}
 }
 
-bool BinaryParser::Seen(char c)
+bool BinaryParser::Seen(char c) noexcept
 {
 	if (bufferLength != 0 && header->numParameters != 0)
 	{
@@ -71,22 +71,22 @@ bool BinaryParser::Seen(char c)
 	return false;
 }
 
-char BinaryParser::GetCommandLetter() const
+char BinaryParser::GetCommandLetter() const noexcept
 {
 	return (bufferLength != 0) ? header->letter : 'Q';
 }
 
-bool BinaryParser::HasCommandNumber() const
+bool BinaryParser::HasCommandNumber() const noexcept
 {
 	return (bufferLength != 0 && (header->flags & CodeFlags::HasMajorCommandNumber) != 0);
 }
 
-int BinaryParser::GetCommandNumber() const
+int BinaryParser::GetCommandNumber() const noexcept
 {
 	return HasCommandNumber() ? header->majorCode : -1;
 }
 
-int8_t BinaryParser::GetCommandFraction() const
+int8_t BinaryParser::GetCommandFraction() const noexcept
 {
 	return (bufferLength != 0 && (header->flags & CodeFlags::HasMinorCommandNumber) != 0) ? header->minorCode : -1;
 }
@@ -409,28 +409,28 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length)
 	}
 }
 
-void BinaryParser::SetFinished()
+void BinaryParser::SetFinished() noexcept
 {
 	gb.machineState->g53Active = false;		// G53 does not persist beyond the current command
 	Init();
 }
 
-FilePosition BinaryParser::GetFilePosition() const
+FilePosition BinaryParser::GetFilePosition() const noexcept
 {
 	return ((header->flags & CodeFlags::HasFilePosition) != 0) ? header->filePosition : noFilePosition;
 }
 
-const char* BinaryParser::DataStart() const
+const char* BinaryParser::DataStart() const noexcept
 {
 	return gb.buffer;
 }
 
-size_t BinaryParser::DataLength() const
+size_t BinaryParser::DataLength() const noexcept
 {
 	return bufferLength;
 }
 
-void BinaryParser::PrintCommand(const StringRef& s) const
+void BinaryParser::PrintCommand(const StringRef& s) const noexcept
 {
 	if (bufferLength != 0 && (header->flags & CodeFlags::HasMajorCommandNumber) != 0)
 	{
@@ -446,7 +446,7 @@ void BinaryParser::PrintCommand(const StringRef& s) const
 	}
 }
 
-void BinaryParser::AppendFullCommand(const StringRef &s) const
+void BinaryParser::AppendFullCommand(const StringRef &s) const noexcept
 {
 	if (bufferLength != 0)
 	{
@@ -467,7 +467,7 @@ void BinaryParser::AppendFullCommand(const StringRef &s) const
 	}
 }
 
-size_t BinaryParser::AddPadding(size_t bytesRead) const
+size_t BinaryParser::AddPadding(size_t bytesRead) const noexcept
 {
     size_t padding = 4 - bytesRead % 4;
     return bytesRead + ((padding == 4) ? 0 : padding);
@@ -537,7 +537,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length, bool d
 	}
 }
 
-void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const
+void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const noexcept
 {
 	if (bufferLength != 0)
 	{
@@ -639,19 +639,19 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const
 	}
 }
 
-ParseException BinaryParser::ConstructParseException(const char *str) const
+ParseException BinaryParser::ConstructParseException(const char *str) const noexcept
 {
-	return ParseException(-1, str);
+	return ParseException(lineNumber, -1, str);
 }
 
-ParseException BinaryParser::ConstructParseException(const char *str, const char *param) const
+ParseException BinaryParser::ConstructParseException(const char *str, const char *param) const noexcept
 {
-	return ParseException(-1, str, param);
+	return ParseException(lineNumber, -1, str, param);
 }
 
-ParseException BinaryParser::ConstructParseException(const char *str, uint32_t param) const
+ParseException BinaryParser::ConstructParseException(const char *str, uint32_t param) const noexcept
 {
-	return ParseException(-1, str, param);
+	return ParseException(lineNumber, -1, str, param);
 }
 
 // End

@@ -97,7 +97,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
 	}
 	catch (const ParseException& e)
 	{
-		e.GetMessage(reply);
+		e.GetMessage(reply, gb);
 		HandleReply(gb, GCodeResult::error, reply.c_str());
 		return true;
 	}

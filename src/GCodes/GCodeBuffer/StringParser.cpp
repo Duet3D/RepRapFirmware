@@ -42,7 +42,7 @@ inline void StringParser::AddToChecksum(char c) noexcept
 	computedChecksum ^= (uint8_t)c;
 }
 
-inline void StringParser::StoreAndAddToChecksum(char c)
+inline void StringParser::StoreAndAddToChecksum(char c) noexcept
 {
 	computedChecksum ^= (uint8_t)c;
 	if (gcodeLineEnd < ARRAY_SIZE(gb.buffer))
@@ -54,7 +54,7 @@ inline void StringParser::StoreAndAddToChecksum(char c)
 // Add a byte to the code being assembled.  If false is returned, the code is
 // not yet complete.  If true, it is complete and ready to be acted upon and 'indent'
 // is the number of leading white space characters..
-bool StringParser::Put(char c)
+bool StringParser::Put(char c) noexcept
 {
 	if (c != 0)
 	{
@@ -233,6 +233,15 @@ bool StringParser::Put(char c)
 // Return true if there is a completed command ready to be executed.
 bool StringParser::LineFinished()
 {
+	if (hadLineNumber)
+	{
+		gb.machineState->lineNumber = receivedLineNumber;
+	}
+	else
+	{
+		++gb.machineState->lineNumber;
+	}
+
 	if (gcodeLineEnd == 0)
 	{
 		// Empty line
@@ -253,34 +262,6 @@ bool StringParser::LineFinished()
 	if (reprap.Debug(moduleGcodes) && fileBeingWritten == nullptr)
 	{
 		reprap.GetPlatform().MessageF(DebugMessage, "%s%s: %s\n", gb.GetIdentity(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);
-	}
-
-	if (badChecksum)
-	{
-		if (hadLineNumber)
-		{
-			SafeSnprintf(gb.buffer, ARRAY_SIZE(gb.buffer), "M998 P%u", receivedLineNumber);	// request resend
-		}
-		else
-		{
-			Init();
-			return false;
-		}
-	}
-	else if (missingChecksum)
-	{
-		// Checksum required but none was provided
-		Init();
-		return false;
-	}
-
-	if (hadLineNumber)
-	{
-		gb.machineState->lineNumber = receivedLineNumber;
-	}
-	else
-	{
-		++gb.machineState->lineNumber;
 	}
 
 	commandStart = 0;
@@ -416,7 +397,7 @@ bool StringParser::ProcessConditionalGCode(BlockType previousBlockType)
 }
 
 // Create new code blocks
-void StringParser::CreateBlocks()
+void StringParser::CreateBlocks() noexcept
 {
 	while (gb.machineState->indentLevel < commandIndent)
 	{
@@ -425,7 +406,7 @@ void StringParser::CreateBlocks()
 }
 
 // End blocks returning true if nothing more to process on this line
-bool StringParser::EndBlocks()
+bool StringParser::EndBlocks() noexcept
 {
 	while (gb.machineState->indentLevel > commandIndent)
 	{
@@ -463,10 +444,11 @@ void StringParser::ProcessElseCommand(BlockType previousBlockType)
 	else if (gb.machineState->CurrentBlockState().GetType() == BlockType::ifTrue || gb.machineState->CurrentBlockState().GetType() == BlockType::ifFalseHadTrue)
 	{
 		indentToSkipTo = gb.machineState->indentLevel;					// skip forwards to the end of the if-block
+		gb.machineState->CurrentBlockState().SetPlainBlock();			// so that we get an error if there is another 'else' part
 	}
 	else
 	{
-		throw ConstructParseException("'else' did not follow 'if");
+		throw ConstructParseException("'else' did not follow 'if'");
 	}
 }
 
@@ -480,7 +462,8 @@ void StringParser::ProcessElifCommand(BlockType previousBlockType)
 		}
 		else
 		{
-			indentToSkipTo = gb.machineState->indentLevel;				// skip forwards to the end of the if-block
+			indentToSkipTo = gb.machineState->indentLevel;				// skip forwards to the end of the elif-block
+			gb.machineState->CurrentBlockState().SetIfFalseNoneTrueBlock();
 		}
 	}
 	else if (gb.machineState->CurrentBlockState().GetType() == BlockType::ifTrue || gb.machineState->CurrentBlockState().GetType() == BlockType::ifFalseHadTrue)
@@ -551,7 +534,7 @@ bool StringParser::EvaluateCondition()
 // On entry, 'commandStart' has already been set to the address the start of where the command should be
 // and 'commandIndent' is the number of leading whitespace characters at the start of the current line.
 // On return, the state must be set to 'ready' to indicate that a command is available and we should stop adding characters.
-void StringParser::DecodeCommand()
+void StringParser::DecodeCommand() noexcept
 {
 	// Check for a valid command letter at the start
 	const char cl = toupper(gb.buffer[commandStart]);
@@ -646,7 +629,7 @@ void StringParser::DecodeCommand()
 }
 
 // Add an entire string, overwriting any existing content and adding '\n' at the end if necessary to make it a complete line
-void StringParser::PutAndDecode(const char *str, size_t len)
+void StringParser::PutAndDecode(const char *str, size_t len) noexcept
 {
 	Init();
 	for (size_t i = 0; i < len; i++)
@@ -662,12 +645,12 @@ void StringParser::PutAndDecode(const char *str, size_t len)
 	DecodeCommand();
 }
 
-void StringParser::PutAndDecode(const char *str)
+void StringParser::PutAndDecode(const char *str) noexcept
 {
 	PutAndDecode(str, strlen(str));
 }
 
-void StringParser::SetFinished()
+void StringParser::SetFinished() noexcept
 {
 	if (commandEnd < gcodeLineEnd)
 	{
@@ -1219,7 +1202,7 @@ void StringParser::AppendFullCommand(const StringRef &s) const noexcept
 #if HAS_MASS_STORAGE
 
 // Open a file to write to
-bool StringParser::OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
+bool StringParser::OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept
 {
 	fileBeingWritten = reprap.GetPlatform().OpenFile(directory, fileName, OpenMode::writeWithCrc);
 	eofStringCounter = 0;
@@ -1235,7 +1218,7 @@ bool StringParser::OpenFileToWrite(const char* directory, const char* fileName, 
 }
 
 // Write the current line of GCode to file
-void StringParser::WriteToFile()
+void StringParser::WriteToFile() noexcept
 {
 	DecodeCommand();
 	if (GetCommandLetter() == 'M')
@@ -1267,7 +1250,7 @@ void StringParser::WriteToFile()
 	Init();
 }
 
-void StringParser::WriteBinaryToFile(char b)
+void StringParser::WriteBinaryToFile(char b) noexcept
 {
 	if (b == eofString[eofStringCounter] && writingFileSize == 0)
 	{
@@ -1297,7 +1280,7 @@ void StringParser::WriteBinaryToFile(char b)
 	FinishWritingBinary();
 }
 
-void StringParser::FinishWritingBinary()
+void StringParser::FinishWritingBinary() noexcept
 {
 	// If we get here then we have come to the end of the data
 	fileBeingWritten->Close();
@@ -1316,7 +1299,7 @@ void StringParser::FinishWritingBinary()
 }
 
 // This is called when we reach the end of the file we are reading from. Return true if there is a line waiting to be processed.
-bool StringParser::FileEnded()
+bool StringParser::FileEnded() noexcept
 {
 	if (IsWritingBinary())
 	{
@@ -1335,15 +1318,17 @@ bool StringParser::FileEnded()
 
 	if (IsWritingFile())
 	{
-		bool gotM29 = false;
-		if (gb.IsReady())				// if we have a complete command
+		if (commandCompleted)
 		{
 			DecodeCommand();
-			gotM29 = (GetCommandLetter() == 'M' && GetCommandNumber() == 29);
-			if (!gotM29)				// if it wasn't M29, write it to file
+			if (gb.IsReady())				// if we have a complete command
 			{
-				fileBeingWritten->Write(gb.buffer);
-				fileBeingWritten->Write('\n');
+				const bool gotM29 = (GetCommandLetter() == 'M' && GetCommandNumber() == 29);
+				if (!gotM29)				// if it wasn't M29, write it to file
+				{
+					fileBeingWritten->Write(gb.buffer);
+					fileBeingWritten->Write('\n');
+				}
 			}
 		}
 
@@ -1729,7 +1714,7 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority)
 				break;
 
 			case TYPE_OF(float_t):
-				val.fVal = (val.fVal > val2.fVal);
+				val.bVal = (val.fVal > val2.fVal);
 				break;
 
 			case TYPE_OF(bool):
@@ -1755,7 +1740,7 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority)
 				break;
 
 			case TYPE_OF(float_t):
-				val.fVal = (val.fVal < val2.fVal);
+				val.bVal = (val.fVal < val2.fVal);
 				break;
 
 			case TYPE_OF(bool):
@@ -1892,7 +1877,7 @@ void StringParser::ConvertToBool(ExpressionValue& val)
 	}
 }
 
-void StringParser::SkipWhiteSpace()
+void StringParser::SkipWhiteSpace() noexcept
 {
 	while (gb.buffer[readPointer] == ' ' || gb.buffer[readPointer] == '\t')
 	{
@@ -2168,17 +2153,17 @@ ExpressionValue StringParser::ParseIdentifier()
 
 ParseException StringParser::ConstructParseException(const char *str) const
 {
-	return ParseException(readPointer, str);
+	return ParseException(gb.machineState->lineNumber, readPointer, str);
 }
 
 ParseException StringParser::ConstructParseException(const char *str, const char *param) const
 {
-	return ParseException(readPointer, str, param);
+	return ParseException(gb.machineState->lineNumber, readPointer, str, param);
 }
 
 ParseException StringParser::ConstructParseException(const char *str, uint32_t param) const
 {
-	return ParseException(readPointer, str, param);
+	return ParseException(gb.machineState->lineNumber, readPointer, str, param);
 }
 
 // End

@@ -24,11 +24,11 @@ public:
 	StringParser(GCodeBuffer& gcodeBuffer) noexcept;
 	void Init() noexcept; 													// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype) noexcept;							// Write some debug info
-	bool Put(char c) __attribute__((hot));									// Add a character to the end
-	void DecodeCommand();													// Decode the next command in the line
-	void PutAndDecode(const char *str, size_t len);							// Add an entire string, overwriting any existing content
-	void PutAndDecode(const char *str);										// Add a null-terminated string, overwriting any existing content
-	bool FileEnded();														// Called when we reach the end of the file we are reading from
+	bool Put(char c) noexcept __attribute__((hot));							// Add a character to the end
+	void DecodeCommand() noexcept;											// Decode the next command in the line
+	void PutAndDecode(const char *str, size_t len) noexcept;				// Add an entire string, overwriting any existing content
+	void PutAndDecode(const char *str) noexcept;							// Add a null-terminated string, overwriting any existing content
+	bool FileEnded() noexcept;												// Called when we reach the end of the file we are reading from
 	bool CheckMetaCommand() THROWS_PARSE_ERROR;								// Check whether the current command is a meta command, or we are skipping block
 
 	// The following may be called after calling DecodeCommand
@@ -54,23 +54,24 @@ public:
 	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS_PARSE_ERROR;	// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS_PARSE_ERROR;	// Get a :-separated list of drivers after a key letter
 
-	void SetFinished();									// Set the G Code finished
-	void SetCommsProperties(uint32_t arg) { checksumRequired = (arg & 1); }
+	void SetFinished() noexcept;											// Set the G Code finished
+	void SetCommsProperties(uint32_t arg) noexcept { checksumRequired = (arg & 1); }
 
 #if HAS_MASS_STORAGE
-	bool OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32);	// Open a file to write to
-	bool IsWritingFile() const { return fileBeingWritten != nullptr; }	// Returns true if writing a file
-	void WriteToFile();													// Write the current GCode to file
+	bool OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept;
+																			// Open a file to write to
+	bool IsWritingFile() const noexcept { return fileBeingWritten != nullptr; }	// Returns true if writing a file
+	void WriteToFile() noexcept;											// Write the current GCode to file
 
-	bool IsWritingBinary() const { return IsWritingFile() && binaryWriting; }	// Returns true if writing binary
-	void WriteBinaryToFile(char b);												// Write a byte to the file
-	void FinishWritingBinary();
+	bool IsWritingBinary() const noexcept { return IsWritingFile() && binaryWriting; }	// Returns true if writing binary
+	void WriteBinaryToFile(char b) noexcept;								// Write a byte to the file
+	void FinishWritingBinary() noexcept;
 #endif
 
-	FilePosition GetFilePosition() const noexcept;				// Get the file position at the start of the current command
+	FilePosition GetFilePosition() const noexcept;							// Get the file position at the start of the current command
 
-	const char* DataStart() const noexcept;						// Get the start of the current command
-	size_t DataLength() const noexcept;							// Get the length of the current command
+	const char* DataStart() const noexcept;									// Get the start of the current command
+	size_t DataLength() const noexcept;										// Get the length of the current command
 
 	void PrintCommand(const StringRef& s) const noexcept;
 	void AppendFullCommand(const StringRef &s) const noexcept;
@@ -83,8 +84,8 @@ private:
 	GCodeBuffer& gb;
 
 	void AddToChecksum(char c) noexcept;
-	void StoreAndAddToChecksum(char c);
-	bool LineFinished() THROWS_PARSE_ERROR;						// Deal with receiving end-of-line and return true if we have a command
+	void StoreAndAddToChecksum(char c) noexcept;
+	bool LineFinished() THROWS_PARSE_ERROR;									// Deal with receiving end-of-line and return true if we have a command
 	void InternalGetQuotedString(const StringRef& str) THROWS_PARSE_ERROR
 		pre (readPointer >= 0; gb.buffer[readPointer] == '"'; str.IsEmpty());
 	void InternalGetPossiblyQuotedString(const StringRef& str) THROWS_PARSE_ERROR
@@ -97,11 +98,11 @@ private:
 		pre (readPointer >= 0; gb.buffer[readPointer] == '{'; str.IsEmpty());
 
 	bool ProcessConditionalGCode(BlockType previousBlockType) THROWS_PARSE_ERROR;
-														// Check for and process a conditional GCode language command returning true if we found one
-	void CreateBlocks();								// Create new code blocks
-	bool EndBlocks();									// End blocks returning true if nothing more to process on this line
+																			// Check for and process a conditional GCode language command returning true if we found one
+	void CreateBlocks() noexcept;											// Create new code blocks
+	bool EndBlocks() noexcept;												// End blocks returning true if nothing more to process on this line
 	void ProcessIfCommand() THROWS_PARSE_ERROR;
-	void ProcessElseCommand(BlockType previousBlockType);
+	void ProcessElseCommand(BlockType previousBlockType) THROWS_PARSE_ERROR;
 	void ProcessElifCommand(BlockType previousBlockType) THROWS_PARSE_ERROR;
 	void ProcessWhileCommand() THROWS_PARSE_ERROR;
 	void ProcessBreakCommand();
@@ -126,7 +127,7 @@ private:
 	void ConvertToBool(ExpressionValue& val) THROWS_PARSE_ERROR;
 	void EnsureNumeric(ExpressionValue& val) THROWS_PARSE_ERROR;
 
-	void SkipWhiteSpace();
+	void SkipWhiteSpace() noexcept;
 
 	unsigned int commandStart;							// Index in the buffer of the command letter of this command
 	unsigned int parameterStart;

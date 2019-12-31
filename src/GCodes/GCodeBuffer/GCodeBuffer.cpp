@@ -18,7 +18,7 @@
 #include "Platform.h"
 
 // Create a default GCodeBuffer
-GCodeBuffer::GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility c)
+GCodeBuffer::GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility c) noexcept
 	: codeChannel(channel), normalInput(normalIn),
 #if HAS_MASS_STORAGE
 	  fileInput(fileIn),
@@ -34,7 +34,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeIn
 }
 
 // Reset it to its state after start-up
-void GCodeBuffer::Reset()
+void GCodeBuffer::Reset() noexcept
 {
 	while (PopState(false)) { }
 	isBinaryBuffer = false;
@@ -42,20 +42,20 @@ void GCodeBuffer::Reset()
 }
 
 // Set it up to parse another G-code
-void GCodeBuffer::Init()
+void GCodeBuffer::Init() noexcept
 {
 	binaryParser.Init();
 	stringParser.Init();
 	timerRunning = false;
 }
 
-void GCodeBuffer::StartTimer()
+void GCodeBuffer::StartTimer() noexcept
 {
 	whenTimerStarted = millis();
 	timerRunning = true;
 }
 
-bool GCodeBuffer::DoDwellTime(uint32_t dwellMillis)
+bool GCodeBuffer::DoDwellTime(uint32_t dwellMillis) noexcept
 {
 	const uint32_t now = millis();
 
@@ -76,7 +76,7 @@ bool GCodeBuffer::DoDwellTime(uint32_t dwellMillis)
 }
 
 // Write some debug info
-void GCodeBuffer::Diagnostics(MessageType mtype)
+void GCodeBuffer::Diagnostics(MessageType mtype) noexcept
 {
 	String<ScratchStringLength> scratchString;
 	scratchString.copy(GetIdentity());
@@ -119,14 +119,14 @@ void GCodeBuffer::Diagnostics(MessageType mtype)
 }
 
 // Add a character to the end
-bool GCodeBuffer::Put(char c)
+bool GCodeBuffer::Put(char c) noexcept
 {
 	isBinaryBuffer = false;
 	return stringParser.Put(c);
 }
 
 // Decode the command in the buffer when it is complete
-void GCodeBuffer::DecodeCommand()
+void GCodeBuffer::DecodeCommand() noexcept
 {
 	if (!isBinaryBuffer)
 	{
@@ -141,7 +141,7 @@ bool GCodeBuffer::CheckMetaCommand()
 }
 
 // Add an entire G-Code, overwriting any existing content
-void GCodeBuffer::PutAndDecode(const char *str, size_t len, bool isBinary)
+void GCodeBuffer::PutAndDecode(const char *str, size_t len, bool isBinary) noexcept
 {
 	isBinaryBuffer = isBinary;
 	if (isBinary)
@@ -155,38 +155,37 @@ void GCodeBuffer::PutAndDecode(const char *str, size_t len, bool isBinary)
 }
 
 // Add a null-terminated string, overwriting any existing content
-void GCodeBuffer::PutAndDecode(const char *str)
+void GCodeBuffer::PutAndDecode(const char *str) noexcept
 {
 	isBinaryBuffer = false;
 	stringParser.PutAndDecode(str);
 }
 
 // Called when we reach the end of the file we are reading from. Return true if there is a line waiting to be processed.
-bool GCodeBuffer::FileEnded()
+bool GCodeBuffer::FileEnded() noexcept
 {
 	return (!isBinaryBuffer) && stringParser.FileEnded();
 }
 
-char GCodeBuffer::GetCommandLetter() const
+char GCodeBuffer::GetCommandLetter() const noexcept
 {
 	return isBinaryBuffer ? binaryParser.GetCommandLetter() : stringParser.GetCommandLetter();
 }
 
-bool GCodeBuffer::HasCommandNumber() const
+bool GCodeBuffer::HasCommandNumber() const noexcept
 {
 	return isBinaryBuffer ? binaryParser.HasCommandNumber() : stringParser.HasCommandNumber();
 }
 
-int GCodeBuffer::GetCommandNumber() const
+int GCodeBuffer::GetCommandNumber() const noexcept
 {
 	return isBinaryBuffer ? binaryParser.GetCommandNumber() : stringParser.GetCommandNumber();
 }
 
-int8_t GCodeBuffer::GetCommandFraction() const
+int8_t GCodeBuffer::GetCommandFraction() const noexcept
 {
 	return isBinaryBuffer ? binaryParser.GetCommandFraction() : stringParser.GetCommandFraction();
 }
-
 
 // Is a character present?
 bool GCodeBuffer::Seen(char c) noexcept
@@ -199,7 +198,7 @@ void GCodeBuffer::MustSee(char c)
 {
 	if (!Seen(c))
 	{
-		throw ParseException(-1, "missing parameter '%c'", (uint32_t)c);
+		throw ParseException(machineState->lineNumber, -1, "missing parameter '%c'", (uint32_t)c);
 	}
 }
 
@@ -497,27 +496,27 @@ DriverId GCodeBuffer::GetDriverId()
 	return isBinaryBuffer ? binaryParser.GetDriverId() : stringParser.GetDriverId();
 }
 
-bool GCodeBuffer::IsIdle() const
+bool GCodeBuffer::IsIdle() const noexcept
 {
 	return bufferState != GCodeBufferState::ready && bufferState != GCodeBufferState::executing;
 }
 
-bool GCodeBuffer::IsCompletelyIdle() const
+bool GCodeBuffer::IsCompletelyIdle() const noexcept
 {
 	return GetState() == GCodeState::normal && IsIdle();
 }
 
-bool GCodeBuffer::IsReady() const
+bool GCodeBuffer::IsReady() const noexcept
 {
 	return bufferState == GCodeBufferState::ready;
 }
 
-bool GCodeBuffer::IsExecuting() const
+bool GCodeBuffer::IsExecuting() const noexcept
 {
 	return bufferState == GCodeBufferState::executing;
 }
 
-void GCodeBuffer::SetFinished(bool f)
+void GCodeBuffer::SetFinished(bool f) noexcept
 {
 	if (f)
 	{
@@ -536,7 +535,7 @@ void GCodeBuffer::SetFinished(bool f)
 	}
 }
 
-void GCodeBuffer::SetCommsProperties(uint32_t arg)
+void GCodeBuffer::SetCommsProperties(uint32_t arg) noexcept
 {
 	if (!isBinaryBuffer)
 	{
@@ -545,7 +544,7 @@ void GCodeBuffer::SetCommsProperties(uint32_t arg)
 }
 
 // Get the original machine state before we pushed anything
-GCodeMachineState& GCodeBuffer::OriginalMachineState() const
+GCodeMachineState& GCodeBuffer::OriginalMachineState() const noexcept
 {
 	GCodeMachineState *ms = machineState;
 	while (ms->previous != nullptr)
@@ -556,20 +555,20 @@ GCodeMachineState& GCodeBuffer::OriginalMachineState() const
 }
 
 // Convert from inches to mm if necessary
-float GCodeBuffer::ConvertDistance(float distance) const
+float GCodeBuffer::ConvertDistance(float distance) const noexcept
 {
 	return (machineState->usingInches) ? distance * InchToMm : distance;
 }
 
 // Convert from mm to inches if necessary
-float GCodeBuffer::InverseConvertDistance(float distance) const
+float GCodeBuffer::InverseConvertDistance(float distance) const noexcept
 {
 	return (machineState->usingInches) ? distance/InchToMm : distance;
 }
 
 
 // Push state returning true if successful (i.e. stack not overflowed)
-bool GCodeBuffer::PushState(bool preserveLineNumber)
+bool GCodeBuffer::PushState(bool preserveLineNumber) noexcept
 {
 	// Check the current stack depth
 	unsigned int depth = 0;
@@ -612,7 +611,7 @@ bool GCodeBuffer::PushState(bool preserveLineNumber)
 }
 
 // Pop state returning true if successful (i.e. no stack underrun)
-bool GCodeBuffer::PopState(bool preserveLineNumber)
+bool GCodeBuffer::PopState(bool preserveLineNumber) noexcept
 {
 	GCodeMachineState * const ms = machineState;
 	if (ms->previous == nullptr)
@@ -638,7 +637,7 @@ bool GCodeBuffer::PopState(bool preserveLineNumber)
 
 // Abort execution of any files or macros being executed, returning true if any files were closed
 // We now avoid popping the state if we were not executing from a file, so that if DWC or PanelDue is used to jog the axes before they are homed, we don't report stack underflow.
-void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort)
+void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort) noexcept
 {
 	if (machineState->DoingFile())
 	{
@@ -662,12 +661,12 @@ void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort)
 
 #if HAS_LINUX_INTERFACE
 
-bool GCodeBuffer::IsFileFinished() const
+bool GCodeBuffer::IsFileFinished() const noexcept
 {
 	return machineState->isFileFinished;
 }
 
-void GCodeBuffer::SetPrintFinished()
+void GCodeBuffer::SetPrintFinished() noexcept
 {
 	const uint32_t fileId = OriginalMachineState().fileId;
 	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->previous)
@@ -680,7 +679,7 @@ void GCodeBuffer::SetPrintFinished()
 }
 
 // Note: filename is sometimes null when calling this from LinuxInterface
-void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing, bool fromCode)
+void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing, bool fromCode) noexcept
 {
 	machineState->SetFileExecuting();
 	if (filename == nullptr)
@@ -696,34 +695,34 @@ void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing, boo
 	abortFile = abortAllFiles = false;
 }
 
-const char *GCodeBuffer::GetRequestedMacroFile(bool& reportMissing, bool& fromCode) const
+const char *GCodeBuffer::GetRequestedMacroFile(bool& reportMissing, bool& fromCode) const noexcept
 {
 	reportMissing = reportMissingMacro;
 	fromCode = isMacroFromCode;
 	return requestedMacroFile.IsEmpty() ? nullptr : requestedMacroFile.c_str();
 }
 
-bool GCodeBuffer::IsAbortRequested() const
+bool GCodeBuffer::IsAbortRequested() const noexcept
 {
 	return abortFile;
 }
 
-bool GCodeBuffer::IsAbortAllRequested() const
+bool GCodeBuffer::IsAbortAllRequested() const noexcept
 {
 	return abortAllFiles;
 }
 
-void GCodeBuffer::AcknowledgeAbort()
+void GCodeBuffer::AcknowledgeAbort() noexcept
 {
 	abortFile = abortAllFiles = false;
 }
 
-bool GCodeBuffer::IsStackEventFlagged() const
+bool GCodeBuffer::IsStackEventFlagged() const noexcept
 {
 	return reportStack;
 }
 
-void GCodeBuffer::AcknowledgeStackEvent()
+void GCodeBuffer::AcknowledgeStackEvent() noexcept
 {
 	reportStack = false;
 }
@@ -732,7 +731,7 @@ void GCodeBuffer::AcknowledgeStackEvent()
 
 // Tell this input source that any message it sent and is waiting on has been acknowledged
 // Allow for the possibility that the source may have started running a macro since it started waiting
-void GCodeBuffer::MessageAcknowledged(bool cancelled)
+void GCodeBuffer::MessageAcknowledged(bool cancelled) noexcept
 {
 	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->previous)
 	{
@@ -746,12 +745,12 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled)
 }
 
 // Return true if we can queue gcodes from this source. This is the case if a file is being executed
-bool GCodeBuffer::CanQueueCodes() const
+bool GCodeBuffer::CanQueueCodes() const noexcept
 {
 	return machineState->DoingFile();
 }
 
-MessageType GCodeBuffer::GetResponseMessageType() const
+MessageType GCodeBuffer::GetResponseMessageType() const noexcept
 {
 	if (isBinaryBuffer)
 	{
@@ -760,7 +759,7 @@ MessageType GCodeBuffer::GetResponseMessageType() const
 	return responseMessageType;
 }
 
-bool GCodeBuffer::IsDoingFile() const
+bool GCodeBuffer::IsDoingFile() const noexcept
 {
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
@@ -776,14 +775,14 @@ bool GCodeBuffer::IsDoingFile() const
 #endif
 }
 
-FilePosition GCodeBuffer::GetFilePosition() const
+FilePosition GCodeBuffer::GetFilePosition() const noexcept
 {
 	return isBinaryBuffer ? binaryParser.GetFilePosition() : stringParser.GetFilePosition();
 }
 
 #if HAS_MASS_STORAGE
 
-bool GCodeBuffer::OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
+bool GCodeBuffer::OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept
 {
 	if (isBinaryBuffer)
 	{
@@ -792,7 +791,7 @@ bool GCodeBuffer::OpenFileToWrite(const char* directory, const char* fileName, c
 	return stringParser.OpenFileToWrite(directory, fileName, size, binaryWrite, fileCRC32);
 }
 
-bool GCodeBuffer::IsWritingFile() const
+bool GCodeBuffer::IsWritingFile() const noexcept
 {
 	if (!isBinaryBuffer)
 	{
@@ -801,7 +800,7 @@ bool GCodeBuffer::IsWritingFile() const
 	return false;
 }
 
-void GCodeBuffer::WriteToFile()
+void GCodeBuffer::WriteToFile() noexcept
 {
 	if (!isBinaryBuffer)
 	{
@@ -809,7 +808,7 @@ void GCodeBuffer::WriteToFile()
 	}
 }
 
-bool GCodeBuffer::IsWritingBinary() const
+bool GCodeBuffer::IsWritingBinary() const noexcept
 {
 	if (!isBinaryBuffer)
 	{
@@ -818,7 +817,7 @@ bool GCodeBuffer::IsWritingBinary() const
 	return false;
 }
 
-void GCodeBuffer::WriteBinaryToFile(char b)
+void GCodeBuffer::WriteBinaryToFile(char b) noexcept
 {
 	if (!isBinaryBuffer)
 	{
@@ -826,7 +825,7 @@ void GCodeBuffer::WriteBinaryToFile(char b)
 	}
 }
 
-void GCodeBuffer::FinishWritingBinary()
+void GCodeBuffer::FinishWritingBinary() noexcept
 {
 	if (!isBinaryBuffer)
 	{
@@ -836,7 +835,7 @@ void GCodeBuffer::FinishWritingBinary()
 
 #endif
 
-void GCodeBuffer::RestartFrom(FilePosition pos)
+void GCodeBuffer::RestartFrom(FilePosition pos) noexcept
 {
 #if HAS_MASS_STORAGE
 	fileInput->Reset(machineState->fileState);		// clear the buffered data
@@ -845,17 +844,17 @@ void GCodeBuffer::RestartFrom(FilePosition pos)
 	Init();											// clear the next move
 }
 
-const char* GCodeBuffer::DataStart() const
+const char* GCodeBuffer::DataStart() const noexcept
 {
 	return isBinaryBuffer ? binaryParser.DataStart() : stringParser.DataStart();
 }
 
-size_t GCodeBuffer::DataLength() const
+size_t GCodeBuffer::DataLength() const noexcept
 {
 	return isBinaryBuffer ? binaryParser.DataLength() : stringParser.DataLength();
 }
 
-void GCodeBuffer::PrintCommand(const StringRef& s) const
+void GCodeBuffer::PrintCommand(const StringRef& s) const noexcept
 {
 	if (isBinaryBuffer)
 	{
@@ -867,7 +866,7 @@ void GCodeBuffer::PrintCommand(const StringRef& s) const
 	}
 }
 
-void GCodeBuffer::AppendFullCommand(const StringRef &s) const
+void GCodeBuffer::AppendFullCommand(const StringRef &s) const noexcept
 {
 	if (isBinaryBuffer)
 	{

@@ -118,7 +118,14 @@ enum class Compatibility : uint8_t
 };
 
 // Type of the block we are in when processing conditional GCode
-enum class BlockType : uint8_t { plain, ifTrue, ifFalseNoneTrue, ifFalseHadTrue, loop };
+enum class BlockType : uint8_t
+{
+	plain,						// a normal block
+	ifTrue,						// the block immediately after 'if' when the condition was true, or after 'elif' when the condition was true and previous conditions were false
+	ifFalseNoneTrue,			// the block immediately after 'if' when the condition was false, or after 'elif' when all conditions so far were false
+	ifFalseHadTrue,				// the block immediately after 'elif' when we have already seem a true condition
+	loop						// block inside a 'while' command
+};
 
 // Class to hold the state of gcode execution for some input source
 class GCodeMachineState
