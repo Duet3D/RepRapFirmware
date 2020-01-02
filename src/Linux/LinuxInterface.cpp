@@ -419,37 +419,34 @@ void LinuxInterface::Spin()
 		}
 		wasConnected = true;
 	}
-	else if (!transfer->IsConnected())
+	else if (!transfer->IsConnected() && wasConnected)
 	{
-		if (wasConnected)
+		reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to Linux\n");
+
+		wasConnected = false;
+		numDisconnects++;
+
+		rxPointer = txPointer = txLength = 0;
+		sendBufferUpdate = true;
+		iapWritePointer = IAP_IMAGE_START;
+
+		if (!requestedFileName.IsEmpty())
 		{
-			reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to Linux\n");
-
-			wasConnected = false;
-			numDisconnects++;
-
-			rxPointer = txPointer = txLength = 0;
-			sendBufferUpdate = true;
-			iapWritePointer = IAP_IMAGE_START;
-
-			if (!requestedFileName.IsEmpty())
-			{
-				requestedFileDataLength = -1;
-				requestedFileSemaphore.Give();
-			}
-
-			// Don't cache any messages if they cannot be sent
-			gcodeReply->ReleaseAll();
-
-			// Close all open G-code files
-			for (size_t i = 0; i < NumGCodeChannels; i++)
-			{
-				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((GCodeChannel)i);
-				gb->AbortFile(true, false);
-				gb->MessageAcknowledged(true);
-			}
-			reprap.GetGCodes().StopPrint(StopPrintReason::abort);
+			requestedFileDataLength = -1;
+			requestedFileSemaphore.Give();
 		}
+
+		// Don't cache any messages if they cannot be sent
+		gcodeReply->ReleaseAll();
+
+		// Close all open G-code files
+		for (size_t i = 0; i < NumGCodeChannels; i++)
+		{
+			GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer((GCodeChannel)i);
+			gb->AbortFile(true, false);
+			gb->MessageAcknowledged(true);
+		}
+		reprap.GetGCodes().StopPrint(StopPrintReason::abort);
 
 		// Invalidate the G-code buffers holding binary data (if applicable)
 		for (size_t i = 0; i < NumGCodeChannels; i++)

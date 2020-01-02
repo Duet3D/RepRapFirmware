@@ -24,18 +24,19 @@ GCodeBuffer::GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeIn
 #endif
 	  responseMessageType(mt), toolNumberAdjust(0), isBinaryBuffer(false), binaryParser(*this), stringParser(*this),
 	  machineState(new GCodeMachineState())
-#if HAS_LINUX_INTERFACE
-	  , reportMissingMacro(false), isMacroFromCode(false), abortFile(false), abortAllFiles(false), reportStack(false)
-#endif
 {
 	machineState->compatibility = c;
-	Init();
+	Reset();
 }
 
 // Reset it to its state after start-up
 void GCodeBuffer::Reset()
 {
 	while (PopState(false)) { }
+#if HAS_LINUX_INTERFACE
+	requestedMacroFile.Clear();
+	reportMissingMacro = isMacroFromCode = abortFile = abortAllFiles = reportStack = false;
+#endif
 	isBinaryBuffer = false;
 	Init();
 }
