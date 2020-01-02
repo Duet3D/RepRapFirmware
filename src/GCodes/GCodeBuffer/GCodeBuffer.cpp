@@ -678,7 +678,7 @@ void GCodeBuffer::SetPrintFinished() noexcept
 	}
 }
 
-// Note: filename is sometimes null when calling this from LinuxInterface
+// This is only called when using the Linux interface. 'filename' is sometimes null.
 void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing, bool fromCode) noexcept
 {
 	machineState->SetFileExecuting();
@@ -693,6 +693,7 @@ void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing, boo
 	reportMissingMacro = reportMissing;
 	isMacroFromCode = fromCode;
 	abortFile = abortAllFiles = false;
+	isBinaryBuffer = true;
 }
 
 const char *GCodeBuffer::GetRequestedMacroFile(bool& reportMissing, bool& fromCode) const noexcept
