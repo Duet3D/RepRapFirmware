@@ -628,6 +628,7 @@ void GCodeBuffer::RequestMacroFile(const char *filename, bool reportMissing, boo
 	reportMissingMacro = reportMissing;
 	isMacroFromCode = fromCode;
 	abortFile = abortAllFiles = false;
+	isBinaryBuffer = true;
 }
 
 const char *GCodeBuffer::GetRequestedMacroFile(bool& reportMissing, bool& fromCode) const
