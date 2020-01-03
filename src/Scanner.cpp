@@ -292,7 +292,7 @@ void Scanner::ProcessCommand()
 	else if (StringStartsWith(buffer, "GCODE "))
 	{
 		doingGCodes = true;
-		serialGCode->Put(&buffer[6], bufferPointer - 6, false);
+		serialGCode->PutAndDecode(&buffer[6], bufferPointer - 6, false);
 	}
 
 	// Switch to post-processing mode: POSTPROCESS
@@ -566,7 +566,7 @@ void Scanner::DoFileMacro(const char *filename)
 	{
 		String<MaxFilenameLength + 7> gcode;
 		gcode.printf("M98 P\"%s\"\n", filename);
-		serialGCode->Put(gcode.c_str());
+		serialGCode->PutAndDecode(gcode.c_str());
 	}
 }
 

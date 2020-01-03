@@ -4511,7 +4511,7 @@ bool GCodes::ProcessCommandFromLcd(const char *cmd)
 {
 	if (lcdGCode->IsCompletelyIdle())
 	{
-		lcdGCode->Put(cmd);
+		lcdGCode->PutAndDecode(cmd);
 		return true;
 	}
 	return false;
