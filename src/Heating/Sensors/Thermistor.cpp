@@ -125,12 +125,12 @@ void Thermistor::Poll() noexcept
 	if (tempFilterValid && vrefFilter.IsValid() && vssaFilter.IsValid())
 	{
 # ifdef DUET3
-		// Duet 3 MB6HC board revisions 0.6 and 1.0 have the series resistor connected to VrefP, not VrefMon.
+		// Duet 3 MB6HC board revisions 0.5, 0.6 and 1.0 have the series resistor connected to VrefP, not VrefMon.
 		// So Extrapolate the reading for VrefP. We also allow offsets to be added.
 		const int32_t rawAveragedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
 		const int32_t rawAveragedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
-		const int32_t averagedVssaReading = rawAveragedVssaReading + adcLowOffset;
-		const int32_t averagedVrefReading = ((rawAveragedVrefReading - rawAveragedVssaReading) * (4715.0/4700.0)) + rawAveragedVssaReading + adcHighOffset;
+		const int32_t averagedVssaReading = rawAveragedVssaReading + (2 * adcLowOffset);
+		const int32_t averagedVrefReading = ((rawAveragedVrefReading - rawAveragedVssaReading) * 4715)/4700 + rawAveragedVssaReading + (2 * adcHighOffset);
 # else
 		const int32_t averagedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
 		const int32_t averagedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> Thermistor::AdcOversampleBits);
@@ -139,7 +139,7 @@ void Thermistor::Poll() noexcept
 		// VREF is the measured voltage at VREF less the drop of a 15 ohm resistor.
 		// VSSA is the voltage measured across the VSSA fuse. We assume the same 15 ohms maximum resistance for the fuse.
 		// Assume a maximum ADC reading offset of 100.
-		constexpr int32_t maxDrop = (OversampledAdcRange * 15)/MinVrefLoadR + (100 << Thermistor::AdcOversampleBits);
+		constexpr int32_t maxDrop = ((OversampledAdcRange * 15)/(int32_t)MinVrefLoadR) + (100 << Thermistor::AdcOversampleBits);
 
 		if (averagedVrefReading < OversampledAdcRange - maxDrop)
 		{
