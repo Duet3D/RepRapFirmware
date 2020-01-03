@@ -1,3 +1,27 @@
+RepRapFirmware 3.0
+==================
+
+Recommended compatible firmware:
+- Duet Web Control 2.0.4
+- DuetWiFiServer 1.23
+- DuetSoftwareFramework 1.2.2.0
+- Duet3Firmware_EXP3HC 3.0
+
+Upgrade notes since beta12:
+- Endstop type S0 (active low switch) is no longer supported in M574 commands. Instead, use type S1 and invert the input by prefixing the pin name with '!'.
+- If you are using Duet 3 expansion or tool boards, you must upgrade those to 3.0 too
+- Duet 3+SBC users must use DSF 1.2.2.0 or a compatible later version with this version of RRF
+- You should also upload the new IAP file for your system. You will need it when upgrading firmware in future. These files are called Duet2CombinedIAP.bin, DuetMaestroIAP.bin, Duet3_SBCiap_MB6HC.bin (for Duet 3+SBC) and Duet3_SDiap.bin (for Duet 3 standalone systems). You can leave the old IAP files on your system, they have different names and you will need them if you downgrade to earlier firmware.
+- Duet 3 users: there is no longer a default bed heater. To use Heater 0 as the bed heater, put M140 H0 in config.g (later in config.g than your M950 H0 command).
+
+Known limitations:
+- Duet 3 users: connector IO_0 of the MB6HC board is currently reserved for PanelDue. We recommend that you do not use it for any other purpose.
+- Duet 3 users: support for expansion boards has some limitations. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations for details.
+
+Bug fixes since 3.0RC2:
+- Fixed issue where a missing start.g could disrupt the G-code flow with an attached SBC
+- When RRF requested a macro file but had to wait for the SBC to connect, the final code replies to DSF were omitted
+
 RepRapFirmware 3.0RC2
 =====================
 
@@ -50,7 +74,7 @@ Upgrade notes:
 - If you are using Duet 3 expansion or tool boards, you must upgrade those to 3.0RC1 too
 - Duet 3+SBC users must use DSF 1.1.0.5 or a compatible later version with this version of RRF
 - You should also upload the new IAP file for your system. You will need it when upgrading firmware in future. These files are called Duet2CombinedIAP.bin, DuetMaestroIAP.bin, Duet3_SBCiap_MB6HC.bin (for Duet 3+SBC) and Duet3_SDiap.bin (for Duet 3 standalone systems). You can leave the old IAP files on your system, they have different names and you will need them if you downgrade to earlier firmware.
-- Duet 3 users: there is no longer a defualt bed heater. To use Heater 0 as the bed heater, put M140 H0 in config.g (later in config.g than your M950 H0 command).
+- Duet 3 users: there is no longer a default bed heater. To use Heater 0 as the bed heater, put M140 H0 in config.g (later in config.g than your M950 H0 command).
 
 Feature changes since beta 12:
 - Duet 3 only: Switch-type endstops connected to expansion boards are supported
