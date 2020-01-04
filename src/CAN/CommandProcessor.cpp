@@ -265,7 +265,7 @@ static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddres
 }
 
 // Process a received broadcast or request message and free the message buffer
-void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf)
+void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 {
 	if (buf->id.Src() == CanId::MasterAddress)
 	{

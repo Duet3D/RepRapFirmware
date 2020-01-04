@@ -13,13 +13,13 @@
 #include "Storage/FileStore.h"
 #include "Heating/Heat.h"
 
-ZProbe::ZProbe(unsigned int num, ZProbeType p_type) : EndstopOrZProbe(), number(num)
+ZProbe::ZProbe(unsigned int num, ZProbeType p_type) noexcept : EndstopOrZProbe(), number(num)
 {
 	SetDefaults();
 	type = p_type;
 }
 
-void ZProbe::SetDefaults()
+void ZProbe::SetDefaults() noexcept
 {
 	adcValue = DefaultZProbeADValue;
 	xOffset= yOffset = 0.0;
@@ -37,7 +37,7 @@ void ZProbe::SetDefaults()
 	sensor = -1;
 }
 
-float ZProbe::GetActualTriggerHeight() const
+float ZProbe::GetActualTriggerHeight() const noexcept
 {
 	if (sensor >= 0)
 	{
@@ -53,7 +53,7 @@ float ZProbe::GetActualTriggerHeight() const
 
 #if HAS_MASS_STORAGE
 
-bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const
+bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept
 {
 	String<ScratchStringLength> scratchString;
 	scratchString.printf("G31 K%u P%d X%.1f Y%.1f Z%.2f\n", probeNumber, adcValue, (double)xOffset, (double)yOffset, (double)triggerHeight);
@@ -62,7 +62,7 @@ bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const
 
 #endif
 
-int ZProbe::GetReading() const
+int ZProbe::GetReading() const noexcept
 {
 	int zProbeVal = 0;
 	const Platform& p = reprap.GetPlatform();
@@ -106,7 +106,7 @@ int ZProbe::GetReading() const
 	return (misc.parts.invertReading) ? 1000 - zProbeVal : zProbeVal;
 }
 
-int ZProbe::GetSecondaryValues(int& v1, int& v2)
+int ZProbe::GetSecondaryValues(int& v1, int& v2) noexcept
 {
 	const Platform& p = reprap.GetPlatform();
 	if (p.GetZProbeOnFilter().IsValid() && p.GetZProbeOffFilter().IsValid())
@@ -124,7 +124,7 @@ int ZProbe::GetSecondaryValues(int& v1, int& v2)
 }
 
 // Test whether we are at or near the stop
-EndStopHit ZProbe::Stopped() const
+EndStopHit ZProbe::Stopped() const noexcept
 {
 	const int zProbeVal = GetReading();
 	return (zProbeVal >= adcValue) ? EndStopHit::atStop
@@ -133,7 +133,7 @@ EndStopHit ZProbe::Stopped() const
 }
 
 // Check whether the probe is triggered and return the action that should be performed. Called from the step ISR.
-EndstopHitDetails ZProbe::CheckTriggered(bool goingSlow)
+EndstopHitDetails ZProbe::CheckTriggered(bool goingSlow) noexcept
 {
 	EndStopHit e = Stopped();
 	if (misc.parts.probingAway)
@@ -164,7 +164,7 @@ EndstopHitDetails ZProbe::CheckTriggered(bool goingSlow)
 
 // This is called by the ISR to acknowledge that it is acting on the return from calling CheckTriggered. Called from the step ISR.
 // Return true if we have finished with this endstop or probe in this move.
-bool ZProbe::Acknowledge(EndstopHitDetails what)
+bool ZProbe::Acknowledge(EndstopHitDetails what) noexcept
 {
 	return what.GetAction() == EndstopHitAction::stopAll;
 }
@@ -295,7 +295,7 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& see
 }
 
 // Default implementation of SendProgram, overridden in some classes
-GCodeResult ZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply)
+GCodeResult ZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept
 {
 	reply.copy("This configuration of Z probe does not support programming");
 	return GCodeResult::error;

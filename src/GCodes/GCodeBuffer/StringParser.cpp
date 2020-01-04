@@ -288,16 +288,8 @@ bool StringParser::CheckMetaCommand()
 		}
 		indentToSkipTo = NoIndentSkip;									// no longer skipping
 	}
-	bool b;
-	try
-	{
-		b = ProcessConditionalGCode(previousBlockType);
-	}
-	catch (const ParseException&)
-	{
-		Init();
-		throw;
-	}
+
+	const bool b = ProcessConditionalGCode(previousBlockType);			// this may throw a ParseException
 	if (b)
 	{
 		Init();

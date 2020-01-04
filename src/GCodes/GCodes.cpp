@@ -650,6 +650,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 				{
 					e.GetMessage(reply, gb);
 					HandleReply(gb, GCodeResult::error, reply.c_str());
+					gb.Init();
 					AbortPrint(gb);
 					break;
 				}

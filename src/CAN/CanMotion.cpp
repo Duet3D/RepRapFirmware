@@ -24,7 +24,7 @@ static volatile bool stopAllFlag = false;
 static bool doingStopAll = false;
 static LargeBitmap<CanId::MaxNormalAddress + 1> boardsActiveInLastMove;
 
-void CanMotion::Init()
+void CanMotion::Init() noexcept
 {
 	movementBufferList = nullptr;
 	urgentMessageBuffer = CanMessageBuffer::Allocate();
@@ -32,7 +32,7 @@ void CanMotion::Init()
 }
 
 // This is called by DDA::Prepare at the start of preparing a movement
-void CanMotion::StartMovement(const DDA& dda)
+void CanMotion::StartMovement(const DDA& dda) noexcept
 {
 	// There shouldn't be any movement buffers in the list, but free any that there may be
 	for (;;)
@@ -49,7 +49,7 @@ void CanMotion::StartMovement(const DDA& dda)
 
 // This is called by DDA::Prepare for each active CAN DM in the move
 // If steps == 0 then the drivers just need to be enabled
-void CanMotion::AddMovement(const DDA& dda, const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance)
+void CanMotion::AddMovement(const DDA& dda, const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance) noexcept
 {
 	// Search for the correct movement buffer
 	CanMessageBuffer* buf = movementBufferList;
@@ -106,7 +106,7 @@ void CanMotion::AddMovement(const DDA& dda, const PrepParams& params, DriverId c
 }
 
 // This is called by DDA::Prepare when all DMs for CAN drives have been processed
-void CanMotion::FinishMovement(uint32_t moveStartTime)
+void CanMotion::FinishMovement(uint32_t moveStartTime) noexcept
 {
 	boardsActiveInLastMove.ClearAll();
 	CanMessageBuffer *buf;
@@ -119,13 +119,13 @@ void CanMotion::FinishMovement(uint32_t moveStartTime)
 	}
 }
 
-bool CanMotion::CanPrepareMove()
+bool CanMotion::CanPrepareMove() noexcept
 {
 	return CanMessageBuffer::FreeBuffers() >= MaxCanBoards;
 }
 
 // This is called by the CanSender task to check if we have any urgent messages to send
-CanMessageBuffer *CanMotion::GetUrgentMessage()
+CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 {
 	if (stopAllFlag)
 	{
@@ -177,13 +177,13 @@ CanMessageBuffer *CanMotion::GetUrgentMessage()
 
 // The next 4 functions may be called from the step ISR, so they can't send CAN messages directly
 
-void CanMotion::InsertHiccup(uint32_t numClocks)
+void CanMotion::InsertHiccup(uint32_t numClocks) noexcept
 {
 	hiccupToInsert += numClocks;
 	CanInterface::WakeCanSender();
 }
 
-void CanMotion::StopDriver(bool isBeingPrepared, DriverId driver)
+void CanMotion::StopDriver(bool isBeingPrepared, DriverId driver) noexcept
 {
 	if (isBeingPrepared)
 	{
@@ -206,7 +206,7 @@ void CanMotion::StopDriver(bool isBeingPrepared, DriverId driver)
 	}
 }
 
-void CanMotion::StopAxis(bool isBeingPrepared, size_t axis)
+void CanMotion::StopAxis(bool isBeingPrepared, size_t axis) noexcept
 {
 	const AxisDriversConfig& cfg = reprap.GetPlatform().GetAxisDriversConfig(axis);
 	if (isBeingPrepared)
@@ -234,7 +234,7 @@ void CanMotion::StopAxis(bool isBeingPrepared, size_t axis)
 	}
 }
 
-void CanMotion::StopAll(bool isBeingPrepared)
+void CanMotion::StopAll(bool isBeingPrepared) noexcept
 {
 	if (isBeingPrepared)
 	{

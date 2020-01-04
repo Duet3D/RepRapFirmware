@@ -137,21 +137,18 @@ public:
 	class BlockState
 	{
 	public:
-		BlockState() : blockType((uint32_t)BlockType::plain) {}
+		BlockType GetType() const noexcept { return (BlockType) blockType; }
+		uint32_t GetIterations() const noexcept { return iterationsDone; }
+		uint32_t GetLineNumber() const noexcept { return lineNumber; }
+		FilePosition GetFilePosition() const noexcept { return fpos; }
 
-		BlockType GetType() const { return (BlockType) blockType; }
-		uint32_t GetIterations() const { return iterationsDone; }
+		void SetLoopBlock(FilePosition filePos, uint32_t lineNum) noexcept { blockType = (uint32_t)BlockType::loop; fpos = filePos; lineNumber = lineNum; iterationsDone = 0; }
+		void SetPlainBlock() noexcept { blockType = (uint32_t)BlockType::plain; iterationsDone = 0; }
+		void SetIfTrueBlock() noexcept { blockType = (uint32_t)BlockType::ifTrue; iterationsDone = 0; }
+		void SetIfFalseNoneTrueBlock() noexcept { blockType = (uint32_t)BlockType::ifFalseNoneTrue; iterationsDone = 0; }
+		void SetIfFalseHadTrueBlock() noexcept { blockType = (uint32_t)BlockType::ifFalseHadTrue; iterationsDone = 0; }
 
-		uint32_t GetLineNumber() const { return lineNumber; }
-		FilePosition GetFilePosition() const { return fpos; }
-
-		void SetLoopBlock(FilePosition filePos, uint32_t lineNum) { fpos = filePos; lineNumber = lineNum; iterationsDone = 0; }
-		void SetPlainBlock() { blockType = (uint32_t)BlockType::plain; iterationsDone = 0; }
-		void SetIfTrueBlock() { blockType = (uint32_t)BlockType::ifTrue; iterationsDone = 0; }
-		void SetIfFalseNoneTrueBlock() { blockType = (uint32_t)BlockType::ifFalseNoneTrue; iterationsDone = 0; }
-		void SetIfFalseHadTrueBlock() { blockType = (uint32_t)BlockType::ifFalseHadTrue; iterationsDone = 0; }
-
-		void IncrementIterations() { ++iterationsDone; }
+		void IncrementIterations() noexcept { ++iterationsDone; }
 
 	private:
 		FilePosition fpos;											// the file offset at which the current block started
@@ -160,7 +157,7 @@ public:
 		uint32_t iterationsDone;
 	};
 
-	GCodeMachineState();
+	GCodeMachineState() noexcept;
 
 	GCodeMachineState *previous;
 	float feedRate;
@@ -199,39 +196,32 @@ public:
 	GCodeState state;
 	uint8_t toolChangeParam;
 
-	static GCodeMachineState *Allocate()
+	static GCodeMachineState *Allocate() noexcept
 	post(!result.IsLive(); result.state == GCodeState::normal);
 
-	bool DoingFile() const;
-	void CloseFile();
+	bool DoingFile() const noexcept;
+	void CloseFile() noexcept;
 
 #if HAS_LINUX_INTERFACE
-	void SetFileExecuting();
-	void SetFileFinished(bool error);
+	void SetFileExecuting() noexcept;
+	void SetFileFinished(bool error) noexcept;
 #endif
 
-	bool UsingMachineCoordinates() const { return g53Active || runningSystemMacro; }
+	bool UsingMachineCoordinates() const noexcept { return g53Active || runningSystemMacro; }
 
 	// Copy values that may have been altered into this state record
 	// Called after running config.g and after running resurrect.g
-	void CopyStateFrom(const GCodeMachineState& other)
-	{
-		drivesRelative = other.drivesRelative;
-		axesRelative = other.axesRelative;
-		feedRate = other.feedRate;
-		volumetricExtrusion = other.volumetricExtrusion;
-		usingInches = other.usingInches;
-	}
+	void CopyStateFrom(const GCodeMachineState& other) noexcept;
 
-	BlockState& CurrentBlockState();
-	int32_t GetIterations() const;
+	BlockState& CurrentBlockState() noexcept;
+	int32_t GetIterations() const noexcept;
 
-	bool CreateBlock();
-	void EndBlock();
+	bool CreateBlock() noexcept;
+	void EndBlock() noexcept;
 
-	static void Release(GCodeMachineState *ms);
-	static unsigned int GetNumAllocated() { return numAllocated; }
-	static unsigned int GetNumInUse();
+	static void Release(GCodeMachineState *ms) noexcept;
+	static unsigned int GetNumAllocated() noexcept { return numAllocated; }
+	static unsigned int GetNumInUse() noexcept;
 
 private:
 	static GCodeMachineState *freeList;

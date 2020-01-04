@@ -16,18 +16,18 @@
 
 namespace CanMotion
 {
-	void Init();
-	void StartMovement(const DDA& dda);
-	void AddMovement(const DDA& dda, const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance);
-	void FinishMovement(uint32_t moveStartTime);
-	bool CanPrepareMove();
-	CanMessageBuffer *GetUrgentMessage();
+	void Init() noexcept;
+	void StartMovement(const DDA& dda) noexcept;
+	void AddMovement(const DDA& dda, const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance) noexcept;
+	void FinishMovement(uint32_t moveStartTime) noexcept;
+	bool CanPrepareMove() noexcept;
+	CanMessageBuffer *GetUrgentMessage() noexcept;
 
 	// The next 4 functions may be called from the step ISR, so they can't send CAN messages directly
-	void InsertHiccup(uint32_t numClocks);
-	void StopDriver(bool isBeingPrepared, DriverId driver);
-	void StopAxis(bool isBeingPrepared, size_t axis);
-	void StopAll(bool isBeingPrepared);
+	void InsertHiccup(uint32_t numClocks) noexcept;
+	void StopDriver(bool isBeingPrepared, DriverId driver) noexcept;
+	void StopAxis(bool isBeingPrepared, size_t axis) noexcept;
+	void StopAll(bool isBeingPrepared) noexcept;
 }
 
 #endif

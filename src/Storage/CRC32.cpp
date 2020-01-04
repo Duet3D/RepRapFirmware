@@ -161,12 +161,12 @@ constexpr uint32_t CRC_32_TAB3[256] =
 
 #endif
 
-CRC32::CRC32()
+CRC32::CRC32() noexcept
 {
 	Reset();
 }
 
-void CRC32::Update(char c)
+void CRC32::Update(char c) noexcept
 {
 	crc = (CRC_32_TAB[(crc ^ c) & 0xFF] ^ (crc >> 8));
 }
@@ -176,7 +176,7 @@ void CRC32::Update(char c)
 // Algorithm currently used on non-SAME70 processors (4 bytes per loop iteration, 1K table): 19 instructions, 26 clocks (6.5 clocks/byte)
 // Slicing-by-4 using 1 dword per loop iteration: 15 instructions, 18 clocks (4.5 clocks/byte)
 // Slicing-by-4 using 1 quadword per loop iteration: 28 instructions, 31 clocks (3.875 clocks/byte)
-void CRC32::Update(const char *s, size_t len)
+void CRC32::Update(const char *s, size_t len) noexcept
 {
 	// The speed of this function affects the speed of file uploads, so make it as fast as possible. Sadly the SAME70 doesn't do hardware CRC calculation.
 	// Work on a local copy of the crc to avoid storing it all the time
@@ -222,7 +222,7 @@ void CRC32::Update(const char *s, size_t len)
 	crc = locCrc;
 }
 
-void CRC32::Reset()
+void CRC32::Reset() noexcept
 {
 	crc = 0xffffffff;
 }

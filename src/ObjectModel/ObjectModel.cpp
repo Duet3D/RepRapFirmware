@@ -15,12 +15,12 @@
 #include <General/SafeStrtod.h>
 
 // Constructor
-ObjectModel::ObjectModel()
+ObjectModel::ObjectModel() noexcept
 {
 }
 
 // Report this object
-bool ObjectModel::ReportAsJson(OutputBuffer* buf, const char* filter, ReportFlags flags)
+bool ObjectModel::ReportAsJson(OutputBuffer* buf, const char* filter, ReportFlags flags) noexcept
 {
 	buf->cat('{');
 	size_t numEntries;
@@ -45,7 +45,7 @@ bool ObjectModel::ReportAsJson(OutputBuffer* buf, const char* filter, ReportFlag
 }
 
 // Find the requested entry
-const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(const char* idString)
+const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(const char* idString) noexcept
 {
 	size_t numElems;
 	const ObjectModelTableEntry *tbl = GetObjectModelTable(numElems);
@@ -70,7 +70,7 @@ const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(const char* 
 	return (low < numElems && tbl[low].IdCompare(idString) == 0) ? &tbl[low] : nullptr;
 }
 
-/*static*/ const char* ObjectModel::GetNextElement(const char *id)
+/*static*/ const char* ObjectModel::GetNextElement(const char *id) noexcept
 {
 	while (*id != 0 && *id != '.' && *id != '[')
 	{
@@ -83,13 +83,13 @@ const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(const char* 
 	return id;
 }
 
-bool ObjectModelTableEntry::Matches(const char* filterString, ObjectModelFilterFlags filterFlags) const
+bool ObjectModelTableEntry::Matches(const char* filterString, ObjectModelFilterFlags filterFlags) const noexcept
 {
 	return IdCompare(filterString) == 0 && (flags & filterFlags) == filterFlags;
 }
 
 // Private function to report a value of primitive type
-void ObjectModelTableEntry::ReportItemAsJson(OutputBuffer *buf, const char *filter, ObjectModel::ReportFlags flags, void *nParam, TypeCode type)
+void ObjectModelTableEntry::ReportItemAsJson(OutputBuffer *buf, const char *filter, ObjectModel::ReportFlags flags, void *nParam, TypeCode type) noexcept
 {
 	switch (type)
 	{
@@ -187,7 +187,7 @@ void ObjectModelTableEntry::ReportItemAsJson(OutputBuffer *buf, const char *filt
 }
 
 // Add the value of this element to the buffer, returning true if it matched and we did
-bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectModel *self, const char* filter, ObjectModel::ReportFlags flags) const
+bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectModel *self, const char* filter, ObjectModel::ReportFlags flags) const noexcept
 {
 	buf->cat(name);
 	buf->cat(':');
@@ -238,7 +238,7 @@ bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectModel *self, c
 }
 
 // Compare an ID with the name of this object
-int ObjectModelTableEntry::IdCompare(const char *id) const
+int ObjectModelTableEntry::IdCompare(const char *id) const noexcept
 {
 	if (id[0] == 0 || id[0] == '*')
 	{

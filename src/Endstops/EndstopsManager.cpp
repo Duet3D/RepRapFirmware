@@ -28,7 +28,7 @@
 
 ReadWriteLock EndstopsManager::endstopsLock;					// used to lock both endstops and Z probes
 
-EndstopsManager::EndstopsManager() : activeEndstops(nullptr), extrudersEndstop(nullptr), isHomingMove(false)
+EndstopsManager::EndstopsManager() noexcept : activeEndstops(nullptr), extrudersEndstop(nullptr), isHomingMove(false)
 {
 	for (Endstop *& es : axisEndstops)
 	{
@@ -40,7 +40,7 @@ EndstopsManager::EndstopsManager() : activeEndstops(nullptr), extrudersEndstop(n
 	}
 }
 
-void EndstopsManager::Init()
+void EndstopsManager::Init() noexcept
 {
 	activeEndstops = nullptr;
 
@@ -69,14 +69,14 @@ void EndstopsManager::Init()
 }
 
 // Add an endstop to the active list
-void EndstopsManager::AddToActive(EndstopOrZProbe& e)
+void EndstopsManager::AddToActive(EndstopOrZProbe& e) noexcept
 {
 	e.SetNext(activeEndstops);
 	activeEndstops = &e;
 }
 
 // Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command. Return true if successful.
-bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming)
+bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming) noexcept
 {
 	activeEndstops = nullptr;
 	isHomingMove = forHoming && axes != 0;
@@ -99,7 +99,7 @@ bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming)
 }
 
 // Set up the active endstops for Z probing, returning true if successful
-bool EndstopsManager::EnableZProbe(size_t probeNumber, bool probingAway)
+bool EndstopsManager::EnableZProbe(size_t probeNumber, bool probingAway) noexcept
 {
 	activeEndstops = nullptr;
 	isHomingMove = false;
@@ -112,7 +112,7 @@ bool EndstopsManager::EnableZProbe(size_t probeNumber, bool probingAway)
 }
 
 // Enable extruder endstops. This adds to any existing axis endstops, so you must call EnableAxisEndstops before calling this.
-bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders)
+bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept
 {
 	if (extruders != 0)
 	{
@@ -149,7 +149,7 @@ bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders)
 
 // Check the endstops.
 // If an endstop has triggered, remove it from the active list and return its details
-EndstopHitDetails EndstopsManager::CheckEndstops(bool goingSlow)
+EndstopHitDetails EndstopsManager::CheckEndstops(bool goingSlow) noexcept
 {
 	EndstopHitDetails ret;									// the default constructor will clear all fields
 	EndstopOrZProbe *actioned = nullptr;
@@ -207,7 +207,7 @@ EndstopHitDetails EndstopsManager::CheckEndstops(bool goingSlow)
 }
 
 // Configure the endstops in response to M574
-GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf)
+GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf) noexcept
 {
 	// First count how many axes we are configuring, and lock movement if necessary
 	unsigned int axesSeen = 0;
@@ -365,7 +365,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 	return GCodeResult::ok;
 }
 
-EndStopPosition EndstopsManager::GetEndStopPosition(size_t axis) const pre(axis < MaxAxes)
+EndStopPosition EndstopsManager::GetEndStopPosition(size_t axis) const noexcept
 {
 	return (axisEndstops[axis] == nullptr) ? EndStopPosition::noEndStop
 			: (axisEndstops[axis]->GetAtHighEnd()) ? EndStopPosition::highEndStop
@@ -373,17 +373,17 @@ EndStopPosition EndstopsManager::GetEndStopPosition(size_t axis) const pre(axis 
 }
 
 // Return true if we are using a bed probe to home Z
-bool EndstopsManager::HomingZWithProbe() const
+bool EndstopsManager::HomingZWithProbe() const noexcept
 {
 	return axisEndstops[Z_AXIS] == nullptr || axisEndstops[Z_AXIS]->GetEndstopType() == EndStopType::zProbeAsEndstop;
 }
 
-EndStopHit EndstopsManager::Stopped(size_t axis) const
+EndStopHit EndstopsManager::Stopped(size_t axis) const noexcept
 {
 	return (axisEndstops[axis] == nullptr) ? EndStopHit::noStop : axisEndstops[axis]->Stopped();
 }
 
-void EndstopsManager::GetM119report(const StringRef& reply)
+void EndstopsManager::GetM119report(const StringRef& reply) noexcept
 {
 	reply.copy("Endstops - ");
 	for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
@@ -396,7 +396,7 @@ void EndstopsManager::GetM119report(const StringRef& reply)
 	reply.catf("Z probe: %s", TranslateEndStopResult(GetCurrentZProbe().Stopped(), false));
 }
 
-const char *EndstopsManager::TranslateEndStopResult(EndStopHit es, bool atHighEnd)
+const char *EndstopsManager::TranslateEndStopResult(EndStopHit es, bool atHighEnd) noexcept
 {
 	switch (es)
 	{
@@ -412,18 +412,18 @@ const char *EndstopsManager::TranslateEndStopResult(EndStopHit es, bool atHighEn
 	}
 }
 
-ZProbe& EndstopsManager::GetCurrentZProbe() const
+ZProbe& EndstopsManager::GetCurrentZProbe() const noexcept
 {
 	ZProbe * const zp = (currentZProbeNumber < MaxZProbes) ? zProbes[currentZProbeNumber] : nullptr;
 	return (zp == nullptr) ? *defaultZProbe : *zp;
 }
 
-ZProbe *EndstopsManager::GetZProbe(size_t num) const
+ZProbe *EndstopsManager::GetZProbe(size_t num) const noexcept
 {
 	return (num < ARRAY_SIZE(zProbes)) ? zProbes[num] : nullptr;
 }
 
-void EndstopsManager::SetZProbeDefaults()
+void EndstopsManager::SetZProbeDefaults() noexcept
 {
 	zProbes[0]->SetDefaults();
 	for (size_t i = 0; i < MaxZProbes; ++i)
@@ -467,7 +467,7 @@ GCodeResult EndstopsManager::ProgramZProbe(GCodeBuffer& gb, const StringRef& rep
 
 #if HAS_MASS_STORAGE
 
-bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) const
+bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) const noexcept
 {
 	bool ok = true;
 	bool written = false;
@@ -629,7 +629,7 @@ GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 
 // Handle signalling of a remote switch change, when the handle indicates that it is being used as an endstop.
 // We must re-use or free the buffer.
-void EndstopsManager::HandleRemoteInputChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state)
+void EndstopsManager::HandleRemoteInputChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(axisEndstops))
 	{
@@ -643,7 +643,7 @@ void EndstopsManager::HandleRemoteInputChange(CanAddress src, uint8_t handleMajo
 
 // This is called when we update endstop states because of a message from a remote board.
 // In time we may use it to help implement interrupt-driven local endstops too, but for now those are checked in the step ISR by a direct call to DDA::CheckEndstops().
-void EndstopsManager::OnEndstopStatesChanged()
+void EndstopsManager::OnEndstopStatesChanged() noexcept
 {
 	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
 

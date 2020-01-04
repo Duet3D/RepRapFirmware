@@ -25,7 +25,7 @@ Licence: GPL
 #include "Platform.h"
 #include "RepRap.h"
 
-PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) : platform(p), gCodes(gc), isPrinting(false), heatingUp(false),
+PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) noexcept : platform(p), gCodes(gc), isPrinting(false), heatingUp(false),
 	printStartTime(0), pauseStartTime(0), totalPauseTime(0), currentLayer(0), warmUpDuration(0.0),
 	firstLayerDuration(0.0), firstLayerFilament(0.0), firstLayerProgress(0.0), lastLayerChangeTime(0.0),
 	lastLayerFilament(0.0), lastLayerZ(0.0), numLayerSamples(0), layerEstimatedTimeLeft(0.0), printingFileParsed(false)
@@ -34,12 +34,12 @@ PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) : platform(p), gCodes(gc), i
 	printingFileInfo.Init();
 }
 
-void PrintMonitor::Init()
+void PrintMonitor::Init() noexcept
 {
 	lastUpdateTime = millis();
 }
 
-bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info)
+bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info) noexcept
 {
 	if (IsPrinting())
 	{
@@ -56,14 +56,14 @@ bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info)
 	return true;
 }
 
-void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info)
+void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info) noexcept
 {
 	filenameBeingPrinted.copy(filename);
 	printingFileInfo = info;
 	printingFileParsed = true;
 }
 
-void PrintMonitor::Spin()
+void PrintMonitor::Spin() noexcept
 {
 #if HAS_LINUX_INTERFACE
 	if (reprap.UsingLinuxInterface())
@@ -177,19 +177,19 @@ void PrintMonitor::Spin()
 }
 
 // Return the first layer print time
-float PrintMonitor::GetFirstLayerDuration() const
+float PrintMonitor::GetFirstLayerDuration() const noexcept
 {
 	return (firstLayerDuration > 0.0) ? firstLayerDuration : ((currentLayer > 0) ? GetPrintDuration() - warmUpDuration : 0.0);
 }
 
 // Return the warm-up time
-float PrintMonitor::GetWarmUpDuration() const
+float PrintMonitor::GetWarmUpDuration() const noexcept
 {
 	return (heatingUp) ? warmUpDuration + (millis64() - heatingStartedTime) * MillisToSeconds : warmUpDuration;
 }
 
 // Notifies this class that a file has been set for printing
-void PrintMonitor::StartingPrint(const char* filename)
+void PrintMonitor::StartingPrint(const char* filename) noexcept
 {
 #if HAS_MASS_STORAGE
 	MassStorage::CombineName(filenameBeingPrinted.GetRef(), platform.GetGCodeDir(), filename);
@@ -198,7 +198,7 @@ void PrintMonitor::StartingPrint(const char* filename)
 }
 
 // Tell this class that the file set for printing is now actually processed
-void PrintMonitor::StartedPrint()
+void PrintMonitor::StartedPrint() noexcept
 {
 	isPrinting = true;
 	heatingUp = false;
@@ -207,7 +207,7 @@ void PrintMonitor::StartedPrint()
 }
 
 // Called when the first layer has been finished
-void PrintMonitor::FirstLayerComplete()
+void PrintMonitor::FirstLayerComplete() noexcept
 {
 	firstLayerFilament = gCodes.GetTotalRawExtrusion();
 	firstLayerDuration = GetPrintDuration() - warmUpDuration;
@@ -223,7 +223,7 @@ void PrintMonitor::FirstLayerComplete()
 }
 
 // This is called whenever a layer greater than 2 has been finished
-void PrintMonitor::LayerComplete()
+void PrintMonitor::LayerComplete() noexcept
 {
 	// Record a new set of layer, filament and file stats
 	const float extrRawTotal = gCodes.GetTotalRawExtrusion();
@@ -285,7 +285,7 @@ void PrintMonitor::LayerComplete()
 	}
 }
 
-void PrintMonitor::StoppedPrint()
+void PrintMonitor::StoppedPrint() noexcept
 {
 	isPrinting = heatingUp = printingFileParsed = false;
 	currentLayer = numLayerSamples = 0;
@@ -295,7 +295,7 @@ void PrintMonitor::StoppedPrint()
 	lastLayerChangeTime = lastLayerFilament = lastLayerZ = 0.0;
 }
 
-float PrintMonitor::FractionOfFilePrinted() const
+float PrintMonitor::FractionOfFilePrinted() const noexcept
 {
 	if (!printingFileInfo.isValid || printingFileInfo.fileSize == 0)
 	{
@@ -305,7 +305,7 @@ float PrintMonitor::FractionOfFilePrinted() const
 }
 
 // Estimate the print time left in seconds on a preset estimation method
-float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
+float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcept
 {
 	// We can't provide an estimation if we don't have any information about the file
 	if (!printingFileParsed)
@@ -437,7 +437,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 }
 
 // This returns the amount of time the machine has printed without interruptions (i.e. pauses)
-float PrintMonitor::GetPrintDuration() const
+float PrintMonitor::GetPrintDuration() const noexcept
 {
 	if (!isPrinting)
 	{

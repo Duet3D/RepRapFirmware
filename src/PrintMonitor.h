@@ -42,30 +42,30 @@ enum PrintEstimationMethod
 class PrintMonitor
 {
 	public:
-		PrintMonitor(Platform& p, GCodes& gc);
-		void Spin();
-		void Init();
+		PrintMonitor(Platform& p, GCodes& gc) noexcept;
+		void Spin() noexcept;
+		void Init() noexcept;
 
-		bool IsPrinting() const;						// Is a file being printed?
-		void StartingPrint(const char *filename);		// Called to indicate a file will be printed (see M23)
-		void StartedPrint();							// Called whenever a new live print starts (see M24)
-		void StoppedPrint();							// Called whenever a file print has stopped
-		float FractionOfFilePrinted() const;			// Return the fraction printed (0..1)
+		bool IsPrinting() const noexcept;						// Is a file being printed?
+		void StartingPrint(const char *filename) noexcept;		// Called to indicate a file will be printed (see M23)
+		void StartedPrint() noexcept;							// Called whenever a new live print starts (see M24)
+		void StoppedPrint() noexcept;							// Called whenever a file print has stopped
+		float FractionOfFilePrinted() const noexcept;			// Return the fraction printed (0..1)
 
 		// Return an estimate in seconds based on a specific estimation method
-		float EstimateTimeLeft(PrintEstimationMethod method) const;
+		float EstimateTimeLeft(PrintEstimationMethod method) const noexcept;
 
 		// Provide some information about the file being printed
-		unsigned int GetCurrentLayer() const;
-		float GetCurrentLayerTime() const;
-		float GetPrintDuration() const;
-		float GetWarmUpDuration() const;
-		float GetFirstLayerDuration() const;
-		float GetFirstLayerHeight() const;
+		unsigned int GetCurrentLayer() const noexcept;
+		float GetCurrentLayerTime() const noexcept;
+		float GetPrintDuration() const noexcept;
+		float GetWarmUpDuration() const noexcept;
+		float GetFirstLayerDuration() const noexcept;
+		float GetFirstLayerHeight() const noexcept;
 
-		const char *GetPrintingFilename() const { return (isPrinting) ? filenameBeingPrinted.c_str() : nullptr; }
-		bool GetPrintingFileInfo(GCodeFileInfo& info);
-		void SetPrintingFileInfo(const char *filename, GCodeFileInfo& info);
+		const char *GetPrintingFilename() const noexcept { return (isPrinting) ? filenameBeingPrinted.c_str() : nullptr; }
+		bool GetPrintingFileInfo(GCodeFileInfo& info) noexcept;
+		void SetPrintingFileInfo(const char *filename, GCodeFileInfo& info) noexcept;
 
 	private:
 		Platform& platform;
@@ -73,8 +73,8 @@ class PrintMonitor
 		uint32_t lastUpdateTime;
 
 		// Information/Events concerning the file being printed
-		void FirstLayerComplete();
-		void LayerComplete();
+		void FirstLayerComplete() noexcept;
+		void LayerComplete() noexcept;
 
 		bool isPrinting;
 		bool heatingUp;
@@ -98,10 +98,10 @@ class PrintMonitor
 		String<MaxFilenameLength> filenameBeingPrinted;
 };
 
-inline bool PrintMonitor::IsPrinting() const { return isPrinting; }
-inline unsigned int PrintMonitor::GetCurrentLayer() const { return currentLayer; }
-inline float PrintMonitor::GetCurrentLayerTime() const { return (lastLayerChangeTime > 0.0) ? (GetPrintDuration() - lastLayerChangeTime) : 0.0; }
-inline float PrintMonitor::GetFirstLayerHeight() const { return printingFileParsed ? printingFileInfo.firstLayerHeight : 0.0; }
+inline bool PrintMonitor::IsPrinting() const noexcept { return isPrinting; }
+inline unsigned int PrintMonitor::GetCurrentLayer() const noexcept { return currentLayer; }
+inline float PrintMonitor::GetCurrentLayerTime() const noexcept { return (lastLayerChangeTime > 0.0) ? (GetPrintDuration() - lastLayerChangeTime) : 0.0; }
+inline float PrintMonitor::GetFirstLayerHeight() const noexcept { return printingFileParsed ? printingFileInfo.firstLayerHeight : 0.0; }
 
 #endif /* PRINTMONITOR_H */
 

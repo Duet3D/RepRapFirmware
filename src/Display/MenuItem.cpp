@@ -19,12 +19,12 @@
 #include "Networking/Network.h"
 #include "PrintMonitor.h"
 
-MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis)
+MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis) noexcept
 	: row(r), column(c), width(w), height(0), align(a), fontNumber(fn), visCase(vis), itemChanged(true), highlighted(false), drawn(false), next(nullptr)
 {
 }
 
-/*static*/ void MenuItem::AppendToList(MenuItem **root, MenuItem *item)
+/*static*/ void MenuItem::AppendToList(MenuItem **root, MenuItem *item) noexcept
 {
 	while (*root != nullptr)
 	{
@@ -35,7 +35,7 @@ MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, Fon
 }
 
 // Print the item at the correct place with the correct alignment
-void MenuItem::PrintAligned(Lcd7920& lcd, PixelNumber tOffset, PixelNumber rightMargin)
+void MenuItem::PrintAligned(Lcd7920& lcd, PixelNumber tOffset, PixelNumber rightMargin) noexcept
 {
 	PixelNumber colsToSkip = 0;
 	lcd.SetFont(fontNumber);
@@ -69,7 +69,7 @@ void MenuItem::PrintAligned(Lcd7920& lcd, PixelNumber tOffset, PixelNumber right
 	lcd.TextInvert(false);
 }
 
-bool MenuItem::IsVisible() const
+bool MenuItem::IsVisible() const noexcept
 {
 	switch (visCase)
 	{
@@ -89,7 +89,7 @@ bool MenuItem::IsVisible() const
 }
 
 // Erase this item if it is drawn but should not be visible
-void MenuItem::EraseIfInvisible(Lcd7920& lcd, PixelNumber tOffset)
+void MenuItem::EraseIfInvisible(Lcd7920& lcd, PixelNumber tOffset) noexcept
 {
 	if (drawn && !IsVisible())
 	{
@@ -98,17 +98,17 @@ void MenuItem::EraseIfInvisible(Lcd7920& lcd, PixelNumber tOffset)
 	}
 }
 
-TextMenuItem::TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, const char* t)
+TextMenuItem::TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, const char* t) noexcept
 	: MenuItem(r, c, w, a, fn, vis), text(t)
 {
 }
 
-void TextMenuItem::CorePrint(Lcd7920& lcd)
+void TextMenuItem::CorePrint(Lcd7920& lcd) noexcept
 {
 	lcd.print(text);
 }
 
-void TextMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
+void TextMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
 {
 	// We ignore the 'highlight' parameter because text items are not selectable
 	if (IsVisible() && (!drawn || itemChanged))
@@ -119,7 +119,7 @@ void TextMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, P
 	}
 }
 
-void TextMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
+void TextMenuItem::UpdateWidthAndHeight(Lcd7920& lcd) noexcept
 {
 	if (width == 0)
 	{
@@ -141,19 +141,19 @@ void TextMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
 	}
 }
 
-ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char* t, const char* cmd, char const* acFile)
+ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char* t, const char* cmd, char const* acFile) noexcept
 	: MenuItem(r, c, w, CentreAlign, fn, vis), text(t), command(cmd), m_acFile(acFile)
 {
 }
 
-void ButtonMenuItem::CorePrint(Lcd7920& lcd)
+void ButtonMenuItem::CorePrint(Lcd7920& lcd) noexcept
 {
 	lcd.WriteSpaces(1);				// space at start in case highlighted
 	lcd.print(text);
 	lcd.WriteSpaces(1);				// space at end to allow for highlighting
 }
 
-void ButtonMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
+void ButtonMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
 {
 	if (IsVisible() && (itemChanged || !drawn || highlight != highlighted) && column < lcd.GetNumCols())
 	{
@@ -164,7 +164,7 @@ void ButtonMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight,
 	}
 }
 
-void ButtonMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
+void ButtonMenuItem::UpdateWidthAndHeight(Lcd7920& lcd) noexcept
 {
 	if (width == 0)
 	{
@@ -183,7 +183,7 @@ void ButtonMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
 }
 
 // TODO WS1: if we overflow the command or directory string, we should probably offer a return value that tells the caller to do nothing...
-bool ButtonMenuItem::Select(const StringRef& cmd)
+bool ButtonMenuItem::Select(const StringRef& cmd) noexcept
 {
 	const int nReplacementIndex = StringContains(command, "#0");
 	if (-1 != nReplacementIndex)
@@ -205,7 +205,7 @@ bool ButtonMenuItem::Select(const StringRef& cmd)
 	return true;
 }
 
-PixelNumber ButtonMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const
+PixelNumber ButtonMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept
 {
 	PixelNumber tOffsetRequest = tCurrentOffset;
 
@@ -224,12 +224,12 @@ PixelNumber ButtonMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, P
 	return tOffsetRequest;
 }
 
-ValueMenuItem::ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, bool adj, unsigned int v, unsigned int d)
+ValueMenuItem::ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, bool adj, unsigned int v, unsigned int d) noexcept
 	: MenuItem(r, c, ((w != 0) ? w : DefaultWidth), a, fn, vis), valIndex(v), currentFormat(PrintFormat::undefined), decimals(d), adjusting(AdjustMode::displaying), adjustable(adj)
 {
 }
 
-void ValueMenuItem::CorePrint(Lcd7920& lcd)
+void ValueMenuItem::CorePrint(Lcd7920& lcd) noexcept
 {
 	if (adjustable)
 	{
@@ -304,7 +304,7 @@ void ValueMenuItem::CorePrint(Lcd7920& lcd)
 	}
 }
 
-void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
+void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
 {
 	if (IsVisible())
 	{
@@ -487,13 +487,13 @@ void ValueMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 	}
 }
 
-bool ValueMenuItem::Select(const StringRef& cmd)
+bool ValueMenuItem::Select(const StringRef& cmd) noexcept
 {
 	adjusting = AdjustMode::adjusting;
 	return false;
 }
 
-void ValueMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
+void ValueMenuItem::UpdateWidthAndHeight(Lcd7920& lcd) noexcept
 {
 	// The width is always set for a ValueMenuItem so we just need to determine the height
 	if (height == 0)
@@ -503,13 +503,13 @@ void ValueMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
 	}
 }
 
-PixelNumber ValueMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const
+PixelNumber ValueMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept
 {
 	// TODO
 	return 0;
 }
 
-bool ValueMenuItem::Adjust_SelectHelper()
+bool ValueMenuItem::Adjust_SelectHelper() noexcept
 {
 	if (adjusting == AdjustMode::adjusting)
 	{
@@ -587,7 +587,7 @@ bool ValueMenuItem::Adjust_SelectHelper()
 	return true;
 }
 
-unsigned int ValueMenuItem::GetReferencedToolNumber() const
+unsigned int ValueMenuItem::GetReferencedToolNumber() const noexcept
 {
 	unsigned int uToolNumber = valIndex % 100;
 	if (79 == uToolNumber)
@@ -600,7 +600,7 @@ unsigned int ValueMenuItem::GetReferencedToolNumber() const
 
 // Adjust the value of this item by 'clicks' click of the encoder. 'clicks' is nonzero.
 // Return true if we have finished adjusting it.
-bool ValueMenuItem::Adjust_AlterHelper(int clicks)
+bool ValueMenuItem::Adjust_AlterHelper(int clicks) noexcept
 {
 	itemChanged = true;			// we will probably change the value, so it will need to be re-displayed
 	const unsigned int itemNumber = GetReferencedToolNumber();
@@ -684,14 +684,14 @@ bool ValueMenuItem::Adjust_AlterHelper(int clicks)
 
 // Adjust this element, returning true if we have finished adjustment.
 // 'clicks' is the number of encoder clicks to adjust by, or 0 if the button was pushed.
-bool ValueMenuItem::Adjust(int clicks)
+bool ValueMenuItem::Adjust(int clicks) noexcept
 {
 	return (clicks == 0)						// if button has been pressed
 			?  Adjust_SelectHelper()
 				: Adjust_AlterHelper(clicks);
 }
 
-FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *cmd, const char *dir, const char *acFile, unsigned int nf)
+FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *cmd, const char *dir, const char *acFile, unsigned int nf) noexcept
 	: MenuItem(r, c, w, LeftAlign, fn, vis), numDisplayLines(nf), command(cmd), initialDirectory(dir), m_acFile(acFile),
         m_uListingFirstVisibleIndex(0), m_uListingSelectedIndex(0)
 {
@@ -707,13 +707,13 @@ FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNu
 	sdCardState = notStarted;
 }
 
-void FilesMenuItem::vResetViewState()
+void FilesMenuItem::vResetViewState() noexcept
 {
 	m_uListingSelectedIndex = 0;
 	m_uListingFirstVisibleIndex = 0;
 }
 
-void FilesMenuItem::EnterDirectory()
+void FilesMenuItem::EnterDirectory() noexcept
 {
 	vResetViewState();
 
@@ -734,7 +734,7 @@ void FilesMenuItem::EnterDirectory()
 	itemChanged = true;							// force a redraw
 }
 
-uint8_t FilesMenuItem::GetDirectoryNesting() const
+uint8_t FilesMenuItem::GetDirectoryNesting() const noexcept
 {
 	const char *pcPathElement = currentDirectory.c_str();
 	uint8_t uNumSlashes = 0;
@@ -750,17 +750,17 @@ uint8_t FilesMenuItem::GetDirectoryNesting() const
 	return uNumSlashes;
 }
 
-bool FilesMenuItem::bInSubdirectory() const
+bool FilesMenuItem::bInSubdirectory() const noexcept
 {
 	return GetDirectoryNesting() > initialDirectoryNesting;
 }
 
-unsigned int FilesMenuItem::uListingEntries() const
+unsigned int FilesMenuItem::uListingEntries() const noexcept
 {
 	return bInSubdirectory() ? (1 + m_uHardItemsInDirectory) : m_uHardItemsInDirectory;
 }
 
-void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
+void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
 {
 	// The 'highlight' parameter is not used to highlight this item, but it is still used to tell whether this item is selected or not
 	if (!IsVisible())
@@ -823,7 +823,7 @@ void FilesMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 	}
 }
 
-void FilesMenuItem::ListFiles(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
+void FilesMenuItem::ListFiles(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
 {
 	lcd.SetFont(fontNumber);
 	lcd.SetRightMargin(rightMargin);
@@ -918,7 +918,7 @@ void FilesMenuItem::ListFiles(Lcd7920& lcd, PixelNumber rightMargin, bool highli
 	highlighted = highlight;
 }
 
-void FilesMenuItem::Enter(bool bForwardDirection)
+void FilesMenuItem::Enter(bool bForwardDirection) noexcept
 {
 	if (bForwardDirection || uListingEntries() == 0)
 	{
@@ -933,7 +933,7 @@ void FilesMenuItem::Enter(bool bForwardDirection)
 	itemChanged = true;
 }
 
-int FilesMenuItem::Advance(int nCounts)
+int FilesMenuItem::Advance(int nCounts) noexcept
 {
 	// In case of empty directory, there's nothing the control itself can do
 	if (uListingEntries() != 0)
@@ -981,7 +981,7 @@ int FilesMenuItem::Advance(int nCounts)
 	return nCounts;
 }
 
-bool FilesMenuItem::Select(const StringRef& cmd)
+bool FilesMenuItem::Select(const StringRef& cmd) noexcept
 {
 	// Several cases:
 	// TEST 1. ".." entry - call EnterDirectory(), using saved state information
@@ -1071,7 +1071,7 @@ bool FilesMenuItem::Select(const StringRef& cmd)
 	return false;
 }
 
-void FilesMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
+void FilesMenuItem::UpdateWidthAndHeight(Lcd7920& lcd) noexcept
 {
 	// The width is always set for a FilesMenuItem so we just need to determine the height
 	if (height == 0)
@@ -1081,7 +1081,7 @@ void FilesMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
 	}
 }
 
-PixelNumber FilesMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const
+PixelNumber FilesMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept
 {
 	// TODO
 	return 0;
@@ -1092,13 +1092,13 @@ PixelNumber FilesMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, Pi
 // Byte 0 = number of columns
 // Byte 1 = number of rows
 // Remaining bytes = data, 1 row at a time. If the number of columns is not a multiple of 8 then the data for each row is padded to a multiple of 8 bits.
-ImageMenuItem::ImageMenuItem(PixelNumber r, PixelNumber c, Visibility vis, const char *pFileName)
+ImageMenuItem::ImageMenuItem(PixelNumber r, PixelNumber c, Visibility vis, const char *pFileName) noexcept
 	: MenuItem(r, c, 0, 0, 0, vis)
 {
 	fileName.copy(pFileName);
 }
 
-void ImageMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset)
+void ImageMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
 {
 	if (IsVisible() && (!drawn || itemChanged || highlight != highlighted))
 	{
@@ -1132,7 +1132,7 @@ void ImageMenuItem::Draw(Lcd7920& lcd, PixelNumber rightMargin, bool highlight, 
 	}
 }
 
-void ImageMenuItem::UpdateWidthAndHeight(Lcd7920& lcd)
+void ImageMenuItem::UpdateWidthAndHeight(Lcd7920& lcd) noexcept
 {
 	if (width == 0 || height == 0)
 	{

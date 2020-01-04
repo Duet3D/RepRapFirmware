@@ -20,20 +20,20 @@ class CanMessageBuffer;
 class EndstopOrZProbe
 {
 public:
-	EndstopOrZProbe() : next(nullptr) {}
-	virtual ~EndstopOrZProbe() {}
+	EndstopOrZProbe() noexcept : next(nullptr) {}
+	virtual ~EndstopOrZProbe() noexcept {}
 
-	virtual EndStopHit Stopped() const = 0;
-	virtual EndstopHitDetails CheckTriggered(bool goingSlow) = 0;
-	virtual bool Acknowledge(EndstopHitDetails what) = 0;
+	virtual EndStopHit Stopped() const noexcept = 0;
+	virtual EndstopHitDetails CheckTriggered(bool goingSlow) noexcept = 0;
+	virtual bool Acknowledge(EndstopHitDetails what) noexcept = 0;
 
-	EndstopOrZProbe *GetNext() const { return next; }
-	void SetNext(EndstopOrZProbe *e) { next = e; }
+	EndstopOrZProbe *GetNext() const noexcept { return next; }
+	void SetNext(EndstopOrZProbe *e) noexcept { next = e; }
 
-	static void UpdateStalledDrivers(uint32_t driverMask, bool isStalled);
+	static void UpdateStalledDrivers(uint32_t driverMask, bool isStalled) noexcept;
 
 protected:
-	static DriversBitmap GetStalledDrivers() { return stalledDrivers; }
+	static DriversBitmap GetStalledDrivers() noexcept { return stalledDrivers; }
 
 private:
 	EndstopOrZProbe *next;								// next endstop in linked list
@@ -41,7 +41,7 @@ private:
 	static DriversBitmap stalledDrivers;				// used to track which drivers are reported as stalled, for stall detect endstops and stall detect Z probes
 };
 
-inline void EndstopOrZProbe::UpdateStalledDrivers(uint32_t driverMask, bool isStalled)
+inline void EndstopOrZProbe::UpdateStalledDrivers(uint32_t driverMask, bool isStalled) noexcept
 {
 	if (isStalled)
 	{
@@ -56,21 +56,21 @@ inline void EndstopOrZProbe::UpdateStalledDrivers(uint32_t driverMask, bool isSt
 class Endstop : public EndstopOrZProbe
 {
 public:
-	virtual EndStopType GetEndstopType() const = 0;
-	virtual bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) = 0;
-	virtual void AppendDetails(const StringRef& str) = 0;
+	virtual EndStopType GetEndstopType() const noexcept = 0;
+	virtual bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept = 0;
+	virtual void AppendDetails(const StringRef& str) noexcept = 0;
 
 #if SUPPORT_CAN_EXPANSION
 	// Process a remote endstop input change that relates to this endstop
-	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state) { }
+	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state) noexcept { }
 #endif
 
-	unsigned int GetAxis() const { return axis; }
-	bool GetAtHighEnd() const { return atHighEnd; }
-	void SetAtHighEnd(bool b) { atHighEnd = b; }
+	unsigned int GetAxis() const noexcept { return axis; }
+	bool GetAtHighEnd() const noexcept { return atHighEnd; }
+	void SetAtHighEnd(bool b) noexcept { atHighEnd = b; }
 
 protected:
-	Endstop(uint8_t axis, EndStopPosition pos);
+	Endstop(uint8_t axis, EndStopPosition pos) noexcept;
 
 
 private:

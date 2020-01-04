@@ -29,7 +29,7 @@ const char* const CALIBRATE_POST_G = "calibrate_post.g";
 constexpr uint32_t ScannerTaskStackWords = 400;			// task stack size in dwords
 static Task<ScannerTaskStackWords> *scannerTask = nullptr;
 
-extern "C" void ScannerTask(void * pvParameters)
+extern "C" void ScannerTask(void * pvParameters) noexcept
 {
 	for (;;)
 	{
@@ -40,7 +40,7 @@ extern "C" void ScannerTask(void * pvParameters)
 
 #endif
 
-void Scanner::Init()
+void Scanner::Init() noexcept
 {
 	enabled = false;
 	SetState(ScannerState::Disconnected);
@@ -49,14 +49,14 @@ void Scanner::Init()
 	fileBeingUploaded = nullptr;
 }
 
-void Scanner::SetState(const ScannerState s)
+void Scanner::SetState(const ScannerState s) noexcept
 {
 	progress = 0.0f;
 	doingGCodes = false;
 	state = s;
 }
 
-void Scanner::Exit()
+void Scanner::Exit() noexcept
 {
 	if (IsEnabled())
 	{
@@ -79,7 +79,7 @@ void Scanner::Exit()
 	}
 }
 
-void Scanner::Spin()
+void Scanner::Spin() noexcept
 {
 	// Is the 3D scanner extension enabled at all and is a device registered?
 	if (!IsEnabled() || state == ScannerState::Disconnected)
@@ -273,7 +273,7 @@ void Scanner::Spin()
 }
 
 // Process incoming commands from the scanner board
-void Scanner::ProcessCommand()
+void Scanner::ProcessCommand() noexcept
 {
 	// Output some info if debugging is enabled
 	if (reprap.Debug(moduleScanner))
@@ -378,7 +378,7 @@ void Scanner::ProcessCommand()
 }
 
 // Enable the scanner extensions
-bool Scanner::Enable()
+bool Scanner::Enable() noexcept
 {
 	enabled = true;
 #if SCANNER_AS_SEPARATE_TASK
@@ -392,7 +392,7 @@ bool Scanner::Enable()
 }
 
 // Register a scanner device
-void Scanner::Register()
+void Scanner::Register() noexcept
 {
 	if (!IsRegistered())
 	{
@@ -404,7 +404,7 @@ void Scanner::Register()
 }
 
 // Initiate a new scan
-bool Scanner::StartScan(const char *filename, int range, int resolution, int mode)
+bool Scanner::StartScan(const char *filename, int range, int resolution, int mode) noexcept
 {
 	if (state != ScannerState::Idle)
 	{
@@ -431,7 +431,7 @@ bool Scanner::StartScan(const char *filename, int range, int resolution, int mod
 }
 
 // Cancel current 3D scanner action
-bool Scanner::Cancel()
+bool Scanner::Cancel() noexcept
 {
 	if (state == ScannerState::ScanningPre || state == ScannerState::ScanningPost ||
 		state == ScannerState::CalibratingPre || state == ScannerState::CalibratingPost)
@@ -454,7 +454,7 @@ bool Scanner::Cancel()
 }
 
 // Send ALIGN ON/OFF to the 3D scanner
-bool Scanner::SetAlignment(bool on)
+bool Scanner::SetAlignment(bool on) noexcept
 {
 	if (state != ScannerState::Idle)
 	{
@@ -473,7 +473,7 @@ bool Scanner::SetAlignment(bool on)
 }
 
 // Sends SHUTDOWN to the 3D scanner and unregisters it
-bool Scanner::Shutdown()
+bool Scanner::Shutdown() noexcept
 {
 	if (state != ScannerState::Idle)
 	{
@@ -489,7 +489,7 @@ bool Scanner::Shutdown()
 }
 
 // Calibrate the 3D scanner
-bool Scanner::Calibrate(int mode)
+bool Scanner::Calibrate(int mode) noexcept
 {
 	if (state != ScannerState::Idle)
 	{
@@ -510,7 +510,7 @@ bool Scanner::Calibrate(int mode)
 	return true;
 }
 
-const char Scanner::GetStatusCharacter() const
+const char Scanner::GetStatusCharacter() const noexcept
 {
 	switch (state)
 	{
@@ -543,7 +543,7 @@ const char Scanner::GetStatusCharacter() const
 }
 
 // Return the progress of the current operation
-float Scanner::GetProgress() const
+float Scanner::GetProgress() const noexcept
 {
 	if (state == ScannerState::Uploading)
 	{
@@ -554,13 +554,13 @@ float Scanner::GetProgress() const
 }
 
 // Is a macro file being executed?
-bool Scanner::IsDoingFileMacro() const
+bool Scanner::IsDoingFileMacro() const noexcept
 {
 	return (serialGCode->IsDoingFileMacro() || (serialGCode->Seen('M') && serialGCode->GetIValue() == 98));
 }
 
 // Perform a file macro using the GCodeBuffer
-void Scanner::DoFileMacro(const char *filename)
+void Scanner::DoFileMacro(const char *filename) noexcept
 {
 	if (platform.SysFileExists(filename))
 	{

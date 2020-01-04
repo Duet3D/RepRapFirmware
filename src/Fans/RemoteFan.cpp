@@ -22,10 +22,16 @@ RemoteFan::RemoteFan(unsigned int fanNum, CanAddress boardNum) noexcept
 RemoteFan::~RemoteFan() noexcept
 {
 	CanMessageGenericConstructor cons(M950FanParams);
-	cons.AddUParam('F', fanNumber);
-	cons.AddStringParam('C', "nil");
-	String<1> dummy;
-	(void)cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, dummy.GetRef());
+	try
+	{
+		cons.AddUParam('F', fanNumber);
+		cons.AddStringParam('C', "nil");
+		String<1> dummy;
+		(void)cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, dummy.GetRef());
+	}
+	catch (...)
+	{
+	}
 }
 
 bool RemoteFan::Check() noexcept

@@ -29,19 +29,19 @@ class ObjectModel;		// forward declaration
 
 // Function template used to get constexpr type IDs
 // Each type must return a unique type code in the range 1 to 127
-template<class T> constexpr TypeCode TypeOf();
+template<class T> constexpr TypeCode TypeOf() noexcept;
 
-template<> constexpr TypeCode TypeOf<bool> () { return 1; }
-template<> constexpr TypeCode TypeOf<uint32_t> () { return 2; }
-template<> constexpr TypeCode TypeOf<int32_t>() { return 3; }
-template<> constexpr TypeCode TypeOf<float>() { return 4; }
-template<> constexpr TypeCode TypeOf<Float2>() { return 5; }
-template<> constexpr TypeCode TypeOf<Float3>() { return 6; }
-template<> constexpr TypeCode TypeOf<Bitmap32>() { return 7; }
-template<> constexpr TypeCode TypeOf<Enum32>() { return 8; }
-template<> constexpr TypeCode TypeOf<ObjectModel>() { return 9; }
-template<> constexpr TypeCode TypeOf<const char *>() { return 10; }
-template<> constexpr TypeCode TypeOf<IPAddress>() { return 11; }
+template<> constexpr TypeCode TypeOf<bool>() noexcept { return 1; }
+template<> constexpr TypeCode TypeOf<uint32_t>() noexcept { return 2; }
+template<> constexpr TypeCode TypeOf<int32_t>() noexcept { return 3; }
+template<> constexpr TypeCode TypeOf<float>() noexcept { return 4; }
+template<> constexpr TypeCode TypeOf<Float2>() noexcept { return 5; }
+template<> constexpr TypeCode TypeOf<Float3>() noexcept { return 6; }
+template<> constexpr TypeCode TypeOf<Bitmap32>() noexcept { return 7; }
+template<> constexpr TypeCode TypeOf<Enum32>() noexcept { return 8; }
+template<> constexpr TypeCode TypeOf<ObjectModel>() noexcept { return 9; }
+template<> constexpr TypeCode TypeOf<const char *>() noexcept { return 10; }
+template<> constexpr TypeCode TypeOf<IPAddress>() noexcept { return 11; }
 
 #define TYPE_OF(_t) (TypeOf<_t>())
 
@@ -63,10 +63,10 @@ struct ExpressionValue
 		const ObjectModel *omVal;
 	};
 
-	constexpr ExpressionValue(bool b) : type(TYPE_OF(bool)), bVal(b) { }
-	constexpr ExpressionValue(float f) : type(TYPE_OF(float)), fVal(f) { }
-	constexpr ExpressionValue(int32_t i) : type(TYPE_OF(int32_t)), iVal(i) { }
-	ExpressionValue() : type(NoType) { }
+	constexpr ExpressionValue(bool b) noexcept : type(TYPE_OF(bool)), bVal(b) { }
+	constexpr ExpressionValue(float f) noexcept : type(TYPE_OF(float)), fVal(f) { }
+	constexpr ExpressionValue(int32_t i) noexcept : type(TYPE_OF(int32_t)), iVal(i) { }
+	ExpressionValue() noexcept : type(NoType) { }
 };
 
 class ObjectModel
@@ -78,47 +78,47 @@ public:
 		flagShortForm = 1
 	};
 
-	ObjectModel();
+	ObjectModel() noexcept;
 
 	// Construct a JSON representation of those parts of the object model requested by the user
-	bool ReportAsJson(OutputBuffer *buf, const char *filter, ReportFlags rflags);
+	bool ReportAsJson(OutputBuffer *buf, const char *filter, ReportFlags rflags) noexcept;
 
 	// Return the type of an object
-	TypeCode GetObjectType(const char *idString);
+	TypeCode GetObjectType(const char *idString) noexcept;
 
 	// Get the value of an object when we don't know what its type is
-	ExpressionValue GetObjectValue(const StringParser& sp, const char *idString);
+	ExpressionValue GetObjectValue(const StringParser& sp, const char *idString) THROWS_PARSE_ERROR;
 
 	// Specialisation of above for float, allowing conversion from integer to float
-	bool GetObjectValue(float& val, const char *idString);
+	bool GetObjectValue(float& val, const char *idString) THROWS_PARSE_ERROR;
 
 	// Specialisation of above for int, allowing conversion from unsigned to signed
-	bool GetObjectValue(int32_t& val, const char *idString);
+	bool GetObjectValue(int32_t& val, const char *idString) THROWS_PARSE_ERROR;
 
 	// Get the object model table entry for the current level object in the query
-	const ObjectModelTableEntry *FindObjectModelTableEntry(const char *idString);
+	const ObjectModelTableEntry *FindObjectModelTableEntry(const char *idString) noexcept;
 
 	// Skip the current element in the ID or filter string
-	static const char* GetNextElement(const char *id);
+	static const char* GetNextElement(const char *id) noexcept;
 
 protected:
-	virtual const ObjectModelTableEntry *GetObjectModelTable(size_t& numEntries) const = 0;
+	virtual const ObjectModelTableEntry *GetObjectModelTable(size_t& numEntries) const noexcept = 0;
 
 private:
 	// Get pointers to various types from the object model, returning null if failed
-	template<class T> T* GetObjectPointer(const char* idString);
+	template<class T> T* GetObjectPointer(const char* idString) noexcept;
 
-	const char **GetStringObjectPointer(const char *idString);
-	uint32_t *GetShortEnumObjectPointer(const char *idString);
-	uint32_t *GetBitmapObjectPointer(const char *idString);
+	const char **GetStringObjectPointer(const char *idString) noexcept;
+	uint32_t *GetShortEnumObjectPointer(const char *idString) noexcept;
+	uint32_t *GetBitmapObjectPointer(const char *idString) noexcept;
 };
 
 // Entry to describe an array
 class ObjectModelArrayDescriptor
 {
 public:
-	size_t (*GetNumElements)(ObjectModel*);
-	void * (*GetElement)(ObjectModel*, size_t);
+	size_t (*GetNumElements)(ObjectModel*) noexcept;
+	void * (*GetElement)(ObjectModel*, size_t) noexcept;
 };
 
 // Object model table entry
@@ -137,7 +137,7 @@ public:
 	};
 
 	// Type of the function pointer in the table entry, that returns a pointer to the data
-	typedef void *(*ParamFuncPtr_t)(ObjectModel*);
+	typedef void *(*ParamFuncPtr_t)(ObjectModel*) noexcept;
 
 	// Member data. This must be public so that we can brace-initialise table entries.
 	const char * name;				// name of this field
@@ -148,19 +148,19 @@ public:
 	// Member functions. These must all be 'const'.
 
 	// Return true if this object table entry matches a filter or query
-	bool Matches(const char *filter, ObjectModelFilterFlags flags) const;
+	bool Matches(const char *filter, ObjectModelFilterFlags flags) const noexcept;
 
 	// See whether we should add the value of this element to the buffer, returning true if it matched the filter and we did add it
-	bool ReportAsJson(OutputBuffer* buf, ObjectModel *self, const char* filter, ObjectModel::ReportFlags flags) const;
+	bool ReportAsJson(OutputBuffer* buf, ObjectModel *self, const char* filter, ObjectModel::ReportFlags flags) const noexcept;
 
 	// Return the name of this field
-	const char* GetName() const { return name; }
+	const char* GetName() const noexcept { return name; }
 
 	// Compare the name of this field with the filter string that we are trying to match
-	int IdCompare(const char *id) const;
+	int IdCompare(const char *id) const noexcept;
 
 	// Private function to report a value of primitive type
-	static void ReportItemAsJson(OutputBuffer *buf, const char *filter, ObjectModel::ReportFlags flags, void *nParam, TypeCode type);
+	static void ReportItemAsJson(OutputBuffer *buf, const char *filter, ObjectModel::ReportFlags flags, void *nParam, TypeCode type) noexcept;
 };
 
 // Use this macro to inherit form ObjectModel
@@ -168,18 +168,18 @@ public:
 
 // Use this macro in the 'protected' section of every class declaration that derived from ObjectModel
 #define DECLARE_OBJECT_MODEL \
-	const ObjectModelTableEntry *GetObjectModelTable(size_t& numEntries) const override; \
+	const ObjectModelTableEntry *GetObjectModelTable(size_t& numEntries) const noexcept override; \
 	static const ObjectModelTableEntry objectModelTable[];
 
 #define DEFINE_GET_OBJECT_MODEL_TABLE(_class) \
-	const ObjectModelTableEntry *_class::GetObjectModelTable(size_t& numEntries) const \
+	const ObjectModelTableEntry *_class::GetObjectModelTable(size_t& numEntries) const noexcept \
 	{ \
 		numEntries = ARRAY_SIZE(objectModelTable); \
 		return objectModelTable; \
 	}
 
-#define OBJECT_MODEL_FUNC_BODY(_class,_ret) [] (ObjectModel* arg) { _class * const self = static_cast<_class*>(arg); return (void *)(_ret); }
-#define OBJECT_MODEL_FUNC_NOSELF(_ret) [] (ObjectModel* arg) { return (void *)(_ret); }
+#define OBJECT_MODEL_FUNC_BODY(_class,_ret) [] (ObjectModel* arg) noexcept { _class * const self = static_cast<_class*>(arg); return (void *)(_ret); }
+#define OBJECT_MODEL_FUNC_NOSELF(_ret) [] (ObjectModel* arg) noexcept { return (void *)(_ret); }
 
 #else
 

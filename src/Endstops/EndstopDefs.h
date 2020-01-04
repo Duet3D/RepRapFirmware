@@ -26,13 +26,13 @@ enum class EndstopHitAction : uint8_t
 // Struct to return info about what endstop has been triggered and what to do about it
 struct EndstopHitDetails
 {
-	EndstopHitDetails() : action((uint32_t)EndstopHitAction::none), internalUse(0), axis(NO_AXIS), setAxisLow(false), setAxisHigh(false), isZProbe(false)
+	EndstopHitDetails() noexcept : action((uint32_t)EndstopHitAction::none), internalUse(0), axis(NO_AXIS), setAxisLow(false), setAxisHigh(false), isZProbe(false)
 	{
 		driver.Clear();
 	}
 
-	void SetAction(EndstopHitAction a) { action = (uint32_t)a; }
-	EndstopHitAction GetAction() const { return (EndstopHitAction)action; }
+	void SetAction(EndstopHitAction a) noexcept { action = (uint32_t)a; }
+	EndstopHitAction GetAction() const noexcept { return (EndstopHitAction)action; }
 
 	uint16_t action : 4,			// an EndstopHitAction
 			 internalUse : 4,		// used to pass data between CheckTriggered() and Acknowledge()

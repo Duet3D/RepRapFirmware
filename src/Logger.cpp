@@ -24,11 +24,11 @@ private:
 	bool& b;
 };
 
-Logger::Logger() : logFile(), lastFlushTime(0), lastFlushFileSize(0), dirty(false), inLogger(false)
+Logger::Logger() noexcept : logFile(), lastFlushTime(0), lastFlushFileSize(0), dirty(false), inLogger(false)
 {
 }
 
-void Logger::Start(time_t time, const StringRef& filename)
+void Logger::Start(time_t time, const StringRef& filename) noexcept
 {
 	if (!inLogger)
 	{
@@ -44,7 +44,7 @@ void Logger::Start(time_t time, const StringRef& filename)
 	}
 }
 
-void Logger::Stop(time_t time)
+void Logger::Stop(time_t time) noexcept
 {
 	if (logFile.IsLive() && !inLogger)
 	{
@@ -54,7 +54,7 @@ void Logger::Stop(time_t time)
 	}
 }
 
-void Logger::LogMessage(time_t time, const char *message)
+void Logger::LogMessage(time_t time, const char *message) noexcept
 {
 	if (logFile.IsLive() && !inLogger)
 	{
@@ -63,7 +63,7 @@ void Logger::LogMessage(time_t time, const char *message)
 	}
 }
 
-void Logger::LogMessage(time_t time, OutputBuffer *buf)
+void Logger::LogMessage(time_t time, OutputBuffer *buf) noexcept
 {
 	if (logFile.IsLive() && !inLogger)
 	{
@@ -86,7 +86,7 @@ void Logger::LogMessage(time_t time, OutputBuffer *buf)
 }
 
 // Version of LogMessage for when we already know we want to proceed and we have already set inLogger
-void Logger::InternalLogMessage(time_t time, const char *message)
+void Logger::InternalLogMessage(time_t time, const char *message) noexcept
 {
 	bool ok = WriteDateTime(time);
 	if (ok)
@@ -113,7 +113,7 @@ void Logger::InternalLogMessage(time_t time, const char *message)
 }
 
 // This is called regularly by Platform to give the logger an opportunity to flush the file buffer
-void Logger::Flush(bool forced)
+void Logger::Flush(bool forced) noexcept
 {
 	if (logFile.IsLive() && dirty && !inLogger)
 	{
@@ -137,7 +137,7 @@ void Logger::Flush(bool forced)
 
 // Write the data and time to the file followed by a space.
 // Caller must already have checked and set inLogger.
-bool Logger::WriteDateTime(time_t time)
+bool Logger::WriteDateTime(time_t time) noexcept
 {
 	String<30> bufferSpace;
 	const StringRef buf = bufferSpace.GetRef();

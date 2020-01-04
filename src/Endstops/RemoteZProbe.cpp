@@ -33,7 +33,7 @@ RemoteZProbe::~RemoteZProbe()
 	}
 }
 
-GCodeResult RemoteZProbe::AppendPinNames(const StringRef& str) const
+GCodeResult RemoteZProbe::AppendPinNames(const StringRef& str) const noexcept
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -58,7 +58,7 @@ GCodeResult RemoteZProbe::AppendPinNames(const StringRef& str) const
 	return rslt;
 }
 
-void RemoteZProbe::SetProbing(bool isProbing) const
+void RemoteZProbe::SetProbing(bool isProbing) const noexcept
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -81,7 +81,7 @@ void RemoteZProbe::SetProbing(bool isProbing) const
 }
 
 // Create a remote Z probe
-GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& reply)
+GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& reply) noexcept
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -128,7 +128,7 @@ GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, boo
 	return rslt;
 }
 
-GCodeResult RemoteZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply)
+GCodeResult RemoteZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept
 {
 	//TODO
 	reply.copy("Programming remote Z probes not yet supported");

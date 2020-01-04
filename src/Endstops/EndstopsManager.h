@@ -24,64 +24,64 @@ class StallDetectionEndstop;
 class EndstopsManager
 {
 public:
-	EndstopsManager();
+	EndstopsManager() noexcept;
 
-	void Init();
+	void Init() noexcept;
 
 	// Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command returning true if successful
-	bool EnableAxisEndstops(AxesBitmap axes, bool forHoming) __attribute__ ((warn_unused_result));
+	bool EnableAxisEndstops(AxesBitmap axes, bool forHoming) noexcept __attribute__ ((warn_unused_result));
 
 	// Set up the active endstops for Z probing returning true if successful
-	bool EnableZProbe(size_t probeNumber, bool probingAway = false) __attribute__ ((warn_unused_result));
+	bool EnableZProbe(size_t probeNumber, bool probingAway = false) noexcept __attribute__ ((warn_unused_result));
 
 	// Set up the active endstops for Z probing with the current probe
-	bool EnableCurrentZProbe(bool probingAway = false) __attribute__ ((warn_unused_result)) { return EnableZProbe(currentZProbeNumber, probingAway); }
+	bool EnableCurrentZProbe(bool probingAway = false) noexcept __attribute__ ((warn_unused_result)) { return EnableZProbe(currentZProbeNumber, probingAway); }
 
 	// Enable extruder endstops
-	bool EnableExtruderEndstops(ExtrudersBitmap extruders);
+	bool EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept;
 
 	// Get the first endstop that has triggered and remove it from the active list if appropriate
-	EndstopHitDetails CheckEndstops(bool goingSlow);
+	EndstopHitDetails CheckEndstops(bool goingSlow) noexcept;
 
 	// Configure the endstops in response to M574
-	GCodeResult HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf);
+	GCodeResult HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf) noexcept;
 
-	EndStopPosition GetEndStopPosition(size_t axis) const pre(axis < MaxAxes);
-	bool HomingZWithProbe() const;
+	EndStopPosition GetEndStopPosition(size_t axis) const pre(axis < MaxAxes) noexcept;
+	bool HomingZWithProbe() const noexcept;
 
-	EndStopHit Stopped(size_t axis) const;
+	EndStopHit Stopped(size_t axis) const noexcept;
 
-	void GetM119report(const StringRef& reply);
+	void GetM119report(const StringRef& reply) noexcept;
 
 	// Z probe
-	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef &reply);		// M558
-	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply);			// G31
+	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS_PARSE_ERROR;		// M558
+	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR;		// G31
 
-	ZProbe& GetCurrentZProbe() const;
-	const size_t GetCurrentZProbeNumber() const { return currentZProbeNumber; }
-	ZProbe *GetZProbe(size_t num) const;
-	void SetZProbeDefaults();
-	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply);
+	ZProbe& GetCurrentZProbe() const noexcept;
+	const size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
+	ZProbe *GetZProbe(size_t num) const noexcept;
+	void SetZProbeDefaults() noexcept;
+	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR;
 
 #if SUPPORT_CAN_EXPANSION
-	void HandleRemoteInputChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state);
+	void HandleRemoteInputChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
 
-	void OnEndstopStatesChanged();
+	void OnEndstopStatesChanged() noexcept;
 #endif
 
 #if HAS_MASS_STORAGE
-	bool WriteZProbeParameters(FileStore *f, bool includingG31) const;
+	bool WriteZProbeParameters(FileStore *f, bool includingG31) const noexcept;
 #endif
 
 private:
 	// Add an endstop to the active list
-	void AddToActive(EndstopOrZProbe& e);
+	void AddToActive(EndstopOrZProbe& e) noexcept;
 
 	// Translate end stop result to text
-	static const char *TranslateEndStopResult(EndStopHit es, bool atHighEnd);
+	static const char *TranslateEndStopResult(EndStopHit es, bool atHighEnd) noexcept;
 
-	ReadLockedPointer<ZProbe> FindZProbe(size_t index) const;
-	ReadLockedPointer<Endstop> FindEndstop(size_t axis) const;
+	ReadLockedPointer<ZProbe> FindZProbe(size_t index) const noexcept;
+	ReadLockedPointer<Endstop> FindEndstop(size_t axis) const noexcept;
 
 	static ReadWriteLock endstopsLock;					// used to lock both endstops and Z probes
 

@@ -24,10 +24,7 @@ GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply)
 	bool seen = false;
 	TryConfigureSensorName(gb, seen);
 	CanMessageGenericConstructor cons(M308Params);
-	if (!cons.PopulateFromCommand(gb, reply))
-	{
-		return GCodeResult::error;
-	}
+	cons.PopulateFromCommand(gb);
 	const GCodeResult ret = cons.SendAndGetResponse(CanMessageType::m308, boardAddress, reply);
 	if ((ret == GCodeResult::ok || ret == GCodeResult::warning) && StringStartsWith(reply.c_str(), "type "))
 	{
