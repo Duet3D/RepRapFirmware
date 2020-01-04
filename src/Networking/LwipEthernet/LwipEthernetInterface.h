@@ -34,7 +34,6 @@ public:
 	void Activate() noexcept override;
 	void Exit() noexcept override;
 	void Spin() noexcept override;
-	void Interrupt() noexcept override;
 	void Diagnostics(MessageType mtype) noexcept override;
 
 	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
@@ -44,7 +43,6 @@ public:
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
 	int EnableState() const noexcept override;
-	bool InNetworkStack() const noexcept override;
 	bool IsWiFiInterface() const noexcept override { return false; }
 
 	void UpdateHostname(const char *hostname) noexcept override;

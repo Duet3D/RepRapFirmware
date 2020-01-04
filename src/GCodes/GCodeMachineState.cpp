@@ -137,13 +137,38 @@ void GCodeMachineState::CloseFile()
 
 GCodeMachineState::BlockState& GCodeMachineState::CurrentBlockState()
 {
-	return blockStates[min<size_t>(indentLevel, ARRAY_SIZE(blockStates) - 1)];
+	return blockStates[indentLevel];
 }
 
-void GCodeMachineState::CreateBlock()
+// Get the number of iterations of the closest enclosing loop i the current file, or -1 if there is on enclosing loop
+int32_t GCodeMachineState::GetIterations() const
 {
+	uint8_t i = indentLevel;
+	while (true)
+	{
+		if (blockStates[i].GetType() != BlockType::loop)
+		{
+			return blockStates[i].GetIterations();
+		}
+		if (i == 0)
+		{
+			return -1;
+		}
+		--i;
+	}
+}
+
+// Create a new block returning true if successful, false if maximum indent level exceeded
+bool GCodeMachineState::CreateBlock()
+{
+	if (indentLevel + 1 == ARRAY_SIZE(blockStates))
+	{
+		return false;
+	}
+
 	++indentLevel;
 	CurrentBlockState().SetPlainBlock();
+	return true;
 }
 
 void GCodeMachineState::EndBlock()

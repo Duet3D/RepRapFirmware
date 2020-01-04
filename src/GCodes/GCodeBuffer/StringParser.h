@@ -99,7 +99,7 @@ private:
 
 	bool ProcessConditionalGCode(BlockType previousBlockType) THROWS_PARSE_ERROR;
 																			// Check for and process a conditional GCode language command returning true if we found one
-	void CreateBlocks() noexcept;											// Create new code blocks
+	void CreateBlocks() THROWS_PARSE_ERROR;									// Create new code blocks
 	bool EndBlocks() noexcept;												// End blocks returning true if nothing more to process on this line
 	void ProcessIfCommand() THROWS_PARSE_ERROR;
 	void ProcessElseCommand(BlockType previousBlockType) THROWS_PARSE_ERROR;
@@ -118,8 +118,10 @@ private:
 		pre (readPointer >= 0);
 	ExpressionValue ParseNumber() THROWS_PARSE_ERROR
 		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
-	ExpressionValue ParseIdentifier() THROWS_PARSE_ERROR
+	ExpressionValue ParseIdentifierExpression() THROWS_PARSE_ERROR
 		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
+	void ParseIdentifier(const StringRef& id) THROWS_PARSE_ERROR
+		pre(readPointer >= 0);
 
 	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2) THROWS_PARSE_ERROR;
 	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2) THROWS_PARSE_ERROR;

@@ -212,28 +212,9 @@ bool ethernet_link_established() noexcept
  */
 void ethernet_task() noexcept
 {
-#if !LWIP_GMAC_TASK
-	/* Run polling tasks */
-	while (ethernetif_input(&gs_net_if)) { }
-#endif
-
 	/* Run periodic tasks */
 	ethernet_timers_update();
 }
-
-#if !LWIP_GMAC_TASK
-/*
- * \brief Sets the EMAC RX callback. It will be called when a new packet
- * can be processed and should be called with a NULL parameter inside
- * the actual callback.
- *
- * \param callback The callback to be called when a new packet is ready
- */
-void ethernet_set_rx_callback(gmac_dev_tx_cb_t callback) noexcept
-{
-	ethernetif_set_rx_callback(callback);
-}
-#endif
 
 /*
  * \brief Returns the current IP address

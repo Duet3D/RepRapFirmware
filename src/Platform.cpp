@@ -89,10 +89,6 @@
 # error Missing feature definition
 #endif
 
-#if HAS_LWIP_NETWORKING && !defined(LWIP_GMAC_TASK)
-# error LWIP_GMAC_TASK must be defined in compiler settings
-#endif
-
 #if HAS_VOLTAGE_MONITOR
 
 inline constexpr float AdcReadingToPowerVoltage(uint16_t adcVal)
@@ -1299,16 +1295,6 @@ float Platform::AdcReadingToCpuTemperature(uint32_t adcVal) const noexcept
 //*****************************************************************************************************************
 // Interrupts
 
-#if HAS_LWIP_NETWORKING && !LWIP_GMAC_TASK
-
-void NETWORK_TC_HANDLER() noexcept
-{
-	tc_get_status(NETWORK_TC, NETWORK_TC_CHAN);
-	reprap.GetNetwork().Interrupt();
-}
-
-#endif
-
 void Platform::InitialiseInterrupts() noexcept
 {
 #if SAM4E || SAME70 || defined(__LPC17xx__)
@@ -1347,26 +1333,6 @@ void Platform::InitialiseInterrupts() noexcept
 	StepTimer::Init();										// initialise the step pulse timer
 
 #if HAS_LWIP_NETWORKING
-# if !LWIP_GMAC_TASK
-	pmc_enable_periph_clk(NETWORK_TC_ID);
-#  if SAME70
-	// Timer interrupt to keep the networking timers running (called at 18Hz, which is almost as low as we can get because the timer is 16-bit)
-	tc_init(NETWORK_TC, NETWORK_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
-	const uint32_t rc = (SystemPeripheralClock()/128)/18;				// 128 because we selected TIMER_CLOCK4 above (16-bit counter)
-#  else
-	// Timer interrupt to keep the networking timers running (called at 16Hz)
-	tc_init(NETWORK_TC, NETWORK_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK2);
-	const uint32_t rc = (VARIANT_MCK/8)/16;					// 8 because we selected TIMER_CLOCK2 above (32-bit counter)
-#  endif
-	tc_write_ra(NETWORK_TC, NETWORK_TC_CHAN, rc/2);			// 50% high, 50% low
-	tc_write_rc(NETWORK_TC, NETWORK_TC_CHAN, rc);
-	tc_start(NETWORK_TC, NETWORK_TC_CHAN);
-	NETWORK_TC->TC_CHANNEL[NETWORK_TC_CHAN].TC_IER = TC_IER_CPCS;
-	NETWORK_TC->TC_CHANNEL[NETWORK_TC_CHAN].TC_IDR = ~TC_IER_CPCS;
-	NVIC_SetPriority(NETWORK_TC_IRQN, NvicPriorityNetworkTick);
-	NVIC_EnableIRQ(NETWORK_TC_IRQN);
-# endif
-
 	// Set up the Ethernet interface priority here to because we have access to the priority definitions
 # if SAME70
 	NVIC_SetPriority(GMAC_IRQn, NvicPriorityEthernet);

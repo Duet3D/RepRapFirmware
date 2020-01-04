@@ -140,20 +140,24 @@ public:
 		BlockState() : blockType((uint32_t)BlockType::plain) {}
 
 		BlockType GetType() const { return (BlockType) blockType; }
+		uint32_t GetIterations() const { return iterationsDone; }
 
 		uint32_t GetLineNumber() const { return lineNumber; }
 		FilePosition GetFilePosition() const { return fpos; }
 
-		void SetLoopBlock(FilePosition filePos, uint32_t lineNum) { fpos = filePos; lineNumber = lineNum; }
-		void SetPlainBlock() { blockType = (uint32_t)BlockType::plain; }
-		void SetIfTrueBlock() { blockType = (uint32_t)BlockType::ifTrue; }
-		void SetIfFalseNoneTrueBlock() { blockType = (uint32_t)BlockType::ifFalseNoneTrue; }
-		void SetIfFalseHadTrueBlock() { blockType = (uint32_t)BlockType::ifFalseHadTrue; }
+		void SetLoopBlock(FilePosition filePos, uint32_t lineNum) { fpos = filePos; lineNumber = lineNum; iterationsDone = 0; }
+		void SetPlainBlock() { blockType = (uint32_t)BlockType::plain; iterationsDone = 0; }
+		void SetIfTrueBlock() { blockType = (uint32_t)BlockType::ifTrue; iterationsDone = 0; }
+		void SetIfFalseNoneTrueBlock() { blockType = (uint32_t)BlockType::ifFalseNoneTrue; iterationsDone = 0; }
+		void SetIfFalseHadTrueBlock() { blockType = (uint32_t)BlockType::ifFalseHadTrue; iterationsDone = 0; }
+
+		void IncrementIterations() { ++iterationsDone; }
 
 	private:
 		FilePosition fpos;											// the file offset at which the current block started
 		uint32_t lineNumber : 29,									// the line number at which the current block started
 				 blockType : 3;										// the type of this block
+		uint32_t iterationsDone;
 	};
 
 	GCodeMachineState();
@@ -220,8 +224,9 @@ public:
 	}
 
 	BlockState& CurrentBlockState();
+	int32_t GetIterations() const;
 
-	void CreateBlock();
+	bool CreateBlock();
 	void EndBlock();
 
 	static void Release(GCodeMachineState *ms);

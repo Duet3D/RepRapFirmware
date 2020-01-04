@@ -397,11 +397,14 @@ bool StringParser::ProcessConditionalGCode(BlockType previousBlockType)
 }
 
 // Create new code blocks
-void StringParser::CreateBlocks() noexcept
+void StringParser::CreateBlocks()
 {
 	while (gb.machineState->indentLevel < commandIndent)
 	{
-		gb.machineState->CreateBlock();
+		if (!gb.machineState->CreateBlock())
+		{
+			throw ConstructParseException("blocks nested too deeply");
+		}
 	}
 }
 
@@ -479,12 +482,19 @@ void StringParser::ProcessElifCommand(BlockType previousBlockType)
 
 void StringParser::ProcessWhileCommand()
 {
-	if (EvaluateCondition())
+	// Set the current block as a loop block first so that we may use 'iterations' in the condition
+	if (gb.machineState->CurrentBlockState().GetType() == BlockType::loop)
 	{
-		gb.machineState->CurrentBlockState().SetLoopBlock(GetFilePosition(), gb.machineState->lineNumber);
+		gb.machineState->CurrentBlockState().IncrementIterations();		// starting another iteration
 	}
 	else
 	{
+		gb.machineState->CurrentBlockState().SetLoopBlock(GetFilePosition(), gb.machineState->lineNumber);
+	}
+
+	if (!EvaluateCondition())
+	{
+		gb.machineState->CurrentBlockState().SetPlainBlock();
 		indentToSkipTo = gb.machineState->indentLevel;					// skip forwards to the end of the block
 	}
 }
@@ -504,17 +514,23 @@ void StringParser::ProcessBreakCommand()
 
 void StringParser::ProcessVarCommand()
 {
-	throw ConstructParseException("'var' not implemented yet");
+#if 0
+	SkipWhiteSpace();
+	String<MaxVariableNameLength> varName;
+	ParseIdentifier(varName.GetRef());
+	qq;
+#endif
+	throw ConstructParseException("'var' not implemented");
 }
 
 void StringParser::ProcessSetCommand()
 {
-	throw ConstructParseException("'set' not implemented yet");
+	throw ConstructParseException("'set' not implemented");
 }
 
 void StringParser::ProcessAbortCommand()
 {
-	throw ConstructParseException("'abort' not implemented yet");
+	gb.AbortFile(true);
 }
 
 // Evaluate the condition that should follow 'if' or 'while'
@@ -1379,6 +1395,7 @@ uint32_t StringParser::ReadUIValue()
 {
 	if (gb.buffer[readPointer] == '{')
 	{
+		++readPointer;
 		const ExpressionValue val = ParseBracketedExpression('}');
 		switch (val.type)
 		{
@@ -1436,7 +1453,8 @@ int32_t StringParser::ReadIValue()
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionValue val = ParseBracketedExpression('}');
+		++readPointer;
+		const ExpressionValue val = ParseBracketedExpression('}');
 		switch (val.type)
 		{
 		case TYPE_OF(int32_t):
@@ -1482,6 +1500,7 @@ DriverId StringParser::ReadDriverIdValue()
 // Get a string expression. The current character is '{'.
 void StringParser::GetStringExpression(const StringRef& str)
 {
+	++readPointer;									// skip the '{'
 	const ExpressionValue val = ParseBracketedExpression('}');
 	switch (val.type)
 	{
@@ -1525,7 +1544,6 @@ void StringParser::GetStringExpression(const StringRef& str)
 // Evaluate a bracketed expression
 ExpressionValue StringParser::ParseBracketedExpression(char closingBracket)
 {
-	++readPointer;						// skip the '{' or '('
 	auto rslt = ParseExpression(0);
 	if (gb.buffer[readPointer] == closingBracket)
 	{
@@ -1533,7 +1551,7 @@ ExpressionValue StringParser::ParseBracketedExpression(char closingBracket)
 		return rslt;
 	}
 
-	throw ConstructParseException("expected closing bracket");
+	throw ConstructParseException("expected '%c'", (uint32_t)closingBracket);
 }
 
 // Evaluate an expression, stopping before any binary operators with priority 'priority' or lower
@@ -1616,7 +1634,7 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority)
 		}
 		else if (isalpha(c))				// looks like a variable name
 		{
-			val = ParseIdentifier();
+			val = ParseIdentifierExpression();
 		}
 		else
 		{
@@ -1642,7 +1660,7 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority)
 			return val;
 		}
 
-		++readPointer;			// skip the [first] operator character
+		++readPointer;						// skip the [first] operator character
 
 		// Handle >= and <=
 		const bool invert = ((opChar == '>' || opChar == '<') && gb.buffer[readPointer] == '=');
@@ -1782,7 +1800,7 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority)
 				break;
 
 			default:
-				throw ConstructParseException("unexpected oerand type to equality operator");
+				throw ConstructParseException("unexpected operand type to equality operator");
 			}
 			val.type = TYPE_OF(bool);
 			break;
@@ -1983,19 +2001,31 @@ ExpressionValue StringParser::ParseNumber()
 	return retvalue;
 }
 
-ExpressionValue StringParser::ParseIdentifier()
+// Parse an identifier
+void StringParser::ParseIdentifier(const StringRef& id)
 {
-	unsigned int start = readPointer;
+	if (!isalpha(gb.buffer[readPointer]))
+	{
+		throw ConstructParseException("expected an identifier");
+	}
+
+	const unsigned int start = readPointer;
 	char c;
 	while (isalpha((c = gb.buffer[readPointer])) || isdigit(c) || c == '_' || c == '.')
 	{
 		++readPointer;
 	}
-	String<MaxVariableNameLength> varName;
-	if (varName.copy(gb.buffer + start, readPointer - start))
+	if (id.copy(gb.buffer + start, readPointer - start))
 	{
 		throw ConstructParseException("variable name too long");;
 	}
+}
+
+// Parse an identifier expression
+ExpressionValue StringParser::ParseIdentifierExpression()
+{
+	String<MaxVariableNameLength> varName;
+	ParseIdentifier(varName.GetRef());
 
 	// Check for the names of constants
 	if (varName.Equals("true"))
@@ -2011,6 +2041,16 @@ ExpressionValue StringParser::ParseIdentifier()
 	if (varName.Equals("pi"))
 	{
 		return ExpressionValue(Pi);
+	}
+
+	if (varName.Equals("iterations"))
+	{
+		const int32_t v = gb.MachineState().GetIterations();
+		if (v < 0)
+		{
+			throw ConstructParseException("'iterations' used when not inside a loop");
+		}
+		return ExpressionValue(v);
 	}
 
 	// Check whether it is a function call
@@ -2153,17 +2193,17 @@ ExpressionValue StringParser::ParseIdentifier()
 
 ParseException StringParser::ConstructParseException(const char *str) const
 {
-	return ParseException(gb.machineState->lineNumber, readPointer, str);
+	return ParseException(gb.machineState->lineNumber, readPointer + commandIndent, str);
 }
 
 ParseException StringParser::ConstructParseException(const char *str, const char *param) const
 {
-	return ParseException(gb.machineState->lineNumber, readPointer, str, param);
+	return ParseException(gb.machineState->lineNumber, readPointer + commandIndent, str, param);
 }
 
 ParseException StringParser::ConstructParseException(const char *str, uint32_t param) const
 {
-	return ParseException(gb.machineState->lineNumber, readPointer, str, param);
+	return ParseException(gb.machineState->lineNumber, readPointer + commandIndent, str, param);
 }
 
 // End

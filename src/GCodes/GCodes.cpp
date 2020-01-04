@@ -855,8 +855,8 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 			FileData& fdata = fileGCode->MachineState().fileState;
 			if (fdata.IsLive())
 			{
-				fileGCode->RestartFrom(pauseRestorePoint.filePos);
-				UnlockAll(*fileGCode);														// release any locks it had
+				fileGCode->RestartFrom(pauseRestorePoint.filePos);						// TODO we ought to restore the line number too, but currently we don't save it
+				UnlockAll(*fileGCode);													// release any locks it had
 			}
 		}
 #else

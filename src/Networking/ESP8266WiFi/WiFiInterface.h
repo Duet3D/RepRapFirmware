@@ -54,7 +54,6 @@ public:
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
 	int EnableState() const noexcept override;
-	bool InNetworkStack() const noexcept override { return false; }
 	bool IsWiFiInterface() const noexcept override { return true; }
 
 	void UpdateHostname(const char *hostname) noexcept override;

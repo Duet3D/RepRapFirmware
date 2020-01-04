@@ -18,13 +18,11 @@ public:
 	virtual void Activate() noexcept = 0;
 	virtual void Exit() noexcept = 0;
 	virtual void Spin() noexcept = 0;
-	virtual void Interrupt() noexcept { };
 	virtual void Diagnostics(MessageType mtype) noexcept = 0;
 
 	virtual GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept = 0;
 	virtual GCodeResult GetNetworkState(const StringRef& reply) noexcept = 0;
 	virtual int EnableState() const noexcept = 0;
-	virtual bool InNetworkStack() const noexcept = 0;
 	virtual bool IsWiFiInterface() const noexcept = 0;
 
 	virtual GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept = 0;

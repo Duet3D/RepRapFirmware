@@ -69,11 +69,6 @@ bool ethernetif_establish_link() noexcept;					// attempts to establish link and
 
 bool ethernetif_link_established() noexcept;				// asks the PHY if the link is still up
 
-#if !LWIP_GMAC_TASK
-typedef void (*gmac_dev_tx_cb_t) (uint32_t ul_status) noexcept;	// copied from gmac_raw.h
-void ethernetif_set_rx_callback(gmac_dev_tx_cb_t callback) noexcept;
-#endif
-
 void ethernetif_set_mac_address(const uint8_t macAddress[]) noexcept;
 
 #endif

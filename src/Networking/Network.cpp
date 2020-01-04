@@ -408,15 +408,6 @@ void Network::Spin() noexcept
 	}
 }
 
-// Process the network timer interrupt
-void Network::Interrupt() noexcept
-{
-	for (NetworkInterface *iface : interfaces)
-	{
-		iface->Interrupt();
-	}
-}
-
 void Network::Diagnostics(MessageType mtype) noexcept
 {
 	platform.Message(mtype, "=== Network ===\n");
@@ -438,18 +429,6 @@ void Network::Diagnostics(MessageType mtype) noexcept
 	{
 		iface->Diagnostics(mtype);
 	}
-}
-
-bool Network::InNetworkStack() const noexcept
-{
-	for (NetworkInterface *iface : interfaces)
-	{
-		if (iface->InNetworkStack())
-		{
-			return true;
-		}
-	}
-	return false;
 }
 
 int Network::EnableState(unsigned int interface) const noexcept

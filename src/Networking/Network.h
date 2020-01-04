@@ -59,9 +59,7 @@ public:
 	void Activate() noexcept;
 	void Exit() noexcept;
 	void Spin() noexcept;
-	void Interrupt() noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
-	bool InNetworkStack() const noexcept;
 	bool IsWiFiInterface(unsigned int interface) const noexcept;
 
 	GCodeResult EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply) noexcept;
