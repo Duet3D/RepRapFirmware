@@ -25,6 +25,7 @@ Recommended compatible firmware:
 
 Upgrade notes:
 - **If you are upgrading from RepRapFirmware 2.x then you will need to make substantial changes to your config.g file.** See https://duet3d.dozuki.com/Wiki/RepRapFirmware_3_overview#Section_Summary_of_what_you_need_to_do_to_convert_your_configuration_and_other_files for details.
+- Duet Maestro users: the M917 command does not work in this release. If you use M917 in config.g or any other files, we suggest you comment it out until you can upgrade to verson 3.01.
 
 The remaining items affect users of RepRapFirmware 3.0 beta (but not RC) versions:
 - Endstop type S0 (active low switch) is no longer supported in M574 commands. Instead, use type S1 and invert the input by prefixing the pin name with '!'.
@@ -35,6 +36,7 @@ The remaining items affect users of RepRapFirmware 3.0 beta (but not RC) version
 Known limitations:
 - Duet 3 users: connector IO_0 of the MB6HC board is currently reserved for PanelDue. We recommend that you do not use it for any other purpose.
 - Duet 3 users: support for expansion boards has some limitations. See https://duet3d.dozuki.com/Wiki/Duet_3_firmware_configuration_limitations for details.
+- Duet Maestro and Duet 3 users: the M917 command does not work properly and must not be used.
 
 Bug fixes since 3.0RC2:
 - Fixed issue where a missing start.g could disrupt the G-code flow with an attached SBC
