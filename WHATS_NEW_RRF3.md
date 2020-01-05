@@ -12,7 +12,7 @@ New features and changed behaviour:
 
 Bug fixes:
 - When the C (temperature coefficient) parameter was used in the G31 command, if the temperature could not be read from the sensor specified in the H parameter then the error message was not clear; and it didn't allow time for the sensor to become ready in case it had only just been configured.
-- The M917 command didn't work on Duet 3.
+- The M917 command didn't work on Duet 3 and Duet Meastro.
 
 RepRapFirmware 3.0
 ==================
