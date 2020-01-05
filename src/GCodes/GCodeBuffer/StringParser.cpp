@@ -528,13 +528,13 @@ void StringParser::ProcessAbortCommand()
 // Evaluate the condition that should follow 'if' or 'while'
 bool StringParser::EvaluateCondition()
 {
-	ExpressionValue val = ParseExpression(0);
+	ExpressionValue val = ParseExpression(0, true);
 	SkipWhiteSpace();
 	if (gb.buffer[readPointer] != 0)
 	{
 		throw ConstructParseException("unexpected characters following condition");
 	}
-	ConvertToBool(val);
+	ConvertToBool(val, true);
 	return val.bVal;
 }
 
@@ -1360,7 +1360,7 @@ float StringParser::ReadFloatValue()
 	if (gb.buffer[readPointer] == '{')
 	{
 		++readPointer;
-		const ExpressionValue val = ParseBracketedExpression('}');
+		const ExpressionValue val = ParseBracketedExpression('}', true);
 		switch (val.type)
 		{
 		case TYPE_OF(float):
@@ -1388,7 +1388,7 @@ uint32_t StringParser::ReadUIValue()
 	if (gb.buffer[readPointer] == '{')
 	{
 		++readPointer;
-		const ExpressionValue val = ParseBracketedExpression('}');
+		const ExpressionValue val = ParseBracketedExpression('}', true);
 		switch (val.type)
 		{
 		case TYPE_OF(uint32_t):
@@ -1446,7 +1446,7 @@ int32_t StringParser::ReadIValue()
 	if (gb.buffer[readPointer] == '{')
 	{
 		++readPointer;
-		const ExpressionValue val = ParseBracketedExpression('}');
+		const ExpressionValue val = ParseBracketedExpression('}', true);
 		switch (val.type)
 		{
 		case TYPE_OF(int32_t):
@@ -1493,7 +1493,7 @@ DriverId StringParser::ReadDriverIdValue()
 void StringParser::GetStringExpression(const StringRef& str)
 {
 	++readPointer;									// skip the '{'
-	const ExpressionValue val = ParseBracketedExpression('}');
+	const ExpressionValue val = ParseBracketedExpression('}', true);
 	switch (val.type)
 	{
 	case TYPE_OF(const char*):
@@ -1534,9 +1534,9 @@ void StringParser::GetStringExpression(const StringRef& str)
 }
 
 // Evaluate a bracketed expression
-ExpressionValue StringParser::ParseBracketedExpression(char closingBracket)
+ExpressionValue StringParser::ParseBracketedExpression(char closingBracket, bool evaluate)
 {
-	auto rslt = ParseExpression(0);
+	auto rslt = ParseExpression(0, evaluate);
 	if (gb.buffer[readPointer] == closingBracket)
 	{
 		++readPointer;
@@ -1547,11 +1547,11 @@ ExpressionValue StringParser::ParseBracketedExpression(char closingBracket)
 }
 
 // Evaluate an expression, stopping before any binary operators with priority 'priority' or lower
-ExpressionValue StringParser::ParseExpression(uint8_t priority)
+ExpressionValue StringParser::ParseExpression(uint8_t priority, bool evaluate)
 {
 	// Lists of binary operators and their priorities
-	static constexpr const char *operators = "&|=<>+-*/";					// for multi-character operators <= and >= this is the first character
-	static constexpr uint8_t priorities[] = { 1, 1, 2, 2, 2, 3, 3, 4, 4 };
+	static constexpr const char *operators = "?&|=<>+-*/";					// for multi-character operators <= and >= this is the first character
+	static constexpr uint8_t priorities[] = { 1, 2, 2, 3, 3, 3, 4, 4, 5, 5 };
 	constexpr uint8_t UnaryPriority = 5;									// must be higher than any binary operator priority
 	static_assert(ARRAY_SIZE(priorities) == strlen(operators));
 
@@ -1566,7 +1566,7 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority)
 
 	case '-':
 		++readPointer;
-		val = ParseExpression(UnaryPriority);
+		val = ParseExpression(UnaryPriority, evaluate);
 		switch (val.type)
 		{
 		case TYPE_OF(int32_t):
@@ -1584,7 +1584,7 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority)
 
 	case '+':
 		++readPointer;
-		val = ParseExpression(UnaryPriority);
+		val = ParseExpression(UnaryPriority, true);
 		switch (val.type)
 		{
 		case TYPE_OF(uint32_t):
@@ -1604,18 +1604,18 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority)
 
 	case '{':
 		++readPointer;
-		val = ParseBracketedExpression('}');
+		val = ParseBracketedExpression('}', evaluate);
 		break;
 
 	case '(':
 		++readPointer;
-		val = ParseBracketedExpression(')');
+		val = ParseBracketedExpression(')', evaluate);
 		break;
 
 	case '!':
 		++readPointer;
-		val = ParseExpression(UnaryPriority);
-		ConvertToBool(val);
+		val = ParseExpression(UnaryPriority, evaluate);
+		ConvertToBool(val, evaluate);
 		val.bVal = !val.bVal;
 		break;
 
@@ -1626,7 +1626,7 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority)
 		}
 		else if (isalpha(c))				// looks like a variable name
 		{
-			val = ParseIdentifierExpression();
+			val = ParseIdentifierExpression(evaluate);
 		}
 		else
 		{
@@ -1670,181 +1670,224 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority)
 
 		SkipWhiteSpace();
 
-		ExpressionValue val2 = ParseExpression(opPrio);		// get the next operand
-		switch(opChar)
+		// Handle operators that do not always evaluate their second operand
+		switch (opChar)
 		{
-		case '+':
-			BalanceNumericTypes(val, val2);
-			if (val.type == TYPE_OF(float))
-			{
-				val.fVal += val2.fVal;
-			}
-			else
-			{
-				val.iVal += val2.iVal;
-			}
-			break;
-
-		case '-':
-			BalanceNumericTypes(val, val2);
-			if (val.type == TYPE_OF(float))
-			{
-				val.fVal -= val2.fVal;
-			}
-			else
-			{
-				val.iVal -= val2.iVal;
-			}
-			break;
-
-		case '*':
-			BalanceNumericTypes(val, val2);
-			if (val.type == TYPE_OF(float))
-			{
-				val.fVal *= val2.fVal;
-			}
-			else
-			{
-				val.iVal *= val2.iVal;
-			}
-			break;
-
-		case '/':
-			ConvertToFloat(val);
-			ConvertToFloat(val2);
-			val.fVal /= val2.fVal;
-			break;
-
-		case '>':
-			BalanceTypes(val, val2);
-			switch (val.type)
-			{
-			case TYPE_OF(int32_t):
-				val.bVal = (val.iVal > val2.iVal);
-				break;
-
-			case TYPE_OF(float_t):
-				val.bVal = (val.fVal > val2.fVal);
-				break;
-
-			case TYPE_OF(bool):
-				val.bVal = (val.bVal && !val2.bVal);
-				break;
-
-			default:
-				throw ConstructParseException("expected numeric or Boolean operands to comparison operator");
-			}
-			val.type = TYPE_OF(bool);
-			if (invert)
-			{
-				val.bVal = !val.bVal;
-			}
-			break;
-
-		case '<':
-			BalanceTypes(val, val2);
-			switch (val.type)
-			{
-			case TYPE_OF(int32_t):
-				val.bVal = (val.iVal < val2.iVal);
-				break;
-
-			case TYPE_OF(float_t):
-				val.bVal = (val.fVal < val2.fVal);
-				break;
-
-			case TYPE_OF(bool):
-				val.bVal = (!val.bVal && val2.bVal);
-				break;
-
-			default:
-				throw ConstructParseException("expected numeric or Boolean operands to comparison operator");
-			}
-			val.type = TYPE_OF(bool);
-			if (invert)
-			{
-				val.bVal = !val.bVal;
-			}
-			break;
-
-		case '=':
-			BalanceTypes(val, val2);
-			switch (val.type)
-			{
-			case TYPE_OF(int32_t):
-				val.bVal = (val.iVal == val2.iVal);
-				break;
-
-			case TYPE_OF(uint32_t):
-				val.bVal = (val.uVal == val2.uVal);
-				break;
-
-			case TYPE_OF(float_t):
-				val.fVal = (val.fVal == val2.fVal);
-				break;
-
-			case TYPE_OF(bool):
-				val.bVal = (val.bVal == val2.bVal);
-				break;
-
-			case TYPE_OF(const char*):
-				val.bVal = (strcmp(val.sVal, val2.sVal) == 0);
-				break;
-
-			default:
-				throw ConstructParseException("unexpected operand type to equality operator");
-			}
-			val.type = TYPE_OF(bool);
-			break;
-
 		case '&':
-			ConvertToBool(val);
-			ConvertToBool(val2);
-			val.bVal = val.bVal && val2.bVal;
+			ConvertToBool(val, evaluate);
+			{
+				ExpressionValue val2 = ParseExpression(opPrio, evaluate && val.bVal);		// get the next operand
+				if (val.bVal)
+				{
+					ConvertToBool(val2, evaluate);
+					val.bVal = val.bVal && val2.bVal;
+				}
+			}
 			break;
 
 		case '|':
-			ConvertToBool(val);
-			ConvertToBool(val2);
-			val.bVal = val.bVal || val2.bVal;
+			ConvertToBool(val, evaluate);
+			{
+				ExpressionValue val2 = ParseExpression(opPrio, evaluate && !val.bVal);		// get the next operand
+				if (!val.bVal)
+				{
+					ConvertToBool(val2, evaluate);
+					val.bVal = val.bVal || val2.bVal;
+				}
+			}
 			break;
+
+		case '?':
+			ConvertToBool(val, evaluate);
+			{
+				ExpressionValue val2 = ParseExpression(opPrio, evaluate && val.bVal);		// get the second operand
+				if (gb.buffer[readPointer] != ':')
+				{
+					throw ConstructParseException("expected ':'");
+				}
+				++readPointer;
+				ExpressionValue val3 = ParseExpression(opPrio - 1, evaluate && !val.bVal);	// get the third operand, which may be a further conditional expression
+				return (val.bVal) ? val2 : val3;
+			}
+
+		default:
+			// Handle binary operators that always evaluate both operands
+			{
+				ExpressionValue val2 = ParseExpression(opPrio, evaluate);	// get the next operand
+				switch(opChar)
+				{
+				case '+':
+					BalanceNumericTypes(val, val2, evaluate);
+					if (val.type == TYPE_OF(float))
+					{
+						val.fVal += val2.fVal;
+					}
+					else
+					{
+						val.iVal += val2.iVal;
+					}
+					break;
+
+				case '-':
+					BalanceNumericTypes(val, val2, evaluate);
+					if (val.type == TYPE_OF(float))
+					{
+						val.fVal -= val2.fVal;
+					}
+					else
+					{
+						val.iVal -= val2.iVal;
+					}
+					break;
+
+				case '*':
+					BalanceNumericTypes(val, val2, evaluate);
+					if (val.type == TYPE_OF(float))
+					{
+						val.fVal *= val2.fVal;
+					}
+					else
+					{
+						val.iVal *= val2.iVal;
+					}
+					break;
+
+				case '/':
+					ConvertToFloat(val, evaluate);
+					ConvertToFloat(val2, evaluate);
+					val.fVal /= val2.fVal;
+					break;
+
+				case '>':
+					BalanceTypes(val, val2, evaluate);
+					switch (val.type)
+					{
+					case TYPE_OF(int32_t):
+						val.bVal = (val.iVal > val2.iVal);
+						break;
+
+					case TYPE_OF(float_t):
+						val.bVal = (val.fVal > val2.fVal);
+						break;
+
+					case TYPE_OF(bool):
+						val.bVal = (val.bVal && !val2.bVal);
+						break;
+
+					default:
+						throw ConstructParseException("expected numeric or Boolean operands to comparison operator");
+					}
+					val.type = TYPE_OF(bool);
+					if (invert)
+					{
+						val.bVal = !val.bVal;
+					}
+					break;
+
+				case '<':
+					BalanceTypes(val, val2, evaluate);
+					switch (val.type)
+					{
+					case TYPE_OF(int32_t):
+						val.bVal = (val.iVal < val2.iVal);
+						break;
+
+					case TYPE_OF(float_t):
+						val.bVal = (val.fVal < val2.fVal);
+						break;
+
+					case TYPE_OF(bool):
+						val.bVal = (!val.bVal && val2.bVal);
+						break;
+
+					default:
+						throw ConstructParseException("expected numeric or Boolean operands to comparison operator");
+					}
+					val.type = TYPE_OF(bool);
+					if (invert)
+					{
+						val.bVal = !val.bVal;
+					}
+					break;
+
+				case '=':
+					BalanceTypes(val, val2, evaluate);
+					switch (val.type)
+					{
+					case TYPE_OF(int32_t):
+						val.bVal = (val.iVal == val2.iVal);
+						break;
+
+					case TYPE_OF(uint32_t):
+						val.bVal = (val.uVal == val2.uVal);
+						break;
+
+					case TYPE_OF(float_t):
+						val.fVal = (val.fVal == val2.fVal);
+						break;
+
+					case TYPE_OF(bool):
+						val.bVal = (val.bVal == val2.bVal);
+						break;
+
+					case TYPE_OF(const char*):
+						val.bVal = (strcmp(val.sVal, val2.sVal) == 0);
+						break;
+
+					default:
+						throw ConstructParseException("unexpected operand type to equality operator");
+					}
+					val.type = TYPE_OF(bool);
+					break;
+				}
+			}
 		}
 	} while (true);
 }
 
-void StringParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2)
+void StringParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate)
 {
 	if (val1.type == TYPE_OF(float))
 	{
-		ConvertToFloat(val2);
+		ConvertToFloat(val2, evaluate);
 	}
 	else if (val2.type == TYPE_OF(float))
 	{
-		ConvertToFloat(val1);
+		ConvertToFloat(val1, evaluate);
 	}
 	else if (val1.type != TYPE_OF(int32_t) || val2.type != TYPE_OF(int32_t))
 	{
-		throw ConstructParseException("expected numeric operands");
+		if (evaluate)
+		{
+			throw ConstructParseException("expected numeric operands");
+		}
+		val1.SetInt(0);
+		val2.SetInt(0);
 	}
 }
 
-void StringParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2)
+void StringParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate)
 {
 	if (val1.type == TYPE_OF(float))
 	{
-		ConvertToFloat(val2);
+		ConvertToFloat(val2, evaluate);
 	}
 	else if (val2.type == TYPE_OF(float))
 	{
-		ConvertToFloat(val1);
+		ConvertToFloat(val1, evaluate);
 	}
 	else if (val1.type != val2.type)
 	{
-		throw ConstructParseException("cannot convert operands to same type");
+		if (evaluate)
+		{
+			throw ConstructParseException("cannot convert operands to same type");
+		}
+		val1.SetInt(0);
+		val2.SetInt(0);
 	}
 }
 
-void StringParser::EnsureNumeric(ExpressionValue& val)
+void StringParser::EnsureNumeric(ExpressionValue& val, bool evaluate)
 {
 	switch (val.type)
 	{
@@ -1858,11 +1901,15 @@ void StringParser::EnsureNumeric(ExpressionValue& val)
 		break;
 
 	default:
-		throw ConstructParseException("expected numeric operand");
+		if (evaluate)
+		{
+			throw ConstructParseException("expected numeric operand");
+		}
+		val.SetInt(0);
 	}
 }
 
-void StringParser::ConvertToFloat(ExpressionValue& val)
+void StringParser::ConvertToFloat(ExpressionValue& val, bool evaluate)
 {
 	switch (val.type)
 	{
@@ -1875,15 +1922,23 @@ void StringParser::ConvertToFloat(ExpressionValue& val)
 		break;
 
 	default:
-		throw ConstructParseException("expected numeric operand");
+		if (evaluate)
+		{
+			throw ConstructParseException("expected numeric operand");
+		}
+		val.SetFloat(0.0);
 	}
 }
 
-void StringParser::ConvertToBool(ExpressionValue& val)
+void StringParser::ConvertToBool(ExpressionValue& val, bool evaluate)
 {
 	if (val.type != TYPE_OF(bool))
 	{
-		throw ConstructParseException("expected Boolean operand");
+		if (evaluate)
+		{
+			throw ConstructParseException("expected Boolean operand");
+		}
+		val.SetBool(false);
 	}
 }
 
@@ -2014,7 +2069,7 @@ void StringParser::ParseIdentifier(const StringRef& id)
 }
 
 // Parse an identifier expression
-ExpressionValue StringParser::ParseIdentifierExpression()
+ExpressionValue StringParser::ParseIdentifierExpression(bool evaluate)
 {
 	String<MaxVariableNameLength> varName;
 	ParseIdentifier(varName.GetRef());
@@ -2050,7 +2105,7 @@ ExpressionValue StringParser::ParseIdentifierExpression()
 	if (gb.buffer[readPointer] == '(')
 	{
 		// It's a function call
-		ExpressionValue rslt = ParseExpression(0);
+		ExpressionValue rslt = ParseExpression(0, evaluate);
 		if (varName.Equals("abs"))
 		{
 			switch (rslt.type)
@@ -2064,42 +2119,46 @@ ExpressionValue StringParser::ParseIdentifierExpression()
 				break;
 
 			default:
-				throw ConstructParseException("expected numeric operand");
+				if (evaluate)
+				{
+					throw ConstructParseException("expected numeric operand");
+				}
+				rslt.SetInt(0);
 			}
 		}
 		else if (varName.Equals("sin"))
 		{
-			ConvertToFloat(rslt);
+			ConvertToFloat(rslt, evaluate);
 			rslt.fVal = sinf(rslt.fVal);
 		}
 		else if (varName.Equals("cos"))
 		{
-			ConvertToFloat(rslt);
+			ConvertToFloat(rslt, evaluate);
 			rslt.fVal = cosf(rslt.fVal);
 		}
 		else if (varName.Equals("tan"))
 		{
-			ConvertToFloat(rslt);
+			ConvertToFloat(rslt, evaluate);
 			rslt.fVal = tanf(rslt.fVal);
 		}
 		else if (varName.Equals("asin"))
 		{
-			ConvertToFloat(rslt);
+			ConvertToFloat(rslt, evaluate);
 			rslt.fVal = asinf(rslt.fVal);
 		}
 		else if (varName.Equals("acos"))
 		{
-			ConvertToFloat(rslt);
+			ConvertToFloat(rslt, evaluate);
 			rslt.fVal = acosf(rslt.fVal);
 		}
 		else if (varName.Equals("atan"))
 		{
-			ConvertToFloat(rslt);
+			ConvertToFloat(rslt, evaluate);
 			rslt.fVal = atanf(rslt.fVal);
 		}
 		else if (varName.Equals("atan2"))
 		{
-			ConvertToFloat(rslt);
+			ConvertToFloat(rslt, evaluate);
 			SkipWhiteSpace();
 			if (gb.buffer[readPointer] != ',')
 			{
@@ -2107,18 +2166,18 @@ ExpressionValue StringParser::ParseIdentifierExpression()
 			}
 			++readPointer;
 			SkipWhiteSpace();
-			ExpressionValue nextOperand = ParseExpression(0);
-			ConvertToFloat(nextOperand);
+			ExpressionValue nextOperand = ParseExpression(0, evaluate);
+			ConvertToFloat(nextOperand, evaluate);
 			rslt.fVal = atan2f(rslt.fVal, nextOperand.fVal);
 		}
 		else if (varName.Equals("sqrt"))
 		{
-			ConvertToFloat(rslt);
+			ConvertToFloat(rslt, evaluate);
 			rslt.fVal = sqrtf(rslt.fVal);
 		}
 		else if (varName.Equals("isnan"))
 		{
-			ConvertToFloat(rslt);
+			ConvertToFloat(rslt, evaluate);
 			rslt.type = TYPE_OF(bool);
 			rslt.bVal = (isnan(rslt.fVal) != 0);
 		}
@@ -2133,8 +2192,8 @@ ExpressionValue StringParser::ParseIdentifierExpression()
 				}
 				++readPointer;
 				SkipWhiteSpace();
-				ExpressionValue nextOperand = ParseExpression(0);
-				BalanceNumericTypes(rslt, nextOperand);
+				ExpressionValue nextOperand = ParseExpression(0, evaluate);
+				BalanceNumericTypes(rslt, nextOperand, evaluate);
 				if (rslt.type == TYPE_OF(float))
 				{
 					rslt.fVal = max<float>(rslt.fVal, nextOperand.fVal);
@@ -2156,8 +2215,8 @@ ExpressionValue StringParser::ParseIdentifierExpression()
 				}
 				++readPointer;
 				SkipWhiteSpace();
-				ExpressionValue nextOperand = ParseExpression(0);
-				BalanceNumericTypes(rslt, nextOperand);
+				ExpressionValue nextOperand = ParseExpression(0, evaluate);
+				BalanceNumericTypes(rslt, nextOperand, evaluate);
 				if (rslt.type == TYPE_OF(float))
 				{
 					rslt.fVal = min<float>(rslt.fVal, nextOperand.fVal);

@@ -67,6 +67,10 @@ struct ExpressionValue
 	constexpr ExpressionValue(float f) noexcept : type(TYPE_OF(float)), fVal(f) { }
 	constexpr ExpressionValue(int32_t i) noexcept : type(TYPE_OF(int32_t)), iVal(i) { }
 	ExpressionValue() noexcept : type(NoType) { }
+
+	void SetBool(bool b) noexcept { type = TYPE_OF(bool); bVal = b; }
+	void SetInt(int32_t i) noexcept { type = TYPE_OF(int32_t); iVal = i; }
+	void SetFloat(float f) noexcept { type = TYPE_OF(float); fVal = f; }
 };
 
 class ObjectModel

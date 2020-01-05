@@ -136,6 +136,8 @@ constexpr Pin TMC2660MosiPin = PortAPin(22);
 constexpr Pin TMC2660MisoPin = PortAPin(21);
 constexpr Pin TMC2660SclkPin = PortAPin(23);
 
+constexpr uint32_t DefaultStandstillCurrentPercent = 100;					// it's not adjustable on Duet 2
+
 constexpr Pin DueX_SG = PortEPin(0);				// DueX stallguard detect pin = PE0 (was E2_STOP)
 constexpr Pin DueX_INT = PortAPin(17);				// DueX interrupt pin = PA17 (was E6_STOP)
 

@@ -155,6 +155,8 @@ constexpr Pin TMC2660MisoPin = PortAPin(12);
 constexpr Pin TMC2660SclkPin = PortAPin(14);
 constexpr Pin GlobalTmc2660EnablePin = PortCPin(16); // The pin that drives ENN of all drivers on the DueX5
 
+constexpr uint32_t DefaultStandstillCurrentPercent = 100;					// it's not adjustable on TMC2660
+
 #elif defined(PCCB_08)
 
 constexpr Pin ENABLE_PINS[NumDirectDrivers] =		{ NoPin,		NoPin,		  PortBPin(14), PortCPin(25), PortCPin( 5), PortCPin(19), PortAPin( 0), PortCPin(28) };
@@ -178,6 +180,8 @@ constexpr uint32_t TransferTimeout = 10;			// any transfer should complete withi
 
 #define UART_TMC_DRV0_Handler	UART0_Handler
 #define UART_TMC_DRV1_Handler	UART1_Handler
+
+constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
 #endif
 

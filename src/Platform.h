@@ -598,7 +598,7 @@ private:
 
 	float motorCurrents[MaxAxesPlusExtruders];				// the normal motor current for each stepper driver
 	float motorCurrentFraction[MaxAxesPlusExtruders];		// the percentages of normal motor current that each driver is set to
-	float standstillCurrentFraction[MaxAxesPlusExtruders];	// the percentages of normal motor current that each driver uses when in standstill
+	float standstillCurrentPercent[MaxAxesPlusExtruders];	// the percentages of normal motor current that each driver uses when in standstill
 	uint16_t microstepping[MaxAxesPlusExtruders];			// the microstepping used for each axis or extruder, top bit is set if interpolation enabled
 
 	volatile DriverStatus driverState[MaxAxesPlusExtruders];

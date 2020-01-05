@@ -468,7 +468,7 @@ void Platform::Init() noexcept
 		driveDriverBits[drive] = 0;
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
-		standstillCurrentFraction[drive] = 0.75;
+		standstillCurrentPercent[drive] = DefaultStandstillCurrentPercent;
 		microstepping[drive] = 16 | 0x8000;						// x16 with interpolation
 	}
 
@@ -2366,7 +2366,7 @@ bool Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, in
 
 #if HAS_SMART_DRIVERS
 	case 917:
-		standstillCurrentFraction[axisOrExtruder] = constrain<float>(0.01 * currentOrPercent, 0.0, 1.0);
+		standstillCurrentPercent[axisOrExtruder] = constrain<float>(currentOrPercent, 0.0, 100.0);
 		break;
 #endif
 
@@ -2383,7 +2383,7 @@ bool Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, in
 								if (code == 917)
 								{
 # if HAS_SMART_DRIVERS
-									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentFraction[axisOrExtruder]);
+									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
 # endif
 								}
 								else
@@ -2395,7 +2395,7 @@ bool Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, in
 							{
 								if (code == 917)
 								{
-									canDriversToUpdate.AddEntry(driver, (uint16_t)(standstillCurrentFraction[axisOrExtruder] * 100));
+									canDriversToUpdate.AddEntry(driver, (uint16_t)(standstillCurrentPercent[axisOrExtruder]));
 								}
 								else
 								{
@@ -2418,7 +2418,7 @@ bool Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, in
 								if (code == 917)
 								{
 # if HAS_SMART_DRIVERS
-									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentFraction[axisOrExtruder]);
+									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
 # endif
 								}
 								else
@@ -2517,7 +2517,7 @@ float Platform::GetMotorCurrent(size_t drive, int code) const noexcept
 
 #if HAS_SMART_DRIVERS
 	case 917:
-		return standstillCurrentFraction[drive];
+		return standstillCurrentPercent[drive];
 #endif
 	default:
 		return 0.0;

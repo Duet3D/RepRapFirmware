@@ -408,7 +408,7 @@ pre(!driversPowered)
 	enabled = false;
 	registersToUpdate = newRegistersToUpdate = 0;
 	motorCurrent = 0;
-	standstillCurrentFraction = 181; 									// default to 1/sqrt(2)
+	standstillCurrentFraction = (uint8_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 255);
 
 	// Set default values for all registers and flag them to be updated
 	UpdateRegister(WriteGConf, DefaultGConfReg);

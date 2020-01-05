@@ -173,17 +173,8 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 {
 	GCodeResult err = GCodeResult::ok;
 	bool seen = false;
-	const char* axisLetters = reprap.GetGCodes().GetAxisLetters();
 
-	gb.TryGetFValue(axisLetters[X_AXIS], xOffset, seen);
-	gb.TryGetFValue(axisLetters[Y_AXIS], yOffset, seen);
-	gb.TryGetFValue(axisLetters[Z_AXIS], triggerHeight, seen);
-	if (gb.Seen('P'))
-	{
-		seen = true;
-		adcValue = gb.GetIValue();
-	}
-
+	// Do the temperature coefficient first because it may return notFinished
 	if (gb.Seen('H'))
 	{
 		seen = true;
@@ -193,16 +184,51 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('C'))
 	{
 		seen = true;
-		TemperatureError terr;
-		float currentTemperature = reprap.GetHeat().GetSensorTemperature(sensor, terr);
-		if (terr != TemperatureError::success)
-		{
-			reply.copy("Cannot set a temperature coefficient without a valid heater number");
-			err = GCodeResult::error;
-			currentTemperature = DefaultZProbeTemperature;
-		}
 		temperatureCoefficient = gb.GetFValue();
-		calibTemperature = (gb.Seen('S')) ? gb.GetFValue() : currentTemperature;
+		calibTemperature = DefaultZProbeTemperature;
+
+		TemperatureError terr;
+		const float currentTemperature = reprap.GetHeat().GetSensorTemperature(sensor, terr);
+		if (terr == TemperatureError::unknownSensor)
+		{
+			reply.copy("Cannot set a temperature coefficient without a valid sensor number");
+			temperatureCoefficient = 0.0;
+			err = GCodeResult::error;
+		}
+		else if (gb.Seen('S'))
+		{
+			calibTemperature = gb.GetFValue();
+		}
+		else if (terr == TemperatureError::success)
+		{
+			calibTemperature = currentTemperature;
+		}
+		else if (!gb.IsTimerRunning())				// the sensor may have only just been configured, so give it 500ms to produce a reading
+		{
+			gb.StartTimer();
+			return GCodeResult::notFinished;
+		}
+		else if (millis() - gb.WhenTimerStarted() < 500)
+		{
+			return GCodeResult::notFinished;
+		}
+		else
+		{
+			gb.StopTimer();
+			reply.printf("Sensor %d did not provide a valid temperature reading", sensor);
+			err = GCodeResult::warning;
+		}
+	}
+
+	const char* axisLetters = reprap.GetGCodes().GetAxisLetters();
+
+	gb.TryGetFValue(axisLetters[X_AXIS], xOffset, seen);
+	gb.TryGetFValue(axisLetters[Y_AXIS], yOffset, seen);
+	gb.TryGetFValue(axisLetters[Z_AXIS], triggerHeight, seen);
+	if (gb.Seen('P'))
+	{
+		seen = true;
+		adcValue = gb.GetIValue();
 	}
 
 	if (seen)

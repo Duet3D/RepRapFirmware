@@ -524,7 +524,7 @@ pre(!driversPowered)
 	enabled = false;
 	registersToUpdate = 0;
 	motorCurrent = 0;
-	standstillCurrentFraction = (256 * 3)/4;							// default to 75%
+	standstillCurrentFraction = (uint8_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 255);
 	UpdateRegister(WriteGConf, DefaultGConfReg);
 	UpdateRegister(WriteSlaveConf, DefaultSlaveConfReg);
 	configuredChopConfReg = DefaultChopConfReg;

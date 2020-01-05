@@ -125,6 +125,7 @@ constexpr uint8_t TMC22xx_UART_PINS = APINS_UART0;
 // In testing I found that 500kbaud was not reliable, so now using 200kbaud.
 constexpr uint32_t DriversBaudRate = 200000;
 constexpr uint32_t TransferTimeout = 10;				// any transfer should complete within 10 ticks @ 1ms/tick
+constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
 constexpr Pin TMC22xxMuxPins[3] = { PortCPin(14), PortCPin(16), PortCPin(17) };	// Pins that control the UART multiplexer, LSB first
 

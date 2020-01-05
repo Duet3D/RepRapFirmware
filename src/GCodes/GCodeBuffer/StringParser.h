@@ -112,22 +112,22 @@ private:
 
 	bool EvaluateCondition() THROWS_PARSE_ERROR;
 
-	ExpressionValue ParseBracketedExpression(char closingBracket) THROWS_PARSE_ERROR
+	ExpressionValue ParseBracketedExpression(char closingBracket, bool evaluate) THROWS_PARSE_ERROR
 		pre (readPointer >= 0; gb.buffer[readPointer] == '{');
-	ExpressionValue ParseExpression(uint8_t priority) THROWS_PARSE_ERROR
+	ExpressionValue ParseExpression(uint8_t priority, bool evaluate) THROWS_PARSE_ERROR
 		pre (readPointer >= 0);
 	ExpressionValue ParseNumber() THROWS_PARSE_ERROR
 		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
-	ExpressionValue ParseIdentifierExpression() THROWS_PARSE_ERROR
+	ExpressionValue ParseIdentifierExpression(bool evaluate) THROWS_PARSE_ERROR
 		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
 	void ParseIdentifier(const StringRef& id) THROWS_PARSE_ERROR
 		pre(readPointer >= 0);
 
-	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2) THROWS_PARSE_ERROR;
-	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2) THROWS_PARSE_ERROR;
-	void ConvertToFloat(ExpressionValue& val) THROWS_PARSE_ERROR;
-	void ConvertToBool(ExpressionValue& val) THROWS_PARSE_ERROR;
-	void EnsureNumeric(ExpressionValue& val) THROWS_PARSE_ERROR;
+	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS_PARSE_ERROR;
+	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS_PARSE_ERROR;
+	void ConvertToFloat(ExpressionValue& val, bool evaluate) THROWS_PARSE_ERROR;
+	void ConvertToBool(ExpressionValue& val, bool evaluate) THROWS_PARSE_ERROR;
+	void EnsureNumeric(ExpressionValue& val, bool evaluate) THROWS_PARSE_ERROR;
 
 	void SkipWhiteSpace() noexcept;
 
