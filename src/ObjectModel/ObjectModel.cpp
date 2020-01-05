@@ -20,36 +20,59 @@ ObjectModel::ObjectModel() noexcept
 }
 
 // Report this object
-bool ObjectModel::ReportAsJson(OutputBuffer* buf, const char* filter, ReportFlags flags) noexcept
+bool ObjectModel::ReportAsJson(OutputBuffer* buf, uint8_t tableNumber, const char* filter, ReportFlags flags) noexcept
 {
 	buf->cat('{');
-	size_t numEntries;
-	const ObjectModelTableEntry *omte = GetObjectModelTable(numEntries);
 	bool added = false;
-	while (numEntries != 0)
+	const uint8_t *descriptor;
+	const ObjectModelTableEntry *tbl = GetObjectModelTable(descriptor);
+	if (tableNumber < descriptor[0])
 	{
-		if (omte->Matches(filter, flags))
+		size_t numEntries = descriptor[tableNumber + 1];
+		while (tableNumber != 0)
 		{
-			if (added)
-			{
-				buf->cat(',');
-			}
-			omte->ReportAsJson(buf, this, GetNextElement(filter), flags);
-			added = true;
+			--tableNumber;
+			tbl += descriptor[tableNumber + 1];
 		}
-		--numEntries;
-		++omte;
+
+		while (numEntries != 0)
+		{
+			if (tbl->Matches(filter, flags))
+			{
+				if (added)
+				{
+					buf->cat(',');
+				}
+				tbl->ReportAsJson(buf, this, GetNextElement(filter), flags);
+				added = true;
+			}
+			--numEntries;
+			++tbl;
+		}
 	}
 	buf->cat('}');
-	return true;
+	return added;
 }
 
 // Find the requested entry
-const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(const char* idString) noexcept
+const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(uint8_t tableNumber, const char* idString) noexcept
 {
-	size_t numElems;
-	const ObjectModelTableEntry *tbl = GetObjectModelTable(numElems);
-	size_t low = 0, high = numElems;
+//	size_t numElems;
+	const uint8_t *descriptor;
+	const ObjectModelTableEntry *tbl = GetObjectModelTable(descriptor);
+	if (tableNumber >= descriptor[0])
+	{
+		return nullptr;
+	}
+
+	const size_t numEntries = descriptor[tableNumber + 1];
+	while (tableNumber != 0)
+	{
+		--tableNumber;
+		tbl += descriptor[tableNumber + 1];
+	}
+
+	size_t low = 0, high = numEntries;
 	while (high > low)
 	{
 		const size_t mid = (high - low)/2 + low;
@@ -67,7 +90,7 @@ const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(const char* 
 			high = mid;
 		}
 	}
-	return (low < numElems && tbl[low].IdCompare(idString) == 0) ? &tbl[low] : nullptr;
+	return (low < numEntries && tbl[low].IdCompare(idString) == 0) ? &tbl[low] : nullptr;
 }
 
 /*static*/ const char* ObjectModel::GetNextElement(const char *id) noexcept
@@ -85,11 +108,11 @@ const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(const char* 
 
 bool ObjectModelTableEntry::Matches(const char* filterString, ObjectModelFilterFlags filterFlags) const noexcept
 {
-	return IdCompare(filterString) == 0 && (flags & filterFlags) == filterFlags;
+	return IdCompare(filterString) == 0 && ((uint16_t)flags & (uint16_t)filterFlags) == (uint16_t)filterFlags;
 }
 
 // Private function to report a value of primitive type
-void ObjectModelTableEntry::ReportItemAsJson(OutputBuffer *buf, const char *filter, ObjectModel::ReportFlags flags, void *nParam, TypeCode type) noexcept
+void ObjectModelTableEntry::ReportItemAsJson(OutputBuffer *buf, const char *filter, ObjectModel::ReportFlags flags, void *nParam, uint8_t tableNumber, TypeCode type) noexcept
 {
 	switch (type)
 	{
@@ -98,7 +121,7 @@ void ObjectModelTableEntry::ReportItemAsJson(OutputBuffer *buf, const char *filt
 		{
 			++filter;
 		}
-		((ObjectModel*)nParam)->ReportAsJson(buf, filter, flags);
+		((ObjectModel*)nParam)->ReportAsJson(buf, tableNumber, filter, flags);
 		break;
 
 	case TYPE_OF(float):
@@ -211,7 +234,7 @@ bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectModel *self, c
 				{
 					buf->cat(',');
 				}
-				ReportItemAsJson(buf, filter, flags, arr->GetElement(self, i), type & ~IsArray);
+				ReportItemAsJson(buf, filter, flags, arr->GetElement(self, i), tableNumber, type & ~IsArray);
 			}
 			buf->cat(']');
 		}
@@ -226,13 +249,13 @@ bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectModel *self, c
 				return false;						// invalid syntax, or index out of range
 			}
 			buf->cat('[');
-			ReportItemAsJson(buf, endptr + 1, flags, arr->GetElement(self, val), type & ~IsArray);
+			ReportItemAsJson(buf, endptr + 1, flags, arr->GetElement(self, val), tableNumber, type & ~IsArray);
 			buf->cat(']');
 		}
 	}
 	else
 	{
-		ReportItemAsJson(buf, filter, flags, param(self), type);
+		ReportItemAsJson(buf, filter, flags, param(self), tableNumber, type);
 	}
 	return true;
 }
@@ -257,11 +280,11 @@ int ObjectModelTableEntry::IdCompare(const char *id) const noexcept
 }
 
 // Get the value of an object when we don't know what its type is
-ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, const char *idString)
+ExpressionValue ObjectModel::GetObjectValue(uint8_t tableNumber, const StringParser& sp, const char *idString)
 {
 	ExpressionValue val;
 
-	const ObjectModelTableEntry *e = FindObjectModelTableEntry(idString);
+	const ObjectModelTableEntry *e = FindObjectModelTableEntry(tableNumber, idString);
 	if (e == nullptr)
 	{
 		throw sp.ConstructParseException("unknown variable %s", idString);
@@ -300,7 +323,7 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, const char *
 	switch (val.type)
 	{
 	case TYPE_OF(ObjectModel):
-		return ((ObjectModel*)param)->GetObjectValue(sp, idString);
+		return ((ObjectModel*)param)->GetObjectValue(e->tableNumber, sp, idString);
 
 	case TYPE_OF(float):
 	case TYPE_OF(Float2):
@@ -337,9 +360,9 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, const char *
 }
 
 // Template specialisations
-bool ObjectModel::GetObjectValue(float& val, const char *idString)
+bool ObjectModel::GetObjectValue(uint8_t tableNumber, float& val, const char *idString)
 {
-	const ObjectModelTableEntry *e = FindObjectModelTableEntry(idString);
+	const ObjectModelTableEntry *e = FindObjectModelTableEntry(tableNumber, idString);
 	if (e == nullptr)
 	{
 		return NoType;
@@ -354,7 +377,7 @@ bool ObjectModel::GetObjectValue(float& val, const char *idString)
 	switch (e->type)
 	{
 	case TYPE_OF(ObjectModel):
-		return ((ObjectModel*)e->param(this))->GetObjectValue(val, GetNextElement(idString));
+		return ((ObjectModel*)e->param(this))->GetObjectValue(e->tableNumber, val, GetNextElement(idString));
 
 	case TYPE_OF(float):
 		val = *((const float*)e->param(this));
@@ -374,9 +397,9 @@ bool ObjectModel::GetObjectValue(float& val, const char *idString)
 }
 
 // Specialisation of above for int, allowing conversion from unsigned to signed
-bool ObjectModel::GetObjectValue(int32_t& val, const char *idString)
+bool ObjectModel::GetObjectValue(uint8_t tableNumber, int32_t& val, const char *idString)
 {
-	const ObjectModelTableEntry *e = FindObjectModelTableEntry(idString);
+	const ObjectModelTableEntry *e = FindObjectModelTableEntry(tableNumber, idString);
 	if (e == nullptr)
 	{
 		return NoType;
@@ -391,7 +414,7 @@ bool ObjectModel::GetObjectValue(int32_t& val, const char *idString)
 	switch (e->type)
 	{
 	case TYPE_OF(ObjectModel):
-		return ((ObjectModel*)e->param(this))->GetObjectValue(val, GetNextElement(idString));
+		return ((ObjectModel*)e->param(this))->GetObjectValue(e->tableNumber, val, GetNextElement(idString));
 
 	case TYPE_OF(int32_t):
 		val = *((const int32_t*)e->param(this));

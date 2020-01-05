@@ -2693,7 +2693,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						}
 						else
 						{
-							reprap.ReportAsJson(outBuf, filter.c_str(), ObjectModel::flagsNone);
+							reprap.ReportAsJson(outBuf, 0, filter.c_str(), ObjectModel::flagsNone);
 						}
 					}
 					break;

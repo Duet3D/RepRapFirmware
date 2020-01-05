@@ -18,11 +18,13 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(RandomProbePointSet, _ret)
 
-const ObjectModelTableEntry RandomProbePointSet::objectModelTable[] =
+constexpr ObjectModelTableEntry RandomProbePointSet::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "numPointsProbed", OBJECT_MODEL_FUNC(&(self->numBedCompensationPoints)), TYPE_OF(uint32_t), ObjectModelTableEntry::none }
+	{ "numPointsProbed", OBJECT_MODEL_FUNC(&(self->numBedCompensationPoints)), TYPE_OF(uint32_t), 0, ObjectModelEntryFlags::none }
 };
+
+constexpr uint8_t RandomProbePointSet::objectModelTableDescriptor[] = { 1, 1 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RandomProbePointSet)
 

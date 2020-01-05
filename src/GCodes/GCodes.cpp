@@ -54,11 +54,13 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(GCodes, _ret)
 
-const ObjectModelTableEntry GCodes::objectModelTable[] =
+constexpr ObjectModelTableEntry GCodes::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "speedFactor", OBJECT_MODEL_FUNC(&(self->speedFactor)), TYPE_OF(float), ObjectModelTableEntry::none }
+	{ "speedFactor", OBJECT_MODEL_FUNC(&(self->speedFactor)), TYPE_OF(float), 0, ObjectModelEntryFlags::none }
 };
+
+constexpr uint8_t GCodes::objectModelTableDescriptor[] = { 1, 1 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GCodes)
 

@@ -71,15 +71,17 @@ static const ObjectModelArrayDescriptor heatersArrayDescriptor =
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(Heat, _ret)
 
-const ObjectModelTableEntry Heat::objectModelTable[] =
+constexpr ObjectModelTableEntry Heat::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "ColdExtrudeTemperature", OBJECT_MODEL_FUNC(&(self->extrusionMinTemp)), TYPE_OF(float), ObjectModelTableEntry::none},
-	{ "ColdRetractTemperature", OBJECT_MODEL_FUNC(&(self->retractionMinTemp)), TYPE_OF(float), ObjectModelTableEntry::none},
+	{ "ColdExtrudeTemperature", OBJECT_MODEL_FUNC(&(self->extrusionMinTemp)), TYPE_OF(float), 0, ObjectModelEntryFlags::none},
+	{ "ColdRetractTemperature", OBJECT_MODEL_FUNC(&(self->retractionMinTemp)), TYPE_OF(float), 0, ObjectModelEntryFlags::none},
 #if 0
-	{ "Heaters", OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), TYPE_OF(ObjectModel) | IsArray, ObjectModelTableEntry::none }
+	{ "Heaters", OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), TYPE_OF(ObjectModel) | IsArray, 0, ObjectModelEntryFlags::none }
 #endif
 };
+
+constexpr uint8_t Heat::objectModelTableDescriptor[] = { 1, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heat)
 

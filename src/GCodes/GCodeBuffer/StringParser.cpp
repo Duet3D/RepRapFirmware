@@ -2239,7 +2239,7 @@ ExpressionValue StringParser::ParseIdentifierExpression(bool evaluate)
 		return rslt;
 	}
 
-	return reprap.GetObjectValue(*this, varName.c_str());
+	return reprap.GetObjectValue(0, *this, varName.c_str());
 }
 
 ParseException StringParser::ConstructParseException(const char *str) const

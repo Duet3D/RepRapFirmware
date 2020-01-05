@@ -26,11 +26,13 @@ const char * const GridDefinition::HeightMapLabelLines[] =
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(GridDefinition, _ret)
 
-const ObjectModelTableEntry GridDefinition::objectModelTable[] =
+constexpr ObjectModelTableEntry GridDefinition::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "radius", OBJECT_MODEL_FUNC(&(self->radius)), TYPE_OF(float), ObjectModelTableEntry::none }
+	{ "radius", OBJECT_MODEL_FUNC(&(self->radius)), TYPE_OF(float), 0, ObjectModelEntryFlags::none }
 };
+
+constexpr uint8_t GridDefinition::objectModelTableDescriptor[] = { 1, 1 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GridDefinition)
 

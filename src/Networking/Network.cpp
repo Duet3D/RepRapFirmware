@@ -78,11 +78,13 @@ static const ObjectModelArrayDescriptor interfaceArrayDescriptor =
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(Network, _ret)
 
-const ObjectModelTableEntry Network::objectModelTable[] =
+constexpr ObjectModelTableEntry Network::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfaceArrayDescriptor), TYPE_OF(ObjectModel) | IsArray, ObjectModelTableEntry::none }
+	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfaceArrayDescriptor), TYPE_OF(ObjectModel) | IsArray, 0, ObjectModelEntryFlags::none }
 };
+
+constexpr uint8_t Network::objectModelTableDescriptor[] = { 1, 1 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Network)
 

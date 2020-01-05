@@ -17,14 +17,16 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(StraightProbeSettings, _ret)
 
-const ObjectModelTableEntry StraightProbeSettings::objectModelTable[] =
+constexpr ObjectModelTableEntry StraightProbeSettings::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "movingAxes", OBJECT_MODEL_FUNC(&(self->movingAxes)), TYPE_OF(uint32_t), ObjectModelTableEntry::none },
-	{ "probeToUse", OBJECT_MODEL_FUNC(&(self->probeToUse)), TYPE_OF(uint32_t), ObjectModelTableEntry::none },
-	//{ "target", OBJECT_MODEL_FUNC(&(self->target)), TYPE_OF(const float *), ObjectModelTableEntry::none },
-	{ "type", OBJECT_MODEL_FUNC(&(self->type)), TYPE_OF(uint32_t), ObjectModelTableEntry::none }
+	{ "movingAxes", OBJECT_MODEL_FUNC(&(self->movingAxes)), TYPE_OF(uint32_t), 0, ObjectModelEntryFlags::none },
+	{ "probeToUse", OBJECT_MODEL_FUNC(&(self->probeToUse)), TYPE_OF(uint32_t), 0, ObjectModelEntryFlags::none },
+	//{ "target", OBJECT_MODEL_FUNC(&(self->target)), TYPE_OF(const float *), 0, ObjectModelEntryFlags::none },
+	{ "type", OBJECT_MODEL_FUNC(&(self->type)), TYPE_OF(uint32_t), 0, ObjectModelEntryFlags::none }
 };
+
+constexpr uint8_t StraightProbeSettings::objectModelTableDescriptor[] = { 1, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(StraightProbeSettings)
 

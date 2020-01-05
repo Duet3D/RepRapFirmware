@@ -45,6 +45,12 @@ template<> constexpr TypeCode TypeOf<IPAddress>() noexcept { return 11; }
 
 #define TYPE_OF(_t) (TypeOf<_t>())
 
+// Function used for compile-time check for the correct number of entries in an object model table
+static inline constexpr size_t ArraySum(const uint8_t *arr, size_t numEntries)
+{
+	return (numEntries == 0) ? 0 : arr[0] + ArraySum(arr + 1, numEntries - 1);
+}
+
 // Forward declarations
 class ObjectModelTableEntry;
 class ObjectModel;
@@ -85,28 +91,28 @@ public:
 	ObjectModel() noexcept;
 
 	// Construct a JSON representation of those parts of the object model requested by the user
-	bool ReportAsJson(OutputBuffer *buf, const char *filter, ReportFlags rflags) noexcept;
+	bool ReportAsJson(OutputBuffer *buf, uint8_t tableNumber, const char *filter, ReportFlags rflags) noexcept;
 
 	// Return the type of an object
-	TypeCode GetObjectType(const char *idString) noexcept;
+	TypeCode GetObjectType(uint8_t tableNumber, const char *idString) noexcept;
 
 	// Get the value of an object when we don't know what its type is
-	ExpressionValue GetObjectValue(const StringParser& sp, const char *idString) THROWS_PARSE_ERROR;
+	ExpressionValue GetObjectValue(uint8_t tableNumber, const StringParser& sp, const char *idString) THROWS_PARSE_ERROR;
 
 	// Specialisation of above for float, allowing conversion from integer to float
-	bool GetObjectValue(float& val, const char *idString) THROWS_PARSE_ERROR;
+	bool GetObjectValue(uint8_t tableNumber, float& val, const char *idString) THROWS_PARSE_ERROR;
 
 	// Specialisation of above for int, allowing conversion from unsigned to signed
-	bool GetObjectValue(int32_t& val, const char *idString) THROWS_PARSE_ERROR;
+	bool GetObjectValue(uint8_t tableNumber, int32_t& val, const char *idString) THROWS_PARSE_ERROR;
 
 	// Get the object model table entry for the current level object in the query
-	const ObjectModelTableEntry *FindObjectModelTableEntry(const char *idString) noexcept;
+	const ObjectModelTableEntry *FindObjectModelTableEntry(uint8_t tableNumber, const char *idString) noexcept;
 
 	// Skip the current element in the ID or filter string
 	static const char* GetNextElement(const char *id) noexcept;
 
 protected:
-	virtual const ObjectModelTableEntry *GetObjectModelTable(size_t& numEntries) const noexcept = 0;
+	virtual const ObjectModelTableEntry *GetObjectModelTable(const uint8_t*& descriptor) const noexcept = 0;
 
 private:
 	// Get pointers to various types from the object model, returning null if failed
@@ -125,6 +131,14 @@ public:
 	void * (*GetElement)(ObjectModel*, size_t) noexcept;
 };
 
+// Flags field of a table entry
+enum class ObjectModelEntryFlags : uint16_t
+{
+	none = 0,				// nothing special
+	live = 1,				// fast changing data, included in common status response
+	canAlter = 2,			// we can alter this value
+};
+
 // Object model table entry
 // It must be possible to construct these in the form of initialised data in flash memory, to avoid using large amounts of RAM.
 // Therefore we can't use a class hierarchy to represent different types of entry. Instead we use a type code and a void* parameter.
@@ -132,14 +146,6 @@ class ObjectModelTableEntry
 {
 public:
 	// Type declarations
-	// Flags field of a table entry
-	enum ObjectModelEntryFlags : uint16_t
-	{
-		none = 0,				// nothing special
-		live = 1,				// fast changing data, included in common status response
-		canAlter = 2,			// we can alter this value
-	};
-
 	// Type of the function pointer in the table entry, that returns a pointer to the data
 	typedef void *(*ParamFuncPtr_t)(ObjectModel*) noexcept;
 
@@ -147,6 +153,7 @@ public:
 	const char * name;				// name of this field
 	ParamFuncPtr_t param;			// function that yields a pointer to this value
 	TypeCode type;					// code for the type of this value
+	uint8_t tableNumber;			// which object model table we want, for objects that have more than one table
 	ObjectModelEntryFlags flags;	// information about this value
 
 	// Member functions. These must all be 'const'.
@@ -164,7 +171,7 @@ public:
 	int IdCompare(const char *id) const noexcept;
 
 	// Private function to report a value of primitive type
-	static void ReportItemAsJson(OutputBuffer *buf, const char *filter, ObjectModel::ReportFlags flags, void *nParam, TypeCode type) noexcept;
+	static void ReportItemAsJson(OutputBuffer *buf, const char *filter, ObjectModel::ReportFlags flags, void *nParam, uint8_t tableNumber, TypeCode type) noexcept;
 };
 
 // Use this macro to inherit form ObjectModel
@@ -172,13 +179,17 @@ public:
 
 // Use this macro in the 'protected' section of every class declaration that derived from ObjectModel
 #define DECLARE_OBJECT_MODEL \
-	const ObjectModelTableEntry *GetObjectModelTable(size_t& numEntries) const noexcept override; \
-	static const ObjectModelTableEntry objectModelTable[];
+	const ObjectModelTableEntry *GetObjectModelTable(const uint8_t*& descriptor) const noexcept override; \
+	static const ObjectModelTableEntry objectModelTable[]; \
+	static const uint8_t objectModelTableDescriptor[];
 
 #define DEFINE_GET_OBJECT_MODEL_TABLE(_class) \
-	const ObjectModelTableEntry *_class::GetObjectModelTable(size_t& numEntries) const noexcept \
+	const ObjectModelTableEntry *_class::GetObjectModelTable(const uint8_t*& descriptor) const noexcept \
 	{ \
-		numEntries = ARRAY_SIZE(objectModelTable); \
+		static_assert(ARRAY_SIZE(_class::objectModelTableDescriptor) == _class::objectModelTableDescriptor[0] + 1, "Bad descriptor length"); \
+		static_assert(ARRAY_SIZE(_class::objectModelTable) == ArraySum(_class::objectModelTableDescriptor + 1, ARRAY_SIZE(_class::objectModelTableDescriptor) - 1), \
+				"Mismatched object model table and descriptor"); \
+		descriptor = objectModelTableDescriptor; \
 		return objectModelTable; \
 	}
 
