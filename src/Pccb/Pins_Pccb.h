@@ -9,6 +9,8 @@
 #define SRC_PCCB_PINS_PCCB_H_
 
 #if defined(PCCB_10)
+# define BOARD_NAME				"PC001373"
+# define BOARD_SHORT_NAME		"PC001373"
 # define FIRMWARE_NAME 			"RepRapFirmware for PC001373"
 # define DEFAULT_BOARD_TYPE 	BoardType::PCCB_v10
 #elif defined(PCCB_08_X5)

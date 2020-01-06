@@ -84,6 +84,7 @@ struct ExpressionValue
 	void Set(int32_t i) noexcept { type = TYPE_OF(int32_t); iVal = i; }
 	void Set(int i) noexcept { type = TYPE_OF(int32_t); iVal = i; }
 	void Set(float f) noexcept { type = TYPE_OF(float); fVal = f; param = 1; }
+	void Set(const char *s) noexcept { type = TYPE_OF(const char*); sVal = s; }
 };
 
 // Entry to describe an array. These should be brace-initializable in flash memory.

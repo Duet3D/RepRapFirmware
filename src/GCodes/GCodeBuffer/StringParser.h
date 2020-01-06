@@ -105,21 +105,21 @@ private:
 	void ProcessElseCommand(BlockType previousBlockType) THROWS_PARSE_ERROR;
 	void ProcessElifCommand(BlockType previousBlockType) THROWS_PARSE_ERROR;
 	void ProcessWhileCommand() THROWS_PARSE_ERROR;
-	void ProcessBreakCommand();
+	void ProcessBreakCommand() THROWS_PARSE_ERROR;
 	void ProcessVarCommand() THROWS_PARSE_ERROR;
 	void ProcessSetCommand() THROWS_PARSE_ERROR;
-	void ProcessAbortCommand(const StringRef& reply);
-	void ProcessEchoCommand(const StringRef& reply);
+	void ProcessAbortCommand(const StringRef& reply) noexcept;
+	void ProcessEchoCommand(const StringRef& reply) THROWS_PARSE_ERROR;
 
 	bool EvaluateCondition() THROWS_PARSE_ERROR;
 
-	ExpressionValue ParseBracketedExpression(char closingBracket, bool evaluate) THROWS_PARSE_ERROR
+	ExpressionValue ParseBracketedExpression(StringRef& stringBuffer, char closingBracket, bool evaluate) THROWS_PARSE_ERROR
 		pre (readPointer >= 0; gb.buffer[readPointer] == '{');
-	ExpressionValue ParseExpression(uint8_t priority, bool evaluate) THROWS_PARSE_ERROR
+	ExpressionValue ParseExpression(StringRef& stringBuffer, uint8_t priority, bool evaluate) THROWS_PARSE_ERROR
 		pre (readPointer >= 0);
 	ExpressionValue ParseNumber() THROWS_PARSE_ERROR
 		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
-	ExpressionValue ParseIdentifierExpression(bool evaluate) THROWS_PARSE_ERROR
+	ExpressionValue ParseIdentifierExpression(StringRef& stringBuffer, bool evaluate) THROWS_PARSE_ERROR
 		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
 	void ParseIdentifier(const StringRef& id) THROWS_PARSE_ERROR
 		pre(readPointer >= 0);
@@ -129,6 +129,7 @@ private:
 	void ConvertToFloat(ExpressionValue& val, bool evaluate) THROWS_PARSE_ERROR;
 	void ConvertToBool(ExpressionValue& val, bool evaluate) THROWS_PARSE_ERROR;
 	void EnsureNumeric(ExpressionValue& val, bool evaluate) THROWS_PARSE_ERROR;
+	void ConvertToString(ExpressionValue& val, bool evaluate, StringRef& stringBuffer) THROWS_PARSE_ERROR;
 
 	void SkipWhiteSpace() noexcept;
 

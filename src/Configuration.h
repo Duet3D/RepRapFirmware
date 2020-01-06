@@ -217,14 +217,16 @@ constexpr size_t StringLength20 = 20;
 constexpr size_t StringLength50 = 50;					// Used for pin names
 constexpr size_t StringLength100 = 100;					// Used for error messages
 constexpr size_t StringLength500 = 500;					// Used when writing the height map
+constexpr size_t StringLength256 = 256;
 
 constexpr size_t MaxHeaterNameLength = StringLength20;	// Maximum number of characters in a heater name
 constexpr size_t MaxFanNameLength = StringLength20;		// Maximum number of characters in a fan name
-constexpr size_t FormatStringLength = 256;
-constexpr size_t GCodeReplyLength = 256;				// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer
+constexpr size_t FormatStringLength = StringLength256;
+constexpr size_t GCodeReplyLength = StringLength256;	// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer
 constexpr size_t MachineNameLength = StringLength50;
 constexpr size_t RepRapPasswordLength = StringLength20;
 constexpr size_t MediumStringLength = MaxFilenameLength;
+constexpr size_t StringBufferLength = StringLength256;	// Length of the string buffer used by the expression parser
 
 #if SAM4E || SAM4S || SAME70
 // Increased GCODE_LENGTH on the SAM4 because M587 and M589 commands on the Duet WiFi can get very long

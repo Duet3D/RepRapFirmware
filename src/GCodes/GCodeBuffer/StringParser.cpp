@@ -525,7 +525,7 @@ void StringParser::ProcessSetCommand()
 	throw ConstructParseException("'set' not implemented");
 }
 
-void StringParser::ProcessAbortCommand(const StringRef& reply)
+void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 {
 	SkipWhiteSpace();
 	if (gb.buffer[readPointer] != 0)
@@ -533,7 +533,9 @@ void StringParser::ProcessAbortCommand(const StringRef& reply)
 		// If we fail to parse the expression, we want to abort anyway
 		try
 		{
-			ExpressionValue val = ParseExpression(0, true);
+			String<StringBufferLength> stringBuffer;
+			StringRef bufRef = stringBuffer.GetRef();
+			const ExpressionValue val = ParseExpression(bufRef, 0, true);
 			AppendAsString(val, reply);
 		}
 		catch (const ParseException& e)
@@ -559,7 +561,9 @@ void StringParser::ProcessEchoCommand(const StringRef& reply)
 		{
 			return;
 		}
-		ExpressionValue val = ParseExpression(0, true);
+		String<StringBufferLength> stringBuffer;
+		StringRef bufRef = stringBuffer.GetRef();
+		const ExpressionValue val = ParseExpression(bufRef, 0, true);
 		if (!reply.IsEmpty())
 		{
 			reply.cat(' ');
@@ -580,7 +584,9 @@ void StringParser::ProcessEchoCommand(const StringRef& reply)
 // Evaluate the condition that should follow 'if' or 'while'
 bool StringParser::EvaluateCondition()
 {
-	ExpressionValue val = ParseExpression(0, true);
+	String<StringBufferLength> stringBuffer;
+	StringRef bufRef = stringBuffer.GetRef();
+	ExpressionValue val = ParseExpression(bufRef, 0, true);
 	SkipWhiteSpace();
 	if (gb.buffer[readPointer] != 0)
 	{
@@ -962,7 +968,11 @@ void StringParser::GetQuotedString(const StringRef& str, bool allowEmpty)
 
 	case '{':
 		++readPointer;									// skip the '{'
-		AppendAsString(ParseBracketedExpression('}', true), str);
+		{
+			String<StringBufferLength> stringBuffer;
+			StringRef bufRef = stringBuffer.GetRef();
+			AppendAsString(ParseBracketedExpression(bufRef, '}', true), str);
+		}
 		break;
 
 	default:
@@ -989,10 +999,11 @@ void StringParser::InternalGetQuotedString(const StringRef& str)
 		}
 		if (c == '"')
 		{
-			if (gb.buffer[readPointer++] != '"')
+			if (gb.buffer[readPointer] != c)
 			{
 				return;
 			}
+			++readPointer;
 		}
 		else if (c == '\'')
 		{
@@ -1007,7 +1018,10 @@ void StringParser::InternalGetQuotedString(const StringRef& str)
 				++readPointer;
 			}
 		}
-		str.cat(c);
+		if (str.cat(c))
+		{
+			throw ConstructParseException("string too long");
+		}
 	}
 }
 
@@ -1037,7 +1051,11 @@ void StringParser::InternalGetPossiblyQuotedString(const StringRef& str)
 	else if (gb.buffer[readPointer] == '{')
 	{
 		++readPointer;									// skip the '{'
-		AppendAsString(ParseBracketedExpression('}', true), str);
+		{
+			String<StringBufferLength> stringBuffer;
+			StringRef bufRef = stringBuffer.GetRef();
+			AppendAsString(ParseBracketedExpression(bufRef, '}', true), str);
+		}
 	}
 	else
 	{
@@ -1414,7 +1432,9 @@ float StringParser::ReadFloatValue()
 	if (gb.buffer[readPointer] == '{')
 	{
 		++readPointer;
-		const ExpressionValue val = ParseBracketedExpression('}', true);
+		String<StringBufferLength> stringBuffer;
+		StringRef bufRef = stringBuffer.GetRef();
+		const ExpressionValue val = ParseBracketedExpression(bufRef, '}', true);
 		switch (val.type)
 		{
 		case TYPE_OF(float):
@@ -1442,7 +1462,9 @@ uint32_t StringParser::ReadUIValue()
 	if (gb.buffer[readPointer] == '{')
 	{
 		++readPointer;
-		const ExpressionValue val = ParseBracketedExpression('}', true);
+		String<StringBufferLength> stringBuffer;
+		StringRef bufRef = stringBuffer.GetRef();
+		const ExpressionValue val = ParseBracketedExpression(bufRef, '}', true);
 		switch (val.type)
 		{
 		case TYPE_OF(uint32_t):
@@ -1500,7 +1522,9 @@ int32_t StringParser::ReadIValue()
 	if (gb.buffer[readPointer] == '{')
 	{
 		++readPointer;
-		const ExpressionValue val = ParseBracketedExpression('}', true);
+		String<StringBufferLength> stringBuffer;
+		StringRef bufRef = stringBuffer.GetRef();
+		const ExpressionValue val = ParseBracketedExpression(bufRef, '}', true);
 		switch (val.type)
 		{
 		case TYPE_OF(int32_t):
@@ -1578,25 +1602,24 @@ void StringParser::AppendAsString(ExpressionValue val, const StringRef& str)
 }
 
 // Evaluate a bracketed expression
-ExpressionValue StringParser::ParseBracketedExpression(char closingBracket, bool evaluate)
+ExpressionValue StringParser::ParseBracketedExpression(StringRef& stringBuffer, char closingBracket, bool evaluate)
 {
-	auto rslt = ParseExpression(0, evaluate);
-	if (gb.buffer[readPointer] == closingBracket)
+	auto rslt = ParseExpression(stringBuffer, 0, evaluate);
+	if (gb.buffer[readPointer] != closingBracket)
 	{
-		++readPointer;
-		return rslt;
+		throw ConstructParseException("expected '%c'", (uint32_t)closingBracket);
 	}
-
-	throw ConstructParseException("expected '%c'", (uint32_t)closingBracket);
+	++readPointer;
+	return rslt;
 }
 
 // Evaluate an expression, stopping before any binary operators with priority 'priority' or lower
-ExpressionValue StringParser::ParseExpression(uint8_t priority, bool evaluate)
+ExpressionValue StringParser::ParseExpression(StringRef& stringBuffer, uint8_t priority, bool evaluate)
 {
 	// Lists of binary operators and their priorities
-	static constexpr const char *operators = "?&|=<>+-*/";					// for multi-character operators <= and >= this is the first character
-	static constexpr uint8_t priorities[] = { 1, 2, 2, 3, 3, 3, 4, 4, 5, 5 };
-	constexpr uint8_t UnaryPriority = 5;									// must be higher than any binary operator priority
+	static constexpr const char *operators = "?^&|=<>+-*/";					// for multi-character operators <= and >= this is the first character
+	static constexpr uint8_t priorities[] = { 1, 2, 3, 3, 4, 4, 4, 5, 5, 6, 6 };
+	constexpr uint8_t UnaryPriority = 10;									// must be higher than any binary operator priority
 	static_assert(ARRAY_SIZE(priorities) == strlen(operators));
 
 	// Start by parsing a unary expression
@@ -1606,11 +1629,17 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority, bool evaluate)
 	switch (c)
 	{
 	case '"':
-		throw ConstructParseException("string literals are not supported within expressions");
+		InternalGetQuotedString(stringBuffer);
+		val.Set(stringBuffer.c_str());
+		if (stringBuffer.Skip())
+		{
+			throw ConstructParseException("string too long");
+		}
+		break;
 
 	case '-':
 		++readPointer;
-		val = ParseExpression(UnaryPriority, evaluate);
+		val = ParseExpression(stringBuffer, UnaryPriority, evaluate);
 		switch (val.type)
 		{
 		case TYPE_OF(int32_t):
@@ -1628,7 +1657,7 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority, bool evaluate)
 
 	case '+':
 		++readPointer;
-		val = ParseExpression(UnaryPriority, true);
+		val = ParseExpression(stringBuffer, UnaryPriority, true);
 		switch (val.type)
 		{
 		case TYPE_OF(uint32_t):
@@ -1648,17 +1677,17 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority, bool evaluate)
 
 	case '{':
 		++readPointer;
-		val = ParseBracketedExpression('}', evaluate);
+		val = ParseBracketedExpression(stringBuffer, '}', evaluate);
 		break;
 
 	case '(':
 		++readPointer;
-		val = ParseBracketedExpression(')', evaluate);
+		val = ParseBracketedExpression(stringBuffer, ')', evaluate);
 		break;
 
 	case '!':
 		++readPointer;
-		val = ParseExpression(UnaryPriority, evaluate);
+		val = ParseExpression(stringBuffer, UnaryPriority, evaluate);
 		ConvertToBool(val, evaluate);
 		val.bVal = !val.bVal;
 		break;
@@ -1670,7 +1699,7 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority, bool evaluate)
 		}
 		else if (isalpha(c))				// looks like a variable name
 		{
-			val = ParseIdentifierExpression(evaluate);
+			val = ParseIdentifierExpression(stringBuffer, evaluate);
 		}
 		else
 		{
@@ -1720,7 +1749,7 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority, bool evaluate)
 		case '&':
 			ConvertToBool(val, evaluate);
 			{
-				ExpressionValue val2 = ParseExpression(opPrio, evaluate && val.bVal);		// get the next operand
+				ExpressionValue val2 = ParseExpression(stringBuffer, opPrio, evaluate && val.bVal);		// get the next operand
 				if (val.bVal)
 				{
 					ConvertToBool(val2, evaluate);
@@ -1732,7 +1761,7 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority, bool evaluate)
 		case '|':
 			ConvertToBool(val, evaluate);
 			{
-				ExpressionValue val2 = ParseExpression(opPrio, evaluate && !val.bVal);		// get the next operand
+				ExpressionValue val2 = ParseExpression(stringBuffer, opPrio, evaluate && !val.bVal);		// get the next operand
 				if (!val.bVal)
 				{
 					ConvertToBool(val2, evaluate);
@@ -1744,20 +1773,20 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority, bool evaluate)
 		case '?':
 			ConvertToBool(val, evaluate);
 			{
-				ExpressionValue val2 = ParseExpression(opPrio, evaluate && val.bVal);		// get the second operand
+				ExpressionValue val2 = ParseExpression(stringBuffer, opPrio, evaluate && val.bVal);		// get the second operand
 				if (gb.buffer[readPointer] != ':')
 				{
 					throw ConstructParseException("expected ':'");
 				}
 				++readPointer;
-				ExpressionValue val3 = ParseExpression(opPrio - 1, evaluate && !val.bVal);	// get the third operand, which may be a further conditional expression
+				ExpressionValue val3 = ParseExpression(stringBuffer, opPrio - 1, evaluate && !val.bVal);	// get the third operand, which may be a further conditional expression
 				return (val.bVal) ? val2 : val3;
 			}
 
 		default:
 			// Handle binary operators that always evaluate both operands
 			{
-				ExpressionValue val2 = ParseExpression(opPrio, evaluate);	// get the next operand
+				ExpressionValue val2 = ParseExpression(stringBuffer, opPrio, evaluate);	// get the next operand
 				switch(opChar)
 				{
 				case '+':
@@ -1883,6 +1912,35 @@ ExpressionValue StringParser::ParseExpression(uint8_t priority, bool evaluate)
 					}
 					val.type = TYPE_OF(bool);
 					break;
+
+				case '^':
+					ConvertToString(val, evaluate, stringBuffer);
+					ConvertToString(val2, evaluate, stringBuffer);
+					// We could skip evaluation if evaluate is false, but there is no real need to
+					// Optimisation when val1 and val2 are the last 2 items in the string buffer
+					// The following is not compliant with standard C++ because it constructs pointers that could theoretically be invalid. But it's OK on ARM.
+					// It also uses a nasty const_cast.
+					// It also assumes that there is no mechanism for val1 or val2 to used anywhere else.
+					if (   val2.sVal + strlen(val2.sVal) + 1 == stringBuffer.Pointer()		// if val2 is the last item in the string buffer
+						&& val.sVal + strlen(val.sVal) + 1 == val2.sVal						// and val immediately precedes val2
+					   )
+					{
+						memmove(const_cast<char *>(val2.sVal - 1), val2.sVal, strlen(val2.sVal) + 1);
+						stringBuffer.Backspace();											// so that we can do it again
+					}
+					else
+					{
+						if (stringBuffer.copy(val.sVal) || stringBuffer.cat(val2.sVal))
+						{
+							throw ConstructParseException("too many strings");
+						}
+						val.Set(stringBuffer.c_str());
+						if (stringBuffer.Skip())
+						{
+							throw ConstructParseException("string too long");
+						}
+					}
+					break;
 				}
 			}
 		}
@@ -1983,6 +2041,26 @@ void StringParser::ConvertToBool(ExpressionValue& val, bool evaluate)
 			throw ConstructParseException("expected Boolean operand");
 		}
 		val.Set(false);
+	}
+}
+
+void StringParser::ConvertToString(ExpressionValue& val, bool evaluate, StringRef& stringBuffer)
+{
+	if (val.type != TYPE_OF(const char*))
+	{
+		if (evaluate)
+		{
+			AppendAsString(val, stringBuffer);
+			val.Set(stringBuffer.c_str());
+			if (stringBuffer.Skip())
+			{
+				throw ConstructParseException("string too long");
+			}
+		}
+		else
+		{
+			val.Set("");
+		}
 	}
 }
 
@@ -2113,7 +2191,7 @@ void StringParser::ParseIdentifier(const StringRef& id)
 }
 
 // Parse an identifier expression
-ExpressionValue StringParser::ParseIdentifierExpression(bool evaluate)
+ExpressionValue StringParser::ParseIdentifierExpression(StringRef& stringBuffer, bool evaluate)
 {
 	String<MaxVariableNameLength> varName;
 	ParseIdentifier(varName.GetRef());
@@ -2154,7 +2232,7 @@ ExpressionValue StringParser::ParseIdentifierExpression(bool evaluate)
 	if (gb.buffer[readPointer] == '(')
 	{
 		// It's a function call
-		ExpressionValue rslt = ParseExpression(0, evaluate);
+		ExpressionValue rslt = ParseExpression(stringBuffer, 0, evaluate);
 		if (varName.Equals("abs"))
 		{
 			switch (rslt.type)
@@ -2215,7 +2293,7 @@ ExpressionValue StringParser::ParseIdentifierExpression(bool evaluate)
 			}
 			++readPointer;
 			SkipWhiteSpace();
-			ExpressionValue nextOperand = ParseExpression(0, evaluate);
+			ExpressionValue nextOperand = ParseExpression(stringBuffer, 0, evaluate);
 			ConvertToFloat(nextOperand, evaluate);
 			rslt.fVal = atan2f(rslt.fVal, nextOperand.fVal);
 		}
@@ -2241,7 +2319,7 @@ ExpressionValue StringParser::ParseIdentifierExpression(bool evaluate)
 				}
 				++readPointer;
 				SkipWhiteSpace();
-				ExpressionValue nextOperand = ParseExpression(0, evaluate);
+				ExpressionValue nextOperand = ParseExpression(stringBuffer, 0, evaluate);
 				BalanceNumericTypes(rslt, nextOperand, evaluate);
 				if (rslt.type == TYPE_OF(float))
 				{
@@ -2264,7 +2342,7 @@ ExpressionValue StringParser::ParseIdentifierExpression(bool evaluate)
 				}
 				++readPointer;
 				SkipWhiteSpace();
-				ExpressionValue nextOperand = ParseExpression(0, evaluate);
+				ExpressionValue nextOperand = ParseExpression(stringBuffer, 0, evaluate);
 				BalanceNumericTypes(rslt, nextOperand, evaluate);
 				if (rslt.type == TYPE_OF(float))
 				{
