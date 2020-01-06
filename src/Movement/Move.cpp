@@ -52,19 +52,36 @@
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(Move, _ret)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Move, __VA_ARGS__)
+
+//static const ObjectModelArrayDescriptor axesArrayDescriptor =
+//{
+//	[] (ObjectModel *self) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
+//	[] (ObjectModel *self, size_t n) noexcept -> void* { return (void *)(((Move*)self)->GetAxis(n)); }
+//};
 
 constexpr ObjectModelTableEntry Move::objectModelTable[] =
 {
-	// These entries must be in alphabetical order
-	{ "drcEnabled", OBJECT_MODEL_FUNC(&(self->drcEnabled)), TYPE_OF(bool), 0, ObjectModelEntryFlags::none },
-	{ "drcMinimumAcceleration", OBJECT_MODEL_FUNC(&(self->drcMinimumAcceleration)), TYPE_OF(float), 0, ObjectModelEntryFlags::none },
-	{ "drcPeriod", OBJECT_MODEL_FUNC(&(self->drcPeriod)), TYPE_OF(float), 0, ObjectModelEntryFlags::none },
-	{ "maxPrintingAcceleration", OBJECT_MODEL_FUNC(&(self->maxPrintingAcceleration)), TYPE_OF(float), 0, ObjectModelEntryFlags::none },
-	{ "maxTravelAcceleration", OBJECT_MODEL_FUNC(&(self->maxTravelAcceleration)), TYPE_OF(float), 0, ObjectModelEntryFlags::none },
+	// Within each group, these entries must be in alphabetical order
+	// Move members
+//	{ "Axes",					OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 						ObjectModelEntryFlags::none },
+	{ "Daa",					OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::none },
+	{ "Idle",					OBJECT_MODEL_FUNC(self, 2),												ObjectModelEntryFlags::none },
+	{ "PrintingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration),						ObjectModelEntryFlags::none },
+	{ "TravelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration),							ObjectModelEntryFlags::none },
+	{ "SpeedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor()),			ObjectModelEntryFlags::none },
+
+	// Move.Daa members
+	{ "Enabled", 				OBJECT_MODEL_FUNC(self->drcEnabled), 									ObjectModelEntryFlags::none },
+	{ "MinimumAcceleration",	OBJECT_MODEL_FUNC(self->drcMinimumAcceleration),						ObjectModelEntryFlags::none },
+	{ "Period",					OBJECT_MODEL_FUNC(self->drcPeriod), 									ObjectModelEntryFlags::none },
+
+	// Move.Idle members
+	{ "Factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor()),	ObjectModelEntryFlags::none },
+	{ "Timeout",				OBJECT_MODEL_FUNC((int32_t)self->idleTimeout),							ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 1, 5 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 3, 5, 3, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 

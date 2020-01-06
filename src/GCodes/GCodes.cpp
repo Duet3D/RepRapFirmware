@@ -52,12 +52,12 @@
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(GCodes, _ret)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(GCodes, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry GCodes::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "speedFactor", OBJECT_MODEL_FUNC(&(self->speedFactor)), TYPE_OF(float), 0, ObjectModelEntryFlags::none }
+	{ "speedFactor", OBJECT_MODEL_FUNC(self->speedFactor), ObjectModelEntryFlags::none }
 };
 
 constexpr uint8_t GCodes::objectModelTableDescriptor[] = { 1, 1 };
@@ -613,7 +613,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 				bool done;
 				try
 				{
-					done = gb.CheckMetaCommand();
+					done = gb.CheckMetaCommand(reply);
 				}
 				catch (ParseException& e)
 				{
@@ -624,7 +624,11 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 					break;
 				}
 
-				if (!done)
+				if (done)
+				{
+					HandleReply(gb, GCodeResult::ok, reply.c_str());
+				}
+				else
 				{
 					gb.DecodeCommand();
 					if (gb.IsReady())
@@ -646,7 +650,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 				bool done;
 				try
 				{
-					done = gb.CheckMetaCommand();
+					done = gb.CheckMetaCommand(reply);
 				}
 				catch (ParseException& e)
 				{
@@ -657,7 +661,11 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 					break;
 				}
 
-				if (!done)
+				if (done)
+				{
+					HandleReply(gb, GCodeResult::ok, reply.c_str());
+				}
+				else
 				{
 					gb.DecodeCommand();
 					if (gb.IsReady())

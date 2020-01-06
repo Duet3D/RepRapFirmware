@@ -71,8 +71,8 @@ Network::Network(Platform& p) noexcept : platform(p), responders(nullptr), nextR
 
 static const ObjectModelArrayDescriptor interfaceArrayDescriptor =
 {
-	[] (ObjectModel *self) noexcept -> size_t { return NumNetworkInterfaces; },
-	[] (ObjectModel *self, size_t n) noexcept -> void* { return (void *)(((Network*)self)->GetInterface(n)); }
+	[] (const ObjectModel *self) noexcept -> size_t { return NumNetworkInterfaces; },
+	[] (const ObjectModel *self, size_t n) noexcept -> ExpressionValue { return ExpressionValue(((Network*)self)->GetInterface(n)); }
 };
 
 // Macro to build a standard lambda function that includes the necessary type conversions
@@ -81,7 +81,7 @@ static const ObjectModelArrayDescriptor interfaceArrayDescriptor =
 constexpr ObjectModelTableEntry Network::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfaceArrayDescriptor), TYPE_OF(ObjectModel) | IsArray, 0, ObjectModelEntryFlags::none }
+	{ "Interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfaceArrayDescriptor), ObjectModelEntryFlags::none }
 };
 
 constexpr uint8_t Network::objectModelTableDescriptor[] = { 1, 1 };

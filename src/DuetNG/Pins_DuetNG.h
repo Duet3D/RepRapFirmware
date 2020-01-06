@@ -4,6 +4,11 @@
 // Pins definition file for Duet 2 WiFi/Ethernet
 // This file is normally #included by #including RepRapFirmware.h, which includes this file
 
+#define BOARD_NAME_WIFI			"Duet 2 WiFi"
+#define BOARD_NAME_ETHERNET		"Duet 2 Ethernet"
+#define BOARD_SHORT_NAME_WIFI	"2WiFi"
+#define BOARD_SHORT_NAME_ETHERNET	"2Ethernet"
+
 #define FIRMWARE_NAME			"RepRapFirmware for Duet 2 WiFi/Ethernet"
 #define DEFAULT_BOARD_TYPE	 	BoardType::DuetWiFi_10
 #define IAP_FIRMWARE_FILE		"Duet2CombinedFirmware.bin"

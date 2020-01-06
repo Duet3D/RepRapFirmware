@@ -16,12 +16,12 @@
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(RandomProbePointSet, _ret)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(RandomProbePointSet, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry RandomProbePointSet::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "numPointsProbed", OBJECT_MODEL_FUNC(&(self->numBedCompensationPoints)), TYPE_OF(uint32_t), 0, ObjectModelEntryFlags::none }
+	{ "numPointsProbed", OBJECT_MODEL_FUNC((int32_t)self->numBedCompensationPoints), ObjectModelEntryFlags::none }
 };
 
 constexpr uint8_t RandomProbePointSet::objectModelTableDescriptor[] = { 1, 1 };

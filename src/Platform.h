@@ -25,6 +25,7 @@ Licence: GPL
 #define PLATFORM_H
 
 #include "RepRapFirmware.h"
+#include "ObjectModel/ObjectModel.h"
 #include "Hardware/IoPorts.h"
 #include "DueFlashStorage.h"
 #include "Fans/FansManager.h"
@@ -259,7 +260,7 @@ struct GpOutputPort
 };
 
 // The main class that defines the RepRap machine for the benefit of the other classes
-class Platform
+class Platform INHERIT_OBJECT_MODEL
 {
 public:
 	// Enumeration to describe the status of a drive
@@ -291,6 +292,8 @@ public:
 #ifdef DUET_NG
 	bool IsDuetWiFi() const noexcept;
 	bool IsDueXPresent() const noexcept { return expansionBoard != ExpansionBoardType::none; }
+	const char *GetBoardName() const;
+	const char *GetBoardShortName() const;
 #endif
 
 	const uint8_t *GetDefaultMacAddress() const noexcept { return defaultMacAddress; }
@@ -537,6 +540,9 @@ public:
 	uint32_t Random() noexcept;
 	void PrintUniqueId(MessageType mtype) noexcept;
 #endif
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	Platform(const Platform&) noexcept;						// private copy constructor to make sure we don't try to copy a Platform

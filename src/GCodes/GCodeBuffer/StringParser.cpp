@@ -270,7 +270,7 @@ bool StringParser::LineFinished()
 
 // Check whether the current command is a meta command, or we are skipping commands in a block
 // Return true if the current line no longer needs to be processed
-bool StringParser::CheckMetaCommand()
+bool StringParser::CheckMetaCommand(const StringRef& reply)
 {
 	if (indentToSkipTo < commandIndent)
 	{
@@ -289,7 +289,7 @@ bool StringParser::CheckMetaCommand()
 		indentToSkipTo = NoIndentSkip;									// no longer skipping
 	}
 
-	const bool b = ProcessConditionalGCode(previousBlockType);			// this may throw a ParseException
+	const bool b = ProcessConditionalGCode(reply, previousBlockType);			// this may throw a ParseException
 	if (b)
 	{
 		Init();
@@ -299,7 +299,7 @@ bool StringParser::CheckMetaCommand()
 
 // Check for and process a conditional GCode language command returning true if we found one, false if it's a regular line of GCode that we need to process
 // 'skippedIfFalse' is true if we just finished skipping an if-block when the condition was false and there might be an 'else'
-bool StringParser::ProcessConditionalGCode(BlockType previousBlockType)
+bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType previousBlockType)
 {
 	if (commandIndent > gb.machineState->indentLevel)
 	{
@@ -326,8 +326,8 @@ bool StringParser::ProcessConditionalGCode(BlockType previousBlockType)
 
 	if (i >= 2 && i < 6 && (gb.buffer[i] == 0 || gb.buffer[i] == ' ' || gb.buffer[i] == '\t' || gb.buffer[i] == '{'))		// if the command word is properly terminated
 	{
-		readPointer = commandIndent + i;
-		const char * const command = &gb.buffer[commandIndent];
+		readPointer = i;
+		const char * const command = gb.buffer;
 		switch (i)
 		{
 		case 2:
@@ -362,6 +362,11 @@ bool StringParser::ProcessConditionalGCode(BlockType previousBlockType)
 				ProcessElifCommand(previousBlockType);
 				return true;
 			}
+			if (StringStartsWith(command, "echo"))
+			{
+				ProcessEchoCommand(reply);
+				return true;
+			}
 			break;
 
 		case 5:
@@ -377,7 +382,7 @@ bool StringParser::ProcessConditionalGCode(BlockType previousBlockType)
 			}
 			if (StringStartsWith(command, "abort"))
 			{
-				ProcessAbortCommand();
+				ProcessAbortCommand(reply);
 				return true;
 			}
 			break;
@@ -520,9 +525,56 @@ void StringParser::ProcessSetCommand()
 	throw ConstructParseException("'set' not implemented");
 }
 
-void StringParser::ProcessAbortCommand()
+void StringParser::ProcessAbortCommand(const StringRef& reply)
 {
+	SkipWhiteSpace();
+	if (gb.buffer[readPointer] != 0)
+	{
+		// If we fail to parse the expression, we want to abort anyway
+		try
+		{
+			ExpressionValue val = ParseExpression(0, true);
+			AppendAsString(val, reply);
+		}
+		catch (const ParseException& e)
+		{
+			e.GetMessage(reply, gb);
+			reply.Insert(0, "invalid expression after 'abort': ");
+		}
+	}
+	else
+	{
+		reply.copy("'abort' command executed");
+	}
+
 	gb.AbortFile(true);
+}
+
+void StringParser::ProcessEchoCommand(const StringRef& reply)
+{
+	while (true)
+	{
+		SkipWhiteSpace();
+		if (gb.buffer[readPointer] == 0)
+		{
+			return;
+		}
+		ExpressionValue val = ParseExpression(0, true);
+		if (!reply.IsEmpty())
+		{
+			reply.cat(' ');
+		}
+		AppendAsString(val, reply);
+		SkipWhiteSpace();
+		if (gb.buffer[readPointer] == ',')
+		{
+			++readPointer;
+		}
+		else if (gb.buffer[readPointer] != 0)
+		{
+			throw ConstructParseException("expected ','");
+		}
+	}
 }
 
 // Evaluate the condition that should follow 'if' or 'while'
@@ -909,7 +961,8 @@ void StringParser::GetQuotedString(const StringRef& str, bool allowEmpty)
 		break;
 
 	case '{':
-		GetStringExpression(str);
+		++readPointer;									// skip the '{'
+		AppendAsString(ParseBracketedExpression('}', true), str);
 		break;
 
 	default:
@@ -983,7 +1036,8 @@ void StringParser::InternalGetPossiblyQuotedString(const StringRef& str)
 	}
 	else if (gb.buffer[readPointer] == '{')
 	{
-		GetStringExpression(str);
+		++readPointer;									// skip the '{'
+		AppendAsString(ParseBracketedExpression('}', true), str);
 	}
 	else
 	{
@@ -1489,43 +1543,33 @@ DriverId StringParser::ReadDriverIdValue()
 	return result;
 }
 
-// Get a string expression. The current character is '{'.
-void StringParser::GetStringExpression(const StringRef& str)
+// Get a string expression and append it to the string
+void StringParser::AppendAsString(ExpressionValue val, const StringRef& str)
 {
-	++readPointer;									// skip the '{'
-	const ExpressionValue val = ParseBracketedExpression('}', true);
 	switch (val.type)
 	{
 	case TYPE_OF(const char*):
-		str.copy(val.sVal);
+		str.cat(val.sVal);
 		break;
 
 	case TYPE_OF(float):
-		str.printf("%.1f", (double)val.fVal);
-		break;
-
-	case TYPE_OF(Float2):
-		str.printf("%.2f", (double)val.fVal);
-		break;
-
-	case TYPE_OF(Float3):
-		str.printf("%.3f", (double)val.fVal);
+		str.catf((val.param == 3) ? "%.3f" : (val.param == 2) ? "%.2f" : "%.1f", (double)val.fVal);
 		break;
 
 	case TYPE_OF(uint32_t):
-		str.printf("%" PRIu32, val.uVal);			// convert unsigned integer to string
+		str.catf("%" PRIu32, val.uVal);			// convert unsigned integer to string
 		break;
 
 	case TYPE_OF(int32_t):
-		str.printf("%" PRIi32, val.uVal);			// convert signed integer to string
+		str.catf("%" PRIi32, val.uVal);			// convert signed integer to string
 		break;
 
 	case TYPE_OF(bool):
-		str.copy((val.bVal) ? "true" : "false");	// convert bool to string
+		str.cat((val.bVal) ? "true" : "false");	// convert bool to string
 		break;
 
 	case TYPE_OF(IPAddress):
-		str.copy(IP4String(val.uVal).c_str());
+		str.cat(IP4String(val.uVal).c_str());
 		break;
 
 	default:
@@ -1861,8 +1905,8 @@ void StringParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& v
 		{
 			throw ConstructParseException("expected numeric operands");
 		}
-		val1.SetInt(0);
-		val2.SetInt(0);
+		val1.Set(0);
+		val2.Set(0);
 	}
 }
 
@@ -1882,8 +1926,8 @@ void StringParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bo
 		{
 			throw ConstructParseException("cannot convert operands to same type");
 		}
-		val1.SetInt(0);
-		val2.SetInt(0);
+		val1.Set(0);
+		val2.Set(0);
 	}
 }
 
@@ -1905,7 +1949,7 @@ void StringParser::EnsureNumeric(ExpressionValue& val, bool evaluate)
 		{
 			throw ConstructParseException("expected numeric operand");
 		}
-		val.SetInt(0);
+		val.Set(0);
 	}
 }
 
@@ -1926,7 +1970,7 @@ void StringParser::ConvertToFloat(ExpressionValue& val, bool evaluate)
 		{
 			throw ConstructParseException("expected numeric operand");
 		}
-		val.SetFloat(0.0);
+		val.Set(0.0f);
 	}
 }
 
@@ -1938,7 +1982,7 @@ void StringParser::ConvertToBool(ExpressionValue& val, bool evaluate)
 		{
 			throw ConstructParseException("expected Boolean operand");
 		}
-		val.SetBool(false);
+		val.Set(false);
 	}
 }
 
@@ -2100,6 +2144,11 @@ ExpressionValue StringParser::ParseIdentifierExpression(bool evaluate)
 		return ExpressionValue(v);
 	}
 
+	if (varName.Equals("line"))
+	{
+		return ExpressionValue((int32_t)gb.MachineState().lineNumber);
+	}
+
 	// Check whether it is a function call
 	SkipWhiteSpace();
 	if (gb.buffer[readPointer] == '(')
@@ -2123,7 +2172,7 @@ ExpressionValue StringParser::ParseIdentifierExpression(bool evaluate)
 				{
 					throw ConstructParseException("expected numeric operand");
 				}
-				rslt.SetInt(0);
+				rslt.Set(0);
 			}
 		}
 		else if (varName.Equals("sin"))
@@ -2239,7 +2288,7 @@ ExpressionValue StringParser::ParseIdentifierExpression(bool evaluate)
 		return rslt;
 	}
 
-	return reprap.GetObjectValue(0, *this, varName.c_str());
+	return reprap.GetObjectValue(*this, 0, varName.c_str());
 }
 
 ParseException StringParser::ConstructParseException(const char *str) const

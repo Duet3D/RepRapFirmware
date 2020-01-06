@@ -183,6 +183,38 @@ DriversBitmap AxisDriversConfig::GetDriversBitmap() const noexcept
 //*************************************************************************************************
 // Platform class
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Platform, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry Platform::objectModelTable[] =
+{
+	// Table entries for object Electronics
+	{ "MainBoard",		OBJECT_MODEL_FUNC(self, 1),								ObjectModelEntryFlags::none },
+
+	// Table entries for object MainBoard
+	{ "MaxHeaters",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),			ObjectModelEntryFlags::none },
+	{ "MaxMotors",		OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),	ObjectModelEntryFlags::none },
+# ifdef DUET_NG
+	{ "Name",			OBJECT_MODEL_FUNC(self->GetBoardName()),				ObjectModelEntryFlags::none },
+	{ "ShortName",		OBJECT_MODEL_FUNC(self->GetBoardShortName()),			ObjectModelEntryFlags::none },
+# else
+	{ "Name",			OBJECT_MODEL_FUNC_NOSELF(BOARD_NAME),					ObjectModelEntryFlags::none },
+	{ "ShortName",		OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),				ObjectModelEntryFlags::none },
+# endif
+};
+
+constexpr uint8_t Platform::objectModelTableDescriptor[] = { 2, 1, 4 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(Platform)
+
+#endif
+
 Platform::Platform() noexcept :
 #if HAS_MASS_STORAGE
 	logger(nullptr),
@@ -199,8 +231,6 @@ Platform::Platform() noexcept :
 	lastWarningMillis(0), lastLaserPwm(0.0), deferredPowerDown(false), deliberateError(false)
 {
 }
-
-//*******************************************************************************************************************
 
 // Initialise the Platform. Note: this is the first module to be initialised, so don't call other modules from here!
 void Platform::Init() noexcept
@@ -3485,11 +3515,23 @@ const char* Platform::GetBoardString() const noexcept
 }
 
 #ifdef DUET_NG
+
 // Return true if this is a Duet WiFi, false if it is a Duet Ethernet
 bool Platform::IsDuetWiFi() const noexcept
 {
 	return board == BoardType::DuetWiFi_10 || board == BoardType::DuetWiFi_102;
 }
+
+const char *Platform::GetBoardName() const
+{
+	return (IsDuetWiFi()) ? BOARD_NAME_WIFI : BOARD_NAME_ETHERNET;
+}
+
+const char *Platform::GetBoardShortName() const
+{
+	return (IsDuetWiFi()) ? BOARD_SHORT_NAME_WIFI : BOARD_SHORT_NAME_ETHERNET;
+}
+
 #endif
 
 #if HAS_MASS_STORAGE

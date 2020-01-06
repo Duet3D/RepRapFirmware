@@ -5,7 +5,7 @@
  *      Author: manuel
  */
 
-#include <Movement/StraightProbeSettings.h>
+#include "StraightProbeSettings.h"
 #include "RepRap.h"
 
 #if SUPPORT_OBJECT_MODEL
@@ -15,15 +15,15 @@
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(StraightProbeSettings, _ret)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(StraightProbeSettings, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry StraightProbeSettings::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "movingAxes", OBJECT_MODEL_FUNC(&(self->movingAxes)), TYPE_OF(uint32_t), 0, ObjectModelEntryFlags::none },
-	{ "probeToUse", OBJECT_MODEL_FUNC(&(self->probeToUse)), TYPE_OF(uint32_t), 0, ObjectModelEntryFlags::none },
-	//{ "target", OBJECT_MODEL_FUNC(&(self->target)), TYPE_OF(const float *), 0, ObjectModelEntryFlags::none },
-	{ "type", OBJECT_MODEL_FUNC(&(self->type)), TYPE_OF(uint32_t), 0, ObjectModelEntryFlags::none }
+	{ "movingAxes", OBJECT_MODEL_FUNC(self->movingAxes, TYPE_OF(Bitmap32)), ObjectModelEntryFlags::none },
+	{ "probeToUse", OBJECT_MODEL_FUNC((int32_t)self->probeToUse), ObjectModelEntryFlags::none },
+	//{ "target", OBJECT_MODEL_FUNC(&(self->target)), TYPE_OF(const float *), ObjectModelEntryFlags::none },
+	{ "type", OBJECT_MODEL_FUNC((uint32_t)self->type, TYPE_OF(Enum32)), ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t StraightProbeSettings::objectModelTableDescriptor[] = { 1, 3 };

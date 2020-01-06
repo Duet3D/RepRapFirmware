@@ -106,18 +106,19 @@ LwipEthernetInterface::LwipEthernetInterface(Platform& p) noexcept : platform(p)
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(LwipEthernetInterface, _ret)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(LwipEthernetInterface, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry LwipEthernetInterface::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "gateway", OBJECT_MODEL_FUNC(&(self->gateway)), TYPE_OF(IPAddress), 0, ObjectModelEntryFlags::none },
-	{ "ip", OBJECT_MODEL_FUNC(&(self->ipAddress)), TYPE_OF(IPAddress), 0, ObjectModelEntryFlags::none },
-	{ "name", OBJECT_MODEL_FUNC_NOSELF("ethernet"), TYPE_OF(const char *), 0, ObjectModelEntryFlags::none },
-	{ "netmask", OBJECT_MODEL_FUNC(&(self->netmask)), TYPE_OF(IPAddress), 0, ObjectModelEntryFlags::none },
+	{ "ActualIP",			OBJECT_MODEL_FUNC(self->ipAddress),		ObjectModelEntryFlags::none },
+	{ "FirmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(nullptr),		ObjectModelEntryFlags::none },
+	{ "Gateway",			OBJECT_MODEL_FUNC(self->gateway),		ObjectModelEntryFlags::none },
+	{ "Subnet",				OBJECT_MODEL_FUNC(self->netmask),		ObjectModelEntryFlags::none },
+	{ "Type",				OBJECT_MODEL_FUNC_NOSELF("ethernet"),	ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t LwipEthernetInterface::objectModelTableDescriptor[] = { 1, 4 };
+constexpr uint8_t LwipEthernetInterface::objectModelTableDescriptor[] = { 1, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(LwipEthernetInterface)
 

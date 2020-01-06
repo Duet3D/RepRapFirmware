@@ -24,12 +24,12 @@ const char * const GridDefinition::HeightMapLabelLines[] =
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(GridDefinition, _ret)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(GridDefinition, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry GridDefinition::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "radius", OBJECT_MODEL_FUNC(&(self->radius)), TYPE_OF(float), 0, ObjectModelEntryFlags::none }
+	{ "radius", OBJECT_MODEL_FUNC(self->radius), ObjectModelEntryFlags::none }
 };
 
 constexpr uint8_t GridDefinition::objectModelTableDescriptor[] = { 1, 1 };

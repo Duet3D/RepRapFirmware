@@ -8,10 +8,12 @@
 #ifndef SRC_DUETM_PINS_DUETM_H_
 #define SRC_DUETM_PINS_DUETM_H_
 
-#define FIRMWARE_NAME "RepRapFirmware for Duet 2 Maestro"
-#define DEFAULT_BOARD_TYPE BoardType::DuetM_10
+#define BOARD_NAME				"Duet 2 Maestro"
+#define BOARD_SHORT_NAME		"2Maestro"
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 2 Maestro"
+#define DEFAULT_BOARD_TYPE		 BoardType::DuetM_10
 constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
-#define IAP_FIRMWARE_FILE	"DuetMaestroFirmware.bin"
+#define IAP_FIRMWARE_FILE		"DuetMaestroFirmware.bin"
 
 #define IAP_IN_RAM				1
 

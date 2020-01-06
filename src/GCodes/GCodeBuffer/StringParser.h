@@ -29,7 +29,7 @@ public:
 	void PutAndDecode(const char *str, size_t len) noexcept;				// Add an entire string, overwriting any existing content
 	void PutAndDecode(const char *str) noexcept;							// Add a null-terminated string, overwriting any existing content
 	bool FileEnded() noexcept;												// Called when we reach the end of the file we are reading from
-	bool CheckMetaCommand() THROWS_PARSE_ERROR;								// Check whether the current command is a meta command, or we are skipping block
+	bool CheckMetaCommand(const StringRef& reply) THROWS_PARSE_ERROR;		// Check whether the current command is a meta command, or we are skipping block
 
 	// The following may be called after calling DecodeCommand
 	char GetCommandLetter() const noexcept { return commandLetter; }
@@ -94,10 +94,10 @@ private:
 	uint32_t ReadUIValue() THROWS_PARSE_ERROR;
 	int32_t ReadIValue() THROWS_PARSE_ERROR;
 	DriverId ReadDriverIdValue() THROWS_PARSE_ERROR;
-	void GetStringExpression(const StringRef& str) THROWS_PARSE_ERROR
-		pre (readPointer >= 0; gb.buffer[readPointer] == '{'; str.IsEmpty());
+	void AppendAsString(ExpressionValue val, const StringRef& str) THROWS_PARSE_ERROR
+		pre (readPointer >= 0);
 
-	bool ProcessConditionalGCode(BlockType previousBlockType) THROWS_PARSE_ERROR;
+	bool ProcessConditionalGCode(const StringRef& reply, BlockType previousBlockType) THROWS_PARSE_ERROR;
 																			// Check for and process a conditional GCode language command returning true if we found one
 	void CreateBlocks() THROWS_PARSE_ERROR;									// Create new code blocks
 	bool EndBlocks() noexcept;												// End blocks returning true if nothing more to process on this line
@@ -108,7 +108,8 @@ private:
 	void ProcessBreakCommand();
 	void ProcessVarCommand() THROWS_PARSE_ERROR;
 	void ProcessSetCommand() THROWS_PARSE_ERROR;
-	void ProcessAbortCommand();
+	void ProcessAbortCommand(const StringRef& reply);
+	void ProcessEchoCommand(const StringRef& reply);
 
 	bool EvaluateCondition() THROWS_PARSE_ERROR;
 

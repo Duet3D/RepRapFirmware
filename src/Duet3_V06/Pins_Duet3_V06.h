@@ -2,6 +2,7 @@
 #define PINS_SAME70_H__
 
 #define BOARD_SHORT_NAME		"MB6HC"
+#define BOARD_NAME				"Duet 3 MB6HC"
 #define FIRMWARE_NAME			"RepRapFirmware for Duet 3 MB6HC v0.6 or 1.0"
 #define DEFAULT_BOARD_TYPE		BoardType::Duet3
 const size_t NumFirmwareUpdateModules = 1;

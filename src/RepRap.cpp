@@ -125,21 +125,22 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 // Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(RepRap, _ret)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(RepRap, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
-	// These entries are temporary pending design of the object model
-	//TODO design the object model
-	{ "gcodes", OBJECT_MODEL_FUNC(&(self->GetGCodes())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
-	{ "heat", OBJECT_MODEL_FUNC(&(self->GetHeat())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
-	{ "meshProbe", OBJECT_MODEL_FUNC(&(self->GetMove().GetGrid())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
-	{ "move", OBJECT_MODEL_FUNC(&(self->GetMove())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
-	{ "network", OBJECT_MODEL_FUNC(&(self->GetNetwork())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
-	{ "randomProbe", OBJECT_MODEL_FUNC(&(self->GetMove().GetProbePoints())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
+	// Within each group, these entries must be in alphabetical order
+	{ "Electronics",	OBJECT_MODEL_FUNC(self->platform),	ObjectModelEntryFlags::none },
+	{ "Heat",			OBJECT_MODEL_FUNC(self->heat),		ObjectModelEntryFlags::none },
+	{ "Move",			OBJECT_MODEL_FUNC(self->move),		ObjectModelEntryFlags::none },
+	{ "Network",		OBJECT_MODEL_FUNC(self->network),	ObjectModelEntryFlags::none },
+
+//	{ "gcodes", OBJECT_MODEL_FUNC(&(self->GetGCodes())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
+//	{ "meshProbe", OBJECT_MODEL_FUNC(&(self->GetMove().GetGrid())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
+//	{ "randomProbe", OBJECT_MODEL_FUNC(&(self->GetMove().GetProbePoints())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 1, 6 };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 1, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 

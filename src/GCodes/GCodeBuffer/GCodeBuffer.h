@@ -53,7 +53,7 @@ public:
 	void PutAndDecode(const char *str) noexcept;								// Add a null-terminated string, overwriting any existing content
 	bool FileEnded() noexcept;													// Called when we reach the end of the file we are reading from
 	void DecodeCommand() noexcept;												// Decode the command in the buffer when it is complete
-	bool CheckMetaCommand() THROWS_PARSE_ERROR;									// Check whether the current command is a meta command, or we are skipping a block
+	bool CheckMetaCommand(const StringRef& reply) THROWS_PARSE_ERROR;			// Check whether the current command is a meta command, or we are skipping a block
 
 	char GetCommandLetter() const noexcept;
 	bool HasCommandNumber() const noexcept;

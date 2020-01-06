@@ -158,13 +158,14 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept : platform(p), uploader(nullp
 constexpr ObjectModelTableEntry WiFiInterface::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "gateway", OBJECT_MODEL_FUNC(&(self->gateway)), TYPE_OF(IPAddress), 0, ObjectModelEntryFlags::none },
-	{ "ip", OBJECT_MODEL_FUNC(&(self->ipAddress)), TYPE_OF(IPAddress), 0, ObjectModelEntryFlags::none },
-	{ "name", OBJECT_MODEL_FUNC_NOSELF("wifi"), TYPE_OF(const char *), 0, ObjectModelEntryFlags::none },
-	{ "netmask", OBJECT_MODEL_FUNC(&(self->netmask)), TYPE_OF(IPAddress), 0, ObjectModelEntryFlags::none },
+	{ "ActualIP",			OBJECT_MODEL_FUNC(self->ipAddress),		ObjectModelEntryFlags::none },
+	{ "FirmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(nullptr),		ObjectModelEntryFlags::none },
+	{ "Gateway",			OBJECT_MODEL_FUNC(self->gateway),		ObjectModelEntryFlags::none },
+	{ "Subnet",				OBJECT_MODEL_FUNC(self->netmask),		ObjectModelEntryFlags::none },
+	{ "Type",				OBJECT_MODEL_FUNC_NOSELF("wifi"),		ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t WiFiInterface::objectModelTableDescriptor[] = { 1, 4 };
+constexpr uint8_t WiFiInterface::objectModelTableDescriptor[] = { 1, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(WiFiInterface)
 
