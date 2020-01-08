@@ -130,17 +130,23 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
-	{ "Electronics",	OBJECT_MODEL_FUNC(self->platform),	ObjectModelEntryFlags::none },
-	{ "Heat",			OBJECT_MODEL_FUNC(self->heat),		ObjectModelEntryFlags::none },
-	{ "Move",			OBJECT_MODEL_FUNC(self->move),		ObjectModelEntryFlags::none },
-	{ "Network",		OBJECT_MODEL_FUNC(self->network),	ObjectModelEntryFlags::none },
+	// 0. MachineModel root
+	{ "Electronics",	OBJECT_MODEL_FUNC(self->platform),							ObjectModelEntryFlags::none },
+	{ "Heat",			OBJECT_MODEL_FUNC(self->heat),								ObjectModelEntryFlags::none },
+	{ "Move",			OBJECT_MODEL_FUNC(self->move),								ObjectModelEntryFlags::none },
+	{ "Network",		OBJECT_MODEL_FUNC(self->network),							ObjectModelEntryFlags::none },
+	{ "State",			OBJECT_MODEL_FUNC(self, 1),									ObjectModelEntryFlags::none },
 
-//	{ "gcodes", OBJECT_MODEL_FUNC(&(self->GetGCodes())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
+	// 1. MachineModel.State
+	{ "CurrentTool",	OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),	ObjectModelEntryFlags::none },
+	{ "MachineMode",	OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),	ObjectModelEntryFlags::none },
+	{ "Status",			OBJECT_MODEL_FUNC(self->GetStatusString()),					ObjectModelEntryFlags::none },
+//	{ "gcodes", OB,JECT_MODEL_FUNC(&(self->GetGCodes())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
 //	{ "meshProbe", OBJECT_MODEL_FUNC(&(self->GetMove().GetGrid())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
 //	{ "randomProbe", OBJECT_MODEL_FUNC(&(self->GetMove().GetProbePoints())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 1, 4 };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 2, 5, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
@@ -2250,27 +2256,54 @@ void RepRap::ClearAlert() noexcept
 	mbox.active = false;
 }
 
+// Get the status index
+size_t RepRap::GetStatusIndex() const noexcept
+{
+	return    (processingConfig)										? 0		// Reading the configuration file
+#if HAS_LINUX_INTERFACE && SUPPORT_CAN_EXPANSION
+			: (gCodes->IsFlashing() || CanInterface::IsFlashing())		? 1		// Flashing a new firmware binary
+#else
+			: (gCodes->IsFlashing())									? 1		// Flashing a new firmware binary
+#endif
+			: (IsStopped()) 											? 2		// Halted
+#if HAS_VOLTAGE_MONITOR
+			: (!platform->HasVinPower() && !gCodes->IsSimulating())		? 3		// Off i.e. powered down
+#endif
+			: (gCodes->IsPausing()) 									? 4		// Pausing / Decelerating
+			: (gCodes->IsResuming()) 									? 5		// Resuming
+			: (gCodes->IsPaused()) 										? 6		// Paused / Stopped
+			: (printMonitor->IsPrinting() && gCodes->IsSimulating())	? 7		// Simulating
+			: (printMonitor->IsPrinting())							  	? 8		// Printing
+			: (gCodes->IsDoingToolChange())								? 9		// Changing tool
+			: (gCodes->DoingFileMacro() || !move->NoLiveMovement()) 	? 10	// Busy
+			:															  11;	// Idle
+
+}
+
 // Get the status character for the new-style status response
 char RepRap::GetStatusCharacter() const noexcept
 {
-	return    (processingConfig)										? 'C'	// Reading the configuration file
-#if HAS_LINUX_INTERFACE && SUPPORT_CAN_EXPANSION
-			: (gCodes->IsFlashing() || CanInterface::IsFlashing())		? 'F'	// Flashing a new firmware binary
-#else
-			: (gCodes->IsFlashing())									? 'F'	// Flashing a new firmware binary
-#endif
-			: (IsStopped()) 											? 'H'	// Halted
-#if HAS_VOLTAGE_MONITOR
-			: (!platform->HasVinPower() && !gCodes->IsSimulating())		? 'O'	// Off i.e. powered down
-#endif
-			: (gCodes->IsPausing()) 									? 'D'	// Pausing / Decelerating
-			: (gCodes->IsResuming()) 									? 'R'	// Resuming
-			: (gCodes->IsPaused()) 										? 'S'	// Paused / Stopped
-			: (printMonitor->IsPrinting() && gCodes->IsSimulating())	? 'M'	// Simulating
-			: (printMonitor->IsPrinting())							  	? 'P'	// Printing
-			: (gCodes->IsDoingToolChange())								? 'T'	// Changing tool
-			: (gCodes->DoingFileMacro() || !move->NoLiveMovement()) 	? 'B'	// Busy
-			:															  'I';	// Idle
+	return "CFHODRSMPTBI"[GetStatusIndex()];
+}
+
+const char* RepRap::GetStatusString() const noexcept
+{
+	static const char *const StatusStrings[] =
+	{
+		"Starting",
+		"Updating",
+		"Halted",
+		"Off",
+		"Pausing",
+		"Resuming",
+		"Paused",
+		"Simulating",
+		"Processing",
+		"ChangingTool",
+		"Busy",
+		"Idle"
+	};
+	return StatusStrings[GetStatusIndex()];
 }
 
 bool RepRap::NoPasswordSet() const noexcept
