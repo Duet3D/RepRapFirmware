@@ -3,13 +3,22 @@ Instructions for building dc42 fork of RepRapFirmware
 
 **Important!**
 
-RepRapFirmware is built from several Github projects. You need to use compatible branches of these projects. As at 18 March 2019, the current (version 2.03beta2+1) source code is on these branches:
+RepRapFirmware is built from several Github projects. You need to use compatible branches of these projects. As at 08 January 2020, the latest RRF 2.x source code is on these branches:
 
-- RepRapFirmware: dev
+- RepRapFirmware: master
+- CoreNG: master
+- FreeRTOS: master
+- RRFLibraries: master
+- DuetWiFiSocketServer: master
+
+As at 08 January 2020, the latest RRF 3.x source code is on these branches:
+
+- RepRapFirmware: v3-dev
 - CoreNG: dev
-- FreeRTOS: main
+- FreeRTOS: master
 - RRFLibraries: dev
-- DuetWiFiSocketServer: dev
+- DuetWiFiSocketServer: master
+- CANlib : master
 
 **Instructions for building under Windows**
 
