@@ -10,7 +10,7 @@
 #include "GCodes.h"
 
 #include "GCodeBuffer/GCodeBuffer.h"
-#include "GCodeBuffer/ParseException.h"
+#include "GCodeException.h"
 #include "GCodeQueue.h"
 #include "Heating/Heat.h"
 #include "Movement/Move.h"
@@ -95,7 +95,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply)
 			break;
 		}
 	}
-	catch (const ParseException& e)
+	catch (const GCodeException& e)
 	{
 		e.GetMessage(reply, gb);
 		HandleReply(gb, GCodeResult::error, reply.c_str());
@@ -2693,7 +2693,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						}
 						else
 						{
-							reprap.ReportAsJson(outBuf, 0, filter.c_str(), ObjectModel::flagsNone);
+							reprap.ReportAsJson(outBuf, filter.c_str(), ObjectModelReportFlags::shortForm, ObjectModelEntryFlags::none);
 						}
 					}
 					break;
@@ -4390,7 +4390,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 		return HandleResult(gb, result, reply, outBuf);
 	}
-	catch (const ParseException& e)
+	catch (const GCodeException& e)
 	{
 		OutputBuffer::ReleaseAll(outBuf);
 		throw;

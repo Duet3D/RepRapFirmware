@@ -75,11 +75,11 @@ public:
 	void SuspendHeaters(bool sus) noexcept;								// Suspend the heaters to conserve power or while probing
 	GCodeResult ResetFault(int heater, const StringRef& reply) noexcept;	// Reset a heater fault for a specific heater or all heaters
 
-	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR;
-	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR;
-	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR;		// Create a sensor or change the parameters for an existing sensor
-	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR; // Set the P/I/D parameters for a heater
-	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply) THROWS_PARSE_ERROR;	// Configure heater protection (M143)
+	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
+	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
+	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;		// Create a sensor or change the parameters for an existing sensor
+	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION; // Set the P/I/D parameters for a heater
+	GCodeResult SetHeaterProtection(GCodeBuffer &gb, const StringRef &reply) THROWS_GCODE_EXCEPTION;	// Configure heater protection (M143)
 
 	void UpdateHeaterProtection(int heaterNumber) noexcept;				// Updates the PIDs and HeaterProtection items when a heater is remapped
 

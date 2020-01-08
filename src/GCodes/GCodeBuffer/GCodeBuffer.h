@@ -53,7 +53,7 @@ public:
 	void PutAndDecode(const char *str) noexcept;								// Add a null-terminated string, overwriting any existing content
 	bool FileEnded() noexcept;													// Called when we reach the end of the file we are reading from
 	void DecodeCommand() noexcept;												// Decode the command in the buffer when it is complete
-	bool CheckMetaCommand(const StringRef& reply) THROWS_PARSE_ERROR;			// Check whether the current command is a meta command, or we are skipping a block
+	bool CheckMetaCommand(const StringRef& reply) THROWS_GCODE_EXCEPTION;			// Check whether the current command is a meta command, or we are skipping a block
 
 	char GetCommandLetter() const noexcept;
 	bool HasCommandNumber() const noexcept;
@@ -61,34 +61,34 @@ public:
 	int8_t GetCommandFraction() const noexcept;
 
 	bool Seen(char c) noexcept __attribute__((hot));							// Is a character present?
-	void MustSee(char c) THROWS_PARSE_ERROR;									// Test for character present, throw error if not
+	void MustSee(char c) THROWS_GCODE_EXCEPTION;									// Test for character present, throw error if not
 
-	float GetFValue() THROWS_PARSE_ERROR __attribute__((hot));					// Get a float after a key letter
-	float GetDistance() THROWS_PARSE_ERROR;										// Get a distance or coordinate and convert it from inches to mm if necessary
-	int32_t GetIValue() THROWS_PARSE_ERROR __attribute__((hot));				// Get an integer after a key letter
-	uint32_t GetUIValue() THROWS_PARSE_ERROR;									// Get an unsigned integer value
-	void GetIPAddress(IPAddress& returnedIp) THROWS_PARSE_ERROR;				// Get an IP address quad after a key letter
-	void GetMacAddress(uint8_t mac[6]) THROWS_PARSE_ERROR;						// Get a MAC address sextet after a key letter
-	PwmFrequency GetPwmFrequency() THROWS_PARSE_ERROR;							// Get a PWM frequency
-	float GetPwmValue() THROWS_PARSE_ERROR;										// Get a PWM value
-	DriverId GetDriverId() THROWS_PARSE_ERROR;									// Get a driver ID
-	void GetUnprecedentedString(const StringRef& str, bool allowEmpty = false) THROWS_PARSE_ERROR;	// Get a string with no preceding key letter
-	void GetQuotedString(const StringRef& str) THROWS_PARSE_ERROR;				// Get and copy a quoted string
-	void GetPossiblyQuotedString(const StringRef& str) THROWS_PARSE_ERROR;		// Get and copy a string which may or may not be quoted
-	void GetReducedString(const StringRef& str) THROWS_PARSE_ERROR;				// Get and copy a quoted string, removing certain characters
-	void GetFloatArray(float arr[], size_t& length, bool doPad) THROWS_PARSE_ERROR __attribute__((hot)); // Get a colon-separated list of floats after a key letter
-	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS_PARSE_ERROR;		// Get a :-separated list of ints after a key letter
-	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS_PARSE_ERROR;	// Get a :-separated list of unsigned ints after a key letter
-	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS_PARSE_ERROR;	// Get a :-separated list of drivers after a key letter
+	float GetFValue() THROWS_GCODE_EXCEPTION __attribute__((hot));					// Get a float after a key letter
+	float GetDistance() THROWS_GCODE_EXCEPTION;										// Get a distance or coordinate and convert it from inches to mm if necessary
+	int32_t GetIValue() THROWS_GCODE_EXCEPTION __attribute__((hot));				// Get an integer after a key letter
+	uint32_t GetUIValue() THROWS_GCODE_EXCEPTION;									// Get an unsigned integer value
+	void GetIPAddress(IPAddress& returnedIp) THROWS_GCODE_EXCEPTION;				// Get an IP address quad after a key letter
+	void GetMacAddress(uint8_t mac[6]) THROWS_GCODE_EXCEPTION;						// Get a MAC address sextet after a key letter
+	PwmFrequency GetPwmFrequency() THROWS_GCODE_EXCEPTION;							// Get a PWM frequency
+	float GetPwmValue() THROWS_GCODE_EXCEPTION;										// Get a PWM value
+	DriverId GetDriverId() THROWS_GCODE_EXCEPTION;									// Get a driver ID
+	void GetUnprecedentedString(const StringRef& str, bool allowEmpty = false) THROWS_GCODE_EXCEPTION;	// Get a string with no preceding key letter
+	void GetQuotedString(const StringRef& str) THROWS_GCODE_EXCEPTION;				// Get and copy a quoted string
+	void GetPossiblyQuotedString(const StringRef& str) THROWS_GCODE_EXCEPTION;		// Get and copy a string which may or may not be quoted
+	void GetReducedString(const StringRef& str) THROWS_GCODE_EXCEPTION;				// Get and copy a quoted string, removing certain characters
+	void GetFloatArray(float arr[], size_t& length, bool doPad) THROWS_GCODE_EXCEPTION __attribute__((hot)); // Get a colon-separated list of floats after a key letter
+	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS_GCODE_EXCEPTION;		// Get a :-separated list of ints after a key letter
+	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS_GCODE_EXCEPTION;	// Get a :-separated list of unsigned ints after a key letter
+	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS_GCODE_EXCEPTION;	// Get a :-separated list of drivers after a key letter
 
-	bool TryGetFValue(char c, float& val, bool& seen) THROWS_PARSE_ERROR;
-	bool TryGetIValue(char c, int32_t& val, bool& seen) THROWS_PARSE_ERROR;
-	bool TryGetUIValue(char c, uint32_t& val, bool& seen) THROWS_PARSE_ERROR;
-	bool TryGetBValue(char c, bool& val, bool& seen) THROWS_PARSE_ERROR;
-	bool TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad = false) THROWS_PARSE_ERROR;
-	bool TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad = false) THROWS_PARSE_ERROR;
-	bool TryGetQuotedString(char c, const StringRef& str, bool& seen) THROWS_PARSE_ERROR;
-	bool TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen) THROWS_PARSE_ERROR;
+	bool TryGetFValue(char c, float& val, bool& seen) THROWS_GCODE_EXCEPTION;
+	bool TryGetIValue(char c, int32_t& val, bool& seen) THROWS_GCODE_EXCEPTION;
+	bool TryGetUIValue(char c, uint32_t& val, bool& seen) THROWS_GCODE_EXCEPTION;
+	bool TryGetBValue(char c, bool& val, bool& seen) THROWS_GCODE_EXCEPTION;
+	bool TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad = false) THROWS_GCODE_EXCEPTION;
+	bool TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad = false) THROWS_GCODE_EXCEPTION;
+	bool TryGetQuotedString(char c, const StringRef& str, bool& seen) THROWS_GCODE_EXCEPTION;
+	bool TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen) THROWS_GCODE_EXCEPTION;
 
 	bool IsIdle() const noexcept;
 	bool IsCompletelyIdle() const noexcept;

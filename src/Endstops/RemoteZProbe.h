@@ -24,7 +24,7 @@ public:
 	uint16_t GetRawReading() const noexcept override { return 0; }
 	void SetProbing(bool isProbing) const noexcept override;
 	GCodeResult AppendPinNames(const StringRef& str) const noexcept override;
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS_PARSE_ERROR override;
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS_GCODE_EXCEPTION override;
 	GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept override;
 
 	GCodeResult Create(const StringRef& pinNames, const StringRef& reply) noexcept;

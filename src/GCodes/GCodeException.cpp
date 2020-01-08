@@ -5,16 +5,16 @@
  *      Author: David
  */
 
-#include "ParseException.h"
+#include "GCodeException.h"
 
 #include <General/StringRef.h>
-#include "GCodeBuffer.h"
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 // Construct the error message. This will be prefixed with "Error: " when it is returned to the user.
-void ParseException::GetMessage(const StringRef &reply, const GCodeBuffer& gb) const
+void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer& gb) const
 {
-	reply.copy((gb.IsDoingFileMacro()) ? "in file macro" : "in GCode file");
-	if (line >= 0 && column >= 0)
+	reply.copy((gb.IsDoingFileMacro()) ? "in file macro" : (gb.IsDoingFile()) ? "in GCode file" : "while executing command");
+	if (line >= 0 && column >= 0 && gb.IsDoingFile())
 	{
 		reply.catf(", line %d column %d", line, column + 1);
 	}

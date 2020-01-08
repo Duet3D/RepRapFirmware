@@ -475,7 +475,7 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			done = gb.CheckMetaCommand(reply);
 		}
-		catch (ParseException& e)
+		catch (GCodeException& e)
 		{
 			e.GetMessage(reply, gb);
 			HandleReply(gb, GCodeResult::error, reply.c_str());
@@ -639,7 +639,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 				{
 					done = gb.CheckMetaCommand(reply);
 				}
-				catch (ParseException& e)
+				catch (GCodeException& e)
 				{
 					e.GetMessage(reply, gb);
 					HandleReply(gb, GCodeResult::error, reply.c_str());
@@ -676,7 +676,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply)
 				{
 					done = gb.CheckMetaCommand(reply);
 				}
-				catch (ParseException& e)
+				catch (GCodeException& e)
 				{
 					e.GetMessage(reply, gb);
 					HandleReply(gb, GCodeResult::error, reply.c_str());

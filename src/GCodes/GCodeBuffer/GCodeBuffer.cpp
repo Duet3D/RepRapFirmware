@@ -9,13 +9,13 @@
 
 #include "GCodeBuffer.h"
 #if HAS_MASS_STORAGE
-# include "GCodes/GCodeInput.h"
+# include <GCodes/GCodeInput.h>
 #endif
 #include "BinaryParser.h"
 #include "StringParser.h"
-#include "ParseException.h"
-#include "RepRap.h"
-#include "Platform.h"
+#include <GCodes/GCodeException.h>
+#include <RepRap.h>
+#include <Platform.h>
 
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility c) noexcept
@@ -199,7 +199,7 @@ void GCodeBuffer::MustSee(char c)
 {
 	if (!Seen(c))
 	{
-		throw ParseException(machineState->lineNumber, -1, "missing parameter '%c'", (uint32_t)c);
+		throw GCodeException(machineState->lineNumber, -1, "missing parameter '%c'", (uint32_t)c);
 	}
 }
 

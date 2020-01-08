@@ -16,6 +16,10 @@
 #include <General/IP4String.h>
 #include <General/StringBuffer.h>
 
+// Replace the default definition of THROW_INTERNAL_ERROR by one that gives line information
+#undef THROW_INTERNAL_ERROR
+#define THROW_INTERNAL_ERROR	throw ConstructParseException("internal error at file " __FILE__ "(%d)", __LINE__)
+
 #if HAS_MASS_STORAGE
 static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML file?
 #endif
@@ -553,7 +557,7 @@ void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 			const ExpressionValue val = ParseExpression(bufRef, 0, true);
 			AppendAsString(val, reply);
 		}
-		catch (const ParseException& e)
+		catch (const GCodeException& e)
 		{
 			e.GetMessage(reply, gb);
 			reply.Insert(0, "invalid expression after 'abort': ");
@@ -2365,22 +2369,22 @@ ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuff
 		return rslt;
 	}
 
-	return reprap.GetObjectValue(*this, 0, varName.c_str());
+	return reprap.GetObjectValue(*this, varName.c_str());
 }
 
-ParseException StringParser::ConstructParseException(const char *str) const
+GCodeException StringParser::ConstructParseException(const char *str) const
 {
-	return ParseException(gb.machineState->lineNumber, readPointer + commandIndent, str);
+	return GCodeException(gb.machineState->lineNumber, readPointer + commandIndent, str);
 }
 
-ParseException StringParser::ConstructParseException(const char *str, const char *param) const
+GCodeException StringParser::ConstructParseException(const char *str, const char *param) const
 {
-	return ParseException(gb.machineState->lineNumber, readPointer + commandIndent, str, param);
+	return GCodeException(gb.machineState->lineNumber, readPointer + commandIndent, str, param);
 }
 
-ParseException StringParser::ConstructParseException(const char *str, uint32_t param) const
+GCodeException StringParser::ConstructParseException(const char *str, uint32_t param) const
 {
-	return ParseException(gb.machineState->lineNumber, readPointer + commandIndent, str, param);
+	return GCodeException(gb.machineState->lineNumber, readPointer + commandIndent, str, param);
 }
 
 // End

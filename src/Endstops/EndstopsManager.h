@@ -54,14 +54,14 @@ public:
 	void GetM119report(const StringRef& reply) noexcept;
 
 	// Z probe
-	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS_PARSE_ERROR;		// M558
-	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR;		// G31
+	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS_GCODE_EXCEPTION;		// M558
+	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;		// G31
 
 	ZProbe& GetCurrentZProbe() const noexcept;
 	const size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
 	ZProbe *GetZProbe(size_t num) const noexcept;
 	void SetZProbeDefaults() noexcept;
-	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR;
+	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
 
 #if SUPPORT_CAN_EXPANSION
 	void HandleRemoteInputChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;

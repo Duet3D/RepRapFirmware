@@ -89,8 +89,8 @@ namespace CanInterface
 	bool SetRemoteDriverCurrents(const CanDriversData& data, const StringRef& reply) noexcept;
 	bool SetRemoteDriverMicrostepping(const CanDriversData& data, const StringRef& reply) noexcept;
 	bool SetRemotePressureAdvance(const CanDriversData& data, const StringRef& reply) noexcept;
-	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR;
-	GCodeResult SetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR;
+	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
+	GCodeResult SetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
 	void WakeCanSender() noexcept;
 
 	// Remote handle functions

@@ -14,13 +14,40 @@
 #include <cstring>
 #include <General/SafeStrtod.h>
 
+void ObjectExplorationContext::AddIndex(unsigned int index)
+{
+	if (numIndices == MaxIndices)		// should always be true
+	{
+		THROW_INTERNAL_ERROR;
+	}
+	++numIndices;
+}
+
+void ObjectExplorationContext::RemoveIndex()
+{
+	if (numIndices == 0)
+	{
+		THROW_INTERNAL_ERROR;
+	}
+	--numIndices;
+}
+
 // Constructor
 ObjectModel::ObjectModel() noexcept
 {
 }
 
+unsigned int ObjectExplorationContext::GetIndex(size_t n) const
+{
+	if (n < numIndices)
+	{
+		return indices[numIndices - n - 1];
+	}
+	THROW_INTERNAL_ERROR;
+}
+
 // Report this object
-bool ObjectModel::ReportAsJson(OutputBuffer* buf, uint8_t tableNumber, const char* filter, ReportFlags flags) const noexcept
+bool ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, uint8_t tableNumber, const char* filter) const
 {
 	buf->cat('{');
 	bool added = false;
@@ -37,13 +64,13 @@ bool ObjectModel::ReportAsJson(OutputBuffer* buf, uint8_t tableNumber, const cha
 
 		while (numEntries != 0)
 		{
-			if (tbl->Matches(filter, flags))
+			if (tbl->Matches(filter, context))
 			{
 				if (added)
 				{
 					buf->cat(',');
 				}
-				tbl->ReportAsJson(buf, this, GetNextElement(filter), flags);
+				tbl->ReportAsJson(buf, context, this, GetNextElement(filter));
 				added = true;
 			}
 			--numEntries;
@@ -54,8 +81,15 @@ bool ObjectModel::ReportAsJson(OutputBuffer* buf, uint8_t tableNumber, const cha
 	return added;
 }
 
+// Construct a JSON representation of those parts of the object model requested by the user. This version is called on the root of the tree.
+bool ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, ObjectModelReportFlags rf, ObjectModelEntryFlags ff) const
+{
+	ObjectExplorationContext context(rf, ff);
+	return ReportAsJson(buf, context, 0, filter);
+}
+
 // Function to report a value or object as JSON
-bool ObjectModel::ReportItemAsJson(ExpressionValue val, OutputBuffer *buf, const char *filter, ObjectModel::ReportFlags flags) const noexcept
+bool ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, ExpressionValue val, const char *filter) const
 {
 	switch (val.type)
 	{
@@ -65,24 +99,26 @@ bool ObjectModel::ReportItemAsJson(ExpressionValue val, OutputBuffer *buf, const
 			++filter;
 			if (*filter == ']')						// if reporting on [parts of] all elements in the array
 			{
-				return ReportArrayAsJson(buf, val.omadVal, filter + 1, flags);
+				return ReportArrayAsJson(buf, context, val.omadVal, filter + 1);
 			}
 
 			const char *endptr;
 			const long index = SafeStrtol(filter, &endptr);
-			if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this))
+			if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
 			{
 				buf->cat("[]");						// avoid returning badly-formed JSON
 				return false;						// invalid syntax, or index out of range
 			}
 			buf->cat('[');
-			const bool ret = ReportItemAsJson(val.omadVal->GetElement(this, index), buf, endptr + 1, flags);
+			context.AddIndex(index);
+			const bool ret = ReportItemAsJson(buf, context, val.omadVal->GetElement(this, context), endptr + 1);
+			context.RemoveIndex();
 			buf->cat(']');
 			return ret;
 		}
 		if (*filter == 0)							// else reporting on all subparts of all elements in the array
 		{
-			return ReportArrayAsJson(buf, val.omadVal, filter, flags);
+			return ReportArrayAsJson(buf, context, val.omadVal, filter);
 		}
 		return false;
 
@@ -91,7 +127,7 @@ bool ObjectModel::ReportItemAsJson(ExpressionValue val, OutputBuffer *buf, const
 		{
 			++filter;
 		}
-		return val.omVal->ReportAsJson(buf, val.param, filter, flags);
+		return val.omVal->ReportAsJson(buf, context, val.param, filter);
 		break;
 
 	case TYPE_OF(float):
@@ -111,7 +147,7 @@ bool ObjectModel::ReportItemAsJson(ExpressionValue val, OutputBuffer *buf, const
 		break;
 
 	case TYPE_OF(Bitmap32):
-		if (flags & ObjectModel::flagShortForm)
+		if (context.ShortFormReport())
 		{
 			buf->catf("%" PRIu32, val.uVal);
 		}
@@ -131,7 +167,7 @@ bool ObjectModel::ReportItemAsJson(ExpressionValue val, OutputBuffer *buf, const
 		break;
 
 	case TYPE_OF(Enum32):
-		if (flags & ObjectModel::flagShortForm)
+		if (context.ShortFormReport())
 		{
 			buf->catf("%" PRIu32, val.uVal);
 		}
@@ -143,7 +179,7 @@ bool ObjectModel::ReportItemAsJson(ExpressionValue val, OutputBuffer *buf, const
 		break;
 
 	case TYPE_OF(bool):
-		if (flags & ObjectModel::flagShortForm)
+		if (context.ShortFormReport())
 		{
 			buf->cat((val.bVal) ? '1' : '0');
 		}
@@ -174,18 +210,20 @@ bool ObjectModel::ReportItemAsJson(ExpressionValue val, OutputBuffer *buf, const
 }
 
 // Report an entire array as JSON
-bool ObjectModel::ReportArrayAsJson(OutputBuffer *buf, const ObjectModelArrayDescriptor *omad, const char *filter, ReportFlags rflags) const noexcept
+bool ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelArrayDescriptor *omad, const char *filter) const
 {
 	buf->cat('[');
 	bool ret = true;
-	const size_t count = omad->GetNumElements(this);
+	const size_t count = omad->GetNumElements(this, context);
 	for (size_t i = 0; i < count && ret; ++i)
 	{
 		if (i != 0)
 		{
 			buf->cat(',');
 		}
-		ret = ReportItemAsJson(omad->GetElement(this, i), buf, filter, rflags);
+		context.AddIndex(i);
+		ret = ReportItemAsJson(buf, context, omad->GetElement(this, context), filter);
+		context.RemoveIndex();
 	}
 	buf->cat(']');
 	return ret;
@@ -242,17 +280,17 @@ const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(uint8_t tabl
 	return id;
 }
 
-bool ObjectModelTableEntry::Matches(const char* filterString, ObjectModelFilterFlags filterFlags) const noexcept
+bool ObjectModelTableEntry::Matches(const char* filterString, const ObjectExplorationContext& context) const noexcept
 {
-	return IdCompare(filterString) == 0 && ((uint16_t)flags & (uint16_t)filterFlags) == (uint16_t)filterFlags;
+	return IdCompare(filterString) == 0 && ((uint8_t)flags & (uint8_t)context.GetFilterFlags()) == (uint8_t)context.GetFilterFlags();
 }
 
 // Add the value of this element to the buffer, returning true if it matched and we did
-bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, const ObjectModel *self, const char* filter, ObjectModel::ReportFlags flags) const noexcept
+bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModel *self, const char* filter) const noexcept
 {
 	buf->cat(name);
 	buf->cat(':');
-	return self->ReportItemAsJson(func(self), buf, filter, flags);
+	return self->ReportItemAsJson(buf, context, func(self, context), filter);
 }
 
 // Compare an ID with the name of this object
@@ -274,8 +312,15 @@ int ObjectModelTableEntry::IdCompare(const char *id) const noexcept
 			: -1;
 }
 
-// Get the value of an object. It must have a primitive type.
-ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, uint8_t tableNumber, const char *idString) const
+// Get the value of an object. This version is called on the root of the tree.
+ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, const char *idString) const
+{
+	ObjectExplorationContext context(ObjectModelReportFlags::none, ObjectModelEntryFlags::none);
+	return GetObjectValue(sp, context, 0, idString);
+}
+
+// Get the value of an object
+ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, uint8_t tableNumber, const char *idString) const
 {
 	const ObjectModelTableEntry *e = FindObjectModelTableEntry(tableNumber, idString);
 	if (e == nullptr)
@@ -284,7 +329,7 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, uint8_t tabl
 	}
 
 	idString = GetNextElement(idString);
-	ExpressionValue val = e->func(this);
+	ExpressionValue val = e->func(this, context);
 	while (val.type == TYPE_OF(const ObjectModelArrayDescriptor*))
 	{
 		if (*idString != '[')
@@ -297,20 +342,22 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, uint8_t tabl
 		{
 			throw sp.ConstructParseException("expected ']'");
 		}
-		if (index < 0 || (size_t)index >= val.omadVal->GetNumElements(this))
+		if (index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
 		{
 			throw sp.ConstructParseException("array index out of bounds");
 		}
 
 		idString = endptr + 1;							// skip past the ']'
-		val = val.omadVal->GetElement(this, index);		// fetch the array element
+		context.AddIndex(index);
+		val = val.omadVal->GetElement(this, context);		// fetch the array element
+		context.RemoveIndex();
 	}
 
 	if (val.type == TYPE_OF(const ObjectModel*))
 	{
 		if (*idString == '.')
 		{
-			return val.omVal->GetObjectValue(sp, val.param, idString + 1);
+			return val.omVal->GetObjectValue(sp, context, val.param, idString + 1);
 		}
 		throw sp.ConstructParseException((*idString == 0) ? "selected value has non-primitive type" : "syntax error in value selector string");
 	}

@@ -639,19 +639,19 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 	}
 }
 
-ParseException BinaryParser::ConstructParseException(const char *str) const noexcept
+GCodeException BinaryParser::ConstructParseException(const char *str) const noexcept
 {
-	return ParseException(lineNumber, -1, str);
+	return GCodeException(lineNumber, -1, str);
 }
 
-ParseException BinaryParser::ConstructParseException(const char *str, const char *param) const noexcept
+GCodeException BinaryParser::ConstructParseException(const char *str, const char *param) const noexcept
 {
-	return ParseException(lineNumber, -1, str, param);
+	return GCodeException(lineNumber, -1, str, param);
 }
 
-ParseException BinaryParser::ConstructParseException(const char *str, uint32_t param) const noexcept
+GCodeException BinaryParser::ConstructParseException(const char *str, uint32_t param) const noexcept
 {
-	return ParseException(lineNumber, -1, str, param);
+	return GCodeException(lineNumber, -1, str, param);
 }
 
 // End

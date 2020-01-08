@@ -8,14 +8,14 @@
 #ifndef SRC_OBJECTMODEL_OBJECTMODEL_H_
 #define SRC_OBJECTMODEL_OBJECTMODEL_H_
 
-#include "RepRapFirmware.h"
+#include <RepRapFirmware.h>
+#include <GCodes/GCodeException.h>
 
 #if SUPPORT_OBJECT_MODEL
 
 #include <General/IPAddress.h>
 #include <RTOSIface/RTOSIface.h>
 
-typedef uint32_t ObjectModelFilterFlags;
 typedef uint8_t TypeCode;
 constexpr TypeCode NoType = 0;							// code for an invalid or unknown type
 
@@ -25,8 +25,8 @@ class Enum32;
 class ObjectModel;					// forward declaration
 class ObjectModelArrayDescriptor;	// forward declaration
 
-// Function template used to get constexpr type IDs
-// Each type must return a unique type code in the range 1 to 127
+// Function template used to get constexpr type codes
+// Each type must return a unique type code in the range 1 to 127 (0 is NoType)
 template<class T> constexpr TypeCode TypeOf() noexcept;
 
 template<> constexpr TypeCode TypeOf<bool>() noexcept { return 1; }
@@ -53,18 +53,19 @@ class ObjectModelTableEntry;
 class ObjectModel;
 class StringParser;
 
+// Struct used to hold the expressions with polymorphic types
 struct ExpressionValue
 {
-	TypeCode type;
-	uint8_t param;
+	TypeCode type;									// what type is stored in the union
+	uint8_t param;									// additional parameter, e.g. number of usual displayed decimal places for a float, or table # for an ObjectModel
 	union
 	{
 		bool bVal;
 		float fVal;
 		int32_t iVal;
-		uint32_t uVal;				// used for enumerations, bitmaps and IP addresses (not for integers, we always use int32_t for those)
+		uint32_t uVal;								// used for enumerations, bitmaps and IP addresses (not for integers, we always use int32_t for those)
 		const char *sVal;
-		const ObjectModel *omVal;
+		const ObjectModel *omVal;					// object of some class derived form ObkectModel
 		const ObjectModelArrayDescriptor *omadVal;
 	};
 
@@ -87,53 +88,10 @@ struct ExpressionValue
 	void Set(const char *s) noexcept { type = TYPE_OF(const char*); sVal = s; }
 };
 
-// Entry to describe an array. These should be brace-initializable in flash memory.
-class ObjectModelArrayDescriptor
+enum class ObjectModelReportFlags : uint16_t
 {
-public:
-	size_t (*GetNumElements)(const ObjectModel*) noexcept;
-	ExpressionValue (*GetElement)(const ObjectModel*, size_t) noexcept;
-};
-
-class ObjectModel
-{
-public:
-	enum ReportFlags : uint16_t
-	{
-		flagsNone,
-		flagShortForm = 1
-	};
-
-	ObjectModel() noexcept;
-
-	// Construct a JSON representation of those parts of the object model requested by the user
-	bool ReportAsJson(OutputBuffer *buf, uint8_t tableNumber, const char *filter, ReportFlags rflags) const noexcept;
-
-	// Report an entire array as JSON
-	bool ReportArrayAsJson(OutputBuffer *buf, const ObjectModelArrayDescriptor *omad, const char *filter, ReportFlags rflags) const noexcept;
-
-	// Function to report a value or object as JSON
-	bool ReportItemAsJson(ExpressionValue val, OutputBuffer *buf, const char *filter, ObjectModel::ReportFlags flags) const noexcept;
-
-	// Get the value of an object when we don't know what its type is
-	ExpressionValue GetObjectValue(const StringParser& sp, uint8_t tableNumber, const char *idString) const THROWS_PARSE_ERROR;
-
-	// Get the object model table entry for the current level object in the query
-	const ObjectModelTableEntry *FindObjectModelTableEntry(uint8_t tableNumber, const char *idString) const noexcept;
-
-	// Skip the current element in the ID or filter string
-	static const char* GetNextElement(const char *id) noexcept;
-
-protected:
-	virtual const ObjectModelTableEntry *GetObjectModelTable(const uint8_t*& descriptor) const noexcept = 0;
-
-private:
-	// Get pointers to various types from the object model, returning null if failed
-//	template<class T> T* GetObjectPointer(const char* idString) noexcept;
-
-//	const char **GetStringObjectPointer(const char *idString) noexcept;
-//	uint32_t *GetShortEnumObjectPointer(const char *idString) noexcept;
-//	uint32_t *GetBitmapObjectPointer(const char *idString) noexcept;
+	none = 0,
+	shortForm = 1
 };
 
 // Flags field of a table entry
@@ -144,6 +102,71 @@ enum class ObjectModelEntryFlags : uint8_t
 	canAlter = 2,			// we can alter this value
 };
 
+// Context passed to object model functions
+class ObjectExplorationContext
+{
+public:
+	ObjectExplorationContext(ObjectModelReportFlags rf, ObjectModelEntryFlags ff) noexcept : numIndices(0), reportFlags(rf), filterFlags(ff) { }
+
+	void AddIndex(unsigned int index) THROWS_GCODE_EXCEPTION;
+	void RemoveIndex() THROWS_GCODE_EXCEPTION;
+	unsigned int GetIndex(size_t n) const THROWS_GCODE_EXCEPTION;
+	size_t GetNumIndices() const noexcept { return numIndices; }
+	ObjectModelReportFlags GetReportFlags() const noexcept { return reportFlags; }
+	ObjectModelEntryFlags GetFilterFlags() const noexcept { return filterFlags; }
+	bool ShortFormReport() const noexcept { return ((uint16_t)reportFlags & (uint16_t)ObjectModelReportFlags::shortForm) != 0; }
+
+private:
+	static constexpr size_t MaxIndices = 4;			// max depth of array nesting
+
+	size_t numIndices;								// the number of indices stored
+	unsigned int indices[MaxIndices];
+	ObjectModelReportFlags reportFlags;
+	ObjectModelEntryFlags filterFlags;
+};
+
+// Entry to describe an array of objects or values. These must be brace-initializable into flash memory.
+class ObjectModelArrayDescriptor
+{
+public:
+	size_t (*GetNumElements)(const ObjectModel*, const ObjectExplorationContext&) noexcept;
+	ExpressionValue (*GetElement)(const ObjectModel*, ObjectExplorationContext&) noexcept;
+};
+
+// Class from which other classes that represent part of the object model are derived
+class ObjectModel
+{
+public:
+	ObjectModel() noexcept;
+
+	// Construct a JSON representation of those parts of the object model requested by the user. This version is called on the root of the tree.
+	bool ReportAsJson(OutputBuffer *buf, const char *filter, ObjectModelReportFlags rf, ObjectModelEntryFlags ff) const THROWS_GCODE_EXCEPTION;
+
+	// Get the value of an object. This version is called on the root of the tree.
+	ExpressionValue GetObjectValue(const StringParser& sp, const char *idString) const THROWS_GCODE_EXCEPTION;
+
+	// Function to report a value or object as JSON
+	bool ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, ExpressionValue val, const char *filter) const THROWS_GCODE_EXCEPTION;
+
+protected:
+	// Construct a JSON representation of those parts of the object model requested by the user
+	bool ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, uint8_t tableNumber, const char *filter) const THROWS_GCODE_EXCEPTION;
+
+	// Report an entire array as JSON
+	bool ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelArrayDescriptor *omad, const char *filter) const THROWS_GCODE_EXCEPTION;
+
+	// Get the value of an object
+	ExpressionValue GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, uint8_t tableNumber, const char *idString) const THROWS_GCODE_EXCEPTION;
+
+	// Get the object model table entry for the current level object in the query
+	const ObjectModelTableEntry *FindObjectModelTableEntry(uint8_t tableNumber, const char *idString) const noexcept;
+
+	// Skip the current element in the ID or filter string
+	static const char* GetNextElement(const char *id) noexcept;
+
+	virtual const ObjectModelTableEntry *GetObjectModelTable(const uint8_t*& descriptor) const noexcept = 0;
+};
+
 // Object model table entry
 // It must be possible to construct these in the form of initialised data in flash memory, to avoid using large amounts of RAM.
 // Therefore we can't use a class hierarchy to represent different types of entry.
@@ -152,7 +175,7 @@ class ObjectModelTableEntry
 public:
 	// Type declarations
 	// Type of the function pointer in the table entry, that returns the data
-	typedef ExpressionValue(*DataFetchPtr_t)(const ObjectModel*) noexcept;
+	typedef ExpressionValue(*DataFetchPtr_t)(const ObjectModel*, ObjectExplorationContext&) noexcept;
 
 	// Member data. This must be public so that we can brace-initialise table entries.
 	const char * name;				// name of this field
@@ -162,10 +185,10 @@ public:
 	// Member functions. These must all be 'const'.
 
 	// Return true if this object table entry matches a filter or query
-	bool Matches(const char *filter, ObjectModelFilterFlags flags) const noexcept;
+	bool Matches(const char *filter, const ObjectExplorationContext& context) const noexcept;
 
 	// See whether we should add the value of this element to the buffer, returning true if it matched the filter and we did add it
-	bool ReportAsJson(OutputBuffer* buf, const ObjectModel *self, const char* filter, ObjectModel::ReportFlags flags) const noexcept;
+	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModel *self, const char* filter) const noexcept;
 
 	// Return the name of this field
 	const char* GetName() const noexcept { return name; }
@@ -193,8 +216,8 @@ public:
 		return objectModelTable; \
 	}
 
-#define OBJECT_MODEL_FUNC_BODY(_class,...) [] (const ObjectModel* arg) noexcept { const _class * const self = static_cast<const _class*>(arg); return ExpressionValue(__VA_ARGS__); }
-#define OBJECT_MODEL_FUNC_NOSELF(...) [] (const ObjectModel* arg) noexcept { return ExpressionValue(__VA_ARGS__); }
+#define OBJECT_MODEL_FUNC_BODY(_class,...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept { const _class * const self = static_cast<const _class*>(arg); return ExpressionValue(__VA_ARGS__); }
+#define OBJECT_MODEL_FUNC_NOSELF(...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept { return ExpressionValue(__VA_ARGS__); }
 
 #else
 

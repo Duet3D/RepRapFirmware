@@ -98,8 +98,8 @@ static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logica
 #include "General/SafeStrtod.h"
 #include "General/SafeVsnprintf.h"
 
-#define THROWS_PARSE_ERROR		// we tag this on to function declarations to indicate that they may throw parse errors, which must be caught
-#define THROW_INTERNAL_ERROR	throw ConstructParseException("internal error at file " __FILE__ "(%d)", __LINE__)
+#define THROWS_GCODE_EXCEPTION	// we tag this on to function declarations to indicate that they may throw a GCodeException, which must be caught
+#define THROW_INTERNAL_ERROR	throw GCodeException(-1, -1, "internal error at file " __FILE__ "(%d)", (int32_t)__LINE__)
 
 // Type of a driver identifier
 struct DriverId

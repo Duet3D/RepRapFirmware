@@ -20,7 +20,7 @@ public:
 	virtual uint16_t GetRawReading() const noexcept = 0;
 	virtual void SetProbing(bool isProbing) const noexcept = 0;
 	virtual GCodeResult AppendPinNames(const StringRef& str) const noexcept = 0;
-	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS_PARSE_ERROR;		// 'seen' is an in-out parameter
+	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS_GCODE_EXCEPTION;		// 'seen' is an in-out parameter
 	virtual GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept;
 
 	EndStopHit Stopped() const noexcept override;
@@ -49,7 +49,7 @@ public:
 	int GetReading() const noexcept;
 	int GetSecondaryValues(int& v1, int& v2) noexcept;
 
-	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS_PARSE_ERROR;
+	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS_GCODE_EXCEPTION;
 	void SetTriggerHeight(float height) noexcept { triggerHeight = height; }
 	void SetSaveToConfigOverride() noexcept { misc.parts.saveToConfigOverride = true; }
 
