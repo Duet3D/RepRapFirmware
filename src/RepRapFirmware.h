@@ -92,7 +92,7 @@ static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logica
 # include "CanId.h"				// for type CanAddress
 #endif
 
-#include "General/StringRef.h"
+#include "General/String.h"
 #include "General/StringFunctions.h"
 #include "General/BitMap.h"
 #include "General/SafeStrtod.h"

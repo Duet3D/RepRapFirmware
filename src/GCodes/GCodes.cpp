@@ -468,7 +468,31 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply)
 		// There is a potential issue here if fileGCode holds any locks, so unlock everything.
 		UnlockAll(gb);
 	}
-	else if (gb.IsReady() || gb.IsExecuting())
+	else if (gb.IsReady())
+	{
+		bool done;
+		try
+		{
+			done = gb.CheckMetaCommand(reply);
+		}
+		catch (ParseException& e)
+		{
+			e.GetMessage(reply, gb);
+			HandleReply(gb, GCodeResult::error, reply.c_str());
+			gb.Init();
+			return;
+		}
+
+		if (done)
+		{
+			HandleReply(gb, GCodeResult::ok, reply.c_str());
+		}
+		else
+		{
+			gb.SetFinished(ActOnCode(gb, reply));
+		}
+	}
+	else if (gb.IsExecuting())
 	{
 		gb.SetFinished(ActOnCode(gb, reply));
 	}

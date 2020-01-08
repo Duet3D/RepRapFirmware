@@ -13,7 +13,8 @@
 #include "GCodes/GCodes.h"
 #include "Platform.h"
 #include "RepRap.h"
-#include "General/IP4String.h"
+#include <General/IP4String.h>
+#include <General/StringBuffer.h>
 
 #if HAS_MASS_STORAGE
 static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML file?
@@ -272,24 +273,41 @@ bool StringParser::LineFinished()
 // Return true if the current line no longer needs to be processed
 bool StringParser::CheckMetaCommand(const StringRef& reply)
 {
-	if (indentToSkipTo < commandIndent)
-	{
-		Init();
-		return true;													// continue skipping this block
-	}
+	const bool doingFile = gb.IsDoingFile();
 	BlockType previousBlockType = BlockType::plain;
-	if (indentToSkipTo != NoIndentSkip && indentToSkipTo >= commandIndent)
+	if (doingFile)
 	{
-		// Finished skipping the nested block
-		if (indentToSkipTo == commandIndent)
+		if (indentToSkipTo < commandIndent)
 		{
-			previousBlockType = gb.machineState->CurrentBlockState().GetType();
-			gb.machineState->CurrentBlockState().SetPlainBlock();		// we've ended the loop or if-block
+			Init();
+			return true;													// continue skipping this block
 		}
-		indentToSkipTo = NoIndentSkip;									// no longer skipping
+		if (indentToSkipTo != NoIndentSkip && indentToSkipTo >= commandIndent)
+		{
+			// Finished skipping the nested block
+			if (indentToSkipTo == commandIndent)
+			{
+				previousBlockType = gb.machineState->CurrentBlockState().GetType();
+				gb.machineState->CurrentBlockState().SetPlainBlock();		// we've ended the loop or if-block
+			}
+			indentToSkipTo = NoIndentSkip;									// no longer skipping
+		}
+
+		if (commandIndent > gb.machineState->indentLevel)
+		{
+			CreateBlocks();					// indentation has increased so start new block(s)
+		}
+		else if (commandIndent < gb.machineState->indentLevel)
+		{
+			if (EndBlocks())
+			{
+				Init();
+				return true;
+			}
+		}
 	}
 
-	const bool b = ProcessConditionalGCode(reply, previousBlockType);			// this may throw a ParseException
+	const bool b = ProcessConditionalGCode(reply, previousBlockType, doingFile);	// this may throw a ParseException
 	if (b)
 	{
 		Init();
@@ -299,21 +317,9 @@ bool StringParser::CheckMetaCommand(const StringRef& reply)
 
 // Check for and process a conditional GCode language command returning true if we found one, false if it's a regular line of GCode that we need to process
 // 'skippedIfFalse' is true if we just finished skipping an if-block when the condition was false and there might be an 'else'
-bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType previousBlockType)
+bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType previousBlockType, bool doingFile)
 {
-	if (commandIndent > gb.machineState->indentLevel)
-	{
-		CreateBlocks();					// indentation has increased so start new block(s)
-	}
-	else if (commandIndent < gb.machineState->indentLevel)
-	{
-		if (EndBlocks())
-		{
-			return true;
-		}
-	}
-
-	// Check for language commands. First count the number of lowercase characters.
+	// First count the number of lowercase characters.
 	unsigned int i = 0;
 	while (gb.buffer[i] >= 'a' && gb.buffer[i] <= 'z')
 	{
@@ -331,7 +337,7 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType pre
 		switch (i)
 		{
 		case 2:
-			if (StringStartsWith(command, "if"))
+			if (doingFile && StringStartsWith(command, "if"))
 			{
 				ProcessIfCommand();
 				return true;
@@ -339,28 +345,34 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType pre
 			break;
 
 		case 3:
-			if (StringStartsWith(command, "var"))
+			if (doingFile)
 			{
-				ProcessVarCommand();
-				return true;
-			}
-			if (StringStartsWith(command, "set"))
-			{
-				ProcessSetCommand();
-				return true;
+				if (StringStartsWith(command, "var"))
+				{
+					ProcessVarCommand();
+					return true;
+				}
+				if (StringStartsWith(command, "set"))
+				{
+					ProcessSetCommand();
+					return true;
+				}
 			}
 			break;
 
 		case 4:
-			if (StringStartsWith(command, "else"))
+			if (doingFile)
 			{
-				ProcessElseCommand(previousBlockType);
-				return true;
-			}
-			if (StringStartsWith(command, "elif"))
-			{
-				ProcessElifCommand(previousBlockType);
-				return true;
+				if (StringStartsWith(command, "else"))
+				{
+					ProcessElseCommand(previousBlockType);
+					return true;
+				}
+				if (StringStartsWith(command, "elif"))
+				{
+					ProcessElifCommand(previousBlockType);
+					return true;
+				}
 			}
 			if (StringStartsWith(command, "echo"))
 			{
@@ -370,20 +382,23 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType pre
 			break;
 
 		case 5:
+			if (doingFile)
+			{
 			if (StringStartsWith(command, "while"))
-			{
-				ProcessWhileCommand();
-				return true;
-			}
-			if (StringStartsWith(command, "break"))
-			{
-				ProcessBreakCommand();
-				return true;
-			}
-			if (StringStartsWith(command, "abort"))
-			{
-				ProcessAbortCommand(reply);
-				return true;
+				{
+					ProcessWhileCommand();
+					return true;
+				}
+				if (StringStartsWith(command, "break"))
+				{
+					ProcessBreakCommand();
+					return true;
+				}
+				if (StringStartsWith(command, "abort"))
+				{
+					ProcessAbortCommand(reply);
+					return true;
+				}
 			}
 			break;
 		}
@@ -533,8 +548,8 @@ void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 		// If we fail to parse the expression, we want to abort anyway
 		try
 		{
-			String<StringBufferLength> stringBuffer;
-			StringRef bufRef = stringBuffer.GetRef();
+			char stringBuffer[StringBufferLength];
+			StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
 			const ExpressionValue val = ParseExpression(bufRef, 0, true);
 			AppendAsString(val, reply);
 		}
@@ -561,8 +576,8 @@ void StringParser::ProcessEchoCommand(const StringRef& reply)
 		{
 			return;
 		}
-		String<StringBufferLength> stringBuffer;
-		StringRef bufRef = stringBuffer.GetRef();
+		char stringBuffer[StringBufferLength];
+		StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
 		const ExpressionValue val = ParseExpression(bufRef, 0, true);
 		if (!reply.IsEmpty())
 		{
@@ -584,8 +599,8 @@ void StringParser::ProcessEchoCommand(const StringRef& reply)
 // Evaluate the condition that should follow 'if' or 'while'
 bool StringParser::EvaluateCondition()
 {
-	String<StringBufferLength> stringBuffer;
-	StringRef bufRef = stringBuffer.GetRef();
+	char stringBuffer[StringBufferLength];
+	StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
 	ExpressionValue val = ParseExpression(bufRef, 0, true);
 	SkipWhiteSpace();
 	if (gb.buffer[readPointer] != 0)
@@ -969,8 +984,8 @@ void StringParser::GetQuotedString(const StringRef& str, bool allowEmpty)
 	case '{':
 		++readPointer;									// skip the '{'
 		{
-			String<StringBufferLength> stringBuffer;
-			StringRef bufRef = stringBuffer.GetRef();
+			char stringBuffer[StringBufferLength];
+			StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
 			AppendAsString(ParseBracketedExpression(bufRef, '}', true), str);
 		}
 		break;
@@ -1051,11 +1066,9 @@ void StringParser::InternalGetPossiblyQuotedString(const StringRef& str)
 	else if (gb.buffer[readPointer] == '{')
 	{
 		++readPointer;									// skip the '{'
-		{
-			String<StringBufferLength> stringBuffer;
-			StringRef bufRef = stringBuffer.GetRef();
-			AppendAsString(ParseBracketedExpression(bufRef, '}', true), str);
-		}
+		char stringBuffer[StringBufferLength];
+		StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
+		AppendAsString(ParseBracketedExpression(bufRef, '}', true), str);
 	}
 	else
 	{
@@ -1432,8 +1445,8 @@ float StringParser::ReadFloatValue()
 	if (gb.buffer[readPointer] == '{')
 	{
 		++readPointer;
-		String<StringBufferLength> stringBuffer;
-		StringRef bufRef = stringBuffer.GetRef();
+		char stringBuffer[StringBufferLength];
+		StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
 		const ExpressionValue val = ParseBracketedExpression(bufRef, '}', true);
 		switch (val.type)
 		{
@@ -1462,8 +1475,8 @@ uint32_t StringParser::ReadUIValue()
 	if (gb.buffer[readPointer] == '{')
 	{
 		++readPointer;
-		String<StringBufferLength> stringBuffer;
-		StringRef bufRef = stringBuffer.GetRef();
+		char stringBuffer[StringBufferLength];
+		StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
 		const ExpressionValue val = ParseBracketedExpression(bufRef, '}', true);
 		switch (val.type)
 		{
@@ -1522,8 +1535,8 @@ int32_t StringParser::ReadIValue()
 	if (gb.buffer[readPointer] == '{')
 	{
 		++readPointer;
-		String<StringBufferLength> stringBuffer;
-		StringRef bufRef = stringBuffer.GetRef();
+		char stringBuffer[StringBufferLength];
+		StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
 		const ExpressionValue val = ParseBracketedExpression(bufRef, '}', true);
 		switch (val.type)
 		{
@@ -1602,7 +1615,7 @@ void StringParser::AppendAsString(ExpressionValue val, const StringRef& str)
 }
 
 // Evaluate a bracketed expression
-ExpressionValue StringParser::ParseBracketedExpression(StringRef& stringBuffer, char closingBracket, bool evaluate)
+ExpressionValue StringParser::ParseBracketedExpression(StringBuffer& stringBuffer, char closingBracket, bool evaluate)
 {
 	auto rslt = ParseExpression(stringBuffer, 0, evaluate);
 	if (gb.buffer[readPointer] != closingBracket)
@@ -1614,7 +1627,7 @@ ExpressionValue StringParser::ParseBracketedExpression(StringRef& stringBuffer, 
 }
 
 // Evaluate an expression, stopping before any binary operators with priority 'priority' or lower
-ExpressionValue StringParser::ParseExpression(StringRef& stringBuffer, uint8_t priority, bool evaluate)
+ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_t priority, bool evaluate)
 {
 	// Lists of binary operators and their priorities
 	static constexpr const char *operators = "?^&|=<>+-*/";					// for multi-character operators <= and >= this is the first character
@@ -1629,12 +1642,8 @@ ExpressionValue StringParser::ParseExpression(StringRef& stringBuffer, uint8_t p
 	switch (c)
 	{
 	case '"':
-		InternalGetQuotedString(stringBuffer);
-		val.Set(stringBuffer.c_str());
-		if (stringBuffer.Skip())
-		{
-			throw ConstructParseException("string too long");
-		}
+		InternalGetQuotedString(stringBuffer.GetRef());
+		val.Set(GetAndFix(stringBuffer));
 		break;
 
 	case '-':
@@ -1917,29 +1926,11 @@ ExpressionValue StringParser::ParseExpression(StringRef& stringBuffer, uint8_t p
 					ConvertToString(val, evaluate, stringBuffer);
 					ConvertToString(val2, evaluate, stringBuffer);
 					// We could skip evaluation if evaluate is false, but there is no real need to
-					// Optimisation when val1 and val2 are the last 2 items in the string buffer
-					// The following is not compliant with standard C++ because it constructs pointers that could theoretically be invalid. But it's OK on ARM.
-					// It also uses a nasty const_cast.
-					// It also assumes that there is no mechanism for val1 or val2 to used anywhere else.
-					if (   val2.sVal + strlen(val2.sVal) + 1 == stringBuffer.Pointer()		// if val2 is the last item in the string buffer
-						&& val.sVal + strlen(val.sVal) + 1 == val2.sVal						// and val immediately precedes val2
-					   )
+					if (stringBuffer.Concat(val.sVal, val2.sVal))
 					{
-						memmove(const_cast<char *>(val2.sVal - 1), val2.sVal, strlen(val2.sVal) + 1);
-						stringBuffer.Backspace();											// so that we can do it again
+						throw ConstructParseException("too many strings");
 					}
-					else
-					{
-						if (stringBuffer.copy(val.sVal) || stringBuffer.cat(val2.sVal))
-						{
-							throw ConstructParseException("too many strings");
-						}
-						val.Set(stringBuffer.c_str());
-						if (stringBuffer.Skip())
-						{
-							throw ConstructParseException("string too long");
-						}
-					}
+					val.sVal = GetAndFix(stringBuffer);
 					break;
 				}
 			}
@@ -2044,24 +2035,32 @@ void StringParser::ConvertToBool(ExpressionValue& val, bool evaluate)
 	}
 }
 
-void StringParser::ConvertToString(ExpressionValue& val, bool evaluate, StringRef& stringBuffer)
+void StringParser::ConvertToString(ExpressionValue& val, bool evaluate, StringBuffer& stringBuffer)
 {
 	if (val.type != TYPE_OF(const char*))
 	{
 		if (evaluate)
 		{
-			AppendAsString(val, stringBuffer);
-			val.Set(stringBuffer.c_str());
-			if (stringBuffer.Skip())
-			{
-				throw ConstructParseException("string too long");
-			}
+			stringBuffer.ClearLatest();
+			AppendAsString(val, stringBuffer.GetRef());
+			val.Set(GetAndFix(stringBuffer));
 		}
 		else
 		{
 			val.Set("");
 		}
 	}
+}
+
+// Get a C-style pointer to the latest string in the buffer, and start a new one
+const char *StringParser::GetAndFix(StringBuffer& stringBuffer)
+{
+	const char *const rslt = stringBuffer.LatestCStr();
+	if (stringBuffer.Fix())
+	{
+		throw ConstructParseException("too many strings");
+	}
+	return rslt;
 }
 
 void StringParser::SkipWhiteSpace() noexcept
@@ -2191,7 +2190,7 @@ void StringParser::ParseIdentifier(const StringRef& id)
 }
 
 // Parse an identifier expression
-ExpressionValue StringParser::ParseIdentifierExpression(StringRef& stringBuffer, bool evaluate)
+ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuffer, bool evaluate)
 {
 	String<MaxVariableNameLength> varName;
 	ParseIdentifier(varName.GetRef());

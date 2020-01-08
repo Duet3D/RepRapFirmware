@@ -239,4 +239,44 @@ inline void GCodeBuffer::AdvanceState() noexcept
 	machineState->state = static_cast<GCodeState>(static_cast<uint8_t>(machineState->state) + 1);
 }
 
+// Return true if we can queue gcodes from this source. This is the case if a file is being executed
+inline bool GCodeBuffer::CanQueueCodes() const noexcept
+{
+	return IsDoingFile();
+}
+
+inline bool GCodeBuffer::IsDoingFile() const noexcept
+{
+	return machineState->DoingFile();
+}
+
+#if HAS_LINUX_INTERFACE
+
+inline bool GCodeBuffer::IsAbortRequested() const noexcept
+{
+	return abortFile;
+}
+
+inline bool GCodeBuffer::IsAbortAllRequested() const noexcept
+{
+	return abortAllFiles;
+}
+
+inline void GCodeBuffer::AcknowledgeAbort() noexcept
+{
+	abortFile = abortAllFiles = false;
+}
+
+inline bool GCodeBuffer::IsStackEventFlagged() const noexcept
+{
+	return reportStack;
+}
+
+inline void GCodeBuffer::AcknowledgeStackEvent() noexcept
+{
+	reportStack = false;
+}
+
+#endif
+
 #endif /* SRC_GCODES_GCODEBUFFER_GCODEBUFFER_H */

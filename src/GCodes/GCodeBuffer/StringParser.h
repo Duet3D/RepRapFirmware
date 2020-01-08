@@ -17,6 +17,7 @@
 
 class GCodeBuffer;
 class IPAddress;
+class StringBuffer;
 
 class StringParser
 {
@@ -97,7 +98,7 @@ private:
 	void AppendAsString(ExpressionValue val, const StringRef& str) THROWS_PARSE_ERROR
 		pre (readPointer >= 0);
 
-	bool ProcessConditionalGCode(const StringRef& reply, BlockType previousBlockType) THROWS_PARSE_ERROR;
+	bool ProcessConditionalGCode(const StringRef& reply, BlockType previousBlockType, bool doingFile) THROWS_PARSE_ERROR;
 																			// Check for and process a conditional GCode language command returning true if we found one
 	void CreateBlocks() THROWS_PARSE_ERROR;									// Create new code blocks
 	bool EndBlocks() noexcept;												// End blocks returning true if nothing more to process on this line
@@ -113,13 +114,13 @@ private:
 
 	bool EvaluateCondition() THROWS_PARSE_ERROR;
 
-	ExpressionValue ParseBracketedExpression(StringRef& stringBuffer, char closingBracket, bool evaluate) THROWS_PARSE_ERROR
+	ExpressionValue ParseBracketedExpression(StringBuffer& stringBuffer, char closingBracket, bool evaluate) THROWS_PARSE_ERROR
 		pre (readPointer >= 0; gb.buffer[readPointer] == '{');
-	ExpressionValue ParseExpression(StringRef& stringBuffer, uint8_t priority, bool evaluate) THROWS_PARSE_ERROR
+	ExpressionValue ParseExpression(StringBuffer& stringBuffer, uint8_t priority, bool evaluate) THROWS_PARSE_ERROR
 		pre (readPointer >= 0);
 	ExpressionValue ParseNumber() THROWS_PARSE_ERROR
 		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
-	ExpressionValue ParseIdentifierExpression(StringRef& stringBuffer, bool evaluate) THROWS_PARSE_ERROR
+	ExpressionValue ParseIdentifierExpression(StringBuffer& stringBuffer, bool evaluate) THROWS_PARSE_ERROR
 		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
 	void ParseIdentifier(const StringRef& id) THROWS_PARSE_ERROR
 		pre(readPointer >= 0);
@@ -129,7 +130,9 @@ private:
 	void ConvertToFloat(ExpressionValue& val, bool evaluate) THROWS_PARSE_ERROR;
 	void ConvertToBool(ExpressionValue& val, bool evaluate) THROWS_PARSE_ERROR;
 	void EnsureNumeric(ExpressionValue& val, bool evaluate) THROWS_PARSE_ERROR;
-	void ConvertToString(ExpressionValue& val, bool evaluate, StringRef& stringBuffer) THROWS_PARSE_ERROR;
+	void ConvertToString(ExpressionValue& val, bool evaluate, StringBuffer& stringBuffer) THROWS_PARSE_ERROR;
+
+	const char *GetAndFix(StringBuffer& stringBuffer) THROWS_PARSE_ERROR;
 
 	void SkipWhiteSpace() noexcept;
 

@@ -138,7 +138,7 @@ void GCodeBuffer::DecodeCommand() noexcept
 // Check whether the current command is a meta command, or we are skipping a block. Return true if we are and the current line no longer needs to be processed.
 bool GCodeBuffer::CheckMetaCommand(const StringRef& reply)
 {
-	return !isBinaryBuffer && machineState->DoingFile() && stringParser.CheckMetaCommand(reply);
+	return !isBinaryBuffer && stringParser.CheckMetaCommand(reply);
 }
 
 // Add an entire G-Code, overwriting any existing content
@@ -704,31 +704,6 @@ const char *GCodeBuffer::GetRequestedMacroFile(bool& reportMissing, bool& fromCo
 	return requestedMacroFile.IsEmpty() ? nullptr : requestedMacroFile.c_str();
 }
 
-bool GCodeBuffer::IsAbortRequested() const noexcept
-{
-	return abortFile;
-}
-
-bool GCodeBuffer::IsAbortAllRequested() const noexcept
-{
-	return abortAllFiles;
-}
-
-void GCodeBuffer::AcknowledgeAbort() noexcept
-{
-	abortFile = abortAllFiles = false;
-}
-
-bool GCodeBuffer::IsStackEventFlagged() const noexcept
-{
-	return reportStack;
-}
-
-void GCodeBuffer::AcknowledgeStackEvent() noexcept
-{
-	reportStack = false;
-}
-
 #endif
 
 // Tell this input source that any message it sent and is waiting on has been acknowledged
@@ -746,12 +721,6 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled) noexcept
 	}
 }
 
-// Return true if we can queue gcodes from this source. This is the case if a file is being executed
-bool GCodeBuffer::CanQueueCodes() const noexcept
-{
-	return machineState->DoingFile();
-}
-
 MessageType GCodeBuffer::GetResponseMessageType() const noexcept
 {
 	if (isBinaryBuffer)
@@ -759,22 +728,6 @@ MessageType GCodeBuffer::GetResponseMessageType() const noexcept
 		return (MessageType)((1 << (size_t)codeChannel) | BinaryCodeReplyFlag);
 	}
 	return responseMessageType;
-}
-
-bool GCodeBuffer::IsDoingFile() const noexcept
-{
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
-	{
-		return machineState->fileId != 0;
-	}
-#endif
-
-#if HAS_MASS_STORAGE
-	return machineState->fileState.IsLive();
-#else
-	return false;
-#endif
 }
 
 FilePosition GCodeBuffer::GetFilePosition() const noexcept
@@ -795,11 +748,7 @@ bool GCodeBuffer::OpenFileToWrite(const char* directory, const char* fileName, c
 
 bool GCodeBuffer::IsWritingFile() const noexcept
 {
-	if (!isBinaryBuffer)
-	{
-		return stringParser.IsWritingFile();
-	}
-	return false;
+	return !isBinaryBuffer && stringParser.IsWritingFile();
 }
 
 void GCodeBuffer::WriteToFile() noexcept
@@ -812,11 +761,7 @@ void GCodeBuffer::WriteToFile() noexcept
 
 bool GCodeBuffer::IsWritingBinary() const noexcept
 {
-	if (!isBinaryBuffer)
-	{
-		return stringParser.IsWritingBinary();
-	}
-	return false;
+	return !isBinaryBuffer && stringParser.IsWritingBinary();
 }
 
 void GCodeBuffer::WriteBinaryToFile(char b) noexcept
