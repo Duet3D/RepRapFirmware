@@ -9,17 +9,18 @@
 
 #if SUPPORT_OBJECT_MODEL
 
-#include "OutputMemory.h"
+#include <OutputMemory.h>
 #include <GCodes/GCodeBuffer/StringParser.h>
 #include <cstring>
 #include <General/SafeStrtod.h>
 
 void ObjectExplorationContext::AddIndex(unsigned int index)
 {
-	if (numIndices == MaxIndices)		// should always be true
+	if (numIndices == MaxIndices)
 	{
 		THROW_INTERNAL_ERROR;
 	}
+	indices[numIndices] = index;
 	++numIndices;
 }
 
@@ -179,14 +180,13 @@ bool ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 		break;
 
 	case TYPE_OF(bool):
-		if (context.ShortFormReport())
-		{
-			buf->cat((val.bVal) ? '1' : '0');
-		}
-		else
-		{
-			buf->cat((val.bVal) ? "\"yes\"" : "\"no\"");
-		}
+		buf->cat((val.bVal) ? "true" : "false");
+		break;
+
+	case TYPE_OF(char):
+		buf->cat('"');
+		buf->EncodeChar(val.cVal);
+		buf->cat('"');
 		break;
 
 	case TYPE_OF(IPAddress):

@@ -30,15 +30,16 @@ class ObjectModelArrayDescriptor;	// forward declaration
 template<class T> constexpr TypeCode TypeOf() noexcept;
 
 template<> constexpr TypeCode TypeOf<bool>() noexcept { return 1; }
-template<> constexpr TypeCode TypeOf<uint32_t>() noexcept { return 2; }
-template<> constexpr TypeCode TypeOf<int32_t>() noexcept { return 3; }
-template<> constexpr TypeCode TypeOf<float>() noexcept { return 4; }
-template<> constexpr TypeCode TypeOf<Bitmap32>() noexcept { return 5; }
-template<> constexpr TypeCode TypeOf<Enum32>() noexcept { return 6; }
-template<> constexpr TypeCode TypeOf<const ObjectModel*>() noexcept { return 7; }
-template<> constexpr TypeCode TypeOf<const char*>() noexcept { return 8; }
-template<> constexpr TypeCode TypeOf<IPAddress>() noexcept { return 9; }
-template<> constexpr TypeCode TypeOf<const ObjectModelArrayDescriptor*>() noexcept { return 10; }
+template<> constexpr TypeCode TypeOf<char>() noexcept { return 2; }
+template<> constexpr TypeCode TypeOf<uint32_t>() noexcept { return 3; }
+template<> constexpr TypeCode TypeOf<int32_t>() noexcept { return 4; }
+template<> constexpr TypeCode TypeOf<float>() noexcept { return 5; }
+template<> constexpr TypeCode TypeOf<Bitmap32>() noexcept { return 6; }
+template<> constexpr TypeCode TypeOf<Enum32>() noexcept { return 7; }
+template<> constexpr TypeCode TypeOf<const ObjectModel*>() noexcept { return 8; }
+template<> constexpr TypeCode TypeOf<const char*>() noexcept { return 9; }
+template<> constexpr TypeCode TypeOf<IPAddress>() noexcept { return 10; }
+template<> constexpr TypeCode TypeOf<const ObjectModelArrayDescriptor*>() noexcept { return 11; }
 
 #define TYPE_OF(_t) (TypeOf<_t>())
 
@@ -61,6 +62,7 @@ struct ExpressionValue
 	union
 	{
 		bool bVal;
+		char cVal;
 		float fVal;
 		int32_t iVal;
 		uint32_t uVal;								// used for enumerations, bitmaps and IP addresses (not for integers, we always use int32_t for those)
@@ -71,6 +73,7 @@ struct ExpressionValue
 
 	ExpressionValue() noexcept : type(NoType) { }
 	explicit constexpr ExpressionValue(bool b) noexcept : type(TYPE_OF(bool)), param(0), bVal(b) { }
+	explicit constexpr ExpressionValue(char c) noexcept : type(TYPE_OF(char)), param(0), cVal(c) { }
 	explicit constexpr ExpressionValue(float f) noexcept : type(TYPE_OF(float)), param(1), fVal(f) { }
 	constexpr ExpressionValue(float f, uint8_t numDecimalPlaces) noexcept : type(TYPE_OF(float)), param(numDecimalPlaces), fVal(f) { }
 	explicit constexpr ExpressionValue(int32_t i) noexcept : type(TYPE_OF(int32_t)), param(0), iVal(i) { }
@@ -82,6 +85,7 @@ struct ExpressionValue
 	explicit constexpr ExpressionValue(nullptr_t dummy) noexcept : type(NoType), param(0), uVal(0) { }
 
 	void Set(bool b) noexcept { type = TYPE_OF(bool); bVal = b; }
+	void Set(char c) noexcept { type = TYPE_OF(char); cVal = c; }
 	void Set(int32_t i) noexcept { type = TYPE_OF(int32_t); iVal = i; }
 	void Set(int i) noexcept { type = TYPE_OF(int32_t); iVal = i; }
 	void Set(float f) noexcept { type = TYPE_OF(float); fVal = f; param = 1; }

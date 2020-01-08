@@ -54,34 +54,42 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Move, __VA_ARGS__)
 
-//static const ObjectModelArrayDescriptor axesArrayDescriptor =
-//{
-//	[] (ObjectModel *self) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-//	[] (ObjectModel *self, size_t n) noexcept -> void* { return (void *)(((Move*)self)->GetAxis(n)); }
-//};
+static const ObjectModelArrayDescriptor axesArrayDescriptor =
+{
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 3); }
+};
 
 constexpr ObjectModelTableEntry Move::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
-	// Move members
-//	{ "Axes",					OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 						ObjectModelEntryFlags::none },
-	{ "Daa",					OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::none },
-	{ "Idle",					OBJECT_MODEL_FUNC(self, 2),												ObjectModelEntryFlags::none },
-	{ "PrintingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration),						ObjectModelEntryFlags::none },
-	{ "TravelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration),							ObjectModelEntryFlags::none },
-	{ "SpeedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor()),			ObjectModelEntryFlags::none },
+	// 0. Move members
+	{ "Axes",					OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 										ObjectModelEntryFlags::none },
+	{ "Daa",					OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
+	{ "Idle",					OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::none },
+	{ "PrintingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration),										ObjectModelEntryFlags::none },
+	{ "TravelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration),											ObjectModelEntryFlags::none },
+	{ "SpeedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor()),							ObjectModelEntryFlags::none },
 
-	// Move.Daa members
-	{ "Enabled", 				OBJECT_MODEL_FUNC(self->drcEnabled), 									ObjectModelEntryFlags::none },
-	{ "MinimumAcceleration",	OBJECT_MODEL_FUNC(self->drcMinimumAcceleration),						ObjectModelEntryFlags::none },
-	{ "Period",					OBJECT_MODEL_FUNC(self->drcPeriod), 									ObjectModelEntryFlags::none },
+	// 1. Move.Daa members
+	{ "Enabled", 				OBJECT_MODEL_FUNC(self->drcEnabled), 													ObjectModelEntryFlags::none },
+	{ "MinimumAcceleration",	OBJECT_MODEL_FUNC(self->drcMinimumAcceleration),										ObjectModelEntryFlags::none },
+	{ "Period",					OBJECT_MODEL_FUNC(self->drcPeriod), 													ObjectModelEntryFlags::none },
 
-	// Move.Idle members
-	{ "Factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor()),	ObjectModelEntryFlags::none },
-	{ "Timeout",				OBJECT_MODEL_FUNC((int32_t)self->idleTimeout),							ObjectModelEntryFlags::none },
+	// 2. Move.Idle members
+	{ "Factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor()),					ObjectModelEntryFlags::none },
+	{ "Timeout",				OBJECT_MODEL_FUNC((int32_t)self->idleTimeout),											ObjectModelEntryFlags::none },
+
+	// 3. Move.Axis[] members
+	{ "Homed",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetIndex(0))),			ObjectModelEntryFlags::none },
+	{ "Letter",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetIndex(0)]),		ObjectModelEntryFlags::none },
+	{ "Max",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().AxisMaximum(context.GetIndex(0))),		ObjectModelEntryFlags::none },
+	{ "Min",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().AxisMinimum(context.GetIndex(0))),		ObjectModelEntryFlags::none },
+	{ "UserPosition",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(context.GetIndex(0))),	ObjectModelEntryFlags::none },
+	{ "Visible",				OBJECT_MODEL_FUNC_NOSELF(context.GetIndex(0) < reprap.GetGCodes().GetVisibleAxes()),	ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 3, 5, 3, 2 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 4, 6, 3, 2, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 

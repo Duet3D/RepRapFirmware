@@ -1589,6 +1589,10 @@ void StringParser::AppendAsString(ExpressionValue val, const StringRef& str)
 {
 	switch (val.type)
 	{
+	case TYPE_OF(char):
+		str.cat(val.cVal);
+		break;
+
 	case TYPE_OF(const char*):
 		str.cat(val.sVal);
 		break;

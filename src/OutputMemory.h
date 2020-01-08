@@ -59,6 +59,7 @@ class OutputBuffer
 		size_t cat(StringRef &str) noexcept;
 
 		size_t EncodeString(const char *src, bool allowControlChars, bool prependAsterisk = false) noexcept;
+		size_t EncodeChar(char c) noexcept;
 
 		template<size_t Len> size_t EncodeString(const String<Len>& str, bool allowControlChars, bool prependAsterisk = false) noexcept
 		{
@@ -97,8 +98,6 @@ class OutputBuffer
 		static unsigned int GetFreeBuffers() { return OUTPUT_BUFFER_COUNT - usedOutputBuffers; }
 
 	private:
-		size_t EncodeChar(char c) noexcept;
-
 		OutputBuffer *next;
 		OutputBuffer *last;
 
