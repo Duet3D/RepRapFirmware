@@ -475,7 +475,7 @@ float TmcDriverState::GetStandstillCurrentPercent() const noexcept
 
 void TmcDriverState::SetStandstillCurrentPercent(float percent) noexcept
 {
-	standstillCurrentFraction = (uint8_t)constrain<long>(lrintf((percent * 256)/100), 0, 255);
+	standstillCurrentFraction = (uint8_t)constrain<long>(lrintf((percent * 256)/100.0), 0, 255);
 	UpdateCurrent();
 }
 
