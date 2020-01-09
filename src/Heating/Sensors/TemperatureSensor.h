@@ -5,11 +5,12 @@
 #include "Heating/TemperatureError.h"		// for result codes
 #include "Hardware/IoPorts.h"
 #include "GCodes/GCodeResult.h"
+#include <ObjectModel/ObjectModel.h>
 
 class GCodeBuffer;
 struct CanSensorReport;
 
-class TemperatureSensor
+class TemperatureSensor INHERIT_OBJECT_MODEL
 {
 public:
 	TemperatureSensor(unsigned int sensorNum, const char *type) noexcept;
@@ -80,6 +81,8 @@ public:
 	virtual bool PollInTask() noexcept { return false; };		// Classes implementing this method need to also call Heat::EnsureSensorsTask() after succesful configuration
 
 protected:
+	DECLARE_OBJECT_MODEL
+
 	void SetResult(float t, TemperatureError rslt) noexcept;
 	void SetResult(TemperatureError rslt) noexcept;
 

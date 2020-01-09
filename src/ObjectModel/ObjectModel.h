@@ -133,6 +133,7 @@ private:
 class ObjectModelArrayDescriptor
 {
 public:
+	ReadWriteLock *lockPointer;
 	size_t (*GetNumElements)(const ObjectModel*, const ObjectExplorationContext&) noexcept;
 	ExpressionValue (*GetElement)(const ObjectModel*, ObjectExplorationContext&) noexcept;
 };
@@ -159,8 +160,11 @@ protected:
 	// Report an entire array as JSON
 	bool ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelArrayDescriptor *omad, const char *filter) const THROWS_GCODE_EXCEPTION;
 
-	// Get the value of an object
+	// Get the value of an object via the table
 	ExpressionValue GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, uint8_t tableNumber, const char *idString) const THROWS_GCODE_EXCEPTION;
+
+	// Get the value of an object that we hold
+	ExpressionValue GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, ExpressionValue val, const char *idString) const THROWS_GCODE_EXCEPTION;
 
 	// Get the object model table entry for the current level object in the query
 	const ObjectModelTableEntry *FindObjectModelTableEntry(uint8_t tableNumber, const char *idString) const noexcept;

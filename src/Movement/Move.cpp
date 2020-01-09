@@ -56,6 +56,7 @@
 
 static const ObjectModelArrayDescriptor axesArrayDescriptor =
 {
+	nullptr,
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 3); }
 };

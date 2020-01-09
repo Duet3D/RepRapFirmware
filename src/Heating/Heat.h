@@ -92,7 +92,8 @@ public:
 	float GetSensorTemperature(int sensorNum, TemperatureError& err) const noexcept; // Result is in degrees Celsius
 
 	float GetHighestTemperatureLimit() const noexcept;					// Get the highest temperature limit of any heater
-	size_t GetHighestUsedHeaterNumber() const noexcept;
+	size_t GetNumHeatersToReport() const noexcept;
+	size_t GetNumSensorsToReport() const noexcept;
 
 	void Diagnostics(MessageType mtype) noexcept;						// Output useful information
 
@@ -144,6 +145,11 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL
+
+#if SUPPORT_OBJECT_MODEL
+	static const ObjectModelArrayDescriptor heatersArrayDescriptor;
+	static const ObjectModelArrayDescriptor sensorsArrayDescriptor;
+#endif
 
 private:
 	Heat(const Heat&) = delete;									// Private copy constructor to prevent copying

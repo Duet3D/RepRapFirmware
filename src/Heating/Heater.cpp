@@ -12,6 +12,30 @@
 #include "HeaterProtection.h"
 #include "Sensors/TemperatureSensor.h"
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Heater, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry Heater::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. Heater members
+	{ "Current",	OBJECT_MODEL_FUNC(self->GetTemperature()), 							ObjectModelEntryFlags::none },
+	{ "Sensor",		OBJECT_MODEL_FUNC((int32_t)self->GetSensorNumber()), 				ObjectModelEntryFlags::none },
+	{ "State",		OBJECT_MODEL_FUNC(self->GetStateName()), 							ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t Heater::objectModelTableDescriptor[] = { 1, 3 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
+
+#endif
+
 Heater::Heater(unsigned int num) noexcept
 	: heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
 	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime),
@@ -73,6 +97,12 @@ HeaterStatus Heater::GetStatus() const noexcept
 					: (mode >= HeaterMode::tuning0) ? HeaterStatus::tuning
 						: (active) ? HeaterStatus::active
 							: HeaterStatus::standby;
+}
+
+const char *Heater::GetStateName() const noexcept
+{
+	static const char * const StateNames[] = { "Off", "Standby", "Active", "Tuning", "Offline" };
+	return StateNames[(uint8_t)GetStatus()];
 }
 
 const char* Heater::GetSensorName() const noexcept

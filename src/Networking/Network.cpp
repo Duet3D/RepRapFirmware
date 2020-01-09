@@ -71,6 +71,7 @@ Network::Network(Platform& p) noexcept : platform(p), responders(nullptr), nextR
 
 static const ObjectModelArrayDescriptor interfaceArrayDescriptor =
 {
+	nullptr,
 	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumNetworkInterfaces; },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((Network*)self)->GetInterface(context.GetIndex(0))); }
 };

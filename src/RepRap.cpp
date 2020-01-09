@@ -1151,8 +1151,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		response->cat("\"current\":");
 		ch = '[';
 		{
-			const size_t highestHeater = heat->GetHighestUsedHeaterNumber();
-			for (size_t heater = 0; heater <= highestHeater; heater++)
+			const size_t numHeaters = heat->GetNumHeatersToReport();
+			for (size_t heater = 0; heater < numHeaters; heater++)
 			{
 				response->catf("%c%.1f", ch, (double)heat->GetHeaterTemperature(heater));
 				ch = ',';
@@ -1162,7 +1162,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 			// Current states
 			response->cat(",\"state\":");
 			ch = '[';
-			for (size_t heater = 0; heater <= highestHeater; heater++)
+			for (size_t heater = 0; heater < numHeaters; heater++)
 			{
 				response->catf("%c%d", ch, (int)heat->GetStatus(heater));
 				ch = ',';
@@ -1174,7 +1174,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 			{
 				response->cat(",\"names\":");
 				ch = '[';
-				for (size_t heater = 0; heater <= highestHeater; heater++)
+				for (size_t heater = 0; heater < numHeaters; heater++)
 				{
 					response->cat(ch);
 					ch = ',';

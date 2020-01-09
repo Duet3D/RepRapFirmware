@@ -112,7 +112,11 @@ bool ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			}
 			buf->cat('[');
 			context.AddIndex(index);
-			const bool ret = ReportItemAsJson(buf, context, val.omadVal->GetElement(this, context), endptr + 1);
+			bool ret;
+			{
+				ReadLocker lock(val.omadVal->lockPointer);
+				ret = ReportItemAsJson(buf, context, val.omadVal->GetElement(this, context), endptr + 1);
+			}
 			context.RemoveIndex();
 			buf->cat(']');
 			return ret;
@@ -124,11 +128,15 @@ bool ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 		return false;
 
 	case TYPE_OF(const ObjectModel*):
-		if (*filter == '.')
+		if (val.omVal != nullptr)
 		{
-			++filter;
+			if (*filter == '.')
+			{
+				++filter;
+			}
+			return val.omVal->ReportAsJson(buf, context, val.param, filter);
 		}
-		return val.omVal->ReportAsJson(buf, context, val.param, filter);
+		buf->cat("null");
 		break;
 
 	case TYPE_OF(float):
@@ -212,6 +220,8 @@ bool ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 // Report an entire array as JSON
 bool ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelArrayDescriptor *omad, const char *filter) const
 {
+	ReadLocker lock(omad->lockPointer);
+
 	buf->cat('[');
 	bool ret = true;
 	const size_t count = omad->GetNumElements(this, context);
@@ -322,7 +332,7 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, const char *
 // Get the value of an object
 ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, uint8_t tableNumber, const char *idString) const
 {
-	const ObjectModelTableEntry *e = FindObjectModelTableEntry(tableNumber, idString);
+	const ObjectModelTableEntry *const e = FindObjectModelTableEntry(tableNumber, idString);
 	if (e == nullptr)
 	{
 		throw sp.ConstructParseException("unknown value %s", idString);
@@ -330,7 +340,12 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplor
 
 	idString = GetNextElement(idString);
 	ExpressionValue val = e->func(this, context);
-	while (val.type == TYPE_OF(const ObjectModelArrayDescriptor*))
+	return GetObjectValue(sp, context, val, idString);
+}
+
+ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, ExpressionValue val, const char *idString) const
+{
+	if (val.type == TYPE_OF(const ObjectModelArrayDescriptor*))
 	{
 		if (*idString != '[')
 		{
@@ -342,15 +357,19 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplor
 		{
 			throw sp.ConstructParseException("expected ']'");
 		}
+
+		ReadLocker lock(val.omadVal->lockPointer);
+
 		if (index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
 		{
 			throw sp.ConstructParseException("array index out of bounds");
 		}
 
-		idString = endptr + 1;							// skip past the ']'
+		idString = endptr + 1;								// skip past the ']'
 		context.AddIndex(index);
-		val = val.omadVal->GetElement(this, context);		// fetch the array element
+		val = GetObjectValue(sp, context, val.omadVal->GetElement(this, context), idString);
 		context.RemoveIndex();
+		return val;
 	}
 
 	if (val.type == TYPE_OF(const ObjectModel*))

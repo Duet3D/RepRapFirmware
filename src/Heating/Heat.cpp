@@ -60,13 +60,19 @@ extern "C" [[noreturn]] void SensorsTaskStart(void * pvParameters) noexcept
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
-#if 0	// need to extend object model functions to handle read-locked pointers before we can use this
-static const ObjectModelArrayDescriptor heatersArrayDescriptor =
+const ObjectModelArrayDescriptor Heat::heatersArrayDescriptor =
 {
-	[] (ObjectModel *self) -> size_t { return MaxHeaters; },
-	[] (ObjectModel *self, size_t n) -> void* { return (void *)(((Heat*)self)->FindHeater(n)); }
+	&heatersLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Heat*)self)->GetNumHeatersToReport(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Heat*)self)->heaters[context.GetIndex(0)]); }
 };
-#endif
+
+const ObjectModelArrayDescriptor Heat::sensorsArrayDescriptor =
+{
+	&sensorsLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Heat*)self)->GetNumSensorsToReport(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Heat*)self)->FindSensor(context.GetIndex(0)).Ptr()); }
+};
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Heat, __VA_ARGS__)
@@ -74,14 +80,14 @@ static const ObjectModelArrayDescriptor heatersArrayDescriptor =
 constexpr ObjectModelTableEntry Heat::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
+	// 0. Heat class
 	{ "ColdExtrudeTemperature", OBJECT_MODEL_FUNC(self->extrusionMinTemp), ObjectModelEntryFlags::none},
 	{ "ColdRetractTemperature", OBJECT_MODEL_FUNC(self->retractionMinTemp), ObjectModelEntryFlags::none},
-#if 0
-	{ "Heaters", OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), ObjectModelEntryFlags::none }
-#endif
+	{ "Heaters", OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), ObjectModelEntryFlags::none },
+	{ "Sensors", OBJECT_MODEL_FUNC_NOSELF(&sensorsArrayDescriptor), ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Heat::objectModelTableDescriptor[] = { 1, 2 };
+constexpr uint8_t Heat::objectModelTableDescriptor[] = { 3, 4, 0, 0 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heat)
 
@@ -253,6 +259,10 @@ ReadLockedPointer<TemperatureSensor> Heat::FindSensor(int sn) const noexcept
 		if ((int)sensor->GetSensorNumber() == sn)
 		{
 			return ReadLockedPointer<TemperatureSensor>(locker, sensor);
+		}
+		if ((int)sensor->GetSensorNumber() > sn)
+		{
+			break;
 		}
 	}
 	return ReadLockedPointer<TemperatureSensor>(locker, nullptr);
@@ -1210,15 +1220,34 @@ float Heat::GetSensorTemperature(int sensorNum, TemperatureError& err) const noe
 	return BadErrorTemperature;
 }
 
-// Return the highest used heater number. Used by RepRap.cpp to shorten responses by omitting unused trailing heater numbers. If no heaters are configured, return 0.
-size_t Heat::GetHighestUsedHeaterNumber() const noexcept
+// Return the highest used heater number plus one. Used by RepRap.cpp to shorten responses by omitting unused trailing heater numbers.
+size_t Heat::GetNumHeatersToReport() const noexcept
 {
-	size_t highestHeater = ARRAY_SIZE(heaters);
-	do
+	size_t ret = ARRAY_SIZE(heaters);
+	while (ret != 0 && heaters[ret] == nullptr)
 	{
-		--highestHeater;
-	} while (heaters[highestHeater] == nullptr && highestHeater != 0);
-	return highestHeater;
+		--ret;
+	}
+	return ret;
+}
+
+// Return the highest used sensor number plus one
+size_t Heat::GetNumSensorsToReport() const noexcept
+{
+	ReadLocker lock(sensorsLock);
+
+	const TemperatureSensor *s = sensorsRoot;
+	if (s == nullptr)
+	{
+		return 0;
+	}
+
+	// Find the last sensor in the list
+	while (s->GetNext() != nullptr)
+	{
+		s = s->GetNext();
+	}
+	return s->GetSensorNumber() + 1;
 }
 
 // Get the temperature of a heater

@@ -11,6 +11,7 @@
 #include "RepRapFirmware.h"
 #include "FOPDT.h"
 #include "GCodes/GCodeResult.h"
+#include <ObjectModel/ObjectModel.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include "CanId.h"
@@ -22,7 +23,7 @@ struct CanHeaterReport;
 // Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
 enum class HeaterStatus { off = 0, standby = 1, active = 2, fault = 3, tuning = 4, offline = 5 };
 
-class Heater
+class Heater INHERIT_OBJECT_MODEL
 {
 public:
 	Heater(unsigned int num) noexcept;
@@ -79,6 +80,8 @@ public:
 	bool CheckGood() const noexcept;
 
 protected:
+	DECLARE_OBJECT_MODEL
+
 	enum class HeaterMode : uint8_t
 	{
 		// The order of these is important because we test "mode > HeatingMode::suspended" to determine whether the heater is active
@@ -114,7 +117,8 @@ protected:
 	FopDt model;
 
 private:
-	bool CheckProtection() const noexcept;					// Check heater protection elements and return true if everything is good
+	bool CheckProtection() const noexcept;			// Check heater protection elements and return true if everything is good
+	const char *GetStateName() const noexcept;
 
 	unsigned int heaterNumber;
 	int sensorNumber;								// the sensor number used by this heater

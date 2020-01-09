@@ -115,6 +115,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply)
 	const int code = gb.GetCommandNumber();
 	if (simulationMode != 0 && code > 4 && code != 10 && code != 11 && code != 20 && code != 21 && (code < 53 || code > 59) && (code < 90 || code > 92))
 	{
+		HandleReply(gb, GCodeResult::ok, "");
 		return true;					// we only simulate some gcodes
 	}
 
@@ -404,6 +405,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		&& code != 0 && code != 1 && code != 82 && code != 83 && code != 105 && code != 109 && code != 111 && code != 112 && code != 122
 		&& code != 200 && code != 204 && code != 207 && code != 408 && code != 999)
 	{
+		HandleReply(gb, GCodeResult::ok, "");
 		return true;			// we don't simulate most M codes
 	}
 
