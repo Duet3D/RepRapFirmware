@@ -298,8 +298,9 @@ bool ObjectModelTableEntry::Matches(const char* filterString, const ObjectExplor
 // Add the value of this element to the buffer, returning true if it matched and we did
 bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModel *self, const char* filter) const noexcept
 {
+	buf->cat('"');
 	buf->cat(name);
-	buf->cat(':');
+	buf->cat("\":");
 	return self->ReportItemAsJson(buf, context, func(self, context), filter);
 }
 
