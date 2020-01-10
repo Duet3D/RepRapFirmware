@@ -141,7 +141,7 @@ static inline void DisableEspInterrupt() noexcept
 /*-----------------------------------------------------------------------------------*/
 // WiFi interface class
 
-WiFiInterface::WiFiInterface(Platform& p) noexcept : platform(p), uploader(nullptr), ftpDataPort(0), closeDataPort(false),
+WiFiInterface::WiFiInterface(Platform& p) noexcept : platform(p), uploader(nullptr), espWaitingTask(nullptr), ftpDataPort(0), closeDataPort(false),
 		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
 		espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0), serialRunning(false), debugMessageChars(0)
 {
@@ -1614,25 +1614,24 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	// Tell the ESP that we are ready to accept data
 	digitalWrite(SamTfrReadyPin, HIGH);
 
-	// Wait for the DMA complete interrupt, with timeout
-	// When we use RTOS we should allow other tasks to run here
+	// Wait until the DMA transfer is complete, with timeout
+	do
 	{
-		const uint32_t now = millis();
-		while (transferPending || !spi_dma_check_rx_complete())
+		espWaitingTask = TaskBase::GetCallerTaskHandle();
+		if (TaskBase::Take(WifiResponseTimeoutMillis))
 		{
-			if (digitalRead(SamCsPin) && millis() - now > WifiResponseTimeoutMillis)	// if no transfer in progress and timed out
+			if (reprap.Debug(moduleNetwork))
 			{
-				if (reprap.Debug(moduleNetwork))
-				{
-					debugPrintf("ResponseTimeout, pending=%d\n", (int)transferPending);
-				}
-				transferPending = false;
-				spi_dma_disable();
-				++responseTimeoutCount;
-				return ResponseTimeout;
+				debugPrintf("ResponseTimeout, pending=%d\n", (int)transferPending);
 			}
+			transferPending = false;
+			spi_dma_disable();
+			++responseTimeoutCount;
+			return ResponseTimeout;
 		}
-	}
+	} while (transferPending);
+
+	while (!spi_dma_check_rx_complete()) { }	// Wait for DMA to complete
 
 	// Look at the response
 	if (bufferIn.hdr.formatVersion != MyFormatVersion)
@@ -1645,8 +1644,8 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	}
 
 	if (   (bufferIn.hdr.state == WiFiState::autoReconnecting || bufferIn.hdr.state == WiFiState::reconnecting)
-			&& currentMode != WiFiState::autoReconnecting && currentMode != WiFiState::reconnecting
-		   )
+		&& currentMode != WiFiState::autoReconnecting && currentMode != WiFiState::reconnecting
+	   )
 	{
 		++reconnectCount;
 	}
@@ -1765,6 +1764,7 @@ void WiFiInterface::SpiInterrupt() noexcept
 			++spiTxUnderruns;
 		}
 		transferPending = false;
+		TaskBase::GiveFromISR(espWaitingTask);
 	}
 }
 

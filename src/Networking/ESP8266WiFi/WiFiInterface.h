@@ -126,6 +126,7 @@ private:
 	uint32_t lastTickMillis;
 
 	WifiFirmwareUploader *uploader;
+	TaskHandle espWaitingTask;
 
 	WiFiSocket *sockets[NumWiFiTcpSockets];
 	size_t currentSocket;

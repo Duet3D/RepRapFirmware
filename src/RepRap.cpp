@@ -57,7 +57,7 @@ static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI,
 
 #ifndef __LPC17xx__
 
-static TaskHandle_t hsmciTask = nullptr;		// the task that is waiting for a HSMCI command to complete
+static TaskHandle hsmciTask = nullptr;									// the task that is waiting for a HSMCI command to complete
 
 // HSMCI interrupt handler
 extern "C" void HSMCI_Handler() noexcept
@@ -66,13 +66,7 @@ extern "C" void HSMCI_Handler() noexcept
 #if SAME70
 	XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CID = 0xFFFFFFFF;			// disable all DMA interrupts for this channel
 #endif
-	if (hsmciTask != nullptr)
-	{
-		BaseType_t higherPriorityTaskWoken = pdFALSE;
-		vTaskNotifyGiveFromISR(hsmciTask, &higherPriorityTaskWoken);	// wake up the task
-		hsmciTask = nullptr;
-		portYIELD_FROM_ISR(higherPriorityTaskWoken);
-	}
+	TaskBase::GiveFromISR(hsmciTask);									// wake up the task
 }
 
 #if SAME70
@@ -105,14 +99,14 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 	   )
 	{
 		// Suspend this task until we get an interrupt indicating that a status bit that we are interested in has been set
-		hsmciTask = xTaskGetCurrentTaskHandle();
+		hsmciTask = TaskBase::GetCallerTaskHandle();
 		HSMCI->HSMCI_IER = stBits;
 #if SAME70
 		DmacManager::SetInterruptCallback(DmacChanHsmci, HsmciDmaCallback, CallbackParameter());
 		XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CIE = dmaBits;
 		XDMAC->XDMAC_GIE = 1u << DmacChanHsmci;
 #endif
-		if (ulTaskNotifyTake(pdTRUE, 200) == 0)
+		if (TaskBase::Take(200) == 0)
 		{
 			// We timed out waiting for the HSMCI operation to complete
 			reprap.GetPlatform().LogError(ErrorCode::HsmciTimeout);

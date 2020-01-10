@@ -149,7 +149,7 @@ void HeightController::Stop()
 	{
 		if (state == PidState::stopped)
 		{
-			heightControllerTask->Take();
+			(void)TaskBase::Take();
 
 			// Here when we get woken up again, normally because the state has been changed to 'starting'. So get ready to start.
 			lastWakeTime = xTaskGetTickCount();

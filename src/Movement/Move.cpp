@@ -1006,7 +1006,7 @@ void Move::LaserTaskRun() noexcept
 	for (;;)
 	{
 		// Sleep until we are woken up by the start of a move
-		TaskBase::Take();
+		(void)TaskBase::Take();
 
 		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
 		{
