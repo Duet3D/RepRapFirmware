@@ -16,8 +16,13 @@
 #include "Movement/Move.h"
 #include "Display.h"
 #include "Tools/Tool.h"
-#include "Networking/Network.h"
 #include "PrintMonitor.h"
+
+#ifdef __LPC17xx__
+# include "Network.h"
+#else
+# include "Networking/Network.h"
+#endif
 
 MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis) noexcept
 	: row(r), column(c), width(w), height(0), align(a), fontNumber(fn), visCase(vis), itemChanged(true), highlighted(false), drawn(false), next(nullptr)

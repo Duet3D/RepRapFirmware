@@ -39,7 +39,7 @@
 #include <TaskPriorities.h>
 
 #ifdef __LPC17xx__
-constexpr size_t NetworkStackWords = 470;
+constexpr size_t NetworkStackWords = 375;
 #else
 constexpr size_t NetworkStackWords = 550;
 #endif
@@ -58,7 +58,11 @@ Network::Network(Platform& p) noexcept : platform(p), responders(nullptr), nextR
 #elif defined(DUET_M)
 	interfaces[0] = new W5500Interface(p);
 #elif defined(__LPC17xx__)
+# if HAS_WIFI_NETWORKING
+	interfaces[0] = new WiFiInterface(p);
+ #else
 	interfaces[0] = new RTOSPlusTCPEthernetInterface(p);
+ #endif
 #else
 # error Unknown board
 #endif

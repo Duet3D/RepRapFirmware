@@ -55,6 +55,8 @@ public:
 
 #if SAME70
 	static constexpr uint32_t StepClockRate = 48000000/64;						// 750kHz
+#elif defined(__LPC17xx__)
+	static constexpr uint32_t StepClockRate = 1000000;                          // 1MHz
 #else
 	static constexpr uint32_t StepClockRate = VARIANT_MCK/128;					// just under 1MHz
 #endif

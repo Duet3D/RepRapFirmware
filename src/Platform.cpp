@@ -43,6 +43,8 @@
 #ifndef __LPC17xx__
 # include "sam/drivers/tc/tc.h"
 # include "sam/drivers/hsmci/hsmci.h"
+#else
+# include "LPC/BoardConfig.h"
 #endif
 
 #include "sd_mmc.h"
@@ -301,7 +303,11 @@ void Platform::Init() noexcept
 	baudRates[0] = MAIN_BAUD_RATE;
 	commsParams[0] = 0;
 	usbMutex.Create("USB");
-	SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
+#if defined(__LPC17xx__)
+	SERIAL_MAIN_DEVICE.begin(baudRates[0]);
+#else
+    SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
+#endif
 
 #ifdef SERIAL_AUX_DEVICE
 	baudRates[1] = AUX_BAUD_RATE;
@@ -332,7 +338,16 @@ void Platform::Init() noexcept
 	MassStorage::Init();
 #endif
 
-	// Ethernet networking defaults
+#ifdef __LPC17xx__
+	// Load HW pin assignments from sdcard
+	BoardConfig::Init();
+	pinMode(ATX_POWER_PIN,(ATX_POWER_INVERTED==false)?OUTPUT_LOW:OUTPUT_HIGH);
+#else
+	// Deal with power first (we assume this doesn't depend on identifying the board type)
+	pinMode(ATX_POWER_PIN,OUTPUT_LOW);
+#endif
+
+    // Ethernet networking defaults
 	ipAddress = DefaultIpAddress;
 	netMask = DefaultNetMask;
 	gateWay = DefaultGateway;
@@ -405,9 +420,10 @@ void Platform::Init() noexcept
 #endif
 
 #if defined(__LPC17xx__)
-# if HAS_DRIVER_CURRENT_CONTROL
-	mcp4451.begin();
-# endif
+	if (hasDriverCurrentControl)
+	{
+		mcp4451.begin();
+	}
 	Microstepping::Init(); // basic class to remember the Microstepping.
 #endif
 
@@ -588,6 +604,8 @@ void Platform::Init() noexcept
 	// Enable the pullup resistor, with luck this will make it float high instead.
 #if SAM3XA
 	pinMode(APIN_SHARED_SPI_MISO, INPUT_PULLUP);
+#elif defined(__LPC17xx__)
+	// nothing to do here
 #else
 	pinMode(APIN_USART_SSPI_MISO, INPUT_PULLUP);
 #endif
@@ -842,8 +860,8 @@ void Platform::Spin() noexcept
 		return;
 	}
 
-#if defined(DUET3)
-	// Blink the LED at about 2Hz. The expansion boards will blink in sync when they have established clock sync with us.
+#if defined(DUET3) || defined(__LPC17xx__)
+	// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
 	digitalWrite(DiagPin, (StepTimer::GetTimerTicks() & (1u << 19)) != 0);
 #endif
 
@@ -1373,7 +1391,7 @@ void Platform::InitialiseInterrupts() noexcept
 #endif
 
 #ifdef __LPC17xx__
-	//SD: Int for GPIO pins on port 0 and 2 share EINT3
+	// Interrupt for GPIO pins. Only port 0 and 2 support interrupts and both share EINT3
 	NVIC_SetPriority(EINT3_IRQn, NvicPriorityPins);
 #else
 	NVIC_SetPriority(PIOA_IRQn, NvicPriorityPins);
@@ -1393,7 +1411,7 @@ void Platform::InitialiseInterrupts() noexcept
 	NVIC_SetPriority(UDP_IRQn, NvicPriorityUSB);
 #elif SAM3XA
 	NVIC_SetPriority(UOTGHS_IRQn, NvicPriorityUSB);
-#elif __LPC17xx__
+#elif defined(__LPC17xx__)
 	NVIC_SetPriority(USB_IRQn, NvicPriorityUSB);
 #else
 # error
@@ -1406,7 +1424,15 @@ void Platform::InitialiseInterrupts() noexcept
 	NVIC_SetPriority(I2C1_IRQn, NvicPriorityTwi);
 #endif
 
-	// Tick interrupt for ADC conversions
+#if defined(__LPC17xx__)
+	// set rest of the Timer Interrupt priorities
+	// Timer 0 is used for step generation (set elsewhere)
+	NVIC_SetPriority(TIMER1_IRQn, 8);                       //Timer 1 is currently unused
+	NVIC_SetPriority(TIMER2_IRQn, NvicPriorityTimerServo);  //Timer 2 runs the PWM for Servos at 50hz
+	NVIC_SetPriority(TIMER3_IRQn, NvicPriorityTimerPWM);    //Timer 3 runs the microsecond free running timer to generate heater/fan PWM
+#endif
+
+    // Tick interrupt for ADC conversions
 	tickState = 0;
 	currentFilterNumber = 0;
 }
@@ -1491,9 +1517,10 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 		MessageF(mtype, "Debug line %d\n", debugLine);
 	}
 
-#ifndef __LPC17xx__
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
+
+#ifndef __LPC17xx__
 	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software",
 # ifdef DUET_NG
 	// On the SAM4E a watchdog reset may be reported as a user reset because of the capacitor on the NRST pin.
@@ -1511,17 +1538,29 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	// Show the reset code stored at the last software reset
 	{
 #ifdef __LPC17xx__
+		// Reset Reason
+		MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: ",
+				 (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60));
+
+		if (LPC_SYSCTL->RSID & RSID_POR) { MessageF(mtype, "[power up]"); }
+		if (LPC_SYSCTL->RSID & RSID_EXTR) { MessageF(mtype, "[reset button]"); }
+		if (LPC_SYSCTL->RSID & RSID_WDTR) { MessageF(mtype, "[watchdog]"); }
+		if (LPC_SYSCTL->RSID & RSID_BODR) { MessageF(mtype, "[brownout]"); }
+		if (LPC_SYSCTL->RSID & RSID_SYSRESET) { MessageF(mtype, "[software]"); }
+		if (LPC_SYSCTL->RSID & RSID_LOCKUP) { MessageF(mtype, "[lockup]"); }
+
+        MessageF(mtype, "\n");
 		SoftwareResetData srdBuf[1];
 		int slot = -1;
 
 		for (int s = SoftwareResetData::numberOfSlots - 1; s >= 0; s--)
 		{
 			SoftwareResetData *sptr = reinterpret_cast<SoftwareResetData *>(LPC_GetSoftwareResetDataSlotPtr(s));
-			if(sptr->magic != 0xFFFF)
+			if (sptr->magic != 0xFFFF)
 			{
 				//slot = s;
-				MessageF(mtype, "Flash Slot[%d]: \n", s);
-				slot=0;// we only have 1 slot in the array, set this to zero to be compatible with existing code below
+				MessageF(mtype, "LPC Flash Slot[%d]: \n", s);
+				slot = 0;	// we only have 1 slot in the array, set this to zero to be compatible with existing code below
 				//copy the data into srdBuff
 				LPC_ReadSoftwareResetDataSlot(s, &srdBuf[0], sizeof(srdBuf[0]));
 				break;
@@ -1903,8 +1942,10 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, un
 #elif SAM3XA
 		deliberateError = true;
 		(void)*(reinterpret_cast<const volatile char*>(0x20200000));
-#elif __LPC17xx__
-		Message(WarningMessage, "TODO:: Skipping test on LPC");//????
+#elif defined(__LPC17xx__)
+		deliberateError = true;
+		// The LPC176x/5x generates Bus Fault exception when accessing a reserved memory address
+		(void)*(reinterpret_cast<const volatile char*>(0x00080000));
 #else
 # error
 #endif
@@ -2027,6 +2068,13 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, un
 #ifdef DUET_NG
 	case (unsigned int)DiagnosticTestType::PrintExpanderStatus:
 		reply.printf("Expander status %04X\n", DuetExpansion::DiagnosticRead());
+		break;
+#endif
+
+#ifdef __LPC17xx__
+	// Diagnostic for LPC board configuration
+	case (int)DiagnosticTestType::PrintBoardConfiguration:
+		BoardConfig::Diagnostics(gb.GetResponseMessageType());
 		break;
 #endif
 
@@ -2512,22 +2560,21 @@ void Platform::UpdateMotorCurrent(size_t driver, float current) noexcept
 			dacPiggy.setChannel(7-driver, current * 0.102);
 		}
 #elif defined(__LPC17xx__)
-# if HAS_DRIVER_CURRENT_CONTROL
-		//Has digipots to set current control for drivers
-		//Current is in mA
-		const uint16_t pot = (unsigned short) (current * digipotFactor / 1000);
-		if (pot > 256) { pot = 255; }
-		if (driver < 4)
+		if (hasDriverCurrentControl)
 		{
-			mcp4451.setMCP4461Address(0x2C); //A0 and A1 Grounded. (001011 00)
-			mcp4451.setVolatileWiper(POT_WIPES[driver], pot);
+			//Has digipots to set current control for drivers
+			//Current is in mA
+			const uint16_t pot = (unsigned short) (current * digipotFactor / 1000);
+			if (driver < 4)
+			{
+				mcp4451.setMCP4461Address(0x2C); //A0 and A1 Grounded. (001011 00)
+				mcp4451.setVolatileWiper(POT_WIPES[driver], pot);
+			}
+			else
+				mcp4451.setMCP4461Address(0x2D); //A0 Vcc, A1 Grounded. (001011 01)
+				mcp4451.setVolatileWiper(POT_WIPES[driver-4], pot);
+			}
 		}
-		else
-		{
-			mcp4451.setMCP4461Address(0x2D); //A0 Vcc, A1 Grounded. (001011 01)
-			mcp4451.setVolatileWiper(POT_WIPES[driver-4], pot);
-		}
-# endif
 #else
 		// otherwise we can't set the motor current
 #endif
@@ -3189,7 +3236,12 @@ void Platform::StopLogging() noexcept
 
 bool Platform::AtxPower() const noexcept
 {
-	return IoPort::ReadPin(ATX_POWER_PIN);
+#ifdef __LPC17xx__
+	const bool val = IoPort::ReadPin(ATX_POWER_PIN);
+	return (ATX_POWER_INVERTED) ? !val : val;
+#else
+    return IoPort::ReadPin(ATX_POWER_PIN);
+#endif
 }
 
 void Platform::AtxPowerOn() noexcept
@@ -3211,7 +3263,11 @@ void Platform::AtxPowerOff(bool defer) noexcept
 			// We don't call logger->Stop() here because we don't know whether turning off the power will work
 		}
 #endif
+#ifdef __LPC17xx__
+		IoPort::WriteDigital(ATX_POWER_PIN, ATX_POWER_INVERTED);
+#else
 		IoPort::WriteDigital(ATX_POWER_PIN, false);
+#endif
 	}
 }
 
@@ -3345,7 +3401,11 @@ void Platform::ResetChannel(size_t chan) noexcept
 	{
 	case 0:
 		SERIAL_MAIN_DEVICE.end();
-		SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
+#if defined(__LPC17xx__)
+		SERIAL_MAIN_DEVICE.begin(baudRates[0]);
+#else
+        SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
+#endif
 		break;
 
 #ifdef SERIAL_AUX_DEVICE

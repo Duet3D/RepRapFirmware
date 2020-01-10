@@ -55,6 +55,8 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
 static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI, "configMAX_SYSCALL_INTERRUPT_PRIORITY is set too high");
 
+#ifndef __LPC17xx__
+
 static TaskHandle_t hsmciTask = nullptr;		// the task that is waiting for a HSMCI command to complete
 
 // HSMCI interrupt handler
@@ -117,6 +119,8 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 		}
 	}
 }
+
+#endif //end ifndef LPC
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -484,6 +488,8 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	platform->MessageF(mtype, "%s version %s running on %s", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
 	const char* const expansionName = DuetExpansion::GetExpansionBoardName();
 	platform->MessageF(mtype, (expansionName == nullptr) ? "\n" : " + %s\n", expansionName);
+#elif defined(__LPC17xx__)
+    platform->MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, platform->GetElectronicsString(), (int)SystemCoreClock/1000000);
 #else
 	platform->MessageF(mtype, "%s version %s running on %s\n", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
 #endif
@@ -597,17 +603,27 @@ void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 		// Record the reason for the software reset
 		// First find a free slot (wear levelling)
 		size_t slot = SoftwareResetData::numberOfSlots;
-		SoftwareResetData srdBuf[SoftwareResetData::numberOfSlots];
+#if defined(__LPC17xx__)
+        SoftwareResetData srdBuf[1];
+#else
+        SoftwareResetData srdBuf[SoftwareResetData::numberOfSlots];
+#endif
 
 #if SAM4E || SAM4S || SAME70
 		if (flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t)) == FLASH_RC_OK)
 #elif SAM3XA
 		DueFlashStorage::read(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
+#elif defined(__LPC17xx__)
+		// nothing here
 #else
 # error
 #endif
 		{
-			while (slot != 0 && srdBuf[slot - 1].isVacant())
+#if defined(__LPC17xx__)
+            while (slot != 0 && LPC_IsSoftwareResetDataSlotVacant(slot - 1))
+#else
+            while (slot != 0 && srdBuf[slot - 1].isVacant())
+#endif
 			{
 				--slot;
 			}
@@ -618,26 +634,38 @@ void RepRap::SoftwareReset(uint16_t reason, const uint32_t *stk) noexcept
 			// No free slots, so erase the area
 #if SAM4E || SAM4S || SAME70
 			flash_erase_user_signature();
+#elif defined(__LPC17xx__)
+			LPC_EraseSoftwareResetDataSlots(); // erase the last flash sector
 #endif
 			memset(srdBuf, 0xFF, sizeof(srdBuf));
 			slot = 0;
 		}
 
-		srdBuf[slot].Populate(reason, (uint32_t)platform->GetDateTime(), stk);
+#if defined(__LPC17xx__)
+        srdBuf[0].Populate(reason, (uint32_t)realTime, stk);
+#else
+        srdBuf[slot].Populate(reason, (uint32_t)platform->GetDateTime(), stk);
+#endif
 
 		// Save diagnostics data to Flash
 #if SAM4E || SAM4S || SAME70
 		flash_write_user_signature(srdBuf, sizeof(srdBuf)/sizeof(uint32_t));
+#elif defined(__LPC17xx__)
+		LPC_WriteSoftwareResetData(slot, srdBuf, sizeof(srdBuf));
 #else
 		DueFlashStorage::write(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
 #endif
 	}
 
-#ifndef RSTC_MR_KEY_PASSWD
+#if defined(__LPC17xx__)
+    LPC_SYSCTL->RSID = 0x3F;					// Clear bits in reset reasons stored in RSID
+#else
+# ifndef RSTC_MR_KEY_PASSWD
 // Definition of RSTC_MR_KEY_PASSWD is missing in the SAM3X ASF files
-# define RSTC_MR_KEY_PASSWD (0xA5u << 24)
-#endif
+#  define RSTC_MR_KEY_PASSWD (0xA5u << 24)
+# endif
 	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD;			// ignore any signal on the NRST pin for now so that the reset reason will show as Software
+#endif
 	Reset();
 	for(;;) {}
 }
@@ -2471,6 +2499,10 @@ bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) con
 
 // Firmware update operations
 
+#ifdef __LPC17xx__
+    #include "LPC/FirmwareUpdate.hpp"
+#else
+
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
 bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply) noexcept
 {
@@ -2756,6 +2788,8 @@ void RepRap::StartIap() noexcept
 	__asm volatile ("orr r1, r1, #1");
 	__asm volatile ("bx r1");
 }
+
+#endif
 
 // Helper function for diagnostic tests in Platform.cpp, to cause a deliberate divide-by-zero
 /*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b) noexcept

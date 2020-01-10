@@ -30,6 +30,8 @@
 #  define PLATFORM DuetM
 # elif defined(PCCB)
 #  define PLATFORM Pccb
+# elif defined(__LPC17xx__)
+#  define PLATFORM LPC
 # else
 #  error Unknown platform
 # endif

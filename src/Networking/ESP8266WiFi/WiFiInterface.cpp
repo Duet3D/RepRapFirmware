@@ -34,23 +34,36 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 # define USE_DMAC			0		// use general DMA controller
 # define USE_XDMAC			1		// use XDMA controller
 
+#elif defined(__LPC17xx__)
+
+# define USE_PDC            0        // use peripheral DMA controller
+# define USE_DMAC           0        // use general DMA controller
+# define USE_XDMAC          0        // use XDMA controller
+
+//Compatibility with existing RRF Code
+constexpr Pin APIN_ESP_SPI_MISO = SPI0_MOSI;
+constexpr Pin APIN_ESP_SPI_SCK = SPI0_SCK;
+constexpr SSPChannel ESP_SPI = SSP0;
+
 #else
 # error Unknown board
 #endif
 
 #if USE_PDC
-#include "pdc/pdc.h"
+# include "pdc/pdc.h"
 #endif
 
 #if USE_DMAC
-#include "dmac/dmac.h"
+# include "dmac/dmac.h"
 #endif
 
 #if USE_XDMAC
-#include "xdmac/xdmac.h"
+# include "xdmac/xdmac.h"
 #endif
 
-#include "matrix/matrix.h"
+#ifndef __LPC17xx__
+# include "matrix/matrix.h"
+#endif
 
 const uint32_t WifiResponseTimeoutMillis = 200;
 const uint32_t WiFiWaitReadyMillis = 100;
@@ -104,6 +117,10 @@ static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength) noex
 	}
 	debugPrintf("\n");
 }
+#endif
+
+#ifdef __LPC17xx__
+# include "WiFiInterface_LPC.hpp"
 #endif
 
 static void EspTransferRequestIsr(CallbackParameter) noexcept
@@ -675,9 +692,9 @@ void WiFiInterface::Spin() noexcept
 	// Check for debug info received from the WiFi module
 	if (serialRunning)
 	{
-		while (!debugPrintPending && Serial1.available() != 0)
+		while (!debugPrintPending && SERIAL_WIFI_DEVICE.available() != 0)
 		{
-			const char c = (char)Serial1.read();
+			const char c = (char)SERIAL_WIFI_DEVICE.read();
 			if (c == '\n')
 			{
 				debugPrintPending = true;
@@ -1193,6 +1210,8 @@ void WiFiInterface::TerminateDataPort() noexcept
 	}
 }
 
+#ifndef __LPC17xx__
+
 #if USE_PDC
 static Pdc *spi_pdc;
 #endif
@@ -1517,6 +1536,8 @@ void WiFiInterface::SetupSpi() noexcept
 	NVIC_EnableIRQ(ESP_SPI_IRQn);
 }
 
+#endif //end ifndef __LPC17xx__
+
 // Send a command to the ESP and get the result
 int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept
 {
@@ -1572,7 +1593,10 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	bufferIn.hdr.formatVersion = InvalidFormatVersion;
 	transferPending = true;
 
-	// DMA may have transferred an extra word to the SPI transmit data register. We need to clear this.
+#if defined(__LPC17xx__)
+    spi_slave_dma_setup(dataOutLength, dataInLength);
+#else
+    // DMA may have transferred an extra word to the SPI transmit data register. We need to clear this.
 	// The only way I can find to do this is to issue a software reset to the SPI system.
 	// Fortunately, this leaves the SPI system in slave mode.
 	spi_reset(ESP_SPI);
@@ -1585,6 +1609,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	// Enable the end-of transfer interrupt
 	(void)ESP_SPI->SPI_SR;						// clear any pending interrupt
 	ESP_SPI->SPI_IER = SPI_IER_NSSR;			// enable the NSS rising interrupt
+#endif
 
 	// Tell the ESP that we are ready to accept data
 	digitalWrite(SamTfrReadyPin, HIGH);
@@ -1701,6 +1726,8 @@ void WiFiInterface::GetNewStatus() noexcept
 	}
 }
 
+#ifndef __LPC17xx__
+
 // SPI interrupt handlers, called when NSS goes high
 void ESP_SPI_HANDLER(void) noexcept
 {
@@ -1741,12 +1768,16 @@ void WiFiInterface::SpiInterrupt() noexcept
 	}
 }
 
+#endif //ifndef __LPC17xx__
+
 // Start the ESP
 void WiFiInterface::StartWiFi() noexcept
 {
 	digitalWrite(EspResetPin, HIGH);
+#ifndef __LPC17xx__
 	ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to UART1
-	Serial1.begin(WiFiBaudRate);								// initialise the UART, to receive debug info
+#endif
+	SERIAL_WIFI_DEVICE.begin(WiFiBaudRate);						// initialise the UART, to receive debug info
 	debugMessageChars = 0;
 	serialRunning = true;
 	debugPrintPending = false;
@@ -1762,7 +1793,7 @@ void WiFiInterface::ResetWiFi() noexcept
 
 	if (serialRunning)
 	{
-		Serial1.end();
+		SERIAL_WIFI_DEVICE.end();
 		serialRunning = false;
 	}
 }
@@ -1777,7 +1808,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 {
 	if (serialRunning)
 	{
-		Serial1.end();
+		SERIAL_WIFI_DEVICE.end();
 		serialRunning = false;
 	}
 
@@ -1811,7 +1842,9 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	}
 	else
 	{
-		ConfigurePin(g_APinDescription[APINS_Serial1]);			// connect the pins to UART1
+#ifndef __LPC17xx__
+		ConfigurePin(g_APinDescription[APINS_Serial1]);				// connect the pins to the UART
+#endif
 	}
 
 	// Release the reset on the ESP8266

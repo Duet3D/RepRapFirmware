@@ -97,8 +97,12 @@ GCodes::GCodes(Platform& p) :
 #if HAS_NETWORKING || HAS_LINUX_INTERFACE
 	httpInput = new NetworkGCodeInput();
 	httpGCode = new GCodeBuffer(GCodeChannel::http, httpInput, fileInput, HttpMessage);
+# if SUPPORT_TELNET
 	telnetInput = new NetworkGCodeInput();
 	telnetGCode = new GCodeBuffer(GCodeChannel::telnet, telnetInput, fileInput, TelnetMessage, Compatibility::marlin);
+# else
+	telnetGCode = nullptr;
+# endif
 #else
 	httpGCode = telnetGCode = nullptr;
 #endif
@@ -199,7 +203,7 @@ void GCodes::Init()
 	DotStarLed::Init();
 #endif
 
-#ifdef SERIAL_AUX_DEVICE
+#if defined(SERIAL_AUX_DEVICE) && !defined(__LPC17xx__)
 	SERIAL_AUX_DEVICE.SetInterruptCallback(GCodes::CommandEmergencyStop);
 #endif
 }
@@ -3742,11 +3746,12 @@ void GCodes::StopPrint(StopPrintReason reason)
 		{
 			platform.Message(UsbMessage, "Done printing file\n");
 		}
+#if SUPPORT_TELNET
 		if (telnetGCode->MachineState().compatibility == Compatibility::marlin)
 		{
 			platform.Message(TelnetMessage, "Done printing file\n");
 		}
-
+#endif
 		const uint32_t printMinutes = lrintf(reprap.GetPrintMonitor().GetPrintDuration()/60.0);
 		platform.MessageF(LoggedGenericMessage, "%s printing file %s, print time was %" PRIu32 "h %" PRIu32 "m\n",
 			(reason == StopPrintReason::normalCompletion) ? "Finished" : "Cancelled",

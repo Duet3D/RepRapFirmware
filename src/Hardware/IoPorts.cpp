@@ -137,7 +137,18 @@ void IoPort::Release() noexcept
 {
 	if (IsValid() && !isSharedInput)
 	{
-		detachInterrupt(PinTable[logicalPin].pin);
+#ifdef __LPC17xx__
+	//Release PWM/Servo from pin if needed
+	if(logicalPinModes[logicalPin] == OUTPUT_SERVO_HIGH || logicalPinModes[logicalPin] == OUTPUT_SERVO_LOW)
+	{
+		ReleaseServoPin(PinTable[logicalPin].pin);
+	}
+	if(logicalPinModes[logicalPin] == OUTPUT_PWM_HIGH || logicalPinModes[logicalPin] == OUTPUT_PWM_LOW)
+	{
+		ReleasePWMPin(PinTable[logicalPin].pin);
+	}
+#endif
+        detachInterrupt(PinTable[logicalPin].pin);
 		portUsedBy[logicalPin] = PinUsedBy::unused;
 		logicalPinModes[logicalPin] = PIN_MODE_NOT_CONFIGURED;
 	}
@@ -269,10 +280,19 @@ bool IoPort::SetMode(PinAccess access) noexcept
 	case PinAccess::write1:
 		desiredMode = (totalInvert) ? OUTPUT_LOW : OUTPUT_HIGH;
 		break;
+#ifdef __LPC17xx__
+	case PinAccess::pwm:
+		desiredMode = (totalInvert) ? OUTPUT_PWM_HIGH : OUTPUT_PWM_LOW;
+		break;
+	case PinAccess::servo:
+		desiredMode = (totalInvert) ? OUTPUT_SERVO_HIGH : OUTPUT_SERVO_LOW;
+		break;
+#else
 	case PinAccess::pwm:
 	case PinAccess::servo:
 		desiredMode = (totalInvert) ? OUTPUT_PWM_HIGH : OUTPUT_PWM_LOW;
 		break;
+#endif
 	case PinAccess::readAnalog:
 		desiredMode = AIN;
 		break;
@@ -306,7 +326,23 @@ bool IoPort::SetMode(PinAccess access) noexcept
 		{
 			return false;
 		}
-		IoPort::SetPinMode(PinTable[logicalPin].pin, desiredMode);
+#ifdef __LPC17xx__
+		if (access == PinAccess::servo)
+		{
+			if (!IsServoCapable(PinTable[logicalPin].pin)) //check that we have slots free to provide Servo
+			{
+				return false;
+			}
+		}
+		else if (access == PinAccess::pwm)
+		{
+			if (!IsPwmCapable(PinTable[logicalPin].pin)) //Check if there is enough slots free for PWM
+			{
+				return false;
+			}
+		}
+#endif
+        IoPort::SetPinMode(PinTable[logicalPin].pin, desiredMode);
 		logicalPinModes[logicalPin] = (int8_t)desiredMode;
 	}
 	return true;

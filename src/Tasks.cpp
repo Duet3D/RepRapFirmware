@@ -25,8 +25,8 @@ extern uint32_t _estack;				// defined in linker script
 // MAIN task data
 // The main task currently runs GCodes, so it needs to be large enough to hold the matrices used for delta auto calibration.
 // The timer and idle tasks currently never do I/O, so they can be much smaller.
-#if defined(LPC_NETWORKING)
-constexpr unsigned int MainTaskStackWords = 1600-424;
+#if defined(__LPC17xx__)
+constexpr unsigned int MainTaskStackWords = 1600-410;
 #else
 constexpr unsigned int MainTaskStackWords = 1600;
 #endif
@@ -88,7 +88,7 @@ extern "C" [[noreturn]] void AppMain() noexcept
 {
 	pinMode(DiagPin, OUTPUT_LOW);				// set up diag LED for debugging and turn it off
 
-#ifndef DEBUG	// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
+#if !defined(DEBUG) && !defined(__LPC17xx__)	// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
 	// Check the integrity of the firmware by checking the firmware CRC
 	{
 #ifdef IFLASH_ADDR
@@ -111,7 +111,7 @@ extern "C" [[noreturn]] void AppMain() noexcept
 			}
 		}
 	}
-#endif
+#endif	// !defined(DEBUG) && !defined(__LPC17xx__)
 
 	// Fill the free memory with a pattern so that we can check for stack usage and memory corruption
 	char* heapend = sbrk(0);
@@ -128,14 +128,7 @@ extern "C" [[noreturn]] void AppMain() noexcept
 #if SAME70 && USE_MPU
 #endif
 
-#ifdef __LPC17xx__
-	// Setup LEDs, start off
-	pinMode(LED_PLAY, OUTPUT_LOW);
-	pinMode(LED1, OUTPUT_LOW);
-	pinMode(LED2, OUTPUT_LOW);
-	pinMode(LED3, OUTPUT_LOW);
-	pinMode(LED4, OUTPUT_LOW);
-#else
+#ifndef __LPC17xx__
 	// When doing a software reset, we disable the NRST input (User reset) to prevent the negative-going pulse that gets generated on it being held
 	// in the capacitor and changing the reset reason from Software to User. So enable it again here. We hope that the reset signal will have gone away by now.
 # ifndef RSTC_MR_KEY_PASSWD
@@ -181,17 +174,7 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 }
 
 #ifdef __LPC17xx__
-	// These are defined in Linker Scripts for LPC
-	extern "C" unsigned int __AHB0_block_start;
-	extern "C" unsigned int __AHB0_dyn_start;
-	extern "C" unsigned int __AHB0_end;
-
-	extern "C" unsigned long __StackLimit;
-	extern "C" unsigned long __StackTop;
-
 	extern "C" size_t xPortGetTotalHeapSize( void );
-
-	volatile uint8_t sysTickLed = 0;
 #endif
 
 namespace Tasks
@@ -238,52 +221,16 @@ namespace Tasks
 #endif
 			p.MessageF(mtype, "Static ram: %d\n", &_end - ramstart);
 
-			const struct mallinfo mi = mallinfo();
+#ifdef __LPC17xx__
+            p.MessageF(mtype, "Dynamic Memory (RTOS Heap 5): %d free, %d never used\n", xPortGetFreeHeapSize(), xPortGetMinimumEverFreeHeapSize() );
+#else
+            const struct mallinfo mi = mallinfo();
 			p.MessageF(mtype, "Dynamic ram: %d of which %d recycled\n", mi.uordblks, mi.fordblks);
-
+#endif
 			uint32_t maxStack, neverUsed;
 			GetHandlerStackUsage(&maxStack, &neverUsed);
 			p.MessageF(mtype, "Exception stack ram used: %" PRIu32 "\n", maxStack);
 			p.MessageF(mtype, "Never used ram: %" PRIu32 "\n", neverUsed);
-
-#ifdef __LPC17xx__
-			const uint32_t ahbStaticUsed = (uint32_t)&__AHB0_dyn_start -(uint32_t)&__AHB0_block_start;
-			const uint32_t totalMainUsage = (uint32_t)((&_end - ramstart) + mi.uordblks + maxStack);
-
-			p.MessageF(mtype, "AHB_RAM Static ram used : %" PRIu32 "\n", ahbStaticUsed);
-			p.Message(mtype, "=== Ram Totals ===\n");
-			p.MessageF(mtype, "Main SRAM         : %" PRIu32 "/%" PRIu32 " (%" PRIu32 " free, %" PRIu32 " never used)\n", totalMainUsage, (uint32_t)32*1024, 32*1024-totalMainUsage, neverUsed );
-			p.MessageF(mtype, "RTOS Dynamic Heap : %" PRIi32 "/%" PRIu32 " (%d free, %d never used)\n", (uint32_t)(xPortGetTotalHeapSize()-xPortGetFreeHeapSize()),(uint32_t)xPortGetTotalHeapSize(), xPortGetFreeHeapSize(),xPortGetMinimumEverFreeHeapSize() );
-
-			//Print out the PWM and timers freq
-			uint16_t freqs[4];
-			GetTimerInfo(freqs);
-			p.MessageF(mtype, "\n=== LPC PWM ===\n");
-			p.MessageF(mtype, "Hardware PWM: %d Hz\nPWMTimer1: %d Hz\nPWMTimer2: %d Hz\nPWMTimer3: %d Hz\n", freqs[0], freqs[1], freqs[2], freqs[3]);
-
-			//Print out our Special Pins Available:
-			p.MessageF(mtype, "\n=== GPIO Special Pins available === (i.e. with M42)\nLogicalPin - PhysicalPin\n");
-			for (size_t i=0; i<ARRAY_SIZE(SpecialPinMap); i++)
-			{
-				if (SpecialPinMap[i] != NoPin)
-				{
-					const uint8_t portNumber =  (SpecialPinMap[i]>>5);		// Divide the pin number by 32 go get the PORT number
-					const uint8_t pinNumber  =   SpecialPinMap[i] & 0x1f;	// lower 5-bits contains the bit number of a 32bit port
-
-					p.MessageF(mtype, " %d - P%d_%d ", (60+i), portNumber, pinNumber);
-					if (TimerPWMPinsArray[SpecialPinMap[i]])
-					{
-						const uint8_t tim = TimerPWMPinsArray[SpecialPinMap[i]] & 0x0F;
-						p.MessageF(mtype, "[Timer %s]", (tim&TimerPWM_1)?"1":(tim&TimerPWM_2)?"2":"3" );
-					}
-					else if ((g_APinDescription[SpecialPinMap[i]].ulPinAttribute & PIN_ATTR_PWM)==PIN_ATTR_PWM)
-					{
-						p.MessageF(mtype, "[HW PWM]");
-					}
-					p.MessageF(mtype, "\n");
-				}
-			}
-#endif //end __LPC17xx__
 
 		}	// end memory stats scope
 
@@ -337,16 +284,6 @@ extern "C"
 	{
 		CoreSysTick();
 		reprap.Tick();
-
-#ifdef __LPC17xx__
-		//blink the PLAY_LED to indicate systick is running
-		sysTickLed++;						//uint8_t let it wrap around
-		if (sysTickLed == 255)
-		{
-			const bool state = GPIO_PinRead(LED_PLAY);
-			GPIO_PinWrite(LED_PLAY, !state);
-		}
-#endif
 	}
 
 	// Exception handlers
@@ -407,7 +344,7 @@ extern "C"
 	[[noreturn]] void WDT_IRQHandler() noexcept __attribute__((naked));
     void WDT_IRQHandler() noexcept
     {
-    	LPC_WDT->WDMOD &=~((uint32_t)(1<<2)); //SD::clear timout flag before resetting to prevent the Smoothie bootloader going into DFU mode
+    	LPC_WDT->MOD &=~((uint32_t)(1<<2)); //SD::clear timout flag before resetting to prevent the Smoothie bootloader going into DFU mode
 #else
     [[noreturn]] void WDT_Handler() noexcept __attribute__((naked));
 	void WDT_Handler() noexcept

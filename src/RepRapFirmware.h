@@ -444,8 +444,8 @@ const uint32_t NvicPriorityEthernet = 6;		// priority for Ethernet interface
 const uint32_t NvicPriorityDMA = 6;				// end-of-DMA interrupt used by TMC drivers and HSMCI
 const uint32_t NvicPrioritySpi = 6;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
 
-#elif __NVIC_PRIO_BITS == 4
-// We have 16 priority levels
+#elif __NVIC_PRIO_BITS >= 4
+// We have at least 16 priority levels
 // Use priority 4 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 
 # if SAM4E || defined(__LPC17xx__)
@@ -454,6 +454,11 @@ const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the high
 
 const uint32_t NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 const uint32_t NvicPriorityDriversSerialTMC = 2; // USART or UART used to control and monitor the smart drivers
+
+# if defined(__LPC17xx__)
+constexpr uint32_t NvicPriorityTimerPWM = 4;
+constexpr uint32_t NvicPriorityTimerServo = 5;
+# endif
 
 const uint32_t NvicPriorityPins = 5;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const uint32_t NvicPriorityStep = 6;			// step interrupt is next highest, it can preempt most other interrupts

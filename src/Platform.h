@@ -27,7 +27,6 @@ Licence: GPL
 #include "RepRapFirmware.h"
 #include "ObjectModel/ObjectModel.h"
 #include "Hardware/IoPorts.h"
-#include "DueFlashStorage.h"
 #include "Fans/FansManager.h"
 #include "Heating/TemperatureError.h"
 #include "OutputMemory.h"
@@ -47,6 +46,8 @@ Licence: GPL
 # include "DAC/DAC084S085.h"       // SPI DAC for motor current vref
 # include "EUI48/EUI48EEPROM.h"    // SPI EUI48 mac address EEPROM
 # include "Microstepping.h"
+#elif defined(__LPC17xx__)
+# include "MCP4461/MCP4461.h"
 #endif
 
 #include <functional>
@@ -127,6 +128,8 @@ enum class BoardType : uint8_t
 	PCCB_v10 = 1
 #elif defined(PCCB_08) || defined(PCCB_08_X5)
 	PCCB_v08 = 1
+#elif defined(__LPC17xx__)
+	Lpc = 1
 #else
 # error Unknown board
 #endif
@@ -148,6 +151,10 @@ enum class DiagnosticTestType : unsigned int
 	TimeSDWrite = 104,				// do a write timing test on the SD card
 	PrintObjectSizes = 105,			// print the sizes of various objects
 	PrintObjectAddresses = 106,		// print the addresses and sizes of various objects
+
+#ifdef __LPC17xx__
+    PrintBoardConfiguration = 200,    //Prints out all pin/values loaded from SDCard to configure board
+#endif
 
 	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
 	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
@@ -660,6 +667,8 @@ private:
 	Pin spiDacCS[MaxSpiDac];
 	DAC084S085 dacAlligator;
 	DAC084S085 dacPiggy;
+#elif defined(__LPC17xx__)
+	MCP4461 mcp4451;// works for 5561 (only volatile setting commands)
 #endif
 
 	// Endstops

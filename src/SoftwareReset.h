@@ -75,7 +75,17 @@ struct SoftwareResetData
 
 	static const uint16_t versionValue = 8;		// increment this whenever this struct changes
 	static const uint16_t magicValue = 0x7D00 | versionValue;	// value we use to recognise that all the flash data has been written
-	static const size_t numberOfSlots = 4;		// number of storage slots used to implement wear levelling - must fit in 512 bytes
+
+#ifdef __LPC17xx__
+	// Software Reset Data is stored in Flash. Since the LPC1768/9 doesn't have the page erase IAP command,
+	// so we have to use the whole sector (last sector of flash is used)
+	// The last sector size is 32k. IAP requires us to write at least 256 bytes and the destination address needs to be on a 256 byte boundary.
+	// Therefore can have 32k/256=128 slots and we will fill the entire sector before erasing it
+	static const size_t numberOfSlots = 128;    // number of storage slots used to implement wear levelling
+#else
+    static const size_t numberOfSlots = 4;		// number of storage slots used to implement wear levelling - must fit in 512 bytes
+#endif
+
 #if SAM3XA
 	static const uint32_t nvAddress = 0;		// must be 4-byte aligned
 #endif

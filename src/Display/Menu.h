@@ -52,7 +52,11 @@ private:
 	static char *SkipWhitespace(char *s) noexcept;
 	static bool CheckVisibility(MenuItem::Visibility vis) noexcept;
 
-	static const size_t CommandBufferSize = 2500;
+#ifdef __LPC17xx__
+    static const size_t CommandBufferSize = 1024;
+#else
+    static const size_t CommandBufferSize = 2500;
+#endif
 	static const size_t MaxMenuLineLength = 120;				// adjusts behaviour in Reload()
 	static const size_t MaxMenuFilenameLength = 18;
 	static const size_t MaxMenuNesting = 8;						// maximum number of nested menus
