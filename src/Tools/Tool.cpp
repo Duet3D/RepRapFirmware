@@ -31,8 +31,6 @@
 #include "Platform.h"
 #include "RepRap.h"
 
-Tool * Tool::freelist = nullptr;
-
 // Create a new tool and return a pointer to it. If an error occurs, put an error message in 'reply' and return nullptr.
 /*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *name, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, const StringRef& reply) noexcept
 {
@@ -67,20 +65,7 @@ Tool * Tool::freelist = nullptr;
 		}
 	}
 
-	Tool *t;
-	{
-		TaskCriticalSectionLocker lock;
-		t = freelist;
-		if (t != nullptr)
-		{
-			freelist = t->next;
-		}
-	}
-
-	if (t == nullptr)
-	{
-		t = new Tool;
-	}
+	Tool * const t = new Tool;
 
 	if (filamentDrive >= 0 && filamentDrive < (int)MaxExtruders)
 	{
@@ -142,20 +127,6 @@ Tool * Tool::freelist = nullptr;
 	}
 
 	return t;
-}
-
-/*static*/ void Tool::Delete(Tool *t) noexcept
-{
-	if (t != nullptr)
-	{
-		delete t->name;
-		t->name = nullptr;
-		t->filament = nullptr;
-
-		TaskCriticalSectionLocker lock;
-		t->next = freelist;
-		freelist = t;
-	}
 }
 
 /*static*/ AxesBitmap Tool::GetXAxes(const Tool *tool) noexcept

@@ -129,20 +129,17 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. MachineModel root
-	{ "Electronics",	OBJECT_MODEL_FUNC(self->platform),							ObjectModelEntryFlags::none },
-	{ "Heat",			OBJECT_MODEL_FUNC(self->heat),								ObjectModelEntryFlags::none },
-	{ "Job",			OBJECT_MODEL_FUNC(self->printMonitor),						ObjectModelEntryFlags::none },
-	{ "Move",			OBJECT_MODEL_FUNC(self->move),								ObjectModelEntryFlags::none },
-	{ "Network",		OBJECT_MODEL_FUNC(self->network),							ObjectModelEntryFlags::none },
-	{ "State",			OBJECT_MODEL_FUNC(self, 1),									ObjectModelEntryFlags::none },
+	{ "Electronics",			OBJECT_MODEL_FUNC(self->platform),							ObjectModelEntryFlags::none },
+	{ "Heat",					OBJECT_MODEL_FUNC(self->heat),								ObjectModelEntryFlags::none },
+	{ "Job",					OBJECT_MODEL_FUNC(self->printMonitor),						ObjectModelEntryFlags::none },
+	{ "Move",					OBJECT_MODEL_FUNC(self->move),								ObjectModelEntryFlags::none },
+	{ "Network",				OBJECT_MODEL_FUNC(self->network),							ObjectModelEntryFlags::none },
+	{ "State",					OBJECT_MODEL_FUNC(self, 1),									ObjectModelEntryFlags::none },
 
 	// 1. MachineModel.State
-	{ "CurrentTool",	OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),	ObjectModelEntryFlags::none },
-	{ "MachineMode",	OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),	ObjectModelEntryFlags::none },
-	{ "Status",			OBJECT_MODEL_FUNC(self->GetStatusString()),					ObjectModelEntryFlags::none },
-//	{ "gcodes", OB,JECT_MODEL_FUNC(&(self->GetGCodes())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
-//	{ "meshProbe", OBJECT_MODEL_FUNC(&(self->GetMove().GetGrid())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
-//	{ "randomProbe", OBJECT_MODEL_FUNC(&(self->GetMove().GetProbePoints())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
+	{ "CurrentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),	ObjectModelEntryFlags::none },
+	{ "MachineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),	ObjectModelEntryFlags::none },
+	{ "Status",					OBJECT_MODEL_FUNC(self->GetStatusString()),					ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 2, 6, 3 };

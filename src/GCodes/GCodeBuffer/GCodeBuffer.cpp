@@ -23,7 +23,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel channel, GCodeInput *normalIn, FileGCodeIn
 #if HAS_MASS_STORAGE
 	  fileInput(fileIn),
 #endif
-	  responseMessageType(mt), toolNumberAdjust(0), isBinaryBuffer(false), binaryParser(*this), stringParser(*this),
+	  responseMessageType(mt), toolNumberAdjust(0), lastResult(GCodeResult::ok), isBinaryBuffer(false), binaryParser(*this), stringParser(*this),
 	  machineState(new GCodeMachineState())
 {
 	machineState->compatibility = c;

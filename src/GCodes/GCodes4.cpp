@@ -727,6 +727,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			const uint32_t numPointsProbed = reprap.GetMove().AccessHeightMap().GetStatistics(mean, deviation, minError, maxError);
 			if (numPointsProbed >= 4)
 			{
+				reprap.GetMove().SetLastMeshDeviation(deviation);
 				reply.printf("%" PRIu32 " points probed, min error %.3f, max error %.3f, mean %.3f, deviation %.3f\n",
 								numPointsProbed, (double)minError, (double)maxError, (double)mean, (double)deviation);
 #if HAS_MASS_STORAGE

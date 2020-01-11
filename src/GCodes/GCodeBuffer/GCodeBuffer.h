@@ -14,6 +14,7 @@
 #include "RepRapFirmware.h"
 #include "GCodes/GCodeChannel.h"
 #include "GCodes/GCodeMachineState.h"
+#include "GCodes/GCodeResult.h"
 #include "Linux/MessageFormats.h"
 #include "MessageType.h"
 #include "ObjectModel/ObjectModel.h"
@@ -59,6 +60,8 @@ public:
 	bool HasCommandNumber() const noexcept;
 	int GetCommandNumber() const noexcept;
 	int8_t GetCommandFraction() const noexcept;
+	GCodeResult GetLastResult() const noexcept { return lastResult; }
+	void SetLastResult(GCodeResult r) noexcept { lastResult = r; }
 
 	bool Seen(char c) noexcept __attribute__((hot));							// Is a character present?
 	void MustSee(char c) THROWS_GCODE_EXCEPTION;									// Test for character present, throw error if not
@@ -191,6 +194,7 @@ private:
 	char buffer[GCODE_LENGTH];
 #endif
 
+	GCodeResult lastResult;
 	bool isBinaryBuffer;
 	BinaryParser binaryParser;
 	StringParser stringParser;

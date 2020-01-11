@@ -66,8 +66,10 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Move members
 	{ "Axes",					OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 										ObjectModelEntryFlags::none },
+	{ "CalibrationDeviation",	OBJECT_MODEL_FUNC(self->lastCalibrationDeviation, 3),										ObjectModelEntryFlags::none },
 	{ "Daa",					OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
 	{ "Idle",					OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::none },
+	{ "MeshDeviation",			OBJECT_MODEL_FUNC(self->lastMeshDeviation, 3),												ObjectModelEntryFlags::none },
 	{ "PrintingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration),										ObjectModelEntryFlags::none },
 	{ "TravelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration),											ObjectModelEntryFlags::none },
 	{ "SpeedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor()),							ObjectModelEntryFlags::none },
@@ -86,11 +88,11 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "Letter",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetIndex(0)]),		ObjectModelEntryFlags::none },
 	{ "Max",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().AxisMaximum(context.GetIndex(0))),		ObjectModelEntryFlags::none },
 	{ "Min",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().AxisMinimum(context.GetIndex(0))),		ObjectModelEntryFlags::none },
-	{ "UserPosition",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(context.GetIndex(0))),	ObjectModelEntryFlags::none },
+	{ "UserPosition",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(context.GetIndex(0)), 3),	ObjectModelEntryFlags::none },
 	{ "Visible",				OBJECT_MODEL_FUNC_NOSELF(context.GetIndex(0) < reprap.GetGCodes().GetVisibleAxes()),	ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 4, 6, 3, 2, 6 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 4, 8, 3, 2, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
@@ -127,6 +129,7 @@ void Move::Init() noexcept
 	SetIdentityTransform();
 	tanXY = tanYZ = tanXZ = 0.0;
 
+	lastCalibrationDeviation = lastMeshDeviation = 0.0;
 	usingMesh = false;
 	useTaper = false;
 	zShift = 0.0;

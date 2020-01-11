@@ -566,6 +566,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 		debugPrintf("%s\n", scratchString.c_str());
 	}
 
+	reprap.GetMove().SetLastCalibrationDeviation(expectedRmsError);
 	reply.printf("Calibrated %d factors using %d points, deviation before %.3f after %.3f",
 			numFactors, numPoints, (double)sqrtf(initialSumOfSquares/numPoints), (double)expectedRmsError);
 

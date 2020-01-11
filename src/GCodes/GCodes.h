@@ -84,7 +84,7 @@ class StraightProbeSettings;
 
 // The GCode interpreter
 
-class GCodes INHERIT_OBJECT_MODEL
+class GCodes
 {
 public:
 	friend class LinuxInterface;
@@ -198,9 +198,6 @@ public:
 #if SUPPORT_WORKPLACE_COORDINATES
 	unsigned int GetWorkplaceCoordinateSystemNumber() const { return currentCoordinateSystem + 1; }
 #endif
-
-protected:
-	DECLARE_OBJECT_MODEL
 
 private:
 	GCodes(const GCodes&) = delete;

@@ -27,6 +27,7 @@ Licence: GPL
 #define TOOL_H_
 
 #include "RepRapFirmware.h"
+#include <General/FreelistManager.h>
 
 #undef array
 #include <functional>
@@ -46,9 +47,13 @@ class Filament;
 class Tool
 {
 public:
+	void* operator new(size_t sz) noexcept { return Allocate<Tool>(); }
+	void operator delete(void* p) noexcept { Release<Tool>(p); }
+
+	~Tool() noexcept { delete name; }
 
 	static Tool *Create(unsigned int toolNumber, const char *name, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, const StringRef& reply) noexcept;
-	static void Delete(Tool *t) noexcept;
+	static void Delete(Tool *t) noexcept { delete t; }
 	static AxesBitmap GetXAxes(const Tool *tool) noexcept;
 	static AxesBitmap GetYAxes(const Tool *tool) noexcept;
 	static float GetOffset(const Tool *tool, size_t axis) noexcept pre(axis < MaxAxes);
@@ -98,8 +103,6 @@ protected:
 	bool DisplayColdExtrudeWarning() noexcept;
 
 private:
-	static Tool *freelist;
-
 	Tool() noexcept : next(nullptr), filament(nullptr), name(nullptr) { }
 
 	void SetTemperatureFault(int8_t dudHeater) noexcept;

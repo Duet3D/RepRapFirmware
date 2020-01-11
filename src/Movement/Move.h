@@ -59,7 +59,7 @@ public:
 
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
 	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool *tool) const noexcept;
-																	// Return the position (after all queued moves have been executed) in transformed coords
+																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetEndPoint(size_t drive) const noexcept;					 	// Get the current position of a motor
 	void LiveCoordinates(float m[MaxAxesPlusExtruders], const Tool *tool) noexcept;	// Gives the last point at the end of the last complete DDA transformed to user coords
 	bool AllMovesAreFinished() noexcept;									// Is the look-ahead ring empty?  Stops more moves being added as well.
@@ -85,6 +85,9 @@ public:
 	bool IsUsingMesh() const noexcept { return usingMesh; }					// Return true if we are using mesh compensation
 	unsigned int GetNumProbePoints() const noexcept;						// Return the number of currently used probe points
 	unsigned int GetNumProbedProbePoints() const noexcept;					// Return the number of actually probed probe points
+	void SetLastCalibrationDeviation(float f) { lastCalibrationDeviation = f; }
+	void SetLastMeshDeviation(float f) { lastMeshDeviation = f; }
+
 	float PushBabyStepping(size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
 
 	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) noexcept;		// process M204
@@ -241,7 +244,11 @@ private:
 	float taperHeight;									// Height over which we taper
 	float recipTaperHeight;								// Reciprocal of the taper height
 	float zShift;										// Height to add to the bed transform
-	bool usingMesh;										// true if we are using the height map, false if we are using the random probe point set
+
+	float lastCalibrationDeviation;
+	float lastMeshDeviation;
+
+	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
 	bool useTaper;										// True to taper off the compensation
 
 	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds

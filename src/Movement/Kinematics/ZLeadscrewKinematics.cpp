@@ -306,14 +306,16 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 				reprap.GetMove().AdjustLeadscrews(solution);
 				reply.printf("Leadscrew adjustments made:");
 				AppendCorrections(solution, reply);
+
+				const float expectedRmsError = sqrtf((float)sumOfSquares/numPoints);
+				reprap.GetMove().SetLastCalibrationDeviation(expectedRmsError);
 				reply.catf(", points used %d, deviation before %.3f after %.3f",
-							numPoints, (double)sqrtf((float)initialSumOfSquares/numPoints), (double)sqrtf((float)sumOfSquares/numPoints));
+							numPoints, (double)sqrtf((float)initialSumOfSquares/numPoints), (double)expectedRmsError);
 			}
 		}
 		else
 		{
-			// User wants manual corrections for bed levelling screws.
-			// Leave the first one alone.
+			// User wants manual corrections for bed levelling screws. Leave the first one alone.
 			reply.printf("Manual corrections required:");
 			for (size_t i = 0; i < numLeadscrews; ++i)
 			{

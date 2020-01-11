@@ -14,7 +14,7 @@
 class DataTransfer;
 
 // This class defines the bed probing grid
-class GridDefinition INHERIT_OBJECT_MODEL
+class GridDefinition
 {
 public:
 	friend class DataTransfer;
@@ -38,9 +38,6 @@ public:
 
 	void PrintError(float originalXrange, float originalYrange, const StringRef& r) const
 	pre(!IsValid());
-
-protected:
-	DECLARE_OBJECT_MODEL
 
 private:
 	void CheckValidity();

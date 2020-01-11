@@ -2239,6 +2239,27 @@ ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuff
 		return ExpressionValue(v);
 	}
 
+	if (varName.Equals("result"))
+	{
+		int32_t rslt;
+		switch (gb.GetLastResult())
+		{
+		case GCodeResult::ok:
+			rslt = 0;
+			break;
+
+		case GCodeResult::warning:
+		case GCodeResult::warningNotSupported:
+			rslt = 1;
+			break;
+
+		default:
+			rslt = 2;
+			break;
+		}
+		return ExpressionValue(rslt);
+	}
+
 	if (varName.Equals("line"))
 	{
 		return ExpressionValue((int32_t)gb.MachineState().lineNumber);

@@ -45,27 +45,6 @@
 # include "Linux/LinuxInterface.h"
 #endif
 
-#if SUPPORT_OBJECT_MODEL
-
-// Object model table and functions
-// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
-// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
-
-// Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(GCodes, __VA_ARGS__)
-
-constexpr ObjectModelTableEntry GCodes::objectModelTable[] =
-{
-	// These entries must be in alphabetical order
-	{ "speedFactor", OBJECT_MODEL_FUNC(self->speedFactor), ObjectModelEntryFlags::none }
-};
-
-constexpr uint8_t GCodes::objectModelTableDescriptor[] = { 1, 1 };
-
-DEFINE_GET_OBJECT_MODEL_TABLE(GCodes)
-
-#endif
-
 #ifdef SERIAL_AUX_DEVICE
 // Support for emergency stop from PanelDue
 bool GCodes::emergencyStopCommanded = false;
@@ -3249,6 +3228,8 @@ void GCodes::SaveFanSpeeds()
 // Note that 'reply' may be empty. If it isn't, then we need to append newline when sending it.
 void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 {
+	gb.SetLastResult(rslt);
+
 #if HAS_LINUX_INTERFACE
 	// Deal with replies to the Linux interface
 	if (gb.IsBinary())
@@ -3349,6 +3330,8 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply)
 // Handle a successful response when the response is in an OutputBuffer
 void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply)
 {
+	gb.SetLastResult(GCodeResult::ok);
+
 	// Although unlikely, it's possible that we get a nullptr reply. Don't proceed if this is the case
 	if (reply == nullptr)
 	{

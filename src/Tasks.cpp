@@ -27,7 +27,7 @@ extern uint32_t _estack;				// defined in linker script
 // The worst case stack usage is after running delta auto calibration with Move debugging enabled.
 // The timer and idle tasks currently never do I/O, so they can be much smaller.
 #if SAME70
-constexpr unsigned int 1800;								// on the SAME70 we use matrices of doubles
+constexpr unsigned int MainTaskStackWords = 1800;			// on the SAME70 we use matrices of doubles
 #elif defined(__LPC17xx__)
 constexpr unsigned int MainTaskStackWords = 1110-(16*9);	// LPC builds only support 16 calibration points, so less space needed
 #else
