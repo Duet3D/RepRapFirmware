@@ -13,6 +13,9 @@
 #endif
 
 // Execute a step of the state machine
+// CAUTION: don't allocate any long strings or other large objects directly within this function.
+// The reason is that this function calls FinishedBedProbing(), which on a delta calls DoAutoCalibration(), which uses lots of stack.
+// So any large local objects allocated here increase the amount of MAIN stack size needed.
 void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 {
 #if HAS_LINUX_INTERFACE
@@ -175,7 +178,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
-			String<RepRapPasswordLength> nextHomingFileName;
+			String<StringLength20> nextHomingFileName;
 			AxesBitmap mustHomeFirst = reprap.GetMove().GetKinematics().GetHomingFileName(toBeHomed, axesHomed, numVisibleAxes, nextHomingFileName.GetRef());
 			if (mustHomeFirst != 0)
 			{
@@ -230,7 +233,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			const Tool * const oldTool = reprap.GetCurrentTool();
 			if (oldTool != nullptr && AllAxesAreHomed())
 			{
-				String<ShortScratchStringLength> scratchString;
+				String<StringLength20> scratchString;
 				scratchString.printf("tfree%d.g", oldTool->Number());
 				DoFileMacro(gb, scratchString.c_str(), false, 0);		// don't pass the T code here because it may be negative
 			}
@@ -250,7 +253,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			gb.AdvanceState();
 			if (reprap.GetTool(gb.MachineState().newToolNumber) != nullptr && AllAxesAreHomed() && (gb.MachineState().toolChangeParam & TPreBit) != 0)
 			{
-				String<ShortScratchStringLength> scratchString;
+				String<StringLength20> scratchString;
 				scratchString.printf("tpre%d.g", gb.MachineState().newToolNumber);
 				DoFileMacro(gb, scratchString.c_str(), false, 0);
 			}
@@ -269,7 +272,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 			{
 				if (reprap.GetCurrentTool() != nullptr && (gb.MachineState().toolChangeParam & TPostBit) != 0)
 				{
-					String<ShortScratchStringLength> scratchString;
+					String<StringLength20> scratchString;
 					scratchString.printf("tpost%d.g", gb.MachineState().newToolNumber);
 					DoFileMacro(gb, scratchString.c_str(), false, 0);
 				}
@@ -1113,53 +1116,53 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		{
 			// The probe recovery time has elapsed, so we can start the probing  move
 			const StraightProbeSettings& sps = reprap.GetMove().GetStraightProbeSettings();
-			const bool probingAway = sps.ProbingAway();
 			const ZProbe& zp = *(platform.GetEndstops().GetZProbe(sps.GetZProbeToUse()));
 			if (zp.GetProbeType() == ZProbeType::none)
 			{
 				// No Z probe, so we are doing manual 'probing'
 				UnlockAll(gb);															// release the movement lock to allow manual Z moves
 				gb.AdvanceState();														// resume at the next state when the user has finished
-
-				String<MaxMessageLength> message;
-				message.printf("Adjust position until the reference point just %s the target, then press OK", probingAway ? "loses contact with" : "touches");
-				DoManualProbe(gb, message.c_str(), "Manual Straight Probe", sps.GetMovingAxes());
-			}
-			else if ((!probingAway && zp.Stopped() == EndStopHit::atStop)
-					|| (probingAway && zp.Stopped() != EndStopHit::atStop))		// check for probe already in target state at start
-			{
-				// Z probe is already in target state at the start of the move, so abandon the probe and signal an error if the type demands so
-				reprap.GetHeat().SuspendHeaters(false);
-				if (sps.SignalError())
-				{
-					platform.MessageF(ErrorMessage, "Probe %s triggered at start of probing move\n", probingAway ? "not" : "already");
-					error = true;
-				}
-				gb.SetState(GCodeState::normal);										// no point in doing anything else
-				if (zp.GetProbeType() != ZProbeType::none && !probeIsDeployed)
-				{
-					DoFileMacro(gb, RETRACTPROBE_G, false, 38);
-				}
+				DoStraightManualProbe(gb, sps);											// call out to separate function because it used a lot of stack
 			}
 			else
 			{
-				zProbeTriggered = false;
-				SetMoveBufferDefaults();
-				if (!platform.GetEndstops().EnableZProbe(sps.GetZProbeToUse(), probingAway))
+				const bool probingAway = sps.ProbingAway();
+				const bool atStop = (zp.Stopped() == EndStopHit::atStop);
+				if (probingAway != atStop)
 				{
-					error = true;
-					reply.copy("Failed to enable Z probe");
-					gb.SetState(GCodeState::normal);
-					break;
+					// Z probe is already in target state at the start of the move, so abandon the probe and signal an error if the type demands so
+					reprap.GetHeat().SuspendHeaters(false);
+					if (sps.SignalError())
+					{
+						platform.MessageF(ErrorMessage, "Probe %s triggered at start of probing move\n", probingAway ? "not" : "already");
+						error = true;
+					}
+					gb.SetState(GCodeState::normal);									// no point in doing anything else
+					if (zp.GetProbeType() != ZProbeType::none && !probeIsDeployed)
+					{
+						DoFileMacro(gb, RETRACTPROBE_G, false, 38);
+					}
 				}
+				else
+				{
+					zProbeTriggered = false;
+					SetMoveBufferDefaults();
+					if (!platform.GetEndstops().EnableZProbe(sps.GetZProbeToUse(), probingAway))
+					{
+						error = true;
+						reply.copy("Failed to enable Z probe");
+						gb.SetState(GCodeState::normal);
+						break;
+					}
 
-				zp.SetProbing(true);
-				moveBuffer.checkEndstops = true;
-				moveBuffer.reduceAcceleration = true;
-				sps.SetCoordsToTarget(moveBuffer.coords);
-				moveBuffer.feedRate = zp.GetProbingSpeed();
-				NewMoveAvailable(1);
-				gb.AdvanceState();
+					zp.SetProbing(true);
+					moveBuffer.checkEndstops = true;
+					moveBuffer.reduceAcceleration = true;
+					sps.SetCoordsToTarget(moveBuffer.coords);
+					moveBuffer.feedRate = zp.GetProbingSpeed();
+					NewMoveAvailable(1);
+					gb.AdvanceState();
+				}
 			}
 		}
 		break;
@@ -1336,6 +1339,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 		HandleReply(gb, (error) ? GCodeResult::error : GCodeResult::ok, reply.c_str());
 		CheckForDeferredPause(gb);
 	}
+}
+
+// Do a manual probe. This is in its own function to reduce the amount of stack space needed by RunStateMachine(). See the comment at the top of that function.
+void GCodes::DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps)
+{
+	String<StringLength256> message;
+	message.printf("Adjust position until the reference point just %s the target, then press OK", sps.ProbingAway() ? "loses contact with" : "touches");
+	DoManualProbe(gb, message.c_str(), "Manual Straight Probe", sps.GetMovingAxes());
 }
 
 // End

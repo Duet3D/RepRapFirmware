@@ -363,7 +363,7 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 
 	if (reprap.Debug(moduleMove))
 	{
-		String<ScratchStringLength> scratchString;
+		String<StringLength256> scratchString;
 		PrintParameters(scratchString.GetRef());
 		debugPrintf("%s\n", scratchString.c_str());
 	}
@@ -512,18 +512,23 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 		}
 	}
 
-	// Print out the calculation time
-	//debugPrintf("Time taken %dms\n", (reprap.GetPlatform()->GetInterruptClocks() - startTime) * 1000 / DDA::stepClockRate);
 	if (reprap.Debug(moduleMove))
 	{
-		String<ScratchStringLength> scratchString;
+		String<StringLength256> scratchString;
 		PrintParameters(scratchString.GetRef());
 		debugPrintf("%s\n", scratchString.c_str());
 	}
 
 	reply.printf("Calibrated %d factors using %d points, deviation before %.3f after %.3f",
 			numFactors, numPoints, (double)sqrtf(initialSumOfSquares/numPoints), (double)expectedRmsError);
-	reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.c_str());
+
+	// We don't want to call MessageF(LogMessage, "%s\n", reply.c_str()) here because that will allocate a buffer within MessageF, which adds to our stack usage.
+	// Better to allocate the buffer here so that it uses the same stack space as the arrays that we have finished with
+	{
+		String<StringLength256> scratchString;
+		scratchString.printf("%s\n", reply.c_str());
+		reprap.GetPlatform().Message(LogMessage, scratchString.c_str());
+	}
 
     doneAutoCalibration = true;
     return false;

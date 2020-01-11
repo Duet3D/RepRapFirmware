@@ -3588,7 +3588,7 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply)
 		SafeStrncpy(filamentToLoad, filamentName.c_str(), ARRAY_SIZE(filamentToLoad));
 		gb.SetState(GCodeState::loadingFilament);
 
-		String<ScratchStringLength> scratchString;
+		String<StringLength256> scratchString;
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName.c_str(), LOAD_FILAMENT_G);
 		DoFileMacro(gb, scratchString.c_str(), true, 701);
 	}
@@ -3626,7 +3626,7 @@ GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	gb.SetState(GCodeState::unloadingFilament);
-	String<ScratchStringLength> scratchString;
+	String<StringLength256> scratchString;
 	scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, tool->GetFilament()->GetName(), UNLOAD_FILAMENT_G);
 	DoFileMacro(gb, scratchString.c_str(), true, 702);
 	return GCodeResult::ok;

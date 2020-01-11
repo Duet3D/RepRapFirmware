@@ -383,8 +383,7 @@ void LinearDeltaKinematics::GetAssumedInitialPosition(size_t numAxes, float posi
 // Auto calibrate from a set of probe points returning true if it failed
 bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply)
 {
-	const size_t NumDeltaFactors = 9;		// maximum number of delta machine factors we can adjust
-	const size_t numPoints = probePoints.NumberOfProbePoints();
+	constexpr size_t NumDeltaFactors = 9;		// maximum number of delta machine factors we can adjust
 
 	if (numFactors < 3 || numFactors > NumDeltaFactors || numFactors == 5)
 	{
@@ -394,18 +393,16 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 
 	if (reprap.Debug(moduleMove))
 	{
-		String<ScratchStringLength> scratchString;
+		String<StringLength256> scratchString;
 		PrintParameters(scratchString.GetRef());
 		debugPrintf("%s\n", scratchString.c_str());
 	}
-
-	// The following is for printing out the calculation time, see later
-	//uint32_t startTime = reprap.GetPlatform()->GetInterruptClocks();
 
 	// Transform the probing points to motor endpoints and store them in a matrix, so that we can do multiple iterations using the same data
 	FixedMatrix<floatc_t, MaxCalibrationPoints, UsualNumTowers> probeMotorPositions;
 	floatc_t corrections[MaxCalibrationPoints];
 	floatc_t initialSumOfSquares = 0.0;
+	const size_t numPoints = probePoints.NumberOfProbePoints();
 	for (size_t i = 0; i < numPoints; ++i)
 	{
 		corrections[i] = 0.0;
@@ -564,14 +561,21 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 	//debugPrintf("Time taken %dms\n", (reprap.GetPlatform()->GetInterruptClocks() - startTime) * 1000 / DDA::stepClockRate);
 	if (reprap.Debug(moduleMove))
 	{
-		String<ScratchStringLength> scratchString;
+		String<StringLength256> scratchString;
 		PrintParameters(scratchString.GetRef());
 		debugPrintf("%s\n", scratchString.c_str());
 	}
 
 	reply.printf("Calibrated %d factors using %d points, deviation before %.3f after %.3f",
 			numFactors, numPoints, (double)sqrtf(initialSumOfSquares/numPoints), (double)expectedRmsError);
-	reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.c_str());
+
+	// We don't want to call MessageF(LogMessage, "%s\n", reply.c_str()) here because that will allocate a buffer within MessageF, which adds to our stack usage.
+	// Better to allocate the buffer here so that it uses the same stack space as the arrays that we have finished with
+	{
+		String<StringLength256> scratchString;
+		scratchString.printf("%s\n", reply.c_str());
+		reprap.GetPlatform().Message(LogMessage, scratchString.c_str());
+	}
 
     doneAutoCalibration = true;
     return false;
@@ -740,7 +744,7 @@ bool LinearDeltaKinematics::WriteCalibrationParameters(FileStore *f) const
 	bool ok = f->Write("; Delta parameters\n");
 	if (ok)
 	{
-		String<ScratchStringLength> scratchString;
+		String<StringLength256> scratchString;
 		scratchString.copy("M665 ");
 		for (size_t tower = 0; tower < numTowers; ++tower)
 		{

@@ -2469,7 +2469,7 @@ bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) con
 		const AxesBitmap axesProbed = t->GetAxisOffsetsProbed();
 		if (axesProbed != 0 || forceWriteOffsets)
 		{
-			String<ScratchStringLength> scratchString;
+			String<StringLength256> scratchString;
 			if (!written)
 			{
 				scratchString.copy("; Probed tool offsets\n");

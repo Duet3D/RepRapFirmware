@@ -79,7 +79,7 @@ bool GCodeBuffer::DoDwellTime(uint32_t dwellMillis) noexcept
 // Write some debug info
 void GCodeBuffer::Diagnostics(MessageType mtype) noexcept
 {
-	String<ScratchStringLength> scratchString;
+	String<StringLength256> scratchString;
 	scratchString.copy(GetIdentity());
 	scratchString.cat(IsBinary() ? "* " : " ");
 	switch (bufferState)

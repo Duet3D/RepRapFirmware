@@ -791,7 +791,7 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity
 
 	capacity = (uint64_t)sd_mmc_get_capacity(slot) * 1024;
 	speed = sd_mmc_get_interface_speed(slot);
-	String<ShortScratchStringLength> path;
+	String<StringLength50> path;
 	path.printf("%u:/", slot);
 	uint32_t freeClusters;
 	FATFS *fs;

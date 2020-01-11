@@ -55,7 +55,7 @@ float ZProbe::GetActualTriggerHeight() const noexcept
 
 bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept
 {
-	String<ScratchStringLength> scratchString;
+	String<StringLength100> scratchString;
 	scratchString.printf("G31 K%u P%d X%.1f Y%.1f Z%.2f\n", probeNumber, adcValue, (double)xOffset, (double)yOffset, (double)triggerHeight);
 	return f->Write(scratchString.c_str());
 }

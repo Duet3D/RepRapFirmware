@@ -77,7 +77,7 @@ void FopDt::SetM301PidParameters(const M301PidParameters& pp) noexcept
 // Write the model parameters to file returning true if no error
 bool FopDt::WriteParameters(FileStore *f, size_t heater) const noexcept
 {
-	String<ScratchStringLength> scratchString;
+	String<StringLength256> scratchString;
 	scratchString.printf("M307 H%u A%.1f C%.1f D%.1f S%.2f V%.1f B%d\n",
 							heater, (double)gain, (double)timeConstant, (double)deadTime, (double)maxPwm, (double)standardVoltage, (usePid) ? 0 : 1);
 	bool ok = f->Write(scratchString.c_str());

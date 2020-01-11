@@ -206,7 +206,7 @@ bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const
 
 	for (size_t cs = 0; cs < NumCoordinateSystems; ++cs)
 	{
-		String<ScratchStringLength> scratchString;
+		String<StringLength100> scratchString;
 		scratchString.printf("G10 L2 P%u", cs + 1);
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
@@ -222,6 +222,7 @@ bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const
 }
 
 #endif
+
 #endif
 
 // Define the probing grid, called when we see an M557 command

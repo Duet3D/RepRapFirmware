@@ -80,6 +80,7 @@ enum class StopPrintReason
 //****************************************************************************************************
 
 class LinuxInterface;
+class StraightProbeSettings;
 
 // The GCode interpreter
 
@@ -228,6 +229,8 @@ private:
 	GCodeBuffer *GetGCodeBuffer(GCodeChannel channel) const { return gcodeSources[(size_t)channel]; }
 	void StartNextGCode(GCodeBuffer& gb, const StringRef& reply);		// Fetch a new or old GCode and process it
 	void RunStateMachine(GCodeBuffer& gb, const StringRef& reply);		// Execute a step of the state machine
+	void DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps);
+
 	void DoFilePrint(GCodeBuffer& gb, const StringRef& reply);			// Get G Codes from a file and print them
 	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning = -1);
 																		// Run a GCode macro file, optionally report error if not found

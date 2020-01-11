@@ -241,10 +241,10 @@ class LinuxInterface;
 #endif
 
 // Define floating point type to use for calculations where we would like high precision in matrix calculations
-#if SAM4E || SAM4S || SAME70
+#if SAME70
 typedef double floatc_t;					// type of matrix element used for calibration
 #else
-// We are more memory-constrained on the SAM3X
+// We are more memory-constrained on the older processors
 typedef float floatc_t;						// type of matrix element used for calibration
 #endif
 
@@ -376,9 +376,6 @@ private:
 };
 
 // Common definitions used by more than one module
-
-constexpr size_t ScratchStringLength = 220;							// standard length of a scratch string, enough to print delta parameters to
-constexpr size_t ShortScratchStringLength = 50;
 
 constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
 constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2;				// The indices of the Cartesian axes in drive arrays

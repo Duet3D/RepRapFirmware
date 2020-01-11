@@ -1137,7 +1137,7 @@ void Platform::Spin() noexcept
 			// Check for stalled drivers that need to be reported and logged
 			if (stalledDriversToLog != 0 && reprap.GetGCodes().IsReallyPrinting())
 			{
-				String<ScratchStringLength> scratchString;
+				String<StringLength100> scratchString;
 				ListDrivers(scratchString.GetRef(), stalledDriversToLog);
 				stalledDriversToLog = 0;
 				float liveCoordinates[MaxAxesPlusExtruders];
@@ -1263,7 +1263,7 @@ void Platform::ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const 
 {
 	if (whichDrivers != 0)
 	{
-		String<ScratchStringLength> scratchString;
+		String<StringLength100> scratchString;
 		scratchString.printf("%s reported by driver(s)", text);
 		DriversBitmap wd = whichDrivers;
 		for (unsigned int drive = 0; wd != 0; ++drive)
@@ -1598,7 +1598,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 		if (slot >= 0 && srdBuf[slot].magic == SoftwareResetData::magicValue)
 		{
 			const char* const reasonText = SoftwareResetData::ReasonText[(srdBuf[slot].resetReason >> 5) & 0x0F];
-			String<ScratchStringLength> scratchString;
+			String<StringLength100> scratchString;
 			if (srdBuf[slot].when != 0)
 			{
 				const time_t when = (time_t)srdBuf[slot].when;
@@ -2194,7 +2194,7 @@ bool Platform::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float 
 		return true;
 	}
 
-	String<ScratchStringLength> scratchString;
+	String<StringLength100> scratchString;
 	scratchString.printf("M208 S%d", sParam);
 	for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
 	{

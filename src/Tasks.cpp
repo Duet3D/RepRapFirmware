@@ -24,18 +24,21 @@ extern uint32_t _estack;				// defined in linker script
 
 // MAIN task data
 // The main task currently runs GCodes, so it needs to be large enough to hold the matrices used for delta auto calibration.
+// The worst case stack usage is after running delta auto calibration with Move debugging enabled.
 // The timer and idle tasks currently never do I/O, so they can be much smaller.
-#if defined(__LPC17xx__)
-constexpr unsigned int MainTaskStackWords = 1600-410;
+#if SAME70
+constexpr unsigned int 1800;								// on the SAME70 we use matrices of doubles
+#elif defined(__LPC17xx__)
+constexpr unsigned int MainTaskStackWords = 1110-(16*9);	// LPC builds only support 16 calibration points, so less space needed
 #else
-constexpr unsigned int MainTaskStackWords = 1600;
+constexpr unsigned int MainTaskStackWords = 1110;			// on other processors we use matrixes of floats
 #endif
 
 static Task<MainTaskStackWords> mainTask;
 extern "C" [[noreturn]] void MainTask(void * pvParameters) noexcept;
 
 // Idle task data
-constexpr unsigned int IdleTaskStackWords = 60;
+constexpr unsigned int IdleTaskStackWords = 40;				// currently we don't use the idle talk for anything, so this can be quite small
 static Task<IdleTaskStackWords> idleTask;
 
 extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize) noexcept

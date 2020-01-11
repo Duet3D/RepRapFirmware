@@ -1335,7 +1335,7 @@ void StringParser::WriteToFile() noexcept
 		if (Seen('P'))
 		{
 			Init();
-			String<ShortScratchStringLength> scratchString;
+			String<StringLength20> scratchString;
 			scratchString.printf("%" PRIi32 "\n", GetIValue());
 			reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, scratchString.c_str());
 			return;

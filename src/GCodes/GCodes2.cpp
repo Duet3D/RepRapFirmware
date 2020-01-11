@@ -3942,7 +3942,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 				const Filament *filament = reprap.GetCurrentTool()->GetFilament();
 				if (filament != nullptr && filament->IsLoaded())
 				{
-					String<ScratchStringLength> scratchString;
+					String<StringLength256> scratchString;
 					scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filament->GetName(), CONFIG_FILAMENT_G);
 					DoFileMacro(gb, scratchString.c_str(), false, 703);
 				}
@@ -4542,7 +4542,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 	case GCodeResult::warning:
 		if (!gb.IsBinary() && gb.IsDoingFile())
 		{
-			String<ShortScratchStringLength> scratchString;
+			String<StringLength50> scratchString;
 			gb.PrintCommand(scratchString.GetRef());
 			reply.Prepend(": ");
 			reply.Prepend(scratchString.c_str());
