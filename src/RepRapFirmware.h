@@ -27,6 +27,9 @@ Licence: GPL
 #include <cstdarg>
 #include <climits>		// for CHAR_BIT
 
+#include <ctime>
+[[deprecated("use gmtime_r instead for thread-safety")]] tm* gmtime(const time_t* time);
+
 #include "ecv.h"
 #undef value			// needed because some files include include <optional>
 #undef array			// needed because some files include <functional>
