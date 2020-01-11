@@ -18,7 +18,7 @@
 const FilePosition GCODE_HEADER_SIZE = 20000uL;		// How many bytes to read from the header - I (DC) have a Kisslicer file with a layer height comment 14Kb from the start
 const FilePosition GCODE_FOOTER_SIZE = 400000uL;	// How many bytes to read from the footer
 
-#if SAM4E || SAM4S || SAME70
+#if SAME70
 const size_t GCODE_READ_SIZE = 2048;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 512 for read efficiency)
 #else
 const size_t GCODE_READ_SIZE = 1024;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 512 for read efficiency)
