@@ -20,8 +20,9 @@ Licence: GPL
 #ifndef PRINTMONITOR_H
 #define PRINTMONITOR_H
 
-#include "RepRapFirmware.h"
-#include "Storage/FileInfoParser.h"	// for struct GCodeFileInfo
+#include <RepRapFirmware.h>
+#include <GCodes/GCodeFileInfo.h>
+#include <ObjectModel/ObjectModel.h>
 
 const float LAYER_HEIGHT_TOLERANCE = 0.015;			// Tolerance for comparing two Z heights (in mm)
 
@@ -39,63 +40,68 @@ enum PrintEstimationMethod
 	layerBased
 };
 
-class PrintMonitor
+class PrintMonitor INHERIT_OBJECT_MODEL
 {
-	public:
-		PrintMonitor(Platform& p, GCodes& gc) noexcept;
-		void Spin() noexcept;
-		void Init() noexcept;
+public:
+	PrintMonitor(Platform& p, GCodes& gc) noexcept;
+	void Spin() noexcept;
+	void Init() noexcept;
 
-		bool IsPrinting() const noexcept;						// Is a file being printed?
-		void StartingPrint(const char *filename) noexcept;		// Called to indicate a file will be printed (see M23)
-		void StartedPrint() noexcept;							// Called whenever a new live print starts (see M24)
-		void StoppedPrint() noexcept;							// Called whenever a file print has stopped
-		float FractionOfFilePrinted() const noexcept;			// Return the fraction printed (0..1)
+	bool IsPrinting() const noexcept;						// Is a file being printed?
+	void StartingPrint(const char *filename) noexcept;		// Called to indicate a file will be printed (see M23)
+	void StartedPrint() noexcept;							// Called whenever a new live print starts (see M24)
+	void StoppedPrint() noexcept;							// Called whenever a file print has stopped
+	float FractionOfFilePrinted() const noexcept;			// Return the fraction printed (0..1)
 
-		// Return an estimate in seconds based on a specific estimation method
-		float EstimateTimeLeft(PrintEstimationMethod method) const noexcept;
+	// Return an estimate in seconds based on a specific estimation method
+	float EstimateTimeLeft(PrintEstimationMethod method) const noexcept;
 
-		// Provide some information about the file being printed
-		unsigned int GetCurrentLayer() const noexcept;
-		float GetCurrentLayerTime() const noexcept;
-		float GetPrintDuration() const noexcept;
-		float GetWarmUpDuration() const noexcept;
-		float GetFirstLayerDuration() const noexcept;
-		float GetFirstLayerHeight() const noexcept;
+	// Provide some information about the file being printed
+	unsigned int GetCurrentLayer() const noexcept;
+	float GetCurrentLayerTime() const noexcept;
+	float GetPrintDuration() const noexcept;
+	float GetWarmUpDuration() const noexcept;
+	float GetFirstLayerDuration() const noexcept;
+	float GetFirstLayerHeight() const noexcept;
 
-		const char *GetPrintingFilename() const noexcept { return (isPrinting) ? filenameBeingPrinted.c_str() : nullptr; }
-		bool GetPrintingFileInfo(GCodeFileInfo& info) noexcept;
-		void SetPrintingFileInfo(const char *filename, GCodeFileInfo& info) noexcept;
+	const char *GetPrintingFilename() const noexcept { return (isPrinting) ? filenameBeingPrinted.c_str() : nullptr; }
+	bool GetPrintingFileInfo(GCodeFileInfo& info) noexcept;
+	void SetPrintingFileInfo(const char *filename, GCodeFileInfo& info) noexcept;
 
-	private:
-		Platform& platform;
-		GCodes& gCodes;
-		uint32_t lastUpdateTime;
+protected:
+	DECLARE_OBJECT_MODEL
 
-		// Information/Events concerning the file being printed
-		void FirstLayerComplete() noexcept;
-		void LayerComplete() noexcept;
+	static const ObjectModelArrayDescriptor filamentArrayDescriptor;
 
-		bool isPrinting;
-		bool heatingUp;
-		uint64_t printStartTime;
-		uint64_t heatingStartedTime;
-		uint64_t pauseStartTime, totalPauseTime;
+private:
+	Platform& platform;
+	GCodes& gCodes;
+	uint32_t lastUpdateTime;
 
-		unsigned int currentLayer;
-		float warmUpDuration, firstLayerDuration;
-		float firstLayerFilament, firstLayerProgress;
-		float lastLayerChangeTime, lastLayerFilament, lastLayerZ;
+	// Information/Events concerning the file being printed
+	void FirstLayerComplete() noexcept;
+	void LayerComplete() noexcept;
 
-		unsigned int numLayerSamples;
-		float layerDurations[MAX_LAYER_SAMPLES];
-		float filamentUsagePerLayer[MAX_LAYER_SAMPLES];
-		float fileProgressPerLayer[MAX_LAYER_SAMPLES];
-		float layerEstimatedTimeLeft;
+	bool isPrinting;
+	bool heatingUp;
+	uint64_t printStartTime;
+	uint64_t heatingStartedTime;
+	uint64_t pauseStartTime, totalPauseTime;
 
-		bool printingFileParsed;
-		GCodeFileInfo printingFileInfo;
-		String<MaxFilenameLength> filenameBeingPrinted;
+	unsigned int currentLayer;
+	float warmUpDuration, firstLayerDuration;
+	float firstLayerFilament, firstLayerProgress;
+	float lastLayerChangeTime, lastLayerFilament, lastLayerZ;
+
+	unsigned int numLayerSamples;
+	float layerDurations[MAX_LAYER_SAMPLES];
+	float filamentUsagePerLayer[MAX_LAYER_SAMPLES];
+	float fileProgressPerLayer[MAX_LAYER_SAMPLES];
+	float layerEstimatedTimeLeft;
+
+	bool printingFileParsed;
+	GCodeFileInfo printingFileInfo;
+	String<MaxFilenameLength> filenameBeingPrinted;
 };
 
 inline bool PrintMonitor::IsPrinting() const noexcept { return isPrinting; }

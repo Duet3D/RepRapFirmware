@@ -467,10 +467,11 @@ time_t MassStorage::GetLastModifiedTime(const char *filePath) noexcept
 
 bool MassStorage::SetLastModifiedTime(const char *filePath, time_t time) noexcept
 {
-	const struct tm * const timeInfo = gmtime(&time);
+	tm timeInfo;
+	gmtime_r(&time, &timeInfo);
 	FILINFO fno;
-    fno.fdate = (WORD)(((timeInfo->tm_year - 80) * 512U) | (timeInfo->tm_mon + 1) * 32U | timeInfo->tm_mday);
-    fno.ftime = (WORD)(timeInfo->tm_hour * 2048U | timeInfo->tm_min * 32U | timeInfo->tm_sec / 2U);
+    fno.fdate = (WORD)(((timeInfo.tm_year - 80) * 512U) | (timeInfo.tm_mon + 1) * 32U | timeInfo.tm_mday);
+    fno.ftime = (WORD)(timeInfo.tm_hour * 2048U | timeInfo.tm_min * 32U | timeInfo.tm_sec / 2U);
     const bool ok = (f_utime(filePath, &fno) == FR_OK);
     if (!ok)
 	{

@@ -935,9 +935,8 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply, 
 // Deal with a M905
 GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply)
 {
-	const time_t now = platform.GetDateTime();
-	struct tm timeInfo;
-	gmtime_r(&now, &timeInfo);
+	tm timeInfo;
+	(void)platform.GetDateTime(timeInfo);
 	bool seen = false;
 
 	if (gb.Seen('P'))

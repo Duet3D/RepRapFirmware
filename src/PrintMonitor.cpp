@@ -25,13 +25,62 @@ Licence: GPL
 #include "Platform.h"
 #include "RepRap.h"
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(PrintMonitor, __VA_ARGS__)
+
+const ObjectModelArrayDescriptor PrintMonitor::filamentArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
+			{ return ((const PrintMonitor*)self)->printingFileInfo.numFilaments; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+			{ return  ExpressionValue(((const PrintMonitor*)self)->printingFileInfo.filamentNeeded[context.GetIndex(0)]); }
+};
+
+constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. PrintMonitor members
+	{ "File",					OBJECT_MODEL_FUNC(self, 1),							 							ObjectModelEntryFlags::none },
+	{ "LastFileName",			OBJECT_MODEL_FUNC(self->filenameBeingPrinted.c_str()), 							ObjectModelEntryFlags::none },
+	{ "Layer",					OBJECT_MODEL_FUNC((int32_t)self->currentLayer), 								ObjectModelEntryFlags::none },
+	{ "TimesLeft",				OBJECT_MODEL_FUNC(self, 2),							 							ObjectModelEntryFlags::none },
+
+	// 1. ParsedFileInfo members
+	{ "Filament",				OBJECT_MODEL_FUNC_NOSELF(&filamentArrayDescriptor),							 	ObjectModelEntryFlags::none },
+	{ "FirstLayerHeight",		OBJECT_MODEL_FUNC(self->printingFileInfo.firstLayerHeight), 					ObjectModelEntryFlags::none },
+	{ "GeneratedBy",			OBJECT_MODEL_FUNC(self->printingFileInfo.generatedBy.c_str()),					ObjectModelEntryFlags::none },
+	{ "Height",					OBJECT_MODEL_FUNC(self->printingFileInfo.objectHeight), 						ObjectModelEntryFlags::none },
+	{ "LastModified",			OBJECT_MODEL_FUNC(DateTime(self->printingFileInfo.lastModifiedTime)), 			ObjectModelEntryFlags::none },
+	{ "LayerHeight",			OBJECT_MODEL_FUNC(self->printingFileInfo.layerHeight), 							ObjectModelEntryFlags::none },
+	{ "NumLayers",				OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.GetNumLayers()), 				ObjectModelEntryFlags::none },
+	{ "PrintTime",				OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.printTime), 					ObjectModelEntryFlags::none },
+	{ "SimulatedTime",			OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.simulatedTime), 				ObjectModelEntryFlags::none },
+	{ "Size",					OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.fileSize), 					ObjectModelEntryFlags::none },	// note, using int32_t limits us to 2Gb
+
+	// 2. TimesLeft members
+	{ "Filament",				OBJECT_MODEL_FUNC(self->EstimateTimeLeft(filamentBased)), 						ObjectModelEntryFlags::none },
+	{ "File",					OBJECT_MODEL_FUNC(self->EstimateTimeLeft(fileBased)),							ObjectModelEntryFlags::none },
+	{ "Layer",					OBJECT_MODEL_FUNC(self->EstimateTimeLeft(layerBased)),							ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 4, 10, 3 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
+
+#endif
+
 PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) noexcept : platform(p), gCodes(gc), isPrinting(false), heatingUp(false),
 	printStartTime(0), pauseStartTime(0), totalPauseTime(0), currentLayer(0), warmUpDuration(0.0),
 	firstLayerDuration(0.0), firstLayerFilament(0.0), firstLayerProgress(0.0), lastLayerChangeTime(0.0),
 	lastLayerFilament(0.0), lastLayerZ(0.0), numLayerSamples(0), layerEstimatedTimeLeft(0.0), printingFileParsed(false)
 {
-	filenameBeingPrinted[0] = 0;
-	printingFileInfo.Init();
 }
 
 void PrintMonitor::Init() noexcept

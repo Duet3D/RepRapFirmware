@@ -131,6 +131,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	// 0. MachineModel root
 	{ "Electronics",	OBJECT_MODEL_FUNC(self->platform),							ObjectModelEntryFlags::none },
 	{ "Heat",			OBJECT_MODEL_FUNC(self->heat),								ObjectModelEntryFlags::none },
+	{ "Job",			OBJECT_MODEL_FUNC(self->printMonitor),						ObjectModelEntryFlags::none },
 	{ "Move",			OBJECT_MODEL_FUNC(self->move),								ObjectModelEntryFlags::none },
 	{ "Network",		OBJECT_MODEL_FUNC(self->network),							ObjectModelEntryFlags::none },
 	{ "State",			OBJECT_MODEL_FUNC(self, 1),									ObjectModelEntryFlags::none },
@@ -144,7 +145,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 //	{ "randomProbe", OBJECT_MODEL_FUNC(&(self->GetMove().GetProbePoints())), TYPE_OF(ObjectModel), 0, ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 2, 5, 3 };
+constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 2, 6, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
@@ -2093,8 +2094,9 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 					bytesLeft -= response->EncodeString(fileInfo.fileName, false);
 					bytesLeft -= response->catf(",\"size\":%" PRIu32, fileInfo.size);
 
-					const struct tm * const timeInfo = gmtime(&fileInfo.lastModified);
-					if (timeInfo->tm_year <= /*19*/80)
+					tm timeInfo;
+					gmtime_r(&fileInfo.lastModified, &timeInfo);
+					if (timeInfo.tm_year <= /*19*/80)
 					{
 						// Don't send the last modified date if it is invalid
 						bytesLeft -= response->cat('}');
@@ -2102,8 +2104,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 					else
 					{
 						bytesLeft -= response->catf(",\"date\":\"%04u-%02u-%02uT%02u:%02u:%02u\"}",
-								timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
-								timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
+								timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 					}
 				}
 				++filesFound;
@@ -2163,12 +2164,12 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 	if (info.isValid)
 	{
 		response->printf("{\"err\":0,\"size\":%lu,",info.fileSize);
-		const struct tm * const timeInfo = gmtime(&info.lastModifiedTime);
-		if (timeInfo->tm_year > /*19*/80)
+		tm timeInfo;
+		gmtime_r(&info.lastModifiedTime, &timeInfo);
+		if (timeInfo.tm_year > /*19*/80)
 		{
 			response->catf("\"lastModified\":\"%04u-%02u-%02uT%02u:%02u:%02u\",",
-					timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
-					timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
+					timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 		}
 
 		response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,",

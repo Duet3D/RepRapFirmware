@@ -148,9 +148,10 @@ bool Logger::WriteDateTime(time_t time) noexcept
 	}
 	else
 	{
-		const struct tm * const timeInfo = gmtime(&time);
+		tm timeInfo;
+		gmtime_r(&time, &timeInfo);
 		buf.printf("%04u-%02u-%02u %02u:%02u:%02u ",
-						timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday, timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
+						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 	}
 	return logFile.Write(buf.c_str());
 }

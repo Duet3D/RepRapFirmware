@@ -12,22 +12,6 @@
 #include "PrintMonitor.h"
 #include "GCodes/GCodes.h"
 
-void GCodeFileInfo::Init()
-{
-	isValid = false;
-	incomplete = true;
-	firstLayerHeight = 0.0;
-	objectHeight = 0.0;
-	layerHeight = 0.0;
-	printTime = simulatedTime = 0;
-	numFilaments = 0;
-	generatedBy.Clear();
-	for (size_t extr = 0; extr < MaxExtruders; extr++)
-	{
-		filamentNeeded[extr] = 0.0;
-	}
-}
-
 #if HAS_MASS_STORAGE
 
 FileInfoParser::FileInfoParser() noexcept

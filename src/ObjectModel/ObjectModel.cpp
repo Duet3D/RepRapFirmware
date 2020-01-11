@@ -210,6 +210,23 @@ bool ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 		}
 		break;
 
+	case TYPE_OF(DateTime):
+		{
+			const time_t time = val.Get40BitValue();
+			if (time == 0)
+			{
+				buf->cat("null");
+			}
+			else
+			{
+				tm timeInfo;
+				gmtime_r(&time, &timeInfo);
+				buf->catf("\"%04u-%02u-%02uT%02u:%02u:%02u\"",
+							timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
+			}
+		}
+		break;
+
 	case NoType:
 		buf->cat("null");
 		break;

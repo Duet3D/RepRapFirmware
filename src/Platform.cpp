@@ -1602,9 +1602,10 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 			if (srdBuf[slot].when != 0)
 			{
 				const time_t when = (time_t)srdBuf[slot].when;
-				const struct tm * const timeInfo = gmtime(&when);
+				tm timeInfo;
+				gmtime_r(&when, &timeInfo);
 				scratchString.printf("at %04u-%02u-%02u %02u:%02u",
-								timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday, timeInfo->tm_hour, timeInfo->tm_min);
+								timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min);
 			}
 			else
 			{

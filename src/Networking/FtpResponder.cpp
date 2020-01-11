@@ -684,10 +684,11 @@ void FtpResponder::ProcessLine() noexcept
 					// Example for a typical UNIX-like file list:
 					// "drwxr-xr-x    2 ftp      ftp             0 Apr 11 2013 bin\r\n"
 					const char dirChar = (fileInfo.isDirectory) ? 'd' : '-';
-					const struct tm * const timeInfo = gmtime(&fileInfo.lastModified);
+					tm timeInfo;
+					gmtime_r(&fileInfo.lastModified, &timeInfo);
 					dataBuf->catf("%crw-rw-rw- 1 ftp ftp %13lu %s %02d %04d %s\r\n",
-							dirChar, fileInfo.size, MassStorage::GetMonthName(timeInfo->tm_mon + 1),
-							timeInfo->tm_mday, timeInfo->tm_year + 1900, fileInfo.fileName.c_str());
+							dirChar, fileInfo.size, MassStorage::GetMonthName(timeInfo.tm_mon + 1),
+							timeInfo.tm_mday, timeInfo.tm_year + 1900, fileInfo.fileName.c_str());
 				} while (MassStorage::FindNext(fileInfo));
 			}
 		}

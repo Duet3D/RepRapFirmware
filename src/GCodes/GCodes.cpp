@@ -1270,12 +1270,11 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 
 			// Write the header comment
 			buf.printf("; File \"%s\" resume print after %s", printingFilename, (wasPowerFailure) ? "power failure" : "print paused");
-			if (platform.IsDateTimeSet())
+			tm timeInfo;
+			if (platform.GetDateTime(timeInfo))
 			{
-				time_t timeNow = platform.GetDateTime();
-				const struct tm * const timeInfo = gmtime(&timeNow);
 				buf.catf(" at %04u-%02u-%02u %02u:%02u",
-								timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday, timeInfo->tm_hour, timeInfo->tm_min);
+								timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min);
 			}
 			buf.cat("\nG21\n");												// set units to mm because we will be writing positions in mm
 			bool ok = f->Write(buf.c_str())
@@ -4117,12 +4116,11 @@ bool GCodes::WriteConfigOverrideHeader(FileStore *f) const
 {
 	String<MaxFilenameLength> buf;
 	buf.copy("; config-override.g file generated in response to M500");
-	if (platform.IsDateTimeSet())
+	tm timeInfo;
+	if (platform.GetDateTime(timeInfo))
 	{
-		time_t timeNow = platform.GetDateTime();
-		const struct tm * const timeInfo = gmtime(&timeNow);
 		buf.catf(" at %04u-%02u-%02u %02u:%02u",
-						timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday, timeInfo->tm_hour, timeInfo->tm_min);
+						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min);
 	}
 	buf.cat('\n');
 	bool ok = f->Write(buf.c_str());

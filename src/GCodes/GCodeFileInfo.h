@@ -13,8 +13,9 @@
 // Struct to hold Gcode file information
 struct GCodeFileInfo
 {
-	GCodeFileInfo() { Init(); }
-	void Init();
+	GCodeFileInfo() noexcept { Init(); }
+	void Init() noexcept;
+	unsigned int GetNumLayers() const noexcept;
 
 	FilePosition fileSize;
 	time_t lastModifiedTime;

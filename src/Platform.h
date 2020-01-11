@@ -310,7 +310,9 @@ public:
 
 	// Real-time clock
 	bool IsDateTimeSet() const noexcept { return realTime != 0; }	// Has the RTC been set yet?
-	time_t GetDateTime() const noexcept { return realTime; }		// Retrieves the current RTC datetime and returns true if it's valid
+	time_t GetDateTime() const noexcept { return realTime; }		// Retrieves the current RTC datetime
+	bool GetDateTime(tm& rslt) const noexcept { return gmtime_r(&realTime, &rslt) != nullptr && realTime != 0; }
+																	// Retrieves the broken-down current RTC datetime and returns true if it's valid
 	bool SetDateTime(time_t time) noexcept;							// Sets the current RTC date and time or returns false on error
 
   	// Communications and data storage

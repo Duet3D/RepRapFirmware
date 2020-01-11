@@ -25,6 +25,14 @@ class Enum32;
 class ObjectModel;					// forward declaration
 class ObjectModelArrayDescriptor;	// forward declaration
 
+// Encapsulated time_t, used to facilitate overloading the ExpressionValue constructor
+struct DateTime
+{
+	DateTime(time_t t) : tim(t) { }
+
+	time_t tim;
+};
+
 // Function template used to get constexpr type codes
 // Each type must return a unique type code in the range 1 to 127 (0 is NoType)
 template<class T> constexpr TypeCode TypeOf() noexcept;
@@ -40,6 +48,7 @@ template<> constexpr TypeCode TypeOf<const ObjectModel*>() noexcept { return 8; 
 template<> constexpr TypeCode TypeOf<const char*>() noexcept { return 9; }
 template<> constexpr TypeCode TypeOf<IPAddress>() noexcept { return 10; }
 template<> constexpr TypeCode TypeOf<const ObjectModelArrayDescriptor*>() noexcept { return 11; }
+template<> constexpr TypeCode TypeOf<DateTime>() noexcept { return 12; }
 
 #define TYPE_OF(_t) (TypeOf<_t>())
 
@@ -58,7 +67,8 @@ class StringParser;
 struct ExpressionValue
 {
 	TypeCode type;									// what type is stored in the union
-	uint8_t param;									// additional parameter, e.g. number of usual displayed decimal places for a float, or table # for an ObjectModel
+	uint8_t param;									// additional parameter, e.g. number of usual displayed decimal places for a float,
+													// or table # for an ObjectModel, or 8 extra bits for a date/time
 	union
 	{
 		bool bVal;
@@ -83,6 +93,7 @@ struct ExpressionValue
 	explicit constexpr ExpressionValue(const ObjectModelArrayDescriptor *omad) noexcept : type(TYPE_OF(const ObjectModelArrayDescriptor*)), param(0), omadVal(omad) { }
 	explicit constexpr ExpressionValue(IPAddress ip) noexcept : type(TYPE_OF(IPAddress)), param(0), uVal(ip.GetV4LittleEndian()) { }
 	explicit constexpr ExpressionValue(nullptr_t dummy) noexcept : type(NoType), param(0), uVal(0) { }
+	explicit ExpressionValue(DateTime t) noexcept : type(TYPE_OF(DateTime)), param(t.tim >> 32), uVal((uint32_t)t.tim) { }
 
 	void Set(bool b) noexcept { type = TYPE_OF(bool); bVal = b; }
 	void Set(char c) noexcept { type = TYPE_OF(char); cVal = c; }
@@ -90,6 +101,9 @@ struct ExpressionValue
 	void Set(int i) noexcept { type = TYPE_OF(int32_t); iVal = i; }
 	void Set(float f) noexcept { type = TYPE_OF(float); fVal = f; param = 1; }
 	void Set(const char *s) noexcept { type = TYPE_OF(const char*); sVal = s; }
+
+	// Extract a 40-bit value that we have stored. Used to retrieve date/times.
+	uint64_t Get40BitValue() const noexcept { return ((uint64_t)param << 32) | uVal; }
 };
 
 enum class ObjectModelReportFlags : uint16_t

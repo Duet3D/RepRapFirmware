@@ -1617,6 +1617,16 @@ void StringParser::AppendAsString(ExpressionValue val, const StringRef& str)
 		str.cat(IP4String(val.uVal).c_str());
 		break;
 
+	case TYPE_OF(DateTime):
+		{
+			const time_t time = val.Get40BitValue();
+			tm timeInfo;
+			gmtime_r(&time, &timeInfo);
+			str.catf("%04u-%02u-%02u %02u:%02u:%02u",
+						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
+		}
+		break;
+
 	default:
 		throw ConstructParseException("string value expected");
 	}
