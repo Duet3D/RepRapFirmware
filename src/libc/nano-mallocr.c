@@ -37,6 +37,21 @@
 #include <errno.h>
 #include <malloc.h>
 
+#if 1	// DC
+# define DEFINE_MALLOC
+# define DEFINE_FREE
+# define DEFINE_CFREE
+# define DEFINE_CALLOC
+# define DEFINE_REALLOC
+# define DEFINE_MALLINFO
+# define DEFINE_MALLOPT
+# define DEFINE_MALLOC_STATS
+# define DEFINE_MALLOC_USABLE_SIZE
+# define DEFINE_MEMALIGN
+# define DEFINE_VALLOC
+# define DEFINE_PVALLOC
+#endif
+
 // DC #if DEBUG
 #if 0	// DC
 #include <assert.h>
@@ -48,7 +63,12 @@
 #define MAX(a,b) ((a) >= (b) ? (a) : (b))
 #endif
 
+#if 1	// DC
+extern char *sbrk(int i);
+#define _SBRK_R(X) sbrk(X)
+#else
 #define _SBRK_R(X) _sbrk_r(X)
+#endif
 
 #ifdef INTERNAL_NEWLIB
 
@@ -458,7 +478,9 @@ void * nano_calloc(RARG malloc_size_t n, malloc_size_t elem)
 void * nano_realloc(RARG void * ptr, malloc_size_t size)
 {
     void * mem;
+#if 0	// DC
     chunk * p_to_realloc;
+#endif
 
     if (ptr == NULL) return nano_malloc(RCALL size);
 
@@ -520,6 +542,7 @@ struct mallinfo nano_mallinfo(RONEARG)
 #ifdef DEFINE_MALLOC_STATS
 void nano_malloc_stats(RONEARG)
 {
+#if 0	// DC
     nano_mallinfo(RONECALL);
     fiprintf(stderr, "max system bytes = %10u\n",
              current_mallinfo.arena);
@@ -527,6 +550,7 @@ void nano_malloc_stats(RONEARG)
              current_mallinfo.arena);
     fiprintf(stderr, "in use bytes     = %10u\n",
              current_mallinfo.uordblks);
+#endif
 }
 #endif /* DEFINE_MALLOC_STATS */
 
@@ -636,3 +660,15 @@ void * nano_pvalloc(RARG size_t s)
     return nano_valloc(RCALL ALIGN_TO(s, MALLOC_PAGE_ALIGN));
 }
 #endif /* DEFINE_PVALLOC */
+
+#if 1	// DC
+
+// We have to declare _malloc_r as well because signal() from libc calls it
+void* _malloc_r(struct _reent *reent_ptr, size_t n)
+{
+	return malloc(n);
+}
+
+#endif
+
+// End
