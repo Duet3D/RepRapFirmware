@@ -328,13 +328,13 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType pre
 	while (gb.buffer[i] >= 'a' && gb.buffer[i] <= 'z')
 	{
 		++i;
-		if (i == 6)
+		if (i == 9)
 		{
-			break;				// all command words are less than 6 characters long
+			break;				// all command words are less than 9 characters long
 		}
 	}
 
-	if (i >= 2 && i < 6 && (gb.buffer[i] == 0 || gb.buffer[i] == ' ' || gb.buffer[i] == '\t' || gb.buffer[i] == '{'))		// if the command word is properly terminated
+	if (i >= 2 && i < 9 && (gb.buffer[i] == 0 || gb.buffer[i] == ' ' || gb.buffer[i] == '\t' || gb.buffer[i] == '{'))		// if the command word is properly terminated
 	{
 		readPointer = i;
 		const char * const command = gb.buffer;
@@ -388,7 +388,7 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType pre
 		case 5:
 			if (doingFile)
 			{
-			if (StringStartsWith(command, "while"))
+				if (StringStartsWith(command, "while"))
 				{
 					ProcessWhileCommand();
 					return true;
@@ -405,6 +405,13 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType pre
 				}
 			}
 			break;
+
+		case 9:
+			if (doingFile && StringStartsWith(command, "continue"))
+			{
+				ProcessContinueCommand();
+				return true;
+			}
 		}
 	}
 
@@ -526,6 +533,23 @@ void StringParser::ProcessBreakCommand()
 		gb.machineState->EndBlock();
 	} while (gb.machineState->CurrentBlockState().GetType() != BlockType::loop);
 	gb.machineState->CurrentBlockState().SetPlainBlock();
+	indentToSkipTo = gb.machineState->indentLevel;						// skip forwards to the end of the loop
+}
+
+void StringParser::ProcessContinueCommand()
+{
+	do
+	{
+		if (gb.machineState->indentLevel == 0)
+		{
+			throw ConstructParseException("'continue' was not inside a loop");
+		}
+		gb.machineState->EndBlock();
+	} while (gb.machineState->CurrentBlockState().GetType() != BlockType::loop);
+
+	// Go back to the start of the loop and re-evaluate the while-part
+	gb.machineState->lineNumber = gb.machineState->CurrentBlockState().GetLineNumber();
+	gb.RestartFrom(gb.machineState->CurrentBlockState().GetFilePosition());
 }
 
 void StringParser::ProcessVarCommand()
@@ -1648,8 +1672,8 @@ ExpressionValue StringParser::ParseBracketedExpression(StringBuffer& stringBuffe
 ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_t priority, bool evaluate)
 {
 	// Lists of binary operators and their priorities
-	static constexpr const char *operators = "?^&|=<>+-*/";					// for multi-character operators <= and >= this is the first character
-	static constexpr uint8_t priorities[] = { 1, 2, 3, 3, 4, 4, 4, 5, 5, 6, 6 };
+	static constexpr const char *operators = "?^&|!=<>+-*/";				// for multi-character operators <= and >= and != this is the first character
+	static constexpr uint8_t priorities[] = { 1, 2, 3, 3, 4, 4, 4, 4, 5, 5, 6, 6 };
 	constexpr uint8_t UnaryPriority = 10;									// must be higher than any binary operator priority
 	static_assert(ARRAY_SIZE(priorities) == strlen(operators));
 
@@ -1740,6 +1764,11 @@ ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_
 	{
 		SkipWhiteSpace();
 		char opChar = gb.buffer[readPointer];
+		if (opChar == 0)	// don't pass null to strchr
+		{
+			return val;
+		}
+
 		const char * const p = strchr(operators, opChar);
 		if (p == nullptr)
 		{
@@ -1754,10 +1783,21 @@ ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_
 
 		++readPointer;						// skip the [first] operator character
 
-		// Handle >= and <=
-		const bool invert = ((opChar == '>' || opChar == '<') && gb.buffer[readPointer] == '=');
-		if (invert)
+		// Handle >= and <= and !=
+		bool invert = false;
+		if (opChar == '!')
 		{
+			if (gb.buffer[readPointer] != '=')
+			{
+				throw ConstructParseException("expected '='");
+			}
+			invert = true;
+			++readPointer;
+			opChar = '=';
+		}
+		else if ((opChar == '>' || opChar == '<') && gb.buffer[readPointer] == '=')
+		{
+			invert = true;
 			++readPointer;
 			opChar ^= ('>' ^ '<');			// change < to > or vice versa
 		}
@@ -1938,6 +1978,10 @@ ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_
 						throw ConstructParseException("unexpected operand type to equality operator");
 					}
 					val.type = TYPE_OF(bool);
+					if (invert)
+					{
+						val.bVal = !val.bVal;
+					}
 					break;
 
 				case '^':
@@ -2188,22 +2232,39 @@ ExpressionValue StringParser::ParseNumber()
 }
 
 // Parse an identifier
-void StringParser::ParseIdentifier(const StringRef& id)
+void StringParser::ParseIdentifier(const StringRef& id, bool evaluate)
 {
 	if (!isalpha(gb.buffer[readPointer]))
 	{
 		throw ConstructParseException("expected an identifier");
 	}
 
-	const unsigned int start = readPointer;
+	// TODO The following would be more efficient if instead of evaluating indices in [ ] and converting them back to strings,
+	// we passed a list of indices to reprap.GetObjectValue and just put markers in the variable name for where the indices were
 	char c;
-	while (isalpha((c = gb.buffer[readPointer])) || isdigit(c) || c == '_' || c == '.')
+	while (isalpha((c = gb.buffer[readPointer])) || isdigit(c) || c == '_' || c == '.' || c == '[')
 	{
 		++readPointer;
-	}
-	if (id.copy(gb.buffer + start, readPointer - start))
-	{
-		throw ConstructParseException("variable name too long");;
+		if (c == '[')
+		{
+			char stringBuffer[StringLength20];			// we shouldn't need any strings while evaluate an index, so use a small buffer
+			StringBuffer bufRef(stringBuffer, ARRAY_SIZE(stringBuffer));
+			const ExpressionValue index = ParseExpression(bufRef, 0, evaluate);
+			if (gb.buffer[readPointer] != ']')
+			{
+				throw ConstructParseException("expected ']'");
+			}
+			if (index.type != TYPE_OF(int32_t))
+			{
+				throw ConstructParseException("expected integer expression");
+			}
+			id.catf("[%" PRIi32 "]", index.iVal);		//TODO overflow check (or do the earlier TODO, then we won't need this catf call)
+			++readPointer;
+		}
+		else if (id.cat(c))
+		{
+			throw ConstructParseException("variable name too long");;
+		}
 	}
 }
 
@@ -2211,7 +2272,7 @@ void StringParser::ParseIdentifier(const StringRef& id)
 ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuffer, bool evaluate)
 {
 	String<MaxVariableNameLength> varName;
-	ParseIdentifier(varName.GetRef());
+	ParseIdentifier(varName.GetRef(), evaluate);
 
 	// Check for the names of constants
 	if (varName.Equals("true"))

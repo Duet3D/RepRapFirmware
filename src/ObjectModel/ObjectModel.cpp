@@ -71,7 +71,12 @@ bool ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 				{
 					buf->cat(',');
 				}
-				tbl->ReportAsJson(buf, context, this, GetNextElement(filter));
+				const char * nextElement = GetNextElement(filter);
+				if (*nextElement == '.')
+				{
+					++nextElement;
+				}
+				tbl->ReportAsJson(buf, context, this, nextElement);
 				added = true;
 			}
 			--numEntries;
@@ -300,10 +305,6 @@ const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(uint8_t tabl
 	{
 		++id;
 	}
-	if (*id == '.')
-	{
-		++id;
-	}
 	return id;
 }
 
@@ -367,7 +368,7 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplor
 	{
 		if (*idString != '[')
 		{
-			throw sp.ConstructParseException("can't use whole array");
+			throw sp.ConstructParseException("can't select whole array");
 		}
 		const char *endptr;
 		const long index = SafeStrtol(idString + 1, &endptr);
@@ -383,9 +384,9 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplor
 			throw sp.ConstructParseException("array index out of bounds");
 		}
 
-		idString = endptr + 1;								// skip past the ']'
 		context.AddIndex(index);
-		val = GetObjectValue(sp, context, val.omadVal->GetElement(this, context), idString);
+		const ExpressionValue arrayElement = val.omadVal->GetElement(this, context);
+		val = GetObjectValue(sp, context, arrayElement, endptr + 1);
 		context.RemoveIndex();
 		return val;
 	}
@@ -404,7 +405,7 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplor
 		return val;
 	}
 
-	throw sp.ConstructParseException("reached primive type beforee end of selector string");
+	throw sp.ConstructParseException("reached primitive type before end of selector string");
 }
 
 #endif

@@ -107,6 +107,7 @@ private:
 	void ProcessElifCommand(BlockType previousBlockType) THROWS_GCODE_EXCEPTION;
 	void ProcessWhileCommand() THROWS_GCODE_EXCEPTION;
 	void ProcessBreakCommand() THROWS_GCODE_EXCEPTION;
+	void ProcessContinueCommand() THROWS_GCODE_EXCEPTION;
 	void ProcessVarCommand() THROWS_GCODE_EXCEPTION;
 	void ProcessSetCommand() THROWS_GCODE_EXCEPTION;
 	void ProcessAbortCommand(const StringRef& reply) noexcept;
@@ -122,7 +123,7 @@ private:
 		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
 	ExpressionValue ParseIdentifierExpression(StringBuffer& stringBuffer, bool evaluate) THROWS_GCODE_EXCEPTION
 		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
-	void ParseIdentifier(const StringRef& id) THROWS_GCODE_EXCEPTION
+	void ParseIdentifier(const StringRef& id, bool evaluate) THROWS_GCODE_EXCEPTION
 		pre(readPointer >= 0);
 
 	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS_GCODE_EXCEPTION;
