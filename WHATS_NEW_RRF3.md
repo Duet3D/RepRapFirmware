@@ -5,15 +5,17 @@ Recommended compatible firmware:
 - TBD
 
 Upgrade notes:
-- You cannot upgrade a Duet WiFi, Ethernet or Maestro direct to this release from RRF 1.x or 2.x because the firmware binary is too large for the old IAP. You must upgrade to version 3.0 first.
+- You cannot upgrade a Duet WiFi, Ethernet or Maestro direct to this release from RRF 1.x or 2.x because the firmware binary is too large for the old IAP. You must upgrade to version 3.0 first, then from 3.0 you can upgrade to this release.
 
 New features and changed behaviour:
 - The **if**, **elif**, **else**, **while**, **break**, **continue**, **echo** and **abort** GCode meta commands are implemented, along with expression evaluation. See https://duet3d.dozuki.com/Wiki/GCode_Meta_Commands.
+- The MakeDirectory and RenameFile SD card functions now create the full path recursively if necessary
 
 Bug fixes:
 - When the C (temperature coefficient) parameter was used in the G31 command, if the temperature could not be read from the sensor specified in the H parameter then the error message was not clear; and it didn't allow time for the sensor to become ready in case it had only just been configured.
 - The M917 command didn't work on Duet 3 and Duet Maestro.
 - Fixed two instances of possible 1-character buffer overflow in class OutputBuffer
+- If no heaters were configured, one spurious heater was reported in the status response
 
 RepRapFirmware 3.0
 ==================
