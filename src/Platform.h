@@ -296,6 +296,10 @@ public:
 	const char* GetElectronicsString() const noexcept;
 	const char* GetBoardString() const noexcept;
 
+#if SUPPORT_OBJECT_MODEL
+	size_t GetNumBoards() const noexcept;							// for the object model table in class RepRap
+#endif
+
 #ifdef DUET_NG
 	bool IsDuetWiFi() const noexcept;
 	bool IsDueXPresent() const noexcept { return expansionBoard != ExpansionBoardType::none; }

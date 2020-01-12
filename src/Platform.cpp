@@ -196,24 +196,38 @@ DriversBitmap AxisDriversConfig::GetDriversBitmap() const noexcept
 
 constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 {
-	// Table entries for object Electronics
-	{ "MainBoard",		OBJECT_MODEL_FUNC(self, 1),								ObjectModelEntryFlags::none },
-
-	// Table entries for object MainBoard
-	{ "MaxHeaters",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),			ObjectModelEntryFlags::none },
-	{ "MaxMotors",		OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),	ObjectModelEntryFlags::none },
+	// Table entries for object Boards[]
+	{ "FirmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),			ObjectModelEntryFlags::none },
+#if HAS_LINUX_INTERFACE
+	{ "IAPFileNameSBC",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE_SBC),			ObjectModelEntryFlags::none },
+#endif
+	{ "IAPFileNameSD",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE),				ObjectModelEntryFlags::none },
+	{ "MaxHeaters",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),			ObjectModelEntryFlags::none },
+	{ "MaxMotors",			OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),	ObjectModelEntryFlags::none },
 # ifdef DUET_NG
-	{ "Name",			OBJECT_MODEL_FUNC(self->GetBoardName()),				ObjectModelEntryFlags::none },
-	{ "ShortName",		OBJECT_MODEL_FUNC(self->GetBoardShortName()),			ObjectModelEntryFlags::none },
+	{ "Name",				OBJECT_MODEL_FUNC(self->GetBoardName()),				ObjectModelEntryFlags::none },
+	{ "ShortName",			OBJECT_MODEL_FUNC(self->GetBoardShortName()),			ObjectModelEntryFlags::none },
 # else
-	{ "Name",			OBJECT_MODEL_FUNC_NOSELF(BOARD_NAME),					ObjectModelEntryFlags::none },
-	{ "ShortName",		OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),				ObjectModelEntryFlags::none },
+	{ "Name",				OBJECT_MODEL_FUNC_NOSELF(BOARD_NAME),					ObjectModelEntryFlags::none },
+	{ "ShortName",			OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),				ObjectModelEntryFlags::none },
 # endif
 };
 
-constexpr uint8_t Platform::objectModelTableDescriptor[] = { 2, 1, 4 };
+constexpr uint8_t Platform::objectModelTableDescriptor[] =
+#if HAS_LINUX_INTERFACE
+															{ 1, 7 };
+#else
+															{ 1, 6 };
+#endif
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Platform)
+
+// This is called by the OMT in class RepRap to get the size of the Boards array
+// For now only main board data is returned
+size_t Platform::GetNumBoards() const noexcept
+{
+	return 1;
+}
 
 #endif
 

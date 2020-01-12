@@ -125,11 +125,18 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(RepRap, __VA_ARGS__)
 
+const ObjectModelArrayDescriptor RepRap::boardsArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->platform->GetNumBoards(); },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->platform, 0); }
+};
+
 constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. MachineModel root
-	{ "Electronics",			OBJECT_MODEL_FUNC(self->platform),							ObjectModelEntryFlags::none },
+	{ "Boards",					OBJECT_MODEL_FUNC_NOSELF(&boardsArrayDescriptor),			ObjectModelEntryFlags::none },
 	{ "Heat",					OBJECT_MODEL_FUNC(self->heat),								ObjectModelEntryFlags::none },
 	{ "Job",					OBJECT_MODEL_FUNC(self->printMonitor),						ObjectModelEntryFlags::none },
 	{ "Move",					OBJECT_MODEL_FUNC(self->move),								ObjectModelEntryFlags::none },

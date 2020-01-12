@@ -164,6 +164,10 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL
 
+#if SUPPORT_OBJECT_MODEL
+	static const ObjectModelArrayDescriptor boardsArrayDescriptor;
+#endif
+
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
 

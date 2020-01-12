@@ -2695,7 +2695,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						}
 						else
 						{
+							outBuf->printf("{\"key\":");
+							outBuf->EncodeString(filter.c_str(), false);
+							outBuf->cat(",\"value\":");
 							reprap.ReportAsJson(outBuf, filter.c_str(), ObjectModelReportFlags::shortForm, ObjectModelEntryFlags::none);
+							outBuf->cat('}');
 						}
 					}
 					break;

@@ -13,9 +13,11 @@ const size_t NumFirmwareUpdateModules = 1;
 
 #if IAP_IN_RAM
 # define IAP_UPDATE_FILE			"Duet3_SDiap_" BOARD_SHORT_NAME ".bin"
+# define IAP_UPDATE_FILE_SBC		"Duet3_SBCiap_" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20450000;		// last 64kb of RAM
 #else
 # define IAP_UPDATE_FILE			"Duet3iap_sd_" BOARD_SHORT_NAME ".bin"
+# define IAP_UPDATE_FILE_SBC		"Duet3iap_sbc_" BOARD_SHORT_NAME ".bin"
 
 // SAME70 Flash locations
 // These are designed to work with 1Mbyte flash processors as well as 2Mbyte

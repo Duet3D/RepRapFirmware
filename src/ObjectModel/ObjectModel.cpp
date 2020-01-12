@@ -48,9 +48,8 @@ unsigned int ObjectExplorationContext::GetIndex(size_t n) const
 }
 
 // Report this object
-bool ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, uint8_t tableNumber, const char* filter) const
+void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, uint8_t tableNumber, const char* filter) const
 {
-	buf->cat('{');
 	bool added = false;
 	const uint8_t *descriptor;
 	const ObjectModelTableEntry *tbl = GetObjectModelTable(descriptor);
@@ -67,35 +66,43 @@ bool ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 		{
 			if (tbl->Matches(filter, context))
 			{
-				if (added)
+				if (!added)
+				{
+					if (*filter == 0 || context.ReportFullPath())
+					{
+						buf->cat('{');
+					}
+					added = true;
+				}
+				else
 				{
 					buf->cat(',');
 				}
-				const char * nextElement = GetNextElement(filter);
-				if (*nextElement == '.')
-				{
-					++nextElement;
-				}
-				tbl->ReportAsJson(buf, context, this, nextElement);
-				added = true;
+				tbl->ReportAsJson(buf, context, this, filter);
 			}
 			--numEntries;
 			++tbl;
 		}
+		if (added && (*filter == 0 || context.ReportFullPath()))
+		{
+			buf->cat('}');
+		}
 	}
-	buf->cat('}');
-	return added;
+	if (!added)
+	{
+		buf->cat("null");
+	}
 }
 
 // Construct a JSON representation of those parts of the object model requested by the user. This version is called on the root of the tree.
-bool ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, ObjectModelReportFlags rf, ObjectModelEntryFlags ff) const
+void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, ObjectModelReportFlags rf, ObjectModelEntryFlags ff) const
 {
 	ObjectExplorationContext context(rf, ff);
-	return ReportAsJson(buf, context, 0, filter);
+	ReportAsJson(buf, context, 0, filter);
 }
 
 // Function to report a value or object as JSON
-bool ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, ExpressionValue val, const char *filter) const
+void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, ExpressionValue val, const char *filter) const
 {
 	switch (val.type)
 	{
@@ -112,25 +119,29 @@ bool ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 			const long index = SafeStrtol(filter, &endptr);
 			if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
 			{
-				buf->cat("[]");						// avoid returning badly-formed JSON
-				return false;						// invalid syntax, or index out of range
+				buf->cat("null");					// avoid returning badly-formed JSON
+				break;								// invalid syntax, or index out of range
 			}
-			buf->cat('[');
+			if (*filter == 0 || context.ReportFullPath())
+			{
+				buf->cat('[');
+			}
 			context.AddIndex(index);
-			bool ret;
 			{
 				ReadLocker lock(val.omadVal->lockPointer);
-				ret = ReportItemAsJson(buf, context, val.omadVal->GetElement(this, context), endptr + 1);
+				ReportItemAsJson(buf, context, val.omadVal->GetElement(this, context), endptr + 1);
 			}
 			context.RemoveIndex();
-			buf->cat(']');
-			return ret;
+			if (*filter == 0 || context.ReportFullPath())
+			{
+				buf->cat(']');
+			}
 		}
-		if (*filter == 0)							// else reporting on all subparts of all elements in the array
+		else if (*filter == 0)						// else reporting on all subparts of all elements in the array
 		{
-			return ReportArrayAsJson(buf, context, val.omadVal, filter);
+			ReportArrayAsJson(buf, context, val.omadVal, filter);
 		}
-		return false;
+		break;;
 
 	case TYPE_OF(const ObjectModel*):
 		if (val.omVal != nullptr)
@@ -236,29 +247,26 @@ bool ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 		buf->cat("null");
 		break;
 	}
-	return true;
 }
 
 // Report an entire array as JSON
-bool ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelArrayDescriptor *omad, const char *filter) const
+void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelArrayDescriptor *omad, const char *filter) const
 {
 	ReadLocker lock(omad->lockPointer);
 
 	buf->cat('[');
-	bool ret = true;
 	const size_t count = omad->GetNumElements(this, context);
-	for (size_t i = 0; i < count && ret; ++i)
+	for (size_t i = 0; i < count; ++i)
 	{
 		if (i != 0)
 		{
 			buf->cat(',');
 		}
 		context.AddIndex(i);
-		ret = ReportItemAsJson(buf, context, omad->GetElement(this, context), filter);
+		ReportItemAsJson(buf, context, omad->GetElement(this, context), filter);
 		context.RemoveIndex();
 	}
 	buf->cat(']');
-	return ret;
 }
 
 // Find the requested entry
@@ -314,12 +322,20 @@ bool ObjectModelTableEntry::Matches(const char* filterString, const ObjectExplor
 }
 
 // Add the value of this element to the buffer, returning true if it matched and we did
-bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModel *self, const char* filter) const noexcept
+void ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModel *self, const char* filter) const noexcept
 {
-	buf->cat('"');
-	buf->cat(name);
-	buf->cat("\":");
-	return self->ReportItemAsJson(buf, context, func(self, context), filter);
+	if (*filter == 0 || context.ReportFullPath())
+	{
+		buf->cat('"');
+		buf->cat(name);
+		buf->cat("\":");
+	}
+	const char * nextElement = ObjectModel::GetNextElement(filter);
+	if (*nextElement == '.')
+	{
+		++nextElement;
+	}
+	self->ReportItemAsJson(buf, context, func(self, context), nextElement);
 }
 
 // Compare an ID with the name of this object
