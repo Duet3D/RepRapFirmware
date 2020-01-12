@@ -279,10 +279,10 @@ void StepTimer::CancelCallbackFromIsr() noexcept
 		if (*ppst == this)
 		{
 			*ppst = this->next;		// unlink this from the pending list
-			active = false;
 			break;
 		}
 	}
+	active = false;
 }
 
 void StepTimer::CancelCallback() noexcept

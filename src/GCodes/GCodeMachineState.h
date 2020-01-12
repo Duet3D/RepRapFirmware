@@ -137,24 +137,27 @@ public:
 	class BlockState
 	{
 	public:
-		BlockType GetType() const noexcept { return (BlockType) blockType; }
+		BlockType GetType() const noexcept { return blockType; }
 		uint32_t GetIterations() const noexcept { return iterationsDone; }
 		uint32_t GetLineNumber() const noexcept { return lineNumber; }
 		FilePosition GetFilePosition() const noexcept { return fpos; }
+		uint16_t GetIndent() const noexcept { return indentLevel; }
 
-		void SetLoopBlock(FilePosition filePos, uint32_t lineNum) noexcept { blockType = (uint32_t)BlockType::loop; fpos = filePos; lineNumber = lineNum; iterationsDone = 0; }
-		void SetPlainBlock() noexcept { blockType = (uint32_t)BlockType::plain; iterationsDone = 0; }
-		void SetIfTrueBlock() noexcept { blockType = (uint32_t)BlockType::ifTrue; iterationsDone = 0; }
-		void SetIfFalseNoneTrueBlock() noexcept { blockType = (uint32_t)BlockType::ifFalseNoneTrue; iterationsDone = 0; }
-		void SetIfFalseHadTrueBlock() noexcept { blockType = (uint32_t)BlockType::ifFalseHadTrue; iterationsDone = 0; }
+		void SetLoopBlock(FilePosition filePos, uint32_t lineNum) noexcept { blockType = BlockType::loop; fpos = filePos; lineNumber = lineNum; iterationsDone = 0; }
+		void SetPlainBlock() noexcept { blockType = BlockType::plain; iterationsDone = 0; }
+		void SetPlainBlock(uint16_t p_indentLevel) noexcept { blockType = BlockType::plain; iterationsDone = 0; indentLevel = p_indentLevel; }
+		void SetIfTrueBlock() noexcept { blockType = BlockType::ifTrue; iterationsDone = 0; }
+		void SetIfFalseNoneTrueBlock() noexcept { blockType = BlockType::ifFalseNoneTrue; iterationsDone = 0; }
+		void SetIfFalseHadTrueBlock() noexcept { blockType = BlockType::ifFalseHadTrue; iterationsDone = 0; }
 
 		void IncrementIterations() noexcept { ++iterationsDone; }
 
 	private:
 		FilePosition fpos;											// the file offset at which the current block started
-		uint32_t lineNumber : 29,									// the line number at which the current block started
-				 blockType : 3;										// the type of this block
+		uint32_t lineNumber;										// the line number at which the current block started
 		uint32_t iterationsDone;
+		uint16_t indentLevel;										// the indentation of this block
+		BlockType blockType;										// the type of this block
 	};
 
 	GCodeMachineState() noexcept;
@@ -192,7 +195,8 @@ public:
 		waitingForAcknowledgement : 1,
 		messageAcknowledged : 1,
 		messageCancelled : 1;
-	uint8_t indentLevel;
+
+	uint8_t blockNesting;
 	GCodeState state;
 	uint8_t toolChangeParam;
 
@@ -214,9 +218,11 @@ public:
 	void CopyStateFrom(const GCodeMachineState& other) noexcept;
 
 	BlockState& CurrentBlockState() noexcept;
+	const BlockState& CurrentBlockState() const noexcept;
 	int32_t GetIterations() const noexcept;
+	uint16_t CurrentBlockIndent() const noexcept { return CurrentBlockState().GetIndent(); }
 
-	bool CreateBlock() noexcept;
+	bool CreateBlock(uint16_t indentLevel) noexcept;
 	void EndBlock() noexcept;
 
 	static void Release(GCodeMachineState *ms) noexcept;

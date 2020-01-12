@@ -100,8 +100,6 @@ private:
 
 	bool ProcessConditionalGCode(const StringRef& reply, BlockType previousBlockType, bool doingFile) THROWS_GCODE_EXCEPTION;
 																			// Check for and process a conditional GCode language command returning true if we found one
-	void CreateBlocks() THROWS_GCODE_EXCEPTION;									// Create new code blocks
-	bool EndBlocks() noexcept;												// End blocks returning true if nothing more to process on this line
 	void ProcessIfCommand() THROWS_GCODE_EXCEPTION;
 	void ProcessElseCommand(BlockType previousBlockType) THROWS_GCODE_EXCEPTION;
 	void ProcessElifCommand(BlockType previousBlockType) THROWS_GCODE_EXCEPTION;

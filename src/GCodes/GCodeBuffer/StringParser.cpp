@@ -297,16 +297,25 @@ bool StringParser::CheckMetaCommand(const StringRef& reply)
 			indentToSkipTo = NoIndentSkip;									// no longer skipping
 		}
 
-		if (commandIndent > gb.machineState->indentLevel)
+		while (commandIndent < gb.machineState->CurrentBlockIndent())
 		{
-			CreateBlocks();					// indentation has increased so start new block(s)
-		}
-		else if (commandIndent < gb.machineState->indentLevel)
-		{
-			if (EndBlocks())
+			gb.machineState->EndBlock();
+			if (gb.machineState->CurrentBlockState().GetType() == BlockType::loop)
 			{
+				// Go back to the start of the loop and re-evaluate the while-part
+				gb.machineState->lineNumber = gb.machineState->CurrentBlockState().GetLineNumber();
+				gb.RestartFrom(gb.machineState->CurrentBlockState().GetFilePosition());
 				Init();
 				return true;
+			}
+		}
+
+		if (commandIndent > gb.machineState->CurrentBlockIndent())
+		{
+			// indentation has increased so start new block(s)
+			if (!gb.machineState->CreateBlock(commandIndent))
+			{
+				throw ConstructParseException("blocks nested too deeply");
 			}
 		}
 	}
@@ -419,35 +428,6 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType pre
 	return false;
 }
 
-// Create new code blocks
-void StringParser::CreateBlocks()
-{
-	while (gb.machineState->indentLevel < commandIndent)
-	{
-		if (!gb.machineState->CreateBlock())
-		{
-			throw ConstructParseException("blocks nested too deeply");
-		}
-	}
-}
-
-// End blocks returning true if nothing more to process on this line
-bool StringParser::EndBlocks() noexcept
-{
-	while (gb.machineState->indentLevel > commandIndent)
-	{
-		gb.machineState->EndBlock();
-		if (gb.machineState->CurrentBlockState().GetType() == BlockType::loop)
-		{
-			// Go back to the start of the loop and re-evaluate the while-part
-			gb.machineState->lineNumber = gb.machineState->CurrentBlockState().GetLineNumber();
-			gb.RestartFrom(gb.machineState->CurrentBlockState().GetFilePosition());
-			return true;
-		}
-	}
-	return false;
-}
-
 void StringParser::ProcessIfCommand()
 {
 	if (EvaluateCondition())
@@ -457,7 +437,7 @@ void StringParser::ProcessIfCommand()
 	else
 	{
 		gb.machineState->CurrentBlockState().SetIfFalseNoneTrueBlock();
-		indentToSkipTo = gb.machineState->indentLevel;					// skip forwards to the end of the block
+		indentToSkipTo = gb.machineState->CurrentBlockIndent();			// skip forwards to the end of the block
 	}
 }
 
@@ -469,7 +449,7 @@ void StringParser::ProcessElseCommand(BlockType previousBlockType)
 	}
 	else if (gb.machineState->CurrentBlockState().GetType() == BlockType::ifTrue || gb.machineState->CurrentBlockState().GetType() == BlockType::ifFalseHadTrue)
 	{
-		indentToSkipTo = gb.machineState->indentLevel;					// skip forwards to the end of the if-block
+		indentToSkipTo = gb.machineState->CurrentBlockIndent();			// skip forwards to the end of the if-block
 		gb.machineState->CurrentBlockState().SetPlainBlock();			// so that we get an error if there is another 'else' part
 	}
 	else
@@ -488,13 +468,13 @@ void StringParser::ProcessElifCommand(BlockType previousBlockType)
 		}
 		else
 		{
-			indentToSkipTo = gb.machineState->indentLevel;				// skip forwards to the end of the elif-block
+			indentToSkipTo = gb.machineState->CurrentBlockIndent();		// skip forwards to the end of the elif-block
 			gb.machineState->CurrentBlockState().SetIfFalseNoneTrueBlock();
 		}
 	}
 	else if (gb.machineState->CurrentBlockState().GetType() == BlockType::ifTrue || gb.machineState->CurrentBlockState().GetType() == BlockType::ifFalseHadTrue)
 	{
-		indentToSkipTo = gb.machineState->indentLevel;					// skip forwards to the end of the if-block
+		indentToSkipTo = gb.machineState->CurrentBlockIndent();			// skip forwards to the end of the if-block
 		gb.machineState->CurrentBlockState().SetIfFalseHadTrueBlock();
 	}
 	else
@@ -518,7 +498,7 @@ void StringParser::ProcessWhileCommand()
 	if (!EvaluateCondition())
 	{
 		gb.machineState->CurrentBlockState().SetPlainBlock();
-		indentToSkipTo = gb.machineState->indentLevel;					// skip forwards to the end of the block
+		indentToSkipTo = gb.machineState->CurrentBlockIndent();			// skip forwards to the end of the block
 	}
 }
 
@@ -526,21 +506,21 @@ void StringParser::ProcessBreakCommand()
 {
 	do
 	{
-		if (gb.machineState->indentLevel == 0)
+		if (gb.machineState->CurrentBlockIndent() == 0)
 		{
 			throw ConstructParseException("'break' was not inside a loop");
 		}
 		gb.machineState->EndBlock();
 	} while (gb.machineState->CurrentBlockState().GetType() != BlockType::loop);
 	gb.machineState->CurrentBlockState().SetPlainBlock();
-	indentToSkipTo = gb.machineState->indentLevel;						// skip forwards to the end of the loop
+	indentToSkipTo = gb.machineState->CurrentBlockIndent();				// skip forwards to the end of the loop
 }
 
 void StringParser::ProcessContinueCommand()
 {
 	do
 	{
-		if (gb.machineState->indentLevel == 0)
+		if (gb.machineState->CurrentBlockIndent() == 0)
 		{
 			throw ConstructParseException("'continue' was not inside a loop");
 		}

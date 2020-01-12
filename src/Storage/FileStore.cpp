@@ -64,29 +64,9 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 
 	if (writing)
 	{
-		// Try to create the path of this file if we want to write to it
-		String<MaxFilenameLength> filePathCopy;
-		filePathCopy.copy(filePath);
-
-		size_t i = (isdigit(filePathCopy[0]) && filePathCopy[1] == ':') ? 2 : 0;
-		if (filePathCopy[i] == '/')
+		if (!MassStorage::EnsurePath(filePath))
 		{
-			++i;
-		}
-
-		while (i < filePathCopy.strlen())
-		{
-			if (filePathCopy[i] == '/')
-			{
-				filePathCopy[i] = 0;
-				if (!MassStorage::DirectoryExists(filePathCopy.GetRef()) && !MassStorage::MakeDirectory(filePathCopy.c_str()))
-				{
-					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create folder %s while trying to open file %s\n", filePathCopy.c_str(), filePath);
-					return false;
-				}
-				filePathCopy[i] = '/';
-			}
-			++i;
+			return false;
 		}
 
 		// Also try to allocate a write buffer so we can perform faster writes

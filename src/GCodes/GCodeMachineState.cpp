@@ -22,13 +22,13 @@ GCodeMachineState::GCodeMachineState() noexcept
 	: previous(nullptr), feedRate(DefaultFeedRate * SecondsToMinutes), lockedResources(0), errorMessage(nullptr),
 	  lineNumber(0), compatibility(Compatibility::reprapFirmware), drivesRelative(false), axesRelative(false), doingFileMacro(false), runningM501(false),
 	  runningM502(false), volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
-	  waitingForAcknowledgement(false), messageAcknowledged(false), indentLevel(0), state(GCodeState::normal)
+	  waitingForAcknowledgement(false), messageAcknowledged(false), blockNesting(0), state(GCodeState::normal)
 {
 #if HAS_LINUX_INTERFACE
 	fileId = 0;
 	isFileFinished = fileError = false;
 #endif
-	blockStates[0].SetPlainBlock();
+	blockStates[0].SetPlainBlock(0);
 }
 
 #if HAS_LINUX_INTERFACE
@@ -147,13 +147,18 @@ void GCodeMachineState::CopyStateFrom(const GCodeMachineState& other) noexcept
 
 GCodeMachineState::BlockState& GCodeMachineState::CurrentBlockState() noexcept
 {
-	return blockStates[indentLevel];
+	return blockStates[blockNesting];
+}
+
+const GCodeMachineState::BlockState& GCodeMachineState::CurrentBlockState() const noexcept
+{
+	return blockStates[blockNesting];
 }
 
 // Get the number of iterations of the closest enclosing loop in the current file, or -1 if there is on enclosing loop
 int32_t GCodeMachineState::GetIterations() const noexcept
 {
-	uint8_t i = indentLevel;
+	uint8_t i = blockNesting;
 	while (true)
 	{
 		if (blockStates[i].GetType() == BlockType::loop)
@@ -169,23 +174,23 @@ int32_t GCodeMachineState::GetIterations() const noexcept
 }
 
 // Create a new block returning true if successful, false if maximum indent level exceeded
-bool GCodeMachineState::CreateBlock() noexcept
+bool GCodeMachineState::CreateBlock(uint16_t indentLevel) noexcept
 {
-	if (indentLevel + 1 == ARRAY_SIZE(blockStates))
+	if (blockNesting + 1 == ARRAY_SIZE(blockStates))
 	{
 		return false;
 	}
 
-	++indentLevel;
-	CurrentBlockState().SetPlainBlock();
+	++blockNesting;
+	CurrentBlockState().SetPlainBlock(indentLevel);
 	return true;
 }
 
 void GCodeMachineState::EndBlock() noexcept
 {
-	if (indentLevel != 0)
+	if (blockNesting != 0)
 	{
-		--indentLevel;
+		--blockNesting;
 	}
 }
 

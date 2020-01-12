@@ -374,27 +374,51 @@ bool MassStorage::Delete(const char* filePath) noexcept
 	return true;
 }
 
-// Create a new directory
-bool MassStorage::MakeDirectory(const char *parentDir, const char *dirName) noexcept
+// Ensure that the path up to the last '/' (excluding trailing '/' characters) in filePath exists, returning true if successful
+bool MassStorage::EnsurePath(const char* filePath) noexcept
 {
-	String<MaxFilenameLength> location;
-	if (!CombineName(location.GetRef(), parentDir, dirName))
+	// Try to create the path of this file if we want to write to it
+	String<MaxFilenameLength> filePathCopy;
+	filePathCopy.copy(filePath);
+
+	size_t i = (isdigit(filePathCopy[0]) && filePathCopy[1] == ':') ? 2 : 0;
+	if (filePathCopy[i] == '/')
 	{
-		return false;
+		++i;
 	}
-	if (f_mkdir(location.c_str()) != FR_OK)
+
+	size_t limit = filePathCopy.strlen();
+	while (limit != 0 && filePath[limit - 1] == '/')
 	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create directory %s\n", location.c_str());
-		return false;
+		--limit;
+	}
+	while (i < limit)
+	{
+		if (filePathCopy[i] == '/')
+		{
+			filePathCopy[i] = 0;
+			if (!MassStorage::DirectoryExists(filePathCopy.GetRef()) && f_mkdir(filePathCopy.c_str()) != FR_OK)
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create folder %s in path %s\n", filePathCopy.c_str(), filePath);
+				return false;
+			}
+			filePathCopy[i] = '/';
+		}
+		++i;
 	}
 	return true;
 }
 
+// Create a new directory
 bool MassStorage::MakeDirectory(const char *directory) noexcept
 {
+	if (!EnsurePath(directory))
+	{
+		return false;
+	}
 	if (f_mkdir(directory) != FR_OK)
 	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create directory %s\n", directory);
+		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create folder %s\n", directory);
 		return false;
 	}
 	return true;
@@ -405,10 +429,14 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename) noexc
 {
 	if (newFilename[0] >= '0' && newFilename[0] <= '9' && newFilename[1] == ':')
 	{
-		// Workaround for DWC 1.13 which send a volume specification at the start of the new path.
+		// Workaround for DWC 1.13 which sends a volume specification at the start of the new path.
 		// f_rename can't handle this, so skip past the volume specification.
 		// We are assuming that the user isn't really trying to rename across volumes. This is a safe assumption when the client is DWC.
 		newFilename += 2;
+	}
+	if (!EnsurePath(newFilename))
+	{
+		return false;
 	}
 	if (f_rename(oldFilename, newFilename) != FR_OK)
 	{

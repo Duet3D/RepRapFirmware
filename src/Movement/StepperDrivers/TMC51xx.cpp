@@ -1183,7 +1183,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			}
 
 			// Wait for the end-of-transfer interrupt
-			timedOut = (TaskBase::Take(TransferTimeout) == 0);
+			timedOut = TaskBase::Take(TransferTimeout);
 			DisableEndOfTransferInterrupt();
 			DisableDma();
 

@@ -33,7 +33,7 @@ namespace MassStorage
 	bool FindNext(FileInfo &file_info) noexcept;
 	void AbandonFindNext() noexcept;
 	bool Delete(const char* filePath) noexcept;
-	bool MakeDirectory(const char *parentDir, const char *dirName) noexcept;
+	bool EnsurePath(const char* filePath) noexcept;
 	bool MakeDirectory(const char *directory) noexcept;
 	bool Rename(const char *oldFilePath, const char *newFilePath) noexcept;
 	bool FileExists(const char *filePath) noexcept;

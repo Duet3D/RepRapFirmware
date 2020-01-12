@@ -138,17 +138,17 @@ void IoPort::Release() noexcept
 	if (IsValid() && !isSharedInput)
 	{
 #ifdef __LPC17xx__
-	//Release PWM/Servo from pin if needed
-	if(logicalPinModes[logicalPin] == OUTPUT_SERVO_HIGH || logicalPinModes[logicalPin] == OUTPUT_SERVO_LOW)
-	{
-		ReleaseServoPin(PinTable[logicalPin].pin);
-	}
-	if(logicalPinModes[logicalPin] == OUTPUT_PWM_HIGH || logicalPinModes[logicalPin] == OUTPUT_PWM_LOW)
-	{
-		ReleasePWMPin(PinTable[logicalPin].pin);
-	}
+		// Release PWM/Servo from pin if needed
+		if (logicalPinModes[logicalPin] == OUTPUT_SERVO_HIGH || logicalPinModes[logicalPin] == OUTPUT_SERVO_LOW)
+		{
+			ReleaseServoPin(PinTable[logicalPin].pin);
+		}
+		if (logicalPinModes[logicalPin] == OUTPUT_PWM_HIGH || logicalPinModes[logicalPin] == OUTPUT_PWM_LOW)
+		{
+			ReleasePWMPin(PinTable[logicalPin].pin);
+		}
 #endif
-        detachInterrupt(PinTable[logicalPin].pin);
+		detachInterrupt(PinTable[logicalPin].pin);
 		portUsedBy[logicalPin] = PinUsedBy::unused;
 		logicalPinModes[logicalPin] = PIN_MODE_NOT_CONFIGURED;
 	}
@@ -342,7 +342,7 @@ bool IoPort::SetMode(PinAccess access) noexcept
 			}
 		}
 #endif
-        IoPort::SetPinMode(PinTable[logicalPin].pin, desiredMode);
+		IoPort::SetPinMode(PinTable[logicalPin].pin, desiredMode);
 		logicalPinModes[logicalPin] = (int8_t)desiredMode;
 	}
 	return true;
