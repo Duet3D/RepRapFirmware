@@ -566,9 +566,11 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 		debugPrintf("%s\n", scratchString.c_str());
 	}
 
+	const float previousRmsError = sqrtf((float)initialSumOfSquares/numPoints);
+	reprap.GetMove().SetPreviousCalibrationDeviation(previousRmsError);
 	reprap.GetMove().SetLastCalibrationDeviation(expectedRmsError);
 	reply.printf("Calibrated %d factors using %d points, deviation before %.3f after %.3f",
-			numFactors, numPoints, (double)sqrtf(initialSumOfSquares/numPoints), (double)expectedRmsError);
+			numFactors, numPoints, (double)previousRmsError, (double)expectedRmsError);
 
 	// We don't want to call MessageF(LogMessage, "%s\n", reply.c_str()) here because that will allocate a buffer within MessageF, which adds to our stack usage.
 	// Better to allocate the buffer here so that it uses the same stack space as the arrays that we have finished with

@@ -86,6 +86,7 @@ public:
 	unsigned int GetNumProbePoints() const noexcept;						// Return the number of currently used probe points
 	unsigned int GetNumProbedProbePoints() const noexcept;					// Return the number of actually probed probe points
 	void SetLastCalibrationDeviation(float f) { lastCalibrationDeviation = f; }
+	void SetPreviousCalibrationDeviation(float f) { previousCalibrationDeviation = f; }
 	void SetLastMeshDeviation(float f) { lastMeshDeviation = f; }
 
 	float PushBabyStepping(size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
@@ -246,6 +247,7 @@ private:
 	float zShift;										// Height to add to the bed transform
 
 	float lastCalibrationDeviation;
+	float previousCalibrationDeviation;
 	float lastMeshDeviation;
 
 	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set

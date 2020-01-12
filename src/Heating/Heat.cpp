@@ -1224,7 +1224,7 @@ float Heat::GetSensorTemperature(int sensorNum, TemperatureError& err) const noe
 size_t Heat::GetNumHeatersToReport() const noexcept
 {
 	size_t ret = ARRAY_SIZE(heaters);
-	while (ret != 0 && heaters[ret] == nullptr)
+	while (ret != 0 && heaters[ret - 1] == nullptr)
 	{
 		--ret;
 	}
