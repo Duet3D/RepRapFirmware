@@ -123,8 +123,6 @@ private:
 		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
 	ExpressionValue ParseIdentifierExpression(StringBuffer& stringBuffer, bool evaluate) THROWS_GCODE_EXCEPTION
 		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
-	void ParseIdentifier(const StringRef& id, bool evaluate) THROWS_GCODE_EXCEPTION
-		pre(readPointer >= 0);
 
 	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS_GCODE_EXCEPTION;
 	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS_GCODE_EXCEPTION;

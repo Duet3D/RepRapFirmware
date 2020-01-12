@@ -14,23 +14,42 @@
 #include <cstring>
 #include <General/SafeStrtod.h>
 
-void ObjectExplorationContext::AddIndex(unsigned int index)
+void ObjectExplorationContext::AddIndex(int32_t index)
 {
-	if (numIndices == MaxIndices)
+	if (numIndicesCounted == MaxIndices)
+	{
+		throw GCodeException(-1, -1, "Too many indices");
+	}
+	indices[numIndicesCounted] = index;
+	++numIndicesCounted;
+}
+
+void ObjectExplorationContext::AddIndex()
+{
+	if (numIndicesCounted == numIndicesProvided)
 	{
 		THROW_INTERNAL_ERROR;
 	}
-	indices[numIndices] = index;
-	++numIndices;
+	++numIndicesCounted;
 }
 
 void ObjectExplorationContext::RemoveIndex()
 {
-	if (numIndices == 0)
+	if (numIndicesCounted == 0)
 	{
 		THROW_INTERNAL_ERROR;
 	}
-	--numIndices;
+	--numIndicesCounted;
+}
+
+void ObjectExplorationContext::ProvideIndex(int32_t index)
+{
+	if (numIndicesProvided == MaxIndices)
+	{
+		throw GCodeException(-1, -1, "Too many indices");
+	}
+	indices[numIndicesProvided] = index;
+	++numIndicesProvided;
 }
 
 // Constructor
@@ -38,11 +57,20 @@ ObjectModel::ObjectModel() noexcept
 {
 }
 
-unsigned int ObjectExplorationContext::GetIndex(size_t n) const
+int32_t ObjectExplorationContext::GetIndex(size_t n) const
 {
-	if (n < numIndices)
+	if (n < numIndicesCounted)
 	{
-		return indices[numIndices - n - 1];
+		return indices[numIndicesCounted - n - 1];
+	}
+	THROW_INTERNAL_ERROR;
+}
+
+int32_t ObjectExplorationContext::GetLastIndex() const
+{
+	if (numIndicesCounted != 0)
+	{
+		return indices[numIndicesCounted - 1];
 	}
 	THROW_INTERNAL_ERROR;
 }
@@ -309,7 +337,7 @@ const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(uint8_t tabl
 
 /*static*/ const char* ObjectModel::GetNextElement(const char *id) noexcept
 {
-	while (*id != 0 && *id != '.' && *id != '[')
+	while (*id != 0 && *id != '.' && *id != '[' && *id != '^')
 	{
 		++id;
 	}
@@ -352,20 +380,13 @@ int ObjectModelTableEntry::IdCompare(const char *id) const noexcept
 		++id;
 		++n;
 	}
-	return (*n == 0 && (*id == 0 || *id == '.' || *id == '[')) ? 0
+	return (*n == 0 && (*id == 0 || *id == '.' || *id == '[' || *id == '^')) ? 0
 		: (*id > *n) ? 1
 			: -1;
 }
 
-// Get the value of an object. This version is called on the root of the tree.
-ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, const char *idString) const
-{
-	ObjectExplorationContext context(ObjectModelReportFlags::none, ObjectModelEntryFlags::none);
-	return GetObjectValue(sp, context, 0, idString);
-}
-
 // Get the value of an object
-ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, uint8_t tableNumber, const char *idString) const
+ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, const char *idString, uint8_t tableNumber) const
 {
 	const ObjectModelTableEntry *const e = FindObjectModelTableEntry(tableNumber, idString);
 	if (e == nullptr)
@@ -382,36 +403,28 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplor
 {
 	if (val.type == TYPE_OF(const ObjectModelArrayDescriptor*))
 	{
-		if (*idString != '[')
+		if (*idString != '^')
 		{
-			throw sp.ConstructParseException("can't select whole array");
-		}
-		const char *endptr;
-		const long index = SafeStrtol(idString + 1, &endptr);
-		if (endptr == idString + 1 || *endptr != ']')
-		{
-			throw sp.ConstructParseException("expected ']'");
+			throw sp.ConstructParseException("missing array index");
 		}
 
+		context.AddIndex();
 		ReadLocker lock(val.omadVal->lockPointer);
 
-		if (index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
+		if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= val.omadVal->GetNumElements(this, context))
 		{
 			throw sp.ConstructParseException("array index out of bounds");
 		}
 
-		context.AddIndex(index);
 		const ExpressionValue arrayElement = val.omadVal->GetElement(this, context);
-		val = GetObjectValue(sp, context, arrayElement, endptr + 1);
-		context.RemoveIndex();
-		return val;
+		return GetObjectValue(sp, context, arrayElement, idString + 1);
 	}
 
 	if (val.type == TYPE_OF(const ObjectModel*))
 	{
 		if (*idString == '.')
 		{
-			return val.omVal->GetObjectValue(sp, context, val.param, idString + 1);
+			return val.omVal->GetObjectValue(sp, context, idString + 1, val.param);
 		}
 		throw sp.ConstructParseException((*idString == 0) ? "selected value has non-primitive type" : "syntax error in value selector string");
 	}

@@ -85,12 +85,12 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "Timeout",				OBJECT_MODEL_FUNC((int32_t)self->idleTimeout),											ObjectModelEntryFlags::none },
 
 	// 3. Move.Axis[] members
-	{ "Homed",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetIndex(0))),			ObjectModelEntryFlags::none },
-	{ "Letter",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetIndex(0)]),		ObjectModelEntryFlags::none },
-	{ "Max",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().AxisMaximum(context.GetIndex(0))),		ObjectModelEntryFlags::none },
-	{ "Min",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().AxisMinimum(context.GetIndex(0))),		ObjectModelEntryFlags::none },
-	{ "UserPosition",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(context.GetIndex(0)), 3),	ObjectModelEntryFlags::none },
-	{ "Visible",				OBJECT_MODEL_FUNC_NOSELF(context.GetIndex(0) < reprap.GetGCodes().GetVisibleAxes()),	ObjectModelEntryFlags::none },
+	{ "Homed",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),		ObjectModelEntryFlags::none },
+	{ "Letter",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetLastIndex()]),	ObjectModelEntryFlags::none },
+	{ "Max",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().AxisMaximum(context.GetLastIndex())),		ObjectModelEntryFlags::none },
+	{ "Min",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().AxisMinimum(context.GetLastIndex())),		ObjectModelEntryFlags::none },
+	{ "UserPosition",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(context.GetLastIndex()), 3),	ObjectModelEntryFlags::none },
+	{ "Visible",				OBJECT_MODEL_FUNC_NOSELF(context.GetLastIndex() < (int32_t)reprap.GetGCodes().GetVisibleAxes()),	ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t Move::objectModelTableDescriptor[] = { 4, 9, 3, 2, 6 };

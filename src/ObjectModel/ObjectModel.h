@@ -125,12 +125,16 @@ enum class ObjectModelEntryFlags : uint8_t
 class ObjectExplorationContext
 {
 public:
-	ObjectExplorationContext(ObjectModelReportFlags rf, ObjectModelEntryFlags ff) noexcept : numIndices(0), reportFlags(rf), filterFlags(ff) { }
+	ObjectExplorationContext(ObjectModelReportFlags rf, ObjectModelEntryFlags ff) noexcept
+		: numIndicesProvided(0), numIndicesCounted(0), reportFlags(rf), filterFlags(ff) { }
 
-	void AddIndex(unsigned int index) THROWS_GCODE_EXCEPTION;
+	void AddIndex(int32_t index) THROWS_GCODE_EXCEPTION;
+	void AddIndex() THROWS_GCODE_EXCEPTION;
 	void RemoveIndex() THROWS_GCODE_EXCEPTION;
-	unsigned int GetIndex(size_t n) const THROWS_GCODE_EXCEPTION;
-	size_t GetNumIndices() const noexcept { return numIndices; }
+	void ProvideIndex(int32_t index) THROWS_GCODE_EXCEPTION;
+	int32_t GetIndex(size_t n) const THROWS_GCODE_EXCEPTION;
+	int32_t GetLastIndex() const THROWS_GCODE_EXCEPTION;
+	size_t GetNumIndicesCounted() const noexcept { return numIndicesCounted; }
 	ObjectModelReportFlags GetReportFlags() const noexcept { return reportFlags; }
 	ObjectModelEntryFlags GetFilterFlags() const noexcept { return filterFlags; }
 	bool ShortFormReport() const noexcept { return ((uint16_t)reportFlags & (uint16_t)ObjectModelReportFlags::shortForm) != 0; }
@@ -139,8 +143,9 @@ public:
 private:
 	static constexpr size_t MaxIndices = 4;			// max depth of array nesting
 
-	size_t numIndices;								// the number of indices stored
-	unsigned int indices[MaxIndices];
+	size_t numIndicesProvided;						// the number of indices provided, when we are doing a value lookup
+	size_t numIndicesCounted;						// the number of indices passed in the search string
+	int32_t indices[MaxIndices];
 	ObjectModelReportFlags reportFlags;
 	ObjectModelEntryFlags filterFlags;
 };
@@ -163,8 +168,8 @@ public:
 	// Construct a JSON representation of those parts of the object model requested by the user. This version is called on the root of the tree.
 	void ReportAsJson(OutputBuffer *buf, const char *filter, ObjectModelReportFlags rf, ObjectModelEntryFlags ff) const THROWS_GCODE_EXCEPTION;
 
-	// Get the value of an object. This version is called on the root of the tree.
-	ExpressionValue GetObjectValue(const StringParser& sp, const char *idString) const THROWS_GCODE_EXCEPTION;
+	// Get the value of an object via the table
+	ExpressionValue GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, const char *idString, uint8_t tableNumber = 0) const THROWS_GCODE_EXCEPTION;
 
 	// Function to report a value or object as JSON
 	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, ExpressionValue val, const char *filter) const THROWS_GCODE_EXCEPTION;
@@ -178,9 +183,6 @@ protected:
 
 	// Report an entire array as JSON
 	void ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelArrayDescriptor *omad, const char *filter) const THROWS_GCODE_EXCEPTION;
-
-	// Get the value of an object via the table
-	ExpressionValue GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, uint8_t tableNumber, const char *idString) const THROWS_GCODE_EXCEPTION;
 
 	// Get the value of an object that we hold
 	ExpressionValue GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, ExpressionValue val, const char *idString) const THROWS_GCODE_EXCEPTION;
