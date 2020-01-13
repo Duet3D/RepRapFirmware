@@ -136,17 +136,17 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. MachineModel root
-	{ "Boards",					OBJECT_MODEL_FUNC_NOSELF(&boardsArrayDescriptor),			ObjectModelEntryFlags::none },
-	{ "Heat",					OBJECT_MODEL_FUNC(self->heat),								ObjectModelEntryFlags::none },
-	{ "Job",					OBJECT_MODEL_FUNC(self->printMonitor),						ObjectModelEntryFlags::none },
-	{ "Move",					OBJECT_MODEL_FUNC(self->move),								ObjectModelEntryFlags::none },
-	{ "Network",				OBJECT_MODEL_FUNC(self->network),							ObjectModelEntryFlags::none },
-	{ "State",					OBJECT_MODEL_FUNC(self, 1),									ObjectModelEntryFlags::none },
+	{ "boards",					OBJECT_MODEL_FUNC_NOSELF(&boardsArrayDescriptor),			ObjectModelEntryFlags::live },
+	{ "heat",					OBJECT_MODEL_FUNC(self->heat),								ObjectModelEntryFlags::live },
+	{ "job",					OBJECT_MODEL_FUNC(self->printMonitor),						ObjectModelEntryFlags::live },
+	{ "move",					OBJECT_MODEL_FUNC(self->move),								ObjectModelEntryFlags::live },
+	{ "network",				OBJECT_MODEL_FUNC(self->network),							ObjectModelEntryFlags::none },
+	{ "state",					OBJECT_MODEL_FUNC(self, 1),									ObjectModelEntryFlags::live },
 
 	// 1. MachineModel.State
-	{ "CurrentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),	ObjectModelEntryFlags::none },
-	{ "MachineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),	ObjectModelEntryFlags::none },
-	{ "Status",					OBJECT_MODEL_FUNC(self->GetStatusString()),					ObjectModelEntryFlags::none },
+	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),	ObjectModelEntryFlags::live },
+	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),	ObjectModelEntryFlags::none },
+	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),					ObjectModelEntryFlags::live },
 };
 
 constexpr uint8_t RepRap::objectModelTableDescriptor[] = { 2, 6, 3 };
@@ -1521,27 +1521,24 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) noe
 		// MCU temperatures
 #if HAS_CPU_TEMP_SENSOR
 		{
-			float minT, currT, maxT;
-			platform->GetMcuTemperatures(minT, currT, maxT);
-			response->catf(",\"mcutemp\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)minT, (double)currT, (double)maxT);
+			const MinMaxCurrent temps = platform->GetMcuTemperatures();
+			response->catf(",\"mcutemp\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)temps.min, (double)temps.current, (double)temps.max);
 		}
 #endif
 
 #if HAS_VOLTAGE_MONITOR
 		// Power in voltages
 		{
-			float minV, currV, maxV;
-			platform->GetPowerVoltages(minV, currV, maxV);
-			response->catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)minV, (double)currV, (double)maxV);
+			const MinMaxCurrent voltages = platform->GetPowerVoltages();
+			response->catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)voltages.min, (double)voltages.current, (double)voltages.max);
 		}
 #endif
 
 #if HAS_12V_MONITOR
 		// Power in voltages
 		{
-			float minV, currV, maxV;
-			platform->GetV12Voltages(minV, currV, maxV);
-			response->catf(",\"v12\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)minV, (double)currV, (double)maxV);
+			const MinMaxCurrent voltages = platform->GetV12Voltages();
+			response->catf(",\"v12\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)voltages.min, (double)voltages.current, (double)voltages.max);
 		}
 #endif
 	}
@@ -2219,6 +2216,38 @@ bool RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, 
 	}
 	return true;
 }
+
+#if SUPPORT_OBJECT_MODEL
+
+// Return a query into the object model, or return nullptr if no buffer available
+OutputBuffer *RepRap::GetModelResponse(const char *key, const char *flags)
+{
+	OutputBuffer *outBuf;
+	if (OutputBuffer::Allocate(outBuf))
+	{
+		if (key == nullptr) { key = ""; }
+		if (flags == nullptr) { flags = ""; }
+
+		outBuf->printf("{\"key\":");
+		outBuf->EncodeString(key, false);
+		outBuf->catf("{\"flags\":");
+		outBuf->EncodeString(flags, false);
+
+		const bool wantArrayLength = (*key == '#');
+		if (wantArrayLength)
+		{
+			++key;
+		}
+
+		outBuf->cat(",\"result\":");
+		reprap.ReportAsJson(outBuf, key, flags, wantArrayLength);
+		outBuf->cat('}');
+	}
+
+	return outBuf;
+}
+
+#endif
 
 // Send a beep. We send it to both PanelDue and the web interface.
 void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept

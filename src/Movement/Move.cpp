@@ -65,35 +65,40 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Move members
-	{ "Axes",					OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 										ObjectModelEntryFlags::none },
-	{ "CalibrationDeviation",	OBJECT_MODEL_FUNC(self->lastCalibrationDeviation, 3),									ObjectModelEntryFlags::none },
-	{ "Daa",					OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
-	{ "Idle",					OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::none },
-	{ "MeshDeviation",			OBJECT_MODEL_FUNC(self->lastMeshDeviation, 3),											ObjectModelEntryFlags::none },
-	{ "PreviousDeviation",		OBJECT_MODEL_FUNC(self->previousCalibrationDeviation, 3),								ObjectModelEntryFlags::none },
-	{ "PrintingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration),										ObjectModelEntryFlags::none },
-	{ "TravelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration),											ObjectModelEntryFlags::none },
-	{ "SpeedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor()),							ObjectModelEntryFlags::none },
+	{ "axes",					OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 										ObjectModelEntryFlags::live },
+	{ "calibrationDeviation",	OBJECT_MODEL_FUNC(self->lastCalibrationDeviation, 3),									ObjectModelEntryFlags::none },
+	{ "currentMove",			OBJECT_MODEL_FUNC(self, 4),																ObjectModelEntryFlags::live },
+	{ "daa",					OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
+	{ "idle",					OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::none },
+	{ "meshDeviation",			OBJECT_MODEL_FUNC(self->lastMeshDeviation, 3),											ObjectModelEntryFlags::none },
+	{ "previousDeviation",		OBJECT_MODEL_FUNC(self->previousCalibrationDeviation, 3),								ObjectModelEntryFlags::none },
+	{ "printingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration),										ObjectModelEntryFlags::none },
+	{ "travelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration),											ObjectModelEntryFlags::none },
+	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor()),							ObjectModelEntryFlags::live },
 
 	// 1. Move.Daa members
-	{ "Enabled", 				OBJECT_MODEL_FUNC(self->drcEnabled), 													ObjectModelEntryFlags::none },
-	{ "MinimumAcceleration",	OBJECT_MODEL_FUNC(self->drcMinimumAcceleration),										ObjectModelEntryFlags::none },
-	{ "Period",					OBJECT_MODEL_FUNC(self->drcPeriod), 													ObjectModelEntryFlags::none },
+	{ "enabled", 				OBJECT_MODEL_FUNC(self->drcEnabled), 													ObjectModelEntryFlags::none },
+	{ "minimumAcceleration",	OBJECT_MODEL_FUNC(self->drcMinimumAcceleration),										ObjectModelEntryFlags::none },
+	{ "period",					OBJECT_MODEL_FUNC(self->drcPeriod), 													ObjectModelEntryFlags::none },
 
 	// 2. Move.Idle members
-	{ "Factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor()),					ObjectModelEntryFlags::none },
-	{ "Timeout",				OBJECT_MODEL_FUNC((int32_t)self->idleTimeout),											ObjectModelEntryFlags::none },
+	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor()),					ObjectModelEntryFlags::none },
+	{ "timeout",				OBJECT_MODEL_FUNC((int32_t)self->idleTimeout),											ObjectModelEntryFlags::none },
 
 	// 3. Move.Axis[] members
-	{ "Homed",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),		ObjectModelEntryFlags::none },
-	{ "Letter",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetLastIndex()]),	ObjectModelEntryFlags::none },
-	{ "Max",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().AxisMaximum(context.GetLastIndex())),		ObjectModelEntryFlags::none },
-	{ "Min",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().AxisMinimum(context.GetLastIndex())),		ObjectModelEntryFlags::none },
-	{ "UserPosition",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(context.GetLastIndex()), 3),	ObjectModelEntryFlags::none },
-	{ "Visible",				OBJECT_MODEL_FUNC_NOSELF(context.GetLastIndex() < (int32_t)reprap.GetGCodes().GetVisibleAxes()),	ObjectModelEntryFlags::none },
+	{ "homed",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),		ObjectModelEntryFlags::live },
+	{ "letter",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetLastIndex()]),	ObjectModelEntryFlags::none },
+	{ "max",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().AxisMaximum(context.GetLastIndex())),		ObjectModelEntryFlags::none },
+	{ "min",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().AxisMinimum(context.GetLastIndex())),		ObjectModelEntryFlags::none },
+	{ "userPosition",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(context.GetLastIndex()), 3), ObjectModelEntryFlags::live },
+	{ "visible",				OBJECT_MODEL_FUNC_NOSELF(context.GetLastIndex() < (int32_t)reprap.GetGCodes().GetVisibleAxes()), ObjectModelEntryFlags::none },
+
+	// 4. move.currentMove members
+	{ "requestedSpeed",			OBJECT_MODEL_FUNC(self->GetRequestedSpeed()),											ObjectModelEntryFlags::live },
+	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeed()),													ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 4, 9, 3, 2, 6 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 5, 10, 3, 2, 6, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 

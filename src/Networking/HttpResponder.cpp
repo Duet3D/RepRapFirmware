@@ -608,6 +608,15 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		responderState = ResponderState::gettingFileInfo;
 		return false;
 	}
+#if SUPPORT_OBJECT_MODEL
+	else if (StringEqualsIgnoreCase(request, "model"))
+	{
+		OutputBuffer::Release(response);
+		const char *const filterVal = GetKeyValue("key");
+		const char *const flagsVal = GetKeyValue("flags");
+		response = reprap.GetModelResponse(filterVal, flagsVal);
+	}
+#endif
 	else if (StringEqualsIgnoreCase(request, "config"))
 	{
 		OutputBuffer::Release(response);

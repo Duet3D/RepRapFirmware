@@ -2655,61 +2655,45 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 
 		case 408: // Get status in JSON format
 			{
-				const unsigned int form = (gb.Seen('P')) ? gb.GetUIValue() : 0;
 				const unsigned int type = gb.Seen('S') ? gb.GetUIValue() : 0;
 #if SUPPORT_CAN_EXPANSION
 				const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : 0;
 				if (board != 0)
 				{
-					result = CanInterface::RemoteM408(board, form, type, gb, reply);
+					result = CanInterface::RemoteM408(board, type, gb, reply);
 					break;
 				}
 #endif
-				switch (form)
+				const int seq = gb.Seen('R') ? gb.GetIValue() : -1;
+				if (&gb == auxGCode && (type == 0 || type == 2))
 				{
-				case 0:
-					{
-						const int seq = gb.Seen('R') ? gb.GetIValue() : -1;
-						if (&gb == auxGCode && (type == 0 || type == 2))
-						{
-							lastAuxStatusReportType = type;
-						}
+					lastAuxStatusReportType = type;
+				}
 
-						outBuf = GenerateJsonStatusResponse(type, seq, (&gb == auxGCode) ? ResponseSource::AUX : ResponseSource::Generic);
-						if (outBuf == nullptr)
-						{
-							result = GCodeResult::notFinished;			// we ran out of buffers, so try again later
-						}
-					}
-					break;
-
-#if SUPPORT_OBJECT_MODEL
-				case 1:
-					{
-						String<MediumStringLength> filter;
-						bool dummy;
-						gb.TryGetQuotedString('F', filter.GetRef(), dummy);
-						if (!OutputBuffer::Allocate(outBuf))
-						{
-							result = GCodeResult::notFinished;
-						}
-						else
-						{
-							outBuf->printf("{\"key\":");
-							outBuf->EncodeString(filter.c_str(), false);
-							outBuf->cat(",\"value\":");
-							reprap.ReportAsJson(outBuf, filter.c_str(), ObjectModelReportFlags::shortForm, ObjectModelEntryFlags::none);
-							outBuf->cat('}');
-						}
-					}
-					break;
-#endif
-
-				default:
-					break;
+				outBuf = GenerateJsonStatusResponse(type, seq, (&gb == auxGCode) ? ResponseSource::AUX : ResponseSource::Generic);
+				if (outBuf == nullptr)
+				{
+					result = GCodeResult::notFinished;			// we ran out of buffers, so try again later
 				}
 			}
 			break;
+
+#if SUPPORT_OBJECT_MODEL
+		case 409: // Get status in JSON format
+			{
+				String<StringLength100> key;
+				String<StringLength20> flags;
+				bool dummy;
+				gb.TryGetQuotedString('K', key.GetRef(), dummy);
+				gb.TryGetQuotedString('F', flags.GetRef(), dummy);
+				outBuf = reprap.GetModelResponse(key.c_str(), flags.c_str());
+				if (outBuf == nullptr)
+				{
+					result = GCodeResult::notFinished;			// we ran out of buffers, so try again later
+				}
+			}
+			break;
+#endif
 
 		case 450: // Report printer mode
 			reply.printf("PrinterMode:%s", GetMachineModeString());

@@ -25,9 +25,9 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Heater members
-	{ "Current",	OBJECT_MODEL_FUNC(self->GetTemperature()), 							ObjectModelEntryFlags::none },
-	{ "Sensor",		OBJECT_MODEL_FUNC((int32_t)self->GetSensorNumber()), 				ObjectModelEntryFlags::none },
-	{ "State",		OBJECT_MODEL_FUNC(self->GetStateName()), 							ObjectModelEntryFlags::none },
+	{ "current",	OBJECT_MODEL_FUNC(self->GetTemperature()), 							ObjectModelEntryFlags::live },
+	{ "sensor",		OBJECT_MODEL_FUNC((int32_t)self->GetSensorNumber()), 				ObjectModelEntryFlags::none },
+	{ "state",		OBJECT_MODEL_FUNC(self->GetStateName()), 							ObjectModelEntryFlags::live },
 };
 
 constexpr uint8_t Heater::objectModelTableDescriptor[] = { 1, 3 };

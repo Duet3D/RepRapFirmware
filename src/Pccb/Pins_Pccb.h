@@ -69,8 +69,6 @@ constexpr uint32_t IAP_IMAGE_END = 0x0047FFFF;		// we allow a full 64K on the SA
 #define SUPPORT_DOTSTAR_LED		1					// set nonzero to support DotStar LED strips
 #define ALLOCATE_DEFAULT_PORTS	1
 
-#define NO_EXTRUDER_ENDSTOPS	1	// Temporary!!!
-
 // The physical capabilities of the machine
 
 #if defined(PCCB_10)
@@ -343,6 +341,8 @@ constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 // Function to look up a pin name pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
+#if ALLOCATE_DEFAULT_PORTS
+
 // Default pin allocations
 constexpr const char *DefaultEndstopPinNames[] = { "stop1", "nil", "stop0" };	// stop0 is the default Z endstop, stop1 is the X endstop
 constexpr const char *DefaultZProbePinNames = "nil";
@@ -355,6 +355,8 @@ constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq, Default
 #else
 constexpr const char *DefaultFanPinNames[] = { "fan0", "fan1", "fan2", "!fan3+fan3a.tach", "nil+fan3btach" };
 constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq, DefaultFanPwmFreq, DefaultFanPwmFreq, 25000 };
+#endif
+
 #endif
 
 // Timer allocation

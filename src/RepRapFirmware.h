@@ -104,6 +104,14 @@ static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logica
 #define THROWS_GCODE_EXCEPTION	// we tag this on to function declarations to indicate that they may throw a GCodeException, which must be caught
 #define THROW_INTERNAL_ERROR	throw GCodeException(-1, -1, "internal error at file " __FILE__ "(%d)", (int32_t)__LINE__)
 
+// Struct to hold min, max and current values
+struct MinMaxCurrent
+{
+	float min;
+	float max;
+	float current;
+};
+
 // Type of a driver identifier
 struct DriverId
 {

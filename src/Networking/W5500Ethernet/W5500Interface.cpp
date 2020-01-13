@@ -49,11 +49,11 @@ W5500Interface::W5500Interface(Platform& p) noexcept
 const ObjectModelTableEntry W5500Interface::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "ActualIP",			OBJECT_MODEL_FUNC(self->ipAddress),		ObjectModelEntryFlags::none },
-	{ "FirmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(nullptr),		ObjectModelEntryFlags::none },
-	{ "Gateway",			OBJECT_MODEL_FUNC(self->gateway),		ObjectModelEntryFlags::none },
-	{ "Subnet",				OBJECT_MODEL_FUNC(self->netmask),		ObjectModelEntryFlags::none },
-	{ "Type",				OBJECT_MODEL_FUNC_NOSELF("ethernet"),	ObjectModelEntryFlags::none },
+	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),		ObjectModelEntryFlags::none },
+	{ "firmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(nullptr),		ObjectModelEntryFlags::none },
+	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),		ObjectModelEntryFlags::none },
+	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),		ObjectModelEntryFlags::none },
+	{ "type",				OBJECT_MODEL_FUNC_NOSELF("ethernet"),	ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t W5500Interface::objectModelTableDescriptor[] = { 1, 5 };

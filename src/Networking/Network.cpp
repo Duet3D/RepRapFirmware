@@ -86,7 +86,7 @@ static const ObjectModelArrayDescriptor interfaceArrayDescriptor =
 constexpr ObjectModelTableEntry Network::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "Interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfaceArrayDescriptor), ObjectModelEntryFlags::none }
+	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfaceArrayDescriptor), ObjectModelEntryFlags::none }
 };
 
 constexpr uint8_t Network::objectModelTableDescriptor[] = { 1, 1 };

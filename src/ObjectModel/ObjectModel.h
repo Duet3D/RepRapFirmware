@@ -106,27 +106,24 @@ struct ExpressionValue
 	uint64_t Get40BitValue() const noexcept { return ((uint64_t)param << 32) | uVal; }
 };
 
-enum class ObjectModelReportFlags : uint16_t
-{
-	none = 0,
-	shortForm = 1,
-	fullPath = 2
-};
-
 // Flags field of a table entry
 enum class ObjectModelEntryFlags : uint8_t
 {
+	// none, live and verbose are alternatives occupying the bottom 2 bits
 	none = 0,				// nothing special
 	live = 1,				// fast changing data, included in common status response
-	canAlter = 2,			// we can alter this value
+	verbose = 2,			// omit reporting this value by default
+
+	// canAlter can be or'ed in
+	canAlter = 4,			// we can alter this value
+	liveCanAlter = 5,		// we can alter this value
 };
 
 // Context passed to object model functions
 class ObjectExplorationContext
 {
 public:
-	ObjectExplorationContext(ObjectModelReportFlags rf, ObjectModelEntryFlags ff) noexcept
-		: numIndicesProvided(0), numIndicesCounted(0), reportFlags(rf), filterFlags(ff) { }
+	ObjectExplorationContext(const char *reportFlags, bool wal) noexcept;
 
 	void AddIndex(int32_t index) THROWS_GCODE_EXCEPTION;
 	void AddIndex() THROWS_GCODE_EXCEPTION;
@@ -135,10 +132,9 @@ public:
 	int32_t GetIndex(size_t n) const THROWS_GCODE_EXCEPTION;
 	int32_t GetLastIndex() const THROWS_GCODE_EXCEPTION;
 	size_t GetNumIndicesCounted() const noexcept { return numIndicesCounted; }
-	ObjectModelReportFlags GetReportFlags() const noexcept { return reportFlags; }
-	ObjectModelEntryFlags GetFilterFlags() const noexcept { return filterFlags; }
-	bool ShortFormReport() const noexcept { return ((uint16_t)reportFlags & (uint16_t)ObjectModelReportFlags::shortForm) != 0; }
-	bool ReportFullPath() const noexcept { return ((uint16_t)reportFlags & (uint16_t)ObjectModelReportFlags::fullPath) != 0; }
+	bool ShortFormReport() const noexcept { return shortForm; }
+	bool ShouldReport(const ObjectModelEntryFlags f) const noexcept;
+	bool WantArrayLength() const noexcept { return wantArrayLength; }
 
 private:
 	static constexpr size_t MaxIndices = 4;			// max depth of array nesting
@@ -146,8 +142,10 @@ private:
 	size_t numIndicesProvided;						// the number of indices provided, when we are doing a value lookup
 	size_t numIndicesCounted;						// the number of indices passed in the search string
 	int32_t indices[MaxIndices];
-	ObjectModelReportFlags reportFlags;
-	ObjectModelEntryFlags filterFlags;
+	bool shortForm;
+	bool onlyLive;
+	bool includeVerbose;
+	bool wantArrayLength;
 };
 
 // Entry to describe an array of objects or values. These must be brace-initializable into flash memory.
@@ -166,7 +164,7 @@ public:
 	ObjectModel() noexcept;
 
 	// Construct a JSON representation of those parts of the object model requested by the user. This version is called on the root of the tree.
-	void ReportAsJson(OutputBuffer *buf, const char *filter, ObjectModelReportFlags rf, ObjectModelEntryFlags ff) const THROWS_GCODE_EXCEPTION;
+	void ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const THROWS_GCODE_EXCEPTION;
 
 	// Get the value of an object via the table
 	ExpressionValue GetObjectValue(const StringParser& sp, ObjectExplorationContext& context, const char *idString, uint8_t tableNumber = 0) const THROWS_GCODE_EXCEPTION;

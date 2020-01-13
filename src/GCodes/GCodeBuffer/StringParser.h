@@ -119,7 +119,7 @@ private:
 		pre (readPointer >= 0);
 	ExpressionValue ParseNumber() THROWS_GCODE_EXCEPTION
 		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
-	ExpressionValue ParseIdentifierExpression(StringBuffer& stringBuffer, bool evaluate) THROWS_GCODE_EXCEPTION
+	ExpressionValue ParseIdentifierExpression(StringBuffer& stringBuffer, bool applyLengthOperator, bool evaluate) THROWS_GCODE_EXCEPTION
 		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
 
 	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS_GCODE_EXCEPTION;

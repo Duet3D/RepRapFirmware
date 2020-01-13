@@ -81,13 +81,13 @@ constexpr ObjectModelTableEntry Heat::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
 	// 0. Heat class
-	{ "ColdExtrudeTemperature", OBJECT_MODEL_FUNC(self->extrusionMinTemp), ObjectModelEntryFlags::none},
-	{ "ColdRetractTemperature", OBJECT_MODEL_FUNC(self->retractionMinTemp), ObjectModelEntryFlags::none},
-	{ "Heaters", OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), ObjectModelEntryFlags::none },
-	{ "Sensors", OBJECT_MODEL_FUNC_NOSELF(&sensorsArrayDescriptor), ObjectModelEntryFlags::none },
+	{ "coldExtrudeTemperature", OBJECT_MODEL_FUNC(self->extrusionMinTemp), ObjectModelEntryFlags::none},
+	{ "coldRetractTemperature", OBJECT_MODEL_FUNC(self->retractionMinTemp), ObjectModelEntryFlags::none},
+	{ "heaters", OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), ObjectModelEntryFlags::live },
+	{ "sensors", OBJECT_MODEL_FUNC_NOSELF(&sensorsArrayDescriptor), ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t Heat::objectModelTableDescriptor[] = { 3, 4, 0, 0 };
+constexpr uint8_t Heat::objectModelTableDescriptor[] = { 1, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heat)
 

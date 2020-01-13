@@ -37,9 +37,9 @@ constexpr ObjectModelTableEntry TemperatureSensor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. TemperatureSensor members
-	{ "LastReading",	OBJECT_MODEL_FUNC(self->lastTemperature), 		ObjectModelEntryFlags::none },
-	{ "Name",			OBJECT_MODEL_FUNC(self->sensorName), 			ObjectModelEntryFlags::none },
-	{ "Type",			OBJECT_MODEL_FUNC(self->sensorType), 			ObjectModelEntryFlags::none },
+	{ "lastReading",	OBJECT_MODEL_FUNC(self->lastTemperature), 		ObjectModelEntryFlags::live },
+	{ "name",			OBJECT_MODEL_FUNC(self->sensorName), 			ObjectModelEntryFlags::none },
+	{ "type",			OBJECT_MODEL_FUNC(self->sensorType), 			ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t TemperatureSensor::objectModelTableDescriptor[] = { 1, 3 };

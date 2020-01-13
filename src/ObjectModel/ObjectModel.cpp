@@ -57,6 +57,33 @@ ObjectModel::ObjectModel() noexcept
 {
 }
 
+// ObjectExplorationContext members
+
+ObjectExplorationContext::ObjectExplorationContext(const char *reportFlags, bool wal) noexcept
+	: numIndicesProvided(0), numIndicesCounted(0), shortForm(false), onlyLive(false), includeVerbose(false), wantArrayLength(wal)
+{
+	while (true)
+	{
+		switch(*reportFlags)
+		{
+		case '\0':
+			return;
+		case 'v':
+			includeVerbose = true;
+			break;
+		case 's':
+			shortForm = true;
+			break;
+		case 'f':
+			onlyLive = true;
+			break;
+		default:
+			break;
+		}
+		++reportFlags;
+	}
+}
+
 int32_t ObjectExplorationContext::GetIndex(size_t n) const
 {
 	if (n < numIndicesCounted)
@@ -73,6 +100,12 @@ int32_t ObjectExplorationContext::GetLastIndex() const
 		return indices[numIndicesCounted - 1];
 	}
 	THROW_INTERNAL_ERROR;
+}
+
+bool ObjectExplorationContext::ShouldReport(const ObjectModelEntryFlags f) const noexcept
+{
+	return (!onlyLive || ((uint8_t)f & (uint8_t)ObjectModelEntryFlags::live) != 0)
+		&& (includeVerbose || ((uint8_t)f & (uint8_t)ObjectModelEntryFlags::verbose) == 0);
 }
 
 // Report this object
@@ -96,7 +129,7 @@ void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 			{
 				if (!added)
 				{
-					if (*filter == 0 || context.ReportFullPath())
+					if (*filter == 0)
 					{
 						buf->cat('{');
 					}
@@ -111,7 +144,7 @@ void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 			--numEntries;
 			++tbl;
 		}
-		if (added && (*filter == 0 || context.ReportFullPath()))
+		if (added && *filter == 0)
 		{
 			buf->cat('}');
 		}
@@ -123,157 +156,172 @@ void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 }
 
 // Construct a JSON representation of those parts of the object model requested by the user. This version is called on the root of the tree.
-void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, ObjectModelReportFlags rf, ObjectModelEntryFlags ff) const
+void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const
 {
-	ObjectExplorationContext context(rf, ff);
+	ObjectExplorationContext context(reportFlags, wantArrayLength);
 	ReportAsJson(buf, context, 0, filter);
 }
 
 // Function to report a value or object as JSON
 void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, ExpressionValue val, const char *filter) const
 {
-	switch (val.type)
+	if (context.WantArrayLength() && *filter == 0)
 	{
-	case TYPE_OF(const ObjectModelArrayDescriptor*):
-		if (*filter == '[')
+		// We have been asked for the length of an array and we have reached the end of the filter, so the value should be an array
+		if (val.type == TYPE_OF(const ObjectModelArrayDescriptor*))
 		{
-			++filter;
-			if (*filter == ']')						// if reporting on [parts of] all elements in the array
-			{
-				return ReportArrayAsJson(buf, context, val.omadVal, filter + 1);
-			}
-
-			const char *endptr;
-			const long index = SafeStrtol(filter, &endptr);
-			if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
-			{
-				buf->cat("null");					// avoid returning badly-formed JSON
-				break;								// invalid syntax, or index out of range
-			}
-			if (*filter == 0 || context.ReportFullPath())
-			{
-				buf->cat('[');
-			}
-			context.AddIndex(index);
-			{
-				ReadLocker lock(val.omadVal->lockPointer);
-				ReportItemAsJson(buf, context, val.omadVal->GetElement(this, context), endptr + 1);
-			}
-			context.RemoveIndex();
-			if (*filter == 0 || context.ReportFullPath())
-			{
-				buf->cat(']');
-			}
+			buf->catf("%u", val.omadVal->GetNumElements(this, context));
 		}
-		else if (*filter == 0)						// else reporting on all subparts of all elements in the array
+		else
 		{
-			ReportArrayAsJson(buf, context, val.omadVal, filter);
+			buf->cat("null");
 		}
-		break;;
-
-	case TYPE_OF(const ObjectModel*):
-		if (val.omVal != nullptr)
+	}
+	else
+	{
+		switch (val.type)
 		{
-			if (*filter == '.')
+		case TYPE_OF(const ObjectModelArrayDescriptor*):
+			if (*filter == '[')
 			{
 				++filter;
+				if (*filter == ']')						// if reporting on [parts of] all elements in the array
+				{
+					return ReportArrayAsJson(buf, context, val.omadVal, filter + 1);
+				}
+
+				const char *endptr;
+				const long index = SafeStrtol(filter, &endptr);
+				if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
+				{
+					buf->cat("null");					// avoid returning badly-formed JSON
+					break;								// invalid syntax, or index out of range
+				}
+				if (*filter == 0)
+				{
+					buf->cat('[');
+				}
+				context.AddIndex(index);
+				{
+					ReadLocker lock(val.omadVal->lockPointer);
+					ReportItemAsJson(buf, context, val.omadVal->GetElement(this, context), endptr + 1);
+				}
+				context.RemoveIndex();
+				if (*filter == 0)
+				{
+					buf->cat(']');
+				}
 			}
-			return val.omVal->ReportAsJson(buf, context, val.param, filter);
-		}
-		buf->cat("null");
-		break;
+			else if (*filter == 0)						// else reporting on all subparts of all elements in the array, or just the length
+			{
+				ReportArrayAsJson(buf, context, val.omadVal, filter);
+			}
+			break;
 
-	case TYPE_OF(float):
-		buf->catf((val.param == 3) ? "%.3f" : (val.param == 2) ? "%.2f" : "%.1f", (double)val.fVal);
-		break;
+		case TYPE_OF(const ObjectModel*):
+			if (val.omVal != nullptr)
+			{
+				if (*filter == '.')
+				{
+					++filter;
+				}
+				return val.omVal->ReportAsJson(buf, context, val.param, filter);
+			}
+			buf->cat("null");
+			break;
 
-	case TYPE_OF(uint32_t):
-		buf->catf("%" PRIu32, val.uVal);
-		break;
+		case TYPE_OF(float):
+			buf->catf((val.param == 3) ? "%.3f" : (val.param == 2) ? "%.2f" : "%.1f", (double)val.fVal);
+			break;
 
-	case TYPE_OF(int32_t):
-		buf->catf("%" PRIi32, val.iVal);
-		break;
-
-	case TYPE_OF(const char*):
-		buf->EncodeString(val.sVal, true);
-		break;
-
-	case TYPE_OF(Bitmap32):
-		if (context.ShortFormReport())
-		{
+		case TYPE_OF(uint32_t):
 			buf->catf("%" PRIu32, val.uVal);
-		}
-		else
-		{
-			uint32_t v = val.uVal;
-			buf->cat('[');
-			buf->cat((v & 1) ? '1' : '0');
-			for (unsigned int i = 1; i < 32; ++i)
+			break;
+
+		case TYPE_OF(int32_t):
+			buf->catf("%" PRIi32, val.iVal);
+			break;
+
+		case TYPE_OF(const char*):
+			buf->EncodeString(val.sVal, true);
+			break;
+
+		case TYPE_OF(Bitmap32):
+			if (context.ShortFormReport())
 			{
-				v >>= 1;
-				buf->cat(',');
-				buf->cat((v & 1) ? '1' : '0');
-			}
-			buf->cat(']');
-		}
-		break;
-
-	case TYPE_OF(Enum32):
-		if (context.ShortFormReport())
-		{
-			buf->catf("%" PRIu32, val.uVal);
-		}
-		else
-		{
-			buf->cat("\"unimplemented\"");
-			// TODO append the real name
-		}
-		break;
-
-	case TYPE_OF(bool):
-		buf->cat((val.bVal) ? "true" : "false");
-		break;
-
-	case TYPE_OF(char):
-		buf->cat('"');
-		buf->EncodeChar(val.cVal);
-		buf->cat('"');
-		break;
-
-	case TYPE_OF(IPAddress):
-		{
-			const IPAddress ipVal(val.uVal);
-			char sep = '"';
-			for (unsigned int q = 0; q < 4; ++q)
-			{
-				buf->catf("%c%u", sep, ipVal.GetQuad(q));
-				sep = '.';
-			}
-			buf->cat('"');
-		}
-		break;
-
-	case TYPE_OF(DateTime):
-		{
-			const time_t time = val.Get40BitValue();
-			if (time == 0)
-			{
-				buf->cat("null");
+				buf->catf("%" PRIu32, val.uVal);
 			}
 			else
 			{
-				tm timeInfo;
-				gmtime_r(&time, &timeInfo);
-				buf->catf("\"%04u-%02u-%02uT%02u:%02u:%02u\"",
-							timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
+				uint32_t v = val.uVal;
+				buf->cat('[');
+				buf->cat((v & 1) ? '1' : '0');
+				for (unsigned int i = 1; i < 32; ++i)
+				{
+					v >>= 1;
+					buf->cat(',');
+					buf->cat((v & 1) ? '1' : '0');
+				}
+				buf->cat(']');
 			}
-		}
-		break;
+			break;
 
-	case NoType:
-		buf->cat("null");
-		break;
+		case TYPE_OF(Enum32):
+			if (context.ShortFormReport())
+			{
+				buf->catf("%" PRIu32, val.uVal);
+			}
+			else
+			{
+				buf->cat("\"unimplemented\"");
+				// TODO append the real name
+			}
+			break;
+
+		case TYPE_OF(bool):
+			buf->cat((val.bVal) ? "true" : "false");
+			break;
+
+		case TYPE_OF(char):
+			buf->cat('"');
+			buf->EncodeChar(val.cVal);
+			buf->cat('"');
+			break;
+
+		case TYPE_OF(IPAddress):
+			{
+				const IPAddress ipVal(val.uVal);
+				char sep = '"';
+				for (unsigned int q = 0; q < 4; ++q)
+				{
+					buf->catf("%c%u", sep, ipVal.GetQuad(q));
+					sep = '.';
+				}
+				buf->cat('"');
+			}
+			break;
+
+		case TYPE_OF(DateTime):
+			{
+				const time_t time = val.Get40BitValue();
+				if (time == 0)
+				{
+					buf->cat("null");
+				}
+				else
+				{
+					tm timeInfo;
+					gmtime_r(&time, &timeInfo);
+					buf->catf("\"%04u-%02u-%02uT%02u:%02u:%02u\"",
+								timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
+				}
+			}
+			break;
+
+		case NoType:
+			buf->cat("null");
+			break;
+		}
 	}
 }
 
@@ -346,13 +394,13 @@ const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(uint8_t tabl
 
 bool ObjectModelTableEntry::Matches(const char* filterString, const ObjectExplorationContext& context) const noexcept
 {
-	return IdCompare(filterString) == 0 && ((uint8_t)flags & (uint8_t)context.GetFilterFlags()) == (uint8_t)context.GetFilterFlags();
+	return IdCompare(filterString) == 0 && context.ShouldReport(flags);
 }
 
 // Add the value of this element to the buffer, returning true if it matched and we did
 void ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModel *self, const char* filter) const noexcept
 {
-	if (*filter == 0 || context.ReportFullPath())
+	if (*filter == 0)
 	{
 		buf->cat('"');
 		buf->cat(name);
@@ -403,6 +451,11 @@ ExpressionValue ObjectModel::GetObjectValue(const StringParser& sp, ObjectExplor
 {
 	if (val.type == TYPE_OF(const ObjectModelArrayDescriptor*))
 	{
+		if (*idString == 0 && context.WantArrayLength())
+		{
+			ReadLocker lock(val.omadVal->lockPointer);
+			return ExpressionValue((int32_t)val.omadVal->GetNumElements(this, context));
+		}
 		if (*idString != '^')
 		{
 			throw sp.ConstructParseException("missing array index");

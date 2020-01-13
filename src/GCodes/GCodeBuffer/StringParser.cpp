@@ -1657,7 +1657,7 @@ ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_
 	constexpr uint8_t UnaryPriority = 10;									// must be higher than any binary operator priority
 	static_assert(ARRAY_SIZE(priorities) == strlen(operators));
 
-	// Start by parsing a unary expression
+	// Start by looking for a unary operator or opening bracket
 	SkipWhiteSpace();
 	const char c = gb.buffer[readPointer];
 	ExpressionValue val;
@@ -1688,7 +1688,7 @@ ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_
 
 	case '+':
 		++readPointer;
-		val = ParseExpression(stringBuffer, UnaryPriority, true);
+		val = ParseExpression(stringBuffer, UnaryPriority, evaluate);
 		switch (val.type)
 		{
 		case TYPE_OF(uint32_t):
@@ -1703,6 +1703,31 @@ ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_
 
 		default:
 			throw ConstructParseException("expected numeric or enumeration value after '+'");
+		}
+		break;
+
+	case '#':
+		++readPointer;
+		SkipWhiteSpace();
+		if (isalpha(gb.buffer[readPointer]))
+		{
+			// Probably applying # to an object model array, so optimise by asking the OM for just the length
+			val = ParseIdentifierExpression(stringBuffer, true, evaluate);
+		}
+		else
+		{
+			val = ParseExpression(stringBuffer, UnaryPriority, evaluate);
+			if (val.type == TYPE_OF(const char*))
+			{
+				const char* s = val.sVal;
+				val.Set((int32_t)strlen(s));
+				stringBuffer.FinishedUsing(s);
+				val.type = TYPE_OF(int32_t);
+			}
+			else
+			{
+				throw ConstructParseException("expected object model value or string after '#");
+			}
 		}
 		break;
 
@@ -1730,7 +1755,7 @@ ExpressionValue StringParser::ParseExpression(StringBuffer& stringBuffer, uint8_
 		}
 		else if (isalpha(c))				// looks like a variable name
 		{
-			val = ParseIdentifierExpression(stringBuffer, evaluate);
+			val = ParseIdentifierExpression(stringBuffer, evaluate, false);
 		}
 		else
 		{
@@ -2212,7 +2237,7 @@ ExpressionValue StringParser::ParseNumber()
 }
 
 // Parse an identifier expression
-ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuffer, bool evaluate)
+ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuffer, bool applyLengthOperator, bool evaluate)
 {
 	if (!isalpha(gb.buffer[readPointer]))
 	{
@@ -2220,7 +2245,7 @@ ExpressionValue StringParser::ParseIdentifierExpression(StringBuffer& stringBuff
 	}
 
 	String<MaxVariableNameLength> id;
-	ObjectExplorationContext context(ObjectModelReportFlags::none, ObjectModelEntryFlags::none);
+	ObjectExplorationContext context("v", applyLengthOperator);
 
 	// Loop parsing identifiers and index expressions
 	// When we come across an index expression, evaluate it, add it to the context, and place a marker in the identifier string.

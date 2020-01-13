@@ -196,29 +196,55 @@ DriversBitmap AxisDriversConfig::GetDriversBitmap() const noexcept
 
 constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 {
-	// Table entries for object Boards[]
-	{ "FirmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),			ObjectModelEntryFlags::none },
+	// 0. boards[] members
+	{ "firmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),			ObjectModelEntryFlags::none },
 #if HAS_LINUX_INTERFACE
-	{ "IAPFileNameSBC",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE_SBC),			ObjectModelEntryFlags::none },
+	{ "iapFileNameSBC",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE_SBC),			ObjectModelEntryFlags::none },
 #endif
-	{ "IAPFileNameSD",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE),				ObjectModelEntryFlags::none },
-	{ "MaxHeaters",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),			ObjectModelEntryFlags::none },
-	{ "MaxMotors",			OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),	ObjectModelEntryFlags::none },
+	{ "iapFileNameSD",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE),				ObjectModelEntryFlags::none },
+	{ "maxHeaters",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),			ObjectModelEntryFlags::verbose },
+	{ "maxMotors",			OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),	ObjectModelEntryFlags::verbose },
+	{ "mcuTemp",			OBJECT_MODEL_FUNC(self, 1),								ObjectModelEntryFlags::live },
 # ifdef DUET_NG
-	{ "Name",				OBJECT_MODEL_FUNC(self->GetBoardName()),				ObjectModelEntryFlags::none },
-	{ "ShortName",			OBJECT_MODEL_FUNC(self->GetBoardShortName()),			ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC(self->GetBoardName()),				ObjectModelEntryFlags::none },
+	{ "shortName",			OBJECT_MODEL_FUNC(self->GetBoardShortName()),			ObjectModelEntryFlags::none },
 # else
-	{ "Name",				OBJECT_MODEL_FUNC_NOSELF(BOARD_NAME),					ObjectModelEntryFlags::none },
-	{ "ShortName",			OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),				ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC_NOSELF(BOARD_NAME),					ObjectModelEntryFlags::none },
+	{ "shortName",			OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),				ObjectModelEntryFlags::none },
 # endif
+#if HAS_12V_MONITOR
+	{ "v12",				OBJECT_MODEL_FUNC(self, 3),								ObjectModelEntryFlags::live },
+#endif
+	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),								ObjectModelEntryFlags::live },
+
+	// 1. mcuTemp members
+	{ "current",			OBJECT_MODEL_FUNC(self->GetMcuTemperatures().current),	ObjectModelEntryFlags::live },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().max),		ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().min),		ObjectModelEntryFlags::none },
+
+	// 2. vIn members
+	{ "current",			OBJECT_MODEL_FUNC(self->GetCurrentPowerVoltage()),		ObjectModelEntryFlags::live },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().max),		ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().min),		ObjectModelEntryFlags::none },
+
+#if HAS_12V_MONITOR
+	// 3. v12 members
+	{ "current",			OBJECT_MODEL_FUNC(self->GetV12Voltages().current),		ObjectModelEntryFlags::live },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetV12Voltages().max),			ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetV12Voltages().min),			ObjectModelEntryFlags::none },
+#endif
 };
 
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
-#if HAS_LINUX_INTERFACE
-															{ 1, 7 };
-#else
-															{ 1, 6 };
+{
+	3 + HAS_12V_MONITOR,
+	8 + HAS_LINUX_INTERFACE + HAS_12V_MONITOR,
+	3,
+	3,
+#if HAS_12V_MONITOR
+	3
 #endif
+};
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Platform)
 
@@ -3804,23 +3830,29 @@ bool Platform::Inkjet(int bitPattern) noexcept
 #endif
 
 #if HAS_CPU_TEMP_SENSOR
+
 // CPU temperature
-void Platform::GetMcuTemperatures(float& minT, float& currT, float& maxT) const noexcept
+MinMaxCurrent Platform::GetMcuTemperatures() const noexcept
 {
-	minT = AdcReadingToCpuTemperature(lowestMcuTemperature);
-	currT = AdcReadingToCpuTemperature(adcFilters[CpuTempFilterIndex].GetSum());
-	maxT = AdcReadingToCpuTemperature(highestMcuTemperature);
+	MinMaxCurrent result;
+	result.min = AdcReadingToCpuTemperature(lowestMcuTemperature);
+	result.current = AdcReadingToCpuTemperature(adcFilters[CpuTempFilterIndex].GetSum());
+	result.max = AdcReadingToCpuTemperature(highestMcuTemperature);
+	return result;
 }
+
 #endif
 
 #if HAS_VOLTAGE_MONITOR
 
 // Power in voltage
-void Platform::GetPowerVoltages(float& minV, float& currV, float& maxV) const noexcept
+MinMaxCurrent Platform::GetPowerVoltages() const noexcept
 {
-	minV = AdcReadingToPowerVoltage(lowestVin);
-	currV = AdcReadingToPowerVoltage(currentVin);
-	maxV = AdcReadingToPowerVoltage(highestVin);
+	MinMaxCurrent result;
+	result.min = AdcReadingToPowerVoltage(lowestVin);
+	result.current = AdcReadingToPowerVoltage(currentVin);
+	result.max = AdcReadingToPowerVoltage(highestVin);
+	return result;
 }
 
 float Platform::GetCurrentPowerVoltage() const noexcept
@@ -3832,11 +3864,13 @@ float Platform::GetCurrentPowerVoltage() const noexcept
 
 #if HAS_12V_MONITOR
 
-void Platform::GetV12Voltages(float& minV, float& currV, float& maxV) const noexcept
+MinMaxCurrent Platform::GetV12Voltages() const noexcept
 {
-	minV = AdcReadingToPowerVoltage(lowestV12);
-	currV = AdcReadingToPowerVoltage(currentV12);
-	maxV = AdcReadingToPowerVoltage(highestV12);
+	MinMaxCurrent result;
+	result.min = AdcReadingToPowerVoltage(lowestV12);
+	result.current = AdcReadingToPowerVoltage(currentV12);
+	result.max = AdcReadingToPowerVoltage(highestV12);
+	return result;
 }
 
 #endif
