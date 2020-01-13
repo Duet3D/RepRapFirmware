@@ -6,10 +6,13 @@ Recommended compatible firmware:
 
 Upgrade notes:
 - You cannot upgrade a Duet WiFi, Ethernet or Maestro direct to this release from RRF 1.x or 2.x because the firmware binary is too large for the old IAP. You must upgrade to version 3.0 first, then from 3.0 you can upgrade to this release.
+- If upgrading a Duet WiFi/Ethernet/Maestro from the 3.0 release, note that default fans are no longer created. Unless your config.g file already used M950 to create the fans explicitly, add these commands M950 F0 C"fan0", M950 F1 C"fan1" and M950 F2 C"fan2" to config.g before your  M106 commands
 
 New features and changed behaviour:
 - The **if**, **elif**, **else**, **while**, **break**, **continue**, **echo** and **abort** GCode meta commands are implemented, along with expression evaluation. See https://duet3d.dozuki.com/Wiki/GCode_Meta_Commands.
-- The MakeDirectory and RenameFile SD card functions now create the full path recursively if necessary
+- M409 and a corresponding HTTP call rr_model have been added, to allow parts of the object model to be queried
+- Large parts of the RepRapFirmware Object Model have been implemented. Values can be retrieved from the OM within GCode command parameters and by M409.
+- The MakeDirectory and RenameFile local SD card functions now create the full path recursively if necessary
 
 Bug fixes:
 - When the C (temperature coefficient) parameter was used in the G31 command, if the temperature could not be read from the sensor specified in the H parameter then the error message was not clear; and it didn't allow time for the sensor to become ready in case it had only just been configured.
