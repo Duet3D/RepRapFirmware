@@ -12,6 +12,7 @@
 #include "ObjectModel/ObjectModel.h"
 
 class DataTransfer;
+class Deviation;
 
 // This class defines the bed probing grid
 class GridDefinition
@@ -87,7 +88,7 @@ public:
 	bool UseHeightMap(bool b);
 	bool UsingHeightMap() const { return useMap; }
 
-	unsigned int GetStatistics(float& mean, float& deviation, float& minError, float& maxError) const;
+	unsigned int GetStatistics(Deviation& deviation, float& minError, float& maxError) const;
 																	// Return number of points probed, mean and RMS deviation, min and max error
 	void ExtrapolateMissing();										// Extrapolate missing points to ensure consistency
 

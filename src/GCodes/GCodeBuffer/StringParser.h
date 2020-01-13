@@ -99,6 +99,7 @@ private:
 	void AppendAsString(ExpressionValue val, const StringRef& str) THROWS_GCODE_EXCEPTION
 		pre (readPointer >= 0);
 
+	void CheckForMixedSpacesAndTabs() noexcept;
 	bool ProcessConditionalGCode(const StringRef& reply, BlockType previousBlockType, bool doingFile) THROWS_GCODE_EXCEPTION;
 																			// Check for and process a conditional GCode language command returning true if we found one
 	void ProcessIfCommand() THROWS_GCODE_EXCEPTION;

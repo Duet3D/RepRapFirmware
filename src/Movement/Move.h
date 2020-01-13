@@ -8,8 +8,8 @@
 #ifndef MOVE_H_
 #define MOVE_H_
 
-#include <Movement/StraightProbeSettings.h>
 #include "RepRapFirmware.h"
+#include <Movement/StraightProbeSettings.h>
 #include "MessageType.h"
 #include "DDARing.h"
 #include "DDA.h"								// needed because of our inline functions
@@ -17,6 +17,7 @@
 #include "BedProbing/Grid.h"
 #include "Kinematics/Kinematics.h"
 #include "GCodes/RestorePoint.h"
+#include <Math/Deviation.h>
 
 #if SUPPORT_ASYNC_MOVES
 # include "HeightControl/HeightController.h"
@@ -85,9 +86,9 @@ public:
 	bool IsUsingMesh() const noexcept { return usingMesh; }					// Return true if we are using mesh compensation
 	unsigned int GetNumProbePoints() const noexcept;						// Return the number of currently used probe points
 	unsigned int GetNumProbedProbePoints() const noexcept;					// Return the number of actually probed probe points
-	void SetLastCalibrationDeviation(float f) { lastCalibrationDeviation = f; }
-	void SetPreviousCalibrationDeviation(float f) { previousCalibrationDeviation = f; }
-	void SetLastMeshDeviation(float f) { lastMeshDeviation = f; }
+	void SetLatestCalibrationDeviation(const Deviation& d) { latestCalibrationDeviation = d; }
+	void SetInitialCalibrationDeviation(const Deviation& d) { initialCalibrationDeviation = d; }
+	void SetLatestMeshDeviation(const Deviation& d) { latestMeshDeviation = d; }
 
 	float PushBabyStepping(size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
 
@@ -246,9 +247,9 @@ private:
 	float recipTaperHeight;								// Reciprocal of the taper height
 	float zShift;										// Height to add to the bed transform
 
-	float lastCalibrationDeviation;
-	float previousCalibrationDeviation;
-	float lastMeshDeviation;
+	Deviation latestCalibrationDeviation;
+	Deviation initialCalibrationDeviation;
+	Deviation latestMeshDeviation;
 
 	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
 	bool useTaper;										// True to taper off the compensation

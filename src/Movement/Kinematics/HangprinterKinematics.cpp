@@ -353,7 +353,6 @@ void HangprinterKinematics::InverseTransform(float La, float Lb, float Lc, float
 bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply)
 {
 	const size_t NumHangprinterFactors = 9;		// maximum number of machine factors we can adjust
-	const size_t numPoints = probePoints.NumberOfProbePoints();
 
 	if (numFactors != 3 && numFactors != 6 && numFactors != NumHangprinterFactors)
 	{
@@ -374,23 +373,29 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 	// Transform the probing points to motor endpoints and store them in a matrix, so that we can do multiple iterations using the same data
 	FixedMatrix<floatc_t, MaxCalibrationPoints, 3> probeMotorPositions;
 	floatc_t corrections[MaxCalibrationPoints];
-	floatc_t initialSumOfSquares = 0.0;
-	for (size_t i = 0; i < numPoints; ++i)
-	{
-		corrections[i] = 0.0;
-		float machinePos[3];
-		const floatc_t zp = reprap.GetMove().GetProbeCoordinates(i, machinePos[X_AXIS], machinePos[Y_AXIS], probePoints.PointWasCorrected(i));
-		machinePos[Z_AXIS] = 0.0;
+	Deviation initialDeviation;
+	const size_t numPoints = probePoints.NumberOfProbePoints();
 
-		probeMotorPositions(i, A_AXIS) = sqrtf(LineLengthSquared(machinePos, anchorA));
-		probeMotorPositions(i, B_AXIS) = sqrtf(LineLengthSquared(machinePos, anchorB));
-		probeMotorPositions(i, C_AXIS) = sqrtf(LineLengthSquared(machinePos, anchorC));
-		initialSumOfSquares += fcsquare(zp);
+	{
+		floatc_t initialSum = 0.0, initialSumOfSquares = 0.0;
+		for (size_t i = 0; i < numPoints; ++i)
+		{
+			corrections[i] = 0.0;
+			float machinePos[3];
+			const floatc_t zp = reprap.GetMove().GetProbeCoordinates(i, machinePos[X_AXIS], machinePos[Y_AXIS], probePoints.PointWasCorrected(i));
+			machinePos[Z_AXIS] = 0.0;
+
+			probeMotorPositions(i, A_AXIS) = sqrtf(LineLengthSquared(machinePos, anchorA));
+			probeMotorPositions(i, B_AXIS) = sqrtf(LineLengthSquared(machinePos, anchorB));
+			probeMotorPositions(i, C_AXIS) = sqrtf(LineLengthSquared(machinePos, anchorC));
+			initialSumOfSquares += fcsquare(zp);
+		}
+		initialDeviation.Set(initialSumOfSquares, initialSum, numPoints);
 	}
 
 	// Do 1 or more Newton-Raphson iterations
+	Deviation finalDeviation;
 	unsigned int iteration = 0;
-	float expectedRmsError;
 	for (;;)
 	{
 		// Build a Nx9 matrix of derivatives with respect to xa, xb, yc, za, zb, zc, diagonal.
@@ -481,7 +486,7 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 		// Calculate the expected probe heights using the new parameters
 		{
 			floatc_t expectedResiduals[MaxCalibrationPoints];
-			floatc_t sumOfSquares = 0.0;
+			floatc_t finalSum = 0.0, finalSumOfSquares = 0.0;
 			for (size_t i = 0; i < numPoints; ++i)
 			{
 				for (size_t axis = 0; axis < 3; ++axis)
@@ -492,10 +497,11 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 				InverseTransform(probeMotorPositions(i, A_AXIS), probeMotorPositions(i, B_AXIS), probeMotorPositions(i, C_AXIS), newPosition);
 				corrections[i] = newPosition[Z_AXIS];
 				expectedResiduals[i] = probePoints.GetZHeight(i) + newPosition[Z_AXIS];
-				sumOfSquares += fcsquare(expectedResiduals[i]);
+				finalSum += expectedResiduals[i];
+				finalSumOfSquares += fcsquare(expectedResiduals[i]);
 			}
 
-			expectedRmsError = sqrtf((float)(sumOfSquares/numPoints));
+			finalDeviation.Set(finalSumOfSquares, finalSum, numPoints);
 
 			if (reprap.Debug(moduleMove))
 			{
@@ -519,11 +525,13 @@ bool HangprinterKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 		debugPrintf("%s\n", scratchString.c_str());
 	}
 
-	const float previousRmsError = sqrtf((float)initialSumOfSquares/numPoints);
-	reprap.GetMove().SetPreviousCalibrationDeviation(previousRmsError);
-	reprap.GetMove().SetLastCalibrationDeviation(expectedRmsError);
-	reply.printf("Calibrated %d factors using %d points, deviation before %.3f after %.3f",
-			numFactors, numPoints, (double)previousRmsError, (double)expectedRmsError);
+	reprap.GetMove().SetInitialCalibrationDeviation(initialDeviation);
+	reprap.GetMove().SetLatestCalibrationDeviation(finalDeviation);
+
+	reply.printf("Calibrated %d factors using %d points, (mean, deviation) before (%.3f, %.3f) after (%.3f, %.3f)",
+			numFactors, numPoints,
+			(double)initialDeviation.GetMean(), (double)initialDeviation.GetDeviationFromMean(),
+			(double)finalDeviation.GetMean(), (double)finalDeviation.GetDeviationFromMean());
 
 	// We don't want to call MessageF(LogMessage, "%s\n", reply.c_str()) here because that will allocate a buffer within MessageF, which adds to our stack usage.
 	// Better to allocate the buffer here so that it uses the same stack space as the arrays that we have finished with

@@ -723,27 +723,26 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply)
 	case GCodeState::gridProbing7:
 		// Finished probing the grid, and retracted the probe if necessary
 		{
-			float mean, deviation, minError, maxError;
-			const uint32_t numPointsProbed = reprap.GetMove().AccessHeightMap().GetStatistics(mean, deviation, minError, maxError);
+			float minError, maxError;
+			Deviation deviation;
+			const uint32_t numPointsProbed = reprap.GetMove().AccessHeightMap().GetStatistics(deviation, minError, maxError);
 			if (numPointsProbed >= 4)
 			{
-				reprap.GetMove().SetLastMeshDeviation(deviation);
+				reprap.GetMove().SetLatestMeshDeviation(deviation);
 				reply.printf("%" PRIu32 " points probed, min error %.3f, max error %.3f, mean %.3f, deviation %.3f\n",
-								numPointsProbed, (double)minError, (double)maxError, (double)mean, (double)deviation);
+								numPointsProbed, (double)minError, (double)maxError, (double)deviation.GetMean(), (double)deviation.GetDeviationFromMean());
 #if HAS_MASS_STORAGE
 # if HAS_LINUX_INTERFACE
 				if (!reprap.UsingLinuxInterface())
+# endif
 				{
-# endif
 					error = TrySaveHeightMap(DefaultHeightMapFile, reply);
-# if HAS_LINUX_INTERFACE
 				}
-# endif
 #endif
 				reprap.GetMove().AccessHeightMap().ExtrapolateMissing();
 				reprap.GetMove().UseMesh(true);
-				const float absMean = fabsf(mean);
-				if (absMean >= 0.05 && absMean >= 2 * deviation)
+				const float absMean = fabsf(deviation.GetMean());
+				if (absMean >= 0.05 && absMean >= 2 * deviation.GetDeviationFromMean())
 				{
 					platform.Message(WarningMessage, "the height map has a substantial Z offset. Suggest use Z-probe to establish Z=0 datum, then re-probe the mesh.\n");
 				}

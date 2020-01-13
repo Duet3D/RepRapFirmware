@@ -9,6 +9,8 @@
 #include "Platform.h"
 #include "RepRap.h"
 #include "Storage/FileStore.h"
+#include <Math/Deviation.h>
+
 #include <cmath>
 
 const char * const GridDefinition::HeightMapLabelLines[] =
@@ -273,10 +275,12 @@ bool HeightMap::SaveToFile(FileStore *f, float zOffset) const
 		buf.catf(" generated at %04u-%02u-%02u %02u:%02u",
 						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min);
 	}
-	float mean, deviation, minError, maxError;
-	(void)GetStatistics(mean, deviation, minError, maxError);
+
+	Deviation deviation;
+	float minError, maxError;
+	(void)GetStatistics(deviation, minError, maxError);
 	buf.catf(", min error %.3f, max error %.3f, mean %.3f, deviation %.3f\n",
-				(double)(minError + zOffset), (double)(maxError + zOffset), (double)(mean + zOffset), (double)deviation);
+				(double)(minError + zOffset), (double)(maxError + zOffset), (double)(deviation.GetMean() + zOffset), (double)deviation.GetDeviationFromMean());
 	if (!f->Write(buf.c_str()))
 	{
 		return true;
@@ -427,7 +431,7 @@ void HeightMap::SaveToArray(float *arr, float zOffset) const
 #endif
 
 // Return number of points probed, mean and RMS deviation, min and max error
-unsigned int HeightMap::GetStatistics(float& mean, float& deviation, float& minError, float& maxError) const
+unsigned int HeightMap::GetStatistics(Deviation& deviation, float& minError, float& maxError) const
 {
 	double heightSum = 0.0, heightSquaredSum = 0.0;
 	minError = 9999.0;
@@ -452,15 +456,8 @@ unsigned int HeightMap::GetStatistics(float& mean, float& deviation, float& minE
 			heightSquaredSum += dsquare(dHeightError);
 		}
 	}
-	if (numProbed == 0)
-	{
-		mean = deviation = 0.0;
-	}
-	else
-	{
-		mean = (float)(heightSum/numProbed);
-		deviation = (float)sqrt(((heightSquaredSum * numProbed) - (heightSum * heightSum)))/numProbed;
-	}
+
+	deviation.Set(heightSquaredSum, heightSum, numProbed);
 	return numProbed;
 }
 

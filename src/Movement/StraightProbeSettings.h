@@ -12,8 +12,6 @@
 #define SRC_MOVEMENT_STRAIGHTPROBESETTINGS_H_
 
 #include "RepRapFirmware.h"
-#include "ObjectModel/ObjectModel.h"
-#include "Endstops/ZProbe.h"
 
 enum class StraightProbeType : uint8_t {
 	unset,
@@ -23,7 +21,7 @@ enum class StraightProbeType : uint8_t {
 	awayFromWorkpiece				 // probe away from workpiece, stop on loss of contact
 };
 
-class StraightProbeSettings INHERIT_OBJECT_MODEL
+class StraightProbeSettings
 {
 public:
 	StraightProbeSettings();
@@ -44,9 +42,6 @@ public:
 
 	const bool ProbingAway() const;
 	const bool SignalError() const;
-
-protected:
-	DECLARE_OBJECT_MODEL
 
 private:
 	AxesBitmap movingAxes;                 // Axes supposed to move - this is only used for manual probing

@@ -66,12 +66,12 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Move members
 	{ "axes",					OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 										ObjectModelEntryFlags::live },
-	{ "calibrationDeviation",	OBJECT_MODEL_FUNC(self->lastCalibrationDeviation, 3),									ObjectModelEntryFlags::none },
+	{ "calibrationDeviation",	OBJECT_MODEL_FUNC(self, 5),																ObjectModelEntryFlags::none },
 	{ "currentMove",			OBJECT_MODEL_FUNC(self, 4),																ObjectModelEntryFlags::live },
 	{ "daa",					OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 2),																ObjectModelEntryFlags::none },
-	{ "meshDeviation",			OBJECT_MODEL_FUNC(self->lastMeshDeviation, 3),											ObjectModelEntryFlags::none },
-	{ "previousDeviation",		OBJECT_MODEL_FUNC(self->previousCalibrationDeviation, 3),								ObjectModelEntryFlags::none },
+	{ "meshDeviation",			OBJECT_MODEL_FUNC(self, 7),																ObjectModelEntryFlags::none },
+	{ "initialDeviation",		OBJECT_MODEL_FUNC(self, 6),																ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC(self->maxPrintingAcceleration),										ObjectModelEntryFlags::none },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC(self->maxTravelAcceleration),											ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor()),							ObjectModelEntryFlags::live },
@@ -96,9 +96,21 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	// 4. move.currentMove members
 	{ "requestedSpeed",			OBJECT_MODEL_FUNC(self->GetRequestedSpeed()),											ObjectModelEntryFlags::live },
 	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeed()),													ObjectModelEntryFlags::live },
+
+	// 5. move.calibrationDeviation members
+	{ "mean",					OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
+	{ "deviation",				OBJECT_MODEL_FUNC(self->latestCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
+
+	// 6. move.initialDeviation members
+	{ "mean",					OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetMean(), 3),						ObjectModelEntryFlags::none },
+	{ "deviation",				OBJECT_MODEL_FUNC(self->initialCalibrationDeviation.GetDeviationFromMean(), 3),			ObjectModelEntryFlags::none },
+
+	// 7. move.meshDeviation members
+	{ "mean",					OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetMean(), 3),								ObjectModelEntryFlags::none },
+	{ "deviation",				OBJECT_MODEL_FUNC(self->latestMeshDeviation.GetDeviationFromMean(), 3),					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 5, 10, 3, 2, 6, 2 };
+constexpr uint8_t Move::objectModelTableDescriptor[] = { 8, 10, 3, 2, 6, 2, 2, 2, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
@@ -135,7 +147,6 @@ void Move::Init() noexcept
 	SetIdentityTransform();
 	tanXY = tanYZ = tanXZ = 0.0;
 
-	lastCalibrationDeviation = previousCalibrationDeviation = lastMeshDeviation = 0.0;
 	usingMesh = false;
 	useTaper = false;
 	zShift = 0.0;

@@ -2230,7 +2230,7 @@ OutputBuffer *RepRap::GetModelResponse(const char *key, const char *flags)
 
 		outBuf->printf("{\"key\":");
 		outBuf->EncodeString(key, false);
-		outBuf->catf("{\"flags\":");
+		outBuf->catf(",\"flags\":");
 		outBuf->EncodeString(flags, false);
 
 		const bool wantArrayLength = (*key == '#');

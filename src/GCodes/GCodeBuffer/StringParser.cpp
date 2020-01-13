@@ -290,11 +290,20 @@ bool StringParser::CheckMetaCommand(const StringRef& reply)
 	BlockType previousBlockType = BlockType::plain;
 	if (doingFile)
 	{
-		if (indentToSkipTo < commandIndent)
+		if (commandIndent == 0)
 		{
-			Init();
-			return true;													// continue skipping this block
+			seenLeadingSpace = seenLeadingTab = false;						// it's OK if the previous block used only space and the following one uses only tab, or v.v.
 		}
+		else
+		{
+			CheckForMixedSpacesAndTabs();
+			if (indentToSkipTo < commandIndent)
+			{
+				Init();
+				return true;												// continue skipping this block
+			}
+		}
+
 		if (indentToSkipTo != NoIndentSkip && indentToSkipTo >= commandIndent)
 		{
 			// Finished skipping the nested block
@@ -333,16 +342,24 @@ bool StringParser::CheckMetaCommand(const StringRef& reply)
 	if (b)
 	{
 		seenMetaCommand = true;
+		if (doingFile)
+		{
+			CheckForMixedSpacesAndTabs();
+		}
 		Init();
 	}
 
+	return b;
+}
+
+void StringParser::CheckForMixedSpacesAndTabs() noexcept
+{
 	if (seenMetaCommand && !warnedAboutMixedSpacesAndTabs && seenLeadingSpace && seenLeadingTab)
 	{
 		reprap.GetPlatform().MessageF(AddWarning(gb.GetResponseMessageType()),
 								"both space and tab characters used to indent blocks by line %" PRIu32, gb.MachineState().lineNumber);
 		warnedAboutMixedSpacesAndTabs = true;
 	}
-	return b;
 }
 
 // Check for and process a conditional GCode language command returning true if we found one, false if it's a regular line of GCode that we need to process
